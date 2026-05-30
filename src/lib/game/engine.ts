@@ -7169,6 +7169,35 @@ export function applyAction(
     next = cleared;
   }
 
+  // v5.335：集中偵測「自方戰鬥寶可夢於自己回合回到自己備戰區」→ 觸發 ON_RETREAT_TO_BENCH 類特性
+  //   （海豚俠｜全能變身 / 鋼炮臂蝦｜返回重載）。原本只有 RETREAT handler inline 觸發；衝浪手 /
+  //   寶可夢交替 / 急進開關 / 頂尖捕捉器 / 烏栗 等互換 supporter/item/招式 走 swap helper 沒觸發
+  //   （玩家回報衝浪手退海豚俠時全能變身不觸發）。此處集中以 before/after 比對覆蓋所有 active→bench
+  //   路徑（含未來新增）。gate：playing + 同一玩家回合（END_TURN 換手不算）+ 無 pending
+  //   （RETREAT inline 或 swap-site promote prompt 已開 pending 時自動跳過，不重複、不搶 pending）。
+  if (next.phase === 'playing' && !next.pendingSelection
+      && state.activePlayerIndex === next.activePlayerIndex) {
+    const rIdx = next.activePlayerIndex;
+    const prevActiveR = state.players[rIdx]?.active ?? null;
+    if (prevActiveR) {
+      const stillActiveR = next.players[rIdx].active?.iid === prevActiveR.iid;
+      const onBenchR = next.players[rIdx].bench.find(b => b.iid === prevActiveR.iid);
+      if (!stillActiveR && onBenchR && !onBenchR.abilityUsedThisTurn) {
+        const benchCardR = pool.get(onBenchR.cardId);
+        if (benchCardR?.abilities) {
+          for (let i = 0; i < benchCardR.abilities.length; i++) {
+            const abR = benchCardR.abilities[i];
+            if (!ON_RETREAT_TO_BENCH_ABILITIES.has(abR.name)) continue;
+            if (!hasAbilityFn(benchCardR.name, abR.name, i)) continue;
+            next = askUseRetreatToBenchAbility(
+              next, rIdx, onBenchR, abR.name, `${benchCardR.name}|${i}`, benchCardR.name);
+            break;
+          }
+        }
+      }
+    }
+  }
+
   // v2.47 防禦層：備戰寶可夢不應持有異常狀態
   next = scrubBenchStatus(next);
 
