@@ -1287,7 +1287,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
             totalDecks: { $sum: 1 },
             winDecks: { $sum: { $cond: ['$isWinner', 1, 0] } },
           }},
-          { $match: { totalDecks: { $gte: minDecks } } },
+          // v0.93: 拿掉 minDecks server-side filter — admin 合併 canonical (老大的指令多版本)
+          //   後再 filter, 否則同名多版本各自被 filter 留下太少, 數字小不合理.
+          //   limit 也從 1000 提升到 10000.
           { $project: {
             _id: 0,
             cardId: '$_id',
@@ -1295,8 +1297,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
             winDecks: 1,
             winRate: { $cond: [{ $gt: ['$totalDecks', 0] }, { $divide: ['$winDecks', '$totalDecks'] }, 0] },
           }},
-          { $sort: { winRate: -1, totalDecks: -1 } },
-          { $limit: 1000 },  // admin 端再做 canonical group + 篩選
+          { $sort: { totalDecks: -1 } },
+          { $limit: 10000 },
         ];
         const cards = await db.collection('matchRecords').aggregate(pipeline).toArray();
         res.json({ cards, minDecks, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now() });

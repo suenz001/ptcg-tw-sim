@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v0.91</title>
+<title>PTCG Oracle Admin v0.93</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -43,7 +43,9 @@
   .stat-card.firebase { border-color: #fb8c00; }
   .stat-card.firebase .stat-value { color: #fa6; }
   .stat-section-label { color: #9aa3b0; font-size: 11px; text-transform: uppercase; margin: 8px 0 4px; letter-spacing: 1px; }
-  table { width: 100%; border-collapse: collapse; background: #ffffff; border-radius: 6px; overflow: hidden; }
+  .sortable-th { cursor: pointer; user-select: none; }
+.sortable-th:hover { background: rgba(0, 0, 0, 0.05); }
+table { width: 100%; border-collapse: collapse; background: #ffffff; border-radius: 6px; overflow: hidden; }
   th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid #e3e8ef; font-size: 12px; vertical-align: middle; }
   th { background: #e3e8ef; color: #5b8def; font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
   tr:hover { background: #f1f3f7; }
@@ -362,7 +364,7 @@
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.91</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v0.93</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -483,7 +485,10 @@ function computeCanonicalKey(c) {
     `${a.name || ''}|${(a.effect || '').slice(0, 150)}`
   ).sort().join('||');
   const rulesKey = (c.rulesText || '').slice(0, 150);
-  return `${c.supertype || ''}|${c.subtype || ''}|${c.name || ''}|A:${attacksKey}|B:${abilitiesKey}|R:${rulesKey}`;
+  // v0.93: name 先 strip 中英括號註解 (例「老大的指令（烏羽）」→「老大的指令」)
+  //   讓不同插畫版同名同效卡合併到同一 canonical key.
+  const baseName = (c.name || '').replace(/[（(][^）)]*[）)]/g, '').trim();
+  return `${c.supertype || ''}|${c.subtype || ''}|${baseName}|A:${attacksKey}|B:${abilitiesKey}|R:${rulesKey}`;
 }
 async function ensureCardIndex() {
   if (_cardLoadPromise) return _cardLoadPromise;
@@ -2013,19 +2018,40 @@ function renderDurationTurns(s) {
 }
 
 // 1.4 勝因分佈
+// v0.93: 勝因 normalize — 拿掉玩家名, 統一分類
+//   原 winReason 含玩家名稱 (e.g. 「Wilson 取得所有獎勵牌」/「火箭隊的奇樹 沒有可上場的寶可夢」)
+//   normalize 後: 「取得所有獎勵牌」/「對手沒有可上場的寶可夢」/「對手抽乾牌庫」 等通用分類
+function normalizeWinReason(raw) {
+  if (!raw) return '(空)';
+  const s = String(raw).trim();
+  if (/取得所有獎勵牌/.test(s)) return '🏆 取得所有獎勵牌';
+  if (/沒有可上場的寶可夢|沒有寶可夢可上場/.test(s)) return '🚫 對手沒有可上場的寶可夢';
+  if (/抽乾牌庫|抽不到牌|牌庫空了/.test(s)) return '🃏 對手抽乾牌庫';
+  if (/勝利象徵|特殊勝利條件/.test(s)) return '⭐ 特殊勝利條件 (勝利象徵)';
+  if (/投降|認輸/.test(s)) return '🏳️ 對手投降';
+  if (/超時|逾時|逾過/.test(s)) return '⏰ 對手超時';
+  return '其他：' + s.slice(0, 30);
+}
 function renderWinReasons(s) {
-  const wr = s.winReasons || [];
+  const wrRaw = s.winReasons || [];
+  // v0.93: 先 normalize 再二次 group (同 normalized 分類合併)
+  const merged = new Map();
+  for (const x of wrRaw) {
+    const k = normalizeWinReason(x.reason);
+    merged.set(k, (merged.get(k) || 0) + x.count);
+  }
+  const wr = [...merged.entries()].map(([reason, count]) => ({ reason, count })).sort((a,b)=>b.count-a.count);
   const total = wr.reduce((sum, x) => sum + x.count, 0);
   if (total === 0) return '<section class="stats-section"><h3>🏁 1.4 勝因分佈</h3><div class="empty">無資料</div></section>';
   const maxCount = wr[0]?.count || 1;
   return `
     <section class="stats-section">
-      <h3>🏁 1.4 勝因分佈 <span class="small muted">（共 ${total} 場）</span></h3>
+      <h3>🏁 1.4 勝因分佈 <span class="small muted">（共 ${total} 場；同類已合併）</span></h3>
       <div class="stats-box">
         ${wr.slice(0, 15).map(x => {
           const pct = (x.count / total * 100).toFixed(1);
           const barPct = Math.round(x.count / maxCount * 100);
-          return `<div class="histo-row" style="grid-template-columns: 280px 1fr 140px;"><span class="histo-lbl">${escapeHtml(x.reason || '(空)')}</span><div class="histo-bar" style="width:${barPct}%"></div><span class="histo-cnt">${x.count} (${pct}%)</span></div>`;
+          return `<div class="histo-row" style="grid-template-columns: 280px 1fr 140px;"><span class="histo-lbl">${escapeHtml(x.reason)}</span><div class="histo-bar" style="width:${barPct}%"></div><span class="histo-cnt">${x.count} (${pct}%)</span></div>`;
         }).join('')}
       </div>
     </section>
@@ -2167,6 +2193,14 @@ function renderTopTrainers(c) {
 }
 
 // 1.8 能量類型分佈
+// v0.93: 基本能量 cardInfo.pokemonType 通常 undefined (game 端 ENERGY_TYPE_MAP 在 client),
+//   admin 需用名稱對照. 修前只有特殊能量被歸類, 基本能量全 fallthrough → 顯示空.
+const ENERGY_NAME_TO_TYPE = {
+  '基本草能量': 'Grass', '基本火能量': 'Fire', '基本水能量': 'Water', '基本雷能量': 'Lightning',
+  '基本超能量': 'Psychic', '基本鬥能量': 'Fighting', '基本惡能量': 'Darkness', '基本鋼能量': 'Metal',
+  '基本【草】能量': 'Grass', '基本【火】能量': 'Fire', '基本【水】能量': 'Water', '基本【雷】能量': 'Lightning',
+  '基本【超】能量': 'Psychic', '基本【鬥】能量': 'Fighting', '基本【惡】能量': 'Darkness', '基本【鋼】能量': 'Metal',
+};
 function renderEnergyDistribution(c) {
   const energy = (c.cards || []).filter(x => cardInfoMap[x.cardId]?.supertype === 'Energy');
   const basicByType = {};
@@ -2174,12 +2208,23 @@ function renderEnergyDistribution(c) {
   for (const e of energy) {
     const info = cardInfoMap[e.cardId];
     if (!info) continue;
-    if (info.subtype === 'Special' || info.subtype === 'Special Energy') {
+    // v0.93: subtype 'Basic' 直接歸基本; 用 pokemonType 或 ENERGY_NAME_TO_TYPE 推 type
+    const isBasic = info.subtype === 'Basic';
+    const energyType = info.pokemonType || ENERGY_NAME_TO_TYPE[info.name];
+    if (isBasic && energyType) {
+      if (!basicByType[energyType]) basicByType[energyType] = { totalCount: 0, deckCount: 0 };
+      basicByType[energyType].totalCount += e.totalCount;
+      basicByType[energyType].deckCount += e.deckCount;
+    } else if (info.subtype === 'Special' || info.subtype === 'Special Energy') {
       specialTotal += e.totalCount; specialDecks += e.deckCount;
-    } else if (info.pokemonType) {
-      if (!basicByType[info.pokemonType]) basicByType[info.pokemonType] = { totalCount: 0, deckCount: 0 };
-      basicByType[info.pokemonType].totalCount += e.totalCount;
-      basicByType[info.pokemonType].deckCount += e.deckCount;
+    } else if (energyType) {
+      // 非 Basic / Special 但有 pokemonType → 也歸對應屬性 (寶石能量類型 fallback)
+      if (!basicByType[energyType]) basicByType[energyType] = { totalCount: 0, deckCount: 0 };
+      basicByType[energyType].totalCount += e.totalCount;
+      basicByType[energyType].deckCount += e.deckCount;
+    } else {
+      // 完全無 type → 歸特殊
+      specialTotal += e.totalCount; specialDecks += e.deckCount;
     }
   }
   const TYPE_LABELS = { Grass: '🌿 草', Fire: '🔥 火', Water: '💧 水', Lightning: '⚡ 雷', Psychic: '👻 超', Fighting: '✊ 鬥', Darkness: '🌑 惡', Metal: '⚙️ 鋼', Dragon: '🐲 龍', Fairy: '🧚 妖', Colorless: '⭐ 無' };
@@ -2199,6 +2244,19 @@ function renderEnergyDistribution(c) {
     </section>
   `;
 }
+
+// v0.93: 玩家排行榜 client-side sort state
+let playerRankSort = 'winRate';
+let playerRankSortDir = 'desc';
+window.setPlayerRankSort = function(col) {
+  if (playerRankSort === col) {
+    playerRankSortDir = playerRankSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    playerRankSort = col;
+    playerRankSortDir = col === 'name' || col === 'email' ? 'asc' : 'desc';
+  }
+  renderStats(document.getElementById('tab-stats'));
+};
 
 window.setPokemonFilter = function(m) {
   if (m !== 'all' && m !== 'main' && m !== 'support') return;
@@ -2248,20 +2306,35 @@ function renderPlayerRanking(p) {
       </div>
     </section>`;
   }
-  const top = players.slice(0, 50);
+  // v0.93: client-side sort by selected column
+  const sortedPlayers = [...players].sort((a, b) => {
+    const dir = playerRankSortDir === 'asc' ? 1 : -1;
+    const va = a[playerRankSort], vb = b[playerRankSort];
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+    if (va == null) return 1; if (vb == null) return -1;
+    return String(va).localeCompare(String(vb), 'zh-Hant') * dir;
+  });
+  const top = sortedPlayers.slice(0, 50);
   const withEmailCount = players.filter(x => x.email).length;
   return `
     <section class="stats-section">
       <h3>👤 2.1 玩家排行榜 <span class="small muted">（共 ${players.length} 位玩家；已排除 AI；含 email ${withEmailCount} 位 / 匿名 ${players.length - withEmailCount} 位；點玩家名看個人戰績）</span></h3>
       <div class="stats-box" style="overflow-x:auto;">
         <table>
-          <thead><tr><th>#</th><th>玩家</th><th>Email / 身份</th><th>場次</th><th>勝</th><th>負</th><th>平</th><th>勝率</th></tr></thead>
+          <thead><tr>
+            <th>#</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('name')">玩家${playerRankSort==='name'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('email')">Email / 身份${playerRankSort==='email'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('matches')">場次${playerRankSort==='matches'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('wins')">勝${playerRankSort==='wins'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('losses')">負${playerRankSort==='losses'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('winRate')">勝率${playerRankSort==='winRate'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+          </tr></thead>
           <tbody>
             ${top.map((row, i) => {
               const wr = row.winRate;
               const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
               const wrColor = wr === null ? '#7a8898' : (wr > 0.55 ? '#2e7d32' : (wr < 0.45 ? '#c62828' : '#1a2332'));
-              // v0.86: key 為點擊 detail 用的識別碼（email 或 "name:xxx"）；UI 顯示優先 email
               const idForDetail = row.email || row.key || row.name;
               const idDisplay = row.email
                 ? `<a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.email)}</a>`
@@ -2273,7 +2346,6 @@ function renderPlayerRanking(p) {
                 <td>${row.matches}</td>
                 <td>${row.wins}</td>
                 <td>${row.losses}</td>
-                <td>${row.draws}</td>
                 <td style="color:${wrColor}; font-weight:600;">${wrText}</td>
               </tr>`;
             }).join('')}
@@ -2381,7 +2453,8 @@ function renderCardWinrate(w) {
   let filtered = groups;
   if (winrateFilterMode === 'main') filtered = groups.filter(g => !groupHasSupport(g));
   else if (winrateFilterMode === 'support') filtered = groups.filter(g => groupHasSupport(g));
-  // 重排：勝率降序
+  // v0.93: 合併後再 filter minDecks (server 已拿掉 server-side filter)
+  filtered = filtered.filter(g => g.totalDecksAgg >= w.minDecks);
   filtered.sort((a, b) => b.winRate - a.winRate || b.totalDecksAgg - a.totalDecksAgg);
   const top = filtered.slice(0, 50);
   return `
