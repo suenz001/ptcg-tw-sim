@@ -4457,35 +4457,56 @@
     return isSeatStale(roomData, oppIdx, HEARTBEAT_STALE_MS);
   })());
 
-  // v5.225 對手回合 3 分鐘無動作 → 顯示棄權按鈕（純 client inactivity timer）
-  //   gate：線上對戰 + 對戰位 + playing + 對手回合
-  //   重置條件：game.log.length 任何變化（任一 action）→ effect 重跑 → 清舊 timer + 起新 timer
+  // 對手 3 分鐘無動作 → 顯示棄權按鈕。
+  //   v5.328 重寫（修兩個漏洞，玩家回報「對手打到一半掛機卻不彈窗」）：
+  //   (A) gate 漏「我方回合卻卡在等對手」：原本只看 activePlayerIndex≠我，但 (1) 我方 KO
+  //       掉對手戰鬥寶可夢後對手要送新寶可夢（active===null，activePlayerIndex 仍是我）、
+  //       (2) pendingSelection.actorIdx 是對手（對手要選手牌/備戰）這兩種「等對手」情境
+  //       都被排除 → 對手在此掛機永不計時。改用 isWaitingOnOpponent() 精準判定。
+  //   (B) 原本 $effect 內 setTimeout，game 物件每次被重新賦值（Oracle 輪詢 _version 變動 /
+  //       任何同步）就 clear+重起 → 過度重置。改用 lastActionAt 時間戳：只在 game.log 真的
+  //       成長（有新 action）才重置計時起點，再用一條持續 interval 判定，免疫 game 重賦值頻率。
   let oppInactivityWarn = $state(false);
   let showForfeitConfirm = $state(false);
-  let _oppInactivityTimer: ReturnType<typeof setTimeout> | null = null;
   const OPP_INACTIVITY_MS = 3 * 60 * 1000; // 3 分鐘
+  let _lastActionAt = Date.now();
+  let _prevLogLen = -1;
 
+  // 「現在這個對局是否在等『對手』動作」— 精準判定，避免我方回合等對手時漏判 / 對手回合卻其實等我方時誤判。
+  function isWaitingOnOpponent(g: GameState | null, seat: number): boolean {
+    if (!g || g.phase !== 'playing') return false;
+    if (seat !== 0 && seat !== 1) return false;
+    const opp = (1 - seat) as 0 | 1;
+    const me = seat as 0 | 1;
+    // 1) 有待選擇 → 由 actorIdx 決定在等誰
+    if (g.pendingSelection) return g.pendingSelection.actorIdx === opp;
+    // 2) 對手戰鬥寶可夢被 KO、需送新寶可夢（還有備戰可送）→ 等對手（即使現在名義上是我方回合）
+    if (g.players[opp].active === null && g.players[opp].bench.length > 0) return true;
+    // 3) 我方需送新寶可夢 → 等我，不算對手閒置
+    if (g.players[me].active === null && g.players[me].bench.length > 0) return false;
+    // 4) 一般情況 → 看是誰的回合
+    return g.activePlayerIndex === opp;
+  }
+
+  // (1) log 成長 = 有新 action（任一方）→ 重置閒置起點 + 立即收 banner
   $effect(() => {
-    // 清舊 timer + 重置 banner
-    if (_oppInactivityTimer !== null) {
-      clearTimeout(_oppInactivityTimer);
-      _oppInactivityTimer = null;
+    const logLen = game?.log?.length ?? 0;
+    if (logLen !== _prevLogLen) {
+      _prevLogLen = logLen;
+      _lastActionAt = Date.now();
+      oppInactivityWarn = false;
     }
-    oppInactivityWarn = false;
+  });
 
-    // gate
-    if (!roomCode) return;                                    // 非線上對戰
-    if (mySeatIdx !== 0 && mySeatIdx !== 1) return;           // 非對戰位（觀戰）
-    if (!game || game.phase !== 'playing') return;            // 非遊戲中
-    if (game.activePlayerIndex === mySeatIdx) return;         // 自己回合不算
-
-    // 觸發 effect re-run 的 dep — log.length 是 reactive proxy
-    const _logLen = game.log?.length ?? 0;
-    void _logLen;
-
-    _oppInactivityTimer = setTimeout(() => {
-      oppInactivityWarn = true;
-    }, OPP_INACTIVITY_MS);
+  // (2) 持續檢查（mount 時建一次 interval，不隨 game 重賦值頻率而重置）：
+  //     線上對戰 + 對戰位 + 正在等對手動作 + 距上次 action ≥ 3 分鐘 → 顯示 banner。
+  $effect(() => {
+    const iv = setInterval(() => {
+      if (!roomCode) { oppInactivityWarn = false; return; }
+      if (!isWaitingOnOpponent(game, mySeatIdx)) { oppInactivityWarn = false; return; }
+      oppInactivityWarn = (Date.now() - _lastActionAt) >= OPP_INACTIVITY_MS;
+    }, 5000);
+    return () => clearInterval(iv);
   });
 
   async function onClickClaimForfeit() {
