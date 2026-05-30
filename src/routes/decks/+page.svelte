@@ -86,6 +86,46 @@
   let setFilter = $state<string>('');
   let pickerPreview = $state<Card | null>(null);
 
+  // v5.311: deck list 拖曳排序 state — pointer events (桌機 + 手機觸控)
+  let dragDeckId = $state<string | null>(null);      // 拖中的 deckId
+  let dragOverId = $state<string | null>(null);      // hover 目標 deckId (視覺提示)
+  let dragStartY = 0;                                  // pointerdown 起點 Y
+  let dragActive = false;                              // 是否進入 drag mode (slop > 8px)
+  function onDeckPointerDown(e: PointerEvent, deckId: string) {
+    if (e.button !== undefined && e.button !== 0) return;  // 非左鍵略過
+    dragDeckId = deckId;
+    dragStartY = e.clientY;
+    dragActive = false;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onDeckPointerMove(e: PointerEvent) {
+    if (!dragDeckId) return;
+    if (!dragActive && Math.abs(e.clientY - dragStartY) > 8) {
+      dragActive = true;  // 啟動 drag mode
+    }
+    if (!dragActive) return;
+    // 計算 hover 在哪個 deck li 上
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const li = el?.closest('li[data-deckid]') as HTMLElement | null;
+    dragOverId = li?.dataset.deckid ?? null;
+  }
+  function onDeckPointerUp(e: PointerEvent) {
+    (e.currentTarget as HTMLElement)?.releasePointerCapture?.(e.pointerId);
+    if (dragActive && dragDeckId && dragOverId && dragDeckId !== dragOverId) {
+      // commit: 把 dragDeckId 搬到 dragOverId 位置
+      const arr = [...decks];
+      const from = arr.findIndex(d => d.id === dragDeckId);
+      const to = arr.findIndex(d => d.id === dragOverId);
+      if (from >= 0 && to >= 0) {
+        const [moved] = arr.splice(from, 1);
+        arr.splice(to, 0, moved);
+        decks = arr;
+        saveDecks(arr);  // 立刻持久化新順序
+      }
+    }
+    dragDeckId = null; dragOverId = null; dragActive = false;
+  }
+
   // v5.310: 常用卡牌 (favorites) state — 本地 localStorage, 手動雲端同步
   let favorites = $state<Set<string>>(loadFavorites());
   let favoritesOnly = $state<boolean>(false);  // filter chip toggle
@@ -1489,7 +1529,14 @@
       </div>
       <ul class="deck-list">
         {#each decks as d (d.id)}
-          <li class:active={d.id === activeId}>
+          <li class:active={d.id === activeId} class:drag-source={dragDeckId === d.id}
+              class:drag-over={dragActive && dragOverId === d.id && dragDeckId !== d.id}
+              data-deckid={d.id}
+              onpointerdown={(e) => onDeckPointerDown(e, d.id)}
+              onpointermove={onDeckPointerMove}
+              onpointerup={onDeckPointerUp}
+              onpointercancel={onDeckPointerUp}>
+            <span class="deck-drag-handle" title="拖曳排序" aria-hidden="true">⠿</span>
             <button class="deck-pick" onclick={() => (activeId = d.id)}>
               <span class="deck-name">{d.name || '(未命名)'}</span>
               <span class="deck-size">
@@ -2604,6 +2651,13 @@
   .pk-mode-select:hover:not(.keyword) {
     background: #f0f0f0;
   }
+
+  /* v5.311: deck list 拖曳排序視覺 */
+  .deck-list li { display: flex; align-items: center; gap: 4px; user-select: none; touch-action: none; position: relative; }
+  .deck-drag-handle { color: #4a8a4a; font-size: 1.1rem; padding: 0 4px; cursor: grab; flex: 0 0 auto; line-height: 1; }
+  .deck-drag-handle:active { cursor: grabbing; }
+  .deck-list li.drag-source { opacity: 0.4; }
+  .deck-list li.drag-over { border-top: 2px solid #ffd700; }
 
   /* v5.310: 常用卡牌 favorites UI */
   .pick-fav-corner {

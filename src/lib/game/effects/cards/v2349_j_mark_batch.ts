@@ -8,11 +8,22 @@ function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number):
   if (count > 0) s = { ...s, coinFlippedThisAttack: true };
   let heads = 0;
   const recordedFlips: string[] = [];  // v5.309
+  // v5.311: 同 effects.ts flipCoinsWithLog — consume _retryInjectedFlipsQueue.
+  // 否則重試徽章 keep flow 重 run attack 走此 local 函式時, 不會 inject 上次擲幣結果,
+  // 變成「玩家選不重擲, 結果還是重擲一次」(走新 random).
+  let queue: string[] | undefined = s._retryInjectedFlipsQueue ? [...s._retryInjectedFlipsQueue] : undefined;
   for (let i = 1; i <= count; i++) {
-    const isHeads = Math.random() < 0.5;
+    let injected: string | undefined = undefined;
+    if (queue && queue.length > 0) injected = queue.shift();
+    const isHeads = injected !== undefined ? (injected === '正面') : (Math.random() < 0.5);
     if (isHeads) heads++;
-    s = addLog(s, `${label}：第 ${i}/${count} 次擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
+    const suffix = injected !== undefined ? '〔重試徽章：使用剛才擲幣結果〕' : '';
+    s = addLog(s, `${label}：第 ${i}/${count} 次擲硬幣 — ${isHeads ? '正面' : '反面'}${suffix}`, aIdx);
     recordedFlips.push(isHeads ? '正面' : '反面');
+  }
+  // 同步 state queue (consume 後剩下的, 若空清掉)
+  if (queue !== undefined) {
+    s = { ...s, _retryInjectedFlipsQueue: queue.length > 0 ? queue : undefined };
   }
   // v5.309: append _machineGunLastFlips → retry modal 顯示「本次擲幣結果」
   if (recordedFlips.length > 0) {

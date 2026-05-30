@@ -206,9 +206,20 @@
   let cpSuccess = $state(false);
   let cpLoading = $state(false);
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
-  let myName      = $state('');
+  // v5.311: 載入上次的玩家名稱 / 房間名稱 (localStorage), 玩家不用每次重打
+  const _lastMyName = (() => { try { return typeof localStorage !== 'undefined' ? (localStorage.getItem('ptcg-tw-sim:lastMyName') ?? '') : ''; } catch { return ''; } })();
+  const _lastRoomName = (() => { try { return typeof localStorage !== 'undefined' ? (localStorage.getItem('ptcg-tw-sim:lastRoomName') ?? '') : ''; } catch { return ''; } })();
+  let myName      = $state(_lastMyName);
   let myDeckId    = $state('');           // 在房間內選牌組用
-  let roomNameInput = $state('');         // 建房時的房間名稱
+  let roomNameInput = $state(_lastRoomName);  // v5.311: 預設沿用上次房間名
+  // v5.311: 自動把當前玩家名/房間名持久化 (玩家編輯後立刻存, 不需點按鈕)
+  $effect(() => {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      if (myName) localStorage.setItem('ptcg-tw-sim:lastMyName', myName);
+      if (roomNameInput) localStorage.setItem('ptcg-tw-sim:lastRoomName', roomNameInput);
+    } catch { /* localStorage 滿 / 隱私模式 — 略過 */ }
+  });
   /** 'choose' → 選建立/加入；'create' → 填資料建房間；'join' → 輸入房號；'room' → 房間等待中 */
   // v5.008：合併 choose/join 為單一大廳頁面，create 表單改為大廳內 inline 展開
   //   'choose' 保留在 union 是為了向後相容（外部任何狀態變化都會被 effect normalize 成 'join'）

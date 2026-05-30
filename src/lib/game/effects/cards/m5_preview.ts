@@ -1589,14 +1589,16 @@ regR('m5-trainer-rust-henchman', (state, aIdx, iids) => {
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'm5-trainer-rust-henchman-pick-energy',
-      params: { titleOverride: '鏽蝕組手下：選擇 1 個能量丟棄', targetPokeIid: targetIid },
+      params: { titleOverride: '鏽蝕組手下：選擇 1 個能量丟棄', targetIid: targetIid },
     },
   );
 });
 regR('m5-trainer-rust-henchman-pick-energy', (state, aIdx, iids, params) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
-  const targetPokeIid = params?.targetPokeIid as string | undefined;
+  // v5.311: 改 targetIid 對齊 UI selectionItems case 'active-energy-discard' 預期 key,
+  // 原 targetPokeIid 讓 UI fallback 只看 active.energyAttached, 玩家無法選對手 bench 能量.
+  const targetPokeIid = params?.targetIid as string | undefined;
   return updatePlayer(addLog(state, '鏽蝕組手下：丟 1 能量', aIdx), dIdx, p => {
     const removeFromInst = (c: import('../../types').CardInstance) => {
       if (c.iid !== targetPokeIid) return c;
