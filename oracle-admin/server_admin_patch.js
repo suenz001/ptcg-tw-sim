@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.23 (admin v1.01 — 2.3 卡牌→代表牌組聚合端點 archetype；原 v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
+// === ORACLE ADMIN ENDPOINTS === v0.24 (admin v1.01 — 2.3 卡牌→代表牌組聚合端點 archetype；原 v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -1374,12 +1374,22 @@ import('firebase-admin').then(async ({ default: admin }) => {
       else if (req.query.mode === 'local') baseMatch.roomCode = null;
       const excludeAI = req.query.excludeAI !== 'false';
       if (excludeAI) baseMatch.roomCode = { $type: 'string' };  // 同 winrate：只算有房號
+      // v0.24：只從獲勝牌組篩選 — 排除平局 + unwind 後只留「勝方」那一副牌
+      const winnerOnly = req.query.winnerOnly === 'true';
+      if (winnerOnly) baseMatch.winner = { $in: [0, 1] };
       try {
         const pipeline = [
           { $match: baseMatch },
-          // 展開 p1 + p2 兩副牌
-          { $project: { decks: [ { cc: '$p1.cardCounts' }, { cc: '$p2.cardCounts' } ] } },
+          // 展開 p1 + p2 兩副牌，標記是否為勝方
+          { $project: { decks: [
+            { cc: '$p1.cardCounts', win: { $eq: ['$winner', 0] } },
+            { cc: '$p2.cardCounts', win: { $eq: ['$winner', 1] } },
+          ] } },
           { $unwind: '$decks' },
+        ];
+        // winnerOnly：unwind 後只留勝方那副
+        if (winnerOnly) pipeline.push({ $match: { 'decks.win': true } });
+        pipeline.push(
           { $project: { entries: { $objectToArray: { $ifNull: ['$decks.cc', {}] } } } },
           // 只保留「含目標卡（任一 variant id）」的牌組
           { $match: { 'entries.k': { $in: idSet } } },
@@ -1399,13 +1409,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
               { $limit: 3000 },
             ],
           }},
-        ];
+        );
         const [agg] = await db.collection('matchRecords').aggregate(pipeline).toArray();
         const totalDecks = agg && agg.totalDecks && agg.totalDecks[0] ? agg.totalDecks[0].n : 0;
         const cards = ((agg && agg.cards) || []).map(c => ({
           cardId: c._id, deckCount: c.deckCount, countDist: c.countDist,
         }));
-        res.json({ totalDecks, cards, ids: idSet, mode: req.query.mode || 'all', excludeAI, generatedAt: Date.now() });
+        res.json({ totalDecks, cards, ids: idSet, mode: req.query.mode || 'all', excludeAI, winnerOnly, generatedAt: Date.now() });
       } catch (e) {
         console.warn('[stats archetype] error:', e.message);
         res.status(500).json({ error: e.message });
