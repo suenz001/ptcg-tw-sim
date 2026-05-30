@@ -686,6 +686,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink } from './effects/_shared';
+import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
 import { canApplyEffectToTarget } from './defense';
 export { sameEvoName };
@@ -1694,9 +1695,19 @@ export function createGame(
   const p1 = emptyPlayer(spec1.name);
   const p2 = emptyPlayer(spec2.name);
 
+  // v5.336：根因修 — M5 台版上線 (v5.300) 後卡 id 由日版 50xxx 改成台版 19xxx。牌組載入端
+  //   (storage.ts/cloud.ts loadDecks) 已自動 migrateDeck，但仍有路徑讓舊 id 漏進對戰
+  //   (早期存的本機牌組未 re-save / 匯入 / 其他來源)，使 createGame 以舊 id 建盤；該寶可夢
+  //   在卡池解不出 → UI 顯示「？/HP 0/0」，且一旦行動 (攻擊/補場 getCard().name) 立即 throw
+  //   「Card not found」→ 整局卡死。此處在本機/AI/Oracle 線上「所有對戰」共同咽喉點 createGame
+  //   對雙方 entries 再做一次 migrateCardId，徹底杜絕舊 id 進入 game state。非 M5 id 原樣回傳，
+  //   零副作用 (migrateCardId table 只含 M5 81 條 jp→tw)。
+  const _e1 = spec1.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) }));
+  const _e2 = spec2.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) }));
+
   // 洗牌 + 建牌組
-  p1.deck = shuffle(deckToInstances(spec1.entries));
-  p2.deck = shuffle(deckToInstances(spec2.entries));
+  p1.deck = shuffle(deckToInstances(_e1));
+  p2.deck = shuffle(deckToInstances(_e2));
 
   // 各抽 7 張（記錄 mulligan 次數 + v3.74 揭示手牌）
   const opening1 = dealOpeningHand(p1, pool);
