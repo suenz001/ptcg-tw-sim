@@ -19,6 +19,11 @@ service cloud.firestore {
         allow read: if isSelf(userId) || isAdmin();
         allow write: if isSelf(userId) || isAdmin();
       }
+      // v5.331：常用卡牌雲端同步 users/{uid}/favorites/cards（鏡射 decks 規則）
+      match /favorites/{favId} {
+        allow read: if isSelf(userId) || isAdmin();
+        allow write: if isSelf(userId) || isAdmin();
+      }
     }
 
     // ── 意見回饋（v2.53 / v2.7：read 改 own-or-admin，update 限 admin 加 reply）──

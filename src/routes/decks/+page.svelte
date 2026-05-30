@@ -522,12 +522,17 @@
       for (const d of dirtyList) {
         await withTimeout(syncDeckToCloud(firebaseUser.uid, d));
       }
-      // v5.330：常用卡牌一併存檔（合併原本獨立的「常用」存檔按鈕，避免兩顆存檔）
-      await withTimeout(saveFavoritesToCloud(firebaseUser.uid, favorites));
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
       dirtyDeckIds = new Set();  // 清空 dirty（紅點消失）
+      // v5.330：常用卡牌一併存檔；v5.331 改 best-effort — 常用存檔失敗不影響牌組存檔結果
+      let favMsg = ` + ${favorites.size} 張常用卡牌`;
+      try {
+        await withTimeout(saveFavoritesToCloud(firebaseUser.uid, favorites));
+      } catch (fe) {
+        favMsg = `（常用卡牌存檔失敗：${fe instanceof Error ? fe.message : String(fe)}）`;
+      }
       syncStatus = 'synced';
-      alert(`已存檔 ${dirtyList.length} 個牌組 + ${favorites.size} 張常用卡牌至雲端！`);
+      alert(`已存檔 ${dirtyList.length} 個牌組${favMsg}至雲端！`);
     } catch (e) {
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);
@@ -548,12 +553,18 @@
         activeId = decks[0]?.id ?? null;
         dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
       }
-      // v5.330：常用卡牌一併讀取（合併原本獨立的「常用」讀取按鈕）
-      const favCloud = await withTimeout(loadFavoritesFromCloud(firebaseUser.uid));
-      favorites = favCloud;
-      saveFavorites(favCloud);
+      // v5.330：常用卡牌一併讀取；v5.331 改 best-effort — 常用讀取失敗不影響牌組讀取結果
+      let favMsg = '';
+      try {
+        const favCloud = await withTimeout(loadFavoritesFromCloud(firebaseUser.uid));
+        favorites = favCloud;
+        saveFavorites(favCloud);
+        favMsg = ` + ${favCloud.size} 張常用卡牌`;
+      } catch (fe) {
+        favMsg = `（常用卡牌讀取失敗：${fe instanceof Error ? fe.message : String(fe)}）`;
+      }
       syncStatus = 'synced';
-      alert(`已從雲端載入 ${cloud.length} 個牌組 + ${favCloud.size} 張常用卡牌。`);
+      alert(`已從雲端載入 ${cloud.length} 個牌組${favMsg}。`);
     } catch (e) {
       syncStatus = 'error';
       syncError = e instanceof Error ? e.message : String(e);

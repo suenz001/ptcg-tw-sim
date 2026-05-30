@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.331</span> 修正常用卡牌雲端存檔/讀取的權限錯誤</summary>
+        <ul>
+          <li>修正：在牌組編輯器點「存檔／讀取」時，常用卡牌部分會出現「Missing or insufficient permissions（權限不足）」而失敗——原因是雲端權限規則漏放行常用卡牌的儲存路徑，已補上。另外把常用卡牌的雲端存／讀改成獨立處理，就算常用部分出問題，也不會害牌組的存檔／讀取一起失敗。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.330</span> 牌組編輯器：常用卡牌的存檔/讀取併入牌組存檔/讀取</summary>
         <ul>
           <li>調整：牌組編輯器左側原本有兩組「存檔/讀取」——一組給牌組、一組給常用卡牌（⭐ 星星）。現在合併成一組：上方「💾 存檔」會同時把牌組與常用卡牌一起存到雲端，「📥 讀取」也一次把兩者都讀回來。星星標記常用卡牌的功能不變，只是拿掉多餘的第二組存檔/讀取按鈕。</li>
