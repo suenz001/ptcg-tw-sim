@@ -5,27 +5,37 @@ import { canApplyAttackEffectToTarget } from '../../effects';
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
   let s = state;
-  // v5.304: 補設 coinFlippedThisAttack=true (與 effects.ts flipCoinsWithLog 一致),
-  // 否則本檔內招式 (萬花筒華爾滋/群起瞄準/臨檢 等) trigger 不到重試徽章.
   if (count > 0) s = { ...s, coinFlippedThisAttack: true };
   let heads = 0;
+  const recordedFlips: string[] = [];  // v5.309
   for (let i = 1; i <= count; i++) {
     const isHeads = Math.random() < 0.5;
     if (isHeads) heads++;
     s = addLog(s, `${label}：第 ${i}/${count} 次擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
+    recordedFlips.push(isHeads ? '正面' : '反面');
+  }
+  // v5.309: append _machineGunLastFlips → retry modal 顯示「本次擲幣結果」
+  if (recordedFlips.length > 0) {
+    const existing = s._machineGunLastFlips ?? [];
+    s = { ...s, _machineGunLastFlips: [...existing, ...recordedFlips] };
   }
   return { state: s, heads };
 }
 
 function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: number } {
-  // v5.304: 補設 coinFlippedThisAttack=true (本檔內若有擲到反面停的招式也接重試徽章).
   let s: GameState = { ...state, coinFlippedThisAttack: true };
   let heads = 0;
+  const recordedFlips: string[] = [];  // v5.309
   for (let i = 1; i <= 20; i++) {
     const isHeads = Math.random() < 0.5;
     s = addLog(s, `${label}：第 ${i} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
+    recordedFlips.push(isHeads ? '正面' : '反面');
     if (isHeads) heads++;
     else break;
+  }
+  if (recordedFlips.length > 0) {
+    const existing = s._machineGunLastFlips ?? [];
+    s = { ...s, _machineGunLastFlips: [...existing, ...recordedFlips] };
   }
   return { state: s, heads };
 }

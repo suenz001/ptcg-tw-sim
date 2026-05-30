@@ -7159,12 +7159,13 @@
             <summary>📖 查看牌庫剩餘全部（{srcP.deck.length} 張，推斷獎賞卡）</summary>
             <div class="full-deck-note">※ 對照你的原牌組，不在清單中的 6 張通常是獎賞卡（或已在手牌/場上/棄牌）</div>
             <div class="full-deck-list">
-              {#each deckGrouped as entry}
-                <div class="deck-item">
-                  <span class="deck-item-name" title={entry.name}>{entry.count}× {entry.name}</span>
-                  <button class="deck-item-zoom" title="放大查看：{entry.name}"
-                    onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>🔍</button>
-                </div>
+              {#each deckGrouped as entry}{@const _dc=getCard(entry.cardId)}
+                <button class="deck-cell" title="{entry.count}× {entry.name} — 點擊放大"
+                  onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>
+                  {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img"/>
+                  {:else}<div class="deck-cell-fallback">{entry.name}</div>{/if}
+                  <span class="deck-cell-count">×{entry.count}</span>
+                </button>
               {/each}
             </div>
           </details>
@@ -7197,11 +7198,11 @@
               <div class="full-deck-list">
                 {#each peekedOthers as inst}{@const c=getCard(inst.cardId)}
                   {#if c}
-                    <div class="deck-item">
-                      <span class="deck-item-name" title={c.name}>{c.name}</span>
-                      <button class="deck-item-zoom" title="放大查看：{c.name}"
-                        onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>🔍</button>
-                    </div>
+                    <button class="deck-cell" title="{c.name} — 點擊放大"
+                      onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
+                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img"/>
+                      {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
+                    </button>
                   {/if}
                 {/each}
               </div>
@@ -7224,11 +7225,11 @@
               <div class="full-deck-list">
                 {#each otherHand as inst}{@const c=getCard(inst.cardId)}
                   {#if c}
-                    <div class="deck-item">
-                      <span class="deck-item-name" title={c.name}>{c.name}</span>
-                      <button class="deck-item-zoom" title="放大查看：{c.name}"
-                        onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>🔍</button>
-                    </div>
+                    <button class="deck-cell" title="{c.name} — 點擊放大"
+                      onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
+                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img"/>
+                      {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
+                    </button>
                   {/if}
                 {/each}
               </div>
@@ -8009,11 +8010,11 @@
               <div class="full-deck-note">※ 高傲指令翻到正面 10 張全部公開揭示給雙方看；確認後放回牌庫並重洗</div>
               <div class="full-deck-list">
                 {#each _peekedOthers as p (p.inst.iid)}
-                  <div class="deck-item">
-                    <span class="deck-item-name" title={p.card.name}>{p.card.name}</span>
-                    <button class="deck-item-zoom" title="放大查看：{p.card.name}"
-                      onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>🔍</button>
-                  </div>
+                  <button class="deck-cell" title="{p.card.name} — 點擊放大"
+                    onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>
+                    {#if p.card.imageUrl}<img src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img"/>
+                    {:else}<div class="deck-cell-fallback">{p.card.name}</div>{/if}
+                  </button>
                 {/each}
               </div>
             </details>
@@ -11311,7 +11312,13 @@
   .full-deck-view{ margin-top:.6rem; background:#0e1a0e; border:1px solid #2a4a2a; border-radius:6px; padding:.4rem .7rem; }
   .full-deck-view summary{ cursor:pointer; font-size:.85rem; color:#aaffcc; font-weight:600; }
   .full-deck-note{ margin:.4rem 0; font-size:.75rem; color:#888; }
-  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:.2rem .6rem; max-height:200px; overflow-y:auto; }
+  /* v5.309: grid 卡圖 + 右下 count badge, 64px 寬控制 modal 不過大 (與棄牌區 cell 視覺一致) */
+  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:4px; max-height:60vh; overflow-y:auto; padding:4px; }
+  .deck-cell{ position:relative; display:block; width:100%; height:0; padding:0 0 140% 0; background:rgba(255,255,255,.04); border:1px solid #444; border-radius:6px; overflow:hidden; cursor:pointer; }
+  .deck-cell:hover{ border-color:#4a8a4a; }
+  .deck-cell-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; }
+  .deck-cell-fallback{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:.55rem; padding:2px; text-align:center; box-sizing:border-box; line-height:1.1; }
+  .deck-cell-count{ position:absolute; right:2px; bottom:2px; background:rgba(220,38,38,.95); color:#fff; font-size:.7rem; font-weight:800; padding:0 5px; border-radius:8px; border:1.5px solid rgba(255,255,255,.9); box-shadow:0 1px 2px rgba(0,0,0,.5); min-width:20px; text-align:center; line-height:1.2; }
   /* v2.39 行內放大鏡：flex 左文字 + 右 🔍，避免長名稱爆版 */
   /* v2.43 Leon 反饋：原本 justify-content:space-between + 名字 flex:1 1 auto，
      讓名字拉滿整行、放大鏡被推到最右邊，與卡名的距離太遠。

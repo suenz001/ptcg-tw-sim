@@ -358,7 +358,7 @@
   //   sheet.list 變動時 template 重新呼叫此函式，無 reactivity 問題。
   //   v5.116~v5.120 曾用 template 內 IIFE / reduce 嘗試 5 次 build fail，
   //   v5.121 才發現是另處 changelog raw {@const} 造成。本版用 script helper 最安全。
-  type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined };
+  type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined; subtype: string | undefined };
   function groupDiscardList(list: CardInstance[]): DiscardGroup[] {
     const m = new Map<string, DiscardGroup>();
     for (const inst of list) {
@@ -373,10 +373,26 @@
           count: 1,
           name: c?.name ?? '?',
           supertype: c?.supertype,
+          subtype: c?.subtype,
         });
       }
     }
-    return [...m.values()].sort((a, b) => b.count - a.count);
+    // v5.309: 排序 寶可夢→物品→支援者→場地→能量, 同類內 count desc
+    function typeRank(g: DiscardGroup): number {
+      if (g.supertype === 'Pokemon') return 1;
+      if (g.supertype === 'Trainer') {
+        if (g.subtype === 'Supporter') return 3;
+        if (g.subtype === 'Stadium') return 4;
+        return 2;
+      }
+      if (g.supertype === 'Energy') return 5;
+      return 9;
+    }
+    return [...m.values()].sort((a, b) => {
+      const ra = typeRank(a), rb = typeRank(b);
+      if (ra !== rb) return ra - rb;
+      return b.count - a.count;
+    });
   }
 
   // ── Hand tap：依卡類型決定 sheet 內容 ──────────────────────────────
