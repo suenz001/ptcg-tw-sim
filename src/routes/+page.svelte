@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.314</span> 手機版搜尋結果 ⭐+ 換行修正</summary>
+        <ul>
+          <li>修正：v5.312 把 ⭐ 常用按鈕加到 + 加入按鈕左邊後，手機版牌組編輯器的搜尋結果列因寬度不夠，⭐ 跟 + 被擠成兩排顯示。已調整版面把卡片縮圖、卡名、⭐、+ 四個元素穩定排在同一列。</li>
+        </ul>
+      </details>
+
+            <details>
         <summary><span class="ver-badge">v5.313</span> 牌組拖曳改長按啟動 + 拉起視覺</summary>
         <ul>
           <li>修正：v5.311 牌組拖曳排序太敏感 — 玩家手機只想往下滑動畫面就誤觸換順序。改為「按住約 0.35 秒」才啟動拖曳；啟動前若手指移動超過 10px，會視為一般滑動畫面，不會誤拖。</li>

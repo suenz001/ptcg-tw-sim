@@ -2845,11 +2845,24 @@
   }
   .picker-list li {
     display: grid;
-    grid-template-columns: 40px 1fr auto;
+    /* v5.314: 從 3 cols 改 4 cols, 容納縮圖 / 卡名 / ⭐ / + 不換行 (手機窄 viewport 也要排同一列) */
+    grid-template-columns: 40px minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.4rem;
     padding: 0.3rem 0.4rem;
     border-radius: 4px;
+  }
+  /* v5.314: 手機版進一步縮 — gap + icon padding 縮緊, 圖縮小 */
+  @media (max-width: 768px) {
+    .picker-list li {
+      grid-template-columns: 36px minmax(0, 1fr) auto auto;
+      gap: 0.25rem;
+      padding: 0.25rem 0.3rem;
+    }
+    .picker-list img { width: 36px; height: 50px; }
+    .picker-list li button.icon { padding: 0.2rem 0.4rem; font-size: 0.9rem; min-width: 1.6rem; }
+    .pick-name { font-size: 0.82rem; }
+    .pick-sub { font-size: 0.7rem; }
   }
   .picker-list li:hover {
     background: #f4f8ff;
