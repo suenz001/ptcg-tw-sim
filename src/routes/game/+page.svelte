@@ -4716,16 +4716,24 @@
           players: (me === 0
             ? [game.players[0], incoming.players[1]]
             : [incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
-          setupDone: (me === 0
-            ? [game.setupDone[0], incoming.setupDone[1]]
-            : [incoming.setupDone[0], game.setupDone[1]]) as [boolean, boolean],
-          pendingMulliganDraw: (me === 0
-            ? [game.pendingMulliganDraw?.[0] ?? 0, incoming.pendingMulliganDraw?.[1] ?? 0]
-            : [incoming.pendingMulliganDraw?.[0] ?? 0, game.pendingMulliganDraw?.[1] ?? 0]) as [number, number],
-          // v4.494：mulliganRevealConfirmed 也 per-player merge
-          mulliganRevealConfirmed: (me === 0
-            ? [game.mulliganRevealConfirmed[0], incoming.mulliganRevealConfirmed[1]]
-            : [incoming.mulliganRevealConfirmed[0], game.mulliganRevealConfirmed[1]]) as [boolean, boolean],
+          // v5.339：setupDone / mulliganRevealConfirmed / pendingMulliganDraw 改「單調合併」。
+          //   根因：Oracle 房狀態推送可能 out-of-order / 重送，原 per-player 覆蓋式 merge 收到「較早
+          //   狀態」晚到時會把已前進的進度洗回去（pendingMulliganDraw 退回 N、confirmed 退回 false）
+          //   → 重抽較多方永遠卡在「等待對手決定補抽」死結。這三欄位本質單調（setupDone /
+          //   mulliganRevealConfirmed 只 false→true 用 OR；pendingMulliganDraw 只 N→0 用 MIN），
+          //   一旦某索引完成即不可逆，不論先後到達或哪端推送都收斂到「前進」，不會退回死結。
+          setupDone: [
+            game.setupDone[0] || incoming.setupDone[0],
+            game.setupDone[1] || incoming.setupDone[1],
+          ] as [boolean, boolean],
+          mulliganRevealConfirmed: [
+            game.mulliganRevealConfirmed[0] || incoming.mulliganRevealConfirmed[0],
+            game.mulliganRevealConfirmed[1] || incoming.mulliganRevealConfirmed[1],
+          ] as [boolean, boolean],
+          pendingMulliganDraw: [
+            Math.min(game.pendingMulliganDraw?.[0] ?? 0, incoming.pendingMulliganDraw?.[0] ?? 0),
+            Math.min(game.pendingMulliganDraw?.[1] ?? 0, incoming.pendingMulliganDraw?.[1] ?? 0),
+          ] as [number, number],
           // v5.159：mulliganPostBenchOpen 也 per-player merge（v5.138 新欄位，原 v4.494 漏）
           //   Wilson 報告線上練牌按準備卡住 — firebase merge 沒處理此欄位 → 雙端 state
           //   不一致 → tryAdvanceToPlaying 條件不滿足 → 卡住。鏡射 mulliganRevealConfirmed
