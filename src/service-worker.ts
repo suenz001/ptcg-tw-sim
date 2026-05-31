@@ -23,8 +23,13 @@ const PRECACHE: string[] = [...build, ...files, ...prerendered];
 sw.addEventListener('install', (event) => {
   async function addAll() {
     const cache = await caches.open(CACHE_NAME);
-    // 用 addAll 一次 fetch 全部；任一失敗整批失敗（保證原子性）
-    await cache.addAll(PRECACHE);
+    // v5.354：逐一容錯快取（取代 cache.addAll 的原子性）。
+    //   原 addAll 任一 URL fetch 失敗 → 整個 install 失敗 → 新版 SW 永遠裝不起來，
+    //   使用者卡在舊版快取（玩家回報「修了好幾版卻沒生效」的真因：/cards/ 被 nginx 轉成
+    //   http 觸發混合內容封鎖 → addAll reject → 站台釘死在舊版 v5.347）。
+    //   改 Promise.allSettled + 個別 cache.add：個別檔失敗只略過該檔，不阻斷整體更新。
+    //   app 本體（build/prerendered，皆 https）一定快取成功；卡牌等 runtime 仍走 network-first。
+    await Promise.allSettled(PRECACHE.map((url) => cache.add(url)));
   }
   event.waitUntil(addAll());
   // skipWaiting：新版 SW install 完馬上 activate，不等舊版斷線
