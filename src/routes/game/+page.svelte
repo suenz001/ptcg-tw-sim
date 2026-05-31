@@ -1766,7 +1766,7 @@
     // v5.351：鐵 gate — 線上對局(有 roomCode)永不跑 AI 驅動。aiPlayerIndex 線上預設 1(給 UI)，
     //   若 mode 尚未設成 'online' 的空窗，舊 mode gate 會失效讓 AI 迴圈空轉(setTimeout 無限重排
     //   想幫真人對手在 setup 行動 → 主執行緒卡死 + setupDone 死結)。roomCode 在 game 出現前就已設。
-    if (roomCode) return;
+    if (roomCode || roomData) return; // v5.355：三重 gate(roomCode/roomData)— 在房間裡一律不跑 AI 驅動
     if (game.phase === 'game-over') return;
 
     // 判斷是否該 AI 行動
@@ -1857,7 +1857,7 @@
 
   // 監聽 game 變化：若 AI 需要行動則排程
   $effect(() => {
-    if (!game || aiPlayerIndex === null || mode === 'online' || roomCode) return; // v5.351：roomCode 鐵 gate，防 mode 未設好空窗誤跑 AI 迴圈
+    if (!game || aiPlayerIndex === null || mode === 'online' || roomCode || roomData) return; // v5.351/v5.355：roomCode+roomData 三重鐵 gate，防 mode 未設好空窗誤跑 AI 迴圈
     const g = game;
     const ai = aiPlayerIndex;
     if (g.phase === 'game-over') { aiThinking = false; return; }
