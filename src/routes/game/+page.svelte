@@ -3676,7 +3676,19 @@
       return;
     }
     const prevState = game;
-    const newState = applyAction(game, action as any, pool);
+    // v5.345：引擎可能 throw（最常見：getCard 找不到卡 — ?卡 / 舊版 id 漏遷移 / 尚未載入的 set），
+    //   原本沒有 try/catch → throw 會讓 dispatch 崩潰、玩家點了沒反應 = 整局凍結。改為攔截：
+    //   不改 state、不 push（避免把壞狀態同步給對手），並提示玩家（可投降/重整脫困）。
+    let newState: GameState;
+    try {
+      newState = applyAction(game, action as any, pool);
+    } catch (err) {
+      console.error('[PTCG] applyAction 拋例外，已攔截避免凍結:', action.type, err);
+      if (!opts.fromAI) {
+        try { alert('這個動作發生錯誤，已略過。若持續卡住，請按「投降」結束本局，或重新整理頁面。'); } catch { /* ignore */ }
+      }
+      return;
+    }
     // Debug：如果 action 被拒絕（state 沒變），印出 state 幫 debug
     if (newState === game) {
       console.warn('[PTCG] action 被 engine 拒絕:', action.type, {
