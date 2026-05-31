@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.09</title>
+<title>PTCG Oracle Admin v1.10</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.09</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.10</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -869,6 +869,8 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${counts.lobby || 0})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
       <input class="search-box" placeholder="搜尋 房號 / 玩家名" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
+      <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
     </div>
     ${pagerHtml}
     <div class="table-wrap"><table class="match-table"><thead><tr>
@@ -1021,7 +1023,7 @@ function renderRoomRow(r, source) {
       <td>${statusBadge}</td>
       <td class="num-cell">${turn}</td>
       <td>${updatedStr}${ageMin !== null ? `<div class="small">${ageMin}m ago</div>` : ''}</td>
-      <td><button class="btn-deck" onclick="showDeckModal('${r._id}', '${source}')">🃏 牌組</button></td>
+      <td><button class="btn-deck" onclick="showDeckModal('${r._id}', '${source}')">🃏 牌組</button> <button class="btn-deck" style="background:#7b1fa2;color:#fff" onclick="showRoomDiag('${r._id}', '${source}')" title="卡死診斷">🔍 診斷</button></td>
       <td>${msgBtn}</td>
       <td>${r.status === 'playing' ? `<button class="btn-deck" style="background:#1976d2;color:#ffffff" onclick="openSpyWindow('${r._id}', '${source}')" title="Admin 隱身觀戰">\ud83d\udd0d 偷看</button>` : '<span class="small">-</span>'}</td>
       ${showDelete ? `<td><button class="tiny danger" onclick="deleteRoomBySource('${r._id}', '${source}')" title="${source === 'firebase' ? '刪除 Firebase 房間（含 messages 子集合）' : '刪除 Oracle 房間'}">刪除</button></td>` : ''}
@@ -1034,6 +1036,62 @@ function escapeHtml(s) {
 }
 
 // ── Deck modal (room decks) ──────────────────────────────────────
+// v1.10：房間卡死診斷 — 抓 gameState 自動研判常見卡死點（玩家回報「動不了」用）
+window.showRoomDiag = async function(code, source) {
+  if (!code) { alert('請輸入房號'); return; }
+  source = source || 'oracle';
+  const shell = (inner) => `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="min-width:560px"><h3>🔍 房間 ${escapeHtml(code)} 卡死診斷</h3>${inner}</div></div>`;
+  document.getElementById('modal-container').innerHTML = shell('<div class="empty">載入中…</div>');
+  await ensureCardIndex();
+  const data = await api('/api/admin/' + source + '/rooms/' + encodeURIComponent(code));
+  const room = data && data.room;
+  const closeBtn = '<div style="text-align:right;margin-top:14px"><button onclick="closeModal()">關閉</button></div>';
+  if (!room) { document.getElementById('modal-container').innerHTML = shell('<div class="empty">找不到此房間（可能已結束被清除，或房號錯誤）。</div>' + closeBtn); return; }
+  const g = room.gameState;
+  const nm = (cid) => cid ? (cardInfoMap[cid] ? (cardInfoMap[cid].displayName || cardInfoMap[cid].name) : ('?#' + cid)) : '(空)';
+  const seats = room.seats || [];
+  let updMs = 0;
+  if (room.updatedAt) updMs = room.updatedAt._seconds ? room.updatedAt._seconds * 1000 : (typeof room.updatedAt === 'number' ? room.updatedAt : new Date(room.updatedAt).getTime());
+  const ageMin = updMs ? Math.round((Date.now() - updMs) / 60000) : null;
+  const diag = [];
+  let html = '';
+  if (!g) {
+    diag.push('房間尚未開始對局（status=' + room.status + '）。');
+  } else {
+    const a0 = g.players && g.players[0] ? g.players[0].active : null;
+    const a1 = g.players && g.players[1] ? g.players[1].active : null;
+    const turnOwner = (g.pendingSelection && g.pendingSelection.actorIdx != null) ? g.pendingSelection.actorIdx : g.activePlayerIndex;
+    if (g.phase === 'game-over') diag.push('對局已結束（winner=' + g.winner + '）。');
+    else if (g.phase === 'setup') {
+      const sd = g.setupDone || [], mr = g.mulliganRevealConfirmed || [], pm = g.pendingMulliganDraw || [], pb = g.mulliganPostBenchOpen || [];
+      diag.push('卡在【開局設置】。');
+      if (!sd[0] || !sd[1]) diag.push('• 尚有玩家未按準備：setupDone=' + JSON.stringify(sd));
+      if ((pm[0] || 0) > 0 || (pm[1] || 0) > 0) diag.push('• 有玩家還沒決定重抽補抽：pendingMulliganDraw=' + JSON.stringify(pm) + '（該玩家需在「決定補抽」視窗操作；v5.339 已修同步卡死，仍卡可能是該玩家畫面沒彈窗）');
+      if (!mr[0] || !mr[1]) diag.push('• 有玩家還沒確認對方 mulligan 揭示：mulliganRevealConfirmed=' + JSON.stringify(mr));
+      if (pb[0] || pb[1]) diag.push('• 有玩家補抽後還沒按「加備戰完成」：mulliganPostBenchOpen=' + JSON.stringify(pb));
+    } else if (g.phase === 'playing') {
+      if ((g.pendingPrizes && (g.pendingPrizes[0] || 0) > 0) || (g.pendingPrizes && (g.pendingPrizes[1] || 0) > 0)) diag.push('• 有玩家需先「取得獎勵牌」才能繼續：pendingPrizes=' + JSON.stringify(g.pendingPrizes));
+      if (a0 === null) diag.push('• P1 戰鬥場空（昏厥後需派出新寶可夢）。');
+      if (a1 === null) diag.push('• P2 戰鬥場空（昏厥後需派出新寶可夢）。');
+      [a0, a1].forEach((a, i) => { if (a && a.cardId && !cardInfoMap[a.cardId]) diag.push('• P' + (i + 1) + ' 戰鬥寶可夢卡片解不出（?卡）cardId=' + a.cardId + '（舊版 id 漏遷移，整局會卡）。'); });
+      if (g.pendingSelection) diag.push('• 等待 P' + (((g.pendingSelection.actorIdx != null ? g.pendingSelection.actorIdx : 0)) + 1) + ' 處理選擇「' + (g.pendingSelection.effectKey || g.pendingSelection.type) + '」（若該玩家畫面沒彈窗 = 卡死點）。');
+      diag.push('• 目前應行動方：P' + (turnOwner + 1) + '（activePlayerIndex=' + g.activePlayerIndex + '，turnPhase=' + g.turnPhase + '）。');
+    }
+    if (ageMin !== null && ageMin > 3) diag.push('⏱ 最後更新已 ' + ageMin + ' 分鐘前 — 對手可能離線/掛機（非引擎卡死）。');
+    html = '<div class="small" style="line-height:1.8">'
+      + '<b>狀態</b>：' + room.status + ' | phase=' + g.phase + ' | turnPhase=' + g.turnPhase + ' | turn=' + g.turn + ' | activePlayerIndex=' + g.activePlayerIndex + '<br>'
+      + '<b>P1</b> ' + escapeHtml(seats[0] && seats[0].name || '?') + '：' + escapeHtml(nm(a0 && a0.cardId)) + (a0 ? (' (扣' + (a0.damage || 0) + (a0.status ? (' ' + a0.status) : '') + (a0.cantRetreatNextTurn ? ' 禁退' : '') + ')') : '') + '<br>'
+      + '<b>P2</b> ' + escapeHtml(seats[1] && seats[1].name || '?') + '：' + escapeHtml(nm(a1 && a1.cardId)) + (a1 ? (' (扣' + (a1.damage || 0) + (a1.status ? (' ' + a1.status) : '') + (a1.cantRetreatNextTurn ? ' 禁退' : '') + ')') : '') + '<br>'
+      + 'pendingSelection=' + (g.pendingSelection ? escapeHtml((g.pendingSelection.effectKey || g.pendingSelection.type) + ' actor=' + g.pendingSelection.actorIdx) : '-') + ' | pendingPrizes=' + JSON.stringify(g.pendingPrizes || []) + '<br>'
+      + 'setupDone=' + JSON.stringify(g.setupDone || []) + ' mulliReveal=' + JSON.stringify(g.mulliganRevealConfirmed || []) + ' pendingMulli=' + JSON.stringify(g.pendingMulliganDraw || []) + ' postBench=' + JSON.stringify(g.mulliganPostBenchOpen || []) + '<br>'
+      + '最後更新：' + (ageMin !== null ? (ageMin + ' 分鐘前') : '?')
+      + '</div>';
+  }
+  const diagHtml = '<div style="background:#fff3e0;border:1px solid #ffb74d;border-radius:6px;padding:10px;margin-bottom:10px;color:#5d4037;font-weight:600;line-height:1.8">' + (diag.length ? diag.map(escapeHtml).join('<br>') : '看起來正常，沒有偵測到明顯卡死點。') + '</div>';
+  const jsonHtml = '<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">📋 完整 gameState JSON</summary><pre style="background:#f5f5f5;padding:8px;border-radius:4px;font-size:11px;max-height:40vh;overflow:auto;white-space:pre-wrap">' + escapeHtml(JSON.stringify(g || room, null, 1)) + '</pre></details>';
+  document.getElementById('modal-container').innerHTML = shell(diagHtml + html + jsonHtml + closeBtn);
+};
+
 window.showDeckModal = async function(code, source) {
   // 先彈窗顯示 loading，再等卡片資料 + 房間資料
   document.getElementById('modal-container').innerHTML = `
