@@ -7133,21 +7133,49 @@ function handlePlaying(
  *
  * 此函式為純函式：回傳新 state（有變更時）或原 state（無變更）。
  */
+// v5.349：一勞永逸 — 備戰寶可夢不該持有「攻擊/撤退鎖」類 active-only 旗標。
+//   bench 寶可夢永遠不能攻擊也不能撤退，這些「下回合不能用某招 / 不能攻擊 / 不能撤退」
+//   旗標在備戰區無意義；若某互換/gust/特性 resolver 漏走 clearActiveEffects，會殘留並在
+//   該寶可夢回到戰鬥場時誤鎖（玩家回報：雷伊布ex 棕碧璽→烏栗→撤退後不能用招式）。
+//   此處在 scrubBenchStatus 中央 sweep（每個 action 後跑、覆蓋所有 active→bench 路徑，
+//   含特性/物品/支援者/競技場/gust/未來新增），對所有備戰寶可夢一律強制清除，符合 PTCG
+//   規則「寶可夢退到備戰區清除所有狀態」。
+//   ⚠ 刻意只清「攻擊/撤退」類鎖（bench 不可能攻擊/撤退）；不碰「受傷」類旗標
+//     （takeExtraDamage*/damageReduceNextHit — 備戰仍可被招式打到，語義有效），
+//     那類由離場 clearActiveEffects 處理，避免誤清。
+const BENCH_ACTION_LOCK_FLAGS = [
+  'cantAttackThisTurn', 'cantAttackPending',
+  'cantRetreatNextTurn', 'cantRetreatPendingSelf',
+  'blockedAttackNamesNextTurn', 'blockedAttackNamesThisTurn',
+  'attackFailureFlipCountPending', 'attackFailureFlipCountThisTurn',
+  'pointySpinNextTurn', 'pointySpinThisTurn',
+  'damageBonusThisTurn', 'damageBonusPending',
+  'deferredPrizeBonusThisTurn', 'deferredPrizeBonusNextTurn',
+] as const;
+function stripBenchActionLockFlags(b: CardInstance): CardInstance {
+  let hit = false;
+  for (const k of BENCH_ACTION_LOCK_FLAGS) {
+    if ((b as unknown as Record<string, unknown>)[k] !== undefined) { hit = true; break; }
+  }
+  if (!hit) return b;
+  const nb = { ...b } as unknown as Record<string, unknown>;
+  for (const k of BENCH_ACTION_LOCK_FLAGS) delete nb[k];
+  return nb as unknown as CardInstance;
+}
+
 function scrubBenchStatus(state: GameState): GameState {
   let changed = false;
   const players = state.players.map((p) => {
     let benchChanged = false;
-    const newBench = p.bench.map((b) => {
-      // v2.187：化石永不持有任何狀態（戰鬥場或備戰）
-      if (b.fossilOnField && (b.status !== undefined || b.secondaryStatus !== undefined)) {
-        benchChanged = true;
-        return { ...b, status: undefined, secondaryStatus: undefined };
-      }
-      // 一般寶可夢：備戰區不應持有異常狀態（v2.47 規則）
+    const newBench = p.bench.map((b0) => {
+      let b = b0;
+      // v2.187 化石 / v2.47 一般：備戰區不應持有異常狀態
       if (b.status !== undefined || b.secondaryStatus !== undefined) {
-        benchChanged = true;
-        return { ...b, status: undefined, secondaryStatus: undefined };
+        b = { ...b, status: undefined, secondaryStatus: undefined };
       }
+      // v5.349：備戰區不應持有「攻擊/撤退鎖」類 active-only 旗標
+      b = stripBenchActionLockFlags(b);
+      if (b !== b0) benchChanged = true;
       return b;
     });
     // v2.187：戰鬥場上的化石也不該持有狀態
