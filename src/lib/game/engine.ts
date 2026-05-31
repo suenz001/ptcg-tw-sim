@@ -5563,6 +5563,26 @@ function handlePlaying(
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
       newState = postFn(newState, aIdx, pool, action);
     }
+    // v5.343：集中修「薄霧能量等免疫對手招式效果的 active 仍被招式設『下回合無法撤退』」。
+    //   v5.333 只在 effects.ts 中央 defCantRetreatNextPost 加 attack-effect guard；伊裴爾塔爾|緊抓
+    //   (inline) 及各卡檔本地 helper（青木的勇士雄鷹|緊抓 / 烈箭鷹|緊抓 / 各「束縛・毒陣」等）漏 guard。
+    //   此處在 ATTACK_POST 後集中掃描：若防守 active「本次新獲得」cantRetreatNextTurn 且對招式效果免疫
+    //   → 清除（薄霧能量卡面「附有這張卡的寶可夢不會受到對手寶可夢招式的效果的影響」）。
+    {
+      const _dBefore = defender.active;
+      const _dAfter = newState.players[dIdx].active;
+      if (_dAfter && _dAfter.cantRetreatNextTurn && _dAfter.iid === _dBefore?.iid && !_dBefore?.cantRetreatNextTurn) {
+        const _gr = canApplyEffectToTarget(newState, aIdx, _dAfter, pool.get(_dAfter.cardId), 'attack-effect', pool);
+        if (_gr.blocked) {
+          const _players = [...newState.players] as [PlayerState, PlayerState];
+          const _da = { ..._players[dIdx].active! };
+          delete _da.cantRetreatNextTurn;
+          _players[dIdx] = { ..._players[dIdx], active: _da };
+          newState = addLog({ ...newState, players: _players },
+            `無法撤退效果：${_gr.reason}（${defenderCard?.name ?? '?'} 不受影響）`, aIdx);
+        }
+      }
+    }
     // v4.991: ATTACK 流程結尾統一 set turnPhase='end' — 修玩家 case 1 卡死。
     //   之前 KO 分支跳過 turnPhase 設定（line 4751 只有「沒 KO」分支 set），
     //   導致 END_TURN handler (line 1330 check turnPhase==='end') 拒絕處理，
