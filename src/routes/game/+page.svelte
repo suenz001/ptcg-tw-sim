@@ -645,6 +645,27 @@
     };
   });
 
+  // v5.350：長任務（主執行緒卡死）偵測器 — 玩家回報「畫面凍住 / 聊天打字要等很久」時，
+  //   F12 console 會印出主執行緒被卡幾毫秒 + 當下最後一個動作，協助定位真兇（渲染或反應式運算）。
+  //   注意：true 無限迴圈不會產生 longtask entry（任務沒結束），但「長但會結束」的飽和會被抓到。
+  onMount(() => {
+    if (typeof window === 'undefined' || typeof PerformanceObserver === 'undefined') return;
+    let obs: PerformanceObserver | null = null;
+    try {
+      obs = new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (e.duration >= 600) {
+            const bc = (globalThis as any).__ptcgLB;
+            console.error('[PTCG] \u26a0\ufe0f \u4e3b\u57f7\u884c\u7dd2\u5361 ' + Math.round(e.duration) + 'ms'
+              + (bc ? '\uff08\u6700\u5f8c\u52d5\u4f5c\uff1a' + bc.kind + '/' + (bc.action ?? '') + '\uff0c' + Math.round(Date.now() - bc.t) + 'ms \u524d\uff09' : ''));
+          }
+        }
+      });
+      obs.observe({ entryTypes: ['longtask'] });
+    } catch { /* longtask 不支援就略過 */ }
+    return () => { try { obs?.disconnect(); } catch { /* ignore */ } };
+  });
+
   // v4.05：擋瀏覽器返回手勢避免右滑中斷對戰
   //   玩家回報手機版右滑（iOS Safari 邊緣返回 / Android 左滑）會跳出對戰。
   //   修法：進對戰時 history.pushState dummy state；popstate 觸發時再 push 回。
@@ -3679,9 +3700,13 @@
     // v5.345：引擎可能 throw（最常見：getCard 找不到卡 — ?卡 / 舊版 id 漏遷移 / 尚未載入的 set），
     //   原本沒有 try/catch → throw 會讓 dispatch 崩潰、玩家點了沒反應 = 整局凍結。改為攔截：
     //   不改 state、不 push（避免把壞狀態同步給對手），並提示玩家（可投降/重整脫困）。
+    (globalThis as any).__ptcgLB = { kind: 'dispatch', action: (action as any)?.type, t: Date.now() }; // v5.350 卡頓麵包屑
     let newState: GameState;
     try {
+      const _t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
       newState = applyAction(game, action as any, pool);
+      const _dt = (typeof performance !== 'undefined') ? performance.now() - _t0 : 0;
+      if (_dt >= 300) console.warn('[PTCG] applyAction(' + (action as any)?.type + ') 耗時 ' + Math.round(_dt) + 'ms');
     } catch (err) {
       console.error('[PTCG] applyAction 拋例外，已攔截避免凍結:', action.type, err);
       if (!opts.fromAI) {
@@ -4592,6 +4617,7 @@
   function handleRoomUpdate(room: Room | null) {
     if (!room) { onlineError = '房間不存在或連線中斷'; return; }
     roomData = room;
+    (globalThis as any).__ptcgLB = { kind: 'incoming', action: room?.gameState?.log?.length, t: Date.now() }; // v5.350 卡頓麵包屑
 
     // ── v4.920 觀戰者加入/離開通知（送到聊天室）─────────────────────────
     //   只有 mySeatIdx === 0 (P1) 才 sendMessage，避免雙方 client 同時偵測重複。

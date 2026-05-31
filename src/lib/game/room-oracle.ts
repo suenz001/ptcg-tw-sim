@@ -584,7 +584,7 @@ export function subscribeRoom(roomCode: string, callback: (room: Room | null) =>
     // v5.347：自適應輪詢間隔 — 前景(分頁可見)時加快、對手動作更即時；
     //   背景(document.hidden)時放慢以省手機電量/行動數據。
     //   只改 cadence，不動 callback/merge/push；callback 仍只在 _version 變化時觸發。
-  }, () => (typeof document !== 'undefined' && document.hidden) ? 2500 : 450);
+  }, () => (typeof document !== 'undefined' && document.hidden) ? 2500 : 800); // v5.350：前景退回 800ms（450ms 疑似在對手連續出招時加重主執行緒重繪壓力 → 凍結）
 }
 
 export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
