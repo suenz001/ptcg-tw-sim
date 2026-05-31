@@ -18,6 +18,14 @@ function browserOnly<T>(fallback: T, fn: () => T): T {
 // v5.301: cardId migration helper 已搬到 cardIdMigration.ts (migrateDeck export)
 //   v5.300 在 storage.ts 內定義 migrateDeck 但 loadDecks 沒呼叫 → 玩家舊牌組仍顯示 jp_id
 //   v5.301 修法: 改 import migrateDeck, loadDecks 內 return 時自動 map
+// v5.352：依玩家自訂 order 排序；未設 order 者（order=undefined）視為極大值排後面，
+//   並以 createdAt 為 tiebreak（未排序過的使用者維持原本 createdAt 排序，無回歸）。
+export function sortDecks(decks: Deck[]): Deck[] {
+  const M = Number.MAX_SAFE_INTEGER;
+  return [...decks].sort((a, b) =>
+    ((a.order ?? M) - (b.order ?? M)) || a.createdAt.localeCompare(b.createdAt));
+}
+
 export function loadDecks(): Deck[] {
   return browserOnly<Deck[]>([], () => {
     const raw = localStorage.getItem(KEY);
@@ -25,7 +33,8 @@ export function loadDecks(): Deck[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     // v5.301: 自動 jp_id → tw_id migration (M5 等已從日版升級為台版)
-    return parsed.map(migrateDeck);
+    // v5.352：依自訂 order 排序
+    return sortDecks(parsed.map(migrateDeck));
   });
 }
 

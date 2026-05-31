@@ -24,6 +24,8 @@ export interface Deck {
   createdAt: string;
   updatedAt: string;
   notes?: string;
+  /** v5.352：玩家自訂排序索引（牌組編輯器上下移動寫入）。未設者排在已設者之後（沿用 createdAt）。 */
+  order?: number;
 }
 
 export interface DeckValidationResult {

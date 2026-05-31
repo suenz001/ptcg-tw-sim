@@ -9,7 +9,8 @@
     loadDecks,
     upsertDeck,
     deleteDeck,
-    newDeck
+    newDeck,
+    sortDecks
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
@@ -87,21 +88,33 @@
   let pickerPreview = $state<Card | null>(null);
 
   // v5.320: deck 排序改 ⬆️⬇️ 按鈕 (拿掉 v5.311~v5.319 拖曳邏輯 — 跨裝置 quirks 太多)
+  // v5.352：reorder 後把新位置寫進每副牌的 order 欄位，存本地 + 同步雲端（只同步 order 變動者），
+  //   讓自訂順序跨裝置 / 對戰選牌組都一致（原本只 saveDecks 本地、且各處用 createdAt 排序會洗掉）。
+  function persistDeckOrder(arr: Deck[]) {
+    const now = new Date().toISOString();
+    const renum = arr.map((d, idx) => (d.order === idx ? d : { ...d, order: idx, updatedAt: now }));
+    decks = renum;
+    saveDecks(renum);
+    if (firebaseUser && !firebaseUser.isAnonymous) {
+      const uid = firebaseUser.uid;
+      renum.forEach((d, idx) => {
+        if (arr[idx]?.order !== idx) syncDeckToCloud(uid, d).catch(() => { /* best-effort */ });
+      });
+    }
+  }
   function moveDeckUp(deckId: string) {
     const i = decks.findIndex(d => d.id === deckId);
     if (i <= 0) return;
     const arr = [...decks];
     [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
-    decks = arr;
-    saveDecks(arr);
+    persistDeckOrder(arr);
   }
   function moveDeckDown(deckId: string) {
     const i = decks.findIndex(d => d.id === deckId);
     if (i < 0 || i >= decks.length - 1) return;
     const arr = [...decks];
     [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
-    decks = arr;
-    saveDecks(arr);
+    persistDeckOrder(arr);
   }
 
   // v5.310: 常用卡牌 (favorites) state — 本地 localStorage, 手動雲端同步
@@ -548,7 +561,7 @@
     try {
       const cloud = await withTimeout(loadDecksFromCloud(firebaseUser.uid));
       if (cloud.length > 0) {
-        decks = cloud.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+        decks = sortDecks(cloud); // v5.352：自訂順序優先
         import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
         activeId = decks[0]?.id ?? null;
         dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
@@ -623,7 +636,7 @@
             const existing = merged.get(d.id);
             if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
           }
-          decks = [...merged.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先
           // Persist merged result locally
           import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
         } else {

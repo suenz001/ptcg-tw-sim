@@ -6,7 +6,7 @@
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex } from '$lib/cards/pool';
-  import { loadDecks, saveDecks } from '$lib/decks/storage';
+  import { loadDecks, saveDecks, sortDecks } from '$lib/decks/storage';
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
   import { loadDecksFromCloud } from '$lib/decks/cloud';
   import type { Deck } from '$lib/decks/types';
@@ -3176,7 +3176,7 @@
               const existing = merged.get(d.id);
               if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
             }
-            decks = [...merged.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+            decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先（對戰選牌組與編輯器一致）
             saveDecks(decks);
           } else {
             // cloud 空 → 用 local（保持原樣，不改動）
@@ -8458,16 +8458,32 @@
   <!-- Discard Viewer -->
   {#if viewDiscardFor !== null}
     {@const viewPlayer = game!.players[viewDiscardFor]}
+    {@const discardGrouped = (() => {
+      // v5.352：網頁版棄牌區改與手機版一致 — 合併同名卡顯示張數，依
+      //   寶可夢→物品→支援者→場地→能量 排序（同類內 count desc 再 name）。
+      const map = new Map();
+      for (const inst of viewPlayer.discard) {
+        const card = pool.get(inst.cardId);
+        const entry = map.get(inst.cardId);
+        if (entry) entry.count++;
+        else map.set(inst.cardId, { name: card?.name ?? inst.cardId, count: 1, cardId: inst.cardId });
+      }
+      return [...map.values()].sort((a, b) => {
+        const ra = cardTypeRank(pool.get(a.cardId)), rb = cardTypeRank(pool.get(b.cardId));
+        if (ra !== rb) return ra - rb;
+        return b.count - a.count || a.name.localeCompare(b.name);
+      });
+    })()}
     <div class="zoom-overlay" onclick={() => viewDiscardFor = null}>
       <div class="zoom-modal discard-modal" onclick={(e)=>e.stopPropagation()}>
         <button class="zoom-close" onclick={() => viewDiscardFor = null}>✕</button>
         <h3 class="discard-title">🗑 {viewPlayer.name} 的棄牌區（{viewPlayer.discard.length} 張）</h3>
         <div class="sel-grid">
-          {#each [...viewPlayer.discard].reverse() as inst}{@const c=getCard(inst.cardId)}
+          {#each discardGrouped as g}{@const c=getCard(g.cardId)}
             {#if c}
-              <button class="sel-card" onclick={() => openZoom(inst.cardId)}>
+              <button class="sel-card" onclick={() => openZoom(g.cardId)}>
                 <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
-                {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
+                <span class="deck-cell-count">×{g.count}</span>
               </button>
             {/if}
           {/each}
