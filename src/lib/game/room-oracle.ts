@@ -554,11 +554,24 @@ export async function startGame(roomCode: string, gameState: GameState): Promise
 }
 
 export async function pushGameState(roomCode: string, gameState: GameState): Promise<void> {
-  await oracleTx(roomCode.toUpperCase(), (data) => ({
-    ...data,
-    gameState: JSON.parse(JSON.stringify(gameState)),
-    status: gameState.phase === 'game-over' ? 'ended' : 'playing',
-  }));
+  await oracleTx(roomCode.toUpperCase(), (data) => {
+    // v5.346：回退防護 — 防止「stale 本地 push 覆蓋房間更新的狀態」。
+    //   根因：optimistic UI 讓玩家在前一個 push（如寶芬/搜尋的 pending 狀態）尚未 commit 前就點了
+    //   下一步，兩個 pushGameState 的 oracleTx 可能 out-of-order commit（後到的是『較早』狀態），
+    //   把房間洗回舊狀態 → 對手畫面回退/沒顯示、自己端 pending 被 poll 讀回重觸發（寶芬畫面再閃一次）。
+    //   修法：playing 期間，若我方 gameState 比房間現有『嚴格較舊』(log 長度為單調序) → 不覆蓋，
+    //   保留房間較新狀態（idempotent；本地稍後由 poll 收斂到較新）。不擋等長，避免雙端互卡。
+    const cur = (data as unknown as { gameState?: GameState | null }).gameState;
+    if (cur && gameState.phase === 'playing' && cur.phase === 'playing'
+        && (gameState.log?.length ?? 0) < (cur.log?.length ?? 0)) {
+      return data; // 我方較舊 → 略過寫入，不 regress 房間
+    }
+    return {
+      ...data,
+      gameState: JSON.parse(JSON.stringify(gameState)),
+      status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+    };
+  });
 }
 
 // ── Subscribe (polling) ─────────────────────────────────────────────────────

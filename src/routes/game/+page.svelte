@@ -4725,9 +4725,13 @@
         const me = myPlayerIndex;
         let merged: GameState = {
           ...incoming,
+          // v5.346：對手側防回退 — 若本地已收到對手「已準備(setupDone=true)」的 players（含已設好的
+          //   6 張獎勵牌/擺放），卻來了 setupDone=false 的 stale incoming（out-of-order），不要用它覆蓋
+          //   → 保留本地已完成的對手 players。修「開局對手獎勵顯示 0 張」(手機/網頁皆可能) 等對手側回退。
+          //   自己側永遠保留本地最新（同 v3.39）。
           players: (me === 0
-            ? [game.players[0], incoming.players[1]]
-            : [incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
+            ? [game.players[0], (game.setupDone[1] && !incoming.setupDone[1]) ? game.players[1] : incoming.players[1]]
+            : [(game.setupDone[0] && !incoming.setupDone[0]) ? game.players[0] : incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
           // v5.339：setupDone / mulliganRevealConfirmed / pendingMulliganDraw 改「單調合併」。
           //   根因：Oracle 房狀態推送可能 out-of-order / 重送，原 per-player 覆蓋式 merge 收到「較早
           //   狀態」晚到時會把已前進的進度洗回去（pendingMulliganDraw 退回 N、confirmed 退回 false）
