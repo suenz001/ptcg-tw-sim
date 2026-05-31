@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.06</title>
+<title>PTCG Oracle Admin v1.07</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.06</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.07</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1902,7 +1902,7 @@ let statsHeatmapCache = null;
 let statsTrendsCache = null;
 let trendsGranularity = 'day';  // 'day' | 'week' | 'month'
 let trendsDays = 30;            // 30 | 90 | 365
-let winrateFilterMode = 'all';  // 'all' | 'main' | 'support'（同 1.6）
+let winrateFilterMode = 'main';  // v1.07 預設主力打手（'all' | 'main' | 'support'）
 
 async function loadStats(reset = false) {
   if (statsLoading) return;
@@ -2020,20 +2020,24 @@ window.setWinrateFilter = function(m) {
 function renderStatsOverview(s) {
   const t = s.total || {};
   const total = t.all || 0;
-  const pct = (n) => total > 0 ? Math.round(n / total * 100) : 0;
-  const showModeBreakdown = (statsMode === 'all');
+  // v1.07：近 24h vs 前 24h（24–48h 前）成長率 — 成長紅、衰退綠
+  const cur24 = s.new24h || 0;
+  const prev24 = s.new24hPrev || 0;
+  let growthHtml = '';
+  if (prev24 > 0) {
+    const chg = Math.round((cur24 - prev24) / prev24 * 100);
+    const color = chg > 0 ? '#e53935' : (chg < 0 ? '#2e7d32' : '#7a8898');
+    const arrow = chg > 0 ? '▲' : (chg < 0 ? '▼' : '—');
+    growthHtml = `<div style="color:${color}; font-size:12px; margin-top:3px; font-weight:600;">${arrow} ${Math.abs(chg)}% <span class="small muted" style="font-weight:400;">vs 前 24h（${prev24} 場）</span></div>`;
+  } else if (cur24 > 0) {
+    growthHtml = `<div class="small muted" style="font-size:12px; margin-top:3px;">前 24h 無對戰可比較</div>`;
+  }
   return `
     <section class="stats-section">
-      <h3>📊 1.1 對戰總覽</h3>
+      <h3>📊 1.1 對戰總覽 <span class="small muted">（資料範圍跟上方選擇器連動）</span></h3>
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">總場次</div><div class="stat-value">${total}</div></div>
-        ${showModeBreakdown ? `
-          <div class="stat-card"><div class="stat-label">🌐 線上</div><div class="stat-value">${t.online || 0}<span class="stat-pct">${pct(t.online)}%</span></div></div>
-          <div class="stat-card"><div class="stat-label">🏠 本機</div><div class="stat-value">${t.local || 0}<span class="stat-pct">${pct(t.local)}%</span></div></div>
-        ` : ''}
-        <div class="stat-card"><div class="stat-label">🤖 vs AI</div><div class="stat-value">${t.vsAI || 0}<span class="stat-pct">${pct(t.vsAI)}%</span></div></div>
-        <div class="stat-card"><div class="stat-label">👥 真人對戰</div><div class="stat-value">${t.humanOnly || 0}</div></div>
-        <div class="stat-card"><div class="stat-label">近 24h</div><div class="stat-value">${s.new24h || 0}</div></div>
+        <div class="stat-card"><div class="stat-label">近 24h</div><div class="stat-value">${cur24}</div>${growthHtml}</div>
         <div class="stat-card"><div class="stat-label">近 7 天</div><div class="stat-value">${s.new7d || 0}</div></div>
         <div class="stat-card"><div class="stat-label">近 30 天</div><div class="stat-value">${s.new30d || 0}</div></div>
       </div>
@@ -2385,7 +2389,7 @@ function renderEnergyDistribution(c) {
 }
 
 // v0.99: 2.3 卡牌勝率 client-side sort state
-let winrateSort = 'winRate';
+let winrateSort = 'winDecks';  // v1.07 預設依勝方牌組
 let winrateSortDir = 'desc';
 window.setWinrateSort = function(col) {
   if (winrateSort === col) {
@@ -2398,7 +2402,7 @@ window.setWinrateSort = function(col) {
 };
 
 // v0.93: 玩家排行榜 client-side sort state
-let playerRankSort = 'winRate';
+let playerRankSort = 'matches';  // v1.07 預設依場次
 let playerRankSortDir = 'desc';
 window.setPlayerRankSort = function(col) {
   if (playerRankSort === col) {

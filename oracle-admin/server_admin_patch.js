@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.24 (admin v1.01 — 2.3 卡牌→代表牌組聚合端點 archetype；原 v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
+// === ORACLE ADMIN ENDPOINTS === v0.25 (admin v1.01 — 2.3 卡牌→代表牌組聚合端點 archetype；原 v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -844,6 +844,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
               { $project: { _id: 0 } },
             ],
             new24h: [{ $match: { endedAt: { $gte: now - ONE_DAY } } }, { $count: 'n' }],
+            // v0.25：前 24h（24–48h 前）給 1.1 成長率比較
+            new24hPrev: [{ $match: { endedAt: { $gte: now - 2 * ONE_DAY, $lt: now - ONE_DAY } } }, { $count: 'n' }],
             new7d: [{ $match: { endedAt: { $gte: now - 7 * ONE_DAY } } }, { $count: 'n' }],
             new30d: [{ $match: { endedAt: { $gte: now - 30 * ONE_DAY } } }, { $count: 'n' }],
             // 1.2 先攻後攻勝率（可選 filter：只看真人對戰）
@@ -918,6 +920,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({
           total: unwrap(agg.totals, { all: 0, online: 0, local: 0, vsAI: 0, humanOnly: 0 }),
           new24h: unwrapCount(agg.new24h),
+          new24hPrev: unwrapCount(agg.new24hPrev),
           new7d: unwrapCount(agg.new7d),
           new30d: unwrapCount(agg.new30d),
           firstMover: {
