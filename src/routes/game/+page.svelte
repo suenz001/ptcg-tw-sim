@@ -8336,7 +8336,7 @@
        6 counter）時，防守方先不彈 modal；等 pending 結束後再彈，避免「modal 已開
        但 button 按了沒反應」的卡頓視覺。 -->
   {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection}
-    <div class="selection-overlay">
+    <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
@@ -8376,7 +8376,7 @@
        v2.123：去掉 turnPhase!=='end' 限制 — 中毒於 END_TURN 觸發時 turnPhase 可能已是 'end'，
        舊條件會擋掉 modal 造成當機。 -->
   {#if game && game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
-    <div class="selection-overlay">
+    <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>

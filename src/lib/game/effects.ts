@@ -1507,8 +1507,28 @@ reg('神奇糖果', (st, idx, pool) => {
     }
     return false;
   };
-  const validIids = p.hand.filter(inst => isStage2(pool.get(inst.cardId))).map(i => i.iid);
-  if (validIids.length === 0) return addLog(st, '神奇糖果：手牌中沒有可進化的寶可夢', idx);
+  // v5.340：只列出「在場上有合法【基礎】目標」的 Stage2（鏡射 guard + rare-candy-choose-target
+  //   的鏈結判定）。原本只 filter isStage2 → 手牌有多張 Stage2 時會把「場上沒有對應基礎」那張也
+  //   列出，玩家選到它 → 神奇糖果已打出被棄、卻無法進化 → 卡白白消耗（依規則不該能這樣用）。
+  const rcFieldPokes = [...(p.active ? [p.active] : []), ...p.bench];
+  const rcHasFieldBasic = (s2c: Card): boolean => {
+    const stage1Name = s2c.evolvesFrom;
+    let basicName: string | undefined;
+    for (const [, c] of pool) {
+      if (sameEvoName(c.name, stage1Name ?? '') && c.evolvesFrom) { basicName = c.evolvesFrom; break; }
+    }
+    if (!basicName) basicName = stage1Name;  // fallback：Stage2 直接 evolvesFrom 基礎（同 resolver）
+    if (!basicName) return false;
+    return rcFieldPokes.some(pk => {
+      if (pk.justPlaced || pk.evolvedThisTurn) return false;
+      const bc = pool.get(pk.cardId);
+      return !!bc && sameEvoName(bc.name, basicName!);
+    });
+  };
+  const validIids = p.hand
+    .filter(inst => { const c = pool.get(inst.cardId); return !!c && isStage2(c) && rcHasFieldBasic(c); })
+    .map(i => i.iid);
+  if (validIids.length === 0) return addLog(st, '神奇糖果：手牌中沒有可進化的寶可夢（場上沒有對應的基礎）', idx);
   st = addLog(st, '神奇糖果：從手牌選擇要進化的 2 階寶可夢', idx);
   return withPending(st, {
     type: 'hand-choose', actorIdx: idx, sourcePlayerIdx: idx,
