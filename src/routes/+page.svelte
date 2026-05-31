@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.342</span> 海豚俠ex 在手牌不再顯示可使用黃框、直接禁止打出</summary>
+        <ul>
+          <li>修正：海豚俠ex 只能透過海豚俠的特性「全能變身」上場，因此在手牌中不應顯示「可使用」的黃色外框。現在手牌裡的海豚俠ex 不會再亮黃框、也無法拖曳打出（網頁版與手機版皆已套用）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.341</span> 修正海豚俠ex 進化規則與「全能變身」搜尋範圍</summary>
         <ul>
           <li>修正：海豚俠ex 的特性「全能靈魂」明文「只可依據海豚俠的特性『全能變身』放置於場上」，因此波普海豚不能直接進化成海豚俠ex。原本可用一般進化跳上海豚俠ex，已修正為禁止（仍可正常進化成海豚俠）。</li>

@@ -7504,7 +7504,8 @@ export function getEvolvableTargets(
   // 手牌中的進化牌（有 evolvesFrom 且非基礎）
   const handEvos = player.hand.filter(inst => {
     const c = pool.get(inst.cardId);
-    return c?.supertype === 'Pokemon' && c.evolvesFrom;
+    // v5.342 海豚俠ex｜全能靈魂 — 只能由「全能變身」放上場，不可一般進化 → 手牌不顯示黃框/不可拖曳進化。
+    return c?.supertype === 'Pokemon' && c.evolvesFrom && !isAllPowerSoulBlocked(c);
   });
   if (handEvos.length === 0) return [];
 
