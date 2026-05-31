@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.08</title>
+<title>PTCG Oracle Admin v1.09</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.08</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.09</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2998,7 +2998,11 @@ window.toggleSupportTag = async function(cardId) {
   if (!cardId) return;
   // v0.83: 找出同 canonicalKey 的所有版本 cardId，一起 toggle（同名同效卡視為同一張）
   const info = cardInfoMap[cardId];
-  const sameGroupIds = info?.canonicalKey ? (cardCanonicalMap.get(info.canonicalKey) || [cardId]) : [cardId];
+  // v1.09：一律把「被點的 cardId 本身」納入標記集合。M5 等卡在統計資料常是舊日版 id (50220-50300)，
+  //   但 cardCanonicalMap 只含台版 id (19145+) → 舊作法只標台版、而偵測端(g.cardIds)用統計的日版 id
+  //   → 標了卻偵測不到、畫面沒反應 (螺釘地鼠/小篤兒等 M5 卡)。改為一定含 cardId 自身。
+  const groupIds = info?.canonicalKey ? (cardCanonicalMap.get(info.canonicalKey) || []) : [];
+  const sameGroupIds = Array.from(new Set([cardId, ...groupIds]));
   const isSupport = (cardTagsCache[cardId] || []).includes('support');
   const action = isSupport ? 'remove' : 'add';
   try {
