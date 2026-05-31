@@ -168,7 +168,7 @@ export async function oracleListRooms(status?: string): Promise<OracleRoom[]> {
 export function oraclePollRoom(
   code: string,
   callback: (room: OracleRoom | null) => void,
-  intervalMs: number = 800,
+  intervalMs: number | (() => number) = 800,
 ): () => void {
   let lastVersion = -1;
   let lastExists = true;
@@ -193,7 +193,11 @@ export function oraclePollRoom(
     } catch (err) {
       console.warn('[oraclePollRoom]', code, err);
     }
-    if (alive) timer = setTimeout(tick, intervalMs);
+    // v5.347：intervalMs 可為函式 → 每次重排前求值（支援自適應輪詢）
+    if (alive) {
+      const _d = typeof intervalMs === 'function' ? intervalMs() : intervalMs;
+      timer = setTimeout(tick, _d);
+    }
   };
 
   tick();

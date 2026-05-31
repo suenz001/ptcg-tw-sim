@@ -581,7 +581,10 @@ export function subscribeRoom(roomCode: string, callback: (room: Room | null) =>
   return oraclePollRoom(code, (room) => {
     if (!room) { callback(null); return; }
     callback({ ...(room as unknown as RoomData), roomId: code });
-  }, 800);
+    // v5.347：自適應輪詢間隔 — 前景(分頁可見)時加快、對手動作更即時；
+    //   背景(document.hidden)時放慢以省手機電量/行動數據。
+    //   只改 cadence，不動 callback/merge/push；callback 仍只在 _version 變化時觸發。
+  }, () => (typeof document !== 'undefined' && document.hidden) ? 2500 : 450);
 }
 
 export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
