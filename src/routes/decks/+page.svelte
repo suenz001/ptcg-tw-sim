@@ -94,7 +94,9 @@
     const now = new Date().toISOString();
     const renum = arr.map((d, idx) => (d.order === idx ? d : { ...d, order: idx, updatedAt: now }));
     decks = renum;
-    saveDecks(renum);
+    // v5.356：此檔故意不在頂層 import saveDecks（見 line ~1021 註解）；用動態 import 寫法，
+    //   否則直接呼叫 saveDecks 會 ReferenceError(玩家回報「卡在牌組套用中 / 順序存不了」真因)。
+    import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(renum));
     if (firebaseUser && !firebaseUser.isAnonymous) {
       const uid = firebaseUser.uid;
       renum.forEach((d, idx) => {

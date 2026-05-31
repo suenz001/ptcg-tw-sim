@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.356</span> 修正：牌組順序調整實際存檔（修 v5.352 的存檔錯誤）</summary>
+        <ul>
+          <li>修正 v5.352 牌組順序功能的一個錯誤：調整順序時實際存檔的呼叫會出錯（ReferenceError），導致順序在畫面上動了卻沒真正存進去、重整後就還原。現已修正，上下移動牌組順序會正確存到本機與你的帳號（雲端）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.354</span> 重要修正：讓網站更新能確實套用（修 service worker 卡在舊版）</summary>
         <ul>
           <li>修正一個會導致「網站已更新、但你的瀏覽器仍停留在舊版」的問題。原因是離線快取（service worker）在安裝新版時，只要其中一個檔案抓取失敗（例如卡牌資料因伺服器設定被瀏覽器擋下），整個更新就會失敗、讓你被釘在舊版。現已改為容錯安裝：個別檔案失敗不會再阻斷整體更新，確保最新版本能正確套用。若你曾遇到「修正一直沒生效」，這就是原因。</li>
