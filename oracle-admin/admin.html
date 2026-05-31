@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.07</title>
+<title>PTCG Oracle Admin v1.08</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.07</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.08</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2274,7 +2274,8 @@ function renderTopPokemon(c) {
   else if (pokemonFilterMode === 'support') filtered = allGroups.filter(g => groupHasSupport(g));
   const supportCount = allGroups.filter(groupHasSupport).length;
   _pokemonGroups = filtered;  // v1.04：模式過濾後(未切50)全部給搜尋用
-  pokemonPage = 0;  // v1.06: 換視圖回第 1 頁
+  // v1.08：不在此自動回第 1 頁 — 否則「標支援型」(走 renderStats 整頁重渲染) 會把 >50 名卡所在頁跳掉，看似沒反應。
+  //   改為只在「換 filter / 搜尋」時 reset（見 setPokemonFilter / filterTopPokemon）。
   return `
     <section class="stats-section">
       <h3>🎴 1.6 熱門寶可夢 Top 50 <span class="small muted">（同名同效不同版本合併）</span></h3>
@@ -2417,6 +2418,7 @@ window.setPlayerRankSort = function(col) {
 window.setPokemonFilter = function(m) {
   if (m !== 'all' && m !== 'main' && m !== 'support') return;
   pokemonFilterMode = m;
+  pokemonPage = 0;  // v1.08：換 filter 回第 1 頁（標支援型不經此處 → 保留當前頁）
   renderStats(document.getElementById('tab-stats'));
 };
 
