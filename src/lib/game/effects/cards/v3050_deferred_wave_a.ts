@@ -76,12 +76,14 @@ regA('海豚俠', 0, (st, idx, pool, cardInst) => {
   const s = addLog(st,
     '全能變身：從牌庫選 1 張「海豚俠ex」與這張卡互換（保留全部附加），並重洗牌庫',
     idx);
+  // v5.341：picker 只列牌庫裡的「海豚俠ex」（卡面明文只能選海豚俠ex）。用 validIids 收窄 deck-search。
+  const exIids = p.deck.filter(d => pool.get(d.cardId)?.name === '海豚俠ex').map(d => d.iid);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon', minCount: 0, maxCount: 1,
     effectKey: 'hugin-allmight-swap',
-    params: { hostIid: src.iid },
+    params: { hostIid: src.iid, validIids: exIids },
   });
 });
 

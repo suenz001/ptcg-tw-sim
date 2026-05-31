@@ -2459,6 +2459,12 @@ function handlePlaying(
     const evoInst = attacker.hand[evoHIdx];
     const evoCard = pool.get(evoInst.cardId);
     if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return state;
+    // v5.341 海豚俠ex｜全能靈魂 — 「這張卡只可依據海豚俠的特性『全能變身』放置於場上」。
+    //   EVOLVE 路徑也要擋（原本只 PLAY_BASIC 擋；海豚俠ex evolvesFrom=波普海豚 → 會被當一般進化目標）。
+    if (isAllPowerSoulBlocked(evoCard)) {
+      return addLog(state,
+        `${attacker.name} 的 ${evoCard.name} 因「全能靈魂」效果，無法以一般進化放上場（只能由「全能變身」放置）`, aIdx);
+    }
 
     // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
     //   （『火箭隊的』除外）不能從手牌進化放置於場上（EVOLVE 路徑）
