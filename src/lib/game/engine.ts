@@ -1861,11 +1861,15 @@ function dealOpeningHand(
 //   滿足才能進 playing phase。在多個 handler 結尾呼叫（FINISH_SETUP / MULLIGAN_DRAW_DECISION /
 //   CONFIRM_MULLIGAN_REVEAL）以避免重複條件 check 邏輯。
 // v4.494：export 給 +page.svelte 在線上 setup merge 後重新評估（修兩端同時 finish 卡死 bug）
+let _lastAdvanceBlockReason = '';
 export function tryAdvanceToPlaying(state: GameState): GameState {
   if (state.phase !== 'setup') return state;
   // v5.261 audit: 若無法 advance, 記下原因 (debug Bug 14 AI 起手無基礎玩家補抽後卡死)
+  // v5.353：去重 — 等對手擺場時 800ms 輪詢會反覆呼叫本函式，原本每次都 console.warn 造成
+  //   洗版（嚇到使用者誤以為當機）。只在「原因字串改變」時才印一次。
   const auditFail = (reason: string) => {
-    if (typeof console !== 'undefined' && console.warn) {
+    if (typeof console !== 'undefined' && console.warn && _lastAdvanceBlockReason !== reason) {
+      _lastAdvanceBlockReason = reason;
       console.warn(`[tryAdvanceToPlaying blocked] ${reason}`,
         'setupDone:', state.setupDone,
         'pendingMulliganDraw:', state.pendingMulliganDraw,
