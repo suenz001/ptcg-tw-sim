@@ -5563,23 +5563,34 @@ function handlePlaying(
       // （如 激流水泵）能在 POST 階段判斷玩家是否棄了能量
       newState = postFn(newState, aIdx, pool, action);
     }
-    // v5.343：集中修「薄霧能量等免疫對手招式效果的 active 仍被招式設『下回合無法撤退』」。
-    //   v5.333 只在 effects.ts 中央 defCantRetreatNextPost 加 attack-effect guard；伊裴爾塔爾|緊抓
-    //   (inline) 及各卡檔本地 helper（青木的勇士雄鷹|緊抓 / 烈箭鷹|緊抓 / 各「束縛・毒陣」等）漏 guard。
-    //   此處在 ATTACK_POST 後集中掃描：若防守 active「本次新獲得」cantRetreatNextTurn 且對招式效果免疫
-    //   → 清除（薄霧能量卡面「附有這張卡的寶可夢不會受到對手寶可夢招式的效果的影響」）。
+    // v5.344（v5.343 一般化）：集中修「對招式效果免疫的防守 active（薄霧能量 / 硬岩【鬥】能量 /
+    //   皇帝之勢 / 抵抗之幕 / 純樸 / 阿塞蘿拉 / 對戰圓形 / 球形盾牌 / 藏隱 / 化石 等，皆由 unified
+    //   canApplyEffectToTarget('attack-effect') 認列）仍被招式『新加上』狀態/封退/封招」。
+    //   背景：v5.333 只修中央 defCantRetreatNextPost；statusPost 與中央 defCantAttackNextPost 已 guard，
+    //   但伊裴爾塔爾|緊抓(inline) / 各卡檔本地 helper / 毒陣・雙狀態類「inline 直接設 status/secondaryStatus」
+    //   等仍會繞過。此處在 ATTACK_POST 後集中比對：若防守 active 對招式效果免疫，且『本次』新加了
+    //   status / secondaryStatus / cantRetreatNextTurn / cantAttackPending(封招) → 一律還原（薄霧/硬岩卡面
+    //   「不會受到對手寶可夢招式的『效果』的影響」；傷害不在此還原，照常結算）。已 guard 的 applier
+    //   在免疫時本就不會新增這些欄位 → 此 sweep 對它們 no-op，無副作用。
     {
-      const _dBefore = defender.active;
-      const _dAfter = newState.players[dIdx].active;
-      if (_dAfter && _dAfter.cantRetreatNextTurn && _dAfter.iid === _dBefore?.iid && !_dBefore?.cantRetreatNextTurn) {
-        const _gr = canApplyEffectToTarget(newState, aIdx, _dAfter, pool.get(_dAfter.cardId), 'attack-effect', pool);
+      const _b = defender.active;
+      const _a = newState.players[dIdx].active;
+      if (_a && _b && _a.iid === _b.iid) {
+        const _gr = canApplyEffectToTarget(newState, aIdx, _a, pool.get(_a.cardId), 'attack-effect', pool);
         if (_gr.blocked) {
-          const _players = [...newState.players] as [PlayerState, PlayerState];
-          const _da = { ..._players[dIdx].active! };
-          delete _da.cantRetreatNextTurn;
-          _players[dIdx] = { ..._players[dIdx], active: _da };
-          newState = addLog({ ...newState, players: _players },
-            `無法撤退效果：${_gr.reason}（${defenderCard?.name ?? '?'} 不受影響）`, aIdx);
+          const _da: any = { ..._a };
+          let _reverted = false;
+          // 本次「新加」異常狀態（含雙狀態槽）→ 還原成攻擊前；只還原「新增/變更為非空狀態」，不還原被治癒清空的
+          if (_da.status && _da.status !== _b.status) { _da.status = _b.status; _reverted = true; }
+          if (_da.secondaryStatus && _da.secondaryStatus !== _b.secondaryStatus) { _da.secondaryStatus = _b.secondaryStatus; _reverted = true; }
+          if (_da.cantRetreatNextTurn && !_b.cantRetreatNextTurn) { delete _da.cantRetreatNextTurn; _reverted = true; }
+          if (_da.cantAttackPending && !_b.cantAttackPending) { delete _da.cantAttackPending; _reverted = true; }
+          if (_reverted) {
+            const _players = [...newState.players] as [PlayerState, PlayerState];
+            _players[dIdx] = { ..._players[dIdx], active: _da };
+            newState = addLog({ ...newState, players: _players },
+              `招式效果：${_gr.reason}（${defenderCard?.name ?? '?'} 不受招式效果影響，傷害照常）`, aIdx);
+          }
         }
       }
     }
