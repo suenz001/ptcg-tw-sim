@@ -14453,7 +14453,9 @@ regR('unruda-choice', (state, aIdx, iids, _params, _pool) => {
         if (!pl.active) return pl;
         const old = pl.active;
         const newActive = pl.bench[0];
-        return { ...pl, active: { ...newActive, status: undefined, movedToActiveThisTurn: true }, bench: [old] };
+        // v5.348：舊 active 退備戰時清除 active-only 旗標（含 cantAttackPending 招式鎖），
+        //   與其他互換 resolver 一致，符合 PTCG 規則（退場清狀態）。
+        return { ...pl, active: { ...newActive, status: undefined, movedToActiveThisTurn: true }, bench: [clearActiveEffects(old)] };
       }), aIdx, _pool);
     }
     state = addLog(state, '烏栗：選 1 隻備戰寶可夢與戰鬥互換', aIdx);
@@ -14484,7 +14486,7 @@ regR('unruda-swap', (state, aIdx, iids, _params, pool) => {
     const newActive = pl.bench[idx];
     const newBench = [...pl.bench];
     newBench.splice(idx, 1);
-    newBench.push(pl.active);
+    newBench.push(clearActiveEffects(pl.active)); // v5.348：退備戰清招式鎖等 active-only 旗標
     return { ...pl, active: { ...newActive, status: undefined, movedToActiveThisTurn: true }, bench: newBench };
   }), aIdx, pool);
 });
