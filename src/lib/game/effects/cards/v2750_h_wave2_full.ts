@@ -2088,9 +2088,10 @@ regPost('鐵毒蛾|瘋狂拒絕', (state, aIdx, _pool) => {
 //   引擎已有 immuneToBasicAttackNextTurn / ThisTurn 旗標
 regPre('太樂巴戈斯ex|皇冠蛋白石', (s) => ({ state: s, damage: 180 }));
 regPost('太樂巴戈斯ex|皇冠蛋白石', (state, aIdx, _pool) => {
-  return updatePlayer(addLog(state, '皇冠蛋白石：下回合不受【基礎】寶可夢招式傷害（無屬性除外）', aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, '皇冠蛋白石：下回合不受【基礎】寶可夢招式傷害（【無】屬性除外）', aIdx), aIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, immuneToBasicAttackNextTurn: true } : null,
+    // v5.338：加 companion 旗標 → 消費點對【無】屬攻擊者（旋轉洛托姆等）放行
+    active: p.active ? { ...p.active, immuneToBasicAttackNextTurn: true, basicImmuneColorlessExcept: true } : null,
   }));
 });
 

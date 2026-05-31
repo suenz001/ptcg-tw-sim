@@ -344,7 +344,9 @@ export function resolveActiveAttackGuard(
   // 2. 塗層攻擊（鋁鋼橋龍）— 不受【基礎】寶可夢招式
   if (defender.immuneToBasicAttackThisTurn) {
     const stage = attackerCard.stage ?? attackerCard.subtype;
-    if (stage === 'Basic') {
+    // v5.338：皇冠蛋白石「【無】寶可夢除外」— companion 在時，【無】屬攻擊者放行
+    const colorlessExcept = defender.basicImmuneColorlessExcept && attackerCard.pokemonType === 'Colorless';
+    if (stage === 'Basic' && !colorlessExcept) {
       return { blocked: true, reason: '塗層攻擊免疫【基礎】寶可夢招式傷害' };
     }
   }

@@ -293,6 +293,12 @@ export interface CardInstance {
    */
   immuneToBasicAttackThisTurn?: boolean;
   /**
+   * v5.338：太樂巴戈斯ex｜皇冠蛋白石專用旗標 — 上述基礎免傷「【無】寶可夢除外」。
+   * 與 immuneToBasicAttackThisTurn 同時存在時，攻擊方 pokemonType==='Colorless'（【無】）不被擋，
+   * 其他基礎寶可夢招式仍擋。其餘共用 immuneToBasicAttackThisTurn 的卡（塗層攻擊/閃光射線等）不設此旗標。
+   */
+  basicImmuneColorlessExcept?: boolean;
+  /**
    * v2.174 阿塞蘿拉的惡作劇（Supporter / I）— 「在下個對手的回合，那隻寶可夢不會
    * 受到對手的『寶可夢【ex】』招式的傷害與效果的影響。」
    * 設於 ATTACK_POST 風格（reg 內把卡上立 NextTurn）；於擁有者下個 END_TURN 時 promote。

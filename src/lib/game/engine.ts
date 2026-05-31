@@ -4448,7 +4448,9 @@ function handlePlaying(
     //   玩家回報：厄鬼椪礎石面具ex|打爆 vs 超級雷電獸ex|閃光射線 沒造成傷害
     if (!skipDefEffects && baseDamage > 0
         && defender.active.immuneToBasicAttackThisTurn
-        && (attackerCard.stage ?? attackerCard.subtype) === 'Basic') {
+        && (attackerCard.stage ?? attackerCard.subtype) === 'Basic'
+        // v5.338：皇冠蛋白石「【無】寶可夢除外」— companion 在時，【無】屬攻擊者不擋
+        && !(defender.active.basicImmuneColorlessExcept && attackerCard.pokemonType === 'Colorless')) {
       workingState = addLog(workingState,
         `${defenderCard.name} 因塗層攻擊效果，不受【基礎】寶可夢招式傷害`, dIdx);
       baseDamage = 0;
@@ -6716,6 +6718,7 @@ function handlePlaying(
       if (c.immuneToBasicAttackThisTurn) {
         n = { ...n };
         delete n.immuneToBasicAttackThisTurn;
+        delete n.basicImmuneColorlessExcept;  // v5.338：companion 隨主旗標一起清
       }
       // v2.174 阿塞蘿拉的惡作劇 — 同 immune* 系列：對手（攻擊方）END_TURN 時清 ThisTurn
       if (c.immuneToExAttackThisTurn) {
