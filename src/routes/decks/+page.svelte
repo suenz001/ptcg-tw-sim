@@ -1502,10 +1502,6 @@
           <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔（連同常用卡牌一起存）` : '將牌組與常用卡牌存檔至雲端'}>💾 存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
           <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組與常用卡牌">📥 讀取</button>
         </div>
-        <!-- v5.330: 常用卡牌雲端存/讀已併入上方「💾 存檔 / 📥 讀取」(牌組+常用一起)；此處只留計數 -->
-        <div class="rail-actions" style="margin-top:.3rem;">
-          <span style="font-size:.7rem;color:#aaffcc;">⭐ 常用 ({favorites.size}) 張</span>
-        </div>
       </div>
       <ul class="deck-list">
         {#each decks as d (d.id)}
