@@ -4824,6 +4824,26 @@
         game = merged;
         return;
       }
+      // v5.364：獎賞單調保護 — 我方獎賞牌數遊戲中只會「減少」（取一張少一張），絕不增加。
+      //   若 incoming 讓「我方獎賞數變多」＝我的取獎賞被回朔（常見：擊倒對手後「我取獎賞」與「對手派
+      //   新寶可夢」同時發生、等長分歧 → 整份覆蓋採用對方那支，洗掉我的取獎賞，玩家要按第二次取得）。
+      //   改用 per-player 合併：我這半保留本地（已取獎賞），對手那半採用 incoming（新寶可夢）。
+      //   非對稱（各自只保護自己的獎賞）→ 不會雙端互擋、不死結。
+      if (game && game.phase === 'playing' && incoming.phase === 'playing' && myPlayerIndex !== null) {
+        const me = myPlayerIndex;
+        const myPrizesLocal = game.players[me].prizes?.length ?? 0;
+        const myPrizesInc = incoming.players[me].prizes?.length ?? 0;
+        if (myPrizesInc > myPrizesLocal) {
+          console.warn('[Online] 獎賞單調保護：擋下把我方獎賞 ' + myPrizesLocal + ' 回朔成 ' + myPrizesInc + '，保留本地我方半邊');
+          game = {
+            ...incoming,
+            players: (me === 0
+              ? [game.players[0], incoming.players[1]]
+              : [incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
+          };
+          return;
+        }
+      }
       game = incoming;
       return;
     }
