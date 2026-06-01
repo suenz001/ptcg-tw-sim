@@ -16,9 +16,12 @@ const CACHE_NAME = `ptcg-tw-sim-${version}`;
 //   build      — JS/CSS bundle（hash-named，不變）
 //   prerendered — 靜態頁面（首頁 / about 等）
 //   files      — static/ 下的檔案（manifest, icons, cards JSON, BGM 等）
-// 注意：files 包含 ~21MB 內容（cards 4MB + covers 7MB + music 10MB），第一次安裝會佔流量。
-//        但用戶只下載一次，後續完全離線可用，符合 PWA 體驗。
-const PRECACHE: string[] = [...build, ...files, ...prerendered];
+// v5.365：封面(covers ~7MB) / 音樂(music ~10MB) 從「安裝時預快取」拿掉，改成「用到才快取」
+//   （fetch handler 的 network-first 會在首次 fetch 時自動寫入快取）。原本安裝要一次抓 ~21MB，
+//   會跟前景「載入卡池」搶頻寬、拖慢首次載入（玩家回報卡『載入卡池中』~30 秒）。改後安裝只預快取
+//   app 本體 + 卡牌(~4MB 內)，安裝輕量、不搶頻寬；封面/音樂第一次用到時才下載並快取。
+const HEAVY_MEDIA = (u: string) => u.includes('/covers/') || u.includes('/music/');
+const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f)), ...prerendered];
 
 sw.addEventListener('install', (event) => {
   async function addAll() {
