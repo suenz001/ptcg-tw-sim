@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.10</title>
+<title>PTCG Oracle Admin v1.11</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.10</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.11</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1961,6 +1961,7 @@ let statsTrendsCache = null;
 let trendsGranularity = 'day';  // 'day' | 'week' | 'month'
 let trendsDays = 30;            // 30 | 90 | 365
 let winrateFilterMode = 'main';  // v1.07 預設主力打手（'all' | 'main' | 'support'）
+let winrateRange = 'all';       // v1.11: 'all' | '7d' | '24h' — 2.3 時間範圍（避免新卡包後看到舊統計）
 
 async function loadStats(reset = false) {
   if (statsLoading) return;
@@ -1980,7 +1981,8 @@ async function loadStats(reset = false) {
     //   players: 排除 AI（玩家排行不算 AI 對手）
     //   winrate: 預設排除 AI（excludeAI=true）
     const playersQ = modeQ + (modeQ ? '&' : '?') + 'excludeAI=true';
-    const winrateQ = modeQ + (modeQ ? '&' : '?') + 'minDecks=5';
+    const _wrSince = winrateRange === '24h' ? (Date.now()-86400000) : (winrateRange === '7d' ? (Date.now()-7*86400000) : 0);  // v1.11
+    const winrateQ = modeQ + (modeQ ? '&' : '?') + 'minDecks=5' + (_wrSince ? '&since=' + _wrSince : '');
     const trendsQ = modeQ + (modeQ ? '&' : '?') + 'days=' + trendsDays + '&granularity=' + trendsGranularity;
     const [overview, cards, tags, players, winrate, heatmap, trends] = await Promise.all([
       api('/api/admin/stats/overview' + modeQ),
@@ -2072,6 +2074,16 @@ window.setWinrateFilter = function(m) {
   if (!['all', 'main', 'support'].includes(m)) return;
   winrateFilterMode = m;
   renderStats(document.getElementById('tab-stats'));
+};
+// v1.11：2.3 時間範圍切換 — 只重抓 winrate（不重抓整頁），依 endedAt 過濾近 24h / 7d / 不限
+window.setWinrateRange = async function(r) {
+  if (!['all','7d','24h'].includes(r) || winrateRange === r) return;
+  winrateRange = r;
+  const modeQ = (statsMode !== 'all') ? '?mode=' + statsMode : '';
+  const since = r === '24h' ? (Date.now()-86400000) : (r === '7d' ? (Date.now()-7*86400000) : 0);
+  const q = modeQ + (modeQ ? '&' : '?') + 'minDecks=5' + (since ? '&since=' + since : '');
+  const winrate = await api('/api/admin/stats/cards/winrate' + q);
+  if (winrate && !winrate.error) { statsWinrateCache = winrate; renderStats(document.getElementById('tab-stats')); }
 };
 
 // 1.1 對戰總覽 — 全部模式才顯示 線上/本機 breakdown；filter 時只顯示 vsAI 比例
@@ -2742,13 +2754,16 @@ window.filterWinrate = function(q) {
 function winrateRowHtml(g, i) {
   const info = g.repInfo;
   if (!info) return '';
+  // v1.11：標支援型按鈕（複用 1.6 同一套 toggleSupportTag / cardTagsCache）
+  const isSupport = g.cardIds.some(id => (cardTagsCache[id] || []).includes('support'));
+  const tagBtn = `<button class="tag-btn ${isSupport ? 'tagged' : ''}" onclick="event.stopPropagation(); toggleSupportTag('${escapeHtml(g.repCardId)}')" title="${isSupport ? '取消支援型' : '標為支援型'}">${isSupport ? '⭐ 支援型' : '☆ 標支援型'}</button>`;
   const verBadge = g.variants > 1 ? ` <span class="ver-multi" title="${g.cardIds.length} 種版本">${g.variants} 版本</span>` : '';
   const wrPct = (g.winRate * 100).toFixed(1);
   const wrColor = g.winRate > 0.55 ? '#2e7d32' : (g.winRate < 0.45 ? '#c62828' : '#1a2332');
   const ids = g.cardIds.join(',');
   return `<tr>
     <td>${i + 1}</td>
-    <td><span style="color:#1565c0; cursor:pointer; text-decoration:underline dotted;" title="看含此卡的代表牌組" onclick="showCardArchetype('${ids}')">${escapeHtml(info.displayName || info.name)}</span>${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span></td>
+    <td><span style="color:#1565c0; cursor:pointer; text-decoration:underline dotted;" title="看含此卡的代表牌組" onclick="showCardArchetype('${ids}')">${escapeHtml(info.displayName || info.name)}</span>${verBadge} <span class="small muted">${info.setCode}·${info.collectorNumber}</span> ${tagBtn}</td>
     <td><span class="small muted">${info.supertype || ''}</span></td>
     <td>${g.totalDecksAgg}</td>
     <td>${g.winDecks}</td>
@@ -2785,7 +2800,9 @@ window.showCardArchetype = async function(idsCSV) {
   document.getElementById('modal-container').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3>${checkboxHtml}<div class="empty">統計中…</div></div></div>`;
   const modeQ = statsMode === 'all' ? '' : ('mode=' + statsMode + '&');
   const winQ = archetypeWinnerOnly ? 'winnerOnly=true&' : '';
-  const data = await api('/api/admin/stats/cards/archetype?' + modeQ + winQ + 'ids=' + encodeURIComponent(idsCSV));
+  // v1.11：代表牌組也套用 2.3 的時間範圍
+  const sinceQ = winrateRange === '24h' ? ('since=' + (Date.now()-86400000) + '&') : (winrateRange === '7d' ? ('since=' + (Date.now()-7*86400000) + '&') : '');
+  const data = await api('/api/admin/stats/cards/archetype?' + modeQ + winQ + sinceQ + 'ids=' + encodeURIComponent(idsCSV));
   const close = `<div style="margin-top:16px; text-align:right;"><button onclick="closeModal()">關閉</button></div>`;
   if (!data || data.error || !data.totalDecks) {
     document.getElementById('modal-container').innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>🃏 含「${escapeHtml(cardName)}」的代表牌組</h3>${checkboxHtml}<div class="empty">樣本不足：在「${rangeLabel}」範圍找到 ${(data && data.totalDecks) || 0} 副含此卡的牌組。${data && data.error ? '<br>錯誤：' + escapeHtml(data.error) : '<br>試著把上方「資料範圍」切到更大的選項。'}</div>${close}</div></div>`;
@@ -2851,6 +2868,14 @@ window.showCardArchetype = async function(idsCSV) {
       rows.map(p => `<div class="deck-entry" style="display:flex; justify-content:space-between; gap:10px;"><span><b>${p.copies}×</b> ${escapeHtml(p.info.displayName || p.info.name)} <span class="small muted">${p.info.setCode || ''}·${p.info.collectorNumber || ''}</span></span><span class="small muted">${p.inclusion}% 牌組採用</span></div>`).join('') +
       `</div>`;
   }).join('');
+  // v1.11：列出「曾搭配、但沒進 60 張代表牌組」的前 10 張備用搭配牌（含採用率）
+  const pickedKeys = new Set(picked.map(p => p.info.displayName || p.info.name));
+  const backups = groups.filter(g => !pickedKeys.has(g.info.displayName || g.info.name)).slice(0, 10);
+  const backupHtml = backups.length ? `
+        <div style="margin-top:14px; border-top:1px dashed #cbd5e1; padding-top:10px;">
+          <div style="font-weight:600; color:#7c4dff; margin-bottom:6px;">🔄 其他曾搭配、但未進 60 張的牌（前 ${backups.length}，可挑備用牌）</div>
+          ${backups.map(g => `<div class="deck-entry" style="display:flex; justify-content:space-between; gap:10px;"><span>${escapeHtml(g.info.displayName || g.info.name)} <span class="small muted">${g.info.setCode || ''}·${g.info.collectorNumber || ''}</span></span><span class="small muted">${g.inclusion}% 牌組採用 · ${g.deckCount} 副</span></div>`).join('')}
+        </div>` : '';
   // 可匯入牌表格式（同牌組編輯器「匯入文字」：第1行牌名 / 第2行 共N張·種類M / 之後 cardLabel 每行）
   const importLines = [ `${cardName} 代表牌組`, `共 ${total} 張 / 種類 ${picked.length}` ]
     .concat(picked.map(p => cardLabel(p.repCardId, p.copies)));
@@ -2862,6 +2887,7 @@ window.showCardArchetype = async function(idsCSV) {
         ${checkboxHtml}
         <div class="small muted" style="margin-bottom:10px;">資料範圍：<b>${rangeLabel}</b>${archetypeWinnerOnly ? ' · <b>只算獲勝牌組</b>' : ''} · 樣本 <b>${totalDecks}</b> 副${archetypeWinnerOnly ? '獲勝且' : ''}含此卡的牌組 · 合計 <b>${total}</b> 張<br>說明：取「含此卡的所有牌組」中，各卡『被放入比例』最高者，每張採其最常見張數湊成 60 張（聚合代表牌組，僅供參考，非單一真實牌組）。已依 PTCG 規則套用：同名卡合計上限 4 張、ACE SPEC 每副 1 張、基本能量無上限。</div>
         ${sectionsHtml || '<div class="empty">無足夠卡牌資料</div>'}
+        ${backupHtml}
         <details style="margin-top:10px;"><summary class="small muted" style="cursor:pointer;">📋 可匯入牌表預覽</summary>
           <pre style="background:#f5f5f5; padding:10px; border-radius:4px; font-family:Consolas,Menlo,monospace; font-size:12px; line-height:1.6; max-height:40vh; overflow:auto; white-space:pre-wrap; user-select:text; margin-top:6px;">${escapeHtml(window._lastArchetypeCopyText)}</pre>
         </details>
@@ -2937,6 +2963,13 @@ function renderCardWinrate(w) {
         <span class="filter-btn ${winrateFilterMode === 'main' ? 'active' : ''}" onclick="setWinrateFilter('main')">⚔️ 主力打手</span>
         <span class="filter-btn ${winrateFilterMode === 'support' ? 'active' : ''}" onclick="setWinrateFilter('support')">⭐ 支援型</span>
         <span class="small muted" style="margin-left:auto;">勝率 = 勝方牌組出現次數 / 所有牌組出現次數</span>
+      </div>
+      <div class="toolbar" style="margin-bottom:10px;">
+        <span class="small muted">⏱ 時間範圍：</span>
+        <span class="filter-btn ${winrateRange === 'all' ? 'active' : ''}" onclick="setWinrateRange('all')">不限</span>
+        <span class="filter-btn ${winrateRange === '7d' ? 'active' : ''}" onclick="setWinrateRange('7d')">近 7 天</span>
+        <span class="filter-btn ${winrateRange === '24h' ? 'active' : ''}" onclick="setWinrateRange('24h')">近 24 小時</span>
+        <span class="small muted" style="margin-left:auto;">避免新卡包上市後仍看到舊統計數據</span>
       </div>
       <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <input id="winrate-search" class="search-box" placeholder="🔎 搜尋卡牌名稱…" value="${escapeHtml(winrateSearch)}" oninput="filterWinrate(this.value)" style="padding:6px 10px; min-width:240px;" />

@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.25 (admin v1.01 — 2.3 卡牌→代表牌組聚合端點 archetype；原 v0.92 — audit endpoint timestamp 比對加 ISO string fallback，讓 client 寫的 collection (如 decks) 也能 count)
+// === ORACLE ADMIN ENDPOINTS === v0.26 (admin v1.11 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -1271,6 +1271,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       //   vsAI field 不可靠 (client 寫入可能誤判), 改用 roomCode 存在判定.
       //   excludeAI=true 等同 「只算有房號的對戰」(本機 vs 玩家也排除, 因為 client 端不太可靠分辨).
       if (excludeAI) baseMatch.roomCode = { $type: 'string' };
+      // v0.26：時間範圍篩選（避免新卡包後仍看舊統計）— ?since=<ms epoch> → endedAt >= since
+      if (req.query.since) baseMatch.endedAt = { $gte: parseInt(req.query.since) };
       const minDecks = Math.max(1, parseInt(req.query.minDecks) || 5);
       try {
         const pipeline = [
@@ -1380,6 +1382,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       // v0.24：只從獲勝牌組篩選 — 排除平局 + unwind 後只留「勝方」那一副牌
       const winnerOnly = req.query.winnerOnly === 'true';
       if (winnerOnly) baseMatch.winner = { $in: [0, 1] };
+      // v0.26：時間範圍篩選 — ?since=<ms epoch> → endedAt >= since（與 winrate 同）
+      if (req.query.since) baseMatch.endedAt = { $gte: parseInt(req.query.since) };
       try {
         const pipeline = [
           { $match: baseMatch },
