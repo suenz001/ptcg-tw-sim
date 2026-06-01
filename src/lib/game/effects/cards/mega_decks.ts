@@ -17,6 +17,7 @@ import {
 } from '../_shared';
 import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
+  passiveImmunityDamageBlock,
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
   JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
@@ -637,6 +638,18 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
         s = addLog(s, `${label}：${targetCard?.name ?? '?'} 中立中心競技場 效果（免疫此招式傷害）`, actorIdx);
       }
       continue;
+    }
+    // v5.367：條件式完全免疫特性（神秘石居 等）對 active+bench 都要擋 —
+    //   油之機關槍是【ex 寶可夢招式傷害】，神秘石居/神秘守護 卡面「不受對手 ex 招式傷害」應免疫。
+    {
+      const piOO = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
+      if (piOO.blocked) {
+        if (!blockedTargetsOO.has(iid)) {
+          blockedTargetsOO.add(iid);
+          s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${piOO.reason}（免疫此招式傷害）`, actorIdx);
+        }
+        continue;
+      }
     }
     // v3.993 招式傷害免疫（attack-damage — only bench；active 不受花之帷幔保護）
     if (defender.active?.iid !== iid) {

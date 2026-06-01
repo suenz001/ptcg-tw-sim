@@ -379,6 +379,12 @@ export function resolveBenchGuard(
       return { blocked: true, reason: '中立中心競技場 效果' };
     }
   }
+  // v5.367：條件式完全免疫特性（神秘石居 等）也適用於備戰目標 — 狙擊/分配傷害類招式
+  //   走 resolveBenchGuard 時一併擋（原只在 engine 主傷害管線消費）。
+  if (kind === 'attack-damage') {
+    const piBench = passiveImmunityDamageBlock(state, actorIdx, targetCard, pool);
+    if (piBench.blocked) return piBench;
+  }
   // v3.21 陳舊的羽毛化石（I）備戰免疫：卡面明寫「傷害與效果」皆免——
   //   v2.191 原實裝只擋 attack-damage 是 bug；本波擴展到 attack-damage|attack-effect 兩者。
   //   caller 已保證 target 在 bench，這裡只比對 cardName。
@@ -3557,6 +3563,41 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // v3.67：改用 isRulePokemon helper
   ['神秘守護', (att) => isRulePokemon(att)],
 ]);
+
+// v5.367：條件式完全免疫特性（神秘石居 / 神秘守護 / 璀璨鱗片 / 尾甲 / 全能硬殼 等「不受對手某類
+//   寶可夢招式傷害」型 PASSIVE_IMMUNITY）— 原本只在 engine.ts 主傷害管線消費，凡是「手動結算傷害」
+//   的招式 resolver（油之機關槍 / 各狙擊 / bench-hit）都繞過 → 玩家回報：岩殿居蟹 神秘石居 在備戰
+//   （甚至戰鬥位）仍被 奧利瓦ex 油之機關槍 打到。此 helper 讓 resolveBenchGuard（bench）與各 resolver
+//   的 active 分支共用同一判定。只認「純 boolean predicate」型 entry（依攻擊方屬性判定、無副作用）；
+//   跳過「順滑大衣」這種擲幣 mutate state 的 entry（resolveBenchGuard 會被 UI 預覽呼叫，預覽不能擲幣）—
+//   擲幣型免疫仍只在主管線（active 防守方）生效。
+export function passiveImmunityDamageBlock(
+  state: GameState,
+  actorIdx: 0 | 1,
+  targetCard: Card | undefined,
+  pool: Map<string, Card>,
+): { blocked: true; reason: string } | { blocked: false } {
+  if (!targetCard?.abilities) return { blocked: false };
+  // 監視塔對【無】寶可夢特性壓制（鏡射 engine.ts isColorlessAbilityBlocked）
+  if (targetCard.pokemonType === 'Colorless') {
+    const sd = state.activeStadium;
+    const sdCard = sd ? pool.get(sd.cardId) : undefined;
+    if (sdCard && ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name)) return { blocked: false };
+  }
+  const atkInst = state.players[actorIdx].active;
+  const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
+  if (!atkCard) return { blocked: false };
+  for (const ab of targetCard.abilities) {
+    if (ab.name === '順滑大衣') continue; // 擲幣型，有副作用，不在無狀態/預覽 guard 內呼叫
+    const immune = PASSIVE_IMMUNITY.get(ab.name);
+    if (!immune) continue;
+    const result = immune(atkCard, 1, state, actorIdx, pool, targetCard.name);
+    if (result === true) {
+      return { blocked: true, reason: `${ab.name}（不受對手該寶可夢招式的傷害）` };
+    }
+  }
+  return { blocked: false };
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.277 Wave 3 — 被動特性：撤退成本修正（ABILITY_RETREAT_MOD）
