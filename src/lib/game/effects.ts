@@ -859,6 +859,7 @@ function hitBenchAll(
 ): GameState {
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0) return state;
+  let coinWS = state;  // v5.368：thread 擲幣 log（順滑大衣）
   // v3.94：移除 v3.892 入口整段 skip — 改為 loop 內 per-target check（規則寶可夢仍受傷害）。
   //   原本 v3.892 過頭：對手全是非規則寶可夢時直接 skip 整個 picker，玩家連選都選不了。
   //   修法：保留 _attackTimeOppFlowerVeil snapshot 用於「KO 後仍擋」，但只 per-target 擋非規則。
@@ -902,6 +903,15 @@ function hitBenchAll(
       newBench.push(c);
       continue;
     }
+    // v5.367/v5.368：hitBenchAll 走 inline guard（不經 resolveBenchGuard）— 補條件式完全免疫
+    //   (神秘石居等 boolean) + 擲幣型(順滑大衣)。僅對手對我方時生效。
+    if (attackerIdx !== targetIdx) {
+      const pbH = passiveImmunityDamageBlock(coinWS, attackerIdx, card, pool);
+      if (pbH.blocked) { teraImmunNames.push(`${card?.name ?? '?'}（${pbH.reason}）`); newBench.push(c); continue; }
+      const coinH = passiveCoinImmunity(coinWS, attackerIdx, card, pool);
+      coinWS = coinH.state;
+      if (coinH.immune) { teraImmunNames.push(`${card?.name ?? '?'}（擲幣免疫正面）`); newBench.push(c); continue; }
+    }
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
     if (perAmt > 0 && card) {
@@ -927,7 +937,7 @@ function hitBenchAll(
     }
   }
 
-  const players = [...state.players] as [PlayerState, PlayerState];
+  const players = [...coinWS.players] as [PlayerState, PlayerState];
   players[targetIdx] = {
     ...target,
     bench: newBench,
@@ -935,7 +945,7 @@ function hitBenchAll(
   };
 
   const who = targetIdx === attackerIdx ? '自己' : '對手';
-  let s: GameState = { ...state, players };
+  let s: GameState = { ...coinWS, players };
   s = addLog(s, `${attackLabel}：對${who}所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
   // v5.293 特性減傷 log
   if (reduceLogs.length > 0) {
@@ -1042,6 +1052,12 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
         newBench.push(c);
         continue;
       }
+    }
+    // v5.368：順滑大衣等擲幣型免疫 — 備戰也適用，真結算擲幣
+    if (targetIdx !== actorIdx) {
+      const coinBH = passiveCoinImmunity(st, actorIdx, card, pool);
+      st = coinBH.state;
+      if (coinBH.immune) { guardBlockedLog.push(`${card?.name ?? '?'}：擲幣免疫（正面）`); newBench.push(c); continue; }
     }
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
@@ -3599,6 +3615,69 @@ export function passiveImmunityDamageBlock(
   return { blocked: false };
 }
 
+// v5.368：擲幣型 PASSIVE_IMMUNITY（順滑大衣：受傷害時擲幣，正面則不受該傷害）— 卡面未限戰鬥場，
+//   備戰被狙擊/分配傷害打到時也該擲幣。擲幣會 mutate state（寫硬幣 log），**只能在真正結算傷害的
+//   resolver 內呼叫**，不可放進會被 UI 預覽呼叫的 resolveBenchGuard / passiveImmunityDamageBlock。
+//   只處理「回傳物件（{immune,newState}）」型 entry（擲幣/有狀態）；純 boolean entry 由
+//   passiveImmunityDamageBlock 處理，此處呼叫到也無副作用。
+export function passiveCoinImmunity(
+  state: GameState,
+  actorIdx: 0 | 1,
+  targetCard: Card | undefined,
+  pool: Map<string, Card>,
+): { immune: boolean; state: GameState } {
+  let s = state;
+  if (!targetCard?.abilities) return { immune: false, state: s };
+  if (targetCard.pokemonType === 'Colorless') {
+    const sd = s.activeStadium;
+    const sdCard = sd ? pool.get(sd.cardId) : undefined;
+    if (sdCard && ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name)) return { immune: false, state: s };
+  }
+  const atkInst = s.players[actorIdx].active;
+  const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
+  if (!atkCard) return { immune: false, state: s };
+  for (const ab of targetCard.abilities) {
+    const immune = PASSIVE_IMMUNITY.get(ab.name);
+    if (!immune) continue;
+    const result = immune(atkCard, 1, s, actorIdx, pool, targetCard.name);
+    if (typeof result !== 'boolean') {
+      s = result.newState;
+      if (result.immune) return { immune: true, state: s };
+    }
+  }
+  return { immune: false, state: s };
+}
+
+// v5.368：手動結算傷害招式（m5 各狙擊等）的統一傷害免疫 guard。組合中立中心（active+bench）＋
+//   bench 走 resolveBenchGuard（球形盾牌/花之帷幔/太晶/化石/v5.367 神秘石居等 boolean 免疫）／
+//   active 走 passiveImmunityDamageBlock（boolean）＋ 擲幣型 passiveCoinImmunity。threads state。
+//   只在真結算呼叫，不可用於預覽。
+export function manualDamageImmunity(
+  state: GameState,
+  actorIdx: 0 | 1,
+  targetCard: Card | undefined,
+  pool: Map<string, Card>,
+  isBench: boolean,
+): { blocked: boolean; reason?: string; state: GameState } {
+  let s = state;
+  const atkInst = s.players[actorIdx].active;
+  const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
+  if (wouldNeutralCenterBlock(s, pool, atkCard, targetCard)) {
+    return { blocked: true, reason: '中立中心競技場 效果', state: s };
+  }
+  if (isBench) {
+    const g = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
+    if (g.blocked) return { blocked: true, reason: g.reason, state: s };
+  } else {
+    const pb = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
+    if (pb.blocked) return { blocked: true, reason: pb.reason, state: s };
+  }
+  const coin = passiveCoinImmunity(s, actorIdx, targetCard, pool);
+  s = coin.state;
+  if (coin.immune) return { blocked: true, reason: '擲幣免疫（正面）', state: s };
+  return { blocked: false, state: s };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.277 Wave 3 — 被動特性：撤退成本修正（ABILITY_RETREAT_MOD）
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5939,6 +6018,11 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
       const name = targetCard?.name ?? '?';
       return addLog(st, `精刺奇襲：${name} 因${g.reason}不受傷害`, actorIdx);
     }
+  }
+  {
+    const coinS = passiveCoinImmunity(st, actorIdx, targetCard, pool);
+    st = coinS.state;
+    if (coinS.immune) return addLog(st, `精刺奇襲：${targetCard?.name ?? '?'} 擲幣免疫（正面）不受傷害`, actorIdx);
   }
   const newDmg = target.damage + 60;
   const targetHP = effectiveHPInline(target, pool, st);  // v5.091

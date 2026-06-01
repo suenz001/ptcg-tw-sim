@@ -83,6 +83,7 @@ import {
   //   prizesForKOLocal v5.172 加 export
   canApplyAttackEffectToTarget,
   prizesForKOLocal,
+  manualDamageImmunity,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -873,13 +874,20 @@ regPost('金魚王|水炮射', (state, aIdx) => {
     },
   );
 });
-regR('m5-seaking-water-shot', (state, aIdx, iids, params) => {
+regR('m5-seaking-water-shot', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
   const dmg = (params?.damage as number) ?? 0;
   if (dmg <= 0) return addLog(state, '水流射擊：傷害為 0，效果略過', aIdx);
-  return updatePlayer(addLog(state, `水流射擊：對選中目標造成 ${dmg} 點傷害`, aIdx), dIdx, p => {
+  const _dp = state.players[dIdx];
+  const _isBench = _dp.bench.some(c => c.iid === targetIid);
+  const _tInst = _dp.active?.iid === targetIid ? _dp.active : _dp.bench.find(c => c.iid === targetIid);
+  if (!_tInst) return state;
+  const _tCard = pool.get(_tInst.cardId);
+  const _g = manualDamageImmunity(state, aIdx, _tCard, pool, _isBench);
+  if (_g.blocked) return addLog(_g.state, `水流射擊：${_tCard?.name ?? '?'} ${_g.reason}（免疫此招式傷害）`, aIdx);
+  return updatePlayer(addLog(_g.state, `水流射擊：對 ${_tCard?.name ?? '?'} 造成 ${dmg} 點傷害`, aIdx), dIdx, p => {
     const updateInst = (c: import('../../types').CardInstance) =>
       c.iid === targetIid ? { ...c, damage: (c.damage ?? 0) + dmg } : c;
     return {
@@ -910,12 +918,19 @@ regPost('鍬農炮蟲|快速俯衝', (state, aIdx) => {
     },
   );
 });
-regR('m5-kuwaganon-dash', (state, aIdx, iids, params) => {
+regR('m5-kuwaganon-dash', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
   const dmg = (params?.damage as number) ?? 50;
-  return updatePlayer(addLog(state, `急速潛行：對選中目標造成 ${dmg} 點傷害`, aIdx), dIdx, p => {
+  const _dp = state.players[dIdx];
+  const _isBench = _dp.bench.some(c => c.iid === targetIid);
+  const _tInst = _dp.active?.iid === targetIid ? _dp.active : _dp.bench.find(c => c.iid === targetIid);
+  if (!_tInst) return state;
+  const _tCard = pool.get(_tInst.cardId);
+  const _g = manualDamageImmunity(state, aIdx, _tCard, pool, _isBench);
+  if (_g.blocked) return addLog(_g.state, `急速潛行：${_tCard?.name ?? '?'} ${_g.reason}（免疫此招式傷害）`, aIdx);
+  return updatePlayer(addLog(_g.state, `急速潛行：對 ${_tCard?.name ?? '?'} 造成 ${dmg} 點傷害`, aIdx), dIdx, p => {
     const updateInst = (c: import('../../types').CardInstance) =>
       c.iid === targetIid ? { ...c, damage: (c.damage ?? 0) + dmg } : c;
     return {
@@ -955,12 +970,19 @@ regPost('禿鷹娜|骨棒狙擊', (state, aIdx, pool) => {
     },
   );
 });
-regR('m5-mandibuzz-bone-snipe', (state, aIdx, iids, params) => {
+regR('m5-mandibuzz-bone-snipe', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
   const dmg = (params?.damage as number) ?? 70;
-  return updatePlayer(addLog(state, `骨頭狙擊：對選中目標造成 ${dmg} 點傷害`, aIdx), dIdx, p => {
+  const _dp = state.players[dIdx];
+  const _isBench = _dp.bench.some(c => c.iid === targetIid);
+  const _tInst = _dp.active?.iid === targetIid ? _dp.active : _dp.bench.find(c => c.iid === targetIid);
+  if (!_tInst) return state;
+  const _tCard = pool.get(_tInst.cardId);
+  const _g = manualDamageImmunity(state, aIdx, _tCard, pool, _isBench);
+  if (_g.blocked) return addLog(_g.state, `骨頭狙擊：${_tCard?.name ?? '?'} ${_g.reason}（免疫此招式傷害）`, aIdx);
+  return updatePlayer(addLog(_g.state, `骨頭狙擊：對 ${_tCard?.name ?? '?'} 造成 ${dmg} 點傷害`, aIdx), dIdx, p => {
     const updateInst = (c: import('../../types').CardInstance) =>
       c.iid === targetIid ? { ...c, damage: (c.damage ?? 0) + dmg } : c;
     return {

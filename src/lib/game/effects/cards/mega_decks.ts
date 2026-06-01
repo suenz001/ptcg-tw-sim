@@ -18,6 +18,7 @@ import {
 import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
   passiveImmunityDamageBlock,
+  passiveCoinImmunity,
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
   JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
@@ -663,6 +664,18 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       }
     }
 
+    // v5.368：順滑大衣等擲幣型免疫 — active+bench 皆適用，真結算擲幣
+    {
+      const coinOO = passiveCoinImmunity(s, actorIdx, targetCard, pool);
+      s = coinOO.state;
+      if (coinOO.immune) {
+        if (!blockedTargetsOO.has(iid)) {
+          blockedTargetsOO.add(iid);
+          s = addLog(s, `${label}：${targetCard?.name ?? '?'} 擲幣免疫（正面）（免疫此招式傷害）`, actorIdx);
+        }
+        continue;
+      }
+    }
     // v3.994 計算最終傷害：base × count + attacker buff（per-target 一次套用）
     const baseAmt = counterDamage * count;
     const buff = computeOliveOilBuff(s, actorIdx, target, targetCard, pool);
