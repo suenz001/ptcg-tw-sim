@@ -976,9 +976,9 @@ regR('m5-mandibuzz-bone-snipe', (state, aIdx, iids, params) => {
 //   實裝：讀對手戰鬥位卡片 JSON 的 retreatCost.length（直接打對手戰鬥位，非 picker）
 regPre('瑪夏多|影繩結', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const defActive = state.players[dIdx].active;
-  const defCard = defActive ? pool.get(defActive.cardId) : null;
-  const retreatCount = defCard?.retreatCost?.length ?? 0;
+  // v5.362：改用 computeActiveRetreatCostFor 取「有效撤退費」（含咒縛火焰 +1 / 重力之玉 / 磁鐵能量 等
+  //   全部修正），不再用 base retreatCost.length（漏算咒縛火焰）。對齊同檔幻影迷宮(v5.082)。
+  const retreatCount = computeActiveRetreatCostFor(state, dIdx, pool);
   const dmg = retreatCount * 30;
   return {
     state: addLog(state, `影結：對手戰鬥位撤退所需 ${retreatCount} 個能量 → ${retreatCount}×30 = ${dmg}`, aIdx),

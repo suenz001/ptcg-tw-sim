@@ -2324,6 +2324,12 @@
     switch (pendingSelection.type) {
       case 'deck-search': {
         const f = pendingSelection.filter ?? '';
+        // v5.362：依卡名過濾（如 亮光增長 'Name:燈火幽靈'）。原本沒此 case → fallthrough `return true`
+        //   顯示整副牌庫、可選非目標卡（regR 雖只放有效卡，但 picker UI 錯誤）。
+        if (f.startsWith('Name:')) {
+          const nm = f.slice('Name:'.length);
+          return src.deck.filter(c => pool.get(c.cardId)?.name === nm);
+        }
         if (f === 'TOP6') {
           const top6 = new Set<string>((pendingSelection.params?.top6Iids as string[]) ?? []);
           return src.deck.filter(c => top6.has(c.iid));
@@ -5195,6 +5201,7 @@
       'ColorlessPokeHP100':            'HP≤100 的【無】寶可夢',
     };
     if (map[f]) return map[f];
+    if (f.startsWith('Name:')) return '「' + f.slice('Name:'.length) + '」';  // v5.362
     const typeMap: Record<string, string> = {
       Grass: '【草】', Fire: '【火】', Water: '【水】', Lightning: '【雷】',
       Psychic: '【超】', Fighting: '【鬥】', Darkness: '【惡】', Metal: '【鋼】',

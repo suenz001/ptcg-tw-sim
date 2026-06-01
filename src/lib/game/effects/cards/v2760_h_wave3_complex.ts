@@ -17,6 +17,7 @@ import type { Card } from '$lib/cards/types';
 import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
+import { computeActiveRetreatCostFor } from '../../engine';  // v5.362：影繩結有效撤退費
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -177,10 +178,9 @@ regPre('克雷色利亞|弦月光芒', (state, aIdx, _pool, action) => {
 // 7. 長毛巨魔|影繩結 50× — 對手戰鬥場撤退費數 ×50
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('長毛巨魔|影繩結', (state, aIdx, pool) => {
-  const da = state.players[(1-aIdx) as 0|1].active;
-  if (!da) return { state, damage: 0 };
-  const card = pool.get(da.cardId);
-  const retreatCost = (card?.retreatCost ?? []).length;
+  const dIdx = (1-aIdx) as 0|1;
+  // v5.362：有效撤退費（含咒縛火焰等修正），對齊瑪夏多影繩結 / 幻影迷宮，不再用 base retreatCost.length
+  const retreatCost = computeActiveRetreatCostFor(state, dIdx, pool);
   return { state: addLog(state, `影繩結：對手撤退費 ${retreatCost} → ${retreatCost}×50 = ${retreatCost*50}`, aIdx), damage: retreatCost * 50 };
 });
 
