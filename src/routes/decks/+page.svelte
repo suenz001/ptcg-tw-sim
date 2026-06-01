@@ -1454,9 +1454,17 @@
       const card = poolById.get(entry.cardId);
       if (card) result.push({ entry, card });
     }
-    // Group: Pokémon → Trainer → Energy, then by name.
-    const rank = (c: Card) =>
-      c.supertype === 'Pokemon' ? 0 : c.supertype === 'Trainer' ? 1 : 2;
+    // v5.363：細分類排序 寶可夢 → 物品 → 支援者 → 競技場 → 能量（與棄牌區 / 牌庫 picker 同一套順序），
+    //   同類內依卡名。原本訓練家全歸一類(物品/支援者/競技場混在一起)，現在分開方便檢視。
+    const rank = (c: Card) => {
+      if (c.supertype === 'Pokemon') return 0;
+      if (c.supertype === 'Trainer') {
+        if (c.subtype === 'Supporter') return 2;
+        if (c.subtype === 'Stadium') return 3;
+        return 1;  // 物品（含工具 / 化石 等其他訓練家物品）
+      }
+      return 4;  // 能量
+    };
     result.sort((a, b) => {
       const r = rank(a.card) - rank(b.card);
       if (r !== 0) return r;
