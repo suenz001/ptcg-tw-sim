@@ -1402,7 +1402,11 @@
   }
   // v4.988: 目前預覽卡的進化鏈分階
   const previewChain = $derived.by(() => {
-    if (!pickerPreview || pickerPreview.supertype !== 'Pokemon') return [];
+    if (!pickerPreview) return [];
+    // v5.358: 化石(Trainer/Item)也是進化鏈起點（如 陳舊的顎之化石 → 寶寶暴龍 → 怪顎龍），放行讓化石
+    //   詳細頁也顯示進化鏈。一般物品卡無寶可夢由它進化 → getEvolutionChainGrouped 回鏈長 1 → 不顯示，安全。
+    if (pickerPreview.supertype !== 'Pokemon'
+        && !(pickerPreview.supertype === 'Trainer' && pickerPreview.subtype === 'Item')) return [];
     return getEvolutionChainGrouped(pickerPreview.name, pool);
   });
   // v4.989: 目前預覽卡的所有同名變體（不同 setCode/collectorNumber 的版本）
