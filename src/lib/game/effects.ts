@@ -6854,6 +6854,17 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
     const name = targetCard?.name ?? '?';
     return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
   }
+  // v5.370：active 路徑補 PASSIVE_IMMUNITY（神秘石居/神秘守護/璀璨鱗片/尾甲等 boolean）+ 擲幣型
+  //   （順滑大衣）— canApplyEffectToTarget 的 active 分支不查 PASSIVE_IMMUNITY，狙擊又繞過主管線，
+  //   故戰鬥位的條件免疫會漏（回歸測試矩陣抓到：神秘石居在戰鬥位被 ex 狙擊仍受傷）。
+  //   只在【傷害】語境套（放指示物 attack-effect 不套）。bench 由 canApplyEffectToTarget→resolveBenchGuard 已含。
+  if (isActive && kind === 'attack-damage') {
+    const _pb = passiveImmunityDamageBlock(st, actorIdx, targetCard, pool);
+    if (_pb.blocked) return addLog(st, `${label}：${targetCard?.name ?? '?'} ${_pb.reason}（免疫此招式傷害）`, actorIdx);
+    const _coin = passiveCoinImmunity(st, actorIdx, targetCard, pool);
+    st = _coin.state;
+    if (_coin.immune) return addLog(st, `${label}：${targetCard?.name ?? '?'} 擲幣免疫（正面）不受傷害`, actorIdx);
+  }
   // v5.369：戰鬥位（active）的招式【傷害】要套弱點×2 + 抵抗力 + 攻擊方道具加成（猛攻手鐲等）。
   //   備戰位不計弱抗（卡面標準「備戰不計弱抗」）；放傷害指示物(kind='attack-effect',如飛來橫禍)
   //   也不套（指示物為 flat）。鏡射多目標 snipe resolver 的 active 公式（v5.153）。
