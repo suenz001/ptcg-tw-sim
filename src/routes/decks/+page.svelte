@@ -1504,7 +1504,7 @@
         </div>
         <!-- v5.330: 常用卡牌雲端存/讀已併入上方「💾 存檔 / 📥 讀取」(牌組+常用一起)；此處只留計數 -->
         <div class="rail-actions" style="margin-top:.3rem;">
-          <span style="font-size:.7rem;color:#aaffcc;">⭐ 常用 ({favorites.size}) 張（存檔/讀取已併入上方按鈕）</span>
+          <span style="font-size:.7rem;color:#aaffcc;">⭐ 常用 ({favorites.size}) 張</span>
         </div>
       </div>
       <ul class="deck-list">
@@ -1800,7 +1800,7 @@
                 class="icon pick-fav-btn" class:active={isFavorite(card.id)}
                 onclick={(e) => { e.stopPropagation(); toggleFavorite(card.id); }}
                 title={isFavorite(card.id) ? '取消常用' : '標記為常用卡牌'}
-                aria-label={isFavorite(card.id) ? '取消常用' : '標記常用'}>{isFavorite(card.id) ? '⭐' : '☆'}</button>
+                aria-label={isFavorite(card.id) ? '取消常用' : '標記常用'}>{isFavorite(card.id) ? '★' : '☆'}</button>
               <button
                 class="icon add-btn"
                 onclick={() => addCard(card)}
@@ -1851,7 +1851,7 @@
             <button class="pv-fav-btn" class:active={isFavorite(pv.id)}
               onclick={() => toggleFavorite(pv.id)}
               title={isFavorite(pv.id) ? '取消常用' : '加入常用卡牌'}>
-              {isFavorite(pv.id) ? '⭐' : '☆'}
+              {isFavorite(pv.id) ? '★' : '☆'}
             </button>
           </h2>
           <!-- v4.989: 頂部 +/- 數量按鈕 — 玩家不用 scroll 到底部就能加減牌組 -->

@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.357</span> 牌組編輯器：修正常用星號顯示歪斜、移除冗餘說明文字</summary>
+        <ul>
+          <li>修正：在牌組編輯器把卡牌加入常用後，星號（⭐）會看起來歪斜／偏移的問題（原本用的是彩色 emoji 星，字形對不齊；改用文字星後對齊正常、也會正確顯示為金色）。同時移除「常用」標籤後方多餘的說明文字，讓版面更乾淨。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.356</span> 修正：牌組順序調整實際存檔（修 v5.352 的存檔錯誤）</summary>
         <ul>
           <li>修正 v5.352 牌組順序功能的一個錯誤：調整順序時實際存檔的呼叫會出錯（ReferenceError），導致順序在畫面上動了卻沒真正存進去、重整後就還原。現已修正，上下移動牌組順序會正確存到本機與你的帳號（雲端）。</li>
