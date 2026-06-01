@@ -6854,7 +6854,35 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
     const name = targetCard?.name ?? '?';
     return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
   }
-  const newDmg = target.damage + dmg;
+  // v5.369：戰鬥位（active）的招式【傷害】要套弱點×2 + 抵抗力 + 攻擊方道具加成（猛攻手鐲等）。
+  //   備戰位不計弱抗（卡面標準「備戰不計弱抗」）；放傷害指示物(kind='attack-effect',如飛來橫禍)
+  //   也不套（指示物為 flat）。鏡射多目標 snipe resolver 的 active 公式（v5.153）。
+  //   玩家回報：閃焰王牌ex 石榴石截擊 打弱火的 蜜集大蛇ex 沒 ×2（180→應 360）。
+  let effDmg = dmg;
+  if (isActive && kind === 'attack-damage') {
+    const _atk = st.players[actorIdx].active;
+    const _atkCard = _atk ? pool.get(_atk.cardId) : undefined;
+    if (_atkCard?.pokemonType && targetCard?.weakness?.type
+        && _atkCard.pokemonType === targetCard.weakness.type) {
+      effDmg *= 2;
+    }
+    if (_atkCard?.pokemonType && targetCard?.resistance?.type
+        && _atkCard.pokemonType === targetCard.resistance.type) {
+      const _rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
+      if (!isNaN(_rv)) effDmg = Math.max(0, effDmg + _rv);
+    }
+    if (_atk && _atkCard) {
+      for (const _t of getAllAttachedTools(_atk)) {
+        const _tc = pool.get(_t.cardId);
+        if (!_tc) continue;
+        const _fn = TOOL_ATTACK_BONUS.get(_tc.name);
+        if (!_fn) continue;
+        const _b = _fn(_atkCard, _atk, targetCard ?? _atkCard, target);
+        if (_b > 0) effDmg += _b;
+      }
+    }
+  }
+  const newDmg = target.damage + effDmg;
   const hp = effectiveHPInline(target, pool, st);
   if (hp > 0 && newDmg >= hp) {
     const ko: CardInstance[] = [
@@ -6881,7 +6909,7 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   if (isActive) newDefender.active = { ...target, damage: newDmg };
   else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
   players[dIdx] = newDefender;
-  return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${dmg} 傷害`, actorIdx);
+  return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
