@@ -4630,6 +4630,15 @@
     if (!room) { onlineError = '房間不存在或連線中斷'; return; }
     roomData = room;
     (globalThis as any).__ptcgLB = { kind: 'incoming', action: room?.gameState?.log?.length, t: Date.now() }; // v5.350 卡頓麵包屑
+    // v5.361 診斷：每次輪詢遞送房間時印「房間版本/log 長度 vs 本地 log 長度」，協助抓同步分歧。
+    //   房間較舊(inLen<myLen)→ 會被 reject-stale 擋；較新→ 會套用；等長→ 視 id/phase。
+    if (room.gameState && game && game.phase === 'playing') {
+      const rv = (room as any)._version;
+      const inLen = room.gameState.log?.length ?? 0;
+      const myLen = game.log?.length ?? 0;
+      const tag = inLen < myLen ? '房間較舊(擋)' : (inLen > myLen ? '房間較新(套用)' : '等長');
+      console.log(`[PTCG sync] 房間 v${rv ?? '?'} log=${inLen} ｜ 本地 log=${myLen} ｜ ${tag}`);
+    }
 
     // ── v4.920 觀戰者加入/離開通知（送到聊天室）─────────────────────────
     //   只有 mySeatIdx === 0 (P1) 才 sendMessage，避免雙方 client 同時偵測重複。
