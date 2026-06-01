@@ -4510,6 +4510,7 @@
   let oppInactivityWarn = $state(false);
   let showForfeitConfirm = $state(false);
   let _lastActionAt = Date.now();
+  let _lastResyncAt = 0;  // v5.360：上次自動重訂閱(自癒)時間
   let _prevLogLen = -1;
 
   // v5.329 秒數 → m:ss 顯示
@@ -4555,6 +4556,13 @@
       // v5.329：門檻改讀房間設定（房主可調 1:00~5:00，預設 3:00）；clamp 防呆
       const thresholdMs = Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)) * 1000;
       oppInactivityWarn = (Date.now() - _lastActionAt) >= thresholdMs;
+      // v5.360：卡住自癒 — 等對手 >8s 都沒有任何新動作（含對手 KO 我方/我方 KO 對手後對手沒收到），
+      //   自動重建房間訂閱（＝玩家手動「重新整理 / 回房按觀戰」的修復：重置輪詢 lastVersion → 重新
+      //   抓房間最新狀態走正常 merge 收斂）。只重讀、不改 merge 邏輯，安全。免玩家手動脫困。
+      if (roomCode && (Date.now() - _lastActionAt) >= 8000 && (Date.now() - _lastResyncAt) >= 8000) {
+        _lastResyncAt = Date.now();
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
+      }
     }, 5000);
     return () => clearInterval(iv);
   });
