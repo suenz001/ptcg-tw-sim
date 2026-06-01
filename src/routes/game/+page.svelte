@@ -4835,11 +4835,18 @@
         const myPrizesInc = incoming.players[me].prizes?.length ?? 0;
         if (myPrizesInc > myPrizesLocal) {
           console.warn('[Online] 獎賞單調保護：擋下把我方獎賞 ' + myPrizesLocal + ' 回朔成 ' + myPrizesInc + '，保留本地我方半邊');
+          // v5.366：pendingPrizes 是「頂層」欄位 — per-player 保護除了 players[me]，也必須保留我方本地的
+          //   pendingPrizes[me]。否則採用 incoming 的舊值（取獎賞前還=1）會讓 UI 以為還能再取一張 →
+          //   玩家「拿 2 次獎賞」(v5.364 的副作用)。我方那格保留本地(最新,取後=0)、對手那格採用 incoming。
+          const oppIdx2 = (1 - me) as 0 | 1;
+          const myPend = game.pendingPrizes?.[me] ?? 0;
+          const oppPend = incoming.pendingPrizes?.[oppIdx2] ?? 0;
           game = {
             ...incoming,
             players: (me === 0
               ? [game.players[0], incoming.players[1]]
               : [incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
+            pendingPrizes: (me === 0 ? [myPend, oppPend] : [oppPend, myPend]) as [number, number],
           };
           return;
         }
