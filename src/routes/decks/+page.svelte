@@ -301,6 +301,10 @@
   // v5.381：去藝術版本後綴（例：「老大的指令（赤日）」→「老大的指令」）。
   const stripArtSuffix = (s: string | undefined | null): string =>
     (s ?? '').replace(/[（(][^（()）]*[）)]\s*$/, '').trim();
+  // v5.382：官網改名對照（舊官方名 → 本站現用名）。官網代碼匯入舊版牌組時，名稱對應前先套用。
+  const CARD_NAME_ALIASES: Record<string, string> = {
+    '寶可齒輪3.0': '寶可裝置3.0', // 官方改名：寶可齒輪3.0 → 寶可裝置3.0
+  };
   /** 三級索引：去後綴卡名 → 本站「標準合法」Card（H/I/J 標 / 基本能量 / reprint-legal 優先）。
    *  供官網代碼匯入：舊版合法卡無法以 id / set+number 對應（常 setCode/collectorNumber 為 null）
    *  時，自動替換成同名的本站合法版（好友寶芬 / 高級球 / 老大的指令 / 基本能量 等）。 */
@@ -1031,7 +1035,9 @@
         //   以「去後綴卡名」對應到本站同名的合法版（好友寶芬 / 高級球 / 老大的指令 / 基本能量 等）。
         let substituted = false;
         if (!card) {
-          const nameCard = poolByName.get(stripArtSuffix(e.name));
+          const baseName = stripArtSuffix(e.name);
+          const lookupName = CARD_NAME_ALIASES[baseName] ?? baseName; // v5.382：先套官網改名別名
+          const nameCard = poolByName.get(lookupName);
           if (nameCard) { card = nameCard; substituted = true; }
         }
         if (card) {
