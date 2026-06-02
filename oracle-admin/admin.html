@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.11</title>
+<title>PTCG Oracle Admin v1.12</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -364,7 +364,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.11</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.12</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1488,6 +1488,8 @@ let feedbackList = [];
 async function loadFeedback() {
   const el = document.getElementById('tab-feedback');
   el.innerHTML = '<h2>💬 意見回饋</h2><div class="empty">Loading…</div>';
+  // v1.12: 先確保 uid→email map 載入，回饋列才能反查並顯示玩家 email
+  await primeEmailMap();
   const data = await api('/api/admin/firebase/feedback');
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   feedbackList = data.feedback || [];
@@ -1515,11 +1517,14 @@ function renderFeedbackItem(f) {
   const deviceShort = (f.deviceId || '').slice(0, 8);
   const hasReply = !!f.reply;
   const userAgent = f.userAgent || '';
+  // v1.12: 反查回饋者 email（uidEmailMap 來自全量 firebase users）— 方便對照玩家、找對戰紀錄
+  const fbEmail = (f.uid && uidEmailMap.get(f.uid)) || '';
   return `
     <div class="feedback-item" data-fbid="${f.id}">
       <div class="feedback-meta">
         📅 <b>${created}</b>
         · <span class="mono small">UID: ${uidShort}…</span>
+        ${fbEmail ? ' · <span class="mono small" style="color:#5b8def;font-weight:600;">✉ ' + escapeHtml(fbEmail) + '</span>' : (f.uid ? ' · <span class="mono small" style="color:#b0b6c0;">✉ 無 email（匿名）</span>' : '')}
         ${deviceShort ? ' · <span class="mono small">device: ' + deviceShort + '</span>' : ''}
         ${hasReply ? '<span class="reply-badge">✓ 已回覆</span>' : '<span class="unreply-badge">⏳ 待回覆</span>'}
       </div>
