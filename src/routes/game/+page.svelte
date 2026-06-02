@@ -7591,6 +7591,19 @@
             {#if selectionBatchSum > 0}
               <button class="btn-act secondary" onclick={()=>{selectionCounts={};}}>清空本批次</button>
             {/if}
+          {:else if isEnergyDist}
+            <!-- v5.384：energy-distribute 用 selectionCounts/selectionBatchSum 計數；
+                 原本沒有專屬 footer → 落到下方預設分支顯示 selectionPicked.size 永遠 0
+                 （金屬製造者等「分配附能量」picker 的「(0)確定」bug）。 -->
+            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>
+              確認分配（{selectionBatchSum}／{pendingSelection.maxCount} 個能量）
+            </button>
+            {#if selectionBatchSum > 0}
+              <button class="btn-act secondary" onclick={()=>{selectionCounts={};}}>清空</button>
+            {/if}
+          {:else if pendingSelection.type === 'reorder-deck-top'}
+            <!-- v5.384：reorder-deck-top 用 selectionReorderKeep，同樣不能用 selectionPicked.size -->
+            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（保留 {selectionReorderKeep.length} 張）</button>
           {:else}
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
             {#if pendingSelection.minCount===0}

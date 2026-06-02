@@ -1194,6 +1194,7 @@
             {@const allTools = [...(tinst.toolAttached ? [tinst.toolAttached] : []), ...(tinst.extraTools ?? [])]}
             {@const toolCnt = allTools.length}
             <div class="mp-pick-card">
+              {#if tinst.iid === myPlayer.active?.iid}<span class="mp-pick-active-badge">⚔️ 戰鬥</span>{/if}
               <button class="mp-pick-zoom" title="放大檢視：{c?.name ?? '?'}"
                 onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(tinst.cardId, tinst); }}>🔍</button>
               <button class="mp-pick-btn" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
@@ -1223,6 +1224,7 @@
               {@const allTools = [...(inst.toolAttached ? [inst.toolAttached] : []), ...(inst.extraTools ?? [])]}
               {@const toolCnt = allTools.length}
               <div class="mp-pick-card">
+                {#if inst.iid === myPlayer.active?.iid}<span class="mp-pick-active-badge">⚔️ 戰鬥</span>{/if}
                 <button class="mp-pick-zoom" title="放大檢視：{ic?.name ?? '?'}"
                   onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(inst.cardId, inst); }}>🔍</button>
                 <button class="mp-pick-btn" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
@@ -1879,6 +1881,13 @@
   .mp-pick-card {
     position: relative;
     display: flex;
+  }
+  /* v5.384：picker 卡圖網格標示戰鬥（active）寶可夢，鏡射桌面 modal */
+  .mp-pick-active-badge {
+    position: absolute; top: 2px; left: 2px; z-index: 3;
+    font-size: 0.55rem; font-weight: 700; line-height: 1;
+    padding: 2px 4px; border-radius: 4px;
+    background: rgba(224,176,48,0.95); color: #1a1a1a; pointer-events: none;
   }
   .mp-pick-btn {
     flex: 1;
