@@ -6858,16 +6858,26 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
   });
 });
 
-regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
-  const dmg = (params?.damage as number) ?? 0;
-  const label = (params?.label as string) ?? '遠程攻擊';
-  // v2.46：caller 透過 kind 指定是招式【傷害】還是【效果】（放傷害指示物）。
-  // 未指定時預設 'attack-damage' — 絕大多數 snipe-variable 用途都是招式傷害
-  // （殘酷箭、落雷風暴、暗影子彈…），只有飛來橫禍等「放指示物」要顯式傳 'attack-effect'。
-  const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
+/**
+ * v5.385：中央「對單一目標結算招式傷害」函式（一勞永逸）。
+ *   收斂所有手動結算傷害的招式（狙擊/分配/多打）— 統一處理：
+ *   免疫(canApplyEffectToTarget + PASSIVE_IMMUNITY + 擲幣) → 弱點×2/抵抗/攻擊方道具
+ *   (僅 active + attack-damage 套) → 加傷 → 擊倒(獎賞卡 + game-over)。
+ *   完整鏡射既有 snipe-variable(v5.369/v5.370) 邏輯；snipe-variable 改為薄包裝呼叫本函式。
+ *   備戰目標不計弱抗；放傷害指示物(kind='attack-effect')亦不套弱抗。
+ */
+export function dealAttackDamageToTarget(
+  st: GameState,
+  actorIdx: 0 | 1,
+  targetIid: string,
+  dmg: number,
+  pool: Map<string, Card>,
+  opts?: { kind?: DamageKind; label?: string },
+): GameState {
+  const kind = opts?.kind ?? 'attack-damage';
+  const label = opts?.label ?? '攻擊';
   const dIdx = (1 - actorIdx) as 0 | 1;
   const defender = st.players[dIdx];
-  const targetIid = selectedIids[0];
   if (!targetIid || dmg === 0) return st;
   const isActive = defender.active?.iid === targetIid;
   const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
@@ -6949,6 +6959,14 @@ regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
   players[dIdx] = newDefender;
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
+}
+
+regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
+  // v5.385：改為呼叫中央 dealAttackDamageToTarget（行為不變）。
+  const dmg = (params?.damage as number) ?? 0;
+  const label = (params?.label as string) ?? '遠程攻擊';
+  const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
+  return dealAttackDamageToTarget(st, actorIdx, selectedIids[0], dmg, pool, { kind, label });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
