@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.26 (admin v1.11 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
+// === ORACLE ADMIN ENDPOINTS === v0.27 (admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -1273,6 +1273,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (excludeAI) baseMatch.roomCode = { $type: 'string' };
       // v0.26：時間範圍篩選（避免新卡包後仍看舊統計）— ?since=<ms epoch> → endedAt >= since
       if (req.query.since) baseMatch.endedAt = { $gte: parseInt(req.query.since) };
+      // v0.27：排除「玩家中途離開」獲勝的場 — winReason 形如「<玩家名> 中途離開」
+      //   （臨時有事/斷線等非實力因素，會污染真實卡牌勝率）。
+      //   $not + regex：同時保留 winReason 不存在的舊場（不影響歷史資料）。
+      baseMatch.winReason = { $not: /中途離開/ };
       const minDecks = Math.max(1, parseInt(req.query.minDecks) || 5);
       try {
         const pipeline = [
