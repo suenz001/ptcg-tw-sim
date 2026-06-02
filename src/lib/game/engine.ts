@@ -2735,6 +2735,8 @@ function handlePlaying(
     if (attacker.active.retreatCostIncreaseThisTurn && attacker.active.retreatCostIncreaseThisTurn > 0) {
       retreatCost += attacker.active.retreatCostIncreaseThisTurn;
     }
+    // v5.371：天空徑線「完全消除」（Wilson 裁定 + 官方判例：連災禍荒野+1也消除）— 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉等 +撤退效果。
+    if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
     // v2.69：撤退成本用「能量單位」比對，不是卡片張數。火箭隊能量 1 張 = 2 units。
     // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
     if (totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active) < retreatCost) return state;
@@ -7802,6 +7804,8 @@ export function computeActiveRetreatCostFor(
   if (player.active) {
     cost = applyAbilityRetreatMod(state, player.active, card, playerIdx, cost, pool);
   }
+  // v5.371：天空徑線「完全消除」（Wilson 裁定 + 官方判例：連災禍荒野+1也消除）— 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉等 +撤退效果。
+  if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   return cost;
 }
 
@@ -7891,6 +7895,8 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   }
   // v2.277 Wave 3：套用 ABILITY_RETREAT_MOD（一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網）
   cost = applyAbilityRetreatMod(state, player.active, card, state.activePlayerIndex, cost, pool);
+  // v5.371：天空徑線「完全消除」（Wilson 裁定 + 官方判例：連災禍荒野+1也消除）— 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉等 +撤退效果。
+  if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   return cost;
 }
 
