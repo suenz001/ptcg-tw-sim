@@ -11288,31 +11288,10 @@ function forceOppSwapThenDamagePost(dmg: number, label: string): AttackPostFn {
     const d = state.players[dIdx];
     if (!d.active) return state;
     if (d.bench.length === 0) {
-      // 無備戰可換 → 對原戰鬥寶可夢補 dmg
-      const newDmg = d.active.damage + dmg;
-      const hp = effectiveHPInline(d.active, _pool, state);
-      const nm = _pool.get(d.active.cardId)?.name ?? '?';
-      if (hp > 0 && newDmg >= hp) {
-        // KO
-        const koPile: CardInstance[] = [
-          { ...d.active, damage: newDmg },
-          ...d.active.energyAttached,
-          ...getAllAttachedTools(d.active),
-          ...(d.active.evolvedFromStack ?? []),
-        ];
-        const cardDef = _pool.get(d.active.cardId);
-        const morePrizes = cardDef ? koPrizeCount(cardDef) : 1;
-        const players = [...state.players] as [PlayerState, PlayerState];
-        players[dIdx] = { ...d, active: null, discard: [...d.discard, ...koPile] };
-        let s2 = addLog(addPendingPrize({ ...state, players }, aIdx, morePrizes),
-          `${label}：對手無備戰，${nm} 受到 ${dmg} 點傷害後被擊倒（+${morePrizes} 張獎賞卡）`, aIdx);
-        s2 = recordOppKO(s2, dIdx, cardDef, 'attack');
-        return s2;
-      }
-      const players = [...state.players] as [PlayerState, PlayerState];
-      players[dIdx] = { ...d, active: { ...d.active, damage: newDmg } };
-      return addLog({ ...state, players },
-        `${label}：對手無備戰可交換，${nm} 受到 ${dmg} 點傷害`, aIdx);
+      // v5.387：無備戰可換 → 對原戰鬥寶可夢造成 dmg。戰鬥場受的招式傷害要計弱點/抵抗 + 走傷害免疫，
+      //   改走中央 dealAttackDamageToTarget（原本 flat 不計弱抗是錯的）。
+      const s0 = addLog(state, `${label}：對手無備戰可交換`, aIdx);
+      return dmg > 0 ? dealAttackDamageToTarget(s0, aIdx, d.active.iid, dmg, _pool, { kind: 'attack-damage', label }) : s0;
     }
     const s = addLog(state, `${label}：對手必須將戰鬥寶可夢與備戰寶可夢互換，然後新上場的寶可夢受到 ${dmg} 點傷害（由對手選）`, aIdx);
     return withPending(s, {
@@ -11359,36 +11338,15 @@ regR('force-opp-swap-then-damage', (st, actorIdx, iids, params, pool) => {
   // v2.08：離開戰鬥場清狀態旗標
   newBench[bIdx] = clearActiveEffects(p.active);
 
-  // 計算傷害（不計弱點 / 抵抗力 / 附加效果）
-  const newDmg = swappingIn.damage + dmg;
-  const hp = effectiveHPInline(swappingIn, pool, st);
+  // v5.387：先完成互換，再對「新上場的戰鬥寶可夢」造成招式傷害。
+  //   原本 flat（不計弱抗）是錯的 — 戰鬥場受的招式傷害要計弱點/抵抗，並走傷害免疫。改走中央函式。
+  const newActive: CardInstance = { ...swappingIn, movedToActiveThisTurn: true };
   const players = [...st.players] as [PlayerState, PlayerState];
-  let s: GameState = { ...st };
-
-  if (dmg > 0 && hp > 0 && newDmg >= hp) {
-    // 新上場寶可夢被擊倒 → 放入棄牌、active=null，攻擊方獲得獎賞
-    const koPile: CardInstance[] = [
-      { ...swappingIn, damage: newDmg, movedToActiveThisTurn: true },
-      ...swappingIn.energyAttached,
-      ...getAllAttachedTools(swappingIn),
-      ...(swappingIn.evolvedFromStack ?? []),
-    ];
-    const cardDef = pool.get(swappingIn.cardId);
-    const morePrizes = cardDef ? koPrizeCount(cardDef) : 1;
-    players[actorIdx] = { ...p, active: null, bench: newBench, discard: [...p.discard, ...koPile] };
-    s = addLog({ ...s, players },
-      `${label}：${oldActiveName} 退回備戰區，${newActiveName} 上場後受到 ${dmg} 點傷害被擊倒（+${morePrizes} 張獎賞卡）`, attackerIdx);
-    s = recordOppKO(s, actorIdx, cardDef, 'attack');
-    // v2.98：actorIdx 是 victim，attackerIdx 才是攻擊方 → 攻擊方取獎
-    return addPendingPrize(s, attackerIdx, morePrizes);
-  }
-
-  const newActive: CardInstance = { ...swappingIn, damage: newDmg, movedToActiveThisTurn: true };
   players[actorIdx] = { ...p, active: newActive, bench: newBench };
-  s = addLog({ ...s, players },
+  let s: GameState = addLog({ ...st, players },
     `${label}：${oldActiveName} 退回備戰區，${newActiveName} 上場`, attackerIdx);
   if (dmg > 0) {
-    s = addLog(s, `${label}：${newActiveName} 受到 ${dmg} 點傷害`, attackerIdx);
+    s = dealAttackDamageToTarget(s, attackerIdx, newActive.iid, dmg, pool, { kind: 'attack-damage', label });
   }
   return s;
 });
