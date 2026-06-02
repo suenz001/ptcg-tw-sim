@@ -6271,7 +6271,6 @@
       {:else}⏭ 回合結束{/if}
     </span>
     <span class="status-chips">
-      {#if roomCode}<span class="chip room-chip" title="房間代碼（邀請朋友觀戰 / 回報 bug 用）">🔑 {roomCode}</span>{/if}
       {#if mode === 'online' && myPlayerIndex !== null}
         <!-- v2.198 修：P1/P2 是座位編號（房主=P1、客人=P2），先後手由擲硬幣 game.firstPlayerIdx 決定，
              跟座位無關。舊版寫死「P1=先手、P2=後手」是錯的：客人擲贏先攻時也會被顯示成「P2 後手」。 -->
@@ -6307,6 +6306,7 @@
         <span class="chip timer-chip timer-p2" class:active={game.activePlayerIndex === 1 && game.phase === 'playing'} title="{game.players[1].name} 累計時間"><span class="t-lb">P2</span><span class="t-val">{fmtTimerMs(p1TotalMs)}</span></span>
         <span class="chip timer-chip timer-turn" title="本回合時間"><span class="t-ic">▶</span><span class="t-val">{fmtTimerMs(liveTurnTimeMs)}</span></span>
       {/if}
+      {#if roomCode}<span class="chip room-chip" title="房間代碼（邀請朋友觀戰 / 回報 bug 用）">🔑 {roomCode}</span>{/if}
       <span class="chip version-chip" title="應用程式版本 — 檢查是否同步到最新">v{VERSION}</span>
       <!-- 音效與音樂設定（⚙️） -->
       <button class="chip settings-chip" onclick={() => showSettingsModal = true} title="設定（音效與音樂）">

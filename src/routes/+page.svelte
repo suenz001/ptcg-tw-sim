@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.373</span> 介面：房間代碼改顯示在版本號旁邊（手機也看得到）</summary>
+        <ul>
+          <li>上一版房號在狀態列最前面，手機版會被擠出畫面看不到。改放到右側版本號（v5.37x）的左邊，手機與桌機都能穩定看到。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.372</span> 介面：對戰上方顯示房間代碼；化石丟棄按鈕移到左側操作列</summary>
         <ul>
           <li>線上對戰時，上方狀態列會顯示房間代碼（🔑），方便邀朋友觀戰或回報問題時對照房號（桌機與手機都顯示，維持單行不換行）。</li>
