@@ -2325,14 +2325,14 @@ function handlePlaying(
     //   block 從手牌正常 PLAY_BASIC（全能變身另路徑放上場時不會走此 handler）
     if (isAllPowerSoulBlocked(card)) {
       return addLog(state,
-        `${attacker.name} 的 ${card.name} 因「全能靈魂」效果，無法從手牌放上場（只能由「全能變身」放置）`,
+        `${attacker.name} 的 ${cardLink(inst.iid, card.name)} 因「全能靈魂」效果，無法從手牌放上場（只能由「全能變身」放置）`,
         aIdx);
     }
     // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
     //   （『火箭隊的』除外）不能從手牌放置於場上（PLAY_BASIC 路徑）
     if (isOppEvilEyeBlocking(state, aIdx, card, pool)) {
       return addLog(state,
-        `${attacker.name} 的 ${card.name} 因對手「瞪眼效用」效果，無法從手牌放置於場上`, aIdx);
+        `${attacker.name} 的 ${cardLink(inst.iid, card.name)} 因對手「瞪眼效用」效果，無法從手牌放置於場上`, aIdx);
     }
 
     // Bug fix (#17 擔架): 從手牌放出時清除任何殘留的戰鬥狀態
@@ -2346,7 +2346,7 @@ function handlePlaying(
     players[aIdx] = attacker;
     let afterPlace = addLog(
       { ...state, players },
-      `${attacker.name} 將 ${card.name} 放到備戰區`,
+      `${attacker.name} 將 ${cardLink(placed.iid, card.name)} 放到備戰區`,
       aIdx
     );
     // 觸發「放到備戰區」特性（例：喵喵ex｜殺手鐧捕捉）
@@ -3040,7 +3040,7 @@ function handlePlaying(
         stadiumUsedThisTurn: newUsedReset,
         prismTowerPlayedThisTurn: newPrismFlag,
       };
-      newState = addLog(newState, `${attacker.name} 打出競技場：${trainerCard.name}！`, aIdx);
+      newState = addLog(newState, `${attacker.name} 打出競技場：${cardLink(trainerInst.iid, trainerCard.name)}！`, aIdx);
       newState = clearFestivalVenueProtectedStatuses(newState, pool);
       const effectFn = TRAINER_EFFECTS.get(trainerCard.name);
       if (effectFn) newState = effectFn(newState, aIdx, pool, trainerInst);
@@ -3770,7 +3770,7 @@ function handlePlaying(
     players[aIdx] = attacker;
     let afterAttach: GameState = addLog(
       { ...state, players },
-      `${attacker.name} 將能量附加到 ${targetCard.name}`,
+      `${attacker.name} 將能量附加到 ${cardLink(target.iid, targetCard.name)}`,
       aIdx
     );
     // v2.22：特殊能量「附加時」hook（例：富裕能量抽 4、感應【超】能量搜【超】基本）
