@@ -905,6 +905,10 @@
 
   <!-- ─── 對手 active ─── -->
   <div class="mp-active-row">
+    <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版） -->
+    {#if game.firstPlayerIdx !== undefined}
+      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === oppIdx}>{game.firstPlayerIdx === oppIdx ? '先攻' : '後攻'}</span>
+    {/if}
     {#if oppPlayer.active}
       {@const inst = oppPlayer.active}
       {@const c = cardOf(inst)}
@@ -990,6 +994,10 @@
 
   <!-- ─── 我方 active ─── -->
   <div class="mp-active-row">
+    <!-- v5.383：先攻/後攻標示（左側空白處，鏡射桌面版） -->
+    {#if game.firstPlayerIdx !== undefined}
+      <span class="mp-turn-order" class:mp-turn-now={game.activePlayerIndex === myIdx}>{game.firstPlayerIdx === myIdx ? '先攻' : '後攻'}</span>
+    {/if}
     {#if myPlayer.active}
       {@const inst = myPlayer.active}
       {@const c = cardOf(inst)}
@@ -1497,7 +1505,17 @@
     max-height: 160px;
     display: flex; justify-content: center;
     padding: 4px 8px;
+    position: relative; /* v5.383：給先攻/後攻徽章絕對定位用 */
   }
+  /* v5.383：先攻/後攻直書徽章，放左側空白處，不影響卡片置中 */
+  .mp-turn-order {
+    position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
+    writing-mode: vertical-rl; text-orientation: upright;
+    font-size: 0.6rem; font-weight: 700; letter-spacing: 1px; line-height: 1.05;
+    padding: 4px 3px; border-radius: 5px; z-index: 2; pointer-events: none;
+    color: #cfd8e8; background: rgba(60,70,100,0.55); border: 1px solid #4a5878;
+  }
+  .mp-turn-order.mp-turn-now { color: #1a1a1a; background: rgba(224,176,48,0.92); border-color: #e0b030; }
   .mp-active {
     display: flex; gap: 8px; align-items: center;
     background: rgba(0,0,0,0.5);

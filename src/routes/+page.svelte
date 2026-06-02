@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.383</span> 改善：手機版對戰畫面加上「先攻／後攻」標示</summary>
+        <ul>
+          <li>手機版原本沒有像桌面版顯示誰先攻、誰後攻。現在雙方戰鬥寶可夢的左側空白處會顯示「先攻／後攻」標示，輪到該玩家的回合時會高亮，與桌面版一致。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.382</span> 補充：官網代碼匯入支援官方改名的卡（寶可齒輪3.0 → 寶可裝置3.0）</summary>
         <ul>
           <li>官方已將「寶可齒輪3.0」改名為「寶可裝置3.0」。用官網代碼匯入舊版牌組時，會自動把舊名對應到本站現用的新名版本，不再因為改名而對應不到。</li>
