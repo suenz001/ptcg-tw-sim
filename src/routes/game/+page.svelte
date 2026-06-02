@@ -6271,6 +6271,7 @@
       {:else}⏭ 回合結束{/if}
     </span>
     <span class="status-chips">
+      {#if roomCode}<span class="chip room-chip" title="房間代碼（邀請朋友觀戰 / 回報 bug 用）">🔑 {roomCode}</span>{/if}
       {#if mode === 'online' && myPlayerIndex !== null}
         <!-- v2.198 修：P1/P2 是座位編號（房主=P1、客人=P2），先後手由擲硬幣 game.firstPlayerIdx 決定，
              跟座位無關。舊版寫死「P1=先手、P2=後手」是錯的：客人擲贏先攻時也會被顯示成「P2 後手」。 -->
@@ -6670,6 +6671,14 @@
               </button>
             {/if}
           {/if}
+          <!-- v5.372：化石戰鬥寶可夢的【丟棄化石】按鈕移到 action-btns（撤退鈕位置，跳過攻擊下方）-->
+          {#if !pendingSelection && isMyTurn() && myPlayer?.active?.fossilOnField && game.phase==='playing' && game.turnPhase==='main'}
+            <button class="btn-act btn-fossil-discard"
+              title="把場上的化石丟棄到棄牌區（非昏厥，對手不抽獎賞）。戰鬥場丟棄需從備戰補 1 隻"
+              onclick={async () => { await dispatch(GameActions.discardFossil(myPlayer!.active!.iid)); }}>
+              🦴 丟棄化石
+            </button>
+          {/if}
           {#if canEndTurn}
             <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
@@ -6764,14 +6773,6 @@
                 🚫 撤退（{retreatCostOf(myPlayer!.active!)}⚡）
               </button>
             {/if}
-          {/if}
-          <!-- v2.189 化石卡【丟棄】按鈕：戰鬥場版本（自己回合 main phase 才出現） -->
-          {#if myPlayer?.active?.fossilOnField && isMyTurn() && game?.phase==='playing' && game?.turnPhase==='main' && !pendingSelection}
-            <button class="btn-retreat btn-fossil-discard"
-              title="把場上的化石丟棄到棄牌區（非昏厥，對手不抽獎賞）。戰鬥場丟棄需從備戰補 1 隻"
-              onclick={async () => { await dispatch(GameActions.discardFossil(myPlayer!.active!.iid)); }}>
-              🦴 丟棄化石
-            </button>
           {/if}
         </div>
         {#if myPlayer?.active}
@@ -10426,6 +10427,7 @@
   .status-chips{ display:flex; gap:0.3rem; flex-wrap:nowrap; }
   .chip{ font-size:0.68rem; padding:0.1rem 0.35rem; border-radius:10px; background:#1a3a1a; color:#8f8; border:1px solid #2a5a2a; }
   .role-chip{ background:#1a1a3a; color:#aaf; border-color:#2a2a5a; }
+  .room-chip{ background:#10241a; color:#7fe; border-color:#1a4a3a; font-weight:700; letter-spacing:0.5px; }
   .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
