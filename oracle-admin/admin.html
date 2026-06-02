@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.12</title>
+<title>PTCG Oracle Admin v1.13</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -138,6 +138,10 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
   .deck-card { background: #ffffff; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #e3e8ef; }
   .feedback-item { background: #ffffff; padding: 14px; margin: 8px 0; border-radius: 6px; border-left: 3px solid #5b8def; }
   .feedback-meta { color: #9aa3b0; font-size: 11px; margin-bottom: 6px; }
+  /* v1.13 意見回饋翻頁 */
+  .fb-page-btn { background:#2a3550; color:#dbe3f4; border:1px solid #3a4560; border-radius:5px; padding:5px 11px; font-size:12px; cursor:pointer; }
+  .fb-page-btn:hover:not(:disabled) { background:#34406b; }
+  .fb-page-btn:disabled { opacity:0.4; cursor:default; }
   .feedback-text { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
   /* v0.4 feedback reply/delete */
   .reply-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; font-size: 10px; background: #c8e6c9; color: #4caf50; font-weight: 600; }
@@ -364,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.12</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.13</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1485,30 +1489,67 @@ window.viewUserDecks = async function(uid, label) {
 
 // ── Tab: Feedback (v0.4 with reply + delete) ─────────────────────
 let feedbackList = [];
-async function loadFeedback() {
+// v1.13: 意見回饋分頁 — 一次只顯示最新 10 則 + 翻頁（歷史累積多 + email 反查時加速）
+let feedbackPage = 1;
+const FEEDBACK_PAGE_SIZE = 10;
+async function loadFeedback(resetPage = true) {
   const el = document.getElementById('tab-feedback');
   el.innerHTML = '<h2>💬 意見回饋</h2><div class="empty">Loading…</div>';
-  // v1.12: 先確保 uid→email map 載入，回饋列才能反查並顯示玩家 email
-  await primeEmailMap();
   const data = await api('/api/admin/firebase/feedback');
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
-  feedbackList = data.feedback || [];
+  feedbackList = data.feedback || [];   // 端點已依 createdAt desc 排序（最新在前）
+  if (resetPage) feedbackPage = 1;
+  // v1.13: 先把列表渲染出來，不被 email map 阻塞；email map 改背景載入，
+  //   載好後若還停在意見回饋分頁就重渲染當前頁，把 email 補上。
   renderFeedback(el);
+  primeEmailMap().then(() => {
+    const elNow = document.getElementById('tab-feedback');
+    if (elNow && currentTab === 'feedback') renderFeedback(elNow);
+  });
 }
 
 function renderFeedback(el) {
   if (!feedbackList.length) { el.innerHTML = '<h2>💬 意見回饋</h2><div class="empty">No feedback</div>'; return; }
   const unreplied = feedbackList.filter(f => !f.reply).length;
+  const total = feedbackList.length;
+  const totalPages = Math.max(1, Math.ceil(total / FEEDBACK_PAGE_SIZE));
+  // v1.13: clamp 頁碼（回覆/刪除後筆數變動仍安全）
+  if (feedbackPage > totalPages) feedbackPage = totalPages;
+  if (feedbackPage < 1) feedbackPage = 1;
+  const start = (feedbackPage - 1) * FEEDBACK_PAGE_SIZE;
+  const pageItems = feedbackList.slice(start, start + FEEDBACK_PAGE_SIZE);  // 只渲染當前頁 10 則
+  const pager = renderFeedbackPager(feedbackPage, totalPages, total);
   el.innerHTML = `
-    <h2>💬 意見回饋（${feedbackList.length}，未回覆 ${unreplied}）</h2>
+    <h2>💬 意見回饋（${total}，未回覆 ${unreplied}）</h2>
     <div class="small" style="color:#9aa3b0; margin-bottom:12px;">
       💡 玩家在主站打開意見回饋視窗時，會看到自己提交過的歷史回饋與你在這裡寫的回覆。送出/編輯/刪除回覆會即時同步到玩家端。
     </div>
+    ${pager}
     <div id="feedback-list">
-      ${feedbackList.map(f => renderFeedbackItem(f)).join('')}
+      ${pageItems.map(f => renderFeedbackItem(f)).join('')}
     </div>
+    ${pager}
   `;
 }
+
+// v1.13: 意見回饋翻頁控制列（最新在前；每頁 10 則）
+function renderFeedbackPager(page, totalPages, total) {
+  const btn = (label, target, disabled) =>
+    '<button class="fb-page-btn" ' + (disabled ? 'disabled' : 'onclick="fbGoPage(' + target + ')"') + '>' + label + '</button>';
+  return `
+    <div class="fb-pager" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:10px 0;">
+      ${btn('« 第一頁', 1, page <= 1)}
+      ${btn('‹ 上一頁', page - 1, page <= 1)}
+      <span class="small" style="color:#9aa3b0; padding:0 4px;">第 ${page} / ${totalPages} 頁（共 ${total} 則，每頁 ${FEEDBACK_PAGE_SIZE}）</span>
+      ${btn('下一頁 ›', page + 1, page >= totalPages)}
+      ${btn('最後一頁 »', totalPages, page >= totalPages)}
+    </div>`;
+}
+window.fbGoPage = function(n) {
+  feedbackPage = n;
+  const el = document.getElementById('tab-feedback');
+  if (el) { renderFeedback(el); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+};
 
 function renderFeedbackItem(f) {
   const created = f.createdAt ? new Date(f.createdAt).toLocaleString('zh-TW') : '-';
@@ -1576,14 +1617,14 @@ window.submitReply = async function(fbId) {
     if (btn) { btn.disabled = false; btn.textContent = '送出回覆'; }
     return;
   }
-  await loadFeedback();  // 重新拉資料更新顯示
+  await loadFeedback(false);  // 重新拉資料更新顯示（保留當前頁）
 };
 
 window.deleteFeedback = async function(fbId) {
   if (!confirm('確定要刪除這筆意見回饋嗎？此動作無法復原。')) return;
   const res = await api('/api/admin/firebase/feedbacks/' + fbId, { method: 'DELETE' });
   if (!res || res.error) { alert('刪除失敗：' + (res?.error || 'unknown')); return; }
-  await loadFeedback();
+  await loadFeedback(false);
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
