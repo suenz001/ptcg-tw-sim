@@ -540,31 +540,50 @@ regPost('燈火幽靈|亮光增長', (state, aIdx, pool) => {
   if (candidates.length === 0) {
     return addLog(state, '增光：牌庫無「燈火幽靈」', aIdx);
   }
-  const maxN = Math.min(3, candidates.length);
+  // v5.389：bench-cap — 放備戰受備戰上限約束（卡面「最多 3 張」但不能超過備戰上限）。
+  //   原本 maxN 沒減剩餘空位 → 只有 1 空位卻能選 3 → 撐爆備戰 → 誤觸「零之大空洞效果失去」清除。
+  //   鏡射螺釘地鼠|呼朋引伴 v5.059 寫法。
+  const limit = getOwnBenchLimit(state, aIdx, pool);
+  const remainingSlots = Math.max(0, limit - p.bench.length);
+  if (remainingSlots <= 0) {
+    // 備戰已滿 → 放 0 張，但卡面「並且重洗牌庫」仍執行
+    return updatePlayer(addLog(state, '增光：備戰區已滿，僅重洗牌庫', aIdx), aIdx, pp => ({
+      ...pp,
+      deck: [...pp.deck].sort(() => Math.random() - 0.5),
+    }));
+  }
+  const maxN = Math.min(3, candidates.length, remainingSlots);
   return withPending(addLog(state, `增光：從牌庫選 ≤${maxN} 張「燈火幽靈」放備戰（可選 0 張）`, aIdx), {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Name:燈火幽靈',
     minCount: 0, maxCount: maxN,
     effectKey: 'm5-litwick-enlight',
+    params: { benchLimitAtPick: limit },  // v5.389：帶到 resolver 做 safety trim
   });
 });
-regR('m5-litwick-enlight', (state, aIdx, iids, _params, pool) => {
+regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '增光：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
       deck: [...p.deck].sort(() => Math.random() - 0.5),
     }));
   }
-  return updatePlayer(addLog(state, `增光：放置 ${iids.length} 張燈火幽靈到備戰並重洗`, aIdx), aIdx, p => {
-    // 防呆：再次確認選的卡都是「燈火幽靈」
-    const valid = p.deck.filter(c => iids.includes(c.iid) && pool.get(c.cardId)?.name === '燈火幽靈');
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+  // v5.389：safety trim — 防 picker 漏 cap，最多只放到備戰剩餘空位，避免撐爆誤觸大空洞清除。
+  const p0 = state.players[aIdx];
+  const validAll = p0.deck.filter(c => iids.includes(c.iid) && pool.get(c.cardId)?.name === '燈火幽靈');
+  const limitAtPick = (params?.benchLimitAtPick as number | undefined) ?? 5;
+  const slotsAvail = Math.max(0, limitAtPick - p0.bench.length);
+  const safeValid = validAll.slice(0, slotsAvail);
+  const safeIids = new Set(safeValid.map(c => c.iid));
+  return updatePlayer(addLog(state, `增光：放置 ${safeValid.length} 張燈火幽靈到備戰並重洗`, aIdx), aIdx, p => {
+    const placed = p.deck.filter(c => safeIids.has(c.iid));
+    const remaining = p.deck.filter(c => !safeIids.has(c.iid));  // 沒放的(含被 trim 掉的選擇)留在牌庫重洗
     const shuffled = [...remaining].sort(() => Math.random() - 0.5);
     return {
       ...p,
       deck: shuffled,
-      bench: [...p.bench, ...valid],
+      bench: [...p.bench, ...placed],
     };
   });
 });
