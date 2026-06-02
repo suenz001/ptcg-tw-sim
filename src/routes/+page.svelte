@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.374</span> 修正：手機直式版面的房間代碼與對手手牌顯示（先前改錯到桌面版面）</summary>
+        <ul>
+          <li>手機直式對戰其實是用獨立的版面元件，先前 v5.372～v5.373 的房號顯示都加在桌面版面、手機完全沒生效。已補到手機版面：房間代碼（🔑）顯示在右下角版本號的左邊。</li>
+          <li>手機版對手的手牌數量本來用「🂠 對手手牌 N」文字顯示，與我方的「✋ N」不一致，已統一改成手掌 icon「✋ N」。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.373</span> 介面：房間代碼改顯示在版本號旁邊（手機也看得到）</summary>
         <ul>
           <li>上一版房號在狀態列最前面，手機版會被擠出畫面看不到。改放到右側版本號（v5.37x）的左邊，手機與桌機都能穩定看到。</li>

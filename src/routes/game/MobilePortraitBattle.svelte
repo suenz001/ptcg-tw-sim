@@ -60,6 +60,7 @@
     aiThinking: boolean;
     isSyncing: boolean;
     version: string;
+    roomCode?: string;  // v5.374 線上房號
     pendingPrizes?: number;
     canUseStadium?: boolean;
     // v5.116 觀戰模式：true 時整個 UI 進入唯讀（按鈕全 gate 掉，純看不操作）
@@ -79,6 +80,7 @@
     game, pool, myIdx, oppIdx,
     stadiumCard, pendingSelection,
     aiThinking, isSyncing, version,
+    roomCode = '',
     pendingPrizes = 0,
     canUseStadium = false,
     isSpectator = false,  // v5.116
@@ -853,7 +855,7 @@
     <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
     <button class="mp-chip mp-clickable" onclick={() => openDiscard(oppPlayer.discard, '對手')} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
-    <span class="mp-chip">🂠 對手手牌 {oppPlayer.hand.length}</span>
+    <span class="mp-chip">✋ {oppPlayer.hand.length}</span>
     {#if stadiumCard && game.activeStadium}
       <button class="mp-chip mp-clickable mp-stadium" onclick={() => onOpenZoom(game.activeStadium!.cardId, null)}>🏟 {stadiumCard.name}</button>
     {/if}
@@ -1011,7 +1013,10 @@
     {#if canUseStadium && isMyTurn}
       <button class="mp-chip mp-clickable mp-stadium-btn" onclick={() => onAction(GameActions.useStadium())}>🏟 使用競技場</button>
     {:else}
-      <span class="mp-chip mp-version">v{version}</span>
+      <span class="mp-right-chips">
+        {#if roomCode}<span class="mp-chip mp-room" title="房間代碼（邀請朋友觀戰 / 回報 bug 用）">🔑 {roomCode}</span>{/if}
+        <span class="mp-chip mp-version">v{version}</span>
+      </span>
     {/if}
   </div>
 
@@ -1433,7 +1438,9 @@
     white-space: nowrap;
   }
   .mp-chip.mp-mine { color: #afa; }
-  .mp-chip.mp-version { color: #c0a0e0; font-family: monospace; margin-left: auto; }
+  .mp-chip.mp-version { color: #c0a0e0; font-family: monospace; }
+  .mp-right-chips { margin-left: auto; display: flex; gap: 0.25rem; align-items: center; }
+  .mp-chip.mp-room { color: #7fffd4; font-weight: 700; letter-spacing: 0.5px; }
   button.mp-chip { cursor: pointer; }
   button.mp-chip:disabled { opacity: 0.4; cursor: default; }
   button.mp-clickable { background: rgba(60,40,80,0.5); border-color: rgba(180,140,220,0.3); }

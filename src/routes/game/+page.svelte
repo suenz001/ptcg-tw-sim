@@ -6234,6 +6234,7 @@
       {isSpectator}
       pendingPrizes={myPendingPrizes}
       version={VERSION}
+      roomCode={roomCode}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
