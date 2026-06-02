@@ -11264,6 +11264,9 @@ export function forceOppSwapPost(label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     if (!d.active) return state;
+    // v5.388：強制互換是招式效果 → 對招式效果免疫的 active（化隱/純樸/阿塞蘿拉…）不被強制換位。
+    const _swapG = canApplyEffectToTarget(state, aIdx, d.active, _pool.get(d.active.cardId), 'attack-effect', _pool);
+    if (_swapG.blocked) return addLog(state, `${label}：${_swapG.reason}（不被強制換位）`, aIdx);
     if (d.bench.length === 0) {
       return addLog(state, `${label}：對手沒有備戰寶可夢可交換`, aIdx);
     }
@@ -11287,10 +11290,13 @@ function forceOppSwapThenDamagePost(dmg: number, label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     if (!d.active) return state;
-    if (d.bench.length === 0) {
-      // v5.387：無備戰可換 → 對原戰鬥寶可夢造成 dmg。戰鬥場受的招式傷害要計弱點/抵抗 + 走傷害免疫，
-      //   改走中央 dealAttackDamageToTarget（原本 flat 不計弱抗是錯的）。
-      const s0 = addLog(state, `${label}：對手無備戰可交換`, aIdx);
+    // v5.388：強制互換是招式效果 → 對招式效果免疫的 active（化隱/純樸…）不被換位；
+    //   但「受到 dmg」是招式傷害（化隱/純樸不擋傷害）→ 仍對原戰鬥寶可夢造成 dmg（比照「無備戰」分支）。
+    const _swapG = canApplyEffectToTarget(state, aIdx, d.active, _pool.get(d.active.cardId), 'attack-effect', _pool);
+    if (_swapG.blocked || d.bench.length === 0) {
+      const _why = _swapG.blocked ? `${_swapG.reason}（不被強制換位）` : '對手無備戰可交換';
+      // v5.387：戰鬥場受的招式傷害要計弱點/抵抗 + 走傷害免疫 → 走中央 dealAttackDamageToTarget。
+      const s0 = addLog(state, `${label}：${_why}`, aIdx);
       return dmg > 0 ? dealAttackDamageToTarget(s0, aIdx, d.active.iid, dmg, _pool, { kind: 'attack-damage', label }) : s0;
     }
     const s = addLog(state, `${label}：對手必須將戰鬥寶可夢與備戰寶可夢互換，然後新上場的寶可夢受到 ${dmg} 點傷害（由對手選）`, aIdx);
