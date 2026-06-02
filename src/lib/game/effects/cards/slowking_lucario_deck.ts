@@ -14,6 +14,7 @@ import {
   ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE,
   shuffle, updatePlayer, addLog, drawCards, withPending,
 } from '../_shared';
+import { dealAttackDamageToTarget } from '../../effects'; // v5.386：幻影碎放指示物改走中央函式（補招式效果免疫 guard）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 呆呆獸 M-P 18072｜憨憨臉（特性 — 卡面：「這隻寶可夢不會【混亂】」）
@@ -252,26 +253,11 @@ regPost('靈幽馬|幻影碎', (state, aIdx, pool) => {
   });
 });
 regR('phantom-shatter-place-counters', (st, idx, iids, params, pool) => {
+  // v5.386：改走中央 dealAttackDamageToTarget（kind='attack-effect'）— 補上原本完全漏掉的
+  //   招式效果免疫 guard（化隱/純樸/對戰圓形/球形盾牌 等「放傷害指示物」該擋）。
+  //   放 N 個指示物 = N×10 傷害；KO 由 dealAttackDamageToTarget inline 處理（移除目標、不雙重）。
   const counters = (params?.counters as number) ?? 12;
-  const targetIid = iids[0];
-  const dIdx = (1 - idx) as 0 | 1;
-  const d = st.players[dIdx];
-  let target: CardInstance | null = null;
-  if (d.active?.iid === targetIid) target = d.active;
-  else target = d.bench.find(c => c.iid === targetIid) ?? null;
-  if (!target) return st;
-  const tname = pool.get(target.cardId)?.name ?? '?';
-  const addDmg = counters * 10;
-  const newDmg = target.damage + addDmg;
-  const s = addLog(st,
-    `幻影碎：在對手的 ${tname} 身上放置 ${counters} 個傷害指示物（${addDmg} 傷害，效果型）`,
-    idx);
-  return updatePlayer(s, dIdx, pl => {
-    if (pl.active?.iid === targetIid) {
-      return { ...pl, active: { ...pl.active, damage: newDmg } };
-    }
-    return { ...pl, bench: pl.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c) };
-  });
+  return dealAttackDamageToTarget(st, idx, iids[0], counters * 10, pool, { kind: 'attack-effect', label: `幻影碎（${counters} 個指示物）` });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

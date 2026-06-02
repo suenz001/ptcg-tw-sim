@@ -16,7 +16,7 @@ import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋�
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
 } from '../_shared';
-import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected } from '../../effects';
+import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
@@ -129,15 +129,14 @@ regPost('N的達摩狒狒|火人加農炮', (state, aIdx, pool) => {
   });
 });
 regR('fire-cannon-90', (state, aIdx, selectedIids, params, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.386：改走中央 dealAttackDamageToTarget — 補上原本漏掉的備戰免疫 guard
+  //   （花之帷幔/球形盾牌/太晶/對戰圓形/藏隱/深度下潛/羽毛化石 等備戰傷害免疫）。
   const dmg = (params?.damage as number) ?? 90;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const def = { ...players[dIdx] };
-  def.bench = def.bench.map(b => selectedIids.includes(b.iid) ? { ...b, damage: b.damage + dmg } : b);
-  players[dIdx] = def;
-  const tgt = def.bench.find(b => selectedIids.includes(b.iid));
-  const name = tgt ? (pool.get(tgt.cardId)?.name ?? '?') : '?';
-  return addLog({ ...state, players }, `火人加農炮：對 ${name} 造成 ${dmg} 傷害`, aIdx);
+  let s = state;
+  for (const iid of selectedIids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, dmg, pool, { kind: 'attack-damage', label: '火人加農炮' });
+  }
+  return s;
 });
 
 // N的扒手貓｜暗槓 30 — 查對手手牌 → 選 1 張放對手牌庫「下方」
@@ -288,17 +287,13 @@ regPost('火箭隊的狃拉|暗算', (state, aIdx) => {
   });
 });
 regR('ambush-snipe-by-counters', (state, aIdx, selectedIids, _params, pool) => {
+  // v5.386：改走中央 dealAttackDamageToTarget — 補上原本漏掉的備戰免疫 guard。
   const dIdx = (1 - aIdx) as 0 | 1;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const def = { ...players[dIdx] };
-  const tgt = def.bench.find(b => selectedIids.includes(b.iid));
+  const tgt = state.players[dIdx].bench.find(b => selectedIids.includes(b.iid));
   if (!tgt) return addLog(state, '暗算：目標無效', aIdx);
   const counters = Math.floor((tgt.damage ?? 0) / 10);
   const dmg = counters * 20;
-  def.bench = def.bench.map(b => b.iid === tgt.iid ? { ...b, damage: b.damage + dmg } : b);
-  players[dIdx] = def;
-  const name = pool.get(tgt.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `暗算：對 ${name}（${counters} 個傷害指示物）造成 ${dmg} 傷害`, aIdx);
+  return dealAttackDamageToTarget(state, aIdx, tgt.iid, dmg, pool, { kind: 'attack-damage', label: `暗算（${counters} 個指示物）` });
 });
 
 // 超級甲賀忍蛙ex｜忍者飛旋 — 卡面：「若希望，將 1 個這隻寶可夢身上附加的【水】能量放回手牌，增加 80 點傷害。」
