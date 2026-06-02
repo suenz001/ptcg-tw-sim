@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.13</title>
+<title>PTCG Oracle Admin v1.14</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.13</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.14</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1565,7 +1565,7 @@ function renderFeedbackItem(f) {
       <div class="feedback-meta">
         📅 <b>${created}</b>
         · <span class="mono small">UID: ${uidShort}…</span>
-        ${fbEmail ? ' · <span class="mono small" style="color:#5b8def;font-weight:600;">✉ ' + escapeHtml(fbEmail) + '</span>' : (f.uid ? ' · <span class="mono small" style="color:#b0b6c0;">✉ 無 email（匿名）</span>' : '')}
+        ${fbEmail ? ' · <span class="mono small" style="color:#5b8def;font-weight:600;">✉ ' + escapeHtml(fbEmail) + '</span>' : (!_emailMapPrimed && f.uid ? ' · <span class="mono small" style="color:#9aa3b0;">✉ 查詢中…</span>' : (f.uid ? ' · <span class="mono small" style="color:#b0b6c0;">✉ 無 email（匿名）</span>' : ''))}
         ${deviceShort ? ' · <span class="mono small">device: ' + deviceShort + '</span>' : ''}
         ${hasReply ? '<span class="reply-badge">✓ 已回覆</span>' : '<span class="unreply-badge">⏳ 待回覆</span>'}
       </div>
