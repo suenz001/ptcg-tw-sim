@@ -14,7 +14,7 @@
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
-  import { validateDeck, maxCopies, isBasicEnergy, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity } from '$lib/decks/validation';
+  import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
@@ -297,6 +297,26 @@
   const poolBySetNum = $derived(
     new Map(pool.map((c) => [`${c.setCode}-${c.collectorNumber}`, c]))
   );
+
+  // v5.381：去藝術版本後綴（例：「老大的指令（赤日）」→「老大的指令」）。
+  const stripArtSuffix = (s: string | undefined | null): string =>
+    (s ?? '').replace(/[（(][^（()）]*[）)]\s*$/, '').trim();
+  /** 三級索引：去後綴卡名 → 本站「標準合法」Card（H/I/J 標 / 基本能量 / reprint-legal 優先）。
+   *  供官網代碼匯入：舊版合法卡無法以 id / set+number 對應（常 setCode/collectorNumber 為 null）
+   *  時，自動替換成同名的本站合法版（好友寶芬 / 高級球 / 老大的指令 / 基本能量 等）。 */
+  const poolByName = $derived((() => {
+    const isLegal = (c: Card): boolean =>
+      (!!c.regulationMark && ['H', 'I', 'J'].includes(c.regulationMark)) || isBasicEnergy(c) || isStandardReprintLegal(c);
+    const m = new Map<string, Card>();
+    for (const c of pool) {
+      const key = stripArtSuffix(c.name);
+      if (!key) continue;
+      const existing = m.get(key);
+      if (!existing) { m.set(key, c); continue; }
+      if (isLegal(c) && !isLegal(existing)) m.set(key, c); // 用合法版取代非標準版
+    }
+    return m;
+  })());
 
   /** 文字格式匯出內容 */
   const textExportContent = $derived.by(() => {
@@ -1000,14 +1020,23 @@
       // 對應到本地 pool — 先 cardId direct match，再 setCode+collectorNumber fallback
       const matched: DeckEntry[] = [];
       const unmatched: string[] = [];
+      const substitutedList: string[] = [];  // v5.381：被「同名合法版」自動替換的卡（透明回報）
       for (const e of data.entries) {
         // v4.971 hotfix: pool 是 Card[] 沒 .get；用 poolById Map
         let card = poolById.get(e.cardId);
         if (!card && e.setCode && e.collectorNumber) {
           card = poolBySetNum.get(`${e.setCode}-${e.collectorNumber}`);
         }
+        // v5.381：第三層 fallback — 舊版/未收錄印刷版（常 setCode/collectorNumber 為 null）
+        //   以「去後綴卡名」對應到本站同名的合法版（好友寶芬 / 高級球 / 老大的指令 / 基本能量 等）。
+        let substituted = false;
+        if (!card) {
+          const nameCard = poolByName.get(stripArtSuffix(e.name));
+          if (nameCard) { card = nameCard; substituted = true; }
+        }
         if (card) {
           matched.push({ cardId: card.id, count: e.count });
+          if (substituted) substitutedList.push(`${e.name} → ${card.name}（${card.setCode ?? '?'} ${card.collectorNumber ?? '?'}）`);
         } else {
           unmatched.push(`${e.name} (${e.setCode ?? '?'} ${e.collectorNumber ?? '?'} × ${e.count})`);
         }
@@ -1020,15 +1049,22 @@
         `成功對應 ${matched.length} 種，但有 ${unmatched.length} 種未對應：\n\n${unmatched.slice(0, 8).join('\n')}${unmatched.length > 8 ? `\n…（共 ${unmatched.length} 種）` : ''}\n\n是否繼續匯入已對應的部分？`
       );
       if (!proceed) return;
+      // v5.381：合併相同 cardId（不同官方印刷版可能替換到同一張本站版）
+      const mergedMap = new Map<string, number>();
+      for (const mEntry of matched) mergedMap.set(mEntry.cardId, (mergedMap.get(mEntry.cardId) ?? 0) + mEntry.count);
+      const mergedEntries: DeckEntry[] = [...mergedMap].map(([cardId, count]) => ({ cardId, count }));
       // 更新 active deck — v4.972 hotfix: saveDecks 沒 module top-level import
       //   仿 line 374 pattern：dynamic import storage.saveDecks + pushDeck() cloud sync
-      const updated = { ...active!, entries: matched, updatedAt: Date.now() };
+      const updated = { ...active!, entries: mergedEntries, updatedAt: Date.now() };
       decks = decks.map(d => d.id === active!.id ? updated : d);
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
       setDirty(updated.id);  // v5.114
-      const totalCards = matched.reduce((s, e) => s + e.count, 0);
+      const totalCards = mergedEntries.reduce((s, e) => s + e.count, 0);
       const cachedNote = data.cached ? '（cache hit）' : '';
-      alert(`✅ 從官網代碼 ${code} 匯入 ${matched.length} 種卡 / 共 ${totalCards} 張 ${cachedNote}`);
+      const subNote = substitutedList.length > 0
+        ? `\n\n🔄 自動替換 ${substitutedList.length} 種為本站合法版：\n${substitutedList.slice(0, 10).join('\n')}${substitutedList.length > 10 ? `\n…（共 ${substitutedList.length} 種）` : ''}`
+        : '';
+      alert(`✅ 從官網代碼 ${code} 匯入 ${mergedEntries.length} 種卡 / 共 ${totalCards} 張 ${cachedNote}${subNote}`);
     } catch (e) {
       alert(`匯入失敗：${e instanceof Error ? e.message : String(e)}`);
     } finally {
