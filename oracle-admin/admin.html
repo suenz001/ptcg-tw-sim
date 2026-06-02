@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.15</title>
+<title>PTCG Oracle Admin v1.16</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,11 +368,11 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.15</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.16</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
-      <button class="ghost" onclick="loadActive(true)">🔄 Refresh</button>
+      <button class="ghost" onclick="manualRefresh(this)">🔄 Refresh</button>
       <button class="ghost" onclick="doLogout()">Logout</button>
     </div>
   </header>
@@ -619,17 +619,8 @@ function showApp() {
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('app-section').style.display = 'block';
   loadActive();
-  // Auto refresh every 30s while tab visible
-  // v0.21: 不自動刷新 users / feedback / firebase-rooms tab（內容相對靜態，避免無限循環）
-  if (!window._adminInterval) {
-    window._adminInterval = setInterval(() => {
-      if (document.visibilityState !== 'visible' || !currentUser) return;
-      // 只自動刷新動態 tab
-      if (currentTab === 'overview' || currentTab === 'oracle-rooms') {
-        loadActive();
-      }
-    }, 30000);
-  }
+  // v1.16：移除 30 秒自動刷新 — 一律手動按 Refresh 重刷（Wilson 偏好手動，
+  //   且避免「總覽」頁在沒按 Refresh 時自己重整）。
 }
 
 // ── API wrapper (Firebase ID token) ──────────────────────────────
@@ -710,14 +701,24 @@ window.switchTab = function(name) {
 };
 
 window.loadActive = function(forceRefresh = false) {
-  if (currentTab === 'overview') loadOverview();
-  else if (currentTab === 'oracle-rooms') loadOracleRooms();
-  else if (currentTab === 'firebase-rooms') loadFirebaseRooms();
-  else if (currentTab === 'users') loadUsers(forceRefresh);  // v0.21: 切 tab 用 cache，按 Refresh 才 reset
-  else if (currentTab === 'feedback') loadFeedback();
-  else if (currentTab === 'matches') loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
-  else if (currentTab === 'stats') loadStats(forceRefresh);  // v0.83: Phase 2a 統計
+  let p;
+  if (currentTab === 'overview') p = loadOverview();
+  else if (currentTab === 'oracle-rooms') p = loadOracleRooms();
+  else if (currentTab === 'firebase-rooms') p = loadFirebaseRooms();
+  else if (currentTab === 'users') p = loadUsers(forceRefresh);  // v0.21: 切 tab 用 cache，按 Refresh 才 reset
+  else if (currentTab === 'feedback') p = loadFeedback();
+  else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
+  else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
+  return p;
+};
+// v1.16：手動 Refresh — 按鈕顯示「更新中…」直到該頁載入完成，給明確回饋
+//   （解決部分頁如「Oracle 對戰」按 Refresh 像沒反應的問題）。
+window.manualRefresh = async function(btn) {
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '🔄 更新中…'; }
+  try { await loadActive(true); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
 };
 
 // ── Tab: Overview (v0.4 三大類別) ────────────────────────────────
