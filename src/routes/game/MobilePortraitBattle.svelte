@@ -751,6 +751,48 @@
       },
     };
   }
+
+  // v5.379：滑鼠橫向拖曳捲動 — 桌機把網頁縮成手機版面時，手牌過多或零之大空洞讓備戰
+  //   寶可夢變多、超出版面寬度的卡，用滑鼠無法像觸控那樣按住橫拉看到。此 action 只接管
+  //   「滑鼠」指標（觸控仍走原生捲動），按住左右拖曳即可捲動；移動超過門檻判定為拖曳時，
+  //   吃掉緊接著的 click 避免誤觸卡片。
+  function dragScroll(node: HTMLElement) {
+    let down = false, startX = 0, startScroll = 0, moved = false;
+    function onDown(e: PointerEvent) {
+      if (e.pointerType !== 'mouse') return;             // 觸控交給原生捲動
+      if (node.scrollWidth <= node.clientWidth) return;  // 沒有可捲動內容就不接管
+      down = true; moved = false;
+      startX = e.clientX; startScroll = node.scrollLeft;
+      node.classList.add('mp-dragging');
+    }
+    function onMove(e: PointerEvent) {
+      if (!down) return;
+      const dx = e.clientX - startX;
+      if (Math.abs(dx) > 4) moved = true;
+      if (moved) { node.scrollLeft = startScroll - dx; e.preventDefault(); }
+    }
+    function onUp() {
+      if (!down) return;
+      down = false;
+      node.classList.remove('mp-dragging');
+      if (moved) {
+        // 拖曳結束後吃掉緊接著的 click（避免把卡片當成被點擊）
+        const eat = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); node.removeEventListener('click', eat, true); };
+        node.addEventListener('click', eat, true);
+        setTimeout(() => node.removeEventListener('click', eat, true), 0);
+      }
+    }
+    node.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return {
+      destroy() {
+        node.removeEventListener('pointerdown', onDown);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      },
+    };
+  }
 </script>
 
 <div class="mp" use:preventScroll>
@@ -822,7 +864,7 @@
   {/if}
 
   <!-- ─── 對手 bench ─── -->
-  <div class="mp-row mp-opp-bench">
+  <div class="mp-row mp-opp-bench" use:dragScroll>
     {#each Array(Math.max(5, oppBenchLimit, oppPlayer.bench.length)) as _, i}
       {@const inst = oppPlayer.bench[i]}
       {#if inst}
@@ -1029,7 +1071,7 @@
   {/if}
 
   <!-- ─── 我方 bench ─── -->
-  <div class="mp-row mp-my-bench">
+  <div class="mp-row mp-my-bench" use:dragScroll>
     {#each Array(Math.max(5, myBenchLimit, myPlayer.bench.length)) as _, i}
       {@const inst = myPlayer.bench[i]}
       {#if inst}
@@ -1057,7 +1099,7 @@
   </div>
 
   <!-- ─── 手牌橫向 scroll（底部固定） ─── -->
-  <footer class="mp-hand">
+  <footer class="mp-hand" use:dragScroll>
     <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
     {#key myIdx}
     {#if myPlayer.hand.length === 0}
@@ -1370,6 +1412,9 @@
     overflow-x: auto;
   }
   .mp-row::-webkit-scrollbar { display: none; }
+  /* v5.379 滑鼠橫向拖曳捲動：游標提示 + 拖曳中禁止選字 */
+  .mp-hand, .mp-row.mp-opp-bench, .mp-row.mp-my-bench { cursor: grab; }
+  .mp-dragging { cursor: grabbing !important; user-select: none; }
   .mp-row { scrollbar-width: none; }
   .mp-opp-bench { background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(60,20,20,0.3)); }
   .mp-my-bench { background: linear-gradient(0deg, rgba(30,40,80,0.5), rgba(20,30,40,0.3)); }
