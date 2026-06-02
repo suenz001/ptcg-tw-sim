@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.27 (admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
+// === ORACLE ADMIN ENDPOINTS === v0.28 (admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -577,6 +577,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
         disabled: u.disabled,
       }));
       res.json({ users, pageToken: result.pageToken || null });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // v0.28: 批次 uid → email 查詢（意見回饋分頁只查「當前頁可見」的少數 uid，免載全量 users）。
+  //   重用 lookupUserInfoBatch（5 分鐘 TTL 快取 + adminAuth.getUsers 每批 100）。
+  //   body: { uids: string[] } → res: { emails: { [uid]: email|null } }（null=匿名/查無）。
+  app.post('/api/admin/firebase/users/lookup', requireFirebaseAdmin, requireFb, async (req, res) => {
+    try {
+      const raw = Array.isArray(req.body && req.body.uids) ? req.body.uids : [];
+      const uids = raw.filter(u => typeof u === 'string').slice(0, 200);  // 上限保護
+      const emails = {};
+      const realUids = [];
+      for (const uid of uids) {
+        if (isSessionAnonUid(uid)) emails[uid] = null;  // client 自產 anon id，無 Firebase email
+        else realUids.push(uid);
+      }
+      if (realUids.length) {
+        const info = await lookupUserInfoBatch(realUids);
+        for (const uid of realUids) {
+          const i = info.get(uid);
+          emails[uid] = (i && i.email) || null;
+        }
+      }
+      res.json({ emails });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
