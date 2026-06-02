@@ -1832,6 +1832,12 @@ function dealOpeningHand(
   player: PlayerState,
   pool: Map<string, Card>,
 ): { mulligans: number; revealedHands: string[][] } {
+  // v5.378：牌組（含手牌）是否「存在」任何可起手上場的卡（基礎寶可夢 / 閃焰王牌瞬間爆發力）。
+  //   原本上限 10 次：抽不到就放行 → 進 setup 卻沒有可放戰鬥場的寶可夢 → 直接卡死
+  //   （化石牌組運氣差時重現）。改為：牌組確實有可上場卡 → 一直重抽到抽到為止（PTCG 正規
+  //   mulligan 本就無上限）；牌組完全沒有可上場卡（理論上非法牌組）→ 抽一次就放行避免無限迴圈。
+  const deckHasPlaceable = [...player.deck, ...player.hand]
+    .some((c) => canBeInitialActive(c.cardId, pool));
   let attempts = 0;
   let mulligans = 0;
   const revealedHands: string[][] = [];
@@ -1850,7 +1856,9 @@ function dealOpeningHand(
     // v3.74：mulligan 失敗 — 把這 7 張 cardIds 記下來給對方看
     revealedHands.push(player.hand.map(c => c.cardId));
     mulligans++;
-  } while (attempts < 10);
+    // 牌組根本沒有可上場的卡（非法牌組）→ 再抽也不可能抽到，停止避免無限迴圈
+    if (!deckHasPlaceable) break;
+  } while (attempts < 200);  // v5.378：安全上限（合法牌組幾乎必在數次內抽到，200 純保險）
   return { mulligans, revealedHands };
 }
 
