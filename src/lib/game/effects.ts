@@ -2277,7 +2277,10 @@ export function isFestivalVenueStatusProtected(
   return stadium?.name === '祭典會場' && (inst.energyAttached?.length ?? 0) > 0;
 }
 
-/** 祭典會場：雙方身上附有能量卡的寶可夢，將受到的特殊狀態全部恢復。 */
+/** 祭典會場：雙方身上附有能量卡的寶可夢，將受到的特殊狀態全部恢復。
+ *  v5.375：清除時補 log。原本靜默清除，使 支配鎖鏈／阿杏的秘招 等先 log「中毒」、
+ *  再被本 sweep 清掉，玩家誤以為狀態真的生效。並擴及 secondaryStatus／tertiaryStatus
+ *  三槽（卡面「特殊狀態全部恢復」＝含雙／三重狀態）。 */
 export function clearFestivalVenueProtectedStatuses(
   state: GameState,
   pool: Map<string, Card>,
@@ -2285,25 +2288,50 @@ export function clearFestivalVenueProtectedStatuses(
   const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
   if (stadium?.name !== '祭典會場') return state;
 
+  // 特殊狀態 → 中文標籤（log 用）
+  const STATUS_LABEL: Record<SpecialCondition, string> = {
+    poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+  };
+  const cleared: string[] = []; // 收集被恢復的寶可夢描述，事後一次補 log
+
+  // 單一實例：身上有能量 + 任一狀態槽有特殊狀態 → 三槽全清，並記錄供 log
+  const clean = (inst: CardInstance): CardInstance => {
+    if ((inst.energyAttached?.length ?? 0) === 0) return inst;
+    if (!inst.status && !inst.secondaryStatus && !inst.tertiaryStatus) return inst;
+    const labels: string[] = [];
+    for (const s of [inst.status, inst.secondaryStatus, inst.tertiaryStatus]) {
+      if (s) labels.push(STATUS_LABEL[s] ?? s);
+    }
+    const name = pool.get(inst.cardId)?.name ?? '寶可夢';
+    cleared.push(`${name}（${labels.join('、')}）`);
+    return { ...inst, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined };
+  };
+
   let changed = false;
   const players = state.players.map((player) => {
     let nextPlayer = player;
-    if (player.active?.status && (player.active.energyAttached?.length ?? 0) > 0) {
-      nextPlayer = { ...nextPlayer, active: { ...player.active, status: undefined } };
-      changed = true;
+    if (player.active) {
+      const na = clean(player.active);
+      if (na !== player.active) {
+        nextPlayer = { ...nextPlayer, active: na };
+        changed = true;
+      }
     }
-    const bench = nextPlayer.bench.map((pk) => {
-      if (!pk.status || (pk.energyAttached?.length ?? 0) === 0) return pk;
-      changed = true;
-      return { ...pk, status: undefined };
-    });
+    const bench = nextPlayer.bench.map((pk) => clean(pk));
     if (bench.some((pk, i) => pk !== nextPlayer.bench[i])) {
       nextPlayer = { ...nextPlayer, bench };
+      changed = true;
     }
     return nextPlayer;
   }) as [PlayerState, PlayerState];
 
-  return changed ? { ...state, players } : state;
+  if (!changed) return state;
+  let next: GameState = { ...state, players };
+  // 補 log：澄清「特殊狀態被祭典會場恢復」而非真的附加成功
+  if (cleared.length > 0) {
+    next = addLog(next, `🎪 祭典會場：${cleared.join('、')} 身上附有能量卡，特殊狀態全部恢復`, null);
+  }
+  return next;
 }
 
 /** v4.996: 附特殊能量後若 holder 被 SPECIAL_ENERGY_STATUS_IMMUNE 命中，
