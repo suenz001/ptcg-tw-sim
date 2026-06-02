@@ -11,7 +11,7 @@
   Layout（上→下，目標 ~600-650px 主流手機 viewport）：
     Top bar (32px)：⚙ · 回合 X · 我N 對N · phase · 結束回合鈕
     對手 bench×5 (56px) — 橫向，無圖只縮圖
-    對手 chips (22px) — 獎勵/牌庫/棄牌
+    對手 chips (22px) — 獎賞/牌庫/棄牌
     對手 active (105px) — 大圖 + HP bar + 能量
     Log (flex:1, min 60px) — 反序顯示
     我方 active (110px) — 大圖 + HP bar + 能量 + 攻擊/撤退/特性按鈕
@@ -606,7 +606,7 @@
     const aId = myPlayer.active.iid;
     // v3.998 化石卡在戰鬥場：自己回合 main phase 才能丟棄（卡面：「若在自己的回合中，則可將場上的這張卡丟棄」）
     //   桌機 v2.189 已有此按鈕（+page.svelte line 4391+），手機版漏這個 UX。
-    //   丟棄與昏厥不同：對手不抽獎賞牌；戰鬥場丟棄需從備戰補 1 隻（engine 處理）。
+    //   丟棄與昏厥不同：對手不抽獎賞卡；戰鬥場丟棄需從備戰補 1 隻（engine 處理）。
     if (myPlayer.active.fossilOnField && isPlaying && isMyTurn && isMainPhase && !pendingSelection) {
       out.push({
         label: '🦴 丟棄化石',
@@ -892,7 +892,7 @@
     {/each}
   </div>
 
-  <!-- ─── 對手 chips: 獎勵/牌庫/棄牌（緊湊） ─── -->
+  <!-- ─── 對手 chips: 獎賞/牌庫/棄牌（緊湊） ─── -->
   <div class="mp-chips mp-opp-chips">
     <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
     <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
@@ -974,13 +974,13 @@
   <!-- v3.02：套 +page.svelte 同款 tokenize + 卡名可點 -->
   <!-- v5.194：log 改為正序顯示（最舊在上、最新在下）+ 顯示 timestamp [mm:ss]，鏡射桌面版 -->
   <section class="mp-log" bind:this={mpLogEl}>
-    {#each ((game.log ?? []).slice(-30)) as entry, i (i + (entry.message ?? ''))}
+    {#each (game.log ?? []) as entry, i (i + (entry.message ?? ''))}
       {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
       {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}
       {@const _lineCls = logLineClass(_msgText ?? '')}
       {@const _tokens = tokenizeLogMessage(_msgText ?? '', cardNamesSorted)}
       {@const _ts = formatLogTimeShort(entry, game?.gameStartTime)}
-      <div class="mp-log-line {_lineCls}" class:latest={i === ((game.log ?? []).length - 1) || i === (Math.min((game.log ?? []).length, 30) - 1)} class:sys={entry.playerIndex === null} class:private={_isPrivate}>
+      <div class="mp-log-line {_lineCls}" class:latest={i === ((game.log ?? []).length - 1)} class:sys={entry.playerIndex === null} class:private={_isPrivate}>
         {#if _ts}<span class="log-time">{_ts}</span>{/if}
         {#if _isPrivate}<span class="log-private-icon" title="只有你看得到">🔒</span>{/if}
         {#each _tokens as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" title="點擊查看 {tok.text} 卡片詳情" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
@@ -1046,7 +1046,7 @@
     {/if}
   </div>
 
-  <!-- ─── 我方 chips: 獎勵/牌庫/棄牌 ─── -->
+  <!-- ─── 我方 chips: 獎賞/牌庫/棄牌 ─── -->
   <div class="mp-chips mp-my-chips">
     <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
     <span class="mp-chip">📚 {myPlayer.deck.length}</span>
@@ -1065,7 +1065,7 @@
   <!-- v5.199：補 !isSpectator gate — 觀戰者不該看到「取得」按鈕（雖 dispatch L3589 已擋，但 UX 不該顯示） -->
   {#if (pendingPrizes ?? 0) > 0 && !isSpectator}
     <div class="mp-prize-alert">
-      🏆 取 {pendingPrizes} 張獎勵牌
+      🏆 取 {pendingPrizes} 張獎賞卡
       <button class="mp-prize-btn" onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>
     </div>
   {/if}
@@ -1459,7 +1459,7 @@
   }
   .mp-actionable { box-shadow: 0 0 6px rgba(255,212,74,0.6); border-color: #e0b030 !important; }
 
-  /* ── Chips row（獎勵/牌庫/棄牌 緊湊） ───────────────────────────── */
+  /* ── Chips row（獎賞/牌庫/棄牌 緊湊） ───────────────────────────── */
   .mp-chips {
     flex: 0 0 22px;
     display: flex; gap: 4px;

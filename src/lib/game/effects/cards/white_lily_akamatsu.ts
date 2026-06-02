@@ -211,7 +211,7 @@ regR('akamatsu-attach', (st, idx, iids, params, pool) => {
 //   在這個回合，若對手的戰鬥寶可夢因自己的「太晶」寶可夢使用的招式的傷害而【昏厥】了，
 //   則多獲得 1 張獎賞卡。
 // 實裝：
-//   - regG：對手獎勵牌恰為 2 張時才可打出。
+//   - regG：對手獎賞卡恰為 2 張時才可打出。
 //   - reg ：設 PlayerState.teraKoBonusPrizeThisTurn=true。engine.ts KO 路徑 (attacker 側)
 //           檢查本旗標 + 攻擊方 active 是否為「太晶寶可夢」(card.tags?.includes('太晶'))
 //           → prizes +1。END_TURN 於 aIdx 清除旗標。
@@ -223,8 +223,8 @@ regG('白蕾雅', (st, idx) => {
 reg('白蕾雅', (st, idx) => {
   const opp = st.players[1 - idx];
   if (opp.prizes.length !== 2) {
-    return addLog(st, '白蕾雅：對手剩餘獎勵牌不是 2 張，無法使用', idx);
+    return addLog(st, '白蕾雅：對手剩餘獎賞卡不是 2 張，無法使用', idx);
   }
-  st = addLog(st, '白蕾雅：本回合若太晶寶可夢招式 KO 對手戰鬥寶可夢 +1 張獎勵牌', idx);
+  st = addLog(st, '白蕾雅：本回合若太晶寶可夢招式 KO 對手戰鬥寶可夢 +1 張獎賞卡', idx);
   return updatePlayer(st, idx, pl => ({ ...pl, teraKoBonusPrizeThisTurn: true }));
 });

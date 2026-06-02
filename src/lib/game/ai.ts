@@ -4,7 +4,7 @@
  * getAIAction(state, pool) → 下一個應執行的 GameAction，或 null（代表無事可做）
  *
  * 策略優先序：
- *  1. 取獎勵牌
+ *  1. 取獎賞卡
  *  2. 解析待選擇（自動選最佳）
  *  3. 送出新出場（被擊倒後）
  *  4. 主階段：進化 → 打基礎備戰 → 附能量 → 打訓練家 → 使用特性 → 攻擊 → 結束
@@ -55,7 +55,7 @@ export function getAIAction(
     };
   }
 
-  // 2. 取獎勵牌（v2.98：移到 activePlayerIndex gate 之前 — owner 在對手回合也可取）
+  // 2. 取獎賞卡（v2.98：移到 activePlayerIndex gate 之前 — owner 在對手回合也可取）
   const aiPending = state.pendingPrizes?.[myIdx] ?? 0;
   if (aiPending > 0) {
     return { type: 'TAKE_PRIZES', count: aiPending, playerIdx: myIdx };

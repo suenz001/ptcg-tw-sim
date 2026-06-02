@@ -141,7 +141,7 @@ regR('matsuba-confidence', (st, idx, iids, _params, pool) => {
   return drawCards(st, idx, benchN);
 });
 
-// 莉莉艾的決意 — 手牌洗回牌庫，抽 6 張（獎勵牌剩 6 張時抽 8 張）
+// 莉莉艾的決意 — 手牌洗回牌庫，抽 6 張（獎賞卡剩 6 張時抽 8 張）
 // v2.24 從 effects.ts 搬遷
 reg('莉莉艾的決意', (st, idx) => {
   const prizes = st.players[idx].prizes.length;

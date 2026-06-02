@@ -1387,7 +1387,7 @@ export function canAffordAttack(
   return tryAffordWithCost(cost);
 }
 
-/** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎勵牌數 */
+/** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎賞卡數 */
 export function prizesForKO(card: Card): number {
   const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
   // 超級進化寶可夢ex（Mega ex）：name 以「超級」開頭且為 ex → 3 張獎賞
@@ -2064,7 +2064,7 @@ function handleSetup(
 
   if (action.type === 'FINISH_SETUP') {
     if (!player.active) return state; // 必須選出場才能完成
-    // 設置獎勵牌（各 6 張）
+    // 設置獎賞卡（各 6 張）
     const prizes: CardInstance[] = [];
     for (let i = 0; i < 6; i++) {
       const top = player.deck.shift();
@@ -2149,7 +2149,7 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       player.active = null;
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(ko.iid, card?.name ?? '?')} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(ko.iid, card?.name ?? '?')} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     }
@@ -2169,7 +2169,7 @@ function sanityKOSweep(
       ];
       player.discard = [...player.discard, ...koDiscard];
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(b.iid, card?.name ?? '?')} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎勵牌`, null);
+      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(b.iid, card?.name ?? '?')} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     } else {
@@ -3946,9 +3946,9 @@ function handlePlaying(
           }
           players[dIdx] = winner;
           const s = addLog({ ...state, players, turnPhase: 'end' as const },
-            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！${players[dIdx].name} 取得 ${take} 張獎勵牌。`, aIdx);
+            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！${players[dIdx].name} 取得 ${take} 張獎賞卡。`, aIdx);
           if (winner.prizes.length === 0) {
-            return { ...s, phase: 'game-over', winner: dIdx, winReason: `${winner.name} 取得所有獎勵牌` };
+            return { ...s, phase: 'game-over', winner: dIdx, winReason: `${winner.name} 取得所有獎賞卡` };
           }
           if (newAttacker.bench.length === 0) {
             return { ...s, phase: 'game-over', winner: dIdx, winReason: `${newAttacker.name} 沒有可上場的寶可夢` };
@@ -4936,7 +4936,7 @@ function handlePlaying(
     // 有效 HP = 基礎 HP + 道具加成（英雄斗篷/勇氣護符/豪華斗篷/驅勁能量古代）
     const defenderHP = getEffectiveHP(defenderState.active, pool, state);
 
-    // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎勵牌 -1
+    // 被動特性：影藏（超級耿鬼ex）— 惡寶可夢被 ex 擊倒時，獎賞卡 -1
     let prizeAdjust = 0;
     if (baseDamage > 0 && newDamage >= defenderHP) {
       const isExAttacker = attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
@@ -5134,7 +5134,7 @@ function handlePlaying(
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
       const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)
         ? updatedActive.deferredPrizeBonusThisTurn : 0;
-      // Wave 43：白蕾雅 — 本回合，攻擊方使用「太晶」寶可夢招式 KO 對手戰鬥位 → +1 獎勵牌。
+      // Wave 43：白蕾雅 — 本回合，攻擊方使用「太晶」寶可夢招式 KO 對手戰鬥位 → +1 獎賞卡。
       // 條件：aIdx 玩家本回合有 teraKoBonusPrizeThisTurn 旗標，且攻擊方 active 為太晶寶可夢。
       // v2.48：scraper 把太晶從 attacks[] 抽出，改查 card.tags 欄位。
       let whiteLilyBonus = 0;
@@ -5144,14 +5144,14 @@ function handlePlaying(
         const isTera = !!atkCard?.tags?.includes('太晶');
         if (isTera) whiteLilyBonus = 1;
       }
-      // v2.185：巴貝娜與荷蓮娜 — 本回合，攻擊方「N 的」寶可夢招式 KO 對手戰鬥位 → +3 獎勵牌。
+      // v2.185：巴貝娜與荷蓮娜 — 本回合，攻擊方「N 的」寶可夢招式 KO 對手戰鬥位 → +3 獎賞卡。
       let bagonElenaBonus = 0;
       if (newState.players[aIdx].bagonElenaThisTurn) {
         const atkActive = newState.players[aIdx].active;
         const atkCard = atkActive ? pool.get(atkActive.cardId) : null;
         if (atkCard?.name?.startsWith('N的')) bagonElenaBonus = 3;
       }
-      // v2.93a：三首惡龍ex｜貪婪食客 — 若招式 KO 對手【基礎】寶可夢 → +1 獎勵牌
+      // v2.93a：三首惡龍ex｜貪婪食客 — 若招式 KO 對手【基礎】寶可夢 → +1 獎賞卡
       // 卡面：「若對手的【基礎】寶可夢因這隻寶可夢使用的招式的傷害而【昏厥】了，則多獲得 1 張獎賞卡。」
       // 條件：attacker 必須是擁有「貪婪食客」特性的寶可夢（即場上 active 為三首惡龍ex）；
       //       且被 KO 的對手寶可夢 subtype === 'Basic'。
@@ -5204,7 +5204,7 @@ function handlePlaying(
           newState = addLog(newState, `「奇跡之吻」啟動：硬幣反面 → 不增加獎賞卡`, aIdx);
         }
       }
-      // 獎賞牌下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
+      // 獎賞卡下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
       const basePrizes = prizesForKO(defenderCard);
       const prizes = preventPrizeAll ? 0
         : Math.max(0, basePrizes + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus);
@@ -5214,12 +5214,12 @@ function handlePlaying(
       // - ancientEnergyAdjust: 古舊能量 -1
       // - deferredBonus / whiteLilyBonus / bagonElenaBonus / greedyGourmetBonus / togekissBonus 已各自有 log
       if (!preventPrizeAll && prizeTool !== 0) {
-        newState = addLog(newState, `🔧 道具調整獎勵牌：${prizeTool >= 0 ? '+' : ''}${prizeTool}（如莉莉艾的珍珠 -1 / 豪華斗篷 +1）`, null);
+        newState = addLog(newState, `🔧 道具調整獎賞卡：${prizeTool >= 0 ? '+' : ''}${prizeTool}（如莉莉艾的珍珠 -1 / 豪華斗篷 +1）`, null);
       }
       if (!preventPrizeAll && ancientEnergyAdjust !== 0) {
         // v3.77：明確 log 古舊能量 ACE SPEC 效果，附 KO 寶可夢名 + 計算式
         newState = addLog(newState,
-          `⚡ 古舊能量（ACE SPEC）：${defenderCard.name} 附有「古舊能量」 → 對手獎勵牌 ${ancientEnergyAdjust >= 0 ? '+' : ''}${ancientEnergyAdjust} 張（${basePrizes} ${ancientEnergyAdjust < 0 ? '-' : '+'} ${Math.abs(ancientEnergyAdjust)} = ${prizes}）`,
+          `⚡ 古舊能量（ACE SPEC）：${defenderCard.name} 附有「古舊能量」 → 對手獎賞卡 ${ancientEnergyAdjust >= 0 ? '+' : ''}${ancientEnergyAdjust} 張（${basePrizes} ${ancientEnergyAdjust < 0 ? '-' : '+'} ${Math.abs(ancientEnergyAdjust)} = ${prizes}）`,
           null);
       }
       defPlayers[dIdx] = defenderState;
@@ -5279,21 +5279,21 @@ function handlePlaying(
         }
       }
       if (deferredBonus > 0) {
-        newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎勵牌`, null);
+        newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎賞卡`, null);
       }
       if (whiteLilyBonus > 0) {
-        newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎勵牌`, aIdx);
+        newState = addLog(newState, `「白蕾雅」效果發動：太晶寶可夢的招式 KO 對手戰鬥位 +${whiteLilyBonus} 張獎賞卡`, aIdx);
       }
       if (bagonElenaBonus > 0) {
-        newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢招式 KO 對手戰鬥位 +${bagonElenaBonus} 張獎勵牌`, aIdx);
+        newState = addLog(newState, `「巴貝娜與荷蓮娜」效果發動：「N 的」寶可夢招式 KO 對手戰鬥位 +${bagonElenaBonus} 張獎賞卡`, aIdx);
       }
       if (prizeAdjust < 0) {
-        newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎勵牌減少 1 張`, null);
+        newState = addLog(newState, `「影藏」啟動：${attacker.name} 取得的獎賞卡減少 1 張`, null);
       }
       if (prizes > 0) {
-        newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！${attacker.name} 取得 ${prizes} 張獎勵牌。`, null);
+        newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！${attacker.name} 取得 ${prizes} 張獎賞卡。`, null);
       } else {
-        newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！但 ${attacker.name} 無法取得任何獎勵牌。`, null);
+        newState = addLog(newState, `${cardLink(koInst?.iid, defenderCard.name)} 被擊倒！但 ${attacker.name} 無法取得任何獎賞卡。`, null);
       }
 
       // 道具：被 KO 時觸發（希望護身符 / 沉重接力棒）— 阻礙之塔時失效
@@ -5454,7 +5454,7 @@ function handlePlaying(
             };
             newState = addLog(
               addPendingPrize({ ...newState, players: retPlayers }, dIdx, retKOPrizes),
-              `${retAtkCard!.name} 被反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${retKOPrizes} 張獎勵牌。`,
+              `${retAtkCard!.name} 被反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${retKOPrizes} 張獎賞卡。`,
               null,
             );
             // 攻擊方沒有備戰寶可夢 → 直接終局
@@ -5508,10 +5508,10 @@ function handlePlaying(
             active: null,
             discard: [...punkRefPlayers2[aIdx].discard, ...koDiscard],
           };
-          // 防守方（dIdx）得到獎賞牌（放進 pendingPrizes 讓 UI 取牌）
+          // 防守方（dIdx）得到獎賞卡（放進 pendingPrizes 讓 UI 取牌）
           newState = addLog(
             addPendingPrize({ ...newState, players: punkRefPlayers2 }, dIdx, punkKOPrizes),
-            `${attackerCard.name} 被龐克頭盔的反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${punkKOPrizes} 張獎勵牌。`,
+            `${attackerCard.name} 被龐克頭盔的反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${punkKOPrizes} 張獎賞卡。`,
             null,
           );
           // 若攻擊方場上空了（無備戰）→ 直接終局
@@ -5611,7 +5611,7 @@ function handlePlaying(
     // v4.991: ATTACK 流程結尾統一 set turnPhase='end' — 修玩家 case 1 卡死。
     //   之前 KO 分支跳過 turnPhase 設定（line 4751 只有「沒 KO」分支 set），
     //   導致 END_TURN handler (line 1330 check turnPhase==='end') 拒絕處理，
-    //   玩家取完獎勵 + 對手補位後點「結束」按鈕無效 → 卡死。
+    //   玩家取完獎賞 + 對手補位後點「結束」按鈕無效 → 卡死。
     //   game-over case 已在 line 4660 區 return 不會跑到這。
     if (newState.phase === 'playing') {
       newState = { ...newState, turnPhase: 'end' as const };
@@ -5794,7 +5794,7 @@ function handlePlaying(
     newState = sanityKOSweep(newState, aIdx, pool);
 
     // v2.335：祭典樂舞完整 state-machine：第 1 次招式即使 KO 對手戰鬥位，也要先保留
-    // 第 2 次招式權；待獎勵牌與對手新戰鬥寶可夢處理完成後，再回到 main 使用第 2 次招式。
+    // 第 2 次招式權；待獎賞卡與對手新戰鬥寶可夢處理完成後，再回到 main 使用第 2 次招式。
     // v5.201：傳 action.attackIndex 讓 auto-second-attack 知道要重打哪個招式
     newState = startFestivalDanceSecondAttackWindow(newState, aIdx, pool, action.attackIndex);
 
@@ -5862,7 +5862,7 @@ function handlePlaying(
     return newState;
   }
 
-  // ── 取獎勵牌 ──────────────────────────────────────────────────────────────
+  // ── 取獎賞卡 ──────────────────────────────────────────────────────────────
   if (action.type === 'TAKE_PRIZES') {
     // v2.98：playerIdx 指明哪一側取獎；不再依賴 activePlayerIndex（對手回合也可取）
     const ownerIdx = action.playerIdx;
@@ -5880,18 +5880,18 @@ function handlePlaying(
 
     let newState: GameState = addLog(
       { ...state, players: newPlayers2, pendingPrizes: newPP },
-      `${taker.name} 取得了 ${count} 張獎勵牌（剩餘 ${taker.prizes.length} 張）`,
+      `${taker.name} 取得了 ${count} 張獎賞卡（剩餘 ${taker.prizes.length} 張）`,
       ownerIdx
     );
 
-    // 勝利條件：獎勵牌全取完
+    // 勝利條件：獎賞卡全取完
     if (taker.prizes.length <= 0) {
       return {
         ...newState,
         phase: 'game-over',
         winner: ownerIdx,
-        winReason: `${taker.name} 取得所有獎勵牌`,
-        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎勵牌，獲勝！`, timestamp: Date.now() }]
+        winReason: `${taker.name} 取得所有獎賞卡`,
+        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: Date.now() }]
       };
     }
 
@@ -5955,7 +5955,7 @@ function handlePlaying(
 
   // ── 結束回合 ──────────────────────────────────────────────────────────────
   if (action.type === 'END_TURN') {
-    if (hasAnyPendingPrize(state)) return state;  // 取獎勵前不能結束
+    if (hasAnyPendingPrize(state)) return state;  // 取獎賞前不能結束
     if (defender.active === null) return state; // 對手必須先送出寶可夢
 
     // 勝利條件：對手備戰區也空了（雙重保險）
@@ -6070,11 +6070,11 @@ function handlePlaying(
         players[oIdx] = winner;
         const poisonState = addLog(
           { ...state, players },
-          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[oIdx].name} 取得 ${take} 張獎勵牌。`,
+          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[oIdx].name} 取得 ${take} 張獎賞卡。`,
           null
         );
         if (winner.prizes.length === 0) {
-          return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${winner.name} 取得所有獎勵牌` };
+          return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${winner.name} 取得所有獎賞卡` };
         }
         if (poisonPlayer.bench.length === 0) {
           return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${poisonPlayer.name} 沒有可上場的寶可夢` };
@@ -6127,9 +6127,9 @@ function handlePlaying(
         }
         players[oIdx] = burnWinner;
         const burnState = addLog({ ...state, players },
-          `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[oIdx].name} 取得 ${burnTake} 張獎勵牌。`, null);
+          `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[oIdx].name} 取得 ${burnTake} 張獎賞卡。`, null);
         if (burnWinner.prizes.length === 0) {
-          return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnWinner.name} 取得所有獎勵牌` };
+          return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnWinner.name} 取得所有獎賞卡` };
         }
         if (burnedPlayer.bench.length === 0) {
           return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
@@ -6317,7 +6317,7 @@ function handlePlaying(
         const winnerIdx = (1 - i) as 0 | 1;
         const winner = players[winnerIdx];
         state = addLog({ ...state, players },
-          `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎勵牌。`,
+          `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎賞卡。`,
           null);
         state = addPendingPrize(state, winnerIdx, owed);
       }
@@ -6415,7 +6415,7 @@ function handlePlaying(
         }
         if (sandstormPrizes > 0) {
           state = addLog({ ...state, players },
-            `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎勵牌。`,
+            `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
             ownerIdx);
           state = addPendingPrize(state, ownerIdx, sandstormPrizes);
         }

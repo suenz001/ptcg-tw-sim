@@ -31,7 +31,7 @@ export type SfxName =
   | 'evolve'           // 進化儀式音（紙翻面 + 上升小琶音）
   | 'attach-energy'    // 附能量（紙片落下 + soft pluck）
   | 'ability'          // 特性發動（中頻 chime）
-  | 'prize-take'       // 拿獎賞牌 1-5 張（紙抽出 + 上升二音）
+  | 'prize-take'       // 拿獎賞卡 1-5 張（紙抽出 + 上升二音）
   | 'victory-fanfare'  // 拿最後一張獎賞（即將勝利）
   | 'game-win'         // 對局勝利
   | 'game-lose'        // 對局失敗

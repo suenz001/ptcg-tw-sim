@@ -59,7 +59,7 @@ regPre('莉莉艾的皮皮ex|滿月輪舞', bothBenchMultiplyPre(20, 20, '滿月
 //   1. regPre：damage = 0（招式本身不造成傷害）
 //   2. regPost：條件達成 → canApplyAttackEffectToTarget 檢查招式效果免疫 →
 //      直接寫 damage = 99999 到 active 上，繞過所有 damage modifier，
-//      由 ATTACK pipeline 末尾的 sanityKOSweep 處理 KO 與獎勵牌計算。
+//      由 ATTACK pipeline 末尾的 sanityKOSweep 處理 KO 與獎賞卡計算。
 // 卡面「6 個」依官方 ruling 解讀為「≥ 6 個」（含 7、8 個...）。
 regPre('超級阿勃梭魯ex|死亡終局', (s) => ({ state: s, damage: 0 }));
 regPost('超級阿勃梭魯ex|死亡終局', (state, aIdx, pool) => {

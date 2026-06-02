@@ -43,8 +43,8 @@ const RULES: PatternRule[] = [
   { re: /【[^】]+】/g, cls: 'log-bracket' },
   // 擊倒：被擊倒 / 擊倒！ / KO
   { re: /被擊倒[!！]?|擊倒[!！]|KO/g, cls: 'log-ko' },
-  // 獎勵牌：+N 張獎勵牌 / 取得 N 張獎勵牌
-  { re: /\+\d+\s*張獎勵牌|取得\s*\d+\s*張獎勵牌|取走\s*\d+\s*張獎勵牌/g, cls: 'log-prize' },
+  // 獎賞卡：+N 張獎賞卡 / 取得 N 張獎賞卡
+  { re: /\+\d+\s*張獎賞卡|取得\s*\d+\s*張獎賞卡|取走\s*\d+\s*張獎賞卡/g, cls: 'log-prize' },
   // 傷害數字：N 點傷害 / +N 傷害 / 造成 N 點 / -N 傷害
   { re: /[+\-]?\d+\s*點傷害|造成\s*\d+\s*點|[+\-]\d+\s*傷害/g, cls: 'log-damage' },
   // 回血：回 N HP / 恢復 N HP
@@ -207,6 +207,6 @@ export function lineClass(msg: string): string {
   // 回合結束 / 換 X 行動 -> turn-marker（醒目的橫向分隔）
   if (/^回合結束/.test(msg) || /換.*行動。?$/.test(msg)) return 'log-turn-marker';
   // 勝負揭曉
-  if (/獲得勝利|取得所有獎勵牌|沒有可上場的寶可夢|遊戲結束/.test(msg)) return 'log-victory';
+  if (/獲得勝利|取得所有獎賞卡|沒有可上場的寶可夢|遊戲結束/.test(msg)) return 'log-victory';
   return '';
 }

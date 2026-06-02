@@ -93,7 +93,7 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
     players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
     s = addLog(
       { ...s, players },
-      `手之力量：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎勵牌`,
+      `手之力量：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎賞卡`,
       aIdx
     );
     s = addPendingPrize(s, aIdx, prizes);

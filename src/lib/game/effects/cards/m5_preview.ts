@@ -297,7 +297,7 @@ regPre('古空棘魚|化石律動', (state, aIdx, pool) => {
 });
 
 // ── 海豚俠|正義之拳 — 80 +200（當對手剩餘獎賞=1）
-//   卡面：「若對手剩餘獎賞牌為 1 張，則此招式傷害 +200。」
+//   卡面：「若對手剩餘獎賞卡為 1 張，則此招式傷害 +200。」
 regPre('海豚俠|正義拳擊', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppPrizes = state.players[dIdx].prizes.length;
@@ -1350,7 +1350,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
   const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...s.players[dIdx], active: null, discard: [...s.players[dIdx].discard, ...ko] };
   const prizes = defCard ? prizesForKOLocal(defCard) : 1;
-  s = addLog({ ...s, players }, `深淵之瞳：${defCard?.name ?? '?'} 處於【${def.status}】 → 直接昏厥！+${prizes} 張獎勵牌（仿同命戰鬥手動 KO，不走 damage 管線）`, aIdx);
+  s = addLog({ ...s, players }, `深淵之瞳：${defCard?.name ?? '?'} 處於【${def.status}】 → 直接昏厥！+${prizes} 張獎賞卡（仿同命戰鬥手動 KO，不走 damage 管線）`, aIdx);
   s = recordOppKO(s, dIdx, defCard, 'attack');
   s = addPendingPrize(s, aIdx, prizes);
   return s;

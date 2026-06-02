@@ -506,11 +506,11 @@ reg('不公印章', (st, idx) => {
 //
 // 流程：
 //   count = prizes.length（一般是 1~6）
-//   把所有獎賞牌洗一洗，放到 deck 底部
+//   把所有獎賞卡洗一洗，放到 deck 底部
 //   從 deck 上方抽 count 張，放到 prizes
 //   牌庫不夠 count 張時 → 全部能抽就抽（防呆，避免越界）
 //
-// gate：必須要還有獎賞牌 + 牌庫至少 1 張（否則沒意義）。
+// gate：必須要還有獎賞卡 + 牌庫至少 1 張（否則沒意義）。
 regG('調換票', (st, idx) => {
   const p = st.players[idx];
   return p.prizes.length > 0 && p.deck.length > 0;
@@ -519,7 +519,7 @@ reg('調換票', (st, idx) => {
   const count = st.players[idx].prizes.length;
   let s = updatePlayer(st, idx, p => {
     if (p.prizes.length === 0) return p;
-    // 把獎賞牌洗一洗放到牌庫最底
+    // 把獎賞卡洗一洗放到牌庫最底
     const shuffled = shuffle([...p.prizes]);
     const newDeckPre = [...p.deck, ...shuffled];
     // 從新牌庫上方抽 count 張當新獎賞（牌庫不夠時取所有）

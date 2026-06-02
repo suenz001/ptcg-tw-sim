@@ -304,6 +304,14 @@
     <div class="changelog-list">
 
       <details open>
+        <summary><span class="ver-badge">v5.380</span> 用詞統一為官方「獎賞卡」，並讓手機版對戰記錄完整顯示</summary>
+        <ul>
+          <li>將系統中的「獎勵牌／獎賞牌」全面統一為官方正式名稱「獎賞卡」（戰鬥記錄、介面標示一致）。</li>
+          <li>手機版對戰記錄原本只保留最近 30 筆、較早的會看不到；已移除此上限，改為完整顯示（與桌面版一致），可往上捲動查看整場記錄。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.379</span> 改善：桌機縮成手機版面時，可用滑鼠按住橫向拖曳手牌與備戰區</summary>
         <ul>
           <li>在電腦上把瀏覽器視窗縮小成手機版面時，手牌過多、或場上有零之大空洞（備戰寶可夢變多）而超出畫面寬度的卡，原本用滑鼠無法像手機觸控那樣橫向滑動查看。現在手牌列與備戰區可用滑鼠按住左右拖曳來捲動（手機觸控操作不受影響）。</li>
@@ -404,9 +412,9 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.366</span> 修正：上一版造成「獎勵牌被多拿一張」</summary>
+        <summary><span class="ver-badge">v5.366</span> 修正：上一版造成「獎賞卡被多拿一張」</summary>
         <ul>
-          <li>修正 v5.364 帶來的副作用：擊倒一隻非規則寶可夢後，有時會被允許連續拿 2 張獎勵牌（應只拿 1 張）。原因是上一版保護「已取的獎勵牌不被回朔」時，漏了同步保留「待領獎勵牌數」這個欄位，導致畫面誤以為還能再拿。現已修正——既不會把已取的獎勵牌還原回去（v5.364 的目的），也不會多拿。</li>
+          <li>修正 v5.364 帶來的副作用：擊倒一隻非規則寶可夢後，有時會被允許連續拿 2 張獎賞卡（應只拿 1 張）。原因是上一版保護「已取的獎賞卡不被回朔」時，漏了同步保留「待領獎賞卡數」這個欄位，導致畫面誤以為還能再拿。現已修正——既不會把已取的獎賞卡還原回去（v5.364 的目的），也不會多拿。</li>
         </ul>
       </details>
 
@@ -418,9 +426,9 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.364</span> 線上對戰：修正「取得獎勵牌常常要按兩次」</summary>
+        <summary><span class="ver-badge">v5.364</span> 線上對戰：修正「取得獎賞卡常常要按兩次」</summary>
         <ul>
-          <li>修正：擊倒對手寶可夢後取得獎勵牌時，常常第一次按「取得」會被回朔、要按第二次才成功。原因是「你取獎勵牌」和「對手派出新寶可夢」幾乎同時發生，同步時被對手那邊的狀態覆蓋掉。現已加上「獎勵牌只進不退」的保護：同步時若有狀態想把你已取的獎勵牌還原回去，會保留你這邊已取的結果、同時正常套用對手派出的新寶可夢，按一次就生效。</li>
+          <li>修正：擊倒對手寶可夢後取得獎賞卡時，常常第一次按「取得」會被回朔、要按第二次才成功。原因是「你取獎賞卡」和「對手派出新寶可夢」幾乎同時發生，同步時被對手那邊的狀態覆蓋掉。現已加上「獎賞卡只進不退」的保護：同步時若有狀態想把你已取的獎賞卡還原回去，會保留你這邊已取的結果、同時正常套用對手派出的新寶可夢，按一次就生效。</li>
         </ul>
       </details>
 
@@ -525,10 +533,10 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v5.346</span> 修正線上對戰幾種同步問題（動作回退/重複觸發/開局獎勵顯示 0）</summary>
+        <summary><span class="ver-badge">v5.346</span> 修正線上對戰幾種同步問題（動作回退/重複觸發/開局獎賞顯示 0）</summary>
         <ul>
           <li>修正：線上對戰中，若操作太快（例如用寶芬搜尋、選完後視窗又短暫閃一次）、或對手做了一連串動作我方卻沒即時顯示/畫面回退，這些大多是「較舊的狀態把較新的洗掉」造成的。已加上防回退保護——只允許較新的狀態覆蓋，避免重複觸發與動作消失。</li>
-          <li>修正：開局時偶爾出現「對手獎勵牌顯示 0 張」，是開局同步時對手已設好的狀態被較舊的狀態蓋掉所致；現在對手準備完成後的狀態不會再被回退。</li>
+          <li>修正：開局時偶爾出現「對手獎賞卡顯示 0 張」，是開局同步時對手已設好的狀態被較舊的狀態蓋掉所致；現在對手準備完成後的狀態不會再被回退。</li>
         </ul>
       </details>
 
@@ -2044,7 +2052,7 @@
             <ol>
               <li> guard — 擋住薄霧能量 / 皇帝之勢 / 抵抗之幕 / 全能硬殼 / 化石 等 attack-effect immunity</li>
               <li>手動 KO：、能量、道具、進化堆全搬到 </li>
-              <li> 記錄 +  給攻擊方獎勵牌</li>
+              <li> 記錄 +  給攻擊方獎賞卡</li>
               <li>完全不走 damage 管線 → 不會誤觸 damage hook</li>
             </ol>
           </li>
@@ -3799,7 +3807,7 @@
           <li><b>修法</b>： resolver 內：</li>
           <li>　・宣告  累計變數（迴圈外）</li>
           <li>　・loop 內對  target 檢查 <code>targetTool?.name === &apos;龐克頭盔&apos; && targetCard?.pokemonType === &apos;Darkness&apos;</code> + <code>dmg &gt; 0</code> → <code>punkReflectDamage += 40</code></li>
-          <li>　・loop 結束後對 attacker apply punkReflectDamage（同 engine.ts 主路徑做法 — 防被 KO 處理覆蓋 attacker state）；若 attacker 被反擊打死也即時做 KO 處理 + 加獎勵牌 + 判斷 game-over</li>
+          <li>　・loop 結束後對 attacker apply punkReflectDamage（同 engine.ts 主路徑做法 — 防被 KO 處理覆蓋 attacker state）；若 attacker 被反擊打死也即時做 KO 處理 + 加獎賞卡 + 判斷 game-over</li>
 
           <li><b>規則對齊</b>：依 PDF II-C C-07「放置●個傷害指示物」— 反擊不算傷害（不計弱抗 / 不受附加效果影響），純放 4 個指示物 = 40 點數值。本實作直接 +40 到  是等價處理（與  ~  主路徑 punk reflect 邏輯一致）。</li>
 
@@ -4243,7 +4251,7 @@
           <li><b>修法 2（備戰區字 / HP / 特性按鈕放大）</b>：<code>.bench-name</code> 字 .82 → 1rem、<code>.bench-stat</code> 字 .78 → .92rem 並補 padding，<code>.ability-btn-sm</code> 在桌墊版備戰區字 .56 → .72rem + padding 加大，全部加 <code>!important</code> override base 樣式。</li>
           <li><b>修法 3（Bench 疊牌動態密度）</b>：兩處 bench attached card stack（對手 + 我方）加 <code>@const _step</code>，依當前疊牌數動態縮間距 — 1 張 29px、4 張 20px、6 張 14px、7+ 鎖 12px。疊越多越密，避免疊到 6-8 張時垂直長度爆出 zone。Active 區疊牌仍橫向 32px 不動（橫向不會爆）。</li>
           <li><b>修法 4 + 5（拿掉 zone 標籤 + 4 zone 間距平均）</b>：對手出場 label 整個 <code>display:none</code>（用 <code>.opp-label</code> class 精準鎖定）；我的出場 label 內含撤退按鈕不能整個 hide，把純文字節點包進 <code>span class=&quot;zone-label-text&quot;</code> 然後 CSS hide 此 span，保留撤退按鈕。<code>.playmat.layout-tabletop</code> 的 <code>grid gap</code> 從 <code>2px 8px</code> 改為 <code>12px 8px</code>，row-gap 拉開讓 4 個 zone（對方備戰 / 對方戰鬥場 / 我方戰鬥場 / 我方備戰）之間視覺上等距分配。</li>
-          <li><b>不變</b>：桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）；獎勵 zone 的 zone-label-sm（沒 opp-label class）不受 hide 規則影響；active 區疊牌動態間距不動（橫向 32px 固定）。</li>
+          <li><b>不變</b>：桌機 classic / 手機 portrait 完全不受影響（純 <code>.playmat.layout-tabletop</code> scope）；獎賞 zone 的 zone-label-sm（沒 opp-label class）不受 hide 規則影響；active 區疊牌動態間距不動（橫向 32px 固定）。</li>
 
         </ul>
       </details>
@@ -4541,7 +4549,7 @@
         <summary><span class="ver-badge">v5.009</span> 🎴 桌墊版對戰布局（齒輪切換，opt-in 測試）</summary>
         <ul>
           <li><b>玩家回饋</b>：實體 PTCG 對戰時 Active 寶可夢放正中央，但本站對戰版面 Active 放在最左、Bench 往右延伸，跟實體不一樣，新手第一眼會搞錯位置。</li>
-          <li><b>新增「桌墊版」布局</b>：仿實體 TCG 桌墊 — Active 寶可夢水平置中、Bench 5 格對稱列、雙方板面以中線對稱（對手 bench 在上 / 自己 bench 在下）、牌庫棄牌獎勵牌分列兩側。</li>
+          <li><b>新增「桌墊版」布局</b>：仿實體 TCG 桌墊 — Active 寶可夢水平置中、Bench 5 格對稱列、雙方板面以中線對稱（對手 bench 在上 / 自己 bench 在下）、牌庫棄牌獎賞卡分列兩側。</li>
           <li><b>切換方式</b>：對戰畫面左上方 ⚙️ 齒輪按鈕 → 選「桌墊版」或「經典版」。設定存 localStorage，跨 session 記憶。</li>
           <li><b>預設保持經典版</b>：所有玩家預設仍使用原有左對齊 layout，老玩家完全不變。桌墊版需主動勾選才會生效，方便先小範圍測試。</li>
           <li><b>限制</b>：(1) 本期只動桌機版面，手機版（豎屏）不變。(2) 窄螢幕（&lt; 1200px）會自動 fallback 回 classic 排版，避免擠壓。(3) 本期只動布局位置，卡片上附加能量/道具仍是現有的 pip/chip 顯示（Phase 2 會做卡片微重疊真實感）。</li>
@@ -7663,12 +7671,12 @@
       </details>
 
       <details>
-        <summary><span class="ver-badge">v3.9998</span> 🐛 4 bug 修補（太陽伊布ex 兩招 + 小灰怪 + 同命戰鬥獎勵）</summary>
+        <summary><span class="ver-badge">v3.9998</span> 🐛 4 bug 修補（太陽伊布ex 兩招 + 小灰怪 + 同命戰鬥獎賞）</summary>
         <ul>
           <li><b>Bug 1：太陽伊布ex 精神出局</b> — 卡面「在不看正面的情況下，從對手的手牌選擇 1 張，將其丟棄」。原實裝用隨機選（），改用 hand-discard picker + <code>params.concealed=true</code>。UI 端讀此 flag → 卡背 placeholder（深藍漸層 + 🎴 + ?），玩家僅看到「對手有幾張」選 1 張丟棄，不揭示卡圖/卡名。</li>
           <li><b>Bug 2：太陽伊布ex 阿賽斯特萊石</b> — 對手退化後應在對手回合可重進化。原 v2.261 設 <code>evolvedThisTurn:true</code>，但  只清「當前玩家」flags，對手 START_TURN 時 flag 仍 true → 不能進化。修法：退化邏輯不設 （被退化的寶可夢非「剛進化」，且當前玩家回合內對方無進化動作，安全移除）。</li>
           <li><b>Bug 3：小灰怪 挪動一下</b> — 卡面「選擇 1 個對手場上寶可夢身上附加的能量，改附於對手的其他寶可夢身上」。原 v2.67 簡化「取末尾能量 + 隨機備戰」違反 Rule 7。改成 2 階段 picker（仿阻礙之翼 v3.14）： → ，兩階段 <code>sourcePlayerIdx=dIdx</code>，玩家自選來源能量 + 目標寶可夢。</li>
-          <li><b>Bug 4：呆呆王耀閃挑戰借同命戰鬥雙 KO 我方沒拿獎</b> — effects.ts line 6528 <code>addPendingPrize(s, dIdx, selfPrizes)</code> 給「對手」是錯的。 變數名誤導 — 實際在 line 6501 累加，是「攻擊方擊倒對手取得的獎勵」應給攻擊方 ()。line 6521 已處理「對手取攻擊方自KO 的獎」。修法：<code>dIdx → aIdx</code>。</li>
+          <li><b>Bug 4：呆呆王耀閃挑戰借同命戰鬥雙 KO 我方沒拿獎</b> — effects.ts line 6528 <code>addPendingPrize(s, dIdx, selfPrizes)</code> 給「對手」是錯的。 變數名誤導 — 實際在 line 6501 累加，是「攻擊方擊倒對手取得的獎賞」應給攻擊方 ()。line 6521 已處理「對手取攻擊方自KO 的獎」。修法：<code>dIdx → aIdx</code>。</li>
         </ul>
       </details>
 
@@ -7770,7 +7778,7 @@
           <li><b>死亡終局（超級阿勃梭魯ex）</b>：原 v2 用 <code>damage = 9999</code> 走 damage pipeline 是簡化實裝（違反 Iron Rule 7）— 會被
             （整人擊落 / 順滑大衣）、（花之帷幔 / 抵抗之幕）誤擋。
             卡面「將那隻寶可夢【昏厥】」是「招式效果」不是「招式傷害」。改為 <code>regPre damage:0</code> +  直接寫
-            <code>damage = 99999</code> 到 active（由  處理 KO + 獎勵牌），繞過所有 damage modifier；
+            <code>damage = 99999</code> 到 active（由  處理 KO + 獎賞卡），繞過所有 damage modifier；
             加  檢查招式效果免疫（仿 雙斧戰龍｜斧擊在地 範本）。</li>
           <li><b>「查看對手手牌」揭示 audit</b>：7 張卡用  公開揭示對手所有手牌名 — 對手知道自己手牌（無感），
             但<b>觀戰者</b>會被揭示，違反 PTCG「只有使用者能看具體卡名」規則。全改 ：
@@ -7824,7 +7832,7 @@
           <li>進化鏈：陳舊的鰭之化石（Item）→ 冰雪龍（Stage1）→ 冰雪巨龍（Stage2）</li>
           <li><b>根因</b>：EVOLVE handler 創建 evolved CardInstance 時 <code>spread ...basePoke</code> 繼承所有欄位，但沒明確 override 。化石進化成冰雪龍後 inst.fossilOnField 仍  → UI 把冰雪龍當化石處理 → 進化選項判定 + 顯示「🦴 丟棄化石」按鈕 都會誤動作。</li>
           <li><b>修法 1</b>：engine.ts EVOLVE handler 在 evolved inst 加 <code>fossilOnField: false</code> 明確 override（化石進化成 Stage1 後該 inst 已是真寶可夢，不再是化石）。</li>
-          <li>桌機 v2.189 已有「🦴 丟棄化石」按鈕（active + bench 兩處），但  的  /  漏這個 UX。卡面明寫「若在自己的回合中，則可將場上的這張卡丟棄」— 丟棄與昏厥不同：對手不抽獎賞牌、戰鬥場丟棄需從備戰補 1 隻。</li>
+          <li>桌機 v2.189 已有「🦴 丟棄化石」按鈕（active + bench 兩處），但  的  /  漏這個 UX。卡面明寫「若在自己的回合中，則可將場上的這張卡丟棄」— 丟棄與昏厥不同：對手不抽獎賞卡、戰鬥場丟棄需從備戰補 1 隻。</li>
           <li><b>修法 2</b>：手機版 activeActions / benchActions 內加 fossilOnField 條件 → 在自己回合 main phase 顯示「🦴 丟棄化石」按鈕，dispatch <code>GameActions.discardFossil(iid)</code>。</li>
           <li>tsc 0 errors。</li>
         </ul>
@@ -9193,7 +9201,7 @@
           <li>　<b>3. 月亮伊布ex｜縞瑪瑙</b>（effects.ts ~7338）— 招式 1 張獎賞額外給自己，原本也是直接派發。</li>
           <li><b>修法</b>：全部改用 <code>addPendingPrize(state, ownerIdx, prizes)</code>。勝負條件改由 TAKE_PRIZES handler 在玩家點按鈕後檢查（既有機制，無需新邏輯）。</li>
           <li>　・「自身無後繼（bench empty）」game-over 檢查保留（與獎賞無關）。</li>
-          <li>　・log 訊息從「對手取走 N 張」改為「對手待取 N 張獎勵牌」更精確。</li>
+          <li>　・log 訊息從「對手取走 N 張」改為「對手待取 N 張獎賞卡」更精確。</li>
           <li><b>遺漏 / 未改</b>：</li>
           <li>　・馬志士的交易（v172_hij_batch.ts:668）— 支援者卡互換獎賞，非 KO 路徑、雙方同時，留待未來統一審查。</li>
 
@@ -9203,11 +9211,11 @@
       <details>
         <summary><span class="ver-badge">v3.791</span> 🚨 hotfix：本機雙人模式 KO 對方寶可夢後卡死（取獎賞 UI 不出現）</summary>
         <ul>
-          <li>玩家回報：單機雙人模式 KO 對方寶可夢後無法繼續，整個畫面卡在「請先取獎勵牌再繼續行動」但沒有取得按鈕。</li>
+          <li>玩家回報：單機雙人模式 KO 對方寶可夢後無法繼續，整個畫面卡在「請先取獎賞卡再繼續行動」但沒有取得按鈕。</li>
           <li><b>根因</b>： 用 <code>pendingPrizesArr[myPlayerIndex ?? 0]</code> 取值。本機雙人模式下 <code>myPlayerIndex === null</code>，<code>?? 0</code> 強制讀 <code>pendingPrizes[0]</code>（P1 視角）。</li>
           <li>　・場景：P2 攻擊 KO P1 的寶可夢 → engine 設 <code>pendingPrizes[1] = N</code>（P2 該取的獎賞）。</li>
           <li>　・UI 讀 <code>pendingPrizes[0] = 0</code> → take-prize 按鈕不出現 → 卡死。</li>
-          <li>　・KO 訊息 + 「請先取獎勵牌」alert 都正確顯示（因為 anyPendingPrize 是檢查兩格的 OR），但取按鈕用的索引錯誤。</li>
+          <li>　・KO 訊息 + 「請先取獎賞卡」alert 都正確顯示（因為 anyPendingPrize 是檢查兩格的 OR），但取按鈕用的索引錯誤。</li>
           <li><b>修法</b>： +  + takePrizes 按鈕的  全改用 （perspective-aware derived 索引，本機雙人模式會跟著 active player flip）。</li>
           <li>線上 / AI 模式不受影響（myPlayerIndex 有值 + myIdx == myPlayerIndex），只有本機雙人模式才會踩到這個 bug。</li>
           <li>tsc 0 errors + Svelte parse OK。</li>
@@ -9265,7 +9273,7 @@
           <li>　・實裝位置：engine.ts EVOLVE handler（進化後 status 通常被清除，加例外）</li>
           <li>　・條件：stadium === '暈眩山谷' + base.status === 'confused' → evolved 保留 confused</li>
           <li>　・其他狀態（睡眠/麻痺/中毒/灼傷）依 PTCG 規則進化即消除，不受影響</li>
-          <li><b>5. 古舊能量 ACE SPEC log 加強</b> — v3.76 已加基本 log，v3.77 補強：明確標示 KO 寶可夢卡名 + 公式（「⚡ 古舊能量（ACE SPEC）：超級寶石海星ex 附有『古舊能量』 → 對手獎勵牌 -1 張（3 - 1 = 2）」）。</li>
+          <li><b>5. 古舊能量 ACE SPEC log 加強</b> — v3.76 已加基本 log，v3.77 補強：明確標示 KO 寶可夢卡名 + 公式（「⚡ 古舊能量（ACE SPEC）：超級寶石海星ex 附有『古舊能量』 → 對手獎賞卡 -1 張（3 - 1 = 2）」）。</li>
           <li>iron rules 遵守：Rule 7c 查 JSON 原文 / Rule 11 Python pipeline 不用 Edit。tsc 0 errors。</li>
         </ul>
       </details>
@@ -9931,8 +9939,8 @@
           <li>玩家回報：iPad 10.5 吋橫向 layout 中央留白過大，主因是 bench 永遠固定 5 格，即使對手只擺 1 隻也撐出 4 個空格。</li>
           <li>修法 1（bench 自適應）：<code>Array(Math.max(5, ...))</code> → <code>Array(Math.max(Math.min(5, N+1), oppBenchLimit, 1))</code>。實擺 N 隻 + 1 個 drop placeholder（用於拖曳目標），上限 5（PTCG 規則），但保留 oppBenchLimit &gt; 5（零之大空洞 8 格）的擴展。對手只擺 1 隻 → 顯示 2 格，省下原本 3 格的留白。</li>
           <li>修法 2（active 上下置中）：<code>.zone-active</code> 加 <code>align-self: center</code> 覆蓋 <code>.field-row</code> 的 <code>align-items: flex-end</code>，戰鬥寶可夢卡片從貼底改為上下置中對齊。</li>
-          <li>未動：active 左右位置 &#47; chip 位置 &#47; 獎勵位置 — 保留現有玩家熟悉的「獎勵在左、牌庫棄牌在右」配置，符合中文 PTCG 玩家既有習慣。</li>
-          <li>下個版本（v3.41 規劃）：參考實體賽事桌墊配置做大改 — 戰鬥場置中、備戰區水平置中、獎勵 2×3 縱向放角落、競技場固定中右。會先出 mock-up 草圖確認方向再動手。</li>
+          <li>未動：active 左右位置 &#47; chip 位置 &#47; 獎賞位置 — 保留現有玩家熟悉的「獎賞在左、牌庫棄牌在右」配置，符合中文 PTCG 玩家既有習慣。</li>
+          <li>下個版本（v3.41 規劃）：參考實體賽事桌墊配置做大改 — 戰鬥場置中、備戰區水平置中、獎賞 2×3 縱向放角落、競技場固定中右。會先出 mock-up 草圖確認方向再動手。</li>
         </ul>
       </details>
 
@@ -10672,7 +10680,7 @@
           <li>v2.98 refactor 沒做完整 — engine 只在 END_TURN 入口擋 pending prize，主 ATTACK/USE_STADIUM/USE_ABILITY 等 action 都沒擋</li>
           <li>UI 也沒 gate — 任一方有 pending prize 時還會顯示其他 main-phase 按鈕</li>
           <li>修法 1：engine.ts pendingSelection gate 之後加 hasAnyPendingPrize early-return — 除 TAKE_PRIZES / SEND_NEW_ACTIVE / RESOLVE_SELECTION 外所有 action 都擋</li>
-          <li>修法 2：+page.svelte 加 anyPendingPrize derived，gate 攻擊/跳過攻擊/競技場/特性/結束回合 等所有 main-phase 按鈕；改顯示「請先取獎勵牌再繼續行動」提示</li>
+          <li>修法 2：+page.svelte 加 anyPendingPrize derived，gate 攻擊/跳過攻擊/競技場/特性/結束回合 等所有 main-phase 按鈕；改顯示「請先取獎賞卡再繼續行動」提示</li>
           <li>確保獎賞流程順序：取完才能繼續其他動作（符合 PTCG 規則 — 獎賞取得是即時的，不能晚於後續動作）</li>
         </ul>
       </details>
@@ -10837,7 +10845,7 @@
           <li>defToolDiscardParalyzePre — 丟道具+麻痺（N的電電蟲｜劈哩啪啦短路）</li>
           <li>oppTargetTakeExtraNextPost — 對手下回合受招式 +N（超音波幼蟲｜刺耳聲、泥巴魚｜飛撲圈套）</li>
           <li>oppActiveCantAttachEnergyNextPost — 對手下回合不能附能量（晶光花｜侵蝕碎塊）</li>
-          <li>oppActiveDeferredPrizeNextPost — 若 KO 多 +N 張獎勵（蝶結萌虻｜多餘花粉）</li>
+          <li>oppActiveDeferredPrizeNextPost — 若 KO 多 +N 張獎賞（蝶結萌虻｜多餘花粉）</li>
           <li>statusPost helper 重構：原本只走 hasEffectShield（薄霧/硬岩/皇帝之勢），改成走 canApplyAttackEffectToTarget 涵蓋抵抗之幕</li>
           <li>defToolDiscardPre/Paralyze 設計：被免疫擋下時「傷害仍正常造成」（卡面有列傷害值的部分屬招式傷害，不被招式效果免疫擋），只有 tool 丟棄/麻痺等「招式效果」部分被擋</li>
           <li>單一 push 同時修補約 15+ 招式</li>
@@ -10874,7 +10882,7 @@
         <summary><span class="ver-badge">v2.88</span> 戰鬥 log 著色與粗體優化</summary>
         <ul>
           <li>玩家提議：戰鬥敘述 log 過於單調 — 新增 render-side tokenizer 把 message 切片，依類別套不同顏色 / 粗體</li>
-          <li>類別色票：招式/特性【XX】金色粗體 · 被擊倒紅色粗體 · +N 張獎勵牌金黃粗體 · 傷害數字橘紅 · 回 HP 翠綠 · 狀態異常紫色 · 進化翠綠 · 擲硬幣淡黃 · 抽牌/重洗/搜尋牌庫淡灰</li>
+          <li>類別色票：招式/特性【XX】金色粗體 · 被擊倒紅色粗體 · +N 張獎賞卡金黃粗體 · 傷害數字橘紅 · 回 HP 翠綠 · 狀態異常紫色 · 進化翠綠 · 擲硬幣淡黃 · 抽牌/重洗/搜尋牌庫淡灰</li>
           <li>整行樣式：「回合結束，換 X 行動」自動套 turn-marker 分隔器（淡藍色 border + 背景）· 勝負訊息加金色 box</li>
           <li>私有訊息（onlyOwner）多加 🔒 icon 與淡紫色 border-left，避免玩家誤以為對手也看得到</li>
           <li>純 render-side：不動 LogEntry / addLog API、不影響 game state、不影響連線同步</li>

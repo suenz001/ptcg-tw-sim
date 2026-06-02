@@ -278,7 +278,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     };
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
-      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害 → 被擊倒！+${prizes} 張獎勵牌`, actorIdx);
+      `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害 → 被擊倒！+${prizes} 張獎賞卡`, actorIdx);
     s = addPendingPrize(s, actorIdx, prizes);
     // v2.246：腎上腺腦力是「對手主動特性 KO」
     s = recordOppKO(s, dIdx, targetCard, 'ability');
@@ -308,7 +308,7 @@ regG('特殊紅牌', (st, idx) => {
 reg('特殊紅牌', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   if (st.players[dIdx].prizes.length > 3) {
-    return addLog(st, '特殊紅牌：對手剩餘獎勵牌超過 3 張，無法使用', idx);
+    return addLog(st, '特殊紅牌：對手剩餘獎賞卡超過 3 張，無法使用', idx);
   }
   // v4.08 修：卡面「對手將對手自己的手牌全部翻回反面並重洗，放回牌庫下方」
   //   原用 returnHandToDeck 會把 hand+deck 一起 shuffle（手牌混進牌庫各處），

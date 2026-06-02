@@ -242,12 +242,12 @@ export interface CardInstance {
    */
   cantAttachEnergyThisTurn?: boolean;
   /**
-   * 跨回合「若此卡在攻擊方下個回合被 KO，則 +N 張獎勵牌」預約旗標（蝶結萌虻｜多餘花粉）。
+   * 跨回合「若此卡在攻擊方下個回合被 KO，則 +N 張獎賞卡」預約旗標（蝶結萌虻｜多餘花粉）。
    * 由攻擊方在 ATTACK_POST 設於對手 active；於擁有者下個 END_TURN promote 為 ThisTurn。
    */
   deferredPrizeBonusNextTurn?: number;
   /**
-   * 本回合此卡被 KO 時 +N 張獎勵牌（由 deferredPrizeBonusNextTurn promote 而來）。
+   * 本回合此卡被 KO 時 +N 張獎賞卡（由 deferredPrizeBonusNextTurn promote 而來）。
    * 在對手（攻擊方）的 END_TURN 時清除。
    */
   deferredPrizeBonusThisTurn?: number;
@@ -380,7 +380,7 @@ export interface PlayerState {
   bench: CardInstance[];
   /** 墓地 */
   discard: CardInstance[];
-  /** 獎勵牌（6 張，正面朝下） */
+  /** 獎賞卡（6 張，正面朝下） */
   prizes: CardInstance[];
   /** 本回合是否已附加能量 */
   energyAttachedThisTurn: boolean;
@@ -511,7 +511,7 @@ export interface PlayerState {
   damageBoostFightingThisTurn?: number;
   /**
    * Wave 43：白蕾雅（Supporter）— 本回合，若對手戰鬥寶可夢因自己的「太晶」寶可夢使用的招式而 KO，
-   * 則多取 1 張獎勵牌。打出 supporter 時設為 true，KO 路徑於攻擊方獲獎前檢查此旗標 +
+   * 則多取 1 張獎賞卡。打出 supporter 時設為 true，KO 路徑於攻擊方獲獎前檢查此旗標 +
    * 攻擊方 active 是否為太晶（card.tags?.includes('太晶')）。
    * 在 END_TURN 時清除（於 aIdx 方）。
    * v2.48：攻擊者太晶偵測從 attacks kludge 改為 tags（scraper 已遷移資料）。
@@ -519,7 +519,7 @@ export interface PlayerState {
   teraKoBonusPrizeThisTurn?: boolean;
   /**
    * v2.185：巴貝娜與荷蓮娜（Supporter / I）— 本回合，若對手戰鬥寶可夢因自己的「N 的」寶可夢
-   * 招式 KO，則多取 3 張獎勵牌。打出時設 true，KO 路徑於攻擊方獲獎前檢查此旗標 +
+   * 招式 KO，則多取 3 張獎賞卡。打出時設 true，KO 路徑於攻擊方獲獎前檢查此旗標 +
    * 攻擊方 active.name 以「N的」開頭。在 END_TURN 時清除（於 aIdx 方）。
    * Gate：場上 6 種特定 N 寶可夢（N的達摩狒狒 / N的索羅亞克ex / N的雙倍多多冰 /
    *       N的齒輪怪 / N的萊希拉姆 / N的捷克羅姆）必須**全部**在場（active+bench）。

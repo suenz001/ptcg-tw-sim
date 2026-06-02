@@ -724,7 +724,7 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
   }
 
   if (koNames.length > 0) {
-    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒！+${morePrizes} 張獎勵牌`, null);
+    s = addLog(s, `${label}：${koNames.join('、')} 被擊倒！+${morePrizes} 張獎賞卡`, null);
     s = addPendingPrize(s, actorIdx, morePrizes);
   }
 

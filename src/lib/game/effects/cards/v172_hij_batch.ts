@@ -640,7 +640,7 @@ reg('馬志士的交易', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const oppName = st.players[oppIdx].name;
   const myName = st.players[idx].name;
-  st = addLog(st, `馬志士的交易：${myName} 詢問 ${oppName} 是否「雙方各取 1 張獎勵牌」`, idx);
+  st = addLog(st, `馬志士的交易：${myName} 詢問 ${oppName} 是否「雙方各取 1 張獎賞卡」`, idx);
   return withPending(st, {
     type: 'modal-choice',
     actorIdx: oppIdx,                 // 對手做決定（Option C 核心）
@@ -650,10 +650,10 @@ reg('馬志士的交易', (st, idx) => {
     params: {
       // options 順序：先 no 後 yes
       // - online：人類對手會看 text 後選擇（順序不影響）
-      // - AI 對手：AI 預設 first option = 'no'（不讓人類玩家輕易拿獎勵牌）
+      // - AI 對手：AI 預設 first option = 'no'（不讓人類玩家輕易拿獎賞卡）
       options: [
         { id: 'no',  text: `❌ 拒絕（${myName} 從牌庫抽 4 張）` },
-        { id: 'yes', text: '✅ 接受（雙方各取 1 張獎勵牌）' },
+        { id: 'yes', text: '✅ 接受（雙方各取 1 張獎賞卡）' },
       ],
     },
   });
@@ -665,7 +665,7 @@ regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
   const oppName = st.players[oppIdx].name;
   if (choice === 'yes') {
     // v3.80 Rule 10：雙方各取 1 張獎賞 — 改用 addPendingPrize 讓兩位玩家都按「取得」
-    st = addLog(st, `馬志士的交易：${oppName} 接受 — 雙方各待取 1 張獎勵牌`, oppIdx);
+    st = addLog(st, `馬志士的交易：${oppName} 接受 — 雙方各待取 1 張獎賞卡`, oppIdx);
     if (st.players[proposerIdx].prizes.length > 0) {
       st = addPendingPrize(st, proposerIdx, 1);
     }
@@ -675,11 +675,11 @@ regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
     // 勝負條件由 TAKE_PRIZES handler 在玩家點按鈕後檢查（既有機制）
     if (false) {
       return { ...st, phase: 'game-over' as const, winner: proposerIdx,
-        winReason: `${proposerName} 取得所有獎勵牌` };
+        winReason: `${proposerName} 取得所有獎賞卡` };
     }
     if (st.players[oppIdx].prizes.length === 0) {
       return { ...st, phase: 'game-over' as const, winner: oppIdx,
-        winReason: `${oppName} 取得所有獎勵牌` };
+        winReason: `${oppName} 取得所有獎賞卡` };
     }
     return st;
   }

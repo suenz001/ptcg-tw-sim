@@ -1777,7 +1777,7 @@
       if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死)
       if (g.phase !== 'playing') return false;
 
-      // 取獎勵牌或選擇 — 由誰的行動決定
+      // 取獎賞卡或選擇 — 由誰的行動決定
       if ((g.pendingPrizes?.[ai] ?? 0) > 0) return true;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
 
@@ -1885,7 +1885,7 @@
   });
 
   // v2.198 自動結束回合：依 PTCG 官方規則，「使用招式後（含招式內所有結算 — 傷害、分配指示物、
-  //   獎勵牌、補戰鬥位）」回合即結束，玩家不需手動按結束回合。
+  //   獎賞卡、補戰鬥位）」回合即結束，玩家不需手動按結束回合。
   // 觸發條件 = canEndTurn（turnPhase==='end' + 無 pending）+ 玩家身分匹配當前回合方。
   // 加 600ms 延遲讓玩家看清楚結算結果（KO 動畫 / 獎賞 / 新戰鬥位等）。
   // - 本機雙人模式：永遠由當前 activePlayerIndex 那側自動觸發
@@ -4779,8 +4779,8 @@
         let merged: GameState = {
           ...incoming,
           // v5.346：對手側防回退 — 若本地已收到對手「已準備(setupDone=true)」的 players（含已設好的
-          //   6 張獎勵牌/擺放），卻來了 setupDone=false 的 stale incoming（out-of-order），不要用它覆蓋
-          //   → 保留本地已完成的對手 players。修「開局對手獎勵顯示 0 張」(手機/網頁皆可能) 等對手側回退。
+          //   6 張獎賞卡/擺放），卻來了 setupDone=false 的 stale incoming（out-of-order），不要用它覆蓋
+          //   → 保留本地已完成的對手 players。修「開局對手獎賞顯示 0 張」(手機/網頁皆可能) 等對手側回退。
           //   自己側永遠保留本地最新（同 v3.39）。
           players: (me === 0
             ? [game.players[0], (game.setupDone[1] && !incoming.setupDone[1]) ? game.players[1] : incoming.players[1]]
@@ -4824,7 +4824,7 @@
         game = merged;
         return;
       }
-      // v5.364：獎賞單調保護 — 我方獎賞牌數遊戲中只會「減少」（取一張少一張），絕不增加。
+      // v5.364：獎賞單調保護 — 我方獎賞卡數遊戲中只會「減少」（取一張少一張），絕不增加。
       //   若 incoming 讓「我方獎賞數變多」＝我的取獎賞被回朔（常見：擊倒對手後「我取獎賞」與「對手派
       //   新寶可夢」同時發生、等長分歧 → 整份覆蓋採用對方那支，洗掉我的取獎賞，玩家要按第二次取得）。
       //   改用 per-player 合併：我這半保留本地（已取獎賞），對手那半採用 incoming（新寶可夢）。
@@ -6549,7 +6549,7 @@
             {#each Array(6) as _, i}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} style="animation-delay:{i*90}ms"></div>{/each}
           </div>
         {/key}
-        <div class="zone-label-sm">獎勵 {oppPlayer?.prizes.length??0}張</div>
+        <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
       </div>
     </div>
 
@@ -6571,7 +6571,7 @@
         {/if}
         {#if myPendingPrizes > 0 && !isSpectator}
           <div class="alert prize-alert">
-            🏆 取 {myPendingPrizes} 張獎勵牌
+            🏆 取 {myPendingPrizes} 張獎賞卡
             {#if takePrizeCountdown > 0}
               <span class="prize-countdown">⏱️ {takePrizeCountdown}s 後自動取得</span>
             {/if}
@@ -6706,7 +6706,7 @@
             </button>
           {/if}
         {:else if isMyTurn() && anyPendingPrize}
-          <span class="waiting-msg">🏆 請先取獎勵牌再繼續行動</span>
+          <span class="waiting-msg">🏆 請先取獎賞卡再繼續行動</span>
         {:else if pendingSelection}
           <span class="waiting-msg">⏳ 等待 {game.players[pendingSelection.actorIdx].name} 選擇中…</span>
         {:else}
@@ -6750,7 +6750,7 @@
         </div>
       {/if}
       <div class="zone-prizes">
-        <div class="zone-label-sm">獎勵 {myPlayer?.prizes.length??0}張</div>
+        <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
             {#each Array(6) as _, i}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} style="animation-delay:{i*90}ms"></div>{/each}
@@ -11199,7 +11199,7 @@
   /* v2.88 戰鬥 log 著色 — 各類別 token 樣式 ─────────────────────────── */
   .log-line .log-bracket   { color:#ffd166; font-weight:700; }       /* 招式/特性名【XX】*/
   .log-line .log-ko        { color:#ff6b6b; font-weight:700; }       /* 被擊倒 / KO */
-  .log-line .log-prize     { color:#ffc93c; font-weight:700; }       /* +N 張獎勵牌 */
+  .log-line .log-prize     { color:#ffc93c; font-weight:700; }       /* +N 張獎賞卡 */
   .log-line .log-damage    { color:#ff8a65; font-weight:600; }       /* N 點傷害 */
   .log-line .log-heal      { color:#7fdc7f; font-weight:600; }       /* 回 N HP */
   .log-line .log-status    { color:#ce93d8; font-weight:600; }       /* 中毒/灼傷/麻痺/睡眠/混亂 */
