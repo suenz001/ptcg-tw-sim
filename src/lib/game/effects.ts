@@ -984,7 +984,12 @@ function hitBenchAll(
       // v3.20 多重轉接：iterate 所有道具
       for (const t of getAllAttachedTools(c)) koDiscards.push(t);
       for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
-      if (card) morePrizes += koPrizeCount(card);
+      if (card) {
+        if (attackerIdx !== targetIdx) {
+          const _ko = koPrizesAdjusted(coinWS, c, card, attackerIdx, targetIdx, pool);
+          morePrizes += _ko.prizes; coinWS = _ko.state;
+        } else morePrizes += koPrizeCount(card);
+      }
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
@@ -1131,7 +1136,12 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       // v3.20 多重轉接：iterate 所有道具
       for (const t of getAllAttachedTools(c)) koDiscards.push(t);
       for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
-      if (card) morePrizes += koPrizeCount(card);
+      if (card) {
+        if (actorIdx !== targetIdx) {
+          const _ko = koPrizesAdjusted(st, c, card, actorIdx, targetIdx, pool);
+          morePrizes += _ko.prizes; st = _ko.state;
+        } else morePrizes += koPrizeCount(card);
+      }
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
@@ -6497,7 +6507,9 @@ regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
       ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
-    const p = prizesForKOLocal(targetCard);
+    const _ko = koPrizesAdjusted(st, target, targetCard, actorIdx, dIdx, pool);
+    st = _ko.state;
+    const p = _ko.prizes;
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
     if (isActive) newDefender.active = null;
@@ -6995,7 +7007,9 @@ export function dealAttackDamageToTarget(
       ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
-    const p = prizesForKOLocal(targetCard);
+    const _ko = koPrizesAdjusted(st, target, targetCard, actorIdx, dIdx, pool);
+    st = _ko.state;
+    const p = _ko.prizes;
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
     if (isActive) newDefender.active = null;
@@ -9001,7 +9015,9 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
         ...getAllAttachedTools(target),
         ...(target.evolvedFromStack ?? []),
       ];
-      const p = prizesForKOLocal(targetCard);
+      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool);
+      s = _ko.state;
+      const p = _ko.prizes;
       totalPrize += p;
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
