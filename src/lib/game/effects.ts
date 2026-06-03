@@ -564,6 +564,61 @@ export function koPrizeCount(card: Card): number {
 }
 
 /**
+ * v5.404：KO 獎賞「防守方側」調整 — effects.ts 的指示物/狙擊/手動 KO 路徑原本只用 base koPrizeCount，
+ *   漏掉 engine 主傷害流程有的調整：莉莉艾的珍珠 -1 / 豪華斗篷 +1 / 古舊能量 -1(每場每方僅1次) / 影藏 -1
+ *   (惡寶可夢被 ex 攻擊方 KO) / 脆弱蛻殼類歸 0。回傳調整後獎賞 + 更新 state(古舊能量 once flag)。
+ *   不含 attacker-context 加成(奇跡之吻擲幣/貪婪食客/N的/白百合等 — 那些主要對 active KO，engine 內處理)。
+ *   @param koInst 被 KO 的 CardInstance（讀其道具/能量）；defenderIdx = 被 KO 那方。
+ */
+export function koPrizesAdjusted(
+  state: GameState,
+  koInst: CardInstance,
+  koCard: Card | undefined,
+  attackerIdx: 0 | 1,
+  defenderIdx: 0 | 1,
+  pool: Map<string, Card>,
+): { prizes: number; state: GameState } {
+  let s = state;
+  if (!koCard) return { prizes: 1, state: s };
+  const base = koPrizeCount(koCard);
+  const atkActive = s.players[attackerIdx].active;
+  const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
+  // 脆弱蛻殼（脫殼忍者）等 PASSIVE_PREVENT_PRIZE → 0 張
+  for (const ab of (koCard.abilities ?? [])) {
+    const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
+    if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
+  }
+  let adjust = 0;
+  // 道具：莉莉艾的珍珠 -1 / 豪華斗篷 +1（阻礙之塔在場時道具效果失效）
+  const stadiumName = s.activeStadium ? pool.get(s.activeStadium.cardId)?.name : undefined;
+  if (stadiumName !== '阻礙之塔') {
+    for (const t of getAllAttachedTools(koInst)) {
+      const tool = pool.get(t.cardId);
+      const fn = tool ? TOOL_PRIZE_BONUS.get(tool.name) : undefined;
+      if (fn) adjust += fn(koCard);
+    }
+  }
+  // 古舊能量 -1（per-game once，per 防守方）
+  const usedFlags = s.ancientEnergyMinusOneUsed ?? [false, false];
+  if (!usedFlags[defenderIdx]
+      && koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量')) {
+    adjust -= 1;
+    const f = [...usedFlags] as [boolean, boolean];
+    f[defenderIdx] = true;
+    s = { ...s, ancientEnergyMinusOneUsed: f };
+  }
+  // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方 KO → -1
+  const isExAttacker = !!atkCard && (atkCard.name.endsWith('ex') || atkCard.name.endsWith('EX'));
+  if (isExAttacker && koCard.pokemonType === 'Darkness') {
+    const def = s.players[defenderIdx];
+    const defHasKage = (def.active && pool.get(def.active.cardId)?.abilities?.some(a => a.name === '影藏'))
+      || def.bench.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '影藏'));
+    if (defHasKage) adjust -= 1;
+  }
+  return { prizes: Math.max(0, base + adjust), state: s };
+}
+
+/**
  * 計算 CardInstance 的有效 HP（含道具 HP 加成 + 場地卡影響，與 engine.getEffectiveHP 對齊）。
  * v2.92：加 `state` 參數以套用場地效果（例：引力山岳 Stage2 -30）。
  * 現有 caller 都在 regPost / regR 內部，都持有 state；傳入即可。
@@ -7789,12 +7844,15 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
         ...getAllAttachedTools(target),
         ...(target.evolvedFromStack ?? []),
       ];
-      const prizes = targetCard ? koPrizeCount(targetCard) : 1;
+      // v5.404：套用防守方側獎賞調整（莉莉艾的珍珠/豪華斗篷/古舊能量/影藏）— 原只用 base koPrizeCount。
+      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool);
+      const prizes = _ko.prizes;
+      s = _ko.state;
       const players = [...s.players] as [PlayerState, PlayerState];
       players[dIdx] = {
-        ...defender,
-        discard: [...defender.discard, ...koDiscard],
-        bench: defender.bench.filter(c => c.iid !== iid),
+        ...s.players[dIdx],
+        discard: [...s.players[dIdx].discard, ...koDiscard],
+        bench: s.players[dIdx].bench.filter(c => c.iid !== iid),
       };
       s = addPendingPrize({ ...s, players }, actorIdx, prizes);
       s = addLog(s,
