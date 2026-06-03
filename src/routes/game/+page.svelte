@@ -4781,6 +4781,15 @@
       //   （e.g. stale snapshot 重發 / 雙端寫 race 期間舊狀態被覆蓋）。
       //   rematch 流程清 gameState=null（走另一條 path），不會撞此 guard。
       //   game-over 是合法終態，不該倒退到 setup/playing — 同樣保護。
+      // v5.400：game-over 是終態 — 拒絕任何把它退回 setup/playing 的 incoming。
+      //   對手棄賽/離開寫的 game-over snapshot 不加 log 行(等長)，等長 stale guard 擋不到；
+      //   舊 phase-rollback 守衛只擋 incoming==='setup'(漏 playing) → stale 'playing' 把 game-over
+      //   覆蓋回 playing → 「對手已離開・我方獲勝」視窗閃一下消失然後卡住(視窗綁 phase==='game-over')。
+      //   合法離開 game-over = rematch/restart 走 gameState=null path(上方已處理)，不經此 snapshot path。
+      if (game && game.phase === 'game-over' && incoming.phase !== 'game-over') {
+        console.warn('[Online] reject: 已 game-over(終態)，拒絕退回非終態', { incomingPhase: incoming.phase });
+        return;
+      }
       if (game && (game.phase === 'playing' || game.phase === 'game-over')
           && incoming.phase === 'setup') {
         console.warn('[Online] reject phase rollback:',
