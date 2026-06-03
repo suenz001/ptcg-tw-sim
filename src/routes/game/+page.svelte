@@ -55,6 +55,7 @@
     findMySeatIdx, bothPlayersReady, countDeckCards,
     sendMessage, subscribeMessages,
     heartbeat, isSeatStale, HEARTBEAT_STALE_MS, deleteRoom,
+    hostPresence,  // v5.393 大廳房主在線狀態
     // v4.75 連線練習模式悔棋 API
     requestUndo as requestUndoApi,
     agreeUndo as agreeUndoApi,
@@ -5013,6 +5014,18 @@
   function handleChatKey(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
   }
+  // v5.393：大廳「開房 X 分鐘前」— 兼容 Oracle(數字 ms) 與 Firebase({seconds})
+  function fmtRoomAge(createdAt: unknown): string {
+    let ms: number | undefined;
+    if (typeof createdAt === 'number') ms = createdAt;
+    else if (createdAt && typeof (createdAt as { seconds?: number }).seconds === 'number') ms = (createdAt as { seconds: number }).seconds * 1000;
+    if (typeof ms !== 'number') return '';
+    const min = Math.floor((Date.now() - ms) / 60000);
+    if (min < 1) return '剛剛開房';
+    if (min < 60) return `開房 ${min} 分鐘前`;
+    const hr = Math.floor(min / 60);
+    return `開房 ${hr} 小時前`;
+  }
   function fmtChatTime(ts: { seconds?: number } | null | undefined): string {
     if (!ts?.seconds) return '';
     const d = new Date(ts.seconds * 1000);
@@ -5934,11 +5947,13 @@
             <ul class="open-room-list">
               {#each lobbyRooms as r (r.roomId)}
                 {@const _bothSeated = !!(r.seats?.[0]?.uid && r.seats?.[1]?.uid)}
+                {@const _host = hostPresence(r)}
                 <li class="open-room-row" class:practice-room={r.allowUndo} class:room-full={_bothSeated}>
                   <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
                   {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式 — 雙方同意可悔棋">🎯 練習</span>{/if}
                   {#if _bothSeated}<span class="or-waiting-tag" title="雙方就坐，等待開戰中 — 進去只能加入觀戰位">⏳ 等待開戰</span>{/if}
-                  <span class="or-host-name">房主：{r.hostName}</span>
+                  <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{r.hostName}</span>
+                  <span class="or-age muted small">· {fmtRoomAge(r.createdAt)}</span>
                   <span class="or-code">房號 {r.roomId}</span>
                   <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
                     {_bothSeated ? '👁 觀戰' : '加入'}

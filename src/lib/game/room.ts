@@ -994,6 +994,8 @@ export function subscribeOpenRooms(
         if (data.status === 'playing' && data.spectatorsAllowed === false) return;
         // v5.003：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
         if (data.visible === false) return;
+        // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆，房主回來自動重現）
+        if (isLobbyHostDead(data)) return;
         // stale 過濾：lobby 用 10 min（v2.52），playing 用 heartbeat 閾值 5 min（v2.73）
         const updatedAtSec = (data.updatedAt as { seconds?: number } | null | undefined)?.seconds;
         if (typeof updatedAtSec === 'number') {
@@ -1070,10 +1072,34 @@ export function isSeatStale(
   thresholdMs: number = HEARTBEAT_STALE_MS,
 ): boolean {
   const hb = roomData.heartbeats?.[seatIdx];
-  if (!hb) return false;
-  const hbSec = (hb as { seconds?: number } | null | undefined)?.seconds;
-  if (typeof hbSec !== 'number') return false;
-  return Date.now() - hbSec * 1000 > thresholdMs;
+  if (hb == null) return false;
+  // v5.393：兼容兩種後端心跳格式 — Oracle 存 Date.now() 數字(ms)；Firebase 存 serverTimestamp {seconds}。
+  let lastMs: number | undefined;
+  if (typeof hb === 'number') lastMs = hb;
+  else if (typeof (hb as { seconds?: number }).seconds === 'number') lastMs = (hb as { seconds: number }).seconds * 1000;
+  if (typeof lastMs !== 'number') return false;
+  return Date.now() - lastMs > thresholdMs;
+}
+
+/**
+ * v5.393：大廳「房主掛機/斷線」分級門檻。房主在房內每 60s 送一次心跳（僅 lobby 送），
+ *   關分頁/斷線/手機背景則停。用心跳判斷房主在線比用「開房時間」精準。
+ * - AWAY（>90s）：大廳該房顯示灰點「房主可能離開」（仍列出，可能只是暫離/手機背景）。
+ * - STALE（>3min）：視為死房，從大廳列表隱藏（可逆 — 房主回來心跳恢復就重新出現）。
+ */
+export const LOBBY_HOST_AWAY_MS = 90 * 1000;
+export const LOBBY_HOST_STALE_MS = 3 * 60 * 1000;
+
+/** 大廳死房判定：lobby 且房主(座位 0)不在或心跳過期 > STALE → 不列出。 */
+export function isLobbyHostDead(room: RoomData): boolean {
+  if (room.status !== 'lobby') return false;
+  if (!room.seats?.[0]?.uid) return true;
+  return isSeatStale(room, 0, LOBBY_HOST_STALE_MS);
+}
+
+/** 房主在線狀態（UI 小圓點）：心跳 < AWAY = online，否則 away。 */
+export function hostPresence(room: RoomData): 'online' | 'away' {
+  return isSeatStale(room, 0, LOBBY_HOST_AWAY_MS) ? 'away' : 'online';
 }
 
 /**

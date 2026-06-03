@@ -29,12 +29,13 @@ export type { Room, RoomData, Seat, SeatRole, DeckEntry, ChatMessage } from './r
 export {
   SEAT_LAYOUT_VERSION, TOTAL_SEATS, SPECTATOR_SEATS, HEARTBEAT_STALE_MS,
   generateRoomCode, findMySeatIdx, countDeckCards, bothPlayersReady, isSeatStale,
+  LOBBY_HOST_AWAY_MS, LOBBY_HOST_STALE_MS, hostPresence,
 } from './room';
 
 import type { Room, RoomData, Seat, DeckEntry, ChatMessage } from './room';
 import {
   findMySeatIdx, generateRoomCode, countDeckCards,
-  SEAT_LAYOUT_VERSION, SPECTATOR_SEATS,
+  SEAT_LAYOUT_VERSION, SPECTATOR_SEATS, isLobbyHostDead,
 } from './room';
 
 // ── private helpers ─────────────────────────────────────────────────────────
@@ -619,6 +620,8 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
           if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
           // v5.004：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
           if (r.visible === false) return false;
+          // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆）
+          if (isLobbyHostDead(r as unknown as RoomData)) return false;
           return true;
         })
         .map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);
