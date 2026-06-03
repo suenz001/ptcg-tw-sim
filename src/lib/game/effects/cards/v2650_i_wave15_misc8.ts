@@ -806,11 +806,8 @@ regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool, action) => {
 });
 
 // 火焰雞｜業火連踢 120 — 棄 2 能量, 對手 1 隻備戰也受到 120
-regPre('火焰雞|業火連踢', (s) => ({ state: s, damage: 120 }));
-regPost('火焰雞|業火連踢', (state, aIdx, pool) => {
-  let s = selfDiscardNEnergyPost(2, '業火連踢')(state, aIdx, pool);
-  return snipeOneOppBenchPost(120, '業火連踢')(s, aIdx, pool);
-});
+// v5.401：丟 2 能量改 units+picker（在 effects.ts SELF_DISCARD_UNITS_BATCH 註冊 regPre+picker+傷害120）；此處只留狙擊
+regPost('火焰雞|業火連踢', snipeOneOppBenchPost(120, '業火連踢'));
 
 // 捷拉奧拉｜閃電急襲 — 棄全能量, 對手備戰區 1 隻 ex 受 210
 regPre('捷拉奧拉|閃電急襲', (s) => ({ state: s, damage: 0 }));

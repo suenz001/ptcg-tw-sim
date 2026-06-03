@@ -9922,6 +9922,9 @@ const SELF_DISCARD_UNITS_BATCH: Array<[string, string, number, number, DiscardMu
   ['蓋歐卡ex|潮汐巨浪', '潮汐巨浪', 230, 2, 'all'],
   ['花舞鳥|花火', '花火', 30, 1, 'all'],
   ['噴火龍ex|爆焰旋渦', '爆焰旋渦', 330, 3, 'all'],
+  // v5.401：B類2張(丟能量+狙擊)——丟能量改units+picker,狙擊效果留在各card檔的 regPost
+  ['火焰雞|業火連踢', '業火連踢', 120, 2, 'all'],
+  ['雙尾怪手|雙尾', '雙尾', 0, 2, 'all'],
 ];
 for (const [key, label, dmg, n, tf] of SELF_DISCARD_UNITS_BATCH) {
   registerSelfDiscardMultiply(key, label, dmg, 0, n, tf, false, n);

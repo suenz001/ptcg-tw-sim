@@ -245,11 +245,8 @@ regPost('電蜘蛛|放電', (state, aIdx, pool) => {
 });
 
 // 雙尾怪手｜雙尾 — 棄 2 能量, 對手 2 隻備戰各 60（不計弱抗）
-regPre('雙尾怪手|雙尾', (s) => ({ state: s, damage: 0, skipWeakRes: true }));
-regPost('雙尾怪手|雙尾', (state, aIdx, pool) => {
-  let s = selfDiscardNEnergyPost(2, '雙尾')(state, aIdx, pool);
-  return snipeNOppBenchAutoPost(60, 2, '雙尾')(s, aIdx, pool);
-});
+// v5.401：丟 2 能量改 units+picker（在 effects.ts batch 註冊 regPre+picker，傷害0）；此處只留狙擊
+regPost('雙尾怪手|雙尾', snipeNOppBenchAutoPost(60, 2, '雙尾'));
 
 // 雪絨蛾｜極寒旋風 90 — 簡化純 90（移轉自能量到備戰過於複雜）
 regPre('雪絨蛾|極寒旋風', (s) => ({ state: s, damage: 90 }));
