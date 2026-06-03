@@ -574,6 +574,22 @@ export async function pushGameState(roomCode: string, gameState: GameState): Pro
   });
 }
 
+/**
+ * v5.390 悔棋專用推送（Oracle）。
+ *   ⚠️ 故意「不」套用 pushGameState 的單調 stale guard — 悔棋 rollback 的 log 比房間現有短，
+ *   若走一般 push 會被那道 guard 擋掉、根本寫不進房間（正式站毀棋失效的直接根因）。
+ *   atomic：同一個 oracleTx 寫 gameState + 清 undoRequest + bump lastUndoApplyAt 一次性標記。
+ */
+export async function pushUndoRollback(roomCode: string, gameState: GameState): Promise<void> {
+  await oracleTx(roomCode.toUpperCase(), (data) => ({
+    ...data,
+    gameState: JSON.parse(JSON.stringify(gameState)),
+    status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+    undoRequest: undefined,
+    lastUndoApplyAt: Date.now(),
+  }));
+}
+
 // ── Subscribe (polling) ─────────────────────────────────────────────────────
 
 export function subscribeRoom(roomCode: string, callback: (room: Room | null) => void): () => void {

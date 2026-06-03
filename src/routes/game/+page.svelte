@@ -45,7 +45,7 @@
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
   import { ORACLE_MODE, oracleAuth } from '$lib/game/oracle-client';
   import {
-    createRoom, joinRoom, subscribeRoom, pushGameState, subscribeOpenRooms,
+    createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
     setRematchReady, checkAndAcceptRematch,
     proposeRestart, respondRestart, cancelRestart, checkAndAcceptRestart,
@@ -148,6 +148,7 @@
   // v4.75 連線練習模式悔棋 — 4 個額外 state
   let undoActionDesc = $state<string | null>(null);        // 描述上一手做什麼（給對手 modal 看）
   let undoDeniedThisSnapshot = $state(false);              // 對手拒絕後，這個 snapshot 的按鈕消失（直到下個 action）
+  let lastSeenUndoApplyAt = 0;                            // v5.390 悔棋 rollback 一次性標記去重（>此值才套用 rollback）
   let undoAwaitingResponse = $state(false);                // 發起方等待對手回應中
   let roomAllowUndoInput = $state(false);                  // 開房表單 checkbox 狀態
   let roomPrivateInput = $state(false);                    // v5.003 私密房 checkbox 狀態（預設公開）
@@ -4743,6 +4744,22 @@
         game = incoming;
         return;
       }
+      // v5.390 悔棋 rollback 繞過：對手同意悔棋後，發起方用 pushUndoRollback 寫入「較舊(log較短)」的
+      //   rollback 狀態並 bump lastUndoApplyAt 一次性標記。偵測 marker 遞增 → 無條件套用該 rollback
+      //   （繞過下方 stale guard，否則較短 log 會被當舊封包擋掉 → 毀棋失效）。套一次即更新 lastSeen，
+      //   之後同 marker 不再重觸發；一般 push 不寫此欄位故不誤觸。
+      if (game && incoming.phase === 'playing'
+          && (room.lastUndoApplyAt ?? 0) > lastSeenUndoApplyAt) {
+        lastSeenUndoApplyAt = room.lastUndoApplyAt as number;
+        game = incoming;
+        undoSnapshot = null; undoActionDesc = null;
+        undoAwaitingResponse = false; undoDeniedThisSnapshot = false;
+        floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
+        prizeAnimKey = [prizeAnimKey[0] + 1, prizeAnimKey[1] + 1];
+        arrivingIids = new Set(); justArrivedIids = new Set();
+        console.log('[undo] 收到悔棋 rollback 標記，已套用並繞過 stale guard');
+        return;
+      }
       if (game && game.phase === 'playing'
           && incoming.phase === 'playing'
           && (incoming.log?.length ?? 0) < (game.log?.length ?? 0)) {
@@ -5404,8 +5421,8 @@
       (async () => {
         try {
           game = snap;
-          await pushGameState(roomCode, snap);
-          await clearUndoRequestApi(roomCode);
+          // v5.390：atomic 寫 rollback + 清 undoRequest + bump marker（繞過 push/收端 stale guard）
+          await pushUndoRollback(roomCode, snap);
           console.log('[undo] 對手同意，已 sync 上一手 state');
         } catch (e) {
           console.warn('[undo agreed] push failed:', e);

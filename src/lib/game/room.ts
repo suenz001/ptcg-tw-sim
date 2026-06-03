@@ -130,6 +130,12 @@ export interface RoomData {
     actionDesc: string;
     status: 'pending' | 'agreed' | 'rejected';
   };
+  /**
+   * v5.390 悔棋一次性標記：發起方同意悔棋後用 pushUndoRollback 寫入 rollback 狀態時 bump 此時間戳。
+   *   對手端 handleRoomUpdate 偵測到此值遞增 → 無條件套用該（log 較短的）rollback 狀態一次，
+   *   繞過收端 stale guard（否則倒退狀態被當舊封包擋掉 → 毀棋失效）。
+   */
+  lastUndoApplyAt?: number;
 }
 
 export interface Room extends RoomData {
@@ -1083,6 +1089,22 @@ export async function pushGameState(roomCode: string, gameState: GameState): Pro
   await updateDoc(doc(db, 'rooms', roomCode), {
     gameState: JSON.parse(JSON.stringify(gameState)),
     status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * v5.390 悔棋專用推送（Firebase）。
+ *   悔棋 rollback 會把「較舊（log 較短）」狀態寫回，必須繞過 pushGameState 的單調防舊邏輯，
+ *   否則 rollback 永遠寫不進房間。atomic：同一次 updateDoc 寫 gameState + 清 undoRequest +
+ *   bump lastUndoApplyAt 一次性標記（避免分兩次寫被 onSnapshot 合併送達的時序雷）。
+ */
+export async function pushUndoRollback(roomCode: string, gameState: GameState): Promise<void> {
+  await updateDoc(doc(db, 'rooms', roomCode), {
+    gameState: JSON.parse(JSON.stringify(gameState)),
+    status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+    undoRequest: null,
+    lastUndoApplyAt: Date.now(),
     updatedAt: serverTimestamp(),
   });
 }
