@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.420</span> 修正：能量撢子原本在「對手手牌沒有能量」時不能使用；但對手手牌屬未知資訊，現在永遠可以使用（查看對手手牌，有能量才放回牌庫下方）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.419</span> 修正：線上對戰用選擇視窗（picker）選完按確定後，有時會沒選到東西的問題（多段選擇的中間步驟被同步覆蓋；如金屬製造者選鋼能量、小光搜尋進化寶可夢）</summary>
       </details>
 

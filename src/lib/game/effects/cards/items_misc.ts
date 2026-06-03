@@ -1093,9 +1093,12 @@ regR('victory-proof-pick', (st, idx, iids, _params, pool) => {
 
 // ── 能量撢子（Item）────────────────────────────────────────────────────────
 // 卡面：查看對手的手牌，從其中選擇 1 張能量卡，放回對手的牌庫下方。
-regG('能量撢子', (st, idx, pool) => {
+regG('能量撢子', (st, idx) => {
+  // v5.420：對手手牌是否有能量是「未知資訊」，不可拿來 gate 可用性（會洩漏+誤擋）。
+  //   卡面效果是「查看對手手牌」＝永遠有效果（取得資訊），只要對手手牌非空就可用；
+  //   若手牌無能量，reg 內走「僅查看」分支（不丟）。原本要求對手有能量是簡易安裝。
   const dIdx = (1 - idx) as 0 | 1;
-  return st.players[dIdx].hand.some(c => pool.get(c.cardId)?.supertype === 'Energy');
+  return st.players[dIdx].hand.length > 0;
 });
 reg('能量撢子', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
