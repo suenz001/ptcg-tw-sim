@@ -158,7 +158,8 @@ function coinReverseFailPre(base: number, label: string) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const DISCARD_N: Array<[string, number, number]> = [  // [key, dmg, n（0 = 全棄）]
-  ['超級噴火駝ex|火山流星', 280, 2],
+  // v5.391：超級噴火駝ex|火山流星 移除 — 它在 effects.ts registerSelfDiscardMultiply 已完整註冊
+  //   （含 picker + units），這裡若再註冊 regPost(selfDiscardNEnergyPost) 會「多丟 2 張」double-discard。
   ['蓋歐卡|漩渦波', 130, 2],
   ['鋼炮臂蝦|水之發射器', 210, 0],
   ['洛托姆ex|十萬伏特', 130, 0],

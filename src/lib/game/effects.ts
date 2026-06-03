@@ -7521,6 +7521,11 @@ function registerSelfDiscardMultiply(
       scope: 'attacker',
       baseDamage,
       damagePerEnergy: per,
+      // v5.391：per=0（純 cost 型「選擇剛好 N 個能量丟棄」）→ 按「能量單位數」計（units），
+      //   讓 1 張燃火能量（進化 host=3 個）/ 火箭隊能量（2 個）/ 新衝天能量（Stage2=2 個）可滿足「N 個」。
+      //   per>0（丟越多傷越高，傷害=per×張數）維持按「張」計，避免 units 與傷害倍率語意衝突。
+      //   受惠：火山流星(2) / 防守回轉(2) / 冰之牢籠(2) / 水射擊(1)。
+      countMode: (per === 0 && min > 0) ? ('units' as const) : undefined,
       // v4.71: picker 也限定屬性（玩家不會選到非該屬性能量造成 UX 混淆）
       // Cast 避開 ATTACK_PRE_DISCARD_CHOICE config 不接受 'Fairy' 的型別限制
       energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic' || typeFilter === 'Fairy')
