@@ -6371,6 +6371,8 @@
                       <div class="att-card-stack">
                         {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
+                      <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
+                      <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
                     {/if}
                   {/if}
                   {#if energyPips(b).length > 0}
@@ -6427,6 +6429,8 @@
                   <div class="att-card-stack">
                     {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
+                  <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
+                  <div class="tt-attach-overlay">{#each energyPips(oppPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if oppPlayer.active.toolAttached || (oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0 ? `×${1 + oppPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
                 {/if}
               {/if}
               <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
@@ -6739,6 +6743,8 @@
                 <div class="att-card-stack">
                   {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
+                <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
+                <div class="tt-attach-overlay">{#each energyPips(myPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if myPlayer.active.toolAttached || (myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0 ? `×${1 + myPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
               {/if}
             {/if}
             <!-- v2.52：能量改為垂直 pip 圖示，排在卡圖右側（與備戰一致）
@@ -6841,6 +6847,8 @@
                     <div class="att-card-stack">
                       {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
+                    <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
+                    <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
                   {/if}
                 {/if}
                 {#if energyPips(b).length > 0}
@@ -9792,6 +9800,38 @@
   .playmat.layout-tabletop .bench-slot .bench-nrg,
   .playmat.layout-tabletop .active-card .tool-chip,
   .playmat.layout-tabletop .bench-slot .tool-chip{ display:none; }
+
+  /* === v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，玩家建議仿手機版）===
+     原桌墊版把 pip/chip display:none、只留 att-card-stack 小卡圖，玩家反應看不清能量
+     種類/道具。新增獨立 .tt-attach-overlay（absolute + pointer-events:none，不改框架），
+     疊在卡圖底部顯示能量 pip（重用 .nrg-pip 配色）+ 道具 🔧×N。att-card-stack 保留。 */
+  .playmat.layout-tabletop .tt-attach-overlay{
+    position:absolute; display:flex; flex-wrap:wrap; gap:2px;
+    align-items:flex-end; justify-content:center;
+    z-index:130; pointer-events:none;
+  }
+  .playmat.layout-tabletop .tt-attach-overlay:empty{ display:none; }
+  .playmat.layout-tabletop .active-card .tt-attach-overlay{
+    left:calc(.5rem + 140px + .45rem); width:105px; bottom:.5rem;
+  }
+  .playmat.layout-tabletop .bench-slot .tt-attach-overlay{
+    left:1px; right:1px; bottom:32px;
+  }
+  .playmat.layout-tabletop .tt-attach-overlay .nrg-pip{
+    min-width:16px; height:16px; font-size:.62rem; padding:0 3px; border-radius:8px;
+  }
+  .playmat.layout-tabletop .bench-slot .tt-attach-overlay .nrg-pip{
+    min-width:13px; height:13px; font-size:.5rem; padding:0 2px; border-radius:7px;
+  }
+  .playmat.layout-tabletop .tt-attach-overlay .tt-tool{
+    display:inline-flex; align-items:center; height:16px; font-size:.6rem;
+    padding:0 4px; border-radius:8px; font-weight:700; color:#fff;
+    background:rgba(180,140,0,.92);
+    box-shadow:0 0 0 1px rgba(0,0,0,.4) inset, 0 1px 2px rgba(0,0,0,.3);
+  }
+  .playmat.layout-tabletop .bench-slot .tt-attach-overlay .tt-tool{
+    height:13px; font-size:.5rem; padding:0 2px;
+  }
 
   /* v5.016：隱藏戰鬥位上方的「撤退」按鈕 — 統一由左側 action-bar 的 .btn-retreat-mirror 操作，
      讓雙方 active 距離更近。:not(.btn-fossil-discard) 避免誤隱藏化石丟棄按鈕（共用 class）。 */
