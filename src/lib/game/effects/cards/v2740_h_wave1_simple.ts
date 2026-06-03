@@ -323,7 +323,7 @@ regPre('故勒頓ex|復仇光炮', selfBenchHasDamagePre(100, 120, '復仇光炮
 // 17. 棄能量大招（2 張）
 // ══════════════════════════════════════════════════════════════════════════════
 const DISCARD_N: Array<[string, number, number]> = [
-  ['紅蓮鎧騎ex|鎧農炮', 200, 1],  // 棄 1 火能量
+  // v5.399：紅蓮鎧騎ex|鎧農炮 移至 effects.ts SELF_DISCARD_UNITS_BATCH(units+picker,Fire filter)
 ];
 for (const [key, dmg, n] of DISCARD_N) {
   const atkName = key.split('|')[1];

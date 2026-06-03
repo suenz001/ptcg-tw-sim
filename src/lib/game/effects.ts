@@ -9913,6 +9913,15 @@ const SELF_DISCARD_UNITS_BATCH: Array<[string, string, number, number, DiscardMu
   ['古劍豹|氣忿利刃', '氣忿利刃', 130, 2, 'all'],
   // n=3
   ['皮卡丘ex|黃玉伏特', '黃玉伏特', 300, 3, 'all'],
+  // v5.399：批次2 — v2620/v2740/v2750/v3700 的「選擇N個能量丟棄」
+  ['暴飛龍ex|狂龍衝擊', '狂龍衝擊', 300, 2, 'all'],
+  ['顫弦蠑螈ex|刷弦閃電', '刷弦閃電', 240, 2, 'all'],
+  ['燈火幽靈|大字爆炎', '大字爆炎', 50, 1, 'all'],
+  ['紅蓮鎧騎ex|鎧農炮', '鎧農炮', 200, 1, 'Fire'],
+  ['萊希拉姆ex|燃燒殆盡', '燃燒殆盡', 200, 1, 'all'],
+  ['蓋歐卡ex|潮汐巨浪', '潮汐巨浪', 230, 2, 'all'],
+  ['花舞鳥|花火', '花火', 30, 1, 'all'],
+  ['噴火龍ex|爆焰旋渦', '爆焰旋渦', 330, 3, 'all'],
 ];
 for (const [key, label, dmg, n, tf] of SELF_DISCARD_UNITS_BATCH) {
   registerSelfDiscardMultiply(key, label, dmg, 0, n, tf, false, n);

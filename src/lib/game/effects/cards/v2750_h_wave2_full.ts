@@ -1022,9 +1022,6 @@ for (const [key, dmg] of RECHARGE) {
 // === Section 6: 棄能量大招 ===
 // ══════════════════════════════════════════════════════════════════════════════
 const DISCARD_N: Array<[string, number, number]> = [  // [key, dmg, n]
-  ['萊希拉姆ex|燃燒殆盡', 200, 1],
-  ['蓋歐卡ex|潮汐巨浪', 230, 2],
-  ['花舞鳥|花火', 30, 1],
 ];
 for (const [key, dmg, n] of DISCARD_N) {
   const atkName = key.split('|')[1];

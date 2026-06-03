@@ -149,14 +149,8 @@ regPost('大吾的念力土偶|黏土爆破', selfDiscardAllEnergyPost('黏土�
 // 3. 棄 N 個能量大招（4 張）
 // ══════════════════════════════════════════════════════════════════════════════
 
-regPre('暴飛龍ex|狂龍衝擊', (s) => ({ state: s, damage: 300 }));
-regPost('暴飛龍ex|狂龍衝擊', selfDiscardNEnergyPost(2, '狂龍衝擊'));
 
-regPre('顫弦蠑螈ex|刷弦閃電', (s) => ({ state: s, damage: 240 }));
-regPost('顫弦蠑螈ex|刷弦閃電', selfDiscardNEnergyPost(2, '刷弦閃電'));
 
-regPre('燈火幽靈|大字爆炎', (s) => ({ state: s, damage: 50 }));
-regPost('燈火幽靈|大字爆炎', selfDiscardNEnergyPost(1, '大字爆炎'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 自方備戰數 ×K（1 張）— 奇諾栗鼠|朋友之環
