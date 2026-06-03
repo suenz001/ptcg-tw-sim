@@ -32,55 +32,9 @@ regA('吉雉雞ex', 0, (state, aIdx, pool, inst) => {
 });
 
 // ── 厄鬼椪 碧草面具ex (Teal Mask Ogerpon ex) ─────────────────────────────────────────
-regA('厄鬼椪 碧草面具ex', 0, (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  const hasGrass = p.hand.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
-  });
-  if (!hasGrass) return addLog(state, '碧綠之舞：手牌沒有基本【草】能量，無法使用', aIdx);
-  // v5.184：詛咒根擋手牌附能 — 自身受詛咒根影響時，無法附加能量
-  if (inst.cantAttachEnergyThisTurn) return addLog(state, '碧綠之舞：受詛咒根影響，本回合無法從手牌附加能量', aIdx);
-  let s = addLog(state, '厄鬼椪 碧草面具ex：使用特性「碧綠之舞」，選擇手牌的 1 張基本【草】能量', aIdx);
-  const instInPlay = s.players[aIdx].active?.iid === inst.iid 
-    ? s.players[aIdx].active 
-    : s.players[aIdx].bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
-  return withPending(s, {
-    type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
-    filter: 'BasicEnergy:Grass', effectKey: 'teal-dance-attach',
-    // v3.62 titleOverride：是「附於碧草面具ex」不是丟棄
-    params: { targetIid: inst.iid, titleOverride: '碧綠之舞：選 1 張手牌基本【草】能量附於碧草面具ex' }
-  });
-});
-regR('teal-dance-attach', (state, actorIdx, selectedIids, params) => {
-  if (selectedIids.length === 0) return state;
-  const targetIid = String(params?.targetIid ?? '');
-  const energyIid = selectedIids[0];
-  const p = state.players[actorIdx];
-  const energyIndex = p.hand.findIndex(c => c.iid === energyIid);
-  if (energyIndex === -1) return state;
-  const energyInst = p.hand[energyIndex];
-  let newHand = [...p.hand];
-  newHand.splice(energyIndex, 1);
-  let s = updatePlayer(state, actorIdx, player => {
-    const p2 = { ...player, hand: newHand };
-    if (p2.active?.iid === targetIid) {
-      p2.active = { ...p2.active, energyAttached: [...p2.active.energyAttached, energyInst] };
-    } else {
-      const bIdx = p2.bench.findIndex(b => b.iid === targetIid);
-      if (bIdx >= 0) {
-        const newBench = [...p2.bench];
-        newBench[bIdx] = { ...newBench[bIdx], energyAttached: [...newBench[bIdx].energyAttached, energyInst] };
-        p2.bench = newBench;
-      }
-    }
-    return p2;
-  });
-  s = addLog(s, '碧綠之舞：將基本【草】能量附於厄鬼椪 碧草面具ex身上，然後從牌庫抽 1 張卡', actorIdx);
-  return drawCards(s, actorIdx, 1);
-});
+// v5.392：碧綠之舞 picker 版死碼已移除 — 同 key regA('厄鬼椪 碧草面具ex', 0) 在 effects.ts 有
+//   自動附能版（import 後 effects.ts body 求值勝出，此 picker 版恆被覆蓋、從未生效）。重複註冊
+//   有翻版風險、picker 版又有取消後 abilityUsedThisTurn 卡住的隱患，故清除。萬葉陣雨 招式保留於下。
 import { regPre, regPost, shuffle, countAttachedEnergyAsUnits } from '../_shared';
 const flipCoin = () => Math.random() < 0.5;
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
