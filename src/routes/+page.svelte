@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.413</span> 修正：桌墊版線上對戰用拖曳把道具附加到寶可夢時，會閃現一下選擇視窗的問題（現在拖曳附加不再閃 modal）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.410</span> 桌墊版：寶可夢身上的能量與道具現在直接疊在卡圖上顯示（仿手機版），一眼看清屬性與道具，不必再從疊放的小卡圖辨識</summary>
         <ul>
           <li>能量改成彩色 pip（含彩虹特殊能量）疊在卡圖底部；道具顯示 🔧 與數量</li>

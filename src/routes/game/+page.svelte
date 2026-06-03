@@ -788,6 +788,7 @@
   //   - 切換新 modal 時 $effect 自動重置 offset（pendingSelection 物件變更就 trigger）
   let modalOffset = $state<{ x: number; y: number }>({ x: 0, y: 0 });
   let modalDragged = $state(false);
+  let suppressToolSelectModal = $state(false); // v5.413：拖曳道具自動解期間抑制 attach-tool modal 閃現
   // v4.923：mulligan 補抽 stepper 計數覆寫值 — null 代表使用預設最大值
   let mulliganPickOverride = $state<number | null>(null);
   // v4.926 Admin 偷看模式：?spectate=ROOM&admin=1 + email 在白名單 → 純訂閱、不寫 seat、不寫 chat
@@ -1482,15 +1483,22 @@
           return;
         }
       }
-      // 打出道具 → 觸發 pendingSelection（attach-tool）→ 用 drop target 直接 resolve
-      await dispatch(GameActions.playTrainer(d.iid));
-      const sel = game?.pendingSelection;
-      if (sel?.effectKey === 'attach-tool') {
-        const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
-        if (validIids.includes(tIid)) {
-          const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-          await dispatch(GameActions.resolveSelection([tIid], sid));
+      // 打出道具 → 觸發 pendingSelection（attach-tool）→ 用 drop target 直接 resolve。
+      // v5.413：拖曳自動解這段期間抑制 attach-tool 選擇 modal 渲染，避免線上拖曳附加道具時
+      //   「playTrainer 開 modal → resolveSelection 關 modal」中間 render 一次造成 modal 閃現。
+      suppressToolSelectModal = true;
+      try {
+        await dispatch(GameActions.playTrainer(d.iid));
+        const sel = game?.pendingSelection;
+        if (sel?.effectKey === 'attach-tool') {
+          const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
+          if (validIids.includes(tIid)) {
+            const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+            await dispatch(GameActions.resolveSelection([tIid], sid));
+          }
         }
+      } finally {
+        suppressToolSelectModal = false;
       }
     }
   }
@@ -7025,7 +7033,7 @@
        true 會錯誤顯示 modal（嚴重隱私 bug：對手看到我選牌畫面）。
        本機雙人模式（mode='local'）視角會隨 actor 自動翻轉，actor 永遠等於當前視角，
        不需另加 actor === myIdx check（會誤判）。 -->
-  {#if pendingSelection && (
+  {#if pendingSelection && !suppressToolSelectModal && (
     (mode === 'online' && myPlayerIndex !== null && pendingSelection.actorIdx === myPlayerIndex)
     || (mode === 'local' && aiPlayerIndex === null)
     || (mode !== 'online' && aiPlayerIndex !== null && pendingSelection.actorIdx === (1 - aiPlayerIndex))
