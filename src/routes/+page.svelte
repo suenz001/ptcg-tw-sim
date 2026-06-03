@@ -304,6 +304,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.397</span> 修正：千面避役「水射擊」原本會丟掉 2 個能量（應為 1 個）</summary>
+        <ul>
+          <li>千面避役的招式「水射擊」卡面是「選擇 1 個能量丟棄」，但因內部重複登錄，實際會丟掉 2 個能量。已修正為正確的 1 個，並可自選要丟哪個。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.396</span> 修正：對戰紀錄點擊已進化寶可夢的「進化前卡名」會顯示錯誤版本</summary>
         <ul>
           <li>例如螺釘地鼠進化成超級龍頭地鼠ex 後，在對戰紀錄點「螺釘地鼠」會跳出你根本沒帶的別版本（如 SV5M·039/071）。原因是進化後該卡被收進進化堆疊裡，點擊時找不到、就退而抓資料庫第一個同名卡。</li>
