@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.414</span> 修正：線上重新開局／重賽後，「從牌庫選牌」類功能（如完全體攪拌器）可選張數被上一局殘留卡住（例如只能丟 3 張）的問題</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.413</span> 修正：桌墊版線上對戰用拖曳把道具附加到寶可夢時，會閃現一下選擇視窗的問題（現在拖曳附加不再閃 modal）</summary>
       </details>
 

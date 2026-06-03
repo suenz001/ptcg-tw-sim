@@ -2027,6 +2027,15 @@
   );
   $effect(() => {
     const _sig = modalSignature;
+    // v5.414：modal 身分變更（新 pending / 清空 / 重新開局換局）時一併重置選取狀態，避免上一個
+    //   selection 殘留的 picks 卡住下一個 picker 的可選張數。根因：toggleSelection 以
+    //   `selectionPicked.size < maxCount` 判可否再選，但 selectionPicked/selectionCounts 原本只在
+    //   confirm/skip/Esc 重置，沒在換 game(重賽 adopt 新局)或新 picker 開啟時清 → 殘留 N 個舊 picks
+    //   時，完全體攪拌器等 deck-search 只能再選 maxCount−N 張（玩家回報「只能丟 3 張」）。
+    selectionPicked = new Set();
+    selectionCounts = {};
+    selectionReorderKeep = [];
+    selectionReorderDiscard = new Set();
     modalOffset = { x: 0, y: 0 };
     modalDragged = false;
     modalDragStart = null;
