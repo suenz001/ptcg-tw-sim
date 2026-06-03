@@ -118,14 +118,9 @@ function discardStadiumPostInline(label: string): AttackPostFn {
 // 1. A 棄自身固定 N 個能量（10 張）
 // ══════════════════════════════════════════════════════════════════════════════
 const SELF_DISC_N: Array<[string, number, number]> = [
+  // v5.395：全部「選擇N個能量丟棄」卡已移至 effects.ts registerSelfDiscardMultiply(units+picker)
   // v5.394：蓋歐卡漩渦波/象牙豬暴雪刀鋒/噴火駝力量踩踏 移至 effects.ts registerSelfDiscardMultiply(units+picker)
   // [key, dmg, n]
-  ['伽勒爾 堵攔熊|龐克粉碎', 160, 1],
-  ['火箭隊的黑魯加|燃燒殆盡', 120, 1],
-  ['舞天鵝|空氣斬', 120, 1],
-  ['雷電雲|災難伏特', 110, 1],
-  ['卡璞・鳴鳴|雷電爆破', 130, 2],
-  ['巨炭山|巨體碰撞', 220, 3],
 ];
 for (const [key, dmg, n] of SELF_DISC_N) {
   const atkName = key.split('|')[1];

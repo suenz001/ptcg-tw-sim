@@ -9901,6 +9901,14 @@ registerSelfDiscardMultiply('噴火駝|力量踩踏', '力量踩踏', 170, 0, 2,
 registerSelfDiscardMultiply('象牙豬|暴雪刀鋒', '暴雪刀鋒', 200, 0, 2, 'all', false, 2);
 registerSelfDiscardMultiply('達摩狒狒|粉碎頭擊', '粉碎頭擊', 180, 0, 2, 'all', false, 2);
 
+// v5.395：再補完所有「選擇 N 個能量丟棄」(純 cost)→ units+picker。原走 selfDiscardNEnergyPost(v2500/v2620)。
+registerSelfDiscardMultiply('伽勒爾 堵攔熊|龐克粉碎', '龐克粉碎', 160, 0, 1, 'all', false, 1);
+registerSelfDiscardMultiply('火箭隊的黑魯加|燃燒殆盡', '燃燒殆盡', 120, 0, 1, 'all', false, 1);
+registerSelfDiscardMultiply('舞天鵝|空氣斬', '空氣斬', 120, 0, 1, 'all', false, 1);
+registerSelfDiscardMultiply('雷電雲|災難伏特', '災難伏特', 110, 0, 1, 'all', false, 1);
+registerSelfDiscardMultiply('卡璞・鳴鳴|雷電爆破', '雷電爆破', 130, 0, 2, 'all', false, 2);
+registerSelfDiscardMultiply('巨炭山|巨體碰撞', '巨體碰撞', 220, 0, 3, 'all', false, 3);
+
 // 鋼炮臂蝦｜水之發射器 210 — 丟所有自身能量
 registerSelfDiscardMultiply('鋼炮臂蝦|水之發射器', '水之發射器', 210, 0, 99, 'all', true);  // v5.080: forceAll=true 卡面「全部丟棄」
 
