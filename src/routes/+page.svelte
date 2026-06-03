@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.421</span> 修正：對戰圓形競技場在場時，小灰怪「挪動一下」找不到可改附的對手寶可夢而失效；對戰圓形只會擋「被放置傷害指示物」，不該擋「移動能量」（已整體 audit，其餘只擋放指示物的招式維持正確）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.420</span> 修正：能量撢子原本在「對手手牌沒有能量」時不能使用；但對手手牌屬未知資訊，現在永遠可以使用（查看對手手牌，有能量才放回牌庫下方）</summary>
       </details>
 

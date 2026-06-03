@@ -389,7 +389,10 @@ regR('minccino-shuffle-pick-energy-anywhere', (state, aIdx, iids, _params, _pool
     .filter(pk => {
       const card = _pool.get(pk.cardId);
       const isBench = opp.active?.iid !== pk.iid;
-      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', _pool, { isBench });
+      // v5.421：re-attach 端也要 skipStadium（同 source 端 345）。對戰圓形/中立中心只擋「放
+      //   傷害指示物」，不擋「移動能量」；漏掉 skipStadium 會讓對戰圓形在場時備戰目標被誤擋
+      //   → 挪動一下找不到可改附目標而失效（玩家回報）。個別寶可夢防護(太晶/化隱)仍保留。
+      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', _pool, { isBench, skipStadium: true });
       return !guard.blocked;
     })
     .map(pk => pk.iid);
