@@ -9812,25 +9812,25 @@
   }
   .playmat.layout-tabletop .tt-attach-overlay:empty{ display:none; }
   .playmat.layout-tabletop .active-card .tt-attach-overlay{
-    left:calc(.5rem + 140px + .45rem); width:105px; bottom:.5rem;
+    left:calc(.5rem + 140px + .45rem); width:105px; bottom:0;
   }
   .playmat.layout-tabletop .bench-slot .tt-attach-overlay{
-    left:1px; right:1px; bottom:32px;
+    left:1px; right:1px; bottom:25px;
   }
   .playmat.layout-tabletop .tt-attach-overlay .nrg-pip{
-    min-width:16px; height:16px; font-size:.62rem; padding:0 3px; border-radius:8px;
+    min-width:21px; height:21px; font-size:.78rem; padding:0 4px; border-radius:11px;
   }
   .playmat.layout-tabletop .bench-slot .tt-attach-overlay .nrg-pip{
-    min-width:17px; height:17px; font-size:.64rem; padding:0 3px; border-radius:9px;
+    min-width:22px; height:22px; font-size:.8rem; padding:0 4px; border-radius:11px;
   }
   .playmat.layout-tabletop .tt-attach-overlay .tt-tool{
-    display:inline-flex; align-items:center; height:16px; font-size:.6rem;
-    padding:0 4px; border-radius:8px; font-weight:700; color:#fff;
+    display:inline-flex; align-items:center; height:21px; font-size:.76rem;
+    padding:0 5px; border-radius:11px; font-weight:700; color:#fff;
     background:rgba(180,140,0,.92);
     box-shadow:0 0 0 1px rgba(0,0,0,.4) inset, 0 1px 2px rgba(0,0,0,.3);
   }
   .playmat.layout-tabletop .bench-slot .tt-attach-overlay .tt-tool{
-    height:17px; font-size:.62rem; padding:0 3px;
+    height:22px; font-size:.78rem; padding:0 4px;
   }
 
   /* v5.016：隱藏戰鬥位上方的「撤退」按鈕 — 統一由左側 action-bar 的 .btn-retreat-mirror 操作，
