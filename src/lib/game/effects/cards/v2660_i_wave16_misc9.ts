@@ -21,7 +21,7 @@
  */
 
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
-  getOwnBenchLimit,
+  getOwnBenchLimit, getAllAttachedTools,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -570,16 +570,28 @@ regPost('火箭隊的火焰鳥ex|邪惡灼燒', (state, aIdx, pool) => {
     discard: [...p.discard, rocketE],
   }));
   s = addLog(s, '邪惡灼燒：丟棄 1 張火箭隊能量', aIdx);
-  // 對手戰鬥場全棄(KO)
+  // 對手戰鬥場「與附加的卡全部丟棄」到棄牌區 — 是【丟棄】非昏厥(KO)，對手不抽獎賞（同化石丟棄）。
+  //   v5.403 修正：原 v5.402 誤用 damage=hp(=KO,會給獎賞卡)。正解：整組(寶可夢+能量+道具+進化堆疊)
+  //   進對手棄牌區、active=null(UI 自動彈補場選擇器)、不動雙方獎賞。
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = s.players[dIdx].active;
   if (da) {
-    const card = pool.get(da.cardId);
-    const hp = card?.hp ?? 0;
-    s = updatePlayer(addLog(s, '邪惡灼燒：對手戰鬥寶可夢全棄（KO）', aIdx), dIdx, p => ({
+    const discardEntries: CardInstance[] = [
+      { ...da, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
+        energyAttached: [], toolAttached: undefined, extraTools: [], evolvedFromStack: undefined, damage: 0 },
+      ...da.energyAttached,
+      ...getAllAttachedTools(da),
+      ...(da.evolvedFromStack ?? []),
+    ];
+    s = updatePlayer(addLog(s, '邪惡灼燒：將對手戰鬥寶可夢與附加的卡全部丟棄到棄牌區（非昏厥，不給獎賞）', aIdx), dIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damage: hp } : null,
+      discard: [...p.discard, ...discardEntries],
+      active: null,
     }));
+    // 對手無備戰可補 → 直接終局（我方勝，非獎賞）；有備戰則 active=null 由 UI 自動彈 SEND_NEW_ACTIVE 補場。
+    if (s.players[dIdx].bench.length === 0) {
+      s = { ...s, phase: 'game-over' as const, winner: aIdx, winReason: `${s.players[dIdx].name} 沒有可上場的寶可夢` };
+    }
   }
   return s;
 });
