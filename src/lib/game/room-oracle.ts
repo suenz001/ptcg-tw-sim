@@ -23,6 +23,7 @@ import { auth } from '$lib/firebase';
 import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { createGame } from './engine';
+import { shouldSkipStalePush } from './sync-guards';
 
 // ── re-export types & const from room.ts ────────────────────────────────────
 export type { Room, RoomData, Seat, SeatRole, DeckEntry, ChatMessage } from './room';
@@ -563,9 +564,8 @@ export async function pushGameState(roomCode: string, gameState: GameState): Pro
     //   修法：playing 期間，若我方 gameState 比房間現有『嚴格較舊』(log 長度為單調序) → 不覆蓋，
     //   保留房間較新狀態（idempotent；本地稍後由 poll 收斂到較新）。不擋等長，避免雙端互卡。
     const cur = (data as unknown as { gameState?: GameState | null }).gameState;
-    if (cur && gameState.phase === 'playing' && cur.phase === 'playing'
-        && (gameState.log?.length ?? 0) < (cur.log?.length ?? 0)) {
-      return data; // 我方較舊 → 略過寫入，不 regress 房間
+    if (shouldSkipStalePush(gameState, cur)) {
+      return data; // 我方較舊 → 略過寫入，不 regress 房間（邏輯抽至 sync-guards.shouldSkipStalePush）
     }
     return {
       ...data,
