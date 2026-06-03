@@ -2238,6 +2238,7 @@ function handlePlaying(
   if (action.type === 'RESOLVE_SELECTION') {
     if (!state.pendingSelection) return state;
     const { effectKey, actorIdx, params } = state.pendingSelection;
+    const _resolvePreLogLen = state.log.length;
     // Guard：若明確指定 senderIdx，必須等於 actorIdx — 防止對手搶先操作
     if (action.senderIdx !== undefined && action.senderIdx !== actorIdx) return state;
     const endTurnAfter = params?.endTurnAfter === true;
@@ -2316,6 +2317,13 @@ function handlePlaying(
     // v2.132：resolver 也可能 leave zombie（damage ≥ HP 卻沒移到棄牌）— sanity sweep 對手側
     newState = sanityKOSweep(newState, actorIdx, pool);
     newState = tryPromoteToMainForFestival(newState, pool);
+    // v5.419 保險絲：保證每次 RESOLVE_SELECTION 讓 log.length 嚴格遞增。線上防舊快照守衛以
+    //   log.length 為單調時鐘且只擋「嚴格較短」；多段 picker 若某步 resolver 只開下一個 pending
+    //   而沒加 log（post 與 pre 等長），等長舊快照會溜過守衛覆蓋掉剛選好的狀態 → 玩家「按確定後
+    //   沒選到」。補一筆 marker 確保時鐘前進，根除整類等長覆蓋（線上 picker 選取被吃掉）。
+    if (newState.log.length === _resolvePreLogLen) {
+      newState = addLog(newState, newState.pendingSelection ? '（繼續選擇下一步）' : '（選擇已套用）', actorIdx);
+    }
     return newState;
   }
 

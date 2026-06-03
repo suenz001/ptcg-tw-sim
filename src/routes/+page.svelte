@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.419</span> 修正：線上對戰用選擇視窗（picker）選完按確定後，有時會沒選到東西的問題（多段選擇的中間步驟被同步覆蓋；如金屬製造者選鋼能量、小光搜尋進化寶可夢）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.417</span> 修正：巴大蝶「鱗粉颶風」的麻痺判定原本與實際擲幣脫鉤（不足 2 次正面也可能麻痺）；現在依實際正面數，2 次以上正面才會讓對手戰鬥寶可夢麻痺</summary>
       </details>
 
