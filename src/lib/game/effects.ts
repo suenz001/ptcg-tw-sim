@@ -7238,32 +7238,7 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
   };
 }
 
-// ── 1 張自身能量（21 張中的 discard 1 部分） ─────────────────────────────────
-regPost('四季鹿|落葉衝撞', selfDiscardNEnergyPost(1, '落葉衝撞'));
-regPost('捷拉奧拉|強力伏特', selfDiscardNEnergyPost(1, '強力伏特'));
-regPost('猛火猴|高溫打擊', selfDiscardNEnergyPost(1, '高溫打擊'));
-regPost('烈焰猴|燃燒殆盡', selfDiscardNEnergyPost(1, '燃燒殆盡'));
-regPost('冰鬼護|瘋狂頭', selfDiscardNEnergyPost(1, '瘋狂頭'));
-regPost('大電海燕|強力伏特', selfDiscardNEnergyPost(1, '強力伏特'));
-regPost('晶光芽|岩石射擊', selfDiscardNEnergyPost(1, '岩石射擊'));
-regPost('夜盜火蜥|火花', selfDiscardNEnergyPost(1, '火花'));
-regPost('焰后蜥|噴射火焰', selfDiscardNEnergyPost(1, '噴射火焰'));
-regPost('炭小侍|噴射火焰', selfDiscardNEnergyPost(1, '噴射火焰'));
-regPost('請假王ex|偉大橫掃', selfDiscardNEnergyPost(1, '偉大橫掃'));
-regPost('尖牙陸鯊|力量爆破', selfDiscardNEnergyPost(1, '力量爆破'));
-
-// ── 2 張自身能量 ─────────────────────────────────────────────────────────────
-regPost('鐵磐岩ex|力量踩踏', selfDiscardNEnergyPost(2, '力量踩踏'));
-regPost('巨金怪|潔淨爆破', selfDiscardNEnergyPost(2, '潔淨爆破'));
-regPost('煤炭龜|火焰旋渦', selfDiscardNEnergyPost(2, '火焰旋渦'));
-regPost('爬地翅|粉碎之翼', selfDiscardNEnergyPost(2, '粉碎之翼'));
-regPost('長毛巨魔|擊拳', selfDiscardNEnergyPost(2, '擊拳'));
-regPost('鋁鋼龍|鋁鋼光束', selfDiscardNEnergyPost(2, '鋁鋼光束'));
-regPost('爆炸頭水牛|粉碎頭擊', selfDiscardNEnergyPost(2, '粉碎頭擊'));
-regPost('古劍豹|氣忿利刃', selfDiscardNEnergyPost(2, '氣忿利刃'));
-
-// ── 3 張自身能量 ─────────────────────────────────────────────────────────────
-regPost('皮卡丘ex|黃玉伏特', selfDiscardNEnergyPost(3, '黃玉伏特'));
+// v5.398：以上「選擇 N 個能量丟棄」(純 cost) 已移至檔末 SELF_DISCARD_UNITS_BATCH 表 → units + picker。
 
 // ── 全部自身能量 ─────────────────────────────────────────────────────────────
 regPost('閃電鳥|十萬伏特', selfDiscardAllEnergyPost('十萬伏特'));
@@ -9908,6 +9883,40 @@ registerSelfDiscardMultiply('舞天鵝|空氣斬', '空氣斬', 120, 0, 1, 'all'
 registerSelfDiscardMultiply('雷電雲|災難伏特', '災難伏特', 110, 0, 1, 'all', false, 1);
 registerSelfDiscardMultiply('卡璞・鳴鳴|雷電爆破', '雷電爆破', 130, 0, 2, 'all', false, 2);
 registerSelfDiscardMultiply('巨炭山|巨體碰撞', '巨體碰撞', 220, 0, 3, 'all', false, 3);
+
+// v5.398：批次轉換「選擇 N 個能量丟棄」(純 cost) → units + picker。
+//   原走 selfDiscardNEnergyPost(按張數、無 picker)。傷害值取自卡面 JSON(已逐張核對)。
+//   表欄位：[key, 招式名, 傷害, N(=min=max), 屬性filter('all'/'Grass'/'Fire'...)]
+const SELF_DISCARD_UNITS_BATCH: Array<[string, string, number, number, DiscardMultiplyFilter]> = [
+  // n=1
+  ['四季鹿|落葉衝撞', '落葉衝撞', 40, 1, 'Grass'],
+  ['捷拉奧拉|強力伏特', '強力伏特', 120, 1, 'all'],
+  ['猛火猴|高溫打擊', '高溫打擊', 80, 1, 'all'],
+  ['烈焰猴|燃燒殆盡', '燃燒殆盡', 200, 1, 'all'],
+  ['冰鬼護|瘋狂頭', '瘋狂頭', 140, 1, 'all'],
+  ['大電海燕|強力伏特', '強力伏特', 100, 1, 'all'],
+  ['晶光芽|岩石射擊', '岩石射擊', 30, 1, 'all'],
+  ['夜盜火蜥|火花', '火花', 30, 1, 'all'],
+  ['焰后蜥|噴射火焰', '噴射火焰', 130, 1, 'all'],
+  ['炭小侍|噴射火焰', '噴射火焰', 70, 1, 'all'],
+  ['請假王ex|偉大橫掃', '偉大橫掃', 280, 1, 'all'],
+  ['尖牙陸鯊|力量爆破', '力量爆破', 50, 1, 'all'],
+  ['阿響的火球鼠|火花', '火花', 30, 1, 'all'],
+  // n=2
+  ['鐵磐岩ex|力量踩踏', '力量踩踏', 200, 2, 'all'],
+  ['巨金怪|潔淨爆破', '潔淨爆破', 200, 2, 'all'],
+  ['煤炭龜|火焰旋渦', '火焰旋渦', 110, 2, 'all'],
+  ['爬地翅|粉碎之翼', '粉碎之翼', 130, 2, 'all'],
+  ['長毛巨魔|擊拳', '擊拳', 160, 2, 'all'],
+  ['鋁鋼龍|鋁鋼光束', '鋁鋼光束', 130, 2, 'all'],
+  ['爆炸頭水牛|粉碎頭擊', '粉碎頭擊', 150, 2, 'all'],
+  ['古劍豹|氣忿利刃', '氣忿利刃', 130, 2, 'all'],
+  // n=3
+  ['皮卡丘ex|黃玉伏特', '黃玉伏特', 300, 3, 'all'],
+];
+for (const [key, label, dmg, n, tf] of SELF_DISCARD_UNITS_BATCH) {
+  registerSelfDiscardMultiply(key, label, dmg, 0, n, tf, false, n);
+}
 
 // 鋼炮臂蝦｜水之發射器 210 — 丟所有自身能量
 registerSelfDiscardMultiply('鋼炮臂蝦|水之發射器', '水之發射器', 210, 0, 99, 'all', true);  // v5.080: forceAll=true 卡面「全部丟棄」
@@ -14562,8 +14571,7 @@ PASSIVE_ATTACK_BONUS.set('勝利聲援', (att) => {
 });
 
 // ── 阿響的火球鼠｜火花 30 + 自棄 1 能量 ─────────────────────────────────────
-regPre('阿響的火球鼠|火花', (state, _aIdx, _pool) => ({ state, damage: 30 }));
-regPost('阿響的火球鼠|火花', selfDiscardNEnergyPost(1, '火花'));
+// v5.398：阿響的火球鼠|火花 移至 SELF_DISCARD_UNITS_BATCH
 
 // ── 阿響的火岩鼠｜烈焰 40（無附加效果，預設處理）── 不需 reg
 
