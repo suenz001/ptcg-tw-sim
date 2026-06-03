@@ -602,6 +602,8 @@ export interface GameState {
    * 顯示擲幣明細給玩家。Setter: 對應 regPre；Resetter: ATTACK 開頭 clear。
    */
   _machineGunLastFlips?: string[];
+  /** v5.416：擲幣招式 regPre 記正面數供同招 regPost 判定（鱗粉颶風 ≥2 麻痺）。同一 ATTACK 內 set→read。 */
+  _lastCoinHeads?: number;
   /**
    * v5.262 重試徽章 — 玩家選「保留剛才擲幣結果」時, engine 把要 inject 的擲幣結果
    * 放到此 queue, flipCoinsWithLog 每次擲幣前從 queue.shift() 取一個 inject,

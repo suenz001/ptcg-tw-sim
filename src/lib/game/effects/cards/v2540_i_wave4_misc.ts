@@ -277,15 +277,23 @@ regPost('雙倍多多冰|雙重冰凍', (state, aIdx, pool) => {
 });
 
 // 巴大蝶|鱗粉颶風 60× — ×K 但 ≥2 次正面才麻痺
-regPre('巴大蝶|鱗粉颶風', coinFlipMultiplyPre(4, 60, '鱗粉颶風'));
+// v5.416：原為簡易安裝 — regPost 另擲 0.6875 機率決定麻痺，與 regPre 實際擲幣脫鉤
+//   （1 正面也可能麻痺、3-4 正面也可能不麻痺）。改為 regPre 擲一次 4 幣、把正面數存
+//   state._lastCoinHeads，regPost 用「同一次」結果判 ≥2 才麻痺。
+regPre('巴大蝶|鱗粉颶風', (state, aIdx, _pool) => {
+  let heads = 0;
+  for (let i = 0; i < 4; i++) if (Math.random() < 0.5) heads++;
+  const s = addLog({ ...state, _lastCoinHeads: heads }, `鱗粉颶風：擲 4 次硬幣 → ${heads} 次正面，造成 ${heads * 60} 點傷害`, aIdx);
+  return { state: s, damage: heads * 60 };
+});
 regPost('巴大蝶|鱗粉颶風', (state, aIdx, pool) => {
-  // P(2+ heads in 4 flips) = 1 - C(4,0)*0.5^4 - C(4,1)*0.5^4 = 1 - 1/16 - 4/16 = 11/16 ≈ 0.6875
-  if (Math.random() < 0.6875) {
+  const heads = state._lastCoinHeads ?? 0;
+  if (heads >= 2) {
     // v2.92：走 statusPost — 內含完整免疫檢查
-    const s = addLog(state, '鱗粉颶風：擲幣判定 — 2+ 次正面', aIdx);
+    const s = addLog(state, `鱗粉颶風：${heads} 次正面（2+）→ 對手戰鬥寶可夢麻痺`, aIdx);
     return statusPost('paralyzed')(s, aIdx, pool);
   }
-  return addLog(state, '鱗粉颶風：擲幣判定 — 不足 2 次正面，無附加狀態', aIdx);
+  return addLog(state, `鱗粉颶風：${heads} 次正面（不足 2）→ 無附加狀態`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

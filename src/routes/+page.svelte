@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.416</span> 修正：巴大蝶「鱗粉颶風」的麻痺判定原本與實際擲幣脫鉤（不足 2 次正面也可能麻痺）；現在依實際正面數，2 次以上正面才會讓對手戰鬥寶可夢麻痺</summary>
+      </details>
+
+      <details
         <summary><span class="ver-badge">v5.415</span> 對戰記錄：「丟棄對手手牌」類功能（穹天狩獵、手部造型、暴君粉碎、拍落、鈴鈴吵鬧、不法之足、勒緊、庫瑟洛斯奇的企圖等）現在會在 log 顯示實際丟棄了哪些牌（棄牌區為公開資訊，雙方皆可知）</summary>
       </details>
 
