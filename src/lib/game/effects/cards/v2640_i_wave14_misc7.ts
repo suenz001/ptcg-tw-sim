@@ -160,13 +160,10 @@ function coinReverseFailPre(base: number, label: string) {
 const DISCARD_N: Array<[string, number, number]> = [  // [key, dmg, n（0 = 全棄）]
   // v5.391：超級噴火駝ex|火山流星 移除 — 它在 effects.ts registerSelfDiscardMultiply 已完整註冊
   //   （含 picker + units），這裡若再註冊 regPost(selfDiscardNEnergyPost) 會「多丟 2 張」double-discard。
-  ['蓋歐卡|漩渦波', 130, 2],
+  // v5.394：漩渦波/力量踩踏/暴雪刀鋒/粉碎頭擊 移至 effects.ts registerSelfDiscardMultiply(units+picker)
   ['鋼炮臂蝦|水之發射器', 210, 0],
   ['洛托姆ex|十萬伏特', 130, 0],
-  ['噴火駝|力量踩踏', 170, 2],
-  ['象牙豬|暴雪刀鋒', 200, 2],
   ['超級拉帝亞斯ex|幻想脈衝', 300, 0],
-  ['達摩狒狒|粉碎頭擊', 180, 2],
 ];
 for (const [key, dmg, n] of DISCARD_N) {
   const atkName = key.split('|')[1];

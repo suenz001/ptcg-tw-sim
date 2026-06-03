@@ -9893,6 +9893,14 @@ registerSelfDiscardMultiply('千面避役|水射擊', '水射擊', 110, 0, 1, 'a
 // 超級噴火駝ex｜火山流星 280 — 丟 2 自身能量
 registerSelfDiscardMultiply('超級噴火駝ex|火山流星', '火山流星', 280, 0, 2, 'all', false, 2);  // v5.080: min=2
 
+// v5.394：以下 4 張卡面「選擇 2 個能量丟棄」，原走 selfDiscardNEnergyPost(v2500/v2640) 按「張」計且無 picker。
+//   改走此 helper：per=0 → 自動 countMode='units'(燃火/火箭隊等特殊能量算多個) + picker(可自選)。
+//   已從 v2500 SELF_DISC_N / v2640 DISCARD_N 移除，避免殘留 regPost 造成 double-discard(同火山流星教訓)。
+registerSelfDiscardMultiply('蓋歐卡|漩渦波', '漩渦波', 130, 0, 2, 'all', false, 2);
+registerSelfDiscardMultiply('噴火駝|力量踩踏', '力量踩踏', 170, 0, 2, 'all', false, 2);
+registerSelfDiscardMultiply('象牙豬|暴雪刀鋒', '暴雪刀鋒', 200, 0, 2, 'all', false, 2);
+registerSelfDiscardMultiply('達摩狒狒|粉碎頭擊', '粉碎頭擊', 180, 0, 2, 'all', false, 2);
+
 // 鋼炮臂蝦｜水之發射器 210 — 丟所有自身能量
 registerSelfDiscardMultiply('鋼炮臂蝦|水之發射器', '水之發射器', 210, 0, 99, 'all', true);  // v5.080: forceAll=true 卡面「全部丟棄」
 
