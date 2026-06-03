@@ -1580,7 +1580,7 @@ regPost('班基拉斯ex|暴君粉碎', (state, aIdx, _pool) => {
   if (opp.hand.length === 0) return addLog(state, '暴君粉碎：對手手牌空', aIdx);
   const idx = Math.floor(Math.random() * opp.hand.length);
   const picked = opp.hand[idx];
-  return updatePlayer(addLog(state, '暴君粉碎：從對手手牌隨機棄 1 張', aIdx), dIdx, p => ({
+  return updatePlayer(addLog(state, `暴君粉碎：從對手手牌隨機棄 1 張 — ${_pool.get(picked.cardId)?.name ?? '?'}`, aIdx), dIdx, p => ({
     ...p,
     hand: [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)],
     discard: [...p.discard, picked],

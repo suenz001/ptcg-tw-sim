@@ -96,8 +96,9 @@ function discardOppHandRandomPost(n: number, label: string): AttackPostFn {
       [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
     }
     const pickedSet = new Set(idxs.slice(0, discardCount));
+    const _discNames = opp.hand.filter((_, i) => pickedSet.has(i)).map(c => _pool.get(c.cardId)?.name ?? '?').join('、');
     return updatePlayer(
-      addLog(state, `${label}：盲選對手 ${discardCount} 張手牌丟棄`, aIdx),
+      addLog(state, `${label}：盲選對手 ${discardCount} 張手牌丟棄 — ${_discNames}`, aIdx),
       dIdx, p => {
         const discarded = p.hand.filter((_, i) => pickedSet.has(i));
         const remaining = p.hand.filter((_, i) => !pickedSet.has(i));

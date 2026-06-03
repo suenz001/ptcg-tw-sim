@@ -70,7 +70,7 @@ regPre('雙劍鞘|劍武備', (state, aIdx, pool) => {
 // 卡面：在不看正面的情況下，將對手的手牌丟棄直到張數變為5張為止。
 // 實裝：對手手牌超過 5 張時，從手牌頭部隨機移除至剩 5 張（不看正面 = 隨機）。
 regPre('多麗米亞|手部造型', (state) => ({ state, damage: 0 }));
-regPost('多麗米亞|手部造型', (state, aIdx) => {
+regPost('多麗米亞|手部造型', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = state.players[dIdx];
   if (dp.hand.length <= 5) {
@@ -82,7 +82,8 @@ regPost('多麗米亞|手部造型', (state, aIdx) => {
   const toDiscard = shuffledHand.slice(0, removeCount);
   const remaining = shuffledHand.slice(removeCount);
   const discardSet = new Set(toDiscard.map(c => c.iid));
-  let s = addLog(state, `手部造型：將對手手牌丟棄 ${removeCount} 張（剩餘 5 張）`, aIdx);
+  const _hsNames = toDiscard.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `手部造型：將對手手牌丟棄 ${removeCount} 張（剩餘 5 張）— ${_hsNames}`, aIdx);
   return updatePlayer(s, dIdx, p => ({
     ...p,
     hand: p.hand.filter(c => !discardSet.has(c.iid)),
@@ -432,7 +433,7 @@ regA('彩粉蝶', 0, (st, idx) => {
 // 卡面：在自己的回合時可使用1次。擲1次硬幣若為正面，則在不看正面的情況下，
 //        從對手的手牌選擇1張，將其丟棄。
 // 實裝：Math.random() 決定正反；正面 → 隨機丟棄 1 張對手手牌
-regA('烈箭鷹', 0, (st, idx) => {
+regA('烈箭鷹', 0, (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const isHeads = Math.random() < 0.5;
   let s = addLog(st, `穹天狩獵：擲硬幣 — ${isHeads ? '正面' : '反面'}`, idx);
@@ -444,7 +445,7 @@ regA('烈箭鷹', 0, (st, idx) => {
   // 隨機選 1 張（不看正面）
   const randIdx = Math.floor(Math.random() * dp.hand.length);
   const discarded = dp.hand[randIdx];
-  s = addLog(s, '穹天狩獵：正面，盲選 1 張對手手牌丟棄', idx);
+  s = addLog(s, `穹天狩獵：正面，盲選丟棄對手手牌「${pool.get(discarded.cardId)?.name ?? '?'}」`, idx);
   return updatePlayer(s, dIdx, p => ({
     ...p,
     hand: p.hand.filter((_, i) => i !== randIdx),

@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.415</span> 對戰記錄：「丟棄對手手牌」類功能（穹天狩獵、手部造型、暴君粉碎、拍落、鈴鈴吵鬧、不法之足、勒緊、庫瑟洛斯奇的企圖等）現在會在 log 顯示實際丟棄了哪些牌（棄牌區為公開資訊，雙方皆可知）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.414</span> 修正：線上重新開局／重賽後，「從牌庫選牌」類功能（如完全體攪拌器）可選張數被上一局殘留卡住（例如只能丟 3 張）的問題</summary>
       </details>
 

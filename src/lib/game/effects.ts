@@ -4373,12 +4373,12 @@ reg('庫瑟洛斯奇的企圖', (st, idx) => {
     params: { titleOverride: `庫瑟洛斯奇的企圖：選擇要丟棄的 ${discardN} 張手牌（丟到剩 3 張）` },
   });
 });
-regR('opp-hand-discard-to-3', (st, idx, iids) => {
-  // idx 是 actor = 被作用的對手；丟掉 iids 對應的手牌
-  return updatePlayer(addPrivateLog(
+regR('opp-hand-discard-to-3', (st, idx, iids, _params, pool) => {
+  // idx 是 actor = 被作用的對手；丟掉 iids 對應的手牌。棄牌區公開 → log 顯示被丟卡名
+  const _khNames = st.players[idx].hand.filter(c => iids.includes(c.iid)).map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  return updatePlayer(addLog(
     st,
-    `庫瑟洛斯奇的企圖：丟棄手牌 ${iids.length} 張`,
-    `庫瑟洛斯奇的企圖：對手丟棄手牌 ${iids.length} 張`,
+    `庫瑟洛斯奇的企圖：對手丟棄手牌 ${iids.length} 張 — ${_khNames}`,
     idx,
   ), idx, p => {
     const discarded = p.hand.filter(c => iids.includes(c.iid));

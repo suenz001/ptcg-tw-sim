@@ -71,8 +71,9 @@ regR('wave15-opp-hand-discard', (state, _actorIdx, iids, params, _pool) => {
   const label = (params?.label as string | undefined) ?? '勒緊';
   if (iids.length === 0) return addLog(state, `${label}：未棄牌`, _actorIdx);
   const set = new Set(iids);
+  const _discNames = state.players[_actorIdx].hand.filter(c => set.has(c.iid)).map(c => _pool.get(c.cardId)?.name ?? '?').join('、');
   return updatePlayer(
-    addLog(state, `${label}：對手丟棄 ${iids.length} 張手牌`, _actorIdx),
+    addLog(state, `${label}：對手丟棄 ${iids.length} 張手牌 — ${_discNames}`, _actorIdx),
     _actorIdx, p => {
       const discarded = p.hand.filter(c => set.has(c.iid));
       const remaining = p.hand.filter(c => !set.has(c.iid));
