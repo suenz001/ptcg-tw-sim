@@ -21,6 +21,7 @@
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
     tryAdvanceToPlaying,
   } from '$lib/game/engine';
+  import { resolveRoomUpdate } from '$lib/game/sync-guards';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
@@ -4724,170 +4725,53 @@
     //   v2.83 已用「playing 期間停心跳」減少 race；本條為最終防線。
     if (room.gameState) {
       const incoming = room.gameState;
-      // v4.964：B 端（後 ready 那方 / 沒先觸發 startGame）— onSnapshot 第一次收到 game
-      //   出現 (local game===null && incoming.phase==='setup') → 播 ready-go。
-      //   雙端時機與 A 端 checkAndStartOnlineGame 內的 play 接近同時（差 1 個 firestore round-trip）。
+      // SFX（保留）：B 端首次收到 setup snapshot 播 ready-go + 起手發 7 張
       if (!game && incoming.phase === 'setup') {
         playSfx('ready-go');
-        // v4.967: 起手發 7 張卡 stagger
         staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
       }
-      // v3.42 Fix：雙端各自 createGame 產生不同 GameState.id（task #171 已知 race）。
-      //   firestore startGame transaction 只接受其中一方版本（commit winner），
-      //   另一方仍持有自己 createGame 的本地版本（loser）。
-      //   v3.39 引入的 setup per-player merge 在「本地與 incoming id 不同」時會錯誤保留
-      //   loser 自己那側的 pendingMulliganDraw / players / setupDone（永遠看不到對手的
-      //   重抽懲罰補抽 modal、雙端不一致）。
-      //   修法：先比對 game.id；不同就全套用 incoming（採用 firestore winner 版本），
-      //   讓本地完全接受 server-authoritative state，再讓後續操作走 setup merge。
-      // v4.929 觀戰/線上對手 action 來時播 state-diff 音效
-      //   玩家自己 dispatch 已透過 dispatchSfxForAction 播；handleRoomUpdate 收到的 incoming
-      //   通常是「對手 action sync 回來」（或觀戰時所有人都收 sync）。state-diff 比對抓
-      //   核心事件：turn-start / KO / status / 拿獎賞 / 抽牌 / 對局結束。
+      // SFX（保留）：同局 incoming（對手 action / 觀戰 sync）播 state-diff 音效
       if (game && incoming && game.id === incoming.id) {
         try { detectSpectatorStateDiffSfx(game, incoming); } catch { /* sfx 不影響遊戲 */ }
       }
-      if (game && game.id !== incoming.id) {
-        console.log('[Online] adopting firestore gameState (createGame race resolved):',
-          { localId: game.id, incomingId: incoming.id });
-        game = incoming;
-        return;
-      }
-      // v5.390 悔棋 rollback 繞過：對手同意悔棋後，發起方用 pushUndoRollback 寫入「較舊(log較短)」的
-      //   rollback 狀態並 bump lastUndoApplyAt 一次性標記。偵測 marker 遞增 → 無條件套用該 rollback
-      //   （繞過下方 stale guard，否則較短 log 會被當舊封包擋掉 → 毀棋失效）。套一次即更新 lastSeen，
-      //   之後同 marker 不再重觸發；一般 push 不寫此欄位故不誤觸。
-      if (game && incoming.phase === 'playing'
-          && (room.lastUndoApplyAt ?? 0) > lastSeenUndoApplyAt) {
-        lastSeenUndoApplyAt = room.lastUndoApplyAt as number;
-        game = incoming;
-        undoSnapshot = null; undoActionDesc = null;
-        undoAwaitingResponse = false; undoDeniedThisSnapshot = false;
-        floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
-        prizeAnimKey = [prizeAnimKey[0] + 1, prizeAnimKey[1] + 1];
-        arrivingIids = new Set(); justArrivedIids = new Set();
-        console.log('[undo] 收到悔棋 rollback 標記，已套用並繞過 stale guard');
-        return;
-      }
-      if (game && game.phase === 'playing'
-          && incoming.phase === 'playing'
-          && (incoming.log?.length ?? 0) < (game.log?.length ?? 0)) {
-        console.warn('[Online] reject stale snapshot:',
-          { incomingLen: incoming.log?.length, localLen: game.log?.length });
-        return;
-      }
-      // v4.499 Fix #7: local phase='playing' 收到 incoming.phase='setup' → 拒絕（防 phase 倒退）
-      //   v3.42 createGame race 已用 game.id 比對處理跨局；本 guard 是同 id 但 phase 倒退的罕見 race
-      //   （e.g. stale snapshot 重發 / 雙端寫 race 期間舊狀態被覆蓋）。
-      //   rematch 流程清 gameState=null（走另一條 path），不會撞此 guard。
-      //   game-over 是合法終態，不該倒退到 setup/playing — 同樣保護。
-      // v5.400：game-over 是終態 — 拒絕任何把它退回 setup/playing 的 incoming。
-      //   對手棄賽/離開寫的 game-over snapshot 不加 log 行(等長)，等長 stale guard 擋不到；
-      //   舊 phase-rollback 守衛只擋 incoming==='setup'(漏 playing) → stale 'playing' 把 game-over
-      //   覆蓋回 playing → 「對手已離開・我方獲勝」視窗閃一下消失然後卡住(視窗綁 phase==='game-over')。
-      //   合法離開 game-over = rematch/restart 走 gameState=null path(上方已處理)，不經此 snapshot path。
-      if (game && game.phase === 'game-over' && incoming.phase !== 'game-over') {
-        console.warn('[Online] reject: 已 game-over(終態)，拒絕退回非終態', { incomingPhase: incoming.phase });
-        return;
-      }
-      if (game && (game.phase === 'playing' || game.phase === 'game-over')
-          && incoming.phase === 'setup') {
-        console.warn('[Online] reject phase rollback:',
-          { localPhase: game.phase, incomingPhase: incoming.phase });
-        return;
-      }
-      // v3.39 Fix：setup 階段 per-player merge 防互覆。
-      //   雙方各自擺自己側 active+bench，整顆 GameState push 會被後寫者覆蓋先寫者，
-      //   echo 回到先寫者就把先寫者的擺放洗掉 → 玩家又擺一次 → 無限重置 ping-pong。
-      //   修法：incoming 是對方剛 push 的，我自己側保留本地 game（最新），對方側取 incoming。
-      //   涵蓋四個 per-player 欄位：players / setupDone / pendingMulliganDraw / mulliganRevealConfirmed。
-      // v4.494 Fix：補兩個遺漏項：
-      //   (1) mulliganRevealConfirmed 也要 per-player merge（v3.39 漏，雙方都 mulligan 各自 confirm
-      //       會被 incoming 整顆覆蓋洗掉本地 confirmed，永遠湊不到 [T,T]）。
-      //   (2) merge 完後呼叫 tryAdvanceToPlaying — 雙方近似同時 FINISH_SETUP 時，兩端各自 dispatch
-      //       後 setupDone 都是 [me=T, op=F]，tryAdvance fail；收到 incoming 後 merge=[T,T] 但 phase
-      //       仍 setup，原本 v3.39 註解假設「後 finish 者 dispatch 自動轉 playing」不成立（兩端都已 dispatch
-      //       過），且 engine.ts:1603 擋掉重複 FINISH_SETUP，導致兩端永遠卡死。
-      //       修法：merge 後呼 tryAdvanceToPlaying，若轉 playing 就 push 同步（兩端都會做，idempotent）。
-      if (game && game.phase === 'setup' && incoming.phase === 'setup' && myPlayerIndex !== null) {
-        const me = myPlayerIndex;
-        let merged: GameState = {
-          ...incoming,
-          // v5.346：對手側防回退 — 若本地已收到對手「已準備(setupDone=true)」的 players（含已設好的
-          //   6 張獎賞卡/擺放），卻來了 setupDone=false 的 stale incoming（out-of-order），不要用它覆蓋
-          //   → 保留本地已完成的對手 players。修「開局對手獎賞顯示 0 張」(手機/網頁皆可能) 等對手側回退。
-          //   自己側永遠保留本地最新（同 v3.39）。
-          players: (me === 0
-            ? [game.players[0], (game.setupDone[1] && !incoming.setupDone[1]) ? game.players[1] : incoming.players[1]]
-            : [(game.setupDone[0] && !incoming.setupDone[0]) ? game.players[0] : incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
-          // v5.339：setupDone / mulliganRevealConfirmed / pendingMulliganDraw 改「單調合併」。
-          //   根因：Oracle 房狀態推送可能 out-of-order / 重送，原 per-player 覆蓋式 merge 收到「較早
-          //   狀態」晚到時會把已前進的進度洗回去（pendingMulliganDraw 退回 N、confirmed 退回 false）
-          //   → 重抽較多方永遠卡在「等待對手決定補抽」死結。這三欄位本質單調（setupDone /
-          //   mulliganRevealConfirmed 只 false→true 用 OR；pendingMulliganDraw 只 N→0 用 MIN），
-          //   一旦某索引完成即不可逆，不論先後到達或哪端推送都收斂到「前進」，不會退回死結。
-          setupDone: [
-            game.setupDone[0] || incoming.setupDone[0],
-            game.setupDone[1] || incoming.setupDone[1],
-          ] as [boolean, boolean],
-          mulliganRevealConfirmed: [
-            game.mulliganRevealConfirmed[0] || incoming.mulliganRevealConfirmed[0],
-            game.mulliganRevealConfirmed[1] || incoming.mulliganRevealConfirmed[1],
-          ] as [boolean, boolean],
-          pendingMulliganDraw: [
-            Math.min(game.pendingMulliganDraw?.[0] ?? 0, incoming.pendingMulliganDraw?.[0] ?? 0),
-            Math.min(game.pendingMulliganDraw?.[1] ?? 0, incoming.pendingMulliganDraw?.[1] ?? 0),
-          ] as [number, number],
-          // v5.159：mulliganPostBenchOpen 也 per-player merge（v5.138 新欄位，原 v4.494 漏）
-          //   Wilson 報告線上練牌按準備卡住 — firebase merge 沒處理此欄位 → 雙端 state
-          //   不一致 → tryAdvanceToPlaying 條件不滿足 → 卡住。鏡射 mulliganRevealConfirmed
-          //   per-player merge 模式（自己端用 game[me]，對方端用 incoming[opp]）。
-          mulliganPostBenchOpen: (me === 0
-            ? [game.mulliganPostBenchOpen?.[0] ?? false, incoming.mulliganPostBenchOpen?.[1] ?? false]
-            : [incoming.mulliganPostBenchOpen?.[0] ?? false, game.mulliganPostBenchOpen?.[1] ?? false]) as [boolean, boolean],
-        };
-        // v4.494：merge 完評估能否進 playing（雙方都 setupDone+confirmed+mulliganDraw=0）
-        const advanced = tryAdvanceToPlaying(merged);
-        if (advanced.phase === 'playing') {
-          console.log('[Online] v4.494 setup merge triggered phase advance');
-          merged = advanced;
-          // push 給對方同步（兩端都會做；後寫覆蓋無傷，最終 phase='playing' 收斂）
-          if (roomCode) {
-            pushGameState(roomCode, merged).catch((e: unknown) => console.warn('[pushGameState advance] failed:', e));
-          }
-        }
-        game = merged;
-        return;
-      }
-      // v5.364：獎賞單調保護 — 我方獎賞卡數遊戲中只會「減少」（取一張少一張），絕不增加。
-      //   若 incoming 讓「我方獎賞數變多」＝我的取獎賞被回朔（常見：擊倒對手後「我取獎賞」與「對手派
-      //   新寶可夢」同時發生、等長分歧 → 整份覆蓋採用對方那支，洗掉我的取獎賞，玩家要按第二次取得）。
-      //   改用 per-player 合併：我這半保留本地（已取獎賞），對手那半採用 incoming（新寶可夢）。
-      //   非對稱（各自只保護自己的獎賞）→ 不會雙端互擋、不死結。
-      if (game && game.phase === 'playing' && incoming.phase === 'playing' && myPlayerIndex !== null) {
-        const me = myPlayerIndex;
-        const myPrizesLocal = game.players[me].prizes?.length ?? 0;
-        const myPrizesInc = incoming.players[me].prizes?.length ?? 0;
-        if (myPrizesInc > myPrizesLocal) {
-          console.warn('[Online] 獎賞單調保護：擋下把我方獎賞 ' + myPrizesLocal + ' 回朔成 ' + myPrizesInc + '，保留本地我方半邊');
-          // v5.366：pendingPrizes 是「頂層」欄位 — per-player 保護除了 players[me]，也必須保留我方本地的
-          //   pendingPrizes[me]。否則採用 incoming 的舊值（取獎賞前還=1）會讓 UI 以為還能再取一張 →
-          //   玩家「拿 2 次獎賞」(v5.364 的副作用)。我方那格保留本地(最新,取後=0)、對手那格採用 incoming。
-          const oppIdx2 = (1 - me) as 0 | 1;
-          const myPend = game.pendingPrizes?.[me] ?? 0;
-          const oppPend = incoming.pendingPrizes?.[oppIdx2] ?? 0;
-          game = {
-            ...incoming,
-            players: (me === 0
-              ? [game.players[0], incoming.players[1]]
-              : [incoming.players[0], game.players[1]]) as [typeof incoming.players[0], typeof incoming.players[1]],
-            pendingPrizes: (me === 0 ? [myPend, oppPend] : [oppPend, myPend]) as [number, number],
-          };
+      // v5.408：收端決策統一改由 sync-guards.resolveRoomUpdate（單一來源，受
+      //   scripts/test-online-sync-guards.mjs 回歸網保護）。原本散落 inline 的
+      //   createGame race / 悔棋繞過 / 防舊 / game-over 終態 / phase 倒退 / 開局單調
+      //   merge / 獎賞單調保護全部收斂到該純函式；此處只套用決策副作用。
+      const decision = resolveRoomUpdate(game, incoming, {
+        myPlayerIndex,
+        roomLastUndoApplyAt: room.lastUndoApplyAt ?? 0,
+        lastSeenUndoApplyAt,
+      });
+      switch (decision.kind) {
+        case 'reject':
+          console.warn('[Online] reject snapshot:', decision.reason);
           return;
-        }
+        case 'apply-undo':
+          // v5.390 悔棋 rollback：套用 + 清 undo/浮動選單 UI + bump 一次性 marker
+          lastSeenUndoApplyAt = room.lastUndoApplyAt as number;
+          game = decision.game;
+          undoSnapshot = null; undoActionDesc = null;
+          undoAwaitingResponse = false; undoDeniedThisSnapshot = false;
+          floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
+          prizeAnimKey = [prizeAnimKey[0] + 1, prizeAnimKey[1] + 1];
+          arrivingIids = new Set(); justArrivedIids = new Set();
+          console.log('[undo] 收到悔棋 rollback 標記，已套用並繞過 stale guard');
+          return;
+        case 'merge-setup':
+          // v4.494：開局單調 merge 後若湊齊雙方完成 → 已是 playing，推給對方同步（idempotent）
+          if (decision.advanced && roomCode) {
+            pushGameState(roomCode, decision.game).catch((e: unknown) => console.warn('[pushGameState advance] failed:', e));
+          }
+          game = decision.game;
+          return;
+        case 'adopt':
+        case 'merge-prize':
+          game = decision.game;
+          return;
+        default:
+          return;
       }
-      game = incoming;
-      return;
     }
 
     // v2.72：雙方 P1/P2 都 ready → P1 或 P2 任一 client 都可觸發 startGame
