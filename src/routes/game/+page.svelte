@@ -1670,14 +1670,14 @@
   }
   // v5.005 admin matchRecords — game-over 時 fire POST 永久紀錄到 Oracle MongoDB
   //   防多次 fire：用 recordedMatchId state + game.id（同場 game.id 一致）
-  //   線上模式只 P1 (mySeatIdx === 0) fire；本機模式唯一 client fire
+  //   v5.409 去單點：線上 P1+P2 皆 fire（P1 斷線時 P2 仍寫）；server 用 matchId $setOnInsert upsert 去重；本機唯一 client fire
   //   admin spy (isAdminMode) 跳過，避免污染統計
   $effect(() => {
     if (!game || game.phase !== 'game-over') return;
     if (recordedMatchId === game.id) return;  // 已記錄
     if (isAdminMode) return;                  // admin spy 不寫
-    // 線上模式：只 P1 fire（P2 / spectator 跳過）
-    if (mode === 'online' && mySeatIdx !== 0) return;
+    // v5.409：線上 P1 或 P2 皆 fire（觀戰者 mySeatIdx=-1 跳過）；server $setOnInsert 防重複
+    if (mode === 'online' && mySeatIdx !== 0 && mySeatIdx !== 1) return;
     recordedMatchId = game.id;
     fireMatchRecord(game);
   });
