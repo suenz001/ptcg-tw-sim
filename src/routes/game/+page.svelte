@@ -9821,7 +9821,7 @@
     min-width:16px; height:16px; font-size:.62rem; padding:0 3px; border-radius:8px;
   }
   .playmat.layout-tabletop .bench-slot .tt-attach-overlay .nrg-pip{
-    min-width:13px; height:13px; font-size:.5rem; padding:0 2px; border-radius:7px;
+    min-width:17px; height:17px; font-size:.64rem; padding:0 3px; border-radius:9px;
   }
   .playmat.layout-tabletop .tt-attach-overlay .tt-tool{
     display:inline-flex; align-items:center; height:16px; font-size:.6rem;
@@ -9830,7 +9830,7 @@
     box-shadow:0 0 0 1px rgba(0,0,0,.4) inset, 0 1px 2px rgba(0,0,0,.3);
   }
   .playmat.layout-tabletop .bench-slot .tt-attach-overlay .tt-tool{
-    height:13px; font-size:.5rem; padding:0 2px;
+    height:17px; font-size:.62rem; padding:0 3px;
   }
 
   /* v5.016：隱藏戰鬥位上方的「撤退」按鈕 — 統一由左側 action-bar 的 .btn-retreat-mirror 操作，
