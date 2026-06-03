@@ -555,12 +555,22 @@ regPost('雙斧戰龍|斧擊衝撞', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的火焰鳥ex|邪惡灼燒', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的火焰鳥ex|邪惡灼燒', (state, aIdx, pool) => {
+  // v5.402：卡面「選擇1張這隻寶可夢身上附加的『火箭隊能量』，將其丟棄。這個情況下，將對手的戰鬥寶可夢
+  //   與附加的卡全部丟棄。」→ 必須丟「火箭隊能量」(原簡化版丟任意能量+必KO是錯的)；身上沒有火箭隊能量
+  //   則效果不發動(不丟能量、不KO)。火箭隊能量為同款卡、效果強制，無需 picker(選哪張無差別)。
   const a = state.players[aIdx].active;
-  if (!a || a.energyAttached.length === 0) {
-    return addLog(state, '邪惡灼燒：自身無能量可丟棄', aIdx);
+  const rocketE = a?.energyAttached.find(e => pool.get(e.cardId)?.name === '火箭隊能量');
+  if (!a || !rocketE) {
+    return addLog(state, '邪惡灼燒：身上沒有「火箭隊能量」可丟棄，效果不發動', aIdx);
   }
-  let s = selfDiscardNEnergyPost(1, '邪惡灼燒')(state, aIdx, pool);
-  // 對手戰鬥場 KO
+  // 丟棄該火箭隊能量(只丟它,不動其他能量)
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== rocketE.iid) } : null,
+    discard: [...p.discard, rocketE],
+  }));
+  s = addLog(s, '邪惡灼燒：丟棄 1 張火箭隊能量', aIdx);
+  // 對手戰鬥場全棄(KO)
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = s.players[dIdx].active;
   if (da) {
