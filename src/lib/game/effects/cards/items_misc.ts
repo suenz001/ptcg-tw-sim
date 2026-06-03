@@ -224,6 +224,25 @@ reg('龍之秘藥', (st, idx, pool) => {
 });
 
 regR('heal-60-discard-1', healResolver);
+// v5.422：好傷藥回血後「玩家選哪個能量丟棄」的 resolver（從被回血寶可夢 ownerIid 上移除選中能量）
+regR('heal-discard-energy-pick', (st, idx, pickedIids, params) => {
+  const ownerIid = params?.ownerIid as string | undefined;
+  const pickedSet = new Set(pickedIids);
+  if (pickedIids.length === 0) return addLog(st, '好傷藥：未選擇能量丟棄', idx);
+  const removed: CardInstance[] = [];
+  let s = updatePlayer(st, idx, p => {
+    const strip = (pk: CardInstance | null): CardInstance | null => {
+      if (!pk || (ownerIid !== undefined && pk.iid !== ownerIid)) return pk;
+      const keep: CardInstance[] = [];
+      for (const e of pk.energyAttached) { if (pickedSet.has(e.iid)) removed.push(e); else keep.push(e); }
+      return { ...pk, energyAttached: keep };
+    };
+    const newActive = strip(p.active);
+    const newBench = p.bench.map(strip) as CardInstance[];
+    return { ...p, active: newActive, bench: newBench, discard: [...p.discard, ...removed] };
+  });
+  return addLog(s, `好傷藥：丟棄 ${removed.length} 個能量`, idx);
+});
 regR('heal-120', healResolver);
 // v2.159 龍之秘藥 — resolver 額外驗證目標必須是【龍】寶可夢
 regR('heal-120-dragon-only', (st, idx, iids, params, pool) => {

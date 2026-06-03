@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.422</span> 修正：好傷藥原本自動丟棄寶可夢身上的能量（固定丟最後一個），現在改成回血後由玩家自行選擇要丟哪一個能量（只有 1 個能量時自動丟）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.421</span> 修正：對戰圓形競技場在場時，小灰怪「挪動一下」找不到可改附的對手寶可夢而失效；對戰圓形只會擋「被放置傷害指示物」，不該擋「移動能量」（已整體 audit，其餘只擋放指示物的招式維持正確）</summary>
       </details>
 

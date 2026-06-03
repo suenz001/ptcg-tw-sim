@@ -939,27 +939,45 @@ export function healResolver(
     }
     st = addLog(st, `→ ${parts.join('，')}`, idx);
   }
-  return updatePlayer(st, idx, (p) => {
+  // v5.422：先回血（不在這裡丟能量）— 卡面「選擇1個身上能量丟棄」應由玩家選，原本 slice(-N)
+  //   自動丟尾端是簡易安裝。
+  st = updatePlayer(st, idx, (p) => {
     const isActive = p.active?.iid === iid;
     const target = isActive ? p.active! : p.bench.find(c => c.iid === iid);
     if (!target) return p;
-
     const newDamage = Math.max(0, target.damage - healAmount);
-    const discarded = target.energyAttached.slice(-discardCount);
-    const remaining = target.energyAttached.slice(0, target.energyAttached.length - discardCount);
-    const healed: CardInstance = { ...target, damage: newDamage, energyAttached: remaining };
+    const healed: CardInstance = { ...target, damage: newDamage };
     if (clearStatus) {
       delete healed.status;
       delete healed.secondaryStatus;
       delete healed.poisonDamagePerCheckup;
     }
-
     return {
       ...p,
       active: isActive ? healed : p.active,
       bench: isActive ? p.bench : p.bench.map(c => c.iid === iid ? healed : c),
-      discard: [...p.discard, ...discarded],
     };
+  });
+  if (discardCount <= 0) return st;
+  // 丟能量：玩家選哪個（能量數 <= 要丟數 → 沒得選，自動全丟）
+  const hp = st.players[idx];
+  const healedInst = hp.active?.iid === iid ? hp.active : hp.bench.find(c => c.iid === iid);
+  const energyIids = healedInst?.energyAttached.map(e => e.iid) ?? [];
+  if (energyIids.length === 0) return st;
+  if (energyIids.length <= discardCount) {
+    const removed = healedInst?.energyAttached ?? [];
+    return updatePlayer(st, idx, p => {
+      const strip = (pk: CardInstance | null): CardInstance | null =>
+        pk && pk.iid === iid ? { ...pk, energyAttached: [] } : pk;
+      return { ...p, active: strip(p.active), bench: p.bench.map(c => c.iid === iid ? { ...c, energyAttached: [] } : c), discard: [...p.discard, ...removed] };
+    });
+  }
+  return withPending(st, {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: discardCount, maxCount: discardCount,
+    effectKey: 'heal-discard-energy-pick',
+    params: { scope: 'all-own', validIids: energyIids, ownerIid: iid, titleOverride: `選擇要丟棄的 ${discardCount} 個能量` },
   });
 }
 
