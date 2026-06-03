@@ -1624,6 +1624,11 @@
               openZoom(c.id, inst);
               return;
             }
+            // v5.396：iid 命中但名字不符（常見：進化後 log 仍連 base 卡名，而 iid 指向進化後的寶可夢）
+            //   → 從進化堆疊 evolvedFromStack 找符合 cardName 的 base 卡（帶正確「版本」cardId），
+            //   不要落到下方 name-fallback 而誤抓 pool 第一個同名版本（玩家根本沒帶的卡）。
+            const stk1 = (inst.evolvedFromStack ?? []).find(s => pool.get(s.cardId)?.name === cardName);
+            if (stk1) { const sc = pool.get(stk1.cardId); if (sc) { openZoom(sc.id, stk1); return; } }
           }
         }
       }
@@ -1643,6 +1648,9 @@
             openZoom(c.id, inst);
             return;
           }
+          // v5.396：場上寶可夢的進化堆疊也找（base 卡進化後埋在 evolvedFromStack 裡）
+          const stk2 = (inst.evolvedFromStack ?? []).find(s => pool.get(s.cardId)?.name === cardName);
+          if (stk2) { const sc = pool.get(stk2.cardId); if (sc) { openZoom(sc.id, stk2); return; } }
         }
       }
     }
