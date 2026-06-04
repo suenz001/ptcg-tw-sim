@@ -846,6 +846,47 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
     // PTCG 規則：寶可夢退到備戰區清除所有狀態（含招式鎖）。
     blockedAttackNamesNextTurn: undefined,
     blockedAttackNamesThisTurn: undefined,
+    // ── v5.443：一勞永逸 — 補齊「招式效果加在這隻寶可夢身上」的所有延遲/跨回合旗標。
+    //   PTCG 官方規則：寶可夢從戰鬥場退到備戰區時，移除所有特殊狀態與招式效果。
+    //   日後新增此類旗標(immune*/cost/weakness/delayed 等)請一律加進此清單，不要在各招式
+    //   另外手動清。保留的欄位(身分/附加/傷害指示物/進化/出牌與特性使用追蹤)不在此清。
+    nextOwnAttackPenalty: undefined,
+    retaliateCountersOnNextHit: undefined,
+    paralyzeFangPending: undefined,
+    koAtMyNextEndOfTurn: undefined,
+    damageAtMyNextEndOfTurn: undefined,
+    strongKissDiscardPending: undefined,        // v5.443 迷唇姐強烈之吻 — 退備戰即清(玩家報)
+    immuneToAttackEffectsNextTurn: undefined,
+    immuneToAttackEffectsThisTurn: undefined,
+    attackCostIncreaseColorlessNextTurn: undefined,
+    attackCostIncreaseColorlessThisTurn: undefined,
+    retreatCostIncreaseNextTurn: undefined,
+    retreatCostIncreaseThisTurn: undefined,
+    endTurnOnOppAttachEnergyNextTurn: undefined,
+    endTurnOnOppAttachEnergyThisTurn: undefined,
+    immuneToExAttackTagNextTurn: undefined,
+    immuneToExAttackTagThisTurn: undefined,
+    weaknessOverrideTypeNextTurn: undefined,
+    weaknessOverrideTypeThisTurn: undefined,
+    weaknessDisabledNextTurn: undefined,
+    weaknessDisabledThisTurn: undefined,
+    immuneToBasicAttackNextTurn: undefined,
+    immuneToBasicAttackThisTurn: undefined,
+    basicImmuneColorlessExcept: undefined,
+    immuneToExAttackNextTurn: undefined,
+    immuneToExAttackThisTurn: undefined,
+    immuneToAbilityPokemonNextTurn: undefined,
+    immuneToAbilityPokemonThisTurn: undefined,
+    immuneToAllAttackNextTurn: undefined,
+    immuneToAllAttackThisTurn: undefined,
+    immuneToAttackDamageNextTurn: undefined,
+    immuneToAttackDamageThisTurn: undefined,
+    immuneToEvolutionAttackNextTurn: undefined,
+    immuneToEvolutionAttackThisTurn: undefined,
+    immuneToBurnedAttackerNextTurn: undefined,
+    immuneToBurnedAttackerThisTurn: undefined,
+    abilityNullifiedNextTurn: undefined,
+    abilityNullifiedThisTurn: undefined,
   };
 }
 

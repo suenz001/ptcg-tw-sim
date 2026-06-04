@@ -6618,29 +6618,22 @@ function handlePlaying(
     //   POST 在 attacker 端設了 defender.strongKissTargetIid = X
     //   此處 (defender's END_TURN) 觸發：若 active 仍為 X → 丟棄整套
     //   ★ 重要：丟棄 ≠ 昏厥。不給對手獎賞卡，不觸發 PASSIVE_ON_KO / PASSIVE_KO_RETALIATION。
-    if (currentPlayer.strongKissTargetIid) {
-      const targetIid = currentPlayer.strongKissTargetIid;
-      if (currentPlayer.active && currentPlayer.active.iid === targetIid) {
-        const koInst = currentPlayer.active;
-        const cardName = pool.get(koInst.cardId)?.name ?? '?';
-        // 收集所有附加卡：能量 + 道具（toolAttached + extraTools）+ 進化堆
-        const discards: CardInstance[] = [
-          koInst,
-          ...koInst.energyAttached,
-          ...getAllAttachedTools(koInst),
-          ...(koInst.evolvedFromStack ?? []),
-        ];
-        currentPlayer.active = null;
-        currentPlayer.discard = [...currentPlayer.discard, ...discards];
-        state = addLog(state,
-          `強烈之吻：${cardName} 與身上 ${discards.length - 1} 張附加卡全部丟棄（非昏厥，對手不獲得獎賞卡）`,
-          aIdx);
-      } else {
-        state = addLog(state,
-          '強烈之吻：原目標已離開戰鬥場（撤退 / 換位 / 已 KO），效果不發動',
-          aIdx);
-      }
-      delete currentPlayer.strongKissTargetIid;
+    // v5.443：改用 instance 級 strongKissDiscardPending（退備戰由 clearActiveEffects 自動清，
+    //   故「退備戰再回戰鬥場」不會誤丟棄）。只丟棄「仍在戰鬥場且仍帶旗標」的那隻。
+    if (currentPlayer.active?.strongKissDiscardPending) {
+      const koInst = currentPlayer.active;
+      const cardName = pool.get(koInst.cardId)?.name ?? '?';
+      const discards: CardInstance[] = [
+        koInst,
+        ...koInst.energyAttached,
+        ...getAllAttachedTools(koInst),
+        ...(koInst.evolvedFromStack ?? []),
+      ];
+      currentPlayer.active = null;
+      currentPlayer.discard = [...currentPlayer.discard, ...discards];
+      state = addLog(state,
+        `強烈之吻：${cardName} 與身上 ${discards.length - 1} 張附加卡全部丟棄（非昏厥，對手不獲得獎賞卡）`,
+        aIdx);
     }
 
     currentPlayer.active = currentPlayer.active ? clearTurnFlags(currentPlayer.active) : null;

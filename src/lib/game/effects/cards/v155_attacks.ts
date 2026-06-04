@@ -43,7 +43,7 @@ import {
   regPre, regPost, regR,
   shuffle, addLog, withPending, updatePlayer,
   ATTACK_PRE_DISCARD_CHOICE,
-  getAllAttachedTools, getEnergyDiscardUnits,
+  getAllAttachedTools, getEnergyDiscardUnits, clearActiveEffects,
 } from '../_shared';
 import {
   coinHeadsMultiplyPre,
@@ -485,7 +485,7 @@ regR('v155-self-swap-active', (st, aIdx, iids, _params, pool) => {
     // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
     const newActive = { ...p.bench[benchIdx], movedToActiveThisTurn: true };
     const newBench = [...p.bench];
-    newBench[benchIdx] = clearActiveEffectsInline(oldActive);
+    newBench[benchIdx] = clearActiveEffects(oldActive);
     return { ...p, active: newActive, bench: newBench };
   });
   return addLog(st, '雀躍：戰鬥位與備戰互換完成', aIdx);
@@ -776,23 +776,4 @@ function updatePlayerInline(
   return { ...state, players };
 }
 
-function clearActiveEffectsInline(poke: CardInstance): CardInstance {
-  return {
-    ...poke,
-    status: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    cantRetreatPendingSelf: undefined,
-    damageReduceNextHit: undefined,
-    damageBonusThisTurn: undefined,
-    damageBonusPending: undefined,
-    takeExtraDamageThisTurn: undefined,
-    takeExtraDamageNextTurn: undefined,
-    cantAttachEnergyThisTurn: undefined,
-    cantAttachEnergyNextTurn: undefined,
-    deferredPrizeBonusThisTurn: undefined,
-    deferredPrizeBonusNextTurn: undefined,
-    movedToActiveThisTurn: undefined,
-  };
-}
+// v5.443：clearActiveEffectsInline 已收斂到中央 clearActiveEffects(_shared.ts)。

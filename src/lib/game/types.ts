@@ -353,6 +353,9 @@ export interface CardInstance {
    */
   abilityNullifiedNextTurn?: boolean;
   abilityNullifiedThisTurn?: boolean;
+  /** v5.443 迷唇姐|強烈之吻 — instance 級延遲丟棄旗標(取代原 player.strongKissTargetIid)。
+   *  下個對手回合結束時若此寶可夢仍在戰鬥場 → 連附加卡全部丟棄(非昏厥)。退備戰由 clearActiveEffects 清。 */
+  strongKissDiscardPending?: boolean;
 }
 
 export type SpecialCondition =

@@ -2122,12 +2122,15 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
   }
   const targetIid = def.active.iid;
   const targetName = pool.get(def.active.cardId)?.name ?? '?';
+  // v5.443：改設 instance 級 strongKissDiscardPending（取代 player.strongKissTargetIid）。
+  //   退備戰再回戰鬥場時，此旗標已被 clearActiveEffects 清 → 不會誤丟棄（玩家回報的 bug）。
+  void targetIid;
   return updatePlayer(
     addLog(state,
-      `強烈之吻：標記 ${targetName}，下個對手回合結束時若仍在戰鬥場 → 全部丟棄（非昏厥）`,
+      `強烈之吻：標記 ${targetName}，下個對手回合結束時若仍在戰鬥場 → 全部丟棄（非昏厥；退備戰即解除）`,
       aIdx),
     dIdx,
-    p => ({ ...p, strongKissTargetIid: targetIid }),
+    p => ({ ...p, active: p.active ? { ...p.active, strongKissDiscardPending: true } : null }),
   );
 });
 
