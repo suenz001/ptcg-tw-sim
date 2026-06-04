@@ -2540,50 +2540,83 @@ regPost('願增猿|精神歪曲', statusPost('confused'));
 regPost('胡地|奇異駭入', (state, aIdx, pool) => {
   // Part 1：將對手戰鬥寶可夢【混亂】
   let s = statusPost('confused')(state, aIdx, pool);
-  // Part 2：對手場上指示物總和 → picker 選承接目標
+  // Part 2（v5.442 重做為 2-picker）：先「抽走任意數量對手全場指示物」，再「任意分配回對手全場」。
+  //   picker1 = damage-distribute(abraRemove:true,每隻上限=現有指示物)；picker2 = 標準 damage-distribute 放置。
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = s.players[dIdx];
   const allOppPokes = [opp.active, ...opp.bench].filter((c): c is CardInstance => !!c);
-  let totalDmg = 0;
-  for (const pk of allOppPokes) totalDmg += pk.damage ?? 0;
-  if (totalDmg === 0) {
-    return addLog(s, '奇異駭入：對手場上無傷害指示物可重新分配', aIdx);
+  const totalCounters = allOppPokes.reduce((n, pk) => n + Math.floor((pk.damage ?? 0) / 10), 0);
+  if (totalCounters === 0) {
+    return addLog(s, '奇異駭入：對手場上無傷害指示物可移動', aIdx);
   }
-  s = addLog(s, `奇異駭入：對手場上共 ${totalDmg} 點傷害 → 選 1 隻對手寶可夢承接全部（其餘歸 0）`, aIdx);
+  s = addLog(s, `奇異駭入：選擇要從對手全場抽走的傷害指示物（最多 ${totalCounters} 個，可選 0 略過）`, aIdx);
   return withPending(s, {
-    type: 'opp-poke-choose',
+    type: 'damage-distribute',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'abra-strange-hack',
-    params: { totalDmg, includeActive: true },
+    minCount: 0, maxCount: totalCounters,
+    effectKey: 'abra-hack-remove',
+    params: { abraRemove: true, totalCounters, counterDamage: 10, placedCounters: 0, includeActive: true },
   });
 });
 
-// v5.113 abra-strange-hack resolver — 集中對手場上所有指示物到玩家所選的 1 隻寶可夢
-RESOLVERS.set('abra-strange-hack', (st, idx, iids, params, pool) => {
+// v5.442 picker1 resolver — 從對手全場抽走玩家選定的指示物（每隻 clamp 現有），再開 picker2 分配。
+RESOLVERS.set('abra-hack-remove', (st, idx, iids, _params, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  const targetIid = iids[0];
-  if (!targetIid) return st;
-  const totalDmg = (params?.totalDmg as number) ?? 0;
-  if (totalDmg === 0) return st;
+  // 計每隻要抽走幾個（clamp 現有指示物數）
+  const want = new Map<string, number>();
+  for (const iid of iids) want.set(iid, (want.get(iid) ?? 0) + 1);
   const opp = st.players[dIdx];
-  const isActive = opp.active?.iid === targetIid;
-  const target = isActive ? opp.active! : opp.bench.find(b => b.iid === targetIid);
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  // 對戰圓形 gate：bench → active 允許；active/bench → bench 被對戰圓形擋
-  const guard = canApplyEffectToTarget(st, idx, target, targetCard, 'attack-effect', pool, { isBench: !isActive });
-  if (guard.blocked) {
-    return addLog(st, `奇異駭入：${targetCard?.name ?? '?'}｜${guard.reason}（指示物無法集中至此目標）`, idx);
+  const allPokes = [opp.active, ...opp.bench].filter((c): c is CardInstance => !!c);
+  const removeOf = new Map<string, number>();
+  let removedTotal = 0;
+  for (const pk of allPokes) {
+    const have = Math.floor((pk.damage ?? 0) / 10);
+    const rem = Math.min(want.get(pk.iid) ?? 0, have);
+    if (rem > 0) { removeOf.set(pk.iid, rem); removedTotal += rem; }
   }
-  const s = updatePlayer(st, dIdx, p => ({
-    ...p,
-    active: p.active
-      ? { ...p.active, damage: p.active.iid === targetIid ? totalDmg : 0 }
-      : null,
-    bench: p.bench.map(b => ({ ...b, damage: b.iid === targetIid ? totalDmg : 0 })),
-  }));
-  return addLog(s, `奇異駭入：${targetCard?.name ?? '?'} 承接全部 ${totalDmg} 點傷害指示物（其餘對手寶可夢歸 0）`, idx);
+  if (removedTotal === 0) {
+    return addLog(st, '奇異駭入：未抽走任何指示物（指示物維持原位）', idx);
+  }
+  let s = updatePlayer(st, dIdx, p => {
+    const apply = (c: CardInstance | null): CardInstance | null =>
+      c ? { ...c, damage: (c.damage ?? 0) - (removeOf.get(c.iid) ?? 0) * 10 } : c;
+    return { ...p, active: apply(p.active), bench: p.bench.map(b => apply(b)!) };
+  });
+  s = addLog(s, `奇異駭入：抽走 ${removedTotal} 個傷害指示物 → 以任意方式分配回對手場上`, idx);
+  return withPending(s, {
+    type: 'damage-distribute',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: removedTotal, maxCount: removedTotal,
+    effectKey: 'abra-hack-place',
+    params: { totalCounters: removedTotal, counterDamage: 10, placedCounters: 0, includeActive: true },
+  });
+});
+
+// v5.442 picker2 resolver — 把抽走的指示物分配回對手全場（attack-effect 免疫：對戰圓形/化隱等照擋；KO 交 sweep）。
+RESOLVERS.set('abra-hack-place', (st, idx, iids, _params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const place = new Map<string, number>();
+  for (const iid of iids) place.set(iid, (place.get(iid) ?? 0) + 1);
+  let s = st;
+  for (const [iid, n] of place) {
+    if (n <= 0) continue;
+    const opp = s.players[dIdx];
+    const isActive = opp.active?.iid === iid;
+    const target = isActive ? opp.active : opp.bench.find(b => b.iid === iid);
+    if (!target) continue;
+    const tcard = pool.get(target.cardId);
+    const guard = canApplyEffectToTarget(s, idx, target, tcard, 'attack-effect', pool, { isBench: !isActive });
+    if (guard.blocked) {
+      s = addLog(s, `奇異駭入：${tcard?.name ?? '?'}｜${guard.reason}（無法放置指示物）`, idx);
+      continue;
+    }
+    s = updatePlayer(s, dIdx, p => ({
+      ...p,
+      active: p.active && p.active.iid === iid ? { ...p.active, damage: (p.active.damage ?? 0) + n * 10 } : p.active,
+      bench: p.bench.map(b => b.iid === iid ? { ...b, damage: (b.damage ?? 0) + n * 10 } : b),
+    }));
+  }
+  return addLog(s, '奇異駭入：傷害指示物重新分配完成', idx);
 });
 // 修建老匠|暴走：自己混亂（攻擊者自己中狀態）
 regPost('修建老匠|暴走', (state, aIdx, pool) => {

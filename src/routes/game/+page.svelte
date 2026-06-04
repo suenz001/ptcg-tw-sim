@@ -5004,6 +5004,13 @@
     if (pendingSelection.type !== 'damage-distribute'
         && pendingSelection.type !== 'energy-distribute') return;
     if (selectionBatchSum >= pendingSelection.maxCount) return;
+    // v5.442 奇異駭入「抽走」模式：每隻上限 = 該寶可夢現有指示物數（不能抽超過）
+    if (pendingSelection.params?.abraRemove && game) {
+      const src = game.players[pendingSelection.sourcePlayerIdx];
+      const pk = src.active?.iid === iid ? src.active : src.bench.find(b => b.iid === iid);
+      const haveCounters = Math.floor((pk?.damage ?? 0) / 10);
+      if ((selectionCounts[iid] ?? 0) >= haveCounters) return;
+    }
     selectionCounts = { ...selectionCounts, [iid]: (selectionCounts[iid] ?? 0) + 1 };
   }
   function decrementCount(iid: string) {
@@ -7076,6 +7083,7 @@
     {@const dmgTotal    = (pendingSelection.params?.totalCounters as number | undefined) ?? pendingSelection.maxCount}
     {@const dmgPlaced   = (pendingSelection.params?.placedCounters as number | undefined) ?? 0}
     {@const dmgPer      = (pendingSelection.params?.counterDamage as number | undefined) ?? 10}
+    {@const isAbraRem   = isDmgDist && pendingSelection.params?.abraRemove === true}
     {@const energyTotal = (pendingSelection.params?.totalCount as number | undefined) ?? pendingSelection.maxCount}
     {@const energyPlaced = (pendingSelection.params?.placedCount as number | undefined) ?? 0}
     {@const energyTypeName = (pendingSelection.params?.energyTypeName as string | undefined) ?? ''}
@@ -7089,12 +7097,17 @@
                 <div class="dmg-progress-fill" style="width:{Math.min(100, ((dmgPlaced + selectionBatchSum) / dmgTotal) * 100)}%"></div>
               </div>
               <div class="dmg-progress-text">
-                已放置 <strong>{(dmgPlaced + selectionBatchSum) * dmgPer}</strong>／{dmgTotal * dmgPer}
+                {isAbraRem ? '已抽走' : '已放置'} <strong>{(dmgPlaced + selectionBatchSum) * dmgPer}</strong>／{dmgTotal * dmgPer}
                 　<span class="muted">（{dmgPlaced + selectionBatchSum}／{dmgTotal} 個指示物）</span>
               </div>
               <p class="sel-hint">
-                本批次剩餘可放 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
-                · 點目標 +1、按「－」鍵 或 右鍵 -1 · 確認後若還有指示物會再開此視窗
+                {#if isAbraRem}
+                  剩餘可抽走 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
+                  · 點對手寶可夢抽走其身上指示物（每隻最多抽走其現有數）· 確認後開「分配」視窗（可選 0 略過）
+                {:else}
+                  本批次剩餘可放 <strong>{pendingSelection.maxCount - selectionBatchSum}</strong>／{pendingSelection.maxCount} 個
+                  · 點目標 +1、按「－」鍵 或 右鍵 -1 · 確認後若還有指示物會再開此視窗
+                {/if}
               </p>
             </div>
           {:else if isEnergyDist}
@@ -7171,8 +7184,9 @@
                 {@const rem=hpRemaining(item)}
                 {@const cnt=selectionCounts[item.iid] ?? 0}
                 {@const isActivePoke = item.iid === srcActiveIidD}
-                {@const projected = item.damage + cnt * dmgPer}
-                {@const willKO = eff > 0 && projected >= eff}
+                {@const projected = item.damage + (isAbraRem ? -1 : 1) * cnt * dmgPer}
+                {@const willKO = !isAbraRem && eff > 0 && projected >= eff}
+                {@const removeCap = Math.floor(item.damage / dmgPer)}
                 <div class="retreat-card" class:sel-picked={cnt>0} class:is-active-poke={isActivePoke} class:will-ko={willKO}>
                   <button class="retreat-zoom" title="放大檢視：{c.name}"
                     onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
@@ -7180,7 +7194,7 @@
                     <button class="dmg-minus" title="移除 1 個指示物（右鍵/減號 快捷）"
                       onclick={(e)=>{e.stopPropagation();decrementCount(item.iid);}}>−</button>
                   {/if}
-                  <button class="retreat-pick" disabled={batchFull}
+                  <button class="retreat-pick" disabled={batchFull || (isAbraRem && cnt >= removeCap)}
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
                     {#if isActivePoke}<span class="retreat-active-badge opp" title="對手目前戰鬥寶可夢">⚔️ 對手戰鬥寶可夢</span>{/if}
@@ -7190,7 +7204,7 @@
                     <div class="retreat-nrg">{energySummary(item)}</div>
                     {#if cnt > 0}
                       <div class="dmg-preview">
-                        +{cnt * dmgPer} → {Math.min(projected, eff)}/{eff}
+                        {isAbraRem ? '−' : '+'}{cnt * dmgPer} → {Math.max(0, Math.min(projected, eff))}/{eff}
                         {#if willKO}<span class="dmg-ko-tag">KO</span>{/if}
                       </div>
                     {/if}
