@@ -1,0 +1,66 @@
+// ── Picker modal 按鈕邏輯（純函式，給 game/+page.svelte 用 + 測試網驗證）──
+// v5.424 整體 audit：Wilson 規則 —
+//   未知資訊（自己的牌庫 / 對手的手牌）→ 可【不選】；【確定】需 ≥1。
+//   已知資訊（棄牌區 / 我方手牌 / 雙方場上）且有 gate → 無【不選】、強制 ≥1。
+//   例外：卡面「任意數量 / 若希望 / 任意方式」或被動 on-KO「或跳過」的已知資訊 picker 仍可【不選】，
+//        以 effectKey 白名單列舉（見下；來源：static/cards JSON 卡面 audit）。
+
+/**
+ * 已知資訊卻「卡面合法允許選 0」的 picker effectKey 白名單。
+ * 依據：static/cards/*.json 卡面含「任意數量 / 若希望 / 任意方式」或被動 on-KO「或跳過」。
+ * 維護：新增同類卡時把其 withPending 的 effectKey 加進來即可（單一維護點，免改各 withPending）。
+ */
+export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<string>([
+  'rush-switch-energy-transfer',   // 急進開關：任意數量能量改附
+  'pirou-discard-then-draw',       // 琵魯：若希望任意數量丟手牌
+  'm5-slowpoke-discard-all',       // 呆呆獸｜丟到飽：任意數量丟手牌
+  'swiftcursor-energy-pick',       // 鐵斑葉ex｜迅速游標：任意數量能量改附
+  'v327-unfezant-reverse-wind',    // 高傲雉雞｜反轉之風：若希望
+  'v327-tauros-thrust',            // 帕底亞 肯泰羅｜上搗角擊：若希望
+  'v327-slowking-flush',           // 呆呆王｜付諸東流：若希望
+  'v327-octopus-water-clean',      // 章魚桶｜水流清洗：若希望
+  'self-swap-active-bench',        // 狡兔三窟 等自身換場（共用 resolver）：若希望互換
+  'lucky-gift-self',               // 信使鳥｜幸福禮物（自方階段）：若希望
+  'lucky-gift-opp',                // 信使鳥｜幸福禮物（對手階段）：若希望
+  'flame-dance-pick-fire',         // 烈焰猴｜火焰蹈舞：最多各1、任意方式
+  'flame-dance-pick-fight',        // 烈焰猴｜火焰蹈舞（鬥側）
+  'lillie-ribombee-invite-place',  // 莉莉艾的蝶結萌虻：查看對手手牌任意數量（亦屬未知資訊）
+  'loquat-discard-opp-items',      // 枇琶：查看對手手牌（未知資訊）
+  'energy-duster-pick',            // 能量撢子：查看對手手牌（未知資訊）
+  'heavy-baton-pick-energies',     // 沉重接力棒（on-KO）：任意方式改附
+  'alloy-forge-pick',              // 鋁鋼橋龍ex｜合金建造：任意方式附加
+  'wave17-pickup-energy-to-hand',  // 長毛狗｜氣味偵測：擲幣後任意選擇（含 0）
+  'cleansing-support-pick-bench',  // 拉帝歐斯｜潔淨支援：任意數量能量改附
+  'pulse-thrust-energies-picked',  // 超級路卡利歐ex｜波動突刺：自選填能（可不選）
+  'ursaluna-bm-attach',            // 月月熊 赫月｜經驗法則：自選附能（可不附）
+  'm5-mirieton-photon-code',       // 密勒頓｜光子纜線（on-KO）：或跳過
+  'lycanroc-spike-bind-attach',    // 鬃岩狼人｜尖刺纏身：自選附能（可不附）
+]);
+
+export interface SkipDecisionInput {
+  type: string;
+  actorIdx: 0 | 1;
+  sourcePlayerIdx: 0 | 1;
+  effectKey: string;
+}
+
+/** 未知資訊 picker：自己的牌庫（牌庫搜尋 / 牌庫頂排序）或對手的手牌（hand-* 且來源為對手）。 */
+export function isUnknownInfoPicker(p: SkipDecisionInput): boolean {
+  if (p.type === 'deck-search' || p.type === 'reorder-deck-top') return true;
+  if ((p.type === 'hand-discard' || p.type === 'hand-choose') && p.sourcePlayerIdx !== p.actorIdx) return true;
+  return false;
+}
+
+/**
+ * 是否顯示【不選】(可略過)。
+ * = 未知資訊 OR 卡面明訂可選 0（白名單 effectKey）。
+ * 否則（已知資訊 + 有 gate：棄牌區檢索 / 我方手牌固定取 / 場上目標）→ 不顯示【不選】、強制 ≥1。
+ */
+export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
+  return isUnknownInfoPicker(p) || OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey);
+}
+
+/** 【確定】可點的最低選取數：一律至少 1（全面防呆，未選不可按確定；選 0 走【不選】）。 */
+export function selectionConfirmFloor(minCount: number): number {
+  return Math.max(1, minCount);
+}

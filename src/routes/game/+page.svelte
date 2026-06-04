@@ -22,6 +22,7 @@
     tryAdvanceToPlaying,
   } from '$lib/game/engine';
   import { resolveRoomUpdate } from '$lib/game/sync-guards';
+  import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
@@ -3113,7 +3114,8 @@
       }
       return true;
     }
-    return selectionPicked.size >= pendingSelection.minCount
+    // v5.424：確定鈕一律需 ≥1（防呆，未選不可確定）；選 0 的合法路徑改走【不選】鈕（僅可略過的 picker 才有）
+    return selectionPicked.size >= selectionConfirmFloor(pendingSelection.minCount)
         && selectionPicked.size <= pendingSelection.maxCount;
   });
 
@@ -7568,8 +7570,8 @@
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（保留 {selectionReorderKeep.length} 張）</button>
           {:else}
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
-            {#if pendingSelection.minCount===0}
-              <button class="btn-act secondary" onclick={()=>{selectionPicked=new Set();confirmSelection();}}>不選（跳過）</button>
+            {#if selectionAllowsSkip({ type: pendingSelection.type, actorIdx: pendingSelection.actorIdx, sourcePlayerIdx: pendingSelection.sourcePlayerIdx, effectKey: pendingSelection.effectKey })}
+              <button class="btn-act secondary" onclick={abandonSelection}>不選（跳過）</button>
             {/if}
             <!-- v2.121 全域安全網：候選為空且 minCount>0 時開放「放棄」避免卡住 -->
             {#if pendingStuckEmpty}
