@@ -265,15 +265,24 @@ for (const [key, coins, per] of DICE_MULTIPLY) {
 }
 
 // 雙倍多多冰|雙重冰凍 90× — ×K 但只要 1 次正面就麻痺
-regPre('雙倍多多冰|雙重冰凍', coinFlipMultiplyPre(2, 90, '雙重冰凍'));
+// v5.430：傷害與麻痺改用「同一次」擲幣（卡面：擲2次硬幣×90傷害，只要≥1正面就麻痺）。
+//   舊版 regPost 另擲 Math.random()<0.75（脫鉤、偷吃步）→ 可能 2正面卻不麻痺/0正面卻麻痺，違反卡面。
+//   改：regPre 擲 2 幣存 _lastCoinHeads，regPost 讀同一次結果（同 鱗粉颶風 v5.416 模式）。
+regPre('雙倍多多冰|雙重冰凍', (state, aIdx, _pool) => {
+  const r = flipCoinsWithLog(state, 2, '雙重冰凍', aIdx);
+  const heads = r.heads;
+  const dmg = heads * 90;
+  const s = addLog({ ...r.state, _lastCoinHeads: heads }, `雙重冰凍：擲 2 次硬幣 → ${heads} 次正面，造成 ${dmg} 點傷害`, aIdx);
+  return { state: s, damage: dmg };
+});
 regPost('雙倍多多冰|雙重冰凍', (state, aIdx, pool) => {
-  // 75% chance at least 1 head: P(heads at least once in 2 flips) = 0.75
-  if (Math.random() < 0.75) {
+  const heads = state._lastCoinHeads ?? 0;
+  if (heads >= 1) {
     // v2.92：走 statusPost — 內含薄霧/硬岩/皇帝之勢/抵抗之幕/泡沫/祭典會場 完整免疫檢查
-    const s = addLog(state, '雙重冰凍：擲幣判定 — 至少 1 次正面', aIdx);
+    const s = addLog(state, `雙重冰凍：${heads} 次正面（≥1）→ 對手麻痺`, aIdx);
     return statusPost('paralyzed')(s, aIdx, pool);
   }
-  return addLog(state, '雙重冰凍：擲幣判定 — 全反面，無附加狀態', aIdx);
+  return addLog(state, '雙重冰凍：全反面，無附加狀態', aIdx);
 });
 
 // 巴大蝶|鱗粉颶風 60× — ×K 但 ≥2 次正面才麻痺
