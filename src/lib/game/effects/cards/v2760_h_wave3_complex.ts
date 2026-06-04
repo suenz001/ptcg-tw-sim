@@ -14,7 +14,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget } from '../../effects';
+import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget, dealAttackDamageToTarget } from '../../effects';
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.362：影繩結有效撤退費
@@ -664,26 +664,14 @@ regPost('下石鳥|墜擊射', (state, aIdx, pool) => {
 });
 regR('h-wave3-hit-any-120', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const tIid = iids[0];
-  // v4.54：卡面是「120 點傷害」(attack-damage)，不是「招式效果」。
-  //   原 v2.92 誤套 canApplyAttackEffectToTarget 連薄霧/抵抗之幕等 effect immunity 都擋 → 違反卡面。
-  //   改用 unified('attack-damage', isBench:?) → bench 走 resolveBenchGuard 擋球形盾牌等，active 不擋。
-  const opp = state.players[dIdx];
-  const _diveIsActive = opp.active?.iid === tIid;
-  const tInst = _diveIsActive ? opp.active : opp.bench.find(b => b.iid === tIid);
-  if (tInst) {
-    const tCard = pool.get(tInst.cardId);
-    const guard = canApplyEffectToTarget(state, aIdx, tInst, tCard, 'attack-damage', pool, { isBench: !_diveIsActive });
-    if (guard.blocked) {
-      return addLog(state, `墜擊射：${tCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
-    }
+  // v5.437：改走中央 dealAttackDamageToTarget（免疫/弱抗/KO/受傷反擊一次到位；
+  //   原本只有 guard 無 KO/弱抗）。卡面「120 點傷害，[備戰不計弱抗]」→ active 計弱點。
+  let s = state;
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, 120, pool, { kind: 'attack-damage', label: '墜擊射' });
+    if (s.phase === 'game-over') return s;
   }
-  return updatePlayer(state, dIdx, p => ({
-    ...p,
-    active: p.active && p.active.iid === tIid ? { ...p.active, damage: (p.active.damage ?? 0) + 120 } : p.active,
-    bench: p.bench.map(b => b.iid === tIid ? { ...b, damage: (b.damage ?? 0) + 120 } : b),
-  }));
+  return s;
 });
 
 // 纏紅鶴ex|[ex規則] — 不是招式效果，是 ex KO 規則描述，無需實裝

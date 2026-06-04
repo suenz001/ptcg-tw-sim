@@ -22,7 +22,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -192,24 +192,21 @@ regPost('蓋諾賽克特|昆蟲加農炮', (state, aIdx, pool) => {
 });
 
 // resolver — 對任選對手 1 寶可夢造成固定傷害（active or bench，不計弱抗）
-regR('wave6-snipe-any-opp-flat', (state, aIdx, iids, params, _pool) => {
+regR('wave6-snipe-any-opp-flat', (state, aIdx, iids, params, pool) => {
   const amount = (params?.amount as number | undefined) ?? 0;
   const label = (params?.label as string | undefined) ?? '狙擊';
+  // v5.437：改走中央 dealAttackDamageToTarget（補免疫/弱抗/KO/受傷反擊）。
+  //   此 resolver 跨卡共用且 kind 不同：昆蟲加農炮=傷害(計弱抗)、悄聲加害=放指示物、
+  //   意念移物=傷害但整招不計弱抗 → 由各卡 params 指定 kind / noWeakness。
+  const kind = (params?.kind as 'attack-damage' | 'attack-effect' | undefined) ?? 'attack-damage';
+  const noWeakness = (params?.noWeakness as boolean | undefined) ?? false;
   if (iids.length === 0 || amount === 0) return state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const targetIid = iids[0];
-  return updatePlayer(
-    addLog(state, `${label}：對手選定寶可夢受到 ${amount} 點傷害`, aIdx),
-    dIdx, p => {
-      const newActive = p.active && p.active.iid === targetIid
-        ? { ...p.active, damage: (p.active.damage ?? 0) + amount }
-        : p.active;
-      const newBench = p.bench.map(b => b.iid === targetIid
-        ? { ...b, damage: (b.damage ?? 0) + amount }
-        : b);
-      return { ...p, active: newActive, bench: newBench };
-    },
-  );
+  let s = state;
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind, label, noWeakness });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

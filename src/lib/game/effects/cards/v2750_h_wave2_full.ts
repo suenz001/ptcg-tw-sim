@@ -19,7 +19,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
-  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
+  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget,
 } from '../../effects';
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -124,25 +124,32 @@ function hitAnyOneOppPost(amount: number, label: string): AttackPostFn {
     });
   };
 }
-regR('h-wave2-hit-any-opp', (state, aIdx, iids, params, _pool) => {
+regR('h-wave2-hit-any-opp', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const amount = (params?.amount as number | undefined) ?? 0;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const tIid = iids[0];
-  return updatePlayer(state, dIdx, p => {
-    if (p.active && p.active.iid === tIid) return { ...p, active: { ...p.active, damage: (p.active.damage ?? 0) + amount } };
-    return { ...p, bench: p.bench.map(b => b.iid === tIid ? { ...b, damage: (b.damage ?? 0) + amount } : b) };
-  });
+  if (amount === 0) return state;
+  const label = (params?.label as string | undefined) ?? '攻擊';
+  // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。卡面「受到傷害，[備戰不計弱抗]」→ active 計弱點。
+  let s = state;
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // 對手所有備戰各受 N（不選）
 function allOppBenchAddDamagePost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    return updatePlayer(
-      addLog(state, `${label}：對手所有備戰各受 ${amount}`, aIdx),
-      dIdx, p => ({ ...p, bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + amount })) }),
-    );
+    const benchIids = state.players[dIdx].bench.map(b => b.iid);
+    // v5.437：改走中央函式（補免疫/KO/受傷反擊）。備戰不計弱抗（中央函式 isActive gate 自動）。
+    let s = addLog(state, `${label}：對手所有備戰各受 ${amount}`, aIdx);
+    for (const iid of benchIids) {
+      s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+      if (s.phase === 'game-over') return s;
+    }
+    return s;
   };
 }
 

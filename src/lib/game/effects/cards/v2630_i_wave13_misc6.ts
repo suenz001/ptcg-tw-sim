@@ -7,7 +7,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
   getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helpers
@@ -167,19 +167,18 @@ function snipeNOppBenchAutoPost(amount: number, count: number, label: string): A
   };
 }
 
-regR('wave13-snipe-multi-opp-bench', (state, aIdx, iids, params, _pool) => {
+regR('wave13-snipe-multi-opp-bench', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const amount = (params?.amount as number | undefined) ?? 0;
   const label = (params?.label as string | undefined) ?? '狙擊';
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const set = new Set(iids);
-  return updatePlayer(
-    addLog(state, `${label}：${iids.length} 隻備戰各受到 ${amount} 點傷害`, aIdx),
-    dIdx, p => ({
-      ...p,
-      bench: p.bench.map(b => set.has(b.iid) ? { ...b, damage: (b.damage ?? 0) + amount } : b),
-    }),
-  );
+  if (amount === 0) return state;
+  // v5.437：改走中央函式（補免疫/KO/受傷反擊）。備戰目標不計弱抗（中央函式 isActive gate 自動）。
+  let s = addLog(state, `${label}：${iids.length} 隻備戰各受到 ${amount} 點傷害`, aIdx);
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // 自方備戰各 +N（不選擇）
@@ -616,7 +615,7 @@ regPost('象徵鳥|意念移物', (state, aIdx, _pool) => {
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'wave6-snipe-any-opp-flat',  // 復用 v2.56 resolver
-    params: { amount: 70, label: '意念移物', validIids: targets },
+    params: { amount: 70, label: '意念移物', kind: 'attack-damage', noWeakness: true, validIids: targets },
   });
 });
 

@@ -26,7 +26,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -108,15 +108,18 @@ function snipeNOppBenchAutoPost(amount: number, count: number, label: string): A
     });
   };
 }
-regR('wave16-snipe-multi', (state, aIdx, iids, params, _pool) => {
+regR('wave16-snipe-multi', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const amount = (params?.amount as number | undefined) ?? 0;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const set = new Set(iids);
-  return updatePlayer(state, dIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => set.has(b.iid) ? { ...b, damage: (b.damage ?? 0) + amount } : b),
-  }));
+  if (amount === 0) return state;
+  const label = (params?.label as string | undefined) ?? '雙尾';
+  // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。
+  let s = state;
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -199,17 +202,18 @@ regPost('堅果啞鈴|強力鞭打', (state, aIdx, _pool) => {
     params: { amount },
   });
 });
-regR('wave16-hit-any-opp', (state, aIdx, iids, params, _pool) => {
+regR('wave16-hit-any-opp', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const amount = (params?.amount as number | undefined) ?? 0;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const targetIid = iids[0];
-  return updatePlayer(state, dIdx, p => {
-    if (p.active && p.active.iid === targetIid) {
-      return { ...p, active: { ...p.active, damage: (p.active.damage ?? 0) + amount } };
-    }
-    return { ...p, bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: (b.damage ?? 0) + amount } : b) };
-  });
+  if (amount === 0) return state;
+  const label = (params?.label as string | undefined) ?? '攻擊';
+  // v5.437：改走中央函式（補免疫/弱抗/KO/受傷反擊）。卡面「受到傷害，[備戰不計弱抗]」→ active 計弱點。
+  let s = state;
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

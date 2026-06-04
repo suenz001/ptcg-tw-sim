@@ -186,7 +186,7 @@ regPost('納噬草|悄聲加害', (state, aIdx, _pool) => {
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'wave6-snipe-any-opp-flat',  // 復用 v2.56 的 resolver
-    params: { amount: 10, label: '悄聲加害', validIids: targets },
+    params: { amount: 10, label: '悄聲加害', kind: 'attack-effect', validIids: targets },
   });
 });
 
