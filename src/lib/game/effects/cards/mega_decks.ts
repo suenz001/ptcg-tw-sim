@@ -270,17 +270,19 @@ regR('gypso-attach-commit', (st, idx, iids, params, pool) => {
 // 卡面：「將自己的 1 隻『超級進化寶可夢【ex】』的 HP 全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。」
 // 實裝：heal-target pending + validIids 限定超級 ex（名稱以「超級」開頭 + subtype=ex）
 regG('滿充的體貼', (st, idx, pool) => {
+  // v5.426：比照好傷藥 — 第一段「HP 全恢復」需有受傷 ex；gate 改要求「有超級進化ex 且 該ex受傷」。
+  //   第二段「能量放回手牌」可略過（無能量不影響），故不要求能量。
   return [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
     .some(c => {
       const card = pool.get(c.cardId);
-      return card?.subtype === 'ex' && card.name.startsWith('超級');
+      return card?.subtype === 'ex' && card.name.startsWith('超級') && c.damage > 0;
     });
 });
 reg('滿充的體貼', (st, idx, pool) => {
   const megaExs = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
     .filter(c => {
       const card = pool.get(c.cardId);
-      return card?.subtype === 'ex' && card.name.startsWith('超級');
+      return card?.subtype === 'ex' && card.name.startsWith('超級') && c.damage > 0;  // v5.426：只列受傷 ex
     });
   if (megaExs.length === 0) return addLog(st, '滿充的體貼：場上無超級進化寶可夢ex', idx);
   const validIids = megaExs.map(c => c.iid);

@@ -6191,6 +6191,16 @@ function handlePlaying(
       state = addLog({ ...state, players }, `${pool.get(paraPlayer.active.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
     }
 
+    } // v5.426：status 區（中毒/灼傷/睡眠/麻痺）到此結束（endTurnSkipCheckup gate）。
+
+    // ── checkup 放指示物特性區（冰冷之帳 / 揚沙 等）獨立 gate ──
+    // v5.426 修：原本這些特性也包在 endTurnSkipCheckup gate 內，導致中毒/灼傷致死提早 return →
+    //   SEND_NEW_ACTIVE re-dispatch END_TURN(skipCheckup=true) 後整段被跳過 → 冰冷之帳/揚沙漏觸發。
+    //   改用 endTurnCheckupAbilitiesDone gate：status-KO re-dispatch 時 status 區跳過、本區仍執行一次。
+    //   旗標於區首設 true，避免後續 re-dispatch（力之沙漏 / 本區自身 KO 補位）重跑放第二次指示物。
+    if (!state.endTurnCheckupAbilitiesDone) {
+    state = { ...state, endTurnCheckupAbilitiesDone: true };
+
     // ── 雪妖女｜冰冷之帳 ─────────────────────────────────────────────────────
     // 卡面：只要這隻寶可夢在場上，每次寶可夢檢查時，在雙方的擁有特性的所有寶可夢
     //       （「雪妖女」除外）身上各放置 1 個傷害指示物。
@@ -6436,7 +6446,7 @@ function handlePlaying(
       }
     }
 
-    } // end of `if (!state.endTurnSkipCheckup)` — 寶可夢 checkup 區塊
+    } // v5.426：end of checkup 放指示物特性區（endTurnCheckupAbilitiesDone gate）
 
     // ── v2.247 力之沙漏（PokemonTool）— 回合結束時，若戰鬥場寶可夢附有此 Tool，
     //   可以從棄牌區將 1 張基本能量附於該寶可夢。改為玩家選擇而非自動附能量。
@@ -7129,6 +7139,7 @@ function handlePlaying(
         rocketInMyDiscardAtMyTurnStart: newRocketTurnStart,
         // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
         endTurnSkipCheckup: undefined,
+        endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
         // v4.24 對戰計時器
         playerTurnTimeMs: _timerNewTimes,
         currentTurnStartTime: _timerNowMs,

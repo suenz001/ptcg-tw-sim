@@ -896,6 +896,10 @@ export interface GameState {
    * 在第一次 END_TURN 跑過了，不可重複觸發傷害。
    */
   endTurnSkipCheckup?: boolean;
+  /** v5.426：checkup 放指示物特性（冰冷之帳/揚沙等）是否已於本次 END_TURN 執行過。
+   *  與 endTurnSkipCheckup 解耦：status-KO 提早 return + re-dispatch(skipCheckup) 後，
+   *  status 區跳過但本旗標仍為 false → 特性區照常執行一次。finalize 時清除。 */
+  endTurnCheckupAbilitiesDone?: boolean;
   /**
    * v3.892：attack-time snapshot — 攻擊宣告時對手場上是否有花之帷幔（謝米）。
    * 由 engine.ts ATTACK handler 在 PRE 之前 set，POST 後清掉。
