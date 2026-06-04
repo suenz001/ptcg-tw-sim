@@ -12671,6 +12671,9 @@ reg('改造之錘', (st, idx, pool) => {
     params: { includeActive: true, validIids: cand.map(c => c.iid) },
   });
 });
+// v5.423 Rule 7：原本選完寶可夢後自動丟末尾特殊能量 → 一隻身上有多種特殊能量時玩家無法選。
+//   改成第二段 active-energy-discard（targetIid + validIids 只列特殊能量）讓玩家挑哪張。
+//   參照粉碎之錘 crush-hammer 兩段範式，差別：只篩特殊能量。
 regR('reform-hammer-discard', (st, idx, iids, _params, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const targetIid = iids[0];
@@ -12680,26 +12683,46 @@ regR('reform-hammer-discard', (st, idx, iids, _params, pool) => {
     ? dp.active
     : dp.bench.find(c => c.iid === targetIid) ?? null;
   if (!target) return st;
-  // 由後往前找第一張特殊能量
-  let spIdx = -1;
-  for (let i = target.energyAttached.length - 1; i >= 0; i--) {
-    const c = pool.get(target.energyAttached[i].cardId);
-    if (c?.supertype === 'Energy' && c.subtype === 'Special') { spIdx = i; break; }
-  }
-  if (spIdx < 0) {
+  // 列出該寶可夢身上所有「特殊能量」的 iid（一隻可能附多種不同特殊能量）
+  const specialIids = target.energyAttached
+    .filter(e => { const c = pool.get(e.cardId); return c?.supertype === 'Energy' && c.subtype === 'Special'; })
+    .map(e => e.iid);
+  if (specialIids.length === 0) {
     const tn = pool.get(target.cardId)?.name ?? '?';
     return addLog(st, `改造之錘：${tn} 身上沒有特殊能量`, idx);
   }
-  const removed = target.energyAttached[spIdx];
-  const energyName = pool.get(removed.cardId)?.name ?? '特殊能量';
+  const tn = pool.get(target.cardId)?.name ?? '?';
+  const s = addLog(st, `改造之錘：選擇 ${tn} 身上要丟棄的 1 張特殊能量`, idx);
+  // 第二段 picker：active-energy-discard 指向該對手寶可夢，validIids 只列特殊能量
+  return withPending(s, {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'reform-hammer-energy-pick',
+    params: { targetIid, validIids: specialIids, titleOverride: '選擇要丟棄的對手特殊能量' },
+  });
+});
+// v5.423 第二段：玩家在選定寶可夢身上挑 1 張特殊能量丟棄
+regR('reform-hammer-energy-pick', (st, idx, iids, params, pool) => {
+  const energyIid = iids[0];
+  const targetIid = params?.targetIid as string | undefined;
+  if (!energyIid || !targetIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid
+    ? dp.active
+    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const removed = target.energyAttached.find(e => e.iid === energyIid);
+  if (!removed) return st;
+  // 防呆：只允許丟特殊能量（picker 已篩，再驗一層）
+  const rc = pool.get(removed.cardId);
+  if (!(rc?.supertype === 'Energy' && rc.subtype === 'Special')) return st;
+  const energyName = rc?.name ?? '特殊能量';
   const targetName = pool.get(target.cardId)?.name ?? '?';
   const s = addLog(st, `改造之錘：丟棄 ${targetName} 身上的特殊能量（${energyName}）`, idx);
   return updatePlayer(s, dIdx, p => {
-    const newEnergies = [
-      ...target.energyAttached.slice(0, spIdx),
-      ...target.energyAttached.slice(spIdx + 1),
-    ];
-    const updated = { ...target, energyAttached: newEnergies };
+    const updated = { ...target, energyAttached: target.energyAttached.filter(e => e.iid !== energyIid) };
     return {
       ...p,
       active: p.active?.iid === targetIid ? updated : p.active,

@@ -2893,7 +2893,11 @@
         if (targetIid) {
           const tgt = src.active?.iid === targetIid ? src.active
                     : src.bench.find(b => b.iid === targetIid);
-          return tgt?.energyAttached ?? [];
+          // v5.423：targetIid 分支支援 validIids 篩選（改造之錘只列特殊能量讓玩家選；
+          //   粉碎之錘不傳 validIids → 仍列全部能量，向後相容）
+          const validIidsT = pendingSelection.params?.validIids as string[] | undefined;
+          const eListT = tgt?.energyAttached ?? [];
+          return validIidsT ? eListT.filter(e => validIidsT.includes(e.iid)) : eListT;
         }
         return src.active?.energyAttached ?? [];
       }

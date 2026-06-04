@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.423</span> 修正：改造之錘原本選好對手寶可夢後，系統會自動丟棄該寶可夢身上的特殊能量（固定丟最後一張）；現在改成由玩家自行選擇要丟哪一張特殊能量（一隻寶可夢身上可能附有多種不同的特殊能量）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.422</span> 修正：好傷藥原本自動丟棄寶可夢身上的能量（固定丟最後一個），現在改成回血後由玩家自行選擇要丟哪一個能量（只有 1 個能量時自動丟）</summary>
       </details>
 
