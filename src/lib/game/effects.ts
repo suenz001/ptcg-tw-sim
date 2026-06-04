@@ -6950,6 +6950,128 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
  *   完整鏡射既有 snipe-variable(v5.369/v5.370) 邏輯；snipe-variable 改為薄包裝呼叫本函式。
  *   備戰目標不計弱抗；放傷害指示物(kind='attack-effect')亦不套弱抗。
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// v5.435：防守方「受招式傷害時」反擊/觸發共用 helper。把主管線(engine.ts)散落的
+//   6 種 on-damaged 機制收斂成一份，給手動結算傷害的狙擊/分配 resolver
+//   （dealAttackDamageToTarget / snipe-multi）共用，讓被狙擊的寶可夢也能正常觸發反擊。
+//   主管線維持自己那套（已 battle-tested，本次不動）。只處理「防守方 active 受招式傷害」。
+//   涵蓋：1 TOOL_ON_DAMAGED(奢華炸彈/凸凸頭盔/幸運頭盔，阻礙之塔失效)
+//        2 SPECIAL_ENERGY_ON_DAMAGED(扣殺能量)
+//        3 PASSIVE_RETALIATION(毒刺/反擊/尖刺盔甲/怨恨旋渦…)+怨恨旋渦備戰 field-wide
+//        4 PASSIVE_ON_DAMAGED(警備濁霧)
+//        5 retaliateCountersOnNextHit(還擊斧/等待角擊/殼捲風旋轉)
+//        6 龐克頭盔反射(戰鬥場【惡】+40，阻礙之塔失效)
+//   光之翼(攻擊方)免疫對手特性反擊；反傷可反殺攻擊方(含 game-over)。
+// ─────────────────────────────────────────────────────────────────────────────
+export function fireDefenderOnDamaged(
+  st: GameState, dIdx: 0 | 1, aIdx: 0 | 1, baseDamage: number, pool: Map<string, Card>,
+): GameState {
+  if (baseDamage <= 0) return st;
+  const defActive0 = st.players[dIdx].active;
+  if (!defActive0) return st;
+  const defCard = pool.get(defActive0.cardId);
+  const atkCard0 = st.players[aIdx].active ? pool.get(st.players[aIdx].active!.cardId) : null;
+  const stadiumCard = st.activeStadium ? pool.get(st.activeStadium.cardId) : null;
+  const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
+  const attackerHasMagicalShine = atkCard0?.abilities?.some(a => a.name === '光之翼') ?? false;
+  let s = st;
+  const atkDamageBefore = s.players[aIdx].active?.damage ?? 0;
+  // 1. TOOL_ON_DAMAGED（阻礙之塔失效）
+  if (!toolsJammed) {
+    for (const t of getAllAttachedTools(defActive0)) {
+      const tool = pool.get(t.cardId);
+      if (!tool) continue;
+      const fn = TOOL_ON_DAMAGED.get(tool.name);
+      if (fn) s = fn(s, dIdx, aIdx, baseDamage, pool);
+    }
+  }
+  // 2. SPECIAL_ENERGY_ON_DAMAGED（扣殺能量）
+  for (const e of defActive0.energyAttached) {
+    const ec = pool.get(e.cardId);
+    if (!ec) continue;
+    const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
+    if (fn) s = fn(s, dIdx, aIdx, baseDamage, pool);
+  }
+  // 3+4. PASSIVE_RETALIATION + PASSIVE_ON_DAMAGED（光之翼擋）
+  if (!attackerHasMagicalShine && defCard?.abilities) {
+    for (const ab of defCard.abilities) {
+      const retal = PASSIVE_RETALIATION.get(ab.name);
+      if (retal) s = retal(s, dIdx, pool);
+    }
+    for (const ab of defCard.abilities) {
+      const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
+      if (fnOD) s = fnOD(s, dIdx, aIdx, pool, defCard);
+    }
+  }
+  // 3b. 怨恨旋渦 field-wide（自方戰鬥場為【惡】時掃備戰）
+  if (!attackerHasMagicalShine) {
+    const da = s.players[dIdx].active;
+    const daCard = da ? pool.get(da.cardId) : null;
+    if (daCard?.pokemonType === 'Darkness') {
+      for (const benchInst of s.players[dIdx].bench) {
+        const bc = pool.get(benchInst.cardId);
+        if (!bc?.abilities) continue;
+        for (const ab of bc.abilities) {
+          if (ab.name === '怨恨旋渦') {
+            const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
+            if (fn) s = fn(s, dIdx, pool);
+          }
+        }
+      }
+    }
+  }
+  // 5. retaliateCountersOnNextHit（還擊斧/等待角擊/殼捲風旋轉）
+  {
+    const retalN = s.players[dIdx].active?.retaliateCountersOnNextHit;
+    if (retalN && retalN > 0) {
+      const refPlayers = [...s.players] as [PlayerState, PlayerState];
+      if (refPlayers[aIdx].active) {
+        refPlayers[aIdx] = { ...refPlayers[aIdx], active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + retalN * 10 } };
+      }
+      if (refPlayers[dIdx].active) {
+        const newAct = { ...refPlayers[dIdx].active! };
+        delete newAct.retaliateCountersOnNextHit;
+        refPlayers[dIdx] = { ...refPlayers[dIdx], active: newAct };
+      }
+      s = addLog({ ...s, players: refPlayers }, `反擊：對攻擊方放 ${retalN} 個傷害指示物（${retalN * 10} 點傷害）`, dIdx);
+    }
+  }
+  // 6. 龐克頭盔反射（戰鬥場【惡】+40，阻礙之塔失效）
+  if (!toolsJammed) {
+    const da = s.players[dIdx].active;
+    const daTool = da?.toolAttached ? pool.get(da.toolAttached.cardId) : null;
+    const daCard = da ? pool.get(da.cardId) : null;
+    if (daTool?.name === '龐克頭盔' && daCard?.pokemonType === 'Darkness' && s.players[aIdx].active) {
+      const refPlayers = [...s.players] as [PlayerState, PlayerState];
+      refPlayers[aIdx] = { ...refPlayers[aIdx], active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + 40 } };
+      s = addLog({ ...s, players: refPlayers }, `🔧 龐克頭盔：${atkCard0?.name ?? '攻擊方'} 受到 40 傷害反擊！`, null);
+    }
+  }
+  // 反傷反殺攻擊方（含 game-over）
+  const retaliatedAtk = s.players[aIdx].active;
+  if (retaliatedAtk && retaliatedAtk.damage > atkDamageBefore) {
+    const retAtkCard = pool.get(retaliatedAtk.cardId);
+    const retAtkEffHP = effectiveHPInline(retaliatedAtk, pool, s);
+    if (retAtkCard && retAtkEffHP > 0 && retaliatedAtk.damage >= retAtkEffHP) {
+      const retKoDiscard: CardInstance[] = [
+        retaliatedAtk,
+        ...retaliatedAtk.energyAttached,
+        ...getAllAttachedTools(retaliatedAtk),
+        ...(retaliatedAtk.evolvedFromStack ?? []),
+      ];
+      const retKOPrizes = prizesForKOLocal(retAtkCard);
+      const retPlayers = [...s.players] as [PlayerState, PlayerState];
+      retPlayers[aIdx] = { ...retPlayers[aIdx], active: null, discard: [...retPlayers[aIdx].discard, ...retKoDiscard] };
+      s = addLog(addPendingPrize({ ...s, players: retPlayers }, dIdx, retKOPrizes),
+        `${retAtkCard.name} 被反彈傷害擊倒！${s.players[dIdx].name} 取得 ${retKOPrizes} 張獎賞卡。`, null);
+      if (retPlayers[aIdx].bench.length === 0) {
+        return { ...s, phase: 'game-over', winner: dIdx, winReason: `${retPlayers[aIdx].name} 沒有可上場的寶可夢` };
+      }
+    }
+  }
+  return s;
+}
+
 export function dealAttackDamageToTarget(
   st: GameState,
   actorIdx: 0 | 1,
@@ -7017,34 +7139,44 @@ export function dealAttackDamageToTarget(
       }
     }
   }
-  const newDmg = target.damage + effDmg;
-  const hp = effectiveHPInline(target, pool, st);
+  // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
+  //   龐克頭盔/還擊斧/反擊特性/警備濁霧）。共用 fireDefenderOnDamaged，與 snipe-multi 同一條。
+  if (isActive && kind === 'attack-damage' && effDmg > 0) {
+    st = fireDefenderOnDamaged(st, dIdx, actorIdx, effDmg, pool);
+    if (st.phase === 'game-over') return st;
+  }
+  // re-fetch（helper 可能消費還擊旗標 / 改 attacker 狀態）
+  const defenderNow = st.players[dIdx];
+  const targetNow = isActive ? defenderNow.active : defenderNow.bench.find(c => c.iid === targetIid);
+  if (!targetNow) return st;
+  const newDmg = targetNow.damage + effDmg;
+  const hp = effectiveHPInline(targetNow, pool, st);
   if (hp > 0 && newDmg >= hp) {
     const ko: CardInstance[] = [
-      { ...target, damage: newDmg },
-      ...target.energyAttached,
-      ...getAllAttachedTools(target),
-      ...(target.evolvedFromStack ?? []),
+      { ...targetNow, damage: newDmg },
+      ...targetNow.energyAttached,
+      ...getAllAttachedTools(targetNow),
+      ...(targetNow.evolvedFromStack ?? []),
     ];
-    const _ko = koPrizesAdjusted(st, target, targetCard, actorIdx, dIdx, pool);
+    const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool);
     st = _ko.state;
     const p = _ko.prizes;
     const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
+    const newDefender = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
     if (isActive) newDefender.active = null;
-    else newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
+    else newDefender.bench = defenderNow.bench.filter(c => c.iid !== targetIid);
     players[dIdx] = newDefender;
     let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
     s = recordOppKO(s, dIdx, targetCard, 'attack');
     if (isActive && newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
     }
     return addPendingPrize(s, actorIdx, p);
   }
   const players = [...st.players] as [PlayerState, PlayerState];
-  const newDefender = { ...defender };
-  if (isActive) newDefender.active = { ...target, damage: newDmg };
-  else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+  const newDefender = { ...defenderNow };
+  if (isActive) newDefender.active = { ...targetNow, damage: newDmg };
+  else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
   players[dIdx] = newDefender;
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
 }
@@ -9020,42 +9152,41 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
         }
       }
     }
-    // v5.155 active target 受擊 → 觸發扣殺能量等 SPECIAL_ENERGY_ON_DAMAGED + TOOL_ON_DAMAGED
-    //   主 engine attack path 有觸發此 hook (L5057-5064)，但 multi-target resolver 漏。
-    //   Wilson 報告扣殺能量「沒效果」可能是被多目標招式攻擊時沒觸發。
+    // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged，
+    //   升級原本只有 SPECIAL_ENERGY 的版本；補 TOOL_ON_DAMAGED/還擊斧/龐克頭盔/反擊特性/警備濁霧）。
     if (isActive && effDmg > 0) {
-      for (const e of target.energyAttached) {
-        const ec = pool.get(e.cardId);
-        if (!ec) continue;
-        const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
-        if (fn) s = fn(s, (1 - actorIdx) as 0 | 1, actorIdx, effDmg, pool);
-      }
+      s = fireDefenderOnDamaged(s, dIdx, actorIdx, effDmg, pool);
+      if (s.phase === 'game-over') return s;
     }
-    const newDmg = target.damage + effDmg;
-    const hp = effectiveHPInline(target, pool, st);  // v5.091
+    // re-fetch（helper 可能消費還擊旗標 / 改 attacker 狀態）
+    const defenderNow = s.players[dIdx];
+    const targetNow = isActive ? defenderNow.active : defenderNow.bench.find(c => c.iid === iid);
+    if (!targetNow) continue;
+    const newDmg = targetNow.damage + effDmg;
+    const hp = effectiveHPInline(targetNow, pool, st);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const ko: CardInstance[] = [
-        { ...target, damage: newDmg },
-        ...target.energyAttached,
-        ...getAllAttachedTools(target),
-        ...(target.evolvedFromStack ?? []),
+        { ...targetNow, damage: newDmg },
+        ...targetNow.energyAttached,
+        ...getAllAttachedTools(targetNow),
+        ...(targetNow.evolvedFromStack ?? []),
       ];
-      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool);
+      const _ko = koPrizesAdjusted(s, targetNow, targetCard, actorIdx, dIdx, pool);
       s = _ko.state;
       const p = _ko.prizes;
       totalPrize += p;
       const players = [...s.players] as [PlayerState, PlayerState];
-      const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
+      const newDefender = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
       if (isActive) { newDefender.active = null; opponentActiveKOed = true; }
-      else newDefender.bench = defender.bench.filter(c => c.iid !== iid);
+      else newDefender.bench = defenderNow.bench.filter(c => c.iid !== iid);
       players[dIdx] = newDefender;
       s = addLog({ ...s, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, targetCard, 'attack');
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
-      const newDefender = { ...defender };
-      if (isActive) newDefender.active = { ...target, damage: newDmg };
-      else newDefender.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      const newDefender = { ...defenderNow };
+      if (isActive) newDefender.active = { ...targetNow, damage: newDmg };
+      else newDefender.bench = defenderNow.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
       players[dIdx] = newDefender;
       s = addLog({ ...s, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
     }
