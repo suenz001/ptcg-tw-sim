@@ -13768,13 +13768,9 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
   let s = st;
   const attacker = st.players[actorIdx].active;
   const attackerCard = attacker ? pool.get(attacker.cardId) : null;
-  // v5.066：累積龐克頭盔反擊量 — 對戰鬥場目標若附「龐克頭盔」且為【惡】寶可夢，
-  //   每次受招式傷害 → 攻擊者放 4 個指示物 (40 點)。bug 起源：clone-strike-multi-hit
-  //   完全沒實作此反擊（engine.ts 主路徑只對「damage > 0 招式」有 punk reflect；
-  //   分身連打 JSON damage='' → 主路徑 baseDmg=0 → 主路徑 punk reflect 不觸發 →
-  //   全靠 resolver 內補上）。卡面：「附有這張卡的【惡】寶可夢在戰鬥場受到對手的
-  //   寶可夢招式的傷害時，在使用招式的寶可夢身上放置 4 個傷害指示物。」
-  let punkReflectDamage = 0;
+  // v5.436：分身連打/大吼大叫/三色炮 的受傷反擊改走共用 fireDefenderOnDamaged，
+  //   與中央函式 / snipe-multi 同一條（原本只 inline SPECIAL_ENERGY + 龐克頭盔累計，
+  //   缺 TOOL_ON_DAMAGED/還擊斧/反擊特性/警備濁霧 4 種）。
   for (const iid of selectedIids) {
     const dIdx = (1 - actorIdx) as 0 | 1;
     const defender = s.players[dIdx];
@@ -13820,42 +13816,32 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
         }
       }
     }
-    // v5.066：龐克頭盔反擊 — 戰鬥場且 target 為【惡】寶可夢且附「龐克頭盔」
-    //   卡面只在「戰鬥場」觸發（備戰位不算），故僅 isActive 走此分支。
-    //   實際 +40 傷害套用延後到所有 target hit 完之後（同 engine.ts 主路徑做法）。
+    // v5.436：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged）。
     if (isActive && dmg > 0) {
-      const targetTool = target.toolAttached ? pool.get(target.toolAttached.cardId) : null;
-      if (targetTool?.name === '龐克頭盔' && targetCard?.pokemonType === 'Darkness') {
-        punkReflectDamage += 40;
-      }
+      s = fireDefenderOnDamaged(s, dIdx, actorIdx, dmg, pool);
+      if (s.phase === 'game-over') return s;
     }
-    // v5.155 active target 受擊 → 觸發扣殺能量等 SPECIAL_ENERGY_ON_DAMAGED
-    //   主 engine attack path 有觸發此 hook，但 multi-target resolver 漏。
-    if (isActive && dmg > 0) {
-      for (const e of target.energyAttached) {
-        const ec = pool.get(e.cardId);
-        if (!ec) continue;
-        const fn = SPECIAL_ENERGY_ON_DAMAGED.get(ec.name);
-        if (fn) s = fn(s, (1 - actorIdx) as 0 | 1, actorIdx, dmg, pool);
-      }
-    }
-    const newDmg = target.damage + dmg;
-    const hp = effectiveHPInline(target, pool, s);
+    // re-fetch（helper 可能消費還擊旗標 / 改 attacker 狀態）
+    const defenderNow = s.players[dIdx];
+    const targetNow = isActive ? defenderNow.active : defenderNow.bench.find(c => c.iid === iid);
+    if (!targetNow) continue;
+    const newDmg = targetNow.damage + dmg;
+    const hp = effectiveHPInline(targetNow, pool, s);
     const players = [...s.players] as [PlayerState, PlayerState];
     if (hp > 0 && newDmg >= hp) {
       // KO：棄牌遷移 + 累計獎賞 + 移除位置
       const ko: CardInstance[] = [
-        { ...target, damage: newDmg },
-        ...target.energyAttached,
-        ...getAllAttachedTools(target),
-        ...(target.evolvedFromStack ?? []),
+        { ...targetNow, damage: newDmg },
+        ...targetNow.energyAttached,
+        ...getAllAttachedTools(targetNow),
+        ...(targetNow.evolvedFromStack ?? []),
       ];
-      const _ko = koPrizesAdjusted(s, target, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
+      const _ko = koPrizesAdjusted(s, targetNow, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
       s = _ko.state;
       const prizeCount = _ko.prizes;
-      const newDef = { ...defender, discard: [...defender.discard, ...ko] };
+      const newDef = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
       if (isActive) newDef.active = null;
-      else newDef.bench = defender.bench.filter(c => c.iid !== iid);
+      else newDef.bench = defenderNow.bench.filter(c => c.iid !== iid);
       players[dIdx] = newDef;
       s = addPendingPrize({ ...s, players }, actorIdx, prizeCount);
       s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害 → 被擊倒！+${prizeCount} 張獎賞卡`, actorIdx);
@@ -13863,51 +13849,16 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       s = recordOppKO(s, dIdx, targetCard, 'attack');
       // 戰鬥場昏厥且對手沒有備戰 → game over
       if (isActive && newDef.bench.length === 0) {
-        s = { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
+        s = { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
         return s;
       }
     } else {
-      const newDef = { ...defender };
-      if (isActive) newDef.active = { ...target, damage: newDmg };
-      else newDef.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      const newDef = { ...defenderNow };
+      if (isActive) newDef.active = { ...targetNow, damage: newDmg };
+      else newDef.bench = defenderNow.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
       players[dIdx] = newDef;
       s = { ...s, players };
       s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害`, actorIdx);
-    }
-  }
-  // v5.066：所有 target 處理完後套用龐克頭盔反擊（防被 KO 處理覆蓋 attacker state）
-  if (punkReflectDamage > 0 && attacker && attackerCard) {
-    const refPlayers = [...s.players] as [PlayerState, PlayerState];
-    const atkP = { ...refPlayers[actorIdx] };
-    if (atkP.active) {
-      const atkNewDmg = atkP.active.damage + punkReflectDamage;
-      const atkHp = effectiveHPInline(atkP.active, pool, s);
-      atkP.active = { ...atkP.active, damage: atkNewDmg };
-      refPlayers[actorIdx] = atkP;
-      s = addLog(
-        { ...s, players: refPlayers },
-        `🔧 龐克頭盔：${attackerCard.name} 受到 ${punkReflectDamage} 傷害反擊！`,
-        null,
-      );
-      // 反擊打死攻擊者 — 立即 KO 處理（resolver 不會被 sanityKOSweep 重掃 attacker）
-      if (atkHp > 0 && atkNewDmg >= atkHp) {
-        const ko: CardInstance[] = [
-          { ...atkP.active, damage: atkNewDmg },
-          ...atkP.active.energyAttached,
-          ...getAllAttachedTools(atkP.active),
-          ...(atkP.active.evolvedFromStack ?? []),
-        ];
-        const prizeCount = prizesForKOLocal(attackerCard);
-        const newAtk = { ...atkP, active: null, discard: [...atkP.discard, ...ko] };
-        const refPlayers2 = [...s.players] as [PlayerState, PlayerState];
-        refPlayers2[actorIdx] = newAtk;
-        s = addPendingPrize({ ...s, players: refPlayers2 }, (1 - actorIdx) as 0 | 1, prizeCount);
-        s = addLog(s, `${attackerCard.name} 受龐克頭盔反擊昏厥！對手 +${prizeCount} 張獎賞卡`, null);
-        // 攻擊者昏厥且無備戰 → game over
-        if (newAtk.bench.length === 0) {
-          s = { ...s, phase: 'game-over', winner: (1 - actorIdx) as 0 | 1, winReason: `${atkP.name} 沒有可上場的寶可夢` };
-        }
-      }
     }
   }
   return s;
