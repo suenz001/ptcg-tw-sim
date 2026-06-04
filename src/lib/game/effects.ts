@@ -1317,64 +1317,10 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
 });
 
 regR('snipe-120', (st, actorIdx, selectedIids, _params, pool) => {
-  const dIdx = (1 - actorIdx) as 0 | 1;
-  const defender = st.players[dIdx];
   const targetIid = selectedIids[0];
   if (!targetIid) return st;
-
-  const isActive = defender.active?.iid === targetIid;
-  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-
-  const targetCard = pool.get(target.cardId);
-  // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
-  //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.46 原行為）
-  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊（v4.975 框架 step 4 新加）
-  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
-  if (guard.blocked) {
-    const name = targetCard?.name ?? '?';
-    return addLog(st, `狙擊羽毛：${name} 因${guard.reason}不受傷害`, actorIdx);
-  }
-
-  const newDmg = target.damage + 120;
-  const targetHP = effectiveHPInline(target, pool, st);  // v5.091
-  if (targetHP > 0 && newDmg >= targetHP) {
-    // 擊倒目標
-    const koDiscard: CardInstance[] = [
-      { ...target, damage: newDmg },
-      ...target.energyAttached,
-      ...getAllAttachedTools(target),
-      ...(target.evolvedFromStack ?? []),
-    ];
-    const _ko = koPrizesAdjusted(st, target, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-    st = _ko.state;
-    const prizes = _ko.prizes;
-    const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defender, discard: [...defender.discard, ...koDiscard] };
-    if (isActive) {
-      newDefender.active = null;
-    } else {
-      newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
-    }
-    players[dIdx] = newDefender;
-    let s = addLog({ ...st, players }, `狙擊羽毛：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
-    s = recordOppKO(s, dIdx, targetCard, 'attack');
-    if (isActive && newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
-    return addPendingPrize(s, actorIdx, prizes);
-  } else {
-    // 未擊倒
-    const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defender };
-    if (isActive) {
-      newDefender.active = { ...target, damage: newDmg };
-    } else {
-      newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
-    }
-    players[dIdx] = newDefender;
-    return addLog({ ...st, players }, `狙擊羽毛：對 ${targetCard?.name ?? '?'} 造成 120 傷害！`, actorIdx);
-  }
+  // v5.440：改走中央 dealAttackDamageToTarget — 補 active 弱點(卡面僅備戰不計弱抗) + 受傷反擊。
+  return dealAttackDamageToTarget(st, actorIdx, targetIid, 120, pool, { kind: 'attack-damage', label: '狙擊羽毛' });
 });
 
 // ── MBG 勾魂眼 ────────────────────────────────────────────────────────────────
@@ -6264,62 +6210,10 @@ regPost('重泥挽馬|泥巴庫存', (state, aIdx, pool) => {
 });
 
 regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
-  const dIdx = (1 - actorIdx) as 0 | 1;
-  const defender = st.players[dIdx];
   const targetIid = selectedIids[0];
   if (!targetIid) return st;
-
-  const isActive = defender.active?.iid === targetIid;
-  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-
-  const targetCard = pool.get(target.cardId);
-  // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
-  //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.46 原行為）
-  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 等 8 個 active-side immune flag（v4.975 框架 step 4 新加）
-  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
-  if (guard.blocked) {
-    const name = targetCard?.name ?? '?';
-    return addLog(st, `電磁電光：${name} 因${guard.reason}不受傷害`, actorIdx);
-  }
-
-  const newDmg = target.damage + 10;
-  const targetHP = effectiveHPInline(target, pool, st);  // v5.091
-  if (targetHP > 0 && newDmg >= targetHP) {
-    const koDiscard: CardInstance[] = [
-      { ...target, damage: newDmg },
-      ...target.energyAttached,
-      ...getAllAttachedTools(target),
-      ...(target.evolvedFromStack ?? []),
-    ];
-    const _ko = koPrizesAdjusted(st, target, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-    st = _ko.state;
-    const prizes = _ko.prizes;
-    const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defender, discard: [...defender.discard, ...koDiscard] };
-    if (isActive) {
-      newDefender.active = null;
-    } else {
-      newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
-    }
-    players[dIdx] = newDefender;
-    let s = addLog({ ...st, players }, `電磁電光：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
-    s = recordOppKO(s, dIdx, targetCard, 'attack');
-    if (isActive && newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
-    return addPendingPrize(s, actorIdx, prizes);
-  } else {
-    const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defender };
-    if (isActive) {
-      newDefender.active = { ...target, damage: newDmg };
-    } else {
-      newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
-    }
-    players[dIdx] = newDefender;
-    return addLog({ ...st, players }, `電磁電光：對 ${targetCard?.name ?? '?'} 造成 10 傷害！`, actorIdx);
-  }
+  // v5.440：改走中央 — 補 active 弱點 + 受傷反擊。
+  return dealAttackDamageToTarget(st, actorIdx, targetIid, 10, pool, { kind: 'attack-damage', label: '電磁電光' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -6501,51 +6395,10 @@ regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
 });
 
 regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
-  const dIdx = (1 - actorIdx) as 0 | 1;
-  const defender = st.players[dIdx];
   const targetIid = selectedIids[0];
   if (!targetIid) return st;
-  const isActive = defender.active?.iid === targetIid;
-  const target = isActive ? defender.active! : defender.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
-  // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='attack-effect'）
-  //   涵蓋對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 薄霧 / 皇帝之勢 等
-  const _silentTgtCard = pool.get(target.cardId);
-  const _silentGuard = canApplyEffectToTarget(st, actorIdx, target, _silentTgtCard, 'attack-effect', pool, { isBench: !isActive });
-  if (_silentGuard.blocked) {
-    return addLog(st, `悄聲加害：${_silentTgtCard?.name ?? '?'} ${_silentGuard.reason}，未放置傷害指示物`, actorIdx);
-  }
-  const targetCard = pool.get(target.cardId);
-  const newDmg = target.damage + 20;
-  const hp = effectiveHPInline(target, pool, st);  // v5.091
-  if (hp > 0 && newDmg >= hp) {
-    const ko: CardInstance[] = [
-      { ...target, damage: newDmg },
-      ...target.energyAttached,
-      ...getAllAttachedTools(target),
-      ...(target.evolvedFromStack ?? []),
-    ];
-    const _ko = koPrizesAdjusted(st, target, targetCard, actorIdx, dIdx, pool);
-    st = _ko.state;
-    const p = _ko.prizes;
-    const players = [...st.players] as [PlayerState, PlayerState];
-    const newDefender = { ...defender, discard: [...defender.discard, ...ko] };
-    if (isActive) newDefender.active = null;
-    else newDefender.bench = defender.bench.filter(c => c.iid !== targetIid);
-    players[dIdx] = newDefender;
-    let s = addLog({ ...st, players }, `悄聲加害：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
-    s = recordOppKO(s, dIdx, targetCard, 'attack');
-    if (isActive && newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
-    return addPendingPrize(s, actorIdx, p);
-  }
-  const players = [...st.players] as [PlayerState, PlayerState];
-  const newDefender = { ...defender };
-  if (isActive) newDefender.active = { ...target, damage: newDmg };
-  else newDefender.bench = defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
-  players[dIdx] = newDefender;
-  return addLog({ ...st, players }, `悄聲加害：對 ${targetCard?.name ?? '?'} 造成 20 傷害`, actorIdx);
+  // v5.440：放置2個傷害指示物(attack-effect, flat 不計弱抗)走中央。
+  return dealAttackDamageToTarget(st, actorIdx, targetIid, 20, pool, { kind: 'attack-effect', label: '悄聲加害' });
 });
 
 // 由克希|痛楚記憶 — 對手所有寶可夢各放置 2 個指示物（= 20 傷害）

@@ -2471,26 +2471,17 @@ regPost('來悲粗茶|詛咒水滴', (state, aIdx, _pool) => {
     params: { totalCounters: 4, target: 'opp' },
   });
 });
-regR('h-wave2-distribute-damage', (state, aIdx, iids, params, _pool) => {
-  // damage-distribute resolver 的 selectedIids 是「每個指示物選了哪隻寶可夢」的列表
+regR('h-wave2-distribute-damage', (state, aIdx, iids, params, pool) => {
+  // damage-distribute：selectedIids 是「每個指示物選了哪隻」的列表，每指示物 10 傷。
   const totalCounters = (params?.totalCounters as number | undefined) ?? 4;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  // 計算每隻寶可的 dmg
-  const counts = new Map<string, number>();
-  for (const iid of iids) counts.set(iid, (counts.get(iid) ?? 0) + 1);
-  return updatePlayer(addLog(state, `詛咒水滴：分配 ${totalCounters} 個指示物`, aIdx), dIdx, p => {
-    const updateOne = (c: CardInstance | null): CardInstance | null => {
-      if (!c) return c;
-      const n = counts.get(c.iid) ?? 0;
-      if (n === 0) return c;
-      return { ...c, damage: (c.damage ?? 0) + n * 10 };
-    };
-    return {
-      ...p,
-      active: updateOne(p.active) as CardInstance | null,
-      bench: p.bench.map(b => updateOne(b)!),
-    };
-  });
+  // v5.440：改走中央 dealAttackDamageToTarget(attack-effect) — 原本完全沒套效果免疫 guard
+  //   (對戰圓形/薄霧/球形盾牌等該擋)。逐指示物結算 + KO。
+  let s = addLog(state, `詛咒水滴：分配 ${totalCounters} 個指示物`, aIdx);
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, 10, pool, { kind: 'attack-effect', label: '詛咒水滴' });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
