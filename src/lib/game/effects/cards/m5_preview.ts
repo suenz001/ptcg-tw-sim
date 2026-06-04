@@ -2037,6 +2037,9 @@ regPost('雷電獸|閃光屏障', (state, aIdx) => {
 //   Note: 「手牌只有此張卡」= 打出時手牌僅 1 張（此卡本身在執行 reg 前已從手牌移除？依
 //          engine 行為查驗）。為穩定保守實作：檢查 reg 執行當下 hand.length === 0
 //          （= 卡剛被打出，手牌剩 0 張），否則 abort + log。
+// v5.425：加 usability gate — 卡面「這張卡只有在自己的手牌只有這1張時才可使用」。
+//   regG 在打出前檢查（卡仍在手牌），手牌恰好 1 張 = 只有此卡 → 可用（顯示黃框）；否則不可出。
+regG('格拉吉歐的決戰', (st, idx) => st.players[idx].hand.length === 1);
 reg('格拉吉歐的決戰', (st, idx) => {
   const p = st.players[idx];
   if (p.hand.length !== 0) {

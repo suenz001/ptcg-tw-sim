@@ -185,20 +185,24 @@ regR('rush-switch-energy-transfer', (st, idx, iids, params, pool) => {
 // 物品卡 — 藥水 / 回復
 // ══════════════════════════════════════════════════════════════════════════════
 
-// 好傷藥 — 回復 60 HP，丟棄 1 個能量
-// Guard: 場上至少 1 隻寶可夢「有傷害且身上有能量」
+// 好傷藥 — 卡面「將自己的1隻寶可夢恢復60HP。然後，選擇1個恢復的寶可夢身上附加的能量，將其丟棄。」
+// v5.425：卡面分 2 段 — 第一段回血（必做）、第二段丟能量（沒能量則略過）。
+//   Guard 改成「只要有受傷寶可夢」即可（不再要求有能量）；無能量寶可夢回血後 healResolver 直接 return。
+//   reg 傳 validIids=受傷寶可夢，picker 只能選受傷的（順帶修「選沒受傷的卻丟能量」）。
 regG('好傷藥', (st, idx) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
-  return all.some(c => c.damage > 0 && c.energyAttached.length > 0);
+  return all.some(c => c.damage > 0);
 });
 reg('好傷藥', (st, idx) => {
-  st = addLog(st, '好傷藥：選擇回復 60 HP 的寶可夢（丟棄 1 個能量）', idx);
+  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  const damagedIids = all.filter(c => c.damage > 0).map(c => c.iid);
+  st = addLog(st, '好傷藥：選擇回復 60 HP 的受傷寶可夢（之後可丟棄其身上 1 個能量）', idx);
   return withPending(st, {
     type: 'heal-target',
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'heal-60-discard-1',
-    params: { healAmount: 60, discardEnergy: 1 },
+    params: { healAmount: 60, discardEnergy: 1, validIids: damagedIids },
   });
 });
 
