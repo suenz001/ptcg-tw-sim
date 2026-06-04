@@ -2239,6 +2239,9 @@ function handlePlaying(
     if (!state.pendingSelection) return state;
     const { effectKey, actorIdx, params } = state.pendingSelection;
     const _resolvePreLogLen = state.log.length;
+    // v5.431：resolver 內擲幣（選目標後才擲，如群起瞄準）也能觸發重試徽章 — 快照 pre-resolve 供 revert + 記擲幣前旗標
+    const _preResolveStateForRetry = state;
+    const _coinFlippedBeforeResolve = state.coinFlippedThisAttack === true;
     // Guard：若明確指定 senderIdx，必須等於 actorIdx — 防止對手搶先操作
     if (action.senderIdx !== undefined && action.senderIdx !== actorIdx) return state;
     const endTurnAfter = params?.endTurnAfter === true;
@@ -2256,7 +2259,7 @@ function handlePlaying(
     if (effectKey === 'm5-retry-badge-decide') {
       const choice = action.selectedIids[0];
       const preAttackState = params?.preAttackState as GameState | undefined;
-      const originalAction = params?.originalAction as Extract<GameAction, { type: 'ATTACK' }> | undefined;  // v5.326: 收斂到 ATTACK 變體，retry 欄位 spread 才型別合法
+      const originalAction = params?.originalAction as Extract<GameAction, { type: 'ATTACK' | 'RESOLVE_SELECTION' }> | undefined;  // v5.326 ATTACK / v5.431 也收 RESOLVE_SELECTION（resolver 內擲幣重試）
       const coinFlips = params?.coinFlips as string[] | undefined;
       if (preAttackState && originalAction) {
         if (choice === 'keep') {
@@ -2323,6 +2326,48 @@ function handlePlaying(
     //   沒選到」。補一筆 marker 確保時鐘前進，根除整類等長覆蓋（線上 picker 選取被吃掉）。
     if (newState.log.length === _resolvePreLogLen) {
       newState = addLog(newState, newState.pendingSelection ? '（繼續選擇下一步）' : '（選擇已套用）', actorIdx);
+    }
+    // v5.431：resolver 內擲幣的重試徽章 check（ATTACK 末端看不到 resolver 階段才設的 coinFlippedThisAttack）。
+    //   只在「本次 resolve 才擲幣」(非 ATTACK 階段殘留) + 攻擊者無屬性 + 附重試徽章 + 未用過 + 無後續 pending 時觸發。
+    //   revert 回 pre-resolve（含原 picker pending），開 m5-retry-badge-decide modal；decide handler 會重跑此 RESOLVE_SELECTION。
+    if (
+      newState.coinFlippedThisAttack === true
+      && !_coinFlippedBeforeResolve
+      && action._retryBadgeAlreadyAsked !== true
+      && !newState.pendingSelection
+      && !isToolsJammed(newState, pool)
+    ) {
+      const _rbInst = newState.players[actorIdx].active;
+      const _rbCard = _rbInst ? pool.get(_rbInst.cardId) : undefined;
+      const _rbHasBadge = !!_rbInst && getAllAttachedTools(_rbInst).some(t => pool.get(t.cardId)?.name === '重試徽章');
+      if (_rbInst && _rbHasBadge && !newState.players[actorIdx].retryBadgeUsedThisTurn) {
+        if (_rbCard?.pokemonType !== 'Colorless') {
+          newState = addLog(newState, `🎒 重試徽章：附在 ${_rbCard?.name ?? '?'}（非【無】屬性）→ 本次效果不觸發 (卡面僅對【無】屬性寶可夢生效)`, actorIdx);
+        } else {
+          const _rbFlips = newState._machineGunLastFlips ?? [];
+          let _rev: GameState = { ..._preResolveStateForRetry, coinFlippedThisAttack: false, _machineGunLastFlips: undefined };
+          _rev = addLog(_rev, '🎲 重試徽章：本次擲幣可重擲，請選擇', actorIdx);
+          newState = {
+            ..._rev,
+            pendingSelection: {
+              type: 'modal-choice', actorIdx, sourcePlayerIdx: actorIdx,
+              minCount: 1, maxCount: 1,
+              effectKey: 'm5-retry-badge-decide',
+              params: {
+                label: '重試徽章',
+                preAttackState: _preResolveStateForRetry,
+                originalAction: action,
+                coinFlips: _rbFlips,
+                attackName: (typeof params?.attackName === 'string' ? params.attackName : '招式'),
+                options: [
+                  { id: 'keep', text: '✅ 不重擲（使用剛才擲幣結果，套用效果）' },
+                  { id: 'retry', text: '🔄 重擲（消除剛才擲幣結果，重新擲幣）— 本回合 1 次' },
+                ],
+              },
+            },
+          };
+        }
+      }
     }
     return newState;
   }

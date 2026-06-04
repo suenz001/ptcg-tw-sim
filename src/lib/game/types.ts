@@ -983,7 +983,7 @@ export type GameAction =
   | { type: 'EVOLVE'; fromIid: string; toIid: string }
   | { type: 'RETREAT'; newActiveIid: string }
   | { type: 'PLAY_TRAINER'; iid: string; params?: Record<string, unknown> }
-  | { type: 'RESOLVE_SELECTION'; selectedIids: string[]; senderIdx?: 0 | 1 }
+  | { type: 'RESOLVE_SELECTION'; selectedIids: string[]; senderIdx?: 0 | 1; _retryInjectedFlips?: string[]; _retryBadgeAlreadyAsked?: boolean }  // v5.431 retry 欄位（resolver 內擲幣重試徽章）
   | {
       type: 'ATTACK';
       attackIndex: number;
