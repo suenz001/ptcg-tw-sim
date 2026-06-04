@@ -22,7 +22,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -166,8 +166,9 @@ regPre('蓋諾賽克特|昆蟲加農炮', (s) => ({ state: s, damage: 0 }));
 regPost('蓋諾賽克特|昆蟲加農炮', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return state;
-  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
-  const grassCount = countOneEnergy(a, 'Grass', pool);
+  // v5.439：改用 countEnergyTypeBloomAware — 補大竺葵|繁茂（基本草×2）+ host-aware 特殊能量。
+  //   原 countOneEnergy 不認繁茂 → 場上有大竺葵時草能量沒×2（玩家回報 20×2×2=80 卻只 40）。
+  const grassCount = countEnergyTypeBloomAware(a, 'Grass', state, aIdx, pool);
   const dmg = grassCount * 20;
   if (dmg === 0) {
     return addLog(state, '昆蟲加農炮：自身無草能量，無傷害', aIdx);

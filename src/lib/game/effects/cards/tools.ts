@@ -644,6 +644,9 @@ export const ATTACH_TOOL_NAMES = new Set<string>([
   ...TOOL_ON_DAMAGED.keys(),
   ...TOOL_RETREAT_MOD.keys(),
   ...TOOL_BOTH_SIDES_RETREAT_PLUS,
+  // v5.439：神聖護符等「攻擊方有特性時減傷」道具 — 原本漏 spread 此 map → 無法附加
+  //   (玩家回報神聖護符「找不到 attach 效果註冊」退回手牌)。
+  ...TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.keys(),
 ]);
 
 {

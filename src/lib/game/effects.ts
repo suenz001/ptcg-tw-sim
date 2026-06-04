@@ -3945,15 +3945,9 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
     const aIdx = (1 - dIdx) as 0 | 1;
     const def = state.players[dIdx].active;
     if (!def) return state;
-    const grassCount = def.energyAttached.filter(e => {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') return false;
-      // 基本【草】能量
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Grass' || /【草】/.test(ec.name))) return true;
-      // 特殊能量帶 Grass type（例：可挾持的 special grass energy）
-      if (ec.pokemonType === 'Grass') return true;
-      return false;
-    }).length;
+    // v5.439：改走中央 countEnergyTypeBloomAware（補大竺葵|繁茂：基本草×2）。
+    //   官方 Q&A：布里卡隆附 2 張基本草 + 繁茂 → 視為 4 → 放 12 個指示物(4×3)。
+    const grassCount = countEnergyTypeBloomAware(def, 'Grass', state, dIdx, pool);
     if (grassCount === 0) return state;
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -6716,6 +6710,31 @@ export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, p
     }
     // 一般情況：依 energyMatchesType（含 pokemonType=null 的 name fallback）
     if (energyMatchesType(ec, type)) count += 1;
+  }
+  return count;
+}
+
+// v5.439：大竺葵|繁茂 — 自己場上有大竺葵|繁茂 → 自方所有寶可夢身上附加的「基本【草】能量」
+//   各視為 2 個（官方：能量供給改寫，傷害計算亦適用）。多隻不疊加。集中於此一函式，凡「依
+//   附加草能量數算傷害/指示物」的招式/特性都該改走 countEnergyTypeBloomAware（一勞永逸，
+//   避免每張卡各自 inline 漏算 — 已重複出包多次：昆蟲加農炮 v5.439 / 尖刺盔甲 v5.439）。
+export function hasBloomOnField(state: GameState, ownerIdx: 0 | 1, pool: Map<string, Card>): boolean {
+  const p = state.players[ownerIdx];
+  const allOwn = [...(p.active ? [p.active] : []), ...p.bench];
+  return allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+}
+
+// host 身上某屬性能量數（host-aware 特殊能量 + 繁茂基本草×2）。依能量數算傷害/指示物用此。
+export function countEnergyTypeBloomAware(
+  host: CardInstance, type: EnergyType, state: GameState, ownerIdx: 0 | 1, pool: Map<string, Card>,
+): number {
+  let count = countEnergyTypeHostAware(host, type, pool);
+  if (type === 'Grass' && hasBloomOnField(state, ownerIdx, pool)) {
+    // 每個基本【草】能量 host-aware 已算 1，繁茂再 +1 → 視為 2。
+    for (const e of host.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (ec?.supertype === 'Energy' && ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass')) count += 1;
+    }
   }
   return count;
 }
