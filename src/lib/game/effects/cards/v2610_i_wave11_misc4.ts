@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog } from '../../effects';
 import { regPre, regPost, addLog, updatePlayer, withPending, regR } from '../_shared';
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -34,9 +34,10 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 // ══════════════════════════════════════════════════════════════════════════════
 function coinHeadsSelfImmunePost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    let s = addLog(state, `${label}：擲 1 次硬幣 → ${heads ? '正面' : '反面'}`, aIdx);
-    if (!heads) return s;
+    // v5.428：改用 flipCoinsWithLog（原 inline Math.random 不設 coinFlippedThisAttack → 重試徽章無效）
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    const s = r.state;
+    if (r.heads === 0) return s;
     return updatePlayer(
       addLog(s, `${label}：正面 → 自身下回合免疫招式傷害`, aIdx),
       aIdx, p => ({
@@ -50,19 +51,21 @@ function coinHeadsSelfImmunePost(label: string): AttackPostFn {
 // helper: 擲幣反面失敗
 function coinTailsFailPre(base: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    if (!heads) return { state: addLog(state, `${label}：反面 → 招式失敗`, aIdx), damage: 0 };
-    return { state: addLog(state, `${label}：正面 → ${base} 傷害`, aIdx), damage: base };
+    // v5.428：改用 flipCoinsWithLog（重試徽章）
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    if (r.heads === 0) return { state: addLog(r.state, `${label}：反面 → 招式失敗`, aIdx), damage: 0 };
+    return { state: addLog(r.state, `${label}：正面 → ${base} 傷害`, aIdx), damage: base };
   };
 }
 
 // helper: 擲 N 次硬幣，正面數 ×K + base
 function coinFlipPlusMultiPre(base: number, coinCount: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    for (let i = 0; i < coinCount; i++) if (Math.random() < 0.5) heads++;
+    // v5.428：改用 flipCoinsWithLog（重試徽章）
+    const r = flipCoinsWithLog(state, coinCount, label, aIdx);
+    const heads = r.heads;
     const dmg = base + heads * perHead;
-    const s = addLog(state, `${label}：擲 ${coinCount} 次 → ${heads} 正面 → ${base} + ${heads}×${perHead} = ${dmg}`, aIdx);
+    const s = addLog(r.state, `${label}：${heads} 正面 → ${base} + ${heads}×${perHead} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   };
 }
