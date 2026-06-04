@@ -42,7 +42,7 @@ function coinHeadsSelfImmunePost(label: string): AttackPostFn {
       addLog(s, `${label}：正面 → 自身下回合免疫招式傷害`, aIdx),
       aIdx, p => ({
         ...p,
-        active: p.active ? { ...p.active, damageReduceNextHit: 9999 } : null,
+        active: p.active ? { ...p.active, immuneToAllAttackNextTurn: true } : null,
       }),
     );
   };

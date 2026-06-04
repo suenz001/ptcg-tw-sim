@@ -36,7 +36,7 @@ regPost('瑪夏多|暗影側踢', (state, aIdx, _pool) => {
     // 對手 active 已被 KO 移除（傷害足夠擊倒）
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, damageReduceNextHit: 9999 };
+    if (att.active) att.active = { ...att.active, immuneToAllAttackNextTurn: true };
     players[aIdx] = att;
     return addLog({ ...state, players }, '暗影側踢：成功擊倒對手 → 下回合免疫招式傷害', aIdx);
   }
@@ -56,7 +56,7 @@ regPost('雪吞蟲|躲藏', (state, aIdx, _pool) => {
     addLog(s, '躲藏：正面 → 下回合免疫招式傷害', aIdx),
     aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damageReduceNextHit: 9999 } : null,
+      active: p.active ? { ...p.active, immuneToAllAttackNextTurn: true } : null,
     }),
   );
 });

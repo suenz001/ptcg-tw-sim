@@ -312,7 +312,7 @@ regPost('赫普的小木靈|躍起閃避', (state, aIdx, _pool) => {
     addLog(s, '躍起閃避：正面 → 自身下回合免疫招式傷害', aIdx),
     aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damageReduceNextHit: 9999 } : null,
+      active: p.active ? { ...p.active, immuneToAllAttackNextTurn: true } : null,
     }),
   );
 });

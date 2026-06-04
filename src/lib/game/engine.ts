@@ -4576,6 +4576,12 @@ function handlePlaying(
       baseDamage = 0;
       skipDefEffects = true;
     }
+    // v5.441 鐵壁/棉花之翼類 — 只免傷害，招式效果照常（不設 skipDefEffects）。
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToAttackDamageThisTurn) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因鐵壁/棉花之翼效果，不受招式傷害（效果照常）`, dIdx);
+      baseDamage = 0;
+    }
 
     // v4.87 雷電獸｜閃光屏障（M5）— defender 不受「進化寶可夢」招式傷害
     //   進化判定：stage Stage1/Stage2 或 evolvesFrom 有值
@@ -6848,6 +6854,10 @@ function handlePlaying(
         n = { ...n };
         delete n.immuneToAllAttackThisTurn;
       }
+      if (c.immuneToAttackDamageThisTurn) {
+        n = { ...n };
+        delete n.immuneToAttackDamageThisTurn;
+      }
       // v4.87 閃光屏障 / 熔岩之壁 — clear ThisTurn at opponent's END_TURN (same pattern as immuneToBasicAttackThisTurn)
       if (c.immuneToEvolutionAttackThisTurn) {
         n = { ...n };
@@ -6968,6 +6978,10 @@ function handlePlaying(
       if (c.immuneToAllAttackNextTurn) {
         n = { ...n, immuneToAllAttackThisTurn: true };
         delete n.immuneToAllAttackNextTurn;
+      }
+      if (c.immuneToAttackDamageNextTurn) {
+        n = { ...n, immuneToAttackDamageThisTurn: true };
+        delete n.immuneToAttackDamageNextTurn;
       }
       // v4.87 閃光屏障 / 熔岩之壁 — promote NextTurn → ThisTurn at owner's END_TURN
       if (c.immuneToEvolutionAttackNextTurn) {

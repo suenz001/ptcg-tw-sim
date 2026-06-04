@@ -5412,24 +5412,32 @@ regPre('阿羅拉 地鼠|偷襲', coinTailsFailPre(30, '偷襲'));
 // 擲 1 次硬幣若正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害。
 // 實作：damageReduceNextHit = 9999 → 招式傷害降到 0（卡面範圍即「招式傷害」，
 // 不擋招式附加效果如異常狀態/放指示物，與卡面語意完全一致）。
-function coinHeadsSelfImmuneNextPost(attackName: string): AttackPostFn {
+function coinHeadsSelfImmuneNextPost(attackName: string, immuneKind: 'all' | 'damage' = 'all'): AttackPostFn {
   return (state, aIdx, _pool) => {
     const r = flipCoinsWithLog(state, 1, attackName, aIdx);
     if (!r.heads) return addLog(r.state, `${attackName}：反面 → 無追加效果`, aIdx);
     const players = [...r.state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, damageReduceNextHit: 9999 };
+    // v5.441：改用「下個對手回合」回合範圍旗標 — 原 damageReduceNextHit:9999 是「下次被打」消費型，
+    //   對手不攻擊就永久殘留(玩家回報效果保留到下下回合)。傷害+效果=immuneToAllAttackNextTurn、
+    //   只免傷害(鐵壁/棉花之翼)=immuneToAttackDamageNextTurn(效果照常)。
+    if (att.active) {
+      att.active = immuneKind === 'all'
+        ? { ...att.active, immuneToAllAttackNextTurn: true }
+        : { ...att.active, immuneToAttackDamageNextTurn: true };
+    }
     players[aIdx] = att;
-    return addLog({ ...r.state, players }, `${attackName}：正面 → 下回合免疫招式傷害`, aIdx);
+    const txt = immuneKind === 'all' ? '下個對手回合免疫招式傷害與效果' : '下個對手回合免疫招式傷害';
+    return addLog({ ...r.state, players }, `${attackName}：正面 → ${txt}`, aIdx);
   };
 }
-regPost('泥偶小人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
-regPost('泥偶巨人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
+regPost('泥偶小人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁', 'damage'));
+regPost('泥偶巨人|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁', 'damage'));
 regPost('土龍弟弟|挖洞', coinHeadsSelfImmuneNextPost('挖洞'));
 regPost('電電蟲|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
 regPost('東施喵|喵打滾', coinHeadsSelfImmuneNextPost('喵打滾'));
 regPost('飄飄雛|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
-regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼'));
+regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼', 'damage'));
 
 // ── (C) coin-until-tails-multiply helper + 5 張 ───────────────────────────
 // v2.252：改為每次擲幣寫 1 行 log（格式「第 N 次擲硬幣 — 正面/反面」），
@@ -9974,7 +9982,7 @@ regPre('無畏小子|叩叩打擊', coinUntilTailsMultiplyPre(30, 10, '叩叩打
 
 // coinHeadsSelfImmuneNextPost(label) — 0 dmg + 正面則自己下回合免疫
 regPre('銅鏡怪|鐵壁', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('銅鏡怪|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁'));
+regPost('銅鏡怪|鐵壁', coinHeadsSelfImmuneNextPost('鐵壁', 'damage'));
 
 // ── (B) registerSelfDiscardMultiply 補完（自身丟能量為 cost） ─────────────
 // 千面避役｜水射擊 110 — 丟 1 自身能量（cost）

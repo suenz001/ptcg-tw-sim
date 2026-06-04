@@ -229,7 +229,7 @@ function coinHeadsImmunePost(label: string): AttackPostFn {
     if (!heads) return s;
     return updatePlayer(s, aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damageReduceNextHit: 9999 } : null,
+      active: p.active ? { ...p.active, immuneToAllAttackNextTurn: true } : null,
     }));
   };
 }

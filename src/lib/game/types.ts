@@ -314,6 +314,9 @@ export interface CardInstance {
   /** v2.360 具甲武者｜要害斬 — 下個對手回合不受招式的傷害與效果影響 */
   immuneToAllAttackNextTurn?: boolean;
   immuneToAllAttackThisTurn?: boolean;
+  /** v5.441 鐵壁/棉花之翼類「下個對手回合不受招式傷害」(效果照常)；NextTurn promote→ThisTurn */
+  immuneToAttackDamageNextTurn?: boolean;
+  immuneToAttackDamageThisTurn?: boolean;
   /**
    * v4.87 雷電獸｜閃光屏障（M5）— 下個對手回合，這隻寶可夢不會受到「進化寶可夢」的招式傷害。
    * Engine 攻擊 pipeline：attacker 為進化寶可夢（stage Stage1/Stage2 或 evolvesFrom 有值）

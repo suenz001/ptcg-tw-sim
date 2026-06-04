@@ -169,6 +169,10 @@ export function canApplyEffectToTarget(
     if (target.immuneToAllAttackThisTurn) {
       return { blocked: true, reason: '免疫招式的傷害與效果（飛翔/要害斬/躲藏類）' };
     }
+    // v5.441 鐵壁/棉花之翼類 — 只免「招式傷害」(attack-damage)，招式效果照常。
+    if (kind === 'attack-damage' && target.immuneToAttackDamageThisTurn) {
+      return { blocked: true, reason: '免疫招式的傷害（鐵壁/棉花之翼類，效果照常）' };
+    }
     if (target.immuneToExAttackThisTurn) {
       const atkActive = state.players[actorIdx].active;
       const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;

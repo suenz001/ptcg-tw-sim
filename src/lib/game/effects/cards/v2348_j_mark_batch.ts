@@ -45,7 +45,7 @@ function selfImmuneOnHeads(label: string) {
     if (!r.heads) return addLog(r.state, `${label}：反面 → 無追加效果`, aIdx);
     const s = updatePlayer(r.state, aIdx, (p) => p.active ? {
       ...p,
-      active: { ...p.active, damageReduceNextHit: 9999 },
+      active: { ...p.active, immuneToAllAttackNextTurn: true },
     } : p);
     return addLog(s, `${label}：正面 → 下個對手回合免疫招式傷害`, aIdx);
   };
