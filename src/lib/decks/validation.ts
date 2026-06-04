@@ -38,6 +38,19 @@ const STANDARD_REPRINT_LEGAL_NAMES = new Set<string>([
   '裁判',           // Judge
   '神奇糖果',       // v3.62 Rare Candy — I 標 M1S 082/063 + MC 655/742 重印，舊版含 G 標仍合法
   '能量回收',       // v3.63 Energy Recycler — I 標 M4 104/083 + MC 636/742 + SV11W 079/086 重印
+  // v5.427：官方「過往系列中可使用之卡牌清單」補完（皆經 static/cards JSON 核實有 H/I/J 重印）
+  '傷藥',           // Potion — MC:J / SVM:J 重印（舊版 MJ:G 仍合法）
+  '精靈球',         // Poké Ball — MC:J / SVM:J
+  '能量輸送',       // Energy Transfer — MC:J / SVM:J
+  '反擊增幅器',     // Counter Catcher — M2a:H / MC:H / SV7a:H
+  '能量回收器',     // Energy Retrieval — M2a:I / M3:I / MC:I（含「能量再利用」視為同一張，卡池無此別名）
+  '慶祝開場樂',     // Festival Lead — SV-P-H:H
+  '西餐廚師',       // Chef — MC:H / MJ:H / SVM:H
+  '氣球',           // Air Balloon — M1L:I / MC:I / SV11B:I
+  '除蟲噴霧',       // Bug Catching Set/Spray — M1L:I / MC:I
+  '改造之錘',       // Enhanced Hammer — M2a:H / SV5a:H / SV6:H / SV8a:H
+  '寶可夢中心的姐姐', // Nurse — SV-P-I:I
+  '道具拆除器',     // Tool Scrapper — M2a:I / SV11W:I
 ]);
 
 export function isStandardReprintLegal(card: Card): boolean {
