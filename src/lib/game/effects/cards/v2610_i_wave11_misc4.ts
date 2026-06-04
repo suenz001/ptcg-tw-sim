@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 import { regPre, regPost, addLog, updatePlayer, withPending, regR } from '../_shared';
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -105,31 +105,35 @@ function selfReturnNTypeEnergyToHandPost(
 }
 
 // helper: 對手所有備戰各受到 N
+// v5.434：改走中央 dealAttackDamageToTarget 補免疫 guard（太晶/化隱/中立中心擋；對戰圓形對「傷害」不擋）。
+//   備戰位不計弱抗（中央函式 isActive gate 自動處理）。
 function snipeAllOppBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    return updatePlayer(
-      addLog(state, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx),
-      dIdx, p => ({
-        ...p,
-        bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + amount })),
-      }),
-    );
+    const benchIids = state.players[dIdx].bench.map(b => b.iid);
+    let s = addLog(state, `${label}：對手所有備戰寶可夢各受到 ${amount} 點傷害`, aIdx);
+    for (const iid of benchIids) {
+      s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+      if (s.phase === 'game-over') return s;
+    }
+    return s;
   };
 }
 
 // 對手所有寶可夢（active+bench）各受到 N
+// v5.434：改走中央函式。卡面僅「[在備戰區]不計弱抗」→ active 仍計弱點/抵抗/攻擊方道具（中央函式 isActive 公式）、
+//   備戰位 flat。原 helper 對 active 也 flat = 漏算弱點，本次一併修正。
 function snipeAllOppPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    return updatePlayer(
-      addLog(state, `${label}：對手所有寶可夢各受到 ${amount} 點傷害`, aIdx),
-      dIdx, p => ({
-        ...p,
-        active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + amount } : null,
-        bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + amount })),
-      }),
-    );
+    const d = state.players[dIdx];
+    const iids = [...(d.active ? [d.active.iid] : []), ...d.bench.map(b => b.iid)];
+    let s = addLog(state, `${label}：對手所有寶可夢各受到 ${amount} 點傷害`, aIdx);
+    for (const iid of iids) {
+      s = dealAttackDamageToTarget(s, aIdx, iid, amount, pool, { kind: 'attack-damage', label });
+      if (s.phase === 'game-over') return s;
+    }
+    return s;
   };
 }
 

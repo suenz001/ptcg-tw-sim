@@ -6956,7 +6956,7 @@ export function dealAttackDamageToTarget(
   targetIid: string,
   dmg: number,
   pool: Map<string, Card>,
-  opts?: { kind?: DamageKind; label?: string },
+  opts?: { kind?: DamageKind; label?: string; noWeakness?: boolean },
 ): GameState {
   const kind = opts?.kind ?? 'attack-damage';
   const label = opts?.label ?? '攻擊';
@@ -6992,7 +6992,9 @@ export function dealAttackDamageToTarget(
   //   也不套（指示物為 flat）。鏡射多目標 snipe resolver 的 active 公式（v5.153）。
   //   玩家回報：閃焰王牌ex 石榴石截擊 打弱火的 蜜集大蛇ex 沒 ×2（180→應 360）。
   let effDmg = dmg;
-  if (isActive && kind === 'attack-damage') {
+  // v5.434：noWeakness — 卡面「這個招式的傷害不計算弱點・抵抗力」(整招 flat，如 重磅驟雨/橄欖石音波)。
+  //   只略過弱點/抵抗/攻擊方道具加成；免疫(太晶/神秘石居/對戰圓形)與 KO 仍照走。
+  if (isActive && kind === 'attack-damage' && !opts?.noWeakness) {
     const _atk = st.players[actorIdx].active;
     const _atkCard = _atk ? pool.get(_atk.cardId) : undefined;
     if (_atkCard?.pokemonType && targetCard?.weakness?.type
@@ -10296,57 +10298,21 @@ function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: str
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
     const all = [d.active, ...d.bench].filter((c): c is CardInstance => !!c);
-    const targets = all.filter(c => {
+    const targetIids = all.filter(c => {
       const card = pool.get(c.cardId);
       if (!card) return false;
       if (isExCard(card)) return true;
       if (filterType === 'ex-or-v' && (card.name.endsWith('V') || card.name.endsWith('VMAX'))) return true;
       return false;
-    });
-    if (targets.length === 0) return addLog(state, `${label}：對手場上無 ex 寶可夢`, aIdx);
-    let s = addLog(state, `${label}：對手 ${targets.length} 隻 ex 寶可夢各 ${dmg} 傷害`, aIdx);
-    let totalPrize = 0;
-    let oppActiveKOed = false;
-    for (const t of targets) {
-      const defender = s.players[dIdx];
-      const isActive = defender.active?.iid === t.iid;
-      const cur = isActive ? defender.active : defender.bench.find(c => c.iid === t.iid);
-      if (!cur) continue;
-      const card = pool.get(cur.cardId);
-      const hp = effectiveHPInline(cur, pool, state);  // v5.091
-      const newDmg = cur.damage + dmg;
-      if (hp > 0 && newDmg >= hp) {
-        const ko: CardInstance[] = [
-          { ...cur, damage: newDmg },
-          ...cur.energyAttached,
-          ...getAllAttachedTools(cur),
-          ...(cur.evolvedFromStack ?? []),
-        ];
-        const _ko = koPrizesAdjusted(s, cur, card, (1 - dIdx) as 0 | 1, dIdx, pool);
-        s = _ko.state;
-        const p = _ko.prizes;
-        totalPrize += p;
-        const players = [...s.players] as [PlayerState, PlayerState];
-        const nd = { ...defender, discard: [...defender.discard, ...ko] };
-        if (isActive) { nd.active = null; oppActiveKOed = true; }
-        else nd.bench = defender.bench.filter(c => c.iid !== t.iid);
-        players[dIdx] = nd;
-        s = addLog({ ...s, players }, `${label}：${card?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
-        s = recordOppKO(s, dIdx, card, 'attack');
-      } else {
-        const players = [...s.players] as [PlayerState, PlayerState];
-        const nd = { ...defender };
-        if (isActive) nd.active = { ...cur, damage: newDmg };
-        else nd.bench = defender.bench.map(c => c.iid === t.iid ? { ...c, damage: newDmg } : c);
-        players[dIdx] = nd;
-        s = addLog({ ...s, players }, `${label}：對 ${card?.name ?? '?'} 造成 ${dmg} 傷害`, aIdx);
-      }
+    }).map(c => c.iid);
+    if (targetIids.length === 0) return addLog(state, `${label}：對手場上無 ex 寶可夢`, aIdx);
+    let s = addLog(state, `${label}：對手 ${targetIids.length} 隻 ex 寶可夢各 ${dmg} 傷害`, aIdx);
+    // v5.434：改走中央 dealAttackDamageToTarget（補免疫 guard：太晶/神秘石居/中立中心/對戰圓形等）。
+    //   noWeakness=true：卡面「這個招式的傷害不計算弱點・抵抗力」→ 整招 flat（含 active ex）。
+    for (const iid of targetIids) {
+      s = dealAttackDamageToTarget(s, aIdx, iid, dmg, pool, { kind: 'attack-damage', noWeakness: true, label });
+      if (s.phase === 'game-over') return s;
     }
-    const defender = s.players[dIdx];
-    if (oppActiveKOed && !defender.active && defender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
-    if (totalPrize > 0) s = addPendingPrize(s, aIdx, totalPrize);
     return s;
   };
 }
