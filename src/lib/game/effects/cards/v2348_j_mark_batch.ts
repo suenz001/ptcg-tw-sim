@@ -1,6 +1,6 @@
 import type { GameState, PlayerState, CardInstance, SpecialCondition } from '../../types';
 import { addLog, clearActiveEffects, regPost, regPre, updatePlayer, withPending } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, dealSelfDamage } from '../../effects';
 
 const statusLabel: Record<SpecialCondition, string> = {
   poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
@@ -60,11 +60,9 @@ function selfSwitchToFirstBench(state: GameState, aIdx: 0 | 1, label: string): G
   return updatePlayer(addLog(state, `${label}：與備戰寶可夢互換`, aIdx), aIdx, (pl) => ({ ...pl, active: newActive, bench: newBench }));
 }
 
+// v5.438：委派中央 dealSelfDamage（自傷收斂）。
 function addSelfDamage(state: GameState, aIdx: 0 | 1, amount: number, label: string): GameState {
-  return updatePlayer(addLog(state, `${label}：自身受到 ${amount} 傷害`, aIdx), aIdx, (p) => p.active ? {
-    ...p,
-    active: { ...p.active, damage: p.active.damage + amount },
-  } : p);
+  return dealSelfDamage(state, aIdx, amount, undefined, label);
 }
 
 // J-mark batch v2.348：remaining P1 simple statuses / revenge / coin status.

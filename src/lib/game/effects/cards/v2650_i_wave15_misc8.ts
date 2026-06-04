@@ -17,7 +17,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, same
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -149,18 +149,6 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
 }
 
 // 自殘 N HP
-function selfHitPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    return updatePlayer(
-      addLog(state, `${label}：自身受到 ${amount} 點傷害`, aIdx),
-      aIdx, p => ({
-        ...p,
-        active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + amount } : null,
-      }),
-    );
-  };
-}
-
 // 對手 1 隻備戰受 N
 function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = false): AttackPostFn {
   return (state, aIdx, _pool) => {

@@ -2686,16 +2686,25 @@ regPost('闇黑酋雷姆ex|冰河期', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** 攻擊後自傷 N */
-export function selfHitPost(amount: number): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (!att.active) return state;
-    const attName = pool.get(att.active.cardId)?.name ?? '?';
-    att.active = { ...att.active, damage: att.active.damage + amount };
-    players[aIdx] = att;
-    return addLog({ ...state, players }, `${attName} 自身受到 ${amount} 點傷害`, aIdx);
-  };
+// v5.438：自傷（recoil）中央 helper — 對「攻擊方自己的戰鬥寶可夢」放 amount 傷害 + log。
+//   收斂原本散落 4 份相同實作（selfHitPost 主 + v2650/v2750/v2770 local + m5SelfDamagePost + addSelfDamage）。
+//   不計弱抗、不觸發對手受傷反擊（自傷非對手招式）。自我 KO 由 engine 攻擊後 sanityKOSweep 接住（已驗證無 bug）。
+//   log 格式完全保留：無 label → 「<卡名> 自身受到 N 點傷害」；有 label → 「<label>：自身受到 N 點傷害」。
+export function dealSelfDamage(
+  state: GameState, aIdx: 0 | 1, amount: number, pool: Map<string, Card> | undefined, label?: string,
+): GameState {
+  const att = state.players[aIdx].active;
+  if (!att || amount <= 0) return state;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[aIdx] = { ...players[aIdx], active: { ...att, damage: att.damage + amount } };
+  const msg = label
+    ? `${label}：自身受到 ${amount} 點傷害`
+    : `${pool?.get(att.cardId)?.name ?? '?'} 自身受到 ${amount} 點傷害`;
+  return addLog({ ...state, players }, msg, aIdx);
+}
+
+export function selfHitPost(amount: number, label?: string): AttackPostFn {
+  return (state, aIdx, pool) => dealSelfDamage(state, aIdx, amount, pool, label);
 }
 regPost('燒火蚣|高溫奇襲', selfHitPost(10));
 regPost('海地鼠|水炸彈', selfHitPost(20));

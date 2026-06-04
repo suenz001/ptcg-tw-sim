@@ -19,7 +19,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
-  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget,
+  hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
 } from '../../effects';
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -46,16 +46,6 @@ function rechargePost(attackName: string): AttackPostFn {
       blockedAttackNamesNextTurn: [...(p.active.blockedAttackNamesNextTurn ?? []), attackName],
     } : null,
   }));
-}
-
-function selfHitPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => updatePlayer(
-    addLog(state, `${label}：自身受 ${amount} 點傷害`, aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + amount } : null,
-    }),
-  );
 }
 
 function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {

@@ -12,7 +12,7 @@ import {
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, selfHitPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -25,13 +25,6 @@ function isEnergyOfType(ec: any, type: string): boolean {
   if (!m) return false;
   const zh: Record<string, string> = { '草':'Grass','火':'Fire','水':'Water','雷':'Lightning','超':'Psychic','鬥':'Fighting','惡':'Darkness','鋼':'Metal','妖':'Fairy','龍':'Dragon','無':'Colorless' };
   return zh[m[1]] === type;
-}
-
-function selfHitPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => updatePlayer(addLog(state, `${label}：自身受 ${amount}`, aIdx), aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + amount } : null,
-  }));
 }
 
 function selfDiscardAllEnergyPost(label: string): AttackPostFn {

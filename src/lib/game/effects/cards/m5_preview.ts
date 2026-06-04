@@ -84,6 +84,7 @@ import {
   canApplyAttackEffectToTarget,
   prizesForKOLocal,
   manualDamageImmunity,
+  dealSelfDamage,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -94,17 +95,9 @@ import { canApplyEffectToTarget } from '../../defense';
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
 // 引擎沒有現成的 selfDamagePost helper（v2380 之前用 inline pattern）
 // 為下架彈性，這個 helper 留在本檔內（不放 effects.ts）
+// v5.438：委派中央 dealSelfDamage（自傷收斂）。
 function m5SelfDamagePost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const s = updatePlayer(state, aIdx, p => {
-      if (!p.active) return p;
-      return {
-        ...p,
-        active: { ...p.active, damage: p.active.damage + n },
-      };
-    });
-    return addLog(s, `${label}：這隻寶可夢也受到 ${n} 點傷害`, aIdx);
-  };
+  return (state, aIdx, pool) => dealSelfDamage(state, aIdx, n, pool, label);
 }
 
 // ── 002 強顎雞母蟲｜吐絲 — 擲幣正面→對手【麻痺】─────────────────────────
