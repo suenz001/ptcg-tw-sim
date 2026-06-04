@@ -1617,7 +1617,7 @@ function startFestivalDanceSecondAttackWindow(
  *   3. 中斷例外（攻擊者反擊 KO / 身分變化 / 失去祭典特性 / 場地換掉 / 狀態異常）→ 清 flag + log
  *   4. 否則 turnPhase 設 main 讓玩家手動操作（不再 dispatch ATTACK）
  */
-function tryPromoteToMainForFestival(
+export function tryPromoteToMainForFestival(
   state: GameState,
   pool: Map<string, Card>,
 ): GameState {

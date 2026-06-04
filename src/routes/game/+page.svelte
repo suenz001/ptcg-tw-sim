@@ -20,6 +20,7 @@
     getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
     tryAdvanceToPlaying,
+    tryPromoteToMainForFestival,
   } from '$lib/game/engine';
   import { resolveRoomUpdate } from '$lib/game/sync-guards';
   import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
@@ -4791,6 +4792,22 @@
         case 'adopt':
         case 'merge-prize':
           game = decision.game;
+          // v5.432：線上祭典樂舞第二次攻擊修正 — 「取獎賞」(攻擊方) 與「對手補位」分屬兩 client，
+          //   各自 action 當下開窗條件未齊（一邊只取獎賞、一邊只補位）；對方動作 merge 進來後沒有任何一方
+          //   重新評估 → 第二次攻擊視窗永遠不開、玩家被迫結束回合。修法：merge 後由「攻擊方本人 client」
+          //   (festival pending.idx===myPlayerIndex) 在尚未 promote(turnPhase!=='main') 時重跑
+          //   tryPromoteToMainForFestival（內部已檢查 pending/獎賞/對手active/中斷例外，條件齊才 promote）。
+          //   只由攻擊方一端做（避免兩端各自 promote 造成 log 分歧），promote 後推同步。
+          if (game && myPlayerIndex !== null
+              && game.festivalDancePendingSecondAttack
+              && game.festivalDancePendingSecondAttack.idx === myPlayerIndex
+              && game.turnPhase !== 'main') {
+            const _festPromoted = tryPromoteToMainForFestival(game, pool);
+            if (_festPromoted !== game) {
+              game = _festPromoted;
+              if (roomCode) pushGameState(roomCode, _festPromoted).catch((e: unknown) => console.warn('[festival promote push] failed:', e));
+            }
+          }
           return;
         default:
           return;
