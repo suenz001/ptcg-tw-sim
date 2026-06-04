@@ -36,7 +36,6 @@ regA('吉雉雞ex', 0, (state, aIdx, pool, inst) => {
 //   自動附能版（import 後 effects.ts body 求值勝出，此 picker 版恆被覆蓋、從未生效）。重複註冊
 //   有翻版風險、picker 版又有取消後 abilityUsedThisTurn 卡住的隱患，故清除。萬葉陣雨 招式保留於下。
 import { regPre, regPost, shuffle, countAttachedEnergyAsUnits } from '../_shared';
-const flipCoin = () => Math.random() < 0.5;
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
 regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, pool) => {
   const p1 = state.players[0];
@@ -288,7 +287,7 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
   let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, targetInst] }));
   return addLog(s, '脫殼：將「脫殼忍者」放置於備戰區，並重洗牌庫', actorIdx);
 });
-import { selfSwapPost, statusPost } from '../../effects';
+import { selfSwapPost, statusPost, flipCoinsWithLog } from '../../effects';
 const selfBouncePost = (name: string) => {
   return (state: GameState, aIdx: 0|1) => {
     // v2.991：拆能量、道具、進化棧底逐一回手牌（與 effects.ts selfReturnToHandPost 一致）
@@ -424,10 +423,10 @@ regR('heliolisk-frill-generation', (state, actorIdx, selectedIids, params, pool)
 regPre('光電傘蜥|強大伏特', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const count = p.active ? p.active.energyAttached.length : 0;
-  let heads = 0;
-  for (let i = 0; i < count; i++) if (flipCoin()) heads++;
+  const rfv = flipCoinsWithLog(state, count, '強大伏特', aIdx);
+  const heads = rfv.heads;
   const dmg = heads * 70;
-  return { state: addLog(state, `強大伏特：擲 ${count} 次硬幣，出現 ${heads} 次正面 → ${dmg} 傷害`, aIdx), damage: dmg };
+  return { state: addLog(rfv.state, `強大伏特：擲 ${count} 次硬幣，出現 ${heads} 次正面 → ${dmg} 傷害`, aIdx), damage: dmg };
 });
 
 // ── 遠古巨蜓ex (Yanmega ex) ───────────────────────────────────────────────────────
@@ -675,11 +674,11 @@ regR('erikas-tangela-hundred-flowers', (state, actorIdx, selectedIids, params, p
 regPre('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => ({ state, damage: 50 }));
 regPost('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => {
   // v2.92：擲幣正面則走 statusPost('paralyzed')（內含完整免疫檢查）
-  if (flipCoin()) {
-    const s = addLog(state, '藤蔓攻擊：擲硬幣 — 正面', aIdx);
-    return statusPost('paralyzed')(s, aIdx, pool);
+  const rvw = flipCoinsWithLog(state, 1, '藤蔓攻擊', aIdx);
+  if (rvw.heads === 1) {
+    return statusPost('paralyzed')(rvw.state, aIdx, pool);
   }
-  return addLog(state, '藤蔓攻擊：擲硬幣 — 反面，無附加狀態', aIdx);
+  return addLog(rvw.state, '藤蔓攻擊：反面，無附加狀態', aIdx);
 });
 
 // ── 萌芽鹿 (Sawsbuck) ───────────────────────

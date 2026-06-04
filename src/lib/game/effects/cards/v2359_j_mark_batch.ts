@@ -43,7 +43,7 @@ import {
   withPending,
   countAttachedEnergyAsUnits, getOwnBenchLimit} from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, flipCoinsWithLog } from '../../effects';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 
@@ -56,10 +56,11 @@ function flip1(
   state: GameState,
   aIdx: 0 | 1,
 ): { state: GameState; heads: boolean } {
-  const isHeads = Math.random() < 0.5;
+  // v5.x：改委派 effects.ts flipCoinsWithLog（設 coinFlippedThisAttack + consume retry queue）
+  const r = flipCoinsWithLog(state, 1, label, aIdx);
   return {
-    state: addLog(state, `${label}：擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx),
-    heads: isHeads,
+    state: r.state,
+    heads: r.heads === 1,
   };
 }
 

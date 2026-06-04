@@ -20,13 +20,15 @@ import {
   regPre,
   updatePlayer,
 } from '../_shared';
+import { flipCoinsWithLog } from '../../effects';
 
 // ── A. 幼基拉斯｜咬碎 ────────────────────────────────────────────────────────
 // 卡面：20 傷害。擲 1 次硬幣，若正面，丟棄對手戰鬥寶可夢身上 1 張能量。
 regPre('幼基拉斯|咬碎', (state, _aIdx, _pool) => ({ state, damage: 20 }));
 regPost('幼基拉斯|咬碎', (state, aIdx, pool) => {
-  const isHeads = Math.random() < 0.5;
-  state = addLog(state, `咬碎：擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
+  const rbc = flipCoinsWithLog(state, 1, '咬碎', aIdx);
+  state = rbc.state;
+  const isHeads = rbc.heads === 1;
   if (!isHeads) return state;
 
   const dIdx = (1 - aIdx) as 0 | 1;

@@ -20,16 +20,17 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { statusPost } from '../../effects';
+import { statusPost, flipCoinsWithLog } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper A: 擲 1 次硬幣 +N
 // ══════════════════════════════════════════════════════════════════════════════
 function coinFlipPlusPre(base: number, bonus: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    const heads = r.heads === 1;
     const dmg = heads ? base + bonus : base;
-    const s = addLog(state, `${label}：擲 1 次硬幣 → ${heads ? '正面' : '反面'} → ${heads ? `+${bonus}` : '不增傷'} = ${dmg}`, aIdx);
+    const s = addLog(r.state, `${label}：${heads ? `正面 → +${bonus}` : '反面 → 不增傷'} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   };
 }
@@ -39,10 +40,10 @@ function coinFlipPlusPre(base: number, bonus: number, label: string): AttackPreF
 // ══════════════════════════════════════════════════════════════════════════════
 function coinFlipMultiplyPre(coinCount: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    for (let i = 0; i < coinCount; i++) if (Math.random() < 0.5) heads++;
+    const r = flipCoinsWithLog(state, coinCount, label, aIdx);
+    const heads = r.heads;
     const dmg = heads * perHead;
-    const s = addLog(state, `${label}：擲 ${coinCount} 次硬幣 → ${heads} 次正面 = ${heads}×${perHead} = ${dmg}`, aIdx);
+    const s = addLog(r.state, `${label}：擲 ${coinCount} 次硬幣 → ${heads} 次正面 = ${heads}×${perHead} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   };
 }
@@ -125,8 +126,9 @@ regR('wave4-force-opp-swap-dmg', (state, _aIdx, iids, params, _pool) => {
 // 擲幣若正則強制換場
 function coinFlipForceOppSwapPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
-    const heads = Math.random() < 0.5;
-    let s = addLog(state, `${label}：擲 1 次硬幣 → ${heads ? '正面' : '反面'}`, aIdx);
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    const heads = r.heads === 1;
+    let s = r.state;
     if (!heads) return s;
     return forceOppSwapPost(label)(s, aIdx, pool);
   };
@@ -218,28 +220,26 @@ for (const [key, base, bonus] of COIN_PLUS) {
 
 // 蒂蕾喵|魔法葉 30+ 擲 1 正面 +30 + 自身回 30 HP（特殊：含 heal）
 regPre('蒂蕾喵|魔法葉', (state, aIdx, _pool) => {
-  const heads = Math.random() < 0.5;
+  const r = flipCoinsWithLog(state, 1, '魔法葉', aIdx);
+  const heads = r.heads === 1;
   const dmg = heads ? 60 : 30;
-  const s = addLog(state, `魔法葉：擲 1 次硬幣 → ${heads ? '正面 → +30 並回 30 HP' : '反面，無 +N 也無回血'} = ${dmg}`, aIdx);
+  // v5.x：把擲幣結果存 _lastCoinHeads，regPost 用同一次結果決定回血（不再獨立重擲）
+  const s = addLog({ ...r.state, _lastCoinHeads: r.heads }, `魔法葉：${heads ? '正面 → +30 並回 30 HP' : '反面，無 +N 也無回血'} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 regPost('蒂蕾喵|魔法葉', (state, aIdx, _pool) => {
-  // 簡化：只在正面時回血（pre 已決定）— 但 random 不能再擲一次。
-  // 這裡用一個 cheap heuristic：看 pre 算出來的 damage。實際引擎流是 pre 之後 post，state 一致。
-  // 嚴格來說應該 share 一個 flag。但 player damage 看 dmg 是 60 還 30 即可推斷。
-  // 折衷：擲幣已隨機過一次 → 直接機率 50% 回血
+  // v5.x：改讀 regPre 存的 _lastCoinHeads（同一次擲幣），正面才回血。
+  //   舊版於此獨立再擲一次 Math.random → 與 regPre 脫鉤（同 鱗粉颶風 v5.416 模式修正）。
+  const headsThisAttack = (state._lastCoinHeads ?? 0) >= 1;
+  if (!headsThisAttack) return state;
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
   if (!p.active || (p.active.damage ?? 0) === 0) return state;
-  // 50% 觸發回血（與 pre 同機率，但獨立 flip — 簡化處理）
-  if (Math.random() < 0.5) {
-    const before = p.active.damage ?? 0;
-    const after = Math.max(0, before - 30);
-    p.active = { ...p.active, damage: after };
-    players[aIdx] = p;
-    return addLog({ ...state, players }, `魔法葉：自身回復 30 HP`, aIdx);
-  }
-  return state;
+  const before = p.active.damage ?? 0;
+  const after = Math.max(0, before - 30);
+  p.active = { ...p.active, damage: after };
+  players[aIdx] = p;
+  return addLog({ ...state, players }, `魔法葉：自身回復 30 HP`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -281,9 +281,9 @@ regPost('雙倍多多冰|雙重冰凍', (state, aIdx, pool) => {
 //   （1 正面也可能麻痺、3-4 正面也可能不麻痺）。改為 regPre 擲一次 4 幣、把正面數存
 //   state._lastCoinHeads，regPost 用「同一次」結果判 ≥2 才麻痺。
 regPre('巴大蝶|鱗粉颶風', (state, aIdx, _pool) => {
-  let heads = 0;
-  for (let i = 0; i < 4; i++) if (Math.random() < 0.5) heads++;
-  const s = addLog({ ...state, _lastCoinHeads: heads }, `鱗粉颶風：擲 4 次硬幣 → ${heads} 次正面，造成 ${heads * 60} 點傷害`, aIdx);
+  const r = flipCoinsWithLog(state, 4, '鱗粉颶風', aIdx);
+  const heads = r.heads;
+  const s = addLog({ ...r.state, _lastCoinHeads: heads }, `鱗粉颶風：擲 4 次硬幣 → ${heads} 次正面，造成 ${heads * 60} 點傷害`, aIdx);
   return { state: s, damage: heads * 60 };
 });
 regPost('巴大蝶|鱗粉颶風', (state, aIdx, pool) => {

@@ -48,6 +48,7 @@ import {
 import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
+  flipCoinsWithLog,
 } from '../../effects';
 import { getEnergyUnits, countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
@@ -590,7 +591,14 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
     return addLog(state, '破壞潮旋：對手戰鬥位無能量', aIdx);
   }
   let heads = 0;
-  while (Math.random() < 0.5) heads++;
+  let s0: GameState = state;
+  while (true) {
+    const r = flipCoinsWithLog(s0, 1, '破壞潮旋', aIdx);
+    s0 = r.state;
+    if (r.heads === 0) break;
+    heads++;
+  }
+  state = s0;
   if (heads === 0) {
     return addLog(state, '破壞潮旋：第 1 次擲就反面 → 不丟能量', aIdx);
   }

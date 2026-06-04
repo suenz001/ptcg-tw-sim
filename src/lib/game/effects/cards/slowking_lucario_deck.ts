@@ -15,6 +15,7 @@ import {
   shuffle, updatePlayer, addLog, drawCards, withPending,
 } from '../_shared';
 import { dealAttackDamageToTarget } from '../../effects'; // v5.386：幻影碎放指示物改走中央函式（補招式效果免疫 guard）
+import { flipCoinsWithLog } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 呆呆獸 M-P 18072｜憨憨臉（特性 — 卡面：「這隻寶可夢不會【混亂】」）
@@ -179,34 +180,19 @@ regPre('超級袋獸ex|機關槍合擊', (state, aIdx, _pool, action) => {
   // v5.165：擲幣明細存到 state._machineGunLastFlips 供 retry-badge modal 顯示；
   //         若 action._retryInjectedFlips 有值（玩家選「保留前次結果」時 engine 重跑帶入）
   //         → 跳過 random，用既定陣列依序判定（語義：玩家確認後才正式套用此次擲幣結果）。
-  let s: GameState = { ...state, coinFlippedThisAttack: true };
+  // v5.x：每次擲幣逐一走 flipCoinsWithLog（設 coinFlippedThisAttack、自行 consume
+  //   _retryInjectedFlipsQueue 注入、append _machineGunLastFlips 供 retry-badge modal 顯示）。
+  //   不再 inline 維護 flips 陣列 / 自行讀 action._retryInjectedFlips —
+  //   engine keep 路徑同時設 state queue，由 flipCoinsWithLog 統一消費。
+  void action;
+  let s: GameState = state;
   let heads = 0;
-  let count = 0;
-  const flips: string[] = [];
-  // v5.165 ATTACK 帶 _retryInjectedFlips → 用既定結果重現（玩家選「保留前次結果」路徑）
-  const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
-  if (injected && injected.length > 0) {
-    for (const flip of injected) {
-      count++;
-      const isHeads = flip === '正面';
-      flips.push(flip);
-      s = addLog(s, `機關槍合擊：第 ${count} 次擲硬幣 — ${flip}${isHeads ? '' : '（停止）'} 〔重試徽章：使用前次擲幣結果〕`, aIdx);
-      if (isHeads) heads++;
-      else break;
-    }
-  } else {
-    for (let i = 0; i < 20; i++) {
-      count++;
-      const isHeads = Math.random() < 0.5;
-      const label = isHeads ? '正面' : '反面';
-      flips.push(label);
-      s = addLog(s, `機關槍合擊：第 ${count} 次擲硬幣 — ${label}${isHeads ? '' : '（停止）'}`, aIdx);
-      if (isHeads) heads++;
-      else break;
-    }
+  for (let i = 0; i < 20; i++) {
+    const r = flipCoinsWithLog(s, 1, '機關槍合擊', aIdx);
+    s = r.state;
+    if (r.heads === 1) heads++;
+    else break;
   }
-  // v5.165 把擲幣明細存到 state 供 ATTACK 末端 retry-badge modal 讀取
-  s = { ...s, _machineGunLastFlips: flips };
   const dmg = 200 + heads * 50;
   s = addLog(s, `機關槍合擊：${heads} 次正面 → 基礎 200 + ${heads}×50 = ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };

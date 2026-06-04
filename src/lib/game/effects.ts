@@ -5490,13 +5490,12 @@ function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: st
   return (state, aIdx, _pool) => {
     let s = state;
     let heads = 0;
-    let count = 0;
     // 安全上限 20 次防無限迴圈（理論概率近 0，但保護）
+    // v5.x：逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack（重試徽章）+ consume retry queue
     for (let i = 0; i < 20; i++) {
-      count++;
-      const isHeads = Math.random() < 0.5;
-      s = addLog(s, `${attackName}：第 ${count} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
-      if (isHeads) heads++;
+      const r = flipCoinsWithLog(s, 1, attackName, aIdx);
+      s = r.state;
+      if (r.heads === 1) heads++;
       else break;
     }
     const dmg = base + heads * perHead;

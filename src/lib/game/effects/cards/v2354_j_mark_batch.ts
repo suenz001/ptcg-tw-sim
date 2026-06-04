@@ -12,6 +12,7 @@
 
 import type { CardInstance, GameState } from '../../types';
 import { startEnergyChain } from './v158_energy_chain';
+import { flipCoinsWithLog } from '../../effects';
 import {
   addLog,
   drawCards,
@@ -435,8 +436,9 @@ regA('彩粉蝶', 0, (st, idx) => {
 // 實裝：Math.random() 決定正反；正面 → 隨機丟棄 1 張對手手牌
 regA('烈箭鷹', 0, (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  const isHeads = Math.random() < 0.5;
-  let s = addLog(st, `穹天狩獵：擲硬幣 — ${isHeads ? '正面' : '反面'}`, idx);
+  const rqh = flipCoinsWithLog(st, 1, '穹天狩獵', idx);
+  const isHeads = rqh.heads === 1;
+  let s = rqh.state;
   if (!isHeads) return addLog(s, '穹天狩獵：反面，無效果', idx);
 
   const dp = s.players[dIdx];

@@ -1,6 +1,7 @@
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending } from '../_shared';
+import { flipCoinsWithLog } from '../../effects';
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
   const p = state.players[idx];
@@ -24,23 +25,17 @@ function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: 
   let s = state;
   let heads = 0;
   for (let i = 1; i <= 20; i++) {
-    const isHeads = Math.random() < 0.5;
-    s = addLog(s, `${label}：第 ${i} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
-    if (isHeads) heads++;
+    const r = flipCoinsWithLog(s, 1, label, aIdx);
+    s = r.state;
+    if (r.heads === 1) heads++;
     else break;
   }
   return { state: s, heads };
 }
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
-  let s = state;
-  let heads = 0;
-  for (let i = 1; i <= count; i++) {
-    const isHeads = Math.random() < 0.5;
-    if (isHeads) heads++;
-    s = addLog(s, `${label}：第 ${i}/${count} 次擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
-  }
-  return { state: s, heads };
+  const r = flipCoinsWithLog(state, count, label, aIdx);
+  return { state: r.state, heads: r.heads };
 }
 
 // J-mark batch v2.346：P1 simple variable/coin/heal effects verified from static/cards JSON.
@@ -121,9 +116,8 @@ regPre('青木的姆克鷹|硬撐', (state, aIdx) => {
 
 // 青木的土龍弟弟｜上衝：擲 1 次硬幣，正面 +20。
 regPre('青木的土龍弟弟|上衝', (state, aIdx) => {
-  const isHeads = Math.random() < 0.5;
-  const s = addLog(state, `上衝：擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
-  return { state: s, damage: isHeads ? 30 : 10 };
+  const r = flipCoinsWithLog(state, 1, '上衝', aIdx);
+  return { state: r.state, damage: r.heads === 1 ? 30 : 10 };
 });
 
 // 霹靂電球ex｜百裂球：100 + 擲到反面前正面數 ×100。

@@ -28,15 +28,16 @@ import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
+import { flipCoinsWithLog } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: A 擲 N 次硬幣，正面數 × K 傷害（damage='Nx30+' 等）
 // ══════════════════════════════════════════════════════════════════════════════
 function coinFlipMultiplyPre(coinCount: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    for (let i = 0; i < coinCount; i++) if (Math.random() < 0.5) heads++;
-    const s = addLog(state, `${label}：擲 ${coinCount} 次硬幣 → ${heads} 次正面，造成 ${heads * perHead} 點傷害`, aIdx);
+    const r = flipCoinsWithLog(state, coinCount, label, aIdx);
+    const heads = r.heads;
+    const s = addLog(r.state, `${label}：擲 ${coinCount} 次硬幣 → ${heads} 次正面，造成 ${heads * perHead} 點傷害`, aIdx);
     return { state: s, damage: heads * perHead };
   };
 }
@@ -249,8 +250,9 @@ function selfDmgReduceNextPost(n: number, label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 function coinAllHeadsPlusPre(base: number, coinCount: number, bonus: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    for (let i = 0; i < coinCount; i++) if (Math.random() < 0.5) heads++;
+    const r = flipCoinsWithLog(state, coinCount, label, aIdx);
+    const heads = r.heads;
+    state = r.state;
     const allHeads = heads === coinCount;
     const dmg = base + (allHeads ? bonus : 0);
     const s = addLog(state, `${label}：擲 ${coinCount} 次 → ${heads} 正面 → ${allHeads ? `全正面 +${bonus}` : '未全正面'} = ${dmg}`, aIdx);

@@ -22,7 +22,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, countOneEnergy} from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -48,8 +48,9 @@ regPost('瑪夏多|暗影側踢', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('雪吞蟲|躲藏', (s) => ({ state: s, damage: 0 }));
 regPost('雪吞蟲|躲藏', (state, aIdx, _pool) => {
-  const heads = Math.random() < 0.5;
-  let s = addLog(state, `躲藏：擲 1 次硬幣 → ${heads ? '正面' : '反面'}`, aIdx);
+  const r = flipCoinsWithLog(state, 1, '躲藏', aIdx);
+  const heads = r.heads === 1;
+  let s = r.state;
   if (!heads) return s;
   return updatePlayer(
     addLog(s, '躲藏：正面 → 下回合免疫招式傷害', aIdx),
@@ -108,9 +109,9 @@ regPre('巨蔓藤|肌力鞭打', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('焚焰蚣|緊束粉碎', (s) => ({ state: s, damage: 50 }));
 regPost('焚焰蚣|緊束粉碎', (state, aIdx, pool) => {
-  const flips = [Math.random() < 0.5, Math.random() < 0.5];
-  const heads = flips.filter(f => f).length;
-  let s = addLog(state, `緊束粉碎：擲 2 次硬幣 → ${flips.map(f => f ? '正' : '反').join('/')} (${heads} 次正面)`, aIdx);
+  const r = flipCoinsWithLog(state, 2, '緊束粉碎', aIdx);
+  const heads = r.heads;
+  let s = addLog(r.state, `緊束粉碎：擲 2 次硬幣 → ${heads} 次正面`, aIdx);
   if (heads === 0) return addLog(s, '緊束粉碎：無正面，無棄能效果', aIdx);
   // 棄對手戰鬥場 N 個能量（從尾端取）
   const dIdx = (1 - aIdx) as 0 | 1;

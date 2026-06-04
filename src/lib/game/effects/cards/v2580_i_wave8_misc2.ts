@@ -20,7 +20,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog } from '../../effects';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -90,11 +90,12 @@ function defCantRetreatNextPost(label: string): AttackPostFn {
 // helper: 擲幣反面失敗
 function coinTailsFailPre(base: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    const heads = r.heads === 1;
     if (!heads) {
-      return { state: addLog(state, `${label}：反面 → 招式失敗`, aIdx), damage: 0 };
+      return { state: addLog(r.state, `${label}：反面 → 招式失敗`, aIdx), damage: 0 };
     }
-    return { state: addLog(state, `${label}：正面 → ${base} 傷害`, aIdx), damage: base };
+    return { state: addLog(r.state, `${label}：正面 → ${base} 傷害`, aIdx), damage: base };
   };
 }
 
@@ -303,8 +304,9 @@ regPost('赫普的朽木妖|窮追不捨', defCantRetreatNextPost('窮追不捨'
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('赫普的小木靈|躍起閃避', (s) => ({ state: s, damage: 10 }));
 regPost('赫普的小木靈|躍起閃避', (state, aIdx, _pool) => {
-  const heads = Math.random() < 0.5;
-  let s = addLog(state, `躍起閃避：擲 1 次硬幣 → ${heads ? '正面' : '反面'}`, aIdx);
+  const r = flipCoinsWithLog(state, 1, '躍起閃避', aIdx);
+  const heads = r.heads === 1;
+  let s = r.state;
   if (!heads) return s;
   return updatePlayer(
     addLog(s, '躍起閃避：正面 → 自身下回合免疫招式傷害', aIdx),

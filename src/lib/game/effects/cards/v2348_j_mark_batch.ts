@@ -1,5 +1,6 @@
 import type { GameState, PlayerState, CardInstance, SpecialCondition } from '../../types';
 import { addLog, clearActiveEffects, regPost, regPre, updatePlayer, withPending } from '../_shared';
+import { flipCoinsWithLog } from '../../effects';
 
 const statusLabel: Record<SpecialCondition, string> = {
   poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
@@ -34,8 +35,8 @@ function applyDefStatuses(state: GameState, aIdx: 0 | 1, statuses: SpecialCondit
 }
 
 function flipOne(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: boolean } {
-  const heads = Math.random() < 0.5;
-  return { state: addLog(state, `${label}：擲硬幣 — ${heads ? '正面' : '反面'}`, aIdx), heads };
+  const r = flipCoinsWithLog(state, 1, label, aIdx);
+  return { state: r.state, heads: r.heads === 1 };
 }
 
 function selfImmuneOnHeads(label: string) {

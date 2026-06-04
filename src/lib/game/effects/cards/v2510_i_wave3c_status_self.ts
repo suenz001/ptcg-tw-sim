@@ -15,7 +15,7 @@ import {
   addLog, updatePlayer,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { coinStatusPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. A 擲幣狀態（7 張）— 純擲幣狀態類，復用 coinStatusPost
@@ -102,9 +102,9 @@ regPre('鐵炮魚|抓狂', (state, aIdx, _pool) => {
 // 火箭隊的拉達|顧前不顧後 90 — 擲 2 次硬幣，全反面則自身受 90
 regPre('火箭隊的拉達|顧前不顧後', (s) => ({ state: s, damage: 90 }));
 regPost('火箭隊的拉達|顧前不顧後', (state, aIdx, _pool) => {
-  const flips = [Math.random() < 0.5, Math.random() < 0.5];
-  const allTails = flips.every(f => !f);
-  let s = addLog(state, `顧前不顧後：擲 2 次硬幣 → ${flips.map(f => f ? '正' : '反').join('/')}`, aIdx);
+  const r = flipCoinsWithLog(state, 2, '顧前不顧後', aIdx);
+  const allTails = r.heads === 0;
+  let s = addLog(r.state, `顧前不顧後：擲 2 次硬幣 → ${r.heads} 正面`, aIdx);
   if (!allTails) return s;
   s = addLog(s, '顧前不顧後：全反面 → 自身受到 90 點傷害', aIdx);
   return updatePlayer(s, aIdx, p => ({

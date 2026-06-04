@@ -1,52 +1,23 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
-import { canApplyAttackEffectToTarget } from '../../effects';
+import { canApplyAttackEffectToTarget, flipCoinsWithLog } from '../../effects';
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
-  let s = state;
-  if (count > 0) s = { ...s, coinFlippedThisAttack: true };
-  let heads = 0;
-  const recordedFlips: string[] = [];  // v5.309
-  // v5.311: 同 effects.ts flipCoinsWithLog — consume _retryInjectedFlipsQueue.
-  // 否則重試徽章 keep flow 重 run attack 走此 local 函式時, 不會 inject 上次擲幣結果,
-  // 變成「玩家選不重擲, 結果還是重擲一次」(走新 random).
-  let queue: string[] | undefined = s._retryInjectedFlipsQueue ? [...s._retryInjectedFlipsQueue] : undefined;
-  for (let i = 1; i <= count; i++) {
-    let injected: string | undefined = undefined;
-    if (queue && queue.length > 0) injected = queue.shift();
-    const isHeads = injected !== undefined ? (injected === '正面') : (Math.random() < 0.5);
-    if (isHeads) heads++;
-    const suffix = injected !== undefined ? '〔重試徽章：使用剛才擲幣結果〕' : '';
-    s = addLog(s, `${label}：第 ${i}/${count} 次擲硬幣 — ${isHeads ? '正面' : '反面'}${suffix}`, aIdx);
-    recordedFlips.push(isHeads ? '正面' : '反面');
-  }
-  // 同步 state queue (consume 後剩下的, 若空清掉)
-  if (queue !== undefined) {
-    s = { ...s, _retryInjectedFlipsQueue: queue.length > 0 ? queue : undefined };
-  }
-  // v5.309: append _machineGunLastFlips → retry modal 顯示「本次擲幣結果」
-  if (recordedFlips.length > 0) {
-    const existing = s._machineGunLastFlips ?? [];
-    s = { ...s, _machineGunLastFlips: [...existing, ...recordedFlips] };
-  }
-  return { state: s, heads };
+  // v5.x: 改委派給 effects.ts 的中央 flipCoinsWithLog（同步設 coinFlippedThisAttack
+  //   + consume _retryInjectedFlipsQueue + append _machineGunLastFlips）。重試徽章依賴此 flag。
+  const r = flipCoinsWithLog(state, count, label, aIdx);
+  return { state: r.state, heads: r.heads };
 }
 
 function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: number } {
-  let s: GameState = { ...state, coinFlippedThisAttack: true };
+  let s: GameState = state;
   let heads = 0;
-  const recordedFlips: string[] = [];  // v5.309
   for (let i = 1; i <= 20; i++) {
-    const isHeads = Math.random() < 0.5;
-    s = addLog(s, `${label}：第 ${i} 次擲硬幣 — ${isHeads ? '正面' : '反面（停止）'}`, aIdx);
-    recordedFlips.push(isHeads ? '正面' : '反面');
-    if (isHeads) heads++;
+    const r = flipCoinsWithLog(s, 1, label, aIdx);
+    s = r.state;
+    if (r.heads === 1) heads++;
     else break;
-  }
-  if (recordedFlips.length > 0) {
-    const existing = s._machineGunLastFlips ?? [];
-    s = { ...s, _machineGunLastFlips: [...existing, ...recordedFlips] };
   }
   return { state: s, heads };
 }
@@ -92,8 +63,9 @@ function damageAllOppByCoin(
   let s = state;
   const targets = [s.players[dIdx].active, ...s.players[dIdx].bench].filter((c): c is CardInstance => !!c);
   for (const t of targets) {
-    const isHeads = Math.random() < 0.5;
-    s = addLog(s, `${label}：對 ${t.iid} 擲硬幣 — ${isHeads ? '正面' : '反面'}`, aIdx);
+    const rco = flipCoinsWithLog(s, 1, label, aIdx);
+    s = rco.state;
+    const isHeads = rco.heads === 1;
     if (!isHeads) continue;
     // v4.57 A1 修：caller 虛無歸零卡面是「150 點傷害」(attack-damage)，非 attack-effect。
     //   原 v4.53 用 attack-effect 會誤套薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 (這些只擋 effect)。

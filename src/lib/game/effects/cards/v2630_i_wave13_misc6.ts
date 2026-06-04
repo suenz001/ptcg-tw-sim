@@ -7,6 +7,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
   getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { flipCoinsWithLog } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helpers
@@ -223,8 +224,9 @@ regR('wave13-self-bench-hit', (state, aIdx, iids, params, _pool) => {
 // 擲幣 immune
 function coinHeadsImmunePost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    let s = addLog(state, `${label}：擲 1 次 → ${heads ? '正面 → 下回合 immune' : '反面'}`, aIdx);
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    const heads = r.heads === 1;
+    let s = addLog(r.state, `${label}：${heads ? '正面 → 下回合 immune' : '反面'}`, aIdx);
     if (!heads) return s;
     return updatePlayer(s, aIdx, p => ({
       ...p,
@@ -569,8 +571,9 @@ regR('curse-doll-curse-words', (state, idx, iids, _params, _pool) => {
 // 敏捷蟲|酸液炸彈 50, 擲幣正面棄對手1能量
 regPre('敏捷蟲|酸液炸彈', (s) => ({ state: s, damage: 50 }));
 regPost('敏捷蟲|酸液炸彈', (state, aIdx, _pool) => {
-  const heads = Math.random() < 0.5;
-  let s = addLog(state, `酸液炸彈：擲 1 次 → ${heads ? '正面' : '反面'}`, aIdx);
+  const r = flipCoinsWithLog(state, 1, '酸液炸彈', aIdx);
+  const heads = r.heads === 1;
+  let s = r.state;
   if (!heads) return s;
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
@@ -712,10 +715,10 @@ regPre('頭巾混混|無賴攻擊', (state, aIdx, pool) => {
   for (const pk of all) {
     if (pool.get(pk.cardId)?.pokemonType === 'Darkness') darkCount++;
   }
-  let heads = 0;
-  for (let i = 0; i < darkCount; i++) if (Math.random() < 0.5) heads++;
+  const rda = flipCoinsWithLog(state, darkCount, '無賴攻擊', aIdx);
+  const heads = rda.heads;
   const dmg = heads * 60;
-  const s = addLog(state, `無賴攻擊：自方惡寶可夢 ${darkCount} 隻 → 擲 ${darkCount} 次 → ${heads} 正面 = ${heads}×60 = ${dmg}`, aIdx);
+  const s = addLog(rda.state, `無賴攻擊：自方惡寶可夢 ${darkCount} 隻 → 擲 ${darkCount} 次 → ${heads} 正面 = ${heads}×60 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
@@ -725,11 +728,14 @@ regPre('頭巾混混|無賴攻擊', (state, aIdx, pool) => {
 regPre('火箭隊的地鼠|狂潛', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的地鼠|狂潛', (state, aIdx, _pool) => {
   let heads = 0;
+  let s0 = state;
   for (let i = 0; i < 20; i++) {
-    if (Math.random() < 0.5) heads++;
+    const r = flipCoinsWithLog(s0, 1, '狂潛', aIdx);
+    s0 = r.state;
+    if (r.heads === 1) heads++;
     else break;
   }
-  let s = addLog(state, `狂潛：擲到反面為止 → ${heads} 次正面`, aIdx);
+  let s = addLog(s0, `狂潛：擲到反面為止 → ${heads} 次正面`, aIdx);
   if (heads === 0) return s;
   const dIdx = (1 - aIdx) as 0 | 1;
   return updatePlayer(s, dIdx, p => {

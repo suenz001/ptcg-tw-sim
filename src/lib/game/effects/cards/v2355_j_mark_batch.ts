@@ -13,6 +13,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { getOwnBenchLimit } from '../_shared';
+import { flipCoinsWithLog } from '../../effects';
 import {
   addLog,
   regPost,
@@ -292,9 +293,16 @@ regR('j-2355-memory-lock', (st, aIdx, iids, params, _pool) => {
 regPost('怪顎龍|亂暴', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
 
-  // 擲幣到反面，累計正面次數
+  // 擲幣到反面，累計正面次數（逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack）
   let heads = 0;
-  while (Math.random() < 0.5) heads++;
+  let s0: GameState = state;
+  while (true) {
+    const r = flipCoinsWithLog(s0, 1, '亂暴', aIdx);
+    s0 = r.state;
+    if (r.heads === 0) break;
+    heads++;
+  }
+  state = s0;
 
   if (heads === 0) {
     return addLog(state, '亂暴：第 1 次擲幣就反面 → 不丟棄對手牌庫', aIdx);

@@ -22,6 +22,7 @@ import {
   healResolver, sameEvoName,
   addPendingPrize, getOwnBenchLimit} from '../_shared';
 import { isBasicPokemonCard } from '../../engine';
+import { flipCoinsWithLog } from '../../effects';
 import type { CardInstance, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
 
@@ -36,8 +37,9 @@ import type { Card } from '$lib/cards/types';
 // ── 火箭隊的超級球（Item / I）── coin → 進化/基礎「火箭隊的」搜
 regG('火箭隊的超級球', (st, idx) => st.players[idx].deck.length > 0);
 reg('火箭隊的超級球', (st, idx, pool) => {
-  const heads = Math.random() < 0.5;
-  st = addLog(st, `火箭隊的超級球：擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  const rfb = flipCoinsWithLog(st, 1, '火箭隊的超級球', idx);
+  st = rfb.state;
+  const heads = rfb.heads === 1;
   const validIids = st.players[idx].deck
     .filter(c => {
       const card = pool.get(c.cardId);
@@ -253,8 +255,10 @@ regR('lucia-show', (st, idx, iids, _params, pool) => {
 // ── 滑稽演員（Supporter / I）── 雙方手洗回 + coin: heads 5/3 / tails 3/5
 regG('滑稽演員', () => true);
 reg('滑稽演員', (st, idx) => {
-  const heads = Math.random() < 0.5;
-  st = addLog(st, `滑稽演員：雙方手牌洗回牌庫，擲硬幣 ${heads ? '正面' : '反面'}`, idx);
+  const rhx = flipCoinsWithLog(st, 1, '滑稽演員', idx);
+  st = rhx.state;
+  const heads = rhx.heads === 1;
+  st = addLog(st, '滑稽演員：雙方手牌洗回牌庫', idx);
   const players = [...st.players] as [PlayerState, PlayerState];
   const dIdx = (1 - idx) as 0 | 1;
   // 雙方手→牌庫並重洗
@@ -289,7 +293,9 @@ reg('悟松', (st, idx) => {
     const p = { ...players[i] };
     p.deck = shuffle([...p.deck, ...p.hand]);
     p.hand = [];
-    const heads = Math.random() < 0.5;
+    const rws = flipCoinsWithLog(st, 1, '悟松', idx);
+    st = rws.state;
+    const heads = rws.heads === 1;
     const drawN = heads ? 6 : 3;
     const taken = p.deck.slice(0, Math.min(drawN, p.deck.length));
     p.hand = taken;

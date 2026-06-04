@@ -5,7 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog } from '../../effects';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
@@ -16,9 +16,10 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 // ══════════════════════════════════════════════════════════════════════════════
 function coinTailsFailPre(base: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    const heads = Math.random() < 0.5;
-    if (!heads) return { state: addLog(state, `${label}：反面 → 招式失敗`, aIdx), damage: 0 };
-    return { state: addLog(state, `${label}：正面 → ${base} 傷害`, aIdx), damage: base };
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    const heads = r.heads === 1;
+    if (!heads) return { state: addLog(r.state, `${label}：反面 → 招式失敗`, aIdx), damage: 0 };
+    return { state: addLog(r.state, `${label}：正面 → ${base} 傷害`, aIdx), damage: base };
   };
 }
 
@@ -58,12 +59,15 @@ function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
 function coinUntilTailsMultiplyPre(base: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     let heads = 0;
+    let s0 = state;
     for (let i = 0; i < 20; i++) {
-      if (Math.random() < 0.5) heads++;
+      const r = flipCoinsWithLog(s0, 1, label, aIdx);
+      s0 = r.state;
+      if (r.heads === 1) heads++;
       else break;
     }
     const dmg = base + heads * perHead;
-    const s = addLog(state, `${label}：擲到反面為止 → ${heads} 次正面 = ${base} + ${heads}×${perHead} = ${dmg}`, aIdx);
+    const s = addLog(s0, `${label}：擲到反面為止 → ${heads} 次正面 = ${base} + ${heads}×${perHead} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
   };
 }
@@ -174,10 +178,10 @@ regPre('泥驢仔|奔進', coinUntilTailsMultiplyPre(0, 40, '奔進'));
 // 6. 擲 N 次硬幣 +K（1 張）— 派拉斯特|橫掃剪
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('派拉斯特|橫掃剪', (state, aIdx, _pool) => {
-  let heads = 0;
-  for (let i = 0; i < 2; i++) if (Math.random() < 0.5) heads++;
+  const r = flipCoinsWithLog(state, 2, '橫掃剪', aIdx);
+  const heads = r.heads;
   const dmg = 60 + heads * 30;
-  const s = addLog(state, `橫掃剪：擲 2 次 → ${heads} 正面 → 60 + ${heads}×30 = ${dmg}`, aIdx);
+  const s = addLog(r.state, `橫掃剪：擲 2 次 → ${heads} 正面 → 60 + ${heads}×30 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
 
@@ -330,8 +334,9 @@ regPre('凱路迪歐ex|音波刀鋒', (s) => ({ state: s, damage: 120, skipDefEf
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('鴨嘴炎獸|灼燒', (s) => ({ state: s, damage: 90 }));
 regPost('鴨嘴炎獸|灼燒', (state, aIdx, _pool) => {
-  const heads = Math.random() < 0.5;
-  let s = addLog(state, `灼燒：擲 1 次 → ${heads ? '正面 → 對手戰鬥場灼傷' : '反面，無附加'}`, aIdx);
+  const r = flipCoinsWithLog(state, 1, '灼燒', aIdx);
+  const heads = r.heads === 1;
+  let s = addLog(r.state, `灼燒：${heads ? '正面 → 對手戰鬥場灼傷' : '反面，無附加'}`, aIdx);
   if (!heads) return s;
   const dIdx = (1 - aIdx) as 0 | 1;
   return updatePlayer(s, dIdx, p => ({
@@ -345,9 +350,9 @@ regPost('鴨嘴炎獸|灼燒', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的椰蛋樹|三重強念', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的椰蛋樹|三重強念', (state, aIdx, _pool) => {
-  const flips = [Math.random() < 0.5, Math.random() < 0.5, Math.random() < 0.5];
-  const allHeads = flips.every(f => f);
-  let s = addLog(state, `三重強念：擲 3 次 → ${flips.map(f => f ? '正' : '反').join('/')}`, aIdx);
+  const r = flipCoinsWithLog(state, 3, '三重強念', aIdx);
+  const allHeads = r.heads === 3;
+  let s = addLog(r.state, `三重強念：擲 3 次 → ${r.heads} 正面`, aIdx);
   if (!allHeads) return s;
   // 全正面 → 對手選 1 寶可夢直接 KO
   const dIdx = (1 - aIdx) as 0 | 1;
