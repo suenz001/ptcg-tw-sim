@@ -42,9 +42,12 @@ const nameHandled = new Set();
 function lev(a, b) { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]); for (let j = 0; j <= n; j++) d[0][j] = j; for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)); return d[m][n]; }
 
 const dir = join(ROOT, 'static/cards');
+// 只掃 index.json 實際引用的正式 set 檔（遊戲只載入這些；排除 *_jp_legacy/_raw/_translate 等備份）
+const liveCodes = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map(e => e.code));
 const flagged = []; const seen = new Set();
 for (const fn of readdirSync(dir)) {
   if (!fn.endsWith('.json') || fn === 'index.json') continue;
+  if (!liveCodes.has(fn.slice(0, -5))) continue; // 跳過非正式(備份)檔
   let cards; try { cards = JSON.parse(readFileSync(join(dir, fn), 'utf8')); } catch { continue; }
   if (!Array.isArray(cards)) continue;
   for (const c of cards) {
@@ -63,6 +66,8 @@ for (const fn of readdirSync(dir)) {
 }
 
 const typos = flagged.filter(f => f.typo);
+const mdMode = process.argv.includes('--md');
+if (!mdMode) {
 console.log(`未實裝／靜默失效 coverage（權威 map 比對）`);
 console.log(`  已註冊 handler key ${registered.size}（+招式名層級 ${nameHandled.size}）／有 effect 招式 ${seen.size}`);
 console.log(`  候選未實裝: ${flagged.length}　其中疑錯字/改名(高信心真 bug): ${typos.length}\n`);
@@ -74,7 +79,9 @@ if (typos.length) {
 console.log('── 其餘候選未實裝（前 60）──');
 for (const f of flagged.filter(x => !x.typo).slice(0, 60)) console.log(`  ${f.key}  [傷${f.dmg}]  ${f.eff.slice(0, 38)}`);
 
-if (process.argv.includes('--md')) {
+} // end !mdMode informational block
+
+if (mdMode) {
   const L = [];
   L.push('# 未實裝／靜默失效卡牌 — coverage 報告', '');
   L.push(`> 自動產生：\`node scripts/coverage-unimplemented.mjs --md\`。引擎用 \`卡名|招式名\` 查 handler 無 fallback；下列招式有 effect 文字但查無實作 → 只造成傷害、效果靜默失效。`, '');
