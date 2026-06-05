@@ -8608,6 +8608,8 @@ export function getUsableAbilities(
         const activeCard = pool.get(player.active.cardId);
         const isFestival = activeCard?.abilities?.some(a => a.name === '祭典樂舞');
         if (!isFestival) return;
+        // v5.456 暗夜羽擊：戰鬥位「祭典樂舞」被對手 passive 消除 → 衝衝鼓不可用
+        if (isAbilityNullifiedByPassive(state, state.activePlayerIndex, player.active, activeCard, '祭典樂舞', 'active', pool)) return;
         if (player.deck.length === 0) return;
       }
       // v2.229 貓頭夜鷹｜搜尋寶石：evolvedThisTurn + 場上太晶寶可夢 + 牌庫不空
