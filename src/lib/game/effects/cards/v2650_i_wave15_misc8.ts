@@ -17,7 +17,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, same
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -150,22 +150,6 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
 
 // 自殘 N HP
 // 對手 1 隻備戰受 N
-function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = false): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const opp = state.players[dIdx];
-    if (opp.bench.length === 0) return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害${exOnly ? '（限 ex）' : ''}`, aIdx);
-    return withPending(s, {
-      type: 'opp-bench-choose',
-      actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      filter: exOnly ? 'ex' : undefined,
-      minCount: 1, maxCount: 1,
-      effectKey: 'wave3a-snipe-bench',
-      params: { amount, label },
-    });
-  };
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 進化牌庫搜尋（5 張）— 全部簡化為「從牌庫挑 1 張寶可夢加手牌」（玩家手動進化）

@@ -20,6 +20,7 @@ import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
+  snipeOneOppBenchPost,
 } from '../../effects';
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -84,20 +85,6 @@ function drawNPost(n: number, label: string): AttackPostFn {
 }
 
 // 對手 1 隻備戰受 N
-function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = false): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    if (state.players[dIdx].bench.length === 0) return state;
-    return withPending(addLog(state, `${label}：選 1 隻對手備戰受 ${amount}`, aIdx), {
-      type: 'opp-bench-choose',
-      actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      filter: exOnly ? 'ex' : undefined,
-      minCount: 1, maxCount: 1,
-      effectKey: 'wave3a-snipe-bench',
-      params: { amount, label },
-    });
-  };
-}
 
 // 對手 1 隻寶可夢任選（含戰鬥場）
 function hitAnyOneOppPost(amount: number, label: string): AttackPostFn {

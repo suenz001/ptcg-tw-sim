@@ -7175,6 +7175,30 @@ export function dealAttackDamageToTarget(
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
 }
 
+/**
+ * v5.446：單一共用「狙擊對手 1 隻備戰」helper（原 v2640/v2650/v2750/v3700 各有一份近乎
+ *   相同的 snipeOneOppBenchPost，差別只在 exOnly filter 與 log 文字 → 收斂成此超集）。
+ *   開 opp-bench-choose picker → wave3a-snipe-bench resolver（備戰傷害，不計弱抗）。
+ * @param exOnly 只能選對手的 ex 寶可夢（閃電急襲等）。
+ */
+export function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = false): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    if (state.players[dIdx].bench.length === 0) {
+      return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
+    }
+    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害${exOnly ? '（限 ex）' : ''}`, aIdx);
+    return withPending(s, {
+      type: 'opp-bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      filter: exOnly ? 'ex' : undefined,
+      minCount: 1, maxCount: 1,
+      effectKey: 'wave3a-snipe-bench',
+      params: { amount, label },
+    });
+  };
+}
+
 regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   // v5.385：改為呼叫中央 dealAttackDamageToTarget（行為不變）。
   const dmg = (params?.damage as number) ?? 0;

@@ -19,7 +19,7 @@ import type { GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
   statusPost, coinStatusPost,
-  coinHeadsMultiplyPre, flipCoinsWithLog,
+  coinHeadsMultiplyPre, flipCoinsWithLog, snipeOneOppBenchPost,
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -92,21 +92,6 @@ function rechargePost(attackName: string): AttackPostFn {
 }
 
 // 對手 1 隻備戰受 N（讓玩家挑）— 用既有 wave3a-snipe-bench resolver
-function snipeOneOppBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const opp = state.players[dIdx];
-    if (opp.bench.length === 0) return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害`, aIdx);
-    return withPending(s, {
-      type: 'opp-bench-choose',
-      actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'wave3a-snipe-bench',
-      params: { amount, label },
-    });
-  };
-}
 
 // 自身 X 屬能量數 ×K + base
 function selfEnergyCountPre(

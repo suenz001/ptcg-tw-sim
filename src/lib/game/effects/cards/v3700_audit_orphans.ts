@@ -30,7 +30,7 @@ import { getOwnBenchLimit } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import type { PlayerState } from '../../types';
 import {
-  statusPost, coinHeadsMultiplyPre, selfHitPost, flipCoinsWithLog,
+  statusPost, coinHeadsMultiplyPre, selfHitPost, flipCoinsWithLog, snipeOneOppBenchPost,
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -115,22 +115,6 @@ function benchBasicFromDeckPost(max: number, label: string): AttackPostFn {
  * 攻擊後 → 對手 1 隻備戰寶可夢受 N 點傷害（不計算弱抗，於備戰區）。
  * 鏡射 v2540_i_wave4_misc.ts:160 + v2750_h_wave2_full.ts:85（既有 resolver 'wave3a-snipe-bench'）。
  */
-function snipeOneOppBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    if (state.players[dIdx].bench.length === 0) {
-      return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-    }
-    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害（不計算弱點/抵抗力）`, aIdx);
-    return withPending(s, {
-      type: 'opp-bench-choose',
-      actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'wave3a-snipe-bench',
-      params: { amount, label },
-    });
-  };
-}
 
 /**
  * PRE：自身（攻擊者）有傷害指示物 → +bonus；否則 base。
