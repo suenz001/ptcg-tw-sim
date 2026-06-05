@@ -52,6 +52,7 @@ for (const fn of readdirSync(dir)) {
   if (!Array.isArray(cards)) continue;
   for (const c of cards) {
     if (c.supertype !== 'Pokemon' || !Array.isArray(c.attacks)) continue;
+    if (!['H', 'I', 'J'].includes(c.regulationMark)) continue; // 只算現行 Standard 卡池(H/I/J 標)
     for (const a of c.attacks) {
       const eff = (a.effect || '').trim(); if (!eff) continue;
       const key = `${c.name}|${a.name}`;
