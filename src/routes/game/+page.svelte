@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
@@ -2022,38 +2022,40 @@
   // 用 effectKey + actorIdx + type 做 signature，避免每次 game 狀態更新（物件新 ref）都誤重置
   const modalSignature = $derived(
     pendingSelection
-      ? `${pendingSelection.type}|${pendingSelection.effectKey ?? ''}|${pendingSelection.actorIdx}`
+      ? `${game?.id ?? ''}|${pendingSelection.type}|${pendingSelection.effectKey ?? ''}|${pendingSelection.actorIdx}`
       : floatingRetreatMenu
         ? 'retreat-menu'
         : 'none'
   );
   $effect(() => {
+    // v5.458：唯一相依 modalSignature（含 game.id）。重置只在「邏輯 pending 身分」或「換局」時觸發。
+    //   修玩家回報：線上 Oracle 輪詢每次 adopt 重賦值 game → pendingSelection 物件參考變 → 原本
+    //   $effect 因 body 讀 pendingSelection 而相依物件、每次都 re-run → 把剛點 +/- 設好的能量分配
+    //   (selectionCounts) 歸 0（金屬製造者分配回朔）。改：body 包 untrack，只認 modalSignature 字串變動。
     const _sig = modalSignature;
-    // v5.414：modal 身分變更（新 pending / 清空 / 重新開局換局）時一併重置選取狀態，避免上一個
-    //   selection 殘留的 picks 卡住下一個 picker 的可選張數。根因：toggleSelection 以
-    //   `selectionPicked.size < maxCount` 判可否再選，但 selectionPicked/selectionCounts 原本只在
-    //   confirm/skip/Esc 重置，沒在換 game(重賽 adopt 新局)或新 picker 開啟時清 → 殘留 N 個舊 picks
-    //   時，完全體攪拌器等 deck-search 只能再選 maxCount−N 張（玩家回報「只能丟 3 張」）。
-    selectionPicked = new Set();
-    selectionCounts = {};
-    selectionReorderKeep = [];
-    selectionReorderDiscard = new Set();
-    modalOffset = { x: 0, y: 0 };
-    modalDragged = false;
-    modalDragStart = null;
-    // v2.164：reorder-deck-top 切到新 pending 時，從 candidateIids 初始化 keep 列表（保持原順序）
-    if (pendingSelection?.type === 'reorder-deck-top') {
-      const cand = (pendingSelection.params?.candidateIids as string[] | undefined) ?? [];
-      selectionReorderKeep = [...cand];
+    void _sig;
+    untrack(() => {
+      selectionPicked = new Set();
+      selectionCounts = {};
+      selectionReorderKeep = [];
       selectionReorderDiscard = new Set();
-    }
-    // v2.201：modal-choice stepper 切到新 pending 時，從 params.stepper.init 初始化數值
-    if (pendingSelection?.type === 'modal-choice') {
-      const stepper = pendingSelection.params?.stepper as { min: number; max: number; step: number; init: number } | undefined;
-      if (stepper) {
-        selectionStepperValue = stepper.init;
+      modalOffset = { x: 0, y: 0 };
+      modalDragged = false;
+      modalDragStart = null;
+      // reorder-deck-top 切到新 pending 時，從 candidateIids 初始化 keep 列表（保持原順序）
+      if (pendingSelection?.type === 'reorder-deck-top') {
+        const cand = (pendingSelection.params?.candidateIids as string[] | undefined) ?? [];
+        selectionReorderKeep = [...cand];
+        selectionReorderDiscard = new Set();
       }
-    }
+      // modal-choice stepper 切到新 pending 時，從 params.stepper.init 初始化數值
+      if (pendingSelection?.type === 'modal-choice') {
+        const stepper = pendingSelection.params?.stepper as { min: number; max: number; step: number; init: number } | undefined;
+        if (stepper) {
+          selectionStepperValue = stepper.init;
+        }
+      }
+    });
   });
   const evolvableTargets = $derived(game && poolReady ? getEvolvableTargets(game, pool) : []);
   const canRetreatNow    = $derived(game && poolReady ? canRetreat(game, pool) : false);
