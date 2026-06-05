@@ -648,7 +648,7 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   }
   // v4.14：units mode — 累計 units 而非張數
   const chosenInsts = att.energyAttached.filter(e => chosenIids.includes(e.iid));
-  const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
+  const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
   if (chosenUnits < required) {
     return { state: addLog(state, `激流水泵：未選滿 ${required} 個能量單位（目前 ${chosenUnits}）→ 100`, aIdx), damage: 100 };
   }
@@ -659,7 +659,7 @@ regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   const discarded = att.energyAttached.filter(e => chosenSet.has(e.iid));
   const remaining = att.energyAttached.filter(e => !chosenSet.has(e.iid));
   // 累計 units 判斷是否達標
-  const totalUnits = discarded.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
+  const totalUnits = discarded.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
   if (totalUnits < required) {
     return { state: addLog(state, '激流水泵：能量挑選異常 → 100', aIdx), damage: 100 };
   }
@@ -688,7 +688,7 @@ regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => 
   // v4.4993：改在 deck 內找（PRE 已把能量 shuffle 進 deck）
   const p = state.players[aIdx];
   const chosenInsts = p.deck.filter(e => chosenIids.includes(e.iid));
-  const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool), 0);
+  const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
   if (chosenUnits < required) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) {

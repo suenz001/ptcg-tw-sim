@@ -4295,7 +4295,7 @@
     if (spec.countMode !== 'units') return picked.size;
     let n = 0;
     for (const e of energies) {
-      if (picked.has(e.iid)) n += getEnergyDiscardUnits(e.cardId, e.hostInst, pool);
+      if (picked.has(e.iid)) n += getEnergyDiscardUnits(e.cardId, e.hostInst, pool, game, aIdx);
     }
     return n;
   }
@@ -4313,7 +4313,7 @@
       if (countMode === 'units') {
         const energies = getDiscardableEnergies(preAttackDiscard.spec);
         const target = energies.find(e => e.iid === iid);
-        const addUnits = target ? getEnergyDiscardUnits(target.cardId, target.hostInst, pool) : 1;
+        const addUnits = target ? getEnergyDiscardUnits(target.cardId, target.hostInst, pool, game, aIdx) : 1;
         const cur = computePickedAmount(preAttackDiscard.spec, picked, energies);
         // v4.14：gate threshold 用 exactRequired 優先（min=0 場景如激流水泵/忍者飛旋）
         //   否則用 min（min>0 場景如分身連打/龍之滑翔）
@@ -4326,7 +4326,7 @@
         if (gate > 0 && newSum >= gate) {
           for (const pickedIid of picked) {
             const pe = energies.find(e => e.iid === pickedIid);
-            const pu = pe ? getEnergyDiscardUnits(pe.cardId, pe.hostInst, pool) : 1;
+            const pu = pe ? getEnergyDiscardUnits(pe.cardId, pe.hostInst, pool, game, aIdx) : 1;
             if (newSum - pu >= gate) return;  // 此已選卡多餘 → 拒
           }
         }
@@ -7995,7 +7995,7 @@
           {#each energies as e (e.iid)}{@const ec = getCard(e.cardId)}
             {#if ec}
               {@const picked = preAttackDiscard.picked.has(e.iid)}
-              {@const eUnits = isUnits ? getEnergyDiscardUnits(e.cardId, e.hostInst, pool) : 1}
+              {@const eUnits = isUnits ? getEnergyDiscardUnits(e.cardId, e.hostInst, pool, game, aIdx) : 1}
               <!-- v5.219：能量旁加放大鏡 — 玩家可看擁有此能量的寶可夢詳情（HP/能量/狀態），決定要丟哪隻的能量。
                    hand-* scope 沒 hostInst（能量還在手牌）→ 隱藏放大鏡。 -->
               <div class="sel-card-wrap" class:sel-picked={picked}>

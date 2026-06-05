@@ -235,6 +235,8 @@ export function getEnergyDiscardUnits(
   energyCardId: string,
   hostInst: CardInstance | null,
   pool: Map<string, Card>,
+  state?: GameState,
+  ownerIdx?: 0 | 1,
 ): number {
   const ec = pool.get(energyCardId);
   if (!ec) return 1;
@@ -253,6 +255,14 @@ export function getEnergyDiscardUnits(
     const hc = pool.get(hostInst.cardId);
     const stage = hc?.stage ?? hc?.subtype;
     return stage === 'Stage2' ? 2 : 1;
+  }
+  // v5.449：大竺葵｜繁茂 — ownerIdx 側場上有繁茂時，自己寶可夢身上附加的「基本【草】能量」
+  //   視為 2 個（與撤退費 totalEnergyUnits / 攻擊費 canAffordAttack 的繁茂處理一致）。
+  //   玩家報：繁茂在場時激流水泵等「選 N 個能量」picker，草能量沒被當 2 個。
+  if (state != null && ownerIdx != null && ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass')) {
+    const owner = state.players[ownerIdx];
+    const field = [...(owner.active ? [owner.active] : []), ...owner.bench];
+    if (field.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '繁茂'))) return 2;
   }
   return 1;
 }
