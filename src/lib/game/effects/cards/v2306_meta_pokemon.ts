@@ -3,6 +3,7 @@ import type { Card } from '$lib/cards/types';
 import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA, regAByName,
   getOwnBenchLimit,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 /**
  * v2.306 Meta Pokemon (H, I, J)
  */
@@ -145,9 +146,9 @@ regR('delphox-flare-magic', (state, actorIdx, selectedIids, params, pool) => {
     ...player, hand: newHand, discard: [...player.discard, energyInst]
   }));
   const handCount = newHand.length;
-  if (handCount >= 7) return addLog(s, '閃焰魔法：已丟棄能量，但手牌已達 7 張以上，不抽卡', actorIdx);
+  if (handCount >= 7) return addLog(s, `閃焰魔法：丟棄能量 ${joinCardNames([energyInst], pool)}，但手牌已達 7 張以上，不抽卡`, actorIdx);
   const drawCount = 7 - handCount;
-  s = addLog(s, `閃焰魔法：已丟棄能量，從牌庫抽 ${drawCount} 張卡（直到滿 7 張）`, actorIdx);
+  s = addLog(s, `閃焰魔法：丟棄能量 ${joinCardNames([energyInst], pool)}，從牌庫抽 ${drawCount} 張卡（直到滿 7 張）`, actorIdx);
   return drawCards(s, actorIdx, drawCount);
 });
 // v4.958+v4.959：能量風暴 — 雙方全場「能量數」(units) × 30。

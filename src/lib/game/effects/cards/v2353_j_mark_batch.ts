@@ -22,6 +22,7 @@ import {
   withPending,
   getOwnBenchLimit,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import { isBasicEnergyOfType } from '../../engine';
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -390,14 +391,14 @@ regR('j-2353-landorus-return-energy', (state, aIdx, iids, _params, pool) => {
 
 // 南瓜怪人ex｜幽靈之觸：140，在不看正面情況下從對手手牌隨機棄 1 張
 regPre('南瓜怪人ex|幽靈之觸', (state) => ({ state, damage: 140 }));
-regPost('南瓜怪人ex|幽靈之觸', (state, aIdx) => {
+regPost('南瓜怪人ex|幽靈之觸', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const d = state.players[dIdx];
   if (d.hand.length === 0) return addLog(state, '幽靈之觸：對手手牌為空', aIdx);
   const idx = Math.floor(Math.random() * d.hand.length);
   const picked = d.hand[idx];
   return updatePlayer(
-    addLog(state, '幽靈之觸：隨機棄對手手牌 1 張', aIdx),
+    addLog(state, `幽靈之觸：隨機棄對手手牌 1 張：${joinCardNames([picked], pool)}`, aIdx),
     dIdx,
     p => ({ ...p, hand: p.hand.filter((_, i) => i !== idx), discard: [...p.discard, picked] }),
   );
@@ -405,14 +406,14 @@ regPost('南瓜怪人ex|幽靈之觸', (state, aIdx) => {
 
 // 禿鷹娜ex｜禿鷹爪：160，在不看正面情況下從對手手牌隨機棄 1 張
 regPre('禿鷹娜ex|禿鷹爪', (state) => ({ state, damage: 160 }));
-regPost('禿鷹娜ex|禿鷹爪', (state, aIdx) => {
+regPost('禿鷹娜ex|禿鷹爪', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const d = state.players[dIdx];
   if (d.hand.length === 0) return addLog(state, '禿鷹爪：對手手牌為空', aIdx);
   const idx = Math.floor(Math.random() * d.hand.length);
   const picked = d.hand[idx];
   return updatePlayer(
-    addLog(state, '禿鷹爪：隨機棄對手手牌 1 張', aIdx),
+    addLog(state, `禿鷹爪：隨機棄對手手牌 1 張：${joinCardNames([picked], pool)}`, aIdx),
     dIdx,
     p => ({ ...p, hand: p.hand.filter((_, i) => i !== idx), discard: [...p.discard, picked] }),
   );

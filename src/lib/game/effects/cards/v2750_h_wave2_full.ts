@@ -1049,10 +1049,12 @@ regPost('熱帶龍|果實豐收', (state, aIdx, _pool) => {
     effectKey: 'h-wave2-fruit-harvest',
   });
 });
-regR('h-wave2-fruit-harvest', (state, aIdx, iids, _params, _pool) => {
+regR('h-wave2-fruit-harvest', (state, aIdx, iids, _params, pool) => {
   let s = state;
   if (iids.length > 0) {
     const set = new Set(iids);
+    const _fd = state.players[aIdx].hand.filter(c => set.has(c.iid));
+    s = addLog(s, `果實豐收：丟棄手牌 ${joinCardNames(_fd, pool)}`, aIdx);
     s = updatePlayer(s, aIdx, p => {
       const discarded = p.hand.filter(c => set.has(c.iid));
       const rest = p.hand.filter(c => !set.has(c.iid));

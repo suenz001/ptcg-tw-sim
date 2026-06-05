@@ -21,6 +21,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   healResolver, sameEvoName,
   addPendingPrize, getOwnBenchLimit} from '../_shared';
+import { joinCardNames } from '../_shared';
 import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog } from '../../effects';
 import type { CardInstance, PlayerState } from '../../types';
@@ -326,12 +327,13 @@ reg('卡娜莉', (st, idx) => {
 regR('kanari-discard-then-search', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return st;
   const set = new Set(iids);
+  const _kd = st.players[idx].hand.filter(c => set.has(c.iid));
   st = updatePlayer(st, idx, p => {
     const discarded = p.hand.filter(c => set.has(c.iid));
     const newHand = p.hand.filter(c => !set.has(c.iid));
     return { ...p, hand: newHand, discard: [...p.discard, ...discarded] };
   });
-  st = addLog(st, '卡娜莉：手牌已棄，從牌庫選最多 4 張【雷】寶可夢加手', idx);
+  st = addLog(st, `卡娜莉：手牌已棄（${joinCardNames(_kd, pool)}），從牌庫選最多 4 張【雷】寶可夢加手`, idx);
   const validIids = st.players[idx].deck
     .filter(c => {
       const card = pool.get(c.cardId);

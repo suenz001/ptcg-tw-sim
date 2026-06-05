@@ -5216,21 +5216,20 @@ regPost('仙子伊布ex|魔法魅惑', selfDmgReducePost(100));
 
 // ── F. 丟對手隨機 1 張手牌 2 張 ───────────────────────────────────────────
 function oppDiscardRandomHand(n: number, attackName: string): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    let s = addLog(state, `${attackName}：丟棄對手手牌 ${n} 張`, aIdx);
-    return updatePlayer(s, dIdx, p => {
-      const pickCount = Math.min(n, p.hand.length);
-      if (pickCount === 0) return p;
-      let hand = [...p.hand];
-      const discarded: CardInstance[] = [];
-      for (let i = 0; i < pickCount; i++) {
-        const idx = Math.floor(Math.random() * hand.length);
-        discarded.push(hand[idx]);
-        hand = hand.filter((_, j) => j !== idx);
-      }
-      return { ...p, hand, discard: [...p.discard, ...discarded] };
-    });
+    const pickCount = Math.min(n, state.players[dIdx].hand.length);
+    if (pickCount === 0) return addLog(state, `${attackName}：對手手牌為空`, aIdx);
+    let hand = [...state.players[dIdx].hand];
+    const discarded: CardInstance[] = [];
+    for (let i = 0; i < pickCount; i++) {
+      const idx = Math.floor(Math.random() * hand.length);
+      discarded.push(hand[idx]);
+      hand = hand.filter((_, j) => j !== idx);
+    }
+    const _diids = new Set(discarded.map(c => c.iid));
+    const s = addLog(state, `${attackName}：丟棄對手手牌 ${pickCount} 張：${joinCardNames(discarded, pool)}`, aIdx);
+    return updatePlayer(s, dIdx, p => ({ ...p, hand: p.hand.filter(c => !_diids.has(c.iid)), discard: [...p.discard, ...discarded] }));
   };
 }
 regPost('功夫鼬|拍落', oppDiscardRandomHand(1, '拍落'));
@@ -5276,10 +5275,9 @@ regR('sunny-eevee-mental-out', (state, aIdx, iids, _params, pool) => {
 
 
 // 巨牙鯊｜咬棄 — 擲 3 次硬幣，丟對手正面數量的手牌（不看正面）
-regPost('巨牙鯊|咬棄', (state, aIdx, _pool) => {
+regPost('巨牙鯊|咬棄', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '咬棄', aIdx);
-  const s = addLog(r.state, `咬棄：${r.heads} 次正面 → 丟對手 ${r.heads} 張手牌`, aIdx);
-  return oppDiscardRandomHand(r.heads, '咬棄')(s, aIdx, new Map());
+  return oppDiscardRandomHand(r.heads, '咬棄')(r.state, aIdx, pool);
 });
 
 // 鐵螯龍蝦｜喀嚓喀嚓 — 擲 2 次硬幣，對手牌庫上方正面數的牌丟棄
@@ -7410,12 +7408,13 @@ regPost('三海地鼠ex|三色炮', (state, aIdx, pool) => {
 
 // 賽富豪ex|淘金潮 — 自動從手牌丟棄全部基本能量，× 50
 regPre('賽富豪ex|淘金潮', (state, aIdx, pool) => {
-  const count = state.players[aIdx].hand.filter(c => {
+  const basics = state.players[aIdx].hand.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic';
-  }).length;
+  });
+  const count = basics.length;
   const dmg = count * 50;
-  return { state: addLog(state, `淘金潮：丟棄 ${count} 張基本能量 → ${dmg}`, aIdx), damage: dmg };
+  return { state: addLog(state, `淘金潮：丟棄 ${count} 張基本能量${count ? `：${joinCardNames(basics, pool)}` : ''} → ${dmg}`, aIdx), damage: dmg };
 });
 regPost('賽富豪ex|淘金潮', (state, aIdx, pool) => {
   return updatePlayer(state, aIdx, p => {

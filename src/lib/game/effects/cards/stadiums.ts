@@ -18,6 +18,7 @@
 
 import { regR, updatePlayer, shuffle, addLog, clearActiveEffects, getOwnBenchLimit,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import { tryPromptPromoteActive } from '../_shared';
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
@@ -63,7 +64,9 @@ regR('night-academy-top', (st, idx, iids) => {
 
 // ── 月光丘陵（Stadium）──────────────────────────────────────────────────────
 // 丟 1 張超能量 → 全體回 30 HP
-regR('moonlight-hill-heal', (st, idx, iids) => {
+regR('moonlight-hill-heal', (st, idx, iids, _params, pool) => {
+  const _md = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  st = addLog(st, `月光之丘：丟棄 ${_md.length} 張能量：${joinCardNames(_md, pool)}，全體回 30 HP`, idx);
   return updatePlayer(st, idx, p => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
