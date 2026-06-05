@@ -40,7 +40,7 @@ import {
   clearActiveEffects,
   healResolver,
 } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -165,12 +165,8 @@ regA('燈罩夜菇', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active) return addLog(st, '平靜之光：對手戰鬥場沒有寶可夢', idx);
-  const name = pool.get(dp.active.cardId)?.name ?? '?';
-  return updatePlayer(
-    addLog(st, `平靜之光：${name} 陷入【睡眠】`, idx),
-    dIdx,
-    pl => pl.active ? { ...pl, active: { ...pl.active, status: 'asleep' } } : pl
-  );
+  // v5.444：改走中央 applyStatusToOppActive（ability-effect）— 化隱 / 不眠 / 祭典會場等免疫
+  return applyStatusToOppActive(st, idx, 'asleep', pool, { kind: 'ability-effect', label: '平靜之光' });
 });
 
 // ── 6. 波爾凱尼恩ex｜燒灼蒸汽 ────────────────────────────────────────────────
@@ -181,12 +177,9 @@ regA('波爾凱尼恩ex', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active) return addLog(st, '燒灼蒸汽：對手戰鬥場沒有寶可夢', idx);
-  const name = pool.get(dp.active.cardId)?.name ?? '?';
-  return updatePlayer(
-    addLog(st, `燒灼蒸汽：${name} 陷入【灼傷】`, idx),
-    dIdx,
-    pl => pl.active ? { ...pl, active: { ...pl.active, status: 'burned' } } : pl
-  );
+  // v5.444：改走中央 applyStatusToOppActive（ability-effect）—【化隱】免疫對手特性效果
+  //   （原本 inline 直接上灼傷，化隱寶可夢被燒灼蒸汽灼傷的 bug 根因）。
+  return applyStatusToOppActive(st, idx, 'burned', pool, { kind: 'ability-effect', label: '燒灼蒸汽' });
 });
 
 // ── 7. 搖籃百合｜任選黏液 ────────────────────────────────────────────────────
@@ -223,15 +216,8 @@ regR('lumineon-slime-pick-status', (st, idx, iids, _params, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active) return addLog(st, '任選黏液：對手戰鬥場無寶可夢', idx);
-  const name = pool.get(dp.active.cardId)?.name ?? '?';
-  const labelMap: Record<string, string> = {
-    poisoned: '中毒', burned: '灼傷', confused: '混亂',
-  };
-  return updatePlayer(
-    addLog(st, `任選黏液：${name} 陷入【${labelMap[choice]}】`, idx),
-    dIdx,
-    pl => pl.active ? { ...pl, active: { ...pl.active, status: choice } } : pl
-  );
+  // v5.444：改走中央 applyStatusToOppActive（ability-effect）— 化隱 / 憨憨臉 / 泡沫能量等免疫
+  return applyStatusToOppActive(st, idx, choice, pool, { kind: 'ability-effect', label: '任選黏液' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -273,20 +259,20 @@ regR('flowery-lure', (st, idx, iids, _params, pool) => {
   if (!target || !dp.active) return st;
   const newName = pool.get(target.cardId)?.name ?? '?';
   const oldName = pool.get(dp.active.cardId)?.name ?? '?';
-  st = addLog(st, `媚惑引誘：對手 ${oldName} 換到備戰，${newName} 上場並陷入【混亂】`, idx);
-  return updatePlayer(st, dIdx, p => {
+  st = addLog(st, `媚惑引誘：對手 ${oldName} 換到備戰，${newName} 上場`, idx);
+  st = updatePlayer(st, dIdx, p => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === targetIid);
     if (bIdx < 0) return p;
     const newBench = [...p.bench];
     newBench[bIdx] = clearActiveEffects(p.active);
-    return {
-      ...p,
-      // v3.812：preserve justPlaced + playedFromHand
-      active: { ...target, status: 'confused' as const },
-      bench: newBench,
-    };
+    // v3.812：preserve justPlaced + playedFromHand（混亂改由中央函式施加）
+    return { ...p, active: { ...target }, bench: newBench };
   });
+  // v5.444：換上場後再經中央 applyStatusToOppActive 施加【混亂】。
+  //   媚惑引誘是【特性】(regA 花潔夫人) → kind='ability-effect'；化隱 / 憨憨臉等免疫
+  //   （化隱在備戰也保護，換上來後仍應免疫）。
+  return applyStatusToOppActive(st, idx, 'confused', pool, { kind: 'ability-effect', label: '媚惑引誘' });
 });
 
 // ── 9. 大劍鬼｜激流旋渦 ──────────────────────────────────────────────────────

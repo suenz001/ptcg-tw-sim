@@ -36,7 +36,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
-import { flipCoinsWithLog, isBenchProtected } from '../../effects';
+import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -327,16 +327,11 @@ regAByName('怖納噬草', '恐慌牢籠', (st, idx, pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
   if (!opp.active) return addLog(st, '恐慌牢籠：對手戰鬥場無寶可夢', idx);
-  const defCard = pool.get(opp.active.cardId);
-  // 憨憨臉免疫混亂
-  if (defCard?.abilities?.some(a => a.name === '憨憨臉')) {
-    return addLog(st, `恐慌牢籠：${defCard.name}｜憨憨臉 → 免疫【混亂】`, idx);
-  }
-  const s = addLog(st, `恐慌牢籠：對手 ${defCard?.name ?? '?'} 陷入【混亂】`, idx);
-  return updatePlayer(s, oppIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, status: 'confused' } : p.active,
-  }));
+  // v5.444：改走中央 applyStatusToOppActive（ability-effect）。
+  //   原本註解「特性不走完整 attack-effect-shield，僅檢查憨憨臉」是錯的 —【化隱】
+  //   卡面明寫免疫「對手的招式或特性的效果」，特性造成的混亂也應被化隱免疫。
+  //   中央函式一次涵蓋 化隱 / 憨憨臉 / 泡沫能量 / 祭典會場。
+  return applyStatusToOppActive(st, idx, 'confused', pool, { kind: 'ability-effect', label: '恐慌牢籠' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

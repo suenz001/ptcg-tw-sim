@@ -1,37 +1,25 @@
 import type { GameState, PlayerState, CardInstance, SpecialCondition } from '../../types';
+import type { Card } from '$lib/cards/types';
 import { addLog, clearActiveEffects, regPost, regPre, updatePlayer, withPending } from '../_shared';
-import { flipCoinsWithLog, dealSelfDamage } from '../../effects';
+import { flipCoinsWithLog, dealSelfDamage, applyStatusToOppActive } from '../../effects';
 
 const statusLabel: Record<SpecialCondition, string> = {
   poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
 };
 
-function applyDefStatuses(state: GameState, aIdx: 0 | 1, statuses: SpecialCondition[], label: string, poisonDamagePerCheckup?: number): GameState {
-  const dIdx = 1 - aIdx as 0 | 1;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const def = { ...players[dIdx] };
-  if (!def.active) return state;
-  let active = { ...def.active };
+// v5.444：改走中央 applyStatusToOppActive（一勞永逸補化隱 / 純樸 / 泡沫能量 / 祭典會場
+//   / 憨憨臉 / 不眠 全部免疫；原本完全無 guard，化隱被中毒+灼傷類招式無視）。
+//   多狀態逐一施加，dual-status 雙格共存由 applyStatusToActive 處理。
+function applyDefStatuses(state: GameState, aIdx: 0 | 1, statuses: SpecialCondition[], label: string, pool: Map<string, Card>, poisonDamagePerCheckup?: number): GameState {
+  let s = state;
   for (const st of statuses) {
-    if (st === 'poisoned') {
-      active.status = active.status && ['asleep', 'confused', 'paralyzed'].includes(active.status) ? active.status : 'poisoned';
-      if (active.status !== 'poisoned') active.secondaryStatus = 'poisoned';
-      active.poisonDamagePerCheckup = poisonDamagePerCheckup;
-    } else if (st === 'burned') {
-      if (active.status && ['asleep', 'confused', 'paralyzed'].includes(active.status)) active.secondaryStatus = 'burned';
-      else if (active.status === 'poisoned') active.secondaryStatus = 'burned';
-      else active.status = 'burned';
-    } else {
-      // 行動類狀態互斥，放主格；若主格原本是傷害類狀態，先移到 secondaryStatus。
-      if (active.status === 'poisoned' || active.status === 'burned') active.secondaryStatus = active.status;
-      active.status = st;
-    }
+    s = applyStatusToOppActive(s, aIdx, st, pool, {
+      kind: 'attack-effect',
+      label,
+      poisonDamagePerCheckup: st === 'poisoned' ? poisonDamagePerCheckup : undefined,
+    });
   }
-  def.active = active;
-  players[dIdx] = def;
-  const names = statuses.map((s) => `【${statusLabel[s]}】`).join('與');
-  const suffix = poisonDamagePerCheckup ? `（中毒傷害 ${poisonDamagePerCheckup}）` : '';
-  return addLog({ ...state, players }, `${label}：對手戰鬥寶可夢陷入${names}${suffix}`, aIdx);
+  return s;
 }
 
 function flipOne(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: boolean } {
@@ -78,8 +66,8 @@ regPost('瑪力露|躲藏', selfImmuneOnHeads('躲藏'));
 //   讓玩家自選備戰寶可夢（玩家回報）。同 selfSwapPost 範本 — 中毒+灼傷先執行，
 //   然後開 bench-choose pending 讓玩家選；玩家選完後 do-switch resolver 完成互換。
 regPre('焰后蜥ex|剋命銳爪', (state) => ({ state, damage: 100 }));
-regPost('焰后蜥ex|剋命銳爪', (state, aIdx) => {
-  let s = applyDefStatuses(state, aIdx, ['poisoned', 'burned'], '剋命銳爪');
+regPost('焰后蜥ex|剋命銳爪', (state, aIdx, pool) => {
+  let s = applyDefStatuses(state, aIdx, ['poisoned', 'burned'], '剋命銳爪', pool);
   const player = s.players[aIdx];
   if (!player.active || player.bench.length === 0) {
     return addLog(s, '剋命銳爪：備戰區沒有寶可夢，無法切換', aIdx);
@@ -95,26 +83,26 @@ regPost('焰后蜥ex|剋命銳爪', (state, aIdx) => {
 
 // 龍王蠍｜危害之尾：100，自身 70，對手中毒+麻痺。
 regPre('龍王蠍|危害之尾', (state) => ({ state, damage: 100 }));
-regPost('龍王蠍|危害之尾', (state, aIdx) => {
+regPost('龍王蠍|危害之尾', (state, aIdx, pool) => {
   let s = addSelfDamage(state, aIdx, 70, '危害之尾');
-  s = applyDefStatuses(s, aIdx, ['poisoned', 'paralyzed'], '危害之尾');
+  s = applyDefStatuses(s, aIdx, ['poisoned', 'paralyzed'], '危害之尾', pool);
   return s;
 });
 
 // 超級毒藻龍ex｜致死猛毒：對手中毒，該中毒每次寶可夢檢查放置 16 個傷害指示物（160）。
 regPre('超級毒藻龍ex|致死猛毒', (state) => ({ state, damage: 0 }));
-regPost('超級毒藻龍ex|致死猛毒', (state, aIdx) => applyDefStatuses(state, aIdx, ['poisoned'], '致死猛毒', 160));
+regPost('超級毒藻龍ex|致死猛毒', (state, aIdx, pool) => applyDefStatuses(state, aIdx, ['poisoned'], '致死猛毒', pool, 160));
 
 // 莉佳的霸王花ex｜粉綻放：160，對手中毒+睡眠。
 regPre('莉佳的霸王花ex|粉綻放', (state) => ({ state, damage: 160 }));
-regPost('莉佳的霸王花ex|粉綻放', (state, aIdx) => applyDefStatuses(state, aIdx, ['poisoned', 'asleep'], '粉綻放'));
+regPost('莉佳的霸王花ex|粉綻放', (state, aIdx, pool) => applyDefStatuses(state, aIdx, ['poisoned', 'asleep'], '粉綻放', pool));
 
 // 托戈德瑪爾ex｜麻痺針：20，擲硬幣正面麻痺。
 regPre('托戈德瑪爾ex|麻痺針', (state) => ({ state, damage: 20 }));
-regPost('托戈德瑪爾ex|麻痺針', (state, aIdx) => {
+regPost('托戈德瑪爾ex|麻痺針', (state, aIdx, pool) => {
   const r = flipOne(state, aIdx, '麻痺針');
   if (!r.heads) return addLog(r.state, '麻痺針：反面 → 無追加效果', aIdx);
-  return applyDefStatuses(r.state, aIdx, ['paralyzed'], '麻痺針');
+  return applyDefStatuses(r.state, aIdx, ['paralyzed'], '麻痺針', pool);
 });
 
 // 故勒頓ex｜緋紅之牙：上個對手回合若自己的寶可夢因招式傷害昏厥，50+120。

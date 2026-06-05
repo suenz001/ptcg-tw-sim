@@ -42,6 +42,7 @@ import {
   addLog, updatePlayer, withPending,
   ABILITY_EFFECTS as _ABILITY_EFFECTS_UNUSED,
 } from '../_shared';
+import { applyStatusToOppActive } from '../../effects';
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3070Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -128,11 +129,8 @@ export const volcaronaAbility_HeatScale: OnDiscardFromHandFn = (st, idx, pool, _
   if (!opp.active) {
     return addLog(st, '熱浪鱗粉：對手戰鬥場無寶可夢', idx);
   }
-  const targetName = pool.get(opp.active.cardId)?.name ?? '?';
-  const s = addLog(st, `熱浪鱗粉：${targetName} 陷入【灼傷】`, idx);
-  return updatePlayer(s, dIdx, pl =>
-    pl.active ? { ...pl, active: { ...pl.active, status: 'burned' } } : pl
-  );
+  // v5.444：改走中央 applyStatusToOppActive（ability-effect）—【化隱】免疫對手特性效果
+  return applyStatusToOppActive(st, idx, 'burned', pool, { kind: 'ability-effect', label: '熱浪鱗粉' });
 };
 
 // ════════════════════════════════════════════════════════════════════════════

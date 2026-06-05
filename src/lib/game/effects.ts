@@ -2512,6 +2512,75 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
   };
 }
 
+/**
+ * v5.444 中央上特殊狀態函式（一勞永逸）。
+ * 所有「對【對手】戰鬥寶可夢施加特殊狀態」的招式 / 特性 / 效果都應走此函式，
+ * 統一檢查全部免疫來源後才施加，避免各自 inline 漏判（化隱被波爾凱尼恩ex燒灼蒸汽
+ * 灼傷的 bug 根因）。
+ *
+ * 免疫檢查順序（涵蓋全部來源）：
+ *   1. 憨憨臉（混亂免疫，與來源無關）
+ *   2. 不眠（睡眠免疫，與來源無關）
+ *   3. canApplyEffectToTarget(kind) — kind='attack-effect'(招式) / 'ability-effect'(特性)：
+ *        化隱（擋招式+特性效果）、純樸 / 薄霧 / 皇帝之勢 / 抵抗之幕（只擋招式效果）、
+ *        對戰圓形競技場 等中央關卡一次到位。
+ *   4. 泡沫【水】等特殊能量狀態免疫（per-status，與來源無關）
+ *   5. 祭典會場（與來源無關）
+ *
+ * ⚠ 道具 / 訓練家卡（暗黑鈴、火箭隊的催眠裝置等）造成的狀態【不適用】化隱／純樸
+ *   （化隱卡面只擋「對手的招式或特性的效果」），那類請勿改走 ability/attack-effect。
+ *
+ * @param kind 'attack-effect'（招式造成）或 'ability-effect'（特性造成）
+ * @param label log 前綴（招式 / 特性名）
+ * @param poisonDamagePerCheckup 強化中毒每次寶可夢檢查的傷害量（致死猛毒 160 等）
+ */
+export function applyStatusToOppActive(
+  state: GameState,
+  srcIdx: 0 | 1,
+  status: SpecialCondition,
+  pool: Map<string, Card>,
+  opts: { kind: 'attack-effect' | 'ability-effect'; label?: string; poisonDamagePerCheckup?: number } = { kind: 'attack-effect' },
+): GameState {
+  const dIdx = (1 - srcIdx) as 0 | 1;
+  const def = state.players[dIdx];
+  if (!def.active) return state;
+  const defName = pool.get(def.active.cardId)?.name ?? '?';
+  const prefix = opts.label ? `${opts.label}：` : '';
+  const statusLabel: Record<string, string> = {
+    poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+  };
+  // 1. 憨憨臉 — 混亂免疫
+  if (status === 'confused' && isConfusionImmune(def.active, pool)) {
+    return addLog(state, `${prefix}${defName}｜憨憨臉：免疫【混亂】`, srcIdx);
+  }
+  // 2. 不眠 — 睡眠免疫
+  if (status === 'asleep' && isSleepImmune(def.active, pool)) {
+    return addLog(state, `${prefix}${defName}｜不眠：免疫【睡眠】`, srcIdx);
+  }
+  // 3. 統一免疫關卡（化隱 / 純樸 / 薄霧 / 皇帝之勢 / 抵抗之幕 / 對戰圓形 …）
+  const guard = canApplyEffectToTarget(state, srcIdx, def.active, pool.get(def.active.cardId), opts.kind, pool);
+  if (guard.blocked) {
+    return addLog(state, `${prefix}${defName}｜${guard.reason}`, srcIdx);
+  }
+  // 4. 泡沫【水】等特殊能量狀態免疫
+  const seImmune = checkSpecialEnergyStatusImmune(def.active, status, pool);
+  if (seImmune.immune) {
+    return addLog(state, `${prefix}${defName}｜${seImmune.energyName}：免疫【${statusLabel[status]}】`, srcIdx);
+  }
+  // 5. 祭典會場
+  if (isFestivalVenueStatusProtected(state, def.active, pool)) {
+    return addLog(state, `${prefix}${defName}｜祭典會場：免疫【${statusLabel[status]}】`, srcIdx);
+  }
+  // 施加狀態（applyStatusToActive 正確處理 status / secondaryStatus 雙格共存）
+  let newActive = applyStatusToActive(def.active, status);
+  if (status === 'poisoned' && opts.poisonDamagePerCheckup) {
+    newActive = { ...newActive, poisonDamagePerCheckup: opts.poisonDamagePerCheckup };
+  }
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...def, active: newActive };
+  return addLog({ ...state, players }, `${prefix}${defName} 陷入【${statusLabel[status]}】`, srcIdx);
+}
+
 // 中毒類
 regPost('鬼斯通|毒之氣息', statusPost('poisoned'));
 regPost('百足蜈蚣|毒液', statusPost('poisoned'));
@@ -3221,7 +3290,7 @@ export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'
     // 皇帝之勢 / 抵抗之幕（基礎火箭隊）。
     if (def.active) {
       const defCardForGuard = pool.get(def.active.cardId);
-      const guardCSP = canApplyAttackEffectToTarget(state, aIdx, def.active, defCardForGuard, pool);
+      const guardCSP = canApplyEffectToTarget(state, aIdx, def.active, defCardForGuard, 'attack-effect', pool);
       if (guardCSP.blocked) {
         const defCoinName = pool.get(def.active.cardId)?.name ?? '?';
         return addLog(state, `正面！但 ${defCoinName}｜${guardCSP.reason}`, aIdx);
@@ -4110,6 +4179,9 @@ reg('危險光線', (st, idx, pool) => {
   const def = { ...players[dIdx] };
   if (def.active) {
     const defName = pool.get(def.active.cardId)?.name ?? '?';
+    // v5.444：補化隱 / 純樸等統一免疫關卡（原本只查特殊能量，化隱被漏）
+    const dlGuard = canApplyEffectToTarget(st, idx, def.active, pool.get(def.active.cardId), 'attack-effect', pool);
+    if (dlGuard.blocked) return addLog(st, `危險光線：${defName}｜${dlGuard.reason}`, idx);
     // v2.175：泡沫【水】等 SPECIAL_ENERGY_STATUS_IMMUNE 命中 → 對應狀態忽略
     const immBurn = checkSpecialEnergyStatusImmune(def.active, 'burned', pool);
     const immConf = checkSpecialEnergyStatusImmune(def.active, 'confused', pool);
@@ -10381,7 +10453,7 @@ function defToolDiscardPre(base: number, label: string): AttackPreFn {
       return { state: addLog(state, `${label}：對手戰鬥寶可夢無道具`, aIdx), damage: base };
     }
     const defCardForGuard = pool.get(def.cardId);
-    const guard = canApplyAttackEffectToTarget(state, aIdx, def, defCardForGuard, pool);
+    const guard = canApplyEffectToTarget(state, aIdx, def, defCardForGuard, 'attack-effect', pool);
     if (guard.blocked) {
       const dName = pool.get(def.cardId)?.name ?? '?';
       return {

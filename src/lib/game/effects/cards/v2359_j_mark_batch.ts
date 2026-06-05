@@ -43,7 +43,7 @@ import {
   withPending,
   countAttachedEnergyAsUnits, getOwnBenchLimit} from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, flipCoinsWithLog } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 
@@ -75,25 +75,17 @@ function coinTailsFailFn(base: number, label: string): AttackPreFn {
   };
 }
 
-/** 擲幣正面 → 對手戰鬥位附加指定狀態（無視 effectShield，簡化版） */
+/** 擲幣正面 → 對手戰鬥位附加指定狀態。
+ *  v5.444：改走中央 applyStatusToOppActive（原「無視 effectShield 簡化版」會讓化隱 /
+ *  純樸 / 泡沫能量 / 祭典會場 全被無視，化隱寶可夢仍被上狀態）。 */
 function coinStatusFn(
   status: 'poisoned' | 'paralyzed',
   label: string,
 ): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const r = flip1(label, state, aIdx);
     if (!r.heads) return addLog(r.state, `${label}：反面 → 無追加效果`, aIdx);
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...r.state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (!def.active) return r.state;
-    def.active = { ...def.active, status };
-    players[dIdx] = def;
-    return addLog(
-      { ...r.state, players },
-      `${label}：正面 → 對手${status === 'poisoned' ? '中毒' : '麻痺'}`,
-      aIdx,
-    );
+    return applyStatusToOppActive(r.state, aIdx, status, pool, { kind: 'attack-effect', label: `${label}：正面` });
   };
 }
 
