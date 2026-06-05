@@ -10,7 +10,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "deploy:rules": "firebase deploy --only firestore:rules --project ptcg-tw-sim",
     "deploy:hosting": "npm run build && firebase deploy --only hosting --project ptcg-tw-sim",
-    "firebase:login": "firebase login"
+    "firebase:login": "firebase login",
+    "test": "node scripts/test-damage-immunity-matrix.mjs && node scripts/test-attack-effect-immunity-matrix.mjs && node scripts/test-online-sync-guards.mjs && node scripts/smoke-coinflip-sweep.mjs && node scripts/test-acespec-consistency.mjs && node scripts/test-cinccino-deck-focused.mjs && node scripts/test-j-mark-batch-a1.mjs && node scripts/test-j-mark-batch-a2.mjs && node scripts/test-j-mark-batch-a3.mjs && node scripts/test-m2-dragon-charizard-batch.mjs && node scripts/test-selection-ui.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.8",

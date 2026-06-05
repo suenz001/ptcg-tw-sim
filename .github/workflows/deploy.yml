@@ -24,6 +24,8 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
+      - name: Run engine regression tests
+        run: npm test
       - name: Build SvelteKit app
         run: npm run build
         env:
