@@ -28,7 +28,7 @@ import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, countAttachedEnergyAsUnits } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: A 擲 N 次硬幣，正面數 × K 傷害（damage='Nx30+' 等）
@@ -99,10 +99,11 @@ function oppActiveEnergyCountPre(
   mode: 'add' | 'sub',
   label: string,
 ): AttackPreFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    const count = def ? def.energyAttached.length : 0;
+    // v5.448：改用單位計數（新衝天 on Stage2 = 2）— 大橫掃依對手能量數減傷
+    const count = def ? countAttachedEnergyAsUnits(def, pool) : 0;
     const delta = count * perEnergy;
     const dmg = mode === 'add' ? base + delta : Math.max(0, base - delta);
     const s = addLog(state, `${label}：對手戰鬥場 ${count} 個能量 → ${base}${mode === 'add' ? '+' : '-'}${delta} = ${dmg}`, aIdx);

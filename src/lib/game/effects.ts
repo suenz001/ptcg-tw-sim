@@ -6719,7 +6719,7 @@ function isEnergyOfType(ec: any, type: string): boolean {
 //   一般 1 個；新衝天能量 on Stage2 = 2 個（卡面「視為提供 2 個所有屬性的能量」）。
 //   用於招式「依能量數計傷害 / 擲幣次數」場合。重複定義避免動巨大 import。
 //   邏輯與 _shared.countAttachedEnergyAsUnits 一致。
-function countAttachedEnergyAsUnits(host: CardInstance, pool: Map<string, Card>): number {
+export function countAttachedEnergyAsUnits(host: CardInstance, pool: Map<string, Card>): number {
   const hostCard = pool.get(host.cardId);
   const hostStage = hostCard?.stage ?? hostCard?.subtype;
   const hostIsStage2 = hostStage === 'Stage2';
@@ -6741,7 +6741,7 @@ function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: Energy
     const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     const count = isTypeFilter
       ? countEnergyTypeHostAware(att, filter as EnergyType, pool)
-      : countOneEnergy(att, filter, pool);
+      : filter === 'all' ? countAttachedEnergyAsUnits(att, pool) : countOneEnergy(att, filter, pool); // v5.448：'all'→單位計數(新衝天Stage2×2)
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：自身能量 ${count} → ${dmg}`, aIdx), damage: dmg };
   };
@@ -6756,7 +6756,7 @@ function defActiveEnergyMultiplyPre(base: number, per: number, filter: EnergyFil
     const count = def
       ? (isTypeFilter
           ? countEnergyTypeHostAware(def, filter as EnergyType, pool)
-          : countOneEnergy(def, filter, pool))
+          : filter === 'all' ? countAttachedEnergyAsUnits(def, pool) : countOneEnergy(def, filter, pool)) // v5.448：'all'→單位計數
       : 0;
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手出場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
@@ -6774,7 +6774,7 @@ function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter
       if (!p) continue;
       count += isTypeFilter
         ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
-        : countOneEnergy(p, filter, pool);
+        : filter === 'all' ? countAttachedEnergyAsUnits(p, pool) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
     }
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
@@ -6801,7 +6801,7 @@ function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilte
       if (!bloom) {
         count += isTypeFilter
           ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
-          : countOneEnergy(p, filter, pool);
+          : filter === 'all' ? countAttachedEnergyAsUnits(p, pool) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
         continue;
       }
       // 繁茂啟用：iterate 每個 energy，基本【草】 +2、其他依 filter 規則 +1
@@ -6841,11 +6841,14 @@ function bothActiveEnergyMultiplyPre(base: number, per: number, label: string): 
     function countWithBloom(inst: CardInstance | null | undefined, ownerIdx: 0 | 1): number {
       if (!inst) return 0;
       const bloom = hasBloomOnSide(ownerIdx);
+      const hostCard = pool.get(inst.cardId);
+      const hostIsStage2 = (hostCard?.stage ?? hostCard?.subtype) === 'Stage2';
       let n = 0;
       for (const e of inst.energyAttached) {
         const ec = pool.get(e.cardId);
         if (!ec || ec.supertype !== 'Energy') continue;
-        if (bloom && isBasicGrass(ec)) n += 2;
+        if (ec.name === '新衝天能量' && hostIsStage2) n += 2;   // v5.448：新衝天 on Stage2 = 2 個
+        else if (bloom && isBasicGrass(ec)) n += 2;
         else n += 1;
       }
       return n;
