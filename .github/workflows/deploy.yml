@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - name: Anti-pattern lint (反模式靜態檢查)
         run: node scripts/anti-pattern-lint.mjs
+      - name: Coverage report (未實裝/靜默失效卡牌, 資訊性非 gating)
+        run: node scripts/coverage-unimplemented.mjs
       - name: Run engine regression tests
         run: npm test
       - name: Build SvelteKit app
