@@ -1272,13 +1272,13 @@ regPre('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
 });
 
 // POST：選擇對手任意寶可夢，造成 120 傷害
-regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
+regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defender = state.players[dIdx];
   if (defender.bench.length === 0 && !defender.active) return state;
   if (defender.bench.length === 0 && defender.active) {
     // 無備戰，直接對出場施加 120 傷害
-    const defCard = _pool.get(defender.active.cardId);
+    const defCard = pool.get(defender.active.cardId);
     const newDmg = defender.active.damage + 120;
     const defHP = defCard?.hp ?? 0;
     if (defHP > 0 && newDmg >= defHP) {
@@ -7297,7 +7297,7 @@ regPre('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
   const dmg = 140 + energyCount * 140;
   return { state: addLog(state, `大地灼燒：雙方牌庫頂丟棄 ${energyCount} 張能量 → ${dmg}`, aIdx), damage: dmg };
 });
-regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, _pool) => {
+regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const players = [...state.players] as [PlayerState, PlayerState];
   let s = state;
