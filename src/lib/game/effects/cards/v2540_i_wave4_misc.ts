@@ -20,7 +20,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { statusPost, flipCoinsWithLog } from '../../effects';
+import { statusPost, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper A: 擲 1 次硬幣 +N
@@ -156,23 +156,29 @@ function selfHealPost(amount: number, label: string): AttackPostFn {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// helper F: 跳踢狙擊（base damage + 對手 1 隻備戰 N）
-// 用 v2.49 的 wave3a-snipe-bench resolver
+// helper F: 任意目標狙擊（對手 active 或 1 隻備戰受 N）
+// v5.445：跳踢卡面是「對手的1隻寶可夢」(active 或備戰皆可)，原本只做到 bench-only。
+//   改用 opp-poke-choose picker + 中央 dealAttackDamageToTarget：
+//   active 計弱點×2、備戰不計弱抗，含免疫(花之帷幔/神秘石居/對戰圓形等)與擊倒。
 // ══════════════════════════════════════════════════════════════════════════════
-function snipeOneBenchPost(amount: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+function snipeAnyOppPost(amount: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const opp = state.players[dIdx];
-    if (opp.bench.length === 0) {
-      return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
+    if (!opp.active && opp.bench.length === 0) {
+      return addLog(state, `${label}：對手沒有寶可夢`, aIdx);
     }
-    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害`, aIdx);
+    // 只有 active（無備戰）→ 無需選擇，直接結算
+    if (opp.bench.length === 0 && opp.active) {
+      return dealAttackDamageToTarget(state, aIdx, opp.active.iid, amount, pool, { kind: 'attack-damage', label });
+    }
+    const s = addLog(state, `${label}：選擇對手任一寶可夢，受到 ${amount} 點傷害`, aIdx);
     return withPending(s, {
-      type: 'opp-bench-choose',
+      type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: 1,
-      effectKey: 'wave3a-snipe-bench',
-      params: { amount, label },
+      effectKey: 'snipe-variable',
+      params: { includeActive: true, damage: amount, label },
     });
   };
 }
@@ -342,7 +348,7 @@ regPost('巨蔓藤|吸取', selfHealPost(30, '吸取'));
 // ══════════════════════════════════════════════════════════════════════════════
 // 騰蹴小將|跳踢 0 + 對手 1 隻備戰 40
 regPre('騰蹴小將|跳踢', (s) => ({ state: s, damage: 0 }));
-regPost('騰蹴小將|跳踢', snipeOneBenchPost(40, '跳踢'));
+regPost('騰蹴小將|跳踢', snipeAnyOppPost(40, '跳踢'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 7. G 不計算抵抗力（1 張）— 鹽石壘|岩石投擲

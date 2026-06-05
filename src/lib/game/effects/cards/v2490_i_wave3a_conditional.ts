@@ -211,18 +211,22 @@ regR('wave3a-snipe-bench', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
-  // v5.176：加 canApplyEffectToTarget('attack-damage') guard
+  // v5.176：加 canApplyEffectToTarget guard
   // v5.270：增強 audit log — 明確顯示 guard 是否觸發, 方便玩家對帳 (花之帷幔/球形盾牌等)
+  // v5.445：加選用 kind 參數 — 預設 'attack-damage'(維持既有 7 卡)；放傷害指示物型(刺殺魔法)
+  //   傳 'attack-effect' 才會走對戰圓形競技場等「招式效果」免疫。
+  const kind = (params?.kind as 'attack-damage' | 'attack-effect' | undefined) ?? 'attack-damage';
   let s = state;
   const target = s.players[dIdx].bench.find(b => b.iid === targetIid);
   if (!target) return s;
   const targetCard = pool.get(target.cardId);
-  const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, 'attack-damage', pool, { isBench: true });
+  const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, kind, pool, { isBench: true });
   if (guard.blocked) {
-    return addLog(s, `✋ ${label}：${targetCard?.name ?? '?'} 受到 ${guard.reason} 保護, 不受 ${amount} 點招式傷害`, aIdx);
+    return addLog(s, `✋ ${label}：${targetCard?.name ?? '?'} 受到 ${guard.reason} 保護, 不受影響`, aIdx);
   }
   // v5.270: guard 未觸發 — 確認套用前寫一條 audit log (讓玩家從 log 對帳)
-  s = addLog(s, `🎯 ${label}：對 ${targetCard?.name ?? '?'} 造成 ${amount} 點傷害 (guard 未觸發)`, aIdx);
+  const applyDesc = kind === 'attack-effect' ? `放置 ${Math.round(amount / 10)} 個傷害指示物` : `造成 ${amount} 點傷害`;
+  s = addLog(s, `🎯 ${label}：對 ${targetCard?.name ?? '?'} ${applyDesc} (guard 未觸發)`, aIdx);
   return updatePlayer(s, dIdx, p => ({
     ...p,
     bench: p.bench.map(b => b.iid === targetIid

@@ -603,7 +603,7 @@ regPost('N的雙倍多多冰|覆雪', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 14. 夢妖魔｜刺殺魔法 60 — 對手戰鬥場有特殊狀態 → 對手 1 隻備戰受 60
+// 14. 夢妖魔｜刺殺魔法 60 — 對手戰鬥場有特殊狀態 → 對手 1 隻備戰放 6 個傷害指示物(招式效果)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('夢妖魔|刺殺魔法', (s) => ({ state: s, damage: 60 }));
 regPost('夢妖魔|刺殺魔法', (state, aIdx, _pool) => {
@@ -611,13 +611,13 @@ regPost('夢妖魔|刺殺魔法', (state, aIdx, _pool) => {
   const da = state.players[dIdx].active;
   if (!da?.status && !da?.secondaryStatus) return addLog(state, '刺殺魔法：對手戰鬥場無特殊狀態', aIdx);
   if (state.players[dIdx].bench.length === 0) return state;
-  const s = addLog(state, '刺殺魔法：選 1 隻對手備戰受 60', aIdx);
+  const s = addLog(state, '刺殺魔法：選 1 隻對手備戰放 6 個傷害指示物', aIdx);
   return withPending(s, {
     type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'wave3a-snipe-bench',
-    params: { amount: 60, label: '刺殺魔法' },
+    params: { amount: 60, label: '刺殺魔法', kind: 'attack-effect' }, // v5.445：放6個傷害指示物=招式效果(對戰圓形可擋)
   });
 });
 
