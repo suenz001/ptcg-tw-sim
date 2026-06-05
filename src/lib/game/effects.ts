@@ -9077,7 +9077,7 @@ function discardEnergyAttachPost(
     const cand = p.discard.filter(c => {
       const card = pool.get(c.cardId);
       if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      if (typeFilter && !energyMatchesType(card, typeFilter as EnergyType)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
     if (cand.length === 0) {
@@ -9451,7 +9451,7 @@ function fieldDiscardMultiplyPre(
       if (!c || c.supertype !== 'Energy') return false;
       if (typeFilter === 'all') return true;
       if (typeFilter === 'basic') return c.subtype === 'Basic';
-      return c.pokemonType === typeFilter;
+      return energyMatchesType(c, typeFilter as EnergyType); // v5.450：基本能量 pokemonType 為 null，須用名稱-aware 比對
     };
     if (player.active) {
       for (const e of player.active.energyAttached) {
@@ -10352,7 +10352,7 @@ function handAttachEnergyPost(
     const cand = p.hand.filter(c => {
       const card = pool.get(c.cardId);
       if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      if (typeFilter && !energyMatchesType(card, typeFilter as EnergyType)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
     if (cand.length === 0) return addLog(state, `${label}：手牌沒有符合的基本能量`, aIdx);
@@ -10719,7 +10719,7 @@ function deckEnergyAttachSelfPost(typeFilter: EnergyType | null, label: string):
     const cand = p.deck.filter(c => {
       const card = pool.get(c.cardId);
       if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      if (typeFilter && !energyMatchesType(card, typeFilter as EnergyType)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
     if (cand.length === 0) return addLog(state, `${label}：牌庫無符合的基本能量`, aIdx);
@@ -10823,7 +10823,7 @@ function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: strin
     const cand = p.hand.filter(c => {
       const card = pool.get(c.cardId);
       if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      if (typeFilter && !energyMatchesType(card, typeFilter as EnergyType)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
     if (cand.length === 0) return addLog(state, `${label}：手牌無符合的基本能量`, aIdx);

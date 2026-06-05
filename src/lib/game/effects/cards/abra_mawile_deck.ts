@@ -184,7 +184,7 @@ function deckEnergyAttachBenchPost(typeFilter: EnergyType | null, label: string)
     const cand = p.deck.filter(c => {
       const card = pool.get(c.cardId);
       if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-      if (typeFilter && card.pokemonType !== typeFilter) return false;
+      if (typeFilter && !isBasicEnergyOfType(card, typeFilter)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
     // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）

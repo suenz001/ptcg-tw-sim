@@ -8,7 +8,7 @@
 
 import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
-  getOwnBenchLimit, countAttachedEnergyAsUnits,
+  getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
@@ -273,7 +273,7 @@ function discardSearchBasicEnergiesPost(max: number, label: string, type?: strin
     const validIids = p.discard.filter(c => {
       const card = pool.get(c.cardId);
       if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
-      if (type && card.pokemonType !== type) return false;
+      if (type && !energyMatchesType(card, type)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     }).map(c => c.iid);
     if (validIids.length === 0) return addLog(state, `${label}：棄牌區無對應基本能量`, aIdx);
@@ -307,7 +307,7 @@ function discardSearchAttachToBenchPost(max: number, label: string, type?: strin
     const validIids = p.discard.filter(c => {
       const card = pool.get(c.cardId);
       if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
-      if (type && card.pokemonType !== type) return false;
+      if (type && !energyMatchesType(card, type)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     }).map(c => c.iid);
     if (validIids.length === 0) return addLog(state, `${label}：棄牌區無對應基本能量`, aIdx);
@@ -378,7 +378,7 @@ function deckSearchAttachToBenchPost(max: number, label: string, type?: string):
     const validCount = p.deck.filter(c => {
       const card = pool.get(c.cardId);
       if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
-      if (type && card.pokemonType !== type) return false;
+      if (type && !energyMatchesType(card, type)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     }).length;
     const realMax = Math.min(max, validCount);
@@ -458,7 +458,7 @@ export function deckSearchAttachToAnyPost(max: number, label: string, type?: str
     const validCount = p.deck.filter(c => {
       const card = pool.get(c.cardId);
       if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
-      if (type && card.pokemonType !== type) return false;
+      if (type && !energyMatchesType(card, type)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     }).length;
     const realMax = Math.min(max, validCount);
@@ -561,7 +561,7 @@ export function discardSearchAttachToAnyPost(max: number, label: string, type?: 
     const validIids = p.discard.filter(c => {
       const card = pool.get(c.cardId);
       if (!(card?.supertype === 'Energy' && card.subtype === 'Basic')) return false;
-      if (type && card.pokemonType !== type) return false;
+      if (type && !energyMatchesType(card, type)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     }).map(c => c.iid);
     if (validIids.length === 0) return addLog(state, `${label}：棄牌區無對應基本能量`, aIdx);

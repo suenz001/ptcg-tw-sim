@@ -20,7 +20,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle, drawCards,
-  ATTACK_PRE_DISCARD_CHOICE,
+  ATTACK_PRE_DISCARD_CHOICE, energyMatchesType,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 
@@ -95,7 +95,7 @@ function deckSearchBasicEnergyPost(
     const validIids = player.deck
       .filter(c => {
         const cc = pool.get(c.cardId);
-        return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && cc.pokemonType === type;
+        return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && energyMatchesType(cc, type); // v5.450：基本能量 pokemonType=null，名稱-aware
       })
       .map(c => c.iid);
     if (validIids.length === 0) {

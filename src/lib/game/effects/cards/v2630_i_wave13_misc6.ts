@@ -4,7 +4,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE,
-  getOwnBenchLimit,
+  getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
@@ -39,7 +39,7 @@ function deckSearchBasicEnergyAttachOnePost(
     const energyIid = player.deck.find(c => {
       const card = pool.get(c.cardId);
       return card?.supertype === 'Energy' && card.subtype === 'Basic'
-        && card.pokemonType === type;
+        && energyMatchesType(card, type); // v5.450：基本能量 pokemonType=null，名稱-aware
     })?.iid;
     if (!energyIid) {
       return updatePlayer(
