@@ -28,6 +28,7 @@ import {
   healResolver,
   getOwnBenchLimit,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import { tryPromptPromoteActive } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
@@ -561,9 +562,9 @@ reg('調換票', (st, idx) => {
 // ── 開洞之鏟（Item / M-P-I）─────────────────────────────────────────────────
 // 卡面：將自己的牌庫上方 2 張卡丟棄。
 regG('開洞之鏟', (st, idx) => st.players[idx].deck.length > 0);
-reg('開洞之鏟', (st, idx) => {
-  return updatePlayer(addLog(st, '開洞之鏟：將自己的牌庫上方 2 張卡丟棄', idx), idx, p => {
-    const top2 = p.deck.slice(0, 2);
+reg('開洞之鏟', (st, idx, pool) => {
+  const top2 = st.players[idx].deck.slice(0, 2);
+  return updatePlayer(addLog(st, `開洞之鏟：將自己的牌庫上方 ${top2.length} 張卡丟棄：${joinCardNames(top2, pool)}`, idx), idx, p => {
     return { ...p, deck: p.deck.slice(top2.length), discard: [...p.discard, ...top2] };
   });
 });

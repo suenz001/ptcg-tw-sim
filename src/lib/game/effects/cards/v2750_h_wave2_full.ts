@@ -10,6 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
@@ -2192,11 +2193,12 @@ regPre('沼王|濕透頭擊', (state, aIdx, pool) => {
   }
   return { state: addLog(state, `濕透頭擊：牌庫頂 3 張中能量 ${energyCount} → ${energyCount}×80 = ${energyCount*80}`, aIdx), damage: energyCount * 80 };
 });
-regPost('沼王|濕透頭擊', (state, aIdx, _pool) => {
-  return updatePlayer(state, aIdx, p => {
-    const k = Math.min(3, p.deck.length);
-    return { ...p, deck: p.deck.slice(k), discard: [...p.discard, ...p.deck.slice(0, k)] };
-  });
+regPost('沼王|濕透頭擊', (state, aIdx, pool) => {
+  const k = Math.min(3, state.players[aIdx].deck.length);
+  const top = state.players[aIdx].deck.slice(0, k);
+  return updatePlayer(addLog(state, `濕透頭擊：自己牌庫頂 ${k} 張丟入棄牌區：${joinCardNames(top, pool)}`, aIdx), aIdx, p => ({
+    ...p, deck: p.deck.slice(k), discard: [...p.discard, ...top],
+  }));
 });
 
 // 鐵荊棘|壞死壓榨 (兩種拼法：壊/壞，視來源資料) — 牌庫頂 5 翻面，未來卡張數 ×70，棄未來卡，剩餘重洗

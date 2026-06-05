@@ -12,7 +12,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
-import { getOwnBenchLimit } from '../_shared';
+import { getOwnBenchLimit, joinCardNames } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import {
   addLog,
@@ -290,7 +290,7 @@ regR('j-2355-memory-lock', (st, aIdx, iids, params, _pool) => {
 // 卡面：「160 擲硬幣直到出現反面，將對手的牌庫上方與正面出現的次數相同數量的卡丟棄。」
 // 實裝：regPost 模擬擲幣迴圈（Math.random < 0.5 = 正面），mill 對手牌庫頂 N 張
 // ※ 不需 regPre（引擎自動讀卡面 damage 160）
-regPost('怪顎龍|亂暴', (state, aIdx, _pool) => {
+regPost('怪顎龍|亂暴', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
 
   // 擲幣到反面，累計正面次數（逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack）
@@ -322,7 +322,7 @@ regPost('怪顎龍|亂暴', (state, aIdx, _pool) => {
   }));
   return addLog(
     s,
-    `亂暴：擲幣 ${heads} 次正面 → 丟棄對手牌庫頂 ${millCount} 張`,
+    `亂暴：擲幣 ${heads} 次正面 → 丟棄對手牌庫頂 ${millCount} 張：${joinCardNames(toDiscard, pool)}`,
     aIdx,
   );
 });

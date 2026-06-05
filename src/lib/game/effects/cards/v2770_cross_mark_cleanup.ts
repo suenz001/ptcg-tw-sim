@@ -9,6 +9,7 @@ import {
   regPre, regPost, regR, addLog, updatePlayer, withPending,
   ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -99,11 +100,12 @@ regPre('小霞的暴鯉龍|嘩啦嘩啦恐慌', (state, aIdx, pool) => {
   }
   return { state: addLog(state, `嘩啦嘩啦恐慌：牌庫頂 7 中小霞的 ${count} → ${count*70}`, aIdx), damage: count * 70 };
 });
-regPost('小霞的暴鯉龍|嘩啦嘩啦恐慌', (state, aIdx, _pool) => {
-  return updatePlayer(state, aIdx, p => {
-    const k = Math.min(7, p.deck.length);
-    return { ...p, deck: p.deck.slice(k), discard: [...p.discard, ...p.deck.slice(0, k)] };
-  });
+regPost('小霞的暴鯉龍|嘩啦嘩啦恐慌', (state, aIdx, pool) => {
+  const k = Math.min(7, state.players[aIdx].deck.length);
+  const top = state.players[aIdx].deck.slice(0, k);
+  return updatePlayer(addLog(state, `嘩啦嘩啦恐慌：自己牌庫頂 ${k} 張丟入棄牌區：${joinCardNames(top, pool)}`, aIdx), aIdx, p => ({
+    ...p, deck: p.deck.slice(k), discard: [...p.discard, ...top],
+  }));
 });
 
 // 吃吼霸ex|極限俯衝 120+ — 若希望 +120 + 自殘 50

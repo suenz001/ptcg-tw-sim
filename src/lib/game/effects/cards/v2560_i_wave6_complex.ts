@@ -21,6 +21,7 @@ import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware } from '../../effects';
 
@@ -150,13 +151,13 @@ regPre('超級暴雪王ex|山崩之錘', (state, aIdx, pool) => {
   return { state: s, damage: dmg };
 });
 
-regPost('超級暴雪王ex|山崩之錘', (state, aIdx, _pool) => {
+regPost('超級暴雪王ex|山崩之錘', (state, aIdx, pool) => {
   // 把牌庫頂 6 張移到棄牌區（已在 pre 用作計算，但要實際移除）
-  return updatePlayer(state, aIdx, p => {
-    const top6 = p.deck.slice(0, 6);
-    if (top6.length === 0) return p;
-    return { ...p, deck: p.deck.slice(top6.length), discard: [...p.discard, ...top6] };
-  });
+  const top6 = state.players[aIdx].deck.slice(0, 6);
+  if (top6.length === 0) return state;
+  return updatePlayer(addLog(state, `山崩之錘：自己牌庫頂 ${top6.length} 張丟入棄牌區：${joinCardNames(top6, pool)}`, aIdx), aIdx, p => ({
+    ...p, deck: p.deck.slice(top6.length), discard: [...p.discard, ...top6],
+  }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

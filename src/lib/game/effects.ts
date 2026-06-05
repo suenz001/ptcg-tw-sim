@@ -46,7 +46,7 @@ import {
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   triggerOakeyeMillIfApplicable,
-  getOwnBenchLimit,} from './effects/_shared';
+  getOwnBenchLimit, joinCardNames,} from './effects/_shared';
 
 // re-export helper 給 engine.ts / 其他 resolver 用
 export { applyBenchPlaceSideEffects };
@@ -4663,12 +4663,13 @@ regR('noisuru-rumble', (st, idx, iids, _params, pool) => {
 // 原本在 BENCH_PLACE_TRIGGERS 自動觸發（v2.241）；現改為 regA 路徑，
 // 由 promptPlayAbilities 詢問玩家後呼叫。
 // 卡面：「在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。將對手的牌庫上方1張卡丟棄。」
-regA('鐵蟻ex', 0, (st, idx) => {
+regA('鐵蟻ex', 0, (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   if (st.players[oppIdx].deck.length === 0) {
     return addLog(st, '突然削退：對手牌庫為空', idx);
   }
-  st = addLog(st, '突然削退：丟對手牌庫頂 1 張', idx);
+  const _sdTop = st.players[oppIdx].deck.slice(0, 1);
+  st = addLog(st, `突然削退：丟對手牌庫頂 1 張：${joinCardNames(_sdTop, pool)}`, idx);
   return updatePlayer(st, oppIdx, p => {
     const top = p.deck.slice(0, 1);
     return { ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] };
@@ -5282,10 +5283,12 @@ regPost('巨牙鯊|咬棄', (state, aIdx, _pool) => {
 });
 
 // 鐵螯龍蝦｜喀嚓喀嚓 — 擲 2 次硬幣，對手牌庫上方正面數的牌丟棄
-regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, _pool) => {
+regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const r = flipCoinsWithLog(state, 2, '喀嚓喀嚓', aIdx);
-  const s = addLog(r.state, `喀嚓喀嚓：${r.heads} 次正面 → 丟對手牌庫頂 ${r.heads} 張`, aIdx);
+  const _kTake = Math.min(r.heads, r.state.players[dIdx].deck.length);
+  const _kDiscarded = r.state.players[dIdx].deck.slice(0, _kTake);
+  const s = addLog(r.state, `喀嚓喀嚓：${r.heads} 次正面 → 丟對手牌庫頂 ${_kTake} 張：${joinCardNames(_kDiscarded, pool)}`, aIdx);
   return updatePlayer(s, dIdx, p => {
     const take = Math.min(r.heads, p.deck.length);
     if (take === 0) return p;
@@ -5946,13 +5949,13 @@ regPre('眷戀雲|愛之同感', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 巨炭山|山崩 — 150 + 對手牌庫頂 2 張丟棄
-regPost('巨炭山|山崩', (state, aIdx, _pool) => {
+regPost('巨炭山|山崩', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const p = state.players[dIdx];
   const take = Math.min(2, p.deck.length);
   if (take === 0) return state;
   const discarded = p.deck.slice(0, take);
-  const s = addLog(state, `山崩：丟對手牌庫頂 ${take} 張`, aIdx);
+  const s = addLog(state, `山崩：丟對手牌庫頂 ${take} 張：${joinCardNames(discarded, pool)}`, aIdx);
   return updatePlayer(s, dIdx, pl => ({
     ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
   }));
@@ -5963,7 +5966,7 @@ regPost('巨炭山|山崩', (state, aIdx, _pool) => {
 regPre('雄偉牙|地盤崩壞', (state, _aIdx, _pool) => {
   return { state, damage: 0 };
 });
-regPost('雄偉牙|地盤崩壞', (state, aIdx, _pool) => {
+regPost('雄偉牙|地盤崩壞', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const p = state.players[dIdx];
   // 基礎丟 1 張；本回合用過「古代」支援者再 +3 張
@@ -5974,8 +5977,8 @@ regPost('雄偉牙|地盤崩壞', (state, aIdx, _pool) => {
   const discarded = p.deck.slice(0, take);
   const s = addLog(state,
     ancientUsed
-      ? `地盤崩壞：本回合已用過「古代」支援者 → 丟對手牌庫頂 ${take} 張（1 + 3）`
-      : `地盤崩壞：丟對手牌庫頂 ${take} 張`,
+      ? `地盤崩壞：本回合已用過「古代」支援者 → 丟對手牌庫頂 ${take} 張（1 + 3）：${joinCardNames(discarded, pool)}`
+      : `地盤崩壞：丟對手牌庫頂 ${take} 張：${joinCardNames(discarded, pool)}`,
     aIdx);
   return updatePlayer(s, dIdx, pl => ({
     ...pl, deck: pl.deck.slice(take), discard: [...pl.discard, ...discarded]
@@ -7300,14 +7303,16 @@ regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const players = [...state.players] as [PlayerState, PlayerState];
   let s = state;
+  const _bgDiscarded: CardInstance[] = [];
   for (const idx of [aIdx, dIdx] as (0 | 1)[]) {
     const p = players[idx];
     if (p.deck.length === 0) continue;
     const top = p.deck[0];
+    _bgDiscarded.push(top);
     players[idx] = { ...p, deck: p.deck.slice(1), discard: [...p.discard, top] };
   }
   s = { ...s, players };
-  return addLog(s, '大地灼燒：雙方牌庫頂 1 張丟入棄牌區', aIdx);
+  return addLog(s, `大地灼燒：雙方牌庫頂 1 張丟入棄牌區：${joinCardNames(_bgDiscarded, pool)}`, aIdx);
 });
 
 // 薩戮德|叢林鞭打 — 卡面：「若希望，將這隻寶可夢身上附加的能量卡全部放回手牌，增加80點傷害。」
@@ -8569,12 +8574,12 @@ function benchBasicFromDeckPost(max: number, label: string): AttackPostFn {
 }
 
 function millSelfDeckTopPost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：自己牌庫為空`, aIdx);
     const taken = p.deck.slice(0, n);
     return updatePlayer(
-      addLog(state, `${label}：自己牌庫頂 ${taken.length} 張丟入棄牌區`, aIdx),
+      addLog(state, `${label}：自己牌庫頂 ${taken.length} 張丟入棄牌區：${joinCardNames(taken, pool)}`, aIdx),
       aIdx,
       pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
     );

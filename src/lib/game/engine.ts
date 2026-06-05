@@ -685,7 +685,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink } from './effects/_shared';
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog } from './effects/_shared';
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
 import { canApplyEffectToTarget } from './defense';
@@ -5946,8 +5946,11 @@ function handlePlaying(
     const newPP: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
     newPP[ownerIdx] = Math.max(0, owed - count);
 
-    let newState: GameState = addLog(
+    // v5.452：取得的獎賞卡是哪幾張只給「取獎者本人」看（private），對手只看到張數（public）。
+    const takenNames = taken.map(c => cardLink(c.iid, getCard(c.cardId, pool).name)).join('、');
+    let newState: GameState = addPrivateLog(
       { ...state, players: newPlayers2, pendingPrizes: newPP },
+      `${taker.name} 取得了 ${count} 張獎賞卡：${takenNames}（剩餘 ${taker.prizes.length} 張）`,
       `${taker.name} 取得了 ${count} 張獎賞卡（剩餘 ${taker.prizes.length} 張）`,
       ownerIdx
     );

@@ -708,6 +708,16 @@ export function updatePlayer(
  * Edge cases：iid 或 displayName 缺則退回顯示 displayName（不產生 marker），確保
  *   never break。
  */
+/**
+ * v5.452：把一組卡（CardInstance[]）格式化成 log 用的卡名字串「A」「B」「C」。
+ * 用於「丟棄牌庫/手牌」類效果在對戰 log 顯示實際丟了哪幾張（玩家回報怪顎龍|亂暴沒顯示）。
+ * 用 cardLink 讓卡名可點擊查看（丟到棄牌堆後仍可由 iid 解析）。
+ */
+export function joinCardNames(cards: CardInstance[], pool: Map<string, Card>): string {
+  if (!cards || cards.length === 0) return '';
+  return cards.map(c => cardLink(c.iid, pool.get(c.cardId)?.name ?? '?')).join('、');
+}
+
 export function cardLink(iid: string | undefined | null, displayName: string | undefined | null): string {
   const name = displayName ?? '';
   if (!iid || !name) return name;

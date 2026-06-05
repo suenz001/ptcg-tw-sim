@@ -24,6 +24,7 @@ import {
   regPre, regPost,
   addLog, updatePlayer, withPending,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -318,15 +319,14 @@ regPost('火箭隊的鈴鐺響|鈴鈴吵鬧', discardOppHandRandomPost(1, '鈴�
 
 // 超級頭巾混混ex|不法之足 160 + 棄對手 1 手牌 + 棄對手牌庫頂 1
 regPre('超級頭巾混混ex|不法之足', (s) => ({ state: s, damage: 160 }));
-regPost('超級頭巾混混ex|不法之足', (state, aIdx, _pool) => {
-  let s = discardOppHandRandomPost(1, '不法之足')(state, aIdx, _pool as never);
+regPost('超級頭巾混混ex|不法之足', (state, aIdx, pool) => {
+  let s = discardOppHandRandomPost(1, '不法之足')(state, aIdx, pool);
   // 再棄對手牌庫頂 1
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(s, dIdx, p => {
-    if (p.deck.length === 0) return p;
-    const top = p.deck[0];
-    return { ...p, deck: p.deck.slice(1), discard: [...p.discard, top] };
-  });
+  const top = s.players[dIdx].deck.slice(0, 1);
+  if (top.length === 0) return s;
+  s = addLog(s, `不法之足：棄對手牌庫頂 1 張：${joinCardNames(top, pool)}`, aIdx);
+  return updatePlayer(s, dIdx, p => ({ ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

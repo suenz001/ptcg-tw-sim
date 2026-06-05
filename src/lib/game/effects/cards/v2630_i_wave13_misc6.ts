@@ -6,6 +6,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE,
   getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
+import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 
@@ -725,7 +726,7 @@ regPre('頭巾混混|無賴攻擊', (state, aIdx, pool) => {
 // 20. 火箭隊的地鼠|狂潛 — 擲到反棄對手牌庫頂 N
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的地鼠|狂潛', (s) => ({ state: s, damage: 0 }));
-regPost('火箭隊的地鼠|狂潛', (state, aIdx, _pool) => {
+regPost('火箭隊的地鼠|狂潛', (state, aIdx, pool) => {
   let heads = 0;
   let s0 = state;
   for (let i = 0; i < 20; i++) {
@@ -737,11 +738,10 @@ regPost('火箭隊的地鼠|狂潛', (state, aIdx, _pool) => {
   let s = addLog(s0, `狂潛：擲到反面為止 → ${heads} 次正面`, aIdx);
   if (heads === 0) return s;
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(s, dIdx, p => {
-    const discardCount = Math.min(heads, p.deck.length);
-    const discarded = p.deck.slice(0, discardCount);
-    return { ...p, deck: p.deck.slice(discardCount), discard: [...p.discard, ...discarded] };
-  });
+  const discardCount = Math.min(heads, s.players[dIdx].deck.length);
+  const discarded = s.players[dIdx].deck.slice(0, discardCount);
+  s = addLog(s, `狂潛：丟對手牌庫頂 ${discardCount} 張：${joinCardNames(discarded, pool)}`, aIdx);
+  return updatePlayer(s, dIdx, p => ({ ...p, deck: p.deck.slice(discardCount), discard: [...p.discard, ...discarded] }));
 });
 
 // 輔助：unused import 防護
