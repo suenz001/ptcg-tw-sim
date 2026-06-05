@@ -101,7 +101,7 @@ function baseState(overrides = {}) {
     isFirstTurn: false,
     setupDone: [true, true],
     pendingMulliganDraw: [0, 0],
-    pendingPrizes: 0,
+    pendingPrizes: [0, 0],
     players: [
       { ...state.players[0], name: 'P1', deck: [], hand: [], discard: [], prizes: Array(6).fill(null).map((_, i) => inst(CID.grass)) },
       { ...state.players[1], name: 'P2', deck: [], hand: [], discard: [], prizes: Array(6).fill(null).map((_, i) => inst(CID.grass)) },
