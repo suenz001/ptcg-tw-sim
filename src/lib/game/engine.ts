@@ -7989,6 +7989,10 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
 }
 
 export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
+  // v5.451：化石（fossilOnField）不是寶可夢、無法撤退 → UI 撤退按鈕應隱藏
+  //   （RETREAT engine handler 早已擋，這裡補上 UI gate；桌面 zone 已有 !fossilOnField，
+  //    手機 MobilePortraitBattle 撤退選項只看 canRetreatNow，靠這裡一併隱藏）。
+  if (state.players[state.activePlayerIndex].active?.fossilOnField) return false;
   // v5.212：祭典樂舞第 2 次招式 pending 期間禁止撤退
   if (state.festivalDancePendingSecondAttack
       && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return false;
@@ -8012,6 +8016,7 @@ export function getRetreatBlockReason(state: GameState, pool: Map<string, Card>)
   if (state.turnPhase !== 'main') return '當前不在主階段（無法撤退）';
   const player = state.players[state.activePlayerIndex];
   if (!player.active) return '尚未派出戰鬥場寶可夢';
+  if (player.active.fossilOnField) return '化石無法撤退（化石不是寶可夢）';
   if (player.bench.length === 0) return '備戰區無寶可夢可換上';
   if (player.retreatedThisTurn) return '本回合已撤退過（PTCG 規則：每回合僅一次撤退）';
   if (player.active.status === 'asleep') return '戰鬥場寶可夢睡眠中（PTCG 規則：無法撤退）';
