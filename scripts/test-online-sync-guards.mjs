@@ -154,6 +154,34 @@ ck('收: reject reason=phase-rollback',
   ck('收: 我方獎賞未回朔 → adopt（非 merge-prize）', resolveRoomUpdate(local, inc, ctx({ me: 0 })).kind === 'adopt');
 }
 
+// ════ B3. 取獎賞窗口 per-player 單調合併（v5.459 咒詛炸彈雙KO卡住）════
+{
+  // P0 端：我方取獎賞+補位(pp[0,1],log9) 收到 對手只取獎賞(pp[1,0],log8,較短) → 不可 reject，要 merge 收斂
+  const local = mkGS({ id:'G', phase:'playing', logLen:9, pendingPrizes:[0,1],
+    players:[{name:'P0',prizes:[{},{},{},{},{}],deck:[]},{name:'P1',prizes:[{},{},{},{},{},{}],deck:[]}] });
+  const inc = mkGS({ id:'G', phase:'playing', logLen:8, pendingPrizes:[1,0],
+    players:[{name:'P0',prizes:[{},{},{},{},{},{}],deck:[]},{name:'P1',prizes:[{},{},{},{},{}],deck:[]}] });
+  const d = resolveRoomUpdate(local, inc, ctx({ me:0 }));
+  ck('收: 取獎賞窗口-對手取獎賞(log較短) → merge-prize(不 reject)', d.kind==='merge-prize', d.kind);
+  ck('  取獎賞窗口 → pendingPrizes 收斂 [0,0]', d.game && d.game.pendingPrizes[0]===0 && d.game.pendingPrizes[1]===0, JSON.stringify(d.game?.pendingPrizes));
+  ck('  取獎賞窗口 → 保留我方已取獎賞(P0 5張)', d.game && d.game.players[0].prizes.length===5);
+  ck('  取獎賞窗口 → 併入對手取獎賞(P1 5張)', d.game && d.game.players[1].prizes.length===5);
+}
+{
+  // 對手未前進(較短log、對手側無變化) → 不誤合併 → 維持原 stale-reject
+  const local = mkGS({ id:'G', phase:'playing', logLen:9, pendingPrizes:[0,1],
+    players:[{name:'P0',prizes:[{},{},{},{},{}],deck:[]},{name:'P1',prizes:[{},{},{},{},{},{}],deck:[]}] });
+  const inc = mkGS({ id:'G', phase:'playing', logLen:8, pendingPrizes:[0,1],
+    players:[{name:'P0',prizes:[{},{},{},{},{}],deck:[]},{name:'P1',prizes:[{},{},{},{},{},{}],deck:[]}] });
+  ck('收: 取獎賞窗口-對手未前進(較短log) → 不誤合併(維持 reject)', resolveRoomUpdate(local, inc, ctx({ me:0 })).kind==='reject');
+}
+{
+  // 無取獎賞窗口(pendingPrizes全0) → 不觸發窗口合併 → 照常 adopt
+  const local = mkGS({ id:'G', phase:'playing', logLen:5, pendingPrizes:[0,0] });
+  const inc = mkGS({ id:'G', phase:'playing', logLen:6, pendingPrizes:[0,0] });
+  ck('收: 無取獎賞窗口 → 不觸發窗口合併(adopt)', resolveRoomUpdate(local, inc, ctx({ me:0 })).kind==='adopt');
+}
+
 console.log(`\n線上同步守衛測試網：PASS ${pass} / FAIL ${fails.length}`);
 for (const f of fails) console.log('  ❌', f);
 if (fails.length > 0) { console.log('\n有同步決策回歸！'); process.exit(1); }

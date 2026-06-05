@@ -89,6 +89,17 @@ export function resolveRoomUpdate(
     return { kind: 'apply-undo', game: incoming };
   }
 
+  // 3.5 取獎賞窗口 per-player 單調合併（v5.459，須在下方 stale-reject 之前）。
+  //   咒詛炸彈雙KO 等「雙方各取獎賞 + 我方補位」：對手只取獎賞(log 較短)的 push 會被
+  //   Rule 4 stale-reject 擋掉 → 我方永遠看不到對手取了獎賞 → pendingPrizes 卡住、跳過鈕消失、卡死。
+  //   修法：只要任一方在取獎賞窗口(pendingPrizes 非 0)，改 per-player 單調合併（我方側保留 local，
+  //   對手側若有「取獎賞前進」(待取減少 / 獎賞卡減少)則併入），不受 log 長度影響。
+  if (local && local.id === incoming.id && ctx.myPlayerIndex !== null
+      && (hasPendingPrize(local) || hasPendingPrize(incoming))) {
+    const merged = mergePrizeWindowMonotonic(local, incoming, ctx.myPlayerIndex);
+    if (merged) return { kind: 'merge-prize', game: merged };
+  }
+
   // 4. 防舊 snapshot：只擋嚴格較短 log
   if (local && local.phase === 'playing' && incoming.phase === 'playing'
       && (incoming.log?.length ?? 0) < (local.log?.length ?? 0)) {
@@ -171,6 +182,43 @@ export function mergeSetupMonotonic(
  *   我這半保留本地（players[me] + pendingPrizes[me]），對手那半採 incoming。
  *   回傳 null = 不需保護（incoming 我方獎賞沒變多）。
  */
+/** 任一方是否在「待取獎賞」窗口（pendingPrizes 有非 0）。 */
+export function hasPendingPrize(s: GameState): boolean {
+  return (s.pendingPrizes?.[0] ?? 0) > 0 || (s.pendingPrizes?.[1] ?? 0) > 0;
+}
+
+/**
+ * 取獎賞窗口 per-player 單調合併（v5.459）。
+ *   以 local 為基底（保留我方側全部進度：已取獎賞 / 已補位 active / 較長 log），
+ *   只在「對手側有更前進的取獎賞進度」(對手待取減少 或 對手獎賞卡減少=取了) 時，
+ *   併入對手側 players[opp] + 對手 pendingPrizes 取 MIN（單調遞減防回退）。
+ *   無對手前進 → 回 null（交回上層 stale-reject/adopt 既有邏輯）。
+ *   雙向對稱：兩端各自保留己側、併入對方取獎賞 → 收斂到 pendingPrizes=[0,0]。
+ */
+export function mergePrizeWindowMonotonic(
+  local: GameState,
+  incoming: GameState,
+  me: 0 | 1,
+): GameState | null {
+  const opp = (1 - me) as 0 | 1;
+  const oppPendLocal = local.pendingPrizes?.[opp] ?? 0;
+  const oppPendInc = incoming.pendingPrizes?.[opp] ?? 0;
+  const oppPrizesLocal = local.players[opp].prizes?.length ?? 0;
+  const oppPrizesInc = incoming.players[opp].prizes?.length ?? 0;
+  // 對手側有更前進的取獎賞進度才併入
+  const oppAdvanced = oppPendInc < oppPendLocal || oppPrizesInc < oppPrizesLocal;
+  if (!oppAdvanced) return null;
+  const myPend = local.pendingPrizes?.[me] ?? 0;
+  const newOppPend = Math.min(oppPendLocal, oppPendInc);
+  return {
+    ...local,
+    players: (me === 0
+      ? [local.players[0], incoming.players[1]]
+      : [incoming.players[0], local.players[1]]) as GameState['players'],
+    pendingPrizes: (me === 0 ? [myPend, newOppPend] : [newOppPend, myPend]) as [number, number],
+  };
+}
+
 export function mergePrizeMonotonic(
   local: GameState,
   incoming: GameState,
