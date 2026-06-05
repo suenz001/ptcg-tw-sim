@@ -1763,6 +1763,7 @@ export function createGame(
 
   const state: GameState = {
     id: uid(),
+    createdAt: Date.now(),
     phase: 'setup',
     turnPhase: 'main',
     activePlayerIndex: firstPlayerIdx,

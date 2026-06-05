@@ -24,8 +24,14 @@ export function shouldSkipStalePush(
   incoming: GameState,
   current: GameState | null | undefined,
 ): boolean {
-  return !!current
-    && incoming.phase === 'playing' && current.phase === 'playing'
+  if (!current) return false;
+  // v5.457 跨局防舊：incoming 是「較早建立的局」(createdAt 較小) → 別用殘留舊局蓋現有(較新)局。
+  //   （再來一局後，舊局殘留 push 因 log 較長騙過長度比較 → 蓋新局；改用 createdAt 跨局判斷。）
+  if (incoming.id !== current.id) {
+    return (incoming.createdAt ?? 0) < (current.createdAt ?? 0);
+  }
+  // 同局：playing×playing 且 log 嚴格較短 → skip
+  return incoming.phase === 'playing' && current.phase === 'playing'
     && (incoming.log?.length ?? 0) < (current.log?.length ?? 0);
 }
 
@@ -68,8 +74,12 @@ export function resolveRoomUpdate(
 ): RoomUpdateDecision {
   if (!incoming) return { kind: 'ignore' };
 
-  // 2. createGame race：本地與 incoming 不同局 → 全採 incoming
+  // 2. 不同局：createGame race 採較新/同齡局；但「較早建立的殘留舊局」(createdAt 較小) 拒收
+  //    v5.457：避免再來一局後舊局殘留 snapshot 蓋掉新局（回到上一盤最後一手）。舊版無 createdAt 視為 0。
   if (local && local.id !== incoming.id) {
+    if ((incoming.createdAt ?? 0) < (local.createdAt ?? 0)) {
+      return { kind: 'reject', reason: 'stale-old-game' };
+    }
     return { kind: 'adopt', game: incoming };
   }
 

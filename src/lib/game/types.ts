@@ -602,6 +602,12 @@ export interface GameState {
   /** 本局唯一 ID */
   id: string;
   /**
+   * v5.457 本局建立時間戳（createGame 設 Date.now()）。
+   * 線上同步「跨局防舊」用：再來一局後，舊局殘留 snapshot 雖 log 較長，但 createdAt 較早 →
+   * 推/收兩端據此拒收，避免舊局蓋掉新局（玩家回到上一盤最後一手）。舊版無此欄位視為 0(最舊)。
+   */
+  createdAt?: number;
+  /**
    * v4.898 重試徽章（M5）— 本次 ATTACK action 中是否呼叫過 flipCoinsWithLog。
    * Setter: flipCoinsWithLog 自動設 true；Resetter: ATTACK 開頭設 false。
    * 用於 ATTACK 末端決定是否開 retry-badge modal-choice picker。

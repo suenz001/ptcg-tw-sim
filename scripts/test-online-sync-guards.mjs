@@ -33,6 +33,7 @@ let gid = 0;
 function mkGS(o = {}) {
   return {
     id: o.id ?? 'G1',
+    createdAt: o.createdAt,
     phase: o.phase ?? 'playing',
     log: Array.from({ length: o.logLen ?? 5 }, (_, i) => ({ msg: 'l' + i })),
     setupDone: o.setupDone ?? [false, false],
@@ -64,6 +65,22 @@ ck('push: current 為 null → 不 skip',
    shouldSkipStalePush(mkGS({ logLen: 3 }), null) === false);
 ck('push: 非 playing → 不 skip',
    shouldSkipStalePush(mkGS({ logLen: 3, phase: 'setup' }), mkGS({ logLen: 5, phase: 'setup' })) === false);
+
+// ════ A2. 跨局防舊（v5.457 再來一局後舊局殘留覆蓋新局）════
+ck('push: 跨局-舊局(log長,createdAt早)蓋新局(log短,createdAt晚) → skip',
+   shouldSkipStalePush(mkGS({ id: 'OLD', createdAt: 100, logLen: 153 }), mkGS({ id: 'NEW', createdAt: 200, logLen: 5 })) === true);
+ck('push: 跨局-新局(createdAt晚)蓋舊局(createdAt早) → 不 skip',
+   shouldSkipStalePush(mkGS({ id: 'NEW', createdAt: 200, logLen: 5 }), mkGS({ id: 'OLD', createdAt: 100, logLen: 153 })) === false);
+ck('push: 跨局-兩局皆無 createdAt(舊版相容) → 回退長度比較(較長不 skip)',
+   shouldSkipStalePush(mkGS({ id: 'OLD', logLen: 153 }), mkGS({ id: 'NEW', logLen: 5 })) === false);
+ck('收: 跨局-本地新局收到殘留舊局(game-over,createdAt早) → reject stale-old-game',
+   resolveRoomUpdate(mkGS({ id: 'NEW', createdAt: 200, phase: 'playing', logLen: 5 }),
+                     mkGS({ id: 'OLD', createdAt: 100, phase: 'game-over', logLen: 163 }), ctx()).reason === 'stale-old-game');
+ck('收: 跨局-本地舊局收到新局(createdAt晚) → adopt',
+   resolveRoomUpdate(mkGS({ id: 'OLD', createdAt: 100, phase: 'game-over', logLen: 163 }),
+                     mkGS({ id: 'NEW', createdAt: 200, phase: 'setup', logLen: 1 }), ctx()).kind === 'adopt');
+ck('收: 跨局-兩局皆無 createdAt(舊版相容) → adopt(原行為)',
+   resolveRoomUpdate(mkGS({ id: 'OLD', logLen: 5 }), mkGS({ id: 'NEW', logLen: 6 }), ctx()).kind === 'adopt');
 
 // ════ B. 收端 resolveRoomUpdate 決策路由 ════
 ck('收: 無 incoming → ignore',
