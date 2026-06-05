@@ -903,6 +903,8 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
     immuneToAttackDamageThisTurn: undefined,
     immuneToEvolutionAttackNextTurn: undefined,
     immuneToEvolutionAttackThisTurn: undefined,
+    evolutionDamageReduceNextTurn: undefined,
+    evolutionDamageReduceThisTurn: undefined,
     immuneToBurnedAttackerNextTurn: undefined,
     immuneToBurnedAttackerThisTurn: undefined,
     abilityNullifiedNextTurn: undefined,

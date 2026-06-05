@@ -487,6 +487,7 @@ import './effects/cards/v2997_g4_wave3';
 import './effects/cards/v2998_g2';
 import './effects/cards/v3700_audit_orphans';
 import './effects/cards/m5_preview';
+import './effects/cards/m5_j_coverage_fix';
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)

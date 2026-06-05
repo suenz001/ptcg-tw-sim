@@ -4605,6 +4605,18 @@ function handlePlaying(
       }
     }
 
+    // v5.455 青銅鐘｜金屬障礙（M5）— defender 受「進化寶可夢」招式傷害 -N（非全免）
+    if (!skipDefEffects && baseDamage > 0 && defender.active.evolutionDamageReduceThisTurn) {
+      const atkStage2 = attackerCard.stage ?? attackerCard.subtype;
+      const isEvolution2 = atkStage2 === 'Stage1' || atkStage2 === 'Stage2' || !!attackerCard.evolvesFrom;
+      if (isEvolution2) {
+        const red = defender.active.evolutionDamageReduceThisTurn;
+        baseDamage = Math.max(0, baseDamage - red);
+        workingState = addLog(workingState,
+          `${defenderCard.name} 因金屬障礙效果，受進化寶可夢招式傷害 -${red}`, dIdx);
+      }
+    }
+
     // v4.87 席多藍恩｜熔岩之壁（M5）— defender 不受【灼傷】狀態 attacker 招式傷害
     // v5.124：加 !skipDefEffects gate
     if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToBurnedAttackerThisTurn) {
@@ -6868,6 +6880,10 @@ function handlePlaying(
         n = { ...n };
         delete n.immuneToEvolutionAttackThisTurn;
       }
+      if (c.evolutionDamageReduceThisTurn != null) {
+        n = { ...n };
+        delete n.evolutionDamageReduceThisTurn;
+      }
       if (c.immuneToBurnedAttackerThisTurn) {
         n = { ...n };
         delete n.immuneToBurnedAttackerThisTurn;
@@ -6992,6 +7008,10 @@ function handlePlaying(
       if (c.immuneToEvolutionAttackNextTurn) {
         n = { ...n, immuneToEvolutionAttackThisTurn: true };
         delete n.immuneToEvolutionAttackNextTurn;
+      }
+      if (c.evolutionDamageReduceNextTurn != null) {
+        n = { ...n, evolutionDamageReduceThisTurn: c.evolutionDamageReduceNextTurn };
+        delete n.evolutionDamageReduceNextTurn;
       }
       if (c.immuneToBurnedAttackerNextTurn) {
         n = { ...n, immuneToBurnedAttackerThisTurn: true };

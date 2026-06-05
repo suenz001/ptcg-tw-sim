@@ -327,6 +327,12 @@ export interface CardInstance {
   immuneToEvolutionAttackNextTurn?: boolean;
   immuneToEvolutionAttackThisTurn?: boolean;
   /**
+   * v5.455 青銅鐘｜金屬障礙（M5 J）— 下個對手回合，這隻受「進化寶可夢」招式傷害 -N（非全免）。
+   * NextTurn 於擁有者 END_TURN promote 為 ThisTurn；ThisTurn 於對手 END_TURN 清除。
+   */
+  evolutionDamageReduceNextTurn?: number;
+  evolutionDamageReduceThisTurn?: number;
+  /**
    * v4.87 席多藍恩｜熔岩之壁（M5）— 下個對手回合，這隻寶可夢不會受到處於【灼傷】狀態的
    * 寶可夢的招式傷害。
    * Engine 攻擊 pipeline：attacker.status === 'burned' （含 secondaryStatus）
