@@ -1642,6 +1642,15 @@ export function tryPromoteToMainForFestival(
   if (!hasFestivalDanceActive(state, pending.idx, pool)) {
     return abortFestivalSecondAttack(state, '已無祭典樂舞特性');
   }
+  // v5.447：祭典樂舞被對手特性消除（振翼髮｜暗夜羽擊「對手戰鬥寶可夢的特性全部消除」）
+  //   → 不能使用第 2 次。第一拳擊倒對手後對手推出振翼髮，攻擊方祭典樂舞即被壓制。
+  //   hasFestivalDanceActive 只看特性是否「存在」，這裡補查是否被 passive 消除。
+  {
+    const fdCard = pool.get(player.active.cardId);
+    if (isAbilityNullifiedByPassive(state, pending.idx, player.active, fdCard, '祭典樂舞', 'active', pool)) {
+      return abortFestivalSecondAttack(state, '祭典樂舞特性被對手消除（暗夜羽擊）');
+    }
+  }
   if (!hasFestivalVenue(state, pool)) {
     return abortFestivalSecondAttack(state, '祭典會場已不在場');
   }
