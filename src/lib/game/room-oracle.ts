@@ -36,7 +36,7 @@ export {
 import type { Room, RoomData, Seat, DeckEntry, ChatMessage } from './room';
 import {
   findMySeatIdx, generateRoomCode, countDeckCards,
-  SEAT_LAYOUT_VERSION, SPECTATOR_SEATS, isLobbyHostDead,
+  SEAT_LAYOUT_VERSION, SPECTATOR_SEATS, isLobbyHostDead, isLobbyTooOld,
 } from './room';
 
 // ── private helpers ─────────────────────────────────────────────────────────
@@ -622,6 +622,8 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
           if (r.visible === false) return false;
           // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆）
           if (isLobbyHostDead(r as unknown as RoomData)) return false;
+          // v5.463：開房超過 10 分鐘的 lobby 房不列出（房主長掛分頁的殭屍練習房；用 createdAt 因 updatedAt 被心跳 bump）
+          if (isLobbyTooOld(r as unknown as RoomData)) return false;
           return true;
         })
         .map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);

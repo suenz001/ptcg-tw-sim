@@ -996,6 +996,8 @@ export function subscribeOpenRooms(
         if (data.visible === false) return;
         // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆，房主回來自動重現）
         if (isLobbyHostDead(data)) return;
+        // v5.463：開房超過 10 分鐘的 lobby 房不列出（房主長掛分頁的殭屍練習房；用 createdAt 因 updatedAt 被心跳 bump）
+        if (isLobbyTooOld(data)) return;
         // stale 過濾：lobby 用 10 min（v2.52），playing 用 heartbeat 閾值 5 min（v2.73）
         const updatedAtSec = (data.updatedAt as { seconds?: number } | null | undefined)?.seconds;
         if (typeof updatedAtSec === 'number') {
@@ -1089,12 +1091,34 @@ export function isSeatStale(
  */
 export const LOBBY_HOST_AWAY_MS = 90 * 1000;
 export const LOBBY_HOST_STALE_MS = 3 * 60 * 1000;
+/**
+ * v5.463：大廳「開房過久」門檻。lobby 房開房（createdAt）超過此時間，即使房主心跳仍新，
+ *   也從大廳列表隱藏 — 避免房主長期掛著分頁、沒人加入的殭屍練習房永遠佔住列表。
+ *   為何用 createdAt 而非 updatedAt：心跳每 15s 會 bump updatedAt，故 updatedAt 永遠是新的，
+ *   只有 createdAt（開房當下）能反映「這房已掛多久」。可逆：房間仍存在，房主仍可用房號讓人加入。
+ */
+export const LOBBY_MAX_AGE_MS = 10 * 60 * 1000;
 
 /** 大廳死房判定：lobby 且房主(座位 0)不在或心跳過期 > STALE → 不列出。 */
 export function isLobbyHostDead(room: RoomData): boolean {
   if (room.status !== 'lobby') return false;
   if (!room.seats?.[0]?.uid) return true;
   return isSeatStale(room, 0, LOBBY_HOST_STALE_MS);
+}
+
+/**
+ * v5.463：大廳房「開房過久」判定 — lobby 且 createdAt 超過 maxAgeMs → 不列出（可逆）。
+ *   兼容兩後端 createdAt 格式：Oracle 存 number(ms)；Firebase 存 serverTimestamp {seconds}。
+ *   無法解析 createdAt → 回 false（安全預設，不隱藏）。
+ */
+export function isLobbyTooOld(room: RoomData, maxAgeMs: number = LOBBY_MAX_AGE_MS): boolean {
+  if (room.status !== 'lobby') return false;
+  const c = room.createdAt as unknown;
+  let createdMs: number | undefined;
+  if (typeof c === 'number') createdMs = c;
+  else if (c && typeof (c as { seconds?: number }).seconds === 'number') createdMs = (c as { seconds: number }).seconds * 1000;
+  if (typeof createdMs !== 'number') return false;
+  return Date.now() - createdMs > maxAgeMs;
 }
 
 /** 房主在線狀態（UI 小圓點）：心跳 < AWAY = online，否則 away。 */
