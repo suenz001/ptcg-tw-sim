@@ -221,20 +221,15 @@ regPost('火箭隊的阿柏怪|旋轉之尾', snipeAllOppPost(30, '旋轉之尾'
 // 龍頭地鼠ex|貫通鑽 60 + 對手有指示物的 1 隻備戰 60
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('龍頭地鼠ex|貫通鑽', (s) => ({ state: s, damage: 60 }));
-regPost('龍頭地鼠ex|貫通鑽', (state, aIdx, _pool) => {
+regPost('龍頭地鼠ex|貫通鑽', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   const wounded = opp.bench.filter(b => (b.damage ?? 0) > 0);
   if (wounded.length === 0) return addLog(state, '貫通鑽：對手備戰區無受傷寶可夢', aIdx);
   // 自動選第一個受傷的
   const target = wounded[0];
-  return updatePlayer(
-    addLog(state, `貫通鑽：對手備戰受傷寶可夢受到 60 點傷害`, aIdx),
-    dIdx, p => ({
-      ...p,
-      bench: p.bench.map(b => b.iid === target.iid ? { ...b, damage: (b.damage ?? 0) + 60 } : b),
-    }),
-  );
+  // v5.462：改走中央 dealAttackDamageToTarget 補太晶/化隱等備戰免疫 guard（原 inline 漏）。
+  return dealAttackDamageToTarget(state, aIdx, target.iid, 60, pool, { kind: 'attack-damage', label: '貫通鑽' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -17,7 +17,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, same
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -877,18 +877,18 @@ regPre('鐵螯龍蝦|反撲剪', (s) => ({ state: s, damage: 130 }));
 
 // 酋雷姆ex｜雪爆發 130 — 對手所有備戰各受到對手已獲得獎賞數 ×10
 regPre('酋雷姆ex|雪爆發', (s) => ({ state: s, damage: 130 }));
-regPost('酋雷姆ex|雪爆發', (state, aIdx, _pool) => {
+regPost('酋雷姆ex|雪爆發', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppPrizesTaken = 6 - state.players[dIdx].prizes.length;
   const amount = oppPrizesTaken * 10;
   if (amount === 0) return addLog(state, '雪爆發：對手未取獎賞，備戰無傷害', aIdx);
-  return updatePlayer(
-    addLog(state, `雪爆發：對手備戰各受 ${amount} 點傷害（對手已取獎賞 ${oppPrizesTaken} 張）`, aIdx),
-    dIdx, p => ({
-      ...p,
-      bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) + amount })),
-    }),
-  );
+  // v5.462：改逐隻走中央 dealAttackDamageToTarget 補太晶/化隱等備戰免疫 guard（原 inline 漏）。
+  let s = addLog(state, `雪爆發：對手備戰各受 ${amount} 點傷害（對手已取獎賞 ${oppPrizesTaken} 張）`, aIdx);
+  for (const b of [...s.players[dIdx].bench]) {
+    s = dealAttackDamageToTarget(s, aIdx, b.iid, amount, pool, { kind: 'attack-damage', label: '雪爆發' });
+    if (s.phase === 'game-over') return s;
+  }
+  return s;
 });
 
 // 巨炭山｜瀝青加農炮 — 棄牌區 ≥10 張基本鬥能量否則失敗 + 對手 1 隻寶可夢 140
@@ -926,17 +926,12 @@ regPost('巨炭山|瀝青加農炮', (state, aIdx, pool) => {
     params: { amount: 140 },
   });
 });
-regR('wave15-asphalt-cannon', (state, aIdx, iids, params, _pool) => {
+regR('wave15-asphalt-cannon', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const amount = (params?.amount as number | undefined) ?? 0;
-  const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
-  return updatePlayer(state, dIdx, p => {
-    if (p.active && p.active.iid === targetIid) {
-      return { ...p, active: { ...p.active, damage: (p.active.damage ?? 0) + amount } };
-    }
-    return { ...p, bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: (b.damage ?? 0) + amount } : b) };
-  });
+  // v5.462：改走中央 dealAttackDamageToTarget 補太晶/化隱等備戰免疫 guard（原 inline 漏；active+bench 皆處理）。
+  return dealAttackDamageToTarget(state, aIdx, targetIid, amount, pool, { kind: 'attack-damage', label: '瀝青加農炮' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
