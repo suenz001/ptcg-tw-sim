@@ -3980,6 +3980,31 @@
       };
       return;
     }
+    // v5.468 狐大盜|技能大盜 intercept：手牌=0 時複製對手場上(active+備戰)任一寶可夢的招式。
+    //   原本無 intercept → engine 自動挑印刷最高傷害(簡易)；完整版讓玩家選要複製哪招(reuse rocketCommandPicker)。
+    if (atk.name === '技能大盜') {
+      if (!game) return;
+      // 手牌須=0(engine gate)；>0 直接 dispatch 讓 engine fail log
+      if (game.players[myIdx].hand.length > 0) { dispatch(GameActions.attack(attackIndex)); return; }
+      const opp = game.players[1 - myIdx];
+      const pokeList = [
+        ...(opp.active ? [{ inst: opp.active, card: getCard(opp.active.cardId) }] : []),
+        ...opp.bench.map(b => ({ inst: b, card: getCard(b.cardId) })),
+      ].filter(x => x.card?.supertype === 'Pokemon' && (x.card?.attacks?.length ?? 0) > 0) as Array<{ inst: CardInstance; card: Card }>;
+      if (pokeList.length === 0) { dispatch(GameActions.attack(attackIndex)); return; }
+      if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
+        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: pokeList[0].inst.iid, attackIndex: 0 }));
+        return;
+      }
+      rocketCommandPicker = {
+        sourceAttackIndex: attackIndex,
+        pokeList,
+        top10All: pokeList,
+        revealOnly: false,
+        sourceAttackName: '技能大盜',
+      };
+      return;
+    }
     // v4.39 火箭隊的貓老大ex|高傲指令 intercept：peek 對手牌庫頂 10 張 → 列寶可夢的招式讓玩家選
     //   - 0 寶可夢 → 直接 dispatch（engine PRE 出 fail log）
     //   - 1 寶可夢 1 招 → 自動帶 copyAttackChoice（避免單一選項浪費 UX）

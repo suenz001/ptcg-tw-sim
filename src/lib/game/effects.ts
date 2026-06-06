@@ -7058,7 +7058,10 @@ export function fireDefenderOnDamaged(
         ...getAllAttachedTools(retaliatedAtk),
         ...(retaliatedAtk.evolvedFromStack ?? []),
       ];
-      const retKOPrizes = prizesForKOLocal(retAtkCard);
+      // v5.468：改走 koPrizesAdjusted（反傷KO 也要套古舊能量-1 等；prize-taker=dIdx/KO'd-owner=aIdx）。
+      const _retKo = koPrizesAdjusted(s, retaliatedAtk, retAtkCard, dIdx, aIdx, pool);
+      const retKOPrizes = _retKo.prizes;
+      s = _retKo.state;
       const retPlayers = [...s.players] as [PlayerState, PlayerState];
       retPlayers[aIdx] = { ...retPlayers[aIdx], active: null, discard: [...retPlayers[aIdx].discard, ...retKoDiscard] };
       s = addLog(addPendingPrize({ ...s, players: retPlayers }, dIdx, retKOPrizes, pool),
@@ -7853,7 +7856,10 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
       ...(att.active.evolvedFromStack ?? []),
     ];
     players[aIdx] = { ...att, active: null, discard: [...att.discard, ...ko] };
-    const oppPrizes = card ? (prizesForKOLocal(card)) : 1;
+    // v5.468：改走 koPrizesAdjusted（自損KO 也要套古舊能量-1 等；prize-taker=dIdx/KO'd-owner=aIdx）。
+    const _kdKo = koPrizesAdjusted(s, att.active, card, dIdx, aIdx, pool);
+    const oppPrizes = _kdKo.prizes;
+    s = _kdKo.state;
     s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 也被擊倒，對手待取 ${oppPrizes} 張獎賞卡`, null);
     // v3.792 Rule 10：改用 addPendingPrize（移除直接 prize→hand），讓玩家點「取得」按鈕。
     s = addPendingPrize({ ...s, players }, dIdx, oppPrizes, pool);

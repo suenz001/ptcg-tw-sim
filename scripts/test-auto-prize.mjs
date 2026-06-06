@@ -13,7 +13,7 @@ await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',
 const { createGame, applyAction } = await import(pathToFileURL(O).href);
 const dir=join(ROOT,'static/cards');const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));const pool=new Map();
 for(const f of readdirSync(dir)){if(!f.endsWith('.json')||f==='index.json'||!live.has(f.slice(0,-5)))continue;for(const c of JSON.parse(readFileSync(join(dir,f),'utf8')))if(c?.id!=null)pool.set(String(c.id),c);}
-const CID={onix:'13979',dra:'14794',ubo:'17976',fireE:'14428',psyE:'14103',def:'13163',zaruEx:'10619',momoEx:'14137'};
+const CID={onix:'13979',dra:'14794',ubo:'17976',fireE:'14428',psyE:'14103',def:'13163',zaruEx:'10619',momoEx:'14137',olive:'16542',anc:'17212',grass:'14102'};
 let iid=0;const inst=(cid,e={})=>({iid:`a${++iid}`,cardId:String(cid),damage:0,energyAttached:[],...e});
 const base=()=>createGame({name:'P1',entries:[{cardId:CID.def,count:1}]},{name:'P2',entries:[{cardId:CID.def,count:1}]},pool);
 const guai=pool.get(CID.onix).attacks.findIndex(a=>a.name==='怪力');
@@ -78,6 +78,18 @@ T('對照組：KO願增猿ex無桃歹郎ex → 攻擊方拿2(6→4)', ()=>{
   const st=mk({defActive:inst(CID.zaruEx,{damage:120}),defBench:[inst(CID.ubo)]});
   const n=applyAction(st,{type:'ATTACK',attackIndex:guai},pool);
   assert.equal(n.players[0].prizes.length,4,'ex 2獎賞 (6→4) 實際'+n.players[0].prizes.length);
+});
+
+T('油之機關槍 KO 古舊能量基礎(1獎賞)→koPrizesAdjusted -1→攻擊方拿0(6→6)', ()=>{
+  const s=base();
+  const olAtk=pool.get(CID.olive).attacks.findIndex(a=>a.name==='油之機關槍');
+  const st={...s,phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,isFirstTurn:false,setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],ancientEnergyMinusOneUsed:[false,false],
+    players:[{...s.players[0],hand:[],deck:[inst(CID.def)],discard:[],prizes:prizeOf(6),bench:[],active:inst(CID.olive,{energyAttached:[inst(CID.grass)]})},
+             {...s.players[1],hand:[],deck:[inst(CID.def)],discard:[],prizes:prizeOf(6),bench:[],active:inst(CID.ubo,{energyAttached:[inst(CID.anc)]})}]};
+  let n=applyAction(st,{type:'ATTACK',attackIndex:olAtk},pool);
+  const a=n.players[1].active.iid;
+  let m=applyAction(n,{type:'RESOLVE_SELECTION',effectKey:'olive-oil-distribute',selectedIids:Array.from({length:6},()=>a),actorIdx:0},pool);
+  assert.equal(m.players[0].prizes.length,6,'古舊能量-1：1-1=0 攻擊方獎賞不變 實際'+m.players[0].prizes.length);
 });
 
 console.log(`\n結果：${pass} pass / ${fail} fail`);

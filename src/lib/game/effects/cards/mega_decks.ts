@@ -23,6 +23,7 @@ import {
   JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
   wouldNeutralCenterBlock,
+  koPrizesAdjusted,
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -696,7 +697,10 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
         ...(target.toolAttached ? [target.toolAttached] : []),
         ...(target.evolvedFromStack ?? []),
       ];
-      const prizes = targetCard?.name?.endsWith('ex') ? (targetCard.name.startsWith('超級') ? 3 : 2) : 1;
+      // v5.468：改走 koPrizesAdjusted（原 raw ex?2:1 漏古舊能量-1/莉莉艾珍珠/影藏/脆弱蛻殼）。玩家回報古舊能量沒-1。
+      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool);
+      const prizes = _ko.prizes;
+      s = _ko.state;
       morePrizes += prizes;
       koNames.push(targetCard?.name ?? '?');
       const players = [...s.players] as [PlayerState, PlayerState];
