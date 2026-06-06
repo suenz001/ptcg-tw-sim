@@ -3681,6 +3681,16 @@
       cost = Math.max(0, cost - totalReduce);
       cost = cost + totalAdd;
     }
+    // v5.461：天空徑線「完全消除」最後硬覆蓋 — 蓋過咒縛之炎/鼓擊/重力之玉等 +撤退效果。
+    //   鏡射 engine getRetreatCost L8010（先前 UI 只在前段早套用、被後面 totalAdd 加回 → 顯示非 0）。
+    //   以撤退者「擁有者」場上是否有天空徑線判定（基礎寶可夢免費撤退）。
+    if (card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && game) {
+      const ownerOfInst = game.players[1].active?.iid === inst.iid
+        || game.players[1].bench.some(b => b.iid === inst.iid)
+        ? game.players[1] : game.players[0];
+      const ownAll = [...(ownerOfInst.active ? [ownerOfInst.active] : []), ...ownerOfInst.bench];
+      if (ownAll.some(cc => getCard(cc.cardId)?.abilities?.some(a => a.name === '天空徑線'))) cost = 0;
+    }
     return cost;
   }
   // v5.020 桌墊版 — 列出 inst 身上所有 attached cards（能量 / 道具 / 進化堆）扁平陣列。

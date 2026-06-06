@@ -350,9 +350,11 @@ regPost('小灰怪|挪動一下', (state, aIdx, pool) => {
   if (sourceCandidates.length === 0) {
     return addLog(state, '挪動一下：對手場上無「身上有能量且不受招式效果影響」的寶可夢', aIdx);
   }
-  // 目標（target）：可附加的合法位置至少要有 2 隻不同對手寶可夢（source ≠ target）
-  if (unprotectedPokes.length < 2) {
-    return addLog(state, '挪動一下：對手場上不足 2 隻「不受招式效果影響」的寶可夢', aIdx);
+  // 目標（target）：可為對手任一「其他」寶可夢（含「不受招式效果影響」者）。
+  //   v5.461 判例：改附到免疫寶可夢 → 能量無法附上 → 改為丟棄、結束效果（非禁止選取）。
+  //   故 source(unprotected+能量)≥1 + 對手場上總寶可夢 ≥2（1 來源 + 1 目標）即可。
+  if (allPokes.length < 2) {
+    return addLog(state, '挪動一下：對手場上不足 2 隻寶可夢（無可改附目標）', aIdx);
   }
   // 限制 source picker 只顯示 unprotectedPokes 身上的能量
   const validEnergyIids: string[] = [];
@@ -384,17 +386,10 @@ regR('minccino-shuffle-pick-energy-anywhere', (state, aIdx, iids, _params, _pool
   if (!owner) return addLog(state, '挪動一下：找不到能量擁有者', aIdx);
   // Stage 2：選對手「其他」寶可夢（排除 source + 排除「不受招式效果影響」者）
   // v5.229: 過濾 target 端的招式效果免疫者（薄霧/硬岩/化隱 等）
+  // v5.461 判例：目標可為任一「其他」對手寶可夢（含「不受招式效果影響」者）。
+  //   改附到免疫者時，於 attach resolver 改為「丟棄能量」結束（非禁止選取）。只排除來源本身。
   const validTargets = allPokes
     .filter(pk => pk.iid !== owner.iid)
-    .filter(pk => {
-      const card = _pool.get(pk.cardId);
-      const isBench = opp.active?.iid !== pk.iid;
-      // v5.421：re-attach 端也要 skipStadium（同 source 端 345）。對戰圓形/中立中心只擋「放
-      //   傷害指示物」，不擋「移動能量」；漏掉 skipStadium 會讓對戰圓形在場時備戰目標被誤擋
-      //   → 挪動一下找不到可改附目標而失效（玩家回報）。個別寶可夢防護(太晶/化隱)仍保留。
-      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', _pool, { isBench, skipStadium: true });
-      return !guard.blocked;
-    })
     .map(pk => pk.iid);
   if (validTargets.length === 0) {
     return addLog(state, '挪動一下：對手場上無其他「可附加且不受招式效果影響」的目標，效果結束', aIdx);
@@ -427,6 +422,24 @@ regR('minccino-shuffle-attach-anywhere', (state, aIdx, iids, params, pool) => {
   const ownerName = pool.get(owner.cardId)?.name ?? '?';
   const targetPoke = opp.active?.iid === targetIid ? opp.active : opp.bench.find(b => b.iid === targetIid);
   const targetName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
+  // v5.461 判例：若目標「不受招式效果影響」(薄霧能量/化隱 等) → 能量無法改附 → 丟棄該能量，結束效果。
+  const targetIsBench = opp.active?.iid !== targetIid;
+  const targetImmune = targetPoke
+    ? canApplyEffectToTarget(state, aIdx, targetPoke, pool.get(targetPoke.cardId), 'attack-effect', pool, { isBench: targetIsBench, skipStadium: true }).blocked
+    : false;
+  if (targetImmune) {
+    return updatePlayer(
+      addLog(state, `挪動一下：${targetName} 不受招式效果影響，改附的 ${eName} 改為丟棄`, aIdx),
+      dIdx, p => ({
+        ...p,
+        active: p.active && p.active.iid === ownerIid
+          ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : p.active,
+        bench: p.bench.map(b => b.iid === ownerIid
+          ? { ...b, energyAttached: b.energyAttached.filter(e => e.iid !== energyIid) } : b),
+        discard: [...p.discard, energyInst],
+      }),
+    );
+  }
   return updatePlayer(
     addLog(state, `挪動一下：將 ${ownerName} 身上 ${eName} 改附 ${targetName}`, aIdx),
     dIdx, p => {
