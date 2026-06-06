@@ -8,12 +8,12 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E=join(ROOT,'.vf-e.ts'),O=join(ROOT,'.vf-o.mjs'),S=join(ROOT,'.vf-s.mjs');
 process.on('exit',()=>{for(const p of [E,O,S]){try{unlinkSync(p)}catch{}}});
 writeFileSync(S,'export const base="";export const assets="";');
-writeFileSync(E,`export { createGame, applyAction } from './src/lib/game/engine';`);
+writeFileSync(E,`export { createGame, applyAction } from './src/lib/game/engine';\nexport { selectionAllowsSkip } from './src/lib/game/selection-ui';`);
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
-const { createGame, applyAction } = await import(pathToFileURL(O).href);
+const { createGame, applyAction, selectionAllowsSkip } = await import(pathToFileURL(O).href);
 const dir=join(ROOT,'static/cards');const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));const pool=new Map();
 for(const f of readdirSync(dir)){if(!f.endsWith('.json')||f==='index.json'||!live.has(f.slice(0,-5)))continue;for(const c of JSON.parse(readFileSync(join(dir,f),'utf8')))if(c?.id!=null)pool.set(String(c.id),c);}
-const CID={sakura:'12775',relicanth:'12774',onix:'13979',waterE:'18519',charz:'13163'};
+const CID={sakura:'12775',relicanth:'12774',onix:'13979',waterE:'18519',charz:'13163',balloon:'14467'};
 let iid=0;const inst=(cid,e={})=>({iid:`v${++iid}`,cardId:String(cid),damage:0,energyAttached:[],...e});
 const base=()=>createGame({name:'P1',entries:[{cardId:CID.charz,count:1}]},{name:'P2',entries:[{cardId:CID.charz,count:1}]},pool);
 let pass=0,fail=0;const T=(n,f)=>{try{f();console.log('  ✅',n);pass++;}catch(e){console.log('  ❌',n+':',e.message);fail++;}};
@@ -92,6 +92,22 @@ T('確認「否」→2水進棄牌', ()=>{
   n=applyAction(n,{type:'RESOLVE_SELECTION',effectKey:'diver-catch-confirm',selectedIids:['no'],actorIdx:0},pool);
   assert.equal(n.players[0].hand.filter(c=>String(c.cardId)===CID.waterE).length,0,'手牌無水');
   assert.equal(n.players[0].discard.filter(c=>String(c.cardId)===CID.waterE).length,2,'2水進棄牌');
+});
+
+console.log('=== 手機附道具取消鈕（v5.465）===');
+T('selectionAllowsSkip(attach-tool)=true', ()=>{ assert.equal(selectionAllowsSkip({type:'heal-target',actorIdx:0,sourcePlayerIdx:0,effectKey:'attach-tool'}),true); });
+T('selectionAllowsSkip(sakura-crescendo-attach)=true', ()=>{ assert.equal(selectionAllowsSkip({type:'hand-choose',actorIdx:0,sourcePlayerIdx:0,effectKey:'sakura-crescendo-attach'}),true); });
+T('附道具取消(空選擇)→氣球退回手牌(不掉卡)', ()=>{
+  const s=base();const balloon=inst(CID.balloon);
+  const st={...s,phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:1,isFirstTurn:false,setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],
+    players:[{...s.players[0],hand:[balloon],deck:[inst(CID.charz)],discard:[],prizes:[inst(CID.charz)],bench:[],active:inst(CID.charz)},
+             {...s.players[1],hand:[],deck:[inst(CID.charz)],discard:[],prizes:[inst(CID.charz)],bench:[],active:inst(CID.charz)}]};
+  let n=applyAction(st,{type:'PLAY_TRAINER',iid:balloon.iid},pool);
+  assert.equal(n.pendingSelection?.effectKey,'attach-tool','打出氣球開 attach-tool');
+  let m=applyAction(n,{type:'RESOLVE_SELECTION',effectKey:'attach-tool',selectedIids:[],actorIdx:0},pool);
+  assert.equal(m.players[0].hand.filter(c=>String(c.cardId)===CID.balloon).length,1,'氣球退回手牌');
+  assert.equal(m.players[0].discard.filter(c=>String(c.cardId)===CID.balloon).length,0,'未掉進棄牌');
+  assert.ok(!m.pendingSelection,'pending清除');
 });
 
 console.log(`\n結果：${pass} pass / ${fail} fail`);

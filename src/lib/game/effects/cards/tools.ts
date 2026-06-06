@@ -534,9 +534,18 @@ reg('氣球', toolAttachEffect('氣球'));
 reg('龐克頭盔', toolAttachEffect('龐克頭盔'));
 
 regR('attach-tool', (st, idx, picked, params, pool) => {
-  const targetIid = picked[0];
   const toolInst = params?.toolInst as CardInstance;
   if (!toolInst) return st;
+  // v5.465：玩家取消附加（空選擇）→ 道具退回手牌，不可消失（手機/桌面取消鈕共用此路徑）。
+  //   根因：道具在 PLAY_TRAINER 時已從手牌移除；空 resolve 原本找不到 target 也不退回 → 道具憑空消失。
+  if (!picked || picked.length === 0) {
+    return updatePlayer(
+      addLog(st, `${pool.get(toolInst.cardId)?.name ?? '道具'}：取消附加，道具回到手牌`, idx),
+      idx,
+      pl => ({ ...pl, hand: [...pl.hand, toolInst] }),
+    );
+  }
+  const targetIid = picked[0];
   // Defensive check：target 已有道具則拒絕附加（一隻寶可夢只能附加一個道具）
   const p = st.players[idx];
   const all = [...(p.active ? [p.active] : []), ...p.bench];

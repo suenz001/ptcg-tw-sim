@@ -30,6 +30,11 @@ export function shouldSkipStalePush(
   if (incoming.id !== current.id) {
     return (incoming.createdAt ?? 0) < (current.createdAt ?? 0);
   }
+  // v5.465：終態保護（推端）— 房間已 game-over（同局）時，不讓非 game-over 的 push 蓋掉。
+  //   根因：一方取最後獎賞→game-over 的瞬間，輸方剛好補位(SEND_NEW_ACTIVE)的 'playing' push
+  //   會把房間 storage 從 game-over 洗回 playing → 輸方輪詢拿回 playing、永遠收不到勝利畫面而卡死。
+  //   game-over 是終態，輸方任何後續操作都不該覆蓋（再來一局＝不同 id，已於上方放行）。
+  if (current.phase === 'game-over' && incoming.phase !== 'game-over') return true;
   // 同局：playing×playing 且 log 嚴格較短 → skip
   return incoming.phase === 'playing' && current.phase === 'playing'
     && (incoming.log?.length ?? 0) < (current.log?.length ?? 0);

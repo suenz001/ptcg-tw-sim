@@ -35,6 +35,8 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'ursaluna-bm-attach',            // 月月熊 赫月｜經驗法則：自選附能（可不附）
   'm5-mirieton-photon-code',       // 密勒頓｜光子纜線（on-KO）：或跳過
   'lycanroc-spike-bind-attach',    // 鬃岩狼人｜尖刺纏身：自選附能（可不附）
+  'attach-tool',                   // v5.465：附加寶可夢道具選目標 → 可取消（道具退回手牌）
+  'sakura-crescendo-attach',       // v5.465：櫻花魚｜漸強波 從手牌附水能量 → 可不選（也可不附）
 ]);
 
 export interface SkipDecisionInput {

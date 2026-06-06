@@ -73,6 +73,18 @@ ck('push: 跨局-新局(createdAt晚)蓋舊局(createdAt早) → 不 skip',
    shouldSkipStalePush(mkGS({ id: 'NEW', createdAt: 200, logLen: 5 }), mkGS({ id: 'OLD', createdAt: 100, logLen: 153 })) === false);
 ck('push: 跨局-兩局皆無 createdAt(舊版相容) → 回退長度比較(較長不 skip)',
    shouldSkipStalePush(mkGS({ id: 'OLD', logLen: 153 }), mkGS({ id: 'NEW', logLen: 5 })) === false);
+
+// ════ A3. game-over 終態保護（v5.465 獲勝瞬間被輸方補位 push 覆蓋→卡住）════
+ck('push: 房間 game-over，輸方補位 playing(log較長) → skip(不蓋勝利)',
+   shouldSkipStalePush(mkGS({ phase: 'playing', logLen: 9 }), mkGS({ phase: 'game-over', logLen: 5 })) === true);
+ck('push: 房間 playing，勝方寫 game-over → 不 skip(允許寫入勝利)',
+   shouldSkipStalePush(mkGS({ phase: 'game-over', logLen: 5 }), mkGS({ phase: 'playing', logLen: 9 })) === false);
+ck('push: 房間 game-over，再寫 game-over → 不 skip(允許更新終態)',
+   shouldSkipStalePush(mkGS({ phase: 'game-over', logLen: 6 }), mkGS({ phase: 'game-over', logLen: 5 })) === false);
+ck('push: 跨局 game-over→新局 playing(createdAt晚) → 不 skip(再來一局放行)',
+   shouldSkipStalePush(mkGS({ id: 'NEW', createdAt: 200, phase: 'playing', logLen: 3 }), mkGS({ id: 'OLD', createdAt: 100, phase: 'game-over', logLen: 9 })) === false);
+ck('收端: 本地 playing 收到 game-over → adopt(輸方收到勝利畫面)',
+   resolveRoomUpdate(mkGS({ phase: 'playing', logLen: 9 }), mkGS({ phase: 'game-over', logLen: 5 }), ctx()).kind === 'adopt');
 ck('收: 跨局-本地新局收到殘留舊局(game-over,createdAt早) → reject stale-old-game',
    resolveRoomUpdate(mkGS({ id: 'NEW', createdAt: 200, phase: 'playing', logLen: 5 }),
                      mkGS({ id: 'OLD', createdAt: 100, phase: 'game-over', logLen: 163 }), ctx()).reason === 'stale-old-game');
