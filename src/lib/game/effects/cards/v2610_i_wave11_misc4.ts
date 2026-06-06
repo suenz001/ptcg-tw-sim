@@ -467,28 +467,66 @@ regPre('火箭隊的臭臭泥|毒液危害', (state, aIdx, _pool) => {
 // 櫻花魚|漸強波 30× 自身水能量數
 // （卡面有「若希望，從手牌附水能量」前置 — 簡化為直接計算當前水能量）
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('櫻花魚|漸強波', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard（漸強波 yes 邏輯在 regPre — 附【水】能後算傷害）
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) {
-    const a = state.players[aIdx].active;
-    if (!a) return { state, damage: 0 };
-    const waterCnt = a.energyAttached.filter(e => {
-      const c = pool.get(e.cardId); return c?.subtype === 'Basic' && (c?.pokemonType === 'Water' || (c?.name ?? '').includes('【水】'));
-    }).length;
-    return { state: addLog(state, `漸強波：選擇「否」 — 用當前 ${waterCnt} 顆【水】能 × 30 = ${waterCnt*30}`, aIdx), damage: waterCnt * 30 };
-  }
-  const _cb: AttackPreFn = (state, aIdx, pool) => {
+// v5.464：漸強波 — 卡面「造成傷害前，可從手牌選任意數量基本【水】能量附於自身(也可不選)，再造成傷害」。
+//   舊版 binary-yes-no 的「是」分支只算當前水能量、根本沒附手牌能量(bug)。
+//   改為：regPre 傷害延後(0) → regPost 開 hand-choose 選 0~N 張手牌基本水能量 →
+//   regR 附上後以(自身水量×30)走中央 dealAttackDamageToTarget 造成傷害(含弱抗/免疫/KO)。
+regPre('櫻花魚|漸強波', (state) => ({ state, damage: 0 }));
+regPost('櫻花魚|漸強波', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
-  if (!a) return { state, damage: 0 };
-  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
-  const count = countOneEnergy(a, 'Water', pool);
-  const dmg = count * 30;
-  const s = addLog(state, `漸強波：自身水能量 ${count} 個 → ${count}×30 = ${dmg}`, aIdx);
-  return { state: s, damage: dmg };
-};
-  return _cb(state, aIdx, pool);
+  if (!a) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defIid = state.players[dIdx].active?.iid;
+  if (!defIid) return addLog(state, '漸強波：對手無戰鬥寶可夢', aIdx);
+  // 手牌中的「基本【水】能量」(energyMatchesType 處理 pokemonType=null)
+  const waterInHand = state.players[aIdx].hand.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && energyMatchesType(card, 'Water');
+  });
+  if (waterInHand.length === 0) {
+    const cnt = countOneEnergy(a, 'Water', pool);
+    const s = addLog(state, `漸強波：手牌無可附「基本【水】能量」→ 當前 ${cnt} 顆 ×30 = ${cnt * 30}`, aIdx);
+    return dealAttackDamageToTarget(s, aIdx, defIid, cnt * 30, pool, { kind: 'attack-damage', label: '漸強波' });
+  }
+  return withPending(
+    addLog(state, '漸強波：可從手牌選任意數量「基本【水】能量」附於櫻花魚（也可不選），再造成傷害', aIdx),
+    {
+      type: 'hand-choose',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 0, maxCount: waterInHand.length,
+      effectKey: 'sakura-crescendo-attach',
+      params: { validIids: waterInHand.map(c => c.iid), defIid, label: '漸強波' },
+    },
+  );
+});
+regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
+  const defIid = params?.defIid as string | undefined;
+  let s = state;
+  const valid = (iids ?? []).filter(iid => {
+    const inst = s.players[aIdx].hand.find(c => c.iid === iid);
+    const card = inst ? pool.get(inst.cardId) : undefined;
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && energyMatchesType(card, 'Water');
+  });
+  if (valid.length > 0) {
+    const set = new Set(valid);
+    s = updatePlayer(s, aIdx, p => {
+      const energies = p.hand.filter(c => set.has(c.iid));
+      return {
+        ...p,
+        hand: p.hand.filter(c => !set.has(c.iid)),
+        active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] } : p.active,
+      };
+    });
+    s = addLog(s, `漸強波：從手牌附 ${valid.length} 張「基本【水】能量」到櫻花魚`, aIdx);
+  } else {
+    s = addLog(s, '漸強波：未選擇附加能量', aIdx);
+  }
+  const a = s.players[aIdx].active;
+  const cnt = a ? countOneEnergy(a, 'Water', pool) : 0;
+  const dmg = cnt * 30;
+  s = addLog(s, `漸強波：自身【水】能量 ${cnt} 顆 → ${cnt}×30 = ${dmg}`, aIdx);
+  if (defIid && dmg > 0) s = dealAttackDamageToTarget(s, aIdx, defIid, dmg, pool, { kind: 'attack-damage', label: '漸強波' });
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -57,6 +57,7 @@
 
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
+import { regR, updatePlayer, addLog } from '../_shared';  // v5.464：潛者捕捉確認選單 resolver
 
 // 導出 sentinel 防止 unused import warnings（與 v2999 同模式）
 export type _v3000G3W2Sentinel = GameState | Card | CardInstance;
@@ -180,9 +181,30 @@ export function isBasicWaterEnergy(cardId: string, pool: Map<string, Card>): boo
   if (!c) return false;
   if (c.supertype !== 'Energy') return false;
   if (c.subtype !== 'Basic') return false;
-  // 基本能量的 pokemonType === 'Water' 即可（卡名通常是「基本【水】能量」）
-  return c.pokemonType === 'Water';
+  // v5.464 修：基本能量 pokemonType 為 null（屬性在卡名【水】），原 pokemonType==='Water' 永遠 false
+  //   → 潛者捕捉從不觸發。改用 pokemonType fallback + 卡名【水】判定（對齊 isBasicEnergyOfType 慣例）。
+  if (c.pokemonType === 'Water') return true;
+  return (c.name ?? '').includes('【水】');
 }
+
+// v5.464：潛者捕捉確認選單 resolver — 由 engine KO 路徑設 modal-choice(effectKey='diver-catch-confirm')。
+//   是(yes)→ held 基本水能量放回手牌 / 否(no)→ 進棄牌堆。held 能量存於 pending params.heldEnergy。
+regR('diver-catch-confirm', (state, idx, iids, params) => {
+  const choice = (iids ?? [])[0];
+  const held = (params?.heldEnergy as CardInstance[] | undefined) ?? [];
+  const koName = (params?.koName as string | undefined) ?? '?';
+  if (held.length === 0) return state;
+  if (choice === 'yes') {
+    return updatePlayer(
+      addLog(state, `「潛者捕捉」：將 ${koName} 身上的「基本【水】能量」${held.length} 張放回手牌`, idx),
+      idx, p => ({ ...p, hand: [...p.hand, ...held] }),
+    );
+  }
+  return updatePlayer(
+    addLog(state, `「潛者捕捉」：選擇不回手 → ${held.length} 張「基本【水】能量」進棄牌堆`, idx),
+    idx, p => ({ ...p, discard: [...p.discard, ...held] }),
+  );
+});
 
 /** 自方場上是否有「獵斑魚｜潛者捕捉」可觸發 — defender 屬性必須是【水】。 */
 export function canRelicanthDiverCatchTrigger(

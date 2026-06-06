@@ -16598,13 +16598,7 @@ ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的貓老大ex|高傲指令', {
   choiceNoLabel: '否（跳過複製）',
 });
 
-ATTACK_PRE_DISCARD_CHOICE.set('櫻花魚|漸強波', {
-  min: 0, max: null, scope: 'binary-yes-no',
-  baseDamage: 0, damagePerEnergy: 0,
-  choicePrompt: '是否在造成傷害前，從手牌選擇任意數量的基本【水】能量卡，附於這隻寶可夢身上？',
-  choiceYesLabel: '是（附【水】能再算傷害）',
-  choiceNoLabel: '否（用當前能量算傷害）',
-});
+// v5.464：櫻花魚|漸強波 改走 regPost hand-choose picker（見 v2610_i_wave11_misc4.ts），移除 binary-yes-no pre-choice。
 
 ATTACK_PRE_DISCARD_CHOICE.set('魔牆人偶|相仿秀', {
   min: 0, max: null, scope: 'binary-yes-no',

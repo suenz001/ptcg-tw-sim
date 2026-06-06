@@ -5205,11 +5205,33 @@ function handlePlaying(
       } else {
         defenderState.discard = [...defenderState.discard, ...koDiscard];
       }
-      // v3.0 獵斑魚｜潛者捕捉 — 把過濾出的基本水能量放回 defender 手牌
+      // v5.464 獵斑魚｜潛者捕捉 — 卡面「可使用」= 玩家確認是否回手。改開確認選單(modal-choice)。
+      //   水能量已從 koDiscard 排除(見上 nonWaterEnergyAttached)，此處先 held 在 pending params，
+      //   既不進手牌也不進棄牌；待防守方(dIdx)在確認選單選擇：是→回手 / 否→進棄牌。
+      //   設於此處(active=null 前)，後續所有 {...newState} 展開都會保留 pendingSelection。
       if (waterEnergyToHand.length > 0) {
-        defenderState.hand = [...defenderState.hand, ...waterEnergyToHand];
         newState = addLog(newState,
-          `「潛者捕捉」啟動：${defenderCard?.name ?? '?'} 身上的「基本【水】能量」${waterEnergyToHand.length} 張放回手牌`, dIdx);
+          `「潛者捕捉」可發動：${defenderCard?.name ?? '?'} 身上有「基本【水】能量」${waterEnergyToHand.length} 張`, dIdx);
+        newState = {
+          ...newState,
+          pendingSelection: {
+            type: 'modal-choice',
+            actorIdx: dIdx,
+            sourcePlayerIdx: dIdx,
+            minCount: 1,
+            maxCount: 1,
+            effectKey: 'diver-catch-confirm',
+            params: {
+              label: '潛者捕捉',
+              heldEnergy: waterEnergyToHand,
+              koName: defenderCard?.name ?? '?',
+              options: [
+                { id: 'yes', text: `是（${waterEnergyToHand.length} 張「基本【水】能量」放回手牌）` },
+                { id: 'no', text: '否（一併進棄牌堆）' },
+              ],
+            },
+          },
+        };
       }
       defenderState.active = null;
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
