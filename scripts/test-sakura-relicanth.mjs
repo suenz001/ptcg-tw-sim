@@ -78,11 +78,12 @@ T('確認「是」→2水回手 + 獎賞/補位序列正常', ()=>{
   assert.equal(n.players[0].hand.filter(c=>String(c.cardId)===CID.waterE).length,2,'2水回手');
   assert.equal(n.players[0].discard.filter(c=>String(c.cardId)===CID.waterE).length,0,'棄牌無水');
   assert.ok(!n.pendingSelection,'確認後pending清除');
-  assert.ok((n.pendingPrizes?.[1]??0)>=1,'攻擊方有待領獎賞 '+JSON.stringify(n.pendingPrizes));
+  // v5.466 自動給獎賞：KO 當下攻擊方獎賞自動取走（不再有 pendingPrizes 待領）
+  assert.ok(n.players[1].prizes.length < 6,'攻擊方已自動取獎賞(剩 '+n.players[1].prizes.length+')');
+  assert.deepEqual(n.pendingPrizes,[0,0],'無待領獎賞(已自動發)');
   assert.equal(n.players[0].active,null,'我方active昏厥待補位');
-  // 補位序列：攻擊方領獎賞 + 防守方補位 不卡死
-  let m=applyAction(n,{type:'TAKE_PRIZES',count:1,playerIdx:1,senderIdx:1},pool);
-  m=applyAction(m,{type:'SEND_NEW_ACTIVE',iid:m.players[0].bench[0].iid,senderIdx:0},pool);
+  // 補位序列：防守方補位 不卡死（無獎賞gate）
+  let m=applyAction(n,{type:'SEND_NEW_ACTIVE',iid:n.players[0].bench[0].iid,senderIdx:0},pool);
   assert.ok(m.players[0].active,'補位後我方有active(序列不卡死)');
   assert.ok(!m.pendingSelection,'序列完成無殘留pending');
 });

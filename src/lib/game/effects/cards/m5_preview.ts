@@ -1317,7 +1317,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
   const prizes = defCard ? prizesForKOLocal(defCard) : 1;
   s = addLog({ ...s, players }, `深淵之瞳：${defCard?.name ?? '?'} 處於【${def.status}】 → 直接昏厥！+${prizes} 張獎賞卡（仿同命戰鬥手動 KO，不走 damage 管線）`, aIdx);
   s = recordOppKO(s, dIdx, defCard, 'attack');
-  s = addPendingPrize(s, aIdx, prizes);
+  s = addPendingPrize(s, aIdx, prizes, pool);
   return s;
 });
 

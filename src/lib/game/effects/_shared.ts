@@ -1050,11 +1050,35 @@ export function healResolver(
 // 不再允許 prizes.slice() + hand: [...] 直接派發到手牌（除引擎 TAKE_PRIZES handler）。
 
 /** 對 ownerIdx 側累計 n 張待領獎賞。owner = 應該取走獎賞的玩家。 */
-export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number): GameState {
+export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, pool: Map<string, Card>): GameState {
+  // v5.466 自動給獎賞：取代「累加 pendingPrizes + 手動【取得】鈕」。KO 當下立即把獎賞卡移入手牌，
+  //   消除「攻擊方取獎賞 push 與防守方補位 push 重疊」的線上 desync（幻影奇襲多重KO 等）。
+  //   ★ 私密 log（v5.452）：本人看到取得哪幾張卡(可點 cardLink)、對手只看張數 — 所有取得獎賞狀況
+  //     一律產生此 log（沒有【取得】鈕後，玩家只能靠 log 確認拿到哪張）。pendingPrizes 不再累加(恆 0)。
   if (n <= 0) return state;
-  const pp: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
-  pp[ownerIdx] += n;
-  return { ...state, pendingPrizes: pp };
+  const taker = { ...state.players[ownerIdx] };
+  const count = Math.min(n, taker.prizes.length);
+  if (count <= 0) return state;  // 無獎賞卡可取（理論上已勝）
+  const taken = taker.prizes.slice(0, count);
+  taker.prizes = taker.prizes.slice(count);
+  taker.hand = [...taker.hand, ...taken];
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[ownerIdx] = taker;
+  const takenNames = taken.map(cc => cardLink(cc.iid, pool.get(cc.cardId)?.name ?? '?')).join('、');
+  let s: GameState = addPrivateLog(
+    { ...state, players },
+    `${taker.name} 取得了 ${count} 張獎賞卡：${takenNames}（剩餘 ${taker.prizes.length} 張）`,
+    `${taker.name} 取得了 ${count} 張獎賞卡（剩餘 ${taker.prizes.length} 張）`,
+    ownerIdx,
+  );
+  if (taker.prizes.length <= 0) {
+    s = {
+      ...s, phase: 'game-over', winner: ownerIdx,
+      winReason: `${taker.name} 取得所有獎賞卡`,
+      log: [...s.log, { turn: s.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: Date.now() }],
+    };
+  }
+  return s;
 }
 
 /** 查詢 ownerIdx 側待領獎賞數量。 */

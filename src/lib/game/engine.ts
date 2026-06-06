@@ -2190,7 +2190,7 @@ function sanityKOSweep(
   if (!anyKO) return state;
   const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = player;
-  s = addPendingPrize({ ...s, players }, attackerIdx, prizesAcc);
+  s = addPendingPrize({ ...s, players }, attackerIdx, prizesAcc, pool);
   // 對手 active+bench 都空 → 直接終局
   if (player.active === null && player.bench.length === 0) {
     s = {
@@ -5339,7 +5339,7 @@ function handlePlaying(
         turnPhase: 'end',
         ancientEnergyMinusOneUsed: newAncientFlags,
       };
-      newState = addPendingPrize(newState, aIdx, prizes);
+      newState = addPendingPrize(newState, aIdx, prizes, pool);
       // v2.246 KO cause tracking — 招式 KO 對手戰鬥位
       newState = recordOppKO(newState, dIdx, defenderCard, 'attack');
       // v2.992 PASSIVE_KO_RETALIATION（沙鈴仙人掌 炸裂針）— KO 時對攻擊者放 N 個指示物
@@ -5556,7 +5556,7 @@ function handlePlaying(
               discard: [...retPlayers[aIdx].discard, ...retKoDiscard],
             };
             newState = addLog(
-              addPendingPrize({ ...newState, players: retPlayers }, dIdx, retKOPrizes),
+              addPendingPrize({ ...newState, players: retPlayers }, dIdx, retKOPrizes, pool),
               `${retAtkCard!.name} 被反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${retKOPrizes} 張獎賞卡。`,
               null,
             );
@@ -5613,7 +5613,7 @@ function handlePlaying(
           };
           // 防守方（dIdx）得到獎賞卡（放進 pendingPrizes 讓 UI 取牌）
           newState = addLog(
-            addPendingPrize({ ...newState, players: punkRefPlayers2 }, dIdx, punkKOPrizes),
+            addPendingPrize({ ...newState, players: punkRefPlayers2 }, dIdx, punkKOPrizes, pool),
             `${attackerCard.name} 被龐克頭盔的反彈傷害擊倒！${newState.players[dIdx].name} 取得 ${punkKOPrizes} 張獎賞卡。`,
             null,
           );
@@ -6435,7 +6435,7 @@ function handlePlaying(
         state = addLog({ ...state, players },
           `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎賞卡。`,
           null);
-        state = addPendingPrize(state, winnerIdx, owed);
+        state = addPendingPrize(state, winnerIdx, owed, pool);
       }
       // 勝利條件：任一方戰鬥寶可夢被擊倒 + 備戰已空 → 對手勝
       for (const i of [0, 1] as const) {
@@ -6533,7 +6533,7 @@ function handlePlaying(
           state = addLog({ ...state, players },
             `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
             ownerIdx);
-          state = addPendingPrize(state, ownerIdx, sandstormPrizes);
+          state = addPendingPrize(state, ownerIdx, sandstormPrizes, pool);
         }
         if (sandstormActiveDied && players[oppIdx].bench.length === 0 && players[oppIdx].active === null) {
           return {

@@ -279,7 +279,7 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     players[dIdx] = newDefender;
     s = addLog({ ...s, players },
       `腎上腺腦力：在 ${targetCard?.name ?? '?'} 身上放 ${amount} 傷害 → 被擊倒！+${prizes} 張獎賞卡`, actorIdx);
-    s = addPendingPrize(s, actorIdx, prizes);
+    s = addPendingPrize(s, actorIdx, prizes, pool);
     // v2.246：腎上腺腦力是「對手主動特性 KO」
     s = recordOppKO(s, dIdx, targetCard, 'ability');
     if (isActive && newDefender.bench.length === 0) {

@@ -666,7 +666,7 @@ reg('馬志士的交易', (st, idx) => {
     },
   });
 });
-regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
+regR('masters-trade-decide', (st, oppIdx, iids, _params, pool) => {
   const choice = iids[0];
   const proposerIdx = (1 - oppIdx) as 0 | 1;
   const proposerName = st.players[proposerIdx].name;
@@ -675,10 +675,10 @@ regR('masters-trade-decide', (st, oppIdx, iids, _params, _pool) => {
     // v3.80 Rule 10：雙方各取 1 張獎賞 — 改用 addPendingPrize 讓兩位玩家都按「取得」
     st = addLog(st, `馬志士的交易：${oppName} 接受 — 雙方各待取 1 張獎賞卡`, oppIdx);
     if (st.players[proposerIdx].prizes.length > 0) {
-      st = addPendingPrize(st, proposerIdx, 1);
+      st = addPendingPrize(st, proposerIdx, 1, pool);
     }
     if (st.players[oppIdx].prizes.length > 0) {
-      st = addPendingPrize(st, oppIdx, 1);
+      st = addPendingPrize(st, oppIdx, 1, pool);
     }
     // 勝負條件由 TAKE_PRIZES handler 在玩家點按鈕後檢查（既有機制）
     if (false) {

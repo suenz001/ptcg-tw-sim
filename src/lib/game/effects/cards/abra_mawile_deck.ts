@@ -96,7 +96,7 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
       `手之力量：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎賞卡`,
       aIdx
     );
-    s = addPendingPrize(s, aIdx, prizes);
+    s = addPendingPrize(s, aIdx, prizes, pool);
     // v2.246：手之力量是招式 KO
     s = recordOppKO(s, dIdx, defCard, 'attack');
     if (players[dIdx].bench.length === 0) {
