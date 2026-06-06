@@ -242,6 +242,8 @@ export function canTogekissMiracleKissTrigger(
 export const FIRST_TURN_USABLE_ATTACKS = new Set<string>([
   '急速之禮',    // 信使鳥
   '急速飛行',    // 卡璞・鳴鳴
+  '早熟進化',    // 蛋蛋（v5.460 audit 補；卡面「這個招式可在先攻玩家的最初回合使用」）
+  '急速信號',    // 電螢蟲（v5.460 audit 補；同上標記，亦在 BENCH_FILL_ATTACK_NAMES）
 ]);
 
 export function hasMeloettaExDebut(

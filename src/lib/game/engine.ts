@@ -4083,7 +4083,7 @@ function handlePlaying(
       // v2.219 — 後攻方最初回合限定招式（吼叫尾ex｜絕叫 等）
       // 卡面：「這個招式只可在後攻玩家的最初回合使用。」
       // 條件：state.isFirstTurn && aIdx 是後攻方（!= firstPlayerIdx）
-      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫']);
+      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);  // v5.460 audit 補慢芬香(甜甜螢)
       if (attackName && SECOND_PLAYER_FIRST_TURN_ONLY.has(attackName)) {
         const isSecondPlayer = aIdx !== state.firstPlayerIdx;
         if (!state.isFirstTurn || !isSecondPlayer) {
@@ -7630,7 +7630,7 @@ export function getAvailableAttacks(
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
       // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫）— UI 層反白
-      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫']);
+      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);  // v5.460 audit 補慢芬香(甜甜螢)
       if (SECOND_PLAYER_FIRST_TURN_ONLY.has(atk.name)) {
         const isSecondPlayer = state.activePlayerIndex !== state.firstPlayerIdx;
         if (!state.isFirstTurn || !isSecondPlayer) return -1;
