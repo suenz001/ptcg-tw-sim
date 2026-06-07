@@ -12252,7 +12252,7 @@ export function cursedBombAttackPost(label: string, counters: number = 5): Attac
 }
 
 // ── 過度放電 resolver + postFn ────────────────────────────────────────────
-// 流程：先自身 KO（active）→ 再 pending discard-search（Energy:Lightning, 1-3）→
+// 流程：先自身 KO（active）→ 再 pending discard-search（BasicEnergy 任意屬性, 1-3）→
 //       resolver 選 1 隻自己雷寶可夢附上全部能量。
 
 regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
@@ -12271,7 +12271,7 @@ regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
     const target = lightningSelf[0];
     const energies = p.discard.filter(c => iids.includes(c.iid));
     const tName = pool.get(target.cardId)?.name ?? '?';
-    const s = addLog(st, `${label}：將 ${energies.length} 張基本雷能量附加到 ${tName}`, idx);
+    const s = addLog(st, `${label}：將 ${energies.length} 張基本能量附加到 ${tName}`, idx);
     return updatePlayer(s, idx, pl => {
       const rest = pl.discard.filter(c => !iids.includes(c.iid));
       if (pl.active && pl.active.iid === target.iid) {
@@ -12285,7 +12285,7 @@ regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
   }
   // 多隻雷寶可夢：v2.87 改用 +/- 計數器 UI（同屬性能量批次分配，省下逐張按確認）。
   return withPending(addLog(st,
-    `${label}：請以「+/-」分配 ${iids.length} 張【雷】能量到 ${lightningSelf.length} 隻【雷】寶可夢`,
+    `${label}：請以「+/-」分配 ${iids.length} 張能量到 ${lightningSelf.length} 隻【雷】寶可夢`,
     idx), {
     type: 'energy-distribute',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -12319,9 +12319,9 @@ function overvoltAttackPost(label: string): AttackPostFn {
     // (2) 棄牌區基本雷能量候選
     const cand = s.players[aIdx].discard.filter(c => {
       const card = pool.get(c.cardId);
-      return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
+      return card?.supertype === 'Energy' && card.subtype === 'Basic'; // v5.500：卡面「基本能量卡」任意屬性(雷限制只對附加目標)
     });
-    if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本雷能量`, aIdx);
+    if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本能量`, aIdx);
     // (3) 場上是否還有雷寶可夢
     const hasLightning = [s.players[aIdx].active, ...s.players[aIdx].bench].some(c => {
       if (!c) return false;
@@ -12330,10 +12330,10 @@ function overvoltAttackPost(label: string): AttackPostFn {
     if (!hasLightning) return addLog(s, `${label}：場上無【雷】寶可夢，無法附加`, aIdx);
     // (4) pending discard-search
     const realMax = Math.min(3, cand.length);
-    const s2 = addLog(s, `${label}：從棄牌區選 1-${realMax} 張基本雷能量`, aIdx);
+    const s2 = addLog(s, `${label}：從棄牌區選 1-${realMax} 張基本能量`, aIdx);
     return withPending(s2, {
       type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'Energy:Lightning', minCount: 1, maxCount: realMax,
+      filter: 'BasicEnergy', minCount: 1, maxCount: realMax,
       effectKey: 'overvolt-attach-pick-target',
       params: { label },
     });
@@ -12383,9 +12383,9 @@ regA('三合一磁怪', 0, (st, aIdx, pool, cardInst) => {
   // (2) 棄牌區基本【雷】能量候選
   const cand = s.players[aIdx].discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
+    return card?.supertype === 'Energy' && card.subtype === 'Basic'; // v5.500：卡面「基本能量卡」任意屬性(雷限制只對附加目標)
   });
-  if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本雷能量`, aIdx);
+  if (cand.length === 0) return addLog(s, `${label}：棄牌區無基本能量`, aIdx);
   // (3) 場上是否還有雷寶可夢（self KO 後）
   const hasLightning = [s.players[aIdx].active, ...s.players[aIdx].bench].some(c => {
     if (!c) return false;
@@ -12394,10 +12394,10 @@ regA('三合一磁怪', 0, (st, aIdx, pool, cardInst) => {
   if (!hasLightning) return addLog(s, `${label}：場上無【雷】寶可夢，無法附加`, aIdx);
   // (4) pending discard-search
   const realMax = Math.min(3, cand.length);
-  const s2 = addLog(s, `${label}：從棄牌區選 1-${realMax} 張基本雷能量`, aIdx);
+  const s2 = addLog(s, `${label}：從棄牌區選 1-${realMax} 張基本能量`, aIdx);
   return withPending(s2, {
     type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Energy:Lightning', minCount: 1, maxCount: realMax,
+    filter: 'BasicEnergy', minCount: 1, maxCount: realMax,
     effectKey: 'overvolt-attach-pick-target',
     params: { label },
   });
