@@ -11,6 +11,12 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // ── v5.478 系統管理員廣播設定（公開讀、admin 寫）──────────────────────
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // ── 玩家基本資料與登入追蹤 ────────────────────────────────────────────
     match /users/{userId} {
       allow read: if isSelf(userId) || isAdmin();

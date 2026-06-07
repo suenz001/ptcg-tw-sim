@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.16</title>
+<title>PTCG Oracle Admin v1.17</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -385,6 +385,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="feedback" onclick="switchTab('feedback')">💬 意見回饋</div>
     <div class="tab" data-tab="matches" onclick="switchTab('matches')">📜 對戰歷史</div>
     <div class="tab" data-tab="stats" onclick="switchTab('stats')">📊 統計</div>
+    <div class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 廣播</div>
   </div>
 
   <main>
@@ -395,6 +396,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-feedback" class="tab-content" style="display:none;"></div>
     <div id="tab-matches" class="tab-content" style="display:none;"></div>
     <div id="tab-stats" class="tab-content" style="display:none;"></div>
+    <div id="tab-broadcast" class="tab-content" style="display:none;"></div>
   </main>
 </div>
 
@@ -404,6 +406,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: 'AIzaSyAH5IsKlGyHWWCWKKliDIvOqfevJQW8qhs',
@@ -415,6 +418,7 @@ const firebaseConfig = {
 };
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
+const dbF = getFirestore(fbApp);  // v1.17：廣播設定寫 Firestore config/broadcast
 
 let currentUser = null;
 let currentTab = 'overview';
@@ -709,6 +713,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'feedback') p = loadFeedback();
   else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
+  else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
   document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
   return p;
 };
@@ -720,6 +725,42 @@ window.manualRefresh = async function(btn) {
   try { await loadActive(true); }
   finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
 };
+
+// ── v1.17 系統廣播設定（寫 Firestore config/broadcast，beta+正式站玩家開戰讀取）──
+async function loadBroadcastAdmin() {
+  const el = document.getElementById('tab-broadcast');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
+  let cfg = { enabled:false, text:'', turns:[] };
+  try {
+    const snap = await getDoc(doc(dbF, 'config', 'broadcast'));
+    if (snap.exists()) { const d = snap.data(); cfg = { enabled:!!d.enabled, text:(d.text||''), turns:Array.isArray(d.turns)?d.turns:[] }; }
+  } catch(e) { /* 沒設定過 → 用空值 */ }
+  el.innerHTML =
+    '<div style="max-width:680px;padding:16px;">' +
+      '<h2 style="margin-top:0;">📢 系統廣播設定</h2>' +
+      '<p style="color:#aaa;font-size:.9rem;line-height:1.6;">玩家在「指定回合」開始時，對戰畫面上方會跑一次廣播跑馬燈（回合 = 先攻+後攻各一輪 +1；例如第 4 回合 = 雙方各打過 3 輪）。<br>beta 站與正式站玩家共用這份設定；玩家每次重整頁面後會重新讀取最新設定。</p>' +
+      '<label style="display:block;margin:14px 0;font-weight:600;"><input type="checkbox" id="bc-enabled"' + (cfg.enabled?' checked':'') + '> 啟用廣播</label>' +
+      '<label style="display:block;margin:14px 0;font-weight:600;">廣播文字：<br><textarea id="bc-text" rows="3" style="width:100%;box-sizing:border-box;margin-top:4px;" placeholder="例如：最新版本 v5.478，請大家重新整理頁面更新！">' + escapeHtml(cfg.text) + '</textarea></label>' +
+      '<label style="display:block;margin:14px 0;font-weight:600;">顯示回合（用半形逗號分隔，例如 1,4,7）：<br><input type="text" id="bc-turns" style="width:100%;box-sizing:border-box;margin-top:4px;" value="' + escapeHtml(cfg.turns.join(',')) + '" placeholder="1,4,7"></label>' +
+      '<button id="bc-save" style="padding:9px 24px;background:#7a1fa2;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:1rem;">儲存設定</button>' +
+      '<span id="bc-status" style="margin-left:14px;"></span>' +
+    '</div>';
+  document.getElementById('bc-save').onclick = async () => {
+    const enabled = document.getElementById('bc-enabled').checked;
+    const text = document.getElementById('bc-text').value.trim();
+    const turns = document.getElementById('bc-turns').value.split(',').map(s => parseInt(s.trim(), 10)).filter(n => Number.isInteger(n) && n >= 1);
+    const st = document.getElementById('bc-status');
+    st.textContent = '儲存中…'; st.style.color = '#aaa';
+    try {
+      await setDoc(doc(dbF, 'config', 'broadcast'), { enabled, text, turns, updatedAt: Date.now() });
+      st.textContent = '✅ 已儲存（回合：' + (turns.join('、') || '無') + '）'; st.style.color = '#5c5';
+    } catch(e) {
+      st.textContent = '❌ 儲存失敗：' + (e && e.message ? e.message : e); st.style.color = '#f66';
+    }
+  };
+}
+window.loadBroadcastAdmin = loadBroadcastAdmin;
 
 // ── Tab: Overview (v0.4 三大類別) ────────────────────────────────
 async function loadOverview() {

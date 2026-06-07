@@ -6,6 +6,7 @@
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex } from '$lib/cards/pool';
+  import { getBroadcastConfig, type BroadcastConfig } from '$lib/game/broadcast';
   import { loadDecks, saveDecks, sortDecks } from '$lib/decks/storage';
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
   import { loadDecksFromCloud } from '$lib/decks/cloud';
@@ -106,6 +107,36 @@
   }
 
   let game = $state<GameState | null>(null);
+
+  // v5.478 系統管理員廣播：開戰讀一次 config/broadcast；game.turn 命中設定回合 → 上方跑馬燈跑一輪。
+  //   beta+正式站都讀同一份 Firestore；純前端顯示、不經同步層（兩端各自獨立顯示，無 desync 風險）。
+  let broadcastCfg = $state<BroadcastConfig | null>(null);
+  let broadcastMarquee = $state('');   // 當前跑馬燈文字（'' = 不顯示）
+  let broadcastKey = $state(0);        // 強制重播動畫
+  let _bcLoadedGameId = '';
+  let _bcShownTurns = new Set<number>();
+  let _bcHideTimer: ReturnType<typeof setTimeout> | null = null;
+  // 新對局（game.id 變）→ 載入廣播設定 + 重置已顯示回合
+  $effect(() => {
+    const gid = game?.id ?? '';
+    if (!gid || gid === _bcLoadedGameId) return;
+    _bcLoadedGameId = gid;
+    _bcShownTurns = new Set();
+    broadcastCfg = null;
+    getBroadcastConfig().then((cfg) => { broadcastCfg = cfg; }).catch(() => { /* 容錯 */ });
+  });
+  // game.turn 命中設定回合 → 顯示跑馬燈（config 非同步載入完也會 re-run，補上 turn 1）
+  $effect(() => {
+    const t = game?.turn;
+    const cfg = broadcastCfg;
+    if (!game || game.phase !== 'playing' || t == null || !cfg?.enabled || !cfg.text) return;
+    if (!cfg.turns.includes(t) || _bcShownTurns.has(t)) return;
+    _bcShownTurns.add(t);
+    broadcastMarquee = cfg.text;
+    broadcastKey++;
+    if (_bcHideTimer) clearTimeout(_bcHideTimer);
+    _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 14000);
+  });
 
   // ── 模式：null=未選、local=本機、online=線上 ────────────────────────────────
   let mode = $state<'local' | 'online' | null>(null);
@@ -6120,6 +6151,16 @@
 {:else}
 <div class="battle-root" class:tablet-layout={isTabletLayout} class:zoomed={gameZoom !== 1} style="--game-zoom: {gameZoom};">
 
+  <!-- v5.478 系統管理員廣播跑馬燈（桌面+手機共用；fixed 浮在最上方，跑一輪後自動收起）-->
+  {#if broadcastMarquee}
+    {#key broadcastKey}
+      <div class="admin-broadcast-bar" role="status">
+        <div class="admin-broadcast-track">📢 {broadcastMarquee}</div>
+        <button class="admin-broadcast-close" onclick={() => broadcastMarquee = ''} title="關閉廣播" aria-label="關閉廣播">✕</button>
+      </div>
+    {/key}
+  {/if}
+
   <!-- v2.286 Phase 2-4：手機直式（≤600px portrait）切換到 MobilePortraitBattle 元件。
        桌機 / 平板 / 手機橫屏走原 layout。setup + playing 都切（MobilePortraitBattle 內部
        自行依 phase 切換 setup「拖手牌」vs playing「結束回合」按鈕）。
@@ -10383,6 +10424,26 @@
   /* v2.198 viewport 適配：原 height:100vh + overflow:hidden 在視窗高度不足時（沒全螢幕、有 DevTools 開啟、行動裝置）
      會把底部 hand-strip 切掉。改用 min-height + overflow-y:auto，讓視窗太小時整頁可滾動，手牌不會消失。
      大視窗用戶不受影響（min-height:100vh 仍撐滿）。100dvh 為現代瀏覽器動態 viewport（行動裝置 URL bar 友善）。 */
+  /* v5.478 系統管理員廣播跑馬燈 */
+  .admin-broadcast-bar{
+    position:fixed; top:0; left:0; right:0; z-index:99999;
+    height:34px; display:flex; align-items:center; overflow:hidden;
+    background:linear-gradient(90deg,#7a1fa2,#c2185b);
+    color:#fff; font-weight:700; font-size:.95rem;
+    box-shadow:0 2px 10px rgba(0,0,0,.45);
+  }
+  .admin-broadcast-track{
+    white-space:nowrap; will-change:transform;
+    animation: bc-scroll 14s linear 1;
+    padding-right:3rem;
+  }
+  @keyframes bc-scroll{ from{ transform:translateX(100vw); } to{ transform:translateX(-100%); } }
+  .admin-broadcast-close{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    width:22px; height:22px; border:none; border-radius:50%; cursor:pointer;
+    background:rgba(0,0,0,.3); color:#fff; font-size:.78rem; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
   .battle-root{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; overflow-y:auto; overflow-x:hidden; }
 
   /* v2.280：桌機 header 改 nowrap + overflow-x:auto。
