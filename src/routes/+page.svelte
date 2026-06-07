@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.501</span> 接續上一版：「三合一磁怪｜過度放電」在分配能量到多隻【雷】寶可夢時，視窗現在會顯示你「實際選到的能量屬性」（例如選了火能量就顯示【火】），混合多種屬性時則顯示通用的「能量」，不再一律寫死顯示【雷】。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.500</span> 修正「三合一磁怪｜過度放電」：可以從棄牌區選擇「任意屬性」的基本能量卡（最多 3 張）附於自己的【雷】寶可夢，先前系統錯誤地只允許選【雷】能量。【雷】的限制只針對「附加的目標寶可夢」，不限制能量屬性。</summary>
       </details>
 

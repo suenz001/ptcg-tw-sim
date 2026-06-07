@@ -12283,9 +12283,18 @@ regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
           ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
     });
   }
-  // 多隻雷寶可夢：v2.87 改用 +/- 計數器 UI（同屬性能量批次分配，省下逐張按確認）。
+  // 多隻雷寶可夢：v2.87 改用 +/- 計數器 UI（+/- 計數批次分配，省下逐張按確認）。
+  // v5.501：energyTypeName 改依「實際選中的能量屬性」顯示（先前寫死『雷』，但卡面可選任意基本能量，
+  //   玩家選火/水時 modal 卻顯示『分配【雷】能量』是錯的）。基本能量 pokemonType=null → 從卡名【X】取；
+  //   全部同屬性 → 顯示該屬性；混合屬性 → 留空（modal 顯示通用「能量」不掛【X】）。
+  const _selEnergies = st.players[idx].discard.filter(c => iids.includes(c.iid));
+  const _typeChars = new Set(_selEnergies.map(e => {
+    const m = (pool.get(e.cardId)?.name ?? '').match(/【(.)】/);
+    return m ? m[1] : '';
+  }));
+  const _energyTypeName = _typeChars.size === 1 ? [..._typeChars][0] : '';
   return withPending(addLog(st,
-    `${label}：請以「+/-」分配 ${iids.length} 張能量到 ${lightningSelf.length} 隻【雷】寶可夢`,
+    `${label}：請以「+/-」分配 ${iids.length} 張${_energyTypeName ? `【${_energyTypeName}】` : ''}能量到 ${lightningSelf.length} 隻【雷】寶可夢`,
     idx), {
     type: 'energy-distribute',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -12296,7 +12305,7 @@ regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
       energyIids: iids,
       validIids: lightningSelf.map(c => c.iid),
       totalCount: iids.length, placedCount: 0,
-      energyTypeName: '雷',
+      energyTypeName: _energyTypeName,
     },
   });
 });
