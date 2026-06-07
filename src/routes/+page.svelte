@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.489</span> 修正豐收漁網選擇視窗的分類上限：先前 v5.487 的 picker 介面改動因為內部誤推到錯誤檔案而未實際生效，導致選滿 3 張能量後仍能點第 4 張。現已正確套用——【水】寶可夢與基本【水】能量各選滿 3 張後，該類別會變灰、無法再選。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.488</span> 修正豐收漁網 picker 顯示問題：選擇視窗改用「明確白名單」方式，只會列出棄牌區的【水】寶可夢與基本【水】能量，不會再出現支援者等其他卡片。</summary>
       </details>
 

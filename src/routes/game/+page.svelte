@@ -2976,6 +2976,13 @@
             if (card.supertype === 'Energy' && card.subtype === 'Basic') return true;
             return false;
           }
+          if (f === 'WaterPokemonOrBasicWaterEnergy') {
+            // 豐收漁網：【水】寶可夢 + 基本【水】能量（基本能量 pokemonType 常 null，用卡名【水】fallback）
+            if (card.supertype === 'Pokemon' && card.pokemonType === 'Water') return true;
+            if (card.supertype === 'Energy' && card.subtype === 'Basic'
+                && (card.pokemonType === 'Water' || card.name.includes('【水】'))) return true;
+            return false;
+          }
           // v2.40 修正：原本這裡寫 supertype === 'Energy'（= 所有能量）是 bug，
           // 會讓能量回收器 / 能量回收 等卡從棄牌區撿到富裕能量等 Special Energy。
           // 正確語義：BasicEnergy = supertype=Energy && subtype=Basic（與 deck-search/hand-discard 一致）
@@ -3097,6 +3104,31 @@
     if (brocksDigPickState.hasBasic && isEvo) return true; // Basic 已選 → 擋 Evolution
     return false;
   }
+  // v5.489：豐收漁網 — 同 picker 內分類上限（【水】寶可夢 ≤3、基本【水】能量 ≤3）
+  const fishnetPickState = $derived.by(() => {
+    if (!pendingSelection || pendingSelection.effectKey !== 'fishnet-unified') {
+      return { pokeCount: 0, energyCount: 0 };
+    }
+    let pokeCount = 0, energyCount = 0;
+    for (const iid of selectionPicked) {
+      const item = selectionItems.find(it => it.iid === iid);
+      if (!item) continue;
+      const card = getCard(item.cardId);
+      if (!card) continue;
+      if (card.supertype === 'Pokemon') pokeCount++;
+      else if (card.supertype === 'Energy') energyCount++;
+    }
+    return { pokeCount, energyCount };
+  });
+  function isFishnetDisabled(item: CardInstance): boolean {
+    if (!pendingSelection || pendingSelection.effectKey !== 'fishnet-unified') return false;
+    if (selectionPicked.has(item.iid)) return false;  // 已選 → 允許取消
+    const card = getCard(item.cardId);
+    if (!card) return false;
+    if (card.supertype === 'Pokemon') return fishnetPickState.pokeCount >= 3;   // 寶可夢已選 3 → 擋
+    if (card.supertype === 'Energy') return fishnetPickState.energyCount >= 3;   // 能量已選 3 → 擋
+    return false;
+  }
   // damage-distribute 本批次加總的 counter 數（= 各 iid 的 count 之和）
   const selectionBatchSum = $derived.by(() => {
     let s = 0;
@@ -3111,6 +3143,9 @@
       if (brocksDigPickState.hasBasic && brocksDigPickState.hasEvolution) return false;
       if (brocksDigPickState.hasEvolution && selectionPicked.size > 1) return false;
       if (brocksDigPickState.basicCount > 2) return false;
+    }
+    if (pendingSelection.effectKey === 'fishnet-unified') {
+      if (fishnetPickState.pokeCount > 3 || fishnetPickState.energyCount > 3) return false;
     }
     if (pendingSelection.type === 'damage-distribute') {
       const n = selectionBatchSum;
@@ -4951,6 +4986,10 @@
       const item = selectionItems.find(it => it.iid === iid);
       if (item && isBrocksDigDisabled(item)) return;
     }
+    if (pendingSelection?.effectKey === 'fishnet-unified') {
+      const item = selectionItems.find(it => it.iid === iid);
+      if (item && isFishnetDisabled(item)) return;
+    }
     const next = new Set(selectionPicked);
     if (next.has(iid)) {
       // 點已選 → 取消
@@ -5145,6 +5184,7 @@
       'PokemonOrEnergy':               '寶可夢或能量',
       'PokemonOrBasicEnergy':          '寶可夢或基本能量',
       'PokemonNonExOrBasicEnergy':     '寶可夢（非 ex）或基本能量',
+      'WaterPokemonOrBasicWaterEnergy': '【水】寶可夢或基本【水】能量',
       'PokemonNonRule':                '非規則盒寶可夢',
       'Stage1':                        '1 階進化',
       'Stage2':                        '2 階進化',
@@ -7257,7 +7297,7 @@
           <div class="sel-grid">
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
-                {@const _bdDisabled = isBrocksDigDisabled(item)}
+                {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item)}
                 <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed} class:bd-disabled={_bdDisabled}>
                   {#if !concealed}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
