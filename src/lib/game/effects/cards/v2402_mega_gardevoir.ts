@@ -80,8 +80,15 @@ regPost('超級沙奈朵ex|盈溢祈願', (state, aIdx, pool) => {
   // 邊界 2：牌庫無基本【超】能量 → 重洗 + 結束（仍給玩家可看到牌庫的機會 — 但這裡為了
   //   貼近 v2.42 行為與 picker UX 簡潔，直接 skip 不開 picker）
   if (psyEnergies.length === 0) {
-    const s = updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-    return addLog(s, '盈溢祈願：牌庫中無基本【超】能量；牌庫重洗', aIdx);
+    // v5.495：牌庫非空仍開 view-picker 讓玩家檢視整副牌庫 + 重洗（PTCG 隱藏資訊規則）。
+    if (player.deck.length === 0) return addLog(state, '盈溢祈願：牌庫已空', aIdx);
+    const sv = addLog(state, '盈溢祈願：牌庫中無基本【超】能量；檢視牌庫後重洗', aIdx);
+    return withPending(sv, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'any', minCount: 0, maxCount: 0,
+      effectKey: 'search-to-hand-reshuffle',
+      params: { label: '盈溢祈願（檢視牌庫）' },
+    });
   }
 
   // Stage 1 picker：選 0 ~ min(bench.length, psyEnergies.length) 張基本【超】能量

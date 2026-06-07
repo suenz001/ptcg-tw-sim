@@ -7135,6 +7135,31 @@ export function fireDefenderOnDamaged(
   return s;
 }
 
+// v5.495：共用「被 KO 觸發附加道具 TOOL_ON_KO」（沉重接力棒移能量 / 希望護身符抽牌）。
+//   原本只有 engine 主管線(攻擊打對手 active)會呼叫 TOOL_ON_KO；中央傷害 helper
+//   dealAttackDamageToTarget(狙擊/分配/中央結算)漏呼叫 → 走中央 helper 的招式 KO 帶
+//   沉重接力棒的吼鯨王ex 時，5 顆能量直接進棄牌、反擊效果不觸發（玩家回報）。
+//   gate：① isActive（兩張 TOOL_ON_KO 卡面皆「在戰鬥場…昏厥」才觸發）
+//         ② 阻礙之塔(JAMMING_TOWER) → 道具失效
+//         ③ 只在「招式傷害」KO 觸發（效果昏厥 koTargetByAttackEffect 不走這，卡面「受到…傷害而昏厥」）。
+//   koInst = KO 前的 instance snapshot（含 tools + energy）。
+export function fireOnKOTools(
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>,
+  koInst: CardInstance, isActive: boolean,
+): GameState {
+  if (!isActive) return state;
+  const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  if (stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name)) return state;
+  let s = state;
+  for (const t of getAllAttachedTools(koInst)) {
+    const tool = pool.get(t.cardId);
+    if (!tool) continue;
+    const fn = TOOL_ON_KO.get(tool.name);
+    if (fn) s = fn(s, dIdx, aIdx, pool, koInst);
+  }
+  return s;
+}
+
 export function dealAttackDamageToTarget(
   st: GameState,
   actorIdx: 0 | 1,
@@ -7231,6 +7256,10 @@ export function dealAttackDamageToTarget(
     players[dIdx] = newDefender;
     let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
     s = recordOppKO(s, dIdx, targetCard, 'attack');
+    // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
+    //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
+    s = fireOnKOTools(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive);
+    if (s.phase === 'game-over') return s;
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
     }

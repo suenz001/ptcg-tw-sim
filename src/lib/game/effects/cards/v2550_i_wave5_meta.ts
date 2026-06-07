@@ -188,7 +188,17 @@ regPost('閃焰王牌|閃焰渦輪', (state, aIdx, pool) => {
     return card?.supertype === 'Energy' && card.subtype === 'Basic';
   });
   if (basicEnergies.length === 0 || player.bench.length === 0) {
-    return addLog(state, '閃焰渦輪：牌庫無基本能量或備戰無寶可夢；重洗牌庫', aIdx);
+    // v5.495：牌庫非空時仍開 deck-search picker 讓玩家檢視整副牌庫 + 重洗（PTCG 隱藏資訊規則：
+    //   「搜尋牌庫」即使無可附加目標也要讓玩家看過牌庫、對手知道搜尋過）。filter:'any' 顯示全牌庫、
+    //   maxCount:0 只能檢視（deck-search 一律可【不選】不卡死），確認後 search-to-hand-reshuffle 重洗。
+    if (player.deck.length === 0) return addLog(state, '閃焰渦輪：牌庫已空', aIdx);
+    const sv = addLog(state, '閃焰渦輪：牌庫無基本能量或備戰無寶可夢；檢視牌庫後重洗', aIdx);
+    return withPending(sv, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'any', minCount: 0, maxCount: 0,
+      effectKey: 'search-to-hand-reshuffle',
+      params: { label: '閃焰渦輪（檢視牌庫）' },
+    });
   }
   const max = Math.min(3, basicEnergies.length);
   const s = addLog(state, `閃焰渦輪：從牌庫挑 0~${max} 張基本能量（任意方式分配給備戰寶可夢）`, aIdx);

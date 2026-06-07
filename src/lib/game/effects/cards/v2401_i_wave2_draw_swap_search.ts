@@ -99,7 +99,14 @@ function deckSearchBasicEnergyPost(
       })
       .map(c => c.iid);
     if (validIids.length === 0) {
-      return addLog(state, `${label}：牌庫無基本能量；重洗牌庫`, aIdx);
+      // v5.495：牌庫非空仍開 view-picker 檢視牌庫 + 重洗（PTCG 隱藏資訊規則）。
+      const sv = addLog(state, `${label}：牌庫無基本能量；檢視牌庫後重洗`, aIdx);
+      return withPending(sv, {
+        type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        filter: 'any', minCount: 0, maxCount: 0,
+        effectKey: 'search-to-hand-reshuffle',
+        params: { label: `${label}（檢視牌庫）` },
+      });
     }
     const s = addLog(state, `${label}：從牌庫選最多 ${n} 張基本能量附於自身`, aIdx);
     return withPending(s, {
