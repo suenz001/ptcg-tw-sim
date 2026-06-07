@@ -6193,6 +6193,8 @@
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
+      broadcastMarquee={broadcastMarquee}
+      broadcastKey={broadcastKey}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
@@ -10438,6 +10440,8 @@
     padding-right:3rem;
   }
   @keyframes bc-scroll{ from{ transform:translateX(100vw); } to{ transform:translateX(-100%); } }
+  /* v5.479：手機直式改用 MobilePortraitBattle 內覆蓋計時器的跑馬燈 → 隱藏桌面 fixed 版避免重複 */
+  @media (max-width:600px) and (orientation:portrait){ .admin-broadcast-bar{ display:none; } }
   .admin-broadcast-close{
     position:absolute; right:6px; top:50%; transform:translateY(-50%);
     width:22px; height:22px; border:none; border-radius:50%; cursor:pointer;
