@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.17</title>
+<title>PTCG Oracle Admin v1.18</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.16</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.18</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -559,6 +559,8 @@ function cardLabel(cardId, count) {
 let oracleRoomsCache = [];
 let firebaseRoomsCache = [];
 let statusFilter = 'all'; // all | lobby | playing | ended
+let oracleRoomsCounts = null;   // v1.18: server 回的全量 {lobby,playing,ended}，供 toolbar 顯示
+let firebaseRoomsCounts = null; // v1.18
 
 // Auth state listener
 // v0.76: onAuthStateChanged 改 async，每次切 user 都先 force-refresh idToken。
@@ -865,9 +867,12 @@ async function loadOracleRooms() {
   primeEmailMap();  // v0.5 不 await：背景預熱 email map
   const el = document.getElementById('tab-oracle-rooms');
   if (!oracleRoomsCache.length) el.innerHTML = '<h2>🎮 Oracle 對戰</h2><div class="empty">Loading…</div>';
-  const data = await api('/api/admin/oracle/rooms');
+  // v1.18: 只抓「當前 status 分頁」的房間（如停在「進行中」按 Refresh 不再撈全部已結束房 → 快很多）。
+  const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
+  const data = await api('/api/admin/oracle/rooms' + qs);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   oracleRoomsCache = data.rooms;
+  if (data.counts) oracleRoomsCounts = data.counts;  // 全量三狀態計數，toolbar 用
   renderRoomsTab(el, 'oracle', oracleRoomsCache);
 }
 
@@ -875,15 +880,23 @@ async function loadFirebaseRooms() {
   primeEmailMap();  // v0.5 不 await：背景預熱 email map
   const el = document.getElementById('tab-firebase-rooms');
   if (!firebaseRoomsCache.length) el.innerHTML = '<h2>🔥 Firebase 對戰</h2><div class="empty">Loading…</div>';
-  const data = await api('/api/admin/firebase/rooms');
+  // v1.18: 只抓當前 status 分頁的房間（同 Oracle，加速）。
+  const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
+  const data = await api('/api/admin/firebase/rooms' + qs);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   firebaseRoomsCache = data.rooms;
+  if (data.counts) firebaseRoomsCounts = data.counts;
   renderRoomsTab(el, 'firebase', firebaseRoomsCache);
 }
 
 function renderRoomsTab(el, source, rooms) {
-  const counts = { lobby: 0, playing: 0, ended: 0 };
-  for (const r of rooms) counts[r.status] = (counts[r.status] || 0) + 1;
+  // v1.18: counts 改用 server 回的全量計數（rooms 現在可能只含當前 status 子集，不能從 rooms 數）。
+  //   server 計數不在時（舊 server / all 模式）退回從 rooms 自算。
+  const _srvCounts = source === 'oracle' ? oracleRoomsCounts : firebaseRoomsCounts;
+  let counts;
+  if (_srvCounts) { counts = _srvCounts; }
+  else { counts = { lobby: 0, playing: 0, ended: 0 }; for (const r of rooms) counts[r.status] = (counts[r.status] || 0) + 1; }
+  const totalCount = (counts.lobby || 0) + (counts.playing || 0) + (counts.ended || 0);
   const filtered = statusFilter === 'all' ? rooms : rooms.filter(r => r.status === statusFilter);
   const sourceLabel = source === 'oracle' ? '🎮 Oracle 對戰' : '🔥 Firebase 對戰';
   // v0.90: Firebase rooms 也可刪 — 解決 zombie ended 房無法清理問題
@@ -908,9 +921,9 @@ function renderRoomsTab(el, source, rooms) {
     </div>
   ` : '';
   el.innerHTML = `
-    <h2>${sourceLabel} <span class="small">(共 ${rooms.length})</span></h2>
+    <h2>${sourceLabel} <span class="small">(共 ${totalCount})</span></h2>
     <div class="toolbar">
-      <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${rooms.length})</span>
+      <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${totalCount})</span>
       <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${counts.playing || 0})</span>
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${counts.lobby || 0})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
@@ -971,8 +984,9 @@ window.setStatusFilter = function(s, source) {
   statusFilter = s;
   if (source === 'oracle') oracleRoomsPage = 1;  // v5.276: 切 filter 重置頁碼
   else firebaseRoomsPage = 1;
-  if (source === 'oracle') renderRoomsTab(document.getElementById('tab-oracle-rooms'), 'oracle', oracleRoomsCache);
-  else renderRoomsTab(document.getElementById('tab-firebase-rooms'), 'firebase', firebaseRoomsCache);
+  // v1.18: 切換 status 分頁 → 重新抓「該 status」的房間（每頁各自載入，不再一次撈全部）。
+  if (source === 'oracle') loadOracleRooms();
+  else loadFirebaseRooms();
 };
 
 window.filterRoomsBySearch = function(q, source) {

@@ -416,8 +416,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
   // ── Oracle MongoDB ────────────────────────────────────────────────
   app.get('/api/admin/oracle/rooms', requireFirebaseAdmin, async (req, res) => {
     try {
+      // v1.18: 接受 ?status=playing|lobby|ended → 只撈該 status 子集（admin 進行中分頁 Refresh 加速）。
+      const _sq = (req.query.status || '').trim();
+      const _filter = (_sq && _sq !== 'all') ? { status: _sq } : {};
       const rooms = await db.collection('rooms')
-        .find({}, {
+        .find(_filter, {
           projection: {
             _id: 1, roomName: 1, hostName: 1, hostUid: 1, status: 1,
             seats: 1, memberUids: 1, createdAt: 1, updatedAt: 1,
@@ -446,7 +449,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
       // v0.6: 用 adminAuth.getUsers() 直接 enrich 每個 seat.uid 的 email / isAnonymous
       await enrichSeats(rooms);
-      res.json({ rooms });
+      // v1.18: 永遠回全量三狀態計數（cheap countDocuments，與 rooms 子集無關），供 toolbar 顯示。
+      let counts = { lobby: 0, playing: 0, ended: 0 };
+      try {
+        const [lobby, playing, ended] = await Promise.all([
+          db.collection('rooms').countDocuments({ status: 'lobby' }),
+          db.collection('rooms').countDocuments({ status: 'playing' }),
+          db.collection('rooms').countDocuments({ status: 'ended' }),
+        ]);
+        counts = { lobby, playing, ended };
+      } catch (e) { console.warn('[admin] oracle counts failed:', e.message); }
+      res.json({ rooms, counts });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -502,8 +515,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
   // ── Firebase Firestore ────────────────────────────────────────────
   app.get('/api/admin/firebase/rooms', requireFirebaseAdmin, requireFb, async (req, res) => {
     try {
-      const snap = await adminDb.collection('rooms')
-        .orderBy('updatedAt', 'desc').get(); // v0.20: 拿掉 limit 300 — admin server-side firebase-admin SDK 不吃 client quota
+      // v1.18: ?status= 過濾。帶 where 時不加 orderBy（免複合索引），改 JS 排序。
+      const _sq = (req.query.status || '').trim();
+      const snap = (_sq && _sq !== 'all')
+        ? await adminDb.collection('rooms').where('status', '==', _sq).get()
+        : await adminDb.collection('rooms').orderBy('updatedAt', 'desc').get(); // v0.20: 拿掉 limit 300 — admin SDK 不吃 client quota
       const rooms = snap.docs.map(d => {
         const data = d.data();
         const r = {
@@ -515,6 +531,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         summarizeRoom(r);
         return r;
       });
+      // v1.18: status 過濾時沒帶 orderBy → JS 補 updatedAt desc 排序。
+      if (_sq && _sq !== 'all') rooms.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
       // v0.3: 並行用 count() aggregation 拿每房間訊息數（subcollection）
       try {
         await Promise.all(rooms.map(async r => {
@@ -528,7 +546,17 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
       // v0.6: 用 adminAuth.getUsers() 直接 enrich 每個 seat.uid 的 email / isAnonymous
       await enrichSeats(rooms);
-      res.json({ rooms });
+      // v1.18: 永遠回全量三狀態計數（cheap count() aggregation），供 toolbar 顯示。
+      let counts = { lobby: 0, playing: 0, ended: 0 };
+      try {
+        const [l, p, e2] = await Promise.all([
+          adminDb.collection('rooms').where('status', '==', 'lobby').count().get(),
+          adminDb.collection('rooms').where('status', '==', 'playing').count().get(),
+          adminDb.collection('rooms').where('status', '==', 'ended').count().get(),
+        ]);
+        counts = { lobby: l.data().count, playing: p.data().count, ended: e2.data().count };
+      } catch (e) { console.warn('[admin] firebase counts failed:', e.message); }
+      res.json({ rooms, counts });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
