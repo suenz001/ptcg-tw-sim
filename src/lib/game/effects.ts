@@ -4147,6 +4147,48 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   }],
 ]);
 
+// ════════════════════════════════════════════════════════════════════════════
+// v5.494 INHERENT_RETALIATION — 寶可夢「卡面內建」受傷反擊（非特性／非道具／非能量）
+//   目前唯一：陳舊的頭蓋化石（化石作為 HP60【無】屬性【基礎】寶可夢放置於場上）。
+//   卡面：「這隻寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，在使用招式的寶可夢
+//          身上放置 3 個傷害指示物。」（= 30 傷害）
+//   ★ 與 PASSIVE_RETALIATION 差異：化石**無 abilities 陣列**，反擊主迴圈只掃
+//      defenderCard.abilities → 永遠抓不到 → 玩家回報「沒在攻擊方放 3 個指示物」。
+//      故必須**按卡名**獨立判定（key = 卡名 → counters）。
+//   ★ 非特性 → **不受「光之翼」**（不受對手特性效果影響）阻擋；光之翼只擋 ability 型反擊。
+//   ★ 依 PTCG 規則「受到傷害時」**含 KO 情境**（同龐克頭盔 v5.080）→ KO/非KO 兩分支都套。
+//   ★ 卡面「在戰鬥場」→ 只在化石位於戰鬥場（active）受傷時觸發；備戰被狙擊不觸發
+//      （三處呼叫點都在防守方 active 受招式傷害的路徑，天然符合）。
+// ════════════════════════════════════════════════════════════════════════════
+export const INHERENT_RETALIATION = new Map<string, number>([
+  ['陳舊的頭蓋化石', 3], // 在攻擊方放 3 個傷害指示物（30 傷害）
+]);
+
+/**
+ * 套用「卡面內建受傷反擊」：依防守方卡名在 INHERENT_RETALIATION 查 counters，
+ * 於攻擊方戰鬥位放置該數量傷害指示物。
+ * @param defenderCard 防守方（受傷化石）的卡片 — **由呼叫端傳入**，不從 state 讀 active，
+ *        因為 KO 分支呼叫時化石可能已被移除（active=null）。
+ * 反殺攻擊方（30 傷害剛好打死攻擊方）沿用既有 sanityKOSweep / 反彈擊倒檢查，與尖刺盔甲同。
+ */
+export function applyInherentRetaliation(
+  state: GameState, dIdx: 0 | 1, defenderCard: Card | null | undefined, pool: Map<string, Card>,
+): GameState {
+  const counters = defenderCard ? INHERENT_RETALIATION.get(defenderCard.name) : undefined;
+  if (!counters) return state;
+  const aIdx = (1 - dIdx) as 0 | 1;
+  if (!state.players[aIdx].active) return state; // 攻擊方無戰鬥寶可夢（理論上不會，保險）
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const dmg = counters * 10;
+  players[aIdx] = {
+    ...players[aIdx],
+    active: { ...players[aIdx].active!, damage: players[aIdx].active!.damage + dmg },
+  };
+  const attName = pool.get(players[aIdx].active!.cardId)?.name ?? '攻擊方';
+  return addLog({ ...state, players },
+    `${defenderCard!.name}：在 ${attName} 身上放置 ${counters} 個傷害指示物（${dmg} 傷害）`, dIdx);
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 31 H10 — 更多通用訓練家（Item + Supporter）
 // ══════════════════════════════════════════════════════════════════════════════
@@ -7021,6 +7063,8 @@ export function fireDefenderOnDamaged(
       if (fnOD) s = fnOD(s, dIdx, aIdx, pool, defCard);
     }
   }
+  // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石等，無 abilities，按卡名；非特性不受光之翼擋）。
+  if (baseDamage > 0) s = applyInherentRetaliation(s, dIdx, defCard, pool);
   // 3b. 怨恨旋渦 field-wide（自方戰鬥場為【惡】時掃備戰）
   if (!attackerHasMagicalShine) {
     const da = s.players[dIdx].active;

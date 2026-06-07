@@ -58,6 +58,7 @@ import {
   ON_PLAY_FROM_HAND_ABILITIES,
   ON_EVOLVE_FROM_HAND_ABILITIES,
   wouldNeutralCenterBlock,  // v3.67 中立中心 stadium damage block
+  applyInherentRetaliation,  // v5.494 化石卡面內建受傷反擊
 } from './effects';
 import {
   hasIronTracksDualCore,
@@ -5404,6 +5405,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
         }
       }
+      // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石 — 無 abilities，按卡名）。
+      //   「受到傷害時」含 KO 情境 → holder 被 KO 仍要對攻擊方放指示物（同龐克頭盔 v5.080）。
+      //   傳 defenderCard（active 此時可能已移除）；反殺攻擊方交 sanityKOSweep/反彈檢查。
+      if (baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool);
       // v5.156：SPECIAL_ENERGY_ON_DAMAGED 補 KO 觸發（鏡射 v5.080 / v5.081 模式）
       //   Wilson 截圖確認：扣殺能量 holder 被 KO 時漏觸發 — 卡面「受到對手寶可夢
       //   招式的傷害時」依 PTCG 規則含 KO 情境（卡面無「未昏厥」限制）。
@@ -5782,6 +5787,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         `光之翼：${attackerCard?.name ?? '?'} 不受對手特性效果影響（${defenderCard.abilities.map(a => a.name).join('、')} 無效）`,
         aIdx);
     }
+    // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石 — 非 KO 分支；攻擊方反殺交 sanityKOSweep）。
+    if (!_v5113RanInKoBranch && baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool);
 
     // v2.992 PASSIVE_ON_DAMAGED（火箭隊的瓦斯彈 警備濁霧）— 受傷觸發 deck search
     // v5.113 KO 重複觸發修：v5.081 KO branch L4994 已跑過，這裡共用版加 KO gate

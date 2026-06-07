@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.494</span> 修正「陳舊的頭蓋化石」受傷反擊：化石作為寶可夢在戰鬥場受到對手寶可夢招式的傷害時，現在會正確地在使用招式的寶可夢身上放置 3 個傷害指示物（先前完全沒觸發）。同步檢查同類「受傷反擊」卡片（龐克頭盔、奢華炸彈、凸凸頭盔、扣殺能量、豪邁炸彈）皆已正常，本次僅化石漏實裝。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.493</span> 新增網站推薦預組「吼鯨王ex」（水系，60 張），排在「超級龍頭地鼠」下方。</summary>
       </details>
 
