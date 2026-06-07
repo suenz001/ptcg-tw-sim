@@ -1,7 +1,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
-import { canApplyAttackEffectToTarget, flipCoinsWithLog } from '../../effects';
+import { canApplyAttackEffectToTarget, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
   // v5.x: 改委派給 effects.ts 的中央 flipCoinsWithLog（同步設 coinFlippedThisAttack
@@ -67,19 +67,16 @@ function damageAllOppByCoin(
     s = rco.state;
     const isHeads = rco.heads === 1;
     if (!isHeads) continue;
-    // v4.57 A1 修：caller 虛無歸零卡面是「150 點傷害」(attack-damage)，非 attack-effect。
-    //   原 v4.53 用 attack-effect 會誤套薄霧/抵抗之幕/皇帝之勢/全能硬殼/硬岩 (這些只擋 effect)。
-    //   改 'attack-damage' → active 不擋（直接受擊），bench 走球形盾牌/藏隱/深度下潛/羽毛化石/花之帷幔/太晶/中立中心
+    // v5.470：改走中央 dealAttackDamageToTarget（免疫+弱抗+道具+擊倒一次到位）。
+    //   卡面「各受到150點傷害，[在備戰區不計算弱點・抵抗力]」→ 戰鬥場(active)計弱點×2/抵抗、備戰 noWeakness。
+    //   原 damageOneNoKo 為 raw（不算弱抗、不 KO）→ 戰鬥場漏弱點（玩家回報虛無歸零沒算對手戰鬥場弱點）。
+    //   免疫(薄霧/硬岩只擋 effect、太晶/神秘石居/球形盾牌/花之帷幔/對戰圓形等)由 helper kind='attack-damage' 內部 canApplyEffectToTarget 統一處理。
     if (pool) {
-      const tCard = pool.get(t.cardId);
       const _coinIsBench = t.iid !== s.players[dIdx].active?.iid;
-      const guard = canApplyEffectToTarget(s, aIdx, t, tCard, 'attack-damage', pool, { isBench: _coinIsBench });
-      if (guard.blocked) {
-        s = addLog(s, `${label}：${tCard?.name ?? '?'}｜${guard.reason}（不受傷害）`, aIdx);
-        continue;
-      }
+      s = dealAttackDamageToTarget(s, aIdx, t.iid, amount, pool, { kind: 'attack-damage', label, noWeakness: _coinIsBench });
+    } else {
+      s = damageOneNoKo(s, dIdx, t.iid, amount);
     }
-    s = damageOneNoKo(s, dIdx, t.iid, amount);
   }
   return addLog(s, `${label}：正面且未被擋下的對手寶可夢各受到 ${amount} 傷害`, aIdx);
 }

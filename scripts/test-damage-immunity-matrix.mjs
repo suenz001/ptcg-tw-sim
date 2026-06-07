@@ -119,6 +119,31 @@ for (const r of RESOLVERS) {
   check('snipe-variable / 弱火 bench 不計弱抗', bd === 180, `應 180(flat)，得 ${bd}`);
 }
 
+// v5.470 虛無歸零（超級基格爾德ex 擲幣多目標 regPost）：改走中央 dealAttackDamageToTarget
+//   → 戰鬥場(active)計弱點×2、備戰不計弱抗。原 damageOneNoKo 為 raw 漏戰鬥場弱點(玩家回報)。
+{
+  const GIGA = '18023', WEAK_FT = '14052'; // 超級雷電獸ex 330HP 弱Fighting
+  const FIGHT = eid('基本【鬥】能量');
+  const fe = () => en(FIGHT);
+  const wa = inst(WEAK_FT), wb = inst(WEAK_FT);
+  let st = {
+    phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, turnCount: 3,
+    pendingPrizes: [0, 0], log: [], pendingSelection: null, activeStadium: null,
+    players: [
+      { active: inst(GIGA, [fe(), fe(), fe(), fe(), fe()]), bench: [], hand: [], deck: Array.from({ length: 10 }, () => en(DARK)), discard: [], prizes: Array.from({ length: 6 }, () => en(DARK)), setupDone: true, name: 'P0' },
+      { active: wa, bench: [wb], hand: [], deck: Array.from({ length: 10 }, () => en(DARK)), discard: [], prizes: Array.from({ length: 6 }, () => en(DARK)), setupDone: true, name: 'P1' },
+    ],
+  };
+  const gAtk = pool.get(GIGA).attacks.findIndex((a) => a.name === '虛無歸零');
+  const _rng = Math.random; Math.random = () => 0; // 強制全正面
+  st = applyAction(st, { type: 'ATTACK', attackIndex: gAtk }, pool);
+  Math.random = _rng;
+  const da = st.players[1].active;
+  check('虛無歸零 / 戰鬥場弱Fighting ×2 (150×2=300)', !!da && da.damage === 300, `應 300，得 ${da?.damage}`);
+  const bd = st.players[1].bench.find((c) => c.iid === wb.iid)?.damage;
+  check('虛無歸零 / 備戰弱Fighting 不計弱抗 (150 flat)', bd === 150, `應 150(flat)，得 ${bd}`);
+}
+
 console.log(`\n傷害免疫矩陣：PASS ${pass} / FAIL ${fails.length}`);
 for (const f of fails) console.log('  ❌', f);
 if (fails.length > 0) { console.log('\n有招式漏算免疫/弱點！'); process.exit(1); }
