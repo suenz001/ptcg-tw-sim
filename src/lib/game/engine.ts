@@ -6398,6 +6398,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           `冰冷之帳：${players[i].name} 有寶可夢被擊倒，${winner.name} 將取得 ${owed} 張獎賞卡。`,
           null);
         state = addPendingPrize(state, winnerIdx, owed, pool);
+        // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
+        //   後續 checkup 區塊(力之沙漏/道具自棄)與 finalize(clearTurnFlags) 的 {...state, players}
+        //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
+        players[0] = state.players[0]; players[1] = state.players[1];
       }
       // 勝利條件：任一方戰鬥寶可夢被擊倒 + 備戰已空 → 對手勝
       for (const i of [0, 1] as const) {
@@ -6496,6 +6500,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
             `揚沙：${players[oppIdx].name} 有寶可夢被擊倒，${players[ownerIdx].name} 將取得 ${sandstormPrizes} 張獎賞卡。`,
             ownerIdx);
           state = addPendingPrize(state, ownerIdx, sandstormPrizes, pool);
+        // v5.498：addPendingPrize 把獎賞發在 state.players，但本地 players 變數會 stale；
+        //   後續 checkup 區塊(力之沙漏/道具自棄)與 finalize(clearTurnFlags) 的 {...state, players}
+        //   會用 stale players 覆蓋掉剛發的獎賞 → 玩家「冰冷之帳/揚沙 KO 對手卻沒拿到獎賞」。同步回來。
+        players[0] = state.players[0]; players[1] = state.players[1];
         }
         if (sandstormActiveDied && players[oppIdx].bench.length === 0 && players[oppIdx].active === null) {
           return {
