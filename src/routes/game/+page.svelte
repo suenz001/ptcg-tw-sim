@@ -17,6 +17,7 @@
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
     canRetreat, getRetreatBlockReason, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
+    computeActiveRetreatCostFor,
     getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
     tryAdvanceToPlaying,
@@ -3566,147 +3567,11 @@
     return p > 0.5 ? '#2c7a3c' : p > 0.25 ? '#e0a020' : '#c00';
   }
   function retreatCostOf(inst: CardInstance): number {
-    const card = getCard(inst.cardId);
-    let cost = card?.retreatCost?.length ?? 0;
-    // v3.20 多重轉接：iterate 所有道具
-    const allTools = [
-      ...(inst.toolAttached ? [inst.toolAttached] : []),
-      ...(inst.extraTools ?? []),
-    ];
-    // v5.084 阻礙之塔 gate — 道具失效時不套用任何 TOOL_RETREAT_MOD（鏡射 engine.ts L7104 / L7269）
-    const stadiumNameRetreatT = game?.activeStadium ? getCard(game.activeStadium.cardId)?.name : undefined;
-    const toolsJammedR = stadiumNameRetreatT ? JAMMING_TOWER_STADIUMS.has(stadiumNameRetreatT) : false;
-    const hasBalloon = !toolsJammedR && allTools.some(t => getCard(t.cardId)?.name === '氣球');
-    if (hasBalloon) cost = Math.max(0, cost - 2);
-    // v5.084：重力之玉（TOOL_BOTH_SIDES_RETREAT_PLUS）— 每張獨立貢獻 +1
-    //   鏡射 engine.ts L7187-7196；阻礙之塔時失效。
-    //   v5.086：原 v5.084 `boolean || boolean → +1` 違反卡面 — 「附有這張卡的寶可夢…」
-    //     是每張卡獨立計算。雙方各 1 張應 +2，玩家回報。改 per-instance count 累加。
-    if (!toolsJammedR && game) {
-      // 找撤退者所屬 owner（通常 inst 是自己 active，但保險起見從場上實體查）
-      let ownerIdx: 0 | 1 = 0;
-      if (game.players[1].active?.iid === inst.iid) ownerIdx = 1;
-      const oppIdx = (1 - ownerIdx) as 0 | 1;
-      let gravityCountUI = 0;
-      // 自身上的所有重力之玉
-      for (const t of allTools) {
-        if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? '')) gravityCountUI++;
-      }
-      // 對手 active 上的所有重力之玉
-      const oppAct = game.players[oppIdx].active;
-      if (oppAct) {
-        const oppTools = [
-          ...(oppAct.toolAttached ? [oppAct.toolAttached] : []),
-          ...(oppAct.extraTools ?? []),
-        ];
-        for (const t of oppTools) {
-          if (TOOL_BOTH_SIDES_RETREAT_PLUS.has(getCard(t.cardId)?.name ?? '')) gravityCountUI++;
-        }
-      }
-      cost += gravityCountUI;
-    }
-    // v2.96：天空徑線（拉帝亞斯ex）— 自己場上有拉帝亞斯ex 時基礎寶可夢撤退 0
-    // 鏡射 engine canRetreat 的 hook；UI 按鈕顯示「撤退（0⚡）」
-    if (cost > 0 && card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && myPlayer) {
-      const allMy = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench];
-      // v5.472：天空徑線 holder 被鐵荊棘ex 初始化消除時失效（v5.471 只補了後段硬覆蓋、漏這個早期段 → 顯示仍 0）
-      const initActiveSkyE = game ? game.players.some(pl => pl.active && getCard(pl.active.cardId)?.abilities?.some(a => a.name === '初始化')) : false;
-      const hasSkyPath = allMy.some(c => {
-        const c2 = getCard(c.cardId);
-        return c2?.abilities?.some(a => a.name === '天空徑線')
-          && !(initActiveSkyE && isRulePokemon(c2) && !((c2.tags ?? []).includes('未來')));
-      });
-      if (hasSkyPath) cost = 0;
-    }
-    // v2.117 N的城堡（Stadium）— 雙方場上所有「N的」寶可夢撤退 0
-    if (cost > 0 && card?.name?.startsWith('N的') && game?.activeStadium) {
-      const stadiumName = getCard(game.activeStadium.cardId)?.name;
-      if (stadiumName === 'N的城堡') cost = 0;
-    }
-    // v5.084：樂園度假地（Stadium）— 可達鴨撤退 -1（鏡射 engine.ts L7274）
-    if (cost > 0 && card?.name === '可達鴨' && game?.activeStadium) {
-      const stadiumName = getCard(game.activeStadium.cardId)?.name;
-      if (stadiumName === '樂園度假地') cost = Math.max(0, cost - 1);
-    }
-    // v5.075：補鏡射 SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量 等）
-    //   engine RETREAT handler L2458 + getRetreatCost (v5.075 補) 都套了，
-    //   但這個 UI 顯示 helper 之前漏 → 玩家撤退按鈕顯示 cost 不正確（誤判「磁鐵【鋼】能量沒生效」）
-    if (card) {
-      for (const e of inst.energyAttached) {
-        const ec = getCard(e.cardId);
-        if (!ec) continue;
-        const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
-        if (!fn) continue;
-        const r = fn(card, inst);
-        if (r.zero) { cost = 0; break; }
-        if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
-      }
-    }
-    // ── v4.916：鏡射 engine.ts ABILITY_RETREAT_MOD（撤退費修飾特性）──────────────
-    // 修玩家回報「咒縛之炎」沒生效 — root cause 是這個 UI 顯示 helper 沒鏡射
-    // engine 的 ABILITY_RETREAT_MOD 邏輯：button 顯示舊 cost（如「撤退 0⚡」）但 engine
-    // 實際撤退時要求 +1 能量，玩家按按鈕沒反應 → 誤判「特性沒生效」。
-    // 鏡射項目：一身輕 / 溶化流動 / 鋼之橋 / 森林秘道 / 大網 / 咒縛之炎
-    // 鏡射來源：engine.ts applyAbilityRetreatMod (line 6608)
-    if (card && game) {
-      // 找撤退者擁有者 idx（通常是 myIdx 但保險起見從場上實體查）
-      let retreatingOwnerIdx: 0 | 1 = 0;
-      if (game.players[1].active?.iid === inst.iid) retreatingOwnerIdx = 1;
-      let zero = false;
-      let totalReduce = 0;
-      let totalAdd = 0;
-      const stadiumNameRetreat = game.activeStadium ? getCard(game.activeStadium.cardId)?.name : undefined;
-      const colorlessBlocked = stadiumNameRetreat === '火箭隊的監視塔';
-      for (const ownerIdx of [0, 1] as const) {
-        const player = game.players[ownerIdx];
-        const allInstances: Array<{ inst: CardInstance; position: 'active' | 'bench' }> = [];
-        if (player.active) allInstances.push({ inst: player.active, position: 'active' });
-        for (const b of player.bench) allInstances.push({ inst: b, position: 'bench' });
-        for (const { inst: holderInst, position } of allInstances) {
-          const holderCard = getCard(holderInst.cardId);
-          if (!holderCard?.abilities) continue;
-          // 火箭隊監視塔擋 Colorless 寶可夢特性
-          if (colorlessBlocked && holderCard.pokemonType === 'Colorless') continue;
-          // v5.471：鐵荊棘ex 初始化消除規則寶可夢(未來除外)特性 → 撤退費修飾特性失效（鏡射 engine）
-          if (game.players.some(pl => pl.active && getCard(pl.active.cardId)?.abilities?.some(a => a.name === '初始化'))
-              && isRulePokemon(holderCard) && !((holderCard.tags ?? []).includes('未來'))) continue;
-          for (const ab of holderCard.abilities) {
-            const fn = ABILITY_RETREAT_MOD.get(ab.name);
-            if (!fn) continue;
-            const r = fn({
-              holderInst, holderCard, holderPosition: position, holderOwnerIdx: ownerIdx,
-              retreatingInst: inst, retreatingCard: card,
-              retreatingOwnerIdx,
-              state: game, pool,
-              countEnergy: (i) => countEnergy(i, pool) as unknown as Map<string, number>,
-            });
-            if (r.zero) zero = true;
-            if (r.reduceBy) totalReduce += r.reduceBy;
-            if (r.addBy) totalAdd += r.addBy;
-          }
-        }
-      }
-      if (zero) cost = 0;
-      cost = Math.max(0, cost - totalReduce);
-      cost = cost + totalAdd;
-    }
-    // v5.461：天空徑線「完全消除」最後硬覆蓋 — 蓋過咒縛之炎/鼓擊/重力之玉等 +撤退效果。
-    //   鏡射 engine getRetreatCost L8010（先前 UI 只在前段早套用、被後面 totalAdd 加回 → 顯示非 0）。
-    //   以撤退者「擁有者」場上是否有天空徑線判定（基礎寶可夢免費撤退）。
-    if (card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && game) {
-      const ownerOfInst = game.players[1].active?.iid === inst.iid
-        || game.players[1].bench.some(b => b.iid === inst.iid)
-        ? game.players[1] : game.players[0];
-      const ownAll = [...(ownerOfInst.active ? [ownerOfInst.active] : []), ...ownerOfInst.bench];
-      // v5.471：天空徑線 holder 被鐵荊棘ex 初始化消除時失效（鏡射 engine isAbilityHolderEffective）
-      const initActiveSky = game.players.some(pl => pl.active && getCard(pl.active.cardId)?.abilities?.some(a => a.name === '初始化'));
-      if (ownAll.some(cc => {
-        const c2 = getCard(cc.cardId);
-        return c2?.abilities?.some(a => a.name === '天空徑線')
-          && !(initActiveSky && isRulePokemon(c2) && !((c2.tags ?? []).includes('未來')));
-      })) cost = 0;
-    }
-    return cost;
+    // v5.473：撤退費收斂——委派 engine 中央 computeActiveRetreatCostFor（與實際撤退 / getRetreatCost
+    //   同一來源，含道具 / 特殊能量 / 重力之玉 / 天空徑線(初始化消除) / 競技場 / ABILITY_RETREAT_MOD / 鼓擊；
+    //   UI 不再各自重算，免漏修）。retreatCostOf 4 處 call site 一律以 myPlayer.active 呼叫，故用 myIdx。
+    if (!game) return getCard(inst.cardId)?.retreatCost?.length ?? 0;
+    return computeActiveRetreatCostFor(game, myIdx as 0 | 1, pool);
   }
   // v5.020 桌墊版 — 列出 inst 身上所有 attached cards（能量 / 道具 / 進化堆）扁平陣列。
   // 用於 .att-card-stack 重疊呈現；kind 影響 border 顏色區分種類。
