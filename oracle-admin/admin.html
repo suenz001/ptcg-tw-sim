@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.19</title>
+<title>PTCG Oracle Admin v1.20</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.19</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.20</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -869,12 +869,16 @@ async function loadOracleRooms() {
   if (!oracleRoomsCache.length) el.innerHTML = '<h2>🎮 Oracle 對戰</h2><div class="empty">Loading…</div>';
   // v1.18: 只抓「當前 status 分頁」的房間（如停在「進行中」按 Refresh 不再撈全部已結束房 → 快很多）。
   const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
-  // v1.19: 與卡片索引/標籤並行載入（detectMainPokemon 主力打手偵測需要），皆有 promise 快取只抓一次。
-  const [data] = await Promise.all([api('/api/admin/oracle/rooms' + qs), ensureCardIndex(), ensureCardTags()]);
+  // v1.20: 只 await 房間（status 過濾，快）→ 立即渲染，恢復 v1.18 的快速 refresh。
+  //   卡片索引/標籤改「背景載入」，好了再重畫補上主力打手 badge（已快取則 .then 立即跑、badge 同步出現）。
+  const data = await api('/api/admin/oracle/rooms' + qs);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   oracleRoomsCache = data.rooms;
   if (data.counts) oracleRoomsCounts = data.counts;  // 全量三狀態計數，toolbar 用
   renderRoomsTab(el, 'oracle', oracleRoomsCache);
+  Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
+    if (currentTab === 'oracle-rooms') renderRoomsTab(el, 'oracle', oracleRoomsCache); // 補主力打手 ⚔️
+  });
 }
 
 async function loadFirebaseRooms() {
@@ -883,12 +887,15 @@ async function loadFirebaseRooms() {
   if (!firebaseRoomsCache.length) el.innerHTML = '<h2>🔥 Firebase 對戰</h2><div class="empty">Loading…</div>';
   // v1.18: 只抓當前 status 分頁的房間（同 Oracle，加速）。
   const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
-  // v1.19: 與卡片索引/標籤並行載入（主力打手偵測需要）。
-  const [data] = await Promise.all([api('/api/admin/firebase/rooms' + qs), ensureCardIndex(), ensureCardTags()]);
+  // v1.20: 只 await 房間 → 立即渲染（快），卡片索引/標籤背景載入後補 badge。
+  const data = await api('/api/admin/firebase/rooms' + qs);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   firebaseRoomsCache = data.rooms;
   if (data.counts) firebaseRoomsCounts = data.counts;
   renderRoomsTab(el, 'firebase', firebaseRoomsCache);
+  Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
+    if (currentTab === 'firebase-rooms') renderRoomsTab(el, 'firebase', firebaseRoomsCache);
+  });
 }
 
 function renderRoomsTab(el, source, rooms) {
