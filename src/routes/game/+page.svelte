@@ -135,8 +135,10 @@
   // v5.051: 預組永遠顯示在下拉內（移除 toggle） — Android Chrome 對動態 {#if} optgroup 有 bug
   let p2Name = $state('AI 對手');
   // v3.75：本機/AI 模式先後攻偏好（贏擲幣時生效；AI 模式直接生效）
-  let p1FirstPref = $state<'random' | 'first' | 'second'>('random');
-  let p2FirstPref = $state<'random' | 'first' | 'second'>('random');
+  let p1FirstPref = $state<'random' | 'first' | 'second' | 'opponent'>(_readLastFirstPref());
+  let p2FirstPref = $state<'random' | 'first' | 'second' | 'opponent'>('random');
+  // v5.476：本機/我方先後攻偏好變更時持久化（線上由 seat radio onchange 存）
+  $effect(() => { _saveFirstPref(p1FirstPref); });
   /** AI 控制哪個玩家（null = 無 AI） */
   let aiPlayerIndex = $state<0 | 1 | null>(1);
   /** AI 是否正在思考（防止連擊） */
@@ -212,6 +214,15 @@
   let cpSuccess = $state(false);
   let cpLoading = $state(false);
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
+  // v5.476：先後攻偏好 + 對手閒置判定時間 的記憶（採上次設定，玩家不用每次調）
+  function _readLastFirstPref(): 'random' | 'first' | 'second' | 'opponent' {
+    try { const v = localStorage.getItem('ptcg-tw-sim:lastFirstPref'); return (v === 'first' || v === 'second' || v === 'opponent' || v === 'random') ? v : 'random'; } catch { return 'random'; }
+  }
+  function _saveFirstPref(p: string) { try { localStorage.setItem('ptcg-tw-sim:lastFirstPref', p); } catch { /* ignore */ } }
+  function _readLastIdle(): number {
+    try { const v = Number(localStorage.getItem('ptcg-tw-sim:lastIdleTimeout')); return (v >= 60 && v <= 300) ? (Math.round(v / 30) * 30) : 180; } catch { return 180; }
+  }
+  function _saveIdle(s: number) { try { localStorage.setItem('ptcg-tw-sim:lastIdleTimeout', String(s)); } catch { /* ignore */ } }
   // v5.311: 載入上次的玩家名稱 / 房間名稱 (localStorage), 玩家不用每次重打
   const _lastMyName = (() => { try { return typeof localStorage !== 'undefined' ? (localStorage.getItem('ptcg-tw-sim:lastMyName') ?? '') : ''; } catch { return ''; } })();
   const _lastRoomName = (() => { try { return typeof localStorage !== 'undefined' ? (localStorage.getItem('ptcg-tw-sim:lastRoomName') ?? '') : ''; } catch { return ''; } })();
@@ -4401,6 +4412,9 @@
       // v5.003：第 4 個參數是 visible — !private 即「公開房 = true」「私密房 = false」
       roomCode = await createRoom(roomNameInput.trim(), myName.trim(), roomAllowUndoInput, !roomPrivateInput);
       amIHost = true;
+      // v5.476：套用上次記憶的先後攻偏好 + 對手閒置判定時間（房主可再調）
+      try { await setSeatFirstChoice(roomCode, _readLastFirstPref()); } catch { /* best-effort */ }
+      try { await setIdleTimeout(roomCode, _readLastIdle()); } catch { /* best-effort */ }
       onlineStep = 'room';
       startRoomSubscription();
     } catch(e: any) { onlineError = e.message ?? '建立房間失敗'; }
@@ -4415,6 +4429,8 @@
       await joinRoom(joinInput.trim(), myName.trim());
       roomCode = joinInput.trim().toUpperCase();
       amIHost = false;
+      // v5.476：套用上次記憶的先後攻偏好
+      try { await setSeatFirstChoice(roomCode, _readLastFirstPref()); } catch { /* best-effort */ }
       onlineStep = 'room';
       startRoomSubscription();
     } catch(e: any) { onlineError = e.message ?? '加入房間失敗'; }
@@ -4747,7 +4763,7 @@
     if (!p1.ready || !p2.ready) return;
 
     // v3.75：讀雙方 seat 上的先後攻偏好（贏擲幣的一方套用自己的偏好）
-    const prefs: ['random'|'first'|'second', 'random'|'first'|'second'] = [
+    const prefs: ['random'|'first'|'second'|'opponent', 'random'|'first'|'second'|'opponent'] = [
       p1.firstChoicePreference ?? 'random',
       p2.firstChoicePreference ?? 'random',
     ];
@@ -5666,6 +5682,7 @@
           <label class="first-pref-radio"><input type="radio" value="random" bind:group={p1FirstPref} /><span>🎲 隨機</span></label>
           <label class="first-pref-radio"><input type="radio" value="first" bind:group={p1FirstPref} /><span>⚡ 先攻</span></label>
           <label class="first-pref-radio"><input type="radio" value="second" bind:group={p1FirstPref} /><span>🛡️ 後攻</span></label>
+          <label class="first-pref-radio"><input type="radio" value="opponent" bind:group={p1FirstPref} /><span>🤝 對手決定</span></label>
         </div>
       </div>
       <div class="vs-badge">VS</div>
@@ -5714,6 +5731,7 @@
             <label class="first-pref-radio"><input type="radio" value="random" bind:group={p2FirstPref} /><span>🎲 隨機</span></label>
             <label class="first-pref-radio"><input type="radio" value="first" bind:group={p2FirstPref} /><span>⚡ 先攻</span></label>
             <label class="first-pref-radio"><input type="radio" value="second" bind:group={p2FirstPref} /><span>🛡️ 後攻</span></label>
+            <label class="first-pref-radio"><input type="radio" value="opponent" bind:group={p2FirstPref} /><span>🤝 對手決定</span></label>
           </div>
         {/if}
       </div>
@@ -5911,6 +5929,7 @@
               onchange={(e) => {
                 if (!roomCode) return;
                 const t = e.currentTarget as HTMLInputElement;
+                _saveIdle(Number(t.value));
                 setIdleTimeout(roomCode, Number(t.value)).catch(console.error);
               }}
             />
@@ -5991,9 +6010,10 @@
                       <!-- v3.75：先後攻偏好（只有自己看得到自己的，對手看不到） -->
                       <div class="first-pref-group lobby">
                         <div class="first-pref-label">贏擲幣時</div>
-                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="random" checked={(s.firstChoicePreference ?? 'random') === 'random'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'random').catch(console.error)} /><span>🎲 隨機</span></label>
-                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="first" checked={s.firstChoicePreference === 'first'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'first').catch(console.error)} /><span>⚡ 先攻</span></label>
-                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="second" checked={s.firstChoicePreference === 'second'} disabled={s.ready} onchange={() => roomCode && setSeatFirstChoice(roomCode, 'second').catch(console.error)} /><span>🛡️ 後攻</span></label>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="random" checked={(s.firstChoicePreference ?? 'random') === 'random'} disabled={s.ready} onchange={() => { _saveFirstPref('random'); roomCode && setSeatFirstChoice(roomCode, 'random').catch(console.error); }} /><span>🎲 隨機</span></label>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="first" checked={s.firstChoicePreference === 'first'} disabled={s.ready} onchange={() => { _saveFirstPref('first'); roomCode && setSeatFirstChoice(roomCode, 'first').catch(console.error); }} /><span>⚡ 先攻</span></label>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="second" checked={s.firstChoicePreference === 'second'} disabled={s.ready} onchange={() => { _saveFirstPref('second'); roomCode && setSeatFirstChoice(roomCode, 'second').catch(console.error); }} /><span>🛡️ 後攻</span></label>
+                        <label class="first-pref-radio"><input type="radio" name="seat-pref-{i}" value="opponent" checked={s.firstChoicePreference === 'opponent'} disabled={s.ready} onchange={() => { _saveFirstPref('opponent'); roomCode && setSeatFirstChoice(roomCode, 'opponent').catch(console.error); }} /><span>🤝 對手決定</span></label>
                       </div>
                     {:else}
                       <!-- 別人坐：只顯示狀態（v3.38：補張數警告；v5.217：補 G 標警告） -->

@@ -1699,7 +1699,10 @@ export function createGame(
     /** 直接指定先手方（AI / 本機雙人模式：玩家偏好已可直接換算為先手 idx） */
     firstPlayerOverride?: 0 | 1;
     /** 線上模式雙方偏好；coinWinner 套用自己那邊的偏好決定先攻方 */
-    firstChoicePreferences?: ['random' | 'first' | 'second', 'random' | 'first' | 'second'];
+    firstChoicePreferences?: [
+      'random' | 'first' | 'second' | 'opponent',
+      'random' | 'first' | 'second' | 'opponent',
+    ];
   }
 ): GameState {
   const p1 = emptyPlayer(spec1.name);
@@ -1757,6 +1760,15 @@ export function createGame(
     } else if (winnerPref === 'first') {
       firstPlayerIdx = coinWinnerIdx;
       appliedPref = 'first';
+    } else if (winnerPref === 'opponent') {
+      // v5.476 對手決定：贏擲幣方把先後攻決定權讓給對手(敗方)，用敗方的偏好換算。
+      //   敗方也選「對手決定」或「隨機」→ 隨機（勝方先攻；coinWinnerIdx 本就隨機，等同隨機結果）。
+      const loserIdx = (1 - coinWinnerIdx) as 0 | 1;
+      const loserPref = options?.firstChoicePreferences?.[loserIdx] ?? 'random';
+      if (loserPref === 'first') firstPlayerIdx = loserIdx;
+      else if (loserPref === 'second') firstPlayerIdx = coinWinnerIdx;
+      else firstPlayerIdx = coinWinnerIdx;
+      appliedPref = firstPlayerIdx === coinWinnerIdx ? 'first' : 'second';
     } else {
       firstPlayerIdx = coinWinnerIdx;
     }

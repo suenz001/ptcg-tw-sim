@@ -54,7 +54,7 @@ export interface Seat {
   ready: boolean;
   /** v3.75：本玩家在贏擲幣時希望先攻 / 後攻 / 隨機（對手看不到自己選什麼）。
    *  預設 'random' — 等同舊版行為。 */
-  firstChoicePreference?: 'random' | 'first' | 'second';
+  firstChoicePreference?: 'random' | 'first' | 'second' | 'opponent';
 }
 
 export interface RoomData {
@@ -398,7 +398,7 @@ export async function setSeatReady(
 /** v3.75：設定我的先後攻偏好（贏擲幣時生效；對手看不到） */
 export async function setSeatFirstChoice(
   roomCode: string,
-  choice: 'random' | 'first' | 'second',
+  choice: 'random' | 'first' | 'second' | 'opponent',
 ): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');

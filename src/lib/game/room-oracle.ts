@@ -218,7 +218,7 @@ export async function setSeatReady(roomCode: string, ready: boolean): Promise<vo
   });
 }
 
-export async function setSeatFirstChoice(roomCode: string, choice: 'random' | 'first' | 'second'): Promise<void> {
+export async function setSeatFirstChoice(roomCode: string, choice: 'random' | 'first' | 'second' | 'opponent'): Promise<void> {
   const uid = await getMyUid();
   await oracleTx(roomCode.toUpperCase(), (data) => {
     const myIdx = findMySeatIdx(data.seats, uid);
