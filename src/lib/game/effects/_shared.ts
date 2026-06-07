@@ -808,6 +808,21 @@ export function withPending(state: GameState, sel: PendingSelection): GameState 
   return { ...state, pendingSelection: sel };
 }
 
+// v5.496：牌庫搜尋型「無符合卡」的統一處理 — 仍開 deck-search 檢視 picker 讓玩家看過整副牌庫 + 重洗。
+//   依 v5.424 規則：牌庫=未知資訊→可【不選】；只要牌庫非空就開 picker，不直接略過（符合「搜尋牌庫」
+//   公開規則：對手知道你搜尋過、你重洗）。filter:'any' 顯示全牌庫、maxCount:0 僅檢視、
+//   search-to-hand-reshuffle 確認/不選後重洗（0 picks 不加手牌）。牌庫全空才略過（無可看）。
+export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: string): GameState {
+  if (state.players[idx].deck.length === 0) return addLog(state, `${label}：牌庫已空`, idx);
+  const s = addLog(state, `${label}：牌庫無符合卡，檢視牌庫後重洗`, idx);
+  return withPending(s, {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'any', minCount: 0, maxCount: 0,
+    effectKey: 'search-to-hand-reshuffle',
+    params: { label: `${label}（檢視牌庫）` },
+  });
+}
+
 /**
  * 當寶可夢離開戰鬥場（撤退 / 被切換 / 被換出）時要清掉的旗標與狀態。
  *

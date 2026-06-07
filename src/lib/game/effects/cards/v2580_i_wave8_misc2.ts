@@ -26,6 +26,7 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';
 import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 
@@ -401,7 +402,7 @@ regPost('洛托姆|洛托呼喚', (state, aIdx, pool) => {
     })
     .map(c => c.iid);
   if (lotomIids.length === 0) {
-    return addLog(state, '洛托呼喚：牌庫中無「洛托姆」寶可夢', aIdx);
+    return openDeckViewReshuffle(state, aIdx, '洛托呼喚'); // v5.496
   }
   const max = Math.min(benchSpace, lotomIids.length);
   const s = addLog(state, `洛托呼喚：從牌庫挑 0~${max} 張「洛托姆」寶可夢放備戰`, aIdx);

@@ -11,6 +11,7 @@
 
 import type { CardInstance, SpecialCondition } from '../../types';
 import { getOwnBenchLimit } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';
 import {
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS,
@@ -50,9 +51,16 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
     return addLog(st, '感應【超】能量：備戰區已滿，略過搜尋', idx);
   }
   // 牌庫要有卡
-  const hasPsychicBasic = p.deck.length > 0;
-  if (!hasPsychicBasic) {
-    return addLog(st, '感應【超】能量：牌庫沒有基礎【超】寶可夢', idx);
+  if (p.deck.length === 0) {
+    return addLog(st, '感應【超】能量：牌庫已空', idx);
+  }
+  // v5.496：牌庫無基礎【超】寶可夢 → 仍開檢視 picker 讓玩家看過牌庫 + 重洗（可【不選】）。
+  const psyCand = p.deck.filter(c => {
+    const cc = pool.get(c.cardId);
+    return cc?.supertype === 'Pokemon' && !cc.evolvesFrom && cc.pokemonType === 'Psychic';
+  });
+  if (psyCand.length === 0) {
+    return openDeckViewReshuffle(st, idx, '感應【超】能量');
   }
   const takeMax = Math.min(2, benchSlots);
   const s = addLog(st, `感應【超】能量：從牌庫選至多 ${takeMax} 隻基礎【超】寶可夢到備戰區`, idx);

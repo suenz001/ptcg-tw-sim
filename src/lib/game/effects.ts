@@ -20,6 +20,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
+import { openDeckViewReshuffle } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -10530,7 +10531,7 @@ function deckSameNameBenchPost(max: number, cardName: string, label: string): At
     const limit = getOwnBenchLimit(state, aIdx, pool);
     if (p.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
     const cand = p.deck.filter(c => pool.get(c.cardId)?.name === cardName);
-    if (cand.length === 0) return addLog(state, `${label}：牌庫無「${cardName}」`, aIdx);
+    if (cand.length === 0) return openDeckViewReshuffle(state, aIdx, label); // v5.496：仍開檢視 picker
     const slots = Math.min(max, limit - p.bench.length, cand.length);
     const s = addLog(state, `${label}：從牌庫選最多 ${slots} 張「${cardName}」放備戰`, aIdx);
     return withPending(s, {
@@ -10861,7 +10862,7 @@ function deckEnergyAttachSelfPost(typeFilter: EnergyType | null, label: string):
       if (typeFilter && !energyMatchesType(card, typeFilter as EnergyType)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
-    if (cand.length === 0) return addLog(state, `${label}：牌庫無符合的基本能量`, aIdx);
+    if (cand.length === 0) return openDeckViewReshuffle(state, aIdx, label); // v5.496
     const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
     const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於自己`, aIdx);
     return withPending(s, {

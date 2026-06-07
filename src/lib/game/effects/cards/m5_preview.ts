@@ -63,6 +63,7 @@ import {
   recordOppKO,
   addPendingPrize,
   regG} from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
   statusPost,
@@ -532,7 +533,7 @@ regPost('燈火幽靈|亮光增長', (state, aIdx, pool) => {
   // 預先 filter 牌庫中「燈火幽靈」可選候選
   const candidates = p.deck.filter(c => pool.get(c.cardId)?.name === '燈火幽靈');
   if (candidates.length === 0) {
-    return addLog(state, '增光：牌庫無「燈火幽靈」', aIdx);
+    return openDeckViewReshuffle(state, aIdx, '增光'); // v5.496：仍開檢視 picker + 重洗
   }
   // v5.389：bench-cap — 放備戰受備戰上限約束（卡面「最多 3 張」但不能超過備戰上限）。
   //   原本 maxN 沒減剩餘空位 → 只有 1 空位卻能選 3 → 撐爆備戰 → 誤觸「零之大空洞效果失去」清除。

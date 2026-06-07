@@ -10,6 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';
 import { joinCardNames } from '../_shared';
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
@@ -384,8 +385,7 @@ function deckSearchAttachToBenchPost(max: number, label: string, type?: string):
     }).length;
     const realMax = Math.min(max, validCount);
     if (realMax === 0) {
-      // 牌庫無對應能量 → 仍須重洗（卡面：「並且重洗牌庫」）
-      return updatePlayer(addLog(state, `${label}：牌庫無對應基本能量；重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      return openDeckViewReshuffle(state, aIdx, label); // v5.496：仍開檢視 picker（內含重洗）
     }
     // 篩選 filter 用 BasicEnergy 或細項類型；engine 若需 type filter，picker 上自行篩
     return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（重洗後挑選；附到 1 隻備戰）`, aIdx), {
@@ -464,7 +464,7 @@ export function deckSearchAttachToAnyPost(max: number, label: string, type?: str
     }).length;
     const realMax = Math.min(max, validCount);
     if (realMax === 0) {
-      return updatePlayer(addLog(state, `${label}：牌庫無對應基本能量；重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      return openDeckViewReshuffle(state, aIdx, label); // v5.496
     }
     return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（附到自方任一寶可夢；重洗）`, aIdx), {
       type: 'deck-search',
@@ -664,7 +664,7 @@ function deckSearchAttachToTaggedBenchPost(max: number, label: string, tagName: 
     }).length;
     const realMax = Math.min(max, validCount);
     if (realMax === 0) {
-      return updatePlayer(addLog(state, `${label}：牌庫無基本能量；重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      return openDeckViewReshuffle(state, aIdx, label); // v5.496
     }
     return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（附到「${tagName}」寶可夢；重洗）`, aIdx), {
       type: 'deck-search',
@@ -1141,7 +1141,7 @@ regPost('蒼響ex|鋼鐵武器', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     return isEnergyOfType(card, 'Metal') && card?.subtype === 'Basic';
   })?.iid;
-  if (!eIid) return updatePlayer(addLog(state, '鋼鐵武器：牌庫無基本鋼能量；重洗', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  if (!eIid) return openDeckViewReshuffle(state, aIdx, '鋼鐵武器'); // v5.496
   return updatePlayer(addLog(state, '鋼鐵武器：從牌庫挑 1 張基本鋼能量附自身（重洗）', aIdx), aIdx, p => {
     const idx = p.deck.findIndex(c => c.iid === eIid);
     if (idx < 0) return p;

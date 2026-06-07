@@ -14,6 +14,7 @@
  */
 
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, sameEvoName, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -231,8 +232,7 @@ regR('twin-cell-evolve-pick-base', (st, aIdx, iids, _params, pool) => {
     return sameEvoName(card.evolvesFrom, baseCard.name);
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
-    return updatePlayer(addLog(st, `細胞進化：牌庫中無「${baseCard.name}」的進化卡；重洗牌庫`, aIdx),
-      aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+    return openDeckViewReshuffle(st, aIdx, '細胞進化'); // v5.496：仍開檢視 picker（內含重洗）
   }
   const s = addLog(st, `細胞進化：從牌庫選「${baseCard.name}」的進化卡（可跳過）`, aIdx);
   return withPending(s, {
