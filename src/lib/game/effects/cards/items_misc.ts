@@ -1437,11 +1437,22 @@ reg('豐收漁網', (st, idx, pool) => {
     return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
   }).length;
   const maxCount = Math.min(3, waterPoke) + Math.min(3, waterEnergy);
+  // v5.488：除 filter 字串外，再用 validIids 硬列合法卡 iid（棄牌區【水】寶可夢 + 基本【水】能量），
+  //   確保 picker modal 絕不顯示其他卡（如支援者）—— discard-search 的 validIids 為硬性白名單。
+  const validIids = p.discard.filter(co => {
+    const card = pool.get(co.cardId);
+    if (!card) return false;
+    if (card.supertype === 'Pokemon' && card.pokemonType === 'Water') return true;
+    if (card.supertype === 'Energy' && card.subtype === 'Basic'
+        && (card.pokemonType === 'Water' || card.name?.includes('【水】'))) return true;
+    return false;
+  }).map(co => co.iid);
   st = addLog(st, '豐收漁網：從棄牌區選【水】寶可夢與基本【水】能量（各最多 3 張）放回牌庫並重洗', idx);
   return withPending(st, {
     type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'WaterPokemonOrBasicWaterEnergy', minCount: 0, maxCount,
     effectKey: 'fishnet-unified',
+    params: { validIids },
   });
 });
 regR('fishnet-unified', (st, idx, iids, _params, pool) => {

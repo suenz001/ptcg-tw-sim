@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.488</span> 修正豐收漁網 picker 顯示問題：選擇視窗改用「明確白名單」方式，只會列出棄牌區的【水】寶可夢與基本【水】能量，不會再出現支援者等其他卡片。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.487</span> 豐收漁網介面優化：依玩家建議，把原本分兩步（先選寶可夢、再選能量）改成**同一個選擇視窗一起選**——【水】寶可夢與基本【水】能量並列顯示，寶可夢最多選 3 張、能量最多選 3 張（各 3 張，達上限的類別會自動變灰不可再選），做法參考「水蓮的照顧／小剛的發掘」。</summary>
       </details>
 
