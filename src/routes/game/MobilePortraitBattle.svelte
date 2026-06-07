@@ -858,7 +858,7 @@
 
   <!-- v5.015：送出新戰鬥寶可夢的等待提示 — 桌機版 +page.svelte:5641-5662 已有同樣 alert，手機 portrait 需自行渲染 -->
   {#if needSendActiveMine}
-    <div class="mp-wait-alert mp-wait-warn">⚠️ 你的戰鬥寶可夢已昏厥，請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
+    <div class="mp-wait-alert mp-wait-warn">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
   {:else if needSendActiveOpp && isMyTurn}
     <div class="mp-wait-alert">⏳ 對手戰鬥場空 — 等待對手送出新戰鬥寶可夢</div>
   {/if}

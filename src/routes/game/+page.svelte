@@ -6518,7 +6518,7 @@
         {/if}
         <!-- 自 KO（如咒詛炸彈、中毒）：主動方自己戰鬥場變空，須從備戰區送出新戰鬥寶可夢 -->
         {#if game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
-          <div class="alert warn-alert">⚠️ 你的戰鬥寶可夢已昏厥，請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
+          <div class="alert warn-alert">⚠️ 請從備戰區派出新的戰鬥寶可夢（下方視窗選擇）</div>
         {/if}
         {#if game.phase==='playing' && oppPlayer?.active===null && game.turnPhase!=='end' && (oppPlayer?.bench??[]).length>0 && !pendingSelection}
           <div class="alert warn-alert">⚠️ 等待 {oppPlayer?.name} 送出新戰鬥寶可夢</div>
@@ -8384,7 +8384,7 @@
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
-          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+          <p class="sel-hint">請從備戰區挑一隻寶可夢上場；點放大鏡 🔍 查看詳情</p>
         </div>
         <div class="retreat-grid">
           {#each defenderPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
@@ -8424,7 +8424,7 @@
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
-          <p class="sel-hint">你的戰鬥寶可夢已昏厥，請從備戰區挑選一隻上場；點放大鏡 🔍 查看詳情</p>
+          <p class="sel-hint">請從備戰區挑一隻寶可夢上場；點放大鏡 🔍 查看詳情</p>
         </div>
         <div class="retreat-grid">
           {#each myPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
