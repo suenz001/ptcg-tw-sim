@@ -117,12 +117,14 @@
   let _bcShownTurns = new Set<number>();
   let _bcHideTimer: ReturnType<typeof setTimeout> | null = null;
   // 新對局（game.id 變）→ 載入廣播設定 + 重置已顯示回合
+  //   v5.482：只有「線上對戰」才讀廣播（本機雙人 / vs AI 練習不碰 Firebase，再省讀取量）。
   $effect(() => {
     const gid = game?.id ?? '';
     if (!gid || gid === _bcLoadedGameId) return;
     _bcLoadedGameId = gid;
     _bcShownTurns = new Set();
     broadcastCfg = null;
+    if (mode !== 'online') return;  // 單機/AI 模式不讀廣播
     getBroadcastConfig().then((cfg) => { broadcastCfg = cfg; }).catch(() => { /* 容錯 */ });
   });
   // game.turn 命中設定回合 → 顯示跑馬燈（config 非同步載入完也會 re-run，補上 turn 1）
