@@ -1885,6 +1885,44 @@ const ANCIENT_FLYGON_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 超級龍頭地鼠（60 張）— v5.490 網站推薦預組 */
+const MEGA_DUGTRIO_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_mega_dugtrio__',
+  name: '超級龍頭地鼠',
+  createdAt: '',
+  entries: [
+    // Pokemon 17
+    { cardId: '19207', count: 2 }, // 超級龍頭地鼠ex (M5 063/081)
+    { cardId: '19188', count: 4 }, // 螺釘地鼠 (M5 044/081)
+    { cardId: '13011', count: 2 }, // 蓋諾賽克特ex (SV11B 069/086)
+    { cardId: '18479', count: 1 }, // 巨金怪 (M4 059/083)
+    { cardId: '9888', count: 4 },  // 金屬怪 (SV5M 047/071)
+    { cardId: '9887', count: 4 },  // 鐵啞鈴 (SV5M 046/071)
+    // Items 16
+    { cardId: '14820', count: 4 }, // 火箭隊的接收器 (M2a 160/193)
+    { cardId: '9762', count: 1 },  // 好友寶芬 (SV5K 063/071)
+    { cardId: '14825', count: 2 }, // 氣球 (M2a 165/193)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '14116', count: 1 }, // 能量回收器 (MBD 012/022)
+    { cardId: '14118', count: 1 }, // 高級球 (MBD 014/022)
+    { cardId: '17129', count: 1 }, // 貴重手推車 (MC 658/742)
+    { cardId: '14391', count: 2 }, // 超大冰淇淋 (M2 073/080)
+    { cardId: '13948', count: 2 }, // 寶可裝置3.0 (SV11B 081/086)
+    { cardId: '14143', count: 1 }, // 寶可夢交替 (MBG 015/022)
+    // Supporters 10
+    { cardId: '14839', count: 4 }, // 火箭隊的拉姆達 (M2a 179/193)
+    { cardId: '18496', count: 1 }, // 吉普索 (M4 076/083)
+    { cardId: '14124', count: 2 }, // 老大的指令 (MBD 020/022)
+    { cardId: '10510', count: 1 }, // 烏栗 (SV6 096/101)
+    { cardId: '17182', count: 2 }, // 裁判 (MC 711/742)
+    // Stadiums 2
+    { cardId: '11286', count: 1 }, // 引力山岳 (SV8 106/106)
+    { cardId: '12847', count: 1 }, // 火箭隊的工廠 (SV10 097/098)
+    // Energy 15
+    { cardId: '14434', count: 15 }, // 基本【鋼】能量 (M-P-I MET)
+  ],
+};
+
 export const PRESET_DECKS: Deck[] = [
   { ...GENGAR_DECK, updatedAt: '' },
   { ...DIANCIE_DECK, updatedAt: '' },
@@ -1932,6 +1970,7 @@ export const PRESET_DECKS: Deck[] = [
   { ...URSALUNA_BLOODMOON_DECK, updatedAt: '' },
   { ...CRABOMINABLE_DECK, updatedAt: '' },
   { ...ANCIENT_FLYGON_DECK, updatedAt: '' },
+  { ...MEGA_DUGTRIO_DECK, updatedAt: '' },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */

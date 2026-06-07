@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.490</span> 新增網站推薦預組「超級龍頭地鼠」（鋼系，60 張，含超級龍頭地鼠ex／蓋諾賽克特ex／巨金怪線）。可在牌組頁的「內建預組」區直接取用。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.489</span> 修正豐收漁網選擇視窗的分類上限：先前 v5.487 的 picker 介面改動因為內部誤推到錯誤檔案而未實際生效，導致選滿 3 張能量後仍能點第 4 張。現已正確套用——【水】寶可夢與基本【水】能量各選滿 3 張後，該類別會變灰、無法再選。</summary>
       </details>
 
