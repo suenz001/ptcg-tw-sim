@@ -132,7 +132,9 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
     cardId: prev.cardId,
     evolvedFromStack: stack.length > 0 ? stack : undefined,
     evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
-    evolvedThisTurn: true, // 退化後本回合不可再進化
+    // v5.497：退化「對手」寶可夢、在我方回合；卡面無「該回合無法進化」限制。對手退化不設
+    //   evolvedThisTurn(否則殘留到對手回合誤擋其再進化；clearTurnFlags 只清當前玩家)。
+    evolvedThisTurn: undefined,
     status: undefined,
     secondaryStatus: undefined,
     tertiaryStatus: undefined,

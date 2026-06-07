@@ -332,7 +332,10 @@ regR('archeops-primal-wing', (st, idx, iids, _params, pool) => {
     cardId: newBaseInst.cardId,
     evolvedFromStack: newStack.length > 0 ? newStack : undefined,
     evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
-    evolvedThisTurn: true,
+    // v5.497：退化的是「對手」寶可夢、在我方回合進行；卡面無「該回合無法進化」限制。
+    //   evolvedThisTurn 只在「當前玩家 END_TURN」清除(clearTurnFlags)，若設在對手身上會殘留到
+    //   對手回合，誤擋對手再進化(玩家回報)。對手退化一律不設 evolvedThisTurn。
+    evolvedThisTurn: undefined,
     status: undefined,
     secondaryStatus: undefined,
     tertiaryStatus: undefined,
