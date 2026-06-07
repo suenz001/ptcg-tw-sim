@@ -5211,8 +5211,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       let greedyGourmetBonus = 0;
       const atkActiveGG = newState.players[aIdx].active;
       const atkCardGG = atkActiveGG ? pool.get(atkActiveGG.cardId) : null;
+      // v5.483：原 subtype==='Basic' 對「基礎 ex」(如喵喵ex subtype='ex')失效 → 只給 base 2 不 +1。
+      //   改 isBasicPokemonCard（涵蓋基礎 ex / 火箭隊基礎等）。卡面：對手【基礎】被本招式傷害 KO → +1。
       if (atkCardGG?.abilities?.some(a => a.name === '貪婪食客')
-          && defenderCard?.subtype === 'Basic') {
+          && isBasicPokemonCard(defenderCard)) {
         greedyGourmetBonus = 1;
       }
       // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1

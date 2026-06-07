@@ -13069,9 +13069,14 @@ reg('火箭隊的蘭斯', (st, idx) => {
 //   - 若戰鬥位與備戰皆有至少 1 隻火箭隊的寶可夢 → 進入 bench-choose（自方火箭隊備戰）
 //     self-swap-rocket resolver 執行後接 opp-bench-choose → gust-opp。
 //   - 若條件不齊（如戰鬥位非火箭隊 / 備戰沒有火箭隊）→ 跳過自換步驟直接進對方換。
-regG('火箭隊的坂木', (st, idx) => {
+regG('火箭隊的坂木', (st, idx, pool) => {
+  const p = st.players[idx];
   const opp = st.players[(1 - idx) as 0 | 1];
-  return opp.bench.length > 0;  // 至少需要對手有備戰
+  // v5.483 官方 Q&A：自己戰鬥場與備戰區都要有「火箭隊的寶可夢」才能使出（卡面第一句自換是必須效果，
+  //   無火箭隊寶可夢可換則不能使出）；加上對手要有備戰才能進行對手互換。
+  const activeIsRocket = !!p.active && (pool.get(p.active.cardId)?.name ?? '').includes('火箭隊的');
+  const benchHasRocket = p.bench.some(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  return activeIsRocket && benchHasRocket && opp.bench.length > 0;
 });
 reg('火箭隊的坂木', (st, idx, pool) => {
   const p = st.players[idx];
