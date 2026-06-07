@@ -4842,12 +4842,21 @@
       pool,
       { firstChoicePreferences: prefs },
     );
-    game = newGame;
-    // v4.964：A 端（先觸發 startGame）— lobby 雙方 ready，game 剛建出來那一刻播 ready-go
-    playSfx('ready-go');
-    // v4.967: 起手發 7 張卡 stagger（與 ready-go 並進，營造「啟動 + 發牌」儀式感）
-    staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
-    startGame(roomCode, newGame).catch(console.error);
+    // v5.492：先確認本端 startGame transaction 是否 commit（成為房間 canonical 局）才採用本地 game。
+    //   再來一局/開局時雙方各自 createGame race（不同 id），輸掉 transaction 的一端若先用自己的
+    //   phantom 局抽牌/設置寶可夢，待 canonical 局 push 進來被 adopt → 進度突然回復重洗（v5.457 後症狀）。
+    //   修法：只有 commit 成功(won=true)才採用本地 game + 播 ready-go/發牌；輸方保持 game=null，
+    //   待 canonical snapshot 由 room update adopt（B 端首次收 setup snapshot 自有 deal 音效）。
+    const _pendingGame = newGame;
+    startGame(roomCode, _pendingGame).then((won) => {
+      if (won) {
+        game = _pendingGame;
+        playSfx('ready-go');
+        staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
+      } else {
+        console.log('[online] startGame 未 commit（對方已建 canonical 局）→ 不用本地 phantom 局，等同步 adopt');
+      }
+    }).catch((e) => console.warn('[startGame] failed:', e));
   }
 
   // ── 房間內互動 ─────────────────────────────────────────────────────────
@@ -12369,6 +12378,7 @@
   /* 例外 — 以下區塊保留可選文字（玩家可能想 copy 紀錄、訊息、房號、卡片描述等） */
   .battle-root .log-col, .battle-root .log-col *,
   .battle-root .chat-messages, .battle-root .chat-messages *,
+  .battle-root .chat-panel-messages, .battle-root .chat-panel-messages *,
   .battle-root .modal-body, .battle-root .modal-body *,
   .battle-root .room-code-inline, .battle-root .room-code-inline *,
   .battle-root input, .battle-root textarea, .battle-root select {

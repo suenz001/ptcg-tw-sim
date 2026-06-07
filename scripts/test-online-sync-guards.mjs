@@ -93,6 +93,10 @@ ck('收: 跨局-本地舊局收到新局(createdAt晚) → adopt',
                      mkGS({ id: 'NEW', createdAt: 200, phase: 'setup', logLen: 1 }), ctx()).kind === 'adopt');
 ck('收: 跨局-兩局皆無 createdAt(舊版相容) → adopt(原行為)',
    resolveRoomUpdate(mkGS({ id: 'OLD', logLen: 5 }), mkGS({ id: 'NEW', logLen: 6 }), ctx()).kind === 'adopt');
+// v5.492 開局/再來一局 race 修法依賴：輸掉 startGame transaction 的一端保持 game=null，
+//   待 canonical 局 push 進來 adopt（不在 phantom 局抽牌/設置→不會被回復重洗）。
+ck('收: 輸方清局(local=null)收到 canonical setup 局 → adopt（v5.492 開局race修依賴）',
+   resolveRoomUpdate(null, mkGS({ id: 'CANON', createdAt: 200, phase: 'setup', logLen: 1 }), ctx()).kind === 'adopt');
 
 // ════ B. 收端 resolveRoomUpdate 決策路由 ════
 ck('收: 無 incoming → ignore',
