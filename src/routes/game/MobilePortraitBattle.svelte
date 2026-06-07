@@ -74,9 +74,6 @@
     // v5.194：手機版補悔棋按鈕（鏡射桌面版 performUndo）
     undoAvailable?: boolean;
     onUndo?: () => void;
-    // v5.479 系統管理員廣播（覆蓋計時器那排顯示）
-    broadcastMarquee?: string;
-    broadcastKey?: number;
   }
 
   let {
@@ -848,26 +845,16 @@
     <button class="mp-icon-btn" onclick={onOpenSettings} title="設定">⚙</button>
   </header>
 
-  <!-- v4.24 對戰計時器 — 細條 timer-strip，4 欄資訊一直可見。v5.479：包 relative zone 讓廣播跑馬燈可覆蓋其上 -->
-  <div class="mp-timer-zone">
-    {#if game.gameStartTime !== undefined}
-      <div class="mp-timer-strip">
-        <span class="mp-t-cell mp-t-total">⏱ {fmtTimerMs(gameTotalMs)}</span>
-        <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 0 && game.phase === 'playing'}>P1 {fmtTimerMs(p0TotalMs)}</span>
-        <span class="mp-t-sep">|</span>
-        <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 1 && game.phase === 'playing'}>P2 {fmtTimerMs(p1TotalMs)}</span>
-        <span class="mp-t-cell mp-t-turn">▶ {fmtTimerMs(liveTurnTimeMs)}</span>
-      </div>
-    {/if}
-    <!-- v5.479 系統管理員廣播跑馬燈（覆蓋計時器那排；跑一輪後由父層 14s 計時自動收起）-->
-    {#if broadcastMarquee}
-      {#key broadcastKey}
-        <div class="mp-broadcast-overlay" role="status">
-          <div class="mp-broadcast-track">📢 {broadcastMarquee}</div>
-        </div>
-      {/key}
-    {/if}
-  </div>
+  <!-- v4.24 對戰計時器 — 細條 timer-strip，4 欄資訊一直可見 -->
+  {#if game.gameStartTime !== undefined}
+    <div class="mp-timer-strip">
+      <span class="mp-t-cell mp-t-total">⏱ {fmtTimerMs(gameTotalMs)}</span>
+      <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 0 && game.phase === 'playing'}>P1 {fmtTimerMs(p0TotalMs)}</span>
+      <span class="mp-t-sep">|</span>
+      <span class="mp-t-cell" class:mp-t-active={game.activePlayerIndex === 1 && game.phase === 'playing'}>P2 {fmtTimerMs(p1TotalMs)}</span>
+      <span class="mp-t-cell mp-t-turn">▶ {fmtTimerMs(liveTurnTimeMs)}</span>
+    </div>
+  {/if}
 
   <!-- v5.015：送出新戰鬥寶可夢的等待提示 — 桌機版 +page.svelte:5641-5662 已有同樣 alert，手機 portrait 需自行渲染 -->
   {#if needSendActiveMine}
@@ -1334,20 +1321,6 @@
     padding-left: env(safe-area-inset-left, 0);
     padding-right: env(safe-area-inset-right, 0);
   }
-  /* v5.479 系統管理員廣播跑馬燈（覆蓋計時器那排）*/
-  .mp-timer-zone { position: relative; flex-shrink: 0; }
-  .mp-broadcast-overlay {
-    position: absolute; inset: 0; z-index: 60;
-    display: flex; align-items: center; overflow: hidden;
-    background: linear-gradient(90deg, #7a1fa2, #c2185b);
-    color: #fff; font-weight: 700; font-size: 12px;
-    box-shadow: 0 1px 6px rgba(0,0,0,.45);
-  }
-  .mp-broadcast-track {
-    white-space: nowrap; will-change: transform; padding-right: 2rem;
-    animation: mp-bc-scroll 14s linear 1;
-  }
-  @keyframes mp-bc-scroll { from { transform: translateX(100vw); } to { transform: translateX(-100%); } }
   /* v4.24 對戰計時器細條 — mp-top 下方 ~20px，4 欄資訊 */
   .mp-timer-strip {
     flex-shrink: 0;

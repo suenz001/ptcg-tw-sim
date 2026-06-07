@@ -4443,11 +4443,12 @@
       // v5.003：第 4 個參數是 visible — !private 即「公開房 = true」「私密房 = false」
       roomCode = await createRoom(roomNameInput.trim(), myName.trim(), roomAllowUndoInput, !roomPrivateInput);
       amIHost = true;
-      // v5.476：套用上次記憶的先後攻偏好 + 對手閒置判定時間（房主可再調）
-      try { await setSeatFirstChoice(roomCode, _readLastFirstPref()); } catch { /* best-effort */ }
-      try { await setIdleTimeout(roomCode, _readLastIdle()); } catch { /* best-effort */ }
       onlineStep = 'room';
       startRoomSubscription();
+      // v5.480：套用上次記憶的先後攻偏好 + 閒置時間——改非阻塞（fire-and-forget），
+      //   避免這兩個 Firestore 寫入在手機上 hang 住整個進房流程（v5.476 用 await 會卡在開房畫面）。
+      setSeatFirstChoice(roomCode, _readLastFirstPref()).catch(() => { /* best-effort */ });
+      setIdleTimeout(roomCode, _readLastIdle()).catch(() => { /* best-effort */ });
     } catch(e: any) { onlineError = e.message ?? '建立房間失敗'; }
     finally { onlineLoading = false; }
   }
@@ -4460,10 +4461,10 @@
       await joinRoom(joinInput.trim(), myName.trim());
       roomCode = joinInput.trim().toUpperCase();
       amIHost = false;
-      // v5.476：套用上次記憶的先後攻偏好
-      try { await setSeatFirstChoice(roomCode, _readLastFirstPref()); } catch { /* best-effort */ }
       onlineStep = 'room';
       startRoomSubscription();
+      // v5.480：套用上次記憶的先後攻偏好——非阻塞，避免 hang 住進房流程。
+      setSeatFirstChoice(roomCode, _readLastFirstPref()).catch(() => { /* best-effort */ });
     } catch(e: any) { onlineError = e.message ?? '加入房間失敗'; }
     finally { onlineLoading = false; }
   }
@@ -6193,8 +6194,6 @@
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
-      broadcastMarquee={broadcastMarquee}
-      broadcastKey={broadcastKey}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
@@ -10440,8 +10439,6 @@
     padding-right:3rem;
   }
   @keyframes bc-scroll{ from{ transform:translateX(100vw); } to{ transform:translateX(-100%); } }
-  /* v5.479：手機直式改用 MobilePortraitBattle 內覆蓋計時器的跑馬燈 → 隱藏桌面 fixed 版避免重複 */
-  @media (max-width:600px) and (orientation:portrait){ .admin-broadcast-bar{ display:none; } }
   .admin-broadcast-close{
     position:absolute; right:6px; top:50%; transform:translateY(-50%);
     width:22px; height:22px; border:none; border-radius:50%; cursor:pointer;
