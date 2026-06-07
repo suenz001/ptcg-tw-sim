@@ -7926,11 +7926,16 @@ export function computeActiveRetreatCostFor(
     }
   }
   cost += gravityCountC;
-  // 天空徑線
+  // 天空徑線（v5.472：holder 須特性有效，被初始化等消除則失效）
+  const skyIdxC = playerIdx as 0 | 1;
   const hasSkyPath = [
-    ...(player.active ? [player.active] : []),
-    ...player.bench,
-  ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+    ...(player.active ? [{ c: player.active, loc: 'active' as const }] : []),
+    ...player.bench.map(c => ({ c, loc: 'bench' as const })),
+  ].some(({ c, loc }) => {
+    const cc = pool.get(c.cardId);
+    return !!cc?.abilities?.some(a => a.name === '天空徑線')
+      && isAbilityHolderEffective(state, c, cc, skyIdxC, '天空徑線', loc, pool);
+  });
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   // 競技場
   const stadiumNameCR = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
@@ -8016,10 +8021,17 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
   }
   cost += gravityCountG;
   // 被動特性：天空徑線（拉帝亞斯ex）— 所有基礎寶可夢免費撤退
+  // v5.472：holder 須特性有效（被鐵荊棘ex 初始化等消除則失效）。getRetreatCost 是 UI canRetreat /
+  //   撤退按鈕顯示用的獨立計算點，v5.471 只修了 RETREAT handler，漏這裡 → 顯示仍 0（玩家回報）。
+  const skyIdx = state.activePlayerIndex as 0 | 1;
   const hasSkyPath = [
-    ...(player.active ? [player.active] : []),
-    ...player.bench,
-  ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+    ...(player.active ? [{ c: player.active, loc: 'active' as const }] : []),
+    ...player.bench.map(c => ({ c, loc: 'bench' as const })),
+  ].some(({ c, loc }) => {
+    const cc = pool.get(c.cardId);
+    return !!cc?.abilities?.some(a => a.name === '天空徑線')
+      && isAbilityHolderEffective(state, c, cc, skyIdx, '天空徑線', loc, pool);
+  });
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   // v2.119 修：canRetreat() 也要鏡射 N的城堡 hook（原 v2.117 只改了 RETREAT handler 的 cost，
   //   導致 UI canRetreatNow 仍用舊 cost 計算，按鈕不出現）。

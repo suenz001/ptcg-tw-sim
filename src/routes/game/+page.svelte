@@ -3609,7 +3609,13 @@
     // 鏡射 engine canRetreat 的 hook；UI 按鈕顯示「撤退（0⚡）」
     if (cost > 0 && card && !card.evolvesFrom && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && myPlayer) {
       const allMy = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench];
-      const hasSkyPath = allMy.some(c => getCard(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+      // v5.472：天空徑線 holder 被鐵荊棘ex 初始化消除時失效（v5.471 只補了後段硬覆蓋、漏這個早期段 → 顯示仍 0）
+      const initActiveSkyE = game ? game.players.some(pl => pl.active && getCard(pl.active.cardId)?.abilities?.some(a => a.name === '初始化')) : false;
+      const hasSkyPath = allMy.some(c => {
+        const c2 = getCard(c.cardId);
+        return c2?.abilities?.some(a => a.name === '天空徑線')
+          && !(initActiveSkyE && isRulePokemon(c2) && !((c2.tags ?? []).includes('未來')));
+      });
       if (hasSkyPath) cost = 0;
     }
     // v2.117 N的城堡（Stadium）— 雙方場上所有「N的」寶可夢撤退 0

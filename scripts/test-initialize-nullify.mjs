@@ -14,11 +14,11 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.init-e.ts'), O = join(ROOT, '.init-o.mjs'), S = join(ROOT, '.init-s.mjs');
 process.on('exit', () => { for (const p of [E, O, S]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";export const assets="";');
-writeFileSync(E, `export { createGame, applyAction } from './src/lib/game/engine';
+writeFileSync(E, `export { createGame, applyAction, getRetreatCost } from './src/lib/game/engine';
 export { isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified } from './src/lib/game/effects/cards/v3001_g3_wave3';`);
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20', alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const M = await import(pathToFileURL(O).href);
-const { createGame, applyAction, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified } = M;
+const { createGame, applyAction, getRetreatCost, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified } = M;
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map(e => e.code));
 const pool = new Map();
@@ -68,5 +68,15 @@ T('天空徑線被初始化消除：對手鐵荊棘ex→0 能量無法撤退(費
   const n = applyAction(st, { type: 'RETREAT', newActiveIid: b }, pool);
   assert.equal(n.players[0].active?.cardId, CID.ubo);
 });
+// ── getRetreatCost（UI canRetreat / 撤退按鈕顯示用的真值）也要 respect 初始化 ──
+T('getRetreatCost：無初始化→天空徑線顯示 0 費', () => {
+  const st = retreatState(CID.ubo);
+  assert.equal(getRetreatCost(st, pool), 0, '天空徑線→顯示 0');
+});
+T('getRetreatCost：初始化消除天空徑線→顯示恢復為 1（撤退費顯示正確）', () => {
+  const st = retreatState(CID.tetsu);
+  assert.equal(getRetreatCost(st, pool), 1, '天空徑線被消除→顯示烏波 base 撤退 1');
+});
+
 console.log(`\n初始化特性消除：PASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
