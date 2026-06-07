@@ -10320,6 +10320,15 @@ const SELF_DISCARD_UNITS_BATCH: Array<[string, string, number, number, DiscardMu
   // v5.401：B類2張(丟能量+狙擊)——丟能量改units+picker,狙擊效果留在各card檔的 regPost
   ['火焰雞|業火連踢', '業火連踢', 120, 2, 'all'],
   ['雙尾怪手|雙尾', '雙尾', 0, 2, 'all'],
+  // v5.499：自身丟能量改 picker（原 inline discardOwnNEnergyFn/discardActiveEnergies/單卡自動丟最後N張，
+  //   玩家無法選；卡面「選擇N個這隻寶可夢身上附加的能量丟棄」應由玩家選）。移除各 card 檔 inline reg。
+  ['長尾火狐|噴射火焰', '噴射火焰', 80, 1, 'all'],
+  ['雷丘|強力伏特', '強力伏特', 150, 1, 'Lightning'],  // 卡面限【雷】能量（原 inline 沒過濾屬性，順手修）
+  ['倫琴貓|強力伏特', '強力伏特', 200, 2, 'all'],
+  ['頓甲|粉碎頭擊', '粉碎頭擊', 180, 2, 'all'],
+  ['鳳王|紅蓮之翼', '紅蓮之翼', 130, 1, 'Fire'],  // 卡面限【火】能量
+  ['大朝北鼻|鼻衝撞', '鼻衝撞', 260, 3, 'all'],
+  ['火恐龍|大字爆炎', '大字爆炎', 90, 1, 'all'],
 ];
 for (const [key, label, dmg, n, tf] of SELF_DISCARD_UNITS_BATCH) {
   registerSelfDiscardMultiply(key, label, dmg, 0, n, tf, false, n);

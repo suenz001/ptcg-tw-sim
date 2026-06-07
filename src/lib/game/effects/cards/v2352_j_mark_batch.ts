@@ -135,15 +135,10 @@ regPre('君主蛇|日光旋繞', (state, aIdx, pool) => {
 });
 
 // 鳳王｜紅蓮之翼：130，丟自身 1 個【火】能量（自動取第一張提供火的能量）。
-regPre('鳳王|紅蓮之翼', (state) => ({ state, damage: 130 }));
-regPost('鳳王|紅蓮之翼', (state, aIdx, pool) => discardActiveEnergies(state, aIdx, 1, '紅蓮之翼', pool, e => {
-  const c = pool.get(e.cardId);
-  return c?.name?.includes('【火】') || c?.pokemonType === 'Fire';
-}));
+// v5.499：鳳王|紅蓮之翼 移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 選【火】能量丟）。
 
 // 大朝北鼻｜鼻衝撞：260，丟自身 3 個能量。
-regPre('大朝北鼻|鼻衝撞', (state) => ({ state, damage: 260 }));
-regPost('大朝北鼻|鼻衝撞', (state, aIdx, pool) => discardActiveEnergies(state, aIdx, 3, '鼻衝撞', pool));
+// v5.499：大朝北鼻|鼻衝撞 移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 選 3 個能量丟）。
 
 // 狙射樹梟ex｜粉碎箭：240，丟對手戰鬥寶可夢 1 個能量。
 regPre('狙射樹梟ex|粉碎箭', (state) => ({ state, damage: 240 }));

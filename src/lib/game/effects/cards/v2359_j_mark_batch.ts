@@ -490,19 +490,19 @@ regPre('倫琴貓|猛力進攻', (state, aIdx) => {
 
 // 長尾火狐（M4 Stage1 Fire 100HP）｜噴射火焰：80，棄 1 個能量
 // 卡面：「80 將這隻寶可夢身上附加的 1 個能量丟棄。」
-regPost('長尾火狐|噴射火焰', discardOwnNEnergyFn(1, '噴射火焰'));
+// v5.499：移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 玩家選丟哪個能量）。// regPost('長尾火狐|噴射火焰', discardOwnNEnergyFn(1, '噴射火焰'));
 
 // 雷丘（MC Stage1 Lightning 130HP）｜強力伏特：150，棄 1 個能量
 // 卡面：「150 將這隻寶可夢身上附加的 1 個能量丟棄。」
-regPost('雷丘|強力伏特', discardOwnNEnergyFn(1, '強力伏特'));
+// v5.499：移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 玩家選丟哪個能量）。// regPost('雷丘|強力伏特', discardOwnNEnergyFn(1, '強力伏特'));
 
 // 倫琴貓（M3 Stage2 Lightning 150HP）｜強力伏特：200，棄 2 個能量
 // 卡面：「200 將這隻寶可夢身上附加的 2 個能量丟棄。」
-regPost('倫琴貓|強力伏特', discardOwnNEnergyFn(2, '強力伏特'));
+// v5.499：移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 玩家選丟哪個能量）。// regPost('倫琴貓|強力伏特', discardOwnNEnergyFn(2, '強力伏特'));
 
 // 頓甲（M4 Stage1 Fighting 150HP）｜粉碎頭擊：180，棄 2 個能量
 // 卡面：「180 將這隻寶可夢身上附加的 2 個能量丟棄。」
-regPost('頓甲|粉碎頭擊', discardOwnNEnergyFn(2, '粉碎頭擊'));
+// v5.499：移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 玩家選丟哪個能量）。// regPost('頓甲|粉碎頭擊', discardOwnNEnergyFn(2, '粉碎頭擊'));
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 群組 I：牌庫 / 手牌操作

@@ -687,18 +687,27 @@ regPre('萊希拉姆ex|火爆發', (state, aIdx, _pool) => {
   const s = addLog(state, `火爆發：對手已得獎賞 ${taken} 張 → 130 + ${taken}×50 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
-regPost('萊希拉姆ex|火爆發', (state, aIdx, _pool) => {
+// v5.499：火爆發傷害動態(130+對手獎賞×50)無法用 SELF_DISCARD_UNITS_BATCH(固定傷害)，
+//   故獨立註冊 ATTACK_PRE_DISCARD_CHOICE 讓 UI 在攻擊前提示玩家「選 1 個自身能量丟棄」，
+//   regPost 改丟玩家選中的能量(action.discardedEnergyIids)而非自動丟最後一張。
+ATTACK_PRE_DISCARD_CHOICE.set('萊希拉姆ex|火爆發', {
+  min: 1, max: 1, scope: 'attacker', baseDamage: 130, damagePerEnergy: 0,
+});
+regPost('萊希拉姆ex|火爆發', (state, aIdx, _pool, action) => {
   const a = state.players[aIdx].active;
   if (!a || a.energyAttached.length === 0) return state;
+  // 玩家選中的能量 iid（picker）；無(舊 client / fallback)則丟最後一張。
+  const chosen = action?.discardedEnergyIids?.[0];
   return updatePlayer(
     addLog(state, '火爆發：自身丟棄 1 個能量', aIdx),
     aIdx, p => {
-      if (!p.active) return p;
-      const lastIdx = p.active.energyAttached.length - 1;
-      const discarded = p.active.energyAttached[lastIdx];
+      if (!p.active || p.active.energyAttached.length === 0) return p;
+      let idx = chosen ? p.active.energyAttached.findIndex(e => e.iid === chosen) : -1;
+      if (idx < 0) idx = p.active.energyAttached.length - 1;
+      const discarded = p.active.energyAttached[idx];
       return {
         ...p,
-        active: { ...p.active, energyAttached: p.active.energyAttached.slice(0, lastIdx) },
+        active: { ...p.active, energyAttached: p.active.energyAttached.filter((_, i) => i !== idx) },
         discard: [...p.discard, discarded],
       };
     },

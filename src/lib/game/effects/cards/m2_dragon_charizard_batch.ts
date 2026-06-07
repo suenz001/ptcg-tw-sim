@@ -269,15 +269,4 @@ regPre('超級噴火龍Xex|烈獄狂火X', (state, aIdx, pool, action) => {
 
 // ── 火恐龍 SVQL｜大字爆炎 ───────────────────────────────────────────────────
 // G-reg normally outside project scope, but this exact card was explicitly requested.
-regPost('火恐龍|大字爆炎', (state, aIdx, pool) => {
-  const p = state.players[aIdx];
-  if (!p.active) return state;
-  const energy = p.active.energyAttached[p.active.energyAttached.length - 1];
-  if (!energy) return state;
-  const s = addLog(state, `大字爆炎：丟棄 ${pool.get(energy.cardId)?.name ?? '1 個能量'}`, aIdx);
-  return updatePlayer(s, aIdx, pl => ({
-    ...pl,
-    active: pl.active ? { ...pl.active, energyAttached: pl.active.energyAttached.slice(0, -1) } : null,
-    discard: [...pl.discard, energy],
-  }));
-});
+// v5.499：火恐龍|大字爆炎 移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 選 1 個能量丟）。
