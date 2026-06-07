@@ -15,6 +15,7 @@
  */
 
 import type { CardInstance } from '../../types';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre,
@@ -84,7 +85,7 @@ regR('serperior-mature-charge', (st, idx, iids, params, pool) => {
   const all = [s.players[idx].active, ...s.players[idx].bench].filter((c): c is CardInstance => !!c);
   const target = all.find(c => c.iid === targetIid);
   const tname = target ? pool.get(target.cardId)?.name ?? '?' : '?';
-  return addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx);
+  return applyMagearnaHandAttachHeal(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx), idx, [targetIid], pool);  // v5.485 自動治癒
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

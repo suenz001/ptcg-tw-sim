@@ -35,6 +35,7 @@
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { Card } from '$lib/cards/types';
 import {
   regA, regAByName, regR,
@@ -304,9 +305,10 @@ regA('青木的樹枕尾熊', 0, (st, idx, pool, inst) => {
     params: { titleOverride: '無力充能：選 1 張手牌能量附於戰鬥寶可夢' },
   });
 });
-regR('koala-feeble-charge', (state, aIdx, iids, _params, _pool) => {
+regR('koala-feeble-charge', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
-  return updatePlayer(state, aIdx, p => {
+  const tgtIid = state.players[aIdx].active?.iid;
+  const attached = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
     const energy = p.hand.find(c => c.iid === iids[0]);
     if (!energy) return p;
@@ -316,6 +318,7 @@ regR('koala-feeble-charge', (state, aIdx, iids, _params, _pool) => {
       active: { ...p.active, energyAttached: [...p.active.energyAttached, energy] },
     };
   });
+  return tgtIid ? applyMagearnaHandAttachHeal(attached, aIdx, [tgtIid], pool) : attached;  // v5.485 自動治癒
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

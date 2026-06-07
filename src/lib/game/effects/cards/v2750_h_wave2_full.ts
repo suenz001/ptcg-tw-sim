@@ -21,7 +21,7 @@ import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
-  snipeOneOppBenchPost, markFaintByEffect,
+  snipeOneOppBenchPost, markFaintByEffect, koTargetByAttackEffect,
 } from '../../effects';
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -2596,10 +2596,7 @@ regPost('阿羅拉 椰蛋樹ex|嗡嗡榍石', (state, aIdx, pool) => {
     if (!da) return r.state;
     const card = pool.get(da.cardId);
     if (card?.stage !== 'Basic') return addLog(r.state, '嗡嗡榍石：對手戰鬥場非基礎，無效', aIdx);
-    return updatePlayer(addLog(r.state, '嗡嗡榍石：正面 → 對手戰鬥場(基礎)KO', aIdx), dIdx, p => ({
-      ...p,
-      active: p.active ? markFaintByEffect(p.active, pool, r.state) : null,
-    }));
+    return koTargetByAttackEffect(addLog(r.state, '嗡嗡榍石：正面 → 對手戰鬥場(基礎)KO', aIdx), aIdx, da, true, pool, '嗡嗡榍石');
   }
   // 反 → 對手選 1 備戰基礎 KO
   if (r.state.players[dIdx].bench.length === 0) return r.state;
@@ -2615,13 +2612,9 @@ regR('h-wave2-ko-opp-bench-basic', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
-  return updatePlayer(addLog(state, '嗡嗡榍石：對手備戰寶可夢 KO', aIdx), dIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => {
-      if (b.iid !== targetIid) return b;
-      return markFaintByEffect(b, pool, state);
-    }),
-  }));
+  const benchTarget = state.players[dIdx].bench.find(b => b.iid === targetIid);
+  if (!benchTarget) return state;
+  return koTargetByAttackEffect(addLog(state, '嗡嗡榍石：對手備戰寶可夢 KO', aIdx), aIdx, benchTarget, false, pool, '嗡嗡榍石');
 });
 
 // 謎擬Ｑex|惡作劇之手 — 對手 2 隻寶可夢身上各放 3 個指示物（30 點）

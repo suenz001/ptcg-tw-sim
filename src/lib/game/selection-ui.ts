@@ -37,6 +37,8 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'lycanroc-spike-bind-attach',    // 鬃岩狼人｜尖刺纏身：自選附能（可不附）
   'attach-tool',                   // v5.465：附加寶可夢道具選目標 → 可取消（道具退回手牌）
   'sakura-crescendo-attach',       // v5.465：櫻花魚｜漸強波 從手牌附水能量 → 可不選（也可不附）
+  'fishnet-step1',                 // v5.485：豐收漁網 step1（棄牌選【水】寶可夢，最多3、可不選）
+  'fishnet-step2',                 // v5.485：豐收漁網 step2（棄牌選基本【水】能量，最多3、可不選）
 ]);
 
 export interface SkipDecisionInput {

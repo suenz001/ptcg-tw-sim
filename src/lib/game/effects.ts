@@ -9885,6 +9885,44 @@ function resolveLanzhushi(
   return addPendingPrize(s, aIdx, prizes, pool);
 }
 
+// v5.485：招式效果「使昏厥」中央 helper（仿 深淵之瞳 / 藍柱石）。
+//   「直接使對手寶可夢昏厥」型招式效果(非傷害)統一入口：
+//   1. canApplyAttackEffectToTarget 效果免疫判定(化隱/純樸/太晶/阿塞蘿拉/薄霧/化石…) → 擋則不昏厥。
+//   2. 直接移除目標 + 附加卡進棄牌(不走 damage 管線/不觸發傷害 hook)。
+//   3. prizesForKOLocal(效果KO base 獎賞；古舊能量/影藏只在「招式傷害」昏厥才 -1)。
+//   4. recordOppKO + 補位空場 game-over + addPendingPrize 自動發獎。
+//   ⚠ 只用於「對手」effect-KO；自損昏厥(高速破壞)用 markFaintByEffect；狀態延遲KO(浸蝕污泥)維持 getEffectiveHP。
+export function koTargetByAttackEffect(
+  state: GameState, attackerIdx: 0 | 1, target: CardInstance, isActive: boolean,
+  pool: Map<string, Card>, label: string,
+): GameState {
+  const dIdx = (1 - attackerIdx) as 0 | 1;
+  const def = state.players[dIdx];
+  const card = pool.get(target.cardId);
+  const guard = canApplyAttackEffectToTarget(state, attackerIdx, target, card, pool);
+  if (guard.blocked) {
+    return addLog(state, `${label}：${card?.name ?? '?'}｜${guard.reason}（不昏厥）`, attackerIdx);
+  }
+  const ko: CardInstance[] = [
+    { ...target, damage: (card?.hp ?? 0) },
+    ...target.energyAttached,
+    ...getAllAttachedTools(target),
+    ...(target.evolvedFromStack ?? []),
+  ];
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const newDef = { ...def, discard: [...def.discard, ...ko] };
+  if (isActive) newDef.active = null;
+  else newDef.bench = def.bench.filter(b => b.iid !== target.iid);
+  players[dIdx] = newDef;
+  const prizes = card ? prizesForKOLocal(card) : 1;
+  let s = addLog({ ...state, players }, `${label}：${card?.name ?? '?'} 被昏厥！+${prizes} 張獎賞卡`, attackerIdx);
+  s = recordOppKO(s, dIdx, card, 'attack');
+  if (isActive && newDef.bench.length === 0) {
+    return { ...s, phase: 'game-over', winner: attackerIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
+  }
+  return addPendingPrize(s, attackerIdx, prizes, pool);
+}
+
 regR('lanzhushi-ko', (st, actorIdx, selectedIids, params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
   const def = st.players[dIdx];
@@ -13234,6 +13272,7 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
       bench: pl.bench.map(attach),
     };
   });
+  st = _magHeal(st, idx, [src.iid], pool);  // v5.485 自動治癒（瑪機雅娜在戰鬥場時）
   // 步驟 2：抽 1 張
   st = addLog(st, '碧綠之舞：從牌庫抽 1 張', idx);
   return drawCards(st, idx, 1);
@@ -13960,7 +13999,7 @@ regR('ursaluna-bm-attach', (state, aIdx, selectedIids, params, pool) => {
   }
   players[aIdx] = p;
   const names = energies.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  return addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx);
+  return _magHeal(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, [hostIid], pool);  // v5.485 自動治癒
 });
 
 // ── 5) 菊草葉｜叫聲 — 對手戰鬥位下回合招式 -20（沿用 嘎啦嘎啦|叫聲 的 helper）

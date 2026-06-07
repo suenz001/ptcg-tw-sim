@@ -10,6 +10,7 @@
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
 import { tryPromptPromoteActive } from '../_shared';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋引伴 pre-scan basic
@@ -520,7 +521,7 @@ regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
   }
   players[aIdx] = p;
   const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給 ${tgtName}`, aIdx);
+  return applyMagearnaHandAttachHeal(addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給 ${tgtName}`, aIdx), aIdx, [pIid], pool);  // v5.485 自動治癒
 });
 
 // 顫弦蠑螈｜惡棍衝天 — 牌庫選 1 張「基本【惡】能量」附給備戰區【惡】寶可夢 + 重洗 + 放 2 傷

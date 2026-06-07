@@ -26,7 +26,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, markFaintByEffect } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -545,10 +545,9 @@ regPost('雙斧戰龍|斧擊衝撞', (state, aIdx, pool) => {
   if (card?.stage !== 'Basic' && card?.subtype !== 'Basic') {
     return addLog(state, '斧擊衝撞：對手戰鬥場非基礎，效果無效', aIdx);
   }
-  return updatePlayer(
+  return koTargetByAttackEffect(
     addLog(state, '斧擊衝撞：對手戰鬥場為基礎寶可夢 → KO', aIdx),
-    dIdx, p => ({ ...p, active: p.active ? markFaintByEffect(p.active, pool, state) : null }),
-  );
+    aIdx, da, true, pool, '斧擊衝撞');
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -709,10 +708,7 @@ regPost('蜜集大蛇|大蛇吐息', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = s.players[dIdx].active;
   if (da) {
-    s = updatePlayer(addLog(s, '大蛇吐息：對手戰鬥寶可夢昏厥', aIdx), dIdx, pl => ({
-      ...pl,
-      active: pl.active ? markFaintByEffect(pl.active, pool, s) : null,
-    }));
+    s = koTargetByAttackEffect(addLog(s, '大蛇吐息：對手戰鬥寶可夢昏厥', aIdx), aIdx, da, true, pool, '大蛇吐息');
   }
   return s;
 });

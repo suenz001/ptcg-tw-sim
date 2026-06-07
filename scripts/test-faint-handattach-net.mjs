@@ -22,7 +22,7 @@ for (const f of readdirSync(dir)) { if (!f.endsWith('.json') || f === 'index.jso
 
 const CID = { net: '18493', water: '14085', waterE: '18519',
   magearna: '14780', oricorio: '14336', fireMega: '14425', charm: '14416', fireE: '14428',
-  voltorb: '16706', garchomp: '14750', weight: '14822', lightE: '18520' };
+  voltorb: '16706', garchomp: '14750', weight: '14822', lightE: '18520', ogerpon: '14677', grassE: '14102' };
 let iid = 0; const inst = (cid, e = {}) => ({ iid: `a${++iid}`, cardId: String(cid), damage: 0, energyAttached: [], ...e });
 
 let pass = 0, fail = 0;
@@ -83,6 +83,22 @@ T('怦怦炸彈正面 → KO 附竹蘭力量負重的烈咬陸鯊ex(330+70=400)'
     const oppActive = n.players[1].active;
     assert(oppActive === null || oppActive.cardId !== CID.garchomp, '烈咬陸鯊ex 應被昏厥(active清空或補位)，實際仍在=' + (oppActive && oppActive.cardId));
   } finally { Math.random = orig; }
+});
+
+
+// ④ 自動治癒補漏：碧綠之舞（厄鬼椪 碧草面具ex 特性，從手牌附草能量到自己）→ 瑪機雅娜在戰鬥場 → 厄鬼椪 +90
+T('自動治癒：碧綠之舞(厄鬼椪)從手牌附草能 → 厄鬼椪治癒90', () => {
+  const s = createGame({ name: 'P1', entries: [{ cardId: CID.charm, count: 1 }] },
+    { name: 'P2', entries: [{ cardId: CID.charm, count: 1 }] }, pool);
+  const oger = inst(CID.ogerpon, { damage: 50 });
+  const st = { ...s, phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, isFirstTurn: false,
+    players: [
+      { ...s.players[0], active: inst(CID.magearna), bench: [oger], hand: [inst(CID.grassE)], deck: [inst(CID.charm), inst(CID.charm)] },
+      { ...s.players[1], active: inst(CID.charm) }] };
+  const n = applyAction(st, { type: 'USE_ABILITY', iid: oger.iid, abilityIndex: 0, actorIdx: 0 }, pool);
+  const o2 = n.players[0].bench.find(b => b.cardId === CID.ogerpon);
+  assert(o2.energyAttached.length === 1, '草能量應已附上');
+  assert.equal(o2.damage, 0, '厄鬼椪應被自動治癒 50→0，實際 damage=' + o2.damage);
 });
 
 unlinkSync(E); unlinkSync(O); unlinkSync(S);

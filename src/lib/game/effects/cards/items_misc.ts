@@ -1424,39 +1424,9 @@ regG('豐收漁網', (st, idx, pool) => {
   });
   return hasWaterPoke || hasBasicWater;
 });
-reg('豐收漁網', (st, idx, pool) => {
-  const p = st.players[idx];
-  const waterPokeCount = p.discard.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
-  }).length;
-  const maxStep1 = Math.min(3, waterPokeCount);
-  st = addLog(st, `豐收漁網：先從棄牌挑選最多 ${maxStep1} 張【水】寶可夢`, idx);
-  return withPending(st, {
-    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon:Water', minCount: 0, maxCount: maxStep1,
-    effectKey: 'fishnet-step1',
-  });
-});
-regR('fishnet-step1', (st, idx, iids, _params, pool) => {
-  // 暫存 step1 picked iids，開 step2 選基本【水】能量
-  const p = st.players[idx];
-  const basicWaterCount = p.discard.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
-  }).length;
-  const maxStep2 = Math.min(3, basicWaterCount);
-  st = addLog(st, `豐收漁網：再從棄牌挑選最多 ${maxStep2} 張基本【水】能量`, idx);
-  return withPending(st, {
-    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Energy:Water', minCount: 0, maxCount: maxStep2,
-    effectKey: 'fishnet-step2',
-    params: { step1Iids: iids },
-  });
-});
-regR('fishnet-step2', (st, idx, iids, params, pool) => {
-  const step1Iids = (params?.step1Iids as string[]) ?? [];
-  const allIids = [...step1Iids, ...iids];
+// v5.485：reg 跳過「候選 0」的步驟，避免空 picker 無法略過卡死（玩家報：只有水能量沒水寶可夢時 step1 卡住）。
+//   並把 fishnet-step1/step2 加進 OPTIONAL_SELECTION_EFFECT_KEYS（卡面「最多各3張」=可不選）。
+function fishnetFinalize(st: GameState, idx: 0 | 1, allIids: string[], pool: Map<string, Card>): GameState {
   if (allIids.length === 0) {
     return addLog(st, '豐收漁網：未選擇任何卡，效果結束', idx);
   }
@@ -1469,6 +1439,42 @@ regR('fishnet-step2', (st, idx, iids, params, pool) => {
     discard: pl.discard.filter(c => !allIids.includes(c.iid)),
     deck: shuffle([...pl.deck, ...picks]),
   }));
+}
+function fishnetOpenStep2(st: GameState, idx: 0 | 1, step1Iids: string[], pool: Map<string, Card>): GameState {
+  const p = st.players[idx];
+  const basicWaterCount = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
+  }).length;
+  const maxStep2 = Math.min(3, basicWaterCount);
+  if (maxStep2 === 0) return fishnetFinalize(st, idx, step1Iids, pool);  // 無水能量 → 直接結算（用 step1 選的）
+  st = addLog(st, `豐收漁網：再從棄牌挑選最多 ${maxStep2} 張基本【水】能量`, idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Energy:Water', minCount: 0, maxCount: maxStep2,
+    effectKey: 'fishnet-step2',
+    params: { step1Iids },
+  });
+}
+reg('豐收漁網', (st, idx, pool) => {
+  const p = st.players[idx];
+  const waterPokeCount = p.discard.filter(c => {
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
+  }).length;
+  const maxStep1 = Math.min(3, waterPokeCount);
+  if (maxStep1 === 0) return fishnetOpenStep2(st, idx, [], pool);  // 無水寶可夢 → 直接跳能量步驟（修空 picker 卡死）
+  st = addLog(st, `豐收漁網：先從棄牌挑選最多 ${maxStep1} 張【水】寶可夢`, idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon:Water', minCount: 0, maxCount: maxStep1,
+    effectKey: 'fishnet-step1',
+  });
+});
+regR('fishnet-step1', (st, idx, iids, _params, pool) => fishnetOpenStep2(st, idx, iids, pool));
+regR('fishnet-step2', (st, idx, iids, params, pool) => {
+  const step1Iids = (params?.step1Iids as string[]) ?? [];
+  return fishnetFinalize(st, idx, [...step1Iids, ...iids], pool);
 });
 
 // ── 鬼之假面（Item / H）── v2.193 ────────────────────────────────────────────

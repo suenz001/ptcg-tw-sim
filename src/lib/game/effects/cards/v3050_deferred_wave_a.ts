@@ -26,6 +26,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import {
   regA, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -240,7 +241,7 @@ regR('clamperl-bombard-attach', (st, idx, iids, params, pool) => {
     `返回重載：將 ${energyNames} 共 ${validInsts.length} 張附於 ${hostName}`,
     idx);
   const validSet = new Set(validInsts.map(e => e.iid));
-  return updatePlayer(s, idx, pl => ({
+  const _att = updatePlayer(s, idx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => !validSet.has(c.iid)),
     active: isActive && pl.active
@@ -250,6 +251,7 @@ regR('clamperl-bombard-attach', (st, idx, iids, params, pool) => {
       ? { ...c, energyAttached: [...c.energyAttached, ...validInsts] }
       : c),
   }));
+  return applyMagearnaHandAttachHeal(_att, idx, [hostIid], pool);  // v5.485 自動治癒
 });
 
 // ════════════════════════════════════════════════════════════════════════════
