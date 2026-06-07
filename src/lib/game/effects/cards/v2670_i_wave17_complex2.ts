@@ -109,12 +109,13 @@ regPre('浩大鯨ex|粉碎重壓', (state, aIdx, _pool, action) => {
   }
   return { state: addLog(state, '粉碎重壓：選「是」 → 140+140 = 280（POST 棄競技場）', aIdx), damage: 280 };
 });
-regPost('浩大鯨ex|粉碎重壓', (state, aIdx, _pool, action) => {
+regPost('浩大鯨ex|粉碎重壓', (state, aIdx, pool, action) => {
   if (!state.activeStadium) return state;
   const chosenIids = action?.discardedEnergyIids;
   const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
   if (!choseYes) return state;
-  return addLog(discardActiveStadium(state, aIdx), '粉碎重壓：棄場上競技場', aIdx);
+  const _smashStadium = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  return addLog(discardActiveStadium(state, aIdx), `粉碎重壓：丟棄競技場「${_smashStadium ?? '?'}」`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

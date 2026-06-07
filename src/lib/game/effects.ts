@@ -5880,10 +5880,11 @@ regPre('古玉魚|大地熔化', (state, aIdx, _pool) => {
   }
   return { state, damage: 60 };
 });
-regPost('古玉魚|大地熔化', (state, aIdx, _pool) => {
+regPost('古玉魚|大地熔化', (state, aIdx, pool) => {
   // v2.244 升級：用 discardActiveStadium helper 丟回擁有者棄牌堆（不再簡化）
   if (!state.activeStadium) return state;
-  return addLog(discardActiveStadium(state, aIdx), '大地熔化：丟棄競技場', aIdx);
+  const _meltStadium = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  return addLog(discardActiveStadium(state, aIdx), `大地熔化：丟棄競技場「${_meltStadium ?? '?'}」`, aIdx);
 });
 
 // 轟鳴月ex|災厄風暴 — 卡面：「若希望，將場上的競技場卡丟棄。這個情況下，增加120點傷害。」
@@ -6138,10 +6139,11 @@ regPost('朽木妖|終極吸取', selfHealByDealtPost('終極吸取'));
 
 // 洗翠 卡蒂狗|全部燒光 — 無傷害，丟棄競技場卡
 regPre('洗翠 卡蒂狗|全部燒光', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('洗翠 卡蒂狗|全部燒光', (state, aIdx, _pool) => {
+regPost('洗翠 卡蒂狗|全部燒光', (state, aIdx, pool) => {
   if (!state.activeStadium) return addLog(state, '全部燒光：場上沒有競技場', aIdx);
   // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆
-  return addLog(discardActiveStadium(state, aIdx), '全部燒光：丟棄競技場', aIdx);
+  const _burnStadium = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+  return addLog(discardActiveStadium(state, aIdx), `全部燒光：丟棄競技場「${_burnStadium ?? '?'}」`, aIdx);
 });
 
 // 洗翠 風速狗|灼燒 — 90 + 灼傷
@@ -7525,7 +7527,8 @@ function coinHeadsOppDiscardEnergyPost(label: string): AttackPostFn {
     const defName = pool.get(def.cardId)?.name ?? '?';
     // 從後往前丟 1 張（最近附加優先）
     const last = def.energyAttached[def.energyAttached.length - 1];
-    let s = addLog(state, `${label}：正面！丟棄對手 ${defName} 身上 1 張能量`, aIdx);
+    const lastEnergyName = pool.get(last.cardId)?.name ?? '能量';
+    let s = addLog(state, `${label}：正面！丟棄對手 ${defName} 身上的 ${lastEnergyName}`, aIdx);
     return updatePlayer(s, dIdx, p => {
       if (!p.active) return p;
       return {
@@ -8886,7 +8889,8 @@ regPost('爆焰龜獸|灼燒盡', (state, aIdx, pool) => {
   }
   const last = def.energyAttached[def.energyAttached.length - 1];
   const defName = defCard.name;
-  const s = addLog(state, `灼燒盡：丟棄對手 ${defName} 1 張能量`, aIdx);
+  const lastEnergyName = pool.get(last.cardId)?.name ?? '能量';
+  const s = addLog(state, `灼燒盡：丟棄對手 ${defName} 身上的 ${lastEnergyName}`, aIdx);
   return updatePlayer(s, dIdx, pl => {
     if (!pl.active) return pl;
     return {
