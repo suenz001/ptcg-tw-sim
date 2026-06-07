@@ -2045,11 +2045,49 @@ const JUNIOR_GENGAR_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 吼鯨王ex（60 張）— v5.493 網站推薦預組 */
+const WAILORD_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_wailord__',
+  name: '吼鯨王ex',
+  createdAt: '',
+  entries: [
+    // Pokemon 15
+    { cardId: '19159', count: 4 }, // 吼鯨王ex (M5 015/081)
+    { cardId: '19158', count: 4 }, // 吼吼鯨 (M5 014/081)
+    { cardId: '18061', count: 2 }, // 小海獅 (M-P-J 065/M-P)
+    { cardId: '17996', count: 2 }, // 白海獅 (M3 019/080)
+    { cardId: '10452', count: 1 }, // 厄鬼椪 水井面具ex (SV6 038/101)
+    { cardId: '10620', count: 1 }, // 吉雉雞ex (SV6a 038/064)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    // Items 20
+    { cardId: '9907', count: 4 },  // 沉重接力棒 (SV5M 066/071)
+    { cardId: '14118', count: 4 }, // 高級球 (MBD 014/022)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '13948', count: 4 }, // 寶可裝置3.0 (SV11B 081/086)
+    { cardId: '14391', count: 2 }, // 超大冰淇淋 (M2 073/080)
+    { cardId: '10638', count: 1 }, // 夜間擔架 (SV6a 056/064)
+    { cardId: '18493', count: 1 }, // 豐收漁網 (M4 073/083)
+    // Supporters 12
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 (M1L 062/063)
+    { cardId: '19219', count: 3 }, // 小霞的朝氣 (M5 075/081)
+    { cardId: '10641', count: 2 }, // 阿克羅瑪的執著 (SV6a 059/064)
+    { cardId: '14124', count: 2 }, // 老大的指令 (MBD 020/022)
+    { cardId: '11090', count: 1 }, // 杜若 (SV7a 060/064)
+    // Stadiums 3
+    { cardId: '14082', count: 3 }, // 衝浪海灘 (M1S 062/063)
+    // Energy 10
+    { cardId: '18519', count: 8 }, // 基本【水】能量 (M-P-J 098/M-P)
+    { cardId: '18502', count: 1 }, // 泡沫【水】能量 (M4 082/083)
+    { cardId: '10515', count: 1 }, // 古舊能量 (SV6 101/101)
+  ],
+};
+
 export const PRESET_DECKS: Deck[] = [
   { ...MASTER_KANGASKHAN_OGERPON_DECK, updatedAt: '' },  // 大師冠軍超級袋獸厄鬼椪
   { ...SENIOR_BLAZIKEN_DRAGAPULT_DECK, updatedAt: '' },  // 少年冠軍火焰雞多龍
   { ...JUNIOR_GENGAR_DRAGAPULT_DECK, updatedAt: '' },    // 孩童冠軍魔靈多龍
   { ...MEGA_DUGTRIO_DECK, updatedAt: '' },               // 超級龍頭地鼠
+  { ...WAILORD_DECK, updatedAt: '' },                    // 吼鯨王ex
   { ...GENGAR_DECK, updatedAt: '' },
   { ...DIANCIE_DECK, updatedAt: '' },
   { ...CYNTHIA_GARCHOMP_DECK, updatedAt: '' },
