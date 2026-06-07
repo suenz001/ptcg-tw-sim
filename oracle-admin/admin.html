@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.18</title>
+<title>PTCG Oracle Admin v1.19</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.18</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.19</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -869,7 +869,8 @@ async function loadOracleRooms() {
   if (!oracleRoomsCache.length) el.innerHTML = '<h2>🎮 Oracle 對戰</h2><div class="empty">Loading…</div>';
   // v1.18: 只抓「當前 status 分頁」的房間（如停在「進行中」按 Refresh 不再撈全部已結束房 → 快很多）。
   const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
-  const data = await api('/api/admin/oracle/rooms' + qs);
+  // v1.19: 與卡片索引/標籤並行載入（detectMainPokemon 主力打手偵測需要），皆有 promise 快取只抓一次。
+  const [data] = await Promise.all([api('/api/admin/oracle/rooms' + qs), ensureCardIndex(), ensureCardTags()]);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   oracleRoomsCache = data.rooms;
   if (data.counts) oracleRoomsCounts = data.counts;  // 全量三狀態計數，toolbar 用
@@ -882,7 +883,8 @@ async function loadFirebaseRooms() {
   if (!firebaseRoomsCache.length) el.innerHTML = '<h2>🔥 Firebase 對戰</h2><div class="empty">Loading…</div>';
   // v1.18: 只抓當前 status 分頁的房間（同 Oracle，加速）。
   const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
-  const data = await api('/api/admin/firebase/rooms' + qs);
+  // v1.19: 與卡片索引/標籤並行載入（主力打手偵測需要）。
+  const [data] = await Promise.all([api('/api/admin/firebase/rooms' + qs), ensureCardIndex(), ensureCardTags()]);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   firebaseRoomsCache = data.rooms;
   if (data.counts) firebaseRoomsCounts = data.counts;
@@ -1052,6 +1054,10 @@ function renderRoomRow(r, source) {
   }
   const p1Name = seatLabel(p1);
   const p2Name = seatLabel(p2);
+  // v1.19 還原：玩家名下顯示「⚔️ 主力打手」（從牌組推測牌型，剔除功能牌）。
+  const _mainBadge = (m) => m ? `<div class="small" style="color:#d98c3f;font-size:10px;font-weight:600">⚔️ ${escapeHtml(m)}</div>` : '';
+  const p1MainBadge = _mainBadge(detectMainPokemon(p1));
+  const p2MainBadge = _mainBadge(detectMainPokemon(p2));
   const turn = (gs?.turn != null) ? gs.turn : '<span class="small">-</span>';
   // v0.90: Firebase rooms 也可刪
   const showDelete = true;
@@ -1078,8 +1084,8 @@ function renderRoomRow(r, source) {
     <tr>
       <td class="mono"><b>${r._id}</b></td>
       <td title="${escapeHtml(roomNameFull)}"><div class="trunc-inner">${escapeHtml(roomNameFull)}</div></td>
-      <td class="${p1Class}" title="${escapeHtml(p1FullName)}"><div class="trunc-inner">${p1Name}</div></td>
-      <td class="${p2Class}" title="${escapeHtml(p2FullName)}"><div class="trunc-inner">${p2Name}</div></td>
+      <td class="${p1Class}" title="${escapeHtml(p1FullName)}"><div class="trunc-inner">${p1Name}</div>${p1MainBadge}</td>
+      <td class="${p2Class}" title="${escapeHtml(p2FullName)}"><div class="trunc-inner">${p2Name}</div>${p2MainBadge}</td>
       <td>${statusBadge}</td>
       <td class="num-cell">${turn}</td>
       <td>${updatedStr}${ageMin !== null ? `<div class="small">${ageMin}m ago</div>` : ''}</td>
@@ -2068,6 +2074,37 @@ window.copyMatchDeck = async function() {
 let statsOverviewCache = null;
 let statsCardsCache = null;
 let cardTagsCache = {};         // { cardId: ['support', ...] }
+// ── v1.19 還原：對戰列表「主力打手偵測」（v1.17 曾有、被後續 clone-based admin 改動覆蓋掉）──
+//   cardTagsCache 原僅統計頁 loadStats 載；對戰分頁也要用 → 抽 ensureCardTags（promise guard 只抓一次）。
+let _cardTagsPromise = null;
+async function ensureCardTags() {
+  if (_cardTagsPromise) return _cardTagsPromise;
+  _cardTagsPromise = (async () => {
+    try {
+      const tags = await api('/api/admin/cards/tags');
+      if (tags && !tags.error) cardTagsCache = tags.tags || {};
+    } catch (e) { console.warn('[admin] ensureCardTags failed:', e.message); }
+  })();
+  return _cardTagsPromise;
+}
+// 從玩家牌組（deckEntries）推測「主力打手寶可夢」，剔除功能牌（訓練家/能量 + 手動標『支援型』的寶可夢）。
+//   評分：規則卡(ex)+1000 / 進化階級×100(Stage2=2,Stage1=1,Basic=0) / 張數×10 → 取最高。
+//   需 cardInfoMap(ensureCardIndex) + cardTagsCache(ensureCardTags) 先載好。
+function detectMainPokemon(seat) {
+  const entries = seat?.deckEntries || [];
+  if (!entries.length) return '';
+  let bestName = '', bestScore = -1;
+  for (const e of entries) {
+    const info = cardInfoMap[e.cardId];
+    if (!info || info.supertype !== 'Pokemon') continue;
+    if ((cardTagsCache[e.cardId] || []).includes('support')) continue; // 排除手動標『支援型』的寶可夢
+    const isRuleBox = info.subtype === 'ex';
+    const stageRank = info.subtype === 'Stage2' ? 2 : (info.subtype === 'Stage1' ? 1 : 0);
+    const score = (isRuleBox ? 1000 : 0) + stageRank * 100 + (e.count || 0) * 10;
+    if (score > bestScore) { bestScore = score; bestName = info.displayName || info.name; }
+  }
+  return bestName;
+}
 let statsLoading = false;
 let pokemonFilterMode = 'all';  // 'all' | 'main' | 'support'
 let statsMode = 'online';       // v0.83: 全局 mode filter — 預設 '線上' (排除本機測試)
