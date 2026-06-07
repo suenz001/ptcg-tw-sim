@@ -20,6 +20,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
+import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { openDeckViewReshuffle } from './effects/_shared';
 import {
   // Maps
@@ -12257,57 +12258,14 @@ export function cursedBombAttackPost(label: string, counters: number = 5): Attac
 
 regR('overvolt-attach-pick-target', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '過度放電';
-  const p = st.players[idx];
-  const lightningSelf = [p.active, ...p.bench].filter((c): c is CardInstance => {
-    if (!c) return false;
-    const card = pool.get(c.cardId);
-    return card?.pokemonType === 'Lightning';
-  });
-  if (lightningSelf.length === 0) {
-    // 全部雷寶可夢已離場 — 能量留在棄牌區
-    return addLog(st, `${label}：場上無【雷】寶可夢，能量留在棄牌區`, idx);
-  }
-  if (lightningSelf.length === 1) {
-    const target = lightningSelf[0];
-    const energies = p.discard.filter(c => iids.includes(c.iid));
-    const tName = pool.get(target.cardId)?.name ?? '?';
-    const s = addLog(st, `${label}：將 ${energies.length} 張基本能量附加到 ${tName}`, idx);
-    return updatePlayer(s, idx, pl => {
-      const rest = pl.discard.filter(c => !iids.includes(c.iid));
-      if (pl.active && pl.active.iid === target.iid) {
-        return { ...pl, discard: rest,
-          active: { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] } };
-      }
-      return { ...pl, discard: rest,
-        bench: pl.bench.map(c => c.iid === target.iid
-          ? { ...c, energyAttached: [...c.energyAttached, ...energies] } : c) };
-    });
-  }
-  // 多隻雷寶可夢：v2.87 改用 +/- 計數器 UI（+/- 計數批次分配，省下逐張按確認）。
-  // v5.501：energyTypeName 改依「實際選中的能量屬性」顯示（先前寫死『雷』，但卡面可選任意基本能量，
-  //   玩家選火/水時 modal 卻顯示『分配【雷】能量』是錯的）。基本能量 pokemonType=null → 從卡名【X】取；
-  //   全部同屬性 → 顯示該屬性；混合屬性 → 留空（modal 顯示通用「能量」不掛【X】）。
-  const _selEnergies = st.players[idx].discard.filter(c => iids.includes(c.iid));
-  const _typeChars = new Set(_selEnergies.map(e => {
-    const m = (pool.get(e.cardId)?.name ?? '').match(/【(.)】/);
-    return m ? m[1] : '';
-  }));
-  const _energyTypeName = _typeChars.size === 1 ? [..._typeChars][0] : '';
-  return withPending(addLog(st,
-    `${label}：請以「+/-」分配 ${iids.length} 張${_energyTypeName ? `【${_energyTypeName}】` : ''}能量到 ${lightningSelf.length} 隻【雷】寶可夢`,
-    idx), {
-    type: 'energy-distribute',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: iids.length, maxCount: iids.length,
-    effectKey: 'v87-energy-distribute-flat',
-    params: {
-      label,
-      energyIids: iids,
-      validIids: lightningSelf.map(c => c.iid),
-      totalCount: iids.length, placedCount: 0,
-      energyTypeName: _energyTypeName,
-    },
-  });
+  // v5.502：統一改用 startEnergyChain（仿大吾的巨金怪ex|X啟動）取代原 inline 分配邏輯。
+  //   能量已在 discard（從 discard-search picker 選），source='discard'；目標=自己【雷】寶可夢。
+  //   startEnergyChain 自動處理：0 目標→能量留棄牌、1 目標→全附、同屬性→單 picker 顯示該屬性、
+  //   **混合屬性→「逐屬性分波」**(第1波火 modal 顯示【火】、第2波水顯示【水】…)，
+  //   解決 v5.501「混合屬性顯示通用『能量』、玩家看不出附哪種屬性」的問題。
+  return startEnergyChain(st, idx, iids, {
+    label, source: 'discard', scope: 'any-own', filterType: 'Lightning',
+  }, pool);
 });
 
 // v2.87：overvolt-attach-commit 已被 v87-energy-distribute-flat 取代。
