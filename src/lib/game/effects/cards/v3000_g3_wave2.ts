@@ -306,6 +306,40 @@ export function magearnaAutoHealAmount(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// v5.484：瑪機雅娜｜自動治癒中央套用 helper
+//   卡面「每次從自己的手牌將能量卡附於寶可夢身上時，將那隻寶可夢恢復 90 HP」。
+//   除了 engine ATTACH_ENERGY（手動附能）外，凡「特性/卡片從手牌附能量到自己寶可夢」
+//   的 resolver（激動渦輪/金色火焰/火焰蹈舞/電氣流/烈火亂舞…）附完能量後都該呼叫它，
+//   傳入「本次被附能量的目標 iid」。attacherIdx 戰鬥場有自動治癒才生效。
+//   ⚠ 攻擊型「從手牌附能」(滿載心田/吃飽先等)的攻擊者本身佔住 active≠瑪機雅娜，
+//     不可能與自動治癒共存，故不需接（只接特性/卡片路徑）。
+export function applyMagearnaHandAttachHeal(
+  state: GameState,
+  attacherIdx: 0 | 1,
+  targetIids: string[],
+  pool: Map<string, Card>,
+): GameState {
+  const healAmt = magearnaAutoHealAmount(state, attacherIdx, pool);
+  if (healAmt <= 0 || targetIids.length === 0) return state;
+  const ids = new Set(targetIids);
+  const healedNames: string[] = [];
+  const heal = (inst: CardInstance): CardInstance => {
+    if (!ids.has(inst.iid) || (inst.damage ?? 0) <= 0) return inst;
+    healedNames.push(pool.get(inst.cardId)?.name ?? '?');
+    return { ...inst, damage: Math.max(0, (inst.damage ?? 0) - healAmt) };
+  };
+  let s = updatePlayer(state, attacherIdx, p => ({
+    ...p,
+    active: p.active ? heal(p.active) : p.active,
+    bench: p.bench.map(heal),
+  }));
+  if (healedNames.length > 0) {
+    s = addLog(s, `「自動治癒」啟動：${healedNames.join('、')} 恢復 ${healAmt} HP`, attacherIdx);
+  }
+  return s;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // v3.0 register pattern（Iron Rule 12）
 //
 // 本檔目前的 helpers 都是 inline 用法（engine.ts 內 import 後呼叫），

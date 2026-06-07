@@ -6767,9 +6767,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   清除 flag（消費完）
     const triggerSludgeKO = (c: CardInstance): CardInstance => {
       if (!c.koAtMyNextEndOfTurn) return c;
-      const card = pool.get(c.cardId);
-      const hp = card?.hp ?? 0;
-      const n = { ...c, damage: hp };
+      const n = { ...c, damage: getEffectiveHP(c, pool, state) };
       delete n.koAtMyNextEndOfTurn;
       return n;
     };

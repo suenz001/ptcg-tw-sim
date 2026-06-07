@@ -17,7 +17,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, same
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, markFaintByEffect } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -827,11 +827,9 @@ regPost('奇樹的頑皮雷彈|怦怦炸彈', (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const da = s.players[dIdx].active;
     if (da) {
-      const card = pool.get(da.cardId);
-      const hp = card?.hp ?? 0;
       s = updatePlayer(s, dIdx, p => ({
         ...p,
-        active: p.active ? { ...p.active, damage: hp } : null,
+        active: p.active ? markFaintByEffect(p.active, pool, s) : null,
       }));
       s = addLog(s, '怦怦炸彈：正面 → 對手戰鬥寶可夢昏厥', aIdx);
     }

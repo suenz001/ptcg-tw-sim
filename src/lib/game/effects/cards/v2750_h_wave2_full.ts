@@ -21,7 +21,7 @@ import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
-  snipeOneOppBenchPost,
+  snipeOneOppBenchPost, markFaintByEffect,
 } from '../../effects';
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -983,7 +983,7 @@ regPost('普隆隆姆ex|高速破壞', (state, aIdx, pool) => {
   const card = pool.get(a.cardId);
   return updatePlayer(addLog(state, '高速破壞：自身與附加卡全部丟棄', aIdx), aIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, damage: card?.hp ?? 9999 } : null,
+    active: p.active ? markFaintByEffect(p.active, pool, state) : null,
   }));
 });
 
@@ -2598,7 +2598,7 @@ regPost('阿羅拉 椰蛋樹ex|嗡嗡榍石', (state, aIdx, pool) => {
     if (card?.stage !== 'Basic') return addLog(r.state, '嗡嗡榍石：對手戰鬥場非基礎，無效', aIdx);
     return updatePlayer(addLog(r.state, '嗡嗡榍石：正面 → 對手戰鬥場(基礎)KO', aIdx), dIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, damage: card?.hp ?? 9999 } : null,
+      active: p.active ? markFaintByEffect(p.active, pool, r.state) : null,
     }));
   }
   // 反 → 對手選 1 備戰基礎 KO
@@ -2619,8 +2619,7 @@ regR('h-wave2-ko-opp-bench-basic', (state, aIdx, iids, _params, pool) => {
     ...p,
     bench: p.bench.map(b => {
       if (b.iid !== targetIid) return b;
-      const card = pool.get(b.cardId);
-      return { ...b, damage: card?.hp ?? 9999 };
+      return markFaintByEffect(b, pool, state);
     }),
   }));
 });

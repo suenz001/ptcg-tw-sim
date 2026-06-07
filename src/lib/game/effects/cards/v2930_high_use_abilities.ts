@@ -12,6 +12,7 @@
  */
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import {
   regA, regAByName, regR,
   addLog, updatePlayer, withPending,
@@ -194,13 +195,14 @@ regR('gold-flame-attach', (st, idx, iids, params, pool) => {
   const energies = p.hand.filter(c => energyIids.includes(c.iid));
   let s = addLog(st,
     `金色火焰：將 ${energies.length} 張基本【火】能量附於 ${tName}`, idx);
-  return updatePlayer(s, idx, pl => ({
+  const attached = updatePlayer(s, idx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
     bench: pl.bench.map(c => c.iid === targetIid
       ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
       : c),
   }));
+  return applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool);  // v5.484 自動治癒
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

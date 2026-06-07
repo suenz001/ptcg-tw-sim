@@ -37,6 +37,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, drawCards,
@@ -419,6 +420,7 @@ regR('flame-dance-attach-fire', (st, idx, iids, params, pool) => {
       ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
       : c),
   }));
+  s = applyMagearnaHandAttachHeal(s, idx, [targetIid], pool);  // v5.484 自動治癒
   return openFlameDanceFightStage(s, idx, pool);
 });
 function openFlameDanceFightStage(st: GameState, idx: 0 | 1, pool: Map<string, Card>): GameState {
@@ -488,6 +490,7 @@ regR('flame-dance-attach-fight', (st, idx, iids, params, pool) => {
       ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
       : c),
   }));
+  s = applyMagearnaHandAttachHeal(s, idx, [targetIid], pool);  // v5.484 自動治癒
   return s;
 });
 
@@ -806,6 +809,7 @@ regR('kitree-iron-bundle-flow-attach', (st, idx, iids, params, pool) => {
       ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
       : c),
   }));
+  s = applyMagearnaHandAttachHeal(s, idx, [targetIid], pool);  // v5.484 自動治癒
   return s;
 });
 

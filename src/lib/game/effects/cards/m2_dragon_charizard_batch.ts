@@ -10,6 +10,7 @@
  * - 火恐龍 SVQL｜大字爆炎（user explicitly requested this G-reg card）
  */
 import { tryPromptPromoteActive } from '../_shared';
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
@@ -201,11 +202,12 @@ regR('exciting-turbo-commit', (st, idx, iids, params, pool) => {
   const tCard = pool.get(target.cardId);
   if (!isBasicEnergyOf(eCard, 'Fire', '【火】') || tCard?.pokemonType !== 'Fire') return st;
   const s = addLog(st, `激動渦輪：將基本【火】能量附於 ${tCard.name}`, idx);
-  return updatePlayer(s, idx, pl => ({
+  const attached = updatePlayer(s, idx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => c.iid !== energyIid),
     bench: pl.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b),
   }));
+  return applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool);  // v5.484 自動治癒
 });
 
 // ── 超級噴火駝ex｜炙燒 ─────────────────────────────────────────────────────

@@ -724,6 +724,18 @@ function effectiveHPInline(
   return hp;
 }
 
+// v5.484：效果昏厥中央 helper — 將寶可夢 damage 設為「有效 maxHP」(含道具/特殊能量/場地 HP 加成)，
+//   交給引擎 KO sweep 結算。所有「直接使昏厥」效果(非傷害,如怦怦炸彈/斧擊衝撞/大蛇吐息/嗡嗡榍石/
+//   高速破壞自損)的 in-place faint 都該用它，避免用 base card.hp → 對手附「竹蘭的力量負重」(+70HP)
+//   等道具時 damage 不足而打不死。
+export function markFaintByEffect(
+  inst: CardInstance,
+  pool: Map<string, Card>,
+  state?: GameState,
+): CardInstance {
+  return { ...inst, damage: effectiveHPInline(inst, pool, state) };
+}
+
 /**
  * 對指定方的「所有備戰寶可夢」施加固定 amount 傷害（bench 不計算弱點/抵抗力）。
  * KO 判定 + 棄牌遷移 + pendingPrizes 累計都在這裡處理。
@@ -15531,7 +15543,7 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
   if (!targetIid || !energyIid || !energyCardId) return st;
   const energyInst: import('./types').CardInstance = { iid: energyIid, cardId: energyCardId, damage: 0, energyAttached: [] };
   const energyName = pool.get(energyCardId)?.name ?? '能量';
-  return updatePlayer(st, idx, p => {
+  const _attached = updatePlayer(st, idx, p => {
     const attachTo = (inst: import('./types').CardInstance | null): import('./types').CardInstance | null => {
       if (!inst || inst.iid !== targetIid) return inst;
       const name = pool.get(inst.cardId)?.name ?? '?';
@@ -15544,6 +15556,7 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
       bench: p.bench.map(c => attachTo(c) ?? c),
     };
   });
+  return _magHeal(_attached, idx, [targetIid], pool);  // v5.484 自動治癒
 });
 
 // v3.07 Deferred Wave D — 手牌觸發特性 effect fn（給 ON_DISCARD_FROM_HAND_ABILITIES /
@@ -16379,6 +16392,7 @@ registerV3080DeferredWaveC();
 //   - 化石補漏在本 effects.ts inline 改完（resolveBenchGuard 羽毛 / canApplyAttackEffectToTarget 背蓋）
 //   - 鰭之化石整合進 v3080_deferred_wave_c.ts 的 isImmuneToOppSupporter（單獨 patch）
 import { registerV3210Ordiga } from './effects/cards/v3210_ordiga';
+import { applyMagearnaHandAttachHeal as _magHeal } from './effects/cards/v3000_g3_wave2';
 registerV3210Ordiga();
 
 // ============================================================================
