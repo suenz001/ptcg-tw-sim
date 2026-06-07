@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.491</span> 內建預組更新：新增 3 組世界賽冠軍牌表——「大師冠軍超級袋獸厄鬼椪」「少年冠軍火焰雞多龍」「孩童冠軍魔靈多龍」，並把內建預組改為「越新的排越上面」（目前由上至下：大師冠軍超級袋獸厄鬼椪、少年冠軍火焰雞多龍、孩童冠軍魔靈多龍、超級龍頭地鼠…）。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.490</span> 新增網站推薦預組「超級龍頭地鼠」（鋼系，60 張，含超級龍頭地鼠ex／蓋諾賽克特ex／巨金怪線）。可在牌組頁的「內建預組」區直接取用。</summary>
       </details>
 

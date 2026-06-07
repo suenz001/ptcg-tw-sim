@@ -1923,7 +1923,133 @@ const MEGA_DUGTRIO_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 大師冠軍超級袋獸厄鬼椪（60 張）— v5.491 網站推薦預組（WCS Masters） */
+const MASTER_KANGASKHAN_OGERPON_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_master_kangaskhan_ogerpon__',
+  name: '大師冠軍超級袋獸厄鬼椪',
+  createdAt: '',
+  entries: [
+    // Pokemon 18
+    { cardId: '14071', count: 2 }, // 超級袋獸ex (M1S 051/063)
+    { cardId: '10430', count: 4 }, // 厄鬼椪 碧草面具ex (SV6 016/101)
+    { cardId: '10452', count: 1 }, // 厄鬼椪 水井面具ex (SV6 038/101)
+    { cardId: '11049', count: 2 }, // 拉帝亞斯ex (SV7a 019/064)
+    { cardId: '11255', count: 2 }, // 桃歹郎 (SV8 075/106)
+    { cardId: '14720', count: 2 }, // 莉莉艾的皮皮ex (M2a 060/193)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '10620', count: 1 }, // 吉雉雞ex (SV6a 038/064)
+    { cardId: '10265', count: 1 }, // 古玉魚 (SV5a 018/066)
+    { cardId: '10469', count: 1 }, // 願增猿 (SV6 055/101)
+    // Items 15
+    { cardId: '10508', count: 4 }, // 捕蟲組合 (SV6 094/101)
+    { cardId: '17109', count: 4 }, // 能量轉移 (MC 638/742)
+    { cardId: '14118', count: 4 }, // 高級球 (MBD 014/022)
+    { cardId: '10300', count: 1 }, // 不公印章 (SV5a 053/066)
+    { cardId: '12427', count: 1 }, // 太晶珠 (SV8a 145/187)
+    { cardId: '10638', count: 1 }, // 夜間擔架 (SV6a 056/064)
+    // Supporters 9
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 (M1L 062/063)
+    { cardId: '14124', count: 3 }, // 老大的指令 (MBD 020/022)
+    { cardId: '9908', count: 1 },  // 暗碼迷的解讀 (SV5M 067/071)
+    { cardId: '13770', count: 1 }, // N的謀劃 (SV11B 165/086)
+    // Stadiums 3
+    { cardId: '10997', count: 3 }, // 零之大空洞 (SV7 102/102)
+    // Energy 15
+    { cardId: '18382', count: 11 }, // 基本【草】能量 (MJ GRA)
+    { cardId: '14852', count: 4 },  // 稜鏡能量 (M2a 192/193)
+  ],
+};
+
+/** 少年冠軍火焰雞多龍（60 張）— v5.491 網站推薦預組（WCS Seniors） */
+const SENIOR_BLAZIKEN_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_senior_blaziken_dragapult__',
+  name: '少年冠軍火焰雞多龍',
+  createdAt: '',
+  entries: [
+    // Pokemon 23
+    { cardId: '12086', count: 2 }, // 火焰雞ex (SVM 016/175)
+    { cardId: '12768', count: 3 }, // 火稚雞 (SV10 018/098)
+    { cardId: '12769', count: 1 }, // 力壯雞 (SV10 019/098)
+    { cardId: '17019', count: 2 }, // 多龍巴魯托ex (MC 548/742)
+    { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
+    { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '16758', count: 1 }, // 莉莉艾的皮皮ex (MC 287/742)
+    { cardId: '18038', count: 1 }, // 喵喵ex (M3 061/080)
+    { cardId: '10265', count: 1 }, // 古玉魚 (SV5a 018/066)
+    { cardId: '14671', count: 1 }, // 含羞苞 (M2a 011/193)
+    { cardId: '14672', count: 1 }, // 謝米 (M2a 012/193)
+    { cardId: '16829', count: 1 }, // 願增猿 (MC 358/742)
+    // Items 19
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17126', count: 3 }, // 神奇糖果 (MC 655/742)
+    { cardId: '17110', count: 1 }, // 能量輸送 (MC 639/742)
+    { cardId: '17141', count: 1 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742)
+    // Supporters 9
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '12844', count: 1 }, // 火箭隊的拉姆達 (SV10 094/098)
+    { cardId: '18495', count: 1 }, // AZ的平和 (M4 075/083)
+    // Stadiums 2
+    { cardId: '14849', count: 1 }, // 火箭隊的監視塔 (M2a 189/193)
+    { cardId: '10997', count: 1 }, // 零之大空洞 (SV7 102/102)
+    // Energy 7
+    { cardId: '17216', count: 3 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17220', count: 3 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17214', count: 1 }, // 基本【惡】能量 (MC DAR)
+  ],
+};
+
+/** 孩童冠軍魔靈多龍（60 張）— v5.491 網站推薦預組（WCS Juniors） */
+const JUNIOR_GENGAR_DRAGAPULT_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_junior_gengar_dragapult__',
+  name: '孩童冠軍魔靈多龍',
+  createdAt: '',
+  entries: [
+    // Pokemon 22
+    { cardId: '17019', count: 3 }, // 多龍巴魯托ex (MC 548/742)
+    { cardId: '17018', count: 4 }, // 多龍奇 (MC 547/742)
+    { cardId: '17017', count: 4 }, // 多龍梅西亞 (MC 546/742)
+    { cardId: '16781', count: 1 }, // 黑夜魔靈 (MC 310/742)
+    { cardId: '16780', count: 2 }, // 彷徨夜靈 (MC 309/742)
+    { cardId: '16779', count: 2 }, // 夜巡靈 (MC 308/742)
+    { cardId: '18038', count: 2 }, // 喵喵ex (M3 061/080)
+    { cardId: '16960', count: 1 }, // 吉雉雞ex (MC 489/742)
+    { cardId: '11526', count: 1 }, // 含羞苞 (SV8a 001/187)
+    { cardId: '12664', count: 1 }, // 謝米 (SV9a 006/063)
+    { cardId: '16829', count: 1 }, // 願增猿 (MC 358/742)
+    // Items 18
+    { cardId: '17122', count: 4 }, // 高級球 (MC 651/742)
+    { cardId: '17133', count: 4 }, // 寶可平板 (MC 662/742)
+    { cardId: '17119', count: 4 }, // 好友寶芬 (MC 648/742)
+    { cardId: '17126', count: 2 }, // 神奇糖果 (MC 655/742)
+    { cardId: '17141', count: 2 }, // 夜間擔架 (MC 670/742)
+    { cardId: '18492', count: 1 }, // 特殊紅牌 (M4 072/083)
+    { cardId: '17104', count: 1 }, // 不公印章 (MC 633/742)
+    // Supporters 10
+    { cardId: '17200', count: 4 }, // 莉莉艾的決意 (MC 729/742)
+    { cardId: '17195', count: 3 }, // 老大的指令 (MC 724/742)
+    { cardId: '17167', count: 2 }, // 赤松 (MC 696/742)
+    { cardId: '14395', count: 1 }, // 小光 (M2 077/080)
+    // Stadiums 2
+    { cardId: '12846', count: 1 }, // 火箭隊的監視塔 (SV10 096/098)
+    { cardId: '11706', count: 1 }, // 阻礙之塔 (SV8a 181/187)
+    // Energy 8
+    { cardId: '17216', count: 3 }, // 基本【火】能量 (MC FIR)
+    { cardId: '17220', count: 3 }, // 基本【超】能量 (MC PSY)
+    { cardId: '17214', count: 2 }, // 基本【惡】能量 (MC DAR)
+  ],
+};
+
 export const PRESET_DECKS: Deck[] = [
+  { ...MASTER_KANGASKHAN_OGERPON_DECK, updatedAt: '' },  // 大師冠軍超級袋獸厄鬼椪
+  { ...SENIOR_BLAZIKEN_DRAGAPULT_DECK, updatedAt: '' },  // 少年冠軍火焰雞多龍
+  { ...JUNIOR_GENGAR_DRAGAPULT_DECK, updatedAt: '' },    // 孩童冠軍魔靈多龍
+  { ...MEGA_DUGTRIO_DECK, updatedAt: '' },               // 超級龍頭地鼠
   { ...GENGAR_DECK, updatedAt: '' },
   { ...DIANCIE_DECK, updatedAt: '' },
   { ...CYNTHIA_GARCHOMP_DECK, updatedAt: '' },
@@ -1970,7 +2096,6 @@ export const PRESET_DECKS: Deck[] = [
   { ...URSALUNA_BLOODMOON_DECK, updatedAt: '' },
   { ...CRABOMINABLE_DECK, updatedAt: '' },
   { ...ANCIENT_FLYGON_DECK, updatedAt: '' },
-  { ...MEGA_DUGTRIO_DECK, updatedAt: '' },
 ];
 
 /** 預設牌組 ID 集合（用來判斷是否為內建牌組） */
