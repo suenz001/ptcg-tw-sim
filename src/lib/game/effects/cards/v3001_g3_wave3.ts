@@ -47,6 +47,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { RULE_BOX_SUBTYPES } from '../../types';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -124,6 +125,34 @@ export function hasAbilityOnActive(
  * @param location 持有者在 'active' 或 'bench'
  * @returns true → 特性實際生效；false → 特性被消除應跳過
  */
+// ════════════════════════════════════════════════════════════════════════════
+// 鐵荊棘ex｜初始化（passive 特性消除 — 規則寶可夢）
+//   卡面：「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）
+//          的特性全部消除。」
+//   與 engine.ts isInitializeBlocking 同邏輯，集中進中央 helper 讓 UI(getUsableAbilities) +
+//   所有被動套用點(isAbilityHolderEffective caller) 一律 respect。鐵荊棘ex 本身是「未來」→ 不消除自己。
+// ════════════════════════════════════════════════════════════════════════════
+export function isInitializeNullified(
+  state: GameState | undefined,
+  holderCard: Card | null | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || !holderCard || !pool) return false;
+  // holder 必須是「擁有規則的寶可夢」(rule box)
+  const isRuleBox = (holderCard.subtype != null && RULE_BOX_SUBTYPES.has(holderCard.subtype))
+    || (holderCard.tags ?? []).some(t => RULE_BOX_SUBTYPES.has(t));
+  if (!isRuleBox) return false;
+  // 「未來」寶可夢不受影響（含鐵荊棘ex 自己）
+  if ((holderCard.tags ?? []).includes('未來')) return false;
+  // 任一方「戰鬥場」有「初始化」(鐵荊棘ex) 持有者
+  for (const player of state.players) {
+    if (!player.active) continue;
+    const ac = pool.get(player.active.cardId);
+    if (ac?.abilities?.some(ab => ab.name === '初始化')) return true;
+  }
+  return false;
+}
+
 export function isAbilityHolderEffective(
   state: GameState | undefined,
   holderInst: CardInstance | null | undefined,
@@ -134,6 +163,8 @@ export function isAbilityHolderEffective(
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!state || !holderInst || !holderCard || holderOwnerIdx == null || !abilityName || !pool) return false;
+  // 0. 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除
+  if (isInitializeNullified(state, holderCard, pool)) return false;
   // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標
   if (location === 'active' && holderInst.abilityNullifiedThisTurn) return false;
   // 2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → active 位置的特性失效
@@ -374,6 +405,8 @@ export function isAbilityNullifiedByPassive(
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!state || ownerIdx == null || !inst || !card || !abilityName || !pool) return false;
+  // 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除（含被動，UI/被動套用點一律 respect）
+  if (isInitializeNullified(state, card, pool)) return true;
   // 振翼髮｜暗夜羽擊 — 對手戰鬥位特性消除
   if (location === 'active') {
     if (isOppActiveAbilityNullifiedByMoonsenne(state, ownerIdx, card, abilityName, pool)) {

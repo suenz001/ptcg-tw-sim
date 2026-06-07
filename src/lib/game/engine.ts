@@ -696,6 +696,7 @@ import {
   isOppEvilEyeBlocking,
   isOppItemPlayBlocked,
   isAbilityNullifiedByPassive,
+  isAbilityHolderEffective,
   hasRocketTyranitarSandstorm,
   getOppRetreatTriggers,
   hasRocketAmpharosDarkPulse,
@@ -2786,10 +2787,16 @@ function handlePlaying(
     }
     retreatCost += gravityCountR;
     // 被動特性：天空徑線（拉帝亞斯ex）— 基礎寶可夢免費撤退
+    // v5.471：holder 須「特性有效」(isAbilityHolderEffective)——被鐵荊棘ex 初始化/暗夜羽擊/監視塔等
+    //   消除時，天空徑線失效（玩家報：初始化發動後天空徑線仍 0 費撤退）。
     const hasSkyPathR = [
-      ...(attacker.active ? [attacker.active] : []),
-      ...attacker.bench,
-    ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '天空徑線'));
+      ...(attacker.active ? [{ c: attacker.active, loc: 'active' as const }] : []),
+      ...attacker.bench.map(c => ({ c, loc: 'bench' as const })),
+    ].some(({ c, loc }) => {
+      const cc = pool.get(c.cardId);
+      return !!cc?.abilities?.some(a => a.name === '天空徑線')
+        && isAbilityHolderEffective(state, c, cc, aIdx, '天空徑線', loc, pool);
+    });
     if (hasSkyPathR && isBasicPokemonCard(activeCard)) retreatCost = 0;
     // v2.117 N的城堡（Stadium）：雙方場上所有「N的」寶可夢撤退成本 = 0。
     const stadiumNameForRetreat = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
@@ -4393,6 +4400,7 @@ function handlePlaying(
         for (const ab of c.abilities) {
           const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
           if (!fn) continue;
+          if (!isAbilityHolderEffective(state, inst, c, aIdx, ab.name, attacker.active?.iid === inst.iid ? 'active' : 'bench', pool)) continue; // v5.471 holder 特性消除
           // 卡面明文「不重複」的特性 dedup by name；其他特性每隻場上寶可夢都獨立加成
           if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStackNames.has(ab.name)) continue;
           // v2.133：簽名擴充 — 把 defenderCard 也傳進去（複眼 等需要看對手卡）
@@ -4696,6 +4704,7 @@ function handlePlaying(
     if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
         && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
+        if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) {
           const before = baseDamage;
@@ -4934,6 +4943,7 @@ function handlePlaying(
     if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
         && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
+if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
         const immune = PASSIVE_IMMUNITY.get(ab.name);
         if (!immune) continue;
         const result = immune(attackerCard, baseDamage, workingState, aIdx, pool, defenderCard.name);
@@ -4961,6 +4971,7 @@ function handlePlaying(
     if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
         && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
+        if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
         const coinFn = PASSIVE_COIN_AVOID.get(ab.name);
         if (!coinFn || !defender.active) continue;
         if (!coinFn(defender.active, defenderCard, pool)) continue;
@@ -5347,6 +5358,7 @@ function handlePlaying(
       const _v456KoMagicalShine = attackerCard?.abilities?.some(a => a.name === '光之翼') ?? false;
       if (defenderCard.abilities && !_v456KoMagicalShine) {
         for (const ab of defenderCard.abilities) {
+          if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
           const ret = PASSIVE_KO_RETALIATION.get(ab.name);
           if (!ret) continue;
           const refPlayers = [...newState.players] as [PlayerState, PlayerState];
@@ -5441,6 +5453,8 @@ function handlePlaying(
       //   光之翼擋（attacker 持有時免疫對手特性反擊）— 同非 KO 分支邏輯
       if (!_v456KoMagicalShine && baseDamage > 0 && defenderCard.abilities) {
         for (const ab of defenderCard.abilities) {
+if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
+  if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
           const retal = PASSIVE_RETALIATION.get(ab.name);
           if (retal) newState = retal(newState, dIdx, pool);
         }

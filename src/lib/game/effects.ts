@@ -784,7 +784,10 @@ function _applyBenchAbilityReduce(
 
   // === self-only PASSIVE_DAMAGE_REDUCE + COND ===
   if (dmg > 0 && victimCard.abilities && !_colorlessBlocked(victimCard)) {
+    const _vloc: 'active' | 'bench' = defender.active?.iid === victim.iid ? 'active' : 'bench';
     for (const ab of victimCard.abilities) {
+      // v5.471：holder 特性被鐵荊棘ex 初始化/暗夜羽擊/黏著束縛等消除 → 跳過此減傷特性
+      if (!isAbilityHolderEffective(state, victim, victimCard, defenderIdx, ab.name, _vloc, pool)) continue;
       const reduceN = PASSIVE_DAMAGE_REDUCE.get(ab.name);
       if (reduceN) {
         const before = dmg;
@@ -3749,6 +3752,8 @@ export function passiveImmunityDamageBlock(
   pool: Map<string, Card>,
 ): { blocked: true; reason: string } | { blocked: false } {
   if (!targetCard?.abilities) return { blocked: false };
+  // v5.471：鐵荊棘ex 初始化消除規則寶可夢(未來除外)特性 → 此免疫特性失效
+  if (isInitializeNullified(state, targetCard, pool)) return { blocked: false };
   // 監視塔對【無】寶可夢特性壓制（鏡射 engine.ts isColorlessAbilityBlocked）
   if (targetCard.pokemonType === 'Colorless') {
     const sd = state.activeStadium;
@@ -16325,7 +16330,7 @@ registerV3000G3W2Passives();
 // 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
 //   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
-import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective } from './effects/cards/v3001_g3_wave3';
+import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
 
 // v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）

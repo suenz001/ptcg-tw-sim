@@ -3661,6 +3661,9 @@
           if (!holderCard?.abilities) continue;
           // 火箭隊監視塔擋 Colorless 寶可夢特性
           if (colorlessBlocked && holderCard.pokemonType === 'Colorless') continue;
+          // v5.471：鐵荊棘ex 初始化消除規則寶可夢(未來除外)特性 → 撤退費修飾特性失效（鏡射 engine）
+          if (game.players.some(pl => pl.active && getCard(pl.active.cardId)?.abilities?.some(a => a.name === '初始化'))
+              && isRulePokemon(holderCard) && !((holderCard.tags ?? []).includes('未來'))) continue;
           for (const ab of holderCard.abilities) {
             const fn = ABILITY_RETREAT_MOD.get(ab.name);
             if (!fn) continue;
@@ -3689,7 +3692,13 @@
         || game.players[1].bench.some(b => b.iid === inst.iid)
         ? game.players[1] : game.players[0];
       const ownAll = [...(ownerOfInst.active ? [ownerOfInst.active] : []), ...ownerOfInst.bench];
-      if (ownAll.some(cc => getCard(cc.cardId)?.abilities?.some(a => a.name === '天空徑線'))) cost = 0;
+      // v5.471：天空徑線 holder 被鐵荊棘ex 初始化消除時失效（鏡射 engine isAbilityHolderEffective）
+      const initActiveSky = game.players.some(pl => pl.active && getCard(pl.active.cardId)?.abilities?.some(a => a.name === '初始化'));
+      if (ownAll.some(cc => {
+        const c2 = getCard(cc.cardId);
+        return c2?.abilities?.some(a => a.name === '天空徑線')
+          && !(initActiveSky && isRulePokemon(c2) && !((c2.tags ?? []).includes('未來')));
+      })) cost = 0;
     }
     return cost;
   }
