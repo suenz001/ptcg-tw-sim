@@ -320,6 +320,24 @@ export function resolveBenchGuard(
   targetCard: Card | undefined,
   kind: DamageKind,
 ): { blocked: true; reason: string } | { blocked: false } {
+  // v5.503：護城龍|太古防壁 — defender 備戰有護城龍 + 攻擊方能量單位 ≤2 → 擋對「備戰」的招式傷害。
+  //   原僅 canApplyEffectToTarget(defense.ts) 檢查；但 bench-hit-N resolver(噴射打擊等「對備戰N傷害」)
+  //   直接呼叫 resolveBenchGuard、繞過該檢查 → 太古防壁對備戰失效（玩家回報）。移到此低層 helper
+  //   統一，所有 bench 傷害路徑共享。依攻擊宣告時能量快照(_attackTimeAttackerEnergyUnits,deferred
+  //   picker 期間仍在；active 路徑同此快照)；缺席退回不擋(理論上 attack-damage 必有)。
+  if (kind === 'attack-damage') {
+    const _defIdxTB = (1 - actorIdx) as 0 | 1;
+    const _hasTaikoBari = state.players[_defIdxTB].bench.some(b => {
+      const c = pool.get(b.cardId);
+      return c?.abilities?.some(a => a.name === '太古防壁');
+    });
+    if (_hasTaikoBari) {
+      const _atkUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
+      if (_atkUnits <= 2) {
+        return { blocked: true, reason: `太鼓防壁 免疫能量 ${_atkUnits} 個（≤2）的對手招式傷害` };
+      }
+    }
+  }
   if (kind === 'attack-effect' || kind === 'ability-effect') {
     if (isBenchProtected(state, pool)) {
       return { blocked: true, reason: '對戰圓形競技場效果' };
