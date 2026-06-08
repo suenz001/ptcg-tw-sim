@@ -397,14 +397,12 @@ regPost('夢妖魔ex|六之魔法', (state, aIdx, pool, action) => {
   return _cb(state, aIdx, pool);
 });
 
-regPre('差不多娃娃|報恩', (s) => ({ state: s, damage: 30 }));
-regPost('差不多娃娃|報恩', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
+// v5.509：抽牌移到 regPre（傷害前）— 先補滿手牌再結算傷害/氣絕/拿獎。
+regPre('差不多娃娃|報恩', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx);
-  const _cb: AttackPostFn = drawToFull6Post('報恩');
-  return _cb(state, aIdx, pool);
+  if (!_choseYes) return { state: addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx), damage: 30 };
+  return { state: drawToFull6Post('報恩')(state, aIdx, pool), damage: 30 };
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

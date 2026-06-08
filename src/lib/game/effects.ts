@@ -10709,24 +10709,20 @@ function damagedMultiSnipePost(targetCount: number, dmg: number, label: string):
 regPre('狙射樹梟|羽毛庫存', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('狙射樹梟|羽毛庫存', drawToHandPost(7, '羽毛庫存'));
 
-regPre('霓虹魚|報恩', (state, _aIdx, _pool) => ({ state, damage: 20 }));
-regPost('霓虹魚|報恩', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
+// v5.509：抽牌移到 regPre（傷害前）— 氣絕拿獎(自動進手牌)若在抽牌前會少抽1張，故先補滿手牌再結算傷害/氣絕/拿獎。
+regPre('霓虹魚|報恩', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx);
-  const _cb: AttackPostFn = drawToHandPost(6, '報恩');
-  return _cb(state, aIdx, pool);
+  if (!_choseYes) return { state: addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx), damage: 20 };
+  return { state: drawToHandPost(6, '報恩')(state, aIdx, pool), damage: 20 };
 });
 
-regPre('幸福蛋ex|報恩', (state, _aIdx, _pool) => ({ state, damage: 180 }));
-regPost('幸福蛋ex|報恩', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
+// v5.509：抽牌移到 regPre（傷害前）— 氣絕拿獎(自動進手牌)若在抽牌前會少抽1張，故先補滿手牌再結算傷害/氣絕/拿獎。
+regPre('幸福蛋ex|報恩', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx);
-  const _cb: AttackPostFn = drawToHandPost(6, '報恩');
-  return _cb(state, aIdx, pool);
+  if (!_choseYes) return { state: addLog(state, '報恩：選擇「否」 — 跳過抽牌', aIdx), damage: 180 };
+  return { state: drawToHandPost(6, '報恩')(state, aIdx, pool), damage: 180 };
 });
 
 // ── (B) 牌庫搜 Item / Supporter（需搭配 UI 新 filter） ────────────────────
@@ -12768,13 +12764,13 @@ reg('百萬噸吹風機', (st, idx, pool) => {
 
 // ── 1. 螺旋俯衝 — 100 傷害 + 抽到滿 6 ────────────────────────────────────────
 // v2.22：卡名統一（pool.ts loadSet strip <>），只登錄純名稱即可
-regPost('竹蘭的烈咬陸鯊ex|螺旋俯衝', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
+// v5.509：抽牌移到 regPre（傷害前）— 先補滿手牌再結算傷害/氣絕/拿獎，避免氣絕自動拿獎(進手牌)使抽牌少1張。
+//   傷害仍回 100 走引擎（保留竹蘭的羅絲雷朵 +30 等 PASSIVE_ATTACK_BONUS / 弱抗）。
+regPre('竹蘭的烈咬陸鯊ex|螺旋俯衝', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '螺旋俯衝：選擇「否」 — 跳過抽牌', aIdx);
-  const _cb: AttackPostFn = drawToHandPost(6, '螺旋俯衝');
-  return _cb(state, aIdx, pool);
+  if (!_choseYes) return { state: addLog(state, '螺旋俯衝：選擇「否」 — 跳過抽牌', aIdx), damage: 100 };
+  return { state: drawToHandPost(6, '螺旋俯衝')(state, aIdx, pool), damage: 100 };
 });
 
 // ── 2. 龍之爆發 — 260 傷害 + 自己全部能量丟棄 ─────────────────────────────
