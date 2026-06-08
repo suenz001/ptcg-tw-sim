@@ -5364,6 +5364,31 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
       }
 
+      // v5.505 豪邁炸彈（M5 PokemonTool，依賴真實 baseDamage 的受傷反擊）holder 被 KO 時補觸發。
+      //   卡面：「附有這張卡的寶可夢（超級進化ex 除外），在戰鬥場受到對手超級進化ex 的招式造成 240 點
+      //   以上傷害時，在使用招式的寶可夢身上放置 12 個傷害指示物。之後將這張卡丟棄。」依 PTCG 規則
+      //   「受到傷害時」含 KO 情境（同龐克頭盔 v5.080 / 陳舊頭蓋化石 v5.494）。豪邁炸彈因需真實傷害值
+      //   判 240，無法走 registerToolOnDamagedAndKO（KO 路徑 damage=0），故只註冊 TOOL_ON_DAMAGED →
+      //   上方 TOOL_ON_KO 迴圈不含它 → holder 被 240+ 一擊 KO 時漏觸發（最常見情況）。
+      //   holder 已 KO（道具隨 KO 寶可夢進棄牌），此處只需對攻擊方放 12 個指示物（+120）。
+      //   gate 與 TOOL_ON_DAMAGED.豪邁炸彈 一致：baseDamage≥240 + 攻擊方為超級進化ex + holder 非超級進化ex。
+      if (!toolsJammed && baseDamage >= 240 && onKOToolNames.some(c => c.name === '豪邁炸彈')) {
+        const lbAtk = newState.players[aIdx].active;
+        const lbAtkCard = lbAtk ? pool.get(lbAtk.cardId) : null;
+        const lbAtkIsMega = !!lbAtkCard && lbAtkCard.name.endsWith('ex') && lbAtkCard.name.startsWith('超級');
+        const lbDefIsMega = !!defenderCard && defenderCard.name.endsWith('ex') && defenderCard.name.startsWith('超級');
+        if (lbAtk && lbAtkIsMega && !lbDefIsMega) {
+          const lbPlayers = [...newState.players] as [PlayerState, PlayerState];
+          const lbAtkP = { ...lbPlayers[aIdx] };
+          if (lbAtkP.active) {
+            lbAtkP.active = { ...lbAtkP.active, damage: lbAtkP.active.damage + 120 };
+            lbPlayers[aIdx] = lbAtkP;
+            newState = addLog({ ...newState, players: lbPlayers },
+              `豪邁炸彈（holder 被 KO）：${lbAtkCard?.name ?? '?'} 受到 ${baseDamage} 點超級進化ex 招式傷害（≥240）→ 放 12 個傷害指示物（+120）！`, null);
+          }
+        }
+      }
+
       // v5.080：龐克頭盔反擊 — 卡面「受到傷害時」依 PTCG 規則含 KO 情境，
       //   原 L5043 PUNK reflect 套用只在「沒 KO」分支跑（else if !preventedKO），
       //   holder 被 KO 時漏觸發。複製套用邏輯到 KO 分支（在 TOOL_ON_KO 之後）。
