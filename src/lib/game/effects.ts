@@ -598,6 +598,7 @@ export function koPrizesAdjusted(
   attackerIdx: 0 | 1,
   defenderIdx: 0 | 1,
   pool: Map<string, Card>,
+  koByAttackDamage: boolean = true,  // v5.506：是否「受到招式傷害」昏厥（效果KO=false）
 ): { prizes: number; state: GameState } {
   let s = state;
   if (!koCard) return { prizes: 1, state: s };
@@ -610,31 +611,37 @@ export function koPrizesAdjusted(
     if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
   }
   let adjust = 0;
-  // 道具：莉莉艾的珍珠 -1 / 豪華斗篷 +1（阻礙之塔在場時道具效果失效）
-  const stadiumName = s.activeStadium ? pool.get(s.activeStadium.cardId)?.name : undefined;
-  if (stadiumName !== '阻礙之塔') {
-    for (const t of getAllAttachedTools(koInst)) {
-      const tool = pool.get(t.cardId);
-      const fn = tool ? TOOL_PRIZE_BONUS.get(tool.name) : undefined;
-      if (fn) adjust += fn(koCard);
+  // v5.506：以下四種獎賞調整卡面皆明寫「受到對手寶可夢招式的【傷害】而昏厥時」→ 只在傷害KO生效。
+  //   效果KO（放傷害指示物：多龍巴魯托ex|幻影奇襲、咒詛炸彈、悄聲加害 等 attack-effect；
+  //   或深淵之瞳式效果昏厥）koByAttackDamage=false → 一律不套。玩家回報：幻影奇襲放指示物
+  //   昏厥古舊能量持有者不該 -1。（脆弱蛻殼 PASSIVE_PREVENT_PRIZE→0 上方處理，卡面未確認限傷害故不動。）
+  if (koByAttackDamage) {
+    // 道具：莉莉艾的珍珠 -1 / 豪華斗篷 +1（阻礙之塔在場時道具效果失效）
+    const stadiumName = s.activeStadium ? pool.get(s.activeStadium.cardId)?.name : undefined;
+    if (stadiumName !== '阻礙之塔') {
+      for (const t of getAllAttachedTools(koInst)) {
+        const tool = pool.get(t.cardId);
+        const fn = tool ? TOOL_PRIZE_BONUS.get(tool.name) : undefined;
+        if (fn) adjust += fn(koCard);
+      }
     }
-  }
-  // 古舊能量 -1（per-game once，per 防守方）
-  const usedFlags = s.ancientEnergyMinusOneUsed ?? [false, false];
-  if (!usedFlags[defenderIdx]
-      && koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量')) {
-    adjust -= 1;
-    const f = [...usedFlags] as [boolean, boolean];
-    f[defenderIdx] = true;
-    s = { ...s, ancientEnergyMinusOneUsed: f };
-  }
-  // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方 KO → -1
-  const isExAttacker = !!atkCard && (atkCard.name.endsWith('ex') || atkCard.name.endsWith('EX'));
-  if (isExAttacker && koCard.pokemonType === 'Darkness') {
-    const def = s.players[defenderIdx];
-    const defHasKage = (def.active && pool.get(def.active.cardId)?.abilities?.some(a => a.name === '影藏'))
-      || def.bench.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '影藏'));
-    if (defHasKage) adjust -= 1;
+    // 古舊能量 -1（per-game once，per 防守方）
+    const usedFlags = s.ancientEnergyMinusOneUsed ?? [false, false];
+    if (!usedFlags[defenderIdx]
+        && koInst.energyAttached.some(e => pool.get(e.cardId)?.name === '古舊能量')) {
+      adjust -= 1;
+      const f = [...usedFlags] as [boolean, boolean];
+      f[defenderIdx] = true;
+      s = { ...s, ancientEnergyMinusOneUsed: f };
+    }
+    // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方 KO → -1
+    const isExAttacker = !!atkCard && (atkCard.name.endsWith('ex') || atkCard.name.endsWith('EX'));
+    if (isExAttacker && koCard.pokemonType === 'Darkness') {
+      const def = s.players[defenderIdx];
+      const defHasKage = (def.active && pool.get(def.active.cardId)?.abilities?.some(a => a.name === '影藏'))
+        || def.bench.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '影藏'));
+      if (defHasKage) adjust -= 1;
+    }
   }
   return { prizes: Math.max(0, base + adjust), state: s };
 }
@@ -6566,7 +6573,7 @@ regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
         ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
-      const _ko = koPrizesAdjusted(state, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool);
+      const _ko = koPrizesAdjusted(state, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool, false);
       state = _ko.state;
       const p = _ko.prizes;
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
@@ -7266,7 +7273,7 @@ export function dealAttackDamageToTarget(
       ...getAllAttachedTools(targetNow),
       ...(targetNow.evolvedFromStack ?? []),
     ];
-    const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool);
+    const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool, kind === 'attack-damage');
     st = _ko.state;
     const p = _ko.prizes;
     const players = [...st.players] as [PlayerState, PlayerState];
@@ -8157,7 +8164,7 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
         ...(target.evolvedFromStack ?? []),
       ];
       // v5.404：套用防守方側獎賞調整（莉莉艾的珍珠/豪華斗篷/古舊能量/影藏）— 原只用 base koPrizeCount。
-      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool);
+      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool, false);
       const prizes = _ko.prizes;
       s = _ko.state;
       const players = [...s.players] as [PlayerState, PlayerState];
@@ -12178,7 +12185,7 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
       ...getAllAttachedTools(target),
       ...(target.evolvedFromStack ?? []),
     ];
-    const _ko = koPrizesAdjusted(s, target, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool);
+    const _ko = koPrizesAdjusted(s, target, targetCard, (1 - dIdx) as 0 | 1, dIdx, pool, false);
     s = _ko.state;
     const prizes = _ko.prizes;
     const players = [...s.players] as [PlayerState, PlayerState];
