@@ -5098,7 +5098,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影')) {
       infiniteShadowReturnsToHand = true;
       newState = addLog(newState,
-        `無限之影：${defenderCard.name} 招式 KO 不丟棄，本體放回手牌（能量/道具/進化堆仍丟棄）`,
+        `無限之影：${defenderCard.name} 因招式傷害昏厥 → 整條進化鏈放回手牌（附加能量/道具仍丟棄），對手仍取得獎賞`,
         dIdx);
     }
     if (!preventedKO && wouldBeKO) {
@@ -5135,8 +5135,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
 
       if (infiniteShadowReturnsToHand) {
         // 無限之影：本體回手牌（清除 damage/能量/道具/進化堆，類似全新一張卡）
-        const cleanInst: CardInstance = {
-          ...updatedActive,
+        const cleanCard = (cc: CardInstance): CardInstance => ({
+          ...cc,
           damage: 0,
           energyAttached: [],
           toolAttached: undefined, extraTools: [],
@@ -5144,15 +5144,19 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           status: undefined,
           secondaryStatus: undefined,
           tertiaryStatus: undefined,
-        };
-        // 其餘附件（能量、道具、進化堆）丟到棄牌
+        });
+        const cleanInst = cleanCard(updatedActive);
+        // v5.512：官方 Q&A — 透過無限之影把耿鬼放回手牌時，進化前的鬼斯通/鬼斯也要一起放回手牌。
+        //   evolvedFromStack 是「扁平的下層卡片實體」(EVOLVE 建構時 baseBare.evolvedFromStack=undefined)，
+        //   逐張 cleanCard 後放回手牌。原本誤把整條進化堆丟到棄牌區（只回二階本體）。
+        const chainToHand: CardInstance[] = (updatedActive.evolvedFromStack ?? []).map(cleanCard);
+        // 附加的能量 / 道具仍進棄牌（離場附加卡進棄牌，符合 PTCG）；進化鏈整條回手。
         const ancillaryDiscard: CardInstance[] = [
           ...updatedActive.energyAttached,
           ...getAllAttachedTools(updatedActive),
-          ...(updatedActive.evolvedFromStack ?? []),
         ];
         defenderState.discard = [...defenderState.discard, ...ancillaryDiscard];
-        defenderState.hand = [...defenderState.hand, cleanInst];
+        defenderState.hand = [...defenderState.hand, cleanInst, ...chainToHand];
       } else {
         defenderState.discard = [...defenderState.discard, ...koDiscard];
       }
