@@ -6132,8 +6132,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       let poisonBonus = 0;
       if (stadiumName === '危險密林' && poisonedCard?.pokemonType !== 'Darkness') poisonBonus += 20;
       // 劇毒支配（桃歹郎）— 「中毒方的對手」active 是劇毒支配時 +50
-      const oActiveCard = state.players[oIdx].active ? pool.get(state.players[oIdx].active.cardId) : null;
-      const hasDominatingPoisonOnActive = oActiveCard?.abilities?.some(a => a.name === '劇毒支配') ?? false;
+      // v5.507：須查 isAbilityHolderEffective — 中毒方(我方)振翼髮｜暗夜羽擊在戰鬥場時，
+      //   對手 active 的劇毒支配被消除 → 不加 +50（玩家回報暗夜羽擊沒擋住劇毒支配）。
+      const oActiveInst = state.players[oIdx].active;
+      const oActiveCard = oActiveInst ? pool.get(oActiveInst.cardId) : null;
+      const hasDominatingPoisonOnActive = !!oActiveInst && !!oActiveCard
+        && (oActiveCard.abilities?.some(a => a.name === '劇毒支配') ?? false)
+        && isAbilityHolderEffective(state, oActiveInst, oActiveCard, oIdx, '劇毒支配', 'active', pool);
       if (hasDominatingPoisonOnActive) poisonBonus += 50;
       const poisonBaseDamage = poisonPlayer.active.poisonDamagePerCheckup ?? 10;
       const poisonTotalDmg = poisonBaseDamage + poisonBonus;
