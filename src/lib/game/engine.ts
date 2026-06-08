@@ -8408,6 +8408,21 @@ export function getUsableAbilities(
       if (isAbilityBlockedByOakEye(state, ab.name, pool)) return;
       // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，
       // Leon 反饋希望 UI 直接隱藏按鈕，而不是誤按後才提示）。
+      // v5.510 熱浪鱗粉（火神蛾）：手牌需有基本【火】能量 + 對手 active 非已灼傷（碧綠之舞 pattern 隱藏按鈕）
+      if (ab.name === '熱浪鱗粉') {
+        const hasFire = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.name?.includes('【火】') ?? false);
+        });
+        const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
+        if (!hasFire || !oppA || oppA.status === 'burned') return;
+      }
+      // v5.510 誘導之尾（超能妙喵）：手牌需有「悠哉尾草棒」 + 對手 active + 對手備戰≥1
+      if (ab.name === '誘導之尾') {
+        const hasSlow = player.hand.some(c => pool.get(c.cardId)?.name === '悠哉尾草棒');
+        const oppP = state.players[(1 - state.activePlayerIndex) as 0 | 1];
+        if (!hasSlow || !oppP.active || oppP.bench.length === 0) return;
+      }
       if (ab.name === '碧綠之舞') {
         const hasGrassEnergy = player.hand.some(c => {
           const cc = pool.get(c.cardId);

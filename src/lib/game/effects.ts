@@ -15741,12 +15741,36 @@ export { ON_PROMOTE_TO_ACTIVE_ABILITIES, tryPromptPromoteActive, askUsePromoteAc
  *
  * 卡片清單見 v3070_deferred_wave_d.ts。
  */
+// v5.510：熱浪鱗粉(火神蛾) / 誘導之尾(超能妙喵) 從「手牌棄牌按鈕」改為「寶可夢上的 regA 啟動特性」
+//   （碧綠之舞 pattern；玩家回報按鈕跑到手牌、應在寶可夢身上）。發動時自動丟手牌資源(基本火能量 /
+//   悠哉尾草棒)再執行原效果。每隻寶可夢 1 回 1 次由 engine abilityUsedThisTurn 管控；按鈕顯示 gate
+//   在 getUsableAbilities（手牌需有資源 + 目標合法）。1/turn 改 instance-based 也更正確(各自1次)。
+regA('火神蛾', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  const fire = p.hand.find(c => {
+    const cc = pool.get(c.cardId);
+    return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.name?.includes('【火】') ?? false);
+  });
+  if (!fire) return addLog(st, '熱浪鱗粉：手牌中沒有基本【火】能量', idx);
+  let s = updatePlayer(st, idx, pl => ({ ...pl, hand: pl.hand.filter(c => c.iid !== fire.iid), discard: [...pl.discard, fire] }));
+  s = addLog(s, `熱浪鱗粉：從手牌丟棄 ${pool.get(fire.cardId)?.name ?? '基本【火】能量'}`, idx);
+  return volcaronaAbility_HeatScale(s, idx, pool, fire);
+});
+regA('超能妙喵', 0, (st, idx, pool) => {
+  const p = st.players[idx];
+  const slow = p.hand.find(c => pool.get(c.cardId)?.name === '悠哉尾草棒');
+  if (!slow) return addLog(st, '誘導之尾：手牌中沒有「悠哉尾草棒」', idx);
+  let s = updatePlayer(st, idx, pl => ({ ...pl, hand: pl.hand.filter(c => c.iid !== slow.iid), discard: [...pl.discard, slow] }));
+  s = addLog(s, '誘導之尾：從手牌丟棄「悠哉尾草棒」', idx);
+  return supercatExpAbility_LureTail(s, idx, pool, slow);
+});
+
 export const ON_DISCARD_FROM_HAND_ABILITIES = new Map<
   string,
   (state: GameState, idx: 0 | 1, pool: Map<string, Card>, triggerInst: CardInstance) => GameState
 >([
-  ['超能妙喵', supercatExpAbility_LureTail],   // 棄悠哉尾草棒 → 對手備戰 ↔ 戰鬥位互換
-  ['火神蛾',   volcaronaAbility_HeatScale],     // 棄基本【火】能量 → 對手戰鬥位灼傷
+  // v5.510：超能妙喵|誘導之尾 / 火神蛾|熱浪鱗粉 已改為寶可夢上的 regA 啟動特性（見上方 regA），
+  //   不再走手牌棄牌按鈕；從此 map 移除避免雙按鈕。effect fn 仍由 regA wrapper 呼叫。
 ]);
 
 /**

@@ -2176,40 +2176,9 @@
       return all.some(c => pool.get(c.cardId)?.name === name);
     };
 
-    // 1) 超能妙喵｜誘導之尾 — 棄『悠哉尾草棒』+ 對手有備戰 + 戰鬥位有寶可夢
-    if (hasOnField('超能妙喵') && !usedNames.includes('誘導之尾')
-        && opp.active && opp.bench.length > 0) {
-      for (const inst of me.hand) {
-        const card = pool.get(inst.cardId);
-        if (card?.name === '悠哉尾草棒') {
-          out.set(inst.iid, {
-            triggerName: '超能妙喵',
-            abilityName: '誘導之尾',
-            label: '🌀 棄此卡 → 觸發 超能妙喵｜誘導之尾',
-          });
-        }
-      }
-    }
-
-    // 2) 火神蛾｜熱浪鱗粉 — 棄『基本【火】能量』+ 對手戰鬥位非已灼傷
-    if (hasOnField('火神蛾') && !usedNames.includes('熱浪鱗粉')
-        && opp.active && opp.active.status !== 'burned') {
-      for (const inst of me.hand) {
-        const card = pool.get(inst.cardId);
-        if (!card) continue;
-        if (card.supertype === 'Energy' && card.subtype === 'Basic'
-            && (card.name?.includes('【火】') ?? false)) {
-          // 若已被前一輪同卡型 set，仍允許（同 iid 只可能對應單一 trigger，因為超能妙喵不需基本能量）
-          if (!out.has(inst.iid)) {
-            out.set(inst.iid, {
-              triggerName: '火神蛾',
-              abilityName: '熱浪鱗粉',
-              label: '🔥 棄此卡 → 觸發 火神蛾｜熱浪鱗粉',
-            });
-          }
-        }
-      }
-    }
+    // v5.510：超能妙喵|誘導之尾 / 火神蛾|熱浪鱗粉 已改為寶可夢上的 regA 啟動特性（碧綠之舞 pattern），
+    //   不再走手牌棄牌按鈕（玩家回報按鈕應在寶可夢上）。機制 A 基礎設施保留供未來使用，此處不再加入這兩張。
+    void hasOnField; void usedNames; void opp; void me;
     return out;
   });
 
