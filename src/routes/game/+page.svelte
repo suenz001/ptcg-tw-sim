@@ -7005,9 +7005,11 @@
             : canTrainer ? 'trainer'
             : null}
           {@const isActionable = canEnergy || canBasic || canFossil || canTrainer || canEvolve}
+          <!-- v5.511 緊急迴轉(齒輪怪) — 滿足條件直接黃框可用、點卡發動，不另顯示按鈕標示 -->
+          {@const canHandActivate = handActivateAbilities.has(inst.iid)}
           <div class="hand-card"
             class:selected={selectedEnergyIid===inst.iid}
-            class:can-actionable={isActionable}
+            class:can-actionable={isActionable || canHandActivate}
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
@@ -7019,8 +7021,8 @@
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
             onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
-            onclick={()=>{if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
-            title={dragKind?`拖曳使用 · ${c.name}`:c.name}>
+            onclick={()=>{if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            title={canHandActivate?`點擊使用特性（放備戰） · ${c.name}`:(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
             <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
                  預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。
                  改法：onclick 不再呼叫 openZoom，僅 stopPropagation 防觸發外層 startDrag/click。
@@ -7042,13 +7044,7 @@
                 onclick={(e)=>{e.stopPropagation(); triggerHandDiscardAbility(inst.iid);}}
                 title={_trig.label}>{_trig.label}</button>
             {/if}
-            {#if handActivateAbilities.has(inst.iid)}
-              {@const _act = handActivateAbilities.get(inst.iid)!}
-              <button class="hand-trigger-btn"
-                onpointerdown={(e)=>e.stopPropagation()}
-                onclick={(e)=>{e.stopPropagation(); triggerHandActivateAbility(inst.iid);}}
-                title={_act.label}>{_act.label}</button>
-            {/if}
+            <!-- v5.511：緊急迴轉 改為「黃框可用 + 點卡發動」（見 .hand-card onclick / canHandActivate），不再顯示按鈕標示 -->
             {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
             {:else if canFossil}<span class="hand-hint hl">🦴 化石放到備戰</span>
