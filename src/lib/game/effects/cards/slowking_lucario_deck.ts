@@ -304,11 +304,17 @@ regPre('月石|力量寶石', (state) => ({ state, damage: 50 }));
 // 實作：逐張 pending chain — 讓玩家每選 1 張能量後，獨立選 1 隻備戰目標，
 //   重複直到所有選到的能量都分配完。完全符合卡面「以任意方式附於備戰」
 //   語意（每張能量可不同目標）。
-regPre('超級路卡利歐ex|波動突刺', (state) => ({ state, damage: 130 }));
+regPre('超級路卡利歐ex|波動突刺', (state) => ({ state, damage: 0 })); // v5.508：傷害延後到附能量後（log 先效果後傷害）
 regPost('超級路卡利歐ex|波動突刺', (state, aIdx, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const defIid = state.players[dIdx].active?.iid;
+  // 漸強波 pattern：附能量後才造傷害；無對手 active 理論上不會發生（攻擊需對手 active）。
+  const dealNow = (s: GameState) => defIid
+    ? dealAttackDamageToTarget(s, aIdx, defIid, 130, pool, { kind: 'attack-damage', label: '波動突刺' })
+    : s;
   const p = state.players[aIdx];
   if (p.bench.length === 0) {
-    return addLog(state, '波動突刺：備戰區沒有寶可夢，無法附加能量', aIdx);
+    return dealNow(addLog(state, '波動突刺：備戰區沒有寶可夢，無法附加能量', aIdx));
   }
   const cand = p.discard.filter(c => {
     const card = pool.get(c.cardId);
@@ -316,84 +322,80 @@ regPost('超級路卡利歐ex|波動突刺', (state, aIdx, pool) => {
       && (card.name?.includes('【鬥】') ?? false);
   });
   if (cand.length === 0) {
-    return addLog(state, '波動突刺：棄牌區沒有基本【鬥】能量', aIdx);
+    return dealNow(addLog(state, '波動突刺：棄牌區沒有基本【鬥】能量', aIdx));
   }
   const maxTake = Math.min(3, cand.length);
   const s = addLog(state,
-    `波動突刺：從棄牌區選最多 ${maxTake} 張「基本【鬥】能量」，接著依序選備戰目標`,
+    `波動突刺：從棄牌區選最多 ${maxTake} 張「基本【鬥】能量」，再以 +/- 分配到備戰`,
     aIdx);
   return withPending(s, {
     type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicFightingEnergy', minCount: 0, maxCount: maxTake,
     effectKey: 'pulse-thrust-energies-picked',
+    params: { defIid },
   });
 });
 
-// 玩家選完 0~3 張能量 → 進入逐張分配備戰目標流程
-regR('pulse-thrust-energies-picked', (st, idx, energyIids) => {
+// v5.508：選完 0~3 張能量 → 開「單一」energy-distribute (+/-) 分配到備戰（金屬製造者式），
+//   分配完在 resolver 內才造成 130 傷害（log 效果在傷害前）。原逐張 bench-choose chain 已移除。
+regR('pulse-thrust-energies-picked', (st, idx, energyIids, params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const defIid = (params?.defIid as string | undefined) ?? st.players[dIdx].active?.iid;
+  const dealNow = (s: GameState) => defIid
+    ? dealAttackDamageToTarget(s, idx, defIid, 130, pool, { kind: 'attack-damage', label: '波動突刺' })
+    : s;
   if (energyIids.length === 0) {
-    return addLog(st, '波動突刺：未選擇能量，略過附加', idx);
+    return dealNow(addLog(st, '波動突刺：未選擇能量，略過附加', idx));
   }
-  const p = st.players[idx];
-  if (p.bench.length === 0) return st;
-  // 若只有 1 隻備戰 → 直接全附（避免反覆彈 UI）
-  if (p.bench.length === 1) {
-    const target = p.bench[0];
-    const energies = p.discard.filter(c => energyIids.includes(c.iid));
-    let s = addLog(st,
-      `波動突刺：備戰僅有 1 隻，${energies.length} 張能量全附到該寶可夢`,
-      idx);
-    return updatePlayer(s, idx, pl => ({
-      ...pl,
-      discard: pl.discard.filter(c => !energyIids.includes(c.iid)),
-      bench: pl.bench.map(c => c.iid === target.iid
-        ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
+  const benchIids = st.players[idx].bench.map(c => c.iid);
+  if (benchIids.length === 0) return dealNow(st);
+  const s = addLog(st, '波動突刺：以 +/- 分配【鬥】能量到備戰寶可夢', idx);
+  return withPending(s, {
+    type: 'energy-distribute', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: energyIids.length, maxCount: energyIids.length,
+    effectKey: 'pulse-thrust-distribute',
+    params: {
+      label: '波動突刺', energyIids, validIids: benchIids,
+      totalCount: energyIids.length, placedCount: 0, energyTypeName: '鬥', defIid,
+    },
+  });
+});
+
+// v5.508：分配 resolver（mirror v87-energy-distribute-flat 的附能量）→ 再造成 130 傷害。
+//   selectedIids 長度 = totalCount，每元素 = 該張能量要附給哪隻備戰。
+regR('pulse-thrust-distribute', (st, idx, selectedIids, params, pool) => {
+  const energyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
+  const defIid = params?.defIid as string | undefined;
+  let s: GameState = st;
+  const useCount = Math.min(selectedIids.length, energyIids.length);
+  const tally = new Map<string, number>();
+  for (let i = 0; i < useCount; i++) {
+    const targetIid = selectedIids[i];
+    const energyIid = energyIids[i];
+    const pl = s.players[idx];
+    const energyInst = pl.discard.find(c => c.iid === energyIid);
+    const target = pl.bench.find(c => c.iid === targetIid);
+    if (!energyInst || !target) continue;
+    s = updatePlayer(s, idx, pp => ({
+      ...pp,
+      discard: pp.discard.filter(c => c.iid !== energyIid),
+      bench: pp.bench.map(c => c.iid === targetIid
+        ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
         : c),
     }));
+    tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
   }
-  // 多隻備戰 → 對第 1 張能量開 bench-choose
-  const firstEnergy = energyIids[0];
-  const remaining = energyIids.slice(1);
-  const s = addLog(st,
-    `波動突刺：選擇要附第 1 張能量的備戰寶可夢（共 ${energyIids.length} 張待附）`,
-    idx);
-  return withPending(s, {
-    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'pulse-thrust-attach-one',
-    params: { currentEnergy: firstEnergy, remainingEnergies: remaining },
-  });
-});
-
-// 附 1 張能量到選到的備戰；若還有剩餘能量 → 開下一個 bench-choose（chain）
-regR('pulse-thrust-attach-one', (st, idx, iids, params, pool) => {
-  const currentEnergy = params?.currentEnergy as string;
-  const remaining = (params?.remainingEnergies as string[]) ?? [];
-  const targetIid = iids[0];
-  const p = st.players[idx];
-  const target = p.bench.find(c => c.iid === targetIid);
-  const energyInst = p.discard.find(c => c.iid === currentEnergy);
-  if (!target || !energyInst) return st;
-  const tname = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `波動突刺：將 1 張基本【鬥】能量附到備戰 ${tname}`, idx);
-  s = updatePlayer(s, idx, pl => ({
-    ...pl,
-    discard: pl.discard.filter(c => c.iid !== currentEnergy),
-    bench: pl.bench.map(c => c.iid === targetIid
-      ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
-      : c),
-  }));
-  // 若還有剩餘 → 開下一個 bench-choose
-  if (remaining.length === 0) return s;
-  const nextEnergy = remaining[0];
-  const rest = remaining.slice(1);
-  s = addLog(s, `波動突刺：選擇要附下一張能量的備戰寶可夢（剩 ${remaining.length} 張）`, idx);
-  return withPending(s, {
-    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'pulse-thrust-attach-one',
-    params: { currentEnergy: nextEnergy, remainingEnergies: rest },
-  });
+  const parts: string[] = [];
+  for (const [tid, n] of tally) {
+    const tInst = s.players[idx].bench.find(c => c.iid === tid);
+    parts.push(`${tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?'}×${n}`);
+  }
+  if (parts.length > 0) {
+    s = addLog(s, `波動突刺：將 ${parts.join('、')} 共 ${useCount} 張基本【鬥】能量附到備戰`, idx);
+  }
+  // 效果後再造成傷害（漸強波 pattern）
+  if (defIid) s = dealAttackDamageToTarget(s, idx, defIid, 130, pool, { kind: 'attack-damage', label: '波動突刺' });
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
