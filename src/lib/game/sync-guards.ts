@@ -24,7 +24,13 @@ export function shouldSkipStalePush(
   incoming: GameState,
   current: GameState | null | undefined,
 ): boolean {
-  if (!current) return false;
+  // v5.504 不復活守衛（Oracle 開局回復重抽 / 重複開局同手牌沒重洗 的客戶端根治）。
+  //   v5.492 後贏方的 game 只在 startGame transaction commit 後才設定，故任何「合法」推送發生時
+  //   房間必已有 gameState（current 非 null）。因此 current===null 只會發生在「房間已被重置成空」
+  //   （rematch/離開 → gameState=null）的時刻——此時殘留舊局想被 push 回去就是「復活」，一律 skip。
+  //   若不擋：舊局被推回 → 後續 startGame 讀到房間已有 gameState → no-op → 雙方又 adopt 同一舊局
+  //   （手牌一樣、牌庫沒重洗）；或新舊局 id 分歧 → 一端被拉回 setup（開局回復重抽）。
+  if (!current) return true;
   // v5.457 跨局防舊：incoming 是「較早建立的局」(createdAt 較小) → 別用殘留舊局蓋現有(較新)局。
   //   （再來一局後，舊局殘留 push 因 log 較長騙過長度比較 → 蓋新局；改用 createdAt 跨局判斷。）
   if (incoming.id !== current.id) {

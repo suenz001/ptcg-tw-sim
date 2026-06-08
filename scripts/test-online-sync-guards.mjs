@@ -61,8 +61,10 @@ ck('push: playing 等長 → 不 skip',
    shouldSkipStalePush(mkGS({ logLen: 5 }), mkGS({ logLen: 5 })) === false);
 ck('push: playing 較新 → 不 skip',
    shouldSkipStalePush(mkGS({ logLen: 7 }), mkGS({ logLen: 5 })) === false);
-ck('push: current 為 null → 不 skip',
-   shouldSkipStalePush(mkGS({ logLen: 3 }), null) === false);
+ck('push: current 為 null（房間已重置）→ skip 不復活舊局（v5.504）',
+   shouldSkipStalePush(mkGS({ logLen: 3 }), null) === true);
+ck('push: current 為 undefined（房間無局）→ skip 不復活（v5.504）',
+   shouldSkipStalePush(mkGS({ logLen: 3 }), undefined) === true);
 ck('push: 非 playing → 不 skip',
    shouldSkipStalePush(mkGS({ logLen: 3, phase: 'setup' }), mkGS({ logLen: 5, phase: 'setup' })) === false);
 
