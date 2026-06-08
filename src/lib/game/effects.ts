@@ -5144,7 +5144,11 @@ export function flipCoinsWithLog(
 ): { state: GameState; heads: number } {
   let s = state;
   // v4.898 重試徽章：標記本次 ATTACK action 中已擲過幣（ATTACK 末端用此判定是否開 modal）。
-  if (count > 0) s = { ...s, coinFlippedThisAttack: true };
+  // v5.513 gate：只有「當前進攻方(active player)自己」因招式擲幣才算數。防守方特性擲幣
+  //   (奇諾栗鼠ex 順滑大衣 dIdx / 變隱龍 躲藏高手·吉雉雞 腎上腺費洛蒙 PASSIVE_COIN_AVOID dIdx)、
+  //   或招式讓「對手」擲幣(火箭隊的引夢貘人 備戰區操縱 dIdx) 皆 aIdx≠activePlayerIndex → 不設旗標，
+  //   避免 ATTACK 末端誤觸發重試徽章 modal。卡面：「自己因附有這張卡的【無】寶可夢的招式而擲硬幣時」。
+  if (count > 0 && aIdx === state.activePlayerIndex) s = { ...s, coinFlippedThisAttack: true };
   let heads = 0;
   const recordedFlips: string[] = [];
   // v5.262：state queue consume — 比 caller 傳的 injectedFlips 優先
