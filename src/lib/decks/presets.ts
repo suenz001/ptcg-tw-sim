@@ -2082,12 +2082,50 @@ const WAILORD_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+/** 大師亞軍化隱（60 張）— v5.514 網站推薦預組（WCS Masters 亞軍 化隱怨影娃娃） */
+const MASTER_HISUI_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_master_huayin__',
+  name: '大師亞軍化隱',
+  createdAt: '',
+  entries: [
+    // Pokemon 24
+    { cardId: '12540', count: 3 }, // 土龍弟弟 (SV9 078/100)
+    { cardId: '9827', count: 2 },  // 土龍節節 (SV5K 057/071)
+    { cardId: '10299', count: 1 }, // 月月熊 赫月 ex (SV5a 052/066)
+    { cardId: '19150', count: 1 }, // 來悲粗茶 (M5 006/081)
+    { cardId: '19175', count: 4 }, // 怨影娃娃 (M5 031/081)
+    { cardId: '9803', count: 1 },  // 振翼髮 (SV5K 033/071)
+    { cardId: '19181', count: 4 }, // 破破舵輪 (M5 037/081)
+    { cardId: '18488', count: 1 }, // 探探鼠 (M4 068/083)
+    { cardId: '14720', count: 2 }, // 莉莉艾的皮皮ex (M2a 060/193)
+    { cardId: '19149', count: 2 }, // 斯魔茶 (M5 005/081)
+    { cardId: '19176', count: 3 }, // 詛咒娃娃 (M5 032/081)
+    // Trainers 23
+    { cardId: '9762', count: 2 },  // 好友寶芬 (SV5K 063/071)
+    { cardId: '10638', count: 2 }, // 夜間擔架 (SV6a 056/064)
+    { cardId: '14825', count: 1 }, // 氣球 (M2a 165/193)
+    { cardId: '14118', count: 4 }, // 高級球 (MBD 014/022)
+    { cardId: '18047', count: 4 }, // 寶可平板 (M3 070/080)
+    { cardId: '13948', count: 2 }, // 寶可裝置3.0 (SV11B 081/086)
+    { cardId: '14124', count: 3 }, // 老大的指令 (MBD 020/022)
+    { cardId: '19222', count: 3 }, // 沐淨 (M5 078/081)
+    { cardId: '10510', count: 1 }, // 烏栗 (SV6 096/101)
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 (M1L 062/063)
+    { cardId: '18550', count: 3 }, // 稜鏡塔 (113/083)
+    // Energy 7
+    { cardId: '10515', count: 1 }, // 古舊能量 (SV6 101/101)
+    { cardId: '14128', count: 2 }, // 基本【超】能量 (MBD PSY)
+    { cardId: '18056', count: 4 }, // 感應【超】能量 (M3 079/080)
+  ],
+};
+
 export const PRESET_DECKS: Deck[] = [
   { ...MASTER_KANGASKHAN_OGERPON_DECK, updatedAt: '' },  // 大師冠軍超級袋獸厄鬼椪
+  { ...MASTER_HISUI_DECK, updatedAt: '' },               // 大師亞軍化隱
   { ...SENIOR_BLAZIKEN_DRAGAPULT_DECK, updatedAt: '' },  // 少年冠軍火焰雞多龍
   { ...JUNIOR_GENGAR_DRAGAPULT_DECK, updatedAt: '' },    // 孩童冠軍魔靈多龍
-  { ...MEGA_DUGTRIO_DECK, updatedAt: '' },               // 超級龍頭地鼠
   { ...WAILORD_DECK, updatedAt: '' },                    // 吼鯨王ex
+  { ...MEGA_DUGTRIO_DECK, updatedAt: '' },               // 超級龍頭地鼠
   { ...GENGAR_DECK, updatedAt: '' },
   { ...DIANCIE_DECK, updatedAt: '' },
   { ...CYNTHIA_GARCHOMP_DECK, updatedAt: '' },

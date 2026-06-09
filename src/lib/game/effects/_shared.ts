@@ -786,11 +786,24 @@ export function discardHand(state: GameState, idx: 0 | 1): GameState {
 }
 
 export function returnHandToDeck(state: GameState, idx: 0 | 1): GameState {
-  return updatePlayer(state, idx, (p) => ({
-    ...p,
-    deck: shuffle([...p.deck, ...p.hand]),
-    hand: [],
-  }));
+  return updatePlayer(state, idx, (p) => {
+    // v5.514：手牌洗回牌庫時，給這些卡換上全新 iid。
+    //   原因：UI 抽牌動畫以「手牌 iid 是否為新」偵測新抽到的卡（src/routes/game/+page.svelte
+    //   prevHandIids diff）。若洗回的卡又被抽回手牌且保留原 iid，diff 會誤判「這張卡沒離開過手牌」
+    //   → 重抽動畫不顯示（玩家報：莉莉艾的決意/裁判/不公印章 重抽後抽到與原手牌相同的卡時，
+    //   看起來像手牌一直在手上、沒有重抽）。re-id 後不論抽到什麼都是新 iid → 必跑抽牌動畫。
+    //   手牌卡是裸 instance（能量/道具只在場上寶可夢身上，pending 此刻不引用手牌），換 iid 安全；
+    //   線上模式只有出招方計算後整包推送覆蓋對手，故 Math.random iid 不會造成不同步。
+    const reidHand = p.hand.map((c) => ({
+      ...c,
+      iid: `${c.iid}~r${Math.random().toString(36).slice(2, 8)}`,
+    }));
+    return {
+      ...p,
+      deck: shuffle([...p.deck, ...reidHand]),
+      hand: [],
+    };
+  });
 }
 
 export function withPending(state: GameState, sel: PendingSelection): GameState {
