@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.21</title>
+<title>PTCG Oracle Admin v1.22</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.21</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.22</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1889,38 +1889,66 @@ function renderMatchPagination() {
   `;
 }
 
+// v1.22：matchRecord 的 cardCounts({id→count}) → entries 餵 detectMainPokemon 判主力牌組
+function detectMainFromCardCounts(cc) {
+  if (!cc || typeof cc !== 'object' || Array.isArray(cc)) return '';
+  const entries = Object.keys(cc).map(cardId => ({ cardId, count: cc[cardId] }));
+  return detectMainPokemon({ deckEntries: entries });
+}
+// v1.22：抽出單列渲染（搜尋過濾要重用）+ 玩家名下標示 ⚔️ 主力牌組
+function renderMatchRow(r) {
+  const p1Win = r.winner === 0;
+  const p2Win = r.winner === 1;
+  const p1Cls = p1Win ? 'winner-cell' : '';
+  const p2Cls = p2Win ? 'winner-cell' : '';
+  const p1Email = r.p1?.email ? escapeHtml(r.p1.email) : '<span style="color:#bbb;">匿名</span>';
+  const p2Email = r.p2?.email ? escapeHtml(r.p2.email) : '<span style="color:#bbb;">匿名</span>';
+  const mid = escapeHtml(r._id || '');
+  const isOnline = !!r.roomCode;
+  const modeBadge = isOnline
+    ? '<span class="mode-badge mode-online" title="線上對戰">🌐</span>'
+    : '<span class="mode-badge mode-local" title="本機雙人對戰">🏠</span>';
+  const _mainBadge = (m) => m ? `<div class="small" style="color:#d98c3f;font-size:10px;font-weight:600">⚔️ ${escapeHtml(m)}</div>` : '';
+  const p1MainBadge = _mainBadge(detectMainFromCardCounts(r.p1?.cardCounts));
+  const p2MainBadge = _mainBadge(detectMainFromCardCounts(r.p2?.cardCounts));
+  return `<tr>
+    <td>${fmtMatchTime(r.endedAt)}</td>
+    <td>${modeBadge} <code>${escapeHtml(r.roomCode || '本機')}</code></td>
+    <td class="${p1Cls}">
+      <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p1?.name || '先攻')}</span>
+      <span class="player-email">${p1Email}</span>${p1MainBadge}
+    </td>
+    <td class="${p2Cls}">
+      <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p2?.name || '後攻')}</span>
+      <span class="player-email">${p2Email}</span>${p2MainBadge}
+    </td>
+    <td>${escapeHtml(r.winReason || '-')}</td>
+    <td>${r.finalTurn ?? '-'}</td>
+    <td>${fmtMatchDuration(r.durationMs)}</td>
+    <td><button class="tiny danger" onclick="deleteMatchRecord('${mid}')" title="刪除此筆紀錄（測試資料清理用）">🗑</button></td>
+  </tr>`;
+}
+// v1.22：本頁 client 搜尋（房號/玩家名/email/牌組主力）— 過濾當前頁 cache 後只更新 tbody
+window.filterMatchRecordsBySearch = function(q) {
+  const lc = (q || '').toLowerCase().trim();
+  const filtered = !lc ? matchRecordsCache : matchRecordsCache.filter(r => {
+    if ((r.roomCode || '').toLowerCase().includes(lc)) return true;
+    for (const pl of [r.p1, r.p2]) {
+      if (!pl) continue;
+      if ((pl.name || '').toLowerCase().includes(lc)) return true;
+      if ((pl.email || '').toLowerCase().includes(lc)) return true;
+      const m = detectMainFromCardCounts(pl.cardCounts);
+      if (m && m.toLowerCase().includes(lc)) return true;
+    }
+    return false;
+  });
+  const tbody = document.querySelector('#tab-matches tbody');
+  if (tbody) tbody.innerHTML = filtered.map(renderMatchRow).join('');
+};
+
 function renderMatchRecords(el) {
   const records = matchRecordsCache;
-  const rows = records.map(r => {
-    const p1Win = r.winner === 0;
-    const p2Win = r.winner === 1;
-    const p1Cls = p1Win ? 'winner-cell' : '';
-    const p2Cls = p2Win ? 'winner-cell' : '';
-    const p1Email = r.p1?.email ? escapeHtml(r.p1.email) : '<span style="color:#bbb;">匿名</span>';
-    const p2Email = r.p2?.email ? escapeHtml(r.p2.email) : '<span style="color:#bbb;">匿名</span>';
-    const mid = escapeHtml(r._id || '');
-    // v0.82：「📍 線上」/「🏠 本機」標籤靠 roomCode 判斷（有=線上、無=本機）
-    const isOnline = !!r.roomCode;
-    const modeBadge = isOnline
-      ? '<span class="mode-badge mode-online" title="線上對戰">🌐</span>'
-      : '<span class="mode-badge mode-local" title="本機雙人對戰">🏠</span>';
-    return `<tr>
-      <td>${fmtMatchTime(r.endedAt)}</td>
-      <td>${modeBadge} <code>${escapeHtml(r.roomCode || '本機')}</code></td>
-      <td class="${p1Cls}">
-        <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p1?.name || '先攻')}</span>
-        <span class="player-email">${p1Email}</span>
-      </td>
-      <td class="${p2Cls}">
-        <span class="player-name" onclick="showMatchDeck('${mid}')">${escapeHtml(r.p2?.name || '後攻')}</span>
-        <span class="player-email">${p2Email}</span>
-      </td>
-      <td>${escapeHtml(r.winReason || '-')}</td>
-      <td>${r.finalTurn ?? '-'}</td>
-      <td>${fmtMatchDuration(r.durationMs)}</td>
-      <td><button class="tiny danger" onclick="deleteMatchRecord('${mid}')" title="刪除此筆紀錄（測試資料清理用）">🗑</button></td>
-    </tr>`;
-  }).join('');
+  const rows = records.map(renderMatchRow).join('');
   el.innerHTML = `
     <h2>📜 對戰歷史 <span class="small">(共 ${matchRecordsTotal} 場${matchRecordsFilter ? ' · email: ' + escapeHtml(matchRecordsFilter) : ''}${matchRecordsModeFilter !== 'all' ? ' · ' + (matchRecordsModeFilter === 'online' ? '🌐 線上' : '🏠 本機') : ''})</span></h2>
     <div class="toolbar">
@@ -1928,10 +1956,12 @@ function renderMatchRecords(el) {
       <span class="filter-btn ${matchRecordsModeFilter === 'online' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('online')">🌐 線上對戰</span>
       <span class="filter-btn ${matchRecordsModeFilter === 'local' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('local')">🏠 本機雙人</span>
       <span style="flex:1"></span>
-      <input class="search-box" placeholder="Filter by email" value="${escapeHtml(matchRecordsFilter)}"
-        style="max-width:240px;"
+      <input class="search-box" id="match-quick-search" placeholder="🔍 本頁搜尋 房號/玩家名/Email/牌組(主力)"
+        style="max-width:300px;" oninput="filterMatchRecordsBySearch(this.value)" />
+      <input class="search-box" placeholder="📧 全站 email 篩選" value="${escapeHtml(matchRecordsFilter)}"
+        style="max-width:200px;"
         onkeydown="if(event.key==='Enter')filterMatchRecordsByEmail(this.value)" />
-      <button onclick="filterMatchRecordsByEmail(document.querySelector('#tab-matches .search-box').value)">套用</button>
+      <button onclick="filterMatchRecordsByEmail(document.querySelectorAll('#tab-matches .search-box')[1].value)">套用</button>
       <button class="ghost" onclick="filterMatchRecordsByEmail('')">清除</button>
     </div>
     <div class="small" style="margin: 4px 0 12px; color: #7a8898;">點玩家名字 → 看這場用的牌組（勝者綠底）· 🗑 刪除測試紀錄</div>
