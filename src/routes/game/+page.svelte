@@ -907,6 +907,9 @@
     // 清掉舊 timer
     for (const t of coinFlipTimers) clearTimeout(t);
     coinFlipTimers = [];
+    // v5.516：觀戰者進房不重播開場先攻擲硬幣動畫（玩家報每次進房都看到之前的擲幣）。
+    //   已標記此 game.id 處理過 → 直接 done、不開 overlay。
+    if (isSpectator) { coinFlipStage = 'done'; return; }
     coinFlipStage = 'flipping';
     coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'revealing'; }, 2000));
     coinFlipTimers.push(setTimeout(() => { coinFlipStage = 'done'; }, 3800));
@@ -1365,6 +1368,9 @@
   $effect(() => {
     if (!game || !game.log) { lastLogProcessed = 0; return; }
     const logs = game.log;
+    // v5.516：觀戰者不播擲硬幣動畫 — 同步 lastLogProcessed 但不 enqueue，
+    //   避免進房時 fresh=整段歷史 log 把之前的擲幣全部重播一遍。
+    if (isSpectator) { lastLogProcessed = logs.length; return; }
     if (logs.length <= lastLogProcessed) { lastLogProcessed = logs.length; return; }
     const fresh = logs.slice(lastLogProcessed);
     lastLogProcessed = logs.length;
