@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.20</title>
+<title>PTCG Oracle Admin v1.21</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.20</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.21</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -936,7 +936,7 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${counts.playing || 0})</span>
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${counts.lobby || 0})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
-      <input class="search-box" placeholder="搜尋 房號 / 玩家名" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      <input class="search-box" placeholder="搜尋 房號 / 玩家名 / Email / 牌組(主力)" oninput="filterRoomsBySearch(this.value, '${source}')" />
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
     </div>
@@ -1010,7 +1010,19 @@ window.filterRoomsBySearch = function(q, source) {
     if (!q) return true;
     if (r._id.toLowerCase().includes(lc)) return true;
     if ((r.roomName || '').toLowerCase().includes(lc)) return true;
-    return (r.seats || []).some(s => s?.name && s.name.toLowerCase().includes(lc));
+    return (r.seats || []).some(s => {
+      if (!s) return false;
+      // 玩家名
+      if (s.name && s.name.toLowerCase().includes(lc)) return true;
+      // v1.21：email 搜尋（server enrich 的 seat.email 或 client uidEmailMap fallback）
+      const em = s.email || (s.uid && uidEmailMap.get(s.uid)) || '';
+      if (em && em.toLowerCase().includes(lc)) return true;
+      // v1.21：牌組(主力打手)搜尋 — 用牌庫非支援型寶可夢判斷的主力名（如「多龍巴魯托ex」）。
+      //   依賴 cardInfoMap（卡片索引背景載入後才有；未載入時回空字串，不影響其他搜尋）。
+      const mainP = detectMainPokemon(s);
+      if (mainP && mainP.toLowerCase().includes(lc)) return true;
+      return false;
+    });
   });
   // tbody-only 更新 (不重 render pager — 搜尋當下不換頁碼避免閃爍)
   document.getElementById(source + '-rooms-tbody').innerHTML = filtered.slice(0, ROOMS_PAGE_SIZE).map(r => renderRoomRow(r, source)).join('');
