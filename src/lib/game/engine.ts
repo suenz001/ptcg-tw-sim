@@ -4101,6 +4101,7 @@ function handlePlaying(
     state = {
       ...state,
       coinFlippedThisAttack: false,
+      _attackerActiveBonusDone: false,  // v5.517 每次攻擊重置攻擊方加成 guard
       _machineGunLastFlips: undefined,
       // 重跑時保留 queue; 一般攻擊清空殘留 queue (防呆)
       _retryInjectedFlipsQueue: isRetryReplay ? state._retryInjectedFlipsQueue : undefined,
@@ -4409,6 +4410,11 @@ function handlePlaying(
         formula.push({ sign: '+', value: 30, label: '烏栗' });
       }
     }
+
+    // v5.517：標記本次攻擊已於引擎主管線套過「攻擊方加成」→ 中央 helper(dealAttackDamageToTarget)
+    //   對戰鬥位再結算傷害時不重複套(applyAttackerActiveDamageBonuses 的 guard)。
+    //   baseDamage>0 才標記，讓 regPre=0(波動突刺等主傷害走中央 helper)的招式仍由中央 helper 補套。
+    if (baseDamage > 0) workingState = { ...workingState, _attackerActiveBonusDone: true };
 
     // 弱點（×2）— 只對有實際傷害的招式套用。skipWeakRes 旗標跳過此計算。
     // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。

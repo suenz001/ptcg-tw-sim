@@ -7199,6 +7199,126 @@ export function fireOnKOTools(
   return s;
 }
 
+/**
+ * v5.517 收斂中央管線：攻擊方「對對手戰鬥寶可夢」的招式傷害加成（weakness 前套用）。
+ * 單一來源，供引擎主管線與中央 helper dealAttackDamageToTarget 共用，避免兩邊分歧
+ * （玩家報「力量蛋白飲對波動突刺沒生效」= 波動突刺主傷害走中央 helper、繞過引擎加成）。
+ * 涵蓋：伏特【雷】能量 / 攻擊道具 TOOL_ATTACK_BONUS / 被動特性 PASSIVE_ATTACK_BONUS /
+ *       力量蛋白飲(【鬥】+30) / 夠讚狗 腎上腺力量 / 化朗鎮 / 空手道王演練 / 烏栗。
+ * 不含「消耗型旗標」(下回合加傷 damageBonusThisTurn / 招致削傷 nextOwnAttackPenalty /
+ *       格拉吉歐的決戰)——這些有消耗語意，留在引擎主管線結算。
+ * guard：state._attackerActiveBonusDone 為 true(引擎已套)時不重複；dmg<=0 不套不標記
+ *        (讓 regPre=0 的招式由中央 helper 補套)。
+ */
+export function applyAttackerActiveDamageBonuses(
+  state: GameState, aIdx: 0 | 1, dmg: number, pool: Map<string, Card>,
+): { damage: number; state: GameState; formula: { sign: string; value: number; label: string }[] } {
+  const formula: { sign: string; value: number; label: string }[] = [];
+  if (dmg <= 0) return { damage: dmg, state, formula };
+  if (state._attackerActiveBonusDone) return { damage: dmg, state, formula };
+  const attacker = state.players[aIdx];
+  const aInst = attacker.active;
+  if (!aInst) return { damage: dmg, state, formula };
+  const aCard = pool.get(aInst.cardId);
+  if (!aCard) return { damage: dmg, state, formula };
+  const defender = state.players[(1 - aIdx) as 0 | 1];
+  const dInst = defender.active;
+  if (!dInst) return { damage: dmg, state, formula };
+  const dCard = pool.get(dInst.cardId);
+  let d = dmg;
+  let s = state;
+  const _colorlessBlocked = (card: Card | undefined): boolean => {
+    if (!card || card.pokemonType !== 'Colorless') return false;
+    const sd = state.activeStadium; if (!sd) return false;
+    const sdCard = pool.get(sd.cardId); if (!sdCard) return false;
+    return ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name);
+  };
+  const _toolsJammed = !!state.activeStadium
+    && JAMMING_TOWER_STADIUMS.has(pool.get(state.activeStadium.cardId)?.name ?? '');
+  // ── 伏特【雷】能量（【雷】屬性附加者 +20/張）─────────────────────────────
+  if (aCard.pokemonType === 'Lightning') {
+    const n = aInst.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;
+    if (n > 0) {
+      const b = 20 * n; d += b;
+      s = addLog(s, `${aCard.name} 招式傷害 +${b}（伏特【雷】能量 ${n} 張 × 20，【雷】屬性）`, aIdx);
+      formula.push({ sign: '+', value: b, label: `伏特【雷】能量×${n}` });
+    }
+  }
+  // ── 攻擊方道具加成（極限腰帶 / 猛攻手鐲 等；阻礙之塔時失效）─────────────
+  if (!_toolsJammed) {
+    for (const t of getAllAttachedTools(aInst)) {
+      const atkTool = pool.get(t.cardId); if (!atkTool) continue;
+      const fn = TOOL_ATTACK_BONUS.get(atkTool.name); if (!fn) continue;
+      const b = fn(aCard, aInst, dCard, dInst);
+      if (b > 0) {
+        d += b;
+        s = addLog(s, `🔧 ${atkTool.name}：${aCard.name} 招式傷害 +${b}（${d - b} → ${d}）`, aIdx);
+        formula.push({ sign: '+', value: b, label: atkTool.name });
+      }
+    }
+  }
+  // ── 被動特性 +N（攻擊方場上每張卡；PASSIVE_ATTACK_NO_STACK dedup；監視塔壓制【無】）─
+  {
+    const attAll = [aInst, ...attacker.bench];
+    const noStack = new Set<string>();
+    for (const inst of attAll) {
+      const c = pool.get(inst.cardId); if (!c?.abilities) continue;
+      if (_colorlessBlocked(c)) continue;
+      for (const ab of c.abilities) {
+        const fn = PASSIVE_ATTACK_BONUS.get(ab.name); if (!fn) continue;
+        if (!isAbilityHolderEffective(s, inst, c, aIdx, ab.name, aInst.iid === inst.iid ? 'active' : 'bench', pool)) continue;
+        if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && noStack.has(ab.name)) continue;
+        const b = fn(aCard, dCard, s, aIdx, pool);
+        if (b > 0) {
+          if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) noStack.add(ab.name);
+          d += b;
+          s = addLog(s, `「${ab.name}」啟動：${aCard.name} 招式傷害 +${b}`, aIdx);
+          formula.push({ sign: '+', value: b, label: ab.name });
+        }
+      }
+    }
+  }
+  // ── 力量蛋白飲（本回合自己【鬥】寶可夢對對手戰鬥位 +30，累加）─────────────
+  if (aCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {
+    const b = attacker.damageBoostFightingThisTurn; d += b;
+    s = addLog(s, `「力量蛋白飲」啟動：${aCard.name} 招式傷害 +${b}`, aIdx);
+    formula.push({ sign: '+', value: b, label: '力量蛋白飲' });
+  }
+  // ── 夠讚狗｜腎上腺力量（自身附【惡】能量 +100）─────────────────────────
+  if (aCard.name === '夠讚狗' && countEnergyTypeHostAware(aInst, 'Darkness', pool) >= 1) {
+    d += 100;
+    s = addLog(s, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
+    formula.push({ sign: '+', value: 100, label: '腎上腺力量' });
+  }
+  // ── 化朗鎮（赫普的寶可夢 +30）───────────────────────────────────────────
+  if (aCard.name.startsWith('赫普的')) {
+    const stN = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+    if (stN === '化朗鎮') {
+      d += 30;
+      s = addLog(s, `「化朗鎮」啟動：${aCard.name} 招式傷害 +30`, aIdx);
+      formula.push({ sign: '+', value: 30, label: '化朗鎮' });
+    }
+  }
+  // ── 空手道王的演練（本回合對對手戰鬥位 ex +40）────────────────────────
+  if (attacker.karateKingBonusThisTurn && dCard?.subtype === 'ex') {
+    d += 40;
+    s = addLog(s, `「空手道王的演練」啟動：對 ${dCard.name}（ex）+40`, aIdx);
+    formula.push({ sign: '+', value: 40, label: '空手道王演練' });
+  }
+  // ── 烏栗（本回合對對手戰鬥位 ex/V +30）──────────────────────────────────
+  if (attacker.unrudaBonusThisTurn && dCard) {
+    const isExV = dCard.subtype === 'ex' || dCard.name.endsWith('ex') || dCard.name.endsWith('EX')
+      || dCard.name.endsWith('V') || dCard.name.endsWith('VMAX') || dCard.name.endsWith('VSTAR');
+    if (isExV) {
+      d += 30;
+      s = addLog(s, `「烏栗」啟動：對 ${dCard.name}（ex/V）+30`, aIdx);
+      formula.push({ sign: '+', value: 30, label: '烏栗' });
+    }
+  }
+  s = { ...s, _attackerActiveBonusDone: true } as GameState;
+  return { damage: d, state: s, formula };
+}
+
 export function dealAttackDamageToTarget(
   st: GameState,
   actorIdx: 0 | 1,
@@ -7243,6 +7363,14 @@ export function dealAttackDamageToTarget(
   let effDmg = dmg;
   // v5.434：noWeakness — 卡面「這個招式的傷害不計算弱點・抵抗力」(整招 flat，如 重磅驟雨/橄欖石音波)。
   //   只略過弱點/抵抗/攻擊方道具加成；免疫(太晶/神秘石居/對戰圓形)與 KO 仍照走。
+  // v5.517：收斂中央管線 — 戰鬥位招式傷害先套「攻擊方加成」(力量蛋白飲/烏栗/空手道王/
+  //   化朗鎮/夠讚狗/伏特雷能量/PASSIVE_ATTACK_BONUS/攻擊道具)，與引擎主管線共用單一函式，
+  //   weakness 前套。noWeakness 招式仍套這些加成(只略過弱抗，不略過 +N，鏡射引擎)。
+  if (isActive && kind === 'attack-damage') {
+    const _ab = applyAttackerActiveDamageBonuses(st, actorIdx, effDmg, pool);
+    effDmg = _ab.damage;
+    st = _ab.state;
+  }
   if (isActive && kind === 'attack-damage' && !opts?.noWeakness) {
     const _atk = st.players[actorIdx].active;
     const _atkCard = _atk ? pool.get(_atk.cardId) : undefined;
@@ -7254,16 +7382,6 @@ export function dealAttackDamageToTarget(
         && _atkCard.pokemonType === targetCard.resistance.type) {
       const _rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
       if (!isNaN(_rv)) effDmg = Math.max(0, effDmg + _rv);
-    }
-    if (_atk && _atkCard) {
-      for (const _t of getAllAttachedTools(_atk)) {
-        const _tc = pool.get(_t.cardId);
-        if (!_tc) continue;
-        const _fn = TOOL_ATTACK_BONUS.get(_tc.name);
-        if (!_fn) continue;
-        const _b = _fn(_atkCard, _atk, targetCard ?? _atkCard, target);
-        if (_b > 0) effDmg += _b;
-      }
     }
   }
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/

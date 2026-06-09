@@ -614,6 +614,9 @@ export interface GameState {
    * Outside-of-ATTACK 擲幣（sleep/burn checkup）也會 set，但 ATTACK 沒讀 → 無影響。
    */
   coinFlippedThisAttack?: boolean;
+  /** v5.517 收斂：本次攻擊是否已於引擎主管線套過「攻擊方加成」(力量蛋白飲/烏栗/passive 等)。
+   *  防止中央 helper dealAttackDamageToTarget 對戰鬥位重複套。ATTACK 起點 reset。 */
+  _attackerActiveBonusDone?: boolean;
   /**
    * v5.165 重試徽章 — 動態次數擲幣招式（機關槍合擊等）每次擲完把結果陣列
    * 暫存於此（如 ['正面','正面','反面']），供 ATTACK 末端 retry-badge modal
