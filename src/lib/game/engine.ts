@@ -3523,6 +3523,11 @@ function handlePlaying(
       return state;
     }
 
+    // v5.519 土龍節節｜逃跑抽出 — 官方 Q&A：自己牌庫為 0 張時不能使用（特性需先從牌庫抽 3 張）。
+    if (ability.name === '逃跑抽出' && attacker.deck.length === 0) {
+      return state;
+    }
+
     // 火箭隊的監視塔：場上此 Stadium 時，【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
 
@@ -8211,6 +8216,8 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
         if (!player.akyoSecretPlayedThisTurn) return;  // 本回合需打過阿杏的秘招
       }
+      // v5.519 土龍節節｜逃跑抽出 — 官方 Q&A：牌庫為 0 時不能使用（需先抽 3 張）→ 不列入可用清單。
+      if (ab.name === '逃跑抽出' && player.deck.length === 0) return;
       // v4.4996：4 組撞 key 卡的另一個 ability — 都是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕
       //   - 生機森巴 (樂天河童 SV9/MC) — passive +40 HP，自動套用 getEffectiveHP
       //   - 雜草魂 (怖納噬草 SV8a) — passive 對手獎賞×50 HP，自動套用
