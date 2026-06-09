@@ -718,6 +718,21 @@ export function joinCardNames(cards: CardInstance[], pool: Map<string, Card>): s
   return cards.map(c => cardLink(c.iid, pool.get(c.cardId)?.name ?? '?')).join('、');
 }
 
+/**
+ * v5.518 中央：道具因「效果觸發」被丟棄到棄牌區時，統一在對戰 log 顯示丟棄的道具名
+ *   （參考 v5.515 從手牌丟棄顯示卡名的邏輯，避免玩家不知道道具被丟棄）。
+ *   收斂點：倖存鍛鍊器(TOOL_PREVENT_KO)、果實道具(discardOnTrigger 防禦減傷)、
+ *           回合結束丟棄道具(TOOL_END_TURN_DISCARD) 等都走它。reason 可選（如「自己回合結束」）。
+ */
+export function addToolDiscardLog(
+  state: GameState, toolInsts: CardInstance[], pool: Map<string, Card>,
+  ownerIdx: 0 | 1 | null = null, reason?: string,
+): GameState {
+  if (!toolInsts || toolInsts.length === 0) return state;
+  const names = joinCardNames(toolInsts, pool);
+  return addLog(state, reason ? `🔧 ${names} 已丟棄到棄牌區（${reason}）` : `🔧 ${names} 已丟棄到棄牌區`, ownerIdx);
+}
+
 export function cardLink(iid: string | undefined | null, displayName: string | undefined | null): string {
   const name = displayName ?? '';
   if (!iid || !name) return name;

@@ -686,7 +686,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog } from './effects/_shared';
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog } from './effects/_shared';
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
 import { canApplyEffectToTarget } from './defense';
@@ -4954,6 +4954,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       };
       defenderState.active = removeOne(defenderState.active);
       defenderState.discard = [...defenderState.discard, tool];
+      // v5.518：果實道具(福祿果/巧可果等 discardOnTrigger)觸發減傷後丟棄 → log 顯示丟棄道具名。
+      //   workingState 為 running state(下方 L5030 newState 由它承接 → log 會保留)。
+      workingState = addToolDiscardLog(workingState, [tool], pool, dIdx);
     }
 
     // 「下次被攻擊傷害 -N」— 套用後清除旗標（Session 31 新機制）
@@ -5076,6 +5079,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         defPlayers[dIdx] = defenderState;
         newState = addLog({ ...newState, players: defPlayers, turnPhase: 'end' },
           `${preventTool.name}：${defenderCard.name} 避免昏厥，剩餘 HP ${result.leaveHP}！`, null);
+        // v5.518：倖存鍛鍊器卡面「然後將這張卡丟棄」— log 顯示道具已丟棄(玩家報沒顯示)。
+        newState = addToolDiscardLog(newState, [triggered], pool, dIdx);
         preventedKO = true;
         break;
       }
@@ -6661,10 +6666,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           bench: newBench,
           discard: [...aPlayer.discard, ...newDiscards],
         };
-        for (const t of newDiscards) {
-          const tName = pool.get(t.cardId)?.name ?? '?';
-          state = addLog({ ...state, players }, `🔧 ${tName}：自己回合結束，將附加的道具丟棄`, aIdx);
-        }
+        // v5.518：收斂走中央 addToolDiscardLog(原 inline 逐張 log)。
+        state = addToolDiscardLog({ ...state, players }, newDiscards, pool, aIdx, '自己回合結束');
       }
     }
 
