@@ -64,6 +64,7 @@ import {
   addPendingPrize,
   regG} from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
+import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
   statusPost,
@@ -150,7 +151,7 @@ regPost('呆呆獸|丟到飽', (state, aIdx, _pool) => {
 });
 
 // resolver: 把選的手牌丟到棄牌堆
-regR('m5-slowpoke-discard-all', (state, aIdx, iids, _params, _pool) => {
+regR('m5-slowpoke-discard-all', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
     return addLog(state, '徹底丟棄：玩家選擇 0 張，跳過', aIdx);
   }
@@ -162,7 +163,7 @@ regR('m5-slowpoke-discard-all', (state, aIdx, iids, _params, _pool) => {
     hand: newHand,
     discard: [...pl.discard, ...toDiscard],
   }));
-  return addLog(s, `徹底丟棄：丟棄 ${toDiscard.length} 張手牌`, aIdx);
+  return addLog(s, `徹底丟棄：丟棄 ${joinCardNames(toDiscard, pool)}`, aIdx);  // v5.515 顯示卡名
 });
 
 // ── 030 迷唇姐｜精神力 — 擲幣正面→對手【麻痺】────────────────────
@@ -1480,10 +1481,12 @@ reg('沐淨', (st, idx, pool) => {
     },
   );
 });
-regR('m5-trainer-mokujou', (state, aIdx, iids) => {
+regR('m5-trainer-mokujou', (state, aIdx, iids, _params, pool) => {
   // v5.202: minCount=1 後 iids.length === 0 不再可能；保留 defensive 分支
   if (iids.length === 0) return addLog(state, '沐淨：玩家丟 0 張（不應發生，防呆 log）', aIdx);
-  return updatePlayer(addLog(state, `沐淨：丟 ${iids.length} 張非規則寶 → 抽 ${iids.length * 3} 張`, aIdx), aIdx, p => {
+  // v5.515：log 顯示實際丟棄的卡名（丟到棄牌區為公開資訊）
+  const _mokujouNames = joinCardNames(state.players[aIdx].hand.filter(c => iids.includes(c.iid)), pool);
+  return updatePlayer(addLog(state, `沐淨：丟棄 ${_mokujouNames} → 抽 ${iids.length * 3} 張`, aIdx), aIdx, p => {
     const toDiscard = p.hand.filter(c => iids.includes(c.iid));
     const remaining = p.hand.filter(c => !iids.includes(c.iid));
     const drawN = Math.min(iids.length * 3, p.deck.length);

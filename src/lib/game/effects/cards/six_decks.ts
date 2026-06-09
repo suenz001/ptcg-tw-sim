@@ -10,6 +10,7 @@
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
 import { tryPromptPromoteActive } from '../_shared';
+import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
@@ -390,14 +391,14 @@ regA('N的索羅亞克ex', 0, (st, idx) => {
     effectKey: 'trade-draw-2',
   });
 });
-regR('trade-draw-2', (state, aIdx, selectedIids, _params) => {
+regR('trade-draw-2', (state, aIdx, selectedIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
   const picks = p.hand.filter(c => selectedIids.includes(c.iid));
   p.hand = p.hand.filter(c => !selectedIids.includes(c.iid));
   p.discard = [...p.discard, ...picks];
   players[aIdx] = p;
-  let s = addLog({ ...state, players }, `交易：丟棄 ${picks.length} 張手牌`, aIdx);
+  let s = addLog({ ...state, players }, `交易：丟棄 ${joinCardNames(picks, pool)}`, aIdx);  // v5.515 顯示卡名
   s = drawCards(s, aIdx, 2);
   return addLog(s, '交易：抽 2 張', aIdx);
 });

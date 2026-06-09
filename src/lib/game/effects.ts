@@ -2929,8 +2929,10 @@ reg('手部修剪器', (st, idx) => {
   });
 });
 
-regR('hand-clipper-opp-discard', (st, idx, iids, params) => {
+regR('hand-clipper-opp-discard', (st, idx, iids, params, pool) => {
   // idx 是 actor = oppIdx（被作用的對手）
+  // v5.515：log 顯示丟棄的卡名（丟到棄牌區為公開資訊，雙方可見）
+  const _hcNames = joinCardNames(st.players[idx].hand.filter(c => iids.includes(c.iid)), pool);
   st = updatePlayer(st, idx, p => {
     const discarded = p.hand.filter(c => iids.includes(c.iid));
     return {
@@ -2940,8 +2942,8 @@ regR('hand-clipper-opp-discard', (st, idx, iids, params) => {
     };
   });
   st = addPrivateLog(st,
-    `手部修剪器：你丟棄了 ${iids.length} 張手牌`,
-    `手部修剪器：對手丟棄了 ${iids.length} 張手牌`,
+    `手部修剪器：你丟棄了 ${_hcNames}`,
+    `手部修剪器：對手丟棄了 ${_hcNames}`,
     idx);
   // 對手丟完 → 換用卡者丟（若 myNeed > 0）
   const userIdx = params?.userIdx as 0 | 1 | undefined;
@@ -2958,8 +2960,10 @@ regR('hand-clipper-opp-discard', (st, idx, iids, params) => {
   return st;
 });
 
-regR('hand-clipper-self-discard', (st, idx, iids) => {
+regR('hand-clipper-self-discard', (st, idx, iids, _params, pool) => {
   // idx 是 actor = 用卡者
+  // v5.515：log 顯示丟棄的卡名
+  const _hcsNames = joinCardNames(st.players[idx].hand.filter(c => iids.includes(c.iid)), pool);
   st = updatePlayer(st, idx, p => {
     const discarded = p.hand.filter(c => iids.includes(c.iid));
     return {
@@ -2969,8 +2973,8 @@ regR('hand-clipper-self-discard', (st, idx, iids) => {
     };
   });
   return addPrivateLog(st,
-    `手部修剪器：你丟棄了 ${iids.length} 張手牌`,
-    `手部修剪器：對手丟棄了 ${iids.length} 張手牌`,
+    `手部修剪器：你丟棄了 ${_hcsNames}`,
+    `手部修剪器：對手丟棄了 ${_hcsNames}`,
     idx);
 });
 
@@ -5284,10 +5288,14 @@ regPost('鑰圈兒|插入抽出', (state, aIdx, _pool) => {
 regR('insert-and-draw-discard', (st, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return st;
   const targetIid = iids[0];
-  return updatePlayer(st, aIdx, p => {
+  // v5.515：log 顯示丟棄的卡名（原本 dname 算了卻沒寫進 log）
+  const _insDiscarded = st.players[aIdx].hand.find(c => c.iid === targetIid);
+  const s2 = _insDiscarded
+    ? addLog(st, `插入抽出：丟棄 ${joinCardNames([_insDiscarded], pool)} → 抽 2 張`, aIdx)
+    : st;
+  return updatePlayer(s2, aIdx, p => {
     const discarded = p.hand.find(c => c.iid === targetIid);
     if (!discarded) return p;
-    const dname = pool.get(discarded.cardId)?.name ?? '?';
     const newHand = p.hand.filter(c => c.iid !== targetIid);
     const take = Math.min(2, p.deck.length);
     return {
