@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.22</title>
+<title>PTCG Oracle Admin v1.23</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.22</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.23</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1734,6 +1734,7 @@ window.deleteFeedback = async function(fbId) {
 let matchRecordsCache = [];
 let matchRecordsTotal = 0;
 let matchRecordsFilter = '';
+let matchRecordsSearch = '';  // v1.23：全站搜尋字串（房號/玩家名/email/牌組）
 let matchRecordsModeFilter = 'all';  // v0.82: 'all' | 'online' | 'local'（線上=有 roomCode，本機=無）
 let matchRecordsLoading = false;
 // v0.91: 真正翻頁取代「載入更多」append 模式
@@ -1759,7 +1760,13 @@ async function loadMatchRecords(reset = false) {
       limit: String(MATCH_PAGE_SIZE),
       skip: String(matchRecordsPage * MATCH_PAGE_SIZE),
     });
-    if (matchRecordsFilter) params.set('email', matchRecordsFilter);
+    // v1.23：全站搜尋 — q（房號/玩家名/email 模糊）+ cardIds（牌組含此卡，client 解析寶可夢名）。
+    if (matchRecordsSearch) {
+      await ensureCardIndex(); await ensureCardTags();  // 牌組搜尋需卡片索引把名稱解析成 cardIds
+      params.set('q', matchRecordsSearch);
+      const ids = resolvePokemonCardIds(matchRecordsSearch);
+      if (ids.length) params.set('cardIds', ids.join(','));
+    }
     if (matchRecordsModeFilter === 'online' || matchRecordsModeFilter === 'local') {
       params.set('mode', matchRecordsModeFilter);
     }
@@ -1772,6 +1779,12 @@ async function loadMatchRecords(reset = false) {
     matchRecordsCache = data.records || [];
     matchRecordsTotal = data.total ?? matchRecordsCache.length;
     renderMatchRecords(el);
+    // v1.23：首次未載卡片索引時背景載入 → 補 ⚔️ 主力 badge（不擋初始 render）。
+    if (!Object.keys(cardInfoMap).length) {
+      Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
+        if (currentTab === 'matches') renderMatchRecords(el);
+      });
+    }
   } finally {
     matchRecordsLoading = false;
   }
@@ -1928,41 +1941,42 @@ function renderMatchRow(r) {
     <td><button class="tiny danger" onclick="deleteMatchRecord('${mid}')" title="刪除此筆紀錄（測試資料清理用）">🗑</button></td>
   </tr>`;
 }
-// v1.22：本頁 client 搜尋（房號/玩家名/email/牌組主力）— 過濾當前頁 cache 後只更新 tbody
-window.filterMatchRecordsBySearch = function(q) {
+// v1.23：把搜尋字串裡的寶可夢名解析成 cardId 清單（牌組搜尋用，送給 server 比對 cardCounts）。
+//   只取「非支援型」寶可夢（同主力打手判定）；名稱子字串模糊比對。
+function resolvePokemonCardIds(q) {
   const lc = (q || '').toLowerCase().trim();
-  const filtered = !lc ? matchRecordsCache : matchRecordsCache.filter(r => {
-    if ((r.roomCode || '').toLowerCase().includes(lc)) return true;
-    for (const pl of [r.p1, r.p2]) {
-      if (!pl) continue;
-      if ((pl.name || '').toLowerCase().includes(lc)) return true;
-      if ((pl.email || '').toLowerCase().includes(lc)) return true;
-      const m = detectMainFromCardCounts(pl.cardCounts);
-      if (m && m.toLowerCase().includes(lc)) return true;
-    }
-    return false;
-  });
-  const tbody = document.querySelector('#tab-matches tbody');
-  if (tbody) tbody.innerHTML = filtered.map(renderMatchRow).join('');
+  if (!lc) return [];
+  const ids = [];
+  for (const id in cardInfoMap) {
+    const info = cardInfoMap[id];
+    if (!info || info.supertype !== 'Pokemon') continue;
+    if ((cardTagsCache[id] || []).includes('support')) continue;
+    const nm = (info.displayName || info.name || '').toLowerCase();
+    if (nm.includes(lc)) { ids.push(id); if (ids.length >= 300) break; }
+  }
+  return ids;
+}
+// v1.23：全站搜尋（取代 v1.22 本頁 client 過濾）— 設搜尋字串 → 重新從 server 抓第 1 頁（含分頁、全站範圍）。
+window.filterMatchRecordsBySearch = function(q) {
+  matchRecordsSearch = (q || '').trim();
+  matchRecordsCache = [];
+  loadMatchRecords(true);
 };
 
 function renderMatchRecords(el) {
   const records = matchRecordsCache;
   const rows = records.map(renderMatchRow).join('');
   el.innerHTML = `
-    <h2>📜 對戰歷史 <span class="small">(共 ${matchRecordsTotal} 場${matchRecordsFilter ? ' · email: ' + escapeHtml(matchRecordsFilter) : ''}${matchRecordsModeFilter !== 'all' ? ' · ' + (matchRecordsModeFilter === 'online' ? '🌐 線上' : '🏠 本機') : ''})</span></h2>
+    <h2>📜 對戰歷史 <span class="small">(共 ${matchRecordsTotal} 場${matchRecordsSearch ? ' · 搜尋: ' + escapeHtml(matchRecordsSearch) : ''}${matchRecordsModeFilter !== 'all' ? ' · ' + (matchRecordsModeFilter === 'online' ? '🌐 線上' : '🏠 本機') : ''})</span></h2>
     <div class="toolbar">
       <span class="filter-btn ${matchRecordsModeFilter === 'all' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('all')">全部</span>
       <span class="filter-btn ${matchRecordsModeFilter === 'online' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('online')">🌐 線上對戰</span>
       <span class="filter-btn ${matchRecordsModeFilter === 'local' ? 'active' : ''}" onclick="setMatchRecordsModeFilter('local')">🏠 本機雙人</span>
       <span style="flex:1"></span>
-      <input class="search-box" id="match-quick-search" placeholder="🔍 本頁搜尋 房號/玩家名/Email/牌組(主力)"
-        style="max-width:300px;" oninput="filterMatchRecordsBySearch(this.value)" />
-      <input class="search-box" placeholder="📧 全站 email 篩選" value="${escapeHtml(matchRecordsFilter)}"
-        style="max-width:200px;"
-        onkeydown="if(event.key==='Enter')filterMatchRecordsByEmail(this.value)" />
-      <button onclick="filterMatchRecordsByEmail(document.querySelectorAll('#tab-matches .search-box')[1].value)">套用</button>
-      <button class="ghost" onclick="filterMatchRecordsByEmail('')">清除</button>
+      <input class="search-box" id="match-global-search" placeholder="🔍 全站搜尋 房號/玩家名/Email/牌組(主力)" value="${escapeHtml(matchRecordsSearch)}"
+        style="max-width:340px;" onkeydown="if(event.key==='Enter')filterMatchRecordsBySearch(this.value)" />
+      <button onclick="filterMatchRecordsBySearch(document.getElementById('match-global-search').value)">搜尋</button>
+      <button class="ghost" onclick="filterMatchRecordsBySearch('')">清除</button>
     </div>
     <div class="small" style="margin: 4px 0 12px; color: #7a8898;">點玩家名字 → 看這場用的牌組（勝者綠底）· 🗑 刪除測試紀錄</div>
     ${records.length === 0 ? '<div class="empty">尚無對戰紀錄（符合目前 filter 條件）</div>' : `

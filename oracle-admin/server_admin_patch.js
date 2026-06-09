@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.28 (admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
+// === ORACLE ADMIN ENDPOINTS === v0.29 (admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -815,14 +815,32 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
       const limit = Math.min(parseInt(req.query.limit) || 50, 500);
       const skip = parseInt(req.query.skip) || 0;
-      const filter = {};
-      if (req.query.email) filter.$or = [{ 'p1.email': req.query.email }, { 'p2.email': req.query.email }];
-      // v0.11：mode filter 改用 roomCode 判斷（玩家語意：有房號=線上、無=本機）
-      //   舊版用 `filter.mode = 'online'/'local'` 是依 client 端 payload 自報的 mode field，
-      //   不夠可靠（可能跟 roomCode 不一致）。改用 roomCode existence 為唯一真相來源。
-      if (req.query.mode === 'online') filter.roomCode = { $type: 'string' };
-      else if (req.query.mode === 'local') filter.roomCode = null;
-      if (req.query.since) filter.endedAt = { $gte: parseInt(req.query.since) };
+      // v0.29：改用 $and 組合條件，支援「全站搜尋」q（房號/玩家名/email 模糊）+ cardIds（牌組含此卡）。
+      const and = [];
+      // mode filter（roomCode 判斷：有房號=線上、無=本機）
+      if (req.query.mode === 'online') and.push({ roomCode: { $type: 'string' } });
+      else if (req.query.mode === 'local') and.push({ roomCode: null });
+      if (req.query.since) and.push({ endedAt: { $gte: parseInt(req.query.since) } });
+      // 向後相容：舊 email 精確 filter
+      if (req.query.email) and.push({ $or: [{ 'p1.email': req.query.email }, { 'p2.email': req.query.email }] });
+      // v0.29 全站搜尋：q 對 房號/p1+p2 的 name/email 做 case-insensitive 模糊比對；
+      //   cardIds（client 把寶可夢名解析成的卡 id 清單）對 p1/p2.cardCounts 做「含此卡」比對（牌組搜尋）。
+      const q = String(req.query.q || '').trim();
+      const cardIds = req.query.cardIds
+        ? String(req.query.cardIds).split(',').map(s => s.trim()).filter(Boolean).slice(0, 300)
+        : [];
+      if (q || cardIds.length) {
+        const or = [];
+        if (q) {
+          const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          or.push({ roomCode: rx }, { 'p1.name': rx }, { 'p2.name': rx }, { 'p1.email': rx }, { 'p2.email': rx });
+        }
+        for (const id of cardIds) {
+          or.push({ ['p1.cardCounts.' + id]: { $gt: 0 } }, { ['p2.cardCounts.' + id]: { $gt: 0 } });
+        }
+        if (or.length) and.push({ $or: or });
+      }
+      const filter = and.length ? { $and: and } : {};
       try {
         const [records, total] = await Promise.all([
           db.collection('matchRecords')
