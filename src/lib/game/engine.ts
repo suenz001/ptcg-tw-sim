@@ -102,7 +102,7 @@ function isInitializeBlocking(
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
 // 當場上活動場地卡為 JAMMING_TOWER_STADIUMS 所列競技場卡時，雙方所有【道具】不發動效果。
 // 這個閘門會包在所有 TOOL_* 查找上，讓道具的 HP 加成、攻擊 +N、退避減免等全部失效。
-function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
+export function isToolsJammed(state: GameState, pool: Map<string, Card>): boolean {
   const s = state.activeStadium;
   if (!s) return false;
   const card = pool.get(s.cardId);
@@ -4574,277 +4574,16 @@ function handlePlaying(
       }
     }
 
-    // defender 是【鋼】 + 防守方有 metalShieldThisTurn → 傷害 -30
-    if (baseDamage > 0
-        && defender.metalShieldThisTurn
-        && defenderCard.pokemonType === 'Metal') {
-      const reduced = Math.max(0, baseDamage - 30);
-      workingState = addLog(workingState,
-        `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
-      formula.push({ sign: '-', value: baseDamage - reduced, label: '鐵之防禦' });
-      baseDamage = reduced;
-    }
-
-    // v2.190 陳舊的顎之化石（戰鬥場）— 對手戰鬥寶可夢使用招式的傷害「-30」
-    // defender.active 是 fossilOnField + cardId 對應 陳舊的顎之化石 → 傷害 -30
-    if (baseDamage > 0
-        && defender.active.fossilOnField
-        && defenderCard.name === '陳舊的顎之化石') {
-      const reduced = Math.max(0, baseDamage - 30);
-      workingState = addLog(workingState,
-        `陳舊的顎之化石：受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
-      formula.push({ sign: '-', value: baseDamage - reduced, label: '陳舊顎化石' });
-      baseDamage = reduced;
-    }
-
-    // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
-    // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
-    // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
-    // 位置：weakness 後（語意上是 defender-side 的「本回合受傷 +N」debuff，不是 attacker's bonus）。
-    if (baseDamage > 0 && defender.active.takeExtraDamageThisTurn) {
-      const extra = defender.active.takeExtraDamageThisTurn;
-      baseDamage += extra;
-      workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
-      formula.push({ sign: '+', value: extra, label: '上回合遺留' });
-    }
-
-    // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過
-    // v2.266：火箭隊的監視塔對 Colorless 防守方的 PASSIVE_DAMAGE_REDUCE 也要擋
-    //   （e.g. 毛毛角羊｜柔軟羊毛 Colorless -30）。
-    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
-        && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
-      for (const ab of defenderCard.abilities) {
-        if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
-        const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
-        if (reduce) {
-          const before = baseDamage;
-          baseDamage = Math.max(0, baseDamage - reduce);
-          if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
-        }
-        // v2.992 條件式減免（雷吉洛克 岩石盔甲 等）
-        const condFn = PASSIVE_DAMAGE_REDUCE_COND.get(ab.name);
-        if (condFn && defender.active) {
-          const reduceN = condFn(defender.active, defenderCard);
-          if (reduceN > 0) {
-            const before = baseDamage;
-            baseDamage = Math.max(0, baseDamage - reduceN);
-            if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
-          }
-        }
-        // v5.294 依攻擊者屬性條件減傷 (白海獅 厚脂肪 等)
-        const atkFn = PASSIVE_DAMAGE_REDUCE_BY_ATTACKER.get(ab.name);
-        if (atkFn && defender.active) {
-          const reduceN = atkFn(defender.active, defenderCard, attackerCard);
-          if (reduceN > 0) {
-            const before = baseDamage;
-            baseDamage = Math.max(0, baseDamage - reduceN);
-            if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
-          }
-        }
-      }
-    }
-
-    // v2.999 Group 3 Wave 1 ：團體 -N 受傷減免（大吾的小碎鑽 / 青銅鐘 / 齒輪怪）
-    //   skipDefEffects 跳過；baseDamage>0 才算；同樣遵 火箭隊的監視塔 閘門
-    //   （青銅鐘 / 齒輪怪是【鋼】 / 大吾的小碎鑽是【闘】，都非【無】→ 監視塔
-    //    對其無效；這列 helper 木木會逐個當成 ability holder 個別閘門）
-    if (!skipDefEffects && baseDamage > 0) {
-      // 大吾的小碎鑽｜岩石宮殿 — 備戰區時，自方「大吾的」寶可夢受招式傷害 -30
-      //   （多隻不重複；大吾的小碎鑽是【闘】…監視塔擋不到，略監視塔閘門）
-      const palaceReduce = steelixPalaceReduce(workingState, dIdx, defenderCard, pool);
-      if (palaceReduce > 0) {
-        const before = baseDamage;
-        baseDamage = Math.max(0, baseDamage - palaceReduce);
-        workingState = addLog(workingState,
-          `「岩石宮殿」：${defenderCard.name} 受傷害 -${palaceReduce}（${before} → ${baseDamage}）`, dIdx);
-        formula.push({ sign: '-', value: before - baseDamage, label: '岩石宮殿' });
-      }
-      // 青銅鐘｜守護之鐘 — 自方寶可夢受傷害 -10
-      const bronzongReduce = bronzongShelterReduce(workingState, dIdx, pool);
-      if (bronzongReduce > 0) {
-        const before = baseDamage;
-        baseDamage = Math.max(0, baseDamage - bronzongReduce);
-        workingState = addLog(workingState,
-          `「守護之鐘」：${defenderCard.name} 受傷害 -${bronzongReduce}（${before} → ${baseDamage}）`, dIdx);
-        formula.push({ sign: '-', value: before - baseDamage, label: '守護之鐘' });
-      }
-      // 齒輪怪｜齒輪塗層 — 自方附【鋼】能量寶可夢受傷害 -20
-      const gearReduce = gearCoatingReduce(workingState, dIdx, defender.active, pool);
-      if (gearReduce > 0) {
-        const before = baseDamage;
-        baseDamage = Math.max(0, baseDamage - gearReduce);
-        workingState = addLog(workingState,
-          `「齒輪塗層」：${defenderCard.name} 受傷害 -${gearReduce}（${before} → ${baseDamage}）`, dIdx);
-        formula.push({ sign: '-', value: before - baseDamage, label: '齒輪塗層' });
-      }
-      // v3.77 全金屬實驗室（Stadium）— 雙方【鋼】寶可夢，受到對手寶可夢招式的傷害 -30
-      //   卡面：「雙方的【鋼】寶可夢，受到對手的寶可夢招式的傷害「-30」點。」
-      //   條件：場上 stadium === '全金屬實驗室' + defender 的 pokemonType === 'Metal'
-      const stadiumNameMetal = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
-      if (stadiumNameMetal === '全金屬實驗室' && defenderCard.pokemonType === 'Metal') {
-        const before = baseDamage;
-        baseDamage = Math.max(0, baseDamage - 30);
-        workingState = addLog(workingState,
-          `「全金屬實驗室」：${defenderCard.name}（鋼）受傷害 -30（${before} → ${baseDamage}）`, dIdx);
-        formula.push({ sign: '-', value: before - baseDamage, label: '全金屬實驗室' });
-      }
-      // v3.77 石之洞窟（Stadium）— 雙方「大吾的」寶可夢，受到對手寶可夢招式的傷害 -30
-      //   卡面：「雙方的所有『大吾的寶可夢』受到對手的寶可夢招式的傷害「-30」點。」
-      const stadiumNameSteven = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
-      if (stadiumNameSteven === '石之洞窟' && defenderCard.name.startsWith('大吾的')) {
-        const before = baseDamage;
-        baseDamage = Math.max(0, baseDamage - 30);
-        workingState = addLog(workingState,
-          `「石之洞窟」：${defenderCard.name}（大吾的）受傷害 -30（${before} → ${baseDamage}）`, dIdx);
-        formula.push({ sign: '-', value: before - baseDamage, label: '石之洞窟' });
-      }
-    }
-
-
-    // v2.154 爆炸頭水牛｜捲牆 — 場上有 2 隻以上爆炸頭水牛 + 防守方戰鬥位是【無】基礎 → -60
-    //   這是 field-wide buff，不只 defender 自己的 abilities，要掃 defender 整個場上
-    //   無論多少隻擁有此特性的寶可夢，效果不重複（最多 -60 一次）
-    // v2.266：火箭隊的監視塔（Colorless 特性消除）會擋掉每隻爆炸頭水牛的捲牆 →
-    //   filter 內加 isColorlessAbilityBlocked 閘門（爆炸頭水牛本身是 Colorless）。
-    //   stadiums.ts line 179-180 的註解就預告過這類「被動特性 × 監視塔」要個別補閘門。
-    if (!skipDefEffects && baseDamage > 0) {
-      const defAll: CardInstance[] = [
-        ...(defender.active ? [defender.active] : []),
-        ...defender.bench,
-      ];
-      const buffaloCount = defAll.filter(c => {
-        const card = pool.get(c.cardId);
-        if (card?.name !== '爆炸頭水牛') return false;
-        if (!card.abilities?.some(a => a.name === '捲牆')) return false;
-        // 監視塔擋掉【無】寶可夢的特性（捲牆持有者爆炸頭水牛本身是 Colorless）
-        if (isColorlessAbilityBlocked(state, card, pool)) return false;
-        return true;
-      }).length;
-      if (buffaloCount >= 2) {
-        // 防守方戰鬥位必須是【無】基礎
-        const isColorless = defenderCard.pokemonType === 'Colorless';
-        const isBasic = !defenderCard.evolvesFrom && defenderCard.stage !== 'Stage1' && defenderCard.stage !== 'Stage2';
-        if (isColorless && isBasic) {
-          const before = baseDamage;
-          baseDamage = Math.max(0, baseDamage - 60);
-          if (before > baseDamage) {
-            formula.push({ sign: '-', value: before - baseDamage, label: '爆炸頭水牛 捲牆' });
-          }
-        }
-      }
-    }
-
-    // v2.217 灰塵山（J）｜垃圾洩氣 — 場上有灰塵山 + 攻擊者戰鬥場附有 PokemonTool → -20
-    // 卡面：「只要這隻寶可夢在場上，對手身上附有「寶可夢道具」卡的戰鬥寶可夢使用的招式的傷害「-20」點。」
-    // 多隻不疊加（卡面通常如此；保險用 has 而非 count）
-    if (!skipDefEffects && baseDamage > 0) {
-      const defAll: CardInstance[] = [
-        ...(defender.active ? [defender.active] : []),
-        ...defender.bench,
-      ];
-      const hasGarbageMountain = defAll.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.name === '灰塵山' && card?.abilities?.some(a => a.name === '垃圾洩氣');
-      });
-      if (hasGarbageMountain && attacker.active && getAllAttachedTools(attacker.active).length > 0) {
-        // v3.20 多重轉接：只要附了任一張寶可夢道具就觸發
-        const allTools = getAllAttachedTools(attacker.active);
-        const toolCard = pool.get(allTools[0].cardId);
-        if (toolCard?.subtype === 'PokemonTool') {
-          const before = baseDamage;
-          baseDamage = Math.max(0, baseDamage - 20);
-          workingState = addLog(workingState,
-            `垃圾洩氣：${attackerCard.name} 附有寶可夢道具 → 招式傷害 -20`, dIdx);
-          formula.push({ sign: '-', value: before - baseDamage, label: '垃圾洩氣' });
-        }
-      }
-    }
-
-    // v2.355 冰雪巨龍｜凍原堡壘 — 防守方場上有冰雪巨龍(凍原堡壘)且防守 active 附有【水】能量 → -50
-    // 卡面：「只要這隻寶可夢在場上，對手的招式對自己的戰鬥寶可夢造成的傷害，
-    //        若戰鬥寶可夢身上附有【水】能量，則傷害「-50」點。」
-    // gate：skipDefEffects 跳過、baseDamage>0 才算
-    if (!skipDefEffects && baseDamage > 0) {
-      const defAll2: CardInstance[] = [
-        ...(defender.active ? [defender.active] : []),
-        ...defender.bench,
-      ];
-      const hasFrozenFortress = defAll2.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.name === '冰雪巨龍' && card?.abilities?.some(a => a.name === '凍原堡壘');
-      });
-      if (hasFrozenFortress && defender.active) {
-        const hasWater = defender.active.energyAttached.some(e => {
-          const ec = pool.get(e.cardId);
-          if (!ec || ec.supertype !== 'Energy') return false;
-          // 基本【水】能量
-          if (ec.subtype === 'Basic' && (ec.pokemonType === 'Water' || /【水】/.test(ec.name ?? ''))) return true;
-          // 特殊能量本身屬性含 Water
-          if (ec.pokemonType === 'Water') return true;
-          // 古舊能量 / 夜光能量 → 全屬性
-          if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
-          return false;
-        });
-        if (hasWater) {
-          baseDamage = Math.max(0, baseDamage - 50);
-          workingState = addLog(workingState,
-            `凍原堡壘：${pool.get(defender.active.cardId)?.name ?? '?'} 附有【水】能量 → 招式傷害 -50`, dIdx);
-          formula.push({ sign: '-', value: 50, label: '凍原堡壘' });
-        }
-      }
-    }
-
-    // v2.217 電龍（J）｜同步脈衝 — 自己手牌與對手手牌張數相同 → 招式傷害 +80
-    // 卡面：「若自己的手牌與對手的手牌張數相同，則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+80」點。」
-    // gate：only triggers when attacker is 電龍 自己（attacker.active.cardName === 電龍）
-    if (baseDamage > 0 && attackerCard.name === '電龍'
-        && attackerCard.abilities?.some(a => a.name === '同步脈衝')) {
-      const myHand = attacker.hand.length;
-      const oppHand = defender.hand.length;
-      if (myHand === oppHand) {
-        baseDamage += 80;
-        workingState = addLog(workingState,
-          `同步脈衝：雙方手牌均 ${myHand} 張 → ${attackerCard.name} 招式傷害 +80`, aIdx);
-        formula.push({ sign: '+', value: 80, label: '同步脈衝' });
-      }
-    }
-
-    // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果 / 渾厚鱗片）
-    // 只要觸發就 -N，部分卡會丟棄；不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
-    // skipDefEffects 跳過，但不觸發道具也不丟棄。阻礙之塔時整個道具效果失效。
-    // v2.176：新增 holderTypes filter（渾厚鱗片需 holder 為【龍】）
-    //          + TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY（神聖護符）
+    // v5.544：防守方減傷算術收斂到中央 applyDefenderReductionsBlockA（引擎 + 狙擊/延後型共用）。
     let defenseReduceToolToDiscard: CardInstance | null = null;
-    if (!toolsJammed && !skipDefEffects) {
-      const defenderCardForTool = pool.get(defender.active.cardId);
-      // v3.20 多重轉接：iterate 所有道具（toolAttached + extraTools）
-      for (const t of getAllAttachedTools(defender.active)) {
-        const defTool = pool.get(t.cardId);
-        if (!defTool) continue;
-        const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
-        if (defense && attackerCard.pokemonType && defense.types.includes(attackerCard.pokemonType) && baseDamage > 0) {
-          const holderOk = !defense.holderTypes
-            || (defenderCardForTool?.pokemonType
-                && defense.holderTypes.includes(defenderCardForTool.pokemonType));
-          if (holderOk) {
-            baseDamage = Math.max(0, baseDamage - defense.amount);
-            if (defense.discardOnTrigger) defenseReduceToolToDiscard = t;
-          }
-        }
-        const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
-        if (abilFn && baseDamage > 0) {
-          const reduce = abilFn(attackerCard);
-          if (reduce > 0) {
-            baseDamage = Math.max(0, baseDamage - reduce);
-            // v5.252：補 addLog + formula 揭示觸發 (例如神聖護符 -30)
-            workingState = addLog(workingState,
-              `${defTool.name}：${attackerCard.name}（擁有特性）招式傷害 -${reduce}`, dIdx);
-            formula.push({ sign: '-', value: reduce, label: defTool.name });
-          }
-        }
-      }
+    {
+      const _ra = applyDefenderReductionsBlockA(
+        workingState, state, defender, attacker, defenderCard, attackerCard,
+        baseDamage, skipDefEffects, toolsJammed, dIdx, aIdx, formula, pool);
+      workingState = _ra.workingState;
+      baseDamage = _ra.baseDamage;
+      defenseReduceToolToDiscard = _ra.defenseReduceToolToDiscard;
     }
-
     // 被動特性：條件式完全免疫 — skipDefEffects 跳過
     // v2.250：ImmunityCheck 可回傳 boolean（既有 entry）或 { immune, newState }
     //   （順滑大衣 等需要寫 log 的特性）。後者會 chain 到 workingState。
@@ -7322,6 +7061,306 @@ function scrubBenchStatus(state: GameState): GameState {
  * 主要引擎入口：接收現有 state + 動作 → 回傳新 state。
  * 所有遊戲邏輯都在這裡分派。
  */
+
+export type FormulaTerm = { sign: '=' | '+' | '-' | '×'; value: number; label: string };
+
+// ════════════════════════════════════════════════════════════════════════════
+// v5.544 中央收斂：防守方「減傷算術」block A（metalShield/化石/takeExtra/PASSIVE_DAMAGE_REDUCE×3/
+//   岩石宮殿/守護之鐘/齒輪塗層/全金屬實驗室/石之洞窟/爆炸頭水牛捲牆/垃圾洩氣/凍原堡壘/同步脈衝/
+//   防具道具減傷）。引擎主管線 + 中央 dealAttackDamageToTarget（狙擊/延後型打 active）共用同一段，
+//   避免狙擊/延後招式漏套防守方減傷（玩家報：玩偶捕捉等走中央函式的招式沒套鐵之防禦/防護充能 -N）。
+//   ★ 純算術 + log + 算出要丟棄的減傷道具(defenseReduceToolToDiscard)，不碰 defenderState/KO 邊界。
+//   ★ 不含「條件式完全免疫(PASSIVE_IMMUNITY/COIN)」與「damageReduceNextHit 消耗」——前者各自管線已處理、
+//     後者在呼叫端套（消耗語意）。skipDefEffects=true 時整段照引擎原樣 gate 跳過。
+// ════════════════════════════════════════════════════════════════════════════
+export function applyDefenderReductionsBlockA(
+  workingState: GameState,
+  state: GameState,
+  defender: PlayerState,
+  attacker: PlayerState,
+  defenderCard: Card,
+  attackerCard: Card,
+  baseDamage: number,
+  skipDefEffects: boolean,
+  toolsJammed: boolean,
+  dIdx: 0 | 1,
+  aIdx: 0 | 1,
+  formula: FormulaTerm[],
+  pool: Map<string, Card>,
+): { workingState: GameState; baseDamage: number; defenseReduceToolToDiscard: CardInstance | null } {
+    // defender 是【鋼】 + 防守方有 metalShieldThisTurn → 傷害 -30
+    if (baseDamage > 0
+        && defender.metalShieldThisTurn
+        && defenderCard.pokemonType === 'Metal') {
+      const reduced = Math.max(0, baseDamage - 30);
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+      formula.push({ sign: '-', value: baseDamage - reduced, label: '鐵之防禦' });
+      baseDamage = reduced;
+    }
+
+    // v2.190 陳舊的顎之化石（戰鬥場）— 對手戰鬥寶可夢使用招式的傷害「-30」
+    // defender.active 是 fossilOnField + cardId 對應 陳舊的顎之化石 → 傷害 -30
+    if (baseDamage > 0
+        && defender.active.fossilOnField
+        && defenderCard.name === '陳舊的顎之化石') {
+      const reduced = Math.max(0, baseDamage - 30);
+      workingState = addLog(workingState,
+        `陳舊的顎之化石：受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+      formula.push({ sign: '-', value: baseDamage - reduced, label: '陳舊顎化石' });
+      baseDamage = reduced;
+    }
+
+    // 跨回合「這隻本回合受招式傷害 +N」旗標（例：超音波幼蟲｜刺耳聲）
+    // 由對手上個回合 ATTACK_POST 設於 takeExtraDamageNextTurn → 本回合開始前 promote 為 ThisTurn。
+    // 不消耗旗標，本回合結束時在 END_TURN 統一清除。
+    // 位置：weakness 後（語意上是 defender-side 的「本回合受傷 +N」debuff，不是 attacker's bonus）。
+    if (baseDamage > 0 && defender.active.takeExtraDamageThisTurn) {
+      const extra = defender.active.takeExtraDamageThisTurn;
+      baseDamage += extra;
+      workingState = addLog(workingState, `${defenderCard.name} 受到 +${extra} 傷害（上回合招式遺留效果）`, dIdx);
+      formula.push({ sign: '+', value: extra, label: '上回合遺留' });
+    }
+
+    // 被動特性：受傷減 N（Passive damage reduction）— skipDefEffects 跳過
+    // v2.266：火箭隊的監視塔對 Colorless 防守方的 PASSIVE_DAMAGE_REDUCE 也要擋
+    //   （e.g. 毛毛角羊｜柔軟羊毛 Colorless -30）。
+    if (!skipDefEffects && baseDamage > 0 && defenderCard.abilities
+        && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
+      for (const ab of defenderCard.abilities) {
+        if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
+        const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
+        if (reduce) {
+          const before = baseDamage;
+          baseDamage = Math.max(0, baseDamage - reduce);
+          if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
+        }
+        // v2.992 條件式減免（雷吉洛克 岩石盔甲 等）
+        const condFn = PASSIVE_DAMAGE_REDUCE_COND.get(ab.name);
+        if (condFn && defender.active) {
+          const reduceN = condFn(defender.active, defenderCard);
+          if (reduceN > 0) {
+            const before = baseDamage;
+            baseDamage = Math.max(0, baseDamage - reduceN);
+            if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
+          }
+        }
+        // v5.294 依攻擊者屬性條件減傷 (白海獅 厚脂肪 等)
+        const atkFn = PASSIVE_DAMAGE_REDUCE_BY_ATTACKER.get(ab.name);
+        if (atkFn && defender.active) {
+          const reduceN = atkFn(defender.active, defenderCard, attackerCard);
+          if (reduceN > 0) {
+            const before = baseDamage;
+            baseDamage = Math.max(0, baseDamage - reduceN);
+            if (before > baseDamage) formula.push({ sign: '-', value: before - baseDamage, label: ab.name });
+          }
+        }
+      }
+    }
+
+    // v2.999 Group 3 Wave 1 ：團體 -N 受傷減免（大吾的小碎鑽 / 青銅鐘 / 齒輪怪）
+    //   skipDefEffects 跳過；baseDamage>0 才算；同樣遵 火箭隊的監視塔 閘門
+    //   （青銅鐘 / 齒輪怪是【鋼】 / 大吾的小碎鑽是【闘】，都非【無】→ 監視塔
+    //    對其無效；這列 helper 木木會逐個當成 ability holder 個別閘門）
+    if (!skipDefEffects && baseDamage > 0) {
+      // 大吾的小碎鑽｜岩石宮殿 — 備戰區時，自方「大吾的」寶可夢受招式傷害 -30
+      //   （多隻不重複；大吾的小碎鑽是【闘】…監視塔擋不到，略監視塔閘門）
+      const palaceReduce = steelixPalaceReduce(workingState, dIdx, defenderCard, pool);
+      if (palaceReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - palaceReduce);
+        workingState = addLog(workingState,
+          `「岩石宮殿」：${defenderCard.name} 受傷害 -${palaceReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '岩石宮殿' });
+      }
+      // 青銅鐘｜守護之鐘 — 自方寶可夢受傷害 -10
+      const bronzongReduce = bronzongShelterReduce(workingState, dIdx, pool);
+      if (bronzongReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - bronzongReduce);
+        workingState = addLog(workingState,
+          `「守護之鐘」：${defenderCard.name} 受傷害 -${bronzongReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '守護之鐘' });
+      }
+      // 齒輪怪｜齒輪塗層 — 自方附【鋼】能量寶可夢受傷害 -20
+      const gearReduce = gearCoatingReduce(workingState, dIdx, defender.active, pool);
+      if (gearReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - gearReduce);
+        workingState = addLog(workingState,
+          `「齒輪塗層」：${defenderCard.name} 受傷害 -${gearReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '齒輪塗層' });
+      }
+      // v3.77 全金屬實驗室（Stadium）— 雙方【鋼】寶可夢，受到對手寶可夢招式的傷害 -30
+      //   卡面：「雙方的【鋼】寶可夢，受到對手的寶可夢招式的傷害「-30」點。」
+      //   條件：場上 stadium === '全金屬實驗室' + defender 的 pokemonType === 'Metal'
+      const stadiumNameMetal = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+      if (stadiumNameMetal === '全金屬實驗室' && defenderCard.pokemonType === 'Metal') {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - 30);
+        workingState = addLog(workingState,
+          `「全金屬實驗室」：${defenderCard.name}（鋼）受傷害 -30（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '全金屬實驗室' });
+      }
+      // v3.77 石之洞窟（Stadium）— 雙方「大吾的」寶可夢，受到對手寶可夢招式的傷害 -30
+      //   卡面：「雙方的所有『大吾的寶可夢』受到對手的寶可夢招式的傷害「-30」點。」
+      const stadiumNameSteven = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+      if (stadiumNameSteven === '石之洞窟' && defenderCard.name.startsWith('大吾的')) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - 30);
+        workingState = addLog(workingState,
+          `「石之洞窟」：${defenderCard.name}（大吾的）受傷害 -30（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '石之洞窟' });
+      }
+    }
+
+
+    // v2.154 爆炸頭水牛｜捲牆 — 場上有 2 隻以上爆炸頭水牛 + 防守方戰鬥位是【無】基礎 → -60
+    //   這是 field-wide buff，不只 defender 自己的 abilities，要掃 defender 整個場上
+    //   無論多少隻擁有此特性的寶可夢，效果不重複（最多 -60 一次）
+    // v2.266：火箭隊的監視塔（Colorless 特性消除）會擋掉每隻爆炸頭水牛的捲牆 →
+    //   filter 內加 isColorlessAbilityBlocked 閘門（爆炸頭水牛本身是 Colorless）。
+    //   stadiums.ts line 179-180 的註解就預告過這類「被動特性 × 監視塔」要個別補閘門。
+    if (!skipDefEffects && baseDamage > 0) {
+      const defAll: CardInstance[] = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ];
+      const buffaloCount = defAll.filter(c => {
+        const card = pool.get(c.cardId);
+        if (card?.name !== '爆炸頭水牛') return false;
+        if (!card.abilities?.some(a => a.name === '捲牆')) return false;
+        // 監視塔擋掉【無】寶可夢的特性（捲牆持有者爆炸頭水牛本身是 Colorless）
+        if (isColorlessAbilityBlocked(state, card, pool)) return false;
+        return true;
+      }).length;
+      if (buffaloCount >= 2) {
+        // 防守方戰鬥位必須是【無】基礎
+        const isColorless = defenderCard.pokemonType === 'Colorless';
+        const isBasic = !defenderCard.evolvesFrom && defenderCard.stage !== 'Stage1' && defenderCard.stage !== 'Stage2';
+        if (isColorless && isBasic) {
+          const before = baseDamage;
+          baseDamage = Math.max(0, baseDamage - 60);
+          if (before > baseDamage) {
+            formula.push({ sign: '-', value: before - baseDamage, label: '爆炸頭水牛 捲牆' });
+          }
+        }
+      }
+    }
+
+    // v2.217 灰塵山（J）｜垃圾洩氣 — 場上有灰塵山 + 攻擊者戰鬥場附有 PokemonTool → -20
+    // 卡面：「只要這隻寶可夢在場上，對手身上附有「寶可夢道具」卡的戰鬥寶可夢使用的招式的傷害「-20」點。」
+    // 多隻不疊加（卡面通常如此；保險用 has 而非 count）
+    if (!skipDefEffects && baseDamage > 0) {
+      const defAll: CardInstance[] = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ];
+      const hasGarbageMountain = defAll.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '灰塵山' && card?.abilities?.some(a => a.name === '垃圾洩氣');
+      });
+      if (hasGarbageMountain && attacker.active && getAllAttachedTools(attacker.active).length > 0) {
+        // v3.20 多重轉接：只要附了任一張寶可夢道具就觸發
+        const allTools = getAllAttachedTools(attacker.active);
+        const toolCard = pool.get(allTools[0].cardId);
+        if (toolCard?.subtype === 'PokemonTool') {
+          const before = baseDamage;
+          baseDamage = Math.max(0, baseDamage - 20);
+          workingState = addLog(workingState,
+            `垃圾洩氣：${attackerCard.name} 附有寶可夢道具 → 招式傷害 -20`, dIdx);
+          formula.push({ sign: '-', value: before - baseDamage, label: '垃圾洩氣' });
+        }
+      }
+    }
+
+    // v2.355 冰雪巨龍｜凍原堡壘 — 防守方場上有冰雪巨龍(凍原堡壘)且防守 active 附有【水】能量 → -50
+    // 卡面：「只要這隻寶可夢在場上，對手的招式對自己的戰鬥寶可夢造成的傷害，
+    //        若戰鬥寶可夢身上附有【水】能量，則傷害「-50」點。」
+    // gate：skipDefEffects 跳過、baseDamage>0 才算
+    if (!skipDefEffects && baseDamage > 0) {
+      const defAll2: CardInstance[] = [
+        ...(defender.active ? [defender.active] : []),
+        ...defender.bench,
+      ];
+      const hasFrozenFortress = defAll2.some(c => {
+        const card = pool.get(c.cardId);
+        return card?.name === '冰雪巨龍' && card?.abilities?.some(a => a.name === '凍原堡壘');
+      });
+      if (hasFrozenFortress && defender.active) {
+        const hasWater = defender.active.energyAttached.some(e => {
+          const ec = pool.get(e.cardId);
+          if (!ec || ec.supertype !== 'Energy') return false;
+          // 基本【水】能量
+          if (ec.subtype === 'Basic' && (ec.pokemonType === 'Water' || /【水】/.test(ec.name ?? ''))) return true;
+          // 特殊能量本身屬性含 Water
+          if (ec.pokemonType === 'Water') return true;
+          // 古舊能量 / 夜光能量 → 全屬性
+          if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
+          return false;
+        });
+        if (hasWater) {
+          baseDamage = Math.max(0, baseDamage - 50);
+          workingState = addLog(workingState,
+            `凍原堡壘：${pool.get(defender.active.cardId)?.name ?? '?'} 附有【水】能量 → 招式傷害 -50`, dIdx);
+          formula.push({ sign: '-', value: 50, label: '凍原堡壘' });
+        }
+      }
+    }
+
+    // v2.217 電龍（J）｜同步脈衝 — 自己手牌與對手手牌張數相同 → 招式傷害 +80
+    // 卡面：「若自己的手牌與對手的手牌張數相同，則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+80」點。」
+    // gate：only triggers when attacker is 電龍 自己（attacker.active.cardName === 電龍）
+    if (baseDamage > 0 && attackerCard.name === '電龍'
+        && attackerCard.abilities?.some(a => a.name === '同步脈衝')) {
+      const myHand = attacker.hand.length;
+      const oppHand = defender.hand.length;
+      if (myHand === oppHand) {
+        baseDamage += 80;
+        workingState = addLog(workingState,
+          `同步脈衝：雙方手牌均 ${myHand} 張 → ${attackerCard.name} 招式傷害 +80`, aIdx);
+        formula.push({ sign: '+', value: 80, label: '同步脈衝' });
+      }
+    }
+
+    // 道具：特定屬性防禦（福祿果 / 巧可果 / 千香果 / 刺耳果 / 霹霹果 / 莓榴果 / 渾厚鱗片）
+    // 只要觸發就 -N，部分卡會丟棄；不受是否已被其他機制削到 0 影響（規則上 tool 仍消耗）
+    // skipDefEffects 跳過，但不觸發道具也不丟棄。阻礙之塔時整個道具效果失效。
+    // v2.176：新增 holderTypes filter（渾厚鱗片需 holder 為【龍】）
+    //          + TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY（神聖護符）
+    let defenseReduceToolToDiscard: CardInstance | null = null;
+    if (!toolsJammed && !skipDefEffects) {
+      const defenderCardForTool = pool.get(defender.active.cardId);
+      // v3.20 多重轉接：iterate 所有道具（toolAttached + extraTools）
+      for (const t of getAllAttachedTools(defender.active)) {
+        const defTool = pool.get(t.cardId);
+        if (!defTool) continue;
+        const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
+        if (defense && attackerCard.pokemonType && defense.types.includes(attackerCard.pokemonType) && baseDamage > 0) {
+          const holderOk = !defense.holderTypes
+            || (defenderCardForTool?.pokemonType
+                && defense.holderTypes.includes(defenderCardForTool.pokemonType));
+          if (holderOk) {
+            baseDamage = Math.max(0, baseDamage - defense.amount);
+            if (defense.discardOnTrigger) defenseReduceToolToDiscard = t;
+          }
+        }
+        const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
+        if (abilFn && baseDamage > 0) {
+          const reduce = abilFn(attackerCard);
+          if (reduce > 0) {
+            baseDamage = Math.max(0, baseDamage - reduce);
+            // v5.252：補 addLog + formula 揭示觸發 (例如神聖護符 -30)
+            workingState = addLog(workingState,
+              `${defTool.name}：${attackerCard.name}（擁有特性）招式傷害 -${reduce}`, dIdx);
+            formula.push({ sign: '-', value: reduce, label: defTool.name });
+          }
+        }
+      }
+    }
+  return { workingState, baseDamage, defenseReduceToolToDiscard };
+}
+
 export function applyAction(
   state: GameState,
   action: GameAction,

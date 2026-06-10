@@ -200,6 +200,7 @@ export function countAncientOnField(
  */
 // v4.51 Phase 2：統一 defense helper
 import { canApplyEffectToTarget } from './defense';
+import { applyDefenderReductionsBlockA, isToolsJammed, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
 
@@ -7413,6 +7414,41 @@ export function dealAttackDamageToTarget(
         && _atkCard.pokemonType === targetCard.resistance.type) {
       const _rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
       if (!isNaN(_rv)) effDmg = Math.max(0, effDmg + _rv);
+    }
+  }
+  // v5.544：戰鬥位招式【傷害】套防守方減傷（中央 applyDefenderReductionsBlockA，與引擎主管線共用單一段）。
+  //   修「狙擊/延後型招式(走中央函式)漏套鐵之防禦/全金屬實驗室/防護充能/果實道具等防守方減傷」。
+  //   位置：弱抗後、on-damaged 反擊前（反擊量依減傷後傷害；減到 0 不觸發反擊）。
+  if (isActive && kind === 'attack-damage' && effDmg > 0) {
+    const _defP = st.players[dIdx];
+    const _atkP = st.players[actorIdx];
+    const _atkCardR = _atkP.active ? pool.get(_atkP.active.cardId) : undefined;
+    if (_atkCardR && targetCard) {
+      const _fm: FormulaTerm[] = [];
+      const _rr = applyDefenderReductionsBlockA(
+        st, st, _defP, _atkP, targetCard, _atkCardR, effDmg, false,
+        isToolsJammed(st, pool), dIdx, actorIdx, _fm, pool);
+      st = _rr.workingState;
+      effDmg = _rr.baseDamage;
+      // 減傷果實道具丟棄（福祿果/巧可果等 discardOnTrigger）
+      if (_rr.defenseReduceToolToDiscard) {
+        const _tool = _rr.defenseReduceToolToDiscard;
+        st = updatePlayer(st, dIdx, p => {
+          if (!p.active) return p;
+          let act = p.active;
+          if (act.toolAttached?.iid === _tool.iid) act = { ...act, toolAttached: undefined };
+          else if (act.extraTools) act = { ...act, extraTools: act.extraTools.filter(x => x.iid !== _tool.iid) };
+          return { ...p, active: act, discard: [...p.discard, _tool] };
+        });
+      }
+      // damageReduceNextHit（下次被擊減傷）消耗 — 鏡射引擎 step 4（祭典樂舞首擊不消耗）
+      const _dAct = st.players[dIdx].active;
+      if (effDmg > 0 && _dAct?.damageReduceNextHit) {
+        effDmg = Math.max(0, effDmg - _dAct.damageReduceNextHit);
+        if (!_isFestivalDanceFirstAttackLocal(st, actorIdx, pool)) {
+          st = updatePlayer(st, dIdx, p => ({ ...p, active: p.active ? { ...p.active, damageReduceNextHit: undefined } : p.active }));
+        }
+      }
     }
   }
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
