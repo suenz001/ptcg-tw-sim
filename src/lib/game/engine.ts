@@ -4225,8 +4225,8 @@ function handlePlaying(
       players[aIdx] = { ...players[aIdx], active: newAtk };
       workingState = { ...workingState, players };
       const atkName = pool.get(newAtk.cardId)?.name ?? '?';
-      workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（下回合加傷效果）`, aIdx);
-      formula.push({ sign: '+', value: dmgBonus, label: '下回合加傷' });
+      workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（回合加傷效果）`, aIdx);
+      formula.push({ sign: '+', value: dmgBonus, label: '回合加傷' });
     }
 
     // 攻擊方自身的招式傷害削減旗標（由上回合對手的「吠」/「大聲咆哮」/「叫聲」等效果設置）
@@ -7293,8 +7293,10 @@ const BENCH_ACTION_LOCK_FLAGS = [
   'blockedAttackNamesNextTurn', 'blockedAttackNamesThisTurn',
   'attackFailureFlipCountPending', 'attackFailureFlipCountThisTurn',
   'pointySpinNextTurn', 'pointySpinThisTurn',
-  'damageBonusThisTurn', 'damageBonusPending',
-  'deferredPrizeBonusThisTurn', 'deferredPrizeBonusNextTurn',
+  // v5.529：移除 damageBonusThisTurn/damageBonusPending — 它們是「本回合/下次招式加傷」BUFF，
+  //   不是攻擊/撤退鎖。大力鱷|奔流之心 等特性在【備戰區】發動就會設這個 buff（玩家可先疊好再換位
+  //   到戰鬥場攻擊），scrubBenchStatus 每個 action 都清備戰→把備戰設的 +120 立刻清掉(玩家回報無效)。
+  //   殘留跨回合的問題由 END_TURN 的 clearDmgBonusThisTurn 處理，這裡不該碰。deferredPrizeBonus 同理移除。
 ] as const;
 function stripBenchActionLockFlags(b: CardInstance): CardInstance {
   let hit = false;
