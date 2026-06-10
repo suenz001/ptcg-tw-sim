@@ -423,7 +423,8 @@ regR('heliolisk-frill-generation', (state, actorIdx, selectedIids, params, pool)
 });
 regPre('光電傘蜥|強大伏特', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  const count = p.active ? p.active.energyAttached.length : 0;
+  // v5.541：依能量數(units)——燃火/火箭隊等特殊能量正確計數
+  const count = p.active ? countAttachedEnergyAsUnits(p.active, pool, state, aIdx) : 0;
   const rfv = flipCoinsWithLog(state, count, '強大伏特', aIdx);
   const heads = rfv.heads;
   const dmg = heads * 70;

@@ -281,18 +281,25 @@ export function getEnergyDiscardUnits(
  *
  * 不適用：card-count 場合（如丟棄 N 張能量、撤退費用、條件 'energyAttached.length > 0'）。
  *
- * 火箭隊能量 / 燃火能量：暫時當 1 個算（屬性 / cost 規則，非 count override）。
+ * v5.541：改為委派 getEnergyDiscardUnits → 火箭隊能量=2、燃火能量(附進化)=3、新衝天(Stage2)=2、
+ * 繁茂草(傳 state+ownerIdx 時)=2；其餘=1。host-aware 單一來源。
  */
-export function countAttachedEnergyAsUnits(host: CardInstance, pool: Map<string, Card>): number {
-  const hostCard = pool.get(host.cardId);
-  const hostStage = hostCard?.stage ?? hostCard?.subtype;
-  const hostIsStage2 = hostStage === 'Stage2';
+export function countAttachedEnergyAsUnits(
+  host: CardInstance,
+  pool: Map<string, Card>,
+  state?: GameState,
+  ownerIdx?: 0 | 1,
+): number {
+  // v5.541：收斂為「逐能量呼叫 getEnergyDiscardUnits（host-aware 單一來源）」。
+  //   原本只算「新衝天能量 on Stage2 = 2」，漏算 燃火能量（附進化=3）/ 火箭隊能量（=2）。
+  //   玩家報：青木的土龍節節ex|職務猛攻（擲與附加能量數相同次數）沒把燃火能量算 3 個。
+  //   getEnergyDiscardUnits 統一處理：燃火(進化3/否則1)、火箭隊(2)、新衝天(Stage2=2)、
+  //   稜鏡/古舊/基本(1)，並在傳入 state+ownerIdx 時套用「大竺葵|繁茂」基本草×2。
   let count = 0;
   for (const e of host.energyAttached) {
     const ec = pool.get(e.cardId);
     if (!ec || ec.supertype !== 'Energy') continue;
-    if (ec.name === '新衝天能量' && hostIsStage2) count += 2;
-    else count += 1;
+    count += getEnergyDiscardUnits(e.cardId, host, pool, state, ownerIdx);
   }
   return count;
 }

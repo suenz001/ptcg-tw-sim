@@ -1,6 +1,6 @@
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
-import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending } from '../_shared';
+import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
@@ -128,8 +128,10 @@ regPre('霹靂電球ex|百裂球', (state, aIdx) => {
 });
 
 // 青木的土龍節節ex｜職務猛攻：擲與自身附加能量數相同次數，正面數 ×80。
-regPre('青木的土龍節節ex|職務猛攻', (state, aIdx) => {
-  const energyCount = state.players[aIdx].active?.energyAttached.length ?? 0;
+regPre('青木的土龍節節ex|職務猛攻', (state, aIdx, pool) => {
+  // v5.541：依「能量數(units)」非卡張數——燃火能量(附進化)算3、火箭隊能量算2 等
+  const _act = state.players[aIdx].active;
+  const energyCount = _act ? countAttachedEnergyAsUnits(_act, pool, state, aIdx) : 0;
   const r = flipFixed(state, aIdx, '職務猛攻', energyCount);
   const dmg = r.heads * 80;
   return { state: addLog(r.state, `職務猛攻：${r.heads}/${energyCount} 次正面 → ${dmg} 傷害`, aIdx), damage: dmg };

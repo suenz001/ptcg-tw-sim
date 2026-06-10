@@ -6,7 +6,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -74,9 +74,10 @@ function coinUntilTailsMultiplyPre(base: number, perHead: number, label: string)
 
 // 自身能量數 ×K
 function selfTotalEnergyPre(base: number, perEnergy: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
-    const count = a?.energyAttached.length ?? 0;
+    // v5.541：依能量數(units)——燃火/火箭隊等特殊能量正確計數
+    const count = a ? countAttachedEnergyAsUnits(a, pool, state, aIdx) : 0;
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
@@ -100,10 +101,11 @@ function selfTypeEnergyPre(
 }
 
 function oppActiveEnergyCountPre(base: number, perEnergy: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    const count = def?.energyAttached.length ?? 0;
+    // v5.541：依能量數(units)——燃火/火箭隊等特殊能量正確計數(對手側繁茂用 dIdx)
+    const count = def ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : 0;
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：對手戰鬥場能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
