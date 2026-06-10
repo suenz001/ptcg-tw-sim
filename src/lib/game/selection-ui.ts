@@ -39,13 +39,24 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'sakura-crescendo-attach',       // v5.465：櫻花魚｜漸強波 從手牌附水能量 → 可不選（也可不附）
 ]);
 
+/**
+ * v5.543：「查看牌庫上方 N 張，強制選擇 K 張加入手牌」型 picker 的 effectKey 白名單。
+ * 這類是【已揭示、必選】（非搜尋），不可【不選】。
+ * ⚠ 與「搜尋牌庫找特定卡」不同——後者依官方規則一律可「找不到」而跳過（即使牌庫有），
+ *   故 賽吉/喵頭目/v2996 等搜尋型(filter 分類)、暗碼迷的解讀(搜尋整副排序)都【不】列入此名單。
+ * 維護：新增同類「看牌庫上方 N 張必選加手牌」卡時把其 effectKey 加進來即可（單一維護點）。
+ */
+export const MANDATORY_TOP_PICK_EFFECT_KEYS: ReadonlySet<string> = new Set<string>([
+  'scouting-order',  // 多龍奇｜偵查指令：查看上方2張，選1張加手牌
+  'explorer-guide',  // 探險家的嚮導：查看頂6張，強制選2張加手牌
+  'shinli-pick',     // 辛俐：查看上方4張，強制選2張加手牌
+]);
+
 export interface SkipDecisionInput {
   type: string;
   actorIdx: 0 | 1;
   sourcePlayerIdx: 0 | 1;
   effectKey: string;
-  /** v5.542：picker 的 minCount（牌庫搜尋是否「卡面強制選 N≥1」的判定依據）。 */
-  minCount?: number;
 }
 
 /** 未知資訊 picker：自己的牌庫（牌庫搜尋 / 牌庫頂排序）或對手的手牌（hand-* 且來源為對手）。 */
@@ -61,15 +72,11 @@ export function isUnknownInfoPicker(p: SkipDecisionInput): boolean {
  * 否則（已知資訊 + 有 gate：棄牌區檢索 / 我方手牌固定取 / 場上目標）→ 不顯示【不選】、強制 ≥1。
  */
 export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
-  // 卡面明訂可選 0（白名單）→ 一律可不選（含少數已知資訊「任意數量/若希望」picker）。
-  if (OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey)) return true;
-  // v5.542：牌庫搜尋——只有 minCount===0（搜尋可 fail-to-find / 最多 N / 任意數量）才可不選；
-  //   卡面「強制選 N≥1」型（看牌庫上方 N 張必選 / 選 1 張直接進化 等，minCount≥1）→ 無【不選】。
-  //   玩家報：多龍奇|偵查指令（查看牌庫上方 2 張，選擇其中 1 張加手牌，minCount:1）不該出現【不選】。
-  //   同類自動涵蓋：探險家的嚮導 / 辛俐 / 暗碼迷的解讀 / 賽吉 / v172/v2996 等強制選牌庫 picker。
-  if (p.type === 'deck-search') return (p.minCount ?? 0) === 0;
-  // 其餘未知資訊（牌庫頂排序 reorder-deck-top / 對手手牌 hand-*）維持可不選。
-  return isUnknownInfoPicker(p);
+  // v5.543：「看牌庫上方 N 張，強制選擇加手牌」型（已揭示、必選）→ 無【不選】。
+  //   玩家報：多龍奇|偵查指令 + 探險家的嚮導 不該出現【不選】。
+  //   ★ 注意「搜尋牌庫找特定卡」型（賽吉/喵頭目 等）依官方「找不到」規則仍可不選，故不列入此名單。
+  if (MANDATORY_TOP_PICK_EFFECT_KEYS.has(p.effectKey)) return false;
+  return isUnknownInfoPicker(p) || OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey);
 }
 
 /** 【確定】可點的最低選取數：一律至少 1（全面防呆，未選不可按確定；選 0 走【不選】）。 */
