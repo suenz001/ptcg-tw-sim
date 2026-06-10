@@ -7191,6 +7191,22 @@ export function fireOnKOTools(
  * guard：state._attackerActiveBonusDone 為 true(引擎已套)時不重複；dmg<=0 不套不標記
  *        (讓 regPre=0 的招式由中央 helper 補套)。
  */
+// v5.535 收斂：引擎主管線 inline 的「回合型/消耗型」加成（回合加傷／受招削傷／格拉吉歐的決戰）
+//   原本只在 engine 主傷害區套用；走中央 dealAttackDamageToTarget 的招式（延後傷害如忍之利刃／
+//   狙擊類）會漏。現納入 applyAttackerActiveDamageBonuses（受 _attackerActiveBonusDone guard：
+//   一般攻擊 engine 已 inline 套用並設旗標→中央 helper 早退、不雙套；只有 baseDamage=0 的延後／
+//   狙擊路徑才會在此套用）。祭典樂舞首擊不消耗消耗型旗標，需本地複製判定（effects.ts 不能 import engine）。
+function _isFestivalDanceFirstAttackLocal(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>): boolean {
+  const a = state.players[aIdx].active;
+  if (!a) return false;
+  const card = pool.get(a.cardId);
+  if (!card?.abilities?.some(ab => ab.name === '祭典樂舞')) return false;
+  const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  if (sd?.name !== '祭典會場') return false;
+  if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
+  if (state.festivalDanceSecondAttackUsed?.[aIdx]) return false;
+  return true;
+}
 export function applyAttackerActiveDamageBonuses(
   state: GameState, aIdx: 0 | 1, dmg: number, pool: Map<string, Card>,
 ): { damage: number; state: GameState; formula: { sign: string; value: number; label: string }[] } {
@@ -7216,6 +7232,39 @@ export function applyAttackerActiveDamageBonuses(
   };
   const _toolsJammed = !!state.activeStadium
     && JAMMING_TOWER_STADIUMS.has(pool.get(state.activeStadium.cardId)?.name ?? '');
+  // ── v5.535 回合加傷（damageBonusThisTurn；巨金怪彗星拳／大電海燕風力充能／奔流之心，下次攻擊 +N）──
+  //   消耗型，祭典樂舞首擊不消耗。一般攻擊 engine 已 inline 套+設 guard→此處只在延後/狙擊(baseDamage=0)路徑生效。
+  if (aInst.damageBonusThisTurn) {
+    const b = aInst.damageBonusThisTurn; d += b;
+    s = addLog(s, `${aCard.name} 招式傷害 +${b}（回合加傷效果）`, aIdx);
+    formula.push({ sign: '+', value: b, label: '回合加傷' });
+    if (!_isFestivalDanceFirstAttackLocal(state, aIdx, pool) && s.players[aIdx].active) {
+      const na = { ...s.players[aIdx].active! }; delete na.damageBonusThisTurn;
+      const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
+      s = { ...s, players: ps };
+    }
+  }
+  // ── v5.535 受招削傷（nextOwnAttackPenalty；對手叫聲/吠/咆哮設給我方 active，自己出招 -N）──
+  //   消耗型，祭典樂舞首擊不消耗。
+  {
+    const cur = s.players[aIdx].active;
+    if (cur?.nextOwnAttackPenalty) {
+      const pen = cur.nextOwnAttackPenalty; d = Math.max(0, d - pen);
+      s = addLog(s, `${aCard.name} 招式傷害 -${pen}（受招致使傷害削減效果）`, aIdx);
+      formula.push({ sign: '-', value: pen, label: '招致削傷' });
+      if (!_isFestivalDanceFirstAttackLocal(state, aIdx, pool) && s.players[aIdx].active) {
+        const na = { ...s.players[aIdx].active! }; delete na.nextOwnAttackPenalty;
+        const ps = [...s.players] as [PlayerState, PlayerState]; ps[aIdx] = { ...ps[aIdx], active: na };
+        s = { ...s, players: ps };
+      }
+    }
+  }
+  // ── v5.535 格拉吉歐的決戰（player-level +80，非規則寶可夢；END_TURN 清、不在此消耗）──
+  if (attacker.gladionDuelBonusThisTurn && !isRulePokemon(aCard)) {
+    d += 80;
+    s = addLog(s, `${aCard.name} 招式傷害 +80（格拉吉歐的決戰，非規則寶可夢加成）`, aIdx);
+    formula.push({ sign: '+', value: 80, label: '格拉吉歐的決戰' });
+  }
   // ── 伏特【雷】能量（【雷】屬性附加者 +20/張）─────────────────────────────
   if (aCard.pokemonType === 'Lightning') {
     const n = aInst.energyAttached.filter(e => pool.get(e.cardId)?.name === '伏特【雷】能量').length;

@@ -77,5 +77,28 @@ T('⑥ 鉤爪搜尋(70)：吼鯨王ex RESOLVE([])→70傷害+maxCount2',()=>{
   const r=resolve(a,[]);
   assert.equal(r.players[1].active?.damage,70,'吼鯨王受70，實='+r.players[1].active?.damage);
 });
+
+T('⑦ v5.535 回合加傷+50：忍之利刃延後傷害仍套 → 170+50=220 + 消耗',()=>{
+  const st=mk(GRENINJA,[WATER],WAIL); st.players[0].active.damageBonusThisTurn=50;
+  const r=resolve(atk(st,0),[]);
+  assert.equal(r.players[1].active?.damage,220,'應220(170+50)，實='+r.players[1].active?.damage);
+  assert(!r.players[0].active?.damageBonusThisTurn,'回合加傷應已消耗');
+});
+T('⑧ v5.535 受招削傷-30：忍之利刃延後傷害仍套 → 170-30=140 + 消耗',()=>{
+  const st=mk(GRENINJA,[WATER],WAIL); st.players[0].active.nextOwnAttackPenalty=30;
+  const r=resolve(atk(st,0),[]);
+  assert.equal(r.players[1].active?.damage,140,'應140(170-30)，實='+r.players[1].active?.damage);
+  assert(!r.players[0].active?.nextOwnAttackPenalty,'受招削傷應已消耗');
+});
+T('⑨ v5.535 格拉吉歐+80(非規則 詛咒娃娃)：玩偶捕捉延後傷害 → 80+80=160',()=>{
+  const st=mk(DOLL,[PSY],WAIL); st.players[0].gladionDuelBonusThisTurn=true;
+  const r=resolve(atk(st,0),[]);
+  assert.equal(r.players[1].active?.damage,160,'應160(80+80)，實='+r.players[1].active?.damage);
+});
+T('⑩ v5.535 規則寶可夢(甲賀忍蛙ex)不吃格拉吉歐 → 仍170',()=>{
+  const st=mk(GRENINJA,[WATER],WAIL); st.players[0].gladionDuelBonusThisTurn=true;
+  const r=resolve(atk(st,0),[]);
+  assert.equal(r.players[1].active?.damage,170,'規則寶可夢不加，應170，實='+r.players[1].active?.damage);
+});
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail?1:0);
