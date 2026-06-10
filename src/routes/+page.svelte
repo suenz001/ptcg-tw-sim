@@ -304,6 +304,10 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.537</span> 對戰修正：「N的城堡」（雙方場上所有「N的寶可夢」撤退所需能量全部消除）原本會被其他「增加撤退費」的效果（如咒縛之炎、重力之玉、鼓擊等）抵銷掉。已修正為與「拉帝亞斯ex｜天空徑線」一致——撤退費完全消除、蓋過所有增加撤退費的效果。</summary>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.536</span> 對戰修正：我方有「耿鬼ex｜侵蝕詛咒」在場時，對手從手牌將能量卡附於寶可夢身上，原本沒有在那隻寶可夢身上放置 2 個傷害指示物（特性失效）。已修正，現會正確放置（含對手備戰的寶可夢），若因此擊倒對手也會正確取得獎賞卡。</summary>
       </details>
 

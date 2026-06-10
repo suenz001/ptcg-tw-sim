@@ -7922,7 +7922,7 @@ export function computeActiveRetreatCostFor(
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
   // 競技場
   const stadiumNameCR = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
-  if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
+  // 注意：N的城堡「撤退所需能量全部消除」改為最後硬覆蓋(見函式結尾)，蓋過 +撤退效果，故不在此設 0。
   if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
   // SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量）
   if (card) {
@@ -7945,8 +7945,10 @@ export function computeActiveRetreatCostFor(
   if (player.active.retreatCostIncreaseThisTurn && player.active.retreatCostIncreaseThisTurn > 0) {
     cost += player.active.retreatCostIncreaseThisTurn;
   }
-  // v5.371：天空徑線「完全消除」（Wilson 裁定 + 官方判例：連災禍荒野+1也消除）— 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉等 +撤退效果。
+  // v5.371/v5.537：「撤退所需能量全部消除」型 — 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉/災禍荒野等 +撤退效果
+  //   （Wilson 裁定 + 官方判例）。天空徑線(自己場上基礎寶可夢) / N的城堡(N的寶可夢) 同類，都在這裡硬歸 0。
   if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
+  if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
   return cost;
 }
 
