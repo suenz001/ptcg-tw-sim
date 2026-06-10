@@ -7,7 +7,7 @@
  */
 
 import {
-  regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
+  regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
@@ -22,7 +22,7 @@ import type { Card } from '$lib/cards/types';
 import {
   coinStatusPost, statusPost, coinHeadsMultiplyPre, flipCoinsWithLog,
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
-  snipeOneOppBenchPost, markFaintByEffect, koTargetByAttackEffect,
+  snipeOneOppBenchPost, koTargetByAttackEffect,
 } from '../../effects';
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -980,11 +980,16 @@ regPre('普隆隆姆ex|高速破壞', (s) => ({ state: s, damage: 250 }));
 regPost('普隆隆姆ex|高速破壞', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return state;
-  const card = pool.get(a.cardId);
-  return updatePlayer(addLog(state, '高速破壞：自身與附加卡全部丟棄', aIdx), aIdx, p => ({
-    ...p,
-    active: p.active ? markFaintByEffect(p.active, pool, state) : null,
-  }));
+  // v5.523：卡面是「將這隻寶可夢與附加的卡全部丟棄」=丟棄(非昏厥)→對手【不取獎賞卡】。
+  //   走「化石丟棄」式自身移除：active→null + 本體/能量/道具/前階全進棄牌，
+  //   不呼叫 recordOppKO / addPendingPrize、也不設 damage 讓 sanityKOSweep 當成 KO。
+  //   原 markFaintByEffect(damage=有效maxHP) 會被 sweep 當昏厥→誤給對手獎賞，故改掉。
+  const discarded = [a, ...a.energyAttached, ...getAllAttachedTools(a), ...(a.evolvedFromStack ?? [])];
+  return updatePlayer(
+    addLog(state, '高速破壞：將自身與附加的卡全部丟棄（丟棄非昏厥，對手不取獎賞卡）', aIdx),
+    aIdx,
+    p => ({ ...p, active: null, discard: [...p.discard, ...discarded] }),
+  );
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
