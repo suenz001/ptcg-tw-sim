@@ -2007,50 +2007,72 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const TROOMS = db.collection('tournamentRooms');
     console.log('[tournament] engine + pool loaded:', TPOOL.size, 'cards');
 
-    function buildPresetGame() {
-      let basicId = null, energyId = null;
-      for (const [id, c] of TPOOL) {
-        if (!basicId && c.supertype === 'Pokemon' && (c.stage || c.subtype) === 'Basic' && c.hp && parseInt(c.hp, 10) >= 110) {
-          const atk = (c.attacks || [])[0];
-          if (atk && atk.cost && atk.cost.length >= 1 && atk.cost.length <= 3 && atk.cost.every((x) => x === 'Colorless') && atk.damage) basicId = id;
-        }
-        if (!energyId && c.supertype === 'Energy' && c.subtype === 'Basic') energyId = id;
+    // ── 工具：用雙方真實牌組建一局完整遊戲（引擎 createGame → setup 階段）──
+    function makeGame(decks, names) {
+      const d0 = { name: (names && names[0]) || 'P1', entries: decks[0] };
+      const d1 = { name: (names && names[1]) || 'P2', entries: decks[1] };
+      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: ['random', 'random'] });
+    }
+    // ── 伺服器權威 actor gate：防止玩家替對手送動作 ──
+    function canSeatAct(gs, seat, action) {
+      if (!gs || gs.phase === 'game-over') return false;
+      const t = action && action.type;
+      const SELF = (action && Object.prototype.hasOwnProperty.call(action, 'senderIdx'))
+        || t === 'RESOLVE_SELECTION' || t === 'TAKE_PRIZES' || t === 'SEND_NEW_ACTIVE';
+      if (gs.phase === 'setup') return SELF;          // setup 只收自我識別動作
+      if (gs.phase !== 'playing') return false;
+      if (SELF) return true;
+      if (gs.pendingSelection) return gs.pendingSelection.actorIdx === seat;
+      if (gs.pendingPrizes && (gs.pendingPrizes[seat] || 0) > 0) return true;
+      if (gs.players[seat] && gs.players[seat].active === null) return true;
+      return gs.activePlayerIndex === seat;
+    }
+    // 強制 senderIdx/playerIdx = 自己 seat，防偽造替對手操作
+    function normalizeAction(action, seat) {
+      const a = Object.assign({}, action);
+      if (Object.prototype.hasOwnProperty.call(a, 'senderIdx')) a.senderIdx = seat;
+      if (a.type === 'TAKE_PRIZES') a.playerIdx = seat;
+      if ((a.type === 'RESOLVE_SELECTION' || a.type === 'SEND_NEW_ACTIVE') && a.senderIdx == null) a.senderIdx = seat;
+      return a;
+    }
+    // doc：{ _id, seats:[pid0,pid1], names:[n0,n1], decks:[e0,e1], gameState, version, updatedAt }
+    function freshDoc(room) {
+      return { _id: room, seats: [null, null], names: [null, null], decks: [null, null], gameState: null, version: 0, updatedAt: Date.now() };
+    }
+    async function maybeStartGame(room, doc) {
+      if (doc.gameState) return doc;
+      if (doc.seats[0] && doc.seats[1] && doc.decks[0] && doc.decks[1]) {
+        let gs;
+        try { gs = makeGame(doc.decks, doc.names); }
+        catch (e) { throw new Error('建立對局失敗(牌組可能含未支援卡): ' + (e && e.message)); }
+        const nv = (doc.version || 0) + 1;
+        await TROOMS.updateOne({ _id: room }, { $set: { gameState: gs, version: nv, updatedAt: Date.now() } });
+        doc.gameState = gs; doc.version = nv;
       }
-      const deck = { name: '錦標測試', entries: [{ cardId: basicId, count: 12 }, { cardId: energyId, count: 48 }] };
-      const g = TENG.createGame(deck, deck, TPOOL);
-      let iid = 0;
-      const inst = (cid, e) => Object.assign({ iid: 't' + (++iid), cardId: String(cid), damage: 0, energyAttached: [] }, e || {});
-      const mkSide = (sd) => Object.assign({}, sd, {
-        active: inst(basicId, { energyAttached: [inst(energyId), inst(energyId), inst(energyId)] }),
-        bench: [], hand: [inst(energyId), inst(energyId), inst(basicId)],
-        deck: Array.from({ length: 20 }, () => inst(energyId)), discard: [], prizes: Array.from({ length: 6 }, () => inst(basicId)),
-      });
-      return Object.assign({}, g, {
-        phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, isFirstTurn: false,
-        turn: 1, setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
-        players: [mkSide(g.players[0]), mkSide(g.players[1])],
-        log: ['\u{1F3C6} 錦標賽測試對局開始（伺服器權威運算）'],
-      });
+      return doc;
     }
 
     app.post('/api/tournament/join', async (req, res) => {
       try {
         const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
         const pid = String((req.body && req.body.playerId) || '');
+        const name = String((req.body && req.body.name) || '玩家').slice(0, 24);
+        const deckEntries = req.body && req.body.deckEntries;
         if (!pid) return res.status(400).json({ error: 'no playerId' });
+        if (!Array.isArray(deckEntries) || deckEntries.length === 0) return res.status(400).json({ error: '請先選擇牌組' });
         let doc = await TROOMS.findOne({ _id: room });
-        if (!doc) {
-          const gs = buildPresetGame();
-          await TROOMS.insertOne({ _id: room, gameState: gs, seats: [pid, null], version: 1, updatedAt: Date.now() });
-          return res.json({ seat: 0, gameState: gs, version: 1 });
-        }
+        if (!doc) { doc = freshDoc(room); await TROOMS.insertOne(doc); }
         let seat = doc.seats.indexOf(pid);
         if (seat < 0) {
-          if (doc.seats[0] == null) { seat = 0; await TROOMS.updateOne({ _id: room }, { $set: { 'seats.0': pid, updatedAt: Date.now() } }); }
-          else if (doc.seats[1] == null) { seat = 1; await TROOMS.updateOne({ _id: room }, { $set: { 'seats.1': pid, updatedAt: Date.now() } }); }
+          if (doc.seats[0] == null) seat = 0;
+          else if (doc.seats[1] == null) seat = 1;
           else return res.status(409).json({ error: '測試房已滿(2人)，請按「重置房」或換另一台/瀏覽器。' });
         }
-        return res.json({ seat, gameState: doc.gameState, version: doc.version });
+        const set = {}; set['seats.' + seat] = pid; set['names.' + seat] = name; set['decks.' + seat] = deckEntries; set.updatedAt = Date.now();
+        await TROOMS.updateOne({ _id: room }, { $set: set });
+        doc.seats[seat] = pid; doc.names[seat] = name; doc.decks[seat] = deckEntries;
+        doc = await maybeStartGame(room, doc);
+        return res.json({ seat, gameState: doc.gameState, version: doc.version, waiting: !doc.gameState, seats: doc.seats, names: doc.names });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2058,8 +2080,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const room = String(req.query.room || 'TOURNAMENT-TEST');
         const doc = await TROOMS.findOne({ _id: room });
-        if (!doc) return res.json({ version: -1 });
-        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats });
+        if (!doc) return res.json({ version: -1, waiting: true });
+        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats, names: doc.names, waiting: !doc.gameState });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2073,10 +2095,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const seat = doc.seats.indexOf(pid);
         if (seat < 0) return res.status(403).json({ error: '你不在這個房間' });
         const gs = doc.gameState;
-        if (gs.phase === 'playing' && gs.activePlayerIndex !== seat) return res.json({ error: '不是你的回合', gameState: gs, version: doc.version });
+        if (!gs) return res.json({ error: '對局尚未開始', waiting: true, version: doc.version });
+        if (!action || !action.type) return res.status(400).json({ error: 'no action' });
+        if (!canSeatAct(gs, seat, action)) return res.json({ error: '現在不是你能操作的時機', gameState: gs, version: doc.version });
         let newGs;
-        try { newGs = TENG.applyAction(gs, action, TPOOL); }
+        try { newGs = TENG.applyAction(gs, normalizeAction(action, seat), TPOOL); }
         catch (e) { return res.json({ error: '動作無效：' + e.message, gameState: gs, version: doc.version }); }
+        if (newGs === gs) return res.json({ rejected: true, gameState: gs, version: doc.version });
         const nv = doc.version + 1;
         await TROOMS.updateOne({ _id: room }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now() } });
         res.json({ gameState: newGs, version: nv });
@@ -2086,12 +2111,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.post('/api/tournament/reset', async (req, res) => {
       try {
         const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
-        const pid = String((req.body && req.body.playerId) || '');
         const prev = await TROOMS.findOne({ _id: room });
         const nv = ((prev && prev.version) || 0) + 1;
-        const gs = buildPresetGame();
-        await TROOMS.updateOne({ _id: room }, { $set: { gameState: gs, seats: [pid || null, null], version: nv, updatedAt: Date.now() } }, { upsert: true });
-        res.json({ seat: 0, gameState: gs, version: nv });
+        await TROOMS.updateOne({ _id: room }, { $set: { seats: [null, null], names: [null, null], decks: [null, null], gameState: null, version: nv, updatedAt: Date.now() } }, { upsert: true });
+        res.json({ ok: true, version: nv, waiting: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 

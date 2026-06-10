@@ -89,6 +89,25 @@
   let poolReady = $state(false);
   let decks = $state<Deck[]>([]);
   const allDecks = $derived([...PRESET_DECKS, ...decks]);
+  // ── v0.4 錦標賽伺服器權威模式（/tournament wrapper 傳入 tournamentMode=true）──
+  //   全部以 isTournament gate；正常 /game 線上對戰路徑 runtime 完全不變（gate=false）。
+  let { tournamentMode = false } = $props();
+  let isTournament = $state(tournamentMode);
+  let tStep = $state<'lobby' | 'waiting' | 'playing'>('lobby');
+  let tVersion = $state(-1);
+  let tDeckId = $state('');
+  let tError = $state('');
+  let tBusy = $state(false);
+  let tPollTimer: ReturnType<typeof setInterval> | null = null;
+  const T_API = '/api/tournament';
+  const T_ROOM = 'TOURNAMENT-TEST';
+  function tPlayerId(): string {
+    try {
+      let id = localStorage.getItem('ptcg_tourn_pid');
+      if (!id) { id = 'p_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('ptcg_tourn_pid', id); }
+      return id;
+    } catch { return 'p_' + Math.random().toString(36).slice(2, 10); }
+  }
 
   // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
   // v5.068：對戰 log 時間戳 — 顯示「[mm:ss] 訊息」相對對戰開始時間
@@ -3370,6 +3389,7 @@
   onDestroy(() => {
     stopHeartbeat();
     closeAudio();  // v4.928: 釋放 AudioContext + 停所有 in-flight oscillators
+    if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; }
     unsubRoom?.();
     unsubOpenRooms?.();
     // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
@@ -3684,6 +3704,87 @@
   }
 
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
+  // ── 錦標賽 transport（伺服器權威）：dispatch 在 isTournament 時改走這裡 ──
+  async function tApi(path: string, body?: any) {
+    const res = await fetch(T_API + path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+    return res.json();
+  }
+  function tSyntheticRoom(seats: any, names: any) {
+    // 餵戰板一個最小相容 Room（無聊天/觀戰/悔棋；不觸發任何線上後端）
+    roomData = {
+      roomId: T_ROOM, roomName: '\u{1F3C6} 錦標賽', status: 'playing',
+      allowUndo: false, allowSpectate: false, isPrivate: true,
+      hostName: (names && names[0]) || 'P1',
+      seats: [
+        { uid: (seats && seats[0]) || 't0', name: (names && names[0]) || 'P1', deckEntries: [], ready: true, firstChoicePreference: 'random' },
+        { uid: (seats && seats[1]) || 't1', name: (names && names[1]) || 'P2', deckEntries: [], ready: true, firstChoicePreference: 'random' },
+      ],
+      spectators: [], createdAt: Date.now(), updatedAt: Date.now(),
+    } as any;
+  }
+  function tAdopt(state: any, version: number) {
+    if (typeof version === 'number' && version < tVersion) return; // 拒收 stale
+    game = state as GameState;
+    if (typeof version === 'number') tVersion = version;
+    if (state) tStep = 'playing';
+  }
+  async function tournamentJoin() {
+    const deck = allDecks.find(d => d.id === tDeckId);
+    if (!deck) { tError = '請先選擇牌組'; return; }
+    const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
+    if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
+    tError = ''; tBusy = true; tStep = 'waiting';
+    try {
+      const nm = (myName && myName.trim()) || '玩家';
+      const r = await tApi('/join', { room: T_ROOM, playerId: tPlayerId(), name: nm, deckEntries: deck.entries });
+      if (r.error) { tError = r.error; tStep = 'lobby'; return; }
+      mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online';
+      tSyntheticRoom(r.seats, r.names);
+      if (r.gameState) tAdopt(r.gameState, r.version);
+      else tStep = 'waiting';
+      startTournamentPoll();
+    } catch (e: any) {
+      tError = '連線失敗：' + (e?.message ?? e) + '（伺服器權威錦標賽僅正式站可用）';
+      tStep = 'lobby';
+    } finally { tBusy = false; }
+  }
+  function startTournamentPoll() {
+    if (tPollTimer) clearInterval(tPollTimer);
+    tPollTimer = setInterval(async () => {
+      try {
+        const r = await tApi(`/state?room=${T_ROOM}&v=${tVersion}`);
+        if (r && r.names) tSyntheticRoom(r.seats, r.names);
+        if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
+      } catch { /* 忽略單次輪詢失敗 */ }
+    }, 1200);
+  }
+  async function tournamentDispatch(action: any) {
+    if (tBusy) return; tBusy = true; tError = '';
+    const prev = game;
+    try {
+      const r = await tApi('/action', { room: T_ROOM, playerId: tPlayerId(), action });
+      if (r.error) tError = r.error;
+      if (r.gameState) {
+        tAdopt(r.gameState, r.version);
+        try { if (game && game !== prev) dispatchSfxForAction(action as any, prev as any, game as any); } catch { /* sfx best-effort */ }
+      }
+    } catch (e: any) { tError = String(e?.message ?? e); }
+    finally { tBusy = false; }
+  }
+  async function tournamentReset() {
+    if (!confirm('重置測試房？會清空目前對局，雙方需重新選牌組進場。')) return;
+    tBusy = true; tError = '';
+    try { await tApi('/reset', { room: T_ROOM, playerId: tPlayerId() }); }
+    catch (e: any) { tError = String(e?.message ?? e); }
+    finally { tBusy = false; }
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1;
+  }
+
   async function dispatch(
     action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
     opts: { fromAI?: boolean } = {}
@@ -3694,6 +3795,7 @@
       console.log('[Spectator] action blocked:', action.type);
       return;
     }
+    if (isTournament) { await tournamentDispatch(action); return; }
     const prevState = game;
     // v5.345：引擎可能 throw（最常見：getCard 找不到卡 — ?卡 / 舊版 id 漏遷移 / 尚未載入的 set），
     //   原本沒有 try/catch → throw 會讓 dispatch 崩潰、玩家點了沒反應 = 整局凍結。改為攔截：
@@ -5626,6 +5728,39 @@
 
 <!-- v2.288：手機直式 + 戰鬥中時鎖 body 滑動，禁止 iOS Safari 整頁 bounce / pull-to-refresh -->
 <svelte:body class:mp-locked={isPortraitMobile && !!game} />
+
+{#if isTournament && tStep !== 'playing'}
+  <main class="lobby tourn-lobby">
+    <h1 class="lobby-title">🏆 錦標賽對戰</h1>
+    <p class="lobby-subtitle">伺服器權威運算 · 隱藏測試房</p>
+    {#if tStep === 'waiting'}
+      <p class="tourn-wait">⏳ 已進場，等待對手加入…<br/>（請另一人也開 /tournament 選牌組進場）</p>
+      <button class="btn-secondary" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
+    {:else}
+      <label class="tourn-field">你的暱稱
+        <input class="name-input" bind:value={myName} maxlength="24" placeholder="輸入暱稱" />
+      </label>
+      <label class="tourn-field">選擇牌組（需 60 張）
+        <select class="deck-select" bind:value={tDeckId}>
+          <option value="" disabled>— 請選擇牌組 —</option>
+          {#if PRESET_DECKS.length > 0}
+            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+          {/if}
+          {#if decks.length > 0}
+            <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+          {/if}
+        </select>
+      </label>
+      {#if tError}<p class="warn">{tError}</p>{/if}
+      <button class="btn-primary tourn-join" onclick={tournamentJoin} disabled={tBusy || !tDeckId}>
+        {tBusy ? '進場中…' : '進入賽事對戰'}
+      </button>
+      <button class="btn-secondary small" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
+      <p class="muted small">⚠ 此功能運算需正式站伺服器；beta 站無法連線。</p>
+    {/if}
+  </main>
+{:else}
+{#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
@@ -9155,7 +9290,15 @@
     </div>
   </div>
 {/if}
+{/if}
 <style>
+  /* 錦標賽大廳/提示（v0.4 伺服器權威）*/
+  .tourn-lobby { max-width: 460px; }
+  .tourn-field { display: block; text-align: left; margin: 14px auto; max-width: 360px; font-weight: 600; color: #cfe8cf; }
+  .tourn-field .deck-select, .tourn-field .name-input { display: block; width: 100%; margin-top: 6px; padding: 10px; border-radius: 8px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; font-size: 1rem; box-sizing: border-box; }
+  .tourn-join { margin-top: 8px; }
+  .tourn-wait { color: #ffd35a; font-size: 1.05rem; margin: 22px 0; line-height: 1.6; }
+  .tourn-toast { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {
     position: fixed;
