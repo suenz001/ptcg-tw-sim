@@ -12,8 +12,14 @@ await build({ entryPoints: [join(ROOT,'src/lib/game/selection-ui.ts')], outfile:
 const M = await import(pathToFileURL(O).href);
 const { selectionAllowsSkip, selectionConfirmFloor, isUnknownInfoPicker } = M;
 let pass=0, fail=[]; const ck=(n,ok,d='')=>{ ok?pass++:fail.push(n+(d?' — '+d:'')); };
-const mk=(type,effectKey='x',src=0,act=0)=>({type,effectKey,sourcePlayerIdx:src,actorIdx:act});
-ck('牌庫搜尋→可不選', selectionAllowsSkip(mk('deck-search')));
+const mk=(type,effectKey='x',src=0,act=0,minCount=0)=>({type,effectKey,sourcePlayerIdx:src,actorIdx:act,minCount});
+ck('牌庫搜尋(minCount0,可fail-to-find)→可不選', selectionAllowsSkip(mk('deck-search')));
+// v5.542：牌庫搜尋卡面強制選 N≥1 → 不可不選
+ck('偵查指令(看上方2選1,minCount1)→強制', !selectionAllowsSkip(mk('deck-search','scouting-order',0,0,1)));
+ck('探險家的嚮導(看頂6選2,minCount2)→強制', !selectionAllowsSkip(mk('deck-search','explorer-guide',0,0,2)));
+ck('辛俐(看頂4選2,minCount2)→強制', !selectionAllowsSkip(mk('deck-search','x',0,0,2)));
+ck('賽吉(選1進化,minCount1)→強制', !selectionAllowsSkip(mk('deck-search','x',0,0,1)));
+ck('八朔(看頂8最多3,minCount0)→可不選', selectionAllowsSkip(mk('deck-search','search-to-hand-reshuffle',0,0,0)));
 ck('牌庫頂排序→可不選', selectionAllowsSkip(mk('reorder-deck-top')));
 ck('查看對手手牌(枇琶)→可不選', selectionAllowsSkip(mk('hand-discard','loquat-discard-opp-items',1,0)));
 ck('能量撢子→可不選', selectionAllowsSkip(mk('hand-discard','energy-duster-pick',1,0)));

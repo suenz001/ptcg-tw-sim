@@ -44,6 +44,8 @@ export interface SkipDecisionInput {
   actorIdx: 0 | 1;
   sourcePlayerIdx: 0 | 1;
   effectKey: string;
+  /** v5.542：picker 的 minCount（牌庫搜尋是否「卡面強制選 N≥1」的判定依據）。 */
+  minCount?: number;
 }
 
 /** 未知資訊 picker：自己的牌庫（牌庫搜尋 / 牌庫頂排序）或對手的手牌（hand-* 且來源為對手）。 */
@@ -59,7 +61,15 @@ export function isUnknownInfoPicker(p: SkipDecisionInput): boolean {
  * 否則（已知資訊 + 有 gate：棄牌區檢索 / 我方手牌固定取 / 場上目標）→ 不顯示【不選】、強制 ≥1。
  */
 export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
-  return isUnknownInfoPicker(p) || OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey);
+  // 卡面明訂可選 0（白名單）→ 一律可不選（含少數已知資訊「任意數量/若希望」picker）。
+  if (OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey)) return true;
+  // v5.542：牌庫搜尋——只有 minCount===0（搜尋可 fail-to-find / 最多 N / 任意數量）才可不選；
+  //   卡面「強制選 N≥1」型（看牌庫上方 N 張必選 / 選 1 張直接進化 等，minCount≥1）→ 無【不選】。
+  //   玩家報：多龍奇|偵查指令（查看牌庫上方 2 張，選擇其中 1 張加手牌，minCount:1）不該出現【不選】。
+  //   同類自動涵蓋：探險家的嚮導 / 辛俐 / 暗碼迷的解讀 / 賽吉 / v172/v2996 等強制選牌庫 picker。
+  if (p.type === 'deck-search') return (p.minCount ?? 0) === 0;
+  // 其餘未知資訊（牌庫頂排序 reorder-deck-top / 對手手牌 hand-*）維持可不選。
+  return isUnknownInfoPicker(p);
 }
 
 /** 【確定】可點的最低選取數：一律至少 1（全面防呆，未選不可按確定；選 0 走【不選】）。 */
