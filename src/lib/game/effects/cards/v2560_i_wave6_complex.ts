@@ -23,7 +23,7 @@ import {
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -280,11 +280,12 @@ regPost('千面避役|擊斃', (state, aIdx, pool) => {
       aIdx,
     );
     return updatePlayer(s, target.ownerIdx, p => {
+      // v5.520：效果KO走中央 markFaintByEffect（取代 =99999 假傷害）
       const newActive = p.active && p.active.iid === target.iid
-        ? { ...p.active, damage: 99999 }
+        ? markFaintByEffect(p.active, pool, s)
         : p.active;
       const newBench = p.bench.map(b => b.iid === target.iid
-        ? { ...b, damage: 99999 }
+        ? markFaintByEffect(b, pool, s)
         : b);
       return { ...p, active: newActive, bench: newBench };
     });
@@ -320,11 +321,12 @@ regR('striking-down-pick', (st, aIdx, iids, _params, pool) => {
   const tname = pool.get(target.cardId)?.name ?? '?';
   let s = addLog(st, `擊斃：選定 ${tname}（${ownerIdx === aIdx ? '自方' : '對手'}）→ 直接昏厥`, aIdx);
   return updatePlayer(s, ownerIdx, pl => {
+    // v5.520：效果KO走中央 markFaintByEffect（取代 =99999 假傷害）
     const newActive = pl.active && pl.active.iid === targetIid
-      ? { ...pl.active, damage: 99999 }
+      ? markFaintByEffect(pl.active, pool, s)
       : pl.active;
     const newBench = pl.bench.map(b => b.iid === targetIid
-      ? { ...b, damage: 99999 }
+      ? markFaintByEffect(b, pool, s)
       : b);
     return { ...pl, active: newActive, bench: newBench };
   });

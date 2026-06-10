@@ -45,7 +45,7 @@ import {
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits } from '../../engine';
-import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy} from '../../effects';
+import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy, markFaintByEffect } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
@@ -194,11 +194,13 @@ regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
     ...s,
     players: s.players.map((p, i) => i !== dIdx ? p : ({
       ...p,
+      // v5.520：效果KO走中央 markFaintByEffect（damage=有效maxHP，剛好昏厥）
+      //   取代原 +9999 假傷害（KO被擋時會殘留負HP→「?/HP 0/0」卡死）。
       active: p.active && targetIids.has(p.active.iid)
-        ? { ...p.active, damage: p.active.damage + 9999 }
+        ? markFaintByEffect(p.active, pool, s)
         : p.active,
       bench: p.bench.map(b => targetIids.has(b.iid)
-        ? { ...b, damage: b.damage + 9999 }
+        ? markFaintByEffect(b, pool, s)
         : b),
     })) as typeof s.players,
   };

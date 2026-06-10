@@ -5,7 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, markFaintByEffect } from '../../effects';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
@@ -371,7 +371,7 @@ regPost('火箭隊的椰蛋樹|三重強念', (state, aIdx, _pool) => {
   });
 });
 
-regR('wave12-ko-target', (state, aIdx, iids, _params, _pool) => {
+regR('wave12-ko-target', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
@@ -379,8 +379,9 @@ regR('wave12-ko-target', (state, aIdx, iids, _params, _pool) => {
     addLog(state, '三重強念：選定寶可夢直接昏厥', aIdx),
     dIdx, p => ({
       ...p,
-      active: p.active && p.active.iid === targetIid ? { ...p.active, damage: 99999 } : p.active,
-      bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: 99999 } : b),
+      // v5.520：效果KO走中央 markFaintByEffect（取代 =99999 假傷害）
+      active: p.active && p.active.iid === targetIid ? markFaintByEffect(p.active, pool, state) : p.active,
+      bench: p.bench.map(b => b.iid === targetIid ? markFaintByEffect(b, pool, state) : b),
     }),
   );
 });
