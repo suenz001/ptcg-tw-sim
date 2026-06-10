@@ -91,26 +91,10 @@ function isInitializeBlocking(
   targetPoke: CardInstance,
   pool: Map<string, Card>
 ): boolean {
-  // 目標必須是「擁有規則的寶可夢」
-  const targetCard = pool.get(targetPoke.cardId);
-  if (!targetCard) return false;
-  const isRuleBox = (targetCard.subtype && RULE_BOX_SUBTYPES.has(targetCard.subtype))
-    || (targetCard.tags ?? []).some(t => RULE_BOX_SUBTYPES.has(t));
-  if (!isRuleBox) return false;
-
-  // 「未來」寶可夢不受影響
-  const isFuture = (targetCard.tags ?? []).includes('未來');
-  if (isFuture) return false;
-
-  // 檢查任一方場上是否有 鐵荊棘ex 在 active
-  for (const player of state.players) {
-    if (!player.active) continue;
-    const activeCard = pool.get(player.active.cardId);
-    if (!activeCard?.abilities) continue;
-    const hasInit = activeCard.abilities.some(ab => ab.name === '初始化');
-    if (hasInit) return true;
-  }
-  return false;
+  // v5.528：收斂至中央 isInitializeNullified（v3001）— rule-box + 「未來」除外 + 任一方戰鬥場有「初始化」
+  //   的判定只維護在一處，避免各發動點散裝重複（USE_ABILITY / BENCH_PLACE / promptPlayAbilities /
+  //   getUsableAbilities / 被動套用點 全部走同一函式）。保留本 wrapper 名稱與 caller 的清楚 log。
+  return isInitializeNullified(state, pool.get(targetPoke.cardId), pool);
 }
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -698,6 +682,7 @@ import {
   isOppItemPlayBlocked,
   isAbilityNullifiedByPassive,
   isAbilityHolderEffective,
+  isInitializeNullified,
   hasRocketTyranitarSandstorm,
   getOppRetreatTriggers,
   hasRocketAmpharosDarkPulse,

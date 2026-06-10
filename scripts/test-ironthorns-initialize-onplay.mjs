@@ -16,7 +16,7 @@ const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).m
 const pool = new Map();
 for (const f of readdirSync(dir)) { if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
   for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c); }
-const MEOWTH='18038', IRONTHORNS='16753';
+const MEOWTH='18038', IRONTHORNS='16753', IRONLEAVES='16548'; // 鐵斑葉ex=未來
 // 找一張支援者(讓殺手鐧捕捉有目標) + 一張普通基礎當我方active/對手非鐵荊棘active
 let SUPPORTER=null, PLAINBASIC=null;
 for (const [id,c] of pool){ if(!SUPPORTER&&c.supertype==='Trainer'&&c.subtype==='Supporter')SUPPORTER=id;
@@ -49,5 +49,17 @@ T('② 對照：對手非鐵荊棘ex → 喵喵ex 上備戰，殺手鐧捕捉【
   assert(n.players[0].bench.some(c=>c.cardId===MEOWTH),'喵喵ex 應已上備戰');
   assert(!!n.pendingSelection && (n.pendingSelection.type==='modal-choice'||n.pendingSelection.type==='deck-search'),'無初始化時殺手鐧捕捉應觸發提示(modal-choice/deck-search)，實際='+JSON.stringify(n.pendingSelection?.type));
 });
+T('③★ 鐵斑葉ex(未來)|迅速游標：對手鐵荊棘ex 在場仍【正常觸發】(卡面未來除外→初始化不擋)',()=>{
+  const s2=createGame({name:'P1',entries:[{cardId:PLAINBASIC,count:1}]},{name:'P2',entries:[{cardId:IRONTHORNS,count:1}]},pool);
+  const leaves=inst(IRONLEAVES);
+  const st={...s2,phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,isFirstTurn:false,
+    setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],pendingSelection:undefined,
+    players:[{...s2.players[0],hand:[leaves],deck:[inst(PLAINBASIC),inst(PLAINBASIC)],discard:[],prizes:Array.from({length:6},()=>inst(PLAINBASIC)),bench:[],active:inst(PLAINBASIC)},
+             {...s2.players[1],hand:[],deck:[inst(IRONTHORNS)],discard:[],prizes:Array.from({length:6},()=>inst(IRONTHORNS)),bench:[],active:inst(IRONTHORNS)}]};
+  const n=applyAction(st,{type:'PLAY_BASIC',iid:leaves.iid},pool);
+  assert(n.players[0].bench.some(c=>c.cardId===IRONLEAVES),'鐵斑葉ex 應已上備戰');
+  assert(!!n.pendingSelection,'★ 鐵斑葉ex 是未來→初始化不該擋迅速游標，應正常觸發(有 pendingSelection)，實際='+JSON.stringify(n.pendingSelection?.type));
+});
+
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail?1:0);
