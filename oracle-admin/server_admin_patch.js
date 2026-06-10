@@ -1982,6 +1982,125 @@ import('firebase-admin').then(async ({ default: admin }) => {
   console.log('[zombie-cleanup] v0.3 已啟動：lobby>5min / playing>5min / ended>90天 自動清，每 2 分鐘掃一次');
 })();
 
+// ════════════════════════════════════════════════════════════════════════════
+// v0.31 錦標賽 — 伺服器權威（測試，限定 /game/tournament）
+//   引擎跑在伺服器：收動作 → applyAction → 存 tournamentRooms collection → 回傳唯一盤面。
+//   引擎 bundle + 卡池放 /opt/ptcg/api/tournament/（server-engine.cjs + tournament-pool.json）。
+//   ★ 獨立 collection、獨立路由；載入失敗只停用錦標賽，正常對戰/admin 完全不受影響（金絲雀）。
+// ════════════════════════════════════════════════════════════════════════════
+(async () => {
+  try {
+    const TDIR = '/opt/ptcg/api/tournament';
+    let TENG, poolObj;
+    try {
+      // CJS host
+      TENG = require(TDIR + '/server-engine.cjs');
+      poolObj = require(TDIR + '/tournament-pool.json');
+    } catch (eReq) {
+      // ESM host
+      const _m = await import(TDIR + '/server-engine.cjs');
+      TENG = (_m.default && _m.default.createGame) ? _m.default : _m;
+      const _fs = await import('fs');
+      poolObj = JSON.parse(_fs.readFileSync(TDIR + '/tournament-pool.json', 'utf8'));
+    }
+    const TPOOL = new Map(Object.entries(poolObj));
+    const TROOMS = db.collection('tournamentRooms');
+    console.log('[tournament] engine + pool loaded:', TPOOL.size, 'cards');
+
+    function buildPresetGame() {
+      let basicId = null, energyId = null;
+      for (const [id, c] of TPOOL) {
+        if (!basicId && c.supertype === 'Pokemon' && (c.stage || c.subtype) === 'Basic' && c.hp && parseInt(c.hp, 10) >= 110) {
+          const atk = (c.attacks || [])[0];
+          if (atk && atk.cost && atk.cost.length >= 1 && atk.cost.length <= 3 && atk.cost.every((x) => x === 'Colorless') && atk.damage) basicId = id;
+        }
+        if (!energyId && c.supertype === 'Energy' && c.subtype === 'Basic') energyId = id;
+      }
+      const deck = { name: '錦標測試', entries: [{ cardId: basicId, count: 12 }, { cardId: energyId, count: 48 }] };
+      const g = TENG.createGame(deck, deck, TPOOL);
+      let iid = 0;
+      const inst = (cid, e) => Object.assign({ iid: 't' + (++iid), cardId: String(cid), damage: 0, energyAttached: [] }, e || {});
+      const mkSide = (sd) => Object.assign({}, sd, {
+        active: inst(basicId, { energyAttached: [inst(energyId), inst(energyId), inst(energyId)] }),
+        bench: [], hand: [inst(energyId), inst(energyId), inst(basicId)],
+        deck: Array.from({ length: 20 }, () => inst(energyId)), discard: [], prizes: Array.from({ length: 6 }, () => inst(basicId)),
+      });
+      return Object.assign({}, g, {
+        phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, isFirstTurn: false,
+        turn: 1, setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
+        players: [mkSide(g.players[0]), mkSide(g.players[1])],
+        log: ['\u{1F3C6} 錦標賽測試對局開始（伺服器權威運算）'],
+      });
+    }
+
+    app.post('/api/tournament/join', async (req, res) => {
+      try {
+        const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
+        const pid = String((req.body && req.body.playerId) || '');
+        if (!pid) return res.status(400).json({ error: 'no playerId' });
+        let doc = await TROOMS.findOne({ _id: room });
+        if (!doc) {
+          const gs = buildPresetGame();
+          await TROOMS.insertOne({ _id: room, gameState: gs, seats: [pid, null], version: 1, updatedAt: Date.now() });
+          return res.json({ seat: 0, gameState: gs, version: 1 });
+        }
+        let seat = doc.seats.indexOf(pid);
+        if (seat < 0) {
+          if (doc.seats[0] == null) { seat = 0; await TROOMS.updateOne({ _id: room }, { $set: { 'seats.0': pid, updatedAt: Date.now() } }); }
+          else if (doc.seats[1] == null) { seat = 1; await TROOMS.updateOne({ _id: room }, { $set: { 'seats.1': pid, updatedAt: Date.now() } }); }
+          else return res.status(409).json({ error: '測試房已滿(2人)，請按「重置房」或換另一台/瀏覽器。' });
+        }
+        return res.json({ seat, gameState: doc.gameState, version: doc.version });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.get('/api/tournament/state', async (req, res) => {
+      try {
+        const room = String(req.query.room || 'TOURNAMENT-TEST');
+        const doc = await TROOMS.findOne({ _id: room });
+        if (!doc) return res.json({ version: -1 });
+        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post('/api/tournament/action', async (req, res) => {
+      try {
+        const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
+        const pid = String((req.body && req.body.playerId) || '');
+        const action = req.body && req.body.action;
+        const doc = await TROOMS.findOne({ _id: room });
+        if (!doc) return res.status(404).json({ error: 'no room' });
+        const seat = doc.seats.indexOf(pid);
+        if (seat < 0) return res.status(403).json({ error: '你不在這個房間' });
+        const gs = doc.gameState;
+        if (gs.phase === 'playing' && gs.activePlayerIndex !== seat) return res.json({ error: '不是你的回合', gameState: gs, version: doc.version });
+        let newGs;
+        try { newGs = TENG.applyAction(gs, action, TPOOL); }
+        catch (e) { return res.json({ error: '動作無效：' + e.message, gameState: gs, version: doc.version }); }
+        const nv = doc.version + 1;
+        await TROOMS.updateOne({ _id: room }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now() } });
+        res.json({ gameState: newGs, version: nv });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    app.post('/api/tournament/reset', async (req, res) => {
+      try {
+        const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
+        const pid = String((req.body && req.body.playerId) || '');
+        const prev = await TROOMS.findOne({ _id: room });
+        const nv = ((prev && prev.version) || 0) + 1;
+        const gs = buildPresetGame();
+        await TROOMS.updateOne({ _id: room }, { $set: { gameState: gs, seats: [pid || null, null], version: nv, updatedAt: Date.now() } }, { upsert: true });
+        res.json({ seat: 0, gameState: gs, version: nv });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    console.log('[tournament] endpoints registered: /api/tournament/{join,state,action,reset}');
+  } catch (_te) {
+    console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);
+  }
+})();
+
 // === ORACLE ADMIN PATCH END ===
 // 上面這行是 oracle_admin_update.sh 用的 patch 結尾標記，請勿刪除。
 // install script 會 strip 從 patch 起點 marker 到本 END marker 之間的全部內容，

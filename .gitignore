@@ -33,3 +33,10 @@ static/cards/*.tmp
 .tmp-p2-test-*
 .tmp-test-evolve-iid-*
 .tmp-audit-preset-card-coverage-*
+
+
+# 錦標賽伺服器引擎 bundle/pool（產生檔，部署時 build-server-engine.mjs 重建）
+oracle-admin/tournament/server-engine.cjs
+oracle-admin/tournament/tournament-pool.json
+oracle-admin/tournament/.engine-entry.ts
+oracle-admin/tournament/.appstub.js
