@@ -1,5 +1,5 @@
 <script lang="ts">
-  // 錦標賽對戰（伺服器權威測試）— 隱藏路由 /game/tournament，首頁不放入口。
+  // 錦標賽對戰（伺服器權威測試）— 隱藏路由 /tournament，首頁不放入口。
   // 運算全由 Oracle 伺服器(server_admin_patch.js)的引擎處理；本頁只送動作 + 渲染伺服器盤面。
   // ⚠ 錦標賽 API 僅正式站 www.ptcg-tw-sim.com 提供（beta github.io 無此 API）。
   import { onMount, onDestroy } from 'svelte';
