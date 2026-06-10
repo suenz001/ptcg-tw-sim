@@ -13380,6 +13380,28 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   });
 });
 
+// v5.525：自身戰鬥↔備戰互換共用 resolver（敏捷蟲|褪殼猛毒 / 狡兔三窟 等 5 張卡的 effectKey）。
+//   先前完全沒註冊 → 玩家選了備戰寶可夢卻不互換（褪殼猛毒玩家回報）。鏡射 sakaki-self-swap：
+//   outgoing(戰鬥→備戰)走 clearActiveEffects 全清；incoming(備戰→戰鬥)只設 movedToActiveThisTurn、不清狀態(保留奔流之心等 buff)。
+regR('self-swap-active-bench', (st, idx, iids, _params, pool) => {
+  const pickIid = iids[0];
+  if (!pickIid) return st;  // 可不選(在 OPTIONAL_SELECTION_EFFECT_KEYS)：未選→不互換
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const benchPick = p.bench.find(c => c.iid === pickIid);
+  if (!benchPick) return st;
+  const aName = pool.get(p.active.cardId)?.name ?? '?';
+  const bName = pool.get(benchPick.cardId)?.name ?? '?';
+  let s2 = addLog(st, `${aName}（戰鬥）↔ ${bName}（備戰）互換`, idx);
+  return updatePlayer(s2, idx, pl => {
+    if (!pl.active) return pl;
+    const newActive = { ...benchPick, movedToActiveThisTurn: true };
+    const cleared = clearActiveEffects(pl.active);  // 戰鬥→備戰：全清狀態(含本回合 buff)
+    const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
+    return { ...pl, active: newActive, bench: newBench };
+  });
+});
+
 // ---- 火箭隊的阿波羅（Supporter）- 上回合火箭隊寶可夢 KO'd 才可用 ------------
 // 卡面：這張卡必須在上個對手的回合自己的「火箭隊的寶可夢」【昏厥】了才可使用。
 //       雙方手牌放回牌庫重洗。然後抽牌：自己 5 張，對手 3 張。
