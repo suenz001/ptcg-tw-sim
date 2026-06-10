@@ -16167,47 +16167,13 @@ export function promptPlayAbilities(
 // 卡面效果：「只要這隻寶可夢在場上，每次對手從手牌將能量卡附於寶可夢身上時，
 //            在那隻寶可夢身上放置2個傷害指示物。」
 OPP_ENERGY_ATTACH_PASSIVE.set('侵蝕詛咒', (state, gIdx, _oppIdx, targetIid, pool) => {
-  const player = state.players[gIdx];
-  const isActive = player.active?.iid === targetIid;
-  const benchIdx = player.bench.findIndex(c => c.iid === targetIid);
-
-  // v4.51 Phase 2：改用統一 canApplyEffectToTarget（kind='ability-effect'）
-  //   涵蓋光之翼 + 對戰圓形（其他 bench-defense 卡面是「招式」不擋特性，N/A）
-  const _erosionTgt = isActive ? player.active! : (benchIdx >= 0 ? player.bench[benchIdx] : null);
-  if (_erosionTgt) {
-    const _erosionTgtCard = pool.get(_erosionTgt.cardId);
-    const _erosionGuard = canApplyEffectToTarget(state, gIdx, _erosionTgt, _erosionTgtCard, 'ability-effect', pool, { isBench: !isActive });
-    if (_erosionGuard.blocked) {
-      return addLog(state,
-        `侵蝕詛咒：${_erosionTgtCard?.name ?? '?'} ${_erosionGuard.reason}`,
-        gIdx);
-    }
-  }
-
-  let updatedActive = player.active;
-  let updatedBench = player.bench;
-
-  if (isActive && player.active) {
-    updatedActive = { ...player.active, damage: player.active.damage + 20 };
-  } else if (benchIdx >= 0) {
-    updatedBench = player.bench.map((c, i) =>
-      i === benchIdx ? { ...c, damage: c.damage + 20 } : c
-    );
-  } else {
-    return state; // target not found
-  }
-
-  const updatedPlayers = [...state.players] as [PlayerState, PlayerState];
-  updatedPlayers[gIdx] = { ...player, active: updatedActive, bench: updatedBench };
-
-  const targetInst = isActive ? updatedActive! : updatedBench[benchIdx];
-  const targetName = pool.get(targetInst.cardId)?.name ?? '?';
-
-  return addLog(
-    { ...state, players: updatedPlayers },
-    `侵蝕詛咒：對手${targetName}被放置2個傷害指示物`,
-    gIdx,
-  );
+  // gIdx = 侵蝕詛咒 擁有者；附能的那隻寶可夢在「對手(attacker = 1-gIdx = _oppIdx)」場上。
+  // v5.536 收斂＋修 bug：原實作誤用 player = state.players[gIdx]（擁有者自己場上）去找 targetIid，
+  //   但 targetIid 在【對手】場上 → 永遠找不到 → return state（沒放指示物，玩家回報）。
+  //   改走中央 dealAttackDamageToTarget(kind:'attack-effect'，放 2 個傷害指示物 = 20，flat)：
+  //   actorIdx=gIdx → 內部 dIdx=1-gIdx=對手，依 targetIid 在對手場上正確命中；
+  //   一次處理免疫(化隱/太晶備戰/對戰圓形/光之翼)＋昏厥＋自動拿獎(原實作都漏)。
+  return dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'attack-effect', label: '侵蝕詛咒' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
