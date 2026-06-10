@@ -9,6 +9,7 @@
  */
 
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
+import { BENCH_SCRUB_LOCK_FLAGS } from './instance-flags';
 import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
@@ -7287,25 +7288,15 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
 //   ⚠ 刻意只清「攻擊/撤退」類鎖（bench 不可能攻擊/撤退）；不碰「受傷」類旗標
 //     （takeExtraDamage*/damageReduceNextHit — 備戰仍可被招式打到，語義有效），
 //     那類由離場 clearActiveEffects 處理，避免誤清。
-const BENCH_ACTION_LOCK_FLAGS = [
-  'cantAttackThisTurn', 'cantAttackPending',
-  'cantRetreatNextTurn', 'cantRetreatPendingSelf',
-  'blockedAttackNamesNextTurn', 'blockedAttackNamesThisTurn',
-  'attackFailureFlipCountPending', 'attackFailureFlipCountThisTurn',
-  'pointySpinNextTurn', 'pointySpinThisTurn',
-  // v5.529：移除 damageBonusThisTurn/damageBonusPending — 它們是「本回合/下次招式加傷」BUFF，
-  //   不是攻擊/撤退鎖。大力鱷|奔流之心 等特性在【備戰區】發動就會設這個 buff（玩家可先疊好再換位
-  //   到戰鬥場攻擊），scrubBenchStatus 每個 action 都清備戰→把備戰設的 +120 立刻清掉(玩家回報無效)。
-  //   殘留跨回合的問題由 END_TURN 的 clearDmgBonusThisTurn 處理，這裡不該碰。deferredPrizeBonus 同理移除。
-] as const;
+// v5.531：BENCH_SCRUB_LOCK_FLAGS 收斂至 instance-flags.ts 單一來源(與 clearActiveEffects 共同維護、不漂移)。
 function stripBenchActionLockFlags(b: CardInstance): CardInstance {
   let hit = false;
-  for (const k of BENCH_ACTION_LOCK_FLAGS) {
+  for (const k of BENCH_SCRUB_LOCK_FLAGS) {
     if ((b as unknown as Record<string, unknown>)[k] !== undefined) { hit = true; break; }
   }
   if (!hit) return b;
   const nb = { ...b } as unknown as Record<string, unknown>;
-  for (const k of BENCH_ACTION_LOCK_FLAGS) delete nb[k];
+  for (const k of BENCH_SCRUB_LOCK_FLAGS) delete (nb as Record<string, unknown>)[k as string];
   return nb as unknown as CardInstance;
 }
 

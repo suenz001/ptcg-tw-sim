@@ -15,6 +15,7 @@
  */
 
 import type { Card } from '$lib/cards/types';
+import { CLEAR_ON_EXIT_FLAGS } from '../instance-flags';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
   SpecialCondition,
@@ -879,80 +880,11 @@ export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: strin
  * 統一用這個 helper 處理。
  */
 export function clearActiveEffects(poke: CardInstance): CardInstance {
-  return {
-    ...poke,
-    status: undefined,
-    secondaryStatus: undefined,
-    tertiaryStatus: undefined,
-    poisonDamagePerCheckup: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    attackFailureFlipCountPending: undefined,
-    attackFailureFlipCountThisTurn: undefined,
-    pointySpinNextTurn: undefined,
-    pointySpinThisTurn: undefined,
-    cantRetreatPendingSelf: undefined,
-    damageReduceNextHit: undefined,
-    damageBonusThisTurn: undefined,
-    damageBonusPending: undefined,
-    takeExtraDamageThisTurn: undefined,
-    takeExtraDamageNextTurn: undefined,
-    cantAttachEnergyThisTurn: undefined,
-    cantAttachEnergyNextTurn: undefined,
-    deferredPrizeBonusThisTurn: undefined,
-    deferredPrizeBonusNextTurn: undefined,
-    movedToActiveThisTurn: undefined,
-    // v5.033：鎖招名 flag — 蒼響ex 無畏斬 / 破空焰ex 烈火爆進 / 天仙石 / 超級勇氣 /
-    // 龍之強襲 / 光明角擊 / 7 張 recharge 等所有 blockedAttackNamesNextTurn 機制
-    // 卡面文義為「下回合此寶可夢無法用此招」或「離開戰鬥場前無法用此招」—
-    // PTCG 規則：寶可夢退到備戰區清除所有狀態（含招式鎖）。
-    blockedAttackNamesNextTurn: undefined,
-    blockedAttackNamesThisTurn: undefined,
-    // ── v5.443：一勞永逸 — 補齊「招式效果加在這隻寶可夢身上」的所有延遲/跨回合旗標。
-    //   PTCG 官方規則：寶可夢從戰鬥場退到備戰區時，移除所有特殊狀態與招式效果。
-    //   日後新增此類旗標(immune*/cost/weakness/delayed 等)請一律加進此清單，不要在各招式
-    //   另外手動清。保留的欄位(身分/附加/傷害指示物/進化/出牌與特性使用追蹤)不在此清。
-    nextOwnAttackPenalty: undefined,
-    retaliateCountersOnNextHit: undefined,
-    paralyzeFangPending: undefined,
-    koAtMyNextEndOfTurn: undefined,
-    damageAtMyNextEndOfTurn: undefined,
-    strongKissDiscardPending: undefined,        // v5.443 迷唇姐強烈之吻 — 退備戰即清(玩家報)
-    immuneToAttackEffectsNextTurn: undefined,
-    immuneToAttackEffectsThisTurn: undefined,
-    attackCostIncreaseColorlessNextTurn: undefined,
-    attackCostIncreaseColorlessThisTurn: undefined,
-    retreatCostIncreaseNextTurn: undefined,
-    retreatCostIncreaseThisTurn: undefined,
-    endTurnOnOppAttachEnergyNextTurn: undefined,
-    endTurnOnOppAttachEnergyThisTurn: undefined,
-    immuneToExAttackTagNextTurn: undefined,
-    immuneToExAttackTagThisTurn: undefined,
-    weaknessOverrideTypeNextTurn: undefined,
-    weaknessOverrideTypeThisTurn: undefined,
-    weaknessDisabledNextTurn: undefined,
-    weaknessDisabledThisTurn: undefined,
-    immuneToBasicAttackNextTurn: undefined,
-    immuneToBasicAttackThisTurn: undefined,
-    basicImmuneColorlessExcept: undefined,
-    immuneToExAttackNextTurn: undefined,
-    immuneToExAttackThisTurn: undefined,
-    immuneToAbilityPokemonNextTurn: undefined,
-    immuneToAbilityPokemonThisTurn: undefined,
-    immuneToAllAttackNextTurn: undefined,
-    immuneToAllAttackThisTurn: undefined,
-    immuneToAttackDamageNextTurn: undefined,
-    immuneToAttackDamageThisTurn: undefined,
-    immuneToEvolutionAttackNextTurn: undefined,
-    immuneToEvolutionAttackThisTurn: undefined,
-    evolutionDamageReduceNextTurn: undefined,
-    evolutionDamageReduceThisTurn: undefined,
-    immuneToBurnedAttackerNextTurn: undefined,
-    immuneToBurnedAttackerThisTurn: undefined,
-    abilityNullifiedNextTurn: undefined,
-    abilityNullifiedThisTurn: undefined,
-  };
+  // v5.531：清除欄位收斂至 instance-flags.ts 的 CLEAR_ON_EXIT_FLAGS 單一來源（原 63 個硬編欄位）。
+  //   官方規則：寶可夢從戰鬥場退到備戰區，移除所有特殊狀態與招式效果(含延遲/跨回合)。
+  const n = { ...poke } as unknown as Record<string, unknown>;
+  for (const k of CLEAR_ON_EXIT_FLAGS) delete n[k as string];
+  return n as unknown as CardInstance;
 }
 
 /**

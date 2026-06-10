@@ -142,23 +142,20 @@ for (const f of files) {
 //   且每個鎖旗標必須也在 clearActiveEffects 清單內(active→bench 一律清，子集不變式)。
 //   見 reference-clear-active-effects-central。
 {
-  const engineSrc = readFileSync(join(SRC, 'engine.ts'), 'utf8');
-  const sharedSrc = readFileSync(join(SRC, 'effects/_shared.ts'), 'utf8');
-  const m = engineSrc.match(/BENCH_ACTION_LOCK_FLAGS\s*=\s*\[([\s\S]*?)\]\s*as const/);
-  if (m) {
-    const lockFlags = [...m[1].matchAll(/'([a-zA-Z0-9_]+)'/g)].map((x) => x[1]);
-    // clearActiveEffects 清的欄位(xxx: undefined,)
-    const caeMatch = sharedSrc.match(/export function clearActiveEffects[\s\S]*?\n\}/);
-    const caeFields = new Set(caeMatch ? [...caeMatch[0].matchAll(/^\s+([a-zA-Z0-9_]+):\s*undefined,/gm)].map((x) => x[1]) : []);
-    // 合法鎖命名(攻擊/撤退/招式名鎖類)
-    const LOCK_NAME = /^(cantAttack|cantRetreat|blockedAttackNames|attackFailureFlipCount|pointySpin|attackCostIncrease|retreatCostIncrease|paralyzeFang)/;
-    for (const f of lockFlags) {
-      if (!LOCK_NAME.test(f)) {
-        violations.push(`[F] engine.ts BENCH_ACTION_LOCK_FLAGS 含非「攻擊/撤退鎖」旗標 \`${f}\`（buff/受傷類旗標備戰仍有意義，不可每 action 清；見 reference-clear-active-effects-central / v5.529 奔流之心）`);
-      }
-      if (caeFields.size > 0 && !caeFields.has(f)) {
-        violations.push(`[F] engine.ts BENCH_ACTION_LOCK_FLAGS 的 \`${f}\` 不在 clearActiveEffects 清單（active→bench 子集不變式被破壞；該旗標應同時加進 clearActiveEffects）`);
-      }
+  const flagsSrc = readFileSync(join(SRC, 'instance-flags.ts'), 'utf8');
+  const grab = (name) => {
+    const mm = flagsSrc.match(new RegExp(name + '\\s*:\\s*readonly[\\s\\S]*?=\\s*\\[([\\s\\S]*?)\\n\\];'));
+    return mm ? [...mm[1].matchAll(/'([a-zA-Z0-9_]+)'/g)].map((x) => x[1]) : [];
+  };
+  const lockFlags = grab('BENCH_SCRUB_LOCK_FLAGS');
+  const caeFields = new Set(grab('CLEAR_ON_EXIT_FLAGS'));
+  const LOCK_NAME = /^(cantAttack|cantRetreat|blockedAttackNames|attackFailureFlipCount|pointySpin|attackCostIncrease|retreatCostIncrease|paralyzeFang)/;
+  for (const f of lockFlags) {
+    if (!LOCK_NAME.test(f)) {
+      violations.push(`[F] instance-flags.ts BENCH_SCRUB_LOCK_FLAGS 含非「攻擊/撤退鎖」旗標 \`${f}\`（buff/受傷類旗標備戰仍有意義，不可每 action 清；見 reference-clear-active-effects-central / v5.529 奔流之心）`);
+    }
+    if (caeFields.size > 0 && !caeFields.has(f)) {
+      violations.push(`[F] instance-flags.ts BENCH_SCRUB_LOCK_FLAGS 的 \`${f}\` 不在 CLEAR_ON_EXIT_FLAGS（子集不變式被破壞）`);
     }
   }
 }
