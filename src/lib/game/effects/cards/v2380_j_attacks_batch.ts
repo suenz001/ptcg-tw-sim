@@ -45,7 +45,7 @@ import {
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits } from '../../engine';
-import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy, markFaintByEffect } from '../../effects';
+import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy, koTargetByAttackEffect } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
@@ -185,25 +185,22 @@ regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
   if (targets.length === 0) {
     return addLog(s, '死亡靈魂：對手場上沒有 HP ≤50 的寶可夢可昏厥', aIdx);
   }
-  const targetIids = new Set(targets.map(t => t.iid));
   s = addLog(s,
     `死亡靈魂：將對手 ${targets.length} 隻寶可夢昏厥 — ${targets.map(t => t.name).join('、')}`,
     aIdx);
-  // 給每隻目標寶可夢 +9999 damage，sanityKOSweep 在 ATTACK pipeline 末尾會處理 KO
-  return {
-    ...s,
-    players: s.players.map((p, i) => i !== dIdx ? p : ({
-      ...p,
-      // v5.520：效果KO走中央 markFaintByEffect（damage=有效maxHP，剛好昏厥）
-      //   取代原 +9999 假傷害（KO被擋時會殘留負HP→「?/HP 0/0」卡死）。
-      active: p.active && targetIids.has(p.active.iid)
-        ? markFaintByEffect(p.active, pool, s)
-        : p.active,
-      bench: p.bench.map(b => targetIids.has(b.iid)
-        ? markFaintByEffect(b, pool, s)
-        : b),
-    })) as typeof s.players,
-  };
+  // v5.522：效果KO收斂中央 koTargetByAttackEffect（深淵之瞳式：搬棄牌 + recordOppKO + addPendingPrize，
+  //   不走 damage 管線→不誤觸受傷反擊 / 不殘留假傷害）。多目標先 KO 備戰、最後 KO 戰鬥位（game-over 判定正確）。
+  const _benchTargets = targets.filter(t => t.iid !== _oppActiveIid);
+  const _activeTarget = targets.find(t => t.iid === _oppActiveIid);
+  for (const t of _benchTargets) {
+    const inst = s.players[dIdx].bench.find(b => b.iid === t.iid);
+    if (inst) s = koTargetByAttackEffect(s, aIdx, inst, false, pool, '死亡靈魂');
+  }
+  if (_activeTarget) {
+    const inst = s.players[dIdx].active;
+    if (inst && inst.iid === _activeTarget.iid) s = koTargetByAttackEffect(s, aIdx, inst, true, pool, '死亡靈魂');
+  }
+  return s;
 });
 
 // ── 08. 伊裴爾塔爾ex｜黑暗打擊 — 210 + recharge ──────────────────────────────

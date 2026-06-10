@@ -88,6 +88,7 @@ import {
   manualDamageImmunity,
   dealSelfDamage,
   dealAttackDamageToTarget,
+  koTargetByAttackEffect,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -1297,31 +1298,13 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
     return addLog(s, '深淵之瞳：對手戰鬥位不處於特殊狀態 → 效果失敗', aIdx);
   }
   const defCard = pool.get(def.cardId);
-  // v5.168/v5.170：深淵之瞳「使昏厥」屬招式效果（attack-effect）。仿棄世猴|同命戰鬥
-  //   (effects.ts L6877) 用 canApplyAttackEffectToTarget guard 擋 薄霧能量 / 皇帝之勢 /
-  //   抵抗之幕 / 全能硬殼 / 化石 等 attack-effect immunity。
-  const guardKO = canApplyAttackEffectToTarget(s, aIdx, def, defCard, pool);
-  if (guardKO.blocked) {
-    return addLog(s, `深淵之瞳：${defCard?.name ?? '?'}｜${guardKO.reason}（不昏厥對手）`, aIdx);
-  }
-  // v5.170：仿棄世猴|同命戰鬥手動 KO 模式（取代 v5.168 的 damage=HP+sanityKOSweep）。
-  //   原 v5.168 設 damage=HP 是「造成 N 傷害」的變相 → 會誤觸 damage 相關 hook
-  //   (PASSIVE_ON_DAMAGED / 扣殺能量 / SPECIAL_ENERGY_ON_DAMAGED 等)。
-  //   正確：「使昏厥」是 effect-level KO — 直接搬到棄牌 + addPendingPrize，不走 damage 管線。
-  const ko: CardInstance[] = [
-    { ...def, damage: (defCard?.hp ?? 0) },
-    ...def.energyAttached,
-    ...getAllAttachedTools(def),
-    ...(def.evolvedFromStack ?? []),
-  ];
-  const players = [...s.players] as [PlayerState, PlayerState];
-  players[dIdx] = { ...s.players[dIdx], active: null, discard: [...s.players[dIdx].discard, ...ko] };
-  // v5.469 還原：深淵之瞳是「效果使昏厥」(無傷害)，古舊能量/影藏只在「受到對手招式傷害而昏厥」觸發 → 不套 koPrizesAdjusted。
-  const prizes = defCard ? prizesForKOLocal(defCard) : 1;
-  s = addLog({ ...s, players }, `深淵之瞳：${defCard?.name ?? '?'} 處於【${def.status}】 → 直接昏厥！+${prizes} 張獎賞卡（仿同命戰鬥手動 KO，不走 damage 管線）`, aIdx);
-  s = recordOppKO(s, dIdx, defCard, 'attack');
-  s = addPendingPrize(s, aIdx, prizes, pool);
-  return s;
+  // v5.522：效果KO收斂中央 koTargetByAttackEffect（深淵之瞳原為 inline 手動KO，現統一呼叫中央 helper：
+  //   自帶 canApplyAttackEffectToTarget guard + 搬棄牌 + recordOppKO + addPendingPrize + game-over，
+  //   不走 damage 管線→不誤觸 PASSIVE_ON_DAMAGED / 扣殺能量 等受傷 hook）。
+  return koTargetByAttackEffect(
+    addLog(s, `深淵之瞳：${defCard?.name ?? '?'} 處於【${def.status}】 → 直接昏厥！（招式效果）`, aIdx),
+    aIdx, def, true, pool, '深淵之瞳',
+  );
 });
 
 // ════════════════════════════════════════════════════════════════════════════

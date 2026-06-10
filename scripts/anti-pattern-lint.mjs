@@ -113,8 +113,28 @@ for (const f of files) {
   }
 }
 
+
+// ── Check E：markFaintByEffect 只能用於「自身」昏厥，對手效果KO須用 koTargetByAttackEffect ──
+//   markFaintByEffect(damage=有效maxHP) 是自身昏厥(高速破壞/擊斃自身)用；對對手「使昏厥」要走
+//   中央 koTargetByAttackEffect(深淵之瞳式：搬棄牌+recordOppKO+addPendingPrize，不走 damage 管線)。
+//   見 reference-effect-ko-central-helper。偵測 markFaintByEffect 包在 defender 索引(dIdx/oppIdx)的更新區。
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!/markFaintByEffect\s*\(/.test(lines[i])) continue;
+    if (/dmg-direct-ok/.test(lines[i]) || /export function markFaintByEffect/.test(lines[i])) continue;
+    let fs = i;
+    for (let j = i; j >= Math.max(0, i - 80); j--) { if (C_FUNC_START.test(lines[j])) { fs = j; break; } }
+    const idx = mutatedIdx(lines, i, fs);
+    const isDefender = !!idx && (/\bdIdx\b|\boppIdx\b/.test(idx) || /1\s*-\s*aIdx/.test(idx));
+    if (isDefender) {
+      violations.push(`[E] ${rel(f)}:${i + 1} — markFaintByEffect 用於對手(${idx})；對手效果KO須改走 koTargetByAttackEffect(state, aIdx, target, isActive, pool, label)`);
+    }
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

@@ -1,4 +1,4 @@
-// v5.520：「直接昏厥/招式效果KO」收斂中央 markFaintByEffect（取代 +9999/=99999 假傷害）。
+// v5.522：「直接昏厥/招式效果KO」收斂中央 koTargetByAttackEffect（深淵之瞳式，取代 markFaintByEffect/假傷害）。
 //   驗 死亡靈魂(伊裴爾塔爾ex) 對剩餘HP≤50 的對手寶可夢效果KO：對手寶可夢被移除、攻擊方取獎賞。
 //   markFaintByEffect 把 damage 設為「有效maxHP」剛好昏厥(非 99999)，KO 被擋時不殘留負HP。
 import { build } from 'esbuild';
@@ -28,7 +28,7 @@ let iid=0; const inst=(cid,e={})=>({iid:`a${++iid}`,cardId:String(cid),damage:0,
 let pass=0,fail=0;
 const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FAIL',n,'::',e.message);fail++;}};
 
-T('①★ 死亡靈魂效果KO 剩餘HP≤50 的對手戰鬥寶可夢（markFaintByEffect 非 99999）',()=>{
+T('①★ 死亡靈魂效果KO 剩餘HP≤50 的對手戰鬥寶可夢（koTargetByAttackEffect 中央效果KO）',()=>{
   const s=createGame({name:'P1',entries:[{cardId:YVELTAL,count:1}]},{name:'P2',entries:[{cardId:TGT,count:1}]},pool);
   // 攻擊方=伊裴爾塔爾ex 附 DDD(滿足 DDC) ；對手 active 預傷使剩餘=tgtHp-(tgtHp-40)=40 ≤50
   const preDmg = tgtHp - 40;
@@ -63,5 +63,29 @@ T('② 對手無剩餘HP≤50 的寶可夢 → 死亡靈魂不KO任何寶可夢'
   assert.equal(n.players[1].active?.iid, victim.iid, '滿血(>50HP)對手不該被效果KO');
   assert.equal(n.players[0].prizes.length, 6, '沒KO→不取獎賞(維持6)');
 });
+T('③★ 死亡靈魂多目標：對手 active + 1 備戰皆剩餘HP≤50 → 雙KO，攻擊方取2獎賞，仍有存活備戰(active=null待補位)',()=>{
+  const s=createGame({name:'P1',entries:[{cardId:YVELTAL,count:1}]},{name:'P2',entries:[{cardId:TGT,count:1}]},pool);
+  const preDmg = tgtHp - 40; // 剩40
+  const attacker=inst(YVELTAL,{energyAttached:[inst(DARK),inst(DARK),inst(DARK)]});
+  const victimA=inst(TGT,{damage:preDmg});      // active 剩40 ≤50 → KO
+  const victimB=inst(TGT,{damage:preDmg});      // bench1 剩40 ≤50 → KO
+  const survivor=inst(TGT,{damage:0});          // bench2 滿血 >50 → 存活
+  const st={...s,phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,isFirstTurn:false,
+    setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],
+    players:[{...s.players[0],hand:[],deck:[inst(YVELTAL)],discard:[],prizes:Array.from({length:6},()=>inst(YVELTAL)),bench:[],active:attacker},
+             {...s.players[1],hand:[],deck:[inst(TGT)],discard:[],prizes:Array.from({length:6},()=>inst(TGT)),bench:[victimB,survivor],active:victimA}]};
+  const n=applyAction(st,{type:'ATTACK',attackIndex:0},pool);
+  const disc=n.players[1].discard.map(c=>c.iid);
+  assert(disc.includes(victimA.iid),'active victim 應進棄牌');
+  assert(disc.includes(victimB.iid),'bench victim 應進棄牌');
+  assert(!disc.includes(survivor.iid),'滿血 survivor 不應被KO');
+  // 存活備戰還在(或已補位成 active)
+  const oppAll=[n.players[1].active,...n.players[1].bench].filter(Boolean).map(c=>c.iid);
+  assert(oppAll.includes(survivor.iid),'survivor 應仍在場(備戰或補位)');
+  assert.equal(n.players[0].prizes.length,4,'雙KO→取2獎賞(6→4)，實際'+n.players[0].prizes.length);
+  const allInsts=[...n.players[0].bench,n.players[0].active,...n.players[1].bench,n.players[1].active].filter(Boolean);
+  for(const c of allInsts) assert((c.damage??0)<90000,'不應殘留假傷害 '+c.cardId+'='+c.damage);
+});
+
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail?1:0);

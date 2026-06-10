@@ -18,7 +18,7 @@ import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋�
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
 } from '../_shared';
-import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, markFaintByEffect } from '../../effects';
+import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
@@ -77,12 +77,10 @@ regPost('超級阿勃梭魯ex|死亡終局', (state, aIdx, pool) => {
   if (guard.blocked) {
     return addLog(state, `死亡終局：${defCard?.name ?? '?'}｜${guard.reason}（不昏厥）`, aIdx);
   }
-  // v5.520：效果KO走中央 markFaintByEffect（damage=有效maxHP，剛好昏厥）→ sanityKOSweep 結算；
-  //   取代原 =99999 假傷害（KO 被擋時會殘留負HP）。
-  return updatePlayer(
+  // v5.522：效果KO收斂中央 koTargetByAttackEffect（深淵之瞳式：搬棄牌+recordOppKO+addPendingPrize，不走 damage 管線）
+  return koTargetByAttackEffect(
     addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物 ≥ 6 個 → 直接昏厥（招式效果）', aIdx),
-    dIdx,
-    p => ({ ...p, active: p.active ? markFaintByEffect(p.active, pool, state) : null }),
+    aIdx, def, true, pool, '死亡終局',
   );
 });
 

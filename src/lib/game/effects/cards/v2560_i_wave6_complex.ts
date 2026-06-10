@@ -23,7 +23,7 @@ import {
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -279,16 +279,19 @@ regPost('千面避役|擊斃', (state, aIdx, pool) => {
       `擊斃：唯一剩餘 HP 最少的 ${target.name}（${target.ownerIdx === aIdx ? '自方' : '對手'}，剩 ${target.remaining}）→ 直接昏厥`,
       aIdx,
     );
-    return updatePlayer(s, target.ownerIdx, p => {
-      // v5.520：效果KO走中央 markFaintByEffect（取代 =99999 假傷害）
-      const newActive = p.active && p.active.iid === target.iid
-        ? markFaintByEffect(p.active, pool, s)
-        : p.active;
-      const newBench = p.bench.map(b => b.iid === target.iid
-        ? markFaintByEffect(b, pool, s)
-        : b);
-      return { ...p, active: newActive, bench: newBench };
-    });
+    // v5.522：對手側走中央 koTargetByAttackEffect（深淵之瞳式效果KO）；自身側用 markFaintByEffect（自身昏厥，對手取獎賞）
+    const tgtPlayer = state.players[target.ownerIdx];
+    const tgtIsActive = tgtPlayer.active?.iid === target.iid;
+    const tgtInst = tgtIsActive ? tgtPlayer.active : tgtPlayer.bench.find(b => b.iid === target.iid);
+    if (!tgtInst) return s;
+    if (target.ownerIdx === aIdx) {
+      return updatePlayer(s, aIdx, p => {
+        const na = p.active && p.active.iid === target.iid ? markFaintByEffect(p.active, pool, s) : p.active;
+        const nb = p.bench.map(b => b.iid === target.iid ? markFaintByEffect(b, pool, s) : b);
+        return { ...p, active: na, bench: nb };
+      });
+    }
+    return koTargetByAttackEffect(s, aIdx, tgtInst, tgtIsActive, pool, '擊斃');
   }
   // 2+ 隻並列 → modal-choice picker 讓玩家選
   const s = addLog(state,
@@ -320,16 +323,16 @@ regR('striking-down-pick', (st, aIdx, iids, _params, pool) => {
   if (!target) return addLog(st, '擊斃：目標已不存在', aIdx);
   const tname = pool.get(target.cardId)?.name ?? '?';
   let s = addLog(st, `擊斃：選定 ${tname}（${ownerIdx === aIdx ? '自方' : '對手'}）→ 直接昏厥`, aIdx);
-  return updatePlayer(s, ownerIdx, pl => {
-    // v5.520：效果KO走中央 markFaintByEffect（取代 =99999 假傷害）
-    const newActive = pl.active && pl.active.iid === targetIid
-      ? markFaintByEffect(pl.active, pool, s)
-      : pl.active;
-    const newBench = pl.bench.map(b => b.iid === targetIid
-      ? markFaintByEffect(b, pool, s)
-      : b);
-    return { ...pl, active: newActive, bench: newBench };
-  });
+  // v5.522：對手側走中央 koTargetByAttackEffect；自身側用 markFaintByEffect
+  const pickIsActive = p.active?.iid === targetIid;
+  if (ownerIdx === aIdx) {
+    return updatePlayer(s, aIdx, pl => {
+      const na = pl.active && pl.active.iid === targetIid ? markFaintByEffect(pl.active, pool, s) : pl.active;
+      const nb = pl.bench.map(b => b.iid === targetIid ? markFaintByEffect(b, pool, s) : b);
+      return { ...pl, active: na, bench: nb };
+    });
+  }
+  return koTargetByAttackEffect(s, aIdx, target, pickIsActive, pool, '擊斃');
 });
 
 // 輔助：unused import 防護
