@@ -412,10 +412,14 @@ export interface PlayerState {
   talarongPlayedThisTurn?: boolean;
   /**
    * v2.174 鐵之防禦強化（Item / I）— 在下個對手的回合，自己的所有【鋼】寶可夢
-   * 受到對手寶可夢招式的傷害 -30。打出時設於 self 的 NextTurn flag，於 nextIdx
-   * 的 END_TURN promote 為 ThisTurn（即對手回合開始前）。
+   * 受到對手寶可夢招式的傷害 -30。打出時設於 self（設旗標方）的 NextTurn flag。
+   * ★ v5.538：此為「對手回合」型旗標（由設旗標方在【對手回合】保護自己的鋼），與
+   *   「自己下回合」型（noAttacks/cantPlayItem/Supporter/Evolve/Stadium，設於對手側、
+   *   於對手自己回合生效）不同 → 必須在【設旗標方(ender=aIdx) END_TURN、對手回合開始時】
+   *   promote 為 ThisTurn，並在【對手回合結束、設旗標方回合開始(nextIdx=設旗標方)時】清除。
+   *   （原 v2.174 誤放在 nextP「自己下回合」promote 區塊 → 對手攻擊時 -30 從未生效；
+   *   玩家報「全金屬實驗室+鐵之防禦+防護充能應-90卻只-60」，v5.538 修。engine.ts END_TURN。）
    * 攻擊計算時：defender 屬性為【鋼】 + defendingPlayer.metalShieldThisTurn → -30。
-   * ThisTurn flag 在「使用方」下回合 END_TURN 時清除（同 weakness/immune flag 模式）。
    */
   metalShieldNextTurn?: boolean;
   metalShieldThisTurn?: boolean;

@@ -7126,6 +7126,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const nextP = { ...players[nextIdx] };
     if (nextP.active) nextP.active = promotePending(nextP.active);
     nextP.bench = nextP.bench.map(promotePending);
+    // ★ 以下 nextP(即將行動者) promote 區塊：限「自己下回合」型 player 旗標 —— 設於【對手(dIdx)】、
+    //   在【對手自己回合】生效(noAttacks/cantPlayItem/Supporter/Evolve/Stadium/cantRetreatIfPoisoned)。
+    //   ⚠ 禁放「對手回合」型旗標(由設旗標方保護/影響於對手回合，如 鐵之防禦 metalShield)→
+    //   那類要在 ender promote、對手回合結束 clear(見下方 players[nextIdx] 賦值後的 metalShield 區塊)。
+    //   v5.538 血淚：metalShield 誤放這裡 → 對手攻擊時 -30 從未生效。
     // Wave 36：promote nextIdx 的 noAttacksNextTurn → noAttacksThisTurn（例：雷電在地）
     if (nextP.noAttacksNextTurn) {
       nextP.noAttacksThisTurn = true;
