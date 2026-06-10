@@ -7101,7 +7101,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       currentPlayer.unrudaBonusThisTurn ||
       currentPlayer.gladionDuelBonusThisTurn ||
       currentPlayer.retryBadgeUsedThisTurn ||
-      currentPlayer.metalShieldThisTurn ||
       currentPlayer.cantRetreatIfPoisonedThisTurn ||
       currentPlayer.bagonElenaThisTurn ||
       currentPlayer.cantPlayStadiumThisTurn
@@ -7117,7 +7116,6 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete cp.unrudaBonusThisTurn;
       delete cp.gladionDuelBonusThisTurn;
       delete cp.retryBadgeUsedThisTurn;
-      delete cp.metalShieldThisTurn;
       delete cp.cantRetreatIfPoisonedThisTurn;
       delete cp.bagonElenaThisTurn;
       delete cp.cantPlayStadiumThisTurn;  // v4.33 燒灼大地 flag 自己回合結束時清除
@@ -7146,11 +7144,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       nextP.cantEvolveThisTurn = true;
       delete nextP.cantEvolveNextTurn;
     }
-    // v2.174 promote 鐵之防禦強化 / 霍米加的演奏 旗標
-    if (nextP.metalShieldNextTurn) {
-      nextP.metalShieldThisTurn = true;
-      delete nextP.metalShieldNextTurn;
-    }
+    // v2.174 promote 霍米加的演奏 旗標（鐵之防禦強化 metalShield 改為「對手回合」型，見下方 players[nextIdx] 賦值之後）
     if (nextP.cantRetreatIfPoisonedNextTurn) {
       nextP.cantRetreatIfPoisonedThisTurn = true;
       delete nextP.cantRetreatIfPoisonedNextTurn;
@@ -7173,6 +7167,22 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       retreatedThisTurn: false,
       lourisToolUsedThisTurn: false, // v3.24 力之沙漏 per-turn flag reset
     };
+
+    // v5.538 鐵之防禦強化 = 「對手回合」型減傷（保護設旗標方自己的【鋼】寶可夢於對手回合）。
+    //   與「自己下回合」型旗標(noAttacks/cantPlay*)不同：由設旗標方在【對手回合】生效。
+    //   ① 設旗標方(ender=aIdx)回合結束、對手回合開始 → promote metalShieldNextTurn→ThisTurn。
+    //   ② 對手回合結束、設旗標方回合開始(此時 nextIdx=設旗標方) → 清除 metalShieldThisTurn。
+    //   原誤放在 nextP「自己下回合」promote 區塊 → 在錯的回合生效，對手攻擊時 -30 沒套（玩家報 -60）。
+    if (players[aIdx].metalShieldNextTurn) {
+      const ep = { ...players[aIdx], metalShieldThisTurn: true };
+      delete ep.metalShieldNextTurn;
+      players[aIdx] = ep;
+    }
+    if (players[nextIdx].metalShieldThisTurn) {
+      const np = { ...players[nextIdx] };
+      delete np.metalShieldThisTurn;
+      players[nextIdx] = np;
+    }
 
     // 重置競技場使用旗標（當前玩家的回合結束時清除其旗標）
     let stadiumUsedThisTurn = state.stadiumUsedThisTurn ?? [false, false] as [boolean, boolean];
