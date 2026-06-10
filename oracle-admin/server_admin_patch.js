@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.29 (admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
+// === ORACLE ADMIN ENDPOINTS === v0.30 (admin v1.25 — 1.4 勝因分佈：離開類依 finalTurn<=1 細分「第一回合離開(開房掛機)」vs「中途離開(認輸)」；「取得所有獎勵牌」正名「取得所有獎賞卡」) (v0.29 — admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -977,9 +977,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
             // 1.4 勝因分佈
             winReasons: [
               { $match: { winReason: { $ne: '' } } },
-              { $group: { _id: '$winReason', count: { $sum: 1 } } },
+              // v0.30: 加入「是否第一回合(含開局設置)結束」維度，讓 1.4 勝因分佈能區分
+              //   第一回合離開(開房者掛機) vs 其他回合離開(中途認輸放棄)。finalTurn<=1 視為第一回合。
+              { $group: { _id: { r: '$winReason', ft: { $lte: ['$finalTurn', 1] } }, count: { $sum: 1 } } },
               { $sort: { count: -1 } },
-              { $limit: 50 },
+              { $limit: 100 },
             ],
           }});
         const [agg] = await db.collection('matchRecords').aggregate(pipeline).toArray();
@@ -1008,7 +1010,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             sampleCount: unwrap(agg.turnsAvg, { count: 0 }).count || 0,
             distribution: agg.turnsDistribution || [],
           },
-          winReasons: (agg.winReasons || []).map(x => ({ reason: x._id, count: x.count })),
+          winReasons: (agg.winReasons || []).map(x => ({ reason: x._id.r, firstTurn: !!x._id.ft, count: x.count })),  // v0.30: 帶出 firstTurn 供客戶端細分離開類
         });
       } catch (e) {
         console.warn('[stats overview] error:', e.message);

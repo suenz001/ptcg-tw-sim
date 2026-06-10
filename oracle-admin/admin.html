@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.24</title>
+<title>PTCG Oracle Admin v1.25</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.24</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.25</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2403,16 +2403,17 @@ function renderDurationTurns(s) {
 // v0.93: 勝因 normalize — 拿掉玩家名, 統一分類
 //   原 winReason 含玩家名稱 (e.g. 「Wilson 取得所有獎勵牌」/「火箭隊的奇樹 沒有可上場的寶可夢」)
 //   normalize 後: 「取得所有獎勵牌」/「對手沒有可上場的寶可夢」/「對手抽乾牌庫」 等通用分類
-function normalizeWinReason(raw) {
+function normalizeWinReason(raw, firstTurn) {
   if (!raw) return '(空)';
   const s = String(raw).trim();
-  if (/取得所有獎(賞|勵)(卡|牌)/.test(s)) return '🏆 取得所有獎勵牌';  // v1.24: 同時抓新詞「獎賞卡」與舊詞「獎勵牌」, 合併到同一勝因
+  if (/取得所有獎(賞|勵)(卡|牌)/.test(s)) return '🏆 取得所有獎賞卡';  // v1.25: 正名為官方用詞「獎賞卡」；regex 仍同時抓新舊詞合併
   if (/沒有可上場的寶可夢|沒有寶可夢可上場/.test(s)) return '🚫 對手沒有可上場的寶可夢';
   if (/抽乾牌庫|抽不到牌|牌庫空了/.test(s)) return '🃏 對手抽乾牌庫';
   if (/勝利象徵|特殊勝利條件/.test(s)) return '⭐ 特殊勝利條件 (勝利象徵)';
   if (/投降|認輸/.test(s)) return '🏳️ 對手投降';
   if (/超時|逾時|逾過/.test(s)) return '⏰ 對手超時';
-  if (/中途離開|離開房間|斷線|斷開|退出|不在場|disconnect/i.test(s)) return '👋 玩家中途離開';
+  // v1.25: 離開類再依回合細分 — 第一回合(含開局設置)離開多為開房者掛機；其他回合離開多為中途認輸放棄
+  if (/中途離開|離開房間|斷線|斷開|退出|不在場|disconnect/i.test(s)) return firstTurn ? '👋 玩家於第一回合離開' : '👋 玩家中途離開';
   return '其他：' + s.slice(0, 30);
 }
 function renderWinReasons(s) {
@@ -2420,7 +2421,7 @@ function renderWinReasons(s) {
   // v0.93: 先 normalize 再二次 group (同 normalized 分類合併)
   const merged = new Map();
   for (const x of wrRaw) {
-    const k = normalizeWinReason(x.reason);
+    const k = normalizeWinReason(x.reason, x.firstTurn);  // v1.25: 傳入 firstTurn 細分離開類
     merged.set(k, (merged.get(k) || 0) + x.count);
   }
   const wr = [...merged.entries()].map(([reason, count]) => ({ reason, count })).sort((a,b)=>b.count-a.count);
