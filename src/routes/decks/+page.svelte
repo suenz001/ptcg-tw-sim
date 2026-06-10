@@ -1090,7 +1090,9 @@
     const totalCards = activeEntries.reduce((s, x) => s + x.entry.count, 0);
     // 構造 entries — cardId 用我們系統的 id（= 官網 cardId，v4.970 已驗證），cardName 用繁中卡名
     const entries = activeEntries.map(({ entry, card }) => ({
-      cardId: card.id,
+      // v5.533：優先用 twDeckBuildId（台灣官網對應 id）。少數特典卡（古歷/超級妖火紅狐ex）
+      //   資料來自港版、其 id 台灣官網 deck-builder 不認得，會導致匯出失敗；補登錄後採用之。
+      cardId: card.twDeckBuildId ?? card.id,
       cardName: card.name,
       count: entry.count,
     }));

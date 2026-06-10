@@ -30,6 +30,14 @@ export interface Card {
   setCode: string;
   collectorNumber: string;
   regulationMark?: string;
+  /**
+   * v5.533：台灣官網「牌組編輯器／匯出為官網代碼」專用的卡片 id。
+   * 絕大多數卡的 id 本身就是台灣官網 cardId，無需此欄位。
+   * 但少數特典卡（M-P-J 的「古歷」「超級妖火紅狐ex」）的資料是從香港官網抓的，
+   * 其 id 為港版 id，台灣官網 deck-builder 不認得 → 匯出會失敗。
+   * 對這類卡額外登錄台灣官網對應 id，匯出時優先採用；不影響遊戲內 id（避免破壞已存牌組）。
+   */
+  twDeckBuildId?: string;
   hp?: number;
   pokemonType?: EnergyType;
   evolvesFrom?: string;
