@@ -21,6 +21,7 @@ import {
   reg, regR, regG, regA, regPre,
   addLog, updatePlayer, withPending,
   shuffle,
+  fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
 } from '../_shared';
 import { isBasicEnergyOfType } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
@@ -85,7 +86,10 @@ regR('serperior-mature-charge', (st, idx, iids, params, pool) => {
   const all = [s.players[idx].active, ...s.players[idx].bench].filter((c): c is CardInstance => !!c);
   const target = all.find(c => c.iid === targetIid);
   const tname = target ? pool.get(target.cardId)?.name ?? '?' : '?';
-  return applyMagearnaHandAttachHeal(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx), idx, [targetIid], pool);  // v5.485 自動治癒
+  // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
+  return fireOnHandEnergyAttached(
+    applyMagearnaHandAttachHeal(addLog(s, `熟成充能：將基本【草】能量附於 ${tname}，回復 30 HP`, idx), idx, [targetIid], pool),  // v5.485 自動治癒
+    idx, targetIid, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

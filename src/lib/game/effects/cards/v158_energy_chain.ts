@@ -40,6 +40,7 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   reg, regR, regG, regA, // ts: 雖然這檔不直接 reg 卡片，但仍 export resolver 給其他檔用
   shuffle, addLog, withPending, updatePlayer,
+  fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手被動（侵蝕詛咒 等）
 } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -136,6 +137,11 @@ regR('v87-energy-distribute-flat', (st, aIdx, selectedIids, params, pool) => {
       };
     });
     tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
+  }
+
+  // v5.539：從手牌附能 → 對被附能的寶可夢觸發對手附能被動（耿鬼ex|侵蝕詛咒 等）
+  if (params?.source === 'hand') {
+    for (const iid of tally.keys()) s = fireOnHandEnergyAttached(s, aIdx, iid, pool);
   }
 
   const parts: string[] = [];
@@ -280,6 +286,8 @@ export function startEnergyChain(
         bench: p.bench.map(attach),
       };
     });
+    // v5.539：source==='hand' → 觸發對手附能被動（耿鬼ex|侵蝕詛咒 等）
+    if (source === 'hand') st = fireOnHandEnergyAttached(st, aIdx, target.iid, pool);
     return addLog(st, `${label}：場上僅有 1 個合法目標 → 全 ${energyIids.length} 張能量附到 ${tname}`, aIdx);
   }
 
@@ -298,6 +306,7 @@ export function startEnergyChain(
       effectKey: 'v87-energy-distribute-flat',
       params: {
         label,
+        source, // v5.539 thread source → resolver 判斷是否 fire 對手附能被動
         energyIids,
         validIids: validTargets.map(c => c.iid),
         totalCount: energyIids.length,
@@ -317,7 +326,7 @@ export function startEnergyChain(
     st, aIdx,
     energyIids,
     validTargets.map(c => c.iid),
-    { label, scope, filterType },
+    { label, scope, filterType, source },
     pool,
   );
 }
@@ -371,7 +380,7 @@ function dispatchByTypeWaveDistribute(
   aIdx: 0 | 1,
   energyIids: string[],
   validIids: string[],
-  opts: { label: string; scope: 'bench-only' | 'any-own'; filterType: EnergyTypeFilter },
+  opts: { label: string; scope: 'bench-only' | 'any-own'; filterType: EnergyTypeFilter; source?: 'deck' | 'discard' | 'hand' },
   pool: Map<string, Card>,
 ): GameState {
   const energyInsts = st.players[aIdx].discard.filter(c => energyIids.includes(c.iid));
@@ -394,6 +403,7 @@ function dispatchByTypeWaveDistribute(
       label: opts.label,
       scope: opts.scope,
       filterType: opts.filterType,
+      source: opts.source, // v5.539 thread source
       energyIids: first.energyIids,
       currentTypeName: first.typeName,
       remainingWaves: rest,
@@ -439,6 +449,10 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
       });
       tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
     }
+    // v5.539：從手牌附能 → 觸發對手附能被動
+    if (params?.source === 'hand') {
+      for (const iid of tally.keys()) st = fireOnHandEnergyAttached(st, aIdx, iid, pool);
+    }
     const parts: string[] = [];
     for (const [iid, n] of tally) {
       const player = st.players[aIdx];
@@ -478,6 +492,7 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
     effectKey: 'v357-multi-type-distribute-wave',
     params: {
       label, scope, filterType,
+      source: params?.source, // v5.539 thread source 到下一波
       energyIids: next.energyIids,
       currentTypeName: next.typeName,
       remainingWaves: rest,

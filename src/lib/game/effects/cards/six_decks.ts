@@ -17,6 +17,7 @@ import { canApplyEffectToTarget } from '../../defense';
 import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋引伴 pre-scan basic
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
+  fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
 } from '../_shared';
 import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
 
@@ -521,7 +522,10 @@ regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
   }
   players[aIdx] = p;
   const ename = pool.get(energy.cardId)?.name ?? '?';
-  return applyMagearnaHandAttachHeal(addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給 ${tgtName}`, aIdx), aIdx, [pIid], pool);  // v5.485 自動治癒
+  // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
+  return fireOnHandEnergyAttached(
+    applyMagearnaHandAttachHeal(addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給 ${tgtName}`, aIdx), aIdx, [pIid], pool),  // v5.485 自動治癒
+    aIdx, pIid, pool);
 });
 
 // 顫弦蠑螈｜惡棍衝天 — 牌庫選 1 張「基本【惡】能量」附給備戰區【惡】寶可夢 + 重洗 + 放 2 傷

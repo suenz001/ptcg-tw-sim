@@ -35,6 +35,7 @@ import {
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
   SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
   OPP_ENERGY_ATTACH_PASSIVE,
+  fireOnHandEnergyAttached,
   clearActiveEffects,
   clearFestivalVenueProtectedStatuses,
   clearSpecialEnergyProtectedStatuses,
@@ -3789,39 +3790,10 @@ function handlePlaying(
     if (attachHook) {
       afterAttach = attachHook(afterAttach, aIdx, target.iid, pool);
     }
-    // v2.341：對手附能被動特性鉤子（例：耿鬼ex｜侵蝕詛咒）
-    // 遍歷對手（dIdx）場上所有寶可夢，檢查被動特性是否在 OPP_ENERGY_ATTACH_PASSIVE map 中
-    const opp = players[1 - aIdx];
-    const oppField: CardInstance[] = [
-      ...(opp.active ? [opp.active] : []),
-      ...opp.bench,
-    ];
-    const processedOppAb = new Set<string>();
-    for (const inst of oppField) {
-      const card = pool.get(inst.cardId);
-      if (!card?.abilities) continue;
-      for (const ab of card.abilities) {
-        if (processedOppAb.has(ab.name)) continue;
-        const fn = OPP_ENERGY_ATTACH_PASSIVE.get(ab.name);
-        if (!fn) continue;
-        processedOppAb.add(ab.name);
-        afterAttach = fn(afterAttach, (1 - aIdx) as 0 | 1, aIdx as 0 | 1, target.iid, pool);
-      }
-    }
-    // v2.69 帕奇利茲｜麻痺門牙 — 若 target 有 paralyzeFangPending flag，放 8 個傷害指示物（80 點）
-    if (target.paralyzeFangPending) {
-      const targetCardName = getCard(target.cardId, pool).name;
-      afterAttach = addLog(afterAttach, `麻痺門牙：${targetCardName} 因附加能量被放 8 個傷害指示物（+80 點）`, aIdx);
-      const newPlayers = [...afterAttach.players] as [PlayerState, PlayerState];
-      const updateInst = (c: CardInstance): CardInstance =>
-        c.iid === target!.iid ? { ...c, damage: (c.damage ?? 0) + 80 } : c;
-      newPlayers[aIdx] = {
-        ...newPlayers[aIdx],
-        active: newPlayers[aIdx].active && newPlayers[aIdx].active!.iid === target.iid ? updateInst(newPlayers[aIdx].active!) : newPlayers[aIdx].active,
-        bench: newPlayers[aIdx].bench.map(updateInst),
-      };
-      afterAttach = { ...afterAttach, players: newPlayers };
-    }
+    // v5.539：對手附能反應收斂到中央 fireOnHandEnergyAttached（侵蝕詛咒 OPP_ENERGY_ATTACH_PASSIVE
+    //   + 麻痺門牙）。所有「從手牌附能」路徑（手動 ATTACH_ENERGY + 特性/招式填能）共用同一函式，
+    //   避免特性填能漏觸發（玩家報耿鬼ex侵蝕詛咒對碧綠之舞等沒生效）。白日夢 END_TURN 留在下方。
+    afterAttach = fireOnHandEnergyAttached(afterAttach, aIdx as 0 | 1, target.iid, pool);
     // v2.78 引夢貘人｜白日夢 — defender 有 endTurnOnOppAttachEnergyThisTurn → 對手回合結束
     if (target.endTurnOnOppAttachEnergyThisTurn) {
       const newPlayers2 = [...afterAttach.players] as [PlayerState, PlayerState];

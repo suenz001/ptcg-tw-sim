@@ -31,6 +31,7 @@ import {
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
   SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED,
   OPP_ENERGY_ATTACH_PASSIVE,
+  fireOnHandEnergyAttached,
   // Register functions
   reg, regR, regG,
   regPre, regPost, regA,
@@ -59,7 +60,7 @@ export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, ge
 // v2.133 PASSIVE_PREVENT_KO 在本檔下方定義，匯出供 engine 使用
 // （直接在此先 forward-ref：宣告處放到 v2.133 區塊，之後會由 engine import）
 export { BENCH_PLACE_TRIGGERS };
-export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED, OPP_ENERGY_ATTACH_PASSIVE };
+export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED, OPP_ENERGY_ATTACH_PASSIVE , fireOnHandEnergyAttached };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
 
 // ── 道具（Pokemon Tool）模組 — v2.09 從本檔抽離 ────────────────────────────
@@ -11127,7 +11128,7 @@ regR('self-active-hand-attach-heal', (st, idx, iids, params, pool) => {
   const newDmg = Math.max(0, p.active.damage - heal);
   const healed = p.active.damage - newDmg;
   let s = addLog(st, `${label}：${ename} 附於 ${tname}，並回 ${healed} HP`, idx);
-  return updatePlayer(s, idx, pl => {
+  s = updatePlayer(s, idx, pl => {
     if (!pl.active) return pl;
     return {
       ...pl,
@@ -11139,6 +11140,8 @@ regR('self-active-hand-attach-heal', (st, idx, iids, params, pool) => {
       },
     };
   });
+  // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
+  return fireOnHandEnergyAttached(s, idx, p.active.iid, pool);
 });
 regPre('卡比獸|吃飽先', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('卡比獸|吃飽先', selfActiveHandAttachHealPost(60, '吃飽先'));
@@ -11186,12 +11189,12 @@ regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, _pool) =>
     params: { energyIids: iids, label, validIids: benchValidIids },
   });
 });
-regR('bench-hand-attach-fullheal-commit', (st, idx, iids, params, _pool) => {
+regR('bench-hand-attach-fullheal-commit', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '附能+全回復';
   const energyIids = (params?.energyIids as string[]) ?? [];
-  return applyBenchAttachFullHeal(st, idx, energyIids, iids[0], label);
+  return applyBenchAttachFullHeal(st, idx, energyIids, iids[0], label, pool);
 });
-function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[], targetIid: string, label: string): GameState {
+function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[], targetIid: string, label: string, pool: Map<string, Card>): GameState {
   const p = st.players[idx];
   const target = p.bench.find(c => c.iid === targetIid);
   if (!target) return st;
@@ -11201,13 +11204,15 @@ function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[
   const newDamage = 0;
   const healed = target.damage;
   let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰，並全回復（回 ${healed} HP）`, idx);
-  return updatePlayer(s, idx, pl => ({
+  s = updatePlayer(s, idx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
     bench: pl.bench.map(c => c.iid === targetIid
       ? { ...c, damage: newDamage, energyAttached: [...c.energyAttached, ...energies] }
       : c),
   }));
+  // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
+  return fireOnHandEnergyAttached(s, idx, targetIid, pool);
 }
 regPre('葉伊布|嫩葉之恩', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('葉伊布|嫩葉之恩', benchHandAttachFullHealPost('Grass', '嫩葉之恩'));
@@ -13526,6 +13531,7 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
     };
   });
   st = _magHeal(st, idx, [src.iid], pool);  // v5.485 自動治癒（瑪機雅娜在戰鬥場時）
+  st = fireOnHandEnergyAttached(st, idx, src.iid, pool);  // v5.539 從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
   // 步驟 2：抽 1 張
   st = addLog(st, '碧綠之舞：從牌庫抽 1 張', idx);
   return drawCards(st, idx, 1);

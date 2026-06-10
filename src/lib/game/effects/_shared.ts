@@ -518,6 +518,52 @@ export const OPP_ENERGY_ATTACH_PASSIVE = new Map<string, (
   pool: Map<string, Card>,
 ) => GameState>();
 
+/**
+ * v5.539 中央收斂：「從手牌將能量附於寶可夢」後，觸發對手的被動反應（一勞永逸）。
+ * 所有「從手牌附能」路徑——手動 ATTACH_ENERGY、以及各種以特性/招式從手牌填能
+ * （碧綠之舞 / 固拉多|充溢之力 / 卡比獸|吃飽先 / 葉伊布|嫩葉之恩 / 熟成充能 / 岩石武裝 …）
+ * ——在附完能量後都應呼叫此函式，避免漏觸發對手反應（玩家報：耿鬼ex|侵蝕詛咒 對特性填能沒生效）：
+ *   ① OPP_ENERGY_ATTACH_PASSIVE（對手場上被動特性，如 耿鬼ex|侵蝕詛咒：在那隻寶可夢放 2 個傷害指示物）
+ *   ② 帕奇利茲|麻痺門牙（target 有 paralyzeFangPending → 放 8 個傷害指示物 = +80 點）
+ * 註：白日夢 endTurnOnOppAttachEnergy 需呼叫 END_TURN（engine 專屬，_shared 不能 import engine 避免循環），
+ *     留在引擎手動 ATTACH_ENERGY 路徑；特性填能觸發白日夢屬罕見組合，暫不在此處理。
+ * @param attacherIdx 附能方（其寶可夢得到能量）；對手 = 1 - attacherIdx
+ * @param targetIid   得到能量的寶可夢 iid（在 attacherIdx 場上）
+ */
+export function fireOnHandEnergyAttached(
+  state: GameState, attacherIdx: 0 | 1, targetIid: string, pool: Map<string, Card>,
+): GameState {
+  let s = state;
+  // ① 對手場上被動特性（侵蝕詛咒 等）
+  const opp = s.players[(1 - attacherIdx) as 0 | 1];
+  const oppField: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  const processed = new Set<string>();
+  for (const inst of oppField) {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities) continue;
+    for (const ab of card.abilities) {
+      if (processed.has(ab.name)) continue;
+      const fn = OPP_ENERGY_ATTACH_PASSIVE.get(ab.name);
+      if (!fn) continue;
+      processed.add(ab.name);
+      s = fn(s, (1 - attacherIdx) as 0 | 1, attacherIdx, targetIid, pool);
+    }
+  }
+  // ② 帕奇利茲|麻痺門牙（target 有 paralyzeFangPending → +80）
+  const me = s.players[attacherIdx];
+  const tgt = me.active?.iid === targetIid ? me.active : me.bench.find((c) => c.iid === targetIid);
+  if (tgt?.paralyzeFangPending) {
+    const tName = pool.get(tgt.cardId)?.name ?? '?';
+    const upd = (c: CardInstance): CardInstance =>
+      c.iid === targetIid ? { ...c, damage: (c.damage ?? 0) + 80 } : c;
+    s = updatePlayer(s, attacherIdx, (pl) => ({
+      ...pl, active: pl.active ? upd(pl.active) : pl.active, bench: pl.bench.map(upd),
+    }));
+    s = addLog(s, `麻痺門牙：${tName} 因附加能量被放 8 個傷害指示物（+80 點）`, attacherIdx);
+  }
+  return s;
+}
+
 export function canPlayTrainer(
   cardName: string,
   state: GameState,
