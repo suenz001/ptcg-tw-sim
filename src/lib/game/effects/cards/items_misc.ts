@@ -1072,6 +1072,7 @@ regR('rocket-scare-bomb-place', (st, idx, iids, _params, pool) => {
   if (!target) return st;
   const tn = pool.get(target.cardId)?.name ?? '?';
   st = addLog(st, `火箭隊的驚嚇炸彈：${tn} 受到 20 傷害`, idx);
+  // dmg-direct-ok: 道具放置傷害指示物，免疫(化隱/神秘石居)僅針對招式/特性，不走中央招式 guard
   return updatePlayer(st, dIdx, p => {
     const upd = (pk: typeof target) => pk.iid === targetIid ? { ...pk, damage: pk.damage + 20 } : pk;
     return {
