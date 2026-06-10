@@ -133,8 +133,38 @@ for (const f of files) {
   }
 }
 
+
+// ── Check F：scrubBenchStatus 的 BENCH_ACTION_LOCK_FLAGS 只能含「攻擊/撤退鎖」─────
+//   scrubBenchStatus(engine.ts)每個 action 後清備戰寶可夢的這些旗標。它【只能】含
+//   「備戰不可能有意義的 active-only 攻擊/撤退鎖」；嚴禁混入：
+//     ① 加傷 BUFF(damageBonus*/deferredPrize*)— 備戰特性可合法設、升場才生效(奔流之心，v5.529 血淚)
+//     ② 受傷類旗標(immune*/takeExtraDamage*/damageReduce*)— 備戰仍可被狙擊招式打到，語義有效
+//   且每個鎖旗標必須也在 clearActiveEffects 清單內(active→bench 一律清，子集不變式)。
+//   見 reference-clear-active-effects-central。
+{
+  const engineSrc = readFileSync(join(SRC, 'engine.ts'), 'utf8');
+  const sharedSrc = readFileSync(join(SRC, 'effects/_shared.ts'), 'utf8');
+  const m = engineSrc.match(/BENCH_ACTION_LOCK_FLAGS\s*=\s*\[([\s\S]*?)\]\s*as const/);
+  if (m) {
+    const lockFlags = [...m[1].matchAll(/'([a-zA-Z0-9_]+)'/g)].map((x) => x[1]);
+    // clearActiveEffects 清的欄位(xxx: undefined,)
+    const caeMatch = sharedSrc.match(/export function clearActiveEffects[\s\S]*?\n\}/);
+    const caeFields = new Set(caeMatch ? [...caeMatch[0].matchAll(/^\s+([a-zA-Z0-9_]+):\s*undefined,/gm)].map((x) => x[1]) : []);
+    // 合法鎖命名(攻擊/撤退/招式名鎖類)
+    const LOCK_NAME = /^(cantAttack|cantRetreat|blockedAttackNames|attackFailureFlipCount|pointySpin|attackCostIncrease|retreatCostIncrease|paralyzeFang)/;
+    for (const f of lockFlags) {
+      if (!LOCK_NAME.test(f)) {
+        violations.push(`[F] engine.ts BENCH_ACTION_LOCK_FLAGS 含非「攻擊/撤退鎖」旗標 \`${f}\`（buff/受傷類旗標備戰仍有意義，不可每 action 清；見 reference-clear-active-effects-central / v5.529 奔流之心）`);
+      }
+      if (caeFields.size > 0 && !caeFields.has(f)) {
+        violations.push(`[F] engine.ts BENCH_ACTION_LOCK_FLAGS 的 \`${f}\` 不在 clearActiveEffects 清單（active→bench 子集不變式被破壞；該旗標應同時加進 clearActiveEffects）`);
+      }
+    }
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
