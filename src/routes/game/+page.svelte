@@ -1759,6 +1759,13 @@
         if (!c) return;
         add(c.cardId);
         for (const e of c.evolvedFromStack ?? []) add(e.cardId);
+        // v5.532：補計入場上寶可夢身上附加的能量與道具。先前只統計寶可夢本體與進化前卡，
+        //   漏掉 energyAttached / toolAttached / extraTools → 對戰結束時仍存活、身上帶能量或
+        //   道具的寶可夢，其附加卡未被計入 → 牌組張數顯示不足 60（敗方場面已清空故正常 60）。
+        //   附加卡（能量/道具）皆無巢狀附加，直接 add 即可、不會重複計算。
+        for (const en of c.energyAttached ?? []) add(en.cardId);
+        if (c.toolAttached) add(c.toolAttached.cardId);
+        for (const t of c.extraTools ?? []) add(t.cardId);
       };
       for (const c of p.deck) visit(c);
       for (const c of p.hand) visit(c);

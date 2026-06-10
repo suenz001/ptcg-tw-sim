@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.23</title>
+<title>PTCG Oracle Admin v1.24</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.23</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.24</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2406,7 +2406,7 @@ function renderDurationTurns(s) {
 function normalizeWinReason(raw) {
   if (!raw) return '(空)';
   const s = String(raw).trim();
-  if (/取得所有獎勵牌/.test(s)) return '🏆 取得所有獎勵牌';
+  if (/取得所有獎(賞|勵)(卡|牌)/.test(s)) return '🏆 取得所有獎勵牌';  // v1.24: 同時抓新詞「獎賞卡」與舊詞「獎勵牌」, 合併到同一勝因
   if (/沒有可上場的寶可夢|沒有寶可夢可上場/.test(s)) return '🚫 對手沒有可上場的寶可夢';
   if (/抽乾牌庫|抽不到牌|牌庫空了/.test(s)) return '🃏 對手抽乾牌庫';
   if (/勝利象徵|特殊勝利條件/.test(s)) return '⭐ 特殊勝利條件 (勝利象徵)';
