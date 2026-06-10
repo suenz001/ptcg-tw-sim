@@ -2437,7 +2437,8 @@ function handlePlaying(
     // 觸發「放到備戰區」特性（例：喵喵ex｜殺手鐧捕捉）
     // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除，跳過此觸發
     const placeFn = BENCH_PLACE_TRIGGERS.get(card.name);
-    if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool)) {
+    // v5.524：鐵荊棘ex 初始化也消除「放到備戰即觸發」型特性（規則寶可夢，未來除外）
+    if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool) && !isInitializeBlocking(afterPlace, placed, pool)) {
       afterPlace = placeFn(afterPlace, aIdx, pool);
     }
     // v2.119 險惡廢墟：改走統一 helper（同時被 pokemon_search / six_decks 等 resolver 呼叫）

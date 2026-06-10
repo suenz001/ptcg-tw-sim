@@ -15998,6 +15998,16 @@ export function promptPlayAbilities(
       return state;
     }
   }
+  // v5.524：鐵荊棘ex｜初始化 — 場上有 鐵荊棘ex(active) 時，規則寶可夢(「未來」除外)的所有特性消除，
+  //   含「剛上場/進化即確認是否發動」型(喵喵ex 殺手鐧捕捉等 on-play/on-evolve)。
+  //   與 USE_ABILITY 的 isInitializeBlocking 同一語意（gate 集中於本函式，三 caller 都涵蓋）。
+  if (isRulePokemon(card) && !(card.tags ?? []).includes('未來')) {
+    for (const pl of state.players) {
+      if (pl.active && pool.get(pl.active.cardId)?.abilities?.some(ab => ab.name === '初始化')) {
+        return state;
+      }
+    }
+  }
 
   for (let i = 0; i < card.abilities.length; i++) {
     const ab = card.abilities[i];
