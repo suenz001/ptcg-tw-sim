@@ -6032,7 +6032,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   重複清不會造成任何 bug (clearActiveEffects 只動 active-only flags, 不動 energy/tool).
     //   保留 movedToActiveThisTurn (本回合補場 flag 是 SEND_NEW_ACTIVE 後才加的).
     const benchInst = sendingPlayer.bench[benchIdx];
-    const cleanedInst = clearActiveEffects(benchInst);
+    // v5.525：bench→active 升場保留「備戰可設的本回合加傷 buff」(奔流之心 damageBonusThisTurn)；
+    //   仍清 active-only 鎖做防呆。PTCG 規則：備戰→戰鬥場不清狀態。
+    const cleanedInst = clearActiveEffects(benchInst, { preserveBenchBuffs: true });
     const newActive = { ...cleanedInst, ...(isOwnTurn ? { movedToActiveThisTurn: true } : {}) };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;
