@@ -2062,15 +2062,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (!Array.isArray(deckEntries) || deckEntries.length === 0) return res.status(400).json({ error: '請先選擇牌組' });
         let doc = await TROOMS.findOne({ _id: room });
         if (!doc) { doc = freshDoc(room); await TROOMS.insertOne(doc); }
+        // v0.41 自我修復：舊版 doc 可能缺 names/decks 陣列（preset 時期殘留）→ 補齊避免 undefined[idx]
+        doc.seats = Array.isArray(doc.seats) ? doc.seats : [null, null];
+        doc.names = Array.isArray(doc.names) ? doc.names : [null, null];
+        doc.decks = Array.isArray(doc.decks) ? doc.decks : [null, null];
         let seat = doc.seats.indexOf(pid);
         if (seat < 0) {
           if (doc.seats[0] == null) seat = 0;
           else if (doc.seats[1] == null) seat = 1;
           else return res.status(409).json({ error: '測試房已滿(2人)，請按「重置房」或換另一台/瀏覽器。' });
         }
-        const set = {}; set['seats.' + seat] = pid; set['names.' + seat] = name; set['decks.' + seat] = deckEntries; set.updatedAt = Date.now();
-        await TROOMS.updateOne({ _id: room }, { $set: set });
         doc.seats[seat] = pid; doc.names[seat] = name; doc.decks[seat] = deckEntries;
+        // 整陣列寫回（避免 dotted $set 在缺欄位時把 names/decks 建成物件而非陣列）
+        await TROOMS.updateOne({ _id: room }, { $set: { seats: doc.seats, names: doc.names, decks: doc.decks, updatedAt: Date.now() } });
         doc = await maybeStartGame(room, doc);
         return res.json({ seat, gameState: doc.gameState, version: doc.version, waiting: !doc.gameState, seats: doc.seats, names: doc.names });
       } catch (e) { res.status(500).json({ error: e.message }); }
