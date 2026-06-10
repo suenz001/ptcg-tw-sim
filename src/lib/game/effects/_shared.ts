@@ -878,11 +878,8 @@ export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: strin
  *   effect，退到備戰區後仍鎖（玩家回報）。卡面 PTCG 規則一致：退場清狀態。
  * 統一用這個 helper 處理。
  */
-export function clearActiveEffects(
-  poke: CardInstance,
-  opts?: { preserveBenchBuffs?: boolean },
-): CardInstance {
-  const cleared = {
+export function clearActiveEffects(poke: CardInstance): CardInstance {
+  return {
     ...poke,
     status: undefined,
     secondaryStatus: undefined,
@@ -956,13 +953,6 @@ export function clearActiveEffects(
     abilityNullifiedNextTurn: undefined,
     abilityNullifiedThisTurn: undefined,
   };
-  if (opts?.preserveBenchBuffs) {
-    // v5.525：bench→active 升場不清「備戰可設的本回合/下次招式加傷」buff（奔流之心 damageBonusThisTurn 等）；
-    //   PTCG 規則：戰鬥場→備戰清狀態，備戰→戰鬥場不清。其餘 active-only 鎖(status/cantAttack…)仍清做防呆。
-    cleared.damageBonusThisTurn = poke.damageBonusThisTurn;
-    cleared.damageBonusPending = poke.damageBonusPending;
-  }
-  return cleared;
 }
 
 /**

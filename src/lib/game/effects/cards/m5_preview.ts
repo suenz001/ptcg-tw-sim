@@ -65,6 +65,7 @@ import {
   regG} from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
+import { clearActiveEffects } from '../_shared';  // v5.527 收斂 m5ClearTurnFlags→中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import {
   statusPost,
@@ -603,25 +604,7 @@ regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── m5 helper：clear self transient turn-flags (進攻完互換時用) ────────
-function m5ClearTurnFlags(c: import('../../types').CardInstance): import('../../types').CardInstance {
-  const n = { ...c };
-  delete n.status;
-  delete n.cantAttackThisTurn;
-  delete n.cantAttackPending;
-  delete n.cantRetreatNextTurn;
-  delete n.cantRetreatPendingSelf;
-  delete n.damageReduceNextHit;
-  delete n.damageBonusThisTurn;
-  delete n.damageBonusPending;
-  delete n.takeExtraDamageThisTurn;
-  delete n.takeExtraDamageNextTurn;
-  delete n.cantAttachEnergyThisTurn;
-  delete n.cantAttachEnergyNextTurn;
-  delete n.deferredPrizeBonusThisTurn;
-  delete n.deferredPrizeBonusNextTurn;
-  delete n.movedToActiveThisTurn;
-  return n;
-}
+// v5.527：m5ClearTurnFlags 已收斂至中央 clearActiveEffects（原過時不完整副本，漏清 v5.443 後新鎖）。
 
 // ── A1. 銅鏡怪|鏡像攻擊 — 10 + 對手戰鬥位為寶可夢 +30 ─────────────
 //   卡面：「若對手的戰鬥寶可夢為寶可夢，則此招式傷害 +30。」
@@ -858,7 +841,7 @@ regR('m5-zeraora-teleport', (state, aIdx, iids) => {
       // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
       const newActive = { ...p.bench[benchIdx], movedToActiveThisTurn: true };
       const newBench = [...p.bench];
-      newBench[benchIdx] = m5ClearTurnFlags(oldActive);
+      newBench[benchIdx] = clearActiveEffects(oldActive);  // v5.527：收斂中央(原 m5ClearTurnFlags 漏清 v5.443 後新鎖)
       return { ...p, active: newActive, bench: newBench };
     },
   );

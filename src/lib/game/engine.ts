@@ -6031,11 +6031,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   但若某 swap/retreat resolver 漏走 clearActiveEffects, 新 active 會殘留導致不能攻擊.
     //   重複清不會造成任何 bug (clearActiveEffects 只動 active-only flags, 不動 energy/tool).
     //   保留 movedToActiveThisTurn (本回合補場 flag 是 SEND_NEW_ACTIVE 後才加的).
+    // v5.527：bench→active 升場不清任何狀態（PTCG 規則：戰鬥場→備戰清、備戰→戰鬥場不清）。
+    //   所有 active→bench 退場路徑均走中央 clearActiveEffects 完整清除（含 m5 換場 v5.527 收斂），
+    //   備戰 instance 不會殘留 active-only 鎖 → 升場直接保留全部(含奔流之心 buff)，與撤退一致。
     const benchInst = sendingPlayer.bench[benchIdx];
-    // v5.525：bench→active 升場保留「備戰可設的本回合加傷 buff」(奔流之心 damageBonusThisTurn)；
-    //   仍清 active-only 鎖做防呆。PTCG 規則：備戰→戰鬥場不清狀態。
-    const cleanedInst = clearActiveEffects(benchInst, { preserveBenchBuffs: true });
-    const newActive = { ...cleanedInst, ...(isOwnTurn ? { movedToActiveThisTurn: true } : {}) };
+    const newActive = { ...benchInst, ...(isOwnTurn ? { movedToActiveThisTurn: true } : {}) };
     sendingPlayer.bench = sendingPlayer.bench.filter((_, i) => i !== benchIdx);
     sendingPlayer.active = newActive;
 

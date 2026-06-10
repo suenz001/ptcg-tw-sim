@@ -43,8 +43,8 @@ function selfSwitchToFirstBench(state: GameState, aIdx: 0 | 1, label: string): G
   const p = state.players[aIdx];
   if (!p.active || p.bench.length === 0) return addLog(state, `${label}：沒有備戰寶可夢可互換`, aIdx);
   const oldActive = clearActiveEffects(p.active);
-  // v5.525：incoming bench→active 保留備戰 buff(奔流之心式)，仍清 active-only 鎖
-  const newActive = clearActiveEffects(p.bench[0], { preserveBenchBuffs: true });
+  // v5.527：incoming bench→active 不清狀態(備戰→戰鬥場不清，與撤退/sakaki 一致)，保留全部 buff
+  const newActive = { ...p.bench[0], movedToActiveThisTurn: true };
   const newBench = [oldActive, ...p.bench.slice(1)];
   return updatePlayer(addLog(state, `${label}：與備戰寶可夢互換`, aIdx), aIdx, (pl) => ({ ...pl, active: newActive, bench: newBench }));
 }
