@@ -6142,28 +6142,9 @@ regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
   return { state, damage: 130 };
 });
 
-// 貓頭夜鷹|鉤爪搜尋 — 70 + 若希望從牌庫任選最多 2 張加手牌（重洗）
-// v2.159：升級為 deck-search 讓玩家自選（之前簡化為固定抽 2 張）
-regPost('貓頭夜鷹|鉤爪搜尋', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '鉤爪搜尋：選擇「否」 — 跳過搜尋', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, _pool) => {
-  const player = state.players[aIdx];
-  if (player.deck.length === 0) return addLog(state, '鉤爪搜尋：牌庫為空', aIdx);
-  const max = Math.min(2, player.deck.length);
-  const s = addLog(state, `鉤爪搜尋：從牌庫選 ≤${max} 張卡加入手牌（重洗）`, aIdx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Any',
-    minCount: 0, maxCount: max,
-    effectKey: 'search-to-hand-reshuffle',
-  });
-};
-  return _cb(state, aIdx, pool);
-});
+// 貓頭夜鷹|鉤爪搜尋 70 — v5.534 收斂至中央 registerDamageThenOptionalDeckSearchToHand
+//   （效果先於傷害；原 regPost 走共用 search-to-hand-reshuffle、傷害留引擎→KO 先拿獎才搜尋）
+registerDamageThenOptionalDeckSearchToHand('貓頭夜鷹|鉤爪搜尋', { damage: 70, maxCount: 2, logName: '鉤爪搜尋' });
 
 // 皮卡丘|電磁電光 — 對對手任一寶可夢（含備戰）造成 10 傷害
 regPre('皮卡丘|電磁電光', (_state, _aIdx, _pool) => {
@@ -13980,47 +13961,81 @@ regR('energy-switch-dst', (st, idx, iids, params, pool) => {
 // ── 1) 甲賀忍蛙ex (MC 208/742)｜變幻手裏劍 100+ — 擲幣正面 +100
 regPre('甲賀忍蛙ex|變幻手裏劍', coinPlusDmg(100, 100));
 
-// ── 2) 甲賀忍蛙ex (SV5a)｜忍之利刃 170 — 若希望，從牌庫任選 1 張卡加手牌（重洗）
-regPre('甲賀忍蛙ex|忍之利刃', (state, _aIdx, _pool) => ({ state, damage: 170 }));
-regPost('甲賀忍蛙ex|忍之利刃', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '忍之利刃：選擇「否」 — 跳過搜尋', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, pool) => {
-  if (state.players[aIdx].deck.length === 0) {
-    return addLog(state, '忍之利刃：牌庫已空，跳過搜尋', aIdx);
-  }
-  const s = addLog(state, '忍之利刃：從牌庫任選 0~1 張卡加手牌（之後重洗）', aIdx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'any',
-    minCount: 0, maxCount: 1,
-    effectKey: 'greninja-ninja-blade-search',
+// ══════════════════════════════════════════════════════════════════════════
+// v5.534 中央收斂：「傷害 + 若希望從牌庫任選最多 N 張加手牌（重洗）」型招式
+//   ── 效果（牌庫搜尋）先於傷害（同 v5.509 螺旋俯衝精神 / 櫻花魚漸強波 regPre0 範本）
+//
+// 玩家報：甲賀忍蛙ex｜忍之利刃 KO 對手時，會「先拿獎賞卡才開搜尋視窗」。
+//   根因＝v5.466 自動拿獎在 KO 當下發生於引擎主傷害區；而這類招式原本把傷害留在
+//   引擎（regPre 設傷害），搜尋 picker 在 regPost（傷害之後）→ KO→拿獎 先於玩家選卡。
+//   官方順序應是先做招式效果（搜尋），昏厥／拿獎在招式完全結算後。
+//
+// 修法（中央管線，一勞永逸）：regPre 把傷害設 0（延後），搜尋 picker 的 resolver
+//   做完搜尋後，才用中央 dealAttackDamageToTarget 造傷害（弱抗／免疫／攻擊方加成／
+//   KO／自動拿獎一次到位）。順序變為：(若希望 yes/no) → 搜尋選卡 → 造傷害 → 昏厥 → 拿獎。
+//   ⚠ 引擎 inline 的「消耗型」加成（damageBonusThisTurn 回合加傷／nextOwnAttackPenalty
+//     ／格拉吉歐的決戰）在 baseDamage=0 時不套（v5.517 既定「消耗型旗標留引擎」）；
+//     這幾隻攻擊者實務上無卡會對其設這些旗標（格拉吉歐限非規則寶可夢且為低傷輔助招），
+//     與 櫻花魚漸強波／波動突刺 同 pattern，可接受。
+const DAMAGE_AFTER_DECK_SEARCH_KEY = 'damage-after-deck-search-to-hand';
+function registerDamageThenOptionalDeckSearchToHand(
+  attackName: string, opts: { damage: number; maxCount: number; logName: string },
+): void {
+  // 傷害延後：引擎主管線造 0，真正傷害在搜尋後由 resolver / 「否」分支結算
+  regPre(attackName, (state) => ({ state, damage: 0 }));
+  regPost(attackName, (state, aIdx, pool, action) => {
+    const ln = opts.logName;
+    const dealNow = (s: GameState): GameState => {
+      const dIid = s.players[(1 - aIdx) as 0 | 1].active?.iid;
+      return dIid ? dealAttackDamageToTarget(s, aIdx, dIid, opts.damage, pool, { label: ln }) : s;
+    };
+    // 若希望 binary-yes-no：選「否」→ 不搜尋，直接造傷害
+    const chosen = action?.discardedEnergyIids;
+    const choseYes = chosen === undefined ? true : chosen.length >= 1;
+    if (!choseYes) return dealNow(addLog(state, `${ln}：選擇「否」 — 跳過搜尋`, aIdx));
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return dealNow(addLog(state, `${ln}：牌庫已空，跳過搜尋`, aIdx));
+    const max = Math.min(opts.maxCount, p.deck.length);
+    const s = addLog(state, `${ln}：若希望，從牌庫任選 0~${max} 張卡加手牌（之後重洗），確定後造成傷害`, aIdx);
+    return withPending(s, {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'any',
+      minCount: 0, maxCount: max,
+      effectKey: DAMAGE_AFTER_DECK_SEARCH_KEY,
+      params: { dmg: opts.damage, logName: ln },
+    });
   });
-};
-  return _cb(state, aIdx, pool);
-});
-regR('greninja-ninja-blade-search', (state, aIdx, selectedIids, _params, pool) => {
-  const picks = state.players[aIdx].deck.filter(c => selectedIids.includes(c.iid));
-  let s = updatePlayer(state, aIdx, p => ({
+}
+// 共用 resolver：搜尋（加手牌＋重洗）→ 最後才造傷害（效果先於傷害）
+regR(DAMAGE_AFTER_DECK_SEARCH_KEY, (state, aIdx, selectedIids, params, pool) => {
+  const ln = (params?.logName as string) ?? '招式';
+  let s = state;
+  const picks = s.players[aIdx].deck.filter(c => selectedIids.includes(c.iid));
+  s = updatePlayer(s, aIdx, p => ({
     ...p,
     deck: shuffle(p.deck.filter(c => !selectedIids.includes(c.iid))),
     hand: [...p.hand, ...picks],
   }));
   if (picks.length > 0) {
     const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    // v2.130：自牌庫搜尋具體卡名僅給自己看；對手看脫敏版
+    // 自牌庫搜尋具體卡名僅給自己看；對手看脫敏版
     s = addPrivateLog(s,
-      `忍之利刃：搜到 ${names} 加入手牌，重洗牌庫`,
-      `忍之利刃：搜到 ${picks.length} 張卡加入手牌，重洗牌庫`,
-      aIdx);
+      `${ln}：搜到 ${names} 加入手牌，重洗牌庫`,
+      `${ln}：搜到 ${picks.length} 張卡加入手牌，重洗牌庫`, aIdx);
   } else {
-    s = addLog(s, '忍之利刃：未選卡，重洗牌庫', aIdx);
+    s = addLog(s, `${ln}：未選卡，重洗牌庫`, aIdx);
   }
+  // 搜尋完才造傷害（KO→自動拿獎在此之後發生）
+  const dmg = Number(params?.dmg) || 0;
+  const dIid = s.players[(1 - aIdx) as 0 | 1].active?.iid;
+  if (dIid && dmg > 0) s = dealAttackDamageToTarget(s, aIdx, dIid, dmg, pool, { label: ln });
   return s;
 });
+// ── 2) 甲賀忍蛙ex (SV5a)｜忍之利刃 170 — 若希望，從牌庫任選 1 張卡加手牌（重洗）
+registerDamageThenOptionalDeckSearchToHand('甲賀忍蛙ex|忍之利刃', { damage: 170, maxCount: 1, logName: '忍之利刃' });
+// 詛咒娃娃|玩偶捕捉 80（原在 m5_preview.ts，v5.534 收斂集中至此）
+registerDamageThenOptionalDeckSearchToHand('詛咒娃娃|玩偶捕捉', { damage: 80, maxCount: 1, logName: '玩偶捕捉' });
 
 // ── 3) 甲賀忍蛙ex (SV5a)｜分身連打 — 棄 2 個能量 → 對手 2 隻寶可夢各 120 傷
 //   卡面：「對手的 2 隻寶可夢各受到 120 點傷害。[在備戰區不計算弱點・抵抗力。]」

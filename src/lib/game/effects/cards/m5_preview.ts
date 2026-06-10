@@ -1192,40 +1192,8 @@ regR('m5-tropius-fruit-aroma', (state, aIdx, iids) => {
 
 // ── C2. 詛咒娃娃|人偶捕捉 — 80 + 若希望牌庫選 1 任意卡加手牌 ────
 //   卡面：「若希望，從自己的牌庫選擇 1 張任意卡，加入手牌。然後重洗牌庫。」
-regPost('詛咒娃娃|玩偶捕捉', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '人偶捕捉：選擇「否」 — 跳過搜尋', aIdx);
-  const _cb: AttackPostFn = (state, aIdx) => {
-  const p = state.players[aIdx];
-  if (p.deck.length === 0) return addLog(state, '人偶捕捉：牌庫為空，效果略過', aIdx);
-  return withPending(
-    addLog(state, '人偶捕捉：若希望，從牌庫選 1 張任意卡加手牌（可選 0 張跳過）', aIdx),
-    {
-      type: 'deck-search',
-      actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'Any',
-      minCount: 0, maxCount: 1,
-      effectKey: 'm5-shuppet-doll-capture',
-    },
-  );
-};
-  return _cb(state, aIdx, pool);
-});
-regR('m5-shuppet-doll-capture', (state, aIdx, iids) => {
-  if (iids.length === 0) {
-    return updatePlayer(addLog(state, '人偶捕捉：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
-      ...p,
-      deck: [...p.deck].sort(() => Math.random() - 0.5),
-    }));
-  }
-  return updatePlayer(addLog(state, '人偶捕捉：取 1 張任意卡加手牌 + 重洗牌庫', aIdx), aIdx, p => {
-    const picked = p.deck.filter(c => iids.includes(c.iid));
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    return { ...p, deck: [...remaining].sort(() => Math.random() - 0.5), hand: [...p.hand, ...picked] };
-  });
-});
+// 詛咒娃娃|玩偶捕捉 80 — v5.534 收斂至中央 registerDamageThenOptionalDeckSearchToHand
+//   （效果先於傷害；註冊集中於 effects.ts，避免 KO 先拿獎才開搜尋。原 regPost+regR 已移除）
 
 // ── D1. 西獅海壬|水流回歸 — 120 + 自身連同附加卡回牌庫並重洗 ──
 //   卡面：「將這隻寶可夢及其身上附加的所有卡放回牌庫並重洗。」
