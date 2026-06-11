@@ -10740,6 +10740,10 @@
     font-size: 22px; cursor: pointer;
     box-shadow: 0 4px 12px rgba(0,0,0,.45);
     transition: background .15s, transform .1s;
+    /* v5.582 對齊 chat-fab：flex 置中 emoji（iPad baseline 偏移修正）+ touch-action none 防拖曳帶動背景 */
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1; padding: 0;
+    touch-action: none; user-select: none;
   }
   .opp-turn-toggle-btn:hover { background: #4a4a7a; transform: translateY(-2px); }
   .opp-turn-toggle-btn:active { transform: translateY(0); }
