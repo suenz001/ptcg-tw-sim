@@ -5262,6 +5262,12 @@
     const hr = Math.floor(min / 60);
     return `開房 ${hr} 小時前`;
   }
+  // v5.571：錦標賽聊天訊息時間(ms epoch) → HH:MM
+  function tFmtMsgTime(ts: number | null | undefined): string {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+  }
   function fmtChatTime(ts: { seconds?: number } | null | undefined): string {
     if (!ts?.seconds) return '';
     const d = new Date(ts.seconds * 1000);
@@ -5955,7 +5961,7 @@
         <div class="tourn-chat-msgs">
           {#if tChat.length === 0}<div class="tcmsg muted">還沒有人發言，來說聲哈囉吧～</div>{/if}
           {#each tChat as m (m.id)}
-            <div class="tcmsg" class:tcsys={m.sys} class:tcadmin={m.admin}><span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
+            <div class="tcmsg" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
         {#if tMe.registered || tIsAdmin}
@@ -9628,6 +9634,7 @@
   .tcmsg { color: #e8f0e8; word-break: break-word; }
   .tcmsg.muted { color: #888; }
   .tcmsg.tcsys { color: #ffd35a; }
+  .tctime { color: #667; font-size: 11px; margin-right: 5px; font-variant-numeric: tabular-nums; }
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
   .tourn-idle-warn { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(40,30,10,0.95); color: #ffd35a; border: 1px solid #a80; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
