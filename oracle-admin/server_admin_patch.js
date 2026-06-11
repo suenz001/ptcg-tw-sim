@@ -1,4 +1,5 @@
-// === ORACLE ADMIN ENDPOINTS === v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
+// === ORACLE ADMIN ENDPOINTS === v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
+// v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
 // v0.32 (錦標賽：/state 回 lastActionAt 給等待方倒數 + admin 強制裁定任意場 /admin/pending-matches + /admin/event/force-finish 安全閥)
 // v0.31 (錦標賽：投降即時判負 /match/forfeit + 閒置逾3分鐘自動判負 currentActorSeat)
 // v0.30 (admin v1.25 — 1.4 勝因分佈：離開類依 finalTurn<=1 細分「第一回合離開(開房掛機)」vs「中途離開(認輸)」；「取得所有獎勵牌」正名「取得所有獎賞卡」) (v0.29 — admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
@@ -2175,6 +2176,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
     async function getActiveEvent() {
       return await TEVENTS.findOne({ status: { $ne: 'finished' } });
     }
+    // v0.34：把 deckEntries 轉成可貼回「編輯我的牌組」匯入功能的文字格式
+    function deckEntriesToText(entries, deckName) {
+      const lines = ['// ' + (deckName || '牌組'), ''];
+      if (Array.isArray(entries)) {
+        for (const e of entries) {
+          const c = TPOOL.get(String(e.cardId));
+          if (c) lines.push(e.count + ' ' + (c.name || '') + ' ' + (c.setCode || '') + ' ' + (c.collectorNumber || ''));
+          else lines.push(e.count + ' (未知卡 ' + e.cardId + ')');
+        }
+      }
+      return lines.join('\n');
+    }
     function deckCount(entries) {
       if (!Array.isArray(entries)) return -1;
       let n = 0; for (const e of entries) n += (e && e.count) || 0; return n;
@@ -2316,7 +2329,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const ev = await getActiveEvent();
         if (!ev) return res.json({ event: null, regs: [] });
         const regs = await TREGS.find({ eventId: ev._id }).toArray();
-        res.json({ event: ev, regs: regs.map((r) => ({ uid: r.uid, email: r.email, name: r.name, checkedIn: !!r.checkedIn, deckCount: deckCount(r.deckEntries), registeredAt: r.registeredAt })) });
+        res.json({ event: ev, regs: regs.map((r) => ({ uid: r.uid, email: r.email, name: r.name, checkedIn: !!r.checkedIn, deckCount: deckCount(r.deckEntries), deckText: deckEntriesToText(r.deckEntries, r.deckName), registeredAt: r.registeredAt })) });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2699,6 +2712,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
               if (e0 || e1) {
                 const wUid = e0 ? m.p1uid : m.p2uid, wName = e0 ? m.p1name : m.p2name, lName = e0 ? m.p2name : m.p1name;
                 await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', noShow: true } });
+                // v0.34：勝方已進場(卡在 setup 等待)→把房間設 game-over 讓勝方看到勝利畫面 + 返回賽事大廳
+                if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState && room.gameState.phase !== 'game-over') { const winSeat = e0 ? 0 : 1; const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 未進場，判定你獲勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } } catch (e) { /* best-effort */ } }
                 await postSystemChat('⏰ ' + (lName || '一方') + ' 未進場判負，' + wName + ' 自動晉級。');
                 await advanceOrFinish(m, wUid, wName);
               } else {

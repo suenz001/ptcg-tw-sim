@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.33</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.34</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -705,6 +705,7 @@ async function api(path, options = {}) {
 async function loadTournamentAdmin() {
   const el = document.getElementById('tab-tournament');
   if (!el) return;
+  var L = {}; try { L = JSON.parse(localStorage.getItem('tevLastSettings') || '{}') || {}; } catch (e) { L = {}; }
   el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
   let data = { event: null, regs: [] };
   try {
@@ -729,11 +730,12 @@ async function loadTournamentAdmin() {
   if (!ev) {
     html += '<div style="border:1px solid #555;border-radius:8px;padding:14px;">'
       + '<h3 style="margin:0 0 10px;">建立新賽事</h3>'
-      + '<label style="display:block;margin:8px 0;">賽事名稱：<input id="tev-name" value="錦標賽" style="width:60%;padding:5px;"></label>'
-      + '<label style="display:block;margin:8px 0;">人數上限（空白=不限，≤64）：<input id="tev-max" placeholder="不限" style="width:120px;padding:5px;"></label>'
-      + '<label style="display:block;margin:8px 0;">每場時限（分）：<input id="tev-round" value="25" style="width:80px;padding:5px;"></label>'
-      + '<label style="display:block;margin:8px 0;">未進場判負（分）：<input id="tev-noshow" value="5" style="width:80px;padding:5px;"></label>'
-      + '<label style="display:block;margin:8px 0;">輪間休息倒數（分，倒數結束才可進場，預設3）：<input id="tev-countdown" value="3" style="width:80px;padding:5px;"></label>'
+      + '<p style="color:#9ab;font-size:.8rem;margin:2px 0 8px;">（以下預設值＝你上次建立賽事的設定）</p>'
+      + '<label style="display:block;margin:8px 0;">賽事名稱：<input id="tev-name" value="' + escapeHtml(L.name || '錦標賽') + '" style="width:60%;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">人數上限（空白=不限，≤64）：<input id="tev-max" value="' + escapeHtml(String(L.maxPlayers || '')) + '" placeholder="不限" style="width:120px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">每場時限（分）：<input id="tev-round" value="' + escapeHtml(String(L.roundLimitMin || 25)) + '" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">未進場判負（分）：<input id="tev-noshow" value="' + escapeHtml(String(L.noShowMin || 5)) + '" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">輪間休息倒數（分，倒數結束才可進場，預設3）：<input id="tev-countdown" value="' + escapeHtml(String(L.roundCountdownMin != null && L.roundCountdownMin !== '' ? L.roundCountdownMin : 3)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名開始時間（可不填＝立即開放）：<input id="tev-regopen" type="datetime-local" style="padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名截止時間（可不填＝手動開賽；填了到點自動公布賽程並開賽）：<input id="tev-regclose" type="datetime-local" style="padding:5px;"></label>'
       + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事（單敗淘汰 Bo1）</button>'
@@ -781,6 +783,14 @@ async function loadTournamentAdmin() {
         html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.name || '') + '</td><td>' + escapeHtml(r.email || '') + '</td><td>' + (r.deckCount || 0) + ' 張</td><td>' + (r.registeredAt ? new Date(r.registeredAt).toLocaleString('zh-TW') : '') + '</td></tr>';
       });
       html += '</tbody></table>';
+      html += '<h3 style="margin-top:16px;">📋 報名者牌組（可複製貼回「編輯我的牌組」匯入功能）</h3>';
+      data.regs.slice().sort((a, b) => (a.registeredAt || 0) - (b.registeredAt || 0)).forEach((r, i) => {
+        html += '<details style="margin:6px 0;border:1px solid #4a6a4a;border-radius:6px;padding:6px 10px;background:#16201a;">'
+          + '<summary style="cursor:pointer;color:#cfe;">' + escapeHtml(r.name || '') + '（' + (r.deckCount || 0) + ' 張）</summary>'
+          + '<textarea id="deck-ta-' + i + '" readonly style="width:100%;box-sizing:border-box;height:230px;margin-top:6px;font-family:monospace;font-size:.82rem;line-height:1.5;background:#0f140f;color:#dfe;border:1px solid #3a5a3a;border-radius:4px;padding:8px;">' + escapeHtml(r.deckText || '') + '</textarea>'
+          + '<button style="' + btnS + 'margin-top:4px;" onclick="tevCopyDeck(' + i + ',this)">📋 複製牌組</button>'
+          + '</details>';
+      });
     }
   }
   // 名人堂管理（不限是否有進行中賽事）
@@ -816,6 +826,7 @@ window.tevCreate = async function (btn) {
     registrationOpenAt: toMs('tev-regopen'),
     registrationCloseAt: toMs('tev-regclose'),
   };
+  try { localStorage.setItem('tevLastSettings', JSON.stringify({ name: body.name, maxPlayers: body.maxPlayers, roundLimitMin: body.roundLimitMin, noShowMin: body.noShowMin, roundCountdownMin: body.roundCountdownMin })); } catch (e) {}
   try { const d = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
@@ -840,6 +851,14 @@ window.tevForceFinish = async function (btn) {
   try { const d = await api('/api/tournament/admin/event/force-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽事已強制結束。'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
+};
+window.tevCopyDeck = function (i, btn) {
+  var ta = document.getElementById('deck-ta-' + i);
+  if (!ta) return;
+  try { ta.select(); document.execCommand('copy'); } catch (e) {}
+  try { navigator.clipboard.writeText(ta.value); } catch (e) {}
+  var orig = btn.textContent; btn.textContent = '✓ 已複製';
+  setTimeout(function () { btn.textContent = orig; }, 1500);
 };
 window.tevChampUpdate = async function (id, i, btn) {
   btn.disabled = true;
