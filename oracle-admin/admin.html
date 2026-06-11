@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.31</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.32</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -719,6 +719,8 @@ async function loadTournamentAdmin() {
   if (ev) { try { tieData = await api('/api/tournament/admin/tie-matches'); if (!tieData || !tieData.ties) tieData = { ties: [] }; } catch (e) { tieData = { ties: [] }; } }
   let pendData = { pending: [] };
   if (ev && ev.status === 'running') { try { pendData = await api('/api/tournament/admin/pending-matches'); if (!pendData || !pendData.pending) pendData = { pending: [] }; } catch (e) { pendData = { pending: [] }; } }
+  let champData = { champions: [] };
+  try { champData = await api('/api/tournament/champions'); if (!champData || !champData.champions) champData = { champions: [] }; } catch (e) { champData = { champions: [] }; }
   const btnS = 'padding:6px 14px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;border-radius:6px;cursor:pointer;';
   const btnD = 'padding:6px 14px;border:1px solid #7a3a3a;background:#2e1e1e;color:#fdd;border-radius:6px;cursor:pointer;';
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
@@ -781,6 +783,24 @@ async function loadTournamentAdmin() {
       html += '</tbody></table>';
     }
   }
+  // 名人堂管理（不限是否有進行中賽事）
+  html += '<div style="border:1px solid #6a5a2a;border-radius:8px;padding:10px;margin:14px 0;background:#16120a;"><h3 style="margin:0 0 8px;color:#ffd35a;">🏛️ 名人堂管理（歷屆冠軍，' + champData.champions.length + '）</h3>';
+  if (!champData.champions.length) html += '<p style="color:#888;">尚無冠軍紀錄。賽事完賽（或強制完賽指定冠軍）後自動加入。</p>';
+  else {
+    var ipS = 'padding:4px 6px;background:#222;color:#eee;border:1px solid #555;border-radius:4px;';
+    champData.champions.forEach(function (c, i) {
+      var dateStr = c.finishedAt ? new Date(c.finishedAt).toLocaleDateString('zh-TW') : '';
+      html += '<div style="border-top:1px solid #2a2414;padding:8px 0;">'
+        + '<div style="color:#9a8d6a;font-size:.8rem;margin-bottom:4px;">' + escapeHtml(dateStr) + ' ｜ ' + (c.playerCount || 0) + ' 人</div>'
+        + '冠軍 <input id="cf-name-' + i + '" value="' + escapeHtml(c.championName || '') + '" style="' + ipS + 'width:130px;"> '
+        + '賽事 <input id="cf-event-' + i + '" value="' + escapeHtml(c.eventName || '') + '" style="' + ipS + 'width:130px;"> '
+        + '牌組 <input id="cf-deck-' + i + '" value="' + escapeHtml(c.deckName || '') + '" style="' + ipS + 'width:150px;"> '
+        + '<button style="' + btnS + '" onclick="tevChampUpdate(\'' + c.id + '\',' + i + ',this)">儲存</button> '
+        + '<button style="' + btnD + '" onclick="tevChampDelete(\'' + c.id + '\',this)">刪除</button>'
+        + '</div>';
+    });
+  }
+  html += '</div>';
   html += '</div>';
   el.innerHTML = html;
 }
@@ -818,6 +838,25 @@ window.tevForceFinish = async function (btn) {
   if (!confirm('確定強制結束目前賽事（無冠軍）？僅在賽程卡死無法正常完賽時使用。')) return;
   btn.disabled = true;
   try { const d = await api('/api/tournament/admin/event/force-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽事已強制結束。'); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevChampUpdate = async function (id, i, btn) {
+  btn.disabled = true;
+  var body = {
+    id: id,
+    championName: (document.getElementById('cf-name-' + i) || {}).value || '',
+    eventName: (document.getElementById('cf-event-' + i) || {}).value || '',
+    deckName: (document.getElementById('cf-deck-' + i) || {}).value || '',
+  };
+  try { const d = await api('/api/tournament/admin/champions/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); else alert('已更新名人堂紀錄。'); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevChampDelete = async function (id, btn) {
+  if (!confirm('確定從名人堂刪除這筆冠軍紀錄？此動作無法復原。')) return;
+  btn.disabled = true;
+  try { const d = await api('/api/tournament/admin/champions/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };

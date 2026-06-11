@@ -102,6 +102,7 @@
   let tIdleMin = $state(3);        // 閒置判負分鐘(伺服器回)
   // ── 觀戰 ──
   let tSpectateList = $state<any[]>([]);
+  let tChampions = $state<any[]>([]); // v5.570 名人堂（歷屆冠軍）
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -125,7 +126,7 @@
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); }, 3000); }
+      if (!tEventPollTimer) { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   function tPlayerId(): string {
@@ -3817,6 +3818,11 @@
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
     tournLoadEvent(); tBracketLoad();
   }
+  // 名人堂：載入歷屆冠軍
+  async function tChampionsLoad() {
+    try { const r = await tApi('/champions'); tChampions = (r && Array.isArray(r.champions)) ? r.champions : []; }
+    catch { /* ignore */ }
+  }
   // 觀戰：列出進行中的對戰
   async function tSpectateLoad() {
     try { const r = await tApi('/spectate/list'); tSpectateList = (r && Array.isArray(r.matches)) ? r.matches : []; }
@@ -6017,6 +6023,18 @@
             <div class="tourn-mymatch">
               <span>第 {sp.round} 輪：<b>{sp.p1name}</b> vs <b>{sp.p2name}</b></span>
               <button class="btn-secondary small" onclick={() => tSpectate(sp.roomId)} disabled={tBusy}>👁 觀戰</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+      {#if tChampions.length > 0}
+        <div class="tourn-bracket tourn-hof">
+          <div class="tourn-bracket-head">🏛️ 名人堂 ｜ 歷屆冠軍</div>
+          {#each tChampions as c (c.id)}
+            <div class="tourn-hof-row">
+              <span class="tourn-hof-trophy">🏆</span>
+              <span class="tourn-hof-name">{c.championName}</span>
+              <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
             </div>
           {/each}
         </div>
@@ -9617,6 +9635,13 @@
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
   .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
   .tourn-bracket-head { font-weight: 600; color: #cfe0f8; margin-bottom: 8px; }
+  .tourn-hof { border-color: #6a5a2a; background: #16120a; }
+  .tourn-hof .tourn-bracket-head { color: #ffd35a; }
+  .tourn-hof-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid #2a2414; }
+  .tourn-hof-row:last-child { border-bottom: none; }
+  .tourn-hof-trophy { font-size: 15px; }
+  .tourn-hof-name { font-weight: 700; color: #ffe79a; }
+  .tourn-hof-meta { color: #9a8d6a; font-size: 12px; }
   .tourn-mymatch { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
   .tourn-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
   .tourn-round { min-width: 150px; flex: 0 0 auto; }

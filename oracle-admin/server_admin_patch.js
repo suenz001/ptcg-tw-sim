@@ -1,4 +1,5 @@
-// === ORACLE ADMIN ENDPOINTS === v0.32 (錦標賽：/state 回 lastActionAt 給等待方倒數 + admin 強制裁定任意場 /admin/pending-matches + /admin/event/force-finish 安全閥)
+// === ORACLE ADMIN ENDPOINTS === v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
+// v0.32 (錦標賽：/state 回 lastActionAt 給等待方倒數 + admin 強制裁定任意場 /admin/pending-matches + /admin/event/force-finish 安全閥)
 // v0.31 (錦標賽：投降即時判負 /match/forfeit + 閒置逾3分鐘自動判負 currentActorSeat)
 // v0.30 (admin v1.25 — 1.4 勝因分佈：離開類依 finalTurn<=1 細分「第一回合離開(開房掛機)」vs「中途離開(認輸)」；「取得所有獎勵牌」正名「取得所有獎賞卡」) (v0.29 — admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
@@ -2363,6 +2364,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // Phase1-D：賽程引擎（單敗淘汰 Bo1，含 bye 湊 2 次方，伺服器權威自動晉級）
     // ════════════════════════════════════════════════════════════════════
     const TMATCH = db.collection('tournamentMatches');
+    const TCHAMPS = db.collection('tournamentChampions'); // v0.33 名人堂（歷屆冠軍）
     function buildBracket(players, evId) {
       const N = players.length;
       const ps = players.slice();
@@ -2394,6 +2396,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
       await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt: Date.now() } });
       return { ok: true, rounds, players: players.length };
     }
+    // 名人堂：賽事誕生冠軍時永久記錄（以 eventId 為鍵 upsert，重複完賽不重覆）
+    async function recordChampion(ev, champUid, champName) {
+      if (!ev || !champUid) return;
+      try {
+        const reg = await TREGS.findOne({ eventId: ev._id, uid: champUid });
+        const playerCount = await TREGS.countDocuments({ eventId: ev._id });
+        await TCHAMPS.updateOne({ _id: 'champ_' + ev._id }, { $set: {
+          _id: 'champ_' + ev._id, eventId: ev._id, eventName: ev.name || '錦標賽',
+          championUid: champUid, championName: champName || (reg && reg.name) || '冠軍',
+          deckName: (reg && reg.deckName) || '', playerCount: playerCount || 0, finishedAt: Date.now(),
+        } }, { upsert: true });
+      } catch (e) { /* best-effort 名人堂 */ }
+    }
     // 勝者填入下一輪 parent（或決賽 → 完賽）
     async function advanceOrFinish(m, winnerUid, winnerName) {
       const ev = await TEVENTS.findOne({ _id: m.eventId });
@@ -2405,6 +2420,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         await TMATCH.updateOne({ _id: parentId }, { $set: set });
       } else {
         await TEVENTS.updateOne({ _id: m.eventId }, { $set: { status: 'finished', championUid: winnerUid, championName: winnerName } });
+        await recordChampion(ev, winnerUid, winnerName);
         await postSystemChat('🏆 賽事結束！冠軍：' + (winnerName || '?') + ' 🎉 恭喜！');
       }
       await checkRoundAdvance(m.eventId);
@@ -2600,7 +2616,45 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const champUid = (req.body && req.body.championUid) || null;
         const champName = (req.body && req.body.championName) || null;
         await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'finished', championUid: champUid, championName: champName, forceFinished: true } });
+        if (champUid) await recordChampion(ev, champUid, champName);
         await postSystemChat(champName ? ('🏆 管理員強制完賽，冠軍：' + champName) : '⚠️ 管理員強制結束賽事（無冠軍）。');
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 名人堂：歷屆冠軍列表（公開，登入即可看）
+    app.get('/api/tournament/champions', async (req, res) => {
+      try {
+        const cs = await TCHAMPS.find({}).sort({ finishedAt: -1 }).limit(200).toArray();
+        res.json({ champions: cs.map((c) => ({ id: c._id, eventName: c.eventName, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0 })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 管理員：編輯名人堂紀錄（冠軍名/賽事名/牌組名）
+    app.post('/api/tournament/admin/champions/update', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const cid = String((req.body && req.body.id) || '');
+        if (!cid) return res.status(400).json({ error: '缺少 id' });
+        const set = {};
+        if (req.body && typeof req.body.championName === 'string') set.championName = req.body.championName.slice(0, 40);
+        if (req.body && typeof req.body.eventName === 'string') set.eventName = req.body.eventName.slice(0, 60);
+        if (req.body && typeof req.body.deckName === 'string') set.deckName = req.body.deckName.slice(0, 60);
+        if (!Object.keys(set).length) return res.status(400).json({ error: '無可更新欄位' });
+        const r = await TCHAMPS.updateOne({ _id: cid }, { $set: set });
+        if (!r.matchedCount) return res.status(404).json({ error: '找不到該紀錄' });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 管理員：刪除名人堂紀錄
+    app.post('/api/tournament/admin/champions/delete', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const cid = String((req.body && req.body.id) || '');
+        if (!cid) return res.status(400).json({ error: '缺少 id' });
+        await TCHAMPS.deleteOne({ _id: cid });
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
