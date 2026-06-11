@@ -130,7 +130,7 @@
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); }, 3000); }
+      if (!tEventPollTimer) { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   // v5.575：1 秒 tick 平滑倒數（用伺服器對時 tClockOffset，所有倒數對齊伺服器時間）；hub + 對戰中都跑
