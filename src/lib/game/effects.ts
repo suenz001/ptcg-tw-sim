@@ -262,6 +262,19 @@ export function hasRocketVeil(
 /** v2.57：判斷 targetCard 是「基礎」且名稱含「火箭隊的」— 抵抗之幕保護對象
  * v3.46：原 subtype === 'Basic' 會誤排除 subtype='ex' 的基礎卡（如火箭隊的超夢ex）。
  *        改用 PTCG 標準基礎判定（!evolvesFrom 且非 Stage1/Stage2）。 */
+/**
+ * v5.565 收斂：寶可夢「進化階段」唯一判定。ex/超級(Mega) 卡 subtype 為 'ex' 會丟失階段，
+ * 但 JSON 的 stage 欄位(v2.75 新增)保留原始 Basic/Stage1/Stage2 → 一律以 stage 為準(fallback subtype/evolvesFrom)。
+ * 凡「對手/自己是 1 階/2 階/進化寶可夢」的傷害加成・數量計算，禁直接 subtype === 'Stage1'(會漏 ex 進化)。
+ */
+export function cardStage(c: Card | undefined): 'Basic' | 'Stage1' | 'Stage2' | 'Other' {
+  const s = c?.stage ?? c?.subtype;
+  return (s === 'Basic' || s === 'Stage1' || s === 'Stage2') ? s : (c?.evolvesFrom ? 'Stage1' : 'Other');
+}
+export const isStage1Card = (c: Card | undefined): boolean => cardStage(c) === 'Stage1';
+export const isStage2Card = (c: Card | undefined): boolean => cardStage(c) === 'Stage2';
+export const isEvolutionCard = (c: Card | undefined): boolean => { const s = cardStage(c); return s === 'Stage1' || s === 'Stage2'; };
+
 export function isRocketBasicTarget(targetCard: Card | undefined): boolean {
   if (!targetCard) return false;
   if (targetCard.supertype !== 'Pokemon') return false;
@@ -5010,7 +5023,7 @@ regPre('土台龜ex|森林行進', (state, aIdx, pool) => {
 
 // 奇麒麟｜中級轟鳴 — 自己場上【1階進化】寶可夢數 × 40
 regPre('奇麒麟|中級轟鳴', (state, aIdx, pool) => {
-  const n = countOwnPokemon(state, aIdx, pool, c => c.subtype === 'Stage1');
+  const n = countOwnPokemon(state, aIdx, pool, c => isStage1Card(c));
   return { state, damage: n * 40 };
 });
 
@@ -5795,7 +5808,7 @@ export function prizesForKOLocal(c: Card | undefined): number {
   return 2;
 }
 function isEvolvedCard(c: Card | undefined): boolean {
-  return c?.subtype === 'Stage1' || c?.subtype === 'Stage2';
+  return isEvolutionCard(c);
 }
 
 // 若對手戰鬥寶可夢處於特殊狀態 → +120
@@ -5846,7 +5859,7 @@ regPre('帕底亞 肯泰羅|真氣衝撞', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   const card = def ? pool.get(def.cardId) : undefined;
-  if (card?.subtype === 'Stage1') {
+  if (isStage1Card(card)) {
     return { state: addLog(state, '真氣衝撞：對手為 1 階進化 → +90', aIdx), damage: 180 };
   }
   return { state, damage: 90 };
@@ -10063,7 +10076,7 @@ function defCantAttackIfSubtypePost(
     const matches =
       cond === 'basic'
         ? isPtcgBasic
-        : (card.subtype === 'Stage1' || card.subtype === 'Stage2');
+        : isEvolutionCard(card);
     if (!matches) {
       return addLog(state, `${label}：對手不符合條件（${cond === 'basic' ? '基礎' : '進化'}寶可夢），無附加效果`, aIdx);
     }
