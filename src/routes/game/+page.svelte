@@ -536,12 +536,15 @@
   let chatPanelDragStart: { mx: number; my: number; ox: number; oy: number } | null = null;
   let lastSeenChatCount = $state(0);
   const unreadChatCount = $derived(Math.max(0, chatMessages.length - lastSeenChatCount));
+  let tLastSeenChat = $state(0); // v5.577 錦標賽對戰中浮動聊天(接大廳)已讀數
+  const chatFabUnread = $derived(isTournament ? Math.max(0, tChat.length - tLastSeenChat) : unreadChatCount);
   let chatPanelScrollEl: HTMLDivElement | null = null;
 
   function toggleChatPanel() {
     chatPanelOpen = !chatPanelOpen;
     if (chatPanelOpen) {
       lastSeenChatCount = chatMessages.length;
+      if (isTournament) tLastSeenChat = tChat.length;
       // 開啟時等 DOM 更新後 scroll to bottom
       setTimeout(() => {
         if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
@@ -671,11 +674,15 @@
   }
   // 新訊息進來時若 panel 已開 → markChatSeen + 自動 scroll
   $effect(() => {
-    if (chatPanelOpen && chatMessages.length > lastSeenChatCount) {
+    if (chatPanelOpen && !isTournament && chatMessages.length > lastSeenChatCount) {
       lastSeenChatCount = chatMessages.length;
       setTimeout(() => {
         if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
       }, 50);
+    }
+    if (chatPanelOpen && isTournament && tChat.length > tLastSeenChat) {
+      tLastSeenChat = tChat.length;
+      setTimeout(() => { if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight; }, 50);
     }
   });
   let roomCode    = $state('');          // 建立或加入後得到的房號
@@ -3967,6 +3974,7 @@
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
         tNow = Date.now() + tClockOffset;
+        tChatLoad(); // v5.577 對戰中持續更新大廳聊天(浮動對話用)
       } catch { /* 忽略單次輪詢失敗 */ }
     }, 1200);
   }
@@ -8752,7 +8760,7 @@
 
   <!-- v3.97 對戰中聊天室（floating panel + 手機 modal）─────────────────────── -->
   <!-- 只在連線模式 + 已進入 game（避開 lobby — lobby 已有 chat-area） -->
-  {#if mode === 'online' && game && roomCode}
+  {#if (mode === 'online' && game && roomCode) || (isTournament && game)}
     <!-- v5.055：對手回合動作 panel — toggle 按鈕 -->
     {#if game?.phase === 'playing'
          && (oppPlayer?.turnActionsLog?.length ?? 0) > 0
@@ -8834,7 +8842,7 @@
         onpointerup={onFabPointerUp}
         title="點擊開啟聊天室；長按拖曳可移動位置">
         💬
-        {#if unreadChatCount > 0}<span class="chat-fab-badge">{unreadChatCount}</span>{/if}
+        {#if chatFabUnread > 0}<span class="chat-fab-badge">{chatFabUnread}</span>{/if}
       </button>
     {:else}
       <!-- 展開：floating panel（桌機）/ 全螢幕 modal（手機 portrait CSS @media） -->
@@ -8844,14 +8852,26 @@
           onpointermove={onChatHeaderMove}
           onpointerup={onChatHeaderUp}
           title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
-          <span>💬 聊天室</span>
+          <span>{isTournament ? '💬 大廳聊天室' : '💬 聊天室'}</span>
           <button class="chat-panel-close"
             onpointerdown={(e) => e.stopPropagation()}
             onclick={toggleChatPanel}
             title="最小化">×</button>
         </div>
         <div class="chat-panel-messages" bind:this={chatPanelScrollEl}>
-          {#if chatMessages.length === 0}
+          {#if isTournament}
+            {#if tChat.length === 0}
+              <p class="muted small chat-empty">大廳聊天室目前沒有訊息～</p>
+            {:else}
+              {#each tChat as m (m.id)}
+                <div class="chat-msg" class:tcsys={m.sys} class:tcadmin={m.admin}>
+                  <span class="chat-name">{#if m.admin}🛡️ {/if}{m.name}</span>
+                  {#if m.ts}<span class="chat-time">{tFmtMsgTime(m.ts)}</span>{/if}
+                  <div class="chat-text">{m.text}</div>
+                </div>
+              {/each}
+            {/if}
+          {:else if chatMessages.length === 0}
             <p class="muted small chat-empty">尚無訊息，先說聲哈囉吧！</p>
           {:else}
             {#each chatMessages as m (m.id)}
@@ -8864,20 +8884,25 @@
           {/if}
         </div>
         <div class="chat-input-row">
-          <input
-            class="chat-input"
-            type="text"
-            placeholder="輸入訊息（Enter 送出，最多 200 字）"
-            maxlength="200"
-            bind:value={chatInput}
-            onkeydown={handleChatKey}
-            disabled={mySeatIdx < 0}
-          />
-          <button class="btn-primary chat-send"
-            onclick={handleSendMessage}
-            disabled={!chatInput.trim() || mySeatIdx < 0}>
-            送出
-          </button>
+          {#if isTournament}
+            <input class="chat-input" type="text" placeholder={(tMe.registered || tIsAdmin) ? '與大廳聊天室互動（Enter 送出）' : '🔒 報名者才能發言，可觀看'} maxlength="200" bind:value={tChatInput} onkeydown={(e) => e.key === 'Enter' && (tMe.registered || tIsAdmin) && tChatSend()} disabled={!(tMe.registered || tIsAdmin)} />
+            <button class="btn-primary chat-send" onclick={tChatSend} disabled={!tChatInput.trim() || !(tMe.registered || tIsAdmin)}>送出</button>
+          {:else}
+            <input
+              class="chat-input"
+              type="text"
+              placeholder="輸入訊息（Enter 送出，最多 200 字）"
+              maxlength="200"
+              bind:value={chatInput}
+              onkeydown={handleChatKey}
+              disabled={mySeatIdx < 0}
+            />
+            <button class="btn-primary chat-send"
+              onclick={handleSendMessage}
+              disabled={!chatInput.trim() || mySeatIdx < 0}>
+              送出
+            </button>
+          {/if}
         </div>
       </div>
     {/if}
