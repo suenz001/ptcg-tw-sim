@@ -3733,6 +3733,12 @@
     catch (e: any) { authError = friendlyAuthError(e.code); }
     finally { tBusy = false; }
   }
+  async function tournLogout() {
+    // 登出：清錦標賽狀態 + signOut → onAuthStateChanged 退回匿名 → isAnonymous 觸發登入閘門
+    try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = '';
+    try { await signOut(auth); } catch { /* ignore */ }
+  }
   function tSyntheticRoom(seats: any, names: any) {
     // 餵戰板一個最小相容 Room（無聊天/觀戰/悔棋；不觸發任何線上後端）
     roomData = {
@@ -5769,7 +5775,7 @@
         <button class="btn-secondary" onclick={tournRegister} disabled={tBusy}>註冊新帳號</button>
       </div>
     {:else}
-      <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b></p>
+      <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
       <label class="tourn-field">選擇牌組（需 60 張）
         <select class="deck-select" bind:value={tDeckId}>
           <option value="" disabled>— 請選擇牌組 —</option>
@@ -9331,6 +9337,7 @@
   .tourn-toast { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
   .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
+  .tourn-logout { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; border: 1px solid #888; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {
