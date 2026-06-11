@@ -6079,11 +6079,11 @@
         <label class="tourn-field">選擇牌組（需 60 張）
           <select class="deck-select" bind:value={tDeckId}>
             <option value="" disabled>— 請選擇牌組 —</option>
-            {#if PRESET_DECKS.length > 0}
-              <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
             {#if decks.length > 0}
               <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+            {/if}
+            {#if PRESET_DECKS.length > 0}
+              <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
             {/if}
           </select>
         </label>
