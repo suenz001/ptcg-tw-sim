@@ -2226,11 +2226,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const exist = await getActiveEvent();
         if (exist) return res.status(409).json({ error: '已有進行中的賽事，請先結束或刪除它（一次只辦一個）' });
         const b = req.body || {};
+        const regOpen = Number(b.registrationOpenAt) > 0 ? Number(b.registrationOpenAt) : null;
+        const regClose = Number(b.registrationCloseAt) > 0 ? Number(b.registrationCloseAt) : null;
+        const initStatus = (regOpen && regOpen > Date.now()) ? 'draft' : 'registration';
         const ev = {
           _id: 'evt_' + Date.now().toString(36),
           name: String(b.name || '錦標賽').slice(0, 60),
           format: 'single-elim', bestOf: 1,
-          status: 'registration',
+          status: initStatus,
+          registrationOpenAt: regOpen, registrationCloseAt: regClose,
           maxPlayers: (b.maxPlayers == null || b.maxPlayers === '' || Number(b.maxPlayers) <= 0) ? null : Math.min(64, Number(b.maxPlayers)),
           roundLimitMin: Number(b.roundLimitMin) > 0 ? Number(b.roundLimitMin) : 25,
           noShowMin: Number(b.noShowMin) > 0 ? Number(b.noShowMin) : 5,
@@ -2341,6 +2345,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
       for (let i = 0; i < byes; i++) { const m = M['1_' + i]; if (m.round < rounds && m.winnerUid) { const parent = M[(m.round + 1) + '_' + Math.floor(m.idx / 2)]; const slot = (m.idx % 2 === 0) ? 'p1' : 'p2'; parent[slot + 'uid'] = m.winnerUid; parent[slot + 'name'] = m.winnerName; } }
       return { matches, rounds, P, byes };
     }
+    async function postSystemChat(text) {
+      try { await TCHAT.insertOne({ room: 'lobby', uid: 'system', name: '系統', text: String(text).slice(0, 200), ts: Date.now(), sys: true }); }
+      catch (e) { /* best-effort 通知 */ }
+    }
+    async function seedEventBracket(ev) {
+      const regs = await TREGS.find({ eventId: ev._id }).toArray();
+      if (regs.length < 2) return { error: '至少需要 2 位報名者' };
+      const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' }));
+      const { matches, rounds } = buildBracket(players, ev._id);
+      await TMATCH.deleteMany({ eventId: ev._id });
+      await TMATCH.insertMany(matches);
+      await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds } });
+      return { ok: true, rounds, players: players.length };
+    }
     // 對局結束 → 記勝者 + 晉級下一輪 + 檢查本輪/賽事完成
     async function onMatchGameOver(doc, gs) {
       if (!doc.matchId) return;
@@ -2360,9 +2378,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // 本輪全 done → currentRound++
         const cur = (ev && ev.currentRound) || m.round;
         const remaining = await TMATCH.countDocuments({ eventId: m.eventId, round: cur, status: { $ne: 'done' } });
-        if (remaining === 0) await TEVENTS.updateOne({ _id: m.eventId }, { $set: { currentRound: cur + 1 } });
+        if (remaining === 0) { await TEVENTS.updateOne({ _id: m.eventId }, { $set: { currentRound: cur + 1 } }); await postSystemChat('⚔️ 第 ' + (cur + 1) + ' 輪開始！請對戰雙方進場。'); }
       } else {
         await TEVENTS.updateOne({ _id: m.eventId }, { $set: { status: 'finished', championUid: winnerUid, championName: winnerName } });
+        await postSystemChat('🏆 賽事結束！冠軍：' + (winnerName || '?') + ' 🎉 恭喜！');
       }
     }
 
@@ -2374,14 +2393,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
         const ev = await getActiveEvent();
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
-        const regs = await TREGS.find({ eventId: ev._id }).toArray();
-        if (regs.length < 2) return res.status(400).json({ error: '至少需要 2 位報名者' });
-        const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' }));
-        const { matches, rounds } = buildBracket(players, ev._id);
-        await TMATCH.deleteMany({ eventId: ev._id });
-        await TMATCH.insertMany(matches);
-        await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds } });
-        res.json({ ok: true, rounds, players: players.length });
+        const r = await seedEventBracket(ev);
+        if (r.error) return res.status(400).json({ error: r.error });
+        await postSystemChat('🔔 「' + ev.name + '」賽程已公布，第 1 輪開始！');
+        res.json({ ok: true, rounds: r.rounds, players: r.players });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2426,6 +2441,25 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    async function tournamentSchedulerTick() {
+      try {
+        const ev = await getActiveEvent();
+        if (!ev) return;
+        const now = Date.now();
+        if (ev.status === 'draft' && ev.registrationOpenAt && now >= ev.registrationOpenAt) {
+          await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'registration' } });
+          await postSystemChat('📋 「' + ev.name + '」報名開始！快來報名～');
+          return;
+        }
+        if (ev.status === 'registration' && ev.registrationCloseAt && now >= ev.registrationCloseAt) {
+          const r = await seedEventBracket(ev);
+          if (r.ok) await postSystemChat('🔔 「' + ev.name + '」報名截止，賽程已公布，第 1 輪開始！');
+          else if (!ev._closeWarned) { await TEVENTS.updateOne({ _id: ev._id }, { $set: { _closeWarned: true } }); await postSystemChat('⚠️ 「' + ev.name + '」報名人數不足 2 人，請管理員處理。'); }
+          return;
+        }
+      } catch (e) { console.warn('[tournament] scheduler tick failed:', e && e.message); }
+    }
+    setInterval(tournamentSchedulerTick, 30000);
     console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + chat + bracket/seed/match-enter + admin event/chat');
   } catch (_te) {
     console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);

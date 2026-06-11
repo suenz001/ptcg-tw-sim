@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.27</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.28</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -726,6 +726,8 @@ async function loadTournamentAdmin() {
       + '<label style="display:block;margin:8px 0;">人數上限（空白=不限，≤64）：<input id="tev-max" placeholder="不限" style="width:120px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">每場時限（分）：<input id="tev-round" value="25" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">未進場判負（分）：<input id="tev-noshow" value="5" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">報名開始時間（可不填＝立即開放）：<input id="tev-regopen" type="datetime-local" style="padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">報名截止時間（可不填＝手動開賽；填了到點自動公布賽程並開賽）：<input id="tev-regclose" type="datetime-local" style="padding:5px;"></label>'
       + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事（單敗淘汰 Bo1）</button>'
       + '</div>';
   } else {
@@ -733,9 +735,11 @@ async function loadTournamentAdmin() {
     html += '<div style="border:1px solid #4a6a4a;border-radius:8px;padding:14px;margin-bottom:14px;">'
       + '<h3 style="margin:0 0 6px;">' + escapeHtml(ev.name) + '</h3>'
       + '<p style="color:#cfe8cf;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ 單敗淘汰 Bo1 ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
+      + (ev.registrationOpenAt ? '<p style="color:#9ab;margin:2px 0;">報名開始：' + new Date(ev.registrationOpenAt).toLocaleString('zh-TW') + '</p>' : '')
+      + (ev.registrationCloseAt ? '<p style="color:#9ab;margin:2px 0;">報名截止：' + new Date(ev.registrationCloseAt).toLocaleString('zh-TW') + '（到點自動公布賽程並開賽）</p>' : '')
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
       + '<button style="' + btnS + '" onclick="tevStatus(\'registration\',this)">開放報名</button>'
-      + '<button style="' + btnS + '" onclick="tevStatus(\'running\',this)">開賽</button>'
+      + '<button style="' + btnS + '" onclick="tevSeed(this)">🎲 產生賽程並開賽</button>'
       + '<button style="' + btnS + '" onclick="tevStatus(\'finished\',this)">結束</button>'
       + '<button style="' + btnD + '" onclick="tevDelete(this)">刪除賽事</button>'
       + '</div></div>';
@@ -754,13 +758,23 @@ async function loadTournamentAdmin() {
 }
 window.tevCreate = async function (btn) {
   btn.disabled = true;
+  const toMs = (id) => { const el = document.getElementById(id); const v = el && el.value; return v ? new Date(v).getTime() : ''; };
   const body = {
     name: (document.getElementById('tev-name').value || '錦標賽'),
     maxPlayers: (document.getElementById('tev-max').value || ''),
     roundLimitMin: (document.getElementById('tev-round').value || 25),
     noShowMin: (document.getElementById('tev-noshow').value || 5),
+    registrationOpenAt: toMs('tev-regopen'),
+    registrationCloseAt: toMs('tev-regclose'),
   };
   try { const d = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevSeed = async function (btn) {
+  if (!confirm('依目前報名名單立即產生賽程並開賽？（之後不可再報名）')) return;
+  btn.disabled = true;
+  try { const d = await api('/api/tournament/admin/bracket/seed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽程已產生：' + d.rounds + ' 輪 / ' + d.players + ' 人，賽事開始！'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };

@@ -5876,6 +5876,8 @@
         <div class="tourn-event">
           <h3>🏆 {tEvent.name}</h3>
           <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(tEvent.status)}</b> ｜ 報名 {tRegCount}{tEvent.maxPlayers ? ' / ' + tEvent.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {tEvent.roundLimitMin} 分</p>
+          {#if tEvent.status === 'draft' && tEvent.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(tEvent.registrationOpenAt).toLocaleString()} 開放</p>{/if}
+          {#if tEvent.status === 'registration' && tEvent.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(tEvent.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
           {#if tMe.registered}
             <p class="reg-ok">✅ 你已報名，牌組已鎖定（整賽不可更換）</p>
             {#if tEvent.status === 'registration'}<button class="btn-secondary small" onclick={tournUnregister} disabled={tBusy}>退賽</button>{/if}
