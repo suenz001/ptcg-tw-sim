@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.26</title>
+<title>PTCG Oracle Admin v1.27</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.26</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.27</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -708,8 +708,7 @@ async function loadTournamentAdmin() {
   el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
   let data = { event: null, regs: [] };
   try {
-    const r = await api('/api/tournament/admin/event/registrations');
-    data = await r.json();
+    data = await api('/api/tournament/admin/event/registrations');
     if (data.error) { el.innerHTML = '<div style="padding:16px;color:#c00;">' + escapeHtml(data.error) + '</div>'; return; }
   } catch (e) {
     el.innerHTML = '<div style="padding:16px;color:#c00;">載入失敗：' + escapeHtml(e.message) + '<br><span style="color:#888;font-size:.85rem;">（錦標賽 API 需正式站伺服器已部署最新版）</span></div>';
@@ -761,20 +760,20 @@ window.tevCreate = async function (btn) {
     roundLimitMin: (document.getElementById('tev-round').value || 25),
     noShowMin: (document.getElementById('tev-noshow').value || 5),
   };
-  try { const r = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json(); if (d.error) alert(d.error); }
+  try { const d = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
 window.tevStatus = async function (st, btn) {
   btn.disabled = true;
-  try { const r = await api('/api/tournament/admin/event/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: st }) }); const d = await r.json(); if (d.error) alert(d.error); }
+  try { const d = await api('/api/tournament/admin/event/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: st }) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
 window.tevDelete = async function (btn) {
   if (!confirm('刪除目前賽事（含所有報名）？')) return;
   btn.disabled = true;
-  try { const r = await api('/api/tournament/admin/event/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); const d = await r.json(); if (d.error) alert(d.error); }
+  try { const d = await api('/api/tournament/admin/event/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
