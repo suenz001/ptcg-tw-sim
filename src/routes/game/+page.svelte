@@ -98,6 +98,8 @@
   let tDeckId = $state('');
   let tNickname = $state(''); // 錦標賽暱稱（對戰/聊天/賽程表都用它顯示）
   let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
+  let tLastActionAt = $state(0);   // v5.569：對局最後動作時間(伺服器回)，等待方閒置倒數用
+  let tIdleMin = $state(3);        // 閒置判負分鐘(伺服器回)
   // ── 觀戰 ──
   let tSpectateList = $state<any[]>([]);
   let tSpectateRoom = $state('');
@@ -3802,6 +3804,9 @@
       const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`);
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
+      if (sst && typeof sst.lastActionAt === 'number') tLastActionAt = sst.lastActionAt;
+      if (sst && typeof sst.idleForfeitMin === 'number') tIdleMin = sst.idleForfeitMin;
+      tNow = Date.now();
       startTournamentPoll();
     } catch (e: any) { tError = '進場失敗：' + (e?.message ?? e); tStep = 'lobby'; }
     finally { tBusy = false; }
@@ -3882,6 +3887,32 @@
     if (typeof version === 'number') tVersion = version;
     if (state) tStep = 'playing';
   }
+  // v5.569：算「當前該動作的座位」(鏡射伺服器 currentActorSeat)，給等待方閒置倒數判斷
+  function tCurrentActorSeat(g: any): number | null {
+    if (!g || g.phase === 'game-over') return null;
+    if (g.phase === 'setup') {
+      const d0 = !!(g.setupDone && g.setupDone[0]), d1 = !!(g.setupDone && g.setupDone[1]);
+      if (d0 && !d1) return 1;
+      if (!d0 && d1) return 0;
+      return -1;
+    }
+    if (g.phase !== 'playing') return null;
+    if (g.pendingSelection && (g.pendingSelection.actorIdx === 0 || g.pendingSelection.actorIdx === 1)) return g.pendingSelection.actorIdx;
+    if (g.pendingPrizes && (g.pendingPrizes[0] || 0) > 0) return 0;
+    if (g.pendingPrizes && (g.pendingPrizes[1] || 0) > 0) return 1;
+    if (g.players && g.players[0] && g.players[0].active === null) return 0;
+    if (g.players && g.players[1] && g.players[1].active === null) return 1;
+    return (g.activePlayerIndex === 0 || g.activePlayerIndex === 1) ? g.activePlayerIndex : null;
+  }
+  // 我在等對手時，回傳「對手再過幾秒閒置判負（我獲勝）」；非等待狀態回 null
+  const tIdleWarnSec = $derived.by(() => {
+    if (!isTournament || isTournSpectator || !game || !tLastActionAt) return null;
+    if ((game as any).phase === 'game-over') return null;
+    const actor = tCurrentActorSeat(game);
+    if (actor == null || actor === mySeatIdx) return null; // 只在「該對手動作」時提示等待方
+    const remain = Math.ceil((tLastActionAt + tIdleMin * 60000 - tNow) / 1000);
+    return remain > 0 ? remain : 0;
+  });
   async function tournamentJoin() {
     const deck = allDecks.find(d => d.id === tDeckId);
     if (!deck) { tError = '請先選擇牌組'; return; }
@@ -3909,6 +3940,9 @@
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
+        if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
+        if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
+        tNow = Date.now();
       } catch { /* 忽略單次輪詢失敗 */ }
     }, 1200);
   }
@@ -6013,6 +6047,7 @@
   </main>
 {:else}
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
+{#if isTournament && tIdleWarnSec != null && tIdleWarnSec <= 90}<div class="tourn-idle-warn">⏳ 對手閒置中：剩 {tIdleWarnSec} 秒未行動將自動判你勝</div>{/if}
 {#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 {#if isTournSpectator && game}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
@@ -9577,6 +9612,7 @@
   .tcmsg.tcsys { color: #ffd35a; }
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
+  .tourn-idle-warn { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(40,30,10,0.95); color: #ffd35a; border: 1px solid #a80; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
   .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
   .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }

@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.30</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.31</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -717,6 +717,8 @@ async function loadTournamentAdmin() {
   const ev = data.event;
   let tieData = { ties: [] };
   if (ev) { try { tieData = await api('/api/tournament/admin/tie-matches'); if (!tieData || !tieData.ties) tieData = { ties: [] }; } catch (e) { tieData = { ties: [] }; } }
+  let pendData = { pending: [] };
+  if (ev && ev.status === 'running') { try { pendData = await api('/api/tournament/admin/pending-matches'); if (!pendData || !pendData.pending) pendData = { pending: [] }; } catch (e) { pendData = { pending: [] }; } }
   const btnS = 'padding:6px 14px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;border-radius:6px;cursor:pointer;';
   const btnD = 'padding:6px 14px;border:1px solid #7a3a3a;background:#2e1e1e;color:#fdd;border-radius:6px;cursor:pointer;';
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
@@ -755,6 +757,18 @@ async function loadTournamentAdmin() {
           + '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',0,this)">判 ' + escapeHtml(t.p1name || 'P1') + ' 勝</button> '
           + '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',1,this)">判 ' + escapeHtml(t.p2name || 'P2') + ' 勝</button></div>';
       });
+      html += '</div>';
+    }
+    if (pendData.pending && pendData.pending.length) {
+      html += '<div style="border:1px solid #555;border-radius:8px;padding:10px;margin:10px 0;background:#181818;"><b style="color:#9cf;">🛠️ 賽程管理：強制裁定卡死場（' + pendData.pending.length + ' 場未結束）</b>'
+        + '<p style="color:#888;font-size:.8rem;margin:4px 0;">對手棄賽／異常卡住時用；判勝後該場直接晉級。兩格皆無玩家的場無法判勝（請用下方強制完賽）。</p>';
+      pendData.pending.forEach(function (t) {
+        html += '<div style="margin:6px 0;">第 ' + t.round + ' 輪（' + (t.status === 'playing' ? '對戰中' : t.status) + '）：<b>' + escapeHtml(t.p1name || '（空）') + '</b> vs <b>' + escapeHtml(t.p2name || '（空）') + '</b> &nbsp;'
+          + (t.hasP1 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',0,this)">判 ' + escapeHtml(t.p1name || 'P1') + ' 勝</button> ' : '')
+          + (t.hasP2 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',1,this)">判 ' + escapeHtml(t.p2name || 'P2') + ' 勝</button>' : '')
+          + '</div>';
+      });
+      html += '<div style="margin-top:8px;"><button style="' + btnD + '" onclick="tevForceFinish(this)">⚠️ 強制結束賽事（無冠軍，最終安全閥）</button></div>';
       html += '</div>';
     }
     html += '<h3>報名名單（' + data.regs.length + '）</h3>';
@@ -797,6 +811,13 @@ window.tevResolveTie = async function (matchId, seat, btn) {
   if (!confirm('確定裁定此場勝者？裁定後勝者直接晉級。')) return;
   btn.disabled = true;
   try { const d = await api('/api/tournament/admin/match/resolve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: matchId, winnerSeat: seat }) }); if (d.error) alert(d.error); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevForceFinish = async function (btn) {
+  if (!confirm('確定強制結束目前賽事（無冠軍）？僅在賽程卡死無法正常完賽時使用。')) return;
+  btn.disabled = true;
+  try { const d = await api('/api/tournament/admin/event/force-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽事已強制結束。'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };

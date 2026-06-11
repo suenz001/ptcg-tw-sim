@@ -1,4 +1,5 @@
-// === ORACLE ADMIN ENDPOINTS === v0.31 (錦標賽：投降即時判負 /match/forfeit + 閒置逾3分鐘自動判負 currentActorSeat)
+// === ORACLE ADMIN ENDPOINTS === v0.32 (錦標賽：/state 回 lastActionAt 給等待方倒數 + admin 強制裁定任意場 /admin/pending-matches + /admin/event/force-finish 安全閥)
+// v0.31 (錦標賽：投降即時判負 /match/forfeit + 閒置逾3分鐘自動判負 currentActorSeat)
 // v0.30 (admin v1.25 — 1.4 勝因分佈：離開類依 finalTurn<=1 細分「第一回合離開(開房掛機)」vs「中途離開(認輸)」；「取得所有獎勵牌」正名「取得所有獎賞卡」) (v0.29 — admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
@@ -2122,7 +2123,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const room = String(req.query.room || 'TOURNAMENT-TEST');
         const doc = await TROOMS.findOne({ _id: room });
         if (!doc) return res.json({ version: -1, waiting: true });
-        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats, names: doc.names, waiting: !doc.gameState });
+        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats, names: doc.names, waiting: !doc.gameState, lastActionAt: doc.lastActionAt || null, idleForfeitMin: doc.idleForfeitMin || 3 });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2526,7 +2527,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           let gs;
           try { gs = makeGame([reg1.deckEntries, reg2.deckEntries], [m.p1name, m.p2name]); }
           catch (e) { return res.status(500).json({ error: '建立對局失敗（牌組可能含未支援卡）：' + e.message }); }
-          await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: 1, matchId: m._id, eventId: ev._id, updatedAt: Date.now(), lastActionAt: Date.now() } }, { upsert: true });
+          await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: 1, matchId: m._id, eventId: ev._id, updatedAt: Date.now(), lastActionAt: Date.now(), idleForfeitMin: (ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3) } }, { upsert: true });
           await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', gameStartedAt: Date.now() } });
         }
         const seat = (id.uid === m.p1uid) ? 0 : 1;
@@ -2568,10 +2569,38 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (m.status === 'done') return res.status(409).json({ error: '該場次已結束' });
         if (winnerSeat !== 0 && winnerSeat !== 1) return res.status(400).json({ error: 'winnerSeat 需 0 或 1' });
         const wUid = winnerSeat === 0 ? m.p1uid : m.p2uid, wName = winnerSeat === 0 ? m.p1name : m.p2name;
+        if (!wUid) return res.status(400).json({ error: '該座位無玩家，無法判勝' });
         await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true } });
         if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winnerSeat; og.winReason = '管理員裁定：' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
         await postSystemChat('⚖️ 管理員裁定：' + wName + ' 勝出，自動晉級。');
         await advanceOrFinish(m, wUid, wName);
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 管理員：列出所有「未結束」場次（強制裁定卡死場用，不限平手）
+    app.get('/api/tournament/admin/pending-matches', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.json({ pending: [] });
+        const ms = await TMATCH.find({ eventId: ev._id, status: { $ne: 'done' } }).sort({ round: 1, idx: 1 }).toArray();
+        res.json({ pending: ms.map((m) => ({ matchId: m._id, round: m.round, idx: m.idx, p1name: m.p1name, p2name: m.p2name, hasP1: !!m.p1uid, hasP2: !!m.p2uid, status: m.status })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 管理員：強制完賽（賽事卡死的最終安全閥；可指定冠軍 seat，或無冠軍結束）
+    app.post('/api/tournament/admin/event/force-finish', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
+        const champUid = (req.body && req.body.championUid) || null;
+        const champName = (req.body && req.body.championName) || null;
+        await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'finished', championUid: champUid, championName: champName, forceFinished: true } });
+        await postSystemChat(champName ? ('🏆 管理員強制完賽，冠軍：' + champName) : '⚠️ 管理員強制結束賽事（無冠軍）。');
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
