@@ -2484,13 +2484,45 @@ import('firebase-admin').then(async ({ default: admin }) => {
           try { gs = makeGame([reg1.deckEntries, reg2.deckEntries], [m.p1name, m.p2name]); }
           catch (e) { return res.status(500).json({ error: '建立對局失敗（牌組可能含未支援卡）：' + e.message }); }
           await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: 1, matchId: m._id, eventId: ev._id, updatedAt: Date.now() } }, { upsert: true });
-          await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing' } });
+          await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', gameStartedAt: Date.now() } });
         }
         const seat = (id.uid === m.p1uid) ? 0 : 1;
         res.json({ roomId, seat });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // 管理員：裁定平手場(時限到雙方獎賞相同)的勝者
+    app.post('/api/tournament/admin/match/resolve', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可裁定' });
+        const matchId = String((req.body && req.body.matchId) || '');
+        const winnerSeat = Number(req.body && req.body.winnerSeat);
+        const m = await TMATCH.findOne({ _id: matchId });
+        if (!m) return res.status(404).json({ error: '找不到該場次' });
+        if (m.status === 'done') return res.status(409).json({ error: '該場次已結束' });
+        if (winnerSeat !== 0 && winnerSeat !== 1) return res.status(400).json({ error: 'winnerSeat 需 0 或 1' });
+        const wUid = winnerSeat === 0 ? m.p1uid : m.p2uid, wName = winnerSeat === 0 ? m.p1name : m.p2name;
+        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', adminResolved: true } });
+        if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winnerSeat; og.winReason = '管理員裁定：' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
+        await postSystemChat('⚖️ 管理員裁定：' + wName + ' 勝出，自動晉級。');
+        await advanceOrFinish(m, wUid, wName);
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 管理員：列出待裁定平手場
+    app.get('/api/tournament/admin/tie-matches', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.json({ ties: [] });
+        const ties = await TMATCH.find({ eventId: ev._id, status: 'tie' }).toArray();
+        res.json({ ties: ties.map((m) => ({ matchId: m._id, round: m.round, p1name: m.p1name, p2name: m.p2name })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
     async function tournamentSchedulerTick() {
       try {
         const ev = await getActiveEvent();
@@ -2528,6 +2560,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
                 await checkRoundAdvance(ev._id);
               }
             }
+          }
+        }
+        // 對局時限：每場 roundLimitMin 分(預設25)到 → 依「獎賞卡取得較多(剩餘較少)」判勝；平手交管理員裁定。
+        if (ev.status === 'running') {
+          const limitMin = (ev.roundLimitMin > 0 ? ev.roundLimitMin : 25);
+          const playing = await TMATCH.find({ eventId: ev._id, status: 'playing', roomId: { $ne: null }, gameStartedAt: { $ne: null } }).toArray();
+          for (const m of playing) {
+            if (now <= m.gameStartedAt + limitMin * 60000) continue;
+            const room = await TROOMS.findOne({ _id: m.roomId });
+            const gs = room && room.gameState;
+            if (!gs || gs.phase === 'game-over') continue;
+            const p0rem = ((gs.players[0] && gs.players[0].prizes) || []).length;
+            const p1rem = ((gs.players[1] && gs.players[1].prizes) || []).length;
+            if (p0rem === p1rem) {
+              if (m.status !== 'tie') {
+                await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'tie', tieAt: now } });
+                try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = '對局時限到且雙方獎賞卡數相同，等待管理員裁定'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+                await postSystemChat('⏰ 「' + m.p1name + ' vs ' + m.p2name + '」對局時限(' + limitMin + '分)到且平手，請管理員後台裁定。');
+              }
+              continue;
+            }
+            const winSeat = (p0rem < p1rem) ? 0 : 1;
+            const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
+            await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', timeLimit: true } });
+            try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = '對局時限到，依獎賞卡數判定（' + wName + ' 勝）'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+            await postSystemChat('⏰ 對局時限到：' + wName + ' 以獎賞卡較多勝出，自動晉級。');
+            await advanceOrFinish(m, wUid, wName);
           }
         }
       } catch (e) { console.warn('[tournament] scheduler tick failed:', e && e.message); }
