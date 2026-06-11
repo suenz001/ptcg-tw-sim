@@ -117,6 +117,9 @@
   let tRegCount = $state(0);
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
+  let tTickTimer: ReturnType<typeof setInterval> | null = null; // v5.575 1秒tick平滑倒數
+  let tClockOffset = $state(0);   // v5.575 伺服器時間 - 本機時間(對時，所有倒數用)
+  let tChatClearedAt = $state(0); // v5.575 已知聊天清空時間(admin清空即時生效)
   // ── Phase1-C 大廳聊天 ──
   let tChat = $state<any[]>([]);
   let tChatInput = $state('');
@@ -127,8 +130,14 @@
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); }, 3000); }
+      if (!tEventPollTimer) { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
+  });
+  // v5.575：1 秒 tick 平滑倒數（用伺服器對時 tClockOffset，所有倒數對齊伺服器時間）；hub + 對戰中都跑
+  $effect(() => {
+    if (isTournament) {
+      if (!tTickTimer) tTickTimer = setInterval(() => { tNow = Date.now() + tClockOffset; }, 1000);
+    } else if (tTickTimer) { clearInterval(tTickTimer); tTickTimer = null; }
   });
   function tPlayerId(): string {
     // v0.5 A1：登入帳號 → 用 firebase uid 當身分（與伺服器 verifyIdToken 回傳的 uid 一致）
@@ -3771,6 +3780,11 @@
   async function tChatLoad() {
     try {
       const r = await tApi(`/chat?since=${tChatLastTs}`);
+      if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
+      // v5.575：admin 清除聊天室 → 本地即時清空（不必 F5 重整）
+      if (r && typeof r.clearedAt === 'number' && r.clearedAt > tChatClearedAt) {
+        tChat = []; tChatClearedAt = r.clearedAt; tChatLastTs = r.clearedAt;
+      }
       if (r && Array.isArray(r.messages) && r.messages.length) {
         for (const m of r.messages) { if (m.ts > tChatLastTs) tChatLastTs = m.ts; }
         tChat = [...tChat, ...r.messages].slice(-200);
@@ -3787,6 +3801,7 @@
   async function tournLoadEvent() {
     try {
       const r = await tApi('/event');
+      if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
       if (tMe.registered && tMe.name && !tNickname) tNickname = tMe.name; // 預填已報名暱稱
     } catch { /* ignore */ }
@@ -3808,7 +3823,8 @@
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
       if (sst && typeof sst.lastActionAt === 'number') tLastActionAt = sst.lastActionAt;
       if (sst && typeof sst.idleForfeitMin === 'number') tIdleMin = sst.idleForfeitMin;
-      tNow = Date.now();
+      if (sst && typeof sst.serverNow === 'number') tClockOffset = sst.serverNow - Date.now();
+      tNow = Date.now() + tClockOffset;
       startTournamentPoll();
     } catch (e: any) { tError = '進場失敗：' + (e?.message ?? e); tStep = 'lobby'; }
     finally { tBusy = false; }
@@ -3949,7 +3965,8 @@
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
-        tNow = Date.now();
+        if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
+        tNow = Date.now() + tClockOffset;
       } catch { /* 忽略單次輪詢失敗 */ }
     }, 1200);
   }

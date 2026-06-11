@@ -1,4 +1,5 @@
-// === ORACLE ADMIN ENDPOINTS === v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
+// === ORACLE ADMIN ENDPOINTS === v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
 // v0.32 (錦標賽：/state 回 lastActionAt 給等待方倒數 + admin 強制裁定任意場 /admin/pending-matches + /admin/event/force-finish 安全閥)
@@ -2127,7 +2128,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const room = String(req.query.room || 'TOURNAMENT-TEST');
         const doc = await TROOMS.findOne({ _id: room });
         if (!doc) return res.json({ version: -1, waiting: true });
-        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats, names: doc.names, waiting: !doc.gameState, lastActionAt: doc.lastActionAt || null, idleForfeitMin: doc.idleForfeitMin || 3 });
+        res.json({ gameState: doc.gameState, version: doc.version, seats: doc.seats, names: doc.names, waiting: !doc.gameState, lastActionAt: doc.lastActionAt || null, idleForfeitMin: doc.idleForfeitMin || 3, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2219,7 +2220,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             myMatch = { matchId: mm._id, round: mm.round, oppName: (mm.p1uid === id.uid ? mm.p2name : mm.p1name), enterOpenAt, noShowDeadline: enterOpenAt + nsMin * 60000, entered: !!(mm.entered && mm.entered[mySeat]), roomId: mm.roomId || null };
           }
         }
-        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch });
+        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2341,12 +2342,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
 
     // ── Phase1-C：大廳聊天室（全站登入者共用 room='lobby'）──
     const TCHAT = db.collection('tournamentChat');
+    const TCONFIG = db.collection('tournamentConfig'); // v0.36 聊天清空標記等
     const _chatRate = new Map(); // uid -> last post ts（記憶體限速）
     app.get('/api/tournament/chat', async (req, res) => {
       try {
         const since = Number(req.query.since) || 0;
+        const cfg = await TCONFIG.findOne({ _id: 'chatMeta' });
+        const clearedAt = (cfg && cfg.clearedAt) || 0;
         const msgs = await TCHAT.find({ room: 'lobby', ts: { $gt: since } }).sort({ ts: 1 }).limit(80).toArray();
-        res.json({ messages: msgs.map((m) => ({ id: String(m._id), name: m.name, text: m.text, ts: m.ts, uid: m.uid, sys: !!m.sys, admin: !!m.admin })) });
+        res.json({ messages: msgs.map((m) => ({ id: String(m._id), name: m.name, text: m.text, ts: m.ts, uid: m.uid, sys: !!m.sys, admin: !!m.admin })), clearedAt, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     app.post('/api/tournament/chat', async (req, res) => {
@@ -2374,6 +2378,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
         await TCHAT.deleteMany({ room: 'lobby' });
+        await TCONFIG.updateOne({ _id: 'chatMeta' }, { $set: { clearedAt: Date.now() } }, { upsert: true });
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
