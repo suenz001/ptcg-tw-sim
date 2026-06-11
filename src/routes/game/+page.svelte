@@ -102,6 +102,8 @@
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   function tPlayerId(): string {
+    // v0.5 A1：登入帳號 → 用 firebase uid 當身分（與伺服器 verifyIdToken 回傳的 uid 一致）
+    if (firebaseUser && !firebaseUser.isAnonymous) return firebaseUser.uid;
     try {
       let id = localStorage.getItem('ptcg_tourn_pid');
       if (!id) { id = 'p_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('ptcg_tourn_pid', id); }
@@ -3706,13 +3708,30 @@
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
   // ── 錦標賽 transport（伺服器權威）：dispatch 在 isTournament 時改走這裡 ──
   async function tApi(path: string, body?: any) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // v0.5 A1：帶 Firebase ID token，伺服器 verifyIdToken 驗證身分（禁匿名）
+    try { if (firebaseUser && !firebaseUser.isAnonymous) headers['Authorization'] = 'Bearer ' + (await firebaseUser.getIdToken()); } catch { /* 取 token 失敗 → 伺服器退回 playerId fallback */ }
     const res = await fetch(T_API + path, {
       method: body ? 'POST' : 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
     return res.json();
+  }
+  async function tournLogin() {
+    if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
+    authError = null; tBusy = true;
+    try { await signInWithEmailAndPassword(auth, authEmail, authPassword); authPassword = ''; }
+    catch (e: any) { authError = friendlyAuthError(e.code); }
+    finally { tBusy = false; }
+  }
+  async function tournRegister() {
+    if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼（至少 6 碼）'; return; }
+    authError = null; tBusy = true;
+    try { await createUserWithEmailAndPassword(auth, authEmail, authPassword); authPassword = ''; }
+    catch (e: any) { authError = friendlyAuthError(e.code); }
+    finally { tBusy = false; }
   }
   function tSyntheticRoom(seats: any, names: any) {
     // 餵戰板一個最小相容 Room（無聊天/觀戰/悔棋；不觸發任何線上後端）
@@ -5736,10 +5755,21 @@
     {#if tStep === 'waiting'}
       <p class="tourn-wait">⏳ 已進場，等待對手加入…<br/>（請另一人也開 /tournament 選牌組進場）</p>
       <button class="btn-secondary" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
-    {:else}
-      <label class="tourn-field">你的暱稱
-        <input class="name-input" bind:value={myName} maxlength="24" placeholder="輸入暱稱" />
+    {:else if isAnonymous}
+      <p class="tourn-gate">🔒 錦標賽需要 email 帳號（不開放匿名）。請登入，或註冊新帳號：</p>
+      <label class="tourn-field">Email
+        <input class="name-input" type="email" bind:value={authEmail} placeholder="you@example.com" />
       </label>
+      <label class="tourn-field">密碼
+        <input class="name-input" type="password" bind:value={authPassword} placeholder="密碼（至少 6 碼）" onkeydown={(e) => e.key === 'Enter' && tournLogin()} />
+      </label>
+      {#if authError}<p class="warn">{authError}</p>{/if}
+      <div class="tourn-auth-btns">
+        <button class="btn-primary" onclick={tournLogin} disabled={tBusy}>登入</button>
+        <button class="btn-secondary" onclick={tournRegister} disabled={tBusy}>註冊新帳號</button>
+      </div>
+    {:else}
+      <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b></p>
       <label class="tourn-field">選擇牌組（需 60 張）
         <select class="deck-select" bind:value={tDeckId}>
           <option value="" disabled>— 請選擇牌組 —</option>
@@ -9299,6 +9329,9 @@
   .tourn-join { margin-top: 8px; }
   .tourn-wait { color: #ffd35a; font-size: 1.05rem; margin: 22px 0; line-height: 1.6; }
   .tourn-toast { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
+  .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
+  .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
+  .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {
     position: fixed;

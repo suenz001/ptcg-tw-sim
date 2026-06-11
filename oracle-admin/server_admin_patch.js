@@ -2006,6 +2006,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const TPOOL = new Map(Object.entries(poolObj));
     const TROOMS = db.collection('tournamentRooms');
     console.log('[tournament] engine + pool loaded:', TPOOL.size, 'cards');
+    // ── A1：身分驗證（重用 admin 既有 firebase-admin + /opt/ptcg/api/firebase-admin-key.json）──
+    let TADMIN = null;
+    try { TADMIN = (await import('firebase-admin')).default; } catch (e) { console.warn('[tournament] firebase-admin import failed (auth fallback to playerId):', e && e.message); }
+    async function tournIdentity(req) {
+      const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+      const m = /^Bearer\s+(.+)$/.exec(h);
+      if (TADMIN && TADMIN.apps && TADMIN.apps.length && m) {
+        try {
+          const dec = await TADMIN.auth().verifyIdToken(m[1]);
+          if (dec.firebase && dec.firebase.sign_in_provider === 'anonymous') return { error: '錦標賽不開放匿名帳號，請用 email 帳號登入', code: 403 };
+          const nm = dec.name || (dec.email ? String(dec.email).split('@')[0] : '玩家');
+          return { uid: dec.uid, email: dec.email || null, name: String(nm).slice(0, 24), verified: true };
+        } catch (e) { return { error: '登入憑證無效或過期，請重新登入', code: 401 }; }
+      }
+      const pid = (req.body && req.body.playerId) || (req.query && req.query.playerId);
+      if (pid) return { uid: String(pid), email: null, name: String((req.body && req.body.name) || '玩家').slice(0, 24), verified: false };
+      return { error: '需要登入', code: 401 };
+    }
 
     // ── 工具：用雙方真實牌組建一局完整遊戲（引擎 createGame → setup 階段）──
     function makeGame(decks, names) {
@@ -2055,10 +2073,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.post('/api/tournament/join', async (req, res) => {
       try {
         const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
-        const pid = String((req.body && req.body.playerId) || '');
-        const name = String((req.body && req.body.name) || '玩家').slice(0, 24);
+        const _id = await tournIdentity(req);
+        if (_id.error) return res.status(_id.code || 401).json({ error: _id.error });
+        const pid = _id.uid;
+        const name = _id.name;
         const deckEntries = req.body && req.body.deckEntries;
-        if (!pid) return res.status(400).json({ error: 'no playerId' });
         if (!Array.isArray(deckEntries) || deckEntries.length === 0) return res.status(400).json({ error: '請先選擇牌組' });
         let doc = await TROOMS.findOne({ _id: room });
         if (!doc) { doc = freshDoc(room); await TROOMS.insertOne(doc); }
@@ -2092,7 +2111,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.post('/api/tournament/action', async (req, res) => {
       try {
         const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
-        const pid = String((req.body && req.body.playerId) || '');
+        const _id = await tournIdentity(req);
+        if (_id.error) return res.status(_id.code || 401).json({ error: _id.error });
+        const pid = _id.uid;
         const action = req.body && req.body.action;
         const doc = await TROOMS.findOne({ _id: room });
         if (!doc) return res.status(404).json({ error: 'no room' });
