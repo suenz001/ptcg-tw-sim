@@ -8,15 +8,15 @@ echo.
 
 echo [sync] Syncing working tree to latest commit (avoid missing-file build errors)...
 cd /d E:\ptcg-tw-sim
-git archive HEAD -- src scripts -o "%TEMP%\ptcg_sync.tar"
+git archive HEAD -o "%TEMP%\ptcg_sync.tar" -- src scripts
 if errorlevel 1 (
-  echo *** git archive FAILED — confirm E:\ptcg-tw-sim is a git repo and git is on PATH ***
+  echo *** git archive FAILED - confirm E:\ptcg-tw-sim is a git repo and git is on PATH ***
   pause
   exit /b 1
 )
 tar -xf "%TEMP%\ptcg_sync.tar"
 if errorlevel 1 (
-  echo *** working-tree sync (tar) FAILED — confirm tar is available (built-in on Win10+) ***
+  echo *** working-tree sync (tar) FAILED - confirm tar is available (built-in on Win10+) ***
   pause
   exit /b 1
 )
@@ -51,4 +51,4 @@ echo [3/5] Installing bundle to /opt/ptcg/api/tournament/ ...
 ssh -i %KEY% -t %HOST% "sudo mkdir -p /opt/ptcg/api/tournament && sudo cp /tmp/server-engine.cjs /tmp/tournament-pool.json /opt/ptcg/api/tournament/ && sudo chown -R ubuntu:ubuntu /opt/ptcg/api/tournament && echo bundle and pool installed"
 
 echo [4/5] Uploading patch + admin.html + update script...
-scp -i %KEY% "%SRC%\server_admin_patch.js" "%SRC%\admin.html" "%SRC%\oracle_admin_update.sh" %H
+scp -i %KEY% "%SRC%\server_admin_patch.js" "%SRC%\admin.html" "%SRC%\oracle_admin_update.sh" %HOST%
