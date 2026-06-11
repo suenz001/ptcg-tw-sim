@@ -2267,6 +2267,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // 管理員：列出目前賽事的報名名單
+    app.get('/api/tournament/admin/event/registrations', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.json({ event: null, regs: [] });
+        const regs = await TREGS.find({ eventId: ev._id }).toArray();
+        res.json({ event: ev, regs: regs.map((r) => ({ uid: r.uid, email: r.email, name: r.name, checkedIn: !!r.checkedIn, deckCount: deckCount(r.deckEntries), registeredAt: r.registeredAt })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + admin event create/status/delete');
   } catch (_te) {
     console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);

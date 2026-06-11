@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.25</title>
+<title>PTCG Oracle Admin v1.26</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.25</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.26</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -386,6 +386,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="matches" onclick="switchTab('matches')">📜 對戰歷史</div>
     <div class="tab" data-tab="stats" onclick="switchTab('stats')">📊 統計</div>
     <div class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 廣播</div>
+    <div class="tab" data-tab="tournament" onclick="switchTab('tournament')">🏆 賽事</div>
   </div>
 
   <main>
@@ -397,6 +398,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-matches" class="tab-content" style="display:none;"></div>
     <div id="tab-stats" class="tab-content" style="display:none;"></div>
     <div id="tab-broadcast" class="tab-content" style="display:none;"></div>
+    <div id="tab-tournament" class="tab-content" style="display:none;"></div>
   </main>
 </div>
 
@@ -699,6 +701,84 @@ async function api(path, options = {}) {
 }
 
 // ── Tab switching ────────────────────────────────────────────────
+// ── 🏆 錦標賽管理（呼叫 /api/tournament/admin/* 端點，admin token）──
+async function loadTournamentAdmin() {
+  const el = document.getElementById('tab-tournament');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
+  let data = { event: null, regs: [] };
+  try {
+    const r = await api('/api/tournament/admin/event/registrations');
+    data = await r.json();
+    if (data.error) { el.innerHTML = '<div style="padding:16px;color:#c00;">' + escapeHtml(data.error) + '</div>'; return; }
+  } catch (e) {
+    el.innerHTML = '<div style="padding:16px;color:#c00;">載入失敗：' + escapeHtml(e.message) + '<br><span style="color:#888;font-size:.85rem;">（錦標賽 API 需正式站伺服器已部署最新版）</span></div>';
+    return;
+  }
+  const ev = data.event;
+  const btnS = 'padding:6px 14px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;border-radius:6px;cursor:pointer;';
+  const btnD = 'padding:6px 14px;border:1px solid #7a3a3a;background:#2e1e1e;color:#fdd;border-radius:6px;cursor:pointer;';
+  let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
+    + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 一次一個賽事。建立後玩家於 /tournament 報名（牌組鎖定）。</p>';
+  if (!ev) {
+    html += '<div style="border:1px solid #555;border-radius:8px;padding:14px;">'
+      + '<h3 style="margin:0 0 10px;">建立新賽事</h3>'
+      + '<label style="display:block;margin:8px 0;">賽事名稱：<input id="tev-name" value="錦標賽" style="width:60%;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">人數上限（空白=不限，≤64）：<input id="tev-max" placeholder="不限" style="width:120px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">每場時限（分）：<input id="tev-round" value="25" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">未進場判負（分）：<input id="tev-noshow" value="5" style="width:80px;padding:5px;"></label>'
+      + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事（單敗淘汰 Bo1）</button>'
+      + '</div>';
+  } else {
+    const stLabel = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[ev.status] || ev.status;
+    html += '<div style="border:1px solid #4a6a4a;border-radius:8px;padding:14px;margin-bottom:14px;">'
+      + '<h3 style="margin:0 0 6px;">' + escapeHtml(ev.name) + '</h3>'
+      + '<p style="color:#cfe8cf;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ 單敗淘汰 Bo1 ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
+      + '<button style="' + btnS + '" onclick="tevStatus(\'registration\',this)">開放報名</button>'
+      + '<button style="' + btnS + '" onclick="tevStatus(\'running\',this)">開賽</button>'
+      + '<button style="' + btnS + '" onclick="tevStatus(\'finished\',this)">結束</button>'
+      + '<button style="' + btnD + '" onclick="tevDelete(this)">刪除賽事</button>'
+      + '</div></div>';
+    html += '<h3>報名名單（' + data.regs.length + '）</h3>';
+    if (!data.regs.length) html += '<p style="color:#aaa;">尚無人報名。</p>';
+    else {
+      html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>暱稱</th><th>Email</th><th>牌組</th><th>報名時間</th></tr></thead><tbody>';
+      data.regs.slice().sort((a, b) => (a.registeredAt || 0) - (b.registeredAt || 0)).forEach((r, i) => {
+        html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.name || '') + '</td><td>' + escapeHtml(r.email || '') + '</td><td>' + (r.deckCount || 0) + ' 張</td><td>' + (r.registeredAt ? new Date(r.registeredAt).toLocaleString('zh-TW') : '') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+window.tevCreate = async function (btn) {
+  btn.disabled = true;
+  const body = {
+    name: (document.getElementById('tev-name').value || '錦標賽'),
+    maxPlayers: (document.getElementById('tev-max').value || ''),
+    roundLimitMin: (document.getElementById('tev-round').value || 25),
+    noShowMin: (document.getElementById('tev-noshow').value || 5),
+  };
+  try { const r = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json(); if (d.error) alert(d.error); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevStatus = async function (st, btn) {
+  btn.disabled = true;
+  try { const r = await api('/api/tournament/admin/event/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: st }) }); const d = await r.json(); if (d.error) alert(d.error); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevDelete = async function (btn) {
+  if (!confirm('刪除目前賽事（含所有報名）？')) return;
+  btn.disabled = true;
+  try { const r = await api('/api/tournament/admin/event/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); const d = await r.json(); if (d.error) alert(d.error); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+
 window.switchTab = function(name) {
   currentTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
@@ -716,6 +796,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
+  else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
   document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
   return p;
 };

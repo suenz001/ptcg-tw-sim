@@ -107,8 +107,6 @@
   let tRegCount = $state(0);
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
-  let tAdmName = $state('錦標賽');
-  let tAdmMax = $state('');
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
       if (!tEventPollTimer) { tournLoadEvent(); tEventPollTimer = setInterval(tournLoadEvent, 5000); }
@@ -3772,20 +3770,6 @@
     tBusy = true; tError = '';
     try { await tApi('/unregister', {}); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
-  async function tournAdminCreate() {
-    tBusy = true; tError = '';
-    try { const r = await tApi('/admin/event/create', { name: tAdmName, maxPlayers: tAdmMax }); if (r.error) tError = r.error; await tournLoadEvent(); }
-    catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
-  }
-  async function tournAdminStatus(st: string) {
-    tBusy = true; tError = '';
-    try { await tApi('/admin/event/status', { status: st }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
-  }
-  async function tournAdminDelete() {
-    if (!confirm('刪除目前賽事（含所有報名）？')) return;
-    tBusy = true; tError = '';
-    try { await tApi('/admin/event/delete', {}); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
-  }
   function tEventStatusLabel(st: string): string {
     return ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' } as any)[st] ?? st;
   }
@@ -5838,25 +5822,9 @@
           {/if}
         </div>
       {:else}
-        <p class="muted small">目前沒有開放報名的賽事。{#if tIsAdmin}（你是管理員，可在下方建立）{/if}</p>
+        <p class="muted small">目前沒有開放報名的賽事。{#if tIsAdmin}（請至 admin 後台「🏆 賽事」分頁建立）{/if}</p>
       {/if}
-      {#if tIsAdmin}
-        <details class="tourn-admin">
-          <summary>🔧 管理員</summary>
-          {#if !tEvent}
-            <label class="tourn-field">賽事名稱<input class="name-input" bind:value={tAdmName} maxlength="40" /></label>
-            <label class="tourn-field">人數上限（空白=不限，≤64）<input class="name-input" bind:value={tAdmMax} placeholder="不限" /></label>
-            <button class="btn-primary" onclick={tournAdminCreate} disabled={tBusy}>建立賽事（單敗淘汰 Bo1）</button>
-          {:else}
-            <div class="tourn-auth-btns">
-              <button class="btn-secondary small" onclick={() => tournAdminStatus('registration')} disabled={tBusy}>開放報名</button>
-              <button class="btn-secondary small" onclick={() => tournAdminStatus('running')} disabled={tBusy}>開賽</button>
-              <button class="btn-secondary small" onclick={() => tournAdminStatus('finished')} disabled={tBusy}>結束</button>
-              <button class="btn-secondary small" onclick={tournAdminDelete} disabled={tBusy}>刪除賽事</button>
-            </div>
-          {/if}
-        </details>
-      {/if}
+
       <label class="tourn-field">選擇牌組（需 60 張）
         <select class="deck-select" bind:value={tDeckId}>
           <option value="" disabled>— 請選擇牌組 —</option>
@@ -9426,8 +9394,6 @@
   .tourn-event h3 { margin: 0 0 4px; }
   .tourn-evstat { color: #cfe8cf; font-size: 0.88rem; }
   .reg-ok { color: #7CFC9A; font-weight: 600; }
-  .tourn-admin { max-width: 420px; margin: 8px auto; text-align: left; border: 1px dashed #777; border-radius: 8px; padding: 6px 12px; }
-  .tourn-admin summary { cursor: pointer; color: #ffd35a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {
