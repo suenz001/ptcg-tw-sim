@@ -199,7 +199,7 @@ export function countAncientOnField(
  * 類似於基本能量 vs 特殊能量當初的拆分原則。
  */
 // v4.51 Phase 2：統一 defense helper
-import { canApplyEffectToTarget } from './defense';
+import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect } from './defense';
 import { applyDefenderReductionsBlockA, isToolsJammed, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
@@ -8630,6 +8630,11 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da || da.energyAttached.length === 0) return addLog(state, '反轉之風：對手戰鬥無能量', aIdx);
+  // v5.555 收斂：免疫對手招式效果 → 不可放回能量
+  {
+    const _imm = isOppActiveImmuneToAttackEffect(state, aIdx, pool);
+    if (_imm.blocked) return addLog(state, `反轉之風：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
+  }
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
   if (_v3080OppHasMenasureCG(state, aIdx, pool)) {
     return addLog(state, '反轉之風：對手場上有【平穩境地】，能量回手效果無效', aIdx);
@@ -16359,6 +16364,11 @@ regPost('耿鬼ex|戲法舞步', (state, aIdx, pool, action) => {
   const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
+  // v5.555 收斂：硬岩【鬥】能量/薄霧/純樸/化隱… 免疫對手招式效果 → 不可搬能量
+  {
+    const _imm = isOppActiveImmuneToAttackEffect(state, aIdx, pool);
+    if (_imm.blocked) return addLog(state, `戲法舞步：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
+  }
   // 對手active上要有能量才能移
   const activeEnergies = opp.active?.energyAttached ?? [];
   if (activeEnergies.length === 0) {

@@ -304,6 +304,30 @@ export function canApplyEffectToTarget(
 
 
 /**
+ * v5.555 收斂：招式效果動「對手戰鬥位寶可夢」前的免疫閘門（單一來源）。
+ *
+ * inline 招式效果（戲法舞步搬能量 / 反轉之風能量回手 等）在「搬移／丟棄／改附對手戰鬥位
+ * 能量・改狀態」前必呼叫，走 canApplyEffectToTarget('attack-effect') 收斂全部招式效果免疫
+ * 來源（薄霧能量 / 硬岩【鬥】能量 / 純樸 / 化隱 / 阿塞蘿拉 / 飛翔等 per-turn 旗標…）。
+ *
+ * 背景：此類 inline 開 pendingSelection 在 ATTACK_POST sweep 之後才結算，sweep 還原機制
+ * （只還原 status/封退/封招、不還原能量）救不到 → 必須在效果發動前 gate。
+ *
+ * blocked=true 時 caller 應 `return addLog(state, '<招式>：' + r.reason, aIdx)` 不做效果。
+ */
+export function isOppActiveImmuneToAttackEffect(
+  state: GameState,
+  actorIdx: 0 | 1,
+  pool: Map<string, Card>,
+): DefenseCheckResult {
+  const dIdx = (1 - actorIdx) as 0 | 1;
+  const da = state.players[dIdx].active;
+  if (!da) return { blocked: false };
+  return canApplyEffectToTarget(state, actorIdx, da, pool.get(da.cardId), 'attack-effect', pool, { isBench: false });
+}
+
+
+/**
  * v4.975: 統一 active target 招式傷害守護 helper。
  * 
  * **為什麼需要**：engine.ts 主路徑（約 line 3870-4000）已 inline check 11 個 active-side

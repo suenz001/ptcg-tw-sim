@@ -14,6 +14,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { flipCoinsWithLog, selfHitPost } from '../../effects';
+import { isOppActiveImmuneToAttackEffect } from '../../defense';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -227,6 +228,11 @@ regPost('超能妙喵|戲法舞步', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) return state;
+  // v5.555 收斂：免疫對手招式效果 → 不可搬能量
+  {
+    const _imm = isOppActiveImmuneToAttackEffect(state, aIdx, _pool);
+    if (_imm.blocked) return addLog(state, `戲法舞步：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
+  }
   const last = opp.active.energyAttached[opp.active.energyAttached.length - 1];
   const benchIdx = Math.floor(Math.random() * opp.bench.length);
   return updatePlayer(addLog(state, '戲法舞步：對手戰鬥末尾 1 個能量改附對手備戰（隨機）', aIdx), dIdx, p => ({
