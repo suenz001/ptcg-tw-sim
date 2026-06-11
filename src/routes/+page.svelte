@@ -273,6 +273,14 @@
     </p>
   </section>
 
+  <section>
+    <h2>🏆 淘汰賽測試 <span class="beta-tag">Beta</span></h2>
+    <p>
+      <a href="{base}/tournament">進入賽事大廳 →</a>
+      <span class="hint">（單敗淘汰 · 線上即時對戰 · 歡迎報名測試）</span>
+    </p>
+  </section>
+
   <!-- v2.43 社群連結：LINE 群組 + QR Code -->
   <section class="community-section">
     <h2>💬 玩家社群</h2>
@@ -12740,6 +12748,7 @@
     color: #666;
     margin-top: 0;
   }
+  .beta-tag { display: inline-block; font-size: 0.6em; vertical-align: middle; background: #c0392b; color: #fff; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 700; letter-spacing: 0.5px; }
   section {
     margin-top: 1.5rem;
     padding: 1rem 1.25rem;

@@ -97,6 +97,7 @@
   let tVersion = $state(-1);
   let tDeckId = $state('');
   let tNickname = $state(''); // 錦標賽暱稱（對戰/聊天/賽程表都用它顯示）
+  let tCoinPref = $state('random'); // v5.572 硬幣勝出時要先攻/後攻/隨機
   let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
   let tLastActionAt = $state(0);   // v5.569：對局最後動作時間(伺服器回)，等待方閒置倒數用
   let tIdleMin = $state(3);        // 閒置判負分鐘(伺服器回)
@@ -3863,7 +3864,7 @@
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { name: nick, deckName: deck.name, deckEntries: deck.entries }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    try { const r = await tApi('/register', { name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   async function tournUnregister() {
@@ -6059,6 +6060,14 @@
               <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
             {/if}
           </select>
+        </label>
+        <label class="tourn-field">硬幣勝出時，你要：
+          <select class="deck-select" bind:value={tCoinPref}>
+            <option value="random">隨機（不指定）</option>
+            <option value="first">先攻</option>
+            <option value="second">後攻</option>
+          </select>
+          <span class="tourn-coin-hint">（贏得開場擲幣時，依此自動安排；輸的話由對手決定）</span>
         </label>
         {#if tError}<p class="warn">{tError}</p>{/if}
         {#if tEvent && tEvent.status === 'registration'}
@@ -9638,6 +9647,7 @@
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
   .tourn-idle-warn { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(40,30,10,0.95); color: #ffd35a; border: 1px solid #a80; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  .tourn-coin-hint { display: block; color: #889; font-size: 11px; margin-top: 3px; }
   .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
   .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }

@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.34</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.35</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -724,6 +724,7 @@ async function loadTournamentAdmin() {
   try { champData = await api('/api/tournament/champions'); if (!champData || !champData.champions) champData = { champions: [] }; } catch (e) { champData = { champions: [] }; }
   const btnS = 'padding:6px 14px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;border-radius:6px;cursor:pointer;';
   const btnD = 'padding:6px 14px;border:1px solid #7a3a3a;background:#2e1e1e;color:#fdd;border-radius:6px;cursor:pointer;';
+  const btnW = 'padding:6px 14px;border:1px solid #b8862a;background:#3a2e12;color:#ffd98a;border-radius:6px;cursor:pointer;';
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
     + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 一次一個賽事。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
     + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>';
@@ -769,7 +770,8 @@ async function loadTournamentAdmin() {
       pendData.pending.forEach(function (t) {
         html += '<div style="margin:8px 0;color:#eaf0f8;">第 ' + t.round + ' 輪（' + (t.status === 'playing' ? '對戰中' : t.status) + '）：<b style="color:#fff;">' + escapeHtml(t.p1name || '（空）') + '</b> vs <b style="color:#fff;">' + escapeHtml(t.p2name || '（空）') + '</b> &nbsp;'
           + (t.hasP1 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',0,this)">判 ' + escapeHtml(t.p1name || 'P1') + ' 勝</button> ' : '')
-          + (t.hasP2 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',1,this)">判 ' + escapeHtml(t.p2name || 'P2') + ' 勝</button>' : '')
+          + (t.hasP2 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',1,this)">判 ' + escapeHtml(t.p2name || 'P2') + ' 勝</button> ' : '')
+          + ((t.hasP1 && t.hasP2) ? '<button style="' + btnW + '" onclick="tevRestartMatch(\'' + t.matchId + '\',this)">🔄 重賽（從擲幣開始）</button>' : '')
           + '</div>';
       });
       html += '<div style="margin-top:8px;"><button style="' + btnD + '" onclick="tevForceFinish(this)">⚠️ 強制結束賽事（無冠軍，最終安全閥）</button></div>';
@@ -849,6 +851,13 @@ window.tevForceFinish = async function (btn) {
   if (!confirm('確定強制結束目前賽事（無冠軍）？僅在賽程卡死無法正常完賽時使用。')) return;
   btn.disabled = true;
   try { const d = await api('/api/tournament/admin/event/force-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽事已強制結束。'); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevRestartMatch = async function (matchId, btn) {
+  if (!confirm('確定讓這場「重賽」？對局將從擲硬幣重新開始，雙方目前進度會清空。')) return;
+  btn.disabled = true;
+  try { const d = await api('/api/tournament/admin/match/restart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: matchId }) }); if (d.error) alert(d.error); else alert('已重新開賽（從擲幣開始）。'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
