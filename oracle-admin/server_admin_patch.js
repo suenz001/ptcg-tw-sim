@@ -2727,6 +2727,27 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
+    // 管理員：賽事統計 — 回傳所有賽事歸檔(TARCHIVE) + 名人堂(TCHAMPS)，前端用卡片索引聚合各項數據
+    app.get('/api/tournament/admin/stats', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const archives = await TARCHIVE.find({}).sort({ finishedAt: -1 }).limit(500).toArray();
+        const champions = await TCHAMPS.find({}).sort({ finishedAt: -1 }).limit(500).toArray();
+        res.json({
+          archives: archives.map((a) => ({
+            eventId: a.eventId, eventName: a.eventName || '錦標賽',
+            createdAt: a.createdAt || null, finishedAt: a.finishedAt || 0,
+            playerCount: a.playerCount || 0,
+            championUid: a.championUid || null, championName: a.championName || null,
+            players: (a.players || []).map((p) => ({ uid: p.uid, name: p.name, deckName: p.deckName || '', coinPref: p.coinPref || 'random', deckEntries: p.deckEntries || [] })),
+            matches: (a.matches || []).map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
+          })),
+          champions: champions.map((c) => ({ eventId: c.eventId, eventName: c.eventName, championUid: c.championUid, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0 })),
+        });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
     // 管理員：列出待裁定平手場
     app.get('/api/tournament/admin/tie-matches', async (req, res) => {
       try {

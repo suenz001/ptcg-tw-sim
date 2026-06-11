@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.27</title>
+<title>PTCG Oracle Admin v1.36</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.35</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.36</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -387,6 +387,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="stats" onclick="switchTab('stats')">📊 統計</div>
     <div class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 廣播</div>
     <div class="tab" data-tab="tournament" onclick="switchTab('tournament')">🏆 賽事</div>
+    <div class="tab" data-tab="tournament-stats" onclick="switchTab('tournament-stats')">📈 賽事統計</div>
   </div>
 
   <main>
@@ -399,6 +400,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-stats" class="tab-content" style="display:none;"></div>
     <div id="tab-broadcast" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament" class="tab-content" style="display:none;"></div>
+    <div id="tab-tournament-stats" class="tab-content" style="display:none;"></div>
   </main>
 </div>
 
@@ -909,6 +911,185 @@ window.tevDelete = async function (btn) {
   loadTournamentAdmin();
 };
 
+// ══════════════════════════════════════════════════════════════════════
+// 📈 賽事統計（v1.36）— 仿一般對戰「📊 統計」，專供錦標賽
+//   資料源：/api/tournament/admin/stats → 賽事歸檔(TARCHIVE) + 名人堂(TCHAMPS)
+//   全部在前端聚合：總覽 / 冠軍榜 / 玩家戰績 / 主力寶可夢使用率+勝率 / 歷屆賽事 / 賽果分佈
+//   需先 ensureCardIndex + ensureCardTags（主力寶可夢偵測沿用 detectMainPokemon）
+// ══════════════════════════════════════════════════════════════════════
+let tournStatsLoading = false;
+let tournStatsCache = null;
+async function loadTournamentStats(reset = false) {
+  if (tournStatsLoading) return;
+  tournStatsLoading = true;
+  try {
+    const el = document.getElementById('tab-tournament-stats');
+    if (!el) return;
+    if (tournStatsCache && !reset) { renderTournamentStats(el, tournStatsCache); return; }
+    el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">Loading…（彙整賽事歸檔 + 載入卡牌資料，約 3-8 秒）</div>';
+    await ensureCardIndex();
+    await ensureCardTags();
+    const data = await api('/api/tournament/admin/stats');
+    if (data && data.error) { el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">Error: ' + escapeHtml(data.error) + '</div>'; return; }
+    tournStatsCache = data || { archives: [], champions: [] };
+    renderTournamentStats(el, tournStatsCache);
+  } catch (e) {
+    const el = document.getElementById('tab-tournament-stats');
+    if (el) el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">載入失敗：' + escapeHtml(e.message) + '</div>';
+  } finally {
+    tournStatsLoading = false;
+  }
+}
+function _tsFmtDate(ms) {
+  if (!ms) return '—';
+  try { return new Date(ms).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+  catch (e) { return '—'; }
+}
+function _tsPct(w, l) { const t = w + l; return t > 0 ? Math.round(w / t * 100) : 0; }
+function renderTournamentStats(el, data) {
+  const archives = (data && data.archives) || [];
+  if (!archives.length) {
+    el.innerHTML = '<h2>📈 賽事統計 <button class="refresh-btn" style="float:right;font-size:.8rem;" onclick="loadTournamentStats(true)">🔄 重新整理</button></h2>'
+      + '<div class="empty">尚無已完成賽事的歸檔資料。賽事完賽（或管理員強制完賽）後會自動彙整到此。</div>';
+    return;
+  }
+  // 只算「真實對局」：雙方都有人、已結束、非輪空
+  const isRealMatch = (m) => m.status === 'done' && !m.bye && m.p1uid && m.p2uid;
+
+  // ── 聚合容器 ──
+  let totalEntries = 0;                 // 累計報名人次
+  const uniquePlayers = new Set();      // 不重複玩家
+  let totalRealMatches = 0;             // 真實對局數
+  const pmap = {};                      // uid → 玩家戰績
+  const pkUse = {};                     // 主力寶可夢 → { use, wins, losses }
+  const outcome = { normal: 0, forfeit: 0, idleForfeit: 0, noShow: 0, doubleNoShow: 0, timeLimit: 0, bye: 0, adminResolved: 0 };
+  const ensureP = (uid, name) => {
+    if (!uid) return null;
+    if (!pmap[uid]) pmap[uid] = { uid: uid, name: name || '?', events: 0, wins: 0, losses: 0, titles: 0 };
+    if (name) pmap[uid].name = name;
+    return pmap[uid];
+  };
+  const ensurePk = (nm) => { if (!pkUse[nm]) pkUse[nm] = { use: 0, wins: 0, losses: 0 }; return pkUse[nm]; };
+
+  archives.forEach((a) => {
+    totalEntries += (a.players || []).length;
+    const uidMain = {};                 // 此賽事 uid → 主力寶可夢名
+    (a.players || []).forEach((p) => {
+      uniquePlayers.add(p.uid);
+      const rec = ensureP(p.uid, p.name); if (rec) rec.events++;
+      const main = detectMainPokemon({ deckEntries: p.deckEntries || [] }) || '（未知牌型）';
+      uidMain[p.uid] = main;
+      ensurePk(main).use++;             // 報名一次＝該主力使用 +1
+    });
+    if (a.championUid) { const c = ensureP(a.championUid, a.championName); if (c) c.titles++; }
+    (a.matches || []).forEach((m) => {
+      // 賽果分佈（互斥優先序）
+      if (m.bye) outcome.bye++;
+      else if (m.doubleNoShow) outcome.doubleNoShow++;
+      else if (m.adminResolved) outcome.adminResolved++;
+      else if (m.idleForfeit) outcome.idleForfeit++;
+      else if (m.forfeit) outcome.forfeit++;
+      else if (m.noShow) outcome.noShow++;
+      else if (m.timeLimit) outcome.timeLimit++;
+      else if (m.status === 'done') outcome.normal++;
+      // 勝負（玩家 + 主力寶可夢）
+      if (isRealMatch(m)) {
+        totalRealMatches++;
+        const wUid = m.winnerUid;
+        const isP1Win = (m.p1uid === wUid);
+        const lUid = isP1Win ? m.p2uid : m.p1uid;
+        const wName = m.winnerName;
+        const lName = isP1Win ? m.p2name : m.p1name;
+        const w = ensureP(wUid, wName); if (w) w.wins++;
+        const l = ensureP(lUid, lName); if (l) l.losses++;
+        const wPk = uidMain[wUid], lPk = uidMain[lUid];
+        if (wPk) ensurePk(wPk).wins++;
+        if (lPk) ensurePk(lPk).losses++;
+      }
+    });
+  });
+
+  const totalEvents = archives.length;
+  const avgPlayers = totalEvents ? (totalEntries / totalEvents) : 0;
+
+  // ── 1. 賽事總覽 ──
+  let html = '<h2>📈 賽事統計 <button class="refresh-btn" style="float:right;font-size:.8rem;" onclick="loadTournamentStats(true)">🔄 重新整理</button></h2>';
+  html += '<section class="stats-section"><h3>📊 1. 賽事總覽</h3><div class="stats-grid">'
+    + '<div class="stat-card"><div class="stat-label">完成賽事</div><div class="stat-value">' + totalEvents + '</div></div>'
+    + '<div class="stat-card"><div class="stat-label">累計報名人次</div><div class="stat-value">' + totalEntries + '</div></div>'
+    + '<div class="stat-card"><div class="stat-label">不重複玩家</div><div class="stat-value">' + uniquePlayers.size + '</div></div>'
+    + '<div class="stat-card"><div class="stat-label">對戰場數</div><div class="stat-value">' + totalRealMatches + '</div></div>'
+    + '<div class="stat-card"><div class="stat-label">平均每場人數</div><div class="stat-value">' + avgPlayers.toFixed(1) + '</div></div>'
+    + '</div></section>';
+
+  // ── 2. 冠軍榜（奪冠次數）──
+  const champRank = Object.values(pmap).filter((p) => p.titles > 0).sort((a, b) => b.titles - a.titles || b.wins - a.wins);
+  html += '<section class="stats-section"><h3>🏆 2. 冠軍榜（奪冠次數）</h3>';
+  if (!champRank.length) html += '<div class="empty">尚無冠軍紀錄。</div>';
+  else {
+    html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>奪冠</th><th>參賽</th><th>戰績</th><th>勝率</th></tr></thead><tbody>';
+    champRank.forEach((p, i) => {
+      html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
+        + '</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+  html += '</section>';
+
+  // ── 3. 玩家戰績排行（依勝場）──
+  const playerRank = Object.values(pmap).sort((a, b) => b.wins - a.wins || _tsPct(b.wins, b.losses) - _tsPct(a.wins, a.losses));
+  html += '<section class="stats-section"><h3>🎯 3. 玩家戰績排行 <span class="small muted">（只計雙方都到場的真實對局，不含輪空）</span></h3>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>參賽</th><th>勝</th><th>負</th><th>勝率</th><th>奪冠</th></tr></thead><tbody>';
+  playerRank.forEach((p, i) => {
+    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + p.events + '</td><td>' + p.wins
+      + '</td><td>' + p.losses + '</td><td>' + _tsPct(p.wins, p.losses) + '%</td><td>' + (p.titles ? (p.titles + ' 🏆') : '—') + '</td></tr>';
+  });
+  html += '</tbody></table></section>';
+
+  // ── 4. 主力寶可夢使用率 + 勝率 ──
+  const pkRank = Object.keys(pkUse).map((nm) => ({ name: nm, ...pkUse[nm] })).sort((a, b) => b.use - a.use || b.wins - a.wins);
+  html += '<section class="stats-section"><h3>⚔️ 4. 主力寶可夢使用率 <span class="small muted">（依牌組推測主力打手；勝率只計真實對局）</span></h3>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>主力寶可夢</th><th>使用次數</th><th>使用率</th><th>戰績</th><th>勝率</th></tr></thead><tbody>';
+  pkRank.forEach((p, i) => {
+    const usePct = totalEntries ? Math.round(p.use / totalEntries * 100) : 0;
+    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + p.use + '</td><td>' + usePct
+      + '%</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
+  });
+  html += '</tbody></table></section>';
+
+  // ── 5. 歷屆賽事 ──
+  html += '<section class="stats-section"><h3>📋 5. 歷屆賽事</h3>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>完賽日</th><th>賽事名稱</th><th>人數</th><th>冠軍</th><th>冠軍牌型</th></tr></thead><tbody>';
+  archives.forEach((a) => {
+    const champRec = (a.players || []).find((p) => p.uid === a.championUid);
+    const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
+    html += '<tr><td>' + _tsFmtDate(a.finishedAt) + '</td><td>' + escapeHtml(a.eventName || '錦標賽') + '</td><td>' + (a.playerCount || (a.players || []).length)
+      + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td></tr>';
+  });
+  html += '</tbody></table></section>';
+
+  // ── 6. 賽果分佈 ──
+  const oTotal = Object.values(outcome).reduce((s, v) => s + v, 0);
+  const oRow = (label, n, hint) => {
+    if (!n) return '';
+    const pct = oTotal ? Math.round(n / oTotal * 100) : 0;
+    return '<tr><td>' + label + '</td><td>' + n + '</td><td>' + pct + '%</td><td class="small muted">' + (hint || '') + '</td></tr>';
+  };
+  html += '<section class="stats-section"><h3>🔚 6. 賽果分佈 <span class="small muted">（全部對局，含輪空與判負）</span></h3>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>結束方式</th><th>場數</th><th>占比</th><th></th></tr></thead><tbody>';
+  html += oRow('✅ 正常對戰分勝負', outcome.normal, '雙方打到遊戲結束');
+  html += oRow('🏳️ 投降判負', outcome.forfeit, '一方主動投降');
+  html += oRow('⏰ 閒置判負', outcome.idleForfeit, '3 分鐘無動作');
+  html += oRow('🚫 未進場判負', outcome.noShow, '一方逾時未進場');
+  html += oRow('⌛ 時限判負', outcome.timeLimit, '對局超時');
+  html += oRow('💤 雙方未進場', outcome.doubleNoShow, '雙方皆逾時');
+  html += oRow('🛠️ 管理員裁定', outcome.adminResolved, '人工強制裁定');
+  html += oRow('➖ 輪空晉級', outcome.bye, '人數不足自動晉級');
+  html += '</tbody></table></section>';
+
+  el.innerHTML = html;
+}
+
 window.switchTab = function(name) {
   currentTab = name;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
@@ -927,6 +1108,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
   else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
+  else if (currentTab === 'tournament-stats') p = loadTournamentStats(forceRefresh);  // 賽事統計
   document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
   return p;
 };
