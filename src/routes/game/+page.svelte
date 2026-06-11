@@ -5123,6 +5123,10 @@
     }
   }
 
+  // v5.560：對戰中「投降離開」前先確認，減少順手中離影響對手體驗
+  function surrenderLeave() {
+    if (confirm('中離是不好的行為，訓練家應盡力完成對戰，確定要投降/離開嗎？？？')) leaveOnlineGame();
+  }
   async function leaveOnlineGame() {
     // v3.34 Fix #3：先 unsubRoom 阻斷 onSnapshot callback，再 stopHeartbeat，
     //   最後 await leaveRoom；避免 await 期間 firestore snapshot 仍 fire
@@ -6571,7 +6575,7 @@
   <!-- ── 頂部資訊列 ── -->
   <header class="battle-header">
     {#if mode === 'online'}
-      <button class="small-back" onclick={leaveOnlineGame}>← 離開</button>
+      <button class="small-back" onclick={surrenderLeave}>🏳 投降離開</button>
     {:else}
       <a href="{base}/" class="small-back">← 首頁</a>
     {/if}

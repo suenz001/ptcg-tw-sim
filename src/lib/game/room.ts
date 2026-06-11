@@ -589,7 +589,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
       ...myGs,
       phase: 'game-over' as const,
       winner: winnerIdx,
-      winReason: `${myName} 中途離開`,
+      winReason: '對手承認技不如人，先行離開了',
       log: [
         ...(myGs.log ?? []),
         { turn: myGs.turn, playerIndex: null, message: `${myName} 中途離開遊戲，對手獲勝` },
