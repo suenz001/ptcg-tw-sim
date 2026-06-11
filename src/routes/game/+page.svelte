@@ -98,6 +98,10 @@
   let tDeckId = $state('');
   let tNickname = $state(''); // 錦標賽暱稱（對戰/聊天/賽程表都用它顯示）
   let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
+  // ── 觀戰 ──
+  let tSpectateList = $state<any[]>([]);
+  let tSpectateRoom = $state('');
+  let isTournSpectator = $state(false);
   let tError = $state('');
   let tBusy = $state(false);
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -119,7 +123,7 @@
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); }, 3000); }
+      if (!tEventPollTimer) { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   function tPlayerId(): string {
@@ -3808,6 +3812,38 @@
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
     tournLoadEvent(); tBracketLoad();
   }
+  // 觀戰：列出進行中的對戰
+  async function tSpectateLoad() {
+    try { const r = await tApi('/spectate/list'); tSpectateList = (r && Array.isArray(r.matches)) ? r.matches : []; }
+    catch { /* ignore */ }
+  }
+  // 觀戰：進入某場對戰（read-only，伺服器已 redact 雙方手牌；本端額外把手牌渲染成卡背）
+  async function tSpectate(roomId: string) {
+    tError = ''; tBusy = true;
+    try {
+      isTournSpectator = true; tSpectateRoom = roomId; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; tStep = 'waiting';
+      const sst = await tApi(`/spectate/state?room=${roomId}&v=-1`);
+      if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
+      if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
+      startSpectatePoll();
+    } catch (e: any) { tError = '觀戰失敗：' + (e?.message ?? e); isTournSpectator = false; tStep = 'lobby'; }
+    finally { tBusy = false; }
+  }
+  function startSpectatePoll() {
+    if (tPollTimer) clearInterval(tPollTimer);
+    tPollTimer = setInterval(async () => {
+      try {
+        const r = await tApi(`/spectate/state?room=${tSpectateRoom}&v=${tVersion}`);
+        if (r && r.names) tSyntheticRoom(r.seats, r.names);
+        if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
+      } catch { /* 忽略單次失敗 */ }
+    }, 2000);
+  }
+  function tLeaveSpectate() {
+    try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
+    tournLoadEvent(); tBracketLoad(); tSpectateLoad();
+  }
   async function tournEnroll() {
     const nick = (tNickname || '').trim();
     if (!nick) { tError = '請先填寫錦標賽暱稱'; return; }
@@ -5935,6 +5971,17 @@
         </div>
       {/if}
 
+      {#if tSpectateList.length > 0}
+        <div class="tourn-bracket">
+          <div class="tourn-bracket-head">👁 觀戰進行中的對戰（不會看到雙方手牌）</div>
+          {#each tSpectateList as sp (sp.roomId)}
+            <div class="tourn-mymatch">
+              <span>第 {sp.round} 輪：<b>{sp.p1name}</b> vs <b>{sp.p2name}</b></span>
+              <button class="btn-secondary small" onclick={() => tSpectate(sp.roomId)} disabled={tBusy}>👁 觀戰</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
       {#if !tMe.registered}
         <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
           <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
@@ -5962,6 +6009,7 @@
 {:else}
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
 {#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
+{#if isTournSpectator && game}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
@@ -7320,6 +7368,9 @@
       <!-- v2.43: setup 階段要等硬幣動畫結束才開始發牌（感覺上是硬幣→發 7 張） -->
       <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
+      {#if isTournSpectator}
+        {#each myPlayer?.hand??[] as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
+      {:else}
       {#key myIdx}
       {#each myPlayer?.hand??[] as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
@@ -7405,6 +7456,7 @@
         {/if}
       {/each}
       {/key}
+      {/if}
       {/if}
     </div>
   </div>

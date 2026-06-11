@@ -2455,6 +2455,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
         });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
+    // 觀戰：列出進行中的對戰（任何登入者可看）
+    app.get('/api/tournament/spectate/list', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev) return res.json({ matches: [] });
+        const ms = await TMATCH.find({ eventId: ev._id, status: 'playing', roomId: { $ne: null } }).toArray();
+        res.json({ matches: ms.map((m) => ({ roomId: m.roomId, round: m.round, p1name: m.p1name, p2name: m.p2name })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // 觀戰：取對局盤面（雙方手牌 redact 成卡背，防作弊；觀戰者不可操作）
+    app.get('/api/tournament/spectate/state', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const room = String(req.query.room || '');
+        const doc = await TROOMS.findOne({ _id: room });
+        if (!doc || !doc.gameState) return res.json({ version: -1, waiting: true });
+        const gs = JSON.parse(JSON.stringify(doc.gameState));
+        if (Array.isArray(gs.players)) for (const pl of gs.players) { if (Array.isArray(pl.hand)) pl.hand = pl.hand.map((c) => ({ iid: c.iid, cardId: '__HIDDEN__', damage: 0, energyAttached: [] })); }
+        res.json({ gameState: gs, version: doc.version, seats: [null, null], names: doc.names, spectate: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
 
     // 進入我這輪的對戰（建/取伺服器權威房）
     app.post('/api/tournament/match/enter', async (req, res) => {
