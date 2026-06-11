@@ -9686,6 +9686,7 @@
   .tcmsg { color: #e8f0e8; word-break: break-word; }
   .tcmsg.muted { color: #888; }
   .tcmsg.tcsys { color: #ffd35a; }
+  .tcmsg.tcsys .tcname { color: #ffd35a; } /* v5.579 系統通知的「系統」名字也用黃色(與內容一致)，跟玩家發言的藍色名區分 */
   .tctime { color: #667; font-size: 11px; margin-right: 5px; font-variant-numeric: tabular-nums; }
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
