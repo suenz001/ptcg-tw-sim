@@ -5933,8 +5933,6 @@
             <p class="muted small">選好下方牌組後按「報名」（報名後牌組即鎖定）。</p>
           {/if}
         </div>
-      {:else}
-        <p class="muted small">目前沒有開放報名的賽事。{#if tIsAdmin}（請至 admin 後台「🏆 賽事」分頁建立）{/if}</p>
       {/if}
       {#if tBracket && tBracket.matches && tBracket.matches.length}
         <div class="tourn-bracket">
