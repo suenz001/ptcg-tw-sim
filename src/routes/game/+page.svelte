@@ -5955,6 +5955,7 @@
 
 {#if isTournament && tStep !== 'playing'}
   <main class="lobby tourn-lobby">
+    <div class="tourn-topbar"><a class="tourn-home-btn" href="{base}/">← 回到首頁</a></div>
     <h1 class="lobby-title">🏆 錦標賽對戰</h1>
     {#if tStep === 'waiting'}
       <p class="tourn-wait">⏳ 已進場，等待對手加入…<br/>（請另一人也開 /tournament 選牌組進場）</p>
@@ -9790,6 +9791,10 @@
   /* v4.491：margin top 改為 calc(1rem + env(safe-area-inset-top, 0)) 比照 cards 標準，避開 iOS 動態島／瀏海。
      Desktop 上 env() = 0 不影響；iOS 上自動補上動態島高度（~47px）。 */
   .lobby,.setup-screen{ max-width:700px; margin: calc(1rem + env(safe-area-inset-top, 0)) auto 2rem; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
+  /* v5.576：錦標賽頁回到首頁鈕；padding-top 再加 safe-area，iOS 動態島／瀏海不會擋到、好按 */
+  .tourn-topbar { margin: 0 0 14px; padding-top: env(safe-area-inset-top, 0); text-align: left; }
+  .tourn-home-btn { display: inline-block; padding: 10px 18px; background: #2a3a4a; color: #cfe0f8; border: 1px solid #4a6a8a; border-radius: 9px; text-decoration: none; font-size: 14px; font-weight: 600; }
+  .tourn-home-btn:active, .tourn-home-btn:hover { background: #36495d; }
   .lobby h1{ font-size:1.8rem; margin-bottom:1rem; }
   .lobby-subtitle{ color:#9aa; font-size:0.85rem; margin:-0.5rem 0 0.8rem; text-align:center; }
   .back{ color:#88ccff; font-size:0.9rem; text-decoration:none; display:inline-block; margin-bottom:1rem; }
