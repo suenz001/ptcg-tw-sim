@@ -97,6 +97,7 @@
   let tVersion = $state(-1);
   let tDeckId = $state('');
   let tNickname = $state(''); // 錦標賽暱稱（對戰/聊天/賽程表都用它顯示）
+  let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
   let tError = $state('');
   let tBusy = $state(false);
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -118,7 +119,7 @@
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tournLoadEvent(); tChatLoad(); tBracketLoad(); tEventPollTimer = setInterval(() => { tournLoadEvent(); tChatLoad(); tBracketLoad(); }, 3000); }
+      if (!tEventPollTimer) { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now(); tournLoadEvent(); tChatLoad(); tBracketLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   function tPlayerId(): string {
@@ -3815,7 +3816,7 @@
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { name: nick, deckEntries: deck.entries }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    try { const r = await tApi('/register', { name: nick, deckName: deck.name, deckEntries: deck.entries }); if (r.error) tError = r.error; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   async function tournUnregister() {
@@ -5883,7 +5884,7 @@
           {#if tEvent.status === 'draft' && tEvent.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(tEvent.registrationOpenAt).toLocaleString()} 開放</p>{/if}
           {#if tEvent.status === 'registration' && tEvent.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(tEvent.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
           {#if tMe.registered}
-            <p class="reg-ok">✅ 你已報名，牌組已鎖定（整賽不可更換）</p>
+            <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{tMe.name}</b> ｜ 鎖定牌組：<b>{tMe.deckName ?? '（已選定）'}</b></p>
             {#if tEvent.status === 'registration'}<button class="btn-secondary small" onclick={tournUnregister} disabled={tBusy}>退賽</button>{/if}
           {:else if tEvent.status === 'registration'}
             <p class="muted small">選好下方牌組後按「報名」（報名後牌組即鎖定）。</p>
@@ -5896,10 +5897,19 @@
         <div class="tourn-bracket">
           <div class="tourn-bracket-head">📋 賽程表{#if tBracket.event?.championName} ｜ 🏆 冠軍：<b>{tBracket.event.championName}</b>{/if}</div>
           {#if tMyMatch}
+            {@const _waitMs = (tMyMatch.enterOpenAt ?? 0) - tNow}
+            {@const _dlMs = (tMyMatch.noShowDeadline ?? 0) - tNow}
             <div class="tourn-mymatch">
               <span>🔔 第 {tMyMatch.round} 輪 ｜ 對手：<b>{tMyMatch.oppName}</b></span>
-              <button class="btn-primary small" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : '⚔ 進入對戰'}</button>
+              {#if _waitMs > 0}
+                <span class="tourn-cd">⏳ 休息倒數 {Math.floor(_waitMs / 60000)}:{String(Math.floor((_waitMs % 60000) / 1000)).padStart(2, '0')} 後可進場</span>
+              {:else}
+                <button class="btn-primary small" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : (tMyMatch.entered ? '⚔ 回到對戰' : '⚔ 進入對戰')}</button>
+              {/if}
             </div>
+            {#if _waitMs <= 0 && tMyMatch.noShowDeadline && _dlMs > 0 && !tMyMatch.entered}
+              <p class="muted small" style="text-align:center;color:#e8a;">⏰ 請於 {Math.floor(_dlMs / 60000)}:{String(Math.floor((_dlMs % 60000) / 1000)).padStart(2, '0')} 內進場，逾時判負離席</p>
+            {/if}
           {/if}
           <div class="tourn-rounds">
             {#each Array.from({ length: tBracket.event?.rounds ?? 0 }, (_, i) => i + 1) as rnd}
@@ -5918,29 +5928,28 @@
         </div>
       {/if}
 
-      <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
-        <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" disabled={tMe.registered} />
-      </label>
-      <label class="tourn-field">選擇牌組（需 60 張）
-        <select class="deck-select" bind:value={tDeckId}>
-          <option value="" disabled>— 請選擇牌組 —</option>
-          {#if PRESET_DECKS.length > 0}
-            <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-          {/if}
-          {#if decks.length > 0}
-            <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-          {/if}
-        </select>
-      </label>
-      {#if tError}<p class="warn">{tError}</p>{/if}
-      {#if tEvent && tEvent.status === 'registration' && !tMe.registered}
-        <button class="btn-primary tourn-join" onclick={tournEnroll} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? '報名中…' : '報名（鎖定暱稱與牌組）'}</button>
+      {#if !tMe.registered}
+        <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
+          <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
+        </label>
+        <label class="tourn-field">選擇牌組（需 60 張）
+          <select class="deck-select" bind:value={tDeckId}>
+            <option value="" disabled>— 請選擇牌組 —</option>
+            {#if PRESET_DECKS.length > 0}
+              <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+            {/if}
+            {#if decks.length > 0}
+              <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+            {/if}
+          </select>
+        </label>
+        {#if tError}<p class="warn">{tError}</p>{/if}
+        {#if tEvent && tEvent.status === 'registration'}
+          <button class="btn-primary tourn-join" onclick={tournEnroll} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? '報名中…' : '報名（鎖定暱稱與牌組）'}</button>
+        {/if}
+      {:else}
+        {#if tError}<p class="warn">{tError}</p>{/if}
       {/if}
-      <button class="btn-secondary tourn-join" onclick={tournamentJoin} disabled={tBusy || !tDeckId}>
-        {tBusy ? '進場中…' : '快速測試房（不需報名）'}
-      </button>
-      <button class="btn-secondary small" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
-      <p class="muted small">⚠ 此功能運算需正式站伺服器；beta 站無法連線。</p>
     {/if}
   </main>
 {:else}
