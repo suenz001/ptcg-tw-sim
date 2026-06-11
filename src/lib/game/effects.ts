@@ -1386,6 +1386,7 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, pool) => {
       const prizes = _ko.prizes;
       let s = addLog({ ...state, players }, `狙擊羽毛：120 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack');
+      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
       if (players[dIdx].bench.length === 0) {
         return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
       }
@@ -6222,6 +6223,7 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
       const prizes = _ko.prizes;
       let s = addLog({ ...state, players }, `電磁電光：10 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack');
+      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
       if (players[dIdx].bench.length === 0) {
         return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
       }
@@ -6513,6 +6515,7 @@ function applyDamageToAllOpp(
       defender = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
       s = addLog(s, `${label}：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack');
+      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
     } else {
       defender = { ...defender, active: { ...defender.active, damage: newDmg } };
     }
@@ -7053,6 +7056,7 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
       players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
       let s = addLog({ ...state, players }, `落雷風暴：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack');
+      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, ko[0], true, true);
       if (players[dIdx].bench.length === 0) {
         return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
       }
@@ -7212,19 +7216,54 @@ export function fireDefenderOnDamaged(
 //         ② 阻礙之塔(JAMMING_TOWER) → 道具失效
 //         ③ 只在「招式傷害」KO 觸發（效果昏厥 koTargetByAttackEffect 不走這，卡面「受到…傷害而昏厥」）。
 //   koInst = KO 前的 instance snapshot（含 tools + energy）。
-export function fireOnKOTools(
+export function fireDefenderOnKO(
   state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>,
-  koInst: CardInstance, isActive: boolean,
+  koInst: CardInstance, isActive: boolean, koByAttackDamage: boolean = true,
 ): GameState {
+  // v5.573：收斂「戰鬥位被招式 KO」時的防守方 on-KO 機制——原本只有引擎主管線觸發，
+  //   走中央 helper dealAttackDamageToTarget / inline 傷害 resolver 的招式 KO 戰鬥位時會漏。
+  //   三類：① TOOL_ON_KO(沉重接力棒/希望護身符) ② PASSIVE_KO_RETALIATION(沙鈴仙人掌 炸裂針)
+  //   ③ PASSIVE_ON_KO(桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / 密勒頓 光子密碼)。
+  //   皆「戰鬥位」(isActive) 且「受招式傷害昏厥」(koByAttackDamage) 才觸發；效果KO不觸發。
   if (!isActive) return state;
-  const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
-  if (stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name)) return state;
   let s = state;
-  for (const t of getAllAttachedTools(koInst)) {
-    const tool = pool.get(t.cardId);
-    if (!tool) continue;
-    const fn = TOOL_ON_KO.get(tool.name);
-    if (fn) s = fn(s, dIdx, aIdx, pool, koInst);
+  const stadiumCard = s.activeStadium ? pool.get(s.activeStadium.cardId) : null;
+  const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
+  // ① TOOL_ON_KO（維持原行為：isActive + 阻礙之塔失效）
+  if (!toolsJammed) {
+    for (const t of getAllAttachedTools(koInst)) {
+      const tool = pool.get(t.cardId);
+      if (!tool) continue;
+      const fn = TOOL_ON_KO.get(tool.name);
+      if (fn) s = fn(s, dIdx, aIdx, pool, koInst);
+    }
+  }
+  if (koByAttackDamage) {
+    const koCard = pool.get(koInst.cardId);
+    const attackerHasMagicalShine = s.players[aIdx].active
+      ? (pool.get(s.players[aIdx].active!.cardId)?.abilities?.some(a => a.name === '光之翼') ?? false) : false;
+    // ② PASSIVE_KO_RETALIATION（炸裂針）→ 對攻擊方放指示物（光之翼擋；初始化/暗夜羽擊等消除 holder 特性則跳過）
+    if (koCard?.abilities && !attackerHasMagicalShine) {
+      for (const ab of koCard.abilities) {
+        if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, 'active', pool)) continue;
+        const ret = PASSIVE_KO_RETALIATION.get(ab.name);
+        if (!ret) continue;
+        const refPlayers = [...s.players] as [PlayerState, PlayerState];
+        if (refPlayers[aIdx].active) {
+          const dmg = ret.counters * 10;
+          refPlayers[aIdx] = { ...refPlayers[aIdx], active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + dmg } };
+          const attName = pool.get(refPlayers[aIdx].active!.cardId)?.name ?? '?';
+          s = addLog({ ...s, players: refPlayers }, `「${ab.name}」啟動：${attName} 身上放置 ${ret.counters} 個傷害指示物（+${dmg}）`, dIdx);
+        }
+      }
+    }
+    // ③ PASSIVE_ON_KO（桃歹郎/鬆口氣/光子密碼）
+    if (koCard?.abilities) {
+      for (const ab of koCard.abilities) {
+        const fnKO = PASSIVE_ON_KO.get(ab.name);
+        if (fnKO) s = fnKO(s, dIdx, aIdx, pool, koCard, koInst);
+      }
+    }
   }
   return s;
 }
@@ -7531,7 +7570,7 @@ export function dealAttackDamageToTarget(
     s = recordOppKO(s, dIdx, targetCard, 'attack');
     // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
     //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
-    s = fireOnKOTools(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive);
+    s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, kind === 'attack-damage');
     if (s.phase === 'game-over') return s;
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
@@ -8029,6 +8068,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
     players[dIdx] = newDefender;
     s = addLog({ ...s, players }, `${label}：${newActiveName} 被擊倒！+${prizes} 張獎賞卡`, null);
     s = recordOppKO(s, dIdx, newActiveCard, 'attack');
+    s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koList[0], true, true);
     if (newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
     }
