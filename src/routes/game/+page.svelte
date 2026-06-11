@@ -111,9 +111,13 @@
   let tChat = $state<any[]>([]);
   let tChatInput = $state('');
   let tChatLastTs = $state(0);
+  // ── Phase1-D 賽程（單敗淘汰）──
+  let tBracket = $state<any>(null);   // { event, matches[] }
+  let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
+  let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tournLoadEvent(); tChatLoad(); tEventPollTimer = setInterval(() => { tournLoadEvent(); tChatLoad(); }, 3000); }
+      if (!tEventPollTimer) { tournLoadEvent(); tChatLoad(); tBracketLoad(); tEventPollTimer = setInterval(() => { tournLoadEvent(); tChatLoad(); tBracketLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   function tPlayerId(): string {
@@ -3773,8 +3777,33 @@
   async function tournLoadEvent() {
     try {
       const r = await tApi('/event');
-      tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin;
+      tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
     } catch { /* ignore */ }
+  }
+  // 載入賽程表（admin seed 後才有 matches）
+  async function tBracketLoad() {
+    try { const r = await tApi('/bracket'); tBracket = (r && Array.isArray(r.matches)) ? r : null; }
+    catch { /* ignore */ }
+  }
+  // 進入我本輪的對戰（伺服器建/取對戰房，鎖定的牌組）
+  async function tEnterMatch() {
+    tError = ''; tBusy = true;
+    try {
+      const r = await tApi('/match/enter', {});
+      if (r.error) { tError = r.error; return; }
+      tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting';
+      const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+      if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
+      if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
+      startTournamentPoll();
+    } catch (e: any) { tError = '進場失敗：' + (e?.message ?? e); tStep = 'lobby'; }
+    finally { tBusy = false; }
+  }
+  // 對戰結束 → 返回賽事大廳（清本地對局、刷新賽程）
+  function tLeaveMatch() {
+    try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
+    tournLoadEvent(); tBracketLoad();
   }
   async function tournEnroll() {
     const deck = allDecks.find(d => d.id === tDeckId);
@@ -3817,10 +3846,10 @@
     if (!deck) { tError = '請先選擇牌組'; return; }
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
-    tError = ''; tBusy = true; tStep = 'waiting';
+    tError = ''; tBusy = true; tStep = 'waiting'; tActiveRoom = T_ROOM;
     try {
       const nm = (myName && myName.trim()) || '玩家';
-      const r = await tApi('/join', { room: T_ROOM, playerId: tPlayerId(), name: nm, deckEntries: deck.entries });
+      const r = await tApi('/join', { room: tActiveRoom, playerId: tPlayerId(), name: nm, deckEntries: deck.entries });
       if (r.error) { tError = r.error; tStep = 'lobby'; return; }
       mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online';
       tSyntheticRoom(r.seats, r.names);
@@ -3836,7 +3865,7 @@
     if (tPollTimer) clearInterval(tPollTimer);
     tPollTimer = setInterval(async () => {
       try {
-        const r = await tApi(`/state?room=${T_ROOM}&v=${tVersion}`);
+        const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
       } catch { /* 忽略單次輪詢失敗 */ }
@@ -3846,7 +3875,7 @@
     if (tBusy) return; tBusy = true; tError = '';
     const prev = game;
     try {
-      const r = await tApi('/action', { room: T_ROOM, playerId: tPlayerId(), action });
+      const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });
       if (r.error) tError = r.error;
       if (r.gameState) {
         tAdopt(r.gameState, r.version);
@@ -3858,10 +3887,10 @@
   async function tournamentReset() {
     if (!confirm('重置測試房？會清空目前對局，雙方需重新選牌組進場。')) return;
     tBusy = true; tError = '';
-    try { await tApi('/reset', { room: T_ROOM, playerId: tPlayerId() }); }
+    try { await tApi('/reset', { room: tActiveRoom, playerId: tPlayerId() }); }
     catch (e: any) { tError = String(e?.message ?? e); }
     finally { tBusy = false; }
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1;
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
   }
 
   async function dispatch(
@@ -5857,6 +5886,31 @@
       {:else}
         <p class="muted small">目前沒有開放報名的賽事。{#if tIsAdmin}（請至 admin 後台「🏆 賽事」分頁建立）{/if}</p>
       {/if}
+      {#if tBracket && tBracket.matches && tBracket.matches.length}
+        <div class="tourn-bracket">
+          <div class="tourn-bracket-head">📋 賽程表{#if tBracket.event?.championName} ｜ 🏆 冠軍：<b>{tBracket.event.championName}</b>{/if}</div>
+          {#if tMyMatch}
+            <div class="tourn-mymatch">
+              <span>🔔 第 {tMyMatch.round} 輪 ｜ 對手：<b>{tMyMatch.oppName}</b></span>
+              <button class="btn-primary small" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : '⚔ 進入對戰'}</button>
+            </div>
+          {/if}
+          <div class="tourn-rounds">
+            {#each Array.from({ length: tBracket.event?.rounds ?? 0 }, (_, i) => i + 1) as rnd}
+              <div class="tourn-round">
+                <div class="tourn-round-title">{rnd === tBracket.event?.rounds ? '🏆 決賽' : '第 ' + rnd + ' 輪'}</div>
+                {#each tBracket.matches.filter((m: any) => m.round === rnd) as m}
+                  <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'}>
+                    <div class="tm-p" class:win={m.winner === 'p1'}>{m.p1name ?? '—'}</div>
+                    <div class="tm-vs">{m.bye ? '輪空' : 'vs'}</div>
+                    <div class="tm-p" class:win={m.winner === 'p2'}>{m.p2name ?? (m.bye ? '' : '—')}</div>
+                  </div>
+                {/each}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <label class="tourn-field">選擇牌組（需 60 張）
         <select class="deck-select" bind:value={tDeckId}>
@@ -5882,6 +5936,7 @@
   </main>
 {:else}
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
+{#if isTournament && game && game.phase === 'game-over'}<div class="tourn-return-bar"><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
@@ -9429,13 +9484,27 @@
   .reg-ok { color: #7CFC9A; font-weight: 600; }
   .tourn-chat { max-width: 460px; margin: 10px auto; border: 1px solid #3a5a3a; border-radius: 10px; background: #0f1c0f; overflow: hidden; text-align: left; }
   .tourn-chat-head { background: #1a2e1a; padding: 6px 12px; font-weight: 600; color: #cfe8cf; }
-  .tourn-chat-msgs { max-height: 180px; overflow-y: auto; padding: 8px 12px; font-size: 0.88rem; line-height: 1.5; display: flex; flex-direction: column; }
+  .tourn-chat-msgs { height: 200px; overflow-y: auto; padding: 8px 12px; font-size: 0.88rem; line-height: 1.5; display: flex; flex-direction: column; }
   .tcmsg { color: #e8f0e8; word-break: break-word; }
   .tcmsg.muted { color: #888; }
   .tcmsg.tcsys { color: #ffd35a; }
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
+  .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
+  .tourn-bracket-head { font-weight: 600; color: #cfe0f8; margin-bottom: 8px; }
+  .tourn-mymatch { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .tourn-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
+  .tourn-round { min-width: 150px; flex: 0 0 auto; }
+  .tourn-round-title { font-size: 0.82rem; color: #8aa0c8; margin-bottom: 6px; text-align: center; }
+  .tourn-match { background: #141b2a; border: 1px solid #2a3a55; border-radius: 7px; padding: 5px 8px; margin-bottom: 8px; font-size: 0.86rem; }
+  .tourn-match.mine { border-color: #d8b24a; box-shadow: 0 0 0 1px #d8b24a55; }
+  .tourn-match.done { opacity: 0.92; }
+  .tourn-match .tm-p { padding: 2px 4px; color: #c8d4e8; border-radius: 4px; }
+  .tourn-match .tm-p.win { color: #aef0b0; font-weight: 700; background: #1d3a1d; }
+  .tourn-match .tm-vs { text-align: center; font-size: 0.72rem; color: #6a7a98; margin: 1px 0; }
+  .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9999; }
+  .tourn-return-bar button { box-shadow: 0 4px 14px #000a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {

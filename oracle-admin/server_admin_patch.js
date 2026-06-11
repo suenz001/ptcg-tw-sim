@@ -2129,6 +2129,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (newGs === gs) return res.json({ rejected: true, gameState: gs, version: doc.version });
         const nv = doc.version + 1;
         await TROOMS.updateOne({ _id: room }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now() } });
+        if (newGs.phase === 'game-over' && doc.matchId) { try { await onMatchGameOver(doc, newGs); } catch (e) { console.warn('[tournament] match advance failed:', e && e.message); } }
         res.json({ gameState: newGs, version: nv });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -2172,7 +2173,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         let regCount = 0;
         if (ev) regCount = await TREGS.countDocuments({ eventId: ev._id });
-        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id) });
+        let myMatch = null;
+        if (ev && ev.status === 'running') {
+          const mm = await TMATCH.findOne({ eventId: ev._id, round: ev.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+          if (mm) myMatch = { matchId: mm._id, round: mm.round, oppName: (mm.p1uid === id.uid ? mm.p2name : mm.p1name) };
+        }
+        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2313,7 +2319,114 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
-    console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + chat + admin event/chat');
+
+    // ════════════════════════════════════════════════════════════════════
+    // Phase1-D：賽程引擎（單敗淘汰 Bo1，含 bye 湊 2 次方，伺服器權威自動晉級）
+    // ════════════════════════════════════════════════════════════════════
+    const TMATCH = db.collection('tournamentMatches');
+    function buildBracket(players, evId) {
+      const N = players.length;
+      const ps = players.slice();
+      for (let i = ps.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ps[i]; ps[i] = ps[j]; ps[j] = t; }
+      let P = 1; while (P < N) P *= 2;
+      const rounds = Math.round(Math.log2(P));
+      const byes = P - N; const half = P / 2;
+      const mid = (r, i) => evId + '_r' + r + '_m' + i;
+      const matches = [];
+      for (let r = 1; r <= rounds; r++) { const cnt = P / Math.pow(2, r); for (let i = 0; i < cnt; i++) matches.push({ _id: mid(r, i), eventId: evId, round: r, idx: i, p1uid: null, p1name: null, p2uid: null, p2name: null, roomId: null, winnerUid: null, winnerName: null, status: 'pending', bye: false }); }
+      const M = {}; for (const m of matches) M[m.round + '_' + m.idx] = m;
+      let pi = 0;
+      for (let i = 0; i < byes; i++) { const m = M['1_' + i]; const pl = ps[pi++]; m.p1uid = pl.uid; m.p1name = pl.name; m.bye = true; m.winnerUid = pl.uid; m.winnerName = pl.name; m.status = 'done'; }
+      for (let i = byes; i < half; i++) { const m = M['1_' + i]; const a = ps[pi++], b = ps[pi++]; m.p1uid = a.uid; m.p1name = a.name; m.p2uid = b.uid; m.p2name = b.name; }
+      for (let i = 0; i < byes; i++) { const m = M['1_' + i]; if (m.round < rounds && m.winnerUid) { const parent = M[(m.round + 1) + '_' + Math.floor(m.idx / 2)]; const slot = (m.idx % 2 === 0) ? 'p1' : 'p2'; parent[slot + 'uid'] = m.winnerUid; parent[slot + 'name'] = m.winnerName; } }
+      return { matches, rounds, P, byes };
+    }
+    // 對局結束 → 記勝者 + 晉級下一輪 + 檢查本輪/賽事完成
+    async function onMatchGameOver(doc, gs) {
+      if (!doc.matchId) return;
+      const m = await TMATCH.findOne({ _id: doc.matchId });
+      if (!m || m.status === 'done') return;
+      const wSeat = (gs.winner === 0 || gs.winner === 1) ? gs.winner : null;
+      if (wSeat == null) return;
+      const winnerUid = doc.seats[wSeat]; const winnerName = (doc.names && doc.names[wSeat]) || '';
+      await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid, winnerName, status: 'done' } });
+      const ev = await TEVENTS.findOne({ _id: m.eventId });
+      const rounds = (ev && ev.rounds) || 99;
+      if (m.round < rounds) {
+        const parentId = m.eventId + '_r' + (m.round + 1) + '_m' + Math.floor(m.idx / 2);
+        const slot = (m.idx % 2 === 0) ? 'p1' : 'p2';
+        const set = {}; set[slot + 'uid'] = winnerUid; set[slot + 'name'] = winnerName;
+        await TMATCH.updateOne({ _id: parentId }, { $set: set });
+        // 本輪全 done → currentRound++
+        const cur = (ev && ev.currentRound) || m.round;
+        const remaining = await TMATCH.countDocuments({ eventId: m.eventId, round: cur, status: { $ne: 'done' } });
+        if (remaining === 0) await TEVENTS.updateOne({ _id: m.eventId }, { $set: { currentRound: cur + 1 } });
+      } else {
+        await TEVENTS.updateOne({ _id: m.eventId }, { $set: { status: 'finished', championUid: winnerUid, championName: winnerName } });
+      }
+    }
+
+    // 管理員：產生賽程（報名名單 → 隨機種子 → 單敗淘汰，含 bye）
+    app.post('/api/tournament/admin/bracket/seed', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
+        const regs = await TREGS.find({ eventId: ev._id }).toArray();
+        if (regs.length < 2) return res.status(400).json({ error: '至少需要 2 位報名者' });
+        const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' }));
+        const { matches, rounds } = buildBracket(players, ev._id);
+        await TMATCH.deleteMany({ eventId: ev._id });
+        await TMATCH.insertMany(matches);
+        await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds } });
+        res.json({ ok: true, rounds, players: players.length });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 賽程表
+    app.get('/api/tournament/bracket', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev) return res.json({ event: null, matches: [] });
+        const matches = await TMATCH.find({ eventId: ev._id }).sort({ round: 1, idx: 1 }).toArray();
+        res.json({
+          event: { _id: ev._id, name: ev.name, status: ev.status, currentRound: ev.currentRound, rounds: ev.rounds, championName: ev.championName || null },
+          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winner: (m.winnerUid && m.winnerUid === m.p1uid) ? 'p1' : (m.winnerUid && m.winnerUid === m.p2uid) ? 'p2' : null, status: m.status, bye: m.bye, mine: (m.p1uid === id.uid || m.p2uid === id.uid) })),
+        });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 進入我這輪的對戰（建/取伺服器權威房）
+    app.post('/api/tournament/match/enter', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev || ev.status !== 'running') return res.json({ error: '賽事尚未開始或已結束' });
+        const m = await TMATCH.findOne({ eventId: ev._id, round: ev.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+        if (!m) return res.json({ error: '你目前沒有可進行的對戰（可能在等對手、等下一輪、或已淘汰）' });
+        let roomId = m.roomId;
+        if (!roomId) {
+          roomId = 'mr_' + m._id;
+          const reg1 = await TREGS.findOne({ _id: ev._id + '__' + m.p1uid });
+          const reg2 = await TREGS.findOne({ _id: ev._id + '__' + m.p2uid });
+          if (!reg1 || !reg2) return res.status(500).json({ error: '找不到玩家牌組' });
+          let gs;
+          try { gs = makeGame([reg1.deckEntries, reg2.deckEntries], [m.p1name, m.p2name]); }
+          catch (e) { return res.status(500).json({ error: '建立對局失敗（牌組可能含未支援卡）：' + e.message }); }
+          await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: 1, matchId: m._id, eventId: ev._id, updatedAt: Date.now() } }, { upsert: true });
+          await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing' } });
+        }
+        const seat = (id.uid === m.p1uid) ? 0 : 1;
+        res.json({ roomId, seat });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + chat + bracket/seed/match-enter + admin event/chat');
   } catch (_te) {
     console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);
   }
