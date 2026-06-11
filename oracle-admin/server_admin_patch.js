@@ -1,4 +1,5 @@
-// === ORACLE ADMIN ENDPOINTS === v0.30 (admin v1.25 — 1.4 勝因分佈：離開類依 finalTurn<=1 細分「第一回合離開(開房掛機)」vs「中途離開(認輸)」；「取得所有獎勵牌」正名「取得所有獎賞卡」) (v0.29 — admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
+// === ORACLE ADMIN ENDPOINTS === v0.31 (錦標賽：投降即時判負 /match/forfeit + 閒置逾3分鐘自動判負 currentActorSeat)
+// v0.30 (admin v1.25 — 1.4 勝因分佈：離開類依 finalTurn<=1 細分「第一回合離開(開房掛機)」vs「中途離開(認輸)」；「取得所有獎勵牌」正名「取得所有獎賞卡」) (v0.29 — admin v1.23 — 對戰歷史全站搜尋：match-records 加 q(房號/玩家名/email 模糊 regex) + cardIds(牌組含此卡) 全站篩選) (v0.28 — admin v1.15 — 意見回饋 email 改「當前頁批次 uid 查詢」端點 /users/lookup，免載全量 users) (v0.27 — admin v1.12 — 2.3 卡牌勝率排除「玩家中途離開」獲勝場：臨時離開/斷線不代表真實卡牌勝率) (v0.26 — winrate/archetype 加 ?since 時間範圍篩選 24h/7d/不限) (v0.25 — 2.3 卡牌→代表牌組聚合端點 archetype)
 // Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)
 //
 // Changes:
@@ -2045,6 +2046,23 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (gs.players[seat] && gs.players[seat].active === null) return true;
       return gs.activePlayerIndex === seat;
     }
+    // v0.31：閒置判負用 — 算「當前該動作的座位」(沿用 canSeatAct 的優先序)。回傳 0/1；setup 雙方都未完成回 -1；無法判定回 null。
+    function currentActorSeat(gs) {
+      if (!gs || gs.phase === 'game-over') return null;
+      if (gs.phase === 'setup') {
+        const d0 = !!(gs.setupDone && gs.setupDone[0]), d1 = !!(gs.setupDone && gs.setupDone[1]);
+        if (d0 && !d1) return 1;
+        if (!d0 && d1) return 0;
+        return -1; // 雙方都未完成 setup → 都欠動作
+      }
+      if (gs.phase !== 'playing') return null;
+      if (gs.pendingSelection && (gs.pendingSelection.actorIdx === 0 || gs.pendingSelection.actorIdx === 1)) return gs.pendingSelection.actorIdx;
+      if (gs.pendingPrizes && (gs.pendingPrizes[0] || 0) > 0) return 0;
+      if (gs.pendingPrizes && (gs.pendingPrizes[1] || 0) > 0) return 1;
+      if (gs.players && gs.players[0] && gs.players[0].active === null) return 0;
+      if (gs.players && gs.players[1] && gs.players[1].active === null) return 1;
+      return (gs.activePlayerIndex === 0 || gs.activePlayerIndex === 1) ? gs.activePlayerIndex : null;
+    }
     // 強制 senderIdx/playerIdx = 自己 seat，防偽造替對手操作
     function normalizeAction(action, seat) {
       const a = Object.assign({}, action);
@@ -2128,7 +2146,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         catch (e) { return res.json({ error: '動作無效：' + e.message, gameState: gs, version: doc.version }); }
         if (newGs === gs) return res.json({ rejected: true, gameState: gs, version: doc.version });
         const nv = doc.version + 1;
-        await TROOMS.updateOne({ _id: room }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now() } });
+        await TROOMS.updateOne({ _id: room }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now(), lastActionAt: Date.now() } });
         if (newGs.phase === 'game-over' && doc.matchId) { try { await onMatchGameOver(doc, newGs); } catch (e) { console.warn('[tournament] match advance failed:', e && e.message); } }
         res.json({ gameState: newGs, version: nv });
       } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2307,7 +2325,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const since = Number(req.query.since) || 0;
         const msgs = await TCHAT.find({ room: 'lobby', ts: { $gt: since } }).sort({ ts: 1 }).limit(80).toArray();
-        res.json({ messages: msgs.map((m) => ({ id: String(m._id), name: m.name, text: m.text, ts: m.ts, uid: m.uid, sys: !!m.sys })) });
+        res.json({ messages: msgs.map((m) => ({ id: String(m._id), name: m.name, text: m.text, ts: m.ts, uid: m.uid, sys: !!m.sys, admin: !!m.admin })) });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     app.post('/api/tournament/chat', async (req, res) => {
@@ -2323,8 +2341,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const now = Date.now();
         if (now - (_chatRate.get(id.uid) || 0) < 1200) return res.status(429).json({ error: '發言太快，請稍候' });
         _chatRate.set(id.uid, now);
-        const chatName = (regc && regc.name) ? regc.name : (id.name || '玩家');
-        await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: chatName, text, ts: now });
+        const isAdm = isTournAdmin(id);  // v0.31：管理員發言統一顯示「系統管理員」+ admin 標記(前端專屬顏色+icon)
+        const chatName = isAdm ? '系統管理員' : ((regc && regc.name) ? regc.name : (id.name || '玩家'));
+        await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: chatName, text, ts: now, admin: isAdm || undefined });
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -2507,11 +2526,32 @@ import('firebase-admin').then(async ({ default: admin }) => {
           let gs;
           try { gs = makeGame([reg1.deckEntries, reg2.deckEntries], [m.p1name, m.p2name]); }
           catch (e) { return res.status(500).json({ error: '建立對局失敗（牌組可能含未支援卡）：' + e.message }); }
-          await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: 1, matchId: m._id, eventId: ev._id, updatedAt: Date.now() } }, { upsert: true });
+          await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: 1, matchId: m._id, eventId: ev._id, updatedAt: Date.now(), lastActionAt: Date.now() } }, { upsert: true });
           await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', gameStartedAt: Date.now() } });
         }
         const seat = (id.uid === m.p1uid) ? 0 : 1;
         res.json({ roomId, seat });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 玩家投降：對戰中按「投降離開」→ 立即判對手勝 + 晉級（不必等對局時限）
+    app.post('/api/tournament/match/forfeit', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev || ev.status !== 'running') return res.json({ ok: true, note: '賽事未進行中' });
+        const m = await TMATCH.findOne({ eventId: ev._id, status: 'playing', $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+        if (!m) return res.json({ ok: true, note: '無進行中對戰' });
+        const mySeat = (id.uid === m.p1uid) ? 0 : 1;
+        const winSeat = 1 - mySeat;
+        const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
+        const lName = mySeat === 0 ? m.p1name : m.p2name;
+        await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', forfeit: true } });
+        if (m.roomId) { try { const room = await TROOMS.findOne({ _id: m.roomId }); if (room && room.gameState) { const og = JSON.parse(JSON.stringify(room.gameState)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '對手') + ' 投降，' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: Date.now() } }); } } catch (e) { /* best-effort */ } }
+        await postSystemChat('🏳 ' + (lName || '一方') + ' 投降，' + wName + ' 自動晉級。');
+        await advanceOrFinish(m, wUid, wName);
+        res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2583,6 +2623,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
                 await postSystemChat('⏰ 本場雙方皆未進場，雙淘汰，無人晉級。');
                 await checkRoundAdvance(ev._id);
               }
+            }
+          }
+        }
+        // 閒置判負：對局中(雙方都已進場)，輪到動作的一方逾 idleForfeitMin(預設3)分鐘無動作 → 判負(含斷線)。
+        if (ev.status === 'running') {
+          const idleMin = (ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3);
+          const playingI = await TMATCH.find({ eventId: ev._id, status: 'playing', roomId: { $ne: null } }).toArray();
+          for (const m of playingI) {
+            if (!(m.entered && m.entered[0] && m.entered[1])) continue; // 只判雙方都進場的對局(單方未進場由未進場判負處理)
+            const room = await TROOMS.findOne({ _id: m.roomId });
+            const gs = room && room.gameState;
+            if (!gs || gs.phase === 'game-over') continue;
+            const last = room.lastActionAt || room.updatedAt || m.gameStartedAt || now;
+            if (now <= last + idleMin * 60000) continue;
+            const actor = currentActorSeat(gs);
+            if (actor === 0 || actor === 1) {
+              const winSeat = 1 - actor;
+              const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name, lName = actor === 0 ? m.p1name : m.p2name;
+              await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', idleForfeit: true } });
+              try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+              await postSystemChat('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 自動晉級。');
+              await advanceOrFinish(m, wUid, wName);
+            } else if (actor === -1) {
+              await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'done', winnerUid: null, doubleNoShow: true } });
+              try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = '雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+              await postSystemChat('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰，無人晉級。');
+              await checkRoundAdvance(ev._id);
             }
           }
         }

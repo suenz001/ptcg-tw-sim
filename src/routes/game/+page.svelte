@@ -5161,7 +5161,14 @@
 
   // v5.560：對戰中「投降離開」前先確認，減少順手中離影響對手體驗
   function surrenderLeave() {
-    if (confirm('中離是不好的行為，訓練家應盡力完成對戰，確定要投降/離開嗎？？？')) leaveOnlineGame();
+    if (!confirm('中離是不好的行為，訓練家應盡力完成對戰，確定要投降/離開嗎？？？')) return;
+    // v5.568：錦標賽模式投降 → 伺服器即時判對手勝+晉級，再返回賽事大廳(不走一般 leaveOnlineGame)
+    if (isTournament) { tForfeitAndLeave(); return; }
+    leaveOnlineGame();
+  }
+  async function tForfeitAndLeave() {
+    try { await tApi('/match/forfeit', { room: tActiveRoom }); } catch (e) { console.warn('[tForfeit]', e); }
+    tLeaveMatch();
   }
   async function leaveOnlineGame() {
     // v3.34 Fix #3：先 unsubRoom 阻斷 onSnapshot callback，再 stopHeartbeat，
@@ -5908,7 +5915,7 @@
         <div class="tourn-chat-msgs">
           {#if tChat.length === 0}<div class="tcmsg muted">還沒有人發言，來說聲哈囉吧～</div>{/if}
           {#each tChat as m (m.id)}
-            <div class="tcmsg" class:tcsys={m.sys}><span class="tcname">{m.name}</span>：{m.text}</div>
+            <div class="tcmsg" class:tcsys={m.sys} class:tcadmin={m.admin}><span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
         {#if tMe.registered || tIsAdmin}
@@ -9569,6 +9576,7 @@
   .tcmsg.muted { color: #888; }
   .tcmsg.tcsys { color: #ffd35a; }
   .tcname { color: #7fc7ff; font-weight: 600; }
+  .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
   .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
   .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
