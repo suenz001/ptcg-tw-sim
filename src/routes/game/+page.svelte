@@ -107,9 +107,13 @@
   let tRegCount = $state(0);
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
+  // ── Phase1-C 大廳聊天 ──
+  let tChat = $state<any[]>([]);
+  let tChatInput = $state('');
+  let tChatLastTs = $state(0);
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tournLoadEvent(); tEventPollTimer = setInterval(tournLoadEvent, 5000); }
+      if (!tEventPollTimer) { tournLoadEvent(); tChatLoad(); tEventPollTimer = setInterval(() => { tournLoadEvent(); tChatLoad(); }, 3000); }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   function tPlayerId(): string {
@@ -3750,6 +3754,22 @@
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = '';
     try { await signOut(auth); } catch { /* ignore */ }
   }
+  async function tChatLoad() {
+    try {
+      const r = await tApi(`/chat?since=${tChatLastTs}`);
+      if (r && Array.isArray(r.messages) && r.messages.length) {
+        for (const m of r.messages) { if (m.ts > tChatLastTs) tChatLastTs = m.ts; }
+        tChat = [...tChat, ...r.messages].slice(-200);
+      }
+    } catch { /* ignore */ }
+  }
+  async function tChatSend() {
+    const txt = (tChatInput || '').trim();
+    if (!txt) return;
+    tChatInput = '';
+    try { const r = await tApi('/chat', { text: txt }); if (r && r.error) tError = r.error; await tChatLoad(); }
+    catch (e: any) { tError = String(e?.message ?? e); }
+  }
   async function tournLoadEvent() {
     try {
       const r = await tApi('/event');
@@ -5810,6 +5830,19 @@
       </div>
     {:else}
       <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
+      <div class="tourn-chat">
+        <div class="tourn-chat-head">💬 大廳聊天室</div>
+        <div class="tourn-chat-msgs">
+          {#if tChat.length === 0}<div class="tcmsg muted">還沒有人發言，來說聲哈囉吧～</div>{/if}
+          {#each tChat as m (m.id)}
+            <div class="tcmsg" class:tcsys={m.sys}><span class="tcname">{m.name}</span>：{m.text}</div>
+          {/each}
+        </div>
+        <div class="tourn-chat-input">
+          <input bind:value={tChatInput} maxlength="200" placeholder="說點什麼…（Enter 送出）" onkeydown={(e) => e.key === 'Enter' && tChatSend()} />
+          <button class="btn-secondary small" onclick={tChatSend} disabled={!tChatInput.trim()}>送出</button>
+        </div>
+      </div>
       {#if tEvent}
         <div class="tourn-event">
           <h3>🏆 {tEvent.name}</h3>
@@ -9394,6 +9427,15 @@
   .tourn-event h3 { margin: 0 0 4px; }
   .tourn-evstat { color: #cfe8cf; font-size: 0.88rem; }
   .reg-ok { color: #7CFC9A; font-weight: 600; }
+  .tourn-chat { max-width: 460px; margin: 10px auto; border: 1px solid #3a5a3a; border-radius: 10px; background: #0f1c0f; overflow: hidden; text-align: left; }
+  .tourn-chat-head { background: #1a2e1a; padding: 6px 12px; font-weight: 600; color: #cfe8cf; }
+  .tourn-chat-msgs { max-height: 180px; overflow-y: auto; padding: 8px 12px; font-size: 0.88rem; line-height: 1.5; display: flex; flex-direction: column; }
+  .tcmsg { color: #e8f0e8; word-break: break-word; }
+  .tcmsg.muted { color: #888; }
+  .tcmsg.tcsys { color: #ffd35a; }
+  .tcname { color: #7fc7ff; font-weight: 600; }
+  .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
+  .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {

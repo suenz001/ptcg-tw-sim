@@ -2280,7 +2280,40 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
-    console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + admin event create/status/delete');
+    // ── Phase1-C：大廳聊天室（全站登入者共用 room='lobby'）──
+    const TCHAT = db.collection('tournamentChat');
+    const _chatRate = new Map(); // uid -> last post ts（記憶體限速）
+    app.get('/api/tournament/chat', async (req, res) => {
+      try {
+        const since = Number(req.query.since) || 0;
+        const msgs = await TCHAT.find({ room: 'lobby', ts: { $gt: since } }).sort({ ts: 1 }).limit(80).toArray();
+        res.json({ messages: msgs.map((m) => ({ id: String(m._id), name: m.name, text: m.text, ts: m.ts, uid: m.uid, sys: !!m.sys })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    app.post('/api/tournament/chat', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const text = String((req.body && req.body.text) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!text) return res.status(400).json({ error: '訊息不可空白' });
+        const now = Date.now();
+        if (now - (_chatRate.get(id.uid) || 0) < 1200) return res.status(429).json({ error: '發言太快，請稍候' });
+        _chatRate.set(id.uid, now);
+        await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: id.name || '玩家', text, ts: now });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    app.post('/api/tournament/admin/chat/clear', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        await TCHAT.deleteMany({ room: 'lobby' });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + chat + admin event/chat');
   } catch (_te) {
     console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);
   }
