@@ -10884,10 +10884,17 @@
   }
   .chat-panel-close:hover { color: #fff; }
   .chat-panel-messages {
-    flex: 1; overflow-y: auto; padding: .5rem .8rem;
+    flex: 1; min-height: 0; overflow-y: auto; padding: .5rem .8rem;
     display: flex; flex-direction: column; gap: .4rem;
     background: #15151f;
+    /* v5.580：iPad/iOS 觸控慣性捲動 + 允許垂直拖曳捲動(不被父層 touch-action 吃掉) */
+    -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain;
   }
+  /* v5.580：浮動對話面板字體縮小(玩家回報 iPad 太大)；只影響浮動面板，不動其他聊天 */
+  .chat-panel .chat-text { font-size: .78rem; }
+  .chat-panel .chat-name { font-size: .68rem; }
+  .chat-panel .chat-time { font-size: .62rem; }
+  .chat-panel .chat-msg { padding: .3rem .5rem; }
   .chat-panel .chat-input-row {
     display: flex; gap: .4rem; padding: .5rem;
     border-top: 1px solid #3a3a4a; background: #1e1e28;
