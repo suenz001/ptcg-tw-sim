@@ -1,5 +1,5 @@
 // 古舊能量：附有它的寶可夢「受到對手招式的【傷害】而昏厥」才減1獎賞。
-//   效果KO（放傷害指示物：幻影奇襲/咒詛炸彈/悄聲加害）不該觸發。玩家報幻影奇襲放6指示物昏厥誤-1。
+//   效果KO（放傷害指示物：幻影奇襲/咒詛炸彈/悄聲加害 + 強制昏厥：同命戰鬥/斧擊在地/瘋癲攻擊/藍柱石）不該觸發。
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -57,12 +57,24 @@ T('④★ 整合 幻影奇襲6指示物 KO 走路草(古舊能量) → P0 取 1 
              {...s.players[1],hand:[],deck:[inst(WAIL)],discard:[],prizes:Array.from({length:6},()=>inst(WAIL)),bench:[oddish],active:inst(WAIL)}]};
   let n=applyAction(st,{type:'ATTACK',attackIndex:1},pool);
   assert(n.pendingSelection,'幻影奇襲應開 damage-distribute pending，實際無 pending');
-  // 6 個指示物全放 走路草 (60≥50 KO)
   n=applyAction(n,{type:'RESOLVE_SELECTION',selectedIids:Array.from({length:6},()=>oddish.iid)},pool);
-  // 吼鯨王ex(active)存活(200<380)，走路草被KO；P0 取走路草獎賞(base1)，效果KO不-1 → prizes 6→5
   assert(!n.players[1].bench.some(c=>c.cardId===ODDISH),'走路草應被KO');
   assert.equal(n.players[0].prizes.length,5,'P0 應取 1 張獎賞(6→5；若誤-1會是0→留6)，實際 prizes='+n.players[0].prizes.length);
 });
 
+// ── 整合：同命戰鬥(互相昏厥=效果KO) KO 古舊能量持有者 → 攻擊方獎賞不減 (玩家回報 v5.557) ──
+const SARU='11242' /*棄世猴|同命戰鬥 attackIndex1 cost[鬥][無]*/, FIGHT='14104' /*基本鬥能量*/;
+T('⑤★ 整合 棄世猴|同命戰鬥 KO 走路草(古舊能量) → 攻擊方取 1 獎賞(非0,效果KO不-1)',()=>{
+  const s=createGame({name:'P1',entries:[{cardId:SARU,count:1}]},{name:'P2',entries:[{cardId:ODDISH,count:1}]},pool);
+  const oddish=inst(ODDISH,{energyAttached:[inst(ANCIENT)]}); // 走路草+古舊能量 (base 1 獎賞)
+  const st={...s,phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,isFirstTurn:false,
+    setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],ancientEnergyMinusOneUsed:[false,false],
+    players:[{...s.players[0],hand:[],deck:[inst(SARU)],discard:[],prizes:Array.from({length:6},()=>inst(SARU)),bench:[inst(SARU)],active:inst(SARU,{energyAttached:[inst(FIGHT),inst(FIGHT)]})},
+             {...s.players[1],hand:[],deck:[inst(ODDISH)],discard:[],prizes:Array.from({length:6},()=>inst(ODDISH)),bench:[inst(ODDISH)],active:oddish}]};
+  const n=applyAction(st,{type:'ATTACK',attackIndex:1},pool); // 同命戰鬥：雙方 active 昏厥
+  assert(n.players[1].active===null||n.players[1].active.cardId!==ODDISH,'走路草(對手active)應被同命戰鬥KO');
+  assert.equal(n.players[0].prizes.length,5,'攻擊方應取 1 張獎賞(6→5；若誤套古舊能量-1會是0→留6)，實際 prizes='+n.players[0].prizes.length);
+});
+
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
-process.exit(fail?1:0);
+process.exitCode = fail ? 1 : 0;

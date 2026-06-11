@@ -8153,7 +8153,7 @@ regPost('棄世猴|同命戰鬥', (state, aIdx, pool) => {
         ...(def.active.evolvedFromStack ?? []),
       ];
       players[dIdx] = { ...def, active: null, discard: [...def.discard, ...ko] };
-      const _ko = koPrizesAdjusted(s, def.active, card, (1 - dIdx) as 0 | 1, dIdx, pool);
+      const _ko = koPrizesAdjusted(s, def.active, card, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 同命戰鬥=效果KO,古舊能量等不減
       s = _ko.state;
       selfPrizes += _ko.prizes;
       s = addLog({ ...s, players }, `同命戰鬥：${card?.name ?? '?'} 被擊倒！+${selfPrizes} 張獎賞卡`, null);
@@ -8214,7 +8214,7 @@ regPost('雙斧戰龍|斧擊在地', (state, aIdx, pool) => {
     ...getAllAttachedTools(def.active),
     ...(def.active.evolvedFromStack ?? []),
   ];
-  const _ko = koPrizesAdjusted(state, def.active, card, (1 - dIdx) as 0 | 1, dIdx, pool);
+  const _ko = koPrizesAdjusted(state, def.active, card, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 斧擊在地=條件效果KO
   state = _ko.state;
   const prizes = _ko.prizes;
   const players = [...state.players] as [PlayerState, PlayerState];
@@ -10071,7 +10071,7 @@ regPost('轟鳴月ex|瘋癲攻擊', (state, aIdx, pool) => {
         ...getAllAttachedTools(def.active),
         ...(def.active.evolvedFromStack ?? []),
       ];
-      const _ko = koPrizesAdjusted(s, def.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool);
+      const _ko = koPrizesAdjusted(s, def.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 瘋癲攻擊=效果KO
       s = _ko.state;
       const prizes = _ko.prizes;
       const players = [...s.players] as [PlayerState, PlayerState];
@@ -10172,7 +10172,7 @@ function resolveLanzhushi(
     ...getAllAttachedTools(target),
     ...(target.evolvedFromStack ?? []),
   ];
-  const _ko = koPrizesAdjusted(state, target, card, (1 - dIdx) as 0 | 1, dIdx, pool);
+  const _ko = koPrizesAdjusted(state, target, card, (1 - dIdx) as 0 | 1, dIdx, pool, false); // 藍柱石=依指示物效果KO
   state = _ko.state;
   const prizes = _ko.prizes;
   const players = [...state.players] as [PlayerState, PlayerState];
