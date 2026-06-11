@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.32</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.33</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -762,10 +762,10 @@ async function loadTournamentAdmin() {
       html += '</div>';
     }
     if (pendData.pending && pendData.pending.length) {
-      html += '<div style="border:1px solid #555;border-radius:8px;padding:10px;margin:10px 0;background:#181818;"><b style="color:#9cf;">🛠️ 賽程管理：強制裁定卡死場（' + pendData.pending.length + ' 場未結束）</b>'
-        + '<p style="color:#888;font-size:.8rem;margin:4px 0;">對手棄賽／異常卡住時用；判勝後該場直接晉級。兩格皆無玩家的場無法判勝（請用下方強制完賽）。</p>';
+      html += '<div style="border:1px solid #5a7aa6;border-radius:8px;padding:12px;margin:10px 0;background:#2b3647;color:#eaf0f8;"><b style="color:#bfe0ff;font-size:1rem;">🛠️ 賽程管理：強制裁定卡死場（' + pendData.pending.length + ' 場未結束）</b>'
+        + '<p style="color:#c2cede;font-size:.85rem;margin:6px 0;">對手棄賽／異常卡住時用；判勝後該場直接晉級。兩格皆無玩家的場無法判勝（請用下方強制完賽）。</p>';
       pendData.pending.forEach(function (t) {
-        html += '<div style="margin:6px 0;">第 ' + t.round + ' 輪（' + (t.status === 'playing' ? '對戰中' : t.status) + '）：<b>' + escapeHtml(t.p1name || '（空）') + '</b> vs <b>' + escapeHtml(t.p2name || '（空）') + '</b> &nbsp;'
+        html += '<div style="margin:8px 0;color:#eaf0f8;">第 ' + t.round + ' 輪（' + (t.status === 'playing' ? '對戰中' : t.status) + '）：<b style="color:#fff;">' + escapeHtml(t.p1name || '（空）') + '</b> vs <b style="color:#fff;">' + escapeHtml(t.p2name || '（空）') + '</b> &nbsp;'
           + (t.hasP1 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',0,this)">判 ' + escapeHtml(t.p1name || 'P1') + ' 勝</button> ' : '')
           + (t.hasP2 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',1,this)">判 ' + escapeHtml(t.p2name || 'P2') + ' 勝</button>' : '')
           + '</div>';
