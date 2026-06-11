@@ -2316,11 +2316,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         const text = String((req.body && req.body.text) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
         if (!text) return res.status(400).json({ error: '訊息不可空白' });
+        // 只有報名者（或管理員）可發言；未報名僅能觀看
+        const evc = await getActiveEvent();
+        const regc = evc ? await TREGS.findOne({ eventId: evc._id, uid: id.uid }) : null;
+        if (!regc && !isTournAdmin(id)) return res.status(403).json({ error: '只有報名者可以發言，未報名僅能觀看' });
         const now = Date.now();
         if (now - (_chatRate.get(id.uid) || 0) < 1200) return res.status(429).json({ error: '發言太快，請稍候' });
         _chatRate.set(id.uid, now);
-        let chatName = id.name || '玩家';
-        try { const evc = await getActiveEvent(); if (evc) { const regc = await TREGS.findOne({ eventId: evc._id, uid: id.uid }); if (regc && regc.name) chatName = regc.name; } } catch (e) { /* fallback token name */ }
+        const chatName = (regc && regc.name) ? regc.name : (id.name || '玩家');
         await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: chatName, text, ts: now });
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }

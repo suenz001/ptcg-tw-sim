@@ -5849,7 +5849,6 @@
 {#if isTournament && tStep !== 'playing'}
   <main class="lobby tourn-lobby">
     <h1 class="lobby-title">🏆 錦標賽對戰</h1>
-    <p class="lobby-subtitle">伺服器權威運算 · 隱藏測試房</p>
     {#if tStep === 'waiting'}
       <p class="tourn-wait">⏳ 已進場，等待對手加入…<br/>（請另一人也開 /tournament 選牌組進場）</p>
       <button class="btn-secondary" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
@@ -5876,10 +5875,14 @@
             <div class="tcmsg" class:tcsys={m.sys}><span class="tcname">{m.name}</span>：{m.text}</div>
           {/each}
         </div>
-        <div class="tourn-chat-input">
-          <input bind:value={tChatInput} maxlength="200" placeholder="說點什麼…（Enter 送出）" onkeydown={(e) => e.key === 'Enter' && tChatSend()} />
-          <button class="btn-secondary small" onclick={tChatSend} disabled={!tChatInput.trim()}>送出</button>
-        </div>
+        {#if tMe.registered || tIsAdmin}
+          <div class="tourn-chat-input">
+            <input bind:value={tChatInput} maxlength="200" placeholder="說點什麼…（Enter 送出）" onkeydown={(e) => e.key === 'Enter' && tChatSend()} />
+            <button class="btn-secondary small" onclick={tChatSend} disabled={!tChatInput.trim()}>送出</button>
+          </div>
+        {:else}
+          <div class="tourn-chat-input"><span class="muted small" style="padding:4px 8px;">🔒 報名後才能發言，未報名僅能觀看</span></div>
+        {/if}
       </div>
       {#if tEvent}
         <div class="tourn-event">
