@@ -2143,7 +2143,131 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
-    console.log('[tournament] endpoints registered: /api/tournament/{join,state,action,reset}');
+    // ════════════════════════════════════════════════════════════════════
+    // Phase1-B：賽事 collections + 報名（一次一 active 賽事；單敗淘汰 Bo1）
+    // ════════════════════════════════════════════════════════════════════
+    const TEVENTS = db.collection('tournamentEvents');
+    const TREGS = db.collection('tournamentRegistrations');
+    const TADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    function isTournAdmin(id) { return !!(id && id.verified && id.email && TADMIN_EMAILS.includes(String(id.email).toLowerCase())); }
+    // 目前唯一進行中的賽事（status 非 finished）
+    async function getActiveEvent() {
+      return await TEVENTS.findOne({ status: { $ne: 'finished' } });
+    }
+    function deckCount(entries) {
+      if (!Array.isArray(entries)) return -1;
+      let n = 0; for (const e of entries) n += (e && e.count) || 0; return n;
+    }
+
+    // 玩家：目前賽事 + 我的報名狀態
+    app.get('/api/tournament/event', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        let me = { registered: false, checkedIn: false };
+        if (ev) {
+          const reg = await TREGS.findOne({ _id: ev._id + '__' + id.uid });
+          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(reg.deckEntries) };
+        }
+        let regCount = 0;
+        if (ev) regCount = await TREGS.countDocuments({ eventId: ev._id });
+        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 玩家：報名（鎖定牌組，一帳號一名額）
+    app.post('/api/tournament/register', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(409).json({ error: '目前沒有開放報名的賽事' });
+        if (ev.status !== 'registration') return res.status(409).json({ error: '目前不在報名階段' });
+        const deckEntries = req.body && req.body.deckEntries;
+        if (deckCount(deckEntries) !== 60) return res.status(400).json({ error: '牌組需為 60 張' });
+        const regId = ev._id + '__' + id.uid;
+        const existing = await TREGS.findOne({ _id: regId });
+        if (existing) return res.status(409).json({ error: '你已經報名了（牌組已鎖定，整賽不可更換）' });
+        // 人數上限（maxPlayers=null 表示不限）
+        if (ev.maxPlayers != null) {
+          const cnt = await TREGS.countDocuments({ eventId: ev._id });
+          if (cnt >= ev.maxPlayers) return res.status(409).json({ error: '報名人數已滿（' + ev.maxPlayers + ' 人）' });
+        }
+        await TREGS.insertOne({ _id: regId, eventId: ev._id, uid: id.uid, email: id.email || null, name: id.name || '玩家', deckEntries, checkedIn: false, registeredAt: Date.now() });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 玩家：退賽（僅報名階段）
+    app.post('/api/tournament/unregister', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev || ev.status !== 'registration') return res.status(409).json({ error: '目前無法退賽' });
+        await TREGS.deleteOne({ _id: ev._id + '__' + id.uid });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 管理員：建立賽事
+    app.post('/api/tournament/admin/event/create', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可建立賽事' });
+        const exist = await getActiveEvent();
+        if (exist) return res.status(409).json({ error: '已有進行中的賽事，請先結束或刪除它（一次只辦一個）' });
+        const b = req.body || {};
+        const ev = {
+          _id: 'evt_' + Date.now().toString(36),
+          name: String(b.name || '錦標賽').slice(0, 60),
+          format: 'single-elim', bestOf: 1,
+          status: 'registration',
+          maxPlayers: (b.maxPlayers == null || b.maxPlayers === '' || Number(b.maxPlayers) <= 0) ? null : Math.min(64, Number(b.maxPlayers)),
+          roundLimitMin: Number(b.roundLimitMin) > 0 ? Number(b.roundLimitMin) : 25,
+          noShowMin: Number(b.noShowMin) > 0 ? Number(b.noShowMin) : 5,
+          checkInEnabled: b.checkInEnabled !== false,
+          currentRound: 0,
+          createdBy: id.email || id.uid, createdAt: Date.now(),
+        };
+        await TEVENTS.insertOne(ev);
+        res.json({ ok: true, event: ev });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 管理員：轉換賽事階段
+    app.post('/api/tournament/admin/event/status', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
+        const st = String((req.body && req.body.status) || '');
+        const valid = ['draft', 'registration', 'checkin', 'bracket_ready', 'running', 'finished'];
+        if (!valid.includes(st)) return res.status(400).json({ error: 'invalid status' });
+        await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: st } });
+        res.json({ ok: true, status: st });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // 管理員：刪除賽事（含報名）
+    app.post('/api/tournament/admin/event/delete', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
+        await TREGS.deleteMany({ eventId: ev._id });
+        await TEVENTS.deleteOne({ _id: ev._id });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + admin event create/status/delete');
   } catch (_te) {
     console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);
   }
