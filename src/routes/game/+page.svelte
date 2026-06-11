@@ -101,6 +101,19 @@
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
+  // ── Phase1-B：賽事狀態 ──
+  let tEvent = $state<any>(null);
+  let tMe = $state<any>({ registered: false });
+  let tRegCount = $state(0);
+  let tIsAdmin = $state(false);
+  let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
+  let tAdmName = $state('錦標賽');
+  let tAdmMax = $state('');
+  $effect(() => {
+    if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
+      if (!tEventPollTimer) { tournLoadEvent(); tEventPollTimer = setInterval(tournLoadEvent, 5000); }
+    } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
+  });
   function tPlayerId(): string {
     // v0.5 A1：登入帳號 → 用 firebase uid 當身分（與伺服器 verifyIdToken 回傳的 uid 一致）
     if (firebaseUser && !firebaseUser.isAnonymous) return firebaseUser.uid;
@@ -3739,6 +3752,43 @@
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = '';
     try { await signOut(auth); } catch { /* ignore */ }
   }
+  async function tournLoadEvent() {
+    try {
+      const r = await tApi('/event');
+      tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin;
+    } catch { /* ignore */ }
+  }
+  async function tournEnroll() {
+    const deck = allDecks.find(d => d.id === tDeckId);
+    if (!deck) { tError = '請先選擇牌組'; return; }
+    const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
+    if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
+    tError = ''; tBusy = true;
+    try { const r = await tApi('/register', { deckEntries: deck.entries }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+  }
+  async function tournUnregister() {
+    if (!confirm('確定退賽？')) return;
+    tBusy = true; tError = '';
+    try { await tApi('/unregister', {}); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+  }
+  async function tournAdminCreate() {
+    tBusy = true; tError = '';
+    try { const r = await tApi('/admin/event/create', { name: tAdmName, maxPlayers: tAdmMax }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+  }
+  async function tournAdminStatus(st: string) {
+    tBusy = true; tError = '';
+    try { await tApi('/admin/event/status', { status: st }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+  }
+  async function tournAdminDelete() {
+    if (!confirm('刪除目前賽事（含所有報名）？')) return;
+    tBusy = true; tError = '';
+    try { await tApi('/admin/event/delete', {}); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+  }
+  function tEventStatusLabel(st: string): string {
+    return ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' } as any)[st] ?? st;
+  }
   function tSyntheticRoom(seats: any, names: any) {
     // 餵戰板一個最小相容 Room（無聊天/觀戰/悔棋；不觸發任何線上後端）
     roomData = {
@@ -5776,6 +5826,37 @@
       </div>
     {:else}
       <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
+      {#if tEvent}
+        <div class="tourn-event">
+          <h3>🏆 {tEvent.name}</h3>
+          <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(tEvent.status)}</b> ｜ 報名 {tRegCount}{tEvent.maxPlayers ? ' / ' + tEvent.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {tEvent.roundLimitMin} 分</p>
+          {#if tMe.registered}
+            <p class="reg-ok">✅ 你已報名，牌組已鎖定（整賽不可更換）</p>
+            {#if tEvent.status === 'registration'}<button class="btn-secondary small" onclick={tournUnregister} disabled={tBusy}>退賽</button>{/if}
+          {:else if tEvent.status === 'registration'}
+            <p class="muted small">選好下方牌組後按「報名」（報名後牌組即鎖定）。</p>
+          {/if}
+        </div>
+      {:else}
+        <p class="muted small">目前沒有開放報名的賽事。{#if tIsAdmin}（你是管理員，可在下方建立）{/if}</p>
+      {/if}
+      {#if tIsAdmin}
+        <details class="tourn-admin">
+          <summary>🔧 管理員</summary>
+          {#if !tEvent}
+            <label class="tourn-field">賽事名稱<input class="name-input" bind:value={tAdmName} maxlength="40" /></label>
+            <label class="tourn-field">人數上限（空白=不限，≤64）<input class="name-input" bind:value={tAdmMax} placeholder="不限" /></label>
+            <button class="btn-primary" onclick={tournAdminCreate} disabled={tBusy}>建立賽事（單敗淘汰 Bo1）</button>
+          {:else}
+            <div class="tourn-auth-btns">
+              <button class="btn-secondary small" onclick={() => tournAdminStatus('registration')} disabled={tBusy}>開放報名</button>
+              <button class="btn-secondary small" onclick={() => tournAdminStatus('running')} disabled={tBusy}>開賽</button>
+              <button class="btn-secondary small" onclick={() => tournAdminStatus('finished')} disabled={tBusy}>結束</button>
+              <button class="btn-secondary small" onclick={tournAdminDelete} disabled={tBusy}>刪除賽事</button>
+            </div>
+          {/if}
+        </details>
+      {/if}
       <label class="tourn-field">選擇牌組（需 60 張）
         <select class="deck-select" bind:value={tDeckId}>
           <option value="" disabled>— 請選擇牌組 —</option>
@@ -5788,8 +5869,11 @@
         </select>
       </label>
       {#if tError}<p class="warn">{tError}</p>{/if}
-      <button class="btn-primary tourn-join" onclick={tournamentJoin} disabled={tBusy || !tDeckId}>
-        {tBusy ? '進場中…' : '進入賽事對戰'}
+      {#if tEvent && tEvent.status === 'registration' && !tMe.registered}
+        <button class="btn-primary tourn-join" onclick={tournEnroll} disabled={tBusy || !tDeckId}>{tBusy ? '報名中…' : '報名（鎖定此牌組）'}</button>
+      {/if}
+      <button class="btn-secondary tourn-join" onclick={tournamentJoin} disabled={tBusy || !tDeckId}>
+        {tBusy ? '進場中…' : '快速測試房（不需報名）'}
       </button>
       <button class="btn-secondary small" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
       <p class="muted small">⚠ 此功能運算需正式站伺服器；beta 站無法連線。</p>
@@ -9338,6 +9422,12 @@
   .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
   .tourn-logout { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; border: 1px solid #888; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer; }
+  .tourn-event { border: 1px solid #4a6a4a; border-radius: 10px; padding: 10px 14px; margin: 10px auto; max-width: 420px; background: #142414; }
+  .tourn-event h3 { margin: 0 0 4px; }
+  .tourn-evstat { color: #cfe8cf; font-size: 0.88rem; }
+  .reg-ok { color: #7CFC9A; font-weight: 600; }
+  .tourn-admin { max-width: 420px; margin: 8px auto; text-align: left; border: 1px dashed #777; border-radius: 8px; padding: 6px 12px; }
+  .tourn-admin summary { cursor: pointer; color: #ffd35a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
   .opp-inactive-banner {
