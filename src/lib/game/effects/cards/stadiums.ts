@@ -18,7 +18,7 @@
 
 import { regR, updatePlayer, shuffle, addLog, clearActiveEffects, getOwnBenchLimit,
 } from '../_shared';
-import { joinCardNames } from '../_shared';
+import { joinCardNames, addPrivateLog } from '../_shared';
 import { tryPromptPromoteActive } from '../_shared';
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
@@ -54,9 +54,12 @@ regR('miracle-garden-draw', (st, idx, picked, _params, pool) => {
 
 // ── 夜間學院（Stadium）──────────────────────────────────────────────────────
 // 選 1 張手牌放回牌庫上方
-regR('night-academy-top', (st, idx, iids) => {
+// v5.574：原本有移卡但完全沒有 log，玩家看不到放了什麼回去、誤以為手牌沒放回去。補私密 log（本人看卡名，對手只看到放回 1 張，不洩漏手牌）。
+regR('night-academy-top', (st, idx, iids, _params, pool) => {
+  const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  if (chosen.length === 0) return st;
+  st = addPrivateLog(st, `夜間學院：將 ${joinCardNames(chosen, pool)} 放回牌庫上方`, `夜間學院：將 1 張手牌放回牌庫上方`, idx);
   return updatePlayer(st, idx, p => {
-    const chosen = p.hand.filter(c => iids.includes(c.iid));
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
     return { ...p, hand: newHand, deck: [...chosen, ...p.deck] };
   });
