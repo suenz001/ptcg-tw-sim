@@ -96,6 +96,7 @@
   let tStep = $state<'lobby' | 'waiting' | 'playing'>('lobby');
   let tVersion = $state(-1);
   let tDeckId = $state('');
+  let tNickname = $state(''); // 錦標賽暱稱（對戰/聊天/賽程表都用它顯示）
   let tError = $state('');
   let tBusy = $state(false);
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -3778,6 +3779,7 @@
     try {
       const r = await tApi('/event');
       tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
+      if (tMe.registered && tMe.name && !tNickname) tNickname = tMe.name; // 預填已報名暱稱
     } catch { /* ignore */ }
   }
   // 載入賽程表（admin seed 後才有 matches）
@@ -3806,12 +3808,14 @@
     tournLoadEvent(); tBracketLoad();
   }
   async function tournEnroll() {
+    const nick = (tNickname || '').trim();
+    if (!nick) { tError = '請先填寫錦標賽暱稱'; return; }
     const deck = allDecks.find(d => d.id === tDeckId);
     if (!deck) { tError = '請先選擇牌組'; return; }
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { deckEntries: deck.entries }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    try { const r = await tApi('/register', { name: nick, deckEntries: deck.entries }); if (r.error) tError = r.error; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   async function tournUnregister() {
@@ -5914,6 +5918,9 @@
         </div>
       {/if}
 
+      <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
+        <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" disabled={tMe.registered} />
+      </label>
       <label class="tourn-field">選擇牌組（需 60 張）
         <select class="deck-select" bind:value={tDeckId}>
           <option value="" disabled>— 請選擇牌組 —</option>
@@ -5927,7 +5934,7 @@
       </label>
       {#if tError}<p class="warn">{tError}</p>{/if}
       {#if tEvent && tEvent.status === 'registration' && !tMe.registered}
-        <button class="btn-primary tourn-join" onclick={tournEnroll} disabled={tBusy || !tDeckId}>{tBusy ? '報名中…' : '報名（鎖定此牌組）'}</button>
+        <button class="btn-primary tourn-join" onclick={tournEnroll} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? '報名中…' : '報名（鎖定暱稱與牌組）'}</button>
       {/if}
       <button class="btn-secondary tourn-join" onclick={tournamentJoin} disabled={tBusy || !tDeckId}>
         {tBusy ? '進場中…' : '快速測試房（不需報名）'}
@@ -5938,7 +5945,6 @@
   </main>
 {:else}
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
-{#if isTournament && game && game.phase === 'game-over'}<div class="tourn-return-bar"><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
@@ -9341,7 +9347,11 @@
             🧾 匯出 log（.json）
           </button>
         </div>
-        {#if mode === 'online' || roomCode}
+        {#if isTournament}
+          <div class="lobby-btns">
+            <button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button>
+          </div>
+        {:else if mode === 'online' || roomCode}
           <div class="lobby-btns">
             <button
               class="btn-primary"

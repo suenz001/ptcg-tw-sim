@@ -2169,7 +2169,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         let me = { registered: false, checkedIn: false };
         if (ev) {
           const reg = await TREGS.findOne({ _id: ev._id + '__' + id.uid });
-          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(reg.deckEntries) };
+          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(reg.deckEntries), name: reg.name };
         }
         let regCount = 0;
         if (ev) regCount = await TREGS.countDocuments({ eventId: ev._id });
@@ -2192,6 +2192,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (ev.status !== 'registration') return res.status(409).json({ error: '目前不在報名階段' });
         const deckEntries = req.body && req.body.deckEntries;
         if (deckCount(deckEntries) !== 60) return res.status(400).json({ error: '牌組需為 60 張' });
+        const nickname = String((req.body && req.body.name) || '').replace(/\s+/g, ' ').trim().slice(0, 16);
+        if (!nickname) return res.status(400).json({ error: '請填寫錦標賽暱稱' });
         const regId = ev._id + '__' + id.uid;
         const existing = await TREGS.findOne({ _id: regId });
         if (existing) return res.status(409).json({ error: '你已經報名了（牌組已鎖定，整賽不可更換）' });
@@ -2200,7 +2202,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const cnt = await TREGS.countDocuments({ eventId: ev._id });
           if (cnt >= ev.maxPlayers) return res.status(409).json({ error: '報名人數已滿（' + ev.maxPlayers + ' 人）' });
         }
-        await TREGS.insertOne({ _id: regId, eventId: ev._id, uid: id.uid, email: id.email || null, name: id.name || '玩家', deckEntries, checkedIn: false, registeredAt: Date.now() });
+        await TREGS.insertOne({ _id: regId, eventId: ev._id, uid: id.uid, email: id.email || null, name: nickname, deckEntries, checkedIn: false, registeredAt: Date.now() });
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -2309,7 +2311,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const now = Date.now();
         if (now - (_chatRate.get(id.uid) || 0) < 1200) return res.status(429).json({ error: '發言太快，請稍候' });
         _chatRate.set(id.uid, now);
-        await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: id.name || '玩家', text, ts: now });
+        let chatName = id.name || '玩家';
+        try { const evc = await getActiveEvent(); if (evc) { const regc = await TREGS.findOne({ eventId: evc._id, uid: id.uid }); if (regc && regc.name) chatName = regc.name; } } catch (e) { /* fallback token name */ }
+        await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: chatName, text, ts: now });
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
