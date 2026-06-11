@@ -88,7 +88,7 @@ export {
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
 import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
 // v5.293: import field-wide damage-reduce helpers for bench damage path
-import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce } from './effects/cards/v2999_g3_wave1';
+import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore } from './effects/cards/v2999_g3_wave1';
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 
 /**
@@ -293,6 +293,39 @@ export function hasFairyZoneField(
     }
   }
   return false;
+}
+
+/**
+ * v5.562 收斂：計算 defender 戰鬥位的「有效弱點屬性」。引擎主管線 + 中央 dealAttackDamageToTarget 共用，
+ * 避免走中央 helper 的招式(如 M5 詛咒娃娃|玩偶捕捉)漏套妖精領域/掌握弱點覆寫/弱點失效。
+ *   妖精領域(莉莉艾的皮皮ex)：actorIdx 一方在場 → 對手【龍】寶可夢弱點改【超】；
+ *   掌握弱點(智揮猩)：weaknessOverrideTypeThisTurn 覆寫；
+ *   金屬防禦強化(鋁鋼橋龍ex)：weaknessDisabledThisTurn → disabled。actorIdx = 攻擊方(=皮皮ex 持有方)。
+ */
+export function getEffectiveWeaknessType(
+  state: GameState,
+  actorIdx: 0 | 1,
+  defenderActive: CardInstance | null | undefined,
+  defenderCard: Card | undefined,
+  pool: Map<string, Card>,
+): { type: string | undefined; disabled: boolean } {
+  let t = defenderCard?.weakness?.type;
+  if (defenderCard?.pokemonType === 'Dragon' && hasFairyZoneField(state, actorIdx, pool)) t = 'Psychic';
+  if (defenderActive?.weaknessOverrideTypeThisTurn) t = defenderActive.weaknessOverrideTypeThisTurn;
+  return { type: t, disabled: !!defenderActive?.weaknessDisabledThisTurn };
+}
+/**
+ * v5.562 收斂：攻擊方戰鬥位的「有效屬性清單」(弱點/抵抗比對用)。
+ *   小碎鑽|雙重屬性→【鬥】+【超】；鐵轍跡|二重核心(附驅勁能量 未來)→【鬥】+【鋼】；否則單一 pokemonType。
+ */
+export function getAttackerEffectiveTypes(
+  attackerActive: CardInstance | null | undefined,
+  attackerCard: Card | undefined,
+  pool: Map<string, Card>,
+): string[] {
+  if (attackerCard?.name === '小碎鑽' && attackerCard.abilities?.some(a => a.name === '雙重屬性')) return ['Fighting', 'Psychic'];
+  if (attackerActive && attackerCard && hasIronTracksDualCore(attackerActive, attackerCard, pool)) return ['Fighting', 'Metal'];
+  return attackerCard?.pokemonType ? [attackerCard.pokemonType] : [];
 }
 
 /**
@@ -7407,8 +7440,10 @@ export function dealAttackDamageToTarget(
   if (isActive && kind === 'attack-damage' && !opts?.noWeakness) {
     const _atk = st.players[actorIdx].active;
     const _atkCard = _atk ? pool.get(_atk.cardId) : undefined;
-    if (_atkCard?.pokemonType && targetCard?.weakness?.type
-        && _atkCard.pokemonType === targetCard.weakness.type) {
+    // v5.562 收斂：與引擎主管線共用弱點計算(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性)
+    const _w = getEffectiveWeaknessType(st, actorIdx, target, targetCard, pool);
+    const _atkTypes = getAttackerEffectiveTypes(_atk, _atkCard, pool);
+    if (!_w.disabled && _w.type && _atkTypes.includes(_w.type)) {
       effDmg *= 2;
     }
     if (_atkCard?.pokemonType && targetCard?.resistance?.type

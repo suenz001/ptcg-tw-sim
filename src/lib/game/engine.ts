@@ -40,6 +40,8 @@ import {
   clearFestivalVenueProtectedStatuses,
   clearSpecialEnergyProtectedStatuses,
   hasFairyZoneField,
+  getEffectiveWeaknessType,
+  getAttackerEffectiveTypes,
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
   getOctopusTentacleEffectiveCost,
@@ -63,7 +65,6 @@ import {
   applyInherentRetaliation,  // v5.494 化石卡面內建受傷反擊
 } from './effects';
 import {
-  hasIronTracksDualCore,
   steelixPalaceReduce,
   bronzongShelterReduce,
   gearCoatingReduce,
@@ -4384,28 +4385,11 @@ function handlePlaying(
     // v2.57：莉莉艾的皮皮ex｜妖精領域 — 我方場上有皮皮ex 時，對手【龍】寶可夢的弱點改為【超】。
     // 卡面允許「本無弱點」的龍寶可夢被加上【超】弱點。
     // v2.101：鋁鋼橋龍ex｜金屬防禦強化 — 本回合弱點失效（weaknessDisabledThisTurn）
-    let effectiveWeaknessType: string | undefined = defenderCard.weakness?.type;
-    if (defenderCard.pokemonType === 'Dragon' && hasFairyZoneField(workingState, aIdx, pool)) {
-      effectiveWeaknessType = 'Psychic';
-    }
-    // v2.78 智揮猩｜掌握弱點 — 弱點屬性改為指定值（如 'Colorless'）
-    if (defender.active.weaknessOverrideTypeThisTurn) {
-      effectiveWeaknessType = defender.active.weaknessOverrideTypeThisTurn;
-    }
-    const weaknessDisabled = !!defender.active.weaknessDisabledThisTurn;
-    // v2.388 小碎鑽｜雙重屬性 — 場上時改為【鬥】+【超】2 種屬性。
-    //   對方招式屬性 == 鬥或超 都觸發弱點 / 抵抗力。
-    const attackerHasDualType = attackerCard.name === '小碎鑽'
-      && attackerCard.abilities?.some(a => a.name === '雙重屬性');
-    // v2.999 鐵轍跡｜二重核心 — 身上附有「驅勁能量 未來」 時，屬性改為【闘】+【鋼】 2 種
-    //   helper 判定 attacker.active 絑定（板戰 attacker.bench 的鐵轍跡不算數）。
-    const attackerHasIronTracksDual = !!attacker.active
-      && hasIronTracksDualCore(attacker.active, attackerCard, pool);
-    const attackerEffectiveTypes: string[] = attackerHasDualType
-      ? ['Fighting', 'Psychic']
-      : attackerHasIronTracksDual
-        ? ['Fighting', 'Metal']
-        : (attackerCard.pokemonType ? [attackerCard.pokemonType] : []);
+    // v5.562 收斂：弱點屬性 + 攻擊方有效屬性改走共用 helper(與中央 dealAttackDamageToTarget 同一套)
+    const _wk = getEffectiveWeaknessType(workingState, aIdx, defender.active, defenderCard, pool);
+    const effectiveWeaknessType = _wk.type;
+    const weaknessDisabled = _wk.disabled;
+    const attackerEffectiveTypes = getAttackerEffectiveTypes(attacker.active, attackerCard, pool);
     // v4.495：弱點 gate 同時 check skipWeakRes (跳兩個) 與 skipWeakness (只跳弱點)
     if (!skipWeakRes && !skipWeakness && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
