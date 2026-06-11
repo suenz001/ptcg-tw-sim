@@ -6616,7 +6616,8 @@
       onOpenZoom={openZoom}
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => {
-        if (mode === 'online') leaveOnlineGame();
+        // v5.566：手機直式離開鈕也要走投降確認(原直接 leaveOnlineGame 漏了確認視窗)
+        if (mode === 'online') surrenderLeave();
         else { game = null; mode = null; }
       }}
       undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}
