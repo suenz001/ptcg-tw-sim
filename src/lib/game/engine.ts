@@ -5141,7 +5141,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
 if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
   if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
           const retal = PASSIVE_RETALIATION.get(ab.name);
-          if (retal) newState = retal(newState, dIdx, pool);
+          if (retal) newState = retal(newState, dIdx, pool, koInst);
         }
         for (const ab of defenderCard.abilities) {
           const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
@@ -5173,7 +5173,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //             這裡只 scan defender.bench 上的花岩怪（持有者在備戰 + active 是其他【惡】）。
       //   光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。
       if (!_v456KoMagicalShine && baseDamage > 0) {
-        const defActiveKO = newState.players[dIdx].active;
+        const defActiveKO = koInst;  // v5.548 KO 安全：KO 時 active 已 null，用受傷前快照判【惡】field-wide
         const defActiveCardKO = defActiveKO ? pool.get(defActiveKO.cardId) : null;
         if (defActiveCardKO?.pokemonType === 'Darkness') {
           for (const benchInst of newState.players[dIdx].bench) {
@@ -5182,7 +5182,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
             for (const ab of benchCard.abilities) {
               if (ab.name === '怨恨旋渦') {
                 const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
-                if (fn) newState = fn(newState, dIdx, pool);
+                if (fn) newState = fn(newState, dIdx, pool, koInst);
               }
             }
           }

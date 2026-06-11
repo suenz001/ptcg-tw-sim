@@ -4007,7 +4007,8 @@ export const ABILITY_RETREAT_MOD = new Map<string, (
 export type RetaliationFn = (
   state: GameState,
   dIdx: 0 | 1,  // 被攻擊者 index
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  defSnapshot?: CardInstance | null  // v5.548 KO 安全：holder 被擊倒時 state.players[dIdx].active 已 null，傳入受傷前快照
 ) => GameState;
 export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   // 毒薔薇 / 羅絲雷朵 毒刺 — 攻擊者中毒
@@ -4040,9 +4041,9 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   // v2.217 布里卡隆（J）｜尖刺盔甲 — 受到傷害時，將「自己身上【草】能量數×3」個傷害指示物
   // 放置於攻擊者身上。換算：N 張草能量 → N × 3 × 10 = N × 30 傷害。
   // 注意：是「能量卡張數」而非「能量單位數」（一張能量卡通常 = 1 個能量單位）。
-  ['尖刺盔甲', (state, dIdx, pool) => {
+  ['尖刺盔甲', (state, dIdx, pool, defSnapshot) => {
     const aIdx = (1 - dIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
+    const def = defSnapshot ?? state.players[dIdx].active;
     if (!def) return state;
     // v5.439：改走中央 countEnergyTypeBloomAware（補大竺葵|繁茂：基本草×2）。
     //   官方 Q&A：布里卡隆附 2 張基本草 + 繁茂 → 視為 4 → 放 12 個指示物(4×3)。
@@ -4068,9 +4069,9 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   //   在使用招式的寶可夢身上放置 1 個傷害指示物。」
   // 簡化：本實裝以「持有者本身在 active 被打」觸發（持有者必為【惡】，符合卡面 active 條件）。
   //   若日後需 field-wide（持有者在備戰時 active 是其他【惡】寶可夢也觸發），需擴 hook。
-  ['怨恨旋渦', (state, dIdx, pool) => {
+  ['怨恨旋渦', (state, dIdx, pool, defSnapshot) => {
     const aIdx = (1 - dIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
+    const def = defSnapshot ?? state.players[dIdx].active;
     if (!def) return state;
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -4154,9 +4155,9 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
     return state;
   }],
   // 拖拖蚓ex(H) | 快掃拳返 — 受傷時放 (鋼能量數×2) 個指示物
-  ['快掃拳返', (state, dIdx, pool) => {
+  ['快掃拳返', (state, dIdx, pool, defSnapshot) => {
     const aIdx = (1 - dIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
+    const def = defSnapshot ?? state.players[dIdx].active;
     if (!def) return state;
     const metalCount = def.energyAttached.filter(e => {
       const ec = pool.get(e.cardId);
