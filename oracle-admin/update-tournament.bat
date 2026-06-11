@@ -16,7 +16,7 @@ if errorlevel 1 (
 )
 tar -xf "%TEMP%\ptcg_sync.tar"
 if errorlevel 1 (
-  echo *** working-tree sync (tar) FAILED - confirm tar is available (built-in on Win10+) ***
+  echo *** working-tree sync via tar FAILED - confirm tar is available, built-in on Win10+ ***
   pause
   exit /b 1
 )
@@ -51,4 +51,4 @@ echo [3/5] Installing bundle to /opt/ptcg/api/tournament/ ...
 ssh -i %KEY% -t %HOST% "sudo mkdir -p /opt/ptcg/api/tournament && sudo cp /tmp/server-engine.cjs /tmp/tournament-pool.json /opt/ptcg/api/tournament/ && sudo chown -R ubuntu:ubuntu /opt/ptcg/api/tournament && echo bundle and pool installed"
 
 echo [4/5] Uploading patch + admin.html + update script...
-scp -i %KEY% "%SRC%\server_admin_patch.js" "%SRC%\admin.html" "%SRC%\oracle_admin_update.sh" %HOST%
+scp -i %KEY% "%SRC%\server_admin_patch.js" "%SRC%\admin.html" "%SRC%\oracle_admin_update.sh" %HOST
