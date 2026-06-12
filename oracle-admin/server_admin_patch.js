@@ -2748,6 +2748,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
         });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
+    // 管理員：刪除某場賽事的歸檔（連同名人堂紀錄）— 測試賽事清除，刪除後完全不計入賽事統計
+    app.post('/api/tournament/admin/stats/archive/delete', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const eventId = String((req.body && req.body.eventId) || '');
+        if (!eventId) return res.status(400).json({ error: '缺少 eventId' });
+        await TARCHIVE.deleteOne({ _id: 'arch_' + eventId });
+        await TCHAMPS.deleteOne({ _id: 'champ_' + eventId });  // 一併移除名人堂該筆，統計與冠軍榜都不再計入
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
     // 管理員：列出待裁定平手場
     app.get('/api/tournament/admin/tie-matches', async (req, res) => {
       try {

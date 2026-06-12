@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.36</title>
+<title>PTCG Oracle Admin v1.37</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.36</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.37</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -940,6 +940,23 @@ async function loadTournamentStats(reset = false) {
     tournStatsLoading = false;
   }
 }
+// 刪除某場賽事歸檔（含名人堂紀錄）→ 該賽事完全不計入統計（測試賽事清除用）
+async function tevDeleteArchive(eidEnc, btn) {
+  const eventId = decodeURIComponent(eidEnc || '');
+  if (!eventId) return;
+  if (!confirm('刪除這場賽事的所有統計資料（含名人堂該筆紀錄）？\n刪除後此賽事將完全不計入賽事統計，無法復原。')) return;
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '刪除中…'; }
+  try {
+    const d = await api('/api/tournament/admin/stats/archive/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: eventId }) });
+    if (d && d.error) { alert(d.error); if (btn) { btn.disabled = false; btn.textContent = orig; } return; }
+    tournStatsCache = null;            // 清快取，重新聚合
+    await loadTournamentStats(true);
+  } catch (e) {
+    alert('刪除失敗：' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
 function _tsFmtDate(ms) {
   if (!ms) return '—';
   try { return new Date(ms).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
@@ -1059,12 +1076,13 @@ function renderTournamentStats(el, data) {
 
   // ── 5. 歷屆賽事 ──
   html += '<section class="stats-section"><h3>📋 5. 歷屆賽事</h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>完賽日</th><th>賽事名稱</th><th>人數</th><th>冠軍</th><th>冠軍牌型</th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>完賽日</th><th>賽事名稱</th><th>人數</th><th>冠軍</th><th>冠軍牌型</th><th></th></tr></thead><tbody>';
   archives.forEach((a) => {
     const champRec = (a.players || []).find((p) => p.uid === a.championUid);
     const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
     html += '<tr><td>' + _tsFmtDate(a.finishedAt) + '</td><td>' + escapeHtml(a.eventName || '錦標賽') + '</td><td>' + (a.playerCount || (a.players || []).length)
-      + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td></tr>';
+      + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
+      + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
   });
   html += '</tbody></table></section>';
 
