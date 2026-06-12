@@ -6025,7 +6025,7 @@
               {#if _waitMs > 0}
                 <span class="tourn-cd">⏳ 休息倒數 {Math.floor(_waitMs / 60000)}:{String(Math.floor((_waitMs % 60000) / 1000)).padStart(2, '0')} 後可進場</span>
               {:else}
-                <button class="btn-primary small" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : (tMyMatch.entered ? '⚔ 回到對戰' : '⚔ 進入對戰')}</button>
+                <button class="tourn-enter-btn" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : (tMyMatch.entered ? '⚔️ 回到對戰' : '⚔️ 立即進入對戰')}</button>
               {/if}
             </div>
             {#if _waitMs <= 0 && tMyMatch.noShowDeadline && _dlMs > 0 && !tMyMatch.entered}
@@ -9694,6 +9694,23 @@
   .tourn-coin-hint { display: block; color: #889; font-size: 11px; margin-top: 3px; }
   .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }
+  /* v5.584 進入對戰按鈕：大、橘色漸層、脈動發光，醒目好按 */
+  .tourn-enter-btn {
+    display: block; width: 100%; margin: 10px 0 4px; padding: 16px 20px;
+    font-size: 1.25rem; font-weight: 800; letter-spacing: 1px;
+    color: #fff; border: 2px solid #ffd35a; border-radius: 12px; cursor: pointer;
+    background: linear-gradient(135deg, #e8531a, #ff8c00);
+    box-shadow: 0 0 0 0 rgba(255,140,0,.55), 0 6px 18px rgba(0,0,0,.45);
+    text-shadow: 0 1px 2px rgba(0,0,0,.4);
+    animation: tournEnterPulse 1.3s ease-in-out infinite;
+  }
+  .tourn-enter-btn:hover { filter: brightness(1.08); }
+  .tourn-enter-btn:active { transform: scale(.98); }
+  .tourn-enter-btn:disabled { opacity: .6; cursor: default; animation: none; }
+  @keyframes tournEnterPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,140,0,.55), 0 6px 18px rgba(0,0,0,.45); transform: scale(1); }
+    50% { box-shadow: 0 0 20px 7px rgba(255,140,0,0), 0 6px 18px rgba(0,0,0,.45); transform: scale(1.035); }
+  }
   .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
   .tourn-bracket-head { font-weight: 600; color: #cfe0f8; margin-bottom: 8px; }
   .tourn-hof { border-color: #6a5a2a; background: #16120a; }

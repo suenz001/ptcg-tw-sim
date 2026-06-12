@@ -2390,22 +2390,26 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const TMATCH = db.collection('tournamentMatches');
     const TCHAMPS = db.collection('tournamentChampions'); // v0.33 名人堂（歷屆冠軍）
     const TARCHIVE = db.collection('tournamentArchives'); // v0.35 完整賽事歸檔（永久保存，刪賽事不影響）
-    function buildBracket(players, evId) {
-      const N = players.length;
-      const ps = players.slice();
-      for (let i = ps.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ps[i]; ps[i] = ps[j]; ps[j] = t; }
-      let P = 1; while (P < N) P *= 2;
-      const rounds = Math.round(Math.log2(P));
-      const byes = P - N; const half = P / 2;
-      const mid = (r, i) => evId + '_r' + r + '_m' + i;
-      const matches = [];
-      for (let r = 1; r <= rounds; r++) { const cnt = P / Math.pow(2, r); for (let i = 0; i < cnt; i++) matches.push({ _id: mid(r, i), eventId: evId, round: r, idx: i, p1uid: null, p1name: null, p2uid: null, p2name: null, roomId: null, winnerUid: null, winnerName: null, status: 'pending', bye: false }); }
-      const M = {}; for (const m of matches) M[m.round + '_' + m.idx] = m;
-      let pi = 0;
-      for (let i = 0; i < byes; i++) { const m = M['1_' + i]; const pl = ps[pi++]; m.p1uid = pl.uid; m.p1name = pl.name; m.bye = true; m.winnerUid = pl.uid; m.winnerName = pl.name; m.status = 'done'; }
-      for (let i = byes; i < half; i++) { const m = M['1_' + i]; const a = ps[pi++], b = ps[pi++]; m.p1uid = a.uid; m.p1name = a.name; m.p2uid = b.uid; m.p2name = b.name; }
-      for (let i = 0; i < byes; i++) { const m = M['1_' + i]; if (m.round < rounds && m.winnerUid) { const parent = M[(m.round + 1) + '_' + Math.floor(m.idx / 2)]; const slot = (m.idx % 2 === 0) ? 'p1' : 'p2'; parent[slot + 'uid'] = m.winnerUid; parent[slot + 'name'] = m.winnerName; } }
-      return { matches, rounds, P, byes };
+    // 每輪動態配對：⌊n/2⌋ 場對戰；n 為奇數 → 落單 1 人輪空保送下一輪（優先給「還沒輪空過的人」，避免同一人連續被保送）。
+    //   players: [{ uid, name, byes }]（byes＝至今累計輪空次數）。回傳本輪 match 陣列（含輪空 match，status='done'）。
+    function buildRoundMatches(players, evId, roundNum) {
+      const pool = players.slice();
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = pool[i]; pool[i] = pool[j]; pool[j] = t; }  // 洗牌公平配對
+      const matches = []; let idx = 0; let byePlayer = null;
+      if (pool.length % 2 === 1) {
+        // 落單 1 人輪空：挑「輪空次數最少」者（洗牌後同分取先者）
+        let mn = Infinity, bi = 0;
+        for (let i = 0; i < pool.length; i++) { const b = (pool[i].byes || 0); if (b < mn) { mn = b; bi = i; } }
+        byePlayer = pool.splice(bi, 1)[0];
+      }
+      for (let i = 0; i + 1 < pool.length; i += 2) {
+        const a = pool[i], b = pool[i + 1];
+        matches.push({ _id: evId + '_r' + roundNum + '_m' + idx, eventId: evId, round: roundNum, idx, p1uid: a.uid, p1name: a.name, p2uid: b.uid, p2name: b.name, roomId: null, winnerUid: null, winnerName: null, status: 'pending', bye: false }); idx++;
+      }
+      if (byePlayer) {
+        matches.push({ _id: evId + '_r' + roundNum + '_m' + idx, eventId: evId, round: roundNum, idx, p1uid: byePlayer.uid, p1name: byePlayer.name, p2uid: null, p2name: null, roomId: null, winnerUid: byePlayer.uid, winnerName: byePlayer.name, status: 'done', bye: true }); idx++;
+      }
+      return matches;
     }
     async function postSystemChat(text) {
       try { await TCHAT.insertOne({ room: 'lobby', uid: 'system', name: '系統', text: String(text).slice(0, 200), ts: Date.now(), sys: true }); }
@@ -2414,8 +2418,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
     async function seedEventBracket(ev) {
       const regs = await TREGS.find({ eventId: ev._id }).toArray();
       if (regs.length < 2) return { error: '至少需要 2 位報名者' };
-      const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' }));
-      const { matches, rounds } = buildBracket(players, ev._id);
+      const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家', byes: 0 }));
+      const rounds = Math.max(1, Math.ceil(Math.log2(players.length)));  // 總輪數＝⌈log2(N)⌉（每輪只 1 人輪空，不多花輪）
+      const matches = buildRoundMatches(players, ev._id, 1);  // 只建第 1 輪，後續每輪打完才動態建（避免第一輪大量輪空）
       await TMATCH.deleteMany({ eventId: ev._id });
       await TMATCH.insertMany(matches);
       await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt: Date.now(), startedAt: Date.now() } });
@@ -2450,47 +2455,46 @@ import('firebase-admin').then(async ({ default: admin }) => {
         } }, { upsert: true });
       } catch (e) { /* best-effort 歸檔 */ }
     }
-    // 勝者填入下一輪 parent（或決賽 → 完賽）
+    // 某場結束（winner 已由 caller 設好）→ 交給 checkRoundAdvance 判斷本輪是否打完、要不要動態建下一輪或產生冠軍。
+    //   （動態賽制：不再預建整棵樹、不填 parent；下一輪在本輪全部完成時才用贏家名單建立。）
     async function advanceOrFinish(m, winnerUid, winnerName) {
-      const ev = await TEVENTS.findOne({ _id: m.eventId });
-      const rounds = (ev && ev.rounds) || 99;
-      if (m.round < rounds) {
-        const parentId = m.eventId + '_r' + (m.round + 1) + '_m' + Math.floor(m.idx / 2);
-        const slot = (m.idx % 2 === 0) ? 'p1' : 'p2';
-        const set = {}; set[slot + 'uid'] = winnerUid; set[slot + 'name'] = winnerName;
-        await TMATCH.updateOne({ _id: parentId }, { $set: set });
-      } else {
-        await TEVENTS.updateOne({ _id: m.eventId }, { $set: { status: 'finished', championUid: winnerUid, championName: winnerName } });
-        await recordChampion(ev, winnerUid, winnerName);
-        await recordTournamentArchive({ ...ev, championUid: winnerUid, championName: winnerName });
-        await postSystemChat('🏆 賽事結束！冠軍：' + (winnerName || '?') + ' 🎉 恭喜！');
-      }
       await checkRoundAdvance(m.eventId);
     }
-    // 本輪全 done → currentRound++ + 設 roundStartedAt（倒數重新計時）+ 通知；新輪空位自動 bye
+    // 本輪全部 done → 收集贏家（含輪空者）。剩 1 人＝冠軍完賽；>1 人＝動態建下一輪（每輪只 1 人輪空，優先未輪空者）。
     async function checkRoundAdvance(eventId) {
       const ev = await TEVENTS.findOne({ _id: eventId });
       if (!ev || ev.status !== 'running') return;
-      const cur = ev.currentRound; const rounds = ev.rounds || 99;
-      const remaining = await TMATCH.countDocuments({ eventId, round: cur, status: { $ne: 'done' } });
-      if (remaining > 0 || cur >= rounds) return;
+      const cur = ev.currentRound;
+      const curMatches = await TMATCH.find({ eventId, round: cur }).toArray();
+      if (!curMatches.length) return;
+      if (curMatches.some((m) => m.status !== 'done')) return;  // 本輪還沒打完
+      // 收集本輪贏家（雙未進場的場無 winner → 兩人皆淘汰，不列入）
+      const winners = [];
+      for (const m of curMatches) { if (m.winnerUid) winners.push({ uid: m.winnerUid, name: m.winnerName }); }
+      if (winners.length <= 1) {
+        const champ = winners[0] || null;
+        await TEVENTS.updateOne({ _id: eventId }, { $set: { status: 'finished', championUid: champ ? champ.uid : null, championName: champ ? champ.name : null } });
+        if (champ) {
+          await recordChampion(ev, champ.uid, champ.name);
+          await recordTournamentArchive({ ...ev, championUid: champ.uid, championName: champ.name });
+          await postSystemChat('🏆 賽事結束！冠軍：' + (champ.name || '?') + ' 🎉 恭喜！');
+        } else {
+          await recordTournamentArchive(ev);
+          await postSystemChat('⚠️ 賽事結束（最後一場雙方皆未進場，無冠軍）。');
+        }
+        return;
+      }
+      // 還有 >1 人 → 建下一輪。算每人至今累計輪空數（輪空優先給最少者）。
+      const allMatches = await TMATCH.find({ eventId }).toArray();
+      const byeCount = {};
+      for (const m of allMatches) { if (m.bye && m.winnerUid) byeCount[m.winnerUid] = (byeCount[m.winnerUid] || 0) + 1; }
       const next = cur + 1;
+      const nextPlayers = winners.map((w) => ({ uid: w.uid, name: w.name, byes: byeCount[w.uid] || 0 }));
+      const nextMatches = buildRoundMatches(nextPlayers, eventId, next);
+      await TMATCH.insertMany(nextMatches);
       await TEVENTS.updateOne({ _id: eventId }, { $set: { currentRound: next, roundStartedAt: Date.now() } });
       const cd = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
-      await postSystemChat('⚔️ 第 ' + next + ' 輪即將開始！休息倒數 ' + cd + ' 分鐘，時間到才可進場。');
-      await autoByeLonelyMatches(eventId, next);
-    }
-    // 新一輪：某場只剩一名玩家（另一格 null，因上一輪雙淘汰）→ 該玩家 bye 直接晉級
-    async function autoByeLonelyMatches(eventId, round) {
-      const ms = await TMATCH.find({ eventId, round, status: { $ne: 'done' } }).toArray();
-      for (const m of ms) {
-        const hasP1 = !!m.p1uid, hasP2 = !!m.p2uid;
-        if (hasP1 !== hasP2) {
-          const wUid = hasP1 ? m.p1uid : m.p2uid, wName = hasP1 ? m.p1name : m.p2name;
-          await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', bye: true } });
-          await advanceOrFinish(m, wUid, wName);
-        }
-      }
+      await postSystemChat('⚔️ 第 ' + next + ' 輪賽程已產生！休息倒數 ' + cd + ' 分鐘，時間到才可進場。');
     }
     // 對局結束 → 記勝者 + 晉級
     async function onMatchGameOver(doc, gs) {
