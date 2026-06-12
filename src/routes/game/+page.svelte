@@ -6199,13 +6199,13 @@
             </div>
             <div class="tourn-round">
               {#if _roundMatches.length === 0}
-                <div class="tm-vs muted" style="text-align:center;padding:10px;">此輪賽程尚未產生（前一輪打完才會排定）</div>
+                <div class="muted small" style="text-align:center;padding:14px;">此輪賽程尚未產生（前一輪打完才會排定）</div>
               {/if}
               {#each _roundMatches as m}
-                <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'}>
-                  <div class="tm-p" class:win={m.winner === 'p1'}>{m.p1name ?? '—'}</div>
-                  <div class="tm-vs">{m.bye ? '輪空' : 'vs'}</div>
-                  <div class="tm-p" class:win={m.winner === 'p2'}>{m.p2name ?? (m.bye ? '' : '—')}</div>
+                <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
+                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
+                  <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
+                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
                 </div>
               {/each}
             </div>
@@ -9886,7 +9886,7 @@
   .tourn-hof-meta { color: #9a8d6a; font-size: 12px; }
   .tourn-mymatch { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
   .tourn-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
-  .tourn-round { min-width: 150px; flex: 0 0 auto; }
+  .tourn-round { width: 100%; }
   /* v5.590 賽程翻頁 */
   .tourn-bracket-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 10px; }
   .tourn-pg-btn { background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: .85rem; }
@@ -9894,12 +9894,16 @@
   .tourn-pg-title { font-weight: 700; color: #ffd35a; font-size: 1rem; }
   .tourn-pg-cur { color: #7ee0a0; font-size: .78rem; font-weight: 600; }
   .tourn-round-title { font-size: 0.82rem; color: #8aa0c8; margin-bottom: 6px; text-align: center; }
-  .tourn-match { background: #141b2a; border: 1px solid #2a3a55; border-radius: 7px; padding: 5px 8px; margin-bottom: 8px; font-size: 0.86rem; }
+  /* v5.595 賽程單場改單列橫排：玩家A 〔VS〕 玩家B，grid 三欄置中、贏家高亮 */
+  .tourn-match { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; background: #141b2a; border: 1px solid #2a3a55; border-radius: 8px; padding: 7px 12px; margin-bottom: 8px; font-size: 0.9rem; }
   .tourn-match.mine { border-color: #d8b24a; box-shadow: 0 0 0 1px #d8b24a55; }
   .tourn-match.done { opacity: 0.92; }
-  .tourn-match .tm-p { padding: 2px 4px; color: #c8d4e8; border-radius: 4px; }
-  .tourn-match .tm-p.win { color: #aef0b0; font-weight: 700; background: #1d3a1d; }
-  .tourn-match .tm-vs { text-align: center; font-size: 0.72rem; color: #6a7a98; margin: 1px 0; }
+  .tourn-match.bye { opacity: 0.85; }
+  .tourn-match .tm-side { padding: 4px 8px; color: #c8d4e8; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tourn-match .tm-p1 { text-align: right; }
+  .tourn-match .tm-p2 { text-align: left; }
+  .tourn-match .tm-side.win { color: #aef0b0; font-weight: 700; background: #1d3a1d; }
+  .tourn-match .tm-vs { text-align: center; font-size: 0.7rem; font-weight: 700; color: #9ab4e0; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
   .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9999; }
   .tourn-return-bar button { box-shadow: 0 4px 14px #000a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
