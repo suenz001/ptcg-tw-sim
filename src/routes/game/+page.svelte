@@ -757,6 +757,18 @@
   let chatInput = $state('');
   let unsubMessages: (() => void) | null = null;
   let chatScrollEl: HTMLElement | null = $state(null);
+  // v5.589 大廳聊天室：進入即捲到最新訊息；「釘在底部」——讀歷史往上捲時不打擾，捲回底部恢復自動捲
+  let tLobbyChatEl = $state<HTMLElement | null>(null);
+  let tLobbyChatPinned = true;
+  function onLobbyChatScroll() {
+    const el = tLobbyChatEl;
+    if (el) tLobbyChatPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  }
+  $effect(() => {
+    const _n = tChat.length;  // 依賴：訊息變動 / 首次載入時觸發
+    if (!tLobbyChatEl || !tLobbyChatPinned) return;
+    setTimeout(() => { if (tLobbyChatEl) tLobbyChatEl.scrollTop = tLobbyChatEl.scrollHeight; }, 30);
+  });
   // v2.276 Phase 3：觀戰視角切換
   let spectatorView = $state<'p1' | 'p2' | 'auto'>('auto');
 
@@ -6062,7 +6074,7 @@
       <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
       <div class="tourn-chat">
         <div class="tourn-chat-head">💬 大廳聊天室</div>
-        <div class="tourn-chat-msgs">
+        <div class="tourn-chat-msgs" bind:this={tLobbyChatEl} onscroll={onLobbyChatScroll}>
           {#if tChat.length === 0}<div class="tcmsg muted">還沒有人發言，來說聲哈囉吧～</div>{/if}
           {#each tChat as m (m.id)}
             <div class="tcmsg" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
