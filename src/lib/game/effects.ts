@@ -7539,6 +7539,14 @@ export function dealAttackDamageToTarget(
       }
     }
   }
+  // v5.583：bench 受招式【傷害】→ 套防守方特性/場地減傷（捲牆/守護之鐘/齒輪塗層/凍原堡壘/
+  //   自身 PASSIVE_DAMAGE_REDUCE 等）。active 已於上方 applyDefenderReductionsBlockA 處理，故只補 bench。
+  //   收斂：與 hitBenchAll/hitBenchPickPost/snipe-multi 同一條 _applyBenchAbilityReduce。
+  if (!isActive && kind === 'attack-damage' && effDmg > 0 && targetCard) {
+    const _rb = _applyBenchAbilityReduce(st, target, targetCard, dIdx, actorIdx, pool, effDmg);
+    if (_rb.amount !== effDmg && _rb.logs.length > 0) st = addLog(st, `${targetCard.name}：${_rb.logs.join('、')}`, null);
+    effDmg = _rb.amount;
+  }
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
   //   龐克頭盔/還擊斧/反擊特性/警備濁霧）。共用 fireDefenderOnDamaged，與 snipe-multi 同一條。
   if (isActive && kind === 'attack-damage' && effDmg > 0) {
@@ -9591,6 +9599,15 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
           if (bonus > 0) effDmg += bonus;
         }
       }
+    }
+    // v5.583：套防守方特性/場地【傷害減免】（爆炸頭水牛 捲牆 / 守護之鐘 / 齒輪塗層 / 凍原堡壘 /
+    //   岩石宮殿 / 自身 PASSIVE_DAMAGE_REDUCE 等）。弱點/抵抗力非此類，已於上方戰鬥位另計。
+    //   收斂：與 hitBenchAll / hitBenchPickPost / dealAttackDamageToTarget 同一條 _applyBenchAbilityReduce，
+    //   active+bench 皆適用（snipe-multi 不走引擎主管線，過去完全漏套 → 備戰捲牆等無效）。
+    if (effDmg > 0 && targetCard) {
+      const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, effDmg);
+      if (_rd.amount !== effDmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
+      effDmg = _rd.amount;
     }
     // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged，
     //   升級原本只有 SPECIAL_ENERGY 的版本；補 TOOL_ON_DAMAGED/還擊斧/龐克頭盔/反擊特性/警備濁霧）。
@@ -14331,6 +14348,13 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
           if (bonus > 0) dmg += bonus;
         }
       }
+    }
+    // v5.583：套防守方特性/場地【傷害減免】（捲牆/守護之鐘/齒輪塗層/凍原堡壘/自身減傷特性），
+    //   active+bench 皆適用（收斂 _applyBenchAbilityReduce；分身連打過去備戰漏套）。
+    if (dmg > 0 && targetCard) {
+      const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, dmg);
+      if (_rd.amount !== dmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
+      dmg = _rd.amount;
     }
     // v5.436：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged）。
     if (isActive && dmg > 0) {
