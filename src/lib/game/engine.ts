@@ -57,6 +57,7 @@ import {
   hasShellinkEvolveBypass,
   isAllPowerSoulBlocked,
   PASSIVE_PREVENT_KO,
+  COIN_PREVENT_KO_ABILITIES,
   flipCoinsWithLog,
   promptPlayAbilities,
   ON_PLAY_FROM_HAND_ABILITIES,
@@ -4779,6 +4780,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         if (!fn) continue;
         const result = fn(defenderState.active, defenderCard, baseDamage);
         if (result.prevent) {
+          // v5.596 擲幣型 prevent-KO(堅忍之軀/不朽身軀)走 flipCoinsWithLog；反面則照常昏厥
+          if (COIN_PREVENT_KO_ABILITIES.has(ab.name)) {
+            const _cf = flipCoinsWithLog(newState, 1, ab.name, dIdx);
+            newState = _cf.state;
+            if (_cf.heads === 0) continue;
+          }
           const targetDamage = Math.max(0, defenderHP - result.leaveHP);
           defenderState.active = { ...defenderState.active, damage: targetDamage };
           defPlayers[dIdx] = defenderState;

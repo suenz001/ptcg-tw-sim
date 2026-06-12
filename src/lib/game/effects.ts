@@ -7474,21 +7474,28 @@ function applyPreventKOToVictim(
     }
   }
   // 2) 被動防 KO（堅忍之軀/不朽身軀/勤奮之心/結實）
+  let workState = state;
   if (victimCard.abilities) {
     for (const ab of victimCard.abilities) {
       const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
       const r = fn(inPlay, victimCard, baseDamage);
       if (!r.prevent) continue;
+      // v5.596 擲幣型(堅忍之軀/不朽身軀)走 flipCoinsWithLog；反面則不防(保留擲幣 log)，繼續查其他特性
+      if (COIN_PREVENT_KO_ABILITIES.has(ab.name)) {
+        const cf = flipCoinsWithLog(workState, 1, ab.name, defenderIdx);
+        workState = cf.state;
+        if (cf.heads === 0) continue;
+      }
       const targetDamage = Math.max(0, hp - r.leaveHP);
       const newInst: CardInstance = { ...inPlay, damage: targetDamage };
-      let s = updatePlayer(state, defenderIdx, p => isActive
+      let s = updatePlayer(workState, defenderIdx, p => isActive
         ? { ...p, active: newInst }
         : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c) });
       s = addLog(s, `「${ab.name}」啟動：${victimCard.name} 避免昏厥，剩餘 HP ${r.leaveHP}！`, null);
       return { prevented: true, state: s };
     }
   }
-  return { prevented: false, state };
+  return { prevented: false, state: workState };
 }
 
 export function dealAttackDamageToTarget(
@@ -14908,6 +14915,9 @@ export function isAllPowerSoulBlocked(card: Card | undefined): boolean {
 export const PASSIVE_PREVENT_KO = new Map<string, (
   holderInst: CardInstance, holderCard: Card, incomingDamage: number
 ) => { prevent: boolean; leaveHP: number }>();
+// v5.596 擲幣型 prevent-KO 特性（堅忍之軀/不朽身軀）：呼叫端(engine inline + applyPreventKOToVictim)
+//   要走 flipCoinsWithLog 擲 1 幣，正面才真的防 KO（其餘如勤奮之心/結實是滿血條件型，無幣）。
+export const COIN_PREVENT_KO_ABILITIES = new Set<string>(['堅忍之軀', '不朽身軀']);
 PASSIVE_PREVENT_KO.set('勤奮之心', (inst, card, _dmg) => {
   // 全血才能觸發（damage === 0）
   if (inst.damage > 0) return { prevent: false, leaveHP: 0 };
@@ -14926,25 +14936,17 @@ PASSIVE_PREVENT_KO.set('結實', (inst, _card, _dmg) => {
   return { prevent: true, leaveHP: 10 };
 });
 
-// v2.992 超級摔角鷹人ex(I) | 堅忍之軀 — 受 KO 時擲幣，正面留 10HP
-// fn 是 pure 簽名(無 state)，用 Math.random 擲(engine 套用 prevent KO 命中時自動寫 log)
-// 卡面無滿血條件，與勤奮之心/結實不同。
-PASSIVE_PREVENT_KO.set('堅忍之軀', (_inst, _card, _dmg) => {
-  const heads = Math.random() < 0.5;
-  if (!heads) return { prevent: false, leaveHP: 0 };
-  return { prevent: true, leaveHP: 10 };
-});
+// v2.992 超級摔角鷹人ex(I) | 堅忍之軀 — 受招式傷害昏厥時擲 1 幣，正面留 10HP（無滿血條件）。
+// v5.596：擲幣移至呼叫端走 flipCoinsWithLog（見 COIN_PREVENT_KO_ABILITIES）→ 有 log/動畫/線上同步；
+//   fn 只回報「擲到正面就能防」的意圖，是否真防由呼叫端擲幣決定。
+PASSIVE_PREVENT_KO.set('堅忍之軀', (_inst, _card, _dmg) => ({ prevent: true, leaveHP: 10 }));
 
 // v4.89 棄世猴(M5) | 不朽之軀 — 與「堅忍之軀」邏輯完全等價
 // 卡面：「這隻寶可夢因招式傷害而【昏厥】時，擲 1 次硬幣，若為正面，這隻寶可夢
 //        不會【昏厥】，並以剩餘 HP 為「10」的狀態留在場上。」
 // engine 觸發點：wouldBeKO (baseDamage > 0 由招式傷害) → 走 PASSIVE_PREVENT_KO map，
 // 卡面「因招式傷害而昏厥」這個前提天然成立（engine 不會在特性 KO 或自殺 KO 時呼叫此 hook）。
-PASSIVE_PREVENT_KO.set('不朽身軀', (_inst, _card, _dmg) => {
-  const heads = Math.random() < 0.5;
-  if (!heads) return { prevent: false, leaveHP: 0 };
-  return { prevent: true, leaveHP: 10 };
-});
+PASSIVE_PREVENT_KO.set('不朽身軀', (_inst, _card, _dmg) => ({ prevent: true, leaveHP: 10 }));  // v5.596 擲幣移至呼叫端(flipCoinsWithLog)
 
 // ============================================================================
 // v2.992 Group 1 — 7 new passive hook maps
