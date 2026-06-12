@@ -4080,16 +4080,19 @@
       } catch { /* 忽略單次輪詢失敗 */ }
     }, 1200);
   }
-  async function tournamentDispatch(action: any) {
+  async function tournamentDispatch(action: any, _retried = false) {
     if (tBusy) return; tBusy = true; tError = '';
     const prev = game;
     try {
       const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });
-      if (r.error) tError = r.error;
       if (r.gameState) {
         tAdopt(r.gameState, r.version);
         try { if (game && game !== prev) dispatchSfxForAction(action as any, prev as any, game as any); } catch { /* sfx best-effort */ }
       }
+      // v5.598：伺服器樂觀並發 CAS 落敗(stale) → 已同步到最新狀態，自動重試一次。
+      //   setup 雙方同時擺場時常見；雙方擺自己側不衝突，重試必成功。只重試一次避免迴圈。
+      if (r.stale && !_retried) { tBusy = false; return await tournamentDispatch(action, true); }
+      if (r.error) tError = r.error;
     } catch (e: any) { tError = String(e?.message ?? e); }
     finally { tBusy = false; }
   }

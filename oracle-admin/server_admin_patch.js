@@ -2152,7 +2152,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
         catch (e) { return res.json({ error: '動作無效：' + e.message, gameState: gs, version: doc.version }); }
         if (newGs === gs) return res.json({ rejected: true, gameState: gs, version: doc.version });
         const nv = doc.version + 1;
-        await TROOMS.updateOne({ _id: room }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now(), lastActionAt: Date.now() } });
+        // v5.598 樂觀並發控制（CAS）：filter 加 version:doc.version，只在版本未被其他並發動作改寫時才寫入。
+        //   setup 階段雙方會「同時各自擺場」→ 兩個 /action 都讀到 version N、都寫 N+1，原本後寫會覆蓋前寫
+        //   (lost update) 抹掉其中一方擺場而卡死。CAS 後只有一個寫成功；落敗者 matchedCount=0，回傳最新狀態
+        //   讓 client 重新同步後再試（前端會自動重試一次；雙方擺自己側不衝突故必成功）。
+        const wr = await TROOMS.updateOne({ _id: room, version: doc.version }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now(), lastActionAt: Date.now() } });
+        if (!wr || wr.matchedCount === 0) {
+          const fresh = await TROOMS.findOne({ _id: room });
+          return res.json({ rejected: true, stale: true, gameState: fresh ? fresh.gameState : gs, version: fresh ? fresh.version : doc.version });
+        }
         if (newGs.phase === 'game-over' && doc.matchId) { try { await onMatchGameOver(doc, newGs); } catch (e) { console.warn('[tournament] match advance failed:', e && e.message); } }
         res.json({ gameState: newGs, version: nv });
       } catch (e) { res.status(500).json({ error: e.message }); }
