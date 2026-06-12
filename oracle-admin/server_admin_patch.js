@@ -2197,6 +2197,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
 
     // 玩家：目前賽事 + 我的報名狀態
+    // 玩家：報到（僅報到階段；已報名者才能報到）
+    app.post('/api/tournament/checkin', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(409).json({ error: '目前沒有賽事' });
+        if (ev.status !== 'checkin') return res.status(409).json({ error: '目前不在報到階段' });
+        const reg = await TREGS.findOne({ _id: ev._id + '__' + id.uid });
+        if (!reg) return res.status(409).json({ error: '你未報名本賽事，無法報到' });
+        await TREGS.updateOne({ _id: reg._id }, { $set: { checkedIn: true } });
+        res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
     app.get('/api/tournament/event', async (req, res) => {
       try {
         const id = await tournIdentity(req);
@@ -2415,15 +2429,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try { await TCHAT.insertOne({ room: 'lobby', uid: 'system', name: '系統', text: String(text).slice(0, 200), ts: Date.now(), sys: true }); }
       catch (e) { /* best-effort 通知 */ }
     }
-    async function seedEventBracket(ev) {
-      const regs = await TREGS.find({ eventId: ev._id }).toArray();
-      if (regs.length < 2) return { error: '至少需要 2 位報名者' };
+    async function seedEventBracket(ev, opts) {
+      opts = opts || {};
+      let regs = await TREGS.find({ eventId: ev._id }).toArray();
+      if (opts.checkedInOnly) regs = regs.filter((r) => r.checkedIn);  // 報到制：只列入「已報到」者，排除報名但沒到的人
+      if (regs.length < 2) return { error: '至少需要 2 位' + (opts.checkedInOnly ? '報到者' : '報名者') };
       const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家', byes: 0 }));
       const rounds = Math.max(1, Math.ceil(Math.log2(players.length)));  // 總輪數＝⌈log2(N)⌉（每輪只 1 人輪空，不多花輪）
       const matches = buildRoundMatches(players, ev._id, 1);  // 只建第 1 輪，後續每輪打完才動態建（避免第一輪大量輪空）
       await TMATCH.deleteMany({ eventId: ev._id });
       await TMATCH.insertMany(matches);
-      await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt: Date.now(), startedAt: Date.now() } });
+      // 報到制：休息時間已用於報到 → 第 1 輪立即可進場（roundStartedAt 回推 cdMin，使 enterOpenAt=now）
+      const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
+      const roundStartedAt = opts.immediateEnter ? (Date.now() - cdMin * 60000) : Date.now();
+      await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt, startedAt: Date.now() } });
       return { ok: true, rounds, players: players.length };
     }
     // 名人堂：賽事誕生冠軍時永久記錄（以 eventId 為鍵 upsert，重複完賽不重覆）
@@ -2788,9 +2807,37 @@ import('firebase-admin').then(async ({ default: admin }) => {
           return;
         }
         if (ev.status === 'registration' && ev.registrationCloseAt && now >= ev.registrationCloseAt) {
-          const r = await seedEventBracket(ev);
-          if (r.ok) await postSystemChat('🔔 「' + ev.name + '」報名截止，賽程已公布，第 1 輪開始！');
-          else if (!ev._closeWarned) { await TEVENTS.updateOne({ _id: ev._id }, { $set: { _closeWarned: true } }); await postSystemChat('⚠️ 「' + ev.name + '」報名人數不足 2 人，請管理員處理。'); }
+          const cdMin0 = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
+          if (ev.checkInEnabled !== false && cdMin0 > 0) {
+            // 報到制：先進「報到階段」，給 cdMin 分鐘讓參賽者按報到鈕；逾時未報到者不列入賽程
+            await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'checkin', checkInDeadline: now + cdMin0 * 60000 } });
+            await postSystemChat('🔔 「' + ev.name + '」報名截止！請於 ' + cdMin0 + ' 分鐘內按「我要報到」，逾時未報到者不列入賽程。');
+          } else {
+            // 無報到制（admin 關閉 或 休息時間=0）→ 沿用舊行為：直接以全部報名者開賽
+            const r = await seedEventBracket(ev);
+            if (r.ok) await postSystemChat('🔔 「' + ev.name + '」報名截止，賽程已公布，第 1 輪開始！');
+            else if (!ev._closeWarned) { await TEVENTS.updateOne({ _id: ev._id }, { $set: { _closeWarned: true } }); await postSystemChat('⚠️ 「' + ev.name + '」報名人數不足 2 人，請管理員處理。'); }
+          }
+          return;
+        }
+        // 報到截止 → 以「已報到者」產生賽程開賽（排除報名但沒到的人，第 1 輪即可進場）
+        if (ev.status === 'checkin' && ev.checkInDeadline && now >= ev.checkInDeadline) {
+          const r = await seedEventBracket(ev, { checkedInOnly: true, immediateEnter: true });
+          if (r.ok) {
+            await postSystemChat('⚔️ 報到結束！依 ' + r.players + ' 名已報到者產生賽程，第 1 輪開始，可直接進場！');
+          } else {
+            const checked = await TREGS.find({ eventId: ev._id, checkedIn: true }).toArray();
+            if (checked.length === 1) {
+              await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'finished', championUid: checked[0].uid, championName: checked[0].name } });
+              await recordChampion(ev, checked[0].uid, checked[0].name);
+              await recordTournamentArchive({ ...ev, championUid: checked[0].uid, championName: checked[0].name });
+              await postSystemChat('🏆 僅 1 人報到，「' + (checked[0].name || '?') + '」直接獲得冠軍！');
+            } else {
+              await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'finished', championUid: null, championName: null } });
+              await recordTournamentArchive(ev);
+              await postSystemChat('⚠️ 報到人數不足 2 人，賽事取消。');
+            }
+          }
           return;
         }
         // 未進場判負：倒數(roundCountdownMin)+遲到容許(noShowMin) 過後，本輪未進場者判負

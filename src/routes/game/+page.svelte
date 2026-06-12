@@ -128,6 +128,12 @@
   // ── Phase1-D 賽程（單敗淘汰）──
   let tBracket = $state<any>(null);   // { event, matches[] }
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
+  let tBracketPage = $state(1);        // v5.590 賽程翻頁：目前檢視的輪次（預設＝當前進行輪）
+  let _tBracketLastRound = -1;
+  $effect(() => {
+    const cur = tBracket?.event?.currentRound ?? 1;
+    if (cur !== _tBracketLastRound) { _tBracketLastRound = cur; tBracketPage = cur; }  // 當前輪變動 → 預設跳到該輪
+  });
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   // v5.585 跨房提醒：在「一般對戰」中也輪詢錦標賽「我的對戰」，可入場時跳頂部橫幅
   let tAlertEvent = $state<any>(null);
@@ -3953,6 +3959,16 @@
     try { const r = await tApi('/register', { name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
+  // v5.590 報到：報到階段按鈕，已報名者標記 checkedIn=true
+  async function tCheckin() {
+    tBusy = true; tError = '';
+    try {
+      const r = await tApi('/checkin', {});
+      if (r?.error) tError = r.error;
+      else { tMe = { ...tMe, checkedIn: true }; tournLoadEvent(); }
+    } catch (e: any) { tError = '報到失敗：' + (e?.message ?? e); }
+    finally { tBusy = false; }
+  }
   async function tournUnregister() {
     if (!confirm('確定退賽？')) return;
     tBusy = true; tError = '';
@@ -6110,6 +6126,20 @@
               {/if}
             </div>
           {/if}
+          {#if tEvent.status === 'checkin'}
+            {@const _ciMs = (tEvent.checkInDeadline ?? 0) - tNow}
+            <div class="tourn-cdbox urgent">
+              <div class="tourn-cdbox-label">📋 報到階段{#if _ciMs > 0} ｜ 剩 {fmtCountdown(_ciMs)}{/if}</div>
+              {#if !tMe.registered}
+                <div class="muted small">未報名者無法參加；報到結束後依「已報到者」產生賽程。</div>
+              {:else if tMe.checkedIn}
+                <div class="reg-ok">✅ 你已報到，等待開賽…</div>
+              {:else}
+                <button class="tourn-enter-btn" onclick={tCheckin} disabled={tBusy}>{tBusy ? '報到中…' : '✋ 我要報到'}</button>
+                <div class="muted small" style="margin-top:4px;">逾時未報到將不列入賽程</div>
+              {/if}
+            </div>
+          {/if}
           {#if tMe.registered}
             <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{tMe.name}</b> ｜ 鎖定牌組：<b>{tMe.deckName ?? '（已選定）'}</b></p>
             {#if tEvent.status === 'registration'}<button class="btn-secondary small" onclick={tournUnregister} disabled={tBusy}>退賽</button>{/if}
@@ -6136,20 +6166,29 @@
               <p class="muted small" style="text-align:center;color:#e8a;">⏰ 請於 {Math.floor(_dlMs / 60000)}:{String(Math.floor((_dlMs % 60000) / 1000)).padStart(2, '0')} 內進場，逾時判負離席</p>
             {/if}
           {/if}
-          <div class="tourn-rounds">
-            {#each Array.from({ length: tBracket.event?.rounds ?? 0 }, (_, i) => i + 1) as rnd}
-              <div class="tourn-round">
-                <div class="tourn-round-title">{rnd === tBracket.event?.rounds ? '🏆 決賽' : '第 ' + rnd + ' 輪'}</div>
-                {#each tBracket.matches.filter((m: any) => m.round === rnd) as m}
-                  <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'}>
-                    <div class="tm-p" class:win={m.winner === 'p1'}>{m.p1name ?? '—'}</div>
-                    <div class="tm-vs">{m.bye ? '輪空' : 'vs'}</div>
-                    <div class="tm-p" class:win={m.winner === 'p2'}>{m.p2name ?? (m.bye ? '' : '—')}</div>
-                  </div>
-                {/each}
-              </div>
-            {/each}
-          </div>
+          {#if tBracket.event}
+            {@const _rounds = tBracket.event.rounds ?? 1}
+            {@const _page = Math.min(Math.max(1, tBracketPage), _rounds)}
+            {@const _curR = tBracket.event.currentRound ?? 1}
+            {@const _roundMatches = tBracket.matches.filter((m: any) => m.round === _page)}
+            <div class="tourn-bracket-pager">
+              <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.max(1, _page - 1)} disabled={_page <= 1}>◀ 上一輪</button>
+              <span class="tourn-pg-title">{_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪'}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
+              <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.min(_rounds, _page + 1)} disabled={_page >= _rounds}>下一輪 ▶</button>
+            </div>
+            <div class="tourn-round">
+              {#if _roundMatches.length === 0}
+                <div class="tm-vs muted" style="text-align:center;padding:10px;">此輪賽程尚未產生（前一輪打完才會排定）</div>
+              {/if}
+              {#each _roundMatches as m}
+                <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'}>
+                  <div class="tm-p" class:win={m.winner === 'p1'}>{m.p1name ?? '—'}</div>
+                  <div class="tm-vs">{m.bye ? '輪空' : 'vs'}</div>
+                  <div class="tm-p" class:win={m.winner === 'p2'}>{m.p2name ?? (m.bye ? '' : '—')}</div>
+                </div>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/if}
 
@@ -9827,6 +9866,12 @@
   .tourn-mymatch { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
   .tourn-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
   .tourn-round { min-width: 150px; flex: 0 0 auto; }
+  /* v5.590 賽程翻頁 */
+  .tourn-bracket-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 10px; }
+  .tourn-pg-btn { background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 7px; padding: 5px 12px; cursor: pointer; font-size: .85rem; }
+  .tourn-pg-btn:disabled { opacity: .4; cursor: default; }
+  .tourn-pg-title { font-weight: 700; color: #ffd35a; font-size: 1rem; }
+  .tourn-pg-cur { color: #7ee0a0; font-size: .78rem; font-weight: 600; }
   .tourn-round-title { font-size: 0.82rem; color: #8aa0c8; margin-bottom: 6px; text-align: center; }
   .tourn-match { background: #141b2a; border: 1px solid #2a3a55; border-radius: 7px; padding: 5px 8px; margin-bottom: 8px; font-size: 0.86rem; }
   .tourn-match.mine { border-color: #d8b24a; box-shadow: 0 0 0 1px #d8b24a55; }
