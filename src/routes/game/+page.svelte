@@ -165,6 +165,16 @@
         //   (看不到對手 KO 我方 → 無法換新戰鬥位 → 被閒置判敗)。伺服器權威，重抓永遠安全。
         if (tStep === 'playing' && game && !isTournSpectator && _tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000) {
           _tLastPollOkAt = Date.now();  // 防重複觸發
+          // v5.593 輪詢停擺 → 立即強制重抓最新狀態並「強制採用」(伺服器權威，繞過版本檢查) + 重啟輪詢，
+          //   治「第一隻昏厥後 client 沒收到 active=空 → 無法換場 → 閒置判敗」型卡住，最多 6~7 秒自動恢復。
+          (async () => {
+            try {
+              const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+              if (fr && fr.gameState) { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }
+              if (fr && typeof fr.serverNow === 'number') tClockOffset = fr.serverNow - Date.now();
+              if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
+            } catch { /* ignore */ }
+          })();
           startTournamentPoll();
         }
       }, 1000);
@@ -4061,6 +4071,7 @@
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
+        else if (r && typeof r.version === 'number' && r.version < tVersion && r.gameState) { game = r.gameState; tVersion = r.version; }  // v5.593 client 版本超前伺服器(desync/房重置)→ 強制回正(伺服器權威)
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
