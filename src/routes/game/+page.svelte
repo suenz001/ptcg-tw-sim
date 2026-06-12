@@ -110,6 +110,7 @@
   let tBusy = $state(false);
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
   let tPollGen = 0;  // v5.586 poll 世代：離開對戰時 ++，使在路上的 in-flight 回應失效（防返回大廳後被彈回對戰）
+  let _tLastPollOkAt = 0;  // v5.591 上次輪詢成功回應時間（看門狗判斷輪詢是否停擺）
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
@@ -158,7 +159,15 @@
   // v5.575：1 秒 tick 平滑倒數（用伺服器對時 tClockOffset，所有倒數對齊伺服器時間）；hub + 對戰中都跑
   $effect(() => {
     if (isTournament) {
-      if (!tTickTimer) tTickTimer = setInterval(() => { tNow = Date.now() + tClockOffset; }, 1000);
+      if (!tTickTimer) tTickTimer = setInterval(() => {
+        tNow = Date.now() + tClockOffset;
+        // v5.591 輪詢看門狗：對戰中若輪詢停擺(>6s 沒成功回應)→ 重啟輪詢，避免 client 卡在舊狀態
+        //   (看不到對手 KO 我方 → 無法換新戰鬥位 → 被閒置判敗)。伺服器權威，重抓永遠安全。
+        if (tStep === 'playing' && game && !isTournSpectator && _tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000) {
+          _tLastPollOkAt = Date.now();  // 防重複觸發
+          startTournamentPoll();
+        }
+      }, 1000);
     } else if (tTickTimer) { clearInterval(tTickTimer); tTickTimer = null; }
   });
   // v5.585 跨房提醒輪詢：非錦標賽頁 + 已登入(非匿名) → 每 30 秒查一次我的錦標賽對戰，1 秒 tick 算倒數
@@ -703,8 +712,8 @@
     if (!chatFabDragStart) return;
     const dx = e.clientX - chatFabDragStart.mx;
     const dy = e.clientY - chatFabDragStart.my;
-    if (!chatFabDragged && Math.abs(dx) + Math.abs(dy) > 4) {
-      chatFabDragged = true;  // 移動超過 4px 視為拖曳，後續 pointerup 不 toggle
+    if (!chatFabDragged && Math.abs(dx) + Math.abs(dy) > 12) {
+      chatFabDragged = true;  // v5.591 門檻 4→12px：手機觸控輕觸常有 <12px 抖動，避免被誤判成拖曳而點不開聊天室
     }
     if (chatFabDragged) {
       chatFabPos = { x: chatFabDragStart.ox + dx, y: chatFabDragStart.oy + dy };
@@ -4049,6 +4058,7 @@
       try {
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
+        _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
