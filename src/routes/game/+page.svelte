@@ -128,6 +128,21 @@
   let tBracket = $state<any>(null);   // { event, matches[] }
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
+  // v5.585 跨房提醒：在「一般對戰」中也輪詢錦標賽「我的對戰」，可入場時跳頂部橫幅
+  let tAlertEvent = $state<any>(null);
+  let tAlertMatch = $state<any>(null);
+  let tAlertOffset = $state(0);
+  let tAlertNow = $state(0);
+  let tAlertDismissedId = $state('');
+  let tAlertPollTimer: ReturnType<typeof setInterval> | null = null;
+  let tAlertTickTimer: ReturnType<typeof setInterval> | null = null;
+  const tAlertReady = $derived(
+    !isTournament
+    && !!tAlertEvent && tAlertEvent.status === 'running'
+    && !!tAlertMatch && !tAlertMatch.entered
+    && tAlertMatch.matchId !== tAlertDismissedId
+    && (tAlertMatch.enterOpenAt ?? Infinity) <= tAlertNow
+  );
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
       if (!tEventPollTimer) { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); }, 3000); }
@@ -139,6 +154,36 @@
       if (!tTickTimer) tTickTimer = setInterval(() => { tNow = Date.now() + tClockOffset; }, 1000);
     } else if (tTickTimer) { clearInterval(tTickTimer); tTickTimer = null; }
   });
+  // v5.585 跨房提醒輪詢：非錦標賽頁 + 已登入(非匿名) → 每 30 秒查一次我的錦標賽對戰，1 秒 tick 算倒數
+  $effect(() => {
+    if (!isTournament && firebaseUser && !firebaseUser.isAnonymous) {
+      if (!tAlertPollTimer) {
+        const poll = async () => {
+          try {
+            const r = await tApi('/event');
+            tAlertEvent = r?.event ?? null;
+            tAlertMatch = r?.myMatch ?? null;
+            if (r?.serverNow) tAlertOffset = r.serverNow - Date.now();
+          } catch { /* 未登入錦標賽 / 無賽事 / 網路 → 略過，不影響一般對戰 */ }
+        };
+        poll();
+        tAlertPollTimer = setInterval(poll, 30000);
+        tAlertTickTimer = setInterval(() => { tAlertNow = Date.now() + tAlertOffset; }, 1000);
+      }
+    } else {
+      if (tAlertPollTimer) { clearInterval(tAlertPollTimer); tAlertPollTimer = null; }
+      if (tAlertTickTimer) { clearInterval(tAlertTickTimer); tAlertTickTimer = null; }
+      tAlertMatch = null; tAlertEvent = null;
+    }
+  });
+  // v5.585 倒數格式化：>1天顯示「X 天 HH:MM:SS」，否則 HH:MM:SS
+  function fmtCountdown(ms: number): string {
+    if (!ms || ms <= 0) return '00:00:00';
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const p = (n: number) => String(n).padStart(2, '0');
+    return (d > 0 ? d + ' 天 ' : '') + p(h) + ':' + p(m) + ':' + p(sec);
+  }
   function tPlayerId(): string {
     // v0.5 A1：登入帳號 → 用 firebase uid 當身分（與伺服器 verifyIdToken 回傳的 uid 一致）
     if (firebaseUser && !firebaseUser.isAnonymous) return firebaseUser.uid;
@@ -5961,6 +6006,15 @@
 <!-- v2.288：手機直式 + 戰鬥中時鎖 body 滑動，禁止 iOS Safari 整頁 bounce / pull-to-refresh -->
 <svelte:body class:mp-locked={isPortraitMobile && !!game} />
 
+<!-- v5.585 跨房錦標賽入場提醒：一般對戰中，我的錦標賽對戰可入場時頂部固定橫幅 -->
+{#if tAlertReady}
+  <div class="tourn-alert-banner">
+    <span class="tourn-alert-txt">🏆 你報名的錦標賽對戰可以入場了！對手：<b>{tAlertMatch.oppName ?? '?'}</b></span>
+    <a class="tourn-alert-go" href="{base}/tournament">⚔️ 前往入場</a>
+    <button class="tourn-alert-x" onclick={() => (tAlertDismissedId = tAlertMatch.matchId)} aria-label="關閉提醒">✕</button>
+  </div>
+{/if}
+
 {#if isTournament && tStep !== 'playing'}
   <main class="lobby tourn-lobby">
     <div class="tourn-topbar"><a class="tourn-home-btn" href="{base}/">← 回到首頁</a></div>
@@ -6006,6 +6060,21 @@
           <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(tEvent.status)}</b> ｜ 報名 {tRegCount}{tEvent.maxPlayers ? ' / ' + tEvent.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {tEvent.roundLimitMin} 分</p>
           {#if tEvent.status === 'draft' && tEvent.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(tEvent.registrationOpenAt).toLocaleString()} 開放</p>{/if}
           {#if tEvent.status === 'registration' && tEvent.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(tEvent.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
+          {#if tEvent.status === 'draft' && tEvent.registrationOpenAt}
+            {@const _toOpen = tEvent.registrationOpenAt - tNow}
+            {#if _toOpen > 0}<div class="tourn-cdbox"><div class="tourn-cdbox-label">⏳ 報名開放倒數</div><div class="tourn-cdbox-time">{fmtCountdown(_toOpen)}</div></div>{/if}
+          {/if}
+          {#if tEvent.status === 'registration' && tEvent.registrationCloseAt}
+            {@const _toStart = tEvent.registrationCloseAt - tNow}
+            <div class="tourn-cdbox" class:urgent={_toStart > 0 && _toStart <= 300000}>
+              {#if _toStart > 0}
+                <div class="tourn-cdbox-label">⏰ 距離開賽倒數</div>
+                <div class="tourn-cdbox-time">{fmtCountdown(_toStart)}</div>
+              {:else}
+                <div class="tourn-cdbox-label">🔔 報名截止，賽程即將公布，請準備進場！</div>
+              {/if}
+            </div>
+          {/if}
           {#if tMe.registered}
             <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{tMe.name}</b> ｜ 鎖定牌組：<b>{tMe.deckName ?? '（已選定）'}</b></p>
             {#if tEvent.status === 'registration'}<button class="btn-secondary small" onclick={tournUnregister} disabled={tBusy}>退賽</button>{/if}
@@ -9835,6 +9904,33 @@
      Desktop 上 env() = 0 不影響；iOS 上自動補上動態島高度（~47px）。 */
   .lobby,.setup-screen{ max-width:700px; margin: calc(1rem + env(safe-area-inset-top, 0)) auto 2rem; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
   /* v5.576：錦標賽頁回到首頁鈕；padding-top 再加 safe-area，iOS 動態島／瀏海不會擋到、好按 */
+  /* v5.585 跨房入場提醒橫幅 */
+  .tourn-alert-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 99990;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+    padding: 10px 14px calc(10px + env(safe-area-inset-top, 0));
+    background: linear-gradient(135deg, #b8341a, #e8801a); color: #fff;
+    box-shadow: 0 3px 14px rgba(0,0,0,.5); font-weight: 700;
+    animation: tournAlertPulse 1.2s ease-in-out infinite;
+  }
+  .tourn-alert-txt { font-size: 1rem; }
+  .tourn-alert-go {
+    background: #fff; color: #c0392b; text-decoration: none; font-weight: 800;
+    padding: 7px 16px; border-radius: 9px; border: 2px solid #ffd35a; white-space: nowrap;
+  }
+  .tourn-alert-go:hover { filter: brightness(.96); }
+  .tourn-alert-x { background: transparent; border: none; color: #fff; font-size: 1.1rem; cursor: pointer; opacity: .85; }
+  @keyframes tournAlertPulse { 0%,100% { background: linear-gradient(135deg, #b8341a, #e8801a); } 50% { background: linear-gradient(135deg, #d63a1e, #ffa033); } }
+  /* v5.585 開賽倒數框 */
+  .tourn-cdbox {
+    margin: 10px auto; max-width: 360px; padding: 10px 14px;
+    border: 2px solid #ffd35a; border-radius: 12px; background: rgba(255,170,40,.10); text-align: center;
+  }
+  .tourn-cdbox-label { font-size: .85rem; color: #ffd9a0; margin-bottom: 2px; }
+  .tourn-cdbox-time { font-size: 1.9rem; font-weight: 800; letter-spacing: 2px; color: #ffd35a; font-variant-numeric: tabular-nums; }
+  .tourn-cdbox.urgent { border-color: #ff6a4d; background: rgba(255,80,50,.14); animation: tournCdPulse 1s ease-in-out infinite; }
+  .tourn-cdbox.urgent .tourn-cdbox-time { color: #ff8c6e; }
+  @keyframes tournCdPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,90,60,.4); } 50% { box-shadow: 0 0 14px 3px rgba(255,90,60,0); } }
   .tourn-topbar { margin: 0 0 14px; padding-top: env(safe-area-inset-top, 0); text-align: left; }
   .tourn-home-btn { display: inline-block; padding: 10px 18px; background: #2a3a4a; color: #cfe0f8; border: 1px solid #4a6a8a; border-radius: 9px; text-decoration: none; font-size: 14px; font-weight: 600; }
   .tourn-home-btn:active, .tourn-home-btn:hover { background: #36495d; }
