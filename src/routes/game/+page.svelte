@@ -6092,8 +6092,19 @@
     <div class="tourn-topbar"><a class="tourn-home-btn" href="{base}/">← 回到首頁</a></div>
     <h1 class="lobby-title">🏆 錦標賽對戰</h1>
     {#if tStep === 'waiting'}
-      <p class="tourn-wait">⏳ 已進場，等待對手加入…<br/>（請另一人也開 /tournament 選牌組進場）</p>
-      <button class="btn-secondary" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
+      <!-- v5.597：waiting 畫面依情境分流。原本寫死「測試房」文案＋重置鈕，進真實對戰(tActiveRoom='mr_…')
+           時 tEnterMatch 先設 waiting 就會閃這個錯畫面；若進場競態卡住更會困在此(重置鈕對真實對戰無用、
+           又無返回鈕)。觀戰/測試房/真實對戰各給對應文案，真實對戰附「返回賽事大廳」逃生鈕。 -->
+      {#if isTournSpectator}
+        <p class="tourn-wait">⏳ 載入觀戰畫面中…</p>
+        <button class="btn-secondary" onclick={tLeaveSpectate} disabled={tBusy}>返回賽事大廳</button>
+      {:else if tActiveRoom === T_ROOM}
+        <p class="tourn-wait">⏳ 已進場，等待對手加入…<br/>（請另一人也開 /tournament 選牌組進場）</p>
+        <button class="btn-secondary" onclick={tournamentReset} disabled={tBusy}>重置測試房</button>
+      {:else}
+        <p class="tourn-wait">⏳ 進場中，正在載入對戰…</p>
+        <button class="btn-secondary" onclick={tLeaveMatch} disabled={tBusy}>返回賽事大廳</button>
+      {/if}
     {:else if isAnonymous}
       <p class="tourn-gate">🔒 錦標賽需要 email 帳號（不開放匿名）。請登入，或註冊新帳號：</p>
       <label class="tourn-field">Email
