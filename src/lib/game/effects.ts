@@ -16079,6 +16079,7 @@ export const ON_EVOLVE_FROM_HAND_ABILITIES = new Set([
   '脫殼',         // 鐵面忍者 — 搜脫殼忍者上備戰
   '合金建造',     // 鋁鋼橋龍ex — 棄牌區鋼能量附給鋼寶可夢
   '大力捕捉器',   // v2.94 鐵掌力士 — 對手備戰 1 隻 ↔ 戰鬥場
+  '增長繭',       // v5.588 甲殼繭 — 進化時搜牌庫放甲殼繭/盾甲繭上備戰（改自動提示 modal，原僅手動按鈕）
   // v2.998 Group 2 — 12 張進化觸發特性 + 1 張雙觸發（沙之羽擊也走 PASSIVE_ON_KO）
   '繁星花紋',     // 安瓢蟲 — HP≤90 對手備戰 ↔ 戰鬥場互換
   '使壞之尾',     // 雙尾怪手 — 擲 2 幣，正面數量隨機抽對手手牌放回牌庫並重洗
@@ -16312,6 +16313,8 @@ export function promptPlayAbilities(
         const hasMetalPoke = field.some(c => pool.get(c!.cardId)?.pokemonType === 'Metal');
         if (!hasMetalPoke) continue;
       }
+      // v5.588 增長繭（甲殼繭）：備戰已滿無法放置 → 不提示（牌庫是否有目標屬隱藏資訊，不查）
+      if (ab.name === '增長繭' && state.players[aIdx].bench.length >= getOwnBenchLimit(state, aIdx, pool)) continue;
       return askUsePlayAbility(state, aIdx, pool, inst, ab.name, key);
     }
   }

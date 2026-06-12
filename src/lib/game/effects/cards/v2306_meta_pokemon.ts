@@ -285,7 +285,7 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
   if (targetCard?.name !== '脫殼忍者') return addLog(state, '脫殼：選擇的不是「脫殼忍者」，取消操作', actorIdx);
   let newDeck = [...p.deck];
   newDeck.splice(idx, 1);
-  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, targetInst] }));
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, { ...targetInst, justPlaced: true }] }));
   return addLog(s, '脫殼：將「脫殼忍者」放置於備戰區，並重洗牌庫', actorIdx);
 });
 import { selfSwapPost, statusPost, flipCoinsWithLog } from '../../effects';
@@ -528,7 +528,7 @@ regR('silcoon-growth-cocoon', (state, actorIdx, selectedIids, params, pool) => {
   if (targetCard?.name !== '甲殼繭' && targetCard?.name !== '盾甲繭') return addLog(state, '增長繭：選擇的不是「甲殼繭」或「盾甲繭」，取消操作', actorIdx);
   let newDeck = [...p.deck];
   newDeck.splice(idx, 1);
-  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, targetInst] }));
+  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, { ...targetInst, justPlaced: true }] }));
   return addLog(s, `增長繭：將「${targetCard.name}」放置於備戰區，並重洗牌庫`, actorIdx);
 });
 regPre('甲殼繭|撞擊', (state, aIdx, pool) => ({ state, damage: 30 }));
