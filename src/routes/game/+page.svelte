@@ -109,6 +109,7 @@
   let tError = $state('');
   let tBusy = $state(false);
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
+  let tPollGen = 0;  // v5.586 poll 世代：離開對戰時 ++，使在路上的 in-flight 回應失效（防返回大廳後被彈回對戰）
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
@@ -3481,7 +3482,7 @@
   onDestroy(() => {
     stopHeartbeat();
     closeAudio();  // v4.928: 釋放 AudioContext + 停所有 in-flight oscillators
-    if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; }
+    if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; tPollGen++; }
     unsubRoom?.();
     unsubOpenRooms?.();
     // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
@@ -3826,6 +3827,7 @@
   async function tournLogout() {
     // 登出：清錦標賽狀態 + signOut → onAuthStateChanged 退回匿名 → isAnonymous 觸發登入閘門
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = '';
     try { await signOut(auth); } catch { /* ignore */ }
   }
@@ -3884,6 +3886,7 @@
   // 對戰結束 → 返回賽事大廳（清本地對局、刷新賽程）
   function tLeaveMatch() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
     tournLoadEvent(); tBracketLoad();
   }
@@ -3911,9 +3914,11 @@
   }
   function startSpectatePoll() {
     if (tPollTimer) clearInterval(tPollTimer);
+    const gen = ++tPollGen;
     tPollTimer = setInterval(async () => {
       try {
         const r = await tApi(`/spectate/state?room=${tSpectateRoom}&v=${tVersion}`);
+        if (gen !== tPollGen) return; // v5.586 已離開觀戰 → 丟棄在路上的回應
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
       } catch { /* 忽略單次失敗 */ }
@@ -3921,6 +3926,7 @@
   }
   function tLeaveSpectate() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
     tournLoadEvent(); tBracketLoad(); tSpectateLoad();
   }
@@ -4010,9 +4016,11 @@
   }
   function startTournamentPoll() {
     if (tPollTimer) clearInterval(tPollTimer);
+    const gen = ++tPollGen;
     tPollTimer = setInterval(async () => {
       try {
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
+        if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
