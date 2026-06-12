@@ -11120,7 +11120,9 @@
       max-height: 55vh;
       border-radius: 12px;
       border: 2px solid #4a4a6a;
-      /* v5.168：移除 transform: none !important — 允許手機版拖曳（與桌機同步） */
+      /* v5.592：手機版改回 transform: none — 全螢幕面板不需拖曳，且帶 transform 會讓 iOS Safari
+         的 position:fixed 內部訊息區無法觸控捲動（看不到歷史訊息）。覆蓋 inline style:transform。 */
+      transform: none !important;
     }
     .chat-panel-header {
       cursor: default;
