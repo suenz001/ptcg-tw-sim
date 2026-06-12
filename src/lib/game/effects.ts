@@ -7437,6 +7437,60 @@ export function applyAttackerActiveDamageBonuses(
   return { damage: d, state: s, formula };
 }
 
+// v5.594 prevent-KO 收斂：受招式傷害昏厥前，查 TOOL_PREVENT_KO(倖存鍛鍊器)+PASSIVE_PREVENT_KO
+//   (堅忍之軀/不朽身軀/勤奮之心/結實)。命中 → 該寶可夢留 leaveHP 不昏厥(道具型丟棄道具)，回傳新 state。
+//   位置無關(active/bench 皆可，snipe 可 KO 備戰)；與引擎主管線(engine.ts wouldBeKO)inline 同邏輯，
+//   分屬不同 KO 路徑(中央 helper / snipe-multi / clone-strike)不雙觸發。只在「招式傷害」昏厥語境呼叫。
+function applyPreventKOToVictim(
+  state: GameState,
+  victim: CardInstance,
+  victimCard: Card | undefined,
+  defenderIdx: 0 | 1,
+  baseDamage: number,
+  pool: Map<string, Card>,
+): { prevented: boolean; state: GameState } {
+  if (baseDamage <= 0 || !victimCard) return { prevented: false, state };
+  const defender = state.players[defenderIdx];
+  const isActive = defender.active?.iid === victim.iid;
+  const inPlay = isActive ? defender.active! : defender.bench.find(c => c.iid === victim.iid);
+  if (!inPlay) return { prevented: false, state };
+  const hp = effectiveHPInline(inPlay, pool, state);
+  // 1) 道具防 KO（倖存鍛鍊器）— 阻礙之塔(工具封鎖)時失效
+  if (!isToolsJammed(state, pool)) {
+    for (const t of getAllAttachedTools(inPlay)) {
+      const tc = pool.get(t.cardId); if (!tc) continue;
+      const fn = TOOL_PREVENT_KO.get(tc.name); if (!fn) continue;
+      const r = fn(inPlay, victimCard, baseDamage);
+      if (!r.prevent) continue;
+      const targetDamage = Math.max(0, hp - r.leaveHP);
+      let newInst: CardInstance = { ...inPlay, damage: targetDamage };
+      if (newInst.toolAttached?.iid === t.iid) newInst = { ...newInst, toolAttached: undefined };
+      else if (newInst.extraTools) newInst = { ...newInst, extraTools: newInst.extraTools.filter(x => x.iid !== t.iid) };
+      let s = updatePlayer(state, defenderIdx, p => isActive
+        ? { ...p, active: newInst, discard: [...p.discard, t] }
+        : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c), discard: [...p.discard, t] });
+      s = addLog(s, `${tc.name}：${victimCard.name} 避免昏厥，剩餘 HP ${r.leaveHP}！`, null);
+      return { prevented: true, state: s };
+    }
+  }
+  // 2) 被動防 KO（堅忍之軀/不朽身軀/勤奮之心/結實）
+  if (victimCard.abilities) {
+    for (const ab of victimCard.abilities) {
+      const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
+      const r = fn(inPlay, victimCard, baseDamage);
+      if (!r.prevent) continue;
+      const targetDamage = Math.max(0, hp - r.leaveHP);
+      const newInst: CardInstance = { ...inPlay, damage: targetDamage };
+      let s = updatePlayer(state, defenderIdx, p => isActive
+        ? { ...p, active: newInst }
+        : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c) });
+      s = addLog(s, `「${ab.name}」啟動：${victimCard.name} 避免昏厥，剩餘 HP ${r.leaveHP}！`, null);
+      return { prevented: true, state: s };
+    }
+  }
+  return { prevented: false, state };
+}
+
 export function dealAttackDamageToTarget(
   st: GameState,
   actorIdx: 0 | 1,
@@ -7560,6 +7614,11 @@ export function dealAttackDamageToTarget(
   const newDmg = targetNow.damage + effDmg;
   const hp = effectiveHPInline(targetNow, pool, st);
   if (hp > 0 && newDmg >= hp) {
+    // v5.594 受招式傷害昏厥前查 prevent-KO（堅忍之軀/倖存鍛鍊器等）；命中則留 HP 不昏厥
+    if (kind === 'attack-damage') {
+      const _pk = applyPreventKOToVictim(st, targetNow, targetCard, dIdx, effDmg, pool);
+      if (_pk.prevented) return _pk.state;
+    }
     const ko: CardInstance[] = [
       { ...targetNow, damage: newDmg },
       ...targetNow.energyAttached,
@@ -9622,6 +9681,9 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     const newDmg = targetNow.damage + effDmg;
     const hp = effectiveHPInline(targetNow, pool, st);  // v5.091
     if (hp > 0 && newDmg >= hp) {
+      // v5.594 prevent-KO（堅忍之軀/倖存鍛鍊器等）：命中則留 HP 不昏厥
+      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, effDmg, pool);
+      if (_pk.prevented) { s = _pk.state; continue; }
       const ko: CardInstance[] = [
         { ...targetNow, damage: newDmg },
         ...targetNow.energyAttached,
@@ -14369,6 +14431,9 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     const hp = effectiveHPInline(targetNow, pool, s);
     const players = [...s.players] as [PlayerState, PlayerState];
     if (hp > 0 && newDmg >= hp) {
+      // v5.594 prevent-KO（堅忍之軀/倖存鍛鍊器等）：命中則留 HP 不昏厥
+      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, dmg, pool);
+      if (_pk.prevented) { s = _pk.state; continue; }
       // KO：棄牌遷移 + 累計獎賞 + 移除位置
       const ko: CardInstance[] = [
         { ...targetNow, damage: newDmg },
