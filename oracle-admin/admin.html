@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.38</title>
+<title>PTCG Oracle Admin v1.39</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.38</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.39</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -965,6 +965,18 @@ function _tsFmtDate(ms) {
   try { return new Date(ms).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
   catch (e) { return '—'; }
 }
+function _tsFmtDateTime(ms) {
+  if (!ms) return '—';
+  try { return new Date(ms).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }); }
+  catch (e) { return '—'; }
+}
+function _tsFmtDuration(ms) {
+  if (!ms || ms < 0) return '—';
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  if (h > 0) return h + ' 小時 ' + m + ' 分';
+  if (m > 0) return m + ' 分 ' + sec + ' 秒';
+  return sec + ' 秒';
+}
 function _tsPct(w, l) { const t = w + l; return t > 0 ? Math.round(w / t * 100) : 0; }
 function renderTournamentStats(el, data) {
   const archives = (data && data.archives) || [];
@@ -976,32 +988,44 @@ function renderTournamentStats(el, data) {
   // 只算「真實對局」：雙方都有人、已結束、非輪空
   const isRealMatch = (m) => m.status === 'done' && !m.bye && m.p1uid && m.p2uid;
 
-  // ── 聚合容器 ──
+  // ── 聚合容器（以 email 為身分基礎；暱稱會變但 email 不會。顯示名＝最後一次參賽的暱稱）──
   let totalEntries = 0;                 // 累計報名人次
-  const uniquePlayers = new Set();      // 不重複玩家
+  const uniquePlayers = new Set();      // 不重複玩家（依 email）
   let totalRealMatches = 0;             // 真實對局數
-  const pmap = {};                      // uid → 玩家戰績
+  const pmap = {};                      // key(email) → 玩家戰績
   const pkUse = {};                     // 主力寶可夢 → { use, wins, losses }
   const outcome = { normal: 0, forfeit: 0, idleForfeit: 0, noShow: 0, doubleNoShow: 0, timeLimit: 0, bye: 0, adminResolved: 0 };
-  const ensureP = (uid, name) => {
-    if (!uid) return null;
-    if (!pmap[uid]) pmap[uid] = { uid: uid, name: name || '?', events: 0, wins: 0, losses: 0, titles: 0 };
-    if (name) pmap[uid].name = name;
-    return pmap[uid];
+  const keyOf = (uid, email) => email ? ('email:' + email) : ('uid:' + (uid || '?'));
+  const ensureP = (key, email, name, ts) => {
+    if (!key) return null;
+    if (!pmap[key]) pmap[key] = { key: key, email: email || '', name: name || '?', events: 0, wins: 0, losses: 0, titles: 0, lastSeen: -1 };
+    const r = pmap[key];
+    if (email && !r.email) r.email = email;
+    if (name && ts != null && ts >= r.lastSeen) { r.name = name; r.lastSeen = ts; }  // 取最後一次參賽的暱稱為顯示名
+    return r;
   };
   const ensurePk = (nm) => { if (!pkUse[nm]) pkUse[nm] = { use: 0, wins: 0, losses: 0 }; return pkUse[nm]; };
 
   archives.forEach((a) => {
     totalEntries += (a.players || []).length;
+    const ts = a.finishedAt || a.startedAt || a.createdAt || 0;
     const uidMain = {};                 // 此賽事 uid → 主力寶可夢名
+    const uidInfo = {};                 // 此賽事 uid → { email, name, key }
     (a.players || []).forEach((p) => {
-      uniquePlayers.add(p.uid);
-      const rec = ensureP(p.uid, p.name); if (rec) rec.events++;
+      const email = p.email || '';
+      const key = keyOf(p.uid, email);
+      uidInfo[p.uid] = { email: email, name: p.name, key: key };
+      uniquePlayers.add(key);
+      const rec = ensureP(key, email, p.name, ts); if (rec) rec.events++;
       const main = detectMainPokemon({ deckEntries: p.deckEntries || [] }) || '（未知牌型）';
       uidMain[p.uid] = main;
       ensurePk(main).use++;             // 報名一次＝該主力使用 +1
     });
-    if (a.championUid) { const c = ensureP(a.championUid, a.championName); if (c) c.titles++; }
+    if (a.championUid) {
+      const ci = uidInfo[a.championUid];
+      const rec = ensureP(ci ? ci.key : keyOf(a.championUid, ''), ci && ci.email, a.championName, ts);
+      if (rec) rec.titles++;
+    }
     (a.matches || []).forEach((m) => {
       // 賽果分佈（互斥優先序）
       if (m.bye) outcome.bye++;
@@ -1012,7 +1036,7 @@ function renderTournamentStats(el, data) {
       else if (m.noShow) outcome.noShow++;
       else if (m.timeLimit) outcome.timeLimit++;
       else if (m.status === 'done') outcome.normal++;
-      // 勝負（玩家 + 主力寶可夢）
+      // 勝負（玩家依 email + 主力寶可夢）
       if (isRealMatch(m)) {
         totalRealMatches++;
         const wUid = m.winnerUid;
@@ -1020,8 +1044,9 @@ function renderTournamentStats(el, data) {
         const lUid = isP1Win ? m.p2uid : m.p1uid;
         const wName = m.winnerName;
         const lName = isP1Win ? m.p2name : m.p1name;
-        const w = ensureP(wUid, wName); if (w) w.wins++;
-        const l = ensureP(lUid, lName); if (l) l.losses++;
+        const wInfo = uidInfo[wUid], lInfo = uidInfo[lUid];
+        const w = ensureP(wInfo ? wInfo.key : keyOf(wUid, ''), wInfo && wInfo.email, wName, ts); if (w) w.wins++;
+        const l = ensureP(lInfo ? lInfo.key : keyOf(lUid, ''), lInfo && lInfo.email, lName, ts); if (l) l.losses++;
         const wPk = uidMain[wUid], lPk = uidMain[lUid];
         if (wPk) ensurePk(wPk).wins++;
         if (lPk) ensurePk(lPk).losses++;
@@ -1047,9 +1072,9 @@ function renderTournamentStats(el, data) {
   html += '<section class="stats-section"><h3>🏆 2. 冠軍榜（奪冠次數）</h3>';
   if (!champRank.length) html += '<div class="empty">尚無冠軍紀錄。</div>';
   else {
-    html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>奪冠</th><th>參賽</th><th>戰績</th><th>勝率</th></tr></thead><tbody>';
+    html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>Email</th><th>奪冠</th><th>參賽</th><th>戰績</th><th>勝率</th></tr></thead><tbody>';
     champRank.forEach((p, i) => {
-      html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
+      html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + escapeHtml(p.email || '（匿名）') + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
         + '</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
     });
     html += '</tbody></table>';
@@ -1059,9 +1084,9 @@ function renderTournamentStats(el, data) {
   // ── 3. 玩家戰績排行（依勝場）──
   const playerRank = Object.values(pmap).sort((a, b) => b.wins - a.wins || _tsPct(b.wins, b.losses) - _tsPct(a.wins, a.losses));
   html += '<section class="stats-section"><h3>🎯 3. 玩家戰績排行 <span class="small muted">（只計雙方都到場的真實對局，不含輪空）</span></h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>參賽</th><th>勝</th><th>負</th><th>勝率</th><th>奪冠</th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>Email</th><th>參賽</th><th>勝</th><th>負</th><th>勝率</th><th>奪冠</th></tr></thead><tbody>';
   playerRank.forEach((p, i) => {
-    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + p.events + '</td><td>' + p.wins
+    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + escapeHtml(p.email || '（匿名）') + '</td><td>' + p.events + '</td><td>' + p.wins
       + '</td><td>' + p.losses + '</td><td>' + _tsPct(p.wins, p.losses) + '%</td><td>' + (p.titles ? (p.titles + ' 🏆') : '—') + '</td></tr>';
   });
   html += '</tbody></table></section>';
@@ -1079,11 +1104,12 @@ function renderTournamentStats(el, data) {
 
   // ── 5. 歷屆賽事 ──
   html += '<section class="stats-section"><h3>📋 5. 歷屆賽事</h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>完賽日</th><th>賽事名稱</th><th>人數</th><th>冠軍</th><th>冠軍牌型</th><th></th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>完賽時間</th><th>耗時</th><th>賽事名稱</th><th>人數</th><th>冠軍</th><th>冠軍牌型</th><th></th></tr></thead><tbody>';
   archives.forEach((a) => {
     const champRec = (a.players || []).find((p) => p.uid === a.championUid);
     const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
-    html += '<tr><td>' + _tsFmtDate(a.finishedAt) + '</td><td>' + escapeHtml(a.eventName || '錦標賽') + '</td><td>' + (a.playerCount || (a.players || []).length)
+    const dur = (a.finishedAt && (a.startedAt || a.createdAt)) ? (a.finishedAt - (a.startedAt || a.createdAt)) : 0;
+    html += '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td><td>' + escapeHtml(a.eventName || '錦標賽') + '</td><td>' + (a.playerCount || (a.players || []).length)
       + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
       + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
   });

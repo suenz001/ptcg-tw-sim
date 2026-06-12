@@ -2418,7 +2418,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const { matches, rounds } = buildBracket(players, ev._id);
       await TMATCH.deleteMany({ eventId: ev._id });
       await TMATCH.insertMany(matches);
-      await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt: Date.now() } });
+      await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt: Date.now(), startedAt: Date.now() } });
       return { ok: true, rounds, players: players.length };
     }
     // 名人堂：賽事誕生冠軍時永久記錄（以 eventId 為鍵 upsert，重複完賽不重覆）
@@ -2442,7 +2442,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const matches = await TMATCH.find({ eventId: ev._id }).sort({ round: 1, idx: 1 }).toArray();
         await TARCHIVE.updateOne({ _id: 'arch_' + ev._id }, { $set: {
           _id: 'arch_' + ev._id, eventId: ev._id, eventName: ev.name || '錦標賽',
-          createdAt: ev.createdAt || null, finishedAt: Date.now(),
+          createdAt: ev.createdAt || null, startedAt: ev.startedAt || ev.createdAt || null, finishedAt: Date.now(),
           format: ev.format || 'single-elim', bestOf: ev.bestOf || 1, playerCount: regs.length,
           championUid: ev.championUid || null, championName: ev.championName || null,
           players: regs.map((r) => ({ uid: r.uid, name: r.name, email: r.email || null, deckName: r.deckName || '', coinPref: r.coinPref || 'random', deckEntries: r.deckEntries || [] })),
@@ -2738,10 +2738,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({
           archives: archives.map((a) => ({
             eventId: a.eventId, eventName: a.eventName || '錦標賽',
-            createdAt: a.createdAt || null, finishedAt: a.finishedAt || 0,
+            createdAt: a.createdAt || null, startedAt: a.startedAt || a.createdAt || null, finishedAt: a.finishedAt || 0,
             playerCount: a.playerCount || 0,
             championUid: a.championUid || null, championName: a.championName || null,
-            players: (a.players || []).map((p) => ({ uid: p.uid, name: p.name, deckName: p.deckName || '', coinPref: p.coinPref || 'random', deckEntries: p.deckEntries || [] })),
+            players: (a.players || []).map((p) => ({ uid: p.uid, name: p.name, email: p.email || '', deckName: p.deckName || '', coinPref: p.coinPref || 'random', deckEntries: p.deckEntries || [] })),
             matches: (a.matches || []).map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
           })),
           champions: champions.map((c) => ({ eventId: c.eventId, eventName: c.eventName, championUid: c.championUid, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0 })),
