@@ -4906,6 +4906,7 @@
   let showForfeitConfirm = $state(false);
   let _lastActionAt = Date.now();
   let _lastResyncAt = 0;  // v5.360：上次自動重訂閱(自癒)時間
+  let _forceAdoptNext = false;  // v5.587：下一個收到的同局 snapshot 強制採用(繞過 stale 守衛)＝程式幫忙重整
   let _prevLogLen = -1;
 
   // v5.329 秒數 → m:ss 顯示
@@ -4956,6 +4957,10 @@
       //   抓房間最新狀態走正常 merge 收斂）。只重讀、不改 merge 邏輯，安全。免玩家手動脫困。
       if (roomCode && (Date.now() - _lastActionAt) >= 8000 && (Date.now() - _lastResyncAt) >= 8000) {
         _lastResyncAt = Date.now();
+        // v5.587：卡更久(>=25s 等對手都沒新動作)→ 強制採用伺服器最新狀態(繞過 stale 守衛)。
+        //   治「本地 log 領先伺服器、重抓回來又被守衛拒收」型卡死。只在『正等對手』時走到這(上方已 gate)，
+        //   我方沒有未推送的手，故不會丟手；不同局/game-over/setup 在 handleRoomUpdate 內另有保護。
+        if ((Date.now() - _lastActionAt) >= 25000) _forceAdoptNext = true;
         try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
       }
     }, 5000);
@@ -5103,6 +5108,16 @@
     //   v2.83 已用「playing 期間停心跳」減少 race；本條為最終防線。
     if (room.gameState) {
       const incoming = room.gameState;
+      // v5.587 強制自癒：自癒升級——卡 >=25s 後本次 snapshot 強制採用伺服器狀態(繞過下方 stale 守衛)＝等同重整。
+      //   僅同一局(或本地無局)且非 setup(防 phase 倒退)才採用；game-over 本地時上層 isWaitingOnOpponent=false 不會走到這。
+      if (_forceAdoptNext) {
+        _forceAdoptNext = false;
+        if (incoming && incoming.phase !== 'setup' && (!game || game.id === incoming.id)) {
+          console.warn('[Online] 強制自癒：採用伺服器最新狀態（繞過 stale 守衛，治本地領先型卡死）');
+          game = incoming;
+          return;
+        }
+      }
       // SFX（保留）：B 端首次收到 setup snapshot 播 ready-go + 起手發 7 張
       if (!game && incoming.phase === 'setup') {
         playSfx('ready-go');
