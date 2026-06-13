@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.39</title>
+<title>PTCG Oracle Admin v1.40</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.39</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.40</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -704,6 +704,8 @@ async function api(path, options = {}) {
 
 // ── Tab switching ────────────────────────────────────────────────
 // ── 🏆 錦標賽管理（呼叫 /api/tournament/admin/* 端點，admin token）──
+// v1.40：ms 時間戳 -> datetime-local input 值（本地時區），給編輯表單預填用
+function tevMsToLocal(ms){ if(!ms) return ''; try { var d=new Date(Number(ms) - new Date().getTimezoneOffset()*60000); return d.toISOString().slice(0,16); } catch(e){ return ''; } }
 async function loadTournamentAdmin() {
   const el = document.getElementById('tab-tournament');
   if (!el) return;
@@ -756,7 +758,19 @@ async function loadTournamentAdmin() {
       + '<button style="' + btnS + '" onclick="tevSeed(this)">🎲 產生賽程並開賽</button>'
       + '<button style="' + btnS + '" onclick="tevStatus(\'finished\',this)">結束</button>'
       + '<button style="' + btnD + '" onclick="tevDelete(this)">刪除賽事</button>'
-      + '</div></div>';
+      + '</div>'
+      + '<details style="margin-top:10px;border-top:1px solid #2a3a2a;padding-top:8px;"><summary style="cursor:pointer;color:#bfe0ff;">✏️ 編輯賽事設定（名稱／參數，即時生效，不影響已報名者）</summary>'
+      + '<div style="padding:8px 0 2px;">'
+      + '<label style="display:block;margin:6px 0;">賽事名稱：<input id="tev-e-name" value="' + escapeHtml(ev.name || '') + '" style="width:60%;padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">人數上限（空白=不限，≤64）：<input id="tev-e-max" value="' + escapeHtml(String(ev.maxPlayers || '')) + '" placeholder="不限" style="width:120px;padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">每場時限（分）：<input id="tev-e-round" value="' + escapeHtml(String(ev.roundLimitMin || 25)) + '" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">未進場判負（分）：<input id="tev-e-noshow" value="' + escapeHtml(String(ev.noShowMin || 5)) + '" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">輪間休息倒數（分）：<input id="tev-e-countdown" value="' + escapeHtml(String(ev.roundCountdownMin != null ? ev.roundCountdownMin : 3)) + '" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">報名開始時間（清空=立即開放）：<input id="tev-e-regopen" type="datetime-local" value="' + tevMsToLocal(ev.registrationOpenAt) + '" style="padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">報名截止時間（清空=手動開賽）：<input id="tev-e-regclose" type="datetime-local" value="' + tevMsToLocal(ev.registrationCloseAt) + '" style="padding:5px;"></label>'
+      + '<button style="' + btnS + 'margin-top:6px;" onclick="tevUpdate(this)">\ud83d\udcbe 儲存修改</button>'
+      + '</div></details>'
+      + '</div>';
     if (tieData.ties && tieData.ties.length) {
       html += '<div style="border:1px solid #a80;border-radius:8px;padding:10px;margin:10px 0;background:#2a2410;"><b style="color:#fd0;">⚖️ 待裁定平手場（' + tieData.ties.length + '）— 對局時限到且雙方獎賞卡數相同</b>';
       tieData.ties.forEach(function (t) {
@@ -832,6 +846,23 @@ window.tevCreate = async function (btn) {
   };
   try { localStorage.setItem('tevLastSettings', JSON.stringify({ name: body.name, maxPlayers: body.maxPlayers, roundLimitMin: body.roundLimitMin, noShowMin: body.noShowMin, roundCountdownMin: body.roundCountdownMin })); } catch (e) {}
   try { const d = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); }
+  catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevUpdate = async function (btn) {
+  btn.disabled = true;
+  const toMs = (id) => { const el = document.getElementById(id); const v = el && el.value; return v ? new Date(v).getTime() : null; };
+  const g = (id) => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  const body = {
+    name: g('tev-e-name'),
+    maxPlayers: g('tev-e-max'),
+    roundLimitMin: g('tev-e-round'),
+    noShowMin: g('tev-e-noshow'),
+    roundCountdownMin: g('tev-e-countdown'),
+    registrationOpenAt: toMs('tev-e-regopen'),
+    registrationCloseAt: toMs('tev-e-regclose'),
+  };
+  try { const d = await api('/api/tournament/admin/event/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); else alert('已更新賽事設定。'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };

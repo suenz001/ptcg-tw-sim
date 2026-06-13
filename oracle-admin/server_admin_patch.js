@@ -2334,6 +2334,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // v0.38 管理員：即時修改賽事參數 + 名稱（建錯名稱／已有人報名時皆可改，不影響既有報名）
+    app.post('/api/tournament/admin/event/update', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const ev = await getActiveEvent();
+        if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
+        const b = req.body || {};
+        const set = {};
+        if (typeof b.name === 'string' && b.name.trim()) set.name = b.name.trim().slice(0, 60);
+        if (b.maxPlayers !== undefined) set.maxPlayers = (b.maxPlayers == null || b.maxPlayers === '' || Number(b.maxPlayers) <= 0) ? null : Math.min(64, Number(b.maxPlayers));
+        if (b.roundLimitMin !== undefined && Number(b.roundLimitMin) > 0) set.roundLimitMin = Number(b.roundLimitMin);
+        if (b.noShowMin !== undefined && Number(b.noShowMin) > 0) set.noShowMin = Number(b.noShowMin);
+        if (b.roundCountdownMin !== undefined && b.roundCountdownMin !== '' && Number(b.roundCountdownMin) >= 0) set.roundCountdownMin = Number(b.roundCountdownMin);
+        if (b.registrationOpenAt !== undefined) set.registrationOpenAt = Number(b.registrationOpenAt) > 0 ? Number(b.registrationOpenAt) : null;
+        if (b.registrationCloseAt !== undefined) set.registrationCloseAt = Number(b.registrationCloseAt) > 0 ? Number(b.registrationCloseAt) : null;
+        if (b.checkInEnabled !== undefined) set.checkInEnabled = b.checkInEnabled !== false;
+        if (!Object.keys(set).length) return res.status(400).json({ error: '沒有要更新的欄位' });
+        await TEVENTS.updateOne({ _id: ev._id }, { $set: set });
+        res.json({ ok: true, set: set });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     // 管理員：刪除賽事（含報名）
     app.post('/api/tournament/admin/event/delete', async (req, res) => {
       try {
