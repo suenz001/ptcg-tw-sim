@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.41</title>
+<title>PTCG Oracle Admin v1.42</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.41</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.42</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -3207,6 +3207,8 @@ function playerRankRowHtml(row, i) {
     <td>${row.wins}</td>
     <td>${row.losses}</td>
     <td style="color:${wrColor}; font-weight:600;">${wrText}</td>
+    <td>${row.midLeaves || 0}</td>
+    <td style="color:${(row.midLeaveRate != null && row.midLeaveRate > 0.2) ? '#c62828' : '#1a2332'};">${row.midLeaveRate == null ? '-' : (row.midLeaveRate * 100).toFixed(1) + '%'}</td>
   </tr>`;
 }
 function playerRankRowsHtml(rows) {
@@ -3214,7 +3216,7 @@ function playerRankRowsHtml(rows) {
   let list = rows;
   if (q) list = rows.filter(r => ((r.name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)));
   const shown = q ? list.slice(0, 200) : list.slice(0, 50);
-  if (shown.length === 0) return '<tr><td colspan="7" class="empty" style="text-align:center; padding:18px;">查無符合玩家</td></tr>';
+  if (shown.length === 0) return '<tr><td colspan="9" class="empty" style="text-align:center; padding:18px;">查無符合玩家</td></tr>';
   return shown.map((row, i) => playerRankRowHtml(row, i)).join('');
 }
 window.filterPlayers = function(q) {
@@ -3229,6 +3231,8 @@ window.filterPlayers = function(q) {
 function renderPlayerRanking(p) {
   if (!p) return '<section class="stats-section"><h3>👤 2.1 玩家排行榜</h3><div class="empty">無資料</div></section>';
   const players = p.players || [];
+  // v1.42 中離率（排序+顯示用）：midLeaves / 總場次
+  players.forEach(x => { x.midLeaves = x.midLeaves || 0; x.midLeaveRate = (x.matches > 0) ? (x.midLeaves / x.matches) : null; });
   const debug = p.debug || {};
   if (!players.length) {
     const db = debug.dataBreakdown || {};
@@ -3287,6 +3291,8 @@ function renderPlayerRanking(p) {
             <th class="sortable-th" onclick="setPlayerRankSort('wins')">勝${playerRankSort==='wins'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
             <th class="sortable-th" onclick="setPlayerRankSort('losses')">負${playerRankSort==='losses'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
             <th class="sortable-th" onclick="setPlayerRankSort('winRate')">勝率${playerRankSort==='winRate'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('midLeaves')">中離${playerRankSort==='midLeaves'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
+            <th class="sortable-th" onclick="setPlayerRankSort('midLeaveRate')">中離率${playerRankSort==='midLeaveRate'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
           </tr></thead>
           <tbody id="player-rank-tbody">
             ${playerRankRowsHtml(sortedPlayers)}

@@ -1170,6 +1170,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
               wins: { $sum: { $cond: [{ $eq: ['$winner', 0] }, 1, 0] } },
               losses: { $sum: { $cond: [{ $eq: ['$winner', 1] }, 1, 0] } },
               draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
+              // v0.39 中離：p1 為敗方(winner=1) 且 winReason 含「中途離開」→ p1 該場中離
+              midLeaves: { $sum: { $cond: [ { $and: [ { $eq: ['$winner', 1] }, { $regexMatch: { input: { $ifNull: ['$winReason', ''] }, regex: '中途離開' } } ] }, 1, 0 ] } },
             }},
           ],
           asP2: [
@@ -1182,6 +1184,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
               wins: { $sum: { $cond: [{ $eq: ['$winner', 1] }, 1, 0] } },
               losses: { $sum: { $cond: [{ $eq: ['$winner', 0] }, 1, 0] } },
               draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
+              // v0.39 中離：p2 為敗方(winner=0) 且 winReason 含「中途離開」→ p2 該場中離
+              midLeaves: { $sum: { $cond: [ { $and: [ { $eq: ['$winner', 0] }, { $regexMatch: { input: { $ifNull: ['$winReason', ''] }, regex: '中途離開' } } ] }, 1, 0 ] } },
             }},
           ],
         }});
@@ -1191,12 +1195,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         for (const src of [agg.asP1, agg.asP2]) {
           for (const row of (src || [])) {
             const key = row._id;
-            if (!merged.has(key)) merged.set(key, { key, email: row.email || null, name: row.name, matches: 0, wins: 0, losses: 0, draws: 0 });
+            if (!merged.has(key)) merged.set(key, { key, email: row.email || null, name: row.name, matches: 0, wins: 0, losses: 0, draws: 0, midLeaves: 0 });
             const m = merged.get(key);
             m.matches += row.matches;
             m.wins += row.wins;
             m.losses += row.losses;
             m.draws += row.draws;
+            m.midLeaves += row.midLeaves || 0;
             if (row.name) m.name = row.name;  // 後寫贏（取最新 name）
             if (row.email && !m.email) m.email = row.email;  // 補 email
           }
