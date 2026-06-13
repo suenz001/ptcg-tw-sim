@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.40</title>
+<title>PTCG Oracle Admin v1.41</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.40</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.41</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -562,7 +562,7 @@ function cardLabel(cardId, count) {
 }
 let oracleRoomsCache = [];
 let firebaseRoomsCache = [];
-let statusFilter = 'all'; // all | lobby | playing | ended
+let statusFilter = 'playing'; // all | lobby | playing | ended（v1.41 預設只載「進行中」→載入快很多，不撈全部已結束房）
 let oracleRoomsCounts = null;   // v1.18: server 回的全量 {lobby,playing,ended}，供 toolbar 顯示
 let firebaseRoomsCounts = null; // v1.18
 
@@ -1170,6 +1170,8 @@ function renderTournamentStats(el, data) {
 
 window.switchTab = function(name) {
   currentTab = name;
+  if (name === 'oracle-rooms') statusFilter = 'playing'; // v1.41 點「Oracle 對戰」分頁預設只載「進行中」(server 只查 playing 房→快很多)；要看全部再按「全部」
+
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === 'tab-' + name ? 'block' : 'none');
   loadActive();
