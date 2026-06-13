@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.42</title>
+<title>PTCG Oracle Admin v1.43</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.42</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.43</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2886,7 +2886,7 @@ function normalizeWinReason(raw, firstTurn) {
   if (/投降|認輸/.test(s)) return '🏳️ 對手投降';
   if (/超時|逾時|逾過/.test(s)) return '⏰ 對手超時';
   // v1.25: 離開類再依回合細分 — 第一回合(含開局設置)離開多為開房者掛機；其他回合離開多為中途認輸放棄
-  if (/中途離開|離開房間|斷線|斷開|退出|不在場|disconnect/i.test(s)) return firstTurn ? '👋 玩家於第一回合離開' : '👋 玩家中途離開';
+  if (/中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i.test(s)) return firstTurn ? '👋 玩家於第一回合離開' : '👋 玩家中途離開';  // v1.43 合併現行措辭「對手承認技不如人，先行離開了」(舊措辭=中途離開,同一事件)
   return '其他：' + s.slice(0, 30);
 }
 function renderWinReasons(s) {

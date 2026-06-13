@@ -1171,7 +1171,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               losses: { $sum: { $cond: [{ $eq: ['$winner', 1] }, 1, 0] } },
               draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
               // v0.39 中離：p1 為敗方(winner=1) 且 winReason 含「中途離開」→ p1 該場中離
-              midLeaves: { $sum: { $cond: [ { $and: [ { $eq: ['$winner', 1] }, { $regexMatch: { input: { $ifNull: ['$winReason', ''] }, regex: '中途離開' } } ] }, 1, 0 ] } },
+              midLeaves: { $sum: { $cond: [ { $and: [ { $eq: ['$winner', 1] }, { $regexMatch: { input: { $ifNull: ['$winReason', ''] }, regex: '中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開', options: 'i' } } ] }, 1, 0 ] } },
             }},
           ],
           asP2: [
@@ -1185,7 +1185,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               losses: { $sum: { $cond: [{ $eq: ['$winner', 0] }, 1, 0] } },
               draws: { $sum: { $cond: [{ $eq: ['$winner', null] }, 1, 0] } },
               // v0.39 中離：p2 為敗方(winner=0) 且 winReason 含「中途離開」→ p2 該場中離
-              midLeaves: { $sum: { $cond: [ { $and: [ { $eq: ['$winner', 0] }, { $regexMatch: { input: { $ifNull: ['$winReason', ''] }, regex: '中途離開' } } ] }, 1, 0 ] } },
+              midLeaves: { $sum: { $cond: [ { $and: [ { $eq: ['$winner', 0] }, { $regexMatch: { input: { $ifNull: ['$winReason', ''] }, regex: '中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開', options: 'i' } } ] }, 1, 0 ] } },
             }},
           ],
         }});
@@ -1359,7 +1359,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       // v0.27：排除「玩家中途離開」獲勝的場 — winReason 形如「<玩家名> 中途離開」
       //   （臨時有事/斷線等非實力因素，會污染真實卡牌勝率）。
       //   $not + regex：同時保留 winReason 不存在的舊場（不影響歷史資料）。
-      baseMatch.winReason = { $not: /中途離開/ };
+      baseMatch.winReason = { $not: /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i };  // v0.39 補現行措辭「對手承認技不如人，先行離開了」(舊措辭=中途離開)
       const minDecks = Math.max(1, parseInt(req.query.minDecks) || 5);
       try {
         const pipeline = [
