@@ -4460,6 +4460,75 @@ reg('反擊捕捉器', (st, idx) => {
   });
 });
 
+// ── 鬼之假面（Item, SV6/SV8a/MC）— 從棄牌區選 1 張「厄鬼椪 ex」與場上 1 隻「厄鬼椪 ex」互換 ──
+//   卡面：從自己棄牌區選 1 張名稱含「厄鬼椪」的「寶可夢ex」，與自己場上 1 隻名稱含「厄鬼椪」的
+//   「寶可夢ex」互換（所附加的卡・傷害指示物・特殊狀態・效果全部保留），將換下的寶可夢丟棄。
+//   實作：兩段 picker（棄牌→場上,皆用 validIids 限定只能選厄鬼椪ex）；互換=場上 instance 保留 iid
+//   與全部附加物只換 cardId（新底牌上場）,換下的裸底牌進棄牌（重用被選棄牌卡已釋出的 iid）。
+const _isOgerponEx = (c: Card | undefined): boolean =>
+  !!c && c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.includes('厄鬼椪');
+regG('鬼之假面', (st, idx, pool) => {
+  const me = st.players[idx];
+  const inDiscard = me.discard.some(c => _isOgerponEx(pool.get(c.cardId)));
+  const onField = [me.active, ...me.bench].some(p => !!p && _isOgerponEx(pool.get(p.cardId)));
+  return inDiscard && onField;
+});
+reg('鬼之假面', (st, idx, pool) => {
+  const me = st.players[idx];
+  const validDiscard = me.discard.filter(c => _isOgerponEx(pool.get(c.cardId))).map(c => c.iid);
+  st = addLog(st, '鬼之假面：從棄牌區選擇 1 張「厄鬼椪 ex」', idx);
+  return withPending(st, {
+    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'Pokemon', minCount: 1, maxCount: 1,
+    effectKey: 'ghost-mask-pick-field',
+    params: { validIids: validDiscard },
+  });
+});
+regR('ghost-mask-pick-field', (st, idx, picked, _params, pool) => {
+  const discardIid = picked[0];
+  if (!discardIid) return st;
+  const me = st.players[idx];
+  const dc = me.discard.find(c => c.iid === discardIid);
+  if (!dc || !_isOgerponEx(pool.get(dc.cardId))) return addLog(st, '鬼之假面：選擇無效，取消', idx);
+  const validField = [me.active, ...me.bench]
+    .filter((p): p is CardInstance => !!p && _isOgerponEx(pool.get(p.cardId)))
+    .map(p => p.iid);
+  if (validField.length === 0) return addLog(st, '鬼之假面：場上沒有「厄鬼椪 ex」可互換', idx);
+  st = addLog(st, '鬼之假面：選擇場上 1 隻「厄鬼椪 ex」與其互換', idx);
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, filter: '',
+    effectKey: 'ghost-mask-swap',
+    params: { discardIid, validIids: validField },
+  });
+});
+regR('ghost-mask-swap', (st, idx, picked, params, pool) => {
+  const fieldIid = picked[0];
+  const discardIid = params?.discardIid as string | undefined;
+  if (!fieldIid || !discardIid) return st;
+  const me = st.players[idx];
+  const discardCard = me.discard.find(c => c.iid === discardIid);
+  const fieldInst = me.active?.iid === fieldIid ? me.active : me.bench.find(b => b.iid === fieldIid);
+  if (!discardCard || !fieldInst
+      || !_isOgerponEx(pool.get(discardCard.cardId)) || !_isOgerponEx(pool.get(fieldInst.cardId))) {
+    return addLog(st, '鬼之假面：互換目標已失效，取消', idx);
+  }
+  const newName = pool.get(discardCard.cardId)?.name ?? '?';
+  const oldName = pool.get(fieldInst.cardId)?.name ?? '?';
+  // 新場上底牌：保留場上 instance 的 iid + 全部附加物/傷害/狀態/旗標，只換 cardId
+  const newFieldInst: CardInstance = { ...fieldInst, cardId: discardCard.cardId };
+  // 換下的裸底牌：重用被選棄牌卡的 iid(已釋出,因 newFieldInst 用場上 iid)，附加物全留給新底牌
+  const swappedOutBare: CardInstance = { ...discardCard, cardId: fieldInst.cardId };
+  st = updatePlayer(st, idx, p => ({
+    ...p,
+    active: p.active && p.active.iid === fieldIid ? newFieldInst : p.active,
+    bench: p.bench.map(b => b.iid === fieldIid ? newFieldInst : b),
+    discard: [...p.discard.filter(c => c.iid !== discardIid), swappedOutBare],
+  }));
+  st = addLog(st, `鬼之假面：${oldName} 與棄牌區的 ${newName} 互換（保留所有附加物），${oldName} 丟棄`, idx);
+  return st;
+});
+
 // 釣竿MAX — 棄牌取最多 5 張寶可夢或基本能量
 // v2.43 修：卡面寫「寶可夢卡與『基本能量』卡合計最多5張」，原本 filter: 'PokemonOrEnergy'
 // （含 Special Energy）違反卡面。改成 PokemonOrBasicEnergy；guard 也比照調整。
