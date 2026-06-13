@@ -843,6 +843,42 @@ export function markFaintByEffect(
  * 不涵蓋 (戰鬥位 only, 卡面明確):
  *   - 火炎獅|威嚇之牙 / 灰塵山|垃圾洩氣
  */
+// v5.599 受招式傷害「擲幣免傷」中央收斂（變隱龍 躲藏高手 / 吉雉雞 腎上腺費洛蒙 PASSIVE_COIN_AVOID）。
+//   原本只在 engine.ts 主管線(active 一般攻擊,~4604)消費 → 走中央 dealAttackDamageToTarget / snipe-multi /
+//   分身連打,或在備戰被狙擊時,全漏(完全不擲幣)。位置無關(active+bench);正面 → 回 avoided 讓呼叫端把該目標
+//   傷害歸 0(連帶 on-damaged/KO 自然跳過,因都 gate >0)。dIdx 擲幣不誤觸重試徽章(flipCoinsWithLog aIdx gate)。
+function applyDefenderCoinAvoid(
+  state: GameState,
+  victim: CardInstance,
+  victimCard: Card | undefined,
+  defenderIdx: 0 | 1,
+  baseDamage: number,
+  pool: Map<string, Card>,
+): { avoided: boolean; state: GameState } {
+  if (baseDamage <= 0 || !victimCard || !victimCard.abilities) return { avoided: false, state };
+  // inline isColorlessAbilityBlocked（engine.ts 未 export,避免循環依賴；同 _applyBenchAbilityReduce 做法）
+  if (victimCard.pokemonType === 'Colorless' && state.activeStadium) {
+    const sdCard = pool.get(state.activeStadium.cardId);
+    if (sdCard && ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name)) return { avoided: false, state };
+  }
+  const defender = state.players[defenderIdx];
+  const isActive = defender.active?.iid === victim.iid;
+  const inPlay = isActive ? defender.active! : defender.bench.find(c => c.iid === victim.iid);
+  if (!inPlay) return { avoided: false, state };
+  const loc: 'active' | 'bench' = isActive ? 'active' : 'bench';
+  let s = state;
+  for (const ab of victimCard.abilities) {
+    if (!isAbilityHolderEffective(s, inPlay, victimCard, defenderIdx, ab.name, loc, pool)) continue;
+    const coinFn = PASSIVE_COIN_AVOID.get(ab.name);
+    if (!coinFn) continue;
+    if (!coinFn(inPlay, victimCard, pool)) continue;
+    const r = flipCoinsWithLog(s, 1, `${victimCard.name}｜${ab.name}`, defenderIdx);
+    s = addLog(r.state, `${victimCard.name}｜${ab.name}：${r.heads ? '正面 → 免疫此招式傷害！' : '反面 → 受傷害'}`, defenderIdx);
+    if (r.heads) return { avoided: true, state: s };
+  }
+  return { avoided: false, state: s };
+}
+
 function _applyBenchAbilityReduce(
   state: GameState,
   victim: CardInstance,
@@ -7608,6 +7644,12 @@ export function dealAttackDamageToTarget(
     if (_rb.amount !== effDmg && _rb.logs.length > 0) st = addLog(st, `${targetCard.name}：${_rb.logs.join('、')}`, null);
     effDmg = _rb.amount;
   }
+  // v5.599 受招式傷害擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套（中央 helper 過去漏,只引擎主管線有）。
+  if (kind === 'attack-damage' && effDmg > 0) {
+    const _ca = applyDefenderCoinAvoid(st, target, targetCard, dIdx, effDmg, pool);
+    st = _ca.state;
+    if (_ca.avoided) effDmg = 0;
+  }
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
   //   龐克頭盔/還擊斧/反擊特性/警備濁霧）。共用 fireDefenderOnDamaged，與 snipe-multi 同一條。
   if (isActive && kind === 'attack-damage' && effDmg > 0) {
@@ -9674,6 +9716,12 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, effDmg);
       if (_rd.amount !== effDmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
       effDmg = _rd.amount;
+    }
+    // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
+    if (effDmg > 0) {
+      const _ca = applyDefenderCoinAvoid(s, target, targetCard, dIdx, effDmg, pool);
+      s = _ca.state;
+      if (_ca.avoided) effDmg = 0;
     }
     // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged，
     //   升級原本只有 SPECIAL_ENERGY 的版本；補 TOOL_ON_DAMAGED/還擊斧/龐克頭盔/反擊特性/警備濁霧）。
@@ -14424,6 +14472,12 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, dmg);
       if (_rd.amount !== dmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
       dmg = _rd.amount;
+    }
+    // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
+    if (dmg > 0) {
+      const _ca = applyDefenderCoinAvoid(s, target, targetCard, dIdx, dmg, pool);
+      s = _ca.state;
+      if (_ca.avoided) dmg = 0;
     }
     // v5.436：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged）。
     if (isActive && dmg > 0) {
