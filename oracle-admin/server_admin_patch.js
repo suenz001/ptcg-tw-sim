@@ -2531,7 +2531,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const wSeat = (gs.winner === 0 || gs.winner === 1) ? gs.winner : null;
       if (wSeat == null) return;
       const winnerUid = doc.seats[wSeat]; const winnerName = (doc.names && doc.names[wSeat]) || '';
-      await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid, winnerName, status: 'done' } });
+      // v0.37 永久快照：把最終盤面 + 逐回合對戰 log 寫進 match 紀錄，供日後 debug（即使房間被清也留得住）。
+      await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid, winnerName, status: 'done',
+        finalLog: Array.isArray(gs.log) ? gs.log : [], finalState: gs, finalWinReason: gs.winReason || null, finalTurn: gs.turn || null, endedAt: Date.now() } });
       await advanceOrFinish(m, winnerUid, winnerName);
     }
 
