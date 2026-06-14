@@ -49,6 +49,7 @@ import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
   flipCoinsWithLog,
+  hasBloomOnField,
 } from '../../effects';
 import { countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
@@ -84,9 +85,8 @@ regPre('超級大竺葵ex|巨型花束', (state, aIdx, pool) => {
   // v5.255：補 bloom (大竺葵|繁茂) inline 計算 — 自方場上有繁茂時, 基本【草】能量算 2 個
   //   countEnergy() 內建 host-aware 特殊能量 (稜鏡/新衝天/燃火), 但不認繁茂.
   //   修法仿 effects.ts:6243 selfAllEnergyMultiplyPre 的 inline bloom 邏輯.
-  const a = state.players[aIdx];
-  const allOwn = [...(a.active ? [a.active] : []), ...a.bench];
-  const bloom = allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+  // v5.601：改走中央 hasBloomOnField（繁茂被暗夜羽擊等消除時不算）
+  const bloom = hasBloomOnField(state, aIdx, pool);
   let grassCount = 0;
   if (!bloom) {
     grassCount = countEnergy(att, pool).get('Grass') ?? 0;

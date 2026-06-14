@@ -59,6 +59,7 @@ import {
   PASSIVE_PREVENT_KO,
   COIN_PREVENT_KO_ABILITIES,
   flipCoinsWithLog,
+  hasBloomOnField,
   promptPlayAbilities,
   ON_PLAY_FROM_HAND_ABILITIES,
   ON_EVOLVE_FROM_HAND_ABILITIES,
@@ -913,12 +914,8 @@ export function hasBloomAbilityOnField(
   pool: Map<string, Card>,
 ): boolean {
   if (!state || ownerIdx == null) return false;
-  const owner = state.players[ownerIdx];
-  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
-  return all.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.abilities?.some(a => a.name === '繁茂');
-  });
+  // v5.601：繁茂 holder 被振翼髮暗夜羽擊/海兔獸黏著束縛/鐵荊棘ex初始化消除時不算 → 委派中央 hasBloomOnField。
+  return hasBloomOnField(state, ownerIdx, pool);
 }
 
 /**

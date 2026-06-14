@@ -232,6 +232,14 @@ export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
  * 用於 PreDiscardSpec.countMode='units' 的招式（如 分身連打）— UI 把玩家挑中的能量
  * 累加 unit 數對 spec.min/max 比對；不影響 engine 內 cost 匹配（後者已自有完整邏輯）。
  */
+// v5.601：繁茂是否「有效」(holder 未被暗夜羽擊/黏著束縛/初始化消除) 的判定注入點。
+//   _shared 為底層不能 import effects/v3001（循環依賴）→ effects.ts 載入時 setBloomEffectiveFn 注入
+//   nullification-aware 的 hasBloomOnField；未注入時 fallback raw name 偵測（向後相容）。
+let _bloomEffectiveFn: ((state: GameState, ownerIdx: 0 | 1, pool: Map<string, Card>) => boolean) | null = null;
+export function setBloomEffectiveFn(fn: (state: GameState, ownerIdx: 0 | 1, pool: Map<string, Card>) => boolean): void {
+  _bloomEffectiveFn = fn;
+}
+
 export function getEnergyDiscardUnits(
   energyCardId: string,
   hostInst: CardInstance | null,
@@ -262,8 +270,10 @@ export function getEnergyDiscardUnits(
   //   玩家報：繁茂在場時激流水泵等「選 N 個能量」picker，草能量沒被當 2 個。
   if (state != null && ownerIdx != null && ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass')) {
     const owner = state.players[ownerIdx];
-    const field = [...(owner.active ? [owner.active] : []), ...owner.bench];
-    if (field.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '繁茂'))) return 2;
+    const bloomActive = _bloomEffectiveFn
+      ? _bloomEffectiveFn(state, ownerIdx, pool)
+      : [...(owner.active ? [owner.active] : []), ...owner.bench].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '繁茂'));
+    if (bloomActive) return 2;
   }
   return 1;
 }

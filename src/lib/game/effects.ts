@@ -21,7 +21,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
-import { openDeckViewReshuffle } from './effects/_shared';
+import { openDeckViewReshuffle, setBloomEffectiveFn } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -6925,10 +6925,23 @@ export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, p
 //   附加草能量數算傷害/指示物」的招式/特性都該改走 countEnergyTypeBloomAware（一勞永逸，
 //   避免每張卡各自 inline 漏算 — 已重複出包多次：昆蟲加農炮 v5.439 / 尖刺盔甲 v5.439）。
 export function hasBloomOnField(state: GameState, ownerIdx: 0 | 1, pool: Map<string, Card>): boolean {
+  // v5.601：繁茂 holder 被振翼髮暗夜羽擊(active)/海兔獸黏著束縛(bench Stage2)/鐵荊棘ex初始化消除時
+  //   不算數（鐵律：新被動套用前必查 holder-effective）→ 走中央 isAbilityHolderEffective。
   const p = state.players[ownerIdx];
-  const allOwn = [...(p.active ? [p.active] : []), ...p.bench];
-  return allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+  const act = p.active;
+  if (act) {
+    const ac = pool.get(act.cardId);
+    if (ac?.abilities?.some(ab => ab.name === '繁茂')
+        && isAbilityHolderEffective(state, act, ac, ownerIdx, '繁茂', 'active', pool)) return true;
+  }
+  return p.bench.some(b => {
+    const bc = pool.get(b.cardId);
+    return !!bc?.abilities?.some(ab => ab.name === '繁茂')
+      && isAbilityHolderEffective(state, b, bc, ownerIdx, '繁茂', 'bench', pool);
+  });
 }
+// v5.601：把 nullification-aware 的繁茂判定注入 _shared（getEnergyDiscardUnits 等 units/cost 路徑共用單一來源）。
+setBloomEffectiveFn(hasBloomOnField);
 
 // host 身上某屬性能量數（host-aware 特殊能量 + 繁茂基本草×2）。依能量數算傷害/指示物用此。
 export function countEnergyTypeBloomAware(
@@ -7028,11 +7041,8 @@ function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilte
     //   原邏輯只用 countOneEnergy 不套繁茂倍率，跟 bothActiveEnergyMultiplyPre 不對稱
     //   ( bothActiveEnergyMultiplyPre 用 countWithBloom inline helper)
     // v3.731: inline bloom check (effects.ts 不能 import engine.ts — circular)
-    let bloom = false;
-    if (filter === 'Grass') {
-      const allOwn = [...(a.active ? [a.active] : []), ...a.bench];
-      bloom = allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
-    }
+    // v5.601：繁茂走中央 hasBloomOnField（被暗夜羽擊/黏著束縛/初始化消除時不算）
+    const bloom = filter === 'Grass' && hasBloomOnField(state, aIdx, pool);
     let count = 0;
     // v4.797：type filter 走 host-aware（無繁茂時）；繁茂仍用原 inline 邏輯（基本草 +2）
     const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
@@ -7067,10 +7077,9 @@ function bothActiveEnergyMultiplyPre(base: number, per: number, label: string): 
     // v2.108：若某方場上有大竺葵繁茂，該方寶可夢身上的「基本【草】能量」算 2 個。
     // 萬葉陣雨 rulesText：「雙方戰鬥寶可夢身上附加的能量的數量 × 30」— 按 Leon 解讀，
     // 繁茂倍率應套用於傷害計算（與日版 ruling 可能不一致，但符合 Leon 期待）。
+    // v5.601：繁茂走中央 hasBloomOnField（被暗夜羽擊/黏著束縛/初始化消除時不算）
     function hasBloomOnSide(ownerIdx: 0 | 1): boolean {
-      const owner = state.players[ownerIdx];
-      const allOwn = [...(owner.active ? [owner.active] : []), ...owner.bench];
-      return allOwn.some(c => pool.get(c.cardId)?.abilities?.some(ab => ab.name === '繁茂'));
+      return hasBloomOnField(state, ownerIdx, pool);
     }
     function isBasicGrass(ec: Card | undefined): boolean {
       if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
