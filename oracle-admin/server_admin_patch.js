@@ -2961,8 +2961,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
             const winSeat = (p0rem < p1rem) ? 0 : 1;
             const wUid = winSeat === 0 ? m.p1uid : m.p2uid, wName = winSeat === 0 ? m.p1name : m.p2name;
             await TMATCH.updateOne({ _id: m._id }, { $set: { winnerUid: wUid, winnerName: wName, status: 'done', timeLimit: true } });
-            try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = '對局時限到，依獎賞卡數判定（' + wName + ' 勝）'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
-            await postSystemChat('⏰ 對局時限到：' + wName + ' 以獎賞卡較多勝出，自動晉級。');
+            try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = winSeat; og.winReason = '對局時限到，依取得獎賞卡數判定（取得較多者勝）：' + wName + ' 勝'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+            await postSystemChat('⏰ 對局時限到：' + wName + ' 取得的獎賞卡較多（剩餘較少），勝出並自動晉級。');
             await advanceOrFinish(m, wUid, wName);
           }
         }
