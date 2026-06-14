@@ -14,16 +14,31 @@
 
 import type { Card } from './types';
 
+// v5.602：去除進化變體後綴/前綴 → 取「同一隻寶可夢」的 base 名（用於 seed 同 species 精確比對）。
+//   超級XXXex / XXXex / XXXV / XXXVMAX … 視為同一 species；不同 species（咕咕 vs 咕咕鴿）則不同。
+//   與 engine sameEvoName 同精神，但 cards/ 層自含、不依賴 game/。
+function evoBaseName(name: string): string {
+  let n = (name ?? '').trim().toLowerCase();
+  if (n.startsWith('超級')) n = n.slice(2);
+  n = n.replace(/(vmax|vstar|gx|ex|v)$/, '');
+  return n.trim();
+}
+
 export function getEvolutionChainNames(query: string, pool: Card[]): Set<string> {
   const q = query.trim().toLowerCase();
   if (!q || pool.length === 0) return new Set<string>();
 
-  // Step 1: seeds — 名字以 query 開頭的卡
-  // v5.001 修：startsWith 隔離訓練家冠名與一般鏈
-  // v5.271：seeds 也接受 Trainer/化石 卡 (有 stage2 寶可夢 evolvesFrom===化石名 的 chain)
-  const seeds = pool.filter(c =>
-    (c.supertype === 'Pokemon' || (c.supertype === 'Trainer' && c.subtype === 'Item'))
-    && c.name.toLowerCase().startsWith(q));
+  // Step 1: seeds
+  // v5.602 修：原本用 c.name.startsWith(q) → 當某寶可夢名是另一隻「不同 species」的前綴時會誤抓
+  //   （玩家報「咕咕」抓到「咕咕鴿」→ 咕咕鴿往上爬 evolvesFrom 到「豆豆鴿」→ 整條豆豆鴿線被拉進咕咕鏈）。
+  //   改法：先取「同進化 species」精確 seed（去 ex/超級/V 等變體後 base name 等於 query base）；
+  //   找不到精確 species 才退回 prefix 比對（保留「打部分字搜尋」如輸入「甲賀」）。
+  //   真正同線的後代由 Step 3 BFS（evolvesFrom 鏈）收集，不受此限（鬼斯→鬼斯通→耿鬼 等仍完整）。
+  const isSeedCard = (c: Card) =>
+    c.supertype === 'Pokemon' || (c.supertype === 'Trainer' && c.subtype === 'Item');
+  const qBase = evoBaseName(q);
+  let seeds = pool.filter(c => isSeedCard(c) && evoBaseName(c.name) === qBase);
+  if (seeds.length === 0) seeds = pool.filter(c => isSeedCard(c) && c.name.toLowerCase().startsWith(q));
   if (seeds.length === 0) return new Set<string>();
 
   // name → Card[] 索引（多印刷 / ex 版本同名）
