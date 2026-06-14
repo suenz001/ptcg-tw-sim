@@ -9,17 +9,57 @@ function loadMongo() {
   throw new Error('找不到 mongodb 模組（請在 /opt/ptcg/api 下執行）');
 }
 const { MongoClient } = loadMongo();
+function readEnvFile(p) {
+  try {
+    const txt = fs.readFileSync(p, 'utf8');
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/=\s*["']?(mongodb(?:\+srv)?:\/\/[^"'\s]+)/i);
+      if (m) return m[1];
+    }
+  } catch (e) {}
+  return null;
+}
+// 從「正在執行的 server 行程」環境變數抓 mongo URI(與 server 同一條已認證連線,最準)。
+function fromProcEnviron() {
+  try {
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid)) continue;
+      let cmd = '';
+      try { cmd = fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8'); } catch (e) { continue; }
+      if (!/server\.js|ptcg/.test(cmd)) continue;
+      let env = '';
+      try { env = fs.readFileSync('/proc/' + pid + '/environ', 'utf8'); } catch (e) { continue; }
+      for (const v of env.split('\0')) {
+        const m = v.match(/^[^=]*=(mongodb(?:\+srv)?:\/\/[^\s]+)$/);
+        if (m) return m[1];
+      }
+    }
+  } catch (e) {}
+  return null;
+}
 function findUri() {
   if (process.env.MONGO_URL) return process.env.MONGO_URL;
+  if (process.env.MONGODB_URI) return process.env.MONGODB_URI;
+  // 1) 執行中 server 行程的環境變數(認證連線,最準)
+  const fp = fromProcEnviron(); if (fp) return fp;
+  // 2) .env 檔(含認證的完整 URI)
+  for (const p of ['/opt/ptcg/api/.env', '/opt/ptcg/.env', '/opt/ptcg/api/.env.production', '/opt/ptcg/api/.env.local']) {
+    const u = readEnvFile(p); if (u) return u;
+  }
+  // 3) server.js 內 literal
   for (const p of ['/opt/ptcg/api/server.js','/opt/ptcg/server.js']) {
     try { const s = fs.readFileSync(p,'utf8'); const m = s.match(/mongodb(\+srv)?:\/\/[^'"`\s)]+/); if (m) return m[0]; } catch (e) {}
   }
   return 'mongodb://127.0.0.1:27017';
 }
+function dbNameFromUri(u) {
+  try { const m = u.match(/mongodb(?:\+srv)?:\/\/[^/]+\/([^?]+)/); return m && m[1] ? decodeURIComponent(m[1]) : null; } catch (e) { return null; }
+}
 (async () => {
   const term = (process.argv[2] || '').trim();
   if (!term) { console.error('用法: node dump-match-records.cjs "<玩家名字 / email / matchId / eventId>"'); process.exit(1); }
   const uri = findUri();
+  console.log('mongo uri:', uri.replace(/:\/\/[^@/]*@/, '://***@'));
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
   await client.connect();
   let db = null;
@@ -30,8 +70,8 @@ function findUri() {
       const cols = await cand.listCollections({ name: 'tournamentMatches' }).toArray();
       if (cols.length) { db = cand; break; }
     }
-  } catch (e) {}
-  if (!db) db = client.db();
+  } catch (e) { /* 認證使用者可能無 listDatabases 權限 → 改用 URI 內 db 名 */ }
+  if (!db) { const dn = dbNameFromUri(uri); db = dn ? client.db(dn) : client.db(); }
   const TMATCH = db.collection('tournamentMatches');
   const TROOMS = db.collection('tournamentRooms');
   const TREGS  = db.collection('tournamentRegistrations');
