@@ -630,6 +630,14 @@ export function canPlayTrainer(
  * 內聯實作，不依賴 engine.ts（避免 effects → engine 循環 import）。
  * 與 engine.ts:getBenchLimit 保持邏輯同步。
  */
+// v5.608 中央：「自己的最初回合」判定。
+//   ⚠ state.turn 只在「後攻方 END_TURN」才 +1 → turn===1 涵蓋『雙方各自的第 1 個動作回合』
+//   (先攻第1 + 後攻第1)。卡面「無法在自己的最初回合使用」要擋雙方第1回合 → 用 turn===1。
+//   ❌ 不可用 state.isFirstTurn(那只涵蓋『先攻方第1動作回合』,後攻方第1回合已是 false → 會漏)。
+export function isOwnFirstTurn(state: GameState): boolean {
+  return state.turn === 1;
+}
+
 export function getOwnBenchLimit(
   state: GameState,
   idx: 0 | 1,

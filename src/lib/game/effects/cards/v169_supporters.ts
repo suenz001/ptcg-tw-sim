@@ -16,7 +16,7 @@
 import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
-  getOwnBenchLimit,
+  getOwnBenchLimit, isOwnFirstTurn,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
 
@@ -273,7 +273,9 @@ regR('firebreather-pick', (st, idx, iids, _params, pool) => {
 
 // ── 越橘的一步棋 — top7 → 1 惡寶可夢放備戰，剩餘洗回（不可第 1 回合）──────
 regG('越橘的一步棋', (st, idx, pool) => {
-  if (st.isFirstTurn) return false;
+  // v5.608：卡面「無法在自己的最初回合使用」→ 用 isOwnFirstTurn(turn===1,涵蓋後攻方第1回合)。
+  //   原 st.isFirstTurn 只擋先攻方第1回合 → 後攻方第1回合(isFirstTurn=false,turn仍1)誤放行。
+  if (isOwnFirstTurn(st)) return false;
   // v3.78：支援零之大空洞
   if (st.players[idx].bench.length >= getOwnBenchLimit(st, idx, pool)) return false;
   return st.players[idx].deck.length > 0;
