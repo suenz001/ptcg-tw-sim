@@ -114,11 +114,11 @@
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
-  let tEvent = $state<any>(null);
-  let tEvents = $state<any[]>([]);   // 多賽事：開放中賽事清單（大廳選擇器用）
-  let tSelEventId = $state('');      // 玩家目前選看/報名的賽事 id（空＝伺服器預設主賽事）
+  let tEvents = $state<any[]>([]);   // 多賽事：開放中賽事清單（每場一張卡，各自報名）
+  let tRegFormEventId = $state('');  // 目前展開報名表單的賽事 id（點某場「報名」才展開）
   let tMe = $state<any>({ registered: false });
-  let tRegCount = $state(0);
+  // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
+  const tRegisteredAny = $derived(!!tMe.registered || tEvents.some((e: any) => e.registered));
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
   let tTickTimer: ReturnType<typeof setInterval> | null = null; // v5.575 1秒tick平滑倒數
@@ -3892,23 +3892,17 @@
   }
   async function tournLoadEvent() {
     try {
-      // 多賽事：選了某場就帶 eventId 取「該場」詳細，否則取伺服器預設主賽事
-      const r = await tApi('/event' + (tSelEventId ? ('?eventId=' + encodeURIComponent(tSelEventId)) : ''));
+      const r = await tApi('/event');
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       tEvents = Array.isArray(r.events) ? r.events : [];
-      // 選中的賽事已結束/被刪除 → 回退預設
-      if (tSelEventId && !tEvents.some((e: any) => e._id === tSelEventId)) tSelEventId = '';
-      // 尚未選 → 預設伺服器主賽事，否則清單第一場
-      if (!tSelEventId) tSelEventId = (r.event && r.event._id) || (tEvents[0] && tEvents[0]._id) || '';
-      tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
-      if (tMe.registered && tMe.name && !tNickname) tNickname = tMe.name; // 預填已報名暱稱
+      tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
+      // 預填暱稱：用任一已報名賽事的暱稱
+      if (!tNickname) {
+        const mine = tEvents.find((e: any) => e.registered && e.myName);
+        if (mine) tNickname = mine.myName;
+        else if (tMe.registered && tMe.name) tNickname = tMe.name;
+      }
     } catch { /* ignore */ }
-  }
-  // 多賽事：玩家點選某場 → 切換並重新載入該場詳細
-  function tSelectTournEvent(eid: string) {
-    if (tSelEventId === eid) return;
-    tSelEventId = eid; tError = '';
-    tournLoadEvent(); tBracketLoad();
   }
   // 載入賽程表（admin seed 後才有 matches）
   async function tBracketLoad() {
@@ -3980,7 +3974,7 @@
     game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
     tournLoadEvent(); tBracketLoad(); tSpectateLoad();
   }
-  async function tournEnroll() {
+  async function tournEnroll(eventId: string) {
     const nick = (tNickname || '').trim();
     if (!nick) { tError = '請先填寫錦標賽暱稱'; return; }
     const deck = allDecks.find(d => d.id === tDeckId);
@@ -3988,23 +3982,23 @@
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { eventId: tSelEventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; else tRegFormEventId = ''; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   // v5.590 報到：報到階段按鈕，已報名者標記 checkedIn=true
-  async function tCheckin() {
+  async function tCheckin(eventId: string) {
     tBusy = true; tError = '';
     try {
-      const r = await tApi('/checkin', { eventId: tSelEventId });
+      const r = await tApi('/checkin', { eventId });
       if (r?.error) tError = r.error;
-      else { tMe = { ...tMe, checkedIn: true }; tournLoadEvent(); }
+      else { tournLoadEvent(); }
     } catch (e: any) { tError = '報到失敗：' + (e?.message ?? e); }
     finally { tBusy = false; }
   }
-  async function tournUnregister() {
+  async function tournUnregister(eventId: string) {
     if (!confirm('確定退賽？')) return;
     tBusy = true; tError = '';
-    try { await tApi('/unregister', { eventId: tSelEventId }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+    try { await tApi('/unregister', { eventId }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   function tEventStatusLabel(st: string): string {
     return ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' } as any)[st] ?? st;
@@ -6144,7 +6138,7 @@
             <div class="tcmsg" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
-        {#if tMe.registered || tIsAdmin}
+        {#if tRegisteredAny || tIsAdmin}
           <div class="tourn-chat-input">
             <input bind:value={tChatInput} maxlength="200" placeholder="說點什麼…（Enter 送出）" onkeydown={(e) => e.key === 'Enter' && tChatSend()} />
             <button class="btn-secondary small" onclick={tChatSend} disabled={!tChatInput.trim()}>送出</button>
@@ -6153,29 +6147,21 @@
           <div class="tourn-chat-input"><span class="muted small" style="padding:4px 8px;">🔒 報名後才能發言，未報名僅能觀看</span></div>
         {/if}
       </div>
-      {#if tEvents.length > 1}
-        <div class="tourn-event-tabs" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;">
-          <span class="muted small">賽事：</span>
-          {#each tEvents as _ev (_ev._id)}
-            <button type="button" class="tourn-evtab" onclick={() => tSelectTournEvent(_ev._id)} disabled={tBusy}
-              style="padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.85rem;border:1px solid {_ev._id === tSelEventId ? '#7fc97f' : '#3a4a5a'};background:{_ev._id === tSelEventId ? '#243a24' : '#1a2230'};color:{_ev._id === tSelEventId ? '#dfe' : '#bcd'};font-weight:{_ev._id === tSelEventId ? 700 : 400};">
-              {_ev.name} <span style="opacity:.7;">· {tEventStatusLabel(_ev.status)} · {_ev.regCount ?? 0}人{#if _ev.registered} · ✅{/if}</span>
-            </button>
-          {/each}
-        </div>
+      {#if tEvents.length === 0}
+        <div class="tourn-event"><p class="muted small">目前沒有開放中的賽事。</p></div>
       {/if}
-      {#if tEvent}
+      {#each tEvents as ev (ev._id)}
         <div class="tourn-event">
-          <h3>🏆 {tEvent.name}</h3>
-          <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(tEvent.status)}</b> ｜ 報名 {tRegCount}{tEvent.maxPlayers ? ' / ' + tEvent.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {tEvent.roundLimitMin} 分</p>
-          {#if tEvent.status === 'draft' && tEvent.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(tEvent.registrationOpenAt).toLocaleString()} 開放</p>{/if}
-          {#if tEvent.status === 'registration' && tEvent.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(tEvent.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
-          {#if tEvent.status === 'draft' && tEvent.registrationOpenAt}
-            {@const _toOpen = tEvent.registrationOpenAt - tNow}
+          <h3>🏆 {ev.name}</h3>
+          <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(ev.status)}</b> ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {ev.roundLimitMin} 分</p>
+          {#if ev.status === 'draft' && ev.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(ev.registrationOpenAt).toLocaleString()} 開放</p>{/if}
+          {#if ev.status === 'registration' && ev.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(ev.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
+          {#if ev.status === 'draft' && ev.registrationOpenAt}
+            {@const _toOpen = ev.registrationOpenAt - tNow}
             {#if _toOpen > 0}<div class="tourn-cdbox"><div class="tourn-cdbox-label">⏳ 報名開放倒數</div><div class="tourn-cdbox-time">{fmtCountdown(_toOpen)}</div></div>{/if}
           {/if}
-          {#if tEvent.status === 'registration' && tEvent.registrationCloseAt}
-            {@const _toStart = tEvent.registrationCloseAt - tNow}
+          {#if ev.status === 'registration' && ev.registrationCloseAt}
+            {@const _toStart = ev.registrationCloseAt - tNow}
             <div class="tourn-cdbox" class:urgent={_toStart > 0 && _toStart <= 300000}>
               {#if _toStart > 0}
                 <div class="tourn-cdbox-label">⏰ 距離開賽倒數</div>
@@ -6185,28 +6171,59 @@
               {/if}
             </div>
           {/if}
-          {#if tEvent.status === 'checkin'}
-            {@const _ciMs = (tEvent.checkInDeadline ?? 0) - tNow}
+          {#if ev.status === 'checkin'}
+            {@const _ciMs = (ev.checkInDeadline ?? 0) - tNow}
             <div class="tourn-cdbox urgent">
               <div class="tourn-cdbox-label">📋 報到階段{#if _ciMs > 0} ｜ 剩 {fmtCountdown(_ciMs)}{/if}</div>
-              {#if !tMe.registered}
+              {#if !ev.registered}
                 <div class="muted small">未報名者無法參加；報到結束後依「已報到者」產生賽程。</div>
-              {:else if tMe.checkedIn}
+              {:else if ev.checkedIn}
                 <div class="reg-ok">✅ 你已報到，等待開賽…</div>
               {:else}
-                <button class="tourn-enter-btn" onclick={tCheckin} disabled={tBusy}>{tBusy ? '報到中…' : '✋ 我要報到'}</button>
+                <button class="tourn-enter-btn" onclick={() => tCheckin(ev._id)} disabled={tBusy}>{tBusy ? '報到中…' : '✋ 我要報到'}</button>
                 <div class="muted small" style="margin-top:4px;">逾時未報到將不列入賽程</div>
               {/if}
             </div>
           {/if}
-          {#if tMe.registered}
-            <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{tMe.name}</b> ｜ 鎖定牌組：<b>{tMe.deckName ?? '（已選定）'}</b></p>
-            {#if tEvent.status === 'registration'}<button class="btn-secondary small" onclick={tournUnregister} disabled={tBusy}>退賽</button>{/if}
-          {:else if tEvent.status === 'registration'}
-            <p class="muted small">選好下方牌組後按「報名」（報名後牌組即鎖定）。</p>
+          {#if ev.registered}
+            <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{ev.myName}</b> ｜ 鎖定牌組：<b>{ev.myDeckName ?? '（已選定）'}</b></p>
+            {#if ev.status === 'registration'}<button class="btn-secondary small" onclick={() => tournUnregister(ev._id)} disabled={tBusy}>退賽</button>{/if}
+          {:else if ev.status === 'registration'}
+            {#if tRegFormEventId === ev._id}
+              <div class="tourn-reg-form">
+                <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
+                  <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
+                </label>
+                <label class="tourn-field">選擇牌組（需 60 張）
+                  <select class="deck-select" bind:value={tDeckId}>
+                    <option value="" disabled>— 請選擇牌組 —</option>
+                    {#if decks.length > 0}
+                      <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                    {/if}
+                    {#if PRESET_DECKS.length > 0}
+                      <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                    {/if}
+                  </select>
+                </label>
+                <label class="tourn-field">硬幣勝出時，你要：
+                  <select class="deck-select" bind:value={tCoinPref}>
+                    <option value="random">隨機（不指定）</option>
+                    <option value="first">先攻</option>
+                    <option value="second">後攻</option>
+                  </select>
+                  <span class="tourn-coin-hint">（贏得開場擲幣時，依此自動安排；輸的話由對手決定）</span>
+                </label>
+                <div class="tourn-reg-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                  <button class="btn-primary tourn-join" onclick={() => tournEnroll(ev._id)} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? '報名中…' : '✅ 確認報名（鎖定暱稱與牌組）'}</button>
+                  <button class="btn-secondary small" onclick={() => { tRegFormEventId = ''; tError = ''; }} disabled={tBusy}>取消</button>
+                </div>
+              </div>
+            {:else}
+              <button class="btn-primary tourn-join" onclick={() => { tRegFormEventId = ev._id; tError = ''; }} disabled={tBusy}>📝 報名這一場</button>
+            {/if}
           {/if}
         </div>
-      {/if}
+      {/each}
       {#if tBracket && tBracket.matches && tBracket.matches.length}
         <div class="tourn-bracket">
           <div class="tourn-bracket-head">📋 賽程表{#if tBracket.event?.championName} ｜ 🏆 冠軍：<b>{tBracket.event.championName}</b>{/if}</div>
@@ -6274,36 +6291,7 @@
           {/each}
         </div>
       {/if}
-      {#if !tMe.registered}
-        <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
-          <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
-        </label>
-        <label class="tourn-field">選擇牌組（需 60 張）
-          <select class="deck-select" bind:value={tDeckId}>
-            <option value="" disabled>— 請選擇牌組 —</option>
-            {#if decks.length > 0}
-              <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
-            {#if PRESET_DECKS.length > 0}
-              <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-            {/if}
-          </select>
-        </label>
-        <label class="tourn-field">硬幣勝出時，你要：
-          <select class="deck-select" bind:value={tCoinPref}>
-            <option value="random">隨機（不指定）</option>
-            <option value="first">先攻</option>
-            <option value="second">後攻</option>
-          </select>
-          <span class="tourn-coin-hint">（贏得開場擲幣時，依此自動安排；輸的話由對手決定）</span>
-        </label>
-        {#if tError}<p class="warn">{tError}</p>{/if}
-        {#if tEvent && tEvent.status === 'registration'}
-          <button class="btn-primary tourn-join" onclick={tournEnroll} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? '報名中…' : '報名（鎖定暱稱與牌組）'}</button>
-        {/if}
-      {:else}
-        {#if tError}<p class="warn">{tError}</p>{/if}
-      {/if}
+      {#if tError}<p class="warn">{tError}</p>{/if}
     {/if}
   </main>
 {:else}
@@ -9087,8 +9075,8 @@
         </div>
         <div class="chat-input-row">
           {#if isTournament}
-            <input class="chat-input" type="text" placeholder={(tMe.registered || tIsAdmin) ? '與大廳聊天室互動（Enter 送出）' : '🔒 報名者才能發言，可觀看'} maxlength="200" bind:value={tChatInput} onkeydown={(e) => e.key === 'Enter' && (tMe.registered || tIsAdmin) && tChatSend()} disabled={!(tMe.registered || tIsAdmin)} />
-            <button class="btn-primary chat-send" onclick={tChatSend} disabled={!tChatInput.trim() || !(tMe.registered || tIsAdmin)}>送出</button>
+            <input class="chat-input" type="text" placeholder={(tRegisteredAny || tIsAdmin) ? '與大廳聊天室互動（Enter 送出）' : '🔒 報名者才能發言，可觀看'} maxlength="200" bind:value={tChatInput} onkeydown={(e) => e.key === 'Enter' && (tRegisteredAny || tIsAdmin) && tChatSend()} disabled={!(tRegisteredAny || tIsAdmin)} />
+            <button class="btn-primary chat-send" onclick={tChatSend} disabled={!tChatInput.trim() || !(tRegisteredAny || tIsAdmin)}>送出</button>
           {:else}
             <input
               class="chat-input"

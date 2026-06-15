@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2278,7 +2278,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         for (const _e of _openList) {
           const _reg = await TREGS.findOne({ _id: _e._id + '__' + id.uid });
           const _cnt = await TREGS.countDocuments({ eventId: _e._id });
-          _events.push({ _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: _cnt, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null });
+          _events.push({ _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: _cnt, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null, myName: (_reg && _reg.name) || null, checkInDeadline: _e.checkInDeadline || null });
         }
         res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch, events: _events, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
