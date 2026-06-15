@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2858,6 +2858,37 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     // 管理員：賽事統計 — 回傳所有賽事歸檔(TARCHIVE) + 名人堂(TCHAMPS)，前端用卡片索引聚合各項數據
+    // v0.42 管理員：取某場對戰的逐回合 log（賽事統計下鑽用）
+    //   優先 TMATCH.finalLog（自然結束的場 v0.37 已快照），fallback 房間 mr_<matchId>.gameState.log
+    //   （投降/時限/未進場等沒走 onMatchGameOver 的場，log 仍在房間盤面裡）。
+    app.get('/api/tournament/admin/match-log', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        let matchId = req.query.matchId ? String(req.query.matchId) : '';
+        if (!matchId && req.query.eventId && req.query.round != null && req.query.idx != null) {
+          matchId = String(req.query.eventId) + '_r' + Number(req.query.round) + '_m' + Number(req.query.idx);
+        }
+        if (!matchId) return res.status(400).json({ error: '需要 matchId 或 eventId+round+idx' });
+        const m = await TMATCH.findOne({ _id: matchId });
+        let log = (m && Array.isArray(m.finalLog)) ? m.finalLog : null;
+        let winReason = (m && m.finalWinReason) || null;
+        let turn = (m && m.finalTurn) || null;
+        let p1name = m ? m.p1name : null, p2name = m ? m.p2name : null, winnerName = m ? m.winnerName : null, status = m ? m.status : null;
+        if (!log || !log.length) {
+          const room = await TROOMS.findOne({ _id: 'mr_' + matchId });
+          if (room && room.gameState) {
+            if (Array.isArray(room.gameState.log)) log = room.gameState.log;
+            winReason = winReason || room.gameState.winReason || null;
+            turn = turn || room.gameState.turn || null;
+            if (!p1name && room.names) { p1name = room.names[0] || null; p2name = room.names[1] || null; }
+          }
+        }
+        res.json({ matchId, p1name, p2name, winnerName, status, winReason, turn, log: log || [], found: !!(log && log.length) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     app.get('/api/tournament/admin/stats', async (req, res) => {
       try {
         const id = await tournIdentity(req);

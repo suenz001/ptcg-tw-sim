@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.45</title>
+<title>PTCG Oracle Admin v1.46</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.45</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.46</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -983,6 +983,94 @@ let tournStatsLoading = false;
 let tournStatsCache = null;
 // v1.38：賽事統計的函式要掛到 window，inline onclick 才找得到（script 是 type=module）
 window.loadTournamentStats = (...a) => loadTournamentStats(...a);
+
+// v1.46 賽事統計下鑽：點賽事名稱 → 賽程 modal；點某場對戰 → 對戰 log
+function _tsModal(innerHtml) {
+  var ov = document.getElementById('ts-modal-overlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'ts-modal-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.addEventListener('click', function (e) { if (e.target === ov) _tsCloseModal(); });
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = '<div style="background:#13201a;border:1px solid #3a5a3a;border-radius:10px;max-width:840px;width:100%;max-height:88vh;overflow:auto;padding:18px 20px;position:relative;">'
+    + '<button onclick="_tsCloseModal()" style="position:absolute;top:10px;right:12px;background:#7a3a3a;color:#fdd;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">✕ 關閉</button>'
+    + innerHtml + '</div>';
+  ov.style.display = 'flex';
+}
+window._tsCloseModal = function () { var ov = document.getElementById('ts-modal-overlay'); if (ov) ov.style.display = 'none'; };
+
+function _tsMatchOutcome(m) {
+  if (m.bye) return '輪空晉級';
+  if (m.doubleNoShow) return '雙方未進場';
+  if (m.noShow) return '未進場判負';
+  if (m.forfeit) return '投降判負';
+  if (m.idleForfeit) return '閒置判負';
+  if (m.timeLimit) return '時限判負';
+  if (m.adminResolved) return '管理員裁定';
+  if (m.status === 'done') return '正常分勝負';
+  return m.status || '';
+}
+
+window.tevShowBracket = function (eventIdEnc) {
+  var eventId = decodeURIComponent(eventIdEnc);
+  var data = tournStatsCache || { archives: [] };
+  var a = (data.archives || []).find(function (x) { return x.eventId === eventId; });
+  if (!a) { _tsModal('<p style="color:#f88;">找不到這場賽事的資料。</p>'); return; }
+  var byRound = {};
+  (a.matches || []).forEach(function (m) { (byRound[m.round] = byRound[m.round] || []).push(m); });
+  var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; });
+  var h = '<h3 style="margin:0 28px 2px 0;">🏆 ' + escapeHtml(a.eventName || '錦標賽') + ' — 賽程</h3>';
+  h += '<p class="small muted" style="margin:0 0 10px;">' + (a.playerCount || 0) + ' 人' + (a.championName ? ' ｜ 冠軍：' + escapeHtml(a.championName) + ' 🏆' : '') + '　·　點任一場可看該局對戰 log</p>';
+  if (!rounds.length) { h += '<p class="empty">這場沒有賽程紀錄。</p>'; _tsModal(h); return; }
+  rounds.forEach(function (r) {
+    h += '<div style="margin:10px 0 4px;color:#bfe0ff;font-weight:600;">第 ' + r + ' 輪</div>';
+    byRound[r].forEach(function (m) {
+      var winP1 = m.winnerUid && m.winnerUid === m.p1uid, winP2 = m.winnerUid && m.winnerUid === m.p2uid;
+      var p1 = '<b style="color:' + (winP1 ? '#7fc97f' : '#ccc') + ';">' + escapeHtml(m.p1name || '—') + (winP1 ? ' 🏆' : '') + '</b>';
+      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : ('<b style="color:' + (winP2 ? '#7fc97f' : '#ccc') + ';">' + escapeHtml(m.p2name || '—') + (winP2 ? ' 🏆' : '') + '</b>');
+      var label = p1 + ' <span class="muted">vs</span> ' + p2;
+      var clickable = !m.bye && m.p1uid && m.p2uid;
+      if (clickable) {
+        h += '<button onclick="tevShowMatchLog(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="display:block;width:100%;text-align:left;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #3a5a3a;background:#16241a;color:#dfe;cursor:pointer;font-size:.9rem;">'
+          + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + ' ▶ 看對戰 log</span></button>';
+      } else {
+        h += '<div style="margin:3px 0;padding:8px 11px;border-radius:6px;background:#101810;color:#9ab;font-size:.9rem;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></div>';
+      }
+    });
+  });
+  _tsModal(h);
+};
+
+window.tevShowMatchLog = async function (eventIdEnc, round, idx) {
+  var eventId = decodeURIComponent(eventIdEnc);
+  _tsModal('<div class="empty">載入對戰 log…</div>');
+  var d;
+  try { d = await api('/api/tournament/admin/match-log?eventId=' + encodeURIComponent(eventId) + '&round=' + round + '&idx=' + idx); }
+  catch (e) { _tsModal('<p style="color:#f88;">載入失敗：' + escapeHtml(e.message) + '</p>'); return; }
+  if (!d || d.error) { _tsModal('<p style="color:#f88;">' + escapeHtml((d && d.error) || '載入失敗') + '</p>'); return; }
+  var h = '<h3 style="margin:0 28px 6px 0;">⚔️ ' + escapeHtml(d.p1name || 'P1') + ' vs ' + escapeHtml(d.p2name || 'P2') + '</h3>';
+  h += '<p class="small muted" style="margin:0 0 8px;">';
+  if (d.winnerName) h += '勝者：' + escapeHtml(d.winnerName) + ' 🏆　';
+  if (d.winReason) h += '｜ ' + escapeHtml(d.winReason) + '　';
+  if (d.turn) h += '｜ 共 ' + d.turn + ' 回合';
+  h += '</p>';
+  var btnBack = '<button onclick="tevShowBracket(\'' + encodeURIComponent(eventId) + '\')" style="background:#1e2e1e;color:#dfe;border:1px solid #4a6a4a;border-radius:6px;padding:4px 10px;cursor:pointer;margin-bottom:10px;">◀ 回賽程</button>';
+  h = btnBack + h;
+  if (!d.found || !d.log || !d.log.length) {
+    h += '<p class="empty">這場沒有保存對戰 log（可能是輪空、未進場判負，或對局尚未產生過盤面）。</p>';
+  } else {
+    h += '<div style="background:#0d130d;border:1px solid #2a3a2a;border-radius:6px;padding:10px 12px;font-family:monospace;font-size:.82rem;line-height:1.65;max-height:62vh;overflow:auto;">';
+    d.log.forEach(function (l, i) {
+      var txt = (typeof l === 'string') ? l : (l && l.message ? l.message : JSON.stringify(l));
+      h += '<div style="padding:1px 0;"><span style="color:#567;">' + (i + 1) + '.</span> ' + escapeHtml(txt) + '</div>';
+    });
+    h += '</div>';
+  }
+  _tsModal(h);
+};
+
 window.tevDeleteArchive = (...a) => tevDeleteArchive(...a);
 async function loadTournamentStats(reset = false) {
   if (tournStatsLoading) return;
@@ -1171,7 +1259,7 @@ function renderTournamentStats(el, data) {
     const champRec = (a.players || []).find((p) => p.uid === a.championUid);
     const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
     const dur = (a.finishedAt && (a.startedAt || a.createdAt)) ? (a.finishedAt - (a.startedAt || a.createdAt)) : 0;
-    html += '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td><td>' + escapeHtml(a.eventName || '錦標賽') + '</td><td>' + (a.playerCount || (a.players || []).length)
+    html += '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td><td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與對戰 log">' + escapeHtml(a.eventName || '錦標賽') + '</button></td><td>' + (a.playerCount || (a.players || []).length)
       + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
       + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
   });
