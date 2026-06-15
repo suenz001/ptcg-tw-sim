@@ -5512,18 +5512,16 @@ regR('sunny-eevee-mental-out', (state, aIdx, iids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const targetIid = iids[0];
   if (!targetIid) return state;
-  return updatePlayer(state, dIdx, p => {
-    const picked = p.hand.find(c => c.iid === targetIid);
-    if (!picked) return p;
-    const pickedName = pool.get(picked.cardId)?.name ?? '?';
-    // 揭示丟棄的卡（卡丟到棄牌區後本就公開）
-    return {
-      ...p,
-      hand: p.hand.filter(c => c.iid !== targetIid),
-      discard: [...p.discard, picked],
-      // log message 在 outer 處理
-    };
-  });
+  // v5.603：丟到棄牌區後本就是公開資訊 → 用中央 joinCardNames 在雙方對戰紀錄揭示被丟棄的卡名
+  const picked = state.players[dIdx].hand.find(c => c.iid === targetIid);
+  if (!picked) return state;
+  let st = updatePlayer(state, dIdx, p => ({
+    ...p,
+    hand: p.hand.filter(c => c.iid !== targetIid),
+    discard: [...p.discard, picked],
+  }));
+  st = addLog(st, `精神出局：丟棄了對手的 ${joinCardNames([picked], pool)}`, aIdx);
+  return st;
 });
 // v3.9998：拍落仍用隨機（卡面寫「隨機」），維持舊邏輯
 

@@ -63,5 +63,17 @@ T('④ 插入抽出(鑰圈兒)：丟棄卡名顯示在 log',()=>{
   const lg=logStr(n);
   assert(lg.includes('插入抽出')&&lg.includes(nameOf(GASTLY)),'插入抽出 log 應含卡名，log='+lg.split('\n').slice(-3).join(' | '));
 });
+T('⑤ 精神出局(太陽伊布ex)：丟棄對手手牌的卡名顯示在 log',()=>{
+  const g=inst(GASTLY);
+  const st=baseState([],[]);
+  st.players[1]={...st.players[1],hand:[g]};
+  const n=resolve(st,{type:'hand-discard',actorIdx:0,sourcePlayerIdx:1,minCount:1,maxCount:1,effectKey:'sunny-eevee-mental-out'},[g.iid]);
+  const lg=logStr(n);
+  // 對手手牌少了那張卡
+  assert(n.players[1].hand.length===0,'對手手牌應被丟棄');
+  assert(n.players[1].discard.some(c=>c.iid===g.iid),'卡應進對手棄牌區');
+  // log 公開顯示卡名
+  assert(lg.includes('精神出局')&&lg.includes(nameOf(GASTLY)),'精神出局 log 應含丟棄卡名「'+nameOf(GASTLY)+'」，log='+lg.split('\n').slice(-3).join(' | '));
+});
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail?1:0);
