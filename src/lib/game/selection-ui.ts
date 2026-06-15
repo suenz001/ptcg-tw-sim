@@ -57,6 +57,7 @@ export interface SkipDecisionInput {
   actorIdx: 0 | 1;
   sourcePlayerIdx: 0 | 1;
   effectKey: string;
+  minCount?: number;  // v5.607：卡面要求的最低選取數（權威信號）
 }
 
 /** 未知資訊 picker：自己的牌庫（牌庫搜尋 / 牌庫頂排序）或對手的手牌（hand-* 且來源為對手）。 */
@@ -72,8 +73,14 @@ export function isUnknownInfoPicker(p: SkipDecisionInput): boolean {
  * 否則（已知資訊 + 有 gate：棄牌區檢索 / 我方手牌固定取 / 場上目標）→ 不顯示【不選】、強制 ≥1。
  */
 export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
+  // v5.607：minCount>=1 = 卡面要求「至少選 N(N>=1)」→ 一律不給【不選】(minCount 是卡面語意權威)。
+  //   修玩家報「啪咚猴|衝衝鼓」：卡面「從牌庫任意選擇 1 張卡加入手牌」=無類別限定的任意檢索，
+  //   牌庫非空一定找得到「任意 1 張」→ 不適用官方「找不到」(fail-to-find)，必選。
+  //   fail-to-find 只在「搜尋符合特定條件的卡」(minCount=0)時適用；「任意檢索」沒有找不到的情形。
+  //   通則：任何 picker 只要 minCount>=1 就不該能跳過(送 0)，這是純語意防呆，零誤傷
+  //   (「最多 N/任意數量/可不選」型卡面 minCount 本就=0 → 不受影響)。
+  if ((p.minCount ?? 0) >= 1) return false;
   // v5.543：「看牌庫上方 N 張，強制選擇加手牌」型（已揭示、必選）→ 無【不選】。
-  //   玩家報：多龍奇|偵查指令 + 探險家的嚮導 不該出現【不選】。
   //   ★ 注意「搜尋牌庫找特定卡」型（賽吉/喵頭目 等）依官方「找不到」規則仍可不選，故不列入此名單。
   if (MANDATORY_TOP_PICK_EFFECT_KEYS.has(p.effectKey)) return false;
   return isUnknownInfoPicker(p) || OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey);

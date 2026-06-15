@@ -12,7 +12,7 @@ await build({ entryPoints: [join(ROOT,'src/lib/game/selection-ui.ts')], outfile:
 const M = await import(pathToFileURL(O).href);
 const { selectionAllowsSkip, selectionConfirmFloor, isUnknownInfoPicker } = M;
 let pass=0, fail=[]; const ck=(n,ok,d='')=>{ ok?pass++:fail.push(n+(d?' — '+d:'')); };
-const mk=(type,effectKey='x',src=0,act=0)=>({type,effectKey,sourcePlayerIdx:src,actorIdx:act});
+const mk=(type,effectKey='x',src=0,act=0,minCount=0)=>({type,effectKey,sourcePlayerIdx:src,actorIdx:act,minCount});
 ck('一般牌庫搜尋→可不選', selectionAllowsSkip(mk('deck-search')));
 // v5.543：「看牌庫上方N張強制選加手牌」型 → 不可不選（白名單）
 ck('偵查指令(看上方2選1)→強制', !selectionAllowsSkip(mk('deck-search','scouting-order',0,0)));
@@ -36,6 +36,12 @@ ck('呆呆獸丟到飽→可不選', selectionAllowsSkip(mk('hand-discard','m5-s
 ck('迅速游標→可不選', selectionAllowsSkip(mk('active-energy-discard','swiftcursor-energy-pick',0,0)));
 ck('狡兔三窟換場→可不選', selectionAllowsSkip(mk('bench-choose','self-swap-active-bench',0,0)));
 ck('拉帝歐斯潔淨支援→可不選', selectionAllowsSkip(mk('bench-choose','cleansing-support-pick-bench',0,0)));
+// v5.607：minCount>=1 一律不給【不選】(minCount 權威)；衝衝鼓任意檢索強制選1
+ck('衝衝鼓(任意檢索 minCount=1)→必選不可跳過', !selectionAllowsSkip(mk('deck-search','search-generic-to-hand-private',0,0,1)));
+ck('詭計(任意檢索 最多2 minCount=0)→仍可不選', selectionAllowsSkip(mk('deck-search','search-to-hand-reshuffle',0,0,0)));
+ck('賽吉(有條件搜尋 minCount=0)→仍可不選', selectionAllowsSkip(mk('deck-search','sage-search-evolve',0,0,0)));
+ck('任意 picker minCount=2→必選', !selectionAllowsSkip(mk('deck-search','whatever',0,0,2)));
+ck('未知資訊但 minCount=1→必選', !selectionAllowsSkip(mk('hand-discard','loquat-discard-opp-items',1,0,1)));
 ck('confirmFloor(0)=1', selectionConfirmFloor(0)===1);
 ck('confirmFloor(1)=1', selectionConfirmFloor(1)===1);
 ck('confirmFloor(2)=2', selectionConfirmFloor(2)===2);

@@ -125,8 +125,9 @@ regA('啪咚猴', 0, (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Any',
-    // v3.996：minCount=0 — 對手不知道牌庫內容，玩家可選擇不找（fake fail to find）
-    minCount: 0, maxCount: 1,
+    // v5.607：minCount=1 — 卡面「任意選擇 1 張卡」無類別限定，牌庫非空(上方已 gate)一定找得到，
+    //   不適用「找不到」→ 強制選 1 張，不可跳過。
+    minCount: 1, maxCount: 1,
     // v2.993：衝衝鼓卡面無「給對手看過」→ 用私下版 resolver
     effectKey: 'search-generic-to-hand-private',
   });
