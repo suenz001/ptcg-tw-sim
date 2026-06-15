@@ -534,17 +534,31 @@ export async function clearUndoRequest(roomCode: string): Promise<void> {
  * 鏡射 leaveRoom 的 forfeit 邏輯但 winner = 自己（mySeatIdx）。
  * 寫入 status='ended' + gameState.phase='game-over' + winner=自己。
  */
-export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<void> {
+/**
+ * v5.605：宣告對手棄權前，用最新伺服器盤面確認真的還在等對手動作（鏡射 room-oracle 同名 helper）。
+ */
+function _waitingOnOpp(gs: any, seat: 0 | 1): boolean {
+  if (!gs || gs.phase !== 'playing') return false;
+  const opp = (1 - seat) as 0 | 1;
+  if (gs.pendingSelection) return gs.pendingSelection.actorIdx === opp;
+  const oppP = gs.players?.[opp], meP = gs.players?.[seat];
+  if (oppP && oppP.active == null && (oppP.bench?.length ?? 0) > 0) return true;
+  if (meP && meP.active == null && (meP.bench?.length ?? 0) > 0) return false;
+  return gs.activePlayerIndex === opp;
+}
+export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<boolean> {
   const uid = auth.currentUser?.uid;
-  if (!uid) return;
+  if (!uid) return false;
   const ref = doc(db, 'rooms', roomCode.toUpperCase());
   const snap = await getDoc(ref);
-  if (!snap.exists()) return;
+  if (!snap.exists()) return false;
   const data = snap.data() as RoomData;
-  if (data.status !== 'playing' || !data.gameState) return;
+  if (data.status !== 'playing' || !data.gameState) return false;
   const myIdx = findMySeatIdx(data.seats, uid);
-  if (myIdx !== mySeatIdx) return; // 防呆：呼叫者必須是 mySeatIdx 本人
+  if (myIdx !== mySeatIdx) return false; // 防呆：呼叫者必須是 mySeatIdx 本人
   const myGs = data.gameState;
+  // v5.605：對手其實已行動(我方畫面 stale)→ 不判，回傳 false 讓前端重新同步+提示
+  if (!_waitingOnOpp(myGs as any, mySeatIdx)) return false;
   const oppIdx = (1 - mySeatIdx) as 0 | 1;
   const oppName = myGs.players?.[oppIdx]?.name ?? `P${oppIdx + 1}`;
   const myName = myGs.players?.[mySeatIdx]?.name ?? `P${mySeatIdx + 1}`;
@@ -563,6 +577,7 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
     status: 'ended',
     updatedAt: serverTimestamp(),
   });
+  return true;
 }
 
 export async function leaveRoom(roomCode: string): Promise<void> {

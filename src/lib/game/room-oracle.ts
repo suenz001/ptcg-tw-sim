@@ -256,16 +256,33 @@ export async function setIdleTimeout(roomCode: string, sec: number): Promise<voi
 /**
  * v5.225 宣告對手棄權 — Oracle 版本，鏡射 room.ts 同名函式。
  */
-export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<void> {
+/**
+ * v5.605：宣告對手棄權前，用「最新伺服器盤面」確認真的還在等對手動作。
+ *   防「對手其實已補位/行動，但我方畫面 stale 沒同步 → 仍宣告獲勝 / 反被誤判」的情況。
+ *   邏輯鏡射 +page.svelte isWaitingOnOpponent。
+ */
+function _waitingOnOpp(gs: any, seat: 0 | 1): boolean {
+  if (!gs || gs.phase !== 'playing') return false;
+  const opp = (1 - seat) as 0 | 1;
+  if (gs.pendingSelection) return gs.pendingSelection.actorIdx === opp;
+  const oppP = gs.players?.[opp], meP = gs.players?.[seat];
+  if (oppP && oppP.active == null && (oppP.bench?.length ?? 0) > 0) return true;
+  if (meP && meP.active == null && (meP.bench?.length ?? 0) > 0) return false;
+  return gs.activePlayerIndex === opp;
+}
+
+export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): Promise<boolean> {
   const uid = oracleCurrentUid();
-  if (!uid) return;
+  if (!uid) return false;
   const code = roomCode.toUpperCase();
   try {
     await oracleTx(code, (cur) => {
-      if (cur.status !== 'playing' || !cur.gameState) return cur;
+      if (cur.status !== 'playing' || !cur.gameState) throw new Error('NOT_PLAYING');
       const myIdx = findMySeatIdx(cur.seats, uid);
-      if (myIdx !== mySeatIdx) return cur;
+      if (myIdx !== mySeatIdx) throw new Error('NOT_ME');
       const myGs = cur.gameState;
+      // v5.605：以最新伺服器盤面再驗證——對手其實已行動(我方畫面 stale)→ 不判
+      if (!_waitingOnOpp(myGs as any, mySeatIdx)) throw new Error('OPP_ACTED');
       const oppIdx = (1 - mySeatIdx) as 0 | 1;
       const oppName = myGs.players?.[oppIdx]?.name ?? ('P' + (oppIdx + 1));
       const myName = myGs.players?.[mySeatIdx]?.name ?? ('P' + (mySeatIdx + 1));
@@ -281,8 +298,11 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
       };
       return { ...cur, gameState: JSON.parse(JSON.stringify(forfeitGame)), status: 'ended' };
     });
-  } catch (err) {
+    return true;
+  } catch (err: any) {
+    if (err && (err.message === 'OPP_ACTED' || err.message === 'NOT_PLAYING' || err.message === 'NOT_ME')) return false;
     console.warn('[oracle claimOpponentForfeit]', err);
+    return false;
   }
 }
 

@@ -5038,13 +5038,21 @@
       showForfeitConfirm = false;
       return;
     }
+    showForfeitConfirm = false;
+    oppInactivityWarn = false;
     try {
-      await claimOpponentForfeit(roomCode, mySeatIdx as 0 | 1);
+      // v5.605：宣告前由 room lib 以「最新伺服器盤面」再驗證。回傳 false = 對手其實已行動
+      //   (我方畫面 stale)→ 不判，強制重新同步盤面 + 提示「輪到你了」，避免畫面沒同步而誤判勝負。
+      const granted = await claimOpponentForfeit(roomCode, mySeatIdx as 0 | 1);
+      if (granted === false) {
+        _forceAdoptNext = true;
+        _lastActionAt = Date.now();
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
+        alert('對手其實已經行動了，現在輪到你！畫面已為你重新同步。');
+      }
     } catch (e) {
       console.warn('[claimOpponentForfeit] failed:', e);
     }
-    showForfeitConfirm = false;
-    oppInactivityWarn = false;
   }
 
   async function dismissZombieRoom() {
