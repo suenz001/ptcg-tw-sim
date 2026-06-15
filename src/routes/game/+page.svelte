@@ -115,6 +115,8 @@
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
   let tEvent = $state<any>(null);
+  let tEvents = $state<any[]>([]);   // 多賽事：開放中賽事清單（大廳選擇器用）
+  let tSelEventId = $state('');      // 玩家目前選看/報名的賽事 id（空＝伺服器預設主賽事）
   let tMe = $state<any>({ registered: false });
   let tRegCount = $state(0);
   let tIsAdmin = $state(false);
@@ -146,7 +148,6 @@
   let tAlertTickTimer: ReturnType<typeof setInterval> | null = null;
   const tAlertReady = $derived(
     !isTournament
-    && !!tAlertEvent && tAlertEvent.status === 'running'
     && !!tAlertMatch && !tAlertMatch.entered
     && tAlertMatch.matchId !== tAlertDismissedId
     && (tAlertMatch.enterOpenAt ?? Infinity) <= tAlertNow
@@ -3891,11 +3892,23 @@
   }
   async function tournLoadEvent() {
     try {
-      const r = await tApi('/event');
+      // 多賽事：選了某場就帶 eventId 取「該場」詳細，否則取伺服器預設主賽事
+      const r = await tApi('/event' + (tSelEventId ? ('?eventId=' + encodeURIComponent(tSelEventId)) : ''));
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
+      tEvents = Array.isArray(r.events) ? r.events : [];
+      // 選中的賽事已結束/被刪除 → 回退預設
+      if (tSelEventId && !tEvents.some((e: any) => e._id === tSelEventId)) tSelEventId = '';
+      // 尚未選 → 預設伺服器主賽事，否則清單第一場
+      if (!tSelEventId) tSelEventId = (r.event && r.event._id) || (tEvents[0] && tEvents[0]._id) || '';
       tEvent = r.event ?? null; tMe = r.me ?? { registered: false }; tRegCount = r.regCount ?? 0; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
       if (tMe.registered && tMe.name && !tNickname) tNickname = tMe.name; // 預填已報名暱稱
     } catch { /* ignore */ }
+  }
+  // 多賽事：玩家點選某場 → 切換並重新載入該場詳細
+  function tSelectTournEvent(eid: string) {
+    if (tSelEventId === eid) return;
+    tSelEventId = eid; tError = '';
+    tournLoadEvent(); tBracketLoad();
   }
   // 載入賽程表（admin seed 後才有 matches）
   async function tBracketLoad() {
@@ -3975,14 +3988,14 @@
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; await tournLoadEvent(); }
+    try { const r = await tApi('/register', { eventId: tSelEventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   // v5.590 報到：報到階段按鈕，已報名者標記 checkedIn=true
   async function tCheckin() {
     tBusy = true; tError = '';
     try {
-      const r = await tApi('/checkin', {});
+      const r = await tApi('/checkin', { eventId: tSelEventId });
       if (r?.error) tError = r.error;
       else { tMe = { ...tMe, checkedIn: true }; tournLoadEvent(); }
     } catch (e: any) { tError = '報到失敗：' + (e?.message ?? e); }
@@ -3991,7 +4004,7 @@
   async function tournUnregister() {
     if (!confirm('確定退賽？')) return;
     tBusy = true; tError = '';
-    try { await tApi('/unregister', {}); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+    try { await tApi('/unregister', { eventId: tSelEventId }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   function tEventStatusLabel(st: string): string {
     return ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' } as any)[st] ?? st;
@@ -6140,6 +6153,17 @@
           <div class="tourn-chat-input"><span class="muted small" style="padding:4px 8px;">🔒 報名後才能發言，未報名僅能觀看</span></div>
         {/if}
       </div>
+      {#if tEvents.length > 1}
+        <div class="tourn-event-tabs" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px;">
+          <span class="muted small">賽事：</span>
+          {#each tEvents as _ev (_ev._id)}
+            <button type="button" class="tourn-evtab" onclick={() => tSelectTournEvent(_ev._id)} disabled={tBusy}
+              style="padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.85rem;border:1px solid {_ev._id === tSelEventId ? '#7fc97f' : '#3a4a5a'};background:{_ev._id === tSelEventId ? '#243a24' : '#1a2230'};color:{_ev._id === tSelEventId ? '#dfe' : '#bcd'};font-weight:{_ev._id === tSelEventId ? 700 : 400};">
+              {_ev.name} <span style="opacity:.7;">· {tEventStatusLabel(_ev.status)} · {_ev.regCount ?? 0}人{#if _ev.registered} · ✅{/if}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
       {#if tEvent}
         <div class="tourn-event">
           <h3>🏆 {tEvent.name}</h3>
