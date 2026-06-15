@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.44</title>
+<title>PTCG Oracle Admin v1.45</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.44</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.45</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -745,15 +745,21 @@ async function loadTournamentAdmin() {
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
     + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 可同時公布多場（時間不重疊），玩家各自報名。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
     + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>';
-  // v1.44：賽事選擇器（多場並列，點選切換詳細）
-  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px;align-items:center;">';
-  html += '<span style="color:#9ab;font-size:.85rem;">開放中賽事（' + evList.length + '）：</span>';
+  // v1.45：賽事下拉選單（多場切換顯示各自詳細）
+  var _stLabels = { draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' };
+  html += '<div style="margin:4px 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+  html += '<span style="color:#9ab;font-size:.9rem;font-weight:600;">選擇賽事（共 ' + evList.length + ' 場）：</span>';
   if (!evList.length) html += '<span style="color:#888;">目前沒有開放中賽事</span>';
-  else evList.forEach(function (e) {
-    var sel = (e._id === tevSelEventId);
-    var stL = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[e.status] || e.status;
-    html += '<button onclick="tevSelectEvent(\'' + e._id + '\')" style="padding:5px 12px;border-radius:6px;cursor:pointer;border:1px solid ' + (sel ? '#7fc97f' : '#456') + ';background:' + (sel ? '#243a24' : '#1a2230') + ';color:' + (sel ? '#dfe' : '#bcd') + ';font-weight:' + (sel ? '700' : '400') + ';">' + escapeHtml(e.name || '賽事') + ' <span style="opacity:.7;font-size:.8rem;">' + stL + ' · ' + (e.regCount || 0) + '人</span></button>';
-  });
+  else {
+    html += '<select onchange="tevSelectEvent(this.value)" style="padding:7px 12px;border-radius:6px;background:#1a2230;color:#dfe;border:1px solid #4a6a6a;font-size:.92rem;min-width:260px;cursor:pointer;">';
+    evList.forEach(function (e) {
+      var stL = _stLabels[e.status] || e.status;
+      var selAttr = (e._id === tevSelEventId) ? ' selected' : '';
+      html += '<option value="' + escapeHtml(e._id) + '"' + selAttr + '>' + escapeHtml(e.name || '賽事') + '（' + stL + ' · ' + (e.regCount || 0) + ' 人）</option>';
+    });
+    html += '</select>';
+    html += '<button style="' + btnS + '" onclick="loadTournamentAdmin()">🔄 重新整理</button>';
+  }
   html += '</div>';
   // 建立新賽事（永遠可用 — 可同時開多場）
   html += '<details style="border:1px solid #555;border-radius:8px;padding:14px;margin-bottom:14px;"' + (evList.length ? '' : ' open') + '>'
