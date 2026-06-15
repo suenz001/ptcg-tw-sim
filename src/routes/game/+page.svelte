@@ -3796,6 +3796,14 @@
   //   6. 寶可夢本體（z=99，最上）
   //   實作：array index 小 = z-index 高 = 越靠近本體 = 渲染在上層
   //   推入順序（由本體往外推）：進化堆反序 → 道具 → 特殊能量 → 普通能量
+  // v5.606 防呆：依 iid 去重，避免任何瞬時/異常重複 iid 讓 Svelte keyed {#each} 丟 each_key_duplicate（整頁崩潰白屏）。
+  //   正常情況下 iid 唯一→回傳原樣（不影響動畫）；萬一引擎瞬時產生重複 iid，寧可少顯示一張也不要整個對戰畫面崩掉。
+  function dedupeByIid<T extends { iid?: string }>(list: readonly T[] | null | undefined): T[] {
+    if (!list) return [];
+    const seen = new Set<string>(); const out: T[] = [];
+    for (const c of list) { const k = (c as any)?.iid; if (typeof k === 'string') { if (seen.has(k)) continue; seen.add(k); } out.push(c as T); }
+    return out;
+  }
   function attachedCardsOf(inst: CardInstance | null | undefined): Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> {
     if (!inst) return [];
     const out: Array<{ cardId: string; iid: string; kind: 'energy' | 'tool' | 'evo' }> = [];
@@ -3818,7 +3826,7 @@
     }
     for (const e of specialEnergies) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
     for (const e of basicEnergies) out.push({ cardId: e.cardId, iid: e.iid, kind: 'energy' });
-    return out;
+    return dedupeByIid(out);
   }
   function evoOptionsFor(fromIid: string): CardInstance[] {
     const entry = evolvableTargets.find(e => e.fromIid === fromIid);
@@ -7672,10 +7680,10 @@
       <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
       {#if isTournSpectator}
-        {#each myPlayer?.hand??[] as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
+        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
       {:else}
       {#key myIdx}
-      {#each myPlayer?.hand??[] as inst, i (inst.iid)}
+      {#each dedupeByIid(myPlayer?.hand) as inst, i (inst.iid)}
         {@const c=getCard(inst.cardId)}
         {@const n=(myPlayer?.hand.length??0)}
         {@const mid=(n-1)/2}

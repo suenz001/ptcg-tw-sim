@@ -384,6 +384,13 @@
   //   v5.116~v5.120 曾用 template 內 IIFE / reduce 嘗試 5 次 build fail，
   //   v5.121 才發現是另處 changelog raw {@const} 造成。本版用 script helper 最安全。
   type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined; subtype: string | undefined };
+  // v5.606 防呆：依 iid 去重，避免瞬時重複 iid 讓 keyed {#each} 崩潰（each_key_duplicate 白屏）。
+  function dedupeByIid<T extends { iid?: string }>(list: readonly T[] | null | undefined): T[] {
+    if (!list) return [];
+    const seen = new Set<string>(); const out: T[] = [];
+    for (const c of list) { const k = (c as any)?.iid; if (typeof k === 'string') { if (seen.has(k)) continue; seen.add(k); } out.push(c as T); }
+    return out;
+  }
   function groupDiscardList(list: CardInstance[]): DiscardGroup[] {
     const m = new Map<string, DiscardGroup>();
     for (const inst of list) {
@@ -1136,7 +1143,7 @@
     {#if myPlayer.hand.length === 0}
       <div class="mp-hand-empty">（手牌空）</div>
     {:else}
-      {#each myPlayer.hand as inst (inst.iid)}
+      {#each dedupeByIid(myPlayer.hand) as inst (inst.iid)}
         {@const c = cardOf(inst)}
         {@const playable = (
           playableBasicIids.has(inst.iid) || playableEvoIids.has(inst.iid) ||
