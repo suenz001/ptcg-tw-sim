@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.46</title>
+<title>PTCG Oracle Admin v1.47</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.46</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.47</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1043,6 +1043,22 @@ window.tevShowBracket = function (eventIdEnc) {
   _tsModal(h);
 };
 
+// v1.47 對戰 log 單行上色：依類型分類 + 卡牌連結 @iid@名@ 清成高亮卡名
+function _tsLogLineHtml(raw, i, p1name, p2name) {
+  var txt = (typeof raw === 'string') ? raw : (raw && raw.message ? raw.message : JSON.stringify(raw));
+  var esc = escapeHtml(txt).replace(/@[A-Za-z0-9_]+@([^@]*)@/g, '<span style="color:#ffd86b;font-weight:600;">$1</span>');
+  var color = '#dce8dc', bg = '', bold = false;
+  if (/遊戲開始|對戰開始|Setup |回合結束|換 .+ 行動|先手行動/.test(txt)) { color = '#ffe08a'; bold = true; bg = 'background:#241f0e;border-radius:4px;'; }
+  else if (/擲|硬幣|正面|反面/.test(txt)) { color = '#7fd7e8'; }
+  else if (/傷害|昏厥|擊倒|KO|破壞|爆擊/.test(txt)) { color = '#ff9a8a'; }
+  else if (/獎賞/.test(txt)) { color = '#ffcf5a'; bold = true; }
+  else if (p1name && txt.indexOf(p1name) === 0) { color = '#9fd0ff'; }
+  else if (p2name && txt.indexOf(p2name) === 0) { color = '#ffb3d9'; }
+  return '<div style="padding:3px 6px;' + bg + 'display:flex;gap:9px;align-items:baseline;border-bottom:1px solid #ffffff0a;">'
+    + '<span style="color:#6a7e6a;min-width:2.4em;text-align:right;flex:none;font-size:.78rem;">' + (i + 1) + '</span>'
+    + '<span style="color:' + color + ';' + (bold ? 'font-weight:700;' : '') + 'word-break:break-word;flex:1;">' + esc + '</span></div>';
+}
+
 window.tevShowMatchLog = async function (eventIdEnc, round, idx) {
   var eventId = decodeURIComponent(eventIdEnc);
   _tsModal('<div class="empty">載入對戰 log…</div>');
@@ -1061,11 +1077,16 @@ window.tevShowMatchLog = async function (eventIdEnc, round, idx) {
   if (!d.found || !d.log || !d.log.length) {
     h += '<p class="empty">這場沒有保存對戰 log（可能是輪空、未進場判負，或對局尚未產生過盤面）。</p>';
   } else {
-    h += '<div style="background:#0d130d;border:1px solid #2a3a2a;border-radius:6px;padding:10px 12px;font-family:monospace;font-size:.82rem;line-height:1.65;max-height:62vh;overflow:auto;">';
-    d.log.forEach(function (l, i) {
-      var txt = (typeof l === 'string') ? l : (l && l.message ? l.message : JSON.stringify(l));
-      h += '<div style="padding:1px 0;"><span style="color:#567;">' + (i + 1) + '.</span> ' + escapeHtml(txt) + '</div>';
-    });
+    h += '<div class="small" style="margin:0 0 7px;display:flex;gap:12px;flex-wrap:wrap;color:#aaa;">'
+      + '<span style="color:#ffe08a;">● 回合/階段</span>'
+      + '<span style="color:#7fd7e8;">● 擲硬幣</span>'
+      + '<span style="color:#ff9a8a;">● 傷害/昏厥</span>'
+      + '<span style="color:#ffcf5a;">● 獎賞卡</span>'
+      + '<span style="color:#9fd0ff;">● ' + escapeHtml(d.p1name || '玩家1') + '</span>'
+      + '<span style="color:#ffb3d9;">● ' + escapeHtml(d.p2name || '玩家2') + '</span>'
+      + '<span style="color:#ffd86b;">● 卡牌</span></div>';
+    h += '<div style="background:#0e140e;border:1px solid #2f422f;border-radius:8px;padding:6px 4px;font-size:.9rem;line-height:1.5;max-height:60vh;overflow:auto;">';
+    d.log.forEach(function (l, i) { h += _tsLogLineHtml(l, i, d.p1name, d.p2name); });
     h += '</div>';
   }
   _tsModal(h);
