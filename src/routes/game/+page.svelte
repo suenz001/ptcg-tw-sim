@@ -6909,7 +6909,9 @@
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => {
         // v5.566：手機直式離開鈕也要走投降確認(原直接 leaveOnlineGame 漏了確認視窗)
-        if (mode === 'online') surrenderLeave();
+        // 觀戰者不投降：錦標賽走離開觀戰、一般線上走離開房間
+        if (mode === 'online' && isSpectator) { if (isTournSpectator) tLeaveSpectate(); else leaveOnlineGame(); }
+        else if (mode === 'online') surrenderLeave();
         else { game = null; mode = null; }
       }}
       undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}
@@ -6919,7 +6921,7 @@
 
   <!-- ── 頂部資訊列 ── -->
   <header class="battle-header">
-    {#if mode === 'online'}
+    {#if mode === 'online' && !isSpectator}
       <button class="small-back" onclick={surrenderLeave}>🏳 投降離開</button>
     {:else}
       <a href="{base}/" class="small-back">← 首頁</a>
