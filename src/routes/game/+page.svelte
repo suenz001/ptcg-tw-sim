@@ -3946,6 +3946,9 @@
   }
   // 觀戰：進入某場對戰（read-only，伺服器已 redact 雙方手牌；本端額外把手牌渲染成卡背）
   async function tSpectate(roomId: string) {
+    // v5.604 防呆：若這是「我自己參賽」的對戰 → 走進場(看自己手牌)而非觀戰(redact 手牌)。
+    //   伺服器 /spectate/list v0.43 已排除自己的場，這裡再保險一層(防快取/stale 清單誤點)。
+    if (tMyMatch && tMyMatch.roomId && tMyMatch.roomId === roomId) { return tEnterMatch(); }
     tError = ''; tBusy = true;
     try {
       isTournSpectator = true; tSpectateRoom = roomId; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; tStep = 'waiting';
