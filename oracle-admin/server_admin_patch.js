@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2188,9 +2188,29 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const TREGS = db.collection('tournamentRegistrations');
     const TADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
     function isTournAdmin(id) { return !!(id && id.verified && id.email && TADMIN_EMAILS.includes(String(id.email).toLowerCase())); }
-    // 目前唯一進行中的賽事（status 非 finished）
+    // v0.40 多賽事：可同時公布多場（時間不重疊），玩家各自報名。
+    //   listOpenEvents＝所有未結束賽事；getEventById＝精確定位；resolveEventFromReq＝端點優先吃 body/query 的 eventId，
+    //   無 eventId 時 fallback getActiveEvent（向後相容尚未多賽事化的舊前端）。
+    async function listOpenEvents() {
+      return await TEVENTS.find({ status: { $ne: 'finished' } }).sort({ createdAt: 1 }).toArray();
+    }
+    async function getEventById(eventId) {
+      if (!eventId) return null;
+      return await TEVENTS.findOne({ _id: String(eventId) });
+    }
+    // 舊前端相容：多場開放時挑「最該顯示」的一場（running > checkin > bracket_ready > registration > draft，同階取 createdAt 最早）。
+    const _EV_RANK = { running: 0, checkin: 1, bracket_ready: 2, registration: 3, draft: 4 };
     async function getActiveEvent() {
-      return await TEVENTS.findOne({ status: { $ne: 'finished' } });
+      const all = await listOpenEvents();
+      if (!all.length) return null;
+      all.sort((a, b) => ((_EV_RANK[a.status] != null ? _EV_RANK[a.status] : 9) - (_EV_RANK[b.status] != null ? _EV_RANK[b.status] : 9)) || ((a.createdAt || 0) - (b.createdAt || 0)));
+      return all[0];
+    }
+    // 端點解析目標賽事：優先 body/query 的 eventId（多賽事化的 admin/前端），否則 fallback 舊單場行為。
+    async function resolveEventFromReq(req) {
+      const eid = (req.body && req.body.eventId) || (req.query && req.query.eventId) || null;
+      if (eid) return await getEventById(eid);
+      return await getActiveEvent();
     }
     // v0.34：把 deckEntries 轉成可貼回「編輯我的牌組」匯入功能的文字格式
     function deckEntriesToText(entries, deckName) {
@@ -2215,7 +2235,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(409).json({ error: '目前沒有賽事' });
         if (ev.status !== 'checkin') return res.status(409).json({ error: '目前不在報到階段' });
         const reg = await TREGS.findOne({ _id: ev._id + '__' + id.uid });
@@ -2228,7 +2248,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         let me = { registered: false, checkedIn: false };
         if (ev) {
           const reg = await TREGS.findOne({ _id: ev._id + '__' + id.uid });
@@ -2236,18 +2256,31 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         let regCount = 0;
         if (ev) regCount = await TREGS.countDocuments({ eventId: ev._id });
+        // v0.40 多賽事：玩家可能同時有多場 running → 掃描所有進行中賽事找我這輪的對戰
         let myMatch = null;
-        if (ev && ev.status === 'running') {
-          const mm = await TMATCH.findOne({ eventId: ev._id, round: ev.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
-          if (mm) {
-            const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
-            const nsMin = (ev.noShowMin > 0 ? ev.noShowMin : 5);
-            const enterOpenAt = (ev.roundStartedAt || 0) + cdMin * 60000;
-            const mySeat = (mm.p1uid === id.uid) ? 0 : 1;
-            myMatch = { matchId: mm._id, round: mm.round, oppName: (mm.p1uid === id.uid ? mm.p2name : mm.p1name), enterOpenAt, noShowDeadline: enterOpenAt + nsMin * 60000, entered: !!(mm.entered && mm.entered[mySeat]), roomId: mm.roomId || null };
+        {
+          const _runEv = await TEVENTS.find({ status: 'running' }).toArray();
+          for (const _e of _runEv) {
+            const mm = await TMATCH.findOne({ eventId: _e._id, round: _e.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+            if (mm) {
+              const cdMin = (_e.roundCountdownMin != null ? _e.roundCountdownMin : 3);
+              const nsMin = (_e.noShowMin > 0 ? _e.noShowMin : 5);
+              const enterOpenAt = (_e.roundStartedAt || 0) + cdMin * 60000;
+              const mySeat = (mm.p1uid === id.uid) ? 0 : 1;
+              myMatch = { matchId: mm._id, eventId: _e._id, round: mm.round, oppName: (mm.p1uid === id.uid ? mm.p2name : mm.p1name), enterOpenAt, noShowDeadline: enterOpenAt + nsMin * 60000, entered: !!(mm.entered && mm.entered[mySeat]), roomId: mm.roomId || null };
+              break;
+            }
           }
         }
-        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch, serverNow: Date.now() });
+        // v0.40：附上所有開放中賽事清單（多賽事前端用；舊前端忽略此欄、仍讀單一 event）
+        const _openList = await listOpenEvents();
+        const _events = [];
+        for (const _e of _openList) {
+          const _reg = await TREGS.findOne({ _id: _e._id + '__' + id.uid });
+          const _cnt = await TREGS.countDocuments({ eventId: _e._id });
+          _events.push({ _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: _cnt, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null });
+        }
+        res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch, events: _events, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2256,7 +2289,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(409).json({ error: '目前沒有開放報名的賽事' });
         if (ev.status !== 'registration') return res.status(409).json({ error: '目前不在報名階段' });
         const deckEntries = req.body && req.body.deckEntries;
@@ -2284,7 +2317,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev || ev.status !== 'registration') return res.status(409).json({ error: '目前無法退賽' });
         await TREGS.deleteOne({ _id: ev._id + '__' + id.uid });
         res.json({ ok: true });
@@ -2297,8 +2330,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可建立賽事' });
-        const exist = await getActiveEvent();
-        if (exist) return res.status(409).json({ error: '已有進行中的賽事，請先結束或刪除它（一次只辦一個）' });
+        // v0.40：移除「一次只辦一個」限制 — 可同時公布多場（時間不重疊），玩家各自報名。
         const b = req.body || {};
         const regOpen = Number(b.registrationOpenAt) > 0 ? Number(b.registrationOpenAt) : null;
         const regClose = Number(b.registrationCloseAt) > 0 ? Number(b.registrationCloseAt) : null;
@@ -2329,7 +2361,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
         const st = String((req.body && req.body.status) || '');
         const valid = ['draft', 'registration', 'checkin', 'bracket_ready', 'running', 'finished'];
@@ -2345,7 +2377,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
         const b = req.body || {};
         const set = {};
@@ -2369,7 +2401,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
         await TREGS.deleteMany({ eventId: ev._id });
         await TMATCH.deleteMany({ eventId: ev._id });
@@ -2384,10 +2416,26 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.json({ event: null, regs: [] });
         const regs = await TREGS.find({ eventId: ev._id }).toArray();
         res.json({ event: ev, regs: regs.map((r) => ({ uid: r.uid, email: r.email, name: r.name, checkedIn: !!r.checkedIn, deckCount: deckCount(r.deckEntries), deckText: deckEntriesToText(r.deckEntries, r.deckName), registeredAt: r.registeredAt })) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // v0.40 管理員：列出所有開放中（未結束）賽事 — 多賽事管理用（admin 頁切換顯示）
+    app.get('/api/tournament/admin/events', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const evs = await listOpenEvents();
+        const out = [];
+        for (const e of evs) {
+          const cnt = await TREGS.countDocuments({ eventId: e._id });
+          out.push({ _id: e._id, name: e.name, status: e.status, maxPlayers: e.maxPlayers, regCount: cnt, roundLimitMin: e.roundLimitMin, noShowMin: e.noShowMin, roundCountdownMin: e.roundCountdownMin, registrationOpenAt: e.registrationOpenAt || null, registrationCloseAt: e.registrationCloseAt || null, currentRound: e.currentRound, rounds: e.rounds, createdAt: e.createdAt || 0 });
+        }
+        res.json({ events: out });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2411,8 +2459,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const text = String((req.body && req.body.text) || '').replace(/\s+/g, ' ').trim().slice(0, 200);
         if (!text) return res.status(400).json({ error: '訊息不可空白' });
         // 只有報名者（或管理員）可發言；未報名僅能觀看
-        const evc = await getActiveEvent();
-        const regc = evc ? await TREGS.findOne({ eventId: evc._id, uid: id.uid }) : null;
+        // v0.40 多賽事：在任一開放中賽事報名者即可發言
+        const _openEv = await listOpenEvents();
+        const _openIds = _openEv.map((e) => e._id);
+        const regc = _openIds.length ? await TREGS.findOne({ eventId: { $in: _openIds }, uid: id.uid }) : null;
         if (!regc && !isTournAdmin(id)) return res.status(403).json({ error: '只有報名者可以發言，未報名僅能觀看' });
         const now = Date.now();
         if (now - (_chatRate.get(id.uid) || 0) < 1200) return res.status(429).json({ error: '發言太快，請稍候' });
@@ -2572,7 +2622,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
         const r = await seedEventBracket(ev);
         if (r.error) return res.status(400).json({ error: r.error });
@@ -2586,7 +2636,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.json({ event: null, matches: [] });
         const matches = await TMATCH.find({ eventId: ev._id }).sort({ round: 1, idx: 1 }).toArray();
         res.json({
@@ -2600,7 +2650,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.json({ matches: [] });
         const ms = await TMATCH.find({ eventId: ev._id, status: 'playing', roomId: { $ne: null } }).toArray();
         res.json({ matches: ms.map((m) => ({ roomId: m.roomId, round: m.round, p1name: m.p1name, p2name: m.p2name })) });
@@ -2625,9 +2675,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
-        if (!ev || ev.status !== 'running') return res.json({ error: '賽事尚未開始或已結束' });
-        const m = await TMATCH.findOne({ eventId: ev._id, round: ev.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+        // v0.40 多賽事：玩家可能同時報名多場 → 跨所有「進行中」賽事找「我這輪可進場」的對戰。
+        const _runEv = await TEVENTS.find({ status: 'running' }).toArray();
+        let ev = null, m = null;
+        for (const _e of _runEv) {
+          const _mm = await TMATCH.findOne({ eventId: _e._id, round: _e.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+          if (_mm) { ev = _e; m = _mm; break; }
+        }
+        if (!ev) return res.json({ error: '賽事尚未開始或已結束' });
         if (!m) return res.json({ error: '你目前沒有可進行的對戰（可能在等對手、等下一輪、或已淘汰）' });
         // 倒數休息 gate：到 enterOpenAt 才可進場
         const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
@@ -2668,9 +2723,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await getActiveEvent();
-        if (!ev || ev.status !== 'running') return res.json({ ok: true, note: '賽事未進行中' });
-        const m = await TMATCH.findOne({ eventId: ev._id, status: 'playing', $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+        // v0.40 多賽事：跨所有進行中賽事找我「對戰中」的場
+        const _runEv = await TEVENTS.find({ status: 'running' }).toArray();
+        let ev = null, m = null;
+        for (const _e of _runEv) {
+          const _mm = await TMATCH.findOne({ eventId: _e._id, status: 'playing', $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+          if (_mm) { ev = _e; m = _mm; break; }
+        }
+        if (!ev || !m) return res.json({ ok: true, note: '無進行中對戰' });
         if (!m) return res.json({ ok: true, note: '無進行中對戰' });
         const mySeat = (id.uid === m.p1uid) ? 0 : 1;
         const winSeat = 1 - mySeat;
@@ -2711,7 +2771,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.json({ pending: [] });
         const ms = await TMATCH.find({ eventId: ev._id, status: { $ne: 'done' } }).sort({ round: 1, idx: 1 }).toArray();
         res.json({ pending: ms.map((m) => ({ matchId: m._id, round: m.round, idx: m.idx, p1name: m.p1name, p2name: m.p2name, hasP1: !!m.p1uid, hasP2: !!m.p2uid, status: m.status })) });
@@ -2749,7 +2809,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.status(404).json({ error: '沒有進行中的賽事' });
         const champUid = (req.body && req.body.championUid) || null;
         const champName = (req.body && req.body.championName) || null;
@@ -2837,16 +2897,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
-        const ev = await getActiveEvent();
+        const ev = await resolveEventFromReq(req);
         if (!ev) return res.json({ ties: [] });
         const ties = await TMATCH.find({ eventId: ev._id, status: 'tie' }).toArray();
         res.json({ ties: ties.map((m) => ({ matchId: m._id, round: m.round, p1name: m.p1name, p2name: m.p2name })) });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
-    async function tournamentSchedulerTick() {
-      try {
-        const ev = await getActiveEvent();
-        if (!ev) return;
+    // v0.40：把單一賽事的排程處理抽成 per-event，scheduler 迴圈所有開放賽事 → 多場同時並行推進。
+    async function _processEventTick(ev) {
         const now = Date.now();
         if (ev.status === 'draft' && ev.registrationOpenAt && now >= ev.registrationOpenAt) {
           await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'registration' } });
@@ -2965,6 +3023,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
             await postSystemChat('⏰ 對局時限到：' + wName + ' 取得的獎賞卡較多（剩餘較少），勝出並自動晉級。');
             await advanceOrFinish(m, wUid, wName);
           }
+        }
+    }
+    async function tournamentSchedulerTick() {
+      try {
+        const evs = await listOpenEvents();
+        for (const ev of evs) {
+          try { await _processEventTick(ev); }
+          catch (e) { console.warn('[tournament] event tick failed:', ev && ev._id, e && e.message); }
         }
       } catch (e) { console.warn('[tournament] scheduler tick failed:', e && e.message); }
     }

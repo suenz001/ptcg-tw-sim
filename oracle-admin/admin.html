@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.43</title>
+<title>PTCG Oracle Admin v1.44</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.43</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.44</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -706,35 +706,59 @@ async function api(path, options = {}) {
 // ── 🏆 錦標賽管理（呼叫 /api/tournament/admin/* 端點，admin token）──
 // v1.40：ms 時間戳 -> datetime-local input 值（本地時區），給編輯表單預填用
 function tevMsToLocal(ms){ if(!ms) return ''; try { var d=new Date(Number(ms) - new Date().getTimezoneOffset()*60000); return d.toISOString().slice(0,16); } catch(e){ return ''; } }
+var tevSelEventId = null; // v1.44 多賽事：目前選中的賽事 id
+window.tevSelectEvent = function (eid) { tevSelEventId = eid; loadTournamentAdmin(); };
 async function loadTournamentAdmin() {
   const el = document.getElementById('tab-tournament');
   if (!el) return;
   var L = {}; try { L = JSON.parse(localStorage.getItem('tevLastSettings') || '{}') || {}; } catch (e) { L = {}; }
   el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
-  let data = { event: null, regs: [] };
+  // v1.44 多賽事：先抓所有開放中賽事清單，再選一場顯示詳細（建立新賽事永遠可用）
+  let evList = [];
   try {
-    data = await api('/api/tournament/admin/event/registrations');
-    if (data.error) { el.innerHTML = '<div style="padding:16px;color:#c00;">' + escapeHtml(data.error) + '</div>'; return; }
+    const lr = await api('/api/tournament/admin/events');
+    if (lr && lr.error) { el.innerHTML = '<div style="padding:16px;color:#c00;">' + escapeHtml(lr.error) + '</div>'; return; }
+    if (lr && Array.isArray(lr.events)) evList = lr.events;
   } catch (e) {
     el.innerHTML = '<div style="padding:16px;color:#c00;">載入失敗：' + escapeHtml(e.message) + '<br><span style="color:#888;font-size:.85rem;">（錦標賽 API 需正式站伺服器已部署最新版）</span></div>';
     return;
   }
+  // 選中的賽事：沿用上次選擇，否則預設第一場
+  if (tevSelEventId && !evList.some(function (e) { return e._id === tevSelEventId; })) tevSelEventId = null;
+  if (!tevSelEventId && evList.length) tevSelEventId = evList[0]._id;
+  let data = { event: null, regs: [] };
+  if (tevSelEventId) {
+    try { data = await api('/api/tournament/admin/event/registrations?eventId=' + encodeURIComponent(tevSelEventId)); }
+    catch (e) { data = { event: null, regs: [] }; }
+    if (!data || data.error) data = { event: null, regs: [] };
+  }
   const ev = data.event;
   let tieData = { ties: [] };
-  if (ev) { try { tieData = await api('/api/tournament/admin/tie-matches'); if (!tieData || !tieData.ties) tieData = { ties: [] }; } catch (e) { tieData = { ties: [] }; } }
+  if (ev) { try { tieData = await api('/api/tournament/admin/tie-matches?eventId=' + encodeURIComponent(ev._id)); if (!tieData || !tieData.ties) tieData = { ties: [] }; } catch (e) { tieData = { ties: [] }; } }
   let pendData = { pending: [] };
-  if (ev && ev.status === 'running') { try { pendData = await api('/api/tournament/admin/pending-matches'); if (!pendData || !pendData.pending) pendData = { pending: [] }; } catch (e) { pendData = { pending: [] }; } }
+  if (ev && ev.status === 'running') { try { pendData = await api('/api/tournament/admin/pending-matches?eventId=' + encodeURIComponent(ev._id)); if (!pendData || !pendData.pending) pendData = { pending: [] }; } catch (e) { pendData = { pending: [] }; } }
   let champData = { champions: [] };
   try { champData = await api('/api/tournament/champions'); if (!champData || !champData.champions) champData = { champions: [] }; } catch (e) { champData = { champions: [] }; }
   const btnS = 'padding:6px 14px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;border-radius:6px;cursor:pointer;';
   const btnD = 'padding:6px 14px;border:1px solid #7a3a3a;background:#2e1e1e;color:#fdd;border-radius:6px;cursor:pointer;';
   const btnW = 'padding:6px 14px;border:1px solid #b8862a;background:#3a2e12;color:#ffd98a;border-radius:6px;cursor:pointer;';
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
-    + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 一次一個賽事。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
+    + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 可同時公布多場（時間不重疊），玩家各自報名。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
     + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>';
-  if (!ev) {
-    html += '<div style="border:1px solid #555;border-radius:8px;padding:14px;">'
-      + '<h3 style="margin:0 0 10px;">建立新賽事</h3>'
+  // v1.44：賽事選擇器（多場並列，點選切換詳細）
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px;align-items:center;">';
+  html += '<span style="color:#9ab;font-size:.85rem;">開放中賽事（' + evList.length + '）：</span>';
+  if (!evList.length) html += '<span style="color:#888;">目前沒有開放中賽事</span>';
+  else evList.forEach(function (e) {
+    var sel = (e._id === tevSelEventId);
+    var stL = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[e.status] || e.status;
+    html += '<button onclick="tevSelectEvent(\'' + e._id + '\')" style="padding:5px 12px;border-radius:6px;cursor:pointer;border:1px solid ' + (sel ? '#7fc97f' : '#456') + ';background:' + (sel ? '#243a24' : '#1a2230') + ';color:' + (sel ? '#dfe' : '#bcd') + ';font-weight:' + (sel ? '700' : '400') + ';">' + escapeHtml(e.name || '賽事') + ' <span style="opacity:.7;font-size:.8rem;">' + stL + ' · ' + (e.regCount || 0) + '人</span></button>';
+  });
+  html += '</div>';
+  // 建立新賽事（永遠可用 — 可同時開多場）
+  html += '<details style="border:1px solid #555;border-radius:8px;padding:14px;margin-bottom:14px;"' + (evList.length ? '' : ' open') + '>'
+      + '<summary style="cursor:pointer;color:#bfe0ff;font-weight:700;">➕ 建立新賽事</summary>'
+      + '<div style="padding-top:10px;">'
       + '<p style="color:#9ab;font-size:.8rem;margin:2px 0 8px;">（以下預設值＝你上次建立賽事的設定）</p>'
       + '<label style="display:block;margin:8px 0;">賽事名稱：<input id="tev-name" value="' + escapeHtml(L.name || '錦標賽') + '" style="width:60%;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">人數上限（空白=不限，≤64）：<input id="tev-max" value="' + escapeHtml(String(L.maxPlayers || '')) + '" placeholder="不限" style="width:120px;padding:5px;"></label>'
@@ -744,8 +768,8 @@ async function loadTournamentAdmin() {
       + '<label style="display:block;margin:8px 0;">報名開始時間（可不填＝立即開放）：<input id="tev-regopen" type="datetime-local" style="padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名截止時間（可不填＝手動開賽；填了到點自動公布賽程並開賽）：<input id="tev-regclose" type="datetime-local" style="padding:5px;"></label>'
       + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事（單敗淘汰 Bo1）</button>'
-      + '</div>';
-  } else {
+      + '</div></details>';
+  if (ev) {
     const stLabel = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[ev.status] || ev.status;
     html += '<div style="border:1px solid #4a6a4a;border-radius:8px;padding:14px;margin-bottom:14px;">'
       + '<h3 style="margin:0 0 6px;">' + escapeHtml(ev.name) + '</h3>'
@@ -854,6 +878,7 @@ window.tevUpdate = async function (btn) {
   const toMs = (id) => { const el = document.getElementById(id); const v = el && el.value; return v ? new Date(v).getTime() : null; };
   const g = (id) => { const el = document.getElementById(id); return el ? el.value : undefined; };
   const body = {
+    eventId: tevSelEventId,
     name: g('tev-e-name'),
     maxPlayers: g('tev-e-max'),
     roundLimitMin: g('tev-e-round'),
@@ -883,7 +908,7 @@ window.tevResolveTie = async function (matchId, seat, btn) {
 window.tevForceFinish = async function (btn) {
   if (!confirm('確定強制結束目前賽事（無冠軍）？僅在賽程卡死無法正常完賽時使用。')) return;
   btn.disabled = true;
-  try { const d = await api('/api/tournament/admin/event/force-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽事已強制結束。'); }
+  try { const d = await api('/api/tournament/admin/event/force-finish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: tevSelEventId }) }); if (d.error) alert(d.error); else alert('賽事已強制結束。'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
@@ -924,20 +949,20 @@ window.tevChampDelete = async function (id, btn) {
 window.tevSeed = async function (btn) {
   if (!confirm('依目前報名名單立即產生賽程並開賽？（之後不可再報名）')) return;
   btn.disabled = true;
-  try { const d = await api('/api/tournament/admin/bracket/seed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); if (d.error) alert(d.error); else alert('賽程已產生：' + d.rounds + ' 輪 / ' + d.players + ' 人，賽事開始！'); }
+  try { const d = await api('/api/tournament/admin/bracket/seed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: tevSelEventId }) }); if (d.error) alert(d.error); else alert('賽程已產生：' + d.rounds + ' 輪 / ' + d.players + ' 人，賽事開始！'); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
 window.tevStatus = async function (st, btn) {
   btn.disabled = true;
-  try { const d = await api('/api/tournament/admin/event/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: st }) }); if (d.error) alert(d.error); }
+  try { const d = await api('/api/tournament/admin/event/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: st, eventId: tevSelEventId }) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
 window.tevDelete = async function (btn) {
-  if (!confirm('刪除目前賽事（含所有報名）？')) return;
+  if (!confirm('刪除這場選中的賽事（含所有報名）？')) return;
   btn.disabled = true;
-  try { const d = await api('/api/tournament/admin/event/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); if (d.error) alert(d.error); }
+  try { const d = await api('/api/tournament/admin/event/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eventId: tevSelEventId }) }); if (d.error) alert(d.error); else tevSelEventId = null; }
   catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
