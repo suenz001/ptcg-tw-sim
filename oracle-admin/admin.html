@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.47</title>
+<title>PTCG Oracle Admin v1.48</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.47</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.48</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1043,10 +1043,15 @@ window.tevShowBracket = function (eventIdEnc) {
   _tsModal(h);
 };
 
-// v1.47 對戰 log 單行上色：依類型分類 + 卡牌連結 @iid@名@ 清成高亮卡名
+// v1.48 對戰 log 單行上色：依類型分類 + 卡牌連結 PUA marker(U+E100 iid U+E101 名 U+E102) 清成高亮卡名
+//   用 String.fromCharCode 純 ASCII 建 regex，避免不可見 PUA 字元在 Python patch/scp 上傳途中遺失。
 function _tsLogLineHtml(raw, i, p1name, p2name) {
   var txt = (typeof raw === 'string') ? raw : (raw && raw.message ? raw.message : JSON.stringify(raw));
-  var esc = escapeHtml(txt).replace(/@[A-Za-z0-9_]+@([^@]*)@/g, '<span style="color:#ffd86b;font-weight:600;">$1</span>');
+  var _b0 = String.fromCharCode(57600), _b1 = String.fromCharCode(57601), _b2 = String.fromCharCode(57602);
+  var _cls = '[^' + _b0 + _b1 + _b2 + ']+';
+  var _cardRe = new RegExp(_b0 + _cls + _b1 + '(' + _cls + ')' + _b2, 'g');
+  var _stripRe = new RegExp('[' + _b0 + _b1 + _b2 + ']', 'g');
+  var esc = escapeHtml(txt).replace(_cardRe, '<span style="color:#ffd86b;font-weight:600;">$1</span>').replace(_stripRe, '');
   var color = '#dce8dc', bg = '', bold = false;
   if (/遊戲開始|對戰開始|Setup |回合結束|換 .+ 行動|先手行動/.test(txt)) { color = '#ffe08a'; bold = true; bg = 'background:#241f0e;border-radius:4px;'; }
   else if (/擲|硬幣|正面|反面/.test(txt)) { color = '#7fd7e8'; }
