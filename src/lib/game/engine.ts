@@ -2253,7 +2253,7 @@ function handlePlaying(
     const _preResolveStateForRetry = state;
     const _coinFlippedBeforeResolve = state.coinFlippedThisAttack === true;
     // Guard：若明確指定 senderIdx，必須等於 actorIdx — 防止對手搶先操作
-    if (action.senderIdx !== undefined && action.senderIdx !== actorIdx) return state;
+    if (action.senderIdx != null && action.senderIdx !== actorIdx) return state;
     const endTurnAfter = params?.endTurnAfter === true;
     const resolver = RESOLVERS.get(effectKey);
     let newState: GameState = { ...state, pendingSelection: undefined };
@@ -5736,7 +5736,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v2.124：偵測 endTurnContinueAfterKO — 表示這是 self-KO 後補戰鬥位
     // → 補完後 re-dispatch END_TURN 並設 endTurnSkipCheckup（避免重跑 checkup 造成重複放傷害），
     // 直接進入 finalize（清旗標 + 切換玩家 + 抽牌）。
-    if (state.endTurnContinueAfterKO !== undefined) {
+    // 錦標賽修正：用 != null（非 !== undefined）— 錦標賽 gameState 存 MongoDB，undefined 會被 round-trip 成 null，
+    //   原 !== undefined 對 null 為真 → 誤入 self-KO continue 分支、把 activePlayerIndex 設成 null →
+    //   重跑 END_TURN 時 players[null].active 崩潰「Cannot read properties of undefined (reading active)」。
+    if (state.endTurnContinueAfterKO != null) {
       const continueIdx = state.endTurnContinueAfterKO;
       let cleared: GameState = {
         ...newState,
