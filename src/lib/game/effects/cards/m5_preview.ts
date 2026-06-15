@@ -1056,55 +1056,7 @@ regPost('戰槌龍ex|亂暴錘', (state, aIdx) => {
   });
 });
 
-// ── B1. 喇叭啄鳥|飛翔 — 30 + 擲幣（反失敗，正面 → 下回合不受招式傷害和效果） ─
-//   卡面：「擲 1 次硬幣，若為反面，此招式失敗。若為正面，下個對手的回合，
-//          這隻寶可夢不會受到招式的傷害和效果。」
-regPre('喇叭啄鳥|飛翔', (state, aIdx) => {
-  const r = flipCoinsWithLog(state, 1, '飛翔', aIdx);
-  if (r.heads === 0) {
-    return { state: addLog(r.state, '飛翔：擲幣反面 → 招式失敗', aIdx), damage: 0 };
-  }
-  return { state: addLog(r.state, '飛翔：擲幣正面 → 30（POST 設下回合免疫）', aIdx), damage: 30 };
-});
-regPost('喇叭啄鳥|飛翔', (state, aIdx) => {
-  // 只在 PRE 已擲出正面時設 immune（PRE 反面時 damage=0，POST 仍會跑，需 gate）
-  // 但 PRE 已 log「招式失敗」— POST 不知道 PRE 結果。最保險：檢查最近 log，
-  // 或讓 POST 無條件設 immune（簡化但 PRE 反面也設就違反卡面）。
-  // 採用：POST 自身傷害 > 0 才設 (PRE 反面 damage=0 → POST 來時 damage 沒加)
-  // 但這個 attacker.active.damage 不會被自己攻擊改 — 改檢查「招式有沒有命中」需要 attack-time snapshot。
-  // 折衷：POST 階段重新擲一次幣 → 不行 (PRE 已擲)。
-  // 採取最簡可靠做法：在 PRE 反面時用 customField 'm5_brave_bird_fail' 寫入 state，
-  // POST 讀此 field 決定是否設 immune。但 state 不能加新欄位（Rule 13）。
-  //
-  // 改用更乾淨做法：拆成 PRE-only 設 immune（只在正面時透過 PRE 返回 state 變更）。
-  // 但 PRE 不應該寫 player flags。
-  //
-  // 最終方案：在 PRE 寫 immune flag 直接到 attacker.active（避開 POST）—
-  // PRE 已 return state 包含修改，OK 用。重寫 PRE：
-
-  // POST 無條件設 immune — PRE 已 handle 反面失敗的 damage=0
-  // 但卡面說「若為正面，下個對手的回合不受招式傷害和效果」— 必須只在正面時設。
-  // 由於 PRE/POST split 困難，採取一個替代：把 immune 設邏輯搬到 PRE。
-  // → 註冊兩個版本不可能，故 POST 改為「不做事」，PRE 改寫處理 immune
-  return state;  // POST 不做事，immune 已在 PRE 處理
-});
-// 重新註冊 PRE：在 PRE 內處理 immune（覆蓋上面那次 regPre — TypeScript Map.set 後者勝）
-regPre('喇叭啄鳥|飛翔', (state, aIdx) => {
-  const r = flipCoinsWithLog(state, 1, '飛翔', aIdx);
-  if (r.heads === 0) {
-    return { state: addLog(r.state, '飛翔：擲幣反面 → 招式失敗', aIdx), damage: 0 };
-  }
-  // 正面：30 點傷害 + 設下回合不受招式（用既有 immuneToAllAttackNextTurn flag）
-  const s = updatePlayer(
-    addLog(r.state, '飛翔：擲幣正面 → 30，下個對手回合不受招式傷害和效果', aIdx),
-    aIdx,
-    p => {
-      if (!p.active) return p;
-      return { ...p, active: { ...p.active, immuneToAllAttackNextTurn: true } };
-    },
-  );
-  return { state: s, damage: 30 };
-});
+// ── B1. 喇叭啄鳥|飛翔 — 已移至 effects.ts coinFlyPre(30) 統一處理（單擲決定成敗+免疫，retry-aware）。
 
 // ── B2. 下石鳥|配送挑戰 — 2 次擲幣全正面 → 牌庫選 1 寶可夢到備戰 ─
 //   卡面：「擲 2 次硬幣，若全部為正面，從自己的牌庫選擇 1 張寶可夢，放置於備戰區。

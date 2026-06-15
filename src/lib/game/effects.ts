@@ -5766,6 +5766,30 @@ regPre('斯魔茶|偷襲', coinTailsFailPre(30, '偷襲'));
 regPre('搬運小匠|全力拳', coinTailsFailPre(40, '全力拳'));
 regPre('阿羅拉 地鼠|偷襲', coinTailsFailPre(30, '偷襲'));
 
+// ── 飛翔型：擲 1 硬幣 — 反面→招式失敗(0傷,不設免疫)；正面→base傷害 + 下個對手回合
+//   自身免疫招式的傷害與效果(immuneToAllAttackNextTurn)。卡面「擲1次硬幣」=單次擲幣同時
+//   決定成敗與免疫，禁分兩次擲(否則違反卡面且重試徽章會雙觸發)。retry-badge-aware：
+//   flipCoinsWithLog 自動 consume state._retryInjectedFlipsQueue。
+//   收斂：原 咕咕鴿|飛翔 被誤丟進 COIN_IMMUNE 表(damage 寫死0+無反面失敗)→正面0傷 bug；
+//   喇叭啄鳥|飛翔 原 m5_preview 亂碼雙註冊。兩張統一走此 helper。
+function coinFlyPre(base: number, attackName: string): AttackPreFn {
+  return (state, aIdx, _pool, action) => {
+    const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
+    const r = flipCoinsWithLog(state, 1, attackName, aIdx, injected);
+    if (!r.heads) {
+      return { state: addLog(r.state, `${attackName}：反面 → 招式失敗`, aIdx), damage: 0 };
+    }
+    const s = updatePlayer(
+      addLog(r.state, `${attackName}：正面 → ${base} 傷害 + 下個對手回合免疫招式傷害與效果`, aIdx),
+      aIdx,
+      p => (p.active ? { ...p, active: { ...p.active, immuneToAllAttackNextTurn: true } } : p),
+    );
+    return { state: s, damage: base };
+  };
+}
+regPre('喇叭啄鳥|飛翔', coinFlyPre(30, '飛翔'));
+regPre('咕咕鴿|飛翔', coinFlyPre(40, '飛翔'));
+
 // ── (B) coin-heads-immune-next helper + 7 張 ──────────────────────────────
 // 擲 1 次硬幣若正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害。
 // 實作：damageReduceNextHit = 9999 → 招式傷害降到 0（卡面範圍即「招式傷害」，

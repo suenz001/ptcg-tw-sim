@@ -174,7 +174,7 @@ function selfReturnToHandPost(label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 const COIN_IMMUNE: Array<[string, number]> = [
   // [key, baseDmg]
-  ['咕咕鴿|飛翔', 0],  // 卡面：擲 1 反面則失敗，正面則 immune；簡化：合併到 immune helper（先不嚴格做失敗）
+  // 咕咕鴿|飛翔 已移至 effects.ts coinFlyPre（原誤丟此表 damage 寫死0+無反面失敗，正面0傷 bug）
   ['高傲雉雞|高速飛翔', 120],
   ['大力鱷|深處潛水', 140],
   ['戽斗尖梭|潛水', 60],
