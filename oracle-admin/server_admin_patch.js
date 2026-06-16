@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2938,6 +2938,36 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // v0.40：把單一賽事的排程處理抽成 per-event，scheduler 迴圈所有開放賽事 → 多場同時並行推進。
     async function _processEventTick(ev) {
         const now = Date.now();
+        // v0.45：自動順延（全域）——較晚開賽的賽事，若有「開賽時間較早、且 status 尚未 finished」的其他賽事仍在進行，
+        //   則在距本場開賽(registrationCloseAt) AUTO_DELAY_BUFFER_MS 內，自動把開賽時間順延 AUTO_DELAY_STEP_MS 並於聊天室公告。
+        //   靠 lastAutoDelayAt 節流(每次順延至少間隔 STEP-1 分鐘)，避免同一波重複推。
+        //   目的：前一場沒打完(沒產生冠軍)前不開下一場，避免同一玩家被兩場同時要求進場。
+        const AUTO_DELAY_BUFFER_MS = 10 * 60000;  // 距開賽 10 分鐘內開始檢查
+        const AUTO_DELAY_STEP_MS = 10 * 60000;    // 每次順延 10 分鐘
+        if ((ev.status === 'draft' || ev.status === 'registration') && Number(ev.registrationCloseAt) > 0) {
+          const myStart = Number(ev.registrationCloseAt);
+          if (now >= myStart - AUTO_DELAY_BUFFER_MS) {
+            // 找「開賽時間較早(strict <)、且尚未結束」的其他賽事；只要有一場就擋住本場開賽。
+            const _others = await TEVENTS.find({ _id: { $ne: ev._id }, status: { $ne: 'finished' } }).toArray();
+            const _blocker = _others.find((o) => {
+              const oStart = Number(o.registrationCloseAt) > 0 ? Number(o.registrationCloseAt)
+                : (Number(o.registrationOpenAt) || Number(o.createdAt) || 0);
+              return oStart > 0 && oStart < myStart;
+            });
+            if (_blocker) {
+              // 節流：上次順延後至少隔 (STEP - 1 分鐘) 才能再順延（避免同一波在連續 tick 重複推）。
+              if (!ev.lastAutoDelayAt || (now - Number(ev.lastAutoDelayAt)) >= (AUTO_DELAY_STEP_MS - 60000)) {
+                const newClose = myStart + AUTO_DELAY_STEP_MS;
+                await TEVENTS.updateOne({ _id: ev._id }, { $set: { registrationCloseAt: newClose, lastAutoDelayAt: now } });
+                // 以 Asia/Taipei(UTC+8，無 DST) 手動算 HH:MM，避免依賴伺服器時區 / ICU。
+                const _tpe = new Date(newClose + 8 * 3600000);
+                const _hhmm = String(_tpe.getUTCHours()).padStart(2, '0') + ':' + String(_tpe.getUTCMinutes()).padStart(2, '0');
+                await postSystemChat('⏳ 「' + ev.name + '」因前一場賽事「' + (_blocker.name || '?') + '」尚未結束，開賽時間自動順延 10 分鐘，預計 ' + _hhmm + ' 開始。');
+              }
+              return; // 本 tick 已改排程，不再處理後續轉場。
+            }
+          }
+        }
         if (ev.status === 'draft' && ev.registrationOpenAt && now >= ev.registrationOpenAt) {
           await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'registration' } });
           await postSystemChat('📋 「' + ev.name + '」報名開始！快來報名～');
