@@ -239,7 +239,7 @@
 
 <main>
   <h1>PTCG 實體賽事演練 <span class="version">v{VERSION}</span></h1>
-  <p class="subtitle">寶可夢集換式卡牌模擬器</p>
+  <p class="subtitle">免費線上・寶可夢集換式卡牌對戰模擬器 ｜ Pokémon TCG Simulator</p>
   <!-- v5.197：強制更新按鈕（手機 PWA 解套快取問題；桌面也可用） -->
   <p class="hard-refresh-row">
     <button class="hard-refresh-btn" onclick={hardRefresh} disabled={hardRefreshing}
