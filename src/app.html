@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
 
     <!-- ── 基本 SEO ── -->
-    <title>PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器</title>
-    <meta name="description" content="專為台灣寶可夢集換式卡牌（PTCG）玩家打造的免費網頁版對戰模擬器。支援 H / I / J 標準賽制環境、繁體中文卡牌資料庫、牌組構築、實戰模擬，免安裝、免登入、即開即戰。" />
-    <meta name="keywords" content="PTCG, 寶可夢卡牌, 寶可夢集換式卡牌, Pokemon TCG, 網頁模擬器, 線上對戰, 牌組構築, 牌組測試, 台灣, 繁體中文, 標準賽, H 標, I 標, J 標" />
+    <title>PTCG 實體賽事演練 — 寶可夢集換式卡牌對戰模擬器 | Pokémon TCG Simulator</title>
+    <meta name="description" content="專為台灣寶可夢集換式卡牌（PTCG）玩家打造的免費網頁版對戰模擬器。支援 H / I / J 標準賽制環境、繁體中文卡牌資料庫、牌組構築、實戰模擬，免安裝、免登入、即開即戰。Free online Pokémon TCG simulator (PTCG sim) — build decks and battle in your browser, no download required." />
+    <meta name="keywords" content="PTCG, 寶可夢卡牌, 寶可夢集換式卡牌, Pokemon TCG, 網頁模擬器, 線上對戰, 牌組構築, 牌組測試, 台灣, 繁體中文, 標準賽, H 標, I 標, J 標, simulator, Pokemon TCG simulator, PTCG simulator, pokemon tcg sim, Pokemon card game online, Pokemon TCG online, deck builder, online, free" />
     <meta name="author" content="suenz001" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.ptcg-tw-sim.com/" />
@@ -15,15 +15,20 @@
     <!-- ── Open Graph / Facebook / LINE 預覽 ── -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="PTCG 實體賽事演練" />
-    <meta property="og:title" content="PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器" />
+    <meta property="og:title" content="PTCG 實體賽事演練 — 寶可夢集換式卡牌對戰模擬器 | Pokémon TCG Simulator" />
     <meta property="og:description" content="專為台灣 PTCG 玩家打造的線上對戰演練平台，支援 H / I / J 標環境，免安裝、即開即戰。" />
     <meta property="og:url" content="https://www.ptcg-tw-sim.com/" />
     <meta property="og:locale" content="zh_TW" />
+    <meta property="og:image" content="https://www.ptcg-tw-sim.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="PTCG 實體賽事演練 — 寶可夢集換式卡牌對戰模擬器 Pokémon TCG Simulator" />
 
     <!-- ── Twitter / X 預覽 ── -->
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="PTCG 實體賽事演練 — 寶可夢集換式卡牌模擬器" />
     <meta name="twitter:description" content="台灣 PTCG 玩家專屬的免費網頁版對戰演練 — 牌組構築 + 實戰模擬。" />
+    <meta name="twitter:image" content="https://www.ptcg-tw-sim.com/og-image.png" />
 
     <!-- ── iOS PWA：加入主畫面後可全螢幕運作，隱藏 Safari UI ── -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -39,6 +44,23 @@
     <link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/icon-192.png?v=4.993" />
     <link rel="icon" type="image/png" sizes="512x512" href="%sveltekit.assets%/icons/icon-512.png?v=4.993" />
     <meta name="theme-color" content="#1e3a20" />
+
+    <!-- v5.611 結構化資料：讓搜尋引擎理解為免費網頁遊戲應用 -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "PTCG 實體賽事演練 — 寶可夢集換式卡牌對戰模擬器",
+      "alternateName": "Pokémon TCG Simulator (PTCG Sim)",
+      "url": "https://www.ptcg-tw-sim.com/",
+      "applicationCategory": "GameApplication",
+      "operatingSystem": "Web browser",
+      "inLanguage": "zh-Hant",
+      "image": "https://www.ptcg-tw-sim.com/og-image.png",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TWD" },
+      "description": "\u514d\u8cbb\u7db2\u9801\u7248\u5bf6\u53ef\u5922\u96c6\u63db\u5f0f\u5361\u724c\uff08PTCG\uff09\u5c0d\u6230\u6a21\u64ec\u5668\uff0c\u652f\u63f4 H / I / J \u6a19\u6e96\u8cfd\u5236\u3001\u7e41\u9ad4\u4e2d\u6587\u5361\u5eab\u3001\u724c\u7d44\u69cb\u7bc9\u8207\u7dda\u4e0a\u5c0d\u6230\u3002Free online Pok\u00e9mon TCG simulator and deck builder."
+    }
+    </script>
 
     %sveltekit.head%
   </head>
