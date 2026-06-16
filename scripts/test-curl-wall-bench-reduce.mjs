@@ -16,7 +16,7 @@ const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).m
 const pool = new Map();
 for (const f of readdirSync(dir)) { if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
   for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c); }
-const KYUREM='10629', BUFFALO='14800', SNORLAX='18039', WATER='18519', METAL='14434';
+const KYUREM='10629', BUFFALO='14800', BUFFALO_NOWALL='11267', SNORLAX='18039', WATER='18519', METAL='14434';
 let iid=0;
 const inst=(cid,e=[],x={})=>({iid:'i'+(++iid),cardId:String(cid),damage:0,energyAttached:e,...x});
 const en=(cid)=>({iid:'e'+(++iid),cardId:String(cid),damage:0,energyAttached:[]});
@@ -43,5 +43,13 @@ console.log('2) 對照：只有 1 隻爆炸頭水牛 → 捲牆不滿足(≥2) �
 { const r=snipeBench([inst(BUFFALO),inst(SNORLAX)],1);
   ck('無 err',!r.err,r.err);
   ck('備戰受 110 傷害（無減傷）',r.victim&&r.victim.damage===110,'實際='+(r.victim&&r.victim.damage)); }
+console.log('3) ★修正：捲牆版+SV8無捲牆版 各1隻 → 依卡名計數≥2 → 仍 -60 = 50（舊碼=110）');
+{ const r=snipeBench([inst(BUFFALO),inst(BUFFALO_NOWALL),inst(SNORLAX)],2);
+  ck('無 err',!r.err,r.err);
+  ck('備戰受 50 傷害（依卡名計數）',r.victim&&r.victim.damage===50,'實際='+(r.victim&&r.victim.damage)); }
+console.log('4) 對照：2隻都無捲牆(SV8) → 無有效捲牆特性 → 不減傷 110');
+{ const r=snipeBench([inst(BUFFALO_NOWALL),inst(BUFFALO_NOWALL),inst(SNORLAX)],2);
+  ck('無 err',!r.err,r.err);
+  ck('備戰受 110 傷害（無有效捲牆）',r.victim&&r.victim.damage===110,'實際='+(r.victim&&r.victim.damage)); }
 console.log('\n捲牆備戰減傷收斂 PASS '+pass+' / FAIL '+fail);
 process.exitCode=fail?1:0;

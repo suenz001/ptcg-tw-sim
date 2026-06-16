@@ -700,13 +700,21 @@
   let chatFabDragged = false;  // 區分 click vs drag（drag 後不觸發 toggle）
 
   // 載入 localStorage 保存的位置
+  // v5.613：clamp 聊天 fab 位置在視窗內——避免拖出畫面、或換裝置/旋轉後偏移超出視窗導致 fab「不見」
+  function clampChatFabPos(p: { x: number; y: number }): { x: number; y: number } {
+    if (typeof window === 'undefined') return p;
+    const W = window.innerWidth, H = window.innerHeight, PAD = 6, SIZE = 54, BASE = 18;
+    const minX = PAD + BASE + SIZE - W, maxX = BASE - PAD;
+    const minY = PAD + BASE + SIZE - H, maxY = BASE - PAD;
+    return { x: Math.max(minX, Math.min(maxX, p.x)), y: Math.max(minY, Math.min(maxY, p.y)) };
+  }
   if (typeof window !== 'undefined') {
     try {
       const saved = localStorage.getItem('ptcg_chat_fab_pos');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
-          chatFabPos = parsed;
+          chatFabPos = clampChatFabPos(parsed);
         }
       }
     } catch { /* ignore parse errors */ }
@@ -727,7 +735,7 @@
       chatFabDragged = true;  // v5.591 門檻 4→12px：手機觸控輕觸常有 <12px 抖動，避免被誤判成拖曳而點不開聊天室
     }
     if (chatFabDragged) {
-      chatFabPos = { x: chatFabDragStart.ox + dx, y: chatFabDragStart.oy + dy };
+      chatFabPos = clampChatFabPos({ x: chatFabDragStart.ox + dx, y: chatFabDragStart.oy + dy });
     }
   }
   function onFabPointerUp(e: PointerEvent) {
@@ -962,6 +970,8 @@
       
       // v2.45：依視窗 / 設定重算 game zoom
       recomputeZoom();
+      // v5.613：視窗大小/方向改變後重新 clamp 聊天 fab，避免偏移超出新視窗而消失
+      chatFabPos = clampChatFabPos(chatFabPos);
     };
     
     window.addEventListener('resize', onResize);

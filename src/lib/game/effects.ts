@@ -971,14 +971,19 @@ function _applyBenchAbilityReduce(
       ...(defender.active ? [defender.active] : []),
       ...defender.bench,
     ];
-    const buffaloCount = defAll.filter(c => {
+    // v5.613：捲牆條件「場上≥2隻爆炸頭水牛」依【卡名】計數——不要求每隻都有捲牆特性
+    //   (SV8 爆炸頭水牛 11267 無捲牆，仍計入數量；玩家報一隻捲牆+一隻無捲牆時沒減傷)。
+    //   仍需至少一隻「捲牆特性有效(未被【無】封鎖/消除)」的爆炸頭水牛，效果才存在。
+    const buffaloByName = defAll.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;
+    const hasActiveCurlWall = defAll.some(c => {
       const card = pool.get(c.cardId);
       if (card?.name !== '爆炸頭水牛') return false;
       if (!card.abilities?.some(a => a.name === '捲牆')) return false;
       if (_colorlessBlocked(card)) return false;
-      return true;
-    }).length;
-    if (buffaloCount >= 2) {
+      const loc: 'active' | 'bench' = defender.active?.iid === c.iid ? 'active' : 'bench';
+      return isAbilityHolderEffective(state, c, card, defenderIdx, '捲牆', loc, pool);
+    });
+    if (buffaloByName >= 2 && hasActiveCurlWall) {
       const isColorless = victimCard.pokemonType === 'Colorless';
       const isBasic = !victimCard.evolvesFrom && victimCard.stage !== 'Stage1' && victimCard.stage !== 'Stage2';
       if (isColorless && isBasic) {
@@ -9856,6 +9861,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       players[dIdx] = newDefender;
       s = addLog({ ...s, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, targetCard, 'attack');
+      // v5.613 收斂：多目標狙擊招式 KO 戰鬥位 → 補觸發防守方 on-KO（沉重接力棒/反擊等），與引擎主管線/中央 helper 一致
+      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true);
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDefender = { ...defenderNow };
@@ -14613,6 +14620,8 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害 → 被擊倒！+${prizeCount} 張獎賞卡`, actorIdx);
       // v2.246：clone-strike-multi-hit 屬於招式 KO（共用大吼大叫 / 三色炮 / 分身連打）
       s = recordOppKO(s, dIdx, targetCard, 'attack');
+      // v5.613 收斂：分身連打/三色炮類 KO 戰鬥位 → 補觸發防守方 on-KO（沉重接力棒/反擊等）
+      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true);
       // 戰鬥場昏厥且對手沒有備戰 → game over
       if (isActive && newDef.bench.length === 0) {
         s = { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
