@@ -111,6 +111,8 @@
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
   let tPollGen = 0;  // v5.586 poll 世代：離開對戰時 ++，使在路上的 in-flight 回應失效（防返回大廳後被彈回對戰）
   let _tLastPollOkAt = 0;  // v5.591 上次輪詢成功回應時間（看門狗判斷輪詢是否停擺）
+  let _tLastStateChangeAt = 0;  // v5.618 上次盤面實際更新時間（新鮮度看門狗：poll 成功卻漏接更新時也能自動重抓）
+  let _tLastForceResyncAt = 0;  // v5.618 上次強制重抓時間（節流）
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
@@ -176,6 +178,16 @@
               if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
             } catch { /* ignore */ }
           })();
+          startTournamentPoll();
+        }
+        // v5.618 新鮮度看門狗：對戰/setup 中盤面 >8s 沒任何更新（poll 成功卻漏接/版本卡住，如「對手補抽放置完成後我方手牌沒亮」）
+        //   → 強制重抓伺服器權威最新盤面。涵蓋 setup（tStep 一有 gameState 即 playing）。gate：我方 picker 進行中不擾動；節流 8s。
+        if (tStep === 'playing' && game && !isTournSpectator
+            && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > 8000
+            && (Date.now() - _tLastForceResyncAt) > 8000
+            && !(game.pendingSelection && game.pendingSelection.actorIdx === mySeatIdx)) {
+          _tLastForceResyncAt = Date.now();
+          tForceResync();
           startTournamentPoll();
         }
       }, 1000);
@@ -4065,6 +4077,21 @@
     game = state as GameState;
     if (typeof version === 'number') tVersion = version;
     if (state) tStep = 'playing';
+    _tLastStateChangeAt = Date.now();  // v5.618 記錄盤面更新時間（新鮮度看門狗用）
+  }
+  // v5.618：手動/自動「重新同步」— 強制 v=-1 抓伺服器權威最新盤面（版本不同才採用，避免擾動我方 picker）。
+  //   答玩家「輪到自己時系統會幫忙確認/不必 F5」：對戰中盤面卡住即可由看門狗自動或玩家點「🔄 同步」恢復。
+  async function tForceResync() {
+    if (!isTournament || isTournSpectator || !tActiveRoom) return;
+    try {
+      const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+      if (fr && fr.gameState && typeof fr.version === 'number') {
+        if (fr.version !== tVersion) { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }  // 漏接或客戶端超前 → 一律回正
+        _tLastStateChangeAt = Date.now();
+      }
+      if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
+      if (fr && typeof fr.serverNow === 'number') { tClockOffset = fr.serverNow - Date.now(); tNow = Date.now() + tClockOffset; }
+    } catch { /* ignore */ }
   }
   // v5.569：算「當前該動作的座位」(鏡射伺服器 currentActorSeat)，給等待方閒置倒數判斷
   function tCurrentActorSeat(g: any): number | null {
@@ -6955,6 +6982,7 @@
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
+      onResync={isTournament ? tForceResync : undefined}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
@@ -7005,7 +7033,7 @@
           {/if}
         </span>
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
-        {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip">等待對手行動</span>{/if}
+        {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip" title={isTournament ? '若遲遲沒換你，可能是畫面沒更新 → 點此重新同步（不必重整網頁）' : undefined} style={isTournament ? 'cursor:pointer;' : undefined} onclick={() => { if (isTournament) tForceResync(); }}>等待對手行動{#if isTournament} 🔄{/if}</span>{/if}
       {/if}
       <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
       {#if isSpectator}

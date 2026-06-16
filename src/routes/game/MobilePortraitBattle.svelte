@@ -74,6 +74,7 @@
     // v5.194：手機版補悔棋按鈕（鏡射桌面版 performUndo）
     undoAvailable?: boolean;
     onUndo?: () => void;
+    onResync?: () => void;  // v5.618 錦標賽：點狀態列強制重新同步(免重整)
   }
 
   let {
@@ -87,6 +88,7 @@
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     undoAvailable = false,
     onUndo,
+    onResync,
   }: Props = $props();
 
   // v5.194：手機版 log timestamp helper（鏡射 +page.svelte formatLogTime）
@@ -840,11 +842,11 @@
       <button class="mp-icon-btn mp-undo-btn" onclick={onUndo} title="悔棋（回到上一步）">↶</button>
     {/if}
     <span class="mp-turn-text">回合 {game.turn}</span>
-    <span class="mp-phase">
+    <span class="mp-phase" role={onResync ? 'button' : undefined} style={onResync ? 'cursor:pointer;' : undefined} title={onResync ? '若畫面卡住、遲遲沒換你 → 點此重新同步（不必重整網頁）' : undefined} onclick={() => onResync?.()}>
       {#if isSetup}🎴 設置
       {:else if game.turnPhase === 'main'}{isMyTurn ? '🟢 你的回合' : '🔴 對手回合'}
       {:else if game.turnPhase === 'draw'}📥 抽牌
-      {:else}⏭ 結束{/if}
+      {:else}⏭ 結束{/if}{#if onResync} 🔄{/if}
     </span>
     <span class="mp-spacer"></span>
     {#if aiThinking}<span class="mp-tag">🤖</span>{/if}
