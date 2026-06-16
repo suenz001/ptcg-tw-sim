@@ -121,6 +121,9 @@
   let tMe = $state<any>({ registered: false });
   // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
   const tRegisteredAny = $derived(!!tMe.registered || tEvents.some((e: any) => e.registered));
+  // v5.620：賽事分組——進行中/即將開始(checkin/running/bracket_ready/seeding)排上面、報名中/籌備中(registration/draft)排下面
+  const tRunningEvents = $derived(tEvents.filter((e: any) => e.status !== 'registration' && e.status !== 'draft'));
+  const tUpcomingEvents = $derived(tEvents.filter((e: any) => e.status === 'registration' || e.status === 'draft'));
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
   let tTickTimer: ReturnType<typeof setInterval> | null = null; // v5.575 1秒tick平滑倒數
@@ -6229,7 +6232,7 @@
       {#if tEvents.length === 0}
         <div class="tourn-event"><p class="muted small">目前沒有開放中的賽事。</p></div>
       {/if}
-      {#each tEvents as ev (ev._id)}
+      {#snippet eventCard(ev)}
         <div class="tourn-event">
           <h3>🏆 {ev.name}</h3>
           <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(ev.status)}</b> ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {ev.roundLimitMin} 分</p>
@@ -6302,7 +6305,9 @@
             {/if}
           {/if}
         </div>
-      {/each}
+      {/snippet}
+      <!-- v5.620：進行中／即將開始的賽事優先（其賽程表、觀戰選單排在「下一場報名」視窗之上）-->
+      {#each tRunningEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
       {#if tBracket && tBracket.matches && tBracket.matches.length}
         <div class="tourn-bracket">
           <div class="tourn-bracket-head">📋 賽程表{#if tBracket.event?.championName} ｜ 🏆 冠軍：<b>{tBracket.event.championName}</b>{/if}</div>
@@ -6358,6 +6363,8 @@
           {/each}
         </div>
       {/if}
+      <!-- v5.620：報名中／籌備中的賽事（下一場、下下場…）排在進行中賽事與觀戰之下 -->
+      {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
       {#if tChampions.length > 0}
         <div class="tourn-bracket tourn-hof">
           <div class="tourn-bracket-head">🏛️ 名人堂 ｜ 歷屆冠軍</div>
