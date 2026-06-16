@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.49</title>
+<title>PTCG Oracle Admin v1.50</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.49</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.50</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1198,6 +1198,7 @@ function _tsSortTable(th) {
   var ar = document.createElement('span'); ar.className = 'sort-ar'; ar.textContent = asc ? ' ▲' : ' ▼';
   th.appendChild(ar);
 }
+window._tsSortTable = _tsSortTable; // v1.50 type="module" 下 inline onclick 需掛 window 才找得到
 
 function renderTournamentStats(el, data) {
   const archives = (data && data.archives) || [];
