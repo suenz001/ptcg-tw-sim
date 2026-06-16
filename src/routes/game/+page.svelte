@@ -6321,8 +6321,11 @@
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
-     iOS Safari 不支援 screen.orientation.lock，依靠用戶手動旋轉。 -->
-{#if game}
+     iOS Safari 不支援 screen.orientation.lock，依靠用戶手動旋轉。
+     v5.609：game-over / 觀戰時不顯示 — 此提示是 z-index:99999 全螢幕遮罩(無 pointer-events:none)，
+       在 601~950px 直向觸控裝置會蓋住「返回賽事大廳 / 離開觀戰」鈕(z-9999)→ 按不了。
+       這兩種狀態玩家只需按離開/返回、不需橫向，故不顯示提示。對戰進行中(參戰者)維持提示不變。 -->
+{#if game && game.phase !== 'game-over' && !isSpectator}
   <div class="rotate-prompt">
     <div class="rotate-prompt-icon">📱</div>
     <div class="rotate-prompt-text">請將手機旋轉至橫向<br/>以獲得最佳對戰體驗</div>
