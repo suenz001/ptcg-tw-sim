@@ -15,7 +15,7 @@
   const setLabel = $derived(`${card.setCode} ${card.collectorNumber}`);
   const h1 = $derived(`${card.name}（${setLabel}）`);
   const title = $derived(`${card.name} ${setLabel}｜PTCG 卡牌資料庫`);
-  const pageUrl = $derived(`https://www.ptcg-tw-sim.com${base}/card/${card.id}/`);
+  const pageUrl = $derived(`https://www.ptcg-tw-sim.com/card/${card.id}/`);  // canonical 永遠指正式站，不帶 base(github.io 的 /ptcg-tw-sim 不該接上)
   const description = $derived.by(() => {
     const p: string[] = [];
     if (card.species) p.push(card.species);
