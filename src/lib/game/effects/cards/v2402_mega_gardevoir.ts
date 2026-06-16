@@ -27,7 +27,7 @@ import {
   regPre, regPost, regR,
   addLog, updatePlayer, shuffle, withPending,
 } from '../_shared';
-import { countEnergy } from '../../engine';
+import { countEnergyTypeHostAware } from '../../effects';  // v5.616：型別計數中央 helper(火箭隊能量=2超)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 盈溢祈願 — 0 傷害；玩家自選 N 張基本【超】能量 → 自選 N 隻備戰附加（順序配對）
@@ -228,7 +228,7 @@ regPre('超級沙奈朵ex|超級交響樂', (state, aIdx, pool) => {
   ];
   let psyCount = 0;
   for (const pk of allOwn) {
-    psyCount += countEnergy(pk, pool).get('Psychic') ?? 0;
+    psyCount += countEnergyTypeHostAware(pk, 'Psychic', pool);  // v5.616 改用型別計數中央 helper：火箭隊能量正確計 2 超(原 countEnergy 計 1)+ 保留新衝天等 host-aware
   }
   const dmg = psyCount * 50;
   return {

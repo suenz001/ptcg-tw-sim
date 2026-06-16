@@ -6886,7 +6886,7 @@ export function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: M
 //   - 稜鏡能量 on Basic → 任意屬性 ×1（on Evolution → Colorless ×1）
 //   - 燃火能量 on Evolution → Colorless ×3（on Basic → ×1）
 //   - 古舊能量 → 任意屬性 ×1（ACE SPEC 全屬性）
-//   - 火箭隊能量 → Psychic ×1 + Darkness ×1（依 SPECIAL_ENERGY_TYPES）
+//   - 火箭隊能量 → Psychic ×2 + Darkness ×2（卡面「視為提供 2 個【超】【惡】2 種屬性的能量」=2 單位、每個都雙屬性）
 //   - 其他特殊能量 / 基本能量：依 energyMatchesType（pokemonType + name【X】 fallback）
 // 不從 engine import（avoid circular），inline 處理。若 engine.ts 的 SPECIAL_ENERGY_TYPES
 // 改動需同步本檔。
@@ -6919,7 +6919,10 @@ export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, p
       continue;
     }
     if (ec.name === '火箭隊能量') {
-      if (type === 'Psychic' || type === 'Darkness') count += 1;
+      // 卡面：「視為提供 2 個【超】【惡】2 種屬性的能量」→ 2 個單位、每個同時是【超】與【惡】。
+      //   故「數【超】/【惡】能量數」(超級交響樂等傷害計算) 計 2，非 1（v5.616 修玩家回報）。
+      //   ⚠ 此為「型別計數」語意；engine SPECIAL_ENERGY_TYPES 的 ['Psychic','Darkness'] 是「cost 槽位」語意(1超+1惡=2單位)，兩者用途不同、各自正確，未改 cost。
+      if (type === 'Psychic' || type === 'Darkness') count += 2;
       continue;
     }
     // 一般情況：依 energyMatchesType（含 pokemonType=null 的 name fallback）
