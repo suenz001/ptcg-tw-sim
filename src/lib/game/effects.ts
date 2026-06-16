@@ -88,7 +88,7 @@ export {
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
 import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
 // v5.293: import field-wide damage-reduce helpers for bench damage path
-import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore } from './effects/cards/v2999_g3_wave1';
+import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce } from './effects/cards/v2999_g3_wave1';
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 
 /**
@@ -965,32 +965,13 @@ function _applyBenchAbilityReduce(
       if (before > dmg) logs.push(`齒輪塗層 -${before - dmg}`);
     }
   }
-  // === field-wide: 爆炸頭水牛|捲牆 (≥2 隻 + 【無】基礎) ===
+  // === field-wide: 爆炸頭水牛|捲牆 (≥2 隻爆炸頭水牛[依卡名] + 【無】基礎) — v5.614 共用 curlWallReduce ===
   if (dmg > 0) {
-    const defAll: CardInstance[] = [
-      ...(defender.active ? [defender.active] : []),
-      ...defender.bench,
-    ];
-    // v5.613：捲牆條件「場上≥2隻爆炸頭水牛」依【卡名】計數——不要求每隻都有捲牆特性
-    //   (SV8 爆炸頭水牛 11267 無捲牆，仍計入數量；玩家報一隻捲牆+一隻無捲牆時沒減傷)。
-    //   仍需至少一隻「捲牆特性有效(未被【無】封鎖/消除)」的爆炸頭水牛，效果才存在。
-    const buffaloByName = defAll.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;
-    const hasActiveCurlWall = defAll.some(c => {
-      const card = pool.get(c.cardId);
-      if (card?.name !== '爆炸頭水牛') return false;
-      if (!card.abilities?.some(a => a.name === '捲牆')) return false;
-      if (_colorlessBlocked(card)) return false;
-      const loc: 'active' | 'bench' = defender.active?.iid === c.iid ? 'active' : 'bench';
-      return isAbilityHolderEffective(state, c, card, defenderIdx, '捲牆', loc, pool);
-    });
-    if (buffaloByName >= 2 && hasActiveCurlWall) {
-      const isColorless = victimCard.pokemonType === 'Colorless';
-      const isBasic = !victimCard.evolvesFrom && victimCard.stage !== 'Stage1' && victimCard.stage !== 'Stage2';
-      if (isColorless && isBasic) {
-        const before = dmg;
-        dmg = Math.max(0, dmg - 60);
-        if (before > dmg) logs.push(`爆炸頭水牛 捲牆 -${before - dmg}`);
-      }
+    const _cw = curlWallReduce(state, defenderIdx, victimCard, pool);
+    if (_cw > 0) {
+      const before = dmg;
+      dmg = Math.max(0, dmg - _cw);
+      if (before > dmg) logs.push(`爆炸頭水牛 捲牆 -${before - dmg}`);
     }
   }
   // === field-wide: 冰雪巨龍|凍原堡壘 (victim 附水能量) ===

@@ -41,6 +41,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { PASSIVE_ATTACK_BONUS } from '../../effects';
+import { ROCKET_WATCHTOWER_STADIUMS } from './stadiums';
 
 // 導出 sentinel 防止 unused import warnings
 export type _v2999G3W1Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -135,6 +136,40 @@ export function hasIronTracksDualCore(
     const ec = pool.get(e.cardId);
     return ec?.name === '驅勁能量 未來';
   });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// 爆炸頭水牛｜捲牆 — 場上有 2 隻以上「爆炸頭水牛」(依卡名)時，自己的【無】基礎寶可夢受
+//   對手招式傷害 -60。v5.614 收斂：原 engine(戰鬥位) 與 effects(備戰) 各一份 inline，
+//   且都「要求每隻爆炸頭水牛都有捲牆特性」→ 含 SV8(11267 無捲牆)版時計數不足、漏減傷
+//   (玩家報：超級袋獸ex 場上 1 隻捲牆+1 隻 SV8，被忍之利刃 KO)。抽單一函式兩處共用。
+//   依【卡名】計數 ≥2 + 至少一隻捲牆特性有效(未被火箭隊的監視塔消除【無】特性)。回傳 60 或 0。
+// ════════════════════════════════════════════════════════════════════════════
+export function curlWallReduce(
+  state: GameState | undefined,
+  defenderIdx: 0 | 1 | undefined,
+  victimCard: Card | null | undefined,
+  pool: Map<string, Card> | undefined,
+): number {
+  if (!state || defenderIdx == null || !victimCard || !pool) return 0;
+  // 受惠 gate：受傷者必須是【無】基礎寶可夢
+  const isColorless = victimCard.pokemonType === 'Colorless';
+  const isBasic = !victimCard.evolvesFrom && victimCard.stage !== 'Stage1' && victimCard.stage !== 'Stage2';
+  if (!isColorless || !isBasic) return 0;
+  const me = state.players[defenderIdx];
+  const all = [...(me.active ? [me.active] : []), ...me.bench];
+  // 依【卡名】計數「爆炸頭水牛」≥2（不要求每隻都有捲牆特性；SV8 11267 無捲牆版也算數量）
+  const buffaloByName = all.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;
+  if (buffaloByName < 2) return 0;
+  // 火箭隊的監視塔消除【無】寶可夢特性 → 捲牆失效（爆炸頭水牛本身是【無】）
+  const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
+  if (sd && ROCKET_WATCHTOWER_STADIUMS.has(sd.name)) return 0;
+  // 至少一隻「有捲牆特性」的爆炸頭水牛在場
+  const hasWall = all.some(c => {
+    const card = pool.get(c.cardId);
+    return card?.name === '爆炸頭水牛' && !!card.abilities?.some(a => a.name === '捲牆');
+  });
+  return hasWall ? 60 : 0;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

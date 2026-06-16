@@ -51,5 +51,29 @@ console.log('4) 對照：2隻都無捲牆(SV8) → 無有效捲牆特性 → 不
 { const r=snipeBench([inst(BUFFALO_NOWALL),inst(BUFFALO_NOWALL),inst(SNORLAX)],2);
   ck('無 err',!r.err,r.err);
   ck('備戰受 110 傷害（無有效捲牆）',r.victim&&r.victim.damage===110,'實際='+(r.victim&&r.victim.damage)); }
+// v5.614 戰鬥位捲牆收斂：忍之利刃(Fighting,170) 打 超級袋獸ex(Colorless基礎,弱Fighting,HP300)+激動競技場(+30=330)
+function activeCurlWall(benchIds){
+  const NINJA='10292', KANGA='14071', STADIUM='11285';
+  let j=0; const ai=(cid,e=[])=>({iid:'x'+(++j),cardId:String(cid),damage:0,energyAttached:e});
+  const ae=(cid)=>({iid:'xe'+(++j),cardId:String(cid),damage:0,energyAttached:[]});
+  let st={phase:'playing',turnPhase:'main',activePlayerIndex:0,turn:3,isFirstTurn:false,
+    pendingPrizes:[0,0],log:[],pendingSelection:null,activeStadium:{iid:'st',cardId:STADIUM},setupDone:[true,true],
+    players:[
+      {active:ai(NINJA,[ae(WATER)]),bench:[],hand:[],deck:Array.from({length:10},()=>ae(WATER)),discard:[],prizes:Array.from({length:6},()=>ae(WATER)),name:'攻'},
+      {active:ai(KANGA),bench:benchIds.map(c=>ai(c)),hand:[],deck:Array.from({length:10},()=>ae(WATER)),discard:[],prizes:Array.from({length:6},()=>ae(WATER)),name:'守'},
+    ]};
+  const kid=st.players[1].active.iid;
+  st=applyAction(st,{type:'ATTACK',attackIndex:0},pool);
+  let g=0; while(st.pendingSelection&&g++<5){const ps=st.pendingSelection;st=applyAction(st,{type:'RESOLVE_SELECTION',selectedIids:[]},pool);if(st.pendingSelection===ps)break;}
+  const k=st.players[1].active;
+  return {koed:!k||k.iid!==kid, damage:k?k.damage:null};
+}
+console.log('5) ★戰鬥位：超級袋獸ex + 1捲牆(14800)+1 SV8無捲牆(11267) 被忍之利刃 → 存活 280（舊 engine 副本=KO）');
+{ const r=activeCurlWall(['14800','11267']);
+  ck('存活(未KO)',!r.koed,'koed='+r.koed);
+  ck('damage=280',r.damage===280,'實際='+r.damage); }
+console.log('6) 對照戰鬥位：超級袋獸ex + 2隻SV8無捲牆 → 無有效捲牆 → 340 → KO');
+{ const r=activeCurlWall(['11267','11267']);
+  ck('被KO（無有效捲牆）',r.koed,'koed='+r.koed); }
 console.log('\n捲牆備戰減傷收斂 PASS '+pass+' / FAIL '+fail);
 process.exitCode=fail?1:0;

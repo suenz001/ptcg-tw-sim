@@ -70,6 +70,7 @@ import {
   steelixPalaceReduce,
   bronzongShelterReduce,
   gearCoatingReduce,
+  curlWallReduce,
 } from './effects/cards/v2999_g3_wave1';
 // v3.0 Group 3 Wave 2 helpers
 import {
@@ -7206,35 +7207,15 @@ export function applyDefenderReductionsBlockA(
     }
 
 
-    // v2.154 爆炸頭水牛｜捲牆 — 場上有 2 隻以上爆炸頭水牛 + 防守方戰鬥位是【無】基礎 → -60
-    //   這是 field-wide buff，不只 defender 自己的 abilities，要掃 defender 整個場上
-    //   無論多少隻擁有此特性的寶可夢，效果不重複（最多 -60 一次）
-    // v2.266：火箭隊的監視塔（Colorless 特性消除）會擋掉每隻爆炸頭水牛的捲牆 →
-    //   filter 內加 isColorlessAbilityBlocked 閘門（爆炸頭水牛本身是 Colorless）。
-    //   stadiums.ts line 179-180 的註解就預告過這類「被動特性 × 監視塔」要個別補閘門。
+    // v5.614 爆炸頭水牛｜捲牆 — 收斂到共用 curlWallReduce（依卡名計數≥2，與 effects 備戰版同源；
+    //   修「含 SV8 無捲牆版時計數不足、戰鬥位漏減傷」。監視塔消除已內含於 helper）。
     if (!skipDefEffects && baseDamage > 0) {
-      const defAll: CardInstance[] = [
-        ...(defender.active ? [defender.active] : []),
-        ...defender.bench,
-      ];
-      const buffaloCount = defAll.filter(c => {
-        const card = pool.get(c.cardId);
-        if (card?.name !== '爆炸頭水牛') return false;
-        if (!card.abilities?.some(a => a.name === '捲牆')) return false;
-        // 監視塔擋掉【無】寶可夢的特性（捲牆持有者爆炸頭水牛本身是 Colorless）
-        if (isColorlessAbilityBlocked(state, card, pool)) return false;
-        return true;
-      }).length;
-      if (buffaloCount >= 2) {
-        // 防守方戰鬥位必須是【無】基礎
-        const isColorless = defenderCard.pokemonType === 'Colorless';
-        const isBasic = !defenderCard.evolvesFrom && defenderCard.stage !== 'Stage1' && defenderCard.stage !== 'Stage2';
-        if (isColorless && isBasic) {
-          const before = baseDamage;
-          baseDamage = Math.max(0, baseDamage - 60);
-          if (before > baseDamage) {
-            formula.push({ sign: '-', value: before - baseDamage, label: '爆炸頭水牛 捲牆' });
-          }
+      const _cw = curlWallReduce(workingState, dIdx, defenderCard, pool);
+      if (_cw > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - _cw);
+        if (before > baseDamage) {
+          formula.push({ sign: '-', value: before - baseDamage, label: '爆炸頭水牛 捲牆' });
         }
       }
     }
