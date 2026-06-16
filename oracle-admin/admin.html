@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.50</title>
+<title>PTCG Oracle Admin v1.51</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.50</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.51</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1259,7 +1259,7 @@ function renderTournamentStats(el, data) {
       else if (m.timeLimit) outcome.timeLimit++;
       else if (m.status === 'done') outcome.normal++;
       // 勝負（玩家依 email + 主力寶可夢）
-      if (isRealMatch(m)) {
+      if (isRealMatch(m) && m.winnerUid) {  // v1.51：雙敗(無winner)場不計勝負
         totalRealMatches++;
         const wUid = m.winnerUid;
         const isP1Win = (m.p1uid === wUid);
