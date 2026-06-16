@@ -2417,7 +2417,7 @@
 
 
   // v2.276：觀戰者判定（線上模式且坐在 spectator 位）
-  const isSpectator = $derived(mode === 'online' && (mySeatIdx >= 2 || isAdminMode));  // v4.926 admin 偷看也走觀戰渲染路徑
+  const isSpectator = $derived(isTournSpectator || (mode === 'online' && (mySeatIdx >= 2 || isAdminMode)));  // v4.926 admin 偷看也走觀戰渲染路徑
   // v4.927：admin spy 若在 poolReady 之前觸發，這個 $effect 會在 pool 載完後補訂閱
   let _adminSpySubscribed = $state(false);
   $effect(() => {
@@ -3884,7 +3884,7 @@
     // 登出：清錦標賽狀態 + signOut → onAuthStateChanged 退回匿名 → isAnonymous 觸發登入閘門
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = '';
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = ''; isTournSpectator = false;
     try { await signOut(auth); } catch { /* ignore */ }
   }
   async function tChatLoad() {
@@ -3933,7 +3933,7 @@
     try {
       const r = await tApi('/match/enter', {});
       if (r.error) { tError = r.error; return; }
-      tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting';
+      tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting'; isTournSpectator = false;
       const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`);
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
@@ -3949,7 +3949,7 @@
   function tLeaveMatch() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false;
     tournLoadEvent(); tBracketLoad();
   }
   // 名人堂：載入歷屆冠軍
@@ -4079,7 +4079,7 @@
       const nm = (myName && myName.trim()) || '玩家';
       const r = await tApi('/join', { room: tActiveRoom, playerId: tPlayerId(), name: nm, deckEntries: deck.entries });
       if (r.error) { tError = r.error; tStep = 'lobby'; return; }
-      mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online';
+      mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; isTournSpectator = false;
       tSyntheticRoom(r.seats, r.names);
       if (r.gameState) tAdopt(r.gameState, r.version);
       else tStep = 'waiting';
@@ -4130,7 +4130,7 @@
     try { await tApi('/reset', { room: tActiveRoom, playerId: tPlayerId() }); }
     catch (e: any) { tError = String(e?.message ?? e); }
     finally { tBusy = false; }
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM;
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false;
   }
 
   async function dispatch(
