@@ -631,8 +631,25 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         return true;
       });
-      // 優先選 HP 高的寶可夢
-      candidates.sort((a, b) => (pool.get(b.cardId)?.hp ?? 0) - (pool.get(a.cardId)?.hp ?? 0));
+      // v5.617：抓寶可夢優先「現在用得到的」——基礎(可放備戰) > 進化鏈上一階已在場上/手牌(可進化) > 抓了也用不到的高階。
+      //   修玩家報：莉佳的蔓藤怪|百花齊放 場上沒喇叭芽/口呆花卻一直抓 Stage2 大食花。非寶可夢候選中性、退回 HP 排序。
+      const _fieldHandNames = new Set([
+        actorPlayer.active ? pool.get(actorPlayer.active.cardId)?.name : null,
+        ...actorPlayer.bench.map(c => pool.get(c.cardId)?.name),
+        ...actorPlayer.hand.map(c => pool.get(c.cardId)?.name),
+      ].filter((n): n is string => !!n));
+      const _usefulness = (inst: CardInstance): number => {
+        const card = pool.get(inst.cardId);
+        if (!card || card.supertype !== 'Pokemon') return 1;  // 非寶可夢中性
+        if (isBasicPokemonCard(card)) return 3;               // 基礎一定放得了
+        if (card.evolvesFrom && _fieldHandNames.has(card.evolvesFrom)) return 2;  // 上一階在場/手 → 可進化
+        return 0;                                             // 無上一階 → 抓了也用不到
+      };
+      candidates.sort((a, b) => {
+        const su = _usefulness(b) - _usefulness(a);
+        if (su !== 0) return su;
+        return (pool.get(b.cardId)?.hp ?? 0) - (pool.get(a.cardId)?.hp ?? 0);
+      });
       const count = Math.min(sel.maxCount, candidates.length);
       return { type: 'RESOLVE_SELECTION', selectedIids: candidates.slice(0, count).map(c => c.iid) };
     }

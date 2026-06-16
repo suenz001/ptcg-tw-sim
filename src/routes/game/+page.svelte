@@ -2000,6 +2000,10 @@
     }, delay);
   }
 
+  // v5.617：AI 無進展防呆 — 連續若干次行動後盤面 signature 完全沒變(動作被引擎拒絕無法執行,
+  //   如富裕能量被 ACE消弭擋/祭典樂舞第二擊無能量) → AI 卡住、回合結束不了。偵測到即強制 END_TURN。
+  let _aiPrevSig = '';
+  let _aiStuck = 0;
   function tickAI() {
     if (!game || !poolReady || aiPlayerIndex === null) return;
     // v5.351：鐵 gate — 線上對局(有 roomCode)永不跑 AI 驅動。aiPlayerIndex 線上預設 1(給 UI)，
@@ -2035,6 +2039,25 @@
     })();
 
     if (!shouldAct) return;
+
+    // v5.617 無進展防呆：若盤面 signature 與上一個 AI tick 完全相同(上次 dispatch 被拒、毫無進展)，
+    //   累計；連續 2 次無進展 → AI 卡在無法執行的動作 → 主階段強制 END_TURN(同 null-fallback 條件)。
+    {
+      const _g = game!;
+      const _sig = `${_g.phase}|${_g.turn}|${_g.turnPhase}|${_g.activePlayerIndex}|${_g.log.length}|${_g.players[0].hand.length}|${_g.players[1].hand.length}|${_g.players[aiPlayerIndex].bench.length}|${_g.players[aiPlayerIndex].active?.iid ?? ''}|${_g.pendingSelection?.effectKey ?? ''}|${_g.pendingPrizes?.[0] ?? 0}|${_g.pendingPrizes?.[1] ?? 0}`;
+      if (_sig === _aiPrevSig) _aiStuck++; else { _aiStuck = 0; _aiPrevSig = _sig; }
+      if (_aiStuck >= 2) {
+        _aiStuck = 0; _aiPrevSig = '';
+        if (_g.phase === 'playing' && _g.activePlayerIndex === aiPlayerIndex && _g.turnPhase === 'main'
+            && !_g.pendingSelection && (_g.pendingPrizes?.[0] ?? 0) === 0 && (_g.pendingPrizes?.[1] ?? 0) === 0) {
+          console.warn('[AI no-progress guard] AI 連續無進展(動作被拒) → 強制 END_TURN');
+          aiThinking = true;
+          dispatch({ type: 'END_TURN' } as any, { fromAI: true });
+          scheduleAI();
+        }
+        return;
+      }
+    }
 
     const action = getAIAction(game!, pool, aiPlayerIndex);
     if (!action) {
