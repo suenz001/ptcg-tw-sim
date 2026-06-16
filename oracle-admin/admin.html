@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.48</title>
+<title>PTCG Oracle Admin v1.49</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.48</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.49</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1154,6 +1154,51 @@ function _tsFmtDuration(ms) {
   return sec + ' 秒';
 }
 function _tsPct(w, l) { const t = w + l; return t > 0 ? Math.round(w / t * 100) : 0; }
+// v1.49 賽事統計表格通用排序：點欄位標頭排序（首次點大到小，再點切換；# 與空白欄不排序）
+function _tsSortTable(th) {
+  var table = th.closest('table');
+  if (!table || !table.tHead || !table.tBodies[0]) return;
+  var ths = Array.prototype.slice.call(table.tHead.rows[0].cells);
+  var col = ths.indexOf(th);
+  if (col < 0) return;
+  var prevCol = table.getAttribute('data-sort-col');
+  var prevAsc = table.getAttribute('data-sort-asc') === '1';
+  var asc = (String(prevCol) === String(col)) ? !prevAsc : false;
+  table.setAttribute('data-sort-col', String(col));
+  table.setAttribute('data-sort-asc', asc ? '1' : '0');
+  var tbody = table.tBodies[0];
+  var rows = Array.prototype.slice.call(tbody.rows);
+  function val(r) {
+    var td = r.cells[col];
+    if (!td) return { n: null, s: '' };
+    if (td.hasAttribute('data-sort')) {
+      var dv = parseFloat(td.getAttribute('data-sort'));
+      return { n: isNaN(dv) ? null : dv, s: td.getAttribute('data-sort') || '' };
+    }
+    var t = (td.textContent || '').trim();
+    var m = t.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+    return { n: m ? parseFloat(m[0]) : null, s: t };
+  }
+  rows.sort(function (ra, rb) {
+    var a = val(ra), b = val(rb), r;
+    if (a.n !== null || b.n !== null) {
+      var an = (a.n === null) ? -Infinity : a.n;
+      var bn = (b.n === null) ? -Infinity : b.n;
+      r = an - bn;
+    } else {
+      r = a.s.localeCompare(b.s, 'zh-Hant');
+    }
+    return asc ? r : -r;
+  });
+  rows.forEach(function (r) { tbody.appendChild(r); });
+  if (ths[0] && (ths[0].textContent || '').trim() === '#') {
+    rows.forEach(function (r, i) { if (r.cells[0]) r.cells[0].textContent = (i + 1); });
+  }
+  ths.forEach(function (h) { var x = h.querySelector('.sort-ar'); if (x) x.parentNode.removeChild(x); });
+  var ar = document.createElement('span'); ar.className = 'sort-ar'; ar.textContent = asc ? ' ▲' : ' ▼';
+  th.appendChild(ar);
+}
+
 function renderTournamentStats(el, data) {
   const archives = (data && data.archives) || [];
   if (!archives.length) {
@@ -1248,7 +1293,7 @@ function renderTournamentStats(el, data) {
   html += '<section class="stats-section"><h3>🏆 2. 冠軍榜（奪冠次數）</h3>';
   if (!champRank.length) html += '<div class="empty">尚無冠軍紀錄。</div>';
   else {
-    html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>Email</th><th>奪冠</th><th>參賽</th><th>戰績</th><th>勝率</th></tr></thead><tbody>';
+    html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">戰績</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th></tr></thead><tbody>';
     champRank.forEach((p, i) => {
       html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + escapeHtml(p.email || '（匿名）') + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
         + '</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
@@ -1260,7 +1305,7 @@ function renderTournamentStats(el, data) {
   // ── 3. 玩家戰績排行（依勝場）──
   const playerRank = Object.values(pmap).sort((a, b) => b.wins - a.wins || _tsPct(b.wins, b.losses) - _tsPct(a.wins, a.losses));
   html += '<section class="stats-section"><h3>🎯 3. 玩家戰績排行 <span class="small muted">（只計雙方都到場的真實對局，不含輪空）</span></h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>玩家</th><th>Email</th><th>參賽</th><th>勝</th><th>負</th><th>勝率</th><th>奪冠</th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">勝</th><th class="sortable" onclick="_tsSortTable(this)">負</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th></tr></thead><tbody>';
   playerRank.forEach((p, i) => {
     html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + escapeHtml(p.email || '（匿名）') + '</td><td>' + p.events + '</td><td>' + p.wins
       + '</td><td>' + p.losses + '</td><td>' + _tsPct(p.wins, p.losses) + '%</td><td>' + (p.titles ? (p.titles + ' 🏆') : '—') + '</td></tr>';
@@ -1270,7 +1315,7 @@ function renderTournamentStats(el, data) {
   // ── 4. 主力寶可夢使用率 + 勝率 ──
   const pkRank = Object.keys(pkUse).map((nm) => ({ name: nm, ...pkUse[nm] })).sort((a, b) => b.use - a.use || b.wins - a.wins);
   html += '<section class="stats-section"><h3>⚔️ 4. 主力寶可夢使用率 <span class="small muted">（依牌組推測主力打手；勝率只計真實對局）</span></h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>主力寶可夢</th><th>使用次數</th><th>使用率</th><th>戰績</th><th>勝率</th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">主力寶可夢</th><th class="sortable" onclick="_tsSortTable(this)">使用次數</th><th class="sortable" onclick="_tsSortTable(this)">使用率</th><th class="sortable" onclick="_tsSortTable(this)">戰績</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th></tr></thead><tbody>';
   pkRank.forEach((p, i) => {
     const usePct = totalEntries ? Math.round(p.use / totalEntries * 100) : 0;
     html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + p.use + '</td><td>' + usePct
@@ -1280,12 +1325,12 @@ function renderTournamentStats(el, data) {
 
   // ── 5. 歷屆賽事 ──
   html += '<section class="stats-section"><h3>📋 5. 歷屆賽事</h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>完賽時間</th><th>耗時</th><th>賽事名稱</th><th>人數</th><th>冠軍</th><th>冠軍牌型</th><th></th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th class="sortable" onclick="_tsSortTable(this)">完賽時間</th><th class="sortable" onclick="_tsSortTable(this)">耗時</th><th class="sortable" onclick="_tsSortTable(this)">賽事名稱</th><th class="sortable" onclick="_tsSortTable(this)">人數</th><th class="sortable" onclick="_tsSortTable(this)">冠軍</th><th class="sortable" onclick="_tsSortTable(this)">冠軍牌型</th><th></th></tr></thead><tbody>';
   archives.forEach((a) => {
     const champRec = (a.players || []).find((p) => p.uid === a.championUid);
     const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
     const dur = (a.finishedAt && (a.startedAt || a.createdAt)) ? (a.finishedAt - (a.startedAt || a.createdAt)) : 0;
-    html += '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td><td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與對戰 log">' + escapeHtml(a.eventName || '錦標賽') + '</button></td><td>' + (a.playerCount || (a.players || []).length)
+    html += '<tr><td data-sort="' + (a.finishedAt||0) + '">' + _tsFmtDateTime(a.finishedAt) + '</td><td data-sort="' + (dur||0) + '">' + _tsFmtDuration(dur) + '</td><td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與對戰 log">' + escapeHtml(a.eventName || '錦標賽') + '</button></td><td>' + (a.playerCount || (a.players || []).length)
       + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
       + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
   });
@@ -1299,7 +1344,7 @@ function renderTournamentStats(el, data) {
     return '<tr><td>' + label + '</td><td>' + n + '</td><td>' + pct + '%</td><td class="small muted">' + (hint || '') + '</td></tr>';
   };
   html += '<section class="stats-section"><h3>🔚 6. 賽果分佈 <span class="small muted">（全部對局，含輪空與判負）</span></h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>結束方式</th><th>場數</th><th>占比</th><th></th></tr></thead><tbody>';
+  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th class="sortable" onclick="_tsSortTable(this)">結束方式</th><th class="sortable" onclick="_tsSortTable(this)">場數</th><th class="sortable" onclick="_tsSortTable(this)">占比</th><th></th></tr></thead><tbody>';
   html += oRow('✅ 正常對戰分勝負', outcome.normal, '雙方打到遊戲結束');
   html += oRow('🏳️ 投降判負', outcome.forfeit, '一方主動投降');
   html += oRow('⏰ 閒置判負', outcome.idleForfeit, '3 分鐘無動作');
