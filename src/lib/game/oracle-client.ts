@@ -104,6 +104,10 @@ export async function oracleApi<T = any>(
     // 沒 body，當作 caller 自己重試；但其實 caller 走 polling 自動會再試
     throw new Error('oracleApi 304 (unexpected with cache:no-store)');
   }
+  // v5.610: server 對「房間版本未變」回 204（無 body）→ 回傳 undefined 讓 caller 略過
+  if (res.status === 204) {
+    return undefined as unknown as T;
+  }
   if (!res.ok) {
     // 409 conflict 也算 ok response, caller 要處理
     if (res.status === 409) {
@@ -127,10 +131,22 @@ export type OracleUpsertResult =
   | { ok: true; version: number; room: OracleRoom }
   | { conflict: true; currentVersion: number; room: OracleRoom | null };
 
-export async function oracleGetRoom(code: string): Promise<OracleRoom | null> {
+// v5.610: 房間版本未變更哨兵（server 回 204 時用）
+export const ROOM_UNCHANGED = Symbol('room-unchanged');
+
+export function oracleGetRoom(code: string): Promise<OracleRoom | null>;
+export function oracleGetRoom(code: string, since: number): Promise<OracleRoom | null | typeof ROOM_UNCHANGED>;
+export async function oracleGetRoom(
+  code: string,
+  since?: number,
+): Promise<OracleRoom | null | typeof ROOM_UNCHANGED> {
   try {
-    const { room } = await oracleApi<{ room: OracleRoom }>(`/api/rooms/${code.toUpperCase()}`);
-    return room;
+    // 只有 polling 會帶 since（>=0）；其餘呼叫端不帶 → server 照回完整 room
+    const q = since !== undefined && since >= 0 ? `?since=${since}` : '';
+    const res = await oracleApi<{ room: OracleRoom } | undefined>(`/api/rooms/${code.toUpperCase()}${q}`);
+    // 204：server 告知版本未變 → 回哨兵讓 caller 略過（不觸發任何 callback）
+    if (res === undefined) return ROOM_UNCHANGED;
+    return res.room;
   } catch (err: any) {
     if (String(err.message).includes('404')) return null;
     throw err;
@@ -178,8 +194,13 @@ export function oraclePollRoom(
   const tick = async () => {
     if (!alive) return;
     try {
-      const room = await oracleGetRoom(code);
-      if (room) {
+      // v5.610: 帶上已知版本；server 版本沒變回 204 → ROOM_UNCHANGED，直接略過省流量
+      const room = lastVersion >= 0
+        ? await oracleGetRoom(code, lastVersion)
+        : await oracleGetRoom(code);
+      if (room === ROOM_UNCHANGED) {
+        // 版本未變，什麼都不做（等同舊版收到同版本時忽略）
+      } else if (room) {
         if (room._version !== lastVersion) {
           lastVersion = room._version;
           lastExists = true;
