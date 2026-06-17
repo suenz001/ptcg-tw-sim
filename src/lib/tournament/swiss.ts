@@ -133,6 +133,7 @@ export interface MatchRecord {
   p2uid: string | null;   // null = Bye
   winnerUid: string | null;
   bye?: boolean;
+  status?: string;        // 'pending' | 'playing' | 'done' …；未結束(非 done 且無 winner)= 尚未有結果,不可計分
 }
 /**
  * 由「已完成的瑞士輪對戰紀錄 + 參賽者名單」重建每人的 SwissPlayer（積分/對手/結果/Bye）。
@@ -153,6 +154,10 @@ export function buildSwissPlayersFromMatches(
       p.matchPoints += 3; p.byes += 1; p.results.push('BYE');
       continue;
     }
+    // 只計已結束的對戰：有 winner=勝負已定；無 winner 但 status==='done'=雙未進場(雙敗)。
+    // 未結束(pending/playing、尚未產生結果)→ 跳過，絕不可當雙敗計分（否則剛配好還沒打的下一輪會被誤記兩敗）。
+    const resolved = m.winnerUid != null || m.status === 'done';
+    if (!resolved) continue;
     const a = byUid.get(m.p1uid), b = byUid.get(m.p2uid);
     if (a && b) { a.opponents.push(b.uid); b.opponents.push(a.uid); }
     if (m.winnerUid) {
@@ -162,6 +167,7 @@ export function buildSwissPlayersFromMatches(
       if (w) { w.matchPoints += 3; w.results.push('W'); }
       if (l) l.results.push('L');
     } else {
+      // status==='done' 且無 winner = 雙未進場/雙敗
       if (a) a.results.push('L');
       if (b) b.results.push('L');
     }

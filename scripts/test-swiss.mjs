@@ -190,7 +190,7 @@ T('buildSwissPlayersFromMatches 重建積分/對手/Bye 正確', () => {
   assert.deepEqual(st.map(p=>p.uid), ['c','a','b']);
 });
 T('buildSwissPlayersFromMatches 無 winner(雙未進場) → 雙方記L不得分', () => {
-  const ps = S.buildSwissPlayersFromMatches([{round:1,p1uid:'a',p2uid:'b',winnerUid:null,bye:false}], [{uid:'a',name:'A'},{uid:'b',name:'B'}]);
+  const ps = S.buildSwissPlayersFromMatches([{round:1,p1uid:'a',p2uid:'b',winnerUid:null,bye:false,status:'done'}], [{uid:'a',name:'A'},{uid:'b',name:'B'}]);
   const by = Object.fromEntries(ps.map(p=>[p.uid,p]));
   assert.equal(by.a.matchPoints,0); assert.equal(by.b.matchPoints,0);
   assert.deepEqual(by.a.results,['L']); assert.deepEqual(by.a.opponents,['b']);
@@ -261,14 +261,28 @@ T('端到端 瑞士→TopCut→冠軍：N=8/10/16/17 都收斂出唯一冠軍', 
 T('雙方未進場(雙敗)跨輪累計：每場各記1敗,不重複不漏', () => {
   const regs=[{uid:'a',name:'A'},{uid:'b',name:'B'}];
   const matches=[
-    {round:1,p1uid:'a',p2uid:'b',winnerUid:null,bye:false},
-    {round:2,p1uid:'a',p2uid:'b',winnerUid:null,bye:false},
+    {round:1,p1uid:'a',p2uid:'b',winnerUid:null,bye:false,status:'done'},
+    {round:2,p1uid:'a',p2uid:'b',winnerUid:null,bye:false,status:'done'},
   ];
   const ps=S.buildSwissPlayersFromMatches(matches,regs);
   const by=Object.fromEntries(ps.map(p=>[p.uid,p]));
   assert.equal(by.a.results.filter(r=>r==='L').length, 2, 'a 兩場雙敗=2敗(非4非0)');
   assert.equal(by.a.matchPoints, 0, '雙敗 0 分');
   assert.equal(by.b.results.filter(r=>r==='L').length, 2);
+});
+
+
+T('pending(未打)對戰不計分：剛配好還沒打的下一輪不可被當雙敗(修 v5.624 後)', () => {
+  const regs=[{uid:'g',name:'GG'},{uid:'a',name:'aa'}];
+  const matches=[
+    {round:1,p1uid:'g',p2uid:'a',winnerUid:'g',bye:false,status:'done'},  // R1: GG 勝 aa
+    {round:2,p1uid:'g',p2uid:'a',winnerUid:null,bye:false,status:'pending'}, // R2: 剛配好,還沒打
+  ];
+  const ps=S.buildSwissPlayersFromMatches(matches,regs);
+  const by=Object.fromEntries(ps.map(p=>[p.uid,p]));
+  assert.equal(by.g.matchPoints,3,'GG 1勝=3(非含pending)'); assert.deepEqual(by.g.results,['W'],'GG 只1場W,不含R2 pending');
+  assert.equal(by.a.matchPoints,0); assert.deepEqual(by.a.results,['L'],'aa 只1敗,不含R2 pending');
+  assert.deepEqual(by.g.opponents,['a'],'opponents 只算已打的'); assert.equal(by.a.opponents.length,1);
 });
 
 console.log(`\n=== 瑞士制 ${pass} PASS / ${fail} FAIL ===`);
