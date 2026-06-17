@@ -1096,6 +1096,24 @@ export function healResolver(
 // 不再允許 prizes.slice() + hand: [...] 直接派發到手牌（除引擎 TAKE_PRIZES handler）。
 
 /** 對 ownerIdx 側累計 n 張待領獎賞。owner = 應該取走獎賞的玩家。 */
+/**
+ * v5.625：「場上寶可夢互換成棄牌區寶可夢」(變化之書/鬼之假面)時，換上的新寶可夢 abilityUsedThisTurn 取值。
+ * 官方 QA(變化之書)：特性「已使用」狀態以「特性名稱」保留——
+ *  - 舊寶可夢本回合沒用過特性 → 新的可用(回 undefined)。
+ *  - 舊用過 + 新寶可夢有「同名」特性 → 沿用已使用(回 true，擋；Q3)。
+ *  - 舊用過 + 新寶可夢特性「不同名」或無特性 → 新特性尚未使用，可用(回 undefined；Q2)。
+ * 原本整包 {...fieldInst} 一律帶 abilityUsedThisTurn=true → 換上的不同特性寶可夢被誤擋。
+ */
+export function abilityUsedAfterSwap(
+  oldInst: { abilityUsedThisTurn?: boolean },
+  oldCard: Card | undefined,
+  newCard: Card | undefined,
+): boolean | undefined {
+  if (!oldInst.abilityUsedThisTurn) return undefined;
+  const oldNames = new Set((oldCard?.abilities ?? []).map((a) => a.name));
+  return (newCard?.abilities ?? []).some((a) => oldNames.has(a.name)) ? true : undefined;
+}
+
 export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, pool: Map<string, Card>): GameState {
   // v5.466 自動給獎賞：取代「累加 pendingPrizes + 手動【取得】鈕」。KO 當下立即把獎賞卡移入手牌，
   //   消除「攻擊方取獎賞 push 與防守方補位 push 重疊」的線上 desync（幻影奇襲多重KO 等）。

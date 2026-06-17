@@ -28,7 +28,7 @@ import {
   healResolver,
   getOwnBenchLimit,
 } from '../_shared';
-import { joinCardNames } from '../_shared';
+import { joinCardNames, abilityUsedAfterSwap } from '../_shared';
 import { tryPromptPromoteActive } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
@@ -1556,6 +1556,8 @@ regR('oni-mask-step2', (st, idx, iids, params, pool) => {
     ...fieldTarget,
     cardId: discardPick.cardId,
     // 保留：damage/energy/tool/status/secondaryStatus/evolvedFromStack/各種旗標
+    // v5.625 官方QA：特性已使用以名稱保留(換上不同名特性可用、同名沿用已用)
+    abilityUsedThisTurn: abilityUsedAfterSwap(fieldTarget, pool.get(fieldTarget.cardId), pool.get(discardPick.cardId)),
   };
 
   st = addLog(st, `鬼之假面：${oldCardName} ↔ ${newCardName}（保留所有附加）；換下的 ${oldCardName} 丟棄`, idx);
@@ -1668,6 +1670,8 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
   const swapped: import('../../types').CardInstance = {
     ...fieldTarget,
     cardId: discardPick.cardId,
+    // v5.625 官方QA：特性「已使用」以名稱保留——換上不同名特性可用、同名沿用已用(不再整包帶 true 誤擋)
+    abilityUsedThisTurn: abilityUsedAfterSwap(fieldTarget, fieldCard, pool.get(discardPick.cardId)),
   };
 
   st = addLog(st, `變化之書：${oldCardName} ↔ ${newCardName}（保留所有附加）；換下的 ${oldCardName} 丟棄`, idx);

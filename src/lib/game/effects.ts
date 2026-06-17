@@ -21,7 +21,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
-import { openDeckViewReshuffle, setBloomEffectiveFn } from './effects/_shared';
+import { openDeckViewReshuffle, setBloomEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -4502,7 +4502,7 @@ regR('ghost-mask-swap', (st, idx, picked, params, pool) => {
   const newName = pool.get(discardCard.cardId)?.name ?? '?';
   const oldName = pool.get(fieldInst.cardId)?.name ?? '?';
   // 新場上底牌：保留場上 instance 的 iid + 全部附加物/傷害/狀態/旗標，只換 cardId
-  const newFieldInst: CardInstance = { ...fieldInst, cardId: discardCard.cardId };
+  const newFieldInst: CardInstance = { ...fieldInst, cardId: discardCard.cardId, abilityUsedThisTurn: abilityUsedAfterSwap(fieldInst, pool.get(fieldInst.cardId), pool.get(discardCard.cardId)) };  // v5.625 官方QA：特性已使用以名稱保留
   // 換下的裸底牌：重用被選棄牌卡的 iid(已釋出,因 newFieldInst 用場上 iid)，附加物全留給新底牌
   const swappedOutBare: CardInstance = { ...discardCard, cardId: fieldInst.cardId };
   st = updatePlayer(st, idx, p => ({
