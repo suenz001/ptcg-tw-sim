@@ -754,7 +754,7 @@
   function preventScroll(node: HTMLElement) {
     const moveHandler = (e: TouchEvent) => {
       const t = e.target as Element | null;
-      if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet')) return;
+      if (t?.closest('.mp-row, .mp-hand, .mp-log, .mp-chips, .mp-sheet, .chat-panel-messages')) return;
       e.preventDefault();
     };
     // v3.871 / v3.872: document 層也擋 — 處理 .mp 外的 pull-to-refresh
@@ -769,7 +769,8 @@
         '.selection-overlay, .selection-modal, ' +
         '.lightbox-overlay, ' +
         '.zoom-overlay, .zoom-modal, ' +
-        '.full-deck-view, .full-deck-list',
+        '.full-deck-view, .full-deck-list, ' +
+        '.chat-panel-messages',  // v5.627 浮動聊天訊息區允許垂直捲動看歷史;原本被 document touchmove 全擋
       )) {
         if (e.cancelable) e.preventDefault();
       }

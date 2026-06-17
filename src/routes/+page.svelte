@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.627</span> 修正：手機版對戰中聊天視窗仍無法上下捲動看歷史訊息（被對戰防滑手勢擋住）</summary>
+        <ul>
+          <li>手機版對戰中為了防止整頁亂滑，會攔截滑動手勢，但漏放行了浮動聊天視窗的訊息區，導致聊天訊息多時無法上下捲動查看歷史。已把聊天訊息區加入可捲動白名單。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.626</span> 介面調整：開戰跑馬燈放慢；手機版聊天視窗可上下捲動看歷史訊息、可拖曳移動</summary>
         <ul>
           <li>電腦版開戰系統跑馬燈速度放慢，且依文字長度自動調整、不再因字多而變快。</li>
