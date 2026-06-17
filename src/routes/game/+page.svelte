@@ -262,6 +262,8 @@
   //   beta+正式站都讀同一份 Firestore；純前端顯示、不經同步層（兩端各自獨立顯示，無 desync 風險）。
   let broadcastCfg = $state<BroadcastConfig | null>(null);
   let broadcastMarquee = $state('');   // 當前跑馬燈文字（'' = 不顯示）
+  // v5.626 跑馬燈速度依字數放慢(原固定14s→字越長越快)；下限18s,每字+0.6s,讓速度一致且整體慢一點。
+  const broadcastMarqueeDur = $derived(Math.max(18, broadcastMarquee.length * 0.6));
   let broadcastKey = $state(0);        // 強制重播動畫
   let _bcLoadedGameId = '';
   let _bcShownTurns = new Set<number>();
@@ -630,6 +632,8 @@
   let tLastSeenChat = $state(0); // v5.577 錦標賽對戰中浮動聊天(接大廳)已讀數
   const chatFabUnread = $derived(isTournament ? Math.max(0, tChat.length - tLastSeenChat) : unreadChatCount);
   let chatPanelScrollEl: HTMLDivElement | null = null;
+  let chatPanelPinned = $state(true);  // v5.626 使用者是否在底部；往上看歷史時(false)新訊息不強制捲回底
+  function onChatPanelScroll(e: Event) { const el = e.currentTarget as HTMLElement; chatPanelPinned = (el.scrollHeight - el.scrollTop - el.clientHeight) < 48; }
 
   function toggleChatPanel() {
     chatPanelOpen = !chatPanelOpen;
@@ -650,7 +654,14 @@
     if (!chatPanelDragStart) return;
     const dx = e.clientX - chatPanelDragStart.mx;
     const dy = e.clientY - chatPanelDragStart.my;
-    chatPanelPos = { x: chatPanelDragStart.ox + dx, y: chatPanelDragStart.oy + dy };
+    let x = chatPanelDragStart.ox + dx, y = chatPanelDragStart.oy + dy;
+    // v5.626 手機版用 margin 位移(避免 transform 破壞 iOS 內部捲動)→ clamp 保留面板大致在畫面內不拖丟
+    if (isPortraitMobile && typeof window !== 'undefined') {
+      const W = window.innerWidth, H = window.innerHeight;
+      x = Math.max(-W * 0.45, Math.min(W * 0.45, x));
+      y = Math.max(-(H * 0.25), Math.min(H * 0.45, y));
+    }
+    chatPanelPos = { x, y };
   }
   function onChatHeaderUp(_e: PointerEvent) {
     chatPanelDragStart = null;
@@ -776,12 +787,12 @@
     if (chatPanelOpen && !isTournament && chatMessages.length > lastSeenChatCount) {
       lastSeenChatCount = chatMessages.length;
       setTimeout(() => {
-        if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
+        if (chatPanelScrollEl && chatPanelPinned) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
       }, 50);
     }
     if (chatPanelOpen && isTournament && tChat.length > tLastSeenChat) {
       tLastSeenChat = tChat.length;
-      setTimeout(() => { if (chatPanelScrollEl) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight; }, 50);
+      setTimeout(() => { if (chatPanelScrollEl && chatPanelPinned) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight; }, 50);
     }
   });
   let roomCode    = $state('');          // 建立或加入後得到的房號
@@ -6985,7 +6996,7 @@
   {#if broadcastMarquee}
     {#key broadcastKey}
       <div class="admin-broadcast-bar" role="status">
-        <div class="admin-broadcast-track">📢 {broadcastMarquee}</div>
+        <div class="admin-broadcast-track" style="animation-duration: {broadcastMarqueeDur}s">📢 {broadcastMarquee}</div>
         <button class="admin-broadcast-close" onclick={() => broadcastMarquee = ''} title="關閉廣播" aria-label="關閉廣播">✕</button>
       </div>
     {/key}
@@ -9162,7 +9173,7 @@
       </button>
     {:else}
       <!-- 展開：floating panel（桌機）/ 全螢幕 modal（手機 portrait CSS @media） -->
-      <div class="chat-panel" style:transform={`translate(${chatPanelPos.x}px, ${chatPanelPos.y}px)`}>
+      <div class="chat-panel" style:transform={`translate(${chatPanelPos.x}px, ${chatPanelPos.y}px)`} style:margin-left={isPortraitMobile ? `${chatPanelPos.x}px` : undefined} style:margin-top={isPortraitMobile ? `${chatPanelPos.y}px` : undefined}>
         <div class="chat-panel-header"
           onpointerdown={onChatHeaderDown}
           onpointermove={onChatHeaderMove}
@@ -9174,7 +9185,7 @@
             onclick={toggleChatPanel}
             title="最小化">×</button>
         </div>
-        <div class="chat-panel-messages" bind:this={chatPanelScrollEl}>
+        <div class="chat-panel-messages" bind:this={chatPanelScrollEl} onscroll={onChatPanelScroll}>
           {#if isTournament}
             {#if tChat.length === 0}
               <p class="muted small chat-empty">大廳聊天室目前沒有訊息～</p>
@@ -11279,20 +11290,17 @@
      - 加 safe-area-inset 邊距處理瀏海 / 動態島 / 底部 home indicator */
   @media (max-width: 600px) and (orientation: portrait) {
     .chat-panel {
-      right: 2.5vw; left: 2.5vw;
-      top: max(env(safe-area-inset-top, 20px), 40px);
-      bottom: max(env(safe-area-inset-bottom, 12px), 12px);
-      width: auto; height: auto;
-      /* v5.168：80vh → 55vh — 玩家回報手機版聊天室太高擋到牌面 */
-      max-height: 55vh;
+      /* v5.626 改 left/top + 固定尺寸(不再 left+right/top+bottom stretch)→ 讓 margin 位移可乾淨拖曳；
+         仍 transform:none(避免 iOS position:fixed+transform 破壞內部捲動)。 */
+      left: 2.5vw; right: auto;
+      top: max(env(safe-area-inset-top, 20px), 40px); bottom: auto;
+      width: 95vw; height: 55vh; max-height: 55vh;
       border-radius: 12px;
       border: 2px solid #4a4a6a;
-      /* v5.592：手機版改回 transform: none — 全螢幕面板不需拖曳，且帶 transform 會讓 iOS Safari
-         的 position:fixed 內部訊息區無法觸控捲動（看不到歷史訊息）。覆蓋 inline style:transform。 */
       transform: none !important;
     }
     .chat-panel-header {
-      cursor: default;
+      cursor: move;
       padding: .7rem 1rem;
       font-size: 1rem;
     }
