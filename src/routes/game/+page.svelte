@@ -6308,6 +6308,22 @@
       {/snippet}
       <!-- v5.620：進行中／即將開始的賽事優先（其賽程表、觀戰選單排在「下一場報名」視窗之上）-->
       {#each tRunningEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
+      <!-- v5.621 瑞士制即時排名表（僅 swiss 賽事;伺服器 /bracket 回 standings）。排在賽程表上方。 -->
+      {#if tBracket?.standings && tBracket.standings.length}
+        <div class="tourn-bracket">
+          <div class="tourn-bracket-head">📊 瑞士制排名{#if tBracket.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if tBracket.event?.swissRounds} ｜ 第 {tBracket.event.currentRound}/{tBracket.event.swissRounds} 輪{/if}</div>
+          <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
+            <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">積分</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div>
+            {#each tBracket.standings as s (s.name + '_' + s.rank)}
+              <div style="text-align:center;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.rank}</div>
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.name}{#if s.mine} （你）{/if}</div>
+              <div style="text-align:center;">{s.w}-{s.l}</div>
+              <div style="text-align:center;font-weight:600;">{s.matchPoints}</div>
+              <div style="text-align:center;color:#9ab;">{s.owp}%</div>
+            {/each}
+          </div>
+        </div>
+      {/if}
       {#if tBracket && tBracket.matches && tBracket.matches.length}
         <div class="tourn-bracket">
           <div class="tourn-bracket-head">📋 賽程表{#if tBracket.event?.championName} ｜ 🏆 冠軍：<b>{tBracket.event.championName}</b>{/if}</div>
@@ -6327,13 +6343,16 @@
             {/if}
           {/if}
           {#if tBracket.event}
-            {@const _rounds = tBracket.event.rounds ?? 1}
+            {@const _maxRound = tBracket.matches.reduce((mx: number, m: any) => Math.max(mx, m.round), 1)}
+            {@const _rounds = Math.max(tBracket.event.rounds ?? 1, _maxRound)}
             {@const _page = Math.min(Math.max(1, tBracketPage), _rounds)}
             {@const _curR = tBracket.event.currentRound ?? 1}
             {@const _roundMatches = tBracket.matches.filter((m: any) => m.round === _page)}
+            {@const _isCut = _roundMatches.some((m: any) => m.phase === 'cut')}
+            {@const _isSwiss = _roundMatches.some((m: any) => m.phase === 'swiss')}
             <div class="tourn-bracket-pager">
               <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.max(1, _page - 1)} disabled={_page <= 1}>◀ 上一輪</button>
-              <span class="tourn-pg-title">{_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪'}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
+              <span class="tourn-pg-title">{_isSwiss ? '瑞士第 ' + _page + ' 輪' : _isCut ? (_page === _rounds ? '🏆 Top Cut 決賽' : 'Top Cut') : (_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪')}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
               <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.min(_rounds, _page + 1)} disabled={_page >= _rounds}>下一輪 ▶</button>
             </div>
             <div class="tourn-round">

@@ -771,15 +771,18 @@ async function loadTournamentAdmin() {
       + '<label style="display:block;margin:8px 0;">每場時限（分）：<input id="tev-round" value="' + escapeHtml(String(L.roundLimitMin || 25)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">未進場判負（分）：<input id="tev-noshow" value="' + escapeHtml(String(L.noShowMin || 5)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">輪間休息倒數（分，倒數結束才可進場，預設3）：<input id="tev-countdown" value="' + escapeHtml(String(L.roundCountdownMin != null && L.roundCountdownMin !== '' ? L.roundCountdownMin : 3)) + '" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">賽制：<select id="tev-format" style="padding:5px;"><option value="single-elim">單敗淘汰 Bo1（輸一場淘汰）</option><option value="swiss">瑞士制 + Top Cut Bo1（全員打固定輪數→前K名單淘汰）</option></select></label>'
+      + '<label style="display:block;margin:8px 0;">瑞士輪數（空白＝依人數自動；僅瑞士制生效）：<input id="tev-swissrounds" value="" placeholder="自動" style="width:80px;padding:5px;"></label>'
+      + '<label style="display:block;margin:8px 0;">Top Cut 取前幾名（空白＝依人數自動：≤16→4、≥17→8；僅瑞士制生效）：<input id="tev-topcut" value="" placeholder="自動" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名開始時間（可不填＝立即開放）：<input id="tev-regopen" type="datetime-local" style="padding:5px;"></label>'
       + '<label style="display:block;margin:8px 0;">報名截止時間（可不填＝手動開賽；填了到點自動公布賽程並開賽）：<input id="tev-regclose" type="datetime-local" style="padding:5px;"></label>'
-      + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事（單敗淘汰 Bo1）</button>'
+      + '<button style="' + btnS + 'margin-top:8px;" onclick="tevCreate(this)">建立賽事</button>'
       + '</div></details>';
   if (ev) {
     const stLabel = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[ev.status] || ev.status;
     html += '<div style="border:1px solid #4a6a4a;border-radius:8px;padding:14px;margin-bottom:14px;">'
       + '<h3 style="margin:0 0 6px;">' + escapeHtml(ev.name) + '</h3>'
-      + '<p style="color:#cfe8cf;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ 單敗淘汰 Bo1 ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
+      + '<p style="color:#cfe8cf;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ ' + (ev.format === 'swiss-then-cut' ? ('瑞士制+TopCut Bo1' + (ev.swissRounds ? ('（' + ev.swissRounds + '輪→前' + (ev.topCut||'?') + '）') : '')) : '單敗淘汰 Bo1') + ' ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
       + (ev.registrationOpenAt ? '<p style="color:#9ab;margin:2px 0;">報名開始：' + new Date(ev.registrationOpenAt).toLocaleString('zh-TW') + '</p>' : '')
       + (ev.registrationCloseAt ? '<p style="color:#9ab;margin:2px 0;">報名截止：' + new Date(ev.registrationCloseAt).toLocaleString('zh-TW') + '（到點自動公布賽程並開賽）</p>' : '')
       + '<p style="color:#9ab;margin:2px 0;">輪間休息倒數：' + (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3) + ' 分 ｜ 未進場判負：' + (ev.noShowMin || 5) + ' 分</p>'
@@ -873,6 +876,9 @@ window.tevCreate = async function (btn) {
     roundCountdownMin: (document.getElementById('tev-countdown') ? document.getElementById('tev-countdown').value : 3),
     registrationOpenAt: toMs('tev-regopen'),
     registrationCloseAt: toMs('tev-regclose'),
+    format: (document.getElementById('tev-format') ? document.getElementById('tev-format').value : 'single-elim'),
+    swissRounds: (document.getElementById('tev-swissrounds') ? document.getElementById('tev-swissrounds').value : ''),
+    topCut: (document.getElementById('tev-topcut') ? document.getElementById('tev-topcut').value : ''),
   };
   try { localStorage.setItem('tevLastSettings', JSON.stringify({ name: body.name, maxPlayers: body.maxPlayers, roundLimitMin: body.roundLimitMin, noShowMin: body.noShowMin, roundCountdownMin: body.roundCountdownMin })); } catch (e) {}
   try { const d = await api('/api/tournament/admin/event/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); if (d.error) alert(d.error); }
