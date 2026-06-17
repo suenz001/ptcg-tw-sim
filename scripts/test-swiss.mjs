@@ -196,5 +196,66 @@ T('buildSwissPlayersFromMatches 無 winner(雙未進場) → 雙方記L不得分
   assert.deepEqual(by.a.results,['L']); assert.deepEqual(by.a.opponents,['b']);
 });
 
+
+// ── 完整端到端：瑞士→排名→Top Cut→冠軍（鏡射伺服器 advanceSwiss/checkRoundAdvance 編排）──
+function fullSwissThenCut(N, rng) {
+  // 建 N 人；matches 累積（{round,p1uid,p2uid,winnerUid,bye,phase}）
+  let mk2 = [];
+  for (let i=0;i<N;i++) mk2.push('p'+(i+1));
+  const swissRounds = S.swissRoundsForCount(N);
+  const topCut = S.topCutSizeForCount(N);
+  const allMatches = [];
+  const recordRound = (pairings, round, phase) => {
+    for (const pr of pairings) {
+      if (pr.p2 == null) { allMatches.push({round,p1uid:pr.p1,p2uid:null,winnerUid:pr.p1,bye:true,phase}); }
+      else { const w = rng()<0.5?pr.p1:pr.p2; allMatches.push({round,p1uid:pr.p1,p2uid:pr.p2,winnerUid:w,bye:false,phase}); }
+    }
+  };
+  // 第1輪（隨機）
+  let players0 = mk2.map(u=>({uid:u,name:u,matchPoints:0,opponents:[],results:[],byes:0}));
+  recordRound(S.pairSwissRound(players0, 1, rng), 1, 'swiss');
+  // 後續瑞士輪
+  for (let cur=1; cur<swissRounds; cur++) {
+    const sw = allMatches.filter(m=>m.phase==='swiss');
+    const players = S.buildSwissPlayersFromMatches(sw, mk2.map(u=>({uid:u,name:u})));
+    recordRound(S.pairSwissRound(players, cur+1, rng), cur+1, 'swiss');
+  }
+  // 瑞士結束→standings→TopCut seed
+  const swAll = allMatches.filter(m=>m.phase==='swiss');
+  const players = S.buildSwissPlayersFromMatches(swAll, mk2.map(u=>({uid:u,name:u})));
+  // 不變量：每人打滿 swissRounds、Bye≤1
+  for (const pl of players) {
+    assert.equal(pl.results.length, swissRounds, N+'人:'+pl.uid+' 瑞士場次應='+swissRounds+' 實='+pl.results.length);
+    assert(pl.byes<=1, pl.uid+' Bye>1');
+  }
+  const standings = S.computeStandings(players);
+  let cutRound = swissRounds+1;
+  let alive = standings.slice(0, Math.min(topCut, standings.length)).map(p=>p.uid);
+  let pairings = S.seedTopCut(standings, topCut);
+  // 單淘汰直到剩 1 人
+  let guard=0;
+  while (true) {
+    if (++guard>20) throw new Error('cut 迴圈未收斂');
+    recordRound(pairings, cutRound, 'cut');
+    const roundMatches = allMatches.filter(m=>m.phase==='cut'&&m.round===cutRound);
+    const winners = roundMatches.map(m=>m.winnerUid).filter(Boolean);
+    if (winners.length<=1) return { champ: winners[0], swissRounds, topCut, totalRounds: cutRound };
+    // 下一 cut 輪：贏家相鄰配（單淘汰，奇數給 bye）
+    const next=[]; let bye=null;
+    let w=winners.slice();
+    if (w.length%2===1) bye=w.pop();
+    const ps=[]; for (let i=0;i<w.length;i+=2) ps.push({p1:w[i],p2:w[i+1]});
+    if (bye) ps.push({p1:bye,p2:null});
+    pairings=ps; cutRound++;
+  }
+}
+T('端到端 瑞士→TopCut→冠軍：N=8/10/16/17 都收斂出唯一冠軍', () => {
+  for (const N of [8,10,16,17]) {
+    const r = fullSwissThenCut(N, seededRng(N*13+1));
+    assert(r.champ, N+'人應產生冠軍'); 
+    console.log('   N='+N+' → '+r.swissRounds+'瑞士輪, Top'+r.topCut+', 冠軍='+r.champ+' (共'+r.totalRounds+'輪)');
+  }
+});
+
 console.log(`\n=== 瑞士制 ${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);
