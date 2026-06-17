@@ -257,5 +257,19 @@ T('端到端 瑞士→TopCut→冠軍：N=8/10/16/17 都收斂出唯一冠軍', 
   }
 });
 
+
+T('雙方未進場(雙敗)跨輪累計：每場各記1敗,不重複不漏', () => {
+  const regs=[{uid:'a',name:'A'},{uid:'b',name:'B'}];
+  const matches=[
+    {round:1,p1uid:'a',p2uid:'b',winnerUid:null,bye:false},
+    {round:2,p1uid:'a',p2uid:'b',winnerUid:null,bye:false},
+  ];
+  const ps=S.buildSwissPlayersFromMatches(matches,regs);
+  const by=Object.fromEntries(ps.map(p=>[p.uid,p]));
+  assert.equal(by.a.results.filter(r=>r==='L').length, 2, 'a 兩場雙敗=2敗(非4非0)');
+  assert.equal(by.a.matchPoints, 0, '雙敗 0 分');
+  assert.equal(by.b.results.filter(r=>r==='L').length, 2);
+});
+
 console.log(`\n=== 瑞士制 ${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

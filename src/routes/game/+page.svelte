@@ -6353,9 +6353,10 @@
             {@const _roundMatches = tBracket.matches.filter((m: any) => m.round === _page)}
             {@const _isCut = _roundMatches.some((m: any) => m.phase === 'cut')}
             {@const _isSwiss = _roundMatches.some((m: any) => m.phase === 'swiss')}
+            {@const _cutPlayers = _roundMatches.reduce((n: number, m: any) => n + (m.p2name != null ? 2 : 1), 0)}
             <div class="tourn-bracket-pager">
               <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.max(1, _page - 1)} disabled={_page <= 1}>◀ 上一輪</button>
-              <span class="tourn-pg-title">{_isSwiss ? '瑞士第 ' + _page + ' 輪' : _isCut ? (_page === _rounds ? '🏆 Top Cut 決賽' : 'Top Cut') : (_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪')}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
+              <span class="tourn-pg-title">{_isSwiss ? '瑞士第 ' + _page + ' 輪' : _isCut ? (_cutPlayers <= 2 ? '🏆 決賽' : _cutPlayers + '強賽') : (_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪')}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
               <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.min(_rounds, _page + 1)} disabled={_page >= _rounds}>下一輪 ▶</button>
             </div>
             <div class="tourn-round">
