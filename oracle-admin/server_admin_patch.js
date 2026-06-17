@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2339,7 +2339,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
           _id: 'evt_' + Date.now().toString(36),
           createdAt: Date.now(),
           name: String(b.name || '錦標賽').slice(0, 60),
-          format: 'single-elim', bestOf: 1,
+          format: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss-then-cut' : 'single-elim', bestOf: 1,
+          // 瑞士制(swiss-then-cut)專屬：swissRounds/topCut 為 0 = 「依人數自動」(seed 時算)，admin 填數字則覆寫；phase 隨賽程 swiss→cut。
+          swissRounds: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.swissRounds) > 0 ? Number(b.swissRounds) : 0) : undefined,
+          topCut: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? (Number(b.topCut) > 0 ? Number(b.topCut) : 0) : undefined,
+          phase: (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss' : undefined,
           status: initStatus,
           registrationOpenAt: regOpen, registrationCloseAt: regClose,
           maxPlayers: (b.maxPlayers == null || b.maxPlayers === '' || Number(b.maxPlayers) <= 0) ? null : Math.min(64, Number(b.maxPlayers)),
@@ -2522,14 +2526,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (opts.checkedInOnly) regs = regs.filter((r) => r.checkedIn);  // 報到制：只列入「已報到」者，排除報名但沒到的人
       if (regs.length < 2) return { error: '至少需要 2 位' + (opts.checkedInOnly ? '報到者' : '報名者') };
       const players = regs.map((r) => ({ uid: r.uid, name: r.name || '玩家', byes: 0 }));
-      const rounds = Math.max(1, Math.ceil(Math.log2(players.length)));  // 總輪數＝⌈log2(N)⌉（每輪只 1 人輪空，不多花輪）
-      const matches = buildRoundMatches(players, ev._id, 1);  // 只建第 1 輪，後續每輪打完才動態建（避免第一輪大量輪空）
+      const sw = ev.format === 'swiss-then-cut';  // 瑞士制（單敗淘汰時 sw=false，行為完全不變）
+      const swissRounds = sw ? ((ev.swissRounds > 0) ? ev.swissRounds : TENG.swissRoundsForCount(players.length)) : 0;
+      const topCut = sw ? ((ev.topCut > 0) ? ev.topCut : TENG.topCutSizeForCount(players.length)) : 0;
+      const rounds = sw ? swissRounds : Math.max(1, Math.ceil(Math.log2(players.length)));  // 單敗＝⌈log2(N)⌉；瑞士＝固定輪數
+      const matches = buildRoundMatches(players, ev._id, 1);  // 第 1 輪（瑞士=隨機配對，與單敗第 1 輪相同）
+      if (sw) matches.forEach((m) => { m.phase = 'swiss'; });
       await TMATCH.deleteMany({ eventId: ev._id });
       await TMATCH.insertMany(matches);
       // 報到制：休息時間已用於報到 → 第 1 輪立即可進場（roundStartedAt 回推 cdMin，使 enterOpenAt=now）
       const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
       const roundStartedAt = opts.immediateEnter ? (Date.now() - cdMin * 60000) : Date.now();
-      await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'running', currentRound: 1, rounds, roundStartedAt, startedAt: Date.now() } });
+      const _set = { status: 'running', currentRound: 1, rounds, roundStartedAt, startedAt: Date.now() };
+      if (sw) { _set.swissRounds = swissRounds; _set.topCut = topCut; _set.phase = 'swiss'; }
+      await TEVENTS.updateOne({ _id: ev._id }, { $set: _set });
       return { ok: true, rounds, players: players.length };
     }
     // 名人堂：賽事誕生冠軍時永久記錄（以 eventId 為鍵 upsert，重複完賽不重覆）
@@ -2566,6 +2576,46 @@ import('firebase-admin').then(async ({ default: admin }) => {
     async function advanceOrFinish(m, winnerUid, winnerName) {
       await checkRoundAdvance(m.eventId);
     }
+    // 瑞士配對 → TMATCH docs（沿用單敗 match 結構；p2=null=Bye 直接 done+判 p1 勝，積分由 buildSwissPlayersFromMatches 重建）。
+    function pairingsToMatches(pairings, evId, round, phase, nameOf) {
+      const out = []; let idx = 0;
+      for (const pr of pairings) {
+        const base = { _id: evId + '_r' + round + '_m' + idx, eventId: evId, round, idx, phase, roomId: null };
+        if (pr.p2 == null) {
+          out.push({ ...base, p1uid: pr.p1, p1name: nameOf(pr.p1), p2uid: null, p2name: null, winnerUid: pr.p1, winnerName: nameOf(pr.p1), status: 'done', bye: true });
+        } else {
+          out.push({ ...base, p1uid: pr.p1, p1name: nameOf(pr.p1), p2uid: pr.p2, p2name: nameOf(pr.p2), winnerUid: null, winnerName: null, status: 'pending', bye: false });
+        }
+        idx++;
+      }
+      return out;
+    }
+    // 瑞士制晉級：本輪打完 → 由所有瑞士輪 TMATCH 重建 standings → 未達輪數配下一瑞士輪、達到則依排名取前 K 進 Top Cut(單敗)。
+    async function advanceSwiss(ev, cur) {
+      const swissMatches = await TMATCH.find({ eventId: ev._id, phase: 'swiss' }).toArray();
+      const regs = await TREGS.find({ eventId: ev._id, checkedIn: true }).toArray();
+      const nameOf = (uid) => { const r = regs.find((x) => x.uid === uid); return (r && r.name) || '玩家'; };
+      const players = TENG.buildSwissPlayersFromMatches(
+        swissMatches.map((m) => ({ round: m.round, p1uid: m.p1uid, p2uid: m.p2uid, winnerUid: m.winnerUid, bye: !!m.bye })),
+        regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' })),
+      );
+      const swissRounds = (ev.swissRounds > 0) ? ev.swissRounds : TENG.swissRoundsForCount(players.length);
+      const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
+      if (cur < swissRounds) {
+        const next = cur + 1;
+        const pairings = TENG.pairSwissRound(players, next);
+        await TMATCH.insertMany(pairingsToMatches(pairings, ev._id, next, 'swiss', nameOf));
+        await TEVENTS.updateOne({ _id: ev._id }, { $set: { currentRound: next, roundStartedAt: Date.now() } });
+        await postSystemChat('⚔️ 瑞士制第 ' + next + ' / ' + swissRounds + ' 輪配對完成！休息倒數 ' + cdMin + ' 分鐘，時間到才可進場。');
+      } else {
+        const standings = TENG.computeStandings(players);
+        const K = (ev.topCut > 0) ? ev.topCut : TENG.topCutSizeForCount(players.length);
+        const next = cur + 1;
+        await TMATCH.insertMany(pairingsToMatches(TENG.seedTopCut(standings, K), ev._id, next, 'cut', nameOf));
+        await TEVENTS.updateOne({ _id: ev._id }, { $set: { phase: 'cut', currentRound: next, roundStartedAt: Date.now() } });
+        await postSystemChat('🏆 瑞士制 ' + swissRounds + ' 輪結束！依積分(破同分 OWP/OOWP)取前 ' + K + ' 名進入單敗淘汰 Top Cut，休息倒數 ' + cdMin + ' 分鐘後開打！');
+      }
+    }
     // 本輪全部 done → 收集贏家（含輪空者）。剩 1 人＝冠軍完賽；>1 人＝動態建下一輪（每輪只 1 人輪空，優先未輪空者）。
     async function checkRoundAdvance(eventId) {
       const ev = await TEVENTS.findOne({ _id: eventId });
@@ -2574,6 +2624,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const curMatches = await TMATCH.find({ eventId, round: cur }).toArray();
       if (!curMatches.length) return;
       if (curMatches.some((m) => m.status !== 'done')) return;  // 本輪還沒打完
+      // 瑞士制階段：走瑞士晉級(重算 standings→配下一輪/進 Top Cut)。cut 階段與純單敗都走下方原邏輯。
+      if (ev.format === 'swiss-then-cut' && ev.phase === 'swiss') { return await advanceSwiss(ev, cur); }
       // 收集本輪贏家（雙未進場的場無 winner → 兩人皆淘汰，不列入）
       const winners = [];
       for (const m of curMatches) { if (m.winnerUid) winners.push({ uid: m.winnerUid, name: m.winnerName }); }
@@ -2593,10 +2645,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
       // 還有 >1 人 → 建下一輪。算每人至今累計輪空數（輪空優先給最少者）。
       const allMatches = await TMATCH.find({ eventId }).toArray();
       const byeCount = {};
-      for (const m of allMatches) { if (m.bye && m.winnerUid) byeCount[m.winnerUid] = (byeCount[m.winnerUid] || 0) + 1; }
+      // cut 階段(swiss-then-cut)只計 cut 期 Bye；純單敗 ev.phase 為空 → 計全部(行為不變)。
+      for (const m of allMatches) { if (m.bye && m.winnerUid && (!ev.phase || m.phase === ev.phase)) byeCount[m.winnerUid] = (byeCount[m.winnerUid] || 0) + 1; }
       const next = cur + 1;
       const nextPlayers = winners.map((w) => ({ uid: w.uid, name: w.name, byes: byeCount[w.uid] || 0 }));
       const nextMatches = buildRoundMatches(nextPlayers, eventId, next);
+      if (ev.phase) nextMatches.forEach((m) => { m.phase = ev.phase; });  // cut 階段標記，供 byeCount 範圍判定
       await TMATCH.insertMany(nextMatches);
       await TEVENTS.updateOne({ _id: eventId }, { $set: { currentRound: next, roundStartedAt: Date.now() } });
       const cd = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);

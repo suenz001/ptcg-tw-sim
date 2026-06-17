@@ -126,6 +126,49 @@ export function pairSwissRound(players: SwissPlayer[], roundIndex: number, rng: 
   return pairings;
 }
 
+// ════════ 從對戰紀錄重建 standings（伺服器把 TMATCH 餵進來）════════
+export interface MatchRecord {
+  round: number;
+  p1uid: string;
+  p2uid: string | null;   // null = Bye
+  winnerUid: string | null;
+  bye?: boolean;
+}
+/**
+ * 由「已完成的瑞士輪對戰紀錄 + 參賽者名單」重建每人的 SwissPlayer（積分/對手/結果/Bye）。
+ * 不容許平手：有 winner → 勝方+3記W、敗方記L；Bye → +3記BYE；無 winner(雙未進場) → 雙方記L不得分。
+ * 給伺服器在每輪結束時呼叫，再丟進 pairSwissRound / computeStandings。
+ */
+export function buildSwissPlayersFromMatches(
+  matches: MatchRecord[],
+  regs: Array<{ uid: string; name: string; dropped?: boolean }>,
+): SwissPlayer[] {
+  const byUid = new Map<string, SwissPlayer>(
+    regs.map((r) => [r.uid, { uid: r.uid, name: r.name, matchPoints: 0, opponents: [], results: [], byes: 0, dropped: r.dropped }]),
+  );
+  const sorted = [...matches].sort((a, b) => (a.round || 0) - (b.round || 0));
+  for (const m of sorted) {
+    if (m.bye || m.p2uid == null) {
+      const p = byUid.get(m.p1uid); if (!p) continue;
+      p.matchPoints += 3; p.byes += 1; p.results.push('BYE');
+      continue;
+    }
+    const a = byUid.get(m.p1uid), b = byUid.get(m.p2uid);
+    if (a && b) { a.opponents.push(b.uid); b.opponents.push(a.uid); }
+    if (m.winnerUid) {
+      const w = byUid.get(m.winnerUid);
+      const lUid = m.winnerUid === m.p1uid ? m.p2uid : m.p1uid;
+      const l = lUid ? byUid.get(lUid) : undefined;
+      if (w) { w.matchPoints += 3; w.results.push('W'); }
+      if (l) l.results.push('L');
+    } else {
+      if (a) a.results.push('L');
+      if (b) b.results.push('L');
+    }
+  }
+  return [...byUid.values()];
+}
+
 // ════════ Top Cut 種子配置 ════════
 function nextPow2(n: number): number { let p = 1; while (p < n) p *= 2; return p; }
 /** 標準單淘汰種子位置（讓種子 1 與 2 在決賽才碰）。回傳長度 size 的種子序（1-based）。 */

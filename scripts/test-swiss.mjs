@@ -171,5 +171,30 @@ T('完整模擬 N=10 跑 4 輪(跨輪 Bye≤1、每輪合法、積分一致)', (
   validateRound(st.slice(0,4).map(p=>({uid:p.uid})), cut, 'TopCut R1');
 });
 
+
+// ── buildSwissPlayersFromMatches：從對戰紀錄重建 standings ──
+T('buildSwissPlayersFromMatches 重建積分/對手/Bye 正確', () => {
+  const regs = [{uid:'a',name:'A'},{uid:'b',name:'B'},{uid:'c',name:'C'}];
+  const matches = [
+    { round:1, p1uid:'a', p2uid:'b', winnerUid:'a', bye:false },  // a 勝 b
+    { round:1, p1uid:'c', p2uid:null, winnerUid:'c', bye:true },  // c 輪空
+    { round:2, p1uid:'a', p2uid:'c', winnerUid:'c', bye:false },  // c 勝 a
+  ];
+  const ps = S.buildSwissPlayersFromMatches(matches, regs);
+  const by = Object.fromEntries(ps.map(p=>[p.uid,p]));
+  assert.equal(by.a.matchPoints, 3, 'a: 1勝=3'); assert.deepEqual(by.a.results.sort(), ['L','W']); assert.deepEqual(by.a.opponents.sort(), ['b','c']);
+  assert.equal(by.b.matchPoints, 0, 'b: 1敗=0'); assert.deepEqual(by.b.opponents, ['a']);
+  assert.equal(by.c.matchPoints, 6, 'c: Bye+1勝=6'); assert.equal(by.c.byes, 1); assert.deepEqual(by.c.results.sort(), ['BYE','W']); assert.deepEqual(by.c.opponents, ['a']);
+  // 餵進 standings：c(6) > a(3) > b(0)
+  const st = S.computeStandings(ps);
+  assert.deepEqual(st.map(p=>p.uid), ['c','a','b']);
+});
+T('buildSwissPlayersFromMatches 無 winner(雙未進場) → 雙方記L不得分', () => {
+  const ps = S.buildSwissPlayersFromMatches([{round:1,p1uid:'a',p2uid:'b',winnerUid:null,bye:false}], [{uid:'a',name:'A'},{uid:'b',name:'B'}]);
+  const by = Object.fromEntries(ps.map(p=>[p.uid,p]));
+  assert.equal(by.a.matchPoints,0); assert.equal(by.b.matchPoints,0);
+  assert.deepEqual(by.a.results,['L']); assert.deepEqual(by.a.opponents,['b']);
+});
+
 console.log(`\n=== 瑞士制 ${pass} PASS / ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

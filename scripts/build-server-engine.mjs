@@ -1,5 +1,5 @@
 // 伺服器權威用：把遊戲引擎打包成 Node CJS bundle，給 Oracle 伺服器(server_admin_patch.js)require。
-//   輸出 oracle-admin/tournament/server-engine.cjs，export { createGame, applyAction, buildPool }
+//   輸出 oracle-admin/tournament/server-engine.cjs，export { createGame, applyAction } + 瑞士制純函式(pairSwissRound/computeStandings/seedTopCut/buildSwissPlayersFromMatches/...)
 import { build } from 'esbuild';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,8 @@ import type { Card } from '$lib/cards/types';
 // buildPool：從 static/cards/*.json 組 pool（伺服器端用 fs 讀，故這裡只 re-export engine 函式）
 export { createGame, applyAction };
 export type { Card };
+// 瑞士制純函式（單一真相來源，harness 已驗）：伺服器 server_admin_patch.js 透過 TENG.* 使用
+export * from '$lib/tournament/swiss';
 `);
 await build({
   entryPoints: [ENTRY],
