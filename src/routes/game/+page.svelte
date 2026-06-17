@@ -134,6 +134,7 @@
   let tChatClearedAt = $state(0); // v5.575 已知聊天清空時間(admin清空即時生效)
   // ── Phase1-C 大廳聊天 ──
   let tChat = $state<any[]>([]);
+  let _tChatLoading = false;  // v5.624 tChatLoad 並發防護（見 tChatLoad）
   let tChatInput = $state('');
   let tChatLastTs = $state(0);
   // ── Phase1-D 賽程（單敗淘汰）──
@@ -3929,6 +3930,12 @@
     try { await signOut(auth); } catch { /* ignore */ }
   }
   async function tChatLoad() {
+    // v5.624 防並發重入：tChatLoad 從多處呼叫（3s 輪詢 / 送出後 / 對戰中持續更新），
+    //   同時跑會用「同一個 since」重複抓同一批訊息 → tChat 出現重複 id →
+    //   keyed {#each tChat (m.id)} 丟 each_key_duplicate → 整頁渲染崩潰（連「返回賽事大廳」鈕都按不動）。
+    //   錦標賽回合推進/勝利時系統連發多則廣播，最易觸發。
+    if (_tChatLoading) return;
+    _tChatLoading = true;
     try {
       const r = await tApi(`/chat?since=${tChatLastTs}`);
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
@@ -3938,9 +3945,13 @@
       }
       if (r && Array.isArray(r.messages) && r.messages.length) {
         for (const m of r.messages) { if (m.ts > tChatLastTs) tChatLastTs = m.ts; }
-        tChat = [...tChat, ...r.messages].slice(-200);
+        // v5.624 依 id 去重合併（杜絕並發/邊界重複造成的 each_key_duplicate）
+        const _seen = new Set(); const _merged: any[] = [];
+        for (const m of [...tChat, ...r.messages]) { const k = m && m.id; if (k != null) { if (_seen.has(k)) continue; _seen.add(k); } _merged.push(m); }
+        tChat = _merged.slice(-200);
       }
     } catch { /* ignore */ }
+    finally { _tChatLoading = false; }
   }
   async function tChatSend() {
     const txt = (tChatInput || '').trim();

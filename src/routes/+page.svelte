@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.624</span> 錦標賽修正：進行中／結束時聊天訊息偶爾導致畫面卡住、按鈕（如返回賽事大廳）按了沒反應</summary>
+        <ul>
+          <li>錦標賽對戰中或獲勝後，偶爾因聊天訊息重複導致整頁渲染卡住，造成「返回賽事大廳」等按鈕點了沒反應，需重整網頁。已修正聊天訊息的去重與並發載入，不再發生。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.620</span> 錦標賽頁面排序調整：進行中的賽事、賽程表、觀戰選單一律排在「下一場報名」視窗之上</summary>
         <ul>
           <li>賽事進行中時，賽程表與觀戰選單會優先顯示在上方；尚未開始（報名中／籌備中）的下一場、下下場賽事報名視窗則排在其下。</li>
