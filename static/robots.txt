@@ -5,3 +5,4 @@ Allow: /
 Disallow: /_app/
 
 Sitemap: https://www.ptcg-tw-sim.com/sitemap.xml
+Sitemap: https://www.ptcg-tw-sim.com/sitemap-cards.xml
