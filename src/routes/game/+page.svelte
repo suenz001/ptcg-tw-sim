@@ -122,8 +122,11 @@
   // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
   const tRegisteredAny = $derived(!!tMe.registered || tEvents.some((e: any) => e.registered));
   // v5.620：賽事分組——進行中/即將開始(checkin/running/bracket_ready/seeding)排上面、報名中/籌備中(registration/draft)排下面
-  const tRunningEvents = $derived(tEvents.filter((e: any) => e.status !== 'registration' && e.status !== 'draft'));
-  const tUpcomingEvents = $derived(tEvents.filter((e: any) => e.status === 'registration' || e.status === 'draft'));
+  // v5.622：賽事卡依「開賽時間(registrationCloseAt)」由近到遠排序——越接近開賽排越上面。
+  const _evStart = (e: any) => (e.registrationCloseAt ?? e.registrationOpenAt ?? Infinity);
+  const _byStart = (a: any, b: any) => _evStart(a) - _evStart(b);
+  const tRunningEvents = $derived(tEvents.filter((e: any) => e.status !== 'registration' && e.status !== 'draft').slice().sort(_byStart));
+  const tUpcomingEvents = $derived(tEvents.filter((e: any) => e.status === 'registration' || e.status === 'draft').slice().sort(_byStart));
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
   let tTickTimer: ReturnType<typeof setInterval> | null = null; // v5.575 1秒tick平滑倒數
@@ -6235,7 +6238,7 @@
       {#snippet eventCard(ev)}
         <div class="tourn-event">
           <h3>🏆 {ev.name}</h3>
-          <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(ev.status)}</b> ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : '（不限）'} 人 ｜ 單敗淘汰 Bo1 ｜ 每場 {ev.roundLimitMin} 分</p>
+          <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(ev.status)}</b> ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : '（不限）'} 人 ｜ {ev.format === 'swiss-then-cut' ? '瑞士制 + Top Cut Bo1' : '單敗淘汰 Bo1'} ｜ 每場 {ev.roundLimitMin} 分</p>
           {#if ev.status === 'draft' && ev.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(ev.registrationOpenAt).toLocaleString()} 開放</p>{/if}
           {#if ev.status === 'registration' && ev.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(ev.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
           {#if ev.status === 'draft' && ev.registrationOpenAt}
