@@ -6285,7 +6285,7 @@
         {:else}
           <div class="tourn-event">
             <h3>📣 發起社群賽</h3>
-            <p class="muted small">募集達標即自動開賽、無需管理員；全站同時只能有一場社群賽。鄰近官方賽事時段不開放。</p>
+            <p class="muted small">募集時間內都可報名（人越多越熱鬧）；<b>時間結束時</b>達門檻（單淘汰 4 人／瑞士 8 人）即自動開賽、無需管理員。全站同時只能有一場社群賽，鄰近官方賽事時段不開放。</p>
             <label class="tourn-field">賽事名稱<input class="name-input" maxlength="30" bind:value={tProposeName} placeholder="例：週五歡樂盃" /></label>
             <label class="tourn-field">賽制
               <select class="deck-select" bind:value={tProposeFormat}>
