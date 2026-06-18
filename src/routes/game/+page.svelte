@@ -4139,6 +4139,12 @@
     tBusy = true; tError = '';
     try { await tApi('/unregister', { eventId }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
+  // v5.635 發起者取消自己發起的社群賽（伺服器再 gate：本人/報名階段/未達門檻）
+  async function tCancelProposal(eventId: string) {
+    if (!confirm('確定要取消這場你發起的社群賽嗎？取消後所有已報名者都會解除報名。')) return;
+    tBusy = true; tError = '';
+    try { await tApi('/cancel-proposal', { eventId }); await tournLoadEvent(); } catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
+  }
   function tEventStatusLabel(st: string): string {
     return ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' } as any)[st] ?? st;
   }
@@ -6391,6 +6397,7 @@
           {#if ev.registered}
             <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{ev.myName}</b> ｜ 鎖定牌組：<b>{ev.myDeckName ?? '（已選定）'}</b></p>
             {#if ev.status === 'registration'}<button class="btn-secondary small" onclick={() => tournUnregister(ev._id)} disabled={tBusy}>退賽</button>{/if}
+            {#if ev.isProposer && ev.createdByPlayer && ev.status === 'registration' && (ev.regCount ?? 0) < (ev.minPlayers ?? 4)}<button class="btn-secondary small" style="border-color:#a4434a;color:#ff9b9b;margin-left:6px;" onclick={() => tCancelProposal(ev._id)} disabled={tBusy}>🚫 取消比賽</button>{/if}
           {:else if ev.status === 'registration'}
             {#if tRegFormEventId === ev._id}
               <div class="tourn-reg-form">

@@ -312,6 +312,14 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.635</span> 社群賽：發起者可在人數未達門檻前取消比賽</summary>
+        <ul>
+          <li>玩家發起的社群賽，在報名人數還沒達到開賽門檻（單淘汰 4 人／瑞士 8 人）之前，發起者可按「🚫 取消比賽」自行取消，不必空等募集時間結束。</li>
+          <li>調整社群賽發起時的系統公告措辭。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.634</span> 修正錦標賽大廳在電腦版排版參差不齊</summary>
         <ul>
           <li>原本聊天室、賽事卡、名人堂各自寬度不同又都置中，左右邊緣對不齊，整頁看起來歪歪的。</li>
