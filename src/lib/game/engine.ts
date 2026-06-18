@@ -1880,23 +1880,12 @@ function dealOpeningHand(
 //   滿足才能進 playing phase。在多個 handler 結尾呼叫（FINISH_SETUP / MULLIGAN_DRAW_DECISION /
 //   CONFIRM_MULLIGAN_REVEAL）以避免重複條件 check 邏輯。
 // v4.494：export 給 +page.svelte 在線上 setup merge 後重新評估（修兩端同時 finish 卡死 bug）
-let _lastAdvanceBlockReason = '';
 export function tryAdvanceToPlaying(state: GameState): GameState {
   if (state.phase !== 'setup') return state;
-  // v5.261 audit: 若無法 advance, 記下原因 (debug Bug 14 AI 起手無基礎玩家補抽後卡死)
-  // v5.353：去重 — 等對手擺場時 800ms 輪詢會反覆呼叫本函式，原本每次都 console.warn 造成
-  //   洗版（嚇到使用者誤以為當機）。只在「原因字串改變」時才印一次。
-  const auditFail = (reason: string) => {
-    if (typeof console !== 'undefined' && console.warn && _lastAdvanceBlockReason !== reason) {
-      _lastAdvanceBlockReason = reason;
-      console.warn(`[tryAdvanceToPlaying blocked] ${reason}`,
-        'setupDone:', state.setupDone,
-        'pendingMulliganDraw:', state.pendingMulliganDraw,
-        'mulliganRevealConfirmed:', state.mulliganRevealConfirmed,
-        'mulliganPostBenchOpen:', state.mulliganPostBenchOpen);
-    }
-    return state;
-  };
+  // v5.636：原本 setup 未完成時 console.warn(debug Bug 14)。但伺服器端引擎是「所有對局共用同一份模組」，
+  //   去重旗標是模組層級全域 → 多局交錯時 reason 一直變、去重失效 → 大型錦標賽高流量下每個 setup 動作
+  //   都狂寫 pm2 log，灌爆 error.log/吃 CPU/塞事件迴圈 → API 卡頓+crash-loop。改成 no-op(gate 行為不變,只是不印)。
+  const auditFail = (_reason: string) => state;
   if (!state.setupDone[0] || !state.setupDone[1]) return auditFail(`setup 未完成: P1=${state.setupDone[0]}, P2=${state.setupDone[1]}`);
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return auditFail(`pendingMulliganDraw 未處理: [${state.pendingMulliganDraw[0]}, ${state.pendingMulliganDraw[1]}]`);
   if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return auditFail(`mulliganRevealConfirmed 未完成: [${state.mulliganRevealConfirmed[0]}, ${state.mulliganRevealConfirmed[1]}]`);
