@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2278,7 +2278,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         for (const _e of _openList) {
           const _reg = await TREGS.findOne({ _id: _e._id + '__' + id.uid });
           const _cnt = await TREGS.countDocuments({ eventId: _e._id });
-          _events.push({ _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: _cnt, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null, myName: (_reg && _reg.name) || null, checkInDeadline: _e.checkInDeadline || null, format: _e.format || 'single-elim', swissRounds: _e.swissRounds || null, topCut: _e.topCut || null });
+          _events.push({ _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: _cnt, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null, myName: (_reg && _reg.name) || null, checkInDeadline: _e.checkInDeadline || null, format: _e.format || 'single-elim', swissRounds: _e.swissRounds || null, topCut: _e.topCut || null, createdByPlayer: !!_e.createdByPlayer, minPlayers: _e.minPlayers || null, proposerName: _e.proposerName || null });
         }
         res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch, events: _events, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2309,6 +2309,61 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const coinPref = (cp === 'first' || cp === 'second') ? cp : 'random'; // 硬幣勝出時 先攻/後攻/隨機
         await TREGS.insertOne({ _id: regId, eventId: ev._id, uid: id.uid, email: id.email || null, name: nickname, deckName, deckEntries, coinPref, checkedIn: false, registeredAt: Date.now() });
         res.json({ ok: true });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // v0.53 玩家發起社群賽。
+    app.post('/api/tournament/propose', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        if (!id.email) return res.status(403).json({ error: '發起社群賽需要 email 帳號（不開放匿名）' });
+        const b = req.body || {};
+        const now = Date.now();
+        const deckEntries = b.deckEntries;
+        if (deckCount(deckEntries) !== 60) return res.status(400).json({ error: '牌組需為 60 張' });
+        const nickname = String(b.nickname || '').replace(/\s+/g, ' ').trim().slice(0, 16);
+        if (!nickname) return res.status(400).json({ error: '請填寫錦標賽暱稱' });
+        const fmt = (b.format === 'swiss' || b.format === 'swiss-then-cut') ? 'swiss-then-cut' : 'single-elim';
+        const rallyMin = [15, 30, 60].includes(Number(b.rallyMin)) ? Number(b.rallyMin) : 30;
+        const minPlayers = fmt === 'swiss-then-cut' ? 8 : 4;
+        // 全站同時僅 1 個社群賽
+        const liveComm = await TEVENTS.findOne({ createdByPlayer: true, status: { $ne: 'finished' } });
+        if (liveComm) return res.status(409).json({ error: '目前已有一場社群賽進行中，請等它結束後再發起。' });
+        // 發起者 30 分冷卻（看本人上一個社群賽結束時間）
+        const myLast = await TEVENTS.find({ createdByPlayer: true, proposerUid: id.uid }).sort({ createdAt: -1 }).limit(1).toArray();
+        if (myLast.length && myLast[0].finishedAt && (now - myLast[0].finishedAt) < 30 * 60000) {
+          const wait = Math.ceil((30 * 60000 - (now - myLast[0].finishedAt)) / 60000);
+          return res.status(429).json({ error: '發起冷卻中，請於 ' + wait + ' 分鐘後再發起。' });
+        }
+        // 官方賽事避讓：官方(非社群)賽事 開賽時間在 2h 內 或 未結束(checkin/bracket_ready/running) → 禁止
+        const officialNear = await TEVENTS.findOne({
+          createdByPlayer: { $ne: true }, status: { $ne: 'finished' },
+          $or: [
+            { registrationCloseAt: { $gt: 0, $lte: now + 2 * 3600000 } },
+            { status: { $in: ['checkin', 'bracket_ready', 'running'] } },
+          ],
+        });
+        if (officialNear) return res.status(409).json({ error: '鄰近或正在進行官方賽事時段，暫不開放玩家發起（請優先參加官方賽事）。' });
+        // 建賽事 + 自動把發起者報名
+        const ev = {
+          _id: 'evt_' + now.toString(36) + Math.random().toString(36).slice(2, 6),
+          createdAt: now,
+          name: String(b.eventName || (nickname + ' 的社群賽')).slice(0, 60),
+          format: fmt, bestOf: 1,
+          createdByPlayer: true, proposerUid: id.uid, proposerName: nickname, minPlayers,
+          status: 'registration',
+          registrationOpenAt: null, registrationCloseAt: now + rallyMin * 60000,
+          maxPlayers: null, roundLimitMin: 25, noShowMin: 5, roundCountdownMin: 3,
+          checkInEnabled: true, currentRound: 0,
+          createdBy: id.email || id.uid,
+        };
+        if (fmt === 'swiss-then-cut') { ev.swissRounds = 0; ev.topCut = 0; ev.phase = 'swiss'; }
+        await TEVENTS.insertOne(ev);
+        const cp0 = String(b.coinPref || 'random');
+        await TREGS.insertOne({ _id: ev._id + '__' + id.uid, eventId: ev._id, uid: id.uid, email: id.email || null, name: nickname, deckName: String(b.deckName || '').slice(0, 40), deckEntries, coinPref: (cp0 === 'first' || cp0 === 'second') ? cp0 : 'random', checkedIn: false, registeredAt: now });
+        await postSystemChat('📣 玩家發起社群賽「' + ev.name + '」（' + (fmt === 'swiss-then-cut' ? '瑞士制+TopCut' : '單淘汰') + '）！募集 ' + rallyMin + ' 分鐘，集滿 ' + minPlayers + ' 人即開賽，快來「響應」報名～');
+        res.json({ ok: true, event: ev });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -2559,6 +2614,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           _id: 'champ_' + ev._id, eventId: ev._id, eventName: ev.name || '錦標賽',
           championUid: champUid, championName: champName || (reg && reg.name) || '冠軍',
           deckName: (reg && reg.deckName) || '', playerCount: playerCount || 0, finishedAt: Date.now(),
+          communityEvent: !!ev.createdByPlayer,
         } }, { upsert: true });
       } catch (e) { /* best-effort 名人堂 */ }
     }
@@ -2905,7 +2961,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.get('/api/tournament/champions', async (req, res) => {
       try {
         const cs = await TCHAMPS.find({}).sort({ finishedAt: -1 }).limit(200).toArray();
-        res.json({ champions: cs.map((c) => ({ id: c._id, eventName: c.eventName, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0 })) });
+        res.json({ champions: cs.map((c) => ({ id: c._id, eventName: c.eventName, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0, communityEvent: !!c.communityEvent })) });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     // 管理員：編輯名人堂紀錄（冠軍名/賽事名/牌組名）
@@ -3054,6 +3110,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
           return;
         }
         if (ev.status === 'registration' && ev.registrationCloseAt && now >= ev.registrationCloseAt) {
+          // v0.53 社群賽：募集截止先檢查「響應(報名)人數 ≥ 門檻」，不足直接取消（不需管理員）。
+          if (ev.createdByPlayer) {
+            const _regN = await TREGS.countDocuments({ eventId: ev._id });
+            if (_regN < (ev.minPlayers || 4)) {
+              await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'finished', cancelled: true, championUid: null, championName: null } });
+              await postSystemChat('🚫 社群賽「' + ev.name + '」響應不足（' + _regN + '/' + (ev.minPlayers || 4) + '），募集取消。');
+              return;
+            }
+          }
           const cdMin0 = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
           if (ev.checkInEnabled !== false && cdMin0 > 0) {
             // 報到制：先進「報到階段」，給 cdMin 分鐘讓參賽者按報到鈕；逾時未報到者不列入賽程
@@ -3069,6 +3134,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         // 報到截止 → 以「已報到者」產生賽程開賽（排除報名但沒到的人，第 1 輪即可進場）
         if (ev.status === 'checkin' && ev.checkInDeadline && now >= ev.checkInDeadline) {
+          // v0.53 社群賽：報到截止先檢查「報到人數 ≥ 門檻」，不足直接取消。
+          if (ev.createdByPlayer) {
+            const _ciN = await TREGS.countDocuments({ eventId: ev._id, checkedIn: true });
+            if (_ciN < (ev.minPlayers || 4)) {
+              await TEVENTS.updateOne({ _id: ev._id }, { $set: { status: 'finished', cancelled: true, championUid: null, championName: null } });
+              await postSystemChat('🚫 社群賽「' + ev.name + '」報到不足（' + _ciN + '/' + (ev.minPlayers || 4) + '），取消開賽。');
+              return;
+            }
+          }
           // v0.46：原子搶占 checkin → bracket_ready（過渡狀態，seed 成功後 seedEventBracket 內改 running）。
           //   (A) 防 TOCTOU 競態：搶占瞬間「報到窗口」即關閉（checkin 端點要求 status==='checkin'），
           //       之後到的報到一律回 409，杜絕「報到回 200 但 seedEventBracket 已讀完 regs → 沒被排進賽程」
