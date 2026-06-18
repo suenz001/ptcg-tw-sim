@@ -169,7 +169,21 @@
   );
   $effect(() => {
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
-      if (!tEventPollTimer) { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); tEventPollTimer = setInterval(() => { tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad(); }, 3000); }
+      if (!tEventPollTimer) {
+        // 首次進大廳：5 支全抓一次（即時顯示）
+        tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad();
+        // v5.637 降載：原本每 3s 同時打 5 支 API，大型錦標賽多人同時在大廳時把單一 node 進程打爆（事件迴圈尖峰→502）。
+        //   常變的 /event /chat 維持 3s；/bracket /spectate 改每 3 tick(9s)；/champions（名人堂幾乎不變）每 10 tick(30s)。
+        let _tPollTick = 0;
+        tEventPollTimer = setInterval(() => {
+          tNow = Date.now() + tClockOffset;
+          _tPollTick++;
+          tournLoadEvent();
+          tChatLoad();
+          if (_tPollTick % 3 === 0) { tBracketLoad(); tSpectateLoad(); }
+          if (_tPollTick % 10 === 0) { tChampionsLoad(); }
+        }, 3000);
+      }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
   });
   // v5.575：1 秒 tick 平滑倒數（用伺服器對時 tClockOffset，所有倒數對齊伺服器時間）；hub + 對戰中都跑
