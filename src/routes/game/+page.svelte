@@ -10090,7 +10090,7 @@
 {/if}
 <style>
   /* 錦標賽大廳/提示（v0.4 伺服器權威）*/
-  .tourn-lobby { max-width: 460px; }
+  .lobby.tourn-lobby { max-width: 640px; }  /* v5.634 提高 specificity 蓋過 .lobby 的 700；統一大廳寬度並置中 */
   .tourn-field { display: block; text-align: left; margin: 14px auto; max-width: 360px; font-weight: 600; color: #cfe8cf; }
   .tourn-field .deck-select, .tourn-field .name-input { display: block; width: 100%; margin-top: 6px; padding: 10px; border-radius: 8px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; font-size: 1rem; box-sizing: border-box; }
   .tourn-join { margin-top: 8px; }
@@ -10099,11 +10099,11 @@
   .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
   .tourn-logout { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; border: 1px solid #888; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer; }
-  .tourn-event { border: 1px solid #4a6a4a; border-radius: 10px; padding: 10px 14px; margin: 10px auto; max-width: 420px; background: #142414; }
+  .tourn-event { border: 1px solid #4a6a4a; border-radius: 10px; padding: 10px 14px; margin: 10px auto; max-width: 100%; background: #142414; }  /* v5.634 填滿欄位、邊緣對齊 */
   .tourn-event h3 { margin: 0 0 4px; }
   .tourn-evstat { color: #cfe8cf; font-size: 0.88rem; }
   .reg-ok { color: #7CFC9A; font-weight: 600; }
-  .tourn-chat { max-width: 460px; margin: 10px auto; border: 1px solid #3a5a3a; border-radius: 10px; background: #0f1c0f; overflow: hidden; text-align: left; }
+  .tourn-chat { max-width: 100%; margin: 10px auto; border: 1px solid #3a5a3a; border-radius: 10px; background: #0f1c0f; overflow: hidden; text-align: left; }
   .tourn-chat-head { background: #1a2e1a; padding: 6px 12px; font-weight: 600; color: #cfe8cf; }
   .tourn-chat-msgs { height: 200px; overflow-y: auto; padding: 8px 12px; font-size: 0.88rem; line-height: 1.5; display: flex; flex-direction: column; }
   .tcmsg { color: #e8f0e8; word-break: break-word; }
@@ -10134,7 +10134,7 @@
     0%, 100% { box-shadow: 0 0 0 0 rgba(255,140,0,.55), 0 6px 18px rgba(0,0,0,.45); transform: scale(1); }
     50% { box-shadow: 0 0 20px 7px rgba(255,140,0,0), 0 6px 18px rgba(0,0,0,.45); transform: scale(1.035); }
   }
-  .tourn-bracket { max-width: 640px; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
+  .tourn-bracket { max-width: 100%; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
   .tourn-bracket-head { font-weight: 600; color: #cfe0f8; margin-bottom: 8px; }
   .tourn-hof { border-color: #6a5a2a; background: #16120a; }
   .tourn-hof .tourn-bracket-head { color: #ffd35a; }

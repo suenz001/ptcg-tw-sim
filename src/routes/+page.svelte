@@ -312,6 +312,14 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.634</span> 修正錦標賽大廳在電腦版排版參差不齊</summary>
+        <ul>
+          <li>原本聊天室、賽事卡、名人堂各自寬度不同又都置中，左右邊緣對不齊，整頁看起來歪歪的。</li>
+          <li>現在統一大廳寬度並置中，各區塊改為填滿欄位、邊緣對齊，畫面更整齊。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.633</span> 廣播跑馬燈顯示優化</summary>
         <ul>
           <li>修正跑馬燈在手機上捲動過慢的問題：捲動時長改依「螢幕寬度＋文字長度」計算，手機與電腦的捲動速度一致。</li>
