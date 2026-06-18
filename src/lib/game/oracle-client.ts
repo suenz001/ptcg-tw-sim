@@ -78,6 +78,7 @@ export async function oracleApi<T = any>(
     body?: any;
     headers?: Record<string, string>;
   } = {},
+  _retry = true,  // v5.628 內部用：401(token 過期/失效) 時自動重新登入並重試一次
 ): Promise<T> {
   if (!API_URL) throw new Error('VITE_ORACLE_API_URL not set');
   const { token } = await oracleAuth();
@@ -107,6 +108,13 @@ export async function oracleApi<T = any>(
   // v5.610: server 對「房間版本未變」回 204（無 body）→ 回傳 undefined 讓 caller 略過
   if (res.status === 204) {
     return undefined as unknown as T;
+  }
+  // v5.628：401(jwt expired / invalid token)= 快取的 token 過期或失效。
+  //   oracleAuth 只會回快取 token、不檢查到期 → 清掉重新匿名登入,以新 token 重試一次,避免卡在 401 建不了房。
+  if (res.status === 401 && _retry) {
+    oracleSignOut();
+    await oracleAuth();
+    return oracleApi<T>(path, options, false);
   }
   if (!res.ok) {
     // 409 conflict 也算 ok response, caller 要處理

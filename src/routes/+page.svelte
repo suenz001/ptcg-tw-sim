@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.628</span> 修正：一般線上對戰偶爾因登入逾時而無法建立／加入房間（jwt expired）</summary>
+        <ul>
+          <li>正式站一般線上對戰的登入憑證放久會過期，但程式仍沿用舊憑證導致建房/加入時出現 401「jwt expired」、操作不了（常見於同一台電腦瀏覽器隔一段時間再用）。已改為偵測到憑證過期時自動重新登入並重試，不需手動清快取。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.627</span> 修正：手機版對戰中聊天視窗仍無法上下捲動看歷史訊息（被對戰防滑手勢擋住）</summary>
         <ul>
           <li>手機版對戰中為了防止整頁亂滑，會攔截滑動手勢，但漏放行了浮動聊天視窗的訊息區，導致聊天訊息多時無法上下捲動查看歷史。已把聊天訊息區加入可捲動白名單。</li>
