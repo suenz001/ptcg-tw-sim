@@ -312,6 +312,14 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.633</span> 廣播跑馬燈顯示優化</summary>
+        <ul>
+          <li>修正跑馬燈在手機上捲動過慢的問題：捲動時長改依「螢幕寬度＋文字長度」計算，手機與電腦的捲動速度一致。</li>
+          <li>修正跑馬燈會「跑到一半就突然消失」的問題：現在會等整段文字完整捲出螢幕後才自然收起。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.629</span> 新功能：玩家可自行發起社群錦標賽（單淘汰 或 瑞士制＋Top Cut）</summary>
         <ul>
           <li>登入後可在錦標賽大廳「📣 我要發起社群賽」：選賽制、募集時間（15/30/60 分）、填賽事名與牌組。募集時間內其他玩家按「響應」報名，集滿門檻（單淘汰 4 人／瑞士制 8 人）即自動開賽，無需管理員。</li>

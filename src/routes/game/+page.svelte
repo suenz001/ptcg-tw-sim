@@ -269,8 +269,14 @@
   let broadcastCfg = $state<BroadcastConfig | null>(null);
   let broadcastMarquee = $state('');   // 當前跑馬燈文字（'' = 不顯示）
   let broadcastIsCommunity = $state(false);  // v5.632 true=玩家社群賽募集(綠底)、false=管理員廣播(紫粉底)
-  // v5.626 跑馬燈速度依字數放慢(原固定14s→字越長越快)；下限18s,每字+0.6s,讓速度一致且整體慢一點。
-  const broadcastMarqueeDur = $derived(Math.max(18, broadcastMarquee.length * 0.6));
+  // v5.633 跑馬燈時長依「螢幕寬度 + 文字長度」算，目標固定速度(~90px/s)→ 手機/桌面速度一致(手機不再過慢)；
+  //   隱藏計時器 = 此時長(+緩衝)，讓整段文字跑完離開螢幕才自然消失(不再跑到一半被砍)。
+  let broadcastMarqueeDur = $state(18);
+  function marqueeDur(text: string): number {
+    const vw = (typeof window !== 'undefined') ? window.innerWidth : 1000;
+    const textPx = (text?.length ?? 0) * 16;  // CJK 每字約 16px 估算
+    return Math.max(8, Math.round((vw + textPx) / 90));  // 速度 ~90px/s（值越小越慢）
+  }
   let broadcastKey = $state(0);        // 強制重播動畫
   let _bcLoadedGameId = '';
   let _bcShownTurns = new Set<number>();
@@ -296,9 +302,10 @@
     _bcShownTurns.add(t);
     broadcastMarquee = cfg.text;
     broadcastIsCommunity = false;
+    broadcastMarqueeDur = marqueeDur(cfg.text);
     broadcastKey++;
     if (_bcHideTimer) clearTimeout(_bcHideTimer);
-    _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 14000);
+    _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, broadcastMarqueeDur * 1000 + 600);
   });
   // v5.631 一般線上對戰第 2 回合 → 若有「募集中的玩家社群賽」自動跑馬燈宣傳（鼓勵報名）。
   //   只在 online 一般對戰(非錦標賽)、每局查一次；查 /event 找 createdByPlayer 且 registration 的賽事。
@@ -316,9 +323,10 @@
           const hhmm = d ? (String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '';
           broadcastMarquee = `📣【${ev.proposerName || '玩家'}】發起【${ev.name}】之社群賽，截止時間為 ${hhmm}，歡迎大家到錦標賽頁面報名參加！`;
           broadcastIsCommunity = true;
+          broadcastMarqueeDur = marqueeDur(broadcastMarquee);
           broadcastKey++;
           if (_bcHideTimer) clearTimeout(_bcHideTimer);
-          _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 16000);
+          _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, broadcastMarqueeDur * 1000 + 600);
         }
       } catch { /* 未登入/無權限 → 不顯示，容錯 */ }
     })();
