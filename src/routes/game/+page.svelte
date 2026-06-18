@@ -268,6 +268,7 @@
   //   beta+正式站都讀同一份 Firestore；純前端顯示、不經同步層（兩端各自獨立顯示，無 desync 風險）。
   let broadcastCfg = $state<BroadcastConfig | null>(null);
   let broadcastMarquee = $state('');   // 當前跑馬燈文字（'' = 不顯示）
+  let broadcastIsCommunity = $state(false);  // v5.632 true=玩家社群賽募集(綠底)、false=管理員廣播(紫粉底)
   // v5.626 跑馬燈速度依字數放慢(原固定14s→字越長越快)；下限18s,每字+0.6s,讓速度一致且整體慢一點。
   const broadcastMarqueeDur = $derived(Math.max(18, broadcastMarquee.length * 0.6));
   let broadcastKey = $state(0);        // 強制重播動畫
@@ -294,6 +295,7 @@
     if (!cfg.turns.includes(t) || _bcShownTurns.has(t)) return;
     _bcShownTurns.add(t);
     broadcastMarquee = cfg.text;
+    broadcastIsCommunity = false;
     broadcastKey++;
     if (_bcHideTimer) clearTimeout(_bcHideTimer);
     _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 14000);
@@ -313,6 +315,7 @@
           const d = ev.registrationCloseAt ? new Date(ev.registrationCloseAt) : null;
           const hhmm = d ? (String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '';
           broadcastMarquee = `📣【${ev.proposerName || '玩家'}】發起【${ev.name}】之社群賽，截止時間為 ${hhmm}，歡迎大家到錦標賽頁面報名參加！`;
+          broadcastIsCommunity = true;
           broadcastKey++;
           if (_bcHideTimer) clearTimeout(_bcHideTimer);
           _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 16000);
@@ -7080,7 +7083,7 @@
   <!-- v5.478 系統管理員廣播跑馬燈（桌面+手機共用；fixed 浮在最上方，跑一輪後自動收起）-->
   {#if broadcastMarquee}
     {#key broadcastKey}
-      <div class="admin-broadcast-bar" role="status">
+      <div class="admin-broadcast-bar" class:community={broadcastIsCommunity} role="status">
         <div class="admin-broadcast-track" style="animation-duration: {broadcastMarqueeDur}s">📢 {broadcastMarquee}</div>
         <button class="admin-broadcast-close" onclick={() => broadcastMarquee = ''} title="關閉廣播" aria-label="關閉廣播">✕</button>
       </div>
@@ -11502,6 +11505,8 @@
     color:#fff; font-weight:700; font-size:.95rem;
     box-shadow:0 2px 10px rgba(0,0,0,.45);
   }
+  /* v5.632 玩家社群賽募集跑馬燈：綠底，與管理員廣播(紫粉)區分 */
+  .admin-broadcast-bar.community{ background:linear-gradient(90deg,#0f7a3d,#1f9d57); }
   .admin-broadcast-track{
     white-space:nowrap; will-change:transform;
     animation: bc-scroll 14s linear 1;
