@@ -274,6 +274,7 @@
   let _bcLoadedGameId = '';
   let _bcShownTurns = new Set<number>();
   let _bcHideTimer: ReturnType<typeof setTimeout> | null = null;
+  let _commRallyShownGameId = '';  // v5.631 一般對戰第2回合社群賽募集跑馬燈（每局只查一次）
   // 新對局（game.id 變）→ 載入廣播設定 + 重置已顯示回合
   //   v5.482：只有「線上對戰」才讀廣播（本機雙人 / vs AI 練習不碰 Firebase，再省讀取量）。
   $effect(() => {
@@ -296,6 +297,28 @@
     broadcastKey++;
     if (_bcHideTimer) clearTimeout(_bcHideTimer);
     _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 14000);
+  });
+  // v5.631 一般線上對戰第 2 回合 → 若有「募集中的玩家社群賽」自動跑馬燈宣傳（鼓勵報名）。
+  //   只在 online 一般對戰(非錦標賽)、每局查一次；查 /event 找 createdByPlayer 且 registration 的賽事。
+  $effect(() => {
+    const t = game?.turn;
+    if (!game || game.phase !== 'playing' || isTournament || mode !== 'online') return;
+    if (t == null || t < 2 || _commRallyShownGameId === game.id) return;
+    _commRallyShownGameId = game.id;
+    (async () => {
+      try {
+        const r = await tApi('/event');
+        const ev = (r?.events ?? []).find((e: any) => e.createdByPlayer && e.status === 'registration');
+        if (ev && !broadcastMarquee) {
+          const d = ev.registrationCloseAt ? new Date(ev.registrationCloseAt) : null;
+          const hhmm = d ? (String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')) : '';
+          broadcastMarquee = `📣【${ev.proposerName || '玩家'}】發起【${ev.name}】之社群賽，截止時間為 ${hhmm}，歡迎大家到錦標賽頁面報名參加！`;
+          broadcastKey++;
+          if (_bcHideTimer) clearTimeout(_bcHideTimer);
+          _bcHideTimer = setTimeout(() => { broadcastMarquee = ''; }, 16000);
+        }
+      } catch { /* 未登入/無權限 → 不顯示，容錯 */ }
+    })();
   });
 
   // ── 模式：null=未選、local=本機、online=線上 ────────────────────────────────
@@ -6285,7 +6308,7 @@
         {:else}
           <div class="tourn-event">
             <h3>📣 發起社群賽</h3>
-            <p class="muted small">募集時間內都可報名（人越多越熱鬧）；<b>時間結束時</b>達門檻（單淘汰 4 人／瑞士 8 人）即自動開賽、無需管理員。全站同時只能有一場社群賽，鄰近官方賽事時段不開放。</p>
+            <p class="muted small">募集時間內皆可報名，時間結束時達門檻（單淘汰 4 人／瑞士 8 人）即自動開賽；但若接近網站預定賽事舉辦時間則不開放。</p>
             <label class="tourn-field">賽事名稱<input class="name-input" maxlength="30" bind:value={tProposeName} placeholder="例：週五歡樂盃" /></label>
             <label class="tourn-field">賽制
               <select class="deck-select" bind:value={tProposeFormat}>
