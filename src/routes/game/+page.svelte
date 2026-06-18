@@ -118,6 +118,12 @@
   // ── Phase1-B：賽事狀態 ──
   let tEvents = $state<any[]>([]);   // 多賽事：開放中賽事清單（每場一張卡，各自報名）
   let tRegFormEventId = $state('');  // 目前展開報名表單的賽事 id（點某場「報名」才展開）
+  // v5.629 玩家發起社群賽
+  let tProposeOpen = $state(false);
+  let tProposeName = $state('');
+  let tProposeFormat = $state<'single-elim' | 'swiss'>('single-elim');
+  let tProposeRally = $state(30);
+  const tHasCommunityEvent = $derived(tEvents.some((e: any) => e.createdByPlayer));
   let tMe = $state<any>({ registered: false });
   // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
   const tRegisteredAny = $derived(!!tMe.registered || tEvents.some((e: any) => e.registered));
@@ -4069,6 +4075,21 @@
     try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; else tRegFormEventId = ''; await tournLoadEvent(); }
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
+  // v5.629 玩家發起社群賽
+  async function tPropose() {
+    const nick = (tNickname || '').trim();
+    if (!nick) { tError = '請先填寫錦標賽暱稱'; return; }
+    if (!tProposeName.trim()) { tError = '請填寫賽事名稱'; return; }
+    const deck = allDecks.find(d => d.id === tDeckId);
+    if (!deck) { tError = '請先選擇牌組'; return; }
+    const total = deck.entries.reduce((sum: number, e: any) => sum + (e.count || 0), 0);
+    if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
+    tError = ''; tBusy = true;
+    try {
+      const r = await tApi('/propose', { format: tProposeFormat, rallyMin: tProposeRally, eventName: tProposeName.trim(), nickname: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref });
+      if (r?.error) tError = r.error; else { tProposeOpen = false; tProposeName = ''; await tournLoadEvent(); }
+    } catch (e: any) { tError = '發起失敗：' + String(e?.message ?? e); } finally { tBusy = false; }
+  }
   // v5.590 報到：報到階段按鈕，已報名者標記 checkedIn=true
   async function tCheckin(eventId: string) {
     tBusy = true; tError = '';
@@ -6257,9 +6278,50 @@
       {#if tEvents.length === 0}
         <div class="tourn-event"><p class="muted small">目前沒有開放中的賽事。</p></div>
       {/if}
+      <!-- v5.629 玩家發起社群賽 -->
+      {#if firebaseUser?.email && !tHasCommunityEvent}
+        {#if !tProposeOpen}
+          <button class="btn-primary tourn-join" style="margin:4px 0;" onclick={() => { tProposeOpen = true; tError = ''; }} disabled={tBusy}>📣 我要發起社群賽</button>
+        {:else}
+          <div class="tourn-event">
+            <h3>📣 發起社群賽</h3>
+            <p class="muted small">募集達標即自動開賽、無需管理員；全站同時只能有一場社群賽。鄰近官方賽事時段不開放。</p>
+            <label class="tourn-field">賽事名稱<input class="name-input" maxlength="30" bind:value={tProposeName} placeholder="例：週五歡樂盃" /></label>
+            <label class="tourn-field">賽制
+              <select class="deck-select" bind:value={tProposeFormat}>
+                <option value="single-elim">單淘汰 Bo1（最少 4 人開賽）</option>
+                <option value="swiss">瑞士制 + Top Cut Bo1（最少 8 人開賽）</option>
+              </select>
+            </label>
+            <label class="tourn-field">募集時間
+              <select class="deck-select" bind:value={tProposeRally}>
+                <option value={15}>15 分鐘</option>
+                <option value={30}>30 分鐘</option>
+                <option value={60}>60 分鐘</option>
+              </select>
+            </label>
+            <label class="tourn-field">你的暱稱<input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" /></label>
+            <label class="tourn-field">你的牌組（需 60 張）
+              <select class="deck-select" bind:value={tDeckId}>
+                <option value="" disabled>— 請選擇牌組 —</option>
+                {#if decks.length > 0}<optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>{/if}
+                {#if PRESET_DECKS.length > 0}<optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>{/if}
+              </select>
+            </label>
+            <label class="tourn-field">硬幣勝出時，你要：
+              <select class="deck-select" bind:value={tCoinPref}><option value="random">隨機（不指定）</option><option value="first">先攻</option><option value="second">後攻</option></select>
+            </label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+              <button class="btn-primary tourn-join" onclick={tPropose} disabled={tBusy || !tDeckId || !tNickname.trim() || !tProposeName.trim()}>{tBusy ? '發起中…' : '📣 確認發起（你會自動報名）'}</button>
+              <button class="btn-secondary small" onclick={() => { tProposeOpen = false; tError = ''; }} disabled={tBusy}>取消</button>
+            </div>
+          </div>
+        {/if}
+      {/if}
       {#snippet eventCard(ev)}
         <div class="tourn-event">
           <h3>🏆 {ev.name}</h3>
+          {#if ev.createdByPlayer}<p class="muted small" style="margin:2px 0;color:#8fdcc0;">📣 玩家社群賽{#if ev.proposerName}（{ev.proposerName} 發起）{/if}{#if ev.minPlayers} ｜ 響應 {ev.regCount ?? 0}/{ev.minPlayers} 人{/if}</p>{/if}
           <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(ev.status)}</b> ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : '（不限）'} 人 ｜ {ev.format === 'swiss-then-cut' ? '瑞士制 + Top Cut Bo1' : '單敗淘汰 Bo1'} ｜ 每場 {ev.roundLimitMin} 分</p>
           {#if ev.status === 'draft' && ev.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(ev.registrationOpenAt).toLocaleString()} 開放</p>{/if}
           {#if ev.status === 'registration' && ev.registrationCloseAt}<p class="muted small">⏰ 報名截止：{new Date(ev.registrationCloseAt).toLocaleString()}（到點自動公布賽程並開賽）</p>{/if}
@@ -6326,7 +6388,7 @@
                 </div>
               </div>
             {:else}
-              <button class="btn-primary tourn-join" onclick={() => { tRegFormEventId = ev._id; tError = ''; }} disabled={tBusy}>📝 報名這一場</button>
+              <button class="btn-primary tourn-join" onclick={() => { tRegFormEventId = ev._id; tError = ''; }} disabled={tBusy}>{ev.createdByPlayer ? '✋ 我要響應（報名）' : '📝 報名這一場'}</button>
             {/if}
           {/if}
         </div>
@@ -6415,8 +6477,8 @@
           <div class="tourn-bracket-head">🏛️ 名人堂 ｜ 歷屆冠軍</div>
           {#each tChampions as c (c.id)}
             <div class="tourn-hof-row">
-              <span class="tourn-hof-trophy">🏆</span>
-              <span class="tourn-hof-name">{c.championName}</span>
+              <span class="tourn-hof-trophy">{c.communityEvent ? '🎖️' : '🏆'}</span>
+              <span class="tourn-hof-name" style={c.communityEvent ? 'color:#8fdcc0;' : ''}>{c.championName}{#if c.communityEvent} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span>{/if}</span>
               <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
             </div>
           {/each}
