@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.57 (錦標賽：大廳聊天效能——①為 tournamentChat 建 {room,ts} 索引,讓 /chat 的 ts>since+sort 走索引範圍掃描,不再每次全表掃+記憶體排序[訊息越多越慢→高流量輪詢拖慢];②scheduler 每~5 分鐘定期修剪大廳聊天,只保留最近 800 則,避免 collection 無限長大) + v0.56 (錦標賽：修『打到一半被判未進場』——進場標記 entered 原是 read-modify-write 整包寫回,兩人同時進場時後者用讀到的舊值覆蓋掉前者的旗標→某方進場記錄遺失→未進場 tick 誤判已開打的對局[實例 Eg vs Gali]。修(A根因)進場端改原子 positional $set 只更新自己座位+建 match 時初始化 entered:[false,false];修(B保險)未進場判負前若房間 gameState 已 playing/game-over[雙方都完成 setup 確實到場]即不判未進場) + v0.55 (錦標賽：社群賽發起公告措辭微調[「就自動開賽（人越多越熱鬧）」→「就能開賽」] + 新增 /api/tournament/cancel-proposal[發起者本人，報名階段且報名人數未達門檻時可手動取消社群賽；原子搶占 status=registration→finished 防與 scheduler 開賽競態；不收 30 分冷卻、釋放全站 1 場名額] + /event 每場補 isProposer 旗標供前端顯示取消鈕) + v0.54 (錦標賽：社群賽發起公告文字修正——募集窗口會跑滿,期間都可報名,時間到達門檻才開賽[非一達標即開],避免『集滿即開賽』誤導) + v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.58 (錦標賽：定期清掃「已結束賽事底下、沒打完(非done)的對戰」殘留——賽事 finished 後不清 TMATCH，致這種 pending 對戰累積、被監控誤算成「等開打」死資料(排程器本就以 listOpenEvents 排除 finished，故這些殘留零功能影響、不會幽靈開打)；scheduler 每~5分刪除 finished 賽事的非done對戰，一次涵蓋正常完賽/force-finish/取消所有結束路徑+自動清掉歷史殘留) + v0.57 (錦標賽：大廳聊天效能——①為 tournamentChat 建 {room,ts} 索引,讓 /chat 的 ts>since+sort 走索引範圍掃描,不再每次全表掃+記憶體排序[訊息越多越慢→高流量輪詢拖慢];②scheduler 每~5 分鐘定期修剪大廳聊天,只保留最近 800 則,避免 collection 無限長大) + v0.56 (錦標賽：修『打到一半被判未進場』——進場標記 entered 原是 read-modify-write 整包寫回,兩人同時進場時後者用讀到的舊值覆蓋掉前者的旗標→某方進場記錄遺失→未進場 tick 誤判已開打的對局[實例 Eg vs Gali]。修(A根因)進場端改原子 positional $set 只更新自己座位+建 match 時初始化 entered:[false,false];修(B保險)未進場判負前若房間 gameState 已 playing/game-over[雙方都完成 setup 確實到場]即不判未進場) + v0.55 (錦標賽：社群賽發起公告措辭微調[「就自動開賽（人越多越熱鬧）」→「就能開賽」] + 新增 /api/tournament/cancel-proposal[發起者本人，報名階段且報名人數未達門檻時可手動取消社群賽；原子搶占 status=registration→finished 防與 scheduler 開賽競態；不收 30 分冷卻、釋放全站 1 場名額] + /event 每場補 isProposer 旗標供前端顯示取消鈕) + v0.54 (錦標賽：社群賽發起公告文字修正——募集窗口會跑滿,期間都可報名,時間到達門檻才開賽[非一達標即開],避免『集滿即開賽』誤導) + v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -3304,6 +3304,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
         }
     }
+    // v0.58 清掉「已結束賽事底下、沒打完(非 done)的對戰」殘留。這種 pending 對戰在賽事 finished 後
+    //   不再被排程器處理(listOpenEvents 排除 finished)，但會一直被監控算成「等開打」且累積成死資料。
+    //   定期掃(每~5分)刪除，涵蓋所有結束路徑+自動清歷史殘留。賽事歸檔(recordTournamentArchive)在
+    //   finish 當下已快照，故刪除 live TMATCH 殘留不影響歷史。
+    let _lastStaleMatchSweepAt = 0;
+    async function sweepFinishedEventLeftoverMatches() {
+      const finished = await TEVENTS.find({ status: 'finished' }).toArray();
+      if (!finished.length) return;
+      const ids = finished.map((e) => e._id);
+      const r = await TMATCH.deleteMany({ eventId: { $in: ids }, status: { $ne: 'done' } });
+      if (r.deletedCount) console.log('[stale-match-sweep] 清掉已結束賽事殘留的未完成對戰 ' + r.deletedCount + ' 筆');
+    }
     async function tournamentSchedulerTick() {
       try {
         const evs = await listOpenEvents();
@@ -3314,6 +3326,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { console.warn('[tournament] scheduler tick failed:', e && e.message); }
       // v0.57 順帶定期修剪大廳聊天（每 ~5 分鐘一次，避免無限長大拖慢 /chat）
       if (Date.now() - _lastChatPruneAt > 5 * 60000) { _lastChatPruneAt = Date.now(); try { await pruneLobbyChat(); } catch (e) { /* best-effort */ } }
+      // v0.58 順帶清掉已結束賽事殘留的未完成對戰（避免一直被算成「等開打」死資料 + 累積）
+      if (Date.now() - _lastStaleMatchSweepAt > 5 * 60000) { _lastStaleMatchSweepAt = Date.now(); try { await sweepFinishedEventLeftoverMatches(); } catch (e) { /* best-effort */ } }
     }
     setInterval(tournamentSchedulerTick, 30000);
     console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + chat + bracket/seed/match-enter + admin event/chat');
