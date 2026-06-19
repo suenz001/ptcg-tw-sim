@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.640</span> 洛托姆ex「多重轉接」可正常附加第 2 張道具</summary>
+        <ul>
+          <li>洛托姆ex「多重轉接」在場時，名稱含「洛托姆」的寶可夢現在可正確附加第 2 張寶可夢道具（原本要附第 2 張時選不到目標）。洛托姆ex 離場時會自動丟棄多附的道具。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.639</span> 修正洛托姆「洛托呼喚」叫不出形態洛托姆 + AI 遇 ACE消弭 卡死</summary>
         <ul>
           <li>洛托姆「洛托呼喚」現在可正確呼叫清洗／切割／加熱／旋轉洛托姆等名稱含「洛托姆」的寶可夢（原本只認名稱開頭是「洛托姆」的，會漏掉這些形態）。</li>

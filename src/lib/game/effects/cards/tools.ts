@@ -503,8 +503,12 @@ function toolAttachEffect(toolName: string): EffectFn {
     // v2.214：套用 TOOL_ATTACH_GATE — 不符合 holder 條件的寶可夢從候選排除
     //   例：核心記憶碟 只能附「超級基格爾德ex」
     const gate = TOOL_ATTACH_GATE.get(toolName);
+    // v5.640 洛托姆ex｜多重轉接：已附 1 張道具的「洛托姆」家族，若自方場上有多重轉接啟用且 extraTools<1，
+    //   仍可被選為第 2 張道具的對象。原本 .filter(pk => !pk.toolAttached) 把已附道具者全排除 → picker 選不到
+    //   → 第 2 張永遠附不上（多重轉接「疑似未完整實裝」的真正缺口；resolver 端早已支援溢出 extraTools）。
+    const relayActive = hasMultiToolRelay(st, idx, pool);
     const validIids = allInPlay
-      .filter(pk => !pk.toolAttached)
+      .filter(pk => !pk.toolAttached || (relayActive && isLotomFamily(pool.get(pk.cardId)) && (pk.extraTools?.length ?? 0) < 1))
       .filter(pk => {
         if (!gate) return true;
         const card = pool.get(pk.cardId);
