@@ -846,6 +846,7 @@ async function loadTournamentAdmin() {
   }
   // 名人堂管理（不限是否有進行中賽事）
   html += '<div style="border:1px solid #6a5a2a;border-radius:8px;padding:10px;margin:14px 0;background:#16120a;"><h3 style="margin:0 0 8px;color:#ffd35a;">🏛️ 名人堂管理（歷屆冠軍，' + champData.champions.length + '）</h3>';
+  html += '<div style="margin:0 0 10px;"><button style="' + btnS + '" onclick="tevChampRestore(this)">♻️ 從歸檔還原名人堂（補回被誤刪的冠軍，不覆蓋現有）</button></div>';
   if (!champData.champions.length) html += '<p style="color:#888;">尚無冠軍紀錄。賽事完賽（或強制完賽指定冠軍）後自動加入。</p>';
   else {
     var ipS = 'padding:4px 6px;background:#222;color:#eee;border:1px solid #555;border-radius:4px;';
@@ -956,6 +957,15 @@ window.tevChampDelete = async function (id, btn) {
   btn.disabled = true;
   try { const d = await api('/api/tournament/admin/champions/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }); if (d.error) alert(d.error); }
   catch (e) { alert(e.message); }
+  loadTournamentAdmin();
+};
+window.tevChampRestore = async function (btn) {
+  if (!confirm('從賽事歸檔重建名人堂？只會補回缺漏的冠軍紀錄（例如被誤刪的），不會覆蓋現有的。')) return;
+  btn.disabled = true;
+  try {
+    const d = await api('/api/tournament/admin/champions/restore-from-archive', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    if (d.error) alert(d.error); else alert('已從歸檔還原 ' + (d.restored || 0) + ' 筆冠軍紀錄。');
+  } catch (e) { alert(e.message); }
   loadTournamentAdmin();
 };
 window.tevSeed = async function (btn) {
