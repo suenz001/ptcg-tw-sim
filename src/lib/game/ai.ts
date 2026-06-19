@@ -621,6 +621,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const prefix = f.slice('Pokemon:NamePrefix='.length);
           return card.supertype === 'Pokemon' && card.name.startsWith(prefix);
         }
+        if (f.startsWith('Pokemon:NameContains=')) {
+          const sub = f.slice('Pokemon:NameContains='.length);
+          return card.supertype === 'Pokemon' && card.name.includes(sub);
+        }
         if (f === 'MarniePokemon') return card.supertype === 'Pokemon' && card.name.startsWith('瑪俐的');
         if (f === 'BasicNonRule') {
           // v3.66：改用 isRulePokemon helper

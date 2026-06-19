@@ -2128,7 +2128,12 @@
     //   累計；連續 2 次無進展 → AI 卡在無法執行的動作 → 主階段強制 END_TURN(同 null-fallback 條件)。
     {
       const _g = game!;
-      const _sig = `${_g.phase}|${_g.turn}|${_g.turnPhase}|${_g.activePlayerIndex}|${_g.log.length}|${_g.players[0].hand.length}|${_g.players[1].hand.length}|${_g.players[aiPlayerIndex].bench.length}|${_g.players[aiPlayerIndex].active?.iid ?? ''}|${_g.pendingSelection?.effectKey ?? ''}|${_g.pendingPrizes?.[0] ?? 0}|${_g.pendingPrizes?.[1] ?? 0}`;
+      const _aip = _g.players[aiPlayerIndex];
+      // v5.639：移除 log.length（被引擎拒絕但有寫警告 log 的動作會讓 log 每 tick 變長→sig 一直變→
+      //   無進展防呆永遠不觸發→AI 卡死，例：古舊能量被 ACE消弭 擋）。改用「實際盤面進展」欄位：
+      //   牌庫/棄牌/手牌張數 + 場上能量總數 + 場上/備戰 + pending；純加警告 log 不算進展。
+      const _eTot = (_aip.active?.energyAttached.length ?? 0) + _aip.bench.reduce((nn, c) => nn + c.energyAttached.length, 0);
+      const _sig = `${_g.phase}|${_g.turn}|${_g.turnPhase}|${_g.activePlayerIndex}|${_g.players[0].hand.length}|${_g.players[1].hand.length}|${_aip.bench.length}|${_aip.active?.iid ?? ''}|${_g.pendingSelection?.effectKey ?? ''}|${_g.pendingPrizes?.[0] ?? 0}|${_g.pendingPrizes?.[1] ?? 0}|${_aip.deck.length}|${_aip.discard.length}|${_eTot}`;
       if (_sig === _aiPrevSig) _aiStuck++; else { _aiStuck = 0; _aiPrevSig = _sig; }
       if (_aiStuck >= 2) {
         _aiStuck = 0; _aiPrevSig = '';
@@ -2863,6 +2868,11 @@
           if (f.startsWith('Pokemon:NamePrefix=')) {
             const prefix = f.slice('Pokemon:NamePrefix='.length);
             return card.supertype === 'Pokemon' && card.name.startsWith(prefix);
+          }
+          // v5.639：名稱「含」指定字串的寶可夢（洛托呼喚：清洗/切割/加熱洛托姆等，洛托姆 為字尾，prefix 比對會漏）
+          if (f.startsWith('Pokemon:NameContains=')) {
+            const sub = f.slice('Pokemon:NameContains='.length);
+            return card.supertype === 'Pokemon' && card.name.includes(sub);
           }
           // v2.159：寶可夢且名字含對手場上某寶可夢同名（甜蜜球）— params.matchOppNames 提供
           if (f === 'Pokemon:MatchOppName') {

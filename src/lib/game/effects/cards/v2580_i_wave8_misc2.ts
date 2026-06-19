@@ -409,7 +409,7 @@ regPost('洛托姆|洛托呼喚', (state, aIdx, pool) => {
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Pokemon:NamePrefix=洛托姆',
+    filter: 'Pokemon:NameContains=洛托姆',
     minCount: 0, maxCount: max,
     effectKey: 'wave5-place-basic-bench',  // 復用 v2.55 resolver（其實是放任意寶可夢的）
     params: { validIids: lotomIids },

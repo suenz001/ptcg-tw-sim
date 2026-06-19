@@ -312,6 +312,14 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.639</span> 修正洛托姆「洛托呼喚」叫不出形態洛托姆 + AI 遇 ACE消弭 卡死</summary>
+        <ul>
+          <li>洛托姆「洛托呼喚」現在可正確呼叫清洗／切割／加熱／旋轉洛托姆等名稱含「洛托姆」的寶可夢（原本只認名稱開頭是「洛托姆」的，會漏掉這些形態）。</li>
+          <li>修正對手有蓋諾賽克特「ACE消弭」時，AI 持有古舊能量（ACE SPEC）會因無法附加而卡死、回合結束不了的問題。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.638</span> 修正撤退擲幣與「擊倒多得獎賞」兩個對戰問題</summary>
         <ul>
           <li>黏美龍「黏滑失足」：對手撤退擲幣為反面、撤退失敗時，該回合就不能再按撤退重新擲幣（修正可一直重擲到成功的問題）。</li>
