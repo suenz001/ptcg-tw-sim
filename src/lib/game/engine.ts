@@ -2718,7 +2718,12 @@ function handlePlaying(
       if (hasStickFoot) {
         const r = flipCoinsWithLog(state, 1, '黏滑失足', aIdx);
         if (!r.heads) {
-          return addLog(r.state, '黏滑失足：反面 → 撤退所需能量不丟棄，不進行互換', aIdx);
+          // v5.638：反面撤退失敗，但仍消耗「本回合撤退」→ 不可重按再擲（修無限重擲 exploit：
+          //   原本反面直接 return 未設 retreatedThisTurn，玩家可一直按撤退一直擲到正面）。
+          const failSt = addLog(r.state, '黏滑失足：反面 → 撤退所需能量不丟棄，不進行互換', aIdx);
+          const fp = [...failSt.players] as [PlayerState, PlayerState];
+          fp[aIdx] = { ...fp[aIdx], retreatedThisTurn: true };
+          return { ...failSt, players: fp };
         }
         state = r.state; // 正面：繼續正常撤退流程
       }

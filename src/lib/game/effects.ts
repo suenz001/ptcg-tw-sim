@@ -651,6 +651,11 @@ export function koPrizesAdjusted(
   let s = state;
   if (!koCard) return { prizes: 1, state: s };
   const base = koPrizeCount(koCard);
+  // v5.638：deferredPrizeBonusThisTurn（多餘花粉等「下個自己回合，此卡被昏厥時+N獎賞」）綁在「被KO的這隻
+  //   instance」身上，卡面是「被【昏厥】時」→ 不論招式傷害KO 或 效果/特性KO（咒詛炸彈/深淵之瞳…）都該+N。
+  //   原本只在 engine 攻擊傷害主管線 inline 加，所有走 koPrizesAdjusted 的效果/特性KO 路徑全漏（玩家回報
+  //   多餘花粉被咒詛炸彈KO沒+2）。收斂到此中央函式 → 18+ 個 KO 路徑一致 +N，與 koByAttackDamage 無關。
+  const deferredBonus = (koInst.deferredPrizeBonusThisTurn && koInst.deferredPrizeBonusThisTurn > 0) ? koInst.deferredPrizeBonusThisTurn : 0;
   const atkActive = s.players[attackerIdx].active;
   const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
   // 脆弱蛻殼（脫殼忍者）等 PASSIVE_PREVENT_PRIZE → 0 張
@@ -691,7 +696,7 @@ export function koPrizesAdjusted(
       if (defHasKage) adjust -= 1;
     }
   }
-  return { prizes: Math.max(0, base + adjust), state: s };
+  return { prizes: Math.max(0, base + adjust + deferredBonus), state: s };
 }
 
 /**
