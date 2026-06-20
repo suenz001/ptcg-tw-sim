@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.641</span> 修「阿蜜的目光」只保護戰鬥位、新上場寶可夢沒效果</summary>
+        <ul>
+          <li>「阿蜜的目光」現在正確讓「自己所有寶可夢」（含備戰區、以及對手回合中新上場／換上的寶可夢）在下個對手回合受招式傷害 -30，符合卡面「包含新上場的寶可夢」。原本只保護當下的戰鬥位一隻。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.640</span> 洛托姆ex「多重轉接」可正常附加第 2 張道具</summary>
         <ul>
           <li>洛托姆ex「多重轉接」在場時，名稱含「洛托姆」的寶可夢現在可正確附加第 2 張寶可夢道具（原本要附第 2 張時選不到目標）。洛托姆ex 離場時會自動丟棄多附的道具。</li>

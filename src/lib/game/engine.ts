@@ -6885,6 +6885,17 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete np.metalShieldThisTurn;
       players[nextIdx] = np;
     }
+    // v5.641 阿蜜的目光（玩家層級「對手回合」型減傷，promote/clear 時機同 metalShield）
+    if (players[aIdx].flatDamageReduceNextTurn) {
+      const ep = { ...players[aIdx], flatDamageReduceThisTurn: players[aIdx].flatDamageReduceNextTurn };
+      delete ep.flatDamageReduceNextTurn;
+      players[aIdx] = ep;
+    }
+    if (players[nextIdx].flatDamageReduceThisTurn) {
+      const np2 = { ...players[nextIdx] };
+      delete np2.flatDamageReduceThisTurn;
+      players[nextIdx] = np2;
+    }
 
     // 重置競技場使用旗標（當前玩家的回合結束時清除其旗標）
     let stadiumUsedThisTurn = state.stadiumUsedThisTurn ?? [false, false] as [boolean, boolean];
@@ -7082,6 +7093,16 @@ export function applyDefenderReductionsBlockA(
       workingState = addLog(workingState,
         `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
       formula.push({ sign: '-', value: baseDamage - reduced, label: '鐵之防禦' });
+      baseDamage = reduced;
+    }
+
+    // v5.641 阿蜜的目光：防守方有 flatDamageReduceThisTurn → 該玩家「所有」寶可夢(含新上場)受招式傷害 -N(無屬性限制)
+    if (baseDamage > 0 && defender.flatDamageReduceThisTurn && defender.flatDamageReduceThisTurn > 0) {
+      const amt = defender.flatDamageReduceThisTurn;
+      const reduced = Math.max(0, baseDamage - amt);
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因阿蜜的目光效果，受到的傷害 -${amt}（${baseDamage} → ${reduced}）`, dIdx);
+      formula.push({ sign: '-', value: baseDamage - reduced, label: '阿蜜的目光' });
       baseDamage = reduced;
     }
 

@@ -424,6 +424,13 @@ export interface PlayerState {
   metalShieldNextTurn?: boolean;
   metalShieldThisTurn?: boolean;
   /**
+   * v5.641 阿蜜的目光（Supporter）— 下個對手的回合，自己的「所有」寶可夢（含新上場）受到對手寶可夢
+   *   招式的傷害 -N(30)。玩家層級數值旗標 → 天然涵蓋備戰/新上場/換上的(非 instance 限定)；對手回合型，
+   *   promote/clear 時機同 metalShield。攻擊計算：defendingPlayer.flatDamageReduceThisTurn>0 → -N(無屬性限制)。
+   */
+  flatDamageReduceNextTurn?: number;
+  flatDamageReduceThisTurn?: number;
+  /**
    * v2.174 霍米加的演奏（Supporter / J）— 在下個對手的回合，對手的【中毒】寶可夢
    * 無法撤退（包含新中毒的）。
    * 設於對手側的 cantRetreatIfPoisonedNextTurn；於該對手 END_TURN 時 promote。

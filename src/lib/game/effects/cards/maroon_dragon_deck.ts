@@ -325,13 +325,9 @@ reg('特殊紅牌', (st, idx) => {
 // ── 阿蜜的目光（Supporter） ─────────────────────────────────────────────────
 // 本回合結束後，你的戰鬥位寶可夢下次受到招式傷害 -30（套用 damageReduceNextHit）。
 regG('阿蜜的目光', (st, idx) => !!st.players[idx].active);
-reg('阿蜜的目光', (st, idx, pool) => {
-  const p = st.players[idx];
-  if (!p.active) return addLog(st, '阿蜜的目光：戰鬥位沒有寶可夢', idx);
-  const activeName = pool.get(p.active.cardId)?.name ?? '戰鬥位寶可夢';
-  st = addLog(st, `阿蜜的目光：${activeName} 下次受到招式傷害 -30`, idx);
-  return updatePlayer(st, idx, pl => {
-    if (!pl.active) return pl;
-    return { ...pl, active: { ...pl.active, damageReduceNextHit: 30 } };
-  });
+reg('阿蜜的目光', (st, idx, _pool) => {
+  // v5.641：卡面「下個對手回合，自己『所有』寶可夢(含新上場)受招式傷害 -30」→ 玩家層級「對手回合」型旗標
+  //   (flatDamageReduceNextTurn)，非只標 active instance(原 damageReduceNextHit 只護 active 一隻、新上場/換上的沒效)。
+  st = addLog(st, '阿蜜的目光：下個對手回合，自己所有寶可夢受招式傷害 -30', idx);
+  return updatePlayer(st, idx, pl => ({ ...pl, flatDamageReduceNextTurn: 30 }));
 });
