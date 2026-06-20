@@ -104,6 +104,9 @@
   // ── 觀戰 ──
   let tSpectateList = $state<any[]>([]);
   let tChampions = $state<any[]>([]); // v5.570 名人堂（歷屆冠軍）
+  let tHofView = $state<any | null>(null);   // v5.642 名人堂點選後載入的「當初賽程」(歸檔)
+  let tHofPage = $state(1);                   // 名人堂賽程翻頁(輪次)
+  let tHofLoading = $state(false);
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -4084,6 +4087,18 @@
     try { const r = await tApi('/champions'); tChampions = (r && Array.isArray(r.champions)) ? r.champions : []; }
     catch { /* ignore */ }
   }
+  // v5.642 名人堂點選 → 載入該賽事「當初賽程」(歸檔 TARCHIVE)
+  async function tHofOpen(c: any) {
+    if (!c || !c.eventId) { tError = '此冠軍紀錄沒有可顯示的賽程'; return; }
+    tHofLoading = true; tHofView = null; tHofPage = 1; tError = '';
+    try {
+      const r = await tApi(`/champion-bracket?eventId=${encodeURIComponent(c.eventId)}`);
+      tHofView = (r && Array.isArray(r.matches)) ? r : null;
+      tHofPage = 1;
+    } catch (e: any) { tError = String(e?.message ?? e); }
+    finally { tHofLoading = false; }
+  }
+  function tHofClose() { tHofView = null; }
   // 觀戰：列出進行中的對戰
   async function tSpectateLoad() {
     try { const r = await tApi('/spectate/list'); tSpectateList = (r && Array.isArray(r.matches)) ? r.matches : []; }
@@ -6539,14 +6554,43 @@
       {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
       {#if tChampions.length > 0}
         <div class="tourn-bracket tourn-hof">
-          <div class="tourn-bracket-head">🏛️ 名人堂 ｜ 歷屆冠軍</div>
+          <div class="tourn-bracket-head">🏛️ 名人堂 ｜ 歷屆冠軍 <span class="muted small" style="font-weight:400;">（點擊看當初賽程）</span></div>
           {#each tChampions as c (c.id)}
-            <div class="tourn-hof-row">
+            <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
               <span class="tourn-hof-trophy">{c.communityEvent ? '🎖️' : '🏆'}</span>
               <span class="tourn-hof-name" style={c.communityEvent ? 'color:#8fdcc0;' : ''}>{c.championName}{#if c.communityEvent} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span>{/if}</span>
               <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
+              {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
           {/each}
+        </div>
+      {/if}
+      {#if tHofLoading}
+        <div class="hof-modal-backdrop" role="presentation"><div class="hof-modal"><p class="muted" style="text-align:center;margin:18px 0;">載入賽程中…</p></div></div>
+      {/if}
+      {#if tHofView}
+        {@const _hr = Math.max(1, tHofView.rounds ?? 1)}
+        {@const _hpg = Math.min(Math.max(1, tHofPage), _hr)}
+        {@const _hrm = (tHofView.matches ?? []).filter((m: any) => m.round === _hpg)}
+        <div class="hof-modal-backdrop" role="presentation" onclick={tHofClose}>
+          <div class="hof-modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tHofClose()}>
+            <div class="tourn-bracket-head">📋 {tHofView.eventName ?? '錦標賽'}{#if tHofView.championName} ｜ 🏆 {tHofView.championName}{/if}<button class="hof-modal-x" onclick={tHofClose} aria-label="關閉">✕</button></div>
+            <div class="tourn-bracket-pager">
+              <button class="tourn-pg-btn" onclick={() => tHofPage = Math.max(1, _hpg - 1)} disabled={_hpg <= 1}>◀ 上一輪</button>
+              <span class="tourn-pg-title">{_hpg === _hr ? '🏆 決賽' : '第 ' + _hpg + ' 輪'}</span>
+              <button class="tourn-pg-btn" onclick={() => tHofPage = Math.min(_hr, _hpg + 1)} disabled={_hpg >= _hr}>下一輪 ▶</button>
+            </div>
+            <div class="tourn-round">
+              {#if _hrm.length === 0}<div class="muted small" style="text-align:center;padding:14px;">此輪無對戰紀錄</div>{/if}
+              {#each _hrm as m}
+                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye}>
+                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
+                  <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
+                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
         </div>
       {/if}
       {#if tError}<p class="warn">{tError}</p>{/if}
@@ -10174,6 +10218,12 @@
   .tourn-hof-trophy { font-size: 15px; }
   .tourn-hof-name { font-weight: 700; color: #ffe79a; }
   .tourn-hof-meta { color: #9a8d6a; font-size: 12px; }
+  .tourn-hof-row.tourn-hof-clickable { cursor: pointer; }
+  .tourn-hof-row.tourn-hof-clickable:hover { background: #1f1a0c; border-radius: 6px; }
+  .tourn-hof-go { margin-left: auto; color: #ffd35a; font-size: 12px; white-space: nowrap; }
+  .hof-modal-backdrop { position: fixed; inset: 0; z-index: 100000; background: rgba(0,0,0,.62); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .hof-modal { background: #0f1420; border: 1px solid #3a4a6a; border-radius: 12px; padding: 14px; max-width: 560px; width: 100%; max-height: 86vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
+  .hof-modal-x { float: right; background: transparent; border: none; color: #cfe0f8; font-size: 1.15rem; cursor: pointer; line-height: 1; }
   .tourn-mymatch { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; flex-wrap: wrap; }
   .tourn-rounds { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
   .tourn-round { width: 100%; }

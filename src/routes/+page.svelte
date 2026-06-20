@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.642</span> 名人堂可點開看當初的完整賽程</summary>
+        <ul>
+          <li>錦標賽頁的「名人堂」歷屆冠軍，點任一筆即可查看那場賽事當初的完整賽程：每一輪可翻頁瀏覽，並標示每場對戰的勝負（含輪空）。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.641</span> 修「阿蜜的目光」只保護戰鬥位、新上場寶可夢沒效果</summary>
         <ul>
           <li>「阿蜜的目光」現在正確讓「自己所有寶可夢」（含備戰區、以及對手回合中新上場／換上的寶可夢）在下個對手回合受招式傷害 -30，符合卡面「包含新上場的寶可夢」。原本只保護當下的戰鬥位一隻。</li>
