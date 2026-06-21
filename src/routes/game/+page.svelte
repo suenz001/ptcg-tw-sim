@@ -107,7 +107,8 @@
   let tHofView = $state<any | null>(null);   // v5.642 名人堂點選後載入的「當初賽程」(歸檔)
   let tHofPage = $state(1);                   // 名人堂賽程翻頁(輪次)
   let tHofLoading = $state(false);
-  let tHofListOpen = $state(false);          // v5.649 名人堂預設收摺，點開才展開（賽事越多頁面越長）
+  let tHofOfficialOpen = $state(true);       // v5.652 官方歷屆冠軍：預設展開（直接呈現）
+  let tHofCommunityOpen = $state(false);     // v5.652 社群自辦歷屆冠軍：預設收摺（社群賽數量多，點選才展開）
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -6585,16 +6586,35 @@
       {/if}
       <!-- v5.620：報名中／籌備中的賽事（下一場、下下場…）排在進行中賽事與觀戰之下 -->
       {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
-      {#if tChampions.length > 0}
+      <!-- v5.652 名人堂分兩段下拉：官方賽（在前、預設展開「直接呈現」）與社群自辦賽（在後、預設收摺「點選才看」）。
+           因官方賽人數多、社群自辦賽人數少（最低 4 人），奪冠難度不同，分開呈現較清楚。依 communityEvent 旗標分流。 -->
+      {#if tChampions.some((c) => !c.communityEvent)}
         <div class="tourn-bracket tourn-hof">
-          <div class="tourn-bracket-head tourn-hof-toggle" role="button" tabindex="0" style="cursor:pointer;user-select:none;" onclick={() => tHofListOpen = !tHofListOpen} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (tHofListOpen = !tHofListOpen)}>
-            <span style="display:inline-block;width:1em;">{tHofListOpen ? '▾' : '▸'}</span>🏛️ 名人堂 ｜ 歷屆冠軍（{tChampions.length}）<span class="muted small" style="font-weight:400;">{tHofListOpen ? ' ｜ 點擊冠軍看當初賽程' : ' ｜ 點此展開'}</span>
+          <div class="tourn-bracket-head tourn-hof-toggle" role="button" tabindex="0" style="cursor:pointer;user-select:none;" onclick={() => tHofOfficialOpen = !tHofOfficialOpen} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (tHofOfficialOpen = !tHofOfficialOpen)}>
+            <span style="display:inline-block;width:1em;">{tHofOfficialOpen ? '▾' : '▸'}</span>🏛️ 官方歷屆冠軍（{tChampions.filter((c) => !c.communityEvent).length}）<span class="muted small" style="font-weight:400;">{tHofOfficialOpen ? ' ｜ 點擊冠軍看當初賽程' : ' ｜ 點此展開'}</span>
           </div>
-          {#if tHofListOpen}
-          {#each tChampions as c (c.id)}
+          {#if tHofOfficialOpen}
+          {#each tChampions.filter((c) => !c.communityEvent) as c (c.id)}
             <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
-              <span class="tourn-hof-trophy">{c.communityEvent ? '🎖️' : '🏆'}</span>
-              <span class="tourn-hof-name" style={c.communityEvent ? 'color:#8fdcc0;' : ''}>{c.championName}{#if c.communityEvent} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span>{/if}</span>
+              <span class="tourn-hof-trophy">🏆</span>
+              <span class="tourn-hof-name">{c.championName}</span>
+              <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
+              {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
+            </div>
+          {/each}
+          {/if}
+        </div>
+      {/if}
+      {#if tChampions.some((c) => c.communityEvent)}
+        <div class="tourn-bracket tourn-hof">
+          <div class="tourn-bracket-head tourn-hof-toggle" role="button" tabindex="0" style="cursor:pointer;user-select:none;" onclick={() => tHofCommunityOpen = !tHofCommunityOpen} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (tHofCommunityOpen = !tHofCommunityOpen)}>
+            <span style="display:inline-block;width:1em;">{tHofCommunityOpen ? '▾' : '▸'}</span>🎖️ 社群自辦歷屆冠軍（{tChampions.filter((c) => c.communityEvent).length}）<span class="muted small" style="font-weight:400;">{tHofCommunityOpen ? ' ｜ 點擊冠軍看當初賽程' : ' ｜ 點此展開'}</span>
+          </div>
+          {#if tHofCommunityOpen}
+          {#each tChampions.filter((c) => c.communityEvent) as c (c.id)}
+            <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
+              <span class="tourn-hof-trophy">🎖️</span>
+              <span class="tourn-hof-name" style="color:#8fdcc0;">{c.championName} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span></span>
               <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
               {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
