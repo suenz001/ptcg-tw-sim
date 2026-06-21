@@ -22,7 +22,7 @@ const seededRng = (seed) => () => { seed = (seed * 1103515245 + 12345) & 0x7ffff
 T('swissRoundsForCount 對照表', () => {
   const f = S.swissRoundsForCount;
   assert.equal(f(2), 3); assert.equal(f(8), 3); assert.equal(f(9), 4); assert.equal(f(16), 4);
-  assert.equal(f(17), 5); assert.equal(f(32), 5); assert.equal(f(33), 6); assert.equal(f(128), 7); assert.equal(f(129), 8);
+  assert.equal(f(17), 5); assert.equal(f(48), 5); assert.equal(f(49), 6); assert.equal(f(96), 6); assert.equal(f(97), 7); assert.equal(f(192), 7); assert.equal(f(193), 8);
 });
 T('topCutSizeForCount 對照表(≤16→4 / ≥17→8)', () => {
   const f = S.topCutSizeForCount;

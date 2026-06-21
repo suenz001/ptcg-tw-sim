@@ -28,9 +28,9 @@ export function swissRoundsForCount(n: number): number {
   if (n <= 1) return 0;
   if (n <= 8) return 3;
   if (n <= 16) return 4;
-  if (n <= 32) return 5;
-  if (n <= 64) return 6;
-  if (n <= 128) return 7;
+  if (n <= 48) return 5;   // v5.645：5 輪上限 32→48(36 人賽事改 5 輪,初賽更快)
+  if (n <= 96) return 6;   // 6 輪門檻 33→49
+  if (n <= 192) return 7;
   return 8;
 }
 export function topCutSizeForCount(n: number): number {
