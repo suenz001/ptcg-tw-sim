@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.644</span> 修正古玉魚「燒灼大地」只該丟對手的競技場</summary>
+        <ul>
+          <li>古玉魚「燒灼大地」原本會把場上任何競技場（含自己打出的）都丟棄；現依卡面只丟棄「對手打出」的競技場，且唯有確實丟棄時，對手下個回合才無法使出競技場卡。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.643</span> 修正起手準備階段「輪到誰」的提示</summary>
         <ul>
           <li>對戰開始的起手準備階段，現在會正確顯示輪到誰行動：依規則重抽次數較少的一方要先選出場寶可夢並準備，較多的一方會看到「等待對手…」而非被要求行動。系統提示與閒置判負的判定一致。</li>

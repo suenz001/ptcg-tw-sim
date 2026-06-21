@@ -720,12 +720,16 @@ regR('wave17-bounce-opp', (state, aIdx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('古玉魚|燒灼大地', (s) => ({ state: s, damage: 40 }));
 regPost('古玉魚|燒灼大地', (state, aIdx, _pool) => {
-  if (!state.activeStadium) return state;
-  // 卡面：「有丟棄的情況下」→ 確實有 stadium 才設 flag（無 stadium 時不觸發 flag）
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.644：卡面「將場上的【對手的】競技場卡丟棄」→ 只丟「對手打出」的競技場(自己打的不丟);
+  //   「有丟棄的情況下」才設「對手下回合禁出競技場」flag。activeStadiumOwnerIdx 是擁有者單一真相。
+  //   (其他丟競技場招式大風暴/世界之末/割除利刃 卡面是「場上的競技場卡」=任何,故不加此 gate。)
+  if (!state.activeStadium || state.activeStadiumOwnerIdx !== dIdx) {
+    return addLog(state, '燒灼大地：場上沒有對手的競技場卡可丟棄', aIdx);
+  }
   let s = discardActiveStadium(state, aIdx);
   s = updatePlayer(s, dIdx, p => ({ ...p, cantPlayStadiumNextTurn: true }));
-  return addLog(s, '燒灼大地：棄場上競技場 + 對手下個回合無法使出競技場卡', aIdx);
+  return addLog(s, '燒灼大地：丟棄對手的競技場卡 + 對手下個回合無法使出競技場卡', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
