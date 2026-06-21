@@ -6896,6 +6896,22 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete np2.flatDamageReduceThisTurn;
       players[nextIdx] = np2;
     }
+    // v5.651 收斂「下個對手回合 -N」(damageReduceNextHit，單體消費型)的回合過期：
+    //   此旗標由「擁有者」在自己回合設(防護充能/變硬/躲藏/coin免疫/各受招-N…)，卡面只護「下個對手的回合」。
+    //   原本只在被打時消費、無回合過期 → 對手該回合沒攻擊它就殘留到日後某次被打才 -N
+    //   （玩家報：蓋諾賽克特ex 上回合沒攻擊卻仍 -30）。nextIdx = 即將開始回合者 = 上個自己回合設旗標的人，
+    //   其保護的對手回合(剛結束的 aIdx 回合)已過 → 清除。時機同上方 metalShield/flatDamageReduce 的 nextIdx clear。
+    {
+      let _drnTouched = false;
+      const _clrDRN = (ci: CardInstance): CardInstance => {
+        if (ci.damageReduceNextHit == null) return ci;
+        _drnTouched = true; const n = { ...ci }; delete n.damageReduceNextHit; return n;
+      };
+      const _npx = players[nextIdx];
+      const _na = _npx.active ? _clrDRN(_npx.active) : _npx.active;
+      const _nb = _npx.bench.map(_clrDRN);
+      if (_drnTouched) players[nextIdx] = { ..._npx, active: _na, bench: _nb };
+    }
 
     // 重置競技場使用旗標（當前玩家的回合結束時清除其旗標）
     let stadiumUsedThisTurn = state.stadiumUsedThisTurn ?? [false, false] as [boolean, boolean];
