@@ -795,6 +795,9 @@ async function loadTournamentAdmin() {
       + '<details style="margin-top:10px;border-top:1px solid #2a3a2a;padding-top:8px;"><summary style="cursor:pointer;color:#bfe0ff;">✏️ 編輯賽事設定（名稱／參數，即時生效，不影響已報名者）</summary>'
       + '<div style="padding:8px 0 2px;">'
       + '<label style="display:block;margin:6px 0;">賽事名稱：<input id="tev-e-name" value="' + escapeHtml(ev.name || '') + '" style="width:60%;padding:5px;"></label>'
+      + '<label style="display:block;margin:6px 0;">賽制：<select id="tev-e-format" style="padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '><option value="single-elim"' + (ev.format === 'swiss-then-cut' ? '' : ' selected') + '>單敗淘汰 Bo1</option><option value="swiss-then-cut"' + (ev.format === 'swiss-then-cut' ? ' selected' : '') + '>瑞士制 + Top Cut Bo1</option></select>' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' <span style="color:#e88;font-size:.78rem;">已開賽，賽制不可改</span>') + '</label>'
+      + '<label style="display:block;margin:6px 0;">瑞士輪數（空白=依人數自動；僅瑞士制生效）：<input id="tev-e-swissrounds" value="' + escapeHtml(String(ev.swissRounds || '')) + '" placeholder="自動" style="width:80px;padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '></label>'
+      + '<label style="display:block;margin:6px 0;">Top Cut 取前幾名（空白=自動 ≤16→4／≥17→8；僅瑞士制生效）：<input id="tev-e-topcut" value="' + escapeHtml(String(ev.topCut || '')) + '" placeholder="自動" style="width:80px;padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '></label>'
       + '<label style="display:block;margin:6px 0;">人數上限（空白=不限，≤64）：<input id="tev-e-max" value="' + escapeHtml(String(ev.maxPlayers || '')) + '" placeholder="不限" style="width:120px;padding:5px;"></label>'
       + '<label style="display:block;margin:6px 0;">每場時限（分）：<input id="tev-e-round" value="' + escapeHtml(String(ev.roundLimitMin || 25)) + '" style="width:80px;padding:5px;"></label>'
       + '<label style="display:block;margin:6px 0;">未進場判負（分）：<input id="tev-e-noshow" value="' + escapeHtml(String(ev.noShowMin || 5)) + '" style="width:80px;padding:5px;"></label>'
@@ -897,6 +900,9 @@ window.tevUpdate = async function (btn) {
     roundLimitMin: g('tev-e-round'),
     noShowMin: g('tev-e-noshow'),
     roundCountdownMin: g('tev-e-countdown'),
+    format: g('tev-e-format'),
+    swissRounds: g('tev-e-swissrounds'),
+    topCut: g('tev-e-topcut'),
     registrationOpenAt: toMs('tev-e-regopen'),
     registrationCloseAt: toMs('tev-e-regclose'),
   };
