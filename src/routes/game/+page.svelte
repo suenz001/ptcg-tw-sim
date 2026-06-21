@@ -4028,6 +4028,18 @@
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = ''; isTournSpectator = false;
     try { await signOut(auth); } catch { /* ignore */ }
   }
+  // v5.650 錦標賽系統播報分類上色：依訊息開頭 emoji／關鍵字歸類，回傳對應 CSS class（皆亮色系，不傷眼）
+  function tSysClass(text: string): string {
+    const t = (text || '').trim();
+    if (/冠軍|恭喜/.test(t) && /^(🏆|🎉)/.test(t)) return 'sc-champ';     // 冠軍誕生（金黃高亮）
+    if (/^(🚫|⚠)/.test(t) || /無冠軍/.test(t)) return 'sc-cancel';        // 取消／不足／無冠軍（紅粉）
+    if (/^🏳/.test(t) || /投降|棄權/.test(t)) return 'sc-forfeit';        // 投降／棄權（橙）
+    if (/^⏰/.test(t)) return 'sc-timeout';                               // 逾時／未進場／閒置／時限（珊瑚紅）
+    if (/^(⚖|🔄|⏳)/.test(t) || /管理員/.test(t)) return 'sc-admin';      // 管理員裁定／順延（淡紫）
+    if (/^(📣|📋)/.test(t)) return 'sc-reg';                              // 報名／募集／發起（亮藍）
+    if (/^(🔔|⚔|🎲|🏆)/.test(t)) return 'sc-bracket';                    // 賽程／配對／開賽（亮綠）
+    return '';                                                            // 其他（維持原黃色）
+  }
   async function tChatLoad() {
     // v5.624 防並發重入：tChatLoad 從多處呼叫（3s 輪詢 / 送出後 / 對戰中持續更新），
     //   同時跑會用「同一個 since」重複抓同一批訊息 → tChat 出現重複 id →
@@ -6363,7 +6375,7 @@
         <div class="tourn-chat-msgs" bind:this={tLobbyChatEl} onscroll={onLobbyChatScroll}>
           {#if tChat.length === 0}<div class="tcmsg muted">還沒有人發言，來說聲哈囉吧～</div>{/if}
           {#each tChat as m (m.id)}
-            <div class="tcmsg" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
+            <div class="tcmsg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
         {#if tRegisteredAny || tIsAdmin}
@@ -9386,7 +9398,7 @@
               <p class="muted small chat-empty">大廳聊天室目前沒有訊息～</p>
             {:else}
               {#each tChat as m (m.id)}
-                <div class="chat-msg" class:tcsys={m.sys} class:tcadmin={m.admin}>
+                <div class="chat-msg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>
                   <span class="chat-name">{#if m.admin}🛡️ {/if}{m.name}</span>
                   {#if m.ts}<span class="chat-time">{tFmtMsgTime(m.ts)}</span>{/if}
                   <div class="chat-text">{m.text}</div>
@@ -10209,6 +10221,14 @@
   .tcmsg.muted { color: #888; }
   .tcmsg.tcsys { color: #ffd35a; }
   .tcmsg.tcsys .tcname { color: #ffd35a; } /* v5.579 系統通知的「系統」名字也用黃色(與內容一致)，跟玩家發言的藍色名區分 */
+  /* v5.650 系統播報分類上色（亮色系，避免太暗傷眼）；同時套用大廳(.tcmsg)與浮動/對戰中(.chat-msg） */
+  .tcmsg.tcsys.sc-reg, .tcmsg.tcsys.sc-reg .tcname, .chat-msg.sc-reg .chat-text, .chat-msg.sc-reg .chat-name { color: #5fd0ff; }
+  .tcmsg.tcsys.sc-bracket, .tcmsg.tcsys.sc-bracket .tcname, .chat-msg.sc-bracket .chat-text, .chat-msg.sc-bracket .chat-name { color: #7ee787; }
+  .tcmsg.tcsys.sc-champ, .tcmsg.tcsys.sc-champ .tcname, .chat-msg.sc-champ .chat-text, .chat-msg.sc-champ .chat-name { color: #ffd84d; font-weight: 800; text-shadow: 0 0 7px rgba(255,200,60,0.5); }
+  .tcmsg.tcsys.sc-forfeit, .tcmsg.tcsys.sc-forfeit .tcname, .chat-msg.sc-forfeit .chat-text, .chat-msg.sc-forfeit .chat-name { color: #ffae42; }
+  .tcmsg.tcsys.sc-timeout, .tcmsg.tcsys.sc-timeout .tcname, .chat-msg.sc-timeout .chat-text, .chat-msg.sc-timeout .chat-name { color: #ff8c6b; }
+  .tcmsg.tcsys.sc-cancel, .tcmsg.tcsys.sc-cancel .tcname, .chat-msg.sc-cancel .chat-text, .chat-msg.sc-cancel .chat-name { color: #ff6f7d; }
+  .tcmsg.tcsys.sc-admin, .tcmsg.tcsys.sc-admin .tcname, .chat-msg.sc-admin .chat-text, .chat-msg.sc-admin .chat-name { color: #c5a3ff; }
   .tctime { color: #667; font-size: 11px; margin-right: 5px; font-variant-numeric: tabular-nums; }
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }

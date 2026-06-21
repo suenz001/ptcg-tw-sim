@@ -312,6 +312,12 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.650</span> 錦標賽系統播報依類型分色顯示</summary>
+        <ul>
+          <li>錦標賽系統播報原本全是黃色，現在依類型用不同亮色區分，一眼看出是哪種：報名／募集（藍）、賽程／配對／開賽（綠）、產生冠軍（金黃高亮）、投降（橙）、未進場／逾時／判負（珊瑚紅）、取消／人數不足（紅粉）、管理員裁定／順延（紫）。</li>
+        </ul>
+      </details>
+<details>
         <summary><span class="ver-badge">v5.649</span> 名人堂預設收摺，點開才展開</summary>
         <ul>
           <li>錦標賽頁面的「名人堂｜歷屆冠軍」改為預設收摺，點一下標題才展開，避免冠軍場次越來越多時頁面過長。</li>
