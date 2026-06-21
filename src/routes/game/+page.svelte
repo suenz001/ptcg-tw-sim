@@ -107,6 +107,7 @@
   let tHofView = $state<any | null>(null);   // v5.642 名人堂點選後載入的「當初賽程」(歸檔)
   let tHofPage = $state(1);                   // 名人堂賽程翻頁(輪次)
   let tHofLoading = $state(false);
+  let tHofListOpen = $state(false);          // v5.649 名人堂預設收摺，點開才展開（賽事越多頁面越長）
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -6574,7 +6575,10 @@
       {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
       {#if tChampions.length > 0}
         <div class="tourn-bracket tourn-hof">
-          <div class="tourn-bracket-head">🏛️ 名人堂 ｜ 歷屆冠軍 <span class="muted small" style="font-weight:400;">（點擊看當初賽程）</span></div>
+          <div class="tourn-bracket-head tourn-hof-toggle" role="button" tabindex="0" style="cursor:pointer;user-select:none;" onclick={() => tHofListOpen = !tHofListOpen} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (tHofListOpen = !tHofListOpen)}>
+            <span style="display:inline-block;width:1em;">{tHofListOpen ? '▾' : '▸'}</span>🏛️ 名人堂 ｜ 歷屆冠軍（{tChampions.length}）<span class="muted small" style="font-weight:400;">{tHofListOpen ? ' ｜ 點擊冠軍看當初賽程' : ' ｜ 點此展開'}</span>
+          </div>
+          {#if tHofListOpen}
           {#each tChampions as c (c.id)}
             <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
               <span class="tourn-hof-trophy">{c.communityEvent ? '🎖️' : '🏆'}</span>
@@ -6583,6 +6587,7 @@
               {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
           {/each}
+          {/if}
         </div>
       {/if}
       {#if tHofLoading}
