@@ -7832,6 +7832,10 @@ function applyAbilityRetreatMod(
       for (const ab of card.abilities) {
         const fn = ABILITY_RETREAT_MOD.get(ab.name);
         if (!fn) continue;
+        // v5.648：特性消除收斂——holder 特性被「初始化 / 招式版暗夜羽擊(abilityNullifiedThisTurn) /
+        //   passive 振翼髮｜暗夜羽擊 / 黏著束縛」壓制時，撤退費修正失效。原本只擋火箭隊監視塔【無】特性，
+        //   漏了 holder-effective → 對手振翼髮暗夜羽擊在戰鬥場時，我方小火龍「一身輕」仍錯誤免撤退（Wilson 回報）。
+        if (!isAbilityHolderEffective(state, inst, card, ownerIdx, ab.name, position, pool)) continue;
         const r = fn({
           holderInst: inst,
           holderCard: card,

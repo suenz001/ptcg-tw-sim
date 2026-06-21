@@ -21,7 +21,7 @@ const dir = join(ROOT, 'static/cards');
 const liveC = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map(e => e.code));
 const pool = new Map();
 for (const f of readdirSync(dir)) { if (!f.endsWith('.json') || f === 'index.json' || !liveC.has(f.slice(0, -5))) continue; for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c); }
-const CID = { ubo: '17976', r2: '14087', latias: '14735', tetsu: '16753', grav: '10990', water: '14102', def: '13163' };
+const CID = { ubo: '17976', r2: '14087', latias: '14735', tetsu: '16753', grav: '10990', water: '14102', def: '13163', char: '14416'/*小火龍|一身輕,retreat2*/, bramble: '16826'/*振翼髮|暗夜羽擊 passive*/ };
 let nn = 0;
 const inst = (cid, e = [], x = {}) => ({ iid: 'i' + (++nn), cardId: String(cid), damage: 0, energyAttached: e, ...x });
 const en = (cid) => ({ iid: 'e' + (++nn), cardId: String(cid), damage: 0, energyAttached: [] });
@@ -70,6 +70,21 @@ T('RETREAT 行為一致：鼓擊使 cost=3，2 能量撤退失敗 / 3 能量成�
   const bIid = st3.players[0].bench[0].iid;
   const n3 = applyAction(st3, { type: 'RETREAT', newActiveIid: bIid }, pool);
   assert.notEqual(n3.players[0].active?.cardId, CID.ubo, '3 能量 ≥ cost 3 → 撤退成功');
+});
+// ── v5.648：免撤退費特性被「特性消除」壓制時應失效（Wilson 報：對手振翼髮暗夜羽擊在場時小火龍一身輕仍免撤退）──
+T('一身輕(0能量) + 對手普通 → 撤退費 0（特性生效，控制組）', () => {
+  const st = mk(inst(CID.char, []), [inst(CID.def), inst(CID.def)], CID.def);
+  assert.equal(computeActiveRetreatCostFor(st, 0, pool), 0, '一身輕 0能量應免撤退');
+  assert.equal(getRetreatCost(st, pool), 0);
+});
+T('★一身輕(0能量) + 對手振翼髮｜暗夜羽擊在戰鬥場 → 撤退費=base 2（特性被消除，bug 修正）', () => {
+  const st = mk(inst(CID.char, []), [inst(CID.def), inst(CID.def)], CID.bramble);
+  assert.equal(computeActiveRetreatCostFor(st, 0, pool), 2, '一身輕被暗夜羽擊消除→回 base 撤退費 2');
+  assert.equal(getRetreatCost(st, pool), 2);
+});
+T('一身輕(身上有1能量) + 對手普通 → 撤退費 2（一身輕本就不觸發，確保 0 是來自特性）', () => {
+  const st = mk(inst(CID.char, [en(CID.water)]), [inst(CID.def), inst(CID.def)], CID.def);
+  assert.equal(computeActiveRetreatCostFor(st, 0, pool), 2, '有能量→一身輕不觸發→base 2');
 });
 console.log(`\n撤退費中央收斂：PASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
