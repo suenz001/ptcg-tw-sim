@@ -176,7 +176,7 @@
         // 首次進大廳：5 支全抓一次（即時顯示）
         tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad();
         // v5.637 降載：原本每 3s 同時打 5 支 API，大型錦標賽多人同時在大廳時把單一 node 進程打爆（事件迴圈尖峰→502）。
-        //   常變的 /event /chat 維持 3s；/bracket /spectate 改每 3 tick(9s)；/champions（名人堂幾乎不變）每 10 tick(30s)。
+        //   常變的 /event /chat 維持 3s；/bracket /spectate 改每 3 tick(9s)；/champions（名人堂幾乎不變）只在進入大廳抓一次、不週期刷新（v5.647）。
         let _tPollTick = 0;
         tEventPollTimer = setInterval(() => {
           tNow = Date.now() + tClockOffset;
@@ -184,7 +184,8 @@
           tournLoadEvent();
           tChatLoad();
           if (_tPollTick % 3 === 0) { tBracketLoad(); tSpectateLoad(); }
-          if (_tPollTick % 10 === 0) { tChampionsLoad(); }
+          // v5.647 降載：名人堂(/champions)移出輪詢——冠軍只在賽事結束才變,週期刷新無意義;
+          //   只在「進入/重入錦標賽大廳」初始那次抓(上方首抓已有 tChampionsLoad()),降低 Oracle 負擔。
         }, 3000);
       }
     } else if (tEventPollTimer) { clearInterval(tEventPollTimer); tEventPollTimer = null; }
