@@ -21,8 +21,8 @@ const seededRng = (seed) => () => { seed = (seed * 1103515245 + 12345) & 0x7ffff
 
 T('swissRoundsForCount 對照表', () => {
   const f = S.swissRoundsForCount;
-  assert.equal(f(2), 3); assert.equal(f(8), 3); assert.equal(f(9), 4); assert.equal(f(16), 4);
-  assert.equal(f(17), 5); assert.equal(f(48), 5); assert.equal(f(49), 6); assert.equal(f(96), 6); assert.equal(f(97), 7); assert.equal(f(192), 7); assert.equal(f(193), 8);
+  assert.equal(f(2), 3); assert.equal(f(16), 3); assert.equal(f(17), 4); assert.equal(f(32), 4);
+  assert.equal(f(33), 5); assert.equal(f(48), 5); assert.equal(f(49), 6); assert.equal(f(96), 6); assert.equal(f(97), 7); assert.equal(f(192), 7); assert.equal(f(193), 8);
 });
 T('topCutSizeForCount 對照表(≤16→4 / ≥17→8)', () => {
   const f = S.topCutSizeForCount;
@@ -138,11 +138,11 @@ T('seedTopCut K=6(非2次方) → 種子1,2輪空 + 4v5,3v6', () => {
 
 
 // ── 多輪完整模擬：跑滿輪數，驗證跨輪不變量(每人最多1 Bye、每輪涵蓋全員、積分累加正確) ──
-T('完整模擬 N=10 跑 4 輪(跨輪 Bye≤1、每輪合法、積分一致)', () => {
+T('完整模擬 N=10 跑 3 輪(跨輪 Bye≤1、每輪合法、積分一致)', () => {
   const rng = seededRng(42);
   let players = Array.from({ length: 10 }, () => mk());
-  const rounds = S.swissRoundsForCount(10); // 4
-  assert.equal(rounds, 4);
+  const rounds = S.swissRoundsForCount(10); // 3
+  assert.equal(rounds, 3);
   for (let r = 1; r <= rounds; r++) {
     const pr = S.pairSwissRound(players, r, rng);
     validateRound(players, pr, 'sim R' + r);
@@ -249,8 +249,9 @@ function fullSwissThenCut(N, rng) {
     pairings=ps; cutRound++;
   }
 }
-T('端到端 瑞士→TopCut→冠軍：N=8/10/16/17 都收斂出唯一冠軍', () => {
-  for (const N of [8,10,16,17]) {
+T('端到端 瑞士→TopCut→冠軍：各人數階界(含新輪數表)都收斂出唯一冠軍', () => {
+  // v5.646 新輪數表:16→3輪/17-32→4輪/33-48→5輪/49-96→6輪;驗證複賽(單敗TopCut)銜接對應正確
+  for (const N of [8,10,16,17,20,32,36,48,49,64]) {
     const r = fullSwissThenCut(N, seededRng(N*13+1));
     assert(r.champ, N+'人應產生冠軍'); 
     console.log('   N='+N+' → '+r.swissRounds+'瑞士輪, Top'+r.topCut+', 冠軍='+r.champ+' (共'+r.totalRounds+'輪)');

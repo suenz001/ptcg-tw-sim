@@ -26,10 +26,10 @@ export interface SwissPairing {
 // ════════ 輪數 / Top Cut 對照（admin 可覆寫）════════
 export function swissRoundsForCount(n: number): number {
   if (n <= 1) return 0;
-  if (n <= 8) return 3;
-  if (n <= 16) return 4;
-  if (n <= 48) return 5;   // v5.645：5 輪上限 32→48(36 人賽事改 5 輪,初賽更快)
-  if (n <= 96) return 6;   // 6 輪門檻 33→49
+  if (n <= 16) return 3;   // v5.646：≤16 人 → 3 輪
+  if (n <= 32) return 4;   // 17–32 人 → 4 輪
+  if (n <= 48) return 5;   // 33–48 人 → 5 輪
+  if (n <= 96) return 6;   // 49–96 人 → 6 輪
   if (n <= 192) return 7;
   return 8;
 }
