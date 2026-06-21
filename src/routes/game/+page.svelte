@@ -2609,13 +2609,32 @@
   );
 
   // 線上模式 / AI 模式：是否輪到玩家行動
+  // v5.643 setup「誰該動作」— 與伺服器 currentActorSeat 同一套邏輯(敗場判定/UI 提示一致):
+  //   放出場階段 mulligan 較少方先放(較多方等);雙方 setupDone 後才進揭示確認/補抽。回 0/1=該方,-1=雙方(都該動)。
+  function setupActorSeat(g: any): 0 | 1 | -1 {
+    const sd0 = !!g?.setupDone?.[0], sd1 = !!g?.setupDone?.[1];
+    if (!(sd0 && sd1)) {
+      const m0 = g?.mulliganCounts?.[0] ?? 0, m1 = g?.mulliganCounts?.[1] ?? 0;
+      if (m0 === m1) { if (!sd0 && !sd1) return -1; return (!sd0 ? 0 : 1); }
+      const lessIdx: 0 | 1 = m0 < m1 ? 0 : 1;
+      if (!(lessIdx === 0 ? sd0 : sd1)) return lessIdx;
+      const moreIdx: 0 | 1 = lessIdx === 0 ? 1 : 0;
+      if (!(moreIdx === 0 ? sd0 : sd1)) return moreIdx;
+    }
+    const pmd = g?.pendingMulliganDraw ?? [0, 0];
+    const mrc = g?.mulliganRevealConfirmed ?? [true, true];
+    const mpb = g?.mulliganPostBenchOpen ?? [false, false];
+    const owes = (i: number) => (Number(pmd[i]) > 0) || !mrc[i] || !!mpb[i];
+    if (owes(0) || owes(1)) { const b0 = owes(0), b1 = owes(1); if (b0 && !b1) return 0; if (b1 && !b0) return 1; return -1; }
+    return -1;
+  }
   const isMyTurn = $derived(() => {
     if (!game) return false;
     // 線上模式：只有輪到 myPlayerIndex 才能行動（必須優先於 AI 判斷）
     if (mode === 'online') {
       if (myPlayerIndex === null) return false;
       // v5.139: setup 階段同時看 mulliganPostBenchOpen — 補抽後加備戰也是「我的回合」
-      if (game.phase === 'setup') return !game.setupDone[myPlayerIndex] || !!game.mulliganPostBenchOpen?.[myPlayerIndex];
+      if (game.phase === 'setup') { const _b = setupActorSeat(game); return _b === -1 || _b === myPlayerIndex; }
       if (game.pendingSelection) return game.pendingSelection.actorIdx === myPlayerIndex;
       if (game.turnPhase === 'end' && game.players[myPlayerIndex].active === null) return true;
       return game.activePlayerIndex === myPlayerIndex;
@@ -2624,7 +2643,7 @@
     if (aiPlayerIndex !== null) {
       const hIdx = (1 - aiPlayerIndex) as 0 | 1;
       // v5.139: setup 階段同時看 mulliganPostBenchOpen — 補抽後加備戰也是「我的回合」
-      if (game.phase === 'setup') return !game.setupDone[hIdx] || !!game.mulliganPostBenchOpen?.[hIdx];
+      if (game.phase === 'setup') { const _b = setupActorSeat(game); return _b === -1 || _b === hIdx; }
       if (game.pendingSelection) return game.pendingSelection.actorIdx === hIdx;
       if (game.turnPhase === 'end' && game.players[hIdx].active === null) return true;
       // v2.98：取獎賞由 owner 決定（pendingPrizes[hIdx] > 0 即可取，不論誰的回合）
@@ -7535,11 +7554,10 @@
     <div class="action-bar">
       <div class="alerts-col">
         {#if game.phase==='setup'}
-          {@const myDone = game.setupDone[myIdx]}
-          {@const oppDone = game.setupDone[oppIdx]}
-          {#if myDone && !oppDone}
-            <div class="alert info-alert">⏳ 等待對手選出場寶可夢…</div>
-          {:else if !myDone}
+          {@const _sb = setupActorSeat(game)}
+          {#if _sb !== -1 && _sb !== myIdx}
+            <div class="alert info-alert">⏳ 等待對手{(game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 ? '補抽手牌' : (!game.mulliganRevealConfirmed?.[oppIdx] ? '確認起手揭示' : (!game.setupDone?.[oppIdx] ? '選出場寶可夢並準備' : '準備'))}…</div>
+          {:else if !game.setupDone[myIdx]}
             {#if !myPlayer?.active}
               <div class="alert info-alert">🃏 從手牌拖出 1 隻基礎寶可夢到戰鬥場</div>
             {:else}

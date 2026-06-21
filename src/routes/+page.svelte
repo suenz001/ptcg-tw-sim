@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.643</span> 修正起手準備階段「輪到誰」的提示</summary>
+        <ul>
+          <li>對戰開始的起手準備階段，現在會正確顯示輪到誰行動：依規則重抽次數較少的一方要先選出場寶可夢並準備，較多的一方會看到「等待對手…」而非被要求行動。系統提示與閒置判負的判定一致。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.642</span> 名人堂可點開看當初的完整賽程</summary>
         <ul>
           <li>錦標賽頁的「名人堂」歷屆冠軍，點任一筆即可查看那場賽事當初的完整賽程：每一輪可翻頁瀏覽，並標示每場對戰的勝負（含輪空）。</li>
