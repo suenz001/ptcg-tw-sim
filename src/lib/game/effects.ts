@@ -2683,7 +2683,11 @@ export function applyStatusToOppActive(
   srcIdx: 0 | 1,
   status: SpecialCondition,
   pool: Map<string, Card>,
-  opts: { kind: 'attack-effect' | 'ability-effect'; label?: string; poisonDamagePerCheckup?: number } = { kind: 'attack-effect' },
+  // v5.674：新增 'item-effect' — 道具/訓練家卡造成的狀態。
+  //   道具效果【不會】被化隱／純樸／光之翼等「對手招式或特性效果」免疫擋（卡面只擋招式/特性），
+  //   故 item-effect 時跳過 canApplyEffectToTarget 那關；但憨憨臉/不眠/特殊能量/祭典會場
+  //   屬「來源無關」的狀態免疫，對任何來源（含道具）都生效，照常套用。
+  opts: { kind: 'attack-effect' | 'ability-effect' | 'item-effect'; label?: string; poisonDamagePerCheckup?: number } = { kind: 'attack-effect' },
 ): GameState {
   const dIdx = (1 - srcIdx) as 0 | 1;
   const def = state.players[dIdx];
@@ -2702,9 +2706,12 @@ export function applyStatusToOppActive(
     return addLog(state, `${prefix}${defName}｜不眠：免疫【睡眠】`, srcIdx);
   }
   // 3. 統一免疫關卡（化隱 / 純樸 / 薄霧 / 皇帝之勢 / 抵抗之幕 / 對戰圓形 …）
-  const guard = canApplyEffectToTarget(state, srcIdx, def.active, pool.get(def.active.cardId), opts.kind, pool);
-  if (guard.blocked) {
-    return addLog(state, `${prefix}${defName}｜${guard.reason}`, srcIdx);
+  //    僅招式/特性來源適用；道具來源（item-effect）跳過——化隱等卡面只擋「對手招式或特性效果」。
+  if (opts.kind !== 'item-effect') {
+    const guard = canApplyEffectToTarget(state, srcIdx, def.active, pool.get(def.active.cardId), opts.kind, pool);
+    if (guard.blocked) {
+      return addLog(state, `${prefix}${defName}｜${guard.reason}`, srcIdx);
+    }
   }
   // 4. 泡沫【水】等特殊能量狀態免疫
   const seImmune = checkSpecialEnergyStatusImmune(def.active, status, pool);
@@ -4363,42 +4370,20 @@ reg('寶可夢中心的姐姐', (st, idx) => {
 regR('pokemon-center-lady-heal', healResolver);
 
 // 危險光線 — 對手戰鬥寶可夢同時陷入【灼傷】+【混亂】（v2.163 完整實裝）
-// 約定：行動類狀態（混亂）放 status 主格；傷害類狀態（灼傷）放 secondaryStatus。
-// 引擎 checkup 會掃兩格做毒/灼判定；攻擊前的混亂擲幣只看 status 主格。
+// v5.674 收斂：改走中央 applyStatusToOppActive（kind:'item-effect'），一勞永逸處理
+//   ① 狀態欄位（status 主格 / secondaryStatus）的雙格共存與保留既有狀態（applyStatusToActive）
+//   ② 來源無關免疫：憨憨臉（混亂）/ 特殊能量泡沫【水】/ 祭典會場
+//   ③ 危險光線是【道具】，化隱／純樸只擋「對手招式或特性效果」→ 不該擋道具
+//      （原 v5.444 誤加 canApplyEffectToTarget('attack-effect') 化隱 gate，Wilson 裁定移除）
+// 約定：行動類狀態（混亂）放 status 主格；傷害類狀態（灼傷）放 secondaryStatus（helper 自動處理）。
 regG('危險光線', (st, idx) => !!st.players[(1-idx) as 0|1].active);
 reg('危險光線', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  const players = [...st.players] as [PlayerState, PlayerState];
-  const def = { ...players[dIdx] };
-  if (def.active) {
-    const defName = pool.get(def.active.cardId)?.name ?? '?';
-    // v5.444：補化隱 / 純樸等統一免疫關卡（原本只查特殊能量，化隱被漏）
-    const dlGuard = canApplyEffectToTarget(st, idx, def.active, pool.get(def.active.cardId), 'attack-effect', pool);
-    if (dlGuard.blocked) return addLog(st, `危險光線：${defName}｜${dlGuard.reason}`, idx);
-    // v2.175：泡沫【水】等 SPECIAL_ENERGY_STATUS_IMMUNE 命中 → 對應狀態忽略
-    const immBurn = checkSpecialEnergyStatusImmune(def.active, 'burned', pool);
-    const immConf = checkSpecialEnergyStatusImmune(def.active, 'confused', pool);
-    if (immBurn.immune && immConf.immune) {
-      return addLog(st, `危險光線：${defName} 對【灼傷】【混亂】皆免疫`, idx);
-    }
-    if (immBurn.immune) {
-      def.active = { ...def.active, status: 'confused' };
-      players[dIdx] = def;
-      const s = addLog({ ...st, players }, `${defName}｜${immBurn.energyName}：免疫【灼傷】`, idx);
-      return addLog(s, `危險光線：${defName} 陷入【混亂】`, idx);
-    }
-    if (immConf.immune) {
-      def.active = { ...def.active, status: 'burned' };
-      players[dIdx] = def;
-      const s = addLog({ ...st, players }, `${defName}｜${immConf.energyName}：免疫【混亂】`, idx);
-      return addLog(s, `危險光線：${defName} 陷入【灼傷】`, idx);
-    }
-    def.active = { ...def.active, status: 'confused', secondaryStatus: 'burned' };
-    players[dIdx] = def;
-    return addLog({ ...st, players }, `危險光線：${defName} 陷入【灼傷】+【混亂】`, idx);
-  }
-  players[dIdx] = def;
-  return st;
+  if (!st.players[dIdx].active) return st;
+  // 先灼傷、再混亂；各自處理自身免疫（特殊能量/憨憨臉/祭典會場）與欄位放置。
+  let s = applyStatusToOppActive(st, idx, 'burned', pool, { kind: 'item-effect', label: '危險光線' });
+  s = applyStatusToOppActive(s, idx, 'confused', pool, { kind: 'item-effect', label: '危險光線' });
+  return s;
 });
 
 // 推理組合 — 卡面：看牌庫頂 3 張，二選一：(A) 以任意順序排列放回頂；(B) 全部翻反洗回底
