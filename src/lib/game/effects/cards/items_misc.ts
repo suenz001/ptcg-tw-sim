@@ -1795,20 +1795,14 @@ function doOddClockDevolve(
   }));
   // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
   //   清除特殊狀態與附加效果（跟進化規則一致 — PDF 明文「退化後特殊狀態與附加效果消除」）。
+  // v5.672：清狀態+附加效果改用中央 clearActiveEffects(CLEAR_ON_EXIT_FLAGS,~50旗標)。原只清 7 個,
+  //   漏其餘效果旗標(純樸 immuneToAttackEffects/takeExtra/weaknessOverride/retaliate 等);PDF §II-C-13
+  //   「退化後特殊狀態與附加效果消除」=與進化一致全清(保留 damage/能量/道具)。
   const devolved: import('../../types').CardInstance = {
-    ...target,
-    cardId: newBaseInst.cardId,
+    ...clearActiveEffects({ ...target, cardId: newBaseInst.cardId }),
     evolvedFromStack: newStack.length > 0 ? newStack : undefined,
     evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
-    evolvedThisTurn: true, // 卡面「那個回合無法進化」
-    // v2.261 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
-    status: undefined,
-    secondaryStatus: undefined,
-    tertiaryStatus: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    damageReduceNextHit: undefined,
+    evolvedThisTurn: true, // 卡面「那個回合無法進化」(自己退化)
   };
   const oldName = pool.get(target.cardId)?.name ?? '?';
   const newName = pool.get(newBaseInst.cardId)?.name ?? '?';

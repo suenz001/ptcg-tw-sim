@@ -429,19 +429,12 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       //   → 對手回合不能進化，違反 PTCG 規則（跨回合應失效）。
       //   修法：不設此 flag。本回合對方寶可夢沒有「進化動作」（不是他回合），
       //   所以即使移除 flag 也不會發生「本回合自我連續進化」問題。
+      // v5.672：清狀態+附加效果改用中央 clearActiveEffects(原只清 7 旗標,漏其餘;PDF §II-C-13)。
       return {
-        ...poke,
-        cardId: prev.cardId,
+        ...clearActiveEffects({ ...poke, cardId: prev.cardId }),
         evolvedFromStack: stack.length > 0 ? stack : undefined,
         evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
-        // v3.9998 清狀態 + 跨回合 flag（PDF §II-C-13 消除物）
-        status: undefined,
-        secondaryStatus: undefined,
-        tertiaryStatus: undefined,
-        cantAttackThisTurn: undefined,
-        cantAttackPending: undefined,
-        cantRetreatNextTurn: undefined,
-        damageReduceNextHit: undefined,
+        evolvedThisTurn: undefined, // v3.9998 對手退化不設(否則殘留誤擋其進化)
       };
     };
     let active = p.active;

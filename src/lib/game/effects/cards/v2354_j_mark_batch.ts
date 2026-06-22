@@ -15,6 +15,7 @@ import { startEnergyChain } from './v158_energy_chain';
 import { flipCoinsWithLog } from '../../effects';
 import {
   addLog,
+  clearActiveEffects,
   drawCards,
   regA,
   regPost,
@@ -127,21 +128,12 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
   };
 
   // 退化後的寶可夢保留 HP/能量/道具，清除特殊狀態
+  // v5.672：清狀態+附加效果改用中央 clearActiveEffects(原只清 7 旗標,漏其餘;PDF §II-C-13)。
   const devolvedActive: CardInstance = {
-    ...dp.active,
-    cardId: prev.cardId,
+    ...clearActiveEffects({ ...dp.active, cardId: prev.cardId }),
     evolvedFromStack: stack.length > 0 ? stack : undefined,
     evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
-    // v5.497：退化「對手」寶可夢、在我方回合；卡面無「該回合無法進化」限制。對手退化不設
-    //   evolvedThisTurn(否則殘留到對手回合誤擋其再進化；clearTurnFlags 只清當前玩家)。
-    evolvedThisTurn: undefined,
-    status: undefined,
-    secondaryStatus: undefined,
-    tertiaryStatus: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    damageReduceNextHit: undefined,
+    evolvedThisTurn: undefined, // v5.497 對手退化不設(否則殘留誤擋其再進化)
   };
 
   const prevName = pool.get(prev.cardId)?.name ?? '?';
