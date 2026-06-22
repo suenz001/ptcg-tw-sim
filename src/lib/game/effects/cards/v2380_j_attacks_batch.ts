@@ -45,7 +45,7 @@ import {
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits } from '../../engine';
-import { flipCoinsWithLog, canApplyAttackEffectToTarget, countOneEnergy, koTargetByAttackEffect } from '../../effects';
+import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
@@ -334,21 +334,7 @@ regR('small-messenger-search', (state, aIdx, iids, _params, _pool) => {
 //   v5.323 fix：感應【超】能量等特殊能量 pokemonType=null 且非 Basic, 兩條 check 都漏抓
 //     → 改用 getEnergyUnits (engine.ts) 看 unit.types 含 'Psychic'. 涵蓋基本+特殊能量
 //     (含古舊能量 / 稜鏡能量 / 感應【超】能量等). 一張能量卡算 1 個 (不按 unit 數).
-regPre('哲爾尼亞斯|大地風暴', (state, aIdx, pool) => {
-  const player = state.players[aIdx];
-  const all: CardInstance[] = [...(player.active ? [player.active] : []), ...player.bench];
-  let psyCount = 0;
-  for (const pk of all) {
-    for (const e of pk.energyAttached) {
-      const units = getEnergyUnits(e.cardId, pool);
-      // 每張能量卡若提供任一 Psychic unit → 算 1 個 (PTCG 規則: 不按 unit 數累加)
-      if (units.some(u => u.types.includes('Psychic'))) {
-        psyCount++;
-      }
-    }
-  }
-  return { state, damage: psyCount * 30 };
-});
+// v5.669：移除重複註冊 — 此招式統一由 v2353 energyMultiplyPre(host-aware,能量「個」數,火箭隊=2)實作。
 
 // ── 15. 樹才怪｜岩石投擲 — 30, 不計抵抗力 ───────────────────────────────────
 // v4.495：原誤套 skipWeakRes，改 skipResistance（弱點仍應計算）
@@ -444,13 +430,7 @@ regR('regi-charge', (state, aIdx, iids, _params, _pool) => {
 });
 
 // ── 22. 瑪力露麗ex｜能量氣球 — 60 + 自身超能量數 ×40 ──────────────────────
-regPre('瑪力露麗ex|能量氣球', (state, aIdx, pool) => {
-  const active = state.players[aIdx].active;
-  if (!active) return { state, damage: 60 };
-  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
-  const psyCount = countOneEnergy(active, 'Psychic', pool);
-  return { state, damage: 60 + psyCount * 40 };
-});
+// v5.669：移除重複註冊 — 此招式統一由 v2353 energyMultiplyPre(host-aware,能量「個」數,火箭隊=2)實作。
 
 // ── 23. 故勒頓ex｜衝擊打擊 — 200 + recharge ────────────────────────────────
 regPre('故勒頓ex|衝擊打擊', (s, _a, _p) => ({ state: s, damage: 200 }));
@@ -465,22 +445,10 @@ regPost('故勒頓ex|衝擊打擊', (state, aIdx, _pool) => {
 });
 
 // ── 24. 優雅貓｜能量粉碎 — 40× 對手所有寶可夢身上能量總數 ─────────────────
-regPre('優雅貓|能量粉碎', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  let cnt = 0;
-  if (opp.active) cnt += opp.active.energyAttached.length;
-  for (const b of opp.bench) cnt += b.energyAttached.length;
-  return { state, damage: cnt * 40 };
-});
+// v5.669：移除重複註冊 — 此招式統一由 v2353 energyMultiplyPre(host-aware,能量「個」數,火箭隊=2)實作。
 
 // ── 26. 超級差不多娃娃ex｜耳之力 — 20+ 對手戰鬥場能量數 ×80 ─────────────────
-regPre('超級差不多娃娃ex|耳之力', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  const cnt = def ? def.energyAttached.length : 0;
-  return { state, damage: 20 + cnt * 80 };
-});
+// v5.669：移除重複註冊 — 此招式統一由 v2353 energyMultiplyPre(host-aware,能量「個」數,火箭隊=2)實作。
 
 // ── 27. 青木的勇士雄鷹｜勇鳥猛攻 — 120 + 自傷 30 ────────────────────────────
 regPre('青木的勇士雄鷹|勇鳥猛攻', (s, _a, _p) => ({ state: s, damage: 120 }));

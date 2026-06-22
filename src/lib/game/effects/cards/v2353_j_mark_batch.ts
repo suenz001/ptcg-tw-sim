@@ -9,6 +9,9 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import type { EnergyType } from '$lib/cards/types';
+import { countEnergyTypeHostAware } from '../../effects'; // v5.669 型別能量數 host-aware(火箭隊=2)
+import { totalEnergyUnits } from '../../engine'; // v5.669 全屬性能量「個/單位」數 host-aware
 import {
   ATTACK_PRE_DISCARD_CHOICE,
   addLog,
@@ -89,47 +92,29 @@ function energyMultiplyPre(
     const self = state.players[aIdx];
     const opp  = state.players[dIdx];
 
-    // v4.960：unit + type-aware count — 新衝天能量規則 host-aware
-    const countOf = (c: CardInstance): number => {
-      const hostCard = pool.get(c.cardId);
-      const hostStage = hostCard?.stage ?? hostCard?.subtype;
-      const hostIsStage2 = hostStage === 'Stage2';
-      let n = 0;
-      for (const e of c.energyAttached) {
-        const ec = pool.get(e.cardId);
-        if (!ec || ec.supertype !== 'Energy') continue;
-        // 新衝天能量單獨處理：host-aware unit count
-        if (ec.name === '新衝天能量') {
-          if (hostIsStage2) {
-            // 「視為提供 2 個所有屬性的能量」— 任何 typeFilter 都 match
-            n += 2;
-          } else if (typeFilter === 'all' || typeFilter === 'Colorless') {
-            // 「視為提供 1 個【無】能量」— 只在 all 或 Colorless filter 時算
-            n += 1;
-          }
-          continue;
-        }
-        // 一般能量卡：沿用 matchesEnergyType（已含 typeFilter='all' 全 match + 基本能量
-        // pokemonType=null 時從卡名【X】fallback）
-        if (matchesEnergyType(e, typeFilter, pool)) {
-          n += 1;
-        }
+    // v5.669：卡面「能量的『數量』」=【個】(單位)語意(非【張】卡牌張數;對照 擦除球「張數」=張)。
+    //   → 一律走 host-aware 中央計數,火箭隊能量=2 個、繁茂基本草=2、新衝天 host-aware
+    //   (與超級交響樂 v5.616 通則一致;原 matchesEnergyType 逐張會把火箭隊算 0~1)。
+    //   特定屬性 → countEnergyTypeHostAware;'all'/'Colorless' → totalEnergyUnits(全屬性總單位)。
+    const countOf = (c: CardInstance, ownerIdx: 0 | 1): number => {
+      if (typeFilter === 'all' || typeFilter === 'Colorless') {
+        return totalEnergyUnits(c.energyAttached, pool, state, ownerIdx, c);
       }
-      return n;
+      return countEnergyTypeHostAware(c, typeFilter as EnergyType, pool);
     };
 
     let count = 0;
     if (mode === 'self-attached') {
-      count = self.active ? countOf(self.active) : 0;
+      count = self.active ? countOf(self.active, aIdx) : 0;
     } else if (mode === 'def-active') {
-      count = opp.active ? countOf(opp.active) : 0;
+      count = opp.active ? countOf(opp.active, dIdx) : 0;
     } else if (mode === 'opp-all') {
       const all = [opp.active, ...opp.bench].filter((c): c is CardInstance => !!c);
-      count = all.reduce((s, c) => s + countOf(c), 0);
+      count = all.reduce((s, c) => s + countOf(c, dIdx), 0);
     } else {
       // self-all
       const all = [self.active, ...self.bench].filter((c): c is CardInstance => !!c);
-      count = all.reduce((s, c) => s + countOf(c), 0);
+      count = all.reduce((s, c) => s + countOf(c, aIdx), 0);
     }
 
     const dmg = base + count * per;
