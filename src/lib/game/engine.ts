@@ -5166,6 +5166,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
             if (!benchCard?.abilities) continue;
             for (const ab of benchCard.abilities) {
               if (ab.name === '怨恨旋渦') {
+                if (!isAbilityHolderEffective(newState, benchInst, benchCard, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656
                 const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
                 if (fn) newState = fn(newState, dIdx, pool, koInst);
               }
@@ -5507,6 +5508,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
     if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
+        if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
         const retal = PASSIVE_RETALIATION.get(ab.name);
         if (retal) newState = retal(newState, dIdx, pool);
       }
@@ -5522,6 +5524,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v5.113 KO 重複觸發修：v5.081 KO branch L4994 已跑過，這裡共用版加 KO gate
     if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
+        if (!isAbilityHolderEffective(newState, newState.players[dIdx].active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 非KO分支反擊/受傷觸發 gate
         const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
         if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
       }
@@ -5543,6 +5546,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           if (!benchCard?.abilities) continue;
           for (const ab of benchCard.abilities) {
             if (ab.name === '怨恨旋渦') {
+              if (!isAbilityHolderEffective(newState, benchInst, benchCard, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656
               const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
               if (fn) newState = fn(newState, dIdx, pool);
             }

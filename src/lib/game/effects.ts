@@ -7259,10 +7259,12 @@ export function fireDefenderOnDamaged(
   // 3+4. PASSIVE_RETALIATION + PASSIVE_ON_DAMAGED（光之翼擋）
   if (!attackerHasMagicalShine && defCard?.abilities) {
     for (const ab of defCard.abilities) {
+      if (!isAbilityHolderEffective(s, defActive0, defCard, dIdx, ab.name, 'active', pool)) continue; // v5.656 暗夜羽擊/初始化等壓制→反擊失效
       const retal = PASSIVE_RETALIATION.get(ab.name);
       if (retal) s = retal(s, dIdx, pool);
     }
     for (const ab of defCard.abilities) {
+      if (!isAbilityHolderEffective(s, defActive0, defCard, dIdx, ab.name, 'active', pool)) continue; // v5.656
       const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
       if (fnOD) s = fnOD(s, dIdx, aIdx, pool, defCard);
     }
@@ -7279,6 +7281,7 @@ export function fireDefenderOnDamaged(
         if (!bc?.abilities) continue;
         for (const ab of bc.abilities) {
           if (ab.name === '怨恨旋渦') {
+            if (!isAbilityHolderEffective(s, benchInst, bc, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656
             const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
             if (fn) s = fn(s, dIdx, pool);
           }
