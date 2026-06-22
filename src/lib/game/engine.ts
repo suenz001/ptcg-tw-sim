@@ -5952,11 +5952,15 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         state = burnFlip.state;
         const burnCoin = burnFlip.heads === 1;
         if (burnCoin) {
-          // v2.163：燒傷可能在 status 也可能在 secondaryStatus；只清掉燒傷那格。
+          // v2.163/v5.659：燒傷可能在 status / secondaryStatus / tertiaryStatus；只清掉燒傷「實際所在」那格。
+          //   原 else-if 同時認 secondary||tertiary 卻一律清 secondaryStatus → 若燒傷在 tertiary 會誤清 secondary
+          //   (例:睡眠+中毒+灼傷 → status=睡眠/secondary=中毒/tertiary=灼傷,解燒傷竟清掉中毒、燒傷反而留)。
           if (burnedPlayer.active.status === 'burned') {
             burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
-          } else if (burnedPlayer.active.secondaryStatus === 'burned' || burnedPlayer.active.tertiaryStatus === 'burned') {
+          } else if (burnedPlayer.active.secondaryStatus === 'burned') {
             burnedPlayer.active = { ...burnedPlayer.active, secondaryStatus: undefined };
+          } else if (burnedPlayer.active.tertiaryStatus === 'burned') {
+            burnedPlayer.active = { ...burnedPlayer.active, tertiaryStatus: undefined };
           }
         }
         players[tIdx] = burnedPlayer;
