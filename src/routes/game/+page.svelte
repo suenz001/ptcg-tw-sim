@@ -13358,6 +13358,12 @@
       gap: 0.25rem;
       max-height: 50vh;
     }
+    /* v5.667：手機直式能量 picker — 修 v5.664 桌機放大(img 88px)外溢到手機 54px 欄位致排版跑掉。
+       欄寬加大到 80px(!important 蓋上面 54px)、圖縮到吻合格子,來源寶可夢名仍完整顯示。 */
+    .sel-grid.sel-grid-energy{ grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)) !important; gap:0.3rem; }
+    .sel-grid.sel-grid-energy .sel-card img{ width:60px; }
+    .sel-grid.sel-grid-energy .sel-name{ font-size:0.6rem; }
+    .sel-grid.sel-grid-energy .sel-energy-source{ font-size:0.62rem; }
 
     /* zoom-modal（卡牌詳細 / 放大）— v3.885 重新啟用 lightbox 點圖 */
     .zoom-modal {
