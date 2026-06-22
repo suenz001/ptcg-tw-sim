@@ -625,32 +625,30 @@ ATTACK_PRE_DISCARD_CHOICE.set('厄鬼椪 水井面具ex|激流水泵', {
   verb: 'return-to-deck', // 卡面：「將 3 個能量放回牌庫並重洗」
   countMode: 'units',  // v4.14：卡面「3 個」用 units 解讀，1 張燃火/新衝天等特殊能量可達標
 });
-// v3.875 helper：計算「啟用 option 所需放回的能量數」
-//   - 預設 3（卡面「選擇3個」）
-//   - 若使用者本人是「太晶」寶可夢且有附 璀璨結晶 → 2（官方 QA：能量需求 -1 → 放回也 -1）
-//   - 扮晶晶酒 借此招時：借者是 火箭隊的謎擬Ｑ（非太晶），即使有 璀璨結晶 也不適用 → 仍為 3
-function _hydroPumpRequired(att: CardInstance | null, pool: Map<string, import('$lib/cards/types').Card>): number {
-  if (!att) return 3;
-  const card = pool.get(att.cardId);
-  const isTera = card?.tags?.includes('太晶') ?? false;
-  if (!isTera) return 3;
-  const tools = getAllAttachedTools(att);
-  const hasShinyCrystal = tools.some(t => pool.get(t.cardId)?.name === '璀璨結晶');
-  return hasShinyCrystal ? 2 : 3;
+// v5.653 helper：啟用備戰 120 所需放回的「能量單位數」= min(3, 身上能量總單位)。
+//   卡面「選擇 3 個能量放回牌庫」；官方 QA：身上不足 3 個時放回「全部」也成立並觸發備戰 120
+//   （附 2 能量+璀璨結晶 → 放回 2 個可）。
+//   ⚠ 璀璨結晶只減「使用招式的費用」(太晶 -1)，不改本效果放回張數；2 個能成立是因「只有 2 個、放回全部」，
+//     並非「需求被 -1」。原 v3.875 特判「璀璨結晶→放回 2」會讓 crystal+3 能量者只放 2 留 1 仍觸發 120(錯)，
+//     故移除特判，改純 min(3, 原始總單位)。扮晶晶酒 借招者亦同此通則(依借者身上能量)。
+function _hydroPumpRequired(totalUnits: number): number {
+  return Math.min(3, totalUnits);
 }
 
 regPre('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => {
   const att = state.players[aIdx].active;
   const chosenIids = action?.discardedEnergyIids ?? [];
-  const required = _hydroPumpRequired(att, pool);
   if (!att) {
     return { state: addLog(state, '激流水泵：戰鬥場無寶可夢 → 100', aIdx), damage: 100 };
   }
+  // v5.653：required = min(3, 原始附加能量總單位)。PRE 階段能量都還在 att 上 → 原始總量 = att 全部。
+  const originalUnits = att.energyAttached.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
+  const required = _hydroPumpRequired(originalUnits);
   // v4.14：units mode — 累計 units 而非張數
   const chosenInsts = att.energyAttached.filter(e => chosenIids.includes(e.iid));
   const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
   if (chosenUnits < required) {
-    return { state: addLog(state, `激流水泵：未選滿 ${required} 個能量單位（目前 ${chosenUnits}）→ 100`, aIdx), damage: 100 };
+    return { state: addLog(state, `激流水泵：未放回足夠能量（需 ${required}、目前 ${chosenUnits}）→ 100`, aIdx), damage: 100 };
   }
   // 棄玩家選的 required 個（取前 required 個 — UI 已限制 max）
   const allowed = new Set(att.energyAttached.map(e => e.iid));
@@ -681,7 +679,6 @@ regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => 
   //   POST 改在 deck 內找 chosenIids 對應 inst — 若在 active 找會 0 → fail → picker 不開。
   //   iid 不變、inst 仍在（只是位置從 attached 變 deck），units 計算結果等價。
   const att = state.players[aIdx].active;
-  const required = _hydroPumpRequired(att, pool);
   const chosenIids = action?.discardedEnergyIids ?? [];
   if (!att) return state;
   // v4.14：units mode — 累計 units 判斷
@@ -689,6 +686,9 @@ regPost('厄鬼椪 水井面具ex|激流水泵', (state, aIdx, pool, action) => 
   const p = state.players[aIdx];
   const chosenInsts = p.deck.filter(e => chosenIids.includes(e.iid));
   const chosenUnits = chosenInsts.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
+  // v5.653：required = min(3, 原始總單位)。POST 時選的能量已移進 deck → 原始 = 剩餘(att 上) + 已放回(chosen)。
+  const remainingUnits = att.energyAttached.reduce((s, e) => s + getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx), 0);
+  const required = _hydroPumpRequired(remainingUnits + chosenUnits);
   if (chosenUnits < required) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   if (state.players[dIdx].bench.length === 0) {
