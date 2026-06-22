@@ -29,7 +29,7 @@ import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v27
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive } from '../../effects';
 // v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
 //   重複 import 造成 build fail，本次移除我新加的這行（L26 既有 import 就夠用）。
 
@@ -59,11 +59,8 @@ regPre('樹枕尾熊|晚安敲擊', (s) => ({ state: s, damage: 30 }));
 regPost('樹枕尾熊|晚安敲擊', (state, aIdx, pool) => {
   // 對手戰鬥場睡眠
   let s = statusPost('asleep')(state, aIdx, pool);
-  // 自方戰鬥場睡眠
-  s = updatePlayer(s, aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, status: 'asleep' as const } : null,
-  }));
+  // 自方戰鬥場睡眠 — v5.675 收斂到中央自身狀態 helper
+  s = applyStatusToSelfActive(s, aIdx, 'asleep', pool, { label: '晚安敲擊' });
   // 下回合 +100
   s = updatePlayer(s, aIdx, p => ({
     ...p,

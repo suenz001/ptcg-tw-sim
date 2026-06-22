@@ -23,7 +23,7 @@ import {
   addPendingPrize, getOwnBenchLimit} from '../_shared';
 import { joinCardNames } from '../_shared';
 import { isBasicPokemonCard } from '../../engine';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 import type { CardInstance, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
 
@@ -221,7 +221,7 @@ regR('lucia-show', (st, idx, iids, _params, pool) => {
   const newName = pool.get(target.cardId)?.name ?? '?';
   const oldName = pool.get(dp.active.cardId)?.name ?? '?';
   st = addLog(st, `琉琪亞的展示：對手 ${oldName} 換到備戰，${newName} 上場並混亂`, idx);
-  return updatePlayer(st, dIdx, p => {
+  st = updatePlayer(st, dIdx, p => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === targetIid);
     if (bIdx < 0) return p;
@@ -230,10 +230,13 @@ regR('lucia-show', (st, idx, iids, _params, pool) => {
     return {
       ...p,
       // v3.812：preserve justPlaced + playedFromHand（被強制換到戰鬥場不該重置剛打出 flag）
-      active: { ...target, status: 'confused' as const },
+      active: { ...target },
       bench: newBench,
     };
   });
+  // v5.675 收斂：換場後混亂走中央（琉琪亞的展示是訓練家卡=item-effect，不被化隱擋，但補憨憨臉免疫）。
+  //   新上場 active 無既有狀態，helper 直接放置於 status 主格。
+  return applyStatusToOppActive(st, idx, 'confused', pool, { kind: 'item-effect', label: '琉琪亞的展示' });
 });
 
 // ── 滑稽演員（Supporter / I）── 雙方手洗回 + coin: heads 5/3 / tails 3/5

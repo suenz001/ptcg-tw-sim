@@ -15,7 +15,7 @@ import {
   addLog, updatePlayer,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget } from '../../effects';
+import { canApplyAttackEffectToTarget, applyStatusToSelfActive, applyStatusToOppActive } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 自身回血 N 點
@@ -62,15 +62,11 @@ for (const [key, dmg, heal] of SELF_HEAL) {
 
 // 食夢夢|睡覺 — 0 + 自身睡眠 + 回 30 HP
 regPre('食夢夢|睡覺', (s) => ({ state: s, damage: 0 }));
-regPost('食夢夢|睡覺', (state, aIdx, _pool) => {
-  let s = updatePlayer(
-    addLog(state, '睡覺：自身陷入【睡眠】+ 回復 30 HP', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, status: 'asleep' as const } : null,
-    }),
-  );
-  return selfHealPost(30, '睡覺')(s, aIdx, _pool);
+regPost('食夢夢|睡覺', (state, aIdx, pool) => {
+  // v5.675 收斂：自身睡眠走中央自身狀態 helper
+  let s = applyStatusToSelfActive(state, aIdx, 'asleep', pool, { label: '睡覺' });
+  s = addLog(s, '睡覺：回復 30 HP', aIdx);
+  return selfHealPost(30, '睡覺')(s, aIdx, pool);
 });
 
 // 盔甲鳥|羽棲 — 0 + 回 50 + 自身下回合無法撤退
@@ -112,51 +108,19 @@ for (const [key, dmg] of SKIP_RES) {
 // 毒粉蛾|薄暮之毒 100 + 對手戰鬥場 中毒+睡眠
 regPre('毒粉蛾|薄暮之毒', (s) => ({ state: s, damage: 100 }));
 regPost('毒粉蛾|薄暮之毒', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def) return state;
-  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
-  const defCard = pool.get(def.cardId);
-  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
-  if (guard.blocked) {
-    return addLog(state, `薄暮之毒：${defCard?.name ?? '?'}｜${guard.reason}（不施加雙重狀態）`, aIdx);
-  }
-  return updatePlayer(
-    addLog(state, '薄暮之毒：對手戰鬥寶可夢【中毒】+【睡眠】', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        status: 'asleep' as const,
-        secondaryStatus: 'poisoned' as const,
-      } : null,
-    }),
-  );
+  // v5.675 收斂：對手雙重狀態走中央，逐狀態判免疫（不眠擋睡眠/祭典擋中毒/泡沫水全擋/化隱純樸）
+  let s = applyStatusToOppActive(state, aIdx, 'asleep', pool, { kind: 'attack-effect', label: '薄暮之毒' });
+  s = applyStatusToOppActive(s, aIdx, 'poisoned', pool, { kind: 'attack-effect', label: '薄暮之毒' });
+  return s;
 });
 
 // 火箭隊的黑魯加|惡之火種 0 + 對手戰鬥場 灼傷+混亂
 regPre('火箭隊的黑魯加|惡之火種', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的黑魯加|惡之火種', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def) return state;
-  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
-  const defCard = pool.get(def.cardId);
-  const guard = canApplyEffectToTarget(state, aIdx, def, defCard, 'attack-effect', pool, { isBench: false });
-  if (guard.blocked) {
-    return addLog(state, `惡之火種：${defCard?.name ?? '?'}｜${guard.reason}（不施加雙重狀態）`, aIdx);
-  }
-  return updatePlayer(
-    addLog(state, '惡之火種：對手戰鬥寶可夢【灼傷】+【混亂】', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        status: 'confused' as const,
-        secondaryStatus: 'burned' as const,
-      } : null,
-    }),
-  );
+  // v5.675 收斂：對手雙重狀態走中央，逐狀態判免疫（憨憨臉擋混亂/祭典擋灼傷/泡沫水全擋/化隱純樸）
+  let s = applyStatusToOppActive(state, aIdx, 'burned', pool, { kind: 'attack-effect', label: '惡之火種' });
+  s = applyStatusToOppActive(s, aIdx, 'confused', pool, { kind: 'attack-effect', label: '惡之火種' });
+  return s;
 });
 
 // 輔助：unused import 防護

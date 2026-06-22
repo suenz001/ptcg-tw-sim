@@ -1,7 +1,7 @@
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, applyStatusToSelfActive } from '../../effects';
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
   const p = state.players[idx];
@@ -155,8 +155,9 @@ regR('j-sweet-scent-heal-30', healResolver);
 
 // 青木的樹枕尾熊｜瞌睡抽出：自身睡眠，抽 2 張。
 regPre('青木的樹枕尾熊|瞌睡抽出', (state) => ({ state, damage: 0 }));
-regPost('青木的樹枕尾熊|瞌睡抽出', (state, aIdx) => {
-  let s = updatePlayer(state, aIdx, (p) => p.active ? { ...p, active: { ...p.active, status: 'asleep' } } : p);
+regPost('青木的樹枕尾熊|瞌睡抽出', (state, aIdx, pool) => {
+  // v5.675 收斂：自身睡眠走中央自身狀態 helper（不眠/泡沫水免疫 + 欄位保留）
+  let s = applyStatusToSelfActive(state, aIdx, 'asleep', pool, { label: '瞌睡抽出' });
   s = drawCards(s, aIdx, 2);
-  return addLog(s, '瞌睡抽出：自身【睡眠】，抽出 2 張卡', aIdx);
+  return addLog(s, '瞌睡抽出：抽出 2 張卡', aIdx);
 });

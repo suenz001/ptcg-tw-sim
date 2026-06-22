@@ -35,6 +35,7 @@ import {
 } from '../_shared';
 // v3.66：規則寶可夢統一判定 helper
 import { isRulePokemon } from '../../engine';
+import { applyStatusToOppActive } from '../../effects';
 // v5.070：沉重接力棒分配能量改用 startEnergyChain — UI 顯示能量類型 + 同屬性 +/- counter
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -297,10 +298,9 @@ registerToolOnDamagedAndKO('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg,
   if (!holder) return state;
   const holderCard = pool.get(holder.cardId);
   if (!holderCard?.name?.startsWith('火箭隊的')) return state;
-  return updatePlayer(addLog(state, '火箭隊的催眠裝置：將攻擊方睡眠', null), aIdx, p => {
-    if (!p.active) return p;
-    return { ...p, active: { ...p.active, status: 'asleep' } };
-  });
+  // v5.675 收斂：道具讓攻擊方睡眠走中央（item-effect 不被化隱擋；補不眠/泡沫水免疫 + 欄位保留）。
+  //   holder=dIdx，applyStatusToOppActive 施加於 1-dIdx=攻擊方 aIdx。
+  return applyStatusToOppActive(state, dIdx, 'asleep', pool, { kind: 'item-effect', label: '火箭隊的催眠裝置' });
 });
 // v2.170 逆境保險：受傷時若 holder 弱點屬性 = 攻擊方屬性，從牌庫抽 3 張
 registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {

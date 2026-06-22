@@ -2732,6 +2732,50 @@ export function applyStatusToOppActive(
   return addLog({ ...state, players }, `${prefix}${defName} 陷入【${statusLabel[status]}】`, srcIdx);
 }
 
+// v5.675：自身施加狀態（攻擊者讓自己中狀態，如暴走自身混亂、睡覺自身睡眠）。
+//   自身狀態【不】受化隱／純樸影響（那是「對手的招式或特性」效果，自損非對手造成），
+//   故不走 canApplyEffectToTarget；但憨憨臉(混亂)/不眠(睡眠)/特殊能量泡沫【水】/祭典會場(中毒灼傷)
+//   等「來源無關」狀態免疫照常套用。欄位放置交給 applyStatusToActive（保留既有狀態、雙格共存）。
+export function applyStatusToSelfActive(
+  state: GameState,
+  idx: 0 | 1,
+  status: SpecialCondition,
+  pool: Map<string, Card>,
+  opts: { label?: string; poisonDamagePerCheckup?: number } = {},
+): GameState {
+  const me = state.players[idx];
+  if (!me.active) return state;
+  const myName = pool.get(me.active.cardId)?.name ?? '?';
+  const prefix = opts.label ? `${opts.label}：` : '';
+  const statusLabel: Record<string, string> = {
+    poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
+  };
+  // 憨憨臉 — 混亂免疫
+  if (status === 'confused' && isConfusionImmune(me.active, pool)) {
+    return addLog(state, `${prefix}${myName}｜憨憨臉：免疫【混亂】`, idx);
+  }
+  // 不眠 — 睡眠免疫
+  if (status === 'asleep' && isSleepImmune(me.active, pool)) {
+    return addLog(state, `${prefix}${myName}｜不眠：免疫【睡眠】`, idx);
+  }
+  // 泡沫【水】等特殊能量狀態免疫
+  const seImmune = checkSpecialEnergyStatusImmune(me.active, status, pool);
+  if (seImmune.immune) {
+    return addLog(state, `${prefix}${myName}｜${seImmune.energyName}：免疫【${statusLabel[status]}】`, idx);
+  }
+  // 祭典會場（中毒/灼傷）
+  if (isFestivalVenueStatusProtected(state, me.active, pool)) {
+    return addLog(state, `${prefix}${myName}｜祭典會場：免疫【${statusLabel[status]}】`, idx);
+  }
+  let newActive = applyStatusToActive(me.active, status);
+  if (status === 'poisoned' && opts.poisonDamagePerCheckup) {
+    newActive = { ...newActive, poisonDamagePerCheckup: opts.poisonDamagePerCheckup };
+  }
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[idx] = { ...me, active: newActive };
+  return addLog({ ...state, players }, `${prefix}${myName} 陷入【${statusLabel[status]}】`, idx);
+}
+
 // 中毒類
 regPost('鬼斯通|毒之氣息', statusPost('poisoned'));
 regPost('百足蜈蚣|毒液', statusPost('poisoned'));
@@ -2838,19 +2882,8 @@ RESOLVERS.set('abra-hack-place', (st, idx, iids, _params, pool) => {
   }
   return addLog(s, '奇異駭入：傷害指示物重新分配完成', idx);
 });
-// 修建老匠|暴走：自己混亂（攻擊者自己中狀態）
-regPost('修建老匠|暴走', (state, aIdx, pool) => {
-  // v2.91：憨憨臉免疫混亂
-  if (isConfusionImmune(state.players[aIdx].active, pool)) {
-    const name = pool.get(state.players[aIdx].active!.cardId)?.name ?? '?';
-    return addLog(state, `${name}｜憨憨臉：免疫【混亂】`, aIdx);
-  }
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const att = { ...players[aIdx] };
-  if (att.active) att.active = { ...att.active, status: 'confused' };
-  players[aIdx] = att;
-  return { ...state, players };
-});
+// 修建老匠|暴走：自己混亂（攻擊者自己中狀態）— v5.675 收斂到中央自身狀態 helper
+regPost('修建老匠|暴走', (state, aIdx, pool) => applyStatusToSelfActive(state, aIdx, 'confused', pool, { label: '暴走' }));
 
 // 睡眠類
 regPost('雪吞蟲|細雪', statusPost('asleep'));
@@ -5381,18 +5414,8 @@ regPost('電燈怪|錯亂閃光', statusPost('confused')); // 「8 個 counter�
 
 // ── C. 將自己混亂 2 張 ─────────────────────────────────────────────────────
 function selfConfusePost(): AttackPostFn {
-  return (state, aIdx, pool) => {
-    // v2.91：憨憨臉免疫混亂
-    if (isConfusionImmune(state.players[aIdx].active, pool)) {
-      const name = pool.get(state.players[aIdx].active!.cardId)?.name ?? '?';
-      return addLog(state, `${name}｜憨憨臉：免疫【混亂】`, aIdx);
-    }
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (att.active) att.active = { ...att.active, status: 'confused' };
-    players[aIdx] = att;
-    return addLog({ ...state, players }, `自身陷入【混亂】`, aIdx);
-  };
+  // v5.675 收斂：自身混亂走中央自身狀態 helper（憨憨臉/泡沫水免疫 + 欄位保留）
+  return (state, aIdx, pool) => applyStatusToSelfActive(state, aIdx, 'confused', pool);
 }
 regPost('流氓熊貓|暴走', selfConfusePost());
 regPost('棄世猴|暴走', selfConfusePost());
@@ -12378,11 +12401,12 @@ function defToolDiscardParalyzePre(base: number, label: string): AttackPreFn {
       }
       return {
         ...pl,
-        active: { ...newAct, status: 'paralyzed' as const },
+        active: newAct,
         discard: [...pl.discard, discarded],
       };
     });
-    s = addLog(s, `${defName} 陷入【麻痺】`, aIdx);
+    // v5.675 收斂：麻痺改走中央（補泡沫水等特殊能量免疫 + 欄位保留；化隱已於上方 guard 判過）
+    s = applyStatusToOppActive(s, aIdx, 'paralyzed', pool, { kind: 'attack-effect', label });
     return { state: s, damage: base };
   };
 }
