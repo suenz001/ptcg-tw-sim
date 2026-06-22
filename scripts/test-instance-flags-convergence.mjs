@@ -16,14 +16,14 @@ const { clearActiveEffects, CLEAR_ON_EXIT_FLAGS, BENCH_SCRUB_LOCK_FLAGS } = awai
 let pass=0,fail=0;
 const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FAIL',n,'::',e.message);fail++;}};
 
-T('① CLEAR_ON_EXIT_FLAGS=63、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
-  assert.equal(CLEAR_ON_EXIT_FLAGS.length,63,'CLEAR_ON_EXIT 應 63，實際'+CLEAR_ON_EXIT_FLAGS.length);
+T('① CLEAR_ON_EXIT_FLAGS=64、BENCH_SCRUB_LOCK_FLAGS=10 且為子集',()=>{
+  assert.equal(CLEAR_ON_EXIT_FLAGS.length,64,'CLEAR_ON_EXIT 應 64，實際'+CLEAR_ON_EXIT_FLAGS.length);
   assert.equal(BENCH_SCRUB_LOCK_FLAGS.length,10,'SCRUB 應 10');
   for(const k of BENCH_SCRUB_LOCK_FLAGS) assert(CLEAR_ON_EXIT_FLAGS.includes(k),'子集破壞 '+k);
 });
 
 T('②★ clearActiveEffects 清除【全部】CLEAR_ON_EXIT 旗標，保留身分/附加/傷害/進化',()=>{
-  // 建一個把所有 63 旗標都設真值的 instance + 身分欄位
+  // 建一個把所有 64 旗標都設真值的 instance + 身分欄位
   const inst={ iid:'x1', cardId:'9999', damage:120, energyAttached:[{iid:'e1',cardId:'14102'}],
     toolAttached:{iid:'t1',cardId:'tool'}, extraTools:[{iid:'t2',cardId:'tool2'}],
     evolvedFromStack:[{iid:'pre',cardId:'1'}], fossilOnField:true, abilityUsedThisTurn:true, justPlaced:true };
