@@ -7966,12 +7966,13 @@ regPost('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
 });
 
 // 吞食獸|張大嘴 — 若自身能量 > 對手出場能量 則 +160，基礎 10
-regPre('吞食獸|張大嘴', (state, aIdx, _pool) => {
+regPre('吞食獸|張大嘴', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const selfE = att?.energyAttached.length ?? 0;
-  const defE = def?.energyAttached.length ?? 0;
+  // v5.676：卡面「能量的數量」= 能量單位數(個)，非卡張數 → host-aware（火箭隊能量=2、燃火進化=3 等）
+  const selfE = att ? countAttachedEnergyAsUnits(att, pool) : 0;
+  const defE = def ? countAttachedEnergyAsUnits(def, pool) : 0;
   const bonus = selfE > defE ? 160 : 0;
   const dmg = 10 + bonus;
   return { state: addLog(state, `張大嘴：自能量 ${selfE} vs 對手 ${defE}${bonus ? ' +160' : ''} → ${dmg}`, aIdx), damage: dmg };

@@ -90,6 +90,7 @@ import {
   dealSelfDamage,
   dealAttackDamageToTarget,
   koTargetByAttackEffect,
+  countEnergyTypeHostAware,
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -659,16 +660,17 @@ regPre('超級龍頭地鼠ex|極限鑽', (state, aIdx, pool) => {
   };
 });
 
-// ── A4. 超級捷拉奧拉ex|雷電拳 — 自身能量數 × 60 ──────────────────
-//   卡面：「這隻寶可夢身上附加的能量數 × 60 點傷害。」
-//   解讀：energy card 張數（非 units）。雖然新衝天 on Stage2 = 2 units，
-//   但這裡用「能量數」按物理張數最直觀。同 H 標卡常規實作。
-regPre('超級捷拉奧拉ex|閃電拳', (state, aIdx) => {
+// ── A4. 超級捷拉奧拉ex|閃電拳 — 自身【雷】能量數 × 60 ──────────────────
+//   卡面（live M5 19170）：「造成這隻寶可夢身上附加的【雷】能量的數量×60點傷害。」
+//   v5.676：依 Wilson「個 vs 張」裁定，「能量的數量」= 能量單位數(個) → countEnergyTypeHostAware(雷)。
+//   原 inline 兩處錯：①漏【雷】type filter（誤算全部能量）②用 raw .length（漏火箭隊=2 等單位）。
+//   （舊註解誤標為 legacy「雷電拳/能量數(全部)」— 該命名為未上線的 jp_legacy 卡，已更正。）
+regPre('超級捷拉奧拉ex|閃電拳', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
-  const n = att?.energyAttached.length ?? 0;
+  const n = att ? countEnergyTypeHostAware(att, 'Lightning', pool) : 0;
   const dmg = n * 60;
   return {
-    state: addLog(state, `雷電拳：自身能量 ${n} 張 → ${n}×60 = ${dmg}`, aIdx),
+    state: addLog(state, `閃電拳：自身【雷】能量 ${n} 個 → ${n}×60 = ${dmg}`, aIdx),
     damage: dmg,
   };
 });
