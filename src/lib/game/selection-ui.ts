@@ -49,7 +49,8 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
 export const MANDATORY_TOP_PICK_EFFECT_KEYS: ReadonlySet<string> = new Set<string>([
   'scouting-order',  // 多龍奇｜偵查指令：查看上方2張，選1張加手牌
   'explorer-guide',  // 探險家的嚮導：查看頂6張，強制選2張加手牌
-  'shinli-pick',     // 辛俐：查看上方4張，強制選2張加手牌
+  'shinli-pick',
+  'n-plot-energy-move', // v5.663 N的謀劃改用能量picker(可不選/最多2)     // 辛俐：查看上方4張，強制選2張加手牌
 ]);
 
 export interface SkipDecisionInput {

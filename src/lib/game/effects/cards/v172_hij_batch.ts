@@ -81,59 +81,42 @@ regG('N的謀劃', (st, idx) => {
   return st.players[idx].bench.some(c => c.energyAttached.length > 0);
 });
 reg('N的謀劃', (st, idx) => {
-  // 用 bench-choose 選備戰寶可夢（含能量），第一次選之後接著選第二次
-  st = addLog(st, 'N的謀劃：選 1 隻備戰寶可夢移走 1 顆能量到戰鬥場（最多執行 2 次）', idx);
-  const validIids = st.players[idx].bench.filter(c => c.energyAttached.length > 0).map(c => c.iid);
+  // 卡面：選擇最多 2 個自己「備戰」寶可夢身上附加的能量，改附於戰鬥場寶可夢。
+  // v5.663：原本用 bench-choose 只讓玩家選「備戰寶可夢」，再自動取該寶可夢的「末張」能量改附
+  //   → 多屬性備戰(如同時有【惡】【水】)時系統幫玩家選(末張)，違反卡面「選擇能量」(玩家報)。
+  //   改用中央 active-energy-discard 能量 picker(scope='all-own', validIids 限備戰能量, maxCount=2)，
+  //   讓玩家自己挑哪幾張能量；resolver 把選中能量移到戰鬥場。
+  const benchEnergyIids = st.players[idx].bench.flatMap(c => c.energyAttached.map(e => e.iid));
+  if (benchEnergyIids.length === 0 || !st.players[idx].active) {
+    return addLog(st, 'N的謀劃：備戰無能量或無戰鬥位 → 無效果', idx);
+  }
+  st = addLog(st, 'N的謀劃：選擇最多 2 個備戰寶可夢身上的能量，改附到戰鬥場', idx);
   return withPending(st, {
-    type: 'bench-choose',
+    type: 'active-energy-discard',
     actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 0, maxCount: 1,
+    minCount: 0, maxCount: 2,
     effectKey: 'n-plot-energy-move',
-    params: { round: 1, validIids },
+    params: { scope: 'all-own', validIids: benchEnergyIids, titleOverride: 'N的謀劃：選最多 2 個備戰能量改附戰鬥場' },
   });
 });
-regR('n-plot-energy-move', (st, idx, iids, params, pool) => {
-  const round = (params?.round as number) ?? 1;
-  if (iids.length === 0) {
-    return addLog(st, `N的謀劃：第 ${round} 次未選 → 結束`, idx);
-  }
-  const benchIid = iids[0];
-  const bench = st.players[idx].bench.find(c => c.iid === benchIid);
-  if (!bench || bench.energyAttached.length === 0 || !st.players[idx].active) {
-    return addLog(st, 'N的謀劃：目標無能量或無戰鬥位 → 跳過', idx);
-  }
-  // 取最後一張能量改附 active
-  const lastIdx = bench.energyAttached.length - 1;
-  const energy = bench.energyAttached[lastIdx];
-  const energyName = pool.get(energy.cardId)?.name ?? '能量';
-  const benchName = pool.get(bench.cardId)?.name ?? '?';
-  const activeName = st.players[idx].active ? (pool.get(st.players[idx].active!.cardId)?.name ?? '?') : '?';
-  st = addLog(st, `N的謀劃：${benchName} 的 ${energyName} 改附 ${activeName}`, idx);
+regR('n-plot-energy-move', (st, idx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, 'N的謀劃：未選擇能量 → 結束', idx);
+  const sel = new Set(iids.slice(0, 2));  // 卡面上限 2 個
+  const p0 = st.players[idx];
+  // 從備戰各 owner 收集選中的能量(只取備戰上的，戰鬥場自身能量不在 validIids 不會被選)
+  const moved = p0.bench.flatMap(b => b.energyAttached.filter(e => sel.has(e.iid)));
+  if (moved.length === 0 || !p0.active) return addLog(st, 'N的謀劃：無有效能量 → 結束', idx);
   st = updatePlayer(st, idx, p => {
     if (!p.active) return p;
     return {
       ...p,
-      active: { ...p.active, energyAttached: [...p.active.energyAttached, energy] },
-      bench: p.bench.map(b =>
-        b.iid === benchIid
-          ? { ...b, energyAttached: b.energyAttached.slice(0, lastIdx) }
-          : b
-      ),
+      bench: p.bench.map(b => ({ ...b, energyAttached: b.energyAttached.filter(e => !sel.has(e.iid)) })),
+      active: { ...p.active, energyAttached: [...p.active.energyAttached, ...moved] },
     };
   });
-  // 第二次
-  if (round === 1) {
-    const validIids2 = st.players[idx].bench.filter(c => c.energyAttached.length > 0).map(c => c.iid);
-    if (validIids2.length === 0) return st;
-    return withPending(st, {
-      type: 'bench-choose',
-      actorIdx: idx, sourcePlayerIdx: idx,
-      minCount: 0, maxCount: 1,
-      effectKey: 'n-plot-energy-move',
-      params: { round: 2, validIids: validIids2 },
-    });
-  }
-  return st;
+  const activeName = st.players[idx].active ? (pool.get(st.players[idx].active!.cardId)?.name ?? '?') : '?';
+  const names = moved.map(e => pool.get(e.cardId)?.name ?? '能量').join('、');
+  return addLog(st, `N的謀劃：將 ${names}（${moved.length} 個）改附 ${activeName}`, idx);
 });
 
 // ── 沙儷（Supporter / H）── 手牌寶可夢 ≤2 回牌庫 + 牌庫搜寶可夢相同數量
