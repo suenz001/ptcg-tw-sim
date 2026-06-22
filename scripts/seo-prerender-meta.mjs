@@ -80,11 +80,13 @@ export function transform(html, slug, cfg) {
 
 // 卡片頁：用該頁已正確的 canonical/og:title/description/og:image，補正 og:url + twitter:*
 export function transformCard(html) {
-  const grab = (re) => { const m = html.match(re); return m ? m[1] : null; };
-  const canon = grab(/<link rel="canonical" href="([^"]+)"/);
-  const ogTitle = grab(/<meta property="og:title" content="([^"]+)"/);
-  const desc = grab(/<meta name="description" content="([^"]+)"/);
-  const ogImage = grab(/<meta property="og:image" content="([^"]+)"/);
+  // 卡片頁的 head 有兩組 meta：app.html 殼的首頁版(在前) + 卡片 svelte:head 注入的卡片版(在後)。
+  // 取「最後一個」= 卡片自己的值。
+  const grabLast = (reg) => { const ms = [...html.matchAll(reg)]; return ms.length ? ms[ms.length - 1][1] : null; };
+  const canon = grabLast(/<link rel="canonical" href="([^"]+)"/g);
+  const ogTitle = grabLast(/<meta property="og:title" content="([^"]+)"/g);
+  const desc = grabLast(/<meta name="description" content="([^"]+)"/g);
+  const ogImage = grabLast(/<meta property="og:image" content="([^"]+)"/g);
   if (!canon || !ogTitle) return { html, changed: 0 }; // 非預期卡片頁，略過
   let changed = 0;
   const rep = (from, to) => { if (to && from !== to && html.includes(from)) { html = html.split(from).join(to); changed++; } };
@@ -152,11 +154,12 @@ if (process.argv.includes('--selftest')) {
     if (!pass) ok = false;
   }
   // 卡片頁（合成樣本：canonical/og:title/desc/og:image 已各卡，og:url/twitter 仍首頁）
-  let cardSample = sample
-    .replace('<link rel="canonical" href="' + SITE + '/" />', '<link rel="canonical" href="' + SITE + '/card/9809/" />')
-    .replace('<meta property="og:title" content="' + HOME.ogTitle + '" />', '<meta property="og:title" content="小炭仔 SV5K 039/071｜PTCG 卡牌資料庫" />')
-    .replace('<meta name="description" content="' + HOME.desc + '" />', '<meta name="description" content="小炭仔（寶可夢，標準標記 H）。" />')
-    .replace('<meta property="og:image" content="' + SITE + '/og-image.png" />', '<meta property="og:image" content="https://asia.pokemon-card.com/tw/card-img/tw00009809.png" />');
+  // 模擬真實卡片頁：保留 app.html 首頁版 meta，再在 </head> 前插入「卡片版」(svelte:head 注入) → 兩組並存
+  const cardHead = '\n    <link rel="canonical" href="' + SITE + '/card/9809/" />'
+    + '\n    <meta property="og:title" content="小炭仔 SV5K 039/071｜PTCG 卡牌資料庫" />'
+    + '\n    <meta name="description" content="小炭仔（寶可夢，標準標記 H）。" />'
+    + '\n    <meta property="og:image" content="https://asia.pokemon-card.com/tw/card-img/tw00009809.png" />\n  </head>';
+  let cardSample = sample.replace('</head>', cardHead);
   const cr = transformCard(cardSample);
   const cardPass = cr.changed >= 3
     && cr.html.includes('<meta property="og:url" content="' + SITE + '/card/9809/" />')
