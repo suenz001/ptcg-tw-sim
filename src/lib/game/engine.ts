@@ -6647,20 +6647,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         n = { ...n, retreatCostIncreaseThisTurn: c.retreatCostIncreaseNextTurn };
         delete n.retreatCostIncreaseNextTurn;
       }
-      // v2.78 純樸 — defender 不受招式效果影響（next → this）
-      if (c.immuneToAttackEffectsNextTurn) {
-        n = { ...n, immuneToAttackEffectsThisTurn: true };
-        delete n.immuneToAttackEffectsNextTurn;
-      }
       // v2.78 白日夢
       if (c.endTurnOnOppAttachEnergyNextTurn) {
         n = { ...n, endTurnOnOppAttachEnergyThisTurn: true };
         delete n.endTurnOnOppAttachEnergyNextTurn;
-      }
-      // v2.78 防護代碼 — defender 不受帶 tag 的 ex 招式傷害
-      if (c.immuneToExAttackTagNextTurn) {
-        n = { ...n, immuneToExAttackTagThisTurn: c.immuneToExAttackTagNextTurn };
-        delete n.immuneToExAttackTagNextTurn;
       }
       // v2.78 智揮猩｜掌握弱點
       if (c.weaknessOverrideTypeNextTurn) {
@@ -6747,6 +6737,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (c.immuneToBurnedAttackerNextTurn) {
         n = { ...n, immuneToBurnedAttackerThisTurn: true };
         delete n.immuneToBurnedAttackerNextTurn;
+      }
+      // v5.658：純樸(免疫對手招式效果)/防護代碼(免疫帶tag的ex招式傷害)— 自設「下個對手回合」防守旗標。
+      //   原誤放在 nextP(promotePending)→ 對手回合沒生效、反而自己回合才 promote(空跑證實);移到 owner END_TURN promote。
+      if (c.immuneToAttackEffectsNextTurn) {
+        n = { ...n, immuneToAttackEffectsThisTurn: true };
+        delete n.immuneToAttackEffectsNextTurn;
+      }
+      if (c.immuneToExAttackTagNextTurn) {
+        n = { ...n, immuneToExAttackTagThisTurn: c.immuneToExAttackTagNextTurn };
+        delete n.immuneToExAttackTagNextTurn;
       }
       return n;
     };
