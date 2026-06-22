@@ -57,5 +57,16 @@ T('控制組：沒有旗標時 END_TURN 不會無中生有', () => {
   assert.equal(n.players[0].active.damageReduceNextHit, undefined);
 });
 
+T('retaliateCountersOnNextHit:設旗標方回合結束→存活進對手回合', () => {
+  const st = mk(0, { retaliateCountersOnNextHit: 12 });
+  const n = applyAction(st, { type: 'END_TURN' }, pool);
+  assert.equal(n.players[0].active.retaliateCountersOnNextHit, 12, '設旗標方回合結束後應存活');
+});
+T('★retaliateCountersOnNextHit:對手回合結束→清除殘留(v5.657 修正)', () => {
+  const st = mk(1, { retaliateCountersOnNextHit: 12 });
+  const n = applyAction(st, { type: 'END_TURN' }, pool);
+  assert.equal(n.players[0].active.retaliateCountersOnNextHit, undefined, '對手回合結束未消費應清除,不可殘留');
+});
+
 console.log(`\n防護充能旗標回合過期：PASS ${pass} / FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
