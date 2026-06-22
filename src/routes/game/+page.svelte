@@ -8193,6 +8193,9 @@
             {/if}
           {/if}
         </div>
+        {#snippet activeSpotBadge(isOpp)}
+          <span class="retreat-active-badge" class:opp={isOpp} title={isOpp ? '對手目前戰鬥寶可夢' : '我方目前戰鬥寶可夢'}>⚔️ {isOpp ? '對手' : '我方'}戰鬥寶可夢</span>
+        {/snippet}
         {#if isPokePicker}
           {@const srcActiveIid = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
           {@const isOppPicker = pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='opp-bench-choose'}
@@ -8207,7 +8210,7 @@
                   <button class="retreat-zoom" title="放大檢視：{c.name}"
                     onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
                   <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();toggleSelection(item.iid);}}>
-                    {#if isActivePoke}<span class="retreat-active-badge" class:opp={isOppPicker} title={isOppPicker ? '對手目前戰鬥寶可夢' : '目前戰鬥寶可夢'}>⚔️ {isOppPicker ? '對手戰鬥寶可夢' : '我方戰鬥寶可夢'}</span>{/if}
+                    {#if isActivePoke}{@render activeSpotBadge(isOppPicker)}{/if}
                     <img src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -8247,7 +8250,7 @@
                   <button class="retreat-pick" disabled={batchFull || (isAbraRem && cnt >= removeCap)}
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
-                    {#if isActivePoke}<span class="retreat-active-badge opp" title="對手目前戰鬥寶可夢">⚔️ 對手戰鬥寶可夢</span>{/if}
+                    {#if isActivePoke}{@render activeSpotBadge(true)}{/if}
                     <img src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -8286,7 +8289,7 @@
                   <button class="retreat-pick" disabled={batchFullE}
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
-                    {#if isActivePoke}<span class="retreat-active-badge" title="目前戰鬥寶可夢">⚔️ 我方戰鬥寶可夢</span>{/if}
+                    {#if isActivePoke}{@render activeSpotBadge(false)}{/if}
                     <img src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -8359,7 +8362,7 @@
                         title="點擊放大來源寶可夢：[{owner.isActive ? '戰鬥場' : '備戰'}] {owner.name}"
                         onclick={(e) => {e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}
                         onkeydown={(e) => {if (e.key==='Enter' || e.key===' ') {e.preventDefault(); e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}}>
-                        📍 <span class="sel-source-slot" class:sel-source-active={owner.isActive}>{owner.isActive ? '⚔ 戰鬥場' : '備戰'}</span> {owner.name} 🔍
+                        📍 <span class="sel-source-slot" class:sel-source-active={owner.isActive}>{owner.isActive ? '⚔️ 戰鬥場' : '備戰'}</span> {owner.name} 🔍
                       </div>
                     {/if}
                     {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
