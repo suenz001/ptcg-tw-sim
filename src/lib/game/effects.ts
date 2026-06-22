@@ -343,6 +343,29 @@ export function getAttackerEffectiveTypes(
 }
 
 /**
+ * v5.673 中央弱點/抵抗力計算 — 與引擎主管線一致:妖精領域(龍→超)/掌握弱點/弱點失效(disabled)
+ *   + 攻擊方有效屬性(小碎鑽雙屬性/鐵轍跡二重核心)。所有「戰鬥位攻擊傷害」helper 共用,
+ *   禁各自 raw `attackerCard.pokemonType === ...` 比對(會漏上述效果;狙擊/多目標 helper 曾漏)。
+ */
+export function applyWeakRes(
+  state: GameState, actorIdx: 0 | 1,
+  target: CardInstance | null | undefined, targetCard: Card | undefined,
+  dmg: number, pool: Map<string, Card>,
+): number {
+  const atk = state.players[actorIdx].active;
+  const atkCard = atk ? pool.get(atk.cardId) : undefined;
+  const atkTypes = getAttackerEffectiveTypes(atk, atkCard, pool);
+  let d = dmg;
+  const w = getEffectiveWeaknessType(state, actorIdx, target, targetCard, pool);
+  if (!w.disabled && w.type && atkTypes.includes(w.type)) d *= 2;
+  if (targetCard?.resistance?.type && atkTypes.includes(targetCard.resistance.type)) {
+    const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
+    if (!isNaN(rv)) d = Math.max(0, d + rv);
+  }
+  return d;
+}
+
+/**
  * v2.46：「對備戰目標」造成傷害/放指示物時，統一檢查是否被卡面/場地擋下。
  *   kind === 'attack-effect' / 'ability-effect' → 查對戰圓形（備戰不放指示物）
  *   kind === 'attack-damage'                   → 查花之帷幔（備戰且非 ex）、太晶（備戰）
@@ -7656,19 +7679,8 @@ export function dealAttackDamageToTarget(
     st = _ab.state;
   }
   if (isActive && kind === 'attack-damage' && !opts?.noWeakness) {
-    const _atk = st.players[actorIdx].active;
-    const _atkCard = _atk ? pool.get(_atk.cardId) : undefined;
-    // v5.562 收斂：與引擎主管線共用弱點計算(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性)
-    const _w = getEffectiveWeaknessType(st, actorIdx, target, targetCard, pool);
-    const _atkTypes = getAttackerEffectiveTypes(_atk, _atkCard, pool);
-    if (!_w.disabled && _w.type && _atkTypes.includes(_w.type)) {
-      effDmg *= 2;
-    }
-    if (_atkCard?.pokemonType && targetCard?.resistance?.type
-        && _atkCard.pokemonType === targetCard.resistance.type) {
-      const _rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
-      if (!isNaN(_rv)) effDmg = Math.max(0, effDmg + _rv);
-    }
+    // v5.673：弱點+抵抗力統一走中央 applyWeakRes(原抵抗力仍用 raw pokemonType→漏小碎鑽雙屬性,收斂)。
+    effDmg = applyWeakRes(st, actorIdx, target, targetCard, effDmg, pool);
   }
   // v5.544：戰鬥位招式【傷害】套防守方減傷（中央 applyDefenderReductionsBlockA，與引擎主管線共用單一段）。
   //   修「狙擊/延後型招式(走中央函式)漏套鐵之防禦/全金屬實驗室/防護充能/果實道具等防守方減傷」。
@@ -9754,17 +9766,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     if (isActive) {
       const attacker = s.players[actorIdx].active;
       const attackerCard = attacker ? pool.get(attacker.cardId) : null;
-      // weakness ×2
-      if (attackerCard?.pokemonType && targetCard?.weakness?.type
-          && attackerCard.pokemonType === targetCard.weakness.type) {
-        effDmg *= 2;
-      }
-      // resistance（通常 -30）
-      if (attackerCard?.pokemonType && targetCard?.resistance?.type
-          && attackerCard.pokemonType === targetCard.resistance.type) {
-        const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
-        if (!isNaN(rv)) effDmg = Math.max(0, effDmg + rv);  // resistance.value 是負數
-      }
+      // v5.673：弱點/抵抗力收斂到中央 applyWeakRes(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性,與主管線一致)。
+      effDmg = applyWeakRes(s, actorIdx, target, targetCard, effDmg, pool);
       // TOOL_ATTACK_BONUS（猛攻手鐲等）— iterate 攻擊方所有道具
       if (attacker && attackerCard) {
         for (const t of getAllAttachedTools(attacker)) {
@@ -14510,21 +14513,14 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     }
     // 戰鬥場：套用弱點 ×2；備戰位：不計弱抗（卡面明示）
     let dmg = baseDmg;
-    if (isActive
-        && attackerCard?.pokemonType
-        && targetCard?.weakness?.type
-        && attackerCard.pokemonType === targetCard.weakness.type) {
-      dmg *= 2;
+    // v5.673：弱點+抵抗力收斂到中央 applyWeakRes(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性)。
+    if (isActive) {
+      dmg = applyWeakRes(s, actorIdx, target, targetCard, dmg, pool);
     }
     // v5.153：active 補套 resistance + 攻擊方 tool（猛攻手鐲）
     //   Wilson 回報多目標招式對戰鬥場 ex 沒算 +30。
     if (isActive) {
-      // resistance（通常 -30）
-      if (attackerCard?.pokemonType && targetCard?.resistance?.type
-          && attackerCard.pokemonType === targetCard.resistance.type) {
-        const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
-        if (!isNaN(rv)) dmg = Math.max(0, dmg + rv);
-      }
+      // v5.673：resistance 已併入上方 applyWeakRes(中央收斂)。
       // TOOL_ATTACK_BONUS — iterate 攻擊方所有道具
       if (attacker && attackerCard) {
         for (const t of getAllAttachedTools(attacker)) {
