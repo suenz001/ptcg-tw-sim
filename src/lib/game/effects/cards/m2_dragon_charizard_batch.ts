@@ -11,6 +11,7 @@
  */
 import { tryPromptPromoteActive } from '../_shared';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
@@ -207,7 +208,8 @@ regR('exciting-turbo-commit', (st, idx, iids, params, pool) => {
     hand: pl.hand.filter(c => c.iid !== energyIid),
     bench: pl.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b),
   }));
-  return applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool);  // v5.484 自動治癒
+  // v5.662：從手牌附能 → 自方治癒 + 對手附能反應(侵蝕詛咒/麻痺門牙),原漏 fireOnHandEnergyAttached
+  return fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool), idx, targetIid, pool);
 });
 
 // ── 超級噴火駝ex｜炙燒 ─────────────────────────────────────────────────────

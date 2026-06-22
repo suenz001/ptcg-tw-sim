@@ -38,6 +38,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, drawCards,
@@ -424,6 +425,7 @@ regR('flame-dance-attach-fire', (st, idx, iids, params, pool) => {
       : c),
   }));
   s = applyMagearnaHandAttachHeal(s, idx, [targetIid], pool);  // v5.484 自動治癒
+  s = fireOnHandEnergyAttached(s, idx, targetIid, pool);  // v5.662 補對手附能反應(侵蝕詛咒/麻痺門牙)
   return openFlameDanceFightStage(s, idx, pool);
 });
 function openFlameDanceFightStage(st: GameState, idx: 0 | 1, pool: Map<string, Card>): GameState {
@@ -494,6 +496,7 @@ regR('flame-dance-attach-fight', (st, idx, iids, params, pool) => {
       : c),
   }));
   s = applyMagearnaHandAttachHeal(s, idx, [targetIid], pool);  // v5.484 自動治癒
+  s = fireOnHandEnergyAttached(s, idx, targetIid, pool);  // v5.662 補對手附能反應(侵蝕詛咒/麻痺門牙)
   return s;
 });
 
@@ -813,6 +816,7 @@ regR('kitree-iron-bundle-flow-attach', (st, idx, iids, params, pool) => {
       : c),
   }));
   s = applyMagearnaHandAttachHeal(s, idx, [targetIid], pool);  // v5.484 自動治癒
+  s = fireOnHandEnergyAttached(s, idx, targetIid, pool);  // v5.662 補對手附能反應(侵蝕詛咒/麻痺門牙)
   return s;
 });
 

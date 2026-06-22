@@ -36,6 +36,7 @@
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import type { Card } from '$lib/cards/types';
 import {
   regA, regAByName, regR,
@@ -318,7 +319,8 @@ regR('koala-feeble-charge', (state, aIdx, iids, _params, pool) => {
       active: { ...p.active, energyAttached: [...p.active.energyAttached, energy] },
     };
   });
-  return tgtIid ? applyMagearnaHandAttachHeal(attached, aIdx, [tgtIid], pool) : attached;  // v5.485 自動治癒
+  // v5.662：補對手附能反應(侵蝕詛咒/麻痺門牙)
+  return tgtIid ? fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(attached, aIdx, [tgtIid], pool), aIdx, tgtIid, pool) : attached;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

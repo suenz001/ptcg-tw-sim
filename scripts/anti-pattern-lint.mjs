@@ -160,8 +160,32 @@ for (const f of files) {
   }
 }
 
+// ── Check G：從手牌附能的「自方治療」與「對手反應」雙胞胎必須成對 ──────────
+//   applyMagearnaHandAttachHeal(瀑機雅娜自動治療,從手牌附能觸發) 與 fireOnHandEnergyAttached
+//   (對手附能被動:耕鬼ex侵蝕詛咒/麻痺門牙) 是同一「從手牌附能」事件的雙胞胎反應。
+//   任何呼叫前者的 resolver 必須也呼叫後者,否則對手侵蝕詛咒/麻痺門牙漏觸發(v5.662 一次補了7處)。
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (!/applyMagearnaHandAttachHeal\s*\(/.test(lines[i])) continue;
+    if (/function applyMagearnaHandAttachHeal/.test(lines[i])) continue;
+    if (/dmg-direct-ok|handattach-heal-only-ok/.test(lines[i])) continue;
+    let fs = i;
+    for (let j = i; j >= Math.max(0, i - 80); j--) { if (C_FUNC_START.test(lines[j])) { fs = j; break; } }
+    let depth = 0, end = lines.length, started = false;
+    for (let j = fs; j < Math.min(lines.length, fs + 120); j++) {
+      for (const ch of lines[j]) { if (ch === '{') { depth++; started = true; } else if (ch === '}') { depth--; } }
+      if (started && depth <= 0) { end = j; break; }
+    }
+    const span = lines.slice(fs, end + 1).join('\n');
+    if (!/fireOnHandEnergyAttached/.test(span)) {
+      violations.push(`[G] ${rel(f)}:${i + 1} — 呼叫 applyMagearnaHandAttachHeal(從手牌附能)卻未見 fireOnHandEnergyAttached（對手侵蝕詛咒/麻痺門牙會漏觸發；用 fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(...), idx, targetIid, pool) 包一層，或標 // handattach-heal-only-ok: 理由）`);
+    }
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
