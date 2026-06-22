@@ -698,7 +698,7 @@ import {
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
 //   ON_RETREAT_TO_BENCH_ABILITIES：白名單 Set，列出有此觸發機制的特性名（卡面文義「從戰鬥場回到備戰區時，可使用 1 次」）
 //   askUseRetreatToBenchAbility：開 modal-choice 詢問玩家是否使用該特性（仿 askUsePlayAbility）
-import { ON_RETREAT_TO_BENCH_ABILITIES, isBenchProtected, applyStatusToActive } from './effects';
+import { ON_RETREAT_TO_BENCH_ABILITIES, isBenchProtected, applyStatusToOppActive } from './effects';
 import { askUseRetreatToBenchAbility } from './effects/cards/v3050_deferred_wave_a';
 // v5.243：tryPromptPromoteActive 從 _shared.ts (leaf) 經 effects.ts re-export
 import { tryPromptPromoteActive } from './effects';
@@ -2844,32 +2844,16 @@ function handlePlaying(
       const trig = getOppRetreatTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
       if (trig.burnNewActive || trig.confuseNewActive || trig.countersOnRetreater > 0) {
         const ownerIdx = (1 - aIdx) as 0 | 1;
+        // v5.660→v5.661：收斂到中央上狀態函式(「特性對對手戰鬥寶可夢施加狀態」統一免疫關卡)。
+        //   原手動路徑只做正確放置,仍漏全部免疫來源(化隱/憨憨臉混亂免疫/祭典會場/特殊能量),
+        //   且與同區塊「凹洞」(已走 canApplyEffectToTarget)不一致 → 一併收斂。
+        //   ownerIdx=特性持有者=srcIdx → 函式內 dIdx=1-ownerIdx=aIdx(新上場者),放置+全免疫一次到位。
+        //   kind='ability-effect':正確套化隱(擋招式+特性),不誤套純樸/薄霧(僅擋招式效果)。
         if (trig.burnNewActive) {
-          const upd = retreatState.players[aIdx];
-          if (upd.active) {
-            const newPlayers2: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
-            // v5.660：改用中央 applyStatusToActive,正確放置(若新上場者已帶行動類狀態不會覆蓋)
-            newPlayers2[aIdx] = { ...upd, active: applyStatusToActive(upd.active, 'burned') };
-            retreatState = addLog({ ...retreatState, players: newPlayers2 },
-              `熔岩地域：${pool.get(upd.active.cardId)?.name ?? '?'} 進入【灼傷】狀態`,
-              ownerIdx);
-          }
+          retreatState = applyStatusToOppActive(retreatState, ownerIdx, 'burned', pool, { kind: 'ability-effect', label: '熔岩地域' });
         }
         if (trig.confuseNewActive) {
-          const upd = retreatState.players[aIdx];
-          if (upd.active) {
-            const newPlayers3: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
-            const targetActive = newPlayers3[aIdx].active;
-            if (targetActive) {
-              // v5.660：原手動放置在 status==='burned'(如熔岩地域先燒)時把混亂放進 secondaryStatus，
-              //   違反「行動類狀態(睡眠/混亂/麻痺)永遠在 status 主格」不變式 → 攻擊時混亂判定(只讀 status)漏掉、
-              //   混亂寶可夢攻擊不擲幣自傷。改用中央 applyStatusToActive：混亂進 status 主格、灼傷自動擠到傷害槽。
-              newPlayers3[aIdx] = { ...newPlayers3[aIdx], active: applyStatusToActive(targetActive, 'confused') };
-              retreatState = addLog({ ...retreatState, players: newPlayers3 },
-                `漩渦言靈：${pool.get(targetActive.cardId)?.name ?? '?'} 進入【混亂】狀態`,
-                ownerIdx);
-            }
-          }
+          retreatState = applyStatusToOppActive(retreatState, ownerIdx, 'confused', pool, { kind: 'ability-effect', label: '漩渦言靈' });
         }
         if (trig.countersOnRetreater > 0) {
           // v4.56：改用 unified('ability-effect', isBench:true) — 涵蓋對戰圓形/球形盾牌/藏隱/深度下潛/羽毛化石/光之翼
