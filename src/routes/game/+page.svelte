@@ -8323,7 +8323,7 @@
             return m;
           })()}
           {@const concealed = pendingSelection.params?.concealed === true}
-          <div class="sel-grid">
+          <div class="sel-grid" class:sel-grid-energy={isEnergyPicker}>
             {#each selectionItems as item}{@const c=getCard(item.cardId)}
               {#if c}
                 {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item)}
@@ -12850,9 +12850,14 @@
   .sel-card img{ width:64px; border-radius:3px; }
   .sel-name{ text-align:center; font-size:.6rem; }
   /* v3.827: 能量 picker 來源寶可夢標籤 */
-  .sel-energy-source{ display:inline-block; font-size:.6rem; color:#9cd49c; background:rgba(0,0,0,.55); border:1px solid rgba(156,212,156,.4); border-radius:4px; padding:.05rem .3rem; margin-top:.15rem; max-width:95%; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; cursor:pointer; transition:background .15s, border-color .15s; }
+  .sel-energy-source{ display:inline-block; font-size:.7rem; line-height:1.25; color:#9cd49c; background:rgba(0,0,0,.55); border:1px solid rgba(156,212,156,.4); border-radius:4px; padding:.1rem .35rem; margin-top:.2rem; max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word; cursor:pointer; transition:background .15s, border-color .15s; } /* v5.664：移除截斷,來源寶可夢名完整換行 */
   .sel-energy-source:hover{ background:rgba(20,60,20,.85); border-color:#9cd49c; color:#cfe9cf; }
   .sel-energy-source:focus-visible{ outline:2px solid #9cd49c; outline-offset:1px; }
+  /* v5.664：能量 picker 卡圖放大(僅挑能量的 picker,不動其他選取格) */
+  .sel-grid.sel-grid-energy{ grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:.6rem; }
+  .sel-grid.sel-grid-energy .sel-card{ font-size:.72rem; }
+  .sel-grid.sel-grid-energy .sel-card img{ width:88px; }
+  .sel-grid.sel-grid-energy .sel-name{ font-size:.72rem; }
   .sel-hp{ font-size:.58rem; color:#888; }
   .sel-check{ position:absolute; top:2px; right:4px; font-size:.9rem; color:#aaff44; font-weight:700; }
   .sel-empty{ color:#666; font-size:.85rem; grid-column:1/-1; text-align:center; padding:1rem; }
