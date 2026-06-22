@@ -312,6 +312,12 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.665</span> 能量選擇:戰鬥場來源標籤改色區分</summary>
+        <ul>
+          <li>能量選擇介面中，把「戰鬥場」寶可夢的來源標籤改成明顯不同的顏色（暖橘色＋⚔ 標記），與「備戰」標籤一眼區分，更容易看出能量是戰鬥寶可夢還是備戰寶可夢身上的。</li>
+        </ul>
+      </details>
+<details>
         <summary><span class="ver-badge">v5.664</span> 能量選擇介面放大卡圖+來源名完整顯示</summary>
         <ul>
           <li>優化能量選擇介面（N的謀劃、挪動一下、粉碎之錘等需要從寶可夢身上挑能量的卡）：放大能量卡圖，並讓每張能量卡下方「來源寶可夢」的名稱完整顯示、不再被截斷，方便辨認你要移動的是哪一隻寶可夢身上的能量。</li>

@@ -8359,7 +8359,7 @@
                         title="點擊放大來源寶可夢：[{owner.isActive ? '戰鬥場' : '備戰'}] {owner.name}"
                         onclick={(e) => {e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}
                         onkeydown={(e) => {if (e.key==='Enter' || e.key===' ') {e.preventDefault(); e.stopPropagation(); openZoom(owner.inst.cardId, owner.inst);}}}>
-                        📍 <span class="sel-source-slot">[{owner.isActive ? '戰鬥場' : '備戰'}]</span> {owner.name} 🔍
+                        📍 <span class="sel-source-slot" class:sel-source-active={owner.isActive}>{owner.isActive ? '⚔ 戰鬥場' : '備戰'}</span> {owner.name} 🔍
                       </div>
                     {/if}
                     {#if selectionPicked.has(item.iid)}<span class="sel-check">✓</span>{/if}
@@ -11987,6 +11987,8 @@
     background:rgba(0,0,0,.4);
     border-radius:3px;
   }
+  /* v5.665：戰鬥場(active)來源標籤改暖橘+底色,與[備戰]金色明顯區分,一眼辨識戰鬥寶可夢 */
+  .sel-source-slot.sel-source-active{ color:#ffae6a; background:rgba(120,45,0,.55); }
 
   /* v3.9998：concealed picker（精神出局）— 卡背 placeholder */
   .sel-card-back{
