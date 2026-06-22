@@ -201,7 +201,7 @@ export function countAncientOnField(
  */
 // v4.51 Phase 2：統一 defense helper
 import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect } from './defense';
-import { applyDefenderReductionsBlockA, isToolsJammed, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂
+import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
 
@@ -734,99 +734,15 @@ function effectiveHPInline(
   pool: Map<string, Card>,
   state?: GameState,
 ): number {
-  const card = pool.get(inst.cardId);
-  if (!card) return 0;
-  let hp = card.hp ?? 0;
-  // v3.20 多重轉接：iterate 所有道具
-  for (const t of getAllAttachedTools(inst)) {
-    const tool = pool.get(t.cardId);
-    if (!tool) continue;
-    const bonusFn = TOOL_HP_BONUS.get(tool.name);
-    if (bonusFn) hp += bonusFn(card);
-  }
-  // v2.175 特殊能量 HP bonus（增強【草】等）— iterate energyAttached
-  for (const e of inst.energyAttached) {
-    const ec = pool.get(e.cardId);
-    if (!ec) continue;
-    const fn = SPECIAL_ENERGY_HP_BONUS.get(ec.name);
-    if (fn) hp += fn(card);
-  }
-  // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
-  const stadiumNameEff = state?.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
-  if (stadiumNameEff === '引力山岳' && card.stage === 'Stage2') {
-    hp = Math.max(0, hp - 30);
-  }
-  // v2.265：激動競技場（Stadium）— 雙方場上所有【基礎】寶可夢最大 HP +30
-  if (stadiumNameEff === '激動競技場' && card.stage === 'Basic') {
-    hp += 30;
-  }
-  // v2.382：昂主花葉蒂（Stadium, M4）— 雙方場上所有「超級花葉蒂ex」最大 HP +150
-  if (stadiumNameEff === '昂主花葉蒂' && card.name === '超級花葉蒂ex') {
-    hp += 150;
-  }
-  // v2.268 wave 2：max HP 修正類被動特性（鏡射 engine.ts getEffectiveHP）
-  // 樂天河童｜生機森巴 — 持有者所屬玩家場上所有寶可夢 +40 HP
-  if (state) {
-    for (const p of state.players) {
-      const allP = [...(p.active ? [p.active] : []), ...p.bench];
-      const hasSamba = allP.some(c => {
-        const cc = pool.get(c.cardId);
-        return cc?.abilities?.some(a => a.name === '生機森巴');
-      });
-      if (!hasSamba) continue;
-      if (allP.some(c => c.iid === inst.iid)) { hp += 40; break; }
-    }
-  }
-  // 修建老匠｜大師工藝 — 自身【鬥】能量 × 40 HP
-  if (card.name === '修建老匠') {
-    let fightingCount = 0;
-    for (const e of inst.energyAttached) {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') continue;
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /【鬥】/.test(ec.name))) fightingCount++;
-      else if (ec.pokemonType === 'Fighting') fightingCount++;
-    }
-    hp += fightingCount * 40;
-  }
-  // 怖納噬草｜雜草魂 — 對手已獲獎賞數 × 50 HP
-  if (state && card.name === '怖納噬草') {
-    let ownerIdx: 0 | 1 | -1 = -1;
-    for (let i = 0 as 0 | 1; i <= 1; i = (i + 1) as 0 | 1) {
-      const p = state.players[i];
-      if ((p.active && p.active.iid === inst.iid) || p.bench.some(c => c.iid === inst.iid)) {
-        ownerIdx = i; break;
-      }
-    }
-    if (ownerIdx >= 0) {
-      const opp = state.players[(1 - ownerIdx) as 0 | 1];
-      const oppPrizesTaken = 6 - (opp.prizes?.length ?? 6);
-      hp += oppPrizesTaken * 50;
-    }
-  }
-  // v2.113 夠讚狗｜腎上腺力量 — 身上附【惡】能量時最大 HP +100
-  // v2.120 修：稜鏡能量附於基礎寶可夢時視為提供全屬性能量（含惡能量），也算數
-  if (card.name === '夠讚狗') {
-    // 夠讚狗是 Basic，稜鏡能量附它 → 全屬性（含 Darkness）
-    const hostIsEvolution = !!card.evolvesFrom || card.stage === 'Stage1' || card.stage === 'Stage2';
-    const hasDark = inst.energyAttached.some(e => {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') return false;
-      // 基本能量 Darkness
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Darkness' || /【惡】/.test(ec.name))) return true;
-      // 特殊能量本來屬性即含 Darkness（火箭隊能量、古舊能量等）
-      if (ec.pokemonType === 'Darkness') return true;
-      // 稜鏡能量 on Basic host → 視為全屬性
-      if (ec.name === '稜鏡能量' && !hostIsEvolution) return true;
-      // 新衝天能量 on Stage2 host → 全屬性（夠讚狗是 Basic 所以不適用，保留邏輯為他卡參考）
-      // 古舊能量 → 單張即全屬性
-      if (ec.name === '古舊能量' || ec.name === '夜光能量') return true;
-      // 火箭隊能量 → 提供 Psychic/Darkness
-      if (ec.name === '火箭隊能量') return true;
-      return false;
-    });
-    if (hasDark) hp += 100;
-  }
-  return hp;
+  // v5.677 收斂：直接委派 engine.getEffectiveHP（單一有效 HP 來源），消除與其漂移。
+  //   原本地實作鏡射了大部分 HP hook，卻漏掉 engine 版的三項：
+  //     ① inst.fossilOnField → 永遠 60（化石上場不吃任何加成）
+  //     ② isToolsJammed（阻礙之塔）→ 停用道具 HP 加成
+  //     ③ 怪顎龍｜暴龍根性（附特殊能量 +150）
+  //   → 效果KO/markFaintByEffect/狙擊 等 ~18 處 HP 判定對這些卡誤算
+  //     （例：效果昏厥打不死「附特殊能量的怪顎龍」、化石被高估/低估）。
+  //   委派後與 UI 顯示、引擎 KO sweep 完全一致，且日後新增 HP hook 只需改 engine 一處。
+  return getEffectiveHP(inst, pool, state);
 }
 
 // v5.484：效果昏厥中央 helper — 將寶可夢 damage 設為「有效 maxHP」(含道具/特殊能量/場地 HP 加成)，
