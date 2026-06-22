@@ -660,6 +660,7 @@ export function koPrizesAdjusted(
   const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
   // 脆弱蛻殼（脫殼忍者）等 PASSIVE_PREVENT_PRIZE → 0 張
   for (const ab of (koCard.abilities ?? [])) {
+    if (!isAbilityHolderEffective(s, koInst, koCard, (1 - attackerIdx) as 0 | 1, ab.name, 'active', pool)) continue; // v5.655 被KO者特性被暗夜羽擊/初始化等壓制→脆弱蛻殼失效
     const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
     if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
   }

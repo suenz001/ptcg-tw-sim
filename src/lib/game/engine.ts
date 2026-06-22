@@ -4939,6 +4939,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       let preventPrizeAll = false;
       if (defenderCard.abilities) {
         for (const ab of defenderCard.abilities) {
+          if (!isAbilityHolderEffective(newState, koInst, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.655 暗夜羽擊/初始化/黏著束縛/監視塔壓制→脆弱蛻殼等防守特性失效
           const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
           if (fnPP && fnPP(attackerCard)) {
             preventPrizeAll = true;
@@ -5032,6 +5033,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //         koInst 在本作用域內已於 line 4468 (const koInst = state.players[dIdx].active) 取得。
       if (defenderCard.abilities) {
         for (const ab of defenderCard.abilities) {
+          if (!isAbilityHolderEffective(newState, koInst, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.655 同上：被KO觸發特性(鬆口氣/最後鎖鏈等)被壓制時失效
           const fnKO = PASSIVE_ON_KO.get(ab.name);
           if (fnKO) newState = fnKO(newState, dIdx, aIdx, pool, defenderCard, koInst ?? undefined);
         }
