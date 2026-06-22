@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.679</span> 電燈怪「錯亂閃光」完整實裝</summary>
+        <ul>
+          <li>電燈怪「錯亂閃光」：被此招式弄成混亂的對手寶可夢，之後因混亂自傷時會放置 8 個傷害指示物（80 點），而非一般混亂的 3 個（30 點）。先前只施加混亂、未套用此加強效果，現已補上。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.678</span> 修正玩家回報的三個招式 bug</summary>
         <ul>
           <li>來悲粗茶「詛咒水滴」：現在可以把傷害指示物放在對手的戰鬥寶可夢身上（先前只能放在對手備戰區）。</li>

@@ -2472,6 +2472,11 @@ export function clearSpecialEnergyProtectedStatuses(
  * 用法：`active = applyStatusToActive(active, 'confused');`
  */
 export function applyStatusToActive(active: CardInstance, newStatus: SpecialCondition): CardInstance {
+  // v5.679：每次施加【混亂】先清除上一次的「混亂自傷指示物覆蓋」(電燈怪錯亂閃光=8)，
+  //   一般混亂回預設 3 個(30)；錯亂閃光在套用混亂【之後】再設 8（見其 regPost）。
+  if (newStatus === 'confused' && active.confusionSelfDamageCounters != null) {
+    active = { ...active, confusionSelfDamageCounters: undefined };
+  }
   // v5.295: 三槽配置 — PTCG 規則允許行動類+中毒+灼傷 3 個並存
   const isNewAction = newStatus === 'asleep' || newStatus === 'confused' || newStatus === 'paralyzed';
   const isNewDamage = newStatus === 'poisoned' || newStatus === 'burned';
@@ -5326,7 +5331,18 @@ regPost('麻花犬ex|奇跡閃耀', statusPost('confused'));
 regPost('卡璞・蝶蝶|蠱惑', statusPost('confused'));
 regPost('青綿鳥|魅惑之聲', statusPost('confused'));
 regPost('月亮伊布ex|月亮幻想', statusPost('confused'));
-regPost('電燈怪|錯亂閃光', statusPost('confused')); // 「8 個 counter」細節先不實作
+// v5.679 完整實裝：卡面「將對手戰鬥寶可夢混亂。因這個混亂而放置的傷害指示物的數量改為 8 個」。
+//   = 該寶可夢之後因混亂自傷時放 8 個指示物(80)而非預設 3 個(30)。先套混亂(走中央免疫)，再設覆蓋值。
+regPost('電燈怪|錯亂閃光', (state, aIdx, pool) => {
+  let s = statusPost('confused')(state, aIdx, pool);
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const da = s.players[dIdx].active;
+  if (da && (da.status === 'confused' || da.secondaryStatus === 'confused' || da.tertiaryStatus === 'confused')) {
+    s = updatePlayer(s, dIdx, p => p.active ? { ...p, active: { ...p.active, confusionSelfDamageCounters: 8 } } : p);
+    s = addLog(s, '錯亂閃光：此混亂的自傷指示物改為 8 個（80）', aIdx);
+  }
+  return s;
+});
 
 // ── C. 將自己混亂 2 張 ─────────────────────────────────────────────────────
 function selfConfusePost(): AttackPostFn {

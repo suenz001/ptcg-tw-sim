@@ -15,6 +15,7 @@ export const CLEAR_ON_EXIT_FLAGS: readonly (keyof CardInstance)[] = [
   // STATUS 特殊狀態
   'status', 'secondaryStatus', 'tertiaryStatus',
   'poisonDamagePerCheckup',
+  'confusionSelfDamageCounters',  // v5.679 混亂自傷指示物覆蓋(錯亂閃光) — 離場/進化清除
   // LOCK 攻擊/撤退鎖(在 scrub 白名單)
   'cantAttackThisTurn', 'cantAttackPending', 'cantRetreatNextTurn',
   'attackFailureFlipCountPending', 'attackFailureFlipCountThisTurn', 'pointySpinNextTurn',

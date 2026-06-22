@@ -88,6 +88,8 @@ export interface CardInstance {
   status?: SpecialCondition;
   /** 強化中毒每次寶可夢檢查放置的傷害量；未設定則一般中毒 10。 */
   poisonDamagePerCheckup?: number;
+  /** v5.679：此寶可夢因【混亂】自傷時放置的傷害指示物數（預設 3=30；電燈怪錯亂閃光=8=80）。 */
+  confusionSelfDamageCounters?: number;
   /**
    * v5.295 重新整理 PTCG 規則（手冊 line 130/415）:
    *   - 行動類 (asleep/paralyzed/confused) 三者互斥 (同樣翻卡標記)

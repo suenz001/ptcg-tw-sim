@@ -3929,7 +3929,7 @@ function handlePlaying(
       state = flipResult.state;
       const coin = flipResult.heads === 1;
       if (!coin) {
-        const selfDmg = (attacker.active.damage ?? 0) + 30;
+        const selfDmg = (attacker.active.damage ?? 0) + (attacker.active.confusionSelfDamageCounters ?? 3) * 10; // v5.679 自傷指示物可被改寫(錯亂閃光=8)
         const atkHP = getEffectiveHP(attacker.active, pool, state);
         const atkCard = pool.get(attacker.active.cardId);
         if (atkHP > 0 && selfDmg >= atkHP) {
