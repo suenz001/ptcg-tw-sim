@@ -1,6 +1,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
 import type { AttackPostFn } from '../_shared';
+import { canApplyEffectToTarget } from '../../defense'; // v5.668 粉碎箭攻擊效果免疫 gate
 
 function cardName(pool: Map<string, any>, inst?: CardInstance | null): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
@@ -32,20 +33,6 @@ function discardActiveEnergies(
     discard: [...pl.discard, ...picked],
   }) : pl);
   return addLog(s, `${label}：丟棄 ${picked.length} 個自身能量（${names}）`, aIdx);
-}
-
-function discardOpponentActiveEnergy(state: GameState, aIdx: 0 | 1, pool: Map<string, any>, label: string): GameState {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const d = state.players[dIdx];
-  const active = d.active;
-  if (!active || active.energyAttached.length === 0) return addLog(state, `${label}：對手戰鬥寶可夢沒有能量`, aIdx);
-  const picked = active.energyAttached[0];
-  const s = updatePlayer(state, dIdx, pl => pl.active ? ({
-    ...pl,
-    active: { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => e.iid !== picked.iid) },
-    discard: [...pl.discard, picked],
-  }) : pl);
-  return addLog(s, `${label}：丟棄對手戰鬥寶可夢的 ${pool.get(picked.cardId)?.name ?? '能量'}`, aIdx);
 }
 
 function deckEnergyToActivePost(key: string, type: 'Grass' | 'Psychic', typeText: string, maxCount: number, label: string): void {
@@ -140,7 +127,45 @@ regPre('君主蛇|日光旋繞', (state, aIdx, pool) => {
 
 // 狙射樹梟ex｜粉碎箭：240，丟對手戰鬥寶可夢 1 個能量。
 regPre('狙射樹梟ex|粉碎箭', (state) => ({ state, damage: 240 }));
-regPost('狙射樹梟ex|粉碎箭', (state, aIdx, pool) => discardOpponentActiveEnergy(state, aIdx, pool, '粉碎箭'));
+regPost('狙射樹梟ex|粉碎箭', (state, aIdx, pool) => {
+  // 卡面「選擇 1 個對手戰鬥寶可夢身上附加的能量丟棄」→ 須讓攻擊方選(原自動取 energyAttached[0]，
+  //   對手多屬性時剝奪選擇權，與 N的謀劃 同類)。v5.668：改用 active-energy-discard picker(targetIid=對手 active)，
+  //   並加攻擊效果免疫 gate(化隱/薄霧/硬岩等)，與「挪動一下」一致。
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const oppActive = state.players[dIdx].active;
+  if (!oppActive || oppActive.energyAttached.length === 0) {
+    return addLog(state, '粉碎箭：對手戰鬥寶可夢沒有能量', aIdx);
+  }
+  const guard = canApplyEffectToTarget(state, aIdx, oppActive, pool.get(oppActive.cardId), 'attack-effect', pool);
+  if (guard.blocked) {
+    return addLog(state, `粉碎箭：${pool.get(oppActive.cardId)?.name ?? '?'}｜${guard.reason}`, aIdx);
+  }
+  return withPending(addLog(state, '粉碎箭：選擇要丟棄的對手能量', aIdx), {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'shatter-arrow-discard',
+    params: { targetIid: oppActive.iid, titleOverride: '粉碎箭：選擇要丟棄的對手能量' },
+  });
+});
+regR('shatter-arrow-discard', (st, idx, iids, params, pool) => {
+  // 鏡射 crush-hammer-discard：丟棄 targetIid(對手 active)身上選中的能量
+  const energyIid = iids[0];
+  const targetIid = params?.targetIid as string | undefined;
+  if (!energyIid || !targetIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
+  const dp = st.players[dIdx];
+  const target = dp.active?.iid === targetIid ? dp.active : dp.bench.find(c => c.iid === targetIid) ?? null;
+  if (!target) return st;
+  const removed = target.energyAttached.find(e => e.iid === energyIid);
+  if (!removed) return st;
+  const energyName = pool.get(removed.cardId)?.name ?? '能量';
+  const s = addLog(st, `粉碎箭：丟棄 ${pool.get(target.cardId)?.name ?? '?'} 身上的 ${energyName}`, idx);
+  return updatePlayer(s, dIdx, p => {
+    const updated = { ...target, energyAttached: target.energyAttached.filter(e => e.iid !== energyIid) };
+    return { ...p, active: p.active?.iid === targetIid ? updated : p.active, bench: p.bench.map(cc => cc.iid === targetIid ? updated : cc), discard: [...p.discard, removed] };
+  });
+});
 
 // 凱路迪歐｜能量反射：70，選自身 1 個能量改附於備戰寶可夢。
 regPre('凱路迪歐|能量反射', (state) => ({ state, damage: 70 }));

@@ -312,6 +312,12 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.668</span> 修粉碎箭可自選丟棄對手能量</summary>
+        <ul>
+          <li>修正「狙射樹梟ex｜粉碎箭」無法選擇要丟棄對手哪一顆能量的問題：卡面是「選擇 1 個對手戰鬥寶可夢身上的能量丟棄」，原本系統會自動幫你丟第一顆（對手身上有多種能量時影響很大），現在改為由你自己挑選，並補上化隱等免疫判定。</li>
+        </ul>
+      </details>
+<details>
         <summary><span class="ver-badge">v5.667</span> 修手機能量選擇視窗版面跑掉</summary>
         <ul>
           <li>修正手機（直式）能量選擇視窗的版面跑掉問題：先前放大桌機能量卡圖時，尺寸外溢到手機較窄的格子造成圖片與排版錯位，現已針對手機調整為合適大小，卡圖與來源寶可夢名稱都能正常顯示。</li>
