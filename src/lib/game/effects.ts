@@ -48,6 +48,7 @@ import {
   sameEvoName, getAllAttachedTools,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
+  countAttachedEnergyAsUnits,
   triggerOakeyeMillIfApplicable,
   getOwnBenchLimit, joinCardNames,} from './effects/_shared';
 
@@ -56,7 +57,7 @@ export { applyBenchPlaceSideEffects };
 
 // 為 engine.ts / +page.svelte 的 import 路徑維持相容：re-export
 export { TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS, canPlayTrainer, clearActiveEffects };
-export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits };
+export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, getEnergyDiscardUnits, countAttachedEnergyAsUnits };
 // v2.133 PASSIVE_PREVENT_KO 在本檔下方定義，匯出供 engine 使用
 // （直接在此先 forward-ref：宣告處放到 v2.133 區塊，之後會由 engine import）
 export { BENCH_PLACE_TRIGGERS };
@@ -6985,23 +6986,9 @@ function isEnergyOfType(ec: any, type: string): boolean {
   return zh[m[1]] === type;
 }
 
-// v4.959：計「能量數」(units, all types)，host-aware。
-//   一般 1 個；新衝天能量 on Stage2 = 2 個（卡面「視為提供 2 個所有屬性的能量」）。
-//   用於招式「依能量數計傷害 / 擲幣次數」場合。重複定義避免動巨大 import。
-//   邏輯與 _shared.countAttachedEnergyAsUnits 一致。
-export function countAttachedEnergyAsUnits(host: CardInstance, pool: Map<string, Card>): number {
-  const hostCard = pool.get(host.cardId);
-  const hostStage = hostCard?.stage ?? hostCard?.subtype;
-  const hostIsStage2 = hostStage === 'Stage2';
-  let count = 0;
-  for (const e of host.energyAttached) {
-    const ec = pool.get(e.cardId);
-    if (!ec || ec.supertype !== 'Energy') continue;
-    if (ec.name === '新衝天能量' && hostIsStage2) count += 2;
-    else count += 1;
-  }
-  return count;
-}
+// v5.671：移除 stale 重複定義 — countAttachedEnergyAsUnits 統一改用 _shared 版(host-aware:
+//   火箭隊能量=2/燃火進化=3/新衝天Stage2=2/繁茂基本草×2),已於上方 import + 上方 re-export。
+//   原 effects.ts 本地副本只認新衝天(火箭隊/燃火算1),違反卡面「能量的數量」=個語意(Wilson 裁定)。
 
 function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
@@ -7091,31 +7078,15 @@ function bothActiveEnergyMultiplyPre(base: number, per: number, label: string): 
     const dIdx = (1 - aIdx) as 0 | 1;
     const a = state.players[aIdx].active;
     const d = state.players[dIdx].active;
-    // v2.108：若某方場上有大竺葵繁茂，該方寶可夢身上的「基本【草】能量」算 2 個。
-    // 萬葉陣雨 rulesText：「雙方戰鬥寶可夢身上附加的能量的數量 × 30」— 按 Leon 解讀，
-    // 繁茂倍率應套用於傷害計算（與日版 ruling 可能不一致，但符合 Leon 期待）。
-    // v5.601：繁茂走中央 hasBloomOnField（被暗夜羽擊/黏著束縛/初始化消除時不算）
-    function hasBloomOnSide(ownerIdx: 0 | 1): boolean {
-      return hasBloomOnField(state, ownerIdx, pool);
-    }
-    function isBasicGrass(ec: Card | undefined): boolean {
-      if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
-      if (ec.pokemonType === 'Grass') return true;
-      const m = ec.name.match(/【(.+?)】/);
-      return !!m && m[1] === '草';
-    }
+    // v5.671：收斂到中央 getEnergyDiscardUnits(host-aware 單一來源:火箭隊能量=2/燃火進化=3/
+    //   新衝天Stage2=2/繁茂基本草×2)。原逐張只認新衝天+繁茂、漏火箭隊=2/燃火=3(卡面「能量的數量」=個)。
     function countWithBloom(inst: CardInstance | null | undefined, ownerIdx: 0 | 1): number {
       if (!inst) return 0;
-      const bloom = hasBloomOnSide(ownerIdx);
-      const hostCard = pool.get(inst.cardId);
-      const hostIsStage2 = (hostCard?.stage ?? hostCard?.subtype) === 'Stage2';
       let n = 0;
       for (const e of inst.energyAttached) {
         const ec = pool.get(e.cardId);
         if (!ec || ec.supertype !== 'Energy') continue;
-        if (ec.name === '新衝天能量' && hostIsStage2) n += 2;   // v5.448：新衝天 on Stage2 = 2 個
-        else if (bloom && isBasicGrass(ec)) n += 2;
-        else n += 1;
+        n += getEnergyDiscardUnits(e.cardId, inst, pool, state, ownerIdx);
       }
       return n;
     }

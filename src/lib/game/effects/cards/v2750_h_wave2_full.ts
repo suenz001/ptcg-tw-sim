@@ -1432,7 +1432,7 @@ regPre('大奶罐|哞哞回轉', requirePrevAttackPre(100, '滾動', '哞哞回�
 regPre('阿羅拉 三地鼠|三賓果', exactHandSizePre(120, 3, '三賓果'));
 
 // 厄鬼椪 碧草面具ex|萬葉陣雨 30+ — 雙方戰鬥能量數合計 ×30
-regPre('厄鬼椪 碧草面具ex|萬葉陣雨', bothBenchEnergyCountPre(30, 30, '萬葉陣雨'));
+// v5.671：萬葉陣雨重複註冊清理 — 統一由 effects.ts bothActiveEnergyMultiplyPre 實作;此 raw-length 死碼移除。
 
 // 蟲甲聖ex|精神強念 20+ — 對手戰鬥能量數 ×90
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。

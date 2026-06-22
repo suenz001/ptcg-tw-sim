@@ -45,12 +45,7 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 // 厄鬼椪 碧草面具ex|萬葉陣雨 30+ — 增加雙方戰鬥寶可夢身上附加能量數量 ×30
 //   (Wave 2 audit 因字符邊界誤報，這裡確認註冊)
-regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, _pool) => {
-  const a = state.players[aIdx].active;
-  const d = state.players[(1-aIdx) as 0|1].active;
-  const total = (a?.energyAttached.length ?? 0) + (d?.energyAttached.length ?? 0);
-  return { state: addLog(state, `萬葉陣雨：雙方戰鬥能量 ${total} → 30+${total}×30 = ${30 + total*30}`, aIdx), damage: 30 + total*30 };
-});
+// v5.671：萬葉陣雨重複註冊清理 — 統一由 effects.ts bothActiveEnergyMultiplyPre 實作;此 raw-length 死碼移除。
 
 // 纏紅鶴ex|[ex規則] — scraper artifact（攻擊欄位錯誤地放了 ex 卡昏厥獎賞規則）
 //   不實裝（不是真正的招式）

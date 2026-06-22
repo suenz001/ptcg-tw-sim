@@ -38,15 +38,7 @@ regA('吉雉雞ex', 0, (state, aIdx, pool, inst) => {
 //   有翻版風險、picker 版又有取消後 abilityUsedThisTurn 卡住的隱患，故清除。萬葉陣雨 招式保留於下。
 import { regPre, regPost, shuffle, countAttachedEnergyAsUnits } from '../_shared';
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
-regPre('厄鬼椪 碧草面具ex|萬葉陣雨', (state, aIdx, pool) => {
-  const p1 = state.players[0];
-  const p2 = state.players[1];
-  const e1 = p1.active ? countAttachedEnergyAsUnits(p1.active, pool) : 0;
-  const e2 = p2.active ? countAttachedEnergyAsUnits(p2.active, pool) : 0;
-  const bonus = (e1 + e2) * 30;
-  const total = 30 + bonus;
-  return { state: addLog(state, `萬葉陣雨：雙方戰鬥寶可夢身上共有 ${e1 + e2} 個能量，+${bonus} 傷害 → ${total} 傷害`, aIdx), damage: total };
-});
+// v5.671：萬葉陣雨重複註冊清理 — 統一由 effects.ts bothActiveEnergyMultiplyPre(host-aware,火箭隊=2/燃火=3)實作;此 card-file 版被覆蓋(死碼)移除。
 
 // ── 叉字蝠 (Crobat) ──────────────────────────────────────────────────────────────
 // v4.4995 重構：用 regAByName 註冊（key = cardName|abilityName）— 解決同名卡撞 key。

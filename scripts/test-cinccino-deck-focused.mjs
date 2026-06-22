@@ -274,7 +274,7 @@ console.log('\n── T3: 奇諾栗鼠ex｜能量巴掌 ────────
   const fireE2 = instE(CID.burnedE);
   // hp=999 測試用法無效（getEffectiveHP 用 card.hp，非 inst.hp）
   // 改用真實高HP寶可夢：土龍節節 HP=140（cardId 14465）做 defender
-  const DEFENDER = '14465'; // 土龍節節 HP=140
+  const DEFENDER = '16916'; // v5.671：耿鬼ex HP=310(燃火=3 後 2燃火=240,需 HP>240 避免 KO)
   const defenderHP = pool.get(DEFENDER)?.hp ?? 140;
   const defender = { ...inst(DEFENDER), damage: 0, energyAttached: [] };
 
@@ -299,11 +299,11 @@ console.log('\n── T3: 奇諾栗鼠ex｜能量巴掌 ────────
       { ...state.players[1], active: { ...defender, damage: 0 } },
     ],
   };
-  test('T3-2: 1 attached燃火 → 40 damage', () => {
+  test('T3-2: 1 attached燃火(進化=3個) → 120 damage', () => {
     let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
     const opp = next.players[1].active;
     assert.ok(opp !== null, 'opponent active should exist');
-    assert.equal(opp.damage, 40, `expected 40 damage (0 + 40×1燃火), got ${opp.damage}`);
+    assert.equal(opp.damage, 120, `expected 120 damage (0 + 40×3個[燃火進化=3]), got ${opp.damage}`);
   });
 
   // 2 attached燃火
@@ -313,11 +313,11 @@ console.log('\n── T3: 奇諾栗鼠ex｜能量巴掌 ────────
       { ...state.players[1], active: { ...defender, damage: 0 } },
     ],
   };
-  test('T3-3: 2 attached燃火 → 80 damage', () => {
+  test('T3-3: 2 attached燃火(=6個) → 240 damage', () => {
     let next = applyAction(state, { type: 'ATTACK', attackIndex: atkIdx }, pool);
     const opp = next.players[1].active;
     assert.ok(opp !== null, `opponent active should exist (defender HP=${defenderHP}, 80 dmg non-lethal)`);
-    assert.equal(opp.damage, 80, `expected 80 damage (0 + 40×2燃火), got ${opp.damage}`);
+    assert.equal(opp.damage, 240, `expected 240 damage (0 + 40×6個[2燃火進化=各3]), got ${opp.damage}`);
   });
 }
 
