@@ -735,6 +735,8 @@ export interface GameState {
    * Firestore-safe：PendingSelection[] 是 array of object，與既有 pendingSelection 內
    *   params/CardInstance 嵌套深度同級（per Iron Rule 13 — 禁的是 array of array）。
    */
+  /** v5.678：招式以 picker 收尾時，跨 RESOLVE_SELECTION 保留回力鏢/燃料火 revive 快照。 */
+  _pendingAttackEnergyRevive?: { aIdx: 0 | 1; boomIids: string[]; boomActiveIid: string; fuelIids: string[] };
   pendingChainQueue?: PendingSelection[];
   /**
    * v2.160：上一次招式套用後實際造成的傷害量（含弱抗 / 道具減傷後最終值）。

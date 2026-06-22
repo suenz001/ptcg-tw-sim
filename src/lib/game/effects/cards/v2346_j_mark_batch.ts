@@ -48,8 +48,9 @@ regPre('超級艾路雷朵ex|快手斬', (state, aIdx) => {
 
 // 拉達｜逆襲門牙：自己備戰區所有「小拉達」傷害指示物數 ×40。
 regPre('拉達|逆襲門牙', (state, aIdx, pool) => {
+  // v5.678：卡面「所有『小拉達』」採 NameContains（含「火箭隊的小拉達」等同名家族；Wilson 裁定 + 洛托呼喚先例）
   const dmg = state.players[aIdx].bench
-    .filter((b) => cardName(pool, b) === '小拉達')
+    .filter((b) => cardName(pool, b).includes('小拉達'))
     .reduce((sum, b) => sum + damageCounters(b) * 40, 0);
   return { state, damage: dmg };
 });

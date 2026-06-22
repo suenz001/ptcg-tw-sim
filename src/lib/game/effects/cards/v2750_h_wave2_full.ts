@@ -2464,7 +2464,8 @@ regPost('來悲粗茶|詛咒水滴', (state, aIdx, _pool) => {
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 4, maxCount: 4,
     effectKey: 'h-wave2-distribute-damage',
-    params: { totalCounters: 4, target: 'opp' },
+    // v5.678：卡面「對手的寶可夢」含戰鬥位 → includeActive（原漏 → picker 預設只列備戰，放不到對手戰鬥位）
+    params: { totalCounters: 4, target: 'opp', includeActive: true },
   });
 });
 regR('h-wave2-distribute-damage', (state, aIdx, iids, params, pool) => {

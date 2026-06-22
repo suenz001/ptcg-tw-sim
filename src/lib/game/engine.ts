@@ -2194,6 +2194,57 @@ function sanityKOSweep(
 
 // ── 正式對戰動作處理 ─────────────────────────────────────────────────────────
 
+// v5.678：回力鏢能量 / 燃料【火】能量 的「被自身招式效果丟棄後歸還」收斂單一來源。
+//   回力鏢能量：被自身招式效果丟棄 → 重附回原 active（active iid 未變才回）。
+//   燃料【火】能量：被【火】寶可夢招式效果丟棄 → 放回手牌（與寶可夢解綁）。
+//   USE_ATTACK 同步流程末端呼叫一次；若招式以 picker 收尾（如銀伴戰獸｜空氣斬「選 1 個自身能量丟棄」），
+//   丟棄發生在後續 RESOLVE_SELECTION → 同步 revive 抓不到，故把快照存進 state._pendingAttackEnergyRevive，
+//   待 picker 鏈全部解完後在 RESOLVE_SELECTION 再呼叫一次（單一 helper，免兩份邏輯漂移）。
+function reviveAttackDiscardedSpecialEnergy(
+  state: GameState,
+  aIdx: 0 | 1,
+  boomIids: string[],
+  boomActiveIid: string,
+  fuelIids: string[],
+  pool: Map<string, Card>,
+): GameState {
+  let newState = state;
+  // 回力鏢能量 → 重附回原 active
+  if (boomIids.length > 0) {
+    const curAtk = newState.players[aIdx].active;
+    const curDiscard = newState.players[aIdx].discard;
+    if (curAtk && curAtk.iid === boomActiveIid) {
+      const returnSet = new Set(boomIids);
+      const toReturn = curDiscard.filter(e => returnSet.has(e.iid));
+      if (toReturn.length > 0) {
+        const newDiscard = curDiscard.filter(e => !returnSet.has(e.iid));
+        const attachedIidSet = new Set(curAtk.energyAttached.map(e => e.iid));
+        const actuallyReturn = toReturn.filter(e => !attachedIidSet.has(e.iid));
+        if (actuallyReturn.length > 0) {
+          const newActive: CardInstance = { ...curAtk, energyAttached: [...curAtk.energyAttached, ...actuallyReturn] };
+          const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+          refPlayers[aIdx] = { ...refPlayers[aIdx], active: newActive, discard: newDiscard };
+          const atkName = pool.get(newActive.cardId)?.name ?? '?';
+          newState = addLog({ ...newState, players: refPlayers }, `回力鏢能量：${actuallyReturn.length} 張重新附於 ${atkName}`, aIdx);
+        }
+      }
+    }
+  }
+  // 燃料【火】能量 → 放回手牌
+  if (fuelIids.length > 0) {
+    const aPlayer = newState.players[aIdx];
+    const returnSet = new Set(fuelIids);
+    const toReturn = aPlayer.discard.filter(e => returnSet.has(e.iid));
+    if (toReturn.length > 0) {
+      const newDiscard = aPlayer.discard.filter(e => !returnSet.has(e.iid));
+      const refPlayers = [...newState.players] as [PlayerState, PlayerState];
+      refPlayers[aIdx] = { ...refPlayers[aIdx], hand: [...refPlayers[aIdx].hand, ...toReturn], discard: newDiscard };
+      newState = addLog({ ...newState, players: refPlayers }, `燃料【火】能量：${toReturn.length} 張因招式效果被丟棄，放回手牌`, aIdx);
+    }
+  }
+  return newState;
+}
+
 function handlePlaying(
   state: GameState,
   action: GameAction,
@@ -2312,6 +2363,12 @@ function handlePlaying(
         pendingSelection: nextSel,
         pendingChainQueue: restQueue.length > 0 ? restQueue : undefined,
       };
+    }
+    // v5.678：picker 收尾的招式自身丟能量 → 在 picker 鏈全部解完後補跑回力鏢/燃料火 revive（單一 helper）。
+    if (!newState.pendingSelection && newState._pendingAttackEnergyRevive) {
+      const _rv = newState._pendingAttackEnergyRevive;
+      newState = reviveAttackDiscardedSpecialEnergy(newState, _rv.aIdx, _rv.boomIids, _rv.boomActiveIid, _rv.fuelIids, pool);
+      newState = { ...newState, _pendingAttackEnergyRevive: undefined };
     }
     // 若為招式觸發的互動效果，解決後進入回合結束（不再有連鎖 pendingSelection 時才設）
     if (endTurnAfter && !newState.pendingSelection) {
@@ -5431,56 +5488,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       }
     }
 
-    // ── v2.92：回力鏢能量 revive ─────────────────────────────────────────────
-    // 若 regPre/regPost 過程中把回力鏢能量搬到 attacker 的棄牌區，且 attacker.active
-    // 仍是同一隻（iid 未變），在「招式的傷害與效果的影響之後」把它們撤回原寶可夢。
-    if (boomerangSnapshotIids.length > 0) {
-      const curAtk = newState.players[aIdx].active;
-      const curDiscard = newState.players[aIdx].discard;
-      if (curAtk && curAtk.iid === boomerangAttackerActiveIid) {
-        const returnSet = new Set(boomerangSnapshotIids);
-        // 目前棄牌區中屬於快照範圍的回力鏢能量（經由招式效果被搬去）
-        const toReturn = curDiscard.filter(e => returnSet.has(e.iid));
-        if (toReturn.length > 0) {
-          const newDiscard = curDiscard.filter(e => !returnSet.has(e.iid));
-          // 只挑尚未在 active.energyAttached 中的（避免重複附加）
-          const attachedIidSet = new Set(curAtk.energyAttached.map(e => e.iid));
-          const actuallyReturn = toReturn.filter(e => !attachedIidSet.has(e.iid));
-          const newActive: CardInstance = {
-            ...curAtk,
-            energyAttached: [...curAtk.energyAttached, ...actuallyReturn],
-          };
-          const refPlayers = [...newState.players] as [PlayerState, PlayerState];
-          refPlayers[aIdx] = { ...refPlayers[aIdx], active: newActive, discard: newDiscard };
-          const atkName = pool.get(newActive.cardId)?.name ?? '?';
-          newState = addLog(
-            { ...newState, players: refPlayers },
-            `回力鏢能量：${actuallyReturn.length} 張重新附於 ${atkName}`,
-            aIdx,
-          );
-        }
-      }
-    }
-
-    // ── v2.195：燃料【火】能量 revive（送回手牌而非寶可夢）─────────────────
-    // 卡面：「若因附有這張卡的【火】寶可夢使用的招式的效果使這張卡被丟棄，
-    //        則在招式的傷害與效果的影響之後，這張卡放回手牌。」
-    // attacker 是【火】（snapshot 階段已 check）+ snapshot iid 出現在 attacker 棄牌
-    // → 撈回 attacker 手牌（即使 attacker.active 換了也撈，因為「放回手牌」與寶可夢解綁）
-    if (fuelFireSnapshotIids.length > 0) {
-      const aPlayer = newState.players[aIdx];
-      const returnSet = new Set(fuelFireSnapshotIids);
-      const toReturn = aPlayer.discard.filter(e => returnSet.has(e.iid));
-      if (toReturn.length > 0) {
-        const newDiscard = aPlayer.discard.filter(e => !returnSet.has(e.iid));
-        const refPlayers = [...newState.players] as [PlayerState, PlayerState];
-        refPlayers[aIdx] = { ...refPlayers[aIdx], hand: [...refPlayers[aIdx].hand, ...toReturn], discard: newDiscard };
-        newState = addLog(
-          { ...newState, players: refPlayers },
-          `燃料【火】能量：${toReturn.length} 張因招式效果被丟棄，放回手牌`,
-          aIdx,
-        );
-      }
+    // ── v2.92/v2.195：回力鏢能量 / 燃料【火】能量 revive（v5.678 收斂單一 helper）──
+    newState = reviveAttackDiscardedSpecialEnergy(
+      newState, aIdx, boomerangSnapshotIids, boomerangAttackerActiveIid, fuelFireSnapshotIids, pool);
+    // v5.678：若招式以 picker 收尾（自身丟能量等），丟棄在後續 RESOLVE_SELECTION 才發生，
+    //   此處同步 revive 抓不到 → 存快照，待 picker 鏈解完於 RESOLVE_SELECTION 再 revive 一次。
+    if (newState.pendingSelection && (boomerangSnapshotIids.length > 0 || fuelFireSnapshotIids.length > 0)) {
+      newState = { ...newState, _pendingAttackEnergyRevive: {
+        aIdx, boomIids: boomerangSnapshotIids, boomActiveIid: boomerangAttackerActiveIid, fuelIids: fuelFireSnapshotIids } };
     }
 
     // ── 被動反擊特性（毒刺、灼熱之軀、反擊等）— 只對有實際傷害的招式觸發 ──
@@ -6991,6 +7006,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v2.124：finalize 結束時清掉 endTurnSkipCheckup（避免下次 endTurn 也跳過 checkup）
         endTurnSkipCheckup: undefined,
         endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
+        _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
         // v4.24 對戰計時器
         playerTurnTimeMs: _timerNewTimes,
         currentTurnStartTime: _timerNowMs,
