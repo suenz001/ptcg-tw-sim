@@ -2817,8 +2817,12 @@ regPost('海豹球|細雪', statusPost('asleep'));
 regPost('焚焰蚣|灼熱', statusPost('burned'));
 regPost('熾焰咆哮虎ex|火焰炸彈', statusPost('burned'));
 
-// 混合狀態：九尾|奇異燈火（灼傷+混亂）— 目前狀態系統單一 slot，先給灼傷
-regPost('九尾|奇異燈火', statusPost('burned'));
+// 九尾|奇異燈火（卡面：灼傷與混亂）— 逐狀態走中央 applyStatusToOppActive（含免疫檢查＋三狀態欄雙格共存），不再只套灼傷。
+regPost('九尾|奇異燈火', (state, aIdx, pool) => {
+  let s = applyStatusToOppActive(state, aIdx, 'burned', pool, { kind: 'attack-effect', label: '奇異燈火' });
+  s = applyStatusToOppActive(s, aIdx, 'confused', pool, { kind: 'attack-effect', label: '奇異燈火' });
+  return s;
+});
 
 // 麻痺（條件式）
 // 托戈德瑪爾|麻麻時機 — 自己剩 1 獎賞卡時才麻痺對手
@@ -10816,8 +10820,12 @@ regPre('麻麻小魚|紋絲不動', (state, _aIdx, _pool) => ({ state, damage: 0
 regPost('麻麻小魚|紋絲不動', selfHealPost(10, '紋絲不動'));
 
 // ── (D) statusPost 多狀態（取主要狀態） ─────────────────────────────────
-// 霸王花｜花粉炸彈 30 + 中毒（規則 says 中毒+睡眠，但引擎僅單一 status，取中毒）
-regPost('霸王花|花粉炸彈', statusPost('poisoned'));
+// 霸王花｜花粉炸彈（卡面：中毒與睡眠）— 逐狀態走中央 applyStatusToOppActive，不再只套中毒。
+regPost('霸王花|花粉炸彈', (state, aIdx, pool) => {
+  let s = applyStatusToOppActive(state, aIdx, 'poisoned', pool, { kind: 'attack-effect', label: '花粉炸彈' });
+  s = applyStatusToOppActive(s, aIdx, 'asleep', pool, { kind: 'attack-effect', label: '花粉炸彈' });
+  return s;
+});
 
 // ── (E) oppDiscardRandomHand / oppSwapDmgPost / discardOppActiveEnergyPost ──
 // 滑滑小子｜拍落 20 + 對手手牌隨機丟 1

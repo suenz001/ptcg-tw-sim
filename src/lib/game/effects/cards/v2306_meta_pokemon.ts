@@ -105,8 +105,12 @@ regR('crobat-night-work', (state, actorIdx, selectedIids, params, pool) => {
   return addLog(s, '夜間工作：重洗剩餘牌庫，並將所選的卡放回牌庫上方', actorIdx);
 });
 regPre('叉字蝠|毒音波', (state, aIdx, pool) => ({ state, damage: 80 }));
-// v2.92：改用 statusPost('poisoned') — 內含薄霧/硬岩/皇帝之勢/抵抗之幕/泡沫/祭典會場 全套免疫檢查
-regPost('叉字蝠|毒音波', statusPost('poisoned'));
+// 叉字蝠|毒音波（卡面：中毒與混亂）— 逐狀態走中央 applyStatusToOppActive（含全套免疫檢查），不再只套中毒。
+regPost('叉字蝠|毒音波', (state, aIdx, pool) => {
+  let s = applyStatusToOppActive(state, aIdx, 'poisoned', pool, { kind: 'attack-effect', label: '毒音波' });
+  s = applyStatusToOppActive(s, aIdx, 'confused', pool, { kind: 'attack-effect', label: '毒音波' });
+  return s;
+});
 
 // ── 妖火紅狐 (Delphox) ────────────────────────────────────────────────────────────
 regA('妖火紅狐', 0, (state, aIdx, pool, inst) => {
@@ -280,7 +284,7 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
   let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: shuffle(newDeck), bench: [...pl.bench, { ...targetInst, justPlaced: true }] }));
   return addLog(s, '脫殼：將「脫殼忍者」放置於備戰區，並重洗牌庫', actorIdx);
 });
-import { selfSwapPost, statusPost, flipCoinsWithLog } from '../../effects';
+import { selfSwapPost, statusPost, flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 const selfBouncePost = (name: string) => {
   return (state: GameState, aIdx: 0|1) => {
     // v2.991：拆能量、道具、進化棧底逐一回手牌（與 effects.ts selfReturnToHandPost 一致）

@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.687</span> 修正多種「同時造成兩種異常狀態」招式</summary>
+        <ul>
+          <li>九尾「奇異燈火」、叉字蝠「毒音波」、霸王花「花粉炸彈」先前只會造成其中一種異常狀態，現已修正為卡面所寫的兩種狀態都會生效（例如「灼傷與混亂」「中毒與混亂」「中毒與睡眠」）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.686</span> 修正班基拉斯ex「暴君粉碎」的傷害</summary>
         <ul>
           <li>班基拉斯ex「暴君粉碎」的傷害先前誤算為 50 點，現已修正為卡面正確的 150 點（招式效果「在不看正面的情況下，從對手手牌丟棄 1 張」維持不變）。</li>

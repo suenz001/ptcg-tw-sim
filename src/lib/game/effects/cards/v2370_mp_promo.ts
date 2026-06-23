@@ -6,7 +6,7 @@
  *   - 超級妖火紅狐ex (id=18965, Pokemon/Stage2/ex)
  */
 
-import type { CardInstance, GameState, PlayerState, SpecialCondition } from '../../types';
+import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   addLog,
   reg,
@@ -16,6 +16,7 @@ import {
   withPending,
 } from '../_shared';
 import { getOwnBenchLimit } from '../_shared';
+import { applyStatusToOppActive } from '../../effects';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 古歷（Supporter）— 將雙方的所有寶可夢各恢復「50」HP
@@ -87,28 +88,9 @@ regPost('超級妖火紅狐ex|戲法傳送門', (state, aIdx, pool) => {
 // 邏輯：套灼傷 + 混亂兩種特殊狀態；混亂 是 action 類狀態（主格），
 //       灼傷 是 damage 類狀態（若主格已被佔走則放 secondaryStatus）。
 regPre('超級妖火紅狐ex|奇異燈火', (state) => ({ state, damage: 200 }));
-regPost('超級妖火紅狐ex|奇異燈火', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(state, dIdx, p => {
-    if (!p.active) return p;
-    const active = { ...p.active };
-    const statuses: SpecialCondition[] = ['burned', 'confused'];
-    for (const st of statuses) {
-      if (st === 'burned') {
-        // burned 屬 damage 類；若主格已是 action 類（asleep/confused/paralyzed）或 poisoned，放 secondaryStatus
-        if (active.status && ['asleep', 'confused', 'paralyzed', 'poisoned'].includes(active.status)) {
-          active.secondaryStatus = 'burned';
-        } else {
-          active.status = 'burned';
-        }
-      } else {
-        // confused / asleep / paralyzed 互斥，放主格；若主格原是傷害類（poisoned/burned），先移到 secondaryStatus
-        if (active.status === 'poisoned' || active.status === 'burned') {
-          active.secondaryStatus = active.status;
-        }
-        active.status = st;
-      }
-    }
-    return { ...p, active } as PlayerState;
-  });
+// 卡面：灼傷與混亂 —— 收斂到中央 applyStatusToOppActive（逐狀態各一次），統一免疫檢查＋三狀態欄雙格共存，取代原手寫 slot literal。
+regPost('超級妖火紅狐ex|奇異燈火', (state, aIdx, pool) => {
+  let s = applyStatusToOppActive(state, aIdx, 'burned', pool, { kind: 'attack-effect', label: '奇異燈火' });
+  s = applyStatusToOppActive(s, aIdx, 'confused', pool, { kind: 'attack-effect', label: '奇異燈火' });
+  return s;
 });
