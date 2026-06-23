@@ -305,24 +305,9 @@ function commitMetagrossEnergy(
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// v2.462 蜜集大蛇ex｜蜜糖風暴（招式）— 修永遠只 30 點 bug
-// 卡面：「30+ 增加自己的所有寶可夢身上附加的【草】能量的數量×30 點傷害。」
-// 公式：30 + 30 × Σ(自方所有寶可夢身上 pokemonType==='Grass' 的能量數)
-// 之前無 regPre → 引擎只取 parseInt('30+') = 30，沒套+N 公式
-// ══════════════════════════════════════════════════════════════════════════════
-regPre('蜜集大蛇ex|蜜糖風暴', (state, aIdx, pool) => {
-  const player = state.players[aIdx];
-  const allOwn: CardInstance[] = [
-    ...(player.active ? [player.active] : []),
-    ...player.bench,
-  ];
-  let grassCount = 0;
-  for (const pk of allOwn) {
-    for (const e of pk.energyAttached) {
-      const ec = pool.get(e.cardId);
-      // 廣義【草】能量：基本【草】 + 名稱含【草】(如富裕能量等多色不算，需嚴格用 pokemonType)
-      if (ec?.pokemonType === 'Grass') grassCount++;
-    }
-  }
-  return { state, damage: 30 + grassCount * 30 };
-});
+// v5.684：蜜集大蛇ex｜蜜糖風暴 的 regPre 已收斂並生效於 effects.ts:7081
+//   regPre('蜜集大蛇ex|蜜糖風暴', selfAllEnergyMultiplyPre(30,30,'Grass','蜜糖風暴'))。
+//   原本檔此處另有一份 inline regPre（用 ec.pokemonType==='Grass' 數草，對基本【草】能量
+//   JSON pokemonType=null 永遠漏算）—— 但 effects.ts body 在 import 本卡檔之後執行、
+//   ATTACK_PRE.set 後者覆蓋，故此處實為【死碼】（從未生效，工廠版才生效且已 host-aware
+//   正確認列基本草/繁茂草=2/古舊/稜鏡）。移除死碼避免雙頭維護與未來誤改（同 修建老匠 v5.675）。
