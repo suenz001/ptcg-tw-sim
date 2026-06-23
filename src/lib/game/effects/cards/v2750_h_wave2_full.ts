@@ -1562,10 +1562,9 @@ regPre('班基拉斯ex|壓碎', (state, aIdx, pool) => {
   const n = att ? countAttachedEnergyAsUnits(att, pool) : 0;
   return { state: addLog(state, `壓碎：自身能量 ${n} → ${n}×50 = ${n*50}`, aIdx), damage: n * 50 };
 });
-// 班基拉斯ex|暴君粉碎 50× — 從對手手牌（不看正面）隨機選 1 張棄
-//   原文：「在不看正面的情況下，從對手的手牌選擇1張，將其丟棄。」
-//   damage 寫 50× 但卡面其實是固定 50 + 棄牌效果 — 待確認，先依文字解
-regPre('班基拉斯ex|暴君粉碎', (s) => ({ state: s, damage: 50 }));
+// 班基拉斯ex|暴君粉碎 — 固定 150 + 從對手手牌（不看正面）隨機棄 1 張
+//   卡面（SVM 12148, static/cards 權威）：傷害固定 150，效果僅「在不看正面的情況下，從對手的手牌選擇1張，將其丟棄」。
+//   v5.686：移除誤植的 regPre（曾硬寫 damage:50，殘留「50×」錯誤註解，台灣無 50× 版）→ 改由引擎讀卡面 150；僅保留 regPost 棄牌效果。
 regPost('班基拉斯ex|暴君粉碎', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];

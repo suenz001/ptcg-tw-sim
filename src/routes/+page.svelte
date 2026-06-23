@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.686</span> 修正班基拉斯ex「暴君粉碎」的傷害</summary>
+        <ul>
+          <li>班基拉斯ex「暴君粉碎」的傷害先前誤算為 50 點，現已修正為卡面正確的 150 點（招式效果「在不看正面的情況下，從對手手牌丟棄 1 張」維持不變）。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.685</span> 修正鋼系銅鏡怪「鏡面攻擊」的屬性判定</summary>
         <ul>
           <li>銅鏡怪「鏡面攻擊」有鋼系（M5）與超系（SV5K）兩種版本，分別在對手戰鬥寶可夢為【鋼】／【超】時 +30。先前一律以【超】判定，導致鋼系版本判斷錯誤（打鋼系對手沒加成、打超系對手反而加成）；現已改為依銅鏡怪自身屬性正確判定，兩個版本都正確。</li>
