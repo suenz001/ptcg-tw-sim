@@ -6076,7 +6076,8 @@ regPre('師父鼬|疾風迴旋', (state, aIdx, _pool) => {
 regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 50 };
-  const has = att.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Lightning'));
+  // v5.683：host-aware → 古舊/稜鏡(Basic)等「視為雷」的特殊能量也算「附有【雷】能量」
+  const has = att.energyAttached.some(e => energyProvidesType(att, e, 'Lightning', pool));
   if (has) {
     return { state: addLog(state, '麻麻羅網：附有【雷】能量 → +80', aIdx), damage: 130 };
   }
@@ -6086,12 +6087,11 @@ regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool) => {
 // 若自己場上的【惡】能量有 3 個以上 → +50
 regPre('阿勃梭魯|惡棍墜落', (state, aIdx, pool) => {
   const p = state.players[aIdx];
+  // v5.683：host-aware 型別計數（火箭隊能量=2個【惡】、古舊/稜鏡(Basic)視為惡；「個」= 單位）
   let count = 0;
   for (const c of [p.active, ...p.bench]) {
     if (!c) continue;
-    for (const e of c.energyAttached) {
-      if (isEnergyOfType(pool.get(e.cardId), 'Darkness')) count++;
-    }
+    count += countEnergyTypeHostAware(c, 'Darkness', pool);
   }
   if (count >= 3) {
     return { state: addLog(state, `惡棍墜落：【惡】能量 ${count} ≥3 → +50`, aIdx), damage: 70 };
@@ -8110,7 +8110,7 @@ regPost('自爆磁怪|強勁磁場', (state, aIdx, pool) => {
 regPre('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 0 };
-  const fireCount = att.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Fire')).length;
+  const fireCount = att.energyAttached.filter(e => energyProvidesType(att, e, 'Fire', pool)).length; // v5.683 host-aware(古舊/稜鏡等視為火)
   if (fireCount === 0) {
     return { state: addLog(state, '紅蓮引爆：身上無火能量，招式失敗', aIdx), damage: 0 };
   }
@@ -8119,12 +8119,12 @@ regPre('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
 regPost('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return state;
-  const fireEnergies = att.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Fire'));
+  const fireEnergies = att.energyAttached.filter(e => energyProvidesType(att, e, 'Fire', pool)); // v5.683 host-aware
   if (fireEnergies.length === 0) return state;
   // 先丟棄火能量
   let s = updatePlayer(state, aIdx, p => {
     if (!p.active) return p;
-    const kept = p.active.energyAttached.filter(e => !isEnergyOfType(pool.get(e.cardId), 'Fire'));
+    const kept = p.active.energyAttached.filter(e => !energyProvidesType(p.active!, e, 'Fire', pool)); // v5.683 host-aware
     return {
       ...p,
       active: { ...p.active, energyAttached: kept },

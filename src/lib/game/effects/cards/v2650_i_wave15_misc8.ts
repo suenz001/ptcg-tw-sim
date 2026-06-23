@@ -18,7 +18,7 @@ import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -693,9 +693,8 @@ regPre('奇樹的霹靂電球|連鎖伏特', (state, aIdx, pool) => {
   for (const c of [p.active, ...p.bench].filter(Boolean) as CardInstance[]) {
     const card = pool.get(c.cardId);
     if (!card?.name?.startsWith('奇樹的')) continue;
-    for (const e of c.energyAttached) {
-      if (isEnergyOfType(pool.get(e.cardId), 'Lightning')) lightning++;
-    }
+    // v5.683：host-aware 型別計數（古舊/稜鏡(Basic)視為雷；火箭隊不提供雷）
+    lightning += countEnergyTypeHostAware(c, 'Lightning', pool);
   }
   const dmg = 20 + lightning * 20;
   return { state: addLog(state, `連鎖伏特：奇樹寶可雷能量 ${lightning} 個 → 20 + ${lightning}×20 = ${dmg}`, aIdx), damage: dmg };

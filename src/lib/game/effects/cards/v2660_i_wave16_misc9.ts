@@ -26,7 +26,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -154,7 +154,7 @@ regPre('雙彈瓦斯|瘋狂炸彈', (s) => ({ state: s, damage: 50 }));
 regPre('泥巴魚|泥巴伏特', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 20 };
-  const hasFighting = a.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Fighting'));
+  const hasFighting = a.energyAttached.some(e => energyProvidesType(a, e, 'Fighting', pool)); // v5.683 host-aware(古舊/稜鏡等視為鬥)
   if (hasFighting) return { state: addLog(state, '泥巴伏特：有鬥能量 → 20+20 = 40', aIdx), damage: 40 };
   return { state: addLog(state, '泥巴伏特：無鬥能量 → 20', aIdx), damage: 20 };
 });
