@@ -2238,26 +2238,37 @@ regPost('鐵荊棘|壞死壓榨', tetsuibaraDeathSqueezePost('壞死壓榨'));
 regPre('鐵荊棘|壊死壓榨', tetsuibaraDeathSqueezePre('壊死壓榨'));
 regPost('鐵荊棘|壊死壓榨', tetsuibaraDeathSqueezePost('壊死壓榨'));
 
-// 好啦魷|惡作劇觸手 — 看對手牌庫上方 1 張 + 若希望重洗
+// 好啦魷|惡作劇觸手 — 卡面：「查看對手的牌庫上方 1 張卡，回復原樣。若希望，重洗那個牌庫。」
+//   v5.681：原借殼 binary-yes-no → 玩家在【看到對手牌庫頂之前】就要決定重洗，且實作自動重洗（違反「若希望」）。
+//   改用 modal-choice：先 peek 對手牌庫頂 1 張，把卡名放進選項 text 揭示給(出招)玩家，
+//   看過後再選「重洗 / 保留」。只揭示頂 1 張（不洩漏對手整副牌庫）。
 regPre('好啦魷|惡作劇觸手', (s) => ({ state: s, damage: 0 }));
-regPost('好啦魷|惡作劇觸手', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '惡作劇觸手：選擇「否」 — 不重洗對手牌庫', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, pool) => {
+regPost('好啦魷|惡作劇觸手', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  if (opp.deck.length === 0) return state;
-  const top = opp.deck[0];
-  const cardName = pool.get(top.cardId)?.name ?? '?';
-  // 簡化：揭露 + 50% 機率重洗
-  let s = addLog(state, `惡作劇觸手：對手牌庫頂為「${cardName}」`, aIdx);
-  // 玩家未必想重洗 — 簡化自動重洗（多數情況下都想攪亂）
-  s = updatePlayer(s, dIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-  return addLog(s, '惡作劇觸手：重洗對手牌庫', aIdx);
-};
-  return _cb(state, aIdx, pool);
+  if (opp.deck.length === 0) return addLog(state, '惡作劇觸手：對手牌庫已空', aIdx);
+  const topName = pool.get(opp.deck[0].cardId)?.name ?? '?';
+  const s = addLog(state, `惡作劇觸手：查看對手牌庫頂為「${topName}」`, aIdx);
+  return withPending(s, {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'mischief-tentacle-reshuffle',
+    params: {
+      label: '惡作劇觸手',
+      options: [
+        { id: 'reshuffle', text: `重洗對手牌庫（牌庫頂為「${topName}」）` },
+        { id: 'keep', text: '保留原樣（不重洗）' },
+      ],
+    },
+  });
+});
+regR('mischief-tentacle-reshuffle', (state, aIdx, iids) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (iids[0] === 'reshuffle') {
+    return updatePlayer(addLog(state, '惡作劇觸手：重洗對手牌庫', aIdx), dIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  return addLog(state, '惡作劇觸手：保留對手牌庫原樣', aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

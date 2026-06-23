@@ -17262,10 +17262,4 @@ ATTACK_PRE_DISCARD_CHOICE.set('魔牆人偶|相仿秀', {
   choiceNoLabel: '否（跳過）',
 });
 
-ATTACK_PRE_DISCARD_CHOICE.set('好啦魷|惡作劇觸手', {
-  min: 0, max: null, scope: 'binary-yes-no',
-  baseDamage: 0, damagePerEnergy: 0,
-  choicePrompt: '是否重洗對手的牌庫？',
-  choiceYesLabel: '是（重洗對手牌庫）',
-  choiceNoLabel: '否（不重洗）',
-});
+// v5.681：好啦魷|惡作劇觸手 改用 modal-choice（先揭示對手牌庫頂再決定重洗），不再借殼 binary-yes-no。
