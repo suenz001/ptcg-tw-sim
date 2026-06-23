@@ -924,6 +924,28 @@ export function openDeckViewReshuffle(state: GameState, idx: 0 | 1, label: strin
 }
 
 /**
+ * v5.680：「查看自己牌庫上方 N 張，回復原樣；若希望，將(選定的)那些卡丟棄」型招式的中央入口。
+ *   開 deck-search picker（validIids=牌庫頂 N、filter any、min0/maxN）→ 玩家【看見牌面】後選 0~N 張丟棄；
+ *   未選的維持原順序留在牌庫頂（符合卡面「回復原樣」，不重洗）。resolver = 'deck-top-reveal-discard'。
+ *   取代舊「binary-yes-no 盲選（看不到牌庫頂）」實裝（岩狗狗挖回 / 燭光靈光照燃燒）。
+ */
+export function openDeckTopRevealOptionalDiscard(state: GameState, idx: 0 | 1, count: number, label: string): GameState {
+  const p = state.players[idx];
+  if (p.deck.length === 0) return addLog(state, `${label}：牌庫已空`, idx);
+  const n = Math.min(count, p.deck.length);
+  const topIids = p.deck.slice(0, n).map(c => c.iid);
+  return withPending(
+    addLog(state, `${label}：查看牌庫上方 ${n} 張`, idx),
+    {
+      type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+      filter: 'any', minCount: 0, maxCount: n,
+      effectKey: 'deck-top-reveal-discard',
+      params: { validIids: topIids, label, titleOverride: `${label}：查看牌庫上方 ${n} 張，選擇要丟棄的（可不選＝回復原樣）` },
+    },
+  );
+}
+
+/**
  * 當寶可夢離開戰鬥場（撤退 / 被切換 / 被換出）時要清掉的旗標與狀態。
  *
  * PTCG 官方規則：寶可夢離開戰鬥場、或離開場地時，所有施於它身上的

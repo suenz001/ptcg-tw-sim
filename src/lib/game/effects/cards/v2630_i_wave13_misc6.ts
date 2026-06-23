@@ -3,7 +3,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE,
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, openDeckTopRevealOptionalDiscard,
   getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
@@ -386,59 +386,15 @@ regPost('波爾凱尼恩ex|高溫旋風', (state, aIdx, _pool) => {
 //   v3.26 修：原強制棄牌庫頂，違反卡面「若希望」。借殼 binary-yes-no。
 //   注意：簡化未實裝「先給玩家看牌庫頂再決定」（會洩漏牌庫頂），
 //   只做 yes/no 問答；玩家若選「否」則保留牌庫頂、選「是」則丟棄牌庫頂。
-ATTACK_PRE_DISCARD_CHOICE.set('燭光靈|光照燃燒', {
-  min: 0, max: null, scope: 'binary-yes-no',
-  baseDamage: 0, damagePerEnergy: 0,
-  choicePrompt: '是否將自己的牌庫上方 1 張卡丟棄？',
-  choiceYesLabel: '是（將牌庫頂丟棄）',
-  choiceNoLabel: '否（保留牌庫頂）',
-});
+// v5.680：改用中央 reveal picker（玩家可看見牌庫頂再決定丟不丟）取代盲選 binary-yes-no。
 regPre('燭光靈|光照燃燒', (s) => ({ state: s, damage: 0 }));
-regPost('燭光靈|光照燃燒', (state, aIdx, _pool, action) => {
-  const player = state.players[aIdx];
-  if (player.deck.length === 0) return addLog(state, '光照燃燒：牌庫已空', aIdx);
-  const chosenIids = action?.discardedEnergyIids;
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  if (!choseYes) {
-    return addLog(state, '光照燃燒：選「否」 → 保留牌庫頂', aIdx);
-  }
-  return updatePlayer(
-    addLog(state, '光照燃燒：選「是」 → 丟棄牌庫頂 1 張', aIdx),
-    aIdx, p => ({
-      ...p,
-      deck: p.deck.slice(1),
-      discard: [...p.discard, p.deck[0]],
-    }),
-  );
-});
+regPost('燭光靈|光照燃燒', (state, aIdx) => openDeckTopRevealOptionalDiscard(state, aIdx, 1, '光照燃燒'));
 
 // 岩狗狗|挖回 — 卡面：「查看自己的牌庫上方1張卡，回復原樣。若希望，將那張卡丟棄。」
 //   v3.26 修：與光照燃燒相同 pattern。借殼 binary-yes-no。
-ATTACK_PRE_DISCARD_CHOICE.set('岩狗狗|挖回', {
-  min: 0, max: null, scope: 'binary-yes-no',
-  baseDamage: 0, damagePerEnergy: 0,
-  choicePrompt: '是否將自己的牌庫上方 1 張卡丟棄？',
-  choiceYesLabel: '是（將牌庫頂丟棄）',
-  choiceNoLabel: '否（保留牌庫頂）',
-});
+// v5.680：改用中央 reveal picker（玩家可看見牌庫頂再決定丟不丟）取代盲選 binary-yes-no。
 regPre('岩狗狗|挖回', (s) => ({ state: s, damage: 0 }));
-regPost('岩狗狗|挖回', (state, aIdx, _pool, action) => {
-  const player = state.players[aIdx];
-  if (player.deck.length === 0) return addLog(state, '挖回：牌庫已空', aIdx);
-  const chosenIids = action?.discardedEnergyIids;
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  if (!choseYes) {
-    return addLog(state, '挖回：選「否」 → 保留牌庫頂', aIdx);
-  }
-  return updatePlayer(
-    addLog(state, '挖回：選「是」 → 丟棄牌庫頂 1 張', aIdx),
-    aIdx, p => ({
-      ...p,
-      deck: p.deck.slice(1),
-      discard: [...p.discard, p.deck[0]],
-    }),
-  );
-});
+regPost('岩狗狗|挖回', (state, aIdx) => openDeckTopRevealOptionalDiscard(state, aIdx, 1, '挖回'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 對手 2 隻備戰各 N (1 張) — 竹蘭的美納斯|水分岔
@@ -756,3 +712,23 @@ regPost('火箭隊的地鼠|狂潛', (state, aIdx, pool) => {
 // 輔助：unused import 防護
 export type _v2630Sentinel = PlayerState;
 type _APT = AttackPostFn;
+
+
+// v5.680：「查看牌庫頂 N 張 → 選擇丟棄(可不選=回復原樣，不重洗)」共用 resolver。
+//   供 openDeckTopRevealOptionalDiscard（岩狗狗挖回 / 燭光靈光照燃燒 等）使用。
+regR('deck-top-reveal-discard', (st, idx, iids, params) => {
+  const label = (params?.label as string) ?? '查看牌庫頂';
+  if (!iids || iids.length === 0) {
+    return addLog(st, `${label}：保留牌庫頂（回復原樣）`, idx);
+  }
+  return updatePlayer(
+    addLog(st, `${label}：丟棄牌庫頂 ${iids.length} 張`, idx),
+    idx,
+    p => {
+      const sel = new Set(iids);
+      const discarded = p.deck.filter(c => sel.has(c.iid));
+      const remaining = p.deck.filter(c => !sel.has(c.iid));
+      return { ...p, deck: remaining, discard: [...p.discard, ...discarded] };
+    },
+  );
+});
