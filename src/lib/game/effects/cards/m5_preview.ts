@@ -607,22 +607,9 @@ regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
 // ── m5 helper：clear self transient turn-flags (進攻完互換時用) ────────
 // v5.527：m5ClearTurnFlags 已收斂至中央 clearActiveEffects（原過時不完整副本，漏清 v5.443 後新鎖）。
 
-// ── A1. 銅鏡怪|鏡像攻擊 — 10 + 對手戰鬥位為寶可夢 +30 ─────────────
-//   卡面：「若對手的戰鬥寶可夢為寶可夢，則此招式傷害 +30。」
-//   注意：戰鬥位永遠是 Pokemon（不可能空白），這個條件實際上一定 true。
-//   仍嚴格判斷以對應卡面文字。
-regPre('銅鏡怪|鏡面攻擊', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const defActive = state.players[dIdx].active;
-  const defCard = defActive ? pool.get(defActive.cardId) : null;
-  const isPoke = defCard?.supertype === 'Pokemon';
-  const bonus = isPoke ? 30 : 0;
-  const dmg = 10 + bonus;
-  return {
-    state: addLog(state, `鏡像攻擊：對手戰鬥位${isPoke ? '為寶可夢 +30' : '非寶可夢'} → ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+// v5.685：銅鏡怪|鏡面攻擊 已收斂並生效於 effects.ts（對手與本身同屬性 +30，統一 M5鋼/SV5K超 兩版）。
+//   原此處 inline regPre 來自殘缺翻譯「對手為寶可夢就+30」(永遠+30，錯)，且被 effects.ts body 後載入
+//   覆蓋為【死碼】(從未生效)；移除避免雙頭維護與未來誤改(同 修建老匠 v5.675/蜜糖風暴 v5.684)。
 
 // ── A2. 薩戮德|暗影鞭打 — 100 + 自方備戰任一附「暗影【惡】能量」+70 ────
 //   卡面：「若自己的備戰寶可夢身上附有『暗影【惡】能量』，則此招式傷害 +70。」

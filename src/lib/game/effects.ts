@@ -5949,13 +5949,18 @@ regPre('帕底亞 肯泰羅|真氣衝撞', (state, aIdx, pool) => {
   return { state, damage: 90 };
 });
 
-// 若對手戰鬥寶可夢為【超】→ +30
+// v5.685：對手戰鬥寶可夢與本身(銅鏡怪)同屬性 → +30。
+//   「銅鏡怪|鏡面攻擊」有兩張不同 LIVE 卡：M5(鋼系,卡面判對手【鋼】)/SV5K(超系,判對手【超】)；
+//   單一 key 無法區分，但兩版判定屬性恰 = 該版銅鏡怪【自身】屬性(鏡面映照) → 用「對手===自身屬性」
+//   統一涵蓋。原寫死【超】→ M5 鋼版誤用【超】判定全錯(打鋼不加、打超反加)。
 regPre('銅鏡怪|鏡面攻擊', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const card = def ? pool.get(def.cardId) : undefined;
-  if (card?.pokemonType === 'Psychic') {
-    return { state: addLog(state, '鏡面攻擊：對手為【超】→ +30', aIdx), damage: 40 };
+  const defCard = def ? pool.get(def.cardId) : undefined;
+  const selfActive = state.players[aIdx].active;
+  const selfType = selfActive ? pool.get(selfActive.cardId)?.pokemonType : undefined;
+  if (selfType && defCard?.pokemonType === selfType) {
+    return { state: addLog(state, '鏡面攻擊：對手與本身同屬性 → +30', aIdx), damage: 40 };
   }
   return { state, damage: 10 };
 });
