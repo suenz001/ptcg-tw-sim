@@ -16859,7 +16859,9 @@ function attachedEnergyNameIncludes(inst: CardInstance | null | undefined, pool:
 
 // 波爾凱尼恩｜強力蒸汽：擲與身上【水】能量數相同次數硬幣，正面數 × 90。
 regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
-  const waterCount = attachedEnergyNameIncludes(state.players[aIdx].active, pool, '水');
+  // v5.688：改用中央 countEnergyTypeHostAware — 「擲與【水】能量數相同次數」應認列古舊/稜鏡等視為水的特殊能量。
+  const _act = state.players[aIdx].active;
+  const waterCount = _act ? countEnergyTypeHostAware(_act, 'Water', pool) : 0;
   const r = flipCoinsWithLog(state, waterCount, '強力蒸汽', aIdx);
   const damage = r.heads * 90;
   return { state: addLog(r.state, `強力蒸汽：${r.heads}/${waterCount} 次正面 → ${damage} 傷害`, aIdx), damage };

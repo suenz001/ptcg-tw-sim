@@ -13,13 +13,13 @@
  */
 
 import { regPre, regPost, addLog, updatePlayer, withPending } from '../_shared';
-import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
   statusPost, coinStatusPost,
   coinHeadsMultiplyPre, flipCoinsWithLog, snipeOneOppBenchPost,
+  countEnergyTypeHostAware,
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -103,10 +103,8 @@ function selfEnergyCountPre(
   return (state: GameState, aIdx: 0|1, pool: Map<string, Card>) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    let count = 0;
-    for (const e of a.energyAttached) {
-      if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
-    }
+    // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡/燃火/火箭隊/新衝天等「視為該屬性」特殊能量。
+    const count = countEnergyTypeHostAware(a, energyType, pool);
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身${energyType}能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };

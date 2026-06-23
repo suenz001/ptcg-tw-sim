@@ -5,7 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
 } from '../_shared';
@@ -92,8 +92,8 @@ function selfTypeEnergyPre(
   return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量 (看卡名【X】fallback)
-    const count = countOneEnergy(a, type, pool);
+    // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡/燃火/火箭隊等「視為該屬性」特殊能量(countOneEnergy 會漏)。
+    const count = countEnergyTypeHostAware(a, type, pool);
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身 ${type} 能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };

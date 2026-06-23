@@ -15,7 +15,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy } from '../../effects';
+import { countEnergyTypeHostAware } from '../../effects';
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -93,8 +93,8 @@ regPre('流氓鱷ex|強力啃咬', (state, aIdx, _pool) => {
 regPre('拉普拉斯ex|水炮迴旋', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
-  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
-  const count = countOneEnergy(a, 'Water', pool);
+  // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡等「視為水」特殊能量。
+  const count = countEnergyTypeHostAware(a, 'Water', pool);
   const dmg = count * 30;
   const s = addLog(state, `水炮迴旋：自身水能量 ${count} 個 → ${count}×30 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };

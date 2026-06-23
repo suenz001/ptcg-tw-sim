@@ -28,7 +28,7 @@ import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
-import { flipCoinsWithLog, countAttachedEnergyAsUnits } from '../../effects';
+import { flipCoinsWithLog, countAttachedEnergyAsUnits, countEnergyTypeHostAware } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: A 擲 N 次硬幣，正面數 × K 傷害（damage='Nx30+' 等）
@@ -54,10 +54,8 @@ function selfEnergyCountPre(
   return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    let count = 0;
-    for (const e of a.energyAttached) {
-      if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
-    }
+    // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡/燃火/火箭隊/新衝天等「視為該屬性」特殊能量。
+    const count = countEnergyTypeHostAware(a, energyType, pool);
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身${energyType}能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
