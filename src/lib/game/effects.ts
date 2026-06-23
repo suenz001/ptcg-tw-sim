@@ -6860,44 +6860,39 @@ export function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: M
 //   - 其他特殊能量 / 基本能量：依 energyMatchesType（pokemonType + name【X】 fallback）
 // 不從 engine import（avoid circular），inline 處理。若 engine.ts 的 SPECIAL_ENERGY_TYPES
 // 改動需同步本檔。
-export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, pool: Map<string, Card>): number {
+// v5.682：單一附加能量「依 host 視為提供某屬性幾個單位」的單一來源。
+//   countEnergyTypeHostAware（型別計數傷害）、energyProvidesType（選/移/丟「【X】能量」述詞）
+//   與 UI energyTypeFilter 全部共用此邏輯，避免三份各自實作漂移（古舊/稜鏡/新衝天/燃火/火箭隊）。
+export function energyTypeUnitsHostAware(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): number {
+  const ec = pool.get(e.cardId);
+  if (!ec || ec.supertype !== 'Energy') return 0;
   const hostCard = pool.get(host.cardId);
   const hostStage = hostCard?.stage ?? hostCard?.subtype;
   const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
   const hostIsStage2 = hostStage === 'Stage2';
+  // host-aware 特殊能量（與 engine.countEnergy 同步）
+  if (ec.name === '新衝天能量') return hostIsStage2 ? 2 : (type === 'Colorless' ? 1 : 0); // Stage2→任意×2，其他→Colorless×1
+  if (ec.name === '稜鏡能量') return !hostIsEvolution ? 1 : (type === 'Colorless' ? 1 : 0); // Basic→任意×1，進化→Colorless×1
+  if (ec.name === '燃火能量') return type === 'Colorless' ? (hostIsEvolution ? 3 : 1) : 0;
+  if (ec.name === '古舊能量') return 1; // 全屬性 ACE SPEC，計入任何 type
+  if (ec.name === '火箭隊能量') return (type === 'Psychic' || type === 'Darkness') ? 2 : 0; // 型別計數語意 v5.616
+  return energyMatchesType(ec, type) ? 1 : 0; // 一般：pokemonType / 名稱【X】fallback
+}
+
+/**
+ * v5.682：「這張附加能量，當下是否被視為提供某屬性」host-aware 述詞（單一來源）。
+ *   用於「選擇／移動／丟棄『【X】能量』」類效果（白海獅沖刷/科巴爾翁金屬之道/佛烈托斯鐵之震動/
+ *   阿響熔岩蝸牛熔岩爆炸 …）— 須納入古舊能量(全屬性)、稜鏡能量(Basic上=全屬性)、新衝天(Stage2=全屬性)等
+ *   「當下能被當作該屬性」的特殊能量；禁用 isEnergyOfType（只認 pokemonType/名稱、漏特殊能量）。
+ *   ⚠ host 依該能量「目前所在的寶可夢」(稜鏡在進化寶可夢上只提供 Colorless → 非該屬性)。
+ */
+export function energyProvidesType(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): boolean {
+  return energyTypeUnitsHostAware(host, e, type, pool) > 0;
+}
+
+export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, pool: Map<string, Card>): number {
   let count = 0;
-  for (const e of host.energyAttached) {
-    const ec = pool.get(e.cardId);
-    if (!ec || ec.supertype !== 'Energy') continue;
-    // host-aware 特殊能量（與 engine.countEnergy 同步）
-    if (ec.name === '新衝天能量') {
-      if (hostIsStage2) count += 2;            // Stage2 → 任意屬性 ×2
-      else if (type === 'Colorless') count += 1; // 其他 → Colorless ×1
-      continue;
-    }
-    if (ec.name === '稜鏡能量') {
-      if (!hostIsEvolution) count += 1;        // Basic → 任意屬性 ×1
-      else if (type === 'Colorless') count += 1; // 進化 → Colorless ×1
-      continue;
-    }
-    if (ec.name === '燃火能量') {
-      if (type === 'Colorless') count += hostIsEvolution ? 3 : 1;
-      continue;
-    }
-    if (ec.name === '古舊能量') {
-      count += 1;  // 全屬性 ACE SPEC，計入任何 type
-      continue;
-    }
-    if (ec.name === '火箭隊能量') {
-      // 卡面：「視為提供 2 個【超】【惡】2 種屬性的能量」→ 2 個單位、每個同時是【超】與【惡】。
-      //   故「數【超】/【惡】能量數」(超級交響樂等傷害計算) 計 2，非 1（v5.616 修玩家回報）。
-      //   ⚠ 此為「型別計數」語意；engine SPECIAL_ENERGY_TYPES 的 ['Psychic','Darkness'] 是「cost 槽位」語意(1超+1惡=2單位)，兩者用途不同、各自正確，未改 cost。
-      if (type === 'Psychic' || type === 'Darkness') count += 2;
-      continue;
-    }
-    // 一般情況：依 energyMatchesType（含 pokemonType=null 的 name fallback）
-    if (energyMatchesType(ec, type)) count += 1;
-  }
+  for (const e of host.energyAttached) count += energyTypeUnitsHostAware(host, e, type, pool);
   return count;
 }
 

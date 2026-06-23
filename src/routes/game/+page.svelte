@@ -28,8 +28,9 @@
   import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
+  import type { EnergyType } from '$lib/cards/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType } from '$lib/game/effects';
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -4891,38 +4892,10 @@
     // v4.16：spec.energyTypeFilter 設定時，filter 出「視為該屬性」的能量
     //   覆蓋基本/特殊能量規則；新衝天 (Stage2) 視為所有屬性；稜鏡 (Basic) 視為所有屬性
     if (spec.energyTypeFilter) {
-      const filterType = spec.energyTypeFilter;
-      const zhMark: Record<string, string> = {
-        Grass: '【草】', Fire: '【火】', Water: '【水】', Lightning: '【雷】',
-        Psychic: '【超】', Fighting: '【鬥】', Darkness: '【惡】', Metal: '【鋼】',
-        Dragon: '【龍】', Colorless: '【無】',
-      };
-      const mark = zhMark[filterType];
-      return out.filter(item => {
-        const ec = getCard(item.cardId);
-        if (!ec || ec.supertype !== 'Energy') return false;
-        const hc = getCard(item.hostInst.cardId);
-        const hostStage = hc?.stage ?? hc?.subtype;
-        if (ec.subtype === 'Basic') {
-          if (ec.pokemonType === filterType) return true;
-          if (mark && ec.name.includes(mark)) return true;
-          return false;
-        }
-        if (ec.subtype === 'Special') {
-          // 新衝天能量：on Stage2 視為所有屬性
-          if (ec.name === '新衝天能量') return hostStage === 'Stage2';
-          // 稜鏡能量：on Basic 視為所有屬性
-          if (ec.name === '稜鏡能量') {
-            const isEvo = hostStage === 'Stage1' || hostStage === 'Stage2';
-            return !isEvo;
-          }
-          // 一般特殊能量：名稱含屬性或 pokemonType 對應
-          if (ec.pokemonType === filterType) return true;
-          if (mark && ec.name.includes(mark)) return true;
-          return false;
-        }
-        return false;
-      });
+      // v5.682：收斂到中央 host-aware energyProvidesType（基本【X】/古舊(全)/稜鏡(Basic=全)/
+      //   新衝天(Stage2=全)/燃火/火箭隊）。取代原本前端自己一份、漏掉古舊等的實作。
+      const filterType = spec.energyTypeFilter as EnergyType;
+      return out.filter(item => energyProvidesType(item.hostInst, { cardId: item.cardId }, filterType, pool));
     }
     return out;
   }

@@ -20,7 +20,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -431,7 +431,7 @@ regPre('阿響的熔岩蝸牛|熔岩爆炸', (state, aIdx, pool, action) => {
   if (!a) return { state, damage: 0 };
   // v5.081: 用玩家選的 iids（picker 透過 ATTACK_PRE_DISCARD_CHOICE 收集）
   const chosenIids = action?.discardedEnergyIids;
-  const fireEnergies = a.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Fire'));
+  const fireEnergies = a.energyAttached.filter(e => energyProvidesType(a, e, 'Fire', pool)); // v5.682 host-aware(古舊/稜鏡等視為火)
   const allowed = new Set(fireEnergies.map(e => e.iid));
   const selectedIids = (chosenIids ?? []).filter(id => allowed.has(id)).slice(0, 5);
   const count = selectedIids.length;

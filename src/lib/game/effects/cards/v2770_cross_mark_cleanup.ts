@@ -13,7 +13,7 @@ import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { flipCoinsWithLog, selfHitPost } from '../../effects';
+import { flipCoinsWithLog, selfHitPost, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
 import { isOppActiveImmuneToAttackEffect } from '../../defense';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -143,16 +143,15 @@ regPost('佛烈托斯|鐵之震動', (state, aIdx, pool) => {
   const sourceEnergies: Array<{ energyIid: string; sourceIid: string }> = [];
   if (player.active) {
     for (const e of player.active.energyAttached) {
-      const card = pool.get(e.cardId);
-      if (isEnergyOfType(card, 'Metal')) {
+      // v5.682：host-aware → 古舊/稜鏡(Basic)等「視為鋼」的特殊能量也算可改附來源
+      if (energyProvidesType(player.active, e, 'Metal', pool)) {
         sourceEnergies.push({ energyIid: e.iid, sourceIid: player.active.iid });
       }
     }
   }
   for (const b of player.bench) {
     for (const e of b.energyAttached) {
-      const card = pool.get(e.cardId);
-      if (isEnergyOfType(card, 'Metal')) {
+      if (energyProvidesType(b, e, 'Metal', pool)) {
         sourceEnergies.push({ energyIid: e.iid, sourceIid: b.iid });
       }
     }

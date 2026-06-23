@@ -37,6 +37,7 @@
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
+import { energyProvidesType } from '../../effects'; // v5.682 host-aware「視為提供X屬性」(含古舊/稜鏡等特殊能量)
 import type { Card } from '$lib/cards/types';
 import {
   regA, regAByName, regR,
@@ -64,8 +65,8 @@ regAByName('白海獅', '沖刷', (st, idx, pool) => {
   const sourcesWithWater: { iid: string; energyIid: string }[] = [];
   for (const b of player.bench) {
     for (const e of b.energyAttached) {
-      const ec = pool.get(e.cardId);
-      if (isEnergyOfType(ec, 'Water')) {
+      // v5.682：用 host-aware 述詞 → 古舊/稜鏡(Basic)等「視為水」的特殊能量也算可沖刷來源
+      if (energyProvidesType(b, e, 'Water', pool)) {
         sourcesWithWater.push({ iid: b.iid, energyIid: e.iid });
       }
     }
@@ -91,7 +92,7 @@ regR('walrein-rinse', (state, aIdx, iids, _params, pool) => {
   if (!src) return state;
   // 取所有水能量
   // v4.963：用通用 isEnergyOfType helper
-  const waterEnergies = src.energyAttached.filter(e => isEnergyOfType(pool.get(e.cardId), 'Water'));
+  const waterEnergies = src.energyAttached.filter(e => energyProvidesType(src, e, 'Water', pool)); // v5.682 host-aware
   if (waterEnergies.length === 0) return addLog(state, '沖刷：來源無【水】能量', aIdx);
   // v2.389 多張水能量 → modal-choice 讓玩家選 1 張；1 張 fast path
   if (waterEnergies.length > 1) {
@@ -401,7 +402,7 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
   // 找場上「自己其他寶可夢」身上的鋼能量
   const sources: string[] = [];
   for (const b of player.bench) {
-    if (b.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Metal'))) {
+    if (b.energyAttached.some(e => energyProvidesType(b, e, 'Metal', pool))) { // v5.682 host-aware
       sources.push(b.iid);
     }
   }
@@ -425,7 +426,7 @@ regR('cobalion-metal-path', (state, aIdx, iids, _params, pool) => {
   const src = player.bench.find(b => b.iid === sourceIid);
   if (!src) return state;
   // 取 1 張鋼能量（簡化：每次搬 1 張，玩家可重複用直到限額）
-  const idx = src.energyAttached.findIndex(e => isEnergyOfType(pool.get(e.cardId), 'Metal'));
+  const idx = src.energyAttached.findIndex(e => energyProvidesType(src, e, 'Metal', pool)); // v5.682 host-aware
   if (idx < 0) return state;
   const energy = src.energyAttached[idx];
   return updatePlayer(
