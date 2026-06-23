@@ -7095,13 +7095,14 @@ regPre('厄鬼椪 碧草面具ex|萬葉陣雨', bothActiveEnergyMultiplyPre(30, 
 // 猛雷鼓|落雷風暴 — 0 base，傷害 = 自身能量 × 30，對對手任意 1 隻（含備戰）
 regPre('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
-  const count = att ? countOneEnergy(att, 'all', pool) : 0;
+  // v5.689：卡面「能量的數量」= host-aware 單位數(火箭隊2/燃火進化3)，原 countOneEnergy('all') 每張算1會少算。
+  const count = att ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : 0;
   // 不在這裡造成傷害給對手出場，由 POST 處理任意目標
   return { state: addLog(state, `落雷風暴：自身能量 ${count} → 對任一 ${count * 30} 傷害（不計弱抗）`, aIdx), damage: 0 };
 });
 regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
-  const count = att ? countOneEnergy(att, 'all', pool) : 0;
+  const count = att ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : 0;
   const dmg = count * 30;
   if (dmg === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;

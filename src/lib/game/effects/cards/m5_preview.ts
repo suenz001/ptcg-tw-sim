@@ -840,19 +840,20 @@ regR('m5-zeraora-teleport', (state, aIdx, iids) => {
 //   卡面：「對對手 1 隻寶可夢，造成這隻寶可夢身上附加的能量數 × 30 點傷害。
 //          （備戰寶可夢不計算弱點・抵抗力。）」
 regPre('金魚王|水炮射', (state) => ({ state, damage: 0 }));
-regPost('金魚王|水炮射', (state, aIdx) => {
+regPost('金魚王|水炮射', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defender = state.players[dIdx];
   if (!defender.active && defender.bench.length === 0) {
-    return addLog(state, '水流射擊：對手無寶可夢', aIdx);
+    return addLog(state, '水炮射：對手無寶可夢', aIdx);
   }
   const att = state.players[aIdx].active;
-  const n = att?.energyAttached.length ?? 0;
+  // v5.689：卡面「【水】能量的數量」→ 只數水、且 host-aware(古舊/稜鏡/火箭隊等)。原誤數全部能量。
+  const n = att ? countEnergyTypeHostAware(att, 'Water', pool) : 0;
   if (n === 0) {
-    return addLog(state, '水流射擊：自身無能量 → 0 傷害（仍需選目標）', aIdx);
+    return addLog(state, '水炮射：自身無水能量 → 0 傷害（仍需選目標）', aIdx);
   }
   return withPending(
-    addLog(state, `水流射擊：選對手 1 隻寶可夢造成 ${n}×30=${n * 30} 傷害（備戰不計弱抗）`, aIdx),
+    addLog(state, `水炮射：選對手 1 隻寶可夢造成 ${n}×30=${n * 30} 傷害（備戰不計弱抗）`, aIdx),
     {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -865,9 +866,9 @@ regPost('金魚王|水炮射', (state, aIdx) => {
 regR('m5-seaking-water-shot', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) return state;
   const dmg = (params?.damage as number) ?? 0;
-  if (dmg <= 0) return addLog(state, '水流射擊：傷害為 0，效果略過', aIdx);
+  if (dmg <= 0) return addLog(state, '水炮射：傷害為 0，效果略過', aIdx);
   // v5.440：改走中央 — 補 active 弱點(原 flat 漏算) + 受傷反擊；免疫 guard 為 superset。
-  return dealAttackDamageToTarget(state, aIdx, iids[0], dmg, pool, { kind: 'attack-damage', label: '水流射擊' });
+  return dealAttackDamageToTarget(state, aIdx, iids[0], dmg, pool, { kind: 'attack-damage', label: '水炮射' });
 });
 
 // ── E2. 鍬農炮蟲|急速潛行 — 對對手 1 隻寶可夢 50 (bench 不計弱抗) ─

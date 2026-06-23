@@ -26,7 +26,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -188,7 +188,8 @@ regPre('石居蟹|抓狂', (state, aIdx, _pool) => {
 regPre('堅果啞鈴|強力鞭打', (s) => ({ state: s, damage: 0, skipWeakRes: true }));
 regPost('堅果啞鈴|強力鞭打', (state, aIdx, _pool) => {
   const a = state.players[aIdx].active;
-  const eN = a?.energyAttached.length ?? 0;
+  // v5.689：卡面「能量的數量」=能量單位數(host-aware,火箭隊2/燃火進化3)，原 .length 少算。
+  const eN = a ? countAttachedEnergyAsUnits(a, _pool, state, aIdx) : 0;
   const amount = eN * 20;
   if (amount === 0) return addLog(state, '強力鞭打：自身無能量', aIdx);
   const dIdx = (1 - aIdx) as 0 | 1;
