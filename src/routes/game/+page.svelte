@@ -28,7 +28,6 @@
   import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
-  import type { EnergyType } from '$lib/cards/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
   import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType } from '$lib/game/effects';
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
