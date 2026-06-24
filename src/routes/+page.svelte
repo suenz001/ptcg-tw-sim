@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.693</span> 對戰戰報改為直接點擊對戰列開啟</summary>
+        <ul>
+          <li>名人堂賽程的對戰戰報，改為直接點擊「對戰那一列（例：大條 VS MM皮格）」即可開啟，不再另設按鈕，版面更簡潔。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.692</span> 錦標賽名人堂賽程可查看每場「對戰戰報」</summary>
         <ul>
           <li>在名人堂點冠軍展開的賽程表中，每一場已完成的對戰新增「📜 戰報」按鈕，可查看該場逐步的文字對戰紀錄（出招、擲幣、傷害、KO、取獎賞等，卡名可點擊放大）。僅開放已結束賽事，且不顯示搜牌／手牌等隱藏私有資訊。</li>

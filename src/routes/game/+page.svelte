@@ -6659,11 +6659,16 @@
             <div class="tourn-round">
               {#if _hrm.length === 0}<div class="muted small" style="text-align:center;padding:14px;">此輪無對戰紀錄</div>{/if}
               {#each _hrm as m}
-                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye}>
+                {@const _hasLog = m.status === 'done' && !m.bye && m.p1name && m.p2name}
+                <div class="tourn-match" class:done={m.status === 'done'} class:bye={m.bye} class:tourn-match-log={_hasLog}
+                  role={_hasLog ? 'button' : undefined} tabindex={_hasLog ? 0 : undefined}
+                  title={_hasLog ? '點擊查看這場對戰戰報' : ''}
+                  onclick={() => { if (_hasLog) tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); }}
+                  onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
                   <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                   <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
-                  {#if m.status === 'done' && !m.bye && m.p1name && m.p2name}<button class="tm-log-btn" title="看這場的對戰戰報" onclick={() => tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name)}>📜 戰報</button>{/if}
+                  {#if _hasLog}<span class="tm-log-hint" aria-hidden="true">📜</span>{/if}
                 </div>
               {/each}
             </div>
@@ -10366,8 +10371,9 @@
   .tourn-tab:hover { background: #18301a; }
   .tourn-tab.active { background: linear-gradient(180deg,#2a5a3a,#1d4029); color: #eaffea; border-color: #6ab87a; box-shadow: 0 0 0 1px #6ab87a inset; }
   /* v5.692 對戰戰報 */
-  .tm-log-btn { margin-left: 8px; flex: 0 0 auto; padding: 2px 8px; font-size: .72rem; border: 1px solid #4a6a8a; border-radius: 6px; background: #16263a; color: #bcd8ff; cursor: pointer; }
-  .tm-log-btn:hover { background: #1e3450; }
+  .tourn-match-log { cursor: pointer; transition: background .12s, box-shadow .12s; }
+  .tourn-match-log:hover { background: #1c3320; box-shadow: 0 0 0 1px #5aa86a inset; }
+  .tm-log-hint { flex: 0 0 auto; margin-left: 6px; font-size: .8rem; opacity: .65; }
   .mlog-modal { max-width: 680px; }
   .mlog-list { max-height: 62vh; overflow-y: auto; background: #0d140d; border: 1px solid #2a3a2a; border-radius: 8px; padding: 8px 10px; font-size: .82rem; line-height: 1.5; }
   .mlog-list .log-line { padding: 2px 0; border-bottom: 1px solid #161f16; word-break: break-word; }
