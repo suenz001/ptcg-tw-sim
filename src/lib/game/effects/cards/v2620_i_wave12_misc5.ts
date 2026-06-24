@@ -6,6 +6,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects';
+import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
 } from '../_shared';
@@ -286,9 +287,8 @@ regPre('野蠻鱸魚|堆積之牙', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('投摔鬼|背負上投', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  const card = def ? pool.get(def.cardId) : undefined;
-  const retreatCost = card?.retreatCost?.length ?? 0;
+  // v5.690：有效撤退費(含咒縛火焰/重力之玉/浮遊等修正)，不再用 base retreatCost.length。
+  const retreatCost = computeActiveRetreatCostFor(state, dIdx, pool);
   const dmg = Math.max(0, 120 - retreatCost * 30);
   const s = addLog(state, `背負上投：對手撤退費 ${retreatCost} 個 → 120 - ${retreatCost}×30 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };

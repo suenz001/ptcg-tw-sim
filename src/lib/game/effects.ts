@@ -201,7 +201,7 @@ export function countAncientOnField(
  */
 // v4.51 Phase 2：統一 defense helper
 import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect } from './defense';
-import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源
+import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
 
@@ -5144,16 +5144,16 @@ regPre('鐵蟻ex|復仇粉碎', (state, aIdx, _pool) => {
 // 阿利多斯｜線帶纏繞 — 10 + 對手戰鬥寶可夢撤退能量數 × 30
 regPre('阿利多斯|線帶纏繞', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  const retreat = def ? (pool.get(def.cardId)?.retreatCost?.length ?? 0) : 0;
+  // v5.690：用有效撤退費(含咒縛火焰/重力之玉/浮遊/磁鐵能量等修正)，對齊影繩結/幻影迷宮，不再用 base retreatCost.length。
+  const retreat = computeActiveRetreatCostFor(state, dIdx, pool);
   return { state, damage: 10 + retreat * 30 };
 });
 
 // 鐵包袱｜瞬風衝激 — 200 - 對手戰鬥寶可夢撤退 × 50
 regPre('鐵包袱|瞬風衝激', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  const retreat = def ? (pool.get(def.cardId)?.retreatCost?.length ?? 0) : 0;
+  // v5.690：有效撤退費(含各修正)，不再用 base retreatCost.length。
+  const retreat = computeActiveRetreatCostFor(state, dIdx, pool);
   return { state, damage: Math.max(0, 200 - retreat * 50) };
 });
 
