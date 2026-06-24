@@ -7834,11 +7834,10 @@ function applyAbilityRetreatMod(
   retreatingInst: CardInstance,
   retreatingCard: Card | undefined,
   retreatingOwnerIdx: 0 | 1,
-  baseCost: number,
   pool: Map<string, Card>,
-): number {
-  if (!retreatingCard) return baseCost;
-  if (ABILITY_RETREAT_MOD.size === 0) return baseCost;
+): { zero: boolean; reduce: number; add: number } {
+  if (!retreatingCard) return { zero: false, reduce: 0, add: 0 };
+  if (ABILITY_RETREAT_MOD.size === 0) return { zero: false, reduce: 0, add: 0 };
 
   let zero = false;
   let totalReduce = 0;
@@ -7887,11 +7886,9 @@ function applyAbilityRetreatMod(
     }
   }
 
-  let cost = baseCost;
-  if (zero) cost = 0;
-  cost = Math.max(0, cost - totalReduce);
-  cost = cost + totalAdd;
-  return cost;
+  // v5.696：回傳原始 {zero,reduce,add} 分量，由 computeActiveRetreatCostFor 統一把 zero 當「免撤退最後覆蓋」處理
+  //   （與天空徑線/N的城堡/磁鐵能量/浮遊石一致：撤退歸 0 蓋過咒縛火焰/大網/鼓擊等 +撤退）。
+  return { zero, reduce: totalReduce, add: totalAdd };
 }
 
 /**
@@ -7923,23 +7920,25 @@ export function computeActiveRetreatCostFor(
   const player = state.players[playerIdx];
   if (!player.active) return 0;
   const card = pool.get(player.active.cardId);
-  let cost = card?.retreatCost?.length ?? 0;
+  const baseCost = card?.retreatCost?.length ?? 0;
+  // v5.696 收斂：所有「撤退歸 0 / 免撤退」效果(道具/能量/特性zero、天空徑線、N的城堡)統一收成
+  //   freeRetreat 旗標，於最後硬覆蓋——蓋過咒縛火焰/大網/重力之玉/鼓擊等 +撤退(Wilson 裁定:撤退0為最後覆蓋)。
+  //   reduce/add 分別累加，最後 cost = max(0, base - reduce) + add；freeRetreat → 0。
+  let freeRetreat = false;
+  let reduce = 0;
+  let add = 0;
   const toolsJammedCanR = isToolsJammed(state, pool);
   // TOOL_RETREAT_MOD（多重轉接 iterate 所有道具）
   if (!toolsJammedCanR && card) {
-    let zeroSet2 = false;
-    let totalReduce2 = 0;
     for (const t of getAllAttachedTools(player.active)) {
       const tool = pool.get(t.cardId);
       if (!tool) continue;
       const mod = TOOL_RETREAT_MOD.get(tool.name);
       if (!mod) continue;
       const r = mod(card, player.active);
-      if (r.zero) { zeroSet2 = true; break; }
-      if (r.reduceBy) totalReduce2 += r.reduceBy;
+      if (r.zero) freeRetreat = true;
+      else if (r.reduceBy) reduce += r.reduceBy;
     }
-    if (zeroSet2) cost = 0;
-    else if (totalReduce2 > 0) cost = Math.max(0, cost - totalReduce2);
   }
   // 重力之玉：每張獨立貢獻 +1（卡面「附有這張卡的寶可夢…」每張卡獨立計算）
   // v5.086：原 `boolean || boolean → +1` 違反卡面 — 雙方各 1 張應 +2。改 per-instance count 累加。
@@ -7957,7 +7956,7 @@ export function computeActiveRetreatCostFor(
       }
     }
   }
-  cost += gravityCountC;
+  add += gravityCountC;
   // 天空徑線（v5.472：holder 須特性有效，被初始化等消除則失效）
   const skyIdxC = playerIdx as 0 | 1;
   const hasSkyPath = [
@@ -7968,11 +7967,11 @@ export function computeActiveRetreatCostFor(
     return !!cc?.abilities?.some(a => a.name === '天空徑線')
       && isAbilityHolderEffective(state, c, cc, skyIdxC, '天空徑線', loc, pool);
   });
-  if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
+  if (hasSkyPath && isBasicPokemonCard(card)) freeRetreat = true;
   // 競技場
   const stadiumNameCR = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
   // 注意：N的城堡「撤退所需能量全部消除」改為最後硬覆蓋(見函式結尾)，蓋過 +撤退效果，故不在此設 0。
-  if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') cost = Math.max(0, cost - 1);
+  if (stadiumNameCR === '樂園度假地' && card?.name === '可達鴨') reduce += 1;
   // SPECIAL_ENERGY_RETREAT_MOD（磁鐵【鋼】能量）
   if (card) {
     for (const e of player.active.energyAttached) {
@@ -7981,23 +7980,28 @@ export function computeActiveRetreatCostFor(
       const fn = SPECIAL_ENERGY_RETREAT_MOD.get(ec.name);
       if (!fn) continue;
       const r = fn(card, player.active);
-      if (r.zero) { cost = 0; break; }
-      if (r.reduceBy) cost = Math.max(0, cost - r.reduceBy);
+      if (r.zero) freeRetreat = true;
+      else if (r.reduceBy) reduce += r.reduceBy;
     }
   }
   // ABILITY_RETREAT_MOD（咒縛之炎、一身輕、溶化流動、鋼之橋、森林秘道、大網）
   if (player.active) {
-    cost = applyAbilityRetreatMod(state, player.active, card, playerIdx, cost, pool);
+    const am = applyAbilityRetreatMod(state, player.active, card, playerIdx, pool);
+    if (am.zero) freeRetreat = true;
+    reduce += am.reduce;
+    add += am.add;
   }
   // v5.473：鼓擊 — 撤退費 +N（retreatCostIncreaseThisTurn）。原只在 RETREAT handler，本中央函式
   //   與 getRetreatCost 漏 → UI 顯示 + 幻影迷宮傷害漏算鼓擊（重複實作的既存分歧）。收斂進中央。
   if (player.active.retreatCostIncreaseThisTurn && player.active.retreatCostIncreaseThisTurn > 0) {
-    cost += player.active.retreatCostIncreaseThisTurn;
+    add += player.active.retreatCostIncreaseThisTurn;
   }
   // v5.371/v5.537：「撤退所需能量全部消除」型 — 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉/災禍荒野等 +撤退效果
   //   （Wilson 裁定 + 官方判例）。天空徑線(自己場上基礎寶可夢) / N的城堡(N的寶可夢) 同類，都在這裡硬歸 0。
-  if (hasSkyPath && isBasicPokemonCard(card)) cost = 0;
-  if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) cost = 0;
+  if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) freeRetreat = true;
+  // 合成：先 reduce(不低於0) 再 add；freeRetreat(撤退歸0) 為最後硬覆蓋。
+  let cost = Math.max(0, baseCost - reduce) + add;
+  if (freeRetreat) cost = 0;
   return cost;
 }
 
