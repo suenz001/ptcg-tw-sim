@@ -538,9 +538,16 @@ export async function clearUndoRequest(roomCode: string): Promise<void> {
  * v5.605：宣告對手棄權前，用最新伺服器盤面確認真的還在等對手動作（鏡射 room-oracle 同名 helper）。
  */
 function _waitingOnOpp(gs: any, seat: 0 | 1): boolean {
-  if (!gs || gs.phase !== 'playing') return false;
+  if (!gs) return false;
   const opp = (1 - seat) as 0 | 1;
+  // v5.699：與 room-oracle._waitingOnOpp 一致——setup 階段(我已準備、對手沒)也算等對手；
+  //   playing 期間補上「待拿獎賞卡(pendingPrizes)」這一關(漏判→某些拿獎賞時機誤判不等對手)。
+  if (gs.phase === 'setup') { const sd = gs.setupDone || []; return !!sd[seat] && !sd[opp]; }
+  if (gs.phase !== 'playing') return false;
   if (gs.pendingSelection) return gs.pendingSelection.actorIdx === opp;
+  const pp = gs.pendingPrizes;
+  if (pp && (pp[opp] || 0) > 0) return true;
+  if (pp && (pp[seat] || 0) > 0) return false;
   const oppP = gs.players?.[opp], meP = gs.players?.[seat];
   if (oppP && oppP.active == null && (oppP.bench?.length ?? 0) > 0) return true;
   if (meP && meP.active == null && (meP.bench?.length ?? 0) > 0) return false;
