@@ -10425,6 +10425,24 @@ function resolveLanzhushi(
 //   3. prizesForKOLocal(效果KO base 獎賞；古舊能量/影藏只在「招式傷害」昏厥才 -1)。
 //   4. recordOppKO + 補位空場 game-over + addPendingPrize 自動發獎。
 //   ⚠ 只用於「對手」effect-KO；自損昏厥(高速破壞)用 markFaintByEffect；狀態延遲KO(浸蝕污泥)維持 getEffectiveHP。
+// v5.707：對手戰鬥位被 KO(任何方式) → 攻擊方「波克基斯|奇跡之吻」擲幣,正面多 1 獎賞(不重複)。
+//   原僅 engine 招式傷害 KO 主管線觸發,效果 KO(放指示物/koTargetByAttackEffect)漏 → 抽共用 helper。
+function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>): GameState {
+  const owner = state.players[attackerIdx];
+  const has = [...(owner.active ? [owner.active] : []), ...owner.bench]
+    .some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '奇跡之吻'));
+  if (!has) return state;
+  const r = flipCoinsWithLog(state, 1, '波克基斯｜奇跡之吻', attackerIdx);
+  let s = r.state;
+  if (r.heads === 1) {
+    s = addLog(s, `「奇跡之吻」啟動：硬幣正面 → 多獲得 1 張獎賞卡`, attackerIdx);
+    s = addPendingPrize(s, attackerIdx, 1, pool);
+  } else {
+    s = addLog(s, `「奇跡之吻」啟動：硬幣反面 → 不增加獎賞卡`, attackerIdx);
+  }
+  return s;
+}
+
 export function koTargetByAttackEffect(
   state: GameState, attackerIdx: 0 | 1, target: CardInstance, isActive: boolean,
   pool: Map<string, Card>, label: string,
@@ -10436,24 +10454,31 @@ export function koTargetByAttackEffect(
   if (guard.blocked) {
     return addLog(state, `${label}：${card?.name ?? '?'}｜${guard.reason}（不昏厥）`, attackerIdx);
   }
+  // v5.707：獎賞走中央 koPrizesAdjusted(koByAttackDamage=false)→脆弱蛻殼0/多餘花粉(deferred)+N 一致;
+  //   效果KO 不套道具/古舊能量調整(卡面限「受招式傷害昏厥」)。原 prizesForKOLocal(純count)漏這些。
+  const adj = koPrizesAdjusted(state, target, card, attackerIdx, dIdx, pool, false);
+  let s = adj.state;
+  const prizes = adj.prizes;
   const ko: CardInstance[] = [
     { ...target, damage: (card?.hp ?? 0) },
     ...target.energyAttached,
     ...getAllAttachedTools(target),
     ...(target.evolvedFromStack ?? []),
   ];
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const newDef = { ...def, discard: [...def.discard, ...ko] };
+  const players = [...s.players] as [PlayerState, PlayerState];
+  const newDef = { ...s.players[dIdx], discard: [...s.players[dIdx].discard, ...ko] };
   if (isActive) newDef.active = null;
-  else newDef.bench = def.bench.filter(b => b.iid !== target.iid);
+  else newDef.bench = s.players[dIdx].bench.filter(b => b.iid !== target.iid);
   players[dIdx] = newDef;
-  const prizes = card ? prizesForKOLocal(card) : 1;
-  let s = addLog({ ...state, players }, `${label}：${card?.name ?? '?'} 被昏厥！+${prizes} 張獎賞卡`, attackerIdx);
+  s = addLog({ ...s, players }, `${label}：${card?.name ?? '?'} 被昏厥！+${prizes} 張獎賞卡`, attackerIdx);
   s = recordOppKO(s, dIdx, card, 'attack');
   if (isActive && newDef.bench.length === 0) {
     return { ...s, phase: 'game-over', winner: attackerIdx, winReason: `${def.name} 沒有可上場的寶可夢` };
   }
-  return addPendingPrize(s, attackerIdx, prizes, pool);
+  s = addPendingPrize(s, attackerIdx, prizes, pool);
+  // v5.707：對手戰鬥位被效果KO → attacker 奇跡之吻(卡面「對手戰鬥寶可夢昏厥時」不分傷害/效果)
+  if (isActive) s = applyMiracleKissOnOppActiveKO(s, attackerIdx, pool);
+  return s;
 }
 
 regR('lanzhushi-ko', (st, actorIdx, selectedIids, params, pool) => {

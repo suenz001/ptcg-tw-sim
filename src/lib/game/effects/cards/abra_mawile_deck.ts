@@ -32,7 +32,7 @@ import {
 } from '../_shared';
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
-  canApplyAttackEffectToTarget,
+  canApplyAttackEffectToTarget, koTargetByAttackEffect,
 } from '../../effects';
 import { isBasicEnergyOfType, isRulePokemon } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -81,29 +81,9 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
     aIdx
   );
   if (defHP > 0 && newDmg >= defHP) {
-    // KO 流程：出場寶可夢、附加能量、道具、進化底卡全部進棄牌堆
-    const koDiscard: CardInstance[] = [
-      { ...defender.active, damage: newDmg },
-      ...defender.active.energyAttached,
-      ...(defender.active.toolAttached ? [defender.active.toolAttached] : []),
-      ...(defender.active.evolvedFromStack ?? []),
-    ];
-    const prizes = defCard ? koPrizeCount(defCard) : 1;
-    const players = [...s.players] as [PlayerState, PlayerState];
-    players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
-    s = addLog(
-      { ...s, players },
-      `手之力量：${defCard?.name ?? '?'} 被擊倒！+${prizes} 張獎賞卡`,
-      aIdx
-    );
-    s = addPendingPrize(s, aIdx, prizes, pool);
-    // v2.246：手之力量是招式 KO
-    s = recordOppKO(s, dIdx, defCard, 'attack');
-    if (players[dIdx].bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: aIdx,
-        winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
-    return s;
+    // v5.707：效果KO(放指示物致死)走中央 koTargetByAttackEffect → 獎賞 koPrizesAdjusted(脆弱蛻殼0/
+    //   多餘花粉)+奇跡之吻一致(原 inline koPrizeCount 漏全部調整 + 奇跡之吻)。
+    return koTargetByAttackEffect(s, aIdx, defender.active, true, pool, '手之力量');
   }
   const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...defender, active: { ...defender.active, damage: newDmg } };
