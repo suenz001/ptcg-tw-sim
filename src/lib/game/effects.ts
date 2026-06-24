@@ -8745,14 +8745,25 @@ function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string): 
         };
       });
     }
-    // 改附於備戰：用 gengar-move-energy 單張迴圈；我們取 1 張（n 預設 1 對此類卡）
+    // 改附於備戰：卡面「選擇 1 個這隻身上的能量，改附於備戰」。
     if (state.players[aIdx].bench.length === 0) {
       return addLog(state, `${label}：沒有備戰寶可夢，能量留在原位`, aIdx);
     }
-    const toMove = moved[0];
+    // v5.708：active 身上有多個能量時讓玩家選「哪個能量」(原自動取末張 moved[0] → 不能選不同屬性);
+    //   單一能量自動。選來源後 resolver 接 bench-choose 選目標備戰。
+    if (energies.length > 1) {
+      return withPending(state, {
+        type: 'active-energy-discard',
+        actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'return-self-energy-pick-to-bench',
+        params: { titleOverride: `${label}：選擇 1 個要改附於備戰寶可夢的能量`, label },
+      });
+    }
+    const toMove = energies[0];
     let s = updatePlayer(state, aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
+      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== toMove.iid) } : null,
     }));
     s = addLog(s, `${label}：將能量改附於備戰寶可夢`, aIdx);
     return withPending(s, {
@@ -8764,6 +8775,29 @@ function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string): 
     });
   };
 }
+
+// v5.708：returnSelfActiveEnergyPost 改附分支的「選能量」picker 收尾 — 收選定能量 → 從 active 移除 → 開 bench-choose 選目標備戰。
+regR('return-self-energy-pick-to-bench', (st, idx, iids, params, pool) => {
+  const energyIid = iids[0];
+  if (!energyIid) return st;
+  const active = st.players[idx].active;
+  if (!active) return st;
+  const energy = active.energyAttached.find(e => e.iid === energyIid);
+  if (!energy) return st;
+  const label = (params?.label as string) ?? '改附能量';
+  let s = updatePlayer(st, idx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : null,
+  }));
+  s = addLog(s, `${label}：將能量改附於備戰寶可夢`, idx);
+  return withPending(s, {
+    type: 'bench-choose',
+    actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'gengar-move-energy',
+    params: { energyIid: energy.iid, energyCardId: energy.cardId },
+  });
+});
 
 function returnOppActiveEnergyPost(n: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {

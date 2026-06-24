@@ -7,7 +7,7 @@
  */
 
 import {
-  regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools,
+  regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
@@ -2683,22 +2683,54 @@ regPost('胖甜妮|甜甜你', (state, aIdx, pool) => {
 // 大舌頭|舌引 — 對手手牌挑 ≤2 基礎放對手備戰（複雜：需展示對手手牌+選擇）
 regPre('大舌頭|舌引', (s) => ({ state: s, damage: 0 }));
 regPost('大舌頭|舌引', (state, aIdx, pool) => {
+  // v5.708：卡面「查看對手手牌，從中選最多 2 張【基礎】寶可夢放對手備戰」。原為自動放前 2 張、
+  //   未揭示對手手牌也未讓玩家選 → 改鏡射邀請眨眼:揭示對手手牌(公開)+ hand-choose picker
+  //   (actor=自己,source=對手,選 0~2 張基礎)。
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  // v3.80：對手 bench 上限同樣考慮零之大空洞（dIdx 視角）
   const benchSpace = Math.max(0, getOwnBenchLimit(state, dIdx, pool) - opp.bench.length);
-  if (benchSpace === 0) return state;
-  // 自動：對手手牌中前 2 個基礎寶可夢自動放備戰
+  if (benchSpace === 0) return addLog(state, '舌引：對手備戰區已滿', aIdx);
+  if (opp.hand.length === 0) return addLog(state, '舌引：對手手牌為空', aIdx);
+  const handNames = opp.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  let s = addLog(state, `舌引：查看對手手牌（${opp.hand.length} 張）— ${handNames}`, aIdx);
   const candidates = opp.hand.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.stage === 'Basic';
-  }).slice(0, Math.min(2, benchSpace));
-  if (candidates.length === 0) return addLog(state, '舌引：對手手牌無基礎寶可夢', aIdx);
-  const set = new Set(candidates.map(c => c.iid));
-  return updatePlayer(addLog(state, `舌引：對手手牌 ${candidates.length} 張基礎寶可夢自動放對手備戰`, aIdx), dIdx, p => ({
+    return card?.supertype === 'Pokemon' && (card.subtype === 'Basic' || card.stage === 'Basic');
+  });
+  if (candidates.length === 0) return addLog(s, '舌引：對手手牌沒有【基礎】寶可夢', aIdx);
+  const maxPick = Math.min(2, benchSpace, candidates.length);
+  s = addLog(s, `舌引：選最多 ${maxPick} 張【基礎】寶可夢放對手備戰區（候選 ${candidates.length} 張）`, aIdx);
+  return withPending(s, {
+    type: 'hand-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: maxPick,
+    effectKey: 'tongue-pull-place',
+    params: { validIids: candidates.map(c => c.iid), label: '舌引' },
+  });
+});
+regR('tongue-pull-place', (st, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(st, '舌引：未選擇任何寶可夢，效果結束', aIdx);
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const opp = st.players[dIdx];
+  const slotsLeft = Math.max(0, getOwnBenchLimit(st, dIdx, pool) - opp.bench.length);
+  const actualIids = iids.slice(0, Math.min(2, slotsLeft));
+  const placed: CardInstance[] = [];
+  const names: string[] = [];
+  for (const iid of actualIids) {
+    const inst = opp.hand.find(c => c.iid === iid);
+    if (!inst) continue;
+    const card = pool.get(inst.cardId);
+    if (!card || card.supertype !== 'Pokemon') continue;
+    if (!(card.subtype === 'Basic' || card.stage === 'Basic')) continue;
+    placed.push({ ...toBareCard(inst), justPlaced: true });  // v5.708 裸化+justPlaced(同回合不可進化)
+    names.push(card.name);
+  }
+  if (placed.length === 0) return addLog(st, '舌引：所選不符條件', aIdx);
+  const placedSet = new Set(placed.map(p => p.iid));
+  return updatePlayer(addLog(st, `舌引：將 ${names.join('、')} 放到對手備戰區`, aIdx), dIdx, p => ({
     ...p,
-    hand: p.hand.filter(c => !set.has(c.iid)),
-    bench: [...p.bench, ...candidates],
+    hand: p.hand.filter(c => !placedSet.has(c.iid)),
+    bench: [...p.bench, ...placed],
   }));
 });
 
