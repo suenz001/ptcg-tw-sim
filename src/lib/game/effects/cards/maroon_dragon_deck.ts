@@ -32,6 +32,7 @@ import {
   selfKOInstance,
   koPrizeCount,
   isBenchProtected,
+  applyMiracleKissOnOppActiveKO
 } from '../../effects';
 import { getEffectiveHP } from '../../engine';  // v5.091
 import { addPendingPrize } from '../_shared';
@@ -268,7 +269,9 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
       ...(target.toolAttached ? [target.toolAttached] : []),
       ...(target.evolvedFromStack ?? []),
     ];
-    const prizes = targetCard ? koPrizeCount(targetCard) : 1;
+    // v5.709：特性效果KO對手也享多餘花粉(deferred)+奇跡之吻(卡面「對手戰鬥寶可夢昏厥時」不分招式/特性);
+    //   脆弱蛻殼/道具/古舊卡面限「招式傷害」→特性KO不適用,故不走 koPrizesAdjusted、只加 deferred。
+    const prizes = (targetCard ? koPrizeCount(targetCard) : 1) + (target.deferredPrizeBonusThisTurn ?? 0);
     const players = [...s.players] as [PlayerState, PlayerState];
     const newDefender: PlayerState = {
       ...defender,
@@ -282,6 +285,8 @@ regR('adrenal-brain-target', (st, actorIdx, iids, params, pool) => {
     s = addPendingPrize(s, actorIdx, prizes, pool);
     // v2.246：腎上腺腦力是「對手主動特性 KO」
     s = recordOppKO(s, dIdx, targetCard, 'ability');
+    // v5.709：對手戰鬥位被特性效果KO → 攻擊方奇跡之吻擲幣+1(卡面「對手戰鬥寶可夢昏厥時」含特性KO)
+    if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx,
         winReason: `${defender.name} 沒有可上場的寶可夢` };

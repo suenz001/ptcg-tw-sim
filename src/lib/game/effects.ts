@@ -10461,7 +10461,7 @@ function resolveLanzhushi(
 //   ⚠ 只用於「對手」effect-KO；自損昏厥(高速破壞)用 markFaintByEffect；狀態延遲KO(浸蝕污泥)維持 getEffectiveHP。
 // v5.707：對手戰鬥位被 KO(任何方式) → 攻擊方「波克基斯|奇跡之吻」擲幣,正面多 1 獎賞(不重複)。
 //   原僅 engine 招式傷害 KO 主管線觸發,效果 KO(放指示物/koTargetByAttackEffect)漏 → 抽共用 helper。
-function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>): GameState {
+export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>): GameState {
   const owner = state.players[attackerIdx];
   const has = [...(owner.active ? [owner.active] : []), ...owner.bench]
     .some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '奇跡之吻'));
