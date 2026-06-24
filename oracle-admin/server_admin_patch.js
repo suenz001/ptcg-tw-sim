@@ -3247,6 +3247,34 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // ── v0.67 公開：對戰戰報（文字 log）—— 只開放已結束(已歸檔)賽事，剝除私有訊息防作弊 ──
+    app.get('/api/tournament/match-log', async (req, res) => {
+      try {
+        const eventId = String((req.query && req.query.eventId) || '');
+        const round = Number(req.query && req.query.round);
+        const idx = Number(req.query && req.query.idx);
+        if (!eventId || !Number.isFinite(round) || !Number.isFinite(idx)) return res.status(400).json({ error: '需要 eventId + round + idx' });
+        // 只開放已結束(已歸檔 TARCHIVE)的賽事，進行中不給（防偷看作弊）
+        const arch = await TARCHIVE.findOne({ _id: 'arch_' + eventId }, { projection: { _id: 1 } });
+        if (!arch) return res.status(403).json({ error: '此賽事尚未結束，暫不開放戰報' });
+        const matchId = eventId + '_r' + round + '_m' + idx;
+        const m = await TMATCH.findOne({ _id: matchId });
+        let log = (m && Array.isArray(m.finalLog)) ? m.finalLog : null;
+        let turn = (m && m.finalTurn) || null;
+        let p1name = m ? m.p1name : null, p2name = m ? m.p2name : null, winnerName = m ? m.winnerName : null;
+        if (!log || !log.length) {
+          const room = await TROOMS.findOne({ _id: 'mr_' + matchId });
+          if (room && room.gameState && Array.isArray(room.gameState.log)) {
+            log = room.gameState.log; turn = turn || room.gameState.turn || null;
+            if (!p1name && room.names) { p1name = room.names[0] || null; p2name = room.names[1] || null; }
+          }
+        }
+        // 公開只回 public message（剝除 privateMessage：搜牌/手牌等隱藏資訊）
+        const pub = (log || []).map((e) => ({ turn: e.turn, playerIndex: e.playerIndex, message: e.message || '', sourceIid: e.sourceIid || null }));
+        res.json({ matchId, p1name, p2name, winnerName, turn, log: pub, found: !!(log && log.length) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     app.get('/api/tournament/admin/stats', async (req, res) => {
       try {
         const id = await tournIdentity(req);

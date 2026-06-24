@@ -115,6 +115,11 @@
   let tLbLoading = $state(false);
   let tProfile = $state<any | null>(null);        // 個人資料聚合（後端 /profile，本人）
   let tProfileLoading = $state(false);
+  // v5.692 對戰戰報（名人堂賽程點某場看公開 log）
+  let tHofEventId = $state('');
+  let tMatchLog = $state<any | null>(null);
+  let tMatchLogLoading = $state(false);
+  let tMatchLogTitle = $state('');
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -4148,7 +4153,7 @@
   // v5.642 名人堂點選 → 載入該賽事「當初賽程」(歸檔 TARCHIVE)
   async function tHofOpen(c: any) {
     if (!c || !c.eventId) { tError = '此冠軍紀錄沒有可顯示的賽程'; return; }
-    tHofLoading = true; tHofView = null; tHofPage = 1; tError = '';
+    tHofLoading = true; tHofView = null; tHofPage = 1; tError = ''; tHofEventId = c.eventId || '';
     try {
       const r = await tApi(`/champion-bracket?eventId=${encodeURIComponent(c.eventId)}`);
       tHofView = (r && Array.isArray(r.matches)) ? r : null;
@@ -4157,6 +4162,18 @@
     finally { tHofLoading = false; }
   }
   function tHofClose() { tHofView = null; }
+  // v5.692 對戰戰報：點賽程某場 → 載入公開 log（已結束賽事，後端已剝私有訊息）
+  async function tMatchLogOpen(round: number, idx: number, p1: string, p2: string) {
+    if (!tHofEventId) return;
+    tMatchLogTitle = (p1 ?? '?') + ' vs ' + (p2 ?? '?');
+    tMatchLogLoading = true; tMatchLog = null;
+    try {
+      const r = await tApi(`/match-log?eventId=${encodeURIComponent(tHofEventId)}&round=${round}&idx=${idx}`);
+      tMatchLog = (r && Array.isArray(r.log)) ? r : { log: [] };
+    } catch (e: any) { tMatchLog = { log: [], error: (e && e.message) || '載入失敗' }; }
+    finally { tMatchLogLoading = false; }
+  }
+  function tMatchLogClose() { tMatchLog = null; tMatchLogLoading = false; }
   // 觀戰：列出進行中的對戰
   async function tSpectateLoad() {
     try { const r = await tApi('/spectate/list'); tSpectateList = (r && Array.isArray(r.matches)) ? r.matches : []; }
@@ -6646,9 +6663,33 @@
                   <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                   <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                  {#if m.status === 'done' && !m.bye && m.p1name && m.p2name}<button class="tm-log-btn" title="看這場的對戰戰報" onclick={() => tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name)}>📜 戰報</button>{/if}
                 </div>
               {/each}
             </div>
+          </div>
+        </div>
+      {/if}
+      {#if tMatchLog || tMatchLogLoading}
+        <div class="hof-modal-backdrop" role="presentation" onclick={tMatchLogClose}>
+          <div class="hof-modal mlog-modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Escape' && tMatchLogClose()}>
+            <div class="tourn-bracket-head">📜 對戰戰報 ｜ {tMatchLogTitle}<button class="hof-modal-x" onclick={tMatchLogClose} aria-label="關閉">✕</button></div>
+            {#if tMatchLogLoading}
+              <p class="muted" style="text-align:center;margin:18px 0;">載入戰報中…</p>
+            {:else if !tMatchLog || (tMatchLog.log?.length ?? 0) === 0}
+              <p class="muted" style="text-align:center;margin:18px 0;">{tMatchLog?.error ?? '這場沒有可顯示的戰報紀錄。'}</p>
+            {:else}
+              {#if tMatchLog.winnerName}<p class="muted small" style="text-align:center;margin:2px 0 8px;">🏆 勝者：{tMatchLog.winnerName}{#if tMatchLog.turn} ｜ 共 {tMatchLog.turn} 回合{/if}</p>{/if}
+              <div class="mlog-list">
+                {#each tMatchLog.log as entry}
+                  {@const _mlc = logLineClass(entry.message ?? '')}
+                  {@const _mtk = tokenizeLogMessage(entry.message ?? '', cardNamesSorted)}
+                  <div class="log-line {_mlc}" class:log-sys={entry.playerIndex === null}>
+                    {#each _mtk as tok}{#if tok.cls === 'log-card-link'}<button type="button" class="log-card-link" onclick={() => openZoomByName(tok.text, tok.iid ?? entry.sourceIid, entry.playerIndex)}>{tok.text}</button>{:else}<span class={tok.cls}>{tok.text}</span>{/if}{/each}
+                  </div>
+                {/each}
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -10324,6 +10365,13 @@
   .tourn-tab { flex: 1; padding: 9px 6px; border: 1px solid #3a5a3a; border-radius: 9px; background: #102010; color: #9fdca0; font-size: .9rem; font-weight: 600; cursor: pointer; transition: .15s; }
   .tourn-tab:hover { background: #18301a; }
   .tourn-tab.active { background: linear-gradient(180deg,#2a5a3a,#1d4029); color: #eaffea; border-color: #6ab87a; box-shadow: 0 0 0 1px #6ab87a inset; }
+  /* v5.692 對戰戰報 */
+  .tm-log-btn { margin-left: 8px; flex: 0 0 auto; padding: 2px 8px; font-size: .72rem; border: 1px solid #4a6a8a; border-radius: 6px; background: #16263a; color: #bcd8ff; cursor: pointer; }
+  .tm-log-btn:hover { background: #1e3450; }
+  .mlog-modal { max-width: 680px; }
+  .mlog-list { max-height: 62vh; overflow-y: auto; background: #0d140d; border: 1px solid #2a3a2a; border-radius: 8px; padding: 8px 10px; font-size: .82rem; line-height: 1.5; }
+  .mlog-list .log-line { padding: 2px 0; border-bottom: 1px solid #161f16; word-break: break-word; }
+  .mlog-list .log-line:last-child { border-bottom: none; }
   /* 排行榜 */
   .tourn-lb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
   .tourn-lb-card { border: 1px solid #4a6a4a; border-radius: 12px; padding: 12px 14px; background: #142414; }
