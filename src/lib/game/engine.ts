@@ -3562,7 +3562,9 @@ function handlePlaying(
 
     // 精神抽出（勇基拉 / 胡地）/ 龐克練肌（瑪俐的長毛巨魔ex）/ 搜尋寶石（貓頭夜鷹）：
     // 必須「本回合剛進化成此階段」才能使用（evolvedThisTurn）。
-    if ((ability.name === '精神抽出' || ability.name === '龐克練肌' || ability.name === '搜尋寶石' || ability.name === '能量舞步' || ability.name === '脫殼') && !targetPoke.evolvedThisTurn) {
+    // v5.706：「進化時可用1次」特性(ON_EVOLVE_FROM_HAND_ABILITIES 全 24 個)後端一律 gate evolvedThisTurn
+    //   (原僅硬編 5 個，漏合金建造/大力捕捉器/增長繭/亂咬等 19 個→後端可在非剛進化發動)。
+    if (ON_EVOLVE_FROM_HAND_ABILITIES.has(ability.name) && !targetPoke.evolvedThisTurn) {
       return state;
     }
 
@@ -8394,7 +8396,8 @@ export function getUsableAbilities(
         if (player.deck.length === 0) return;
       }
       // 精神抽出 / 龐克練肌 / 合金建造（v2.102）：只有本回合剛進化才能用
-      if ((ab.name === '精神抽出' || ab.name === '龐克練肌' || ab.name === '合金建造' || ab.name === '能量舞步' || ab.name === '脫殼') && !pk.evolvedThisTurn) return;
+      // v5.706：進化觸發特性可用性一律用 ON_EVOLVE_FROM_HAND_ABILITIES 單一來源(與 USE_ABILITY 後端 gate 一致)
+      if (ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name) && !pk.evolvedThisTurn) return;
       // v2.229 精神抽出（魔靈多龍系）：除 evolvedThisTurn 外還需牌庫不空（要看 top 5）
       // v2.323：龐克練肌 移除牌庫惡能量 gate（隱藏資訊規則）
       // v2.229 合金建造（鋁鋼橋龍ex）：除 evolvedThisTurn 外還需棄牌區基本【鋼】能量 + 場上【鋼】寶可夢
