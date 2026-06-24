@@ -3136,8 +3136,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
 
     // ── v0.66 公開：排行榜（各榜前 5；依 email 聚合、顯示最後暱稱、不回 email）──
+    //   v0.68：加 60 秒記憶體快取——排行榜只在賽事結束才變,掃全 TARCHIVE 聚合較重,降低 Oracle 負載。
+    let _lbCache = { at: 0, data: null };
     app.get('/api/tournament/leaderboard', async (req, res) => {
       try {
+        if (_lbCache.data && (Date.now() - _lbCache.at) < 60000) return res.json(_lbCache.data);
         const archives = await TARCHIVE.find({}, { projection: { 'players.deckEntries': 0 } }).toArray();
         const all = [..._aggregateArchives(archives).values()];
         const topN = (key, atKey) => all.filter((x) => x[key] > 0).sort((a, b) => (b[key] - a[key]) || ((b[atKey] || 0) - (a[atKey] || 0))).slice(0, 5).map((x) => ({ displayName: x.displayName || '（未命名）', count: x[key] }));
@@ -3145,7 +3148,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const hostMap = new Map();
         for (const ev of commEvents) { const e = ev.createdBy; if (!e) continue; if (!hostMap.has(e)) hostMap.set(e, { displayName: ev.proposerName || e, count: 0, last: -1 }); const h = hostMap.get(e); h.count++; if ((ev.createdAt || 0) > h.last) { h.last = ev.createdAt || 0; h.displayName = ev.proposerName || h.displayName; } }
         const communityHost = [...hostMap.values()].sort((a, b) => (b.count - a.count) || ((b.last || 0) - (a.last || 0))).slice(0, 5).map((x) => ({ displayName: x.displayName, count: x.count }));
-        res.json({ champions: { official: topN('champOfficial', 'champOfficialAt'), community: topN('champCommunity', 'champCommunityAt') }, wins: topN('wins', 'winsAt'), top8: topN('top8', 'top8At'), finals: topN('finals', 'finalsAt'), communityHost });
+        const result = { champions: { official: topN('champOfficial', 'champOfficialAt'), community: topN('champCommunity', 'champCommunityAt') }, wins: topN('wins', 'winsAt'), top8: topN('top8', 'top8At'), finals: topN('finals', 'finalsAt'), communityHost };
+        _lbCache = { at: Date.now(), data: result };
+        res.json(result);
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
