@@ -38,5 +38,12 @@ T('個資 參賽2/勝7/暱稱Alice/events2', ()=>{ assert.equal(pf.eventsPlayed,
 T('個資 h@ 只入8強(非4強)', ()=>{ const p=buildProfile([OFF,COM],'h@'); assert.equal(p.top8,1); assert.equal(p.top4,0); assert.equal(p.finals,0); });
 T('社群不算8強/決賽(COM不汙染)', ()=>{ const p=buildProfile([COM],'a@'); assert.equal(p.top8,0); assert.equal(p.finals,0); assert.equal(p.championsCommunity,1); });
 
+// ── v5.695 同分 tie-break：最近達成者優先 ──
+const offX={ eventName:'官X', format:'single-elim', communityEvent:false, finishedAt:1000, championUid:'ux', players:[P('ux','PX','x@'),P('uo','O','o@')], matches:[M(1,'ux','uo','ux')] };
+const offY={ eventName:'官Y', format:'single-elim', communityEvent:false, finishedAt:2000, championUid:'uy', players:[P('uy','PY','y@'),P('uo','O','o@')], matches:[M(1,'uy','uo','uy')] };
+const lb2=buildLeaderboards([offX,offY],[]);
+T('star 冠軍榜同分→最近奪冠者優先(PY@2000 在 PX@1000 前)', ()=>{ const off=lb2.champions.official; const iX=off.findIndex(r=>r.displayName==='PX'), iY=off.findIndex(r=>r.displayName==='PY'); assert.ok(iY>=0&&iX>=0&&iY<iX, '最近奪冠者應在前 '+JSON.stringify(off)); });
+T('star 勝場榜同分→最近有勝場者優先(PY 在 PX 前)', ()=>{ const w=lb2.wins; const iX=w.findIndex(r=>r.displayName==='PX'), iY=w.findIndex(r=>r.displayName==='PY'); assert.ok(iY>=0&&iX>=0&&iY<iX, '最近有勝場者應在前 '+JSON.stringify(w)); });
+
 console.log('\n錦標賽戰績聚合:PASS '+pass+' / FAIL '+fail);
 process.exit(fail?1:0);

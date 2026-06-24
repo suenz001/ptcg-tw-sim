@@ -3094,7 +3094,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // 把多筆 archives 聚合成 Map<email, stat>。
     function _aggregateArchives(archives) {
       const acc = new Map();
-      const ensure = (email) => { if (!acc.has(email)) acc.set(email, { email, displayName: '', lastFinishedAt: -1, champOfficial: 0, champCommunity: 0, wins: 0, losses: 0, finals: 0, top4: 0, top8: 0, communityEntered: 0, officialEntered: 0, eventsPlayed: 0, events: [] }); return acc.get(email); };
+      const ensure = (email) => { if (!acc.has(email)) acc.set(email, { email, displayName: '', lastFinishedAt: -1, champOfficial: 0, champOfficialAt: -1, champCommunity: 0, champCommunityAt: -1, wins: 0, winsAt: -1, losses: 0, finals: 0, finalsAt: -1, top4: 0, top4At: -1, top8: 0, top8At: -1, communityEntered: 0, officialEntered: 0, eventsPlayed: 0, events: [] }); return acc.get(email); };
+      const _mx = (a, b) => (a > b ? a : b);
       for (const a of archives) {
         const emailByUid = new Map();
         for (const p of (a.players || [])) if (p.email) emailByUid.set(p.uid, p.email);
@@ -3106,7 +3107,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (m.winnerUid && m.p1uid && m.p2uid) {
             const lUid = m.winnerUid === m.p1uid ? m.p2uid : m.p1uid;
             const we = emailByUid.get(m.winnerUid), le = emailByUid.get(lUid);
-            if (we) { ensure(we).wins++; evW.set(we, (evW.get(we) || 0) + 1); }
+            if (we) { const sw = ensure(we); sw.wins++; sw.winsAt = _mx(sw.winsAt, fin); evW.set(we, (evW.get(we) || 0) + 1); }
             if (le) { ensure(le).losses++; evL.set(le, (evL.get(le) || 0) + 1); }
           } else if (m.status === 'done' && m.p1uid && m.p2uid && !m.winnerUid) {
             const a1 = emailByUid.get(m.p1uid), a2 = emailByUid.get(m.p2uid);
@@ -3121,8 +3122,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
           s.eventsPlayed++; if (isComm) s.communityEntered++; else s.officialEntered++;
           if (fin > s.lastFinishedAt) { s.lastFinishedAt = fin; s.displayName = p.name || s.displayName; }
           const isChamp = champEmail === p.email;
-          if (isChamp) { if (isComm) s.champCommunity++; else s.champOfficial++; }
-          if (!isComm) { if (cut.finals.has(p.uid)) s.finals++; if (cut.top4.has(p.uid)) s.top4++; if (cut.top8.has(p.uid)) s.top8++; }
+          if (isChamp) { if (isComm) { s.champCommunity++; s.champCommunityAt = _mx(s.champCommunityAt, fin); } else { s.champOfficial++; s.champOfficialAt = _mx(s.champOfficialAt, fin); } }
+          if (!isComm) { if (cut.finals.has(p.uid)) { s.finals++; s.finalsAt = _mx(s.finalsAt, fin); } if (cut.top4.has(p.uid)) { s.top4++; s.top4At = _mx(s.top4At, fin); } if (cut.top8.has(p.uid)) { s.top8++; s.top8At = _mx(s.top8At, fin); } }
           let result = '';
           if (isChamp) result = '冠軍';
           else if (!isComm && cut.finals.has(p.uid)) result = '亞軍';
@@ -3139,12 +3140,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const archives = await TARCHIVE.find({}, { projection: { 'players.deckEntries': 0 } }).toArray();
         const all = [..._aggregateArchives(archives).values()];
-        const topN = (key) => all.filter((x) => x[key] > 0).sort((a, b) => b[key] - a[key]).slice(0, 5).map((x) => ({ displayName: x.displayName || '（未命名）', count: x[key] }));
+        const topN = (key, atKey) => all.filter((x) => x[key] > 0).sort((a, b) => (b[key] - a[key]) || ((b[atKey] || 0) - (a[atKey] || 0))).slice(0, 5).map((x) => ({ displayName: x.displayName || '（未命名）', count: x[key] }));
         const commEvents = await TEVENTS.find({ createdByPlayer: true }).toArray();
         const hostMap = new Map();
         for (const ev of commEvents) { const e = ev.createdBy; if (!e) continue; if (!hostMap.has(e)) hostMap.set(e, { displayName: ev.proposerName || e, count: 0, last: -1 }); const h = hostMap.get(e); h.count++; if ((ev.createdAt || 0) > h.last) { h.last = ev.createdAt || 0; h.displayName = ev.proposerName || h.displayName; } }
-        const communityHost = [...hostMap.values()].sort((a, b) => b.count - a.count).slice(0, 5).map((x) => ({ displayName: x.displayName, count: x.count }));
-        res.json({ champions: { official: topN('champOfficial'), community: topN('champCommunity') }, wins: topN('wins'), top8: topN('top8'), finals: topN('finals'), communityHost });
+        const communityHost = [...hostMap.values()].sort((a, b) => (b.count - a.count) || ((b.last || 0) - (a.last || 0))).slice(0, 5).map((x) => ({ displayName: x.displayName, count: x.count }));
+        res.json({ champions: { official: topN('champOfficial', 'champOfficialAt'), community: topN('champCommunity', 'champCommunityAt') }, wins: topN('wins', 'winsAt'), top8: topN('top8', 'top8At'), finals: topN('finals', 'finalsAt'), communityHost });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
