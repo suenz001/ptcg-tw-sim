@@ -312,9 +312,9 @@
     <div class="changelog-list">
 
 <details open>
-        <summary><span class="ver-badge">v5.693</span> 對戰戰報改為直接點擊對戰列開啟</summary>
+        <summary><span class="ver-badge">v5.694</span> 對戰戰報改為直接點擊對戰列開啟（單行不換行）</summary>
         <ul>
-          <li>名人堂賽程的對戰戰報，改為直接點擊「對戰那一列（例：大條 VS MM皮格）」即可開啟，不再另設按鈕，版面更簡潔。</li>
+          <li>名人堂賽程的對戰戰報，改為直接點擊「對戰那一列（例：大條 VS MM皮格）」即可開啟，不再另設按鈕；對戰列在手機與電腦皆維持單行顯示、名稱過長以省略號截斷，不換行。</li>
         </ul>
       </details>
 

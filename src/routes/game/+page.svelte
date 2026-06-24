@@ -6668,7 +6668,6 @@
                   <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                   <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
-                  {#if _hasLog}<span class="tm-log-hint" aria-hidden="true">📜</span>{/if}
                 </div>
               {/each}
             </div>
@@ -10371,9 +10370,8 @@
   .tourn-tab:hover { background: #18301a; }
   .tourn-tab.active { background: linear-gradient(180deg,#2a5a3a,#1d4029); color: #eaffea; border-color: #6ab87a; box-shadow: 0 0 0 1px #6ab87a inset; }
   /* v5.692 對戰戰報 */
-  .tourn-match-log { cursor: pointer; transition: background .12s, box-shadow .12s; }
+  .tourn-match-log { cursor: pointer; transition: background .12s, box-shadow .12s; border-color: #3a6a48; }
   .tourn-match-log:hover { background: #1c3320; box-shadow: 0 0 0 1px #5aa86a inset; }
-  .tm-log-hint { flex: 0 0 auto; margin-left: 6px; font-size: .8rem; opacity: .65; }
   .mlog-modal { max-width: 680px; }
   .mlog-list { max-height: 62vh; overflow-y: auto; background: #0d140d; border: 1px solid #2a3a2a; border-radius: 8px; padding: 8px 10px; font-size: .82rem; line-height: 1.5; }
   .mlog-list .log-line { padding: 2px 0; border-bottom: 1px solid #161f16; word-break: break-word; }
