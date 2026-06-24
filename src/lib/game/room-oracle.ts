@@ -262,8 +262,12 @@ export async function setIdleTimeout(roomCode: string, sec: number): Promise<voi
  *   邏輯鏡射 +page.svelte isWaitingOnOpponent。
  */
 function _waitingOnOpp(gs: any, seat: 0 | 1): boolean {
-  if (!gs || gs.phase !== 'playing') return false;
+  if (!gs) return false;
   const opp = (1 - seat) as 0 | 1;
+  // v5.697：setup 階段——我已放置+準備、對手還沒 → 等對手（與前端 isWaitingOnOpponent 一致；
+  //   修對手 setup 掛機無法宣告棄權。startGame 已設 room status='playing',故 claim 的 status gate 會過）。
+  if (gs.phase === 'setup') { const sd = gs.setupDone || []; return !!sd[seat] && !sd[opp]; }
+  if (gs.phase !== 'playing') return false;
   if (gs.pendingSelection) return gs.pendingSelection.actorIdx === opp;
   const oppP = gs.players?.[opp], meP = gs.players?.[seat];
   if (oppP && oppP.active == null && (oppP.bench?.length ?? 0) > 0) return true;
