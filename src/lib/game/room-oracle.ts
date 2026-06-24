@@ -269,6 +269,10 @@ function _waitingOnOpp(gs: any, seat: 0 | 1): boolean {
   if (gs.phase === 'setup') { const sd = gs.setupDone || []; return !!sd[seat] && !sd[opp]; }
   if (gs.phase !== 'playing') return false;
   if (gs.pendingSelection) return gs.pendingSelection.actorIdx === opp;
+  // v5.698：待拿獎賞卡（pendingPrizes）→ 由該方拿取（與前端 isWaitingOnOpponent / 錦標賽 tCurrentActorSeat 一致）。
+  const pp = gs.pendingPrizes;
+  if (pp && (pp[opp] || 0) > 0) return true;
+  if (pp && (pp[seat] || 0) > 0) return false;
   const oppP = gs.players?.[opp], meP = gs.players?.[seat];
   if (oppP && oppP.active == null && (oppP.bench?.length ?? 0) > 0) return true;
   if (meP && meP.active == null && (meP.bench?.length ?? 0) > 0) return false;

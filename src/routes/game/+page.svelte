@@ -5213,6 +5213,7 @@
   let _lastResyncAt = 0;  // v5.360：上次自動重訂閱(自癒)時間
   let _forceAdoptNext = false;  // v5.587：下一個收到的同局 snapshot 強制採用(繞過 stale 守衛)＝程式幫忙重整
   let _prevLogLen = -1;
+  let _prevGameId = '';  // v5.698：閒置倒數基準綁定的對局 id（換局重設，避免上一局倒數殘留）
 
   // v5.329 秒數 → m:ss 顯示
   function fmtMMSS(totalSec: number): string {
@@ -5234,6 +5235,11 @@
     if (g.phase !== 'playing') return false;
     // 1) 有待選擇 → 由 actorIdx 決定在等誰
     if (g.pendingSelection) return g.pendingSelection.actorIdx === opp;
+    // v5.698：待拿獎賞卡（pendingPrizes）→ 由該方拿取（與運作正常的錦標賽 tCurrentActorSeat 判定順序對齊）。
+    //   原線上版漏這關：盤面停在「對手該拿獎賞、但 activePlayerIndex 已非對手」時會誤判「不等對手」→ 按鈕不跳。
+    const pp: any = (g as any).pendingPrizes;
+    if (pp && (pp[opp] || 0) > 0) return true;
+    if (pp && (pp[me] || 0) > 0) return false;
     // 2) 對手戰鬥寶可夢被 KO、需送新寶可夢（還有備戰可送）→ 等對手（即使現在名義上是我方回合）
     if (g.players[opp].active === null && g.players[opp].bench.length > 0) return true;
     // 3) 我方需送新寶可夢 → 等我，不算對手閒置
@@ -5243,12 +5249,28 @@
   }
 
   // (1) log 成長 = 有新 action（任一方）→ 重置閒置起點 + 立即收 banner
+  //   v5.698：只在 log「增長」時重置倒數。真正的對手/我方動作只會「附加」log；
+  //   「縮短」是自癒 force-adopt 採用較短的伺服器權威盤面 / merge 收斂造成的同步雜訊，
+  //   不是新動作，不該重置閒置倒數（原本 `!==` 會被 25s force-adopt 洗掉倒數→按鈕延後/不跳）。
+  //   換局/新局（game.id 變）則重設基準，避免上一局的倒數殘留到新局。
   $effect(() => {
-    const logLen = game?.log?.length ?? 0;
-    if (logLen !== _prevLogLen) {
+    const g = game;
+    const logLen = g?.log?.length ?? 0;
+    const gid = (g as any)?.id ?? '';
+    if (gid !== _prevGameId) {            // 換局/新局 → 重設基準
+      _prevGameId = gid;
       _prevLogLen = logLen;
       _lastActionAt = Date.now();
       oppInactivityWarn = false;
+      return;
+    }
+    if (logLen !== _prevLogLen) {
+      const grew = logLen > _prevLogLen;  // 只有「增長」才是新動作
+      _prevLogLen = logLen;
+      if (grew) {
+        _lastActionAt = Date.now();
+        oppInactivityWarn = false;
+      }
     }
   });
 
