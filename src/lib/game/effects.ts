@@ -15160,10 +15160,13 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   //       玩家「選哪 2 張」之 UI picker 為 deferred。常見情況 N≤2 行為完全符合卡面。
   ['光子纜線', (state, dIdx, _aIdx, pool, _defCard, defInst) => {
     if (!defInst) return state;
+    // v5.710：卡面 19171(M5正式)「基本【雷】能量」(原實作沿用 preview「光子密碼」的任意基本能量→
+    //   會誤搬非雷基本能量)。限基本【雷】(基本能量限定,非視為雷的特殊能量,故 isBasic+Lightning 非 energyProvidesType)。
     const basicEnergyIids = defInst.energyAttached
       .filter(e => {
         const ec = pool.get(e.cardId);
-        return ec?.supertype === 'Energy' && ec?.subtype === 'Basic';
+        return ec?.supertype === 'Energy' && ec?.subtype === 'Basic'
+          && (ec.pokemonType === 'Lightning' || /【雷】/.test(ec.name ?? ''));
       })
       .map(e => e.iid);
     if (basicEnergyIids.length === 0) {
