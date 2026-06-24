@@ -5214,6 +5214,7 @@
   let _forceAdoptNext = false;  // v5.587：下一個收到的同局 snapshot 強制採用(繞過 stale 守衛)＝程式幫忙重整
   let _prevLogLen = -1;
   let _prevGameId = '';  // v5.698：閒置倒數基準綁定的對局 id（換局重設，避免上一局倒數殘留）
+  let _lastSyncAt = Date.now();  // v5.701：卡住自癒(resync/force-adopt)專用計時，與宣告倒數 _lastActionAt 解耦
 
   // v5.329 秒數 → m:ss 顯示
   function fmtMMSS(totalSec: number): string {
@@ -5261,12 +5262,16 @@
       _prevGameId = gid;
       _prevLogLen = logLen;
       _lastActionAt = Date.now();
+      _lastSyncAt = Date.now();
       oppInactivityWarn = false;
       return;
     }
     if (logLen !== _prevLogLen) {
       const grew = logLen > _prevLogLen;  // 只有「增長」才是新動作
       _prevLogLen = logLen;
+      // v5.701：自癒計時用「任何 log 變動」即更新（回到 v5.698 前語意，與宣告倒數解耦，
+      //   避免 grow-only 改動把自癒(8s 重訂閱/25s force-adopt)頻率放大）。
+      _lastSyncAt = Date.now();
       if (grew) {
         _lastActionAt = Date.now();
         oppInactivityWarn = false;
@@ -5286,12 +5291,12 @@
       // v5.360：卡住自癒 — 等對手 >8s 都沒有任何新動作（含對手 KO 我方/我方 KO 對手後對手沒收到），
       //   自動重建房間訂閱（＝玩家手動「重新整理 / 回房按觀戰」的修復：重置輪詢 lastVersion → 重新
       //   抓房間最新狀態走正常 merge 收斂）。只重讀、不改 merge 邏輯，安全。免玩家手動脫困。
-      if (roomCode && (Date.now() - _lastActionAt) >= 8000 && (Date.now() - _lastResyncAt) >= 8000) {
+      if (roomCode && (Date.now() - _lastSyncAt) >= 8000 && (Date.now() - _lastResyncAt) >= 8000) {
         _lastResyncAt = Date.now();
         // v5.587：卡更久(>=25s 等對手都沒新動作)→ 強制採用伺服器最新狀態(繞過 stale 守衛)。
         //   治「本地 log 領先伺服器、重抓回來又被守衛拒收」型卡死。只在『正等對手』時走到這(上方已 gate)，
         //   我方沒有未推送的手，故不會丟手；不同局/game-over/setup 在 handleRoomUpdate 內另有保護。
-        if ((Date.now() - _lastActionAt) >= 25000) _forceAdoptNext = true;
+        if ((Date.now() - _lastSyncAt) >= 25000) _forceAdoptNext = true;
         try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
       }
     }, 5000);
