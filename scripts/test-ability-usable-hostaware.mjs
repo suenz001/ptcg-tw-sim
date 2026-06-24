@@ -19,10 +19,11 @@ const pool=new Map();
 for(const f of readdirSync(dir)){if(!f.endsWith('.json')||f==='index.json'||!live.has(f.slice(0,-5)))continue;
   for(const c of JSON.parse(readFileSync(join(dir,f),'utf8')))if(c?.id!=null)pool.set(String(c.id),c);}
 // 動態找基本水/鋼能量 id
-let waterE,metalE;
+let waterE,metalE,grassB;
 for(const[id,c]of pool){if(c.supertype==='Energy'&&c.subtype==='Basic'){
   if(!waterE&&(c.pokemonType==='Water'||/【水】/.test(c.name)))waterE=id;
-  if(!metalE&&(c.pokemonType==='Metal'||/【鋼】/.test(c.name)))metalE=id;}}
+  if(!metalE&&(c.pokemonType==='Metal'||/【鋼】/.test(c.name)))metalE=id;
+  if(!grassB&&(c.pokemonType==='Grass'||/【草】/.test(c.name)))grassB=id;}}
 const WALREIN='17996', KOBALON='18482', ANCIENT='10515', PRISM='13953', BUD='14443';
 let nn=0; const inst=(cid,e=[],x={})=>({iid:'i'+(++nn),cardId:String(cid),damage:0,energyAttached:e,extraTools:[],...x});
 const en=(cid)=>({iid:'e'+(++nn),cardId:String(cid),damage:0,energyAttached:[]});
@@ -55,6 +56,22 @@ T('金屬之路:備戰古舊能量(提供鋼) → 可用[驗HEAD FAIL]', ()=>{
 T('金屬之路對照:備戰基本鋼能量 → 可用[HEAD亦PASS]', ()=>{
   const st=mk(inst(KOBALON,[],{movedToActiveThisTurn:true}), [inst(BUD,[en(metalE)])]);
   assert(has(st,'金屬之路'),'金屬之路應可用(基本鋼)');
+});
+// 發酵果汁(壺壺,草,卡面非基本)：需身上【草】能量 + 場上有受傷寶可夢(engine 8796 gate)
+let POTTLE; for(const[id,cc]of pool){if(cc.name==='壺壺'&&(cc.abilities||[]).some(a=>a.name==='發酵果汁')){POTTLE=id;break;}}
+assert(POTTLE,'live pool 找不到壺壺發酵果汁');
+const hurt=()=>inst(BUD,[],{damage:30}); // 受傷備戰(讓恢復有意義)
+T('發酵果汁:壺壺身上古舊能量(視為草)+場上有受傷 → 可用[驗HEAD FAIL]', ()=>{
+  const st=mk(inst(POTTLE,[en(ANCIENT)]), [hurt()]);
+  assert(has(st,'發酵果汁'),'發酵果汁應可用(古舊視為草)');
+});
+T('發酵果汁對照:基本草+受傷 → 可用[HEAD亦PASS]', ()=>{
+  const st=mk(inst(POTTLE,[en(grassB)]), [hurt()]);
+  assert(has(st,'發酵果汁'),'發酵果汁應可用(基本草)');
+});
+T('發酵果汁反向:有草但場上無受傷 → 不可用(受傷gate)', ()=>{
+  const st=mk(inst(POTTLE,[en(ANCIENT)]), [inst(BUD)]); // 滿血
+  assert(!has(st,'發酵果汁'),'無受傷寶可夢時不該可用');
 });
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);
