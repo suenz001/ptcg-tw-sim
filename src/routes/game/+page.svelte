@@ -109,6 +109,12 @@
   let tHofLoading = $state(false);
   let tHofOfficialOpen = $state(true);       // v5.652 官方歷屆冠軍：預設展開（直接呈現）
   let tHofCommunityOpen = $state(false);     // v5.652 社群自辦歷屆冠軍：預設收摺（社群賽數量多，點選才展開）
+  // v5.691 錦標賽大廳三分頁：賽事 / 排行榜 / 個人資料
+  let tTab = $state<'events' | 'leaderboard' | 'profile'>('events');
+  let tLeaderboard = $state<any | null>(null);   // 排行榜聚合（後端 /leaderboard）
+  let tLbLoading = $state(false);
+  let tProfile = $state<any | null>(null);        // 個人資料聚合（後端 /profile，本人）
+  let tProfileLoading = $state(false);
   let tSpectateRoom = $state('');
   let isTournSpectator = $state(false);
   let tError = $state('');
@@ -4121,6 +4127,24 @@
     try { const r = await tApi('/champions'); tChampions = (r && Array.isArray(r.champions)) ? r.champions : []; }
     catch { /* ignore */ }
   }
+  // v5.691 排行榜 / 個人資料載入（後端聚合端點，掃 TARCHIVE）
+  async function tLeaderboardLoad() {
+    if (tLbLoading) return; tLbLoading = true;
+    try { const r = await tApi('/leaderboard'); tLeaderboard = r ?? null; }
+    catch { tLeaderboard = null; }
+    finally { tLbLoading = false; }
+  }
+  async function tProfileLoad() {
+    if (tProfileLoading) return; tProfileLoading = true;
+    try { const r = await tApi('/profile'); tProfile = r ?? null; }
+    catch { tProfile = null; }
+    finally { tProfileLoading = false; }
+  }
+  function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile') {
+    tTab = tab;
+    if (tab === 'leaderboard' && !tLeaderboard) tLeaderboardLoad();
+    if (tab === 'profile' && !tProfile) tProfileLoad();
+  }
   // v5.642 名人堂點選 → 載入該賽事「當初賽程」(歸檔 TARCHIVE)
   async function tHofOpen(c: any) {
     if (!c || !c.eventId) { tError = '此冠軍紀錄沒有可顯示的賽程'; return; }
@@ -6343,6 +6367,12 @@
       </div>
     {:else}
       <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
+      <div class="tourn-tabs" role="tablist">
+        <button class="tourn-tab" class:active={tTab === 'events'} role="tab" aria-selected={tTab === 'events'} onclick={() => tSwitchTab('events')}>🏆 賽事</button>
+        <button class="tourn-tab" class:active={tTab === 'leaderboard'} role="tab" aria-selected={tTab === 'leaderboard'} onclick={() => tSwitchTab('leaderboard')}>📊 排行榜</button>
+        <button class="tourn-tab" class:active={tTab === 'profile'} role="tab" aria-selected={tTab === 'profile'} onclick={() => tSwitchTab('profile')}>🪪 個人資料</button>
+      </div>
+      {#if tTab === 'events'}
       <div class="tourn-chat">
         <div class="tourn-chat-head">💬 大廳聊天室</div>
         <div class="tourn-chat-msgs" bind:this={tLobbyChatEl} onscroll={onLobbyChatScroll}>
@@ -6620,6 +6650,91 @@
               {/each}
             </div>
           </div>
+        </div>
+      {/if}
+      {:else if tTab === 'leaderboard'}
+        <div class="tourn-lb">
+          {#if tLbLoading}
+            <p class="muted small" style="text-align:center;padding:18px;">載入排行榜中…</p>
+          {:else if !tLeaderboard}
+            <p class="muted small" style="text-align:center;padding:18px;">排行榜尚未開放，或目前還沒有已結束的賽事資料。</p>
+          {:else}
+            {#snippet lbBoard(title, rows, unit)}
+              <div class="tourn-lb-card">
+                <div class="tourn-lb-title">{title}</div>
+                {#if !rows || rows.length === 0}
+                  <div class="tourn-lb-empty">尚無資料</div>
+                {:else}
+                  {#each rows as r, i}
+                    <div class="tourn-lb-row">
+                      <span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span>
+                      <span class="tourn-lb-name">{r.displayName}</span>
+                      <span class="tourn-lb-cnt">{r.count} {unit}</span>
+                    </div>
+                  {/each}
+                {/if}
+              </div>
+            {/snippet}
+            <div class="tourn-lb-grid">
+              <div class="tourn-lb-card tourn-lb-champ">
+                <div class="tourn-lb-title">🏆 冠軍榜</div>
+                <div class="tourn-lb-champ-cols">
+                  <div>
+                    <div class="tourn-lb-sub">🏛️ 官方賽</div>
+                    {#if !tLeaderboard.champions?.official?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
+                    {#each (tLeaderboard.champions?.official ?? []) as r, i}
+                      <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
+                    {/each}
+                  </div>
+                  <div>
+                    <div class="tourn-lb-sub">🎖️ 社群賽</div>
+                    {#if !tLeaderboard.champions?.community?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
+                    {#each (tLeaderboard.champions?.community ?? []) as r, i}
+                      <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
+                    {/each}
+                  </div>
+                </div>
+              </div>
+              {@render lbBoard('⚔️ 勝場榜（官方+社群）', tLeaderboard.wins, '勝')}
+              {@render lbBoard('🥇 8 強榜（官方）', tLeaderboard.top8, '次')}
+              {@render lbBoard('🏅 決賽次數榜（官方）', tLeaderboard.finals, '次')}
+              {@render lbBoard('📣 社群賽主辦榜', tLeaderboard.communityHost, '場')}
+            </div>
+            <p class="muted small" style="text-align:center;margin-top:8px;">※ 依帳號統計，顯示玩家最後一場賽事所用暱稱。</p>
+          {/if}
+        </div>
+      {:else if tTab === 'profile'}
+        <div class="tourn-profile">
+          {#if tProfileLoading}
+            <p class="muted small" style="text-align:center;padding:18px;">載入個人資料中…</p>
+          {:else if !tProfile}
+            <p class="muted small" style="text-align:center;padding:18px;">個人資料尚未開放，或你還沒有已結束的賽事紀錄。</p>
+          {:else}
+            <div class="tourn-pf-head">
+              <div class="tourn-pf-name">{tProfile.displayName ?? '（未命名）'}</div>
+              <div class="tourn-pf-email">{tProfile.email ?? firebaseUser?.email}</div>
+            </div>
+            <div class="tourn-pf-tiles">
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.championsOfficial ?? 0}</div><div class="tourn-pf-lbl">官方奪冠</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.championsCommunity ?? 0}</div><div class="tourn-pf-lbl">社群奪冠</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.finals ?? 0}</div><div class="tourn-pf-lbl">決賽(官方)</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.top4 ?? 0}</div><div class="tourn-pf-lbl">4 強(官方)</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.top8 ?? 0}</div><div class="tourn-pf-lbl">8 強(官方)</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.communityEntered ?? 0}</div><div class="tourn-pf-lbl">社群賽參加</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.totalWins ?? 0}-{tProfile.totalLosses ?? 0}</div><div class="tourn-pf-lbl">總勝-敗</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.eventsPlayed ?? 0}</div><div class="tourn-pf-lbl">參賽場數</div></div>
+            </div>
+            <div class="tourn-pf-events">
+              <div class="tourn-lb-title">📋 參賽紀錄</div>
+              {#if !tProfile.events?.length}<div class="tourn-lb-empty">尚無參賽紀錄</div>{/if}
+              {#each (tProfile.events ?? []) as ev}
+                <div class="tourn-pf-evrow">
+                  <span class="tourn-pf-evname">{ev.communityEvent ? '🎖️' : '🏛️'} {ev.eventName}</span>
+                  <span class="tourn-pf-evmeta">{ev.date ? new Date(ev.date).toLocaleDateString('zh-TW') : ''} ｜ {ev.wins ?? 0} 勝 {ev.losses ?? 0} 敗{#if ev.result} ｜ {ev.result}{/if}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
         </div>
       {/if}
       {#if tError}<p class="warn">{tError}</p>{/if}
@@ -10204,6 +10319,41 @@
   .tourn-toast { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
   .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
+  /* v5.691 三分頁切換 */
+  .tourn-tabs { display: flex; gap: 6px; max-width: 100%; margin: 6px auto 12px; }
+  .tourn-tab { flex: 1; padding: 9px 6px; border: 1px solid #3a5a3a; border-radius: 9px; background: #102010; color: #9fdca0; font-size: .9rem; font-weight: 600; cursor: pointer; transition: .15s; }
+  .tourn-tab:hover { background: #18301a; }
+  .tourn-tab.active { background: linear-gradient(180deg,#2a5a3a,#1d4029); color: #eaffea; border-color: #6ab87a; box-shadow: 0 0 0 1px #6ab87a inset; }
+  /* 排行榜 */
+  .tourn-lb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .tourn-lb-card { border: 1px solid #4a6a4a; border-radius: 12px; padding: 12px 14px; background: #142414; }
+  .tourn-lb-champ { grid-column: 1 / -1; }
+  .tourn-lb-champ-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .tourn-lb-title { font-weight: 700; color: #ffd35a; margin-bottom: 8px; font-size: .98rem; }
+  .tourn-lb-sub { font-weight: 600; color: #cfe0f8; margin-bottom: 5px; font-size: .85rem; }
+  .tourn-lb-empty { color: #6a7a6a; font-size: .8rem; padding: 4px 0; }
+  .tourn-lb-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #20301f; }
+  .tourn-lb-row:last-child { border-bottom: none; }
+  .tourn-lb-rank { flex: 0 0 22px; height: 22px; line-height: 22px; text-align: center; border-radius: 50%; background: #24382a; color: #bfe; font-size: .78rem; font-weight: 700; }
+  .tourn-lb-rank-1 { background: linear-gradient(180deg,#ffe082,#d4a017); color: #3a2a00; }
+  .tourn-lb-rank-2 { background: linear-gradient(180deg,#e0e0e0,#9aa0a8); color: #2a2a2a; }
+  .tourn-lb-rank-3 { background: linear-gradient(180deg,#e0a060,#a0682c); color: #2a1500; }
+  .tourn-lb-name { flex: 1 1 auto; color: #eaffea; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tourn-lb-cnt { flex: 0 0 auto; color: #9fdca0; font-size: .82rem; font-weight: 600; }
+  /* 個人資料 */
+  .tourn-pf-head { text-align: center; margin-bottom: 12px; }
+  .tourn-pf-name { font-size: 1.25rem; font-weight: 700; color: #eaffea; }
+  .tourn-pf-email { font-size: .8rem; color: #7a9a7a; }
+  .tourn-pf-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .tourn-pf-tile { border: 1px solid #4a6a4a; border-radius: 10px; padding: 9px 4px; background: #142414; text-align: center; }
+  .tourn-pf-num { font-size: 1.3rem; font-weight: 700; color: #ffd35a; }
+  .tourn-pf-lbl { font-size: .72rem; color: #9fdca0; margin-top: 2px; }
+  .tourn-pf-events { border: 1px solid #4a6a4a; border-radius: 12px; padding: 12px 14px; background: #142414; }
+  .tourn-pf-evrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 6px 0; border-bottom: 1px solid #20301f; }
+  .tourn-pf-evrow:last-child { border-bottom: none; }
+  .tourn-pf-evname { color: #eaffea; font-size: .9rem; font-weight: 600; }
+  .tourn-pf-evmeta { color: #9fdca0; font-size: .78rem; }
+  @media (max-width: 560px) { .tourn-lb-champ-cols { grid-template-columns: 1fr; } }
   .tourn-logout { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; border: 1px solid #888; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer; }
   .tourn-event { border: 1px solid #4a6a4a; border-radius: 10px; padding: 10px 14px; margin: 10px auto; max-width: 100%; background: #142414; }  /* v5.634 填滿欄位、邊緣對齊 */
   .tourn-event h3 { margin: 0 0 4px; }
