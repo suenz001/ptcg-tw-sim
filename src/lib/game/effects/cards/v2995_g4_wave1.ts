@@ -40,7 +40,7 @@ import {
   clearActiveEffects,
   healResolver,
 } from '../_shared';
-import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
+import { flipCoinsWithLog, applyStatusToOppActive, energyProvidesType } from '../../effects'; // v5.702 host-aware 草能量述詞
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -98,11 +98,8 @@ regA('壺壺', 0, (st, idx, pool, cardInst) => {
     : allPokes.find(c => pool.get(c.cardId)?.name === '壺壺');
   if (!src) return addLog(st, '發酵果汁：找不到壺壺', idx);
 
-  // 檢查身上有【草】能量
-  const hasGrass = src.energyAttached.some(e => {
-    const ec = pool.get(e.cardId);
-    return ec?.pokemonType === 'Grass' || (ec?.name?.includes('【草】') ?? false);
-  });
+  // 檢查身上有【草】能量（v5.702 host-aware：古舊/稜鏡視為草也算，與 engine 可用性 gate 一致）
+  const hasGrass = src.energyAttached.some(e => energyProvidesType(src, e, 'Grass', pool));
   if (!hasGrass) return addLog(st, '發酵果汁：身上沒有【草】能量', idx);
 
   const s = addLog(st, '發酵果汁：選擇 1 隻自己的寶可夢恢復 30 HP', idx);

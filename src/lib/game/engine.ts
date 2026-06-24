@@ -905,6 +905,31 @@ export function isEnergyOfType(ec: Card | undefined, type: EnergyType): boolean 
 }
 
 /**
+ * v5.702：單一附加能量「依 host 視為提供某屬性幾個單位」host-aware 單一來源（移自 effects.ts，
+ *   放 engine 底層讓 getUsableAbilities 可用性 gate 與 effects 發動 handler 共用同一函式，
+ *   修「移動邏輯改 host-aware 但可用性 gate 沒一併改」型不一致）。
+ *   稜鏡(Basic=全屬性/進化=僅Colorless)/新衝天(Stage2=全屬性)/燃火/古舊(全屬性)/火箭隊。
+ */
+export function energyTypeUnitsHostAware(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): number {
+  const ec = pool.get(e.cardId);
+  if (!ec || ec.supertype !== 'Energy') return 0;
+  const hostCard = pool.get(host.cardId);
+  const hostStage = hostCard?.stage ?? hostCard?.subtype;
+  const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
+  const hostIsStage2 = hostStage === 'Stage2';
+  if (ec.name === '新衝天能量') return hostIsStage2 ? 2 : (type === 'Colorless' ? 1 : 0);
+  if (ec.name === '稜鏡能量') return !hostIsEvolution ? 1 : (type === 'Colorless' ? 1 : 0);
+  if (ec.name === '燃火能量') return type === 'Colorless' ? (hostIsEvolution ? 3 : 1) : 0;
+  if (ec.name === '古舊能量') return 1; // 全屬性 ACE SPEC
+  if (ec.name === '火箭隊能量') return (type === 'Psychic' || type === 'Darkness') ? 2 : 0;
+  return isEnergyOfType(ec, type) ? 1 : 0;
+}
+/** v5.702：「這張附加能量當下是否視為提供某屬性」host-aware 述詞（選/移/丟「【X】能量」一律走此，禁 isEnergyOfType）。 */
+export function energyProvidesType(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): boolean {
+  return energyTypeUnitsHostAware(host, e, type, pool) > 0;
+}
+
+/**
  * v2.108：場上是否有「大竺葵｜繁茂」在 ownerIdx 玩家側？
  * 繁茂：自己所有寶可夢身上的「基本【草】能量」視為各提供 2 個【草】能量
  * （這個特性的效果不會重複，多隻大竺葵也只算一次）。
@@ -8270,13 +8295,9 @@ export function getUsableAbilities(
       //   (scraper 留空，type 從卡名推斷)，strict pokemonType==='Water' 會誤判。
       if (ab.name === '沖刷') {
         if (!player.active) return;
+        // v5.702：host-aware energyProvidesType（與發動 handler 一致）→ 古舊/稜鏡(Basic)等視為水的特殊能量也算
         const hasWaterOnBench = player.bench.some(b =>
-          b.energyAttached.some(e => {
-            const ec = pool.get(e.cardId);
-            if (!ec || ec.supertype !== 'Energy') return false;
-            if (ec.pokemonType === 'Water') return true;
-            return /【水】/.test(ec.name || '');
-          }));
+          b.energyAttached.some(e => energyProvidesType(b, e, 'Water', pool)));
         if (!hasWaterOnBench) return;
       }
       // P0：瑪力露麗ex | 收集泡泡 — v4.4998 修正：卡面沒要求 active 是瑪力露麗ex
@@ -8300,9 +8321,9 @@ export function getUsableAbilities(
       if (ab.name === '金屬之路') {
         if (player.active?.iid !== pk.iid) return;
         if (!player.active.movedToActiveThisTurn) return;
-        // v4.963：用 isEnergyOfType 認基本【鋼】能量（pokemonType=null fallback）
+        // v5.702：host-aware energyProvidesType（與發動 handler 一致）→ 古舊/稜鏡等視為鋼的特殊能量也算
         const hasMetalOnBench = player.bench.some(b =>
-          b.energyAttached.some(e => isEnergyOfType(pool.get(e.cardId), 'Metal')));
+          b.energyAttached.some(e => energyProvidesType(b, e, 'Metal', pool)));
         if (!hasMetalOnBench) return;
       }
       // P0：麻麻鰻 | 電氣發電機 — 棄牌區有基本【雷】+ 備戰非空
@@ -8748,10 +8769,8 @@ export function getUsableAbilities(
       }
       // 壺壺｜發酵果汁：身上需有【草】能量
       if (ab.name === '發酵果汁') {
-        const hasGrass = pk.energyAttached.some(e => {
-          const ec = pool.get(e.cardId);
-          return ec?.pokemonType === 'Grass' || (ec?.name?.includes('【草】') ?? false);
-        });
+        // v5.702 host-aware：卡面「【草】能量卡」(不限基本)→ 古舊(全屬性)/稜鏡(在 Basic 壺壺上=全屬性)也算
+        const hasGrass = pk.energyAttached.some(e => energyProvidesType(pk, e, 'Grass', pool));
         if (!hasGrass) return;
       }
       // 樂天河童｜激動治癒：自方場上需有【草】超級進化ex
