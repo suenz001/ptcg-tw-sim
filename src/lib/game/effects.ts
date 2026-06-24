@@ -596,6 +596,9 @@ import {
 } from './effects/cards/v3060_deferred_wave_b';
 // v3.08 Deferred Wave C helper — 美納斯｜平穩境地（對手寶可夢/附加卡 → 對手手牌阻擋）
 import { oppHasMenasureCalmGround as _v3080OppHasMenasureCG } from './effects/cards/v3080_deferred_wave_c';
+// v5.700 對手備戰強制換位(gust)免疫過濾：item 級(緊張感/融合為雪) / supporter 級(+化石/廣域堡壘)
+import { isImmuneToOppTrainer as _gustImmuneTrainer } from './effects/cards/v3060_deferred_wave_b';
+import { isImmuneToOppSupporter as _gustImmuneSupporter } from './effects/cards/v3080_deferred_wave_c';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -2075,15 +2078,19 @@ reg('精靈球', (st, idx, pool) => {
 });
 
 // 寶可夢捕捉器 — 擲硬幣，正面則選對手備戰與戰鬥寶可夢互換（物品）
-regG('寶可夢捕捉器', (st, idx) => st.players[(1 - idx) as 0 | 1].bench.length > 0);
-reg('寶可夢捕捉器', (st, idx) => {
+// v5.700：物品卡強制換位 → 過濾「緊張感/融合為雪」(卡面「物品卡或支援者卡不受影響」)免疫的對手備戰。
+regG('寶可夢捕捉器', (st, idx, pool) => st.players[(1 - idx) as 0 | 1].bench.some(b => !_gustImmuneTrainer(b, pool)));
+reg('寶可夢捕捉器', (st, idx, pool) => {
   const r = flipCoinsWithLog(st, 1, '寶可夢捕捉器', idx);
   if (!r.heads) return addLog(r.state, '寶可夢捕捉器：反面 → 什麼都沒發生', idx);
   const oppIdx = (1 - idx) as 0 | 1;
-  st = addLog(r.state, '寶可夢捕捉器：正面 → 選對手備戰與戰鬥寶可夢互換', idx);
+  st = r.state;
+  const validIids = st.players[oppIdx].bench.filter(b => !_gustImmuneTrainer(b, pool)).map(b => b.iid);
+  if (validIids.length === 0) return addLog(st, '寶可夢捕捉器：正面，但對手備戰沒有可呼叫的寶可夢（緊張感/融合為雪 免疫）', idx);
+  st = addLog(st, '寶可夢捕捉器：正面 → 選對手備戰與戰鬥寶可夢互換', idx);
   return withPending(st, {
     type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: oppIdx,
-    minCount: 1, maxCount: 1, effectKey: 'gust-opp',
+    minCount: 1, maxCount: 1, effectKey: 'gust-opp', params: { validIids },
   });
 });
 
@@ -4406,16 +4413,19 @@ reg('奇跡耳麥', (st, idx) => {
 });
 
 // 反擊捕捉器 — 自己獎賞多時可用，呼叫對手備戰
-regG('反擊捕捉器', (st, idx) =>
+// v5.700：物品卡強制換位 → 過濾「緊張感/融合為雪」免疫的對手備戰。
+regG('反擊捕捉器', (st, idx, pool) =>
   st.players[idx].prizes.length > st.players[(1-idx) as 0|1].prizes.length &&
-  st.players[(1-idx) as 0|1].bench.length > 0
+  st.players[(1-idx) as 0|1].bench.some(b => !_gustImmuneTrainer(b, pool))
 );
-reg('反擊捕捉器', (st, idx) => {
+reg('反擊捕捉器', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
+  const validIids = st.players[oppIdx].bench.filter(b => !_gustImmuneTrainer(b, pool)).map(b => b.iid);
+  if (validIids.length === 0) return addLog(st, '反擊捕捉器：對手備戰沒有可呼叫的寶可夢（緊張感/融合為雪 免疫）', idx);
   st = addLog(st, '反擊捕捉器：選對手備戰與戰鬥寶可夢互換', idx);
   return withPending(st, {
     type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: oppIdx,
-    minCount: 1, maxCount: 1, effectKey: 'gust-opp',
+    minCount: 1, maxCount: 1, effectKey: 'gust-opp', params: { validIids },
   });
 });
 
@@ -13670,12 +13680,18 @@ reg('火箭隊的坂木', (st, idx, pool) => {
   }
   // 條件不符：直接對方換
   st = addLog(st, '火箭隊的坂木：自方無可互換的火箭隊寶可夢，略過自換', idx);
-  return withPending(st, {
-    type: 'opp-bench-choose',
-    actorIdx: idx, sourcePlayerIdx: (1 - idx) as 0 | 1,
-    minCount: 1, maxCount: 1,
-    effectKey: 'gust-opp',   // 復用既有 opp-swap resolver
-  });
+  {
+    // v5.700：supporter 強制換位 → 過濾化石/緊張感/融合為雪/廣域堡壘 免疫的對手備戰。
+    const _oppIdx = (1 - idx) as 0 | 1;
+    const _valid = st.players[_oppIdx].bench.filter(b => !_gustImmuneSupporter(st, _oppIdx, b, pool)).map(b => b.iid);
+    if (_valid.length === 0) return addLog(st, '火箭隊的坂木：對手備戰沒有可呼叫的寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）', idx);
+    return withPending(st, {
+      type: 'opp-bench-choose',
+      actorIdx: idx, sourcePlayerIdx: _oppIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'gust-opp', params: { validIids: _valid },
+    });
+  }
 });
 regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   const pickIid = iids[0];
@@ -13696,12 +13712,18 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
     return { ...pl, active: newActive, bench: newBench };
   });
   // 再強迫對方換
-  return withPending(st, {
-    type: 'opp-bench-choose',
-    actorIdx: idx, sourcePlayerIdx: (1 - idx) as 0 | 1,
-    minCount: 1, maxCount: 1,
-    effectKey: 'gust-opp',
-  });
+  {
+    // v5.700：supporter 強制換位 → 過濾化石/緊張感/融合為雪/廣域堡壘 免疫的對手備戰。
+    const _oppIdx = (1 - idx) as 0 | 1;
+    const _valid = st.players[_oppIdx].bench.filter(b => !_gustImmuneSupporter(st, _oppIdx, b, pool)).map(b => b.iid);
+    if (_valid.length === 0) return addLog(st, '火箭隊的坂木：對手備戰沒有可呼叫的寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）', idx);
+    return withPending(st, {
+      type: 'opp-bench-choose',
+      actorIdx: idx, sourcePlayerIdx: _oppIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'gust-opp', params: { validIids: _valid },
+    });
+  }
 });
 
 // v5.525：自身戰鬥↔備戰互換共用 resolver（敏捷蟲|褪殼猛毒 / 狡兔三窟 等 5 張卡的 effectKey）。
