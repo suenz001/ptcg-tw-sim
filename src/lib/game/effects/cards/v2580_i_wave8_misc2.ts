@@ -25,6 +25,7 @@ import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, ATTACK_PRE_DISCARD_CHOICE,
+  toBareCard,
 } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
 import { energyMatchesType } from '../_shared';
@@ -150,19 +151,11 @@ regPost('烈腿蝗|跳躍射擊', (state, aIdx, _pool) => {
       if (!p.active) return p;
       const a = p.active;
       const returning: CardInstance[] = [
-        { ...a, damage: 0, energyAttached: [], toolAttached: undefined,
-          status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
-          evolvedFromStack: undefined, evolvedThisTurn: undefined,
-          justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-          damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-          abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-          cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-          damageBonusPending: undefined, takeExtraDamageThisTurn: undefined, takeExtraDamageNextTurn: undefined,
-          blockedAttackNamesNextTurn: undefined,
-        },
-        ...a.energyAttached,
-        ...(a.toolAttached ? [a.toolAttached] : []),
-        ...(a.evolvedFromStack ?? []),
+        // v5.705：主體與附加卡全部裸化（中央白名單 toBareCard）
+        toBareCard(a),
+        ...a.energyAttached.map(toBareCard),
+        ...getAllAttachedTools(a).map(toBareCard),
+        ...(a.evolvedFromStack ?? []).map(toBareCard),
       ];
       return { ...p, active: null, deck: shuffle([...p.deck, ...returning]) };
     },

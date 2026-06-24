@@ -1198,6 +1198,16 @@ export function hasAnyPendingPrize(state: GameState): boolean {
 //   3. TOOL_xxx hook（HP_BONUS / ATTACK_BONUS / DEFENSE 等）— iterate 全部道具
 //   4. 特性消除（場上沒有洛托姆ex 多重轉接）— reconcile 所有 extraTools 進棄牌
 //
+/**
+ * v5.705：把寶可夢/卡片實體「裸化」成乾淨卡牌（回手牌/牌庫用）。白名單只保留 iid + cardId，
+ * 丟棄傷害/能量/道具/進化棧/狀態/所有離場旗標。取代各處手動列舉旗標的黑名單（會漂移漏清，
+ * 且 PLAY_BASIC 重打用 {...inst} 只覆寫少數欄位、會保留殘留旗標 → 殘留旗標隨重打回到場上）。
+ * 附加卡（能量/道具/進化棧的卡）進手牌/牌庫前也應各自 toBareCard。
+ */
+export function toBareCard(inst: CardInstance): CardInstance {
+  return { iid: inst.iid, cardId: inst.cardId, damage: 0, energyAttached: [] };
+}
+
 export function getAllAttachedTools(inst: CardInstance | null | undefined): CardInstance[] {
   if (!inst) return [];
   const out: CardInstance[] = [];

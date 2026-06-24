@@ -2,6 +2,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA, regAByName,
   getOwnBenchLimit,
+  toBareCard,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 /**
@@ -291,18 +292,12 @@ const selfBouncePost = (name: string) => {
     let s = updatePlayer(state, aIdx, pl => {
       if (!pl.active) return pl;
       const inst = pl.active;
+      // v5.705：主體與附加卡全部裸化（中央白名單 toBareCard，取代手動黑名單；附加改 getAllAttachedTools 修漏 extraTools）
       const returning: CardInstance[] = [
-        { ...inst, damage: 0, energyAttached: [], toolAttached: undefined,
-          status: undefined, evolvedFromStack: undefined,
-          evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined,
-          movedToActiveThisTurn: undefined, damageBonusThisTurn: undefined,
-          damageReduceNextHit: undefined, abilityUsedThisTurn: undefined,
-          cantAttackThisTurn: undefined, cantAttackPending: undefined,
-          cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-          damageBonusPending: undefined },
-        ...inst.energyAttached,
-        ...(inst.toolAttached ? [inst.toolAttached] : []),
-        ...(inst.evolvedFromStack ?? []),
+        toBareCard(inst),
+        ...inst.energyAttached.map(toBareCard),
+        ...getAllAttachedTools(inst).map(toBareCard),
+        ...(inst.evolvedFromStack ?? []).map(toBareCard),
       ];
       return { ...pl, hand: [...pl.hand, ...returning], active: null };
     });

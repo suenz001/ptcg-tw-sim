@@ -45,7 +45,7 @@ import {
   discardActiveStadium,
   recordOppKO,
   healResolver,
-  sameEvoName, getAllAttachedTools,
+  sameEvoName, getAllAttachedTools, toBareCard,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   countAttachedEnergyAsUnits,
@@ -11735,16 +11735,11 @@ function selfReturnToHandPost(label: string): AttackPostFn {
       // 整疊連附加一起送回手牌即可，但 evolvedFromStack 裡每張都是獨立的 CardInstance，
       // 逐一加入手牌才符合「附加的卡」語義。
       // 主體（含目前 cardId 與 iid）
-      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
-        status: undefined, evolvedFromStack: undefined,
-        evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-        damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-        abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-        cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-        damageBonusPending: undefined },
-      ...inst.energyAttached,
-      ...getAllAttachedTools(inst),
-      ...(inst.evolvedFromStack ?? []),
+      // v5.705：主體與附加卡全部裸化成乾淨卡牌（中央白名單，取代手動黑名單避免漏清旗標）
+      toBareCard(inst),
+      ...inst.energyAttached.map(toBareCard),
+      ...getAllAttachedTools(inst).map(toBareCard),
+      ...(inst.evolvedFromStack ?? []).map(toBareCard),
     ];
     const players = [...state.players] as [PlayerState, PlayerState];
     players[aIdx] = {
@@ -11765,16 +11760,11 @@ function selfReturnToDeckPost(label: string): AttackPostFn {
     if (!p.active) return state;
     const inst = p.active;
     const returning: CardInstance[] = [
-      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
-        status: undefined, evolvedFromStack: undefined,
-        evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-        damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-        abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-        cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-        damageBonusPending: undefined },
-      ...inst.energyAttached,
-      ...getAllAttachedTools(inst),
-      ...(inst.evolvedFromStack ?? []),
+      // v5.705：主體與附加卡全部裸化成乾淨卡牌（中央白名單，取代手動黑名單避免漏清旗標）
+      toBareCard(inst),
+      ...inst.energyAttached.map(toBareCard),
+      ...getAllAttachedTools(inst).map(toBareCard),
+      ...(inst.evolvedFromStack ?? []).map(toBareCard),
     ];
     const players = [...state.players] as [PlayerState, PlayerState];
     players[aIdx] = {
@@ -11797,16 +11787,11 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
     if (!p.active) return state;
     const inst = p.active;
     const returning: CardInstance[] = [
-      { ...inst, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
-        status: undefined, evolvedFromStack: undefined,
-        evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-        damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-        abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-        cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-        damageBonusPending: undefined },
-      ...inst.energyAttached,
-      ...getAllAttachedTools(inst),
-      ...(inst.evolvedFromStack ?? []),
+      // v5.705：主體與附加卡全部裸化成乾淨卡牌（中央白名單，取代手動黑名單避免漏清旗標）
+      toBareCard(inst),
+      ...inst.energyAttached.map(toBareCard),
+      ...getAllAttachedTools(inst).map(toBareCard),
+      ...(inst.evolvedFromStack ?? []).map(toBareCard),
     ];
     const players = [...state.players] as [PlayerState, PlayerState];
     players[aIdx] = {
@@ -11854,16 +11839,11 @@ regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) =>
   const picked = p.bench.find(c => c.iid === iid);
   if (!picked) return st;
   const returning: CardInstance[] = [
-    { ...picked, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
-      status: undefined, evolvedFromStack: undefined,
-      evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-      damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-      abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-      cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-      damageBonusPending: undefined },
-    ...picked.energyAttached,
-    ...getAllAttachedTools(picked),
-    ...(picked.evolvedFromStack ?? []),
+    // v5.705：主體與附加卡全部裸化成乾淨卡牌
+    toBareCard(picked),
+    ...picked.energyAttached.map(toBareCard),
+    ...getAllAttachedTools(picked).map(toBareCard),
+    ...(picked.evolvedFromStack ?? []).map(toBareCard),
   ];
   const players = [...st.players] as [PlayerState, PlayerState];
   players[actorIdx] = {
@@ -13025,30 +13005,12 @@ regR('wind-vortex-return', (st, idx, iids, _params, pool) => {
   if (!target) return st;
   const tName = pool.get(target.cardId)?.name ?? '?';
   // 重置為純淨狀態（清除傷害、狀態、旗標、能量、道具、進化棧）
-  const mainBare: CardInstance = {
-    ...target,
-    damage: 0,
-    energyAttached: [],
-    toolAttached: undefined, extraTools: [],
-    status: undefined,
-    evolvedFromStack: undefined,
-    evolvedThisTurn: undefined,
-    justPlaced: undefined, playedFromHand: undefined,
-    movedToActiveThisTurn: undefined,
-    damageBonusThisTurn: undefined,
-    damageReduceNextHit: undefined,
-    abilityUsedThisTurn: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    cantRetreatPendingSelf: undefined,
-    damageBonusPending: undefined,
-  };
+  // v5.705：主體與附加卡全部裸化成乾淨卡牌（中央白名單）
   const returning: CardInstance[] = [
-    mainBare,
-    ...target.energyAttached,
-    ...getAllAttachedTools(target),
-    ...(target.evolvedFromStack ?? []),
+    toBareCard(target),
+    ...target.energyAttached.map(toBareCard),
+    ...getAllAttachedTools(target).map(toBareCard),
+    ...(target.evolvedFromStack ?? []).map(toBareCard),
   ];
   const s = addLog(st, `寶可夢旋風回收機：將 ${tName} 與附加的 ${returning.length - 1} 張卡放回手牌`, idx);
   return updatePlayer(s, idx, pp => ({
