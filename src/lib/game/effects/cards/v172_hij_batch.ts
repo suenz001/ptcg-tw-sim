@@ -808,25 +808,22 @@ reg('配樂之笛', (st, idx, pool) => {
   const limit = getOwnBenchLimit(st, oppIdx, pool);
   const space = Math.max(0, limit - opp.bench.length);
   const basicsInTop5 = top5.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
-  const maxN = Math.min(space, basicsInTop5.length);
-  if (maxN === 0) {
-    st = addLog(st, '配樂之笛：對手牌庫上方 5 張無基礎寶可夢或備戰區已滿，洗回後結束', idx);
-    // v2.243 釐清（不再簡化）：concat(rest, top5) 後 shuffle = 整個 deck 重洗，
-    //   符合卡面「將剩餘卡放回牌庫並重洗」。
-    return updatePlayer(st, oppIdx, p => ({
-      ...p,
-      deck: shuffle([...p.deck.slice(top5.length), ...top5]),
-    }));
-  }
+  const placeableN = Math.min(space, basicsInTop5.length); // 實際可放幾隻基礎
+  // v5.704：一律開 deck-search picker（比照米立龍集客 / 寶可裝置3.0），即使無基礎寶可夢
+  //   (placeableN===0) 也讓玩家看完翻開的對手牌庫頂 5 張再確認（選 0）。原 maxN===0 早退會
+  //   直接洗回 → 玩家看不到揭示資訊（翻對手牌庫是重要情報）。filter='Basic:TOP5' 限定只基礎可勾；
+  //   maxCount 至少 1 確保 picker 開啟（無基礎時 0 可勾，玩家確認 0 → resolver 洗回）。
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     filter: 'Basic:TOP5',
-    minCount: 0, maxCount: maxN,
+    minCount: 0, maxCount: Math.max(1, placeableN),
     effectKey: 'melody-flute-place',
     params: {
       top5Iids,
-      titleOverride: `配樂之笛：${st.players[oppIdx].name} 牌庫頂 5 張中的基礎寶可夢（選 0–${maxN} 隻放對手備戰）`,
+      titleOverride: placeableN > 0
+        ? `配樂之笛：${st.players[oppIdx].name} 牌庫頂 5 張中的基礎寶可夢（選 0–${placeableN} 隻放對手備戰）`
+        : `配樂之笛：${st.players[oppIdx].name} 牌庫頂 5 張（無基礎寶可夢可放，看過後確認洗回）`,
     },
   });
 });
