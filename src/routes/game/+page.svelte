@@ -5210,6 +5210,7 @@
   let oppInactivityWarn = $state(false);
   let showForfeitConfirm = $state(false);
   let _lastActionAt = Date.now();
+  let _autoForfeitTriedAt = 0;   // v5.696 自動閒置判勝節流(避免每 tick 重打)
   let _lastResyncAt = 0;  // v5.360：上次自動重訂閱(自癒)時間
   let _forceAdoptNext = false;  // v5.587：下一個收到的同局 snapshot 強制採用(繞過 stale 守衛)＝程式幫忙重整
   let _prevLogLen = -1;
@@ -5245,6 +5246,7 @@
       _prevLogLen = logLen;
       _lastActionAt = Date.now();
       oppInactivityWarn = false;
+      _autoForfeitTriedAt = 0;
     }
   });
 
@@ -5257,6 +5259,14 @@
       // v5.329：門檻改讀房間設定（房主可調 1:00~5:00，預設 3:00）；clamp 防呆
       const thresholdMs = Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)) * 1000;
       oppInactivityWarn = (Date.now() - _lastActionAt) >= thresholdMs;
+      // v5.696：到達房主設定的閒置門檻 → 自動宣告對手棄權獲勝（走 claimOpponentForfeit 的「伺服器
+      //   最新盤面再驗證」路徑：對手其實已行動則回 false → 重新同步、不誤判；節流 15s 避免每 tick 重打）。
+      //   只有「正等對手」的一方會走到這(上方 isWaitingOnOpponent 已 gate)，閒置方不觸發→無雙重判定。
+      //   保留下方手動按鈕當後備（背景分頁 interval 被節流時可手動）。
+      if (oppInactivityWarn && (Date.now() - _autoForfeitTriedAt) >= 15000) {
+        _autoForfeitTriedAt = Date.now();
+        autoClaimOpponentForfeit();
+      }
       // v5.360：卡住自癒 — 等對手 >8s 都沒有任何新動作（含對手 KO 我方/我方 KO 對手後對手沒收到），
       //   自動重建房間訂閱（＝玩家手動「重新整理 / 回房按觀戰」的修復：重置輪詢 lastVersion → 重新
       //   抓房間最新狀態走正常 merge 收斂）。只重讀、不改 merge 邏輯，安全。免玩家手動脫困。
@@ -5272,6 +5282,19 @@
     return () => clearInterval(iv);
   });
 
+  // v5.696 到閒置門檻自動宣告對手棄權（經 claimOpponentForfeit 伺服器盤面再驗證，安全；false=對手其實已行動→不判+重同步）。
+  async function autoClaimOpponentForfeit() {
+    if (!roomCode || (mySeatIdx !== 0 && mySeatIdx !== 1)) return;
+    try {
+      const granted = await claimOpponentForfeit(roomCode, mySeatIdx as 0 | 1);
+      if (granted === false) {
+        _forceAdoptNext = true;
+        _lastActionAt = Date.now();
+        oppInactivityWarn = false;
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
+      }
+    } catch (e) { console.warn('[autoClaimForfeit]', e); }
+  }
   async function onClickClaimForfeit() {
     showForfeitConfirm = true;
   }
@@ -7513,8 +7536,8 @@
 <!-- v5.225 對手 3 分鐘無動作警告 banner —— fixed 在頂部 -->
 {#if oppInactivityWarn && game?.phase === 'playing' && (mySeatIdx === 0 || mySeatIdx === 1)}
   <div class="opp-inactive-banner">
-    <span class="opp-inactive-text">⚠️ 對手已 3 分鐘無回應</span>
-    <button class="opp-inactive-btn" onclick={onClickClaimForfeit}>宣告對手棄權獲勝</button>
+    <span class="opp-inactive-text">⚠️ 對手長時間無回應，正在自動判定你獲勝…</span>
+    <button class="opp-inactive-btn" onclick={onClickClaimForfeit}>立即宣告對手棄權獲勝</button>
   </div>
 {/if}
 

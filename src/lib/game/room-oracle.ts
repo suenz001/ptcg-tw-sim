@@ -290,10 +290,10 @@ export async function claimOpponentForfeit(roomCode: string, mySeatIdx: 0 | 1): 
         ...myGs,
         phase: 'game-over' as const,
         winner: mySeatIdx,
-        winReason: oppName + ' 3 分鐘無回應，被宣告棄權',
+        winReason: oppName + ' 長時間無回應，被宣告棄權',
         log: [
           ...(myGs.log ?? []),
-          { turn: myGs.turn, playerIndex: null, message: oppName + ' 3 分鐘無回應，' + myName + ' 宣告對手棄權獲勝' },
+          { turn: myGs.turn, playerIndex: null, message: oppName + ' 長時間無回應，' + myName + ' 宣告對手棄權獲勝' },
         ],
       };
       return { ...cur, gameState: JSON.parse(JSON.stringify(forfeitGame)), status: 'ended' };
