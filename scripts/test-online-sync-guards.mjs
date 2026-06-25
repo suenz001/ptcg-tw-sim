@@ -48,7 +48,7 @@ function mkGS(o = {}) {
     ],
   };
 }
-const ctx = (o = {}) => ({ myPlayerIndex: o.me ?? 0, roomLastUndoApplyAt: o.room ?? 0, lastSeenUndoApplyAt: o.seen ?? 0 });
+const ctx = (o = {}) => ({ myPlayerIndex: o.me ?? 0, roomLastUndoApplyAt: o.room ?? 0, lastSeenUndoApplyAt: o.seen ?? 0, roomRestartCount: o.rc ?? 0, lastAdoptedRestartCount: o.larc ?? 0 });
 
 let pass = 0; const fails = [];
 const ck = (n, ok, d = '') => { ok ? pass++ : fails.push(`${n}${d ? ' — ' + d : ''}`); };
@@ -199,6 +199,34 @@ ck('收: reject reason=phase-rollback',
   const inc = mkGS({ id:'G', phase:'playing', logLen:6, pendingPrizes:[0,0] });
   ck('收: 無取獎賞窗口 → 不觸發窗口合併(adopt)', resolveRoomUpdate(local, inc, ctx({ me:0 })).kind==='adopt');
 }
+
+// ════ G. v5.716 phantom 開局 race 防護（一般對戰已開始卻重新開局洗牌的根治）════
+// push 端：current 已開打 + 我方要推不同 id 的 setup 局(phantom) → skip(不論 createdAt 新舊)
+ck('push: phantom — current playing + 不同id setup(createdAt較新) → skip',
+   shouldSkipStalePush(mkGS({ id:'PH', phase:'setup', createdAt:200 }), mkGS({ id:'CANON', phase:'playing', createdAt:100 })) === true);
+ck('push: 回歸-current game-over + 不同id setup(較新) → 不被playing防護擋(走createdAt)',
+   shouldSkipStalePush(mkGS({ id:'NEW', phase:'setup', createdAt:200 }), mkGS({ id:'OLD', phase:'game-over', createdAt:100 })) === false);
+ck('push: 回歸-開局 setup×setup 不同id(current setup) → 走createdAt(較新不skip)',
+   shouldSkipStalePush(mkGS({ id:'B', phase:'setup', createdAt:200 }), mkGS({ id:'A', phase:'setup', createdAt:100 })) === false);
+// adopt 端：local 已開打 + incoming 不同 id setup + 無 restart 信號 → reject phantom
+ck('收: phantom — local playing + 不同id setup(較新) + 無restart信號 → reject phantom-setup',
+   resolveRoomUpdate(mkGS({ id:'CANON', phase:'playing', createdAt:100 }), mkGS({ id:'PH', phase:'setup', createdAt:200 }), ctx({ rc:0, larc:0 })).reason === 'phantom-setup');
+ck('收: 回歸-local game-over + 新setup(較新,再來一局) → adopt(不擋game-over)',
+   resolveRoomUpdate(mkGS({ id:'OLD', phase:'game-over', createdAt:100 }), mkGS({ id:'NEW', phase:'setup', createdAt:200 }), ctx({ rc:0, larc:0 })).kind === 'adopt');
+// adopt 端：合法 restart(restartProposalCount 遞增) → adopt setup 覆蓋 playing
+ck('收: 合法restart — local playing + 不同id setup + restartCount遞增(1>0) → adopt',
+   resolveRoomUpdate(mkGS({ id:'CANON', phase:'playing', createdAt:100 }), mkGS({ id:'NEW', phase:'setup', createdAt:300 }), ctx({ rc:1, larc:0 })).kind === 'adopt');
+ck('收: restart已採用 — count未再遞增(1<=1) → 後續同類拒收 phantom',
+   resolveRoomUpdate(mkGS({ id:'CANON', phase:'playing', createdAt:100 }), mkGS({ id:'PH2', phase:'setup', createdAt:400 }), ctx({ rc:1, larc:1 })).reason === 'phantom-setup');
+// 回歸：開局 setup×setup 不同 id 較新 → 仍 adopt(local 是 setup 不是 playing,不觸發防護)
+ck('收: 回歸-開局 setup×不同id setup(較新) → adopt(local非playing)',
+   resolveRoomUpdate(mkGS({ id:'A', phase:'setup', createdAt:100 }), mkGS({ id:'B', phase:'setup', createdAt:200 }), ctx({})).kind === 'adopt');
+// 回歸：不同 id playing 較新 → 仍 adopt(playing×playing 不受 setup 防護)
+ck('收: 回歸-不同id playing(較新) → adopt(非setup)',
+   resolveRoomUpdate(mkGS({ id:'A', phase:'playing', createdAt:100 }), mkGS({ id:'B', phase:'playing', createdAt:200 }), ctx({})).kind === 'adopt');
+// 回歸：不同 id 較舊(stale) → 仍 reject stale-old-game(防護不影響既有)
+ck('收: 回歸-不同id setup較舊 → reject stale-old-game',
+   resolveRoomUpdate(mkGS({ id:'A', phase:'playing', createdAt:200 }), mkGS({ id:'B', phase:'setup', createdAt:100 }), ctx({})).reason === 'stale-old-game');
 
 console.log(`\n線上同步守衛測試網：PASS ${pass} / FAIL ${fails.length}`);
 for (const f of fails) console.log('  ❌', f);

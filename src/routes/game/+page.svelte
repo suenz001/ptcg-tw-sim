@@ -412,6 +412,7 @@
   let undoActionDesc = $state<string | null>(null);        // 描述上一手做什麼（給對手 modal 看）
   let undoDeniedThisSnapshot = $state(false);              // 對手拒絕後，這個 snapshot 的按鈕消失（直到下個 action）
   let lastSeenUndoApplyAt = 0;                            // v5.390 悔棋 rollback 一次性標記去重（>此值才套用 rollback）
+  let lastAdoptedRestartCount = 0;                       // v5.716 phantom 防護：上次 adopt restart 重建 setup 局時的 restartProposalCount
   let undoAwaitingResponse = $state(false);                // 發起方等待對手回應中
   let roomAllowUndoInput = $state(false);                  // 開房表單 checkbox 狀態
   let roomPrivateInput = $state(false);                    // v5.003 私密房 checkbox 狀態（預設公開）
@@ -5479,6 +5480,8 @@
         myPlayerIndex,
         roomLastUndoApplyAt: room.lastUndoApplyAt ?? 0,
         lastSeenUndoApplyAt,
+        roomRestartCount: (room.restartProposalCount as number | undefined) ?? 0,
+        lastAdoptedRestartCount,
       });
       switch (decision.kind) {
         case 'reject':
@@ -5505,6 +5508,11 @@
         case 'adopt':
         case 'merge-prize':
           game = decision.game;
+          // v5.716：adopt 了 restart 重建的新 setup 局(已通過 phantom 防護=合法重新開局) →
+          //   記下當前 restartProposalCount,讓後續同 count 的 phantom setup 局被擋(只放行「下一次」restart)。
+          if (decision.kind === 'adopt' && decision.game.phase === 'setup') {
+            lastAdoptedRestartCount = (room.restartProposalCount as number | undefined) ?? 0;
+          }
           // v5.432：線上祭典樂舞第二次攻擊修正 — 「取獎賞」(攻擊方) 與「對手補位」分屬兩 client，
           //   各自 action 當下開窗條件未齊（一邊只取獎賞、一邊只補位）；對方動作 merge 進來後沒有任何一方
           //   重新評估 → 第二次攻擊視窗永遠不開、玩家被迫結束回合。修法：merge 後由「攻擊方本人 client」

@@ -34,6 +34,12 @@ export function shouldSkipStalePush(
   // v5.457 跨局防舊：incoming 是「較早建立的局」(createdAt 較小) → 別用殘留舊局蓋現有(較新)局。
   //   （再來一局後，舊局殘留 push 因 log 較長騙過長度比較 → 蓋新局；改用 createdAt 跨局判斷。）
   if (incoming.id !== current.id) {
+    // v5.716 phantom 防護：current 已開打(playing)卻要推一個「不同 id 的 setup 局」
+    //   = 開局 createGame race 殘留的 phantom 局，絕不可覆蓋進行中的對局(不論 createdAt 新舊)。
+    //   合法「重新開局」走 checkAndAcceptRestart 的 oracleTx 直寫房間，不經 pushGameState，故不受影響。
+    if (current.phase === 'playing' && incoming.phase === 'setup') {
+      return true;
+    }
     return (incoming.createdAt ?? 0) < (current.createdAt ?? 0);
   }
   // v5.465：終態保護（推端）— 房間已 game-over（同局）時，不讓非 game-over 的 push 蓋掉。
@@ -60,6 +66,11 @@ export interface RoomUpdateCtx {
   myPlayerIndex: 0 | 1 | null;
   roomLastUndoApplyAt: number;   // room.lastUndoApplyAt ?? 0
   lastSeenUndoApplyAt: number;   // 元件持有的上次套用 marker
+  // v5.716 phantom 防護：用 restartProposalCount 區分「合法重新開局」vs「開局 phantom race 局」。
+  //   合法 restart 會在 proposeRestart 時遞增 restartProposalCount；phantom（開局 createGame race
+  //   殘留局）不會。adopt 端只在 roomRestartCount > lastAdoptedRestartCount 時放行 setup 覆蓋 playing。
+  roomRestartCount?: number;         // room.restartProposalCount ?? 0
+  lastAdoptedRestartCount?: number;  // 元件持有：上次 adopt restart 重建局時的 restartProposalCount
 }
 
 /**
@@ -90,6 +101,15 @@ export function resolveRoomUpdate(
   if (local && local.id !== incoming.id) {
     if ((incoming.createdAt ?? 0) < (local.createdAt ?? 0)) {
       return { kind: 'reject', reason: 'stale-old-game' };
+    }
+    // v5.716 phantom 防護：local 進行中(playing)，incoming 是「不同 id 的 setup 局」
+    //   → 只有雙方同意的「重新開局」(restartProposalCount 遞增)才放行；否則為開局 createGame race
+    //   殘留的 phantom setup 局，拒收（否則 adopt 它會把進行中的對局拉回 setup、重新洗牌）。
+    //   （再來一局/返回房間走 gameState=null 回 lobby，不是 setup 局覆蓋，不在此路徑。）
+    if (local.phase === 'playing'
+        && incoming.phase === 'setup'
+        && (ctx.roomRestartCount ?? 0) <= (ctx.lastAdoptedRestartCount ?? 0)) {
+      return { kind: 'reject', reason: 'phantom-setup' };
     }
     return { kind: 'adopt', game: incoming };
   }
