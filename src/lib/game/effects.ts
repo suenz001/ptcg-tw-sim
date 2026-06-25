@@ -5992,9 +5992,9 @@ regPre('暴噬龜|堅硬嚼碎', (state, aIdx, _pool) => {
 // 若對手戰鬥寶可夢【撤退】所需的能量為2個以上 → +110
 regPre('烈箭鷹|氣旋競爭', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  const card = def ? pool.get(def.cardId) : undefined;
-  const retreat = card?.retreatCost?.length ?? 0;
+  // v5.711：用有效撤退費(含咒縛火焰/重力之玉/磁鐵鋼/浮遊/特性歸0 等修正)，不再用 base retreatCost.length。
+  //   對齊 v5.690 阿利多斯線帶纏繞/鐵包袱瞬風衝激/背負上投/影繩結/幻影迷宮。卡面「撤退所需的能量」=最終值。
+  const retreat = computeActiveRetreatCostFor(state, dIdx, pool);
   if (retreat >= 2) {
     return { state: addLog(state, `氣旋競爭：對手撤退 ${retreat} ≥ 2 → +110`, aIdx), damage: 220 };
   }

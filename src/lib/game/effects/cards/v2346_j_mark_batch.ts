@@ -2,6 +2,7 @@ import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
 import { flipCoinsWithLog, applyStatusToSelfActive } from '../../effects';
+import { computeActiveRetreatCostFor } from '../../engine'; // v5.711 有效撤退費(整隻咬)
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
   const p = state.players[idx];
@@ -66,9 +67,10 @@ regPre('大針蜂ex|針蜂轟鳴', (state, aIdx, pool) => {
 
 // 尖牙籠｜整隻咬：對手戰鬥寶可夢沒有撤退費用時 +80。
 regPre('尖牙籠|整隻咬', (state, aIdx, pool) => {
-  const def = state.players[1 - aIdx as 0 | 1].active;
-  const c = def ? pool.get(def.cardId) : null;
-  const hasNoRetreatCost = (c?.retreatCost?.length ?? 0) === 0;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.711：「沒有撤退費用」=有效撤退費為 0（含磁鐵鋼/浮遊/特性歸0 讓 base>0 歸 0、
+  //   或咒縛火焰/重力之玉讓 base=0 變 >0），不再用 base retreatCost.length。對齊 v5.690 同類。
+  const hasNoRetreatCost = computeActiveRetreatCostFor(state, dIdx, pool) === 0;
   return { state, damage: hasNoRetreatCost ? 160 : 80 };
 });
 
