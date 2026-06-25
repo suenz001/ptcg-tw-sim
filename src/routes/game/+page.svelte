@@ -4704,11 +4704,34 @@
     sourceAttackIndex: number;
     candidates: Array<{ inst: CardInstance; card: Card | undefined }>;
   } | null>(null);
+  // v5.721：copy-attack 借招式統一 dispatch（收斂 4 個 picker）——被借招式有 PRE_DISCARD_CHOICE
+  //   （「若希望」binary-yes-no / 能量 picker）時開 preAttackDiscard 帶 copyAttackChoice 讓玩家選；
+  //   否則直接 dispatch。原本只有耀閃挑戰 / 扮晶晶酒各自實作此處理，高傲指令系列（揮指 / 欺詐 /
+  //   試著模仿 / 技能大盜）與暗黑底牌「漏」→ 借金屬之錘等「若希望」招式時玩家無法選不希望（v5.720
+  //   只修了引擎端 sentinel，前端沒開 modal 仍走 fallback）。
+  function dispatchBorrowedAttack(srcAttackIndex: number, pokeIid: string, attackIndex: number, borrowedCard: Card | undefined) {
+    const pickedAtk = borrowedCard?.attacks?.[attackIndex];
+    if (borrowedCard && pickedAtk) {
+      const borrowedKey = `${borrowedCard.name}|${pickedAtk.name}`;
+      const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
+      if (spec) {
+        const borrowerActive = game?.players[myIdx].active ?? null;
+        const exactRequired = _computeExactRequired(pickedAtk.name, borrowerActive);
+        preAttackDiscard = {
+          attackIndex: srcAttackIndex, spec, attackName: pickedAtk.name,
+          picked: new Set<string>(), copyAttackChoice: { pokeIid, attackIndex }, exactRequired,
+        };
+        return;
+      }
+    }
+    dispatch(GameActions.attack(srcAttackIndex, undefined, { pokeIid, attackIndex }));
+  }
   function resolveCopyAttack(pokeIid: string, attackIndex: number) {
     if (!copyAttackPicker) return;
     const src = copyAttackPicker.sourceAttackIndex;
+    const card = copyAttackPicker.candidates.find(c => c.inst.iid === pokeIid)?.card; // v5.721 borrowed card
     copyAttackPicker = null;
-    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+    dispatchBorrowedAttack(src, pokeIid, attackIndex, card);
   }
   function cancelCopyAttack() { copyAttackPicker = null; }
 
@@ -4724,29 +4747,7 @@
     const src = personateAttackPicker.sourceAttackIndex;
     const oppPoke = personateAttackPicker.oppPoke;
     personateAttackPicker = null;
-    // 檢查 borrowed 招式是否有 PRE_DISCARD_CHOICE — 若有，先開能量 picker（讓玩家決定是否使用 option / 是否希望）
-    const pickedAtk = oppPoke.card.attacks?.[attackIndex];
-    if (!pickedAtk) {
-      dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
-      return;
-    }
-    const borrowedKey = `${oppPoke.card.name}|${pickedAtk.name}`;
-    const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
-    if (spec) {
-      // v3.875：借此招時，借者 active 才是「自身」（謎擬Q 非太晶，所以激流水泵 required = 3 固定）
-      const borrowerActive = game?.players[myIdx].active ?? null;
-      const exactRequired = _computeExactRequired(pickedAtk.name, borrowerActive);
-      preAttackDiscard = {
-        attackIndex: src,
-        spec,
-        attackName: pickedAtk.name,
-        picked: new Set<string>(),
-        copyAttackChoice: { pokeIid, attackIndex },
-        exactRequired,
-      };
-      return;
-    }
-    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+    dispatchBorrowedAttack(src, pokeIid, attackIndex, oppPoke.card); // v5.721 收斂
   }
   function cancelPersonateAttack() { personateAttackPicker = null; }
 
@@ -4768,29 +4769,7 @@
     //   呆呆王不能借規則寶可夢的招式（RULE_BOX_SUBTYPES filter 已守住），
     //   所以實際影響的招式有限（多數 picker 招式都在 ex/規則 上）。
     //   但保留 general-purpose fix 以防將來新增非規則寶可夢的 picker 招式。
-    const pickedAtk = topPoke.card.attacks?.[attackIndex];
-    if (!pickedAtk) {
-      dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
-      return;
-    }
-    const borrowedKey = `${topPoke.card.name}|${pickedAtk.name}`;
-    const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
-    if (spec) {
-      // 借者 active 才是「自身」（_computeExactRequired 也用此邏輯）
-      const borrowerActive = game?.players[myIdx].active ?? null;
-      const exactRequired = _computeExactRequired(pickedAtk.name, borrowerActive);
-      preAttackDiscard = {
-        attackIndex: src,
-        spec,
-        attackName: pickedAtk.name,
-        picked: new Set<string>(),
-        copyAttackChoice: { pokeIid, attackIndex },
-        exactRequired,
-      };
-      return;
-    }
-    // 無 PRE_DISCARD_CHOICE → 直接 dispatch
-    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+    dispatchBorrowedAttack(src, pokeIid, attackIndex, topPoke.card); // v5.721 收斂
   }
   function cancelBrightChallenge() { brightChallengePicker = null; }
 
@@ -4811,8 +4790,9 @@
   function resolveRocketCommand(pokeIid: string, attackIndex: number) {
     if (!rocketCommandPicker) return;
     const src = rocketCommandPicker.sourceAttackIndex;
+    const card = rocketCommandPicker.pokeList.find(pk => pk.inst.iid === pokeIid)?.card; // v5.721 borrowed card
     rocketCommandPicker = null;
-    dispatch(GameActions.attack(src, undefined, { pokeIid, attackIndex }));
+    dispatchBorrowedAttack(src, pokeIid, attackIndex, card);
   }
   function skipRocketCommand() {
     if (!rocketCommandPicker) return;
