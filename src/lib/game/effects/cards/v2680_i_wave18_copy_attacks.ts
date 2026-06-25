@@ -220,7 +220,8 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   // borrowed 招式 binary-yes-no PRE_DISCARD_CHOICE → 注入 sentinel 視為「希望」（仿耀閃挑戰）
   const copiedSpec = ATTACK_PRE_DISCARD_CHOICE.get(copiedKey);
   let dispatchAction: typeof action = action;
-  if (copiedSpec?.scope === 'binary-yes-no') {
+  // v5.720：同耀閃挑戰——只在玩家未選(action 無 discardedEnergyIids)才 fallback「希望」；玩家選了(含否)就尊重。
+  if (copiedSpec?.scope === 'binary-yes-no' && action?.discardedEnergyIids === undefined) {
     dispatchAction = {
       ...(action ?? { type: 'ATTACK', attackIndex: 0 } as Extract<GameAction, { type: 'ATTACK' }>),
       discardedEnergyIids: ['__rocket_command_borrowed_yes__'],

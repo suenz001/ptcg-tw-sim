@@ -9097,6 +9097,7 @@
               // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
+              const cc = preAttackDiscard.copyAttackChoice; // v5.720 borrowed(耀閃挑戰/高傲指令)時帶上,否則被借招式選擇丟失
               // v4.46 金屬之錘 Stage 2：自動偵測 metal 能量數，決定下一步
               //   - 0 顆：sentinel '__metal_hammer_no_metal__' → +150 不丟
               //   - 1-3 顆：自動全選（玩家無需操作）→ +150
@@ -9110,10 +9111,10 @@
                 const eligible = getDiscardableEnergies(stage2Spec);
                 if (eligible.length === 0) {
                   preAttackDiscard = null;
-                  dispatch(GameActions.attack(ai, ['__metal_hammer_no_metal__']));
+                  dispatch(GameActions.attack(ai, ['__metal_hammer_no_metal__'], cc));
                 } else if (eligible.length <= 3) {
                   preAttackDiscard = null;
-                  dispatch(GameActions.attack(ai, eligible.map(e => e.iid)));
+                  dispatch(GameActions.attack(ai, eligible.map(e => e.iid), cc));
                 } else {
                   // 4+ 顆：切換到 picker spec（min=max=3 強制玩家選 3）
                   preAttackDiscard = {
@@ -9122,20 +9123,22 @@
                     attackName: '金屬之錘',
                     picked: new Set<string>(),
                     exactRequired: 3,
+                    copyAttackChoice: cc, // v5.720 borrowed 金屬之錘 4+ 鋼:stage2 picker confirm 也要帶
                   };
                 }
                 return;
               }
               preAttackDiscard = null;
-              dispatch(GameActions.attack(ai, ['yes-token']));
+              dispatch(GameActions.attack(ai, ['yes-token'], cc));
             }}>{yesLabel}</button>
           <button class="btn-ghost" style="padding:12px 32px;font-size:16px"
             onclick={() => {
               // v3.35：closure 內 ts narrowing 不會穿過外層 #if，需 null guard
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
+              const cc = preAttackDiscard.copyAttackChoice; // v5.720 borrowed 選「否」也要帶,否則耀閃挑戰收不到借招選擇
               preAttackDiscard = null;
-              dispatch(GameActions.attack(ai, []));
+              dispatch(GameActions.attack(ai, [], cc));
             }}>{noLabel}</button>
         </div>
       </div>

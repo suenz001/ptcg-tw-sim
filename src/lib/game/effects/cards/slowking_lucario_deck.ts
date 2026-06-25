@@ -114,7 +114,10 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
   //     讓借者能拿到 +N 加成（如金屬之錘 +150，QA 規定即使 0 鋼能量也應 +150）。
   const copiedSpec = ATTACK_PRE_DISCARD_CHOICE.get(copiedKey);
   let dispatchAction = action;
-  if (copiedSpec?.scope === 'binary-yes-no') {
+  // v5.720：只在玩家「未透過前端 binary modal 選擇」時(action 無 discardedEnergyIids，例 AI / 舊 state)
+  //   才預設「希望」fallback；玩家有選(含選「否」= 空陣列)就尊重玩家，讓玩家能選「不希望」
+  //   (官方判例：借者可選不增加傷害；選希望時前端會走被借招式自己的能量流程，如金屬之錘有鋼則丟)。
+  if (copiedSpec?.scope === 'binary-yes-no' && action?.discardedEnergyIids === undefined) {
     dispatchAction = {
       ...(action ?? { type: 'ATTACK', attackIndex: 0 } as Extract<GameAction, { type: 'ATTACK' }>),
       discardedEnergyIids: ['__yaoshan_borrowed_yes__'],
