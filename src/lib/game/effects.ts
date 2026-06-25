@@ -16636,104 +16636,93 @@ regR('electro-shot-discard', (st, idx, iids, params, pool) => {
 // 費用：[惡][惡] / 傷害：160
 // 效果：「若希望，選擇1個對手的戰鬥寶可夢身上附加的能量，改附於對手的備戰寶可夢身上。」
 regPre('耿鬼ex|戲法舞步', (state, _aIdx, _pool) => ({ state, damage: 160 }));
-regPost('耿鬼ex|戲法舞步', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '戲法舞步：選擇「否」 — 不改附對手能量', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  // v5.555 收斂：硬岩【鬥】能量/薄霧/純樸/化隱… 免疫對手招式效果 → 不可搬能量
-  {
+// v5.717 戲法舞步中央 helper（耿鬼ex/超能妙喵共用）：「若希望，選擇1個對手戰鬥寶可夢的能量，改附對手備戰」。
+//   原耿鬼ex 用 trick-step-energy(stage1 先從 active 移除能量)+trick-step-dst(stage2 從已移除的 active
+//   find energyInst→undefined→return st) → 能量從戰鬥場消失、沒附到備戰(玩家回報)。
+//   超能妙喵原自動取末張+隨機備戰(違反卡面「選擇1個」)。收斂：選能量用 active-energy-discard picker
+//   (符合通則 reference-nplot-energy-pick)，pick 階段「不移除」、attach 階段從仍持有的 active 一步移除+附加。
+export function trickStepPost(): AttackPostFn {
+  return (state, aIdx, pool, action) => {
+    // 若希望 binary-yes-no guard（ATTACK_PRE_DISCARD_CHOICE）
+    const chosen = action?.discardedEnergyIids;
+    const choseYes = chosen === undefined ? true : chosen.length >= 1;
+    if (!choseYes) return addLog(state, '戲法舞步：選擇「否」 — 不改附對手能量', aIdx);
+    // v5.555 免疫 gate：硬岩【鬥】/薄霧/純樸/化隱… 免疫對手招式效果 → 不可搬能量
     const _imm = isOppActiveImmuneToAttackEffect(state, aIdx, pool);
     if (_imm.blocked) return addLog(state, `戲法舞步：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
-  }
-  // 對手active上要有能量才能移
-  const activeEnergies = opp.active?.energyAttached ?? [];
-  if (activeEnergies.length === 0) {
-    return addLog(state, '戲法舞步：對手戰鬥寶可夢沒有附能量', aIdx);
-  }
-  if (opp.bench.length === 0) {
-    return addLog(state, '戲法舞步：對手備戰區沒有寶可夢，無法移動能量', aIdx);
-  }
-  // 讓玩家選擇要移動哪張能量（用 modal-choice）
-  return withPending(state, {
-    type: 'modal-choice',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'trick-step-energy',
-    params: {
-      label: '戲法舞步：選擇要移動的能量',
-      options: activeEnergies.map((e, i) => ({
-        id: e.iid,
-        text: `${i + 1}. ${pool.get(e.cardId)?.name ?? '?'}`,
-      })),
-    },
-  });
-};
-  return _cb(state, aIdx, pool);
-});
-regR('trick-step-energy', (st, idx, iids, _params, pool) => {
-  // idx = 攻擊方（發動方）
-  const dIdx = (1 - idx) as 0 | 1;
-  const energyIid = iids[0]; // 能量 iid 直接就是 id
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const opp = state.players[dIdx];
+    if (!opp.active || opp.active.energyAttached.length === 0) {
+      return addLog(state, '戲法舞步：對手戰鬥寶可夢沒有附能量', aIdx);
+    }
+    if (opp.bench.length === 0) {
+      return addLog(state, '戲法舞步：對手備戰區沒有寶可夢，無法移動能量', aIdx);
+    }
+    // 選對手戰鬥能量（active-energy-discard picker；validIids 限對手 active 能量）
+    return withPending(state, {
+      type: 'active-energy-discard',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'trick-step-pick',
+      params: {
+        scope: 'all-opp',
+        validIids: opp.active.energyAttached.map(e => e.iid),
+        targetIid: opp.active.iid,
+        titleOverride: '戲法舞步：選擇要移動的對手戰鬥能量',
+      },
+    });
+  };
+}
+regPost('耿鬼ex|戲法舞步', trickStepPost());
+regR('trick-step-pick', (st, idx, iids, _params, pool) => {
+  // v5.717 修復：pick 階段「不移除」能量（原 trick-step-energy 先移除 → attach 階段找不到 → 能量消失）。
+  //   只確認能量仍在對手 active 上，開 bench-choose 選對手備戰目標；實際移動延到 attach 一步完成。
+  const energyIid = iids[0];
   if (!energyIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
   const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
   if (!energyInst) return st;
+  if (opp.bench.length === 0) return st;
   const oppActiveName = pool.get(opp.active!.cardId)?.name ?? '?';
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
-
-  // 1. 從 active 移除能量
-  const newActive = {
-    ...opp.active!,
-    energyAttached: opp.active!.energyAttached.filter(e => e.iid !== energyIid),
-  };
-  // 2. 讓玩家選目的地 bench Pokemon（用 bench-choose）
-  // 注意：newActive 的 energyAttached 已移除，benchPokemon 不變
-  let s = addLog({ ...st, players: [...st.players] as [PlayerState, PlayerState] },
-    `戲法舞步：從 ${oppActiveName} 取下 ${eName}，選擇目的地備戰寶可夢`, idx);
-  s.players[dIdx] = { ...opp, active: newActive };
-  return withPending(s, {
-    type: 'bench-choose',
-    actorIdx: idx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'trick-step-dst',
-    params: {
-      validIids: opp.bench.map(c => c.iid),
-      titleOverride: '戲法舞步：選擇能量要移至的備戰寶可夢',
-      energyIid, // 傳遞到下一個 resolver
+  return withPending(
+    addLog(st, `戲法舞步：選擇 ${oppActiveName} 的 ${eName} 要移至的對手備戰寶可夢`, idx),
+    {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'trick-step-attach',
+      params: {
+        validIids: opp.bench.map(c => c.iid),
+        titleOverride: '戲法舞步：選擇能量要移至的備戰寶可夢',
+        energyIid,
+      },
     },
-  });
+  );
 });
-regR('trick-step-dst', (st, idx, iids, params, pool) => {
-  const dIdx = (1 - idx) as 0 | 1;
+regR('trick-step-attach', (st, idx, iids, params, pool) => {
+  // v5.717：energyInst 從「仍持有能量的對手 active」取得（pick 階段未移除）→ 一步：從 active 移除 + 附到備戰。
   const benchTargetIid = iids[0];
   const energyIid = (params?.energyIid as string | undefined) ?? '';
   if (!benchTargetIid || !energyIid) return st;
+  const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
-  const benchTarget = opp.bench.find(c => c.iid === benchTargetIid);
-  if (!benchTarget) return st;
-  // 能量在 newActive 的 energyAttached 中（已被 step1 移除），
-  // 需要從 newActive 取得 energyInst
   const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
   if (!energyInst) return st;
+  const benchTarget = opp.bench.find(c => c.iid === benchTargetIid);
+  if (!benchTarget) return st;
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
   const targetName = pool.get(benchTarget.cardId)?.name ?? '?';
-
-  // 1. 從 active 移除 energyInst（再次確認）
   const newActive = {
     ...opp.active!,
     energyAttached: opp.active!.energyAttached.filter(e => e.iid !== energyIid),
   };
-  // 2. 將能量附加到 bench target
   const newBench = opp.bench.map(c =>
     c.iid === benchTargetIid
       ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
-      : c
+      : c,
   );
-
   const players = [...st.players] as [PlayerState, PlayerState];
   players[dIdx] = { ...opp, active: newActive, bench: newBench };
   return addLog({ ...st, players },

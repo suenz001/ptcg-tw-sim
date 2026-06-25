@@ -13,8 +13,7 @@ import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { flipCoinsWithLog, selfHitPost, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
-import { isOppActiveImmuneToAttackEffect } from '../../defense';
+import { flipCoinsWithLog, selfHitPost, energyProvidesType, trickStepPost } from '../../effects'; // v5.682 host-aware；v5.717 戲法舞步收斂
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -216,30 +215,7 @@ regR('h-energy-redistribute', (state, aIdx, iids, params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 超能妙喵|戲法舞步 80 — 若希望，對手戰鬥 1 個能量改附對手備戰
 regPre('超能妙喵|戲法舞步', (s) => ({ state: s, damage: 80 }));
-regPost('超能妙喵|戲法舞步', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '戲法舞步：選擇「否」 — 不改附對手能量', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) return state;
-  // v5.555 收斂：免疫對手招式效果 → 不可搬能量
-  {
-    const _imm = isOppActiveImmuneToAttackEffect(state, aIdx, _pool);
-    if (_imm.blocked) return addLog(state, `戲法舞步：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
-  }
-  const last = opp.active.energyAttached[opp.active.energyAttached.length - 1];
-  const benchIdx = Math.floor(Math.random() * opp.bench.length);
-  return updatePlayer(addLog(state, '戲法舞步：對手戰鬥末尾 1 個能量改附對手備戰（隨機）', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
-    bench: p.bench.map((b, i) => i === benchIdx ? { ...b, energyAttached: [...b.energyAttached, last] } : b),
-  }));
-};
-  return _cb(state, aIdx, pool);
-});
+regPost('超能妙喵|戲法舞步', trickStepPost());
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 統計：H(1 漏網) + I(4 漏網) + J(1 漏網) = 6 張
