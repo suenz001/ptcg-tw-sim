@@ -7,6 +7,7 @@
  */
 
 import type { CardInstance, GameAction, GameState } from '../../types';
+import { copyAttackPostDispatch } from '../_shared';
 import type { Card } from '$lib/cards/types';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import {
@@ -143,14 +144,7 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
   return { state: s, damage: parseDmgFallback(picked.damage) };
 });
 // regPost 轉接到被複製招式的 ATTACK_POST（與扮晶晶酒對稱）
-regPost('呆呆王|耀閃挑戰', (state, aIdx, pool) => {
-  const key = state.pendingCopyAttackKey;
-  const cleared = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
-  const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool);
-});
+regPost('呆呆王|耀閃挑戰', copyAttackPostDispatch);
 
 // ── 呆呆王 SV7 10934｜超念力 — 120 無效果 ────────────────────────────────────
 regPre('呆呆王|超念力', (state) => ({ state, damage: 120 }));

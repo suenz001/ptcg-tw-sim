@@ -10,6 +10,7 @@
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
 import { tryPromptPromoteActive } from '../_shared';
+import { copyAttackPostDispatch } from '../_shared';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
@@ -1159,11 +1160,4 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
   // 被複製招式未註冊 PRE：回印刷傷害
   return { state: s, damage: parseDmg(pickedAtk.damage) };
 });
-regPost('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool) => {
-  const key = state.pendingCopyAttackKey;
-  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
-  const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool);
-});
+regPost('N的索羅亞克ex|暗黑底牌', copyAttackPostDispatch);

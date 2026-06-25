@@ -11,6 +11,7 @@ import {
   ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -126,14 +127,7 @@ regPre('皮可西|揮指', (state, aIdx, pool, action) => {
   }
   return { state: s, damage: best.damage };
 });
-regPost('皮可西|揮指', (state, aIdx, pool) => {
-  const key = state.pendingCopyAttackKey;
-  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
-  const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool);
-});
+regPost('皮可西|揮指', copyAttackPostDispatch);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 5. 艾姆利多|神之爆炸 160 — 自方備戰沒有「由克希」「亞克諾姆」失敗

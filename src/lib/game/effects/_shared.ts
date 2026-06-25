@@ -153,6 +153,24 @@ export type AttackPostFn = (
 export const ATTACK_PRE  = new Map<string, AttackPreFn>();
 export const ATTACK_POST = new Map<string, AttackPostFn>();
 
+/**
+ * v5.722：copy-attack regPost 統一轉接被借招式的 ATTACK_POST，**傳 action**讓 borrowed 招式的
+ *   regPost option 效果（「若希望」洗回/丟棄，如跳躍衝天回牌庫 / 金屬之錘丟鋼）能正確判 yes/no。
+ *   原各 copy-attack(耀閃挑戰/揮指/技能大盜/暗黑底牌/欺詐/試著模仿/高傲指令)的 regPost 多漏傳 action
+ *   → borrowed regPost 收 action=undefined → 預設 yes → 玩家選否仍被強制執行 option 效果(玩家回報)。
+ *   (扮晶晶酒 v3.873 早已傳，現一併收斂到此中央 helper。)
+ */
+export function copyAttackPostDispatch(
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, action?: GameAction,
+): GameState {
+  const key = state.pendingCopyAttackKey;
+  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
+  if (!key) return cleared;
+  const copiedPost = ATTACK_POST.get(key);
+  if (!copiedPost) return cleared;
+  return copiedPost(cleared, aIdx, pool, action);
+}
+
 export function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }
 export function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
 

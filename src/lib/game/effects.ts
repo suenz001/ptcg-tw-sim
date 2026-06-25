@@ -21,6 +21,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
+import { copyAttackPostDispatch } from './effects/_shared';
 import { openDeckViewReshuffle, setBloomEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
@@ -14041,14 +14042,7 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
 // POST 轉接：engine 走完傷害施加後，查本招式的 POST → 這邊將 state.pendingCopyAttackKey
 // 轉去呼叫被複製招式的 POST（例如 pendingSelection 類附加效果），完成後清除旗標。
 // v3.873：接收 action 並轉接 — 激流水泵 等 option-style POST 需要 action.discardedEnergyIids 判斷是否觸發。
-regPost('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
-  const key = state.pendingCopyAttackKey;
-  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
-  const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool, action);
-});
+regPost('火箭隊的謎擬Ｑ|扮晶晶酒', copyAttackPostDispatch); // v5.722 收斂
 
 // ---- Known gap 特性 stubs（log only）--------------------------------------
 // 這些特性需要引擎擴充才能完整實裝。目前寫成說明 log，避免預組無法放入編輯器。

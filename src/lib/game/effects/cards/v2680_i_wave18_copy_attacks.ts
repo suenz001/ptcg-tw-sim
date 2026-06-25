@@ -16,6 +16,7 @@
  */
 
 import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, revealTopCardsLog } from '../_shared';
+import { copyAttackPostDispatch } from '../_shared';
 import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, GameAction, CardInstance } from '../../types';
@@ -63,14 +64,8 @@ function copyAttackPre(state: GameState, aIdx: 0|1, pool: Map<string, Card>, cop
   return { state: s, damage: fallbackDamage };
 }
 
-function copyAttackPost(state: GameState, aIdx: 0|1, pool: Map<string, Card>): GameState {
-  const key = state.pendingCopyAttackKey;
-  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
-  const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool);
-}
+// v5.722：收斂到 _shared.copyAttackPostDispatch（傳 action，讓 borrowed regPost 判 yes/no）。
+const copyAttackPost = copyAttackPostDispatch;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 索羅亞克｜欺詐 — 選對手戰鬥場 1 招
@@ -239,7 +234,7 @@ regPost('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = updatePlayer(state, dIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   s = addLog(s, '高傲指令：對手牌庫重洗', aIdx);
-  return copyAttackPost(s, aIdx, pool);
+  return copyAttackPostDispatch(s, aIdx, pool, action); // v5.722 傳 action
 };
   return _cb(state, aIdx, pool);
 });

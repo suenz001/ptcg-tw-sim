@@ -64,6 +64,7 @@ import {
   addPendingPrize,
   regG} from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
+import { copyAttackPostDispatch } from '../_shared';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { clearActiveEffects } from '../_shared';  // v5.527 收斂 m5ClearTurnFlags→中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -2151,14 +2152,7 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
 });
 
 // ── 1b. 狐大盜|招式竊賊 POST — 轉接 borrowed attack 的 POST ──────────
-regPost('狐大盜|技能大盜', (state, aIdx, pool) => {
-  const key = state.pendingCopyAttackKey;
-  const cleared = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
-  const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool);
-});
+regPost('狐大盜|技能大盜', copyAttackPostDispatch);
 
 // ── 2. 光子密碼 resolver — 從 discard 搶救 ≤2 張 basic 能量到備戰寶可夢
 //   參數：params.basicEnergyIids（fn 開 picker 時傳入的 KO 前快照）
