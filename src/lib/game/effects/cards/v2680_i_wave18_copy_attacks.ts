@@ -15,7 +15,7 @@
  *   - 不繼承被複製招式的 skipWeakRes（弱抗計算用本招式自身屬性）
  */
 
-import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, revealTopCardsLog } from '../_shared';
 import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, GameAction, CardInstance } from '../../types';
@@ -183,6 +183,8 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   const top10 = opp.deck.slice(0, 10);
+  // v5.719：卡面「將對手的牌庫上方 10 張卡翻到正面」= 公開揭示，列出翻開的卡名。
+  state = revealTopCardsLog(state, aIdx, top10, pool, '高傲指令');
   const pokemonCards: CardInstance[] = top10.filter(c => pool.get(c.cardId)?.supertype === 'Pokemon');
   if (pokemonCards.length === 0) {
     return { state: addLog(state, '高傲指令：對手牌庫頂 10 張無寶可夢', aIdx), damage: 0 };

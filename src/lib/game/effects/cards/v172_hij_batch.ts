@@ -20,7 +20,7 @@ import {
   reg, regR, regG, regA,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   healResolver, sameEvoName,
-  addPendingPrize, getOwnBenchLimit} from '../_shared';
+  addPendingPrize, getOwnBenchLimit, revealTopCardsLog} from '../_shared';
 import { joinCardNames } from '../_shared';
 import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
@@ -803,7 +803,9 @@ reg('配樂之笛', (st, idx, pool) => {
   const opp = st.players[oppIdx];
   const top5 = opp.deck.slice(0, 5);
   const top5Iids = top5.map(c => c.iid);
-  st = addLog(st, '配樂之笛：翻開對手牌庫上方 5 張，選任意數量基礎寶可夢放對手備戰', idx);
+  st = addLog(st, '配樂之笛：將對手牌庫上方 5 張翻到正面，選任意數量基礎寶可夢放對手備戰', idx);
+  // v5.719：卡面「翻到正面」= 公開揭示，列出全部 5 張卡名（含非基礎/沒被選的），玩家才看得到「沒翻到的是哪些」。
+  st = revealTopCardsLog(st, idx, top5, pool, '配樂之笛');
   // 算對手能放幾隻（受備戰上限）
   const limit = getOwnBenchLimit(st, oppIdx, pool);
   const space = Math.max(0, limit - opp.bench.length);

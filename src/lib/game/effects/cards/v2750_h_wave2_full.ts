@@ -10,7 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
-import { openDeckViewReshuffle } from '../_shared';
+import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
@@ -2212,12 +2212,14 @@ function tetsuibaraDeathSqueezePre(label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     const top = p.deck.slice(0, 5);
+    // v5.719：卡面「將自己的牌庫上方 5 張卡翻到正面」= 公開揭示，列出翻開的卡名。
+    let s = revealTopCardsLog(state, aIdx, top, pool, label);
     let futureCount = 0;
     for (const c of top) {
       const card = pool.get(c.cardId);
       if (card?.tags?.includes('未來')) futureCount++;
     }
-    return { state: addLog(state, `${label}：牌庫頂 5 中未來 ${futureCount} → ${futureCount}×70 = ${futureCount*70}`, aIdx), damage: futureCount * 70 };
+    return { state: addLog(s, `${label}：牌庫頂 5 中未來 ${futureCount} → ${futureCount}×70 = ${futureCount*70}`, aIdx), damage: futureCount * 70 };
   };
 }
 function tetsuibaraDeathSqueezePost(label: string): AttackPostFn {

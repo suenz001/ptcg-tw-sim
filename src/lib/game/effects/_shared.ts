@@ -811,6 +811,23 @@ export function cardLink(iid: string | undefined | null, displayName: string | u
   return `\uE100${iid}\uE101${name}\uE102`;
 }
 
+/**
+ * v5.719：「翻到正面 / 查看牌庫上方 N 張」公開揭示翻開的卡名（雙方可見）。
+ *   卡面寫「翻到正面」= 公開資訊，雙方都該看到翻了哪些卡（含沒被選 / 沒翻到的）。
+ *   配樂之笛 / 火箭隊的貓老大ex / 鐵荊棘未來迴路 等共用，避免各自只 log 結果不列卡名。
+ */
+export function revealTopCardsLog(
+  state: GameState,
+  actorIdx: 0 | 1,
+  topCards: CardInstance[],
+  pool: Map<string, Card>,
+  label: string,
+): GameState {
+  if (topCards.length === 0) return state;
+  const names = topCards.map((c) => pool.get(c.cardId)?.name ?? '?').join('、');
+  return addLog(state, `${label}：翻到正面的 ${topCards.length} 張 — ${names}`, actorIdx);
+}
+
 export function addLog(
   state: GameState,
   msg: string,
