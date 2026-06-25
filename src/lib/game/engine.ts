@@ -1188,8 +1188,16 @@ export function canAffordAttack(
     const overridden = getKyuremElectroplasmaEffectiveCost(attackerName, attackName, state, pool, cost);
     if (overridden !== cost) cost = overridden;
     // v2.133 月月熊 赫月ex｜老練招式 — 「血月」所需【無】減少對手已獲得獎賞數
-    const overridden2 = getUrsalunaBloodMoonEffectiveCost(attackerName, attackName, state, pool, cost);
-    if (overridden2 !== cost) cost = overridden2;
+    // v5.723：老練招式是【無】寶可夢(月月熊赫月ex)的「特性」改寫 cost — 火箭隊的監視塔在場時【無】寶可夢
+    //   特性全消除 → cost 不減。音波龍|調諧迴響(下方 overridden8)同屬【無】特性型 cost-modifier，一併 gate。
+    //   其餘 cost-modifier 持有者皆非【無】(酋雷姆龍/八爪武師鬥/狙射樹梟草/瑪力露麗超/鐵螯惡水/熾焰咆哮虎火/
+    //   好勝毛蟹水)或為招式自帶條件(觸手激怒/反撲剪)，不受監視塔影響。通則:新增【無】寶可夢特性型 cost-modifier
+    //   都要走此 isColorlessAbilityBlocked gate。
+    const colorlessAbilityNullified = isColorlessAbilityBlocked(state, attackerCard, pool);
+    if (!colorlessAbilityNullified) {
+      const overridden2 = getUrsalunaBloodMoonEffectiveCost(attackerName, attackName, state, pool, cost);
+      if (overridden2 !== cost) cost = overridden2;
+    }
     // v2.161 八爪武師｜觸手激怒 — 身上有傷害指示物則只需 1 個【鬥】
     const overridden3 = getOctopusTentacleEffectiveCost(pokemon, attackerName, attackName, cost);
     if (overridden3 !== cost) cost = overridden3;
@@ -1208,8 +1216,10 @@ export function canAffordAttack(
     const overridden7 = getAzumarillSparkleSplashEffectiveCost(attackerName, attackName, state, pool, cost);
     if (overridden7 !== cost) cost = overridden7;
     // v2.997 音波龍｜調諧迴響 — 雙方手牌張數相同時，「恐慌嚎鳴」cost 全部消除
-    const overridden8 = getSonidoTuningResonanceEffectiveCost(attackerName, attackName, state, pool, cost);
-    if (overridden8 !== cost) cost = overridden8;
+    if (!colorlessAbilityNullified) {  // v5.723：音波龍|調諧迴響是【無】寶可夢特性 → 監視塔在場消除
+      const overridden8 = getSonidoTuningResonanceEffectiveCost(attackerName, attackName, state, pool, cost);
+      if (overridden8 !== cost) cost = overridden8;
+    }
     // v4.976 鐵螯龍蝦｜反撲剪 — 身上有傷害指示物則只需 1 個【惡】
     const overridden9 = getIronCrabCounterClipEffectiveCost(pokemon, attackerName, attackName, cost);
     if (overridden9 !== cost) cost = overridden9;
