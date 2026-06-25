@@ -166,6 +166,9 @@ regPost('佛烈托斯|鐵之震動', (state, aIdx, pool) => {
     params: {
       sourceEnergies,
       target: 'self',
+      // v5.712：卡面「以任意方式改附於自己的寶可夢身上」含戰鬥位 → includeActive（原漏 → picker 只列備戰，
+      //   從戰鬥位拆下的【鋼】能量無法再附回戰鬥位）。resolver 早已支援 active 目標(distMap.has(newActive.iid))。
+      includeActive: true,
       titleOverride: `鐵之震動：分配 ${totalCount} 張【鋼】能量（點目標寶可夢，每點一次 = 1 個能量）`,
     },
   });
