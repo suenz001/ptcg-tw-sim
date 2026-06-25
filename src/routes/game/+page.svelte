@@ -25,6 +25,7 @@
     tryPromoteToMainForFestival,
   } from '$lib/game/engine';
   import { resolveRoomUpdate } from '$lib/game/sync-guards';
+  import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -3218,34 +3219,9 @@
       // v3.14 擴充：支援 params.targetIid（粉碎之錘 / 悠哉尾草棒）— 從 src 玩家
       //   「指定 iid」的寶可夢身上挑能量；可以是 active 或 bench；找不到則 fallback active。
       // v3.826 擴充：支援 params.scope='all-own'（鐵斑葉ex 迅速游標）— 列自方所有寶可夢身上能量
-      case 'active-energy-discard': {
-        const scope = pendingSelection.params?.scope as string | undefined;
-        if (scope === 'all-own' || scope === 'all-opp') {
-          // v4.01：'all-opp' 列對手場上所有寶可夢能量（小灰怪挪動一下用）— src 已是 sourcePlayerIdx
-          const allPokes = [...(src.active ? [src.active] : []), ...src.bench];
-          const validIidsSet = new Set(pendingSelection.params?.validIids as string[] | undefined);
-          const targetIidS = pendingSelection.params?.targetIid as string | undefined;
-          const out: CardInstance[] = [];
-          for (const pk of allPokes) {
-            if (pk.iid === targetIidS) continue;  // 不列 target 自己的能量（自轉無意義）
-            for (const e of pk.energyAttached) {
-              if (validIidsSet.size === 0 || validIidsSet.has(e.iid)) out.push(e);
-            }
-          }
-          return out;
-        }
-        const targetIid = pendingSelection.params?.targetIid as string | undefined;
-        if (targetIid) {
-          const tgt = src.active?.iid === targetIid ? src.active
-                    : src.bench.find(b => b.iid === targetIid);
-          // v5.423：targetIid 分支支援 validIids 篩選（改造之錘只列特殊能量讓玩家選；
-          //   粉碎之錘不傳 validIids → 仍列全部能量，向後相容）
-          const validIidsT = pendingSelection.params?.validIids as string[] | undefined;
-          const eListT = tgt?.energyAttached ?? [];
-          return validIidsT ? eListT.filter(e => validIidsT.includes(e.iid)) : eListT;
-        }
-        return src.active?.energyAttached ?? [];
-      }
+      case 'active-energy-discard':
+        // v5.718：邏輯抽至 selection-candidates.ts（純函式，test-selection-candidates 覆蓋）。
+        return activeEnergyDiscardCandidates(pendingSelection.params, src);
       case 'heal-target':  {
         const all = [...(src.active ? [src.active] : []), ...src.bench];
         const validIids3 = pendingSelection.params?.validIids as string[] | undefined;

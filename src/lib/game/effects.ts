@@ -16666,8 +16666,9 @@ export function trickStepPost(): AttackPostFn {
       effectKey: 'trick-step-pick',
       params: {
         scope: 'all-opp',
+        // ⚠ 不可傳 targetIid：前端 all-opp 分支會 `if (pk.iid === targetIid) continue` 跳過該寶可夢能量。
+        //   戲法舞步要選的正是對手戰鬥位(active)能量，若把 active 設 targetIid → 能量全被跳過→選不到(v5.718)。
         validIids: opp.active.energyAttached.map(e => e.iid),
-        targetIid: opp.active.iid,
         titleOverride: '戲法舞步：選擇要移動的對手戰鬥能量',
       },
     });

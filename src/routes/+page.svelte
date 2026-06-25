@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.718</span> 修正：戲法舞步能量選擇器列不出能量（接續 v5.717）</summary>
+        <ul>
+          <li>v5.717 修正戲法舞步能量消失後，能量選擇介面因參數設定錯誤，導致對手戰鬥位的能量列不出來、玩家無法點選。已修正，現可正常選擇要移動的能量與目標備戰寶可夢。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.717</span> 修正：耿鬼ex「戲法舞步」轉移的能量會消失</summary>
         <ul>
           <li>耿鬼ex（與超能妙喵）的「戲法舞步」會把對手戰鬥寶可夢的 1 個能量改附到對手備戰，但先前實作會讓被轉移的能量直接消失、沒有附到備戰寶可夢身上。</li>

@@ -9,9 +9,9 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.stub-ts.js'); writeFileSync(S, 'export const base="";export const assets="";');
 const E = join(ROOT, '.ent-ts.ts'); const O = join(ROOT, '.ent-ts.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
-writeFileSync(E, `export { applyAction } from './src/lib/game/engine';\nimport './src/lib/game/effects';`);
+writeFileSync(E, `export { applyAction } from './src/lib/game/engine';\nexport { activeEnergyDiscardCandidates } from './src/lib/game/selection-candidates';\nimport './src/lib/game/effects';`);
 await build({ entryPoints:[E], outfile:O, bundle:true, format:'esm', platform:'node', target:'node20', alias:{ '$lib':join(ROOT,'src/lib'), '$app/paths':S }, logLevel:'error' });
-const { applyAction } = await import(pathToFileURL(O).href);
+const { applyAction, activeEnergyDiscardCandidates } = await import(pathToFileURL(O).href);
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
 const pool = new Map();
@@ -40,6 +40,11 @@ T('戲法舞步:對手戰鬥能量移到對手備戰(能量不消失) [驗HEAD�
   let out = applyAction(st, { type:'ATTACK', attackIndex:0 }, pool);
   assert(out.pendingSelection, `ATTACK 後應開能量 picker(實 ${out.pendingSelection?.type})`);
   assert.equal(out.pendingSelection.type, 'active-energy-discard');
+  // ★ v5.718：把 engine 產生的 picker params 餵給前端候選函式,確認玩家「選得到」能量(非空)。
+  //   原誤傳 targetIid=對手active → 候選空 → 玩家連能量都選不到(本斷言鎖住)。
+  const _cand = activeEnergyDiscardCandidates(out.pendingSelection.params, out.players[1]);
+  assert(_cand.length >= 1, `戲法舞步 picker 應列出對手戰鬥位能量(玩家選得到),實候選數 ${_cand.length}`);
+  assert(_cand.some(e => e.iid === oppWater.iid), '對手戰鬥位的水能量應在可選候選中');
   // 選對手戰鬥能量
   out = applyAction(out, { type:'RESOLVE_SELECTION', selectedIids:[oppWater.iid] }, pool);
   assert(out.pendingSelection, `選能量後應開 bench-choose(實 ${out.pendingSelection?.type})`);
