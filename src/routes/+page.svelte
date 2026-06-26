@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.725</span> 修正：場上多張「耿鬼ex」時「侵蝕詛咒」傷害正確疊加</summary>
+        <ul>
+          <li>先前場上有 2 張以上「耿鬼ex」時，對手從手牌附能，只有 1 張的「侵蝕詛咒」生效（只放 2 個傷害指示物）。已修正：每張耿鬼ex 各自放置（2 張 → 放 4 個、+40 點），比照雪妖女「冰冷之帳」同名特性各自生效。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.724</span> 體驗優化：對戰紀錄回顧不再被新動作跳走、報名卡顯示先後攻選擇</summary>
         <ul>
           <li>對戰紀錄面板：先前每當有新動作，正在往下翻看歷史紀錄時會被自動捲回最新處、一直跳掉。已修正，捲動位置會保持，可以安心回顧。</li>

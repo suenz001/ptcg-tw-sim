@@ -572,15 +572,22 @@ export function fireOnHandEnergyAttached(
   // ① 對手場上被動特性（侵蝕詛咒 等）
   const opp = s.players[(1 - attacherIdx) as 0 | 1];
   const oppField: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
-  const processed = new Set<string>();
+  // v5.725：同名被動特性「疊加」——卡面「只要這隻寶可夢在場上…」是針對每一個持有者
+  //   各自獨立觸發（同雪妖女｜冰冷之帳：場上 N 張 → 效果 ×N）。原以「特性名」全域 Set
+  //   去重 → 場上 2 張耿鬼ex 的侵蝕詛咒只觸發 1 次（只放 20 應 40），玩家回報的 bug。
+  //   改為「每個持有者實體」各觸發一次；僅在「同一張卡重複列同名特性」時於該卡內去重，
+  //   避免單卡重複（卡資料正常不會重列，純防呆）。比照 PASSIVE_ATTACK_BONUS 的疊加原則
+  //   （預設疊加，唯明文「不重複」者才 dedup）。OPP_ENERGY_ATTACH_PASSIVE 目前僅侵蝕詛咒，
+  //   屬「每張各自生效」型，無「不重複」白名單需求。
   for (const inst of oppField) {
     const card = pool.get(inst.cardId);
     if (!card?.abilities) continue;
+    const firedOnThisInst = new Set<string>();  // 僅卡內去重（防單卡重列同名）
     for (const ab of card.abilities) {
-      if (processed.has(ab.name)) continue;
+      if (firedOnThisInst.has(ab.name)) continue;
       const fn = OPP_ENERGY_ATTACH_PASSIVE.get(ab.name);
       if (!fn) continue;
-      processed.add(ab.name);
+      firedOnThisInst.add(ab.name);
       s = fn(s, (1 - attacherIdx) as 0 | 1, attacherIdx, targetIid, pool);
     }
   }
