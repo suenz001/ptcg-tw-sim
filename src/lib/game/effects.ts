@@ -13323,18 +13323,8 @@ reg('寶可平板', (st, idx) => {
 // ── 10. 竹蘭的力量負重（道具）— TOOL_HP_BONUS 提供 +70 HP；
 //        attach resolver 由 TOOL_* 自動登記區塊統一註冊 toolAttachEffect。 ────────
 
-// ── 11. 火箭隊的拉姆達（Supporter）— 搜 1 張訓練家卡加手牌 ────────────────
-regG('火箭隊的拉姆達', (st, idx) => st.players[idx].deck.length > 0);
-reg('火箭隊的拉姆達', (st, idx) => {
-  st = addLog(st, '火箭隊的拉姆達：從牌庫選 1 張訓練家卡加入手牌', idx);
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Trainer',
-    minCount: 0, maxCount: 1,
-    effectKey: 'search-generic-to-hand',
-  });
-});
+// ── 11. 火箭隊的拉姆達（Supporter）— v5.728 移除此處重複死碼；生效版實裝在下方
+//        「搜任意 1 張訓練家加手牌」(filter AnyTrainer + search-pokemon-to-hand)。
 
 // ── 12. 硬岩【鬥】能量 — 屬性：鬥（已由 engine SPECIAL_ENERGY_TYPES 處理） ──
 // 補充：卡面另有「附著此能量的寶可夢不會受到對手寶可夢招式的效果的影響」，

@@ -97,37 +97,8 @@ reg('短褲小子', (st, idx) => {
   });
 });
 
-// ── 寶可夢中心的姐姐 — 選 1 寶可夢 +60 HP + 解全狀態 ─────────────────────
-regG('寶可夢中心的姐姐', (st, idx) => {
-  const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
-  return all.some(c => c.damage > 0 || !!c.status || !!c.secondaryStatus || !!c.tertiaryStatus);
-});
-reg('寶可夢中心的姐姐', (st, idx) => {
-  st = addLog(st, '寶可夢中心的姐姐：選 1 隻寶可夢回 60 HP 並解除所有特殊狀態', idx);
-  return withPending(st, {
-    type: 'heal-target',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'heal-60-clear-status',
-    params: { healAmount: 60, clearStatus: true },
-  });
-});
-regR('heal-60-clear-status', (st, idx, iids, _params, pool) => {
-  const targetIid = iids[0];
-  if (!targetIid) return st;
-  return updatePlayer(st, idx, p => {
-    const heal = (pk: import('../../types').CardInstance) =>
-      pk.iid === targetIid
-        ? { ...pk, damage: Math.max(0, pk.damage - 60), status: undefined, secondaryStatus: undefined }
-        : pk;
-    return {
-      ...p,
-      active: p.active ? heal(p.active) : null,
-      bench: p.bench.map(heal),
-    };
-  });
-  void pool;  // unused
-});
+// 寶可夢中心的姐姐 — v5.728 移除此處重複死碼（生效版在 effects.ts:4327，effectKey
+//   pokemon-center-lady-heal → healResolver）；此處自訂 resolver 漏清 tertiaryStatus 已棄用。
 
 // ── 由紫 — 選 1【超】寶可夢 +150 HP ────────────────────────────────────────
 regG('由紫', (st, idx, pool) => {

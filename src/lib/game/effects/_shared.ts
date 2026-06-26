@@ -1107,7 +1107,7 @@ export function healResolver(
     const actualHeal = Math.min(prevTarget.damage, healAmount);
     const parts = [`${name} 回復 ${actualHeal} HP`];
     if (discardCount > 0) parts.push(`丟棄 ${discardCount} 個能量`);
-    if (clearStatus && (prevTarget.status || prevTarget.secondaryStatus)) {
+    if (clearStatus && (prevTarget.status || prevTarget.secondaryStatus || prevTarget.tertiaryStatus)) {
       parts.push('解除特殊狀態');
     }
     st = addLog(st, `→ ${parts.join('，')}`, idx);
@@ -1123,6 +1123,7 @@ export function healResolver(
     if (clearStatus) {
       delete healed.status;
       delete healed.secondaryStatus;
+      delete healed.tertiaryStatus;  // v5.728：三重狀態(睡+毒+燒)第三格也要清,卡面「特殊狀態也全部恢復」(與撤退/化石清狀態一致清全三階層)
       delete healed.poisonDamagePerCheckup;
     }
     return {

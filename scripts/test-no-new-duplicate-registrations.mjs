@@ -12,7 +12,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const KNOWN = new Set([
   "regA|吉雉雞ex|0","regA|米立龍|0",
-  "regG|寶可夢中心的姐姐","regG|火箭隊的拉姆達","regG|鬼之假面",
+  "regG|鬼之假面",
   "regPost|仙子伊布ex|天仙石","regPost|喵喵ex|夾尾巴逃跑",
   "regPost|圓絲蛛|緊纏之絲","regPost|妙喵|小憩","regPost|布里卡隆|圍困","regPost|洗翠 風速狗|灼燒",
   "regPost|芳香精|吸取之吻","regPost|鐵面忍者|急速折返","regPost|阿利多斯|毒陣",
@@ -23,8 +23,8 @@ const KNOWN = new Set([
   "regPre|摔角鷹人|復仇踢","regPre|波爾凱尼恩|強力蒸汽","regPre|波盪水ex|宣洩吼嘯",
   "regPre|火箭隊的多邊獸Ⅱ|R指令","regPre|耿鬼|意志劫持","regPre|貓鼬斬|連斬",
   "regPre|超級火炎獅ex|大爆炸之火","regPre|雙彈瓦斯|瘋狂炸彈","regPre|雷丘|快速攻擊",
-  "regR|heal-60-clear-status",
-  "reg|寶可夢中心的姐姐","reg|火箭隊的拉姆達","reg|鬼之假面",
+  
+  "reg|鬼之假面",
 ]);
 
 function listTs(dir){let out=[];for(const e of readdirSync(dir,{withFileTypes:true})){const p=join(dir,e.name);
