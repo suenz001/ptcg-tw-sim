@@ -10672,7 +10672,6 @@ regPost('洛托姆|粉碎脈衝', (state, aIdx, pool) => {
 // 混亂類
 regPost('光電傘蜥|閃光彈', statusPost('confused'));
 regPost('火箭隊的大嘴蝠|奇異之光', statusPost('confused'));
-regPost('火箭隊的大嘴蝠|奇異之光', statusPost('confused'));
 regPost('超能妙喵|蠱惑', statusPost('confused'));
 regPost('超音蝠|超音波', statusPost('confused'));
 regPost('死神棺|蠱惑', statusPost('confused'));
@@ -10684,7 +10683,6 @@ regPost('雙彈瓦斯|充滿瓦斯', statusPost('confused'));
 // 中毒類
 regPost('天蠍|毒擊', statusPost('poisoned'));
 regPost('鉗尾蠍|毒擊', statusPost('poisoned'));
-regPost('火箭隊的超音蝠|噴毒', statusPost('poisoned'));
 regPost('火箭隊的超音蝠|噴毒', statusPost('poisoned'));
 regPost('<莉佳的>臭臭花|噴毒', statusPost('poisoned'));
 regPost('哎呀球菇|毒之孢子', statusPost('poisoned'));
