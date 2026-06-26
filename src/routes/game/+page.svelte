@@ -99,6 +99,11 @@
   let tDeckId = $state('');
   let tNickname = $state(''); // 錦標賽暱稱（對戰/聊天/賽程表都用它顯示）
   let tCoinPref = $state('random'); // v5.572 硬幣勝出時要先攻/後攻/隨機
+  // v5.724：報名顯示先後攻偏好。server /event 未回傳 myCoinPref 時用 localStorage(玩家報名時本機存的)fallback。
+  const COIN_PREF_LABEL: Record<string, string> = { random: '隨機', first: '先攻', second: '後攻', opponent: '對手決定' };
+  function coinPrefLabel(p: string | undefined | null): string { return COIN_PREF_LABEL[p ?? 'random'] ?? '隨機'; }
+  function readCoinPref(eventId: string): string { try { return localStorage.getItem(`ptcg_tourn_coinpref_${eventId}`) ?? 'random'; } catch { return 'random'; } }
+  function saveCoinPref(eventId: string, pref: string): void { try { localStorage.setItem(`ptcg_tourn_coinpref_${eventId}`, pref); } catch { /* ignore */ } }
   let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
   let tLastActionAt = $state(0);   // v5.569：對局最後動作時間(伺服器回)，等待方閒置倒數用
   let tIdleMin = $state(3);        // 閒置判負分鐘(伺服器回)
@@ -4197,7 +4202,7 @@
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; else tRegFormEventId = ''; await tournLoadEvent(); }
+    try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; else { saveCoinPref(eventId, tCoinPref); tRegFormEventId = ''; } await tournLoadEvent(); } // v5.724 存先後攻偏好供報名卡顯示
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   // v5.629 玩家發起社群賽
@@ -6482,7 +6487,7 @@
             </div>
           {/if}
           {#if ev.registered}
-            <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{ev.myName}</b> ｜ 鎖定牌組：<b>{ev.myDeckName ?? '（已選定）'}</b></p>
+            <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{ev.myName}</b> ｜ 鎖定牌組：<b>{ev.myDeckName ?? '（已選定）'}</b> ｜ 先後攻：<b>{coinPrefLabel(ev.myCoinPref ?? readCoinPref(ev._id))}</b></p>
             {#if ev.status === 'registration'}<button class="btn-secondary small" onclick={() => tournUnregister(ev._id)} disabled={tBusy}>退賽</button>{/if}
             {#if ev.isProposer && ev.createdByPlayer && ev.status === 'registration' && (ev.regCount ?? 0) < (ev.minPlayers ?? 4)}<button class="btn-secondary small" style="border-color:#a4434a;color:#ff9b9b;margin-left:6px;" onclick={() => tCancelProposal(ev._id)} disabled={tBusy}>🚫 取消比賽</button>{/if}
           {:else if ev.status === 'registration'}
@@ -7885,7 +7890,8 @@
       {/if}
 
       <div class="log-col" title="向下滾動可查看從戰鬥開始到現在的完整記錄">
-        {#each [...(game.log??[])].reverse() as entry, i}
+        <!-- v5.724：用原始 log index 當 each key，避免新動作時整個列表 DOM 重建→捲動位置被重置(玩家回顧被跳掉) -->
+        {#each [...(game.log??[]).entries()].reverse() as [origIdx, entry], i (origIdx)}
           <!-- v2.130：privateMessage 只給 entry.playerIndex 本人看（對手 / 系統 fallback 到 message） -->
           <!-- v2.88：tokenize 後依類別套色 + 整行類別（turn-marker / victory）-->
           {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
