@@ -12070,10 +12070,13 @@ regPost('泥巴魚|飛撲圈套', (state, aIdx, pool, action) => {
 // v2.48 仙子伊布ex 兩招（H 標 Stage1 Psychic）
 // ══════════════════════════════════════════════════════════════════════════════
 // 1) 魔法魅惑 [PCC] 160 — 「下個對手回合，受到這個招式的寶可夢使用招式的傷害 -100」
-//    用既有 defNextAtkReducePost(100)：在對手 active 上設 damageReduceNextHit=100，
-//    對手下次該寶可夢攻擊時引擎自動扣 100。若對手換場到備戰 → clearActiveEffects 清旗標。
+//    v5.727：魔法魅惑 regPost 改回同族正確的 selfDmgReducePost(100)（註冊於上方「E. 自己下
+//    回合受招式傷害 -N」群組）。卡面「在下個對手的回合，受到這個招式的寶可夢(=仙子伊布自身)
+//    使用招式的傷害 -100」是【自身防護】(同 龍捲雲|暴風障壁、振翼髮|月亮之力)；先前誤用
+//    defNextAtkReducePost(在對手 active 設 nextOwnAttackPenalty 削弱對手攻擊)：對手附免疫
+//    能量(硬岩等)時其 guard 會擋掉 → 仙子伊布反而沒被保護，且會削弱對手對所有目標的傷害=錯誤語意。
+//    此處僅保留 regPre 基礎傷害 160；regPost 由上方 selfDmgReducePost(100) 生效。
 regPre('仙子伊布ex|魔法魅惑', (s, _a, _p) => ({ state: s, damage: 160 }));
-regPost('仙子伊布ex|魔法魅惑', defNextAtkReducePost(100));
 
 // 2) 天仙石 [WLP] 0 — 選 0~2 隻對手備戰，連附加卡放回對手牌庫並重洗
 //    Gate：「在上個自己的回合，若自己的寶可夢使出了天仙石，則無法使用」

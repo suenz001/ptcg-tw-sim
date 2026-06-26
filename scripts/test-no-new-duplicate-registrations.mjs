@@ -13,7 +13,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const KNOWN = new Set([
   "regA|吉雉雞ex|0","regA|米立龍|0",
   "regG|寶可夢中心的姐姐","regG|火箭隊的拉姆達","regG|鬼之假面",
-  "regPost|仙子伊布ex|天仙石","regPost|仙子伊布ex|魔法魅惑","regPost|喵喵ex|夾尾巴逃跑",
+  "regPost|仙子伊布ex|天仙石","regPost|喵喵ex|夾尾巴逃跑",
   "regPost|圓絲蛛|緊纏之絲","regPost|妙喵|小憩","regPost|布里卡隆|圍困","regPost|洗翠 風速狗|灼燒",
   "regPost|芳香精|吸取之吻","regPost|鐵面忍者|急速折返","regPost|阿利多斯|毒陣",
   "regPre|仙子伊布ex|天仙石","regPre|倫琴貓|猛力進攻","regPre|厄鬼椪 碧草面具|鬼返",
