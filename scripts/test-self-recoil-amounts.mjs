@@ -19,8 +19,11 @@ for(const f of readdirSync(dir)){if(!f.endsWith('.json')||f==='index.json'||!idx
   for(const c of JSON.parse(readFileSync(join(dir,f),'utf8'))){if(c?.id==null)continue;pool.set(String(c.id),c);if(!byName.has(c.name))byName.set(c.name,c);}}
 const recoil=[]; const seen=new Set();
 for(const c of byName.values())for(const a of (c.attacks||[])){
-  const m=(a.effect||'').match(/這隻寶可夢也?受到(\d+)點傷害/);
-  if(m){const k=`${c.name}|${a.name}`; if(!seen.has(k)){seen.add(k); recoil.push({card:c,key:k,N:parseInt(m[1])});}}
+  const eff=a.effect||'';
+  const m=eff.match(/這隻寶可夢也?受到(\d+)點傷害/);
+  // 只測「無條件固定自傷」;含「擲」(硬幣)或「若」(若希望/若…條件)的自傷是條件型→
+  //   依硬幣/玩家選擇才生效,本守衛跑不到那條件會 false-positive(且硬幣不確定),故排除。
+  if(m && !/[擲若]/.test(eff)){const k=`${c.name}|${a.name}`; if(!seen.has(k)){seen.add(k); recoil.push({card:c,key:k,N:parseInt(m[1])});}}
 }
 let iid=0;const inst=(cid,e={})=>({iid:`c${++iid}`,cardId:String(cid),damage:0,energyAttached:[],...e});
 let pass=0,fail=0,fails=[];
@@ -36,6 +39,6 @@ for(const r of recoil){
   if(got===r.N) pass++;
   else { fails.push(`[不符] ${r.key} 卡面${r.N} 實際${got}`); fail++; }
 }
-console.log(`自傷反作用力守衛:${recoil.length} 招,PASS ${pass} / FAIL ${fail}`);
+console.log(`自傷反作用力守衛(無條件固定型):${recoil.length} 招,PASS ${pass} / FAIL ${fail}`);
 fails.forEach(x=>console.log('  '+x));
 process.exit(fail?1:0);
