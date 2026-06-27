@@ -1713,13 +1713,19 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
         toolAttached: undefined, extraTools: [],
         evolvedFromStack: undefined,
       };
+      // v5.738：進化(含神奇糖果)清除特殊狀態(PDF §I-A-05) — 原 `status: pk.status` 把基底
+      //   混亂/睡眠/麻痺/中毒/灼傷一併帶到進化體(玩家回報「神奇糖果進化無法解除混亂」)。
+      //   清全部狀態(status/secondary/tertiary 從 stage2Inst 繼承 default=無),唯暈眩山谷在場且
+      //   基底為混亂時保留混亂(同正常 EVOLVE 的 preserveConfusion 例外)。
+      const dazeStadium = st.activeStadium ? pool.get(st.activeStadium.cardId)?.name : null;
+      const preserveConfusion = dazeStadium === '暈眩山谷' && pk.status === 'confused';
       return {
         ...stage2Inst,
         damage: pk.damage,
         energyAttached: pk.energyAttached,
         toolAttached: pk.toolAttached,
         extraTools: pk.extraTools,
-        status: pk.status,
+        ...(preserveConfusion ? { status: 'confused' as const } : {}),
         evolvedFromIid: pk.iid,
         // 神奇糖果跳過 Stage 1，進化鏈只含 Basic
         evolvedFromStack: [...(pk.evolvedFromStack ?? []), baseBare],

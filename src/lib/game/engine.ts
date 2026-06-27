@@ -8115,19 +8115,12 @@ export function getRetreatCost(state: GameState, pool: Map<string, Card>): numbe
 }
 
 export function canRetreat(state: GameState, pool: Map<string, Card>): boolean {
-  // v5.451：化石（fossilOnField）不是寶可夢、無法撤退 → UI 撤退按鈕應隱藏
-  //   （RETREAT engine handler 早已擋，這裡補上 UI gate；桌面 zone 已有 !fossilOnField，
-  //    手機 MobilePortraitBattle 撤退選項只看 canRetreatNow，靠這裡一併隱藏）。
-  if (state.players[state.activePlayerIndex].active?.fossilOnField) return false;
-  // v5.212：祭典樂舞第 2 次招式 pending 期間禁止撤退
-  if (state.festivalDancePendingSecondAttack
-      && state.festivalDancePendingSecondAttack.idx === state.activePlayerIndex) return false;
-  const cost = getRetreatCost(state, pool);
-  if (cost === null) return false;
-  const player = state.players[state.activePlayerIndex];
-  // v2.69：以能量單位計算（火箭隊能量 1 張 = 2 units）。
-  // v2.108：傳 state+aIdx 讓大竺葵繁茂套上（基本【草】能量 = 2 units）。
-  return totalEnergyUnits(player.active!.energyAttached, pool, state, state.activePlayerIndex, player.active!) >= cost;
+  // v5.738：收斂為「getRetreatBlockReason 回 null 才可撤退」——單一真實來源,徹底消除前端
+  //   撤退鈕(canRetreat)與規則描述/引擎 RETREAT handler 不一致。
+  //   原 canRetreat 漏查【麻痺/睡眠】【cantRetreatNextTurn】【中毒禁撤退(霍米加)】【已撤退】等
+  //   (只查 fossil/祭典/能量)→ 玩家回報「龍王蠍 危害之尾 麻痺對手後對手撤退鈕仍可按」(引擎其實會
+  //   擋,但 UI 仍顯示鈕=誤導)。getRetreatBlockReason 已涵蓋全部規則,直接鏡射避免日後再漂移。
+  return getRetreatBlockReason(state, pool) === null;
 }
 
 /**
