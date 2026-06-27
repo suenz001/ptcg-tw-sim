@@ -414,14 +414,59 @@ regPost('迷唇姐|邀請之吻', (state, aIdx, pool) => {
   // v3.80：支援零之大空洞
   const space = Math.max(0, getOwnBenchLimit(state, aIdx, pool) - p.bench.length);
   if (space === 0 || p.deck.length === 0) return state;
-  return withPending(addLog(state, '邀請之吻：從牌庫挑 1 基礎放備戰（重洗）；之後請手動移自身 1 能量到新上場', aIdx), {
+  return withPending(addLog(state, '邀請之吻：從牌庫挑 1 張【基礎】寶可夢放備戰（重洗）', aIdx), {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Basic',
     minCount: 0, maxCount: 1,
-    effectKey: 'wave5-place-basic-bench',
+    effectKey: 'invite-kiss-place',  // v5.737：放基礎→自動接「搬1能量到新上場」(原 wave5 通用 resolver 只放基礎,漏能量搬移)
   });
 });
+// v5.737 迷唇姐|邀請之吻 第1段:放1基礎到備戰,記「新上場」iid;若迷唇姐(active)有能量,開「選1能量」picker(限active能量)
+regR('invite-kiss-place', (state, aIdx, _iidsP, _params, _poolP) => {
+  const iids = _iidsP;
+  if (!iids || iids.length === 0) {
+    return updatePlayer(addLog(state, '邀請之吻：未選擇基礎寶可夢；重洗牌庫', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
+  const targetCardId = iids[0];
+  let newIid: string | null = null;
+  let s2 = updatePlayer(addLog(state, '邀請之吻：將 1 張基礎寶可夢放置於備戰（重洗牌庫）', aIdx), aIdx, p => {
+    const picked = p.deck.filter(c => iids.includes(c.iid));
+    const rest = p.deck.filter(c => !iids.includes(c.iid));
+    const placed = picked.map(c => ({ ...c, justPlaced: true, damage: 0 } as CardInstance));
+    if (placed[0]) newIid = placed[0].iid;
+    return { ...p, deck: shuffle(rest), bench: [...p.bench, ...placed] };
+  });
+  void targetCardId;
+  const act = s2.players[aIdx].active;
+  if (!newIid || !act || (act.energyAttached?.length ?? 0) === 0) return s2;  // 沒放成功 / 迷唇姐無能量 → 結束
+  // 開「選1個迷唇姐身上的能量」picker（限 active 能量），resolver 自動附到新上場那隻
+  return withPending(addLog(s2, '邀請之吻：選擇 1 個迷唇姐身上的能量，改附於新上場的寶可夢', aIdx), {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'invite-kiss-move-energy',
+    params: { newIid, scope: 'all-own', validIids: act.energyAttached.map(e => e.iid), titleOverride: '邀請之吻：選擇 1 個迷唇姐身上的能量改附於新上場' },
+  });
+});
+// v5.737 第2段:把選到的能量從迷唇姐(active)移除,附到新上場（params.newIid）那隻備戰
+regR('invite-kiss-move-energy', (state, aIdx, iids, params, pool) => {
+  const energyIid = iids?.[0];
+  const newIid = params?.newIid as string | undefined;
+  if (!energyIid || !newIid) return state;
+  const act = state.players[aIdx].active;
+  const energy = act?.energyAttached.find(e => e.iid === energyIid);
+  if (!energy) return state;
+  const energyName = pool.get(energy.cardId)?.name ?? '能量';
+  let s2 = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : null,
+    bench: p.bench.map(c => c.iid === newIid ? { ...c, energyAttached: [...c.energyAttached, energy] } : c),
+  }));
+  const tgtName = pool.get(s2.players[aIdx].bench.find(c => c.iid === newIid)?.cardId ?? '')?.name ?? '新上場的寶可夢';
+  return addLog(s2, `邀請之吻：將 ${energyName} 從迷唇姐改附於 ${tgtName}`, aIdx);
+});
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 20. 引夢貘人|白日夢 80 — 下回合對手附能量於受招式者，則對手回合結束
