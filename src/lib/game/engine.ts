@@ -7450,7 +7450,19 @@ export function applyDefenderReductionsBlockA(
   return { workingState, baseDamage, defenseReduceToolToDiscard };
 }
 
+// v5.736：normalize 提升到 applyAction 邊界(每個 action 必經、含 END_TURN 等遞迴 re-dispatch)。
+//   v5.735 只掛在 sanityKOSweep,但主攻擊 KO 到 sanityKOSweep 之間有 early return(revive/雙KO/反彈
+//   等特殊子路徑)可能繞過 → 仍可能殘留巢狀+扁平重複 iid。改在 applyAction 出口統一 normalize 一次,
+//   保證任何路徑產生的非場上區重複 iid / 殘留 evolvedFromStack 在 action 回傳前都被清掉(changed
+//   旗標無變動回原 state,不擾渲染/不增 log)。sanityKOSweep 內的呼叫保留為中途冗餘(無害)。
 export function applyAction(
+  state: GameState,
+  action: GameAction,
+  pool: Map<string, Card>
+): GameState {
+  return normalizeNonFieldStacks(applyActionImpl(state, action, pool));
+}
+function applyActionImpl(
   state: GameState,
   action: GameAction,
   pool: Map<string, Card>

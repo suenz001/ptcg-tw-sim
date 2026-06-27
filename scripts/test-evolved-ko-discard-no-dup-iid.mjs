@@ -52,5 +52,24 @@ T('進化體被效果KO後,棄牌堆無重複iid(基底不該巢狀+扁平兩份
   console.log('   p2 全iid數='+ids.length+' 重複='+JSON.stringify([...new Set(dup)]));
   assert.equal(dup.length,0,'不該有重複iid,實際重複='+JSON.stringify([...new Set(dup)]));
 });
+T('既有重複iid局:做任意action(applyAction邊界normalize)會自癒',()=>{
+  // 模擬卡死局:active與discard某卡的evolvedFromStack同iid(兮雪實況)
+  const dupIid='zz_base_18523_dup';
+  const s=createGame({name:'P1',entries:[{cardId:GARC,count:1}]},{name:'P2',entries:[{cardId:'18523',count:1}]},pool);
+  let st={...s,phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,isFirstTurn:false,
+    setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],
+    players:[{...s.players[0],hand:[],deck:[inst(GARC),inst(GARC)],discard:[],prizes:Array.from({length:6},()=>inst(GARC)),bench:[],active:inst(GARC)},
+             {...s.players[1],hand:[],deck:[inst(GARC)],discard:[
+                {iid:'someTop',cardId:'18524',damage:0,energyAttached:[],evolvedFromStack:[{iid:dupIid,cardId:'18523',damage:0,energyAttached:[]}]}
+              ],prizes:Array.from({length:6},()=>inst(GARC)),bench:[],
+              active:{iid:dupIid,cardId:'18523',damage:0,energyAttached:[]}}]};
+  // P0 做個無害action(抽牌? 改用 ATTACH? 直接 END_TURN 觸發 applyAction 邊界)
+  let r=applyAction(st,{type:'END_TURN'},pool);
+  // P2 該重複iid不該再同時出現在 active 與 discard/stack
+  const p2=r.players[1];
+  const fieldHas = p2.active?.iid===dupIid;
+  const stackHas = (p2.discard||[]).some(c=>(c.evolvedFromStack||[]).some(e=>e.iid===dupIid));
+  assert.ok(!(fieldHas&&stackHas),'自癒後不該同時存在於active與discard/stack(stackHas='+stackHas+' fieldHas='+fieldHas+')');
+});
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail?1:0);
