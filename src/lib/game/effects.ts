@@ -5588,7 +5588,7 @@ regPost('桃歹郎|猛毒連鎖', (state, aIdx, pool) => {
 });
 
 // ── B. 自己下回合無法使用招式（指定招式名統一視為全招式）────────────────
-regPost('炎熱喵|閃焰強襲', selfCantAttackNextPost());
+regPost('炎熱喵|閃焰強襲', selfBlockSpecificAttackNextPost('閃焰強襲'));  // v5.730 卡面「無法使用『閃焰強襲』」=特定擋(炎熱喵另有咬住),原全擋誤鎖
 regPost('咕咕鴿|噴射之翼', selfCantAttackNextPost());
 regPost('高傲雉雞|潛力', selfCantAttackNextPost());
 regPost('鐵螯龍蝦|暴亂之錘', selfCantAttackNextPost());
@@ -5599,13 +5599,13 @@ regPost('海豚俠ex|終極衝擊', selfCantAttackNextPost());
 regPost('吉利蛋|潛力', selfCantAttackNextPost());
 regPost('大嘴蝠|漆黑利刃', selfCantAttackNextPost());
 regPost('願增猿ex|惡劣頭擊', selfCantAttackNextPost());
-regPost('閃焰王牌ex|閃焰強襲', selfCantAttackNextPost());
+regPost('閃焰王牌ex|閃焰強襲', selfBlockSpecificAttackNextPost('閃焰強襲'));  // v5.730 特定擋(另有石榴石截擊)
 regPost('好勝毛蟹|揮大拳', selfCantAttackNextPost());
 regPost('電燈怪|閃電伏特', selfCantAttackNextPost());
 regPost('鋁鋼橋龍|鐵之引爆', selfCantAttackNextPost());
 regPost('爆炸頭水牛|潛力', selfCantAttackNextPost());
 regPost('蒼炎刃鬼|黑煙斬', selfCantAttackNextPost());
-regPost('自爆磁怪|電磁炮', selfCantAttackNextPost());
+regPost('自爆磁怪|電磁炮', selfBlockSpecificAttackNextPost('電磁炮'));  // v5.730 特定擋(另有衝天電光/閃光伏特)
 regPost('火伊布ex|紅玉髓', selfCantAttackNextPost());
 regPost('鐵毒蛾|高熱光線', selfCantAttackNextPost());
 regPost('水伊布ex|海藍寶石', selfCantAttackNextPost());
@@ -5614,7 +5614,7 @@ regPost('鐵武者ex|鐳射利刃', selfCantAttackNextPost());
 regPost('沙鐵皮ex|大地扣殺', selfCantAttackNextPost());
 regPost('月亮伊布|漆黑利刃', selfCantAttackNextPost());
 regPost('猛惡菇|暴亂之錘', selfCantAttackNextPost());
-regPost('雙劍鞘|猛擊在地', selfCantAttackNextPost());
+regPost('雙劍鞘|猛擊在地', selfBlockSpecificAttackNextPost('猛擊在地'));  // v5.730 特定擋(另有劍武備)
 
 // 朝北鼻｜力量猛攻 — 擲 1 次硬幣反面，自己下回合無法使用招式（60 dmg baseline）
 regPost('朝北鼻|力量猛攻', (state, aIdx, pool) => {
