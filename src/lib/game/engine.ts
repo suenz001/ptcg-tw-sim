@@ -2157,6 +2157,39 @@ function applyAutoDraw(state: GameState): GameState {
 //   - 累計 prize 到 pendingPrizes（按 prizesForKO 算）
 //   - 不觸發 TOOL_PREVENT_KO / TOOL_ON_KO（這些本應在主 KO 路徑處理）
 //   - 寫一條 sanity log，方便日後 debug 知道是 fallback 觸發了
+// v5.735：非場上區(棄牌/牌庫/手牌/獎賞)的卡不該帶 evolvedFromStack(那是「場上進化堆」專用)。
+//   進化體被KO棄牌時,KO 路徑把頂層卡(仍帶 evolvedFromStack)加進棄牌、又把基底層 spread 成扁平棄牌卡
+//   → 同一基底「巢狀(在頂層卡內)+扁平」兩份共用同一 iid。之後用夜間擔架/好友寶芬等取回扁平那份放上場,
+//   就與棄牌堆裡巢狀那份 iid 碰撞 → 前端 each_key_duplicate 整頁卡死(兮雪 vs 喔拉 比賽回報,dump 證實
+//   active 與 discard/stack 同 iid)。收斂:把非場上區每張卡的 evolvedFromStack 攤平回該區、清掉頂層的
+//   stack 欄位,並依 iid 去重(扁平與巢狀同 iid 只留一份)。在 sanityKOSweep(各 KO 路徑收斂點)末尾呼叫。
+function normalizeNonFieldStacks(state: GameState): GameState {
+  let changed = false;
+  const fixZone = (zone: CardInstance[]): CardInstance[] => {
+    const out: CardInstance[] = [];
+    const seen = new Set<string>();
+    for (const c of zone) {
+      const stack = c.evolvedFromStack;
+      const top = stack && stack.length > 0 ? { ...c, evolvedFromStack: undefined } : c;
+      if (stack && stack.length > 0) changed = true;
+      if (!seen.has(top.iid)) { seen.add(top.iid); out.push(top); } else { changed = true; }
+      if (stack) for (const e of stack) {
+        const be = e.evolvedFromStack ? { ...e, evolvedFromStack: undefined } : e;
+        if (!seen.has(be.iid)) { seen.add(be.iid); out.push(be); } else { changed = true; }
+      }
+    }
+    return out;
+  };
+  const players = state.players.map(pl => ({
+    ...pl,
+    discard: fixZone(pl.discard),
+    deck: fixZone(pl.deck),
+    hand: fixZone(pl.hand),
+    prizes: fixZone(pl.prizes),
+  })) as [PlayerState, PlayerState];
+  return changed ? { ...state, players } : state;
+}
+
 function sanityKOSweep(
   state: GameState,
   attackerIdx: 0 | 1,
@@ -2212,7 +2245,7 @@ function sanityKOSweep(
     }
   }
   player.bench = newBench;
-  if (!anyKO) return state;
+  if (!anyKO) return normalizeNonFieldStacks(state);
   const players = [...s.players] as [PlayerState, PlayerState];
   players[dIdx] = player;
   s = addPendingPrize({ ...s, players }, attackerIdx, prizesAcc, pool);
@@ -2224,7 +2257,7 @@ function sanityKOSweep(
       winReason: `${player.name} 沒有可上場的寶可夢`,
     };
   }
-  return s;
+  return normalizeNonFieldStacks(s);
 }
 
 // ── 正式對戰動作處理 ─────────────────────────────────────────────────────────
