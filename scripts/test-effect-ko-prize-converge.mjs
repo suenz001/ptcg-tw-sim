@@ -35,12 +35,15 @@ T('koTargetByAttackEffect 對手active效果KO + 奇跡之吻(正面) → 拿2[�
   assert(!out.players[1].active, '對手active應KO');
   assert.equal(taken(out), 2, `應拿2(1base+1奇跡),實 ${taken(out)}`);
 });
-T('koTargetByAttackEffect 脆弱蛻殼(對ex攻擊方) → 拿0[驗HEAD FAIL]', ()=>{
+T('koTargetByAttackEffect 脆弱蛻殼(對ex攻擊方,效果KO) → 正常拿1(v5.728:卡面「招式的傷害」限傷害KO,效果KO不歸0)', ()=>{
+  // Wilson 裁定(2026-06):脆弱蛻殼卡面「受到對手寶可夢【ex】『招式的傷害』而昏厥,對手無法獲得獎賞卡」
+  //   =只限招式傷害KO;效果KO(幻影奇襲放指示物/深淵之瞳式)不觸發,對手正常拿獎賞。與同款字眼的
+  //   古舊能量/豪華斗篷/莉莉艾的珍珠(皆已限傷害KO)一致。
   const {st,target}=mk(SHED, [inst(BUD)]);
-  st.players[0].active=inst('11067'); // attacker=鋁鋼橋龍ex(脆弱蛻殼僅對 ex 攻擊方觸發)
+  st.players[0].active=inst('11067'); // attacker=鋁鋼橋龍ex
   const out=koTargetByAttackEffect(st,0,target,true,pool,'測試');
   assert(!out.players[1].active, '脫殼忍者應KO');
-  assert.equal(taken(out), 0, `脆弱蛻殼應拿0,實 ${taken(out)}`);
+  assert.equal(taken(out), 1, `效果KO脆弱蛻殼不觸發,應拿base 1,實 ${taken(out)}`);
 });
 T('對照:無奇跡之吻 → 拿1', ()=>{
   const {st,target}=mk(BUD, [inst(BUD)]);

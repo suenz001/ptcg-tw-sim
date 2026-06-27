@@ -686,18 +686,20 @@ export function koPrizesAdjusted(
   const deferredBonus = (koInst.deferredPrizeBonusThisTurn && koInst.deferredPrizeBonusThisTurn > 0) ? koInst.deferredPrizeBonusThisTurn : 0;
   const atkActive = s.players[attackerIdx].active;
   const atkCard = atkActive ? pool.get(atkActive.cardId) : undefined;
-  // 脆弱蛻殼（脫殼忍者）等 PASSIVE_PREVENT_PRIZE → 0 張
-  for (const ab of (koCard.abilities ?? [])) {
-    if (!isAbilityHolderEffective(s, koInst, koCard, (1 - attackerIdx) as 0 | 1, ab.name, 'active', pool)) continue; // v5.655 被KO者特性被暗夜羽擊/初始化等壓制→脆弱蛻殼失效
-    const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
-    if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
-  }
   let adjust = 0;
-  // v5.506：以下四種獎賞調整卡面皆明寫「受到對手寶可夢招式的【傷害】而昏厥時」→ 只在傷害KO生效。
+  // v5.506：以下獎賞調整卡面皆明寫「受到對手寶可夢招式的【傷害】而昏厥時」→ 只在傷害KO生效。
   //   效果KO（放傷害指示物：多龍巴魯托ex|幻影奇襲、咒詛炸彈、悄聲加害 等 attack-effect；
-  //   或深淵之瞳式效果昏厥）koByAttackDamage=false → 一律不套。玩家回報：幻影奇襲放指示物
-  //   昏厥古舊能量持有者不該 -1。（脆弱蛻殼 PASSIVE_PREVENT_PRIZE→0 上方處理，卡面未確認限傷害故不動。）
+  //   或深淵之瞳式效果昏厥）koByAttackDamage=false → 一律不套。
+  //   v5.728：脆弱蛻殼（PASSIVE_PREVENT_PRIZE→0）也移入此 gate — 卡面「受到對手寶可夢【ex】招式
+  //   的『傷害』而昏厥，對手也無法獲得獎賞卡」確認限傷害KO（Wilson 裁定）；效果KO（幻影奇襲放指示物
+  //   等）不觸發歸0，對手正常拿獎賞（修正先前放在 koByAttackDamage 外、效果KO 也誤歸0 的 bug）。
   if (koByAttackDamage) {
+    // 脆弱蛻殼（脫殼忍者）等 PASSIVE_PREVENT_PRIZE → 0 張
+    for (const ab of (koCard.abilities ?? [])) {
+      if (!isAbilityHolderEffective(s, koInst, koCard, (1 - attackerIdx) as 0 | 1, ab.name, 'active', pool)) continue; // v5.655 被KO者特性被暗夜羽擊/初始化等壓制→脆弱蛻殼失效
+      const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
+      if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
+    }
     // 道具：莉莉艾的珍珠 -1 / 豪華斗篷 +1（阻礙之塔在場時道具效果失效）
     const stadiumName = s.activeStadium ? pool.get(s.activeStadium.cardId)?.name : undefined;
     if (stadiumName !== '阻礙之塔') {
