@@ -24,6 +24,7 @@ ck('八朔(看頂8最多3)→可不選', selectionAllowsSkip(mk('deck-search','s
 ck('牌庫頂排序→可不選', selectionAllowsSkip(mk('reorder-deck-top')));
 ck('查看對手手牌(枇琶)→可不選', selectionAllowsSkip(mk('hand-discard','loquat-discard-opp-items',1,0)));
 ck('能量撢子→可不選', selectionAllowsSkip(mk('hand-discard','energy-duster-pick',1,0)));
+ck('力之沙漏(可不附能量)→可不選', selectionAllowsSkip(mk('discard-search','brailliant-attach',0,0,0)));
 ck('棄牌區奇跡耳麥→強制', !selectionAllowsSkip(mk('discard-search','discard-to-hand')));
 ck('棄牌區聖灰→強制', !selectionAllowsSkip(mk('discard-search','sacred-ash-discard-to-deck')));
 ck('治療→強制', !selectionAllowsSkip(mk('heal-target','heal')));

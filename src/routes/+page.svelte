@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.733</span> 修正：力之沙漏可以選擇「不附能量」</summary>
+        <ul>
+          <li>「力之沙漏」（寶可夢道具）在自己回合結束時，從棄牌區附基本能量到場上寶可夢——卡面是「可」附加（非強制）。先前必須選 1 張，現在會顯示「不選（跳過）」按鈕，可以選擇不附能量。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.730</span> 修正：「下回合無法使用某招式」不再誤鎖其他招式</summary>
         <ul>
           <li>炎熱喵、閃焰王牌ex、自爆磁怪、雙劍鞘 使用卡面寫「在下個自己的回合無法使用『某招式』」的招式後，先前會誤把「其他招式」也一起鎖住。已修正為只鎖卡面指定的那一招，下回合仍可使用其他招式。</li>

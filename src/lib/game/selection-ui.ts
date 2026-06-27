@@ -36,6 +36,7 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'm5-mirieton-photon-code',       // 密勒頓｜光子纜線（on-KO）：或跳過
   'lycanroc-spike-bind-attach',    // 鬃岩狼人｜尖刺纏身：自選附能（可不附）
   'attach-tool',                   // v5.465：附加寶可夢道具選目標 → 可取消（道具退回手牌）
+  'brailliant-attach',         // v5.733：力之沙漏（PokemonTool）回合結束「可」從棄牌區附基本能量 → 可不選
   'sakura-crescendo-attach',       // v5.465：櫻花魚｜漸強波 從手牌附水能量 → 可不選（也可不附）
 ]);
 
