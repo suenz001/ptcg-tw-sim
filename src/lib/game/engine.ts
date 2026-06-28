@@ -4099,7 +4099,6 @@ function handlePlaying(
       // v2.219 — 後攻方最初回合限定招式（吼叫尾ex｜絕叫 等）
       // 卡面：「這個招式只可在後攻玩家的最初回合使用。」
       // 條件：state.isFirstTurn && aIdx 是後攻方（!= firstPlayerIdx）
-      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);  // v5.460 audit 補慢芬香(甜甜螢)
       if (attackName && SECOND_PLAYER_FIRST_TURN_ONLY.has(attackName)) {
         const isSecondPlayer = aIdx !== state.firstPlayerIdx;
         if (!state.isFirstTurn || !isSecondPlayer) {
@@ -7729,6 +7728,12 @@ const BENCH_FILL_ATTACK_NAMES = new Set<string>([
   '香味',
 ]);
 
+// v5.739 收斂:後攻方最初回合限定招式(吼叫尾ex｜絕叫、甜甜螢｜慢芬香)。
+//   原本在 ATTACK handler 與 getAvailableAttacks 各 inline 一份相同 Set → 漂移風險
+//   (同 canRetreat/getRetreatBlockReason 各寫一份的反模式)。提升為模組級單一來源,
+//   引擎拒絕(ATTACK)與 UI 反白(getAvailableAttacks)永遠引用同一份,不會分歧。
+const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);
+
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 export function getAvailableAttacks(
   state: GameState,
@@ -7776,7 +7781,6 @@ export function getAvailableAttacks(
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
       // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫）— UI 層反白
-      const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);  // v5.460 audit 補慢芬香(甜甜螢)
       if (SECOND_PLAYER_FIRST_TURN_ONLY.has(atk.name)) {
         const isSecondPlayer = state.activePlayerIndex !== state.firstPlayerIdx;
         if (!state.isFirstTurn || !isSecondPlayer) return -1;
