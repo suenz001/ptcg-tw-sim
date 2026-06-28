@@ -312,7 +312,7 @@
     <div class="changelog-list">
 
 <details open>
-        <summary><span class="ver-badge">v5.747</span> 修正：葉伊布「嫩葉之恩」在備戰只有 1 隻寶可夢時發動會出錯</summary>
+        <summary><span class="ver-badge">v5.748</span> 修正：葉伊布「嫩葉之恩」在備戰只有 1 隻寶可夢時發動會出錯</summary>
         <ul>
           <li>葉伊布「嫩葉之恩」（從手牌附能量到備戰並全回復）在備戰區只有 1 隻可選寶可夢、自動選定時，先前因內部缺少一個參數而報錯。已修正。</li>
         </ul>

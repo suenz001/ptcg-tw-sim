@@ -11518,7 +11518,7 @@ function benchHandAttachFullHealPost(typeFilter: EnergyType | null, label: strin
     });
   };
 }
-regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, _pool) => {
+regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '附能+全回復';
   const p = st.players[idx];
   if (p.bench.length === 0) return st;
@@ -11529,7 +11529,7 @@ regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, _pool) =>
     // 只有 1 隻合法備戰，自動選定
     // v5.747：補傳 pool（原漏第 6 參→ applyBenchAttachFullHeal 末尾 fireOnHandEnergyAttached
     //   收到 undefined pool → pool.get() TypeError 崩。葉伊布|嫩葉之恩 恰 1 隻合法備戰即崩）
-    return applyBenchAttachFullHeal(st, idx, iids, benchValidIids[0], label, _pool);
+    return applyBenchAttachFullHeal(st, idx, iids, benchValidIids[0], label, pool);
   }
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
