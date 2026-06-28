@@ -3022,6 +3022,9 @@ function handlePlaying(
             // 確認 ABILITY_EFFECTS 有註冊（避免無對應 fn 也彈 modal）
             // v4.4995：用 helper（by-name 優先 fallback by-index）
             if (!hasAbilityFn(benchCard.name, ab.name, i)) continue;
+            // v5.754：回備戰特性也受對手特性消除影響(bench 位→初始化/黏著束縛;暗夜羽擊只擋 active 不影響)
+            //   — 同 v5.751/v5.753 的 isAbilityHolderEffective gate。
+            if (!isAbilityHolderEffective(retreatState, benchInst, benchCard, aIdx, ab.name, 'bench', pool)) continue;
             // 詢問玩家使用 → 回傳含 pendingSelection 的 state，玩家選 yes 後走 resolver
             retreatState = askUseRetreatToBenchAbility(
               retreatState, aIdx, benchInst, ab.name, abilityKey, benchCard.name);
@@ -7531,6 +7534,8 @@ function applyActionImpl(
             const abR = benchCardR.abilities[i];
             if (!ON_RETREAT_TO_BENCH_ABILITIES.has(abR.name)) continue;
             if (!hasAbilityFn(benchCardR.name, abR.name, i)) continue;
+            // v5.754：回備戰特性消除 gate(bench 位,同 site1)。
+            if (!isAbilityHolderEffective(next, onBenchR, benchCardR, rIdx, abR.name, 'bench', pool)) continue;
             next = askUseRetreatToBenchAbility(
               next, rIdx, onBenchR, abR.name, `${benchCardR.name}|${i}`, benchCardR.name);
             break;
