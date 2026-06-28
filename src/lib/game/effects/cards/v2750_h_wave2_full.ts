@@ -10,6 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
+import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
@@ -1678,7 +1679,11 @@ regR('h-wave2-force-opp-swap-by-self', (state, dIdx, iids, _params, _pool) => {
     if (!p.active) return p;
     const idx = p.bench.findIndex(b => b.iid === targetIid);
     if (idx < 0) return p;
-    return { ...p, active: p.bench[idx], bench: p.bench.map((b, i) => i === idx ? p.active! : b) };
+    // v5.743：舊 active 退回備戰必須清除特殊狀態與 active-only 效果(PTCG 規則:
+    //   離開戰鬥場解除特殊狀態),同 force-opp-swap/opp-swap-dmg。原本直接 push
+    //   p.active! → 中毒/灼傷/招式鎖等殘留到備戰。
+    const oldActiveCleared = clearActiveEffects(p.active);
+    return { ...p, active: p.bench[idx], bench: p.bench.map((b, i) => i === idx ? oldActiveCleared : b) };
   });
 });
 
