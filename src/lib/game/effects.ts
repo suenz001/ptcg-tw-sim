@@ -16422,6 +16422,15 @@ export function promptPlayAbilities(
     // 只處理有在 ABILITY_EFFECTS 註冊的特性
     if (!ABILITY_EFFECTS.has(key)) continue;
 
+    // v5.751：on-play/on-evolve 自動觸發特性也要受「特性消除」影響 — 中央 isAbilityHolderEffective
+    //   gate(涵蓋 鐵荊棘ex初始化 / 振翼髮暗夜羽擊(對手戰鬥場特性消除) / 招式版暗夜羽擊
+    //   abilityNullifiedThisTurn / 海兔獸黏著束縛)。原本入口只 gate 監視塔+初始化,漏暗夜羽擊
+    //   → 對手有振翼髮時,胡地進化的「精神抽出」等 on-evolve 特性仍觸發(玩家回報)。
+    //   逐特性 gate(暗夜羽擊只擋 active 位,進化在備戰不受影響=正確)。三 caller(EVOLVE/
+    //   神奇糖果/on-play 放置)共用此函式,一次收斂全部。
+    const _abLoc: 'active' | 'bench' = state.players[aIdx].active?.iid === inst.iid ? 'active' : 'bench';
+    if (!isAbilityHolderEffective(state, inst, card, aIdx, ab.name, _abLoc, pool)) continue;
+
     const isPlay = ON_PLAY_FROM_HAND_ABILITIES.has(ab.name);
     const isEvolveAb = ON_EVOLVE_FROM_HAND_ABILITIES.has(ab.name);
 
