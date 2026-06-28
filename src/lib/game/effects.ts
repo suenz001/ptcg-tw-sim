@@ -11527,7 +11527,9 @@ regR('bench-hand-attach-fullheal-pick-energy', (st, idx, iids, params, _pool) =>
   if (benchValidIids.length === 0) return st;
   if (benchValidIids.length === 1) {
     // 只有 1 隻合法備戰，自動選定
-    return applyBenchAttachFullHeal(st, idx, iids, benchValidIids[0], label);
+    // v5.747：補傳 pool（原漏第 6 參→ applyBenchAttachFullHeal 末尾 fireOnHandEnergyAttached
+    //   收到 undefined pool → pool.get() TypeError 崩。葉伊布|嫩葉之恩 恰 1 隻合法備戰即崩）
+    return applyBenchAttachFullHeal(st, idx, iids, benchValidIids[0], label, _pool);
   }
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,

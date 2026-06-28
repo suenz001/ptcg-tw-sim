@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.747</span> 修正：葉伊布「嫩葉之恩」在備戰只有 1 隻寶可夢時發動會出錯</summary>
+        <ul>
+          <li>葉伊布「嫩葉之恩」（從手牌附能量到備戰並全回復）在備戰區只有 1 隻可選寶可夢、自動選定時，先前因內部缺少一個參數而報錯。已修正。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.746</span> 修正：烈腿蝗「跳躍射擊」發動時出現錯誤</summary>
         <ul>
           <li>烈腿蝗（M2 010/080）的「跳躍射擊」會把自己連同附加的卡放回牌庫，先前因內部缺少一個函式引用而在發動時報錯。已修正，並一併修正其他幾個同類的內部引用問題。</li>
