@@ -10,6 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
+import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
 import {
@@ -1864,7 +1865,7 @@ regR('eevee-awaken-evolve', (state, aIdx, iids, _params, pool) => {
     damage: base.damage,
     energyAttached: base.energyAttached,
     toolAttached: base.toolAttached,
-    status: base.status,
+    ...evolvedStatusAfter(base, state, pool),
     evolvedFromStack: [
       ...(base.evolvedFromStack ?? []),
       // v4.20：chain entry 不帶 base 的 transient turn flags（同 engine.ts baseBare 修法）
@@ -1955,7 +1956,7 @@ regR('exeggcute-precoition-evolve', (state, aIdx, iids, _params, pool) => {
     damage: base.damage,
     energyAttached: base.energyAttached,
     toolAttached: base.toolAttached,
-    status: base.status,
+    ...evolvedStatusAfter(base, state, pool),
     evolvedFromStack: [
       ...(base.evolvedFromStack ?? []),
       {

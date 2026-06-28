@@ -39,6 +39,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
+import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, drawCards,
@@ -167,7 +168,7 @@ regR('duduge-emergency-evolve', (st, idx, iids, params, pool) => {
     damage: base.damage,
     energyAttached: base.energyAttached,
     toolAttached: base.toolAttached,
-    status: base.status,
+    ...evolvedStatusAfter(base, st, pool),
     evolvedFromStack: [
       ...(base.evolvedFromStack ?? []),
       {

@@ -34,6 +34,7 @@ import {
   updatePlayer,
   withPending,
 } from '../_shared';
+import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // A. 石居蟹｜覺醒 — 招式驅動「從牌庫直接進化」
@@ -95,7 +96,7 @@ regR('crab-awaken-evolve', (state, aIdx, iids, _params, pool) => {
     damage: base.damage,
     energyAttached: base.energyAttached,
     toolAttached: base.toolAttached,
-    status: base.status,
+    ...evolvedStatusAfter(base, state, pool),
     evolvedFromStack: [
       ...(base.evolvedFromStack ?? []),
       {

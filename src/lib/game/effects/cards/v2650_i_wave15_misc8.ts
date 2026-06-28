@@ -14,6 +14,7 @@
  */
 
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, sameEvoName, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
 import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -269,7 +270,7 @@ regR('twin-cell-evolve-do', (st, aIdx, iids, params, pool) => {
           damage: base.damage,
           energyAttached: base.energyAttached,
           toolAttached: base.toolAttached,
-          status: base.status,
+          ...evolvedStatusAfter(base, st, pool),
           evolvedFromIid: base.iid,
           evolvedFromStack: [...prevStack, baseBare],
           evolvedThisTurn: true,
@@ -367,7 +368,7 @@ regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
           damage: base.damage,
           energyAttached: base.energyAttached,
           toolAttached: base.toolAttached,
-          status: base.status,
+          ...evolvedStatusAfter(base, st, pool),
           evolvedFromIid: base.iid,
           evolvedFromStack: [...prevStack, baseBare],
           evolvedThisTurn: true,
@@ -461,7 +462,7 @@ for (const [attackKey, baseName, dmg, effectKey] of DIRECT_EVOLVE_AWAKEN) {
       damage: base.damage,
       energyAttached: base.energyAttached,
       toolAttached: base.toolAttached,
-      status: base.status,
+      ...evolvedStatusAfter(base, state, pool),
       evolvedFromStack: [
         ...(base.evolvedFromStack ?? []),
         // chain entry 不帶 base 的 transient turn flags（同 engine.ts baseBare 修法）
@@ -624,7 +625,7 @@ regR('evil-awakening-evolve', (st, aIdx, iids, params, pool) => {
           damage: base.damage,
           energyAttached: base.energyAttached,
           toolAttached: base.toolAttached,
-          status: base.status,
+          ...evolvedStatusAfter(base, st, pool),
           evolvedFromIid: base.iid,
           evolvedFromStack: [...prevStack, baseBare],
           evolvedThisTurn: true,

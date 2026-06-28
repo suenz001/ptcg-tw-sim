@@ -31,6 +31,7 @@ import {
   withPending,
   triggerOakeyeMillIfApplicable, isOwnFirstTurn,
 } from '../_shared';
+import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
 import { countEnergy } from '../../engine';
 import { flipCoinsWithLog } from '../../effects';
 
@@ -297,7 +298,7 @@ regR('phantump-grudge-evolve', (state, aIdx, iids, params, pool) => {
     damage: base.damage + 20, // 放置 2 個傷害指示物（= 20 damage）
     energyAttached: base.energyAttached,
     toolAttached: base.toolAttached,
-    status: base.status,
+    ...evolvedStatusAfter(base, state, pool),
     evolvedFromIid: base.iid,
     evolvedFromStack: [...prevStack, baseBare],
     evolvedThisTurn: true,

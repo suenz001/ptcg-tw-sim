@@ -1251,6 +1251,21 @@ export function toBareCard(inst: CardInstance): CardInstance {
   return { iid: inst.iid, cardId: inst.cardId, damage: 0, energyAttached: [] };
 }
 
+/**
+ * v5.741：進化後特殊狀態 — 單一來源。PDF §I-A-05「進化後特殊狀態全部消除」,
+ *   唯「暈眩山谷」在場且 base 為【混亂】時保留混亂(該卡例外)。回傳可 spread 進
+ *   進化體的物件({} = 清除 / {status:'confused'} = 保留)。取代各進化路徑手寫
+ *   `status: base.status`(反覆造成進化不解除異常狀態 bug,且漏暈眩山谷例外)。
+ */
+export function evolvedStatusAfter(
+  base: CardInstance,
+  state: GameState,
+  pool: Map<string, Card>,
+): { status?: 'confused' } {
+  const stadium = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+  return (stadium === '暈眩山谷' && base.status === 'confused') ? { status: 'confused' } : {};
+}
+
 export function getAllAttachedTools(inst: CardInstance | null | undefined): CardInstance[] {
   if (!inst) return [];
   const out: CardInstance[] = [];
