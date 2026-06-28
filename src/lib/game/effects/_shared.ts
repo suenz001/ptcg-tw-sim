@@ -258,6 +258,14 @@ export function setBloomEffectiveFn(fn: (state: GameState, ownerIdx: 0 | 1, pool
   _bloomEffectiveFn = fn;
 }
 
+// v5.753：on-promote-to-active 特性(金屬之路 等)需查對手特性消除(暗夜羽擊/初始化/黏著束縛)。
+//   _shared 為底層不能 import v3001(循環)→ effects.ts 載入時注入「active 位特性是否有效」判定。
+//   未注入時 fallback：視為有效(向後相容)。回傳 true=可發動。
+let _abilityHolderEffectiveFn: ((state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, pool: Map<string, Card>) => boolean) | null = null;
+export function setAbilityHolderEffectiveFn(fn: (state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, pool: Map<string, Card>) => boolean): void {
+  _abilityHolderEffectiveFn = fn;
+}
+
 export function getEnergyDiscardUnits(
   energyCardId: string,
   hostInst: CardInstance | null,
@@ -1541,6 +1549,9 @@ export function tryPromptPromoteActive(
     if (!ON_PROMOTE_TO_ACTIVE_ABILITIES.has(ab.name)) continue;
     const abilityKey = `${actCard.name}|${i}`;
     if (!hasAbilityFn(actCard.name, ab.name, i)) continue;
+    // v5.753：對手戰鬥場有振翼髮｜暗夜羽擊(或初始化/黏著束縛)消除我方戰鬥位特性時，
+    //   上場時特性(金屬之路 等)也不可發動 — 同 v5.751 on-evolve/on-play 的 isAbilityHolderEffective gate。
+    if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, actInst, actCard, pIdx, ab.name, pool)) continue;
     return askUsePromoteActiveAbility(state, pIdx, actInst, ab.name, abilityKey, actCard.name);
   }
   return state;

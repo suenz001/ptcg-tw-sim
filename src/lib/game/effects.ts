@@ -23,7 +23,7 @@ import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, Pr
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
-import { openDeckViewReshuffle, setBloomEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
+import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -6929,6 +6929,9 @@ export function hasBloomOnField(state: GameState, ownerIdx: 0 | 1, pool: Map<str
 }
 // v5.601：把 nullification-aware 的繁茂判定注入 _shared（getEnergyDiscardUnits 等 units/cost 路徑共用單一來源）。
 setBloomEffectiveFn(hasBloomOnField);
+// v5.753：注入「active 位特性是否有效」給 _shared.tryPromptPromoteActive(上場時特性 gate 暗夜羽擊等)。
+setAbilityHolderEffectiveFn((state, inst, card, ownerIdx, abilityName, pool) =>
+  isAbilityHolderEffective(state, inst, card, ownerIdx, abilityName, 'active', pool));
 
 // host 身上某屬性能量數（host-aware 特殊能量 + 繁茂基本草×2）。依能量數算傷害/指示物用此。
 export function countEnergyTypeBloomAware(
