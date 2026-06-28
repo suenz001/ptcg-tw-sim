@@ -165,6 +165,8 @@
   let _tChatLoading = false;  // v5.624 tChatLoad 並發防護（見 tChatLoad）
   let tChatInput = $state('');
   let tChatLastTs = $state(0);
+  let tChatHasMore = $state(false);  // v5.752 是否還有更舊訊息可載(往上滑續載)
+  let _tChatLoadingOlder = false;   // v5.752 載更舊並發防護
   // ── Phase1-D 賽程（單敗淘汰）──
   let tBracket = $state<any>(null);   // { event, matches[] }
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
@@ -711,7 +713,7 @@
   const chatFabUnread = $derived(isTournament ? Math.max(0, tChat.length - tLastSeenChat) : unreadChatCount);
   let chatPanelScrollEl: HTMLDivElement | null = null;
   let chatPanelPinned = $state(true);  // v5.626 使用者是否在底部；往上看歷史時(false)新訊息不強制捲回底
-  function onChatPanelScroll(e: Event) { const el = e.currentTarget as HTMLElement; chatPanelPinned = (el.scrollHeight - el.scrollTop - el.clientHeight) < 48; }
+  function onChatPanelScroll(e: Event) { const el = e.currentTarget as HTMLElement; chatPanelPinned = (el.scrollHeight - el.scrollTop - el.clientHeight) < 48; if (isTournament && el.scrollTop < 60 && tChatHasMore && !_tChatLoadingOlder) tChatLoadOlder(el); }
 
   function toggleChatPanel() {
     chatPanelOpen = !chatPanelOpen;
@@ -905,7 +907,9 @@
   let tLobbyChatPinned = true;
   function onLobbyChatScroll() {
     const el = tLobbyChatEl;
-    if (el) tLobbyChatPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    if (!el) return;
+    tLobbyChatPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    if (el.scrollTop < 60 && tChatHasMore && !_tChatLoadingOlder) tChatLoadOlder(el); // v5.752 滑到頂→載更舊
   }
   $effect(() => {
     const _n = tChat.length;  // 依賴：訊息變動 / 首次載入時觸發
@@ -4047,17 +4051,39 @@
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       // v5.575：admin 清除聊天室 → 本地即時清空（不必 F5 重整）
       if (r && typeof r.clearedAt === 'number' && r.clearedAt > tChatClearedAt) {
-        tChat = []; tChatClearedAt = r.clearedAt; tChatLastTs = r.clearedAt;
+        tChat = []; tChatClearedAt = r.clearedAt; tChatLastTs = r.clearedAt; tChatHasMore = false;
       }
+      // v5.752 懶載入：初始(since=0)伺服器回最新一頁 + hasMore;增量輪詢(since>0)不附 hasMore→沿用。
+      if (r && typeof r.hasMore === 'boolean') tChatHasMore = r.hasMore;
       if (r && Array.isArray(r.messages) && r.messages.length) {
         for (const m of r.messages) { if (m.ts > tChatLastTs) tChatLastTs = m.ts; }
         // v5.624 依 id 去重合併（杜絕並發/邊界重複造成的 each_key_duplicate）
         const _seen = new Set(); const _merged: any[] = [];
         for (const m of [...tChat, ...r.messages]) { const k = m && m.id; if (k != null) { if (_seen.has(k)) continue; _seen.add(k); } _merged.push(m); }
-        tChat = _merged.slice(-200);
+        tChat = _merged.slice(-600);  // v5.752 提高上限(原200)讓往上滑載入的舊訊息不被增量輪詢裁掉
       }
     } catch { /* ignore */ }
     finally { _tChatLoading = false; }
+  }
+  // v5.752 往上滑載入更舊訊息（懶載入：預設只讀最新一頁，需要的人滑到頂再續載，省流量）。
+  async function tChatLoadOlder(el: HTMLElement | null) {
+    if (_tChatLoadingOlder || !tChatHasMore || tChat.length === 0) return;
+    _tChatLoadingOlder = true;
+    const beforeTs = (tChat[0] && tChat[0].ts) || 0;
+    const prevH = el ? el.scrollHeight : 0;
+    const prevTop = el ? el.scrollTop : 0;
+    try {
+      const r = await tApi(`/chat?before=${beforeTs}`);
+      if (r && Array.isArray(r.messages) && r.messages.length) {
+        const _seen = new Set(tChat.map((m: any) => m && m.id));
+        const older = r.messages.filter((m: any) => m && m.id != null && !_seen.has(m.id));
+        if (older.length) tChat = [...older, ...tChat];
+      }
+      if (r && typeof r.hasMore === 'boolean') tChatHasMore = r.hasMore;
+      // prepend 後內容變高，維持使用者原本看的位置（不讓畫面跳動）。
+      if (el) requestAnimationFrame(() => { try { el.scrollTop = prevTop + (el.scrollHeight - prevH); } catch { /* noop */ } });
+    } catch { /* ignore */ }
+    finally { _tChatLoadingOlder = false; }
   }
   async function tChatSend() {
     const txt = (tChatInput || '').trim();
