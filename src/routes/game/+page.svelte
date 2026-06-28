@@ -24,7 +24,7 @@
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
   } from '$lib/game/engine';
-  import { resolveRoomUpdate } from '$lib/game/sync-guards';
+  import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
@@ -884,6 +884,7 @@
   let myPlayerIndex = $state<0 | 1 | null>(null);
   /** v2.269：當前座位索引 (0..9)；觀戰位 ≥2 */
   let mySeatIdx = $state<number>(-1);
+  let _onlineReadyAt = 0; // v5.749 決定性建局者 grace 計時(雙就緒+lobby+無局 起算)
   let unsubRoom:    (() => void) | null = null;
   // v2.73 殭屍房間心跳機制
   let heartbeatTimer: number | null = null;
@@ -5506,10 +5507,20 @@
 
   function checkAndStartOnlineGame() {
     if (!poolReady || !roomData) return;
-    if (roomData.status !== 'lobby' || roomData.gameState) return;
+    // v5.749：非「雙就緒+lobby+無 gameState」一律重置 grace 計時
+    if (roomData.status !== 'lobby' || roomData.gameState) { _onlineReadyAt = 0; return; }
     const p1 = roomData.seats[0], p2 = roomData.seats[1];
-    if (!p1.uid || !p2.uid || !p1.deckEntries || !p2.deckEntries) return;
-    if (!p1.ready || !p2.ready) return;
+    if (!p1.uid || !p2.uid || !p1.deckEntries || !p2.deckEntries) { _onlineReadyAt = 0; return; }
+    if (!p1.ready || !p2.ready) { _onlineReadyAt = 0; return; }
+    // v5.749：決定性建局者 — 消滅開局雙端 createGame race（開局重新洗牌根治）。
+    //   只有 seat 0（P1）立即建；seat 1（P2）僅 P1 久未建（grace）才 fallback；本端已有 local game 不再建。
+    if (_onlineReadyAt === 0) _onlineReadyAt = Date.now();
+    const _mySeat = roomData.seats.findIndex((s) => !!s.uid && s.uid === myUid);
+    if (!shouldAttemptStartGame({
+      mySeat: _mySeat, bothReady: true, roomStatus: roomData.status,
+      hasGameState: !!roomData.gameState, haveLocalGame: !!game,
+      readyElapsedMs: Date.now() - _onlineReadyAt,
+    })) return;
 
     // v3.75：讀雙方 seat 上的先後攻偏好（贏擲幣的一方套用自己的偏好）
     const prefs: ['random'|'first'|'second'|'opponent', 'random'|'first'|'second'|'opponent'] = [

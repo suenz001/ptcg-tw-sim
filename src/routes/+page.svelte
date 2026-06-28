@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.749</span> 修正：一般線上對戰開局時偶爾會重新洗牌／重開（接續 v5.716 根治）</summary>
+        <ul>
+          <li>開局時雙方裝置各自洗牌建立對局，再競爭成為正式對局，輸的一方原本的牌序會被覆蓋，造成「開局突然重新洗牌」。已改為「指定由 P1 建立對局、P2 直接同步」（P1 久未建立時 P2 才接手），從源頭消除這個競爭，開局不再重洗。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.748</span> 修正：葉伊布「嫩葉之恩」在備戰只有 1 隻寶可夢時發動會出錯</summary>
         <ul>
           <li>葉伊布「嫩葉之恩」（從手牌附能量到備戰並全回復）在備戰區只有 1 隻可選寶可夢、自動選定時，先前因內部缺少一個參數而報錯。已修正。</li>

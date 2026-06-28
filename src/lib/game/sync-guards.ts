@@ -270,3 +270,29 @@ export function mergePrizeMonotonic(
     pendingPrizes: (me === 0 ? [myPend, oppPend] : [oppPend, myPend]) as [number, number],
   };
 }
+
+/**
+ * v5.749：決定性建局者 — 根治「開局重新洗牌」。
+ *   根因：開局時雙端各自 createGame(不同 id/牌序),透過 startGame race 擇一為 canonical,
+ *   另一端的 phantom 局或被 adopt(自己盤面被對方牌序蓋掉=重洗)或互相覆蓋。v5.716 的雙端
+ *   phantom 防護只在「現有局 playing」才擋,setup×setup 不同 id 仍 adopt 較新 → 開局重洗未解。
+ *   收斂法:指定 seat 0(P1)為唯一建局者立即建;seat 1(P2)只在 grace 期過後(P1 斷線/未建)
+ *   才 fallback 建。雙端 seat 正確時只有 P1 建 → 房間 canonical 唯一 → P2 純 adopt,phantom race
+ *   整類消失。已有本地局(haveLocalGame)一律不再建(防自身重複建局重洗)。
+ */
+export function shouldAttemptStartGame(opts: {
+  mySeat: number;            // 自己在 roomData.seats 的 index(0/1;-1=未入座)
+  bothReady: boolean;
+  roomStatus: string;
+  hasGameState: boolean;
+  haveLocalGame: boolean;    // 本端已有 local game(setup/playing)→ 不再建
+  readyElapsedMs: number;    // 雙方就緒+lobby+無 gameState 已持續多久
+  fallbackGraceMs?: number;  // P2 fallback 等待(預設 3000ms)
+}): boolean {
+  if (opts.haveLocalGame) return false;
+  if (opts.roomStatus !== 'lobby' || opts.hasGameState) return false;
+  if (!opts.bothReady) return false;
+  if (opts.mySeat === 0) return true;                                  // 指定建局者:立即
+  if (opts.mySeat === 1) return opts.readyElapsedMs >= (opts.fallbackGraceMs ?? 3000); // fallback
+  return false;
+}
