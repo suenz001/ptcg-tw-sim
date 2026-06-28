@@ -3,6 +3,7 @@ import type { Card } from '$lib/cards/types';
 import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA, regAByName,
   getOwnBenchLimit,
   toBareCard,
+  getAllAttachedTools,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 /**

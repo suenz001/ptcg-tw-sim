@@ -10279,7 +10279,7 @@ regPost('大電海燕|風力充能', setSelfDamageBonusPendingPost(120, '風力�
 
 // 攻擊後若對手出場已 KO（active === null）→ 額外加 N 張獎賞卡
 function bonusPrizeIfKOPost(bonus: number, label: string): AttackPostFn {
-  return (state, aIdx) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     if (state.players[dIdx].active !== null) return state;
     if (getPendingPrize(state, aIdx) <= 0) return state;

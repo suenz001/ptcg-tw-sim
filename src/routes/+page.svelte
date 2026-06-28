@@ -312,6 +312,13 @@
     <div class="changelog-list">
 
 <details open>
+        <summary><span class="ver-badge">v5.746</span> 修正：烈腿蝗「跳躍射擊」發動時出現錯誤</summary>
+        <ul>
+          <li>烈腿蝗（M2 010/080）的「跳躍射擊」會把自己連同附加的卡放回牌庫，先前因內部缺少一個函式引用而在發動時報錯。已修正，並一併修正其他幾個同類的內部引用問題。</li>
+        </ul>
+      </details>
+
+      <details open>
         <summary><span class="ver-badge">v5.745</span> 修正：「呼喚同伴／增光／親送挑戰」從牌庫放到備戰的寶可夢，同回合可被違規進化</summary>
         <ul>
           <li>透過招式從牌庫放置到備戰區的寶可夢，先前沒有標記為「本回合剛放上場」，導致同一回合就能違規進化它。已修正：所有放置到備戰的路徑統一在中央處理，正確標記，當回合無法進化（符合規則）。</li>

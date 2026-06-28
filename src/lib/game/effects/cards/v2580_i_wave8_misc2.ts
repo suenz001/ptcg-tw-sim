@@ -26,6 +26,7 @@ import {
   addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, ATTACK_PRE_DISCARD_CHOICE,
   toBareCard,
+  getAllAttachedTools,
 } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';
 import { energyMatchesType } from '../_shared';
