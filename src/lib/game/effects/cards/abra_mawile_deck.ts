@@ -37,6 +37,7 @@ import {
 import { isBasicEnergyOfType, isRulePokemon } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
+import { toBareCard, getAllAttachedTools } from '../_shared'; // v5.740 離場裸化收斂
 
 // ── 凱西｜瞬間移動攻擊 — 10，可選擇與備戰互換 ────────────────────────────────
 regPre('凱西|瞬間移動攻擊', (state, _aIdx, _pool) => ({ state, damage: 10 }));
@@ -135,17 +136,13 @@ regA('土龍節節', 0, (st, idx, pool, cardInst) => {
   st = drawCards(st, idx, 3);
 
   // 步驟 2：組出要回牌庫的卡 — 本體（重設狀態）+ 能量 + 道具 + 前階堆疊
+  // v5.740：收斂為中央 toBareCard 白名單(取代手動黑名單)。修漏 secondary/tertiary
+  //   status 與 ~40 效果旗標殘留;附加卡各自裸化;getAllAttachedTools 修漏 extraTools 丟卡。
   const returning: CardInstance[] = [
-    { ...src, damage: 0, energyAttached: [], toolAttached: undefined,
-      status: undefined, evolvedFromStack: undefined,
-      evolvedThisTurn: undefined, justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-      damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-      abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-      cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-      damageBonusPending: undefined },
-    ...src.energyAttached,
-    ...(src.toolAttached ? [src.toolAttached] : []),
-    ...(src.evolvedFromStack ?? []),
+    toBareCard(src),
+    ...src.energyAttached.map(toBareCard),
+    ...getAllAttachedTools(src).map(toBareCard),
+    ...(src.evolvedFromStack ?? []).map(toBareCard),
   ];
   st = addLog(st, '逃跑抽出：土龍節節（含附加 + 前階）放回牌庫並重洗', idx);
   return updatePlayer(st, idx, pl => ({

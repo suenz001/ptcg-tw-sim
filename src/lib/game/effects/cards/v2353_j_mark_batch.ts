@@ -26,6 +26,7 @@ import {
   getOwnBenchLimit,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
+import { toBareCard, getAllAttachedTools } from '../_shared'; // v5.740 離場裸化收斂
 import { isBasicEnergyOfType } from '../../engine';
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -438,30 +439,13 @@ regPost('電飛鼠|天空迴旋', (state, aIdx) => {
   if (!p.active) return state;
   const inst = p.active;
   // 主體 + 附加能量 + 工具卡 + 進化鏈底層
+  // v5.740：收斂為中央 toBareCard 白名單(取代手動黑名單)。修漏 secondary/tertiary
+  //   status 與 ~40 效果旗標殘留;附加卡各自裸化;getAllAttachedTools 修漏 extraTools 丟卡。
   const returning: CardInstance[] = [
-    {
-      ...inst,
-      damage: 0,
-      energyAttached: [],
-      toolAttached: undefined,
-      status: undefined,
-      evolvedFromStack: undefined,
-      evolvedThisTurn: undefined,
-      justPlaced: undefined,
-      playedFromHand: undefined,
-      movedToActiveThisTurn: undefined,
-      damageBonusThisTurn: undefined,
-      damageReduceNextHit: undefined,
-      abilityUsedThisTurn: undefined,
-      cantAttackThisTurn: undefined,
-      cantAttackPending: undefined,
-      cantRetreatNextTurn: undefined,
-      cantRetreatPendingSelf: undefined,
-      damageBonusPending: undefined,
-    },
-    ...inst.energyAttached,
-    ...(inst.toolAttached ? [inst.toolAttached] : []),
-    ...(inst.evolvedFromStack ?? []),
+    toBareCard(inst),
+    ...inst.energyAttached.map(toBareCard),
+    ...getAllAttachedTools(inst).map(toBareCard),
+    ...(inst.evolvedFromStack ?? []).map(toBareCard),
   ];
   const players = [...state.players] as [PlayerState, PlayerState];
   players[aIdx] = { ...p, active: null, hand: [...p.hand, ...returning] };

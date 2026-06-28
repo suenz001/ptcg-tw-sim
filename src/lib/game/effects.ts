@@ -3147,6 +3147,10 @@ function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetI
   const evoCard = pool.get(evoInst.cardId);
   if (!evoCard?.evolvesFrom) return addLog(state, '賽吉：所選非進化卡', aIdx);
 
+  // v5.740：進化清除特殊狀態(PDF §I-A-05) — 同 v5.738 神奇糖果/正常 EVOLVE。
+  //   原 `status: target.status` 把基底混亂/睡眠/麻痺/中毒/灼傷帶到進化體;改清除,
+  //   唯暈眩山谷在場且基底混亂時保留混亂(同 preserveConfusion 例外)。
+  const _sageDazeStadium = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
   const doEvolve = (target: CardInstance): CardInstance => ({
     ...evoInst,
     iid: target.iid,
@@ -3154,7 +3158,7 @@ function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetI
     energyAttached: target.energyAttached,
     toolAttached: target.toolAttached,
     extraTools: target.extraTools,
-    status: target.status,
+    ...((_sageDazeStadium === '暈眩山谷' && target.status === 'confused') ? { status: 'confused' as const } : {}),
     evolvedFromStack: [...(target.evolvedFromStack ?? []), { ...target,
       iid: `${target.iid}_base_${target.cardId}_${Math.random().toString(36).slice(2, 8)}`,
       toolAttached: undefined, extraTools: [], energyAttached: [], evolvedFromStack: undefined }],
