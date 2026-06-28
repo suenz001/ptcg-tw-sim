@@ -20,6 +20,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
+import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
 import { openDeckViewReshuffle, setBloomEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
@@ -11121,7 +11122,7 @@ regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
   let s = addLog(st, `${label}：從棄牌區放置 ${take.length} 張「${targetName}」到備戰（${names}）`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
-    bench: [...pl.bench, ...take],
+    bench: [...pl.bench, ...take.map(placedBenchInstance)],
     discard: pl.discard.filter(c => !take.some(t => t.iid === c.iid)),
   }));
 });

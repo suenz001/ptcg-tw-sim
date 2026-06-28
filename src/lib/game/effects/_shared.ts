@@ -1252,6 +1252,27 @@ export function toBareCard(inst: CardInstance): CardInstance {
 }
 
 /**
+ * v5.745：放置寶可夢到備戰的單一收斂 — 從牌庫/手牌/棄牌放上場一律裸化 + 設 justPlaced:true
+ *   (本回合剛上場,同回合不可進化;engine EVOLVE gate basePoke.justPlaced)。過往各 bench-fill
+ *   resolver 手刻 {...c, justPlaced:true},部分(呼喚同伴/增光/親送挑戰)漏設 → 放的基礎同回合
+ *   可違規進化。非場上區來源本就乾淨,baring 為防呆冪等。
+ */
+export function placedBenchInstance(card: CardInstance): CardInstance {
+  return {
+    ...card,
+    damage: 0,
+    energyAttached: [],
+    toolAttached: undefined,
+    extraTools: [],
+    evolvedFromStack: undefined,
+    status: undefined,
+    secondaryStatus: undefined,
+    tertiaryStatus: undefined,
+    justPlaced: true,
+  };
+}
+
+/**
  * v5.741：進化後特殊狀態 — 單一來源。PDF §I-A-05「進化後特殊狀態全部消除」,
  *   唯「暈眩山谷」在場且 base 為【混亂】時保留混亂(該卡例外)。回傳可 spread 進
  *   進化體的物件({} = 清除 / {status:'confused'} = 保留)。取代各進化路徑手寫

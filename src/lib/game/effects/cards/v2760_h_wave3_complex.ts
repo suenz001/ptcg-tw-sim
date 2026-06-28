@@ -10,6 +10,7 @@ import {
   getOwnBenchLimit,
   ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
 } from '../_shared';
+import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
@@ -435,7 +436,7 @@ regR('invite-kiss-place', (state, aIdx, _iidsP, _params, _poolP) => {
     const rest = p.deck.filter(c => !iids.includes(c.iid));
     const placed = picked.map(c => ({ ...c, justPlaced: true, damage: 0 } as CardInstance));
     if (placed[0]) newIid = placed[0].iid;
-    return { ...p, deck: shuffle(rest), bench: [...p.bench, ...placed] };
+    return { ...p, deck: shuffle(rest), bench: [...p.bench, ...placed.map(placedBenchInstance)] };
   });
   void targetCardId;
   const act = s2.players[aIdx].active;

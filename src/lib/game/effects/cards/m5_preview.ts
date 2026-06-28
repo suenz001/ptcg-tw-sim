@@ -63,6 +63,7 @@ import {
   recordOppKO,
   addPendingPrize,
   regG} from '../_shared';
+import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { openDeckViewReshuffle } from '../_shared';
 import { copyAttackPostDispatch } from '../_shared';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
@@ -522,7 +523,7 @@ regR('m5-screwdriller-call-allies', (state, aIdx, iids, params) => {
     return {
       ...p,
       deck: shuffled,
-      bench: [...p.bench, ...safePicked],
+      bench: [...p.bench, ...safePicked.map(placedBenchInstance)],
     };
   });
 });
@@ -583,7 +584,7 @@ regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
     return {
       ...p,
       deck: shuffled,
-      bench: [...p.bench, ...placed],
+      bench: [...p.bench, ...placed.map(placedBenchInstance)],
     };
   });
 });
@@ -1091,7 +1092,7 @@ regR('m5-flamigo-delivery', (state, aIdx, iids, params) => {
     const notPlaced = picked.slice(slots);
     const remaining = [...p.deck.filter(c => !iids.includes(c.iid)), ...notPlaced];
     const shuffled = [...remaining].sort(() => Math.random() - 0.5);
-    return { ...p, deck: shuffled, bench: [...p.bench, ...toBench] };
+    return { ...p, deck: shuffled, bench: [...p.bench, ...toBench.map(placedBenchInstance)] };
   });
 });
 
@@ -2276,7 +2277,7 @@ regR('m5-fossil-excavation', (state, aIdx, iids, _params, pool) => {
   return updatePlayer(s, aIdx, pl => ({
     ...pl,
     deck: shuffle(remainingDeck),
-    bench: [...pl.bench, ...fossilInsts],
+    bench: [...pl.bench, ...fossilInsts.map(placedBenchInstance)],
   }));
 });
 

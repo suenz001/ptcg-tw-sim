@@ -36,6 +36,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit,
 } from '../_shared';
+import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
 import type { Card } from '$lib/cards/types';
 
@@ -549,7 +550,7 @@ regR('lillie-ribombee-invite-place', (st, idx, iids, _params, pool) => {
   return updatePlayer(s, oppIdx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => !placedSet.has(c.iid)),
-    bench: [...pl.bench, ...placedInsts],
+    bench: [...pl.bench, ...placedInsts.map(placedBenchInstance)],
   }));
 });
 

@@ -10,6 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
+import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
@@ -874,7 +875,7 @@ regR('v311-deck-peek-basic-to-bench', (state, aIdx, iids, params, _pool) => {
   const benchAdd = chosen.map(c => ({ ...c, justPlaced: true }));
   return updatePlayer(addLog(state, `${label}：放 ${chosen.length} 隻寶可夢到備戰（剩餘洗回）`, aIdx), aIdx, pl => ({
     ...pl,
-    bench: [...pl.bench, ...benchAdd],
+    bench: [...pl.bench, ...benchAdd.map(placedBenchInstance)],
     deck: shuffle(restDeck),
   }));
 });
@@ -2673,7 +2674,7 @@ regR('tongue-pull-place', (st, aIdx, iids, _params, pool) => {
   return updatePlayer(addLog(st, `舌引：將 ${names.join('、')} 放到對手備戰區`, aIdx), dIdx, p => ({
     ...p,
     hand: p.hand.filter(c => !placedSet.has(c.iid)),
-    bench: [...p.bench, ...placed],
+    bench: [...p.bench, ...placed.map(placedBenchInstance)],
   }));
 });
 
