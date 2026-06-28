@@ -111,17 +111,27 @@ export function pairSwissRound(players: SwissPlayer[], roundIndex: number, rng: 
     ordered = ordered.filter((p) => p.uid !== byeUid);
   }
 
-  // 貪婪避重賽：從名次高者起，配下一個沒交手過的；全交手過才被迫 rematch（取名次最接近）
+  // v5.750：回溯避重賽 — 取代原貪婪法。貪婪「從名次高者配第一個沒交手過的」會把自己逼到
+  //   死角：即使全域存在「無人重賽」的配對方案，貪婪仍可能在名次底端硬湊出重賽(雙敗者同分
+  //   聚在底端最易中招，玩家所見「雙敗下一場又遇同對手」)。改回溯：優先配名次最接近且未交手
+  //   的對手,遞迴成功才採用;先嘗試「完全無重賽」解,真的不存在才退而允許重賽(社群場人數小,
+  //   名次接近優先的回溯實務上極快)。
   const oppOf = new Map(players.map((p) => [p.uid, new Set(p.opponents)]));
-  const remaining = ordered.slice();
-  const pairings: SwissPairing[] = [];
-  while (remaining.length > 0) {
-    const a = remaining.shift() as SwissPlayer;
-    let idx = remaining.findIndex((b) => !oppOf.get(a.uid)!.has(b.uid));
-    if (idx === -1) idx = 0;
-    const b = remaining.splice(idx, 1)[0];
-    pairings.push({ p1: a.uid, p2: b.uid });
+  // 回溯:ordered 已依名次,index 0 起為名次最高;對 ordered[0] 由近到遠試對手。
+  function solve(list: SwissPlayer[], allowRematch: boolean): SwissPairing[] | null {
+    if (list.length === 0) return [];
+    const a = list[0];
+    const rest = list.slice(1);
+    for (let i = 0; i < rest.length; i++) {
+      const b = rest[i];
+      if (!allowRematch && oppOf.get(a.uid)!.has(b.uid)) continue; // 跳過重賽
+      const sub = solve(rest.slice(0, i).concat(rest.slice(i + 1)), allowRematch);
+      if (sub !== null) return [{ p1: a.uid, p2: b.uid }, ...sub];
+    }
+    return null;
   }
+  // 先求「完全無重賽」配對;不存在(全互相交手過)才允許最少必要的重賽。
+  const pairings: SwissPairing[] = solve(ordered, false) ?? solve(ordered, true) ?? [];
   if (byeUid) pairings.push({ p1: byeUid, p2: null });
   return pairings;
 }
