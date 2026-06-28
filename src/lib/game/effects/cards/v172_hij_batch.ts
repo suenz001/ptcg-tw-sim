@@ -21,7 +21,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
   sameEvoName,
   addPendingPrize, getOwnBenchLimit, revealTopCardsLog} from '../_shared';
-import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
+import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { joinCardNames } from '../_shared';
 import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
@@ -855,17 +855,7 @@ function __sturdyDoEvolveStep1(
   const isActive = p.active?.iid === base.iid;
   const prevStack = base.evolvedFromStack ?? [];
   const baseBare: CardInstance = { ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined };
-  const evolved: CardInstance = {
-    ...evoInst,
-    damage: base.damage,
-    energyAttached: base.energyAttached,
-    toolAttached: base.toolAttached,
-    ...evolvedStatusAfter(base, st, pool),
-    evolvedFromIid: base.iid,
-    evolvedFromStack: [...prevStack, baseBare],
-    evolvedThisTurn: true,
-    justPlaced: false, playedFromHand: false,
-  };
+  const evolved: CardInstance = buildEvolvedInstance(base, evoInst, st, pool);
   st = updatePlayer(st, idx, x => ({
     ...x,
     deck: x.deck.filter(c => c.iid !== evoInst.iid),
@@ -993,17 +983,7 @@ regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
   const isActive = p.active?.iid === stage1Iid;
   const prevStack = stage1.evolvedFromStack ?? [];
   const stage1Bare: CardInstance = { ...stage1, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined };
-  const evolved: CardInstance = {
-    ...evoInst,
-    damage: stage1.damage,
-    energyAttached: stage1.energyAttached,
-    toolAttached: stage1.toolAttached,
-    ...evolvedStatusAfter(stage1, st, pool),
-    evolvedFromIid: stage1.iid,
-    evolvedFromStack: [...prevStack, stage1Bare],
-    evolvedThisTurn: true,
-    justPlaced: false, playedFromHand: false,
-  };
+  const evolved: CardInstance = buildEvolvedInstance(stage1, evoInst, st, pool);
   st = updatePlayer(st, idx, x => ({
     ...x,
     deck: shuffle(x.deck.filter(c => c.iid !== pickedIid)),  // 完成所有進化後重洗

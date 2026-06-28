@@ -39,7 +39,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
-import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
+import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, drawCards,
@@ -162,37 +162,7 @@ regR('duduge-emergency-evolve', (st, idx, iids, params, pool) => {
     return updatePlayer(addLog(st, '緊急進化：找不到豆豆鴿，僅重洗牌庫', idx), idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
   // 進化（跳階）：把豆豆鴿放進 evolvedFromStack，cardId 換成高傲雉雞
-  const evolved: CardInstance = {
-    ...evoInst,
-    iid: base.iid,
-    damage: base.damage,
-    energyAttached: base.energyAttached,
-    toolAttached: base.toolAttached,
-    ...evolvedStatusAfter(base, st, pool),
-    evolvedFromStack: [
-      ...(base.evolvedFromStack ?? []),
-      {
-        ...base,
-        iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-        toolAttached: undefined,
-        energyAttached: [],
-        evolvedFromStack: undefined,
-      },
-    ],
-    evolvedThisTurn: true,
-    justPlaced: undefined,
-    movedToActiveThisTurn: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    cantRetreatPendingSelf: undefined,
-    damageBonusThisTurn: undefined,
-    damageBonusPending: undefined,
-    damageReduceNextHit: undefined,
-    blockedAttackNamesThisTurn: undefined,
-    blockedAttackNamesNextTurn: undefined,
-    abilityUsedThisTurn: undefined,
-  };
+  const evolved: CardInstance = buildEvolvedInstance(base, evoInst, st, pool);
 
   let s = updatePlayer(st, idx, pl => {
     const newDeck = shuffle(pl.deck.filter((_, i) => i !== evoIdx));

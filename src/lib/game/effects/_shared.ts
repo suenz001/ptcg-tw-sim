@@ -1266,6 +1266,49 @@ export function evolvedStatusAfter(
   return (stadium === '暈眩山谷' && base.status === 'confused') ? { status: 'confused' } : {};
 }
 
+/**
+ * v5.742：中央進化體建構 — 所有「直接進化」效果(覺醒/緊急進化/壯偉碩木/早熟進化/
+ *   細胞覺醒等)的單一來源,鏡射 engine 正規 EVOLVE。過往各路徑手刻 `const evolved = {...}`
+ *   反覆漏:extraTools(進化丟多餘道具=丟卡)、iid:base.iid(身份分歧→退化/取回 dup-iid)、
+ *   fossilOnField:false(化石進化殘留)、baseBare 帶 transient flags(v4.20 UI 標籤錯)。
+ *   保證:繼承 base 的 iid/damage/能量/道具/extraTools;狀態走 evolvedStatusAfter(暈眩山谷
+ *   例外);evolvedFromStack 加入唯一 iid 的裸殼 chain entry;清 transient flags + fossilOnField。
+ *   opts.extraDamage:卡面「進化時放 N 傷害指示物」(如夜盜火蟲|怨念進化 +20)。
+ */
+export function buildEvolvedInstance(
+  base: CardInstance,
+  evoInst: CardInstance,
+  state: GameState,
+  pool: Map<string, Card>,
+  opts?: { extraDamage?: number },
+): CardInstance {
+  const prevStack = base.evolvedFromStack ?? [];
+  const baseBare: CardInstance = {
+    iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
+    cardId: base.cardId,
+    damage: 0,
+    energyAttached: [],
+    toolAttached: undefined,
+    extraTools: [],
+    evolvedFromStack: undefined,
+  };
+  return {
+    ...evoInst,
+    iid: base.iid,
+    damage: base.damage + (opts?.extraDamage ?? 0),
+    energyAttached: base.energyAttached,
+    toolAttached: base.toolAttached,
+    extraTools: base.extraTools,
+    ...evolvedStatusAfter(base, state, pool),
+    evolvedFromIid: base.iid,
+    evolvedFromStack: [...prevStack, baseBare],
+    evolvedThisTurn: true,
+    justPlaced: false,
+    playedFromHand: false,
+    fossilOnField: false,
+  };
+}
+
 export function getAllAttachedTools(inst: CardInstance | null | undefined): CardInstance[] {
   if (!inst) return [];
   const out: CardInstance[] = [];

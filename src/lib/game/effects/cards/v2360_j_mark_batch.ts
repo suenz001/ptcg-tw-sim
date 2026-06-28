@@ -31,7 +31,7 @@ import {
   withPending,
   triggerOakeyeMillIfApplicable, isOwnFirstTurn,
 } from '../_shared';
-import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
+import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { countEnergy } from '../../engine';
 import { flipCoinsWithLog } from '../../effects';
 
@@ -293,18 +293,7 @@ regR('phantump-grudge-evolve', (state, aIdx, iids, params, pool) => {
     toolAttached: undefined,
     evolvedFromStack: undefined,
   };
-  const evolved: CardInstance = {
-    ...evoInst,
-    damage: base.damage + 20, // 放置 2 個傷害指示物（= 20 damage）
-    energyAttached: base.energyAttached,
-    toolAttached: base.toolAttached,
-    ...evolvedStatusAfter(base, state, pool),
-    evolvedFromIid: base.iid,
-    evolvedFromStack: [...prevStack, baseBare],
-    evolvedThisTurn: true,
-    justPlaced: false,
-    playedFromHand: false,
-  };
+  const evolved: CardInstance = buildEvolvedInstance(base, evoInst, state, pool, { extraDamage: 20 });
 
   // 從手牌移除進化卡，並在場上以 evolved 取代 base
   state = updatePlayer(state, aIdx, x => ({

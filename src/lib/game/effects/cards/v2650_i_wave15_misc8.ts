@@ -14,7 +14,7 @@
  */
 
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, sameEvoName, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
-import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
+import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -265,17 +265,7 @@ regR('twin-cell-evolve-do', (st, aIdx, iids, params, pool) => {
         const baseBare: CardInstance = {
           ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
         };
-        const evolved: CardInstance = {
-          ...evoInst,
-          damage: base.damage,
-          energyAttached: base.energyAttached,
-          toolAttached: base.toolAttached,
-          ...evolvedStatusAfter(base, st, pool),
-          evolvedFromIid: base.iid,
-          evolvedFromStack: [...prevStack, baseBare],
-          evolvedThisTurn: true,
-          justPlaced: false, playedFromHand: false,
-        };
+        const evolved: CardInstance = buildEvolvedInstance(base, evoInst, st, pool);
         s = updatePlayer(s, aIdx, x => ({
           ...x,
           deck: x.deck.filter(c => c.iid !== evoIid),
@@ -363,17 +353,7 @@ regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
         const baseBare: CardInstance = {
           ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
         };
-        const evolved: CardInstance = {
-          ...evoInst,
-          damage: base.damage,
-          energyAttached: base.energyAttached,
-          toolAttached: base.toolAttached,
-          ...evolvedStatusAfter(base, st, pool),
-          evolvedFromIid: base.iid,
-          evolvedFromStack: [...prevStack, baseBare],
-          evolvedThisTurn: true,
-          justPlaced: false, playedFromHand: false,
-        };
+        const evolved: CardInstance = buildEvolvedInstance(base, evoInst, st, pool);
         s = updatePlayer(s, aIdx, x => ({
           ...x,
           deck: x.deck.filter(c => c.iid !== evoIid),
@@ -456,40 +436,7 @@ for (const [attackKey, baseName, dmg, effectKey] of DIRECT_EVOLVE_AWAKEN) {
       return addLog(state, `${attackKey.split('|')[1]}：戰鬥場已非「${baseN}」，僅重洗牌庫`, aIdx);
     }
     const base = player.active;
-    const evolved: CardInstance = {
-      ...evoInst,
-      iid: base.iid,
-      damage: base.damage,
-      energyAttached: base.energyAttached,
-      toolAttached: base.toolAttached,
-      ...evolvedStatusAfter(base, state, pool),
-      evolvedFromStack: [
-        ...(base.evolvedFromStack ?? []),
-        // chain entry 不帶 base 的 transient turn flags（同 engine.ts baseBare 修法）
-        {
-          iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-          cardId: base.cardId,
-          damage: 0,
-          energyAttached: [],
-          toolAttached: undefined,
-          extraTools: [],
-          evolvedFromStack: undefined,
-        },
-      ],
-      evolvedThisTurn: true,
-      justPlaced: undefined,
-      movedToActiveThisTurn: undefined,
-      cantAttackThisTurn: undefined,
-      cantAttackPending: undefined,
-      cantRetreatNextTurn: undefined,
-      cantRetreatPendingSelf: undefined,
-      damageBonusThisTurn: undefined,
-      damageBonusPending: undefined,
-      damageReduceNextHit: undefined,
-      blockedAttackNamesThisTurn: undefined,
-      blockedAttackNamesNextTurn: undefined,
-      abilityUsedThisTurn: undefined,
-    };
+    const evolved: CardInstance = buildEvolvedInstance(base, evoInst, state, pool);
     let s = state;
     s = updatePlayer(s, aIdx, p => ({
       ...p,
@@ -620,17 +567,7 @@ regR('evil-awakening-evolve', (st, aIdx, iids, params, pool) => {
         const baseBare: CardInstance = {
           ...base, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined,
         };
-        const evolved: CardInstance = {
-          ...evoInst,
-          damage: base.damage,
-          energyAttached: base.energyAttached,
-          toolAttached: base.toolAttached,
-          ...evolvedStatusAfter(base, st, pool),
-          evolvedFromIid: base.iid,
-          evolvedFromStack: [...prevStack, baseBare],
-          evolvedThisTurn: true,
-          justPlaced: false, playedFromHand: false,
-        };
+        const evolved: CardInstance = buildEvolvedInstance(base, evoInst, st, pool);
         s = updatePlayer(s, aIdx, x => ({
           ...x,
           deck: x.deck.filter(c => c.iid !== evoIid),

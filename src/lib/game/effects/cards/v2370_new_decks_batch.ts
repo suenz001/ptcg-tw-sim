@@ -34,7 +34,7 @@ import {
   updatePlayer,
   withPending,
 } from '../_shared';
-import { evolvedStatusAfter } from '../_shared'; // v5.741 進化狀態中央
+import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // A. 石居蟹｜覺醒 — 招式驅動「從牌庫直接進化」
@@ -90,37 +90,7 @@ regR('crab-awaken-evolve', (state, aIdx, iids, _params, pool) => {
   }
 
   const base = player.active;
-  const evolved: CardInstance = {
-    ...evoInst,
-    iid: base.iid,
-    damage: base.damage,
-    energyAttached: base.energyAttached,
-    toolAttached: base.toolAttached,
-    ...evolvedStatusAfter(base, state, pool),
-    evolvedFromStack: [
-      ...(base.evolvedFromStack ?? []),
-      {
-        ...base,
-        iid: `${base.iid}_base_${base.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-        toolAttached: undefined,
-        energyAttached: [],
-        evolvedFromStack: undefined,
-      },
-    ],
-    evolvedThisTurn: true,
-    justPlaced: undefined,
-    movedToActiveThisTurn: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    cantRetreatPendingSelf: undefined,
-    damageBonusThisTurn: undefined,
-    damageBonusPending: undefined,
-    damageReduceNextHit: undefined,
-    blockedAttackNamesThisTurn: undefined,
-    blockedAttackNamesNextTurn: undefined,
-    abilityUsedThisTurn: undefined,
-  };
+  const evolved: CardInstance = buildEvolvedInstance(base, evoInst, state, pool);
 
   let s = state;
   s = updatePlayer(s, aIdx, p => ({
