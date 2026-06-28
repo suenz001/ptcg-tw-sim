@@ -1053,13 +1053,16 @@ regPost('戰槌龍ex|亂暴錘', (state, aIdx) => {
 //   卡面：「擲 2 次硬幣，若全部為正面，從自己的牌庫選擇 1 張寶可夢，放置於備戰區。
 //          然後重洗牌庫。」
 regPre('下石鳥|親送挑戰', (state) => ({ state, damage: 0 }));
-regPost('下石鳥|親送挑戰', (state, aIdx) => {
+regPost('下石鳥|親送挑戰', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 2, '配送挑戰', aIdx);
   if (r.heads < 2) {
     return addLog(r.state, `配送挑戰：${r.heads}/2 次正面，效果失敗`, aIdx);
   }
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(r.state, '配送挑戰：2 正面但牌庫為空', aIdx);
+  // v5.744：備戰區已滿時不能放置(否則 resolver 直接 push 會超過上限),比照其他 bench-fill
+  const limit = getOwnBenchLimit(state, aIdx, pool);
+  if (p.bench.length >= limit) return addLog(r.state, '配送挑戰：2 正面但備戰區已滿', aIdx);
   return withPending(
     addLog(r.state, '配送挑戰：2 次全正面 → 從牌庫選 1 張寶可夢放備戰（可選 0 張）', aIdx),
     {
@@ -1068,21 +1071,27 @@ regPost('下石鳥|親送挑戰', (state, aIdx) => {
       filter: 'Pokemon',
       minCount: 0, maxCount: 1,
       effectKey: 'm5-flamigo-delivery',
+      params: { benchLimitAtPick: limit },
     },
   );
 });
-regR('m5-flamigo-delivery', (state, aIdx, iids) => {
+regR('m5-flamigo-delivery', (state, aIdx, iids, params) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '配送挑戰：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
       deck: [...p.deck].sort(() => Math.random() - 0.5),
     }));
   }
-  return updatePlayer(addLog(state, '配送挑戰：放置 1 張寶可夢到備戰並重洗牌庫', aIdx), aIdx, p => {
+  return updatePlayer(addLog(state, '配送挑戰：放置寶可夢到備戰並重洗牌庫', aIdx), aIdx, p => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
-    const remaining = p.deck.filter(c => !iids.includes(c.iid));
+    // v5.744：safety-trim 至備戰空格(防 benchLimitAtPick 過時);未放置者退回牌庫不丟卡
+    const limitAtPick = (params?.benchLimitAtPick as number | undefined) ?? 5;
+    const slots = Math.max(0, limitAtPick - p.bench.length);
+    const toBench = picked.slice(0, slots);
+    const notPlaced = picked.slice(slots);
+    const remaining = [...p.deck.filter(c => !iids.includes(c.iid)), ...notPlaced];
     const shuffled = [...remaining].sort(() => Math.random() - 0.5);
-    return { ...p, deck: shuffled, bench: [...p.bench, ...picked] };
+    return { ...p, deck: shuffled, bench: [...p.bench, ...toBench] };
   });
 });
 
