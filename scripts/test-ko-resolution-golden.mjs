@@ -80,5 +80,53 @@ T('G4 非ex攻擊方KO惡(對手有影藏)→影藏不觸發,取1獎賞', () => 
   assert.equal(prizesTaken(out), 1, '非ex攻擊方不觸發影藏,應=1 實=' + prizesTaken(out));
 });
 
+// ── 反擊 / 雙殺：攻擊方 拉普拉斯ex｜衝浪(水×3,140) vs 布里卡隆(尖刺盔甲,草能量×30 反擊) ──
+const WATER = '18519';
+const LAPRAS_ATK = '14085';
+const CHESNAUGHT = '18427';
+const ATK_SURF = { type: 'ATTACK', attackIndex: 1 };
+function mkRetal({ atkPreDamage = 0, defPreDamage = 0 }) {
+  return { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], ancientEnergyMinusOneUsed: [false, false],
+    players: [
+      { name: 'P1', active: inst(LAPRAS_ATK, { energyAttached: [inst(WATER), inst(WATER), inst(WATER)], damage: atkPreDamage }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: inst(CHESNAUGHT, { energyAttached: [inst(ENERGY)], damage: defPreDamage }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+}
+const oppPrizesTaken = out => 6 - out.players[1].prizes.length;
+
+T('G5 反擊非KO→攻擊方被反擊30,對手存活', () => {
+  const out = applyAction(mkRetal({}), ATK_SURF, pool);
+  assert.equal(out.players[0].active.damage, 30, '攻擊方應被反擊30 實=' + out.players[0].active?.damage);
+  assert.ok(out.players[1].active && out.players[1].active.cardId === CHESNAUGHT, '布里卡隆應存活');
+});
+
+T('G6 反擊KO→對手KO+攻擊方仍被反擊30,P1取1獎賞', () => {
+  const out = applyAction(mkRetal({ defPreDamage: 40 }), ATK_SURF, pool);
+  assert.ok(out.players[1].discard.some(c => c.cardId === CHESNAUGHT), '布里卡隆應KO進棄牌');
+  assert.equal(out.players[0].active.damage, 30, 'KO時尖刺盔甲仍反擊30 實=' + out.players[0].active?.damage);
+  assert.equal(prizesTaken(out), 1, '布里卡隆非ex→P1取1獎賞 實=' + prizesTaken(out));
+});
+
+T('G7 雙殺→兩邊KO,各取獎賞(P1取1/P2取2)', () => {
+  const out = applyAction(mkRetal({ atkPreDamage: 180, defPreDamage: 40 }), ATK_SURF, pool);
+  assert.ok(out.players[1].discard.some(c => c.cardId === CHESNAUGHT), '布里卡隆應KO');
+  assert.ok(out.players[0].discard.some(c => c.cardId === LAPRAS_ATK), '拉普拉斯ex應被反擊KO');
+  assert.equal(prizesTaken(out), 1, 'P1取1(布里卡隆) 實=' + prizesTaken(out));
+  assert.equal(oppPrizesTaken(out), 2, 'P2取2(拉普拉斯ex) 實=' + oppPrizesTaken(out));
+});
+
+T('G8 中毒checkup KO→P0取1獎賞', () => {
+  const st = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
+    players: [
+      { name: 'P1', active: inst(LION, { energyAttached: [inst(ENERGY)] }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: inst(WILLDUN, { damage: 100, status: 'poisoned' }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+  const out = applyAction(st, { type: 'END_TURN' }, pool);
+  assert.ok(out.players[1].discard.some(c => c.cardId === WILLDUN), '中毒應KO願增猿進棄牌');
+  assert.equal(prizesTaken(out), 1, '中毒KO→P0取1獎賞 實=' + prizesTaken(out));
+});
+
 console.log('\nKO 結算黃金基準網:PASS ' + pass + ' / FAIL ' + fail);
 process.exit(fail ? 1 : 0);
