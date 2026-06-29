@@ -39,6 +39,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { isAbilityHolderEffective } from './v3001_g3_wave3';
 import type { Card } from '$lib/cards/types';
 import { PASSIVE_ATTACK_BONUS } from '../../effects';
 import { ROCKET_WATCHTOWER_STADIUMS } from './stadiums';
@@ -228,7 +229,10 @@ export function bronzongShelterReduce(
   let count = 0;
   for (const c of all) {
     const card = pool.get(c.cardId);
-    if (card?.abilities?.some(a => a.name === '守護之鐘')) count++;
+    if (!card?.abilities?.some(a => a.name === '守護之鐘')) continue;
+    const loc: 'active' | 'bench' = owner.active && c.iid === owner.active.iid ? 'active' : 'bench';
+    if (!isAbilityHolderEffective(state, c, card, defenderIdx, '守護之鐘', loc, pool)) continue;
+    count++;
   }
   return count * 10;
 }
@@ -269,7 +273,10 @@ export function gearCoatingReduce(
   let count = 0;
   for (const c of all) {
     const card = pool.get(c.cardId);
-    if (card?.abilities?.some(a => a.name === '齒輪塗層')) count++;
+    if (!card?.abilities?.some(a => a.name === '齒輪塗層')) continue;
+    const loc: 'active' | 'bench' = owner.active && c.iid === owner.active.iid ? 'active' : 'bench';
+    if (!isAbilityHolderEffective(state, c, card, defenderIdx, '齒輪塗層', loc, pool)) continue;
+    count++;
   }
   return count * 20;
 }

@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.765</span> 對戰修正：齒輪怪「齒輪塗層」、青銅鐘「守護之鐘」這類「場上每有 1 隻就減傷」的特性，現在會正確排除特性被「暗夜羽擊／初始化」等效果消除的那一隻（被消除的持有者不再計入減傷）</summary>
+        <ul>
+          <li>依官方裁定，只有「處於有效狀態」的持有者才計入；例如對手用振翼髮「暗夜羽擊」消除你戰鬥場齒輪怪的特性時，那隻齒輪怪就不再提供減傷。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.764</span> 對戰修正：寶可夢檢查（回合間結算）在一方寶可夢因中毒／灼傷昏厥時，會跳過剩餘的狀態結算 — 現依官方規則完整結算雙方的中毒、灼傷、睡眠、麻痺</summary>
         <ul>
           <li>例如：你的寶可夢被中毒擊倒的同時，對手場上被灼傷／中毒的寶可夢現在也會正確受到傷害；雙方在睡眠的寶可夢都會擲幣判定是否醒來。</li>
