@@ -7335,9 +7335,11 @@ export function fireDefenderOnKO(
         }
       }
     }
-    // ③ PASSIVE_ON_KO（桃歹郎/鬆口氣/光子密碼）
+    // ③ PASSIVE_ON_KO（桃歹郎/鬆口氣/光子密碼）— v5.756 比照 engine.ts 主管線(v5.655)與本函式 ①②：
+    //   holder 特性被暗夜羽擊/初始化/監視塔/黏著束縛等消除時,被KO觸發特性失效(fireDefenderOnKO 開頭已 gate isActive→傳 'active')。
     if (koCard?.abilities) {
       for (const ab of koCard.abilities) {
+        if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, 'active', pool)) continue;
         const fnKO = PASSIVE_ON_KO.get(ab.name);
         if (fnKO) s = fnKO(s, dIdx, aIdx, pool, koCard, koInst);
       }

@@ -318,6 +318,14 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.756</span> 修正：被「暗夜羽擊／初始化」等消除特性的寶可夢，被部分招式（狙擊、傷害分配等）擊倒時，其「被擊倒時觸發」的特性（如桃歹郎「最後鎖鏈」）仍會誤觸發 — 現已正確壓制</summary>
+        <ul>
+          <li>引擎主管線（一般招式擊倒）原本已正確壓制；本次補上手動傷害／分配傷害結算路徑，與主管線一致。</li>
+          <li>涵蓋桃歹郎「最後鎖鏈」、願增猿ex「鬆口氣」、密勒頓「光子密碼」等被擊倒觸發特性。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.753</span> 修正：振翼髮「暗夜羽擊」未擋住對手「上場時」自動發動的特性（如勾帕路翁ex「金屬之路」）</summary>
         <ul>
           <li>接續 v5.751。我方戰鬥場有振翼髮「暗夜羽擊」時，對手寶可夢從備戰移到戰鬥場時自動發動的特性（如勾帕路翁ex「金屬之路」）先前仍會觸發。已修正：這類「上場時」特性與一般特性一樣會被「暗夜羽擊／初始化／黏著束縛」等消除效果擋下。</li>
