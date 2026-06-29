@@ -5961,7 +5961,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${poisonPlayer.name} 沒有可上場的寶可夢` };
         }
         // SEND_NEW_ACTIVE 由被毒死方（tIdx）補；re-dispatch END_TURN 仍以 aIdx 為 activePlayerIndex
-        return { ...poisonState, endTurnContinueAfterKO: aIdx };
+        // v5.764：不 early-return — 設 state 後繼續跑完剩餘 checkup(對手中毒/灼傷、雙方睡眠醒幣、
+        //   麻痺解除)。§11 規則:寶可夢檢查須完整結算雙方所有特殊狀態;補位延到狀態區結尾統一處理。
+        state = poisonState;
       } else {
         poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
         players[tIdx] = poisonPlayer;
@@ -6015,7 +6017,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         if (burnedPlayer.bench.length === 0) {
           return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
         }
-        return { ...burnState, endTurnContinueAfterKO: aIdx };
+        // v5.764：同上 — 不 early-return,繼續跑完剩餘 checkup,補位延到狀態區結尾統一處理。
+        state = burnState;
       } else {
         burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
         // 擲硬幣：正面解除燒傷
@@ -6068,6 +6071,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       state = addLog({ ...state, players }, `${pool.get(paraPlayer.active.cardId)?.name ?? '?'} 的麻痺解除了！`, null);
     }
 
+    // v5.764：checkup 全部狀態(中毒/灼傷/睡眠/麻痺,雙方)結算完畢後,若有任一方戰鬥位因 checkup
+    //   致死(active=null) → 此時才統一補位(SEND_NEW_ACTIVE)。原本 poison/burn 致死當下 early-return
+    //   會跳過剩餘 checkup,違反 §11(對手中毒/灼傷不結算、雙方睡眠不擲幣醒、麻痺不解除多停一回合)。
+    if (state.players[aIdx].active === null || state.players[dIdx].active === null) {
+      return { ...state, endTurnContinueAfterKO: aIdx };
+    }
     } // v5.426：status 區（中毒/灼傷/睡眠/麻痺）到此結束（endTurnSkipCheckup gate）。
 
     // ── checkup 放指示物特性區（冰冷之帳 / 揚沙 等）獨立 gate ──
