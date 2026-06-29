@@ -718,13 +718,12 @@ export function koPrizesAdjusted(
       f[defenderIdx] = true;
       s = { ...s, ancientEnergyMinusOneUsed: f };
     }
-    // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方 KO → -1
+    // 影藏（超級耿鬼ex）：惡寶可夢被【ex】攻擊方招式傷害 KO → -1
+    // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
+    //   （原只查特性名，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
     const isExAttacker = !!atkCard && (atkCard.name.endsWith('ex') || atkCard.name.endsWith('EX'));
-    if (isExAttacker && koCard.pokemonType === 'Darkness') {
-      const def = s.players[defenderIdx];
-      const defHasKage = (def.active && pool.get(def.active.cardId)?.abilities?.some(a => a.name === '影藏'))
-        || def.bench.some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '影藏'));
-      if (defHasKage) adjust -= 1;
+    if (isExAttacker && koCard.pokemonType === 'Darkness' && hasEffectiveKageHide(s, defenderIdx, pool)) {
+      adjust -= 1;
     }
   }
   return { prizes: Math.max(0, base + adjust + deferredBonus), state: s };
@@ -17011,7 +17010,7 @@ registerV3000G3W2Passives();
 // 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
 //   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
-import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified } from './effects/cards/v3001_g3_wave3';
+import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified, hasEffectiveKageHide } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
 
 // v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）

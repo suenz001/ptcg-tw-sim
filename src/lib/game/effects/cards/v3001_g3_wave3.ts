@@ -179,6 +179,29 @@ export function isAbilityHolderEffective(
   return true;
 }
 
+/**
+ * 影藏（超級耿鬼ex）獎賞減少 — 中央述詞：ownerIdx 玩家場上是否有「處於有效狀態」的影藏持有者。
+ * §17.42.B / 卡面：影藏須「處於有效狀態」（鐵荊棘ex｜初始化會消除超級耿鬼ex 這類『規則寶可夢』的
+ * 特性 → 影藏失效；招式型特性消除 / abilityNullifiedThisTurn 亦然）。收斂 engine 主傷害 KO 流程與
+ * effects.koPrizesAdjusted 兩處對影藏持有者的判定，避免漂移。
+ */
+export function hasEffectiveKageHide(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || ownerIdx == null || !pool) return false;
+  const p = state.players[ownerIdx];
+  const ok = (inst: CardInstance | null | undefined, loc: 'active' | 'bench'): boolean => {
+    if (!inst) return false;
+    const c = pool.get(inst.cardId);
+    if (!c?.abilities?.some(ab => ab.name === '影藏')) return false;
+    return isAbilityHolderEffective(state, inst, c, ownerIdx, '影藏', loc, pool);
+  };
+  if (ok(p.active, 'active')) return true;
+  return p.bench.some(b => ok(b, 'bench'));
+}
+
 /** 玩家 idx 備戰是否有指定 ability holder。 */
 function hasAbilityOnBench(
   state: GameState | undefined,

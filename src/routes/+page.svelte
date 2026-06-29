@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.768</span> 對戰修正：超級耿鬼ex 特性「影藏」（自己【惡】寶可夢受對手 ex 招式傷害昏厥時少給 1 張獎賞），現在會正確判斷「影藏處於有效狀態」 — 當超級耿鬼ex 的特性被鐵荊棘ex「初始化」等效果消除時，不再錯誤地少給獎賞</summary>
+        <ul>
+          <li>依 §17.42.B 官方裁定：影藏須處於有效狀態才生效。先前只檢查特性是否存在，漏判特性已被消除的情形。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.767</span> 對戰修正：競技場卡「神秘花園」現在只有在「丟棄能量卡後會實際抽到牌」時才能使用 — 場上沒有【超】寶可夢、牌庫沒有卡、或手牌張數已達場上【超】寶可夢數量時，不再能白白丟棄能量（依官方裁定）</summary>
         <ul>
           <li>卡面：丟 1 張能量後抽到「手牌張數＝場上【超】寶可夢數量」。先前在抽不到任何牌時仍允許丟能量。</li>

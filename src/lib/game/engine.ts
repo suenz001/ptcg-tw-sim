@@ -688,6 +688,7 @@ import {
   isOppItemPlayBlocked,
   isAbilityNullifiedByPassive,
   isAbilityHolderEffective,
+  hasEffectiveKageHide,
   isInitializeNullified,
   hasRocketTyranitarSandstorm,
   getOppRetreatTriggers,
@@ -4792,11 +4793,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     if (baseDamage > 0 && newDamage >= defenderHP) {
       const isExAttacker = attackerCard.name.endsWith('ex') || attackerCard.name.endsWith('EX');
       const isDefenderDark = defenderCard.pokemonType === 'Darkness';
-      const defenderHasKageHide = defender.bench.some(c => {
-        const bc = pool.get(c.cardId);
-        return bc?.abilities?.some(a => a.name === '影藏');
-      }) || (defender.active && pool.get(defender.active.cardId)?.abilities?.some(a => a.name === '影藏'));
-      if (isExAttacker && isDefenderDark && defenderHasKageHide) {
+      // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
+      //   （原只查特性名存在，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
+      if (isExAttacker && isDefenderDark && hasEffectiveKageHide(state, dIdx, pool)) {
         prizeAdjust = -1;
       }
     }
