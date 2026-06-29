@@ -23,6 +23,7 @@ import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, Pr
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
+import { getKODefenderEnergyInDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
 import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
@@ -8901,10 +8902,7 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
   // v5.769：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
   //   （此刻在棄牌區，_koDefenderEnergySnapshot）放回對手手牌。
   if (!state.players[dIdx].active) {
-    const snap = state._koDefenderEnergySnapshot;
-    const koEnergyIids = (snap && snap.idx === dIdx)
-      ? snap.energyIids.filter(iid => state.players[dIdx].discard.some(c => c.iid === iid))
-      : [];
+    const koEnergyIids = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
     if (koEnergyIids.length === 0) return addLog(state, '反轉之風：對手戰鬥無可放回的能量', aIdx);
     const capKO = Math.min(2, koEnergyIids.length);
     return withPending(addLog(state, '反轉之風：對手戰鬥寶可夢已昏厥 — 可從棄牌區將其能量放回對手手牌', aIdx), {
@@ -16700,10 +16698,7 @@ export function trickStepPost(): AttackPostFn {
     // v5.769：對手戰鬥位被本招式 160 傷害 KO（active=null）→ 官方順序「招式效果先於昏厥結算」，
     //   仍可把 KO 前戰鬥位的能量（此刻在棄牌區，由 _koDefenderEnergySnapshot 記錄 iid）改附對手備戰。
     if (!opp.active) {
-      const snap = state._koDefenderEnergySnapshot;
-      const koEnergyIids = (snap && snap.idx === dIdx)
-        ? snap.energyIids.filter(iid => opp.discard.some(c => c.iid === iid))
-        : [];
+      const koEnergyIids = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
       if (koEnergyIids.length === 0) return addLog(state, '戲法舞步：對手戰鬥寶可夢沒有可改附的能量', aIdx);
       if (opp.bench.length === 0) return addLog(state, '戲法舞步：對手備戰區沒有寶可夢，無法移動能量', aIdx);
       return withPending(addLog(state, '戲法舞步：對手戰鬥寶可夢已昏厥 — 可從棄牌區改附其能量到對手備戰', aIdx), {

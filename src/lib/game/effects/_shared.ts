@@ -1572,3 +1572,20 @@ export function energyMatchesType(ec: Card | undefined, type: string): boolean {
   const zh: Record<string, string> = { '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning', '超': 'Psychic', '鬥': 'Fighting', '惡': 'Darkness', '鋼': 'Metal', '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless' };
   return zh[m[1]] === type;
 }
+
+
+// ── v5.774 KO 對手戰鬥位「pre-KO 完整實體快照」中央存取器 ──────────────────────
+// 官方順序「招式效果先於昏厥結算」：picker 型 POST 效果(戲法舞步/反轉之風…)非同步,真正效果在
+//   後續 RESOLVE_SELECTION 才發生,屆時對手戰鬥位早已被主 KO 移除。engine 在移除前把 pre-KO 的對手
+//   戰鬥位『完整實體』存進 state._koDefenderSnapshot,這裡提供中央存取,讓這類卡免逐張客製化讀取。
+export function getKODefenderSnapshot(state: GameState, dIdx: 0 | 1): CardInstance | null {
+  const snap = state._koDefenderSnapshot;
+  return snap && snap.idx === dIdx ? snap.inst : null;
+}
+// 取「被本次招式傷害 KO 的對手戰鬥位」當下仍在該方棄牌區的能量(供搬移/回手 picker 的候選 iid)。
+export function getKODefenderEnergyInDiscard(state: GameState, dIdx: 0 | 1): CardInstance[] {
+  const snap = getKODefenderSnapshot(state, dIdx);
+  if (!snap) return [];
+  const discard = state.players[dIdx].discard;
+  return (snap.energyAttached ?? []).filter(e => discard.some(c => c.iid === e.iid));
+}

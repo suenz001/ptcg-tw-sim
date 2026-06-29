@@ -41,7 +41,7 @@ function koState(attackerCid, energyInsts, withBench = true) {
   const bench = withBench ? [inst(POKE)] : [];
   return { ...s, phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, isFirstTurn: false, turn: 5,
     setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], pendingSelection: null,
-    _koDefenderEnergySnapshot: { idx: 1, energyIids: energyInsts.map(e => e.iid) },
+    _koDefenderSnapshot: { idx: 1, inst: { iid: 'koActive', cardId: '0', energyAttached: energyInsts } },
     players: [
       { ...s.players[0], hand: [], deck: [inst(DARK)], discard: [], prizes: prize(6), bench: [], active: inst(attackerCid, { energyAttached: [inst(DARK), inst(DARK)] }) },
       { ...s.players[1], hand: [], deck: [inst(DARK)], discard: [...energyInsts], prizes: prize(6), bench, active: null }] };
@@ -89,7 +89,7 @@ T('★反轉之風 KO→開 picker(fromDiscard)', () => {
   const s = createGame({ name: 'P1', entries: [{ cardId: UNFEZANT, count: 1 }] }, { name: 'P2', entries: [{ cardId: POKE, count: 1 }] }, pool);
   const st = { ...s, phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, isFirstTurn: false, turn: 5,
     setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], pendingSelection: null,
-    _koDefenderEnergySnapshot: { idx: 1, energyIids: en.map(e => e.iid) },
+    _koDefenderSnapshot: { idx: 1, inst: { iid: 'koA2', cardId: '0', energyAttached: en } },
     players: [
       { ...s.players[0], hand: [], deck: [inst(DARK)], discard: [], prizes: prize(6), bench: [], active: inst(UNFEZANT, { energyAttached: [inst(DARK), inst(DARK)] }) },
       { ...s.players[1], hand: [], deck: [inst(DARK)], discard: [...en], prizes: prize(6), bench: [inst(POKE)], active: null }] };
