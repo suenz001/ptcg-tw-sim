@@ -702,8 +702,7 @@ export function koPrizesAdjusted(
       if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
     }
     // 道具：莉莉艾的珍珠 -1 / 豪華斗篷 +1（阻礙之塔在場時道具效果失效）
-    const stadiumName = s.activeStadium ? pool.get(s.activeStadium.cardId)?.name : undefined;
-    if (stadiumName !== '阻礙之塔') {
+    if (!isToolsJammed(s, pool)) {  // v5.761：改用中央 isToolsJammed（原硬寫'阻礙之塔'字面）
       for (const t of getAllAttachedTools(koInst)) {
         const tool = pool.get(t.cardId);
         const fn = tool ? TOOL_PRIZE_BONUS.get(tool.name) : undefined;
@@ -9755,8 +9754,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       const attackerCard = attacker ? pool.get(attacker.cardId) : null;
       // v5.673：弱點/抵抗力收斂到中央 applyWeakRes(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性,與主管線一致)。
       effDmg = applyWeakRes(s, actorIdx, target, targetCard, effDmg, pool);
-      // TOOL_ATTACK_BONUS（猛攻手鐲等）— iterate 攻擊方所有道具
-      if (attacker && attackerCard) {
+      // TOOL_ATTACK_BONUS（猛攻手鐲等）— iterate 攻擊方所有道具（v5.761：阻礙之塔時道具失效，比照主管線 gate）
+      if (attacker && attackerCard && !isToolsJammed(s, pool)) {
         for (const t of getAllAttachedTools(attacker)) {
           const atkTool = pool.get(t.cardId);
           if (!atkTool) continue;
@@ -14498,8 +14497,8 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     //   Wilson 回報多目標招式對戰鬥場 ex 沒算 +30。
     if (isActive) {
       // v5.673：resistance 已併入上方 applyWeakRes(中央收斂)。
-      // TOOL_ATTACK_BONUS — iterate 攻擊方所有道具
-      if (attacker && attackerCard) {
+      // TOOL_ATTACK_BONUS — iterate 攻擊方所有道具（v5.761：阻礙之塔時道具失效，比照主管線 gate）
+      if (attacker && attackerCard && !isToolsJammed(s, pool)) {
         for (const t of getAllAttachedTools(attacker)) {
           const atkTool = pool.get(t.cardId);
           if (!atkTool) continue;
