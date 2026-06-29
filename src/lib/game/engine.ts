@@ -3375,6 +3375,23 @@ function handlePlaying(
           aIdx
         );
       }
+      // v5.767：§17.41.F 官方裁定 — 卡面「若丟棄1張能量卡，則可抽卡直到手牌張數＝場上【超】數」。
+      //   只有「丟 1 張能量後會實際抽到 ≥1 張」時才可使用，否則白丟能量＝不可使用：
+      //     - 丟 1 張後手牌變 (hand-1)，抽到 = 【超】數 → 抽張數 = psychicCount-(hand-1)；
+      //       要 ≥1 即 psychicCount ≥ hand（hand 含待丟那張能量）。手牌已 ≥【超】數 → 抽 0 → 不可用(#2)。
+      //     - 場上無【超】寶可夢 → psychicCount=0 < hand → 同式擋下(#3)。牌庫沒有卡 → 不可用(#4)。
+      const allFieldMG = [...(player.active ? [player.active] : []), ...player.bench];
+      const psychicCountMG = allFieldMG.filter(pk => pool.get(pk.cardId)?.pokemonType === 'Psychic').length;
+      if (player.deck.length === 0 || psychicCountMG < player.hand.length) {
+        const revert: [boolean, boolean] = [used[0], used[1]];
+        return addLog(
+          { ...state, stadiumUsedThisTurn: revert },
+          player.deck.length === 0
+            ? '神秘花園：牌庫沒有卡可抽，無法使用'
+            : '神秘花園：手牌張數已達場上【超】寶可夢數量，丟棄能量也抽不到卡，無法使用',
+          aIdx
+        );
+      }
       return {
         ...newState,
         pendingSelection: {

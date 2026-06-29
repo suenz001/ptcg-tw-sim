@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.767</span> 對戰修正：競技場卡「神秘花園」現在只有在「丟棄能量卡後會實際抽到牌」時才能使用 — 場上沒有【超】寶可夢、牌庫沒有卡、或手牌張數已達場上【超】寶可夢數量時，不再能白白丟棄能量（依官方裁定）</summary>
+        <ul>
+          <li>卡面：丟 1 張能量後抽到「手牌張數＝場上【超】寶可夢數量」。先前在抽不到任何牌時仍允許丟能量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.766</span> 對戰修正：物品卡「鐵之防禦強化」在同一回合使用 2 張時，效果現在會正確疊加 — 下個對手回合自己所有【鋼】寶可夢受招式傷害 -60（先前不論用幾張都只 -30）</summary>
         <ul>
           <li>依官方裁定，同回合使用 N 張「鐵之防禦強化」應 -30×N。</li>
