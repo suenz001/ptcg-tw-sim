@@ -1347,6 +1347,21 @@ export function getAllAttachedTools(inst: CardInstance | null | undefined): Card
 }
 
 /**
+ * v5.781：寶可夢實體「連同附加卡放回牌庫/手牌」時，產出所有應一起移動的乾淨卡牌。
+ *   主體 + 能量 + 全部道具（toolAttached + extraTools，走 getAllAttachedTools）+ 進化棧，全部 toBareCard。
+ *   收斂「bounce to 牌庫」各處手刻字面（過去只取 toolAttached → 漏 extraTools 丟卡、殘留旗標）。
+ *   自身 bounce 與對手 bounce 共用單一來源（禁手刻字面）。
+ */
+export function bareCardsForReturn(inst: CardInstance): CardInstance[] {
+  return [
+    toBareCard(inst),
+    ...inst.energyAttached.map(toBareCard),
+    ...getAllAttachedTools(inst).map(toBareCard),
+    ...(inst.evolvedFromStack ?? []).map(toBareCard),
+  ];
+}
+
+/**
  * 自方場上是否有「洛托姆ex」（基本的洛托姆ex，14347）並擁有「多重轉接」特性活躍。
  * 用途：
  *   - attach-tool resolver gate（決定第 2 張道具能否附到「洛托姆」家族）

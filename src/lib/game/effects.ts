@@ -49,6 +49,7 @@ import {
   recordOppKO,
   healResolver,
   sameEvoName, getAllAttachedTools, toBareCard,
+  bareCardsForReturn,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   countAttachedEnergyAsUnits,
@@ -11853,13 +11854,7 @@ function selfReturnToDeckPost(label: string): AttackPostFn {
     const p = state.players[aIdx];
     if (!p.active) return state;
     const inst = p.active;
-    const returning: CardInstance[] = [
-      // v5.705：主體與附加卡全部裸化成乾淨卡牌（中央白名單，取代手動黑名單避免漏清旗標）
-      toBareCard(inst),
-      ...inst.energyAttached.map(toBareCard),
-      ...getAllAttachedTools(inst).map(toBareCard),
-      ...(inst.evolvedFromStack ?? []).map(toBareCard),
-    ];
+    const returning: CardInstance[] = bareCardsForReturn(inst); // v5.781 中央收斂
     const players = [...state.players] as [PlayerState, PlayerState];
     players[aIdx] = {
       ...p,
@@ -11880,13 +11875,7 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
     const p = state.players[aIdx];
     if (!p.active) return state;
     const inst = p.active;
-    const returning: CardInstance[] = [
-      // v5.705：主體與附加卡全部裸化成乾淨卡牌（中央白名單，取代手動黑名單避免漏清旗標）
-      toBareCard(inst),
-      ...inst.energyAttached.map(toBareCard),
-      ...getAllAttachedTools(inst).map(toBareCard),
-      ...(inst.evolvedFromStack ?? []).map(toBareCard),
-    ];
+    const returning: CardInstance[] = bareCardsForReturn(inst); // v5.781 中央收斂
     const players = [...state.players] as [PlayerState, PlayerState];
     players[aIdx] = {
       ...p,
@@ -11932,13 +11921,7 @@ regR('self-bench-return-to-deck', (st, actorIdx, selectedIids, params, _pool) =>
   const p = st.players[actorIdx];
   const picked = p.bench.find(c => c.iid === iid);
   if (!picked) return st;
-  const returning: CardInstance[] = [
-    // v5.705：主體與附加卡全部裸化成乾淨卡牌
-    toBareCard(picked),
-    ...picked.energyAttached.map(toBareCard),
-    ...getAllAttachedTools(picked).map(toBareCard),
-    ...(picked.evolvedFromStack ?? []).map(toBareCard),
-  ];
+  const returning: CardInstance[] = bareCardsForReturn(picked); // v5.781 中央收斂
   const players = [...st.players] as [PlayerState, PlayerState];
   players[actorIdx] = {
     ...p,

@@ -8,6 +8,7 @@
 
 import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
+  bareCardsForReturn, // v5.781 bounce 到牌庫中央收斂
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
@@ -1748,12 +1749,7 @@ regR('h-wave2-bounce-opp-bench', (state, aIdx, iids, _params, _pool) => {
   return updatePlayer(state, dIdx, p => {
     const target = p.bench.find(b => b.iid === targetIid);
     if (!target) return p;
-    const allCards: CardInstance[] = [
-      { iid: target.iid, cardId: target.cardId, damage: 0, energyAttached: [] },
-      ...(target.evolvedFromStack ?? []).map(c => ({ iid: c.iid, cardId: c.cardId, damage: 0, energyAttached: [] })),
-      ...target.energyAttached.map(e => ({ iid: e.iid, cardId: e.cardId, damage: 0, energyAttached: [] })),
-      ...(target.toolAttached ? [{ iid: target.toolAttached.iid, cardId: target.toolAttached.cardId, damage: 0, energyAttached: [] }] : []),
-    ];
+    const allCards: CardInstance[] = bareCardsForReturn(target); // v5.781 含 extraTools+裸化
     return {
       ...p,
       bench: p.bench.filter(b => b.iid !== targetIid),
@@ -2461,12 +2457,7 @@ regR('h-wave2-bounce-non-selected', (state, aIdx, selectedIids, _params, _pool) 
       if (set.has(b.iid)) {
         keep.push(b);
       } else {
-        bounceCards.push({ iid: b.iid, cardId: b.cardId, damage: 0, energyAttached: [] });
-        for (const e of b.energyAttached) bounceCards.push({ iid: e.iid, cardId: e.cardId, damage: 0, energyAttached: [] });
-        if (b.toolAttached) bounceCards.push({ iid: b.toolAttached.iid, cardId: b.toolAttached.cardId, damage: 0, energyAttached: [] });
-        if (b.evolvedFromStack) {
-          for (const c of b.evolvedFromStack) bounceCards.push({ iid: c.iid, cardId: c.cardId, damage: 0, energyAttached: [] });
-        }
+        bounceCards.push(...bareCardsForReturn(b)); // v5.781 含 extraTools+裸化
       }
     }
     return { ...p, bench: keep, deck: shuffle([...p.deck, ...bounceCards]) };

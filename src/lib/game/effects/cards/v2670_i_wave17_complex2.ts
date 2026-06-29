@@ -28,6 +28,7 @@ import { canApplyEffectToTarget } from '../../defense';
 import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
+import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中央收斂
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive } from '../../effects';
@@ -706,12 +707,7 @@ regR('wave17-bounce-opp', (state, aIdx, iids, _params, _pool) => {
     }
     if (!target) return p;
     // 主寶可夢卡 + 進化堆 + 能量 + 道具 全部回牌庫
-    const allCards: CardInstance[] = [
-      { iid: target.iid, cardId: target.cardId, damage: 0, energyAttached: [] },
-      ...(target.evolvedFromStack ?? []).map(c => ({ iid: c.iid, cardId: c.cardId, damage: 0, energyAttached: [] })),
-      ...target.energyAttached.map(e => ({ iid: e.iid, cardId: e.cardId, damage: 0, energyAttached: [] })),
-      ...(target.toolAttached ? [{ iid: target.toolAttached.iid, cardId: target.toolAttached.cardId, damage: 0, energyAttached: [] }] : []),
-    ];
+    const allCards: CardInstance[] = bareCardsForReturn(target); // v5.781 含 extraTools+裸化
     return {
       ...p,
       active: newActive,
