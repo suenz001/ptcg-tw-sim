@@ -7727,8 +7727,13 @@ export function dealAttackDamageToTarget(
   }
   const players = [...st.players] as [PlayerState, PlayerState];
   const newDefender = { ...defenderNow };
-  if (isActive) newDefender.active = { ...targetNow, damage: newDmg };
-  else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c);
+  // v5.780：累計「受到的招式傷害」(超級赫拉克羅斯ex|重裝角擊)。引擎主管線僅 active 主傷害記錄,
+  //   狙擊/多目標傷害(走此中央 helper,含【備戰】)過去漏記 → §17.44.E 案2「備戰受傷後上場」誤算。
+  //   只記攻擊傷害(attack-damage),放傷害指示物(attack-effect)非「受到傷害」不計;END_TURN 已含 bench reset。
+  const _accumTaken = kind === 'attack-damage' && effDmg > 0
+    ? { damageTakenLastOppTurn: (targetNow.damageTakenLastOppTurn ?? 0) + effDmg } : {};
+  if (isActive) newDefender.active = { ...targetNow, damage: newDmg, ..._accumTaken };
+  else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg, ..._accumTaken } : c);
   players[dIdx] = newDefender;
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
 }

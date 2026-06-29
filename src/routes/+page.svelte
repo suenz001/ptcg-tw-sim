@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.780</span> 對戰修正：超級赫拉克羅斯ex「重裝角擊」（100＋上個對手回合這隻寶可夢受到的招式傷害），現在會把「在備戰區被狙擊」或「被多目標招式」造成的傷害也正確計入（先前只計戰鬥位被主招式打的傷害）</summary>
+        <ul>
+          <li>依官方裁定（§17.44.E）：在備戰區受傷後上場使出，傷害仍應加上該筆受傷量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.779</span> 對戰修正：拉達「削落」、金魚王／燃燒蟲「啄落」、烈雀「啄食」、破破舵輪「破壞船錨」、派帕的貪心栗鼠「咬取」這些「丟棄對手戰鬥寶可夢道具」的招式，現在會把該寶可夢身上『所有』道具一併丟棄（先前只丟 1 張，對「多重轉接」附 2 張道具的洛托姆ex 會漏丟）</summary>
         <ul>
           <li>依官方裁定（虛無歸零包）：對附有多張寶可夢道具的對手可全數丟棄。</li>
