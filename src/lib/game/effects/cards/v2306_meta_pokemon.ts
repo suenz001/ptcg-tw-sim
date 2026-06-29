@@ -248,7 +248,6 @@ regR('grumpig-energy-dance-distribute', (state, actorIdx, selectedIids, params, 
     params: { energyIids: restIids, validIids: allPokes.map(c => c.iid), totalCount, placedCount: placedCount + 1 }
   });
 });
-regPre('噗噗豬|念動彈', (state, aIdx, pool) => ({ state, damage: 60 }));
 
 // ── 鐵面忍者 (Ninjask) ────────────────────────────────────────────────────────────
 regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
@@ -677,4 +676,3 @@ regPost('莉佳的蔓藤怪|藤蔓攻擊', (state, aIdx, pool) => {
 
 // ── 萌芽鹿 (Sawsbuck) ───────────────────────
 regA('萌芽鹿', 0, deckSearchToHandA(1, 'Trainer:Stadium', '四季變換'));
-regPre('萌芽鹿|強攻', (state, aIdx, pool) => ({ state, damage: 110 }));
