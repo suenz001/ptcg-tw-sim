@@ -4863,11 +4863,17 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       }
     }
 
+    // v5.775 Phase 2:把 KO+反擊結算包成 resolveKnockouts 閉包（呼叫點不變、行為等價；為日後「改順序」鋪路）。
+    //   wouldBeKO/preventedKO 提到外層（下方 postFn 區仍引用），其餘區域變數由閉包捕捉，免逐一傳參。
+    //   閉包回傳：GameState=終局（直接回傳該 state）/ null=未終局。
+    let wouldBeKO = false;
+    let preventedKO = false;
+    const resolveKnockouts = (): GameState | null => {
     // 擊倒判定
-    const wouldBeKO = baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP;
+    wouldBeKO = baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP;
 
     // 道具防 KO（倖存鍛鍊器）— 滿血被 KO 時保留少量 HP，道具丟棄（阻礙之塔時失效）
-    let preventedKO = false;
+    preventedKO = false;
     if (!toolsJammed && wouldBeKO && defenderState.active) {
       // v3.20 多重轉接：iterate 所有道具找第一個觸發 PREVENT_KO 的
       for (const t of getAllAttachedTools(defenderState.active)) {
@@ -5456,6 +5462,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
       }
     }
+      return null;
+    };
+    // 呼叫點不變：仍於傷害套用後、postFn 前同步結算 KO（Phase 3 才會移到 postFn 後）。
+    const _koEnd = resolveKnockouts();
+    if (_koEnd) return _koEnd;
 
     // ── 招式後置效果（回復、移動能量、觸發 pendingSelection 等）──────────────
     // v2.191 陳舊的背蓋化石（戰鬥場）— 不會受到對手寶可夢使用招式的「效果」影響
