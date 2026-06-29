@@ -44,7 +44,7 @@ import {
 } from '../_shared';
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { isBasicEnergyOfType, getEnergyUnits } from '../../engine';
+import { isBasicEnergyOfType, getEnergyUnits, getEffectiveHP } from '../../engine';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect } from '../../effects';
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
@@ -168,7 +168,7 @@ regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
   for (const pk of allOpp) {
     const card = pool.get(pk.cardId);
     if (!card) continue;
-    const remainingHP = (card.hp ?? 0) - pk.damage;  // 簡化：用 card.hp 而非 getEffectiveHP
+    const remainingHP = getEffectiveHP(pk, pool, state) - pk.damage; // v5.778：有效HP單一來源(含道具/場地HP增減),禁 base card.hp
     if (remainingHP > 0 && remainingHP <= 50) {
       // v4.53 Phase 3：unified('attack-effect') per-target — bench target 補球形盾牌/藏隱等
       const _deathIsBench = pk.iid !== _oppActiveIid;

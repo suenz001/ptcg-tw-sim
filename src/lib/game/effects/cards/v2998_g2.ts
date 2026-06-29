@@ -37,6 +37,7 @@ import {
   getOwnBenchLimit,
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
 import type { Card } from '$lib/cards/types';
 
@@ -141,7 +142,7 @@ regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
   const validIids = opp.bench.filter(b => {
     const card = pool.get(b.cardId);
     if (!card?.hp) return false;
-    return (card.hp - b.damage) <= 90;
+    return (getEffectiveHP(b, pool, st) - b.damage) <= 90; // v5.778 有效HP(含道具/場地),禁 base hp
   }).map(b => b.iid);
   if (validIids.length === 0) {
     return addLog(st, '繁星花紋：對手備戰沒有剩餘 HP ≤ 90 的寶可夢', idx);

@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.778</span> 對戰修正：以「剩餘HP」判定的招式／特性 — 伊裴爾塔爾ex「死亡靈魂」、千面避役「擊斃」、瑪狃拉「報應爪」、安瓢蟲「繁星花紋」，現在會把道具／競技場等造成的HP增減正確算進去（例如附了英雄斗篷而有效HP較高的寶可夢，不會再被當成低HP誤判）</summary>
+        <ul>
+          <li>原本只看卡片基礎HP，未計入勇氣護符／英雄斗篷等HP加成或場地HP增減；改用有效HP單一來源。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.777</span> 效能：觀戰他人對戰時改為較低頻率更新（觀戰畫面可能略有延遲），以降低伺服器負荷；對戰雙方的即時性完全不受影響</summary>
         <ul>
           <li>觀戰者輪詢間隔由 0.5 秒放寬至約 4 秒，大量觀戰時可顯著減輕主機負載。</li>

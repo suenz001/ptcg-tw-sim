@@ -22,6 +22,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
+import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import type { AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect } from '../../effects';
 
@@ -68,9 +69,7 @@ regPost('雪吞蟲|躲藏', (state, aIdx, _pool) => {
 regPre('瑪狃拉|報應爪', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 20 };
-  const card = pool.get(a.cardId);
-  const maxHP = card?.hp ?? 0;
-  const curHP = maxHP - (a.damage ?? 0);
+  const curHP = getEffectiveHP(a, pool, state) - (a.damage ?? 0); // v5.778 有效HP(含勇氣護符/增強草能量等),禁 base hp
   const cond = curHP <= 50;
   const dmg = 20 + (cond ? 170 : 0);
   const s = addLog(state, `報應爪：自身剩餘 HP ${curHP} ${cond ? '≤ 50 → +170' : '> 50，不增傷'} = ${dmg}`, aIdx);
@@ -260,8 +259,7 @@ regPost('千面避役|擊斃', (state, aIdx, pool) => {
     for (const pk of all) {
       if (pk.iid === myActive?.iid) continue;  // 排除自身
       const card = pool.get(pk.cardId);
-      const maxHP = card?.hp ?? 9999;
-      const remaining = maxHP - (pk.damage ?? 0);
+      const remaining = getEffectiveHP(pk, pool, state) - (pk.damage ?? 0); // v5.778 有效HP單一來源
       cands.push({ ownerIdx: owner, iid: pk.iid, remaining, name: card?.name ?? '?' });
     }
   }
