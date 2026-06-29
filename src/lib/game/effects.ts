@@ -11186,19 +11186,20 @@ function defToolDiscardPre(base: number, label: string): AttackPreFn {
         damage: base,
       };
     }
-    const discarded = allDefTools[0];
-    const toolName = pool.get(discarded.cardId)?.name ?? '?';
+    // v5.779：卡面「將對手戰鬥寶可夢身上附加的『寶可夢道具』卡丟棄」+ §17.46.D 對「多重轉接」附 2 道具的
+    //   洛托姆ex 明示「可以全數丟棄」→ 丟『全部』道具(toolAttached + extraTools),非僅第 1 張。
+    const discardIids = new Set(allDefTools.map(t => t.iid));
+    const toolNames = allDefTools.map(t => pool.get(t.cardId)?.name ?? '?').join('、');
     const defName = pool.get(def.cardId)?.name ?? '?';
-    let s = addLog(state, `${label}：丟棄 ${defName} 的道具「${toolName}」`, aIdx);
+    let s = addLog(state, `${label}：丟棄 ${defName} 的道具「${toolNames}」（${allDefTools.length} 張）`, aIdx);
     s = updatePlayer(s, dIdx, pl => {
       if (!pl.active) return pl;
-      let newAct = pl.active;
-      if (newAct.toolAttached?.iid === discarded.iid) {
-        newAct = { ...newAct, toolAttached: undefined };
-      } else if (newAct.extraTools) {
-        newAct = { ...newAct, extraTools: newAct.extraTools.filter(x => x.iid !== discarded.iid) };
-      }
-      return { ...pl, active: newAct, discard: [...pl.discard, discarded] };
+      const newAct = {
+        ...pl.active,
+        toolAttached: pl.active.toolAttached && discardIids.has(pl.active.toolAttached.iid) ? undefined : pl.active.toolAttached,
+        extraTools: pl.active.extraTools ? pl.active.extraTools.filter(x => !discardIids.has(x.iid)) : pl.active.extraTools,
+      };
+      return { ...pl, active: newAct, discard: [...pl.discard, ...allDefTools] };
     });
     return { state: s, damage: base };
   };

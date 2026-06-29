@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.779</span> 對戰修正：拉達「削落」、金魚王／燃燒蟲「啄落」、烈雀「啄食」、破破舵輪「破壞船錨」、派帕的貪心栗鼠「咬取」這些「丟棄對手戰鬥寶可夢道具」的招式，現在會把該寶可夢身上『所有』道具一併丟棄（先前只丟 1 張，對「多重轉接」附 2 張道具的洛托姆ex 會漏丟）</summary>
+        <ul>
+          <li>依官方裁定（虛無歸零包）：對附有多張寶可夢道具的對手可全數丟棄。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.778</span> 對戰修正：以「剩餘HP」判定的招式／特性 — 伊裴爾塔爾ex「死亡靈魂」、千面避役「擊斃」、瑪狃拉「報應爪」、安瓢蟲「繁星花紋」，現在會把道具／競技場等造成的HP增減正確算進去（例如附了英雄斗篷而有效HP較高的寶可夢，不會再被當成低HP誤判）</summary>
         <ul>
           <li>原本只看卡片基礎HP，未計入勇氣護符／英雄斗篷等HP加成或場地HP增減；改用有效HP單一來源。</li>
