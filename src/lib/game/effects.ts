@@ -14617,7 +14617,8 @@ regR('ursaluna-bm-attach', (state, aIdx, selectedIids, params, pool) => {
   }
   players[aIdx] = p;
   const names = energies.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  return _magHeal(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, [hostIid], pool);  // v5.485 自動治癒
+  // v5.782：從手牌附能 → 補對手反應(侵蝕詛咒/麻痺門牙)
+  return fireOnHandEnergyAttached(_magHeal(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, [hostIid], pool), aIdx, hostIid, pool);
 });
 
 // ── 5) 菊草葉｜叫聲 — 對手戰鬥位下回合招式 -20（沿用 嘎啦嘎啦|叫聲 的 helper）
@@ -16211,7 +16212,8 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
       bench: p.bench.map(c => attachTo(c) ?? c),
     };
   });
-  return _magHeal(_attached, idx, [targetIid], pool);  // v5.484 自動治癒
+  // v5.782：從手牌附能 → 補對手反應(侵蝕詛咒/麻痺門牙),原只 _magHeal 漏 fire
+  return fireOnHandEnergyAttached(_magHeal(_attached, idx, [targetIid], pool), idx, targetIid, pool);
 });
 
 // v3.07 Deferred Wave D — 手牌觸發特性 effect fn（給 ON_DISCARD_FROM_HAND_ABILITIES /

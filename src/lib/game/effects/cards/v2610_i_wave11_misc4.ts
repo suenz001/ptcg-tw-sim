@@ -25,7 +25,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
-import { regPre, regPost, addLog, updatePlayer, withPending, regR } from '../_shared';
+import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
@@ -518,6 +518,8 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
       };
     });
     s = addLog(s, `漸強波：從手牌附 ${valid.length} 張「基本【水】能量」到櫻花魚`, aIdx);
+    const _host = s.players[aIdx].active?.iid; // v5.782 從手牌附能→補對手反應(侵蝕詛咒/麻痺門牙)
+    if (_host) s = fireOnHandEnergyAttached(s, aIdx, _host, pool);
   } else {
     s = addLog(s, '漸強波：未選擇附加能量', aIdx);
   }

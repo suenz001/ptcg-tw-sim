@@ -167,7 +167,9 @@ for (const f of files) {
 for (const f of files) {
   const lines = readFileSync(f, 'utf8').split('\n');
   for (let i = 0; i < lines.length; i++) {
-    if (!/applyMagearnaHandAttachHeal\s*\(/.test(lines[i])) continue;
+    // v5.782：含 _magHeal 別名(= applyMagearnaHandAttachHeal),原只配全名→ inferno/ursaluna 滑過
+    if (!/(applyMagearnaHandAttachHeal|_magHeal)\s*\(/.test(lines[i])) continue;
+    if (/const _magHeal\s*=/.test(lines[i])) continue; // 別名定義行本身不算
     if (/function applyMagearnaHandAttachHeal/.test(lines[i])) continue;
     if (/dmg-direct-ok|handattach-heal-only-ok/.test(lines[i])) continue;
     let fs = i;

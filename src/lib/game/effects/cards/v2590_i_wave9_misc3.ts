@@ -23,6 +23,7 @@ import { isRulePokemon } from '../../engine';
 import {
   regPre, regPost,
   addLog, updatePlayer, withPending,
+  fireOnHandEnergyAttached, // v5.782 從手牌附能→對手反應
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
@@ -373,7 +374,8 @@ regPost('龍捲雲|玉樹臨風', (state, aIdx, pool) => {
     return addLog(state, '玉樹臨風：手牌無基本能量', aIdx);
   }
   const energy = player.hand[energyIdx];
-  return updatePlayer(
+  const hostIid = player.active.iid; // v5.782 附能目標(自身戰鬥位)
+  const after = updatePlayer(
     addLog(state, '玉樹臨風：將 1 張基本能量從手牌附給自身', aIdx),
     aIdx, p => ({
       ...p,
@@ -381,6 +383,7 @@ regPost('龍捲雲|玉樹臨風', (state, aIdx, pool) => {
       active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] } : null,
     }),
   );
+  return fireOnHandEnergyAttached(after, aIdx, hostIid, pool); // v5.782 補對手反應(侵蝕詛咒/麻痺門牙)
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

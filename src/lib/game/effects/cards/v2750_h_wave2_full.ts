@@ -10,6 +10,7 @@ import {
   regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, getAllAttachedTools, toBareCard,
   bareCardsForReturn, // v5.781 bounce 到牌庫中央收斂
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
+  fireOnHandEnergyAttached, // v5.782 從手牌附能→對手反應
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
@@ -1608,10 +1609,11 @@ regPost('大電海燕ex|迴旋充能', (state, aIdx, pool) => {
   }
   return s;
 });
-regR('h-wave2-attach-from-hand', (state, aIdx, iids, _params, _pool) => {
+regR('h-wave2-attach-from-hand', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const set = new Set(iids);
-  return updatePlayer(addLog(state, `從手牌附 ${iids.length} 張能量到自身`, aIdx), aIdx, p => {
+  const hostIid = state.players[aIdx].active?.iid; // v5.782 附能目標(迴旋充能後自身戰鬥位)
+  const after = updatePlayer(addLog(state, `從手牌附 ${iids.length} 張能量到自身`, aIdx), aIdx, p => {
     const energies = p.hand.filter(c => set.has(c.iid));
     return {
       ...p,
@@ -1619,6 +1621,7 @@ regR('h-wave2-attach-from-hand', (state, aIdx, iids, _params, _pool) => {
       active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] } : null,
     };
   });
+  return hostIid ? fireOnHandEnergyAttached(after, aIdx, hostIid, pool) : after; // v5.782 補對手反應
 });
 
 // 遠古巨蜓|陀螺音波 110 — 自互
