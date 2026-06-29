@@ -621,7 +621,7 @@ export async function pushUndoRollback(roomCode: string, gameState: GameState): 
 
 // ── Subscribe (polling) ─────────────────────────────────────────────────────
 
-export function subscribeRoom(roomCode: string, callback: (room: Room | null) => void): () => void {
+export function subscribeRoom(roomCode: string, callback: (room: Room | null) => void, isSpectator?: () => boolean): () => void {
   const code = roomCode.toUpperCase();
   return oraclePollRoom(code, (room) => {
     if (!room) { callback(null); return; }
@@ -629,7 +629,12 @@ export function subscribeRoom(roomCode: string, callback: (room: Room | null) =>
     // v5.347：自適應輪詢間隔 — 前景(分頁可見)時加快、對手動作更即時；
     //   背景(document.hidden)時放慢以省手機電量/行動數據。
     //   只改 cadence，不動 callback/merge/push；callback 仍只在 _version 變化時觸發。
-  }, () => (typeof document !== 'undefined' && document.hidden) ? 2500 : 500); // v5.359：AI 迴圈已於 v5.351/5.355 修掉（800ms 是當時為避開它的保守值），前景調回 500ms 讓對手動作更即時；背景仍 2500ms 省電
+  }, () => {
+    // v5.777：觀戰者用較慢輪詢（可 lag，大幅降低 Oracle 請求率/CPU）；對戰雙方維持即時零延遲。
+    const bg = (typeof document !== 'undefined' && document.hidden);
+    if (isSpectator?.()) return bg ? 6000 : 4000;
+    return bg ? 2500 : 500; // v5.359 對戰者：前景 500ms 即時、背景 2500ms 省電
+  });
 }
 
 export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {

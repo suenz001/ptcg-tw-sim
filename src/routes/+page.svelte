@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.777</span> 效能：觀戰他人對戰時改為較低頻率更新（觀戰畫面可能略有延遲），以降低伺服器負荷；對戰雙方的即時性完全不受影響</summary>
+        <ul>
+          <li>觀戰者輪詢間隔由 0.5 秒放寬至約 4 秒，大量觀戰時可顯著減輕主機負載。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.776</span> 對戰修正：呆呆王「付諸東流」、帕底亞 肯泰羅「上搗角擊」、火箭隊的閃電鳥「阻礙之翼」、章魚桶「水流清洗」，現在即使這幾招把對手戰鬥寶可夢打到昏厥，仍能把該寶可夢身上的能量放回對手手牌／改附到對手備戰（與先前的戲法舞步、反轉之風同類，依官方順序：招式效果先於昏厥結算）</summary>
         <ul>
           <li>稽核發現這 4 招與戲法舞步同型卻漏處理「對手已昏厥」的情況，一併補上並加 CI 守衛防止未來同類漏網。</li>

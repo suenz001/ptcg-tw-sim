@@ -5286,7 +5286,7 @@
         //   治「本地 log 領先伺服器、重抓回來又被守衛拒收」型卡死。只在『正等對手』時走到這(上方已 gate)，
         //   我方沒有未推送的手，故不會丟手；不同局/game-over/setup 在 handleRoomUpdate 內另有保護。
         if ((Date.now() - _lastSyncAt) >= 25000) _forceAdoptNext = true;
-        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null); } catch { /* ignore */ }
       }
     }, 5000);
     return () => clearInterval(iv);
@@ -5310,7 +5310,7 @@
       if (granted === false) {
         _forceAdoptNext = true;
         _lastActionAt = Date.now();
-        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate); } catch { /* ignore */ }
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null); } catch { /* ignore */ }
         alert('對手其實已經行動了，現在輪到你！畫面已為你重新同步。');
       }
     } catch (e) {
@@ -5340,7 +5340,7 @@
 
   function startRoomSubscription() {
     unsubRoom?.();
-    unsubRoom = subscribeRoom(roomCode, handleRoomUpdate);
+    unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null);
     startHeartbeat();
     // v2.272：訂閱聊天訊息
     unsubMessages?.();
