@@ -5,7 +5,7 @@
   import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
   import {
     collection, addDoc, serverTimestamp,
-    query, where, limit, getDocs, onSnapshot,
+    query, where, limit, getDocs, onSnapshot, doc, getDoc,
     type Unsubscribe,
   } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
@@ -25,8 +25,13 @@
   let user = $state<User | null>(null);
   let error = $state<string | null>(null);
   let status = $state('初始化中...');
+  let changelogOverride = $state('');  // v5.755 admin 可在後台編輯的首頁更新記錄(Firebase config/homeChangelog);空=用程式內建
 
   onMount(() => {
+    // v5.755：首頁更新記錄可由 admin 後台編輯(Firebase config/homeChangelog,兩站共用);讀到才覆蓋程式內建。
+    getDoc(doc(db, 'config', 'homeChangelog')).then((snap) => {
+      if (snap.exists()) { const h = snap.data()?.html; if (typeof h === 'string' && h.trim()) changelogOverride = h; }
+    }).catch(() => { /* 沒設定 → 用程式內建 */ });
     const unsubscribe = onAuthStateChanged(
       auth,
       (u) => {
@@ -309,7 +314,8 @@
   <section class="changelog-section">
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
-    <div class="changelog-list">
+    {#if changelogOverride}<div class="changelog-list">{@html changelogOverride}</div>{/if}
+    <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
         <summary><span class="ver-badge">v5.753</span> 修正：振翼髮「暗夜羽擊」未擋住對手「上場時」自動發動的特性（如勾帕路翁ex「金屬之路」）</summary>

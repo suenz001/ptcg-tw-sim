@@ -388,6 +388,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 廣播</div>
     <div class="tab" data-tab="tournament" onclick="switchTab('tournament')">🏆 賽事</div>
     <div class="tab" data-tab="tournament-stats" onclick="switchTab('tournament-stats')">📈 賽事統計</div>
+    <div class="tab" data-tab="changelog" onclick="switchTab('changelog')">📋 更新記錄</div>
   </div>
 
   <main>
@@ -401,6 +402,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-broadcast" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament-stats" class="tab-content" style="display:none;"></div>
+    <div id="tab-changelog" class="tab-content" style="display:none;"></div>
   </main>
 </div>
 
@@ -1400,6 +1402,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
+  else if (currentTab === 'changelog') p = loadChangelogAdmin();  // 首頁更新記錄編輯
   else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
   else if (currentTab === 'tournament-stats') p = loadTournamentStats(forceRefresh);  // 賽事統計
   document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
@@ -1415,6 +1418,47 @@ window.manualRefresh = async function(btn) {
 };
 
 // ── v1.17 系統廣播設定（寫 Firestore config/broadcast，beta+正式站玩家開戰讀取）──
+async function loadChangelogAdmin() {
+  const el = document.getElementById('tab-changelog');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
+  let html = '';
+  try {
+    const snap = await getDoc(doc(dbF, 'config', 'homeChangelog'));
+    if (snap.exists()) { const d = snap.data(); html = (d && typeof d.html === 'string') ? d.html : ''; }
+  } catch(e) { /* 沒設定過 → 空(首頁用程式內建) */ }
+  el.innerHTML =
+    '<div style="max-width:900px;padding:16px;">' +
+      '<h2 style="margin-top:0;">📋 首頁更新記錄編輯</h2>' +
+      '<p style="color:#aaa;font-size:.9rem;line-height:1.6;">直接編輯首頁「版本更新記錄」要顯示的內容(HTML)。儲存後首頁(beta 站與正式站共用此設定)會改顯示這份；清空後恢復程式內建版本。<br>每筆格式：&lt;details open&gt;&lt;summary&gt;&lt;span class=&quot;ver-badge&quot;&gt;v X.X&lt;/span&gt; 標題&lt;/summary&gt;&lt;ul&gt;&lt;li&gt;內容&lt;/li&gt;&lt;/ul&gt;&lt;/details&gt;（可向 Claude 索取整段 HTML 再微調文字）。玩家重整首頁後生效。</p>' +
+      '<textarea id="cl-html" rows="22" style="width:100%;box-sizing:border-box;margin-top:4px;font-family:monospace;font-size:13px;line-height:1.5;" placeholder="貼上首頁更新記錄 HTML…（留空 = 用程式內建版本）">' + escapeHtml(html) + '</textarea>' +
+      '<div style="margin-top:12px;">' +
+        '<button id="cl-save" style="padding:9px 24px;background:#5b8def;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:1rem;">💾 儲存（套用到首頁）</button> ' +
+        '<button id="cl-clear" style="padding:9px 18px;background:#888;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:.95rem;">🗑️ 清空（恢復程式內建）</button>' +
+        '<span id="cl-status" style="margin-left:14px;"></span>' +
+      '</div>' +
+    '</div>';
+  document.getElementById('cl-save').onclick = async () => {
+    const val = document.getElementById('cl-html').value;
+    const st = document.getElementById('cl-status');
+    st.textContent = '儲存中…'; st.style.color = '#aaa';
+    try {
+      await setDoc(doc(dbF, 'config', 'homeChangelog'), { html: val, updatedAt: Date.now() });
+      st.textContent = '✅ 已儲存（玩家重整首頁後生效）'; st.style.color = '#5c5';
+    } catch(e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
+  };
+  document.getElementById('cl-clear').onclick = async () => {
+    if (!confirm('確定清空？首頁將恢復顯示程式內建的更新記錄。')) return;
+    const st = document.getElementById('cl-status');
+    st.textContent = '清空中…'; st.style.color = '#aaa';
+    try {
+      await setDoc(doc(dbF, 'config', 'homeChangelog'), { html: '', updatedAt: Date.now() });
+      document.getElementById('cl-html').value = '';
+      st.textContent = '✅ 已清空（恢復程式內建）'; st.style.color = '#5c5';
+    } catch(e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
+  };
+}
+
 async function loadBroadcastAdmin() {
   const el = document.getElementById('tab-broadcast');
   if (!el) return;
