@@ -3967,6 +3967,8 @@ function handlePlaying(
   // ── 宣告招式 ──────────────────────────────────────────────────────────────
   if (action.type === 'ATTACK') {
     if (state.turnPhase !== 'main') return state;
+    // v5.769：每次攻擊開頭清「被KO戰鬥位能量快照」（戲法舞步/反轉之風 KO 分支用）。
+    state = { ...state, _koDefenderEnergySnapshot: null };
     // v5.211：祭典樂舞第 2 次必須使用相同招式（卡面「使用持有的招式 2 次」）
     if (state.festivalDancePendingSecondAttack
         && state.festivalDancePendingSecondAttack.idx === aIdx
@@ -5014,6 +5016,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           },
         };
       }
+      // v5.769：移除戰鬥位前，記錄其能量 iid（此刻已在 defenderState.discard）— 供「搬移對手戰鬥位能量」
+      //   POST 效果(戲法舞步/反轉之風)在官方順序「效果先於昏厥」下從棄牌區取回。
+      newState = { ...newState, _koDefenderEnergySnapshot: { idx: dIdx, energyIids: updatedActive.energyAttached.map(en => en.iid) } };
       defenderState.active = null;
       // Wave 39：蝶結萌虻｜多餘花粉 — 跨回合獎賞加成
       const deferredBonus = (updatedActive.deferredPrizeBonusThisTurn && updatedActive.deferredPrizeBonusThisTurn > 0)

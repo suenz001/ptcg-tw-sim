@@ -913,6 +913,12 @@ export interface GameState {
    */
   ancientEnergyMinusOneUsed?: [boolean, boolean];
   /**
+   * v5.769：被本次招式『傷害』KO 的對手戰鬥位的能量 iid 快照（能量此刻已在該方棄牌區）。
+   * 官方順序「招式效果先於昏厥結算」→ 戲法舞步/反轉之風等「搬移對手戰鬥位能量」POST 效果在主 KO 已移除
+   * 戰鬥位後仍能從棄牌區取回改附/回手。每次 ATTACK 開頭清空、KO 移除戰鬥位前寫入。
+   */
+  _koDefenderEnergySnapshot?: { idx: 0 | 1; energyIids: string[] } | null;
+  /**
    * v2.70：copy-attack（例如 火箭隊的謎擬Ｑ｜扮晶晶酒）在 ATTACK_PRE 階段
    * 記下被複製招式的 effectKey（格式 `對手卡名|招式名`），好讓 ATTACK_POST
    * 可以轉接呼叫被複製招式的 POST（包含 pendingSelection 類附加效果）。

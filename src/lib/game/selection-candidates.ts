@@ -12,7 +12,7 @@
 
 import type { CardInstance } from './types';
 
-type SrcPlayer = { active: CardInstance | null; bench: CardInstance[] };
+type SrcPlayer = { active: CardInstance | null; bench: CardInstance[]; discard?: CardInstance[] };
 
 /**
  * active-energy-discard picker 的能量候選（src = sourcePlayerIdx 對應的 player）。
@@ -26,6 +26,12 @@ export function activeEnergyDiscardCandidates(
   params: Record<string, unknown> | undefined,
   src: SrcPlayer,
 ): CardInstance[] {
+  // v5.769：fromDiscard — 對手戰鬥位已被本招式『傷害』KO，欲搬移的能量在該方棄牌區
+  //   (戲法舞步改附對手備戰 / 反轉之風放回對手手牌)。validIids = _koDefenderEnergySnapshot 記錄的 iid。
+  if (params?.fromDiscard) {
+    const validIidsSet = new Set(params?.validIids as string[] | undefined);
+    return (src.discard ?? []).filter(e => validIidsSet.size === 0 || validIidsSet.has(e.iid));
+  }
   const scope = params?.scope as string | undefined;
   if (scope === 'all-own' || scope === 'all-opp') {
     const allPokes: CardInstance[] = [...(src.active ? [src.active] : []), ...src.bench];

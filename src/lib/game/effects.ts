@@ -8898,6 +8898,22 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '反轉之風：選擇「否」 — 不放回對手能量', aIdx);
   const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.769：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
+  //   （此刻在棄牌區，_koDefenderEnergySnapshot）放回對手手牌。
+  if (!state.players[dIdx].active) {
+    const snap = state._koDefenderEnergySnapshot;
+    const koEnergyIids = (snap && snap.idx === dIdx)
+      ? snap.energyIids.filter(iid => state.players[dIdx].discard.some(c => c.iid === iid))
+      : [];
+    if (koEnergyIids.length === 0) return addLog(state, '反轉之風：對手戰鬥無可放回的能量', aIdx);
+    const capKO = Math.min(2, koEnergyIids.length);
+    return withPending(addLog(state, '反轉之風：對手戰鬥寶可夢已昏厥 — 可從棄牌區將其能量放回對手手牌', aIdx), {
+      type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 0, maxCount: capKO,
+      effectKey: 'v327-unfezant-reverse-wind',
+      params: { fromDiscard: true, validIids: koEnergyIids, titleOverride: `選擇要放回對手手牌的能量（0∼${capKO} 張，已昏厥戰鬥位）` },
+    });
+  }
   const da = state.players[dIdx].active;
   if (!da || da.energyAttached.length === 0) return addLog(state, '反轉之風：對手戰鬥無能量', aIdx);
   // v5.555 收斂：免疫對手招式效果 → 不可放回能量
@@ -8924,20 +8940,18 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
 regR('v327-unfezant-reverse-wind', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '反轉之風：玩家選擇不發動效果', idx);
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  if (!dp.active) return st;
-  const set = new Set(iids);
-  const moved = dp.active.energyAttached.filter(e => set.has(e.iid));
+  // v5.769：能量可能在對手 active（未KO）或棄牌區（已被本招式KO）→ source-agnostic pluck。
+  let dp = st.players[dIdx];
+  const moved: CardInstance[] = [];
+  for (const iid of iids) {
+    const { player, energy } = pluckOppEnergyActiveOrDiscard(dp, iid);
+    if (energy) { dp = player; moved.push(energy); }
+  }
   if (moved.length === 0) return st;
   const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
-  const s = addLog(st, `反轉之風：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
-  return updatePlayer(s, dIdx, pl => ({
-    ...pl,
-    active: pl.active
-      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
-      : pl.active,
-    hand: [...pl.hand, ...moved],
-  }));
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...dp, hand: [...dp.hand, ...moved] };
+  return addLog({ ...st, players }, `反轉之風：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
 });
 
 // 8. 波士可多拉|發怒猛進 — 自己場上身上有傷害指示物的寶可夢數 × 50
@@ -16653,6 +16667,25 @@ regPre('耿鬼ex|戲法舞步', (state, _aIdx, _pool) => ({ state, damage: 160 }
 //   find energyInst→undefined→return st) → 能量從戰鬥場消失、沒附到備戰(玩家回報)。
 //   超能妙喵原自動取末張+隨機備戰(違反卡面「選擇1個」)。收斂：選能量用 active-energy-discard picker
 //   (符合通則 reference-nplot-energy-pick)，pick 階段「不移除」、attach 階段從仍持有的 active 一步移除+附加。
+// v5.769：戲法舞步/反轉之風 — 對手戰鬥位被本招式傷害 KO 後，欲搬移的能量已在棄牌區(snapshot)。
+//   共用述詞：從對手 active 或棄牌區取出指定能量(回傳更新後 player + 該能量)，讓 pick/attach/回手 resolver source-agnostic。
+function pluckOppEnergyActiveOrDiscard(
+  player: PlayerState, iid: string,
+): { player: PlayerState; energy: CardInstance | null } {
+  const fromActive = player.active?.energyAttached.find(e => e.iid === iid);
+  if (fromActive) {
+    return {
+      player: { ...player, active: { ...player.active!, energyAttached: player.active!.energyAttached.filter(e => e.iid !== iid) } },
+      energy: fromActive,
+    };
+  }
+  const fromDiscard = player.discard.find(e => e.iid === iid);
+  if (fromDiscard) {
+    return { player: { ...player, discard: player.discard.filter(e => e.iid !== iid) }, energy: fromDiscard };
+  }
+  return { player, energy: null };
+}
+
 export function trickStepPost(): AttackPostFn {
   return (state, aIdx, pool, action) => {
     // 若希望 binary-yes-no guard（ATTACK_PRE_DISCARD_CHOICE）
@@ -16664,6 +16697,27 @@ export function trickStepPost(): AttackPostFn {
     if (_imm.blocked) return addLog(state, `戲法舞步：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
     const dIdx = (1 - aIdx) as 0 | 1;
     const opp = state.players[dIdx];
+    // v5.769：對手戰鬥位被本招式 160 傷害 KO（active=null）→ 官方順序「招式效果先於昏厥結算」，
+    //   仍可把 KO 前戰鬥位的能量（此刻在棄牌區，由 _koDefenderEnergySnapshot 記錄 iid）改附對手備戰。
+    if (!opp.active) {
+      const snap = state._koDefenderEnergySnapshot;
+      const koEnergyIids = (snap && snap.idx === dIdx)
+        ? snap.energyIids.filter(iid => opp.discard.some(c => c.iid === iid))
+        : [];
+      if (koEnergyIids.length === 0) return addLog(state, '戲法舞步：對手戰鬥寶可夢沒有可改附的能量', aIdx);
+      if (opp.bench.length === 0) return addLog(state, '戲法舞步：對手備戰區沒有寶可夢，無法移動能量', aIdx);
+      return withPending(addLog(state, '戲法舞步：對手戰鬥寶可夢已昏厥 — 可從棄牌區改附其能量到對手備戰', aIdx), {
+        type: 'active-energy-discard',
+        actorIdx: aIdx, sourcePlayerIdx: dIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'trick-step-pick',
+        params: {
+          fromDiscard: true,
+          validIids: koEnergyIids,
+          titleOverride: '戲法舞步：選擇要改附的能量（對手已昏厥的戰鬥位）',
+        },
+      });
+    }
     if (!opp.active || opp.active.energyAttached.length === 0) {
       return addLog(state, '戲法舞步：對手戰鬥寶可夢沒有附能量', aIdx);
     }
@@ -16694,10 +16748,12 @@ regR('trick-step-pick', (st, idx, iids, _params, pool) => {
   if (!energyIid) return st;
   const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
-  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  // v5.769：能量可能在對手 active（未KO）或棄牌區（已被本招式KO）。
+  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid)
+    ?? opp.discard.find(e => e.iid === energyIid);
   if (!energyInst) return st;
   if (opp.bench.length === 0) return st;
-  const oppActiveName = pool.get(opp.active!.cardId)?.name ?? '?';
+  const oppActiveName = opp.active ? (pool.get(opp.active.cardId)?.name ?? '?') : '已昏厥的戰鬥位';
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
   return withPending(
     addLog(st, `戲法舞步：選擇 ${oppActiveName} 的 ${eName} 要移至的對手備戰寶可夢`, idx),
@@ -16720,26 +16776,22 @@ regR('trick-step-attach', (st, idx, iids, params, pool) => {
   const energyIid = (params?.energyIid as string | undefined) ?? '';
   if (!benchTargetIid || !energyIid) return st;
   const dIdx = (1 - idx) as 0 | 1;
-  const opp = st.players[dIdx];
-  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
+  // v5.769：能量可能在對手 active（未KO）或棄牌區（已被本招式KO）→ source-agnostic pluck。
+  const { player: oppPlucked, energy: energyInst } = pluckOppEnergyActiveOrDiscard(st.players[dIdx], energyIid);
   if (!energyInst) return st;
-  const benchTarget = opp.bench.find(c => c.iid === benchTargetIid);
+  const benchTarget = oppPlucked.bench.find(c => c.iid === benchTargetIid);
   if (!benchTarget) return st;
   const eName = pool.get(energyInst.cardId)?.name ?? '?';
   const targetName = pool.get(benchTarget.cardId)?.name ?? '?';
-  const newActive = {
-    ...opp.active!,
-    energyAttached: opp.active!.energyAttached.filter(e => e.iid !== energyIid),
-  };
-  const newBench = opp.bench.map(c =>
+  const newBench = oppPlucked.bench.map(c =>
     c.iid === benchTargetIid
       ? { ...c, energyAttached: [...c.energyAttached, energyInst] }
       : c,
   );
   const players = [...st.players] as [PlayerState, PlayerState];
-  players[dIdx] = { ...opp, active: newActive, bench: newBench };
+  players[dIdx] = { ...oppPlucked, bench: newBench };
   return addLog({ ...st, players },
-    `戲法舞步：${eName} 從戰鬥場移至 ${targetName} 的備戰`, idx);
+    `戲法舞步：${eName} 移至 ${targetName} 的備戰`, idx);
 });
 
 // 來悲粗茶ex SV5a 009/066｜熬返

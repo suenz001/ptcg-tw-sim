@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.769</span> 對戰修正：耿鬼ex「戲法舞步」與高傲雉雞「反轉之風」，現在即使這招的傷害把對手戰鬥寶可夢打到昏厥，仍能把該戰鬥寶可夢身上的能量改附到對手備戰／放回對手手牌（依官方順序：招式效果先於昏厥結算）</summary>
+        <ul>
+          <li>先前若這招把對手戰鬥位一擊昏厥，會因戰鬥位已離場而無法搬移其能量。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.768</span> 對戰修正：超級耿鬼ex 特性「影藏」（自己【惡】寶可夢受對手 ex 招式傷害昏厥時少給 1 張獎賞），現在會正確判斷「影藏處於有效狀態」 — 當超級耿鬼ex 的特性被鐵荊棘ex「初始化」等效果消除時，不再錯誤地少給獎賞</summary>
         <ul>
           <li>依 §17.42.B 官方裁定：影藏須處於有效狀態才生效。先前只檢查特性是否存在，漏判特性已被消除的情形。</li>
