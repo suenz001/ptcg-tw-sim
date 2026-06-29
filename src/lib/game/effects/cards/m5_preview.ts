@@ -1233,7 +1233,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //   - 化隱特性 6 張 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate
 //   - 暗影惡能量 — 需 hasFlowerVeil 類 helper 擴充
 //   - 西獅海壬|滿滿旋律 — 需 evolve-from-hand trigger hook
-//   - 密勒頓|光子密碼 — 需 PASSIVE_ON_KO 死亡觸發 hook
+//   - 密勒頓|光子纜線 — 需 PASSIVE_ON_KO 死亡觸發 hook
 //   - 棄世猴|不朽之軀 — 需修改 KO 流程加擲幣判定
 //   - 護城龍|太鼓防壁 — 需 player-wide damage gate (對手能量 ≤2 時)
 //   - 超級水晶燈火靈ex|咒縛之炎 — 需動 engine retreat cost 計算
@@ -1900,7 +1900,7 @@ reg('格拉吉歐的決戰', (st, idx) => {
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 8a 結束。
 // 累計：71 (P1-P7) + 2 immune regPost + 1 supporter reg + 閃電能量 = 75 個項目 / 81 張卡。
-// 剩餘 deferred (Phase 8b+)：咒縛之炎 / 太鼓防壁 / 蟲蟲恐慌 / 不朽之軀 / 光子密碼 /
+// 剩餘 deferred (Phase 8b+)：咒縛之炎 / 太鼓防壁 / 蟲蟲恐慌 / 不朽之軀 / 光子纜線 /
 //   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪邁炸彈/重試徽章) /
 //   強烈之吻 / 招式竊賊
 // ════════════════════════════════════════════════════════════════════════════
@@ -1980,7 +1980,7 @@ regPost('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
 // Phase 8c 結束。
 // 累計：75 (P1-Phase8a) + 1 (Phase 8b 咒縛之炎) + 1 (不朽之軀) + 1 (蟲蟲恐慌)
 //      = 78 個項目 / 81 張卡（~96% coverage）。
-// 剩餘 deferred (Phase 8d+)：太鼓防壁 / 光子密碼 / 強烈之吻 / 招式竊賊 /
+// 剩餘 deferred (Phase 8d+)：太鼓防壁 / 光子纜線 / 強烈之吻 / 招式竊賊 /
 //   化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪邁炸彈/重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -2030,12 +2030,12 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
 // Phase 8e 結束。
 // 累計：78 (P1-8c) + 1 (Phase 8d 太鼓防壁) + 1 (Phase 8e 強烈之吻)
 //      = 80 個項目 / 81 張卡（~99% coverage）。
-// 剩餘 deferred (Phase 8f+)：光子密碼 / 招式竊賊 / 化石卡 + 化石採掘場 /
+// 剩餘 deferred (Phase 8f+)：光子纜線 / 招式竊賊 / 化石卡 + 化石採掘場 /
 //   工具卡 (豪邁炸彈 / 重試徽章)。
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
-// Phase 8f (v4.893) — 招式竊賊（狐大盜）+ 光子密碼（密勒頓 resolver）
+// Phase 8f (v4.893) — 招式竊賊（狐大盜）+ 光子纜線（密勒頓 resolver）
 //
 // 1. 狐大盜｜招式竊賊（attack）
 //    卡面：「若自己的手牌為 0 張，則從對手場上 1 隻寶可夢擁有的招式中選擇 1 個，
@@ -2043,7 +2043,7 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
 //    實裝（同 耀閃挑戰 precedent）：hand=0 gate + copyAttackChoice or fallback。
 //    UI picker（攻擊借者選對手寶可夢 + 招式）為 deferred enhancement。
 //
-// 2. 密勒頓｜光子密碼 resolver
+// 2. 密勒頓｜光子纜線 resolver
 //    PASSIVE_ON_KO fn（在 effects.ts 已實裝，開 bench-choose picker）→
 //    本檔 regR 完成實際的能量搶救（從 discard 取出 ≤2 張 basic 能量附加到備戰目標）。
 // ════════════════════════════════════════════════════════════════════════════
@@ -2164,25 +2164,25 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
 // ── 1b. 狐大盜|招式竊賊 POST — 轉接 borrowed attack 的 POST ──────────
 regPost('狐大盜|技能大盜', copyAttackPostDispatch);
 
-// ── 2. 光子密碼 resolver — 從 discard 搶救 ≤2 張 basic 能量到備戰寶可夢
+// ── 2. 光子纜線 resolver — 從 discard 搶救 ≤2 張 basic 能量到備戰寶可夢
 //   參數：params.basicEnergyIids（fn 開 picker 時傳入的 KO 前快照）
 //        iids（玩家在 bench-choose picker 選的 ≥0 隻備戰寶可夢 iid）
 //   限制：≥3 張 basic 能量時，目前 auto-pick 前 2 張（玩家選哪 2 張之 UI deferred）
 regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) {
-    return addLog(state, '光子密碼：玩家跳過，無能量轉移', aIdx);
+    return addLog(state, '光子纜線：玩家跳過，無能量轉移', aIdx);
   }
   const targetBenchIid = iids[0];
   const basicEnergyIids: string[] = (params?.basicEnergyIids as string[]) ?? [];
   if (basicEnergyIids.length === 0) {
-    return addLog(state, '光子密碼：無 basic 能量可移動', aIdx);
+    return addLog(state, '光子纜線：無 basic 能量可移動', aIdx);
   }
 
   const p = state.players[aIdx];
   // 從 discard 找出對應 iids 的能量卡（KO sweep 時已被 engine 移到 discard）
   const energiesInDiscard = p.discard.filter(c => basicEnergyIids.includes(c.iid));
   if (energiesInDiscard.length === 0) {
-    return addLog(state, '光子密碼：基本能量已不在棄牌堆（異常狀態），效果失敗', aIdx);
+    return addLog(state, '光子纜線：基本能量已不在棄牌堆（異常狀態），效果失敗', aIdx);
   }
 
   // 取最多 2 張（如 ≥3 張，auto-pick 前 2 — 玩家選哪 2 張 UI 為 deferred）
@@ -2197,7 +2197,7 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
   const targetName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
 
   let s = addLog(state,
-    `光子密碼：移 ${moveCount} 張基本能量到 ${targetName}${autoPickedNotice}`,
+    `光子纜線：移 ${moveCount} 張基本能量到 ${targetName}${autoPickedNotice}`,
     aIdx);
   s = updatePlayer(s, aIdx, pl => ({
     ...pl,
@@ -2212,7 +2212,7 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 8f 結束。
-// 累計：80 (P1-8e) + 1 (招式竊賊) + 1 (光子密碼) = 82 個項目（已超 81 張卡因部分卡有
+// 累計：80 (P1-8e) + 1 (招式竊賊) + 1 (光子纜線) = 82 個項目（已超 81 張卡因部分卡有
 //   多 effect，例如 護城龍 既有招式 又有 太鼓防壁 特性都各算一個 effect 記）。
 // 81 張卡 effect coverage：80 → 81 → 完成（剩化石卡與工具卡兩組需要新引擎機制）。
 // 剩餘 deferred：化石卡 (陳舊的頭蓋/盾牌 + 化石採掘場) / 工具卡 (豪邁炸彈 / 重試徽章)

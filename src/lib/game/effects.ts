@@ -7301,7 +7301,7 @@ export function fireDefenderOnKO(
   // v5.573：收斂「戰鬥位被招式 KO」時的防守方 on-KO 機制——原本只有引擎主管線觸發，
   //   走中央 helper dealAttackDamageToTarget / inline 傷害 resolver 的招式 KO 戰鬥位時會漏。
   //   三類：① TOOL_ON_KO(沉重接力棒/希望護身符) ② PASSIVE_KO_RETALIATION(沙鈴仙人掌 炸裂針)
-  //   ③ PASSIVE_ON_KO(桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / 密勒頓 光子密碼)。
+  //   ③ PASSIVE_ON_KO(桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / 密勒頓 光子纜線)。
   //   皆「戰鬥位」(isActive) 且「受招式傷害昏厥」(koByAttackDamage) 才觸發；效果KO不觸發。
   if (!isActive) return state;
   let s = state;
@@ -7335,7 +7335,7 @@ export function fireDefenderOnKO(
         }
       }
     }
-    // ③ PASSIVE_ON_KO（桃歹郎/鬆口氣/光子密碼）— v5.756 比照 engine.ts 主管線(v5.655)與本函式 ①②：
+    // ③ PASSIVE_ON_KO（桃歹郎/鬆口氣/光子纜線）— v5.756 比照 engine.ts 主管線(v5.655)與本函式 ①②：
     //   holder 特性被暗夜羽擊/初始化/監視塔/黏著束縛等消除時,被KO觸發特性失效(fireDefenderOnKO 開頭已 gate isActive→傳 'active')。
     if (koCard?.abilities) {
       for (const ab of koCard.abilities) {
@@ -15105,7 +15105,7 @@ export const PASSIVE_KO_RETALIATION = new Map<string, { counters: number }>([
 
 /** 受招式 KO 時的廣義 hook(不只放指示物)
  * v4.893：加 defenderInst?: CardInstance（KO 前的 instance 快照，含 energyAttached
- *         / toolAttached / damage 等）。給需要讀取 KO 前狀態的特性（如 密勒頓 光子密碼）。
+ *         / toolAttached / damage 等）。給需要讀取 KO 前狀態的特性（如 密勒頓 光子纜線）。
  *         向後相容：舊 fn 簽名忽略此參數仍可運作。 */
 export type PassiveOnKoFn = (
   state: GameState,
@@ -15155,7 +15155,7 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // PASSIVE_ON_KO 只在「被招式 KO」時觸發（engine 篩選），不會誤觸特性 KO。
   ['沙之羽擊', (state, dIdx, aIdx, pool, defCard) => desertDragonflyOnKo(state, dIdx, aIdx, pool, defCard)],
 
-  // v4.893 密勒頓(M5) | 光子密碼 — 在戰鬥場 KO 時，從身上基本能量最多 2 張改附給 1 隻備戰
+  // v4.893 密勒頓(M5) | 光子纜線 — 在戰鬥場 KO 時，從身上基本能量最多 2 張改附給 1 隻備戰
   // 卡面：「這隻寶可夢在戰鬥場受到對手寶可夢的招式傷害而【昏厥】時，從這隻寶可夢身上
   //        附加的『基本能量』最多選擇 2 張，改附給 1 隻備戰寶可夢。」
   // 注意：engine PASSIVE_ON_KO 呼叫時已在 KO sweep 後（active=null，能量已進 discard）。
@@ -15175,17 +15175,17 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
       })
       .map(e => e.iid);
     if (basicEnergyIids.length === 0) {
-      return addLog(state, '光子密碼：身上無基本能量，效果不發動', dIdx);
+      return addLog(state, '光子纜線：身上無基本能量，效果不發動', dIdx);
     }
     const defPlayer = state.players[dIdx];
     if (defPlayer.bench.length === 0) {
-      return addLog(state, '光子密碼：備戰區無寶可夢，效果不發動', dIdx);
+      return addLog(state, '光子纜線：備戰區無寶可夢，效果不發動', dIdx);
     }
     const moveCount = Math.min(2, basicEnergyIids.length);
     const willAutoPick = basicEnergyIids.length >= 3;
     return withPending(
       addLog(state,
-        `光子密碼：選 1 隻備戰寶可夢接收 ${moveCount} 張基本能量（或跳過）${willAutoPick ? '（注：≥3 張時自動取前 2 張，玩家選哪 2 張的 UI 為 deferred）' : ''}`,
+        `光子纜線：選 1 隻備戰寶可夢接收 ${moveCount} 張基本能量（或跳過）${willAutoPick ? '（注：≥3 張時自動取前 2 張，玩家選哪 2 張的 UI 為 deferred）' : ''}`,
         dIdx),
       {
         type: 'bench-choose',

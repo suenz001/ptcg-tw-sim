@@ -5140,9 +5140,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
             aIdx);
         }
       }
-      // v2.992 PASSIVE_ON_KO（桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / v4.893 密勒頓 光子密碼）
+      // v2.992 PASSIVE_ON_KO（桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / v4.893 密勒頓 光子纜線）
       // v4.893：傳 koInst (KO 前的 instance 快照) 給 fn — 部分特性需要讀取 KO 前
-      //         的能量列表（如 光子密碼移基本能量到備戰）。
+      //         的能量列表（如 光子纜線移基本能量到備戰）。
       //         koInst 在本作用域內已於 line 4468 (const koInst = state.players[dIdx].active) 取得。
       if (defenderCard.abilities) {
         for (const ab of defenderCard.abilities) {
