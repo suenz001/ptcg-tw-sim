@@ -27,12 +27,12 @@ T('placedBenchInstance:設justPlaced+裸化(damage0/energy[])',()=>{
 function gs(deck){return {phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,isFirstTurn:false,activeStadium:null,log:[],
   players:[{name:'A',hand:[],deck,discard:[],prizes:[],bench:[],active:inst(basic)},{name:'B',hand:[],deck:[],discard:[],prizes:[],bench:[],active:inst(anyId)}]};}
 // end-to-end:三個放場 resolver
-for(const [key,nm] of [['m5-screwdriller-call-allies','呼喚同伴'],['m5-litwick-enlight','增光'],['m5-flamigo-delivery','親送挑戰']]){
+for(const [key,nm] of [['m5-screwdriller-call-allies','呼朋引伴'],['m5-litwick-enlight','亮光增長'],['m5-flamigo-delivery','親送挑戰']]){
   T(`${nm}: 放到備戰的基礎設 justPlaced(同回合不可進化)`,()=>{
     const fn=RESOLVERS.get(key); assert.ok(fn,'無 '+key);
-    // 增光需特定卡(燈火幽靈);若無則用任意 basic 但 resolver 可能 filter 掉→跳過
+    // 亮光增長需特定卡(燈火幽靈);若無則用任意 basic 但 resolver 可能 filter 掉→跳過
     let cid=basic;
-    if(nm==='增光'){ const lid=byName.get('燈火幽靈'); if(!lid){console.log('  (無燈火幽靈跳過)');return;} cid=lid; }
+    if(nm==='亮光增長'){ const lid=byName.get('燈火幽靈'); if(!lid){console.log('  (無燈火幽靈跳過)');return;} cid=lid; }
     const deckCard=inst(cid);
     let st=gs([deckCard]);
     st=fn(st,0,[deckCard.iid],{benchLimitAtPick:5},pool);

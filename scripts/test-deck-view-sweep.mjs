@@ -50,15 +50,15 @@ T('helper: 牌庫全空 → 略過(無 picker)', ()=>{
   assert(!out.pendingSelection,'空牌庫應略過');
 });
 
-// ── 代表卡 wiring：增光（燈火幽靈|亮光增長）──
+// ── 代表卡 wiring：亮光增長（燈火幽靈|亮光增長）──
 const zengGuang=ATTACK_POST.get('燈火幽靈|亮光增長');
-assert(zengGuang,'找不到增光 ATTACK_POST');
-T('增光: 牌庫無燈火幽靈(有其他卡) → 開檢視 picker', ()=>{
+assert(zengGuang,'找不到亮光增長 ATTACK_POST');
+T('亮光增長: 牌庫無燈火幽靈(有其他卡) → 開檢視 picker', ()=>{
   const out=zengGuang(mkState([anyItem,anyItem,anyItem]), 0, pool);
   assert(out.pendingSelection?.type==='deck-search' && out.pendingSelection.filter==='any',
     '應開 view-picker，實際='+(out.pendingSelection?.type||'略過'));
 });
-T('增光: 牌庫全空 → 略過', ()=>{
+T('亮光增長: 牌庫全空 → 略過', ()=>{
   const out=zengGuang(mkState([]), 0, pool);
   assert(!out.pendingSelection,'空牌庫應略過');
 });

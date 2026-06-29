@@ -1,4 +1,4 @@
-// 從手牌丟棄為效果/代價的卡,對戰 log 要顯示丟棄的卡名(沐淨/交易/徹底丟棄/插入抽出/手部修剪器)。
+// 從手牌丟棄為效果/代價的卡,對戰 log 要顯示丟棄的卡名(沐淨/交易/丟到飽/插入抽出/手部修剪器)。
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -49,12 +49,12 @@ T('② 交易：丟棄 2 張的卡名顯示在 log',()=>{
   const lg=logStr(n);
   assert(lg.includes('交易')&&lg.includes(nameOf(GASTLY)),'交易 log 應含丟棄卡名，log='+lg.split('\n').slice(-3).join(' | '));
 });
-T('③ 徹底丟棄(呆呆獸)：丟棄卡名顯示在 log',()=>{
+T('③ 丟到飽(呆呆獸)：丟棄卡名顯示在 log',()=>{
   const a=inst(GASTLY), b=inst(EN);
   const st=baseState([a,b],[inst(EN),inst(EN)]);
   const n=resolve(st,{type:'hand-discard',actorIdx:0,sourcePlayerIdx:0,minCount:0,maxCount:2,effectKey:'m5-slowpoke-discard-all'},[a.iid]);
   const lg=logStr(n);
-  assert(lg.includes('徹底丟棄')&&lg.includes(nameOf(GASTLY)),'徹底丟棄 log 應含卡名，log='+lg.split('\n').slice(-3).join(' | '));
+  assert(lg.includes('丟到飽')&&lg.includes(nameOf(GASTLY)),'丟到飽 log 應含卡名，log='+lg.split('\n').slice(-3).join(' | '));
 });
 T('④ 插入抽出(鑰圈兒)：丟棄卡名顯示在 log',()=>{
   const a=inst(GASTLY);
