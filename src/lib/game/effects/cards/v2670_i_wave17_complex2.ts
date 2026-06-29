@@ -27,6 +27,7 @@ import { canApplyEffectToTarget } from '../../defense';
 // v3.10 import 修 bug 用的兩個 helper（原本 wave17 內自己 inline 寫成「加手」）
 import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive } from '../../effects';
@@ -273,6 +274,20 @@ regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '阻礙之翼：選擇「否」 — 不改附對手能量', aIdx);
   const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
+  //   （此刻在棄牌區，_koDefenderSnapshot）改附對手備戰。
+  if (!state.players[dIdx].active) {
+    const _koE = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
+    if (_koE.length === 0 || state.players[dIdx].bench.length === 0) {
+      return addLog(state, '阻礙之翼：對手戰鬥（已昏厥）無可改附的能量或備戰無寶可夢', aIdx);
+    }
+    return withPending(addLog(state, '阻礙之翼：對手戰鬥寶可夢已昏厥 — 可從棄牌區改附其能量到對手備戰', aIdx), {
+      type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'v3140-zapdos-jamming-pick-energy',
+      params: { fromDiscard: true, validIids: _koE, titleOverride: '選擇要改附的對手能量（已昏厥戰鬥位）' },
+    });
+  }
   const opp = state.players[dIdx];
   if (!opp.active || opp.active.energyAttached.length === 0 || opp.bench.length === 0) {
     return addLog(state, '阻礙之翼：條件不足（對手戰鬥場無能量或備戰無寶可夢）', aIdx);
@@ -304,18 +319,13 @@ regR('v3140-zapdos-jamming-attach', (state, aIdx, iids, params, pool) => {
   const energyIid = params?.energyIid as string | undefined;
   if (!targetIid || !energyIid) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  const energyInst = opp.active?.energyAttached.find(e => e.iid === energyIid);
-  if (!energyInst) return state;
-  const eName = pool.get(energyInst.cardId)?.name ?? '?';
-  return updatePlayer(
-    addLog(state, `阻礙之翼：將對手戰鬥位 ${eName} 改附對手備戰`, aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== energyIid) } : null,
-      bench: p.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energyInst] } : b),
-    }),
-  );
+  // v5.776：能量可能在對手 active(未KO)或棄牌區(已被本招式KO)→ source-agnostic pluck。
+  const r = pluckOppEnergyActiveOrDiscard(state.players[dIdx], energyIid);
+  if (!r.energy) return state;
+  const eName = pool.get(r.energy.cardId)?.name ?? '?';
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...r.player, bench: r.player.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, r.energy!] } : b) };
+  return addLog({ ...state, players }, `阻礙之翼：將對手戰鬥位 ${eName} 改附對手備戰`, aIdx);
 });
 
 // 小灰怪｜挪動一下 0 — 對手「場上」寶可夢能量改附對手「其他」寶可夢

@@ -23,6 +23,7 @@
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, getAllAttachedTools,
 } from '../_shared';
+import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -468,6 +469,19 @@ regPost('章魚桶|水流清洗', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '水流清洗：選擇「否」 — 不放回對手能量', aIdx);
   const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
+  //   （此刻在棄牌區，_koDefenderSnapshot）放回對手手牌。
+  if (!state.players[dIdx].active) {
+    const _koE = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
+    if (_koE.length === 0) return addLog(state, '水流清洗：對手戰鬥無可放回的能量', aIdx);
+    const _capKO = Math.min(1, _koE.length);
+    return withPending(addLog(state, '水流清洗：對手戰鬥寶可夢已昏厥 — 可從棄牌區將其能量放回對手手牌', aIdx), {
+      type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 0, maxCount: _capKO,
+      effectKey: 'v327-octopus-water-clean',
+      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥戰鬥位）` },
+    });
+  }
   const dp = state.players[dIdx];
   if (!dp.active || dp.active.energyAttached.length === 0) {
     return addLog(state, '水流清洗：對手戰鬥位沒有能量', aIdx);
@@ -487,20 +501,15 @@ regPost('章魚桶|水流清洗', (state, aIdx, pool, action) => {
 regR('v327-octopus-water-clean', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '水流清洗：玩家選擇不發動效果', idx);
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  if (!dp.active) return st;
   const targetIid = iids[0];
-  const energyInst = dp.active.energyAttached.find(e => e.iid === targetIid);
-  if (!energyInst) return st;
-  const eName = pool.get(energyInst.cardId)?.name ?? '?';
-  const s = addLog(st, `水流清洗：對手戰鬥位的 ${eName} 放回對手手牌`, idx);
-  return updatePlayer(s, dIdx, pl => ({
-    ...pl,
-    active: pl.active
-      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => e.iid !== targetIid) }
-      : pl.active,
-    hand: [...pl.hand, energyInst],
-  }));
+  if (!targetIid) return st;
+  // v5.776：能量可能在對手 active(未KO)或棄牌區(已被本招式KO)。
+  const r = pluckOppEnergyActiveOrDiscard(st.players[dIdx], targetIid);
+  if (!r.energy) return st;
+  const eName = pool.get(r.energy.cardId)?.name ?? '?';
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...r.player, hand: [...r.player.hand, r.energy] };
+  return addLog({ ...st, players }, `水流清洗：對手戰鬥位的 ${eName} 放回對手手牌`, idx);
 });
 
 // 毛崖蟹｜喀嚓鉗 — 擲 2 次, 對手戰鬥場能量 ×N 棄

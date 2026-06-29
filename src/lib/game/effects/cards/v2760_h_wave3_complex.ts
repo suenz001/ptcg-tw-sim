@@ -10,6 +10,7 @@ import {
   getOwnBenchLimit,
   ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
 } from '../_shared';
+import { getKODefenderEnergyInDiscard, getKODefenderSnapshot, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { copyAttackPostDispatch } from '../_shared';
@@ -559,6 +560,22 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '上搗角擊：選擇「否」 — 不放回對手能量', aIdx);
   const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
+  //   （此刻在棄牌區，_koDefenderSnapshot）放回對手手牌。
+  if (!state.players[dIdx].active) {
+    const _snap = getKODefenderSnapshot(state, dIdx);
+    const _snapCard = _snap ? pool.get(_snap.cardId) : null;
+    if (_snapCard?.stage !== 'Stage2') return addLog(state, '上搗角擊：對手戰鬥場（已昏厥）非 2 階進化，沒有附加效果', aIdx);
+    const _koE = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
+    if (_koE.length === 0) return addLog(state, '上搗角擊：對手戰鬥無可放回的能量', aIdx);
+    const _capKO = Math.min(2, _koE.length);
+    return withPending(addLog(state, '上搗角擊：對手戰鬥寶可夢已昏厥 — 可從棄牌區將其能量放回對手手牌', aIdx), {
+      type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 0, maxCount: _capKO,
+      effectKey: 'v327-tauros-thrust',
+      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥戰鬥位）` },
+    });
+  }
   const da = state.players[dIdx].active;
   if (!da) return state;
   const card = pool.get(da.cardId);
@@ -583,20 +600,18 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
 regR('v327-tauros-thrust', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '上搗角擊：玩家選擇不發動效果', idx);
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  if (!dp.active) return st;
-  const set = new Set(iids);
-  const moved = dp.active.energyAttached.filter(e => set.has(e.iid));
+  // v5.776：能量可能在對手 active(未KO)或棄牌區(已被本招式KO)→ source-agnostic pluck。
+  let dp = st.players[dIdx];
+  const moved: CardInstance[] = [];
+  for (const iid of iids) {
+    const r = pluckOppEnergyActiveOrDiscard(dp, iid);
+    if (r.energy) { dp = r.player; moved.push(r.energy); }
+  }
   if (moved.length === 0) return st;
   const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
-  const s = addLog(st, `上搗角擊：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
-  return updatePlayer(s, dIdx, pl => ({
-    ...pl,
-    active: pl.active
-      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
-      : pl.active,
-    hand: [...pl.hand, ...moved],
-  }));
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...dp, hand: [...dp.hand, ...moved] };
+  return addLog({ ...st, players }, `上搗角擊：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -649,6 +664,19 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '付諸東流：選擇「否」 — 不放回對手能量', aIdx);
   const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
+  //   （此刻在棄牌區，_koDefenderSnapshot）放回對手手牌。
+  if (!state.players[dIdx].active) {
+    const _koE = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
+    if (_koE.length === 0) return addLog(state, '付諸東流：對手戰鬥無可放回的能量', aIdx);
+    const _capKO = Math.min(2, _koE.length);
+    return withPending(addLog(state, '付諸東流：對手戰鬥寶可夢已昏厥 — 可從棄牌區將其能量放回對手手牌', aIdx), {
+      type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 0, maxCount: _capKO,
+      effectKey: 'v327-slowking-flush',
+      params: { fromDiscard: true, validIids: _koE, titleOverride: `選擇要放回對手手牌的能量（0∼${_capKO} 張，已昏厥戰鬥位）` },
+    });
+  }
   const da = state.players[dIdx].active;
   if (!da || da.energyAttached.length === 0) return addLog(state, '付諸東流：對手戰鬥無能量', aIdx);
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
@@ -670,20 +698,18 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
 regR('v327-slowking-flush', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) return addLog(st, '付諸東流：玩家選擇不發動效果', idx);
   const dIdx = (1 - idx) as 0 | 1;
-  const dp = st.players[dIdx];
-  if (!dp.active) return st;
-  const set = new Set(iids);
-  const moved = dp.active.energyAttached.filter(e => set.has(e.iid));
+  // v5.776：能量可能在對手 active(未KO)或棄牌區(已被本招式KO)→ source-agnostic pluck。
+  let dp = st.players[dIdx];
+  const moved: CardInstance[] = [];
+  for (const iid of iids) {
+    const r = pluckOppEnergyActiveOrDiscard(dp, iid);
+    if (r.energy) { dp = r.player; moved.push(r.energy); }
+  }
   if (moved.length === 0) return st;
   const names = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
-  const s = addLog(st, `付諸東流：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
-  return updatePlayer(s, dIdx, pl => ({
-    ...pl,
-    active: pl.active
-      ? { ...pl.active, energyAttached: pl.active.energyAttached.filter(e => !set.has(e.iid)) }
-      : pl.active,
-    hand: [...pl.hand, ...moved],
-  }));
+  const players = [...st.players] as [PlayerState, PlayerState];
+  players[dIdx] = { ...dp, hand: [...dp.hand, ...moved] };
+  return addLog({ ...st, players }, `付諸東流：將對手戰鬥位的 ${names}（${moved.length} 張）放回對手手牌`, idx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

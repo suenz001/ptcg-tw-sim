@@ -23,7 +23,7 @@ import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, Pr
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
-import { getKODefenderEnergyInDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
+import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
 import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
@@ -16667,23 +16667,6 @@ regPre('耿鬼ex|戲法舞步', (state, _aIdx, _pool) => ({ state, damage: 160 }
 //   (符合通則 reference-nplot-energy-pick)，pick 階段「不移除」、attach 階段從仍持有的 active 一步移除+附加。
 // v5.769：戲法舞步/反轉之風 — 對手戰鬥位被本招式傷害 KO 後，欲搬移的能量已在棄牌區(snapshot)。
 //   共用述詞：從對手 active 或棄牌區取出指定能量(回傳更新後 player + 該能量)，讓 pick/attach/回手 resolver source-agnostic。
-function pluckOppEnergyActiveOrDiscard(
-  player: PlayerState, iid: string,
-): { player: PlayerState; energy: CardInstance | null } {
-  const fromActive = player.active?.energyAttached.find(e => e.iid === iid);
-  if (fromActive) {
-    return {
-      player: { ...player, active: { ...player.active!, energyAttached: player.active!.energyAttached.filter(e => e.iid !== iid) } },
-      energy: fromActive,
-    };
-  }
-  const fromDiscard = player.discard.find(e => e.iid === iid);
-  if (fromDiscard) {
-    return { player: { ...player, discard: player.discard.filter(e => e.iid !== iid) }, energy: fromDiscard };
-  }
-  return { player, energy: null };
-}
-
 export function trickStepPost(): AttackPostFn {
   return (state, aIdx, pool, action) => {
     // 若希望 binary-yes-no guard（ATTACK_PRE_DISCARD_CHOICE）

@@ -1589,3 +1589,19 @@ export function getKODefenderEnergyInDiscard(state: GameState, dIdx: 0 | 1): Car
   const discard = state.players[dIdx].discard;
   return (snap.energyAttached ?? []).filter(e => discard.some(c => c.iid === e.iid));
 }
+
+// v5.776：從對手 active 或棄牌區取出指定能量(回傳更新後 player + 該能量)，讓搬移對手戰鬥位能量的
+//   pick/attach/回手 resolver source-agnostic（對手未KO=從 active 取；已KO=從棄牌區取，配合 _koDefenderSnapshot）。
+export function pluckOppEnergyActiveOrDiscard(
+  player: PlayerState, iid: string,
+): { player: PlayerState; energy: CardInstance | null } {
+  const fromActive = player.active?.energyAttached.find(e => e.iid === iid);
+  if (fromActive) {
+    return { player: { ...player, active: { ...player.active!, energyAttached: player.active!.energyAttached.filter(e => e.iid !== iid) } }, energy: fromActive };
+  }
+  const fromDiscard = player.discard.find(e => e.iid === iid);
+  if (fromDiscard) {
+    return { player: { ...player, discard: player.discard.filter(e => e.iid !== iid) }, energy: fromDiscard };
+  }
+  return { player, energy: null };
+}
