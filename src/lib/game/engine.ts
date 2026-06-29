@@ -6966,7 +6966,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   ② 對手回合結束、設旗標方回合開始(此時 nextIdx=設旗標方) → 清除 metalShieldThisTurn。
     //   原誤放在 nextP「自己下回合」promote 區塊 → 在錯的回合生效，對手攻擊時 -30 沒套（玩家報 -60）。
     if (players[aIdx].metalShieldNextTurn) {
-      const ep = { ...players[aIdx], metalShieldThisTurn: true };
+      const ep = { ...players[aIdx], metalShieldThisTurn: players[aIdx].metalShieldNextTurn }; // v5.766：帶 count
       delete ep.metalShieldNextTurn;
       players[aIdx] = ep;
     }
@@ -7202,9 +7202,11 @@ export function applyDefenderReductionsBlockA(
     if (baseDamage > 0
         && defender.metalShieldThisTurn
         && defenderCard.pokemonType === 'Metal') {
-      const reduced = Math.max(0, baseDamage - 30);
+      const mShieldCnt = defender.metalShieldThisTurn ?? 0; // v5.766：每張鐵之防禦強化 -30 累加
+      const mShieldAmt = 30 * mShieldCnt;
+      const reduced = Math.max(0, baseDamage - mShieldAmt);
       workingState = addLog(workingState,
-        `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
+        `${defenderCard.name} 因鐵之防禦強化效果，受到的傷害 -${mShieldAmt}（${baseDamage} → ${reduced}）`, dIdx);
       formula.push({ sign: '-', value: baseDamage - reduced, label: '鐵之防禦' });
       baseDamage = reduced;
     }

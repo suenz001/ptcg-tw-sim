@@ -445,7 +445,7 @@ reg('可怕的哥哥', (st, idx, pool) => {
 regG('鐵之防禦強化', () => true);
 reg('鐵之防禦強化', (st, idx) => {
   st = addLog(st, '鐵之防禦強化：下個對手回合，自己所有【鋼】寶可夢受招式 -30', idx);
-  return updatePlayer(st, idx, p => ({ ...p, metalShieldNextTurn: true }));
+  return updatePlayer(st, idx, p => ({ ...p, metalShieldNextTurn: (p.metalShieldNextTurn ?? 0) + 1 })); // v5.766：累加(2 張=-60,§17.40.E)
 });
 
 // ── 阿塞蘿拉的惡作劇（Supporter / I）── 對手獎賞 ≤2 才可用，1 寶可夢下回合不受 ex 招式

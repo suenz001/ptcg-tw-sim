@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.766</span> 對戰修正：物品卡「鐵之防禦強化」在同一回合使用 2 張時，效果現在會正確疊加 — 下個對手回合自己所有【鋼】寶可夢受招式傷害 -60（先前不論用幾張都只 -30）</summary>
+        <ul>
+          <li>依官方裁定，同回合使用 N 張「鐵之防禦強化」應 -30×N。</li>
+        </ul>
+      </details>
+
+<details>
         <summary><span class="ver-badge">v5.765</span> 對戰修正：齒輪怪「齒輪塗層」、青銅鐘「守護之鐘」這類「場上每有 1 隻就減傷」的特性，現在會正確排除特性被「暗夜羽擊／初始化」等效果消除的那一隻（被消除的持有者不再計入減傷）</summary>
         <ul>
           <li>依官方裁定，只有「處於有效狀態」的持有者才計入；例如對手用振翼髮「暗夜羽擊」消除你戰鬥場齒輪怪的特性時，那隻齒輪怪就不再提供減傷。</li>

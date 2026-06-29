@@ -423,8 +423,8 @@ export interface PlayerState {
    *   玩家報「全金屬實驗室+鐵之防禦+防護充能應-90卻只-60」，v5.538 修。engine.ts END_TURN。）
    * 攻擊計算時：defender 屬性為【鋼】 + defendingPlayer.metalShieldThisTurn → -30。
    */
-  metalShieldNextTurn?: boolean;
-  metalShieldThisTurn?: boolean;
+  metalShieldNextTurn?: number; // v5.766：改計數(用幾張鐵之防禦強化),減傷=30×count
+  metalShieldThisTurn?: number;
   /**
    * v5.641 阿蜜的目光（Supporter）— 下個對手的回合，自己的「所有」寶可夢（含新上場）受到對手寶可夢
    *   招式的傷害 -N(30)。玩家層級數值旗標 → 天然涵蓋備戰/新上場/換上的(非 instance 限定)；對手回合型，
