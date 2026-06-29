@@ -128,5 +128,47 @@ T('G8 中毒checkup KO→P0取1獎賞', () => {
   assert.equal(prizesTaken(out), 1, '中毒KO→P0取1獎賞 實=' + prizesTaken(out));
 });
 
+// ── G9 倖存鍛鍊器防KO / G10 多目標狙擊備戰KO / G11 灼傷 checkup ──
+const SURVIVE_TOOL = '10306'; // 倖存鍛鍊器（滿血受致命傷→留10HP,道具丟棄）
+const KELDEO = '18509';       // 凱路迪歐 穿通[水]20(對手1隻備戰也20) idx0
+const toolInst = () => ({ iid: 't' + (++nn), cardId: SURVIVE_TOOL });
+
+T('G9 倖存鍛鍊器:滿血願增猿受衝浪140→防KO留10HP,道具丟棄,不取獎賞', () => {
+  const st = mkRetal({});  // 攻擊方拉普拉斯ex衝浪
+  // 改對手 active = 滿血願增猿(110) + 倖存鍛鍊器
+  st.players[1].active = inst(WILLDUN, { toolAttached: toolInst() });
+  const out = applyAction(st, ATK_SURF, pool);
+  assert.ok(out.players[1].active && out.players[1].active.cardId === WILLDUN, '願增猿應存活(防KO)');
+  assert.equal(out.players[1].active.damage, hpOf(WILLDUN) - 10, '應留10HP(damage=HP-10) 實=' + out.players[1].active.damage);
+  assert.equal(prizesTaken(out), 0, '防KO→不取獎賞 實=' + prizesTaken(out));
+  assert.ok(out.players[1].discard.some(c => c.cardId === SURVIVE_TOOL), '倖存鍛鍊器應丟棄');
+});
+
+T('G10 穿通狙擊:對手備戰預傷90+狙擊20→備戰KO,P0取1獎賞', () => {
+  const st = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0], ancientEnergyMinusOneUsed: [false, false],
+    players: [
+      { name: 'P1', active: inst(KELDEO, { energyAttached: [inst(WATER)] }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: inst(LAPRAS, { damage: 0 }), bench: [inst(WILLDUN, { damage: 90 })], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+  const benchIid = st.players[1].bench[0].iid;
+  let out = applyAction(st, { type: 'ATTACK', attackIndex: 0 }, pool); // 穿通 → 開 opp-bench-choose
+  if (out.pendingSelection) out = applyAction(out, { type: 'RESOLVE_SELECTION', selectedIids: [benchIid] }, pool);
+  assert.ok(!out.players[1].bench.some(b => b.iid === benchIid), '被狙擊備戰應KO離場');
+  assert.equal(prizesTaken(out), 1, '備戰KO→P0取1獎賞 實=' + prizesTaken(out));
+});
+
+T('G11 灼傷checkup KO→對手取1獎賞', () => {
+  const st = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
+    players: [
+      { name: 'P1', active: inst(LION, { energyAttached: [inst(ENERGY)] }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: inst(WILLDUN, { damage: hpOf(WILLDUN) - 20, status: 'burned' }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+  const out = applyAction(st, { type: 'END_TURN' }, pool);
+  assert.ok(out.players[1].discard.some(c => c.cardId === WILLDUN), '灼傷應KO願增猿');
+  assert.equal(prizesTaken(out), 1, '灼傷KO→P0取1獎賞 實=' + prizesTaken(out));
+});
+
 console.log('\nKO 結算黃金基準網:PASS ' + pass + ' / FAIL ' + fail);
 process.exit(fail ? 1 : 0);
