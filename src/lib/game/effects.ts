@@ -9721,7 +9721,9 @@ function discardEnergyAttachPost(
 }
 
 // 多目標 snipe：對手任意 N 隻寶可夢各 D 傷害
-function multiSnipePost(targetCount: number, damage: number, label: string): AttackPostFn {
+function multiSnipePost(targetCount: number, damage: number, label: string, opts: { flat?: boolean } = {}): AttackPostFn {
+  // v5.784：flat=true → 整招「不計算弱點・抵抗力與身上附加效果」(雙刃劍/出奇一擊)，
+  //   打對手戰鬥位時也不套 W/R 與防守方減傷(身上附加效果)。預設 false(僅備戰不計弱抗的標準狙擊不變)。
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
@@ -9734,7 +9736,7 @@ function multiSnipePost(targetCount: number, damage: number, label: string): Att
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: 1, maxCount: realMax,
       effectKey: 'snipe-multi',
-      params: { damage, label },
+      params: { damage, label, flat: opts.flat ? true : undefined },
     });
   };
 }
@@ -9743,6 +9745,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
   const label = (params?.label as string) ?? '多目標攻擊';
   // v2.46：caller 可用 kind 指定是招式傷害還是招式效果。預設 'attack-damage'。
   const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
+  const flat = !!params?.flat; // v5.784：整招不計弱抗+附加效果(雙刃劍/出奇一擊)
   const dIdx = (1 - actorIdx) as 0 | 1;
   let s = st;
   let totalPrize = 0;
@@ -9770,7 +9773,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       const attacker = s.players[actorIdx].active;
       const attackerCard = attacker ? pool.get(attacker.cardId) : null;
       // v5.673：弱點/抵抗力收斂到中央 applyWeakRes(妖精領域/掌握弱點/弱點失效/攻擊方雙屬性,與主管線一致)。
-      effDmg = applyWeakRes(s, actorIdx, target, targetCard, effDmg, pool);
+      // v5.784：flat 招式(雙刃劍/出奇一擊「不計算弱點・抵抗力」)整招不計 → 跳過。
+      if (!flat) effDmg = applyWeakRes(s, actorIdx, target, targetCard, effDmg, pool);
       // TOOL_ATTACK_BONUS（猛攻手鐲等）— iterate 攻擊方所有道具（v5.761：阻礙之塔時道具失效，比照主管線 gate）
       if (attacker && attackerCard && !isToolsJammed(s, pool)) {
         for (const t of getAllAttachedTools(attacker)) {
@@ -9787,7 +9791,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     //   岩石宮殿 / 自身 PASSIVE_DAMAGE_REDUCE 等）。弱點/抵抗力非此類，已於上方戰鬥位另計。
     //   收斂：與 hitBenchAll / hitBenchPickPost / dealAttackDamageToTarget 同一條 _applyBenchAbilityReduce，
     //   active+bench 皆適用（snipe-multi 不走引擎主管線，過去完全漏套 → 備戰捲牆等無效）。
-    if (effDmg > 0 && targetCard) {
+    if (effDmg > 0 && targetCard && !flat) { // v5.784：flat 招式不計「身上附加效果」(防守方減傷)
       const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, effDmg);
       if (_rd.amount !== effDmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
       effDmg = _rd.amount;
@@ -11271,10 +11275,10 @@ regPost('莫魯貝可|撿拾附上', discardEnergyAttachPost(2, null, '撿拾附
 
 // ── (D) 單目標 + 多目標 snipe ──────────────────────────────────────────
 regPre('月亮伊布|出奇一擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('月亮伊布|出奇一擊', multiSnipePost(1, 50, '出奇一擊'));
+regPost('月亮伊布|出奇一擊', multiSnipePost(1, 50, '出奇一擊', { flat: true })); // v5.784 整招不計弱抗+附加效果
 
 regPre('鐵頭殼ex|雙刃劍', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('鐵頭殼ex|雙刃劍', multiSnipePost(2, 50, '雙刃劍'));
+regPost('鐵頭殼ex|雙刃劍', multiSnipePost(2, 50, '雙刃劍', { flat: true })); // v5.784 整招不計弱抗+附加效果
 
 // 鐵脖頸|自動導向頭擊 — 對手 3 隻有傷害指示物各 50
 regPre('鐵脖頸|自動導向頭擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));

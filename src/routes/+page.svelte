@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.784</span> 對戰修正：鐵頭殼ex「雙刃劍」、月亮伊布「出奇一擊」這類「對手N隻寶可夢各受到X傷害、這個招式的傷害不計算弱點・抵抗力與身上附加效果」的招式，現在打到對手戰鬥位時也正確不計算弱點／抵抗力與減傷效果——先前打戰鬥位仍誤套弱點×2與防守方減傷</summary>
+        <ul>
+          <li>多目標狙擊原預設「只有備戰不計弱抗、戰鬥位照算」，但這兩張卡是整招都不計算，需區別處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.783</span> 對戰修正：沙鐵皮「磁場炸裂」的傷害現在只「不計算弱點」（依卡面），抵抗力恢復正常計算——先前誤連抵抗力也一起略過，打到對沙鐵皮屬性有抵抗力的寶可夢時會多打傷害</summary>
         <ul>
           <li>對齊 v4.495 對「不計算抵抗力」招式的修正原則：卡面只寫不計算弱點，就只略過弱點。</li>
