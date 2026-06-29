@@ -1447,13 +1447,15 @@ regPre('蟲甲聖ex|精神強念', (state, aIdx, pool) => {
   return { state: addLog(state, `精神強念：對手戰鬥能量 ${dE} → 20+${dE}×90 = ${20 + dE*90}`, aIdx), damage: 20 + dE * 90 };
 });
 
-// 沙鐵皮|磁場炸裂 20+ — 自方場上能量 ≥3 +70 不計弱點
+// 沙鐵皮|磁場炸裂 20+ — 自方場上能量 ≥3 +70；卡面僅「不計算弱點」
+// v5.783：原誤用 skipWeakRes(連抵抗力一起跳)→ 改 skipWeakness(只跳弱點，抵抗力仍計)。
+//   同 v4.495 對「不計算抵抗力」批次的修法(SKIP_RES)，此為弱點側漏網孿生。
 regPre('沙鐵皮|磁場炸裂', (state, aIdx, _pool) => {
   const p = state.players[aIdx];
   let total = (p.active?.energyAttached.length ?? 0);
   for (const b of p.bench) total += b.energyAttached.length;
-  if (total >= 3) return { state: addLog(state, `磁場炸裂：自方場上能量 ${total} ≥3 → 20+70 = 90 (skipWeakRes)`, aIdx), damage: 90, skipWeakRes: true };
-  return { state: addLog(state, `磁場炸裂：自方場上能量 ${total} < 3 → 20 (skipWeakRes)`, aIdx), damage: 20, skipWeakRes: true };
+  if (total >= 3) return { state: addLog(state, `磁場炸裂：自方場上能量 ${total} ≥3 → 20+70 = 90 (skipWeakness)`, aIdx), damage: 90, skipWeakness: true };
+  return { state: addLog(state, `磁場炸裂：自方場上能量 ${total} < 3 → 20 (skipWeakness)`, aIdx), damage: 20, skipWeakness: true };
 });
 
 // 爬地翅|鐵碎 20+ — 對手場上有「未來」寶可夢 +120

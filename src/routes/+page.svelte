@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.783</span> 對戰修正：沙鐵皮「磁場炸裂」的傷害現在只「不計算弱點」（依卡面），抵抗力恢復正常計算——先前誤連抵抗力也一起略過，打到對沙鐵皮屬性有抵抗力的寶可夢時會多打傷害</summary>
+        <ul>
+          <li>對齊 v4.495 對「不計算抵抗力」招式的修正原則：卡面只寫不計算弱點，就只略過弱點。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.782</span> 對戰修正：龍捲雲「玉樹臨風」、炎武王「烈火亂舞」、月月熊 赫月「經驗法則」、大電海燕ex「迴旋充能」、櫻花魚「漸強波」這些「從手牌附加能量」的招式／特性，現在會正確觸發對手的「附能反應」（耿鬼ex 侵蝕詛咒放傷害指示物、帕奇利茲 麻痺門牙＋80）——先前這幾張漏觸發</summary>
         <ul>
           <li>依規則：對手每次從手牌將能量附於寶可夢時，侵蝕詛咒／麻痺門牙都應觸發；過去這 5 張走自訂附能流程，漏接此反應。</li>
