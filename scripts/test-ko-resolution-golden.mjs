@@ -170,5 +170,68 @@ T('G11 灼傷checkup KO→對手取1獎賞', () => {
   assert.equal(prizesTaken(out), 1, '灼傷KO→P0取1獎賞 實=' + prizesTaken(out));
 });
 
+// ── G12 麻痺/睡眠 checkup 不掉血 / G13 進化體KO整堆進棄牌 / G14 無限之影回手 ──
+const GENGAR_ORD = '18026'; // 耿鬼（特性 無限之影：受招式KO→進化鏈回手）
+
+function checkupNoDamage(statusVal) {
+  const st = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
+    players: [
+      { name: 'P1', active: inst(LION, { energyAttached: [inst(ENERGY)] }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: inst(WILLDUN, { damage: hpOf(WILLDUN) - 10, status: statusVal }), bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+  return applyAction(st, { type: 'END_TURN' }, pool);
+}
+
+T('G12a 睡眠 checkup 不掉血→對手存活,獎賞不變', () => {
+  const out = checkupNoDamage('asleep');
+  assert.ok(out.players[1].active && out.players[1].active.cardId === WILLDUN, '睡眠不應致KO');
+  assert.equal(out.players[1].active.damage, hpOf(WILLDUN) - 10, '睡眠不掉血,damage應不變');
+  assert.equal(prizesTaken(out), 0, '無KO→不取獎賞');
+});
+
+T('G12b 麻痺 checkup 不掉血→對手存活,獎賞不變', () => {
+  const out = checkupNoDamage('paralyzed');
+  assert.ok(out.players[1].active && out.players[1].active.cardId === WILLDUN, '麻痺不應致KO');
+  assert.equal(out.players[1].active.damage, hpOf(WILLDUN) - 10, '麻痺不掉血,damage應不變');
+  assert.equal(prizesTaken(out), 0, '無KO→不取獎賞');
+});
+
+T('G13 進化體KO→頂層+進化堆+能量全進棄牌且無重複iid', () => {
+  // 合成進化體:頂WILLDUN + 進化堆[SNEASEL] + 1能量,預傷至HP-10
+  const baseInst = inst(SNEASEL);
+  const energyInst = inst(ENERGY);
+  const evo = inst(WILLDUN, { damage: hpOf(WILLDUN) - 10, evolvedFromStack: [baseInst], energyAttached: [energyInst] });
+  const st = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
+    players: [
+      { name: 'P1', active: inst(LION, { energyAttached: [inst(ENERGY)] }), bench: [], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: evo, bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+  const out = applyAction(st, ATK, pool);
+  const dIids = out.players[1].discard.map(c => c.iid);
+  assert.ok(dIids.includes(evo.iid), '頂層進化體應進棄牌');
+  assert.ok(dIids.includes(baseInst.iid), '進化堆基底應進棄牌');
+  assert.ok(dIids.includes(energyInst.iid), '能量應進棄牌');
+  assert.equal(new Set(dIids).size, dIids.length, '棄牌不應有重複iid');
+  assert.equal(prizesTaken(out), 1, '取1獎賞');
+});
+
+T('G14 無限之影:耿鬼受招式KO→本體回手,能量丟棄,對手仍取獎賞', () => {
+  const energyInst = inst(ENERGY);
+  const gengar = inst(GENGAR_ORD, { damage: hpOf(GENGAR_ORD) - 10, energyAttached: [energyInst] });
+  const st = { phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0, turn: 5, isFirstTurn: false, log: [], pendingSelection: null,
+    setupDone: [true, true], pendingMulliganDraw: [0, 0], pendingPrizes: [0, 0],
+    players: [
+      { name: 'P1', active: inst(LION, { energyAttached: [inst(ENERGY)] }), bench: [], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+      { name: 'P2', active: gengar, bench: [inst(WILLDUN)], hand: [], deck: [inst(ENERGY)], discard: [], prizes: prize(6) },
+    ] };
+  const out = applyAction(st, ATK, pool);
+  assert.ok(out.players[1].hand.some(c => c.cardId === GENGAR_ORD), '耿鬼本體應回手牌');
+  assert.ok(!out.players[1].discard.some(c => c.iid === gengar.iid), '本體不應進棄牌');
+  assert.ok(out.players[1].discard.some(c => c.iid === energyInst.iid), '能量應進棄牌');
+  assert.equal(prizesTaken(out), 1, '對手仍取1獎賞');
+});
+
 console.log('\nKO 結算黃金基準網:PASS ' + pass + ' / FAIL ' + fail);
 process.exit(fail ? 1 : 0);
