@@ -588,6 +588,7 @@ import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
 import { tryPromptPromoteActive } from './effects/_shared';
+import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
 // v5.237：re-export 給 engine.ts 用於 attack-time snapshot
@@ -10426,13 +10427,13 @@ regPre('冰伊布ex|藍柱石', (state, _aIdx, _pool) => ({ state, damage: 0 }))
 regPost('冰伊布ex|藍柱石', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx];
-  // 有效目標 = damage >= 60（6 個傷害指示物）
-  const heavy = (c: CardInstance): boolean => c.damage >= 60;
+  // v5.785：卡面「放置有 6 個傷害指示物」= 剛好 6 個（無「以上」），用 === 6（原 >=60 誤含 7+）。
+  const heavy = (c: CardInstance): boolean => damageCounterCount(c) === 6;
   const candidates: CardInstance[] = [];
   if (def.active && heavy(def.active)) candidates.push(def.active);
   for (const b of def.bench) if (heavy(b)) candidates.push(b);
   if (candidates.length === 0) {
-    return addLog(state, '藍柱石：對手無受 6 個以上傷害指示物的寶可夢，無效', aIdx);
+    return addLog(state, '藍柱石：對手無剛好 6 個傷害指示物的寶可夢，無效', aIdx);
   }
   if (candidates.length === 1) {
     // 只有一隻符合條件 → 直接 KO，不需 pendingSelection
@@ -10441,7 +10442,7 @@ regPost('冰伊布ex|藍柱石', (state, aIdx, pool) => {
     return resolveLanzhushi(state, aIdx, target, isActive, pool);
   }
   // 多個候選 → 以 opp-poke-choose pendingSelection
-  let s = addLog(state, `藍柱石：選擇 1 隻身上有 6 個以上傷害指示物的對手寶可夢，將其昏厥`, aIdx);
+  let s = addLog(state, `藍柱石：選擇 1 隻身上剛好 6 個傷害指示物的對手寶可夢，將其昏厥`, aIdx);
   return withPending(s, {
     type: 'opp-poke-choose',
     actorIdx: aIdx,
@@ -10449,7 +10450,7 @@ regPost('冰伊布ex|藍柱石', (state, aIdx, pool) => {
     minCount: 1,
     maxCount: 1,
     effectKey: 'lanzhushi-ko',
-    params: { minDamage: 60 },
+    params: { exactCounters: 6 },
   });
 });
 
@@ -10557,12 +10558,12 @@ export function koTargetByAttackEffect(
 regR('lanzhushi-ko', (st, actorIdx, selectedIids, params, pool) => {
   const dIdx = (1 - actorIdx) as 0 | 1;
   const def = st.players[dIdx];
-  const minDmg = Number(params?.minDamage ?? 60);
+  const exactCounters = Number(params?.exactCounters ?? 6); // v5.785 剛好 N 個
   const targetIid = selectedIids[0];
   if (!targetIid) return st;
   const isActive = def.active?.iid === targetIid;
   const target = isActive ? def.active! : def.bench.find(b => b.iid === targetIid);
-  if (!target || target.damage < minDmg) return st;
+  if (!target || damageCounterCount(target) !== exactCounters) return st;
   return resolveLanzhushi(st, actorIdx, target, isActive, pool);
 });
 

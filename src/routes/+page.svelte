@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.785</span> 對戰修正：超級阿勃梭魯ex「死亡終局」與冰伊布ex「藍柱石」現在只在對手寶可夢身上「剛好 6 個」傷害指示物時才使其昏厥（依卡面「為 6 個／放置有 6 個」）——先前 6 個以上（含 7、8 個…）也會誤觸發昏厥</summary>
+        <ul>
+          <li>卡面無「以上」字樣＝精確 6 個。內部新增「傷害指示物個數」中央判定，收斂此類精確個數條件。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.784</span> 對戰修正：鐵頭殼ex「雙刃劍」、月亮伊布「出奇一擊」這類「對手N隻寶可夢各受到X傷害、這個招式的傷害不計算弱點・抵抗力與身上附加效果」的招式，現在打到對手戰鬥位時也正確不計算弱點／抵抗力與減傷效果——先前打戰鬥位仍誤套弱點×2與防守方減傷</summary>
         <ul>
           <li>多目標狙擊原預設「只有備戰不計弱抗、戰鬥位照算」，但這兩張卡是整招都不計算，需區別處理。</li>

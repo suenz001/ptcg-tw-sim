@@ -9,7 +9,7 @@
  *     蓋諾賽克特｜ACE消弭（canPlayTrainer gate）
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
-import { tryPromptPromoteActive } from '../_shared';
+import { tryPromptPromoteActive, damageCounterCount } from '../_shared'; // v5.785 指示物個數中央
 import { copyAttackPostDispatch } from '../_shared';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
@@ -64,14 +64,15 @@ regPre('莉莉艾的皮皮ex|滿月輪舞', bothBenchMultiplyPre(20, 20, '滿月
 //   2. regPost：條件達成 → canApplyAttackEffectToTarget 檢查招式效果免疫 →
 //      直接寫 damage = 99999 到 active 上，繞過所有 damage modifier，
 //      由 ATTACK pipeline 末尾的 sanityKOSweep 處理 KO 與獎賞卡計算。
-// 卡面「6 個」依官方 ruling 解讀為「≥ 6 個」（含 7、8 個...）。
+// v5.785：卡面「為 6 個」= 剛好 6 個（Wilson 裁定，7 個以上不觸發）。用 damageCounterCount === 6。
 regPre('超級阿勃梭魯ex|死亡終局', (s) => ({ state: s, damage: 0 }));
 regPost('超級阿勃梭魯ex|死亡終局', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (!def) return state;
-  if (def.damage < 60) {
-    return addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物不足 6 個，效果未觸發', aIdx);
+  if (damageCounterCount(def) !== 6) {
+    // v5.785：卡面「為 6 個」= 剛好 6 個（Wilson 裁定）。7 個以上不觸發。
+    return addLog(state, `死亡終局：對手戰鬥寶可夢傷害指示物 ${damageCounterCount(def)} 個（非剛好 6 個），效果未觸發`, aIdx);
   }
   // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
   const defCard = pool.get(def.cardId);
@@ -81,7 +82,7 @@ regPost('超級阿勃梭魯ex|死亡終局', (state, aIdx, pool) => {
   }
   // v5.522：效果KO收斂中央 koTargetByAttackEffect（深淵之瞳式：搬棄牌+recordOppKO+addPendingPrize，不走 damage 管線）
   return koTargetByAttackEffect(
-    addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物 ≥ 6 個 → 直接昏厥（招式效果）', aIdx),
+    addLog(state, '死亡終局：對手戰鬥寶可夢傷害指示物剛好 6 個 → 直接昏厥（招式效果）', aIdx),
     aIdx, def, true, pool, '死亡終局',
   );
 });

@@ -1338,6 +1338,15 @@ export function buildEvolvedInstance(
   };
 }
 
+/**
+ * v5.785：寶可夢身上「傷害指示物的個數」= damage / 10（PTCG 傷害一律 10 的倍數）。
+ *   卡面「傷害指示物為 N 個 / 放置有 N 個」是精確個數判定，務必用 === N（非 >= N×10）。
+ *   收斂死亡終局 / 藍柱石等「剛好 N 個」條件；「N 個以上」型仍用 >= 比較(各自 helper)。
+ */
+export function damageCounterCount(inst: CardInstance | null | undefined): number {
+  return Math.floor((inst?.damage ?? 0) / 10);
+}
+
 export function getAllAttachedTools(inst: CardInstance | null | undefined): CardInstance[] {
   if (!inst) return [];
   const out: CardInstance[] = [];
