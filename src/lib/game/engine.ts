@@ -4626,13 +4626,13 @@ function handlePlaying(
       }
     }
 
-    // v4.87 席多藍恩｜熔岩之壁（M5）— defender 不受【灼傷】狀態 attacker 招式傷害
+    // v4.87 席多藍恩｜熔岩牆（M5）— defender 不受【灼傷】狀態 attacker 招式傷害
     // v5.124：加 !skipDefEffects gate
     if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToBurnedAttackerThisTurn) {
       const atkBurned = attacker.active.status === 'burned' || attacker.active.secondaryStatus === 'burned' || attacker.active.tertiaryStatus === 'burned';
       if (atkBurned) {
         workingState = addLog(workingState,
-          `${defenderCard.name} 因熔岩之壁效果，不受【灼傷】狀態寶可夢招式傷害`, dIdx);
+          `${defenderCard.name} 因熔岩牆效果，不受【灼傷】狀態寶可夢招式傷害`, dIdx);
         baseDamage = 0;
       }
     }
@@ -6681,7 +6681,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         n = { ...n };
         delete n.immuneToAttackDamageThisTurn;
       }
-      // v4.87 閃光屏障 / 熔岩之壁 — clear ThisTurn at opponent's END_TURN (same pattern as immuneToBasicAttackThisTurn)
+      // v4.87 閃光屏障 / 熔岩牆 — clear ThisTurn at opponent's END_TURN (same pattern as immuneToBasicAttackThisTurn)
       if (c.immuneToEvolutionAttackThisTurn) {
         n = { ...n };
         delete n.immuneToEvolutionAttackThisTurn;
@@ -6800,7 +6800,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         n = { ...n, immuneToAttackDamageThisTurn: true };
         delete n.immuneToAttackDamageNextTurn;
       }
-      // v4.87 閃光屏障 / 熔岩之壁 — promote NextTurn → ThisTurn at owner's END_TURN
+      // v4.87 閃光屏障 / 熔岩牆 — promote NextTurn → ThisTurn at owner's END_TURN
       if (c.immuneToEvolutionAttackNextTurn) {
         n = { ...n, immuneToEvolutionAttackThisTurn: true };
         delete n.immuneToEvolutionAttackNextTurn;
@@ -7703,7 +7703,7 @@ export function getEffectiveAttacks(
  *
  *   17 個新加：呼喚同伴(螺釘地鼠 M5)、呼喚夥伴(同卡日文版翻譯)、
  *     並排(蟲電寶 SV7)、傳喚之門(人造細胞卵 SV5K)、召集標誌(大吾的天秤偶 SVOD)、
- *     增光(燈火幽靈 M5)、大地之門(哲爾尼亞斯 M1S)、家族行軍(一家鼠 SV8)、
+ *     亮光增長(燈火幽靈 M5)、大地之門(哲爾尼亞斯 M1S)、家族行軍(一家鼠 SV8)、
  *     急速信號(電螢蟲 SV6)、戲法傳送門(超級妖火紅狐ex M-P-J)、
  *     招花(莉莉艾的花療環環 MC)、洛托呼喚(洛托姆 M2a)、無伴奏合唱(聒噪鳥 MC)、
  *     硃砂誘餌(米立龍ex SV8)、組成陣形(列陣兵 SV7)、群聚(呱呱泡蛙/強顎雞母蟲)、
@@ -7718,7 +7718,8 @@ const BENCH_FILL_ATTACK_NAMES = new Set<string>([
   '並排',
   '傳喚之門',
   '召集標誌',
-  '增光',
+  '亮光增長',
+  '親送挑戰',
   '大地之門',
   '家族行軍',
   '急速信號',

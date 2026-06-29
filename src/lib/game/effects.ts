@@ -7597,7 +7597,7 @@ export function dealAttackDamageToTarget(
   const targetCard = pool.get(target.cardId);
   // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
   //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
-  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊
+  //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 / 防護代碼 / 塗層攻擊
   //   注意：kind 透傳（snipe-variable 同時用於 attack-damage 跟 attack-effect — 飛來橫禍等放指示物）
   const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
   if (guard.blocked) {
@@ -9739,7 +9739,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     const targetCard = pool.get(target.cardId);
     // v4.979: 統一 — active + bench 都過 canApplyEffectToTarget
     //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
-    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊
+    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 / 防護代碼 / 塗層攻擊
     //   注意：kind 透傳（多目標 resolver 同時用於 attack-damage 跟 attack-effect）
     const guard = canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
     if (guard.blocked) {
@@ -14481,7 +14481,7 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     const targetCard = pool.get(target.cardId);
     // v4.975: 統一守護 — active + bench 都過 canApplyEffectToTarget
     //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.129 原行為）
-    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 等
+    //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 等
     //   （v4.975 新增；之前只查 bench 路徑導致 ex.g. 飛翔擋不住分身連打 bug）
     const guard = canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
     if (guard.blocked) {

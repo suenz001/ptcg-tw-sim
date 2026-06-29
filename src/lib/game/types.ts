@@ -335,7 +335,7 @@ export interface CardInstance {
   evolutionDamageReduceNextTurn?: number;
   evolutionDamageReduceThisTurn?: number;
   /**
-   * v4.87 席多藍恩｜熔岩之壁（M5）— 下個對手回合，這隻寶可夢不會受到處於【灼傷】狀態的
+   * v4.87 席多藍恩｜熔岩牆（M5）— 下個對手回合，這隻寶可夢不會受到處於【灼傷】狀態的
    * 寶可夢的招式傷害。
    * Engine 攻擊 pipeline：attacker.status === 'burned' （含 secondaryStatus）
    * + defender 有 immuneToBurnedAttackerThisTurn → baseDamage = 0。

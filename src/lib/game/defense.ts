@@ -262,8 +262,8 @@ export function canApplyEffectToTarget(
   //    v5.062 防呆：caller 沒傳 isBench 時，用 target.iid 自動判 — 若 target 是
   //    對手 active，跳過 bench-only defense（避免對戰圓形競技場/球形盾牌 等
   //    bench-only 規則誤套用到戰鬥位目標）。
-  //    起源：m5_preview.ts 抹茶旋轉/靈魂終結 caller 沒傳 isBench，對手戰鬥位被
-  //    對戰圓形誤擋 → 抹茶旋轉打不到戰鬥位 ( v5.062 玩家回報 bug)。
+  //    起源：m5_preview.ts 抹茶旋濺/靈魂終結 caller 沒傳 isBench，對手戰鬥位被
+  //    對戰圓形誤擋 → 抹茶旋濺打不到戰鬥位 ( v5.062 玩家回報 bug)。
   //    這個 internal-fallback 設計成「caller 漏傳時自動正確判斷」，但 caller
   //    若明確傳 isBench: false/true 仍以 caller 為主。
   let effectiveIsBench = options?.isBench;
@@ -284,7 +284,7 @@ export function canApplyEffectToTarget(
   }
 
   // 4. v4.975：active target 招式傷害 — 統一 8 個 active-side immune flag
-  //    （飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩之壁 / 防護代碼 / 塗層攻擊）
+  //    （飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 / 防護代碼 / 塗層攻擊）
   //    僅在 isBench === false 時觸發（caller 明確指明 target 在 active）。
   //    engine.ts 主路徑已 inline 跑這些 check（zero-behavior change 在那邊）；
   //    本 step 是給多目標 resolver（如 clone-strike-multi-hit）統一用。
@@ -331,7 +331,7 @@ export function isOppActiveImmuneToAttackEffect(
  * v4.975: 統一 active target 招式傷害守護 helper。
  * 
  * **為什麼需要**：engine.ts 主路徑（約 line 3870-4000）已 inline check 11 個 active-side
- * immune flag（飛翔/要害斬/阿塞蘿拉/中立中心/精神防護/閃光屏障/熔岩之壁/防護代碼/
+ * immune flag（飛翔/要害斬/阿塞蘿拉/中立中心/精神防護/閃光屏障/熔岩牆/防護代碼/
  * 塗層攻擊/太鼓防壁/弱點失效），但**多目標 / snipe resolver**（如 clone-strike-multi-hit
  * = 分身連打 / 大吼大叫 / 三色炮）完全繞過這段，導致玩家回報「飛翔正面後仍受分身連打傷害」bug。
  * 
@@ -408,11 +408,11 @@ export function resolveActiveAttackGuard(
     }
   }
 
-  // 8. 熔岩之壁（席多藍恩 M5）— 不受【灼傷】attacker 招式
+  // 8. 熔岩牆（席多藍恩 M5）— 不受【灼傷】attacker 招式
   if (defender.immuneToBurnedAttackerThisTurn) {
     const attacker = state.players[actorIdx].active;
     if (attacker && (attacker.status === 'burned' || attacker.secondaryStatus === 'burned' || attacker.tertiaryStatus === 'burned')) {
-      return { blocked: true, reason: '熔岩之壁免疫【灼傷】寶可夢招式傷害' };
+      return { blocked: true, reason: '熔岩牆免疫【灼傷】寶可夢招式傷害' };
     }
   }
 

@@ -1262,7 +1262,7 @@ export function toBareCard(inst: CardInstance): CardInstance {
 /**
  * v5.745：放置寶可夢到備戰的單一收斂 — 從牌庫/手牌/棄牌放上場一律裸化 + 設 justPlaced:true
  *   (本回合剛上場,同回合不可進化;engine EVOLVE gate basePoke.justPlaced)。過往各 bench-fill
- *   resolver 手刻 {...c, justPlaced:true},部分(呼喚同伴/增光/親送挑戰)漏設 → 放的基礎同回合
+ *   resolver 手刻 {...c, justPlaced:true},部分(呼朋引伴/亮光增長/親送挑戰)漏設 → 放的基礎同回合
  *   可違規進化。非場上區來源本就乾淨,baring 為防呆冪等。
  */
 export function placedBenchInstance(card: CardInstance): CardInstance {
@@ -1438,7 +1438,7 @@ export function reconcileMultiToolRelay(
 // 觸發路徑（自己回合內、自方換位）：
 //   - 撤退 (RETREAT) + 撤退能量 picker (retreat-energy-discard)
 //   - 寶可夢交替 / 急進開關 / 衝浪海灘 等 trainer 道具
-//   - 自方招式的「自身互換」效果 (雀躍 / 瞬間移轉 / 瞬間移動者 / 天空搬運 / h-wave2 等)
+//   - 自方招式的「自身互換」效果 (雀躍 / 介秒迴轉 / 瞬間移動者 / 天空搬運 / h-wave2 等)
 //   - 鐵斑葉ex 迅速游標 self-promote (特性自身換位)
 //
 // 排除：
