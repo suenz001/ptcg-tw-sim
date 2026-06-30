@@ -318,6 +318,10 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.799</span> 牌組編輯器：側欄「新增／存檔／讀取」按鈕改為純文字（移除前面的小圖示），並改用會自動換行的排版，修正前一版按鈕文字被擠成「…」的問題</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.798</span> 牌組編輯器優化：① 用「+ 新增」或從官網匯入產生的新牌組會自動排到最頂（越新越上面）；② 修正桌機版「📥 讀取」按鈕超出側欄邊框的排版；③ 卡牌詳情的左右「翻閱版本」圓形按鈕改為半透明，不再擋住下方卡牌的數值（例如吼叫尾ex「咬碎」的 120）</summary>
         <ul>
           <li>新牌組置頂：所有「產生新牌組」路徑統一寫入排序，跨重載／雲端都維持在最頂</li>

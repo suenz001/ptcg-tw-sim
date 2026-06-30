@@ -1565,8 +1565,8 @@
         <strong>我的牌組</strong>
         <div class="rail-actions">
           <button class="small" onclick={createDeck}>+ 新增</button>
-          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔（連同常用卡牌一起存）` : '將牌組與常用卡牌存檔至雲端'}>💾 存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
-          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組與常用卡牌">📥 讀取</button>
+          <button class="small cloud-btn" class:has-dirty={dirtyDeckIds.size > 0} onclick={saveAllDecksToCloud} title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組待存檔（連同常用卡牌一起存）` : '將牌組與常用卡牌存檔至雲端'}>存檔{#if dirtyDeckIds.size > 0} ●{/if}</button>
+          <button class="small cloud-btn" onclick={loadAllDecksFromCloud} title="從雲端重新讀取牌組與常用卡牌">讀取</button>
         </div>
       </div>
       <ul class="deck-list">
@@ -2345,20 +2345,17 @@
     color: #374151;
   }
   .rail-actions {
-    display: grid;
-    /* v5.798：minmax(0,1fr) 讓格軌可縮小於內容寬，避免「📥 讀取」撐破 rail（桌機超框） */
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;   /* v5.799：放不下就換行，永不截字/溢出（取代 v5.798 grid+ellipsis 截成「...」） */
     gap: 0.3rem;
   }
   .rail-actions > button {
-    width: 100%;
-    min-width: 0;            /* v5.798：允許 grid 子項縮至軌寬 */
+    flex: 1 1 auto;    /* 等分撐滿，內容不足時仍填滿一列 */
+    min-width: 0;
     text-align: center;
-    padding: 0.4rem 0.2rem;  /* v5.798：略減左右 padding */
-    font-size: 0.82rem;
+    padding: 0.4rem 0.35rem;
+    font-size: 0.8rem;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     box-sizing: border-box;
   }
   .cloud-btn {
