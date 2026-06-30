@@ -437,6 +437,10 @@ export const SHARED_ONCE_PER_TURN_ABILITY_NAMES = new Set<string>([
   // v2.471：補上既有 ad-hoc 實作的 shared 特性（防禦性 — 即使實作層忘記寫 gate，engine 也擋）
   '扭轉乾坤',  // 吉雉雞ex — 卡面：「若已經使出其他扭轉乾坤則無法使用」
   '殺手鐧捕捉', // 喵喵ex — 卡面：「若已經使出名稱中有殺手鐧的特性則無法使用」
+  // v5.811：補上同樣 name-based「使出其他X則無法使用」每回合限1次特性(先前漏列)。
+  '支配鎖鏈',  // 桃歹郎ex
+  '音速搜索',  // 大比鳥ex
+  '裝酷重抽',  // 怒鸚哥ex
 ]);
 
 /**
