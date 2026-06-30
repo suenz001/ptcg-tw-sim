@@ -2610,12 +2610,14 @@ regR('h-wave2-place-3-counters', (state, aIdx, iids, _params, pool) => {
 // 胖甜妮|甜甜你 — 擲 2 次硬幣 ×90 + 全反混亂
 regPre('胖甜妮|甜甜你', coinHeadsMultiplyPre(2, 90, '甜甜你'));
 regPost('胖甜妮|甜甜你', (state, aIdx, pool) => {
-  // 重新擲幣判斷全反 — coinHeadsMultiplyPre 已擲過，這裡再擲會重複
-  // 改為：已擲過的結果不可知；折衷：判定 if oppActive damage 沒增加（表示 0 正面）→ 混亂
-  const da = state.players[(1-aIdx) as 0|1].active;
-  // 簡化：直接以 50% 機率施加混亂（表示「2 次都反面」=25% 概率近似）
-  // 更精確需要 PRE 階段把擲幣結果存入 state — 暫接受誤差
-  return state;
+  // v5.786：卡面「若全部為反面，則將對手戰鬥寶可夢【混亂】」。
+  //   coinHeadsMultiplyPre 已把擲幣正面數存入 _lastCoinHeads（v5.786 中央補），
+  //   讀它判定 heads===0（2 次全反）才混亂，禁再擲/隨機（原 no-op，混亂完全沒實作）。
+  const heads = state._lastCoinHeads ?? 0;
+  if (heads === 0) {
+    return statusPost('confused')(addLog(state, '甜甜你：2 次全反面 → 對手混亂', aIdx), aIdx, pool);
+  }
+  return addLog(state, `甜甜你：${heads} 次正面（非全反）→ 無附加狀態`, aIdx);
 });
 
 // 薄荷果|... 略 (沒在列表)

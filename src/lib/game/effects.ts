@@ -5697,7 +5697,9 @@ export function coinHeadsMultiplyPre(flips: number, perHead: number, attackName:
     const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
     const r = flipCoinsWithLog(state, flips, attackName, aIdx, injected);
     const dmg = r.heads * perHead;
-    const s = addLog(r.state, `${attackName}：${r.heads}/${flips} 次正面 → ${r.heads}×${perHead} = ${dmg} 傷害`, aIdx);
+    // v5.786：存正面數供 regPost 讀（甜甜你「全反面→混亂」等依擲幣結果施加狀態，
+    //   原本 POST 讀不到此 helper 的擲幣結果→脫鉤。比照雙重冰凍/鱗粉颶風的 _lastCoinHeads 模式。）
+    const s = addLog({ ...r.state, _lastCoinHeads: r.heads }, `${attackName}：${r.heads}/${flips} 次正面 → ${r.heads}×${perHead} = ${dmg} 傷害`, aIdx);
     return { state: s, damage: dmg };
   };
 }

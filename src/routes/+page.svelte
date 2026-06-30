@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.786</span> 對戰修正：胖甜妮「甜甜你」（擲 2 次硬幣，若全部為反面則使對手【混亂】）現在會正確施加混亂——先前這個「全反面→混亂」效果完全沒有作用</summary>
+        <ul>
+          <li>原本招式無法得知傷害擲幣的結果，混亂效果被擱置；現改為讀取實際擲幣正面數，0 正面（全反面）才混亂。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.785</span> 對戰修正：超級阿勃梭魯ex「死亡終局」與冰伊布ex「藍柱石」現在只在對手寶可夢身上「剛好 6 個」傷害指示物時才使其昏厥（依卡面「為 6 個／放置有 6 個」）——先前 6 個以上（含 7、8 個…）也會誤觸發昏厥</summary>
         <ul>
           <li>卡面無「以上」字樣＝精確 6 個。內部新增「傷害指示物個數」中央判定，收斂此類精確個數條件。</li>
