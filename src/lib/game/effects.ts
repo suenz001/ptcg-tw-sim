@@ -995,6 +995,24 @@ function _applyBenchAbilityReduce(
       if (before > dmg) logs.push(`石之洞窟 -${before - dmg}`);
     }
   }
+  // v5.817：灰塵山|垃圾洩氣(場上有灰塵山 + 攻擊者戰鬥場附寶可夢道具 → 受傷 -20，field-wide)
+  //   也套到備戰。block A(active)已處理;bench 先前漏(非 victim 自身特性，PASSIVE map 抓不到)。
+  if (dmg > 0) {
+    const _dp = state.players[defenderIdx];
+    const _hasGarbage = [...(_dp.active ? [_dp.active] : []), ..._dp.bench].some(cc => {
+      const cd = pool.get(cc.cardId);
+      return cd?.name === '灰塵山' && (cd?.abilities?.some(a => a.name === '垃圾洩氣') ?? false);
+    });
+    const _atkAct = state.players[attackerIdx].active;
+    if (_hasGarbage && _atkAct) {
+      const _atkTools = getAllAttachedTools(_atkAct);
+      const _tc = _atkTools.length > 0 ? pool.get(_atkTools[0].cardId) : undefined;
+      if (_tc?.subtype === 'PokemonTool') {
+        const _b = dmg; dmg = Math.max(0, dmg - 20);
+        if (_b > dmg) logs.push(`垃圾洩氣 -${_b - dmg}`);
+      }
+    }
+  }
   return { amount: dmg, logs };
 }
 

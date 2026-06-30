@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.817</span> 對戰修正：「灰塵山」的特性「垃圾洩氣」（對手戰鬥寶可夢身上有寶可夢道具時，其招式傷害 -20）先前只對自己的戰鬥位生效，備戰區寶可夢被攻擊（如狙擊）時沒有套用；現已修正，備戰區也正確 -20。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.816</span> 對戰修正：被招式標記「下回合受到招式傷害 +N」（如超音波幼蟲「刺耳聲」、泥巴魚「飛撲圈套」、獒教父「撲身頭擊」）的寶可夢，若退到備戰區後被攻擊（如狙擊），先前沒有套用 +N；現已修正，備戰區也正確追加傷害。</summary>
       </details>
       <details>
