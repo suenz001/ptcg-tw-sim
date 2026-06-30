@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.813</span> 對戰修正：夢幻ex 的特性「重啟」（從牌庫抽卡直到手牌滿 3 張）先前未實作、使用後沒有任何效果，現已正確實作——使用時抽到手牌滿 3 張（手牌已達 3 張以上則不抽），每回合限 1 次。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.812</span> 對戰修正：桃歹郎ex「支配鎖鏈」這個卡面寫「在這個回合，若已經使出了其他的『支配鎖鏈』則無法使用」的特性，現在同名多張在同一回合只能使用 1 次——先前漏設限制，導致場上有多張時可在同回合各觸發 1 次。</summary>
       </details>
       <details>

@@ -480,3 +480,21 @@ regR('morpeko-snack-search-v295', (st, idx, iids, _params, pool) => {
   return s;
 });
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 夢幻ex｜重啟（SVK 001 / id 11131 — H 標）— v5.813
+//   卡面：「在自己的回合時可使用1次。從牌庫抽卡直到自己的手牌滿3張為止。」
+//   先前完全未實作（getAbilityFn 回 undefined）→ 使用無任何效果。比照中央 draw-until-N
+//   邏輯（need = Math.max(0, 3 - hand.length)，已滿 3 張則不抽）。
+//   per-instance「每回合 1 次」由引擎 markUsed(abilityUsedThisTurn) 負責，此處不需手動設。
+// ══════════════════════════════════════════════════════════════════════════════
+regAByName('夢幻ex', '重啟', (state, aIdx, _pool, inst) => {
+  if (!inst) return state;
+  const p = state.players[aIdx];
+  const need = Math.max(0, 3 - p.hand.length);
+  if (need === 0) return addLog(state, '重啟：手牌已達 3 張以上，不抽卡', aIdx);
+  const drawn = Math.min(need, p.deck.length);
+  if (drawn === 0) return addLog(state, '重啟：牌庫為空', aIdx);
+  const s = addLog(state, `重啟：抽到手牌滿 3（補 ${drawn} 張）`, aIdx);
+  return drawCards(s, aIdx, drawn);
+});
