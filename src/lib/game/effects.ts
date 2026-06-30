@@ -8243,7 +8243,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
 
 // ── swap-opp + dmg (3 張) ────────────────────────────────────────────────────
 // 共用 pre：不造成戰鬥寶可夢傷害（傷害在 resolver 中施加）
-function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
+export function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const defender = state.players[dIdx];

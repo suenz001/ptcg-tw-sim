@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.788</span> 對戰修正：派帕的陸地水母「拉扯」、火爆猴「拖出」、幾何雪花「拖出」、飄飄球「拉扯」這些「選擇1隻對手的備戰寶可夢與戰鬥位互換」的招式，現在改由「使用招式的玩家」選擇要拉上場的對手寶可夢（依卡面）——先前誤由對手自己選</summary>
+        <ul>
+          <li>卡面「選擇1隻對手的備戰寶可夢」＝由攻擊方指定（同皮皮「看我嘛」、勇士雄鷹「拖出」）；先前這 4 張誤用了「由對手選擇」的換場流程，已收斂到正確的中央處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.786</span> 對戰修正：胖甜妮「甜甜你」（擲 2 次硬幣，若全部為反面則使對手【混亂】）現在會正確施加混亂——先前這個「全反面→混亂」效果完全沒有作用</summary>
         <ul>
           <li>原本招式無法得知傷害擲幣的結果，混亂效果被擱置；現改為讀取實際擲幣正面數，0 正面（全反面）才混亂。</li>

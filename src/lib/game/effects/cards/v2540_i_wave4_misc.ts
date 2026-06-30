@@ -20,7 +20,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { statusPost, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
+import { statusPost, flipCoinsWithLog, dealAttackDamageToTarget, oppSwapDmgPost } from '../../effects'; // v5.788 gust 攻擊方選中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper A: 擲 1 次硬幣 +N
@@ -52,87 +52,7 @@ function coinFlipMultiplyPre(coinCount: number, perHead: number, label: string):
 // helper C: 對手強制換場（無條件）— 復用既有 'force-opp-swap' resolver（v2.37 已實裝）
 // 同 v2401 的 forceOppSwapPostInline pattern
 // ══════════════════════════════════════════════════════════════════════════════
-function forceOppSwapPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const d = state.players[dIdx];
-    if (!d.active || d.bench.length === 0) {
-      return addLog(state, `${label}：對手無備戰寶可夢可換場`, aIdx);
-    }
-    const s = addLog(state, `${label}：對手必須將戰鬥寶可夢與備戰寶可夢互換（由對手選擇）`, aIdx);
-    return withPending(s, {
-      type: 'bench-choose',
-      actorIdx: dIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'force-opp-swap',
-      params: { label, attackerIdx: aIdx },
-    });
-  };
-}
-
-// 對手強制換場 + 新上場寶可夢受到 N 點傷害
-function forceOppSwapAndDmgPost(label: string, dmgToNewActive: number): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const d = state.players[dIdx];
-    if (!d.active || d.bench.length === 0) {
-      return addLog(state, `${label}：對手無備戰可換`, aIdx);
-    }
-    const s = addLog(state, `${label}：對手換場後，新上場寶可夢受到 ${dmgToNewActive} 點傷害`, aIdx);
-    return withPending(s, {
-      type: 'bench-choose',
-      actorIdx: dIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'wave4-force-opp-swap-dmg',
-      params: { label, attackerIdx: aIdx, dmgToNewActive },
-    });
-  };
-}
-
-// resolver for force opp swap + dmg
-import { regR } from '../_shared';
-regR('wave4-force-opp-swap-dmg', (state, _aIdx, iids, params, _pool) => {
-  const label = (params?.label as string) ?? '拖出';
-  const attackerIdx = params?.attackerIdx as 0 | 1;
-  const dmgToNewActive = (params?.dmgToNewActive as number | undefined) ?? 0;
-  const dIdx = (1 - attackerIdx) as 0 | 1;
-  const benchIid = iids[0];
-  if (!benchIid) return state;
-
-  // 找對手選的 bench 索引
-  const opp = state.players[dIdx];
-  if (!opp.active) return state;
-  const benchIdx = opp.bench.findIndex(b => b.iid === benchIid);
-  if (benchIdx < 0) return state;
-
-  // 互換 active <-> bench[benchIdx]
-  const newActive = { ...opp.bench[benchIdx], movedToActiveThisTurn: true };
-  const oldActive = { ...opp.active };
-  // 清舊 active 的 status / 各種旗標（PTCG 規則：移到 bench 清狀態）
-  delete oldActive.status;
-  delete oldActive.secondaryStatus;
-  delete oldActive.cantRetreatNextTurn;
-  delete oldActive.movedToActiveThisTurn;
-
-  // 新 active 受到 dmg
-  newActive.damage = (newActive.damage ?? 0) + dmgToNewActive;
-
-  const newBench = opp.bench.map((b, i) => i === benchIdx ? oldActive : b);
-  let s = updatePlayer(state, dIdx, p => ({ ...p, active: newActive, bench: newBench }));
-  s = addLog(s, `${label}：對手換場完成；新上場寶可夢受到 ${dmgToNewActive} 點傷害`, attackerIdx);
-  return s;
-});
-
-// 擲幣若正則強制換場
-function coinFlipForceOppSwapPost(label: string): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const r = flipCoinsWithLog(state, 1, label, aIdx);
-    const heads = r.heads === 1;
-    let s = r.state;
-    if (!heads) return s;
-    return forceOppSwapPost(label)(s, aIdx, pool);
-  };
-}
+import { regR } from '../_shared'; // v5.788：保留供 wave4-deck-pick-any；已刪 force-opp-swap 死碼(gust 改走中央 oppSwapDmgPost)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper E: 自身回血 N（純 healing post，attack damage 看 base）
@@ -316,21 +236,26 @@ regPost('巴大蝶|鱗粉颶風', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 派帕的陸地水母|拉扯 0 + 強制換場
 regPre('派帕的陸地水母|拉扯', (s) => ({ state: s, damage: 0 }));
-regPost('派帕的陸地水母|拉扯', forceOppSwapPost('拉扯'));
+regPost('派帕的陸地水母|拉扯', oppSwapDmgPost(0, '拉扯')); // v5.788 gust=攻擊方選對手備戰
 
 // 火爆猴|拖出 0 + 強制換場 + 新上場 30 dmg
 regPre('火爆猴|拖出', (s) => ({ state: s, damage: 0 }));
-regPost('火爆猴|拖出', forceOppSwapAndDmgPost('拖出', 30));
+regPost('火爆猴|拖出', oppSwapDmgPost(30, '拖出')); // v5.788 gust=攻擊方選
 
 // 幾何雪花|拖出 0 + 強制換場 + 新上場 20 dmg
 regPre('幾何雪花|拖出', (s) => ({ state: s, damage: 0 }));
-regPost('幾何雪花|拖出', forceOppSwapAndDmgPost('拖出', 20));
+regPost('幾何雪花|拖出', oppSwapDmgPost(20, '拖出')); // v5.788 gust=攻擊方選
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. D 擲幣若正則強制換場（1 張）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('飄飄球|拉扯', (s) => ({ state: s, damage: 0 }));
-regPost('飄飄球|拉扯', coinFlipForceOppSwapPost('拉扯'));
+regPost('飄飄球|拉扯', (state, aIdx, pool) => {
+  // v5.788 擲幣正面→gust(攻擊方選對手備戰互換)
+  const r = flipCoinsWithLog(state, 1, '拉扯', aIdx);
+  if (r.heads !== 1) return addLog(r.state, '拉扯：反面，不互換', aIdx);
+  return oppSwapDmgPost(0, '拉扯')(r.state, aIdx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 5. E 自方治癒（2 張）
