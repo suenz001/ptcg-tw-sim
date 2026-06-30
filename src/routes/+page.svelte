@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.800</span> 對戰修正：吼叫尾ex「咬碎」、比克提尼「燒落」、大蔥鴨「音速斬」、勾帕路翁「神聖刀鋒」等「選擇1個對手能量丟棄」的招式，現在會讓使用招式的玩家自己選要丟哪一張能量——先前是自動丟最後一張，當對手身上有不同能量（基本＋古舊／特殊能量）時無法挑想丟的那張。只有1張可丟時仍直接丟</summary>
+        <ul>
+          <li>收斂：依「選擇」卡面統一走能量 picker（與其他選能量招式一致）；同步補上 AI 對此 picker 的處理</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.799</span> 牌組編輯器：側欄「新增／存檔／讀取」按鈕改為純文字（移除前面的小圖示），並改用會自動換行的排版，修正前一版按鈕文字被擠成「…」的問題</summary>
       </details>
 

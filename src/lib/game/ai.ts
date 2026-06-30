@@ -998,6 +998,18 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       return { type: 'RESOLVE_SELECTION', selectedIids: ids };
     }
 
+    case 'active-energy-discard': {
+      // v5.800：丟/移對手能量或回手(sourcePlayerIdx≠actor)=對 AI 有利→取滿 maxCount；
+      //   丟自己能量(成本，sourcePlayerIdx=actor)→只取 minCount。
+      const _validE = sel.params?.validIids as string[] | undefined;
+      const _srcAct = srcPlayer.active;
+      let _cand = _srcAct ? _srcAct.energyAttached.map(e => e.iid) : [];
+      if (_validE) _cand = _cand.filter(iid => _validE.includes(iid));
+      if (_cand.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      const _isOpp = sel.sourcePlayerIdx !== sel.actorIdx;
+      const _want = _isOpp ? (sel.maxCount ?? 1) : (sel.minCount ?? 0);
+      return { type: 'RESOLVE_SELECTION', selectedIids: _cand.slice(0, Math.min(_want, _cand.length)) };
+    }
     default:
       return { type: 'RESOLVE_SELECTION', selectedIids: [] };
   }

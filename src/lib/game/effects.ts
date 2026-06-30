@@ -8696,47 +8696,62 @@ function discardOppActiveEnergyPost(
     const dIdx = (1 - aIdx) as 0 | 1;
     const defender = state.players[dIdx];
     if (!defender.active) return state;
-      // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
-      {
-        const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
-        if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
-      }
+    // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
+    {
+      const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
+      if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
+    }
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
     const energies = defender.active.energyAttached;
-    if (energies.length === 0) {
-      return addLog(state, `${label}：${defName} 沒有可丟的能量`, aIdx);
-    }
-    // 找最後一個符合 filter 的能量
-    let targetIdx = -1;
-    for (let i = energies.length - 1; i >= 0; i--) {
-      const card = pool.get(energies[i].cardId);
-      if (filter === 'special') {
-        if (card?.supertype === 'Energy' && card.subtype === 'Special') {
-          targetIdx = i;
-          break;
-        }
-      } else {
-        targetIdx = i;
-        break;
-      }
-    }
-    if (targetIdx < 0) {
+    // v5.800：卡面「選擇 1 個…能量丟棄」= 攻擊方選哪張。原自動取末張違反「選能量須 picker」鐵律
+    //   (v5.663，玩家報自動選錯)；對手混合能量(基本+古舊/特殊)時無法挑。1 張符合→直接丟(無選擇空間，
+    //   同流氓熊貓單招直接鎖)；2+ 張→開 active-energy-discard picker 讓攻擊方選。
+    const matchIids = energies
+      .filter(e => {
+        if (filter === 'special') { const cc = pool.get(e.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Special'; }
+        return true;
+      })
+      .map(e => e.iid);
+    if (matchIids.length === 0) {
       return addLog(state, `${label}：${defName} 無${filter === 'special' ? '特殊' : ''}能量可丟`, aIdx);
     }
-    const discarded = energies[targetIdx];
-    const newEnergies = [...energies.slice(0, targetIdx), ...energies.slice(targetIdx + 1)];
-    const energyName = pool.get(discarded.cardId)?.name ?? '能量';
-    let s = addLog(state, `${label}：${defName} 丟棄 1 張${filter === 'special' ? '特殊' : ''}能量（${energyName}）`, aIdx);
-    return updatePlayer(s, dIdx, p => {
-      if (!p.active) return p;
-      return {
+    if (matchIids.length === 1) {
+      const discarded = energies.find(e => e.iid === matchIids[0])!;
+      const energyName = pool.get(discarded.cardId)?.name ?? '能量';
+      const s = addLog(state, `${label}：${defName} 丟棄 1 張${filter === 'special' ? '特殊' : ''}能量（${energyName}）`, aIdx);
+      return updatePlayer(s, dIdx, p => p.active ? ({
         ...p,
-        active: { ...p.active, energyAttached: newEnergies },
+        active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== matchIids[0]) },
         discard: [...p.discard, discarded],
-      };
-    });
+      }) : p);
+    }
+    return withPending(
+      addLog(state, `${label}：選擇要丟棄對手戰鬥位的 1 張${filter === 'special' ? '特殊' : ''}能量`, aIdx),
+      {
+        type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+        minCount: 1, maxCount: 1,
+        effectKey: 'discard-opp-active-energy-pick',
+        params: { targetIid: defender.active.iid, validIids: matchIids, label, titleOverride: `選擇要丟棄的對手能量（${label}）` },
+      },
+    );
   };
 }
+regR('discard-opp-active-energy-pick', (st, idx, iids, params, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  const pickedIid = iids[0];
+  const label = (params?.label as string | undefined) ?? '丟棄能量';
+  const dp = st.players[dIdx];
+  if (!pickedIid || !dp.active) return st;
+  const discarded = dp.active.energyAttached.find(e => e.iid === pickedIid);
+  if (!discarded) return st;
+  const energyName = pool.get(discarded.cardId)?.name ?? '能量';
+  const defName = pool.get(dp.active.cardId)?.name ?? '?';
+  return updatePlayer(addLog(st, `${label}：${defName} 丟棄 1 張能量（${energyName}）`, idx), dIdx, p => p.active ? ({
+    ...p,
+    active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== pickedIid) },
+    discard: [...p.discard, discarded],
+  }) : p);
+});
 
 function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
