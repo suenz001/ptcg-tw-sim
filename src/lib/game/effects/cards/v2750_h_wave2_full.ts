@@ -908,7 +908,9 @@ regR('h-wave2-self-swap', (state, aIdx, iids, _params, _pool) => {
     const oldActive = p.active;
     // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
     const newActive = { ...p.bench[idx], movedToActiveThisTurn: true };
-    const newBench = p.bench.map((b, i) => i === idx ? oldActive : b);
+    // v5.790：戰鬥→備戰一律 clearActiveEffects(離開戰鬥位清特殊狀態/旗標)；
+    //   原直接 push oldActive → 中毒/灼傷/睡眠等殘留備戰(同 do-switch/self-swap-active-bench)。
+    const newBench = p.bench.map((b, i) => i === idx ? clearActiveEffects(oldActive) : b);
     return { ...p, active: newActive, bench: newBench };
   });
 });
