@@ -2194,7 +2194,9 @@ regPost('好啦魷|惡作劇觸手', (state, aIdx, pool) => {
   const opp = state.players[dIdx];
   if (opp.deck.length === 0) return addLog(state, '惡作劇觸手：對手牌庫已空', aIdx);
   const topName = pool.get(opp.deck[0].cardId)?.name ?? '?';
-  const s = addLog(state, `惡作劇觸手：查看對手牌庫頂為「${topName}」`, aIdx);
+  // v5.794：查看後「回復原樣」放回對手牌庫 → 卡名不應對對手揭露（否則對手得知自己牌庫頂）。
+  //   改用中央 addPrivateLog：出招方看到卡名、對手只看到脫敏版。
+  const s = addPrivateLog(state, `惡作劇觸手：查看對手牌庫頂為「${topName}」`, '惡作劇觸手：查看對手牌庫頂 1 張', aIdx);
   return withPending(s, {
     type: 'modal-choice',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,

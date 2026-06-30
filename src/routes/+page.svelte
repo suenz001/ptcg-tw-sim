@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.794</span> 對戰修正：好啦魷「惡作劇觸手」（查看對手牌庫頂1張後放回）、莫魯貝可特性「搜尋點心」（查看自己牌庫頂1張後可保留）現在揭示的牌庫頂卡名只有使用者本人看得到——先前會寫進公開的對戰紀錄，導致對手得知自己（或你）的牌庫頂卡片</summary>
+        <ul>
+          <li>改用既有的「私有訊息」機制：使用者看到具體卡名，對手只看到「查看牌庫頂 1 張」的脫敏版本</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.793</span> 對戰修正：流氓熊貓「無理取鬧」（選擇1個對手戰鬥寶可夢持有的招式，下回合無法使用）現在會讓「使用招式的玩家」自己選要禁用哪個招式——先前是自動鎖定傷害最高的招式（與火箭隊的黑暗鴉「無理取鬧」不一致）</summary>
         <ul>
           <li>卡面「選擇1個…招式」＝由攻擊方挑選；對手只有 1 個招式時直接鎖定、有多個招式時跳出選擇視窗。</li>

@@ -16,7 +16,7 @@ import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import {
   regA, regAByName, regR,
-  addLog, updatePlayer, withPending,
+  addLog, addPrivateLog, updatePlayer, withPending,
   drawCards,
 } from '../_shared';
 import type { Card } from '$lib/cards/types';
@@ -442,7 +442,9 @@ regAByName('莫魯貝可', '搜尋點心', (st, idx, pool, _cardInst) => {
   }
   const topInst = p.deck[0];
   const topName = pool.get(topInst.cardId)?.name ?? '?';
-  const s = addLog(st, `莫魯貝可：使用特性「搜尋點心」，查看牌庫上方 1 張卡 → 「${topName}」`, idx);
+  // v5.794：卡面「查看自己牌庫上方 1 張，回復原樣，若希望可丟棄」。選「保留」會放回牌庫頂 →
+  //   公開 log 揭示卡名會讓對手得知你的牌庫頂。改用中央 addPrivateLog（出招方看卡名、對手脫敏）。
+  const s = addPrivateLog(st, `莫魯貝可：使用特性「搜尋點心」，查看牌庫上方 1 張卡 → 「${topName}」`, '莫魯貝可：使用特性「搜尋點心」，查看牌庫上方 1 張卡', idx);
   return withPending(s, {
     type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
