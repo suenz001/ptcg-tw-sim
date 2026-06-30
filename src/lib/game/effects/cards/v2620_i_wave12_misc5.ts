@@ -57,6 +57,8 @@ function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
 }
 
 // 擲到反面為止 ×K
+// ⚠️ v5.787：此 local helper 簽名為 (base, perHead)！effects.ts 另有同名 (perHead, base)（相反）。
+//   本檔的 斗笠菇/凍原熊/章魚桶/泥驢仔 用此版（base 先）。守衛見 test-coin-until-tails-formula。
 function coinUntilTailsMultiplyPre(base: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     let heads = 0;

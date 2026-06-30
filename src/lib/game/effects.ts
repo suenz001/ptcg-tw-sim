@@ -5812,6 +5812,9 @@ regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼',
 // v2.252：改為每次擲幣寫 1 行 log（格式「第 N 次擲硬幣 — 正面/反面」），
 //   UI parser（+page.svelte）逐個 enqueue 到 coinFlipQueue 排隊播放動畫，
 //   玩家能看到每次擲幣的結果（不再合併成 1 次動畫且 heads=0 顯示錯面的 bug）。
+// ⚠️ v5.787：注意參數順序為 (perHead, base)！v2620_i_wave12_misc5.ts 另有同名 local helper
+//   簽名為 (base, perHead)（順序相反）。兩者公式皆 base+heads×perHead，但填參務必對照所在檔。
+//   守衛：scripts/test-coin-until-tails-formula.mjs 以卡面印刷傷害驗全部 flip-until-tails 招式。
 function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     let s = state;
