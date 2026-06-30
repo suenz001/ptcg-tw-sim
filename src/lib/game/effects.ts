@@ -863,6 +863,13 @@ function _applyBenchAbilityReduce(
       const _b = dmg; dmg = Math.max(0, dmg - _defP.flatDamageReduceThisTurn);
       if (_b > dmg) logs.push(`阿蜜的目光 -${_b - dmg}`);
     }
+    // v5.816：跨回合「這隻本回合受招式傷害 +N」debuff(takeExtraDamageThisTurn)也套到備戰。
+    //   active 由 engine block A 處理;bench 先前漏 → 帶此旗標者撤退到備戰被狙擊不 +N(泥巴魚/獒教父/超音波幼蟲)。
+    //   位置鏡射 block A:在 metalShield/阿蜜(reduce) 後、下方 PASSIVE 減傷前。
+    if (dmg > 0 && victim.takeExtraDamageThisTurn && victim.takeExtraDamageThisTurn > 0) {
+      const _b = dmg; dmg = dmg + victim.takeExtraDamageThisTurn;
+      logs.push(`受招式傷害 +${victim.takeExtraDamageThisTurn}（${_b}→${dmg}）`);
+    }
   }
   const defender = state.players[defenderIdx];
   // v5.294: 取攻擊方 active 推 attackerCard, 供屬性條件減傷判定 (厚脂肪等)
