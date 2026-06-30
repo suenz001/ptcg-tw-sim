@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
+import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.792 中央 everything-to-hand
 import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -138,36 +138,8 @@ function snipeAllOppPost(amount: number, label: string): AttackPostFn {
 }
 
 // helper: 自身回手牌
-function selfReturnToHandPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    return updatePlayer(
-      addLog(state, `${label}：自身連附加卡放回手牌（寶可夢以外的卡丟棄）`, aIdx),
-      aIdx, p => {
-        if (!p.active) return p;
-        const a = p.active;
-        // Pokémon card 本體回手
-        const newHand: CardInstance[] = [...p.hand, {
-          ...a, damage: 0, energyAttached: [], toolAttached: undefined,
-          status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
-          evolvedFromStack: undefined, evolvedThisTurn: undefined,
-          justPlaced: undefined, playedFromHand: undefined, movedToActiveThisTurn: undefined,
-          damageBonusThisTurn: undefined, damageReduceNextHit: undefined,
-          abilityUsedThisTurn: undefined, cantAttackThisTurn: undefined, cantAttackPending: undefined,
-          cantRetreatNextTurn: undefined, cantRetreatPendingSelf: undefined,
-          damageBonusPending: undefined, takeExtraDamageThisTurn: undefined, takeExtraDamageNextTurn: undefined,
-          blockedAttackNamesNextTurn: undefined,
-        }];
-        // Energy/Tool/Stack 進棄牌區
-        const discarded = [
-          ...a.energyAttached,
-          ...(a.toolAttached ? [a.toolAttached] : []),
-          ...(a.evolvedFromStack ?? []),
-        ];
-        return { ...p, active: null, hand: newHand, discard: [...p.discard, ...discarded] };
-      },
-    );
-  };
-}
+// v5.792：莉莉艾花療憑空消失/隨風球氣球迴旋 卡面「與附加的卡全部放回手牌」=全回手,
+//   原 local selfReturnToHandPost 誤丟棄能量/道具(那是叉字蝠ex『丟棄』版語義)→ 改用 effects.ts 中央版(全回手)。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // A. 擲幣正面 immune (5 張)

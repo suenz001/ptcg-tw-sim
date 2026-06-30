@@ -22,7 +22,8 @@
 
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, getAllAttachedTools,
-} from '../_shared';
+  bareCardsForReturn,
+} from '../_shared'; // v5.792 寶可夢連附加回手中央(含 extraTools+進化棧)
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
@@ -444,13 +445,10 @@ regR('wave16-bench-to-hand', (state, aIdx, iids, _params, pool) => {
   return updatePlayer(state, aIdx, p => {
     const target = p.bench.find(b => b.iid === targetIid);
     if (!target) return p;
-    // 把目標 bench 寶可夢與其附加（能量/道具）回手牌
+    // v5.792：用中央 bareCardsForReturn(主體+能量+全部道具 getAllAttachedTools+進化棧,全裸化)
+    //   原手刻只取 toolAttached 漏 extraTools(多重轉接)、也漏 evolvedFromStack → 進化體/額外道具丟失。
     const restBench = p.bench.filter(b => b.iid !== targetIid);
-    // 主寶可夢卡（重置 damage / energyAttached / toolAttached / status，避免帶污染回手）
-    const mainCard = { iid: target.iid, cardId: target.cardId, damage: 0, energyAttached: [] };
-    const energyCards = target.energyAttached.map(e => ({ iid: e.iid, cardId: e.cardId, damage: 0, energyAttached: [] }));
-    const toolCard = target.toolAttached ? [{ iid: target.toolAttached.iid, cardId: target.toolAttached.cardId, damage: 0, energyAttached: [] }] : [];
-    return { ...p, bench: restBench, hand: [...p.hand, mainCard, ...energyCards, ...toolCard] };
+    return { ...p, bench: restBench, hand: [...p.hand, ...bareCardsForReturn(target)] };
   });
 });
 

@@ -11833,7 +11833,7 @@ regPre('凱路迪歐ex|疾風直撞', movedToActivePre(30, 90, '疾風直撞'));
  * 自身回手牌：active + 所有附加卡全部放回手牌，active=null。
  * 使用時機：post（傷害已結算）。
  */
-function selfReturnToHandPost(label: string): AttackPostFn {
+export function selfReturnToHandPost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;

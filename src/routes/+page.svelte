@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.792</span> 對戰修正：莉莉艾的花療環環「憑空消失」、隨風球「氣球迴旋」（將這隻寶可夢與附加的卡全部放回手牌）現在會把附加的能量・道具也一起放回手牌——先前誤把能量・道具丟到棄牌堆；心蝙蝠「幸福迴旋」回收備戰寶可夢時也會把『所有』道具（含多重轉接的額外道具）一併放回手牌</summary>
+        <ul>
+          <li>卡面「與附加的卡全部放回手牌」＝能量・道具一起回手（同喵喵ex「夾尾巴逃跑」）。原本這兩張誤用了「丟棄附加卡」的流程，已收斂到正確的中央處理。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.791</span> 手機版優化：對戰中往上翻閱戰鬥紀錄時，對手產生新動作不會再把畫面強制拉回最底——會維持在你目前翻閱的位置；捲回最底後恢復自動跟隨最新紀錄</summary>
         <ul>
           <li>手機直式戰鬥畫面的紀錄區只有「貼齊底部」時才自動捲動，與聊天視窗一致。</li>
