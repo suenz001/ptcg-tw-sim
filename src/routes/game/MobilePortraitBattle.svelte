@@ -104,13 +104,20 @@
 
   // v5.194：log 容器 ref + scroll 到底部
   let mpLogEl: HTMLElement | null = $state(null);
+  // v5.791：使用者是否貼齊 log 底部。翻閱舊 log(往上捲)時為 false → 新 log 不再強制把畫面拉到最底，
+  //   維持目前翻閱位置；捲回底部後恢復自動跟隨。鏡射 chat panel 的 pinned 模式。
+  let mpLogPinned = $state(true);
+  function onMpLogScroll() {
+    if (!mpLogEl) return;
+    mpLogPinned = (mpLogEl.scrollHeight - mpLogEl.scrollTop - mpLogEl.clientHeight) < 48;
+  }
   $effect(() => {
-    // 任何 log 變化都自動 scroll 到底部
+    // v5.791：只有「貼齊底部」(mpLogPinned)時才自動捲到底；翻閱中維持原位置。
     const _logLen = game.log?.length;  // 觸發 reactivity
     void _logLen;
-    if (mpLogEl) {
+    if (mpLogEl && mpLogPinned) {
       requestAnimationFrame(() => {
-        if (mpLogEl) mpLogEl.scrollTop = mpLogEl.scrollHeight;
+        if (mpLogEl && mpLogPinned) mpLogEl.scrollTop = mpLogEl.scrollHeight;
       });
     }
   });
@@ -1010,7 +1017,7 @@
   <!-- ─── Log（撐空間） ─── -->
   <!-- v3.02：套 +page.svelte 同款 tokenize + 卡名可點 -->
   <!-- v5.194：log 改為正序顯示（最舊在上、最新在下）+ 顯示 timestamp [mm:ss]，鏡射桌面版 -->
-  <section class="mp-log" bind:this={mpLogEl}>
+  <section class="mp-log" bind:this={mpLogEl} onscroll={onMpLogScroll}>
     {#each (game.log ?? []) as entry, i (i + (entry.message ?? ''))}
       {@const _isPrivate = !!(entry.privateMessage && entry.playerIndex === myIdx)}
       {@const _msgText = _isPrivate ? entry.privateMessage : entry.message}

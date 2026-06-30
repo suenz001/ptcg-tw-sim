@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.791</span> 手機版優化：對戰中往上翻閱戰鬥紀錄時，對手產生新動作不會再把畫面強制拉回最底——會維持在你目前翻閱的位置；捲回最底後恢復自動跟隨最新紀錄</summary>
+        <ul>
+          <li>手機直式戰鬥畫面的紀錄區只有「貼齊底部」時才自動捲動，與聊天視窗一致。</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.790</span> 對戰修正：大電海燕ex「迴旋充能」、遠古巨蜓「陀螺音波」、（拉帝亞斯ex等）「狡兔三窟」、鐵包袱「內部噴射」這些「將這隻寶可夢與備戰寶可夢互換」的招式，退到備戰的寶可夢現在會正確解除身上的減傷／免疫等附加效果——先前這類防禦效果會殘留到備戰、回到戰鬥場時還生效</summary>
         <ul>
           <li>依規則：寶可夢離開戰鬥場即解除特殊狀態與附加效果。原本這條互換路徑漏走中央的「離場清除」，與寶可夢交替／撤退等其他互換不一致。</li>
