@@ -165,6 +165,9 @@ regPost('超級毒藻龍ex|腐蝕液', (state, aIdx, pool) => {
   // 收集所有要丟棄的卡
   const toDiscard: CardInstance[] = [];
   for (const inst of allOpp) {
+    // v5.810：化隱/純樸等免疫招式效果者(含 bench)不被丟道具/特殊能量。
+    const _isBench = !(dp.active && dp.active.iid === inst.iid);
+    if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: _isBench }).blocked) continue;
     if (inst.toolAttached) toDiscard.push(inst.toolAttached);
     for (const e of inst.energyAttached) {
       const ec = pool.get(e.cardId);

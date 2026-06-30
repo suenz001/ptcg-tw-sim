@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.810</span> 對戰修正：用招式丟棄／移除對手能量或道具的效果（超級毒藻龍ex「腐蝕液」、蒼炎刃鬼「火焰咒詛」、爆焰龜獸「灼燒盡」、切割洛托姆「割除衝刺」），現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響，備戰區的寶可夢也適用）——先前會無視免疫直接丟棄化隱寶可夢身上的能量／道具。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.809</span> 對戰修正：用招式將對手寶可夢放回手牌或牌庫的效果（狡猾天狗「陣風返」「驅趕龍捲風」、仙子伊布ex「天仙石」、甜甜螢「慢芬香」、仙子伊布「奧密迴旋」），現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響，備戰區的寶可夢也適用）——先前會無視免疫直接把化隱寶可夢放回。</summary>
       </details>
       <details>

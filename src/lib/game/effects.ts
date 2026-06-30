@@ -9535,6 +9535,11 @@ regPost('爆焰龜獸|灼燒盡', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   if (!def) return state;
+  // v5.810：丟對手能量是招式效果 → 化隱/純樸等免疫者不被丟。
+  {
+    const _g = canApplyEffectToTarget(state, aIdx, def, pool.get(def.cardId), 'attack-effect', pool);
+    if (_g.blocked) return addLog(state, `灼燒盡：${pool.get(def.cardId)?.name ?? '?'}｜${_g.reason}（不丟能量）`, aIdx);
+  }
   const defCard = pool.get(def.cardId);
   if (!defCard || !isExCard(defCard)) {
     return addLog(state, '灼燒盡：對手戰鬥寶可夢非 ex，無效果', aIdx);
@@ -10226,6 +10231,8 @@ regPost('蒼炎刃鬼|火焰咒詛', (state, aIdx, pool) => {
   let removed = 0;
   const removedEnergies: CardInstance[] = [];
   const stripSpecial = (inst: CardInstance): CardInstance => {
+    // v5.810：化隱/純樸等免疫招式效果者(含 bench)不被丟特殊能量。
+    if (oppPokemonImmuneToAttackEffect(state, aIdx, inst.iid, pool).blocked) return inst;
     const specials: CardInstance[] = [];
     const kept: CardInstance[] = [];
     for (const e of inst.energyAttached) {
@@ -11702,6 +11709,11 @@ regPre('切割洛托姆|割除衝刺', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   if (!def) return { state, damage: 30 };
   const dname = pool.get(def.cardId)?.name ?? '?';
+  // v5.810：丟對手道具/能量是招式效果 → 化隱/純樸等免疫者不被丟(傷害正常造成)。
+  {
+    const _g = canApplyEffectToTarget(state, aIdx, def, pool.get(def.cardId), 'attack-effect', pool);
+    if (_g.blocked) return { state: addLog(state, `割除衝刺：${dname}｜${_g.reason}（不丟道具/能量）`, aIdx), damage: 30 };
+  }
   let s = state;
   const newDiscards: CardInstance[] = [];
   // 丟 tool
