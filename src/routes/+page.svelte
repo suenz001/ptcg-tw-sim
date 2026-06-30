@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.805</span> 對戰修正：N的多多冰／凍原熊「絕對零度」、噴嚏熊「渾身鼻水」等讓「對手下回合無法使用招式」的招式，現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響）——先前無視免疫直接套用</summary>
+        <ul>
+          <li>收斂：移除 1 份重複的「禁止對手出招」程式碼，統一走含免疫判定的中央版（延續 v5.802／v5.803 同名重複程式清理）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.804</span> 文字修正：更正 v5.802／v5.803 更新說明中對「太晶」的描述（太晶寶可夢是「在備戰區不受招式傷害」，不是不受效果；前述修正針對的是「化隱」等戰鬥位的招式效果免疫，與太晶無關）。程式行為不變</summary>
       </details>
 

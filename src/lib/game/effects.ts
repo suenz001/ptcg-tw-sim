@@ -3526,9 +3526,11 @@ regPost('斗笠菇|關節衝擊', selfCantAttackNextPost());
 regPost('鐵斑葉ex|稜鏡刀鋒', selfCantAttackNextPost());
 
 // 對手受招後下回合無法攻擊
-function defCantAttackNextPost(): AttackPostFn {
+export function defCantAttackNextPost(label = ''): AttackPostFn {
+  // v5.805：export + 可選 label，收斂 v2590 漏免疫 gate 的本地同名版。
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
+    const _pre = label ? `${label}：` : '';
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
     if (!def.active) return state;
@@ -3540,7 +3542,7 @@ function defCantAttackNextPost(): AttackPostFn {
     }
     def.active = { ...def.active, cantAttackPending: true };
     players[dIdx] = def;
-    return { ...state, players };
+    return addLog({ ...state, players }, `${_pre}對手下回合無法使用招式`, aIdx);
   };
 }
 regPost('雪絨蛾|冰冷寒氣', defCantAttackNextPost());

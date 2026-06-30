@@ -29,6 +29,7 @@ import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { statusPost } from '../../effects'; // v5.797 中央施狀態(gate 化隱/憨憨臉/特殊能量/祭典會場)
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
+import { defCantAttackNextPost } from '../../effects'; // v5.805 中央禁招(免疫gate)
 import { canApplyEffectToTarget } from '../../defense'; // v5.797 cantRetreat 免疫 gate
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -64,16 +65,7 @@ function rechargePost(attackName: string): AttackPostFn {
 }
 
 // helper: 對手戰鬥場下回合無法使用招式（cantAttackThisTurn 由引擎於對手回合開始時設）
-function defCantAttackNextPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantAttackPending: true };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手戰鬥寶可夢下回合無法使用招式`, aIdx);
-  };
-}
+// v5.805：本地 defCantAttackNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 // helper: 對手戰鬥場下回合無法撤退
 // v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
