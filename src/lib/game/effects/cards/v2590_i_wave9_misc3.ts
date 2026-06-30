@@ -28,6 +28,7 @@ import {
 import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { statusPost } from '../../effects'; // v5.797 中央施狀態(gate 化隱/憨憨臉/特殊能量/祭典會場)
+import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import { canApplyEffectToTarget } from '../../defense'; // v5.797 cantRetreat 免疫 gate
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -75,22 +76,7 @@ function defCantAttackNextPost(label: string): AttackPostFn {
 }
 
 // helper: 對手戰鬥場下回合無法撤退
-function defCantRetreatNextPost(label: string): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    // v5.797：免疫招式效果的 active 不受「無法撤退」(C-17 per-target guard，對齊 effects.ts 中央版 v5.333)
-    const _act = state.players[dIdx].active;
-    if (_act) {
-      const _gr = canApplyEffectToTarget(state, aIdx, _act, pool.get(_act.cardId), 'attack-effect', pool);
-      if (_gr.blocked) return addLog(state, `${label}：${_gr.reason}`, aIdx);
-    }
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手下回合無法撤退`, aIdx);
-  };
-}
+// v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 // helper: 從對手手牌隨機棄 N 張
 function discardOppHandRandomPost(n: number, label: string): AttackPostFn {

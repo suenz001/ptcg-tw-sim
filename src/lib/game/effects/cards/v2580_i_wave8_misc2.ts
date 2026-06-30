@@ -21,6 +21,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
+import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -79,16 +80,7 @@ function defNextAtkReducePost(n: number, label: string): AttackPostFn {
 }
 
 // helper: 對手戰鬥場下回合無法撤退
-function defCantRetreatNextPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手戰鬥寶可夢下回合無法撤退`, aIdx);
-  };
-}
+// v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 // helper: 擲幣反面失敗
 function coinTailsFailPre(base: number, label: string): AttackPreFn {

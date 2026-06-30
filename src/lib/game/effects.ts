@@ -5538,19 +5538,21 @@ regPost('鐵螯龍蝦|喀嚓喀嚓', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── 輔助：對手戰鬥寶可夢下回合無法撤退（cantRetreatNextTurn）────────────────
-function defCantRetreatNextPost(): AttackPostFn {
+export function defCantRetreatNextPost(label = ''): AttackPostFn {
+  // v5.802：export + 可選 label，收斂卡檔 5 份本地同名版(其中 4 份漏免疫 gate=bug)。
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
+    const _pre = label ? `${label}：` : '';
     // v5.333：免疫招式效果的 active 不受「無法撤退」（C-17 per-target guard）
     if (state.players[dIdx].active) {
       const _gr = canApplyEffectToTarget(state, aIdx, state.players[dIdx].active!, pool.get(state.players[dIdx].active!.cardId), 'attack-effect', pool);
-      if (_gr.blocked) return addLog(state, `無法撤退效果：${_gr.reason}`, aIdx);
+      if (_gr.blocked) return addLog(state, `${_pre || '無法撤退效果：'}${_gr.reason}`, aIdx);
     }
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
     if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
     players[dIdx] = def;
-    return addLog({ ...state, players }, `對手下次回合無法撤退`, aIdx);
+    return addLog({ ...state, players }, `${_pre}對手下回合無法撤退`, aIdx);
   };
 }
 

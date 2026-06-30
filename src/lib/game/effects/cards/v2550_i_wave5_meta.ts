@@ -16,6 +16,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { countEnergyTypeHostAware } from '../../effects';
+import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -43,16 +44,7 @@ function selfSwapPost(label: string): AttackPostFn {
 }
 
 // 自身下回合無法撤退（對手）— defCantRetreatNextPost equivalent inline
-function defCantRetreatNextPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手戰鬥寶可夢下回合無法撤退`, aIdx);
-  };
-}
+// v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 // 自身棄 N 個能量（從尾端取）
 function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {

@@ -29,6 +29,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits } from '../../effects';
+import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -44,14 +45,7 @@ function isEnergyOfType(ec: any, type: string): boolean {
   return zh[m[1]] === type;
 }
 
-function defCantRetreatNextPost(): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    return updatePlayer(state, (1 - aIdx) as 0|1, p => ({
-      ...p,
-      active: p.active ? { ...p.active, cantRetreatNextTurn: true } : null,
-    }));
-  };
-}
+// v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 function rechargePost(attackName: string): AttackPostFn {
   return (state, aIdx, _pool) => {

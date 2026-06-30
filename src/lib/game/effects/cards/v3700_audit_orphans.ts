@@ -32,6 +32,7 @@ import type { PlayerState } from '../../types';
 import {
   statusPost, coinHeadsMultiplyPre, selfHitPost, flipCoinsWithLog, snipeOneOppBenchPost,
 } from '../../effects';
+import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 本檔 inline helper（複製自 v2740/v2750 既有實作；避免 effects.ts 大檔編輯）
@@ -77,16 +78,7 @@ function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
  * 攻擊後 → 對手戰鬥寶可夢下回合無法撤退（cantRetreatNextTurn 旗標）。
  * 鏡射 effects.ts:4194 的 defCantRetreatNextPost（該函式未 export，這裡 inline）。
  */
-function defCantRetreatNextPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手下回合無法撤退`, aIdx);
-  };
-}
+// v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 /**
  * 攻擊後 → 牌庫搜尋最多 N 張【基礎】寶可夢卡放備戰，並重洗。
