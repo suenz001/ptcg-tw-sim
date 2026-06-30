@@ -13,6 +13,7 @@
 import type { CardInstance, GameState } from '../../types';
 import { startEnergyChain } from './v158_energy_chain';
 import { flipCoinsWithLog } from '../../effects';
+import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
 import {
   addLog,
   clearActiveEffects,
@@ -115,6 +116,11 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
   }
 
   const defName = defCard?.name ?? '?';
+  // v5.808：招式退化是招式效果 → 受化隱/純樸等免疫(canApplyEffectToTarget 'attack-effect')。
+  {
+    const _g = canApplyEffectToTarget(state, aIdx, dp.active, defCard, 'attack-effect', pool);
+    if (_g.blocked) return addLog(state, `退化光線：${defName}｜${_g.reason}`, aIdx);
+  }
   // 從 evolvedFromStack 取最頂（最近一次進化前的狀態）
   const stack = [...dp.active.evolvedFromStack];
   const prev = stack.pop()!;

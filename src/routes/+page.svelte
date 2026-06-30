@@ -318,6 +318,10 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.808</span> 對戰修正：念力土偶「退化光線」、太陽伊布ex「阿賽斯特萊石」、超能豔鴕「奧密之眼」這些用招式讓對手寶可夢退化的效果，現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響）——先前無視免疫直接退化。（「奇異時鐘」是物品卡、且退化自己的寶可夢，不受化隱影響，維持不變）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.807</span> 對戰修正：超能豔鴕「奧密之眼」（讓對手進化寶可夢退化）退化後，現在會正確清除該寶可夢身上的特殊狀態與附加效果（依規則 §II-C-13；HP指示物、能量、道具保留），且維持該寶可夢的場上身份不變——先前漏清效果、且會更動內部編號（與其他退化招式不一致，可能造成顯示／選取異常）</summary>
       </details>
 

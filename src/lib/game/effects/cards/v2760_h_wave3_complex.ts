@@ -510,6 +510,15 @@ regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
   const tIid = iids[0];
+  // v5.808：招式退化是招式效果 → 受化隱/純樸等免疫;選到免疫目標則不退化(bench 傳 isBench)。
+  {
+    const _dp = state.players[dIdx];
+    const _tgt = _dp.active?.iid === tIid ? _dp.active : _dp.bench.find(b => b.iid === tIid);
+    if (_tgt) {
+      const _g = canApplyEffectToTarget(state, aIdx, _tgt, pool.get(_tgt.cardId), 'attack-effect', pool, { isBench: _dp.active?.iid !== tIid });
+      if (_g.blocked) return addLog(state, `奧密之眼：${pool.get(_tgt.cardId)?.name ?? '?'}｜${_g.reason}`, aIdx);
+    }
+  }
   return updatePlayer(state, dIdx, p => {
     const devolveOne = (c: CardInstance | null): CardInstance | null => {
       if (!c || c.iid !== tIid) return c;

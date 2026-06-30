@@ -51,6 +51,7 @@ import {
   flipCoinsWithLog,
   hasBloomOnField,
 } from '../../effects';
+import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
 import { countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -383,15 +384,18 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
   // 找所有「進化寶可夢」（active + bench 中 stage===Stage1/Stage2）
   type Slot = { kind: 'active' } | { kind: 'bench'; idx: number };
   const targets: { iid: string; slot: Slot }[] = [];
+  // v5.808：招式退化受化隱等免疫(attack-effect);免疫的寶可夢不退化(逐 target gate,bench 傳 isBench)。
   if (dPlayer.active) {
     const card = pool.get(dPlayer.active.cardId);
-    if (card?.stage === 'Stage1' || card?.stage === 'Stage2') {
+    const _ga = canApplyEffectToTarget(state, aIdx, dPlayer.active, card, 'attack-effect', pool);
+    if ((card?.stage === 'Stage1' || card?.stage === 'Stage2') && !_ga.blocked) {
       targets.push({ iid: dPlayer.active.iid, slot: { kind: 'active' } });
     }
   }
   dPlayer.bench.forEach((b, idx) => {
     const card = pool.get(b.cardId);
-    if (card?.stage === 'Stage1' || card?.stage === 'Stage2') {
+    const _gb = canApplyEffectToTarget(state, aIdx, b, card, 'attack-effect', pool, { isBench: true });
+    if ((card?.stage === 'Stage1' || card?.stage === 'Stage2') && !_gb.blocked) {
       targets.push({ iid: b.iid, slot: { kind: 'bench', idx } });
     }
   });
