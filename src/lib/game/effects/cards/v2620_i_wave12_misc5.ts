@@ -5,7 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects';
+import { statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
@@ -337,16 +337,13 @@ regPre('凱路迪歐ex|音波刀鋒', (s) => ({ state: s, damage: 120, skipDefEf
 // 19. 擲幣狀態（1 張）— 鴨嘴炎獸|灼燒
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('鴨嘴炎獸|灼燒', (s) => ({ state: s, damage: 90 }));
-regPost('鴨嘴炎獸|灼燒', (state, aIdx, _pool) => {
+regPost('鴨嘴炎獸|灼燒', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 1, '灼燒', aIdx);
   const heads = r.heads === 1;
   let s = addLog(r.state, `灼燒：${heads ? '正面 → 對手戰鬥場灼傷' : '反面，無附加'}`, aIdx);
   if (!heads) return s;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(s, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, secondaryStatus: 'burned' as const } : null,
-  }));
+  // v5.797：收斂至中央 statusPost(gate 化隱/特殊能量/祭典會場),原手刻 secondaryStatus 繞過免疫。
+  return statusPost('burned')(s, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

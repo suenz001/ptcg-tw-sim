@@ -27,6 +27,8 @@ import {
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
+import { statusPost } from '../../effects'; // v5.797 中央施狀態(gate 化隱/憨憨臉/特殊能量/祭典會場)
+import { canApplyEffectToTarget } from '../../defense'; // v5.797 cantRetreat 免疫 gate
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 對手戰鬥場是 ex/2階等條件 +N
@@ -74,8 +76,14 @@ function defCantAttackNextPost(label: string): AttackPostFn {
 
 // helper: 對手戰鬥場下回合無法撤退
 function defCantRetreatNextPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
+    // v5.797：免疫招式效果的 active 不受「無法撤退」(C-17 per-target guard，對齊 effects.ts 中央版 v5.333)
+    const _act = state.players[dIdx].active;
+    if (_act) {
+      const _gr = canApplyEffectToTarget(state, aIdx, _act, pool.get(_act.cardId), 'attack-effect', pool);
+      if (_gr.blocked) return addLog(state, `${label}：${_gr.reason}`, aIdx);
+    }
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
     if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
@@ -244,20 +252,11 @@ regPost('阿響的樹才怪|圍困', defCantRetreatNextPost('圍困'));
 
 // 天蠍王|毒陣 — 中毒 + 對手下回合無法撤退
 regPre('天蠍王|毒陣', (s) => ({ state: s, damage: 50 }));
-regPost('天蠍王|毒陣', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  let s = updatePlayer(
-    addLog(state, '毒陣：對手戰鬥寶可夢【中毒】+ 下回合無法撤退', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        secondaryStatus: 'poisoned' as const,
-        cantRetreatNextTurn: true,
-      } : null,
-    }),
-  );
-  return s;
+regPost('天蠍王|毒陣', (state, aIdx, pool) => {
+  // v5.797：收斂至中央 statusPost(gate 化隱/憨憨臉/特殊能量/祭典會場)+ defCantRetreatNextPost,
+  //   原手刻 secondaryStatus + cantRetreatNextTurn 繞過免疫(對手化隱/泡沫水/祭典會場時仍中毒)。
+  const s1 = statusPost('poisoned')(state, aIdx, pool);
+  return defCantRetreatNextPost('毒陣')(s1, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

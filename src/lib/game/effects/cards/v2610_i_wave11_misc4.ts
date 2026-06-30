@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.795 host-aware 屬性計數（古舊/稜鏡等視為提供該屬性）
+import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
 import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -525,20 +525,10 @@ regPost('清洗洛托姆|搓洗', (state, aIdx, _pool) => {
 // 簡化：標準中毒（每回合 1 個指示物 = 10 點），但我們用 poisonDamagePerCheckup 旗標
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的尼多王ex|惡劣角擊', (s) => ({ state: s, damage: 100 }));
-regPost('火箭隊的尼多王ex|惡劣角擊', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(
-    addLog(state, '惡劣角擊：對手戰鬥場【中毒】（每回合 checkup 放 8 個指示物 = 80 點）', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        secondaryStatus: 'poisoned' as const,
-        poisonDamagePerCheckup: 80,
-      } : null,
-    }),
-  );
-});
+regPost('火箭隊的尼多王ex|惡劣角擊', (state, aIdx, pool) =>
+  // v5.797：收斂至中央 applyStatusToOppActive(gate 化隱/特殊能量/祭典會場)+ 特殊中毒每回合 80 點,
+  //   原手刻 secondaryStatus 繞過免疫。
+  applyStatusToOppActive(state, aIdx, 'poisoned', pool, { kind: 'attack-effect', label: '惡劣角擊', poisonDamagePerCheckup: 80 }));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Q. 不計對手附加效果 (1 張) — 赤面龍|撕裂 40, skipDefEffects
