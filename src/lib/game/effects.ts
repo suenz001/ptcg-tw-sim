@@ -591,6 +591,7 @@ import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
 import { tryPromptPromoteActive } from './effects/_shared';
 import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央
+import { buildEvolvedInstance } from './effects/_shared'; // v5.796 中央進化體建構(保留 base iid)
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
 // v5.237：re-export 給 engine.ts 用於 attack-time snapshot
@@ -1711,31 +1712,13 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
 
     const evolve = (pk: CardInstance): CardInstance => {
       if (pk.iid !== targetIid) return pk;
-      const baseBare: CardInstance = {
-        ...pk,
-        energyAttached: [],
-        toolAttached: undefined, extraTools: [],
-        evolvedFromStack: undefined,
-      };
-      // v5.738：進化(含神奇糖果)清除特殊狀態(PDF §I-A-05) — 原 `status: pk.status` 把基底
-      //   混亂/睡眠/麻痺/中毒/灼傷一併帶到進化體(玩家回報「神奇糖果進化無法解除混亂」)。
-      //   清全部狀態(status/secondary/tertiary 從 stage2Inst 繼承 default=無),唯暈眩山谷在場且
-      //   基底為混亂時保留混亂(同正常 EVOLVE 的 preserveConfusion 例外)。
-      const dazeStadium = st.activeStadium ? pool.get(st.activeStadium.cardId)?.name : null;
-      const preserveConfusion = dazeStadium === '暈眩山谷' && pk.status === 'confused';
-      return {
-        ...stage2Inst,
-        damage: pk.damage,
-        energyAttached: pk.energyAttached,
-        toolAttached: pk.toolAttached,
-        extraTools: pk.extraTools,
-        ...(preserveConfusion ? { status: 'confused' as const } : {}),
-        evolvedFromIid: pk.iid,
-        // 神奇糖果跳過 Stage 1，進化鏈只含 Basic
-        evolvedFromStack: [...(pk.evolvedFromStack ?? []), baseBare],
-        evolvedThisTurn: true,
-        justPlaced: false,
-      };
+      // v5.796：收斂至中央 buildEvolvedInstance（同 engine EVOLVE / 11 站進化建構）。
+      //   原手刻 spread ...stage2Inst 漏設 iid → 進化體沿用【手牌卡 iid】而非保留場上 base iid，
+      //   與 engine EVOLVE「iid: basePoke.iid」不一致 → 前端用原 slot iid 對應斷裂，神奇糖果進化後
+      //   該寶可夢的特性／選目標點不出（玩家回報黑夜魔靈「咒詛炸彈」無法使用）。
+      //   buildEvolvedInstance 一次處理：保留 base iid + evolvedStatusAfter（含暈眩山谷保留混亂）
+      //   + evolvedFromStack（神奇糖果跳 Stage1，鏈只含 Basic）+ evolvedThisTurn/justPlaced 旗標。
+      return buildEvolvedInstance(pk, stage2Inst, st, pool);
     };
 
     return {
