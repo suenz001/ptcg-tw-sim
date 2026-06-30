@@ -13,6 +13,8 @@ import {
 import { getKODefenderEnergyInDiscard, getKODefenderSnapshot, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
+
 import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import type { GameState, CardInstance } from '../../types';
@@ -209,6 +211,7 @@ regR('h-wave3-heal-100', (state, aIdx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('振翼髮|蠱惑挪移', (s) => ({ state: s, damage: 0 }));
 regPost('振翼髮|蠱惑挪移', (state, aIdx, pool) => {
+  if (hasOakEye(state, pool)) return addLog(state, '蠱惑挪移：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   const ancientWithDmg = state.players[aIdx].bench.filter(b => {
     const card = pool.get(b.cardId);
     return card?.tags?.includes('古代') && (b.damage ?? 0) > 0;
@@ -244,7 +247,8 @@ regR('h-wave3-move-bench-dmg-to-opp-active', (state, aIdx, iids, _params, _pool)
 // 10. 勾魂眼|傷害集結 — 對手備戰任意指示物→對手戰鬥
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('勾魂眼|傷害集結', (s) => ({ state: s, damage: 0 }));
-regPost('勾魂眼|傷害集結', (state, aIdx, _pool) => {
+regPost('勾魂眼|傷害集結', (state, aIdx, pool) => {
+  if (hasOakEye(state, pool)) return addLog(state, '傷害集結：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   const dIdx = (1 - aIdx) as 0 | 1;
   let totalDmg = 0;
   for (const b of state.players[dIdx].bench) totalDmg += b.damage ?? 0;

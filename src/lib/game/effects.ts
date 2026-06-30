@@ -9,6 +9,8 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
+import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
+
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
 import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
 
@@ -2741,6 +2743,7 @@ regPost('願增猿|精神歪曲', statusPost('confused'));
 //   其餘歸 0。「任意方式」嚴格上是任意分配，這裡用「全集中」作 best-effort 實作。
 //   對戰圓形 gate：若 target 是對手備戰，被擋 → addLog 提示玩家換目標。
 regPost('胡地|奇異駭入', (state, aIdx, pool) => {
+  if (hasOakEye(state, pool)) return addLog(state, '奇異駭入：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   // Part 1：將對手戰鬥寶可夢【混亂】
   let s = statusPost('confused')(state, aIdx, pool);
   // Part 2（v5.442 重做為 2-picker）：先「抽走任意數量對手全場指示物」，再「任意分配回對手全場」。

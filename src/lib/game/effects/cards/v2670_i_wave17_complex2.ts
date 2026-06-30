@@ -22,6 +22,8 @@
  */
 
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
+
 // v5.113 對戰圓形 gate import
 import { canApplyEffectToTarget } from '../../defense';
 // v3.10 import 修 bug 用的兩個 helper（原本 wave17 內自己 inline 寫成「加手」）
@@ -163,7 +165,8 @@ regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool, action) => 
 // 5. 死神棺｜伸長的傷害棺材 — 選自方備戰 1 隻指示物全部移到對手 1 隻
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('死神棺|伸長的傷害棺材', (s) => ({ state: s, damage: 0 }));
-regPost('死神棺|伸長的傷害棺材', (state, aIdx, _pool) => {
+regPost('死神棺|伸長的傷害棺材', (state, aIdx, pool) => {
+  if (hasOakEye(state, pool)) return addLog(state, '伸長的傷害棺材：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   const p = state.players[aIdx];
   const candidates = p.bench.filter(b => (b.damage ?? 0) > 0);
   if (candidates.length === 0) return addLog(state, '伸長的傷害棺材：自方備戰無傷害可移轉', aIdx);
@@ -228,6 +231,7 @@ regR('wave17-coffin-step2', (state, aIdx, iids, params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的果然翁|火箭鏡面', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的果然翁|火箭鏡面', (state, aIdx, pool) => {
+  if (hasOakEye(state, pool)) return addLog(state, '火箭鏡面：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   const p = state.players[aIdx];
   const rocketBench = p.bench.filter(b => {
     const card = pool.get(b.cardId);

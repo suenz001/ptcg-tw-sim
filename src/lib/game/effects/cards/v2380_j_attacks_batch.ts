@@ -35,6 +35,8 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
+
 import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';
 import {
@@ -250,7 +252,8 @@ regPost('掘地兔|地震', (state, aIdx, pool) => {
 
 // ── 11. 九尾｜九尾狐搬動 — 選備戰，搬指示物到對手戰鬥場 ───────────────────────
 regPre('九尾|九尾狐搬動', (s, _a, _p) => ({ state: s, damage: 0 }));
-regPost('九尾|九尾狐搬動', (state, aIdx, _pool) => {
+regPost('九尾|九尾狐搬動', (state, aIdx, pool) => {
+  if (hasOakEye(state, pool)) return addLog(state, '九尾狐搬動：被探探鼠的監視之眼擋下，傷害指示物無法改放', aIdx); // v5.789
   const player = state.players[aIdx];
   const damaged = player.bench.filter(b => b.damage > 0);
   if (damaged.length === 0) {
