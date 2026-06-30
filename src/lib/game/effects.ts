@@ -3569,9 +3569,11 @@ regPost('飄飄球|膨脹', selfDmgReducePost(10));
 // 對手受招後下回合使用招式傷害 -N
 // v3.22：改寫 nextOwnAttackPenalty（attacker-side debuff，由對手變 attacker 時消耗）
 //   原本寫 damageReduceNextHit 跟「自己下次被打 -N」共用 field 導致誤消耗 bug。
-function defNextAtkReducePost(n: number): AttackPostFn {
+export function defNextAtkReducePost(n: number, label = ''): AttackPostFn {
+  // v5.803：export + 可選 label，收斂 v2580/v2620 兩份漏免疫 gate 的本地同名版。
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
+    const _pre = label ? `${label}：` : '';
     const players = [...state.players] as [PlayerState, PlayerState];
     const def = { ...players[dIdx] };
     if (!def.active) return state;
@@ -3583,7 +3585,7 @@ function defNextAtkReducePost(n: number): AttackPostFn {
     }
     def.active = { ...def.active, nextOwnAttackPenalty: n };
     players[dIdx] = def;
-    return addLog({ ...state, players }, `對手下次使用招式傷害 -${n}`, aIdx);
+    return addLog({ ...state, players }, `${_pre}對手下次使用招式傷害 -${n}`, aIdx);
   };
 }
 regPost('黑魯加|大聲咆哮', defNextAtkReducePost(100));

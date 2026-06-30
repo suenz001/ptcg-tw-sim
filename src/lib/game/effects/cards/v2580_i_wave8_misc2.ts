@@ -21,6 +21,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
+import { defNextAtkReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate)
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import {
   regPre, regPost, regR,
@@ -68,16 +69,7 @@ function fieldEnergyCountConditionPre(
 
 // helper: 對手戰鬥場下回合受招式 -N
 // v3.22：改用 nextOwnAttackPenalty（attacker-side debuff），與 defender 端 damageReduceNextHit 分離。
-function defNextAtkReducePost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, nextOwnAttackPenalty: n };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手下次招式傷害 -${n}`, aIdx);
-  };
-}
+// v5.803：本地 defNextAtkReducePost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 // helper: 對手戰鬥場下回合無法撤退
 // v5.802：本地 defCantRetreatNextPost 移除，改用 effects.ts 中央版(含免疫 gate)。

@@ -318,6 +318,13 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.803</span> 對戰修正：捲捲耳「撒嬌」、布撥「叫聲」、象徵鳥「反射壁」、赫普的稚山雀「恐怖視線」等讓「對手下次招式傷害-N」的招式，現在會正確尊重對手免疫（化隱、太晶等不受招式效果）——先前無視免疫直接套用</summary>
+        <ul>
+          <li>收斂：移除 2 份重複的「減弱對手攻擊」程式碼，統一走含免疫判定的中央版（延續 v5.802 的同名重複程式清理）</li>
+        </ul>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.802</span> 對戰修正：流氓鱷ex「窮追不捨」、赫普的朽木妖「窮追不捨」、烈箭鷹「緊抓」等讓「對手下回合無法撤退」的招式，現在會正確尊重對手的免疫（化隱、太晶等不受招式效果）——先前這幾張會無視免疫直接套用</summary>
         <ul>
           <li>收斂：移除 5 份重複的「禁撤退」程式碼，全部統一走同一份（含免疫判定），避免日後再漏修</li>

@@ -6,6 +6,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
+import { defNextAtkReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate)
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
@@ -127,16 +128,7 @@ function oppActiveCounterCountPre(base: number, perCounter: number, label: strin
 }
 
 // v3.22：改用 nextOwnAttackPenalty（attacker-side debuff）。
-function defNextAtkReducePost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, nextOwnAttackPenalty: n };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手下次招式傷害 -${n}`, aIdx);
-  };
-}
+// v5.803：本地 defNextAtkReducePost 移除，改用 effects.ts 中央版(含免疫 gate)。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 擲幣反面失敗（3 張）
