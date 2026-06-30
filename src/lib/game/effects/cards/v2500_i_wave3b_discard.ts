@@ -18,6 +18,7 @@ import {
   addLog, updatePlayer,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
+import { discardOppActiveEnergyPost } from '../../effects'; // v5.801 中央能量丟棄(picker+免疫gate+host-aware)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 棄自身 N 個能量（從尾端取）
@@ -59,39 +60,7 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 棄對手戰鬥場 1 個能量（filter='any' / 'special'）
 // ══════════════════════════════════════════════════════════════════════════════
-function discardOppActiveEnergyPost(
-  label: string,
-  filter: 'any' | 'special' = 'any',
-): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const defender = state.players[dIdx];
-    if (!defender.active) return state;
-    const defName = pool.get(defender.active.cardId)?.name ?? '?';
-    const energies = defender.active.energyAttached;
-    if (energies.length === 0) {
-      return addLog(state, `${label}：${defName} 沒有可丟的能量`, aIdx);
-    }
-    let targetIdx = -1;
-    for (let i = energies.length - 1; i >= 0; i--) {
-      const card = pool.get(energies[i].cardId);
-      if (filter === 'special') {
-        if (card?.supertype === 'Energy' && card.subtype === 'Special') { targetIdx = i; break; }
-      } else { targetIdx = i; break; }
-    }
-    if (targetIdx < 0) {
-      return addLog(state, `${label}：${defName} 無${filter === 'special' ? '特殊' : ''}能量可丟`, aIdx);
-    }
-    const discarded = energies[targetIdx];
-    const newEnergies = [...energies.slice(0, targetIdx), ...energies.slice(targetIdx + 1)];
-    const energyName = pool.get(discarded.cardId)?.name ?? '能量';
-    const s = addLog(state, `${label}：${defName} 丟棄 1 張${filter === 'special' ? '特殊' : ''}能量（${energyName}）`, aIdx);
-    return updatePlayer(s, dIdx, p => {
-      if (!p.active) return p;
-      return { ...p, active: { ...p.active, energyAttached: newEnergies }, discard: [...p.discard, discarded] };
-    });
-  };
-}
+// v5.801：本地 discardOppActiveEnergyPost 死碼(舊 auto-pick+無免疫 gate)移除，改 import effects.ts 中央版(picker+免疫+host-aware)。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 棄場上競技場

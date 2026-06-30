@@ -5,7 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
+import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
@@ -513,33 +513,9 @@ regPost('N的迷你冰|呼朋引伴', (state, aIdx, pool) => {
 // 24. 棄對手戰鬥場 1 張【火】能量（1 張）— 鴨寶寶|消火
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('鴨寶寶|消火', (s) => ({ state: s, damage: 0 }));
-regPost('鴨寶寶|消火', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def) return state;
-  // v4.55：改用 countOneEnergy fallback 邏輯 (匹配 pokemonType 或 卡名【火】) — 涵蓋基本能量
-  let fireIdx = -1;
-  for (let i = def.energyAttached.length - 1; i >= 0; i--) {
-    const c = pool.get(def.energyAttached[i].cardId);
-    if (c && (c.pokemonType === 'Fire' || /【火】/.test(c.name))) {
-      fireIdx = i;
-      break;
-    }
-  }
-  if (fireIdx < 0) return addLog(state, '消火：對手戰鬥場無火能量可棄', aIdx);
-  return updatePlayer(
-    addLog(state, '消火：棄對手戰鬥場 1 張【火】能量', aIdx),
-    dIdx, p => {
-      if (!p.active) return p;
-      const newEnergies = [...p.active.energyAttached.slice(0, fireIdx), ...p.active.energyAttached.slice(fireIdx + 1)];
-      return {
-        ...p,
-        active: { ...p.active, energyAttached: newEnergies },
-        discard: [...p.discard, p.active.energyAttached[fireIdx]],
-      };
-    },
-  );
-});
+// v5.801：原手刻(自動取末張+靜態【火】判定漏古舊+無免疫 gate)→ 收斂中央 discardOppActiveEnergyPost
+//   ('Fire' filter = host-aware energyProvidesType，picker 讓攻擊方選，含化隱/太晶免疫 gate)。
+regPost('鴨寶寶|消火', discardOppActiveEnergyPost('消火', 'Fire'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 輔助：unused import 防護

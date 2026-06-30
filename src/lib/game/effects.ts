@@ -9,6 +9,7 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
+import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
@@ -8688,9 +8689,9 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
 //   噬沙堡爺ex|重晶石之獄 — 對手所有備戰設置 damage 直到剩 HP=100
 // ══════════════════════════════════════════════════════════════════════════════
 
-function discardOppActiveEnergyPost(
+export function discardOppActiveEnergyPost(
   label: string,
-  filter: 'any' | 'special' = 'any',
+  filter: 'any' | 'special' | EnergyType = 'any',
 ): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -8706,19 +8707,23 @@ function discardOppActiveEnergyPost(
     // v5.800：卡面「選擇 1 個…能量丟棄」= 攻擊方選哪張。原自動取末張違反「選能量須 picker」鐵律
     //   (v5.663，玩家報自動選錯)；對手混合能量(基本+古舊/特殊)時無法挑。1 張符合→直接丟(無選擇空間，
     //   同流氓熊貓單招直接鎖)；2+ 張→開 active-energy-discard picker 讓攻擊方選。
+    // v5.801：filter 可為屬性(EnergyType) — host-aware energyProvidesType(古舊/稜鏡等視為該屬性)。
+    const _isTyped = filter !== 'any' && filter !== 'special';
+    const _fdesc = filter === 'special' ? '特殊' : (_isTyped ? `【${ENERGY_LABEL[filter as EnergyType]}】` : '');
     const matchIids = energies
       .filter(e => {
         if (filter === 'special') { const cc = pool.get(e.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Special'; }
+        if (_isTyped) return energyProvidesType(defender.active!, e, filter as EnergyType, pool);
         return true;
       })
       .map(e => e.iid);
     if (matchIids.length === 0) {
-      return addLog(state, `${label}：${defName} 無${filter === 'special' ? '特殊' : ''}能量可丟`, aIdx);
+      return addLog(state, `${label}：${defName} 無${_fdesc}能量可丟`, aIdx);
     }
     if (matchIids.length === 1) {
       const discarded = energies.find(e => e.iid === matchIids[0])!;
       const energyName = pool.get(discarded.cardId)?.name ?? '能量';
-      const s = addLog(state, `${label}：${defName} 丟棄 1 張${filter === 'special' ? '特殊' : ''}能量（${energyName}）`, aIdx);
+      const s = addLog(state, `${label}：${defName} 丟棄 1 張${_fdesc}能量（${energyName}）`, aIdx);
       return updatePlayer(s, dIdx, p => p.active ? ({
         ...p,
         active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== matchIids[0]) },
@@ -8726,7 +8731,7 @@ function discardOppActiveEnergyPost(
       }) : p);
     }
     return withPending(
-      addLog(state, `${label}：選擇要丟棄對手戰鬥位的 1 張${filter === 'special' ? '特殊' : ''}能量`, aIdx),
+      addLog(state, `${label}：選擇要丟棄對手戰鬥位的 1 張${_fdesc}能量`, aIdx),
       {
         type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
         minCount: 1, maxCount: 1,
