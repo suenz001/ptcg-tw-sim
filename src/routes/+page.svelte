@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.815</span> 對戰修正：「鐵之防禦強化」（下個對手回合自己所有【鋼】寶可夢受招式 -30）與「阿蜜的目光」（下個對手回合自己所有寶可夢受招式 -N）的減傷，先前只對戰鬥位生效，備戰區寶可夢被攻擊（如狙擊）時沒有套用；現已修正，備戰區寶可夢也正確獲得減傷。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.812</span> 對戰修正：桃歹郎ex「支配鎖鏈」這個卡面寫「在這個回合，若已經使出了其他的『支配鎖鏈』則無法使用」的特性，現在同名多張在同一回合只能使用 1 次——先前漏設限制，導致場上有多張時可在同回合各觸發 1 次。</summary>
       </details>
       <details>

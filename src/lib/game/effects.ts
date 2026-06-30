@@ -848,6 +848,22 @@ function _applyBenchAbilityReduce(
 ): { amount: number; logs: string[] } {
   let dmg = baseDamage;
   const logs: string[] = [];
+  // v5.815：玩家層級「下個對手回合」型減傷也要套到備戰寶可夢(active 由 applyDefenderReductionsBlockA 處理)。
+  //   鐵之防禦強化(metalShieldThisTurn：自己所有【鋼】寶可夢 -30×張數)、
+  //   阿蜜的目光(flatDamageReduceThisTurn：自己所有寶可夢含新上場 -N，無屬性限制)。
+  //   先前 bench 路徑漏這兩個玩家層級旗標 → 備戰寶可夢被打沒減傷(玩家回報)。
+  {
+    const _defP = state.players[defenderIdx];
+    if (dmg > 0 && _defP.metalShieldThisTurn && victimCard.pokemonType === 'Metal') {
+      const _amt = 30 * (_defP.metalShieldThisTurn ?? 0);
+      const _b = dmg; dmg = Math.max(0, dmg - _amt);
+      if (_b > dmg) logs.push(`鐵之防禦強化 -${_b - dmg}`);
+    }
+    if (dmg > 0 && _defP.flatDamageReduceThisTurn && _defP.flatDamageReduceThisTurn > 0) {
+      const _b = dmg; dmg = Math.max(0, dmg - _defP.flatDamageReduceThisTurn);
+      if (_b > dmg) logs.push(`阿蜜的目光 -${_b - dmg}`);
+    }
+  }
   const defender = state.players[defenderIdx];
   // v5.294: 取攻擊方 active 推 attackerCard, 供屬性條件減傷判定 (厚脂肪等)
   const attackerActive = state.players[attackerIdx].active;
