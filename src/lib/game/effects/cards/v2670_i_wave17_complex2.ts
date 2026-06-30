@@ -34,6 +34,7 @@ import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中�
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive } from '../../effects';
+import { oppPokemonImmuneToAttackEffect } from '../../effects'; // v5.809 bounce/招式效果免疫述詞
 // v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
 //   重複 import 造成 build fail，本次移除我新加的這行（L26 既有 import 就夠用）。
 
@@ -694,9 +695,12 @@ regPost('狡猾天狗|陣風返', (state, aIdx, _pool) => {
     effectKey: 'wave17-bounce-opp',
   });
 });
-regR('wave17-bounce-opp', (state, aIdx, iids, _params, _pool) => {
+regR('wave17-bounce-opp', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const targetIid = iids[0];
+  // v5.809：bounce 是招式效果 → 化隱/純樸等免疫者不被放回(同 force-switch v5.388)。
+  const _imm = oppPokemonImmuneToAttackEffect(state, aIdx, targetIid, pool);
+  if (_imm.blocked) return addLog(state, `陣風返：${_imm.name}｜${_imm.reason}（不被放回牌庫）`, aIdx);
   const dIdx = (1 - aIdx) as 0 | 1;
   return updatePlayer(state, dIdx, p => {
     let target: CardInstance | null = null;

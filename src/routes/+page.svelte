@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.809</span> 對戰修正：用招式將對手寶可夢放回手牌或牌庫的效果（狡猾天狗「陣風返」「驅趕龍捲風」、仙子伊布ex「天仙石」、甜甜螢「慢芬香」、仙子伊布「奧密迴旋」），現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響，備戰區的寶可夢也適用）——先前會無視免疫直接把化隱寶可夢放回。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.808</span> 對戰修正：念力土偶「退化光線」、太陽伊布ex「阿賽斯特萊石」、超能豔鴕「奧密之眼」這些用招式讓對手寶可夢退化的效果，現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響）——先前無視免疫直接退化。（「奇異時鐘」是物品卡、且退化自己的寶可夢，不受化隱影響，維持不變）</summary>
       </details>
 

@@ -8258,6 +8258,18 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
 
 // ── swap-opp + dmg (3 張) ────────────────────────────────────────────────────
 // 共用 pre：不造成戰鬥寶可夢傷害（傷害在 resolver 中施加）
+export function oppPokemonImmuneToAttackEffect(
+  state: GameState, aIdx: 0 | 1, iid: string, pool: Map<string, Card>,
+): { blocked: boolean; reason: string; name: string } {
+  // v5.809：對手寶可夢被招式效果(bounce/退化/換位…)鎖定前的免疫述詞 — 化隱/純樸等不受招式效果(含 bench)。
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const dp = state.players[dIdx];
+  const inst = dp.active?.iid === iid ? dp.active : (dp.bench.find(b => b.iid === iid) ?? null);
+  if (!inst) return { blocked: false, reason: '', name: '?' };
+  const g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: dp.active?.iid !== iid });
+  return { blocked: g.blocked, reason: g.reason ?? '', name: pool.get(inst.cardId)?.name ?? '?' };
+}
+
 export function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -12180,7 +12192,8 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
   }
   const set = new Set(iids);
   const opp = state.players[oppIdx];
-  const bouncing = opp.bench.filter(b => set.has(b.iid));
+  // v5.809：bounce 是招式效果 → 化隱等免疫者不被放回(逐 target 過濾)。
+  const bouncing = opp.bench.filter(b => set.has(b.iid) && !oppPokemonImmuneToAttackEffect(state, aIdx, b.iid, pool).blocked);
   // 把每隻 bench pokemon + 它的 energyAttached + toolAttached + evolvedFromStack 全部清回 deck
   // 寶可夢本體要清掉所有臨時狀態（damage / status / 各種旗標）— 比照「自己備戰回牌庫」 pattern
   const returning: CardInstance[] = [];
@@ -12217,9 +12230,11 @@ regR('sylveon-skystone-bounce', (state, aIdx, iids, _params, pool) => {
   }
   const names = bouncing.map(b => pool.get(b.cardId)?.name ?? '?').join('、');
   let s = addLog(state, `天仙石：${bouncing.length} 隻備戰（${names}）連附加全部放回對手牌庫並重洗`, aIdx);
+  // v5.809：只移除實際 bounce(非免疫)的;化隱等免疫者留在備戰(不可用 set 否則免疫者被移除卻沒回牌庫=消失)。
+  const _bounceSet = new Set(bouncing.map(b => b.iid));
   return updatePlayer(s, oppIdx, p => ({
     ...p,
-    bench: p.bench.filter(b => !set.has(b.iid)),
+    bench: p.bench.filter(b => !_bounceSet.has(b.iid)),
     deck: shuffle([...p.deck, ...returning]),
   }));
 });

@@ -29,6 +29,7 @@ import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
   snipeOneOppBenchPost, koTargetByAttackEffect,
 } from '../../effects';
+import { oppPokemonImmuneToAttackEffect } from '../../effects'; // v5.809 bounce/招式效果免疫述詞
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -1749,9 +1750,12 @@ regPost('仙子伊布|奧密迴旋', (state, aIdx, _pool) => {
     effectKey: 'h-wave2-bounce-opp-bench',
   });
 });
-regR('h-wave2-bounce-opp-bench', (state, aIdx, iids, _params, _pool) => {
+regR('h-wave2-bounce-opp-bench', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const targetIid = iids[0];
+  // v5.809：bounce 是招式效果 → 化隱等免疫者不被放回。
+  const _imm = oppPokemonImmuneToAttackEffect(state, aIdx, targetIid, pool);
+  if (_imm.blocked) return addLog(state, `${_imm.name}｜${_imm.reason}（不被放回牌庫）`, aIdx);
   const dIdx = (1 - aIdx) as 0 | 1;
   return updatePlayer(state, dIdx, p => {
     const target = p.bench.find(b => b.iid === targetIid);
@@ -2456,14 +2460,15 @@ regPost('狡猾天狗|驅趕龍捲風', (state, aIdx, _pool) => {
     effectKey: 'h-wave2-bounce-non-selected',
   });
 });
-regR('h-wave2-bounce-non-selected', (state, aIdx, selectedIids, _params, _pool) => {
+regR('h-wave2-bounce-non-selected', (state, aIdx, selectedIids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const set = new Set(selectedIids);
   return updatePlayer(addLog(state, '驅趕龍捲風：未選的備戰寶可夢回對手牌庫並重洗', aIdx), dIdx, p => {
     const keep: CardInstance[] = [];
     const bounceCards: CardInstance[] = [];
     for (const b of p.bench) {
-      if (set.has(b.iid)) {
+      // v5.809：化隱等免疫者(招式效果)不被放回 → 強制留下。
+      if (set.has(b.iid) || oppPokemonImmuneToAttackEffect(state, aIdx, b.iid, pool).blocked) {
         keep.push(b);
       } else {
         bounceCards.push(...bareCardsForReturn(b)); // v5.781 含 extraTools+裸化
