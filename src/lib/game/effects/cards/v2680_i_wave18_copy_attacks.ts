@@ -21,7 +21,7 @@ import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, GameAction, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, lockOppChosenAttackPost } from '../../effects'; // v5.793 無理取鬧玩家選招
 
 const parseDmg = (s: string): number => {
   const m = (s ?? '').match(/^(\d+)/);
@@ -115,23 +115,8 @@ regPost('阿響的樹才怪|試著模仿', copyAttackPost);
 //   簡化：自動挑印刷傷害最高
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('流氓熊貓|無理取鬧', (s) => ({ state: s, damage: 30 }));
-regPost('流氓熊貓|無理取鬧', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const da = state.players[dIdx].active;
-  if (!da) return state;
-  const best = pickHighestAttack([da], pool, '');
-  if (!best) return addLog(state, '無理取鬧：對手戰鬥場無可禁用招式', aIdx);
-  return updatePlayer(
-    addLog(state, `無理取鬧：下回合 defender 無法使用「${best.attackName}」（自動挑最高傷害）`, aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        blockedAttackNamesNextTurn: [...(p.active.blockedAttackNamesNextTurn ?? []), best.attackName],
-      } : null,
-    }),
-  );
-});
+// v5.793：原『自動挑最高傷害』違卡面「選擇」→ 改用中央 lockOppChosenAttackPost(玩家選,同火箭隊黑暗鴉)。
+regPost('流氓熊貓|無理取鬧', lockOppChosenAttackPost('無理取鬧'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 九尾｜靈怪變化 — 棄牌庫頂 1, 若是支援者則執行該支援者效果

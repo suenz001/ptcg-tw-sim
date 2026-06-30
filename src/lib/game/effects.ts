@@ -15818,42 +15818,34 @@ regPost('火箭隊的黑暗鴉|誑騙', deckSearchToHandPost(1, 'Supporter', '�
 //   若對手只有 1 招直接套用 fast path，無需 modal。
 //   若對手換戰鬥位，鎖招會自動失效（卡面就是這樣設計）。
 regPre('火箭隊的黑暗鴉|無理取鬧', (state, _aIdx, _pool) => ({ state, damage: 30 }));
-regPost('火箭隊的黑暗鴉|無理取鬧', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx];
-  if (!def.active) return state;
-  const defCard = pool.get(def.active.cardId);
-  const attacks = defCard?.attacks ?? [];
-  if (attacks.length === 0) return state;
-  // 只有 1 招：直接鎖（無 modal）
-  if (attacks.length === 1) {
-    const lockedName = attacks[0].name;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const newDef = { ...def };
-    const cur = newDef.active!.blockedAttackNamesNextTurn ?? [];
-    newDef.active = {
-      ...newDef.active!,
-      blockedAttackNamesNextTurn: [...cur, lockedName],
-    };
-    players[dIdx] = newDef;
-    return addLog({ ...state, players },
-      `無理取鬧：${defCard?.name ?? '?'} 下回合無法使用「${lockedName}」`, aIdx);
-  }
-  // 多招：開 modal-choice 讓玩家選
-  const s = addLog(state, `無理取鬧：選擇 1 個對手 ${defCard?.name ?? '?'} 持有的招式鎖住`, aIdx);
-  return withPending(s, {
-    type: 'modal-choice',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'unreasonable-lock-attack',
-    params: {
-      label: '無理取鬧',
-      options: attacks.map((a, i) => ({ id: `${i}`, text: `${i + 1}. ${a.name}` })),
-      defenderName: defCard?.name ?? '?',
-      attackNames: attacks.map(a => a.name),
-    },
-  });
-});
+// v5.793：「選擇1個對手戰鬥寶可夢持有的招式→下回合無法使用」中央 helper（玩家選，非自動）。
+//   火箭隊的黑暗鴉/流氓熊貓 無理取鬧、鑰圈兒 記憶之鎖 等共用語義(鑰圈兒用自己的 resolver)。
+export function lockOppChosenAttackPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const def = state.players[dIdx];
+    if (!def.active) return state;
+    const defCard = pool.get(def.active.cardId);
+    const attacks = defCard?.attacks ?? [];
+    if (attacks.length === 0) return state;
+    if (attacks.length === 1) {
+      const lockedName = attacks[0].name;
+      const players = [...state.players] as [PlayerState, PlayerState];
+      const newDef = { ...def };
+      const cur = newDef.active!.blockedAttackNamesNextTurn ?? [];
+      newDef.active = { ...newDef.active!, blockedAttackNamesNextTurn: [...cur, lockedName] };
+      players[dIdx] = newDef;
+      return addLog({ ...state, players }, `${label}：${defCard?.name ?? '?'} 下回合無法使用「${lockedName}」`, aIdx);
+    }
+    const s = addLog(state, `${label}：選擇 1 個對手 ${defCard?.name ?? '?'} 持有的招式鎖住`, aIdx);
+    return withPending(s, {
+      type: 'modal-choice', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: 1,
+      effectKey: 'unreasonable-lock-attack',
+      params: { label, options: attacks.map((a, i) => ({ id: `${i}`, text: `${i + 1}. ${a.name}` })), defenderName: defCard?.name ?? '?', attackNames: attacks.map(a => a.name) },
+    });
+  };
+}
+regPost('火箭隊的黑暗鴉|無理取鬧', lockOppChosenAttackPost('無理取鬧'));
 regR('unreasonable-lock-attack', (st, aIdx, iids, params, _pool) => {
   const choiceIdx = parseInt(iids[0] ?? '0', 10);
   const attackNames = (params?.attackNames as string[] | undefined) ?? [];
