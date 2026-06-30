@@ -11,6 +11,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import type { EnergyType } from '$lib/cards/types';
 import { countEnergyTypeHostAware } from '../../effects'; // v5.669 型別能量數 host-aware(火箭隊=2)
+import { applyOppActiveDebuffPost } from '../../effects'; // v5.806 對手 debuff 中央(免疫gate)
 import { totalEnergyUnits } from '../../engine'; // v5.669 全屬性能量「個/單位」數 host-aware
 import {
   ATTACK_PRE_DISCARD_CHOICE,
@@ -407,19 +408,12 @@ regPost('禿鷹娜ex|禿鷹爪', (state, aIdx, pool) => {
 
 // 朽木妖｜詛咒根：30，受到這個招式的寶可夢下個回合無法附上從手牌使出的能量卡
 regPre('朽木妖|詛咒根', (state) => ({ state, damage: 30 }));
-regPost('朽木妖|詛咒根', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const d = state.players[dIdx];
-  if (!d.active) return state;
-  const dName = cardName(pool, d.active);
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[dIdx] = { ...d, active: { ...d.active, cantAttachEnergyNextTurn: true } };
-  return addLog(
-    { ...state, players },
-    `詛咒根：${dName} 下個回合無法附上從手牌使出的能量卡`,
-    aIdx,
-  );
-});
+// v5.806：收斂中央 applyOppActiveDebuffPost(原漏招式效果免疫 gate→化隱對手仍被禁附能)。
+regPost('朽木妖|詛咒根', applyOppActiveDebuffPost(
+  '詛咒根',
+  (a) => ({ ...a, cantAttachEnergyNextTurn: true }),
+  '詛咒根：對手下個回合無法附上從手牌使出的能量卡',
+));
 
 // ── Group D：跨回合效果 ───────────────────────────────────────────────────────
 

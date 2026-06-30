@@ -19,7 +19,7 @@ import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget, dealAttackDamageToTarget } from '../../effects';
+import { coinStatusPost, applyOppActiveDebuffPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget, dealAttackDamageToTarget } from '../../effects';
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.362：影繩結有效撤退費
@@ -397,18 +397,12 @@ regPost('優雅貓|能量攪拌', (state, aIdx, _pool) => {
 //    [TODO engine] 無精確 flag — 用 cantRetreatNextTurn 替代撤退；招式 cost +1 暫不做
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('轟擂金剛猩|鼓擊', (s) => ({ state: s, damage: 60 }));
-regPost('轟擂金剛猩|鼓擊', (state, aIdx, _pool) => {
-  // v2.78 設置兩個新 flag：attackCostIncreaseColorlessNextTurn + retreatCostIncreaseNextTurn
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '鼓擊：下回合 defender 招式+撤退費各 +1【無】能量', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? {
-      ...p.active,
-      attackCostIncreaseColorlessNextTurn: 1,
-      retreatCostIncreaseNextTurn: 1,
-    } : null,
-  }));
-});
+// v5.806：收斂中央 applyOppActiveDebuffPost(原漏招式效果免疫 gate)。
+regPost('轟擂金剛猩|鼓擊', applyOppActiveDebuffPost(
+  '鼓擊',
+  (a) => ({ ...a, attackCostIncreaseColorlessNextTurn: 1, retreatCostIncreaseNextTurn: 1 }),
+  '鼓擊：下回合 defender 招式+撤退費各 +1【無】能量',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 19. 迷唇姐|邀請之吻 — 牌庫挑 1 基礎放備戰，移自身 1 能量到新上場
@@ -480,14 +474,12 @@ regR('invite-kiss-move-energy', (state, aIdx, iids, params, pool) => {
 //    Fallback: 在 defender 上設 paralyzeFangPending 模擬「附能量觸發傷害」（變相懲罰）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('引夢貘人|白日夢', (s) => ({ state: s, damage: 80 }));
-regPost('引夢貘人|白日夢', (state, aIdx, _pool) => {
-  // v2.78 設 defender.endTurnOnOppAttachEnergyNextTurn — engine 在 ATTACH_ENERGY 觸發 END_TURN
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '白日夢：下回合若對手附能量於受招式者，則對手回合結束', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, endTurnOnOppAttachEnergyNextTurn: true } : null,
-  }));
-});
+// v5.806：收斂中央 applyOppActiveDebuffPost(原漏招式效果免疫 gate)。
+regPost('引夢貘人|白日夢', applyOppActiveDebuffPost(
+  '白日夢',
+  (a) => ({ ...a, endTurnOnOppAttachEnergyNextTurn: true }),
+  '白日夢：下回合若對手附能量於受招式者，則對手回合結束',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 21. 超能豔鴕|奧密之眼 — 對手 1 進化寶可移除 1 進化卡使其退化（回對手手牌）

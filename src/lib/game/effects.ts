@@ -3526,6 +3526,28 @@ regPost('斗笠菇|關節衝擊', selfCantAttackNextPost());
 regPost('鐵斑葉ex|稜鏡刀鋒', selfCantAttackNextPost());
 
 // 對手受招後下回合無法攻擊
+export function applyOppActiveDebuffPost(
+  label: string,
+  mutate: (active: CardInstance) => CardInstance,
+  successMsg?: string,
+): AttackPostFn {
+  // v5.806：通用「對手戰鬥位 debuff」中央管線 — 一律先過招式效果免疫 gate(化隱/純樸/薄霧能量/皇帝之勢…)
+  //   再套 mutate。收斂散落卡檔手刻設「下個對手回合」debuff 旗標(原漏免疫 gate):詛咒根 無法附能 /
+  //   鼓擊 增招式+撤退費 / 白日夢 附能即結束回合 等。
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    if (!d.active) return state;
+    const defCard = pool.get(d.active.cardId);
+    const guard = canApplyAttackEffectToTarget(state, aIdx, d.active, defCard, pool);
+    if (guard.blocked) {
+      return addLog(state, `${label}：${defCard?.name ?? '?'}｜${guard.reason}`, aIdx);
+    }
+    const s = updatePlayer(state, dIdx, p => (p.active ? { ...p, active: mutate(p.active) } : p));
+    return successMsg ? addLog(s, successMsg, aIdx) : s;
+  };
+}
+
 export function defCantAttackNextPost(label = ''): AttackPostFn {
   // v5.805：export + 可選 label，收斂 v2590 漏免疫 gate 的本地同名版。
   return (state, aIdx, pool) => {
