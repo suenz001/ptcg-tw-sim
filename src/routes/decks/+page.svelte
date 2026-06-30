@@ -104,6 +104,16 @@
       });
     }
   }
+  // v5.798：新增 / 複製 / 匯入產生的新牌組一律置於最頂（越新越頂）。
+  //   upsertDeck 會 push 到尾；改為加入後重排成 index 0 並 persistDeckOrder（寫 order 欄位，
+  //   跨重載 / 雲端都維持置頂）。所有「產生新牌組」路徑統一走此 helper。
+  function addDeckOnTop(d: Deck): void {
+    const all = upsertDeck(d);
+    const created = all.find(x => x.id === d.id);
+    if (!created) { decks = all; return; }
+    persistDeckOrder([created, ...all.filter(x => x.id !== d.id)]);
+  }
+
   function moveDeckUp(deckId: string) {
     const i = decks.findIndex(d => d.id === deckId);
     if (i <= 0) return;
@@ -714,7 +724,7 @@
   // ── Deck actions ───────────────────────────────────────────────────────
   function createDeck() {
     const d = newDeck(`牌組 ${decks.length + 1}`);
-    decks = upsertDeck(d);
+    addDeckOnTop(d);
     activeId = d.id;
     setDirty(d.id);  // v5.114
   }
@@ -784,7 +794,7 @@
       entries: active.entries.map((e) => ({ ...e })),
       notes: active.notes,
     };
-    decks = upsertDeck(copy);
+    addDeckOnTop(copy);
     activeId = copy.id;
     setDirty(copy.id);  // v5.114
   }
@@ -816,7 +826,7 @@
         entries: parsed.entries,
         notes: parsed.notes
       };
-      decks = upsertDeck(incoming);
+      addDeckOnTop(incoming);
       activeId = incoming.id;
       setDirty(incoming.id);  // v5.114
     } catch (e) {
@@ -1322,7 +1332,7 @@
     if (entries.length === 0) { alert('沒有找到任何可匯入的卡片'); return; }
 
     const d = { ...newDeck(deckName || '匯入牌組'), entries };
-    decks = upsertDeck(d);
+    addDeckOnTop(d);
     activeId = d.id;
     setDirty(d.id);  // v5.114
     showTextModal = false;
@@ -2336,15 +2346,19 @@
   }
   .rail-actions {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    /* v5.798：minmax(0,1fr) 讓格軌可縮小於內容寬，避免「📥 讀取」撐破 rail（桌機超框） */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.3rem;
   }
   .rail-actions > button {
     width: 100%;
+    min-width: 0;            /* v5.798：允許 grid 子項縮至軌寬 */
     text-align: center;
-    padding: 0.4rem 0.3rem;
+    padding: 0.4rem 0.2rem;  /* v5.798：略減左右 padding */
     font-size: 0.82rem;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     box-sizing: border-box;
   }
   .cloud-btn {
@@ -3253,21 +3267,24 @@
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    border: 1px solid #c9d2e0;
-    background: #fff;
+    /* v5.798：半透明化（比照卡牌瀏覽頁 modal-nav），避免擋住下方卡牌數值（如咬碎 120）。
+       箭頭以 text-shadow 白色光暈維持可讀，hover 才加深底色給回饋。 */
+    border: 1px solid rgba(201, 210, 224, 0.55);
+    background: rgba(255, 255, 255, 0.18);
     color: #2a4a78;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85), 0 0 3px rgba(255, 255, 255, 0.7);
     font-size: 1.6rem;
     font-weight: 700;
     cursor: pointer;
     z-index: 5;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     line-height: 1;
   }
-  .pv-nav:hover { background: #e7eef8; }
+  .pv-nav:hover { background: rgba(231, 238, 248, 0.6); }
   /* v5.000: button 完整放 modal 內側 16px，避免被 overflow-x: hidden 切掉 */
   .pv-nav-prev { left: 16px; transform: translateY(-50%); }
   .pv-nav-next { right: 16px; transform: translateY(-50%); }
