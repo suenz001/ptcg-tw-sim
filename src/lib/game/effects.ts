@@ -837,6 +837,12 @@ function applyDefenderCoinAvoid(
   return { avoided: false, state: s };
 }
 
+// v5.818：從備戰寶可夢實例移除指定 iid 的道具(供防具道具果實觸發後丟棄)。
+function _stripBenchTool(inst: CardInstance, iid: string): CardInstance {
+  if (inst.toolAttached?.iid === iid) return { ...inst, toolAttached: undefined };
+  if (inst.extraTools?.some(t => t.iid === iid)) return { ...inst, extraTools: inst.extraTools.filter(t => t.iid !== iid) };
+  return inst;
+}
 function _applyBenchAbilityReduce(
   state: GameState,
   victim: CardInstance,
@@ -845,9 +851,10 @@ function _applyBenchAbilityReduce(
   attackerIdx: 0 | 1,  // v5.294: 取 attacker active 推 attackerCard (供 BY_ATTACKER 用)
   pool: Map<string, Card>,
   baseDamage: number,
-): { amount: number; logs: string[] } {
+): { amount: number; logs: string[]; toolToDiscard: CardInstance | null } {
   let dmg = baseDamage;
   const logs: string[] = [];
+  let toolToDiscard: CardInstance | null = null;
   // v5.815：玩家層級「下個對手回合」型減傷也要套到備戰寶可夢(active 由 applyDefenderReductionsBlockA 處理)。
   //   鐵之防禦強化(metalShieldThisTurn：自己所有【鋼】寶可夢 -30×張數)、
   //   阿蜜的目光(flatDamageReduceThisTurn：自己所有寶可夢含新上場 -N，無屬性限制)。
@@ -1013,7 +1020,36 @@ function _applyBenchAbilityReduce(
       }
     }
   }
-  return { amount: dmg, logs };
+  // v5.818：防具道具減傷也套到備戰(鏡射 block A;active 已由 applyDefenderReductionsBlockA 處理)。
+  //   TOOL_DEFENSE_REDUCE_BY_TYPE(果實:對特定屬性攻擊者 -N,discardOnTrigger→回傳 toolToDiscard 由 caller 丟棄;
+  //   渾厚鱗片:holderTypes【龍】不丟棄)、TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY(神聖護符:對手有特性 -30 不丟棄)。
+  //   卡面皆「附有這張卡的寶可夢…受到傷害」=holder-based,備戰適用。阻礙之塔(isToolsJammed)失效。
+  if (dmg > 0 && !isToolsJammed(state, pool)) {
+    const _atkInst = state.players[attackerIdx].active;
+    const _atkCardT = _atkInst ? pool.get(_atkInst.cardId) : undefined;
+    if (_atkCardT) {
+      for (const t of getAllAttachedTools(victim)) {
+        const defTool = pool.get(t.cardId);
+        if (!defTool) continue;
+        const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
+        if (defense && _atkCardT.pokemonType && defense.types.includes(_atkCardT.pokemonType) && dmg > 0) {
+          const holderOk = !defense.holderTypes
+            || (victimCard.pokemonType && defense.holderTypes.includes(victimCard.pokemonType));
+          if (holderOk) {
+            const _b = dmg; dmg = Math.max(0, dmg - defense.amount);
+            if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`);
+            if (defense.discardOnTrigger) toolToDiscard = t;
+          }
+        }
+        const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
+        if (abilFn && dmg > 0) {
+          const reduce = abilFn(_atkCardT);
+          if (reduce > 0) { const _b = dmg; dmg = Math.max(0, dmg - reduce); if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`); }
+        }
+      }
+    }
+  }
+  return { amount: dmg, logs, toolToDiscard };
 }
 
 function hitBenchAll(
@@ -1081,9 +1117,11 @@ function hitBenchAll(
     }
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
+    let _btd: CardInstance | null = null;
     if (perAmt > 0 && card) {
       const r = _applyBenchAbilityReduce(state, c, card, targetIdx, attackerIdx, pool, perAmt);
       perAmt = r.amount;
+      _btd = r.toolToDiscard;
       if (r.logs.length > 0) {
         reduceLogs.push(`${card.name}：${r.logs.join('、')}`);
       }
@@ -1105,7 +1143,10 @@ function hitBenchAll(
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
-      newBench.push({ ...c, damage: newDmg });
+      // v5.818：防具道具(果實)觸發後丟棄(KO 已隨 getAllAttachedTools 進棄牌)
+      let _kept = { ...c, damage: newDmg };
+      if (_btd) { _kept = _stripBenchTool(_kept, _btd.iid); koDiscards.push(_btd); }
+      newBench.push(_kept);
     }
   }
 
@@ -1233,9 +1274,11 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     }
     // v5.293/v5.294 bench 招式傷害套特性減傷 (含厚脂肪等 BY_ATTACKER)
     let perAmt = amount;
+    let _btd2: CardInstance | null = null;
     if (perAmt > 0 && card) {
       const r = _applyBenchAbilityReduce(st, c, card, targetIdx, actorIdx, pool, perAmt);
       perAmt = r.amount;
+      _btd2 = r.toolToDiscard;
       if (r.logs.length > 0) {
         benchReduceLogs.push(`${card.name}：${r.logs.join('、')}`);
       }
@@ -1257,7 +1300,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       koNames.push(card?.name ?? '?');
       koCards.push(card);
     } else {
-      newBench.push({ ...c, damage: newDmg });
+      // v5.818：防具道具(果實)觸發後丟棄(KO 已隨 getAllAttachedTools 進棄牌)
+      let _kept = { ...c, damage: newDmg };
+      if (_btd2) { _kept = _stripBenchTool(_kept, _btd2.iid); koDiscards.push(_btd2); }
+      newBench.push(_kept);
       hitNames.push(card?.name ?? '?');
     }
   }
@@ -7738,6 +7784,10 @@ export function dealAttackDamageToTarget(
     const _rb = _applyBenchAbilityReduce(st, target, targetCard, dIdx, actorIdx, pool, effDmg);
     if (_rb.amount !== effDmg && _rb.logs.length > 0) st = addLog(st, `${targetCard.name}：${_rb.logs.join('、')}`, null);
     effDmg = _rb.amount;
+    if (_rb.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄(KO 時已不再附著,不重複)
+      const _td = _rb.toolToDiscard;
+      st = updatePlayer(st, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === targetIid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
+    }
   }
   // v5.599 受招式傷害擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套（中央 helper 過去漏,只引擎主管線有）。
   if (kind === 'attack-damage' && effDmg > 0) {
@@ -9893,6 +9943,10 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, effDmg);
       if (_rd.amount !== effDmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
       effDmg = _rd.amount;
+      if (_rd.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄
+        const _td = _rd.toolToDiscard;
+        s = updatePlayer(s, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === iid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
+      }
     }
     // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
     if (effDmg > 0) {
@@ -14627,6 +14681,10 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       const _rd = _applyBenchAbilityReduce(s, target, targetCard, dIdx, actorIdx, pool, dmg);
       if (_rd.amount !== dmg && _rd.logs.length > 0) s = addLog(s, `${targetCard.name}：${_rd.logs.join('、')}`, null);
       dmg = _rd.amount;
+      if (_rd.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄
+        const _td = _rd.toolToDiscard;
+        s = updatePlayer(s, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === iid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
+      }
     }
     // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
     if (dmg > 0) {
