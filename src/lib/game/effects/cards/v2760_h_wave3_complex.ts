@@ -14,6 +14,7 @@ import { getKODefenderEnergyInDiscard, getKODefenderSnapshot, pluckOppEnergyActi
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
+import { clearActiveEffects } from '../_shared'; // v5.807 退化清附加效果(§II-C-13)
 
 import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
@@ -514,18 +515,19 @@ regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
       if (!c || c.iid !== tIid) return c;
       const card = pool.get(c.cardId);
       if (card?.stage === 'Basic') return c;
-      // 退化：移除頂層進化卡（c.cardId/iid），底層 evolvedFromStack 取最後一個成為新頂端
       const stack = c.evolvedFromStack ?? [];
       if (stack.length === 0) return c;
       const newTop = stack[stack.length - 1];
-      // 新頂端繼承 damage / energyAttached / toolAttached / status
-      // 移除的進化卡（c.cardId 對應的）回對手手牌
+      const remaining = stack.slice(0, -1);
+      // v5.807：對齊中央退化模式(退化光線/奇異時鐘/阿賽斯特萊石 v5.672)。
+      //   ① 保留場上 c.iid(穩定身份;原改 newTop.iid 與其他退化站不一致、易致前端對應斷裂,同 rare-candy v5.796)。
+      //   ② clearActiveEffects 清除特殊狀態+附加效果(PDF §II-C-13;保留 damage/能量/道具)。
+      //   ③ evolvedThisTurn 不設(對手退化不擋其再進化)。
       return {
-        ...c,
-        iid: newTop.iid,
-        cardId: newTop.cardId,
-        evolvedFromStack: stack.slice(0, -1),
-        // damage 維持原值（PTCG 規則退化保留指示物）
+        ...clearActiveEffects({ ...c, cardId: newTop.cardId }),
+        evolvedFromStack: remaining.length > 0 ? remaining : undefined,
+        evolvedFromIid: remaining.length > 0 ? remaining[remaining.length - 1].iid : undefined,
+        evolvedThisTurn: undefined,
       };
     };
     // 找到目標退化前的 cardId 以放回對手手

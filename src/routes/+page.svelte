@@ -318,6 +318,10 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.807</span> 對戰修正：超能豔鴕「奧密之眼」（讓對手進化寶可夢退化）退化後，現在會正確清除該寶可夢身上的特殊狀態與附加效果（依規則 §II-C-13；HP指示物、能量、道具保留），且維持該寶可夢的場上身份不變——先前漏清效果、且會更動內部編號（與其他退化招式不一致，可能造成顯示／選取異常）</summary>
+      </details>
+
+      <details>
         <summary><span class="ver-badge">v5.806</span> 對戰修正：朽木妖「詛咒根」（對手下回合無法從手牌附能）、轟擂金剛猩「鼓擊」（對手下回合招式+撤退費各+1）、引夢貘人「白日夢」（對手下回合附能即結束回合）現在會正確尊重對手免疫（如「化隱」特性：不受對手招式與特性的效果影響）——先前無視免疫直接套用</summary>
         <ul>
           <li>收斂：新增「對手戰鬥位減益」中央管線，統一先做免疫判定再套用，徹底清理散落各處、漏免疫判定的同類程式</li>
