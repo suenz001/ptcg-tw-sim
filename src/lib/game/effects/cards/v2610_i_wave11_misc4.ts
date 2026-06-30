@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.792 中央 everything-to-hand
+import { countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.795 host-aware 屬性計數（古舊/稜鏡等視為提供該屬性）
 import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -456,7 +456,7 @@ regPost('櫻花魚|漸強波', (state, aIdx, pool) => {
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && energyMatchesType(card, 'Water');
   });
   if (waterInHand.length === 0) {
-    const cnt = countOneEnergy(a, 'Water', pool);
+    const cnt = countEnergyTypeHostAware(a, 'Water', pool); // v5.795：host-aware（古舊能量等視為提供水）
     const s = addLog(state, `漸強波：手牌無可附「基本【水】能量」→ 當前 ${cnt} 顆 ×30 = ${cnt * 30}`, aIdx);
     return dealAttackDamageToTarget(s, aIdx, defIid, cnt * 30, pool, { kind: 'attack-damage', label: '漸強波' });
   }
@@ -496,7 +496,7 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
     s = addLog(s, '漸強波：未選擇附加能量', aIdx);
   }
   const a = s.players[aIdx].active;
-  const cnt = a ? countOneEnergy(a, 'Water', pool) : 0;
+  const cnt = a ? countEnergyTypeHostAware(a, 'Water', pool) : 0; // v5.795：host-aware 屬性計數
   const dmg = cnt * 30;
   s = addLog(s, `漸強波：自身【水】能量 ${cnt} 顆 → ${cnt}×30 = ${dmg}`, aIdx);
   if (defIid && dmg > 0) s = dealAttackDamageToTarget(s, aIdx, defIid, dmg, pool, { kind: 'attack-damage', label: '漸強波' });

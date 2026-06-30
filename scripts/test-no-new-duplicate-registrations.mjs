@@ -17,7 +17,7 @@ const KNOWN = new Set([
   "regPost|圓絲蛛|緊纏之絲","regPost|妙喵|小憩","regPost|布里卡隆|圍困","regPost|洗翠 風速狗|灼燒",
   "regPost|芳香精|吸取之吻","regPost|鐵面忍者|急速折返","regPost|阿利多斯|毒陣",
   "regPre|仙子伊布ex|天仙石","regPre|倫琴貓|猛力進攻","regPre|厄鬼椪 碧草面具|鬼返",
-  "regPre|古劍豹|上升利刃","regPre|君主蛇|皇家指令","regPre|哥達鴨|水炮","regPre|喵喵ex|夾尾巴逃跑",
+  "regPre|古劍豹|上升利刃","regPre|君主蛇|皇家指令","regPre|喵喵ex|夾尾巴逃跑",
   "regPre|喵喵|亂抓","regPre|堅果啞鈴|特殊鞭打","regPre|天秤偶|連續旋轉","regPre|密勒頓ex|強子電光",
   "regPre|寶寶暴龍|勃然大怒","regPre|彩粉蝶|穿堂風","regPre|恰雷姆|七度踢腿","regPre|捷拉奧拉|鬥戰雷電",
   "regPre|摔角鷹人|復仇踢","regPre|波爾凱尼恩|強力蒸汽","regPre|波盪水ex|宣洩吼嘯",

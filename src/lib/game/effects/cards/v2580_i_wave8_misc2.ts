@@ -20,7 +20,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { countOneEnergy, flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
+import { flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle,
@@ -108,16 +108,7 @@ function coinTailsFailPre(base: number, label: string): AttackPreFn {
 regPre('水君|水晶墜落', fieldEnergyCountConditionPre(30, 90, 'Water', 4, '水晶墜落'));
 regPre('炎帝|閃焰墜落', fieldEnergyCountConditionPre(30, 90, 'Fire', 4, '閃焰墜落'));
 
-// 哥達鴨|水炮 60+ 自身水能量 ×20
-regPre('哥達鴨|水炮', (state, aIdx, pool) => {
-  const a = state.players[aIdx].active;
-  if (!a) return { state, damage: 60 };
-  // v4.55：改用 countOneEnergy — 涵蓋 pokemonType=null 基本能量
-  const count = countOneEnergy(a, 'Water', pool);
-  const dmg = 60 + count * 20;
-  const s = addLog(state, `水炮：自身水能量 ${count} 個 → 60 + ${count}×20 = ${dmg}`, aIdx);
-  return { state: s, damage: dmg };
-});
+// 哥達鴨|水炮 — 由 v2640 selfEnergyCountPre(host-aware) 生效；v5.795 移除此重複死碼註冊
 
 // ══════════════════════════════════════════════════════════════════════════════
 // B. 對手異常條件 +N (1 張)
