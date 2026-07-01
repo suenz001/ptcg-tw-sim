@@ -208,7 +208,8 @@ export function countAncientOnField(
  */
 // v4.51 Phase 2：統一 defense helper
 import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect } from './defense';
-import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, type FormulaTerm } from './engine'; // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
+import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, type FormulaTerm } from './engine'; 
+import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
 
@@ -13932,6 +13933,7 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   const aName = pool.get(p.active.cardId)?.name ?? '?';
   const bName = pool.get(benchPick.cardId)?.name ?? '?';
   st = addLog(st, `火箭隊的坂木：${aName}（戰鬥）↔ ${bName}（備戰）互換`, idx);
+  const _sakLeft = p.active;
   st = updatePlayer(st, idx, pl => {
     if (!pl.active) return pl;
     // v4.978：set movedToActiveThisTurn — 振翅高飛/潔淨支援/金屬之路 等特性 gate 需要
@@ -13941,6 +13943,11 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
     const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
     return { ...pl, active: newActive, bench: newBench };
   });
+  // v5.831：自身戰鬥寶可夢回備戰→觸發對手漩渦言靈/熔岩地域/凹洞
+  {
+    const _na = st.players[idx].active;
+    if (_sakLeft && _na) st = applyOppActiveReturnedToBenchTriggers(st, idx, _sakLeft, _na, pool);
+  }
   // 再強迫對方換
   {
     // v5.700：supporter 強制換位 → 過濾化石/緊張感/融合為雪/廣域堡壘 免疫的對手備戰。
@@ -13969,13 +13976,18 @@ regR('self-swap-active-bench', (st, idx, iids, _params, pool) => {
   const aName = pool.get(p.active.cardId)?.name ?? '?';
   const bName = pool.get(benchPick.cardId)?.name ?? '?';
   let s2 = addLog(st, `${aName}（戰鬥）↔ ${bName}（備戰）互換`, idx);
-  return updatePlayer(s2, idx, pl => {
+  const _leftPoke = p.active;
+  let _res = updatePlayer(s2, idx, pl => {
     if (!pl.active) return pl;
     const newActive = { ...benchPick, movedToActiveThisTurn: true };
     const cleared = clearActiveEffects(pl.active);  // 戰鬥→備戰：全清狀態(含本回合 buff)
     const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
     return { ...pl, active: newActive, bench: newBench };
   });
+  // v5.831：對手戰鬥寶可夢回備戰→觸發漩渦言靈/熔岩地域/凹洞（撤退以外的自我互換路徑）
+  const _na = _res.players[idx].active;
+  if (_na) _res = applyOppActiveReturnedToBenchTriggers(_res, idx, _leftPoke, _na, pool);
+  return _res;
 });
 
 // ---- 火箭隊的阿波羅（Supporter）- 上回合火箭隊寶可夢 KO'd 才可用 ------------

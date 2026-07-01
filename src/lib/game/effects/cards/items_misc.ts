@@ -36,6 +36,7 @@ import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferr
 import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 import type { EffectFn } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
+import { applyOppActiveReturnedToBenchTriggers } from '../../engine'; // v5.831
 import type { CardInstance } from '../../types';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -70,8 +71,8 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
   const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
   const oldName = prevPlayer.active ? (pool.get(prevPlayer.active.cardId)?.name ?? '?') : '?';
   st = addLog(st, `→ 將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
-  // v5.243：包 tryPromptPromoteActive — 自方換位 ON_PROMOTE_TO_ACTIVE prompt
-  return tryPromptPromoteActive(updatePlayer(st, idx, (p) => {
+  const _leftPoke = prevPlayer.active;
+  let _swapped = updatePlayer(st, idx, (p) => {
     if (!p.active) return p;
     const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
     if (bIdx < 0) return p;
@@ -82,7 +83,12 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     // v2.08：離開戰鬥場清狀態旗標
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
-  }), idx, pool);
+  });
+  // v5.831：對手戰鬥寶可夢回備戰(自我互換/交替)→觸發漩渦言靈/熔岩地域/凹洞
+  const _na = _swapped.players[idx].active;
+  if (_leftPoke && _na) _swapped = applyOppActiveReturnedToBenchTriggers(_swapped, idx, _leftPoke, _na, pool);
+  // v5.243：包 tryPromptPromoteActive — 自方換位 ON_PROMOTE_TO_ACTIVE prompt
+  return tryPromptPromoteActive(_swapped, idx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

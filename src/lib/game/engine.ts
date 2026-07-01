@@ -2969,44 +2969,9 @@ function handlePlaying(
       aIdx
     );
 
-    // v3.01 Wave 3 — 對手戰鬥寶可夢回備戰時觸發類（熔岩地域 / 漩渦言靈 / 凹洞）
-    {
-      const trig = getOppRetreatTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
-      if (trig.burnNewActive || trig.confuseNewActive || trig.countersOnRetreater > 0) {
-        const ownerIdx = (1 - aIdx) as 0 | 1;
-        // v5.660→v5.661：收斂到中央上狀態函式(「特性對對手戰鬥寶可夢施加狀態」統一免疫關卡)。
-        //   原手動路徑只做正確放置,仍漏全部免疫來源(化隱/憨憨臉混亂免疫/祭典會場/特殊能量),
-        //   且與同區塊「凹洞」(已走 canApplyEffectToTarget)不一致 → 一併收斂。
-        //   ownerIdx=特性持有者=srcIdx → 函式內 dIdx=1-ownerIdx=aIdx(新上場者),放置+全免疫一次到位。
-        //   kind='ability-effect':正確套化隱(擋招式+特性),不誤套純樸/薄霧(僅擋招式效果)。
-        if (trig.burnNewActive) {
-          retreatState = applyStatusToOppActive(retreatState, ownerIdx, 'burned', pool, { kind: 'ability-effect', label: '熔岩地域' });
-        }
-        if (trig.confuseNewActive) {
-          retreatState = applyStatusToOppActive(retreatState, ownerIdx, 'confused', pool, { kind: 'ability-effect', label: '漩渦言靈' });
-        }
-        if (trig.countersOnRetreater > 0) {
-          // v4.56：改用 unified('ability-effect', isBench:true) — 涵蓋對戰圓形/球形盾牌/藏隱/深度下潛/羽毛化石/光之翼
-          //   凹洞 always 對 bench（剛從 active 回到備戰）
-          const _pitTgtCard = pool.get(retreatingPoke.cardId);
-          const _pitGuard = canApplyEffectToTarget(retreatState, ownerIdx, retreatingPoke, _pitTgtCard, 'ability-effect', pool, { isBench: true });
-          if (_pitGuard.blocked) {
-            retreatState = addLog(retreatState,
-              `凹洞：${_pitTgtCard?.name ?? '?'} ${_pitGuard.reason}（不放指示物）`,
-              ownerIdx);
-          } else {
-            const upd = retreatState.players[aIdx];
-            const benchUpd = upd.bench.map(b => b.iid === retreatingPoke.iid
-              ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater } : b);
-            const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
-            newPlayers4[aIdx] = { ...upd, bench: benchUpd };
-            retreatState = addLog({ ...retreatState, players: newPlayers4 },
-              `凹洞：${_pitTgtCard?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`,
-              ownerIdx);
-          }
-        }
-      }
-    }
+    // v3.01 Wave 3 / v5.831 — 對手戰鬥寶可夢回備戰時觸發類（熔岩地域 / 漩渦言靈 / 凹洞）
+    //   收斂到中央 applyOppActiveReturnedToBenchTriggers（撤退 + 招式自我互換共用）。
+    retreatState = applyOppActiveReturnedToBenchTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
 
     // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類特性（ON_RETREAT_TO_BENCH）
     //   觸發點：retreatingPoke 已從戰鬥場回到 bench；此時詢問玩家是否使用對應特性。
@@ -7502,6 +7467,47 @@ export function applyDefenderReductionsBlockA(
 //   等特殊子路徑)可能繞過 → 仍可能殘留巢狀+扁平重複 iid。改在 applyAction 出口統一 normalize 一次,
 //   保證任何路徑產生的非場上區重複 iid / 殘留 evolvedFromStack 在 action 回傳前都被清掉(changed
 //   旗標無變動回原 state,不擾渲染/不增 log)。sanityKOSweep 內的呼叫保留為中途冗餘(無害)。
+// v5.831：對手戰鬥寶可夢回備戰(撤退/招式自我互換等)→ 觸發類特性統一入口
+//   （熔岩地域 灼傷新上場 / 漩渦言靈 混亂新上場 / 凹洞 對回去那隻放指示物）。
+//   moverIdx = 執行「戰鬥→備戰」動作者（其 active 剛回備戰）；只在 moverIdx 自己的回合觸發
+//   （卡面「在對手的回合」＝ 從特性持有者=1-moverIdx 視角是對手回合）。原僅 engine RETREAT 呼叫，
+//   漏對手用招式自我互換（do-switch/self-swap-active-bench/sakaki-self-swap）→ 收斂到本 helper。
+export function applyOppActiveReturnedToBenchTriggers(
+  state: GameState, moverIdx: 0 | 1,
+  retreatingPoke: CardInstance, newActive: CardInstance,
+  pool: Map<string, Card>,
+): GameState {
+  if (state.activePlayerIndex !== moverIdx) return state; // 只在互換者自己的回合
+  const aIdx = moverIdx;
+  let retreatState = state;
+  const trig = getOppRetreatTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
+  if (trig.burnNewActive || trig.confuseNewActive || trig.countersOnRetreater > 0) {
+    const ownerIdx = (1 - aIdx) as 0 | 1;
+    if (trig.burnNewActive) {
+      retreatState = applyStatusToOppActive(retreatState, ownerIdx, 'burned', pool, { kind: 'ability-effect', label: '熔岩地域' });
+    }
+    if (trig.confuseNewActive) {
+      retreatState = applyStatusToOppActive(retreatState, ownerIdx, 'confused', pool, { kind: 'ability-effect', label: '漩渦言靈' });
+    }
+    if (trig.countersOnRetreater > 0) {
+      const _pitTgtCard = pool.get(retreatingPoke.cardId);
+      const _pitGuard = canApplyEffectToTarget(retreatState, ownerIdx, retreatingPoke, _pitTgtCard, 'ability-effect', pool, { isBench: true });
+      if (_pitGuard.blocked) {
+        retreatState = addLog(retreatState, `凹洞：${_pitTgtCard?.name ?? '?'} ${_pitGuard.reason}（不放指示物）`, ownerIdx);
+      } else {
+        const upd = retreatState.players[aIdx];
+        const benchUpd = upd.bench.map(b => b.iid === retreatingPoke.iid
+          ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater } : b);
+        const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
+        newPlayers4[aIdx] = { ...upd, bench: benchUpd };
+        retreatState = addLog({ ...retreatState, players: newPlayers4 },
+          `凹洞：${_pitTgtCard?.name ?? '?'} 身上放置 ${trig.countersOnRetreater} 個傷害指示物`, ownerIdx);
+      }
+    }
+  }
+  return retreatState;
+}
+
 export function applyAction(
   state: GameState,
   action: GameAction,
