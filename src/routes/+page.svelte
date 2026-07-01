@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.828</span> 對戰修正：密勒頓「防護代碼」（讓自己所有『未來』寶可夢在下個對手回合不受『寶可夢ex』招式的傷害）先前只擋帶有『未來』標記的 ex 招式，對一般 ex（如噴火龍ex、拉普拉斯ex 等沒有『未來』標記的 ex）完全不生效，幾乎等於失效；現已修正為對『任意 ex』招式都免疫。另外，先前只有戰鬥場的寶可夢會套用此免疫，備戰區的『未來』寶可夢被 ex 的狙擊類招式攻擊時會漏掉；現已一併涵蓋戰鬥場與備戰區。（同一路徑上，『塗層攻擊／閃光射線』對備戰區基礎寶可夢招式傷害的免疫也一併補齊。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.827</span> 對戰修正：巨翅飛魚「呼朋引伴」（從牌庫放基礎寶可夢到備戰）先前把備戰上限寫死成 5，在「零之大空洞」使備戰上限變 8 時仍只能放到 5 隻；現已改用正確的備戰上限（零之大空洞下為 8）。</summary>
       </details>
       <details>

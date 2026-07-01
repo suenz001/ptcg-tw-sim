@@ -4530,14 +4530,12 @@ function handlePlaying(
     //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
     // v3.67：改用 isRulePokemon helper（涵蓋未來新規則寶可夢類型）
     // v5.124：打爆類「不計算 defender 身上附加效果」應 bypass — 加 !skipDefEffects gate
-    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn) {
-      const targetTag = defender.active.immuneToExAttackTagThisTurn;
-      const attackerIsEx = isRulePokemon(attackerCard);
-      const attackerHasTag = attackerCard.tags?.includes(targetTag);
-      if (attackerIsEx && attackerHasTag) {
-        workingState = addLog(workingState, `${defenderCard.name}：[防護代碼]免疫帶「${targetTag}」tag 的 ex 招式傷害（${baseDamage} → 0）`, dIdx);
-        baseDamage = 0;
-      }
+    // v5.828：卡面「寶可夢【ex】招式」= 任意 ex（不限 tag）。舊實作誤要求 attacker.tags.includes('未來')
+    //   → 對一般 ex（無「未來」tag）完全不擋，防護代碼幾乎失效。flag 只設在受保護的「未來」寶可夢身上，
+    //   故此處只需判 attacker 是規則寶可夢(ex)。
+    if (!skipDefEffects && baseDamage > 0 && defender.active.immuneToExAttackTagThisTurn && isRulePokemon(attackerCard)) {
+      workingState = addLog(workingState, `${defenderCard.name}：[防護代碼]免疫【ex】寶可夢招式傷害（${baseDamage} → 0）`, dIdx);
+      baseDamage = 0;
     }
     // v2.260 Bug #1：抵抗力計算（PDF §I-A-01 步驟 4）
     //   若受擊方寶可夢卡面抵抗力屬性 === 攻擊方寶可夢屬性 → 套用 resistance.value（"-30" 等）。

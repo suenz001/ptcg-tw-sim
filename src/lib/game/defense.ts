@@ -185,6 +185,30 @@ export function canApplyEffectToTarget(
     return { blocked: true, reason: '免疫招式的效果（純樸類）' };
   }
 
+  // 1b-3. v5.828：防護代碼(immuneToExAttackTagThisTurn)/塗層攻擊·閃光射線(immuneToBasicAttackThisTurn)
+  //   — per-instance 本回合「招式傷害」免疫，隨寶可夢存在於 active 或 bench（END_TURN promote 同套
+  //   active+bench；防護代碼卡面涵蓋自己「所有」未來寶可夢=含備戰）。原僅 engine 主管線(active) +
+  //   resolveActiveAttackGuard（本函式 step4 isBench===false）查 → 對 BENCH 目標的 ex/基礎 狙擊漏免疫。
+  //   移到此層與其他 per-turn 旗標並列，涵蓋 active+bench。皆傷害型（卡面「不受…招式的傷害」），不擋 attack-effect。
+  if (kind === 'attack-damage') {
+    const _atkInstPT = state.players[actorIdx].active;
+    const _atkCardPT = _atkInstPT ? pool.get(_atkInstPT.cardId) : undefined;
+    if (_atkCardPT) {
+      // 防護代碼 — 任意 ex（不限 tag）
+      if (target.immuneToExAttackTagThisTurn && isRulePokemon(_atkCardPT)) {
+        return { blocked: true, reason: '防護代碼免疫【ex】寶可夢招式傷害' };
+      }
+      // 塗層攻擊/閃光射線 — 【基礎】寶可夢招式傷害（皇冠蛋白石【無】除外）
+      if (target.immuneToBasicAttackThisTurn) {
+        const _stagePT = _atkCardPT.stage ?? _atkCardPT.subtype;
+        const _clessPT = target.basicImmuneColorlessExcept && _atkCardPT.pokemonType === 'Colorless';
+        if (_stagePT === 'Basic' && !_clessPT) {
+          return { blocked: true, reason: '塗層攻擊免疫【基礎】寶可夢招式傷害' };
+        }
+      }
+    }
+  }
+
   // 1c. 暗影【惡】能量（v4.85 / M5 — 特殊能量，備戰位免疫對手招式傷害；惡屬性寶可夢限定）
   //     卡面：「附有這張卡的惡屬性寶可夢只要在備戰區，就不會受到對手招式的傷害。」
   //     範圍：bench-only + attack-damage only；不擋 attack-effect、不擋 ability-effect。
@@ -363,10 +387,10 @@ export function resolveActiveAttackGuard(
   // attackerCard 缺失（非招式來源 damage，如 場地扣血 / 中毒 tick）→ 不擋
   if (!attackerCard) return { blocked: false };
 
-  // 1. 防護代碼（密勒頓）— defender 有 immuneToExAttackTag + attacker 是 ex + 有對應 tag
-  const exTag = defender.immuneToExAttackTagThisTurn;
-  if (exTag && isRulePokemon(attackerCard) && attackerCard.tags?.includes(exTag)) {
-    return { blocked: true, reason: `防護代碼免疫帶「${exTag}」tag 的 ex 招式傷害` };
+  // 1. 防護代碼（密勒頓）— 卡面「寶可夢【ex】招式」=任意 ex（不限 tag；v5.828 修）；
+  //    flag 只設在受保護的「未來」寶可夢身上，故只需判 attacker 是規則寶可夢(ex)。
+  if (defender.immuneToExAttackTagThisTurn && isRulePokemon(attackerCard)) {
+    return { blocked: true, reason: '防護代碼免疫【ex】寶可夢招式傷害' };
   }
 
   // 2. 塗層攻擊（鋁鋼橋龍）— 不受【基礎】寶可夢招式

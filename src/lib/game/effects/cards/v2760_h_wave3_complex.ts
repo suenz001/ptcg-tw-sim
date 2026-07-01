@@ -624,7 +624,7 @@ regR('v327-tauros-thrust', (st, idx, iids, _params, pool) => {
 regPre('密勒頓|防護代碼', (s) => ({ state: s, damage: 40 }));
 regPost('密勒頓|防護代碼', (state, aIdx, pool) => {
   // v2.78 對自方所有「未來」寶可夢設 immuneToExAttackTagNextTurn = '未來'
-  return updatePlayer(addLog(state, '防護代碼：下回合自方所有未來寶可不受帶「未來」tag 的 ex 招式傷害', aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, '防護代碼：下回合自方所有未來寶可不受【ex】寶可夢招式傷害', aIdx), aIdx, p => ({
     ...p,
     active: p.active && pool.get(p.active.cardId)?.tags?.includes('未來') ? { ...p.active, immuneToExAttackTagNextTurn: '未來' } : p.active,
     bench: p.bench.map(b => pool.get(b.cardId)?.tags?.includes('未來') ? { ...b, immuneToExAttackTagNextTurn: '未來' } : b),
