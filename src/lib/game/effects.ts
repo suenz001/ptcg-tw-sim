@@ -6709,11 +6709,11 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /** 對 opp 全體或已傷寶可夢各加 amount 傷害，含 KO 處理 */
-function applyDamageToAllOpp(
+export function applyDamageToAllOpp(
   state: GameState,
   aIdx: 0 | 1,
   pool: Map<string, Card>,
-  amount: number,
+  amount: number | ((t: CardInstance) => number),
   onlyDamaged: boolean,
   label: string
 ): GameState {
@@ -6731,7 +6731,8 @@ function applyDamageToAllOpp(
     if (_gA.blocked) {
       s = addLog(s, `${label}：${defCard?.name ?? '?'}（${_gA.reason}）不放指示物`, null);
     } else {
-    const newDmg = defender.active.damage + amount;
+    const _amtA = typeof amount === 'function' ? amount(defender.active) : amount;
+    const newDmg = defender.active.damage + _amtA;
     const hp = effectiveHPInline(defender.active, pool, s);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const koDiscard: CardInstance[] = [
@@ -6768,7 +6769,8 @@ function applyDamageToAllOpp(
       newBench.push(b);
       continue;
     }
-    const newDmg = b.damage + amount;
+    const _amtB = typeof amount === 'function' ? amount(b) : amount;
+    const newDmg = b.damage + _amtB;
     const hp = effectiveHPInline(b, pool, s);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       const koDiscard: CardInstance[] = [

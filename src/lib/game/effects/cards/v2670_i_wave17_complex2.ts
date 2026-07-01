@@ -33,7 +33,7 @@ import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../
 import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中央收斂
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
 import { oppPokemonImmuneToAttackEffect, relocateOwnCounterToOpp } from '../../effects'; // v5.809 bounce免疫述詞;v5.825 改放指示物中央管線
 // v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
 //   重複 import 造成 build fail，本次移除我新加的這行（L26 既有 import 就夠用）。
@@ -590,15 +590,13 @@ regPost('墓揚犬|恐怖啃咬', (state, aIdx, pool) => {
 // 13. N的雙倍多多冰｜覆雪 — 對手所有寶可夢指示物變為 2 倍
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('N的雙倍多多冰|覆雪', (s) => ({ state: s, damage: 0 }));
-regPost('N的雙倍多多冰|覆雪', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(
-    addLog(state, '覆雪：對手所有寶可夢身上指示物變為 2 倍', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) * 2 } : null,
-      bench: p.bench.map(b => ({ ...b, damage: (b.damage ?? 0) * 2 })),
-    }),
+regPost('N的雙倍多多冰|覆雪', (state, aIdx, pool) => {
+  // v5.829：卡面「在對手的所有寶可夢身上放置傷害指示物，直到數量變為 2 倍」＝放置指示物(招式效果)
+  //   → 化隱等免疫者不被放置(與姊妹卡 魂之末 一致)。放置量＝各自現有指示物數(倍化)。
+  //   走中央 applyDamageToAllOpp(per-target amount + 免疫 gate + KO/獎賞)，原直接 *2 漏 gate。
+  return applyDamageToAllOpp(
+    addLog(state, '覆雪：對手所有寶可夢身上指示物變為 2 倍（放置＝各自現有指示物數）', aIdx),
+    aIdx, pool, t => t.damage ?? 0, true, '覆雪',
   );
 });
 
