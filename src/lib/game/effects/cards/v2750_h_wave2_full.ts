@@ -405,7 +405,7 @@ function deckSearchAttachToBenchPost(max: number, label: string, type?: string):
   };
 }
 
-regR('v310-deck-pickup-energy-to-bench-stage1', (state, aIdx, iids, params, _pool) => {
+regR('v310-deck-pickup-energy-to-bench-stage1', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '';
   // 卡面：「並且重洗牌庫」— 無論是否選到能量，剩餘牌庫都要重洗
   if (iids.length === 0) {
@@ -416,14 +416,8 @@ regR('v310-deck-pickup-energy-to-bench-stage1', (state, aIdx, iids, params, _poo
     // 備戰沒人 → 把選到的能量直接洗回牌庫（卡面要求附備戰，但備戰空時無解，回洗保留資源）
     return addLog(state, `${label}：備戰區沒有寶可夢，能量留在牌庫並重洗`, aIdx);
   }
-  // 把選到的能量從 deck 抽出，剩餘 deck 重洗，並 chain 到 stage2 選備戰目標
-  return withPending(addLog(state, `${label}：選 1 隻備戰寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
-    type: 'bench-choose',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'v310-deck-pickup-energy-to-bench-stage2',
-    params: { energyIids: iids, label },
-  });
+  // v5.822：卡面「以任意方式附於備戰寶可夢」= 可分散 → 走中央 startEnergyChain(scope bench-only 分散)。
+  return startEnergyChain(state, aIdx, iids, { label, source: 'deck', scope: 'bench-only', filterType: 'Any' }, pool);
 });
 
 regR('v310-deck-pickup-energy-to-bench-stage2', (state, aIdx, picked, params, pool) => {
@@ -483,44 +477,18 @@ export function deckSearchAttachToAnyPost(max: number, label: string, type?: str
   };
 }
 
-regR('v310-deck-pickup-energy-to-any-stage1', (state, aIdx, iids, params, _pool) => {
+regR('v310-deck-pickup-energy-to-any-stage1', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '';
   if (iids.length === 0) {
     return updatePlayer(addLog(state, `${label}：未選擇能量；重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
   const p = state.players[aIdx];
   if (!p.active && p.bench.length === 0) {
-    return addLog(state, `${label}：場上沒有寶可夢，能量留在牌庫並重洗`, aIdx);
+    return updatePlayer(addLog(state, `${label}：場上沒有寶可夢，能量留在牌庫並重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
-  // 場上只有 1 隻寶可夢時可省略 stage2，直接附給該唯一目標
-  const allOwn = [
-    ...(p.active ? [p.active.iid] : []),
-    ...p.bench.map(b => b.iid),
-  ];
-  if (allOwn.length === 1) {
-    const targetIid = allOwn[0];
-    const energySet = new Set(iids);
-    const energies = p.deck.filter(c => energySet.has(c.iid));
-    const restDeck = p.deck.filter(c => !energySet.has(c.iid));
-    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一寶可夢（重洗）`, aIdx), aIdx, pl => ({
-      ...pl,
-      deck: shuffle(restDeck),
-      active: pl.active && pl.active.iid === targetIid
-        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
-        : pl.active,
-      bench: pl.bench.map(b => b.iid === targetIid
-        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
-        : b),
-    }));
-  }
-  // 多隻 → heal-target 選目標（包含 active + bench）
-  return withPending(addLog(state, `${label}：選 1 隻自方寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
-    type: 'heal-target',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'v310-deck-pickup-energy-to-any-stage2',
-    params: { energyIids: iids, label },
-  });
+  // v5.822：卡面「以任意方式附於自己的寶可夢」= 可分散到多隻 → 走中央 startEnergyChain(分散 +/- UI，
+  //   與其他能量加速卡一致，不再強制單一目標)。source='deck' 自動抽出所選能量+剩餘重洗。
+  return startEnergyChain(state, aIdx, iids, { label, source: 'deck', scope: 'any-own', filterType: 'Any' }, pool);
 });
 
 regR('v310-deck-pickup-energy-to-any-stage2', (state, aIdx, picked, params, pool) => {

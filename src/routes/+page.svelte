@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.822</span> 對戰修正＋操作優化：風妖精ex「能量之禮」、黑魯加「鼓勵」、七夕青鳥「哼唱充能」、逐電犬「輸電衝刺」這些「從牌庫選能量、以任意方式附於自己寶可夢」的招式，先前只能把選到的能量全部附到 1 隻寶可夢；現已可依卡面「以任意方式」分散附加到多隻寶可夢，並改用與其他能量加速卡一致的分配介面。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.821</span> 對戰修正：謝米「親送花朵」（從牌庫選 1 張能量卡附於備戰區的【草】寶可夢）先前錯誤地只能選「基本草能量」、且可附加到任意備戰寶可夢；現已依卡面修正為可選「任意能量卡（含特殊能量）」、且只能附加到備戰區的【草】寶可夢。</summary>
       </details>
       <details>
