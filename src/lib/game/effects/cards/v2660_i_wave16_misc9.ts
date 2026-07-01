@@ -28,7 +28,7 @@ import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -249,8 +249,10 @@ regPost('電蜘蛛|放電', (state, aIdx, pool) => {
 // v5.401：丟 2 能量改 units+picker（在 effects.ts batch 註冊 regPre+picker，傷害0）；此處只留狙擊
 regPost('雙尾怪手|雙尾', snipeNOppBenchAutoPost(60, 2, '雙尾'));
 
-// 雪絨蛾｜極寒旋風 90 — 簡化純 90（移轉自能量到備戰過於複雜）
+// 雪絨蛾｜極寒旋風 90 — 90 傷害 + 選 1 個自身【水】能量改附於備戰(v5.826 補實作;原「簡化純90」違反 Iron Rule 7)。
+//   走中央 returnSelfActiveEnergyPost(typeFilter 'Water' 用 energyProvidesType,含古舊/稜鏡等視為水的特殊能量)。
 regPre('雪絨蛾|極寒旋風', (s) => ({ state: s, damage: 90 }));
+regPost('雪絨蛾|極寒旋風', returnSelfActiveEnergyPost(1, false, '極寒旋風', 'Water'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 對手不可撤退（2 張）

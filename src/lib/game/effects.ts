@@ -8932,14 +8932,15 @@ regR('discard-opp-active-energy-pick', (st, idx, iids, params, pool) => {
   }) : p);
 });
 
-function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string): AttackPostFn {
+export function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string, typeFilter?: EnergyType): AttackPostFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
     if (!att) return state;
     const attName = pool.get(att.cardId)?.name ?? '?';
-    const energies = att.energyAttached;
+    // v5.826：typeFilter 時只取「提供該屬性」的能量(含古舊/稜鏡等特殊,走中央 energyProvidesType 禁 isEnergyOfType)。
+    const energies = typeFilter ? att.energyAttached.filter(e => energyProvidesType(att, e, typeFilter, pool)) : att.energyAttached;
     if (energies.length === 0) {
-      return addLog(state, `${label}：${attName} 沒有可移動的能量`, aIdx);
+      return addLog(state, `${label}：${attName} 沒有可移動的${typeFilter ? '該屬性' : ''}能量`, aIdx);
     }
     const takeCount = Math.min(n, energies.length);
     const moved = energies.slice(energies.length - takeCount);
@@ -8967,7 +8968,7 @@ function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string): 
         actorIdx: aIdx, sourcePlayerIdx: aIdx,
         minCount: 1, maxCount: 1,
         effectKey: 'return-self-energy-pick-to-bench',
-        params: { titleOverride: `${label}：選擇 1 個要改附於備戰寶可夢的能量`, label },
+        params: { titleOverride: `${label}：選擇 1 個要改附於備戰寶可夢的能量`, label, validIids: energies.map(e => e.iid) },
       });
     }
     const toMove = energies[0];

@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.826</span> 對戰修正：雪絨蛾「極寒旋風」先前只造成 90 傷害，卡面的「選擇 1 個這隻寶可夢身上附加的【水】能量，改附於備戰寶可夢」效果未實作；現已補上——可將 1 個【水】能量（含被視為【水】的特殊能量，如古舊能量）改附到備戰寶可夢。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.825</span> 對戰修正：改放傷害指示物到對手的招式（死神棺「伸長的傷害棺材」、九尾「九尾狐搬動」、振翼髮「蠱惑挪移」、火箭隊的果然翁「火箭鏡面」）當對手免疫招式效果（如「化隱」）時，先前連自己來源寶可夢的指示物也不會移除；現依官方裁定修正為：來源的指示物照樣移除，只是不放置到免疫的對手身上。</summary>
       </details>
       <details>
