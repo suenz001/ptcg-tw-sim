@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.819</span> 對戰修正：叉字蝠「劇毒牙」的中毒（卡面：因這個中毒放置的傷害指示物改為 2 個＝每次檢查 20 點）先前只造成一般中毒的 10 點；現已修正為每次寶可夢檢查放置 20 點傷害。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.818</span> 對戰修正：防具道具的減傷（福祿果／巧可果等果實 -60、渾厚鱗片 -50、神聖護符 -30）先前只對戰鬥位生效，附在備戰區寶可夢身上時被攻擊（如狙擊）沒有套用；現已修正，備戰區也正確減傷，果實類觸發後一樣丟棄。</summary>
       </details>
       <details>

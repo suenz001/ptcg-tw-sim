@@ -2797,8 +2797,11 @@ regPost('吞食獸|毒液一擊', statusPost('poisoned'));
 regPost('破破袋|毒液一擊', statusPost('poisoned'));
 regPost('灰塵山|毒液一擊', statusPost('poisoned'));
 
-// 叉字蝠|劇毒牙：強化中毒（2 指示物）— 目前狀態系統不支援變強度中毒，先施加中毒
-regPost('叉字蝠|劇毒牙', statusPost('poisoned'));
+// 叉字蝠|劇毒牙：卡面「因這個中毒放置的傷害指示物改為 2 個」= 每次檢查 20 傷害。
+// v5.819：狀態系統早已支援變強度中毒(致死猛毒 160 / 惡劣角擊 80),原 statusPost 只施普通中毒(10)
+//   =漏設 poisonDamagePerCheckup。收斂至中央 applyStatusToOppActive(gate 化隱/特殊能量/祭典會場)。
+regPost('叉字蝠|劇毒牙', (state, aIdx, pool) =>
+  applyStatusToOppActive(state, aIdx, 'poisoned', pool, { kind: 'attack-effect', label: '劇毒牙', poisonDamagePerCheckup: 20 }));
 
 // 混亂類
 regPost('人造細胞卵|腦力震動', statusPost('confused'));
