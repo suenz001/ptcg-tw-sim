@@ -1454,6 +1454,7 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, pool) => {
       let s = addLog({ ...state, players }, `狙擊羽毛：120 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack');
       s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
+      _miracleActiveKO = true;
       if (players[dIdx].bench.length === 0) {
         return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
       }
@@ -6720,6 +6721,7 @@ export function applyDamageToAllOpp(
   const dIdx = (1 - aIdx) as 0 | 1;
   let s = state;
   let prizesTotal = 0;
+  let _miracleActiveKO = false; // v5.830：對手戰鬥位被此 helper KO → 攻擊方奇跡之吻
   const players = [...s.players] as [PlayerState, PlayerState];
   let defender = { ...players[dIdx] };
 
@@ -6794,6 +6796,8 @@ export function applyDamageToAllOpp(
   defender = { ...defender, bench: newBench };
   players[dIdx] = defender;
   s = { ...s, players };
+  // v5.830：對手戰鬥位被 KO → 攻擊方奇跡之吻擲幣+1
+  if (_miracleActiveKO) s = applyMiracleKissOnOppActiveKO(s, aIdx, pool);
   // v4.52 Phase 3：擋下的 bench targets 補一條 log
   if (blockedBenchNames.length > 0) {
     s = addLog(s, `${label}：${blockedBenchNames.join('、')} 未受影響`, aIdx);
@@ -7844,6 +7848,8 @@ export function dealAttackDamageToTarget(
     //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
     s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, kind === 'attack-damage');
     if (s.phase === 'game-over') return s;
+    // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
+    if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };
     }
@@ -12911,6 +12917,8 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
     s = addPendingPrize(s, actorIdx, prizes, pool);
     // v2.246：對手主動特性 KO 對手寶可夢（從 dIdx victim 視角是「對手特性 KO 我方」）
     s = recordOppKO(s, dIdx, targetCard, 'ability');
+    // v5.830：對手戰鬥位被特性(咒詛炸彈)放指示物 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「昏厥時」不分招式/特性)。
+    if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
     if (isActive && newDefender.bench.length === 0) {
       return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
     }

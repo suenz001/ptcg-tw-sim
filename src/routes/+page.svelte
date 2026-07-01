@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.830</span> 對戰修正：波克基斯「奇跡之吻」（每當對手的戰鬥寶可夢昏厥時擲 1 次硬幣，正面就多得 1 張獎賞卡）先前只在「招式的主傷害」擊倒對手戰鬥寶可夢時才觸發；現改為只要對手的戰鬥寶可夢昏厥就觸發，涵蓋：黑夜魔靈「咒詛炸彈」等特性放置傷害指示物造成的擊倒、狙擊／分配傷害類招式造成的擊倒，以及痛楚記憶／侵蝕之風／覆雪等對全體放置指示物造成的擊倒。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.829</span> 對戰修正：N的雙倍多多冰「覆雪」（在對手所有寶可夢身上放置傷害指示物、直到各自的傷害指示物數量變為 2 倍）先前對帶有「化隱」等免疫招式效果特性的寶可夢也照樣放置；依規則，放置傷害指示物屬於招式效果，「化隱」的寶可夢不受影響。現已修正為：免疫的寶可夢不被放置（與同機制的花岩怪「魂之末」一致），其餘寶可夢照常倍化。</summary>
       </details>
       <details>
