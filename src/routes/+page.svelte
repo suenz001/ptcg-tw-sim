@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.821</span> 對戰修正：謝米「親送花朵」（從牌庫選 1 張能量卡附於備戰區的【草】寶可夢）先前錯誤地只能選「基本草能量」、且可附加到任意備戰寶可夢；現已依卡面修正為可選「任意能量卡（含特殊能量）」、且只能附加到備戰區的【草】寶可夢。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.820</span> 對戰修正：由克希「痛楚記憶」、伊裴爾塔爾「侵蝕之風」這類「在對手所有寶可夢身上各放置傷害指示物」的招式，先前對戰鬥位的「化隱」寶可夢仍會放置（備戰位已正確擋下）；現已修正，戰鬥位的化隱等免疫招式效果的寶可夢也不再被放置指示物（依規則，放置指示物屬招式效果，會被化隱擋，但太晶只擋招式傷害故不受影響）。</summary>
       </details>
       <details>

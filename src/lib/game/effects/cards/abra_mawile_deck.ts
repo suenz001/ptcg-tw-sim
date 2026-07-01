@@ -154,39 +154,41 @@ regA('土龍節節', 0, (st, idx, pool, cardInst) => {
 });
 
 // ── 謝米｜親送花朵 — 從牌庫選 1 張基本【草】能量附於我方 1 隻備戰寶可夢 ────────
-function deckEnergyAttachBenchPost(typeFilter: EnergyType | null, label: string): AttackPostFn {
+function deckEnergyAttachBenchPost(targetType: EnergyType | null, label: string): AttackPostFn {
+  // v5.821：targetType 是「附加目標寶可夢的屬性」(如謝米「備戰區的【草】寶可夢」)，不是能量屬性。
+  //   能量=卡面「能量卡」= 任意能量(基本或特殊皆可)。先前誤把 targetType 當能量過濾 → 雙錯
+  //   (能量被限基本該屬性、目標未限屬性)。
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
-    if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
-    const cand = p.deck.filter(c => {
-      const card = pool.get(c.cardId);
-      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-      if (typeFilter && !isBasicEnergyOfType(card, typeFilter)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
-      return true;
-    });
-    // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
-    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
-    const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於備戰`, aIdx);
+    const benchTargets = p.bench.filter(b => {
+      if (!targetType) return true;
+      return pool.get(b.cardId)?.pokemonType === targetType;
+    }).map(b => b.iid);
+    if (benchTargets.length === 0) return addLog(state, `${label}：備戰區沒有可附加能量的寶可夢`, aIdx);
+    // 任意能量卡(含特殊能量)；即使 cand=0 也仍開 picker 讓玩家查看牌庫(Iron Rule 14)
+    const cand = p.deck.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+    const s = addLog(state, `${label}：從牌庫選 1 張能量卡附於備戰`, aIdx);
     return withPending(s, {
       type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: filterStr, minCount: 0, maxCount: 1,  // v3.997：玩家可不選
+      filter: 'Energy', minCount: 0, maxCount: 1,  // 玩家可不選(牌庫搜尋豁免)
       effectKey: 'deck-energy-attach-bench-pick-energy',
-      params: { label, validIids: cand.map(c => c.iid) },
+      params: { label, validIids: cand.map(c => c.iid), benchTargets },
     });
   };
 }
 regR('deck-energy-attach-bench-pick-energy', (st, idx, iids, params, _pool) => {
   const label = (params?.label as string) ?? '附能到備戰';
-  const p = st.players[idx];
-  if (p.bench.length === 0) return st;
-  if (p.bench.length === 1) {
-    return applyDeckAttachBench(st, idx, iids, p.bench[0].iid, label);
+  // v5.821：目標限定於 benchTargets(POST 已依屬性過濾，如謝米限【草】)；空=無合法目標。
+  const benchTargets = (params?.benchTargets as string[] | undefined) ?? st.players[idx].bench.map(b => b.iid);
+  if (benchTargets.length === 0) return st;
+  if (benchTargets.length === 1) {
+    return applyDeckAttachBench(st, idx, iids, benchTargets[0], label);
   }
   return withPending(st, {
     type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'deck-energy-attach-bench-commit',
-    params: { energyIids: iids, label },
+    params: { energyIids: iids, label, validIids: benchTargets },
   });
 });
 regR('deck-energy-attach-bench-commit', (st, idx, iids, params, _pool) => {
