@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.827</span> 對戰修正：巨翅飛魚「呼朋引伴」（從牌庫放基礎寶可夢到備戰）先前把備戰上限寫死成 5，在「零之大空洞」使備戰上限變 8 時仍只能放到 5 隻；現已改用正確的備戰上限（零之大空洞下為 8）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.826</span> 對戰修正：雪絨蛾「極寒旋風」先前只造成 90 傷害，卡面的「選擇 1 個這隻寶可夢身上附加的【水】能量，改附於備戰寶可夢」效果未實作；現已補上——可將 1 個【水】能量（含被視為【水】的特殊能量，如古舊能量）改附到備戰寶可夢。</summary>
       </details>
       <details>

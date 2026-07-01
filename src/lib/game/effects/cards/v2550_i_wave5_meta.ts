@@ -19,7 +19,7 @@ import { countEnergyTypeHostAware } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import {
   regPre, regPost, regR,
-  addLog, updatePlayer, withPending, shuffle,
+  addLog, updatePlayer, withPending, shuffle, getOwnBenchLimit,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 
@@ -218,8 +218,8 @@ regPost('巨翅飛魚|呼朋引伴', (state, aIdx, pool) => {
   if (player.deck.length === 0) {
     return addLog(state, '呼朋引伴：牌庫已空', aIdx);
   }
-  // 計算備戰剩餘空位（含零之大空洞下 8 上限的可能）
-  const benchLimit = 5;  // 簡化用 5（getBenchLimit 在 engine，這裡保守取 5）
+  // v5.827：改用中央 getOwnBenchLimit（支援零之大空洞 8 上限）— 原硬寫 5 是漏網（兄弟卡謎擬Q/向尾喵已改）。
+  const benchLimit = getOwnBenchLimit(state, aIdx, pool);
   const benchSpace = Math.max(0, benchLimit - player.bench.length);
   if (benchSpace === 0) {
     return addLog(state, '呼朋引伴：備戰區已滿', aIdx);

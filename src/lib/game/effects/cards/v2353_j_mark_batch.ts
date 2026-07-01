@@ -479,9 +479,8 @@ regPost('鳳王|復生火焰', (state, aIdx, pool) => {
   });
 });
 
-// 超級花葉蒂ex｜永生綻放：200，從牌庫選最多 4 張基本【超】能量附於備戰寶可夢，重洗
-// 若備戰只有 1 隻：自動附加。若有多隻：進入 bench-choose 選目標（全部附到同一隻）
-// ⚠️ 簡化：原文可「以任意方式」分配，此實裝限制全部附到同一備戰寶可夢
+// 超級花葉蒂ex｜永生綻放：200，從牌庫選最多 4 張基本【超】能量，以任意方式附於備戰寶可夢，重洗。
+// v3.852 起真正「以任意方式」分配（deck-search → energy-distribute +/- picker，見下方 resolver）。
 regPre('超級花葉蒂ex|永生綻放', (state) => ({ state, damage: 200 }));
 regPost('超級花葉蒂ex|永生綻放', (state, aIdx, pool) => {
   const p = state.players[aIdx];
