@@ -6726,6 +6726,11 @@ function applyDamageToAllOpp(
   // 處理 active
   if (defender.active && (!onlyDamaged || defender.active.damage > 0)) {
     const defCard = pool.get(defender.active.cardId);
+    // v5.820：放置傷害指示物是招式效果 → 化隱/純樸/薄霧能量等免疫者不被放置(規則:太晶不擋但化隱擋;bench 已 gate,active 先前漏)。
+    const _gA = canApplyEffectToTarget(s, aIdx, defender.active, defCard, 'attack-effect', pool);
+    if (_gA.blocked) {
+      s = addLog(s, `${label}：${defCard?.name ?? '?'}（${_gA.reason}）不放指示物`, null);
+    } else {
     const newDmg = defender.active.damage + amount;
     const hp = effectiveHPInline(defender.active, pool, s);  // v5.091
     if (hp > 0 && newDmg >= hp) {
@@ -6745,6 +6750,7 @@ function applyDamageToAllOpp(
       s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
     } else {
       defender = { ...defender, active: { ...defender.active, damage: newDmg } };
+    }
     }
   }
 
