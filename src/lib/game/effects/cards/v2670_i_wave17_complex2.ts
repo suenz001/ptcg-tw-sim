@@ -247,13 +247,18 @@ regPost('火箭隊的果然翁|火箭鏡面', (state, aIdx, pool) => {
     effectKey: 'wave17-rocket-mirror',
   });
 });
-regR('wave17-rocket-mirror', (state, aIdx, iids, _params, _pool) => {
+regR('wave17-rocket-mirror', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const sourceIid = iids[0];
   const dIdx = (1 - aIdx) as 0 | 1;
   const sourceBench = state.players[aIdx].bench.find(b => b.iid === sourceIid);
   const moveDmg = sourceBench?.damage ?? 0;
   if (moveDmg === 0) return state;
+  // v5.824：改放指示物到對手戰鬥場是招式效果 → 化隱/純樸等免疫者不被放置(與死神棺一致;先前漏 gate)。
+  const oppActive = state.players[dIdx].active;
+  if (!oppActive) return addLog(state, '火箭鏡面：對手戰鬥場無寶可夢', aIdx);
+  const _g = canApplyEffectToTarget(state, aIdx, oppActive, pool.get(oppActive.cardId), 'attack-effect', pool, { isBench: false });
+  if (_g.blocked) return addLog(state, `火箭鏡面：${pool.get(oppActive.cardId)?.name ?? '?'}｜${_g.reason}（不搬指示物）`, aIdx);
   let s = updatePlayer(state, aIdx, p => ({
     ...p,
     bench: p.bench.map(b => b.iid === sourceIid ? { ...b, damage: 0 } : b),

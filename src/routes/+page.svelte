@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.824</span> 對戰修正：振翼髮「蠱惑挪移」、火箭隊的果然翁「火箭鏡面」這類「把自己備戰寶可夢身上的傷害指示物改放到對手戰鬥寶可夢」的招式，先前對「化隱」等免疫招式效果的對手仍會放置；現已修正，改放傷害指示物屬招式效果，會被化隱等免疫擋下（與死神棺「伸長的傷害棺材」等一致）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.823</span> 對戰修正＋操作優化：密勒頓「暴衝高點」（附於「未來」寶可夢）、太樂巴戈斯「稜鏡充能」（附於「太晶」寶可夢）這類「從牌庫選能量、以任意方式附於自己特定寶可夢」的招式，先前只能把能量全部附到 1 隻；現已可依卡面「以任意方式」分散到多隻符合條件的寶可夢，並改用與其他能量加速卡一致的分配介面。</summary>
       </details>
       <details>
