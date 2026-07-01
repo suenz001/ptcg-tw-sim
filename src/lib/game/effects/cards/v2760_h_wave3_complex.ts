@@ -18,6 +18,7 @@ import { clearActiveEffects } from '../_shared'; // v5.807 退化清附加效果
 
 import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
+import { relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示物中央管線
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, applyOppActiveDebuffPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget, dealAttackDamageToTarget } from '../../effects';
@@ -233,20 +234,10 @@ regR('h-wave3-move-bench-dmg-to-opp-active', (state, aIdx, iids, _params, pool) 
   if (!sourceB) return state;
   const dmg = sourceB.damage ?? 0;
   if (dmg === 0) return state;
-  // v5.824：改放指示物到對手戰鬥場是招式效果 → 化隱/純樸等免疫者不被放置(與死神棺/九尾狐搬動一致;先前漏 gate)。
+  // v5.825：改走中央 relocateOwnCounterToOpp(source-first)。
   const oppActive = state.players[dIdx].active;
   if (!oppActive) return addLog(state, '蠱惑挪移：對手戰鬥場無寶可夢', aIdx);
-  const _g = canApplyEffectToTarget(state, aIdx, oppActive, pool.get(oppActive.cardId), 'attack-effect', pool, { isBench: false });
-  if (_g.blocked) return addLog(state, `蠱惑挪移：${pool.get(oppActive.cardId)?.name ?? '?'}｜${_g.reason}（不搬指示物）`, aIdx);
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => b.iid === tIid ? { ...b, damage: 0 } : b),
-  }));
-  s = updatePlayer(s, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + dmg } : null,
-  }));
-  return addLog(s, `蠱惑挪移：移轉 ${dmg} 點到對手戰鬥場`, aIdx);
+  return relocateOwnCounterToOpp(state, aIdx, tIid, oppActive.iid, dmg, 'attack-effect', '蠱惑挪移', pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

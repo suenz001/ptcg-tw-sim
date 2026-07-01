@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.825</span> 對戰修正：改放傷害指示物到對手的招式（死神棺「伸長的傷害棺材」、九尾「九尾狐搬動」、振翼髮「蠱惑挪移」、火箭隊的果然翁「火箭鏡面」）當對手免疫招式效果（如「化隱」）時，先前連自己來源寶可夢的指示物也不會移除；現依官方裁定修正為：來源的指示物照樣移除，只是不放置到免疫的對手身上。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.824</span> 對戰修正：振翼髮「蠱惑挪移」、火箭隊的果然翁「火箭鏡面」這類「把自己備戰寶可夢身上的傷害指示物改放到對手戰鬥寶可夢」的招式，先前對「化隱」等免疫招式效果的對手仍會放置；現已修正，改放傷害指示物屬招式效果，會被化隱等免疫擋下（與死神棺「伸長的傷害棺材」等一致）。</summary>
       </details>
       <details>

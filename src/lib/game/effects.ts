@@ -8358,6 +8358,40 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
 
 // ── swap-opp + dmg (3 張) ────────────────────────────────────────────────────
 // 共用 pre：不造成戰鬥寶可夢傷害（傷害在 resolver 中施加）
+// v5.825：中央「改放/移動傷害指示物到對手目標」管線 — source-first(依 Q2758:來源照樣移除,
+//   目標免疫則僅不放置)。removeFromSource 一律執行;target 過 canApplyEffectToTarget(kind),未擋才放置。
+export function relocateOwnCounterToOpp(
+  state: GameState, aIdx: 0 | 1, sourceIid: string, targetIid: string,
+  amount: number, kind: 'attack-effect' | 'ability-effect', label: string,
+  pool: Map<string, Card>,
+): GameState {
+  if (amount <= 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  // 目標須存在(通常對手戰鬥位)
+  const opp = state.players[dIdx];
+  const isActive = opp.active?.iid === targetIid;
+  const target = isActive ? opp.active! : opp.bench.find(b => b.iid === targetIid);
+  if (!target) return state; // 無合法目標 → 招式無效果(來源不移除)
+  // 1. 一律從來源(自方 active/bench)移除 amount(clamp 0)
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active?.iid === sourceIid ? { ...p.active, damage: Math.max(0, p.active.damage - amount) } : p.active,
+    bench: p.bench.map(b => b.iid === sourceIid ? { ...b, damage: Math.max(0, b.damage - amount) } : b),
+  }));
+  // 2. 目標免疫 gate(化隱/純樸=attack-effect;光之翼=ability-effect)。被擋 → 來源已移除,不放置。
+  const g = canApplyEffectToTarget(s, aIdx, target, pool.get(target.cardId), kind, pool, { isBench: !isActive });
+  if (g.blocked) {
+    return addLog(s, `${label}：${pool.get(target.cardId)?.name ?? '?'}｜${g.reason}（來源指示物已移除,不放置於此目標）`, aIdx);
+  }
+  // 3. 放到目標
+  s = updatePlayer(s, dIdx, p => ({
+    ...p,
+    active: p.active?.iid === targetIid ? { ...p.active, damage: p.active.damage + amount } : p.active,
+    bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: b.damage + amount } : b),
+  }));
+  return addLog(s, `${label}：移轉 ${amount} 點傷害指示物`, aIdx);
+}
+
 export function oppPokemonImmuneToAttackEffect(
   state: GameState, aIdx: 0 | 1, iid: string, pool: Map<string, Card>,
 ): { blocked: boolean; reason: string; name: string } {

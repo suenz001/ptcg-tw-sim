@@ -34,7 +34,7 @@ import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中�
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive } from '../../effects';
-import { oppPokemonImmuneToAttackEffect } from '../../effects'; // v5.809 bounce/招式效果免疫述詞
+import { oppPokemonImmuneToAttackEffect, relocateOwnCounterToOpp } from '../../effects'; // v5.809 bounce免疫述詞;v5.825 改放指示物中央管線
 // v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
 //   重複 import 造成 build fail，本次移除我新加的這行（L26 既有 import 就夠用）。
 
@@ -197,34 +197,12 @@ regR('wave17-coffin-step2', (state, aIdx, iids, params, pool) => {
   const sourceIid = params?.sourceIid as string | undefined;
   const targetIid = iids[0];
   if (!sourceIid) return state;
-  const dIdx = (1 - aIdx) as 0 | 1;
   // 取 source damage
   const sourceBench = state.players[aIdx].bench.find(b => b.iid === sourceIid);
   const moveDmg = sourceBench?.damage ?? 0;
   if (moveDmg === 0) return state;
-  // v5.113 對戰圓形 gate：target 是對手 bench 時被擋
-  const opp = state.players[dIdx];
-  const isActive = opp.active?.iid === targetIid;
-  const targetInst = isActive ? opp.active! : opp.bench.find(b => b.iid === targetIid);
-  if (!targetInst) return state;
-  const targetCard = pool.get(targetInst.cardId);
-  const guard = canApplyEffectToTarget(state, aIdx, targetInst, targetCard, 'attack-effect', pool, { isBench: !isActive });
-  if (guard.blocked) {
-    return addLog(state, `伸長的傷害棺材：${targetCard?.name ?? '?'}｜${guard.reason}（指示物無法移轉至此目標）`, aIdx);
-  }
-  // 清 source damage
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => b.iid === sourceIid ? { ...b, damage: 0 } : b),
-  }));
-  // 加給 target
-  s = updatePlayer(s, dIdx, p => {
-    if (p.active && p.active.iid === targetIid) {
-      return { ...p, active: { ...p.active, damage: (p.active.damage ?? 0) + moveDmg } };
-    }
-    return { ...p, bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: (b.damage ?? 0) + moveDmg } : b) };
-  });
-  return addLog(s, `伸長的傷害棺材：移轉 ${moveDmg} 點傷害指示物`, aIdx);
+  // v5.825：改走中央 relocateOwnCounterToOpp(source-first,Q2758:來源照樣移除,目標免疫則不放置)。
+  return relocateOwnCounterToOpp(state, aIdx, sourceIid, targetIid, moveDmg, 'attack-effect', '伸長的傷害棺材', pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -254,20 +232,10 @@ regR('wave17-rocket-mirror', (state, aIdx, iids, _params, pool) => {
   const sourceBench = state.players[aIdx].bench.find(b => b.iid === sourceIid);
   const moveDmg = sourceBench?.damage ?? 0;
   if (moveDmg === 0) return state;
-  // v5.824：改放指示物到對手戰鬥場是招式效果 → 化隱/純樸等免疫者不被放置(與死神棺一致;先前漏 gate)。
+  // v5.825：改走中央 relocateOwnCounterToOpp(source-first)。
   const oppActive = state.players[dIdx].active;
   if (!oppActive) return addLog(state, '火箭鏡面：對手戰鬥場無寶可夢', aIdx);
-  const _g = canApplyEffectToTarget(state, aIdx, oppActive, pool.get(oppActive.cardId), 'attack-effect', pool, { isBench: false });
-  if (_g.blocked) return addLog(state, `火箭鏡面：${pool.get(oppActive.cardId)?.name ?? '?'}｜${_g.reason}（不搬指示物）`, aIdx);
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => b.iid === sourceIid ? { ...b, damage: 0 } : b),
-  }));
-  s = updatePlayer(s, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + moveDmg } : null,
-  }));
-  return addLog(s, `火箭鏡面：將 ${moveDmg} 點指示物移到對手戰鬥場`, aIdx);
+  return relocateOwnCounterToOpp(state, aIdx, sourceIid, oppActive.iid, moveDmg, 'attack-effect', '火箭鏡面', pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

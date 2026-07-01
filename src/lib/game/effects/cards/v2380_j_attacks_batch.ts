@@ -47,7 +47,7 @@ import {
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits, getEffectiveHP } from '../../engine';
-import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect } from '../../effects';
+import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect, relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示物中央管線
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
@@ -275,26 +275,10 @@ regR('kitsune-move-counters', (state, aIdx, iids, _params, pool) => {
   const src = player.bench.find(b => b.iid === targetIid);
   if (!src || src.damage === 0) return state;
   const moveAmount = src.damage;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const oppActive = state.players[dIdx].active;
+  const oppActive = state.players[(1 - aIdx) as 0 | 1].active;
   if (!oppActive) return state;
-  // v4.58：改 unified('attack-effect', isBench:false) — 行為等價
-  const oppCard = pool.get(oppActive.cardId);
-  const guard = canApplyEffectToTarget(state, aIdx, oppActive, oppCard, 'attack-effect', pool, { isBench: false });
-  if (guard.blocked) {
-    return addLog(state, `九尾狐搬動：${oppCard?.name ?? '?'}｜${guard.reason}（不搬指示物）`, aIdx);
-  }
-
-  let s = state;
-  s = updatePlayer(s, aIdx, p => ({
-    ...p,
-    bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: 0 } : b),
-  }));
-  s = updatePlayer(s, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damage: p.active.damage + moveAmount } : null,
-  }));
-  return addLog(s, `九尾狐搬動：將 ${moveAmount} 點傷害指示物移到對手戰鬥場`, aIdx);
+  // v5.825：改走中央 relocateOwnCounterToOpp(source-first)。targetIid 這裡是「來源」備戰 iid。
+  return relocateOwnCounterToOpp(state, aIdx, targetIid, oppActive.iid, moveAmount, 'attack-effect', '九尾狐搬動', pool);
 });
 
 // ── 13. 電飛鼠｜小使者 / 25. 青木的姆克兒｜小使者 — 牌庫挑 ≤2 基本能量加手 ───

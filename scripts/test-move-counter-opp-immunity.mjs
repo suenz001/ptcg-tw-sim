@@ -24,22 +24,24 @@ const drive=(atk,attackKey,srcCard,oppActiveCard)=>{
              {name:'P2',active:inst(oppActiveCard,{iid:'oppAct'}),bench:[],hand:[],deck:[],discard:[],prizes:[1]}]};
   let s=mod.ATTACK_POST.get(attackKey)(st,0,pool,{});
   s=mod.applyAction(s,{type:'RESOLVE_SELECTION',selectedIids:['src']},pool);
-  return s;
+  return {s, srcDmg: s.players[0].bench.find(b=>b.iid==='src')?.damage};
 };
 T('★蠱惑挪移→化隱對手:不被放置(來源亦不清,gate-first)', () => {
-  const s=drive(WING,'振翼髮|蠱惑挪移',ANCIENT,HID);
+  const {s,srcDmg}=drive(WING,'振翼髮|蠱惑挪移',ANCIENT,HID);
   assert.strictEqual(s.players[1].active.damage,0,'化隱對手不應被放指示物');
+  assert.strictEqual(srcDmg,0,'source-first:化隱時來源指示物仍應移除(Q2758)');
 });
 T('★蠱惑挪移→一般對手:正常移轉30(對照)', () => {
-  const s=drive(WING,'振翼髮|蠱惑挪移',ANCIENT,LAP);
+  const {s}=drive(WING,'振翼髮|蠱惑挪移',ANCIENT,LAP);
   assert.strictEqual(s.players[1].active.damage,30,'一般對手應被移轉30');
 });
 T('★火箭鏡面→化隱對手:不被放置', () => {
-  const s=drive(WOB,'火箭隊的果然翁|火箭鏡面',ROCKET,HID);
+  const {s,srcDmg}=drive(WOB,'火箭隊的果然翁|火箭鏡面',ROCKET,HID);
   assert.strictEqual(s.players[1].active.damage,0,'化隱對手不應被放指示物');
+  assert.strictEqual(srcDmg,0,'source-first:化隱時來源指示物仍應移除(Q2758)');
 });
 T('★火箭鏡面→一般對手:正常移轉30(對照)', () => {
-  const s=drive(WOB,'火箭隊的果然翁|火箭鏡面',ROCKET,LAP);
+  const {s}=drive(WOB,'火箭隊的果然翁|火箭鏡面',ROCKET,LAP);
   assert.strictEqual(s.players[1].active.damage,30,'一般對手應被移轉30');
 });
 console.log('\n移指示物到對手免疫(v5.824):PASS '+pass+' / FAIL '+fail);
