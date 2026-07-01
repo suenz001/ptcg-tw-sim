@@ -115,6 +115,23 @@ export type DefenseCheckResult = { blocked: true; reason: string } | { blocked: 
  * @param options.isBench caller 已知 target 在 bench 時傳 true（用於決定是否走 resolveBenchGuard）；
  *   不傳則由 helper 內部判斷
  */
+// v5.832：護城龍｜太古防壁 中央述詞 — 防守方(1-attackerIdx)備戰有護城龍 且 攻擊方能量單位≤2
+//   → 該攻擊對防守方所有寶可夢(active+bench)不造成招式傷害。能量依攻擊宣告時 host-aware 快照
+//   (_attackTimeAttackerEnergyUnits,含火箭隊/繁茂/燃火等 multi-unit;缺席退回 Infinity=不擋)。
+//   統一給 engine active 主管線 / canApplyEffectToTarget / resolveBenchGuard / hitBenchAll 共用，
+//   杜絕各自 inline copy 漏網（hitBenchAll 天空波/大地斷裂 曾漏）。
+export function taikoBariBlocksAttackDamage(
+  state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>,
+): boolean {
+  const defIdx = (1 - attackerIdx) as 0 | 1;
+  const hasTaikoBari = state.players[defIdx].bench.some(b => {
+    const c = pool.get(b.cardId);
+    return c?.abilities?.some(a => a.name === '太古防壁');
+  });
+  if (!hasTaikoBari) return false;
+  return (state._attackTimeAttackerEnergyUnits ?? Infinity) <= 2;
+}
+
 export function canApplyEffectToTarget(
   state: GameState,
   actorIdx: 0 | 1,
@@ -233,30 +250,10 @@ export function canApplyEffectToTarget(
   //     範圍：attack-damage only；對 active 由 engine.ts 主路徑 inline check 處理；
   //            對 bench (snipe) 由本處統一 helper check 處理。
   //     gate：defender 側 bench 有 護城龍 + 攻擊方 active 能量卡張數 ≤ 2。
-  if (kind === 'attack-damage') {
-    const defIdx = (1 - actorIdx) as 0 | 1;
-    const defender = state.players[defIdx];
-    const hasTaikoBari = defender.bench.some(b => {
-      const c = pool.get(b.cardId);
-      return c?.abilities?.some(a => a.name === '太古防壁');
-    });
-    if (hasTaikoBari) {
-      const attacker = state.players[actorIdx];
-      if (attacker.active) {
-        // v5.115：卡面「能量為 2 個以下」是「能量單位數」，非卡張數！
-        //   原 v4.891 用 energyAttached.length 計卡張數會誤擋：
-        //     - 1 張火箭隊能量（提供 2 個【超】【惡】）= 卡張 1 但能量 2 個
-        //     - 1 張火箭隊能量 + 1 張基本【超】能量 = 卡張 2 但能量 3 個（應可攻擊但被擋）
-        //   改用 totalEnergyUnits 正確計算能量單位數（含特殊能量提供值、繁茂 etc）。
-        // v5.325：依【發動攻擊宣告時】攻擊方能量單位數判定（engine 攻擊宣告時快照），
-        //   不計入招式自身丟棄（判例：三重冰霜類自丟能量招式仍以開打前能量計）。
-        //   snapshot 缺席（理論上 attack-damage 必有）時退回不擋（Infinity）。
-        const energyUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
-        if (energyUnits <= 2) {
-          return { blocked: true, reason: `太鼓防壁 免疫能量 ${energyUnits} 個（≤2）的對手招式傷害` };
-        }
-      }
-    }
+  // 1d. 太古防壁（護城龍）— v5.832 收斂到中央述詞（active+bench 全 attack-damage 範圍）。
+  if (kind === 'attack-damage' && taikoBariBlocksAttackDamage(state, actorIdx, pool)) {
+    const energyUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
+    return { blocked: true, reason: `太鼓防壁 免疫能量 ${energyUnits} 個（≤2）的對手招式傷害` };
   }
 
   // 2. canApplyAttackEffectToTarget — ATTACK_EFFECT_IMMUNITY map：

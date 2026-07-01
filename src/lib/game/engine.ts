@@ -683,7 +683,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog } from './effects/_shared';
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
-import { canApplyEffectToTarget } from './defense';
+import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
@@ -4632,23 +4632,13 @@ function handlePlaying(
     //   能量「unit 數」而非張數。PTCG 規則「能量 N 個」= N units（大竺葵繁茂 1 張草 = 2 units，
     //   火箭隊能量 1 張 = 2 units，燃火能量於進化卡 = 3 units，新衝天於 2 階 = 2 units）。
     //   原 length 算法漏算所有 multi-unit 倍率能量，玩家用大竺葵繁茂 + 2 張草仍被誤擋。
-    if (baseDamage > 0) {
-      const hasTaikoBari = defender.bench.some(b => {
-        const c = pool.get(b.cardId);
-        return c?.abilities?.some(a => a.name === '太古防壁');
-      });
-      if (hasTaikoBari) {
-        // v5.209: 傳 hostInst 讓燃火 / 新衝天倍率正確計算
-        // v5.325：依攻擊宣告時快照（不計招式自丟能量）；fallback 為即時計算（理論上必有快照）。
-        const atkUnits = workingState._attackTimeAttackerEnergyUnits
-          ?? totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
-        if (atkUnits <= 2) {
-          workingState = addLog(workingState,
-            `${defenderCard.name} 因 護城龍｜太鼓防壁 效果，不受附加能量 ${atkUnits} 個（≤2）的對手招式傷害`,
-            dIdx);
-          baseDamage = 0;
-        }
-      }
+    // v5.832：太古防壁 active 主管線 — 收斂到中央述詞（與 canApplyEffectToTarget/resolveBenchGuard/hitBenchAll 共用）。
+    if (baseDamage > 0 && taikoBariBlocksAttackDamage(workingState, aIdx, pool)) {
+      const atkUnits = workingState._attackTimeAttackerEnergyUnits ?? Infinity;
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因 護城龍｜太鼓防壁 效果，不受附加能量 ${atkUnits} 個（≤2）的對手招式傷害`,
+        dIdx);
+      baseDamage = 0;
     }
 
     // v5.544：防守方減傷算術收斂到中央 applyDefenderReductionsBlockA（引擎 + 狙擊/延後型共用）。

@@ -207,7 +207,7 @@ export function countAncientOnField(
  * 類似於基本能量 vs 特殊能量當初的拆分原則。
  */
 // v4.51 Phase 2：統一 defense helper
-import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect } from './defense';
+import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage } from './defense';
 import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, type FormulaTerm } from './engine'; 
 import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
@@ -405,18 +405,10 @@ export function resolveBenchGuard(
   //   直接呼叫 resolveBenchGuard、繞過該檢查 → 太古防壁對備戰失效（玩家回報）。移到此低層 helper
   //   統一，所有 bench 傷害路徑共享。依攻擊宣告時能量快照(_attackTimeAttackerEnergyUnits,deferred
   //   picker 期間仍在；active 路徑同此快照)；缺席退回不擋(理論上 attack-damage 必有)。
-  if (kind === 'attack-damage') {
-    const _defIdxTB = (1 - actorIdx) as 0 | 1;
-    const _hasTaikoBari = state.players[_defIdxTB].bench.some(b => {
-      const c = pool.get(b.cardId);
-      return c?.abilities?.some(a => a.name === '太古防壁');
-    });
-    if (_hasTaikoBari) {
-      const _atkUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
-      if (_atkUnits <= 2) {
-        return { blocked: true, reason: `太鼓防壁 免疫能量 ${_atkUnits} 個（≤2）的對手招式傷害` };
-      }
-    }
+  if (kind === 'attack-damage' && taikoBariBlocksAttackDamage(state, actorIdx, pool)) {
+    // v5.832：收斂到中央述詞（bench-hit-N 等直呼 resolveBenchGuard 路徑）
+    const _atkUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
+    return { blocked: true, reason: `太鼓防壁 免疫能量 ${_atkUnits} 個（≤2）的對手招式傷害` };
   }
   if (kind === 'attack-effect' || kind === 'ability-effect') {
     if (isBenchProtected(state, pool)) {
@@ -1063,6 +1055,12 @@ function hitBenchAll(
 ): GameState {
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || amount <= 0) return state;
+  // v5.832：太古防壁（護城龍）— hitBenchAll 走 inline guard 不經 canApplyEffectToTarget/resolveBenchGuard，
+  //   過去漏此檢查（天空波/大地斷裂 打對手全體備戰）。對手能量≤2 時整段不造成傷害。
+  if (attackerIdx !== targetIdx && taikoBariBlocksAttackDamage(state, attackerIdx, pool)) {
+    const _u = state._attackTimeAttackerEnergyUnits ?? Infinity;
+    return addLog(state, `${attackLabel}：對手 護城龍｜太古防壁 → 備戰不受招式傷害（攻擊方能量 ${_u} 個≤2）`, targetIdx);
+  }
   let coinWS = state;  // v5.368：thread 擲幣 log（順滑大衣）
   // v3.94：移除 v3.892 入口整段 skip — 改為 loop 內 per-target check（規則寶可夢仍受傷害）。
   //   原本 v3.892 過頭：對手全是非規則寶可夢時直接 skip 整個 picker，玩家連選都選不了。
