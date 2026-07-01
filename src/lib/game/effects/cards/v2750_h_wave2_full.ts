@@ -651,39 +651,19 @@ function deckSearchAttachToTaggedBenchPost(max: number, label: string, tagName: 
   };
 }
 
-regR('v311-deck-energy-to-tagged-stage1', (state, aIdx, iids, params, _pool) => {
+regR('v311-deck-energy-to-tagged-stage1', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '';
   const tagName = (params?.tagName as string) ?? '';
   const taggedIids = (params?.taggedIids as string[]) ?? [];
   if (iids.length === 0) {
     return updatePlayer(addLog(state, `${label}：未選擇能量；重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
-  if (taggedIids.length === 1) {
-    // 單一目標自動派發
-    const targetIid = taggedIids[0];
-    const energySet = new Set(iids);
-    const p = state.players[aIdx];
-    const energies = p.deck.filter(c => energySet.has(c.iid));
-    const restDeck = p.deck.filter(c => !energySet.has(c.iid));
-    return updatePlayer(addLog(state, `${label}：${iids.length} 張能量附到場上唯一「${tagName}」寶可夢（重洗）`, aIdx), aIdx, pl => ({
-      ...pl,
-      deck: shuffle(restDeck),
-      active: pl.active && pl.active.iid === targetIid
-        ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...energies] }
-        : pl.active,
-      bench: pl.bench.map(b => b.iid === targetIid
-        ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
-        : b),
-    }));
+  if (taggedIids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：場上沒有「${tagName}」寶可夢，能量留在牌庫並重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
-  // 多隻 → heal-target 選目標（限定 tag 寶可夢的 iid）
-  return withPending(addLog(state, `${label}：選 1 隻自方「${tagName}」寶可夢接收能量（已挑 ${iids.length} 張）`, aIdx), {
-    type: 'heal-target',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'v311-deck-energy-to-tagged-stage2',
-    params: { energyIids: iids, label, validIids: taggedIids },
-  });
+  // v5.823：卡面「以任意方式附於自己的「X」寶可夢」= 可分散到多隻同標籤 → 走中央 startEnergyChain
+  //   (targetIids=標籤目標白名單)，與其他能量加速卡共用分配介面(單一自動全附、多隻開 energy-distribute)。
+  return startEnergyChain(state, aIdx, iids, { label, source: 'deck', scope: 'any-own', filterType: 'Any', targetIids: taggedIids }, pool);
 });
 
 regR('v311-deck-energy-to-tagged-stage2', (state, aIdx, picked, params, pool) => {

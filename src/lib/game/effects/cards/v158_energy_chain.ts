@@ -205,6 +205,8 @@ export interface EnergyChainOpts {
   source: 'deck' | 'discard' | 'hand';
   scope: 'bench-only' | 'any-own';
   filterType?: EnergyTypeFilter;
+  // v5.823：可附目標的 iid 白名單(標籤型如密勒頓「未來」/太樂巴戈斯「太晶」寶可夢)。undefined=不限。
+  targetIids?: string[];
 }
 
 export function startEnergyChain(
@@ -215,6 +217,7 @@ export function startEnergyChain(
   pool: Map<string, Card>,
 ): GameState {
   const { label, source, scope } = opts;
+  const targetIids = opts.targetIids; // v5.823 標籤型目標白名單
   const filterType = opts.filterType ?? 'Any';
   const reshuffleDeck = source === 'deck';
 
@@ -256,6 +259,7 @@ export function startEnergyChain(
   const validTargets = candidates.filter(c => {
     if (!pokemonMatchesType(pool.get(c.cardId), filterType)) return false;
     if (source === 'hand' && c.cantAttachEnergyThisTurn) return false;
+    if (targetIids && !targetIids.includes(c.iid)) return false; // v5.823 標籤型目標限定
     return true;
   });
 
@@ -326,7 +330,7 @@ export function startEnergyChain(
     st, aIdx,
     energyIids,
     validTargets.map(c => c.iid),
-    { label, scope, filterType, source },
+    { label, scope, filterType, source, targetIids },
     pool,
   );
 }
@@ -380,7 +384,7 @@ function dispatchByTypeWaveDistribute(
   aIdx: 0 | 1,
   energyIids: string[],
   validIids: string[],
-  opts: { label: string; scope: 'bench-only' | 'any-own'; filterType: EnergyTypeFilter; source?: 'deck' | 'discard' | 'hand' },
+  opts: { label: string; scope: 'bench-only' | 'any-own'; filterType: EnergyTypeFilter; source?: 'deck' | 'discard' | 'hand'; targetIids?: string[] },
   pool: Map<string, Card>,
 ): GameState {
   const energyInsts = st.players[aIdx].discard.filter(c => energyIids.includes(c.iid));
@@ -404,6 +408,7 @@ function dispatchByTypeWaveDistribute(
       scope: opts.scope,
       filterType: opts.filterType,
       source: opts.source, // v5.539 thread source
+      targetIids: opts.targetIids, // v5.823 thread 標籤目標到各波
       energyIids: first.energyIids,
       currentTypeName: first.typeName,
       remainingWaves: rest,
@@ -423,6 +428,7 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
   const currentEnergyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
   const currentTypeName = String(params?.currentTypeName ?? '');
   const remainingWaves = ((params?.remainingWaves as Array<{ typeName: string; energyIids: string[] }> | undefined) ?? []).slice();
+  const targetIids = params?.targetIids as string[] | undefined; // v5.823 標籤型目標白名單
 
   if (selectedIids.length === 0 || currentEnergyIids.length === 0) {
     st = addLog(st, `${label}：未分配【${currentTypeName}】能量；剩餘留在棄牌區`, aIdx);
@@ -473,7 +479,7 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
   }
   for (const b of st.players[aIdx].bench) candidates.push(b);
   const nextValid = candidates
-    .filter(c => pokemonMatchesType(pool.get(c.cardId), filterType))
+    .filter(c => pokemonMatchesType(pool.get(c.cardId), filterType) && (!targetIids || targetIids.includes(c.iid)))
     .map(c => c.iid);
   if (nextValid.length === 0) {
     const totalLeft = remainingWaves.reduce((n, w) => n + w.energyIids.length, 0);
@@ -493,6 +499,7 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
     params: {
       label, scope, filterType,
       source: params?.source, // v5.539 thread source 到下一波
+      targetIids, // v5.823 thread 標籤目標到下一波
       energyIids: next.energyIids,
       currentTypeName: next.typeName,
       remainingWaves: rest,
