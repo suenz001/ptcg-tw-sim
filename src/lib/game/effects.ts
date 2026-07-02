@@ -11,6 +11,7 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
+import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
 import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
@@ -3019,7 +3020,8 @@ function defStatusBonus(base: number, condition: 'poisoned'|'burned'|'asleep'|'c
     // v5.069：補 secondaryStatus 同檢查（特殊狀態可疊加，如「灼傷+混亂」存在 status='confused'
     //   + secondaryStatus='burned'）。原本只 check status 漏判 secondaryStatus 攜帶狀態的情形。
     const act = state.players[dIdx].active;
-    const hasStatus = act?.status === condition || act?.secondaryStatus === condition;
+    // v5.834：跨三槽讀取（傷害狀態[中毒/灼傷]可能在 secondary/tertiary，原漏 tertiary）。
+    const hasStatus = hasStatusInAnySlot(act, condition);
     return { state, damage: base + (hasStatus ? bonus : 0) };
   };
 }
@@ -5303,9 +5305,10 @@ regPre('投羽梟|團結之翼', (state, aIdx, pool) => {
 // 搖籃百合｜瘴氣之風 — 對手戰鬥寶可夢特殊狀態數 × 100
 //   注意：目前引擎 status 單欄位，實際只能算 0 或 1 個狀態
 regPre('搖籃百合|瘴氣之風', (state, aIdx, _pool) => {
+  // v5.834：卡面「處於特殊狀態的數量×100」= 三槽非空狀態數（原只讀主格當 0/1，漏數 secondary/tertiary）。
   const dIdx = (1 - aIdx) as 0 | 1;
-  const st = state.players[dIdx].active?.status;
-  return { state, damage: (st ? 1 : 0) * 100 };
+  const n = countSpecialConditions(state.players[dIdx].active);
+  return { state, damage: n * 100 };
 });
 
 // 海豚俠｜先鋒拳 — 130，攻擊後自己再受 counter × 10 傷害

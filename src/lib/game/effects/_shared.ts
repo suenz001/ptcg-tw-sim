@@ -320,6 +320,25 @@ export function getEnergyDiscardUnits(
  * v5.541：改為委派 getEnergyDiscardUnits → 火箭隊能量=2、燃火能量(附進化)=3、新衝天(Stage2)=2、
  * 繁茂草(傳 state+ownerIdx 時)=2；其餘=1。host-aware 單一來源。
  */
+// v5.834：對手/自身特殊狀態「跨三槽」讀取中央 helper（狀態自 v5.295 起 status/secondaryStatus/
+//   tertiaryStatus 三槽，傷害狀態[中毒/灼傷]可能落在任一槽）。所有「若[狀態]則增傷/失敗」與
+//   「特殊狀態數量×N」的招式一律走此 helper，杜絕只讀 1~2 槽的漏判。
+export function hasStatusInAnySlot(
+  inst: CardInstance | null | undefined,
+  condition: SpecialCondition | readonly SpecialCondition[],
+): boolean {
+  if (!inst) return false;
+  const conds = Array.isArray(condition) ? condition : [condition];
+  return conds.includes(inst.status as SpecialCondition)
+    || conds.includes(inst.secondaryStatus as SpecialCondition)
+    || conds.includes(inst.tertiaryStatus as SpecialCondition);
+}
+/** 特殊狀態「個數」（三槽中非空的數量，0~3）。用於「特殊狀態的數量×N」型招式。 */
+export function countSpecialConditions(inst: CardInstance | null | undefined): number {
+  if (!inst) return 0;
+  return (inst.status ? 1 : 0) + (inst.secondaryStatus ? 1 : 0) + (inst.tertiaryStatus ? 1 : 0);
+}
+
 export function countAttachedEnergyAsUnits(
   host: CardInstance,
   pool: Map<string, Card>,

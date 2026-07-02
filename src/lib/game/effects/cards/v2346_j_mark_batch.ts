@@ -1,6 +1,7 @@
 import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
+import { hasStatusInAnySlot } from '../_shared'; // v5.834 跨三槽狀態讀取
 import { flipCoinsWithLog, applyStatusToSelfActive } from '../../effects';
 import { computeActiveRetreatCostFor } from '../../engine'; // v5.711 有效撤退費(整隻咬)
 
@@ -15,11 +16,6 @@ function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined
 
 function damageCounters(inst: CardInstance | null | undefined): number {
   return Math.floor((inst?.damage ?? 0) / 10);
-}
-
-function hasStatus(inst: CardInstance | null | undefined, statuses: string[]): boolean {
-  if (!inst) return false;
-  return statuses.includes(inst.status ?? '') || statuses.includes(inst.secondaryStatus ?? '');
 }
 
 function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: number } {
@@ -114,7 +110,7 @@ regPre('青木的毛頭小鷹|啄傷口', (state, aIdx) => {
 // 青木的姆克鷹｜硬撐：若自身中毒或灼傷，60+100。
 regPre('青木的姆克鷹|硬撐', (state, aIdx) => {
   const atk = state.players[aIdx].active;
-  return { state, damage: hasStatus(atk, ['poisoned', 'burned']) ? 160 : 60 };
+  return { state, damage: hasStatusInAnySlot(atk, ['poisoned', 'burned']) ? 160 : 60 };
 });
 
 // 青木的土龍弟弟｜上衝：擲 1 次硬幣，正面 +20。

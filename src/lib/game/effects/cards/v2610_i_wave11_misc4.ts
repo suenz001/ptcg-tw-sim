@@ -26,6 +26,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
 import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
+import { countSpecialConditions } from '../_shared'; // v5.834 特殊狀態數(三槽)
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
@@ -426,9 +427,8 @@ regPre('蟾蜍王|輪唱', chorusFamilyPre(70, '輪唱'));
 regPre('火箭隊的臭臭泥|毒液危害', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  let count = 0;
-  if (def?.status) count++;
-  if (def?.secondaryStatus) count++;
+  // v5.834：跨三槽計數（原漏 tertiaryStatus，3 狀態時少算）。
+  const count = countSpecialConditions(def);
   const dmg = count * 100;
   const s = addLog(state, `毒液危害：對手戰鬥場特殊狀態 ${count} 個 → ${count}×100 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
