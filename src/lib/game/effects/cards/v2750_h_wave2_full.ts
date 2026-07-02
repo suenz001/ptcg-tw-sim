@@ -248,7 +248,7 @@ function deckSearchBasicEnergiesAnyPost(max: number, label: string, sameTypes: b
     return withPending(addLog(state, `${label}：從牌庫挑 0~${max} 張基本能量加手（玩家手動分配；重洗）`, aIdx), {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: sameTypes ? 'BasicEnergyDistinctTypes' : 'BasicEnergy',
+      filter: sameTypes ? 'BasicEnergy:DistinctTypes' : 'BasicEnergy',
       minCount: 0, maxCount: max,
       effectKey: 'wave13-deck-take-any',
     });
@@ -469,7 +469,7 @@ export function deckSearchAttachToAnyPost(max: number, label: string, type?: str
     return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（附到自方任一寶可夢；重洗）`, aIdx), {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: sameTypes ? 'BasicEnergyDistinctTypes' : (type ? (`BasicEnergy:${type}` as const) : 'BasicEnergy'),
+      filter: sameTypes ? 'BasicEnergy:DistinctTypes' : (type ? (`BasicEnergy:${type}` as const) : 'BasicEnergy'),
       minCount: 0, maxCount: realMax,
       effectKey: 'v310-deck-pickup-energy-to-any-stage1',
       params: { label },
@@ -643,7 +643,7 @@ function deckSearchAttachToTaggedBenchPost(max: number, label: string, tagName: 
     return withPending(addLog(state, `${label}：從牌庫挑 0~${realMax} 張基本能量（附到「${tagName}」寶可夢；重洗）`, aIdx), {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: sameTypes ? 'BasicEnergyDistinctTypes' : 'BasicEnergy',
+      filter: sameTypes ? 'BasicEnergy:DistinctTypes' : 'BasicEnergy',
       minCount: 0, maxCount: realMax,
       effectKey: 'v311-deck-energy-to-tagged-stage1',
       params: { label, tagName, taggedIids },

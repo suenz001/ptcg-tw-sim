@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.836</span> 對戰修正：太樂巴戈斯「稜鏡充能」（從牌庫選最多 3 張『各不同屬性』的基本能量，附於太晶寶可夢）先前因內部標記字串不符，導致『各不同屬性』的限制沒有生效、可能選到同屬性的基本能量；現已修正為與伊布「鮮豔捕捉」相同的判定，正確限制每種屬性最多 1 張。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.835</span> 對戰修正：計算「寶可夢道具數量」的招式——洛托姆「配件秀」（自己場上道具數×30）、青銅鐘「道具擊落」（雙方場上道具數×40）——先前只計算主要道具欄位，漏掉透過洛托姆ex「多重轉接」附加的額外道具（第 2 張以上）；現已改為計入全部附加道具，與切割／加熱／清洗洛托姆「配件秀」一致。</summary>
       </details>
       <details>
