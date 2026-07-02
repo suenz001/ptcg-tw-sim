@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.847</span> 對戰改善：超級耿鬼ex「空無強風」（選擇 1 個自身能量改附到備戰寶可夢）先前是系統自動選最後附上的能量；現改為由玩家自行選擇要移哪個能量（多屬性或帶特殊能量時才有差別）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.846</span> 對戰改善：密勒頓「光子纜線」（戰鬥場被擊倒時將最多 2 張基本雷能量改附到備戰寶可夢）先前在身上有 3 張以上雷能量時由系統自動取前 2 張；現改為由玩家自行從棄牌區選擇要移動哪 2 張。</summary>
       </details>
       <details>

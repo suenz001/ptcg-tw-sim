@@ -119,7 +119,7 @@ regPre('君主蛇|日光旋繞', (state, aIdx, pool) => {
   return { state: hasMei ? addLog(state, '日光旋繞：棄牌區有「鳴依的勉勵」→ +150', aIdx) : state, damage: hasMei ? 250 : 100 };
 });
 
-// 鳳王｜紅蓮之翼：130，丟自身 1 個【火】能量（自動取第一張提供火的能量）。
+// 鳳王｜紅蓮之翼：130，丟自身 1 個【火】能量。v5.499 已移 effects.ts SELF_DISCARD_UNITS_BATCH(picker)。
 // v5.499：鳳王|紅蓮之翼 移至 effects.ts SELF_DISCARD_UNITS_BATCH（picker 選【火】能量丟）。
 
 // 大朝北鼻｜鼻衝撞：260，丟自身 3 個能量。

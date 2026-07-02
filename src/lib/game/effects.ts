@@ -1518,29 +1518,9 @@ regPost('小仙奶|吸取之吻', (state, aIdx, _pool) => {
 
 // ── MBG 超級耿鬼ex ────────────────────────────────────────────────────────────
 
-// 空無強風 — 選 1 個自身能量，改附於備戰寶可夢（自動取最後 1 個能量，讓玩家選備戰目標）
-regPost('超級耿鬼ex|空無強風', (state, aIdx, _pool) => {
-  const player = state.players[aIdx];
-  if (!player.active || player.active.energyAttached.length === 0) return state;
-  if (player.bench.length === 0) {
-    return addLog(state, '空無強風：備戰區沒有寶可夢，能量留在原位', aIdx);
-  }
-  const energies = player.active.energyAttached;
-  const energyToMove = energies[energies.length - 1];
-  // 從出場移除能量
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
-  }));
-  s = addLog(s, '空無強風：選擇將能量附於哪隻備戰寶可夢', aIdx);
-  return withPending(s, {
-    type: 'bench-choose',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'gengar-move-energy',
-    params: { energyIid: energyToMove.iid, energyCardId: energyToMove.cardId },
-  });
-});
+// 空無強風 — 選 1 個自身能量改附於備戰。v5.847：卡面「選擇1個能量」=任意能量,收斂 returnSelfActiveEnergyPost
+//   (多能量開 active-energy-discard picker 選能量→選備戰;原自動取末端 → 多屬性/特殊能量選錯)。
+regPost('超級耿鬼ex|空無強風', returnSelfActiveEnergyPost(1, false, '空無強風'));
 
 regR('gengar-move-energy', (st, idx, iids, params, pool) => {
   const energyIid    = params?.energyIid    as string | undefined;
