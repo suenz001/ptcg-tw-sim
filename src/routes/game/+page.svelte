@@ -10037,7 +10037,6 @@
             {#if zoomInst}
               {@const effMax = hpTotal(zoomInst)}
               {@const instHp = Math.max(0, effMax - zoomInst.damage)}
-              {@const toolC = zoomInst.toolAttached ? getCard(zoomInst.toolAttached.cardId) : null}
               <!-- v4.03：場上狀態預設無條件展開（玩家要求手機版也預設打開） -->
               <details class="zoom-section" open>
                 <summary class="zoom-section-summary">📍 場上狀態</summary>
@@ -10056,8 +10055,9 @@
                     {/if}
                   </span>
                 </div>
-                {#if toolC}
-                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v"><button class="state-tool clickable" title="點擊放大：{toolC.name}" onclick={() => openZoom(zoomInst!.toolAttached!.cardId, null)}>{toolC.name} 🔍</button></span></div>
+                {@const _allToolsZ = [...(zoomInst.toolAttached ? [zoomInst.toolAttached] : []), ...(zoomInst.extraTools ?? [])]}
+                {#if _allToolsZ.length > 0}
+                  <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v">{#each _allToolsZ as _tz}{@const _tcZ = getCard(_tz.cardId)}<button class="state-tool clickable" title="點擊放大：{_tcZ?.name ?? '道具'}" onclick={() => openZoom(_tz.cardId, null)}>{_tcZ?.name ?? '道具'} 🔍</button>{/each}</span></div>
                 {/if}
                 <!-- v5.071：補 secondaryStatus 雙狀態同顯（如「灼傷+混亂」時 status='confused' / secondaryStatus='burned'，
                      原本只顯示 status 漏掉 secondaryStatus；玩家手機回報只看到「混亂」沒看到「灼傷」）。 -->

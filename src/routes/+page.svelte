@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.850</span> 顯示修正：點擊「查看寶可夢詳細狀態」時，透過洛托姆ex「多重轉接」附加的第 2 張寶可夢道具先前不會顯示（只顯示第 1 張）；現已修正為列出全部道具。（後端附加一直正常，僅詳細狀態視窗顯示遺漏。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.849</span> 對戰改善：泡沫栗鼠「掃除」（選擇最多 2 張對手場上寶可夢道具丟棄）先前是系統自動丟前 2 張；現改為由玩家自行選擇要丟哪些道具（可只丟 1 張或不丟第 2 張），帶「化隱」等免疫招式效果的寶可夢道具不會被列入。</summary>
       </details>
       <details>
