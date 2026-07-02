@@ -270,8 +270,8 @@ regPre('密勒頓ex|抵制伏特', (state, aIdx, _pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 12. 智揮猩|掌握弱點 — 下回合本招式對方弱點變【無】
-//    [TODO engine] 嚴謹需新 flag weaknessOverrideToColorlessThisTurn
-//    Best-effort: 直接設 defender weaknessDisabledNextTurn (取消弱點)
+//    實作：regPost 設 defender weaknessOverrideTypeNextTurn='Colorless'（engine 6729 消費，
+//    下回合弱點屬性改為【無】，×2 仍計算），對齊卡面。無需額外新 flag。（v5.843 更正過時 TODO）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('智揮猩|掌握弱點', (s) => ({ state: s, damage: 0 }));
 regPost('智揮猩|掌握弱點', (state, aIdx, _pool) => {
