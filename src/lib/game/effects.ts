@@ -15410,8 +15410,7 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // 注意：engine PASSIVE_ON_KO 呼叫時已在 KO sweep 後（active=null，能量已進 discard）。
   //       透過 v4.893 擴充的 defenderInst 參數拿到 KO 前的快照，提取 basic 能量 iids。
   //       資源（actual 移動）由 m5_preview.ts regR('m5-mirieton-photon-code') 完成。
-  // 限制（deferred enhancement）：當 N≥3 張 basic 能量時，目前 auto-pick 前 2 張；
-  //       玩家「選哪 2 張」之 UI picker 為 deferred。常見情況 N≤2 行為完全符合卡面。
+  // v5.846：N≥3 張基本雷能量時,讓玩家從棄牌區選哪 2 張(原 auto-pick 前 2 = 技術債)。
   ['光子纜線', (state, dIdx, _aIdx, pool, _defCard, defInst) => {
     if (!defInst) return state;
     // v5.710：卡面 19171(M5正式)「基本【雷】能量」(原實作沿用 preview「光子密碼」的任意基本能量→
@@ -15431,11 +15430,21 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
       return addLog(state, '光子纜線：備戰區無寶可夢，效果不發動', dIdx);
     }
     const moveCount = Math.min(2, basicEnergyIids.length);
-    const willAutoPick = basicEnergyIids.length >= 3;
+    // v5.846：≥3 張 → 先讓玩家從棄牌區選哪 2 張基本雷能量;≤2 張直接全移(等價)。
+    if (basicEnergyIids.length > 2) {
+      return withPending(
+        addLog(state, '光子纜線：從棄牌區選 2 張基本【雷】能量，改附於 1 隻備戰寶可夢', dIdx),
+        {
+          type: 'discard-search',
+          actorIdx: dIdx, sourcePlayerIdx: dIdx,
+          minCount: 2, maxCount: 2, validIids: basicEnergyIids,
+          effectKey: 'photon-code-pick-energy',
+          params: { label: '光子纜線' },
+        },
+      );
+    }
     return withPending(
-      addLog(state,
-        `光子纜線：選 1 隻備戰寶可夢接收 ${moveCount} 張基本能量（或跳過）${willAutoPick ? '（注：≥3 張時自動取前 2 張，玩家選哪 2 張的 UI 為 deferred）' : ''}`,
-        dIdx),
+      addLog(state, `光子纜線：選 1 隻備戰寶可夢接收 ${moveCount} 張基本能量（或跳過）`, dIdx),
       {
         type: 'bench-choose',
         actorIdx: dIdx, sourcePlayerIdx: dIdx,

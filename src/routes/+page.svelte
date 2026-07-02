@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.846</span> 對戰改善：密勒頓「光子纜線」（戰鬥場被擊倒時將最多 2 張基本雷能量改附到備戰寶可夢）先前在身上有 3 張以上雷能量時由系統自動取前 2 張；現改為由玩家自行從棄牌區選擇要移動哪 2 張。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.845</span> 對戰改善：使用需要「選擇能量放回手牌」的招式（狡猾天狗「能量閉環」、古劍豹「冰柱閉環」、波爾凱尼恩「逆火」、裹蜜蟲「能量閉環」）時，先前是系統自動選最後附上的能量放回；現改為由玩家自行選擇要放回哪些能量。</summary>
       </details>
       <details>

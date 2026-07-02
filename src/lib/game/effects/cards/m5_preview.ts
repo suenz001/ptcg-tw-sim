@@ -2168,6 +2168,21 @@ regPost('狐大盜|技能大盜', copyAttackPostDispatch);
 //   參數：params.basicEnergyIids（fn 開 picker 時傳入的 KO 前快照）
 //        iids（玩家在 bench-choose picker 選的 ≥0 隻備戰寶可夢 iid）
 //   限制：≥3 張 basic 能量時，目前 auto-pick 前 2 張（玩家選哪 2 張之 UI deferred）
+// v5.846：≥3 張時玩家先選哪 2 張雷能量(discard-search)→ 收後開 bench-choose 選備戰。
+regR('photon-code-pick-energy', (st, idx, iids, params, _pool) => {
+  if (iids.length === 0) return addLog(st, '光子纜線：未選能量，效果結束', idx);
+  if (st.players[idx].bench.length === 0) return addLog(st, '光子纜線：備戰區無寶可夢', idx);
+  return withPending(
+    addLog(st, `光子纜線：選 1 隻備戰寶可夢接收 ${iids.length} 張基本能量（或跳過）`, idx),
+    {
+      type: 'bench-choose',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 0, maxCount: 1,
+      effectKey: 'm5-mirieton-photon-code',
+      params: { basicEnergyIids: iids },
+    },
+  );
+});
 regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) {
     return addLog(state, '光子纜線：玩家跳過，無能量轉移', aIdx);
@@ -2185,12 +2200,10 @@ regR('m5-mirieton-photon-code', (state, aIdx, iids, params, pool) => {
     return addLog(state, '光子纜線：基本能量已不在棄牌堆（異常狀態），效果失敗', aIdx);
   }
 
-  // 取最多 2 張（如 ≥3 張，auto-pick 前 2 — 玩家選哪 2 張 UI 為 deferred）
-  const toMove = energiesInDiscard.slice(0, 2);
+  // v5.846：params.basicEnergyIids 已是「要移的能量」(≤2 全部,或玩家經 discard-search 選的 2 張)。
+  const toMove = energiesInDiscard;
   const moveCount = toMove.length;
-  const autoPickedNotice = basicEnergyIids.length >= 3
-    ? `（${basicEnergyIids.length} 張中 auto-pick 前 2 張 — UI 玩家選擇為 deferred enhancement）`
-    : '';
+  const autoPickedNotice = '';
 
   // 找出選中的備戰寶可夢的名字
   const targetPoke = p.bench.find(b => b.iid === targetBenchIid);
