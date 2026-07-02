@@ -10037,6 +10037,7 @@
             {#if zoomInst}
               {@const effMax = hpTotal(zoomInst)}
               {@const instHp = Math.max(0, effMax - zoomInst.damage)}
+              {@const _allToolsZ = [...(zoomInst.toolAttached ? [zoomInst.toolAttached] : []), ...(zoomInst.extraTools ?? [])]}
               <!-- v4.03：場上狀態預設無條件展開（玩家要求手機版也預設打開） -->
               <details class="zoom-section" open>
                 <summary class="zoom-section-summary">📍 場上狀態</summary>
@@ -10055,7 +10056,6 @@
                     {/if}
                   </span>
                 </div>
-                {@const _allToolsZ = [...(zoomInst.toolAttached ? [zoomInst.toolAttached] : []), ...(zoomInst.extraTools ?? [])]}
                 {#if _allToolsZ.length > 0}
                   <div class="state-row"><span class="state-k">🔧 道具</span><span class="state-v">{#each _allToolsZ as _tz}{@const _tcZ = getCard(_tz.cardId)}<button class="state-tool clickable" title="點擊放大：{_tcZ?.name ?? '道具'}" onclick={() => openZoom(_tz.cardId, null)}>{_tcZ?.name ?? '道具'} 🔍</button>{/each}</span></div>
                 {/if}
