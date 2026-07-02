@@ -963,6 +963,7 @@ regR('heat-burner-pick', (state, aIdx, iids, _params, pool) => {
       toolInst = dp.active.toolAttached;
       if (!toolInst) return addLog(s, '高溫燃燒器：目標已無道具', aIdx);
       toolName = pool.get(toolInst.cardId)?.name ?? '?';
+      // opp-mut-ok: 高溫燃燒器為物品卡,丟對手道具不受化隱擋(化隱只擋招式與特性效果)
       dp.active = { ...dp.active, toolAttached: undefined };
     } else {
       const bIdx = dp.bench.findIndex(b => b.iid === targetIid);
@@ -990,6 +991,7 @@ regR('heat-burner-pick', (state, aIdx, iids, _params, pool) => {
     if (dp.active && dp.active.iid === targetIid) {
       removed = dp.active.energyAttached.find(e => e.iid === energyIid);
       if (!removed) return addLog(s, '高溫燃燒器：找不到能量', aIdx);
+      // opp-mut-ok: 高溫燃燒器為物品卡,丟對手能量不受化隱擋(化隱只擋招式與特性效果)
       dp.active = { ...dp.active, energyAttached: dp.active.energyAttached.filter(e => e.iid !== energyIid) };
     } else {
       const bIdx = dp.bench.findIndex(b => b.iid === targetIid);

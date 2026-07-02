@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.840</span> 對戰修正：以招式讓「對手下回合無法撤退」的一批效果（莉佳的蔓藤怪「綁緊」、泥巴魚ex「咬緊」、青木的勇士雄鷹「緊抓」、伊裴爾塔爾「緊抓」、破破舵輪「束縛」、帕底亞 土王ex「毒陣」）先前未套用「招式效果免疫」判定，會讓帶有「化隱」等免疫招式效果的對手戰鬥寶可夢仍被禁止撤退；現已收斂至中央處理並套用免疫判定，這類寶可夢不會被禁止撤退。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.839</span> 對戰修正：以「特性」強制交換對手戰鬥寶可夢的效果（鐵掌力士「大力捕捉器」、赫普的毛毛角羊「挑戰角擊」、花潔夫人「媚惑引誘」、大劍鬼「激流旋渦」）先前未套用「特性效果免疫」判定，會強制換下帶有「化隱」等免疫特性效果的對手戰鬥寶可夢；現已與招式版一致，這類寶可夢不會被換位。</summary>
       </details>
       <details>

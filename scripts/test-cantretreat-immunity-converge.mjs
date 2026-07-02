@@ -1,6 +1,7 @@
-/** v5.802 defCantRetreatNextPost 5本地版收斂中央(含免疫gate)
+/** v5.802 defCantRetreatNextPost 本地版收斂中央(含免疫gate)
  *  化隱對手 → 禁撤退招式不應施加 cantRetreatNextTurn。
- *  HEAD:v2550/v2580/v2660/v3700 本地版漏免疫gate → 仍施加。 */
+ *  v5.840 追加:Check H 抓出另一批 inline 漏 gate 生效版(v2359 cantRetreatNextFn 6招/
+ *  伊裴爾塔爾緊抓/v2750 破破舵輪束縛+帕底亞土王ex毒陣)全收斂中央;HEAD 這批漏 gate → FAIL。 */
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path'; import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -23,7 +24,10 @@ const mk=(oppCid)=>({phase:'playing',turnPhase:'main',activePlayerIndex:0,firstP
   players:[{name:'P1',active:inst(POKE),bench:[],hand:[],deck:[],discard:[],prizes:[1]},
            {name:'P2',active:inst(oppCid),bench:[],hand:[],deck:[],discard:[],prizes:[1]}]});
 // 各 wave 一張代表卡
-const CASES=[['流氓鱷ex|窮追不捨','v2550'],['赫普的朽木妖|窮追不捨','v2580'],['烈箭鷹|緊抓','v3700']];
+const CASES=[['流氓鱷ex|窮追不捨','v2550'],['赫普的朽木妖|窮追不捨','v2580'],['烈箭鷹|緊抓','v3700'],
+  // v5.840 Check H 抓出的漏 gate 生效版(收斂 defCantRetreatNextPost 後應免疫)
+  ['莉佳的蔓藤怪|綁緊','v2359'],['泥巴魚ex|咬緊','v2359'],['青木的勇士雄鷹|緊抓','v2359'],
+  ['伊裴爾塔爾|緊抓','effects'],['破破舵輪|束縛','v2750'],['帕底亞 土王ex|毒陣','v2750']];
 for(const [key,wave] of CASES){
   T(`★${key}(${wave}):化隱對手不應被禁撤退`, () => {
     const out=ATTACK_POST.get(key)(mk(HIDDEN),0,pool);

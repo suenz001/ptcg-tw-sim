@@ -3,6 +3,7 @@
  * 反模式 lint — 把「反覆踩到的雷」做成 CI 靜態檢查，新出現就擋。
  * Check A：closure 參數寫 `_pool`/`_aIdx`/... 但 body 又引用去底線同名 → ReferenceError。
  * Check B：基本能量用 `pokemonType === '屬性'` 比對、無卡名 fallback（基本能量 pokemonType 為 null）。
+ * Check H：對手寶可夢非傷害效果(換位/丟能量/丟道具/施狀態)直接 inline mutate 未過免疫 gate → 繞過化隱/純樸。
  * Run: node scripts/anti-pattern-lint.mjs  (exit 0=乾淨 / 1=有違規)
  * 見長期記憶 feedback-basic-energy-pokemontype-null / reference-discard-prize-log。
  */
@@ -186,8 +187,44 @@ for (const f of files) {
   }
 }
 
+
+// ── Check H：對手寶可夢「非傷害效果」施加未過免疫 gate ──────────────────
+//   換位 / 丟能量 / 丟道具 / 施狀態 直接改動對手(dIdx/oppIdx)寶可夢,卻沒走
+//   canApplyEffectToTarget 或中央 gated helper → 繞過 化隱/純樸/光之翼。
+//   防未來新卡(M6+)inline 翻牆。合法豁免標 // opp-mut-ok: 理由。
+//   見長期記憶 reference-opp-swap-hidden-immunity-gate / reference-discard-opp-energy-tool-hidden-immunity。
+const H_MUT = [
+  ['換位(active賦值)', /(?<![=!<>])\.active\s*=(?!=)/],
+  ['對手備戰增減',     /\.bench\.(?:push|splice|unshift)\s*\(/],
+  ['丟能量',           /\.energyAttached\s*=(?!=)|\.energyAttached\.splice\s*\(/],
+  ['丟道具',           /\.(?:toolAttached|extraTools)\s*=(?!=)/],
+  ['施狀態',           /\.(?:status|secondaryStatus|tertiaryStatus)\s*=(?!=)/],
+];
+const H_GUARD = /canApplyEffectToTarget|canApplyAttackEffectToTarget|oppPokemonImmuneToAttackEffect|forceOppSwap|oppSwapDmgPost|applyStatusToOppActive|applyDamageToAllOpp|dealAttackDamageToTarget|koTargetByAttackEffect|clearActiveEffects|toBareCard|isImmuneToOppSupporter|resolveBenchGuard|_gustImmune|opp-mut-ok/;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trimStart();
+    if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;  // 純註解行
+    const code = lines[i].replace(/\/\/.*$/, '');                                  // 剝行內註解
+    const hit = H_MUT.find(([, re]) => re.test(code));
+    if (!hit) continue;
+    if (/opp-mut-ok/.test(lines[i]) || /opp-mut-ok/.test(lines[i - 1] ?? '')) continue;
+    let fs = i;
+    for (let j = i; j >= Math.max(0, i - 100); j--) { if (C_FUNC_START.test(lines[j])) { fs = j; break; } }
+    const idx = mutatedIdx(lines, i, fs);
+    if (!idx) continue;                       // 找不到明確被改 index → 保守不報
+    if (C_ATTACKER.has(idx)) continue;        // 自己側,免 gate
+    const isDefender = /\bdIdx\b|\boppIdx\b/.test(idx) || /1\s*-\s*aIdx/.test(idx);
+    if (!isDefender) continue;
+    const span = lines.slice(fs, i + 2).join('\n');
+    if (H_GUARD.test(span)) continue;
+    violations.push(`[H] ${rel(f)}:${i + 1} — 對手寶可夢${hit[0]}未見免疫 gate（改走 canApplyEffectToTarget/中央 gated helper,或標 // opp-mut-ok: 理由）`);
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

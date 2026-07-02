@@ -22,6 +22,7 @@ import {
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
+import { defCantRetreatNextPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
@@ -1934,23 +1935,15 @@ regPost('爆炸頭水牛|等待角擊', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 破破舵輪|束縛 60 — 下回合 defender 不可撤退
 regPre('破破舵輪|束縛', (s) => ({ state: s, damage: 60 }));
-regPost('破破舵輪|束縛', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(state, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, cantRetreatNextTurn: true } : null,
-  }));
-});
+// v5.840：收斂至中央 defCantRetreatNextPost（原 inline 漏化隱免疫 gate）。
+regPost('破破舵輪|束縛', defCantRetreatNextPost('束縛'));
 
 // 帕底亞 土王ex|毒陣 60 — 中毒 + 下回合 defender 不可撤退
 regPre('帕底亞 土王ex|毒陣', (s) => ({ state: s, damage: 60 }));
+// v5.840：禁撤退部分收斂至中央 defCantRetreatNextPost（原 inline 漏化隱免疫 gate）。
 regPost('帕底亞 土王ex|毒陣', (state, aIdx, pool) => {
-  let s = statusPost('poisoned')(state, aIdx, pool);
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(s, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, cantRetreatNextTurn: true } : null,
-  }));
+  const s = statusPost('poisoned')(state, aIdx, pool);
+  return defCantRetreatNextPost('毒陣')(s, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

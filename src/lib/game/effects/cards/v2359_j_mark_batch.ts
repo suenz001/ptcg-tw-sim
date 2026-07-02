@@ -43,7 +43,7 @@ import {
   withPending,
   countAttachedEnergyAsUnits, getOwnBenchLimit} from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, flipCoinsWithLog, applyStatusToOppActive, defCantRetreatNextPost } from '../../effects';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 
@@ -90,15 +90,12 @@ function coinStatusFn(
 }
 
 /** 攻擊後對手 active 下回合無法撤退 */
+// v5.840：收斂至中央 defCantRetreatNextPost（含化隱/純樸 attack-effect 免疫 gate）。
+//   原本地版 inline 施加 cantRetreatNextTurn 漏免疫檢查 → 化隱對手仍被禁撤退（bug）。
+//   莉佳的蔓藤怪|綁緊 / 泥巴魚ex|咬緊 / 青木的勇士雄鷹|緊抓 為生效版；緊纏之絲/圍困/阿利多斯毒陣
+//   實際生效版在 effects.ts（本檔為被覆蓋死碼），一併委派後亦帶 gate。
 function cantRetreatNextFn(label: string): AttackPostFn {
-  return (state, aIdx) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const def = { ...players[dIdx] };
-    if (def.active) def.active = { ...def.active, cantRetreatNextTurn: true };
-    players[dIdx] = def;
-    return addLog({ ...state, players }, `${label}：對手下回合無法撤退`, aIdx);
-  };
+  return defCantRetreatNextPost(label);
 }
 
 /** 攻擊後自身回復 N HP */

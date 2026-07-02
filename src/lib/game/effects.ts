@@ -6899,17 +6899,8 @@ regPost('由克希|痛楚記憶', (state, aIdx, pool) => {
 // 伊裴爾塔爾|侵蝕之風 — 對手已傷寶可夢各放置 2 個指示物
 // v2.126 伊裴爾塔爾｜緊抓 20 — 在下個對手回合，受到此招式的寶可夢無法撤退
 regPre('伊裴爾塔爾|緊抓', (state, _aIdx, _pool) => ({ state, damage: 20 }));
-regPost('伊裴爾塔爾|緊抓', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const def = { ...players[dIdx] };
-  if (!def.active) return state;
-  const defName = pool.get(def.active.cardId)?.name ?? '?';
-  def.active = { ...def.active, cantRetreatNextTurn: true };
-  players[dIdx] = def;
-  return addLog({ ...state, players },
-    `緊抓：${defName} 在下個對手回合無法撤退`, aIdx);
-});
+// v5.840：收斂至中央 defCantRetreatNextPost（原 inline 漏化隱/純樸 attack-effect 免疫 gate）。
+regPost('伊裴爾塔爾|緊抓', defCantRetreatNextPost('緊抓'));
 
 regPre('伊裴爾塔爾|侵蝕之風', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('伊裴爾塔爾|侵蝕之風', (state, aIdx, pool) => {
