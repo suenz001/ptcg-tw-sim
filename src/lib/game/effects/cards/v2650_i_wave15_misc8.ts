@@ -14,6 +14,7 @@
  */
 
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, sameEvoName, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { getAllAttachedTools } from '../_shared'; // v5.835 道具數含多重轉接
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -639,14 +640,13 @@ regPre('奇樹的霹靂電球|連鎖伏特', (state, aIdx, pool) => {
 });
 
 // 洛托姆｜配件秀 — 自方所有寶可夢身上附加的「寶可夢道具」數量 × 30
-regPre('洛托姆|配件秀', (state, aIdx, pool) => {
+regPre('洛托姆|配件秀', (state, aIdx, _pool) => {
+  // v5.835：道具「數量」含多重轉接(extraTools) → 走中央 getAllAttachedTools（原只讀 toolAttached 少算，
+  //   與姊妹卡 切割/加熱/清洗洛托姆|配件秀 收斂）。
   const p = state.players[aIdx];
   let toolCount = 0;
   for (const c of [p.active, ...p.bench].filter(Boolean) as CardInstance[]) {
-    if (c.toolAttached) {
-      const tool = pool.get(c.toolAttached.cardId);
-      if (tool?.subtype === 'Tool' || tool?.subtype === 'PokemonTool') toolCount++;
-    }
+    toolCount += getAllAttachedTools(c).length;
   }
   const dmg = toolCount * 30;
   return { state: addLog(state, `配件秀：自方寶可道具 ${toolCount} 個 → ${toolCount}×30 = ${dmg}`, aIdx), damage: dmg };

@@ -322,11 +322,12 @@ regPre('胖可丁|輪唱', (state, aIdx, pool) => {
 
 // 青銅鐘|道具擊落 40× 雙方場上「寶可夢道具」數
 regPre('青銅鐘|道具擊落', (state, aIdx, _pool) => {
+  // v5.835：道具「數量」含多重轉接(extraTools) → 走中央 getAllAttachedTools（原只讀 toolAttached 少算）。
   let count = 0;
   for (const p of state.players) {
     const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
     for (const pk of all) {
-      if (pk.toolAttached) count++;
+      count += getAllAttachedTools(pk).length;
     }
   }
   const dmg = count * 40;
