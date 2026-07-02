@@ -8928,6 +8928,17 @@ export function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: st
     const moved = energies.slice(energies.length - takeCount);
     const remaining = energies.slice(0, energies.length - takeCount);
     if (toHand) {
+      // v5.845：多於 takeCount 個可選能量時讓玩家選要放回哪些(原自動取末端 → 多屬性/特殊能量選錯)。
+      if (energies.length > takeCount) {
+        return withPending(state, {
+          type: 'active-energy-discard',
+          actorIdx: aIdx, sourcePlayerIdx: aIdx,
+          minCount: takeCount, maxCount: takeCount,
+          effectKey: 'return-self-energy-pick-to-hand',
+          params: { titleOverride: `${label}：選擇 ${takeCount} 個要放回手牌的能量`, label, validIids: energies.map(e => e.iid) },
+        });
+      }
+      // 可選能量數 <= takeCount → 全放回,無需選(等價)
       let s = addLog(state, `${label}：${attName} 將 ${takeCount} 張能量放回手牌`, aIdx);
       return updatePlayer(s, aIdx, p => {
         if (!p.active) return p;
@@ -8990,6 +9001,24 @@ regR('return-self-energy-pick-to-bench', (st, idx, iids, params, pool) => {
     effectKey: 'gengar-move-energy',
     params: { energyIid: energy.iid, energyCardId: energy.cardId },
   });
+});
+
+// v5.845：returnSelfActiveEnergyPost toHand 分支的「選能量放回手牌」picker 收尾。
+regR('return-self-energy-pick-to-hand', (st, idx, _iids, params, _pool) => {
+  const iids = _iids;
+  if (iids.length === 0) return st;
+  const active = st.players[idx].active;
+  if (!active) return st;
+  const set = new Set(iids);
+  const moved = active.energyAttached.filter(e => set.has(e.iid));
+  if (moved.length === 0) return st;
+  const label = (params?.label as string) ?? '放回能量';
+  let s = updatePlayer(st, idx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => !set.has(e.iid)) } : null,
+    hand: [...p.hand, ...moved.map(e => ({ cardId: e.cardId, iid: e.iid }))],
+  }));
+  return addLog(s, `${label}：將 ${moved.length} 個能量放回手牌`, idx);
 });
 
 function returnOppActiveEnergyPost(n: number, label: string): AttackPostFn {

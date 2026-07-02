@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.845</span> 對戰改善：使用需要「選擇能量放回手牌」的招式（狡猾天狗「能量閉環」、古劍豹「冰柱閉環」、波爾凱尼恩「逆火」、裹蜜蟲「能量閉環」）時，先前是系統自動選最後附上的能量放回；現改為由玩家自行選擇要放回哪些能量。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.844</span> 對戰改善：使用需要「丟棄自身 N 個能量」的招式（超級噴火龍Yex「炎獄狂爆Y」、青木的姆克鷹「羽毛強襲」、烏鴉頭頭「狙擊羽毛」）時，先前是系統自動丟掉最後附上的能量；現已改為由玩家自行選擇要丟哪些能量（與其他同類招式一致），避免誤丟想保留的特殊能量。</summary>
       </details>
       <details>

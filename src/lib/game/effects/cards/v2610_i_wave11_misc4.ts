@@ -24,7 +24,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost } from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
+import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost, returnSelfActiveEnergyPost} from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
 import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
 import { countSpecialConditions } from '../_shared'; // v5.834 特殊狀態數(三槽)
 import { energyMatchesType } from '../_shared';
@@ -175,10 +175,10 @@ regPre('始祖小鳥|雜技', coinFlipPlusMultiPre(30, 2, 30, '雜技'));
 // D. 自身能量回手 (2 張)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('波爾凱尼恩|逆火', (s) => ({ state: s, damage: 130 }));
-regPost('波爾凱尼恩|逆火', selfReturnNTypeEnergyToHandPost(2, 'Fire', '逆火'));
+regPost('波爾凱尼恩|逆火', returnSelfActiveEnergyPost(2, true, '逆火', 'Fire')); // v5.845 收斂 picker
 
 regPre('裹蜜蟲|能量閉環', (s) => ({ state: s, damage: 50 }));
-regPost('裹蜜蟲|能量閉環', selfReturnNTypeEnergyToHandPost(1, 'any', '能量閉環'));
+regPost('裹蜜蟲|能量閉環', returnSelfActiveEnergyPost(1, true, '能量閉環')); // v5.845 收斂 picker
 
 // ══════════════════════════════════════════════════════════════════════════════
 // E. 對手所有寶可夢/備戰各 N 傷 (2 張)
