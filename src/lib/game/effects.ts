@@ -1413,21 +1413,7 @@ regPre('黑暗鴉|伏擊', (state, aIdx, _pool) => {
 
 // 狙擊羽毛 — 丟棄 2 個能量，對對手任意1隻寶可夢造成 120 傷害（含出場）
 // PRE：丟棄 2 個能量，回傳 damage=0（傷害由 POST 處理，不對出場造成傷害）
-regPre('烏鴉頭頭|狙擊羽毛', (state, aIdx, _pool) => {
-  const player = state.players[aIdx];
-  if (!player.active) return { state, damage: 0 };
-  const energies = player.active.energyAttached;
-  if (energies.length < 2) return { state, damage: 0 };
-  const discarded = energies.slice(-2);
-  const remaining = energies.slice(0, energies.length - 2);
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: remaining } : null,
-    discard: [...p.discard, ...discarded],
-  }));
-  s = addLog(s, '狙擊羽毛：丟棄 2 個能量', aIdx);
-  return { state: s, damage: 0 };
-});
+// v5.844：丟 2 能量改 SELF_DISCARD_UNITS_BATCH picker(玩家選,原 slice(-2) 自動取末端)；regPost 只留狙擊
 
 // POST：選擇對手任意寶可夢，造成 120 傷害
 regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, pool) => {
@@ -11080,6 +11066,10 @@ const SELF_DISCARD_UNITS_BATCH: Array<[string, string, number, number, DiscardMu
   ['鳳王|紅蓮之翼', '紅蓮之翼', 130, 1, 'Fire'],  // 卡面限【火】能量
   ['大朝北鼻|鼻衝撞', '鼻衝撞', 260, 3, 'all'],
   ['火恐龍|大字爆炎', '大字爆炎', 90, 1, 'all'],
+  // v5.844：原用 discardActiveEnergy/slice 自動取末端 → 收斂 batch picker(玩家選丟哪 N 個)
+  ['超級噴火龍Yex|炎獄狂爆Y', '炎獄狂爆Y', 0, 3, 'all'],
+  ['青木的姆克鷹|羽毛強襲', '羽毛強襲', 150, 2, 'all'],
+  ['烏鴉頭頭|狙擊羽毛', '狙擊羽毛', 0, 2, 'all'],
 ];
 for (const [key, label, dmg, n, tf] of SELF_DISCARD_UNITS_BATCH) {
   registerSelfDiscardMultiply(key, label, dmg, 0, n, tf, false, n);

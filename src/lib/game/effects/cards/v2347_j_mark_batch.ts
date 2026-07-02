@@ -63,11 +63,8 @@ regPost('投羽梟|羽毛射擊', (state, aIdx) => {
 });
 
 // 超級噴火龍Yex｜炎獄狂爆Y：丟棄自身 3 個能量，對手 1 隻寶可夢 280 傷害。
-regPre('超級噴火龍Yex|炎獄狂爆Y', (state) => ({ state, damage: 0 }));
-regPost('超級噴火龍Yex|炎獄狂爆Y', (state, aIdx) => {
-  const s = discardActiveEnergy(state, aIdx, 3, '炎獄狂爆Y');
-  return chooseOppPokemonDamage(s, aIdx, 280, '炎獄狂爆Y');
-});
+// v5.844：丟 3 能量改 SELF_DISCARD_UNITS_BATCH picker(玩家選,原 discardActiveEnergy 自動取末端)；此處只留狙擊 280
+regPost('超級噴火龍Yex|炎獄狂爆Y', (state, aIdx) => chooseOppPokemonDamage(state, aIdx, 280, '炎獄狂爆Y'));
 
 // 凱路迪歐｜穿通：20，對手 1 隻備戰也 20。
 regPost('凱路迪歐|穿通', (state, aIdx) => chooseOppBenchDamage(state, aIdx, 20, '穿通'));
@@ -77,11 +74,9 @@ regPre('禿鷹娜ex|骨之射擊', (state) => ({ state, damage: 0 }));
 regPost('禿鷹娜ex|骨之射擊', (state, aIdx) => chooseOppPokemonDamage(state, aIdx, 50, '骨之射擊'));
 
 // 青木的姆克鷹｜羽毛強襲：150，丟棄自身 2 個能量，對手 1 隻備戰也 50。
-regPre('青木的姆克鷹|羽毛強襲', (state) => ({ state, damage: 150 }));
-regPost('青木的姆克鷹|羽毛強襲', (state, aIdx) => {
-  const s = discardActiveEnergy(state, aIdx, 2, '羽毛強襲');
-  return chooseOppBenchDamage(s, aIdx, 50, '羽毛強襲');
-});
+// v5.844：羽毛強襲主傷害 150 改由 SELF_DISCARD_UNITS_BATCH regPre 設(含 picker)
+// v5.844：丟 2 能量改 batch picker(玩家選,原自動)；主傷害 150 由 batch regPre 設；此處只留狙擊 50
+regPost('青木的姆克鷹|羽毛強襲', (state, aIdx) => chooseOppBenchDamage(state, aIdx, 50, '羽毛強襲'));
 
 // 超級花葉蒂ex｜溫柔之光：雙方所有寶可夢各恢復 30 HP。
 regPre('超級花葉蒂ex|溫柔之光', (state) => ({ state, damage: 0 }));

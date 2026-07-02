@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.844</span> 對戰改善：使用需要「丟棄自身 N 個能量」的招式（超級噴火龍Yex「炎獄狂爆Y」、青木的姆克鷹「羽毛強襲」、烏鴉頭頭「狙擊羽毛」）時，先前是系統自動丟掉最後附上的能量；現已改為由玩家自行選擇要丟哪些能量（與其他同類招式一致），避免誤丟想保留的特殊能量。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.843</span> 對戰修正：莉佳的臭臭花「噴毒」的效果為「將對手的戰鬥寶可夢中毒」（不需擲硬幣），先前實作誤設為擲硬幣正面才中毒；現已修正為直接中毒。</summary>
       </details>
       <details>
