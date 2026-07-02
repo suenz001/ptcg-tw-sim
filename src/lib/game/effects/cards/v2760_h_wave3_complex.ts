@@ -284,36 +284,72 @@ regPost('智揮猩|掌握弱點', (state, aIdx, _pool) => {
 // 13. 泡沫栗鼠|掃除 — 棄對手 ≤2 道具
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('泡沫栗鼠|掃除', (s) => ({ state: s, damage: 0 }));
-regPost('泡沫栗鼠|掃除', (state, aIdx, pool) => {
+// v5.849：掃除選對手道具 options — 只列對手、過化隱/純樸免疫 gate、含 extraTools(多重轉接)。
+function buildScavengeOptions(state: import('../../types').GameState, aIdx: 0 | 1, pool: Map<string, any>) {
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = state.players[dIdx];
-  // v5.841：對齊腐蝕液 — 過化隱/純樸免疫 gate（招式丟對手道具屬招式效果）+ 含 extraTools(多重轉接)。
-  //   ⚠️ UX 簡化：仍為自動選取前 2 個可丟道具,未做玩家手選 picker（卡面為「選擇最多 2 張」）。
-  const targets: { inst: CardInstance; isBench: boolean }[] = [
-    ...(dp.active ? [{ inst: dp.active, isBench: false }] : []),
-    ...dp.bench.map(b => ({ inst: b, isBench: true })),
+  const all: { inst: CardInstance; pos: string; isBench: boolean }[] = [
+    ...(dp.active ? [{ inst: dp.active, pos: '戰鬥', isBench: false }] : []),
+    ...dp.bench.map(b => ({ inst: b, pos: '備戰', isBench: true })),
   ];
-  const discardIids = new Set<string>();
-  const removedTools: CardInstance[] = [];
-  for (const { inst, isBench } of targets) {
+  const opts: { id: string; text: string; inspectIid?: string; inspectPlayerIdx?: 0 | 1 }[] = [];
+  for (const { inst, pos, isBench } of all) {
     if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench }).blocked) continue;
+    const ownerName = pool.get(inst.cardId)?.name ?? '?';
     for (const t of getAllAttachedTools(inst)) {
-      if (discardIids.size < 2) { discardIids.add(t.iid); removedTools.push({ ...t, damage: 0, energyAttached: [] }); }
+      opts.push({ id: `${dIdx}:${inst.iid}:${t.iid}`, text: `🔧 對手 ${pos} ${ownerName} 的「${pool.get(t.cardId)?.name ?? '?'}」`, inspectIid: inst.iid, inspectPlayerIdx: dIdx });
     }
   }
-  if (discardIids.size === 0) return addLog(state, '掃除：對手場上無可丟棄的道具', aIdx);
-  const strip = (inst: CardInstance): CardInstance => ({
-    ...inst,
-    toolAttached: discardIids.has(inst.toolAttached?.iid ?? '') ? undefined : inst.toolAttached,
-    extraTools: (inst.extraTools ?? []).filter(t => !discardIids.has(t.iid)),
+  return opts;
+}
+// v5.849：卡面「選擇最多 2 張對手道具丟棄」→ 玩家手選(原 UX 簡化自動選前 2)。picksLeft 連續選,對齊道具拆除器。
+regPost('泡沫栗鼠|掃除', (state, aIdx, pool) => {
+  const opts = buildScavengeOptions(state, aIdx, pool);
+  if (opts.length === 0) return addLog(state, '掃除：對手場上無可丟棄的道具', aIdx);
+  return withPending(addLog(state, '掃除：從對手場上選 1 張道具丟棄（最多 2 張）', aIdx), {
+    type: 'modal-choice',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'scavenge-tool-pick',
+    params: { label: '掃除（第 1 張，最多 2 張）', options: opts, picksLeft: 2 },
   });
-  const s = updatePlayer(state, dIdx, p => ({
-    ...p,
-    active: p.active ? strip(p.active) : null,
-    bench: p.bench.map(strip),
-    discard: [...p.discard, ...removedTools],
+});
+regR('scavenge-tool-pick', (state, aIdx, iids, params, pool) => {
+  if (iids.length === 0) return state;
+  const choice = iids[0];
+  if (choice === 'end') return addLog(state, '掃除：玩家選擇不丟第 2 張', aIdx);
+  const segs = choice.split(':');
+  const pIdx = parseInt(segs[0]) as 0 | 1;
+  const targetIid = segs[1];
+  const toolIid = segs[2];
+  let removedTool: any = undefined; let ownerName = '?';
+  const rm = (inst: CardInstance): CardInstance => {
+    if (inst.toolAttached?.iid === toolIid) { removedTool = inst.toolAttached; ownerName = pool.get(inst.cardId)?.name ?? '?'; return { ...inst, toolAttached: undefined }; }
+    const found = (inst.extraTools ?? []).find(x => x.iid === toolIid);
+    if (found) { removedTool = found; ownerName = pool.get(inst.cardId)?.name ?? '?'; return { ...inst, extraTools: (inst.extraTools ?? []).filter(x => x.iid !== toolIid) }; }
+    return inst;
+  };
+  let s = updatePlayer(state, pIdx, pp => ({
+    ...pp,
+    active: pp.active && pp.active.iid === targetIid ? rm(pp.active) : pp.active,
+    bench: pp.bench.map(b => b.iid === targetIid ? rm(b) : b),
   }));
-  return addLog(s, `掃除：對手場上 ${discardIids.size} 張道具卡棄到對手棄牌區`, aIdx);
+  if (!removedTool) return addLog(s, '掃除：找不到目標道具', aIdx);
+  s = updatePlayer(s, pIdx, pp => ({ ...pp, discard: [...pp.discard, { ...removedTool, damage: 0, energyAttached: [] }] }));
+  s = addLog(s, `掃除：丟棄 ${ownerName} 身上的道具`, aIdx);
+  const picksLeft = (params?.picksLeft as number ?? 1) - 1;
+  if (picksLeft >= 1) {
+    const opts2 = buildScavengeOptions(s, aIdx, pool);
+    if (opts2.length > 0) {
+      opts2.push({ id: 'end', text: '✋ 結束（不丟第 2 張）' });
+      s = withPending(s, {
+        type: 'modal-choice', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        minCount: 1, maxCount: 1, effectKey: 'scavenge-tool-pick',
+        params: { label: '掃除（第 2 張）', options: opts2, picksLeft: 0 },
+      });
+    }
+  }
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

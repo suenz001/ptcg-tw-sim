@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.849</span> 對戰改善：泡沫栗鼠「掃除」（選擇最多 2 張對手場上寶可夢道具丟棄）先前是系統自動丟前 2 張；現改為由玩家自行選擇要丟哪些道具（可只丟 1 張或不丟第 2 張），帶「化隱」等免疫招式效果的寶可夢道具不會被列入。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.848</span> 對戰改善：龍頭地鼠ex「貫通鑽」（對手 1 隻受傷的備戰寶可夢受到 60）與赤面龍「龍之猛暴」（從棄牌區附基本火能量到自己的【龍】寶可夢）先前在有多個符合目標時由系統自動選第一個；現改為由玩家自行選擇目標。</summary>
       </details>
       <details>

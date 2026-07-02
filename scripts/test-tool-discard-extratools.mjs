@@ -34,18 +34,7 @@ T('腐蝕液:丟對手 2 道具(含 extraTools)', () => {
   assert.equal((a.extraTools??[]).length, 0, `extraTools 應清空,實得 ${(a.extraTools??[]).length}`);
   assert.equal(out.players[1].discard.length, 2, `對手棄牌應 2 張道具,實得 ${out.players[1].discard.length}`);
 });
-T('掃除:丟對手 2 道具(含 extraTools)', () => {
-  const out=ATTACK_POST.get('泡沫栗鼠|掃除')(mk(twoTool(POKE)),0,pool);
-  const a=out.players[1].active;
-  assert.ok(!a.toolAttached && (a.extraTools??[]).length===0, 'active 道具應全清');
-  assert.equal(out.players[1].discard.length, 2, `應棄 2 張,實得 ${out.players[1].discard.length}`);
-});
-T('★掃除:化隱對手道具不應被丟(補 gate)', () => {
-  const out=ATTACK_POST.get('泡沫栗鼠|掃除')(mk(twoTool(HIDDEN)),0,pool);
-  const a=out.players[1].active;
-  assert.ok(a.toolAttached && (a.extraTools??[]).length===1, `化隱對手道具應保留,實得 tool=${!!a.toolAttached} extra=${(a.extraTools??[]).length}`);
-  assert.equal(out.players[1].discard.length, 0, '化隱對手不應有道具被棄');
-});
+// v5.849：掃除改玩家 picker(選對手道具)→ picker+extraTools+化隱免疫改由 test-scavenge-tool-picker 覆蓋。
 T('刺殺迴旋:自身回手,2 道具(含 extraTools)入棄牌', () => {
   const st=mk(plain(POKE));
   st.players[0].active=twoTool(POKE);   // 攻擊者自身帶 2 道具
