@@ -896,7 +896,7 @@ regPre('芳香精|芬香壓制', (s) => ({ state: s, damage: 60 }));
 regPost('芳香精|芬香壓制', statusPost('confused'));
 // 洗翠 風速狗|灼燒：90 + 將對手戰鬥【灼傷】
 regPre('洗翠 風速狗|灼燒', (s) => ({ state: s, damage: 90 }));
-regPost('洗翠 風速狗|灼燒', statusPost('burned'));
+// v5.844 清除重複死碼(生效版保留在他處),原行 899
 // 謎擬Ｑex|幽靈之旅：120 + 將對手戰鬥【混亂】
 regPre('謎擬Ｑex|幽靈之旅', (s) => ({ state: s, damage: 120 }));
 regPost('謎擬Ｑex|幽靈之旅', statusPost('confused'));

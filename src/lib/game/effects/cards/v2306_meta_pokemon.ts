@@ -11,28 +11,7 @@ import { joinCardNames } from '../_shared';
  */
 
 // ── 吉雉雞ex (Fezandipiti ex) ──────────────────────────────────────────────────
-regA('吉雉雞ex', 0, (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  if (p.abilityNamesUsedThisTurn?.includes('扭轉乾坤')) {
-    return addLog(state, '扭轉乾坤：在這個回合已經使出了其他的「扭轉乾坤」，無法使用', aIdx);
-  }
-  const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
-  const abilityKO = state.oppAbilityKOdMeInLastOppTurn?.[aIdx] ?? 0;
-  if (attackKO === 0 && abilityKO === 0) {
-    return addLog(state, '扭轉乾坤：上個對手回合沒有自己的寶可夢被擊倒，無法使用', aIdx);
-  }
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    abilityNamesUsedThisTurn: [...(p.abilityNamesUsedThisTurn ?? []), '扭轉乾坤'],
-  }));
-  const instInPlay = s.players[aIdx].active?.iid === inst.iid 
-    ? s.players[aIdx].active 
-    : s.players[aIdx].bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
-  s = addLog(s, '吉雉雞ex：使用特性「扭轉乾坤」，從牌庫抽 3 張卡', aIdx);
-  return drawCards(s, aIdx, 3);
-});
+// v5.844 清除重複死碼(生效版保留在他處),原行 14
 
 // ── 厄鬼椪 碧草面具ex (Teal Mask Ogerpon ex) ─────────────────────────────────────────
 // v5.392：碧綠之舞 picker 版死碼已移除 — 同 key regA('厄鬼椪 碧草面具ex', 0) 在 effects.ts 有
@@ -341,7 +320,7 @@ RESOLVERS.set('deck-search-to-hand-a-收集香氣', __genericDeckSearchResolverF
 RESOLVERS.set('deck-search-to-hand-a-毛象搬運', __genericDeckSearchResolverFactory('毛象搬運'));
 RESOLVERS.set('deck-search-to-hand-a-四季變換', __genericDeckSearchResolverFactory('四季變換'));
 regPre('鐵面忍者|急速折返', (state, aIdx, pool) => ({ state, damage: 90 }));
-regPost('鐵面忍者|急速折返', selfSwapPost('急速折返'));
+// v5.844 清除重複死碼(生效版保留在他處),原行 344
 
 // ── 貓鼬探長 (Gumshoos) ───────────────────────────────────────────────────────────
 regA('貓鼬探長', 0, (state, aIdx, pool, inst) => {
@@ -545,31 +524,7 @@ regPre('象牙豬ex|雷鳴行進', (state, aIdx, pool) => {
 });
 
 // ── 米立龍 (Tatsugiri) ───────────────────────
-regA('米立龍', 0, (state, aIdx, pool, inst) => {
-  if (!inst) return state;
-  const p = state.players[aIdx];
-  if (p.active?.iid !== inst.iid) return addLog(state, '集客：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
-  if (p.deck.length === 0) return addLog(state, '集客：牌庫為空', aIdx);
-  if (p.active) p.active.abilityUsedThisTurn = true;
-  const count = Math.min(6, p.deck.length);
-  const top6 = p.deck.slice(0, count);
-  const supporters = top6.filter(c => pool.get(c.cardId)?.subtype === 'Supporter');
-  if (supporters.length === 0) {
-    let s = addLog(state, `集客：牌庫上方 ${count} 張卡中沒有支援者，將其放回牌庫並重洗`, aIdx);
-    return updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
-  }
-  let s = addLog(state, `集客：查看牌庫上方 ${count} 張卡，選擇 1 張支援者加入手牌`, aIdx);
-  return withPending(s, {
-    type: 'reorder-deck-top', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: 1,
-    effectKey: 'tatsugiri-attract-customers',
-    params: {
-      titleOverride: '選擇 1 張支援者加入手牌',
-      candidateIids: supporters.map(c => c.iid),
-      allowDiscard: true,
-      allViewedIids: top6.map(c => c.iid),
-    }
-  });
-});
+// v5.844 清除重複死碼(生效版保留在他處),原行 548
 regR('tatsugiri-attract-customers', (state, actorIdx, selectedIids, params, pool) => {
   const allViewedIids = ((params?.allViewedIids as string[] | undefined) ?? []);
   const p = state.players[actorIdx];

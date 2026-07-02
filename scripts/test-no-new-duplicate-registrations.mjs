@@ -11,10 +11,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 const KNOWN = new Set([
-  "regA|吉雉雞ex|0","regA|米立龍|0","regG|鬼之假面",
-  "regPost|妙喵|小憩","regPost|洗翠 風速狗|灼燒","regPost|鐵面忍者|急速折返",
-  "regPre|恰雷姆|七度踢腿","regPre|波盪水ex|宣洩吼嘯","regPre|貓鼬斬|連斬",
-  "regPre|雙彈瓦斯|瘋狂炸彈","reg|鬼之假面",
+  "regPre|波盪水ex|宣洩吼嘯",
 ]);
 
 function listTs(dir){let out=[];for(const e of readdirSync(dir,{withFileTypes:true})){const p=join(dir,e.name);

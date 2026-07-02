@@ -1508,19 +1508,8 @@ function hasOnishimaPoke(insts: import('../../types').CardInstance[],
     return card?.supertype === 'Pokemon' && card.name.includes('厄鬼椪');
   });
 }
-regG('鬼之假面', (st, idx, pool) => {
-  const p = st.players[idx];
-  const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
-  return hasOnishimaPoke(p.discard, pool) && hasOnishimaPoke(fieldInsts, pool);
-});
-reg('鬼之假面', (st, idx, _pool) => {
-  st = addLog(st, '鬼之假面：從棄牌選 1 張「厄鬼椪 ex」', idx);
-  return withPending(st, {
-    type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Pokemon:NamePrefix=厄鬼椪', minCount: 1, maxCount: 1,
-    effectKey: 'oni-mask-step1',
-  });
-});
+// v5.844 清除重複死碼(生效版保留在他處),原行 1511
+// v5.844 清除重複死碼(生效版保留在他處),原行 1516
 regR('oni-mask-step1', (st, idx, iids, _params, _pool) => {
   if (iids.length !== 1) {
     return addLog(st, '鬼之假面：取消（未選擇）', idx);

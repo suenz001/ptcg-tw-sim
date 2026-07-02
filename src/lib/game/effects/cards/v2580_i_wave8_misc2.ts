@@ -181,13 +181,7 @@ regPre('噴火駝|炙燒灼傷', (state, aIdx, _pool) => {
 });
 
 // 恰雷姆|七度踢腿 150 — 手牌不是 7 張則失敗
-regPre('恰雷姆|七度踢腿', (state, aIdx, _pool) => {
-  const handCount = state.players[aIdx].hand.length;
-  if (handCount !== 7) {
-    return { state: addLog(state, `七度踢腿：手牌 ${handCount} 張（非 7 張）→ 招式失敗`, aIdx), damage: 0 };
-  }
-  return { state: addLog(state, '七度踢腿：手牌恰好 7 張 → 150 傷害', aIdx), damage: 150 };
-});
+// v5.844 清除重複死碼(生效版保留在他處),原行 184
 
 // ══════════════════════════════════════════════════════════════════════════════
 // H. 自方治癒批次 (2 張)

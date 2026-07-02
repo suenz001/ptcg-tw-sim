@@ -241,7 +241,7 @@ regPost('青木的勇士雄鷹|緊抓', cantRetreatNextFn('緊抓'));
 // 妙喵（M3 Basic Psychic 60HP）｜小憩：0 傷，自身回復 20 HP
 // 卡面：「將這隻寶可夢身上的 2 個傷害指示物去除。」
 regPre('妙喵|小憩', (state) => ({ state, damage: 0 }));
-regPost('妙喵|小憩', healSelfFn(20, '小憩'));
+// v5.844 清除重複死碼(生效版保留在他處),原行 244
 
 // 芳香精（M3 Stage1 Psychic 120HP）｜吸取之吻：50，自身回復 30 HP
 // 卡面：「50 將這隻寶可夢身上的 3 個傷害指示物去除。」

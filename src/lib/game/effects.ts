@@ -5452,13 +5452,7 @@ regPre('一對鼠|嬉鬧', coinPlusPre(10, 10, '嬉鬧'));
 regPre('普隆隆姆|擊飛', coinPlusPre(90, 90, '擊飛'));
 
 // 貓鼬斬｜連斬 — 擲 3 次硬幣，1 正 +20 / 2 正 +50 / 3 正 +80
-regPre('貓鼬斬|連斬', (state, aIdx, _pool) => {
-  const r = flipCoinsWithLog(state, 3, '連斬', aIdx);
-  const bonus = r.heads === 3 ? 80 : r.heads === 2 ? 50 : r.heads === 1 ? 20 : 0;
-  const dmg = 10 + bonus;
-  const s = addLog(r.state, `連斬：${r.heads} 次正面 → 基礎 10 + ${bonus} = ${dmg} 傷害`, aIdx);
-  return { state: s, damage: dmg };
-});
+// v5.844 清除重複死碼(貓鼬斬|連斬生效版在 8239 coinTripleHeadsPre),原行 5455
 
 // ── B. 將對手混亂（regPost statusPost('confused')）6 張 ──────────────────
 regPost('仙子伊布|魅惑之聲', statusPost('confused'));
