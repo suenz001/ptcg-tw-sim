@@ -610,8 +610,10 @@ regR('meowth-ex-trump-catch', (state, actorIdx, selectedIids, params, pool) => {
   const cardName = pool.get(targetInst.cardId)?.name ?? '?';
   return addLog(s, `殺手鐧捕捉：將「${cardName}」加入手牌，並重洗牌庫`, actorIdx);
 });
-regPre('喵喵ex|夾尾巴逃跑', (state, aIdx, pool) => ({ state, damage: 60 }));
-regPost('喵喵ex|夾尾巴逃跑', selfBouncePost('夾尾巴逃跑'));
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 喵喵ex|夾尾巴逃跑)
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 喵喵ex|夾尾巴逃跑)
 
 // ── 芳香精 (Aromatisse) ───────────────────────
 regA('芳香精', 0, deckSearchToHandA(2, 'BasicEnergy:Psychic', '收集香氣'));

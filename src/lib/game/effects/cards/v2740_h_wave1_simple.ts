@@ -232,8 +232,10 @@ function oppBenchCountPre(base: number, per: number, label: string): AttackPreFn
     return { state: addLog(state, `${label}：對手備戰 ${n} 隻 → ${base}+${n}×${per} = ${dmg}`, aIdx), damage: dmg };
   };
 }
-regPre('厄鬼椪 碧草面具|鬼返', oppBenchCountPre(20, 20, '鬼返'));
-regPre('捷拉奧拉|鬥戰雷電', oppBenchCountPre(20, 20, '鬥戰雷電'));
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 厄鬼椪 碧草面具|鬼返)
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 捷拉奧拉|鬥戰雷電)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 10. 自方備戰數 ×N（1 張）— 卡璞・鳴鳴ex|閃電結連

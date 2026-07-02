@@ -50,11 +50,8 @@ function parseDmg(s: string): number {
 // 1. 喵喵|亂抓 — name 前有 zero-width non-joiner（U+200C）
 //    擲 3 次硬幣 ×20
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('喵喵|亂抓', (state, aIdx, _pool) => {
-  const r = flipCoinsWithLog(state, 3, '亂抓', aIdx);
-  const dmg = r.heads * 20;
-  return { state: addLog(r.state, `亂抓：${r.heads}/3 → ${r.heads}×20 = ${dmg}`, aIdx), damage: dmg };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 喵喵|亂抓)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. 骨紋巨聲鱷|純樸 — 「這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響」

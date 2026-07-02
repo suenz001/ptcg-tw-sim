@@ -492,22 +492,10 @@ regR('v155-self-swap-active', (st, aIdx, iids, _params, pool) => {
 // (15) 天仙石（仙子伊布ex）— 0 傷 + 對手 2 隻備戰回對手牌庫 + 下回合鎖「天仙石」
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.157：cooldown 從「鎖整隻」精修為「只鎖天仙石招式名」（用 blockedAttackNamesNextTurn）
-regPre('仙子伊布ex|天仙石', (state) => ({ state, damage: 0 }));
-regPost('仙子伊布ex|天仙石', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const dPlayer = state.players[dIdx];
-  if (dPlayer.bench.length === 0) {
-    return addLog(state, '天仙石：對手備戰區無寶可夢', aIdx);
-  }
-  const pickCount = Math.min(2, dPlayer.bench.length);
-  let s = addLog(state, `天仙石：選 ${pickCount} 隻對手備戰寶可夢回對手牌庫並重洗`, aIdx);
-  return withPending(s, {
-    type: 'opp-bench-choose',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: pickCount, maxCount: pickCount,
-    effectKey: 'v155-tianxianstone-return',
-  });
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 仙子伊布ex|天仙石)
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 仙子伊布ex|天仙石)
 
 regR('v155-tianxianstone-return', (st, aIdx, iids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;

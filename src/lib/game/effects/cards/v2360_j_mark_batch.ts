@@ -58,62 +58,21 @@ function flip1(
 // 卡面：擲與這隻寶可夢身上附加的【水】能量的數量相同次數的硬幣，
 //   造成正面出現的次數×90點傷害。
 // 對應：M-P-J (18513) / M3 兩個版本，共用同一招式名稱故一條 regPre 即可覆蓋。
-regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
-  const attacker = state.players[aIdx].active;
-  if (!attacker) return { state: addLog(state, '強力蒸汽：無戰鬥場寶可夢', aIdx), damage: 0 };
 
-  // v4.797：改用 countEnergy（host-aware）— 認 pokemonType=null 基本【水】能量 + 特殊能量
-  //   修舊 bug：strict ec.pokemonType === 'Water' 抓不到 pokemonType=null 的基本水能量。
-  const waterCount = countEnergy(attacker, pool).get('Water') ?? 0;
-
-  if (waterCount === 0) {
-    return {
-      state: addLog(state, '強力蒸汽：無附加【水】能量 → 0 傷害', aIdx),
-      damage: 0,
-    };
-  }
-
-  // 擲 waterCount 次硬幣，計算正面次數
-  let heads = 0;
-  let s = state;
-  for (let i = 0; i < waterCount; i++) {
-    const r = flip1('強力蒸汽', s, aIdx);
-    s = r.state;
-    if (r.heads) heads++;
-  }
-  const dmg = heads * 90;
-  s = addLog(s, `強力蒸汽：${waterCount} 次擲幣，${heads} 次正面 → ${dmg} 傷害`, aIdx);
-  return { state: s, damage: dmg };
-});
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 波爾凱尼恩|強力蒸汽)
 
 // ── 群組 B：彩粉蝶｜穿堂風 ───────────────────────────────────────────────────
 // 卡面：若場上有競技場卡，則增加60點傷害（60 + 60 = 120）。
 // 對應：M3 (17986) 唯一版本。
-regPre('彩粉蝶|穿堂風', (state, aIdx) => {
-  const hasStadium = !!state.activeStadium;
-  const dmg = hasStadium ? 120 : 60;
-  const msg = hasStadium
-    ? `穿堂風：場上有競技場 → ${dmg} 傷害`
-    : '穿堂風：場上無競技場 → 60 傷害';
-  return { state: addLog(state, msg, aIdx), damage: dmg };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 彩粉蝶|穿堂風)
 
 // ── 群組 C：超級火炎獅ex｜大爆炸之火 ────────────────────────────────────────
 // 卡面：減少這隻寶可夢身上放置的傷害指示物的數量×10點傷害（基礎 290−）。
 //   傷害指示物數 = damage / 10，所以實際傷害 = max(0, 290 − attacker.damage)。
 // 對應：M4 (18435) / 083 (18534)，共用同一招式名稱一條 regPre 覆蓋。
-regPre('超級火炎獅ex|大爆炸之火', (state, aIdx) => {
-  const attacker = state.players[aIdx].active;
-  const selfDamage = attacker?.damage ?? 0;
-  const counters = selfDamage / 10;
-  const dmg = Math.max(0, 290 - selfDamage);
-  const s = addLog(
-    state,
-    `大爆炸之火：自身 ${counters} 個傷害指示物 → ${dmg} 傷害`,
-    aIdx,
-  );
-  return { state: s, damage: dmg };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 超級火炎獅ex|大爆炸之火)
 
 // ── 群組 D：妙喵｜拍檔攻擊 ───────────────────────────────────────────────────
 // 卡面：在這個回合，若從手牌使出了「瑪琪艾兒」，則增加60點傷害（10 + 60 = 70）。

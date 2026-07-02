@@ -215,11 +215,13 @@ regPost('泥巴魚ex|咬緊', cantRetreatNextFn('咬緊'));
 
 // 圓絲蛛（M3 Basic Grass 60HP）｜緊纏之絲：10，對手下回合無法撤退
 // 卡面：「10 對手的戰鬥寶可夢下次回合無法撤退。」
-regPost('圓絲蛛|緊纏之絲', cantRetreatNextFn('緊纏之絲'));
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 圓絲蛛|緊纏之絲)
 
 // 布里卡隆（M4 Stage2 Grass 180HP）｜圍困：160，對手下回合無法撤退
 // 卡面：「160 對手的戰鬥寶可夢下次回合無法撤退。」
-regPost('布里卡隆|圍困', cantRetreatNextFn('圍困'));
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 布里卡隆|圍困)
 
 // 青木的勇士雄鷹（MC Stage1 Colorless 130HP）｜緊抓：50，對手下回合無法撤退
 // 卡面：「50 對手的戰鬥寶可夢下次回合無法撤退。」
@@ -229,10 +231,8 @@ regPost('青木的勇士雄鷹|緊抓', cantRetreatNextFn('緊抓'));
 // 卡面：「50 對手的戰鬥寶可夢中毒。對手的戰鬥寶可夢下次回合無法撤退。」
 // v2.991：改用 effects.ts 的 statusPost 走完整免疫檢查（憨憨臉/薄霧/抵抗之幕/祭典會場）+ cantRetreatNextFn
 //         （此 wave 註冊被 effects.ts 13263 覆蓋；改正以防未來載入順序變更）
-regPost('阿利多斯|毒陣', (state, aIdx, pool) => {
-  const s1 = statusPost('poisoned')(state, aIdx, pool);
-  return cantRetreatNextFn('毒陣')(s1, aIdx, pool);
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 阿利多斯|毒陣)
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 群組 D：自愈招式
@@ -245,7 +245,8 @@ regPost('妙喵|小憩', healSelfFn(20, '小憩'));
 
 // 芳香精（M3 Stage1 Psychic 120HP）｜吸取之吻：50，自身回復 30 HP
 // 卡面：「50 將這隻寶可夢身上的 3 個傷害指示物去除。」
-regPost('芳香精|吸取之吻', healSelfFn(30, '吸取之吻'));
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 芳香精|吸取之吻)
 
 // 黏黏寶（M4 Basic Dragon 60HP）｜吸取：30，自身回復 30 HP
 // 卡面：「30 將這隻寶可夢身上的 3 個傷害指示物去除。」
@@ -324,163 +325,59 @@ regPre('超能妙喵|精神強念', (state, aIdx, pool) => {
 
 // 君主蛇（M3 Stage2 Grass 160HP）｜皇家指令：20×自方場上寶可夢總數
 // 卡面：「20× 增加自己場上的寶可夢的數量×20 點傷害。」
-regPre('君主蛇|皇家指令', (state, aIdx) => {
-  const p = state.players[aIdx];
-  const count = (p.active ? 1 : 0) + p.bench.length;
-  const dmg = count * 20;
-  return {
-    state: addLog(state, `皇家指令：場上 ${count} 隻寶可夢 → ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 君主蛇|皇家指令)
 
 // 耿鬼（M3 Stage2 Darkness 130HP）｜意志劫持：10 + 對手備戰數×30
 // 卡面：「10+ 增加對手的備戰區的寶可夢的數量×30 點傷害。」
-regPre('耿鬼|意志劫持', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const bench = state.players[dIdx].bench.length;
-  const dmg = 10 + bench * 30;
-  return {
-    state: addLog(state, `意志劫持：對手備戰 ${bench} 隻 → ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 耿鬼|意志劫持)
 
 // 古劍豹（M3 Basic Darkness 120HP）｜上升利刃：80，若對手為 ex +80
 // 卡面：「80 若對手的戰鬥寶可夢是 ex 寶可夢，增加 80 點傷害。」
-regPre('古劍豹|上升利刃', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const defActive = state.players[dIdx].active;
-  const defCard = defActive ? pool.get(defActive.cardId) : null;
-  // v3.67：改用 isRulePokemon helper
-  const isEx = isRulePokemon(defCard ?? undefined);
-  const dmg = 80 + (isEx ? 80 : 0);
-  return {
-    state: addLog(
-      state,
-      `上升利刃：${isEx ? '對手為 ex → +80' : '對手非 ex'} → ${dmg}`,
-      aIdx,
-    ),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 古劍豹|上升利刃)
 
 // 密勒頓ex（MC Basic Lightning 220HP）｜強子電光：120，若對手為 ex +120
 // 卡面：「120+ 若對手的戰鬥寶可夢是 ex 寶可夢，增加 120 點傷害。」
-regPre('密勒頓ex|強子電光', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const defActive = state.players[dIdx].active;
-  const defCard = defActive ? pool.get(defActive.cardId) : null;
-  // v3.67：改用 isRulePokemon helper
-  const isEx = isRulePokemon(defCard ?? undefined);
-  const dmg = 120 + (isEx ? 120 : 0);
-  return {
-    state: addLog(
-      state,
-      `強子電光：${isEx ? '對手為 ex → +120' : '對手非 ex'} → ${dmg}`,
-      aIdx,
-    ),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 密勒頓ex|強子電光)
 
 // 堅果啞鈴（M4 Stage1 Metal 130HP）｜特殊鞭打：70，若自身附有特殊能量 +70
 // 卡面：「70+ 若這隻寶可夢身上附加了特殊能量卡，增加 70 點傷害。」
-regPre('堅果啞鈴|特殊鞭打', (state, aIdx, pool) => {
-  const att = state.players[aIdx].active;
-  const hasSpecial = att
-    ? att.energyAttached.some(e => {
-        const ec = pool.get(e.cardId);
-        return ec?.supertype === 'Energy' && ec.subtype !== 'Basic';
-      })
-    : false;
-  const dmg = 70 + (hasSpecial ? 70 : 0);
-  return {
-    state: addLog(
-      state,
-      `特殊鞭打：${hasSpecial ? '附有特殊能量 → +70' : '無特殊能量'} → ${dmg}`,
-      aIdx,
-    ),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 堅果啞鈴|特殊鞭打)
 
 // 摔角鷹人（M3 Basic Fighting 70HP）｜復仇踢：30，若任一備戰有傷害 +60
 // 卡面：「30+ 若自己備戰區有任何 1 隻已受傷的寶可夢，增加 60 點傷害。」
-regPre('摔角鷹人|復仇踢', (state, aIdx) => {
-  const bench = state.players[aIdx].bench;
-  const anyDamaged = bench.some(c => c.damage > 0);
-  const dmg = 30 + (anyDamaged ? 60 : 0);
-  return {
-    state: addLog(
-      state,
-      `復仇踢：${anyDamaged ? '備戰有傷害 → +60' : '備戰無傷'} → ${dmg}`,
-      aIdx,
-    ),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 摔角鷹人|復仇踢)
 
 // 天秤偶（M4 Basic Fighting 70HP）｜連續旋轉：30×（擲到反面止）
 // 卡面：「擲硬幣直到出現反面，增加正面出現的次數×30 點傷害。」
 // v2.991：改用本檔 flip1 helper（走標準 flip log）
 //         此 wave 註冊被 effects.ts 13371 覆蓋；改正以防未來載入順序變更
-regPre('天秤偶|連續旋轉', (state, aIdx) => {
-  let s = state;
-  let heads = 0;
-  // 安全上限 20 次防無限迴圈
-  for (let i = 0; i < 20; i++) {
-    const r = flip1('連續旋轉', s, aIdx);
-    s = r.state;
-    if (r.heads) heads++;
-    else break;
-  }
-  const dmg = heads * 30;
-  s = addLog(s, `連續旋轉：${heads} 次正面 → ${dmg} 傷害`, aIdx);
-  return { state: s, damage: dmg };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 天秤偶|連續旋轉)
 
 // 寶寶暴龍（M3 Stage1 Fighting 100HP）｜勃然大怒：20×自身傷害指示物數
 // 卡面：「20× 增加這隻寶可夢身上的傷害指示物的數量×20 點傷害。」
 // 傷害指示物 = damage ÷ 10（每格 10）
-regPre('寶寶暴龍|勃然大怒', (state, aIdx) => {
-  const att = state.players[aIdx].active;
-  const counters = att ? Math.floor(att.damage / 10) : 0;
-  const dmg = counters * 20;
-  return {
-    state: addLog(state, `勃然大怒：${counters} 個傷害指示物 → ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 寶寶暴龍|勃然大怒)
 
 // 雷丘（MC Stage1 Lightning 130HP）｜快速攻擊：20，擲幣正面 +50
 // 卡面：「20+ 擲 1 次硬幣，若正面，增加 50 點傷害。」
-regPre('雷丘|快速攻擊', (state, aIdx) => {
-  const r = flip1('快速攻擊', state, aIdx);
-  const dmg = 20 + (r.heads ? 50 : 0);
-  return {
-    state: addLog(
-      r.state,
-      `快速攻擊：${r.heads ? '正面 → +50' : '反面 → +0'} → ${dmg}`,
-      aIdx,
-    ),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 雷丘|快速攻擊)
 
 // 倫琴貓（M3 Stage2 Lightning 150HP）｜猛力進攻：70×對手已取獎賞張數
 // 卡面：「70× 造成自己已經獲得的獎賞卡的張數×70 點傷害。」
 // v2.991：卡面是「自己已取」非「對手已取」；當玩家 X 抽獎賞，X 自身 prizes.length 減少。
 //         taken_by_me = 6 - state.players[aIdx].prizes.length。
 //         此 wave 註冊被 effects.ts 13317 覆蓋（已正確），改正以防未來載入順序變更。
-regPre('倫琴貓|猛力進攻', (state, aIdx) => {
-  const taken = 6 - state.players[aIdx].prizes.length;
-  const dmg = Math.max(0, taken) * 70;
-  return {
-    state: addLog(state, `猛力進攻：自己已取 ${taken} 張獎賞 → ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 倫琴貓|猛力進攻)
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 群組 H：攻擊後丟棄自身能量

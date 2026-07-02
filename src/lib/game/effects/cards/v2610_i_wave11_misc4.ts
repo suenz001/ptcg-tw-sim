@@ -371,7 +371,8 @@ function rocketSupporterCountInDiscardPre(perCard: number, label: string): Attac
     return { state: s, damage: dmg };
   };
 }
-regPre('火箭隊的多邊獸Ⅱ|R指令', rocketSupporterCountInDiscardPre(20, 'R指令'));
+
+// v5.844 清除跨檔重複死碼(生效版在 effects.ts,原 火箭隊的多邊獸Ⅱ|R指令)
 regPre('火箭隊的多邊獸Ｚ|R指令', rocketSupporterCountInDiscardPre(20, 'R指令'));
 
 // ══════════════════════════════════════════════════════════════════════════════
