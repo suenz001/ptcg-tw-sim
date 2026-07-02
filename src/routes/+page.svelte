@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.837</span> 對戰修正：多張「強制對手互換戰鬥／備戰寶可夢」或「拖出對手備戰」的招式（駒刀小兵／蓋蓋蟲／萌芽鹿／沙河馬「推倒」、哈約克「吼叫」、怒鸚哥「推倒」、蜻蜻蜓「吹飛」、巨金怪「彈回」、流氓熊貓「拉扯」、蓋歐卡ex「蜿蜒浪」、鐵包袱「內部噴射」）先前未套用「招式效果免疫」判定，會強制換下帶有「化隱」「純樸」等免疫招式效果特性的對手戰鬥寶可夢；現已與其他同類招式一致，這類寶可夢不會被強制換位。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.836</span> 對戰修正：太樂巴戈斯「稜鏡充能」（從牌庫選最多 3 張『各不同屬性』的基本能量，附於太晶寶可夢）先前因內部標記字串不符，導致『各不同屬性』的限制沒有生效、可能選到同屬性的基本能量；現已修正為與伊布「鮮豔捕捉」相同的判定，正確限制每種屬性最多 1 張。</summary>
       </details>
       <details>

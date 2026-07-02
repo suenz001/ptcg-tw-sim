@@ -1596,6 +1596,10 @@ regPost('音波龍ex|狡兔三窟', (state, aIdx, pool, action) => {
 regPre('流氓熊貓|拉扯', (s) => ({ state: s, damage: 0 }));
 regPost('流氓熊貓|拉扯', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
+  { const _sa = state.players[dIdx].active;
+    if (_sa) { const _sg = canApplyEffectToTarget(state, aIdx, _sa, _pool.get(_sa.cardId), 'attack-effect', _pool);
+      if (_sg.blocked) return addLog(state, `拉扯：${_sg.reason}（不被強制換位）`, aIdx); } }
   if (state.players[dIdx].bench.length === 0) return state;
   return withPending(addLog(state, '拉扯：對手 1 備戰寶可夢與戰鬥場互換', aIdx), {
     type: 'opp-bench-choose',
@@ -1622,6 +1626,10 @@ regR('h-wave2-force-opp-swap', (state, aIdx, iids, _params, _pool) => {
 regPre('沙河馬|推倒', (s) => ({ state: s, damage: 10 }));
 regPost('沙河馬|推倒', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
+  { const _sa = state.players[dIdx].active;
+    if (_sa) { const _sg = canApplyEffectToTarget(state, aIdx, _sa, _pool.get(_sa.cardId), 'attack-effect', _pool);
+      if (_sg.blocked) return addLog(state, `推倒：${_sg.reason}（不被強制換位）`, aIdx); } }
   if (state.players[dIdx].bench.length === 0) return state;
   return withPending(addLog(state, '推倒：對手必須將戰鬥/備戰互換（對手選）', aIdx), {
     type: 'bench-choose',
@@ -1655,6 +1663,10 @@ regPost('蓋歐卡ex|蜿蜒浪', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '蜿蜒浪：選擇「否」 — 不強制換對手', aIdx);
   const _cb: AttackPostFn = (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
+  { const _sa = state.players[dIdx].active;
+    if (_sa) { const _sg = canApplyEffectToTarget(state, aIdx, _sa, pool.get(_sa.cardId), 'attack-effect', pool);
+      if (_sg.blocked) return addLog(state, `蜿蜒浪：${_sg.reason}（不被強制換位）`, aIdx); } }
   if (state.players[dIdx].bench.length === 0) return state;
   return withPending(addLog(state, '蜿蜒浪：對手戰鬥/備戰互換（對手選）', aIdx), {
     type: 'bench-choose',
@@ -1672,6 +1684,10 @@ regPost('鐵包袱|內部噴射', (state, aIdx, pool) => {
   let s = selfSwapPostInline('內部噴射')(state, aIdx, pool);
   // 對手必須互換
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
+  { const _sa = s.players[dIdx].active;
+    if (_sa) { const _sg = canApplyEffectToTarget(s, aIdx, _sa, pool.get(_sa.cardId), 'attack-effect', pool);
+      if (_sg.blocked) return addLog(s, `內部噴射：${_sg.reason}（不被強制換位）`, aIdx); } }
   if (s.players[dIdx].bench.length === 0) return s;
   return withPending(addLog(s, '內部噴射：對手必須將戰鬥/備戰互換', aIdx), {
     type: 'bench-choose',

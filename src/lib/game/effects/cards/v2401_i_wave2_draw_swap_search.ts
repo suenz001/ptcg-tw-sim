@@ -17,6 +17,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense'; // v5.837 換位免疫 gate
 import {
   regPre, regPost, regR,
   addLog, updatePlayer, withPending, shuffle, drawCards,
@@ -44,6 +45,11 @@ function forceOppSwapPostInline(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
+    // v5.837：強制換位是招式效果 → 化隱/純樸等免疫招式效果的 active 不被換下（對齊中央 forceOppSwapPost v5.388）。
+    if (d.active) {
+      const _sg = canApplyEffectToTarget(state, aIdx, d.active, _pool.get(d.active.cardId), 'attack-effect', _pool);
+      if (_sg.blocked) return addLog(state, `${label}：${_sg.reason}（不被強制換位）`, aIdx);
+    }
     if (!d.active || d.bench.length === 0) {
       return addLog(state, `${label}：對手無備戰寶可夢可換場`, aIdx);
     }

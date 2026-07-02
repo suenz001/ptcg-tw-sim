@@ -25,6 +25,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { canApplyEffectToTarget } from '../../defense'; // v5.837 換位免疫 gate
 import {
   addLog,
   regPost,
@@ -118,6 +119,11 @@ regPost('蜻蜻蜓|吹飛', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const d = state.players[dIdx];
   if (!d.active) return state;
+  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
+  {
+    const _sg = canApplyEffectToTarget(state, aIdx, d.active, _pool.get(d.active.cardId), 'attack-effect', _pool);
+    if (_sg.blocked) return addLog(state, `吹飛：${_sg.reason}（不被強制換位）`, aIdx);
+  }
   if (d.bench.length === 0) {
     return addLog(state, '吹飛：對手沒有備戰寶可夢可交換', aIdx);
   }

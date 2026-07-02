@@ -14901,6 +14901,11 @@ regPre('巨金怪|彈回', (state, _aIdx, _pool) => ({ state, damage: 60 }));
 regPost('巨金怪|彈回', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const d = state.players[dIdx];
+  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
+  if (d.active) {
+    const _sg = canApplyEffectToTarget(state, aIdx, d.active, _pool.get(d.active.cardId), 'attack-effect', _pool);
+    if (_sg.blocked) return addLog(state, `彈回：${_sg.reason}（不被強制換位）`, aIdx);
+  }
   if (!d.active || d.bench.length === 0) {
     return addLog(state, '彈回：對手無備戰可交換', aIdx);
   }
