@@ -206,12 +206,15 @@ regPre('鬃岩狼人|抓擊獠牙', oppActiveCounterCountPre(40, 40, '抓擊獠�
 // 10. 上對手回合得獎賞 ×60（1 張）— 夠讚狗|算帳
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('夠讚狗|算帳', (state, aIdx, _pool) => {
-  // 用既有 state.oppPrizesTakenInLastOppTurn?[aIdx] 機制（如果有），否則用差值
-  // 簡化：用 state.oppAttackKOdMeInLastOppTurn 作為近似（每 KO 對手得 1 獎賞）
-  // 但對手獎賞含「對手 ex KO」的雙倍。簡化為使用同一旗標。
-  const taken = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  // v5.838：卡面「上個對手的回合對手獲得的獎賞卡的張數」= 對手獎賞堆在其回合的減少量
+  //   （含 ex 雙倍/特性 KO/中毒灼傷 checkup KO）。原用招式 KO 次數近似會漏算 ex 雙倍與特性 KO。
+  //   用 oppPrizesAtMyLastTurnEnd（對手回合前）- oppPrizesAtMyTurnStart（對手回合後）快照差
+  //   （索引 [aIdx] = 對手剩餘獎賞，與不公印章 gate 同；初始 [6,6] → 首回合差 0）。
+  const before = state.oppPrizesAtMyLastTurnEnd?.[aIdx] ?? 6;
+  const after = state.oppPrizesAtMyTurnStart?.[aIdx] ?? 6;
+  const taken = Math.max(0, before - after);
   const bonus = taken * 60;
-  const s = addLog(state, `算帳：上對手回合對手得獎賞 ${taken} 張 → 80 + ${taken}×60 = ${80 + bonus}`, aIdx);
+  const s = addLog(state, `算帳：上個對手回合對手獲得獎賞 ${taken} 張 → 80 + ${taken}×60 = ${80 + bonus}`, aIdx);
   return { state: s, damage: 80 + bonus };
 });
 
