@@ -199,10 +199,16 @@ regPost('龍頭地鼠ex|貫通鑽', (state, aIdx, pool) => {
   const opp = state.players[dIdx];
   const wounded = opp.bench.filter(b => (b.damage ?? 0) > 0);
   if (wounded.length === 0) return addLog(state, '貫通鑽：對手備戰區無受傷寶可夢', aIdx);
-  // 自動選第一個受傷的
-  const target = wounded[0];
-  // v5.462：改走中央 dealAttackDamageToTarget 補太晶/化隱等備戰免疫 guard（原 inline 漏）。
-  return dealAttackDamageToTarget(state, aIdx, target.iid, 60, pool, { kind: 'attack-damage', label: '貫通鑽' });
+  // v5.848：卡面「對手 1 隻受傷備戰」= 攻擊方選(原自動選第一個);單隻自動(等價)。免疫 guard 走 dealAttackDamageToTarget。
+  if (wounded.length === 1) {
+    return dealAttackDamageToTarget(state, aIdx, wounded[0].iid, 60, pool, { kind: 'attack-damage', label: '貫通鑽' });
+  }
+  return withPending(addLog(state, '貫通鑽：選 1 隻受傷的對手備戰寶可夢，受到 60 點傷害', aIdx), {
+    type: 'opp-bench-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1, validIids: wounded.map(w => w.iid),
+    effectKey: 'snipe-variable',
+    params: { damage: 60, label: '貫通鑽', kind: 'attack-damage' },
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

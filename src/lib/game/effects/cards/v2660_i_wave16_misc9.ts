@@ -661,22 +661,38 @@ regPost('赤面龍|龍之猛暴', (state, aIdx, pool) => {
     return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
   });
   if (fireBasics.length === 0) return addLog(state, '龍之猛暴：棄牌區無基本火能量', aIdx);
-  // 簡化：自動附給戰鬥場（若戰鬥場是 Dragon 才行）
-  const a = p.active;
-  if (!a) return state;
-  const card = pool.get(a.cardId);
-  if (card?.pokemonType !== 'Dragon') {
-    return addLog(state, '龍之猛暴：戰鬥場非龍寶可夢，能量不附加', aIdx);
-  }
+  // v5.848：卡面「附於自己的【龍】寶可夢」→ 多隻龍時玩家選(原簡化只附戰鬥場)。基本火能量互換,取第一張(合法)。
+  const dragons = [...(p.active ? [p.active] : []), ...p.bench].filter(c => pool.get(c.cardId)?.pokemonType === 'Dragon');
+  if (dragons.length === 0) return addLog(state, '龍之猛暴：場上無【龍】寶可夢，能量不附加', aIdx);
   const energy = fireBasics[0];
-  return updatePlayer(
-    addLog(state, '龍之猛暴：從棄牌區挑 1 張基本火能量附給戰鬥場龍寶可夢', aIdx),
-    aIdx, pl => ({
+  if (dragons.length === 1) {
+    const tid = dragons[0].iid;
+    return updatePlayer(addLog(state, `龍之猛暴：附 1 張基本火能量給 ${pool.get(dragons[0].cardId)?.name ?? '?'}`, aIdx), aIdx, pl => ({
       ...pl,
       discard: pl.discard.filter(c => c.iid !== energy.iid),
-      active: pl.active ? { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } : null,
-    }),
-  );
+      active: pl.active && pl.active.iid === tid ? { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } : pl.active,
+      bench: pl.bench.map(b => b.iid === tid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b),
+    }));
+  }
+  return withPending(addLog(state, '龍之猛暴：選 1 隻【龍】寶可夢附上基本火能量', aIdx), {
+    type: 'heal-target', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 1, maxCount: 1, validIids: dragons.map(d => d.iid),
+    effectKey: 'ryu-moubou-attach', params: { energyIid: energy.iid },
+  });
+});
+// v5.848：龍之猛暴選龍寶可夢附火能量 resolver。
+regR('ryu-moubou-attach', (st, idx, iids, params, pool) => {
+  const tid = iids[0]; if (!tid) return st;
+  const energyIid = params?.energyIid as string;
+  const energy = st.players[idx].discard.find(c => c.iid === energyIid);
+  if (!energy) return st;
+  const nm = (() => { const t = [st.players[idx].active, ...st.players[idx].bench].find(c => c?.iid === tid); return t ? (pool.get(t.cardId)?.name ?? '?') : '?'; })();
+  return updatePlayer(addLog(st, `龍之猛暴：附 1 張基本火能量給 ${nm}`, idx), idx, pl => ({
+    ...pl,
+    discard: pl.discard.filter(c => c.iid !== energyIid),
+    active: pl.active && pl.active.iid === tid ? { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } : pl.active,
+    bench: pl.bench.map(b => b.iid === tid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b),
+  }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
