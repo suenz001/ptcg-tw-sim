@@ -10432,7 +10432,9 @@ regPre('厄鬼椪 火灶面具ex|極限火焰', (state, aIdx, pool) => {
 regPre('怖納噬草|強力尖刺', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 0 };
-  const n = countOneEnergy(att, 'all', pool);
+  // v5.833：卡面「能量的數量」= host-aware 單位數(火箭隊能量2/燃火進化3/繁茂草2)，
+  //   原 countOneEnergy('all') 逐張計數會少擲硬幣（與姊妹卡 光電傘蜥/職務猛攻/投球時刻 收斂）。
+  const n = countAttachedEnergyAsUnits(att, pool, state, aIdx);
   if (n === 0) return { state: addLog(state, '強力尖刺：自身無能量', aIdx), damage: 0 };
   const r = flipCoinsWithLog(state, n, '強力尖刺', aIdx);
   const dmg = r.heads * 80;
