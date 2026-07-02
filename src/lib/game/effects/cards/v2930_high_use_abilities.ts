@@ -13,7 +13,8 @@
 
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
-import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
+import { fireOnHandEnergyAttached } from '../_shared';
+import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending,
@@ -358,6 +359,9 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
   const opp = st.players[dIdx];
   if (!opp.active) return addLog(st, '大力捕捉器：對手戰鬥場無寶可夢', idx);
   if (opp.bench.length === 0) return addLog(st, '大力捕捉器：對手備戰區無寶可夢', idx);
+  // v5.839：特性換位=ability-effect → 化隱/光之翼等免疫特性效果的 active 不被換下（對齊招式版 v5.837）。
+  if (opp.active) { const _g = canApplyEffectToTarget(st, idx, opp.active, _pool.get(opp.active.cardId), 'ability-effect', _pool);
+    if (_g.blocked) return addLog(st, `大力捕捉器：${_g.reason}（不被換位）`, idx); }
   const s = addLog(st, '大力捕捉器：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',

@@ -568,6 +568,9 @@ regA('赫普的毛毛角羊', 0, (st, idx, _pool, _cardInst) => {
   const opp = st.players[oppIdx];
   if (!opp.active) return addLog(st, '挑戰角擊：對手戰鬥場無寶可夢', idx);
   if (opp.bench.length === 0) return addLog(st, '挑戰角擊：對手備戰區為空', idx);
+  // v5.839：特性換位=ability-effect → 化隱/光之翼免疫者 active 不被換下。
+  if (opp.active) { const _g = canApplyEffectToTarget(st, idx, opp.active, _pool.get(opp.active.cardId), 'ability-effect', _pool);
+    if (_g.blocked) return addLog(st, `挑戰角擊：${_g.reason}（不被換位）`, idx); }
   const s = addLog(st, '挑戰角擊：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',

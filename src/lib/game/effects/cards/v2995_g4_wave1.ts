@@ -33,6 +33,7 @@
  */
 
 import { tryPromptPromoteActive } from '../_shared';
+import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   regA, regAByName, regR,
@@ -240,6 +241,9 @@ regA('花潔夫人', 0, (st, idx, _pool, _cardInst) => {
   if (dp.bench.length === 0) {
     return addLog(r.state, '媚惑引誘：對手備戰區沒有寶可夢可呼叫', idx);
   }
+  // v5.839：特性換位=ability-effect → 化隱/光之翼免疫者 active 不被換下。
+  { const _g = canApplyEffectToTarget(r.state, idx, dp.active, _pool.get(dp.active.cardId), 'ability-effect', _pool);
+    if (_g.blocked) return addLog(r.state, `媚惑引誘：${_g.reason}（不被換位）`, idx); }
   const s = addLog(r.state, '媚惑引誘：正面，選 1 隻對手備戰寶可夢與其戰鬥場互換並混亂', idx);
   return withPending(s, {
     type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -319,6 +323,9 @@ regR('samurott-vortex-self', (st, idx, iids, _params, pool) => {
   if (dp.bench.length === 0) {
     return tryPromptPromoteActive(addLog(st, '激流旋渦：對手備戰區無寶可夢可互換', idx), idx, pool);
   }
+  // v5.839：特性換位=ability-effect → 化隱/光之翼免疫者 active 不被強制換位。
+  if (dp.active) { const _g = canApplyEffectToTarget(st, idx, dp.active, pool.get(dp.active.cardId), 'ability-effect', pool);
+    if (_g.blocked) return tryPromptPromoteActive(addLog(st, `激流旋渦：對手 ${_g.reason}（不被換位）`, idx), idx, pool); }
   st = addLog(st, '激流旋渦：對手選 1 隻自方備戰寶可夢與戰鬥場互換', idx);
   return withPending(st, {
     // 由對手選自己的備戰，所以 actorIdx = dIdx
