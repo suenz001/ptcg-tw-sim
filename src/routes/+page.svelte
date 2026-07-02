@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.843</span> 對戰修正：莉佳的臭臭花「噴毒」的效果為「將對手的戰鬥寶可夢中毒」（不需擲硬幣），先前實作誤設為擲硬幣正面才中毒；現已修正為直接中毒。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.842</span> 對戰修正：焚焰蚣「焦黑吐息」（對手灼傷時造成 180 傷害）與火神蛾「熱浪鱗粉」先前判斷對手是否灼傷時只檢查主要狀態欄位；當對手同時處於多種特殊狀態（例如睡眠＋灼傷）時，灼傷可能落在其他欄位而被漏判，使「焦黑吐息」誤判為招式失敗。現已改為檢查全部狀態欄位。</summary>
       </details>
       <details>

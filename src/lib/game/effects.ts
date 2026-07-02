@@ -10789,7 +10789,7 @@ regPost('火稚雞|呼喚', drawNPost(1, '呼喚'));
 regPost('花椰猴|呼喚', drawNPost(1, '呼喚'));
 regPost('冷水猴|呼喚', drawNPost(1, '呼喚'));
 regPost('爆香猴|呼喚', drawNPost(1, '呼喚'));
-regPost('<阿響的>皮丘|麻麻抽出', drawNPost(1, '麻麻抽出'));
+// v5.843 移除失效尖括號死碼 key(正確版已在 card 檔註冊)
 regPost('嗡蝠|快速抽出', drawNPost(1, '快速抽出'));
 
 regPost('超級巨牙鯊ex|貪心之牙', drawNPost(2, '貪心之牙'));
@@ -10924,7 +10924,7 @@ regPost('雙彈瓦斯|充滿瓦斯', statusPost('confused'));
 regPost('天蠍|毒擊', statusPost('poisoned'));
 regPost('鉗尾蠍|毒擊', statusPost('poisoned'));
 regPost('火箭隊的超音蝠|噴毒', statusPost('poisoned'));
-regPost('<莉佳的>臭臭花|噴毒', statusPost('poisoned'));
+// v5.843 移除失效尖括號死碼 key(正確版已在 card 檔註冊)
 regPost('哎呀球菇|毒之孢子', statusPost('poisoned'));
 regPost('灰塵山|垃圾射擊', statusPost('poisoned'));
 regPost('火箭隊的小拉達|險惡門牙', statusPost('poisoned'));
@@ -10958,7 +10958,7 @@ regPost('赫普的卡比獸|極限壓制', selfHitPost(80));
 regPost('藤藤蛇|突擊', selfHitPost(10));
 regPost('小拉達|猛撞', selfHitPost(10));
 regPost('泡沫栗鼠|猛撞', selfHitPost(10));
-regPost('<莉佳的>走路草|突擊', selfHitPost(10));
+// v5.843 移除失效尖括號死碼 key(正確版已在 card 檔註冊)
 regPost('烈焰馬|猛火猛撞', selfHitPost(30));
 regPost('超級炎武王ex|深紅炸彈', selfHitPost(60));
 regPost('小鋸鱷|撞一下', selfHitPost(10));
@@ -10975,7 +10975,7 @@ regPost('伽勒爾 泥巴魚|飛撲啃咬', selfHitPost(30));
 regPost('寶貝龍|突擊', selfHitPost(10));
 regPost('故勒頓ex|凱撒衝撞', selfHitPost(60));
 regPost('貓鼬斬ex|狂野剪', selfHitPost(30));
-regPost('<青木的>勇士雄鷹|勇鳥猛攻', selfHitPost(30));
+// v5.843 移除失效尖括號死碼 key(正確版已在 card 檔註冊)
 regPost('刺梭魚|突擊', selfHitPost(10));
 regPost('沙基拉斯|猛撞', selfHitPost(20));
 
