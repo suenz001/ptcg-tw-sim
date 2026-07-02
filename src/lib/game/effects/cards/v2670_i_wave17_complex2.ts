@@ -21,7 +21,7 @@
  *   - 雙方睡眠+下回合 +N（樹枕尾熊）
  */
 
-import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE, getAllAttachedTools } from '../_shared';
 import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
 
 // v5.113 對戰圓形 gate import
@@ -149,8 +149,9 @@ regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool, action) => 
       const discardedAttached: CardInstance[] = [
         ...p.active.energyAttached.map(e => ({ ...e, damage: 0, energyAttached: [] })),
       ];
-      if (p.active.toolAttached) {
-        discardedAttached.push({ ...p.active.toolAttached, damage: 0, energyAttached: [] });
+      // v5.841：丟全部道具含 extraTools(多重轉接洛托姆),原只丟 toolAttached 漏 extraTools。
+      for (const t of getAllAttachedTools(p.active)) {
+        discardedAttached.push({ ...t, damage: 0, energyAttached: [] });
       }
       return {
         ...p,

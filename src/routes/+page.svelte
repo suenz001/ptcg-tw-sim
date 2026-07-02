@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.841</span> 對戰修正：與「寶可夢道具」丟棄相關的招式（超級毒藻龍ex「腐蝕液」、火箭隊的叉字蝠ex「刺殺迴旋」、泡沫栗鼠「掃除」）先前只處理主要道具槽，會漏掉透過「多重轉接」附加的第 2 張以上道具；此外「掃除」先前未套用「招式效果免疫」判定。現已一併修正：這類道具會正確全數丟棄，且帶「化隱」等免疫招式效果的寶可夢不會被「掃除」丟道具。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.840</span> 對戰修正：以招式讓「對手下回合無法撤退」的一批效果（莉佳的蔓藤怪「綁緊」、泥巴魚ex「咬緊」、青木的勇士雄鷹「緊抓」、伊裴爾塔爾「緊抓」、破破舵輪「束縛」、帕底亞 土王ex「毒陣」）先前未套用「招式效果免疫」判定，會讓帶有「化隱」等免疫招式效果的對手戰鬥寶可夢仍被禁止撤退；現已收斂至中央處理並套用免疫判定，這類寶可夢不會被禁止撤退。</summary>
       </details>
       <details>

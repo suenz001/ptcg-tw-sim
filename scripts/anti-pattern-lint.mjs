@@ -3,6 +3,7 @@
  * 反模式 lint — 把「反覆踩到的雷」做成 CI 靜態檢查，新出現就擋。
  * Check A：closure 參數寫 `_pool`/`_aIdx`/... 但 body 又引用去底線同名 → ReferenceError。
  * Check B：基本能量用 `pokemonType === '屬性'` 比對、無卡名 fallback（基本能量 pokemonType 為 null）。
+ * Check I：數/丟附加道具只讀 toolAttached 漏 extraTools(多重轉接洛托姆) → 改 getAllAttachedTools。
  * Check H：對手寶可夢非傷害效果(換位/丟能量/丟道具/施狀態)直接 inline mutate 未過免疫 gate → 繞過化隱/純樸。
  * Run: node scripts/anti-pattern-lint.mjs  (exit 0=乾淨 / 1=有違規)
  * 見長期記憶 feedback-basic-energy-pokemontype-null / reference-discard-prize-log。
@@ -223,8 +224,38 @@ for (const f of files) {
   }
 }
 
+
+// ── Check I：數/丟「附加道具」只讀 toolAttached 漏 extraTools（多重轉接洛托姆）────────
+//   卡面「道具數量」「丟棄全部道具」若只讀 toolAttached,會漏 extraTools(洛托姆ex 多重轉接第2張以上)。
+//   中央 getAllAttachedTools(inst) = toolAttached + extraTools。boolean「是否有道具」讀 toolAttached 合法。
+//   只報「push 進棄牌陣列」與「count++ 計數」context,且該函式塊內無 getAllAttachedTools/extraTools。
+//   合法豁免標 // extratools-ok: 理由。見長期記憶 reference-tool-count-extratools。
+const I_HIT = [
+  /\.push\(\s*\{?\s*\.\.\.[\w.]+\.toolAttached/,   // discardArr.push({ ...x.toolAttached ... })
+  /\.push\(\s*[\w.]+\.toolAttached\s*\)/,          // discardArr.push(x.toolAttached)
+  /discard:\s*\[[^\]]*\.toolAttached/,             // discard: [...p.discard, x.toolAttached]
+  /if\s*\(\s*[\w.]+\.toolAttached\s*\)\s*(?:\{\s*)?\w*count/, // if (x.toolAttached) count++
+];
+const I_FUNC_START = /^\s*(regR|regPost|regPre|regA|register[A-Za-z]+|export\s+(async\s+)?function|function\s|[\w$]+\.set\(|[\w$]+\s*=\s*\(|\[\s*['"][^'"]+['"]\s*,\s*\()/;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const tt = lines[i].trimStart();
+    if (tt.startsWith('//') || tt.startsWith('*') || tt.startsWith('/*')) continue;
+    const code = lines[i].replace(/\/\/.*$/, '');
+    if (!I_HIT.some(re => re.test(code))) continue;
+    if (/extratools-ok/.test(lines[i]) || /extratools-ok/.test(lines[i - 1] ?? '')) continue;
+    let fs = i;
+    for (let j = i; j >= Math.max(0, i - 60); j--) { if (I_FUNC_START.test(lines[j])) { fs = j; break; } }
+    let end = Math.min(lines.length, fs + 120);
+    const span = lines.slice(fs, end).join('\n');
+    if (/getAllAttachedTools|extraTools/.test(span)) continue;  // 塊內已處理 extraTools
+    violations.push(`[I] ${rel(f)}:${i + 1} — 數/丟附加道具只讀 toolAttached 漏 extraTools（改走 getAllAttachedTools,或標 // extratools-ok: 理由）`);
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

@@ -26,6 +26,7 @@ import {
   updatePlayer,
   withPending,
 } from '../_shared';
+import { getAllAttachedTools } from '../_shared'; // v5.841 丟道具含 extraTools(多重轉接)
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 
@@ -168,7 +169,7 @@ regPost('超級毒藻龍ex|腐蝕液', (state, aIdx, pool) => {
     // v5.810：化隱/純樸等免疫招式效果者(含 bench)不被丟道具/特殊能量。
     const _isBench = !(dp.active && dp.active.iid === inst.iid);
     if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: _isBench }).blocked) continue;
-    if (inst.toolAttached) toDiscard.push(inst.toolAttached);
+    for (const t of getAllAttachedTools(inst)) toDiscard.push(t); // v5.841 toolAttached + extraTools
     for (const e of inst.energyAttached) {
       const ec = pool.get(e.cardId);
       if (ec?.supertype === 'Energy' && ec.subtype === 'Special') toDiscard.push(e);
@@ -186,6 +187,7 @@ regPost('超級毒藻龍ex|腐蝕液', (state, aIdx, pool) => {
     const strip = (inst: CardInstance): CardInstance => ({
       ...inst,
       toolAttached: discardIids.has(inst.toolAttached?.iid ?? '') ? undefined : inst.toolAttached,
+      extraTools: (inst.extraTools ?? []).filter(t => !discardIids.has(t.iid)), // v5.841 一併清 extraTools
       energyAttached: inst.energyAttached.filter(e => !discardIids.has(e.iid)),
     });
     return {

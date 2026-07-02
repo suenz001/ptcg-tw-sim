@@ -18,6 +18,7 @@ import { clearActiveEffects } from '../_shared'; // v5.807 退化清附加效果
 
 import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
+import { getAllAttachedTools } from '../_shared'; // v5.841 丟道具含 extraTools
 import { relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示物中央管線
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -286,36 +287,36 @@ regPost('智揮猩|掌握弱點', (state, aIdx, _pool) => {
 // 13. 泡沫栗鼠|掃除 — 棄對手 ≤2 道具
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('泡沫栗鼠|掃除', (s) => ({ state: s, damage: 0 }));
-regPost('泡沫栗鼠|掃除', (state, aIdx, _pool) => {
+regPost('泡沫栗鼠|掃除', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  // 簡化：自動棄對手場上前 2 個道具
-  let s = state;
-  let removed = 0;
-  s = updatePlayer(s, dIdx, p => {
-    let r = removed;
-    const newBench = p.bench.map(b => {
-      if (r < 2 && b.toolAttached) {
-        r++;
-        const tool = b.toolAttached;
-        return { ...b, toolAttached: undefined };
-      }
-      return b;
-    });
-    let newActive = p.active;
-    if (r < 2 && p.active?.toolAttached) {
-      r++;
-      newActive = { ...p.active, toolAttached: undefined };
+  const dp = state.players[dIdx];
+  // v5.841：對齊腐蝕液 — 過化隱/純樸免疫 gate（招式丟對手道具屬招式效果）+ 含 extraTools(多重轉接)。
+  //   ⚠️ UX 簡化：仍為自動選取前 2 個可丟道具,未做玩家手選 picker（卡面為「選擇最多 2 張」）。
+  const targets: { inst: CardInstance; isBench: boolean }[] = [
+    ...(dp.active ? [{ inst: dp.active, isBench: false }] : []),
+    ...dp.bench.map(b => ({ inst: b, isBench: true })),
+  ];
+  const discardIids = new Set<string>();
+  const removedTools: CardInstance[] = [];
+  for (const { inst, isBench } of targets) {
+    if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench }).blocked) continue;
+    for (const t of getAllAttachedTools(inst)) {
+      if (discardIids.size < 2) { discardIids.add(t.iid); removedTools.push({ ...t, damage: 0, energyAttached: [] }); }
     }
-    removed = r;
-    // 把移除的 tool 放到棄牌區
-    const removedTools: CardInstance[] = [];
-    if (p.active?.toolAttached && !newActive?.toolAttached && p.active.toolAttached) removedTools.push({ ...p.active.toolAttached, damage: 0, energyAttached: [] });
-    p.bench.forEach((b, i) => {
-      if (b.toolAttached && !newBench[i].toolAttached) removedTools.push({ ...b.toolAttached!, damage: 0, energyAttached: [] });
-    });
-    return { ...p, active: newActive, bench: newBench, discard: [...p.discard, ...removedTools] };
+  }
+  if (discardIids.size === 0) return addLog(state, '掃除：對手場上無可丟棄的道具', aIdx);
+  const strip = (inst: CardInstance): CardInstance => ({
+    ...inst,
+    toolAttached: discardIids.has(inst.toolAttached?.iid ?? '') ? undefined : inst.toolAttached,
+    extraTools: (inst.extraTools ?? []).filter(t => !discardIids.has(t.iid)),
   });
-  return addLog(s, `掃除：對手場上 ${removed} 張道具卡棄到對手棄牌區`, aIdx);
+  const s = updatePlayer(state, dIdx, p => ({
+    ...p,
+    active: p.active ? strip(p.active) : null,
+    bench: p.bench.map(strip),
+    discard: [...p.discard, ...removedTools],
+  }));
+  return addLog(s, `掃除：對手場上 ${discardIids.size} 張道具卡棄到對手棄牌區`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
