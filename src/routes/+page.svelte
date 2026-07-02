@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.842</span> 對戰修正：焚焰蚣「焦黑吐息」（對手灼傷時造成 180 傷害）與火神蛾「熱浪鱗粉」先前判斷對手是否灼傷時只檢查主要狀態欄位；當對手同時處於多種特殊狀態（例如睡眠＋灼傷）時，灼傷可能落在其他欄位而被漏判，使「焦黑吐息」誤判為招式失敗。現已改為檢查全部狀態欄位。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.841</span> 對戰修正：與「寶可夢道具」丟棄相關的招式（超級毒藻龍ex「腐蝕液」、火箭隊的叉字蝠ex「刺殺迴旋」、泡沫栗鼠「掃除」）先前只處理主要道具槽，會漏掉透過「多重轉接」附加的第 2 張以上道具；此外「掃除」先前未套用「招式效果免疫」判定。現已一併修正：這類道具會正確全數丟棄，且帶「化隱」等免疫招式效果的寶可夢不會被「掃除」丟道具。</summary>
       </details>
       <details>

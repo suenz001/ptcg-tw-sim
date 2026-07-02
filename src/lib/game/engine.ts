@@ -680,7 +680,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog } from './effects/_shared';
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
@@ -3740,7 +3740,7 @@ function handlePlaying(
       if (discardCard.supertype !== 'Energy' || discardCard.subtype !== 'Basic') return state;
       if (!(discardCard.name?.includes('【火】') ?? false)) return state;
       if (!defender.active) return state;
-      if (defender.active.status === 'burned') return state;
+      if (hasStatusInAnySlot(defender.active, 'burned')) return state; // v5.842 跨三槽:已灼傷(任一槽)則不重複
     }
 
     // 執行：先把該手牌移入棄牌區 → 標記 → log → call fn
@@ -6018,7 +6018,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           // v2.163/v5.659：燒傷可能在 status / secondaryStatus / tertiaryStatus；只清掉燒傷「實際所在」那格。
           //   原 else-if 同時認 secondary||tertiary 卻一律清 secondaryStatus → 若燒傷在 tertiary 會誤清 secondary
           //   (例:睡眠+中毒+灼傷 → status=睡眠/secondary=中毒/tertiary=灼傷,解燒傷竟清掉中毒、燒傷反而留)。
-          if (burnedPlayer.active.status === 'burned') {
+          if (burnedPlayer.active.status === 'burned') { // status-slot-ok: checkup 燒傷解除三分支,本就依實際所在格清除(v5.659)
             burnedPlayer.active = { ...burnedPlayer.active, status: undefined };
           } else if (burnedPlayer.active.secondaryStatus === 'burned') {
             burnedPlayer.active = { ...burnedPlayer.active, secondaryStatus: undefined };
@@ -8594,7 +8594,7 @@ export function getUsableAbilities(
           return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.name?.includes('【火】') ?? false);
         });
         const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
-        if (!hasFire || !oppA || oppA.status === 'burned') return;
+        if (!hasFire || !oppA || hasStatusInAnySlot(oppA, 'burned')) return; // v5.842 跨三槽:對手已灼傷(任一槽)則隱藏
       }
       // v5.510 誘導之尾（超能妙喵）：手牌需有「悠哉尾草棒」 + 對手 active + 對手備戰≥1
       if (ab.name === '誘導之尾') {

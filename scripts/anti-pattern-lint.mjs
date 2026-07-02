@@ -3,6 +3,7 @@
  * 反模式 lint — 把「反覆踩到的雷」做成 CI 靜態檢查，新出現就擋。
  * Check A：closure 參數寫 `_pool`/`_aIdx`/... 但 body 又引用去底線同名 → ReferenceError。
  * Check B：基本能量用 `pokemonType === '屬性'` 比對、無卡名 fallback（基本能量 pokemonType 為 null）。
+ * Check J：讀傷害狀態(中毒/灼傷)只讀 status 主格漏三槽(secondary/tertiary) → 改 hasStatusInAnySlot。
  * Check I：數/丟附加道具只讀 toolAttached 漏 extraTools(多重轉接洛托姆) → 改 getAllAttachedTools。
  * Check H：對手寶可夢非傷害效果(換位/丟能量/丟道具/施狀態)直接 inline mutate 未過免疫 gate → 繞過化隱/純樸。
  * Run: node scripts/anti-pattern-lint.mjs  (exit 0=乾淨 / 1=有違規)
@@ -254,8 +255,30 @@ for (const f of files) {
   }
 }
 
+
+// ── Check J：讀「傷害狀態」(中毒/灼傷)只讀 status 主格漏三槽 ────────────────────
+//   三槽制(v5.295):行動狀態(睡眠/混亂/麻痺)恆在 status 主格,但傷害狀態(poisoned/burned)
+//   可落在 status/secondaryStatus/tertiaryStatus 任一槽。條件式只讀 .status==='poisoned'/'burned'
+//   會漏另兩槽(如睡眠+灼傷時灼傷在 secondary)。改走中央 hasStatusInAnySlot(inst, cond)。
+//   checkup 依實際所在格清除等合法主格讀取標 // status-slot-ok。見長期記憶 reference-defender-status-three-slot-read。
+const J_HIT = /\.status\s*===?\s*'(poisoned|burned)'|\.status\s*!==?\s*'(poisoned|burned)'/;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const tt = lines[i].trimStart();
+    if (tt.startsWith('//') || tt.startsWith('*') || tt.startsWith('/*')) continue;
+    const code = lines[i].replace(/\/\/.*$/, '');
+    if (!J_HIT.test(code)) continue;
+    if (/status-slot-ok/.test(lines[i]) || /status-slot-ok/.test(lines[i - 1] ?? '')) continue;
+    // 窗 [i-1, i+3]：若鄰近有 secondaryStatus/tertiaryStatus(手寫三槽)或 hasStatusInAnySlot(中央)→ 視為已跨槽
+    const win = lines.slice(Math.max(0, i - 1), i + 4).join('\n');
+    if (/secondaryStatus|tertiaryStatus|hasStatusInAnySlot/.test(win)) continue;
+    violations.push(`[J] ${rel(f)}:${i + 1} — 讀傷害狀態(中毒/灼傷)只讀 status 主格漏三槽（改走 hasStatusInAnySlot,或標 // status-slot-ok: 理由）`);
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

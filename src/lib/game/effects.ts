@@ -6367,7 +6367,8 @@ regPost('雄偉牙|地盤崩壞', (state, aIdx, pool) => {
 regPre('焚焰蚣|焦黑吐息', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  if (def && def.status === 'burned') {
+  // v5.842：灼傷可能在 status/secondaryStatus/tertiaryStatus 任一槽(三槽制) → 用中央跨槽讀取,原只讀主格漏槽。
+  if (def && hasStatusInAnySlot(def, 'burned')) {
     return { state: addLog(state, '焦黑吐息：對手灼傷 → 180 傷害', aIdx), damage: 180 };
   }
   return { state: addLog(state, '焦黑吐息：對手未灼傷 → 招式失敗', aIdx), damage: 0 };
