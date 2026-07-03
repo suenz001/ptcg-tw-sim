@@ -7088,7 +7088,14 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00013947.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/13947/",
     "scrapedAt": "2026-04-16T08:15:19.873Z",
-    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。若在自己的回合中，則可將場上的這張卡丟棄。\n\n這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "背蓋守護",
+        "effect": "這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。"
+      }
+    ],
+    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。若在自己的回合中，則可將場上的這張卡丟棄。",
     "illustrator": "AYUMI ODASHIMA",
     "regulationMark": "H"
   },

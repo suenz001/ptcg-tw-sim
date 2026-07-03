@@ -3820,7 +3820,14 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010985.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/10985/",
     "scrapedAt": "2026-04-16T07:57:07.391Z",
-    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。\n\n只要這隻寶可夢在戰鬥場上，對手的【基礎】寶可夢使用招式所需的能量增加1個【無】能量。",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "原始根",
+        "effect": "只要這隻寶可夢在戰鬥場上，對手的【基礎】寶可夢使用招式所需的能量增加1個【無】能量。"
+      }
+    ],
+    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。",
     "illustrator": "AYUMI ODASHIMA",
     "regulationMark": "H"
   },
@@ -3834,7 +3841,14 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00010986.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/10986/",
     "scrapedAt": "2026-04-16T07:57:08.127Z",
-    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。\n\n這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "背蓋守護",
+        "effect": "這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。"
+      }
+    ],
+    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。",
     "illustrator": "AYUMI ODASHIMA",
     "regulationMark": "H"
   },

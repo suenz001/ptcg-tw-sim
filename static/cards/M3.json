@@ -2835,7 +2835,14 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018045.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18045/",
     "scrapedAt": "2026-04-16T08:26:17.152Z",
-    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。\n\n只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-30」點。",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "威嚇之顎",
+        "effect": "只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-30」點。"
+      }
+    ],
+    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。",
     "illustrator": "AYUMI ODASHIMA",
     "regulationMark": "J"
   },
@@ -2849,7 +2856,14 @@
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018046.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18046/",
     "scrapedAt": "2026-04-16T08:26:17.840Z",
-    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。\n\n對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "鰭之守護",
+        "effect": "對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。"
+      }
+    ],
+    "rulesText": "這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n若在自己的回合中，則可將場上的這張卡丟棄。",
     "illustrator": "AYUMI ODASHIMA",
     "regulationMark": "J"
   },
