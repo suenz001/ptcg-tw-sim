@@ -478,12 +478,13 @@ export function resolveBenchGuard(
     const piBench = passiveImmunityDamageBlock(state, actorIdx, targetCard, pool);
     if (piBench.blocked) return piBench;
   }
-  // v3.21 陳舊的羽毛化石（I）備戰免疫：卡面明寫「傷害與效果」皆免——
-  //   v2.191 原實裝只擋 attack-damage 是 bug；本波擴展到 attack-damage|attack-effect 兩者。
+  // v5.852 陳舊的羽毛化石（I）備戰免疫：卡面只寫「不會受到對手的寶可夢招式的傷害」=僅 attack-damage。
+  //   v3.21 曾據「卡面明寫傷害與效果皆免」誤擴展到 attack-effect(幻覺卡面)→ 錯擋放指示物等招式效果
+  //   (玩家回報：來悲粗茶|抹茶旋濺 放指示物被擋)。回歸 v2.191 原本正確的 damage-only(放指示物/狀態不擋)。
   //   caller 已保證 target 在 bench，這裡只比對 cardName。
-  if (kind === 'attack-damage' || kind === 'attack-effect') {
+  if (kind === 'attack-damage') {
     if (targetCard?.name === '陳舊的羽毛化石') {
-      return { blocked: true, reason: '陳舊的羽毛化石 備戰免傷+免效果' };
+      return { blocked: true, reason: '陳舊的羽毛化石 備戰免傷（僅招式傷害）' };
     }
   }
   return { blocked: false };
@@ -13931,11 +13932,8 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
     const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
     return { ...pl, active: newActive, bench: newBench };
   });
-  // v5.831：自身戰鬥寶可夢回備戰→觸發對手漩渦言靈/熔岩地域/凹洞
-  {
-    const _na = st.players[idx].active;
-    if (_sakLeft && _na) st = applyOppActiveReturnedToBenchTriggers(st, idx, _sakLeft, _na, pool);
-  }
+  // v5.852：自身戰鬥→備戰的觸發(漩渦言靈/熔岩地域/凹洞)改由 applyActionImpl 中央偵測統一處理。
+  void _sakLeft;
   // 再強迫對方換
   {
     // v5.700：supporter 強制換位 → 過濾化石/緊張感/融合為雪/廣域堡壘 免疫的對手備戰。
@@ -13972,9 +13970,8 @@ regR('self-swap-active-bench', (st, idx, iids, _params, pool) => {
     const newBench = pl.bench.map(c => c.iid === pickIid ? cleared : c);
     return { ...pl, active: newActive, bench: newBench };
   });
-  // v5.831：對手戰鬥寶可夢回備戰→觸發漩渦言靈/熔岩地域/凹洞（撤退以外的自我互換路徑）
-  const _na = _res.players[idx].active;
-  if (_na) _res = applyOppActiveReturnedToBenchTriggers(_res, idx, _leftPoke, _na, pool);
+  // v5.852：自身戰鬥→備戰的觸發改由 applyActionImpl 中央偵測統一處理。
+  void _leftPoke;
   return _res;
 });
 

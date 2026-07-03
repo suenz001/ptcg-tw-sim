@@ -2969,9 +2969,7 @@ function handlePlaying(
       aIdx
     );
 
-    // v3.01 Wave 3 / v5.831 — 對手戰鬥寶可夢回備戰時觸發類（熔岩地域 / 漩渦言靈 / 凹洞）
-    //   收斂到中央 applyOppActiveReturnedToBenchTriggers（撤退 + 招式自我互換共用）。
-    retreatState = applyOppActiveReturnedToBenchTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
+    // v5.852：撤退觸發(熔岩地域/漩渦言靈/凹洞)改由 applyActionImpl 中央偵測統一處理(涵蓋所有 self-swap)。
 
     // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類特性（ON_RETREAT_TO_BENCH）
     //   觸發點：retreatingPoke 已從戰鬥場回到 bench；此時詢問玩家是否使用對應特性。
@@ -7467,7 +7465,8 @@ export function applyOppActiveReturnedToBenchTriggers(
   retreatingPoke: CardInstance, newActive: CardInstance,
   pool: Map<string, Card>,
 ): GameState {
-  if (state.activePlayerIndex !== moverIdx) return state; // 只在互換者自己的回合
+  // v5.852：guard 移除——本 helper 現只由 applyActionImpl 中央偵測呼叫，該處已保證 moverIdx=動作前回合方
+  //   且其 active 剛回到自己備戰區；招式 self-swap 後回合已翻，不能再用 activePlayerIndex 判。
   const aIdx = moverIdx;
   let retreatState = state;
   const trig = getOppRetreatTriggers(retreatState, aIdx, retreatingPoke, newActive, pool);
@@ -7519,6 +7518,23 @@ function applyActionImpl(
     next = handlePlaying(state, action, pool);
   } else {
     next = state;
+  }
+
+  // v5.852 中央：偵測「當前回合玩家的戰鬥寶可夢自我換到自己備戰區(撤退/寶可夢交替/急進開關/招式互換
+  //   /坂木/衝浪海灘 等所有路徑)」，統一觸發對手『戰鬥寶可夢回備戰』類(熔岩地域灼傷/漩渦言靈混亂/凹洞
+  //   放指示物)。取代原散落 4 處 inline 呼叫→涵蓋所有 self-swap 站點、杜絕漏網與重複觸發。
+  //   判據：active iid 換掉、且舊 active 現在在同一玩家備戰區(=回備戰,非被 KO 進棄牌)。
+  //   用 state.activePlayerIndex(動作前回合方)——招式 self-swap 後回合已翻,不可用 next 的。
+  {
+    const _swAi = state.activePlayerIndex;
+    if (_swAi === 0 || _swAi === 1) {
+      const _swOld = state.players && state.players[_swAi] && state.players[_swAi].active;
+      const _swNew = next.players && next.players[_swAi] && next.players[_swAi].active;
+      if (_swOld && _swNew && _swOld.iid !== _swNew.iid
+          && (next.players[_swAi].bench || []).some(b => b.iid === _swOld.iid)) {
+        next = applyOppActiveReturnedToBenchTriggers(next, _swAi, _swOld, _swNew, pool);
+      }
+    }
   }
 
   // v4.43：偵測寶可夢 damage 減少 → 標記 healedThisTurn（用於活潑鮮花 / 活潑針等條件）

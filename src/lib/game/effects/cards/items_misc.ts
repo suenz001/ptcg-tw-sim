@@ -84,9 +84,8 @@ regR('do-switch', (st, idx, iids, _params, pool) => {
     newBench[bIdx] = clearActiveEffects(p.active);
     return { ...p, active: newActive, bench: newBench };
   });
-  // v5.831：對手戰鬥寶可夢回備戰(自我互換/交替)→觸發漩渦言靈/熔岩地域/凹洞
-  const _na = _swapped.players[idx].active;
-  if (_leftPoke && _na) _swapped = applyOppActiveReturnedToBenchTriggers(_swapped, idx, _leftPoke, _na, pool);
+  // v5.852：自我互換/交替的觸發(漩渦言靈/熔岩地域/凹洞)改由 applyActionImpl 中央偵測統一處理。
+  void _leftPoke;
   // v5.243：包 tryPromptPromoteActive — 自方換位 ON_PROMOTE_TO_ACTIVE prompt
   return tryPromptPromoteActive(_swapped, idx, pool);
 });
