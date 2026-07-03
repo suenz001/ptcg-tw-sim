@@ -7130,8 +7130,10 @@ function scrubBenchStatus(state: GameState): GameState {
     const newBench = p.bench.map((b0) => {
       let b = b0;
       // v2.187 化石 / v2.47 一般：備戰區不應持有異常狀態
-      if (b.status !== undefined || b.secondaryStatus !== undefined) {
-        b = { ...b, status: undefined, secondaryStatus: undefined };
+      // v5.855：補第三狀態槽 tertiaryStatus（三狀態制：睡眠+中毒+灼傷 同時）——此中央最後防線原漏清
+      //   tertiary,某些換場 resolver(如 AZ的平和)不走 clearActiveEffects、靠此 sweep 兜底時第三槽會洩到備戰。
+      if (b.status !== undefined || b.secondaryStatus !== undefined || b.tertiaryStatus !== undefined) {
+        b = { ...b, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined };
       }
       // v5.349：備戰區不應持有「攻擊/撤退鎖」類 active-only 旗標
       b = stripBenchActionLockFlags(b);
@@ -7141,8 +7143,8 @@ function scrubBenchStatus(state: GameState): GameState {
     // v2.187：戰鬥場上的化石也不該持有狀態
     let activeChanged = false;
     let newActive = p.active;
-    if (newActive?.fossilOnField && (newActive.status !== undefined || newActive.secondaryStatus !== undefined)) {
-      newActive = { ...newActive, status: undefined, secondaryStatus: undefined };
+    if (newActive?.fossilOnField && (newActive.status !== undefined || newActive.secondaryStatus !== undefined || newActive.tertiaryStatus !== undefined)) {
+      newActive = { ...newActive, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined };
       activeChanged = true;
     }
     if (benchChanged || activeChanged) {

@@ -20,7 +20,7 @@ import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
 } from '../_shared';
-import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect } from '../../effects';
+import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect, clearActiveEffects } from '../../effects';
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
@@ -1056,9 +1056,11 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
   if (!p.active) return state;
   const bIdx = p.bench.findIndex(b => selectedIids.includes(b.iid));
   if (bIdx < 0) return addLog(state, 'AZ的平和：未選備戰', aIdx);
+  // v5.855：舊 active 下場一律走中央 clearActiveEffects（狀態三槽+~50 旗標全清）——原 {...oldActive}
+  //   直接放備戰漏清(狀態靠 scrubBenchStatus 兜底但受傷/免疫類旗標會洩漏)。收斂「戰鬥位→備戰一律 clearActiveEffects」。
   const oldActive = p.active;
   const oldBench = p.bench[bIdx];
-  p.bench = p.bench.map((b, i) => i === bIdx ? { ...oldActive } : b);
+  p.bench = p.bench.map((b, i) => i === bIdx ? clearActiveEffects(oldActive) : b);
   // v5.244：補設 movedToActiveThisTurn flag — 之前漏設導致疾風直撞類條件招式無法觸發 bonus,
   //   也是 ON_PROMOTE_TO_ACTIVE prompt 的必要 gate
   p.active = { ...oldBench, movedToActiveThisTurn: true };

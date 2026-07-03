@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.855</span> 對戰修正：寶可夢從戰鬥場換到備戰區時應清除所有特殊狀態，但先前若同時帶三種狀態（例如睡眠＋中毒＋灼傷），透過「AZ的平和」等部分換場方式換下時，第三種狀態（灼傷）會殘留到備戰區；現已在中央防線補上第三狀態槽的清除，涵蓋所有換場路徑（並把 AZ的平和 收斂到統一的離場清除，一併清掉殘留的受傷/免疫類旗標）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.854</span> 對戰修正：美納斯ex「璀璨鱗片」（不受對手「太晶」寶可夢招式的傷害與效果）先前只免疫了「傷害」、漏了「效果」——太晶寶可夢的招式效果（施加特殊狀態、丟棄能量、移動傷害指示物等）仍會對美納斯ex生效；現已補上效果免疫，與傷害側共用同一「太晶」判定。</summary>
       </details>
       <details>
