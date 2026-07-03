@@ -95,7 +95,7 @@ import {
   countEnergyTypeHostAware,
   isEvolutionCard, // v5.860：判進化收斂中央 helper
 } from '../../effects';
-import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
+import { totalEnergyUnits, computeActiveRetreatCostFor } from '../../engine'; // v5.862：host-aware 能量單位數
 import { RULE_BOX_SUBTYPES } from '../../types';
 import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
 import type { Card } from '$lib/cards/types';  // v5.204 hotfix: Card 從 cards/types 而非 game/types
@@ -631,14 +631,14 @@ regPre('薩戮德|暗影鞭打', (state, aIdx, pool) => {
 
 // ── A3. 超級龍頭地鼠ex|極限鑽 — 200 + 自身能量單位 ≥ cost+2 (=5) +130 ─
 //   卡面：「若這隻寶可夢身上附加的能量數，比此招式所需能量數多 2 個以上，則此招式傷害 +130。」
-//   注意：「能量數」指 units，需用 engine.getEnergyUnits 算 (例：新衝天能量 on Stage2 = 2 units)
+//   注意：「能量數」指 units，且需 host-aware — 燃火(進化=3)/新衝天(Stage2=2)/火箭隊(=2)/大竺葵繁茂(基本草=2)。
 //   cost 從 JSON 取 = 3 (1 鬥 + 2 無)，所以 ≥ 5 觸發。
+//   v5.862：原逐張 getEnergyUnits(host-unaware)會少算——超級龍頭地鼠ex 是 Stage1 進化，燃火應算 3 個。
+//   改用中央 host-aware totalEnergyUnits(與撤退/canAffordAttack 同一條 host 倍率邏輯)。
 regPre('超級龍頭地鼠ex|極限鑽', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
   if (!att) return { state, damage: 200 };
-  const totalUnits = att.energyAttached.reduce(
-    (sum, e) => sum + getEnergyUnits(e.cardId, pool).length, 0,
-  );
+  const totalUnits = totalEnergyUnits(att.energyAttached, pool, state, aIdx, att);
   const required = 3;  // cost length 3
   const threshold = required + 2;  // ≥ 5
   const bonus = totalUnits >= threshold ? 130 : 0;
