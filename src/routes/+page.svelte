@@ -318,9 +318,6 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
-        <summary><span class="ver-badge">v5.859</span> 顯示修正：哈克龍｜進化指引（從牌庫選 1 張進化寶可夢，在「給對手看過」後加入手牌），先前搜到的卡名只有自己看得到、對手只看到「選 N 張」，違反卡面「給對手看過」的公開資訊要求；現已收斂到與其他搜尋卡相同的公開揭示管線，對手也會看到搜到的具體卡名。純顯示修正，對戰效果不變。</summary>
-      </details>
-      <details>
         <summary><span class="ver-badge">v5.858</span> 對戰修正：從棄牌區「以任意方式」附加能量到備戰的招式（鬃岩狼人｜渦輪刀鋒、圖圖犬｜能量寫生、帕奇利茲｜啪滋啪滋充電），先前只能把選到的能量「全部附到 1 隻」備戰寶可夢，無法依卡面「以任意方式」分散到不同備戰；現已改為逐張選擇目標分散（收斂到與撿拾附上相同的中央能量分配管線，從棄牌區取用、不重洗牌庫、不觸發對手的手牌附能反應）。卡面寫「附於 1 隻備戰」的能量支援維持單目標不變。</summary>
       </details>
       <details>
