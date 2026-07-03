@@ -482,7 +482,7 @@ regPost('圖圖犬|能量寫生', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '能量寫生', aIdx);
   if (r.heads === 0) return addLog(r.state, '能量寫生：0 正面', aIdx);
   // 注意：卡面未限基本能量類型（任意基本能量）
-  return discardSearchAttachToBenchPost(r.heads, '能量寫生')(r.state, aIdx, pool);
+  return discardSearchAttachToBenchPost(r.heads, '能量寫生', undefined, true)(r.state, aIdx, pool);
 });
 // 舊 resolver 'wave17-pickup-energy-to-hand' 已 obsolete（A12 唯一 caller）
 //   保留 dead key 不會造成 runtime error（resolver Map 查不到時 engine 已有 fallback），

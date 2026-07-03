@@ -308,7 +308,7 @@ regR('h-wave2-pickup-energy-to-hand', (state, aIdx, iids, _params, _pool) => {
 
 // v3.09 從棄牌區挑 ≤N 基本能量 → 附到 1 隻備戰寶可夢身上（雙階段 pending）
 //   花舞鳥｜能量支援（MC 133/742）等卡使用此 pattern
-function discardSearchAttachToBenchPost(max: number, label: string, type?: string): AttackPostFn {
+function discardSearchAttachToBenchPost(max: number, label: string, type?: string, distribute = false): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
@@ -320,6 +320,19 @@ function discardSearchAttachToBenchPost(max: number, label: string, type?: strin
       return true;
     }).map(c => c.iid);
     if (validIids.length === 0) return addLog(state, `${label}：棄牌區無對應基本能量`, aIdx);
+    // v5.858：卡面「以任意方式附於備戰」→ 走中央 startEnergyChain(source discard, scope bench-only)
+    //   讓玩家逐張選目標分散（原 h-wave2-pickup 只能選 1 隻塞全部，違反「以任意方式」）。
+    //   「附於 1 隻備戰」型(能量支援)維持 distribute=false 的單目標流程。source=discard 不重洗、不觸發手牌附能反應。
+    if (distribute) {
+      return withPending(addLog(state, `${label}：從棄牌區挑 0~${Math.min(max, validIids.length)} 張基本能量（可任意分配到備戰）`, aIdx), {
+        type: 'discard-search',
+        actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        filter: 'BasicEnergy',
+        minCount: 0, maxCount: Math.min(max, validIids.length),
+        effectKey: 'v158-energy-chain-start',
+        params: { validIids, label, source: 'discard', scope: 'bench-only', filterType: 'Any' },
+      });
+    }
     return withPending(addLog(state, `${label}：從棄牌區挑 0~${Math.min(max, validIids.length)} 張基本能量`, aIdx), {
       type: 'discard-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -1125,7 +1138,7 @@ regPost('逐電犬|輸電衝刺', deckSearchAttachToBenchPost(2, '輸電衝刺',
 // 鬃岩狼人|渦輪刀鋒 50 + 棄牌挑最多 2 基本鬥能量分配備戰
 regPre('鬃岩狼人|渦輪刀鋒', (s) => ({ state: s, damage: 50 }));
 // v3.10 修 bug：原本 discardSearchBasicEnergiesPost 加到手牌；卡面是「附於備戰寶可夢身上」
-regPost('鬃岩狼人|渦輪刀鋒', discardSearchAttachToBenchPost(2, '渦輪刀鋒', 'Fighting'));
+regPost('鬃岩狼人|渦輪刀鋒', discardSearchAttachToBenchPost(2, '渦輪刀鋒', 'Fighting', true));
 
 // 花舞鳥|能量支援 — 棄牌區挑最多 2 基本能量附 1 隻備戰
 regPre('花舞鳥|能量支援', (s) => ({ state: s, damage: 0 }));
@@ -1169,7 +1182,7 @@ regPost('帕奇利茲|啪滋啪滋充電', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '啪滋啪滋充電', aIdx);
   if (r.heads === 0) return addLog(r.state, '啪滋啪滋充電：0 正面', aIdx);
   // 動態 max = heads（呼叫共用 helper 但帶上 heads 上限）
-  return discardSearchAttachToBenchPost(r.heads, '啪滋啪滋充電', 'Lightning')(r.state, aIdx, pool);
+  return discardSearchAttachToBenchPost(r.heads, '啪滋啪滋充電', 'Lightning', true)(r.state, aIdx, pool);
 });
 
 // 夠讚狗ex|猛毒筋力 — 牌庫挑 ≤2 基本【惡】能量附自身 + 自身中毒
