@@ -22,7 +22,6 @@ import {
   regPre,
   regPost,
   regR,
-  shuffle,
   updatePlayer,
   withPending,
 } from '../_shared';
