@@ -9961,8 +9961,11 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
     //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 / 防護代碼 / 塗層攻擊
     //   注意：kind 透傳（多目標 resolver 同時用於 attack-damage 跟 attack-effect）
-    const guard = canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
-    if (guard.blocked) {
+    // v5.861：flat 招式(skipDefEffects 語意,雙刃劍/出奇一擊)「不計算受傷寶可夢身上的附加效果」
+    //   → 對齊 engine 主路徑 skipDefEffects,bypass 所有 defender 免疫(太晶備戰/謝米花之帷幔/
+    //   防護代碼/飛翔/暗影惡能量/太鼓防壁…)。官方判例:不計算不受招式傷害的效果,可造成傷害。
+    const guard = flat ? null : canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
+    if (guard?.blocked) {
       const name = targetCard?.name ?? '?';
       s = addLog(s, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
       continue;
@@ -10002,7 +10005,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       }
     }
     // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
-    if (effDmg > 0) {
+    // v5.861：flat 招式亦 bypass 擲幣免傷(順滑大衣等)——Wilson 引用官方判例即以順滑大衣為例,與 engine skipDefEffects 一致
+    if (effDmg > 0 && !flat) {
       const _ca = applyDefenderCoinAvoid(s, target, targetCard, dIdx, effDmg, pool);
       s = _ca.state;
       if (_ca.avoided) effDmg = 0;

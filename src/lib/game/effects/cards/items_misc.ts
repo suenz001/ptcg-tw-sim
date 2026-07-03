@@ -37,7 +37,8 @@ import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferr
 import type { EffectFn } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import { applyOppActiveReturnedToBenchTriggers } from '../../engine'; // v5.831
-import type { CardInstance } from '../../types';
+import type { CardInstance, GameState } from '../../types';
+import type { Card } from '$lib/cards/types'; // v5.861 重新啟動箱逐張分配 chain 型別
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 切換
@@ -1298,8 +1299,10 @@ regR('lazy-tail-grass-pick-energy', (st, idx, iids, params, pool) => {
 // ── 重新啟動箱（Item / H）── v2.180 ───────────────────────────────────────────
 // 卡面：從棄牌區附給自己的所有「未來」寶可夢各 1 張基本能量卡。
 // 實裝：玩家從棄牌挑選 ≤N 張基本能量（N = 場上未來寶可夢數），
-//       resolver 依場上未來寶可夢順序（戰鬥場優先、再備戰）逐一附加，每隻 1 張。
-//       卡面沒指定分配權，故順序固定（不開二段 pending 讓玩家選分配對象）。
+//       v5.861：改為玩家逐張分配（Wilson 裁定應由玩家選哪張基本能量附給哪隻未來寶可夢，
+//       原自動 picked[i]→future[i] 固定順序是「自動亂填」bug）。卡面「所有『未來』各1張」→ 每隻上限
+//       1 張：逐張開 picker 選目標、附後移出候選。(不走中央 startEnergyChain：其 energy-distribute
+//        無 per-target≤1 上限，會讓玩家集中多張到 1 隻，違反「各 1 張」。)
 // gate：場上未來寶可夢 ≥1 + 棄牌基本能量 ≥1。
 regG('重新啟動箱', (st, idx, pool) => {
   const p = st.players[idx];
@@ -1329,44 +1332,73 @@ reg('重新啟動箱', (st, idx, pool) => {
     params: { futureIids: futures.map(f => f.iid) },
   });
 });
-regR('restart-box-attach', (st, idx, iids, params, pool) => {
-  const futureIids = (params?.futureIids as string[]) ?? [];
-  const picked = st.players[idx].discard.filter(c => iids.includes(c.iid));
-  if (picked.length === 0) {
+regR('restart-box-attach', (st, idx, iids, _params, pool) => {
+  // v5.861：玩家選完能量 → 進入逐張分配 chain（玩家選每張附給哪隻「未來」寶可夢，各 1 張）。
+  const futureIids = ((_params?.futureIids as string[]) ?? []).slice();
+  if (iids.length === 0) {
     return addLog(st, '重新啟動箱：未選擇任何能量，效果結束', idx);
   }
-  // 依 futureIids 順序逐一分配（picked[0]→futureIids[0], picked[1]→futureIids[1], …）
-  const assignmentMap = new Map<string, CardInstance>();
-  picked.forEach((e, i) => {
-    if (i < futureIids.length) assignmentMap.set(futureIids[i], e);
+  return _restartBoxChainStep(st, idx, iids.slice(), futureIids, pool);
+});
+
+// v5.861：重新啟動箱逐張分配 chain — 每隻「未來」寶可夢各 1 張，玩家選哪張能量給哪隻。
+function _restartBoxChainStep(st: GameState, idx: 0 | 1, energyIids: string[], futureIids: string[], pool: Map<string, Card>): GameState {
+  const onField = [...(st.players[idx].active ? [st.players[idx].active] : []), ...st.players[idx].bench]
+    .filter((c): c is CardInstance => !!c);
+  const validFutures = futureIids.filter(fi => onField.some(c => c.iid === fi));
+  if (energyIids.length === 0) return st;
+  if (validFutures.length === 0) {
+    return addLog(st, `重新啟動箱：已無可分配的「未來」寶可夢，剩 ${energyIids.length} 張能量留在棄牌區`, idx);
+  }
+  const currentEnergy = energyIids[0];
+  const eInst = st.players[idx].discard.find(c => c.iid === currentEnergy);
+  const eName = eInst ? (pool.get(eInst.cardId)?.name ?? '能量') : '能量';
+  if (validFutures.length === 1) {
+    st = _restartBoxAttachOne(st, idx, currentEnergy, validFutures[0], pool);
+    const rest = energyIids.slice(1);
+    if (rest.length > 0) return addLog(st, `重新啟動箱：僅剩 1 隻「未來」寶可夢已附 1 張，剩 ${rest.length} 張能量留在棄牌區`, idx);
+    return st;
+  }
+  st = addLog(st, `重新啟動箱：選擇「${eName}」要附給哪一隻「未來」寶可夢（各 1 張）`, idx);
+  return withPending(st, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1, validIids: validFutures,
+    effectKey: 'restart-box-chain-attach',
+    params: {
+      currentEnergy,
+      remainingEnergy: energyIids.slice(1),
+      remainingFutures: validFutures,
+      titleOverride: `重新啟動箱：將「${eName}」附到哪一隻「未來」寶可夢？`,
+    },
   });
+}
+
+// v5.861：把 1 張棄牌區能量附到指定目標並記 log（chain 內部共用）
+function _restartBoxAttachOne(st: GameState, idx: 0 | 1, energyIid: string, targetIid: string, pool: Map<string, Card>): GameState {
+  const energyInst = st.players[idx].discard.find(c => c.iid === energyIid);
+  if (!energyInst) return st;
   st = updatePlayer(st, idx, p => {
-    const remaining = p.discard.filter(c => !iids.includes(c.iid));
-    const attachTo = (c: CardInstance | null) => {
-      if (!c) return c;
-      const e = assignmentMap.get(c.iid);
-      return e ? { ...c, energyAttached: [...c.energyAttached, e] } : c;
-    };
-    return {
-      ...p,
-      discard: remaining,
-      active: attachTo(p.active),
-      bench: p.bench.map(c => attachTo(c) ?? c),
-    };
+    const remaining = p.discard.filter(c => c.iid !== energyIid);
+    const attach = (c: CardInstance | null) => (c && c.iid === targetIid)
+      ? { ...c, energyAttached: [...c.energyAttached, energyInst] } : c;
+    return { ...p, discard: remaining, active: attach(p.active), bench: p.bench.map(c => attach(c) ?? c) };
   });
-  // log 每張附加
-  picked.forEach((e, i) => {
-    if (i >= futureIids.length) return;
-    const eName = pool.get(e.cardId)?.name ?? '能量';
-    const futureIid = futureIids[i];
-    const future = [
-      ...(st.players[idx].active ? [st.players[idx].active] : []),
-      ...st.players[idx].bench,
-    ].find(c => c?.iid === futureIid);
-    const futureName = future ? (pool.get(future.cardId)?.name ?? '?') : '?';
-    st = addLog(st, `重新啟動箱：${eName} 附給 ${futureName}`, idx);
-  });
-  return st;
+  const tInst = [...(st.players[idx].active ? [st.players[idx].active] : []), ...st.players[idx].bench]
+    .find(c => c?.iid === targetIid);
+  const tName = tInst ? (pool.get(tInst.cardId)?.name ?? '?') : '?';
+  const eName = pool.get(energyInst.cardId)?.name ?? '能量';
+  return addLog(st, `重新啟動箱：${eName} 附給 ${tName}`, idx);
+}
+
+regR('restart-box-chain-attach', (st, idx, iids, params, pool) => {
+  const currentEnergy = String(params?.currentEnergy ?? '');
+  const remainingEnergy = ((params?.remainingEnergy as string[]) ?? []).slice();
+  const remainingFutures = ((params?.remainingFutures as string[]) ?? []).slice();
+  const targetIid = iids[0];
+  if (!targetIid) return addLog(st, '重新啟動箱：未選擇目標，效果結束', idx);
+  st = _restartBoxAttachOne(st, idx, currentEnergy, targetIid, pool);
+  const nextFutures = remainingFutures.filter(fi => fi !== targetIid);
+  return _restartBoxChainStep(st, idx, remainingEnergy, nextFutures, pool);
 });
 
 // ── 除蟲噴霧（Item / I）── v2.179 ────────────────────────────────────────────

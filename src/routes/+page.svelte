@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.861</span> 對戰修正：兩則玩家回報的問題。① 卡面標明「傷害不計算受到傷害的寶可夢身上的附加效果」的多目標攻擊（鐵頭殼ex｜雙刃劍、月亮伊布｜出奇一擊等），先前打對手備戰寶可夢時仍會被「花之帷幔」（謝米，保護備戰）、太晶寶可夢ex的備戰免疫、以及擲硬幣免傷（順滑大衣等）擋下；依官方裁定，這類招式不計算對手身上「不受招式傷害的效果」，應可造成傷害，現已修正（與戰鬥場單體同款的 skipDefEffects 處理對齊）。② ACE SPEC「重新啟動箱」從棄牌區附能給所有「未來」寶可夢時，先前會自動決定哪張基本能量給哪隻（自動亂填），現改為由玩家逐張分配、每隻各 1 張。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.859</span> 顯示修正：哈克龍｜進化指引（從牌庫選 1 張進化寶可夢，在「給對手看過」後加入手牌），先前搜到的卡名只有自己看得到、對手只看到「選 N 張」，違反卡面「給對手看過」的公開資訊要求；現已收斂到與其他搜尋卡相同的公開揭示管線，對手也會看到搜到的具體卡名。純顯示修正，對戰效果不變。</summary>
       </details>
       <details>
