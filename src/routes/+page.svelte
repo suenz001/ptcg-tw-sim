@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.857</span> 顯示修正：使用「桌墊版」版面時，戰鬥場的寶可夢若已進化（下方疊放了進化序列／能量／道具的卡片圖），其特殊狀態標示（混亂／中毒／灼傷／睡眠／麻痺）與「已使用特性」標示先前會被往右扇開的疊放卡片蓋住、看不到；現已把戰鬥場的狀態標示層級提到疊放卡片之上（比照備戰區既有做法，並設為不阻擋下方卡片的點擊與預覽），雙方戰鬥場一致，桌墊版下特殊狀態恆可見。純顯示修正，對戰效果不變。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.856</span> 對戰修正：泡沫【水】能量卡面「附有的【水】寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復」，但先前若該寶可夢同時帶三種狀態（睡眠＋中毒＋灼傷），附上泡沫【水】能量後第三種（灼傷）不會被恢復；現已補齊，三種狀態都會正確恢復（並順修「命運的擺弄」回手牌時的第三槽清除）。</summary>
       </details>
       <details>

@@ -11088,6 +11088,16 @@
   }
   /* tabletop 隱藏右側 active-info 內的原 active-name（避免重複顯示） */
   .playmat.layout-tabletop .active-card .active-info .active-name{ display:none; }
+  /* v5.857 桌墊版：戰鬥位狀態徽章(混亂/中毒/灼傷…)+已用特性 chip 被進化堆疊 att-card
+     (z-index 50，往右扇開 left:(i+1)*32px) 蓋住看不到。根因：.active-info(z-index:2)
+     被 .active-card 的 isolation:isolate 封在下層，子孫再高 z 也無法蓋過同層 att-card。
+     比照備戰 .status-chip-sm(z-index:201) 既有收斂做法，把戰鬥位 .active-info 整層
+     z-index 提到 att-card(50) 與 tt-attach-overlay(130) 之上、ability-btn(200) 之下，
+     讓狀態徽章在桌墊版恆可見（雙方 active 共用此 .active-info → 一處收斂全解）。 */
+  /* pointer-events:none：此層唯一可見子孫為狀態/已用特性/附能提示等純資訊 chip
+     (active-name/tool-chip 於桌墊版 display:none；特性鈕/進化鈕為 .active-info 的
+     sibling 不在此層)，故整層穿透，才不會蓋住下方 att-card 的 hover 預覽與點擊縮放。 */
+  .playmat.layout-tabletop .active-card .active-info{ z-index:140; pointer-events:none; }
 
   /* === v5.030 bench 名稱+HP 改 absolute 疊在 Pokemon 圖中央上方 === */
   /* 原本 (v5.028) name/stat 在 bench-slot flex 頂部，z-index:200 浮在 attached 之上 —
