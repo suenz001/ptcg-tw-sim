@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.856</span> 對戰修正：泡沫【水】能量卡面「附有的【水】寶可夢不會陷入特殊狀態，並將受到的特殊狀態全部恢復」，但先前若該寶可夢同時帶三種狀態（睡眠＋中毒＋灼傷），附上泡沫【水】能量後第三種（灼傷）不會被恢復；現已補齊，三種狀態都會正確恢復（並順修「命運的擺弄」回手牌時的第三槽清除）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.855</span> 對戰修正：寶可夢從戰鬥場換到備戰區時應清除所有特殊狀態，但先前若同時帶三種狀態（例如睡眠＋中毒＋灼傷），透過「AZ的平和」等部分換場方式換下時，第三種狀態（灼傷）會殘留到備戰區；現已在中央防線補上第三狀態槽的清除，涵蓋所有換場路徑（並把 AZ的平和 收斂到統一的離場清除，一併清掉殘留的受傷/免疫類旗標）。</summary>
       </details>
       <details>

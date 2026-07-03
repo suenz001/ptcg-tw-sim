@@ -367,8 +367,8 @@ regR('fortu-script', (st, idx, iids, _params, pool) => {
   const tool = target.toolAttached;
   // 寶可夢回手（重置 damage, status, energyAttached, toolAttached, evolvedFromStack）
   const cleanInsts: CardInstance[] = [
-    { ...target, damage: 0, status: undefined, secondaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined, evolvedFromIid: undefined, justPlaced: false, playedFromHand: false, evolvedThisTurn: false },
-    ...evoStack.map(e => ({ ...e, damage: 0, status: undefined, secondaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined })),
+    { ...target, damage: 0, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined, evolvedFromIid: undefined, justPlaced: false, playedFromHand: false, evolvedThisTurn: false },
+    ...evoStack.map(e => ({ ...e, damage: 0, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined, energyAttached: [], toolAttached: undefined, evolvedFromStack: undefined })),
   ];
   const discardInsts: CardInstance[] = [...energies, ...(tool ? [tool] : [])];
   st = addLog(st, `弗圖博士的劇本：${targetName}（含進化鏈 ${evoStack.length} 張）回手；附加能量 ${energies.length} 張 / 道具 ${tool ? 1 : 0} 張全部棄牌`, idx);

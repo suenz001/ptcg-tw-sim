@@ -2514,6 +2514,12 @@ export function clearSpecialEnergyProtectedStatuses(
       result = { ...result, secondaryStatus: undefined };
       changed = true;
     }
+    // v5.856：補第三狀態槽 tertiaryStatus（三狀態制：睡眠+中毒+灼傷）——原漏 tertiary,泡沫【水】能量
+    //   卡面「將受到的特殊狀態全部恢復」時第三槽灼傷不被清(玩家可重現)。與 status/secondary 一致逐槽比對 immuneSet。
+    if (inst.tertiaryStatus && immuneSet.has(inst.tertiaryStatus as SpecialCondition)) {
+      result = { ...result, tertiaryStatus: undefined };
+      changed = true;
+    }
     return result;
   }
 
