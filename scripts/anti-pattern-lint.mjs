@@ -277,8 +277,29 @@ for (const f of files) {
   }
 }
 
+// ── Check K：清除狀態時清 secondaryStatus 卻漏 tertiaryStatus（寫入端三槽）─────
+//   三槽制(v5.295):清除特殊狀態一律清三槽(status+secondaryStatus+tertiaryStatus)。
+//   反覆踩(v5.728姐姐治療/v5.855 scrubBench/v5.856泡沫水·命運擺弄):只清
+//   status+secondaryStatus 漏 tertiary → 第三槽狀態殘留。Check J 守讀取端,Check K 守寫入端。
+//   見長期記憶 reference-demote-clear-status-swap。合法只清雙槽者標 // status-slot-ok: 理由。
+const K_SEC = /secondaryStatus:\s*undefined|delete\s+[\w.]+\.secondaryStatus/;
+const K_TERT = /tertiaryStatus:\s*undefined|delete\s+[\w.]+\.tertiaryStatus/;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const tt = lines[i].trimStart();
+    if (tt.startsWith('//') || tt.startsWith('*') || tt.startsWith('/*')) continue;
+    const code = lines[i].replace(/\/\/.*$/, '');
+    if (!K_SEC.test(code)) continue;
+    if (/status-slot-ok/.test(lines[i]) || /status-slot-ok/.test(lines[i - 1] ?? '')) continue;
+    const win = lines.slice(Math.max(0, i - 8), i + 9).join('\n');
+    if (K_TERT.test(win)) continue;
+    violations.push(`[K] ${rel(f)}:${i + 1} — 清狀態清了 secondaryStatus 卻漏 tertiaryStatus（三槽制須一併清第三槽,或標 // status-slot-ok: 理由）`);
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
