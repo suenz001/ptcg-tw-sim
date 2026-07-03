@@ -10414,7 +10414,7 @@ regPre('厄鬼椪 火灶面具ex|極限火焰', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   if (!def) return { state, damage: 140 };
   const defCard = pool.get(def.cardId);
-  const isEvo = !!(defCard?.evolvesFrom);
+  const isEvo = isEvolutionCard(defCard); // v5.860：收斂中央 isEvolutionCard(遵 effects.ts:278 鐵律,防資料缺 evolvesFrom 漏判)
   if (!isEvo) {
     return { state: addLog(state, '極限火焰：對手非進化寶可夢', aIdx), damage: 140 };
   }

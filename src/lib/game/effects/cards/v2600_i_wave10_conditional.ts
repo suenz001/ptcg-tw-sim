@@ -27,6 +27,7 @@ import { addLog } from '../_shared';
 import type { AttackPreFn } from '../_shared';
 // v5.227: 引入 totalEnergyUnits 處理燃火/新衝天/大竺葵繁茂等 host-aware 能量倍率
 import { totalEnergyUnits } from '../../engine';
+import { isEvolutionCard } from '../../effects'; // v5.860：判進化收斂中央 helper(cardStage 三重防線,防資料缺 evolvesFrom 漏判)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 對手中毒條件 +N
@@ -48,7 +49,7 @@ function oppEvolutionConditionPre(base: number, bonus: number, label: string): A
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
     const card = def ? pool.get(def.cardId) : undefined;
-    const cond = !!card?.evolvesFrom;
+    const cond = isEvolutionCard(card); // v5.860：改用中央 isEvolutionCard(遵 effects.ts:278 鐵律),!!evolvesFrom 對缺 evolvesFrom 的進化卡會漏判
     const dmg = base + (cond ? bonus : 0);
     const s = addLog(state, `${label}：對手戰鬥寶可夢 ${cond ? `進化寶可夢 → +${bonus}` : '基礎'} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };

@@ -93,6 +93,7 @@ import {
   dealAttackDamageToTarget,
   koTargetByAttackEffect,
   countEnergyTypeHostAware,
+  isEvolutionCard, // v5.860：判進化收斂中央 helper
 } from '../../effects';
 import { getEnergyUnits, computeActiveRetreatCostFor } from '../../engine';
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -330,7 +331,7 @@ regPre('故勒頓|戰鬥爪', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
   const defCard = defActive ? pool.get(defActive.cardId) : null;
-  const isEvolution = !!defCard && (defCard.stage === 'Stage1' || defCard.stage === 'Stage2' || !!defCard.evolvesFrom);
+  const isEvolution = isEvolutionCard(defCard ?? undefined); // v5.860：改用中央 isEvolutionCard(cardStage 三重防線)
   const bonus = isEvolution ? 30 : 0;
   const dmg = 30 + bonus;
   return {
