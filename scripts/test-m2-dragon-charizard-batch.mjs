@@ -94,7 +94,7 @@ test('哈克龍｜進化指引 searches 1 evolution Pokemon to hand', () => {
     { ...baseState().players[1], active: inst(CID.defender) },
   ]});
   let next = applyAction(st, { type: 'USE_ABILITY', iid: dragonair.iid, abilityIndex: 0 }, pool);
-  assert.equal(next.pendingSelection?.effectKey, 'dragonair-evolution-guide');
+  assert.equal(next.pendingSelection?.effectKey, 'search-generic-to-hand'); // v5.859 進化指引收斂到公開揭示卡名 resolver
   next = applyAction(next, { type: 'RESOLVE_SELECTION', senderIdx: 0, selectedIids: [evo.iid] }, pool);
   assert.equal(next.players[0].hand[0]?.iid, evo.iid);
 });
