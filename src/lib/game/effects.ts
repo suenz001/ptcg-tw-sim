@@ -2227,6 +2227,9 @@ export const ATTACK_EFFECT_IMMUNITY = new Map<string, AttackEffectImmunityRule>(
   ['硬岩【鬥】能量',   { kind: 'energy-on-target', requireType: 'Fighting' }],
   // 自身特性
   ['皇帝之勢',         { kind: 'self-ability' }],
+  // v5.854 美納斯ex｜璀璨鱗片 — 卡面「不受太晶寶可夢招式的傷害與效果」；傷害側已在 PASSIVE_IMMUNITY,
+  //   效果側補此 self-ability entry(attacker=太晶 的 special-case 在 canApplyAttackEffectToTarget)。
+  ['璀璨鱗片',         { kind: 'self-ability' }],
   // 場上特性
   ['抵抗之幕',         { kind: 'field-ability', targetFilter: 'BasicRocket' }],
 ]);
@@ -2346,6 +2349,14 @@ export function canApplyAttackEffectToTarget(
         // v3.06 肋骨海龜｜全能硬殼 special-case — 還需 attacker 身上附有特殊能量才生效
         if (name === '全能硬殼') {
           if (!_v3060AttackerHasSE(state, atkIdx, pool)) continue;
+        }
+        // v5.854 美納斯ex｜璀璨鱗片 special-case — attacker 須為「太晶」才免疫(卡面條件)。重用
+        //   PASSIVE_IMMUNITY.get('璀璨鱗片') 述詞單一來源→傷害側與效果側的太晶判定不漂移。
+        if (name === '璀璨鱗片') {
+          const _prAtt = state.players[atkIdx].active;
+          const _prCard = _prAtt ? pool.get(_prAtt.cardId) : undefined;
+          const _prPred = PASSIVE_IMMUNITY.get('璀璨鱗片');
+          if (!_prCard || !_prPred || _prPred(_prCard, 1, state, atkIdx, pool, targetCard?.name) !== true) continue;
         }
         // v5.224：target 在對手戰鬥場時若被振翼髮暗夜羽擊壓制 → 特性失效
         const defActiveSelf = state.players[dIdx].active;

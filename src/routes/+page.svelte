@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.854</span> 對戰修正：美納斯ex「璀璨鱗片」（不受對手「太晶」寶可夢招式的傷害與效果）先前只免疫了「傷害」、漏了「效果」——太晶寶可夢的招式效果（施加特殊狀態、丟棄能量、移動傷害指示物等）仍會對美納斯ex生效；現已補上效果免疫，與傷害側共用同一「太晶」判定。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.853</span> 顯示修正：化石系列寶可夢（陳舊的羽毛／根狀／背蓋／顎之／鰭之／頭蓋／盾甲化石）的「特性」先前只在「效果」欄以純文字顯示、沒有特性名稱；現已補上結構化特性（羽毛守護／原始根／背蓋守護／威嚇之顎／鰭之守護／頭蓋尖刺／盾之守護，均經官網逐張比對），卡牌資料庫與牌組編輯器都會正確顯示「特性 X」。純顯示修正，對戰效果不變。</summary>
       </details>
       <details>
