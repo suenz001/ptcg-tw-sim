@@ -25,7 +25,7 @@ jobs:
           cache: 'npm'
       - run: npm ci
       # npm#4828 workaround：npm ci 有時漏裝 rollup 平台 optional binary → vite build 快速 fail。強制補裝。
-      - run: npm install @rollup/rollup-linux-x64-gnu --no-save --no-package-lock
+      - run: npm install @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 --no-save --no-package-lock
       - name: Anti-pattern lint (反模式靜態檢查)
         run: node scripts/anti-pattern-lint.mjs
       - name: Coverage report (未實裝/靜默失效卡牌, 資訊性非 gating)
