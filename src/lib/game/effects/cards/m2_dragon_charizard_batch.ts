@@ -140,20 +140,9 @@ regA('哈克龍', 0, (st, idx, pool, cardInst) => {
   return withPending(addLog(st, '進化指引：從牌庫選擇 1 張進化寶可夢加入手牌', idx), {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'EvolutionPokemon', minCount: 0, maxCount: 1,
-    effectKey: 'dragonair-evolution-guide',
+    effectKey: 'search-generic-to-hand', // v5.859 收斂公開揭示卡名(給對手看過);原自訂resolver漏卡名
     params: { validIids: cand.map(c => c.iid) },
   });
-});
-
-regR('dragonair-evolution-guide', (st, idx, iids, _params, pool) => {
-  const picked = st.players[idx].deck.filter(c => iids.includes(c.iid));
-  if (picked.length === 0) return addLog(st, '進化指引：未選擇任何卡', idx);
-  const s = addLog(st, `進化指引：選擇 ${picked.length} 張進化寶可夢加入手牌`, idx);
-  return updatePlayer(s, idx, p => ({
-    ...p,
-    deck: shuffle(p.deck.filter(c => !iids.includes(c.iid))),
-    hand: [...p.hand, ...picked],
-  }));
 });
 
 // ── 花舞鳥ex｜激動渦輪 ───────────────────────────────────────────────────────
