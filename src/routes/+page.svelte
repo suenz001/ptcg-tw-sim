@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.851</span> 對戰修正：洛托姆ex「多重轉接」（可附 2 張寶可夢道具）在洛托姆ex 自己位於戰鬥場、已附 1 張道具、又是場上唯一可附目標時，第 2 張道具先前無法打出（卡片被判定不可使用）；要撤退到備戰區才附得上。現已修正——道具「可否使用」的判定與「可附目標」清單收斂為同一套邏輯，一致涵蓋多重轉接的第 2 張。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.850</span> 顯示修正：點擊「查看寶可夢詳細狀態」時，透過洛托姆ex「多重轉接」附加的第 2 張寶可夢道具先前不會顯示（只顯示第 1 張）；現已修正為列出全部道具。（後端附加一直正常，僅詳細狀態視窗顯示遺漏。）</summary>
       </details>
       <details>

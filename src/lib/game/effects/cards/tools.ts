@@ -495,29 +495,43 @@ TOOL_BOTH_SIDES_RETREAT_PLUS.add('重力之玉');
 // （從 effects.ts line 1295-1344 區塊搬入，邏輯不變）
 // ══════════════════════════════════════════════════════════════════════════════
 
+// v5.851 中央：計算「可附加此道具的自方寶可夢」— 單一真相來源。
+//   picker(toolAttachEffect 的 validIids) 與自動 TRAINER_GUARD(可玩性判定) 共用，
+//   一致涵蓋洛托姆ex｜多重轉接第 2 張道具（洛托姆家族已附 1 張、relay 啟用、extraTools<1 仍可附）。
+//   根因（本次修）：舊 guard 只認「無 toolAttached」的目標、漏多重轉接 → 洛托姆ex 自身在戰鬥場
+//   且為唯一可附目標時，卡片被判不可玩、道具附不上；備戰有其他無道具寶可夢時 guard 巧合放行才沒露餡。
+//   toolAttachEffect 端的 picker filter 早已正確涵蓋多重轉接，但 guard 另寫一份 → 兩份邏輯漂移。
+function toolAttachableTargets(
+  st: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+  toolName: string,
+): CardInstance[] {
+  const p = st.players[idx];
+  const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
+  const gate = TOOL_ATTACH_GATE.get(toolName);
+  const relayActive = hasMultiToolRelay(st, idx, pool);
+  return allInPlay.filter(pk => {
+    // 容量條件：尚無道具，或（多重轉接啟用 + 洛托姆家族 + 尚未溢出第 2 張）
+    const capacityOk = !pk.toolAttached
+      || (relayActive && isLotomFamily(pool.get(pk.cardId)) && (pk.extraTools?.length ?? 0) < 1);
+    if (!capacityOk) return false;
+    // holder gate（核心記憶碟 等限定持有者）
+    if (!gate) return true;
+    const card = pool.get(pk.cardId);
+    return card ? gate(card) : false;
+  });
+}
+
 function toolAttachEffect(toolName: string): EffectFn {
   return (st, idx, pool, toolInst) => {
     if (!toolInst) return st;
-    const p = st.players[idx];
-    const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
-    // v2.214：套用 TOOL_ATTACH_GATE — 不符合 holder 條件的寶可夢從候選排除
-    //   例：核心記憶碟 只能附「超級基格爾德ex」
-    const gate = TOOL_ATTACH_GATE.get(toolName);
-    // v5.640 洛托姆ex｜多重轉接：已附 1 張道具的「洛托姆」家族，若自方場上有多重轉接啟用且 extraTools<1，
-    //   仍可被選為第 2 張道具的對象。原本 .filter(pk => !pk.toolAttached) 把已附道具者全排除 → picker 選不到
-    //   → 第 2 張永遠附不上（多重轉接「疑似未完整實裝」的真正缺口；resolver 端早已支援溢出 extraTools）。
-    const relayActive = hasMultiToolRelay(st, idx, pool);
-    const validIids = allInPlay
-      .filter(pk => !pk.toolAttached || (relayActive && isLotomFamily(pool.get(pk.cardId)) && (pk.extraTools?.length ?? 0) < 1))
-      .filter(pk => {
-        if (!gate) return true;
-        const card = pool.get(pk.cardId);
-        return card ? gate(card) : false;
-      })
-      .map(pk => pk.iid);
+    // v5.851 收斂：可附目標改走中央 toolAttachableTargets（picker 與 TRAINER_GUARD 單一真相來源，
+    //   一致涵蓋洛托姆ex｜多重轉接第 2 張道具）。原 inline filter 與自動 guard 各寫一份 → guard 漏多重轉接。
+    const validIids = toolAttachableTargets(st, idx, pool, toolName).map(pk => pk.iid);
     if (validIids.length === 0) {
       // gate 把所有 holder 過濾光時，clear 訊息提示
-      const reason = gate ? '無符合附加條件的寶可夢' : '沒有可附加道具的寶可夢';
+      const reason = TOOL_ATTACH_GATE.has(toolName) ? '無符合附加條件的寶可夢' : '沒有可附加道具的寶可夢';
       // 把道具放回手牌（不要從手牌消失）
       return updatePlayer(
         addLog(st, `${toolName}：${reason}，道具回到手牌`, idx),
@@ -794,24 +808,4 @@ regPost('核心記憶碟|大地光炮', (state, aIdx, pool) => {
 //   - 都不可附加 → guard 返回 false → UI 不亮卡、engine 拒絕
 //
 // 注意：必須在 TOOL_ATTACH_GATE 全部登記完之後才能跑（檔案最尾段）。
-// ══════════════════════════════════════════════════════════════════════════════
-
-{
-  const allToolNames = new Set<string>([
-    ...ATTACH_TOOL_NAMES,
-    ...TOOL_ATTACH_GATE.keys(), // v2.214 招式注入 tool（核心記憶碟、招式學習器螢石）
-  ]);
-  for (const name of allToolNames) {
-    regG(name, (state, actorIdx, pool) => {
-      const p = state.players[actorIdx];
-      const allInPlay = [...(p.active ? [p.active] : []), ...p.bench];
-      const gate = TOOL_ATTACH_GATE.get(name);
-      return allInPlay.some(pk => {
-        if (pk.toolAttached) return false;
-        if (!gate) return true;
-        const card = pool.get(pk.cardId);
-        return card ? gate(card) : false;
-      });
-    });
-  }
-}
+// ═══════════════════════════════�
