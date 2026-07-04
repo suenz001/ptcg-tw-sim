@@ -8092,13 +8092,16 @@ regPost('賽富豪ex|淘金潮', (state, aIdx, pool) => {
 });
 
 // 雪童子|驚嚇 — 傷害 20（pre 不需），post：對手手牌隨機 1 張回牌庫並重洗
-regPost('雪童子|驚嚇', (state, aIdx, _pool) => {
+regPost('雪童子|驚嚇', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  let s = addLog(state, '驚嚇：對手手牌隨機 1 張返回牌庫並重洗', aIdx);
+  const oppHand = state.players[dIdx].hand;
+  if (oppHand.length === 0) return addLog(state, '驚嚇：對手手牌已空', aIdx);
+  const idx = Math.floor(Math.random() * oppHand.length);
+  const picked = oppHand[idx];
+  const pickedName = pool.get(picked.cardId)?.name ?? '?';
+  // v5.863：放回牌庫的卡名雙方公開揭示(Wilson裁定,原 log 無卡名)
+  const s = addLog(state, `驚嚇：對手手牌隨機 1 張（${pickedName}）返回牌庫並重洗`, aIdx);
   return updatePlayer(s, dIdx, p => {
-    if (p.hand.length === 0) return p;
-    const idx = Math.floor(Math.random() * p.hand.length);
-    const picked = p.hand[idx];
     const newHand = p.hand.filter((_, i) => i !== idx);
     return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
   });

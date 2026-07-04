@@ -576,10 +576,8 @@ regPost('墓揚犬|恐怖啃咬', (state, aIdx, pool) => {
   const pickedCards = opp.hand.filter((_, i) => pickIdx.has(i));
   const pickedNames = pickedCards.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   // 攻擊方私訊：揭示牌名；對手與觀戰者公開：只見張數
-  s = addPrivateLog(s,
-    `恐怖啃咬：揭示放回對手牌庫的卡 — ${pickedNames}（${k} 張）`,
-    `恐怖啃咬：將對手 ${k} 張手牌放回牌庫並重洗（攻擊方可看見牌名）`,
-    aIdx);
+  // v5.863：放回牌庫的卡名雙方公開揭示(Wilson裁定,原 addPrivateLog 只給攻方看)
+  s = addLog(s, `恐怖啃咬：將對手 ${k} 張手牌放回牌庫並重洗 — ${pickedNames}`, aIdx);
   return updatePlayer(s, dIdx, p => {
     const picked = p.hand.filter((_, i) => pickIdx.has(i));
     const rest = p.hand.filter((_, i) => !pickIdx.has(i));

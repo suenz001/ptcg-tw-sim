@@ -98,7 +98,7 @@ function discardOppHandRandomPost(n: number, label: string): AttackPostFn {
 
 // helper: 從對手手牌隨機抽 N 張回牌庫並重洗
 function returnOppHandRandomToDeckPost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const opp = state.players[dIdx];
     if (opp.hand.length === 0) return addLog(state, `${label}：對手手牌為空`, aIdx);
@@ -109,8 +109,9 @@ function returnOppHandRandomToDeckPost(n: number, label: string): AttackPostFn {
       [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
     }
     const pickedSet = new Set(idxs.slice(0, pickCount));
+    const _rNames = opp.hand.filter((_, i) => pickedSet.has(i)).map(c => pool.get(c.cardId)?.name ?? '?').join('、'); // v5.863 雙方公開放回牌庫的卡名(Wilson裁定)
     return updatePlayer(
-      addLog(state, `${label}：盲選對手 ${pickCount} 張手牌放回牌庫並重洗`, aIdx),
+      addLog(state, `${label}：盲選對手 ${pickCount} 張手牌放回牌庫並重洗 — ${_rNames}`, aIdx),
       dIdx, p => {
         const picked = p.hand.filter((_, i) => pickedSet.has(i));
         const remaining = p.hand.filter((_, i) => !pickedSet.has(i));

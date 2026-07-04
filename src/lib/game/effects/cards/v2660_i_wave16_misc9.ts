@@ -323,13 +323,8 @@ regPost('洛托姆|驚嚇', (state, aIdx, pool) => {
   const idx = Math.floor(Math.random() * opp.hand.length);
   const picked = opp.hand[idx];
   const pickedName = pool.get(picked.cardId)?.name ?? '?';
-  // 攻方 private log 揭示那張卡是什麼；對手側只看到「隨機 1 張回牌庫」
-  let s = addPrivateLog(
-    state,
-    `驚嚇：對手手牌隨機 1 張（${pickedName}）回牌庫並重洗`,  // private（給攻方 aIdx）
-    '驚嚇：對手手牌隨機 1 張回牌庫並重洗',                       // public（對手看到）
-    aIdx,
-  );
+  // v5.863：放回牌庫的卡名雙方公開揭示(Wilson裁定,原 addPrivateLog 只給攻方看)
+  let s = addLog(state, `驚嚇：對手手牌隨機 1 張（${pickedName}）回牌庫並重洗`, aIdx);
   return updatePlayer(s, dIdx, p => {
     const newHand = [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)];
     return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };

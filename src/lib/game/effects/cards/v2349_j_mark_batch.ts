@@ -164,17 +164,18 @@ regR('j-taurus-group-aim', (state, aIdx, iids, _params, pool) => {
 
 // 步哨鼠｜臨檢：擲 3 次，依正面數將對手手牌前 N 張回牌庫並重洗（公開 log，不看內容）。
 regPre('步哨鼠|臨檢', (state) => ({ state, damage: 0 }));
-regPost('步哨鼠|臨檢', (state, aIdx) => {
+regPost('步哨鼠|臨檢', (state, aIdx, pool) => {
   const dIdx = 1 - aIdx as 0 | 1;
   const r = flipFixed(state, aIdx, '臨檢', 3);
   const n = Math.min(r.heads, r.state.players[dIdx].hand.length);
   if (n <= 0) return addLog(r.state, '臨檢：沒有卡放回牌庫', aIdx);
+  const _lNames = r.state.players[dIdx].hand.slice(0, n).map(c => pool.get(c.cardId)?.name ?? '?').join('、'); // v5.863 雙方公開放回牌庫的卡名(Wilson裁定)
   const s = updatePlayer(r.state, dIdx, (p) => {
     const moved = p.hand.slice(0, n);
     const hand = p.hand.slice(n);
     return { ...p, hand, deck: shuffle([...moved, ...p.deck]) };
   });
-  return addLog(s, `臨檢：${r.heads}/3 次正面，將對手 ${n} 張手牌放回牌庫並重洗`, aIdx);
+  return addLog(s, `臨檢：${r.heads}/3 次正面，將對手 ${n} 張手牌放回牌庫並重洗 — ${_lNames}`, aIdx);
 });
 
 // 托戈德瑪爾ex｜尖尖回轉：若上個自己的回合使用過此招式，80+80；使用後記錄到下個自己的回合。
