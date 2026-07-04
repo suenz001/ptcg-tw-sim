@@ -10,14 +10,14 @@
  *  4. 主階段：進化 → 打基礎備戰 → 附能量 → 打訓練家 → 使用特性 → 攻擊 → 結束
  */
 
-import type { Card } from '$lib/cards/types';
+import type { Card, EnergyType } from '$lib/cards/types';
 import type { GameState, GameAction, CardInstance, PendingSelection, PlayerState } from './types';
 import {
   getAvailableAttacks, getEffectiveAttacks, getEvolvableTargets,
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
   canBeInitialActiveCard, isRulePokemon,
-  getEffectiveHP, canAffordAttack,
+  getEffectiveHP, canAffordAttack, isBasicEnergyOfType,
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
@@ -633,6 +633,20 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'ColorlessPokeHP100') {
           return card.supertype === 'Pokemon' && card.pokemonType === 'Colorless' && (card.hp ?? 999) <= 100;
         }
+        // v5.867：基本能量 + 屬性 filter — 與人類端 +page.svelte 對齊,收斂到中央 isBasicEnergyOfType。
+        //   先前 AI 缺這些分支 → 'BasicEnergy:Water' 等落到下方 return true(全牌庫候選) → usefulness
+        //   排序把基礎寶可夢排最前 → AI 用小霞的朝氣/樂呵呵之吻等從牌庫附能時誤選寶可夢(Wilson 回報)。
+        if (f === 'BasicEnergy:DistinctTypes') {
+          // 各不同屬性基本能量(伊布|鮮豔捕捉):候選=任意基本能量,實際去重在下方 slice 前。
+          return card.supertype === 'Energy' && card.subtype === 'Basic';
+        }
+        if (f === 'BasicEnergy:Grass+Lightning') {
+          return isBasicEnergyOfType(card, 'Grass' as EnergyType) || isBasicEnergyOfType(card, 'Lightning' as EnergyType);
+        }
+        if (f.startsWith('BasicEnergy:')) {
+          const t = f.slice('BasicEnergy:'.length) as EnergyType;
+          return isBasicEnergyOfType(card, t);
+        }
         return true;
       });
       // v5.617：抓寶可夢優先「現在用得到的」——基礎(可放備戰) > 進化鏈上一階已在場上/手牌(可進化) > 抓了也用不到的高階。
@@ -654,6 +668,15 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (su !== 0) return su;
         return (pool.get(b.cardId)?.hp ?? 0) - (pool.get(a.cardId)?.hp ?? 0);
       });
+      // v5.867：各不同屬性基本能量 — 依 pokemonType 去重(每屬性只留 1 張),確保選到的屬性互異。
+      if (f === 'BasicEnergy:DistinctTypes') {
+        const seenTypes = new Set<string>();
+        candidates = candidates.filter(inst => {
+          const t = pool.get(inst.cardId)?.pokemonType;
+          if (!t || seenTypes.has(t)) return false;
+          seenTypes.add(t); return true;
+        });
+      }
       const count = Math.min(sel.maxCount, candidates.length);
       return { type: 'RESOLVE_SELECTION', selectedIids: candidates.slice(0, count).map(c => c.iid) };
     }
