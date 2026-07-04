@@ -235,7 +235,7 @@ regR('waitress-attach', (st, idx, iids, params, pool) => {
 });
 
 // ── 吹火人 — 牌庫搜 ≤7 基本【火】能量加手 ──────────────────────────────────
-regG('', (st, idx) => st.players[idx].deck.length > 0);
+regG('吹火人', (st, idx) => st.players[idx].deck.length > 0);
 // v5.292 修吹火人: filter='BasicEnergy' 沒限定屬性, picker line 2518 不讀 validIids,
 //        玩家可選任意基本能量. 改 'BasicEnergy:Fire' 由 picker line 2662 startsWith
 //        分支處理, isBasicEnergyOfType(card, 'Fire') 雙重檢查 (pokemonType==='Fire' OR name 含「【火】」).

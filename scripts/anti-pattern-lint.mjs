@@ -315,8 +315,24 @@ for (const f of files) {
   }
 }
 
+// ── Check M：reg/regG/regA/regR/regPre/regPost 用空字串 key ─────────────────────
+//   reg 系列以卡名/招式名為 key 註冊到 Map；空字串 '' 是死碼(TRAINER_GUARDS.get(卡名) 永遠
+//   拿不到)，且多個空 key 互相覆蓋 → 該卡靜默失去 guard/handler。v5.870 首跑抓 5 處 regG('')
+//   (訂購盒/招式學習器機/派帕/吹火人/赤松 漏填卡名 → 牌庫空仍可用)。合法例外標 // empty-reg-ok。
+const M_EMPTY_REGKEY = /\b(reg|regG|regA|regR|regPre|regPost)\(\s*(''|"")\s*,/;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const tt = lines[i].trimStart();
+    if (tt.startsWith('//') || tt.startsWith('*') || tt.startsWith('/*')) continue;
+    if (!M_EMPTY_REGKEY.test(lines[i])) continue;
+    if (/empty-reg-ok/.test(lines[i]) || /empty-reg-ok/.test(lines[i - 1] ?? '')) continue;
+    violations.push(`[M] ${rel(f)}:${i + 1} — reg 系列空字串 key(死碼,該卡靜默失去 guard/handler）→ 補正確卡名/招式名，或標 // empty-reg-ok: 理由`);
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

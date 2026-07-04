@@ -35,7 +35,7 @@ import {
 //   2c. 若 2 張 + 場上有寶可夢：兩張都先收手牌，再 hand-choose 讓玩家挑 1 張附加
 //       （未被挑選的那張自然留在手牌）
 //   2d. 場上無寶可夢（罕見邊界）：全部退回手牌當 fallback
-regG('', (st, idx) => st.players[idx].deck.length > 0);
+regG('赤松', (st, idx) => st.players[idx].deck.length > 0);
 reg('赤松', (st, idx) => {
   st = addLog(st, '赤松：從牌庫選最多 2 張基本能量（之後自選 1 張附加、另 1 張收手牌）', idx);
   return withPending(st, {

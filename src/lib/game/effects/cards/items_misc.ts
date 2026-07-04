@@ -968,7 +968,7 @@ regR('gift-drone-pick', (st, idx, iids, _params, pool) => {
 
 // ── 訂購盒（Item）──────────────────────────────────────────────────────────
 // 卡面：若使用了這張卡，則自己的回合結束。從自己的牌庫選最多 2 張物品卡，給對手看後加入手牌並重洗。
-regG('', (st, idx) => st.players[idx].deck.length > 0);
+regG('訂購盒', (st, idx) => st.players[idx].deck.length > 0);
 reg('訂購盒', (st, idx) => {
   st = addLog(st, '訂購盒：從牌庫選最多 2 張物品卡加手牌（用後回合結束）', idx);
   return withPending(st, {
@@ -1183,7 +1183,7 @@ regR('energy-duster-pick', (st, idx, iids, _params, pool) => {
 
 // ── 招式學習器機（Item）────────────────────────────────────────────────────
 // 卡面：從自己的牌庫選最多 3 張名稱中有「招式學習器」的「寶可夢道具」卡，給對手看後加手牌並重洗。
-regG('', (st, idx) => st.players[idx].deck.length > 0);
+regG('招式學習器機', (st, idx) => st.players[idx].deck.length > 0);
 reg('招式學習器機', (st, idx, pool) => {
   // 牌庫中名稱含「招式學習器」的 PokemonTool iids
   const validIids = st.players[idx].deck

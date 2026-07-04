@@ -127,7 +127,7 @@ reg('由紫', (st, idx, pool) => {
 // heal-150 已 reg 過 (line 2172)，不重複 reg。
 
 // ── 派帕 — 牌庫選 1 物品卡 + 1 寶可夢道具卡加手牌（重洗）─────────────────
-regG('', (st, idx) => st.players[idx].deck.length > 0);
+regG('派帕', (st, idx) => st.players[idx].deck.length > 0);
 reg('派帕', (st, idx) => {
   // 第 1 階段：選 1 張物品
   st = addLog(st, '派帕：從牌庫選 1 張物品卡', idx);
