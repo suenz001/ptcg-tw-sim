@@ -121,7 +121,7 @@ regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
     const bench = [...p.bench, ...toBench];
     return { ...p, deck: shuffle(remaining), bench };
   });
-  return applyBenchPlaceSideEffects(st, idx, validIids, pool);
+return st; // v5.866 險惡廢墟改走 applyAction 出口中央偵測
 });
 
 regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
@@ -187,8 +187,8 @@ regR('bench-basic-from-deck', (st, idx, iids, params, pool) => {
     const bench = [...p.bench, ...toBench2];
     return { ...p, deck: shuffle(remaining), bench };
   });
-  // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）
-  return applyBenchPlaceSideEffects(st, idx, effIids, pool);
+// v5.866 險惡廢墟改走 applyAction 出口中央偵測
+  return st;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

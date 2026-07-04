@@ -2547,8 +2547,7 @@ function handlePlaying(
     if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool) && !isInitializeBlocking(afterPlace, placed, pool)) {
       afterPlace = placeFn(afterPlace, aIdx, pool);
     }
-    // v2.119 險惡廢墟：改走統一 helper（同時被 pokemon_search / six_decks 等 resolver 呼叫）
-    afterPlace = applyBenchPlaceSideEffects(afterPlace, aIdx, [placed.iid], pool);
+    // v5.866：險惡廢墟改走 applyAction 出口中央偵測(applyRuggedRuinsBenchPlace),此處不再呼叫
     // v2.320：自動提示「從手牌放置於備戰區時」的特性（如殺手鐧捕捉、狂挖等）
     // v3.76：火箭隊的監視塔在場時，【無】寶可夢的 on-play 特性也要被消除（喵喵ex 殺手鐧捕捉等）
     if (!isColorlessAbilityBlocked(afterPlace, card, pool)) {
@@ -2596,8 +2595,7 @@ function handlePlaying(
       `${attacker.name} 將 ${card!.name} 作為【基礎】寶可夢放到備戰區（HP60／【無】）`,
       aIdx
     );
-    // 化石上場 = 寶可夢上場 → 跑同 PLAY_BASIC 的 bench-place 觸發路徑
-    afterPlace = applyBenchPlaceSideEffects(afterPlace, aIdx, [placed.iid], pool);
+    // 化石上場 = 寶可夢上場;v5.866 險惡廢墟改走 applyAction 出口中央偵測,此處不再呼叫
     return afterPlace;
   }
 
@@ -7499,12 +7497,30 @@ export function applyOppActiveReturnedToBenchTriggers(
   return retreatState;
 }
 
+// v5.866 險惡廢墟中央偵測：任何動作後,本回合方新放到自己備戰的寶可夢(iid 不在動作前
+//   自己場上=新放置,排除互換/進化保留 iid)統一觸發險惡廢墟(2 指示物)。收斂原散在 6 處
+//   (PLAY_BASIC/PLAY_FOSSIL/各搜牌庫放備戰 resolver,多處漏呼叫)的 applyBenchPlaceSideEffects。
+//   helper 內部已 no-op(非險惡廢墟在場)+ 濾惡屬性,故僅在該場地生效。
+function applyRuggedRuinsBenchPlace(before: GameState, after: GameState, pool: Map<string, Card>): GameState {
+  const idx = before.activePlayerIndex;
+  if (idx !== 0 && idx !== 1) return after;
+  const bp = before.players[idx];
+  if (!bp) return after;
+  const beforeField = new Set<string>([
+    ...(bp.active ? [bp.active.iid] : []),
+    ...bp.bench.map(c => c.iid),
+  ]);
+  const newIids = after.players[idx].bench.filter(c => !beforeField.has(c.iid)).map(c => c.iid);
+  if (newIids.length === 0) return after;
+  return applyBenchPlaceSideEffects(after, idx, newIids, pool);
+}
+
 export function applyAction(
   state: GameState,
   action: GameAction,
   pool: Map<string, Card>
 ): GameState {
-  return normalizeNonFieldStacks(applyActionImpl(state, action, pool));
+  return applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(applyActionImpl(state, action, pool)), pool); // v5.866 險惡廢墟中央
 }
 function applyActionImpl(
   state: GameState,

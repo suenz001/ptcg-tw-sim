@@ -242,8 +242,7 @@ regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
   players[aIdx] = p;
   const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   let s = addLog({ ...state, players }, `呼朋引伴：從牌庫放 ${picks.length} 張基礎寶可夢到備戰（${names}），並重洗牌庫`, aIdx);
-  // v2.119：觸發「放到備戰」的被動場地卡效果（險惡廢墟等）
-  s = applyBenchPlaceSideEffects(s, aIdx, actuallyPlacedIids, pool);
+// v5.866 險惡廢墟改走 applyAction 出口中央偵測
   return s;
 });
 

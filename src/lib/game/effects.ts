@@ -15692,7 +15692,7 @@ regR('precious-cart-bench', (state, aIdx, selectedIids, _params, pool) => {
   s = { ...s, players };
   if (placedNames.length > 0) {
     s = addLog(s, `貴重手推車：${placedNames.join('、')} 放置於備戰區，重洗牌庫`, aIdx);
-    s = applyBenchPlaceSideEffects(s, aIdx, picks.map(c => c.iid), pool);
+    // v5.866 險惡廢墟改走 applyAction 出口中央偵測
   } else {
     s = addLog(s, '貴重手推車：未選卡，重洗牌庫', aIdx);
   }
