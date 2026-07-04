@@ -373,31 +373,43 @@ regPost('熔蟻獸|滑燒火焰', (state, aIdx, _pool) => {
 // 15. 魔牆人偶|相仿秀 — 查對手手牌 + 若希望，選 1 張支援者作為此招使用
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('魔牆人偶|相仿秀', (s) => ({ state: s, damage: 0 }));
-regPost('魔牆人偶|相仿秀', (state, aIdx, pool, action) => {
-  // v5.063：若希望 binary-yes-no guard
-  const _chosenIids = action?.discardedEnergyIids;
-  const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '相仿秀：選擇「否」 — 跳過複製', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, pool) => {
+regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
+  // v5.868 修玩家回報：原實作「自動執行對手手牌第一張支援者」— 既沒讓玩家「查看對手手牌」，
+  //   也沒讓玩家「選擇 1 張」（違卡面「查看對手的手牌。若希望，選擇1張其中的支援者卡…」+ 絕不簡化）。
+  //   改為開 hand-choose picker(sourcePlayerIdx=對手 → 揭示對手手牌供查看),validIids 只放支援者,
+  //   minCount=0 = 「若希望」可不選。選到的支援者只「複製其效果」，該支援者卡留在對手手牌(卡面無棄牌字樣)。
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppHand = state.players[dIdx].hand;
-  const supps = oppHand.filter(c => pool.get(c.cardId)?.subtype === 'Supporter');
-  let s = state;
-  s = addLog(s, `相仿秀：對手手牌 ${oppHand.length} 張，其中支援者 ${supps.length} 張`, aIdx);
-  if (supps.length > 0) {
-    // 自動執行第一張支援者效果
-    const firstSupp = pool.get(supps[0].cardId);
-    const fn = TRAINER_EFFECTS.get(firstSupp?.name ?? '');
-    if (fn) {
-      s = addLog(s, `相仿秀：自動執行對手手牌支援者「${firstSupp?.name}」`, aIdx);
-      s = fn(s, aIdx, pool);
-    } else {
-      s = addLog(s, `相仿秀：對手支援者「${firstSupp?.name}」效果未實裝（跳過）`, aIdx);
-    }
+  const suppIids = oppHand.filter(c => pool.get(c.cardId)?.subtype === 'Supporter').map(c => c.iid);
+  const s = addLog(state, `相仿秀：查看對手手牌（共 ${oppHand.length} 張，其中支援者 ${suppIids.length} 張）`, aIdx);
+  if (suppIids.length === 0) {
+    return addLog(s, '相仿秀：對手手牌沒有支援者卡，無可複製的效果', aIdx);
   }
-  return s;
-};
-  return _cb(state, aIdx, pool);
+  return withPending(s, {
+    type: 'hand-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: 1,
+    effectKey: 'mrmime-copycat-pick',
+    params: {
+      validIids: suppIids,
+      titleOverride: '相仿秀：查看對手手牌，選 1 張支援者卡複製其效果（可不選）',
+    },
+  });
+});
+regR('mrmime-copycat-pick', (state, aIdx, iids, _params, pool) => {
+  const pickedIid = iids[0];
+  if (!pickedIid) return addLog(state, '相仿秀：未選擇支援者 — 跳過複製', aIdx);
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const picked = state.players[dIdx].hand.find(c => c.iid === pickedIid);
+  const card = picked ? pool.get(picked.cardId) : undefined;
+  if (!card || card.subtype !== 'Supporter') {
+    return addLog(state, '相仿秀：選擇的不是支援者卡，效果失敗', aIdx);
+  }
+  const fn = TRAINER_EFFECTS.get(card.name);
+  if (!fn) {
+    return addLog(state, `相仿秀：對手支援者「${card.name}」的效果未實裝（跳過）`, aIdx);
+  }
+  const s = addLog(state, `相仿秀：複製對手手牌支援者「${card.name}」的效果（該卡仍留在對手手牌）`, aIdx);
+  return fn(s, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

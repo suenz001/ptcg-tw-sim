@@ -8629,7 +8629,7 @@
 
         <!-- v2.38 枇琶：對手手牌 hand-discard（sourcePlayerIdx != actorIdx）— 揭露「非可選」其餘手牌 -->
         <!-- v3.9998：concealed 模式（精神出局）不揭露其餘手牌 -->
-        {#if pendingSelection.type==='hand-discard' && game
+        {#if (pendingSelection.type==='hand-discard' || pendingSelection.type==='hand-choose') && game
           && pendingSelection.sourcePlayerIdx !== pendingSelection.actorIdx
           && pendingSelection.params?.concealed !== true}
           {@const srcHand = game.players[pendingSelection.sourcePlayerIdx].hand}
@@ -8643,8 +8643,8 @@
             })}
           {#if otherHand.length > 0}
             <details class="full-deck-view">
-              <summary>🔍 對手手牌其餘 {otherHand.length} 張（本次不可丟棄，僅供查看）</summary>
-              <div class="full-deck-note">※ 枇琶效果只能丟棄物品卡；其餘手牌（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅揭露，不可選</div>
+              <summary>🔍 對手手牌其餘 {otherHand.length} 張（本次不可選，僅供查看）</summary>
+              <div class="full-deck-note">{pendingSelection.type==='hand-choose' ? '※ 相仿秀查看對手手牌後只能選 1 張「支援者」卡複製其效果；其餘手牌僅揭露供查看，不可選' : '※ 枇琶效果只能丟棄物品卡；其餘手牌（寶可夢 / 支援者 / 能量 / 道具 / 場地）僅揭露，不可選'}</div>
               <div class="full-deck-list">
                 {#each otherHand as inst}{@const c=getCard(inst.cardId)}
                   {#if c}

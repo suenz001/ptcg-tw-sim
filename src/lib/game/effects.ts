@@ -17563,12 +17563,8 @@ ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的貓老大ex|高傲指令', {
 
 // v5.464：櫻花魚|漸強波 改走 regPost hand-choose picker（見 v2610_i_wave11_misc4.ts），移除 binary-yes-no pre-choice。
 
-ATTACK_PRE_DISCARD_CHOICE.set('魔牆人偶|相仿秀', {
-  min: 0, max: null, scope: 'binary-yes-no',
-  baseDamage: 0, damagePerEnergy: 0,
-  choicePrompt: '是否查看對手手牌並選擇 1 張支援者卡，將其效果作為這個招式使用？',
-  choiceYesLabel: '是（複製對手手牌支援者）',
-  choiceNoLabel: '否（跳過）',
-});
+// v5.868：魔牆人偶|相仿秀 移除 binary-yes-no pre-choice。卡面「查看對手的手牌」是無條件的
+//   (一律揭示),「若希望，選擇1張支援者」由 regPost 開的 hand-choose picker(minCount=0)處理,
+//   避免「先問是否查看」與「picker」雙重詢問。實作見 v2760_h_wave3_complex.ts。
 
 // v5.681：好啦魷|惡作劇觸手 改用 modal-choice（先揭示對手牌庫頂再決定重洗），不再借殼 binary-yes-no。
