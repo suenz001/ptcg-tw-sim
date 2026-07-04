@@ -74,10 +74,25 @@ regPre('索羅亞克|欺詐', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da) return { state: addLog(state, '欺詐：對手戰鬥場無寶可夢', aIdx), damage: 0 };
-  const best = pickHighestAttack([da], pool, '索羅亞克|欺詐');
+  // v5.869 修：卡面「選擇1個對手的戰鬥寶可夢持有的招式」→ 讀 action.copyAttackChoice 讓玩家自選
+  //   (原只 pickHighestAttack 自動挑最高傷害,違卡面「選擇」+ 絕不簡化;同 皮可西|揮指 / 阿響的樹才怪)。
+  //   無 choice(AI/舊 state) 才 fallback 自動挑印刷最高。
+  const choice = (action as { copyAttackChoice?: { pokeIid: string; attackIndex: number } } | undefined)?.copyAttackChoice;
+  let best: { cardName: string; attackName: string; damage: number } | null = null;
+  if (choice && choice.pokeIid === da.iid && choice.attackIndex >= 0) {
+    const daCard = pool.get(da.cardId);
+    const atk = daCard?.attacks?.[choice.attackIndex];
+    if (daCard && atk && atk.name && atk.name !== '欺詐') {
+      const m = (atk.damage ?? '').match(/^(\d+)/);
+      best = { cardName: daCard.name!, attackName: atk.name, damage: m ? parseInt(m[1], 10) : 0 };
+    }
+  }
+  if (!best) best = pickHighestAttack([da], pool, '索羅亞克|欺詐');
   if (!best) return { state: addLog(state, '欺詐：對手戰鬥場無可複製招式', aIdx), damage: 0 };
   const copiedKey = `${best.cardName}|${best.attackName}`;
-  return copyAttackPre(state, aIdx, pool, copiedKey, '欺詐', best.damage, action);
+  const pickMode = choice ? '玩家選擇' : '自動挑印刷最高';
+  const sLog = addLog(state, `欺詐：${pickMode}「${copiedKey}」`, aIdx);
+  return copyAttackPre(sLog, aIdx, pool, copiedKey, '欺詐', best.damage, action);
 });
 regPost('索羅亞克|欺詐', copyAttackPost);
 

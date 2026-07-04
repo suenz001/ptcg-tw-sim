@@ -4605,7 +4605,8 @@
     //   reuse rocketCommandPicker UI（pokeList = [對手戰鬥場 1 寶可夢]）
     //   試著模仿擲幣後正面才用 choice，反面 0 傷害 (玩家選了但浪費)
     if ((atk.name === '揮指' && sourceCardName === '皮可西') ||
-        (atk.name === '試著模仿' && sourceCardName === '阿響的樹才怪')) {
+        (atk.name === '試著模仿' && sourceCardName === '阿響的樹才怪') ||
+        (atk.name === '欺詐' && sourceCardName === '索羅亞克')) {
       if (!game) return;
       const oppActive = game.players[1 - myIdx].active;
       if (!oppActive) {
