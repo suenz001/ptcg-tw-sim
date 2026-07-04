@@ -17,7 +17,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost,
-  addLog, updatePlayer, withPending,
+  addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { statusPost, flipCoinsWithLog, dealAttackDamageToTarget, oppSwapDmgPost } from '../../effects'; // v5.788 gust 攻擊方選中央
@@ -328,7 +328,7 @@ regR('wave4-deck-pick-any', (state, aIdx, iids, _params, _pool) => {
     if (!card) return p;
     const newDeck = p.deck.filter(c => c.iid !== targetIid);
     // shuffle
-    const shuffled = [...newDeck].sort(() => Math.random() - 0.5);
+    const shuffled = shuffle([...newDeck]);
     return { ...p, deck: shuffled, hand: [...p.hand, card] };
   });
 });

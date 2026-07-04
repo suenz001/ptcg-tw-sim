@@ -238,7 +238,7 @@ regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
     }
   }
   // 重洗牌庫
-  p.deck = [...p.deck].sort(() => Math.random() - 0.5);
+  p.deck = shuffle([...p.deck]);
   players[aIdx] = p;
   const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   let s = addLog({ ...state, players }, `呼朋引伴：從牌庫放 ${picks.length} 張基礎寶可夢到備戰（${names}），並重洗牌庫`, aIdx);
@@ -580,7 +580,7 @@ regR('rascal-skyward-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   const pIid = selectedPokeIids[0];
   p.bench = p.bench.map(b => b.iid === pIid ? { ...b, energyAttached: [...b.energyAttached, energy], damage: b.damage + 20 } : b);
   // 重洗
-  p.deck = [...p.deck].sort(() => Math.random() - 0.5);
+  p.deck = shuffle([...p.deck]);
   players[aIdx] = p;
   const tgt = p.bench.find(b => b.iid === pIid);
   const name = tgt ? (pool.get(tgt.cardId)?.name ?? '?') : '?';
@@ -774,7 +774,7 @@ regR('akyo-pick-energies', (state, aIdx, selectedEnergyIids, params, pool) => {
   const p = { ...players[aIdx] };
   // v2.121：若玩家放棄（空 iids）→ 直接重洗結束
   if (selectedEnergyIids.length === 0) {
-    p.deck = [...p.deck].sort(() => Math.random() - 0.5);
+    p.deck = shuffle([...p.deck]);
     players[aIdx] = p;
     return addLog({ ...state, players }, '阿杏的秘招：未選能量，重洗牌庫結束效果', aIdx);
   }
@@ -803,7 +803,7 @@ regR('akyo-pick-energies', (state, aIdx, selectedEnergyIids, params, pool) => {
     }
   }
   // 重洗
-  p.deck = [...p.deck].sort(() => Math.random() - 0.5);
+  p.deck = shuffle([...p.deck]);
   players[aIdx] = p;
   let s = addLog({ ...state, players }, `阿杏的秘招：${attachLog.join('、')}`, aIdx);
   if (poisonedActive.length > 0) {
@@ -1034,7 +1034,7 @@ regR('full-shaker-discard', (state, aIdx, selectedIids, _params) => {
   const picks = p.deck.filter(c => selectedIids.includes(c.iid));
   p.deck = p.deck.filter(c => !selectedIids.includes(c.iid));
   p.discard = [...p.discard, ...picks];
-  p.deck = [...p.deck].sort(() => Math.random() - 0.5);
+  p.deck = shuffle([...p.deck]);
   players[aIdx] = p;
   return addLog({ ...state, players }, `完全體攪拌器：丟棄 ${picks.length} 張牌庫卡並重洗`, aIdx);
 });

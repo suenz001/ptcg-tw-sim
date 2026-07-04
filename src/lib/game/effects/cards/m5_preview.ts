@@ -509,14 +509,14 @@ regR('m5-screwdriller-call-allies', (state, aIdx, iids, params) => {
     // 跳過：仍重洗牌庫（卡面：「然後重洗牌庫」是搜尋完成的固定動作）
     return updatePlayer(addLog(state, '呼朋引伴：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
-      deck: [...p.deck].sort(() => Math.random() - 0.5),
+      deck: shuffle([...p.deck]),
     }));
   }
   return updatePlayer(addLog(state, `呼朋引伴：放置 ${iids.length} 張到備戰並重洗`, aIdx), aIdx, p => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
     // 重洗剩餘牌庫
-    const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    const shuffled = shuffle([...remaining]);
     // v5.059：safety trim — picker 漏 cap 防呆，避免觸發 enforceBenchLimit 清場
     const benchLimitAtPick = (params?.benchLimitAtPick as number | undefined) ?? 5;
     const slotsAvail = Math.max(0, benchLimitAtPick - p.bench.length);
@@ -551,7 +551,7 @@ regPost('燈火幽靈|亮光增長', (state, aIdx, pool) => {
     // 備戰已滿 → 放 0 張，但卡面「並且重洗牌庫」仍執行
     return updatePlayer(addLog(state, '亮光增長：備戰區已滿，僅重洗牌庫', aIdx), aIdx, pp => ({
       ...pp,
-      deck: [...pp.deck].sort(() => Math.random() - 0.5),
+      deck: shuffle([...pp.deck]),
     }));
   }
   const maxN = Math.min(3, candidates.length, remainingSlots);
@@ -568,7 +568,7 @@ regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '亮光增長：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
-      deck: [...p.deck].sort(() => Math.random() - 0.5),
+      deck: shuffle([...p.deck]),
     }));
   }
   // v5.389：safety trim — 防 picker 漏 cap，最多只放到備戰剩餘空位，避免撐爆誤觸大空洞清除。
@@ -581,7 +581,7 @@ regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
   return updatePlayer(addLog(state, `亮光增長：放置 ${safeValid.length} 張燈火幽靈到備戰並重洗`, aIdx), aIdx, p => {
     const placed = p.deck.filter(c => safeIids.has(c.iid));
     const remaining = p.deck.filter(c => !safeIids.has(c.iid));  // 沒放的(含被 trim 掉的選擇)留在牌庫重洗
-    const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    const shuffled = shuffle([...remaining]);
     return {
       ...p,
       deck: shuffled,
@@ -973,13 +973,13 @@ regR('m5-inkay-procurement', (state, aIdx, iids) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '籌備：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
-      deck: [...p.deck].sort(() => Math.random() - 0.5),
+      deck: shuffle([...p.deck]),
     }));
   }
   return updatePlayer(addLog(state, `籌備：取得 ${iids.length} 張物品（已給對手看過）→ 加入手牌並重洗牌庫`, aIdx), aIdx, p => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    const shuffled = shuffle([...remaining]);
     return {
       ...p,
       deck: shuffled,
@@ -1081,7 +1081,7 @@ regR('m5-flamigo-delivery', (state, aIdx, iids, params) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '親送挑戰：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
-      deck: [...p.deck].sort(() => Math.random() - 0.5),
+      deck: shuffle([...p.deck]),
     }));
   }
   return updatePlayer(addLog(state, '親送挑戰：放置寶可夢到備戰並重洗牌庫', aIdx), aIdx, p => {
@@ -1092,7 +1092,7 @@ regR('m5-flamigo-delivery', (state, aIdx, iids, params) => {
     const toBench = picked.slice(0, slots);
     const notPlaced = picked.slice(slots);
     const remaining = [...p.deck.filter(c => !iids.includes(c.iid)), ...notPlaced];
-    const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+    const shuffled = shuffle([...remaining]);
     return { ...p, deck: shuffled, bench: [...p.bench, ...toBench.map(placedBenchInstance)] };
   });
 });
@@ -1116,7 +1116,7 @@ regPost('熱帶龍|果實香氣', (state, aIdx, pool) => {
     return updatePlayer(
       addLog(state, `果實香氣：牌庫頂 ${peekN} 張中無寶可夢，重洗牌庫`, aIdx),
       aIdx,
-      p => ({ ...p, deck: [...p.deck].sort(() => Math.random() - 0.5) }),
+      p => ({ ...p, deck: shuffle([...p.deck]) }),
     );
   }
   return withPending(
@@ -1138,7 +1138,7 @@ regR('m5-tropius-fruit-aroma', (state, aIdx, iids) => {
     p => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const remaining = p.deck.filter(c => !iids.includes(c.iid));
-      const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+      const shuffled = shuffle([...remaining]);
       return { ...p, deck: shuffled, hand: [...p.hand, ...picked] };
     },
   );
@@ -1183,7 +1183,7 @@ regPost('西獅海壬|水迴旋', (state, aIdx) => {
     pl => ({
       ...pl,
       active: null,
-      deck: [...pl.deck, ...toReturn].sort(() => Math.random() - 0.5),
+      deck: shuffle([...pl.deck, ...toReturn]),
     }),
   );
 });
@@ -1279,13 +1279,13 @@ regA('銀伴戰獸', 0, (st, idx) => {
 regR('m5-silvally-partner-call', (state, aIdx, iids) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '夥伴呼喚：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
-      ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
+      ...p, deck: shuffle([...p.deck]),
     }));
   }
   return updatePlayer(addLog(state, '夥伴呼喚：取 1 張支援者加手牌（已給對手看過）+ 重洗牌庫', aIdx), aIdx, p => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
-    return { ...p, deck: [...remaining].sort(() => Math.random() - 0.5), hand: [...p.hand, ...picked] };
+    return { ...p, deck: shuffle([...remaining]), hand: [...p.hand, ...picked] };
   });
 });
 
@@ -1544,7 +1544,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
     // 沒選能量 — 仍重洗牌庫 + 強制 END_TURN
     return withPending(
       updatePlayer(addLog(state, '小霞的朝氣：選 0 張【水】能量，僅重洗牌庫 + 結束回合', aIdx), aIdx, p => ({
-        ...p, deck: [...p.deck].sort(() => Math.random() - 0.5),
+        ...p, deck: shuffle([...p.deck]),
       })),
       {
         type: 'modal-choice',
@@ -1566,7 +1566,7 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
     return updatePlayer(
       addLog(state, '小霞的朝氣：場上無寶可夢可附，【水】能量回牌庫', aIdx),
       aIdx,
-      pl => ({ ...pl, deck: [...pl.deck].sort(() => Math.random() - 0.5) }),
+      pl => ({ ...pl, deck: shuffle([...pl.deck]) }),
     );
   }
   return withPending(
@@ -1595,7 +1595,7 @@ regR('m5-trainer-karunari-vigor-attach', (state, aIdx, iids, params) => {
     p => {
       const picked = p.deck.filter(c => energyIids.includes(c.iid));
       const remaining = p.deck.filter(c => !energyIids.includes(c.iid));
-      const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+      const shuffled = shuffle([...remaining]);
       const updateInst = (c: import('../../types').CardInstance) =>
         c.iid === targetIid
           ? { ...c, energyAttached: [...c.energyAttached, ...picked] }

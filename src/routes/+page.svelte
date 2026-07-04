@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.864</span> 對戰公平性修正：多張卡的「重洗牌庫」先前用了有偏（非均勻）的洗牌方式（以隨機比較器排序），會讓某些牌庫順序出現的機率不均、理論上可被利用；現已全部改用均勻隨機的洗牌（Fisher-Yates），並加入靜態守衛防止未來再引入有偏洗牌。牌庫會重洗這件事本身不變，只是分佈更公正。純隨機品質修正，一般對戰無感。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.863</span> 對戰紀錄修正：把對手手牌「放回牌庫並重洗」的招式（洛托姆／雪童子／長尾怪手｜驚嚇、墓揚犬｜恐怖啃咬、步哨鼠｜臨檢），先前放回牌庫的那張卡只在攻擊方的私人紀錄顯示牌名、或完全不顯示牌名——由於卡片放回牌庫重洗後就藏起來了，對戰紀錄是唯一的記錄；現已改為在雙方共同的對戰紀錄公開揭示被放回的是哪張卡（與「丟棄對手手牌」「暗槓」「占為己有」等既有公開揭示一致）。純對戰紀錄呈現修正，遊戲結果不變。</summary>
       </details>
       <details>

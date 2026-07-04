@@ -298,8 +298,25 @@ for (const f of files) {
   }
 }
 
+// ── Check L：有偏洗牌 .sort(() => Math.random()) — 非均勻,牌庫順序可被利用 ────────
+//   PTCG 牌庫重洗須「均勻隨機」(Fisher-Yates)。`.sort(隨機比較器)` 是已知有偏洗牌
+//   (V8 TimSort 對隨機比較器產生非均勻排列),牌庫順序偏差可被利用,違反競技公平。
+//   一律走中央 shuffle()(_shared.ts,Fisher-Yates)。合法例外標 // shuffle-ok: 理由。
+//   v5.864 首跑抓 23 處(m5_preview 17/six_decks 5/v2540 1)全收斂 shuffle()。
+const L_BIAS = /\.sort\([^;\n]*Math\.random/;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const tt = lines[i].trimStart();
+    if (tt.startsWith('//') || tt.startsWith('*') || tt.startsWith('/*')) continue;
+    if (!L_BIAS.test(lines[i])) continue;
+    if (/shuffle-ok/.test(lines[i]) || /shuffle-ok/.test(lines[i - 1] ?? '')) continue;
+    violations.push(`[L] ${rel(f)}:${i + 1} — 有偏洗牌 .sort(()=>Math.random)(非均勻,牌庫順序可利用）→ 改走中央 shuffle()(Fisher-Yates),或標 // shuffle-ok: 理由`);
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
