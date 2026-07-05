@@ -295,6 +295,10 @@ export interface CardInstance {
    * 注意：只擋「招式的傷害」，招式其他效果仍會觸發（此區別依卡面）。
    */
   immuneToBasicAttackNextTurn?: boolean;
+  /** v5.885：下回合此卡不受「古代」寶可夢招式傷害(鐵毒蛾|瘋狂拒絕);promote→ThisTurn。 */
+  immuneToAncientAttackNextTurn?: boolean;
+  /** v5.885：本回合此卡不受「古代」寶可夢(attacker tags 含'古代')招式傷害。 */
+  immuneToAncientAttackThisTurn?: boolean;
   /**
    * v2.101：**本回合此卡不受【基礎】寶可夢招式傷害**（由 immuneToBasicAttackNextTurn promote）。
    * 於 engine 的 attack pipeline：若 attacker card.stage === 'Basic' 且 defender 有此旗標 →

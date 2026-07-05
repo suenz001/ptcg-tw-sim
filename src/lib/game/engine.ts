@@ -4613,6 +4613,14 @@ function handlePlaying(
         `${defenderCard.name} 因塗層攻擊效果，不受【基礎】寶可夢招式傷害`, dIdx);
       baseDamage = 0;
     }
+    // v5.885 鐵毒蛾|瘋狂拒絕 — defender 本回合不受「古代」寶可夢(attacker tags 含'古代')招式傷害。
+    if (!skipDefEffects && baseDamage > 0
+        && defender.active.immuneToAncientAttackThisTurn
+        && (attackerCard.tags?.includes('古代'))) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因瘋狂拒絕效果，不受「古代」寶可夢招式傷害`, dIdx);
+      baseDamage = 0;
+    }
 
     // v2.174 阿塞蘿拉的惡作劇 — defender 在本回合「不受 ex 招式的傷害與效果」
     // 卡面同時涵蓋 PDF §C-16「不會受到招式的傷害」+ §C-17「不會受到招式的效果的影響」兩者。
@@ -6724,6 +6732,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         delete n.immuneToBasicAttackThisTurn;
         delete n.basicImmuneColorlessExcept;  // v5.338：companion 隨主旗標一起清
       }
+      if (c.immuneToAncientAttackThisTurn) {  // v5.885
+        n = { ...n };
+        delete n.immuneToAncientAttackThisTurn;
+      }
       // v2.174 阿塞蘿拉的惡作劇 — 同 immune* 系列：對手（攻擊方）END_TURN 時清 ThisTurn
       if (c.immuneToExAttackThisTurn) {
         n = { ...n };
@@ -6842,6 +6854,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (c.immuneToBasicAttackNextTurn) {
         n = { ...n, immuneToBasicAttackThisTurn: true };
         delete n.immuneToBasicAttackNextTurn;
+      }
+      if (c.immuneToAncientAttackNextTurn) {  // v5.885
+        n = { ...n, immuneToAncientAttackThisTurn: true };
+        delete n.immuneToAncientAttackNextTurn;
       }
       // v2.174 阿塞蘿拉的惡作劇 — owner END_TURN 時 promote NextTurn → ThisTurn
       if (c.immuneToExAttackNextTurn) {

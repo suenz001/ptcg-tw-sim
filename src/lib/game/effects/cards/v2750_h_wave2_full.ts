@@ -1981,14 +1981,15 @@ regPost('噬沙堡爺|潑沙', pothaPost('潑沙'));
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 22: 下回合自身不受 X 招式傷害 ===
 // ══════════════════════════════════════════════════════════════════════════════
-// 鐵毒蛾|瘋狂拒絕 120 — 下回合不受「古代」寶可夢招式傷害
-//   引擎無 immuneToTagThisTurn — 用 immuneToBasicAttackNextTurn 不適用
-//   暫用 damageReduceNextHit = 200 模擬（雖然不是 100% 精確）
+// 鐵毒蛾|瘋狂拒絕 120 — 下回合此卡不受「古代」寶可夢招式的傷害
+//   v5.885：改用中央 immuneToAncientAttackNextTurn(鏡射 immuneToBasicAttack:engine promote/clear+
+//   defense.ts 1b-3 涵蓋 active+bench;傷害檢查看 attacker tags 含'古代')。原 damageReduceNextHit=200
+//   兩面皆錯(非古代也被減、古代>200仍穿)。
 regPre('鐵毒蛾|瘋狂拒絕', (s) => ({ state: s, damage: 120 }));
 regPost('鐵毒蛾|瘋狂拒絕', (state, aIdx, _pool) => {
-  return updatePlayer(addLog(state, '瘋狂拒絕：下回合受傷 -200（簡化「不受古代寶可夢招式傷害」）', aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, '瘋狂拒絕：下回合不受「古代」寶可夢招式的傷害', aIdx), aIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, damageReduceNextHit: 200 } : null,
+    active: p.active ? { ...p.active, immuneToAncientAttackNextTurn: true } : null,
   }));
 });
 

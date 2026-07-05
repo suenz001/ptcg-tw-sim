@@ -223,6 +223,10 @@ export function canApplyEffectToTarget(
           return { blocked: true, reason: '塗層攻擊免疫【基礎】寶可夢招式傷害' };
         }
       }
+      // v5.885 瘋狂拒絕 — 不受「古代」寶可夢(attacker tags 含'古代')招式傷害
+      if (target.immuneToAncientAttackThisTurn && (_atkCardPT.tags?.includes('古代'))) {
+        return { blocked: true, reason: '瘋狂拒絕免疫「古代」寶可夢招式傷害' };
+      }
     }
   }
 
