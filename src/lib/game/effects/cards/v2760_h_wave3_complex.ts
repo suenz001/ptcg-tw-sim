@@ -26,6 +26,7 @@ import { coinStatusPost, applyOppActiveDebuffPost, statusPost, flipCoinsWithLog,
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.362：影繩結有效撤退費
+import { startEnergyChain } from './v158_energy_chain';  // v5.884 能量攪拌重分配
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -454,12 +455,38 @@ regPre('鐵武者|莊嚴之劍', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 17. 優雅貓|能量攪拌 110 — 自方場上能量任意分配
-//    簡化：不做 UI（玩家手動調整）
+// 17. 優雅貓|能量攪拌 110 — 選自己場上任意數量能量,以任意方式改附於自己的寶可夢
+//    v5.884：原僅 log 未實作 → active-energy-discard(scope all-own)選要移動的能量 → resolver 從場上
+//    移除暫存 discard → 中央 startEnergyChain(source discard/scope any-own)逐張選目標重新分配。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('優雅貓|能量攪拌', (s) => ({ state: s, damage: 110 }));
 regPost('優雅貓|能量攪拌', (state, aIdx, _pool) => {
-  return addLog(state, '能量攪拌：[卡面]選自方場上任意能量任意改附（請玩家手動移動）', aIdx);
+  const p = state.players[aIdx];
+  const allEnergyIids = [...(p.active ? [p.active] : []), ...p.bench].flatMap(pk => pk.energyAttached.map(e => e.iid));
+  if (allEnergyIids.length === 0) return addLog(state, '能量攪拌：自方場上無能量可移動', aIdx);
+  return withPending(addLog(state, '能量攪拌：選擇自己場上任意數量能量，以任意方式改附於自己的寶可夢', aIdx), {
+    type: 'active-energy-discard',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    minCount: 0, maxCount: allEnergyIids.length,
+    effectKey: 'elegant-cat-energy-stir',
+    params: { scope: 'all-own', validIids: allEnergyIids, titleOverride: '能量攪拌：選擇要移動的能量（可不選），之後逐張選附加目標' },
+  });
+});
+regR('elegant-cat-energy-stir', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(state, '能量攪拌：未選擇能量', aIdx);
+  const pickSet = new Set(iids);
+  const p0 = state.players[aIdx];
+  const moved = [...(p0.active ? [p0.active] : []), ...p0.bench].flatMap(pk => pk.energyAttached.filter(e => pickSet.has(e.iid)));
+  if (moved.length === 0) return addLog(state, '能量攪拌：選中的能量已不存在', aIdx);
+  // 從場上移除選中能量 → 暫存 discard，再由 startEnergyChain(source=discard) 逐張重新分配到自方寶可夢。
+  let s = updatePlayer(state, aIdx, p => ({
+    ...p,
+    active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.filter(e => !pickSet.has(e.iid)) } : null,
+    bench: p.bench.map(bb => ({ ...bb, energyAttached: bb.energyAttached.filter(e => !pickSet.has(e.iid)) })),
+    discard: [...p.discard, ...moved],
+  }));
+  s = addLog(s, `能量攪拌：移動 ${moved.length} 張能量，以任意方式改附於自己的寶可夢`, aIdx);
+  return startEnergyChain(s, aIdx, moved.map(e => e.iid), { label: '能量攪拌', source: 'discard', scope: 'any-own' }, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -705,21 +732,63 @@ regPost('密勒頓|防護代碼', (state, aIdx, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 24. 塗標客|惡作劇作畫 — 從對手棄牌區挑 ≤3 能量附對手寶可
-//    簡化：自動隨機附給對手戰鬥
+// 24. 塗標客|惡作劇作畫 — 從對手棄牌區選最多 3 張能量,以任意方式附於對手的寶可夢身上
+//    v5.884：原自動取前 3 張全附對手戰鬥位 → 改玩家選(從對手棄牌選能量,再逐張選對手寶可夢附加)。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('塗標客|惡作劇作畫', (s) => ({ state: s, damage: 0 }));
 regPost('塗標客|惡作劇作畫', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
-  const energyCards = opp.discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy').slice(0, 3);
-  if (energyCards.length === 0 || !opp.active) return addLog(state, '惡作劇作畫：條件不足', aIdx);
-  const set = new Set(energyCards.map(c => c.iid));
-  return updatePlayer(addLog(state, `惡作劇作畫：從對手棄牌挑 ${energyCards.length} 張能量附對手戰鬥`, aIdx), dIdx, p => ({
+  const energyIids = opp.discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy').map(c => c.iid);
+  const hasOppTarget = !!opp.active || opp.bench.length > 0;
+  if (energyIids.length === 0 || !hasOppTarget) return addLog(state, '惡作劇作畫：對手棄牌區無能量或對手無寶可夢', aIdx);
+  return withPending(addLog(state, `惡作劇作畫：從對手棄牌區選最多 ${Math.min(3, energyIids.length)} 張能量（之後逐張選對手寶可夢附加）`, aIdx), {
+    type: 'discard-search',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,  // 從對手(dIdx)棄牌區選,由攻擊方(aIdx)決定
+    filter: 'Energy',
+    minCount: 0, maxCount: Math.min(3, energyIids.length),
+    effectKey: 'prank-paint-pick-energy',
+    params: { validIids: energyIids },
+  });
+});
+// helper:逐張把 buffered 能量(仍在對手棄牌區)附到攻擊方選的對手寶可夢
+function prankPaintDistribute(state: GameState, aIdx: 0 | 1, energyQueue: string[], pool: Map<string, Card>): GameState {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  if (energyQueue.length === 0) return state;
+  const opp = state.players[dIdx];
+  const validTargets = [...(opp.active ? [opp.active.iid] : []), ...opp.bench.map(b => b.iid)];
+  if (validTargets.length === 0) return addLog(state, '惡作劇作畫：對手無寶可夢可附加，剩餘能量留在棄牌區', aIdx);
+  const eName = pool.get(state.players[dIdx].discard.find(c => c.iid === energyQueue[0])?.cardId ?? '')?.name ?? '能量';
+  return withPending(addLog(state, `惡作劇作畫：選 1 隻對手寶可夢附加「${eName}」（剩 ${energyQueue.length} 張）`, aIdx), {
+    type: 'opp-poke-choose',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'prank-paint-attach-one',
+    params: { validIids: validTargets, includeActive: true, queue: energyQueue },
+  });
+}
+regR('prank-paint-pick-energy', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return addLog(state, '惡作劇作畫：未選擇能量，效果結束', aIdx);
+  return prankPaintDistribute(state, aIdx, iids, pool);
+});
+regR('prank-paint-attach-one', (state, aIdx, targetIids, params, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const queue = (params?.queue as string[]) ?? [];
+  const energyIid = queue[0];
+  const targetIid = targetIids[0];
+  if (!energyIid) return state;
+  const energy = state.players[dIdx].discard.find(c => c.iid === energyIid);
+  if (!energy || !targetIid) return prankPaintDistribute(state, aIdx, queue.slice(1), pool);
+  // 從對手棄牌區移除該能量 → 附到選中的對手寶可夢
+  let s = updatePlayer(state, dIdx, p => ({
     ...p,
-    discard: p.discard.filter(c => !set.has(c.iid)),
-    active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energyCards] } : null,
+    discard: p.discard.filter(c => c.iid !== energyIid),
+    active: p.active && p.active.iid === targetIid ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] } : p.active,
+    bench: p.bench.map(b => b.iid === targetIid ? { ...b, energyAttached: [...b.energyAttached, energy] } : b),
   }));
+  const tName = pool.get([...(s.players[dIdx].active ? [s.players[dIdx].active] : []), ...s.players[dIdx].bench].find(pk => pk?.iid === targetIid)?.cardId ?? '')?.name ?? '?';
+  s = addLog(s, `惡作劇作畫：將「${pool.get(energy.cardId)?.name ?? '能量'}」附於對手的 ${tName}`, aIdx);
+  return prankPaintDistribute(s, aIdx, queue.slice(1), pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

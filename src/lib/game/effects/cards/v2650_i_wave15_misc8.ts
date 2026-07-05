@@ -752,12 +752,11 @@ regPost('巴布土撥|怒氣拳', (state, aIdx, pool, action) => {
   return s;
 });
 
-// 奇樹的頑皮雷彈｜怦怦炸彈 — 自殘 100, 擲幣正面對手戰鬥昏厥（直接 KO，簡化）
+// 奇樹的頑皮雷彈｜怦怦炸彈 — 自殘 100, 擲幣正面對手戰鬥直接昏厥(KO,走中央 koTargetByAttackEffect)
 regPre('奇樹的頑皮雷彈|怦怦炸彈', (s) => ({ state: s, damage: 0 }));
 regPost('奇樹的頑皮雷彈|怦怦炸彈', (state, aIdx, pool) => {
   let s = selfHitPost(100, '怦怦炸彈')(state, aIdx, pool);
-  // 擲幣正面對手戰鬥昏厥（簡化：用 asleep 狀態替代，因引擎無 'fainted' 即時狀態）
-  // 此處改用 KO 方式：直接設定對手 active.damage = HP
+  // 擲幣正面 → 對手戰鬥寶可夢直接昏厥(KO)：走中央 koTargetByAttackEffect(觸發取獎/反擊等)
   const r = flipCoinsWithLog(s, 1, '怦怦炸彈', aIdx);
   s = r.state;
   if (r.heads === 1) {

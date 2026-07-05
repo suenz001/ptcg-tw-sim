@@ -2207,35 +2207,24 @@ regPost('蜻蜻蜓|靜默之翼', (state, aIdx) => openPeekOppHandView(state, aI
 regPre('焰后蜥|突然炙烤', (s) => ({ state: s, damage: 0 }));
 regPost('焰后蜥|突然炙烤', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  // 簡化：對手隨機棄 1（不開 UI）
   const opp = state.players[dIdx];
-  if (opp.hand.length === 0) return state;
-  let s = state;
-  const idx = Math.floor(Math.random() * opp.hand.length);
-  const picked = opp.hand[idx];
-  s = updatePlayer(addLog(s, '突然炙烤：對手隨機棄 1 張手牌', aIdx), dIdx, p => ({
-    ...p,
-    hand: [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)],
-    discard: [...p.discard, picked],
-  }));
-  // 若從夜盜火蜥進化，再棄 2 張
-  const a = s.players[aIdx].active;
-  const evolvedFrom = a?.evolvedFromStack?.find(c => pool.get(c.cardId)?.name === '夜盜火蜥');
-  if (evolvedFrom) {
-    for (let i = 0; i < 2; i++) {
-      const opp2 = s.players[dIdx];
-      if (opp2.hand.length === 0) break;
-      const idx2 = Math.floor(Math.random() * opp2.hand.length);
-      const picked2 = opp2.hand[idx2];
-      s = updatePlayer(s, dIdx, p => ({
-        ...p,
-        hand: [...p.hand.slice(0, idx2), ...p.hand.slice(idx2 + 1)],
-        discard: [...p.discard, picked2],
-      }));
-    }
-    s = addLog(s, '突然炙烤：從夜盜火蜥進化 → 對手再棄 2 張', aIdx);
-  }
-  return s;
+  if (opp.hand.length === 0) return addLog(state, '突然炙烤：對手手牌為空', aIdx);
+  // v5.884：卡面「對手選擇對手自己的1張手牌丟棄。在這個回合，若這隻從『夜盜火蜥』進化則再丟棄2張」。
+  //   修:①對手自選(原隨機丟違卡面「對手選擇」)②「這個回合進化」用 evolvedThisTurn 判定(原只看
+  //   evolvedFromStack→每回合都誤+2)。開對手 hand-discard picker(actorIdx=dIdx)+中央 wave15-opp-hand-discard
+  //   resolver(對手選+公開揭示丟棄卡名,棄牌區公開)。k=1 或 3(這回合從夜盜火蜥進化)。
+  const a = state.players[aIdx].active;
+  const evolvedFromNightScorch = !!a?.evolvedThisTurn
+    && !!a?.evolvedFromStack?.some(c => pool.get(c.cardId)?.name === '夜盜火蜥');
+  const k = Math.min(evolvedFromNightScorch ? 3 : 1, opp.hand.length);
+  const s = addLog(state, `突然炙烤：對手選擇自己 ${k} 張手牌丟棄${evolvedFromNightScorch ? '（本回合從夜盜火蜥進化 +2）' : ''}`, aIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: dIdx, sourcePlayerIdx: dIdx,
+    minCount: k, maxCount: k,
+    effectKey: 'wave15-opp-hand-discard',
+    params: { label: '突然炙烤' },
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -143,8 +143,8 @@ regPre('恰雷姆|合氣掌', (state, aIdx, _pool) => {
   return { state: addLog(state, `合氣掌：能量數 ${aE} vs ${dE} → 50`, aIdx), damage: 50 };
 });
 
-// 雙彈瓦斯｜瘋狂炸彈 50+ — 簡化純 50（「上回合用了充滿瓦斯」狀態追蹤過於複雜）
-// v5.844 清除重複死碼(生效版保留在他處),原行 147
+// 雙彈瓦斯｜瘋狂炸彈 50+ — 生效版在 v2690_i_wave19_engine_hooks.ts(讀 attackUsedLastSelfTurn,上回合用過
+// 充滿瓦斯則 50+120=170;engine END_TURN promote attackUsedThisTurn→attackUsedLastSelfTurn)。此處僅歷史註記。
 
 // 泥巴魚｜泥巴伏特 20+ — 自身有【鬥】能量時 +20
 regPre('泥巴魚|泥巴伏特', (state, aIdx, pool) => {
