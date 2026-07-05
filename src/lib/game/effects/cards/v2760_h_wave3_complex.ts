@@ -380,18 +380,25 @@ regPost('魔牆人偶|相仿秀', (state, aIdx, pool) => {
   //   minCount=0 = 「若希望」可不選。選到的支援者只「複製其效果」，該支援者卡留在對手手牌(卡面無棄牌字樣)。
   const dIdx = (1 - aIdx) as 0 | 1;
   const oppHand = state.players[dIdx].hand;
+  if (oppHand.length === 0) {
+    return addLog(state, '相仿秀：對手手牌為空，無可查看', aIdx);
+  }
   const suppIids = oppHand.filter(c => pool.get(c.cardId)?.subtype === 'Supporter').map(c => c.iid);
   const s = addLog(state, `相仿秀：查看對手手牌（共 ${oppHand.length} 張，其中支援者 ${suppIids.length} 張）`, aIdx);
-  if (suppIids.length === 0) {
-    return addLog(s, '相仿秀：對手手牌沒有支援者卡，無可複製的效果', aIdx);
-  }
+  // v5.875 修：卡面「查看對手的手牌」是無條件的(對手手牌是重要戰略資訊)。原 v5.868 在「沒有支援者」時
+  //   直接 return → 玩家完全看不到對手手牌。改為一律開 hand-choose picker(參考枇琶 v2.41 Leon 裁定:
+  //   即使無可選卡也開 UI 讓玩家查看整副手牌):有支援者 → maxCount1 可選 1 張複製;無支援者 → maxCount0
+  //   純查看(footer「不選/跳過」)。整副手牌由 UI +page.svelte 揭露區塊(hand-choose + sourcePlayerIdx!=
+  //   actorIdx)顯示;picker 主格顯示可選的支援者。
   return withPending(s, {
     type: 'hand-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 0, maxCount: 1,
+    minCount: 0, maxCount: suppIids.length > 0 ? 1 : 0,
     effectKey: 'mrmime-copycat-pick',
     params: {
       validIids: suppIids,
-      titleOverride: '相仿秀：查看對手手牌，選 1 張支援者卡複製其效果（可不選）',
+      titleOverride: suppIids.length > 0
+        ? '相仿秀：查看對手手牌，選 1 張支援者卡複製其效果（可不選）'
+        : '相仿秀：查看對手手牌（沒有支援者可複製，確認後結束）',
     },
   });
 });
