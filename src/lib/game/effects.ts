@@ -16891,7 +16891,11 @@ regPost('倫琴貓ex|突刺目光', (state, aIdx, pool) => {
   }
   // 先讓雙方都看到對手手牌內容（公開 log）
   const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(state, `突刺目光：查看對手手牌（${oppHand.length} 張）— ${handNames}`, aIdx);
+  // v5.877：揭示對手手牌改 addPrivateLog(僅 actor 看卡名,觀戰者只見張數;隨後公開丟棄 log 會顯示丟了哪張)
+  let s = addPrivateLog(state,
+    `突刺目光：查看對手手牌（${oppHand.length} 張）— ${handNames}`,
+    `突刺目光：查看對手手牌（${oppHand.length} 張）`,
+    aIdx);
   // 讓攻擊方玩家選擇要丟棄的卡
   return withPending(s, {
     type: 'modal-choice',

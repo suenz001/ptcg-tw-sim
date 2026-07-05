@@ -2607,7 +2607,11 @@ regPost('大舌頭|舌引', (state, aIdx, pool) => {
   if (benchSpace === 0) return addLog(state, '舌引：對手備戰區已滿', aIdx);
   if (opp.hand.length === 0) return addLog(state, '舌引：對手手牌為空', aIdx);
   const handNames = opp.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(state, `舌引：查看對手手牌（${opp.hand.length} 張）— ${handNames}`, aIdx);
+  // v5.877：揭示對手手牌改 addPrivateLog(僅 actor 看卡名,觀戰者只見張數)
+  let s = addPrivateLog(state,
+    `舌引：查看對手手牌（${opp.hand.length} 張）— ${handNames}`,
+    `舌引：查看對手手牌（${opp.hand.length} 張）`,
+    aIdx);
   const candidates = opp.hand.filter(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Pokemon' && (card.subtype === 'Basic' || card.stage === 'Basic');
