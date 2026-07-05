@@ -4095,22 +4095,16 @@ function handlePlaying(
           };
           players[aIdx] = newAttacker;
           const koPrizes = atkCard ? prizesForKO(atkCard) : 1;
-          const winner = { ...players[dIdx] };
-          const take = Math.min(koPrizes, winner.prizes.length);
-          if (take > 0) {
-            winner.hand = [...winner.hand, ...winner.prizes.slice(0, take)];
-            winner.prizes = winner.prizes.slice(take);
-          }
-          players[dIdx] = winner;
-          const s = addLog({ ...state, players, turnPhase: 'end' as const },
-            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！${players[dIdx].name} 取得 ${take} 張獎賞卡。`, aIdx);
-          if (winner.prizes.length === 0) {
-            return { ...s, phase: 'game-over', winner: dIdx, winReason: `${winner.name} 取得所有獎賞卡` };
-          }
+          // v5.882：取獎收斂到中央 addPendingPrize(與一般 KO 一致):有正面朝上獎賞開逐張 picker 讓
+          //   取獎方選、私訊揭示取得的卡名(對手看張數)、取完獎賞勝負判定。原 direct-slice 繞過此三者。
+          let s = addLog({ ...state, players, turnPhase: 'end' as const },
+            `${atkNameForStatus} 陷入混亂，自身受到 30 傷害並昏厥！`, aIdx);
+          s = addPendingPrize(s, dIdx, koPrizes, pool);
+          if (s.phase === 'game-over') return s;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
           if (newAttacker.bench.length === 0) {
             return { ...s, phase: 'game-over', winner: dIdx, winReason: `${newAttacker.name} 沒有可上場的寶可夢` };
           }
-          return s;  // active=null → UI 自動 popup SEND_NEW_ACTIVE
+          return s;  // active=null → UI 自動 popup SEND_NEW_ACTIVE(prize picker 未解時會被 gate 擋到取完)
         }
         // 沒 KO：扣 30 傷然後 turnPhase=end
         players[aIdx] = { ...attacker, active: { ...attacker.active, damage: selfDmg } };
