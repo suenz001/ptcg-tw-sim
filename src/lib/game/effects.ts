@@ -588,6 +588,7 @@ import { addPendingPrize, getPendingPrize } from './effects/_shared';
 import { tryPromptPromoteActive } from './effects/_shared';
 import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央
 import { buildEvolvedInstance } from './effects/_shared'; // v5.796 中央進化體建構(保留 base iid)
+import { getAbilityFn, hasAbilityFn } from './effects/_shared'; // v5.872 特性查詢中央(by-name+by-index)
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
 // v5.237：re-export 給 engine.ts 用於 attack-time snapshot
@@ -16614,6 +16615,8 @@ export function askUsePlayAbility(
         { id: 'no', text: '❌ 不使用' }
       ],
       abilityKey,
+      abilityName,        // v5.872：讓 resolver 可走 getAbilityFn(by-name)
+      cardName,           // v5.872
       targetIid: inst.iid
     }
   });
@@ -16629,7 +16632,12 @@ regR('resolve-play-ability-prompt', (state, actorIdx, selectedIids, params, pool
   const targetIid = params?.targetIid as string;
   if (!abilityKey) return state;
 
-  const fn = ABILITY_EFFECTS.get(abilityKey);
+  // v5.872：改用中央 getAbilityFn(by-name 優先,fallback by-index),涵蓋 regAByName 特性
+  //   (恐慌牢籠等)。原只 ABILITY_EFFECTS.get(index-key) 對 regAByName 特性拿不到 fn → 確認後無效果。
+  const abilityName = params?.abilityName as string | undefined;
+  const cardName = (params?.cardName as string | undefined) ?? abilityKey.slice(0, abilityKey.lastIndexOf('|'));
+  const abIdx = parseInt(abilityKey.slice(abilityKey.lastIndexOf('|') + 1), 10) || 0;
+  const fn = getAbilityFn(cardName, abilityName ?? '', abIdx) ?? ABILITY_EFFECTS.get(abilityKey);
   if (!fn) return state;
 
   const player = state.players[actorIdx];
@@ -16676,8 +16684,11 @@ export function promptPlayAbilities(
   for (let i = 0; i < card.abilities.length; i++) {
     const ab = card.abilities[i];
     const key = `${card.name}|${i}`;
-    // 只處理有在 ABILITY_EFFECTS 註冊的特性
-    if (!ABILITY_EFFECTS.has(key)) continue;
+    // v5.872：只處理有註冊 handler 的特性。原只查 ABILITY_EFFECTS(index-based regA),
+    //   漏 regAByName 註冊到 ABILITY_EFFECTS_BY_NAME 的特性(怖納噬草|恐慌牢籠 因同名卡別的
+    //   index-0 是雜草魂,必須用 by-name 消歧義)→ on-evolve 提示永不彈窗(玩家回報)。
+    //   改中央 hasAbilityFn(by-name + by-index 兩 map)。
+    if (!hasAbilityFn(card.name, ab.name, i)) continue;
 
     // v5.751：on-play/on-evolve 自動觸發特性也要受「特性消除」影響 — 中央 isAbilityHolderEffective
     //   gate(涵蓋 鐵荊棘ex初始化 / 振翼髮暗夜羽擊(對手戰鬥場特性消除) / 招式版暗夜羽擊
