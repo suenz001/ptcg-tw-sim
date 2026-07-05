@@ -383,6 +383,73 @@ RESOLVERS.set('enforce-bench-limit', (state, actorIdx, selectedIids, _params, po
   return s;
 });
 
+// ── v5.878 獎賞卡「翻到正面」＋取獎選擇（克雷色利亞｜弦月光芒）────────────────
+// 依 iid 取走指定的獎賞卡，含所有副作用：pendingPrizes 更新、私訊 log（本人看卡名/對手看張數）、
+// 勝負判定（取完獲勝）、嘉年華補位。抽出成共用 helper，讓「一般前端取」與「有正面獎賞時的
+// 選擇取」共用同一套結算，避免兩份邏輯漂移。進入手牌後剝除 faceUp（不再是獎賞卡）。
+function takeSpecificPrizes(
+  state: GameState,
+  ownerIdx: 0 | 1,
+  iidsToTake: string[],
+  pool: Map<string, Card>
+): GameState {
+  const owed = getPendingPrize(state, ownerIdx);
+  const taker = { ...state.players[ownerIdx] };
+  const takeSet = new Set(iidsToTake);
+  const taken = taker.prizes.filter(c => takeSet.has(c.iid));
+  if (taken.length === 0) return state;
+  const takenBare = taken.map(({ faceUp, ...rest }) => rest as CardInstance);  // 剝除 faceUp
+  taker.prizes = taker.prizes.filter(c => !takeSet.has(c.iid));
+  taker.hand = [...taker.hand, ...takenBare];
+  const newPlayers2 = [...state.players] as [PlayerState, PlayerState];
+  newPlayers2[ownerIdx] = taker;
+  const newPP: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
+  newPP[ownerIdx] = Math.max(0, owed - taken.length);
+
+  const takenNames = taken.map(c => cardLink(c.iid, getCard(c.cardId, pool).name)).join('、');
+  const newState: GameState = addPrivateLog(
+    { ...state, players: newPlayers2, pendingPrizes: newPP },
+    `${taker.name} 取得了 ${taken.length} 張獎賞卡：${takenNames}（剩餘 ${taker.prizes.length} 張）`,
+    `${taker.name} 取得了 ${taken.length} 張獎賞卡（剩餘 ${taker.prizes.length} 張）`,
+    ownerIdx
+  );
+
+  // 勝利條件：獎賞卡全取完
+  if (taker.prizes.length <= 0) {
+    return {
+      ...newState,
+      phase: 'game-over',
+      winner: ownerIdx,
+      winReason: `${taker.name} 取得所有獎賞卡`,
+      log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: Date.now() }]
+    };
+  }
+  return tryPromoteToMainForFestival(newState, pool);
+}
+
+// take-prize-choose resolver：玩家決定要不要取走「正面朝上」的已知獎賞卡。
+//   'take-faceup'  → 取 1 張正面獎賞 +（count-1）張蓋著的。
+//   'take-facedown'→ 全取蓋著的（保留正面），蓋著不足才補正面。
+RESOLVERS.set('take-prize-choose', (state, ownerIdx, selectedIids, params, pool) => {
+  const count = (params?.count as number) ?? 1;
+  const taker = state.players[ownerIdx];
+  const faceUps = taker.prizes.filter(c => c.faceUp);
+  const faceDowns = taker.prizes.filter(c => !c.faceUp);
+  if (faceUps.length === 0) {  // 防呆：正面獎賞已不存在 → 前端取
+    return takeSpecificPrizes(state, ownerIdx, taker.prizes.slice(0, count).map(c => c.iid), pool);
+  }
+  const choice = selectedIids[0];
+  let toTake: string[];
+  if (choice === 'take-facedown') {
+    toTake = faceDowns.slice(0, count).map(c => c.iid);
+    if (toTake.length < count) toTake = [...toTake, ...faceUps.slice(0, count - toTake.length).map(c => c.iid)];
+  } else {
+    toTake = [faceUps[0].iid, ...faceDowns.slice(0, count - 1).map(c => c.iid)];
+    if (toTake.length < count) toTake = [...toTake, ...faceUps.slice(1, 1 + (count - toTake.length)).map(c => c.iid)];
+  }
+  return takeSpecificPrizes(state, ownerIdx, toTake, pool);
+});
+
 // ── 火箭隊的監視塔（【無】寶可夢特性無效）── 輔助判定 ────────────────────────
 // 當場上活動場地卡為 ROCKET_WATCHTOWER_STADIUMS 所列競技場卡時，
 // 雙方所有【無】屬寶可夢（pokemonType === 'Colorless'）的特性全部消除。
@@ -5721,37 +5788,34 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     const ownerIdx = action.playerIdx;
     const owed = getPendingPrize(state, ownerIdx);
     if (owed <= 0) return state;
-    const taker = { ...state.players[ownerIdx] };
+    const taker = state.players[ownerIdx];
     const count = Math.min(action.count, taker.prizes.length, owed);
-    const taken = taker.prizes.slice(0, count);
-    taker.prizes = taker.prizes.slice(count);
-    taker.hand = [...taker.hand, ...taken];
-    const newPlayers2 = [...state.players] as [PlayerState, PlayerState];
-    newPlayers2[ownerIdx] = taker;
-    const newPP: [number, number] = [...(state.pendingPrizes ?? [0, 0])] as [number, number];
-    newPP[ownerIdx] = Math.max(0, owed - count);
-
-    // v5.452：取得的獎賞卡是哪幾張只給「取獎者本人」看（private），對手只看到張數（public）。
-    const takenNames = taken.map(c => cardLink(c.iid, getCard(c.cardId, pool).name)).join('、');
-    let newState: GameState = addPrivateLog(
-      { ...state, players: newPlayers2, pendingPrizes: newPP },
-      `${taker.name} 取得了 ${count} 張獎賞卡：${takenNames}（剩餘 ${taker.prizes.length} 張）`,
-      `${taker.name} 取得了 ${count} 張獎賞卡（剩餘 ${taker.prizes.length} 張）`,
-      ownerIdx
-    );
-
-    // 勝利條件：獎賞卡全取完
-    if (taker.prizes.length <= 0) {
+    if (count <= 0) return state;
+    // v5.878：若存在「正面朝上」的獎賞卡（克雷色利亞｜弦月光芒翻開的），讓玩家選擇要不要取走
+    //   那張已知的卡。無正面獎賞 → 維持原本「從前端取」（玩家分辨不出蓋著的獎賞，前端取＝隨機取，
+    //   對玩家無差異，正常對局完全不受影響）。
+    const faceUpPrize = taker.prizes.find(c => c.faceUp);
+    if (faceUpPrize) {
+      const fuName = getCard(faceUpPrize.cardId, pool).name;
+      const opts = [
+        { id: 'take-faceup', text: count > 1 ? `取走正面朝上的【${fuName}】＋蓋著的 ${count - 1} 張` : `取走正面朝上的【${fuName}】` },
+        { id: 'take-facedown', text: count > 1 ? `取走蓋著的 ${count} 張（保留正面的【${fuName}】）` : `取走蓋著的 1 張（保留正面的【${fuName}】）` },
+      ];
       return {
-        ...newState,
-        phase: 'game-over',
-        winner: ownerIdx,
-        winReason: `${taker.name} 取得所有獎賞卡`,
-        log: [...newState.log, { turn: newState.turn, playerIndex: null, message: `${taker.name} 取得所有獎賞卡，獲勝！`, timestamp: Date.now() }]
+        ...state,
+        pendingSelection: {
+          type: 'modal-choice',
+          actorIdx: ownerIdx,
+          sourcePlayerIdx: ownerIdx,
+          minCount: 1, maxCount: 1,
+          effectKey: 'take-prize-choose',
+          params: { count, options: opts, titleOverride: '取獎賞：選擇要取走的獎賞卡' },
+        },
       };
     }
-
-    return tryPromoteToMainForFestival(newState, pool);
+    // 無正面獎賞：維持原「從前端取」
+    const frontIids = taker.prizes.slice(0, count).map(c => c.iid);
+    return takeSpecificPrizes(state, ownerIdx, frontIids, pool);
   }
 
   // ── 對手送出新的出場寶可夢（被擊倒後） ──────────────────────────────────

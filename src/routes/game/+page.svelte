@@ -7751,7 +7751,7 @@
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} style="animation-delay:{i*90}ms"></div>{/each}
+            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz?.faceUp ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
           </div>
         {/key}
         <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
@@ -7958,7 +7958,7 @@
         <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} style="animation-delay:{i*90}ms"></div>{/each}
+            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz?.faceUp ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
           {/key}
         </div>
       </div>
@@ -11992,6 +11992,8 @@
   .zone-prizes{ flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:0.2rem; }
   .prize-grid{ display:grid; grid-template-columns:1fr 1fr; gap:3px; }
   .prize-card{ width:32px; height:45px; background:linear-gradient(135deg,#1e4a8a,#2a6ab0); border:1px solid #4a8ac0; border-radius:4px; }
+  .prize-card.prize-faceup{ overflow:hidden; border-color:#ffd23f; box-shadow:0 0 4px #ffd23f; background:#111; }
+  .prize-face-img{ width:100%; height:100%; object-fit:cover; border-radius:3px; display:block; }
   .prize-card.my-prize{ background:linear-gradient(135deg,#2a6a1a,#3a8a2a); border-color:#5aaa4a; }
   .prize-card.prize-gone{ background:transparent; border-color:#2a3a2a; opacity:.25; animation:none !important; }
   /* 獎賞卡放置動畫：從上方 fly-in + rotate + scale，by animation-delay 錯開 */

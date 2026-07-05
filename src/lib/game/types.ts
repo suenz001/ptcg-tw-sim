@@ -46,6 +46,13 @@ export interface CardInstance {
   extraTools?: CardInstance[];
   /** 進化來源的 iid（用來驗證是否可進化） */
   evolvedFromIid?: string;
+  /**
+   * v5.878：獎賞卡「翻到正面」狀態。克雷色利亞｜弦月光芒可將自己 1 張獎賞卡翻到正面，
+   * 維持到對戰結束（正面朝上的獎賞卡對雙方公開）。取獎賞時若存在 faceUp 獎賞，玩家可
+   * 選擇要不要取走那張已知的卡（見 engine TAKE_PRIZES / take-prize-choose）。
+   * 只在 player.prizes 上有意義；進入手牌後會被剝除。
+   */
+  faceUp?: boolean;
   /** 下一次被攻擊時傷害 -N（攻擊後自動清除），用於「下回合受傷減 N」效果。
    *
    * v3.22 重要：此旗標僅由 **defender 端** 消耗（即「這隻寶可夢下次被打時 -N」）。
