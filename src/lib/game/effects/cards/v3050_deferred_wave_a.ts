@@ -283,13 +283,15 @@ export function askUseRetreatToBenchAbility(
         { id: 'no', text: '❌ 不使用' },
       ],
       abilityKey,
+      abilityName,        // v5.873：讓 resolver 走 getAbilityFn(by-name),涵蓋 regAByName 特性
+      cardName,           // v5.873
       targetIid: inst.iid,
     },
   });
 }
 
 // resolve-retreat-to-bench-ability-prompt resolver — 玩家選 yes 後執行對應 ABILITY_EFFECTS
-import { ABILITY_EFFECTS as _ABILITY_EFFECTS_FOR_RETREAT_HOOK } from '../_shared';
+import { ABILITY_EFFECTS as _ABILITY_EFFECTS_FOR_RETREAT_HOOK, getAbilityFn as _getAbilityFnRetreat } from '../_shared';
 regR('resolve-retreat-to-bench-ability-prompt', (state, actorIdx, selectedIids, params, pool) => {
   const choice = selectedIids[0] ?? 'no';
   if (choice !== 'yes') return state;
@@ -297,7 +299,11 @@ regR('resolve-retreat-to-bench-ability-prompt', (state, actorIdx, selectedIids, 
   const targetIid = params?.targetIid as string;
   if (!abilityKey || !targetIid) return state;
 
-  const fn = _ABILITY_EFFECTS_FOR_RETREAT_HOOK.get(abilityKey);
+  // v5.873：改用中央 getAbilityFn(by-name 優先,fallback by-index),涵蓋 regAByName 的 on-retreat 特性。
+  const abilityName = params?.abilityName as string | undefined;
+  const cardName = (params?.cardName as string | undefined) ?? abilityKey.slice(0, abilityKey.lastIndexOf('|'));
+  const abIdx = parseInt(abilityKey.slice(abilityKey.lastIndexOf('|') + 1), 10) || 0;
+  const fn = _getAbilityFnRetreat(cardName, abilityName ?? '', abIdx) ?? _ABILITY_EFFECTS_FOR_RETREAT_HOOK.get(abilityKey);
   if (!fn) return state;
 
   const player = state.players[actorIdx];

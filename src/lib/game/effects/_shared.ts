@@ -1525,6 +1525,8 @@ export function askUsePromoteActiveAbility(
         { id: 'no', text: '❌ 不使用' },
       ],
       abilityKey,
+      abilityName,        // v5.873：讓 resolver 走 getAbilityFn(by-name),涵蓋 regAByName 特性
+      cardName,           // v5.873
       targetIid: inst.iid,
     },
   });
@@ -1538,7 +1540,12 @@ regR('resolve-promote-active-ability-prompt', (state, actorIdx, selectedIids, pa
   const targetIid = params?.targetIid as string;
   if (!abilityKey || !targetIid) return state;
 
-  const fn = ABILITY_EFFECTS.get(abilityKey);
+  // v5.873：改用中央 getAbilityFn(by-name 優先,fallback by-index),涵蓋 regAByName 的 on-promote 特性
+  //   (與 resolve-play-ability-prompt v5.872 同款修正)。原只 ABILITY_EFFECTS.get(index) 對 regAByName 拿不到 fn。
+  const abilityName = params?.abilityName as string | undefined;
+  const cardName = (params?.cardName as string | undefined) ?? abilityKey.slice(0, abilityKey.lastIndexOf('|'));
+  const abIdx = parseInt(abilityKey.slice(abilityKey.lastIndexOf('|') + 1), 10) || 0;
+  const fn = getAbilityFn(cardName, abilityName ?? '', abIdx) ?? ABILITY_EFFECTS.get(abilityKey);
   if (!fn) return state;
 
   const player = state.players[actorIdx];
