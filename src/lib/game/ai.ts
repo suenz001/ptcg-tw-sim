@@ -742,7 +742,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
     // 對手備戰選擇
     case 'opp-bench-choose': {
-      const bench = srcPlayer.bench;
+      // v5.874：尊重 params.validIids + includeActive(對齊 UI +page.svelte:3169 與 opp-poke-choose)。
+      //   原直接用 srcPlayer.bench 忽略 validIids → snipe-60-ex(只限ex)/gust-opp(排除化隱)/lucia-show/
+      //   wave3a-snipe/頂級球 等設 validIids 的卡,AI 會選到非法目標(打非ex/化隱保護的備戰)。
+      const includeActiveOB = sel.params?.includeActive === true;
+      const validIidsOB = sel.params?.validIids as string[] | undefined;
+      const baseOB = includeActiveOB && srcPlayer.active ? [srcPlayer.active, ...srcPlayer.bench] : srcPlayer.bench;
+      const bench = validIidsOB ? baseOB.filter(c => validIidsOB.includes(c.iid)) : baseOB;
       if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
       // v3.43 魔靈多龍 老大指令：抓 ex 且 remainingHP ≤ 200（讓多龍幻影奇襲 KO 取 2 獎賞）
       // 60 內備戰不抓（保留給幻影奇襲分配 KO，省一張老大指令）
