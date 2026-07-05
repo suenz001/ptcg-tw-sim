@@ -1006,8 +1006,10 @@ regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
 //
 // 為何不做「玩家點位置」UI：
 //   - 卡面說「不看正面」→ 玩家點位置只是儀式感，沒有資訊優勢
-//   - 加 prize-choose pending 需動 +page.svelte / engine / ai 多處，CP 值低
 //   - 隨機抽就符合「盲選」精神（位置等價）
+// v5.879：卡面「在對戰結束前，那張獎賞卡維持正面朝上」已實作 — 選中的對手獎賞（互換時為換進
+//   獎賞格的手牌）設 faceUp，維持到對戰結束、對雙方公開，該玩家取獎時可選要不要取那張已知卡
+//   （沿用 v5.878 克雷色利亞｜弦月光芒的 faceUp 機制與 engine TAKE_PRIZES 取獎選擇）。
 //
 // gate：對手獎賞 ≥1 + 對手手牌 ≥1（任一空就完全沒效果）
 regG('火箭隊的妨礙機器人', (st, idx) => {
@@ -1026,6 +1028,12 @@ reg('火箭隊的妨礙機器人', (st, idx, pool) => {
   const handName = pool.get(handInst.cardId)?.name ?? '?';
   st = addLog(st, `火箭隊的妨礙機器人：盲選 ${opp.name} 的 1 張獎賞卡 + 1 張手牌`, idx);
   st = addLog(st, `→ 翻開：獎賞卡=「${prizeName}」、手牌=「${handName}」`, idx);
+  // v5.879：卡面「在對戰結束前，那張獎賞卡維持正面朝上」— 將選中的對手獎賞設 faceUp（維持到
+  //   對戰結束、對雙方公開、顯示於獎賞區）。若稍後互換，resolver 會把換進獎賞格的那張改設 faceUp。
+  st = updatePlayer(st, oppIdx, p => ({
+    ...p,
+    prizes: p.prizes.map((c, i) => (i === prizeIndex ? { ...c, faceUp: true } : c)),
+  }));
   return withPending(st, {
     type: 'modal-choice',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -1066,16 +1074,18 @@ regR('tr-disrupt-bot-swap-decide', (st, idx, iids, params, _pool) => {
   }
   const prizeInst = opp.prizes[prizeIndex];
   const handInst = opp.hand[handIndex];
-  // 互換：手牌 → 獎賞區（同 index）、獎賞 → 手牌（append 到末端）
+  // 互換：手牌 → 獎賞區（同 index）、獎賞 → 手牌（append 到末端）。
+  // v5.879：那個「獎賞格」維持正面朝上 → 換進去的手牌設 faceUp；換出去進手牌的原獎賞剝除 faceUp。
   st = updatePlayer(st, oppIdx, p => {
     const newPrizes = [...p.prizes];
-    newPrizes[prizeIndex] = handInst;
+    newPrizes[prizeIndex] = { ...handInst, faceUp: true };
     const newHand = p.hand.filter((_, i) => i !== handIndex);
-    newHand.push(prizeInst);
+    const { faceUp: _fu, ...prizeBare } = prizeInst;
+    newHand.push(prizeBare);
     return { ...p, prizes: newPrizes, hand: newHand };
   });
   return addLog(st,
-    `火箭隊的妨礙機器人：互換 ${oppName} 的獎賞卡「${prizeName}」與手牌「${handName}」`, idx);
+    `火箭隊的妨礙機器人：互換 ${oppName} 的獎賞卡「${prizeName}」與手牌「${handName}」（該獎賞格維持正面朝上）`, idx);
 });
 
 // ── 烈焰馬｜快走（特性 / I-mark: SV9a 12672, SV9a 12727, MC 16561）────────────────────
