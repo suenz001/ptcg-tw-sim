@@ -427,27 +427,50 @@ function takeSpecificPrizes(
   return tryPromoteToMainForFestival(newState, pool);
 }
 
-// take-prize-choose resolver：玩家決定要不要取走「正面朝上」的已知獎賞卡。
-//   'take-faceup'  → 取 1 張正面獎賞 +（count-1）張蓋著的。
-//   'take-facedown'→ 全取蓋著的（保留正面），蓋著不足才補正面。
+// v5.880 取獎賞逐張 picker（支援多張正面朝上獎賞、手機純文字友善）。
+//   每次讓玩家從剩餘獎賞選 1 張取走：正面朝上顯示卡名（可指定）、蓋著的顯示編號。取 1 張後若還需取
+//   且仍有正面朝上獎賞 → 再開 picker；沒有正面朝上獎賞了 → 自動取剩餘蓋著的（玩家分辨不出、無資訊差異）。
+function buildPrizeTakeOptions(prizes: CardInstance[], pool: Map<string, Card>): { id: string; text: string }[] {
+  let fd = 0;
+  return prizes.map(pr => {
+    if (pr.faceUp) return { id: pr.iid, text: `🔆 正面朝上：${getCard(pr.cardId, pool).name}` };
+    fd += 1;
+    return { id: pr.iid, text: `🂠 蓋著的獎賞 #${fd}` };
+  });
+}
+function openPrizeTakePicker(state: GameState, ownerIdx: 0 | 1, remaining: number, pool: Map<string, Card>): GameState {
+  return {
+    ...state,
+    pendingSelection: {
+      type: 'modal-choice',
+      actorIdx: ownerIdx, sourcePlayerIdx: ownerIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'take-prize-choose',
+      params: {
+        remaining,
+        titleOverride: `取獎賞：選擇要取走的 1 張（還需取 ${remaining} 張，正面朝上的可指定）`,
+        options: buildPrizeTakeOptions(state.players[ownerIdx].prizes, pool),
+      },
+    },
+  };
+}
 RESOLVERS.set('take-prize-choose', (state, ownerIdx, selectedIids, params, pool) => {
-  const count = (params?.count as number) ?? 1;
+  const pickedIid = selectedIids[0];
+  const remaining = (params?.remaining as number) ?? 1;
   const taker = state.players[ownerIdx];
-  const faceUps = taker.prizes.filter(c => c.faceUp);
-  const faceDowns = taker.prizes.filter(c => !c.faceUp);
-  if (faceUps.length === 0) {  // 防呆：正面獎賞已不存在 → 前端取
-    return takeSpecificPrizes(state, ownerIdx, taker.prizes.slice(0, count).map(c => c.iid), pool);
-  }
-  const choice = selectedIids[0];
-  let toTake: string[];
-  if (choice === 'take-facedown') {
-    toTake = faceDowns.slice(0, count).map(c => c.iid);
-    if (toTake.length < count) toTake = [...toTake, ...faceUps.slice(0, count - toTake.length).map(c => c.iid)];
-  } else {
-    toTake = [faceUps[0].iid, ...faceDowns.slice(0, count - 1).map(c => c.iid)];
-    if (toTake.length < count) toTake = [...toTake, ...faceUps.slice(1, 1 + (count - toTake.length)).map(c => c.iid)];
-  }
-  return takeSpecificPrizes(state, ownerIdx, toTake, pool);
+  // 防呆：沒選或選到不存在 → 取第一張
+  const validIid = taker.prizes.some(c => c.iid === pickedIid) ? pickedIid : taker.prizes[0]?.iid;
+  if (!validIid) return state;
+  const s = takeSpecificPrizes(state, ownerIdx, [validIid], pool);  // 取這 1 張
+  if (s.phase === 'game-over') return s;
+  const stillOwe = remaining - 1;
+  if (stillOwe <= 0) return s;
+  const p = s.players[ownerIdx];
+  if (p.prizes.length === 0) return s;
+  // 還需取：仍有正面朝上獎賞 → 繼續讓玩家指定；否則自動取剩餘蓋著的
+  if (p.prizes.some(c => c.faceUp)) return openPrizeTakePicker(s, ownerIdx, stillOwe, pool);
+  const front = p.prizes.slice(0, stillOwe).map(c => c.iid);
+  return takeSpecificPrizes(s, ownerIdx, front, pool);
 });
 
 // ── 火箭隊的監視塔（【無】寶可夢特性無效）── 輔助判定 ────────────────────────
@@ -5796,22 +5819,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   對玩家無差異，正常對局完全不受影響）。
     const faceUpPrize = taker.prizes.find(c => c.faceUp);
     if (faceUpPrize) {
-      const fuName = getCard(faceUpPrize.cardId, pool).name;
-      const opts = [
-        { id: 'take-faceup', text: count > 1 ? `取走正面朝上的【${fuName}】＋蓋著的 ${count - 1} 張` : `取走正面朝上的【${fuName}】` },
-        { id: 'take-facedown', text: count > 1 ? `取走蓋著的 ${count} 張（保留正面的【${fuName}】）` : `取走蓋著的 1 張（保留正面的【${fuName}】）` },
-      ];
-      return {
-        ...state,
-        pendingSelection: {
-          type: 'modal-choice',
-          actorIdx: ownerIdx,
-          sourcePlayerIdx: ownerIdx,
-          minCount: 1, maxCount: 1,
-          effectKey: 'take-prize-choose',
-          params: { count, options: opts, titleOverride: '取獎賞：選擇要取走的獎賞卡' },
-        },
-      };
+      // v5.880：有正面朝上獎賞 → 逐張 picker 讓玩家指定（可取多張正面的），手機純文字友善。
+      return openPrizeTakePicker(state, ownerIdx, count, pool);
     }
     // 無正面獎賞：維持原「從前端取」
     const frontIids = taker.prizes.slice(0, count).map(c => c.iid);

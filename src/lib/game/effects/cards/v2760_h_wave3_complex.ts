@@ -160,29 +160,34 @@ ATTACK_PRE_DISCARD_CHOICE.set('克雷色利亞|弦月光芒', {
   choiceYesLabel: '是（翻 1 獎賞 / +80 傷害）',
   choiceNoLabel: '否（僅 80 傷害）',
 });
-regPre('克雷色利亞|弦月光芒', (state, aIdx, pool, action) => {
+regPre('克雷色利亞|弦月光芒', (state, aIdx, _pool, action) => {
   const chosenIids = action?.discardedEnergyIids;
   const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  // v5.878：卡面「若希望，選擇1張自己的反面朝上的獎賞卡，翻到正面。這個情況下，增加80點傷害。
-  //   （在對戰結束前，那張獎賞卡維持正面朝上。）」
-  //   找 1 張尚未翻開（反面朝上）的自己獎賞卡。無可翻 → 即使選 yes 也只能 80 base（+80 是「翻獎賞」的條件）。
+  // v5.878/v5.880：卡面「若希望，選擇1張自己的反面朝上的獎賞卡，翻到正面（增加80點傷害），
+  //   那張獎賞卡維持正面朝上到對戰結束」。regPre 只負責「傷害」；實際翻獎賞 + faceUp + log 移到
+  //   regPost（v5.880 修：ATTACK handler 會用 `players` 快照重建最終 state，regPre 對 prizes/log
+  //   的變更會被丟棄；regPost 的回傳 state 才是最終態 → 翻面必須在 regPost 做，否則 faceUp/log 遺失）。
+  const p = state.players[aIdx];
+  const hasFaceDown = p.prizes.some(pr => !pr.faceUp);
+  if (!hasFaceDown) return { state, damage: 80 };       // 無反面獎賞可翻 → 80（+80 是翻獎賞的條件）
+  if (!choseYes) return { state, damage: 80 };
+  return { state, damage: 160 };
+});
+// v5.880：實際翻獎賞在 regPost（其 state 為最終態，不會被 ATTACK handler 的 players 快照覆蓋）。
+regPost('克雷色利亞|弦月光芒', (state, aIdx, pool, action) => {
+  const chosenIids = action?.discardedEnergyIids;
+  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
   const p = state.players[aIdx];
   const faceDownIdx = p.prizes.findIndex(pr => !pr.faceUp);
-  if (faceDownIdx === -1) {
-    return { state: addLog(state, '弦月光芒：無反面朝上的獎賞可翻 → 80 base', aIdx), damage: 80 };
-  }
-  if (!choseYes) return { state: addLog(state, '弦月光芒：選擇「否」，不翻獎賞 → 80 base', aIdx), damage: 80 };
-  // 選「是」：翻開 1 張獎賞到正面，faceUp 維持到對戰結束（取獎時玩家可選擇要不要取那張已知卡）。
-  //   正面朝上的獎賞卡對雙方公開 → 公開 addLog 揭示卡名（對齊「翻到正面」規則）。
+  if (!choseYes || faceDownIdx === -1) return state;    // 選否或無反面獎賞 → 不翻
+  // 翻開 1 張獎賞到正面，faceUp 維持到對戰結束（取獎時玩家可選要不要取那張已知卡）。
+  //   正面朝上的獎賞卡對雙方公開 → 公開 addLog 揭示卡名（對齊「翻到正面」規則、手機看不到圖也能從 log 得知）。
   const flippedName = pool.get(p.prizes[faceDownIdx].cardId)?.name ?? '?';
   const s = updatePlayer(state, aIdx, pp => ({
     ...pp,
     prizes: pp.prizes.map((pr, i) => (i === faceDownIdx ? { ...pr, faceUp: true } : pr)),
   }));
-  return {
-    state: addLog(s, `弦月光芒：將自己 1 張獎賞卡翻到正面 — ${flippedName}（維持到對戰結束）→ 80+80 = 160`, aIdx),
-    damage: 160,
-  };
+  return addLog(s, `弦月光芒：將自己 1 張獎賞卡翻到正面 — ${flippedName}（維持到對戰結束）`, aIdx);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -1212,9 +1212,29 @@ export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, po
   //   ★ 私密 log（v5.452）：本人看到取得哪幾張卡(可點 cardLink)、對手只看張數 — 所有取得獎賞狀況
   //     一律產生此 log（沒有【取得】鈕後，玩家只能靠 log 確認拿到哪張）。pendingPrizes 不再累加(恆 0)。
   if (n <= 0) return state;
+  const takerPeek = state.players[ownerIdx];
+  const count0 = Math.min(n, takerPeek.prizes.length);
+  if (count0 <= 0) return state;  // 無獎賞卡可取（理論上已勝）
+  // v5.880：若有「正面朝上」的獎賞卡（克雷色利亞｜弦月光芒 / 火箭隊的妨礙機器人 翻開的），
+  //   改開逐張 picker 讓玩家指定要取哪張（卡面用意：知道獎賞內容後可選要不要拿那張已知卡）。
+  //   無 faceUp → 維持 v5.466 KO 當下自動取（front），正常對局完全不變、無線上 desync。
+  //   實際取獎由 engine 的 take-prize-choose resolver 依 params.remaining 逐張結算。
+  if (takerPeek.prizes.some(c => c.faceUp)) {
+    let fd = 0;
+    const options = takerPeek.prizes.map(pr => pr.faceUp
+      ? { id: pr.iid, text: `🔆 正面朝上：${pool.get(pr.cardId)?.name ?? '?'}` }
+      : { id: pr.iid, text: `🂠 蓋著的獎賞 #${++fd}` });
+    return {
+      ...state,
+      pendingSelection: {
+        type: 'modal-choice', actorIdx: ownerIdx, sourcePlayerIdx: ownerIdx,
+        minCount: 1, maxCount: 1, effectKey: 'take-prize-choose',
+        params: { remaining: count0, titleOverride: `取獎賞：選擇要取走的 1 張（還需取 ${count0} 張，正面朝上的可指定）`, options },
+      },
+    };
+  }
   const taker = { ...state.players[ownerIdx] };
   const count = Math.min(n, taker.prizes.length);
-  if (count <= 0) return state;  // 無獎賞卡可取（理論上已勝）
   const taken = taker.prizes.slice(0, count);
   taker.prizes = taker.prizes.slice(count);
   taker.hand = [...taker.hand, ...taken];
