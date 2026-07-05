@@ -331,8 +331,36 @@ for (const f of files) {
   }
 }
 
+// ── Check N：withPending 用的 effectKey 沒有對應 resolver（死 effectKey）─────────────
+//   picker 開了但 RESOLVE_SELECTION 查不到 resolver → 選完靜默無效果(氣味偵測/警備濁霧 v5.881)。
+//   收集 regR('k')/regR(CONST)/RESOLVERS.set(...) 註冊的 key(含常數解析) vs effectKey:'k'/CONST 使用。
+//   m5-retry-badge-decide 是 engine RESOLVE_SELECTION inline 特判(非 regR) → 白名單。
+{
+  const allsrc = files.map(f => readFileSync(f, 'utf8')).join('\n');
+  const constMap = {};
+  for (const mm of allsrc.matchAll(/(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*['"]([^'"]+)['"]/g)) constMap[mm[1]] = mm[2];
+  const registered = new Set();
+  for (const mm of allsrc.matchAll(/(?:regR|RESOLVERS\.set)\(\s*['"]([^'"]+)['"]/g)) registered.add(mm[1]);
+  for (const mm of allsrc.matchAll(/(?:regR|RESOLVERS\.set)\(\s*([A-Za-z_$][\w$]*)\s*,/g)) { if (constMap[mm[1]]) registered.add(constMap[mm[1]]); }
+  const INLINE_OK = new Set(['m5-retry-badge-decide']);
+  for (const f of files) {
+    const lines = readFileSync(f, 'utf8').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const tt = lines[i].trimStart();
+      if (tt.startsWith('//') || tt.startsWith('*') || tt.startsWith('/*')) continue;
+      if (/effectkey-inline-ok/.test(lines[i]) || /effectkey-inline-ok/.test(lines[i - 1] ?? '')) continue;
+      let key = null;
+      let m1 = lines[i].match(/effectKey:\s*['"]([^'"]+)['"]/);
+      if (m1) key = m1[1];
+      else { const m2 = lines[i].match(/effectKey:\s*([A-Za-z_$][\w$]*)\b/); if (m2 && constMap[m2[1]]) key = constMap[m2[1]]; }
+      if (!key || INLINE_OK.has(key)) continue;
+      if (!registered.has(key)) violations.push(`[N] ${rel(f)}:${i + 1} — effectKey '${key}' 無對應 resolver(死 key,picker 選完無效果）→ 用有註冊 regR/RESOLVERS.set 的 key，或標 // effectkey-inline-ok: 理由`);
+    }
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

@@ -522,12 +522,15 @@ regPost('長毛狗|氣味偵測', (state, aIdx, _pool) => {
   const r = flipCoinsWithLog(state, 3, '氣味偵測', aIdx);
   if (r.heads === 0) return addLog(r.state, '氣味偵測：0 正面', aIdx);
   const s = addLog(r.state, `氣味偵測：${r.heads} 正面 → 從棄牌區挑 0~${r.heads} 張卡加手`, aIdx);
+  // v5.881 修:原 effectKey 'wave17-pickup-energy-to-hand' 是已 obsolete 死 key(v3.10 圖圖犬遷移時遺留)
+  //   → picker 選完無 resolver、卡沒進手牌。改用中央 discard-to-hand(棄牌→手牌+公開揭示卡名,
+  //   棄牌區公開資訊符合卡面「給對手看過後加入手牌」)。
   return withPending(s, {
     type: 'discard-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'Any',
     minCount: 0, maxCount: r.heads,
-    effectKey: 'wave17-pickup-energy-to-hand',
+    effectKey: 'discard-to-hand',
   });
 });
 

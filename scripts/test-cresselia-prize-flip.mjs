@@ -38,13 +38,15 @@ let pass = 0, fail = 0;
 const T = (n, f) => { try { f(); console.log('  OK', n); pass++; } catch (e) { console.log('  FAIL', n, '::', e.message); fail++; } };
 const p6 = () => [inst(W), inst(POKE), inst(POKE), inst(POKE), inst(POKE), inst(POKE)];
 
-// 1) ATTACK(yes) → regPost 翻面持久(faceUp 保留)+公開 log(v5.880 修:regPre 會遺失)。
-//    註:同一次攻擊的 KO 獎賞取用(addPendingPrize)早於 regPost 翻面,故該張 KO 獎賞仍自動取;
-//    翻的 faceUp 保留給後續回合的取獎(Wilson 多次使用情境)。
-T('★ATTACK(yes) → 翻面持久(faceUp 保留)+公開 log', () => {
+// 1) ★v5.881 順序修正:ATTACK(yes) 翻面「先於」傷害結算與取 KO 獎賞(參考忍之利刃延後傷害)。
+//    → 同一次攻擊 KO 時,剛翻的 faceUp 已就位 → 開 picker 讓玩家選要不要取翻開的那張(獎賞未自動取)。
+T('★ATTACK(yes) KO → 翻面先於取獎 → picker 含剛翻的 faceUp', () => {
   const out = mod.applyAction(mk(p6()), { type: 'ATTACK', attackIndex: 1, discardedEnergyIids: ['x'] }, pool);
-  assert.ok(out.log.some(l => pub(l).includes('翻到正面')), '公開 log 記錄翻到正面的卡(v5.880:regPost 才不遺失)');
-  assert.equal(out.players[0].prizes.filter(pz => pz.faceUp).length, 1, '完整 ATTACK 後仍有 1 張 faceUp 持久');
+  assert.ok(out.log.some(l => pub(l).includes('翻到正面')), '公開 log 記錄翻到正面的卡');
+  assert.ok(out.pendingSelection, 'KO 取獎開 picker(翻面先於取獎,獎賞未自動取)');
+  assert.equal(out.pendingSelection.effectKey, 'take-prize-choose');
+  assert.equal(out.players[0].prizes.length, 6, '獎賞尚未取(等玩家選)');
+  assert.equal(out.pendingSelection.params.options.filter(o => o.text.includes('正面朝上')).length, 1, 'picker 有剛翻的 1 張正面選項');
 });
 
 // 2) 已有 faceUp 獎賞時 KO → picker 選正面 → 取走進手牌(faceUp 剝除)

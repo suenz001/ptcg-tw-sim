@@ -160,34 +160,34 @@ ATTACK_PRE_DISCARD_CHOICE.set('克雷色利亞|弦月光芒', {
   choiceYesLabel: '是（翻 1 獎賞 / +80 傷害）',
   choiceNoLabel: '否（僅 80 傷害）',
 });
-regPre('克雷色利亞|弦月光芒', (state, aIdx, _pool, action) => {
-  const chosenIids = action?.discardedEnergyIids;
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  // v5.878/v5.880：卡面「若希望，選擇1張自己的反面朝上的獎賞卡，翻到正面（增加80點傷害），
-  //   那張獎賞卡維持正面朝上到對戰結束」。regPre 只負責「傷害」；實際翻獎賞 + faceUp + log 移到
-  //   regPost（v5.880 修：ATTACK handler 會用 `players` 快照重建最終 state，regPre 對 prizes/log
-  //   的變更會被丟棄；regPost 的回傳 state 才是最終態 → 翻面必須在 regPost 做，否則 faceUp/log 遺失）。
-  const p = state.players[aIdx];
-  const hasFaceDown = p.prizes.some(pr => !pr.faceUp);
-  if (!hasFaceDown) return { state, damage: 80 };       // 無反面獎賞可翻 → 80（+80 是翻獎賞的條件）
-  if (!choseYes) return { state, damage: 80 };
-  return { state, damage: 160 };
-});
-// v5.880：實際翻獎賞在 regPost（其 state 為最終態，不會被 ATTACK handler 的 players 快照覆蓋）。
+// v5.881：卡面「若希望，選擇1張自己的反面朝上的獎賞卡，翻到正面（增加80點傷害），那張獎賞卡維持
+//   正面朝上到對戰結束」。招式效果（翻獎賞）須「先於傷害結算、也先於取 KO 獎賞」發生（Wilson 裁定，
+//   參考甲賀忍蛙ex｜忍之利刃 registerDamageThenOptionalDeckSearchToHand 的延後傷害範本）：
+//   regPre 傷害設 0（延後）；regPost 先翻獎賞(faceUp+公開 log)、最後才用中央 dealAttackDamageToTarget
+//   造傷害（免疫/弱抗/KO/取獎一次到位）→ KO 取獎時 faceUp 已就位、玩家能選要不要取翻開的那張。
+regPre('克雷色利亞|弦月光芒', (state) => ({ state, damage: 0 }));
 regPost('克雷色利亞|弦月光芒', (state, aIdx, pool, action) => {
   const chosenIids = action?.discardedEnergyIids;
   const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
   const p = state.players[aIdx];
   const faceDownIdx = p.prizes.findIndex(pr => !pr.faceUp);
-  if (!choseYes || faceDownIdx === -1) return state;    // 選否或無反面獎賞 → 不翻
-  // 翻開 1 張獎賞到正面，faceUp 維持到對戰結束（取獎時玩家可選要不要取那張已知卡）。
-  //   正面朝上的獎賞卡對雙方公開 → 公開 addLog 揭示卡名（對齊「翻到正面」規則、手機看不到圖也能從 log 得知）。
-  const flippedName = pool.get(p.prizes[faceDownIdx].cardId)?.name ?? '?';
-  const s = updatePlayer(state, aIdx, pp => ({
-    ...pp,
-    prizes: pp.prizes.map((pr, i) => (i === faceDownIdx ? { ...pr, faceUp: true } : pr)),
-  }));
-  return addLog(s, `弦月光芒：將自己 1 張獎賞卡翻到正面 — ${flippedName}（維持到對戰結束）`, aIdx);
+  let s = state;
+  let dmg = 80;
+  if (choseYes && faceDownIdx !== -1) {
+    // 先翻獎賞（效果先於傷害/取獎）：翻開 1 張反面獎賞成正面，faceUp 維持到對戰結束、對雙方公開 log 卡名。
+    const flippedName = pool.get(p.prizes[faceDownIdx].cardId)?.name ?? '?';
+    s = updatePlayer(state, aIdx, pp => ({
+      ...pp,
+      prizes: pp.prizes.map((pr, i) => (i === faceDownIdx ? { ...pr, faceUp: true } : pr)),
+    }));
+    s = addLog(s, `弦月光芒：將自己 1 張獎賞卡翻到正面 — ${flippedName}（維持到對戰結束）`, aIdx);
+    dmg = 160;
+  } else {
+    s = addLog(s, choseYes ? '弦月光芒：無反面朝上的獎賞可翻 → 80' : '弦月光芒：選擇「否」，不翻獎賞 → 80', aIdx);
+  }
+  // 翻獎賞之後才造傷害 → KO 取獎（addPendingPrize）在翻面後發生，faceUp 已就位。
+  const dIid = s.players[(1 - aIdx) as 0 | 1].active?.iid;
+  return dIid ? dealAttackDamageToTarget(s, aIdx, dIid, dmg, pool, { kind: 'attack-damage', label: '弦月光芒' }) : s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

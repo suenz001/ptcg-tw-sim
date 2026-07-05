@@ -15497,7 +15497,10 @@ export const PASSIVE_ON_DAMAGED = new Map<string, PassiveOnDamagedFn>([
       actorIdx: dIdx, sourcePlayerIdx: dIdx,
       filter: 'NameContains:瓦斯彈',
       minCount: 0, maxCount: Math.min(2, slots),
-      effectKey: 'search-bench-reshuffle',
+      // v5.881 修:原 effectKey 'search-bench-reshuffle' 是死 key(無 resolver)→搜到沒放備戰。
+      //   改用中央 bench-named-basic-from-deck(放備戰+重洗+公開 log),params.nameContains 對齊卡面「名稱中有瓦斯彈」。
+      effectKey: 'bench-named-basic-from-deck',
+      params: { nameContains: '瓦斯彈' },
     });
   }],
 ]);

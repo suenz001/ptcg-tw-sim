@@ -74,12 +74,15 @@ reg('赫普的包包', (st, idx, pool) => {
 // v2.159：bench-named-basic-from-deck — 同 bench-basic-from-deck 但 resolver 驗證 namePrefix
 regR('bench-named-basic-from-deck', (st, idx, iids, params, pool) => {
   const namePrefix = String(params?.namePrefix ?? '');
+  const nameContains = String(params?.nameContains ?? '');  // v5.881:支援「名稱中有X」(警備濁霧 瓦斯彈)
   const chosen = st.players[idx].deck.filter(c => iids.includes(c.iid));
-  // 驗證每張選的卡：必須是 prefix 開頭 + 基礎寶可夢
+  // 驗證每張選的卡：基礎寶可夢 +（prefix 開頭 或 name 含指定字串）
   const valid = chosen.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && !card.evolvesFrom
-      && (!namePrefix || card.name.startsWith(namePrefix));
+    if (!(card?.supertype === 'Pokemon' && !card.evolvesFrom)) return false;
+    if (namePrefix && !card.name.startsWith(namePrefix)) return false;
+    if (nameContains && !card.name.includes(nameContains)) return false;
+    return true;
   });
   const validIids = valid.map(c => c.iid);
   if (valid.length === 0) {
