@@ -23,6 +23,7 @@ import {
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import { defCantRetreatNextPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate
+import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
@@ -2198,16 +2199,9 @@ regR('mischief-tentacle-reshuffle', (state, aIdx, iids) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 蜻蜻蜓|靜默之翼 20 — 查看對手手牌（純揭露 log）
 regPre('蜻蜻蜓|靜默之翼', (s) => ({ state: s, damage: 20 }));
-regPost('蜻蜻蜓|靜默之翼', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const oppHand = state.players[dIdx].hand;
-  const names = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  // v3.9992：揭示對手手牌改 addPrivateLog
-  return addPrivateLog(state,
-    `靜默之翼：對手手牌 (${oppHand.length} 張) — ${names || '空'}`,
-    `靜默之翼：對手手牌 (${oppHand.length} 張)`,
-    aIdx);
-});
+// v5.876：收斂到中央 openPeekOppHandView(開 UI 讓玩家在畫面上查看對手整副手牌,同咕咕|靜默之翼)。
+//   原僅 addPrivateLog 純 log。
+regPost('蜻蜻蜓|靜默之翼', (state, aIdx) => openPeekOppHandView(state, aIdx, '靜默之翼'));
 
 // 焰后蜥|突然炙烤 — 對手選棄 1 張，若這隻寶可夢從「夜盜火蜥」進化則再棄 2 張
 regPre('焰后蜥|突然炙烤', (s) => ({ state: s, damage: 0 }));

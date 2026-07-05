@@ -9268,16 +9268,28 @@ function discardStadiumPost(label: string, failIfNone: boolean = false): AttackP
   };
 }
 
-function peekOppHandPost(label: string): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const hand = state.players[dIdx].hand;
-    if (hand.length === 0) {
-      return addLog(state, `${label}：對手手牌為空`, aIdx);
-    }
-    const names = hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    return addLog(state, `${label}：查看對手手牌（${hand.length} 張）— ${names}`, aIdx);
-  };
+// v5.876：查看對手手牌是玩家權益(重要戰略資訊)。開 hand-choose picker(sourcePlayerIdx=對手,maxCount0
+//   純查看,參考枇琶 v2.41)讓玩家在畫面上完整查看對手整副手牌;public log 只張數(不洩漏卡名給觀戰者,
+//   對齊 addPrivateLog 隱私模型);對手手牌空則跳過。整副手牌由 UI +page.svelte 揭露區塊(hand-choose +
+//   sourcePlayerIdx!=actorIdx)顯示。
+export function openPeekOppHandView(state: GameState, aIdx: 0 | 1, label: string): GameState {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const hand = state.players[dIdx].hand;
+  if (hand.length === 0) {
+    return addLog(state, `${label}：對手手牌為空`, aIdx);
+  }
+  const s = addLog(state, `${label}：查看對手手牌（${hand.length} 張）`, aIdx);
+  return withPending(s, {
+    type: 'hand-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 0, maxCount: 0,
+    effectKey: 'peek-opp-hand-view-only',
+    params: { validIids: [], titleOverride: `${label}：查看對手手牌（僅供查看，確認後結束）` },
+  });
+}
+regR('peek-opp-hand-view-only', (state) => state);
+
+export function peekOppHandPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => openPeekOppHandView(state, aIdx, label);
 }
 
 // 1-5. 簡單 snipe（對對手任一寶可夢造成 dmg，備戰不計弱抗）
@@ -10900,7 +10912,11 @@ regPost('洛托姆|粉碎脈衝', (state, aIdx, pool) => {
   const p = state.players[dIdx];
   if (p.hand.length === 0) return addLog(state, '粉碎脈衝：對手手牌為空', aIdx);
   const handNames = p.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(state, `粉碎脈衝：查看對手手牌（${p.hand.length} 張）— ${handNames}`, aIdx);
+  // v5.876：揭示對手手牌改 addPrivateLog(僅 actor 看卡名,觀戰者只見張數;隨後公開棄牌 log 會顯示丟了哪些)
+  let s = addPrivateLog(state,
+    `粉碎脈衝：查看對手手牌（${p.hand.length} 張）— ${handNames}`,
+    `粉碎脈衝：查看對手手牌（${p.hand.length} 張）`,
+    aIdx);
   const toDiscard = p.hand.filter(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;

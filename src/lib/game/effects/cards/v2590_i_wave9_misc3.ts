@@ -28,6 +28,7 @@ import {
 import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { statusPost } from '../../effects'; // v5.797 中央施狀態(gate 化隱/憨憨臉/特殊能量/祭典會場)
+import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import { defCantAttackNextPost } from '../../effects'; // v5.805 中央禁招(免疫gate)
 import { canApplyEffectToTarget } from '../../defense'; // v5.797 cantRetreat 免疫 gate
@@ -323,6 +324,8 @@ regPre('狩獵鳳蝶|能量吸管', (state, aIdx, pool) => {
   const s = addLog(state, `能量吸管：對手手牌能量 ${count} 張 → ${count}×80 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
+// v5.876：查看對手手牌是玩家權益 → 攻後開 UI 讓玩家查看整副手牌(算張數只 log 數量不夠)
+regPost('狩獵鳳蝶|能量吸管', (state, aIdx) => openPeekOppHandView(state, aIdx, '能量吸管'));
 
 // 風妖精ex|奇跡棉花 50× 對手手牌中訓練家數
 regPre('風妖精ex|奇跡棉花', (state, aIdx, pool) => {
@@ -336,6 +339,8 @@ regPre('風妖精ex|奇跡棉花', (state, aIdx, pool) => {
   const s = addLog(state, `奇跡棉花：對手手牌訓練家 ${count} 張 → ${count}×50 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };
 });
+// v5.876：查看對手手牌 UI
+regPost('風妖精ex|奇跡棉花', (state, aIdx) => openPeekOppHandView(state, aIdx, '奇跡棉花'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // J. 簡單附能量 (1 張)
