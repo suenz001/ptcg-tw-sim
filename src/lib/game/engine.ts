@@ -8090,7 +8090,7 @@ export function computeActiveRetreatCostFor(
   const baseCost = card?.retreatCost?.length ?? 0;
   // v5.696 收斂：所有「撤退歸 0 / 免撤退」效果(道具/能量/特性zero、天空徑線、N的城堡)統一收成
   //   freeRetreat 旗標，於最後硬覆蓋——蓋過咒縛火焰/大網/重力之玉/鼓擊等 +撤退(Wilson 裁定:撤退0為最後覆蓋)。
-  //   reduce/add 分別累加，最後 cost = max(0, base - reduce) + add；freeRetreat → 0。
+  //   reduce/add 分別累加，最後 cost = max(0, base + add - reduce)(單一 floor)；freeRetreat → 0。
   let freeRetreat = false;
   let reduce = 0;
   let add = 0;
@@ -8166,8 +8166,11 @@ export function computeActiveRetreatCostFor(
   // v5.371/v5.537：「撤退所需能量全部消除」型 — 最後硬覆蓋，蓋過咒縛火焰/鼓擊/重力之玉/災禍荒野等 +撤退效果
   //   （Wilson 裁定 + 官方判例）。天空徑線(自己場上基礎寶可夢) / N的城堡(N的寶可夢) 同類，都在這裡硬歸 0。
   if (stadiumNameCR === 'N的城堡' && card?.name?.startsWith('N的')) freeRetreat = true;
-  // 合成：先 reduce(不低於0) 再 add；freeRetreat(撤退歸0) 為最後硬覆蓋。
-  let cost = Math.max(0, baseCost - reduce) + add;
+  // v5.871 修：官方規則撤退費「增減效果全部套用後，結果<0 才歸 0」＝單一 floor，
+  //   不是「先 reduce floor 再 add」。原 max(0, base-reduce)+add 在 reduce>base 時把超出的
+  //   減免浪費掉(玩家回報:九尾 retreat1 + 氣球-2 + 對手2隻咒縛火焰+2,原算 max(0,1-2)+2=2,
+  //   正解 max(0,1+2-2)=1)。freeRetreat(撤退歸0)仍為最後硬覆蓋。
+  let cost = Math.max(0, baseCost + add - reduce);
   if (freeRetreat) cost = 0;
   return cost;
 }
