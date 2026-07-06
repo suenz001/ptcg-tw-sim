@@ -98,6 +98,7 @@ export {
 import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
 // v5.293: import field-wide damage-reduce helpers for bench damage path
 import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce } from './effects/cards/v2999_g3_wave1';
+import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887 神奇糖果進化也要過瞪眼效用 gate
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 
 /**
@@ -1691,9 +1692,10 @@ reg('神奇糖果', (st, idx, pool) => {
     });
   };
   const validIids = p.hand
-    .filter(inst => { const c = pool.get(inst.cardId); return !!c && isStage2(c) && rcHasFieldBasic(c); })
+    // v5.887：對手戰鬥場有「瞪眼效用」→ 擁有特性(非火箭隊)的 Stage2 不可從手牌進化放置(神奇糖果亦然,同 EVOLVE gate)。
+    .filter(inst => { const c = pool.get(inst.cardId); return !!c && isStage2(c) && rcHasFieldBasic(c) && !isOppEvilEyeBlocking(st, idx, c, pool); })
     .map(i => i.iid);
-  if (validIids.length === 0) return addLog(st, '神奇糖果：手牌中沒有可進化的寶可夢（場上沒有對應的基礎）', idx);
+  if (validIids.length === 0) return addLog(st, '神奇糖果：手牌中沒有可進化的寶可夢（場上沒有對應的基礎，或受對手「瞪眼效用」阻擋）', idx);
   st = addLog(st, '神奇糖果：從手牌選擇要進化的 2 階寶可夢', idx);
   return withPending(st, {
     type: 'hand-choose', actorIdx: idx, sourcePlayerIdx: idx,
@@ -1761,6 +1763,10 @@ regR('rare-candy-evolve', (st, idx, picked, params, pool) => {
   }
   const stage2Name = pool.get(stage2InstPrev.cardId)?.name ?? '?';
   const baseName = pool.get(baseInstPrev.cardId)?.name ?? '?';
+  // v5.887 server guard：對手「瞪眼效用」→ 擁有特性(非火箭隊)的 Stage2 不可從手牌進化放置(神奇糖果 bypass 修正)。
+  if (isOppEvilEyeBlocking(st, idx, pool.get(stage2InstPrev.cardId), pool)) {
+    return addLog(st, `神奇糖果：${stage2Name} 因對手「瞪眼效用」效果，無法從手牌進化放置於場上（進化卡保留在手牌）`, idx);
+  }
   st = addLog(st, `神奇糖果：${baseName} 直接進化為 ${stage2Name}！`, idx);
 
   let result = updatePlayer(st, idx, p => {
