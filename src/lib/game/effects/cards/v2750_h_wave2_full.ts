@@ -2019,9 +2019,10 @@ regPre('小灰怪|躲藏', (s) => ({ state: s, damage: 0 }));
 regPost('小灰怪|躲藏', (state, aIdx, _pool) => {
   const r = flipCoinsWithLog(state, 1, '躲藏', aIdx);
   if (r.heads === 0) return r.state;
-  return updatePlayer(addLog(r.state, '躲藏：正面 → 下回合不受招式傷害（用 -999 模擬完全免疫）', aIdx), aIdx, p => ({
+  // v5.888：卡面「不會受到招式的傷害與效果的影響」→ 中央 immuneToAllAttackNextTurn(擋傷害+效果),原 999 漏效果。
+  return updatePlayer(addLog(r.state, '躲藏：正面 → 下回合不受招式的傷害與效果', aIdx), aIdx, p => ({
     ...p,
-    active: p.active ? { ...p.active, damageReduceNextHit: 999 } : null,
+    active: p.active ? { ...p.active, immuneToAllAttackNextTurn: true } : null,
   }));
 });
 

@@ -165,17 +165,18 @@ regPost('晶光花|神經毒', (state, aIdx, pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 5. 擲幣下回合自身免疫（2 張）— 用 damageReduceNextHit = 999 模擬完全免疫
+// 5. 擲幣下回合自身免疫（2 張）— 卡面「不會受到招式的傷害與效果的影響」→ 中央 immuneToAllAttackNextTurn
+//   (engine 同時擋傷害與 POST 效果)。v5.888 修:原用 damageReduceNextHit=999 只擋傷害、效果(狀態/換位等)會漏。
 // ══════════════════════════════════════════════════════════════════════════════
 function coinHeadsImmunePost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const r = flipCoinsWithLog(state, 1, label, aIdx);
     if (r.heads === 0) return addLog(r.state, `${label}：反面，無免疫`, aIdx);
     return updatePlayer(
-      addLog(r.state, `${label}：正面 → 下回合不受招式傷害（用 -999 模擬）`, aIdx),
+      addLog(r.state, `${label}：正面 → 下回合不受招式的傷害與效果`, aIdx),
       aIdx, p => ({
         ...p,
-        active: p.active ? { ...p.active, damageReduceNextHit: 999 } : null,
+        active: p.active ? { ...p.active, immuneToAllAttackNextTurn: true } : null,
       }),
     );
   };
