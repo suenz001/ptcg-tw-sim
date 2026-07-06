@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.892</span> 對戰修正：可拖曳的「對手上回合動作」小視窗中，丟棄卡片的顯示更完整。先前的去重邏輯以「卡片編號」跨整個回合比對，會誤把某些丟棄的卡藏起來——例如你這回合先從手牌附了 1 張水能量，之後又用稜鏡塔丟棄另 1 張水能量時，第二張水能量的丟棄不會顯示在小視窗中。現改為以「實體卡」精準去重（只排除「打出即自動進棄牌的同一張訓練家卡」避免重複顯示），其餘所有丟棄都會如實呈現。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.891</span> 對戰修正：使用場地卡「稜鏡塔」丟棄 2 張手牌抽 1 張卡時，現在會在對戰紀錄公開顯示丟棄的兩張卡名（先前完全沒有記錄，導致雙方都看不到對手用稜鏡塔丟了什麼——棄牌區屬於公開資訊，應顯示卡名）。抽到的卡維持私密（對手看不到）。</summary>
       </details>
       <details>

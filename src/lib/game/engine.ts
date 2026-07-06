@@ -196,24 +196,28 @@ function recordTurnAction(
   const aIdx = before.activePlayerIndex;
 
   let rec: ActionRecord | null = null;
+  // v5.892：記下「本 action 從手牌打出的那張卡的 iid」。用於 recordDiscardDiff 精準去重
+  //   （trainer 打出即自棄是同一實體卡 iid、同一 applyAction），取代原本「用 cardId 跨整個回合去重」
+  //   的舊做法——舊做法會誤抑制「本回合打過同 cardId、之後真的又棄掉另一張同 cardId 卡」的棄牌顯示。
+  let justPlayedIid: string | undefined;
 
   if (action.type === 'PLAY_TRAINER') {
     const cardId = findCardIdByIid(before, aIdx, action.iid);
-    if (cardId) rec = { type: 'play_hand', cardId };
+    if (cardId) { rec = { type: 'play_hand', cardId }; justPlayedIid = action.iid; }
   } else if (action.type === 'ATTACH_ENERGY') {
     // 只在能量是從手牌附時記錄（其他來源如「能量回收」走 resolver 不算此路徑）
     const inHand = (before.players[aIdx].hand ?? []).some(c => c.iid === action.energyIid);
     if (inHand) {
       const cardId = findCardIdByIid(before, aIdx, action.energyIid);
-      if (cardId) rec = { type: 'play_hand', cardId };
+      if (cardId) { rec = { type: 'play_hand', cardId }; justPlayedIid = action.energyIid; }
     }
   } else if (action.type === 'PLAY_BASIC') {
     const cardId = findCardIdByIid(before, aIdx, action.iid);
-    if (cardId) rec = { type: 'play_hand', cardId };
+    if (cardId) { rec = { type: 'play_hand', cardId }; justPlayedIid = action.iid; }
   } else if (action.type === 'EVOLVE') {
     // 進化卡是 toIid（手牌內進化卡）
     const cardId = findCardIdByIid(before, aIdx, action.toIid);
-    if (cardId) rec = { type: 'play_hand', cardId };
+    if (cardId) { rec = { type: 'play_hand', cardId }; justPlayedIid = action.toIid; }
   } else if (action.type === 'ATTACK') {
     const active = before.players[aIdx].active;
     if (active) {
@@ -245,8 +249,8 @@ function recordTurnAction(
   let state = rec ? pushCurrentTurnAction(after, aIdx, rec) : after;
 
   // v5.057：偵測「該 action 引起的棄牌」— 比對 before/after aIdx player 的 discard pile
-  //   排除已被主 action 記錄為 play_hand 的 cardId（避免 trainer 自己進棄牌重複顯示）
-  state = recordDiscardDiff(before, state, aIdx);
+  //   v5.892：排除「本 action 剛從手牌打出的那張卡」(同一 iid,如 trainer 打出即自棄)避免重複顯示
+  state = recordDiscardDiff(before, state, aIdx, justPlayedIid);
   return state;
 }
 
@@ -255,7 +259,7 @@ function recordTurnAction(
  * push 為 type:'discard' record。排除已在 currentTurnActions 內被 play_hand
  * 記錄過的 cardId（i.e. trainer 自己進棄牌不重複顯示）。
  */
-function recordDiscardDiff(before: GameState, after: GameState, aIdx: 0 | 1): GameState {
+function recordDiscardDiff(before: GameState, after: GameState, aIdx: 0 | 1, justPlayedIid?: string): GameState {
   const beforeDiscard = before.players[aIdx].discard ?? [];
   const afterDiscard = after.players[aIdx].discard ?? [];
   if (afterDiscard.length <= beforeDiscard.length) return after;
@@ -264,22 +268,12 @@ function recordDiscardDiff(before: GameState, after: GameState, aIdx: 0 | 1): Ga
   const newDiscards = afterDiscard.filter(c => !beforeIids.has(c.iid));
   if (newDiscards.length === 0) return after;
 
-  // 已被 play_hand 記錄的 cardId（去重避免 trainer 卡自己進棄牌重複）
-  const playedCardIds = new Map<string, number>();
-  for (const r of (after.players[aIdx].currentTurnActions ?? [])) {
-    if (r.type === 'play_hand') {
-      playedCardIds.set(r.cardId, (playedCardIds.get(r.cardId) ?? 0) + 1);
-    }
-  }
-
+  // v5.892：改用 iid 精準去重——只排除「本 action 剛從手牌打出的那張實體卡」(如 trainer 打出即自棄,
+  //   同一 iid、同一 applyAction 進棄牌)。原本「用 cardId 跨整個回合去重」會誤抑制:本回合打過某 cardId
+  //   後,之後真的又棄掉「另一張同 cardId 的卡」(例:先附了 1 張水能量,再用稜鏡塔棄另 1 張水能量)。
   const newRecords: ActionRecord[] = [];
   for (const inst of newDiscards) {
-    // 如果這 cardId 已被 play_hand 記錄過 N 次，跳過 N 次（之後仍計入 discard）
-    const remaining = playedCardIds.get(inst.cardId) ?? 0;
-    if (remaining > 0) {
-      playedCardIds.set(inst.cardId, remaining - 1);
-      continue;
-    }
+    if (justPlayedIid && inst.iid === justPlayedIid) continue;  // 同一張剛打出的卡(hand→discard)不重複記
     newRecords.push({ type: 'discard', cardId: inst.cardId });
   }
 
