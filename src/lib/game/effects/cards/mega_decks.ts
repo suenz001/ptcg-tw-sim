@@ -13,7 +13,7 @@ import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre, regPost,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
-  healResolver, recordOppKO, getAllAttachedTools,
+  healResolver, recordOppKO, getAllAttachedTools, joinCardNames,
 } from '../_shared';
 import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
@@ -404,9 +404,10 @@ regR('aoki-phase3', (st, idx, iids, _params, pool) => {
 // 稜鏡塔（Stadium）resolver — 棄 2 張手牌後抽 1 張
 // （USE_STADIUM handler 在 engine.ts 設 pending，effectKey='prism-tower-draw1'）
 // ══════════════════════════════════════════════════════════════════════════════
-regR('prism-tower-draw1', (st, idx, iids) => {
-  return updatePlayer(st, idx, p => {
-    const toDiscard = p.hand.filter(c => iids.includes(c.iid));
+regR('prism-tower-draw1', (st, idx, iids, _params, pool) => {
+  // 丟棄前先擷取被丟的 2 張手牌(供公開 log 用)
+  const toDiscard = st.players[idx].hand.filter(c => iids.includes(c.iid));
+  let s = updatePlayer(st, idx, p => {
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
     const drawn = p.deck.slice(0, 1);
     return {
@@ -416,6 +417,11 @@ regR('prism-tower-draw1', (st, idx, iids) => {
       discard: [...p.discard, ...toDiscard],
     };
   });
+  // v5.891：棄牌區屬公開資訊 → 公開 log 丟棄的手牌卡名(玩家回報看不到對手用稜鏡塔丟了什麼)。
+  //   抽到的卡本身維持私密(對手不該看到抽了什麼),故只揭示丟棄的兩張。
+  const names = joinCardNames(toDiscard, pool);
+  if (names) s = addLog(s, `稜鏡塔：${st.players[idx].name} 丟棄手牌 ${names}，並從牌庫抽 1 張卡。`, idx);
+  return s;
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

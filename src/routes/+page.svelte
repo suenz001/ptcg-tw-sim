@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.891</span> 對戰修正：使用場地卡「稜鏡塔」丟棄 2 張手牌抽 1 張卡時，現在會在對戰紀錄公開顯示丟棄的兩張卡名（先前完全沒有記錄，導致雙方都看不到對手用稜鏡塔丟了什麼——棄牌區屬於公開資訊，應顯示卡名）。抽到的卡維持私密（對手看不到）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.890</span> 介面調整：取獎賞時的選擇盤更簡化。當場上有「翻到正面並維持」的獎賞卡（如克雷色利亞｜弦月光芒），取獎時只需決定要不要拿那幾張翻正面的已知卡；至於蓋著的獎賞卡因為彼此看起來都一樣（內容未知），不再逐張列出讓你選 #1／#2／#3，改成一個「隨機取一張蓋著的」選項由系統代抽（拿到的結果與手動挑相同）。</summary>
       </details>
       <details>
