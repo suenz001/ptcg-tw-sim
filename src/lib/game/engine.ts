@@ -6012,21 +6012,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         poisonPlayer.active = null;
         players[tIdx] = poisonPlayer;
         const poisonPrizes = prizesForKO(poisonedCard!);
-        const winner = { ...players[oIdx] };
-        const take = Math.min(poisonPrizes, winner.prizes.length);
-        if (take > 0) {
-          winner.hand = [...winner.hand, ...winner.prizes.slice(0, take)];
-          winner.prizes = winner.prizes.slice(take);
-        }
-        players[oIdx] = winner;
-        const poisonState = addLog(
-          { ...state, players },
-          `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！${players[oIdx].name} 取得 ${take} 張獎賞卡。`,
-          null
-        );
-        if (winner.prizes.length === 0) {
-          return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${winner.name} 取得所有獎賞卡` };
-        }
+        // v5.889：取獎收斂到中央 addPendingPrize(與一般 KO / 冰冷之帳一致):有正面朝上獎賞開 picker、
+        //   私訊揭示取得的卡名(對手看張數)、取完所有獎賞判勝。原 direct-slice 繞過此三者。
+        let poisonState = addLog({ ...state, players }, `${poisonedCard?.name ?? '?'} 被中毒傷害擊倒！`, null);
+        poisonState = addPendingPrize(poisonState, oIdx, poisonPrizes, pool);
+        players[0] = poisonState.players[0]; players[1] = poisonState.players[1];  // 同步(避免後續 {...state,players} 用 stale players 覆蓋獎賞)
+        if (poisonState.phase === 'game-over') return poisonState;  // addPendingPrize 內部已判「取完所有獎賞獲勝」
         if (poisonPlayer.bench.length === 0) {
           return { ...poisonState, phase: 'game-over', winner: oIdx, winReason: `${poisonPlayer.name} 沒有可上場的寶可夢` };
         }
@@ -6072,18 +6063,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         burnedPlayer.active = null;
         players[tIdx] = burnedPlayer;
         const burnPrizes = prizesForKO(burnedCard!);
-        const burnWinner = { ...players[oIdx] };
-        const burnTake = Math.min(burnPrizes, burnWinner.prizes.length);
-        if (burnTake > 0) {
-          burnWinner.hand = [...burnWinner.hand, ...burnWinner.prizes.slice(0, burnTake)];
-          burnWinner.prizes = burnWinner.prizes.slice(burnTake);
-        }
-        players[oIdx] = burnWinner;
-        const burnState = addLog({ ...state, players },
-          `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！${players[oIdx].name} 取得 ${burnTake} 張獎賞卡。`, null);
-        if (burnWinner.prizes.length === 0) {
-          return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnWinner.name} 取得所有獎賞卡` };
-        }
+        // v5.889：取獎收斂到中央 addPendingPrize(同中毒/一般 KO)。
+        let burnState = addLog({ ...state, players }, `${burnedCard?.name ?? '?'} 被燒傷傷害擊倒！`, null);
+        burnState = addPendingPrize(burnState, oIdx, burnPrizes, pool);
+        players[0] = burnState.players[0]; players[1] = burnState.players[1];
+        if (burnState.phase === 'game-over') return burnState;
         if (burnedPlayer.bench.length === 0) {
           return { ...burnState, phase: 'game-over', winner: oIdx, winReason: `${burnedPlayer.name} 沒有可上場的寶可夢` };
         }
@@ -6144,6 +6128,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v5.764：checkup 全部狀態(中毒/灼傷/睡眠/麻痺,雙方)結算完畢後,若有任一方戰鬥位因 checkup
     //   致死(active=null) → 此時才統一補位(SEND_NEW_ACTIVE)。原本 poison/burn 致死當下 early-return
     //   會跳過剩餘 checkup,違反 §11(對手中毒/灼傷不結算、雙方睡眠不擲幣醒、麻痺不解除多停一回合)。
+    // v5.889：poison/burn 取獎收斂 addPendingPrize 後,若有正面朝上獎賞會開 take-prize-choose picker
+    //   (state.pendingSelection 已設,KO 方 active 亦為 null)。下面 return { ...state, endTurnContinueAfterKO }
+    //   會「一併帶著 pendingSelection」返回 → pendingSelection gate 擋住 SEND_NEW_ACTIVE 直到玩家解完取獎;
+    //   解完後 active 仍 null + endTurnContinueAfterKO 尚在 → SEND_NEW_ACTIVE 補位 → re-dispatch END_TURN
+    //   (skipCheckup) 續跑冰冷之帳/揚沙並換回合。無 faceUp 時 addPendingPrize 自動取、pendingSelection 為 null,
+    //   走原流程。故此處毋須額外 pendingSelection 分支(加了反而 return 時漏 endTurnContinueAfterKO 斷掉續跑)。
     if (state.players[aIdx].active === null || state.players[dIdx].active === null) {
       return { ...state, endTurnContinueAfterKO: aIdx };
     }

@@ -1219,7 +1219,7 @@ export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, po
   //   改開逐張 picker 讓玩家指定要取哪張（卡面用意：知道獎賞內容後可選要不要拿那張已知卡）。
   //   無 faceUp → 維持 v5.466 KO 當下自動取（front），正常對局完全不變、無線上 desync。
   //   實際取獎由 engine 的 take-prize-choose resolver 依 params.remaining 逐張結算。
-  if (takerPeek.prizes.some(c => c.faceUp)) {
+  if (takerPeek.prizes.some(c => c.faceUp) && !state.pendingSelection) {  // v5.889 已有 pending(mutual/checkup 連KO)→自動取,不開第二個 picker
     let fd = 0;
     const options = takerPeek.prizes.map(pr => pr.faceUp
       ? { id: pr.iid, text: `🔆 正面朝上：${pool.get(pr.cardId)?.name ?? '?'}` }
