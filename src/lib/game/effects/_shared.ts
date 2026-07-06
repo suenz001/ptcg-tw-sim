@@ -1220,16 +1220,21 @@ export function addPendingPrize(state: GameState, ownerIdx: 0 | 1, n: number, po
   //   無 faceUp → 維持 v5.466 KO 當下自動取（front），正常對局完全不變、無線上 desync。
   //   實際取獎由 engine 的 take-prize-choose resolver 依 params.remaining 逐張結算。
   if (takerPeek.prizes.some(c => c.faceUp) && !state.pendingSelection) {  // v5.889 已有 pending(mutual/checkup 連KO)→自動取,不開第二個 picker
-    let fd = 0;
-    const options = takerPeek.prizes.map(pr => pr.faceUp
-      ? { id: pr.iid, text: `🔆 正面朝上：${pool.get(pr.cardId)?.name ?? '?'}` }
-      : { id: pr.iid, text: `🂠 蓋著的獎賞 #${++fd}` });
+    // v5.890：蓋著的獎賞彼此對玩家無差異 → 不逐張列 #1/#2/#3,只讓玩家決定要不要取「翻正面」的那幾張,
+    //   其餘用單一「隨機取一張蓋著的」選項交給系統代抽(sentinel 與 engine take-prize-choose resolver 一致)。
+    const options: { id: string; text: string }[] = [];
+    for (const pr of takerPeek.prizes) {
+      if (pr.faceUp) options.push({ id: pr.iid, text: `🔆 正面朝上：${pool.get(pr.cardId)?.name ?? '?'}` });
+    }
+    if (takerPeek.prizes.some(pr => !pr.faceUp)) {
+      options.push({ id: '__prize_random_facedown__', text: `🂠 隨機取一張蓋著的獎賞` });
+    }
     return {
       ...state,
       pendingSelection: {
         type: 'modal-choice', actorIdx: ownerIdx, sourcePlayerIdx: ownerIdx,
         minCount: 1, maxCount: 1, effectKey: 'take-prize-choose',
-        params: { remaining: count0, titleOverride: `取獎賞：選擇要取走的 1 張（還需取 ${count0} 張，正面朝上的可指定）`, options },
+        params: { remaining: count0, titleOverride: `取獎賞：還需取 ${count0} 張。可指定翻正面的獎賞,或選「隨機取一張蓋著的」由系統代抽`, options },
       },
     };
   }

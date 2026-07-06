@@ -430,13 +430,19 @@ function takeSpecificPrizes(
 // v5.880 取獎賞逐張 picker（支援多張正面朝上獎賞、手機純文字友善）。
 //   每次讓玩家從剩餘獎賞選 1 張取走：正面朝上顯示卡名（可指定）、蓋著的顯示編號。取 1 張後若還需取
 //   且仍有正面朝上獎賞 → 再開 picker；沒有正面朝上獎賞了 → 自動取剩餘蓋著的（玩家分辨不出、無資訊差異）。
+// v5.890：蓋著的獎賞彼此對玩家無差異(全未知),故不逐張列出 #1/#2/#3 —— 只讓玩家決定
+//   「要不要取翻正面的那幾張」,其餘用單一「隨機取一張蓋著的」選項交給系統代抽。
+const PRIZE_TAKE_RANDOM_FACEDOWN = '__prize_random_facedown__';
 function buildPrizeTakeOptions(prizes: CardInstance[], pool: Map<string, Card>): { id: string; text: string }[] {
-  let fd = 0;
-  return prizes.map(pr => {
-    if (pr.faceUp) return { id: pr.iid, text: `🔆 正面朝上：${getCard(pr.cardId, pool).name}` };
-    fd += 1;
-    return { id: pr.iid, text: `🂠 蓋著的獎賞 #${fd}` };
-  });
+  const opts: { id: string; text: string }[] = [];
+  for (const pr of prizes) {
+    if (pr.faceUp) opts.push({ id: pr.iid, text: `🔆 正面朝上：${getCard(pr.cardId, pool).name}` });
+  }
+  // 有任何蓋著的獎賞 → 給一個彙總的「隨機取一張蓋著的」選項(系統代抽,不逐張列)。
+  if (prizes.some(pr => !pr.faceUp)) {
+    opts.push({ id: PRIZE_TAKE_RANDOM_FACEDOWN, text: `🂠 隨機取一張蓋著的獎賞` });
+  }
+  return opts;
 }
 function openPrizeTakePicker(state: GameState, ownerIdx: 0 | 1, remaining: number, pool: Map<string, Card>): GameState {
   return {
@@ -448,7 +454,7 @@ function openPrizeTakePicker(state: GameState, ownerIdx: 0 | 1, remaining: numbe
       effectKey: 'take-prize-choose',
       params: {
         remaining,
-        titleOverride: `取獎賞：選擇要取走的 1 張（還需取 ${remaining} 張，正面朝上的可指定）`,
+        titleOverride: `取獎賞：還需取 ${remaining} 張。可指定翻正面的獎賞,或選「隨機取一張蓋著的」由系統代抽`,
         options: buildPrizeTakeOptions(state.players[ownerIdx].prizes, pool),
       },
     },
@@ -458,8 +464,14 @@ RESOLVERS.set('take-prize-choose', (state, ownerIdx, selectedIids, params, pool)
   const pickedIid = selectedIids[0];
   const remaining = (params?.remaining as number) ?? 1;
   const taker = state.players[ownerIdx];
-  // 防呆：沒選或選到不存在 → 取第一張
-  const validIid = taker.prizes.some(c => c.iid === pickedIid) ? pickedIid : taker.prizes[0]?.iid;
+  // v5.890：選「隨機取一張蓋著的」→ 取第一張蓋著的(彼此無差異=隨機);
+  //   否則取玩家指定的那張正面獎賞。防呆:選到不存在 → 取第一張。
+  let validIid: string | undefined;
+  if (pickedIid === PRIZE_TAKE_RANDOM_FACEDOWN) {
+    validIid = taker.prizes.find(c => !c.faceUp)?.iid ?? taker.prizes[0]?.iid;
+  } else {
+    validIid = taker.prizes.some(c => c.iid === pickedIid) ? pickedIid : taker.prizes[0]?.iid;
+  }
   if (!validIid) return state;
   const s = takeSpecificPrizes(state, ownerIdx, [validIid], pool);  // 取這 1 張
   if (s.phase === 'game-over') return s;
