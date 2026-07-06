@@ -4828,6 +4828,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         defenderState.active = { ...defenderState.active, damageReduceNextHit: undefined };
       }
     }
+    // v5.886 石丸子/鐵甲蛹|變硬 —「不受 N 以下招式的傷害」:所有減傷算完後,最終傷害 ≤ N 則歸 0
+    //   (持續整個對手回合,不消耗;非 -N 減傷)。原 damageReduceNextHit=N 對 >N 傷害誤減。
+    if (!skipDefEffects && baseDamage > 0
+        && defenderState.active.blockAttackDamageIfLTEThisTurn != null
+        && baseDamage <= defenderState.active.blockAttackDamageIfLTEThisTurn) {
+      workingState = addLog(workingState,
+        `${defenderCard.name} 因變硬效果，不受「${defenderState.active.blockAttackDamageIfLTEThisTurn}」以下招式的傷害`, dIdx);
+      formula.push({ sign: '-', value: baseDamage, label: `變硬(≤${defenderState.active.blockAttackDamageIfLTEThisTurn}免傷)` });
+      baseDamage = 0;
+    }
     // v2.385 BUG FIX：移除 v2.384 加的重複「陳舊的顎之化石 -30」hook
     //   （v2.190 line 2903 早已實裝過，v2.384 audit 失誤導致重複扣傷害 60）
 
@@ -6736,6 +6746,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         n = { ...n };
         delete n.immuneToAncientAttackThisTurn;
       }
+      if (c.blockAttackDamageIfLTEThisTurn != null) {  // v5.886
+        n = { ...n };
+        delete n.blockAttackDamageIfLTEThisTurn;
+      }
       // v2.174 阿塞蘿拉的惡作劇 — 同 immune* 系列：對手（攻擊方）END_TURN 時清 ThisTurn
       if (c.immuneToExAttackThisTurn) {
         n = { ...n };
@@ -6858,6 +6872,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (c.immuneToAncientAttackNextTurn) {  // v5.885
         n = { ...n, immuneToAncientAttackThisTurn: true };
         delete n.immuneToAncientAttackNextTurn;
+      }
+      if (c.blockAttackDamageIfLTENextTurn != null) {  // v5.886
+        n = { ...n, blockAttackDamageIfLTEThisTurn: c.blockAttackDamageIfLTENextTurn };
+        delete n.blockAttackDamageIfLTENextTurn;
       }
       // v2.174 阿塞蘿拉的惡作劇 — owner END_TURN 時 promote NextTurn → ThisTurn
       if (c.immuneToExAttackNextTurn) {

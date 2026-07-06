@@ -299,6 +299,10 @@ export interface CardInstance {
   immuneToAncientAttackNextTurn?: boolean;
   /** v5.885：本回合此卡不受「古代」寶可夢(attacker tags 含'古代')招式傷害。 */
   immuneToAncientAttackThisTurn?: boolean;
+  /** v5.886：下回合此卡「不受 N 以下招式傷害」(石丸子/鐵甲蛹|變硬);promote→ThisTurn。 */
+  blockAttackDamageIfLTENextTurn?: number;
+  /** v5.886：本回合最終招式傷害 ≤ 此值則歸 0(不受N以下傷害);持續整個對手回合不消耗。 */
+  blockAttackDamageIfLTEThisTurn?: number;
   /**
    * v2.101：**本回合此卡不受【基礎】寶可夢招式傷害**（由 immuneToBasicAttackNextTurn promote）。
    * 於 engine 的 attack pipeline：若 attacker card.stage === 'Basic' 且 defender 有此旗標 →

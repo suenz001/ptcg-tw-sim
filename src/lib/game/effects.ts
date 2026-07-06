@@ -7763,6 +7763,11 @@ export function dealAttackDamageToTarget(
           st = updatePlayer(st, dIdx, p => ({ ...p, active: p.active ? { ...p.active, damageReduceNextHit: undefined } : p.active }));
         }
       }
+      // v5.886 變硬:最終傷害 ≤ N 歸 0(持續整回合,不消耗) — 鏡射引擎主路徑。
+      const _dAct886 = st.players[dIdx].active;
+      if (effDmg > 0 && _dAct886?.blockAttackDamageIfLTEThisTurn != null && effDmg <= _dAct886.blockAttackDamageIfLTEThisTurn) {
+        effDmg = 0;
+      }
     }
   }
   // v5.583：bench 受招式【傷害】→ 套防守方特性/場地減傷（捲牆/守護之鐘/齒輪塗層/凍原堡壘/

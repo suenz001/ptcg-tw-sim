@@ -605,31 +605,23 @@ regPost('桃歹郎|糬猛攻', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 17. 「下回合不受 N 以下招式」(2 張) — 簡化為下回合 -N 大量
-// 石丸子|變硬 (≤40 → damageReduceNextHit=40)
-// 鐵甲蛹|變硬 (≤60 → damageReduceNextHit=60)
-// 注意：嚴格來說「不會受到 ≤N 招式的傷害」是 if dmg≤N → 0；
-// 簡化為 -N reduction 是合理近似（實際情況差不多）
+// 17. 「下個對手回合不受 N 以下招式傷害」(2 張) — v5.886 中央 blockAttackDamageIfLTE*(最終傷害≤N→0,
+//   >N 全額;持續整個對手回合)。原 damageReduceNextHit=N 對 >N 傷害誤減(-N)是錯的近似。
+// 石丸子|變硬 (≤40) / 鐵甲蛹|變硬 (≤60)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('石丸子|變硬', (s) => ({ state: s, damage: 0 }));
 regPost('石丸子|變硬', (state, aIdx, _pool) => {
   return updatePlayer(
-    addLog(state, '變硬：自身下回合受招式 -40（≤40 不會受到傷害的近似）', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, damageReduceNextHit: 40 } : null,
-    }),
+    addLog(state, '變硬：下個對手回合不受「40」以下招式的傷害', aIdx),
+    aIdx, p => ({ ...p, active: p.active ? { ...p.active, blockAttackDamageIfLTENextTurn: 40 } : null }),
   );
 });
 
 regPre('鐵甲蛹|變硬', (s) => ({ state: s, damage: 0 }));
 regPost('鐵甲蛹|變硬', (state, aIdx, _pool) => {
   return updatePlayer(
-    addLog(state, '變硬：自身下回合受招式 -60（≤60 不會受到傷害的近似）', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, damageReduceNextHit: 60 } : null,
-    }),
+    addLog(state, '變硬：下個對手回合不受「60」以下招式的傷害', aIdx),
+    aIdx, p => ({ ...p, active: p.active ? { ...p.active, blockAttackDamageIfLTENextTurn: 60 } : null }),
   );
 });
 
