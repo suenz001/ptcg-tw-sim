@@ -1217,6 +1217,49 @@ export function hitBenchPickPost(
   });
 }
 
+// v5.901：卡面「在對手 N 隻備戰寶可夢身上放置 M 個傷害指示物」= 招式【效果】(attack-effect)，
+//   不是「受到 M 點傷害」(attack-damage)。差異：放指示物不計弱抗、化隱/對戰圓形/急凍鳥【擋】，
+//   但太晶備戰【不擋】(太晶規則只免疫傷害、不免疫指示物放置，見 canApplyEffectToTarget 內 386 註)。
+//   原棄世猴|幽靈打擊誤用 hitBenchPickPost(走 bench-hit-N = attack-damage)→太晶備戰被誤擋(玩家回報打不到)。
+//   走中央 dealAttackDamageToTarget(kind:'attack-effect')，KO/獎賞/gate 全共用。
+export function placeCountersBenchPickPost(
+  state: GameState,
+  attackerIdx: 0 | 1,
+  targetSide: 'self' | 'opp',
+  count: number,
+  counters: number,
+  attackLabel: string,
+): GameState {
+  const targetIdx = (targetSide === 'opp' ? (1 - attackerIdx) : attackerIdx) as 0 | 1;
+  const target = state.players[targetIdx];
+  if (target.bench.length === 0 || counters <= 0 || count <= 0) return state;
+  const pickCount = Math.min(count, target.bench.length);
+  const pendingType: PendingSelection['type'] = targetSide === 'opp' ? 'opp-bench-choose' : 'bench-choose';
+  const s = addLog(state, `${attackLabel}：選擇 ${pickCount} 隻${targetSide === 'opp' ? '對手' : '自己'}備戰寶可夢，各放置 ${counters} 個傷害指示物`, attackerIdx);
+  return withPending(s, {
+    type: pendingType,
+    actorIdx: attackerIdx,
+    sourcePlayerIdx: targetIdx,
+    minCount: pickCount,
+    maxCount: pickCount,
+    effectKey: 'bench-place-counters-N',
+    params: { counters, attackLabel, targetIdx },
+  });
+}
+
+// 放指示物 resolver(attack-effect)：dealAttackDamageToTarget(kind:'attack-effect')自動處理
+//   化隱/對戰圓形/急凍鳥 gate(擋)、太晶【不擋】、不計弱抗、KO+獎賞。目前僅 opp 目標(dealAttackDamageToTarget 打對手方)。
+regR('bench-place-counters-N', (st, actorIdx, selectedIids, params, pool) => {
+  const counters = Number(params?.counters ?? 0);
+  const label = String(params?.attackLabel ?? '招式');
+  if (counters <= 0 || selectedIids.length === 0) return st;
+  let s = st;
+  for (const iid of selectedIids) {
+    s = dealAttackDamageToTarget(s, actorIdx, iid, counters * 10, pool, { kind: 'attack-effect', label });
+  }
+  return s;
+});
+
 /**
  * 通用 resolver：對 selectedIids 指到的 bench 寶可夢各施加 params.amount 傷害，
  * 處理 KO + 棄牌遷移 + pendingPrizes 累計。
