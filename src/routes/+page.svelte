@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.897</span> 對戰修正：怖納噬草有兩種同名版本——一種特性是「恐慌牢籠」（進化時讓對手戰鬥寶可夢混亂），另一種是「雜草魂」（依對手已取獎賞卡每張最大HP＋50）。先前「雜草魂」的HP加成是用卡名判斷，會誤套到「恐慌牢籠」版，導致玩家用恐慌牢籠版進化時被錯誤加血。現已改為只有實際具有「雜草魂」特性的版本才加HP；恐慌牢籠版進化正常觸發對手混亂、不再被加血。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.896</span> 介面修正：對戰中「對手上回合動作」拖曳小視窗的翻頁按鈕（◀ 看更早的回合 / ▶ 看更新的回合）先前按了沒反應，因為點擊被視窗標題列的拖曳手勢攔截（指標捕獲）。現已修正，可正常翻閱前幾回合的動作記錄。</summary>
       </details>
       <details>

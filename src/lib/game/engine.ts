@@ -914,7 +914,10 @@ export function getEffectiveHP(
   }
   // 怖納噬草｜雜草魂 (SV8a Stage1 100HP) — 「這隻寶可夢的最大 HP，
   //   依對手已經獲得的獎賞卡每 1 張『+50』。」
-  if (state && card.name === '怖納噬草') {
+  // v5.897：同名怖納噬草有兩種特性(雜草魂 HP加成 vs 恐慌牢籠 進化混亂,id 14359 M2)。
+  //   原本用 card.name==='怖納噬草' 會把 HP 加成錯套到「恐慌牢籠版」→ 玩家回報進化時被加血。
+  //   改判「這張卡實際有『雜草魂』特性」才加,恐慌牢籠版不受影響。
+  if (state && (card.abilities?.some(a => a.name === '雜草魂') ?? false)) {
     // 找出對手側 → 對手獎賞已被「攻擊方」取走，記錄在 state.players[opp].prizes 上
     //   原始獎賞 6 張，prizes.length 為「剩餘張數」，已取 = 6 - prizes.length。
     //   要找「持有者」對手；判斷 inst 屬於哪一邊：
