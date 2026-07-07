@@ -12,7 +12,8 @@ let pass=0,fail=0;const T=(n,f)=>{try{f();console.log('PASS',n);pass++;}catch(e)
 const base={bothReady:true,roomStatus:'lobby',hasGameState:false,haveLocalGame:false,readyElapsedMs:0};
 T('seat0 雙就緒lobby無局→立即建',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:0}),true));
 T('seat1 grace未到→不建(等P1)',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:1,readyElapsedMs:0}),false));
-T('seat1 grace已過→fallback建',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:1,readyElapsedMs:3500}),true));
+T('seat1 grace未到(5s<6s v5.893)→不建',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:1,readyElapsedMs:5000}),false));
+T('seat1 grace已過(6.5s>6s v5.893)→fallback建',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:1,readyElapsedMs:6500}),true));
 T('已有本地局→任何seat都不建(防重洗)',()=>{assert.equal(shouldAttemptStartGame({...base,mySeat:0,haveLocalGame:true}),false);assert.equal(shouldAttemptStartGame({...base,mySeat:1,readyElapsedMs:9999,haveLocalGame:true}),false);});
 T('房間已有gameState→不建',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:0,hasGameState:true}),false));
 T('未雙就緒→不建',()=>assert.equal(shouldAttemptStartGame({...base,mySeat:0,bothReady:false}),false));

@@ -20,12 +20,12 @@ const OUT = join(ROOT, '.tmp-sync-bundle.mjs');
 const SHIM = join(ROOT, '.tmp-sync-shim.mjs');
 process.on('exit', () => { for (const p of [ENTRY, OUT, SHIM]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(SHIM, 'export const base="";export const assets="";');
-writeFileSync(ENTRY, `export { shouldSkipStalePush, resolveRoomUpdate, mergeSetupMonotonic, mergePrizeMonotonic } from './src/lib/game/sync-guards';`);
+writeFileSync(ENTRY, `export { shouldSkipStalePush, resolveRoomUpdate, mergeSetupMonotonic, mergePrizeMonotonic, shouldAttemptStartGame } from './src/lib/game/sync-guards';`);
 await build({
   entryPoints: [ENTRY], outfile: OUT, bundle: true, format: 'esm', platform: 'node', target: 'node20',
   alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': SHIM }, logLevel: 'error',
 });
-const { shouldSkipStalePush, resolveRoomUpdate, mergeSetupMonotonic, mergePrizeMonotonic } =
+const { shouldSkipStalePush, resolveRoomUpdate, mergeSetupMonotonic, mergePrizeMonotonic, shouldAttemptStartGame } =
   await import(pathToFileURL(OUT).href);
 
 // ── 最小 GameState fixture（只填 resolveRoomUpdate 讀到的欄位）──
@@ -53,6 +53,19 @@ const ctx = (o = {}) => ({ myPlayerIndex: o.me ?? 0, roomLastUndoApplyAt: o.room
 let pass = 0; const fails = [];
 const ck = (n, ok, d = '') => { ok ? pass++ : fails.push(`${n}${d ? ' — ' + d : ''}`); };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// ════ A0. 開局建局者 shouldAttemptStartGame（v5.893：P2 fallback grace 6000ms）════
+const _sasBase = { bothReady: true, roomStatus: 'lobby', hasGameState: false, haveLocalGame: false };
+ck('start: seat0(P1) 雙就緒 → 立即建局',
+   shouldAttemptStartGame({ ..._sasBase, mySeat: 0, readyElapsedMs: 0 }) === true);
+ck('start: seat1(P2) grace 未到(5s<6s) → 不建局（等 P1）',
+   shouldAttemptStartGame({ ..._sasBase, mySeat: 1, readyElapsedMs: 5000 }) === false);
+ck('start: seat1(P2) grace 剛到(6s) → 才 fallback 建局',
+   shouldAttemptStartGame({ ..._sasBase, mySeat: 1, readyElapsedMs: 6000 }) === true);
+ck('start: 已有 local game → 一律不建（防雙重建局重洗）',
+   shouldAttemptStartGame({ ..._sasBase, mySeat: 1, readyElapsedMs: 9000, haveLocalGame: true }) === false);
+ck('start: 房間已有 gameState(P1 已建並傳到) → P2 不建',
+   shouldAttemptStartGame({ ..._sasBase, mySeat: 1, readyElapsedMs: 9000, hasGameState: true }) === false);
 
 // ════ A. push 端防舊 shouldSkipStalePush ════
 ck('push: playing 較舊 log → skip',

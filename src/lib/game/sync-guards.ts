@@ -293,6 +293,6 @@ export function shouldAttemptStartGame(opts: {
   if (opts.roomStatus !== 'lobby' || opts.hasGameState) return false;
   if (!opts.bothReady) return false;
   if (opts.mySeat === 0) return true;                                  // 指定建局者:立即
-  if (opts.mySeat === 1) return opts.readyElapsedMs >= (opts.fallbackGraceMs ?? 3000); // fallback
+  if (opts.mySeat === 1) return opts.readyElapsedMs >= (opts.fallbackGraceMs ?? 6000); // fallback（v5.893：3000→6000ms 加大 grace，降低「P1 建局 push 未在時限內傳到 P2 → P2 也建局 → 開局後不久整局重洗」的競態；正常 P1 <1s 建局，P2 不會觸發；僅 P1 開局即斷線才 6s 後接手）
   return false;
 }
