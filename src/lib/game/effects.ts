@@ -7764,7 +7764,11 @@ export function dealAttackDamageToTarget(
       // damageReduceNextHit（下次被擊減傷）消耗 — 鏡射引擎 step 4（祭典樂舞首擊不消耗）
       const _dAct = st.players[dIdx].active;
       if (effDmg > 0 && _dAct?.damageReduceNextHit) {
+        const _drBefore = effDmg;
         effDmg = Math.max(0, effDmg - _dAct.damageReduceNextHit);
+        // v5.900：狙擊/延後型路徑補寫「下次被擊減傷」log(此路徑只顯示最終傷害、無公式，原本傷害少了卻無任何說明；鏡射主引擎 formula「下次被擊減傷」項)
+        const _drAmt = _drBefore - effDmg;
+        if (_drAmt > 0) st = addLog(st, `${targetCard.name}：下次被擊減傷 -${_drAmt}`, dIdx);
         if (!_isFestivalDanceFirstAttackLocal(st, actorIdx, pool)) {
           st = updatePlayer(st, dIdx, p => ({ ...p, active: p.active ? { ...p.active, damageReduceNextHit: undefined } : p.active }));
         }
@@ -7772,6 +7776,8 @@ export function dealAttackDamageToTarget(
       // v5.886 變硬:最終傷害 ≤ N 歸 0(持續整回合,不消耗) — 鏡射引擎主路徑。
       const _dAct886 = st.players[dIdx].active;
       if (effDmg > 0 && _dAct886?.blockAttackDamageIfLTEThisTurn != null && effDmg <= _dAct886.blockAttackDamageIfLTEThisTurn) {
+        // v5.900：狙擊/延後型路徑補寫「變硬」免傷 log(原本傷害歸 0 卻無任何說明；鏡射主引擎 engine.ts 4848)
+        st = addLog(st, `${targetCard.name} 因變硬效果，不受「${_dAct886.blockAttackDamageIfLTEThisTurn}」以下招式的傷害`, dIdx);
         effDmg = 0;
       }
     }
