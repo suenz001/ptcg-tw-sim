@@ -283,7 +283,7 @@
       return false;
     })();
     if (!oppHasStage2) return out;
-    for (const inst of me.hand) { if (pool.get(inst.cardId)?.name === '齒輪怪') out.add(inst.iid); }
+    for (const inst of me.hand) { const gc = pool.get(inst.cardId); if (gc?.name === '齒輪怪' && (gc.abilities?.some(a => a.name === '緊急迴轉') ?? false)) out.add(inst.iid); } // v5.898 只緊急迴轉版
     return out;
   });
 
@@ -596,6 +596,7 @@
       }
       // 機制 B: ON_HAND_ACTIVATE — 齒輪怪｜緊急迴轉
       if (c.name === '齒輪怪'
+          && (c.abilities?.some(a => a.name === '緊急迴轉') ?? false) /* v5.898 只緊急迴轉版非齒輪塗層版 */
           && !usedNames.includes('緊急迴轉')
           && me.bench.length < myBenchLimit) {
         // 對手場上有 Stage 2

@@ -2532,7 +2532,8 @@
     if (!usedNames.includes('緊急迴轉') && me.bench.length < 5 && oppHasStage2Local()) {
       for (const inst of me.hand) {
         const card = pool.get(inst.cardId);
-        if (card?.name === '齒輪怪') {
+        // v5.898：同名多特性——只有實際有「緊急迴轉」特性的齒輪怪(非齒輪塗層版)才曝露此手牌特性
+        if (card?.name === '齒輪怪' && (card.abilities?.some(a => a.name === '緊急迴轉') ?? false)) {
           out.set(inst.iid, {
             abilityName: '緊急迴轉',
             label: '⚡ 緊急迴轉 (放備戰)',

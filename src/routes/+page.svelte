@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.898</span> 對戰修正：齒輪怪有兩種同名版本——一種特性是「緊急迴轉」（可從手牌把自己放到備戰），另一種是「齒輪塗層」（進化寶可夢的被動減傷）。先前系統以卡名判斷，導致「齒輪塗層」版（進化寶可夢）也被錯誤地顯示並允許發動「緊急迴轉」（把進化寶可夢從手牌直接放到備戰、不合規則）。現已改為只有實際具有「緊急迴轉」特性的版本才能發動。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.897</span> 對戰修正：怖納噬草有兩種同名版本——一種特性是「恐慌牢籠」（進化時讓對手戰鬥寶可夢混亂），另一種是「雜草魂」（依對手已取獎賞卡每張最大HP＋50）。先前「雜草魂」的HP加成是用卡名判斷，會誤套到「恐慌牢籠」版，導致玩家用恐慌牢籠版進化時被錯誤加血。現已改為只有實際具有「雜草魂」特性的版本才加HP；恐慌牢籠版進化正常觸發對手混亂、不再被加血。</summary>
       </details>
       <details>

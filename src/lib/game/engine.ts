@@ -3883,7 +3883,11 @@ function handlePlaying(
     if (usedNames.includes(abilityName)) return state;
 
     // gate: 各卡名專屬條件
+    // v5.898：同名多特性消歧義——齒輪怪有「緊急迴轉」(SV7,放備戰)與「齒輪塗層」(Stage2 被動減傷)兩版,
+    //   ON_HAND_ACTIVATE_ABILITIES 以卡名 key→齒輪塗層版(Stage2)也被曝露緊急迴轉(把 Stage2 從手牌放備戰=非法)。
+    //   改判「這張卡實際有緊急迴轉特性」才放行。
     if (handCard.name === '齒輪怪') {
+      if (!(handCard.abilities?.some(a => a.name === '緊急迴轉') ?? false)) return state;
       if (!oppHasStage2(defender, pool)) return state;
       if (attacker.bench.length >= getBenchLimit(state, aIdx, pool)) return state;
     }
