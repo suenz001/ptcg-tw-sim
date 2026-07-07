@@ -78,3 +78,56 @@ export function buildCardIndex(cards: Card[]): Map<string, Card> {
   for (const c of cards) m.set(c.id, c);
   return m;
 }
+
+// v5.894：對戰「按牌組只載必要卡包」——避免對戰載入全部 40 個卡包(4.6MB)。
+//   card-set-map.json = { cardId: setCode }（由 build-sets-index.js 產生，只含 live 卡包）。
+let cardSetMapCache: Record<string, string> | null = null;
+let cardSetMapInflight: Promise<Record<string, string>> | null = null;
+
+export async function loadCardSetMap(
+  fetchFn: typeof fetch = fetch
+): Promise<Record<string, string>> {
+  if (cardSetMapCache) return cardSetMapCache;
+  if (cardSetMapInflight) return cardSetMapInflight;
+  cardSetMapInflight = (async () => {
+    const res = await fetchFn(`${base}/card-set-map.json?v=${VERSION}`);
+    if (!res.ok) throw new Error(`Failed to load card-set-map.json: HTTP ${res.status}`);
+    cardSetMapCache = (await res.json()) as Record<string, string>;
+    cardSetMapInflight = null;
+    return cardSetMapCache;
+  })();
+  return cardSetMapInflight;
+}
+
+/**
+ * v5.894：只載入「傳入 cardId 集合所屬的卡包」的卡（去重後 fan-out loadSet，沿用其快取）。
+ *   用於對戰：傳入雙方牌組所有 cardId → 只抓那幾個卡包，而非全部 40 包。
+ *   回傳 { cards, missingIds }：missingIds = 對照表查不到 set 的 cardId（呼叫端據此決定是否 fallback 全載）。
+ */
+/** v5.894：判斷一副牌組的所有卡（cardId）是否都已在 pool 內。
+ *   對戰按牌組載入時，用來（a）驗牌 derived 對「部分 pool」容錯（缺卡→走輕量檢查、不誤判無效）、
+ *   （b）建局前 gate（缺卡→先載入該牌組卡包）。*/
+export function deckEntriesAllInPool(
+  entries: { cardId: string }[] | null | undefined,
+  pool: Map<string, unknown>
+): boolean {
+  if (!entries || entries.length === 0) return false;
+  for (const e of entries) if (!pool.has(String(e.cardId))) return false;
+  return true;
+}
+
+export async function loadDeckSets(
+  cardIds: string[],
+  fetchFn: typeof fetch = fetch
+): Promise<{ cards: Card[]; missingIds: string[] }> {
+  const map = await loadCardSetMap(fetchFn);
+  const neededSets = new Set<string>();
+  const missingIds: string[] = [];
+  for (const id of cardIds) {
+    const code = map[String(id)];
+    if (code) neededSets.add(code);
+    else missingIds.push(String(id));
+  }
+  const batches = await Promise.all([...neededSets].map((code) => loadSet(code, fetchFn)));
+  return { cards: batches.flat(), missingIds };
+}

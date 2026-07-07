@@ -107,7 +107,7 @@ function main() {
   }
   const files = fs
     .readdirSync(CARDS_DIR)
-    .filter((f) => f.endsWith('.json') && f !== 'index.json');
+    .filter((f) => f.endsWith('.json') && f !== 'index.json' && f !== 'card-set-map.json' && !f.includes('_')); // v5.894：排除 scratch/中間檔(M5_raw/M5_jp_legacy/M5_translate 等含底線),只收 live 卡包
 
   const sets = files.map((file) => {
     const code = file.replace(/\.json$/, '');
@@ -142,6 +142,21 @@ function main() {
   const indexPath = path.join(CARDS_DIR, 'index.json');
   fs.writeFileSync(indexPath, JSON.stringify(sets, null, 2));
   console.error(`Wrote ${sets.length} sets to ${indexPath}`);
+
+  // v5.894：同時產出 cardId → setCode 對照表，供對戰時「按牌組只載必要卡包」使用
+  //   （避免對戰載入全部 40 個卡包 4.6MB；只載雙方牌組用到的卡包）。
+  //   同一 cardId 若在多個卡包出現（復刻），保留最後掃到者 — 卡定義相同、載哪包都可。
+  const cardSetMap = {};
+  for (const file of files) {
+    const code = file.replace(/\.json$/, '');
+    const cards = JSON.parse(fs.readFileSync(path.join(CARDS_DIR, file), 'utf8'));
+    for (const c of cards) {
+      if (c && c.id != null) cardSetMap[String(c.id)] = code;
+    }
+  }
+  const mapPath = path.join(REPO_ROOT, 'static', 'card-set-map.json'); // v5.894：放 static/ 根(非 cards/),避免測試 glob static/cards 時把它當卡陣列讀
+  fs.writeFileSync(mapPath, JSON.stringify(cardSetMap));
+  console.error(`Wrote ${Object.keys(cardSetMap).length} cardId→set entries to ${mapPath}`);
   for (const s of sets) {
     console.error(`  ${s.code.padEnd(7)} ${String(s.cardCount).padStart(4)}  ${s.name}`);
   }

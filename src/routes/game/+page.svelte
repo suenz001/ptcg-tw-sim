@@ -5,7 +5,7 @@
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
-  import { loadAllSets, buildCardIndex } from '$lib/cards/pool';
+  import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool } from '$lib/cards/pool';
   import { getBroadcastConfig, type BroadcastConfig } from '$lib/game/broadcast';
   import { loadDecks, saveDecks, sortDecks } from '$lib/decks/storage';
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
@@ -436,22 +436,22 @@
   //   同名 ≤4 / ≥1 基礎寶可夢）。pool 還沒 load 完時 fallback 用 60 張簡易檢查避免 UI 卡按鈕。
   const p1DeckValid = $derived.by(() => {
     if (!p1DeckId || p1DeckCount !== 60) return false;
-    if (!p1DeckObj || pool.size === 0) return p1DeckCount === 60;  // pool 還沒 load
+    if (!p1DeckObj || !deckEntriesAllInPool(p1DeckObj.entries, pool)) return p1DeckCount === 60;  // 該牌組卡包未載齊 → 走輕量檢查
     return validateDeck(p1DeckObj, pool).issues.length === 0;
   });
   const p2DeckValid = $derived.by(() => {
     if (!p2DeckId || p2DeckCount !== 60) return false;
-    if (!p2DeckObj || pool.size === 0) return p2DeckCount === 60;
+    if (!p2DeckObj || !deckEntriesAllInPool(p2DeckObj.entries, pool)) return p2DeckCount === 60;
     return validateDeck(p2DeckObj, pool).issues.length === 0;
   });
   // v5.216：deck-count-info UI 用 — 判定是否有 G 標違規（依 validateDeck issue 字串「為 X 標」匹配）
   //   含 G/F/E 等任何非 H/I/J 標卡（剔除基本能量與 reprint exception 名單後）— 全部歸類「含 G 標」訊息
   const p1DeckHasIllegalMark = $derived.by(() => {
-    if (!p1DeckObj || pool.size === 0) return false;
+    if (!p1DeckObj || !deckEntriesAllInPool(p1DeckObj.entries, pool)) return false;
     return validateDeck(p1DeckObj, pool).issues.some(s => /為 [A-Z]+ 標/.test(s));
   });
   const p2DeckHasIllegalMark = $derived.by(() => {
-    if (!p2DeckObj || pool.size === 0) return false;
+    if (!p2DeckObj || !deckEntriesAllInPool(p2DeckObj.entries, pool)) return false;
     return validateDeck(p2DeckObj, pool).issues.some(s => /為 [A-Z]+ 標/.test(s));
   });
 
@@ -3659,8 +3659,13 @@
       }
     }
 
-    const allCards = await loadAllSets();
-    pool = buildCardIndex(allCards);
+    // v5.894：不再一次全載 40 個卡包（4.6MB）。改按牌組只載雙方用到的卡包（完整性 fallback 缺卡則全載兜底）。
+    //   先把本機已存牌組（allDecks）用到的卡包載入，讓本機/AI lobby 驗牌立即可用；線上對手卡包於開局前補齊。
+    try {
+      const _localEntries: { cardId: string }[] = [];
+      for (const d of allDecks) for (const e of d.entries) _localEntries.push({ cardId: String(e.cardId) });
+      if (_localEntries.length > 0) await ensurePoolForDeckEntries([_localEntries]);
+    } catch (e) { console.error('[pool] 初始按牌組載入失敗', e); }
     poolReady = true;
 
     // 如果 host 在 poolReady 前就收到了 ready 狀態，現在補建遊戲
@@ -5067,11 +5072,13 @@
   }
 
   // ── 本機 Lobby ───────────────────────────────────────────────────────────────
-  function startLocalGame() {
+  async function startLocalGame() {
     if (!p1DeckId || !p2DeckId) return;
     const d1 = allDecks.find(d => d.id === p1DeckId);
     const d2 = allDecks.find(d => d.id === p2DeckId);
     if (!d1 || !d2) return;
+    // v5.894：建局前確保雙方牌組卡包已載入（完整性 fallback 缺卡則全載），使下方 validateDeck 與對戰用真 pool。
+    await ensurePoolForDeckEntries([d1.entries, d2.entries], true);
     // v3.38：60 張規則最終 gate（雙重保險，UI button 已 disabled）
     // v5.215：改用 validateDeck 完整驗證（60 張 / 無 G 標 / ACE SPEC ≤1 / 同名 ≤4 /
     //   ≥1 基礎寶可夢 + reprint exception 名單例外）。任一玩家有 issues 即 alert 列出。
@@ -5532,6 +5539,46 @@
     }
   }
 
+  // v5.894：對戰按牌組載入 — 只載雙方牌組用到的卡包（非全部 40 包）。完整性 fallback：對照表查無 set、
+  //   或 forceComplete 後仍缺卡 → loadAllSets 全載兜底，保證對戰永不因缺卡崩潰（最差＝現況全載）。
+  async function ensurePoolForDeckEntries(
+    entriesList: ({ cardId: string }[] | null | undefined)[],
+    forceComplete = false,
+  ): Promise<void> {
+    const ids: string[] = [];
+    for (const entries of entriesList) if (entries) for (const e of entries) ids.push(String(e.cardId));
+    if (ids.length === 0) return;
+    if (ids.every((id) => pool.has(id))) return;  // 已全部載入 → 免動作（避免重複抓取/迴圈）
+    try {
+      const { cards, missingIds } = await loadDeckSets(ids);
+      const merged = new Map(pool);
+      for (const c of cards) merged.set(c.id, c);
+      const stillMissing = forceComplete ? ids.filter((id) => !merged.has(id)) : [];
+      if (missingIds.length > 0 || stillMissing.length > 0) {
+        const all = await loadAllSets();
+        for (const c of all) merged.set(c.id, c);
+      }
+      pool = merged;
+    } catch (e) {
+      console.error('[pool] ensurePoolForDeckEntries 失敗，fallback 全載', e);
+      try { const all = await loadAllSets(); const merged = new Map(pool); for (const c of all) merged.set(c.id, c); pool = merged; } catch { /* ignore */ }
+    }
+  }
+
+  // v5.894：本機/AI lobby 選定的牌組變動 → 按需載其卡包（驗牌用真 pool；缺卡走輕量檢查不誤判）。
+  $effect(() => {
+    const es: ({ cardId: string }[] | undefined)[] = [];
+    if (p1DeckObj) es.push(p1DeckObj.entries);
+    if (p2DeckObj) es.push(p2DeckObj.entries);
+    if (es.length) ensurePoolForDeckEntries(es);
+  });
+  // v5.894：線上房間 seat 牌組 → 按需載其卡包（讓 seat 驗牌 G 標檢查用真 pool）。
+  $effect(() => {
+    if (!roomData) return;
+    const es = roomData.seats.map((s) => s.deckEntries).filter(Boolean) as { cardId: string }[][];
+    if (es.length) ensurePoolForDeckEntries(es);
+  });
+
   function checkAndStartOnlineGame() {
     if (!poolReady || !roomData) return;
     // v5.749：非「雙就緒+lobby+無 gameState」一律重置 grace 計時
@@ -5549,6 +5596,11 @@
       readyElapsedMs: Date.now() - _onlineReadyAt,
     })) return;
 
+    // v5.894：建局前確保雙方牌組卡包已載入（完整性 fallback）。缺卡→先載入再自我重呼叫本函式。
+    if (!deckEntriesAllInPool(p1.deckEntries, pool) || !deckEntriesAllInPool(p2.deckEntries, pool)) {
+      ensurePoolForDeckEntries([p1.deckEntries, p2.deckEntries], true).then(() => checkAndStartOnlineGame());
+      return;
+    }
     // v3.75：讀雙方 seat 上的先後攻偏好（贏擲幣的一方套用自己的偏好）
     const prefs: ['random'|'first'|'second'|'opponent', 'random'|'first'|'second'|'opponent'] = [
       p1.firstChoicePreference ?? 'random',
@@ -7235,7 +7287,7 @@
                 {@const myDeckCount = countDeckCards(s.deckEntries)}
                 <!-- v5.217：線上 seat 也加 G 標驗證（依現行 PTCG 規則，validateDeck 含 reprint exception） -->
                 {@const seatDeckObj = ({ id: '', name: '', entries: s.deckEntries } as Deck)}
-                {@const seatIssues = (myDeckCount === 60 && pool.size > 0) ? validateDeck(seatDeckObj, pool).issues : []}
+                {@const seatIssues = (myDeckCount === 60 && deckEntriesAllInPool(s.deckEntries, pool)) ? validateDeck(seatDeckObj, pool).issues : []}
                 {@const seatHasIllegalMark = seatIssues.some(x => /為 [A-Z]+ 標/.test(x))}
                 {@const hasValidDeck = myDeckCount === 60 && !seatHasIllegalMark}
                 <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
