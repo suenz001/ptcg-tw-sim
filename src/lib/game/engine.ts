@@ -4708,9 +4708,11 @@ function handlePlaying(
       const isEvolution2 = atkStage2 === 'Stage1' || atkStage2 === 'Stage2' || !!attackerCard.evolvesFrom;
       if (isEvolution2) {
         const red = defender.active.evolutionDamageReduceThisTurn;
+        const _b = baseDamage;
         baseDamage = Math.max(0, baseDamage - red);
         workingState = addLog(workingState,
           `${defenderCard.name} 因金屬障礙效果，受進化寶可夢招式傷害 -${red}`, dIdx);
+        if (_b > baseDamage) formula.push({ sign: '-', value: _b - baseDamage, label: '金屬障礙' }); // v5.899 補公式項
       }
     }
 
@@ -7534,7 +7536,17 @@ export function applyDefenderReductionsBlockA(
             || (defenderCardForTool?.pokemonType
                 && defense.holderTypes.includes(defenderCardForTool.pokemonType));
           if (holderOk) {
+            // v5.899：補 addLog + formula.push,揭示屬性防禦道具(渾厚鱗片/福祿果等)的減傷,
+            //   否則傷害公式漏此項 → 玩家看到「100(基礎)+30(猛攻手鐲)=80」誤以為數學錯(缺 -50)。
+            //   比照下方 TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY(神聖護符 v5.252)。
+            const _before = baseDamage;
             baseDamage = Math.max(0, baseDamage - defense.amount);
+            const _actual = _before - baseDamage;
+            if (_actual > 0) {
+              workingState = addLog(workingState,
+                `${defTool.name}：招式傷害 -${_actual}`, dIdx);
+              formula.push({ sign: '-', value: _actual, label: defTool.name });
+            }
             if (defense.discardOnTrigger) defenseReduceToolToDiscard = t;
           }
         }
