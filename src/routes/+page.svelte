@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.895</span> 介面修正：手機直式版觀戰時，現在也會像桌面版一樣在畫面下方顯示被觀戰玩家的手牌張數（以卡背呈現、內容仍保密）。先前只有桌面版看得到這排手牌卡背，手機版觀戰看不到。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.894</span> 效能優化：對戰時不再一次載入全部卡牌資料（約 4.6MB、40 個卡包），改成只載入雙方牌組實際用到的卡包，加快進入對戰的速度、也讓連線開局更快就緒（連帶再降低開局重洗機率）。並加了完整性保護：萬一某張卡未被涵蓋，會自動補載全部卡包，確保對戰絕不會因缺卡出錯。</summary>
       </details>
       <details>

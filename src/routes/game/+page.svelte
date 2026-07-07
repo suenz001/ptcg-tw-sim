@@ -7481,6 +7481,7 @@
       {isSyncing}
       {canUseStadium}
       {isSpectator}
+      {isTournSpectator}
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
