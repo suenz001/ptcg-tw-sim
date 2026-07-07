@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.902</span> 新增內容：在「內建預組」清單最上方新增 4 套戰術牌組——超級快龍ex、超級巨牙鯊ex、超級噴火龍Xex、超級沙奈朵ex（各 60 張，可直接在本機對戰或練習中選用）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.901</span> 對戰修正：棄世猴的招式「幽靈打擊」（在對手 1 隻備戰寶可夢身上放置 5 個傷害指示物）先前被錯誤地當成「造成傷害」處理，導致對手備戰的【太晶】寶可夢因「太晶在備戰位免疫招式傷害」而被擋掉、放不了指示物。但依規則，太晶只免疫「傷害」，不免疫「放置傷害指示物」這類招式效果。現已修正：幽靈打擊可正常對太晶備戰寶可夢放置 5 個傷害指示物（放指示物一樣不計算弱點・抵抗力，也仍會被化隱、對戰圓形競技場等「招式效果免疫」擋下，與規則一致）。</summary>
       </details>
       <details>

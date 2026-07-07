@@ -2119,7 +2119,142 @@ const MASTER_HISUI_DECK: Omit<Deck, 'updatedAt'> = {
   ],
 };
 
+// ── v5.902：Wilson 提供的 4 套「戰術牌組」預組(放在預組清單最上方) ──
+/** 超級快龍ex（戰術牌組）（60 張，Wilson 提供牌表） */
+const DRAGONITE_TACTIC_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_tactic_dragonite__',
+  name: '超級快龍ex（戰術牌組）',
+  createdAt: '',
+  entries: [
+    { cardId: '10496', count: 1 }, // 米立龍 [SV6 082/101]
+    { cardId: '14785', count: 3 }, // 哈克龍 [M2a 125/193]
+    { cardId: '14784', count: 4 }, // 迷你龍 [M2a 124/193]
+    { cardId: '12698', count: 1 }, // 捷拉奧拉 [SV9a 040/063]
+    { cardId: '14707', count: 3 }, // 麻麻小魚 [M2a 047/193]
+    { cardId: '14708', count: 3 }, // 麻麻鰻 [M2a 048/193]
+    { cardId: '13055', count: 1 }, // 凱路迪歐ex [SV11W 027/086]
+    { cardId: '18038', count: 1 }, // 喵喵ex [M3 061/080]
+    { cardId: '14786', count: 2 }, // 超級快龍ex [M2a 126/193]
+    { cardId: '14071', count: 1 }, // 超級袋獸ex [M1S 051/063]
+    { cardId: '18450', count: 1 }, // 電飛鼠 [M4 030/083]
+    { cardId: '9762', count: 2 }, // 好友寶芬 [SV5K 063/071]
+    { cardId: '14825', count: 2 }, // 氣球 [M2a 165/193]
+    { cardId: '18492', count: 1 }, // 特殊紅牌 [M4 072/083]
+    { cardId: '14141', count: 2 }, // 神奇糖果 [MBG 013/022]
+    { cardId: '14118', count: 4 }, // 高級球 [MBD 014/022]
+    { cardId: '9765', count: 1 }, // 極限腰帶 [SV5K 066/071]
+    { cardId: '18047', count: 4 }, // 寶可平板 [M3 070/080]
+    { cardId: '17195', count: 2 }, // 老大的指令 [MC 724/742]
+    { cardId: '14828', count: 2 }, // 艾莉絲的鬥志 [M2a 168/193]
+    { cardId: '12213', count: 1 }, // 空手道王的演練 [SVM 143/175]
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 [M1L 062/063]
+    { cardId: '18051', count: 2 }, // 琵魯 [M3 074/080]
+    { cardId: '18519', count: 5 }, // 基本【水】能量 [M-P-J 098/M-P]
+    { cardId: '18383', count: 7 }, // 基本【雷】能量 [MJ LIG]
+  ],
+};
+
+/** 超級巨牙鯊ex（戰術牌組）（60 張，Wilson 提供牌表） */
+const SHARPEDO_TACTIC_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_tactic_sharpedo__',
+  name: '超級巨牙鯊ex（戰術牌組）',
+  createdAt: '',
+  entries: [
+    { cardId: '10620', count: 1 }, // 吉雉雞ex [SV6a 038/064]
+    { cardId: '14368', count: 4 }, // 利牙魚 [M2 050/080]
+    { cardId: '14374', count: 3 }, // 毒電嬰 [M2 056/080]
+    { cardId: '10621', count: 1 }, // 桃歹郎ex [SV6a 039/064]
+    { cardId: '14369', count: 3 }, // 超級巨牙鯊ex [M2 051/080]
+    { cardId: '14370', count: 2 }, // 飯匙蛇 [M2 052/080]
+    { cardId: '10469', count: 2 }, // 願增猿 [SV6 055/101]
+    { cardId: '14375', count: 3 }, // 顫弦蠑螈 [M2 057/080]
+    { cardId: '9762', count: 4 }, // 好友寶芬 [SV5K 063/071]
+    { cardId: '10638', count: 1 }, // 夜間擔架 [SV6a 056/064]
+    { cardId: '14825', count: 2 }, // 氣球 [M2a 165/193]
+    { cardId: '18492', count: 1 }, // 特殊紅牌 [M4 072/083]
+    { cardId: '14118', count: 4 }, // 高級球 [MBD 014/022]
+    { cardId: '9903', count: 1 }, // 頂尖捕捉器 [SV5M 062/071]
+    { cardId: '14146', count: 2 }, // 龐克頭盔 [MBG 018/022]
+    { cardId: '18047', count: 4 }, // 寶可平板 [M3 070/080]
+    { cardId: '17195', count: 2 }, // 老大的指令 [MC 724/742]
+    { cardId: '14828', count: 2 }, // 艾莉絲的鬥志 [M2a 168/193]
+    { cardId: '14832', count: 2 }, // 鬥子 [M2a 172/193]
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 [M1L 062/063]
+    { cardId: '14152', count: 12 }, // 基本【惡】能量 [MBG DAR]
+  ],
+};
+
+/** 超級噴火龍Xex（戰術牌組）（60 張，Wilson 提供牌表） */
+const CHARIZARDX_TACTIC_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_tactic_charizardx__',
+  name: '超級噴火龍Xex（戰術牌組）',
+  createdAt: '',
+  entries: [
+    { cardId: '14329', count: 4 }, // 小火龍 [M2 011/080]
+    { cardId: '13879', count: 1 }, // 比克提尼 [SV11B 012/086]
+    { cardId: '14330', count: 3 }, // 火恐龍 [M2 012/080]
+    { cardId: '10620', count: 1 }, // 吉雉雞ex [SV6a 038/064]
+    { cardId: '14336', count: 2 }, // 花舞鳥ex [M2 018/080]
+    { cardId: '14335', count: 1 }, // 萊希拉姆 [M2 017/080]
+    { cardId: '14331', count: 3 }, // 超級噴火龍Xex [M2 013/080]
+    { cardId: '16591', count: 2 }, // 熔蟻獸 [MC 120/742]
+    { cardId: '10638', count: 2 }, // 夜間擔架 [SV6a 056/064]
+    { cardId: '14825', count: 2 }, // 氣球 [M2a 165/193]
+    { cardId: '18492', count: 1 }, // 特殊紅牌 [M4 072/083]
+    { cardId: '14141', count: 2 }, // 神奇糖果 [MBG 013/022]
+    { cardId: '13436', count: 2 }, // 能量回收 [SV11W 079/086]
+    { cardId: '14807', count: 1 }, // 能量回收器 [M2a 147/193]
+    { cardId: '14118', count: 2 }, // 高級球 [MBD 014/022]
+    { cardId: '17129', count: 1 }, // 貴重手推車 [MC 658/742]
+    { cardId: '18047', count: 4 }, // 寶可平板 [M3 070/080]
+    { cardId: '14143', count: 1 }, // 寶可夢交替 [MBG 015/022]
+    { cardId: '14395', count: 3 }, // 小光 [M2 077/080]
+    { cardId: '17195', count: 2 }, // 老大的指令 [MC 724/742]
+    { cardId: '14828', count: 2 }, // 艾莉絲的鬥志 [M2a 168/193]
+    { cardId: '14396', count: 2 }, // 吹火人 [M2 078/080]
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 [M1L 062/063]
+    { cardId: '13185', count: 12 }, // 基本【火】能量 [SVQL FIR]
+  ],
+};
+
+/** 超級沙奈朵ex（戰術牌組）（60 張，Wilson 提供牌表） */
+const GARDEVOIR_TACTIC_DECK: Omit<Deck, 'updatedAt'> = {
+  id: '__preset_tactic_gardevoir__',
+  name: '超級沙奈朵ex（戰術牌組）',
+  createdAt: '',
+  entries: [
+    { cardId: '10496', count: 1 }, // 米立龍 [SV6 082/101]
+    { cardId: '14061', count: 2 }, // 奇魯莉安 [M1S 041/063]
+    { cardId: '11049', count: 1 }, // 拉帝亞斯ex [SV7a 019/064]
+    { cardId: '14060', count: 4 }, // 拉魯拉絲 [M1S 040/063]
+    { cardId: '13070', count: 1 }, // 胖嘟嘟ex [SV11W 042/086]
+    { cardId: '14720', count: 1 }, // 莉莉艾的皮皮ex [M2a 060/193]
+    { cardId: '18038', count: 1 }, // 喵喵ex [M3 061/080]
+    { cardId: '14062', count: 2 }, // 超級沙奈朵ex [M1S 042/063]
+    { cardId: '14110', count: 1 }, // 超級蒂安希ex [MBD 006/022]
+    { cardId: '13398', count: 2 }, // 輕飄飄 [SV11W 041/086]
+    { cardId: '10638', count: 1 }, // 夜間擔架 [SV6a 056/064]
+    { cardId: '14121', count: 4 }, // 奇跡修正檔 [MBD 017/022]
+    { cardId: '9905', count: 1 }, // 英雄斗篷 [SV5M 064/071]
+    { cardId: '14825', count: 2 }, // 氣球 [M2a 165/193]
+    { cardId: '18492', count: 1 }, // 特殊紅牌 [M4 072/083]
+    { cardId: '14141', count: 3 }, // 神奇糖果 [MBG 013/022]
+    { cardId: '14118', count: 4 }, // 高級球 [MBD 014/022]
+    { cardId: '18047', count: 4 }, // 寶可平板 [M3 070/080]
+    { cardId: '17195', count: 2 }, // 老大的指令 [MC 724/742]
+    { cardId: '14123', count: 3 }, // 艾莉絲的鬥志 [MBD 019/022]
+    { cardId: '14832', count: 2 }, // 鬥子 [M2a 172/193]
+    { cardId: '14019', count: 4 }, // 莉莉艾的決意 [M1L 062/063]
+    { cardId: '14128', count: 9 }, // 基本【超】能量 [MBD PSY]
+    { cardId: '18056', count: 4 }, // 感應【超】能量 [M3 079/080]
+  ],
+};
+
 export const PRESET_DECKS: Deck[] = [
+  { ...DRAGONITE_TACTIC_DECK, updatedAt: '' },                    // 超級快龍ex（戰術牌組）
+  { ...SHARPEDO_TACTIC_DECK, updatedAt: '' },                    // 超級巨牙鯊ex（戰術牌組）
+  { ...CHARIZARDX_TACTIC_DECK, updatedAt: '' },                    // 超級噴火龍Xex（戰術牌組）
+  { ...GARDEVOIR_TACTIC_DECK, updatedAt: '' },                    // 超級沙奈朵ex（戰術牌組）
   { ...MASTER_KANGASKHAN_OGERPON_DECK, updatedAt: '' },  // 大師冠軍超級袋獸厄鬼椪
   { ...MASTER_HISUI_DECK, updatedAt: '' },               // 大師亞軍化隱
   { ...SENIOR_BLAZIKEN_DRAGAPULT_DECK, updatedAt: '' },  // 少年冠軍火焰雞多龍
