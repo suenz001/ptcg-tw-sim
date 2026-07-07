@@ -9571,6 +9571,7 @@
           onpointerup={onOppTurnDragEnd}>
           <span class="opp-turn-panel-title">
             <button class="opp-turn-nav-btn" disabled={_safeIdx >= _maxIdx}
+              onpointerdown={(e) => e.stopPropagation()}
               onclick={() => { oppTurnViewIndex = Math.min(_maxIdx, oppTurnViewIndex + 1); }}
               title="看更早的回合">◀</button>
             <span class="opp-turn-title-text">
@@ -9578,6 +9579,7 @@
               <span class="opp-turn-title-sub">（上 {_safeIdx + 1} 回合前）</span>
             </span>
             <button class="opp-turn-nav-btn" disabled={_safeIdx <= 0}
+              onpointerdown={(e) => e.stopPropagation()}
               onclick={() => { oppTurnViewIndex = Math.max(0, oppTurnViewIndex - 1); }}
               title="看更新的回合">▶</button>
           </span>

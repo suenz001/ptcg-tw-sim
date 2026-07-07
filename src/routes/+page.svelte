@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.896</span> 介面修正：對戰中「對手上回合動作」拖曳小視窗的翻頁按鈕（◀ 看更早的回合 / ▶ 看更新的回合）先前按了沒反應，因為點擊被視窗標題列的拖曳手勢攔截（指標捕獲）。現已修正，可正常翻閱前幾回合的動作記錄。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.895</span> 介面修正：手機直式版觀戰時，現在也會像桌面版一樣在畫面下方顯示被觀戰玩家的手牌張數（以卡背呈現、內容仍保密）。先前只有桌面版看得到這排手牌卡背，手機版觀戰看不到。</summary>
       </details>
       <details>
