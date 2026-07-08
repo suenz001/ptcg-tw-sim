@@ -8,7 +8,7 @@ echo.
 
 echo [sync] Syncing working tree to latest commit (avoid missing-file build errors)...
 cd /d E:\ptcg-tw-sim
-git archive HEAD -o "%TEMP%\ptcg_sync.tar" -- src scripts
+git archive HEAD -o "%TEMP%\ptcg_sync.tar" -- src scripts static
 if errorlevel 1 (
   echo *** git archive FAILED - confirm E:\ptcg-tw-sim is a git repo and git is on PATH ***
   pause
