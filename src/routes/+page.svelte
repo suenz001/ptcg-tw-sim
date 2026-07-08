@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.907</span> 對戰修正：拉帝歐斯的特性「潔淨支援」與勾帕路翁ex的特性「金屬之路」（選擇場上寶可夢身上任意數量能量卡改附）先前只能一次選一種數量或每次搬一張，無法自由跨屬性挑選（例如備戰有 2 火 2 超，想搬 1 火 1 超）。現已改為列出場上所有能量卡、可個別自由勾選任意組合再一次改附，與鐵斑葉ex的迅速游標等一致。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.904</span> 卡牌資料補齊：補上「初階牌組 100對戰收藏（MC）」與「特典卡 超級進化（M-P）」兩個商品先前官方漏收的 159 張卡（皆為 H／I／J 標準賽卡的另一種印刷或促銷版本，含玩家回報的兩張寶可平板 106/M-P 與 662/742）。這些是既有卡的不同印刷編號，效果與原卡相同；補上後在牌組編輯器可選用這些版本。</summary>
       </details>
       <details>

@@ -399,48 +399,35 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
   // v2.471 移除 ad-hoc abilityNamesUsedThisTurn gate（誤把 per-instance 寫成 shared）
   // 卡面：「從備戰區放置於戰鬥場時可使用 1 次」 = per-instance + per-trigger（movedToActiveThisTurn）
   // engine 已用 abilityUsedThisTurn 自動處理一回合 1 次
-  // 找場上「自己其他寶可夢」身上的鋼能量
-  const sources: string[] = [];
+  // v5.907：收斂到 active-energy-discard(scope='all-own') 個別能量 picker——選備戰任意數量【鋼】能量,
+  //   改附勾帕路翁ex(active)。共用 swiftcursor-energy-pick(targetIid=active,只從非 target 抽出→只抽備戰)。
+  //   原 heal-target + cobalion-metal-path 只搬 1 張鋼、engine 一回合限 1 次→實際只搬得到 1 張(卡面任意數量)。
+  const metalEnergyIids: string[] = [];
   for (const b of player.bench) {
-    if (b.energyAttached.some(e => energyProvidesType(b, e, 'Metal', pool))) { // v5.682 host-aware
-      sources.push(b.iid);
+    for (const e of b.energyAttached) {
+      if (energyProvidesType(b, e, 'Metal', pool)) metalEnergyIids.push(e.iid); // v5.682 host-aware
     }
   }
-  if (sources.length === 0) {
+  if (metalEnergyIids.length === 0) {
     return addLog(st, '金屬之路：備戰區沒有「鋼」能量可搬', idx);
   }
-  // v2.471 移除 abilityNamesUsedThisTurn 寫入（per-instance gate 由 engine 處理）
-  const s = addLog(st, '金屬之路：選 1 隻備戰寶可夢，把其【鋼】能量改附自身', idx);
+  const s = addLog(st, '金屬之路：選擇備戰寶可夢身上任意數量【鋼】能量，改附勾帕路翁ex（可跨來源自由選、可不選）', idx);
   return withPending(s, {
-    type: 'heal-target',
+    type: 'active-energy-discard',
     actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'cobalion-metal-path',
-    params: { validIids: sources },
+    minCount: 0, maxCount: metalEnergyIids.length,
+    effectKey: 'swiftcursor-energy-pick',
+    params: {
+      scope: 'all-own',
+      validIids: metalEnergyIids,
+      targetIid: player.active.iid,
+      label: '金屬之路',
+      titleOverride: '金屬之路：選擇【鋼】能量改附勾帕路翁ex',
+    },
   });
 });
-regR('cobalion-metal-path', (state, aIdx, iids, _params, pool) => {
-  const sourceIid = iids[0];
-  if (!sourceIid) return state;
-  const player = state.players[aIdx];
-  const src = player.bench.find(b => b.iid === sourceIid);
-  if (!src) return state;
-  // 取 1 張鋼能量（簡化：每次搬 1 張，玩家可重複用直到限額）
-  const idx = src.energyAttached.findIndex(e => energyProvidesType(src, e, 'Metal', pool)); // v5.682 host-aware
-  if (idx < 0) return state;
-  const energy = src.energyAttached[idx];
-  return updatePlayer(
-    addLog(state, '金屬之路：將 1 張【鋼】能量從備戰改附勾帕路翁ex', aIdx),
-    aIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] } : null,
-      bench: p.bench.map(b => b.iid === sourceIid ? {
-        ...b,
-        energyAttached: b.energyAttached.filter((_, i) => i !== idx),
-      } : b),
-    }),
-  );
-});
+// v5.907：cobalion-metal-path (heal-target + 每次搬 1 張鋼) 已收斂到 active-energy-discard +
+//   swiftcursor-energy-pick(見上方 ability)，移除。
 
 
 // ══════════════════════════════════════════════════════════════════════════════

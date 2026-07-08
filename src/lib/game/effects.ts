@@ -15671,8 +15671,10 @@ regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
 regR('swiftcursor-energy-pick', (st, idx, pickedIids, params, pool) => {
   const targetIid = params?.targetIid as string | undefined;
   if (!targetIid) return st;
+  // v5.907：label 通用化 → 潔淨支援/金屬之路 等「移場上能量到剛上場寶可夢」共用本 resolver。
+  const _lbl = (params?.label as string) ?? '迅速游標';
   if (pickedIids.length === 0) {
-    return addLog(st, '迅速游標：未選擇能量轉移', idx);
+    return addLog(st, `${_lbl}：未選擇能量轉移`, idx);
   }
   const pickedSet = new Set(pickedIids);
   let s = st;
@@ -15699,7 +15701,7 @@ regR('swiftcursor-energy-pick', (st, idx, pickedIids, params, pool) => {
     };
   });
   if (moved.length === 0) {
-    return addLog(s, '迅速游標：所選能量無有效轉移目標', idx);
+    return addLog(s, `${_lbl}：所選能量無有效轉移目標`, idx);
   }
   // 把抽出的能量附到 target
   s = updatePlayer(s, idx, p => {
@@ -15717,7 +15719,7 @@ regR('swiftcursor-energy-pick', (st, idx, pickedIids, params, pool) => {
     ? pool.get(s.players[idx].active!.cardId)
     : pool.get(s.players[idx].bench.find(b => b.iid === targetIid)?.cardId ?? '');
   const energyNames = moved.map(e => pool.get(e.cardId)?.name ?? '?').join('、');
-  s = addLog(s, `迅速游標：將 ${moved.length} 張能量（${energyNames}）改附於 ${targetCard?.name ?? '?'}`, idx);
+  s = addLog(s, `${_lbl}：將 ${moved.length} 張能量（${energyNames}）改附於 ${targetCard?.name ?? '?'}`, idx);
   return s;
 });
 
