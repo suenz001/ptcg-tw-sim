@@ -341,45 +341,45 @@
     "code": "M-P-H",
     "name": "M-P特典卡(H)",
     "regulationMark": "H",
-    "cardCount": 8,
+    "cardCount": 11,
     "supertypeCounts": {
-      "Pokemon": 7,
+      "Pokemon": 10,
       "Trainer": 1
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014443.png",
     "scrapedAt": "2026-04-25T00:00:00.000Z",
     "releaseDate": null,
-    "count": 8
+    "count": 11
   },
   {
     "code": "M-P-I",
     "name": "M-P特典卡(I)",
     "regulationMark": "I",
-    "cardCount": 52,
+    "cardCount": 58,
     "supertypeCounts": {
-      "Pokemon": 32,
-      "Trainer": 11,
+      "Pokemon": 35,
+      "Trainer": 14,
       "Energy": 9
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
     "scrapedAt": "2026-04-25T00:00:00.000Z",
     "releaseDate": null,
-    "count": 52
+    "count": 58
   },
   {
     "code": "M-P-J",
     "name": "M-P特典卡(J)",
     "regulationMark": "J",
-    "cardCount": 37,
+    "cardCount": 59,
     "supertypeCounts": {
-      "Pokemon": 32,
-      "Trainer": 2,
-      "Energy": 3
+      "Pokemon": 49,
+      "Trainer": 4,
+      "Energy": 6
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
     "scrapedAt": "2026-04-25T00:00:00.000Z",
     "releaseDate": null,
-    "count": 37
+    "count": 59
   },
   {
     "code": "M3",
@@ -415,16 +415,16 @@
     "code": "MC",
     "name": "超級進化初階牌組100",
     "regulationMark": "J",
-    "cardCount": 774,
+    "cardCount": 902,
     "supertypeCounts": {
-      "Pokemon": 653,
-      "Trainer": 106,
-      "Energy": 15
+      "Pokemon": 753,
+      "Trainer": 126,
+      "Energy": 23
     },
     "coverImageUrl": "covers/MC.png",
     "scrapedAt": "2026-04-16T08:29:24.027Z",
     "releaseDate": "2026-01-16",
-    "count": 774
+    "count": 902
   },
   {
     "code": "SVOD",

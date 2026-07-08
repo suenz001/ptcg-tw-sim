@@ -290,5 +290,114 @@
     ],
     "illustrator": "Mina Nakai",
     "stage": "Basic"
+  },
+  {
+    "id": "14444",
+    "name": "含羞苞",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-H",
+    "collectorNumber": "037/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014443.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14444/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "regulationMark": "H",
+    "hp": 30,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "癢癢花粉",
+        "cost": [],
+        "damage": "10",
+        "effect": "在下個對手的回合，對手無法從手牌使出物品卡。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "pokedexNumber": 406,
+    "species": "花苞寶可夢",
+    "illustrator": "Yoriyuki Ikegami",
+    "stage": "Basic"
+  },
+  {
+    "id": "19245",
+    "name": "小鋸鱷",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-H",
+    "collectorNumber": "053/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016635.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19245/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "hp": 70,
+    "pokemonType": "Water",
+    "attacks": [
+      {
+        "name": "咬緊",
+        "cost": [
+          "Water"
+        ],
+        "damage": "10",
+        "effect": "在下個對手的回合，受到這個招式的寶可夢無法撤退。"
+      }
+    ],
+    "weakness": {
+      "type": "Lightning",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 158,
+    "species": "大顎寶可夢",
+    "illustrator": "MINAMINAMI Take",
+    "regulationMark": "H",
+    "stage": "Basic"
+  },
+  {
+    "id": "19246",
+    "name": "皮卡丘",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-H",
+    "collectorNumber": "054/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016696.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19246/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "hp": 70,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "尾擊",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "10",
+        "effect": ""
+      },
+      {
+        "name": "小伏特",
+        "cost": [
+          "Lightning",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 25,
+    "species": "鼠寶可夢",
+    "illustrator": "kamonabe",
+    "regulationMark": "J",
+    "stage": "Basic"
   }
 ]

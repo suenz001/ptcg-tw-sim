@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.904</span> 卡牌資料補齊：補上「初階牌組 100對戰收藏（MC）」與「特典卡 超級進化（M-P）」兩個商品先前官方漏收的 159 張卡（皆為 H／I／J 標準賽卡的另一種印刷或促銷版本，含玩家回報的兩張寶可平板 106/M-P 與 662/742）。這些是既有卡的不同印刷編號，效果與原卡相同；補上後在牌組編輯器可選用這些版本。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.903</span> 對戰修正：哥德小童的「天眼」、火箭隊的天罩蟲的「攪亂雷達」（查看對手牌庫上方 5 張卡並以任意順序排列放回）先前無法看到、也無法排列對手的牌庫——排序視窗誤讀成攻擊方自己的牌庫。現已修正：可正常查看並排列對手牌庫頂 5 張。此類「看對手牌庫頂並重排」已收斂到單一中央流程，日後同類招式一致。</summary>
       </details>
       <details>

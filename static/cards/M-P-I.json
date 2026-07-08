@@ -1596,5 +1596,176 @@
     "regulationMark": "I",
     "rulesText": "將自己的1隻「超級進化寶可夢【ex】」的HP全部恢復。然後，將恢復的寶可夢身上附加的能量卡全部放回手牌。",
     "illustrator": "Iori Suzuki"
+  },
+  {
+    "id": "14445",
+    "name": "勝利之證",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "M-P-I",
+    "collectorNumber": "M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014447.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14445/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "regulationMark": "I",
+    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14446",
+    "name": "勝利之證",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "M-P-I",
+    "collectorNumber": "M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014447.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14446/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "regulationMark": "I",
+    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "18559",
+    "name": "謝米",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-I",
+    "collectorNumber": "102/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016510.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18559/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "精刺奇襲",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "",
+        "effect": "對手的備戰區的1隻「寶可夢【ex】・【V】」受到60點傷害。[在備戰區不計算弱點・抵抗力。]"
+      },
+      {
+        "name": "後踢",
+        "cost": [
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "50",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "pokedexNumber": 492,
+    "species": "感謝寶可夢",
+    "illustrator": "Atsushi Furusawa",
+    "regulationMark": "H",
+    "stage": "Basic"
+  },
+  {
+    "id": "18565",
+    "name": "小光",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "M-P-I",
+    "collectorNumber": "108/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014424.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18565/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "regulationMark": "I",
+    "rulesText": "從自己的牌庫選擇「【基礎】寶可夢」卡「【1階進化】寶可夢」卡「【2階進化】寶可夢」卡各一張，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "Yuu Nishida"
+  },
+  {
+    "id": "19243",
+    "name": "菊草葉",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-I",
+    "collectorNumber": "051/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016487.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19243/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "叫聲",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-20」點。"
+      },
+      {
+        "name": "種子炸彈",
+        "cost": [
+          "Grass",
+          "Grass"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 152,
+    "species": "葉子寶可夢",
+    "illustrator": "Kariya",
+    "regulationMark": "J",
+    "stage": "Basic"
+  },
+  {
+    "id": "19244",
+    "name": "暖暖豬",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-I",
+    "collectorNumber": "052/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00016579.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19244/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "hp": 70,
+    "pokemonType": "Fire",
+    "attacks": [
+      {
+        "name": "撞擊",
+        "cost": [
+          "Fire"
+        ],
+        "damage": "10",
+        "effect": ""
+      },
+      {
+        "name": "滾動",
+        "cost": [
+          "Fire",
+          "Fire"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Water",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "pokedexNumber": 498,
+    "species": "火豬寶可夢",
+    "illustrator": "Teeziro",
+    "regulationMark": "I",
+    "stage": "Basic"
   }
 ]
