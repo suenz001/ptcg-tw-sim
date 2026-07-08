@@ -1634,25 +1634,24 @@
     "collectorNumber": "102/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018559.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/18559/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
-    "hp": 70,
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "hp": 80,
     "pokemonType": "Grass",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "花之帷幔",
+        "effect": "只要這隻寶可夢在場上，自己的所有備戰寶可夢（「擁有規則的寶可夢」除外）不會受到對手的招式的傷害。"
+      }
+    ],
     "attacks": [
       {
-        "name": "精刺奇襲",
-        "cost": [
-          "Grass"
-        ],
-        "damage": "",
-        "effect": "對手的備戰區的1隻「寶可夢【ex】・【V】」受到60點傷害。[在備戰區不計算弱點・抵抗力。]"
-      },
-      {
-        "name": "後踢",
+        "name": "踢飛",
         "cost": [
           "Colorless",
           "Colorless"
         ],
-        "damage": "50",
+        "damage": "30",
         "effect": ""
       }
     ],
@@ -1660,10 +1659,13 @@
       "type": "Fire",
       "value": "×2"
     },
+    "retreatCost": [
+      "Colorless"
+    ],
     "pokedexNumber": 492,
     "species": "感謝寶可夢",
-    "illustrator": "Atsushi Furusawa",
-    "regulationMark": "H",
+    "illustrator": "tono",
+    "regulationMark": "I",
     "stage": "Basic"
   },
   {
@@ -1689,25 +1691,16 @@
     "collectorNumber": "051/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019243.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19243/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
     "hp": 70,
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "叫聲",
+        "name": "飛葉快刀",
         "cost": [
-          "Colorless"
-        ],
-        "damage": "",
-        "effect": "在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-20」點。"
-      },
-      {
-        "name": "種子炸彈",
-        "cost": [
-          "Grass",
           "Grass"
         ],
-        "damage": "30",
+        "damage": "20",
         "effect": ""
       }
     ],
@@ -1720,8 +1713,8 @@
     ],
     "pokedexNumber": 152,
     "species": "葉子寶可夢",
-    "illustrator": "Kariya",
-    "regulationMark": "J",
+    "illustrator": "kamonabe",
+    "regulationMark": "I",
     "stage": "Basic"
   },
   {

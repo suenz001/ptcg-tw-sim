@@ -365,26 +365,19 @@
     "collectorNumber": "054/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019246.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19246/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "H",
+    "stage": "Basic",
     "hp": 70,
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "尾擊",
+        "name": "電磁電光",
         "cost": [
           "Lightning"
         ],
-        "damage": "10",
-        "effect": ""
-      },
-      {
-        "name": "小伏特",
-        "cost": [
-          "Lightning",
-          "Colorless"
-        ],
-        "damage": "30",
-        "effect": ""
+        "damage": "",
+        "effect": "對手的1隻寶可夢受到10點傷害。[在備戰區不計算弱點・抵抗力。]"
       }
     ],
     "weakness": {
@@ -396,8 +389,6 @@
     ],
     "pokedexNumber": 25,
     "species": "鼠寶可夢",
-    "illustrator": "kamonabe",
-    "regulationMark": "J",
-    "stage": "Basic"
+    "illustrator": "aspara"
   }
 ]

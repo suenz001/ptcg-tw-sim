@@ -1596,18 +1596,19 @@
     "collectorNumber": "129/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019226.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19226/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
     "hp": 70,
     "pokemonType": "Grass",
     "attacks": [
       {
-        "name": "伏擊",
+        "name": "吐絲",
         "cost": [
-          "Colorless",
           "Colorless"
         ],
-        "damage": "10+",
-        "effect": "擲1次硬幣若為正面，則增加30點傷害。"
+        "damage": "10",
+        "effect": "擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。"
       }
     ],
     "weakness": {
@@ -1620,9 +1621,7 @@
     ],
     "pokedexNumber": 736,
     "species": "幼蟲寶可夢",
-    "illustrator": "Jerky",
-    "regulationMark": "H",
-    "stage": "Basic"
+    "illustrator": "Mina Nakai"
   },
   {
     "id": "19227",
@@ -1633,17 +1632,27 @@
     "collectorNumber": "130/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019227.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19227/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "J",
+    "stage": "Stage1",
     "hp": 100,
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "劈哩啪啦",
+        "name": "夾住",
+        "cost": [
+          "Lightning"
+        ],
+        "damage": "30",
+        "effect": ""
+      },
+      {
+        "name": "衝撞",
         "cost": [
           "Lightning",
           "Lightning"
         ],
-        "damage": "60",
+        "damage": "50",
         "effect": ""
       }
     ],
@@ -1658,9 +1667,7 @@
     "pokedexNumber": 737,
     "species": "蓄電池寶可夢",
     "evolvesFrom": "強顎雞母蟲",
-    "illustrator": "Misa Tsutsui",
-    "regulationMark": "H",
-    "stage": "Stage1"
+    "illustrator": "Kazuhisa Uragami"
   },
   {
     "id": "19228",
@@ -1671,28 +1678,28 @@
     "collectorNumber": "131/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019228.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19228/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "J",
+    "stage": "Stage2",
     "hp": 160,
     "pokemonType": "Lightning",
     "attacks": [
       {
-        "name": "伏特替換",
+        "name": "快速俯衝",
         "cost": [
           "Lightning"
         ],
-        "damage": "90",
-        "effect": "將這隻寶可夢與備戰區的【雷】寶可夢互換。"
+        "damage": "",
+        "effect": "對手的1隻寶可夢受到50點傷害。[在備戰區不計算弱點・抵抗力。]"
       },
       {
-        "name": "閃雷攻擊",
+        "name": "終極磁軌炮",
         "cost": [
           "Lightning",
-          "Lightning",
-          "Colorless",
-          "Colorless"
+          "Lightning"
         ],
-        "damage": "240",
-        "effect": ""
+        "damage": "260",
+        "effect": "若這隻寶可夢身上沒有附加「伏特【雷】能量」卡，則這個招式失敗。"
       }
     ],
     "weakness": {
@@ -1700,14 +1707,13 @@
       "value": "×2"
     },
     "retreatCost": [
+      "Colorless",
       "Colorless"
     ],
     "pokedexNumber": 738,
     "species": "鍬形蟲寶可夢",
     "evolvesFrom": "蟲電寶",
-    "illustrator": "Shiburingaru",
-    "regulationMark": "H",
-    "stage": "Stage2"
+    "illustrator": "KEIICHIRO ITO"
   },
   {
     "id": "19231",
@@ -1718,32 +1724,35 @@
     "collectorNumber": "134/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019231.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19231/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
     "hp": 90,
-    "pokemonType": "Fighting",
+    "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "暗影側踢",
+        "name": "影繩結",
         "cost": [
-          "Fighting",
-          "Fighting"
+          "Psychic"
         ],
-        "damage": "60",
-        "effect": "若對手的寶可夢因這個招式的傷害而【昏厥】了，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。"
+        "damage": "30×",
+        "effect": "造成對手的戰鬥寶可夢【撤退】所需的能量的數量×30點傷害。"
       }
     ],
     "weakness": {
-      "type": "Psychic",
+      "type": "Darkness",
       "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
     },
     "retreatCost": [
       "Colorless"
     ],
     "pokedexNumber": 802,
     "species": "棲影寶可夢",
-    "illustrator": "Tomomi Ozaki",
-    "regulationMark": "I",
-    "stage": "Basic"
+    "illustrator": "Nakamura Ippan"
   },
   {
     "id": "19235",
@@ -1754,26 +1763,27 @@
     "collectorNumber": "138/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019235.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19235/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
     "hp": 120,
     "pokemonType": "Lightning",
+    "abilities": [
+      {
+        "label": "特性",
+        "name": "光子纜線",
+        "effect": "這隻寶可夢在戰鬥場上受到對手的寶可夢招式的傷害而【昏厥】時，選擇最多2張這隻寶可夢身上附加的「基本【雷】能量」卡，改附於1隻備戰寶可夢身上。"
+      }
+    ],
     "attacks": [
       {
-        "name": "電氣之爪",
-        "cost": [
-          "Lightning"
-        ],
-        "damage": "30",
-        "effect": ""
-      },
-      {
-        "name": "音速伏特",
+        "name": "打雷",
         "cost": [
           "Lightning",
           "Lightning"
         ],
-        "damage": "60",
-        "effect": ""
+        "damage": "90",
+        "effect": "這隻寶可夢也受到30點傷害。"
       }
     ],
     "weakness": {
@@ -1785,9 +1795,7 @@
     ],
     "pokedexNumber": 1008,
     "species": "悖謬寶可夢",
-    "illustrator": "hncl",
-    "regulationMark": "H",
-    "stage": "Basic"
+    "illustrator": "mashu"
   },
   {
     "id": "19238",
@@ -1834,33 +1842,28 @@
     "collectorNumber": "145/M-P",
     "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019242.png",
     "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19242/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
-    "hp": 130,
-    "pokemonType": "Grass",
+    "scrapedAt": "2026-07-08T03:13:41.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
+    "hp": 140,
+    "pokemonType": "Psychic",
     "attacks": [
       {
-        "name": "迴轉攻擊",
+        "name": "悔念錨",
         "cost": [
-          "Colorless",
-          "Colorless"
+          "Psychic"
         ],
-        "damage": "30",
-        "effect": ""
-      },
-      {
-        "name": "鋼鐵船錨",
-        "cost": [
-          "Grass",
-          "Grass",
-          "Colorless"
-        ],
-        "damage": "80+",
-        "effect": "若自己的備戰區有【鋼】寶可夢，則增加80點傷害。"
+        "damage": "30+",
+        "effect": "若自己的棄牌區有4張以上擁有特性「化隱」的寶可夢卡，則增加140點傷害。"
       }
     ],
     "weakness": {
-      "type": "Fire",
+      "type": "Darkness",
       "value": "×2"
+    },
+    "resistance": {
+      "type": "Fighting",
+      "value": "-30"
     },
     "retreatCost": [
       "Colorless",
@@ -1869,9 +1872,7 @@
     ],
     "pokedexNumber": 781,
     "species": "碎藻寶可夢",
-    "illustrator": "Saya Tsuruta",
-    "regulationMark": "H",
-    "stage": "Basic"
+    "illustrator": "Oku"
   },
   {
     "id": "19229",
