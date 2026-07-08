@@ -219,20 +219,27 @@
     const ok = confirm('將清除瀏覽器快取並重新載入網頁，取得最新版本。\n\n✅ 您的牌組與帳號資料會保留\n❌ 暫存的網頁 / 程式 / 圖檔會清除\n\n確定要強制更新嗎？');
     if (!ok) return;
     hardRefreshing = true;
-    try {
-      // 1. 卸載所有 Service Workers
-      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister().catch(() => false)));
+    // v5.909：清快取包 Promise.race + 逾時保險。原本逐一 await getRegistrations()/caches.delete(),
+    //   在某些瀏覽器/PWA 狀態下這些 API 會「既不 reject 也不 resolve」永遠卡住 → 後面的 location.replace
+    //   永不執行 → 按鈕一直停在「更新中…」(玩家回報)。try/catch 只擋 error 不擋 hang。
+    //   改成：清快取最多等 2.5 秒,無論完成或卡住都強制 reload(?_v 已 bypass HTTP 快取,新版 SW 會重新預快取)。
+    const cleanup = (async () => {
+      try {
+        // 1. 卸載所有 Service Workers
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister().catch(() => false)));
+        }
+        // 2. 清空 Cache API 所有 caches
+        if (typeof window !== 'undefined' && 'caches' in window) {
+          const names = await caches.keys();
+          await Promise.all(names.map(n => caches.delete(n).catch(() => false)));
+        }
+      } catch (e) {
+        console.warn('[hardRefresh] cleanup error:', e);
       }
-      // 2. 清空 Cache API 所有 caches
-      if (typeof window !== 'undefined' && 'caches' in window) {
-        const names = await caches.keys();
-        await Promise.all(names.map(n => caches.delete(n).catch(() => false)));
-      }
-    } catch (e) {
-      console.warn('[hardRefresh] cleanup error:', e);
-    }
+    })();
+    await Promise.race([cleanup, new Promise<void>((res) => setTimeout(res, 2500))]);
     // 3. 加 timestamp query param 強制 fresh HTML (bypass browser HTTP cache)
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -318,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.909</span> 修正：首頁「強制更新版本（清快取）」按鈕有時會一直卡在「更新中…」。原因是清除快取的步驟在某些瀏覽器／PWA 狀態下會卡住不回應，導致後面的重新載入永遠不執行。現已加上逾時保險（最多等 2.5 秒），無論清快取是否完成都會強制重新載入取得最新版本。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.908</span> 對戰改善：拉帝歐斯的特性「潔淨支援」（超級拉帝亞斯ex 從備戰上場時可移能量到戰鬥寶可夢）先前需手動點特性才能發動，現改為超級拉帝亞斯ex 主動上場（撤退或換場效果）時自動詢問是否使用，與勾帕路翁ex的金屬之路、鐵斑葉ex的迅速游標一致。（被對手擊倒後補位上場則不會觸發，符合卡面「在自己的回合放置時」。）</summary>
       </details>
       <details>
