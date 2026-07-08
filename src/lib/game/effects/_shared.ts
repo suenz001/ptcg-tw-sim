@@ -1520,10 +1520,17 @@ export function reconcileMultiToolRelay(
 /** 「從備戰區放置於戰鬥場時」可發動 1 次的特性名稱 */
 export const ON_PROMOTE_TO_ACTIVE_ABILITIES = new Set([
   '振翅高飛',     // 遠古巨蜓ex — 從牌庫選最多 3 張基本【草】能量附身
-  '潔淨支援',     // 拉帝歐斯 — 場上其他寶可夢能量改附給戰鬥位（特定條件）
-  '金屬之路',     // 勾帕路翁ex — 場上【鋼】能量改附給自身
+  '金屬之路',     // 勾帕路翁ex — 場上【鋼】能量改附給自身（holder = 上場那隻）
   '超光速位元',   // 鐵武者ex — 對手 1 隻寶可夢放 2 個傷害指示物（待實作）
   '熱流反應者',   // 鐵毒蛾 — 場上【火】能量改附給自身（待實作）
+]);
+
+// v5.908：備戰持有者「當『特定寶可夢』從備戰上場時」觸發型 auto-prompt(holder 在【備戰】,非上場那隻)。
+//   拉帝歐斯｜潔淨支援：超級拉帝亞斯ex 上場時觸發,持有者拉帝歐斯留在備戰。Map: 備戰特性名 → 需上場的卡名。
+//   ⚠只在「玩家主動把備戰放上戰鬥場」(撤退/換場效果,會呼叫 tryPromptPromoteActive)時彈;KO 補場
+//   (SEND_NEW_ACTIVE)不呼叫本 helper→不觸發(卡面「在自己的回合...放置時」,KO 被動補場不算)。
+export const ON_ACTIVE_PROMOTE_BENCH_WATCHER = new Map<string, string>([
+  ['潔淨支援', '超級拉帝亞斯ex'],
 ]);
 
 /**
@@ -1618,8 +1625,9 @@ export function tryPromptPromoteActive(
   // v5.244：嚴格遵守卡面「從備戰區將這隻寶可夢放置於戰鬥場時」— 必須剛上場才觸發
   if (!actInst.movedToActiveThisTurn) return state;
   const actCard = pool.get(actInst.cardId);
-  if (!actCard?.abilities) return state;
-  for (let i = 0; i < actCard.abilities.length; i++) {
+  if (!actCard) return state;
+  // v5.908：active 無特性也要往下跑 bench-watcher(潔淨支援 holder 在備戰、上場的超級拉帝亞斯ex 本身無特性)。
+  for (let i = 0; i < (actCard.abilities?.length ?? 0); i++) {
     const ab = actCard.abilities[i];
     if (!ON_PROMOTE_TO_ACTIVE_ABILITIES.has(ab.name)) continue;
     const abilityKey = `${actCard.name}|${i}`;
@@ -1628,6 +1636,19 @@ export function tryPromptPromoteActive(
     //   上場時特性(金屬之路 等)也不可發動 — 同 v5.751 on-evolve/on-play 的 isAbilityHolderEffective gate。
     if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, actInst, actCard, pIdx, ab.name, pool)) continue;
     return askUsePromoteActiveAbility(state, pIdx, actInst, ab.name, abilityKey, actCard.name);
+  }
+  // v5.908：備戰持有者觸發型(潔淨支援：超級拉帝亞斯ex 上場時,holder 拉帝歐斯在備戰)。
+  for (const [benchAbName, requiredActive] of ON_ACTIVE_PROMOTE_BENCH_WATCHER) {
+    if (actCard.name !== requiredActive) continue;
+    for (const b of state.players[pIdx].bench) {
+      if (b.abilityUsedThisTurn) continue;
+      const bCard = pool.get(b.cardId);
+      const bi = bCard?.abilities?.findIndex(a => a.name === benchAbName) ?? -1;
+      if (!bCard || bi < 0) continue;
+      if (!hasAbilityFn(bCard.name, benchAbName, bi)) continue;
+      if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, b, bCard, pIdx, benchAbName, pool)) continue;
+      return askUsePromoteActiveAbility(state, pIdx, b, benchAbName, `${bCard.name}|${bi}`, bCard.name);
+    }
   }
   return state;
 }

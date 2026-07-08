@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.908</span> 對戰改善：拉帝歐斯的特性「潔淨支援」（超級拉帝亞斯ex 從備戰上場時可移能量到戰鬥寶可夢）先前需手動點特性才能發動，現改為超級拉帝亞斯ex 主動上場（撤退或換場效果）時自動詢問是否使用，與勾帕路翁ex的金屬之路、鐵斑葉ex的迅速游標一致。（被對手擊倒後補位上場則不會觸發，符合卡面「在自己的回合放置時」。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.907</span> 對戰修正：拉帝歐斯的特性「潔淨支援」與勾帕路翁ex的特性「金屬之路」（選擇場上寶可夢身上任意數量能量卡改附）先前只能一次選一種數量或每次搬一張，無法自由跨屬性挑選（例如備戰有 2 火 2 超，想搬 1 火 1 超）。現已改為列出場上所有能量卡、可個別自由勾選任意組合再一次改附，與鐵斑葉ex的迅速游標等一致。</summary>
       </details>
       <details>
