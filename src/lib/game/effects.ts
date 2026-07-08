@@ -4877,6 +4877,9 @@ reg('蕾荷', (st, idx, _pool) => {
 regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
   const candidateIids = (params?.candidateIids as string[] | undefined) ?? [];
   const allowDiscard = (params?.allowDiscard as boolean | undefined) ?? false;
+  // v5.903：targetIdx 支援排「對手」牌庫(天眼/攪亂雷達)；未指定=自己(推理組合等既有自己向不變)。
+  //   log viewer 仍是 aIdx(執行者=看牌庫的攻擊方),私訊順序給攻擊方看。
+  const targetIdx = ((params?.targetIdx as 0 | 1 | undefined) ?? aIdx);
   if (candidateIids.length === 0) return state;
   const candidateSet = new Set(candidateIids);
   // 過濾 selectedIids：只保留屬於候選且去重
@@ -4897,7 +4900,7 @@ regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
   // 先取得卡名（在 mutate state 前讀 deck top N 對應 cardId）
   const N = candidateIids.length;
   const topByIid = new Map<string, CardInstance>();
-  for (const c of state.players[aIdx].deck.slice(0, N)) topByIid.set(c.iid, c);
+  for (const c of state.players[targetIdx].deck.slice(0, N)) topByIid.set(c.iid, c);
   const ownerNames = finalKeep.map(id => {
     const c = topByIid.get(id);
     return c ? (pool.get(c.cardId)?.name ?? '?') : '?';
@@ -4908,7 +4911,7 @@ regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
   });
 
   // 套用：deck 頂 N 張替換成排序後的 keep；discard 加上丟棄的 inst
-  let newState = updatePlayer(state, aIdx, p => {
+  let newState = updatePlayer(state, targetIdx, p => {
     const remaining = p.deck.slice(N);
     const keepInsts = finalKeep.map(id => topByIid.get(id)).filter((x): x is CardInstance => !!x);
     const discardInsts = discardIids.map(id => topByIid.get(id)).filter((x): x is CardInstance => !!x);

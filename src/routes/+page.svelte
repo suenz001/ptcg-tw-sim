@@ -318,6 +318,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.903</span> 對戰修正：哥德小童的「天眼」、火箭隊的天罩蟲的「攪亂雷達」（查看對手牌庫上方 5 張卡並以任意順序排列放回）先前無法看到、也無法排列對手的牌庫——排序視窗誤讀成攻擊方自己的牌庫。現已修正：可正常查看並排列對手牌庫頂 5 張。此類「看對手牌庫頂並重排」已收斂到單一中央流程，日後同類招式一致。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.902</span> 新增內容：在「內建預組」清單最上方新增 4 套戰術牌組——超級快龍ex、超級巨牙鯊ex、超級噴火龍Xex、超級沙奈朵ex（各 60 張，可直接在本機對戰或練習中選用）。</summary>
       </details>
       <details>

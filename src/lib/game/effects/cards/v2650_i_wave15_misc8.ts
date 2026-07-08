@@ -98,24 +98,17 @@ function viewOppDeckTopReorderPost(n: number, label: string): AttackPostFn {
       type: 'reorder-deck-top',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: realN, maxCount: realN,
-      effectKey: 'wave15-opp-deck-reorder',
+      effectKey: 'reorder-deck-top-apply',  // v5.903：收斂到中央 resolver(支援 targetIdx)
       params: {
         candidateIids: top.map(c => c.iid),
+        allowDiscard: false,
+        targetIdx: dIdx,  // 排對手牌庫
         titleOverride: `${label}：排序對手牌庫頂 ${realN} 張`,
       },
     });
   };
 }
-regR('wave15-opp-deck-reorder', (state, actorIdx, selectedIids, _params, _pool) => {
-  // selectedIids = 玩家排好的 iid 順序（index 0 = top of deck）
-  const dIdx = (1 - actorIdx) as 0 | 1;
-  return updatePlayer(state, dIdx, p => {
-    const set = new Set(selectedIids);
-    const top = selectedIids.map(iid => p.deck.find(c => c.iid === iid)!).filter(Boolean);
-    const rest = p.deck.filter(c => !set.has(c.iid));
-    return { ...p, deck: [...top, ...rest] };
-  });
-});
+// v5.903：wave15-opp-deck-reorder 已收斂進中央 reorder-deck-top-apply(targetIdx)，移除 local 重複版。
 
 // 棄自身 N 個能量（從尾端取）
 function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {

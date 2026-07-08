@@ -8719,7 +8719,7 @@
         {#if pendingSelection.type === 'reorder-deck-top' && game}
           {@const allowDiscard = (pendingSelection.params?.allowDiscard as boolean | undefined) ?? false}
           {@const candidateIids = (pendingSelection.params?.candidateIids as string[] | undefined) ?? []}
-          {@const ownerDeck = game.players[pendingSelection.actorIdx].deck}
+          {@const ownerDeck = game.players[pendingSelection.sourcePlayerIdx].deck}  <!-- v5.903：排序對象牌庫依 sourcePlayerIdx(支援排對手牌庫:天眼/攪亂雷達) -->
           {@const candById = new Map(ownerDeck.filter(c => candidateIids.includes(c.iid)).map(c => [c.iid, c] as const))}
           <div class="reorder-deck-wrap">
             <div class="reorder-section">
