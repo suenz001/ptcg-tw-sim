@@ -1691,6 +1691,9 @@ regG('神奇糖果', (st, idx, pool) => {
   // 至少一張 Stage2 有合法 Basic 目標（Stage2→Stage1→Basic 鏈結完整，場上有該 Basic 且可進化）
   return stage2sInHand.some(hand => {
     const s2 = pool.get(hand.cardId)!;
+    // v5.911：對手「瞪眼效用」阻擋的特性 Stage2 不算「可用目標」→ 手牌只有這種時 regG=false，
+    //   神奇糖果不可打出(不被棄)；有其他非特性目標則可用(picker 已排除特性進化寶可夢)。
+    if (isOppEvilEyeBlocking(st, idx, s2, pool)) return false;
     let basicName: string | undefined;
     for (const c of pool.values()) {
       if (sameEvoName(c.name, s2.evolvesFrom) && c.supertype === 'Pokemon' && c.evolvesFrom) {
@@ -3419,7 +3422,7 @@ regR('hydai-bottom-draw4', (st, idx, iids, _params, pool) => {
   const chosen = st.players[idx].hand.filter(c => iids.includes(c.iid));
   if (chosen.length > 0) {
     const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `海岱：${names} 放到牌庫底`, idx);
+    st = addPrivateLog(st, `海岱：${names} 放到牌庫底`, `海岱：將 ${chosen.length} 張手牌放到牌庫底`, idx);
   }
   return updatePlayer(st, idx, p => {
     const picked = p.hand.filter(c => iids.includes(c.iid));

@@ -144,15 +144,17 @@ regPost('奇魯莉安|呼喚信號', (state, aIdx, _pool) => {
   });
 });
 
-regR('wave5-add-pokemon-to-hand', (state, aIdx, iids, _params, _pool) => {
+regR('wave5-add-pokemon-to-hand', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
     return updatePlayer(
-      addLog(state, '呼喚信號：未選擇；重洗牌庫', aIdx),
+      addLog(state, '搜尋加手牌：未選擇；重洗牌庫', aIdx),
       aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
     );
   }
+  // v5.911：卡面「在給對手看過後加入手牌」(呼喚信號/尋找朋友) → 公開揭示所選寶可夢卡名(Iron Rule 8)
+  const _names = state.players[aIdx].deck.filter(c => iids.includes(c.iid)).map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   return updatePlayer(
-    addLog(state, `呼喚信號：選 ${iids.length} 張寶可夢加手牌；重洗牌庫`, aIdx),
+    addLog(state, `搜尋加手牌：選 ${_names} 加入手牌（給對手看過）；重洗牌庫`, aIdx),
     aIdx, p => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));

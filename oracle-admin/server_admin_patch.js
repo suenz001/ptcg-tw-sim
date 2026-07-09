@@ -2066,6 +2066,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   mulligan「較少」方先放戰鬥場+按準備,較多方需等(engine PLACE_ACTIVE 擋 myMul>oppMul && !setupDone[opp])
         //   →較少方未準備=較少方該動(較多方在等);②雙方都 setupDone 後才進揭示確認/補抽,欠者該動。
         const sd0 = !!(gs.setupDone && gs.setupDone[0]), sd1 = !!(gs.setupDone && gs.setupDone[1]);
+        const pmd = gs.pendingMulliganDraw || [0, 0];
+        const mrc = gs.mulliganRevealConfirmed || [true, true];
+        const mpb = gs.mulliganPostBenchOpen || [false, false];
+        // v5.911：mulligan 補抽後加備戰(mpb) 是「已按過準備、擁有者必須完成」的動作,不論對手是否已 setupDone
+        //   都該由擁有者行動(與前端 setupActorSeat 一致;否則對手未準備時擁有者無準備鍵卡死)。故 mpb 最優先。
+        const p0mpb = !!mpb[0], p1mpb = !!mpb[1];
+        if (p0mpb || p1mpb) { if (p0mpb && !p1mpb) return 0; if (p1mpb && !p0mpb) return 1; return -1; }
         if (!(sd0 && sd1)) {
           const m0 = (gs.mulliganCounts && gs.mulliganCounts[0]) || 0;
           const m1 = (gs.mulliganCounts && gs.mulliganCounts[1]) || 0;
@@ -2075,10 +2082,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const moreIdx = 1 - lessIdx;
           if (!(moreIdx === 0 ? sd0 : sd1)) return moreIdx;
         }
-        const pmd = gs.pendingMulliganDraw || [0, 0];
-        const mrc = gs.mulliganRevealConfirmed || [true, true];
-        const mpb = gs.mulliganPostBenchOpen || [false, false];
-        const owes = (i) => (Number(pmd[i]) > 0) || !mrc[i] || !!mpb[i];
+        const owes = (i) => (Number(pmd[i]) > 0) || !mrc[i];
         if (owes(0) || owes(1)) {
           const b0 = owes(0), b1 = owes(1);
           if (b0 && !b1) return 0;
@@ -2869,6 +2873,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               w: p.results.filter((r) => r === 'W' || r === 'BYE').length,
               l: p.results.filter((r) => r === 'L').length,
               owp: Math.round(p.owp * 1000) / 10,
+              oowp: Math.round(p.oowp * 1000) / 10,
               mine: p.uid === id.uid,
             }));
           } catch (e) { standings = null; }

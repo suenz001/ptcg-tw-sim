@@ -1931,6 +1931,8 @@ export function createGame(
     oppAttackKOdMyHopThisTurn: [0, 0],
     oppAbilityKOdMyHopThisTurn: [0, 0],
     oppAttackKOdMeInLastOppTurn: [0, 0],
+    ancientAttackedIidsThisTurn: [[], []],
+    ancientAttackedIidsLastSelfTurn: [[], []],
     oppAbilityKOdMeInLastOppTurn: [0, 0],
     oppAttackKOdMyRocketInLastOppTurn: [0, 0],
     oppAbilityKOdMyRocketInLastOppTurn: [0, 0],
@@ -5659,6 +5661,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const newPlayers = [...newState.players] as [PlayerState, PlayerState];
         newPlayers[aIdx] = { ...newPlayers[aIdx], active: { ...curAtk, attackUsedThisTurn: attack.name } };
         newState = { ...newState, players: newPlayers };
+        // v5.911 輪番狂攻:記錄「古代」寶可夢本回合使招的 iid(遊戲層級,存活至 KO 離場後)
+        const _atkCard = pool.get(curAtk.cardId);
+        if (_atkCard?.tags?.includes('古代')) {
+          const _prevAnc = newState.ancientAttackedIidsThisTurn ?? [[], []];
+          const _arr = [...(_prevAnc[aIdx] ?? [])];
+          if (!_arr.includes(curAtk.iid)) _arr.push(curAtk.iid);
+          const _nextAnc: [string[], string[]] = [_prevAnc[0] ?? [], _prevAnc[1] ?? []];
+          _nextAnc[aIdx] = _arr;
+          newState = { ...newState, ancientAttackedIidsThisTurn: _nextAnc };
+        }
       }
     }
 
@@ -5957,6 +5969,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v2.246 KO cause tracking — snap thisTurn → InLastOppTurn 並 reset thisTurn
         // 從 oppIdx 視角：剛結束的 aIdx 回合是「上個對手回合」，KO 計數已在過程中累積到 thisTurn
         oppAttackKOdMeInLastOppTurn: state.oppAttackKOdMeThisTurn ?? [0, 0],
+        // v5.911 輪番狂攻:promote 古代使招 iid ThisTurn→LastSelfTurn(結束方 aIdx),清 ThisTurn。
+        //   保留另一方 LastSelfTurn(其上回合古代紀錄,供其下次故勒頓判定)。
+        ancientAttackedIidsLastSelfTurn: (() => {
+          const _prev = state.ancientAttackedIidsLastSelfTurn ?? [[], []];
+          const _cur = state.ancientAttackedIidsThisTurn ?? [[], []];
+          const _next: [string[], string[]] = [_prev[0] ?? [], _prev[1] ?? []];
+          _next[aIdx] = _cur[aIdx] ?? [];
+          return _next;
+        })(),
+        ancientAttackedIidsThisTurn: [[], []],
         oppAbilityKOdMeInLastOppTurn: state.oppAbilityKOdMeThisTurn ?? [0, 0],
         oppAttackKOdMyRocketInLastOppTurn: state.oppAttackKOdMyRocketThisTurn ?? [0, 0],
         oppAbilityKOdMyRocketInLastOppTurn: state.oppAbilityKOdMyRocketThisTurn ?? [0, 0],

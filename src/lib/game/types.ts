@@ -863,6 +863,10 @@ export interface GameState {
   oppAbilityKOdMyHopThisTurn?: [number, number];
   // 對手剛結束回合的 snapshot（在 END_TURN 開頭、checkup 之前 snap）
   oppAttackKOdMeInLastOppTurn?: [number, number];
+  // v5.911 輪番狂攻(故勒頓):記錄「古代」寶可夢使招的 iid(遊戲層級,存活至該寶可夢 KO 離場後),
+  //   供「在上個自己的回合,若這隻寶可夢以外的古代寶可夢使用了招式」判定(不能只掃場上,KO 會漏)。
+  ancientAttackedIidsThisTurn?: [string[], string[]];
+  ancientAttackedIidsLastSelfTurn?: [string[], string[]];
   oppAbilityKOdMeInLastOppTurn?: [number, number];
   oppAttackKOdMyRocketInLastOppTurn?: [number, number];
   oppAbilityKOdMyRocketInLastOppTurn?: [number, number];

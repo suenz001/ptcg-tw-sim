@@ -2640,6 +2640,13 @@
   //   放出場階段 mulligan 較少方先放(較多方等);雙方 setupDone 後才進揭示確認/補抽。回 0/1=該方,-1=雙方(都該動)。
   function setupActorSeat(g: any): 0 | 1 | -1 {
     const sd0 = !!g?.setupDone?.[0], sd1 = !!g?.setupDone?.[1];
+    const pmd = g?.pendingMulliganDraw ?? [0, 0];
+    const mrc = g?.mulliganRevealConfirmed ?? [true, true];
+    const mpb = g?.mulliganPostBenchOpen ?? [false, false];
+    // v5.911：mulligan 補抽後加備戰(mpb)是「已按過準備、擁有者必須完成」的動作，不論對手是否已 setupDone
+    //   都該讓擁有者行動——否則對手還沒按準備時擁有者畫面沒有「完成補抽後設置」鍵→卡死（玩家回報）。故 mpb 最優先。
+    const p0mpb = !!mpb[0], p1mpb = !!mpb[1];
+    if (p0mpb || p1mpb) { if (p0mpb && !p1mpb) return 0; if (p1mpb && !p0mpb) return 1; return -1; }
     if (!(sd0 && sd1)) {
       const m0 = g?.mulliganCounts?.[0] ?? 0, m1 = g?.mulliganCounts?.[1] ?? 0;
       if (m0 === m1) { if (!sd0 && !sd1) return -1; return (!sd0 ? 0 : 1); }
@@ -2648,10 +2655,7 @@
       const moreIdx: 0 | 1 = lessIdx === 0 ? 1 : 0;
       if (!(moreIdx === 0 ? sd0 : sd1)) return moreIdx;
     }
-    const pmd = g?.pendingMulliganDraw ?? [0, 0];
-    const mrc = g?.mulliganRevealConfirmed ?? [true, true];
-    const mpb = g?.mulliganPostBenchOpen ?? [false, false];
-    const owes = (i: number) => (Number(pmd[i]) > 0) || !mrc[i] || !!mpb[i];
+    const owes = (i: number) => (Number(pmd[i]) > 0) || !mrc[i];
     if (owes(0) || owes(1)) { const b0 = owes(0), b1 = owes(1); if (b0 && !b1) return 0; if (b1 && !b0) return 1; return -1; }
     return -1;
   }
@@ -6624,13 +6628,13 @@
         <div class="tourn-bracket">
           <div class="tourn-bracket-head">📊 瑞士制排名{#if tBracket.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if tBracket.event?.swissRounds} ｜ 第 {tBracket.event.currentRound}/{tBracket.event.swissRounds} 輪{/if}</div>
           <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
-            <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">積分</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div>
+            <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
             {#each tBracket.standings as s (s.name + '_' + s.rank)}
               <div style="text-align:center;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.rank}</div>
               <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.name}{#if s.mine} （你）{/if}</div>
               <div style="text-align:center;">{s.w}-{s.l}</div>
-              <div style="text-align:center;font-weight:600;">{s.matchPoints}</div>
               <div style="text-align:center;color:#9ab;">{s.owp}%</div>
+              <div style="text-align:center;color:#9ab;">{s.oowp}%</div>
             {/each}
           </div>
         </div>

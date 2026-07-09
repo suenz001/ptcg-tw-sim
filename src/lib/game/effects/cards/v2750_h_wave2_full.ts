@@ -1338,16 +1338,19 @@ regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
   if (!attacker) {
     return { state: addLog(state, '輪番狂攻：自方無 active（異常）', aIdx), damage: 30 };
   }
-  // iterate 場上所有非攻擊者的 instance，找「古代 + 上回合用招」
+  // v5.911：改用遊戲層級 ancientAttackedIidsLastSelfTurn(存活至古代寶可夢 KO 離場後)。
+  //   卡面「上個自己的回合,若這隻寶可夢以外的古代寶可夢使用了招式」→ 只要上個自己回合有
+  //   『別隻』古代寶可夢使過招即觸發,不論它是否還在場上(舊實作只掃場上 instance,古代被 KO 就漏)。
+  const _ancientIids = state.ancientAttackedIidsLastSelfTurn?.[aIdx] ?? [];
+  const _triggeredIid = _ancientIids.find(iid => iid !== attacker.iid);
+  // 場上仍存在的古代寶可夢(供 audit log 顯示;找不到 instance 代表已 KO 離場,仍算觸發)
   const others: CardInstance[] = [
     ...(p.active ? [p.active] : []),
     ...p.bench,
   ].filter(c => c.iid !== attacker.iid);
-  const triggered = others.find(inst => {
-    const card = pool.get(inst.cardId);
-    if (!card?.tags?.includes('古代')) return false;
-    return inst.attackUsedLastSelfTurn !== undefined;
-  });
+  const triggered = _triggeredIid
+    ? (others.find(inst => inst.iid === _triggeredIid) ?? ({ cardId: '', iid: _triggeredIid } as CardInstance))
+    : undefined;
   // v5.260：audit log — 列出場上古代寶可夢 + LastSelfTurn flag, 方便玩家 debug
   const ancients = others.filter(inst => pool.get(inst.cardId)?.tags?.includes('古代'));
   let s: GameState = state;
@@ -1362,10 +1365,12 @@ regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
     s = addLog(s, `輪番狂攻 audit: 場上其他古代寶可夢及其上回合招式: ${detail}`, aIdx);
   }
   if (triggered) {
+    // v5.911：triggered 可能是已 KO 離場的古代寶可夢(重建 stub, cardId 空)→名稱 fallback「(已離場的古代寶可夢)」
     const tCard = pool.get(triggered.cardId);
+    const _tName = tCard?.name ?? '(已離場的古代寶可夢)';
     return {
       state: addLog(s,
-        `輪番狂攻：上個自己的回合「${tCard?.name ?? '?'}」（古代）使用了「${triggered.attackUsedLastSelfTurn}」 → 30 + 150 = 180`,
+        `輪番狂攻：上個自己的回合「${_tName}」（古代）使用了招式 → 30 + 150 = 180`,
         aIdx),
       damage: 180,
     };
