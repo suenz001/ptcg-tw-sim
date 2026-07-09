@@ -8,6 +8,21 @@ echo.
 
 echo [sync] Syncing working tree to latest commit (avoid missing-file build errors)...
 cd /d E:\ptcg-tw-sim
+echo [pull] Fetching latest cards + code from GitHub (origin/main)...
+if exist ".git\index.lock" del /f /q ".git\index.lock" >nul 2>&1
+git fetch origin
+if errorlevel 1 (
+  echo *** git fetch FAILED - check network / git on PATH ***
+  pause
+  exit /b 1
+)
+git reset --hard origin/main
+if errorlevel 1 (
+  echo *** git reset --hard FAILED - close any open git tool ^(VS Code/GitHub Desktop/SourceTree^) and retry ***
+  pause
+  exit /b 1
+)
+echo     synced working tree to origin/main.
 git archive HEAD -o "%TEMP%\ptcg_sync.tar" -- src scripts static
 if errorlevel 1 (
   echo *** git archive FAILED - confirm E:\ptcg-tw-sim is a git repo and git is on PATH ***
