@@ -4364,8 +4364,10 @@
   function startTournamentPoll() {
     if (tPollTimer) clearInterval(tPollTimer);
     const gen = ++tPollGen;
+    let _gpTick = 0;  // v0.68 降載:對戰中大廳聊天改每 5 輪(~6s)刷新,非每 1.2s
     tPollTimer = setInterval(async () => {
       try {
+        _gpTick++;
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
@@ -4376,7 +4378,7 @@
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
         tNow = Date.now() + tClockOffset;
-        tChatLoad(); // v5.577 對戰中持續更新大廳聊天(浮動對話用)
+        if (_gpTick % 5 === 0) tChatLoad(); // v5.577/v0.68 對戰中大廳聊天每 5 輪(~6s)更新(降載)
       } catch { /* 忽略單次輪詢失敗 */ }
     }, 1200);
   }
