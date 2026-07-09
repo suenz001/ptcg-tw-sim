@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.68 (錦標賽降載+社群:①/state 端點加 client 版本比對(v=cv)——相符只回精簡 unchanged(免序列化/傳輸整個 gameState),先以 projection 排除 gameState 取輕量 doc 比版本,不同才第二次查完整盤面→對戰中每 1.2s×N 人輪詢大降 CPU/頻寬/mongo傳輸;②/spectate/state 同加版本比對(相符免深拷貝蓋手牌);③對戰中大廳聊天輪詢由每 1.2s 改每 ~6s(前端);④聊天室放寬:賽事期間只要已登入即可留言(不限報名者,未報名仍顯示暱稱);⑤社群賽避讓官方賽事的禁辦期由開賽前 2h 縮為 1h) + v0.67 (錦標賽：修 setup 階段閒置判負漏洞——閒置判負原要求「雙方都已進場」才判,但 setup 時若一方已進場鋪好場在線等待、另一方掛著卻還沒按「進入對戰」,該掛著方逃過 3 分鐘閒置判負、只受 8 分鐘未進場保護→在線方空等且輪到自己時反被判(丞龍 vs 承瀚 實例)。修:setup 階段只要「該動作方」逾時未動作且【對手已進場】即判該方敗(currentActorSeat 於 setup 一律回未完成 setup 那方,故被判者必為掛著方);對局中維持雙方都進場才判) + v0.66 (錦標賽：大廳聊天室懶載入——/chat 改成 since=0/初始回「最新」一頁(原回最舊80則要多輪才追到最新、費流量又慢)；新增 ?before=ts 上滑載更舊 + hasMore 旗標；前端預設只載最新一頁，滑到頂才續載舊訊息，省流量+載入快) + v0.65 (錦標賽：admin 編輯賽事設定新增「賽制」選項——可在開賽前(draft/registration)把單敗淘汰⇄瑞士制互改+設瑞士輪數/TopCut;已開賽則 disabled 且後端 gate 回 409(賽程已依賽制產生)。/event/update 接收 format/swissRounds/topCut) + v0.64 (錦標賽：/event/status 端點加防護——已開賽/已結束(checkin/bracket_ready/running/finished)的賽事禁止退回 draft/registration[會讓排程器因 registrationCloseAt 已過而重新產生賽程、刪掉進行中對戰並從第1輪重排,毀掉比賽];回 409 提示改用強制結束後重建。Wilson 手滑在進行中賽事按「開放報名」觸發) + v0.63 (錦標賽：勝負公告統一用「獲勝」取代「(自動)晉級」——因有瑞士制(無晉級/淘汰概念),投降/未進場/閒置/時限/管理員裁定的公告把「自動晉級」「勝出並自動晉級」改為「獲勝」,避免玩家誤會;瑞士制分支本就用獲勝) + v0.62 (錦標賽：setup『誰該動作』判定改成與實際 engine gating 一致——放出場階段依 PTCG 規則 mulligan 較少方先放+按準備(較多方需等),雙方都 setupDone 後才進揭示確認/補抽;修正 v0.60 用 mulligan 旗標判序錯誤,並讓前端 isMyTurn/提示共用同邏輯→提示與敗場判定一致) + v0.61 (錦標賽名人堂可看當初賽程：/champions 補回傳 eventId；新增公開 GET /api/tournament/champion-bracket?eventId= 從歸檔 TARCHIVE 取該賽事每輪 matches+勝負(winner 由 winnerUid 對 p1/p2uid 導出)，供前端名人堂點選後翻頁顯示) + v0.60 (錦標賽：修 setup 階段「等對方補抽」倒數到時誤判雙敗——閒置判負用的 currentActorSeat 在 setup 只看 setupDone，雙方都 false 就回 -1 雙敗，完全忽略 mulligan 子階段；實況是只有一方欠補抽/確認揭示、對手只是在等，卻被一起判雙敗。修：setup 先判 mulligan 待辦(pendingMulliganDraw/mulliganRevealConfirmed/mulliganPostBenchOpen)，只有欠 mulligan 的一方算「該動作」→ 單判該方敗、等待方獲勝；mulligan 都完成才退回看 setupDone) + v0.59 (錦標賽名人堂可從歸檔還原：新增 /admin/champions/restore-from-archive[從 TARCHIVE 重建 TCHAMPS,只補缺漏不覆蓋既有,救回被誤刪的冠軍];歸檔 recordTournamentArchive 補存 communityEvent 旗標供還原;admin.html 名人堂管理加「♻️從歸檔還原」鈕) + v0.58 (錦標賽：定期清掃「已結束賽事底下、沒打完(非done)的對戰」殘留——賽事 finished 後不清 TMATCH，致這種 pending 對戰累積、被監控誤算成「等開打」死資料(排程器本就以 listOpenEvents 排除 finished，故這些殘留零功能影響、不會幽靈開打)；scheduler 每~5分刪除 finished 賽事的非done對戰，一次涵蓋正常完賽/force-finish/取消所有結束路徑+自動清掉歷史殘留) + v0.57 (錦標賽：大廳聊天效能——①為 tournamentChat 建 {room,ts} 索引,讓 /chat 的 ts>since+sort 走索引範圍掃描,不再每次全表掃+記憶體排序[訊息越多越慢→高流量輪詢拖慢];②scheduler 每~5 分鐘定期修剪大廳聊天,只保留最近 800 則,避免 collection 無限長大) + v0.56 (錦標賽：修『打到一半被判未進場』——進場標記 entered 原是 read-modify-write 整包寫回,兩人同時進場時後者用讀到的舊值覆蓋掉前者的旗標→某方進場記錄遺失→未進場 tick 誤判已開打的對局[實例 Eg vs Gali]。修(A根因)進場端改原子 positional $set 只更新自己座位+建 match 時初始化 entered:[false,false];修(B保險)未進場判負前若房間 gameState 已 playing/game-over[雙方都完成 setup 確實到場]即不判未進場) + v0.55 (錦標賽：社群賽發起公告措辭微調[「就自動開賽（人越多越熱鬧）」→「就能開賽」] + 新增 /api/tournament/cancel-proposal[發起者本人，報名階段且報名人數未達門檻時可手動取消社群賽；原子搶占 status=registration→finished 防與 scheduler 開賽競態；不收 30 分冷卻、釋放全站 1 場名額] + /event 每場補 isProposer 旗標供前端顯示取消鈕) + v0.54 (錦標賽：社群賽發起公告文字修正——募集窗口會跑滿,期間都可報名,時間到達門檻才開賽[非一達標即開],避免『集滿即開賽』誤導) + v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.69 (錦標賽降載續:/event(大廳最重端點,原每呼叫8~12次mongo含N+1)共用重查詢加 3s TTL 快取+per-user改批次查詢;/bracket 的 standings 重算(O(n²)OWP/OOWP)加 3s TTL 快取(per event,含20上限淘汰)——輪次交替 ~50 人同時回大廳打 /bracket 不再各自重算,只算一次;currentRound/status 變即失效;per-user mine 回應時再貼) + v0.68 (錦標賽降載+社群:①/state 端點加 client 版本比對(v=cv)——相符只回精簡 unchanged(免序列化/傳輸整個 gameState),先以 projection 排除 gameState 取輕量 doc 比版本,不同才第二次查完整盤面→對戰中每 1.2s×N 人輪詢大降 CPU/頻寬/mongo傳輸;②/spectate/state 同加版本比對(相符免深拷貝蓋手牌);③對戰中大廳聊天輪詢由每 1.2s 改每 ~6s(前端);④聊天室放寬:賽事期間只要已登入即可留言(不限報名者,未報名仍顯示暱稱);⑤社群賽避讓官方賽事的禁辦期由開賽前 2h 縮為 1h) + v0.67 (錦標賽：修 setup 階段閒置判負漏洞——閒置判負原要求「雙方都已進場」才判,但 setup 時若一方已進場鋪好場在線等待、另一方掛著卻還沒按「進入對戰」,該掛著方逃過 3 分鐘閒置判負、只受 8 分鐘未進場保護→在線方空等且輪到自己時反被判(丞龍 vs 承瀚 實例)。修:setup 階段只要「該動作方」逾時未動作且【對手已進場】即判該方敗(currentActorSeat 於 setup 一律回未完成 setup 那方,故被判者必為掛著方);對局中維持雙方都進場才判) + v0.66 (錦標賽：大廳聊天室懶載入——/chat 改成 since=0/初始回「最新」一頁(原回最舊80則要多輪才追到最新、費流量又慢)；新增 ?before=ts 上滑載更舊 + hasMore 旗標；前端預設只載最新一頁，滑到頂才續載舊訊息，省流量+載入快) + v0.65 (錦標賽：admin 編輯賽事設定新增「賽制」選項——可在開賽前(draft/registration)把單敗淘汰⇄瑞士制互改+設瑞士輪數/TopCut;已開賽則 disabled 且後端 gate 回 409(賽程已依賽制產生)。/event/update 接收 format/swissRounds/topCut) + v0.64 (錦標賽：/event/status 端點加防護——已開賽/已結束(checkin/bracket_ready/running/finished)的賽事禁止退回 draft/registration[會讓排程器因 registrationCloseAt 已過而重新產生賽程、刪掉進行中對戰並從第1輪重排,毀掉比賽];回 409 提示改用強制結束後重建。Wilson 手滑在進行中賽事按「開放報名」觸發) + v0.63 (錦標賽：勝負公告統一用「獲勝」取代「(自動)晉級」——因有瑞士制(無晉級/淘汰概念),投降/未進場/閒置/時限/管理員裁定的公告把「自動晉級」「勝出並自動晉級」改為「獲勝」,避免玩家誤會;瑞士制分支本就用獲勝) + v0.62 (錦標賽：setup『誰該動作』判定改成與實際 engine gating 一致——放出場階段依 PTCG 規則 mulligan 較少方先放+按準備(較多方需等),雙方都 setupDone 後才進揭示確認/補抽;修正 v0.60 用 mulligan 旗標判序錯誤,並讓前端 isMyTurn/提示共用同邏輯→提示與敗場判定一致) + v0.61 (錦標賽名人堂可看當初賽程：/champions 補回傳 eventId；新增公開 GET /api/tournament/champion-bracket?eventId= 從歸檔 TARCHIVE 取該賽事每輪 matches+勝負(winner 由 winnerUid 對 p1/p2uid 導出)，供前端名人堂點選後翻頁顯示) + v0.60 (錦標賽：修 setup 階段「等對方補抽」倒數到時誤判雙敗——閒置判負用的 currentActorSeat 在 setup 只看 setupDone，雙方都 false 就回 -1 雙敗，完全忽略 mulligan 子階段；實況是只有一方欠補抽/確認揭示、對手只是在等，卻被一起判雙敗。修：setup 先判 mulligan 待辦(pendingMulliganDraw/mulliganRevealConfirmed/mulliganPostBenchOpen)，只有欠 mulligan 的一方算「該動作」→ 單判該方敗、等待方獲勝；mulligan 都完成才退回看 setupDone) + v0.59 (錦標賽名人堂可從歸檔還原：新增 /admin/champions/restore-from-archive[從 TARCHIVE 重建 TCHAMPS,只補缺漏不覆蓋既有,救回被誤刪的冠軍];歸檔 recordTournamentArchive 補存 communityEvent 旗標供還原;admin.html 名人堂管理加「♻️從歸檔還原」鈕) + v0.58 (錦標賽：定期清掃「已結束賽事底下、沒打完(非done)的對戰」殘留——賽事 finished 後不清 TMATCH，致這種 pending 對戰累積、被監控誤算成「等開打」死資料(排程器本就以 listOpenEvents 排除 finished，故這些殘留零功能影響、不會幽靈開打)；scheduler 每~5分刪除 finished 賽事的非done對戰，一次涵蓋正常完賽/force-finish/取消所有結束路徑+自動清掉歷史殘留) + v0.57 (錦標賽：大廳聊天效能——①為 tournamentChat 建 {room,ts} 索引,讓 /chat 的 ts>since+sort 走索引範圍掃描,不再每次全表掃+記憶體排序[訊息越多越慢→高流量輪詢拖慢];②scheduler 每~5 分鐘定期修剪大廳聊天,只保留最近 800 則,避免 collection 無限長大) + v0.56 (錦標賽：修『打到一半被判未進場』——進場標記 entered 原是 read-modify-write 整包寫回,兩人同時進場時後者用讀到的舊值覆蓋掉前者的旗標→某方進場記錄遺失→未進場 tick 誤判已開打的對局[實例 Eg vs Gali]。修(A根因)進場端改原子 positional $set 只更新自己座位+建 match 時初始化 entered:[false,false];修(B保險)未進場判負前若房間 gameState 已 playing/game-over[雙方都完成 setup 確實到場]即不判未進場) + v0.55 (錦標賽：社群賽發起公告措辭微調[「就自動開賽（人越多越熱鬧）」→「就能開賽」] + 新增 /api/tournament/cancel-proposal[發起者本人，報名階段且報名人數未達門檻時可手動取消社群賽；原子搶占 status=registration→finished 防與 scheduler 開賽競態；不收 30 分冷卻、釋放全站 1 場名額] + /event 每場補 isProposer 旗標供前端顯示取消鈕) + v0.54 (錦標賽：社群賽發起公告文字修正——募集窗口會跑滿,期間都可報名,時間到達門檻才開賽[非一達標即開],避免『集滿即開賽』誤導) + v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -2278,24 +2278,46 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
+    // v0.69 降載：/event 是大廳最重端點——原每次呼叫 8~12 次 mongo(對每個開放賽事各 findOne+countDocuments
+    //   的 N+1、重複 listOpenEvents、每個 running event 各一次 TMATCH.findOne)。輪次交替 ~50 人同時在大廳每 3s
+    //   打一次 → 尖峰。改:①「共用重查詢」(所有使用者相同:開放賽事清單+每場 regCount+running events)3s TTL 快取;
+    //   ②per-user(我的報名/我的對戰)改單次批次查詢(我的所有報名一次抓、跨 running 賽事用 $in 一次抓我的對戰),
+    //   取代 N+1 findOne。使用者自身狀態(registered/checkedIn/myMatch)仍每請求新鮮,只有聚合(清單/count)快取 ≤3s。
+    let _eventShared = { at: 0, openList: [], regCounts: {}, runningEvents: [] };
+    const EVENT_SHARED_TTL_MS = 3000;
+    async function getEventShared() {
+      const now = Date.now();
+      if (_eventShared.at && (now - _eventShared.at) <= EVENT_SHARED_TTL_MS) return _eventShared;
+      const openList = await listOpenEvents();
+      const regCounts = {};
+      for (const _e of openList) regCounts[_e._id] = await TREGS.countDocuments({ eventId: _e._id });
+      const runningEvents = await TEVENTS.find({ status: 'running' }).toArray();
+      _eventShared = { at: now, openList, regCounts, runningEvents };
+      return _eventShared;
+    }
     app.get('/api/tournament/event', async (req, res) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         const ev = await resolveEventFromReq(req);
+        const shared = await getEventShared();
+        // per-user：一次抓我的所有報名（取代原對每個開放賽事各一次 findOne 的 N+1）
+        const myRegs = await TREGS.find({ uid: id.uid }).toArray();
+        const myRegBy = new Map(myRegs.map((r) => [r.eventId, r]));
         let me = { registered: false, checkedIn: false };
         if (ev) {
-          const reg = await TREGS.findOne({ _id: ev._id + '__' + id.uid });
+          const reg = myRegBy.get(ev._id);
           if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(reg.deckEntries), name: reg.name, deckName: reg.deckName || null };
         }
         let regCount = 0;
-        if (ev) regCount = await TREGS.countDocuments({ eventId: ev._id });
-        // v0.40 多賽事：玩家可能同時有多場 running → 掃描所有進行中賽事找我這輪的對戰
+        if (ev) regCount = (shared.regCounts[ev._id] != null) ? shared.regCounts[ev._id] : await TREGS.countDocuments({ eventId: ev._id });
+        // myMatch：跨所有 running 賽事，一次 $in 查詢我的未完成對戰（取代每 running event 各一次 findOne）
         let myMatch = null;
-        {
-          const _runEv = await TEVENTS.find({ status: 'running' }).toArray();
-          for (const _e of _runEv) {
-            const mm = await TMATCH.findOne({ eventId: _e._id, round: _e.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] });
+        if (shared.runningEvents.length) {
+          const _runIds = shared.runningEvents.map((e) => e._id);
+          const _myMatches = await TMATCH.find({ eventId: { $in: _runIds }, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] }).toArray();
+          for (const _e of shared.runningEvents) {
+            const mm = _myMatches.find((m) => m.eventId === _e._id && m.round === _e.currentRound);
             if (mm) {
               const cdMin = (_e.roundCountdownMin != null ? _e.roundCountdownMin : 3);
               const nsMin = (_e.noShowMin > 0 ? _e.noShowMin : 5);
@@ -2307,13 +2329,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
           }
         }
         // v0.40：附上所有開放中賽事清單（多賽事前端用；舊前端忽略此欄、仍讀單一 event）
-        const _openList = await listOpenEvents();
-        const _events = [];
-        for (const _e of _openList) {
-          const _reg = await TREGS.findOne({ _id: _e._id + '__' + id.uid });
-          const _cnt = await TREGS.countDocuments({ eventId: _e._id });
-          _events.push({ _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: _cnt, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null, myName: (_reg && _reg.name) || null, checkInDeadline: _e.checkInDeadline || null, format: _e.format || 'single-elim', swissRounds: _e.swissRounds || null, topCut: _e.topCut || null, createdByPlayer: !!_e.createdByPlayer, minPlayers: _e.minPlayers || null, proposerName: _e.proposerName || null, isProposer: !!(_e.proposerUid && _e.proposerUid === id.uid) });
-        }
+        const _events = shared.openList.map((_e) => {
+          const _reg = myRegBy.get(_e._id);
+          return { _id: _e._id, name: _e.name, status: _e.status, maxPlayers: _e.maxPlayers, regCount: shared.regCounts[_e._id] || 0, registrationOpenAt: _e.registrationOpenAt || null, registrationCloseAt: _e.registrationCloseAt || null, roundLimitMin: _e.roundLimitMin, currentRound: _e.currentRound, rounds: _e.rounds, championName: _e.championName || null, registered: !!_reg, checkedIn: !!(_reg && _reg.checkedIn), myDeckName: (_reg && _reg.deckName) || null, myName: (_reg && _reg.name) || null, checkInDeadline: _e.checkInDeadline || null, format: _e.format || 'single-elim', swissRounds: _e.swissRounds || null, topCut: _e.topCut || null, createdByPlayer: !!_e.createdByPlayer, minPlayers: _e.minPlayers || null, proposerName: _e.proposerName || null, isProposer: !!(_e.proposerUid && _e.proposerUid === id.uid) };
+        });
         res.json({ event: ev || null, me, regCount, isAdmin: isTournAdmin(id), myMatch, events: _events, serverNow: Date.now() });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -2863,36 +2882,49 @@ import('firebase-admin').then(async ({ default: admin }) => {
     });
 
     // 賽程表
+    // v0.69 降載：/bracket 的 standings 重算(buildSwissPlayersFromMatches + computeStandings,O(n²) OWP/OOWP)
+    //   原每次呼叫都算;輪次交替時 ~50 人同時回大廳每 9s 打一次 → 重算風暴。改 3s TTL 快取(per event):
+    //   多人同時打只算一次;currentRound/status 變(輪次推進)即刻失效。per-user 的 mine 旗標於回應時再貼(便宜 O(n))。
+    const _bracketCache = new Map(); // eventId -> { at, round, status, matchesRaw, standingsRaw(含uid) }
+    const BRACKET_TTL_MS = 3000;
     app.get('/api/tournament/bracket', async (req, res) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
         const ev = await resolveEventFromReq(req);
         if (!ev) return res.json({ event: null, matches: [] });
-        const matches = await TMATCH.find({ eventId: ev._id }).sort({ round: 1, idx: 1 }).toArray();
-        // v0.48：瑞士制賽事附即時排名表(由 swiss 階段對戰紀錄重建 → computeStandings)。
-        let standings = null;
-        if (ev.format === 'swiss-then-cut') {
-          try {
-            const regs = await TREGS.find({ eventId: ev._id, checkedIn: true }).toArray();
-            const players = TENG.buildSwissPlayersFromMatches(
-              matches.filter((m) => m.phase === 'swiss').map((m) => ({ round: m.round, p1uid: m.p1uid, p2uid: m.p2uid, winnerUid: m.winnerUid, bye: !!m.bye, status: m.status })),
-              regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' })),
-            );
-            standings = TENG.computeStandings(players).map((p) => ({
-              rank: p.rank, name: p.name, matchPoints: p.matchPoints,
-              w: p.results.filter((r) => r === 'W' || r === 'BYE').length,
-              l: p.results.filter((r) => r === 'L').length,
-              owp: Math.round(p.owp * 1000) / 10,
-              oowp: Math.round(p.oowp * 1000) / 10,
-              mine: p.uid === id.uid,
-            }));
-          } catch (e) { standings = null; }
+        const _now = Date.now();
+        let _cache = _bracketCache.get(ev._id);
+        if (!_cache || (_now - _cache.at) > BRACKET_TTL_MS || _cache.round !== ev.currentRound || _cache.status !== ev.status) {
+          const matches = await TMATCH.find({ eventId: ev._id }).sort({ round: 1, idx: 1 }).toArray();
+          // v0.48：瑞士制賽事附即時排名表(由 swiss 階段對戰紀錄重建 → computeStandings)。
+          let standingsRaw = null;
+          if (ev.format === 'swiss-then-cut') {
+            try {
+              const regs = await TREGS.find({ eventId: ev._id, checkedIn: true }).toArray();
+              const players = TENG.buildSwissPlayersFromMatches(
+                matches.filter((m) => m.phase === 'swiss').map((m) => ({ round: m.round, p1uid: m.p1uid, p2uid: m.p2uid, winnerUid: m.winnerUid, bye: !!m.bye, status: m.status })),
+                regs.map((r) => ({ uid: r.uid, name: r.name || '玩家' })),
+              );
+              standingsRaw = TENG.computeStandings(players).map((p) => ({
+                uid: p.uid, rank: p.rank, name: p.name, matchPoints: p.matchPoints,
+                w: p.results.filter((r) => r === 'W' || r === 'BYE').length,
+                l: p.results.filter((r) => r === 'L').length,
+                owp: Math.round(p.owp * 1000) / 10,
+                oowp: Math.round(p.oowp * 1000) / 10,
+              }));
+            } catch (e) { standingsRaw = null; }
+          }
+          const matchesRaw = matches.map((m) => ({ round: m.round, idx: m.idx, phase: m.phase || null, p1uid: m.p1uid, p2uid: m.p2uid, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winnerUid: m.winnerUid, status: m.status, bye: m.bye }));
+          _cache = { at: _now, round: ev.currentRound, status: ev.status, matchesRaw, standingsRaw };
+          _bracketCache.set(ev._id, _cache);
+          // v0.69：上限 20 個 event(防歷史/社群賽 eventId 累積漏記憶體);超過刪最舊(插入序)。
+          if (_bracketCache.size > 20) { const _oldest = _bracketCache.keys().next().value; if (_oldest !== ev._id) _bracketCache.delete(_oldest); }
         }
         res.json({
           event: { _id: ev._id, name: ev.name, status: ev.status, currentRound: ev.currentRound, rounds: ev.rounds, championName: ev.championName || null, format: ev.format || 'single-elim', phase: ev.phase || null, swissRounds: ev.swissRounds || null, topCut: ev.topCut || null },
-          matches: matches.map((m) => ({ round: m.round, idx: m.idx, phase: m.phase || null, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winner: (m.winnerUid && m.winnerUid === m.p1uid) ? 'p1' : (m.winnerUid && m.winnerUid === m.p2uid) ? 'p2' : null, status: m.status, bye: m.bye, mine: (m.p1uid === id.uid || m.p2uid === id.uid) })),
-          standings,
+          matches: _cache.matchesRaw.map((m) => ({ round: m.round, idx: m.idx, phase: m.phase, p1name: m.p1name, p2name: m.p2name, winnerName: m.winnerName, winner: (m.winnerUid && m.winnerUid === m.p1uid) ? 'p1' : (m.winnerUid && m.winnerUid === m.p2uid) ? 'p2' : null, status: m.status, bye: m.bye, mine: (m.p1uid === id.uid || m.p2uid === id.uid) })),
+          standings: _cache.standingsRaw ? _cache.standingsRaw.map((s) => ({ rank: s.rank, name: s.name, matchPoints: s.matchPoints, w: s.w, l: s.l, owp: s.owp, oowp: s.oowp, mine: s.uid === id.uid })) : null,
         });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
