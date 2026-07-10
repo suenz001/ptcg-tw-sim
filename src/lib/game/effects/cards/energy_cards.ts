@@ -19,6 +19,7 @@ import {
   SPECIAL_ENERGY_STATUS_IMMUNE,
   SPECIAL_ENERGY_ON_DAMAGED,
   addLog, drawCards, updatePlayer, withPending,
+  discardIllegalRocketEnergy,
 } from '../_shared';
 
 // ── 富裕能量（ACE SPEC Special Energy） ─────────────────────────────────────
@@ -80,29 +81,9 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
 // 實裝：
 //   - 屬性：engine.ts SPECIAL_ENERGY_TYPES 已加 ['Psychic','Darkness'] = 2 單位。
 //   - Gate：若 target 名稱不含「火箭隊的」→ 把已附加的火箭隊能量從 target 移到棄牌區。
-SPECIAL_ENERGY_ATTACH.set('火箭隊能量', (st, idx, targetIid, pool) => {
-  const p = st.players[idx];
-  const target = p.active?.iid === targetIid
-    ? p.active
-    : p.bench.find(c => c.iid === targetIid) ?? null;
-  if (!target) return st;
-  const targetCard = pool.get(target.cardId);
-  const targetName = targetCard?.name ?? '?';
-  if (targetName.includes('火箭隊的')) return st; // 合法附加
-  // 非火箭隊寶可夢 → 已附加的火箭隊能量丟棄
-  const rocketEnergyInst = target.energyAttached.find(e => pool.get(e.cardId)?.name === '火箭隊能量');
-  if (!rocketEnergyInst) return st;
-  const s = addLog(st, `火箭隊能量：${targetName} 不是「火箭隊的寶可夢」，火箭隊能量丟棄`, idx);
-  return updatePlayer(s, idx, pl => {
-    const removeFromEnergy = (c: CardInstance) => ({
-      ...c, energyAttached: c.energyAttached.filter(e => e.iid !== rocketEnergyInst.iid)
-    });
-    let active = pl.active;
-    if (active?.iid === targetIid) active = removeFromEnergy(active);
-    const bench = pl.bench.map(c => c.iid === targetIid ? removeFromEnergy(c) : c);
-    return { ...pl, active, bench, discard: [...pl.discard, rocketEnergyInst] };
-  });
-});
+// v5.919 收斂:改用中央 discardIllegalRocketEnergy(_shared),與 dispatcher 末端 sweep 同一述詞
+//   → 手動附加 + 效果移動(手持循環扇/能量轉移/小灰怪招式移能量…)一致丟棄非法附著。
+SPECIAL_ENERGY_ATTACH.set('火箭隊能量', (st, idx, _targetIid, pool) => discardIllegalRocketEnergy(st, idx, pool));
 
 // ── 增強【草】能量（Special Energy） ──────────────────────────────────────────
 // 卡面：提供 1 個【草】能量。附於【草】寶可夢時，HP 上限 +20。

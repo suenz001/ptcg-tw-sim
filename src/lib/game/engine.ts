@@ -778,7 +778,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
-import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn } from './effects/_shared';
+import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy } from './effects/_shared';
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
@@ -1357,19 +1357,18 @@ export function canAffordAttack(
   if (state && attackerIdx !== undefined) {
     const toolsJammed = isToolsJammed(state, pool);
     if (!toolsJammed) {
-      // v3.20 多重轉接：iterate 所有道具
-      for (const t of getAllAttachedTools(pokemon)) {
-        const toolCard = pool.get(t.cardId);
-        if (toolCard?.name !== '反擊增幅器') continue;
-        const myPrizes = state.players[attackerIdx].prizes.length;
-        const oppPrizes = state.players[(1 - attackerIdx) as 0 | 1].prizes.length;
-        if (myPrizes > oppPrizes) {
+      const myPrizes = state.players[attackerIdx].prizes.length;
+      const oppPrizes = state.players[(1 - attackerIdx) as 0 | 1].prizes.length;
+      if (myPrizes > oppPrizes) {
+        // v5.919 多重轉接：每張「反擊增幅器」各減 1 個【無】(原 break 只算 1 張,洛托姆等
+        //   由「多重轉接」附 2 張時漏第 2 張效果 → 配件秀 CC 費應可減到 0 卻仍需 1 能量而打不出)。
+        for (const t of getAllAttachedTools(pokemon)) {
+          if (pool.get(t.cardId)?.name !== '反擊增幅器') continue;
           const colorlessIdx = cost.indexOf('Colorless');
           if (colorlessIdx >= 0) {
             cost = [...cost.slice(0, colorlessIdx), ...cost.slice(colorlessIdx + 1)];
           }
         }
-        break;
       }
     }
   }
@@ -7887,6 +7886,12 @@ function applyActionImpl(
   if (next.phase === 'playing') {
     next = clearSpecialEnergyProtectedStatuses(next, 0, pool);
     next = clearSpecialEnergyProtectedStatuses(next, 1, pool);
+  }
+
+  // v5.919 火箭隊能量:附於非「火箭隊的寶可夢」→丟棄(中央 sweep 涵蓋所有能量移動路徑,非只手動附加)
+  if (next.phase === 'playing') {
+    next = discardIllegalRocketEnergy(next, 0, pool);
+    next = discardIllegalRocketEnergy(next, 1, pool);
   }
 
   return next;

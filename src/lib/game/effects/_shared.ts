@@ -419,6 +419,38 @@ export type AttachEnergyHookFn = (
 export const SPECIAL_ENERGY_ATTACH = new Map<string, AttachEnergyHookFn>();
 
 /**
+ * v5.919 火箭隊能量 附著限制中央 sweep — 卡面「這張卡只可附於『火箭隊的寶可夢』身上,
+ *   若附於『火箭隊的寶可夢』以外的寶可夢身上,則將其丟棄」。
+ *   原僅手動附加(SPECIAL_ENERGY_ATTACH hook)檢查;效果移動(手持循環扇/能量轉移/小灰怪招式/
+ *   進化改名等)漏 → 中央 sweep:對玩家 idx 的 active+bench,host 名稱不含「火箭隊的」→
+ *   其身上所有「火箭隊能量」移到棄牌區。idempotent(無違規回原 state);dispatcher 末端雙邊呼叫。
+ *   注意:富裕能量/感應【超】能量 的 attach hook 是「福利」(抽4/搜尋)非限制,不可在此重觸發,
+ *   故本 sweep 只針對「火箭隊能量」這種『附非法對象即丟棄』的限制型特殊能量。
+ */
+export function discardIllegalRocketEnergy(
+  state: GameState, idx: 0 | 1, pool: Map<string, Card>,
+): GameState {
+  const p = state.players[idx];
+  const removed: CardInstance[] = [];
+  const isRocketEnergy = (e: CardInstance): boolean => pool.get(e.cardId)?.name === '火箭隊能量';
+  const scrub = (inst: CardInstance | null): CardInstance | null => {
+    if (!inst) return inst;
+    const hostName = pool.get(inst.cardId)?.name ?? '';
+    if (hostName.includes('火箭隊的')) return inst; // 合法 host,保留
+    const illegal = inst.energyAttached.filter(isRocketEnergy);
+    if (illegal.length === 0) return inst;
+    removed.push(...illegal);
+    return { ...inst, energyAttached: inst.energyAttached.filter(e => !isRocketEnergy(e)) };
+  };
+  const active = scrub(p.active);
+  const bench = p.bench.map(b => scrub(b) as CardInstance);
+  if (removed.length === 0) return state;
+  let s = updatePlayer(state, idx, pl => ({ ...pl, active, bench, discard: [...pl.discard, ...removed] }));
+  s = addLog(s, `火箭隊能量：附於非「火箭隊的寶可夢」身上 → 丟棄 ${removed.length} 張`, idx);
+  return s;
+}
+
+/**
  * v2.175：特殊能量被動效果 maps（同 TOOL_* 模式）。
  *
  * 觸發點：
