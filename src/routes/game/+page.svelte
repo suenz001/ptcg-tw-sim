@@ -2645,10 +2645,12 @@
     const pmd = g?.pendingMulliganDraw ?? [0, 0];
     const mrc = g?.mulliganRevealConfirmed ?? [true, true];
     const mpb = g?.mulliganPostBenchOpen ?? [false, false];
-    // v5.911：mulligan 補抽後加備戰(mpb)是「已按過準備、擁有者必須完成」的動作，不論對手是否已 setupDone
-    //   都該讓擁有者行動——否則對手還沒按準備時擁有者畫面沒有「完成補抽後設置」鍵→卡死（玩家回報）。故 mpb 最優先。
+    // v5.911：mulligan 補抽後加備戰(mpb)是「已按過準備、擁有者必須完成」的動作。
+    //   v5.923 修:但若【對手尚未 setupDone(還欠放出場)】則對手也欠動作→回 -1(雙方都可動作:isMyTurn 對雙方 true→
+    //   mpb 擁有者仍有「完成補抽後設置」鍵[不回歸 v5.911]、對手放置 UI 也啟用[解 deadlock])。對手已 setupDone 才由 mpb 擁有者單獨。
+    //   ⚠與伺服器 currentActorSeat 逐行同步(閒置判負用)。
     const p0mpb = !!mpb[0], p1mpb = !!mpb[1];
-    if (p0mpb || p1mpb) { if (p0mpb && !p1mpb) return 0; if (p1mpb && !p0mpb) return 1; return -1; }
+    if (p0mpb || p1mpb) { if (p0mpb && !p1mpb) return sd1 ? 0 : -1; if (p1mpb && !p0mpb) return sd0 ? 1 : -1; return -1; }
     if (!(sd0 && sd1)) {
       const m0 = g?.mulliganCounts?.[0] ?? 0, m1 = g?.mulliganCounts?.[1] ?? 0;
       if (m0 === m1) { if (!sd0 && !sd1) return -1; return (!sd0 ? 0 : 1); }
