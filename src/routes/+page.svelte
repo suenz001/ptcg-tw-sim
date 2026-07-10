@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.921</span> 錦標賽顯示修正：對戰中若對手使用了「你自己牌組沒有的卡包」的卡（特別是促銷卡，如貓頭夜鷹SV-P-H、瑪力露麗SVPN 等），先前你的畫面可能出現該卡無法顯示、或誤顯示成同名的另一個版本。現已修正——會依實際盤面上出現的每張卡自動補載對應卡包，對手的卡都能正確顯示。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.920</span> 錦標賽聊天室：先前雖已開放「已登入的玩家（即使未報名賽事）」在大廳與對戰中聊天，但聊天輸入框仍被「🔒 報名後才能發言」的提示擋住、無法輸入。現已修正，只要登入即可在大廳聊天室與對戰畫面發言（未登入者仍僅能觀看）。</summary>
       </details>
       <details>

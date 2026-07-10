@@ -4299,6 +4299,9 @@
   function tAdopt(state: any, version: number) {
     if (typeof version === 'number' && version < tVersion) return; // 拒收 stale
     game = state as GameState;
+    // v5.921：錦標賽盤面由伺服器送來,client 只載過自己牌組的卡包→對手(或促銷卡集如 SV-P-H/SVPN)
+    //   的卡 getCard 查不到→無法顯示/同名 fallback 錯版。依盤面實際 cardId 補載其卡包(缺卡才動作)。
+    void ensurePoolForStateIds(state);
     if (typeof version === 'number') tVersion = version;
     if (state) tStep = 'playing';
     _tLastStateChangeAt = Date.now();  // v5.618 記錄盤面更新時間（新鮮度看門狗用）
@@ -5572,6 +5575,35 @@
       console.error('[pool] ensurePoolForDeckEntries 失敗，fallback 全載', e);
       try { const all = await loadAllSets(); const merged = new Map(pool); for (const c of all) merged.set(c.id, c); pool = merged; } catch { /* ignore */ }
     }
+  }
+
+  // v5.921：依「盤面上實際出現的 cardId」補載卡包 — 錦標賽/線上盤面由伺服器送,client 未必載過對手
+  //   牌組(尤其促銷卡集)的卡包→getCard 查不到→無法顯示或同名 fallback 錯版。收集雙方 active/bench/
+  //   hand/deck/discard/prizes + 附加能量/道具(含多重轉接)/進化堆的所有 cardId,缺卡即透過
+  //   ensurePoolForDeckEntries(forceComplete) 載其 set(對照表)或 loadAllSets 兜底。全載入時 O(n) 早退。
+  async function ensurePoolForStateIds(state: any): Promise<void> {
+    const ps = state && state.players;
+    if (!Array.isArray(ps)) return;
+    const ids: string[] = [];
+    const pushInst = (it: any) => {
+      if (!it) return;
+      if (it.cardId) ids.push(String(it.cardId));
+      if (Array.isArray(it.energyAttached)) for (const e of it.energyAttached) if (e && e.cardId) ids.push(String(e.cardId));
+      if (it.toolAttached && it.toolAttached.cardId) ids.push(String(it.toolAttached.cardId));
+      if (Array.isArray(it.extraTools)) for (const t of it.extraTools) if (t && t.cardId) ids.push(String(t.cardId));
+      if (Array.isArray(it.evolvedFromStack)) for (const s of it.evolvedFromStack) if (s && s.cardId) ids.push(String(s.cardId));
+    };
+    for (const pl of ps) {
+      if (!pl) continue;
+      pushInst(pl.active);
+      for (const z of ['bench', 'hand', 'deck', 'discard', 'prizes'] as const) {
+        const arr = pl[z];
+        if (Array.isArray(arr)) for (const it of arr) pushInst(it);
+      }
+    }
+    if (ids.length === 0) return;
+    if (ids.every((id) => pool.has(id))) return; // 已全載 → 免動作
+    await ensurePoolForDeckEntries([ids.map((id) => ({ cardId: id }))], true);
   }
 
   // v5.894：本機/AI lobby 選定的牌組變動 → 按需載其卡包（驗牌用真 pool；缺卡走輕量檢查不誤判）。
