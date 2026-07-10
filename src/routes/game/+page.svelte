@@ -8584,7 +8584,7 @@
                       <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
                       <span class="sel-name">???</span>
                     {:else}
-                      <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                      <img src={c.imageUrl} alt={c.name} loading="lazy"/><span class="sel-name">{c.name}</span>
                       {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
                     {/if}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
@@ -8636,7 +8636,7 @@
               {#each deckGrouped as entry}{@const _dc=getCard(entry.cardId)}
                 <button class="deck-cell" title="{entry.count}× {entry.name} — 點擊放大"
                   onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>
-                  {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img"/>
+                  {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"/>
                   {:else}<div class="deck-cell-fallback">{entry.name}</div>{/if}
                   <span class="deck-cell-count">×{entry.count}</span>
                 </button>
@@ -8680,7 +8680,7 @@
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img"/>
+                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
                     </button>
                   {/if}
@@ -8713,7 +8713,7 @@
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img"/>
+                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
                     </button>
                   {/if}
@@ -9519,7 +9519,7 @@
                 {#each _peekedOthers as p (p.inst.iid)}
                   <button class="deck-cell" title="{p.card.name} — 點擊放大"
                     onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>
-                    {#if p.card.imageUrl}<img src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img"/>
+                    {#if p.card.imageUrl}<img src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img" loading="lazy"/>
                     {:else}<div class="deck-cell-fallback">{p.card.name}</div>{/if}
                   </button>
                 {/each}
@@ -9851,7 +9851,7 @@
           {#each discardGrouped as g}{@const c=getCard(g.cardId)}
             {#if c}
               <button class="sel-card" onclick={() => openZoom(g.cardId)}>
-                <img src={c.imageUrl} alt={c.name}/><span class="sel-name">{c.name}</span>
+                <img src={c.imageUrl} alt={c.name} loading="lazy"/><span class="sel-name">{c.name}</span>
                 <span class="deck-cell-count">×{g.count}</span>
               </button>
             {/if}

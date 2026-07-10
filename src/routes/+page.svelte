@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.917</span> 效能／體驗：對戰中打開「搜尋牌庫」類的選擇視窗時（例如閃焰王牌的「閃焰渦輪」選能量），先前會一次把整副剩餘牌庫的卡圖全部載入，連線較慢時視窗要等很久才開。現改為只有在你實際展開「查看牌庫剩餘全部」時才載那些卡圖，選擇視窗可即時開啟。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.916</span> 對戰修正：奧利瓦ex 的招式「油之機關槍」攻擊帶有「灼熱之軀」特性的寶可夢（例如席多藍恩、呆火駝）時，先前不會灼傷攻擊方；現已修正，攻擊方會依特性被【灼傷】。同時受招式傷害才觸發的其他防守方反擊（毒刺、反擊、凸凸頭盔等）於此招式也一併正常觸發。</summary>
       </details>
       <details>
