@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.924</span> 效能：錦標賽伺服器的回應壓縮（gzip）先前因程式載入方式與伺服器環境不相容而一直沒有實際生效；現已修正，對戰盤面、大廳、聊天等 JSON 回應會被壓縮約 6～9 倍，降低傳輸量，進場與大廳的延遲/卡頓可獲改善。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.923</span> 錦標賽開局修正：先前開局時，若一方（因對手起手沒有基礎寶可夢而）補抽後停在「可將補抽到的基礎寶可夢加入備戰」這一步，而【對手還沒放出戰鬥場寶可夢】，系統會誤把「該不該動作」全算在補抽這方身上——導致對手的放置畫面被鎖住無法下寶可夢（雙方互相等待卡住），且補抽這方反而在 3 分鐘後被誤判「閒置逾時落敗」。現已修正：這種情況下判定為雙方都可行動，對手能正常放出寶可夢、補抽方保有「完成設置」按鈕、也不會被誤判落敗。</summary>
       </details>
       <details>
