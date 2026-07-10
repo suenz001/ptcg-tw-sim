@@ -148,7 +148,7 @@
   const tHasCommunityEvent = $derived(tEvents.some((e: any) => e.createdByPlayer));
   let tMe = $state<any>({ registered: false });
   // 多賽事：在任一開放賽事報名過即可發言/視為已參賽
-  const tRegisteredAny = $derived(!!tMe.registered || tEvents.some((e: any) => e.registered));
+  const tCanChat = $derived(!!firebaseUser?.email || tIsAdmin); // v5.920 後端 v0.68 已放寬:任何已登入者皆可聊天(不限報名)
   // v5.620：賽事分組——進行中/即將開始(checkin/running/bracket_ready/seeding)排上面、報名中/籌備中(registration/draft)排下面
   // v5.622：賽事卡依「開賽時間(registrationCloseAt)」由近到遠排序——越接近開賽排越上面。
   const _evStart = (e: any) => (e.registrationCloseAt ?? e.registrationOpenAt ?? Infinity);
@@ -6497,13 +6497,13 @@
             <div class="tcmsg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
-        {#if tRegisteredAny || tIsAdmin}
+        {#if tCanChat || tIsAdmin}
           <div class="tourn-chat-input">
             <input bind:value={tChatInput} maxlength="200" placeholder="說點什麼…（Enter 送出）" onkeydown={(e) => e.key === 'Enter' && tChatSend()} />
             <button class="btn-secondary small" onclick={tChatSend} disabled={!tChatInput.trim()}>送出</button>
           </div>
         {:else}
-          <div class="tourn-chat-input"><span class="muted small" style="padding:4px 8px;">🔒 報名後才能發言，未報名僅能觀看</span></div>
+          <div class="tourn-chat-input"><span class="muted small" style="padding:4px 8px;">🔒 請先登入即可在此發言</span></div>
         {/if}
       </div>
       {#if tEvents.length === 0}
@@ -9680,8 +9680,8 @@
         </div>
         <div class="chat-input-row">
           {#if isTournament}
-            <input class="chat-input" type="text" placeholder={(tRegisteredAny || tIsAdmin) ? '與大廳聊天室互動（Enter 送出）' : '🔒 報名者才能發言，可觀看'} maxlength="200" bind:value={tChatInput} onkeydown={(e) => e.key === 'Enter' && (tRegisteredAny || tIsAdmin) && tChatSend()} disabled={!(tRegisteredAny || tIsAdmin)} />
-            <button class="btn-primary chat-send" onclick={tChatSend} disabled={!tChatInput.trim() || !(tRegisteredAny || tIsAdmin)}>送出</button>
+            <input class="chat-input" type="text" placeholder={(tCanChat || tIsAdmin) ? '與大廳聊天室互動（Enter 送出）' : '🔒 請先登入即可發言，可觀看'} maxlength="200" bind:value={tChatInput} onkeydown={(e) => e.key === 'Enter' && (tCanChat || tIsAdmin) && tChatSend()} disabled={!(tCanChat || tIsAdmin)} />
+            <button class="btn-primary chat-send" onclick={tChatSend} disabled={!tChatInput.trim() || !(tCanChat || tIsAdmin)}>送出</button>
           {:else}
             <input
               class="chat-input"
