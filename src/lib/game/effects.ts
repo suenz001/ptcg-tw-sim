@@ -591,7 +591,7 @@ import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個�
 import { buildEvolvedInstance } from './effects/_shared'; // v5.796 中央進化體建構(保留 base iid)
 import { getAbilityFn, hasAbilityFn } from './effects/_shared'; // v5.872 特性查詢中央(by-name+by-index)
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
-import { hasBugAegislashShield } from './effects/cards/v3000_g3_wave2';
+import { hasBugAegislashShield, canRelicanthDiverCatchTrigger, isBasicWaterEnergy } from './effects/cards/v3000_g3_wave2';
 // v5.237：re-export 給 engine.ts 用於 attack-time snapshot
 export { hasBugAegislashShield };
 // v3.06 Deferred Wave B helper — 在備戰時免疫對手招式（藏隱 / 深度下潛）
@@ -7454,8 +7454,33 @@ export function fireDefenderOnKO(
   //   三類：① TOOL_ON_KO(沉重接力棒/希望護身符) ② PASSIVE_KO_RETALIATION(沙鈴仙人掌 炸裂針)
   //   ③ PASSIVE_ON_KO(桃歹郎 最後鎖鏈 / 願增猿ex 鬆口氣 / 密勒頓 光子纜線)。
   //   皆「戰鬥位」(isActive) 且「受招式傷害昏厥」(koByAttackDamage) 才觸發；效果KO不觸發。
-  if (!isActive) return state;
-  let s = state;
+  // v5.918 獵斑魚｜潛者捕捉:防守方(dIdx)自己的【水】寶可夢(戰鬥場「或備戰區」)受招式傷害昏厥→
+  //   身上「基本【水】能量」不丟棄而放回手牌(確認)。呼叫端已把 koInst 全部能量推入 dIdx.discard,
+  //   此處把基本水抽回並排入中央佇列(engine.ts dispatcher 末端 flushDiverCatchQueue 統一開 modal-choice)。
+  //   涵蓋 active+bench→在 isActive gate 之前處理;獵斑魚自身昏厥也觸發(此時已離場,故除了 hasAbilityOnSide
+  //   也認 koCard 自身有潛者捕捉,引用官方判例)。
+  let s0 = state;
+  if (koByAttackDamage) {
+    const _dcCard = pool.get(koInst.cardId);
+    const _dcSelfDiver = _dcCard?.abilities?.some(a => a.name === '潛者捕捉') ?? false;
+    if (_dcCard?.pokemonType === 'Water' && (_dcSelfDiver || canRelicanthDiverCatchTrigger(s0, dIdx, _dcCard, pool))) {
+      const _dcIds = new Set(koInst.energyAttached.filter(e => isBasicWaterEnergy(e.cardId, pool)).map(e => e.iid));
+      if (_dcIds.size > 0) {
+        const _owner = s0.players[dIdx];
+        const _held = _owner.discard.filter(c => _dcIds.has(c.iid));
+        if (_held.length > 0) {
+          const _players = [...s0.players] as [PlayerState, PlayerState];
+          _players[dIdx] = { ..._owner, discard: _owner.discard.filter(c => !_dcIds.has(c.iid)) };
+          s0 = { ...s0, players: _players, _diverCatchQueue: [
+            ...(s0._diverCatchQueue ?? []),
+            { ownerIdx: dIdx, koName: _dcCard?.name ?? '?', heldEnergy: _held },
+          ] };
+        }
+      }
+    }
+  }
+  if (!isActive) return s0;
+  let s = s0;
   const stadiumCard = s.activeStadium ? pool.get(s.activeStadium.cardId) : null;
   const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
   // ① TOOL_ON_KO（維持原行為：isActive + 阻礙之塔失效）

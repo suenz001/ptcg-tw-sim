@@ -2296,6 +2296,65 @@ function normalizeNonFieldStacks(state: GameState): GameState {
   return changed ? { ...state, players } : state;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// v5.918 獵斑魚｜潛者捕捉 — 中央 on-KO 能量搶救管線
+//   卡面:「每次當自己的【水】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時,可使用1次。
+//         【昏厥】的寶可夢身上附加的『基本【水】能量』卡不丟棄,而是全部放回手牌。」
+//   涵蓋:戰鬥場(主攻擊KO路徑 inline)+備戰(sanityKOSweep 狙擊/範圍傷害 zombie KO);
+//   多隻同時KO→一組一組確認(pendingChainQueue);獵斑魚自身昏厥也觸發(KO當下仍在場偵測得到)。
+//   排除:中毒/灼傷checkup、混亂自傷、自主丟棄化石 等「非對手招式傷害」路徑(不呼叫本helper)。
+
+/** 某側一張被招式傷害KO的寶可夢:若該側有「潛者捕捉」且此卡為【水】→回傳身上要保留(不進棄牌)的基本水能量。 */
+function diverCatchHeldEnergy(
+  state: GameState, ownerIdx: 0 | 1, koInst: CardInstance,
+  koCard: Card | null | undefined, pool: Map<string, Card>,
+): CardInstance[] {
+  if (!canRelicanthDiverCatchTrigger(state, ownerIdx, koCard, pool)) return [];
+  return koInst.energyAttached.filter(e => isBasicWaterEnergy(e.cardId, pool));
+}
+
+/** 把一張KO寶可夢保留的基本水能量排入待確認佇列(空則no-op)。 */
+function enqueueDiverCatch(
+  state: GameState, ownerIdx: 0 | 1, koName: string, held: CardInstance[],
+): GameState {
+  if (!held || held.length === 0) return state;
+  return { ...state, _diverCatchQueue: [
+    ...(state._diverCatchQueue ?? []), { ownerIdx, koName, heldEnergy: held },
+  ] };
+}
+
+/** dispatcher 末端:把累積的潛者捕捉確認 flush 成 modal-choice(可選是否回手);多隻→鏈式排隊。 */
+function flushDiverCatchQueue(state: GameState): GameState {
+  const q = state._diverCatchQueue;
+  if (!q || q.length === 0) return state;
+  const modals: PendingSelection[] = q.map(e => ({
+    type: 'modal-choice',
+    actorIdx: e.ownerIdx,
+    sourcePlayerIdx: e.ownerIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'diver-catch-confirm',
+    params: {
+      label: '潛者捕捉',
+      heldEnergy: e.heldEnergy,
+      koName: e.koName,
+      options: [
+        { id: 'yes', text: `是（${e.heldEnergy.length} 張「基本【水】能量」放回手牌）` },
+        { id: 'no', text: '否（一併進棄牌堆）' },
+      ],
+    },
+  } as PendingSelection));
+  const s = { ...state, _diverCatchQueue: undefined };
+  if (s.pendingSelection) {
+    // 已有其他 pending(如取獎picker)→潛者捕捉全部排到鏈尾,依序處理
+    return { ...s, pendingChainQueue: [ ...(s.pendingChainQueue ?? []), ...modals ] };
+  }
+  const [first, ...rest] = modals;
+  return {
+    ...s, pendingSelection: first,
+    pendingChainQueue: rest.length ? [ ...(s.pendingChainQueue ?? []), ...rest ] : s.pendingChainQueue,
+  };
+}
+
 function sanityKOSweep(
   state: GameState,
   attackerIdx: 0 | 1,
@@ -2315,8 +2374,11 @@ function sanityKOSweep(
     if (hp > 0 && inst.damage >= hp) {
       anyKO = true;
       const ko = inst;
+      // v5.918 潛者捕捉:被招式KO的【水】寶可夢,若該側有獵斑魚→基本水能量不進棄牌,排隊確認回手
+      const heldWaterA = diverCatchHeldEnergy(s, dIdx, ko, card, pool);
+      const heldIdsA = new Set(heldWaterA.map(e => e.iid));
       const koDiscard: CardInstance[] = [
-        ko, ...ko.energyAttached,
+        ko, ...ko.energyAttached.filter(e => !heldIdsA.has(e.iid)),
         ...getAllAttachedTools(ko),
         ...(ko.evolvedFromStack ?? []),
       ];
@@ -2324,6 +2386,7 @@ function sanityKOSweep(
       player.active = null;
       if (card) prizesAcc += prizesForKO(card);
       s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(ko.iid, card?.name ?? '?')} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
+      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     }
@@ -2336,14 +2399,18 @@ function sanityKOSweep(
     const hp = getEffectiveHP(inst, pool, s);
     if (hp > 0 && b.damage >= hp) {
       anyKO = true;
+      // v5.918 潛者捕捉:備戰【水】寶可夢被招式KO也觸發(卡面涵蓋戰鬥場或備戰區)
+      const heldWaterB = diverCatchHeldEnergy(s, dIdx, b, card, pool);
+      const heldIdsB = new Set(heldWaterB.map(e => e.iid));
       const koDiscard: CardInstance[] = [
-        b, ...b.energyAttached,
+        b, ...b.energyAttached.filter(e => !heldIdsB.has(e.iid)),
         ...getAllAttachedTools(b),
         ...(b.evolvedFromStack ?? []),
       ];
       player.discard = [...player.discard, ...koDiscard];
       if (card) prizesAcc += prizesForKO(card);
       s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(b.iid, card?.name ?? '?')} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
+      s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack');
     } else {
@@ -5073,26 +5140,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (waterEnergyToHand.length > 0) {
         newState = addLog(newState,
           `「潛者捕捉」可發動：${defenderCard?.name ?? '?'} 身上有「基本【水】能量」${waterEnergyToHand.length} 張`, dIdx);
-        newState = {
-          ...newState,
-          pendingSelection: {
-            type: 'modal-choice',
-            actorIdx: dIdx,
-            sourcePlayerIdx: dIdx,
-            minCount: 1,
-            maxCount: 1,
-            effectKey: 'diver-catch-confirm',
-            params: {
-              label: '潛者捕捉',
-              heldEnergy: waterEnergyToHand,
-              koName: defenderCard?.name ?? '?',
-              options: [
-                { id: 'yes', text: `是（${waterEnergyToHand.length} 張「基本【水】能量」放回手牌）` },
-                { id: 'no', text: '否（一併進棄牌堆）' },
-              ],
-            },
-          },
-        };
+        // v5.918 收斂:改排入中央佇列(與備戰狙擊KO共用),dispatcher 末端 flushDiverCatchQueue 統一開 modal
+        newState = enqueueDiverCatch(newState, dIdx, defenderCard?.name ?? '?', waterEnergyToHand);
       }
       // v5.769：移除戰鬥位前，記錄其能量 iid（此刻已在 defenderState.discard）— 供「搬移對手戰鬥位能量」
       //   POST 效果(戲法舞步/反轉之風)在官方順序「效果先於昏厥」下從棄牌區取回。
@@ -7783,6 +7832,11 @@ function applyActionImpl(
     if (next.phase !== 'game-over') {
       next = sanityKOSweep(next, (1 - aIdxForKO) as 0 | 1, pool);
     }
+  }
+
+  // v5.918 潛者捕捉:把本次 dispatch 累積的「基本水能量放回手牌」確認 flush 成 modal 鏈(多隻一組組問)
+  if (next.phase === 'playing') {
+    next = flushDiverCatchQueue(next);
   }
 
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over

@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.918</span> 對戰修正：獵斑魚的特性「潛者捕捉」先前只有在「戰鬥場」的【水】寶可夢被對手招式擊倒時才會觸發；現已修正，在「備戰區」的【水】寶可夢被對手招式（含狙擊、範圍傷害）擊倒時同樣會觸發，可將被擊倒寶可夢身上的「基本【水】能量」放回手牌（可選擇是否回手）。若同一次有多隻【水】寶可夢被擊倒，會一隻一隻分別詢問；獵斑魚自己被擊倒時也可以觸發。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.917</span> 效能／體驗：對戰中打開「搜尋牌庫」類的選擇視窗時（例如閃焰王牌的「閃焰渦輪」選能量），先前會一次把整副剩餘牌庫的卡圖全部載入，連線較慢時視窗要等很久才開。現改為只有在你實際展開「查看牌庫剩餘全部」時才載那些卡圖，選擇視窗可即時開啟。</summary>
       </details>
       <details>

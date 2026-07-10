@@ -937,6 +937,9 @@ export interface GameState {
    * 戰鬥位後仍能從棄牌區取回改附/回手。每次 ATTACK 開頭清空、KO 移除戰鬥位前寫入。
    */
   _koDefenderSnapshot?: { idx: 0 | 1; inst: CardInstance } | null;
+  // v5.918 獵斑魚｜潛者捕捉:中央累積被對手招式傷害KO的【水】寶可夢待確認的「基本水能量放回手牌」,
+  //   於 dispatcher 末端 flush 成 modal-choice 鏈(多隻一組組問)。
+  _diverCatchQueue?: { ownerIdx: 0 | 1; koName: string; heldEnergy: CardInstance[] }[];
   /**
    * v2.70：copy-attack（例如 火箭隊的謎擬Ｑ｜扮晶晶酒）在 ATTACK_PRE 階段
    * 記下被複製招式的 effectKey（格式 `對手卡名|招式名`），好讓 ATTACK_POST
