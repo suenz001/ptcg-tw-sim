@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.914</span> 錦標賽：官方賽與社群賽現在可以「同時並行」舉辦（不再互相排隊等待）。為避免同一位玩家被兩場同時召喚——若你同時報名的兩場中有一場已先開賽，系統會在較晚那場開賽配對前，自動取消你在該場的報名（保留先開賽的那場），並在大廳公告；待其他賽事結束後你仍可再參加。（此為錦標賽伺服器行為調整，經最強模型 Fable 5 三輪交叉審查修正競態與邊界情況。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.913</span> 效能（錦標賽續，經最強模型 Fable 5 交叉審查後補強）：進一步降低「輪次交替、數十人同時回大廳」時的伺服器負荷。①賽事大廳的資訊端點（先前每次查詢要對每個賽事重複計算報名人數等、單次多達十餘筆資料庫查詢）改為 3 秒快取共用結果、並把個人化查詢合併為單次批次查詢。②瑞士制排名表（OWP／OOWP 全體運算）同樣改 3 秒快取，多人同時查只計算一次、排名推進時立即更新。個人自身狀態（是否已報名、下一場對戰）仍即時更新。</summary>
       </details>
       <details>
