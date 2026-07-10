@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.922</span> 錦標賽報名修正：先前若你在某場賽事中【已經被淘汰出局】，但該賽事整體還在進行（例如官方賽還在打 8 強），此時若有新的社群賽開放報名，系統會誤把你當成「仍在其他進行中的賽事」而擋住、無法報名新賽事。現已修正——判斷改為只看你是否還有【進行中】的對戰，已出局者可正常報名參加新賽事；仍在比賽中的玩家維持原本的防重複召喚保護不變。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.921</span> 錦標賽顯示修正：對戰中若對手使用了「你自己牌組沒有的卡包」的卡（特別是促銷卡，如貓頭夜鷹SV-P-H、瑪力露麗SVPN 等），先前你的畫面可能出現該卡無法顯示、或誤顯示成同名的另一個版本。現已修正——會依實際盤面上出現的每張卡自動補載對應卡包，對手的卡都能正確顯示。</summary>
       </details>
       <details>
