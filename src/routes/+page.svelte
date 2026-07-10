@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.925</span> 錦標賽聊天室：未報名賽事的已登入玩家在聊天室發言時，先前會顯示 email 帳號作為名稱；現改為顯示你「最近一次報名錦標賽時使用的暱稱」（即個人資料分頁上的名稱），不再顯示 email。若你從未報名過任何賽事，則顯示 email 前綴（@ 前的部分），不會露出完整 email。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.924</span> 效能：錦標賽伺服器的回應壓縮（gzip）先前因程式載入方式與伺服器環境不相容而一直沒有實際生效；現已修正，對戰盤面、大廳、聊天等 JSON 回應會被壓縮約 6～9 倍，降低傳輸量，進場與大廳的延遲/卡頓可獲改善。</summary>
       </details>
       <details>
