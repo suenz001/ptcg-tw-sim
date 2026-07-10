@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.915</span> 效能（錦標賽降載）：對戰過程中的戰報 log 佔了盤面資料約 7 成（一場打久了累積數百行），先前每次盤面更新都連整份 log 一起傳。現改為只傳最近 60 行戰報（完整戰報仍完整保存於賽事紀錄），大幅縮小每次更新的傳輸量、進一步降低多人同時對戰時的伺服器負荷。（洗牌／擲幣動畫改用時間戳偵測新事件，截短戰報後動畫音效不受影響。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.914</span> 錦標賽：官方賽與社群賽現在可以「同時並行」舉辦（不再互相排隊等待）。為避免同一位玩家被兩場同時召喚——若你同時報名的兩場中有一場已先開賽，系統會在較晚那場開賽配對前，自動取消你在該場的報名（保留先開賽的那場），並在大廳公告；待其他賽事結束後你仍可再參加。（此為錦標賽伺服器行為調整，經最強模型 Fable 5 三輪交叉審查修正競態與邊界情況。）</summary>
       </details>
       <details>

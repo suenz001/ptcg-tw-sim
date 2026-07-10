@@ -1418,9 +1418,10 @@
   $effect(() => {
     if (!game || !game.log) { animLogCursor = 0; return; }
     const logs = game.log;
-    if (logs.length <= animLogCursor) { animLogCursor = logs.length; return; }
-    const fresh = logs.slice(animLogCursor);
-    animLogCursor = logs.length;
+    // v0.71：改用 timestamp 偵測新事件(非 log 長度/索引)，使伺服器 log 截尾(只送最近 N 行)後洗牌動畫仍正常。
+    //   animLogCursor 此時語意為「已處理的最大 timestamp」。
+    const fresh = logs.filter((e: any) => (e.timestamp ?? 0) > animLogCursor);
+    if (fresh.length) animLogCursor = Math.max(animLogCursor, ...fresh.map((e: any) => e.timestamp ?? 0));
     for (const entry of fresh) {
       if (!/(洗牌|重洗|洗回)/.test(entry.message)) continue;
       const idx = entry.playerIndex;
@@ -1641,12 +1642,13 @@
   $effect(() => {
     if (!game || !game.log) { lastLogProcessed = 0; return; }
     const logs = game.log;
-    // v5.516：觀戰者不播擲硬幣動畫 — 同步 lastLogProcessed 但不 enqueue，
-    //   避免進房時 fresh=整段歷史 log 把之前的擲幣全部重播一遍。
-    if (isSpectator) { lastLogProcessed = logs.length; return; }
-    if (logs.length <= lastLogProcessed) { lastLogProcessed = logs.length; return; }
-    const fresh = logs.slice(lastLogProcessed);
-    lastLogProcessed = logs.length;
+    // v0.71：改用 timestamp 偵測新事件(非 log 長度/索引)，使伺服器 log 截尾後擲幣音效動畫仍正常。
+    //   lastLogProcessed 此時語意為「已處理的最大 timestamp」。
+    const _maxTs = logs.length ? Math.max(...logs.map((e: any) => e.timestamp ?? 0)) : 0;
+    // v5.516：觀戰者不播擲硬幣動畫 — 同步游標但不 enqueue，避免進房時把歷史擲幣全部重播一遍。
+    if (isSpectator) { lastLogProcessed = _maxTs; return; }
+    const fresh = logs.filter((e: any) => (e.timestamp ?? 0) > lastLogProcessed);
+    lastLogProcessed = _maxTs;
     for (const entry of fresh) {
       const msg = entry.message;
       // setup 先手特例（保留現有邏輯）
