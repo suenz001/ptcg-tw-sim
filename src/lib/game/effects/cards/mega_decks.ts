@@ -24,6 +24,7 @@ import {
   // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
   wouldNeutralCenterBlock,
   koPrizesAdjusted,
+  fireDefenderOnDamaged,
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -693,30 +694,42 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     const buffLog = buff > 0 ? `+${buff}=${finalDmg}` : '';
     s = addLog(s, `${label}：${targetCard?.name ?? '?'} 受 ${count}×${counterDamage}=${baseAmt}${buffLog} 傷害`, actorIdx);
 
-    const newDmg = target.damage + finalDmg;
-    const tHp = getEffectiveHP(target, pool, st);  // v5.091
+    // v5.916：對手【戰鬥位】受招式傷害 → 先觸發防守方 on-damaged 反應(灼熱之軀灼傷攻擊方 / 毒刺 / 反擊 /
+    //   凸凸頭盔 / 扣殺能量 / 尖刺盔甲 / 還擊斧…)。收斂共用中央 fireDefenderOnDamaged(與 dealAttackDamageToTarget、
+    //   snipe-multi 同一條);on-damaged 先於 KO(卡面「受到傷害時」即使被打死仍觸發)。備戰目標不觸發。
+    //   玩家回報:油之機關槍打席多藍恩(灼熱之軀)沒灼傷攻擊方——本 resolver 自跑傷害迴圈漏了這步。
+    if (defender.active?.iid === iid && finalDmg > 0) {
+      s = fireDefenderOnDamaged(s, dIdx, actorIdx, finalDmg, pool);
+      if (s.phase === 'game-over') return s;  // 反傷把攻擊方打死 → game-over
+    }
+    // re-fetch(on-damaged 可能消費防守方旗標;attacker 反傷不影響 target.damage)
+    const defenderNow = s.players[dIdx];
+    const targetNow = defenderNow.active?.iid === iid ? defenderNow.active : defenderNow.bench.find(c => c.iid === iid);
+    if (!targetNow) continue;
+    const newDmg = targetNow.damage + finalDmg;
+    const tHp = getEffectiveHP(targetNow, pool, st);  // v5.091
 
     if (tHp > 0 && newDmg >= tHp) {
       // KO
       const ko: CardInstance[] = [
-        { ...target, damage: newDmg }, ...target.energyAttached,
-        ...(target.toolAttached ? [target.toolAttached] : []),
-        ...(target.evolvedFromStack ?? []),
+        { ...targetNow, damage: newDmg }, ...targetNow.energyAttached,
+        ...(targetNow.toolAttached ? [targetNow.toolAttached] : []),
+        ...(targetNow.evolvedFromStack ?? []),
       ];
       // v5.468：改走 koPrizesAdjusted（原 raw ex?2:1 漏古舊能量-1/莉莉艾珍珠/影藏/脆弱蛻殼）。玩家回報古舊能量沒-1。
-      const _ko = koPrizesAdjusted(s, target, targetCard, actorIdx, dIdx, pool);
+      const _ko = koPrizesAdjusted(s, targetNow, targetCard, actorIdx, dIdx, pool);
       const prizes = _ko.prizes;
       s = _ko.state;
       morePrizes += prizes;
       koNames.push(targetCard?.name ?? '?');
       const players = [...s.players] as [PlayerState, PlayerState];
-      if (defender.active?.iid === iid) {
-        players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
+      if (defenderNow.active?.iid === iid) {
+        players[dIdx] = { ...defenderNow, active: null, discard: [...defenderNow.discard, ...ko] };
       } else {
         players[dIdx] = {
-          ...defender,
-          bench: defender.bench.filter(c => c.iid !== iid),
-          discard: [...defender.discard, ...ko],
+          ...defenderNow,
+          bench: defenderNow.bench.filter(c => c.iid !== iid),
+          discard: [...defenderNow.discard, ...ko],
         };
       }
       s = { ...s, players };
@@ -724,11 +737,11 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       s = recordOppKO(s, dIdx, targetCard, 'attack');
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
-      const newDef = { ...defender };
-      if (defender.active?.iid === iid) {
-        newDef.active = { ...defender.active!, damage: newDmg };
+      const newDef = { ...defenderNow };
+      if (defenderNow.active?.iid === iid) {
+        newDef.active = { ...defenderNow.active!, damage: newDmg };
       } else {
-        newDef.bench = defender.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+        newDef.bench = defenderNow.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
       }
       players[dIdx] = newDef;
       s = { ...s, players };
