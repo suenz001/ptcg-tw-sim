@@ -214,6 +214,9 @@ regPost('吼叫尾|唱歌鼓勵', (state, aIdx, pool) => {
     type: 'heal-target',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
+    // v5.929 卡面限「備戰區的『古代』寶可夢」→ 傳 validIids 限定候選(比照美洛耶塔治癒旋律),
+    //   否則前端 heal-target 無 validIids 會列出戰鬥位+全備戰,可治非法目標。
+    params: { validIids: ancientBench.map((c) => c.iid) },
     effectKey: 'h-wave3-heal-100',
   });
 });
