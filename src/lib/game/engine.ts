@@ -5606,7 +5606,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       && defCardAfterDmg?.name === '陳舊的背蓋化石';
     if (shellFossilImmune) {
       newState = addLog(newState,
-        `陳舊的背蓋化石：免疫招式的附加效果（傷害仍正常結算）`, dIdx);
+        `陳舊的背蓋化石：免疫招式效果（只擋指向它的效果；玩家層級效果如「物品/支援者鎖」照常生效）`, dIdx);
     }
     // v2.78 純樸 — defender immuneToAttackEffectsThisTurn → skip ATTACK_POST 附加效果
     // v5.238 擴展：
@@ -5625,7 +5625,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   「目標非我方戰鬥位」的效果）。改由 canApplyEffectToTarget per-target guard 精準擋「指向免疫
     //   active」的效果（defense.ts 1b-2 + 各 defender 效果 POST helper 走 guard）。
     //   （陳舊的背蓋化石 shellFossilImmune 暫維持 blanket，範圍窄、另由 canApplyAttackEffectToTarget 補。）
-    const postFn = !shellFossilImmune ? ATTACK_POST.get(effectKey) : undefined;
+    // v5.930 陳舊的背蓋化石不再 blanket skip 整個 POST(原會誤擋玩家層級 lock 如海之影物品鎖,
+    //   且會誤殺攻擊方 self-effect)。POST 照跑;指向此寶可夢的效果由 canApplyAttackEffectToTarget
+    //   legacy guard(effects.ts fossil short-circuit)+ 下方 canApplyEffectToTarget 還原 sweep 擋
+    //   (背蓋守護在該 guard 函式最前端,凡擋化隱/純樸者必擋此);玩家層級效果(不指向此寶可夢)照常生效。
+    //   (defense.ts 605 僅文件登記,非行為碼。)比照 v5.333 純樸/飛翔/阿塞蘿拉 pattern。
+    const postFn = ATTACK_POST.get(effectKey);
     // v5.333：以下僅資訊性提示「我方戰鬥寶可夢本回合免疫」；實際擋下由 per-target guard 精準處理
     //   （只擋指向此 active 的傷害/效果，目標非我方戰鬥位的效果照常執行）。
     if (postNuetralImmune) {
