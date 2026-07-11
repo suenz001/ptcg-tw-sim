@@ -234,9 +234,10 @@
         }
         // v5.618 新鮮度看門狗：對戰/setup 中盤面 >8s 沒任何更新（poll 成功卻漏接/版本卡住，如「對手補抽放置完成後我方手牌沒亮」）
         //   → 強制重抓伺服器權威最新盤面。涵蓋 setup（tStep 一有 gameState 即 playing）。gate：我方 picker 進行中不擾動；節流 8s。
+        const _freshStaleMs = (game && game.phase === 'setup') ? 3500 : 8000;  // v5.931 setup 階段(互動等待、卡住更擾人)看門狗加快;對戰中維持 8s
         if (tStep === 'playing' && game && !isTournSpectator
-            && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > 8000
-            && (Date.now() - _tLastForceResyncAt) > 8000
+            && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > _freshStaleMs
+            && (Date.now() - _tLastForceResyncAt) > _freshStaleMs
             && !(game.pendingSelection && game.pendingSelection.actorIdx === mySeatIdx)) {
           _tLastForceResyncAt = Date.now();
           tForceResync();
@@ -4315,7 +4316,7 @@
     try {
       const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
       if (fr && fr.gameState && typeof fr.version === 'number') {
-        if (fr.version !== tVersion) { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }  // 漏接或客戶端超前 → 一律回正
+        if (fr.version !== tVersion || fr.gameState.phase === 'setup') { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }  // 漏接/客戶端超前一律回正;v5.931 setup 階段即使版本相符也強制採用(修同版本卻卡空手牌/舊盤面只能F5)
         _tLastStateChangeAt = Date.now();
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
