@@ -135,6 +135,9 @@
   let _tLastPollOkAt = 0;  // v5.591 上次輪詢成功回應時間（看門狗判斷輪詢是否停擺）
   let _tLastStateChangeAt = 0;  // v5.618 上次盤面實際更新時間（新鮮度看門狗：poll 成功卻漏接更新時也能自動重抓）
   let _tLastForceResyncAt = 0;  // v5.618 上次強制重抓時間（節流）
+  let _diagSentCount = 0;              // v5.933 客戶端診斷回傳 per-page 上限(3)
+  let _freshWatchdogFires = 0;         // v5.933 新鮮度看門狗連續觸發次數(盤面 tAdopt 即歸零)
+  let _invisibleHandDiagSent = false;  // v5.933 隱形手牌指紋已回傳一次(避免每 tick 重送)
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
@@ -240,8 +243,18 @@
             && (Date.now() - _tLastForceResyncAt) > 8000
             && !(game.pendingSelection && game.pendingSelection.actorIdx === mySeatIdx)) {
           _tLastForceResyncAt = Date.now();
+          _freshWatchdogFires++;  // v5.933 連續觸發計數
+          if (_freshWatchdogFires >= 2 && game && game.phase === 'setup') _tSendClientDiag('setup-watchdog-repeat');  // v5.933 force-resync 後仍卡 → 回傳診斷
           tForceResync();
           startTournamentPoll();
+        }
+        // v5.933 隱形手牌指紋偵測(v5.932 已修根因,此為確認+未來防護):手牌有卡卻一張都不可見+arriving 殘留 → 回傳一次診斷
+        if (tStep === 'playing' && game && !isTournSpectator && !_invisibleHandDiagSent && arrivingIids.size > 0) {
+          const _hl = game.players?.[mySeatIdx]?.hand?.length ?? 0;
+          if (_hl > 0) {
+            let _vis = -1; try { _vis = document.querySelectorAll('.hand-strip .hand-card').length; } catch { /* */ }
+            if (_vis === 0) { _invisibleHandDiagSent = true; _tSendClientDiag('invisible-hand'); }
+          }
         }
       }, 1000);
     } else if (tTickTimer) { clearInterval(tTickTimer); tTickTimer = null; }
@@ -4327,6 +4340,43 @@
     if (typeof version === 'number') tVersion = version;
     if (state) tStep = 'playing';
     _tLastStateChangeAt = Date.now();  // v5.618 記錄盤面更新時間（新鮮度看門狗用）
+    _freshWatchdogFires = 0;  // v5.933 真盤面更新 → 看門狗連續觸發計數歸零
+  }
+  // v5.933 客戶端診斷回傳(setup/同步異常定根因/確認用)——只在真異常指紋才送,fire-and-forget,絕不阻塞/影響對戰。
+  function _tSendClientDiag(reason: string) {
+    try {
+      if (!isTournament || isTournSpectator || !tActiveRoom) return;
+      if (_diagSentCount >= 3) return;
+      _diagSentCount++;
+      const g: any = game;
+      let visHand = -1, arrivingDom = -1;
+      try { visHand = document.querySelectorAll('.hand-strip .hand-card').length; } catch { /* */ }
+      try { arrivingDom = document.querySelectorAll('.hand-strip .hand-card.arriving').length; } catch { /* */ }
+      const now = Date.now();
+      const payload = {
+        reason, room: tActiveRoom, ts: now, ver: VERSION,
+        state: {
+          tVersion, gameId: g?.id ?? null, phase: g?.phase ?? null, setupDone: g?.setupDone ?? null,
+          pendingMulliganDraw: g?.pendingMulliganDraw ?? null, mulliganRevealConfirmed: g?.mulliganRevealConfirmed ?? null,
+          mulliganPostBenchOpen: g?.mulliganPostBenchOpen ?? null,
+          actorSeat: (() => { try { return tCurrentActorSeat(g); } catch { return null; } })(), mySeatIdx,
+        },
+        render: {
+          coinFlipStage, arrivingSize: arrivingIids.size, drawAnims: drawAnims.length,
+          handLen: (g?.players?.[mySeatIdx]?.hand?.length ?? -1), visHand, arrivingDom,
+        },
+        poll: {
+          sincePollOk: _tLastPollOkAt ? now - _tLastPollOkAt : -1, sinceStateChange: _tLastStateChangeAt ? now - _tLastStateChangeAt : -1,
+          sinceForceResync: _tLastForceResyncAt ? now - _tLastForceResyncAt : -1, pollGen: tPollGen, watchdogFires: _freshWatchdogFires,
+        },
+        env: {
+          vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
+          w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
+          ua: (typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 80) : ''),
+        },
+      };
+      void tApi('/clientdiag', payload).catch(() => { /* fire-and-forget,診斷絕不影響對戰 */ });
+    } catch { /* 診斷絕不影響對戰 */ }
   }
   // v5.618：手動/自動「重新同步」— 強制 v=-1 抓伺服器權威最新盤面（版本不同才採用，避免擾動我方 picker）。
   //   答玩家「輪到自己時系統會幫忙確認/不必 F5」：對戰中盤面卡住即可由看門狗自動或玩家點「🔄 同步」恢復。
@@ -7599,7 +7649,7 @@
           {/if}
         </span>
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
-        {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip" title={isTournament ? '若遲遲沒換你，可能是畫面沒更新 → 點此重新同步（不必重整網頁）' : undefined} style={isTournament ? 'cursor:pointer;' : undefined} onclick={() => { if (isTournament) tForceResync(); }}>等待對手行動{#if isTournament} 🔄{/if}</span>{/if}
+        {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip" title={isTournament ? '若遲遲沒換你，可能是畫面沒更新 → 點此重新同步（不必重整網頁）' : undefined} style={isTournament ? 'cursor:pointer;' : undefined} onclick={() => { if (isTournament) { _tSendClientDiag('manual-sync'); tForceResync(); } }}>等待對手行動{#if isTournament} 🔄{/if}</span>{/if}
       {/if}
       <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
       {#if isSpectator}
