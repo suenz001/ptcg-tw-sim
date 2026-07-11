@@ -55,16 +55,16 @@ regPost('帕奇利茲|麻痺門牙', (state, aIdx, _pool) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 4. 火箭隊的臭泥｜浸蝕污泥 — 在受擊者上設 koAtMyNextEndOfTurn
+// 4. 火箭隊的臭泥｜浸蝕污泥 — 卡面「全部丟棄」(非昏厥)→設 strongKissDiscardPending(複用迷唇姐純丟棄機制,對手不獲獎賞;退備戰解除)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的臭泥|浸蝕污泥', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的臭泥|浸蝕污泥', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   return updatePlayer(
-    addLog(state, '浸蝕污泥：在 defender 上設 koAtMyNextEndOfTurn → 下個對手回合結束時 KO', aIdx),
+    addLog(state, '浸蝕污泥：在 defender 上設延遲丟棄旗標 → 下個對手回合結束時將該寶可夢與附加卡全部丟棄（非昏厥，對手不獲得獎賞卡；退備戰即解除）', aIdx),
     dIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, koAtMyNextEndOfTurn: true } : null,
+      active: p.active ? { ...p.active, strongKissDiscardPending: true } : null,
     }),
   );
 });

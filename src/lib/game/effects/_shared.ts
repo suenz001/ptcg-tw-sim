@@ -781,6 +781,9 @@ export function recordOppKO(
   // v5.274 赫普家族 — 給「赫普的朽木妖|恐怖復仇」用 (卡面只計「赫普的」KO)
   const isHop = victimCard?.supertype === 'Pokemon'
     && (victimCard.name?.startsWith('赫普的') ?? false);
+  // v5.928 阿響家族 — 給「阿響的凱羅斯|一力反攻」用(卡面只計「阿響的」KO)
+  const isAxiang = victimCard?.supertype === 'Pokemon'
+    && (victimCard.name?.startsWith('阿響的') ?? false);
   const fieldKey: keyof GameState = cause === 'attack'
     ? 'oppAttackKOdMeThisTurn'
     : 'oppAbilityKOdMeThisTurn';
@@ -817,6 +820,12 @@ export function recordOppKO(
       const nextDH: [number, number] = [curDH[0], curDH[1]];
       nextDH[victimIdx]++;
       s = { ...s, oppDamageKOdMyHopThisTurn: nextDH };
+    }
+    if (isAxiang) {
+      const curDA = s.oppDamageKOdMyAxiangThisTurn ?? [0, 0];
+      const nextDA: [number, number] = [curDA[0], curDA[1]];
+      nextDA[victimIdx]++;
+      s = { ...s, oppDamageKOdMyAxiangThisTurn: nextDA };
     }
   }
   return s;

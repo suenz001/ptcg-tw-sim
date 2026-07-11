@@ -1931,6 +1931,7 @@ export function createGame(
     oppAbilityKOdMyHopThisTurn: [0, 0],
     oppDamageKOdMeThisTurn: [0, 0],
     oppDamageKOdMyHopThisTurn: [0, 0],
+    oppDamageKOdMyAxiangThisTurn: [0, 0],
     oppAttackKOdMeInLastOppTurn: [0, 0],
     ancientAttackedIidsThisTurn: [[], []],
     ancientAttackedIidsLastSelfTurn: [[], []],
@@ -1942,6 +1943,7 @@ export function createGame(
     oppAbilityKOdMyHopInLastOppTurn: [0, 0],
     oppDamageKOdMeInLastOppTurn: [0, 0],
     oppDamageKOdMyHopInLastOppTurn: [0, 0],
+    oppDamageKOdMyAxiangInLastOppTurn: [0, 0],
     stadiumPlayedThisTurn: [false, false],
     // v3.85: 本回合打過「稜鏡塔」flag（給昂主花葉蒂 gate 用）
     prismTowerPlayedThisTurn: [false, false],
@@ -6039,6 +6041,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         oppAbilityKOdMyHopInLastOppTurn: state.oppAbilityKOdMyHopThisTurn ?? [0, 0],
         oppDamageKOdMeInLastOppTurn: state.oppDamageKOdMeThisTurn ?? [0, 0],
         oppDamageKOdMyHopInLastOppTurn: state.oppDamageKOdMyHopThisTurn ?? [0, 0],
+        oppDamageKOdMyAxiangInLastOppTurn: state.oppDamageKOdMyAxiangThisTurn ?? [0, 0],
         oppAttackKOdMeThisTurn: [0, 0],
         oppAbilityKOdMeThisTurn: [0, 0],
         oppAttackKOdMyRocketThisTurn: [0, 0],
@@ -6047,6 +6050,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         oppAbilityKOdMyHopThisTurn: [0, 0],
         oppDamageKOdMeThisTurn: [0, 0],
         oppDamageKOdMyHopThisTurn: [0, 0],
+        oppDamageKOdMyAxiangThisTurn: [0, 0],
       };
     }
 
@@ -6626,7 +6630,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       currentPlayer.active = null;
       currentPlayer.discard = [...currentPlayer.discard, ...discards];
       state = addLog(state,
-        `強烈之吻：${cardName} 與身上 ${discards.length - 1} 張附加卡全部丟棄（非昏厥，對手不獲得獎賞卡）`,
+        `${cardName} 與身上 ${discards.length - 1} 張附加卡因招式效果全部丟棄（非昏厥，對手不獲得獎賞卡）`,
         aIdx);
     }
 

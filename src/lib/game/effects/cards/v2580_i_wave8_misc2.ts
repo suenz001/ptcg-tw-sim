@@ -237,7 +237,7 @@ regPost('阿響的鳳王ex|閃耀羽毛', (state, aIdx, _pool) => {
 // 用既有 state.oppDamageKOdMeInLastOppTurn 機制
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('阿響的凱羅斯|一力反攻', (state, aIdx, _pool) => {
-  const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  const attackKO = state.oppDamageKOdMyAxiangInLastOppTurn?.[aIdx] ?? 0; // v5.928 只計「阿響的」寶可夢傷害KO
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 100 : 0;
   const s = tookPrize
