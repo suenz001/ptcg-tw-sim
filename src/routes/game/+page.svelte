@@ -234,10 +234,10 @@
         }
         // v5.618 新鮮度看門狗：對戰/setup 中盤面 >8s 沒任何更新（poll 成功卻漏接/版本卡住，如「對手補抽放置完成後我方手牌沒亮」）
         //   → 強制重抓伺服器權威最新盤面。涵蓋 setup（tStep 一有 gameState 即 playing）。gate：我方 picker 進行中不擾動；節流 8s。
-        const _freshStaleMs = (game && game.phase === 'setup') ? 3500 : 8000;  // v5.931 setup 階段(互動等待、卡住更擾人)看門狗加快;對戰中維持 8s
+        const _freshStaleMs = (game && game.phase === 'setup') ? 3500 : 8000;  // v5.931/932 setup 首次觸發加快(3.5s);節流維持 8s 限負載(50人賽避免每3.5s全量抓)
         if (tStep === 'playing' && game && !isTournSpectator
             && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > _freshStaleMs
-            && (Date.now() - _tLastForceResyncAt) > _freshStaleMs
+            && (Date.now() - _tLastForceResyncAt) > 8000
             && !(game.pendingSelection && game.pendingSelection.actorIdx === mySeatIdx)) {
           _tLastForceResyncAt = Date.now();
           tForceResync();
@@ -1524,6 +1524,15 @@
         const next = new Set(arrivingIids);
         for (const iid of newIids) next.add(iid);
         arrivingIids = next;
+        // v5.932 安全網：無論動畫路徑(deckEl null/microtask 未跑/timer 被清),4s 後強制清除仍殘留的 arriving,
+        //   確保手牌絕不會永久隱形需 F5。正常飛入 ~1s 內已清,此 timer 幾乎不會實際動到(僅異常兜底)。
+        const guardIids = newIids.slice();
+        const guardTimer = setTimeout(() => {
+          let changed = false; const g2 = new Set(arrivingIids);
+          for (const iid of guardIids) if (g2.has(iid)) { g2.delete(iid); changed = true; }
+          if (changed) arrivingIids = g2;
+        }, 4000);
+        drawAnimTimers.push(guardTimer);
       }
       const capturedNew = newIids.slice();
       // 延遲到下一個 microtask 才量 DOM — 此時 hand 新卡已 render
@@ -1532,7 +1541,17 @@
         const deckEl = document.querySelector(
           isMine ? '.my-row .pile-slot.deck-pile' : '.opponent-row .pile-slot.deck-pile'
         ) as HTMLElement | null;
-        if (!deckEl) return;
+        if (!deckEl) {
+          // v5.932 根因修 fail-open：量不到牌庫 DOM（開局 coin 動畫剛轉 done、setup 版面尚未 render deck-pile 等）→
+          //   放棄飛入動畫,但務必把這批 iid 從 arrivingIids 移除,否則 hand-card 永久 opacity:0+pointer-events:none
+          //   → 手牌張數 label 有數字卻一張沒亮、選不了出場,只能 F5。此為玩家回報「畫面沒牌需重整」真根因。
+          if (isMine && capturedNew.length) {
+            const noAnim = new Set(arrivingIids);
+            for (const iid of capturedNew) noAnim.delete(iid);
+            arrivingIids = noAnim;
+          }
+          return;
+        }
         const deckRect = deckEl.getBoundingClientRect();
         const startX = deckRect.left + deckRect.width / 2;
         const startY = deckRect.top  + deckRect.height / 2;
@@ -4316,7 +4335,7 @@
     try {
       const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
       if (fr && fr.gameState && typeof fr.version === 'number') {
-        if (fr.version !== tVersion || fr.gameState.phase === 'setup') { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }  // 漏接/客戶端超前一律回正;v5.931 setup 階段即使版本相符也強制採用(修同版本卻卡空手牌/舊盤面只能F5)
+        if (fr.version !== tVersion) { void ensurePoolForStateIds(fr.gameState); game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }  // 漏接或客戶端超前 → 一律回正;v5.932 補 ensurePoolForStateIds(比照 tAdopt,避免對手卡包未載渲染成'?')
         _tLastStateChangeAt = Date.now();
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
