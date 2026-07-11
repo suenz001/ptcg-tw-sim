@@ -78,10 +78,10 @@ regPre('瑪狃拉|報應爪', (state, aIdx, pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 流氓鱷|復仇獠牙 60 + 上對手回合自方寶可夢被招式 KO → +160
-// 用既有 state.oppAttackKOdMeInLastOppTurn 機制（v2.246）
+// 用既有 state.oppDamageKOdMeInLastOppTurn 機制（v2.246）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('流氓鱷|復仇獠牙', (state, aIdx, _pool) => {
-  const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 160 : 0;
   const s = tookPrize

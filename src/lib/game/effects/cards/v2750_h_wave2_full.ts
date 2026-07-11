@@ -1384,9 +1384,9 @@ regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
 });
 
 // 阿羅拉 嘎啦嘎啦|報仇 30+ — 上對手回合若自己寶可夢因招式 KO +90
-//   引擎已有 oppAttackKOdMeInLastOppTurn[me] 計數
+//   引擎已有 oppDamageKOdMeInLastOppTurn[me] 計數
 regPre('阿羅拉 嘎啦嘎啦|報仇', (state, aIdx, _pool) => {
-  const koCount = (state.oppAttackKOdMeInLastOppTurn ?? [0, 0])[aIdx] ?? 0;
+  const koCount = (state.oppDamageKOdMeInLastOppTurn ?? [0, 0])[aIdx] ?? 0;
   if (koCount > 0) return { state: addLog(state, `報仇：上對手回合 KO ${koCount} 隻自方 → 30+90 = 120`, aIdx), damage: 120 };
   return { state: addLog(state, '報仇：上對手回合無 KO → 30', aIdx), damage: 30 };
 });

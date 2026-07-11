@@ -27,6 +27,8 @@ export type TurnPhase =
 
 /** 場上或手牌中的一張卡的「執行期實例」（與 Card 資料庫記錄分離） */
 export interface CardInstance {
+  /** v5.926 效果昏厥標記：markFaintByEffect 設；sanityKOSweep 據此傳 byDamage=false，使「因招式的傷害而昏厥」型復仇招式不誤觸發 */
+  _faintByEffect?: boolean;
   /** 本場遊戲唯一 ID（每張卡不同，即使同名） */
   iid: string;
   /** 對應 Card.id（用來查牌庫資料） */
@@ -861,6 +863,9 @@ export interface GameState {
   //   卡面: 「若自己的『赫普的寶可夢』因招式的傷害而【昏厥】了」 → 必須只計「赫普的」KO
   oppAttackKOdMyHopThisTurn?: [number, number];
   oppAbilityKOdMyHopThisTurn?: [number, number];
+  // v5.926 傷害KO專屬計數（復仇家族「因招式的傷害而昏厥」用，只算傷害KO，不含效果KO=放/移指示物/直接昏厥）
+  oppDamageKOdMeThisTurn?: [number, number];
+  oppDamageKOdMyHopThisTurn?: [number, number];
   // 對手剛結束回合的 snapshot（在 END_TURN 開頭、checkup 之前 snap）
   oppAttackKOdMeInLastOppTurn?: [number, number];
   // v5.911 輪番狂攻(故勒頓):記錄「古代」寶可夢使招的 iid(遊戲層級,存活至該寶可夢 KO 離場後),
@@ -873,6 +878,9 @@ export interface GameState {
   // v5.274 赫普家族 snapshot
   oppAttackKOdMyHopInLastOppTurn?: [number, number];
   oppAbilityKOdMyHopInLastOppTurn?: [number, number];
+  // v5.926 傷害KO專屬 snapshot
+  oppDamageKOdMeInLastOppTurn?: [number, number];
+  oppDamageKOdMyHopInLastOppTurn?: [number, number];
   /**
    * v2.245：對手剛結束回合的「主回合結束時」（寶可夢檢查 *之前*）的對手獎賞張數快照 [P1, P2]。
    *

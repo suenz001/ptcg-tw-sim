@@ -234,10 +234,10 @@ regPost('阿響的鳳王ex|閃耀羽毛', (state, aIdx, _pool) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // I. 上對手回合招式 KO 自方 +N (2 張)
-// 用既有 state.oppAttackKOdMeInLastOppTurn 機制
+// 用既有 state.oppDamageKOdMeInLastOppTurn 機制
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('阿響的凱羅斯|一力反攻', (state, aIdx, _pool) => {
-  const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 100 : 0;
   const s = tookPrize
@@ -248,7 +248,7 @@ regPre('阿響的凱羅斯|一力反攻', (state, aIdx, _pool) => {
 regPre('赫普的朽木妖|恐怖復仇', (state, aIdx, _pool) => {
   // v5.274 卡面: 「若自己的『赫普的寶可夢』因招式的傷害而【昏厥】了」
   //   改用 hop snapshot (只計「赫普的」家族 KO), 非赫普寶可夢被 KO 不觸發.
-  const attackKO = state.oppAttackKOdMyHopInLastOppTurn?.[aIdx] ?? 0;
+  const attackKO = state.oppDamageKOdMyHopInLastOppTurn?.[aIdx] ?? 0;
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 100 : 0;
   const s = tookPrize

@@ -108,7 +108,7 @@ regPost('托戈德瑪爾ex|麻痺針', (state, aIdx, pool) => {
 
 // 故勒頓ex｜緋紅之牙：上個對手回合若自己的寶可夢因招式傷害昏厥，50+120。
 regPre('故勒頓ex|緋紅之牙', (state, aIdx) => {
-  const revenge = (state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0) > 0;
+  const revenge = (state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0) > 0;
   const dmg = revenge ? 170 : 50;
   return { state: addLog(state, `緋紅之牙：${revenge ? '上個對手回合有我方寶可夢因招式昏厥 → 170' : '條件未滿足 → 50'}`, aIdx), damage: dmg };
 });

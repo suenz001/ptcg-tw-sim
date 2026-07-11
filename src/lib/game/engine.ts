@@ -1929,6 +1929,8 @@ export function createGame(
     // v5.274 赫普家族
     oppAttackKOdMyHopThisTurn: [0, 0],
     oppAbilityKOdMyHopThisTurn: [0, 0],
+    oppDamageKOdMeThisTurn: [0, 0],
+    oppDamageKOdMyHopThisTurn: [0, 0],
     oppAttackKOdMeInLastOppTurn: [0, 0],
     ancientAttackedIidsThisTurn: [[], []],
     ancientAttackedIidsLastSelfTurn: [[], []],
@@ -1938,6 +1940,8 @@ export function createGame(
     // v5.274 赫普家族 snapshot
     oppAttackKOdMyHopInLastOppTurn: [0, 0],
     oppAbilityKOdMyHopInLastOppTurn: [0, 0],
+    oppDamageKOdMeInLastOppTurn: [0, 0],
+    oppDamageKOdMyHopInLastOppTurn: [0, 0],
     stadiumPlayedThisTurn: [false, false],
     // v3.85: 本回合打過「稜鏡塔」flag（給昂主花葉蒂 gate 用）
     prismTowerPlayedThisTurn: [false, false],
@@ -2387,7 +2391,7 @@ function sanityKOSweep(
       s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(ko.iid, card?.name ?? '?')} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
-      s = recordOppKO(s, dIdx, card, 'attack');
+      s = recordOppKO(s, dIdx, card, 'attack', !ko._faintByEffect);
     }
   }
   // bench
@@ -2411,7 +2415,7 @@ function sanityKOSweep(
       s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(b.iid, card?.name ?? '?')} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
-      s = recordOppKO(s, dIdx, card, 'attack');
+      s = recordOppKO(s, dIdx, card, 'attack', !b._faintByEffect);
     } else {
       newBench.push(b);
     }
@@ -6033,12 +6037,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v5.274 赫普家族 snapshot
         oppAttackKOdMyHopInLastOppTurn: state.oppAttackKOdMyHopThisTurn ?? [0, 0],
         oppAbilityKOdMyHopInLastOppTurn: state.oppAbilityKOdMyHopThisTurn ?? [0, 0],
+        oppDamageKOdMeInLastOppTurn: state.oppDamageKOdMeThisTurn ?? [0, 0],
+        oppDamageKOdMyHopInLastOppTurn: state.oppDamageKOdMyHopThisTurn ?? [0, 0],
         oppAttackKOdMeThisTurn: [0, 0],
         oppAbilityKOdMeThisTurn: [0, 0],
         oppAttackKOdMyRocketThisTurn: [0, 0],
         oppAbilityKOdMyRocketThisTurn: [0, 0],
         oppAttackKOdMyHopThisTurn: [0, 0],
         oppAbilityKOdMyHopThisTurn: [0, 0],
+        oppDamageKOdMeThisTurn: [0, 0],
+        oppDamageKOdMyHopThisTurn: [0, 0],
       };
     }
 
@@ -6671,7 +6679,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v2.78 觸發滲透寒氣等延遲傷害（於擁有者 END_TURN 時應用）
     const applyDamageAtMyEnd = (c: CardInstance): CardInstance => {
       if (!c.damageAtMyNextEndOfTurn || c.damageAtMyNextEndOfTurn <= 0) return c;
-      const n = { ...c, damage: (c.damage ?? 0) + c.damageAtMyNextEndOfTurn };
+      const _newDmgEnd = (c.damage ?? 0) + c.damageAtMyNextEndOfTurn;
+      const n = { ...c, damage: _newDmgEnd };
+      if (_newDmgEnd >= getEffectiveHP(c, pool, state)) n._faintByEffect = true; // v5.926 滲透寒氣放指示物致死=效果昏厥
       delete n.damageAtMyNextEndOfTurn;
       return n;
     };
@@ -6751,7 +6761,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   清除 flag（消費完）
     const triggerSludgeKO = (c: CardInstance): CardInstance => {
       if (!c.koAtMyNextEndOfTurn) return c;
-      const n = { ...c, damage: getEffectiveHP(c, pool, state) };
+      const n = { ...c, damage: getEffectiveHP(c, pool, state), _faintByEffect: true }; // v5.926 浸蝕污泥效果昏厥
       delete n.koAtMyNextEndOfTurn;
       return n;
     };

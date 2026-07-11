@@ -772,6 +772,7 @@ export function recordOppKO(
   victimIdx: 0 | 1,
   victimCard: Card | undefined,
   cause: 'attack' | 'ability',
+  byDamage: boolean = true, // v5.926 是否「因招式的傷害」昏厥（效果KO=false）→ 復仇家族只算 true
 ): GameState {
   // 自 KO：攻擊方 KO 自己的寶可夢（咒詛炸彈自爆等） — 不算入「對手主動 KO 我方」
   if (state.activePlayerIndex === victimIdx) return state;
@@ -804,6 +805,19 @@ export function recordOppKO(
     const nextH: [number, number] = [curH[0], curH[1]];
     nextH[victimIdx]++;
     s = { ...s, [hopKey]: nextH };
+  }
+  // v5.926 傷害KO專屬計數（復仇刀鋒等「因招式的傷害而昏厥」用）— 只在 cause=attack 且 byDamage 時 ++
+  if (cause === 'attack' && byDamage) {
+    const curD = s.oppDamageKOdMeThisTurn ?? [0, 0];
+    const nextD: [number, number] = [curD[0], curD[1]];
+    nextD[victimIdx]++;
+    s = { ...s, oppDamageKOdMeThisTurn: nextD };
+    if (isHop) {
+      const curDH = s.oppDamageKOdMyHopThisTurn ?? [0, 0];
+      const nextDH: [number, number] = [curDH[0], curDH[1]];
+      nextDH[victimIdx]++;
+      s = { ...s, oppDamageKOdMyHopThisTurn: nextDH };
+    }
   }
   return s;
 }
@@ -1353,6 +1367,7 @@ export function placedBenchInstance(card: CardInstance): CardInstance {
     secondaryStatus: undefined,
     tertiaryStatus: undefined,
     justPlaced: true,
+    _faintByEffect: undefined, // v5.926 上場清效果昏厥標(防棄牌復活帶舊標)
   };
 }
 

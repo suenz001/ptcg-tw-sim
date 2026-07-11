@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.927</span> 復仇系列招式（鐵斑葉復仇刀鋒、普隆隆姆捲土重來、流氓鱷復仇獠牙、代拉基翁與阿羅拉嘎啦嘎啦報仇、赫普的朽木妖恐怖復仇、阿響的凱羅斯一力反攻、故勒頓ex緋紅之牙）的加傷條件是「上個對手的回合，自己的寶可夢因『招式的傷害』而昏厥」。先前只要自己寶可夢被對手以任何方式擊倒都會加傷；現已修正為只在因『招式傷害』昏厥時加傷——被『效果』擊倒（放置或移動傷害指示物，如胡地手之力量、由克希痛楚記憶、藍柱石，或直接使昏厥）時不再誤加傷害。此修正不影響「不公印章／八朔／扭轉乾坤」等『被擊倒即可（不限方式）』的卡片。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.925</span> 錦標賽聊天室：未報名賽事的已登入玩家在聊天室發言時，先前會顯示 email 帳號作為名稱；現改為顯示你「最近一次報名錦標賽時使用的暱稱」（即個人資料分頁上的名稱），不再顯示 email。若你從未報名過任何賽事，則顯示 email 前綴（@ 前的部分），不會露出完整 email。</summary>
       </details>
       <details>

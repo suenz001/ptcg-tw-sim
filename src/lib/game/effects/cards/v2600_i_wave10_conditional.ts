@@ -291,7 +291,7 @@ regPre('哥德小姐|同步射擊', (state, aIdx, _pool) => {
 // 代拉基翁|報仇
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('代拉基翁|報仇', (state, aIdx, _pool) => {
-  const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
+  const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
   const tookPrize = attackKO > 0;
   const bonus = tookPrize ? 80 : 0;
   const s = tookPrize
