@@ -373,10 +373,10 @@ regA('狙射樹梟ex', 0, (st, idx) => addLog(st,
 //   v3.56：之前這裡有錯誤的 regA 註冊（v2.38 stub），會讓 UI 顯示「使用特性」按鈕、玩家按下去
 //          變「已用特性」但沒有任何進化發生 — 已移除。鬥志戰吼不需要任何主動 regA。
 
-// 耿鬼｜無限之影 — 招式 KO 時不丟棄，本體回手牌
-//   實裝：engine.ts:4266-4308 KO 流程（能量/道具/進化堆仍丟棄，本體 +damage=0 + 清旗標回手）（v2.385）
-regA('耿鬼', 0, (st, idx) => addLog(st,
-  '無限之影：被動效果（招式 KO 時本體回手牌）— 已實裝於 engine.ts KO 流程（v2.385）', idx));
+// 耿鬼｜無限之影 — 純被動特性（passive）：受【對手】招式傷害昏厥時本體+進化來源實體卡回手牌。
+//   實裝：engine.ts 戰鬥位主傷害 KO 流程 + effects.ts resolveInfiniteShadowKo（戰鬥位/備戰狙擊擴散,v5.934）。
+//   v5.936：移除原 v2.385 錯誤的 regA stub（會讓 UI 顯示「使用特性」按鈕、按了變「已用特性」卻無任何效果，
+//           比照 v3.56 移除鬥志戰吼錯誤 regA）。無限之影是被動,不需任何主動 regA。
 
 // 堅果啞鈴｜整人擊落 — 對手效果使此卡從牌庫丟棄時，對手牌庫頂 8 張丟棄
 //   實裝：_shared.ts:382 triggerOakeyeMillIfApplicable + v2360 mill trigger 點呼叫（v2.388）

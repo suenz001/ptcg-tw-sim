@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.936</span> 修正耿鬼「無限之影」被誤顯示為可點擊的「使用特性」主動按鈕的問題。無限之影是被動特性（受對手招式傷害昏厥時自動放回手牌），不該有主動按鈕；先前的按鈕按下去只會變成「已使用特性」卻沒有任何效果。現已移除該按鈕，回歸純被動。（被動的自動回手效果本身不受影響。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.935</span> 錦標賽輪空（bye）的玩家，大廳現在也會顯示「本輪進場倒數」與可觀戰提示。先前輪空者雖然自動晉級、不需進場，但畫面上看不到倒數，不知道其他玩家正在等待進場、也不知道何時可以去觀戰。現在輪空時會顯示「你本輪輪空（自動晉級）」＋其他對戰的休息倒數，倒數結束後提示可到下方「觀戰進行中的對戰」觀戰。（純顯示，不影響配對與晉級。）</summary>
       </details>
       <details>
