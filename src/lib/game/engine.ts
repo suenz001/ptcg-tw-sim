@@ -776,7 +776,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot } from './effects/_shared'; // v5.842 跨三槽狀態讀取
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy } from './effects/_shared';
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
@@ -5112,29 +5112,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const onKOToolNames = getAllAttachedTools(updatedActive).map(t => pool.get(t.cardId)).filter((c): c is import('$lib/cards/types').Card => !!c);
 
       if (infiniteShadowReturnsToHand) {
-        // 無限之影：本體回手牌（清除 damage/能量/道具/進化堆，類似全新一張卡）
-        const cleanCard = (cc: CardInstance): CardInstance => ({
-          ...cc,
-          damage: 0,
-          energyAttached: [],
-          toolAttached: undefined, extraTools: [],
-          evolvedFromStack: undefined,
-          status: undefined,
-          secondaryStatus: undefined,
-          tertiaryStatus: undefined,
-        });
-        const cleanInst = cleanCard(updatedActive);
-        // v5.512：官方 Q&A — 透過無限之影把耿鬼放回手牌時，進化前的鬼斯通/鬼斯也要一起放回手牌。
-        //   evolvedFromStack 是「扁平的下層卡片實體」(EVOLVE 建構時 baseBare.evolvedFromStack=undefined)，
-        //   逐張 cleanCard 後放回手牌。原本誤把整條進化堆丟到棄牌區（只回二階本體）。
-        const chainToHand: CardInstance[] = (updatedActive.evolvedFromStack ?? []).map(cleanCard);
-        // 附加的能量 / 道具仍進棄牌（離場附加卡進棄牌，符合 PTCG）；進化鏈整條回手。
-        const ancillaryDiscard: CardInstance[] = [
-          ...updatedActive.energyAttached,
-          ...getAllAttachedTools(updatedActive),
-        ];
-        defenderState.discard = [...defenderState.discard, ...ancillaryDiscard];
-        defenderState.hand = [...defenderState.hand, cleanInst, ...chainToHand];
+        // v5.934 中央收斂：無限之影 KO 去向改走 resolveInfiniteShadowKo（與備戰狙擊/擴散/延後傷害 KO 共用單一來源）。
+        //   本體+進化來源實體卡(evolvedFromStack；神奇糖果情形只含實際疊著的卡→不生出場上沒有的中間進化)
+        //   逐張清乾淨放回手牌；附加能量/道具丟棄。此處 defender 必為對手主傷害 KO，故 eligible=true。
+        const _isk = resolveInfiniteShadowKo(updatedActive, pool, true);
+        defenderState.discard = [...defenderState.discard, ..._isk.toDiscard];
+        defenderState.hand = [...defenderState.hand, ..._isk.toHand];
       } else {
         defenderState.discard = [...defenderState.discard, ...koDiscard];
       }

@@ -1456,6 +1456,33 @@ export function getAllAttachedTools(inst: CardInstance | null | undefined): Card
 }
 
 /**
+ * v5.934 「無限之影」型 KO 去向判定（中央收斂，所有招式傷害 KO 路徑共用：戰鬥位主傷害 +
+ *   備戰狙擊/擴散/延後傷害）。耿鬼｜無限之影：這隻寶可夢受【對手】招式的【傷害】而【昏厥】時，
+ *   不丟棄本體，而是連同其「進化來源的實體卡」(evolvedFromStack) 一起放回手牌（各清乾淨＝視同全新卡）；
+ *   寶可夢以外的卡（附加能量/道具）全部丟棄。神奇糖果情形 evolvedFromStack 只含實際疊在場上的卡，
+ *   故不會生出場上沒有的中間進化（鬼斯→耿鬼跳過鬼斯通 → 只回耿鬼+鬼斯）。
+ * @param eligible 是否符合觸發條件（＝受【對手】招式【傷害】KO；自傷/放指示物等非傷害 → false）。
+ *   false 或非無限之影 → toHand=[]、toDiscard=本體+能量+道具+進化鏈（與原丟棄行為逐字一致）。
+ */
+export function resolveInfiniteShadowKo(
+  koInst: CardInstance,
+  pool: Map<string, Card>,
+  eligible: boolean = true,
+): { toHand: CardInstance[]; toDiscard: CardInstance[] } {
+  const card = pool.get(koInst.cardId);
+  const tools = getAllAttachedTools(koInst);
+  const stack = koInst.evolvedFromStack ?? [];
+  if (eligible && card?.abilities?.some((a) => a.name === '無限之影')) {
+    const clean = (cc: CardInstance): CardInstance => ({
+      ...cc, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
+      evolvedFromStack: undefined, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
+    });
+    return { toHand: [clean(koInst), ...stack.map(clean)], toDiscard: [...koInst.energyAttached, ...tools] };
+  }
+  return { toHand: [], toDiscard: [koInst, ...koInst.energyAttached, ...tools, ...stack] };
+}
+
+/**
  * v5.781：寶可夢實體「連同附加卡放回牌庫/手牌」時，產出所有應一起移動的乾淨卡牌。
  *   主體 + 能量 + 全部道具（toolAttached + extraTools，走 getAllAttachedTools）+ 進化棧，全部 toBareCard。
  *   收斂「bounce to 牌庫」各處手刻字面（過去只取 toolAttached → 漏 extraTools 丟卡、殘留旗標）。

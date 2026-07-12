@@ -52,7 +52,7 @@ import {
   discardActiveStadium,
   recordOppKO,
   healResolver,
-  sameEvoName, getAllAttachedTools, toBareCard,
+  sameEvoName, getAllAttachedTools, toBareCard, resolveInfiniteShadowKo,
   bareCardsForReturn,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
@@ -1073,6 +1073,7 @@ function hitBenchAll(
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
+  const koToHand: CardInstance[] = [];  // v5.934 無限之影:備戰受對手招式傷害KO本體+進化鏈回手
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
   const teraImmunNames: string[] = [];        // v2.260 Bug #3 太晶備戰免疫名單
@@ -1132,11 +1133,10 @@ function hitBenchAll(
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
-      koDiscards.push({ ...c, damage: newDmg });
-      for (const e of c.energyAttached) koDiscards.push(e);
-      // v3.20 多重轉接：iterate 所有道具
-      for (const t of getAllAttachedTools(c)) koDiscards.push(t);
-      for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
+      // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷 targetIdx===attackerIdx 不觸發)
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx);
+      for (const _d of _isk.toDiscard) koDiscards.push(_d);
+      for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
         if (attackerIdx !== targetIdx) {
           const _ko = koPrizesAdjusted(coinWS, c, card, attackerIdx, targetIdx, pool);
@@ -1158,10 +1158,12 @@ function hitBenchAll(
     ...target,
     bench: newBench,
     discard: [...target.discard, ...koDiscards],
+    hand: koToHand.length > 0 ? [...target.hand, ...koToHand] : target.hand,  // v5.934 無限之影
   };
 
   const who = targetIdx === attackerIdx ? '自己' : '對手';
   let s: GameState = { ...coinWS, players };
+  if (koToHand.length > 0) s = addLog(s, `無限之影：備戰的寶可夢因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, targetIdx);
   s = addLog(s, `${attackLabel}：對${who}所有備戰寶可夢各造成 ${amount} 傷害`, attackerIdx);
   // v5.293 特性減傷 log
   if (reduceLogs.length > 0) {
@@ -1282,6 +1284,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
+  const koToHand: CardInstance[] = [];  // v5.934 無限之影:備戰受對手招式傷害KO本體+進化鏈回手
   const hitNames: string[] = [];
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
@@ -1332,11 +1335,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
-      koDiscards.push({ ...c, damage: newDmg });
-      for (const e of c.energyAttached) koDiscards.push(e);
-      // v3.20 多重轉接：iterate 所有道具
-      for (const t of getAllAttachedTools(c)) koDiscards.push(t);
-      for (const prev of c.evolvedFromStack ?? []) koDiscards.push(prev);
+      // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷不觸發)
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx);
+      for (const _d of _isk.toDiscard) koDiscards.push(_d);
+      for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
         if (actorIdx !== targetIdx) {
           const _ko = koPrizesAdjusted(st, c, card, actorIdx, targetIdx, pool);
@@ -1355,9 +1357,10 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   }
 
   const players = [...st.players] as [PlayerState, PlayerState];
-  players[targetIdx] = { ...target, bench: newBench, discard: [...target.discard, ...koDiscards] };
+  players[targetIdx] = { ...target, bench: newBench, discard: [...target.discard, ...koDiscards], hand: koToHand.length > 0 ? [...target.hand, ...koToHand] : target.hand };  // v5.934 無限之影
 
   let s: GameState = { ...st, players };
+  if (koToHand.length > 0) s = addLog(s, `無限之影：備戰的寶可夢因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, targetIdx);
   // v3.888：log 被 resolveBenchGuard 擋下的目標（花之帷幔 / 抵抗之幕 等）
   if (guardBlockedLog.length > 0) {
     s = addLog(s, `${label}：以下備戰寶可夢免疫此招式傷害 — ${guardBlockedLog.join('；')}`, actorIdx);
@@ -7892,21 +7895,20 @@ export function dealAttackDamageToTarget(
       const _pk = applyPreventKOToVictim(st, targetNow, targetCard, dIdx, effDmg, pool);
       if (_pk.prevented) return _pk.state;
     }
-    const ko: CardInstance[] = [
-      { ...targetNow, damage: newDmg },
-      ...targetNow.energyAttached,
-      ...getAllAttachedTools(targetNow),
-      ...(targetNow.evolvedFromStack ?? []),
-    ];
+    // v5.934 無限之影中央收斂：受【對手】招式【傷害】KO(kind==='attack-damage' && dIdx!==actorIdx) → 本體+進化鏈回手;放指示物(attack-effect)/自傷不觸發
+    const _isk = resolveInfiniteShadowKo({ ...targetNow, damage: newDmg }, pool, kind === 'attack-damage' && dIdx !== actorIdx);
+    const ko: CardInstance[] = _isk.toDiscard;
     const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool, kind === 'attack-damage');
     st = _ko.state;
     const p = _ko.prizes;
     const players = [...st.players] as [PlayerState, PlayerState];
     const newDefender = { ...defenderNow, discard: [...defenderNow.discard, ...ko] };
+    if (_isk.toHand.length > 0) newDefender.hand = [...defenderNow.hand, ..._isk.toHand];
     if (isActive) newDefender.active = null;
     else newDefender.bench = defenderNow.bench.filter(c => c.iid !== targetIid);
     players[dIdx] = newDefender;
     let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
+    if (_isk.toHand.length > 0) s = addLog(s, `無限之影：${targetCard?.name ?? '?'} 因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, dIdx);
     s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
     // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
     //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
