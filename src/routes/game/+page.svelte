@@ -171,15 +171,21 @@
   let tChatHasMore = $state(false);  // v5.752 是否還有更舊訊息可載(往上滑續載)
   let _tChatLoadingOlder = false;   // v5.752 載更舊並發防護
   // ── Phase1-D 賽程（單敗淘汰）──
-  let tBracket = $state<any>(null);   // { event, matches[] }
+  let tBrackets = $state<any[]>([]);   // v5.937 所有進行中賽事的賽程(官方+社群並行);每個 { event, matches(含roomId), standings }
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
   let tMyBye = $state<any>(null);     // v5.935 我本輪輪空 { round, enterOpenAt }(輪空者也看倒數+可觀戰提示)
-  let tBracketPage = $state(1);        // v5.590 賽程翻頁：目前檢視的輪次（預設＝當前進行輪）
-  let _tBracketLastRound = -1;
-  $effect(() => {
-    const cur = tBracket?.event?.currentRound ?? 1;
-    if (cur !== _tBracketLastRound) { _tBracketLastRound = cur; tBracketPage = cur; }  // 當前輪變動 → 預設跳到該輪
-  });
+  // v5.937 賽程翻頁改 per-event(多賽事並存):存 {round,page};pageOf 判存的 round≠currentRound 即視為未設→跳當前輪(免 $effect/舊 hack)。
+  let tBracketPages = $state<Record<string, { round: number; page: number }>>({});
+  function pageOf(brk: any, rounds: number): number {
+    const cur = brk?.event?.currentRound ?? 1;
+    const st = tBracketPages[brk?.event?._id];
+    const p = (st && st.round === cur) ? st.page : cur;
+    return Math.min(Math.max(1, p), rounds);
+  }
+  function setBracketPage(brk: any, page: number) {
+    const cur = brk?.event?.currentRound ?? 1;
+    tBracketPages = { ...tBracketPages, [brk.event._id]: { round: cur, page } };
+  }
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
   // v5.585 跨房提醒：在「一般對戰」中也輪詢錦標賽「我的對戰」，可入場時跳頂部橫幅
   let tAlertEvent = $state<any>(null);
@@ -199,7 +205,7 @@
     if (isTournament && firebaseUser && !firebaseUser.isAnonymous && tStep !== 'playing') {
       if (!tEventPollTimer) {
         // 首次進大廳：5 支全抓一次（即時顯示）
-        tNow = Date.now() + tClockOffset; tournLoadEvent(); tChatLoad(); tBracketLoad(); tSpectateLoad(); tChampionsLoad();
+        tNow = Date.now() + tClockOffset; tournLoadEvent().then(() => tBracketLoad()); tChatLoad(); tChampionsLoad();
         // v5.637 降載：原本每 3s 同時打 5 支 API，大型錦標賽多人同時在大廳時把單一 node 進程打爆（事件迴圈尖峰→502）。
         //   常變的 /event /chat 維持 3s；/bracket /spectate 改每 3 tick(9s)；/champions（名人堂幾乎不變）只在進入大廳抓一次、不週期刷新（v5.647）。
         let _tPollTick = 0;
@@ -208,7 +214,7 @@
           _tPollTick++;
           tournLoadEvent();
           tChatLoad();
-          if (_tPollTick % 3 === 0) { tBracketLoad(); tSpectateLoad(); }
+          if (_tPollTick % 3 === 0) { tBracketLoad(); }
           // v5.647 降載：名人堂(/champions)移出輪詢——冠軍只在賽事結束才變,週期刷新無意義;
           //   只在「進入/重入錦標賽大廳」初始那次抓(上方首抓已有 tChampionsLoad()),降低 Oracle 負擔。
         }, 3000);
@@ -4156,8 +4162,13 @@
   }
   // 載入賽程表（admin seed 後才有 matches）
   async function tBracketLoad() {
-    try { const r = await tApi('/bracket'); tBracket = (r && Array.isArray(r.matches)) ? r : null; }
-    catch { /* ignore */ }
+    // v5.937 官方+社群賽並行:每個進行中賽事各抓一次 /bracket?eventId=(伺服器 per-eventId 3s 快取,N≤2,並發不序列)。
+    try {
+      const evs = tRunningEvents;
+      if (!evs || evs.length === 0) { tBrackets = []; return; }
+      const rs = await Promise.all(evs.map((ev: any) => tApi('/bracket?eventId=' + encodeURIComponent(ev._id)).catch(() => null)));
+      tBrackets = rs.filter((r: any) => r && Array.isArray(r.matches) && r.event);
+    } catch { /* ignore */ }
   }
   // 進入我本輪的對戰（伺服器建/取對戰房，鎖定的牌組）
   async function tEnterMatch() {
@@ -4245,6 +4256,7 @@
     try {
       isTournSpectator = true; tSpectateRoom = roomId; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; tStep = 'waiting';
       const sst = await tApi(`/spectate/state?room=${roomId}&v=-1`);
+      if (sst && sst.waiting && !sst.gameState) { tError = '這場對戰已結束或尚未開始，無法觀戰'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; tStep = 'lobby'; return; }  // v5.937 殘留/已結束房快速失敗,不卡 waiting
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
       startSpectatePoll();
@@ -4267,7 +4279,7 @@
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
-    tournLoadEvent(); tBracketLoad(); tSpectateLoad();
+    tournLoadEvent(); tBracketLoad();
   }
   async function tournEnroll(eventId: string) {
     const nick = (tNickname || '').trim();
@@ -6732,92 +6744,101 @@
       {/snippet}
       <!-- v5.620：進行中／即將開始的賽事優先（其賽程表、觀戰選單排在「下一場報名」視窗之上）-->
       {#each tRunningEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
-      <!-- v5.621 瑞士制即時排名表（僅 swiss 賽事;伺服器 /bracket 回 standings）。排在賽程表上方。 -->
-      {#if tBracket?.standings && tBracket.standings.length}
-        <div class="tourn-bracket">
-          <div class="tourn-bracket-head">📊 瑞士制排名{#if tBracket.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if tBracket.event?.swissRounds} ｜ 第 {tBracket.event.currentRound}/{tBracket.event.swissRounds} 輪{/if}</div>
-          <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
-            <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
-            {#each tBracket.standings as s (s.name + '_' + s.rank)}
-              <div style="text-align:center;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.rank}</div>
-              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.name}{#if s.mine} （你）{/if}</div>
-              <div style="text-align:center;">{s.w}-{s.l}</div>
-              <div style="text-align:center;color:#9ab;">{s.owp}%</div>
-              <div style="text-align:center;color:#9ab;">{s.oowp}%</div>
-            {/each}
-          </div>
-        </div>
-      {/if}
-      {#if tBracket && tBracket.matches && tBracket.matches.length}
-        <div class="tourn-bracket">
-          <div class="tourn-bracket-head">📋 賽程表{#if tBracket.event?.championName} ｜ 🏆 冠軍：<b>{tBracket.event.championName}</b>{/if}</div>
-          {#if tMyMatch}
-            {@const _waitMs = (tMyMatch.enterOpenAt ?? 0) - tNow}
-            {@const _dlMs = (tMyMatch.noShowDeadline ?? 0) - tNow}
-            <div class="tourn-mymatch">
-              <span>🔔 第 {tMyMatch.round} 輪 ｜ 對手：<b>{tMyMatch.oppName}</b></span>
-              {#if _waitMs > 0}
-                <span class="tourn-cd">⏳ 休息倒數 {Math.floor(_waitMs / 60000)}:{String(Math.floor((_waitMs % 60000) / 1000)).padStart(2, '0')} 後可進場</span>
-              {:else}
-                <button class="tourn-enter-btn" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : (tMyMatch.entered ? '⚔️ 回到對戰' : '⚔️ 立即進入對戰')}</button>
-              {/if}
-            </div>
-            {#if _waitMs <= 0 && tMyMatch.noShowDeadline && _dlMs > 0 && !tMyMatch.entered}
-              <p class="muted small" style="text-align:center;color:#e8a;">⏰ 請於 {Math.floor(_dlMs / 60000)}:{String(Math.floor((_dlMs % 60000) / 1000)).padStart(2, '0')} 內進場，逾時判負離席</p>
-            {/if}
-          {:else if tMyBye}
-            <!-- v5.935 輪空玩家:不需進場,但顯示本輪進場倒數+提示可觀戰,讓其知道其他對戰何時開打 -->
-            {@const _byeMs = (tMyBye.enterOpenAt ?? 0) - tNow}
-            <div class="tourn-mymatch">
-              <span>💤 第 {tMyBye.round} 輪 ｜ 你本輪<b>輪空</b>（自動晉級，不需進場）</span>
-              {#if _byeMs > 0}
-                <span class="tourn-cd">⏳ 其他對戰休息倒數 {Math.floor(_byeMs / 60000)}:{String(Math.floor((_byeMs % 60000) / 1000)).padStart(2, '0')} 後開打，屆時可到下方👁觀戰</span>
-              {:else}
-                <span class="tourn-cd">👁 其他對戰已開放進場，可到下方「觀戰進行中的對戰」觀戰</span>
-              {/if}
-            </div>
+      <!-- v5.937 官方+社群賽並行:每個進行中賽事各顯示賽程表(含瑞士排名)+內嵌觀戰(觀戰按鈕併入每場VS,省版面) -->
+      {#snippet myMatchBox()}
+        {@const _waitMs = (tMyMatch.enterOpenAt ?? 0) - tNow}
+        {@const _dlMs = (tMyMatch.noShowDeadline ?? 0) - tNow}
+        <div class="tourn-mymatch">
+          <span>🔔 第 {tMyMatch.round} 輪 ｜ 對手：<b>{tMyMatch.oppName}</b></span>
+          {#if _waitMs > 0}
+            <span class="tourn-cd">⏳ 休息倒數 {Math.floor(_waitMs / 60000)}:{String(Math.floor((_waitMs % 60000) / 1000)).padStart(2, '0')} 後可進場</span>
+          {:else}
+            <button class="tourn-enter-btn" onclick={tEnterMatch} disabled={tBusy}>{tBusy ? '進場中…' : (tMyMatch.entered ? '⚔️ 回到對戰' : '⚔️ 立即進入對戰')}</button>
           {/if}
-          {#if tBracket.event}
-            {@const _maxRound = tBracket.matches.reduce((mx: number, m: any) => Math.max(mx, m.round), 1)}
-            {@const _rounds = Math.max(tBracket.event.rounds ?? 1, _maxRound)}
-            {@const _page = Math.min(Math.max(1, tBracketPage), _rounds)}
-            {@const _curR = tBracket.event.currentRound ?? 1}
-            {@const _roundMatches = tBracket.matches.filter((m: any) => m.round === _page)}
-            {@const _isCut = _roundMatches.some((m: any) => m.phase === 'cut')}
-            {@const _isSwiss = _roundMatches.some((m: any) => m.phase === 'swiss')}
-            {@const _cutPlayers = _roundMatches.reduce((n: number, m: any) => n + (m.p2name != null ? 2 : 1), 0)}
-            <div class="tourn-bracket-pager">
-              <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.max(1, _page - 1)} disabled={_page <= 1}>◀ 上一輪</button>
-              <span class="tourn-pg-title">{_isSwiss ? '瑞士第 ' + _page + ' 輪' : _isCut ? (_cutPlayers <= 2 ? '🏆 決賽' : _cutPlayers + '強賽') : (_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪')}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
-              <button class="tourn-pg-btn" onclick={() => tBracketPage = Math.min(_rounds, _page + 1)} disabled={_page >= _rounds}>下一輪 ▶</button>
-            </div>
-            <div class="tourn-round">
-              {#if _roundMatches.length === 0}
-                <div class="muted small" style="text-align:center;padding:14px;">此輪賽程尚未產生（前一輪打完才會排定）</div>
-              {/if}
-              {#each _roundMatches as m}
-                <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
-                  <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
-                  <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
-                  <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
-                </div>
+        </div>
+        {#if _waitMs <= 0 && tMyMatch.noShowDeadline && _dlMs > 0 && !tMyMatch.entered}
+          <p class="muted small" style="text-align:center;color:#e8a;">⏰ 請於 {Math.floor(_dlMs / 60000)}:{String(Math.floor((_dlMs % 60000) / 1000)).padStart(2, '0')} 內進場，逾時判負離席</p>
+        {/if}
+      {/snippet}
+      {#snippet myByeBox()}
+        {@const _byeMs = (tMyBye.enterOpenAt ?? 0) - tNow}
+        <div class="tourn-mymatch">
+          <span>💤 第 {tMyBye.round} 輪 ｜ 你本輪<b>輪空</b>（自動晉級，不需進場）</span>
+          {#if _byeMs > 0}
+            <span class="tourn-cd">⏳ 其他對戰休息倒數 {Math.floor(_byeMs / 60000)}:{String(Math.floor((_byeMs % 60000) / 1000)).padStart(2, '0')} 後開打，屆時可到賽程表點 VS👁 觀戰</span>
+          {:else}
+            <span class="tourn-cd">👁 其他對戰已開放進場，可到賽程表點 VS👁 觀戰</span>
+          {/if}
+        </div>
+      {/snippet}
+      {#snippet bracketBlock(brk)}
+        {#if brk.standings && brk.standings.length}
+          <div class="tourn-bracket">
+            <div class="tourn-bracket-head">📊 {brk.event?.name ?? ''} 瑞士制排名{#if brk.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if brk.event?.swissRounds} ｜ 第 {brk.event.currentRound}/{brk.event.swissRounds} 輪{/if}</div>
+            <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
+              <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
+              {#each brk.standings as s (s.name + '_' + s.rank)}
+                <div style="text-align:center;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.rank}</div>
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.name}{#if s.mine} （你）{/if}</div>
+                <div style="text-align:center;">{s.w}-{s.l}</div>
+                <div style="text-align:center;color:#9ab;">{s.owp}%</div>
+                <div style="text-align:center;color:#9ab;">{s.oowp}%</div>
               {/each}
             </div>
-          {/if}
-        </div>
+          </div>
+        {/if}
+        {#if brk.matches && brk.matches.length}
+          <div class="tourn-bracket">
+            <div class="tourn-bracket-head">📋 {brk.event?.name ?? ''} 賽程表{#if brk.event?.championName} ｜ 🏆 冠軍：<b>{brk.event.championName}</b>{/if}</div>
+            {#if tMyMatch && tMyMatch.eventId === brk.event?._id}
+              {@render myMatchBox()}
+            {:else if tMyBye && tMyBye.eventId === brk.event?._id}
+              {@render myByeBox()}
+            {/if}
+            {#if brk.event}
+              {@const _maxRound = brk.matches.reduce((mx: number, m: any) => Math.max(mx, m.round), 1)}
+              {@const _rounds = Math.max(brk.event.rounds ?? 1, _maxRound)}
+              {@const _page = pageOf(brk, _rounds)}
+              {@const _curR = brk.event.currentRound ?? 1}
+              {@const _roundMatches = brk.matches.filter((m: any) => m.round === _page)}
+              {@const _isCut = _roundMatches.some((m: any) => m.phase === 'cut')}
+              {@const _isSwiss = _roundMatches.some((m: any) => m.phase === 'swiss')}
+              {@const _cutPlayers = _roundMatches.reduce((n: number, m: any) => n + (m.p2name != null ? 2 : 1), 0)}
+              <div class="tourn-bracket-pager">
+                <button class="tourn-pg-btn" onclick={() => setBracketPage(brk, _page - 1)} disabled={_page <= 1}>◀ 上一輪</button>
+                <span class="tourn-pg-title">{_isSwiss ? '瑞士第 ' + _page + ' 輪' : _isCut ? (_cutPlayers <= 2 ? '🏆 決賽' : _cutPlayers + '強賽') : (_page === _rounds ? '🏆 決賽' : '第 ' + _page + ' 輪')}{#if _page === _curR}<span class="tourn-pg-cur"> 進行中</span>{/if}</span>
+                <button class="tourn-pg-btn" onclick={() => setBracketPage(brk, _page + 1)} disabled={_page >= _rounds}>下一輪 ▶</button>
+              </div>
+              <div class="tourn-round">
+                {#if _roundMatches.length === 0}
+                  <div class="muted small" style="text-align:center;padding:14px;">此輪賽程尚未產生（前一輪打完才會排定）</div>
+                {/if}
+                {#each _roundMatches as m}
+                  {@const _canSpec = m.status === 'playing' && m.roomId && !m.mine}
+                  <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
+                    <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
+                    {#if _canSpec}
+                      <button class="tm-vs tm-vs-spec" title="👁 點此觀戰這場對戰" onclick={() => tSpectate(m.roomId)} disabled={tBusy}>VS👁</button>
+                    {:else}
+                      <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
+                    {/if}
+                    <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+      {/snippet}
+      <!-- v5.937 進場鈕保底(判負攸關):tMyMatch/tMyBye 存在但沒對應到已載入的 bracket → 頂層獨立渲染,避免進場鈕消失吃 noShow 判負 -->
+      {#if tMyMatch && !tBrackets.some((b) => b.event?._id === tMyMatch.eventId)}
+        <div class="tourn-bracket">{@render myMatchBox()}</div>
+      {:else if tMyBye && !tBrackets.some((b) => b.event?._id === tMyBye.eventId)}
+        <div class="tourn-bracket">{@render myByeBox()}</div>
       {/if}
-
-      {#if tSpectateList.length > 0}
-        <div class="tourn-bracket">
-          <div class="tourn-bracket-head">👁 觀戰進行中的對戰（不會看到雙方手牌）</div>
-          {#each tSpectateList as sp (sp.roomId)}
-            <div class="tourn-mymatch">
-              <span>第 {sp.round} 輪：<b>{sp.p1name}</b> vs <b>{sp.p2name}</b></span>
-              <button class="btn-secondary small" onclick={() => tSpectate(sp.roomId)} disabled={tBusy}>👁 觀戰</button>
-            </div>
-          {/each}
-        </div>
-      {/if}
+      {#each tBrackets as brk (brk.event._id)}
+        {@render bracketBlock(brk)}
+      {/each}
       <!-- v5.620：報名中／籌備中的賽事（下一場、下下場…）排在進行中賽事與觀戰之下 -->
       {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
       <!-- v5.652 名人堂分兩段下拉：官方賽（在前、預設展開「直接呈現」）與社群自辦賽（在後、預設收摺「點選才看」）。
@@ -10707,6 +10728,9 @@
   .tourn-match .tm-p2 { text-align: left; }
   .tourn-match .tm-side.win { color: #aef0b0; font-weight: 700; background: #1d3a1d; }
   .tourn-match .tm-vs { text-align: center; font-size: 0.7rem; font-weight: 700; color: #9ab4e0; background: #1a2440; border: 1px solid #3a5a8a; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .tourn-match .tm-vs-spec { cursor: pointer; color: #7ee0a0; background: #123020; border-color: #2e6a3e; font-family: inherit; line-height: 1.2; }
+  .tourn-match .tm-vs-spec:hover { background: #1a4a2a; color: #aef0b0; }
+  .tourn-match .tm-vs-spec:disabled { opacity: .5; cursor: default; }
   .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9999; }
   .tourn-return-bar button { box-shadow: 0 4px 14px #000a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }

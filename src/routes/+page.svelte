@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.937</span> 錦標賽比賽頁兩項改善：①修正「官方賽與社群賽同時舉辦」時，比賽頁只看得到其中一個賽事的賽程表與觀戰的問題——現在每個進行中的賽事都會各自顯示自己的賽程表（瑞士制含即時排名）。②為節省版面，把原本獨立的「👁 觀戰」清單併入賽程表：進行中的對戰，其中間的「VS」會變成綠色的「VS👁」，直接點一下就能觀戰那一場（自己的對戰不會顯示觀戰、輪空與未開打的場也不會）。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.936</span> 修正耿鬼「無限之影」被誤顯示為可點擊的「使用特性」主動按鈕的問題。無限之影是被動特性（受對手招式傷害昏厥時自動放回手牌），不該有主動按鈕；先前的按鈕按下去只會變成「已使用特性」卻沒有任何效果。現已移除該按鈕，回歸純被動。（被動的自動回手效果本身不受影響。）</summary>
       </details>
       <details>
