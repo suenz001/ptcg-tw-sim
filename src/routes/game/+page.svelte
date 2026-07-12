@@ -173,6 +173,7 @@
   // ── Phase1-D 賽程（單敗淘汰）──
   let tBracket = $state<any>(null);   // { event, matches[] }
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
+  let tMyBye = $state<any>(null);     // v5.935 我本輪輪空 { round, enterOpenAt }(輪空者也看倒數+可觀戰提示)
   let tBracketPage = $state(1);        // v5.590 賽程翻頁：目前檢視的輪次（預設＝當前進行輪）
   let _tBracketLastRound = -1;
   $effect(() => {
@@ -4144,7 +4145,7 @@
       const r = await tApi('/event');
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       tEvents = Array.isArray(r.events) ? r.events : [];
-      tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null;
+      tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null; tMyBye = r.myBye ?? null;
       // 預填暱稱：用任一已報名賽事的暱稱
       if (!tNickname) {
         const mine = tEvents.find((e: any) => e.registered && e.myName);
@@ -6764,6 +6765,17 @@
             {#if _waitMs <= 0 && tMyMatch.noShowDeadline && _dlMs > 0 && !tMyMatch.entered}
               <p class="muted small" style="text-align:center;color:#e8a;">⏰ 請於 {Math.floor(_dlMs / 60000)}:{String(Math.floor((_dlMs % 60000) / 1000)).padStart(2, '0')} 內進場，逾時判負離席</p>
             {/if}
+          {:else if tMyBye}
+            <!-- v5.935 輪空玩家:不需進場,但顯示本輪進場倒數+提示可觀戰,讓其知道其他對戰何時開打 -->
+            {@const _byeMs = (tMyBye.enterOpenAt ?? 0) - tNow}
+            <div class="tourn-mymatch">
+              <span>💤 第 {tMyBye.round} 輪 ｜ 你本輪<b>輪空</b>（自動晉級，不需進場）</span>
+              {#if _byeMs > 0}
+                <span class="tourn-cd">⏳ 其他對戰休息倒數 {Math.floor(_byeMs / 60000)}:{String(Math.floor((_byeMs % 60000) / 1000)).padStart(2, '0')} 後開打，屆時可到下方👁觀戰</span>
+              {:else}
+                <span class="tourn-cd">👁 其他對戰已開放進場，可到下方「觀戰進行中的對戰」觀戰</span>
+              {/if}
+            </div>
           {/if}
           {#if tBracket.event}
             {@const _maxRound = tBracket.matches.reduce((mx: number, m: any) => Math.max(mx, m.round), 1)}
