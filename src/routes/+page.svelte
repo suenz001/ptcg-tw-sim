@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.939</span> 對戰回放上線！錦標賽已結束的每一場對戰，都可以逐回合重看盤面。在賽程表、或名人堂點開的賽程裡，已結束對戰的中間會出現黃色的「▶回放」，點下去就進入回放模式，用上方控制列的「上一步／下一步」一步一步看整場怎麼打的（雙方手牌都攤開來看）。控制列還有「🔗 複製連結」，可以把這場名局的回放連結分享給別人（對方免登入也能看）。※只有在此更新之後打的對戰才會有逐回合回放資料。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.938</span> 錦標賽賽程表現在會顯示每一場進行中對戰的「觀戰人數」——進行中的對戰，其綠色的「VS👁」會變成「VS👁(32)」，代表目前有 32 人正在觀戰那一場，讓你一眼看出哪一場最熱門、最精采。（自己的對戰若正被別人觀戰，也會顯示觀戰人數。人數約每幾秒更新一次。）</summary>
       </details>
       <details>

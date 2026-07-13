@@ -174,6 +174,9 @@
   let tBrackets = $state<any[]>([]);   // v5.937 所有進行中賽事的賽程(官方+社群並行);每個 { event, matches(含roomId), standings }
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
   let tMyBye = $state<any>(null);     // v5.935 我本輪輪空 { round, enterOpenAt }(輪空者也看倒數+可觀戰提示)
+  let isTReplay = $state(false);         // v5.939 對戰回放模式
+  let tReplay = $state<any>(null);       // { meta, finalLog, finalState, snapshots }
+  let tReplayStep = $state(0);
   // v5.937 賽程翻頁改 per-event(多賽事並存):存 {round,page};pageOf 判存的 round≠currentRound 即視為未設→跳當前輪(免 $effect/舊 hack)。
   let tBracketPages = $state<Record<string, { round: number; page: number }>>({});
   function pageOf(brk: any, rounds: number): number {
@@ -1066,6 +1069,10 @@
   }
 
   onMount(() => {
+    // v5.939 分享回放連結:?treplay=<matchId> 進頁直接進回放(公開端點免登入)
+    try { const _rid = new URLSearchParams(window.location.search).get('treplay'); if (_rid) tStartReplay(_rid); } catch { /* ignore */ }
+  });
+  onMount(() => {
     // 載入 localStorage 設定
     try {
       const saved = localStorage.getItem('ptcgGameResolutionMode');
@@ -1526,6 +1533,7 @@
       prevHandIids[1] = new Set();
       return;
     }
+    if (isTReplay) return;  // v5.939 回放:直接落定盤面,不放抽牌飛入動畫(避免 arriving 洩漏/連放)
     // 硬幣動畫還在播時：發牌畫面會被蓋住，不動；等 'done' 後再算 iid 差異
     if (coinFlipStage !== 'done') return;
     for (const pIdx of [0, 1] as const) {
@@ -4248,6 +4256,56 @@
     catch { /* ignore */ }
   }
   // 觀戰：進入某場對戰（read-only，伺服器已 redact 雙方手牌；本端額外把手牌渲染成卡背）
+  // ── v5.939 對戰回放 ──
+  function tReplaySteps(): any[] {
+    if (!tReplay) return [];
+    const steps = (tReplay.snapshots || []).map((s: any) => ({ turn: s.turn, state: s.state, isFinal: false }));
+    if (tReplay.finalState) steps.push({ turn: tReplay.meta?.finalTurn ?? (steps.length ? steps[steps.length - 1].turn : 1), state: tReplay.finalState, isFinal: true });
+    return steps;
+  }
+  function tReplayGoto(i: number) {
+    const steps = tReplaySteps();
+    if (!steps.length) return;
+    const idx = Math.min(Math.max(0, i), steps.length - 1);
+    tReplayStep = idx;
+    const step = steps[idx];
+    const st = JSON.parse(JSON.stringify(step.state));
+    const upto = step.isFinal ? Infinity : step.turn;
+    st.log = (tReplay.finalLog || []).filter((e: any) => (e.turn ?? 0) <= upto);
+    coinFlipStage = 'done';
+    game = st;
+  }
+  async function tStartReplay(matchId: string) {
+    if (!matchId) return;
+    tError = '';
+    try {
+      const res = await fetch(T_API + '/replay?matchId=' + encodeURIComponent(matchId));
+      if (!res.ok) { tError = '回放載入失敗（' + res.status + '）'; return; }
+      const data = await res.json();
+      if (data.error) { tError = data.error; return; }
+      if ((!data.snapshots || data.snapshots.length === 0) && !data.finalState) { tError = '這場沒有可回放的資料（可能是部署回放功能之前的舊對戰）'; return; }
+      tReplay = data;
+      isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online';
+      const steps = tReplaySteps();
+      try { await Promise.all(steps.map((s: any) => ensurePoolForStateIds(s.state))); } catch { /* best-effort */ }
+      tReplayGoto(0);
+      tStep = 'playing';
+    } catch (e: any) { tError = '回放載入失敗：' + (e?.message ?? e); }
+  }
+  function tExitReplay() {
+    isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; mySeatIdx = -1; myPlayerIndex = null;
+    try { const u = new URL(window.location.href); u.searchParams.delete('treplay'); history.replaceState(null, '', u.toString()); } catch { /* */ }
+    tStep = 'lobby';
+    try { tournLoadEvent(); tBracketLoad(); } catch { /* */ }
+  }
+  async function tCopyReplayLink(matchId: string) {
+    try {
+      const link = window.location.origin + base + '/game?treplay=' + encodeURIComponent(matchId);
+      await navigator.clipboard.writeText(link);
+      tError = '✅ 已複製回放連結,可分享給別人';
+      setTimeout(() => { if (tError.startsWith('✅ 已複製回放連結')) tError = ''; }, 2500);
+    } catch { tError = '複製失敗,請手動複製網址列'; }
+  }
   async function tSpectate(roomId: string) {
     // v5.604 防呆：若這是「我自己參賽」的對戰 → 走進場(看自己手牌)而非觀戰(redact 手牌)。
     //   伺服器 /spectate/list v0.43 已排除自己的場，這裡再保險一層(防快取/stale 清單誤點)。
@@ -6815,12 +6873,15 @@
                 {/if}
                 {#each _roundMatches as m}
                   {@const _canSpec = m.status === 'playing' && m.roomId && !m.mine}
+                  {@const _mid = brk.event._id + '_r' + m.round + '_m' + m.idx}
                   <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
                     <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                     {#if _canSpec}
                       <button class="tm-vs tm-vs-spec" title="👁 點此觀戰這場對戰（目前 {m.viewers ?? 0} 人觀戰中）" onclick={() => tSpectate(m.roomId)} disabled={tBusy}>VS👁{(m.viewers ?? 0) > 0 ? '(' + m.viewers + ')' : ''}</button>
                     {:else if m.status === 'playing' && (m.viewers ?? 0) > 0}
                       <span class="tm-vs" title="目前 {m.viewers} 人觀戰中">VS 👁{m.viewers}</span>
+                    {:else if m.status === 'done' && !m.bye}
+                      <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={() => tStartReplay(_mid)} disabled={tBusy}>▶回放</button>
                     {:else}
                       <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                     {/if}
@@ -6904,7 +6965,11 @@
                   onclick={() => { if (_hasLog) tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); }}
                   onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
                   <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
-                  <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
+                  {#if _hasLog}
+                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); tHofClose(); tStartReplay(tHofView.eventId + '_r' + m.round + '_m' + m.idx); }}>▶回放</button>
+                  {:else}
+                    <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
+                  {/if}
                   <span class="tm-side tm-p2" class:win={m.winner === 'p2'} title={m.p2name ?? ''}>{m.bye ? '—' : (m.p2name ?? '—')}</span>
                 </div>
               {/each}
@@ -7768,6 +7833,22 @@
         <button class="forfeit-cancel" onclick={() => showForfeitConfirm = false}>再等等</button>
       </div>
     </div>
+  </div>
+{/if}
+
+{#if isTReplay && tReplay}
+  {@const _steps = tReplaySteps()}
+  <div class="treplay-bar">
+    <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
+    <span class="treplay-title">🎬 回放：<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
+    <div class="treplay-nav">
+      <button class="treplay-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0}>⏮</button>
+      <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
+      <span class="treplay-step">{_steps[tReplayStep]?.isFinal ? '最終盤面' : ('第 ' + (_steps[tReplayStep]?.turn ?? '?') + ' 回合')}（{tReplayStep + 1}/{_steps.length}）</span>
+      <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _steps.length - 1}>下一步 ▶</button>
+      <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
+    </div>
+    <button class="treplay-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} title="複製分享連結">🔗 複製連結</button>
   </div>
 {/if}
 
@@ -10733,6 +10814,15 @@
   .tourn-match .tm-vs-spec { cursor: pointer; color: #7ee0a0; background: #123020; border-color: #2e6a3e; font-family: inherit; line-height: 1.2; }
   .tourn-match .tm-vs-spec:hover { background: #1a4a2a; color: #aef0b0; }
   .tourn-match .tm-vs-spec:disabled { opacity: .5; cursor: default; }
+  .tourn-match .tm-vs-replay { cursor: pointer; color: #ffcf6b; background: #2e2410; border-color: #6a5a2e; font-family: inherit; line-height: 1.2; }
+  .tourn-match .tm-vs-replay:hover { background: #4a3a1a; color: #ffe0a0; }
+  .treplay-bar { position: sticky; top: 0; z-index: 500; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #0f1730; border-bottom: 2px solid #3a5a8a; padding: 8px 12px; box-shadow: 0 3px 12px rgba(0,0,0,.5); }
+  .treplay-bar .treplay-title { font-weight: 700; color: #cfe0f8; font-size: .9rem; flex: 1 1 160px; min-width: 140px; }
+  .treplay-bar .treplay-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .treplay-bar .treplay-step { color: #ffd35a; font-weight: 700; font-size: .85rem; white-space: nowrap; padding: 0 4px; }
+  .treplay-btn { background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: .82rem; white-space: nowrap; }
+  .treplay-btn:disabled { opacity: .4; cursor: default; }
+  .treplay-btn:hover:not(:disabled) { background: #24345a; }
   .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9999; }
   .tourn-return-bar button { box-shadow: 0 4px 14px #000a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
