@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.944</span> 修正回放的重大顯示問題（真正根因）：之前在有寶可夢昏厥、拿過獎賞卡（獎賞少於 6 張）之後的步驟，回放畫面會出錯，變成上下兩排顯示同一個玩家（雙方獎賞看起來一模一樣）。原因是攤開獎賞卡時，空的獎賞格沒防呆而讓畫面更新中斷。現在已修好，切換視角、逐步回放在昏厥／補位的回合都會正常顯示雙方各自的盤面。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.943</span> 回放小修：①按「上一步」時對戰紀錄會正確跟著回退到那一步的進度（之前會超前顯示到下一整回合的內容）。②回放到「回放系統升級前」打的舊對戰時，會標示「舊版快照（整回合粒度）」，提醒你那些場只有整回合的資料、無法逐半回合切換先攻／後攻視角——升級後打的新對戰才有完整逐半回合回放與視角切換。</summary>
       </details>
       <details>

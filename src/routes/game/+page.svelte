@@ -4296,6 +4296,7 @@
       st.log = fullLog.slice(0, step.logLen);
     }
     // v5.942 視角=當前出牌方在底部(本機雙人語義):spectatorView='auto'→myIdx 跟 game.activePlayerIndex(state 一定有,新舊快照皆robust);不在此強制,讓玩家手動看P1/P2可持續override
+    st.pendingSelection = null;  // v5.944 兜底:回放不開 picker(避免 turn-start 殘留 pendingSelection)
     coinFlipStage = 'done';
     game = st;
   }
@@ -8061,7 +8062,7 @@
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = (_pz?.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp || isTReplay} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
+            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
           </div>
         {/key}
         <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
@@ -8268,7 +8269,7 @@
         <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = (_pz?.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp || isTReplay} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
+            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
           {/key}
         </div>
       </div>
