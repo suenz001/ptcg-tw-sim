@@ -6991,7 +6991,7 @@
                   onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
                   <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                   {#if _hasLog}
-                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); tHofClose(); tStartReplay(tHofView.eventId + '_r' + m.round + '_m' + m.idx); }}>▶回放</button>
+                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); const _mid = tHofView.eventId + '_r' + m.round + '_m' + m.idx; tHofClose(); tStartReplay(_mid); }}>▶回放</button>
                   {:else}
                     <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   {/if}

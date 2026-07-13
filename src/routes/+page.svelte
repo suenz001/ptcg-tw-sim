@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.945</span> 修正「歷屆冠軍」名人堂裡按賽程回放沒反應的問題：之前在名人堂點某場的「▶回放」會先關掉名人堂視窗、再讀取那場的編號，導致讀到空值而整個動作中斷（按了沒反應）。現在改成先記下場次編號再關視窗，名人堂裡的回放按鈕就能正常打開回放了。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.944</span> 修正回放的重大顯示問題（真正根因）：之前在有寶可夢昏厥、拿過獎賞卡（獎賞少於 6 張）之後的步驟，回放畫面會出錯，變成上下兩排顯示同一個玩家（雙方獎賞看起來一模一樣）。原因是攤開獎賞卡時，空的獎賞格沒防呆而讓畫面更新中斷。現在已修好，切換視角、逐步回放在昏厥／補位的回合都會正常顯示雙方各自的盤面。</summary>
       </details>
       <details>
