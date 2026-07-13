@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.941</span> 錦標賽報名更順手：「錦標賽暱稱」欄位現在會自動幫你填上你上一次用過的暱稱（沒報過賽事的話，就帶入你的帳號顯示名稱），不用每次報名都重打。需要換暱稱時，直接改掉那格文字就好。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.940</span> 對戰回放大升級！①先攻、後攻的每一個回合現在都各自是一個可回放的步驟（以前一整輪才一格），可以更細地逐步看盤面怎麼變化。②回放時雙方的手牌、獎賞卡都直接攤開給你看（比賽已結束，公開無妨）。③對戰紀錄（log）會跟著你回放的進度，一步步顯示到目前這一步為止的資訊。④手牌切換比照本機雙人對戰：剛出牌的那位會自動變成畫面下方的主視角。※需在此更新部署之後打的新對戰，才有完整的逐半回合資料。</summary>
       </details>
       <details>

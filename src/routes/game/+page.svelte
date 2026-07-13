@@ -4165,6 +4165,7 @@
         const mine = tEvents.find((e: any) => e.registered && e.myName);
         if (mine) tNickname = mine.myName;
         else if (tMe.registered && tMe.name) tNickname = tMe.name;
+        else if (tMe.lastName) tNickname = tMe.lastName;  // v5.941 未報名任何賽事也預填「最近一次報名暱稱」(或帳號顯示名),免每次重打
       }
     } catch { /* ignore */ }
   }
