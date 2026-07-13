@@ -36,6 +36,7 @@ import {
 } from '../../effects';
 import { getEffectiveHP } from '../../engine';  // v5.091
 import { addPendingPrize } from '../_shared';
+import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示物非治療
 
 // ── 喵喵ex｜殺手鐧捕捉 — v2.320 改為 promptPlayAbilities 互動提示 ──────────
 // 原本在 BENCH_PLACE_TRIGGERS 自動觸發；現改為 regA 路徑，
@@ -226,6 +227,7 @@ function _adrenalCountChosen(
     return { ...pl,
       bench: pl.bench.map(c => c.iid === sourceIid ? { ...c, damage: Math.max(0, c.damage - amount) } : c) };
   });
+  s = markDamageCounterMovedFrom(s, sourceIid);  // v5.947 腎上腺腦力移動指示物(非治療)→來源不算 healedThisTurn
   const dIdx = (1 - idx) as 0 | 1;
   const dp = s.players[dIdx];
   if (!dp.active && dp.bench.length === 0) {

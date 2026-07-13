@@ -10,6 +10,7 @@ import {
   getOwnBenchLimit,
   ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
 } from '../_shared';
+import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示物非治療
 import { getKODefenderEnergyInDiscard, getKODefenderSnapshot, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -272,11 +273,13 @@ regPost('勾魂眼|傷害集結', (state, aIdx, pool) => {
   let totalDmg = 0;
   for (const b of state.players[dIdx].bench) totalDmg += b.damage ?? 0;
   if (totalDmg === 0) return addLog(state, '傷害集結：對手備戰無指示物', aIdx);
+  const _gouSrc = state.players[dIdx].bench.filter(b => (b.damage ?? 0) > 0).map(b => b.iid);  // v5.947 記錄被清 0 的來源
   let s = updatePlayer(state, dIdx, p => ({
     ...p,
     bench: p.bench.map(b => ({ ...b, damage: 0 })),
     active: p.active ? { ...p.active, damage: (p.active.damage ?? 0) + totalDmg } : null,
   }));
+  s = markDamageCounterMovedFrom(s, ..._gouSrc);  // v5.947 對手備戰指示物是移動(非治療)→不算 healedThisTurn
   return addLog(s, `傷害集結：對手備戰所有 ${totalDmg} 點指示物 → 對手戰鬥場`, aIdx);
 });
 

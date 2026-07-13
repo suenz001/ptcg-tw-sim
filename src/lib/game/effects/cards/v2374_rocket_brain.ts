@@ -31,6 +31,7 @@ import {
   addLog, updatePlayer, withPending,
   isAbilityBlockedByOakEye,
 } from '../_shared';
+import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示物非治療
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 火箭隊的以歐路普｜火箭腦力（regA index 0）
@@ -131,7 +132,7 @@ regR('rocket-brain-target', (st, idx, iids, params, pool) => {
   // 來源 -10 傷害，目標 +10 傷害
   st = addLog(st, `火箭腦力：${sourceName} -10 傷害 / ${targetName} +10 傷害`, idx);
 
-  return updatePlayer(st, idx, p => {
+  st = updatePlayer(st, idx, p => {
     const updateInst = (c: CardInstance): CardInstance => {
       if (c.iid === sourceIid) return { ...c, damage: Math.max(0, c.damage - 10) };
       if (c.iid === targetIid) return { ...c, damage: c.damage + 10 };
@@ -143,6 +144,7 @@ regR('rocket-brain-target', (st, idx, iids, params, pool) => {
       bench: p.bench.map(updateInst),
     };
   });
+  return markDamageCounterMovedFrom(st, sourceIid);  // v5.947 火箭腦力移動指示物(非治療)→來源不算 healedThisTurn
   // 注意：指示物轉移到「自己」其他寶可夢上，理論上不會超過 HP 的情況極少見；
   //   若超過 HP 引發 KO 判定，由 engine 的下次 game state cycle 處理（pendingSelection
   //   resolve 後，engine 會做 KO check）。本 resolver 不在這裡 inline KO，避免重複處理。

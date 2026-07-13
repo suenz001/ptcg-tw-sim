@@ -11,6 +11,7 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
+import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
@@ -2904,6 +2905,7 @@ RESOLVERS.set('abra-hack-remove', (st, idx, iids, _params, pool) => {
     return { ...p, active: apply(p.active), bench: p.bench.map(b => apply(b)!) };
   });
   s = addLog(s, `奇異駭入：抽走 ${removedTotal} 個傷害指示物 → 以任意方式分配回對手場上`, idx);
+  s = markDamageCounterMovedFrom(s, ...Array.from(removeOf.keys()));  // v5.947 被抽走指示物的對手寶可夢是移動(非治療)
   return withPending(s, {
     type: 'damage-distribute',
     actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -8455,6 +8457,7 @@ export function relocateOwnCounterToOpp(
     active: p.active?.iid === sourceIid ? { ...p.active, damage: Math.max(0, p.active.damage - amount) } : p.active,
     bench: p.bench.map(b => b.iid === sourceIid ? { ...b, damage: Math.max(0, b.damage - amount) } : b),
   }));
+  s = markDamageCounterMovedFrom(s, sourceIid);  // v5.947 來源指示物是被移動(非治療)→不算 healedThisTurn
   // 2. 目標免疫 gate(化隱/純樸=attack-effect;光之翼=ability-effect)。被擋 → 來源已移除,不放置。
   const g = canApplyEffectToTarget(s, aIdx, target, pool.get(target.cardId), kind, pool, { isBench: !isActive });
   if (g.blocked) {

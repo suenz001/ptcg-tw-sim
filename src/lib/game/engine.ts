@@ -1560,7 +1560,7 @@ function clearTurnFlags(c: CardInstance): CardInstance {
  *   邊際：先傷後回最終 damage < prev → 視為 heal（正確）。
  *   邊際：先回後傷最終 damage >= prev → flag 已設過不清，下次擁有者 END_TURN reset（正確）。
  */
-function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState {
+export function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState {
   // 建 prev 的 iid → damage 對照表（含雙方 active + bench）
   const prevDamage = new Map<string, number>();
   for (const idx of [0, 1] as const) {
@@ -1570,6 +1570,8 @@ function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState 
   }
   // 沒任何 prev 資料 → 跳過（早期初始化階段）
   if (prevDamage.size === 0) return next;
+  // v5.947 本 action 因「移動傷害指示物」(非治療)而減傷的來源 iid → 不算 heal
+  const movedSet = new Set<string>(next._counterMoveSrcIids ?? []);
 
   let changed = false;
   const players = [...next.players] as [PlayerState, PlayerState];
@@ -1582,7 +1584,7 @@ function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState 
       const prevDmg = prevDamage.get(c.iid);
       if (prevDmg === undefined) return c;  // 新進場（換場/進化新 iid）→ 不算 heal
       const newDmg = c.damage ?? 0;
-      if (newDmg < prevDmg && !c.healedThisTurn) {
+      if (newDmg < prevDmg && !c.healedThisTurn && !movedSet.has(c.iid)) {
         pChanged = true;
         return { ...c, healedThisTurn: true };
       }
@@ -1604,7 +1606,10 @@ function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState 
     }
   }
 
-  return changed ? { ...next, players } : next;
+  const _out = changed ? { ...next, players } : next;
+  // v5.947 _counterMoveSrcIids 為 per-action 標記,消費後即清除(避免殘留誤跳過後續真回血)
+  if (_out._counterMoveSrcIids !== undefined) { const _o = { ..._out }; delete _o._counterMoveSrcIids; return _o; }
+  return _out;
 }
 
 /** 加一筆 log */

@@ -503,6 +503,19 @@ export const MOVE_DAMAGE_COUNTER_ABILITIES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * v5.947 標記「本 action 中因『移動/改放傷害指示物』(非治療)而減少傷害的來源寶可夢 iid」。
+ * markHealsByDamageDecrease(engine) 會跳過這些 iid,不誤標 healedThisTurn(活潑刀/活潑鮮花/活潑針
+ * 的「本回合恢復HP」條件)。⚠通則:任何「移放/改放傷害指示物」效果(特性/招式/物品)在減少來源
+ * damage 時一律呼叫此 helper — 移動指示物 ≠ 恢復HP(卡面權威)。
+ */
+export function markDamageCounterMovedFrom(state: GameState, ...iids: string[]): GameState {
+  const prev = state._counterMoveSrcIids ?? [];
+  const add = iids.filter(i => !!i && !prev.includes(i));
+  if (add.length === 0) return state;
+  return { ...state, _counterMoveSrcIids: [...prev, ...add] };
+}
+
+/**
  * 場上是否有「探探鼠」（任一方任一場上位置）— 通用 hook，給所有「移放傷害指示物」
  * 類特性的 gate / callback 入口共用。
  */

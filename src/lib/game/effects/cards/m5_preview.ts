@@ -681,7 +681,8 @@ regPre('超級達克萊伊ex|暗夜襲擊', (state, aIdx) => {
 
 // ── A6. 蘭螳花ex|活潑刀 — 60 + 本回合自身曾回過 HP +200 ─────
 //   卡面：「在這個回合中，若這隻寶可夢曾恢復過 HP，則此招式傷害 +200。」
-//   實裝：engine v4.43 已自動標 healedThisTurn（damage 減少時觸發），END_TURN 清除。
+//   實裝：engine markHealsByDamageDecrease 自動標 healedThisTurn（damage 減少→回血），END_TURN 清除。
+//   ⚠v5.947：「移動/改放傷害指示物」(腎上腺腦力/火箭腦力/九尾狐搬動…)≠恢復HP→用 markDamageCounterMovedFrom 標記來源,不誤觸此 +200。
 regPre('蘭螳花ex|活潑刀', (state, aIdx) => {
   const att = state.players[aIdx].active;
   const healed = att?.healedThisTurn === true;
