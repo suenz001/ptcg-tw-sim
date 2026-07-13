@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.943</span> 回放小修：①按「上一步」時對戰紀錄會正確跟著回退到那一步的進度（之前會超前顯示到下一整回合的內容）。②回放到「回放系統升級前」打的舊對戰時，會標示「舊版快照（整回合粒度）」，提醒你那些場只有整回合的資料、無法逐半回合切換先攻／後攻視角——升級後打的新對戰才有完整逐半回合回放與視角切換。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.942</span> 修正回放切換視角的問題：之前在「有寶可夢昏厥、換上新寶可夢」的回合，回放切換座位時戰鬥場的寶可夢會顯示錯誤、看起來沒有正確切換。現在回放的主視角會正確地跟著「當前出牌的那位」自動切到畫面下方（和本機雙人對戰一致）；你也可以用「看 P1／看 P2」手動固定想看的一方。</summary>
       </details>
       <details>

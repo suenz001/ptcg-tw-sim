@@ -2631,7 +2631,7 @@
       isSpectator
         ? (spectatorView === 'p1' ? 0
             : spectatorView === 'p2' ? 1
-            : ((game?.activePlayerIndex ?? 0) as 0 | 1))
+            : ((game?.activePlayerIndex ?? game?.firstPlayerIdx ?? 0) as 0 | 1))  // v5.943 保險:AP 缺退先攻
         : ((myPlayerIndex ?? 0) as 0 | 1)
     ) :
     aiPlayerIndex !== null ? ((1 - aiPlayerIndex) as 0 | 1) :
@@ -4291,7 +4291,7 @@
       st.log = fullLog.slice();
     } else if (step.logLen == null) {
       const upto = step.turn;
-      st.log = fullLog.filter((e: any) => (e.turn ?? 0) <= upto);
+      st.log = fullLog.filter((e: any) => (e.turn ?? 0) < upto);  // v5.943 舊格快照=turn 開頭,log 切到上一 turn 結尾(原 <= 會多納整個 turn→log 超前盤面一整回合)
     } else {
       st.log = fullLog.slice(0, step.logLen);
     }
@@ -7864,9 +7864,11 @@
   {@const _steps = tReplaySteps()}
   {@const _cur = _steps[tReplayStep]}
   {@const _actIdx = _cur?.state?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0}
+  {@const _isOldFmt = ((tReplay?.snapshots?.length ?? 0) > 0) && (tReplay.snapshots || []).every((s: any) => s.logLen == null)}
   <div class="treplay-bar">
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">🎬 回放：<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
+    {#if _isOldFmt}<span class="treplay-oldfmt" title="這場對戰是在回放系統升級前打的,只存了整回合粒度的快照,無法逐半回合切換先攻/後攻視角。升級後打的新對戰才有完整逐半回合回放。">⚠ 舊版快照（整回合粒度）</span>{/if}
     <div class="treplay-nav">
       <button class="treplay-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0}>⏮</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
@@ -10847,6 +10849,7 @@
   .tourn-match .tm-vs-replay:hover { background: #4a3a1a; color: #ffe0a0; }
   .treplay-bar { position: sticky; top: 0; z-index: 500; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: #0f1730; border-bottom: 2px solid #3a5a8a; padding: 8px 12px; box-shadow: 0 3px 12px rgba(0,0,0,.5); }
   .treplay-bar .treplay-title { font-weight: 700; color: #cfe0f8; font-size: .9rem; flex: 1 1 160px; min-width: 140px; }
+  .treplay-oldfmt { font-size: .72rem; color: #f0c674; background: rgba(240,198,116,.12); border: 1px solid rgba(240,198,116,.35); border-radius: 5px; padding: 2px 7px; white-space: nowrap; cursor: help; }
   .treplay-bar .treplay-nav { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .treplay-bar .treplay-step { color: #ffd35a; font-weight: 700; font-size: .85rem; white-space: nowrap; padding: 0 4px; }
   .treplay-btn { background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: .82rem; white-space: nowrap; }
