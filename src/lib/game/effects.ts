@@ -6739,8 +6739,8 @@ regR('snipe-10', (st, actorIdx, selectedIids, _params, pool) => {
 // 新 helper:
 //   applyDamageToAllOpp(state, aIdx, pool, amount, onlyDamaged, label)
 //     → 對對手所有（或已有傷害指示物的）寶可夢各 +amount 傷害，處理 KO 串聯
-//   setOppActiveHPPre(targetHP, label)
-//     → 將對手戰鬥寶可夢的傷害設到 HP - targetHP（即剩餘 HP = targetHP）
+//   setOppActiveHPPost(targetHP, label)  // v5.948:regPost,走 attack-effect(不觸發順滑大衣/弱抗)
+//     → 放置傷害指示物讓對手戰鬥寶可夢剩餘 HP = targetHP(招式效果非傷害)
 //
 // 實裝清單:
 //   (a) 灼傷補齊（3 張）:呆火鱷|熱灼燒、熔岩蝸牛ex|熾熱熔岩、飄浮泡泡 太陽的樣子|灼熱
@@ -6855,22 +6855,21 @@ export function applyDamageToAllOpp(
   return s;
 }
 
-/** 將對手戰鬥寶可夢的傷害設為使剩餘 HP = targetHP */
-function setOppActiveHPPre(targetHP: number, label: string): AttackPreFn {
+/** v5.948「放置傷害指示物直到剩餘 HP = X」= 招式【效果】(非傷害):走 dealAttackDamageToTarget kind='attack-effect'
+ *  → 擋化隱/對戰圓形(canApplyEffectToTarget)、太晶不擋、【不計弱抗】、【不觸發順滑大衣等擲幣免傷】(只在 attack-damage 語境套)。
+ *  取代舊「回傳 damage 誤走傷害管線」版(順滑大衣/弱點×2 誤觸發;玩家回報偏道一回被奇諾栗鼠ex順滑大衣擋)。 */
+function setOppActiveHPPost(targetHP: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
-    if (!def) return { state, damage: 0 };
+    if (!def) return state;
     const card = pool.get(def.cardId);
     const hp = card?.hp ?? 0;
-    if (hp <= targetHP) {
-      return { state: addLog(state, `${label}：對手 HP 已在 ${targetHP} 以下，無效`, aIdx), damage: 0 };
-    }
+    if (hp <= targetHP) return addLog(state, `${label}：對手 HP 已在 ${targetHP} 以下，無效`, aIdx);
     const needed = hp - targetHP - def.damage;
-    if (needed <= 0) {
-      return { state: addLog(state, `${label}：對手已有足夠傷害指示物，無效`, aIdx), damage: 0 };
-    }
-    return { state: addLog(state, `${label}：讓對手剩餘 HP = ${targetHP}（+${needed} 傷害）`, aIdx), damage: needed };
+    if (needed <= 0) return addLog(state, `${label}：對手已有足夠傷害指示物，無效`, aIdx);
+    const s = addLog(state, `${label}：放置傷害指示物讓對手剩餘 HP = ${targetHP}（+${needed}，招式效果非傷害）`, aIdx);
+    return dealAttackDamageToTarget(s, aIdx, def.iid, needed, pool, { kind: 'attack-effect', label });
   };
 }
 
@@ -6948,10 +6947,12 @@ regPost('伊裴爾塔爾|侵蝕之風', (state, aIdx, pool) => {
 });
 
 // 蜈蚣王|偏道一回 — 將對手戰鬥寶可夢剩餘 HP 變為 10
-regPre('蜈蚣王|偏道一回', setOppActiveHPPre(10, '偏道一回'));
+regPre('蜈蚣王|偏道一回', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('蜈蚣王|偏道一回', setOppActiveHPPost(10, '偏道一回'));
 
 // 恰雷姆ex|氣功指壓 — 剩餘 HP 變為 50
-regPre('恰雷姆ex|氣功指壓', setOppActiveHPPre(50, '氣功指壓'));
+regPre('恰雷姆ex|氣功指壓', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('恰雷姆ex|氣功指壓', setOppActiveHPPost(50, '氣功指壓'));
 
 // 古鼎鹿|傲慢衝擊 — 220；若自身 ≥40 傷害（=4 指示物）則失敗
 regPre('古鼎鹿|傲慢衝擊', (state, aIdx, _pool) => {
