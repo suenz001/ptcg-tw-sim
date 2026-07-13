@@ -4086,7 +4086,7 @@
     // 登出：清錦標賽狀態 + signOut → onAuthStateChanged 退回匿名 → isAnonymous 觸發登入閘門
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = ''; isTournSpectator = false;
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tDeckId = ''; tError = ''; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
     try { await signOut(auth); } catch { /* ignore */ }
   }
   // v5.650 錦標賽系統播報分類上色：依訊息開頭 emoji／關鍵字歸類，回傳對應 CSS class（皆亮色系，不傷眼）
@@ -4184,7 +4184,7 @@
     try {
       const r = await tApi('/match/enter', {});
       if (r.error) { tError = r.error; return; }
-      tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting'; isTournSpectator = false;
+      tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
       const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`);
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
@@ -4200,7 +4200,7 @@
   function tLeaveMatch() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false;
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
     tournLoadEvent(); tBracketLoad();
   }
   // 名人堂：載入歷屆冠軍
@@ -4259,8 +4259,22 @@
   // ── v5.939 對戰回放 ──
   function tReplaySteps(): any[] {
     if (!tReplay) return [];
-    const steps = (tReplay.snapshots || []).map((s: any) => ({ turn: s.turn, state: s.state, isFinal: false }));
-    if (tReplay.finalState) steps.push({ turn: tReplay.meta?.finalTurn ?? (steps.length ? steps[steps.length - 1].turn : 1), state: tReplay.finalState, isFinal: true });
+    const finalLogLen = (tReplay.finalLog || []).length;
+    // v5.940 半回合逐步:每格帶 activePlayerIndex(先攻/後攻)+logLen(該格對戰 log 進度)
+    const steps = (tReplay.snapshots || []).map((s: any) => ({
+      turn: s.turn, activePlayerIndex: s.activePlayerIndex ?? null,
+      logLen: (s.logLen == null ? null : s.logLen), state: s.state, isFinal: false,
+    }));
+    // 依 logLen 升冪=時序(同 turn 的先攻/後攻靠此正確排序);缺 logLen(舊資料)退回 turn
+    steps.sort((a: any, b: any) => {
+      const la = a.logLen == null ? (a.turn ?? 0) * 1e6 : a.logLen;
+      const lb = b.logLen == null ? (b.turn ?? 0) * 1e6 : b.logLen;
+      return la - lb;
+    });
+    if (tReplay.finalState) steps.push({
+      turn: tReplay.meta?.finalTurn ?? (steps.length ? steps[steps.length - 1].turn : 1),
+      activePlayerIndex: null, logLen: finalLogLen, state: tReplay.finalState, isFinal: true,
+    });
     return steps;
   }
   function tReplayGoto(i: number) {
@@ -4270,8 +4284,22 @@
     tReplayStep = idx;
     const step = steps[idx];
     const st = JSON.parse(JSON.stringify(step.state));
-    const upto = step.isFinal ? Infinity : step.turn;
-    st.log = (tReplay.finalLog || []).filter((e: any) => (e.turn ?? 0) <= upto);
+    // v5.940 對戰 log 逐步顯示:用 logLen 切到「這一步為止」的 log(先攻/後攻各自進度);缺 logLen 退回 turn 過濾
+    const fullLog = (tReplay.finalLog || []);
+    if (step.isFinal) {
+      st.log = fullLog.slice();
+    } else if (step.logLen == null) {
+      const upto = step.turn;
+      st.log = fullLog.filter((e: any) => (e.turn ?? 0) <= upto);
+    } else {
+      st.log = fullLog.slice(0, step.logLen);
+    }
+    // v5.940 出牌方=主視角(比照本機雙人):該格盤面=剛打完那位的結果→他在底部;開局格=先攻即將行動;最終格=結束時行動方(勝方)
+    let _viewIdx: 0 | 1;
+    if (step.isFinal) _viewIdx = ((st.activePlayerIndex ?? st.firstPlayerIdx ?? 0) as 0 | 1);
+    else if (idx === 0) _viewIdx = ((step.activePlayerIndex ?? st.firstPlayerIdx ?? 0) as 0 | 1);
+    else _viewIdx = ((1 - (step.activePlayerIndex ?? 0)) as 0 | 1);
+    spectatorView = _viewIdx === 0 ? 'p1' : 'p2';
     coinFlipStage = 'done';
     game = st;
   }
@@ -4285,7 +4313,7 @@
       if (data.error) { tError = data.error; return; }
       if ((!data.snapshots || data.snapshots.length === 0) && !data.finalState) { tError = '這場沒有可回放的資料（可能是部署回放功能之前的舊對戰）'; return; }
       tReplay = data;
-      isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online';
+      isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true;  // v5.940 開對戰log面板;視角由 tReplayGoto 每格設(出牌方在底部)
       const steps = tReplaySteps();
       try { await Promise.all(steps.map((s: any) => ensurePoolForStateIds(s.state))); } catch { /* best-effort */ }
       tReplayGoto(0);
@@ -4293,7 +4321,7 @@
     } catch (e: any) { tError = '回放載入失敗：' + (e?.message ?? e); }
   }
   function tExitReplay() {
-    isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; mySeatIdx = -1; myPlayerIndex = null;
+    isTReplay = false; tReplay = null; tReplayStep = 0; game = null; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; mySeatIdx = -1; myPlayerIndex = null;
     try { const u = new URL(window.location.href); u.searchParams.delete('treplay'); history.replaceState(null, '', u.toString()); } catch { /* */ }
     tStep = 'lobby';
     try { tournLoadEvent(); tBracketLoad(); } catch { /* */ }
@@ -4314,11 +4342,11 @@
     try {
       isTournSpectator = true; tSpectateRoom = roomId; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; tStep = 'waiting';
       const sst = await tApi(`/spectate/state?room=${roomId}&v=-1`);
-      if (sst && sst.waiting && !sst.gameState) { tError = '這場對戰已結束或尚未開始，無法觀戰'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; tStep = 'lobby'; return; }  // v5.937 殘留/已結束房快速失敗,不卡 waiting
+      if (sst && sst.waiting && !sst.gameState) { tError = '這場對戰已結束或尚未開始，無法觀戰'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; tSpectateRoom = ''; mySeatIdx = -1; tStep = 'lobby'; return; }  // v5.937 殘留/已結束房快速失敗,不卡 waiting
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
       startSpectatePoll();
-    } catch (e: any) { tError = '觀戰失敗：' + (e?.message ?? e); isTournSpectator = false; tStep = 'lobby'; }
+    } catch (e: any) { tError = '觀戰失敗：' + (e?.message ?? e); isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; tStep = 'lobby'; }
     finally { tBusy = false; }
   }
   function startSpectatePoll() {
@@ -4336,7 +4364,7 @@
   function tLeaveSpectate() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
-    game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
+    game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
     tournLoadEvent(); tBracketLoad();
   }
   async function tournEnroll(eventId: string) {
@@ -4499,7 +4527,7 @@
       const nm = (myName && myName.trim()) || '玩家';
       const r = await tApi('/join', { room: tActiveRoom, playerId: tPlayerId(), name: nm, deckEntries: deck.entries });
       if (r.error) { tError = r.error; tStep = 'lobby'; return; }
-      mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; isTournSpectator = false;
+      mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
       tSyntheticRoom(r.seats, r.names);
       if (r.gameState) tAdopt(r.gameState, r.version);
       else tStep = 'waiting';
@@ -4552,7 +4580,7 @@
     try { await tApi('/reset', { room: tActiveRoom, playerId: tPlayerId() }); }
     catch (e: any) { tError = String(e?.message ?? e); }
     finally { tBusy = false; }
-    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false;
+    game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
   }
 
   async function dispatch(
@@ -7092,7 +7120,7 @@
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
 {#if isTournament && tIdleWarnSec != null && tIdleWarnSec <= 90}<div class="tourn-idle-warn">⏳ 對手閒置中：剩 {tIdleWarnSec} 秒未行動將自動判你勝</div>{/if}
 {#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
-{#if isTournSpectator && game}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
+{#if isTournSpectator && game && !isTReplay}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
      CSS 用 @media (orientation: portrait) 守門：橫屏自動隱藏。
@@ -7838,13 +7866,15 @@
 
 {#if isTReplay && tReplay}
   {@const _steps = tReplaySteps()}
+  {@const _cur = _steps[tReplayStep]}
+  {@const _viewIdx = _cur?.isFinal ? (_cur?.state?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0) : (tReplayStep === 0 ? (_cur?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0) : (1 - (_cur?.activePlayerIndex ?? 0)))}
   <div class="treplay-bar">
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">🎬 回放：<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
     <div class="treplay-nav">
       <button class="treplay-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0}>⏮</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
-      <span class="treplay-step">{_steps[tReplayStep]?.isFinal ? '最終盤面' : ('第 ' + (_steps[tReplayStep]?.turn ?? '?') + ' 回合')}（{tReplayStep + 1}/{_steps.length}）</span>
+      <span class="treplay-step">{_cur?.isFinal ? '🏁 最終盤面' : ((_cur?.state?.players?.[_viewIdx]?.name ?? '?') + '（' + (_viewIdx === (_cur?.state?.firstPlayerIdx ?? 0) ? '先攻' : '後攻') + '）的回合')}（{tReplayStep + 1}/{_steps.length}）</span>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _steps.length - 1}>下一步 ▶</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
     </div>
@@ -8033,7 +8063,7 @@
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz?.faceUp ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
+            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = (_pz?.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp || isTReplay} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
           </div>
         {/key}
         <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
@@ -8240,7 +8270,7 @@
         <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz?.faceUp ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
+            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = (_pz?.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz?.faceUp || isTReplay} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
           {/key}
         </div>
       </div>
@@ -8475,7 +8505,10 @@
       <!-- v2.43: setup 階段要等硬幣動畫結束才開始發牌（感覺上是硬幣→發 7 張） -->
       <!-- v3.87: 本機雙人換人時用 {#key myIdx} 強制重 mount 手牌 — 修「換人後手牌不顯示」race -->
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
-      {#if isTournSpectator}
+      {#if isTReplay}
+        <!-- v5.940 回放:攤開行動方真手牌(面朝上,唯讀,點擊放大) -->
+        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.iid)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.iid);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
+      {:else if isTournSpectator}
         {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
       {:else}
       {#key myIdx}
@@ -12162,6 +12195,10 @@
   .hand-card{ background:#2a3a2a; border:1px solid #3a5a3a; border-radius:6px; padding:0.4rem; display:flex; flex-direction:column; align-items:center; gap:0.25rem; font-size:0.75rem; color:#ddd; }
   .hand-card img{ width:70px; border-radius:4px; }
   .hand-card-name{ text-align:center; font-size:0.72rem; }
+  /* v5.940 回放攤牌手牌(面朝上,唯讀) */
+  .spectator-hand-face{ cursor:pointer; transition:transform .12s ease; }
+  .spectator-hand-face:hover{ transform:translateY(-6px); z-index:5; }
+  .replay-hand-img{ width:70px; border-radius:4px; display:block; }
   .hand-card.selectable{ border-color:#6aaa6a; cursor:pointer; }
   .card-type-tag{ font-size:0.65rem; color:#888; }
   .small{ padding:0.2rem 0.5rem; border-radius:4px; border:1px solid #5a5a5a; background:#2a2a2a; color:#ddd; cursor:pointer; font:inherit; font-size:0.78rem; }
