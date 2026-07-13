@@ -4295,12 +4295,7 @@
     } else {
       st.log = fullLog.slice(0, step.logLen);
     }
-    // v5.940 出牌方=主視角(比照本機雙人):該格盤面=剛打完那位的結果→他在底部;開局格=先攻即將行動;最終格=結束時行動方(勝方)
-    let _viewIdx: 0 | 1;
-    if (step.isFinal) _viewIdx = ((st.activePlayerIndex ?? st.firstPlayerIdx ?? 0) as 0 | 1);
-    else if (idx === 0) _viewIdx = ((step.activePlayerIndex ?? st.firstPlayerIdx ?? 0) as 0 | 1);
-    else _viewIdx = ((1 - (step.activePlayerIndex ?? 0)) as 0 | 1);
-    spectatorView = _viewIdx === 0 ? 'p1' : 'p2';
+    // v5.942 視角=當前出牌方在底部(本機雙人語義):spectatorView='auto'→myIdx 跟 game.activePlayerIndex(state 一定有,新舊快照皆robust);不在此強制,讓玩家手動看P1/P2可持續override
     coinFlipStage = 'done';
     game = st;
   }
@@ -4314,7 +4309,7 @@
       if (data.error) { tError = data.error; return; }
       if ((!data.snapshots || data.snapshots.length === 0) && !data.finalState) { tError = '這場沒有可回放的資料（可能是部署回放功能之前的舊對戰）'; return; }
       tReplay = data;
-      isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true;  // v5.940 開對戰log面板;視角由 tReplayGoto 每格設(出牌方在底部)
+      isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = 'auto';  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)
       const steps = tReplaySteps();
       try { await Promise.all(steps.map((s: any) => ensurePoolForStateIds(s.state))); } catch { /* best-effort */ }
       tReplayGoto(0);
@@ -7868,14 +7863,14 @@
 {#if isTReplay && tReplay}
   {@const _steps = tReplaySteps()}
   {@const _cur = _steps[tReplayStep]}
-  {@const _viewIdx = _cur?.isFinal ? (_cur?.state?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0) : (tReplayStep === 0 ? (_cur?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0) : (1 - (_cur?.activePlayerIndex ?? 0)))}
+  {@const _actIdx = _cur?.state?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0}
   <div class="treplay-bar">
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">🎬 回放：<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
     <div class="treplay-nav">
       <button class="treplay-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0}>⏮</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
-      <span class="treplay-step">{_cur?.isFinal ? '🏁 最終盤面' : ((_cur?.state?.players?.[_viewIdx]?.name ?? '?') + '（' + (_viewIdx === (_cur?.state?.firstPlayerIdx ?? 0) ? '先攻' : '後攻') + '）的回合')}（{tReplayStep + 1}/{_steps.length}）</span>
+      <span class="treplay-step">{_cur?.isFinal ? '🏁 最終盤面' : ((_cur?.state?.players?.[_actIdx]?.name ?? '?') + '（' + (_actIdx === (_cur?.state?.firstPlayerIdx ?? 0) ? '先攻' : '後攻') + '）的回合')}（{tReplayStep + 1}/{_steps.length}）</span>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _steps.length - 1}>下一步 ▶</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(_steps.length - 1)} disabled={tReplayStep >= _steps.length - 1}>⏭</button>
     </div>

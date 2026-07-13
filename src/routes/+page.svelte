@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.942</span> 修正回放切換視角的問題：之前在「有寶可夢昏厥、換上新寶可夢」的回合，回放切換座位時戰鬥場的寶可夢會顯示錯誤、看起來沒有正確切換。現在回放的主視角會正確地跟著「當前出牌的那位」自動切到畫面下方（和本機雙人對戰一致）；你也可以用「看 P1／看 P2」手動固定想看的一方。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.941</span> 錦標賽報名更順手：「錦標賽暱稱」欄位現在會自動幫你填上你上一次用過的暱稱（沒報過賽事的話，就帶入你的帳號顯示名稱），不用每次報名都重打。需要換暱稱時，直接改掉那格文字就好。</summary>
       </details>
       <details>
