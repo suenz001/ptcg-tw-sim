@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.946</span> 真正修好「歷屆冠軍」名人堂裡按賽程回放沒反應的問題（上一版沒修對）。真根因：名人堂賽程資料裡沒有帶賽事編號，導致按回放時組出來的場次編號變成「undefined」而讀取失敗。已改用正確的賽事編號來源，現在名人堂裡的回放按鈕可正常開啟。另外，回放系統上線前打的舊賽事只存了終局盤面，開啟時會標示「舊對戰（僅終局盤面）」，讓你知道那些場只能看最終盤面與完整戰報、無法逐半回合切換視角。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.945</span> 修正「歷屆冠軍」名人堂裡按賽程回放沒反應的問題：之前在名人堂點某場的「▶回放」會先關掉名人堂視窗、再讀取那場的編號，導致讀到空值而整個動作中斷（按了沒反應）。現在改成先記下場次編號再關視窗，名人堂裡的回放按鈕就能正常打開回放了。</summary>
       </details>
       <details>

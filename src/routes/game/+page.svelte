@@ -6991,7 +6991,7 @@
                   onkeydown={(e) => { if (_hasLog && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tMatchLogOpen(m.round, m.idx, m.p1name, m.p2name); } }}>
                   <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                   {#if _hasLog}
-                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); const _mid = tHofView.eventId + '_r' + m.round + '_m' + m.idx; tHofClose(); tStartReplay(_mid); }}>▶回放</button>
+                    <button class="tm-vs tm-vs-replay" title="🎬 觀看這場對戰回放" onclick={(e) => { e.stopPropagation(); const _mid = tHofEventId + '_r' + m.round + '_m' + m.idx; tHofClose(); tStartReplay(_mid); }}>▶回放</button>
                   {:else}
                     <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                   {/if}
@@ -7865,11 +7865,12 @@
   {@const _steps = tReplaySteps()}
   {@const _cur = _steps[tReplayStep]}
   {@const _actIdx = _cur?.state?.activePlayerIndex ?? _cur?.state?.firstPlayerIdx ?? 0}
-  {@const _isOldFmt = ((tReplay?.snapshots?.length ?? 0) > 0) && (tReplay.snapshots || []).every((s: any) => s.logLen == null)}
+  {@const _finalOnly = (tReplay?.snapshots?.length ?? 0) === 0}
+  {@const _isOldFmt = _finalOnly || (tReplay.snapshots || []).every((s: any) => s.logLen == null)}
   <div class="treplay-bar">
     <button class="treplay-btn" onclick={tExitReplay} title="離開回放">✕ 離開</button>
     <span class="treplay-title">🎬 回放：<b>{tReplay.meta?.p1name ?? '?'}</b> vs <b>{tReplay.meta?.p2name ?? '?'}</b>{#if tReplay.meta?.winnerName} ｜ 🏆 {tReplay.meta.winnerName}{/if}</span>
-    {#if _isOldFmt}<span class="treplay-oldfmt" title="這場對戰是在回放系統升級前打的,只存了整回合粒度的快照,無法逐半回合切換先攻/後攻視角。升級後打的新對戰才有完整逐半回合回放。">⚠ 舊版快照（整回合粒度）</span>{/if}
+    {#if _isOldFmt}<span class="treplay-oldfmt" title="這場對戰是在回放系統上線前打的,只存了{_finalOnly ? '終局盤面' : '整回合粒度'}資料,無法逐半回合切換視角。上線後打的新對戰才有完整逐半回合回放。">⚠ {_finalOnly ? '舊對戰（僅終局盤面）' : '舊版快照（整回合粒度）'}</span>{/if}
     <div class="treplay-nav">
       <button class="treplay-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0}>⏮</button>
       <button class="treplay-btn" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
