@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.938</span> 錦標賽賽程表現在會顯示每一場進行中對戰的「觀戰人數」——進行中的對戰，其綠色的「VS👁」會變成「VS👁(32)」，代表目前有 32 人正在觀戰那一場，讓你一眼看出哪一場最熱門、最精采。（自己的對戰若正被別人觀戰，也會顯示觀戰人數。人數約每幾秒更新一次。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.937</span> 錦標賽比賽頁兩項改善：①修正「官方賽與社群賽同時舉辦」時，比賽頁只看得到其中一個賽事的賽程表與觀戰的問題——現在每個進行中的賽事都會各自顯示自己的賽程表（瑞士制含即時排名）。②為節省版面，把原本獨立的「👁 觀戰」清單併入賽程表：進行中的對戰，其中間的「VS」會變成綠色的「VS👁」，直接點一下就能觀戰那一場（自己的對戰不會顯示觀戰、輪空與未開打的場也不會）。</summary>
       </details>
       <details>

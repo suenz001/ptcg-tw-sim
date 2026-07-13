@@ -6818,7 +6818,9 @@
                   <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
                     <span class="tm-side tm-p1" class:win={m.winner === 'p1'} title={m.p1name ?? ''}>{m.p1name ?? '—'}</span>
                     {#if _canSpec}
-                      <button class="tm-vs tm-vs-spec" title="👁 點此觀戰這場對戰" onclick={() => tSpectate(m.roomId)} disabled={tBusy}>VS👁</button>
+                      <button class="tm-vs tm-vs-spec" title="👁 點此觀戰這場對戰（目前 {m.viewers ?? 0} 人觀戰中）" onclick={() => tSpectate(m.roomId)} disabled={tBusy}>VS👁{(m.viewers ?? 0) > 0 ? '(' + m.viewers + ')' : ''}</button>
+                    {:else if m.status === 'playing' && (m.viewers ?? 0) > 0}
+                      <span class="tm-vs" title="目前 {m.viewers} 人觀戰中">VS 👁{m.viewers}</span>
                     {:else}
                       <span class="tm-vs">{m.bye ? '輪空' : 'VS'}</span>
                     {/if}
