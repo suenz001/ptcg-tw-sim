@@ -3536,6 +3536,18 @@
       }
       return true;
     }
+    // v5.949「選 N 個能量」(繁茂/特殊能量 host-aware)+彈性卡數:合法 ⟺ 張數 k ≤ N ≤ Σ單位。
+    //   噴射旋風等:繁茂下基本草各 2 單位→可只選 2 張(算 2+1=3個)或 3 張(各 1=3個)。非繁茂時 k=N=張數(等價舊行為)。
+    if (pendingSelection.type === 'active-energy-discard' && pendingSelection.params?.unitTarget != null) {
+      const _N = pendingSelection.params.unitTarget as number;
+      const _k = selectionPicked.size;
+      if (_k === 0 || _k > _N) return false;
+      const _pickedU = selectionItems.filter(it => selectionPicked.has(it.iid));
+      const _ownerU = (pendingSelection.params.unitOwnerIdx as 0 | 1 | undefined) ?? (pendingSelection.actorIdx as 0 | 1);
+      const _hostU = game?.players[_ownerU].active ?? undefined;
+      const _maxU = totalEnergyUnits(_pickedU, pool, game ?? undefined, _ownerU, _hostU);
+      return _N <= _maxU;  // k ≤ N 已於上驗;此處驗 N ≤ Σ單位
+    }
     // v5.424：確定鈕一律需 ≥1（防呆，未選不可確定）；選 0 的合法路徑改走【不選】鈕（僅可略過的 picker 才有）
     return selectionPicked.size >= selectionConfirmFloor(pendingSelection.minCount)
         && selectionPicked.size <= pendingSelection.maxCount;

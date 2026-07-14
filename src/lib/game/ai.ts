@@ -1036,7 +1036,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       if (_validE) _cand = _cand.filter(iid => _validE.includes(iid));
       if (_cand.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
       const _isOpp = sel.sourcePlayerIdx !== sel.actorIdx;
-      const _want = _isOpp ? (sel.maxCount ?? 1) : (sel.minCount ?? 0);
+      // v5.949 unitTarget 模式(如噴射旋風):選 maxCount 張(k≤N,guard 已保證單位≥N→合法);否則原邏輯。
+      const _uT = sel.params?.unitTarget as number | undefined;
+      const _want = (_uT != null) ? (sel.maxCount ?? 1) : (_isOpp ? (sel.maxCount ?? 1) : (sel.minCount ?? 0));
       return { type: 'RESOLVE_SELECTION', selectedIids: _cand.slice(0, Math.min(_want, _cand.length)) };
     }
     default:

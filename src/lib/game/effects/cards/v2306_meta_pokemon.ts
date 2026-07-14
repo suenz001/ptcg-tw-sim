@@ -265,6 +265,7 @@ regR('ninjask-shed-skin', (state, actorIdx, selectedIids, params, pool) => {
   return addLog(s, '脫殼：將「脫殼忍者」放置於備戰區，並重洗牌庫', actorIdx);
 });
 import { selfSwapPost, statusPost, flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
+import { totalEnergyUnits } from '../../engine'; // v5.949「選N個能量」單位計數(繁茂-aware)
 const selfBouncePost = (name: string) => {
   return (state: GameState, aIdx: 0|1) => {
     // v2.991：拆能量、道具、進化棧底逐一回手牌（與 effects.ts selfReturnToHandPost 一致）
@@ -434,17 +435,28 @@ regR('yanmega-fluttering-flight', (state, actorIdx, selectedIids, params, pool) 
 regPre('遠古巨蜓ex|噴射旋風', (state, aIdx, pool) => ({ state, damage: 210 }));
 regPost('遠古巨蜓ex|噴射旋風', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  if (!p.active || p.active.energyAttached.length < 3) return addLog(state, '噴射旋風：戰鬥寶可夢身上沒有足夠的能量可以轉移', aIdx);
+  // v5.949「選擇3個能量」= 3 個【單位】(繁茂:自己基本草各視為 2 單位;host-aware)。
+  //   guard 改單位:湊不到 3 單位才擋(非張數→修「繁茂在場 2 張草=4單位」被卡數<3 誤擋)。
+  if (!p.active || p.active.energyAttached.length === 0) return addLog(state, '噴射旋風：戰鬥寶可夢身上沒有能量可以轉移', aIdx);
+  const maxUnits = totalEnergyUnits(p.active.energyAttached, pool, state, aIdx, p.active);
+  if (maxUnits < 3) return addLog(state, '噴射旋風：戰鬥寶可夢身上的能量不足 3 個（單位）可轉移', aIdx);
   if (p.bench.length === 0) return addLog(state, '噴射旋風：沒有備戰寶可夢可轉移能量', aIdx);
-  let s = addLog(state, '噴射旋風：選擇 3 個能量轉移到 1 隻備戰寶可夢', aIdx);
+  let s = addLog(state, '噴射旋風：選擇合計 3 個能量轉移到 1 隻備戰寶可夢（繁茂下基本草各算 2 個，可只選 2 張）', aIdx);
   return withPending(s, {
-    type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 3, maxCount: 3,
-    effectKey: 'yanmega-jet-tornado-pick-energy', params: { titleOverride: '選擇 3 個要轉移的能量' }
+    // unitTarget:3 = 選的能量卡「單位」須恰可湊足 3(合法 ⟺ 張數 k ≤ 3 ≤ Σ單位);maxCount 只當 UI 張數邊界。
+    type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 1, maxCount: Math.min(3, p.active.energyAttached.length),
+    effectKey: 'yanmega-jet-tornado-pick-energy', params: { unitTarget: 3, unitOwnerIdx: aIdx, titleOverride: '選擇合計 3 個要轉移的能量' }
   });
 });
 regR('yanmega-jet-tornado-pick-energy', (state, actorIdx, selectedIids, params, pool) => {
-  if (selectedIids.length === 0) return state;
-  let s = addLog(state, `噴射旋風：已選擇 3 個能量，請選擇轉移目標`, actorIdx);
+  const p = state.players[actorIdx];
+  if (selectedIids.length === 0 || !p.active) return state;
+  // v5.949 fail-closed 單位驗證:合法 ⟺ k ≤ 3 ≤ Σ單位(防 AI/注入用不合法集合繞過 UI)。
+  const selInsts = p.active.energyAttached.filter(e => selectedIids.includes(e.iid));
+  const k = selInsts.length;
+  const selUnits = totalEnergyUnits(selInsts, pool, state, actorIdx, p.active);
+  if (k === 0 || k > 3 || selUnits < 3) return addLog(state, '噴射旋風：能量選擇不合法（需恰可湊足 3 個）', actorIdx);
+  let s = addLog(state, `噴射旋風：已選擇 ${k} 張能量（計為 3 個），請選擇轉移目標`, actorIdx);
   return withPending(s, {
     type: 'bench-choose', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
     effectKey: 'yanmega-jet-tornado-move-energy', params: { energyIids: selectedIids, titleOverride: '選擇要將能量轉移過去的備戰寶可夢' }
@@ -464,7 +476,7 @@ regR('yanmega-jet-tornado-move-energy', (state, actorIdx, selectedIids, params, 
     };
   });
   const targetName = pool.get(s.players[actorIdx].bench.find(b => b.iid === targetIid)?.cardId ?? '')?.name ?? '?';
-  return addLog(s, `噴射旋風：將 3 個能量轉移到備戰的 ${targetName}`, actorIdx);
+  return addLog(s, `噴射旋風：將能量（計為 3 個）轉移到備戰的 ${targetName}`, actorIdx);
 });
 
 // ── 甲殼繭 / 盾甲繭 (Silcoon / Cascoon) ──────────────────────────────────────────
