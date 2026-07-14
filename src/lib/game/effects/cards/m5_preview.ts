@@ -1235,7 +1235,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 // 留 deferred 的（需動 engine.ts 或新引擎機制）：
 //   - 化隱特性 6 張 + 3 依賴招式 — 需 canApplyEffectToTarget 加 ability gate
 //   - 暗影惡能量 — 需 hasFlowerVeil 類 helper 擴充
-//   - 西獅海壬|滿滿旋律 — 需 evolve-from-hand trigger hook
+//   - 西獅海壬|全滿旋律 — 需 evolve-from-hand trigger hook
 //   - 密勒頓|光子纜線 — 需 PASSIVE_ON_KO 死亡觸發 hook
 //   - 棄世猴|不朽之軀 — 需修改 KO 流程加擲幣判定
 //   - 護城龍|太鼓防壁 — 需 player-wide damage gate (對手能量 ≤2 時)
@@ -1769,9 +1769,9 @@ regPre('破破舵輪|悔念錨', (state, aIdx, pool) => {
 // ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
-// Phase 7 (v4.85) — 西獅海壬|滿滿旋律（特性）+ 暗影惡能量（能量擴充）
+// Phase 7 (v4.85) — 西獅海壬|全滿旋律（特性）+ 暗影惡能量（能量擴充）
 //
-// 1. 西獅海壬|滿滿旋律（regA + evolvedThisTurn gate + heal-target picker）
+// 1. 西獅海壬|全滿旋律（regA + evolvedThisTurn gate + heal-target picker）
 //    卡面：「自己的回合，從手牌使出這張卡完成進化時，可使用 1 次。
 //           將自己 1 隻寶可夢的 HP 全部恢復。」
 //    實作：regA('西獅海壬', 0, ...) — gate: inst.evolvedThisTurn === true
@@ -1785,10 +1785,10 @@ regPre('破破舵輪|悔念錨', (state, aIdx, pool) => {
 //    範圍：bench-only + attack-damage only（不擋招式效果、不擋特性效果）
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── 西獅海壬|滿滿旋律 — 進化當回合 1 次：恢復自方 1 隻寶可夢全部 HP ─
+// ── 西獅海壬|全滿旋律 — 進化當回合 1 次：恢復自方 1 隻寶可夢全部 HP ─
 regA('西獅海壬', 0, (st, idx, pool, inst) => {
   if (!inst || !inst.evolvedThisTurn) {
-    return addLog(st, '滿滿旋律：只能在本回合從手牌進化時使用 1 次', idx);
+    return addLog(st, '全滿旋律：只能在本回合從手牌進化時使用 1 次', idx);
   }
   const p = st.players[idx];
   const allOwn: import('../../types').CardInstance[] = [
@@ -1796,29 +1796,29 @@ regA('西獅海壬', 0, (st, idx, pool, inst) => {
     ...p.bench,
   ];
   if (allOwn.length === 0) {
-    return addLog(st, '滿滿旋律：場上無寶可夢可恢復', idx);
+    return addLog(st, '全滿旋律：場上無寶可夢可恢復', idx);
   }
   // 過濾出有受傷的寶可夢（damage > 0）做候選提示
   const injured = allOwn.filter(c => (c.damage ?? 0) > 0);
   if (injured.length === 0) {
-    return addLog(st, '滿滿旋律：自方所有寶可夢都已滿血，效果無實際變化（仍消耗本回合 1 次）', idx);
+    return addLog(st, '全滿旋律：自方所有寶可夢都已滿血，效果無實際變化（仍消耗本回合 1 次）', idx);
   }
   const validIids = injured.map(c => c.iid);
   return withPending(
-    addLog(st, `滿滿旋律：選 1 隻自方寶可夢恢復全部 HP（候選 ${injured.length} 隻受傷寶可夢）`, idx),
+    addLog(st, `全滿旋律：選 1 隻自方寶可夢恢復全部 HP（候選 ${injured.length} 隻受傷寶可夢）`, idx),
     {
       type: 'heal-target',
       actorIdx: idx, sourcePlayerIdx: idx,
       minCount: 1, maxCount: 1,
       effectKey: 'm5-westsealion-full-melody',
-      params: { validIids, titleOverride: '滿滿旋律：選擇要恢復的寶可夢' },
+      params: { validIids, titleOverride: '全滿旋律：選擇要恢復的寶可夢' },
     },
   );
 });
 regR('m5-westsealion-full-melody', (state, aIdx, iids) => {
   if (iids.length === 0) return state;
   const targetIid = iids[0];
-  return updatePlayer(addLog(state, '滿滿旋律：目標寶可夢恢復全部 HP', aIdx), aIdx, p => ({
+  return updatePlayer(addLog(state, '全滿旋律：目標寶可夢恢復全部 HP', aIdx), aIdx, p => ({
     ...p,
     active: p.active && p.active.iid === targetIid ? { ...p.active, damage: 0 } : p.active,
     bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: 0 } : b),
@@ -1827,7 +1827,7 @@ regR('m5-westsealion-full-melody', (state, aIdx, iids) => {
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 7 結束。
-// 累計：69 (P1-P6) + 1 (滿滿旋律) + 1 (暗影惡能量 defense gate) = 71 個項目 / 81 張卡。
+// 累計：69 (P1-P6) + 1 (全滿旋律) + 1 (暗影惡能量 defense gate) = 71 個項目 / 81 張卡。
 // 注意：暗影惡能量的實裝在 defense.ts 加 inline check，本檔僅文檔說明。
 // ════════════════════════════════════════════════════════════════════════════
 
