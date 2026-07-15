@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.952</span> 修正一批「放置傷害指示物／剩餘HP條件」用『基礎HP』而非『有效HP』的潛在錯誤（延續凹洞那輪的整體 audit）。之前這些效果在判定會不會昏厥、或「剩餘HP多少以下」時，只看卡片印刷的基礎HP，沒把加成HP的道具／特性（如英雄斗篷+100HP、勇氣護符、生機森巴等）算進去，可能造成有加血裝的寶可夢被提早誤判昏厥、或「剩餘HP≤30」類條件被誤放行。已修正的有：胡地「手之力量」、蜈蚣王「偏道一回」／恰雷姆ex「氣功指壓」（放到剩X HP）、噬沙堡爺ex「重晶石之獄」、白露的真心、豆豆鴿「緊急進化」——全部改用有效HP。（沒有加成HP時行為完全不變。）</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.951</span> 修正卡牌 bug：火箭隊的三地鼠 特性「凹洞」（對手戰鬥寶可夢回到備戰區時，在那隻寶可夢身上放置2個傷害指示物）之前只扣了2點傷害，但1個傷害指示物＝10點傷害，所以2個指示物應該是20點傷害。已修正為正確的20點。</summary>
       </details>
       <details>

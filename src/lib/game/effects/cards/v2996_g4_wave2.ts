@@ -37,6 +37,7 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { getEffectiveHP } from '../../engine'; // v5.952 剩餘HP用有效HP
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
@@ -106,7 +107,7 @@ regA('豆豆鴿', 0, (st, idx, pool, cardInst) => {
   if (!src) return addLog(st, '緊急進化：找不到豆豆鴿', idx);
   const srcCard = pool.get(src.cardId);
   if (!srcCard?.hp) return st;
-  const currentHP = srcCard.hp - src.damage;
+  const currentHP = getEffectiveHP(src, pool, st) - src.damage;  // v5.952 有效HP-傷害
   if (currentHP > 30) return addLog(st, `緊急進化：剩餘 HP（${currentHP}） > 30，無法使用`, idx);
 
   // 牌庫有「高傲雉雞」/「高傲雉雞ex」候選

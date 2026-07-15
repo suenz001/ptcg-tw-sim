@@ -2078,7 +2078,7 @@ regG('白露的真心', (st, idx, pool) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
   return all.some(c => {
     const card = pool.get(c.cardId);
-    const hp = card?.hp ?? 0;
+    const hp = effectiveHPInline(c, pool, st);  // v5.952 有效HP(含+HP加成)
     return hp > 0 && (hp - c.damage) <= 30;
   });
 });
@@ -2088,7 +2088,7 @@ reg('白露的真心', (st, idx, pool) => {
   const all = [...(p.active ? [p.active] : []), ...p.bench];
   for (const c of all) {
     const card = pool.get(c.cardId);
-    const hp = card?.hp ?? 0;
+    const hp = effectiveHPInline(c, pool, st);  // v5.952 有效HP(含+HP加成)
     if (hp > 0 && (hp - c.damage) <= 30) validIids.push(c.iid);
   }
   st = addLog(st, '白露的真心：選 1 隻 HP≤30 的寶可夢回復全部 HP', idx);
@@ -6864,7 +6864,7 @@ function setOppActiveHPPost(targetHP: number, label: string): AttackPostFn {
     const def = state.players[dIdx].active;
     if (!def) return state;
     const card = pool.get(def.cardId);
-    const hp = card?.hp ?? 0;
+    const hp = effectiveHPInline(def, pool, state);  // v5.952 有效HP(含+HP加成),非base card.hp
     if (hp <= targetHP) return addLog(state, `${label}：對手 HP 已在 ${targetHP} 以下，無效`, aIdx);
     const needed = hp - targetHP - def.damage;
     if (needed <= 0) return addLog(state, `${label}：對手已有足夠傷害指示物，無效`, aIdx);
@@ -9305,7 +9305,7 @@ regPost('噬沙堡爺ex|重晶石之獄', (state, aIdx, pool) => {
   let s = state;
   const newBench = defender.bench.map(c => {
     const card = pool.get(c.cardId);
-    const hp = card?.hp ?? 0;
+    const hp = effectiveHPInline(c, pool, s);  // v5.952 有效HP(含+HP加成)
     if (hp <= 100) return c;
     const targetDamage = hp - 100;
     if (c.damage >= targetDamage) return c;

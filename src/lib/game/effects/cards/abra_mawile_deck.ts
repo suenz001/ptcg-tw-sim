@@ -34,7 +34,7 @@ import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
   canApplyAttackEffectToTarget, koTargetByAttackEffect,
 } from '../../effects';
-import { isBasicEnergyOfType, isRulePokemon } from '../../engine';
+import { isBasicEnergyOfType, isRulePokemon, getEffectiveHP } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
 import { toBareCard, getAllAttachedTools } from '../_shared'; // v5.740 離場裸化收斂
@@ -75,7 +75,7 @@ regPost('胡地|手之力量', (state, aIdx, pool) => {
       `手之力量：${defCard?.name ?? '?'} ${guardHF.reason}（不放傷害指示物）`, aIdx);
   }
   const newDmg = defender.active.damage + addDmg;
-  const defHP = defCard?.hp ?? 0;
+  const defHP = getEffectiveHP(defender.active, pool, state);  // v5.952 有效HP(修+HP寶可夢被base HP誤提早KO)
   let s = addLog(
     state,
     `手之力量：手牌 ${handCount} 張 → 放置 ${counters} 個傷害指示物於 ${defCard?.name ?? '?'}（共 ${addDmg} 傷害，不計算弱點 / 抗性 / 防禦效果）`,
