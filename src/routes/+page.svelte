@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.951</span> 修正卡牌 bug：火箭隊的三地鼠 特性「凹洞」（對手戰鬥寶可夢回到備戰區時，在那隻寶可夢身上放置2個傷害指示物）之前只扣了2點傷害，但1個傷害指示物＝10點傷害，所以2個指示物應該是20點傷害。已修正為正確的20點。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.950</span> 修正卡牌互動：西獅海壬的特性「全滿旋律」（從手牌使出這張卡並完成進化時，可使用1次，恢復自己1隻寶可夢全部HP）之前觸發時好時壞——進化有時被誤標成「已發動」、下回合又能用、有時不會補血。根因是這個特性沒被登記進「進化時自動詢問」的清單。現在改為：不管是用神奇糖果（從basic）或從Stage1進化，進化完成後都會像喵喵ex的殺手鐧捕捉那樣自動跳出視窗詢問你要不要使用（選一隻寶可夢補滿血）。另外把顯示的特性名稱從誤植的「滿滿旋律」更正為卡面正確的「全滿旋律」。</summary>
       </details>
       <details>

@@ -7679,7 +7679,7 @@ export function applyOppActiveReturnedToBenchTriggers(
       } else {
         const upd = retreatState.players[aIdx];
         const benchUpd = upd.bench.map(b => b.iid === retreatingPoke.iid
-          ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater } : b);
+          ? { ...b, damage: (b.damage ?? 0) + trig.countersOnRetreater * 10 } : b);  // v5.951 凹洞:N個指示物=N×10傷害(原漏×10只扣N滴)
         const newPlayers4: [PlayerState, PlayerState] = [...retreatState.players] as [PlayerState, PlayerState];
         newPlayers4[aIdx] = { ...upd, bench: benchUpd };
         retreatState = addLog({ ...retreatState, players: newPlayers4 },
