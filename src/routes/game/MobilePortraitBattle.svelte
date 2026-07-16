@@ -46,6 +46,7 @@
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
+  import { resolveLogCard } from '$lib/game/log_zoom';
   // v4.49：能量屬性顯示（彩色 chip + 文字摘要）
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -332,34 +333,13 @@
     return arr;
   });
   function openZoomByName(cardName: string, hintSourceIid?: string, hintPlayerIdx?: 0 | 1 | null) {
-    // v3.891：log 卡名點擊精準追溯 — 三層 fallback（同 +page.svelte 版本）
+    // v5.955：改用共用 resolveLogCard(與桌機同源;修正手機版原本漂移—缺 evolvedFromStack、
+    //   也沒搜 deck/prizes/場地/巢狀能量道具)。找不到才 fallback 全域 pool。
     if (game) {
-      if (hintSourceIid) {
-        for (const p of game.players) {
-          const inst = (p.active && p.active.iid === hintSourceIid ? p.active : null)
-            ?? p.bench.find(i => i.iid === hintSourceIid)
-            ?? p.hand.find(i => i.iid === hintSourceIid)
-            ?? p.discard.find(i => i.iid === hintSourceIid);
-          if (inst) {
-            const c = pool.get(inst.cardId);
-            if (c?.name === cardName) { onOpenZoom(c.id, inst); return; }
-          }
-        }
-      }
-      const ordering: (0 | 1)[] = hintPlayerIdx === 0 ? [0, 1] : hintPlayerIdx === 1 ? [1, 0] : [0, 1];
-      for (const pIdx of ordering) {
-        const p = game.players[pIdx];
-        const allInsts: CardInstance[] = [
-          ...(p.active ? [p.active] : []),
-          ...p.bench, ...p.hand, ...p.discard,
-        ];
-        for (const inst of allInsts) {
-          const c = pool.get(inst.cardId);
-          if (c?.name === cardName) { onOpenZoom(c.id, inst); return; }
-        }
-      }
+      const r = resolveLogCard(game, pool, cardName, hintSourceIid, hintPlayerIdx);
+      if (r) { onOpenZoom(r.cardId, r.inst); return; }
     }
-    // fallback
+    // fallback：本場所有區都找不到 → 全域 pool 第一個同名
     for (const c of pool.values()) {
       if (c?.name === cardName) { onOpenZoom(c.id, null); return; }
     }
@@ -1603,13 +1583,15 @@
     flex-shrink: 0;
     pointer-events: none;
   }
+  /* v5.955 卡背改用桌機版同款仿真卡背(紅白同心圓),手機/桌機視覺一致 */
   .mp-card-back {
-    background: repeating-linear-gradient(45deg, #1f4277, #1f4277 8px, #1a3a6a 8px, #1a3a6a 16px);
-    border: 2px solid #eebb44;
-    border-radius: 4px;
+    background: radial-gradient(circle at 50% 50%, #f0f4ff 0 12%, #ffffff 12% 14%, #1a1a1a 14% 18%, #c0392b 18% 50%, #922b21 50% 100%);
+    border: 2px solid #1a1a1a;
+    border-radius: 6px;
+    box-shadow: inset 0 0 6px rgba(0,0,0,.6);
     display: flex; align-items: center; justify-content: center;
   }
-  .mp-card-back-mark { color: #eebb44; font-weight: 700; font-family: serif; font-size: 1.5rem; }
+  .mp-card-back-mark { color: rgba(255,255,255,.85); font-weight: 900; font-family: 'Times New Roman', serif; font-size: 1.5rem; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
   /* v5.895 觀戰手牌卡背：填滿 .mp-hand-card(64x86) */
   .mp-hand-card.mp-hand-back { cursor: default; }
   .mp-hand-card.mp-hand-replay { cursor: zoom-in; }  /* v5.954 回放手牌明牌:點擊放大 */

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
+  import { resolveLogCard } from '$lib/game/log_zoom';
   import { onMount, onDestroy, untrack } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
@@ -1992,54 +1993,14 @@
   }
 
   function openZoomByName(cardName: string, hintSourceIid?: string, hintPlayerIdx?: 0 | 1 | null) {
-    // v3.891：log 卡名點擊精準追溯 — 三層 fallback
-    //   1. hintSourceIid 對應 inst（如果名字符合）— 例如「代歐奇希 使用精神尖槍」點代歐奇希
-    //   2. hintPlayerIdx 玩家場上 active/bench/hand/discard 找同名（actor side）
-    //   3. 對手玩家場上找同名（target side — 例如「謝米 受到 120」點謝米）
-    //   4. fallback：全 pool 第一個同名
+    // v5.955：log 卡名點擊 → 共用 resolveLogCard 解析到「本場實體卡」(正確印刷/卡圖)。
+    //   搜雙方所有 zone(active/bench/場地/discard/hand/prizes/deck + 巢狀能量道具/進化來源),
+    //   永不落到全域 pool 第一個同名(那會抓到玩家根本沒帶的印刷)。找不到才 fallback。
     if (game && poolReady) {
-      // 1. 直接 hint inst
-      if (hintSourceIid) {
-        for (const p of game.players) {
-          const find = (lst: CardInstance[]) => lst.find(i => i.iid === hintSourceIid);
-          const inst = find(p.active ? [p.active, ...p.bench, ...p.hand, ...p.discard] : [...p.bench, ...p.hand, ...p.discard]);
-          if (inst) {
-            const c = pool.get(inst.cardId);
-            if (c?.name === cardName) {
-              openZoom(c.id, inst);
-              return;
-            }
-            // v5.396：iid 命中但名字不符（常見：進化後 log 仍連 base 卡名，而 iid 指向進化後的寶可夢）
-            //   → 從進化堆疊 evolvedFromStack 找符合 cardName 的 base 卡（帶正確「版本」cardId），
-            //   不要落到下方 name-fallback 而誤抓 pool 第一個同名版本（玩家根本沒帶的卡）。
-            const stk1 = (inst.evolvedFromStack ?? []).find(s => pool.get(s.cardId)?.name === cardName);
-            if (stk1) { const sc = pool.get(stk1.cardId); if (sc) { openZoom(sc.id, stk1); return; } }
-          }
-        }
-      }
-      // 2/3. 按 hintPlayerIdx 順序掃描（actor 先 → opp 後）
-      const ordering: (0 | 1)[] = hintPlayerIdx === 0 ? [0, 1] : hintPlayerIdx === 1 ? [1, 0] : [0, 1];
-      for (const pIdx of ordering) {
-        const p = game.players[pIdx];
-        const allInsts: CardInstance[] = [
-          ...(p.active ? [p.active] : []),
-          ...p.bench,
-          ...p.hand,
-          ...p.discard,
-        ];
-        for (const inst of allInsts) {
-          const c = pool.get(inst.cardId);
-          if (c?.name === cardName) {
-            openZoom(c.id, inst);
-            return;
-          }
-          // v5.396：場上寶可夢的進化堆疊也找（base 卡進化後埋在 evolvedFromStack 裡）
-          const stk2 = (inst.evolvedFromStack ?? []).find(s => pool.get(s.cardId)?.name === cardName);
-          if (stk2) { const sc = pool.get(stk2.cardId); if (sc) { openZoom(sc.id, stk2); return; } }
-        }
-      }
+      const r = resolveLogCard(game, pool, cardName, hintSourceIid, hintPlayerIdx);
+      if (r) { openZoom(r.cardId, r.inst); return; }
     }
-    // 4. fallback：場上完全找不到 → 第一個同名 Card
+    // fallback：本場所有區都找不到 → 全域 pool 第一個同名 Card(宣言型效果/系統訊息)
     for (const c of pool.values()) {
       if (c?.name === cardName) { openZoom(c.id); return; }
     }
