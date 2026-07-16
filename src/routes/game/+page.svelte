@@ -7750,6 +7750,21 @@
       undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}
       onUndo={performUndo}
     />
+    {#if isTReplay && tReplay}
+      {@const _msteps = tReplaySteps()}
+      {@const _mcur = _msteps[tReplayStep]}
+      {@const _mact = _mcur?.state?.activePlayerIndex ?? _mcur?.state?.firstPlayerIdx ?? 0}
+      {@const _mfirst = (_mcur?.state?.firstPlayerIdx ?? 0)}
+      <div class="treplay-mob" role="toolbar" aria-label="回放導覽">
+        <button class="treplay-mob-btn treplay-mob-exit" onclick={tExitReplay} aria-label="離開回放">✕</button>
+        <button class="treplay-mob-btn" onclick={() => tReplayGoto(0)} disabled={tReplayStep <= 0} aria-label="第一步">⏮</button>
+        <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep - 1)} disabled={tReplayStep <= 0}>◀ 上一步</button>
+        <span class="treplay-mob-step">{_mcur?.isFinal ? '🏁' : (_mact === _mfirst ? '先' : '後') + '·T' + (_mcur?.turn ?? '?')}<br/>{tReplayStep + 1}/{_msteps.length}</span>
+        <button class="treplay-mob-btn treplay-mob-main" onclick={() => tReplayGoto(tReplayStep + 1)} disabled={tReplayStep >= _msteps.length - 1}>下一步 ▶</button>
+        <button class="treplay-mob-btn" onclick={() => tReplayGoto(_msteps.length - 1)} disabled={tReplayStep >= _msteps.length - 1} aria-label="最後一步">⏭</button>
+        <button class="treplay-mob-btn" onclick={() => tCopyReplayLink(tReplay.meta?.matchId)} aria-label="複製分享連結">🔗</button>
+      </div>
+    {/if}
   {:else}
 
   <!-- ── 頂部資訊列 ── -->
@@ -10869,6 +10884,28 @@
   .treplay-btn { background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: .82rem; white-space: nowrap; }
   .treplay-btn:disabled { opacity: .4; cursor: default; }
   .treplay-btn:hover:not(:disabled) { background: #24345a; }
+  /* v5.953 手機版回放導覽浮層 — 只在 isPortraitMobile 手機分支渲染(是 <MobilePortraitBattle/> 的兄弟節點)。
+     position:fixed 蓋在 .mp-top + 計時細條之上、不佔文檔流→對手機盤面零位移。桌機 .treplay-bar 不動。 */
+  .treplay-mob {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 80;
+    display: flex; align-items: stretch; gap: 4px;
+    padding: calc(env(safe-area-inset-top, 0px) + 4px) max(env(safe-area-inset-right, 0px), 6px) 4px max(env(safe-area-inset-left, 0px), 6px);
+    background: #0f1730; border-bottom: 2px solid #3a5a8a; box-shadow: 0 3px 12px rgba(0,0,0,.5);
+  }
+  .treplay-mob-btn {
+    background: #1a2440; color: #cfe0f8; border: 1px solid #3a5a8a; border-radius: 8px;
+    min-height: 44px; padding: 4px 6px; font-size: .78rem; white-space: nowrap;
+    cursor: pointer; touch-action: manipulation; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .treplay-mob-btn:disabled { opacity: .4; cursor: default; }
+  .treplay-mob-main { flex: 1 1 52px; min-width: 52px; font-weight: 700; }
+  .treplay-mob-exit { color: #f8b8b8; border-color: #6a3a3a; }
+  .treplay-mob-step {
+    flex: 0 1 auto; min-width: 0; color: #ffd35a; font-weight: 700; font-size: .68rem; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 2px;
+  }
   .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9999; }
   .tourn-return-bar button { box-shadow: 0 4px 14px #000a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
@@ -13996,6 +14033,12 @@
        header 6vh + field 30vh×2 + hand 16vh + action 12vh = 94vh（剩 6vh buffer）。
        每個 row flex:0 0 <vh> + overflow:hidden 確保內容超出時不擠到別 row。 */
     .battle-root{ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
+    /* v5.953 平板橫向(601-950)回放列壓成單行,避免 wrap 佔多行擠爆 vh 預算把 action-bar 切掉 */
+    .treplay-bar{ padding:2px 6px; gap:4px; flex-wrap:nowrap; overflow-x:auto; }
+    .treplay-bar .treplay-title{ display:none; }
+    .treplay-bar .treplay-oldfmt{ display:none; }
+    .treplay-bar .treplay-btn{ padding:3px 7px; font-size:.7rem; }
+    .treplay-bar .treplay-step{ font-size:.7rem; }
     /* v5.070：mobile portrait — padding-top 同樣加 env(safe-area-inset-top) */
     .battle-header{ flex:0 0 auto; max-height:7vh; padding:calc(0.1rem + env(safe-area-inset-top, 0px)) 0.4rem 0.1rem 0.4rem; gap:0.2rem; font-size:0.66rem;
                     overflow-x:auto; overflow-y:hidden; flex-wrap:nowrap; white-space:nowrap; }
