@@ -8306,7 +8306,7 @@ export function computeActiveRetreatCostFor(
       if (!tool) continue;
       const mod = TOOL_RETREAT_MOD.get(tool.name);
       if (!mod) continue;
-      const r = mod(card, player.active);
+      const r = mod(card, player.active, getEffectiveHP(player.active, pool, state));
       if (r.zero) freeRetreat = true;
       else if (r.reduceBy) reduce += r.reduceBy;
     }

@@ -90,7 +90,7 @@ export const TOOL_ON_DAMAGED = new Map<string, (
   state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>
 ) => GameState>();
 export const TOOL_RETREAT_MOD = new Map<string, (
-  holderCard: Card, holderInst: CardInstance
+  holderCard: Card, holderInst: CardInstance, effHP?: number
 ) => { reduceBy?: number; zero?: boolean }>();
 
 // ── HP 加成 ──────────────────────────────────────────────────────────────────
@@ -475,8 +475,9 @@ regR('cycle-fan-step2-place-energy', (st, dIdx, iids, params, pool) => {
 });
 
 // ── 撤退成本修正 ──────────────────────────────────────────────────────────
-TOOL_RETREAT_MOD.set('緊急滑板', (card, inst) => {
-  const hp = card.hp ?? 0;
+TOOL_RETREAT_MOD.set('緊急滑板', (card, inst, effHP) => {
+  // v5.961 「剩餘HP為30以下」= 有效HP(含+HP道具/特性/場地);原 base card.hp→多重轉接+勇氣護符等誤判免撤退
+  const hp = effHP ?? (card.hp ?? 0);
   const remaining = hp - inst.damage;
   if (remaining <= 30) return { zero: true };
   return { reduceBy: 1 };

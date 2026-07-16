@@ -2544,36 +2544,14 @@ regPost('謎擬Ｑex|惡作劇之手', (state, aIdx, _pool) => {
 });
 regR('h-wave2-place-3-counters', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const set = new Set(iids);
+  // v5.961 放指示物走中央 dealAttackDamageToTarget(kind='attack-effect'):免疫gate(化隱/球形盾牌等)+
+  //   KO 結算 + 標記效果KO(_faintByEffect→復仇家族 bucket 不誤觸發)。原 inline updatePlayer 漏 KO 結算。
   let s = state;
-  // v4.58：改 unified per-target — bench target 補球形盾牌/藏隱/深度下潛/羽毛化石/光之翼 等
-  const opp = s.players[dIdx];
-  const allOpp: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
-  const _trickActiveIid = opp.active?.iid;
-  for (const c of allOpp) {
-    if (!set.has(c.iid)) continue;
-    const card = pool.get(c.cardId);
-    const _trickIsBench = c.iid !== _trickActiveIid;
-    const guard = canApplyEffectToTarget(s, aIdx, c, card, 'attack-effect', pool, { isBench: _trickIsBench });
-    if (guard.blocked) {
-      s = addLog(s, `惡作劇之手：${card?.name ?? '?'}｜${guard.reason}（不放指示物）`, aIdx);
-      set.delete(c.iid);
-    }
+  for (const iid of iids) {
+    s = dealAttackDamageToTarget(s, aIdx, iid, 30, pool, { kind: 'attack-effect', label: '惡作劇之手' });
+    if (s.phase === 'game-over') return s;
   }
-  if (set.size === 0) return s;
-  return updatePlayer(s, dIdx, p => {
-    const updateOne = (c: CardInstance | null): CardInstance | null => {
-      if (!c) return c;
-      if (!set.has(c.iid)) return c;
-      return { ...c, damage: (c.damage ?? 0) + 30 };
-    };
-    return {
-      ...p,
-      active: updateOne(p.active) as CardInstance | null,
-      bench: p.bench.map(b => updateOne(b)!),
-    };
-  });
+  return s;
 });
 
 // 胖甜妮|甜甜你 — 擲 2 次硬幣 ×90 + 全反混亂

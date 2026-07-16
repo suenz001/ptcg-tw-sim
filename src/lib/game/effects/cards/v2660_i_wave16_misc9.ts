@@ -88,19 +88,24 @@ function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
 }
 
 // 對手 N 隻備戰 各受 amount
-function snipeNOppBenchAutoPost(amount: number, count: number, label: string): AttackPostFn {
+function snipeNOppPokemonAutoPost(amount: number, count: number, label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const opp = state.players[dIdx];
-    if (opp.bench.length === 0) return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-    const realCount = Math.min(count, opp.bench.length);
-    const s = addLog(state, `${label}：選 ${realCount} 隻對手備戰各受到 ${amount} 點傷害`, aIdx);
+    // v5.961 卡面「對手的N隻寶可夢」= 任意(含戰鬥位)。原 opp-bench-choose 只列備戰→打不到戰鬥位、
+    //   戰鬥位弱抗永無機會、對手無備戰時已丟能量卻 0 傷害。改 opp-poke-choose(active+bench)。
+    const targets: string[] = [];
+    if (opp.active) targets.push(opp.active.iid);
+    for (const b of opp.bench) targets.push(b.iid);
+    if (targets.length === 0) return addLog(state, `${label}：對手沒有寶可夢`, aIdx);
+    const realCount = Math.min(count, targets.length);
+    const s = addLog(state, `${label}：選 ${realCount} 隻對手寶可夢各受到 ${amount} 點傷害`, aIdx);
     return withPending(s, {
-      type: 'opp-bench-choose',
+      type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
       minCount: realCount, maxCount: realCount,
       effectKey: 'wave16-snipe-multi',
-      params: { amount, label },
+      params: { amount, label, validIids: targets },
     });
   };
 }
@@ -247,7 +252,7 @@ regPost('電蜘蛛|放電', (state, aIdx, pool) => {
 
 // 雙尾怪手｜雙尾 — 棄 2 能量, 對手 2 隻備戰各 60（不計弱抗）
 // v5.401：丟 2 能量改 units+picker（在 effects.ts batch 註冊 regPre+picker，傷害0）；此處只留狙擊
-regPost('雙尾怪手|雙尾', snipeNOppBenchAutoPost(60, 2, '雙尾'));
+regPost('雙尾怪手|雙尾', snipeNOppPokemonAutoPost(60, 2, '雙尾'));
 
 // 雪絨蛾｜極寒旋風 90 — 90 傷害 + 選 1 個自身【水】能量改附於備戰(v5.826 補實作;原「簡化純90」違反 Iron Rule 7)。
 //   走中央 returnSelfActiveEnergyPost(typeFilter 'Water' 用 energyProvidesType,含古舊/稜鏡等視為水的特殊能量)。

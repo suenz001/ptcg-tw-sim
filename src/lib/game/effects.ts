@@ -17093,49 +17093,17 @@ regR('brew-back-target', (st, idx, iids, params, pool) => {
   const grassCount = (params?.grassCount as number) ?? 0;
   const grassEnergyIids = (params?.grassEnergyIids as string[] | undefined) ?? [];
   if (!targetIid || grassCount === 0) return st;
-
   const dmg = grassCount * 20; // 每張草能量 = 2 個傷害指示物 = 20 傷害
-  const opp = st.players[dIdx];
-  const isActive = opp.active?.iid === targetIid;
-  const benchIdx = opp.bench.findIndex(c => c.iid === targetIid);
-
-  let updatedActive = opp.active;
-  let updatedBench = opp.bench;
-  let targetName = '?';
-
-  // v2.89 規則修正：熬返 = 招式效果（無招式傷害值），須檢查 defender 的招式效果免疫
-  const target = isActive ? opp.active : (benchIdx >= 0 ? opp.bench[benchIdx] : null);
-  if (!target) return st;
-  const targetCardCheck = pool.get(target.cardId);
-  const guard = canApplyAttackEffectToTarget(st, idx, target, targetCardCheck, pool);
-  if (guard.blocked) {
-    return addLog(st, `熬返：${targetCardCheck?.name ?? '?'} ${guard.reason}（不放傷害指示物）`, idx);
-  }
-
-  if (isActive && opp.active) {
-    updatedActive = { ...opp.active, damage: opp.active.damage + dmg };
-    targetName = pool.get(opp.active.cardId)?.name ?? '?';
-  } else if (benchIdx >= 0) {
-    updatedBench = opp.bench.map((c, i) =>
-      i === benchIdx ? { ...c, damage: c.damage + dmg } : c
-    );
-    targetName = pool.get(opp.bench[benchIdx].cardId)?.name ?? '?';
-  } else {
-    return st;
-  }
-
-  const players = [...st.players] as [PlayerState, PlayerState];
-  players[dIdx] = { ...opp, active: updatedActive, bench: updatedBench };
-
-  // 將那些草能量從棄牌區移到牌庫頂並重洗
-  const p = st.players[idx];
+  // v5.961 放指示物走中央 dealAttackDamageToTarget(kind='attack-effect'):補完整免疫(化隱/對戰圓形)+
+  //   KO 結算(koPrizesAdjusted/prevent-KO/TOOL_ON_KO)+ 標記效果KO(_faintByEffect→復仇家族 bucket 不誤觸發)。
+  let s = dealAttackDamageToTarget(st, idx, targetIid, dmg, pool, { kind: 'attack-effect', label: '熬返' });
+  // 然後:將給對手看過的草能量從棄牌區移回牌庫並重洗(卡面「然後」;不論是否 KO)
+  const p = s.players[idx];
   const toReturn = p.discard.filter(e => grassEnergyIids.includes(e.iid));
   const remainingDiscard = p.discard.filter(e => !grassEnergyIids.includes(e.iid));
   const newDeck = shuffle([...p.deck, ...toReturn]);
-  players[idx] = { ...p, discard: remainingDiscard, deck: newDeck };
-
-  let s = addLog({ ...st, players },
-    `熬返：${targetName} 受到 ${dmg} 傷害（${grassCount} 張草能量 × 2），${grassCount} 張草能量回牌庫`, idx);
+  s = updatePlayer(s, idx, pp => ({ ...pp, discard: remainingDiscard, deck: newDeck }));
+  s = addLog(s, `熬返：${grassCount} 張草能量回牌庫並重洗`, idx);
   return addPrivateLog(s, `你的來悲粗茶熬返將 ${toReturn.map(e => pool.get(e.cardId)?.name ?? '?').join('、')} 回牌庫`, '', dIdx);
 });
 
