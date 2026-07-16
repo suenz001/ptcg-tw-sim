@@ -14651,10 +14651,12 @@
     width:100%; max-width:100%; aspect-ratio:96/135; height:auto;
     overflow:visible !important; pointer-events:none;
   }
-  /* v5.957 active 上下對調貼齊各自備戰列(start/end 反轉)→ 戰鬥↔備戰距離縮到一個 row-gap；剩餘高集中中場 */
-  .playmat.layout-fable .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:start; position:relative; z-index:1; transform:none; }
-  .playmat.layout-fable .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:end; position:relative; z-index:1; transform:none; }
-  .playmat.layout-fable .my-row .active-card .active-name-tt{ top:auto; bottom:100%; margin-top:0; margin-bottom:4px; }
+  /* v5.959 雙 active 靠中線(中間距=row-gap)、active↔bench 拉開=1fr 剩餘高 → 附加卡扇開較不疊；
+     z-index:210 > zone-bench(200) → 戰鬥場 HP/血條/特性鈕/進化鈕永遠在備戰卡之上(.playmat isolation:isolate
+     封裝,不外洩蓋 playmat 外 fixed modal/zoom;alerts-col z:230 仍最高)。 */
+  .playmat.layout-fable .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; position:relative; z-index:210; transform:none; }
+  .playmat.layout-fable .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:start; position:relative; z-index:210; transform:none; }
+  .playmat.layout-fable .opponent-row .active-card .active-name-tt{ top:auto; bottom:100%; margin-top:0; margin-bottom:4px; }
   .playmat.layout-fable .zone-active{ width:auto; flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
   .playmat.layout-fable .active-card{
     /* v5.958 放卡零位移:此頁無全域 border-box,active-empty padding .4rem 在 content-box 墊高 12.8px
