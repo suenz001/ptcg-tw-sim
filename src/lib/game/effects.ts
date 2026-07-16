@@ -1471,35 +1471,8 @@ regPost('烏鴉頭頭|狙擊羽毛', (state, aIdx, pool) => {
   const defender = state.players[dIdx];
   if (defender.bench.length === 0 && !defender.active) return state;
   if (defender.bench.length === 0 && defender.active) {
-    // 無備戰，直接對出場施加 120 傷害
-    const defCard = pool.get(defender.active.cardId);
-    const newDmg = defender.active.damage + 120;
-    const defHP = defCard?.hp ?? 0;
-    if (defHP > 0 && newDmg >= defHP) {
-      const koDiscard: CardInstance[] = [
-        { ...defender.active, damage: newDmg },
-        ...defender.active.energyAttached,
-        ...getAllAttachedTools(defender.active),
-        ...(defender.active.evolvedFromStack ?? []),
-      ];
-      const players = [...state.players] as [PlayerState, PlayerState];
-      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
-      const _ko = koPrizesAdjusted(state, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-      state = _ko.state;
-      const prizes = _ko.prizes;
-      let s = addLog({ ...state, players }, `狙擊羽毛：120 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
-      s = recordOppKO(s, dIdx, defCard, 'attack');
-      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
-      _miracleActiveKO = true;
-      if (players[dIdx].bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-      }
-      return addPendingPrize(s, aIdx, prizes, pool);
-    } else {
-      const players = [...state.players] as [PlayerState, PlayerState];
-      players[dIdx] = { ...defender, active: { ...defender.active!, damage: newDmg } };
-      return addLog({ ...state, players }, `狙擊羽毛：對 ${defCard?.name ?? '?'} 造成 120 傷害！`, aIdx);
-    }
+    // v5.960 no-bench 也走中央 dealAttackDamageToTarget(對齊 picker 路徑):補 active 弱點/免疫/prevent-KO/受傷反擊/有效HP
+    return dealAttackDamageToTarget(state, aIdx, defender.active.iid, 120, pool, { kind: 'attack-damage', label: '狙擊羽毛' });
   }
   // 有備戰，讓玩家選擇目標（含出場）
   let s = addLog(state, '狙擊羽毛：選擇對手任意寶可夢造成 120 傷害', aIdx);
@@ -6476,33 +6449,8 @@ regPost('皮卡丘|電磁電光', (state, aIdx, pool) => {
   if (defender.bench.length === 0 && !defender.active) return state;
   // 若無備戰，直接對出場施加 10
   if (defender.bench.length === 0 && defender.active) {
-    const defCard = pool.get(defender.active.cardId);
-    const newDmg = defender.active.damage + 10;
-    const defHP = defCard?.hp ?? 0;
-    if (defHP > 0 && newDmg >= defHP) {
-      const koDiscard: CardInstance[] = [
-        { ...defender.active, damage: newDmg },
-        ...defender.active.energyAttached,
-        ...getAllAttachedTools(defender.active),
-        ...(defender.active.evolvedFromStack ?? []),
-      ];
-      const players = [...state.players] as [PlayerState, PlayerState];
-      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
-      const _ko = koPrizesAdjusted(state, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-      state = _ko.state;
-      const prizes = _ko.prizes;
-      let s = addLog({ ...state, players }, `電磁電光：10 傷害擊倒 ${defCard?.name ?? '?'}！${state.players[aIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
-      s = recordOppKO(s, dIdx, defCard, 'attack');
-      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
-      if (players[dIdx].bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-      }
-      return addPendingPrize(s, aIdx, prizes, pool);
-    } else {
-      const players = [...state.players] as [PlayerState, PlayerState];
-      players[dIdx] = { ...defender, active: { ...defender.active!, damage: newDmg } };
-      return addLog({ ...state, players }, `電磁電光：對 ${defCard?.name ?? '?'} 造成 10 傷害！`, aIdx);
-    }
+    // v5.960 no-bench 也走中央 dealAttackDamageToTarget(對齊 picker 路徑):補 active 弱點/免疫/prevent-KO/受傷反擊/有效HP
+    return dealAttackDamageToTarget(state, aIdx, defender.active.iid, 10, pool, { kind: 'attack-damage', label: '電磁電光' });
   }
   // 有備戰，讓玩家選擇
   let s = addLog(state, '電磁電光：選擇對手任一寶可夢造成 10 傷害', aIdx);
@@ -6886,31 +6834,8 @@ regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
   const defender = state.players[dIdx];
   if (defender.bench.length === 0 && !defender.active) return state;
   if (defender.bench.length === 0 && defender.active) {
-    // 僅 active 可選，直接施加
-    const defCard = pool.get(defender.active.cardId);
-    const newDmg = defender.active.damage + 20;
-    const hp = effectiveHPInline(defender.active, pool, state);  // v5.091
-    const players = [...state.players] as [PlayerState, PlayerState];
-    if (hp > 0 && newDmg >= hp) {
-      const ko: CardInstance[] = [
-        { ...defender.active, damage: newDmg },
-        ...defender.active.energyAttached,
-        ...getAllAttachedTools(defender.active),
-        ...(defender.active.evolvedFromStack ?? []),
-      ];
-      const _ko = koPrizesAdjusted(state, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool, false);
-      state = _ko.state;
-      const p = _ko.prizes;
-      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
-      let s = addLog({ ...state, players }, `悄聲加害：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
-      s = recordOppKO(s, dIdx, defCard, 'attack', false);
-      if (players[dIdx].bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-      }
-      return addPendingPrize(s, aIdx, p, pool);
-    }
-    players[dIdx] = { ...defender, active: { ...defender.active, damage: newDmg } };
-    return addLog({ ...state, players }, `悄聲加害：對 ${defCard?.name ?? '?'} 造成 20 傷害`, aIdx);
+    // v5.960 no-bench 也走中央 dealAttackDamageToTarget(對齊 picker 路徑):補 active 弱點/免疫/prevent-KO/受傷反擊/有效HP
+    return dealAttackDamageToTarget(state, aIdx, defender.active.iid, 20, pool, { kind: 'attack-effect', label: '悄聲加害' });
   }
   let s = addLog(state, '悄聲加害：選擇對手任一寶可夢，放置 2 個傷害指示物', aIdx);
   return withPending(s, {
@@ -7271,31 +7196,8 @@ regPost('猛雷鼓|落雷風暴', (state, aIdx, pool) => {
   const defender = state.players[dIdx];
   if (defender.bench.length === 0 && !defender.active) return state;
   if (defender.bench.length === 0 && defender.active) {
-    const defCard = pool.get(defender.active.cardId);
-    const newDmg = defender.active.damage + dmg;
-    const hp = effectiveHPInline(defender.active, pool, state);  // v5.091
-    const players = [...state.players] as [PlayerState, PlayerState];
-    if (hp > 0 && newDmg >= hp) {
-      const ko: CardInstance[] = [
-        { ...defender.active, damage: newDmg },
-        ...defender.active.energyAttached,
-        ...getAllAttachedTools(defender.active),
-        ...(defender.active.evolvedFromStack ?? []),
-      ];
-      const _ko = koPrizesAdjusted(state, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-      state = _ko.state;
-      const p = _ko.prizes;
-      players[dIdx] = { ...defender, active: null, discard: [...defender.discard, ...ko] };
-      let s = addLog({ ...state, players }, `落雷風暴：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
-      s = recordOppKO(s, dIdx, defCard, 'attack');
-      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, ko[0], true, true);
-      if (players[dIdx].bench.length === 0) {
-        return { ...s, phase: 'game-over', winner: aIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-      }
-      return addPendingPrize(s, aIdx, p, pool);
-    }
-    players[dIdx] = { ...defender, active: { ...defender.active, damage: newDmg } };
-    return addLog({ ...state, players }, `落雷風暴：對 ${defCard?.name ?? '?'} 造成 ${dmg} 傷害`, aIdx);
+    // v5.960 no-bench 也走中央 dealAttackDamageToTarget(對齊 picker 路徑):補 active 弱點/免疫/prevent-KO/受傷反擊/有效HP
+    return dealAttackDamageToTarget(state, aIdx, defender.active.iid, dmg, pool, { kind: 'attack-damage', label: '落雷風暴' });
   }
   let s = addLog(state, `落雷風暴：選擇對手任一寶可夢造成 ${dmg} 傷害`, aIdx);
   return withPending(s, {
