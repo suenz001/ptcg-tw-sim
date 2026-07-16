@@ -14657,6 +14657,9 @@
   .playmat.layout-fable .my-row .active-card .active-name-tt{ top:auto; bottom:100%; margin-top:0; margin-bottom:4px; }
   .playmat.layout-fable .zone-active{ width:auto; flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
   .playmat.layout-fable .active-card{
+    /* v5.958 放卡零位移:此頁無全域 border-box,active-empty padding .4rem 在 content-box 墊高 12.8px
+       →空位(170.7)≠實卡(157.9)放卡跳動;border-box 令空位/實卡/卡背三態同高 --active-h */
+    box-sizing:border-box;
     display:block; width:var(--active-w) !important; height:var(--active-h) !important;
     min-height:0 !important; max-height:none !important; padding:0 !important;
     position:relative; overflow:visible;
@@ -14744,12 +14747,27 @@
   .playmat.layout-fable .action-bar > .stadium-display img{ width:calc(var(--card-w) * 0.86); height:auto; object-fit:contain; }
   .playmat.layout-fable .action-bar > .stadium-display .stadium-display-label{ font-size:clamp(.6rem, calc(var(--card-w) * 0.11), .78rem); }
   .playmat.layout-fable .action-bar > .stadium-display .stadium-display-name{ font-size:clamp(.62rem, calc(var(--card-w) * 0.115), .8rem); max-width:calc(var(--card-w) * 0.98); }
-  .playmat.layout-fable .action-bar > .action-btns{ grid-area:actions; position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; flex-direction:column; gap:3px; width:clamp(130px, 11vw, 168px); max-width:none; }
+  /* v5.958 行動鈕固定槽位(Wilson:招式1/2、跳過攻擊、撤退 螢幕位置鎖死,不因狀態增減位移):
+     flex 置中 → grid 固定 row 槽。row1-3=招式(槽3給技術機加招,平時留白兼分組距)、row4=跳過攻擊|結束回合
+     (canEndTurn 與招式塊互斥,共槽)、row5=撤退|丟化石(互斥)、row6=場地、row7/8=悔棋類。鈕消失時固定
+     track 仍在→其餘鈕零位移。Y 錨改固定 -97px(五槽+gap 半高,視覺≈原置中)。原 12px margin 分組距移除。 */
+  .playmat.layout-fable .action-bar > .action-btns{
+    grid-area:actions; position:absolute; left:50%; top:50%; transform:translate(-50%, -97px);
+    display:grid; grid-template-rows:38px 38px 38px 34px 34px; grid-auto-rows:min-content;
+    align-content:start; gap:3px; width:clamp(130px, 11vw, 168px); max-width:none;
+  }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk:nth-of-type(1){ grid-row:1; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk:nth-of-type(2){ grid-row:2; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk:nth-of-type(3){ grid-row:3; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.secondary,
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.stadium-btn,
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.primary{ grid-row:4; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-retreat-mirror,
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-undo{ margin-top:12px !important; }
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.primary:not(:first-child){ margin-top:12px !important; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-fossil-discard{ grid-row:5; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.stadium-btn{ grid-row:6; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-undo,
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-undo-waiting{ grid-row:7; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-undo-cancel{ grid-row:8; }
+  .playmat.layout-fable .action-bar > .action-btns > .waiting-msg{ grid-row:4; align-self:center; justify-self:center; text-align:center; }
   .playmat.layout-fable .action-bar > .alerts-col{ position:absolute; left:50%; top:8px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; max-width:min(560px, 62vw); z-index:230; pointer-events:none; }
   .playmat.layout-fable .action-bar > .alerts-col > *{ pointer-events:auto; box-shadow:0 6px 18px rgba(0,0,0,.55); animation:fableToastIn .18s ease-out; }
   @keyframes fableToastIn{ from{ opacity:0; transform:translateY(-8px); } to{ opacity:1; transform:translateY(0); } }
@@ -14791,6 +14809,7 @@
     .playmat.layout-fable .my-row > .turn-order-chip{ position:static; }
     .playmat.layout-fable .action-bar > .alerts-col,
     .playmat.layout-fable .action-bar > .action-btns{ position:static; transform:none; }
+    .playmat.layout-fable .action-bar > .action-btns{ display:flex; flex-direction:column; }
     .playmat.layout-fable .action-bar > .log-col{ width:auto; }
     .playmat.layout-fable .zone-bench{ display:flex !important; height:auto; min-height:0; max-height:none; }
     .playmat.layout-fable .log-toggle-btn{ display:none; }
