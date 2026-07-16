@@ -7732,6 +7732,7 @@
       {canUseStadium}
       {isSpectator}
       {isTournSpectator}
+      {isTReplay}
       pendingPrizes={myPendingPrizes}
       version={VERSION}
       roomCode={roomCode}
@@ -8534,7 +8535,7 @@
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
       {#if isTReplay}
         <!-- v5.940 回放:攤開行動方真手牌(面朝上,唯讀,點擊放大) -->
-        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.iid)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.iid);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
+        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
       {:else if isTournSpectator}
         {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
       {:else}

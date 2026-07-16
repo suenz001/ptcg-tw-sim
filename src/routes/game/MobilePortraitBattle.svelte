@@ -67,6 +67,8 @@
     isSpectator?: boolean;
     // v5.895 錦標賽觀戰：手牌已被伺服器 redact → 渲染成卡背（比照桌機 spectator-hand-back）
     isTournSpectator?: boolean;
+    // v5.954 回放：攤開主視角(行動方)手牌明牌
+    isTReplay?: boolean;
     // Callbacks
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
@@ -88,6 +90,7 @@
     canUseStadium = false,
     isSpectator = false,  // v5.116
     isTournSpectator = false,  // v5.895
+    isTReplay = false,  // v5.954
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     undoAvailable = false,
     onUndo,
@@ -1156,6 +1159,14 @@
     {#key myIdx}
     {#if myPlayer.hand.length === 0}
       <div class="mp-hand-empty">（手牌空）</div>
+    {:else if isTReplay}
+      <!-- v5.954 回放：攤開主視角(行動方)手牌明牌，唯讀，點擊放大(比照桌機 v5.940 spectator-hand-face)。cardOf null 時 fallback 卡背 -->
+      {#each dedupeByIid(myPlayer.hand) as inst (inst.iid)}
+        {@const c = cardOf(inst)}
+        <button class="mp-hand-card mp-hand-replay" onclick={() => onOpenZoom(inst.cardId, inst)} title={c?.name} aria-label={c?.name ?? '手牌'}>
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{:else}<div class="mp-card-back mp-hand-back-fill"><span class="mp-card-back-mark">?</span></div>{/if}
+        </button>
+      {/each}
     {:else if isTournSpectator}
       <!-- v5.895：錦標賽觀戰者手牌渲染成卡背（伺服器已 redact，不查卡；比照桌機 spectator-hand-back） -->
       {#each dedupeByIid(myPlayer.hand) as inst (inst.iid)}
@@ -1601,6 +1612,7 @@
   .mp-card-back-mark { color: #eebb44; font-weight: 700; font-family: serif; font-size: 1.5rem; }
   /* v5.895 觀戰手牌卡背：填滿 .mp-hand-card(64x86) */
   .mp-hand-card.mp-hand-back { cursor: default; }
+  .mp-hand-card.mp-hand-replay { cursor: zoom-in; }  /* v5.954 回放手牌明牌:點擊放大 */
   .mp-card-back.mp-hand-back-fill { width: 100%; height: 100%; }
   .mp-slot.mp-card-back { padding: 0; width: auto; height: 100%; }
   .mp-card-back.mp-active-card-back { height: 100%; aspect-ratio: 63/88; flex-shrink: 0; }
