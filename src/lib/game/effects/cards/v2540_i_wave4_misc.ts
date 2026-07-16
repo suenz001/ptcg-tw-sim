@@ -19,6 +19,7 @@ import {
   regPre, regPost,
   addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { statusPost, flipCoinsWithLog, dealAttackDamageToTarget, oppSwapDmgPost } from '../../effects'; // v5.788 gust 攻擊方選中央
 
@@ -314,14 +315,14 @@ regPost('信使鳥|急速之禮', (state, aIdx, _pool) => {
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 0, maxCount: 1,
+    minCount: 1, maxCount: 1,  // v5.963 卡面「任意選擇1張」=必選1(比照啪咚猴衝衝鼓 v5.607)
     effectKey: 'wave4-deck-pick-any',
   });
 });
 
 // resolver for any-card deck pick (信使鳥|急速之禮)
 regR('wave4-deck-pick-any', (state, aIdx, iids, _params, _pool) => {
-  if (iids.length === 0) return state;
+  if (iids.length === 0) return openDeckViewReshuffle(state, aIdx, '急速之禮');  // v5.963 防呆重洗
   const targetIid = iids[0];
   return updatePlayer(state, aIdx, p => {
     const card = p.deck.find(c => c.iid === targetIid);

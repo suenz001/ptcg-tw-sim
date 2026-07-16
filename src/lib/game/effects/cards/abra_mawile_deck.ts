@@ -30,6 +30,7 @@ import {
   shuffle, updatePlayer, addLog, drawCards, withPending,
   recordOppKO,
 } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
   canApplyAttackEffectToTarget, koTargetByAttackEffect,
@@ -201,9 +202,9 @@ function applyDeckAttachBench(
 ): import('../../types').GameState {
   const p = st.players[idx];
   const target = p.bench.find(c => c.iid === targetIid);
-  if (!target) return st;
+  if (!target) return openDeckViewReshuffle(st, idx, label);  // v5.963 0-pick 重洗
   const energies = p.deck.filter(c => energyIids.includes(c.iid));
-  if (energies.length === 0) return st;
+  if (energies.length === 0) return openDeckViewReshuffle(st, idx, label);  // v5.963
   const s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰（重洗牌庫）`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,

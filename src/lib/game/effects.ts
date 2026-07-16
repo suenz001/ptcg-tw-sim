@@ -1575,16 +1575,16 @@ regPost('克雷色利亞|充溢之光', (state, aIdx, pool) => {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     // v2.40：卡面僅限基本能量；原本寫 'Energy' 會讓 UI 列出 Special Energy。
-    filter: 'BasicEnergy',
+    filter: 'BasicEnergy:Psychic',  // v5.963 卡面「基本【超】能量」(原 'BasicEnergy' 過寬,任何屬性可附)
     minCount: 0, maxCount: 2,
     effectKey: 'cresselia-attach-energy',
   });
 });
 
 regR('cresselia-attach-energy', (st, idx, iids, _params, pool) => {
-  if (iids.length === 0) return st;
+  if (iids.length === 0) return openDeckViewReshuffle(st, idx, '充溢之光');  // v5.963 0-pick 重洗
   const player = st.players[idx];
-  if (!player.active) return st;
+  if (!player.active) return openDeckViewReshuffle(st, idx, '充溢之光');
   const activeName = pool.get(player.active.cardId)?.name ?? '出場寶可夢';
   const chosenInst = player.deck.filter(c => iids.includes(c.iid));
   const names = chosenInst.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
@@ -3294,7 +3294,7 @@ function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetI
 
 regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
-    return addLog(state, '賽吉：未選擇進化卡', aIdx);
+    return openDeckViewReshuffle(state, aIdx, '賽吉');  // v5.963 0-pick 也要重洗(卡面「並且重洗牌庫」;否則看完整副牌庫)
   }
   const evoIid = iids[0];
   const p = state.players[aIdx];
@@ -11679,7 +11679,7 @@ regR('deck-energy-attach-self', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   if (!p.active) return st;
   const picked = p.deck.filter(c => iids.includes(c.iid));
-  if (picked.length === 0) return addLog(st, `${label}：未選擇`, idx);
+  if (picked.length === 0) return openDeckViewReshuffle(st, idx, label);  // v5.963 0-pick 重洗(卡面「並且重洗牌庫」)
   const tname = pool.get(p.active.cardId)?.name ?? '?';
   const ename = pool.get(picked[0].cardId)?.name ?? '?';
   let s = addLog(st, `${label}：將 ${ename} 附加到 ${tname}（重洗牌庫）`, idx);

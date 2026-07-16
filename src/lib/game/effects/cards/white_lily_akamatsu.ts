@@ -17,6 +17,7 @@ import {
   reg, regR, regG,
   addLog, updatePlayer, withPending, shuffle,
 } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 
 // ── 赤松（Supporter） ───────────────────────────────────────────────────────
 // 從牌庫搜最多 2 張基本能量；玩家自行決定哪 1 張附加到己方寶可夢、哪 1 張收入手牌。
@@ -52,7 +53,7 @@ reg('赤松', (st, idx) => {
 
 regR('akamatsu-split', (st, idx, iids, _params, pool) => {
   if (iids.length === 0) {
-    return addLog(st, '赤松：未選取任何能量（洗回牌庫）', idx);
+    return openDeckViewReshuffle(st, idx, '赤松');  // v5.963 log 原稱洗回但實際沒洗
   }
   const p = st.players[idx];
   let picked = iids

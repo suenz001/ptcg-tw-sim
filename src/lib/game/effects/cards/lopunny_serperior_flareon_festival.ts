@@ -23,6 +23,7 @@ import {
   shuffle,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
 } from '../_shared';
+import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import { isBasicEnergyOfType } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 import { isAbilityNullifiedByPassive } from './v3001_g3_wave3';
@@ -282,7 +283,7 @@ function commitMetagrossEnergy(
   if (psyIid) moved.push(psyIid);
   if (metIid) moved.push(metIid);
   if (moved.length === 0) {
-    return addLog(st, 'X啟動：未選任何能量', idx);
+    return openDeckViewReshuffle(st, idx, 'X啟動');  // v5.963 0-pick 也要重洗(兩段 picker 皆可跳過)
   }
   // 移到 discard（暫存供 chain attach 用），同時 reshuffle deck
   let s = updatePlayer(st, idx, pl => {
