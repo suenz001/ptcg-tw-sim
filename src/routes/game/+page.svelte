@@ -14539,19 +14539,22 @@
      ═══════════════════════════════════════════════════════════════════ */
   .playmat.layout-fable{
     --card-scale-safe: clamp(0.7, var(--card-scale, 1), 1.4);
-    --card-w: calc(clamp(64px, min(5.4vw, 10.5vh), 96px) * var(--card-scale-safe));
+    /* v5.957 一頁鎖高：--card-w-cap = 由視窗高反推的卡寬硬上限(header/hand/gap 等固定開銷約 300px，
+       除以四排卡總高係數 6.05)。滑桿照常放大縮小，但永遠被 cap 鎖住 → 任何 scale 都撐不破一頁。 */
+    --card-w-cap: calc((100dvh - 300px) / 6.05);
+    --card-w: min(calc(clamp(64px, 5.4vw, 96px) * var(--card-scale-safe)), var(--card-w-cap));
     --card-h: calc(var(--card-w) * 1.4);
     --active-w: calc(var(--card-w) * 1.16);
     --active-h: calc(var(--active-w) * 1.4);
     --fan-step: calc(var(--card-w) * 0.32);
     --mat-gap: clamp(6px, 0.8vw, 14px);
-    --row-gap: clamp(20px, 3vh, 36px);
+    --row-gap: clamp(8px, 1.2vh, 18px);
     --log-w: clamp(220px, 18vw, 300px);
     --badge-fs: clamp(0.6rem, calc(var(--card-w) * 0.12), 0.82rem);
     display:grid !important;
     position:relative;
     grid-template-columns:auto calc(var(--card-w) * 1.08) minmax(0, 1fr) clamp(140px, 12vw, 176px) auto var(--log-w);
-    grid-template-rows:auto auto auto auto;
+    grid-template-rows:auto minmax(0, 1fr) minmax(0, 1fr) auto;
     grid-template-areas:
       "benchO   benchO  benchO    benchO   benchO   log"
       "pilesO   stad    activeO   actions  prizesO  log"
@@ -14648,8 +14651,10 @@
     width:100%; max-width:100%; aspect-ratio:96/135; height:auto;
     overflow:visible !important; pointer-events:none;
   }
-  .playmat.layout-fable .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; position:relative; z-index:1; transform:none; }
-  .playmat.layout-fable .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:start; position:relative; z-index:1; transform:none; }
+  /* v5.957 active 上下對調貼齊各自備戰列(start/end 反轉)→ 戰鬥↔備戰距離縮到一個 row-gap；剩餘高集中中場 */
+  .playmat.layout-fable .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:start; position:relative; z-index:1; transform:none; }
+  .playmat.layout-fable .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:end; position:relative; z-index:1; transform:none; }
+  .playmat.layout-fable .my-row .active-card .active-name-tt{ top:auto; bottom:100%; margin-top:0; margin-bottom:4px; }
   .playmat.layout-fable .zone-active{ width:auto; flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
   .playmat.layout-fable .active-card{
     display:block; width:var(--active-w) !important; height:var(--active-h) !important;
@@ -14676,14 +14681,19 @@
   .playmat.layout-fable .att-card:hover{ border-color:#ffd44a !important; box-shadow:0 0 14px rgba(255,212,74,.9), 0 2px 6px rgba(0,0,0,.6); transition:border-color .12s, box-shadow .12s; }
   .playmat.layout-fable .active-card .active-img:hover,
   .playmat.layout-fable .bench-slot .bench-middle img:hover{ filter:brightness(1.12) drop-shadow(0 0 8px rgba(255,212,74,.7)); transition:filter .12s; }
+  /* v5.957 HP 條改滿寬 overlay：血條永遠佔滿卡寬(雙方等長明顯、不被 HP 字數擠壓)，HP 文字疊血條正中(不佔 flow、不多吃高度) */
   .playmat.layout-fable .active-card .active-hpbar-bottom{
     position:absolute; left:3%; right:3%; bottom:2%; top:auto;
-    display:flex; flex-direction:row; align-items:center; gap:6px;
-    padding:3px 6px; margin:0; width:auto; transform:none;
+    display:block; padding:3px 5px; margin:0; width:auto; transform:none;
     background:rgba(0,0,0,.75); border-radius:6px; z-index:135; pointer-events:none;
   }
-  .playmat.layout-fable .active-card .active-hpbar-bottom .hp-bar-wrap{ flex:1 1 auto; width:auto; height:7px; margin:0; }
-  .playmat.layout-fable .active-card .active-hpbar-bottom .active-hp-text{ flex:0 0 auto; font-size:clamp(.62rem, calc(var(--card-w) * 0.115), .88rem); font-weight:700; white-space:nowrap; line-height:1.1; }
+  .playmat.layout-fable .active-card .active-hpbar-bottom .hp-bar-wrap{ display:block; width:100%; height:clamp(12px, calc(var(--card-w) * 0.17), 16px); margin:0; border-radius:5px; border:1px solid rgba(255,255,255,.18); }
+  .playmat.layout-fable .active-card .active-hpbar-bottom .active-hp-text{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    z-index:3; font-size:clamp(.58rem, calc(var(--card-w) * 0.105), .78rem); font-weight:700;
+    white-space:nowrap; line-height:1; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.95), 0 0 4px rgba(0,0,0,.9);
+  }
   .playmat.layout-fable .active-card .active-name-tt{
     position:absolute; top:100%; left:50%; transform:translateX(-50%);
     width:calc(var(--active-w) * 1.3); margin-top:4px; z-index:100; pointer-events:none;
@@ -14762,11 +14772,17 @@
   .playmat.layout-fable .log-toggle-btn:hover{ background:#2a4a2a; }
   .playmat.layout-fable .log-toggle-icon{ font-size:18px; line-height:1; }
   .playmat.layout-fable .log-toggle-arrow{ font-size:14px; color:#88ddaa; }
+  /* v5.957 Fable 一頁鎖高：桌機(>=1024)鎖 battle-root=視窗高不捲動，playmat 吃滿 header 與手牌間剩餘高度。
+     :has() 只在 fable 版存在時命中 → classic/tabletop/手機零影響；<1024 fallback 不鎖(照舊可捲)故包 media。 */
+  @media (min-width: 1024px){
+    .battle-root:has(.playmat.layout-fable){ height:100vh; height:100dvh; min-height:0; overflow:hidden; }
+    .playmat.layout-fable{ min-height:0; overflow:hidden; }
+  }
   .battle-root:has(.playmat.layout-fable) .hand-strip{ padding:0 .7rem 0; }
   .battle-root:has(.playmat.layout-fable) .hand-strip .hand-label{ margin-bottom:0; font-size:.65rem; }
   .battle-root:has(.playmat.layout-fable) .hand-strip .hand-scroll{ padding:0 1rem 0; min-height:120px; }
   @media (max-width: 1023px){
-    .playmat.layout-fable{ display:grid !important; grid-template-columns:none; grid-template-rows:none; grid-template-areas:none; }
+    .playmat.layout-fable{ --card-w-cap:9999px; display:grid !important; grid-template-columns:none; grid-template-rows:none; grid-template-areas:none; }
     .playmat.layout-fable > .field-row,
     .playmat.layout-fable > .action-bar{ display:flex !important; }
     .playmat.layout-fable > .field-row > *,
