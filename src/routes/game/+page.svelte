@@ -410,16 +410,24 @@
   //   classic = 現有左對齊 active；tabletop = active 置中 + bench 對稱列
   //   localStorage 'ptcg_battle_layout' 跨 session 記憶；只動桌機
   //   v5.011：選項整合到既有 showSettingsModal 面板，移除獨立 popup
-  let battleLayout = $state<'classic' | 'tabletop'>('classic');
-  function setBattleLayout(v: 'classic' | 'tabletop'): void {
+  let battleLayout = $state<'classic' | 'tabletop' | 'fable'>('classic');
+  function setBattleLayout(v: 'classic' | 'tabletop' | 'fable'): void {
     battleLayout = v;
     try { localStorage.setItem('ptcg_battle_layout', v); } catch { /* quota ignore */ }
+    recomputeZoom();
   }
   // v5.012：桌墊版 battle log side panel toggle（可關閉），localStorage 記憶
   let battleLogOpen = $state<boolean>(true);
   function toggleBattleLog(): void {
     battleLogOpen = !battleLogOpen;
     try { localStorage.setItem('ptcg_battle_log_open', battleLogOpen ? '1' : '0'); } catch { /* ignore */ }
+  }
+  // fable 版卡牌大小 slider（0.7~1.4）— 只有 .playmat.layout-fable CSS 讀 --card-scale
+  let fableCardScale = $state(1);
+  function setFableCardScale(v: number): void {
+    if (!Number.isFinite(v)) return;
+    fableCardScale = Math.min(1.4, Math.max(0.7, v));
+    try { localStorage.setItem('ptcg_fable_card_scale', String(fableCardScale)); } catch { /* ignore */ }
   }
   // v5.051: 預組永遠顯示在下拉內（移除 toggle） — Android Chrome 對動態 {#if} optgroup 有 bug
   let p2Name = $state('AI 對手');
@@ -1047,6 +1055,7 @@
 
   function recomputeZoom() {
     if (typeof window === 'undefined') return;
+    if (battleLayout === 'fable') { gameZoom = 1; return; }  // fable 版自帶 clamp/vw/vh 尺寸,鎖 gameZoom=1 避免雙重縮放
     const w = window.innerWidth;
     const h = window.innerHeight;
     if (resolutionMode === 'auto') {
@@ -1084,12 +1093,16 @@
     // v5.009 桌墊版 layout — 初始化讀 localStorage（跟其他 settings 一起 init）
     try {
       const savedLayout = localStorage.getItem('ptcg_battle_layout');
-      if (savedLayout === 'tabletop' || savedLayout === 'classic') battleLayout = savedLayout;
+      if (savedLayout === 'tabletop' || savedLayout === 'classic' || savedLayout === 'fable') battleLayout = savedLayout;
     } catch { /* SSR / quota / private mode：保持預設 classic */ }
     // v5.012：battle log side panel 開關狀態（桌墊版用）
     try {
       const savedLogOpen = localStorage.getItem('ptcg_battle_log_open');
       if (savedLogOpen === '0' || savedLogOpen === '1') battleLogOpen = savedLogOpen === '1';
+    } catch { /* ignore */ }
+    try {
+      const savedScale = parseFloat(localStorage.getItem('ptcg_fable_card_scale') ?? '');
+      if (Number.isFinite(savedScale) && savedScale >= 0.7 && savedScale <= 1.4) fableCardScale = savedScale;
     } catch { /* ignore */ }
 
     const onResize = () => {
@@ -7651,7 +7664,7 @@
      正式對戰（Play Mat 佈局） — setup 和 playing 共用此畫面
   ══════════════════════════════════════════════════════════════════════ -->
 {:else}
-<div class="battle-root" class:tablet-layout={isTabletLayout} class:zoomed={gameZoom !== 1} style="--game-zoom: {gameZoom};">
+<div class="battle-root" class:tablet-layout={isTabletLayout && battleLayout !== 'fable'} class:zoomed={gameZoom !== 1} style="--game-zoom: {gameZoom};">
 
   <!-- v5.478 系統管理員廣播跑馬燈（桌面+手機共用；fixed 浮在最上方，跑一輪後自動收起）-->
   {#if broadcastMarquee}
@@ -7871,9 +7884,9 @@
   </div>
 {/if}
 
-<div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:log-collapsed={battleLayout === 'tabletop' && !battleLogOpen}>
+<div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:layout-fable={battleLayout === 'fable'} class:log-collapsed={battleLayout !== 'classic' && !battleLogOpen} style="--card-scale:{fableCardScale}">
     <!-- v5.012：桌墊版專用 battle log toggle 按鈕（漂在右邊） -->
-    {#if battleLayout === 'tabletop'}
+    {#if battleLayout !== 'classic'}
       <button class="log-toggle-btn" onclick={toggleBattleLog}
         title={battleLogOpen ? '收合對戰紀錄面板' : '展開對戰紀錄面板'}
         aria-label={battleLogOpen ? '收合對戰紀錄' : '展開對戰紀錄'}>
@@ -7912,7 +7925,7 @@
           <span class="pile-label">棄牌</span>
         </div>
       </div>
-      <div class="zone-bench" class:bench-extended={oppBenchLimit > 5}>
+      <div class="zone-bench" class:bench-extended={oppBenchLimit > 5} style="--bench-n:{oppBenchLimit}">
         {#each Array(Math.max(Math.min(5, (oppPlayer?.bench.length ?? 0) + 1), oppBenchLimit, 1)) as _, i}
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
@@ -7930,7 +7943,7 @@
                 <div class="bench-middle">
                   <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
                   <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
-                  {#if battleLayout === 'tabletop'}
+                  {#if battleLayout !== 'classic'}
                     {@const _attOB = attachedCardsOf(b)}
                     {#if _attOB.length > 0}
                       <!-- v5.038：疊牌動態間距 — 越多張疊得越密，避免疊太長
@@ -7992,11 +8005,11 @@
             >
               <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
               <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
-              {#if battleLayout === 'tabletop'}
+              {#if battleLayout !== 'classic'}
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                   <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                   <div class="tt-attach-overlay">{#each energyPips(oppPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if oppPlayer.active.toolAttached || (oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0 ? `×${1 + oppPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
@@ -8043,7 +8056,7 @@
               <div class="active-hpbar-bottom">
                 <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(oppPlayer.active)?hpRemaining(oppPlayer.active)/hpTotal(oppPlayer.active)*100:0}%;background:{hpColor(hpRemaining(oppPlayer.active),hpTotal(oppPlayer.active))}"></div></div>
                 <span class="active-hp-text">HP {hpRemaining(oppPlayer.active)}/{hpTotal(oppPlayer.active)}</span>
-                {#if battleLayout === 'tabletop'}<div class="active-name-tt">{ac?.name ?? '?'}</div>{/if}
+                {#if battleLayout !== 'classic'}<div class="active-name-tt">{ac?.name ?? '?'}</div>{/if}
               </div>
             </div>
           {/if}
@@ -8306,11 +8319,11 @@
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}
               onpointerenter={(e)=>enterAttCard(e, myPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
             <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
-            {#if battleLayout === 'tabletop'}
+            {#if battleLayout !== 'classic'}
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:{(i+1)*32}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
                 <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                 <div class="tt-attach-overlay">{#each energyPips(myPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if myPlayer.active.toolAttached || (myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0 ? `×${1 + myPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
@@ -8358,7 +8371,7 @@
             <div class="active-hpbar-bottom">
               <div class="hp-bar-wrap"><div class="hp-bar" style="width:{hpTotal(myPlayer.active)?hpRemaining(myPlayer.active)/hpTotal(myPlayer.active)*100:0}%;background:{hpColor(hpRemaining(myPlayer.active),hpTotal(myPlayer.active))}"></div></div>
               <span class="active-hp-text">HP {hpRemaining(myPlayer.active)}/{hpTotal(myPlayer.active)}</span>
-              {#if battleLayout === 'tabletop'}<div class="active-name-tt">{ac?.name ?? '?'}</div>{/if}
+              {#if battleLayout !== 'classic'}<div class="active-name-tt">{ac?.name ?? '?'}</div>{/if}
             </div>
             {#if evoOpts.length>0&&!pendingSelection&&isMyTurn()}
               <div class="evo-wrap">
@@ -8384,7 +8397,7 @@
         {/if}
       </div>
 
-      <div class="zone-bench" class:bench-extended={myBenchLimit > 5}>
+      <div class="zone-bench" class:bench-extended={myBenchLimit > 5} style="--bench-n:{myBenchLimit}">
         {#each Array(Math.max(Math.min(5, (myPlayer?.bench.length ?? 0) + 1), myBenchLimit, 1)) as _, i}
           {#if myPlayer?.bench[i]}
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
@@ -8408,7 +8421,7 @@
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}
                   onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
                 <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
-                {#if battleLayout === 'tabletop'}
+                {#if battleLayout !== 'classic'}
                   {@const _attMB = attachedCardsOf(b)}
                   {#if _attMB.length > 0}
                     <!-- v5.038：疊牌動態間距 — 越多張疊得越密（同對手 bench 邏輯） -->
@@ -9175,7 +9188,7 @@
 
   <!-- v5.026 桌墊版：附加卡 hover 放大預覽（attached energy/tool/evo 都用同個浮層）
        v5.027：頂部卡 hoverAttBelow=true 時預覽改顯示在卡下方 -->
-  {#if hoverAttCardId && hoverAttAnchor && !dragging && battleLayout === 'tabletop'}
+  {#if hoverAttCardId && hoverAttAnchor && !dragging && battleLayout !== 'classic'}
     {@const ac = getCard(hoverAttCardId)}
     {#if ac}
       <div class="hand-preview-float att-preview-float" class:att-preview-below={hoverAttBelow}
@@ -10197,11 +10210,20 @@
           <div class="setting-row">
             <label for="battle-layout">板面布局：</label>
             <select id="battle-layout" value={battleLayout}
-              onchange={(e) => setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop')}>
+              onchange={(e) => setBattleLayout(e.currentTarget.value as 'classic' | 'tabletop' | 'fable')}>
               <option value="classic">經典版（Active 左對齊）</option>
               <option value="tabletop">🆕 桌墊版（仿實體 — Active 置中、bench 對稱列）</option>
+              <option value="fable">✨ Fable 版（忠實桌墊 grid — 卡牌大小可調、紀錄入欄）</option>
             </select>
           </div>
+          {#if battleLayout === 'fable'}
+            <div class="setting-row">
+              <label for="fable-card-scale">卡牌大小：{Math.round(fableCardScale * 100)}%</label>
+              <input id="fable-card-scale" type="range" min="0.7" max="1.4" step="0.05"
+                value={fableCardScale}
+                oninput={(e) => setFableCardScale(parseFloat(e.currentTarget.value))} />
+            </div>
+          {/if}
           <div class="setting-hint">
             ・經典版 = 目前預設，所有玩家原本看到的版面
             <br/>・桌墊版 = 仿實體 TCG — 戰鬥位置中、Bench 5 格對稱列、競技場置中央
@@ -14505,6 +14527,257 @@
     margin: 0;
     color: #c00;
     font-size: 0.85rem;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     Fable 版對戰版面 — battleLayout === 'fable' → .playmat.layout-fable
+     全部 scope 在 .playmat.layout-fable，不洩漏 classic / .layout-tabletop。
+     1) --card-w 單一尺寸源；--card-scale 由設定面板 slider 注入。
+     2) 忠實實體桌墊 grid-template-areas；log 佔右側 grid 欄。
+     3) gameZoom 於 fable 鎖 1；tablet-layout 絕緣。
+     4) 備戰列 repeat(var(--bench-n)) minmax 自適應（8 備戰自動收縮不捲動）。
+     ═══════════════════════════════════════════════════════════════════ */
+  .playmat.layout-fable{
+    --card-scale-safe: clamp(0.7, var(--card-scale, 1), 1.4);
+    --card-w: calc(clamp(64px, min(5.4vw, 10.5vh), 96px) * var(--card-scale-safe));
+    --card-h: calc(var(--card-w) * 1.4);
+    --active-w: calc(var(--card-w) * 1.16);
+    --active-h: calc(var(--active-w) * 1.4);
+    --fan-step: calc(var(--card-w) * 0.32);
+    --mat-gap: clamp(6px, 0.8vw, 14px);
+    --row-gap: clamp(20px, 3vh, 36px);
+    --log-w: clamp(220px, 18vw, 300px);
+    --badge-fs: clamp(0.6rem, calc(var(--card-w) * 0.12), 0.82rem);
+    display:grid !important;
+    position:relative;
+    grid-template-columns:auto calc(var(--card-w) * 1.08) minmax(0, 1fr) clamp(140px, 12vw, 176px) auto var(--log-w);
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:
+      "benchO   benchO  benchO    benchO   benchO   log"
+      "pilesO   stad    activeO   actions  prizesO  log"
+      "prizesMe stad    activeMe  actions  pilesMe  log"
+      "benchMe  benchMe benchMe   benchMe  benchMe  log";
+    gap:var(--row-gap) var(--mat-gap);
+    padding:10px 10px;
+    align-items:center;
+    margin-right:0;
+  }
+  .playmat.layout-fable.log-collapsed{ --log-w:0px; }
+  .playmat.layout-fable > .field-row,
+  .playmat.layout-fable > .action-bar{ display:contents !important; }
+  .playmat.layout-fable .opponent-row > .turn-order-chip{ position:absolute; left:10px; top:10px; z-index:60; margin:0; }
+  .playmat.layout-fable .my-row > .turn-order-chip{ position:absolute; left:10px; bottom:10px; z-index:60; margin:0; }
+  .playmat.layout-fable .opponent-row > .zone-pile{ grid-area:pilesO; display:flex; flex-direction:column; gap:4px; align-self:center; justify-self:start; }
+  .playmat.layout-fable .opponent-row > .zone-prizes{ grid-area:prizesO; align-self:center; justify-self:end; }
+  .playmat.layout-fable .my-row > .zone-prizes{ grid-area:prizesMe; align-self:center; justify-self:start; }
+  .playmat.layout-fable .my-row > .zone-pile{ grid-area:pilesMe; display:flex; flex-direction:column; gap:4px; align-self:center; justify-self:end; }
+  .playmat.layout-fable .pile-slot{ width:calc(var(--card-w) * 0.82); min-height:calc(var(--card-w) * 0.62); }
+  .playmat.layout-fable .prize-card{ width:calc(var(--card-w) * 0.4); height:calc(var(--card-w) * 0.56); }
+  .playmat.layout-fable .zone-bench{
+    display:grid !important;
+    grid-template-columns:repeat(var(--bench-n, 5), minmax(0, var(--card-w)));
+    gap:calc(var(--card-w) * 0.07);
+    justify-content:center;
+    height:calc(var(--card-h) + 8px);
+    min-height:0; max-height:none;
+    overflow:visible !important;
+    contain:layout;
+    position:relative;
+    z-index:200;
+  }
+  .playmat.layout-fable .opponent-row > .zone-bench{ grid-area:benchO; align-self:end; }
+  .playmat.layout-fable .my-row > .zone-bench{ grid-area:benchMe; align-self:start; }
+  .playmat.layout-fable .zone-bench.bench-extended{ overflow-x:visible !important; overflow-y:visible !important; }
+  .playmat.layout-fable .zone-bench .bench-slot,
+  .playmat.layout-fable .zone-bench .bench-empty,
+  .playmat.layout-fable .zone-bench.bench-extended .bench-slot,
+  .playmat.layout-fable .zone-bench.bench-extended .bench-empty{
+    flex:none; width:auto; min-width:0; max-width:none;
+    height:calc(var(--card-h) + 6px); min-height:0;
+  }
+  .playmat.layout-fable .bench-slot{ position:relative; overflow:visible !important; contain:layout style; padding:2px; border-radius:6px; }
+  .playmat.layout-fable .bench-slot .bench-middle{ display:flex; align-items:center; justify-content:center; position:absolute; inset:0; overflow:visible; }
+  .playmat.layout-fable .bench-slot .bench-middle img{ z-index:99; height:100%; width:auto; max-width:100%; max-height:100%; object-fit:contain; border-radius:4px; }
+  .playmat.layout-fable .zone-bench.bench-extended .bench-slot img{ max-width:100%; max-height:100%; }
+  .playmat.layout-fable .bench-slot .bench-name{
+    position:absolute; left:3%; right:3%; top:36%; z-index:200; pointer-events:none;
+    font-size:clamp(0.66rem, calc(var(--card-w) * 0.14), 0.98rem);
+    font-weight:700; color:#fff; text-align:center; line-height:1.1;
+    text-shadow:0 1px 3px rgba(0,0,0,.95);
+    background:rgba(0,0,0,.72); border-radius:3px; padding:1px 3px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .playmat.layout-fable .bench-slot .bench-stat{
+    position:absolute; left:6%; right:6%;
+    top:calc(36% + clamp(16px, calc(var(--card-w) * 0.24), 24px));
+    z-index:200; pointer-events:none;
+    font-size:clamp(0.68rem, calc(var(--card-w) * 0.14), 1rem);
+    font-weight:700; color:#cfe; text-align:center; line-height:1.15;
+    text-shadow:0 1px 3px rgba(0,0,0,.95);
+    background:rgba(0,0,0,.8); border-radius:3px; padding:1px 4px;
+  }
+  .playmat.layout-fable .bench-slot > .hp-bar-wrap{ position:absolute; left:4%; right:4%; bottom:3px; z-index:200; margin:0; }
+  .playmat.layout-fable .bench-slot .ability-btn-sm{
+    position:absolute; left:3%; right:3%; bottom:16%; z-index:201; margin:0 !important;
+    font-size:var(--badge-fs) !important; font-weight:600;
+    padding:.3rem .35rem !important; border-radius:4px !important;
+    box-shadow:0 2px 4px rgba(0,0,0,.5); min-height:24px;
+  }
+  .playmat.layout-fable .bench-slot .evo-btn-sm{
+    position:absolute; left:3%; right:3%; bottom:calc(16% + 30px); z-index:201; margin:0 !important;
+    font-size:var(--badge-fs) !important; box-shadow:0 2px 4px rgba(0,0,0,.5);
+  }
+  .playmat.layout-fable .bench-slot .evo-btn-sm.fossil-discard-btn{ font-weight:600; padding:.28rem .35rem !important; min-height:24px; }
+  .playmat.layout-fable .bench-slot .ab-used-chip.sm{
+    position:absolute; right:3%; top:3%; z-index:201; margin:0;
+    background:rgba(160,160,160,.85); color:#222; font-size:var(--badge-fs); padding:1px 4px; border-radius:8px;
+  }
+  .playmat.layout-fable .bench-slot .status-chip-sm{
+    position:absolute; left:3%; top:3%; z-index:201; margin:0;
+    font-size:calc(var(--badge-fs) * 1.05); padding:0 3px; border-radius:8px;
+  }
+  .playmat.layout-fable .bench-slot .attach-hint{
+    position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); z-index:202; margin:0;
+    font-size:clamp(1rem, calc(var(--card-w) * 0.18), 1.4rem);
+    background:rgba(0,0,0,.78); color:#ffeb3b; padding:5px 10px; border-radius:8px;
+    box-shadow:0 0 12px rgba(255,235,59,.7);
+  }
+  .playmat.layout-fable .bench-slot .tool-chip.sm{ display:none; }
+  .playmat.layout-fable .bench-slot .att-card-stack{
+    position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+    width:100%; max-width:100%; aspect-ratio:96/135; height:auto;
+    overflow:visible !important; pointer-events:none;
+  }
+  .playmat.layout-fable .opponent-row > .zone-active{ grid-area:activeO; justify-self:center; align-self:end; position:relative; z-index:1; transform:none; }
+  .playmat.layout-fable .my-row > .zone-active{ grid-area:activeMe; justify-self:center; align-self:start; position:relative; z-index:1; transform:none; }
+  .playmat.layout-fable .zone-active{ width:auto; flex:none; display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .playmat.layout-fable .active-card{
+    display:block; width:var(--active-w) !important; height:var(--active-h) !important;
+    min-height:0 !important; max-height:none !important; padding:0 !important;
+    position:relative; overflow:visible;
+    background:rgba(0,0,0,.28); border:1px solid #3a5a3a; border-radius:8px;
+  }
+  .playmat.layout-fable .active-card .active-img{ position:absolute; inset:0; width:100% !important; height:100%; object-fit:contain; z-index:99; border-radius:6px; }
+  .playmat.layout-fable .active-card.active-empty{
+    display:flex; align-items:center; justify-content:center;
+    width:var(--active-w) !important; height:var(--active-h) !important;
+    min-height:0 !important; padding:.4rem !important;
+    font-size:clamp(.6rem, calc(var(--card-w) * 0.11), .85rem);
+  }
+  .playmat.layout-fable .active-card.card-back-active{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+  .playmat.layout-fable .active-card > .att-card-stack{ position:absolute; top:4%; left:5%; width:100%; height:100%; overflow:visible !important; pointer-events:none; }
+  .playmat.layout-fable .att-card{
+    position:absolute; left:0; top:0; width:100%; height:auto;
+    border:1px solid rgba(255,255,255,0.35); border-radius:3px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.65); pointer-events:auto; cursor:zoom-in;
+  }
+  .playmat.layout-fable .att-card.att-tool{ border-color:#d4a000; }
+  .playmat.layout-fable .att-card.att-evo{ border-color:#88aaff; }
+  .playmat.layout-fable .att-card:hover{ border-color:#ffd44a !important; box-shadow:0 0 14px rgba(255,212,74,.9), 0 2px 6px rgba(0,0,0,.6); transition:border-color .12s, box-shadow .12s; }
+  .playmat.layout-fable .active-card .active-img:hover,
+  .playmat.layout-fable .bench-slot .bench-middle img:hover{ filter:brightness(1.12) drop-shadow(0 0 8px rgba(255,212,74,.7)); transition:filter .12s; }
+  .playmat.layout-fable .active-card .active-hpbar-bottom{
+    position:absolute; left:3%; right:3%; bottom:2%; top:auto;
+    display:flex; flex-direction:row; align-items:center; gap:6px;
+    padding:3px 6px; margin:0; width:auto; transform:none;
+    background:rgba(0,0,0,.75); border-radius:6px; z-index:135; pointer-events:none;
+  }
+  .playmat.layout-fable .active-card .active-hpbar-bottom .hp-bar-wrap{ flex:1 1 auto; width:auto; height:7px; margin:0; }
+  .playmat.layout-fable .active-card .active-hpbar-bottom .active-hp-text{ flex:0 0 auto; font-size:clamp(.62rem, calc(var(--card-w) * 0.115), .88rem); font-weight:700; white-space:nowrap; line-height:1.1; }
+  .playmat.layout-fable .active-card .active-name-tt{
+    position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    width:calc(var(--active-w) * 1.3); margin-top:4px; z-index:100; pointer-events:none;
+    font-size:clamp(.72rem, calc(var(--card-w) * 0.13), .95rem);
+    font-weight:700; color:#fff; text-align:center; line-height:1.2;
+    background:rgba(0,0,0,.82); padding:3px 6px; border-radius:4px;
+    word-break:keep-all; overflow-wrap:anywhere;
+    text-shadow:0 1px 2px rgba(0,0,0,.95); box-shadow:0 2px 4px rgba(0,0,0,.4);
+  }
+  .playmat.layout-fable .active-card .active-info{
+    position:absolute; left:3%; top:3%; right:auto; bottom:auto;
+    display:flex; flex-direction:column; align-items:flex-start; gap:3px;
+    max-width:80%; min-width:0; flex:none; z-index:140; pointer-events:none;
+  }
+  .playmat.layout-fable .active-card .active-info .active-name{ display:none; }
+  .playmat.layout-fable .active-card .active-info .tool-chip{ display:none; }
+  .playmat.layout-fable .active-card .active-info .status-chip{ font-size:var(--badge-fs); padding:1px 6px; border-radius:9px; box-shadow:0 1px 3px rgba(0,0,0,.6); }
+  .playmat.layout-fable .active-card .active-info .ab-used-chip{ font-size:var(--badge-fs); padding:1px 6px; border-radius:9px; }
+  .playmat.layout-fable .active-card .active-info .attach-hint{ font-size:calc(var(--badge-fs) * 1.15); background:rgba(0,0,0,.78); color:#ffeb3b; padding:3px 8px; border-radius:8px; box-shadow:0 0 10px rgba(255,235,59,.6); }
+  .playmat.layout-fable .active-card .active-nrg-col,
+  .playmat.layout-fable .bench-slot .bench-nrg{ display:none; }
+  .playmat.layout-fable .tt-attach-overlay{ position:absolute; display:flex; flex-wrap:wrap; gap:2px; align-items:flex-end; justify-content:center; z-index:130; pointer-events:none; }
+  .playmat.layout-fable .tt-attach-overlay:empty{ display:none; }
+  .playmat.layout-fable .active-card .tt-attach-overlay{ left:4%; right:4%; bottom:14%; width:auto; }
+  .playmat.layout-fable .bench-slot .tt-attach-overlay{ left:2%; right:2%; bottom:2px; z-index:202; }
+  .playmat.layout-fable .tt-attach-overlay .nrg-pip{ min-width:clamp(16px, calc(var(--card-w) * 0.22), 24px); height:clamp(16px, calc(var(--card-w) * 0.22), 24px); font-size:clamp(.6rem, calc(var(--card-w) * 0.105), .85rem); padding:0 4px; border-radius:12px; }
+  .playmat.layout-fable .tt-attach-overlay .tt-tool{ display:inline-flex; align-items:center; height:clamp(16px, calc(var(--card-w) * 0.22), 24px); font-size:clamp(.58rem, calc(var(--card-w) * 0.1), .8rem); padding:0 5px; border-radius:12px; font-weight:700; color:#fff; background:rgba(180,140,0,.92); box-shadow:0 0 0 1px rgba(0,0,0,.4) inset, 0 1px 2px rgba(0,0,0,.3); }
+  .playmat.layout-fable .active-card .ability-btn{
+    position:absolute; right:4%; top:54%; width:70%; margin:0; z-index:200;
+    padding:.28rem .4rem; font-size:var(--badge-fs); font-weight:700;
+    background:rgba(58, 26, 90, .92); color:#fff; border:1px solid #b070dd; border-radius:5px;
+    cursor:pointer; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,.7), 0 0 8px rgba(176,112,221,.5);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .playmat.layout-fable .active-card .ability-btn:hover{ background:#5a2a8a; }
+  .playmat.layout-fable .active-card .evo-wrap{ position:absolute; right:4%; bottom:auto !important; top:calc(54% + clamp(26px, calc(var(--card-w) * 0.34), 34px)); width:70%; z-index:201; margin:0; }
+  .playmat.layout-fable .active-card .evo-btn{ width:100% !important; font-size:var(--badge-fs) !important; padding:.28rem .4rem !important; font-weight:bold; }
+  .playmat.layout-fable .zone-label-sm.opp-label{ display:none; }
+  .playmat.layout-fable .zone-label-sm .zone-label-text{ display:none; }
+  .playmat.layout-fable .my-active-zone > .zone-label-sm{ margin:0; padding:0; min-height:0; }
+  .playmat.layout-fable .my-active-zone .btn-retreat:not(.btn-fossil-discard){ display:none; }
+  .playmat.layout-fable .action-bar > .stadium-display{
+    grid-area:stad; position:static; right:auto; top:auto; transform:none;
+    align-self:center; justify-self:center; display:flex; flex-direction:column; align-items:center;
+    width:calc(var(--card-w) * 1.04); height:auto; max-height:none; padding:.25rem .3rem; gap:.18rem;
+    background:rgba(26,42,74,.6); border:1px solid #3a5a8a; border-radius:6px; cursor:pointer; overflow:hidden; z-index:5;
+  }
+  .playmat.layout-fable .action-bar > .stadium-display img{ width:calc(var(--card-w) * 0.86); height:auto; object-fit:contain; }
+  .playmat.layout-fable .action-bar > .stadium-display .stadium-display-label{ font-size:clamp(.6rem, calc(var(--card-w) * 0.11), .78rem); }
+  .playmat.layout-fable .action-bar > .stadium-display .stadium-display-name{ font-size:clamp(.62rem, calc(var(--card-w) * 0.115), .8rem); max-width:calc(var(--card-w) * 0.98); }
+  .playmat.layout-fable .action-bar > .action-btns{ grid-area:actions; position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); display:flex; flex-direction:column; gap:3px; width:clamp(130px, 11vw, 168px); max-width:none; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.secondary,
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.stadium-btn,
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-retreat-mirror,
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-undo{ margin-top:12px !important; }
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.primary:not(:first-child){ margin-top:12px !important; }
+  .playmat.layout-fable .action-bar > .alerts-col{ position:absolute; left:50%; top:8px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; max-width:min(560px, 62vw); z-index:230; pointer-events:none; }
+  .playmat.layout-fable .action-bar > .alerts-col > *{ pointer-events:auto; box-shadow:0 6px 18px rgba(0,0,0,.55); animation:fableToastIn .18s ease-out; }
+  @keyframes fableToastIn{ from{ opacity:0; transform:translateY(-8px); } to{ opacity:1; transform:translateY(0); } }
+  .playmat.layout-fable .action-bar > .log-col{
+    grid-area:log; position:static; width:auto; min-width:0; max-width:none;
+    align-self:stretch; justify-self:stretch; height:auto; max-height:none; min-height:0;
+    background:rgba(10, 26, 10, 0.92); border:1px solid #3a5a3a; border-radius:8px; padding:8px 6px;
+    overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,.4);
+    display:flex; flex-direction:column-reverse; font-size:clamp(.68rem, .78vw, .8rem);
+  }
+  .playmat.layout-fable.log-collapsed .action-bar > .log-col{ display:none; }
+  .playmat.layout-fable .log-toggle-btn{
+    position:fixed; top:120px; right:calc(var(--log-w) + 16px);
+    background:#1a2a1a; border:1px solid #5a8a5a; color:#aaffaa;
+    padding:10px 8px; border-radius:4px 0 0 4px; cursor:pointer; z-index:60;
+    display:flex; flex-direction:column; align-items:center; gap:2px; font-size:11px; font-weight:600;
+    transition:right .2s, background .15s;
+  }
+  .playmat.layout-fable.log-collapsed .log-toggle-btn{ right:8px; }
+  .playmat.layout-fable .log-toggle-btn:hover{ background:#2a4a2a; }
+  .playmat.layout-fable .log-toggle-icon{ font-size:18px; line-height:1; }
+  .playmat.layout-fable .log-toggle-arrow{ font-size:14px; color:#88ddaa; }
+  .battle-root:has(.playmat.layout-fable) .hand-strip{ padding:0 .7rem 0; }
+  .battle-root:has(.playmat.layout-fable) .hand-strip .hand-label{ margin-bottom:0; font-size:.65rem; }
+  .battle-root:has(.playmat.layout-fable) .hand-strip .hand-scroll{ padding:0 1rem 0; min-height:120px; }
+  @media (max-width: 1023px){
+    .playmat.layout-fable{ display:grid !important; grid-template-columns:none; grid-template-rows:none; grid-template-areas:none; }
+    .playmat.layout-fable > .field-row,
+    .playmat.layout-fable > .action-bar{ display:flex !important; }
+    .playmat.layout-fable > .field-row > *,
+    .playmat.layout-fable > .action-bar > *{ grid-area:unset !important; grid-row:auto !important; grid-column:auto !important; }
+    .playmat.layout-fable .opponent-row > .turn-order-chip,
+    .playmat.layout-fable .my-row > .turn-order-chip{ position:static; }
+    .playmat.layout-fable .action-bar > .alerts-col,
+    .playmat.layout-fable .action-bar > .action-btns{ position:static; transform:none; }
+    .playmat.layout-fable .action-bar > .log-col{ width:auto; }
+    .playmat.layout-fable .zone-bench{ display:flex !important; height:auto; min-height:0; max-height:none; }
+    .playmat.layout-fable .log-toggle-btn{ display:none; }
   }
 
 </style>
