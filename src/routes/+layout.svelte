@@ -41,6 +41,8 @@
   }
 
   onMount(() => {
+    // v5.965:app 掛載完成 → 移除 app.html 的載入畫面(splash),顯示真正內容
+    if (typeof document !== 'undefined') document.getElementById('app-splash')?.remove();
     initTracking();
     showMigrationBanner = shouldShowMigrationBanner();
     // v5.034：BETA 偵測 — 同 migration banner 條件（github.io），不可 dismiss
