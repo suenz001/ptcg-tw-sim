@@ -16073,6 +16073,12 @@ export function lockOppChosenAttackPost(label: string): AttackPostFn {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx];
     if (!def.active) return state;
+    // v5.975：鎖對手招式是「招式效果」→ 免疫招式效果者(化隱/薄霧能量/純樸等)不受鎖
+    //   (比照全封型 defCantAttackNextPost 的 gate;blockedAttackNamesNextTurn 不在 v5.344 sweep 故需源頭 gate)。
+    {
+      const _g = canApplyEffectToTarget(state, aIdx, def.active, pool.get(def.active.cardId), 'attack-effect', pool);
+      if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
+    }
     const defCard = pool.get(def.active.cardId);
     const attacks = defCard?.attacks ?? [];
     if (attacks.length === 0) return state;
@@ -16104,6 +16110,11 @@ regR('unreasonable-lock-attack', (st, aIdx, iids, params, _pool) => {
   const def = st.players[dIdx];
   // 對手可能在等待期間換戰鬥位 — 若已不在原位則放棄鎖
   if (!def.active) return addLog(st, `無理取鬧：對手戰鬥位已變動，鎖招失效`, aIdx);
+  // v5.975：resolve 時再過一次招式效果免疫 gate(防等待期間換上免疫者)
+  {
+    const _g = canApplyEffectToTarget(st, aIdx, def.active, _pool.get(def.active.cardId), 'attack-effect', _pool);
+    if (_g.blocked) return addLog(st, `無理取鬧：${_g.reason}`, aIdx);
+  }
   const players = [...st.players] as [PlayerState, PlayerState];
   const newDef = { ...def };
   const cur = newDef.active!.blockedAttackNamesNextTurn ?? [];

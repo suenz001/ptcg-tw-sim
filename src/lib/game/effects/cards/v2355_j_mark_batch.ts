@@ -13,7 +13,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { getOwnBenchLimit, joinCardNames } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, lockOppChosenAttackPost } from '../../effects';
 import {
   addLog,
   regPost,
@@ -198,58 +198,7 @@ regPost('具甲武者|潛力', (state, aIdx, _pool) => {
 //   - 1 招：fast path 直接鎖
 //   - 多招：modal-choice 讓玩家選
 regPre('鑰圈兒|記憶之鎖', (state) => ({ state, damage: 30 }));
-regPost('鑰圈兒|記憶之鎖', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx];
-  if (!def.active) return state;
-
-  const defCard = pool.get(def.active.cardId);
-  const attacks = defCard?.attacks ?? [];
-  if (attacks.length === 0) return state;
-
-  // 只有 1 招：fast path（無需 modal）
-  if (attacks.length === 1) {
-    const lockedName = attacks[0].name;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const cur = def.active.blockedAttackNamesNextTurn ?? [];
-    players[dIdx] = {
-      ...def,
-      active: {
-        ...def.active,
-        blockedAttackNamesNextTurn: [...cur, lockedName],
-      },
-    };
-    return addLog(
-      { ...state, players },
-      `記憶之鎖：${defCard?.name ?? '?'} 下回合無法使用「${lockedName}」`,
-      aIdx,
-    );
-  }
-
-  // 多招：開 modal-choice 讓玩家選
-  const s = addLog(
-    state,
-    `記憶之鎖：選擇 1 個對手 ${defCard?.name ?? '?'} 持有的招式鎖住`,
-    aIdx,
-  );
-  return withPending(s, {
-    type: 'modal-choice',
-    actorIdx: aIdx,
-    sourcePlayerIdx: aIdx,
-    minCount: 1,
-    maxCount: 1,
-    effectKey: 'j-2355-memory-lock',
-    params: {
-      label: '記憶之鎖',
-      options: attacks.map((a: any, i: number) => ({
-        id: `${i}`,
-        text: `${i + 1}. ${a.name}`,
-      })),
-      defenderName: defCard?.name ?? '?',
-      attackNames: attacks.map((a: any) => a.name),
-    },
-  });
-});
+regPost('鑰圈兒|記憶之鎖', lockOppChosenAttackPost('記憶之鎖'));
 
 // resolver：玩家選完後鎖招
 regR('j-2355-memory-lock', (st, aIdx, iids, params, _pool) => {

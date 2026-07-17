@@ -4326,7 +4326,7 @@ function handlePlaying(
     // v2.127 多傳 attack.name 讓 canAffordAttack 能判定 酋雷姆｜反等離子 條件式減費
     // v2.78 凍結獠牙 — 全場低能量鎖招（player-level）
     if (state.lowEnergyCantAttackThisTurn?.[aIdx]
-        && attacker.active.energyAttached.length <= 2) {
+        && totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active) <= 2) {
       // v5.250：必須設 turnPhase='end' 強制進入 end phase，否則 AI 反覆 retry attack 造成無限迴圈
       //   玩家回報：對手用含羞苞癢癢花粉後 AI 想攻擊但能量 ≤ 2 觸發凍結獠牙 lock → 卡住
       return addLog({ ...state, turnPhase: 'end' as const },
