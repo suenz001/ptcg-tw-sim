@@ -8901,15 +8901,20 @@ regR('discard-opp-active-energy-pick', (st, idx, iids, params, pool) => {
   }) : p);
 });
 
-export function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string, typeFilter?: EnergyType): AttackPostFn {
+export function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: string, typeFilter?: EnergyType, basicOnly = false): AttackPostFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
     if (!att) return state;
     const attName = pool.get(att.cardId)?.name ?? '?';
     // v5.826：typeFilter 時只取「提供該屬性」的能量(含古舊/稜鏡等特殊,走中央 energyProvidesType 禁 isEnergyOfType)。
-    const energies = typeFilter ? att.energyAttached.filter(e => energyProvidesType(att, e, typeFilter, pool)) : att.energyAttached;
+    // v5.976：basicOnly 時只取「基本能量」(卡面「選擇1個…基本能量」,如龍捲雲|暴風)。
+    const energies = typeFilter
+      ? att.energyAttached.filter(e => energyProvidesType(att, e, typeFilter, pool))
+      : basicOnly
+        ? att.energyAttached.filter(e => { const c = pool.get(e.cardId); return c?.supertype === 'Energy' && c.subtype === 'Basic'; })
+        : att.energyAttached;
     if (energies.length === 0) {
-      return addLog(state, `${label}：${attName} 沒有可移動的${typeFilter ? '該屬性' : ''}能量`, aIdx);
+      return addLog(state, `${label}：${attName} 沒有可移動的${typeFilter ? '該屬性' : basicOnly ? '基本' : ''}能量`, aIdx);
     }
     const takeCount = Math.min(n, energies.length);
     const moved = energies.slice(energies.length - takeCount);

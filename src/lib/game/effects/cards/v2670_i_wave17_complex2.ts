@@ -254,6 +254,15 @@ regPost('火箭隊的閃電鳥|阻礙之翼', (state, aIdx, pool, action) => {
   if (!_choseYes) return addLog(state, '阻礙之翼：選擇「否」 — 不改附對手能量', aIdx);
   const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
+  // v5.976：改附對手能量是招式效果 → 免疫者(薄霧能量/化隱/純樸)不被搬(比照戲法舞步 v5.555 gate)。
+  //   對手戰鬥位存在才檢查;若已被本招 KO(active=null)走下方 KO-snapshot 分支(免疫在戰鬥位已離場,不適用)。
+  {
+    const _oa = state.players[dIdx].active;
+    if (_oa) {
+      const _g = canApplyEffectToTarget(state, aIdx, _oa, _pool.get(_oa.cardId), 'attack-effect', _pool);
+      if (_g.blocked) return addLog(state, `阻礙之翼：${_g.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
+    }
+  }
   // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
   //   （此刻在棄牌區，_koDefenderSnapshot）改附對手備戰。
   if (!state.players[dIdx].active) {

@@ -8,7 +8,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
-import { flipCoinsWithLog, dealAttackDamageToTarget, discardOppActiveEnergyPost } from '../../effects';
+import { flipCoinsWithLog, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helpers
@@ -263,54 +263,7 @@ regPre('沙鈴仙人掌|活潑針', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 龍捲雲|暴風 100 + 自身 1 基本能量改附備戰
 regPre('龍捲雲|暴風', (s) => ({ state: s, damage: 100 }));
-regPost('龍捲雲|暴風', (state, aIdx, pool) => {
-  // v3.13 修：原本自動附給第 1 隻備戰，違反卡面「玩家選擇備戰目標」。
-  //   改用 bench-choose picker 讓玩家挑目標備戰寶可夢。
-  const a = state.players[aIdx].active;
-  if (!a || a.energyAttached.length === 0) return state;
-  // 找尾端 1 個基本能量
-  let basicIdx = -1;
-  for (let i = a.energyAttached.length - 1; i >= 0; i--) {
-    const c = pool.get(a.energyAttached[i].cardId);
-    if (c?.supertype === 'Energy' && c.subtype === 'Basic') {
-      basicIdx = i;
-      break;
-    }
-  }
-  if (basicIdx < 0) return addLog(state, '暴風：自身無基本能量可移', aIdx);
-  const player = state.players[aIdx];
-  if (player.bench.length === 0) return addLog(state, '暴風：備戰區無寶可夢', aIdx);
-  // bench 只有 1 隻 → 自動附（auto-pick），免去無意義的 picker
-  if (player.bench.length === 1) {
-    const energy = a.energyAttached[basicIdx];
-    const targetIid = player.bench[0].iid;
-    return updatePlayer(
-      addLog(state, '暴風：將自身 1 基本能量改附給唯一備戰寶可夢', aIdx),
-      aIdx, p => {
-        if (!p.active) return p;
-        const newEnergies = [...p.active.energyAttached.slice(0, basicIdx), ...p.active.energyAttached.slice(basicIdx + 1)];
-        return {
-          ...p,
-          active: { ...p.active, energyAttached: newEnergies },
-          bench: p.bench.map(b => b.iid === targetIid
-            ? { ...b, energyAttached: [...b.energyAttached, energy] }
-            : b),
-        };
-      },
-    );
-  }
-  // 多隻備戰 → 玩家選目標
-  return withPending(
-    addLog(state, '暴風：請選擇備戰寶可夢以接收 1 基本能量', aIdx),
-    {
-      type: 'bench-choose',
-      actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'v313-storm-move-energy',
-      params: { basicIdx, label: '暴風' },
-    },
-  );
-});
+regPost('龍捲雲|暴風', returnSelfActiveEnergyPost(1, false, '暴風', undefined, true)); // v5.976 收斂:選1個基本能量(picker)改附備戰,取代自動取末端);
 
 // v3.13 resolver: 把自身 active.energyAttached[basicIdx] 移到玩家選的備戰目標
 regR('v313-storm-move-energy', (state, aIdx, iids, params, _pool) => {
@@ -338,45 +291,7 @@ regR('v313-storm-move-energy', (state, aIdx, iids, params, _pool) => {
 
 // 波爾凱尼恩ex|高溫旋風 160 + 自身 1 能量改附備戰
 regPre('波爾凱尼恩ex|高溫旋風', (s) => ({ state: s, damage: 160 }));
-regPost('波爾凱尼恩ex|高溫旋風', (state, aIdx, _pool) => {
-  // v3.13 修：原本自動附給第 1 隻備戰，違反卡面「玩家選擇備戰目標」。
-  //   改用 bench-choose picker 讓玩家挑目標。
-  const a = state.players[aIdx].active;
-  if (!a || a.energyAttached.length === 0) return state;
-  const player = state.players[aIdx];
-  if (player.bench.length === 0) return addLog(state, '高溫旋風：備戰區無寶可夢', aIdx);
-  // 取尾端 1 能量（沿用原 helper 抓最後一張的行為）
-  const lastIdx = a.energyAttached.length - 1;
-  if (player.bench.length === 1) {
-    // auto-pick（免去無意義的 picker）
-    const energy = a.energyAttached[lastIdx];
-    const targetIid = player.bench[0].iid;
-    return updatePlayer(
-      addLog(state, '高溫旋風：將自身 1 能量改附給唯一備戰寶可夢', aIdx),
-      aIdx, p => {
-        if (!p.active) return p;
-        const newEnergies = p.active.energyAttached.slice(0, -1);
-        return {
-          ...p,
-          active: { ...p.active, energyAttached: newEnergies },
-          bench: p.bench.map(b => b.iid === targetIid
-            ? { ...b, energyAttached: [...b.energyAttached, energy] }
-            : b),
-        };
-      },
-    );
-  }
-  return withPending(
-    addLog(state, '高溫旋風：請選擇備戰寶可夢以接收 1 能量', aIdx),
-    {
-      type: 'bench-choose',
-      actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'v313-storm-move-energy',  // 共用 v313-storm-move-energy resolver
-      params: { basicIdx: lastIdx, label: '高溫旋風' },
-    },
-  );
-});
+regPost('波爾凱尼恩ex|高溫旋風', returnSelfActiveEnergyPost(1, false, '高溫旋風')); // v5.976 收斂:選1個能量(picker)改附備戰,取代自動取末端);
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. 查看自己牌庫頂 1 可選棄 (2 張)
