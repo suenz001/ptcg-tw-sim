@@ -15432,28 +15432,15 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
     if (defPlayer.bench.length === 0) {
       return addLog(state, '光子纜線：備戰區無寶可夢，效果不發動', dIdx);
     }
-    const moveCount = Math.min(2, basicEnergyIids.length);
-    // v5.846：≥3 張 → 先讓玩家從棄牌區選哪 2 張基本雷能量;≤2 張直接全移(等價)。
-    if (basicEnergyIids.length > 2) {
-      return withPending(
-        addLog(state, '光子纜線：從棄牌區選 2 張基本【雷】能量，改附於 1 隻備戰寶可夢', dIdx),
-        {
-          type: 'discard-search',
-          actorIdx: dIdx, sourcePlayerIdx: dIdx,
-          minCount: 2, maxCount: 2, validIids: basicEnergyIids,
-          effectKey: 'photon-code-pick-energy',
-          params: { label: '光子纜線' },
-        },
-      );
-    }
+    const maxPick = Math.min(2, basicEnergyIids.length);
     return withPending(
-      addLog(state, `光子纜線：選 1 隻備戰寶可夢接收 ${moveCount} 張基本能量（或跳過）`, dIdx),
+      addLog(state, `光子纜線：從自身基本【雷】能量最多選擇 ${maxPick} 張，改附於 1 隻備戰寶可夢（可不選）`, dIdx),
       {
-        type: 'bench-choose',
+        type: 'discard-search',
         actorIdx: dIdx, sourcePlayerIdx: dIdx,
-        minCount: 0, maxCount: 1,
-        effectKey: 'm5-mirieton-photon-code',
-        params: { basicEnergyIids },
+        minCount: 0, maxCount: maxPick, validIids: basicEnergyIids,
+        effectKey: 'photon-code-pick-energy',
+        params: { label: '光子纜線' },
       },
     );
   }],
