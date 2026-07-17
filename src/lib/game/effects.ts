@@ -8168,30 +8168,9 @@ function coinHeadsOppDiscardEnergyPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const r = flipCoinsWithLog(state, 1, label, aIdx);
     if (!r.heads) return addLog(r.state, `${label}：反面 → 無追加效果`, aIdx);
-    state = r.state;
-    const dIdx = (1 - aIdx) as 0 | 1;
-    const def = state.players[dIdx].active;
-    if (!def || def.energyAttached.length === 0) {
-      return addLog(state, `${label}：正面 → 但對手出場無附加能量`, aIdx);
-    }
-    // v5.333：免疫招式效果的 active 不受能量丟棄（C-17 per-target guard）
-    {
-      const _gc = canApplyEffectToTarget(state, aIdx, def, pool.get(def.cardId), 'attack-effect', pool);
-      if (_gc.blocked) return addLog(state, `${label}：${_gc.reason}`, aIdx);
-    }
-    const defName = pool.get(def.cardId)?.name ?? '?';
-    // 從後往前丟 1 張（最近附加優先）
-    const last = def.energyAttached[def.energyAttached.length - 1];
-    const lastEnergyName = pool.get(last.cardId)?.name ?? '能量';
-    let s = addLog(state, `${label}：正面！丟棄對手 ${defName} 身上的 ${lastEnergyName}`, aIdx);
-    return updatePlayer(s, dIdx, p => {
-      if (!p.active) return p;
-      return {
-        ...p,
-        active: { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) },
-        discard: [...p.discard, last],
-      };
-    });
+    // v5.973：正面 → 走中央 discardOppActiveEnergyPost(攻擊方以 picker 選哪張 + attack-effect 免疫 gate),
+    //   取代原「自動丟末張」(卡面皆為「選擇1個…能量丟棄」,玩家應有選擇權;gate 本已有,選擇權缺)。
+    return discardOppActiveEnergyPost(label, 'any')(addLog(r.state, `${label}：正面`, aIdx), aIdx, pool);
   };
 }
 

@@ -22,7 +22,7 @@ import {
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
-import { defCantRetreatNextPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate
+import { defCantRetreatNextPost, discardOppActiveEnergyPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -2700,18 +2700,11 @@ regPost('霜奶仙|彩色甜點', (state, aIdx, pool) => {
 
 // 鐵蟻|咬碎 50 — 擲幣正面 → 棄對手戰鬥 1 能量
 regPre('鐵蟻|咬碎', (s) => ({ state: s, damage: 50 }));
-regPost('鐵蟻|咬碎', (state, aIdx, _pool) => {
+regPost('鐵蟻|咬碎', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 1, '咬碎', aIdx);
   if (r.heads === 0) return r.state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const da = r.state.players[dIdx].active;
-  if (!da || da.energyAttached.length === 0) return addLog(r.state, '咬碎：對手戰鬥無能量', aIdx);
-  return updatePlayer(addLog(r.state, '咬碎：正面 → 棄對手戰鬥 1 能量', aIdx), dIdx, p => {
-    if (!p.active || p.active.energyAttached.length === 0) return p;
-    const remaining = p.active.energyAttached.slice(0, -1);
-    const discarded = p.active.energyAttached[p.active.energyAttached.length - 1];
-    return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, discarded] };
-  });
+  // v5.973：正面 → 中央 discardOppActiveEnergyPost(選擇 picker + 免疫 gate),取代原自動丟末張(且原漏 gate)。
+  return discardOppActiveEnergyPost('咬碎', 'any')(addLog(r.state, '咬碎：正面', aIdx), aIdx, pool);
 });
 
 // 烏賊王|勾結觸手 — 條件：上回合用過「庫瑟洛斯奇的企圖」

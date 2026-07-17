@@ -20,34 +20,16 @@ import {
   regPre,
   updatePlayer,
 } from '../_shared';
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsWithLog, discardOppActiveEnergyPost } from '../../effects';
 
 // ── A. 幼基拉斯｜咬碎 ────────────────────────────────────────────────────────
 // 卡面：20 傷害。擲 1 次硬幣，若正面，丟棄對手戰鬥寶可夢身上 1 張能量。
 regPre('幼基拉斯|咬碎', (state, _aIdx, _pool) => ({ state, damage: 20 }));
 regPost('幼基拉斯|咬碎', (state, aIdx, pool) => {
   const rbc = flipCoinsWithLog(state, 1, '咬碎', aIdx);
-  state = rbc.state;
-  const isHeads = rbc.heads === 1;
-  if (!isHeads) return state;
-
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def || def.energyAttached.length === 0) {
-    return addLog(state, '咬碎：對手戰鬥場無能量', aIdx);
-  }
-  // 丟棄最後一張能量
-  const last = def.energyAttached[def.energyAttached.length - 1];
-  const eName = pool.get(last.cardId)?.name ?? '能量';
-  state = addLog(state, `咬碎：丟棄對手的 ${eName}`, aIdx);
-  return updatePlayer(state, dIdx, p => ({
-    ...p,
-    active: p.active ? {
-      ...p.active,
-      energyAttached: p.active.energyAttached.slice(0, -1),
-    } : null,
-    discard: [...p.discard, last],
-  }));
+  if (rbc.heads !== 1) return rbc.state;
+  // v5.973：正面 → 中央 discardOppActiveEnergyPost(攻擊方選擇 picker + 免疫 gate),取代原自動丟末張(且原漏免疫 gate)。
+  return discardOppActiveEnergyPost('咬碎', 'any')(addLog(rbc.state, '咬碎：正面', aIdx), aIdx, pool);
 });
 
 // ── B. 輕飄飄｜海之影 ────────────────────────────────────────────────────────

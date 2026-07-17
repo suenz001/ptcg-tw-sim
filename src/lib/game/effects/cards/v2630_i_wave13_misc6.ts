@@ -8,7 +8,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
 } from '../_shared';
 import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
-import { flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
+import { flipCoinsWithLog, dealAttackDamageToTarget, discardOppActiveEnergyPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helpers
@@ -526,24 +526,11 @@ regR('curse-doll-curse-words', (state, idx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 敏捷蟲|酸液炸彈 50, 擲幣正面棄對手1能量
 regPre('敏捷蟲|酸液炸彈', (s) => ({ state: s, damage: 50 }));
-regPost('敏捷蟲|酸液炸彈', (state, aIdx, _pool) => {
+regPost('敏捷蟲|酸液炸彈', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 1, '酸液炸彈', aIdx);
-  const heads = r.heads === 1;
-  let s = r.state;
-  if (!heads) return s;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def || def.energyAttached.length === 0) return s;
-  return updatePlayer(
-    addLog(s, '酸液炸彈：棄對手戰鬥場 1 張能量', aIdx),
-    dIdx, p => {
-      if (!p.active) return p;
-      const lastIdx = p.active.energyAttached.length - 1;
-      const remaining = p.active.energyAttached.slice(0, lastIdx);
-      const discarded = p.active.energyAttached[lastIdx];
-      return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, discarded] };
-    },
-  );
+  if (r.heads !== 1) return r.state;
+  // v5.973：正面 → 中央 discardOppActiveEnergyPost(選擇 picker + 免疫 gate),取代原自動丟末張(且原漏 gate)。
+  return discardOppActiveEnergyPost('酸液炸彈', 'any')(addLog(r.state, '酸液炸彈：正面', aIdx), aIdx, pool);
 });
 
 // 音波龍|高速移動 40 + 擲幣正面 → immune

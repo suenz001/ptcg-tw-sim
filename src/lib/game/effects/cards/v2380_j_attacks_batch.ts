@@ -47,7 +47,7 @@ import {
 import { energyMatchesType } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits, getEffectiveHP } from '../../engine';
-import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect, relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示物中央管線
+import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect, relocateOwnCounterToOpp, discardOppActiveEnergyPost } from '../../effects'; // v5.825 改放指示物中央管線
 
 // ── 01. 大嘴娃｜雙重食客 — 60× 丟棄手牌能量張數 ─────────────────────────────
 // JSON：「從自己的手牌將最多2張能量卡丟棄，造成其張數×60點傷害。」
@@ -359,21 +359,8 @@ regPre('藍鱷|咬碎', (s, _a, _p) => ({ state: s, damage: 50 }));
 regPost('藍鱷|咬碎', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 1, '咬碎', aIdx);
   if (!r.heads) return r.state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = r.state.players[dIdx].active;
-  if (!def || def.energyAttached.length === 0) {
-    return addLog(r.state, '咬碎：對手戰鬥場無能量', aIdx);
-  }
-  const last = def.energyAttached[def.energyAttached.length - 1];
-  const eName = pool.get(last.cardId)?.name ?? '能量';
-  return updatePlayer(
-    addLog(r.state, `咬碎：丟棄對手 ${eName}`, aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, energyAttached: p.active.energyAttached.slice(0, -1) } : null,
-      discard: [...p.discard, last],
-    }),
-  );
+  // v5.973：正面 → 中央 discardOppActiveEnergyPost(選擇 picker + 免疫 gate),取代原自動丟末張(且原漏 gate)。
+  return discardOppActiveEnergyPost('咬碎', 'any')(addLog(r.state, '咬碎：正面', aIdx), aIdx, pool);
 });
 
 // ── 20-21. 雷吉艾斯ex / 雷吉斯奇魯ex｜雷吉充能 — 從棄牌區挑 ≤2 基本【水/鋼】 ───
