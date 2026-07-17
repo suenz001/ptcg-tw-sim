@@ -1,7 +1,6 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getFunctions, type Functions } from 'firebase/functions';
 
 // These values are public client-side keys. Real security lives in
 // Firestore rules and Cloud Functions authorization — never here.
@@ -17,5 +16,4 @@ const firebaseConfig = {
 export const app: FirebaseApp = initializeApp(firebaseConfig);
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
-// Region must match where we deploy Cloud Functions later.
-export const functions: Functions = getFunctions(app, 'asia-east1');
+// v5.970：getFunctions/functions export 為死碼(全站無 httpsCallable),移除以縮小 firebase chunk。

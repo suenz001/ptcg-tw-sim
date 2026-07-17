@@ -1,6 +1,5 @@
-import { auth, db } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp, increment } from 'firebase/firestore';
+// v5.970：firebase 相關 import 改為 initTracking() 內動態 import(見下),
+//   讓 firebase chunk 離開 layout(全站每頁)的靜態模組圖 → 不再阻擋 hydrate,改 mount 後才載。
 
 let trackingInitialized = false;
 
@@ -45,7 +44,15 @@ export function initTracking() {
   const lastTrackAt = parseInt(localStorage.getItem(LAST_TRACK_KEY) || '0', 10);
   const isThrottled = (Date.now() - lastTrackAt) < THROTTLE_MS;
 
-  onAuthStateChanged(auth, async (user) => {
+  // v5.970：動態載入 firebase(fire-and-forget),firebase chunk 不進 layout 關鍵路徑。
+  void (async () => {
+    const [{ auth, db }, { onAuthStateChanged }, { doc, setDoc, getDoc, serverTimestamp, increment }] =
+      await Promise.all([
+        import('./firebase'),
+        import('firebase/auth'),
+        import('firebase/firestore'),
+      ]);
+    onAuthStateChanged(auth, async (user) => {
     if (user) {
       // v5.072 (C1)：匿名 user 完全跳過 setDoc — 不寫 users/{uid} doc
       //
@@ -100,5 +107,6 @@ export function initTracking() {
         console.error('Failed to track user visit:', err);
       }
     }
-  });
+    });
+  })();
 }
