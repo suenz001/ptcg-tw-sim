@@ -24,7 +24,7 @@ import {
 import { joinCardNames } from '../_shared';
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect, discardOppActiveEnergyPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -110,25 +110,10 @@ regPre('巨蔓藤|肌力鞭打', (state, aIdx, _pool) => {
 regPre('焚焰蚣|緊束粉碎', (s) => ({ state: s, damage: 50 }));
 regPost('焚焰蚣|緊束粉碎', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 2, '緊束粉碎', aIdx);
-  const heads = r.heads;
-  let s = addLog(r.state, `緊束粉碎：擲 2 次硬幣 → ${heads} 次正面`, aIdx);
-  if (heads === 0) return addLog(s, '緊束粉碎：無正面，無棄能效果', aIdx);
-  // 棄對手戰鬥場 N 個能量（從尾端取）
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def || def.energyAttached.length === 0) {
-    return addLog(s, '緊束粉碎：對手戰鬥場無能量可棄', aIdx);
-  }
-  const discardCount = Math.min(heads, def.energyAttached.length);
-  const defName = pool.get(def.cardId)?.name ?? '?';
-  s = addLog(s, `緊束粉碎：棄對手戰鬥場 ${discardCount} 個能量`, aIdx);
-  return updatePlayer(s, dIdx, p => {
-    if (!p.active) return p;
-    const energies = p.active.energyAttached;
-    const remaining = energies.slice(0, energies.length - discardCount);
-    const discarded = energies.slice(energies.length - discardCount);
-    return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...discarded] };
-  });
+  const s = addLog(r.state, `緊束粉碎：擲 2 次硬幣 → ${r.heads} 次正面`, aIdx);
+  if (r.heads === 0) return addLog(s, '緊束粉碎：無正面，無棄能效果', aIdx);
+  // v5.974：選擇 N=正面數 → 中央 discardOppActiveEnergyPost(count=heads,選擇 picker + 免疫 gate),取代原自動從尾端丟。
+  return discardOppActiveEnergyPost('緊束粉碎', 'any', r.heads)(s, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

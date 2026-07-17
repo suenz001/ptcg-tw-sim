@@ -95,6 +95,7 @@ import {
   koTargetByAttackEffect,
   countEnergyTypeHostAware,
   isEvolutionCard, // v5.860：判進化收斂中央 helper
+  discardOppActiveEnergyPost, // v5.974：丟對手能量收斂中央(picker+免疫gate)
 } from '../../effects';
 import { totalEnergyUnits, computeActiveRetreatCostFor } from '../../engine'; // v5.862：host-aware 能量單位數
 import { RULE_BOX_SUBTYPES } from '../../types';
@@ -727,20 +728,9 @@ regPre('炭小侍|全力拳', coinHeadsMultiplyPre(1, 40, '全力拳擊'));
 
 // ── D1. 盾甲龍|碎 — 50 + 對手戰鬥位丟 1 能量 picker ────────
 //   卡面：「從對手的戰鬥寶可夢身上選擇 1 個能量，丟棄。」
-regPost('盾甲龍|碎', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (!def || def.energyAttached.length === 0) {
-    return addLog(state, '碎：對手戰鬥位無能量可丟', aIdx);
-  }
-  return withPending(addLog(state, '碎：從對手戰鬥位選 1 個能量丟棄', aIdx), {
-    type: 'active-energy-discard',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'm5-bastiodon-shatter',
-    params: { titleOverride: '碎：選擇 1 個對手戰鬥位能量丟棄' },
-  });
-});
+regPost('盾甲龍|碎', (state, aIdx, pool) =>
+  // v5.974：收斂中央 discardOppActiveEnergyPost(補 attack-effect 免疫 gate;原 bespoke picker 漏 gate,對化隱誤丟)。
+  discardOppActiveEnergyPost('碎', 'any')(state, aIdx, pool));
 regR('m5-bastiodon-shatter', (state, aIdx, iids) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
@@ -1301,21 +1291,8 @@ regA('戰槌龍ex', 0, (st, idx, pool, inst) => {
   }
   const r = flipCoinsWithLog(st, 1, '破壞頭錘', idx);
   if (r.heads === 0) return addLog(r.state, '破壞之頭錘：反面，無效果', idx);
-  const dIdx = (1 - idx) as 0 | 1;
-  const def = st.players[dIdx].active;
-  if (!def || def.energyAttached.length === 0) {
-    return addLog(r.state, '破壞之頭錘：正面，但對手戰鬥位無能量可丟', idx);
-  }
-  return withPending(
-    addLog(r.state, '破壞之頭錘：正面 → 選對手戰鬥位 1 個能量丟棄', idx),
-    {
-      type: 'active-energy-discard',
-      actorIdx: idx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: 1,
-      effectKey: 'm5-warlord-destroy-headbutt',
-      params: { titleOverride: '破壞之頭錘：選擇 1 個對手戰鬥位能量丟棄' },
-    },
-  );
+  // v5.974：正面 → 中央 discardOppActiveEnergyPost(count=1, ability-effect gate:光之翼等擋;原 bespoke 漏 gate)。
+  return discardOppActiveEnergyPost('破壞頭錘', 'any', 1, 'ability-effect')(r.state, idx, pool);
 });
 regR('m5-warlord-destroy-headbutt', (state, aIdx, iids) => {
   if (iids.length === 0) return state;

@@ -50,6 +50,7 @@ import {
   hitBenchPickPost,
   flipCoinsWithLog,
   hasBloomOnField,
+  discardOppActiveEnergyPost,
 } from '../../effects';
 import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
 import { countEnergy } from '../../engine';
@@ -569,12 +570,7 @@ regPre('帝牙盧卡|時間爆炸', (state, aIdx, _pool, action) => {
 // (17) 破壞潮旋（洛奇亞ex）— 140 + 擲幣到反 → 棄對手戰鬥位 N 能量
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('洛奇亞ex|破壞潮旋', (state) => ({ state, damage: 140 }));
-regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const dActive = state.players[dIdx].active;
-  if (!dActive || dActive.energyAttached.length === 0) {
-    return addLog(state, '破壞潮旋：對手戰鬥位無能量', aIdx);
-  }
+regPost('洛奇亞ex|破壞潮旋', (state, aIdx, pool) => {
   let heads = 0;
   let s0: GameState = state;
   while (true) {
@@ -583,19 +579,11 @@ regPost('洛奇亞ex|破壞潮旋', (state, aIdx) => {
     if (r.heads === 0) break;
     heads++;
   }
-  state = s0;
   if (heads === 0) {
-    return addLog(state, '破壞潮旋：第 1 次擲就反面 → 不丟能量', aIdx);
+    return addLog(s0, '破壞潮旋：第 1 次擲就反面 → 不丟能量', aIdx);
   }
-  const discardCount = Math.min(heads, dActive.energyAttached.length);
-  const discarded = dActive.energyAttached.slice(0, discardCount);
-  const remaining = dActive.energyAttached.slice(discardCount);
-  let s = updatePlayerInline(state, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, energyAttached: remaining } : p.active,
-    discard: [...p.discard, ...discarded],
-  }));
-  return addLog(s, `破壞潮旋：擲幣 ${heads} 次正面 → 丟對手戰鬥位 ${discardCount} 個能量`, aIdx);
+  // v5.974：選擇 N=正面數 → 中央 discardOppActiveEnergyPost(count=heads,選擇 picker + 免疫 gate),取代原自動從頭端丟。
+  return discardOppActiveEnergyPost('破壞潮旋', 'any', heads)(addLog(s0, `破壞潮旋：擲幣 ${heads} 次正面`, aIdx), aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

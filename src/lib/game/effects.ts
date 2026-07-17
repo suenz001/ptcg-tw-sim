@@ -8828,6 +8828,8 @@ regR('dragapult-snipe', (st, actorIdx, selectedIids, params, pool) => {
 export function discardOppActiveEnergyPost(
   label: string,
   filter: 'any' | 'special' | EnergyType = 'any',
+  count = 1,
+  kind: 'attack-effect' | 'ability-effect' = 'attack-effect',
 ): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -8835,7 +8837,7 @@ export function discardOppActiveEnergyPost(
     if (!defender.active) return state;
     // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
     {
-      const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
+      const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), kind, pool);
       if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
     }
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
@@ -8856,21 +8858,26 @@ export function discardOppActiveEnergyPost(
     if (matchIids.length === 0) {
       return addLog(state, `${label}：${defName} 無${_fdesc}能量可丟`, aIdx);
     }
-    if (matchIids.length === 1) {
-      const discarded = energies.find(e => e.iid === matchIids[0])!;
-      const energyName = pool.get(discarded.cardId)?.name ?? '能量';
-      const s = addLog(state, `${label}：${defName} 丟棄 1 張${_fdesc}能量（${energyName}）`, aIdx);
+    const effCount = Math.min(count, matchIids.length);
+    if (effCount <= 0) {
+      return addLog(state, `${label}：無需丟棄${_fdesc}能量`, aIdx);
+    }
+    if (matchIids.length <= effCount) {
+      const matchSet = new Set(matchIids);
+      const discarded = energies.filter(e => matchSet.has(e.iid));
+      const names = discarded.map(e => pool.get(e.cardId)?.name ?? '能量').join('、');
+      const s = addLog(state, `${label}：${defName} 丟棄 ${discarded.length} 張${_fdesc}能量（${names}）`, aIdx);
       return updatePlayer(s, dIdx, p => p.active ? ({
         ...p,
-        active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== matchIids[0]) },
-        discard: [...p.discard, discarded],
+        active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !matchSet.has(e.iid)) },
+        discard: [...p.discard, ...discarded],
       }) : p);
     }
     return withPending(
-      addLog(state, `${label}：選擇要丟棄對手戰鬥位的 1 張${_fdesc}能量`, aIdx),
+      addLog(state, `${label}：選擇要丟棄對手戰鬥位的 ${effCount} 張${_fdesc}能量`, aIdx),
       {
         type: 'active-energy-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
-        minCount: 1, maxCount: 1,
+        minCount: effCount, maxCount: effCount,
         effectKey: 'discard-opp-active-energy-pick',
         params: { targetIid: defender.active.iid, validIids: matchIids, label, titleOverride: `選擇要丟棄的對手能量（${label}）` },
       },
@@ -8879,18 +8886,18 @@ export function discardOppActiveEnergyPost(
 }
 regR('discard-opp-active-energy-pick', (st, idx, iids, params, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  const pickedIid = iids[0];
   const label = (params?.label as string | undefined) ?? '丟棄能量';
   const dp = st.players[dIdx];
-  if (!pickedIid || !dp.active) return st;
-  const discarded = dp.active.energyAttached.find(e => e.iid === pickedIid);
-  if (!discarded) return st;
-  const energyName = pool.get(discarded.cardId)?.name ?? '能量';
+  if (!iids.length || !dp.active) return st;
+  const picked = new Set(iids);
+  const toDiscard = dp.active.energyAttached.filter(e => picked.has(e.iid));
+  if (!toDiscard.length) return st;
+  const names = toDiscard.map(e => pool.get(e.cardId)?.name ?? '能量').join('、');
   const defName = pool.get(dp.active.cardId)?.name ?? '?';
-  return updatePlayer(addLog(st, `${label}：${defName} 丟棄 1 張能量（${energyName}）`, idx), dIdx, p => p.active ? ({
+  return updatePlayer(addLog(st, `${label}：${defName} 丟棄 ${toDiscard.length} 張能量（${names}）`, idx), dIdx, p => p.active ? ({
     ...p,
-    active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => e.iid !== pickedIid) },
-    discard: [...p.discard, discarded],
+    active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !picked.has(e.iid)) },
+    discard: [...p.discard, ...toDiscard],
   }) : p);
 });
 

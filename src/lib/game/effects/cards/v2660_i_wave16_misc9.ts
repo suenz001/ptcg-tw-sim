@@ -28,7 +28,7 @@ import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -508,18 +508,11 @@ regR('v327-octopus-water-clean', (st, idx, iids, _params, pool) => {
 
 // 毛崖蟹｜喀嚓鉗 — 擲 2 次, 對手戰鬥場能量 ×N 棄
 regPre('毛崖蟹|喀嚓鉗', (s) => ({ state: s, damage: 0 }));
-regPost('毛崖蟹|喀嚓鉗', (state, aIdx, _pool) => {
+regPost('毛崖蟹|喀嚓鉗', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 2, '喀嚓鉗', aIdx);
-  const heads = r.heads;
-  if (heads === 0) return addLog(r.state, '喀嚓鉗：0 正面，無棄能量', aIdx);
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(r.state, `喀嚓鉗：${heads} 正面 → 棄對手 ${heads} 個能量`, aIdx), dIdx, p => {
-    if (!p.active || p.active.energyAttached.length === 0) return p;
-    const k = Math.min(heads, p.active.energyAttached.length);
-    const remaining = p.active.energyAttached.slice(0, -k);
-    const discarded = p.active.energyAttached.slice(-k);
-    return { ...p, active: { ...p.active, energyAttached: remaining }, discard: [...p.discard, ...discarded] };
-  });
+  if (r.heads === 0) return addLog(r.state, '喀嚓鉗：0 正面，無棄能量', aIdx);
+  // v5.974：選擇 N=正面數 → 中央 discardOppActiveEnergyPost(count=heads,選擇 picker + 免疫 gate),取代原自動從尾端丟。
+  return discardOppActiveEnergyPost('喀嚓鉗', 'any', r.heads)(addLog(r.state, `喀嚓鉗：${r.heads} 次正面`, aIdx), aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
