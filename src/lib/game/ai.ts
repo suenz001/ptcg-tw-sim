@@ -462,6 +462,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
           return topN.has(c.iid) && card.supertype === 'Energy';
         }
+        // v5.964 女服務生:peek N 中的基本能量(與 +page.svelte 對齊;須在下方 startsWith('BasicEnergy:') 之前)。
+        if (f === 'BasicEnergy:TOP_N') {
+          const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);
+          return topN.has(c.iid) && card.supertype === 'Energy' && card.subtype === 'Basic';
+        }
         // v4.915 杜若：peek N 中的寶可夢 / 訓練家
         if (f === 'Pokemon:TOP_N') {
           const topN = new Set<string>((sel.params?.topIids as string[]) ?? []);

@@ -454,13 +454,16 @@ regR('cipher-geek-pick-second', (st, idx, iids) => {
 });
 // Step 2 resolver：把 topPick 放牌庫最上方，reservedSecond 放第 2 位，其餘洗牌
 regR('cipher-geek-pick-top', (st, idx, iids, params) => {
-  if (iids.length !== 1) return st;
-  const topIid = iids[0];
   const reservedSecond = params?.reservedSecond as CardInstance | undefined;
-  if (!reservedSecond) return st;
+  // v5.964 防呆路徑不掉卡:step1 已把 reservedSecond 從牌庫移出暫存 params,任何異常 return 前都要放回(玩家已看過→洗回)。
+  if (!reservedSecond) return st;  // params 遺失(卡已不在任何區,無從救;理論不可達)
+  if (iids.length !== 1) {
+    return updatePlayer(st, idx, p => ({ ...p, deck: shuffle([...p.deck, reservedSecond]) }));
+  }
+  const topIid = iids[0];
   return updatePlayer(st, idx, p => {
     const topCard = p.deck.find(c => c.iid === topIid);
-    if (!topCard) return p;
+    if (!topCard) return { ...p, deck: shuffle([...p.deck, reservedSecond]) };
     const rest = p.deck.filter(c => c.iid !== topIid);
     return { ...p, deck: [topCard, reservedSecond, ...shuffle(rest)] };
   });

@@ -2779,6 +2779,16 @@
             return !!card && card.supertype === 'Energy';
           });
         }
+        // v5.964 女服務生:peek N 中的「基本」能量 — 須在 generic startsWith('BasicEnergy:') 之前
+        //   (否則 TOP_N 被當 EnergyType 恒 false)。原 generic 'BasicEnergy' 不交集 topIids → 顯示整副。
+        if (f === 'BasicEnergy:TOP_N') {
+          const topN = new Set<string>((pendingSelection.params?.topIids as string[]) ?? []);
+          return src.deck.filter(c => {
+            if (!topN.has(c.iid)) return false;
+            const card = pool.get(c.cardId);
+            return !!card && card.supertype === 'Energy' && card.subtype === 'Basic';
+          });
+        }
         // v4.952 超級妖火紅狐ex 戲法傳送門：牌庫頂 9 張中的寶可夢卡（任意階段）
         if (f === 'Pokemon:TOP9') {
           const top9 = new Set<string>((pendingSelection.params?.top9Iids as string[]) ?? []);

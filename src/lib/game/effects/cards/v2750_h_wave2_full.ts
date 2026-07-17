@@ -808,14 +808,26 @@ function deckTopPeekPokemonToBenchPost(peekN: number, label: string): AttackPost
       return card?.supertype === 'Pokemon';
     });
     if (pokemonsInTop.length === 0) {
-      return updatePlayer(addLog(state, `${label}：牌庫頂 ${top.length} 張內無寶可夢卡；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      // v5.964 卡面「查看…上方N張」是無條件動作:無寶可夢也要讓玩家看到這 N 張(maxCount:0 僅檢視 → 洗回)。
+      return withPending(addLog(state, `${label}：牌庫頂 ${top.length} 張內無寶可夢卡（檢視後洗回重洗）`, aIdx), {
+        type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        filter: 'Pokemon:TOP_N', minCount: 0, maxCount: 0,
+        effectKey: 'v311-deck-peek-basic-to-bench',
+        params: { label, topIids, peekN: top.length },
+      });
     }
     // v5.076：bench limit 5 → getOwnBenchLimit（零之大空洞 +3 = 8）
     const benchLimit = getOwnBenchLimit(state, aIdx, pool);
     const space = Math.max(0, benchLimit - p.bench.length);
     const realMax = Math.min(space, pokemonsInTop.length);
     if (realMax === 0) {
-      return updatePlayer(addLog(state, `${label}：備戰區已滿；洗回後重洗`, aIdx), aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+      // v5.964 同上:備戰滿也要先讓玩家「查看」上方 N 張(maxCount:0 僅檢視 → 洗回)。
+      return withPending(addLog(state, `${label}：備戰區已滿（檢視牌庫頂 ${top.length} 張後洗回重洗）`, aIdx), {
+        type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+        filter: 'Pokemon:TOP_N', minCount: 0, maxCount: 0,
+        effectKey: 'v311-deck-peek-basic-to-bench',
+        params: { label, topIids, peekN: top.length },
+      });
     }
     return withPending(addLog(state, `${label}：查看牌庫頂 ${top.length} 張，選 0~${realMax} 隻寶可夢卡放備戰（剩餘洗回）`, aIdx), {
       type: 'deck-search',

@@ -163,15 +163,21 @@ regR('masaki-transport', (st, idx, iids, params, pool) => {
 
 // ── 女服務生 — top6 → 1 基本能量附自己寶可夢 ─────────────────────────────
 regG('女服務生', (st, idx) => st.players[idx].deck.length > 0 && (!!st.players[idx].active || st.players[idx].bench.length > 0));
-reg('女服務生', (st, idx) => {
+reg('女服務生', (st, idx, pool) => {
   const top6 = st.players[idx].deck.slice(0, 6);
   if (top6.length === 0) return addLog(st, '女服務生：牌庫為空', idx);
   st = addLog(st, `女服務生：查看牌庫頂 ${top6.length} 張，選 1 張基本能量附給自己寶可夢`, idx);
+  // v5.964：filter 'BasicEnergy' → 'BasicEnergy:TOP_N'(UI/ai 依 params.topIids 交集,否則 picker
+  //   顯示整副牌庫的基本能量,違反卡面「上方6張」且可造成同 iid 複製卡)。top6 內有基本能量=已知資訊必選。
+  const hasBasicInTop6 = top6.some(c => {
+    const card = pool.get(c.cardId);
+    return !!card && card.supertype === 'Energy' && card.subtype === 'Basic';
+  });
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'BasicEnergy',
-    minCount: 0, maxCount: 1,
+    filter: 'BasicEnergy:TOP_N',
+    minCount: hasBasicInTop6 ? 1 : 0, maxCount: 1,
     effectKey: 'waitress-pick-energy',
     params: { topIids: top6.map(c => c.iid) },
   });
@@ -190,7 +196,12 @@ regR('waitress-pick-energy', (st, idx, iids, params, pool) => {
   }
   const energyIid = iids[0];
   const inst = st.players[idx].deck.find(c => c.iid === energyIid);
-  if (!inst) return st;
+  // v5.964 server-side guard:所選必須在「查看的上方6張」內(iids ⊆ topIids)。否則 fail-closed
+  //   視為未選(防 desync/竄改 payload 選到牌庫深處 → 複製);玩家已看過 top6,異常路徑照卡面重洗。
+  if (!inst || !topIids.includes(energyIid)) {
+    st = addLog(st, '女服務生：無有效選擇（剩餘洗回牌庫）', idx);
+    return updatePlayer(st, idx, p => ({ ...p, deck: shuffle(p.deck) }));
+  }
   const energyName = pool.get(inst.cardId)?.name ?? '能量';
   st = addLog(st, `女服務生：搜到 ${energyName}，選 1 隻自己寶可夢附加`, idx);
   return withPending(st, {
@@ -219,7 +230,7 @@ regR('waitress-attach', (st, idx, iids, params, pool) => {
   return updatePlayer(st, idx, p => {
     const topSet = new Set(topIids);
     const remaining = p.deck.filter(c => topSet.has(c.iid) && c.iid !== energyIid);
-    const restBelow = p.deck.filter(c => !topSet.has(c.iid));
+    const restBelow = p.deck.filter(c => !topSet.has(c.iid) && c.iid !== energyIid);  // v5.964 排除被選卡消除同 iid 複製(合法路徑 no-op)
     const newDeck = shuffle([...restBelow, ...remaining]);
     const attachTo = (pk: CardInstance) =>
       pk.iid === targetIid
