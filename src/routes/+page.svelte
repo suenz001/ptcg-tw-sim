@@ -325,6 +325,9 @@
     <div class="changelog-list" style:display={changelogOverride ? 'none' : undefined}>
 
 <details open>
+        <summary><span class="ver-badge">v5.966</span> 大幅改善手機首次進站的載入速度。之前進站時，離線快取機制會在背景一次下載整個「卡片查詢」頁面庫（近 4000 張卡片頁、約 73MB），與畫面本身的程式搶頻寬，是手機白屏很久的主因；而且幾乎每次改版都會重抓一次。現在改為這些卡片頁在真正點進去時才下載，首次安裝的下載量從約 82MB 降到約 9MB。另外把上一版的載入畫面加上防呆：卡片查詢頁不再被載入畫面遮住、載入異常過久時會顯示「重新整理」按鈕。</summary>
+      </details>
+      <details>
         <summary><span class="ver-badge">v5.965</span> 改善進站載入體驗：手機或網路較慢時，開啟網站到畫面出現前會先看到品牌「載入中…」畫面，不再是一段長時間的白畫面。（技術上：本站是單頁應用程式，進站時需先下載並啟動程式才會顯示內容，之前這段期間瀏覽器呈現空白；現在改為先以內建的載入畫面填滿，程式啟動後自動移除。）</summary>
       </details>
       <details>

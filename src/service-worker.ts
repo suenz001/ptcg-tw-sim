@@ -21,7 +21,13 @@ const CACHE_NAME = `ptcg-tw-sim-${version}`;
 //   會跟前景「載入卡池」搶頻寬、拖慢首次載入（玩家回報卡『載入卡池中』~30 秒）。改後安裝只預快取
 //   app 本體 + 卡牌(~4MB 內)，安裝輕量、不搶頻寬；封面/音樂第一次用到時才下載並快取。
 const HEAVY_MEDIA = (u: string) => u.includes('/covers/') || u.includes('/music/');
-const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f)), ...prerendered];
+// v5.966：/card/ 子樹是 SEO 預渲染頁（3,839 張卡片頁，build/card ~73MB、近 8000 個請求）。
+//   之前把整包 prerendered（含全部 /card/ 頁）丟進「安裝時預快取」→ 首次進站 SW install 要一次抓 ~73MB，
+//   與前景 app bundle / Firestore 搶頻寬 → 手機白屏很久；且 CACHE_NAME 含 version，幾乎每日出版都讓回訪
+//   使用者重抓整包（GitHub Pages max-age=600 幫不上忙）。這些卡片頁改走 fetch handler 的 network-first
+//   （用到才快取），SEO 爬蟲也是直接抓、不需預快取。install 從 ~82MB 降到 ~9MB。
+const IS_CARD_PAGE = (u: string) => u.includes('/card/');
+const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f)), ...prerendered.filter(p => !IS_CARD_PAGE(p))];
 
 sw.addEventListener('install', (event) => {
   async function addAll() {
