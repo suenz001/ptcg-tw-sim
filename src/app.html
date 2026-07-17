@@ -72,18 +72,19 @@
          +layout onMount 掛載後移除(見 +layout.svelte)。失效保險:12 秒後自動淡出,避免卡死。 -->
     <div id="app-splash" role="status" aria-live="polite">
       <div class="app-splash-inner">
-        <div class="app-splash-logo">PTCG</div>
+        <img class="app-splash-icon" src="%sveltekit.assets%/icons/icon-192.png?v=4.993" alt="PTCG TW SIM" width="112" height="112" />
         <div class="app-splash-spinner"></div>
         <div class="app-splash-text">載入中…</div>
       </div>
     </div>
     <style>
-      #app-splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#1e3a20;color:#e8f0e8;font-family:system-ui,'Noto Sans TC',sans-serif;transition:opacity .3s;text-align:center;padding:16px}
+      /* v5.972 載入畫面改用新版 App 圖示(紅白精靈球)+白底,取代舊墨綠配色 */
+      #app-splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#ffffff;color:#333;font-family:system-ui,'Noto Sans TC',sans-serif;transition:opacity .3s;text-align:center;padding:16px}
       #app-splash .app-splash-inner{text-align:center}
-      #app-splash .app-splash-logo{font-size:2.4rem;font-weight:800;letter-spacing:.15em;color:#ffd56b;margin-bottom:1.1rem}
-      #app-splash .app-splash-spinner{width:38px;height:38px;margin:0 auto .9rem;border:4px solid rgba(255,255,255,.22);border-top-color:#ffd56b;border-radius:50%;animation:app-splash-spin .8s linear infinite}
-      #app-splash .app-splash-text{font-size:.95rem;opacity:.85;line-height:1.6}
-      #app-splash button{margin-top:1rem;padding:.5rem 1.4rem;font-size:.95rem;color:#1e3a20;background:#ffd56b;border:none;border-radius:6px;font-weight:700;cursor:pointer}
+      #app-splash .app-splash-icon{width:112px;height:112px;margin:0 auto 1.1rem;display:block;border-radius:20px}
+      #app-splash .app-splash-spinner{width:34px;height:34px;margin:0 auto .9rem;border:4px solid rgba(0,0,0,.12);border-top-color:#e0242b;border-radius:50%;animation:app-splash-spin .8s linear infinite}
+      #app-splash .app-splash-text{font-size:.95rem;color:#666;line-height:1.6}
+      #app-splash button{margin-top:1rem;padding:.5rem 1.4rem;font-size:.95rem;color:#fff;background:#e0242b;border:none;border-radius:6px;font-weight:700;cursor:pointer}
       @keyframes app-splash-spin{to{transform:rotate(360deg)}}
     </style>
     <script>
