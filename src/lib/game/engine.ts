@@ -4260,6 +4260,18 @@ function handlePlaying(
           aIdx);
       }
 
+      // v5.967 玩家層級招式冷卻(天仙石)：自己全場任一隻上個自己回合用過此招 → 禁用(卡面「自己的寶可夢」)。
+      //   讀中央 attackUsedLastSelfTurn(招式結算自動蓋章、不隨撤退/換位/離場清除)，涵蓋撤退再回、第二張同名卡。
+      if (attackName && PLAYER_LEVEL_ATTACK_COOLDOWN.has(attackName)) {
+        const _ownP = state.players[aIdx];
+        const _usedByOwn = [_ownP.active, ..._ownP.bench].some((c) => c?.attackUsedLastSelfTurn === attackName);
+        if (_usedByOwn) {
+          return addLog(state,
+            `${atkName}：上個自己的回合已使用過「${attackName}」，本回合無法使用`,
+            aIdx);
+        }
+      }
+
       // v2.219 — 後攻方最初回合限定招式（吼叫尾ex｜絕叫 等）
       // 卡面：「這個招式只可在後攻玩家的最初回合使用。」
       // 條件：state.isFirstTurn && aIdx 是後攻方（!= firstPlayerIdx）
@@ -8018,6 +8030,11 @@ const BENCH_FILL_ATTACK_NAMES = new Set<string>([
 //   (同 canRetreat/getRetreatBlockReason 各寫一份的反模式)。提升為模組級單一來源,
 //   引擎拒絕(ATTACK)與 UI 反白(getAvailableAttacks)永遠引用同一份,不會分歧。
 const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);
+// v5.967 玩家層級招式冷卻：卡面「若『自己的寶可夢』上個自己的回合使出了X，則無法使用」(非「這隻寶可夢」)。
+//   仙子伊布ex｜天仙石 屬此類。舊實作把冷卻鎖在 attacker instance(blockedAttackNamesNextTurn)，會被撤退／
+//   換位／第二張同名卡繞過。改在招式禁用 gate 掃自己全場的中央 attackUsedLastSelfTurn(招式結算自動蓋章、
+//   不隨離場清除)判定，任一隻上個自己回合用過此招即禁用。
+const PLAYER_LEVEL_ATTACK_COOLDOWN = new Set<string>(['天仙石']);
 
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 export function getAvailableAttacks(

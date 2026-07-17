@@ -12350,14 +12350,9 @@ regPre('仙子伊布ex|魔法魅惑', (s, _a, _p) => ({ state: s, damage: 160 })
 //    + 重建能量 (3 cost)，per-attacker gate 已涵蓋 95% 場景；保持實作簡潔。
 regPre('仙子伊布ex|天仙石', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('仙子伊布ex|天仙石', (state, aIdx, _pool) => {
-  // 鎖此 attacker 下回合的「天仙石」
-  let s = updatePlayer(state, aIdx, p => ({
-    ...p,
-    active: p.active ? {
-      ...p.active,
-      blockedAttackNamesNextTurn: [...(p.active.blockedAttackNamesNextTurn ?? []), '天仙石'],
-    } : null,
-  }));
+  // v5.967 冷卻改玩家層級：由 engine 招式禁用 gate 掃中央 attackUsedLastSelfTurn 判定
+  //   (attackUsedThisTurn 已於招式結算自動蓋章)。不再鎖 attacker instance(會被撤退/換位/第二張同名卡繞過)。
+  let s = state;
   const oppIdx = (1 - aIdx) as 0 | 1;
   const oppBench = s.players[oppIdx].bench;
   if (oppBench.length === 0) {

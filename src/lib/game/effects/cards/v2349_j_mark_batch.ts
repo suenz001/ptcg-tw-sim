@@ -179,15 +179,14 @@ regPost('步哨鼠|臨檢', (state, aIdx, pool) => {
 });
 
 // 托戈德瑪爾ex｜尖尖回轉：若上個自己的回合使用過此招式，80+80；使用後記錄到下個自己的回合。
+// v5.967 改讀中央 attackUsedLastSelfTurn(招式結算自動蓋章、不隨撤退/換位清除)，取代 pointySpin 旗標
+//   (pointySpin 被歸類 CLEAR_ON_EXIT/BENCH_SCRUB → 撤退再回戰鬥位會漏 +80，違反卡面「這隻寶可夢」)。
+//   無需 regPost：每個招式結算後 engine 都會把 attackUsedThisTurn 設為招式名並於 END_TURN promote。
 regPre('托戈德瑪爾ex|尖尖回轉', (state, aIdx) => {
   const active = state.players[aIdx].active;
-  const bonus = active?.pointySpinThisTurn ? 80 : 0;
+  const bonus = active?.attackUsedLastSelfTurn === '尖尖回轉' ? 80 : 0;
   return { state: addLog(state, `尖尖回轉：${bonus ? '上個自己的回合已使用 → 160' : '未連續使用 → 80'}`, aIdx), damage: 80 + bonus };
 });
-regPost('托戈德瑪爾ex|尖尖回轉', (state, aIdx) => updatePlayer(state, aIdx, (p) => p.active ? {
-  ...p,
-  active: { ...p.active, pointySpinNextTurn: true, pointySpinThisTurn: undefined },
-} : p));
 
 // 超級差不多娃娃ex｜萬花筒華爾滋：擲 3 次，正面×2 張基本能量
 //   v5.253：完整實裝 (玩家選類型 + 任意分配自己場上寶可夢)
