@@ -28,7 +28,7 @@ T('光子纜線:身上 基本雷+基本水 → basicEnergyIids 只含雷(不搬�
     players:[ {name:'P1', active:inst(BUD), bench:[], hand:[], deck:[], discard:[], prizes:[inst(BUD)]},
       {name:'P2', active:null, bench:[inst(BUD)], hand:[], deck:[], discard:[], prizes:[inst(BUD)]} ] };
   const out=fn(st, 1, 0, pool, pool.get(MIRIETON), defInst);
-  const ids=out.pendingSelection?.params?.basicEnergyIids||[];
+  const ids=out.pendingSelection?.validIids||[];
   assert(ids.includes(eLe.iid), '應含基本雷');
   assert(!ids.includes(eWa.iid), `不該含基本水(實 ${JSON.stringify(ids)})`);
   assert.equal(ids.length, 1, '只 1 張雷');
