@@ -76,7 +76,7 @@ export interface CardInstance {
    * 一次性 flag，消費後清除。卡面語意「下個對手回合」 — 自己下回合無法被攻擊，
    * 所以等同於「下次受招式時觸發」。
    */
-  retaliateCountersOnNextHit?: number;
+  retaliateCountersOnNextHit?: number | 'mirror'; // v5.979 'mirror'=藏瑪然特強大猛擊(放與實際受傷相同數值)
   /** 下一次輪到自己行動時不能撤退（老匠、關節技等），行動後清除 */
   cantRetreatNextTurn?: boolean;
   /** 受到「下次使用招式前擲硬幣，反面則失敗」類效果的預約擲幣數。 */

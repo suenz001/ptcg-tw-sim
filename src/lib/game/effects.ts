@@ -4218,23 +4218,10 @@ export type RetaliationFn = (
 ) => GameState;
 export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   // 毒薔薇 / 羅絲雷朵 毒刺 — 攻擊者中毒
-  ['毒刺', (state, dIdx) => {
-    const aIdx = (1 - dIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (att.active && !att.active.status) att.active = { ...att.active, status: 'poisoned' };
-    players[aIdx] = att;
-    return { ...state, players };
-  }],
-  // 席多藍恩 灼熱之軀 — 攻擊者灼傷
-  ['灼熱之軀', (state, dIdx) => {
-    const aIdx = (1 - dIdx) as 0 | 1;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (att.active && !att.active.status) att.active = { ...att.active, status: 'burned' };
-    players[aIdx] = att;
-    return { ...state, players };
-  }],
+  // v5.979：走中央 applyStatusToOppActive(三槽共存:攻擊方已有其他狀態仍中毒/灼傷、且過來源無關免疫鏈+log)。
+  //   原 `if(!att.active.status)` 單槽寫入→攻擊方已有任一狀態時完全不施加,違反三槽規則。kind='ability-effect'。
+  ['毒刺', (state, dIdx, pool) => applyStatusToOppActive(state, dIdx, 'poisoned', pool, { kind: 'ability-effect', label: '毒刺' })],
+  ['灼熱之軀', (state, dIdx, pool) => applyStatusToOppActive(state, dIdx, 'burned', pool, { kind: 'ability-effect', label: '灼熱之軀' })],
   // 磨牙彩皮魚 反擊 — 攻擊者放 3 個傷害指示物（= 30 傷害）
   ['反擊', (state, dIdx) => {
     const aIdx = (1 - dIdx) as 0 | 1;
@@ -7294,8 +7281,10 @@ export function fireDefenderOnDamaged(
   }
   // 5. retaliateCountersOnNextHit（還擊斧/等待角擊/殼捲風旋轉）
   {
-    const retalN = s.players[dIdx].active?.retaliateCountersOnNextHit;
-    if (retalN && retalN > 0) {
+    const _retalFlag = s.players[dIdx].active?.retaliateCountersOnNextHit;
+    // v5.979：'mirror'(藏瑪然特強大猛擊)=放與實際受傷(baseDamage,已弱點/減傷後)相同數值;數值型=固定 N 個。
+    const retalN = _retalFlag === 'mirror' ? Math.floor(baseDamage / 10) : (typeof _retalFlag === 'number' ? _retalFlag : 0);
+    if (retalN > 0) {
       const refPlayers = [...s.players] as [PlayerState, PlayerState];
       if (refPlayers[aIdx].active) {
         refPlayers[aIdx] = { ...refPlayers[aIdx], active: { ...refPlayers[aIdx].active!, damage: refPlayers[aIdx].active!.damage + retalN * 10 } };

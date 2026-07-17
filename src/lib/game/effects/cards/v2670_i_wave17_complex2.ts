@@ -83,7 +83,7 @@ regPost('藏瑪然特|強大猛擊', (state, aIdx, _pool) => {
     addLog(state, '強大猛擊：下回合受招式時，對攻擊方放與受傷相同數值的指示物（用 retaliateCountersOnNextHit 機制）', aIdx),
     aIdx, p => ({
       ...p,
-      active: p.active ? { ...p.active, retaliateCountersOnNextHit: 9999 } : null,
+      active: p.active ? { ...p.active, retaliateCountersOnNextHit: 'mirror' } : null, // v5.979 卡面「與受到的傷害相同數值」,非固定 9999
     }),
   );
 });

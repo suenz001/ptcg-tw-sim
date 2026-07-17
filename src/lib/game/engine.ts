@@ -5804,8 +5804,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   只對有實際傷害的招式觸發（與 PASSIVE_RETALIATION 同準則）。
     if (baseDamage > 0) {
       const dPlayer = newState.players[dIdx];
-      const retalN = dPlayer.active?.retaliateCountersOnNextHit;
-      if (retalN && retalN > 0) {
+      const _retalFlag = dPlayer.active?.retaliateCountersOnNextHit;
+      // v5.979：'mirror'(藏瑪然特強大猛擊)=放與實際受傷(baseDamage)相同數值;數值型(還擊斧8/等待角擊6/殼捲風旋轉12)=固定 N。
+      const retalN = _retalFlag === 'mirror' ? Math.floor(baseDamage / 10) : (typeof _retalFlag === 'number' ? _retalFlag : 0);
+      if (retalN > 0) {
         const refPlayers = [...newState.players] as [PlayerState, PlayerState];
         // 套用 retaliation damage 到 attacker active
         if (refPlayers[aIdx].active) {
@@ -5822,7 +5824,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         }
         newState = addLog(
           { ...newState, players: refPlayers },
-          `殼捲風旋轉反擊：對攻擊方放 ${retalN} 個傷害指示物（${retalN * 10} 點傷害）`,
+          `反擊：對攻擊方放 ${retalN} 個傷害指示物（${retalN * 10} 點傷害）`,
           dIdx,
         );
       }
