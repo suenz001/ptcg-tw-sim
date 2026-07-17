@@ -21,7 +21,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { regPre, regPost, updatePlayer } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { statusPost, coinStatusPost } from '../../effects';
+import { statusPost, coinStatusPost, defCantRetreatNextPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: rechargePost — 攻擊後鎖此招式名直到下回合自己（promote NextTurn → ThisTurn）
@@ -69,12 +69,21 @@ const STATUS_NORMAL: Array<[string, number, 'poisoned'|'burned'|'asleep'|'confus
   ['隨風球|不祥之風', 0, 'confused'],
   ['N的齒輪組|轉轉齒輪', 20, 'confused'],
   ['大吾的念力土偶|不祥之光', 20, 'confused'],
-  ['火箭隊的臭臭泥|渾身臭臭', 40, 'confused'],  // 卡面有「對手不可撤退」副作用，本波先實裝主狀態
 ];
 for (const [key, dmg, status] of STATUS_NORMAL) {
   regPre(key, (s) => ({ state: s, damage: dmg }));
   regPost(key, statusPost(status));
 }
+
+// 火箭隊的臭臭泥｜渾身臭臭 40 — 混亂 + 對手下回合無法撤退（卡面雙效果）。
+// v5.981：原「本波先實裝主狀態」漏無法撤退副作用（前 AI 技術債，Wilson 絕不簡化）→
+//   照 effects.ts 車輪毬/桃歹郎（狀態+無法撤退）wrapper 模式補：statusPost 走憨憨臉/薄霧
+//   混亂免疫鏈、defCantRetreatNextPost 走化隱/純樸 attack-effect 免疫 gate，兩道獨立。
+regPre('火箭隊的臭臭泥|渾身臭臭', (s) => ({ state: s, damage: 40 }));
+regPost('火箭隊的臭臭泥|渾身臭臭', (state, aIdx, pool) => {
+  const s1 = statusPost('confused')(state, aIdx, pool);
+  return defCantRetreatNextPost('渾身臭臭')(s1, aIdx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. 擲幣狀態（擲 1 次硬幣，正面才中狀態）— 16 張
