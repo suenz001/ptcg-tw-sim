@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initTracking } from '$lib/tracking';
+  import { isChunkLoadError } from '$lib/sw-policy';
 
   let { children } = $props();
 
@@ -44,6 +45,23 @@
     // v5.965:app 掛載完成 → 移除 app.html 的載入畫面(splash),顯示真正內容
     if (typeof document !== 'undefined') document.getElementById('app-splash')?.remove();
     initTracking();
+    // v5.968 version-skew 保險：新版部署後，開著舊分頁 lazy import 舊 hash chunk 若 404(chunk load error)
+    //   → 一次性自動 reload 取新版(15 秒內不重複，防 reload loop)。SW 保留舊 cache 是第一道防線，這是最後保險網。
+    if (typeof window !== 'undefined') {
+      const tryChunkReload = (msg: string) => {
+        if (!isChunkLoadError(msg) || !navigator.onLine) return;
+        let last = 0;
+        try { last = Number(sessionStorage.getItem('ptcg_chunk_reload_ts') || '0'); } catch { /* ignore */ }
+        if (Date.now() - last < 15000) return;
+        try { sessionStorage.setItem('ptcg_chunk_reload_ts', String(Date.now())); } catch { /* ignore */ }
+        location.reload();
+      };
+      window.addEventListener('error', (e) => tryChunkReload(String((e as ErrorEvent)?.message || '')));
+      window.addEventListener('unhandledrejection', (e) => {
+        const r = (e as PromiseRejectionEvent)?.reason;
+        tryChunkReload(String((r && r.message) || r || ''));
+      });
+    }
     showMigrationBanner = shouldShowMigrationBanner();
     // v5.034：BETA 偵測 — 同 migration banner 條件（github.io），不可 dismiss
     if (typeof window !== 'undefined' && /github\.io/.test(window.location.hostname)) {

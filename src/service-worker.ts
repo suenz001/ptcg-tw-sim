@@ -6,6 +6,7 @@
 // v4.26 PWA service worker — SvelteKit auto-registers this on production builds.
 // 使用 $service-worker 虛擬模組取得 build / files / prerendered / version。
 import { build, files, prerendered, version } from '$service-worker';
+import { cachesToDelete } from '$lib/sw-policy';
 
 // Cast self to ServiceWorkerGlobalScope so TS knows the SW APIs.
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -47,9 +48,10 @@ sw.addEventListener('install', (event) => {
 
 sw.addEventListener('activate', (event) => {
   async function deleteOld() {
-    for (const key of await caches.keys()) {
-      if (key !== CACHE_NAME) await caches.delete(key);
-    }
+    // v5.968 version-skew：保留現行版 + 最近一個舊版 cache（不再全刪），讓開著舊 HTML 的分頁
+    //   lazy import 舊 hash chunk 仍能命中舊 cache，不會 404 白屏。
+    const keys = await caches.keys();
+    for (const key of cachesToDelete(keys, CACHE_NAME)) await caches.delete(key);
     // 馬上接管現有 client（避免新版 active 後第一次 reload 才生效）
     await sw.clients.claim();
   }
@@ -69,6 +71,13 @@ sw.addEventListener('fetch', (event) => {
 
   async function respond(): Promise<Response> {
     const cache = await caches.open(CACHE_NAME);
+
+    // v5.968 version-skew：hash 命名不可變資源(/_app/immutable/)先跨「全部」cache 查詢(含保留的前一版)，
+    //   命中即回 → 開著舊 HTML 的分頁載入舊 chunk 不會因新版已 activate 刪掉當前版沒有的舊 hash 而 404。
+    if (url.pathname.includes('/immutable/')) {
+      const anyCached = await caches.match(event.request);
+      if (anyCached) return anyCached;
+    }
 
     // build/files/prerendered 走 cache-first（資源不變、最快）
     if (PRECACHE.includes(url.pathname)) {
