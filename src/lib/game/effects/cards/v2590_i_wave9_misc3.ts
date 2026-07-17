@@ -31,6 +31,7 @@ import { statusPost } from '../../effects'; // v5.797 中央施狀態(gate 化�
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import { defCantAttackNextPost } from '../../effects'; // v5.805 中央禁招(免疫gate)
+import { selfCantAttackNextPost } from '../../effects'; // v5.982 全鎖(無法使用招式)自鎖
 import { canApplyEffectToTarget } from '../../defense'; // v5.797 cantRetreat 免疫 gate
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -197,10 +198,11 @@ const RECHARGE_ATTACKS_W9: Array<[string, number]> = [
   ['騎士蝸牛|鐵之光炮', 120],
   ['斧牙龍|潛力', 90],
 ];
+// v5.982：本表 5 招卡面皆為「在下個自己的回合，這隻寶可夢無法使用招式」(全鎖)→ 中央 selfCantAttackNextPost。
+//   原誤用單鎖 rechargePost(只擋同名招)→ 畢力吉翁/浮潛鼬/騎士蝸牛/斧牙龍/奇樹的電肚蛙ex 下回合另一招仍可用(bug)。
 for (const [key, dmg] of RECHARGE_ATTACKS_W9) {
-  const atkName = key.split('|')[1];
   regPre(key, (s) => ({ state: s, damage: dmg }));
-  regPost(key, rechargePost(atkName));
+  regPost(key, selfCantAttackNextPost());
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

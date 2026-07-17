@@ -22,7 +22,7 @@ import {
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
-import { defCantRetreatNextPost, discardOppActiveEnergyPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央
+import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -985,10 +985,12 @@ const RECHARGE: Array<[string, number]> = [
   ['帕底亞 土王ex|終極衝擊', 220],
   ['鐵武者|意念之刃', 120],  // 卡面: 在下個自己的回合，這隻寶可夢無法使用「意念之刃」
 ];
+// v5.982：卡面「無法使用招式」(全鎖)→ selfCantAttackNextPost；「無法使用『X』」(單鎖:密勒頓ex/蒼響ex/鐵武者)→ rechargePost。
+const RECHARGE_ALL_LOCK = new Set(['席多藍恩|鐵之光炮', '帕底亞 土王ex|終極衝擊']);
 for (const [key, dmg] of RECHARGE) {
   const atkName = key.split('|')[1];
   regPre(key, (s) => ({ state: s, damage: dmg }));
-  regPost(key, rechargePost(atkName));
+  regPost(key, RECHARGE_ALL_LOCK.has(key) ? selfCantAttackNextPost() : rechargePost(atkName));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

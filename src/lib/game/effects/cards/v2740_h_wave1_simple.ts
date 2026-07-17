@@ -28,6 +28,7 @@ import {
   coinHeadsMultiplyPre, flipCoinsWithLog,
   selfHitPost,
   countEnergyTypeHostAware,
+  selfCantAttackNextPost, discardOppActiveEnergyPost,
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -136,12 +137,22 @@ const COIN_STATUS: Array<[string, number, 'poisoned'|'burned'|'asleep'|'confused
   ['鐵臂膀|衝擊波', 30, 'paralyzed'],
   ['象徵鳥|念力', 60, 'paralyzed'],
   ['熔岩蟲|熾熱熔岩', 20, 'burned'],
-  ['泥巴魚|劈啪麻痺', 50, 'paralyzed'],
 ];
 for (const [key, dmg, st] of COIN_STATUS) {
   regPre(key, (s) => ({ state: s, damage: dmg }));
   regPost(key, coinStatusPost(st));
 }
+
+// 泥巴魚｜劈啪麻痺 50 — 擲1次硬幣，正面則【麻痺】+ 選1個對手戰鬥能量丟棄（Wilson 裁定：丟能量亦在正面條件內）。
+// v5.982：原在 COIN_STATUS 表只實裝【麻痺】，漏「再丟1能量」副作用（雙效果卡塞進純狀態表，同渾身臭臭型）。
+//   丟能量走中央 discardOppActiveEnergyPost（picker + attack-effect 免疫 gate + host-aware）。
+regPre('泥巴魚|劈啪麻痺', (s) => ({ state: s, damage: 50 }));
+regPost('泥巴魚|劈啪麻痺', (state, aIdx, pool) => {
+  const r = flipCoinsWithLog(state, 1, '劈啪麻痺', aIdx);
+  if (r.heads === 0) return addLog(r.state, '劈啪麻痺：反面，無追加效果', aIdx);
+  const s1 = statusPost('paralyzed')(r.state, aIdx, pool);
+  return discardOppActiveEnergyPost('劈啪麻痺')(s1, aIdx, pool);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 擲幣雙狀態（2 張）
@@ -211,10 +222,12 @@ const RECHARGE: Array<[string, number]> = [
   ['哲爾尼亞斯|終極衝擊', 130],
   ['鐵武者|意念之刃', 120],
 ];
+// v5.982：卡面「無法使用招式」(全鎖)→ selfCantAttackNextPost；「無法使用『X』」(單鎖)→ rechargePost。
+const RECHARGE_ALL_LOCK = new Set(['火炎獅|爆焰衝撞', '哲爾尼亞斯|終極衝擊']);
 for (const [key, dmg] of RECHARGE) {
   const atkName = key.split('|')[1];
   regPre(key, (s) => ({ state: s, damage: dmg }));
-  regPost(key, rechargePost(atkName));
+  regPost(key, RECHARGE_ALL_LOCK.has(key) ? selfCantAttackNextPost() : rechargePost(atkName));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

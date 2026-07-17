@@ -3598,7 +3598,7 @@ regPost('花療環環|花流浴', (state, aIdx) => {
 // Session 31 H8 — 下回合這隻無法使用招式（cantAttackPending 機制）
 // ══════════════════════════════════════════════════════════════════════════════
 
-function selfCantAttackNextPost(): AttackPostFn {
+export function selfCantAttackNextPost(): AttackPostFn {
   return (state, aIdx) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -9432,7 +9432,7 @@ regPost('花蓓蓓|療傷', healAnyOwnPost(30, '療傷'));
 //   v2.236 升級為「實際造成的傷害量」(state.lastDealtDamage)，含弱抗 / 道具減傷
 //   （原版只算 base dmg 30，對手有弱抗時不正確；共用 selfHealByDealtPost helper，
 //    與朽木妖|終極吸取 同 pattern）。
-function selfHealByDealtPost(attackName: string): AttackPostFn {
+export function selfHealByDealtPost(attackName: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const actual = state.lastDealtDamage ?? 0;
     if (actual <= 0) return addLog(state, `${attackName}：實際傷害為 0，不回血`, aIdx);

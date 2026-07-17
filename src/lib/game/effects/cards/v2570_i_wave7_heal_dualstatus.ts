@@ -15,7 +15,7 @@ import {
   addLog, updatePlayer,
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, applyStatusToSelfActive, applyStatusToOppActive } from '../../effects';
+import { canApplyAttackEffectToTarget, applyStatusToSelfActive, applyStatusToOppActive, selfHealByDealtPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 自身回血 N 點
@@ -48,8 +48,6 @@ const SELF_HEAL: Array<[string, number, number]> = [
   ['斗笠菇|超級吸取', 90, 30],
   ['厄鬼椪 水井面具|泡沫吸取', 100, 30],
   ['啃果蟲|小吸取', 10, 10],
-  ['派拉斯|吸血', 10, 10],
-  ['畢力吉翁|終極吸取', 30, 30],
   ['莉莉艾的萌虻|紋絲不動', 0, 10],
   ['皮卡丘|放鬆休息', 0, 20],
   ['大宇怪|冥想', 0, 40],
@@ -59,6 +57,14 @@ for (const [key, dmg, heal] of SELF_HEAL) {
   regPre(key, (s) => ({ state: s, damage: dmg }));
   regPost(key, selfHealPost(heal, atkName));
 }
+
+// v5.982：派拉斯|吸血 / 畢力吉翁|終極吸取 卡面「恢復對對手戰鬥寶可夢造成的傷害相同數值的HP」= 回血=實際造成傷害
+//   (含弱點/加成/對手減傷)，非固定值。原塞進固定值 SELF_HEAL 表(10/30)→弱點時少回、減傷時多回(bug)。
+//   改走中央 selfHealByDealtPost(讀 state.lastDealtDamage)。
+regPre('派拉斯|吸血', (s) => ({ state: s, damage: 10 }));
+regPost('派拉斯|吸血', selfHealByDealtPost('吸血'));
+regPre('畢力吉翁|終極吸取', (s) => ({ state: s, damage: 30 }));
+regPost('畢力吉翁|終極吸取', selfHealByDealtPost('終極吸取'));
 
 // 食夢夢|睡覺 — 0 + 自身睡眠 + 回 30 HP
 regPre('食夢夢|睡覺', (s) => ({ state: s, damage: 0 }));
