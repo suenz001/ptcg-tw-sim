@@ -5389,20 +5389,31 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   光之翼擋（attacker 持有時免疫對手特性反擊）— 同非 KO 分支邏輯
       if (!_v456KoMagicalShine && baseDamage > 0 && defenderCard.abilities) {
         for (const ab of defenderCard.abilities) {
-if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
-  if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
+          if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
           const retal = PASSIVE_RETALIATION.get(ab.name);
           if (retal) newState = retal(newState, dIdx, pool, koInst);
         }
         for (const ab of defenderCard.abilities) {
           const fnOD = PASSIVE_ON_DAMAGED.get(ab.name);
-          if (fnOD) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
+          // v5.980：補 isAbilityHolderEffective gate(holder 特性被消除→不觸發,同上方 RETALIATION loop)。
+          if (fnOD && isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) newState = fnOD(newState, dIdx, aIdx, pool, defenderCard);
         }
       }
       // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石 — 無 abilities，按卡名）。
       //   「受到傷害時」含 KO 情境 → holder 被 KO 仍要對攻擊方放指示物（同龐克頭盔 v5.080）。
       //   傳 defenderCard（active 此時可能已移除）；反殺攻擊方交 sanityKOSweep/反彈檢查。
       if (baseDamage > 0) newState = applyInherentRetaliation(newState, dIdx, defenderCard, pool);
+      // v5.980：招式旗標型受傷反擊(還擊斧/等待角擊/殼捲風旋轉/強大猛擊)holder 被一擊 KO 時仍觸發
+      //   (受傷時含 KO,同龐克頭盔 v5.080/扣殺能量 v5.156/頭蓋化石 v5.494;旗標在 koInst 快照上,隨離場清)。
+      if (baseDamage > 0 && koInst?.retaliateCountersOnNextHit && newState.players[aIdx].active) {
+        const _flag = koInst.retaliateCountersOnNextHit;
+        const _retalN = _flag === 'mirror' ? Math.floor(baseDamage / 10) : (typeof _flag === 'number' ? _flag : 0);
+        if (_retalN > 0) {
+          const _rp = [...newState.players] as [PlayerState, PlayerState];
+          _rp[aIdx] = { ..._rp[aIdx], active: { ..._rp[aIdx].active!, damage: _rp[aIdx].active!.damage + _retalN * 10 } };
+          newState = addLog({ ...newState, players: _rp }, `反擊：對攻擊方放 ${_retalN} 個傷害指示物（${_retalN * 10} 點傷害）`, dIdx);
+        }
+      }
       // v5.156：SPECIAL_ENERGY_ON_DAMAGED 補 KO 觸發（鏡射 v5.080 / v5.081 模式）
       //   Wilson 截圖確認：扣殺能量 holder 被 KO 時漏觸發 — 卡面「受到對手寶可夢
       //   招式的傷害時」依 PTCG 規則含 KO 情境（卡面無「未昏厥」限制）。

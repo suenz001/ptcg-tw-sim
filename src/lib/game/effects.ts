@@ -4352,13 +4352,8 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
     const aIdx = (1 - dIdx) as 0 | 1;
     const def = defSnapshot ?? state.players[dIdx].active;
     if (!def) return state;
-    const metalCount = def.energyAttached.filter(e => {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') return false;
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Metal' || /【鋼】/.test(ec.name))) return true;
-      if (ec.pokemonType === 'Metal') return true;
-      return false;
-    }).length;
+    // v5.980：改走中央 host-aware countEnergyTypeHostAware(火箭隊/燃火/新衝天等倍率),原 inline 按張數。
+    const metalCount = countEnergyTypeHostAware(def, 'Metal', pool);
     if (metalCount === 0) return state;
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -4373,6 +4368,10 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
       dIdx);
   }],
 ]);
+
+// v5.980：卡面「受到...招式的傷害時」**無「在戰鬥場」**限制的 anywhere 型受傷反擊(唯一:拖拖蚓ex|快掃拳返)。
+//   一般反擊卡面皆「在戰鬥場上」故 dispatch 全 active-only;此類在備戰被狙擊也要反擊,需備戰路徑特別觸發。
+export const ANYWHERE_RETALIATION = new Set<string>(['快掃拳返']);
 
 // ════════════════════════════════════════════════════════════════════════════
 // v5.494 INHERENT_RETALIATION — 寶可夢「卡面內建」受傷反擊（非特性／非道具／非能量）
@@ -7776,6 +7775,19 @@ export function dealAttackDamageToTarget(
   if (isActive && kind === 'attack-damage' && effDmg > 0) {
     st = fireDefenderOnDamaged(st, dIdx, actorIdx, effDmg, pool);
     if (st.phase === 'game-over') return st;
+  }
+  // v5.980：anywhere 型受傷反擊(快掃拳返,卡面無「在戰鬥場」)在備戰被狙擊時也觸發(active 已走上方 fireDefenderOnDamaged)。
+  if (!isActive && kind === 'attack-damage' && effDmg > 0) {
+    const _bt = st.players[dIdx].bench.find(c => c.iid === targetIid);
+    const _btCard = _bt ? pool.get(_bt.cardId) : null;
+    if (_bt && _btCard?.abilities) {
+      for (const ab of _btCard.abilities) {
+        if (ANYWHERE_RETALIATION.has(ab.name) && isAbilityHolderEffective(st, _bt, _btCard, dIdx, ab.name, 'bench', pool)) {
+          const fn = PASSIVE_RETALIATION.get(ab.name);
+          if (fn) st = fn(st, dIdx, pool, _bt);
+        }
+      }
+    }
   }
   // re-fetch（helper 可能消費還擊旗標 / 改 attacker 狀態）
   const defenderNow = st.players[dIdx];
