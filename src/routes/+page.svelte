@@ -1,13 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
-  import { auth, db } from '$lib/firebase';
-  import { signInAnonymously, onAuthStateChanged, type User } from 'firebase/auth';
-  import {
-    collection, addDoc, serverTimestamp,
-    query, where, limit, getDocs, onSnapshot, doc, getDoc,
-    type Unsubscribe,
-  } from 'firebase/firestore';
+  // v5.971：firebase 改動態 import(見 onMount),讓 firebase chunk 離開首頁關鍵路徑(首屏先畫再連線)。
+  import type { User } from 'firebase/auth';
+  import type { Unsubscribe } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
 
   // v2.53 我的回饋歷史 + admin 回覆顯示
@@ -28,33 +24,55 @@
   let changelogOverride = $state('');  // v5.755 admin 可在後台編輯的首頁更新記錄(Firebase config/homeChangelog);空=用程式內建
   let changelogBuiltin = $state('');   // v5.969 內建 changelog 改由 static/changelog.html 執行時 fetch(移出 bundle,縮小首頁 route node)
 
+  // v5.971：firebase 模組於 onMount 動態載入後填入;feedback 相關函式使用它們並以 guard 防未載入。
+  let fbMod: typeof import('$lib/firebase') | null = null;
+  let fsMod: typeof import('firebase/firestore') | null = null;
+
   onMount(() => {
     // v5.969：內建 changelog 改由 static/changelog.html 執行時載入(不再編譯進 bundle,縮小首頁)。override(Firestore)仍優先。
     fetch(`${base}/changelog.html?v=${VERSION}`).then((r) => (r.ok ? r.text() : '')).then((t) => { if (t) changelogBuiltin = t; }).catch(() => { /* 載入失敗就顯示載入中 */ });
-    // v5.755：首頁更新記錄可由 admin 後台編輯(Firebase config/homeChangelog,兩站共用);讀到才覆蓋程式內建。
-    getDoc(doc(db, 'config', 'homeChangelog')).then((snap) => {
-      if (snap.exists()) { const h = snap.data()?.html; if (typeof h === 'string' && h.trim()) changelogOverride = h; }
-    }).catch(() => { /* 沒設定 → 用程式內建 */ });
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (u) => {
-        user = u;
-        if (u) {
-          status = '已連線';
-        } else {
-          status = '正在匿名登入...';
-          signInAnonymously(auth).catch((e: Error) => {
-            error = e.message;
-            status = '登入失敗';
-          });
+
+    // v5.971：firebase 動態載入(首屏先畫、mount 後才連線)。onMount 不可宣告為 async(其回傳值不會被當 teardown)，
+    //   故用內層 async IIFE + disposed/unsub 收尾模式，確保 onAuthStateChanged 的退訂在元件卸載時正確執行。
+    let unsub: (() => void) | null = null;
+    let disposed = false;
+    void (async () => {
+      const [firebase, authMod, firestore] = await Promise.all([
+        import('$lib/firebase'),
+        import('firebase/auth'),
+        import('firebase/firestore'),
+      ]);
+      fbMod = firebase;
+      fsMod = firestore;
+      const { auth, db } = firebase;
+      const { signInAnonymously, onAuthStateChanged } = authMod;
+      const { doc, getDoc } = firestore;
+      // v5.755：首頁更新記錄可由 admin 後台編輯(Firebase config/homeChangelog,兩站共用);讀到才覆蓋程式內建。
+      getDoc(doc(db, 'config', 'homeChangelog')).then((snap) => {
+        if (snap.exists()) { const h = snap.data()?.html; if (typeof h === 'string' && h.trim()) changelogOverride = h; }
+      }).catch(() => { /* 沒設定 → 用程式內建 */ });
+      const u = onAuthStateChanged(
+        auth,
+        (usr) => {
+          user = usr;
+          if (usr) {
+            status = '已連線';
+          } else {
+            status = '正在匿名登入...';
+            signInAnonymously(auth).catch((e: Error) => {
+              error = e.message;
+              status = '登入失敗';
+            });
+          }
+        },
+        (e: Error) => {
+          error = e.message;
+          status = '連線失敗';
         }
-      },
-      (e: Error) => {
-        error = e.message;
-        status = '連線失敗';
-      }
-    );
-    return unsubscribe;
+      );
+      if (disposed) u(); else unsub = u;
+    })();
+    return () => { disposed = true; unsub?.(); };
   });
 
   // 意見回饋相關狀態
@@ -119,7 +137,9 @@
 
   function subscribeFeedbacks() {
     unsubscribeFeedbacks();
-    if (!user) { myFeedbacks = []; return; }
+    if (!user || !fbMod || !fsMod) { myFeedbacks = []; return; }
+    const { collection, query, where, limit, onSnapshot } = fsMod;
+    const { db } = fbMod;
     loadingHistory = true;
     let deviceId = 'unknown';
     try { deviceId = localStorage.getItem('ptcg_device_id') ?? 'unknown'; } catch {}
@@ -186,6 +206,9 @@
 
   async function submitFeedback() {
     if (!feedbackText.trim() || feedbackSubmitting) return;
+    if (!fbMod || !fsMod) { feedbackStatus = 'error'; return; }
+    const { collection, addDoc, serverTimestamp } = fsMod;
+    const { db } = fbMod;
     feedbackSubmitting = true;
     try {
       // v2.53：附加 deviceId（給 admin 跨 anon session 識別同裝置玩家）
