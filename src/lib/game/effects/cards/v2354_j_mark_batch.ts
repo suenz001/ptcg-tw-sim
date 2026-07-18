@@ -29,7 +29,7 @@ import {
 } from '../_shared';
 import { getAllAttachedTools } from '../_shared'; // v5.841 丟道具含 extraTools(多重轉接)
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
-import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 
 // ── 工具函式 ─────────────────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
   const dp = state.players[dIdx];
   if (!dp.active) return addLog(state, '退化光線：對手無戰鬥寶可夢', aIdx);
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋退化卡回對手手牌
-  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的進化卡
     return addLog(state, '退化光線：對手場上有【平穩境地】，效果無效', aIdx);
   }
 

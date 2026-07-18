@@ -26,7 +26,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, applyOppActiveDebuffPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget, dealAttackDamageToTarget } from '../../effects';
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
-import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.362：影繩結有效撤退費
 import { startEnergyChain } from './v158_energy_chain';  // v5.884 能量攪拌重分配
 
@@ -592,7 +592,7 @@ regPost('超能豔鴕|奧密之眼', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋進化卡回對手手牌
-  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(state, '奧密之眼：對手場上有【平穩境地】，效果無效', aIdx);
   }
   const evolvedAll: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench]
@@ -677,7 +677,7 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
   if (card?.stage !== 'Stage2') return addLog(state, '上搗角擊：對手戰鬥場非 2 階進化，沒有附加效果', aIdx);
   if (da.energyAttached.length === 0) return addLog(state, '上搗角擊：對手戰鬥無能量', aIdx);
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
-  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(state, '上搗角擊：對手場上有【平穩境地】，能量回手效果無效', aIdx);
   }
   const cap = Math.min(2, da.energyAttached.length);
@@ -817,7 +817,7 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
   const da = state.players[dIdx].active;
   if (!da || da.energyAttached.length === 0) return addLog(state, '付諸東流：對手戰鬥無能量', aIdx);
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
-  if (_v3080OppHasMenasure(state, aIdx, pool)) {
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(state, '付諸東流：對手場上有【平穩境地】，能量回手效果無效', aIdx);
   }
   const cap = Math.min(2, da.energyAttached.length);

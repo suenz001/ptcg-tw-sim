@@ -91,6 +91,7 @@
  */
 
 import type { Attack, Card } from '$lib/cards/types';
+import { isAbilityHolderEffective } from './v3001_g3_wave3'; // v5.985 特性生效性中央述詞
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { isImmuneToOppTrainer } from './v3060_deferred_wave_b';
 
@@ -169,38 +170,45 @@ export function isImmuneToOppSupporter(
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * 「對手場上是否有美納斯（平穩境地）」— 用於阻止『對手寶可夢/附加卡 → 對手手牌』。
+ * v5.985 美納斯｜平穩境地 — 「場上卡→手牌」單一中央述詞。
  *
- * 命名解釋：ownerIdx 是「執行回手動作的玩家」（=想把『他的對手』寶可夢回手），
- *   檢查 1-ownerIdx（=他的對手）場上是否有美納斯。
- *   舉例：
- *     - 玩家 A 用「奧密之眼」想把對手 B 的進化卡回 B 手 → ownerIdx=A，檢查 B 場上美納斯
- *     - 玩家 A 用「悠哉尾草棒」把對手 B 的能量回 B 手 → ownerIdx=A，檢查 B 場上美納斯
+ * 卡面(SV6/SV8a,H)：「只要這隻寶可夢在場上，**對手的**場上寶可夢與那隻寶可夢身上附加的卡，
+ *   全部無法放回手牌。」＝以美納斯**持有者**視角保護「持有者的對手方」的場上卡。
  *
- * 美納斯位置：active 或 bench 任一即可（卡面「在場上」）。
+ * ⭐判準(Wilson 提供官方 Q&A 裁定，取代 v3.08 反向實作)：
+ *   **被放回手牌的那張卡，其「持有者」的對手側若有生效中的平穩境地 → 該回手被擋。**
+ *   與「誰發動效果」無關。
+ *   - Q：自己的美納斯有效時，可用自己的奧密之眼把對手進化寶可夢退化嗎？→ 不可以
+ *     (被回手的是對手的卡；對手的對手＝我方有美納斯 → 擋)
+ *   - Q：對手的美納斯生效中，自己【水】寶可夢昏厥時可用潛者捕捉把身上基本【水】能量回手嗎？→ 不行
+ *     (被回手的是我方的卡；我方的對手＝對手有美納斯 → 擋)
+ *   - Q：對手有平穩境地，丟棄的「燃料火能量」可用其效果從棄牌區回手嗎？→ 可以
+ *     (**只保護「場上」的卡**；棄牌區/牌庫→手牌不受限)
  *
- * @param state    目前 GameState
- * @param ownerIdx 執行回手動作的玩家 index
- * @param pool     卡池
+ * ⚠舊名 oppHasMenasureCalmGround(傳「發動者」idx、查發動者的對手側)方向相反，已刪除不保留
+ *   wrapper——保留舊名必再被誤用。新卡一律走本述詞，傳「被回手卡的持有者 idx」。
+ *
+ * @param cardOwnerIdx 被放回手牌那張卡的持有者(非發動者)
  * @returns true → 此回手動作被阻擋
  */
-export function oppHasMenasureCalmGround(
+export function isReturnToHandBlockedByCalmGround(
   state: GameState | undefined,
-  ownerIdx: 0 | 1 | undefined,
+  cardOwnerIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
 ): boolean {
-  if (!state || ownerIdx == null || !pool) return false;
-  const oppIdx = (1 - ownerIdx) as 0 | 1;
-  const opp = state.players[oppIdx];
-  if (!opp) return false;
-  const all: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
-  return all.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card?.abilities) return false;
-    // v2.362：被消除的特性（如冷風 / 鎮魂歌）— 視為失效
-    if (c.abilityNullifiedThisTurn) return false;
-    return card.abilities.some(ab => ab.name === '平穩境地');
-  });
+  if (!state || cardOwnerIdx == null || !pool) return false;
+  // 美納斯必須在「被回手那張卡的持有者」的對手側(卡面「對手的場上寶可夢與其附加卡無法放回手牌」)
+  const guardIdx = (1 - cardOwnerIdx) as 0 | 1;
+  const gp = state.players[guardIdx];
+  if (!gp) return false;
+  const check = (inst: CardInstance, loc: 'active' | 'bench'): boolean => {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities?.some(ab => ab.name === '平穩境地')) return false;
+    // v5.985：改用中央 isAbilityHolderEffective(涵蓋初始化/暗夜羽擊/監視塔等全部特性消除路徑)
+    return isAbilityHolderEffective(state, inst, card, guardIdx, '平穩境地', loc, pool);
+  };
+  if (gp.active && check(gp.active, 'active')) return true;
+  return gp.bench.some(b => check(b, 'bench'));
 }
 
 // ════════════════════════════════════════════════════════════════════════════

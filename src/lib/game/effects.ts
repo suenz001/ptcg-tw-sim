@@ -602,7 +602,7 @@ import {
   attackerHasSpecialEnergy as _v3060AttackerHasSE,
 } from './effects/cards/v3060_deferred_wave_b';
 // v3.08 Deferred Wave C helper — 美納斯｜平穩境地（對手寶可夢/附加卡 → 對手手牌阻擋）
-import { oppHasMenasureCalmGround as _v3080OppHasMenasureCG } from './effects/cards/v3080_deferred_wave_c';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './effects/cards/v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 // v5.700 對手備戰強制換位(gust)免疫過濾：item 級(緊張感/融合為雪) / supporter 級(+化石/廣域堡壘)
 import { isImmuneToOppTrainer as _gustImmuneTrainer } from './effects/cards/v3060_deferred_wave_b';
 import { isImmuneToOppSupporter as _gustImmuneSupporter } from './effects/cards/v3080_deferred_wave_c';
@@ -8907,6 +8907,11 @@ export function returnSelfActiveEnergyPost(n: number, toHand: boolean, label: st
     const att = state.players[aIdx].active;
     if (!att) return state;
     const attName = pool.get(att.cardId)?.name ?? '?';
+    // v5.985 美納斯｜平穩境地(官方Q&A)：被回手的是「自己」場上的能量 → 對手側有平穩境地則擋。
+    //   只擋 toHand;「改附備戰」不是放回手牌，不受限。
+    if (toHand && _calmGroundBlocks(state, aIdx, pool)) {
+      return addLog(state, `${label}：對手場上有【平穩境地】，能量無法放回手牌`, aIdx);
+    }
     // v5.826：typeFilter 時只取「提供該屬性」的能量(含古舊/稜鏡等特殊,走中央 energyProvidesType 禁 isEnergyOfType)。
     // v5.976：basicOnly 時只取「基本能量」(卡面「選擇1個…基本能量」,如龍捲雲|暴風)。
     const energies = typeFilter
@@ -9026,7 +9031,7 @@ function returnOppActiveEnergyPost(n: number, label: string): AttackPostFn {
       }
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
     // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋對手能量回對手手牌
-    if (_v3080OppHasMenasureCG(state, aIdx, pool)) {
+    if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的能量
       return addLog(state, `${label}：對手場上有【平穩境地】，能量回手效果無效`, aIdx);
     }
     const energies = defender.active.energyAttached;
@@ -9117,7 +9122,7 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
     if (_imm.blocked) return addLog(state, `反轉之風：${_imm.reason}（對手戰鬥寶可夢不受招式效果影響）`, aIdx);
   }
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋
-  if (_v3080OppHasMenasureCG(state, aIdx, pool)) {
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(state, '反轉之風：對手場上有【平穩境地】，能量回手效果無效', aIdx);
   }
   const cap = Math.min(2, da.energyAttached.length);
@@ -12061,6 +12066,10 @@ export function selfReturnToHandPost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
+    // v5.985 美納斯｜平穩境地(官方Q&A)：被回手的是「自己」場上的寶可夢與附加卡 → 對手側有平穩境地則擋。
+    if (_calmGroundBlocks(state, aIdx, _pool)) {
+      return addLog(state, `${label}：對手場上有【平穩境地】，無法放回手牌`, aIdx);
+    }
     const inst = p.active;
     const returning: CardInstance[] = [
       // 把進化棧底重設為未進化版本（保留最底層 card），其實不必拆棧 —

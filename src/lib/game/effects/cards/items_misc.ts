@@ -33,7 +33,7 @@ import { tryPromptPromoteActive } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
 // v3.08 美納斯｜平穩境地 — 阻擋對手寶可夢/附加卡 → 對手手牌
-import { oppHasMenasureCalmGround as _v3080OppHasMenasure } from './v3080_deferred_wave_c';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 import type { EffectFn } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import { applyOppActiveReturnedToBenchTriggers } from '../../engine'; // v5.831
@@ -1230,7 +1230,7 @@ regG('悠哉尾草棒', (st, idx, pool) => {
   if (st.turn !== 1) return false;
   if (st.activePlayerIndex === st.firstPlayerIdx) return false;
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 阻擋整個效果
-  if (_v3080OppHasMenasure(st, idx, pool)) return false;
+  if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) return false; // v5.985 被回手的是對手的卡
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
@@ -1238,7 +1238,7 @@ regG('悠哉尾草棒', (st, idx, pool) => {
 });
 reg('悠哉尾草棒', (st, idx, pool) => {
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果不發生
-  if (_v3080OppHasMenasure(st, idx, pool)) {
+  if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
     return addLog(st, '悠哉尾草棒：對手場上有【平穩境地】，效果無效', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;

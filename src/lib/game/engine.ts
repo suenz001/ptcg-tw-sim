@@ -9,6 +9,7 @@
  */
 
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocksReturn } from './effects/cards/v3080_deferred_wave_c'; // v5.985 場上卡→手牌中央述詞
 import { BENCH_SCRUB_LOCK_FLAGS } from './instance-flags';
 import type {
   GameState, GameAction, CardInstance,
@@ -2334,9 +2335,25 @@ function enqueueDiverCatch(
 }
 
 /** dispatcher 末端:把累積的潛者捕捉確認 flush 成 modal-choice(可選是否回手);多隻→鏈式排隊。 */
-function flushDiverCatchQueue(state: GameState): GameState {
-  const q = state._diverCatchQueue;
-  if (!q || q.length === 0) return state;
+function flushDiverCatchQueue(state: GameState, pool: Map<string, Card>): GameState {
+  const q0 = state._diverCatchQueue;
+  if (!q0 || q0.length === 0) return state;
+  // v5.985 美納斯｜平穩境地(官方Q&A明文「不行」)：被回手的是「昏厥寶可夢身上」＝自己場上的能量
+  //   → 該側的對手有生效中平穩境地則不得回手。被擋項不開 modal，held 能量直接進該側棄牌堆。
+  let state2 = state;
+  const q: typeof q0 = [];
+  for (const e of q0) {
+    if (_calmGroundBlocksReturn(state2, e.ownerIdx, pool)) {
+      state2 = updatePlayer(
+        addLog(state2, `「潛者捕捉」：對手場上有【平穩境地】，${e.koName} 身上的「基本【水】能量」${e.heldEnergy.length} 張無法放回手牌 → 進棄牌堆`, e.ownerIdx),
+        e.ownerIdx, p => ({ ...p, discard: [...p.discard, ...e.heldEnergy] }),
+      );
+    } else {
+      q.push(e);
+    }
+  }
+  state = state2;
+  if (q.length === 0) return { ...state, _diverCatchQueue: undefined };
   const modals: PendingSelection[] = q.map(e => ({
     type: 'modal-choice',
     actorIdx: e.ownerIdx,
@@ -7867,7 +7884,7 @@ function applyActionImpl(
 
   // v5.918 潛者捕捉:把本次 dispatch 累積的「基本水能量放回手牌」確認 flush 成 modal 鏈(多隻一組組問)
   if (next.phase === 'playing') {
-    next = flushDiverCatchQueue(next);
+    next = flushDiverCatchQueue(next, pool);
   }
 
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
