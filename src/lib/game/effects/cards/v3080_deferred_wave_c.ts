@@ -191,6 +191,25 @@ export function isImmuneToOppSupporter(
  * @param cardOwnerIdx 被放回手牌那張卡的持有者(非發動者)
  * @returns true → 此回手動作被阻擋
  */
+/** v5.987：某側「當下盤面」是否有生效中的平穩境地(active/bench 任一)。供述詞與 attack-time snapshot 共用。 */
+export function hasEffectiveCalmGroundOnSide(
+  state: GameState | undefined,
+  guardIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || guardIdx == null || !pool) return false;
+  const gp = state.players[guardIdx];
+  if (!gp) return false;
+  const check = (inst: CardInstance, loc: 'active' | 'bench'): boolean => {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities?.some(ab => ab.name === '平穩境地')) return false;
+    // isAbilityHolderEffective 涵蓋初始化/暗夜羽擊/監視塔等全部特性消除路徑
+    return isAbilityHolderEffective(state, inst, card, guardIdx, '平穩境地', loc, pool);
+  };
+  if (gp.active && check(gp.active, 'active')) return true;
+  return gp.bench.some(b => check(b, 'bench'));
+}
+
 export function isReturnToHandBlockedByCalmGround(
   state: GameState | undefined,
   cardOwnerIdx: 0 | 1 | undefined,
@@ -199,16 +218,10 @@ export function isReturnToHandBlockedByCalmGround(
   if (!state || cardOwnerIdx == null || !pool) return false;
   // 美納斯必須在「被回手那張卡的持有者」的對手側(卡面「對手的場上寶可夢與其附加卡無法放回手牌」)
   const guardIdx = (1 - cardOwnerIdx) as 0 | 1;
-  const gp = state.players[guardIdx];
-  if (!gp) return false;
-  const check = (inst: CardInstance, loc: 'active' | 'bench'): boolean => {
-    const card = pool.get(inst.cardId);
-    if (!card?.abilities?.some(ab => ab.name === '平穩境地')) return false;
-    // v5.985：改用中央 isAbilityHolderEffective(涵蓋初始化/暗夜羽擊/監視塔等全部特性消除路徑)
-    return isAbilityHolderEffective(state, inst, card, guardIdx, '平穩境地', loc, pool);
-  };
-  if (gp.active && check(gp.active, 'active')) return true;
-  return gp.bench.some(b => check(b, 'bench'));
+  // v5.987：當下盤面 OR attack-time snapshot(比照花之帷幔)。即使美納斯被同一招式 KO，
+  //   只要「宣告當時」在生效，此招式的回手效果仍被擋(PTCG 招式效果同時 resolve)。
+  if (hasEffectiveCalmGroundOnSide(state, guardIdx, pool)) return true;
+  return state._attackTimeCalmGround?.[guardIdx] === true;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

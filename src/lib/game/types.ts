@@ -986,6 +986,9 @@ export interface GameState {
    * Transient：每次 attack flow 後 clear，不持久化（連線對戰 / 存檔不需考慮）。
    */
   _attackTimeOppFlowerVeil?: boolean;
+  /** v5.987 美納斯|平穩境地 attack-time snapshot：宣告當時各玩家是否有生效中平穩境地。
+   *   PTCG「招式效果同時 resolve」— 即使美納斯被同招 KO，宣告當時有效則回手仍被擋(比照花之帷幔)。 */
+  _attackTimeCalmGround?: [boolean, boolean];
   _counterMoveSrcIids?: string[];  // v5.947 本 action 因「移動/改放傷害指示物」(非治療)而減傷的來源 iid;markHealsByDamageDecrease 跳過不誤標 healedThisTurn
   /**
    * v5.186：抵抗之幕 attack-time snapshot — 攻擊宣告時對手場上是否有火箭隊的急凍鳥（抵抗之幕）。

@@ -9,7 +9,7 @@
  */
 
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
-import { isReturnToHandBlockedByCalmGround as _calmGroundBlocksReturn } from './effects/cards/v3080_deferred_wave_c'; // v5.985 場上卡→手牌中央述詞
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocksReturn, hasEffectiveCalmGroundOnSide as _hasCalmGround } from './effects/cards/v3080_deferred_wave_c'; // v5.985/987 場上卡→手牌中央述詞+快照
 import { BENCH_SCRUB_LOCK_FLAGS } from './instance-flags';
 import type {
   GameState, GameAction, CardInstance,
@@ -4436,6 +4436,11 @@ function handlePlaying(
     //   故需 snapshot 一個 transient flag 給 hitBenchPickPost / hitBenchAll 讀。
     const attackTimeOppFlowerVeil = hasFlowerVeil(state, dIdx, pool);
     workingState = { ...workingState, _attackTimeOppFlowerVeil: attackTimeOppFlowerVeil };
+    // v5.987：美納斯|平穩境地 attack-time snapshot(比照花之帷幔)。宣告當時各玩家是否有生效平穩境地→
+    //   即使美納斯被同一招式 KO，此招的回手效果(無限之影/潛者捕捉等)仍依宣告當時判定被擋。
+    workingState = { ...workingState, _attackTimeCalmGround: [
+      _hasCalmGround(state, 0, pool), _hasCalmGround(state, 1, pool),
+    ] as [boolean, boolean] };
     // v5.186：抵抗之幕 同 pattern — 玩家回報多龍巴魯托ex 幻影奇襲 對戰急凍鳥時
     //   急凍鳥被 KO 後 6 個指示物還能放到備戰；規則上同招式 resolve 視為同時，
     //   攻擊宣告當時抵抗之幕生效，備戰「火箭隊的」基礎寶可夢仍應免疫此招式效果。
@@ -5728,6 +5733,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     if (newState._attackTimeOppFlowerVeil !== undefined && !newState.pendingSelection) {
       const cleared = { ...newState };
       delete cleared._attackTimeOppFlowerVeil;
+      newState = cleared;
+    }
+    if (newState._attackTimeCalmGround !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeCalmGround;
       newState = cleared;
     }
     // v5.186：抵抗之幕 snapshot 同步清除
@@ -7811,6 +7821,11 @@ function applyActionImpl(
   if (next._attackTimeOppFlowerVeil !== undefined && !next.pendingSelection) {
     const cleared = { ...next };
     delete cleared._attackTimeOppFlowerVeil;
+    next = cleared;
+  }
+  if (next._attackTimeCalmGround !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeCalmGround;
     next = cleared;
   }
   // v5.186：抵抗之幕 snapshot 同步清除（跨 deferred picker 後最終清理）

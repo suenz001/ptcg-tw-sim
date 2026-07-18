@@ -12,7 +12,7 @@ process.on('exit',()=>{for(const p of [S,E,O]){try{unlinkSync(p)}catch{}}});
 writeFileSync(S,'export const base="";');
 writeFileSync(E,
   "export { ATTACK_POST, RESOLVERS } from './src/lib/game/effects/_shared';\n"+
-  "export { isReturnToHandBlockedByCalmGround } from './src/lib/game/effects/cards/v3080_deferred_wave_c';\n"+
+  "export { isReturnToHandBlockedByCalmGround, hasEffectiveCalmGroundOnSide } from './src/lib/game/effects/cards/v3080_deferred_wave_c';\n"+
   "import './src/lib/game/effects';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',
   alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
@@ -117,6 +117,23 @@ let pass=0,fail=0; const ck=(n,c)=>{if(c)pass++;else{fail++;console.log('  ✗',
     const b=p4(st(myMenas(),{active:mk(baseId,{iid:'d',energyAttached:[{iid:'e2',cardId:'99992'}]})}),0,pool,{});
     ck('v5.986 章魚桶:我方美納斯→對手能量無法回手(原漏gate)',L(b).includes('平穩境地'));
   }
+}
+
+// ── v5.987 attack-time snapshot：美納斯被同招 KO 仍依宣告當時判定(比照花之帷幔) ──
+{
+  const B=mod.isReturnToHandBlockedByCalmGround;
+  // 盤面已無美納斯(結算過程中被 KO 移除)，但 snapshot 記得宣告當時 guard 側(1)有 → 仍擋卡主0的卡
+  const s=st({active:mk(baseId,{iid:'atk'})},{active:mk(baseId,{iid:'d'})}); // 兩邊都無美納斯
+  s._attackTimeCalmGround=[false,true];
+  ck('v5.987 盤面無美納斯但snapshot[guard=1]=true→卡主0仍被擋',B(s,0,pool)===true);
+  ck('v5.987 snapshot 只擋對應guard側(卡主1不被擋)',B(s,1,pool)===false);
+  // 對照:無 snapshot 且盤面無美納斯 → 不擋
+  const s2=st({active:mk(baseId,{iid:'atk'})},{active:mk(baseId,{iid:'d'})});
+  ck('v5.987 無snapshot+盤面無美納斯→不擋',B(s2,0,pool)===false);
+  // exported helper 存在
+  ck('v5.987 hasEffectiveCalmGroundOnSide exported',typeof mod.hasEffectiveCalmGroundOnSide==='function');
+  const s3=st({active:mk(menasId,{iid:'m'})},{active:mk(baseId,{iid:'d'})});
+  ck('v5.987 helper:當下盤面0有美納斯→side0 true',mod.hasEffectiveCalmGroundOnSide(s3,0,pool)===true);
 }
 
 console.log(`\nv5.985/986 平穩境地回手中央收斂測試：PASS ${pass} / FAIL ${fail}`);
