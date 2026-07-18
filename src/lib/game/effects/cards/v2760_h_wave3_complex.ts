@@ -9,6 +9,7 @@ import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS,
   getOwnBenchLimit,
   ATTACK_PRE_DISCARD_CHOICE,  // v5.060：克雷色利亞|弦月光芒 補若希望 prompt
+  buildDevolvedInstance, // v5.984 中央退化建構
 } from '../_shared';
 import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示物非治療
 import { getKODefenderEnergyInDiscard, getKODefenderSnapshot, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
@@ -605,6 +606,9 @@ regPost('超能豔鴕|奧密之眼', (state, aIdx, pool) => {
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'h-wave3-devolve',
+    // v5.984：原缺 validIids → UI 列出對手全部寶可夢，選到【基礎】時退化 no-op 但移除卡照樣
+    //   push 進手牌＝憑空複製一張卡(場上還在)。限定只能選有進化堆疊的目標。
+    params: { validIids: evolvedAll.filter(c => (c.evolvedFromStack?.length ?? 0) > 0).map(c => c.iid) },
   });
 });
 regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
@@ -620,39 +624,22 @@ regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
       if (_g.blocked) return addLog(state, `奧密之眼：${pool.get(_tgt.cardId)?.name ?? '?'}｜${_g.reason}`, aIdx);
     }
   }
-  return updatePlayer(state, dIdx, p => {
-    const devolveOne = (c: CardInstance | null): CardInstance | null => {
-      if (!c || c.iid !== tIid) return c;
-      const card = pool.get(c.cardId);
-      if (card?.stage === 'Basic') return c;
-      const stack = c.evolvedFromStack ?? [];
-      if (stack.length === 0) return c;
-      const newTop = stack[stack.length - 1];
-      const remaining = stack.slice(0, -1);
-      // v5.807：對齊中央退化模式(退化光線/奇異時鐘/阿賽斯特萊石 v5.672)。
-      //   ① 保留場上 c.iid(穩定身份;原改 newTop.iid 與其他退化站不一致、易致前端對應斷裂,同 rare-candy v5.796)。
-      //   ② clearActiveEffects 清除特殊狀態+附加效果(PDF §II-C-13;保留 damage/能量/道具)。
-      //   ③ evolvedThisTurn 不設(對手退化不擋其再進化)。
-      return {
-        ...clearActiveEffects({ ...c, cardId: newTop.cardId }),
-        evolvedFromStack: remaining.length > 0 ? remaining : undefined,
-        evolvedFromIid: remaining.length > 0 ? remaining[remaining.length - 1].iid : undefined,
-        evolvedThisTurn: undefined,
-      };
-    };
-    // 找到目標退化前的 cardId 以放回對手手
-    const findOriginal = (c: CardInstance | null): CardInstance | null => c && c.iid === tIid ? c : null;
-    const sourcePoke = findOriginal(p.active) ?? p.bench.map(findOriginal).find(Boolean) ?? null;
-    if (!sourcePoke) return p;
-    const removedCard = { iid: sourcePoke.iid, cardId: sourcePoke.cardId, damage: 0, energyAttached: [] };
-    const np = {
-      ...p,
-      active: devolveOne(p.active),
-      bench: p.bench.map(b => devolveOne(b)!),
-      hand: [...p.hand, removedCard],
-    };
-    return np;
-  });
+  // v5.984：收斂中央 buildDevolvedInstance。原手刻兩處嚴重問題：
+  //   ① removedCard 用 sourcePoke.iid＝與場上退化後的寶可夢 dup-iid(其他退化站皆用唯一新 iid;
+  //      撞 iid 會讓 EVOLVE 以 toIid 找錯卡、手牌選取/去重錯亂)。
+  //   ② devolveOne 對【基礎】/無堆疊目標 no-op，但 removedCard 仍無條件 push＝憑空複製卡。
+  //   現改為：helper 回傳 null(深度不足)即取消，不動手牌；成功才 push 唯一 iid 的 removedCards。
+  const _dp2 = state.players[dIdx];
+  const _target = _dp2.active?.iid === tIid ? _dp2.active : _dp2.bench.find(b => b.iid === tIid);
+  if (!_target) return state;
+  const _dv = buildDevolvedInstance(_target, 1, state, pool);
+  if (!_dv) return addLog(state, '奧密之眼：所選非進化寶可夢，取消', aIdx);
+  return updatePlayer(state, dIdx, p => ({
+    ...p,
+    active: p.active?.iid === tIid ? _dv.devolved : p.active,
+    bench: p.bench.map(b => b.iid === tIid ? _dv.devolved : b),
+    hand: [...p.hand, ..._dv.removedCards],
+  }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

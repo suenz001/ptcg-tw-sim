@@ -44,6 +44,7 @@ import {
   shuffle, addLog, withPending, updatePlayer,
   ATTACK_PRE_DISCARD_CHOICE,
   getAllAttachedTools, getEnergyDiscardUnits, clearActiveEffects, countAttachedEnergyAsUnits,
+  buildDevolvedInstance, // v5.984 中央退化建構
 } from '../_shared';
 import {
   coinHeadsMultiplyPre,
@@ -418,12 +419,10 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       // 必須給回牌庫的「實體卡」新的唯一 iid；同一條進化鏈可能被多次退化，
       // 若固定使用 `${poke.iid}_evo_returned`，Stage1/Stage2 會在手牌/牌庫中撞 iid，
       // 導致 EVOLVE 以 toIid 找到錯的卡。
-      newDeckExtras.push({
-        iid: `${poke.iid}_evo_returned_${poke.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-        cardId: poke.cardId,
-        energyAttached: [],
-        damage: 0
-      });
+      // v5.984：退化建構收斂中央 buildDevolvedInstance(唯一 removed iid + 暈眩山谷混亂例外)
+      const _dv = buildDevolvedInstance(poke, 1, state, pool);
+      if (!_dv) return poke;
+      newDeckExtras.push(..._dv.removedCards);
       returnedCount++;
       // 退化為 prev：cardId 變回前一階
       // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
@@ -435,12 +434,7 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
       //   修法：不設此 flag。本回合對方寶可夢沒有「進化動作」（不是他回合），
       //   所以即使移除 flag 也不會發生「本回合自我連續進化」問題。
       // v5.672：清狀態+附加效果改用中央 clearActiveEffects(原只清 7 旗標,漏其餘;PDF §II-C-13)。
-      return {
-        ...clearActiveEffects({ ...poke, cardId: prev.cardId }),
-        evolvedFromStack: stack.length > 0 ? stack : undefined,
-        evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
-        evolvedThisTurn: undefined, // v3.9998 對手退化不設(否則殘留誤擋其進化)
-      };
+      return _dv.devolved;
     };
     let active = p.active;
     let bench = p.bench;

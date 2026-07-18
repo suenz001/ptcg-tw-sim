@@ -1804,32 +1804,21 @@ function doOddClockDevolve(
   if (stack.length < layers) {
     return addLog(st, `奇異時鐘：堆疊深度不足以退化 ${layers} 層，取消`, idx);
   }
-  // 移除的 cardIds：當前 cardId（最頂） + stack 倒數 layers-1 個
+  // v5.984：退化建構收斂中央 buildDevolvedInstance(暈眩山谷混亂例外+唯一 removed iid;多層退化 layers)
   const removedCardIds: string[] = [target.cardId];
   for (let i = 1; i < layers; i++) {
     removedCardIds.push(stack[stack.length - i].cardId);
   }
-  // 退化後的新 cardId = stack[stack.length - layers]
   const newBaseInst = stack[stack.length - layers];
-  const newStack = stack.slice(0, stack.length - layers);
-  // 移除的卡 → 手牌（產生新 iid）
-  const handCards: import('../../types').CardInstance[] = removedCardIds.map(cid => ({
-    iid: target.iid + '-devo-' + cid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-    cardId: cid,
-    damage: 0,
-    energyAttached: [],
-  }));
+  const _dv = buildDevolvedInstance(target, layers, st, pool, { evolvedThisTurn: true });
+  if (!_dv) return addLog(st, `奇異時鐘：堆疊深度不足以退化 ${layers} 層，取消`, idx);
+  const handCards: import('../../types').CardInstance[] = _dv.removedCards;
   // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
   //   清除特殊狀態與附加效果（跟進化規則一致 — PDF 明文「退化後特殊狀態與附加效果消除」）。
   // v5.672：清狀態+附加效果改用中央 clearActiveEffects(CLEAR_ON_EXIT_FLAGS,~50旗標)。原只清 7 個,
   //   漏其餘效果旗標(純樸 immuneToAttackEffects/takeExtra/weaknessOverride/retaliate 等);PDF §II-C-13
   //   「退化後特殊狀態與附加效果消除」=與進化一致全清(保留 damage/能量/道具)。
-  const devolved: import('../../types').CardInstance = {
-    ...clearActiveEffects({ ...target, cardId: newBaseInst.cardId }),
-    evolvedFromStack: newStack.length > 0 ? newStack : undefined,
-    evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
-    evolvedThisTurn: true, // 卡面「那個回合無法進化」(自己退化)
-  };
+  const devolved: import('../../types').CardInstance = _dv.devolved;
   const oldName = pool.get(target.cardId)?.name ?? '?';
   const newName = pool.get(newBaseInst.cardId)?.name ?? '?';
   const cardNames = removedCardIds.map(cid => pool.get(cid)?.name ?? '?').join('、');

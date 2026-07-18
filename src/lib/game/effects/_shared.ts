@@ -1409,6 +1409,55 @@ export function evolvedStatusAfter(
 }
 
 /**
+ * v5.984：中央退化建構 — 所有退化效果(奧密之眼/退化光線/阿賽斯特萊石/原始之翼/奇異時鐘)
+ *   的單一來源，鏡射 buildEvolvedInstance。官方契約：
+ *   ① 保留場上 iid / damage / 能量 / 道具(含 extraTools) — PDF §II-C-13、§6
+ *   ② 特殊狀態與附加效果全清(clearActiveEffects,~50旗標)，**唯暈眩山谷例外**：卡面
+ *      「雙方的【混亂】的寶可夢，就算進化・退化，【混亂】也不會恢復」→ 複用進化側單一
+ *      來源 evolvedStatusAfter(進化/退化兩路徑共享，未來只修一處)
+ *   ③ 移除的進化卡各配**全新唯一 iid**(同鏈多次退化不撞 iid，撞了會讓 EVOLVE 以 toIid 找錯卡)
+ *   ④ evolvedThisTurn 由 caller 決定：只有卡面明文「退化的寶可夢那個回合無法進化」的自方
+ *      退化(奇異時鐘)傳 true；對手退化一律不傳(此 flag 只在當前玩家 END_TURN 清，設在對手
+ *      身上會殘留到對手回合誤擋其進化 — v3.9998/v5.497)
+ *   不碰 hand/deck、不寫 log、不做免疫 gate(caller 依來源 attack-effect/ability-effect 先 gate)、
+ *   不做 KO(退化後超 HP 由 applyAction 末端雙邊 sanityKOSweep 兜底)。
+ * @returns null = evolvedFromStack 深度不足 layers(caller 取消並 log，不得部分執行)
+ */
+export interface DevolveResult {
+  devolved: CardInstance;
+  removedCards: CardInstance[];
+}
+export function buildDevolvedInstance(
+  target: CardInstance,
+  layers: number,
+  state: GameState,
+  pool: Map<string, Card>,
+  opts?: { evolvedThisTurn?: true },
+): DevolveResult | null {
+  const stack = target.evolvedFromStack ?? [];
+  if (layers < 1 || stack.length < layers) return null;
+  // 移除卡 = 頂層(當前 cardId) + stack 倒數 layers-1 張
+  const removedCardIds: string[] = [target.cardId];
+  for (let i = 1; i < layers; i++) removedCardIds.push(stack[stack.length - i].cardId);
+  const removedCards: CardInstance[] = removedCardIds.map(cid => ({
+    iid: `${target.iid}_devo_${cid}_${Math.random().toString(36).slice(2, 8)}`,
+    cardId: cid,
+    damage: 0,
+    energyAttached: [],
+  }));
+  const newBase = stack[stack.length - layers];
+  const newStack = stack.slice(0, stack.length - layers);
+  const devolved: CardInstance = {
+    ...clearActiveEffects({ ...target, cardId: newBase.cardId }),
+    ...evolvedStatusAfter(target, state, pool),
+    evolvedFromStack: newStack.length > 0 ? newStack : undefined,
+    evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
+    evolvedThisTurn: opts?.evolvedThisTurn,
+  };
+  return { devolved, removedCards };
+}
+
+/**
  * v5.742：中央進化體建構 — 所有「直接進化」效果(覺醒/緊急進化/壯偉碩木/早熟進化/
  *   細胞覺醒等)的單一來源,鏡射 engine 正規 EVOLVE。過往各路徑手刻 `const evolved = {...}`
  *   反覆漏:extraTools(進化丟多餘道具=丟卡)、iid:base.iid(身份分歧→退化/取回 dup-iid)、

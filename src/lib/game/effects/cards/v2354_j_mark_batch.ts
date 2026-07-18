@@ -23,6 +23,7 @@ import {
   regPre,
   regR,
   shuffle,
+  buildDevolvedInstance, // v5.984 中央退化建構(暈眩山谷混亂例外+唯一removed iid)
   updatePlayer,
   withPending,
 } from '../_shared';
@@ -122,26 +123,13 @@ regPost('念力土偶|退化光線', (state, aIdx, pool) => {
     const _g = canApplyEffectToTarget(state, aIdx, dp.active, defCard, 'attack-effect', pool);
     if (_g.blocked) return addLog(state, `退化光線：${defName}｜${_g.reason}`, aIdx);
   }
-  // 從 evolvedFromStack 取最頂（最近一次進化前的狀態）
   const stack = [...dp.active.evolvedFromStack];
-  const prev = stack.pop()!;
-
-  // 把目前 cardId（進化卡）加回對手「手牌」
-  const evoCardInst: CardInstance = {
-    iid: `${dp.active.iid}_evo_returned_${dp.active.cardId}_${Math.random().toString(36).slice(2, 8)}`,
-    cardId: dp.active.cardId,
-    energyAttached: [],
-    damage: 0,
-  };
-
-  // 退化後的寶可夢保留 HP/能量/道具，清除特殊狀態
-  // v5.672：清狀態+附加效果改用中央 clearActiveEffects(原只清 7 旗標,漏其餘;PDF §II-C-13)。
-  const devolvedActive: CardInstance = {
-    ...clearActiveEffects({ ...dp.active, cardId: prev.cardId }),
-    evolvedFromStack: stack.length > 0 ? stack : undefined,
-    evolvedFromIid: stack.length > 0 ? stack[stack.length - 1].iid : undefined,
-    evolvedThisTurn: undefined, // v5.497 對手退化不設(否則殘留誤擋其再進化)
-  };
+  const prev = stack[stack.length - 1];
+  // v5.984：退化建構收斂中央 buildDevolvedInstance(clearActiveEffects+暈眩山谷混亂例外+唯一 removed iid)。
+  const _dv = buildDevolvedInstance(dp.active, 1, state, pool);
+  if (!_dv) return addLog(state, '退化光線：退化層數不足，取消', aIdx);
+  const evoCardInst: CardInstance = _dv.removedCards[0];
+  const devolvedActive: CardInstance = _dv.devolved;
 
   const prevName = pool.get(prev.cardId)?.name ?? '?';
   let s = addLog(state, `退化光線：${defName} 退化為 ${prevName}，進化卡回對手手牌`, aIdx);

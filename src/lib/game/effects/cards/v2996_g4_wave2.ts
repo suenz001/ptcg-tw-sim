@@ -40,6 +40,8 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import { getEffectiveHP } from '../../engine'; // v5.952 剩餘HP用有效HP
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
+import { buildDevolvedInstance } from '../_shared'; // v5.984 中央退化建構
+import { canApplyEffectToTarget } from '../../defense'; // v5.984 特性效果免疫 gate(化隱/對戰圓形)
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import {
   regA, regR,
@@ -287,36 +289,22 @@ regR('archeops-primal-wing', (st, idx, iids, _params, pool) => {
   if (!target) return st;
   const stack = target.evolvedFromStack ?? [];
   if (stack.length === 0) return addLog(st, '原始之翼：所選非進化寶可夢，取消', idx);
-
-  // 移除最頂層（當前 cardId） — 退化 1 層
+  // v5.984 Bug3b：特性對「對手」寶可夢施退化＝特性效果 → 須過 ability-effect 免疫 gate
+  //   (化隱/對戰圓形/羽毛化石等應擋;比照 v5.974 戰槌龍ex 為特性補 gate)。原缺 gate=免疫目標仍被退化。
+  {
+    const _g = canApplyEffectToTarget(st, idx, target, pool.get(target.cardId), 'ability-effect', pool,
+      { isBench: dp.active?.iid !== targetIid });
+    if (_g.blocked) return addLog(st, `原始之翼：${pool.get(target.cardId)?.name ?? '?'}｜${_g.reason}`, idx);
+  }
   const removedCardId = target.cardId;
   const newBaseInst = stack[stack.length - 1];
-  const newStack = stack.slice(0, stack.length - 1);
-  // 移除的卡 → 對手手牌（產生新 iid）
-  const handCard: CardInstance = {
-    iid: `${target.iid}-pwing-${removedCardId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    cardId: removedCardId,
-    damage: 0,
-    energyAttached: [],
-  };
+  // v5.984 Bug3a：原手刻 7 旗標(漏 immuneToAttackEffects/takeExtra/weaknessOverride/retaliate 等 40+)
+  //   → 收斂中央 buildDevolvedInstance(clearActiveEffects 全清 + 暈眩山谷混亂例外 + 唯一 removed iid)。
+  const _dv = buildDevolvedInstance(target, 1, st, pool);
+  if (!_dv) return addLog(st, '原始之翼：退化層數不足，取消', idx);
+  const handCard: CardInstance = _dv.removedCards[0];
   // 退化規則（PDF §II-C-13）：保留 damage / energy / tool；清狀態 + 跨回合 flag
-  const devolved: CardInstance = {
-    ...target,
-    cardId: newBaseInst.cardId,
-    evolvedFromStack: newStack.length > 0 ? newStack : undefined,
-    evolvedFromIid: newStack.length > 0 ? newStack[newStack.length - 1].iid : undefined,
-    // v5.497：退化的是「對手」寶可夢、在我方回合進行；卡面無「該回合無法進化」限制。
-    //   evolvedThisTurn 只在「當前玩家 END_TURN」清除(clearTurnFlags)，若設在對手身上會殘留到
-    //   對手回合，誤擋對手再進化(玩家回報)。對手退化一律不設 evolvedThisTurn。
-    evolvedThisTurn: undefined,
-    status: undefined,
-    secondaryStatus: undefined,
-    tertiaryStatus: undefined,
-    cantAttackThisTurn: undefined,
-    cantAttackPending: undefined,
-    cantRetreatNextTurn: undefined,
-    damageReduceNextHit: undefined,
-  };
+  const devolved: CardInstance = _dv.devolved;
   const oldName = pool.get(removedCardId)?.name ?? '?';
   const newName = pool.get(newBaseInst.cardId)?.name ?? '?';
   const s = addLog(st, `原始之翼：對手 ${oldName} 退化為 ${newName}（移除卡放回對手手牌）`, idx);
