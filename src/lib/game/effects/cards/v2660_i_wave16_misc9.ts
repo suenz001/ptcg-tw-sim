@@ -26,6 +26,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
 } from '../_shared'; // v5.792 寶可夢連附加回手中央(含 extraTools+進化棧)
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
@@ -425,6 +426,10 @@ regR('miracle-painting-status', (st, idx, iids, _params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('心蝙蝠|幸福迴旋', (s) => ({ state: s, damage: 0 }));
 regPost('心蝙蝠|幸福迴旋', (state, aIdx, _pool) => {
+  // v5.986 平穩境地：被回手的是「自己」備戰寶可夢與附加卡 → 對手側有平穩境地則擋
+  if (_calmGroundBlocks(state, aIdx, _pool)) {
+    return addLog(state, '幸福迴旋：對手場上有【平穩境地】，無法放回手牌', aIdx);
+  }
   const p = state.players[aIdx];
   if (p.bench.length === 0) return addLog(state, '幸福迴旋：自方備戰區無寶可夢', aIdx);
   const s = addLog(state, '幸福迴旋：選 1 隻自方備戰寶可夢與附加卡全回手', aIdx);
@@ -461,6 +466,11 @@ regPost('章魚桶|水流清洗', (state, aIdx, pool, action) => {
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
   if (!_choseYes) return addLog(state, '水流清洗：選擇「否」 — 不放回對手能量', aIdx);
+  // v5.986 平穩境地(原完全漏 gate)：被回手的是「對手」的能量 → 我方(1-aIdx 的對手=aIdx)側有平穩境地則擋。
+  //   放在 _cb 之前 → 非KO與KO兩分支皆涵蓋。
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) {
+    return addLog(state, '水流清洗：我方場上有【平穩境地】，對手能量無法放回手牌', aIdx);
+  }
   const _cb: AttackPostFn = (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量

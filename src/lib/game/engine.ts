@@ -5107,7 +5107,15 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v2.385 耿鬼｜無限之影：受招式 KO 時，本體放回手牌（能量 / 道具 / 進化堆仍丟棄）
     //   仍算 KO（給對手獎賞），只改變 defender 本體去向。
     let infiniteShadowReturnsToHand = false;
-    if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影')) {
+    // v5.986 平穩境地：被回手的是「被KO方自己」場上的寶可夢 → 其對手側有平穩境地則擋(正常丟棄,獎賞照常)。
+    //   (由官方 Q&A②潛者捕捉「不行」類推;無直接 Q&A,已記錄待 Wilson 知悉)
+    const _isBlockedByCalmGround = _calmGroundBlocksReturn(newState, dIdx, pool);
+    if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影') && _isBlockedByCalmGround) {
+      newState = addLog(newState,
+        `無限之影：對手場上有【平穩境地】，${defenderCard.name} 無法放回手牌 → 正常進棄牌堆（獎賞照常）`,
+        dIdx);
+    }
+    if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影') && !_isBlockedByCalmGround) {
       infiniteShadowReturnsToHand = true;
       newState = addLog(newState,
         `無限之影：${defenderCard.name} 因招式傷害昏厥 → 整條進化鏈放回手牌（附加能量/道具仍丟棄），對手仍取得獎賞`,

@@ -22,6 +22,7 @@
  */
 
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE, getAllAttachedTools } from '../_shared';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
 
 // v5.113 對戰圓形 gate import
@@ -139,6 +140,10 @@ regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool, action) => 
   const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
   if (!choseYes) {
     return addLog(state, '刺殺迴旋：選「否」 → 自身留場', aIdx);
+  }
+  // v5.986 平穩境地：被回手的是「自己」場上寶可夢 → 對手側有平穩境地則擋(自身留場、附加卡也不丟)
+  if (_calmGroundBlocks(state, aIdx, _pool)) {
+    return addLog(state, '刺殺迴旋：對手場上有【平穩境地】，自身無法放回手牌 → 留場', aIdx);
   }
   // 自身放回手；附加能量/道具棄
   return updatePlayer(

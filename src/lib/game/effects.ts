@@ -1135,7 +1135,7 @@ function hitBenchAll(
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
       // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷 targetIdx===attackerIdx 不觸發)
-      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx);
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx && !_calmGroundBlocks(state, targetIdx, pool));
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
       for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
@@ -1337,7 +1337,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
       // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷不觸發)
-      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx);
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx && !_calmGroundBlocks(st, targetIdx, pool));
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
       for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
@@ -7802,7 +7802,7 @@ export function dealAttackDamageToTarget(
       if (_pk.prevented) return _pk.state;
     }
     // v5.934 無限之影中央收斂：受【對手】招式【傷害】KO(kind==='attack-damage' && dIdx!==actorIdx) → 本體+進化鏈回手;放指示物(attack-effect)/自傷不觸發
-    const _isk = resolveInfiniteShadowKo({ ...targetNow, damage: newDmg }, pool, kind === 'attack-damage' && dIdx !== actorIdx);
+    const _isk = resolveInfiniteShadowKo({ ...targetNow, damage: newDmg }, pool, kind === 'attack-damage' && dIdx !== actorIdx && !_calmGroundBlocks(st, dIdx, pool));
     const ko: CardInstance[] = _isk.toDiscard;
     const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool, kind === 'attack-damage');
     st = _ko.state;
@@ -7991,6 +7991,10 @@ regPre('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
   if (!hasEnergy) {
     return { state: addLog(state, '叢林鞭打：自身無能量 → 80', aIdx), damage: 80 };
   }
+  // v5.986 平穩境地：能量回手被擋 → 加成條件無法達成，只造成基本 80(regPost 亦同 gate)
+  if (_calmGroundBlocks(state, aIdx, _pool)) {
+    return { state: addLog(state, '叢林鞭打：對手場上有【平穩境地】，能量無法放回手牌 → 80', aIdx), damage: 80 };
+  }
   const chosenIids = action?.discardedEnergyIids;
   const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
   if (!choseYes) {
@@ -7999,6 +8003,7 @@ regPre('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
   return { state: addLog(state, '叢林鞭打：選「是」 → 收回自身能量 → 80+80 = 160', aIdx), damage: 160 };
 });
 regPost('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
+  if (_calmGroundBlocks(state, aIdx, _pool)) return state; // v5.986 平穩境地：不收回能量
   const att = state.players[aIdx].active;
   if (!att || att.energyAttached.length === 0) return state;
   const chosenIids = action?.discardedEnergyIids;
@@ -9103,6 +9108,11 @@ regPost('高傲雉雞|反轉之風', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   // v5.769：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
   //   （此刻在棄牌區，_koDefenderEnergySnapshot）放回對手手牌。
+  // v5.986 平穩境地：提前到 KO 分支之前(原 gate 在 KO early-return 之後→KO 分支繞過)。
+  //   被回手的是「對手」的卡(含 KO 前戰鬥位能量快照) → 我方側有平穩境地則擋。
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) {
+    return addLog(state, '對手能量回手效果：我方場上有【平穩境地】，無效', aIdx);
+  }
   if (!state.players[dIdx].active) {
     const koEnergyIids = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
     if (koEnergyIids.length === 0) return addLog(state, '反轉之風：對手戰鬥無可放回的能量', aIdx);

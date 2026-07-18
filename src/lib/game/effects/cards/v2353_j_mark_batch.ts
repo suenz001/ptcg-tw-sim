@@ -9,6 +9,8 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
+import { selfReturnToHandPost as _selfReturnToHandPost } from '../../effects'; // v5.986 自身回手中央 helper(含平穩境地gate)
 import type { EnergyType } from '$lib/cards/types';
 import { countEnergyTypeHostAware } from '../../effects'; // v5.669 型別能量數 host-aware(火箭隊=2)
 import { applyOppActiveDebuffPost } from '../../effects'; // v5.806 對手 debuff 中央(免疫gate)
@@ -342,7 +344,11 @@ registerDiscardMultiply('大嘴娃|雙重食客', '雙重食客', 0, 60, 2);
 
 // 土地雲｜螺旋關節：120，選 1 個自身附加能量放回手牌
 regPre('土地雲|螺旋關節', (state) => ({ state, damage: 120 }));
-regPost('土地雲|螺旋關節', (state, aIdx) => {
+regPost('土地雲|螺旋關節', (state, aIdx, pool) => {
+  // v5.986 平穩境地：被回手的是「自己」場上的能量 → 對手側有平穩境地則擋
+  if (_calmGroundBlocks(state, aIdx, pool)) {
+    return addLog(state, '螺旋關節：對手場上有【平穩境地】，能量無法放回手牌', aIdx);
+  }
   const p = state.players[aIdx];
   if (!p.active || p.active.energyAttached.length === 0) {
     return addLog(state, '螺旋關節：自身沒有能量可放回手牌', aIdx);
@@ -428,23 +434,8 @@ regPost('茸茸羊|電磁干擾', (state, aIdx) => {
 
 // 電飛鼠｜天空迴旋：30，將這隻寶可夢與附加的卡全部放回手牌
 regPre('電飛鼠|天空迴旋', (state) => ({ state, damage: 30 }));
-regPost('電飛鼠|天空迴旋', (state, aIdx) => {
-  const p = state.players[aIdx];
-  if (!p.active) return state;
-  const inst = p.active;
-  // 主體 + 附加能量 + 工具卡 + 進化鏈底層
-  // v5.740：收斂為中央 toBareCard 白名單(取代手動黑名單)。修漏 secondary/tertiary
-  //   status 與 ~40 效果旗標殘留;附加卡各自裸化;getAllAttachedTools 修漏 extraTools 丟卡。
-  const returning: CardInstance[] = [
-    toBareCard(inst),
-    ...inst.energyAttached.map(toBareCard),
-    ...getAllAttachedTools(inst).map(toBareCard),
-    ...(inst.evolvedFromStack ?? []).map(toBareCard),
-  ];
-  const players = [...state.players] as [PlayerState, PlayerState];
-  players[aIdx] = { ...p, active: null, hand: [...p.hand, ...returning] };
-  return addLog({ ...state, players }, '天空迴旋：將自身（含附加的卡）全部放回手牌', aIdx);
-});
+// v5.986：手刻 body 與中央 selfReturnToHandPost 等價 → 直接收斂(順帶自動吃到平穩境地 gate)。
+regPost('電飛鼠|天空迴旋', _selfReturnToHandPost('天空迴旋'));
 
 // ── Group E：棄牌 / 牌庫放備戰 ───────────────────────────────────────────────
 

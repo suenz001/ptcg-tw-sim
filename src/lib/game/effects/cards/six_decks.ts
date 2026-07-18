@@ -11,6 +11,7 @@
  */
 import { tryPromptPromoteActive, damageCounterCount } from '../_shared'; // v5.785 指示物個數中央
 import { copyAttackPostDispatch } from '../_shared';
+import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
@@ -318,6 +319,10 @@ regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
   const chosenIids = action?.discardedEnergyIids ?? [];
   if (chosenIids.length === 0) {
     return { state: addLog(state, '忍者飛旋：未選擇能量 → 120 傷害', aIdx), damage: 120 };
+  }
+  // v5.986 平穩境地：能量回手被擋 → 加成條件無法達成，只造成基本 120
+  if (_calmGroundBlocks(state, aIdx, pool)) {
+    return { state: addLog(state, '忍者飛旋：對手場上有【平穩境地】，能量無法放回手牌 → 120 傷害', aIdx), damage: 120 };
   }
   const active = state.players[aIdx].active;
   if (!active) return { state, damage: 120 };

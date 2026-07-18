@@ -86,5 +86,38 @@ let pass=0,fail=0; const ck=(n,c)=>{if(c)pass++;else{fail++;console.log('  ✗',
     ck('QA2 無美納斯→照常回手(不含平穩境地log)',!JSON.stringify(noMenas.log||[]).includes('平穩境地'));
   } else { ck('狡猾天狗|能量閉環 有註冊',false); }
 }
-console.log(`\nv5.985 平穩境地回手方向測試：PASS ${pass} / FAIL ${fail}`);
+// ── v5.986 手刻站收斂驗證 ──
+{
+  const L=o=>JSON.stringify(o.log||[]);
+  const oppMenas=()=>({active:mk(baseId,{iid:'d'}),bench:[mk(menasId,{iid:'oppMenas'})]});
+  const myMenas=()=>({active:mk(baseId,{iid:'atk'}),bench:[mk(menasId,{iid:'myMenas'})]});
+  // 電飛鼠|天空迴旋(收斂到中央 selfReturnToHandPost)
+  const p1=mod.ATTACK_POST.get('電飛鼠|天空迴旋');
+  ck('電飛鼠|天空迴旋 有註冊',!!p1);
+  if(p1){
+    const blocked=p1(st({active:mk(baseId,{iid:'atk'})},oppMenas()),0,pool,{});
+    ck('v5.986 電飛鼠:對手美納斯→自身無法回手',L(blocked).includes('平穩境地')&&!!blocked.players[0].active);
+  }
+  // 土地雲|螺旋關節
+  const p2=mod.ATTACK_POST.get('土地雲|螺旋關節');
+  if(p2){
+    const b=p2(st({active:mk(baseId,{iid:'atk',energyAttached:[{iid:'e1',cardId:'99991'}]})},oppMenas()),0,pool,{});
+    ck('v5.986 土地雲:對手美納斯→能量無法回手',L(b).includes('平穩境地'));
+  }
+  // 心蝙蝠|幸福迴旋
+  const p3=mod.ATTACK_POST.get('心蝙蝠|幸福迴旋');
+  if(p3){
+    const b=p3(st({active:mk(baseId,{iid:'atk'}),bench:[mk(baseId,{iid:'b1'})]},oppMenas()),0,pool,{});
+    ck('v5.986 心蝙蝠:對手美納斯→備戰無法回手',L(b).includes('平穩境地'));
+  }
+  // 章魚桶|水流清洗(A類原完全漏gate) — 我方有美納斯應擋
+  const p4=mod.ATTACK_POST.get('章魚桶|水流清洗');
+  ck('章魚桶|水流清洗 有註冊',!!p4);
+  if(p4){
+    const b=p4(st(myMenas(),{active:mk(baseId,{iid:'d',energyAttached:[{iid:'e2',cardId:'99992'}]})}),0,pool,{});
+    ck('v5.986 章魚桶:我方美納斯→對手能量無法回手(原漏gate)',L(b).includes('平穩境地'));
+  }
+}
+
+console.log(`\nv5.985/986 平穩境地回手中央收斂測試：PASS ${pass} / FAIL ${fail}`);
 if(fail>0)process.exit(1);

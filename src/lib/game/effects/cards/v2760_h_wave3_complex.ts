@@ -657,6 +657,11 @@ regPost('帕底亞 肯泰羅|上搗角擊', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
   //   （此刻在棄牌區，_koDefenderSnapshot）放回對手手牌。
+  // v5.986 平穩境地：提前到 KO 分支之前(原 gate 在 KO early-return 之後→KO 分支繞過)。
+  //   被回手的是「對手」的卡(含 KO 前戰鬥位能量快照) → 我方側有平穩境地則擋。
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) {
+    return addLog(state, '對手能量回手效果：我方場上有【平穩境地】，無效', aIdx);
+  }
   if (!state.players[dIdx].active) {
     const _snap = getKODefenderSnapshot(state, dIdx);
     const _snapCard = _snap ? pool.get(_snap.cardId) : null;
@@ -803,6 +808,11 @@ regPost('呆呆王|付諸東流', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   // v5.776：對手戰鬥位被本招式傷害 KO（active=null）→ 官方順序「效果先於昏厥」，仍可把 KO 前戰鬥位能量
   //   （此刻在棄牌區，_koDefenderSnapshot）放回對手手牌。
+  // v5.986 平穩境地：提前到 KO 分支之前(原 gate 在 KO early-return 之後→KO 分支繞過)。
+  //   被回手的是「對手」的卡(含 KO 前戰鬥位能量快照) → 我方側有平穩境地則擋。
+  if (_calmGroundBlocks(state, (1 - aIdx) as 0 | 1, pool)) {
+    return addLog(state, '對手能量回手效果：我方場上有【平穩境地】，無效', aIdx);
+  }
   if (!state.players[dIdx].active) {
     const _koE = getKODefenderEnergyInDiscard(state, dIdx).map(e => e.iid);
     if (_koE.length === 0) return addLog(state, '付諸東流：對手戰鬥無可放回的能量', aIdx);
