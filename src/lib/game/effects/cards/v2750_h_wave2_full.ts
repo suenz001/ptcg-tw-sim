@@ -17,6 +17,7 @@ import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
+import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
@@ -1805,19 +1806,15 @@ regPost('差不多娃娃|招喚', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 18: 自方所有備戰各進化 ===
 // ══════════════════════════════════════════════════════════════════════════════
-// 彩粉蝶|進化粉 — 自方所有備戰寶可夢進化
-//   引擎已有 deck-search 模式；簡化：開 deck-search 讓玩家挑進化卡（最多備戰數）
+// 彩粉蝶|進化粉 — 卡面「從牌庫，選擇自己所有備戰寶可夢進化而來的卡各1張，放置各自身上完成進化。並重洗。」
+// v5.983：原「簡化」開泛用 deck-search 拿最多 N 張任意寶可夢「加手牌」(遠強於卡面、可利用、且加手後可挪用/被進化鎖誤擋)。
+//   卡面與人造細胞卵|細胞覺醒逐字相同 → 收斂到同一 chain cellAwakeningStep(逐備戰選該寶可夢進化卡→buildEvolvedInstance→重洗)。
 regPre('彩粉蝶|進化粉', (s) => ({ state: s, damage: 0 }));
-regPost('彩粉蝶|進化粉', (state, aIdx, _pool) => {
-  const benchN = state.players[aIdx].bench.length;
-  if (benchN === 0 || state.players[aIdx].deck.length === 0) return state;
-  return withPending(addLog(state, `進化粉：從牌庫挑最多 ${benchN} 張寶可夢加手（玩家手動進化備戰；重洗）`, aIdx), {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Pokemon',
-    minCount: 0, maxCount: benchN,
-    effectKey: 'wave13-deck-take-any',
-  });
+regPost('彩粉蝶|進化粉', (state, aIdx, pool) => {
+  if (state.players[aIdx].bench.length === 0) {
+    return updatePlayer(addLog(state, '進化粉：備戰區無寶可夢；重洗牌庫', aIdx), aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
+  }
+  return cellAwakeningStep(state, aIdx, pool, 0, '進化粉');
 });
 
 // 伊布|覺醒 — 從牌庫挑 1 張從這隻寶可夢進化而來的卡，放置於自身完成進化

@@ -284,18 +284,18 @@ regR('twin-cell-evolve-do', (st, aIdx, iids, params, pool) => {
 //   - benchIdx 0..N-1 依序處理；params 紀錄當前 index + baseIid
 //   - 收尾：所有備戰處理完 → 重洗牌庫
 // ══════════════════════════════════════════════════════════════════════════════
-function cellAwakeningStep(
-  s: GameState, aIdx: 0 | 1, pool: Map<string, Card>, benchIdx: number,
+export function cellAwakeningStep(
+  s: GameState, aIdx: 0 | 1, pool: Map<string, Card>, benchIdx: number, label = '細胞覺醒',
 ): GameState {
   const p = s.players[aIdx];
   if (benchIdx >= p.bench.length) {
     // 全部備戰處理完，重洗牌庫
-    return updatePlayer(addLog(s, '細胞覺醒：所有備戰處理完，重洗牌庫', aIdx),
+    return updatePlayer(addLog(s, `${label}：所有備戰處理完，重洗牌庫`, aIdx),
       aIdx, x => ({ ...x, deck: shuffle(x.deck) }));
   }
   const base = p.bench[benchIdx];
   const baseCard = pool.get(base.cardId);
-  if (!baseCard) return cellAwakeningStep(s, aIdx, pool, benchIdx + 1);
+  if (!baseCard) return cellAwakeningStep(s, aIdx, pool, benchIdx + 1, label);
   // 牌庫中有可進化的卡嗎？
   const validEvoIids = p.deck.filter(c => {
     const card = pool.get(c.cardId);
@@ -303,10 +303,10 @@ function cellAwakeningStep(
     return sameEvoName(card.evolvesFrom, baseCard.name);
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
-    s = addLog(s, `細胞覺醒：牌庫中無「${baseCard.name}」的進化卡（跳過）`, aIdx);
-    return cellAwakeningStep(s, aIdx, pool, benchIdx + 1);
+    s = addLog(s, `${label}：牌庫中無「${baseCard.name}」的進化卡（跳過）`, aIdx);
+    return cellAwakeningStep(s, aIdx, pool, benchIdx + 1, label);
   }
-  s = addLog(s, `細胞覺醒：從牌庫選「${baseCard.name}」的進化卡（可跳過；第 ${benchIdx + 1} 隻備戰）`, aIdx);
+  s = addLog(s, `${label}：從牌庫選「${baseCard.name}」的進化卡（可跳過；第 ${benchIdx + 1} 隻備戰）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
@@ -317,7 +317,8 @@ function cellAwakeningStep(
       baseIid: base.iid,
       baseName: baseCard.name,
       benchIdx,
-      titleOverride: `細胞覺醒：從牌庫選「${baseCard.name}」的進化卡（可跳過）`,
+      label,
+      titleOverride: `${label}：從牌庫選「${baseCard.name}」的進化卡（可跳過）`,
     },
   });
 }
@@ -334,6 +335,7 @@ regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
   const baseIid = params?.baseIid as string | undefined;
   const baseName = (params?.baseName as string | undefined) ?? '?';
   const benchIdx = (params?.benchIdx as number | undefined) ?? 0;
+  const label = (params?.label as string | undefined) ?? '細胞覺醒';
   let s = st;
   if (iids.length > 0 && baseIid) {
     const evoIid = iids[0];
@@ -353,14 +355,14 @@ regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
           deck: x.deck.filter(c => c.iid !== evoIid),
           bench: x.bench.map(c => c.iid === baseIid ? evolved : c),
         }));
-        s = addLog(s, `細胞覺醒：「${baseName}」進化為「${evoCard.name}」`, aIdx);
+        s = addLog(s, `${label}：「${baseName}」進化為「${evoCard.name}」`, aIdx);
       }
     }
   } else {
-    s = addLog(s, `細胞覺醒：玩家跳過「${baseName}」`, aIdx);
+    s = addLog(s, `${label}：玩家跳過「${baseName}」`, aIdx);
   }
   // 進下一隻備戰
-  return cellAwakeningStep(s, aIdx, pool, benchIdx + 1);
+  return cellAwakeningStep(s, aIdx, pool, benchIdx + 1, label);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
