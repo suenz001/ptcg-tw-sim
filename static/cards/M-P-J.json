@@ -2236,5 +2236,236 @@
     "species": "寄居蟹寶可夢",
     "evolvesFrom": "呆呆獸",
     "illustrator": "CHORISO"
+  },
+  {
+    "id": "19378",
+    "name": "新葉喵",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-J",
+    "collectorNumber": "167/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019378.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19378/",
+    "scrapedAt": "2026-07-20T00:00:00.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "嬉鬧",
+        "cost": [
+          "Grass"
+        ],
+        "damage": "10+",
+        "effect": "擲1次硬幣若為正面，則增加20點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ]
+  },
+  {
+    "id": "19379",
+    "name": "蒂蕾喵",
+    "supertype": "Pokemon",
+    "subtype": "Stage1",
+    "setCode": "M-P-J",
+    "collectorNumber": "168/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019379.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19379/",
+    "scrapedAt": "2026-07-20T00:00:00.000Z",
+    "regulationMark": "J",
+    "stage": "Stage1",
+    "hp": 90,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "劈開",
+        "cost": [
+          "Grass",
+          "Grass"
+        ],
+        "damage": "60",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "evolvesFrom": "新葉喵"
+  },
+  {
+    "id": "19380",
+    "name": "魔幻假面喵ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M-P-J",
+    "collectorNumber": "169/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019380.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19380/",
+    "scrapedAt": "2026-07-20T00:00:00.000Z",
+    "regulationMark": "J",
+    "stage": "Stage2",
+    "hp": 320,
+    "pokemonType": "Grass",
+    "attacks": [
+      {
+        "name": "魔法子彈",
+        "cost": [
+          "Grass",
+          "Grass"
+        ],
+        "damage": "120",
+        "effect": "對手的身上放置有傷害指示物的1隻備戰寶可夢也受到120點傷害。[在備戰區不計算弱點・抵抗力。]"
+      }
+    ],
+    "weakness": {
+      "type": "Fire",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "蒂蕾喵",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "19381",
+    "name": "索羅亞",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-J",
+    "collectorNumber": "170/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019381.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19381/",
+    "scrapedAt": "2026-07-20T00:00:00.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
+    "hp": 70,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "踩",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "10",
+        "effect": ""
+      },
+      {
+        "name": "抓",
+        "cost": [
+          "Darkness",
+          "Colorless"
+        ],
+        "damage": "30",
+        "effect": ""
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ]
+  },
+  {
+    "id": "19382",
+    "name": "索羅亞克ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M-P-J",
+    "collectorNumber": "171/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019382.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19382/",
+    "scrapedAt": "2026-07-20T00:00:00.000Z",
+    "regulationMark": "J",
+    "stage": "Stage1",
+    "hp": 270,
+    "pokemonType": "Darkness",
+    "attacks": [
+      {
+        "name": "狂暴亂打",
+        "cost": [
+          "Darkness"
+        ],
+        "damage": "20×",
+        "effect": "造成自己的場上寶可夢的數量×20點傷害。"
+      },
+      {
+        "name": "猛擊在地",
+        "cost": [
+          "Darkness",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "210",
+        "effect": "在下個自己的回合，這隻寶可夢無法使用「猛擊在地」。"
+      }
+    ],
+    "weakness": {
+      "type": "Grass",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless",
+      "Colorless"
+    ],
+    "evolvesFrom": "索羅亞",
+    "illustrator": "Keisuke Azuma"
+  },
+  {
+    "id": "19383",
+    "name": "伊布ex",
+    "supertype": "Pokemon",
+    "subtype": "ex",
+    "setCode": "M-P-J",
+    "collectorNumber": "172/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019383.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19383/",
+    "scrapedAt": "2026-07-20T00:00:00.000Z",
+    "regulationMark": "J",
+    "stage": "Basic",
+    "hp": 200,
+    "pokemonType": "Colorless",
+    "attacks": [
+      {
+        "name": "呼喚",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "從自己的牌庫抽出3張卡。"
+      },
+      {
+        "name": "勇氣衝刺",
+        "cost": [
+          "Colorless",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "200",
+        "effect": "擲1次硬幣若為反面，則這隻寶可夢也受到30點傷害。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "retreatCost": [
+      "Colorless"
+    ],
+    "illustrator": "aky CG Works"
   }
 ]

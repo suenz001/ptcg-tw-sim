@@ -6425,6 +6425,66 @@ regPre('夠讚狗ex|瘋狂連鎖', (state, aIdx, _pool) => {
 //   （效果先於傷害；原 regPost 走共用 search-to-hand-reshuffle、傷害留引擎→KO 先拿獎才搜尋）
 registerDamageThenOptionalDeckSearchToHand('貓頭夜鷹|鉤爪搜尋', { damage: 70, maxCount: 2, logName: '鉤爪搜尋' });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// M-P 特典卡（J 標）新增招式 — 新葉喵/魔幻假面喵ex/索羅亞克ex/伊布ex
+//   (2026-07 官網卡面查證；全部復用既有中央 helper，零新 import edge)
+//   vanilla（無招式效果，引擎自套 DB damage）：蒂蕾喵|劈開60、索羅亞|踩10、索羅亞|抓30
+// ══════════════════════════════════════════════════════════════════════════════
+
+// 新葉喵|嬉鬧 10+ — 擲 1 幣正面 +20（中央 coinPlusDmg，同瑪力露麗|嬉鬧等）
+regPre('新葉喵|嬉鬧', coinPlusDmg(10, 20));
+
+// 魔幻假面喵ex|魔法子彈 120 — 附加：對手「身上有傷害指示物的 1 隻備戰寶可夢」也受 120（備戰不計弱抗）。
+//   走 opp-bench-choose + wave3a-snipe-bench resolver + params.validIids（限受傷備戰）；
+//   含 canApplyEffectToTarget 免疫 guard（化隱/球形盾牌/太晶備戰）。無受傷備戰則附加效果無效。
+//   收斂為通用 helper（「受傷備戰狙擊」是官方常見模板，未來同型卡可直接復用）。
+export function snipeDamagedBenchPost(amount: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    // validIids = 對手備戰中身上有傷害指示物（damage>0）的寶可夢
+    const validIids = state.players[dIdx].bench.filter(c => (c.damage ?? 0) > 0).map(c => c.iid);
+    if (validIids.length === 0) {
+      return addLog(state, label + '：對手沒有身上有傷害指示物的備戰寶可夢，附加效果無效', aIdx);
+    }
+    const s = addLog(state, label + '：選 1 隻對手身上有傷害指示物的備戰寶可夢，受到 ' + amount + ' 點傷害', aIdx);
+    return withPending(s, {
+      type: 'opp-bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'wave3a-snipe-bench',
+      params: { amount, label, validIids },
+    });
+  };
+}
+// 主傷害 120 打戰鬥場（正常算弱點），regPost 附加受傷備戰狙擊 120
+regPre('魔幻假面喵ex|魔法子彈', (s) => ({ state: s, damage: 120 }));
+regPost('魔幻假面喵ex|魔法子彈', snipeDamagedBenchPost(120, '魔法子彈'));
+
+// 索羅亞克ex|狂暴亂打 20× — 造成「自己場上寶可夢的數量」×20（場上=戰鬥場+備戰）
+regPre('索羅亞克ex|狂暴亂打', (state, aIdx) => {
+  const p = state.players[aIdx];
+  const count = (p.active ? 1 : 0) + p.bench.length;  // 場上 = active + bench
+  const dmg = count * 20;
+  const s = addLog(state, '狂暴亂打：自己場上寶可夢 ' + count + ' 隻 → ' + count + '×20 = ' + dmg, aIdx);
+  return { state: s, damage: dmg };
+});
+
+// 索羅亞克ex|猛擊在地 210 — 下個自己回合無法使用「猛擊在地」（單鎖，同蒼響ex/飛天螳螂|猛擊在地）
+regPost('索羅亞克ex|猛擊在地', selfBlockSpecificAttackNextPost('猛擊在地'));
+
+// 伊布ex|呼喚 — 從牌庫抽 3 張（中央 drawNPost）
+regPost('伊布ex|呼喚', drawNPost(3, '呼喚'));
+
+// 伊布ex|勇氣衝刺 200 — 擲 1 幣反面則自身受 30（反傷；中央 selfHitPost）
+regPost('伊布ex|勇氣衝刺', (state, aIdx, pool) => {
+  const r = flipCoinsWithLog(state, 1, '勇氣衝刺', aIdx);
+  let s = addLog(r.state, '勇氣衝刺：擲 1 次硬幣 → ' + (r.heads === 1 ? '正面' : '反面'), aIdx);
+  if (r.heads === 0) {
+    s = selfHitPost(30, '勇氣衝刺')(s, aIdx, pool);  // 反面 → 自身受 30
+  }
+  return s;
+});
+
 // 皮卡丘|電磁電光 — 對對手任一寶可夢（含備戰）造成 10 傷害
 regPre('皮卡丘|電磁電光', (_state, _aIdx, _pool) => {
   return { state: _state, damage: 0 };
