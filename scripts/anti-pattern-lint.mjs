@@ -17,6 +17,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SRC = join(ROOT, 'src/lib/game');
 function walk(dir){const o=[];for(const e of readdirSync(dir)){const p=join(dir,e);if(statSync(p).isDirectory())o.push(...walk(p));else if(e.endsWith('.ts'))o.push(p);}return o;}
 const files = walk(SRC);
+const sepChar = join('a','b').includes('\\') ? '\\' : '/';
 const rel = (f) => f.slice(ROOT.length + 1);
 const violations = [];
 
@@ -355,6 +356,178 @@ for (const f of files) {
       else { const m2 = lines[i].match(/effectKey:\s*([A-Za-z_$][\w$]*)\b/); if (m2 && constMap[m2[1]]) key = constMap[m2[1]]; }
       if (!key || INLINE_OK.has(key)) continue;
       if (!registered.has(key)) violations.push(`[N] ${rel(f)}:${i + 1} — effectKey '${key}' 無對應 resolver(死 key,picker 選完無效果）→ 用有註冊 regR/RESOLVERS.set 的 key，或標 // effectkey-inline-ok: 理由`);
+    }
+  }
+}
+
+
+// ── Check O：底層模組反向 import 卡檔（module-init 循環 TDZ 防護，v5.989 事故）──────
+//   engine.ts 曾反向 import 卡檔 v3080 → 循環相依 → rollup 模組初始化 TDZ → 對戰頁白屏。
+//   node 測試 + deploy 綠 皆抓不到(vite build 只打包不執行)。凍結現況「symbol 層級」白名單：
+//   底層模組(engine/effects/defense/_shared/types/instance-flags)新增反向 edge、或既有 edge
+//   新增白名單外 symbol → FAIL。修法:helper 下沉 _shared/leaf,讓卡檔與 engine 都 import 它。
+//   白名單只准縮不准擴。見 feedback-build-fail-debug-lessons ⑧。
+{
+  const LOW = new Set([
+    'src/lib/game/engine.ts', 'src/lib/game/effects.ts', 'src/lib/game/defense.ts',
+    'src/lib/game/effects/_shared.ts', 'src/lib/game/types.ts', 'src/lib/game/instance-flags.ts',
+  ]);
+  const WL = {
+  "defense.ts→v3001_g3_wave3": [
+    "isAbilityHolderEffective"
+  ],
+  "effects.ts→stadiums": [
+    "BENCH_PROTECTION_STADIUMS",
+    "JAMMING_TOWER_STADIUMS",
+    "PASSIVE_STADIUMS",
+    "ROCKET_WATCHTOWER_STADIUMS"
+  ],
+  "effects.ts→tools": [
+    "TOOL_ATTACH_GATE",
+    "TOOL_ATTACK_BONUS",
+    "TOOL_BOTH_SIDES_RETREAT_PLUS",
+    "TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY",
+    "TOOL_DEFENSE_REDUCE_BY_TYPE",
+    "TOOL_END_TURN_DISCARD",
+    "TOOL_HP_BONUS",
+    "TOOL_ON_DAMAGED",
+    "TOOL_ON_KO",
+    "TOOL_PREVENT_KO",
+    "TOOL_PRIZE_BONUS",
+    "TOOL_RETREAT_MOD"
+  ],
+  "effects.ts→v158_energy_chain": [
+    "startEnergyChain"
+  ],
+  "effects.ts→v2998_g2": [
+    "desertDragonflyOnKo"
+  ],
+  "effects.ts→v2999_g3_wave1": [
+    "bronzongShelterReduce",
+    "curlWallReduce",
+    "gearCoatingReduce",
+    "hasIronTracksDualCore",
+    "registerV2999G3W1Passives",
+    "steelixPalaceReduce"
+  ],
+  "effects.ts→v3000_g3_wave2": [
+    "applyMagearnaHandAttachHeal",
+    "canRelicanthDiverCatchTrigger",
+    "hasBugAegislashShield",
+    "isBasicWaterEnergy",
+    "registerV3000G3W2Passives"
+  ],
+  "effects.ts→v3001_g3_wave3": [
+    "hasEffectiveKageHide",
+    "isAbilityHolderEffective",
+    "isAbilityNullifiedByPassive",
+    "isInitializeNullified",
+    "isOppEvilEyeBlocking",
+    "registerV3001G3W3Passives"
+  ],
+  "effects.ts→v3050_deferred_wave_a": [
+    "registerV3050DeferredWaveA"
+  ],
+  "effects.ts→v3060_deferred_wave_b": [
+    "attackerHasSpecialEnergy",
+    "getBenchImmunityAbilityName",
+    "hasBenchAttackImmunityAbility",
+    "isImmuneToOppTrainer",
+    "registerV3060DeferredWaveBPassives"
+  ],
+  "effects.ts→v3070_deferred_wave_d": [
+    "klingerAbility_EmergencyRotate",
+    "registerV3070DeferredWaveD",
+    "supercatExpAbility_LureTail",
+    "volcaronaAbility_HeatScale"
+  ],
+  "effects.ts→v3080_deferred_wave_c": [
+    "isImmuneToOppSupporter",
+    "isReturnToHandBlockedByCalmGround",
+    "registerV3080DeferredWaveC"
+  ],
+  "effects.ts→v3210_ordiga": [
+    "registerV3210Ordiga"
+  ],
+  "engine.ts→v2999_g3_wave1": [
+    "bronzongShelterReduce",
+    "curlWallReduce",
+    "gearCoatingReduce",
+    "steelixPalaceReduce"
+  ],
+  "engine.ts→v3000_g3_wave2": [
+    "FIRST_TURN_USABLE_ATTACKS",
+    "canRelicanthDiverCatchTrigger",
+    "canTogekissMiracleKissTrigger",
+    "hasMeloettaExDebut",
+    "isBasicWaterEnergy",
+    "magearnaAutoHealAmount",
+    "magmarFlowingBurnBonus"
+  ],
+  "engine.ts→v3001_g3_wave3": [
+    "getOppRetreatTriggers",
+    "hasAbilityOnActive",
+    "hasEffectiveCalmGroundOnSide",
+    "hasEffectiveKageHide",
+    "hasRocketAmpharosDarkPulse",
+    "hasRocketTyranitarSandstorm",
+    "isAbilityHolderEffective",
+    "isAbilityNullifiedByPassive",
+    "isInitializeNullified",
+    "isOppEvilEyeBlocking",
+    "isOppItemPlayBlocked",
+    "isOppStadiumPlayBlocked",
+    "isReturnToHandBlockedByCalmGround"
+  ],
+  "engine.ts→v3050_deferred_wave_a": [
+    "askUseRetreatToBenchAbility"
+  ],
+  "engine.ts→v3070_deferred_wave_d": [
+    "findFieldPokemonByName",
+    "hasFieldPokemonByName",
+    "oppHasStage2"
+  ],
+  "engine.ts→v3080_deferred_wave_c": [
+    "getAttacksFromEvolvedFromStack",
+    "hasArchaeoglobinDiveMemory"
+  ]
+};
+  const resolveSpec = (fileRel, spec) => {
+    if (!spec.startsWith('.')) return spec;
+    const out = fileRel.split('/').slice(0, -1);
+    for (const seg of spec.split('/')) { if (seg === '.' || seg === '') continue; if (seg === '..') out.pop(); else out.push(seg); }
+    return out.join('/');
+  };
+  const base = (p) => p.split('/').pop();
+  const blockRe = /(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/g;
+  for (const f of files) {
+    const r = f.slice(ROOT.length).replace(/^[/\\]+/, '').split(sepChar).join('/');
+    if (!LOW.has(r)) continue;
+    const src = readFileSync(f, 'utf8');
+    let m;
+    blockRe.lastIndex = 0;
+    while ((m = blockRe.exec(src)) !== null) {
+      if (/^\s*(import|export)\s+type\s/.test(m[0])) continue;
+      const resolved = resolveSpec(r, m[2]);
+      if (!resolved.includes('/effects/cards/')) continue;
+      const key = base(r) + '\u2192' + base(resolved);
+      const allowed = WL[key];
+      if (!allowed) { violations.push([r, `[O] 底層模組新增對卡檔的反向 import (edge 不在白名單): from '${m[2]}' — helper 應下沉 _shared/leaf,禁止底層 import 卡檔`]); continue; }
+      for (const raw of m[1].split(',')) {
+        let s = raw.trim(); if (!s || s.startsWith('type ')) continue;
+        s = s.split(/\s+as\s+/)[0].trim();
+        if (!/^[A-Za-z_$][\w$]*$/.test(s)) continue;
+        if (!allowed.includes(s)) violations.push([r, `[O] 既有反向 edge 新增白名單外 symbol '${s}' (from '${m[2]}') — 恐致 module-init 循環 TDZ;把 helper 下沉 leaf 或改從既有安全 import`]);
+      }
+    }
+  }
+  // leaf 純度鎖
+  for (const leaf of ['src/lib/game/effects/_shared.ts', 'src/lib/game/types.ts', 'src/lib/game/instance-flags.ts']) {
+    const lf = files.find((x) => x.slice(ROOT.length).replace(/^[/\\]+/, '').split(sepChar).join('/') === leaf);
+    if (!lf) continue;
+    for (const line of readFileSync(lf, 'utf8').split('\n')) {
+      if (/^\s*(import|export)\s+type\s/.test(line)) continue;
+      if (/(import|export)\b[^\n]*from\s+['"]\.\.?\/(effects|engine)/.test(line)) violations.push([leaf, `[O] leaf 模組不得 import ./effects 或 ./engine(保持 leaf 純度): ${line.trim().slice(0, 80)}`]);
     }
   }
 }
