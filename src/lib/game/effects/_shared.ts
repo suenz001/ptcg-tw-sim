@@ -394,6 +394,23 @@ export function hasAbilityFn(cardName: string, abilityName: string, abIdx: numbe
       || ABILITY_EFFECTS.has(`${cardName}|${abIdx}`);
 }
 
+// v5.991：runtime 特性註冊自檢網 — 對戰頁載入後抽測數個「核心主動特性」是否已註冊。
+//   任一 miss = effects 註冊不完整(SW 供舊 chunk / chunk 載入失敗 / module-init 循環相依 TDZ),
+//   會造成「場上寶可夢的特性按鈕靜默消失」(玩家回報:神奇糖果進化黑夜魔靈當回合咒詛炸彈按鈕沒出現)。
+//   sentinel 皆為 effects.ts 核心自身昏厥特性,任一 miss 幾乎代表整個 effects 核心註冊未完成。
+const ABILITY_REGISTRY_SENTINELS: Array<[string, string, number]> = [
+  ['黑夜魔靈', '咒詛炸彈', 0],
+  ['彷徨夜靈', '咒詛炸彈', 0],
+  ['三合一磁怪', '過度放電', 0],
+];
+export function selfCheckAbilityRegistry(): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  for (const [cn, an, idx] of ABILITY_REGISTRY_SENTINELS) {
+    if (!hasAbilityFn(cn, an, idx)) missing.push(`${cn}｜${an}`);
+  }
+  return { ok: missing.length === 0, missing };
+}
+
 /**
  * 寶可夢「上備戰時」觸發表（cardName → EffectFn）。
  * engine.ts 會在 PLAY_BASIC 成功後查此 map，有則觸發（pendingSelection 或即時）。

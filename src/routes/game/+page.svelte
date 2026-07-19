@@ -25,6 +25,7 @@
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
   } from '$lib/game/engine';
+  import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
@@ -89,6 +90,18 @@
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
   let poolReady = $state(false);
+  // v5.991：特性註冊 runtime 自檢 — 偵測 effects 註冊不完整(SW 舊 chunk / chunk 載入失敗 / 循環相依)時顯示重新整理提示
+  let abilityRegBroken = $state(false);
+  async function hardReloadBrokenReg() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister().catch(() => false)));
+      }
+      if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+    } catch (_e) {}
+    location.reload();
+  }
   let decks = $state<Deck[]>([]);
   const allDecks = $derived([...PRESET_DECKS, ...decks]);
   // ── v0.4 錦標賽伺服器權威模式（/tournament wrapper 傳入 tournamentMode=true）──
@@ -3720,6 +3733,8 @@
       if (_localEntries.length > 0) await ensurePoolForDeckEntries([_localEntries]);
     } catch (e) { console.error('[pool] 初始按牌組載入失敗', e); }
     poolReady = true;
+    // v5.991：對戰頁載入後抽測特性註冊完整性(黑夜魔靈咒詛炸彈等核心特性),miss=版本載入異常→顯性提示
+    try { const _chk = selfCheckAbilityRegistry(); if (!_chk.ok) { abilityRegBroken = true; console.warn('[PTCG] 特性註冊自檢失敗,建議重新整理:', _chk.missing); } } catch (_e) {}
 
     // 如果 host 在 poolReady 前就收到了 ready 狀態，現在補建遊戲
     checkAndStartOnlineGame();
@@ -7752,6 +7767,12 @@
     {/if}
   {:else}
 
+  {#if abilityRegBroken}
+    <div style="background:#7a1f1f;color:#fff;padding:0.5rem 0.75rem;font-size:0.85rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:center;">
+      ⚠ 偵測到版本載入異常（部分卡牌特性未正確載入，可能導致特性按鈕無法顯示）。請點此重新整理以取得完整版本：
+      <button onclick={hardReloadBrokenReg} style="background:#fff;color:#7a1f1f;border:none;border-radius:4px;padding:0.25rem 0.6rem;font-weight:600;cursor:pointer;">🔄 重新整理</button>
+    </div>
+  {/if}
   <!-- ── 頂部資訊列 ── -->
   <header class="battle-header">
     {#if mode === 'online' && !isSpectator}
