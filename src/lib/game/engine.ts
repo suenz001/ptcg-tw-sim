@@ -9,7 +9,7 @@
  */
 
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
-import { isReturnToHandBlockedByCalmGround as _calmGroundBlocksReturn, hasEffectiveCalmGroundOnSide as _hasCalmGround } from './effects/cards/v3080_deferred_wave_c'; // v5.985/987 場上卡→手牌中央述詞+快照
+// v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
 import { BENCH_SCRUB_LOCK_FLAGS } from './instance-flags';
 import type {
   GameState, GameAction, CardInstance,
@@ -789,6 +789,8 @@ import {
   isOppItemPlayBlocked,
   isAbilityNullifiedByPassive,
   isAbilityHolderEffective,
+  isReturnToHandBlockedByCalmGround as _calmGroundBlocksReturn,
+  hasEffectiveCalmGroundOnSide as _hasCalmGround,
   hasEffectiveKageHide,
   isInitializeNullified,
   hasRocketTyranitarSandstorm,
