@@ -1426,19 +1426,11 @@ export function toBareCard(inst: CardInstance): CardInstance {
  *   可違規進化。非場上區來源本就乾淨,baring 為防呆冪等。
  */
 export function placedBenchInstance(card: CardInstance): CardInstance {
-  return {
-    ...card,
-    damage: 0,
-    energyAttached: [],
-    toolAttached: undefined,
-    extraTools: [],
-    evolvedFromStack: undefined,
-    status: undefined,
-    secondaryStatus: undefined,
-    tertiaryStatus: undefined,
-    justPlaced: true,
-    _faintByEffect: undefined, // v5.926 上場清效果昏厥標(防棄牌復活帶舊標)
-  };
+  // v5.993：改 toBareCard 白名單裸化(取代黑名單逐欄清) — 原黑名單漏 abilityUsedThisTurn /
+  //   cantAttackThisTurn / healedThisTurn / 各 immune*/…ThisTurn/NextTurn 旗標；從棄牌區復活
+  //   (KO 進棄牌帶著整組場上旗標)再放備戰時會外洩(特性被誤擋 / 免疫殘留)。白名單不漂移：
+  //   新增旗標自動被清。原清除項(damage/energy/tool/extraTools/stack/三槽狀態/_faintByEffect)全涵蓋。
+  return { ...toBareCard(card), justPlaced: true };
 }
 
 /**
@@ -1532,7 +1524,10 @@ export function buildEvolvedInstance(
     evolvedFromStack: undefined,
   };
   return {
-    ...evoInst,
+    // v5.993：evoInst 一律先 toBareCard 白名單裸化 — 手牌進化卡可能是「場上用過特性(abilityUsedThisTurn)
+    //   /帶 transient 旗標的卡被 KO→棄牌→聖灰等回牌庫→搜回手」而來，spread `...evoInst` 會把
+    //   stale 旗標帶進進化體（實例:第二隻黑夜魔靈糖果進化後咒詛炸彈當回合被 abilityUsedThisTurn gate 擋）。
+    ...toBareCard(evoInst),
     iid: base.iid,
     damage: base.damage + (opts?.extraDamage ?? 0),
     energyAttached: base.energyAttached,

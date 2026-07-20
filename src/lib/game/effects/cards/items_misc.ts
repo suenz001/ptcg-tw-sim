@@ -28,7 +28,7 @@ import {
   healResolver,
   getOwnBenchLimit,
 } from '../_shared';
-import { joinCardNames, abilityUsedAfterSwap } from '../_shared';
+import { joinCardNames, abilityUsedAfterSwap, toBareCard } from '../_shared'; // v5.993 rescue 回牌庫裸化
 import { tryPromptPromoteActive } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
@@ -1509,7 +1509,8 @@ regR('fishnet-unified', (st, idx, iids, _params, pool) => {
   return updatePlayer(st, idx, pl => ({
     ...pl,
     discard: pl.discard.filter(c => !pickSet.has(c.iid)),
-    deck: shuffle([...pl.deck, ...picks]),
+    // v5.993：進牌庫前 toBareCard 裸化(棄牌卡帶場上 transient 旗標，防外洩回場)
+    deck: shuffle([...pl.deck, ...picks.map(toBareCard)]),
   }));
 });
 

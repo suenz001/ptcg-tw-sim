@@ -12,7 +12,7 @@
 import { tryPromptPromoteActive, damageCounterCount } from '../_shared'; // v5.785 指示物個數中央
 import { copyAttackPostDispatch } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
-import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
+import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
@@ -805,7 +805,8 @@ regR('taragun-to-hand', (state, aIdx, selectedIids, _params, pool) => {
   const p = { ...players[aIdx] };
   const picks = p.discard.filter(c => selectedIids.includes(c.iid));
   p.discard = p.discard.filter(c => !selectedIids.includes(c.iid));
-  p.hand = [...p.hand, ...picks];
+  // v5.993：加入手牌前 toBareCard 裸化(棄牌卡帶場上 transient 旗標，防外洩回場)
+  p.hand = [...p.hand, ...picks.map(toBareCard)];
   players[aIdx] = p;
   const names = picks.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   return addLog({ ...state, players }, `塔拉剛：取回 ${picks.length} 張到手牌（${names}）`, aIdx);

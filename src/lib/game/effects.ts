@@ -15993,7 +15993,9 @@ regR('sacred-ash-discard-to-deck', (state, aIdx, iids, _params, pool) => {
   const picked = p.discard.filter(c => iids.includes(c.iid));
   if (picked.length === 0) return addLog(s, '聖灰：未選任何卡', aIdx);
   p.discard = p.discard.filter(c => !iids.includes(c.iid));
-  p.deck = shuffle([...p.deck, ...picked]);
+  // v5.993：進牌庫前 toBareCard 裸化(v5.705 契約) — 棄牌區的卡(KO 進棄牌)帶著 abilityUsedThisTurn
+  //   等場上 transient 旗標，直接回牌庫會讓旗標跟著卡回到手牌/場上(咒詛炸彈第二隻被擋根因鏈之一)。
+  p.deck = shuffle([...p.deck, ...picked.map(toBareCard)]);
   players[aIdx] = p;
   s = { ...s, players };
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');

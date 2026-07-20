@@ -777,7 +777,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo } from './effects/_shared'; // v5.842 跨三槽狀態讀取
+import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy } from './effects/_shared';
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
@@ -2725,10 +2725,9 @@ function handlePlaying(
 
     // Bug fix (#17 擔架): 從手牌放出時清除任何殘留的戰鬥狀態
     // (正常流程不應有殘留，但若卡片曾透過擔架從棄牌取回，防禦性清除)
-    const placed = { ...inst, justPlaced: true, playedFromHand: true,
-      status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
-      damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
-      evolvedFromStack: undefined };
+    // v5.993：改 toBareCard 白名單裸化 — 原黑名單漏 abilityUsedThisTurn/cantAttackThisTurn/
+    //   healedThisTurn/各 immune* 旗標(擔架/回手類取回的卡帶 stale 旗標重打會外洩)。
+    const placed = { ...toBareCard(inst), justPlaced: true, playedFromHand: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
     players[aIdx] = attacker;
@@ -2783,7 +2782,8 @@ function handlePlaying(
         `${attacker.name} 因對手「海之詛咒」效果，無法從手牌使出化石（物品卡）`, aIdx);
     }
 
-    const placed: CardInstance = { ...inst, justPlaced: true, fossilOnField: true, playedFromHand: true };
+    // v5.993：化石上場也 toBareCard 白名單裸化(原完全未清 — 被回收重打會殘留 damage/旗標)。
+    const placed: CardInstance = { ...toBareCard(inst), justPlaced: true, fossilOnField: true, playedFromHand: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
     attacker.bench = [...attacker.bench, placed];
     players[aIdx] = attacker;
@@ -2944,7 +2944,10 @@ function handlePlaying(
     const stadiumNameDaze = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
     const preserveConfusion = stadiumNameDaze === '暈眩山谷' && basePoke.status === 'confused';
     const evolved: CardInstance = {
-      ...evoInst,
+      // v5.993：evoInst 先 toBareCard 白名單裸化 — 進化卡可能從「場上(用過特性/帶旗標)→棄牌→
+      //   回牌庫→回手」而來，直接 spread 會繼承 stale abilityUsedThisTurn 等 transient 旗標
+      //   (實例:第二隻黑夜魔靈進化當回合咒詛炸彈被擋)。與 _shared buildEvolvedInstance 同步修。
+      ...toBareCard(evoInst),
       // 保留場上寶可夢的 iid 作為「這隻寶可夢」的穩定身份。
       // 若使用手牌進化卡的 iid，退化/回牌庫後再進化可能讓場上兩隻寶可夢共享 iid，
       // 造成 USE_ABILITY / 選擇目標等 action 錯抓到另一隻寶可夢。
