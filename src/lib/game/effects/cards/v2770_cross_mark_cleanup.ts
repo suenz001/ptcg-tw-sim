@@ -13,7 +13,7 @@ import { joinCardNames } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { flipCoinsWithLog, selfHitPost, energyProvidesType, trickStepPost } from '../../effects'; // v5.682 host-aware；v5.717 戲法舞步收斂
+import { flipCoinsWithLog, selfHitPost, energyProvidesType, trickStepPost, resolveOptInPayment } from '../../effects'; // v5.682 host-aware；v5.717 戲法舞步收斂；v5.992 若希望 opt-in 中央管線
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper
@@ -28,16 +28,8 @@ function isEnergyOfType(ec: any, type: string): boolean {
   return zh[m[1]] === type;
 }
 
-function selfDiscardAllEnergyPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const att = state.players[aIdx].active;
-    if (!att || att.energyAttached.length === 0) return state;
-    return updatePlayer(addLog(state, `${label}：棄全能量`, aIdx), aIdx, p => {
-      if (!p.active) return p;
-      return { ...p, active: { ...p.active, energyAttached: [] }, discard: [...p.discard, ...p.active.energyAttached] };
-    });
-  };
-}
+// v5.992：selfDiscardAllEnergyPost 移除 — 唯一使用者 狂暴噴射 regPost 已收斂到
+//   resolveOptInPayment（PRE 宣告時付出），此本地 helper 成死碼。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // === H 標殘餘 (1 張) ===
@@ -61,27 +53,19 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
 ATTACK_PRE_DISCARD_CHOICE.set('超級雷電獸ex|狂暴噴射', {
   min: 0, max: null, scope: 'binary-yes-no',
   baseDamage: 200, damagePerEnergy: 0,
-  choicePrompt: '是否將這隻寶可夢身上附加的能量全部丟棄，增加 130 點傷害？',
+  choicePrompt: '是否將這隻寶可夢身上附加的能量全部丟棄，增加 130 點傷害？（無能量也可，+130 照給）',
   choiceYesLabel: '是（+130 傷害 + 棄全能量）',
   choiceNoLabel: '否（保留能量）',
+  optInPay: { payMax: null, scope: 'attacker', verb: 'discard' }, // v5.992
 });
-regPre('超級雷電獸ex|狂暴噴射', (state, aIdx, _pool, action) => {
-  const a = state.players[aIdx].active;
-  const chosenIids = action?.discardedEnergyIids;
-  // length>=1 = yes（玩家選了 +130）、length=0 = no
-  // AI fallback（chosenIids === undefined）→ 預設 yes 最大化攻擊
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  if (!choseYes || !a || a.energyAttached.length === 0) {
-    return { state: addLog(state, '狂暴噴射：選「否」 → 200 傷害（不棄能量）', aIdx), damage: 200 };
-  }
-  return { state: addLog(state, '狂暴噴射：選「是」 → 200+130 = 330（POST 會棄全能量）', aIdx), damage: 330 };
-});
-regPost('超級雷電獸ex|狂暴噴射', (state, aIdx, _pool, action) => {
-  // 同步 PRE 的 yes/no 選擇：只有選「是」才棄全能量
-  const chosenIids = action?.discardedEnergyIids;
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  if (!choseYes) return state;
-  return selfDiscardAllEnergyPost('狂暴噴射')(state, aIdx, new Map());
+regPre('超級雷電獸ex|狂暴噴射', (state, aIdx, pool, action) => {
+  // v5.992 中央收斂 resolveOptInPayment（Wilson 裁定：0 能量 opt-in 也 +130）；
+  //   付出（棄全能量）移到 PRE（宣告時付出），原 regPost 刪除。
+  const pay = ATTACK_PRE_DISCARD_CHOICE.get('超級雷電獸ex|狂暴噴射')!.optInPay!;
+  const r = resolveOptInPayment(state, aIdx, pool, action, '狂暴噴射', pay, { aiDefault: 'opt-in' });
+  if (!r.optedIn) return { state: addLog(r.state, '狂暴噴射：選「否」 → 200 傷害（不棄能量）', aIdx), damage: 200 };
+  const note = r.paidCount > 0 ? '（棄全能量）' : '（身上無能量，依裁定仍 +130）';
+  return { state: addLog(r.state, `狂暴噴射：選「是」 → 200+130 = 330${note}`, aIdx), damage: 330 };
 });
 
 // 小霞的暴鯉龍|嘩啦嘩啦恐慌 70× — 牌庫頂 7 棄，「小霞的寶可夢」張數 ×70

@@ -59,7 +59,9 @@ import {
   getEnergyDiscardUnits,
   countAttachedEnergyAsUnits,
   triggerOakeyeMillIfApplicable,
-  getOwnBenchLimit, joinCardNames,} from './effects/_shared';
+  getOwnBenchLimit, joinCardNames,
+  OPTIN_NO_PAYMENT, OPTIN_SENTINELS, type OptInPaySpec, // v5.992 若希望 opt-in 中央機制
+} from './effects/_shared';
 
 // re-export helper 給 engine.ts / 其他 resolver 用
 export { applyBenchPlaceSideEffects };
@@ -72,6 +74,8 @@ export { ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, ATTACK_PRE_DISCARD_CHOICE, ge
 export { BENCH_PLACE_TRIGGERS };
 export { SPECIAL_ENERGY_ATTACH, SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD, SPECIAL_ENERGY_STATUS_IMMUNE, SPECIAL_ENERGY_ON_DAMAGED, OPP_ENERGY_ATTACH_PASSIVE , fireOnHandEnergyAttached };
 export type { ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec };
+export type { OptInPaySpec } from './effects/_shared'; // v5.992
+export { OPTIN_NO_PAYMENT, OPTIN_SENTINELS }; // v5.992
 
 // ── 道具（Pokemon Tool）模組 — v2.09 從本檔抽離 ────────────────────────────
 // tools.ts 包含 TOOL_* 所有登錄表、每張道具 entry、toolAttachEffect +
@@ -8040,44 +8044,22 @@ regPost('熔岩蝸牛ex|大地灼燒', (state, aIdx, pool) => {
 ATTACK_PRE_DISCARD_CHOICE.set('薩戮德|叢林鞭打', {
   min: 0, max: null, scope: 'binary-yes-no',
   baseDamage: 80, damagePerEnergy: 0,
-  choicePrompt: '是否將這隻寶可夢身上附加的能量卡全部放回手牌，增加 80 點傷害？',
+  choicePrompt: '是否將這隻寶可夢身上附加的能量卡全部放回手牌，增加 80 點傷害？（無能量也可，+80 照給）',
   choiceYesLabel: '是（+80 傷害 + 全能量回手）',
   choiceNoLabel: '否（保留能量）',
   verb: 'return-to-hand', // 卡面：「將能量卡全部放回手牌」
+  optInPay: { payMax: null, scope: 'attacker', verb: 'return-to-hand' }, // v5.992
 });
 regPre('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
-  const att = state.players[aIdx].active;
-  const hasEnergy = (att?.energyAttached.length ?? 0) > 0;
-  if (!hasEnergy) {
-    return { state: addLog(state, '叢林鞭打：自身無能量 → 80', aIdx), damage: 80 };
-  }
-  // v5.986 平穩境地：能量回手被擋 → 加成條件無法達成，只造成基本 80(regPost 亦同 gate)
-  if (_calmGroundBlocks(state, aIdx, _pool)) {
-    return { state: addLog(state, '叢林鞭打：對手場上有【平穩境地】，能量無法放回手牌 → 80', aIdx), damage: 80 };
-  }
-  const chosenIids = action?.discardedEnergyIids;
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  if (!choseYes) {
-    return { state: addLog(state, '叢林鞭打：選「否」 → 80 傷害（保留能量）', aIdx), damage: 80 };
-  }
-  return { state: addLog(state, '叢林鞭打：選「是」 → 收回自身能量 → 80+80 = 160', aIdx), damage: 160 };
-});
-regPost('薩戮德|叢林鞭打', (state, aIdx, _pool, action) => {
-  if (_calmGroundBlocks(state, aIdx, _pool)) return state; // v5.986 平穩境地：不收回能量
-  const att = state.players[aIdx].active;
-  if (!att || att.energyAttached.length === 0) return state;
-  const chosenIids = action?.discardedEnergyIids;
-  const choseYes = chosenIids === undefined ? true : chosenIids.length >= 1;
-  if (!choseYes) return state;
-  return updatePlayer(state, aIdx, p => {
-    if (!p.active) return p;
-    const energies = p.active.energyAttached;
-    return {
-      ...p,
-      active: { ...p.active, energyAttached: [] },
-      hand: [...p.hand, ...energies],
-    };
-  });
+  // v5.992 中央收斂 resolveOptInPayment：opt-in 即使 0 能量固定加傷 +80 照給（Wilson 裁定）；
+  //   付出（全能量回手）移到 PRE（宣告時付出），原 regPost 刪除。
+  const pay = ATTACK_PRE_DISCARD_CHOICE.get('薩戮德|叢林鞭打')!.optInPay!;
+  const blocked = _calmGroundBlocks(state, aIdx, _pool); // v5.986 平穩境地：能量無法放回手牌
+  const r = resolveOptInPayment(state, aIdx, _pool, action, '叢林鞭打', pay, { aiDefault: 'opt-in', blockPayment: blocked });
+  if (!r.optedIn) return { state: addLog(r.state, '叢林鞭打：選「否」 → 80 傷害（保留能量）', aIdx), damage: 80 };
+  if (r.paymentBlocked) return { state: addLog(r.state, '叢林鞭打：對手場上有【平穩境地】，能量無法放回手牌 → 80', aIdx), damage: 80 };
+  if (r.paidCount === 0) return { state: addLog(r.state, '叢林鞭打：身上無能量，依裁定仍 +80 → 160', aIdx), damage: 160 };
+  return { state: addLog(r.state, '叢林鞭打：選「是」 → 收回自身能量 → 80+80 = 160', aIdx), damage: 160 };
 });
 
 // 吞食獸|張大嘴 — 若自身能量 > 對手出場能量 則 +160，基礎 10
@@ -15007,6 +14989,84 @@ regPost('巨金怪|彈回', (state, aIdx, _pool) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v5.992 「若希望，付出（丟棄/放回）N 個能量 → 加傷/施加狀態」E-10 中央管線
+//   Wilson 官方裁定（金屬之錘 QA 一般化）：
+//     1. opt-in 一律可選（能量不足/為 0 也可）；付得出多少付多少 = min(available, N)；
+//        固定加傷/施加狀態照給全額（付出與效果為獨立事件）。
+//        變動加傷（×實付張數，如 擦除球/閃光尖矛/射攻月亮）不走此管線 — 0 張本來就 +0。
+//     2. 公平性：opt-in 後引擎強制足額付款（玩家送短少 iids 或 sentinel 但身上有可付能量時
+//        自動補足到 min(N, available)），杜絕「拿加成不付費」。
+//   使用方式：spec.optInPay 宣告（UI 一般化二段流程）+ regPre/regPost 呼叫本函式；
+//   禁逐卡手刻 sentinel 分支。
+export interface OptInPaymentOutcome {
+  state: GameState;
+  /** 玩家是否選「希望」 */
+  optedIn: boolean;
+  /** 實際付出張數（0 = 無可付 / 被 blockPayment 擋） */
+  paidCount: number;
+  /** 付出動作被外部效果（如平穩境地擋回手）阻擋 */
+  paymentBlocked: boolean;
+}
+export function resolveOptInPayment(
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  action: { discardedEnergyIids?: string[] } | null | undefined,
+  label: string,
+  pay: OptInPaySpec,
+  opts?: { aiDefault?: 'opt-in' | 'skip'; blockPayment?: boolean },
+): OptInPaymentOutcome {
+  const chosen = action?.discardedEnergyIids;
+  const aiDefault = opts?.aiDefault ?? 'skip';
+  let optedIn: boolean;
+  let explicit: string[] = [];
+  if (chosen === undefined) {
+    optedIn = aiDefault === 'opt-in'; // AI / fallback：無 UI 選擇 → 依各卡既有 AI 行為
+  } else if (chosen.length === 0) {
+    optedIn = false; // 玩家選「否」
+  } else {
+    optedIn = true;  // 玩家選「是」（sentinel 或具體 iids）
+    explicit = chosen.filter(id => !OPTIN_SENTINELS.has(id));
+  }
+  if (!optedIn) return { state, optedIn: false, paidCount: 0, paymentBlocked: false };
+  if (opts?.blockPayment) return { state, optedIn: true, paidCount: 0, paymentBlocked: true };
+  const att = state.players[aIdx].active;
+  if (!att) return { state, optedIn: true, paidCount: 0, paymentBlocked: false };
+  const filter = pay.energyTypeFilter;
+  const eligible = att.energyAttached.filter(e => !filter || energyProvidesType(att, e, filter as import('$lib/cards/types').EnergyType, pool));
+  if (eligible.length === 0) return { state, optedIn: true, paidCount: 0, paymentBlocked: false };
+  const useUnits = pay.countMode === 'units';
+  const unitOf = (e: CardInstance) => (useUnits ? getEnergyDiscardUnits(e.cardId, att, pool, state, aIdx) : 1);
+  const availUnits = eligible.reduce((n, e) => n + unitOf(e), 0);
+  const requiredUnits = pay.payMax === null ? availUnits : Math.min(pay.payMax, availUnits);
+  // 玩家指定的 iid 優先；不足 requiredUnits 依序自動補足（公平性防護）
+  const explicitSet = new Set(explicit);
+  const picked: CardInstance[] = [];
+  let units = 0;
+  for (const e of eligible) {
+    if (units >= requiredUnits) break;
+    if (explicitSet.has(e.iid)) { picked.push(e); units += unitOf(e); }
+  }
+  for (const e of eligible) {
+    if (units >= requiredUnits) break;
+    if (!explicitSet.has(e.iid)) { picked.push(e); units += unitOf(e); }
+  }
+  if (picked.length === 0) return { state, optedIn: true, paidCount: 0, paymentBlocked: false };
+  const rmSet = new Set(picked.map(e => e.iid));
+  const verb = pay.verb ?? 'discard';
+  let s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    const np = { ...p, active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !rmSet.has(e.iid)) } };
+    if (verb === 'return-to-hand') return { ...np, hand: [...np.hand, ...picked] };
+    if (verb === 'return-to-deck') return { ...np, deck: shuffle([...np.deck, ...picked]) };
+    return { ...np, discard: [...np.discard, ...picked] };
+  });
+  const verbTxt = verb === 'return-to-hand' ? '放回手牌' : verb === 'return-to-deck' ? '放回牌庫並重洗' : '丟棄';
+  s = addLog(s, `${label}：將 ${picked.length} 張能量${verbTxt}（${joinCardNames(picked, pool)}）`, aIdx);
+  return { state: s, optedIn: true, paidCount: picked.length, paymentBlocked: false };
+}
+
 // ── 8) 巨金怪 (M4)｜金屬之錘 150+ — v4.46: 2-stage picker（依官方 QA 修正）
 //   卡面：「若希望，將 3 個這隻寶可夢身上附加的【鋼】能量丟棄，增加 150 點傷害。」
 //   官方 QA：「丟鋼能」與「+150 傷害」是**獨立事件**，即使身上 0 鋼能也能拿 +150。
@@ -15033,39 +15093,17 @@ ATTACK_PRE_DISCARD_CHOICE.set('巨金怪|金屬之錘', {
   choicePrompt: '是否將最多 3 個【鋼】能量丟棄並增加 150 點傷害？（若身上無鋼能，仍 +150）',
   choiceYesLabel: '是（+150 傷害）',
   choiceNoLabel: '否（僅 150 傷害）',
+  // v5.992 一般化：原 v4.46 UI hardcode Stage 2 改由 optInPay 宣告驅動
+  optInPay: { payMax: 3, scope: 'attacker', verb: 'discard', energyTypeFilter: 'Metal', countMode: 'units' },
 });
 regPre('巨金怪|金屬之錘', (state, aIdx, pool, action) => {
-  const chosenIids = action?.discardedEnergyIids ?? [];
-  // case 1: 借者（耀閃挑戰） → 依 QA「不用丟鋼能也能 +150」
-  if (chosenIids.length === 1 && chosenIids[0] === '__yaoshan_borrowed_yes__') {
-    return { state: addLog(state, '金屬之錘（借者）：依 QA 不丟鋼能也 +150 → 300', aIdx), damage: 300 };
-  }
-  // case 2: 自己 Yes 但 0 鋼能（UI Stage 2 sentinel）
-  if (chosenIids.length === 1 && chosenIids[0] === '__metal_hammer_no_metal__') {
-    return { state: addLog(state, '金屬之錘：希望 +150 但身上無鋼能 → 不丟 +150 → 300', aIdx), damage: 300 };
-  }
-  // case 3: 不希望（No）→ 150 base
-  if (chosenIids.length === 0) {
-    return { state: addLog(state, '金屬之錘：不希望 → 150 base', aIdx), damage: 150 };
-  }
-  // case 4: 自己 Yes + 有鋼能丟（UI Stage 2 已決定 iids）→ 丟那幾張 + +150
-  const attacker = state.players[aIdx].active;
-  if (!attacker) return { state, damage: 150 };
-  const idSet = new Set(chosenIids);
-  const drop = attacker.energyAttached.filter(e => idSet.has(e.iid));
-  if (drop.length === 0) {
-    // 防呆：所選 iids 都不在身上（race），仍給 +150（語意：玩家已選 Yes）
-    return { state: addLog(state, '金屬之錘：所選能量已不在身上 → 不丟 +150 → 300', aIdx), damage: 300 };
-  }
-  const s = updatePlayer(state, aIdx, p => {
-    if (!p.active) return p;
-    return {
-      ...p,
-      active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !idSet.has(e.iid)) },
-      discard: [...p.discard, ...drop],
-    };
-  });
-  return { state: addLog(s, `金屬之錘：丟 ${drop.length} 張鋼能 → +150 = 300`, aIdx), damage: 300 };
+  // v5.992 中央收斂 resolveOptInPayment（官方 QA：丟鋼能與 +150 為獨立事件；
+  //   opt-in 有鋼能即強制丟 min(3, 持有) — 含借招 sentinel 路徑的公平性補足）
+  const pay = ATTACK_PRE_DISCARD_CHOICE.get('巨金怪|金屬之錘')!.optInPay!;
+  const r = resolveOptInPayment(state, aIdx, pool, action, '金屬之錘', pay, { aiDefault: 'skip' });
+  if (!r.optedIn) return { state: addLog(r.state, '金屬之錘：不希望 → 150 base', aIdx), damage: 150 };
+  if (r.paidCount === 0) return { state: addLog(r.state, '金屬之錘：希望 +150 但身上無鋼能 → 不丟 +150 → 300', aIdx), damage: 300 };
+  return { state: addLog(r.state, `金屬之錘：丟 ${r.paidCount} 張鋼能 → +150 = 300`, aIdx), damage: 300 };
 });
 
 // v2.133 月月熊 赫月ex｜老練招式（被動）— 「血月」所需【無】能量減少對手已獲得獎賞卡數

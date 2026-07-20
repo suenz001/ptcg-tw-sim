@@ -21,7 +21,7 @@ import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
 } from '../_shared';
-import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect, clearActiveEffects } from '../../effects';
+import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect, clearActiveEffects, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 
 // ─── 撕裂 70（skipDefEffects）───────────────────────────────────────────────
 regPre('N的捷克羅姆|撕裂', skipDefEffectsPre(70, '撕裂'));
@@ -302,83 +302,28 @@ regR('ambush-snipe-by-counters', (state, aIdx, selectedIids, _params, pool) => {
 });
 
 // 超級甲賀忍蛙ex｜忍者飛旋 — 卡面：「若希望，將 1 個這隻寶可夢身上附加的【水】能量放回手牌，增加 80 點傷害。」
-// v2.251：改為玩家選擇（不再自動找水能量回手）。
-//   借殼 ATTACK_PRE_DISCARD_CHOICE（{ min: 0, max: 1 }）讓 UI 彈出能量選擇 modal —
-//   玩家從自身能量列表中選 0 / 1 張。regPre 嚴格驗證所選為【水】能量；
-//   - 選 0 張 → 120 base
-//   - 選 1 張水能量 → 該能量「放回手牌」（不丟棄）+ 200
-//   - 選了非水能量（不符卡面條件）→ 120 base，log 提示
-//   舊版（v2.132~v2.250）自動找最後一張水能量回手 — 玩家無選擇權，違反卡面「若希望」。
+// v5.992 中央收斂：改 binary-yes-no + optInPay（Wilson 裁定比照金屬之錘 QA：
+//   opt-in 一律可選；0【水】能量也 +80（付出與加傷為獨立事件）；有水 → 強制放回 min(1, 持有)。
+//   UI 一段 yes/no、二段自動全付/0 付 sentinel/超額 picker，由 spec.optInPay 一般化驅動）。
+//   舊版 v2.251~v5.991：attacker picker + exactRequired=1 — 0 水時 picker 空、玩家拿不到 +80
+//   （玩家回報：皮可西｜揮指 借此招 0 水複製只打 120，即此缺口）。
 ATTACK_PRE_DISCARD_CHOICE.set('超級甲賀忍蛙ex|忍者飛旋', {
-  min: 0, max: 1, scope: 'attacker', baseDamage: 120, damagePerEnergy: 80,
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 120, damagePerEnergy: 0,
+  choicePrompt: '是否將 1 個【水】能量放回手牌，增加 80 點傷害？（若身上無【水】能量，仍 +80）',
+  choiceYesLabel: '是（+80 傷害）',
+  choiceNoLabel: '否（僅 120 傷害）',
   verb: 'return-to-hand', // 卡面：「將 1 個【水】能量放回手牌」
-  countMode: 'units',  // v4.14：卡面「1 個」用 units 解讀；exactRequired=1 由 UI 計算
-  energyTypeFilter: 'Water',  // v4.16：picker 只顯示視為【水】的能量
+  optInPay: { payMax: 1, scope: 'attacker', verb: 'return-to-hand', energyTypeFilter: 'Water', countMode: 'units' },
 });
 regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
-  const chosenIids = action?.discardedEnergyIids ?? [];
-  if (chosenIids.length === 0) {
-    return { state: addLog(state, '忍者飛旋：未選擇能量 → 120 傷害', aIdx), damage: 120 };
-  }
-  // v5.986 平穩境地：能量回手被擋 → 加成條件無法達成，只造成基本 120
-  if (_calmGroundBlocks(state, aIdx, pool)) {
-    return { state: addLog(state, '忍者飛旋：對手場上有【平穩境地】，能量無法放回手牌 → 120 傷害', aIdx), damage: 120 };
-  }
-  const active = state.players[aIdx].active;
-  if (!active) return { state, damage: 120 };
-  // 嚴格驗證：所選必須是【水】能量（基本水 / 卡名含「【水】」）
-  const idSet = new Set(chosenIids);
-  const chosenEnergy = active.energyAttached.find(e => idSet.has(e.iid));
-  if (!chosenEnergy) {
-    return { state: addLog(state, '忍者飛旋：選擇的能量不在攻擊方身上 → 120 傷害', aIdx), damage: 120 };
-  }
-  const ec = pool.get(chosenEnergy.cardId);
-  // v3.47：判定「該能量是否視為提供【水】能量」— 含 host-aware 特殊能量處理（官方 QA 確認可放回）。
-  //   - 基本【水】能量：直接 yes
-  //   - 泡沫【水】能量（特殊，提供 1【水】）：yes
-  //   - 新衝天能量（特殊）：on Stage2 視為所有屬性 → yes（超級甲賀忍蛙ex 是 Stage2）
-  //   - 稜鏡能量（特殊）：on Basic 視為所有屬性、on Evolution 只【無】 → 超級甲賀忍蛙ex 是 Evolution，不算【水】
-  //   邏輯與 engine.ts countEnergy 一致。
-  let isWater = false;
-  if (ec?.supertype === 'Energy') {
-    if (ec.subtype === 'Basic') {
-      isWater = ec.pokemonType === 'Water' || /【水】/.test(ec.name);
-    } else if (ec.subtype === 'Special') {
-      if (ec.name === '新衝天能量') {
-        const hostCard = pool.get(active.cardId);
-        const hostStage = hostCard?.stage ?? hostCard?.subtype;
-        isWater = hostStage === 'Stage2';
-      } else if (ec.name === '稜鏡能量') {
-        const hostCard = pool.get(active.cardId);
-        const hostStage = hostCard?.stage ?? hostCard?.subtype;
-        const hostIsEvolution = hostStage === 'Stage1' || hostStage === 'Stage2' || !!hostCard?.evolvesFrom;
-        isWater = !hostIsEvolution;
-      } else {
-        // 一般特殊能量：名稱含【水】或登記表提供 Water（泡沫【水】能量等）
-        isWater = /【水】/.test(ec.name);
-      }
-    }
-  }
-  if (!isWater) {
-    return {
-      state: addLog(state, `忍者飛旋：${ec?.name ?? '?'} 不視為【水】能量（未觸發 +80）→ 120 傷害`, aIdx),
-      damage: 120,
-    };
-  }
-  // 把該張水能量放回手牌（不丟棄）
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
-  if (!p.active) return { state, damage: 120 };
-  p.active = {
-    ...p.active,
-    energyAttached: p.active.energyAttached.filter(e => e.iid !== chosenEnergy.iid),
-  };
-  p.hand = [...p.hand, chosenEnergy];
-  players[aIdx] = p;
-  return {
-    state: addLog({ ...state, players }, '忍者飛旋：將 1 張【水】能量放回手牌 → +80 = 200 傷害', aIdx),
-    damage: 200,
-  };
+  const pay = ATTACK_PRE_DISCARD_CHOICE.get('超級甲賀忍蛙ex|忍者飛旋')!.optInPay!;
+  const blocked = _calmGroundBlocks(state, aIdx, pool); // v5.986 平穩境地：能量無法放回手牌
+  const r = resolveOptInPayment(state, aIdx, pool, action, '忍者飛旋', pay, { aiDefault: 'skip', blockPayment: blocked });
+  if (!r.optedIn) return { state: addLog(r.state, '忍者飛旋：未選擇加成 → 120 傷害', aIdx), damage: 120 };
+  if (r.paymentBlocked) return { state: addLog(r.state, '忍者飛旋：對手場上有【平穩境地】，能量無法放回手牌 → 120 傷害', aIdx), damage: 120 };
+  if (r.paidCount === 0) return { state: addLog(r.state, '忍者飛旋：身上無【水】能量，依裁定仍 +80 → 200 傷害', aIdx), damage: 200 };
+  return { state: addLog(r.state, '忍者飛旋：將 1 張【水】能量放回手牌 → +80 = 200 傷害', aIdx), damage: 200 };
 });
 
 // ─── Abilities（寶可夢特性，regA 1/回合）────────────────────────────────────

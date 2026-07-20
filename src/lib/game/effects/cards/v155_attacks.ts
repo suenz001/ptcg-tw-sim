@@ -54,6 +54,7 @@ import {
   discardOppActiveEnergyPost,
 } from '../../effects';
 import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
+import { resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 import { countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -535,29 +536,21 @@ regR('v155-tianxianstone-return', (st, aIdx, iids, _params, pool) => {
 //   玩家選任意 ≥1 個能量 → 視為「想執行 option」，PRE 強制棄全部能量回牌庫並洗 + 160 傷害
 // 卡面要求棄「全部」能量，所以實裝為 binary（不允許半棄）。
 ATTACK_PRE_DISCARD_CHOICE.set('帝牙盧卡|時間爆炸', {
-  min: 0, max: null, scope: 'attacker', baseDamage: 0, damagePerEnergy: 0,
+  min: 0, max: null, scope: 'binary-yes-no',
+  baseDamage: 80, damagePerEnergy: 0,
+  choicePrompt: '是否將這隻寶可夢身上附加的能量卡全部放回牌庫並重洗，增加 80 點傷害？（無能量也可，+80 照給）',
+  choiceYesLabel: '是（+80 傷害 + 全能量回牌庫）',
+  choiceNoLabel: '否（保留能量）',
   verb: 'return-to-deck', // 卡面：「將能量卡全部放回牌庫並重洗」
+  optInPay: { payMax: null, scope: 'attacker', verb: 'return-to-deck' }, // v5.992
 });
-regPre('帝牙盧卡|時間爆炸', (state, aIdx, _pool, action) => {
-  const att = state.players[aIdx].active;
-  if (!att) return { state, damage: 80 };
-  const allEnergies = att.energyAttached;
-  const chosenIids = action?.discardedEnergyIids ?? [];
-  // 不選 → 80；無能量 → 也是 80
-  if (chosenIids.length === 0 || allEnergies.length === 0) {
-    return { state: addLog(state, '時間爆炸：未棄能量 → 80', aIdx), damage: 80 };
-  }
-  // 選了 ≥1 個 → 視為玩家想執行 option，依卡面強制棄全部
-  const s2 = updatePlayerInline(state, aIdx, p => {
-    if (!p.active) return p;
-    return {
-      ...p,
-      active: { ...p.active, energyAttached: [] },
-      deck: shuffle([...p.deck, ...allEnergies]),
-    };
-  });
-  const log = addLog(s2, `時間爆炸：將自身 ${allEnergies.length} 個能量回牌庫並重洗 → 80 + 80 = 160`, aIdx);
-  return { state: log, damage: 160 };
+regPre('帝牙盧卡|時間爆炸', (state, aIdx, pool, action) => {
+  // v5.992 中央收斂 resolveOptInPayment（Wilson 裁定：0 能量 opt-in 也 +80，付出與加傷為獨立事件）
+  const pay = ATTACK_PRE_DISCARD_CHOICE.get('帝牙盧卡|時間爆炸')!.optInPay!;
+  const r = resolveOptInPayment(state, aIdx, pool, action, '時間爆炸', pay, { aiDefault: 'skip' });
+  if (!r.optedIn) return { state: addLog(r.state, '時間爆炸：未棄能量 → 80', aIdx), damage: 80 };
+  const note = r.paidCount > 0 ? `（${r.paidCount} 張能量回牌庫並重洗）` : '（身上無能量，依裁定仍 +80）';
+  return { state: addLog(r.state, `時間爆炸：80 + 80 = 160${note}`, aIdx), damage: 160 };
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

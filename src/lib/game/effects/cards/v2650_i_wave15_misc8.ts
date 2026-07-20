@@ -20,7 +20,7 @@ import { openDeckViewReshuffle } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -678,35 +678,22 @@ regPre('劈斬司令|致命刺擊', (state, aIdx, _pool) => {
 //   - _computeExactRequired '災難衝擊'=2 → 玩家選 0 或恰好 2 units（全或無）
 //   - 選 0 → 190 base，不麻痺；選 2 units → 棄 + 麻痺
 ATTACK_PRE_DISCARD_CHOICE.set('超級麻麻鰻魚王ex|災難衝擊', {
-  min: 0, max: 2, scope: 'attacker',
+  min: 0, max: null, scope: 'binary-yes-no',
   baseDamage: 190, damagePerEnergy: 0,
-  countMode: 'units',
-  energyTypeFilter: 'Lightning',
+  choicePrompt: '是否將 2 個【雷】能量丟棄，將對手的戰鬥寶可夢【麻痺】？（不足 2 個也可，麻痺照施加）',
+  choiceYesLabel: '是（丟雷能 + 麻痺對手）',
+  choiceNoLabel: '否（僅 190 傷害）',
+  optInPay: { payMax: 2, scope: 'attacker', verb: 'discard', energyTypeFilter: 'Lightning', countMode: 'units' }, // v5.992
 });
 regPre('超級麻麻鰻魚王ex|災難衝擊', (s) => ({ state: s, damage: 190 }));
 regPost('超級麻麻鰻魚王ex|災難衝擊', (state, aIdx, pool, action) => {
-  const chosenIids = action?.discardedEnergyIids ?? [];
-  if (chosenIids.length === 0) {
-    return addLog(state, '災難衝擊：未棄能量 → 不麻痺對手', aIdx);
-  }
-  // exactRequired=2 確保 picker UI 端 units 已 = 2；regPost 只負責丟 + 麻痺
-  const att = state.players[aIdx].active;
-  if (!att) return state;
-  const idSet = new Set(chosenIids);
-  const drop = att.energyAttached.filter(e => idSet.has(e.iid));
-  if (drop.length === 0) {
-    return addLog(state, '災難衝擊：所選能量不在身上 → 不麻痺對手', aIdx);
-  }
-  let s = updatePlayer(state, aIdx, p => {
-    if (!p.active) return p;
-    return {
-      ...p,
-      active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !idSet.has(e.iid)) },
-      discard: [...p.discard, ...drop],
-    };
-  });
-  s = addLog(s, `災難衝擊：棄 ${drop.length} 張視為【雷】的能量 → 對手麻痺`, aIdx);
-  // 對手戰鬥場麻痺
+  // v5.992 中央收斂 resolveOptInPayment（Wilson 裁定：不足 2 個丟能付的部分、
+  //   0 個也可 opt-in；麻痺一定照施加 — 付出與狀態為獨立事件）。
+  //   舊版 v4.17：exactRequired=2 全或無 → 1 雷玩家被鎖 confirm、0/1 雷拿不到麻痺。
+  const pay = ATTACK_PRE_DISCARD_CHOICE.get('超級麻麻鰻魚王ex|災難衝擊')!.optInPay!;
+  const r = resolveOptInPayment(state, aIdx, pool, action, '災難衝擊', pay, { aiDefault: 'skip' });
+  if (!r.optedIn) return addLog(r.state, '災難衝擊：不希望 → 不麻痺對手', aIdx);
+  const s = addLog(r.state, r.paidCount > 0 ? `災難衝擊：棄 ${r.paidCount} 張視為【雷】的能量 → 對手麻痺` : '災難衝擊：身上無【雷】能量，依裁定仍施加麻痺', aIdx);
   return statusPost('paralyzed')(s, aIdx, pool);
 });
 

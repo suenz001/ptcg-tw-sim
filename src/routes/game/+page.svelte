@@ -32,7 +32,7 @@
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType } from '$lib/game/effects';
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -4786,8 +4786,8 @@
         return;
       }
       if (atks.length === 1) {
-        // 單招直接自動帶 copyAttackChoice
-        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: topInst.iid, attackIndex: 0 }));
+        // v5.992 單招也走 dispatchBorrowedAttack — 被借招式有 PRE_DISCARD_CHOICE(若希望)時開 modal
+        dispatchBorrowedAttack(attackIndex, topInst.iid, 0, topCard);
         return;
       }
       // 2+ 招 → 開 picker
@@ -4817,7 +4817,8 @@
       }
       if (oppAttacks.length === 1) {
         const idx = oppCard!.attacks!.findIndex(a => a.name === oppAttacks[0].name);
-        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: oppActive.iid, attackIndex: idx }));
+        // v5.992 單招也走 dispatchBorrowedAttack — 忍者飛旋等「若希望」選擇不再被 fast-path 吃掉
+        dispatchBorrowedAttack(attackIndex, oppActive.iid, idx, oppCard);
         return;
       }
       // v5.181：sourceAttackName 動態, modal hint 不再顯示「高傲指令」
@@ -4843,7 +4844,7 @@
       ].filter(x => x.card?.supertype === 'Pokemon' && (x.card?.attacks?.length ?? 0) > 0) as Array<{ inst: CardInstance; card: Card }>;
       if (pokeList.length === 0) { dispatch(GameActions.attack(attackIndex)); return; }
       if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
-        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: pokeList[0].inst.iid, attackIndex: 0 }));
+        dispatchBorrowedAttack(attackIndex, pokeList[0].inst.iid, 0, pokeList[0].card); // v5.992 單選也帶出「若希望」modal
         return;
       }
       rocketCommandPicker = {
@@ -4879,7 +4880,7 @@
         return;
       }
       if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
-        dispatch(GameActions.attack(attackIndex, undefined, { pokeIid: pokeList[0].inst.iid, attackIndex: 0 }));
+        dispatchBorrowedAttack(attackIndex, pokeList[0].inst.iid, 0, pokeList[0].card); // v5.992 單選也帶出「若希望」modal
         return;
       }
       rocketCommandPicker = {
@@ -4921,10 +4922,8 @@
       const hasShinyCrystal = allTools.some(t => getCard(t.cardId)?.name === '璀璨結晶');
       return hasShinyCrystal ? 2 : 3;
     }
-    // v4.14：忍者飛旋（甲賀忍蛙ex / 超級甲賀忍蛙ex）— 卡面「將 1 個【水】能量放回手牌」
-    if (attackName === '忍者飛旋') return 1;
-    // v4.17：災難衝擊 卡面「將 2 個【雷】能量丟棄」+ 麻痺對手（exact 2 units）
-    if (attackName === '災難衝擊') return 2;
+    // v5.992：忍者飛旋 / 災難衝擊 改走 spec.optInPay 一般化二段流程（binary-yes-no），
+    //   不再由此處 hardcode exactRequired。
     return undefined;
   }
 
@@ -9470,32 +9469,37 @@
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
               const cc = preAttackDiscard.copyAttackChoice; // v5.720 borrowed(耀閃挑戰/高傲指令)時帶上,否則被借招式選擇丟失
-              // v4.46 金屬之錘 Stage 2：自動偵測 metal 能量數，決定下一步
-              //   - 0 顆：sentinel '__metal_hammer_no_metal__' → +150 不丟
-              //   - 1-3 顆：自動全選（玩家無需操作）→ +150
-              //   - 4+ 顆：切換 picker（min=max=3）讓玩家選 3 顆
-              if (preAttackDiscard.attackName === '金屬之錘') {
+              // v5.992 spec.optInPay 一般化二段流程（原 v4.46 金屬之錘 hardcode Stage 2 抽象化，
+              //   金屬之錘/忍者飛旋/災難衝擊/時間爆炸/叢林鞭打/狂暴噴射共用）：
+              //   - 0 可付 → OPTIN_NO_PAYMENT sentinel（Wilson 裁定：固定加傷/狀態照給全額）
+              //   - 可付 ≤ N（或 N=null 全部）→ 自動全付
+              //   - 可付 > N → 切換 picker（min=max=N 強制選恰 N）
+              const op = spec.optInPay;
+              if (op) {
                 const stage2Spec: PreDiscardSpec = {
-                  min: 0, max: 3, scope: 'attacker',
-                  baseDamage: 150, damagePerEnergy: 0,
-                  energyTypeFilter: 'Metal',
+                  min: 0, max: op.payMax, scope: op.scope,
+                  baseDamage: spec.baseDamage, damagePerEnergy: 0,
+                  energyTypeFilter: op.energyTypeFilter, verb: op.verb, countMode: op.countMode,
                 };
                 const eligible = getDiscardableEnergies(stage2Spec);
+                const totalAmount = op.countMode === 'units'
+                  ? eligible.reduce((n, e) => n + getEnergyDiscardUnits(e.cardId, e.hostInst, pool, game, aIdx), 0)
+                  : eligible.length;
                 if (eligible.length === 0) {
                   preAttackDiscard = null;
-                  dispatch(GameActions.attack(ai, ['__metal_hammer_no_metal__'], cc));
-                } else if (eligible.length <= 3) {
+                  dispatch(GameActions.attack(ai, [OPTIN_NO_PAYMENT], cc));
+                } else if (op.payMax === null || totalAmount <= op.payMax) {
                   preAttackDiscard = null;
                   dispatch(GameActions.attack(ai, eligible.map(e => e.iid), cc));
                 } else {
-                  // 4+ 顆：切換到 picker spec（min=max=3 強制玩家選 3）
+                  // 超過 N：切換到 picker spec（min=max=N 強制玩家選恰 N）
                   preAttackDiscard = {
                     attackIndex: ai,
-                    spec: { ...stage2Spec, min: 3, max: 3 },
-                    attackName: '金屬之錘',
+                    spec: { ...stage2Spec, min: op.payMax, max: op.payMax },
+                    attackName: preAttackDiscard.attackName,
                     picked: new Set<string>(),
-                    exactRequired: 3,
-                    copyAttackChoice: cc, // v5.720 borrowed 金屬之錘 4+ 鋼:stage2 picker confirm 也要帶
+                    exactRequired: op.payMax,
+                    copyAttackChoice: cc, // v5.720 borrowed:stage2 picker confirm 也要帶
                   };
                 }
                 return;

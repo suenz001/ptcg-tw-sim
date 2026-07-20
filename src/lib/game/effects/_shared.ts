@@ -233,7 +233,38 @@ export interface PreDiscardSpec {
    * 不符的能量在 picker 內隱藏，避免玩家點選後被 regPre 退回。
    */
   energyTypeFilter?: 'Grass' | 'Fire' | 'Water' | 'Lightning' | 'Psychic' | 'Fighting' | 'Darkness' | 'Metal' | 'Dragon' | 'Colorless';
+  /**
+   * v5.992：「若希望，付出（丟棄/放回）N 個能量 → 加傷/施加狀態」E-10 語義中央機制。
+   * Wilson 官方裁定（金屬之錘 QA 一般化）：
+   *   1. opt-in 一律可選（即使能量不足/為 0）；付得出多少付多少 = min(available, N)；
+   *      固定加傷/施加狀態「照給全額」（付出與效果為獨立事件）。
+   *   2. 設此欄位的招式 scope 必為 'binary-yes-no'：UI 第一段 yes/no；
+   *      第二段由 UI 一般化處理（0 可付 → OPTIN_NO_PAYMENT sentinel；
+   *      可付 ≤ N（或 N=null 全部）→ 自動全付；可付 > N → picker 強制選恰 N）。
+   *   3. 引擎端 regPre/regPost 一律走 effects.ts resolveOptInPayment()，
+   *      內含「opt-in 未足額自動補足」公平性防護（禁逐卡手刻 sentinel 分支）。
+   */
+  optInPay?: OptInPaySpec;
 }
+
+/** v5.992 見 PreDiscardSpec.optInPay */
+export interface OptInPaySpec {
+  /** 卡面「N 個」；null = 全部（時間爆炸/叢林鞭打/狂暴噴射） */
+  payMax: number | null;
+  /** 付出來源（目前僅支援攻擊方自身能量；擴充其他 scope 時同步 resolveOptInPayment） */
+  scope: 'attacker';
+  /** 付出動作；預設 'discard'。'return-to-deck' 會重洗牌庫 */
+  verb?: 'discard' | 'return-to-hand' | 'return-to-deck';
+  /** 只計「視為該屬性」的能量（host-aware energyProvidesType） */
+  energyTypeFilter?: PreDiscardSpec['energyTypeFilter'];
+  /** 'units'：卡面「N 個」以能量單位計（火箭隊=2 等）；預設 'cards' */
+  countMode?: 'cards' | 'units';
+}
+
+/** v5.992 opt-in 但無可付能量時 UI 送出的 sentinel */
+export const OPTIN_NO_PAYMENT = '__optin_no_payment__';
+/** opt-in sentinel 集合（含舊版相容：金屬之錘 v4.46 / 耀閃挑戰借招 / binary yes-token） */
+export const OPTIN_SENTINELS = new Set<string>([OPTIN_NO_PAYMENT, '__metal_hammer_no_metal__', '__yaoshan_borrowed_yes__', 'yes-token']);
 
 export const ATTACK_PRE_DISCARD_CHOICE = new Map<string, PreDiscardSpec>();
 
