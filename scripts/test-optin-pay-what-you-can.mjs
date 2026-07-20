@@ -175,5 +175,23 @@ T('金屬之錘:2鋼 opt-in→丟2+300(pay-what-you-can)', () => {
   assert.equal(out.damage,300);
   assert.equal(out.state.players[0].active.energyAttached.length,0);
 });
+// ── v5.994 平穩境地擋回手仍照給加傷(Wilson 裁定:付出與加傷獨立) ──
+const MENASU='10444';
+T('忍者飛旋:平穩境地擋回手 opt-in→仍+80=200且水留身', () => {
+  const w=en(WATER); const st=mk(inst(GRENINJA,[w]),inst(BUD));
+  st.players[1].bench=[inst(MENASU)];
+  const out=ninjaPre(st,0,pool,{ discardedEnergyIids:[w.iid] });
+  assert.equal(out.damage,200,'平穩境地擋回手仍+80=200');
+  assert.equal(out.state.players[0].active.energyAttached.length,1,'水留身(平穩境地擋回手)');
+  assert.ok(!out.state.players[0].hand.some(c=>c.iid===w.iid),'水未回手');
+});
+T('叢林鞭打:平穩境地擋回手 opt-in→仍+80=160且能量留身', () => {
+  const w=en(WATER); const st=mk(inst(ZARUDE,[w]),inst(BUD));
+  st.players[1].bench=[inst(MENASU)];
+  const out=zarudePre(st,0,pool,{ discardedEnergyIids:['x'] });
+  assert.equal(out.damage,160,'平穩境地擋回手仍+80=160');
+  assert.equal(out.state.players[0].active.energyAttached.length,1,'能量留身');
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

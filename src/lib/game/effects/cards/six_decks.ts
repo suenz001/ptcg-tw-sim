@@ -321,7 +321,8 @@ regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
   const blocked = _calmGroundBlocks(state, aIdx, pool); // v5.986 平穩境地：能量無法放回手牌
   const r = resolveOptInPayment(state, aIdx, pool, action, '忍者飛旋', pay, { aiDefault: 'skip', blockPayment: blocked });
   if (!r.optedIn) return { state: addLog(r.state, '忍者飛旋：未選擇加成 → 120 傷害', aIdx), damage: 120 };
-  if (r.paymentBlocked) return { state: addLog(r.state, '忍者飛旋：對手場上有【平穩境地】，能量無法放回手牌 → 120 傷害', aIdx), damage: 120 };
+  // v5.994 Wilson 裁定：付出與加傷獨立 → 平穩境地擋回手時,能量留身但加傷仍照給。
+  if (r.paymentBlocked) return { state: addLog(r.state, '忍者飛旋：對手場上有【平穩境地】，能量無法放回手牌，依裁定仍 +80 → 200 傷害', aIdx), damage: 200 };
   if (r.paidCount === 0) return { state: addLog(r.state, '忍者飛旋：身上無【水】能量，依裁定仍 +80 → 200 傷害', aIdx), damage: 200 };
   return { state: addLog(r.state, '忍者飛旋：將 1 張【水】能量放回手牌 → +80 = 200 傷害', aIdx), damage: 200 };
 });
