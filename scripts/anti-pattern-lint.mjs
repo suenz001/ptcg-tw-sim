@@ -532,8 +532,28 @@ for (const f of files) {
   }
 }
 
+// ── Check P：opp-bench-choose / opp-poke-choose 的 pending 帶 filter: 欄 ──────────
+//   UI(game/+page.svelte)與 AI 的 opp-bench/poke-choose picker 只認 params.validIids，
+//   會「忽略」pending 的 filter 欄 → filter:'ex'/'Basic' 形同虛設（可選非法目標）。
+//   v5.996 閃電急襲(限ex)/嗡嗡榍石(限基礎)踩此雷。一律改用 params.validIids 過濾。
+for (const f of files) {
+  const src = readFileSync(f, 'utf8');
+  const re = /type:\s*'opp-(?:bench|poke)-choose'/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const rest = src.slice(m.index, m.index + 500);
+    const end = rest.indexOf('})');
+    const blk = end >= 0 ? rest.slice(0, end) : rest;
+    if (/\bfilter:/.test(blk)) {
+      const line = src.slice(0, m.index).split('\n').length;
+      violations.push(`[P] ${rel(f)}:${line} — opp-bench/poke-choose pending 帶 filter: 欄（UI/AI 忽略，只認 validIids）→ 改用 params.validIids 過濾`);
+    }
+  }
+}
+
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

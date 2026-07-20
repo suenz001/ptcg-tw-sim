@@ -2497,14 +2497,15 @@ regPost('阿羅拉 椰蛋樹ex|嗡嗡榍石', (state, aIdx, pool) => {
     if (card?.stage !== 'Basic') return addLog(r.state, '嗡嗡榍石：對手戰鬥場非基礎，無效', aIdx);
     return koTargetByAttackEffect(addLog(r.state, '嗡嗡榍石：正面 → 對手戰鬥場(基礎)KO', aIdx), aIdx, da, true, pool, '嗡嗡榍石');
   }
-  // 反 → 對手選 1 備戰基礎 KO
-  if (r.state.players[dIdx].bench.length === 0) return r.state;
+  // 反 → 對手選 1 備戰「基礎」KO。⚠v5.996：opp-bench-choose 只認 validIids、忽略 filter 欄 → 用 validIids 限基礎。
+  const _benchBasic = r.state.players[dIdx].bench.filter(b => pool.get(b.cardId)?.stage === 'Basic').map(b => b.iid);
+  if (_benchBasic.length === 0) return addLog(r.state, '嗡嗡榍石：反面 → 對手備戰無基礎寶可夢，無效', aIdx);
   return withPending(addLog(r.state, '嗡嗡榍石：反面 → 選 1 對手備戰(基礎)KO', aIdx), {
     type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    filter: 'Basic',
     minCount: 1, maxCount: 1,
     effectKey: 'h-wave2-ko-opp-bench-basic',
+    params: { validIids: _benchBasic },
   });
 });
 regR('h-wave2-ko-opp-bench-basic', (state, aIdx, iids, _params, pool) => {

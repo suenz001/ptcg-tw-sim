@@ -7917,17 +7917,25 @@ export function dealAttackDamageToTarget(
 export function snipeOneOppBenchPost(amount: number, label: string, exOnly: boolean = false): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
-    if (state.players[dIdx].bench.length === 0) {
+    const bench = state.players[dIdx].bench;
+    if (bench.length === 0) {
       return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
     }
-    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害${exOnly ? '（限 ex）' : ''}`, aIdx);
+    // v5.996：exOnly 限「寶可夢【ex】」。⚠opp-bench-choose picker（UI/AI）只認 params.validIids，
+    //   會忽略 pending 的 filter 欄 → 必須用 validIids 過濾，否則 exOnly 形同虛設（可打非 ex）。
+    const validIids = exOnly
+      ? bench.filter(b => _pool.get(b.cardId)?.subtype === 'ex').map(b => b.iid)
+      : bench.map(b => b.iid);
+    if (validIids.length === 0) {
+      return addLog(state, `${label}：對手備戰區沒有可選目標${exOnly ? '（限【ex】寶可夢）' : ''}`, aIdx);
+    }
+    const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害${exOnly ? '（限【ex】）' : ''}`, aIdx);
     return withPending(s, {
       type: 'opp-bench-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      filter: exOnly ? 'ex' : undefined,
       minCount: 1, maxCount: 1,
       effectKey: 'wave3a-snipe-bench',
-      params: { amount, label },
+      params: { amount, label, validIids },
     });
   };
 }
