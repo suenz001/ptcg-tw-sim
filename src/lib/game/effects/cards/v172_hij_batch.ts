@@ -23,9 +23,11 @@ import {
   addPendingPrize, getOwnBenchLimit, revealTopCardsLog} from '../_shared';
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { joinCardNames } from '../_shared';
+import { getAllAttachedTools } from '../_shared'; // v5.995 可怕的哥哥:數/丟道具含 extraTools(多重轉接)
+import { isImmuneToOppSupporter } from './v3080_deferred_wave_c'; // v5.995 支援者效果目標免疫過濾
 import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
-import type { CardInstance, PlayerState } from '../../types';
+import type { CardInstance, PlayerState, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 
 // ── 釀光市（Stadium / I）─ 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手
@@ -193,13 +195,25 @@ regG('琉琪亞的展示', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   // 對手必須有戰鬥場 + 至少 1 隻基礎備戰（含基礎 ex）
   if (!st.players[dIdx].active) return false;
-  return st.players[dIdx].bench.some(c => isBasicPokemonCard(pool.get(c.cardId)));
+  // v5.995：與 reg 同步 — supporter 免疫者不算合法目標
+  return st.players[dIdx].bench.some(c => {
+    if (!isBasicPokemonCard(pool.get(c.cardId))) return false;
+    if (c.fossilOnField && pool.get(c.cardId)?.name === '陳舊的鰭之化石') return false;
+    if (isImmuneToOppSupporter(st, dIdx, c, pool)) return false;
+    return true;
+  });
 });
 reg('琉琪亞的展示', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
+  // v5.995：加 supporter 免疫過濾（緊張感/融合為雪/廣域堡壘/陳舊的鰭之化石）— 對齊老大的指令
   const validIids = dp.bench
-    .filter(c => isBasicPokemonCard(pool.get(c.cardId)))
+    .filter(c => {
+      if (!isBasicPokemonCard(pool.get(c.cardId))) return false;
+      if (c.fossilOnField && pool.get(c.cardId)?.name === '陳舊的鰭之化石') return false;
+      if (isImmuneToOppSupporter(st, dIdx, c, pool)) return false;
+      return true;
+    })
     .map(c => c.iid);
   if (validIids.length === 0 || !dp.active) {
     return addLog(st, '琉琪亞的展示：對手備戰無基礎寶可夢', idx);
@@ -404,31 +418,27 @@ reg('瑪琪艾兒', (st, idx, pool) => {
 });
 
 // ── 可怕的哥哥（Supporter / I）── 對手 1 寶可夢 -1 道具 -1 特殊能量
+// v5.995 可怕的哥哥候選述詞：道具含 extraTools（多重轉接，v5.835 通則）+ supporter 免疫過濾
+function creepyBroIsCandidate(st: GameState, dIdx: 0 | 1, pk: CardInstance, pool: Map<string, Card>): boolean {
+  if (isImmuneToOppSupporter(st, dIdx, pk, pool)) return false;
+  const hasTool = getAllAttachedTools(pk).length > 0;
+  const hasSpecial = pk.energyAttached.some(e => {
+    const ec = pool.get(e.cardId);
+    return ec?.supertype === 'Energy' && ec.subtype === 'Special';
+  });
+  return hasTool || hasSpecial;
+}
 regG('可怕的哥哥', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  return all.some(pk => {
-    const hasTool = !!pk.toolAttached;
-    const hasSpecial = pk.energyAttached.some(e => {
-      const ec = pool.get(e.cardId);
-      return ec?.supertype === 'Energy' && ec.subtype === 'Special';
-    });
-    return hasTool || hasSpecial;
-  });
+  return all.some(pk => creepyBroIsCandidate(st, dIdx, pk, pool));
 });
 reg('可怕的哥哥', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  const cand = all.filter(pk => {
-    const hasTool = !!pk.toolAttached;
-    const hasSpecial = pk.energyAttached.some(e => {
-      const ec = pool.get(e.cardId);
-      return ec?.supertype === 'Energy' && ec.subtype === 'Special';
-    });
-    return hasTool || hasSpecial;
-  });
+  const cand = all.filter(pk => creepyBroIsCandidate(st, dIdx, pk, pool));
   if (cand.length === 0) return addLog(st, '可怕的哥哥：對手無可拆道具/特殊能量', idx);
   st = addLog(st, '可怕的哥哥：選 1 隻對手寶可夢，丟 1 道具 + 1 特殊能量', idx);
   return withPending(st, {
@@ -494,62 +504,105 @@ reg('霍米加的演奏', (st, idx) => {
   return updatePlayer(st, dIdx, p => ({ ...p, cantRetreatIfPoisonedNextTurn: true }));
 });
 
+// ═══ 可怕的哥哥 v5.995 重寫：多張道具/特殊能量時由使用支援者的玩家選要丟哪張 ═══
+// 卡面：「選擇1隻對手的寶可夢，將那隻寶可夢身上附加的『寶可夢道具』卡與『特殊能量』卡各丟棄1張。」
+// 舊實作：道具只讀 toolAttached(漏 extraTools)、特殊能量自動取「最後一張」(違反已知資訊必選鐵律,玩家回報)。
+// 新流程：目標選定 → 道具 ≥2 開 modal-choice 選 1(=1 自動,0 略過)→ 特殊能量 ≥2 開
+//   active-energy-discard picker 選 1(=1 自動,0 略過)。復用道具拆除器 modal / 中央能量 picker 機制。
+function creepyBroFindTarget(st: GameState, dIdx: 0 | 1, targetIid: string): CardInstance | null {
+  const dp = st.players[dIdx];
+  return dp.active?.iid === targetIid ? dp.active : dp.bench.find(c => c.iid === targetIid) ?? null;
+}
+/** 從目標身上移除 1 張道具（toolAttached 或 extraTools）→ 對手棄牌區 + log */
+function creepyBroDiscardTool(st: GameState, idx: 0 | 1, targetIid: string, toolIid: string, pool: Map<string, Card>): GameState {
+  const dIdx = (1 - idx) as 0 | 1;
+  const target = creepyBroFindTarget(st, dIdx, targetIid);
+  if (!target) return st;
+  const tool = getAllAttachedTools(target).find(t => t.iid === toolIid);
+  if (!tool) return st;
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  const toolName = pool.get(tool.cardId)?.name ?? '道具';
+  st = addLog(st, `可怕的哥哥：${targetName} 丟棄道具「${toolName}」`, idx);
+  return updatePlayer(st, dIdx, p => {
+    const apply = (pk: CardInstance) => {
+      if (pk.iid !== targetIid) return pk;
+      if (pk.toolAttached?.iid === toolIid) return { ...pk, toolAttached: undefined };
+      if (pk.extraTools?.some(t => t.iid === toolIid)) return { ...pk, extraTools: pk.extraTools.filter(t => t.iid !== toolIid) };
+      return pk;
+    };
+    return { ...p, active: p.active ? apply(p.active) : null, bench: p.bench.map(apply), discard: [...p.discard, tool] };
+  });
+}
+/** 從目標身上移除 1 張特殊能量 → 對手棄牌區 + log */
+function creepyBroDiscardEnergy(st: GameState, idx: 0 | 1, targetIid: string, energyIid: string, pool: Map<string, Card>): GameState {
+  const dIdx = (1 - idx) as 0 | 1;
+  const target = creepyBroFindTarget(st, dIdx, targetIid);
+  if (!target) return st;
+  const en = target.energyAttached.find(e => e.iid === energyIid);
+  if (!en) return st;
+  const targetName = pool.get(target.cardId)?.name ?? '?';
+  const enName = pool.get(en.cardId)?.name ?? '特殊能量';
+  st = addLog(st, `可怕的哥哥：${targetName} 丟棄特殊能量「${enName}」`, idx);
+  return updatePlayer(st, dIdx, p => {
+    const apply = (pk: CardInstance) => pk.iid !== targetIid ? pk
+      : { ...pk, energyAttached: pk.energyAttached.filter(e => e.iid !== energyIid) };
+    return { ...p, active: p.active ? apply(p.active) : null, bench: p.bench.map(apply), discard: [...p.discard, en] };
+  });
+}
+/** 特殊能量段：≥2 開 picker（玩家選）、=1 自動丟、0 略過 */
+function creepyBroEnergyStep(st: GameState, idx: 0 | 1, targetIid: string, pool: Map<string, Card>): GameState {
+  const dIdx = (1 - idx) as 0 | 1;
+  const target = creepyBroFindTarget(st, dIdx, targetIid);
+  if (!target) return st;
+  const specials = target.energyAttached.filter(e => {
+    const ec = pool.get(e.cardId);
+    return ec?.supertype === 'Energy' && ec.subtype === 'Special';
+  });
+  if (specials.length === 0) return st;
+  if (specials.length === 1) return creepyBroDiscardEnergy(st, idx, targetIid, specials[0].iid, pool);
+  return withPending(addLog(st, `可怕的哥哥：選擇要丟棄 ${pool.get(target.cardId)?.name ?? '?'} 身上的 1 張特殊能量`, idx), {
+    type: 'active-energy-discard',
+    actorIdx: idx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'creepy-bro-pick-energy',
+    params: { targetIid, validIids: specials.map(e => e.iid), titleOverride: '可怕的哥哥：選擇要丟棄的 1 張特殊能量' },
+  });
+}
 regR('creepy-bro-strip', (st, idx, iids, _params, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const targetIid = iids[0];
   if (!targetIid) return st;
-  const dp = st.players[dIdx];
-  const target = dp.active?.iid === targetIid
-    ? dp.active
-    : dp.bench.find(c => c.iid === targetIid) ?? null;
+  const target = creepyBroFindTarget(st, dIdx, targetIid);
   if (!target) return st;
-  const targetName = pool.get(target.cardId)?.name ?? '?';
-  // 找 1 張特殊能量 + 1 張道具
-  const discardAdd: CardInstance[] = [];
-  let removedTool: CardInstance | undefined;
-  let toolName = '';
-  if (target.toolAttached) {
-    removedTool = target.toolAttached;
-    toolName = pool.get(removedTool.cardId)?.name ?? '道具';
-    discardAdd.push(removedTool);
+  const tools = getAllAttachedTools(target);
+  if (tools.length >= 2) {
+    const targetName = pool.get(target.cardId)?.name ?? '?';
+    return withPending(addLog(st, `可怕的哥哥：選擇要丟棄 ${targetName} 身上的 1 張道具`, idx), {
+      type: 'modal-choice',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'creepy-bro-pick-tool',
+      params: {
+        label: '可怕的哥哥：選擇要丟棄的道具',
+        targetIid,
+        options: tools.map(t => ({ id: t.iid, text: `🔧 ${pool.get(t.cardId)?.name ?? '道具'}`, inspectIid: targetIid, inspectPlayerIdx: dIdx })),
+      },
+    });
   }
-  let specialIdx = -1;
-  for (let i = target.energyAttached.length - 1; i >= 0; i--) {
-    const ec = pool.get(target.energyAttached[i].cardId);
-    if (ec?.supertype === 'Energy' && ec.subtype === 'Special') { specialIdx = i; break; }
-  }
-  let energyName = '';
-  if (specialIdx >= 0) {
-    const removed = target.energyAttached[specialIdx];
-    energyName = pool.get(removed.cardId)?.name ?? '特殊能量';
-    discardAdd.push(removed);
-  }
-  const bits: string[] = [];
-  if (toolName) bits.push(`丟 ${toolName}`);
-  if (energyName) bits.push(`丟 ${energyName}`);
-  st = addLog(st, `可怕的哥哥：${targetName}：${bits.length ? bits.join('，') : '無可丟'}`, idx);
-  return updatePlayer(st, dIdx, p => {
-    const apply = (pk: CardInstance) => {
-      if (pk.iid !== targetIid) return pk;
-      const newEnergies = specialIdx >= 0
-        ? [
-            ...pk.energyAttached.slice(0, specialIdx),
-            ...pk.energyAttached.slice(specialIdx + 1),
-          ]
-        : pk.energyAttached;
-      return {
-        ...pk,
-        toolAttached: undefined,
-        energyAttached: newEnergies,
-      };
-    };
-    return {
-      ...p,
-      active: p.active ? apply(p.active) : null,
-      bench: p.bench.map(apply),
-      discard: [...p.discard, ...discardAdd],
-    };
-  });
+  let s = st;
+  if (tools.length === 1) s = creepyBroDiscardTool(s, idx, targetIid, tools[0].iid, pool);
+  return creepyBroEnergyStep(s, idx, targetIid, pool);
+});
+regR('creepy-bro-pick-tool', (st, idx, iids, params, pool) => {
+  const targetIid = params?.targetIid as string | undefined;
+  if (!targetIid || !iids[0]) return st;
+  const s = creepyBroDiscardTool(st, idx, targetIid, iids[0], pool);
+  return creepyBroEnergyStep(s, idx, targetIid, pool);
+});
+regR('creepy-bro-pick-energy', (st, idx, iids, params, pool) => {
+  const targetIid = params?.targetIid as string | undefined;
+  if (!targetIid || !iids[0]) return st;
+  return creepyBroDiscardEnergy(st, idx, targetIid, iids[0], pool);
 });
 
 // ── 巴貝娜與荷蓮娜（Supporter / I）── v2.185 ──────────────────────────────────

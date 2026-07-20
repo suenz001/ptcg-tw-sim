@@ -7188,6 +7188,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       ancientSupporterPlayedThisTurn: false,
       carnelliPlayedThisTurn: false,
       magearnaPlayedThisTurn: false,
+      kuceroskPlayedThisTurn: false, // v5.995 勾結觸手條件旗標重置
       talarongPlayedThisTurn: false,
       retreatedThisTurn: false,
       lourisToolUsedThisTurn: false, // v3.24 力之沙漏 per-turn flag reset

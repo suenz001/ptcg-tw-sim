@@ -4753,9 +4753,13 @@ reg('庫瑟洛斯奇的企圖', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
   if (opp.hand.length <= 3) {
+    // v5.995：即使無牌可丟，支援者仍已使出 → 設旗標（勾結觸手條件）
+    st = updatePlayer(st, idx, p => ({ ...p, kuceroskPlayedThisTurn: true }));
     return addLog(st, '庫瑟洛斯奇的企圖：對手手牌已 ≤ 3 張，無需丟棄', idx);
   }
   const discardN = opp.hand.length - 3;
+  // v5.995：記錄本回合已從手牌使出「庫瑟洛斯奇的企圖」（烏賊王｜勾結觸手 條件判定用；END_TURN 重置）
+  st = updatePlayer(st, idx, p => ({ ...p, kuceroskPlayedThisTurn: true }));
   st = addLog(st, `庫瑟洛斯奇的企圖：對手將自己的手牌丟棄 ${discardN} 張至 3 張`, idx);
   return withPending(st, {
     type: 'hand-discard',
@@ -8318,6 +8322,11 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
   if (benchIdx < 0) return st;
   const dmg = (params?.damage as number) ?? 0;
   const label = (params?.label as string) ?? '';
+  // v5.995 fail-safe：被選備戰目標若免疫招式效果（化隱等）→ 不互換（正常已被 validIids 擋，防繞過）。
+  {
+    const _tg = canApplyEffectToTarget(st, actorIdx, defender.bench[benchIdx], pool.get(defender.bench[benchIdx].cardId), 'attack-effect', pool, { isBench: true });
+    if (_tg.blocked) return addLog(st, `${label}：${_tg.reason}（此備戰寶可夢不可被選為互換目標）`, actorIdx);
+  }
   const newActiveOrig = defender.bench[benchIdx];
   const newActiveCard = pool.get(newActiveOrig.cardId);
   const oldActiveName = pool.get(oldActive.cardId)?.name ?? '?';
@@ -8335,35 +8344,12 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
 
   if (dmg <= 0) return s;
 
-  // apply damage to new active
+  // v5.995 收斂：「然後，新上場的寶可夢受到 N 點傷害」— 新上場者此時已是戰鬥寶可夢，
+  //   招式傷害須計弱點/減傷道具/傷害免疫/有效 HP，KO 結算（獎賞+on-KO 特性+補位）全走中央
+  //   dealAttackDamageToTarget（對齊 v5.387 forceOppSwapThenDamage / v5.960 狙擊收斂）。
+  //   舊 inline 直加 damage：漏弱點×2、漏減傷道具、漏傷害免疫。
   if (!newDefender.active) return s;
-  const newDmg = newDefender.active.damage + dmg;
-  const hp = effectiveHPInline(newDefender.active, pool, s);  // v5.091
-  if (hp > 0 && newDmg >= hp) {
-    const koList: CardInstance[] = [
-      { ...newDefender.active, damage: newDmg },
-      ...newDefender.active.energyAttached,
-      ...getAllAttachedTools(newDefender.active),
-      ...(newDefender.active.evolvedFromStack ?? []),
-    ];
-    const _ko = koPrizesAdjusted(s, newDefender.active, newActiveCard, (1 - dIdx) as 0 | 1, dIdx, pool);
-    s = _ko.state;
-    const prizes = _ko.prizes;
-    newDefender = { ...newDefender, active: null as any, discard: [...newDefender.discard, ...koList] };
-    players = [...s.players] as [PlayerState, PlayerState];
-    players[dIdx] = newDefender;
-    s = addLog({ ...s, players }, `${label}：${newActiveName} 被擊倒！+${prizes} 張獎賞卡`, null);
-    s = recordOppKO(s, dIdx, newActiveCard, 'attack');
-    s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koList[0], true, true);
-    if (newDefender.bench.length === 0) {
-      return { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defender.name} 沒有可上場的寶可夢` };
-    }
-    return addPendingPrize(s, actorIdx, prizes, pool);
-  }
-  newDefender = { ...newDefender, active: { ...newDefender.active, damage: newDmg } };
-  players = [...s.players] as [PlayerState, PlayerState];
-  players[dIdx] = newDefender;
-  return addLog({ ...s, players }, `${label}：對 ${newActiveName} 造成 ${dmg} 傷害`, actorIdx);
+  return dealAttackDamageToTarget(s, actorIdx, newDefender.active.iid, dmg, pool, { kind: 'attack-damage', label });
 });
 
 // ── swap-opp + dmg (3 張) ────────────────────────────────────────────────────
@@ -8422,10 +8408,16 @@ export function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
     if (!defender.active || defender.bench.length === 0) {
       return addLog(state, `${label}：對手無備戰寶可夢，無法互換`, aIdx);
     }
-    // v5.333：免疫招式效果的 active 不被互換換下（C-17 per-target guard）
-    {
-      const _gs = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), 'attack-effect', pool);
-      if (_gs.blocked) return addLog(state, `${label}：${_gs.reason}`, aIdx);
+    // v5.995 C-05 方向修正（官方判例 §17.3.D 催眠貘｜強行入眠）：
+    //   「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換」的效果對象是【被選的備戰寶可夢】——
+    //   原戰鬥位的「不受招式效果」（化隱/純樸等）不擋互換（v5.333 舊 gate 方向相反 → 移除）。
+    //   免疫 gate 收斂到目標端：備戰候選過 canApplyEffectToTarget(isBench) — 免疫招式效果的
+    //   備戰寶可夢不可被選為互換目標（同老大的指令 validIids 過濾模式）。
+    const validIids = defender.bench
+      .filter(b => !canApplyEffectToTarget(state, aIdx, b, pool.get(b.cardId), 'attack-effect', pool, { isBench: true }).blocked)
+      .map(b => b.iid);
+    if (validIids.length === 0) {
+      return addLog(state, `${label}：對手備戰寶可夢皆不受招式效果影響，無法互換`, aIdx);
     }
     let s = addLog(state, `${label}：選擇對手備戰 1 隻與戰鬥場互換`, aIdx);
     return withPending(s, {
@@ -8435,7 +8427,7 @@ export function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
       minCount: 1,
       maxCount: 1,
       effectKey: 'opp-swap-dmg',
-      params: { damage: dmg, label },
+      params: { damage: dmg, label, validIids },
     });
   };
 }

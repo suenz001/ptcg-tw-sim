@@ -427,6 +427,8 @@ export interface PlayerState {
   carnelliPlayedThisTurn?: boolean;
   /** v2.360：瑪琪艾兒 supporter played - 妙喵｜拍檔攻擊 用 */
   magearnaPlayedThisTurn?: boolean;
+  /** v5.995 本回合是否從手牌使出「庫瑟洛斯奇的企圖」（烏賊王｜勾結觸手 條件；END_TURN 重置） */
+  kuceroskPlayedThisTurn?: boolean;
   /** v2.360：塔拉剛 supporter played - 河馬獸｜龍捲風噴射 用 */
   talarongPlayedThisTurn?: boolean;
   /**

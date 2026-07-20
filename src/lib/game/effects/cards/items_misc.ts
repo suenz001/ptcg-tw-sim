@@ -1405,14 +1405,20 @@ regR('restart-box-chain-attach', (st, idx, iids, params, pool) => {
 // 卡面：將對手的戰鬥寶可夢與備戰寶可夢互換。[由對手選擇放置於戰鬥場的寶可夢。]
 // 實裝：用既有 force-opp-swap resolver — 對對手開 bench-choose pending（min=1 max=1）。
 // gate：對手有 active + 至少 1 隻備戰。
-regG('除蟲噴霧', (st, idx) => {
+regG('除蟲噴霧', (st, idx, pool) => {
   const dp = st.players[(1 - idx) as 0 | 1];
-  return !!dp.active && dp.bench.length >= 1;
+  if (!dp.active || dp.bench.length < 1) return false;
+  // v5.995 audit：C-04 目標=對手戰鬥寶可夢 → 緊張感/融合為雪(不受對手物品)active 擋(HEAD 漏 gate)
+  return !_v3060IsImmuneOppTrainer(dp.active, pool);
 });
 reg('除蟲噴霧', (st, idx, _pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active || dp.bench.length === 0) return st;
+  // v5.995 audit：緊張感/融合為雪 active 不受對手物品效果 → 不被強制換位
+  if (_v3060IsImmuneOppTrainer(dp.active, _pool)) {
+    return addLog(st, '除蟲噴霧：對手的戰鬥寶可夢不受對手物品卡效果影響，無法互換', idx);
+  }
   st = addLog(st, '除蟲噴霧：對手必須將戰鬥寶可夢與備戰寶可夢互換（由對手選擇）', idx);
   return withPending(st, {
     type: 'bench-choose',

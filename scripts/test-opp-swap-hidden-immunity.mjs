@@ -27,13 +27,29 @@ function st(defActiveId){
     players:[{name:'A',active:inst(ATK),bench:[],hand:[],deck:[],discard:[],prizes:[]},
              {name:'B',active:inst(defActiveId),bench:[inst(PLAIN)],hand:[],deck:[],discard:[],prizes:[]}]};
 }
-for(const key of ['駒刀小兵|推倒','巨金怪|彈回','流氓熊貓|拉扯','沙河馬|推倒']){
-  T(`${key}: 化隱 active → 不開換位 picker(不被換位)`,()=>{
+// C-04「將對手的戰鬥寶可夢與備戰寶可夢互換[由對手選]」→ 效果對象=戰鬥位 → 化隱 active 擋。
+for(const key of ['駒刀小兵|推倒','巨金怪|彈回','沙河馬|推倒']){
+  T(`${key}(C-04): 化隱 active → 不開換位 picker(不被換位)`,()=>{
     const r=mod.ATTACK_POST.get(key)(st(HIDDEN),0,pool);
     assert(!r.pendingSelection,'化隱 active 不應開換位 picker,實際 pendingSelection='+JSON.stringify(r.pendingSelection?.effectKey));
     assert.equal(r.players[1].active.cardId,HIDDEN,'化隱 active 應維持不變');
   });
 }
+// v5.995 C-05「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換」→ 效果對象=備戰 → 化隱 active 不擋
+//   (官方判例 §17.3.D 催眠貘|強行入眠)；化隱備戰反而要從候選排除。
+T('流氓熊貓|拉扯(C-05): 化隱 active → 仍開換位 picker(原戰鬥位免疫不擋)',()=>{
+  const r=mod.ATTACK_POST.get('流氓熊貓|拉扯')(st(HIDDEN),0,pool);
+  assert(r.pendingSelection,'C-05 化隱 active 應照常開 picker(HEAD 誤擋)');
+  assert.equal(r.pendingSelection.effectKey,'opp-swap-dmg','應收斂中央 oppSwapDmgPost');
+});
+T('流氓熊貓|拉扯(C-05): 化隱「備戰」→ validIids 排除',()=>{
+  const s0=st(PLAIN); s0.players[1].bench=[inst(HIDDEN),inst(PLAIN)];
+  const r=mod.ATTACK_POST.get('流氓熊貓|拉扯')(s0,0,pool);
+  assert(r.pendingSelection,'應開 picker');
+  const v=r.pendingSelection.params?.validIids;
+  assert(Array.isArray(v)&&v.length===1,'validIids 應只含一般備戰');
+  assert.equal(v[0],s0.players[1].bench[1].iid,'化隱備戰不可為互換目標');
+});
 T('對照:一般 active → 正常開換位 picker',()=>{
   const r=mod.ATTACK_POST.get('駒刀小兵|推倒')(st(PLAIN),0,pool);
   assert(r.pendingSelection,'一般 active 應正常開 picker');

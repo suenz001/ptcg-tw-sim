@@ -32,15 +32,29 @@ function runAbility(userCardId, cardName, abName, defActiveId){
   const old=Math.random; Math.random=()=>0.1; // 媚惑引誘擲幣正面
   try{ return fn(st,0,pool,user); } finally { Math.random=old; }
 }
+// v5.995 C-05 方向修正:「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換」效果對象=備戰
+//   → 化隱 active 不擋互換(官方判例 §17.3.D 強行入眠)；化隱「備戰」才要從候選排除。
 for(const [uid,cn,an] of [['13982','鐵掌力士','大力捕捉器'],['14802','赫普的毛毛角羊','挑戰角擊'],['16801','花潔夫人','媚惑引誘']]){
-  T(`${cn}|${an}: 化隱對手 active → 不開換位 picker`,()=>{
+  T(`${cn}|${an}(C-05): 化隱對手 active → 仍開換位 picker(原戰鬥位免疫不擋)`,()=>{
     const r=runAbility(uid,cn,an,HIDDEN);
-    assert(!r.pendingSelection,`化隱不應開 picker,實際 ${r.pendingSelection?.effectKey}`);
-    assert.equal(r.players[1].active.cardId,HIDDEN,'化隱 active 應維持');
+    assert(r.pendingSelection,`C-05 化隱 active 應照常開 picker(HEAD 誤擋),實際無 pending`);
+    const v=r.pendingSelection.params?.validIids;
+    assert(Array.isArray(v)&&v.length===1,'validIids 應含一般備戰');
   });
   T(`${cn}|${an}: 一般對手 active → 正常開 picker(對照)`,()=>{
     const r=runAbility(uid,cn,an,PLAIN);
     assert(r.pendingSelection,'一般 active 應開 picker');
+  });
+  T(`${cn}|${an}(C-05): 備戰全化隱 → 不開 picker(無合法目標)`,()=>{
+    const user=inst(uid);
+    const st2={phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,turn:5,isFirstTurn:false,log:[],pendingSelection:null,
+      players:[{name:'A',active:user,bench:[],hand:[],deck:[],discard:[],prizes:[]},
+               {name:'B',active:inst(PLAIN),bench:[inst(HIDDEN)],hand:[],deck:[],discard:[],prizes:[]}]};
+    const fn=mod.getAbilityFn(cn,an,0);
+    const old=Math.random; Math.random=()=>0.1;
+    let r; try{ r=fn(st2,0,pool,user); } finally { Math.random=old; }
+    assert(!r.pendingSelection,'備戰唯一候選是化隱 → 不應開 picker');
+    assert.equal(r.players[1].active.cardId,PLAIN,'active 應維持');
   });
 }
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

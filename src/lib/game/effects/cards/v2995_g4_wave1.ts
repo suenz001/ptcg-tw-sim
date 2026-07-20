@@ -241,15 +241,18 @@ regA('花潔夫人', 0, (st, idx, _pool, _cardInst) => {
   if (dp.bench.length === 0) {
     return addLog(r.state, '媚惑引誘：對手備戰區沒有寶可夢可呼叫', idx);
   }
-  // v5.839：特性換位=ability-effect → 化隱/光之翼免疫者 active 不被換下。
-  { const _g = canApplyEffectToTarget(r.state, idx, dp.active, _pool.get(dp.active.cardId), 'ability-effect', _pool);
-    if (_g.blocked) return addLog(r.state, `媚惑引誘：${_g.reason}（不被換位）`, idx); }
+  // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
+  //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
+  const _lureIids = dp.bench
+    .filter((c: CardInstance) => !canApplyEffectToTarget(r.state, idx, c, _pool.get(c.cardId), 'ability-effect', _pool, { isBench: true }).blocked)
+    .map((c: CardInstance) => c.iid);
+  if (_lureIids.length === 0) return addLog(r.state, '媚惑引誘：正面，但對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
   const s = addLog(r.state, '媚惑引誘：正面，選 1 隻對手備戰寶可夢與其戰鬥場互換並混亂', idx);
   return withPending(s, {
     type: 'opp-bench-choose', actorIdx: idx, sourcePlayerIdx: dIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'flowery-lure',
-    params: { validIids: dp.bench.map((c: CardInstance) => c.iid) },
+    params: { validIids: _lureIids },
   });
 });
 regR('flowery-lure', (st, idx, iids, _params, pool) => {

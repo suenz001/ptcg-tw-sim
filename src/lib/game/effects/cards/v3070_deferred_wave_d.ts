@@ -43,6 +43,7 @@ import {
   ABILITY_EFFECTS as _ABILITY_EFFECTS_UNUSED,
 } from '../_shared';
 import { applyStatusToOppActive } from '../../effects';
+import { canApplyEffectToTarget } from '../../defense'; // v5.995 C-05 備戰目標免疫過濾
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3070Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -100,6 +101,13 @@ export const supercatExpAbility_LureTail: OnDiscardFromHandFn = (st, idx, _pool,
   if (!opp.active || opp.bench.length === 0) {
     return addLog(st, '誘導之尾：對手場上無可互換目標', idx);
   }
+  // v5.995：C-05 目標端免疫 — 免疫特性效果的備戰（化隱等，備戰也生效）不可被選為互換目標
+  const validIids = opp.bench
+    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true }).blocked)
+    .map(b => b.iid);
+  if (validIids.length === 0) {
+    return addLog(st, '誘導之尾：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
+  }
   const s = addLog(st, '誘導之尾：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',
@@ -108,6 +116,7 @@ export const supercatExpAbility_LureTail: OnDiscardFromHandFn = (st, idx, _pool,
     minCount: 1,
     maxCount: 1,
     effectKey: 'gust-opp', // 復用既有 resolver（把選中的對手備戰換到對手戰鬥場）
+    params: { validIids },
   });
 };
 

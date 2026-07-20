@@ -290,9 +290,12 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
   const opp = st.players[dIdx];
   if (!opp.active) return addLog(st, '大力捕捉器：對手戰鬥場無寶可夢', idx);
   if (opp.bench.length === 0) return addLog(st, '大力捕捉器：對手備戰區無寶可夢', idx);
-  // v5.839：特性換位=ability-effect → 化隱/光之翼等免疫特性效果的 active 不被換下（對齊招式版 v5.837）。
-  if (opp.active) { const _g = canApplyEffectToTarget(st, idx, opp.active, _pool.get(opp.active.cardId), 'ability-effect', _pool);
-    if (_g.blocked) return addLog(st, `大力捕捉器：${_g.reason}（不被換位）`, idx); }
+  // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
+  //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
+  const validIids = opp.bench
+    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true }).blocked)
+    .map(b => b.iid);
+  if (validIids.length === 0) return addLog(st, '大力捕捉器：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
   const s = addLog(st, '大力捕捉器：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',
@@ -301,6 +304,7 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
     minCount: 1,
     maxCount: 1,
     effectKey: 'gust-opp',
+    params: { validIids },
   });
 });
 

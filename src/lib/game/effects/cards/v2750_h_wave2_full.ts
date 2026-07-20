@@ -23,7 +23,7 @@ import {
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
-import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
+import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost, oppSwapDmgPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -1627,35 +1627,11 @@ regPost('音波龍ex|狡兔三窟', (state, aIdx, pool, action) => {
   return _cb(state, aIdx, pool);
 });
 
-// 流氓熊貓|拉扯 — 對手 1 備戰換戰鬥
+// 流氓熊貓|拉扯 — C-05 gust（攻擊方選對手備戰互換）
+// v5.995：收斂到中央 oppSwapDmgPost — 舊手刻站 (1)誤 gate 原戰鬥位免疫(方向相反,C-05 目標是備戰)
+//   (2)regR 舊 active 退備戰漏 clearActiveEffects(狀態殘留)。中央版兩者皆正確。
 regPre('流氓熊貓|拉扯', (s) => ({ state: s, damage: 0 }));
-regPost('流氓熊貓|拉扯', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  // v5.837：化隱/純樸等免疫招式效果的 active 不被強制換位（對齊中央 forceOppSwapPost）。
-  { const _sa = state.players[dIdx].active;
-    if (_sa) { const _sg = canApplyEffectToTarget(state, aIdx, _sa, _pool.get(_sa.cardId), 'attack-effect', _pool);
-      if (_sg.blocked) return addLog(state, `拉扯：${_sg.reason}（不被強制換位）`, aIdx); } }
-  if (state.players[dIdx].bench.length === 0) return state;
-  return withPending(addLog(state, '拉扯：對手 1 備戰寶可夢與戰鬥場互換', aIdx), {
-    type: 'opp-bench-choose',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'h-wave2-force-opp-swap',
-  });
-});
-regR('h-wave2-force-opp-swap', (state, aIdx, iids, _params, _pool) => {
-  if (iids.length === 0) return state;
-  const targetIid = iids[0];
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(state, dIdx, p => {
-    if (!p.active) return p;
-    const idx = p.bench.findIndex(b => b.iid === targetIid);
-    if (idx < 0) return p;
-    const oldActive = p.active;
-    const newActive = p.bench[idx];
-    return { ...p, active: newActive, bench: p.bench.map((b, i) => i === idx ? oldActive : b) };
-  });
-});
+regPost('流氓熊貓|拉扯', oppSwapDmgPost(0, '拉扯'));
 
 // 沙河馬|推倒 10 — 對手戰鬥/備戰互換（由對手選）
 regPre('沙河馬|推倒', (s) => ({ state: s, damage: 10 }));
@@ -2706,10 +2682,16 @@ regPost('鐵蟻|咬碎', (state, aIdx, pool) => {
   return discardOppActiveEnergyPost('咬碎', 'any')(addLog(r.state, '咬碎：正面', aIdx), aIdx, pool);
 });
 
-// 烏賊王|勾結觸手 — 條件：上回合用過「庫瑟洛斯奇的企圖」
-//   無此追蹤機制，此招式幾乎不會觸發 — 接受失敗 fallback
-regPre('烏賊王|勾結觸手', (state, aIdx, _pool) => {
-  return { state: addLog(state, '勾結觸手：未追蹤上回合「庫瑟洛斯奇的企圖」 → 招式失敗', aIdx), damage: 0 };
+// 烏賊王|勾結觸手 — 卡面：「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。然後，新上場的寶可夢
+//   受到120點傷害。在這個回合，若沒有從手牌使出『庫瑟洛斯奇的企圖』，則這個招式失敗。」
+// v5.995 實裝：kuceroskPlayedThisTurn 旗標（reg('庫瑟洛斯奇的企圖') 設、END_TURN 清）+
+//   中央 oppSwapDmgPost(120)（C-05 gust + 新上場傷害走 dealAttackDamageToTarget）。
+regPre('烏賊王|勾結觸手', (state, _aIdx, _pool) => ({ state, damage: 0 }));
+regPost('烏賊王|勾結觸手', (state, aIdx, pool) => {
+  if (!state.players[aIdx].kuceroskPlayedThisTurn) {
+    return addLog(state, '勾結觸手：這個回合沒有從手牌使出「庫瑟洛斯奇的企圖」 → 招式失敗', aIdx);
+  }
+  return oppSwapDmgPost(120, '勾結觸手')(state, aIdx, pool);
 });
 
 // 列陣兵|一併攻擊 — 已在 Section 13

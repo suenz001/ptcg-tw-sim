@@ -142,6 +142,8 @@ regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
   const validIids = opp.bench.filter(b => {
     const card = pool.get(b.cardId);
     if (!card?.hp) return false;
+    // v5.995：C-05 目標端免疫 — 免疫特性效果的備戰不可被選為互換目標
+    if (canApplyEffectToTarget(st, idx, b, card, 'ability-effect', pool, { isBench: true }).blocked) return false;
     return (getEffectiveHP(b, pool, st) - b.damage) <= 90; // v5.778 有效HP(含道具/場地),禁 base hp
   }).map(b => b.iid);
   if (validIids.length === 0) {
@@ -568,16 +570,19 @@ regA('赫普的毛毛角羊', 0, (st, idx, _pool, _cardInst) => {
   const opp = st.players[oppIdx];
   if (!opp.active) return addLog(st, '挑戰角擊：對手戰鬥場無寶可夢', idx);
   if (opp.bench.length === 0) return addLog(st, '挑戰角擊：對手備戰區為空', idx);
-  // v5.839：特性換位=ability-effect → 化隱/光之翼免疫者 active 不被換下。
-  if (opp.active) { const _g = canApplyEffectToTarget(st, idx, opp.active, _pool.get(opp.active.cardId), 'ability-effect', _pool);
-    if (_g.blocked) return addLog(st, `挑戰角擊：${_g.reason}（不被換位）`, idx); }
+  // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
+  //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
+  const validIids = opp.bench
+    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true }).blocked)
+    .map(b => b.iid);
+  if (validIids.length === 0) return addLog(st, '挑戰角擊：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
   const s = addLog(st, '挑戰角擊：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
     type: 'opp-bench-choose',
     actorIdx: idx, sourcePlayerIdx: oppIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'v2998-swap-opp-active-bench',
-    params: { label: '挑戰角擊' },
+    params: { label: '挑戰角擊', validIids },
   });
 });
 
