@@ -3685,7 +3685,7 @@ regPost('雪絨蛾|冰冷寒氣', defCantAttackNextPost());
 // Session 31 H9 — 下一次被攻擊傷害 -N（新機制 damageReduceNextHit）
 // ══════════════════════════════════════════════════════════════════════════════
 
-function selfDmgReducePost(n: number): AttackPostFn {
+export function selfDmgReducePost(n: number): AttackPostFn {
   return (state, aIdx) => {
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };

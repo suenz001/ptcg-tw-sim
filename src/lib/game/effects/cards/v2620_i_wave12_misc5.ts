@@ -6,7 +6,7 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
-import { defNextAtkReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate)
+import { defNextAtkReducePost, selfDmgReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate) + v6.001 自身防護
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
@@ -235,7 +235,10 @@ regPre('赫普的古月鳥|浮躁噴吐', (state, aIdx, _pool) => {
 // 12. 對手下回合 -N（2 張）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('象徵鳥|反射壁', (s) => ({ state: s, damage: 0 }));
-regPost('象徵鳥|反射壁', defNextAtkReducePost(40, '反射壁'));
+// v6.001：反射壁卡面「這隻寶可夢受到招式的傷害-40」=自身防護(同樹林龜甲殼衝撞家族),非對手削攻。
+//   原誤用 defNextAtkReducePost(對手削攻,=v5.997魔法魅惑的反向錯誤)→會減對手對備戰傷害/誤吃免疫gate/
+//   象徵鳥退場後仍跟對手。改回 selfDmgReducePost(自身 damageReduceNextHit,由 v5.651 過期清除)。
+regPost('象徵鳥|反射壁', selfDmgReducePost(40));
 
 regPre('赫普的稚山雀|恐怖視線', (s) => ({ state: s, damage: 0 }));
 regPost('赫普的稚山雀|恐怖視線', defNextAtkReducePost(20, '恐怖視線'));

@@ -21,7 +21,9 @@ let pass=0,fail=0; const T=(n,f)=>{try{f();console.log('  OK',n);pass++;}catch(e
 const mk=(oppCid)=>({phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,turn:5,isFirstTurn:false,log:[],pendingSelection:null,
   players:[{name:'P1',active:inst(POKE),bench:[],hand:[],deck:[],discard:[],prizes:[1]},
            {name:'P2',active:inst(oppCid),bench:[],hand:[],deck:[],discard:[],prizes:[1]}]});
-for(const [key,wave] of [['捲捲耳|撒嬌','v2580'],['象徵鳥|反射壁','v2620']]){
+// v6.001：象徵鳥|反射壁 已改自身防護(selfDmgReducePost),移出 defNextAtkReducePost；
+//   改用 v2620 真正的 defNextAtkReducePost 卡「赫普的稚山雀|恐怖視線」維持 v2620 免疫 gate 覆蓋。
+for(const [key,wave] of [['捲捲耳|撒嬌','v2580'],['赫普的稚山雀|恐怖視線','v2620']]){
   T(`★${key}(${wave}):化隱對手不應被減攻`, () => {
     const out=ATTACK_POST.get(key)(mk(HIDDEN),0,pool);
     assert.ok(!out.players[1].active.nextOwnAttackPenalty, `化隱應免疫,實得 ${out.players[1].active.nextOwnAttackPenalty}`);
