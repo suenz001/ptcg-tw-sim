@@ -5562,8 +5562,8 @@ regR('insert-and-draw-discard', (st, aIdx, iids, _params, pool) => {
 // ── E. 自己下回合受招式傷害 -N 4 張 ───────────────────────────────────────
 regPost('龍捲雲|暴風障壁', selfDmgReducePost(50));
 regPost('盔甲鳥|鋼翼', selfDmgReducePost(30));
-regPost('振翼髮|月亮之力', selfDmgReducePost(30));
-regPost('仙子伊布ex|魔法魅惑', selfDmgReducePost(100));
+regPost('振翼髮|月亮之力', defNextAtkReducePost(30, '月亮之力'));
+regPost('仙子伊布ex|魔法魅惑', defNextAtkReducePost(100, '魔法魅惑'));
 
 // ── F. 丟對手隨機 1 張手牌 2 張 ───────────────────────────────────────────
 function oppDiscardRandomHand(n: number, attackName: string): AttackPostFn {
@@ -12388,12 +12388,13 @@ regPost('泥巴魚|飛撲圈套', (state, aIdx, pool, action) => {
 // v2.48 仙子伊布ex 兩招（H 標 Stage1 Psychic）
 // ══════════════════════════════════════════════════════════════════════════════
 // 1) 魔法魅惑 [PCC] 160 — 「下個對手回合，受到這個招式的寶可夢使用招式的傷害 -100」
-//    v5.727：魔法魅惑 regPost 改回同族正確的 selfDmgReducePost(100)（註冊於上方「E. 自己下
-//    回合受招式傷害 -N」群組）。卡面「在下個對手的回合，受到這個招式的寶可夢(=仙子伊布自身)
-//    使用招式的傷害 -100」是【自身防護】(同 龍捲雲|暴風障壁、振翼髮|月亮之力)；先前誤用
-//    defNextAtkReducePost(在對手 active 設 nextOwnAttackPenalty 削弱對手攻擊)：對手附免疫
-//    能量(硬岩等)時其 guard 會擋掉 → 仙子伊布反而沒被保護，且會削弱對手對所有目標的傷害=錯誤語意。
-//    此處僅保留 regPre 基礎傷害 160；regPost 由上方 selfDmgReducePost(100) 生效。
+//    v5.997：修正 v5.727 誤讀。卡面主詞「受到這個招式的寶可夢」= 被此招打到的【對手】寶可夢
+//    (受到=承受;若指自身會寫「這隻寶可夢受到」如龍捲雲暴風障壁/盔甲鳥鋼翼)，其【下回合使用招式的
+//    輸出傷害】-100。與黑魯加大聲咆哮/嘎啦嘎啦叫聲/超級火炎獅ex吠等同句式(全走 defNextAtkReducePost)。
+//    v5.727 把 defNextAtkReducePost 誤當自身防護改成 selfDmgReducePost=blanket 減自己受傷、且綁在
+//    仙子伊布自身→被打的對手昏厥換同名替身後仍套用(玩家實測 bug)。故 regPost 改回同族正確的
+//    defNextAtkReducePost(100)(對手免疫招式效果時不施加=正確;削弱對手對所有目標傷害=符合卡面未限目標)。
+//    振翼髮|月亮之力(-30)同一誤讀,一併收斂。regPre 基礎傷害 160 不變。
 regPre('仙子伊布ex|魔法魅惑', (s, _a, _p) => ({ state: s, damage: 160 }));
 
 // 2) 天仙石 [WLP] 0 — 選 0~2 隻對手備戰，連附加卡放回對手牌庫並重洗
