@@ -7624,7 +7624,7 @@ export function applyAttackerActiveDamageBonuses(
     formula.push({ sign: '+', value: b, label: '力量蛋白飲' });
   }
   // ── 夠讚狗｜腎上腺力量（自身附【惡】能量 +100）─────────────────────────
-  if (aCard.name === '夠讚狗' && countEnergyTypeHostAware(aInst, 'Darkness', pool) >= 1) {
+  if (aCard.name === '夠讚狗' && isAbilityHolderEffective(state, aInst, aCard, aIdx, '腎上腺力量', 'active', pool) && countEnergyTypeHostAware(aInst, 'Darkness', pool) >= 1) {
     d += 100;
     s = addLog(s, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
     formula.push({ sign: '+', value: 100, label: '腎上腺力量' });

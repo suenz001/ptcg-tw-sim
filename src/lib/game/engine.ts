@@ -853,6 +853,20 @@ export function getEffectiveHP(
   const card = pool.get(inst.cardId);
   if (!card) return 0;
   let hp = card.hp ?? 0;
+  // v5.999：被動「最大HP」特性(雜草魂/生機森巴/大師工藝/腎上腺力量/暴龍根性)被暗夜羽擊/初始化/黏著
+  //   束縛壓制時不套用其最大HP加成。state 缺席(部分UI/可用性路徑)→無法判壓制,預設有效(維持現行,避免回歸)。
+  const hpAbilityEffective = (i: CardInstance, c: Card, abName: string): boolean => {
+    if (!state) return true;
+    let oIdx: 0 | 1 | -1 = -1;
+    let loc: 'active' | 'bench' = 'bench';
+    for (let k = 0 as 0 | 1; k <= 1; k = (k + 1) as 0 | 1) {
+      const p = state.players[k];
+      if (p.active && p.active.iid === i.iid) { oIdx = k; loc = 'active'; break; }
+      if (p.bench.some(b => b.iid === i.iid)) { oIdx = k; loc = 'bench'; break; }
+    }
+    if (oIdx < 0) return true;
+    return isAbilityHolderEffective(state, i, c, oIdx, abName, loc, pool);
+  };
   // 阻礙之塔（Stadium）會讓道具 HP 加成失效；若未傳 state 則忽略此檢查
   const jammed = state ? isToolsJammed(state, pool) : false;
   if (!jammed) {
@@ -895,7 +909,8 @@ export function getEffectiveHP(
       const allP = [...(p.active ? [p.active] : []), ...p.bench];
       const hasSamba = allP.some(c => {
         const cc = pool.get(c.cardId);
-        return cc?.abilities?.some(a => a.name === '生機森巴');
+        if (!cc?.abilities?.some(a => a.name === '生機森巴')) return false;
+        return hpAbilityEffective(c, cc, '生機森巴');
       });
       if (!hasSamba) continue;
       // 確認 inst 是這位玩家的寶可夢
@@ -905,7 +920,7 @@ export function getEffectiveHP(
   // 修建老匠｜大師工藝 (SV11B Stage2 140HP) — 「這隻寶可夢的最大 HP，
   //   依這隻寶可夢身上附加的【鬥】能量每 1 個『+40』。」
   //   依 host 自身 fighting energy 數量加 HP。
-  if (card.name === '修建老匠') {
+  if (card.name === '修建老匠' && hpAbilityEffective(inst, card, '大師工藝')) {
     let fightingCount = 0;
     for (const e of inst.energyAttached) {
       const ec = pool.get(e.cardId);
@@ -920,7 +935,7 @@ export function getEffectiveHP(
   // v5.897：同名怖納噬草有兩種特性(雜草魂 HP加成 vs 恐慌牢籠 進化混亂,id 14359 M2)。
   //   原本用 card.name==='怖納噬草' 會把 HP 加成錯套到「恐慌牢籠版」→ 玩家回報進化時被加血。
   //   改判「這張卡實際有『雜草魂』特性」才加,恐慌牢籠版不受影響。
-  if (state && (card.abilities?.some(a => a.name === '雜草魂') ?? false)) {
+  if (state && (card.abilities?.some(a => a.name === '雜草魂') ?? false) && hpAbilityEffective(inst, card, '雜草魂')) {
     // 找出對手側 → 對手獎賞已被「攻擊方」取走，記錄在 state.players[opp].prizes 上
     //   原始獎賞 6 張，prizes.length 為「剩餘張數」，已取 = 6 - prizes.length。
     //   要找「持有者」對手；判斷 inst 屬於哪一邊：
@@ -942,7 +957,7 @@ export function getEffectiveHP(
   //   hpRemaining 以及實際 KO 判定全走這裡的 getEffectiveHP，導致 HP+100 完全沒真的生效。
   //   搬到這裡 → UI 顯示與 KO 判定一致。
   //   稜鏡能量 on Basic → 視為全屬性能量（含 Darkness）也算數（Leon v2.120 要求）。
-  if (card.name === '夠讚狗') {
+  if (card.name === '夠讚狗' && hpAbilityEffective(inst, card, '腎上腺力量')) {
     const hostIsEvolution = !!card.evolvesFrom || card.stage === 'Stage1' || card.stage === 'Stage2';
     const hasDark = inst.energyAttached.some(e => {
       const ec = pool.get(e.cardId);
@@ -964,7 +979,7 @@ export function getEffectiveHP(
   // v2.355 怪顎龍｜暴龍根性 — 身上附有特殊能量卡時最大 HP +150
   // 卡面：「若這隻寶可夢身上附有特殊能量卡，則最大 HP 值是「+150」。」
   // 判定：energyAttached 中有任意一張 supertype=Energy 且 subtype!=='Basic' 的卡
-  if (card.name === '怪顎龍' && card.abilities?.some(a => a.name === '暴龍根性')) {
+  if (card.name === '怪顎龍' && card.abilities?.some(a => a.name === '暴龍根性') && hpAbilityEffective(inst, card, '暴龍根性')) {
     const hasSpecial = inst.energyAttached.some(e => {
       const ec = pool.get(e.cardId);
       return ec?.supertype === 'Energy' && ec.subtype !== 'Basic';
@@ -4640,7 +4655,7 @@ function handlePlaying(
 
     // v2.113 夠讚狗｜腎上腺力量 — 若攻擊方自身（夠讚狗）附有【惡】能量，招式傷害 +100
     // v2.120：改用 countEnergy（host-aware），稜鏡能量在 Basic host 上也算惡能量
-    if (baseDamage > 0 && attackerCard.name === '夠讚狗') {
+    if (baseDamage > 0 && attackerCard.name === '夠讚狗' && !!attacker.active && isAbilityHolderEffective(state, attacker.active, attackerCard, aIdx, '腎上腺力量', 'active', pool)) {
       const hasDark = (countEnergy(attacker.active, pool).get('Darkness') ?? 0) >= 1;
       if (hasDark) {
         baseDamage += 100;
