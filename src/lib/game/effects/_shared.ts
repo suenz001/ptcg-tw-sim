@@ -1440,7 +1440,11 @@ export function placedBenchInstance(card: CardInstance): CardInstance {
   //   cantAttackThisTurn / healedThisTurn / 各 immune*/…ThisTurn/NextTurn 旗標；從棄牌區復活
   //   (KO 進棄牌帶著整組場上旗標)再放備戰時會外洩(特性被誤擋 / 免疫殘留)。白名單不漂移：
   //   新增旗標自動被清。原清除項(damage/energy/tool/extraTools/stack/三槽狀態/_faintByEffect)全涵蓋。
-  return { ...toBareCard(card), justPlaced: true };
+  // v6.000：⚠fossilOnField 是「持久性定義屬性」(化石上場永遠 HP60)非回合旗標,必須保留 — 否則
+  //   化石採掘場等走 placedBenchInstance 的化石放置路徑會被 toBareCard 剝掉 → getEffectiveHP=0
+  //   (`if(fossilOnField)return 60` 落空)→ 化石顯示 0/0 且 `hp>0` 判 KO 落空致「打不死」(玩家實測)。
+  //   (PLAY_FOSSIL 是先 toBareCard 再加 fossilOnField,順序對故未中招;此收斂讓所有 bench 化石路徑一致。)
+  return { ...toBareCard(card), justPlaced: true, ...(card.fossilOnField ? { fossilOnField: true } : {}) };
 }
 
 /**
