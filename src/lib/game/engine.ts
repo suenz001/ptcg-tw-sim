@@ -6783,6 +6783,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     if (currentPlayer.active) currentPlayer.active = clearCantRetreat(currentPlayer.active);
     currentPlayer.bench = currentPlayer.bench.map(clearCantRetreat);
 
+    // v5.998：清除 nextOwnAttackPenalty（受招削攻:魔法魅惑/大聲咆哮/叫聲等「受到此招的寶可夢下回合
+    //   使用招式傷害-N」）——旗標由上個對手回合設在本方(擁有者)身上、作用於本回合;本回合未出招消耗
+    //   則於本回合結束清除,避免殘留超出「在下個對手的回合」時限(v5.997 audit 指出唯一漏清 next-turn debuff)。
+    const clearNextOwnAttackPenalty = (c: CardInstance): CardInstance => {
+      if (c.nextOwnAttackPenalty === undefined) return c;
+      const n = { ...c }; delete n.nextOwnAttackPenalty; return n;
+    };
+    if (currentPlayer.active) currentPlayer.active = clearNextOwnAttackPenalty(currentPlayer.active);
+    currentPlayer.bench = currentPlayer.bench.map(clearNextOwnAttackPenalty);
+
     // v2.69 重裝角擊：清除本回合結束方（aIdx）pokemon 的 damageTakenLastOppTurn
     //   原則：「上個對手回合受到的傷害」於對手下回合（=本方下個回合）重置；
     //   實作：每位玩家自己 END_TURN 時清空自己 pokemon 的 lastOppTurn 累計（接下來

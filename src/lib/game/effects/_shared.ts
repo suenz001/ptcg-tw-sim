@@ -297,6 +297,16 @@ export function setAbilityHolderEffectiveFn(fn: (state: GameState, inst: CardIns
   _abilityHolderEffectiveFn = fn;
 }
 
+/**
+ * v5.998：「選擇N個能量丟棄」型招式(registerSelfDiscardMultiply/ATTACK_PRE_DISCARD_CHOICE)在可丟能量
+ *   單位數 availableUnits < spec.min 時的有效最小丟棄數 = min(spec.min, availableUnits)。依官方 Q&A
+ *   (黃玉伏特:附璀璨結晶減費/被扮晶晶酒複製,身上不足N能量→丟光現有、無條件傷害照給),丟棄是「招式效果」
+ *   非「使用成本」,不足額不阻擋招式。UI 的 confirm/minOk gate 用此避免湊不滿N被卡住。
+ */
+export function effectivePreDiscardMin(spec: PreDiscardSpec, availableUnits: number): number {
+  return Math.min(spec.min, Math.max(0, availableUnits));
+}
+
 export function getEnergyDiscardUnits(
   energyCardId: string,
   hostInst: CardInstance | null,

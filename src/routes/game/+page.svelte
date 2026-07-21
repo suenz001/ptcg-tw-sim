@@ -32,7 +32,7 @@
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -5138,6 +5138,12 @@
     return n;
   }
 
+  // v5.998：可丟能量總量(供 effectivePreDiscardMin 上限;不足spec.min時付能付的,依黃玉伏特官方Q&A)
+  function _maxDiscardAmount(spec: PreDiscardSpec): number {
+    const energies = getDiscardableEnergies(spec);
+    return computePickedAmount(spec, new Set(energies.map(e => e.iid)), energies);
+  }
+
   function togglePreAttackEnergy(iid: string) {
     if (!preAttackDiscard) return;
     const picked = new Set(preAttackDiscard.picked);
@@ -5184,7 +5190,7 @@
     const { attackIndex, spec, picked, copyAttackChoice, exactRequired } = preAttackDiscard;
     const energies = getDiscardableEnergies(spec);
     const amount = computePickedAmount(spec, picked, energies);
-    if (amount < spec.min) return;
+    if (amount < effectivePreDiscardMin(spec, _maxDiscardAmount(spec))) return;
     // v4.15：units mode 允許單張 atomic 超過 max（同 v4.12 UI maxOk 修法）
     if (spec.countMode !== 'units' && spec.max !== null && amount > spec.max) return;
     // v4.14：units mode 允許單張超過 → 改 < 嚴擋 (0 skip 或 >= exactRequired 才送)
@@ -9531,7 +9537,7 @@
     {@const isHandDiscard = spec.scope === 'hand-rocket-supporter' || spec.scope === 'hand-tool' || spec.scope === 'hand-energy'}
     {@const isHandTool = spec.scope === 'hand-tool'}
     {@const unit = isUnits ? '個' : '張'}
-    {@const minOk = pickedAmount >= spec.min}
+    {@const minOk = pickedAmount >= effectivePreDiscardMin(spec, _maxDiscardAmount(spec))}
     {@const maxOk = isUnits ? true : (spec.max === null || pickedAmount <= spec.max)}
     {@const dmgPicked = isUnits && spec.max !== null ? Math.min(pickedAmount, spec.max) : pickedAmount}
     {@const estDmg = spec.baseDamage + dmgPicked * spec.damagePerEnergy}
