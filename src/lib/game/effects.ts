@@ -10482,7 +10482,7 @@ regPost('蒼炎刃鬼|火焰咒詛', (state, aIdx, pool) => {
     if (blockedReason) return addLog(s, `火焰咒詛：對手寶可夢｜${blockedReason}（特殊能量無法丟棄）`, aIdx);
     return addLog(s, '火焰咒詛：對手全場沒有特殊能量', aIdx);
   }
-  return addLog(s, `火焰咒詛：丟棄對手全場 ${removed} 張特殊能量`, aIdx);
+  return addLog(s, `火焰咒詛：丟棄對手全場特殊能量 — ${joinCardNames(removedEnergies, pool)}`, aIdx);
 });
 
 // ── 厄鬼椪 火灶面具ex｜極限火焰 — 140（若對手是進化寶可夢 +140，並丟自身全部能量）

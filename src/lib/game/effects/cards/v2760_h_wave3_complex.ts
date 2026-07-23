@@ -364,7 +364,7 @@ regR('scavenge-tool-pick', (state, aIdx, iids, params, pool) => {
   }));
   if (!removedTool) return addLog(s, '掃除：找不到目標道具', aIdx);
   s = updatePlayer(s, pIdx, pp => ({ ...pp, discard: [...pp.discard, { ...removedTool, damage: 0, energyAttached: [] }] }));
-  s = addLog(s, `掃除：丟棄 ${ownerName} 身上的道具`, aIdx);
+  s = addLog(s, `掃除：丟棄 ${ownerName} 身上的道具（${pool.get(removedTool.cardId)?.name ?? '?'}）`, aIdx);
   const picksLeft = (params?.picksLeft as number ?? 1) - 1;
   if (picksLeft >= 1) {
     const opts2 = buildScavengeOptions(s, aIdx, pool);

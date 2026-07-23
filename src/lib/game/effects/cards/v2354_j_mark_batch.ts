@@ -27,7 +27,7 @@ import {
   updatePlayer,
   withPending,
 } from '../_shared';
-import { getAllAttachedTools } from '../_shared'; // v5.841 丟道具含 extraTools(多重轉接)
+import { getAllAttachedTools, joinCardNames } from '../_shared'; // v5.841 丟道具含 extraTools(多重轉接) + v6.003 丟棄卡名 log
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 
@@ -178,7 +178,7 @@ regPost('超級毒藻龍ex|腐蝕液', (state, aIdx, pool) => {
   }
 
   const discardIids = new Set(toDiscard.map(c => c.iid));
-  let s = addLog(state, `腐蝕液：移除對手場上所有道具 & 特殊能量（${toDiscard.length} 張）`, aIdx);
+  let s = addLog(state, `腐蝕液：丟棄對手場上所有道具＆特殊能量 — ${joinCardNames(toDiscard, pool)}`, aIdx);
 
   return updatePlayer(s, dIdx, p => {
     const strip = (inst: CardInstance): CardInstance => ({
