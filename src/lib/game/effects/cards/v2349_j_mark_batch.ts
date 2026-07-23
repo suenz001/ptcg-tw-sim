@@ -1,6 +1,6 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
-import { addLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
+import { addLog, addPrivateLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
 import { startEnergyChain } from './v158_energy_chain';
 import { canApplyAttackEffectToTarget, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
 
@@ -162,20 +162,44 @@ regR('j-taurus-group-aim', (state, aIdx, iids, _params, pool) => {
   return addLog(damageOneNoKo(r.state, dIdx, target, dmg), `群起瞄準：${r.heads}/${count} 次正面 → ${dmg} 傷害`, aIdx);
 });
 
-// 步哨鼠｜臨檢：擲 3 次，依正面數將對手手牌前 N 張回牌庫並重洗（公開 log，不看內容）。
+// 步哨鼠｜臨檢：擲 3 次，依正面數「查看對手手牌並選擇 N 張」放回牌庫並重洗。
+// v6.002：卡面「查看對手的手牌，從其中選擇 N 張放回牌庫」= 玩家看+選(同暗槓/突刺目光),非自動取前 N 張。
 regPre('步哨鼠|臨檢', (state) => ({ state, damage: 0 }));
 regPost('步哨鼠|臨檢', (state, aIdx, pool) => {
-  const dIdx = 1 - aIdx as 0 | 1;
+  const dIdx = (1 - aIdx) as 0 | 1;
   const r = flipFixed(state, aIdx, '臨檢', 3);
-  const n = Math.min(r.heads, r.state.players[dIdx].hand.length);
-  if (n <= 0) return addLog(r.state, '臨檢：沒有卡放回牌庫', aIdx);
-  const _lNames = r.state.players[dIdx].hand.slice(0, n).map(c => pool.get(c.cardId)?.name ?? '?').join('、'); // v5.863 雙方公開放回牌庫的卡名(Wilson裁定)
-  const s = updatePlayer(r.state, dIdx, (p) => {
-    const moved = p.hand.slice(0, n);
-    const hand = p.hand.slice(n);
-    return { ...p, hand, deck: shuffle([...moved, ...p.deck]) };
+  let s = r.state;
+  const oppHand = s.players[dIdx].hand;
+  const n = Math.min(r.heads, oppHand.length);
+  if (n <= 0) return addLog(s, `臨檢：${r.heads}/3 次正面，沒有卡放回牌庫`, aIdx);
+  // 揭示對手手牌給攻擊方(private;觀戰者只見張數)。放回牌庫的卡名隨後公開(v5.863 Wilson裁定)。
+  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  s = addPrivateLog(s,
+    `臨檢：${r.heads}/3 次正面，查看對手手牌（${oppHand.length} 張）— ${handNames}`,
+    `臨檢：${r.heads}/3 次正面，查看對手手牌（${oppHand.length} 張）`,
+    aIdx);
+  return withPending(s, {
+    type: 'hand-discard',
+    actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: n, maxCount: n,
+    effectKey: 'inspection-to-deck-shuffle',
+    params: {
+      validIids: oppHand.map(c => c.iid),
+      titleOverride: `臨檢：選 ${n} 張放回對手牌庫並重洗`,
+    },
   });
-  return addLog(s, `臨檢：${r.heads}/3 次正面，將對手 ${n} 張手牌放回牌庫並重洗 — ${_lNames}`, aIdx);
+});
+regR('inspection-to-deck-shuffle', (state, aIdx, selectedIids, _params, pool) => {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const opp = { ...players[dIdx] };
+  const picked = opp.hand.filter(c => selectedIids.includes(c.iid));
+  if (picked.length === 0) return addLog(state, '臨檢：未選取卡', aIdx);
+  opp.hand = opp.hand.filter(c => !selectedIids.includes(c.iid));
+  opp.deck = shuffle([...picked, ...opp.deck]);
+  players[dIdx] = opp;
+  const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+  return addLog({ ...state, players }, `臨檢：將對手 ${picked.length} 張手牌放回牌庫並重洗 — ${names}`, aIdx);
 });
 
 // 托戈德瑪爾ex｜尖尖回轉：若上個自己的回合使用過此招式，80+80；使用後記錄到下個自己的回合。

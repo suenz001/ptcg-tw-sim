@@ -10447,10 +10447,15 @@ regPost('蒼炎刃鬼|火焰咒詛', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const d = state.players[dIdx];
   let removed = 0;
+  let blockedReason = ''; // v6.002：有特殊能量卻被免疫(薄霧能量等)→ log 顯示原因,不誤報「沒有」。
   const removedEnergies: CardInstance[] = [];
   const stripSpecial = (inst: CardInstance): CardInstance => {
     // v5.810：化隱/純樸等免疫招式效果者(含 bench)不被丟特殊能量。
-    if (oppPokemonImmuneToAttackEffect(state, aIdx, inst.iid, pool).blocked) return inst;
+    const _imm = oppPokemonImmuneToAttackEffect(state, aIdx, inst.iid, pool);
+    if (_imm.blocked) {
+      if (inst.energyAttached.some(e => { const c = pool.get(e.cardId); return c?.supertype === 'Energy' && c.subtype === 'Special'; })) blockedReason = _imm.reason || '免疫招式效果';
+      return inst;
+    }
     const specials: CardInstance[] = [];
     const kept: CardInstance[] = [];
     for (const e of inst.energyAttached) {
@@ -10473,6 +10478,8 @@ regPost('蒼炎刃鬼|火焰咒詛', (state, aIdx, pool) => {
     discard: [...p.discard, ...removedEnergies],
   }));
   if (removed === 0) {
+    // v6.002：有特殊能量卻全被免疫→顯示原因,不誤報「沒有」。
+    if (blockedReason) return addLog(s, `火焰咒詛：對手寶可夢｜${blockedReason}（特殊能量無法丟棄）`, aIdx);
     return addLog(s, '火焰咒詛：對手全場沒有特殊能量', aIdx);
   }
   return addLog(s, `火焰咒詛：丟棄對手全場 ${removed} 張特殊能量`, aIdx);

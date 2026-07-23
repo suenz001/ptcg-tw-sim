@@ -153,18 +153,27 @@ regPost('超級毒藻龍ex|腐蝕液', (state, aIdx, pool) => {
 
   // 收集所有要丟棄的卡
   const toDiscard: CardInstance[] = [];
+  let blockedReason = ''; // v6.002：有道具/特殊能量卻被免疫(薄霧能量等)→ log 顯示原因,不誤報「無」。
   for (const inst of allOpp) {
     // v5.810：化隱/純樸等免疫招式效果者(含 bench)不被丟道具/特殊能量。
     const _isBench = !(dp.active && dp.active.iid === inst.iid);
-    if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: _isBench }).blocked) continue;
-    for (const t of getAllAttachedTools(inst)) toDiscard.push(t); // v5.841 toolAttached + extraTools
-    for (const e of inst.energyAttached) {
+    const _tools = getAllAttachedTools(inst); // v5.841 toolAttached + extraTools
+    const _specials = inst.energyAttached.filter(e => {
       const ec = pool.get(e.cardId);
-      if (ec?.supertype === 'Energy' && ec.subtype === 'Special') toDiscard.push(e);
+      return ec?.supertype === 'Energy' && ec.subtype === 'Special';
+    });
+    const _g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: _isBench });
+    if (_g.blocked) {
+      if (_tools.length > 0 || _specials.length > 0) blockedReason = _g.reason || '免疫招式效果';
+      continue;
     }
+    for (const t of _tools) toDiscard.push(t);
+    for (const e of _specials) toDiscard.push(e);
   }
 
   if (toDiscard.length === 0) {
+    // v6.002：有可丟項卻全被免疫(薄霧能量等)→ 顯示免疫原因,不誤報「無道具或特殊能量」。
+    if (blockedReason) return addLog(state, `腐蝕液：對手寶可夢｜${blockedReason}（道具/特殊能量無法丟棄）`, aIdx);
     return addLog(state, '腐蝕液：對手場上無道具或特殊能量', aIdx);
   }
 

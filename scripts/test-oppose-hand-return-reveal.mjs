@@ -12,9 +12,9 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.oh-s.js'), E = join(ROOT, '.oh-e.ts'), O = join(ROOT, '.oh-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";');
-writeFileSync(E, "export { ATTACK_POST } from './src/lib/game/effects/_shared';\nimport './src/lib/game/effects';");
+writeFileSync(E, "export { ATTACK_POST, RESOLVERS } from './src/lib/game/effects/_shared';\nimport './src/lib/game/effects';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20', alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
-const { ATTACK_POST } = await import(pathToFileURL(O).href);
+const { ATTACK_POST, RESOLVERS } = await import(pathToFileURL(O).href);
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map(e => e.code));
 const pool = new Map();
@@ -42,6 +42,13 @@ for (const key of ['洛托姆|驚嚇','雪童子|驚嚇','長尾怪手|驚嚇','
     // 恐怖啃咬/臨檢/驚嚇皆擲幣型:固定正面讓其執行
     const orig=Math.random; Math.random=()=>0;
     let out; try{ out=post(mk(),0,pool,{}); } finally { Math.random=orig; }
+    // v6.002：步哨鼠|臨檢改玩家 picker → 公開揭示在 resolver(RESOLVE 後);先解 picker 再檢查公開卡名。
+    if (out.pendingSelection) {
+      const ps=out.pendingSelection;
+      const r=RESOLVERS.get(ps.effectKey);
+      assert.ok(r, '找不到 resolver '+ps.effectKey);
+      out=r(out, ps.actorIdx ?? 0, (ps.params && ps.params.validIids) || [], ps.params || {}, pool);
+    }
     assert.ok(publicRevealsName(out), `公開 log 應含卡名「${HAND_NAME}」(HEAD:addPrivateLog/generic 不含)`);
   });
 }
