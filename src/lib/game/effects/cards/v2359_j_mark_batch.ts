@@ -43,7 +43,7 @@ import {
   withPending,
   countAttachedEnergyAsUnits, getOwnBenchLimit} from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
-import { canApplyAttackEffectToTarget, statusPost, flipCoinsWithLog, applyStatusToOppActive, defCantRetreatNextPost } from '../../effects';
+import { canApplyAttackEffectToTarget, statusPost, coinStatusPost, flipCoinsWithLog, applyStatusToOppActive, defCantRetreatNextPost } from '../../effects';
 
 // ── 私有工具函式 ──────────────────────────────────────────────────────────────
 
@@ -196,9 +196,11 @@ regPost('咚咚鼠|電擊', coinStatusFn('paralyzed', '電擊'));
 // 卡面：「20 擲 1 次硬幣，若正面，對手的戰鬥寶可夢麻痺。」
 regPost('咩利羊|電磁波', coinStatusFn('paralyzed', '電磁波'));
 
-// 莉佳的蔓藤怪（MC Basic Grass 80HP）｜綁緊：50，對手下回合無法撤退
-// 卡面：「50 對手的戰鬥寶可夢下次回合無法撤退。」
-regPost('莉佳的蔓藤怪|綁緊', cantRetreatNextFn('綁緊'));
+// 莉佳的蔓藤怪（MC Basic Grass 80HP）｜綁緊：50，擲1次硬幣正面則對手【麻痺】。
+// v6.004：官方卡面(16485/18334)為「擲1次硬幣若為正面,則將對手的戰鬥寶可夢【麻痺】」,
+//   非「無法撤退」(原註解/實作為前AI誤讀卡文的技術債)。收斂到中央 coinStatusPost(含完整免疫gate),
+//   同 火斑喵|擊掌奇襲 / 捷拉奧拉|麻麻關節 / 大舌舔|泰山壓頂 等 8+ 張擲幣麻痺卡。
+regPost('莉佳的蔓藤怪|綁緊', coinStatusPost('paralyzed'));
 
 // 莉佳的臭臭花（MC Stage1 Grass 90HP）｜噴毒：50，正面中毒
 // 卡面：「50 擲 1 次硬幣，若正面，對手的戰鬥寶可夢中毒。」

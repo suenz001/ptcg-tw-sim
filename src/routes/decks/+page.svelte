@@ -1252,7 +1252,16 @@
         // 依名稱精確匹配 — 若同名多張，記錄歧義，取第一張但警告
         const exact = pool.filter(c => c.name === name);
         if (exact.length === 0) {
-          card = pool.find(c => c.name.includes(name));
+          // v6.004：放寬比對 — 去【】/[]/空白正規化(基本能量「基本火能量」/「基本【火】能量」/「火能量」皆可)
+          const normNm = (s: string) => s.replace(/[【】\[\]\s]/g, '');
+          const nname = normNm(name);
+          const relaxed = nname ? pool.filter(c => normNm(c.name) === nname) : [];
+          if (relaxed.length >= 1) {
+            card = relaxed[0];
+            if (relaxed.length > 1) ambiguities.push({ name, used: `${relaxed[0].setCode} · ${relaxed[0].collectorNumber}`, alternatives: relaxed.slice(1).map(c => `${c.setCode} · ${c.collectorNumber}`) });
+          } else {
+            card = pool.find(c => c.name.includes(name)) ?? (nname ? pool.find(c => normNm(c.name).includes(nname)) : undefined);
+          }
         } else if (exact.length === 1) {
           card = exact[0];
         } else {
