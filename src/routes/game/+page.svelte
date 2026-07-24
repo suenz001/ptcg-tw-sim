@@ -25,7 +25,7 @@
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
   } from '$lib/game/engine';
-  import { evaluateSelectionFilter } from '$lib/game/selection-filter';
+  import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
@@ -3260,6 +3260,8 @@
         const validIidsHD = pendingSelection.params?.validIids as string[] | undefined;
         let pool0 = src.hand;
         if (validIidsHD) pool0 = pool0.filter(c => validIidsHD.includes(c.iid));
+        // v6.017（P1-1 批4）：中央 selection filter 求值器（known 走中央、否則落原 inline chain）；UI 為 canonical，零行為變更
+        if (isKnownSelectionFilter('hand-discard', f2)) return pool0.filter(c => evaluateSelectionFilter('hand-discard', f2, c, pool.get(c.cardId), {}) === true);
         if (f2 === 'Energy') return pool0.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
         if (f2 === 'BasicEnergy') return pool0.filter(c => {
           const card = pool.get(c.cardId);
@@ -3314,6 +3316,8 @@
           if (validIidsDiscard && !validIidsDiscard.includes(c.iid)) return false;
           const card = pool.get(c.cardId);
           if (!card) return false;
+          // v6.017（P1-1 批4）：中央 selection filter 求值器（known 走中央、否則落原 inline chain）；UI 為 canonical，零行為變更
+          if (isKnownSelectionFilter('discard-search', f)) return evaluateSelectionFilter('discard-search', f, c, card, {}) === true;
           if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
           if (f === 'PokemonOrBasicEnergy') {
             // v2.43：夜間擔架用 — 寶可夢卡或「基本」能量卡（排除 Special Energy / Pokemon 道具）
