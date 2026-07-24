@@ -21,7 +21,7 @@ import {
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
-import { evaluateSelectionFilter } from './selection-filter'; // v6.013 P1-1批2:deck-search filter 中央求值器
+import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -816,7 +816,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       const validIidsHD = sel.params?.validIids as string[] | undefined;
       let hand = srcPlayer.hand;
       if (validIidsHD) hand = hand.filter(c => validIidsHD.includes(c.iid));
-      if (f === 'Energy') hand = hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
+      // v6.016 批4:中央 selection filter 求值器（修 AI 缺 BasicEnergy:<T>/Energy:<T> 漂移，如妖火紅狐|閃焰魔法丟錯能量）；known 才走中央，否則落原 inline chain
+      if (isKnownSelectionFilter('hand-discard', f)) {
+        hand = hand.filter(c => evaluateSelectionFilter('hand-discard', f, c, pool.get(c.cardId), {}) === true);
+      } else if (f === 'Energy') hand = hand.filter(c => pool.get(c.cardId)?.supertype === 'Energy');
       else if (f === 'BasicEnergy') hand = hand.filter(c => {
         const card = pool.get(c.cardId);
         return card?.supertype === 'Energy' && card.subtype === 'Basic';
@@ -914,9 +917,16 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     // 棄牌區搜尋
     case 'discard-search': {
       const f = sel.filter ?? '';
-      let discard = actorPlayer.discard.filter(c => {
+      // v6.016 批4:三重結構修復——F2 讀 sourcePlayerIdx（原誤硬讀 actorPlayer.discard→惡作劇作畫等
+      //   「從對手棄牌區選卡」招式 AI 送錯 iid 靜默失效）；F1 params.validIids 前置交集（原完全不讀）；
+      //   中央求值器補齊缺失 filter（豐收漁網/塔拉剛/電氣發電機等原落 fallthrough 亂撿不符卡面的卡）。
+      const validIidsDS = sel.params?.validIids as string[] | undefined;
+      let discardBase = srcPlayer.discard;
+      if (validIidsDS) discardBase = discardBase.filter(c => validIidsDS.includes(c.iid));
+      let discard = discardBase.filter(c => {
         const card = pool.get(c.cardId);
         if (!card) return false;
+        if (isKnownSelectionFilter('discard-search', f)) return evaluateSelectionFilter('discard-search', f, c, card, {}) === true;
         if (f === 'PokemonOrEnergy') return (card.supertype === 'Pokemon') || card.supertype === 'Energy';
         if (f === 'PokemonOrBasicEnergy') {
           // v2.43：夜間擔架用 — 寶可夢或基本能量（排除 Special Energy / Pokemon 道具）
