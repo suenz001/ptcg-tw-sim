@@ -25,6 +25,7 @@
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
   } from '$lib/game/engine';
+  import { evaluateSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
@@ -2954,6 +2955,18 @@
         return src.deck.filter(c => {
           const card = pool.get(c.cardId);
           if (!card) return false;
+          // v6.014（P1-1 批3）：UI deck-search 接中央 selection filter 求值器（三態：回 null 走原 inline fallback）。
+          //   BasicEnergy:DistinctTypes 需傳 excludeEnergyTypes（已勾選的其他能量屬性、排除自己本張），與原 inline 等價。
+          let _exclDT: Set<string> | undefined;
+          if (f === 'BasicEnergy:DistinctTypes') {
+            _exclDT = new Set<string>();
+            for (const d of src.deck) {
+              if (d.iid === c.iid) continue;
+              if (selectionPicked.has(d.iid)) { const pt = getBasicEnergyType(pool.get(d.cardId)); if (pt) _exclDT.add(pt); }
+            }
+          }
+          const _central = evaluateSelectionFilter('deck-search', f, c, card, { params: pendingSelection?.params as Record<string, unknown> | undefined, excludeEnergyTypes: _exclDT });
+          if (_central !== null) return _central;
           if (f === 'Basic')      return isBasicPokemonCard(card);
           if (f === 'Basic:HP70') return isBasicPokemonCard(card) && (card.hp ?? 0) <= 70;
           // v2.171 深缽鎮：基礎寶可夢且非「擁有規則」（排除 ex / V 等）
