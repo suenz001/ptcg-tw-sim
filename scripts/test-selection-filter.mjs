@@ -112,7 +112,7 @@ T('unknown filter(批1未收錄)→ null(caller fallback)',()=>{
   assert.equal(ev('deck-search','TOP6',{iid:'x'},cards[0],{}),null);
   assert.equal(ev('deck-search','',{iid:'x'},cards[0],{}),null);
   assert.equal(ev('deck-search','Evolution',{iid:'x'},cards[0],{}),null,'Evolution(validIids交集)批2才收');
-  assert.equal(ev('hand-discard','BasicEnergy',{iid:'x'},cards[0],{}),null,'hand-discard 批4才收');
+  assert.equal(ev('hand-discard','Pokemon',{iid:'x'},cards[0],{}),null,'hand-discard Pokemon 延後未收錄→null（批4）');
   assert.equal(known('deck-search','TOP6'),false);
 });
 

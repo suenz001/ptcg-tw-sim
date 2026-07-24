@@ -15,7 +15,8 @@
  *   下沉搬進本檔、engine 改 re-export（Check O 純度）。批1 先不動 engine。
  */
 import type { Card } from './types';
-import { isBasicPokemonCard, isRulePokemon, getBasicEnergyType } from './engine';
+import type { EnergyType } from '$lib/cards/types';
+import { isBasicPokemonCard, isRulePokemon, getBasicEnergyType, isBasicEnergyOfType } from './engine';
 
 export type SelectionFilterZone = 'deck-search' | 'hand-discard' | 'discard-search';
 
@@ -82,6 +83,53 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
 };
 
 /**
+ * 批4 收錄的 hand-discard 純 predicate（逐字對齊 +page.svelte / ai.ts 的 hand-discard case canonical）。
+ * ⚠不收錄 'Pokemon'（多張卡無 validIids、UI 現行 fallthrough 顯示全部手牌＝既有 UI-也-錯 bug，屬獨立卡效果 audit，非本次「UI/AI 兩份漂移」收斂範疇）。
+ * 'Item' 收錄當防禦（現役唯一使用者枇琶恒帶 validIids 全遮蔽→零行為變更）。
+ * BasicEnergy:<T> / Energy:<T> 走 prefix 規則（isBasicEnergyOfType）。
+ */
+const HAND_DISCARD_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx) => boolean> = {
+  'Energy':              (c) => c.supertype === 'Energy',
+  'BasicEnergy':         (c) => c.supertype === 'Energy' && c.subtype === 'Basic',
+  'BasicPsychicEnergy':  (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【超】'),
+  'BasicFightingEnergy': (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【鬥】'),
+  'Item':                (c) => c.supertype === 'Trainer' && c.subtype === 'Item',
+};
+
+/**
+ * 批4 收錄的 discard-search 純 predicate（逐字對齊 +page.svelte discard-search case canonical）。
+ * ⚠'Basic' 收斂 isBasicPokemonCard（F6：現役 DB 無 supertype=Pokemon+subtype=Other → 與 UI 手刻
+ *   「!evolvesFrom && !Stage1/2」外延等價，零行為變更；等價掃描測試背書）。
+ * BasicEnergy:<T>（原 UI 內嵌 zhMap）/ Energy:<T> / Pokemon:Types= / Pokemon:<T> 走 prefix 規則。
+ */
+const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx) => boolean> = {
+  'PokemonOrEnergy':      (c) => c.supertype === 'Pokemon' || c.supertype === 'Energy',
+  'PokemonOrBasicEnergy': (c) => c.supertype === 'Pokemon' || (c.supertype === 'Energy' && c.subtype === 'Basic'),
+  'PokemonNonExOrBasicEnergy': (c) => (c.supertype === 'Pokemon' && c.subtype !== 'ex') || (c.supertype === 'Energy' && c.subtype === 'Basic'),
+  'WaterPokemonOrBasicWaterEnergy': (c) => {
+    if (c.supertype === 'Pokemon' && c.pokemonType === 'Water') return true;
+    if (c.supertype === 'Energy' && c.subtype === 'Basic' && (c.pokemonType === 'Water' || c.name.includes('【水】'))) return true;
+    return false;
+  },
+  'FightingPokemonOrBasicFightingEnergy': (c) => {
+    if (c.supertype === 'Pokemon' && c.pokemonType === 'Fighting') return true;
+    if (c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【鬥】')) return true;
+    return false;
+  },
+  'BasicEnergy':          (c) => c.supertype === 'Energy' && c.subtype === 'Basic',
+  'BasicPsychicEnergy':   (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【超】'),
+  'BasicFightingEnergy':  (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【鬥】'),
+  'Energy':               (c) => c.supertype === 'Energy',
+  'Pokemon':              (c) => c.supertype === 'Pokemon',
+  'Basic':                (c) => isBasicPokemonCard(c),
+  'Trainer':              (c) => c.supertype === 'Trainer',
+  'Supporter':            (c) => c.supertype === 'Trainer' && c.subtype === 'Supporter',
+  'Item':                 (c) => c.supertype === 'Trainer' && c.subtype === 'Item',
+  'ColorlessPokeHP100':   (c) => c.supertype === 'Pokemon' && c.pokemonType === 'Colorless' && (c.hp ?? 999) <= 100,
+  'Any':                  () => true,
+};
+
+/**
  * 單卡求值。回傳 null = 此 (zone, filter) 批1 未收錄 → caller 走原 inline fallback。
  * 遷移完成後 unknown 一律回 true（保留現行 fallthrough 語義）+ lint 守新增。
  */
@@ -103,12 +151,37 @@ export function evaluateSelectionFilter(
     if (filter.startsWith('Pokemon:NameContains=')) return card.supertype === 'Pokemon' && card.name.includes(filter.slice(21));
     return null;   // 其餘(TOP/Evolution/params/generic Pokemon:/BasicEnergy: 等)批次遷移 → caller fallback
   }
-  return null;     // hand-discard / discard-search 批4 才收
+  if (zone === 'hand-discard') {
+    const pred = HAND_DISCARD_PREDICATES[filter];
+    if (pred) return pred(card, ctx);
+    // BasicEnergy:<T> / Energy:<T>（基本能量+指定屬性；走 isBasicEnergyOfType，pokemonType 恒 null 時用卡名【X】）
+    if (filter.startsWith('BasicEnergy:')) return isBasicEnergyOfType(card, filter.slice('BasicEnergy:'.length) as EnergyType);
+    if (filter.startsWith('Energy:'))      return isBasicEnergyOfType(card, filter.slice('Energy:'.length) as EnergyType);
+    return null;   // 'Pokemon' 等未收錄 → caller fallback（維持現行 fallthrough）
+  }
+  if (zone === 'discard-search') {
+    const pred = DISCARD_SEARCH_PREDICATES[filter];
+    if (pred) return pred(card, ctx);
+    // prefix 規則：specific 在 generic 前（Pokemon:Types= 必須先於 Pokemon:）
+    if (filter.startsWith('Pokemon:Types=')) {
+      const ts = new Set(filter.slice('Pokemon:Types='.length).split(',').filter(Boolean));
+      return card.supertype === 'Pokemon' && card.pokemonType != null && ts.has(card.pokemonType);
+    }
+    if (filter.startsWith('BasicEnergy:')) return isBasicEnergyOfType(card, filter.slice('BasicEnergy:'.length) as EnergyType);
+    if (filter.startsWith('Energy:'))      return isBasicEnergyOfType(card, filter.slice('Energy:'.length) as EnergyType);
+    if (filter.startsWith('Pokemon:'))     return card.supertype === 'Pokemon' && card.pokemonType === (filter.slice('Pokemon:'.length) as EnergyType);
+    return null;
+  }
+  return null;
 }
 
 /** 此 (zone, filter) 是否已被中央求值器收錄（供 caller 判斷是否走 evaluator）。 */
 export function isKnownSelectionFilter(zone: SelectionFilterZone, filter: string): boolean {
   if (zone === 'deck-search') return filter in DECK_SEARCH_PREDICATES;
+  if (zone === 'hand-discard') return (filter in HAND_DISCARD_PREDICATES)
+    || filter.startsWith('BasicEnergy:') || filter.startsWith('Energy:');
+  if (zone === 'discard-search') return (filter in DISCARD_SEARCH_PREDICATES)
+    || filter.startsWith('Pokemon:Types=') || filter.startsWith('BasicEnergy:') || filter.startsWith('Energy:') || filter.startsWith('Pokemon:');
   return false;
 }
 
