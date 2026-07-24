@@ -21,6 +21,7 @@ import {
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
+import { evaluateSelectionFilter } from './selection-filter'; // v6.013 P1-1批2:deck-search filter 中央求值器
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -445,6 +446,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       let candidates = srcPlayer.deck.filter(c => {
         const card = pool.get(c.cardId);
         if (!card) return false;
+        // v6.013 P1-1批2：中央 selection-filter 求值器優先(已收錄回 boolean;未收錄回 null→走下方 inline
+        //   fallback,批次遷移)。這修掉 AI 對 ex/Item/Supporter/Stage1 等原本落 `return true` 全牌庫的漂移。
+        const _central = evaluateSelectionFilter('deck-search', f, c, card, { params: sel.params });
+        if (_central !== null) return _central;
         const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
         if (f === 'TOP6')            return top6.has(c.iid);
         if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';

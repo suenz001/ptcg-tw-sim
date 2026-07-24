@@ -67,6 +67,18 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'ErikaPokemon':   (c) => c.supertype === 'Pokemon' && c.name.startsWith('莉佳的'),
   'RocketSupporter': (c) => c.supertype === 'Trainer' && c.subtype === 'Supporter' && c.name.includes('火箭隊'),
   'RocketBasic':    (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.name.includes('火箭隊的'),
+  // 組合(寶可夢或基本能量)。⚠草:Bug#20 移除 !evolvesFrom(任意階段草寶可夢);鬥:基礎鬥寶可夢(有 !evolvesFrom)。
+  //   基本能量屬性走名稱【X】(基本能量 pokemonType 恒 null,v6.008)。ai.ts 兩處殘留 !evolvesFrom(草)+死碼→本收斂修正。
+  'GrassBasicOrGrassEnergy': (c) => {
+    if (c.supertype === 'Pokemon' && c.pokemonType === 'Grass') return true;
+    if (c.supertype === 'Energy' && c.subtype === 'Basic') return c.pokemonType === 'Grass' || c.name.includes('【草】');
+    return false;
+  },
+  'FightingBasicOrFightingEnergy': (c) => {
+    if (c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Fighting') return true;
+    if (c.supertype === 'Energy' && c.subtype === 'Basic') return c.pokemonType === 'Fighting' || c.name.includes('【鬥】') || c.name.includes('【格】');
+    return false;
+  },
 };
 
 /**
@@ -84,7 +96,12 @@ export function evaluateSelectionFilter(
   if (zone === 'deck-search') {
     const pred = DECK_SEARCH_PREDICATES[filter];
     if (pred) return pred(card, ctx);
-    return null;   // 批1 未收錄（TOP/name-prefix/Evolution/params 類）→ caller fallback
+    // v6.013 批2：卡名前綴規則(固定順序 specific 在 generic 前;根治 ai.ts 死碼——generic 'Pokemon:' 若排前
+    //   會把 'Pokemon:NamePrefix=' 當屬性比對恒 false)。
+    if (filter.startsWith('Name:')) return card.name === filter.slice(5);
+    if (filter.startsWith('Pokemon:NamePrefix=')) return card.supertype === 'Pokemon' && card.name.startsWith(filter.slice(19));
+    if (filter.startsWith('Pokemon:NameContains=')) return card.supertype === 'Pokemon' && card.name.includes(filter.slice(21));
+    return null;   // 其餘(TOP/Evolution/params/generic Pokemon:/BasicEnergy: 等)批次遷移 → caller fallback
   }
   return null;     // hand-discard / discard-search 批4 才收
 }

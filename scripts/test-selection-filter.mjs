@@ -47,6 +47,8 @@ const GOLDEN={
   'ErikaPokemon': c=>c.supertype===P&&c.name.startsWith('莉佳的'),
   'RocketSupporter': c=>c.supertype===Tr&&c.subtype==='Supporter'&&c.name.includes('火箭隊'),
   'RocketBasic': c=>c.supertype===P&&!c.evolvesFrom&&c.name.includes('火箭隊的'),
+  'GrassBasicOrGrassEnergy': c=>(c.supertype===P&&c.pokemonType==='Grass')||(c.supertype===En&&c.subtype==='Basic'&&(c.pokemonType==='Grass'||c.name.includes('【草】'))),
+  'FightingBasicOrFightingEnergy': c=>(c.supertype===P&&!c.evolvesFrom&&c.pokemonType==='Fighting')||(c.supertype===En&&c.subtype==='Basic'&&(c.pokemonType==='Fighting'||c.name.includes('【鬥】')||c.name.includes('【格】'))),
 };
 let pass=0,fail=0;
 const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FAIL',n,'::',e.message);fail++;}};
@@ -91,6 +93,19 @@ T('sanitizeSelectionSet DistinctTypes:同屬性只留首見',()=>{
   const insts=[{iid:'a',cardId:String(F.id)},{iid:'b',cardId:String(F.id)},{iid:'c',cardId:String(W.id)}];
   const out=sanSet('deck-search','BasicEnergy:DistinctTypes',insts,pool);
   assert.deepEqual(out,['a','c'],'火首見留a、火重複b濾、水留c');
+});
+
+T('前綴規則 Name:/Pokemon:NamePrefix=/Pokemon:NameContains= 與 golden 逐卡等價',()=>{
+  const poke=cards.find(c=>c.supertype===P);
+  const gName='Name:'+poke.name, gPre='Pokemon:NamePrefix='+poke.name.slice(0,2), gCon='Pokemon:NameContains='+poke.name.slice(1,3);
+  let n=0;
+  for(const c of cards){
+    assert.equal(ev('deck-search',gName,{iid:'x'},c,{}), c.name===poke.name, 'Name: '+c.id);
+    assert.equal(ev('deck-search',gPre,{iid:'x'},c,{}), c.supertype===P&&c.name.startsWith(poke.name.slice(0,2)), 'NamePrefix '+c.id);
+    assert.equal(ev('deck-search',gCon,{iid:'x'},c,{}), c.supertype===P&&c.name.includes(poke.name.slice(1,3)), 'NameContains '+c.id);
+    n++;
+  }
+  console.log('   前綴規則逐卡',n,'次等價');
 });
 
 T('unknown filter(批1未收錄)→ null(caller fallback)',()=>{
