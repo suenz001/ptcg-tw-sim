@@ -53,17 +53,17 @@ function baseState(deck){
   const uniq = allIids(out).length===new Set(allIids(out)).size;
   chk('②女服務生 top6外能量 fail-closed(不附加/留牌庫/iid唯一)', noAttach && eInDeck && uniq);
 }
-// ③ cipher-geek 防呆不掉卡
+// ③ cipher-geek 單步(v6.006)不掉卡 + 排序(先選=上方第2位、後選=最上方)
 {
-  const reserved=inst('14086');
-  const deck=[inst('14086'),inst('14086')];
+  const a=inst('14086'),b=inst('14086'),c=inst('14086');
+  const deck=[a,b,c];
   const st=baseState(deck);
   const before=allIids(st).length;
-  st.pendingSelection={type:'deck-search',actorIdx:0,sourcePlayerIdx:0,minCount:1,maxCount:1,effectKey:'cipher-geek-pick-top',params:{reservedSecond:reserved}};
-  // reservedSecond 已從牌庫移出(存 params),所以 before 不含它;0-pick 後應洗回→總數 before+1
-  const out=applyAction(st,{type:'RESOLVE_SELECTION',selectedIids:[]},pool);
-  const after=allIids(out).length;
-  chk('③cipher-geek 0-pick reservedSecond 洗回不掉卡', after===before+1 && out.players[0].deck.some(c=>c.iid===reserved.iid));
+  st.pendingSelection={type:'deck-search',actorIdx:0,sourcePlayerIdx:0,minCount:2,maxCount:2,effectKey:'cipher-geek-arrange-top',params:{}};
+  const out=applyAction(st,{type:'RESOLVE_SELECTION',selectedIids:[a.iid,b.iid]},pool);
+  const after=allIids(out).length; const d=out.players[0].deck;
+  // 選取序[a,b]→後選 b 最上方、先選 a 第2位、c 為 rest;總卡數守恆、無殘留 pending
+  chk('③cipher-geek 單步不掉卡+排序(後選最上/先選第2)', after===before && d.length===3 && d[0].iid===b.iid && d[1].iid===a.iid && d[2].iid===c.iid && !out.pendingSelection);
 }
 console.log(`deck-search-integrity-964:PASS ${pass} / FAIL ${fail}`);
 if(fail>0)process.exit(1);

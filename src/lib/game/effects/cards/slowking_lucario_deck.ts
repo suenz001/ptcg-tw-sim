@@ -408,65 +408,49 @@ regR('pulse-thrust-distribute', (st, idx, selectedIids, params, pool) => {
 regG('暗碼迷的解讀', (st, idx) => {
   return st.players[idx].deck.length > 0;
 });
+// v6.006（線上穩健化）：原「兩步 chained deck-search（step1 先把選中卡從牌庫移出、把整個
+//   CardInstance 暫存進 pending.params，step2 再放回）」是全站唯一此模式，在線上錦標賽 live-room
+//   造成客戶端卡在 picker（選不了卡/當掉→閒置判負；CSD子龍 vs 大吾 R2 dump 佐證：伺服器已完整
+//   解完、finalState 無殘留 pending，但客戶端 desync 卡死）。改為【單一 deck-search 一次選 2 張】：
+//   不中途移卡、不暫存 CardInstance、無 chained pending（單一 RESOLVE_SELECTION）→ 線上不再 desync，
+//   且不可能掉卡。resolver 依玩家選取順序放回牌庫上方（維持 Leon v2.96 排序語義：先選＝上方第 2 位、
+//   後選＝最上方），其餘重洗。
 reg('暗碼迷的解讀', (st, idx) => {
   const p = st.players[idx];
   if (p.deck.length === 0) return addLog(st, '暗碼迷的解讀：牌庫已空', idx);
   if (p.deck.length === 1) {
-    // 牌庫只剩 1 張 — 卡面「任意選擇 2 張」不可能滿足，降級為放回那張 + 無可洗
+    // 牌庫只剩 1 張 — 卡面「任意選擇 2 張」不可能滿足，降級：該張本就在牌庫上方，無需選擇/重洗
     return addLog(st, '暗碼迷的解讀：牌庫只剩 1 張，無需選擇', idx);
   }
   const s = addLog(st,
-    '暗碼迷的解讀：先從牌庫選第 1 張（將放在牌庫上方第 2 位）',
+    '暗碼迷的解讀：從牌庫選 2 張放回牌庫上方（先選＝上方第 2 位、後選＝最上方），其餘重洗',
     idx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Any',
-    minCount: 1, maxCount: 1,
-    effectKey: 'cipher-geek-pick-second',
-    params: { titleOverride: '暗碼迷的解讀：先從牌庫選第 1 張（將放在牌庫上方第 2 位）' },
+    minCount: 2, maxCount: 2,
+    effectKey: 'cipher-geek-arrange-top',
+    params: { titleOverride: '暗碼迷的解讀：選 2 張放回牌庫上方（先選＝上方第 2 位、後選＝最上方）' },
   });
 });
-// Step 1 resolver：記住第 1 次選的卡，從 deck 暫移到 pending params，開 Step 2
-regR('cipher-geek-pick-second', (st, idx, iids) => {
-  if (iids.length !== 1) return st;
-  const secondIid = iids[0];
+// 單步 resolver：依玩家選取順序（selectedIids 反映點選序，UI selectionPicked 為 Set 保留插入序）
+//   放回牌庫上方 —— 先選的放上方第 2 位、後選的放最上方（= 牌庫頂順序為選取序 reverse），其餘重洗。
+//   全程不從牌庫移卡、不暫存 CardInstance；任何情況總卡數守恆（不可能掉卡）。
+regR('cipher-geek-arrange-top', (st, idx, iids) => {
   const p = st.players[idx];
-  const secondCard = p.deck.find(c => c.iid === secondIid);
-  if (!secondCard) return st;
-  // 暫移該卡到 params — 確保 Step 2 的 deck list 不再含這張（否則玩家會誤選同一張）
-  let s = updatePlayer(st, idx, pl => ({
-    ...pl,
-    deck: pl.deck.filter(c => c.iid !== secondIid),
-  }));
-  s = addLog(s, '暗碼迷的解讀：再從剩餘牌庫選第 2 張（將放在牌庫最上方）', idx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Any',
-    minCount: 1, maxCount: 1,
-    effectKey: 'cipher-geek-pick-top',
-    params: {
-      reservedSecond: secondCard,
-      titleOverride: '暗碼迷的解讀：再從剩餘牌庫選第 2 張（將放在牌庫最上方）',
-    },
-  });
-});
-// Step 2 resolver：把 topPick 放牌庫最上方，reservedSecond 放第 2 位，其餘洗牌
-regR('cipher-geek-pick-top', (st, idx, iids, params) => {
-  const reservedSecond = params?.reservedSecond as CardInstance | undefined;
-  // v5.964 防呆路徑不掉卡:step1 已把 reservedSecond 從牌庫移出暫存 params,任何異常 return 前都要放回(玩家已看過→洗回)。
-  if (!reservedSecond) return st;  // params 遺失(卡已不在任何區,無從救;理論不可達)
-  if (iids.length !== 1) {
-    return updatePlayer(st, idx, p => ({ ...p, deck: shuffle([...p.deck, reservedSecond]) }));
+  const chosen = ((iids ?? []) as string[])
+    .map(iid => p.deck.find(c => c.iid === iid))
+    .filter((c): c is CardInstance => !!c);
+  if (chosen.length === 0) {
+    // 未選到任何卡（理論上 minCount=2 保證有選）→ 全部重洗，安全不掉卡
+    return updatePlayer(st, idx, pl => ({ ...pl, deck: shuffle([...pl.deck]) }));
   }
-  const topIid = iids[0];
-  return updatePlayer(st, idx, p => {
-    const topCard = p.deck.find(c => c.iid === topIid);
-    if (!topCard) return { ...p, deck: shuffle([...p.deck, reservedSecond]) };
-    const rest = p.deck.filter(c => c.iid !== topIid);
-    return { ...p, deck: [topCard, reservedSecond, ...shuffle(rest)] };
-  });
+  const chosenIids = new Set(chosen.map(c => c.iid));
+  const rest = p.deck.filter(c => !chosenIids.has(c.iid));
+  // 先選的放上方第 2 位、後選的放最上方 → 牌庫頂順序 = 選取序反轉
+  const topOrder = [...chosen].reverse();
+  return updatePlayer(st, idx, pl => ({ ...pl, deck: [...topOrder, ...shuffle(rest)] }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
