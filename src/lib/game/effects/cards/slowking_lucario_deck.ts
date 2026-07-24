@@ -439,7 +439,10 @@ reg('暗碼迷的解讀', (st, idx) => {
 //   全程不從牌庫移卡、不暫存 CardInstance；任何情況總卡數守恆（不可能掉卡）。
 regR('cipher-geek-arrange-top', (st, idx, iids) => {
   const p = st.players[idx];
-  const chosen = ((iids ?? []) as string[])
+  // v6.009 防作弊:引擎 RESOLVE_SELECTION 不驗 min/max/重複 → 對 client 傳來的 iids 去重 + 夾到
+  //   卡面上限 2 張。否則惡意 client 傳 [A,A] 複製卡、或傳整副牌庫 iids → 不重洗照指定序堆疊(疊牌)。
+  const uniq = [...new Set(((iids ?? []) as string[]))].slice(0, 2);
+  const chosen = uniq
     .map(iid => p.deck.find(c => c.iid === iid))
     .filter((c): c is CardInstance => !!c);
   if (chosen.length === 0) {

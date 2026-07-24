@@ -17,6 +17,7 @@ import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
+import { getBasicEnergyType } from '../../engine'; // v6.009 resolver 端 re-validate 基本能量屬性(防作弊)
 import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
@@ -662,7 +663,7 @@ function deckSearchAttachToTaggedBenchPost(max: number, label: string, tagName: 
       filter: sameTypes ? 'BasicEnergy:DistinctTypes' : 'BasicEnergy',
       minCount: 0, maxCount: realMax,
       effectKey: 'v311-deck-energy-to-tagged-stage1',
-      params: { label, tagName, taggedIids },
+      params: { label, tagName, taggedIids, maxN: realMax, distinctTypes: sameTypes },
     });
   };
 }
@@ -671,6 +672,28 @@ regR('v311-deck-energy-to-tagged-stage1', (state, aIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '';
   const tagName = (params?.tagName as string) ?? '';
   const taggedIids = (params?.taggedIids as string[]) ?? [];
+  const maxN = (params?.maxN as number) ?? 3;
+  const distinctTypes = params?.distinctTypes === true;
+  // v6.009 防作弊:引擎 RESOLVE_SELECTION 不驗 filter/min/max/重複 → resolver 端重新驗證 client 傳來的
+  //   iids:只留牌庫中的「基本能量」、去重、(distinctTypes 時)每屬性留 1 張、夾到卡面上限 maxN。
+  //   否則惡意 client 可把牌庫任意卡/重複/超量塞進 energyAttached(公平性)。
+  {
+    const deck0 = state.players[aIdx].deck;
+    const seenIid = new Set<string>();
+    const seenType = new Set<string>();
+    const clean: string[] = [];
+    for (const iid of (iids ?? [])) {
+      if (seenIid.has(iid)) continue;
+      const inst = deck0.find(c => c.iid === iid);
+      if (!inst) continue;
+      const t = getBasicEnergyType(pool.get(inst.cardId));
+      if (!t) continue;                                   // 非基本能量→剔除
+      if (distinctTypes && seenType.has(t)) continue;      // 各不同屬性
+      seenIid.add(iid); seenType.add(t); clean.push(iid);
+      if (clean.length >= maxN) break;                     // 夾到卡面上限
+    }
+    iids = clean;
+  }
   if (iids.length === 0) {
     return updatePlayer(addLog(state, `${label}：未選擇能量；重洗`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
