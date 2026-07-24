@@ -127,7 +127,7 @@
   let tHofView = $state<any | null>(null);   // v5.642 名人堂點選後載入的「當初賽程」(歸檔)
   let tHofPage = $state(1);                   // 名人堂賽程翻頁(輪次)
   let tHofLoading = $state(false);
-  let tHofOfficialOpen = $state(true);       // v5.652 官方歷屆冠軍：預設展開（直接呈現）
+  let tHofOfficialOpen = $state(false);      // v6.005 官方歷屆冠軍：預設收合（同社群，節省版面；點擊展開）
   let tHofCommunityOpen = $state(false);     // v5.652 社群自辦歷屆冠軍：預設收摺（社群賽數量多，點選才展開）
   // v5.691 錦標賽大廳三分頁：賽事 / 排行榜 / 個人資料
   let tTab = $state<'events' | 'leaderboard' | 'profile'>('events');

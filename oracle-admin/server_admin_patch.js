@@ -3289,7 +3289,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // 名人堂：歷屆冠軍列表（公開，登入即可看）
     app.get('/api/tournament/champions', async (req, res) => {
       try {
-        const cs = await TCHAMPS.find({}).sort({ finishedAt: -1 }).limit(200).toArray();
+        // v0.85：官方賽與社群賽各取最近 100 位冠軍(原為混合上限 200 → 某類多時會擠掉另一類)。
+        //   communityEvent!=true(含缺欄/false/null)=官方賽；communityEvent=true=社群自辦賽。前端依同旗標分流渲染。
+        const _officialC = await TCHAMPS.find({ communityEvent: { $ne: true } }).sort({ finishedAt: -1 }).limit(100).toArray();
+        const _communityC = await TCHAMPS.find({ communityEvent: true }).sort({ finishedAt: -1 }).limit(100).toArray();
+        const cs = _officialC.concat(_communityC);
         res.json({ champions: cs.map((c) => ({ id: c._id, eventId: c.eventId, eventName: c.eventName, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0, communityEvent: !!c.communityEvent })) });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
