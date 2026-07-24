@@ -17,7 +17,7 @@ import {
   getPlayableTrainers, getPlayableBasics,
   getUsableAbilities, canRetreat, isBasicPokemonCard,
   canBeInitialActiveCard, isRulePokemon,
-  getEffectiveHP, canAffordAttack, isBasicEnergyOfType,
+  getEffectiveHP, canAffordAttack, isBasicEnergyOfType, getBasicEnergyType,
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
@@ -675,9 +675,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       });
       // v5.867：各不同屬性基本能量 — 依 pokemonType 去重(每屬性只留 1 張),確保選到的屬性互異。
       if (f === 'BasicEnergy:DistinctTypes') {
+        // v6.008：基本能量 pokemonType 恒 null → 用 getBasicEnergyType（卡名【X】推）判屬性去重，
+        //   否則 AI 端也全被濾掉、稜鏡充能等一張都選不到。
         const seenTypes = new Set<string>();
         candidates = candidates.filter(inst => {
-          const t = pool.get(inst.cardId)?.pokemonType;
+          const t = getBasicEnergyType(pool.get(inst.cardId));
           if (!t || seenTypes.has(t)) return false;
           seenTypes.add(t); return true;
         });

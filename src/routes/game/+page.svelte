@@ -20,7 +20,7 @@
     countEnergy, getEvolvableTargets,
     canRetreat, getRetreatBlockReason, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
     computeActiveRetreatCostFor,
-    getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP,
+    getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP, getBasicEnergyType,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
@@ -3007,18 +3007,20 @@
           //   selectionItems 是 $derived，會自動 re-run 並重新過濾。
           if (f === 'BasicEnergy:DistinctTypes') {
             if (!(card.supertype === 'Energy' && card.subtype === 'Basic')) return false;
+            // v6.008：基本能量的 pokemonType 幾乎都留空（現役 68 張全 null）→ 必須用 getBasicEnergyType
+            //   從卡名【X】推屬性；原先直接讀 card.pokemonType → 恒 null 被濾掉，玩家「選不了基礎能量」。
+            const myType = getBasicEnergyType(card);
+            if (!myType) return false;
             // 已選的能量屬性（不含本張）
             const pickedTypes = new Set<string>();
             for (const d of src.deck) {
               if (d.iid === c.iid) continue; // 自己不算入「已選」
               if (selectionPicked.has(d.iid)) {
-                const pc = pool.get(d.cardId);
-                if (pc?.pokemonType) pickedTypes.add(pc.pokemonType);
+                const pt = getBasicEnergyType(pool.get(d.cardId));
+                if (pt) pickedTypes.add(pt);
               }
             }
-            // 本張屬性必須不在已選 set 內（pokemonType 必有，因為基本能量都有）
-            if (!card.pokemonType) return false;
-            return !pickedTypes.has(card.pokemonType);
+            return !pickedTypes.has(myType);
           }
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
           if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');

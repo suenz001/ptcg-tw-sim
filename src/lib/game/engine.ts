@@ -1013,6 +1013,20 @@ export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boo
 }
 
 /**
+ * v6.008：取「基本能量卡的屬性」。scraper 對基本能量的 pokemonType 幾乎都留空（現役 68 張基本能量
+ *   全部 pokemonType=null）→ 屬性必須從卡名【X】推導。稜鏡充能 / 伊布｜鮮豔捕捉 等「各不同屬性的
+ *   基本能量」picker 去重（DistinctTypes）用。回 null=非基本能量或無法判定屬性。
+ *   ⚠禁直接讀 card.pokemonType 判基本能量屬性（恒 null → 全被濾掉，玩家「選不了基礎能量」）。
+ */
+export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
+  if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return null;
+  if (ec.pokemonType) return ec.pokemonType as EnergyType;
+  const m = ec.name.match(/【(.+?)】/);
+  if (!m) return null;
+  return (ZH_ENERGY_TYPE[m[1]] as EnergyType) ?? null;
+}
+
+/**
  * v4.963：通用版 — 不限 Basic 能量 + name【X】 fallback。
  *   未來新代碼用此 helper 認「視為提供 X 屬性的能量卡」，避免 scraper pokemonType=null 誤判。
  *   涵蓋：基本【X】能量 + 特殊【X】能量（卡名含【X】如「泡沫【水】能量」）。
