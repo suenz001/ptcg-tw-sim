@@ -579,15 +579,15 @@
     "code": "M5",
     "name": "深淵之瞳",
     "regulationMark": "J",
-    "cardCount": 81,
+    "cardCount": 118,
     "supertypeCounts": {
-      "Pokemon": 69,
-      "Trainer": 10,
+      "Pokemon": 94,
+      "Trainer": 22,
       "Energy": 2
     },
     "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m5/assets/images/ogp.png",
     "scrapedAt": "2026-05-29T21:55:00.000Z",
     "releaseDate": "2026-05",
-    "count": 81
+    "count": 118
   }
 ]
