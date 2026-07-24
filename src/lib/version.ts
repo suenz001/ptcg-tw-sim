@@ -9,4 +9,4 @@
  * 每次 push 新版本前更新此字串，UI 會顯示在頁首，
  * 讓使用者確認瀏覽器是否同步到最新版本（vs 快取舊版）。
  */
-export const VERSION = '6.009';
+export const VERSION = '6.010';

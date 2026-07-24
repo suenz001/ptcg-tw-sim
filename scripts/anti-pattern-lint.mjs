@@ -552,8 +552,58 @@ for (const f of files) {
 }
 
 
+// ── Check Q：regR resolver 用 client selectedIids「保序 map」重建牌庫頂，未 re-validate ─────
+//   引擎 RESOLVE_SELECTION 不驗 client selectedIids 的 min/max/重複/filter → resolver 若用
+//   `iids.map(iid => deck.find(...))`(保序)重建 `deck: [...]` 而不去重/夾上限,惡意 client 可傳整副
+//   牌庫→疊牌不重洗、傳重複→複製卡(v6.009 暗碼迷)。安全做法:先 `[...new Set(iids)].slice(0,N)`。
+//   合法者(順序來自伺服器可信來源、或已別處驗)加 `// revalidate-ok: 理由`。
+for (const f of files) {
+  const src = readFileSync(f, 'utf8');
+  const re = /regR\(\s*'([^']+)'\s*,\s*(?:async\s*)?\(([^)]*)\)\s*=>\s*\{/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const iidsParam = (m[2].split(',')[2] || '').trim();       // (st, idx, iids, params, pool)
+    if (!/^[\w$]+$/.test(iidsParam)) continue;
+    const body = src.slice(m.index, m.index + 3000);
+    const bodyEnd = body.indexOf('\n});');
+    const blk = bodyEnd >= 0 ? body.slice(0, bodyEnd) : body;
+    const orderMap = new RegExp(iidsParam + '\\b[^;\\n]{0,40}\\.map\\(').test(blk);  // iids.map( / (iids ?? []).map(
+    const rebuildsDeck = /deck:\s*\[/.test(blk);                 // 重建牌庫陣列(順序注入面)
+    if (!(orderMap && rebuildsDeck)) continue;
+    if (/revalidate-ok/.test(blk)) continue;
+    if (new RegExp('new Set\\(\\s*\\(?\\s*' + iidsParam).test(blk)) continue;  // 已去重
+    if (new RegExp('\\[\\s*\\.\\.\\.\\s*new Set[\\s\\S]{0,60}' + iidsParam + '[\\s\\S]{0,60}\\.slice\\(0').test(blk)) continue; // 已對 iids 去重+夾上限
+    const line = src.slice(0, m.index).split('\n').length;
+    violations.push(`[Q] ${rel(f)}:${line} — regR '${m[1]}' 用 client selectedIids 保序 map 重建牌庫頂未去重/夾上限（引擎不驗 min/max/重複 → 疊牌/複製卡）→ 先 [...new Set(iids)].slice(0,N)，或標 // revalidate-ok: 理由`);
+  }
+}
+
+
+// ── Check R：對戰 UI(+page.svelte/MobilePortraitBattle) 與 AI 判「基本能量屬性」直讀 pokemonType ──
+//   現役 68 張基本能量卡 pokemonType 全 null，屬性要從卡名【X】推。DistinctTypes/能量去重 filter 若
+//   直讀 card.pokemonType → 全被濾掉、玩家「選不了基礎能量」(v6.008 稜鏡充能)。改用 getBasicEnergyType。
+//   ⚠anti-pattern-lint 主體只掃 src/lib/game，UI 在 src/routes → 本 check 額外納入兩個對戰 svelte 檔。
+{
+  const R_EXTRA = ['src/routes/game/+page.svelte', 'src/routes/game/MobilePortraitBattle.svelte'].map(p => join(ROOT, p));
+  const R_SAFE = /getBasicEnergyType|isBasicEnergyOfType|energyMatchesType|name\.includes|name\.match|【/;
+  for (const f of [...files.filter(x => /ai\.ts$/.test(x)), ...R_EXTRA]) {
+    let lines;
+    try { lines = readFileSync(f, 'utf8').split('\n'); } catch { continue; }
+    for (let i = 0; i < lines.length; i++) {
+      // pokemonType 被加進「屬性集合」或用於能量去重/DistinctTypes 情境
+      if (!/pokemonType/.test(lines[i])) continue;
+      if (!/(Types?\.add\(|seenTypes|pickedTypes|DistinctTypes|distinctType)/.test(lines[i]) &&
+          !/(Types?\.add\(|seenTypes|pickedTypes|DistinctTypes|distinctType)/.test(lines.slice(Math.max(0,i-3), i+1).join('\n'))) continue;
+      const ctx = lines.slice(Math.max(0, i - 5), i + 3).join('\n');
+      if (R_SAFE.test(ctx)) continue;   // 已用卡名推導
+      violations.push(`[R] ${rel(f)}:${i + 1} — 判基本能量屬性直讀 pokemonType（恒 null → 選不到）→ 改用 getBasicEnergyType（卡名【X】推）`);
+    }
+  }
+}
+
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

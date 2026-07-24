@@ -1027,6 +1027,40 @@ export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
 }
 
 /**
+ * v6.010 中央 sanitize 閘（Fable 規劃 P0-1）：RESOLVE_SELECTION 把 client 傳來的 selectedIids 交給
+ *   resolver 前先消毒——去掉不在該 pending 對應 zone 的 iid、去重、套 params.validIids 交集、夾到
+ *   pending.maxCount。防惡意 client 傳整副牌庫(疊牌)/重複(複製卡)/超量/他 zone 的 iid 作弊。
+ *   ⚠語義=sanitize(濾非法項)非 reject(reject 會殘留 pending 造成線上軟鎖,v6.006 災難類)。
+ *   ⚠type-aware:distribute(合法用重複編碼計數)/active-energy-discard(能量iid,另有單位邏輯)/
+ *     modal-choice(payload 是選項字串非 iid)/reorder-deck-top(來源為 params.candidateIids)一律【原封放行】。
+ *   filter 語義(如 BasicEnergy/限ex)本閘不驗,由 resolver 自驗(v6.009)或未來中央 filter evaluator(Stage 2)補。
+ */
+export function sanitizeSelectedIids(state: GameState, pending: PendingSelection, iids: string[]): string[] {
+  if (!Array.isArray(iids) || iids.length === 0) return Array.isArray(iids) ? iids : [];
+  const t = pending.type;
+  const srcIdx = ((pending.sourcePlayerIdx ?? pending.actorIdx ?? 0) as 0 | 1);
+  const p = state.players[srcIdx];
+  // v6.010:保守只消毒 deck-search(暗碼迷疊牌/稜鏡去重的實際漏洞面;zone=deck 明確、無合法重複、
+  //   無 resolver 讀非牌庫 iid)。hand/場上/heal-target 等通用型別 resolver 讀取語義多變(神奇糖果
+  //   heal-target 進化目標走此型)→誤擋風險高,一律【原封放行】,由 resolver 自驗或 Stage 2 filter evaluator 補。
+  let zone: { iid: string }[] | undefined;
+  if (t === 'deck-search') zone = p?.deck;
+  else return iids;   // 非 deck-search 型別 → 原封放行(不改變行為)
+  const zoneSet = new Set((zone ?? []).map(c => c.iid));
+  const vi = pending.params?.validIids as string[] | undefined;
+  const validSet = Array.isArray(vi) ? new Set(vi) : null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const iid of iids) {
+    if (seen.has(iid) || !zoneSet.has(iid)) continue;
+    if (validSet && !validSet.has(iid)) continue;
+    seen.add(iid); out.push(iid);
+    if (typeof pending.maxCount === 'number' && out.length >= pending.maxCount) break;
+  }
+  return out;
+}
+
+/**
  * v4.963：通用版 — 不限 Basic 能量 + name【X】 fallback。
  *   未來新代碼用此 helper 認「視為提供 X 屬性的能量卡」，避免 scraper pokemonType=null 誤判。
  *   涵蓋：基本【X】能量 + 特殊【X】能量（卡名含【X】如「泡沫【水】能量」）。
@@ -2598,7 +2632,9 @@ function handlePlaying(
     const resolver = RESOLVERS.get(effectKey);
     let newState: GameState = { ...state, pendingSelection: undefined };
     if (resolver) {
-      newState = resolver(newState, actorIdx, action.selectedIids, params, pool);
+      // v6.010 中央 sanitize 閘:消毒 client selectedIids(去重/zone成員/validIids交集/夾maxCount)後才交 resolver。
+      const _cleanIids = sanitizeSelectedIids(state, state.pendingSelection, action.selectedIids);
+      newState = resolver(newState, actorIdx, _cleanIids, params, pool);
     }
     // v4.898 重試徽章 — inline handler（無 regR 註冊；直接在此特判）
     // v5.165 重設計：modal popup 時 engine 已 rollback state（傷害未套）；玩家確認後
