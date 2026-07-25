@@ -53,7 +53,7 @@ reg('火箭隊的超級球', (st, idx, pool) => {
       return heads ? isEvo : !isEvo;
     })
     .map(c => c.iid);
-  st = addLog(st, `火箭隊的超級球：從牌庫選 1 張${heads ? '進化' : '基礎'}「火箭隊的」寶可夢加手（候選 ${validIids.length} 張）`, idx);
+  st = addLog(st, `火箭隊的超級球：從牌庫選 1 張${heads ? '進化' : '基礎'}「火箭隊的」寶可夢加手`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,

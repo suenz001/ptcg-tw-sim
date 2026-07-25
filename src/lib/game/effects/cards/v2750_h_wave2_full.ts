@@ -2603,7 +2603,7 @@ regPost('大舌頭|舌引', (state, aIdx, pool) => {
   });
   if (candidates.length === 0) return addLog(s, '舌引：對手手牌沒有【基礎】寶可夢', aIdx);
   const maxPick = Math.min(2, benchSpace, candidates.length);
-  s = addLog(s, `舌引：選最多 ${maxPick} 張【基礎】寶可夢放對手備戰區（候選 ${candidates.length} 張）`, aIdx);
+  s = addLog(s, `舌引：選最多 ${maxPick} 張【基礎】寶可夢放對手備戰區`, aIdx);
   return withPending(s, {
     type: 'hand-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,

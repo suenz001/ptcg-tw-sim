@@ -256,7 +256,7 @@ reg('吹火人', (st, idx, pool) => {
       const card = pool.get(c.cardId);
       return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【火】');
     }).length;
-  st = addLog(st, `吹火人：從牌庫選最多 7 張基本【火】能量加手（候選 ${candCount} 張）`, idx);
+  st = addLog(st, `吹火人：從牌庫選最多 7 張基本【火】能量加手`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,

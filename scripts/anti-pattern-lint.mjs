@@ -627,8 +627,23 @@ for (const f of files) {
 }
 
 
+// ── Check T：開 picker 前的公開 addLog 不得帶「候選 N 張 / 發現 N 張」隱藏 zone 統計（資訊洩漏，P1 收尾）──
+//   picker UI 本就顯示候選卡，log 帶數量純冗餘、且把隱藏 zone（自己手牌/牌庫）構成洩漏給對手。全禁。
+//   G 標批（v2996_g4 / v2998_g2，不維護，鐵律）整檔豁免。
+for (const f of files) {
+  const relf = rel(f);
+  if (/v2996_g4|v2998_g2/.test(relf)) continue;
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    if (/(候選|發現) \$\{/.test(lines[i])) {
+      violations.push(`[T] ${relf}:${i + 1} — picker log 帶「候選/發現 N 張」會把隱藏 zone(手牌/牌庫)統計洩漏給對手(資訊洩漏)→ 刪除該數量片段(picker UI 已顯示候選卡，log 冗餘)`);
+    }
+  }
+}
+
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

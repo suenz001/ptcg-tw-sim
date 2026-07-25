@@ -912,7 +912,7 @@ regPost('禿鷹娜|骨棒狙擊', (state, aIdx, pool) => {
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(
-    addLog(state, `骨棒狙擊：選 1 隻附特殊能量的對手寶可夢造成 70（候選 ${candidates.length} 隻）`, aIdx),
+    addLog(state, `骨棒狙擊：選 1 隻附特殊能量的對手寶可夢造成 70`, aIdx),
     {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
@@ -1337,7 +1337,7 @@ reg('沐淨', (st, idx, pool) => {
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(
-    addLog(st, `沐淨：從手牌選 1~2 張非規則寶可夢丟棄（候選 ${candidates.length} 張）`, idx),
+    addLog(st, `沐淨：從手牌選 1~2 張非規則寶可夢丟棄`, idx),
     {
       type: 'hand-discard',
       actorIdx: idx, sourcePlayerIdx: idx,
@@ -1424,7 +1424,7 @@ reg('鏽蝕組手下', (st, idx, pool) => {
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(
-    addLog(st, `鏽蝕組手下：選對手 1 隻附能寶可夢（候選 ${candidates.length} 隻）`, idx),
+    addLog(st, `鏽蝕組手下：選對手 1 隻附能寶可夢`, idx),
     {
       type: 'opp-poke-choose',
       actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -1782,7 +1782,7 @@ regA('西獅海壬', 0, (st, idx, pool, inst) => {
   }
   const validIids = injured.map(c => c.iid);
   return withPending(
-    addLog(st, `全滿旋律：選 1 隻自方寶可夢恢復全部 HP（候選 ${injured.length} 隻受傷寶可夢）`, idx),
+    addLog(st, `全滿旋律：選 1 隻自方寶可夢恢復全部 HP`, idx),
     {
       type: 'heal-target',
       actorIdx: idx, sourcePlayerIdx: idx,

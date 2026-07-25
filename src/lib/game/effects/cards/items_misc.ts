@@ -1155,7 +1155,7 @@ reg('能量撢子', (st, idx, pool) => {
       params: { validIids: [] },
     });
   }
-  s = addLog(s, `能量撢子：選 1 張能量放回對手牌庫下方（候選 ${energyIids.length} 張）`, idx);
+  s = addLog(s, `能量撢子：選 1 張能量放回對手牌庫下方`, idx);
   return withPending(s, {
     type: 'hand-discard',
     actorIdx: idx, sourcePlayerIdx: dIdx,
@@ -1194,7 +1194,7 @@ reg('招式學習器機', (st, idx, pool) => {
         && card.name?.includes('招式學習器');
     })
     .map(c => c.iid);
-  st = addLog(st, `招式學習器機：從牌庫選最多 3 張「招式學習器」道具加手牌（候選 ${validIids.length} 張）`, idx);
+  st = addLog(st, `招式學習器機：從牌庫選最多 3 張「招式學習器」道具加手牌`, idx);
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,

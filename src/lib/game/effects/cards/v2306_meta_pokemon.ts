@@ -18,6 +18,7 @@ import { joinCardNames } from '../_shared';
 //   自動附能版（import 後 effects.ts body 求值勝出，此 picker 版恆被覆蓋、從未生效）。重複註冊
 //   有翻版風險、picker 版又有取消後 abilityUsedThisTurn 卡住的隱患，故清除。萬葉陣雨 招式保留於下。
 import { regPre, regPost, shuffle, countAttachedEnergyAsUnits } from '../_shared';
+import { startEnergyChain } from './v158_energy_chain'; // v6.021 能量舞步「以任意方式附能」中央 chain
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
 // v5.671：萬葉陣雨重複註冊清理 — 統一由 effects.ts bothActiveEnergyMultiplyPre(host-aware,火箭隊=2/燃火=3)實作;此 card-file 版被覆蓋(死碼)移除。
 
@@ -147,86 +148,53 @@ regA('噗噗豬', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   if (p.deck.length === 0) return addLog(state, '能量舞步：牌庫沒有卡片，無法使用', aIdx);
-  const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
-  if (instInPlay) instInPlay.abilityUsedThisTurn = true;
+  // v6.021：abilityUsedThisTurn 由 engine USE_ABILITY 統一設 → 刪除手刻 direct mutation（反模式）。
   const count = Math.min(4, p.deck.length);
   const top4 = p.deck.slice(0, count);
-  const basicEnergies = top4.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic';
-  });
-  if (basicEnergies.length === 0) {
-    let s = addLog(state, `噗噗豬：使用特性「能量舞步」，牌庫上方 ${count} 張卡中沒有基本能量，將其放回牌庫並重洗`, aIdx);
-    return updatePlayer(s, aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
-  }
-  let s = addLog(state, `噗噗豬：使用特性「能量舞步」，查看牌庫上方 ${count} 張卡，發現 ${basicEnergies.length} 張基本能量`, aIdx);
+  // v6.021：改走 deck-search + BasicEnergy:TOP_N（同金屬怪｜金屬製造者、女服務生）→ UI 自動 reveal 牌庫頂
+  //   全部 count 張（玩家看得到非能量卡，符合卡面「查看牌庫上方4張卡」），只基本能量可勾選。附能走中央
+  //   startEnergyChain。剩餘與金屬怪不同：卡面「放回牌庫並重洗」= 整庫 shuffle（非牌庫底）。
+  //   log 不再洩漏「發現 N 張基本能量」（牌庫頂構成＝隱藏資訊）。
+  const s = addLog(state, `噗噗豬：使用特性「能量舞步」，查看牌庫上方 ${count} 張卡`, aIdx);
   return withPending(s, {
-    type: 'reorder-deck-top', actorIdx: aIdx, sourcePlayerIdx: aIdx, minCount: 0, maxCount: basicEnergies.length,
+    type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    filter: 'BasicEnergy:TOP_N', minCount: 0, maxCount: count,
     effectKey: 'grumpig-energy-dance-pick',
     params: {
-      titleOverride: '選擇要附加的基本能量卡',
-      candidateIids: basicEnergies.map(c => c.iid),
-      allowDiscard: true,
-      allViewedIids: top4.map(c => c.iid),
-    }
+      topIids: top4.map(c => c.iid),
+      titleOverride: '能量舞步：選任意數量基本能量附於自己的寶可夢（剩餘放回牌庫重洗）',
+    },
   });
 });
 regR('grumpig-energy-dance-pick', (state, actorIdx, selectedIids, params, pool) => {
-  const allViewedIids = ((params?.allViewedIids as string[] | undefined) ?? []);
-  const p = state.players[actorIdx];
-  let newDeck = [...p.deck];
-  const viewedCards = [];
-  for (const iid of allViewedIids) {
-    const idx = newDeck.findIndex(c => c.iid === iid);
-    if (idx !== -1) {
-      viewedCards.push(newDeck[idx]);
-      newDeck.splice(idx, 1);
-    }
+  const topIids = ((params?.topIids as string[] | undefined) ?? []);
+  const p0 = state.players[actorIdx];
+  const topCards = p0.deck.filter(c => topIids.includes(c.iid));
+  // v6.009 resolver 自驗：選中必 ⊆ topIids 且為基本能量（防 client 塞非法 iid）
+  const validEnergies = topCards.filter(c => {
+    if (!selectedIids.includes(c.iid)) return false;
+    const card = pool.get(c.cardId);
+    return card?.supertype === 'Energy' && card?.subtype === 'Basic';
+  });
+  const validIids = validEnergies.map(c => c.iid);
+  const rest = p0.deck.filter(c => !topIids.includes(c.iid));
+  const leftover = topCards.filter(c => !validIids.includes(c.iid));
+  // 卡面「將剩餘卡放回牌庫並重洗」：rest + leftover 整庫重洗；選中能量暫存 discard 供 chain 取用
+  let s = updatePlayer(state, actorIdx, pl => ({
+    ...pl,
+    deck: shuffle([...rest, ...leftover]),
+    discard: [...pl.discard, ...validEnergies],
+  }));
+  if (validIids.length === 0) {
+    return addLog(s, '能量舞步：未選擇附加任何能量，剩餘卡放回牌庫並重洗', actorIdx);
   }
-  const selectedCards = viewedCards.filter(c => selectedIids.includes(c.iid));
-  const unselectedCards = viewedCards.filter(c => !selectedIids.includes(c.iid));
-  newDeck = shuffle([...newDeck, ...unselectedCards]);
-  let s = updatePlayer(state, actorIdx, pl => ({ ...pl, deck: newDeck }));
-  if (selectedCards.length === 0) return addLog(s, '能量舞步：未選擇附加任何能量，剩餘卡放回牌庫並重洗', actorIdx);
-  s = updatePlayer(s, actorIdx, pl => ({ ...pl, discard: [...pl.discard, ...selectedCards] }));
-  const allPokes = [...(s.players[actorIdx].active ? [s.players[actorIdx].active] : []), ...s.players[actorIdx].bench];
-  s = addLog(s, `能量舞步：選擇了 ${selectedCards.length} 張基本能量，請選擇附加目標`, actorIdx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
-    effectKey: 'grumpig-energy-dance-distribute',
-    params: { energyIids: selectedCards.map(c => c.iid), validIids: allPokes.map(c => c.iid), totalCount: selectedCards.length, placedCount: 0 }
-  });
+  s = addLog(s, `能量舞步：選擇了 ${validIids.length} 張基本能量，請選擇附加目標`, actorIdx);
+  // 中央「以任意方式附能」chain（source=discard 暫存、scope=自己所有寶可夢、任意屬性）
+  return startEnergyChain(s, actorIdx, validIids, {
+    label: '能量舞步', source: 'discard', scope: 'any-own', filterType: 'Any',
+  }, pool);
 });
-regR('grumpig-energy-dance-distribute', (state, actorIdx, selectedIids, params, pool) => {
-  const energyIids = ((params?.energyIids as string[] | undefined) ?? []);
-  const totalCount = (params?.totalCount as number | undefined) ?? energyIids.length;
-  const placedCount = (params?.placedCount as number | undefined) ?? 0;
-  if (energyIids.length === 0) return state;
-  const currentEnergyIid = energyIids[0];
-  const restIids = energyIids.slice(1);
-  const targetIid = selectedIids[0];
-  const p = state.players[actorIdx];
-  const energy = p.discard.find(c => c.iid === currentEnergyIid);
-  if (!energy) return state;
-  const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
-  const tCard = target ? pool.get(target.cardId) : null;
-  const tName = tCard?.name ?? '?';
-  let s = addLog(state, `能量舞步：第 ${placedCount + 1}/${totalCount} 張能量附於 ${tName}`, actorIdx);
-  s = updatePlayer(s, actorIdx, pl => {
-    const rest = pl.discard.filter(c => c.iid !== currentEnergyIid);
-    if (pl.active?.iid === targetIid) {
-      return { ...pl, discard: rest, active: { ...pl.active, energyAttached: [...pl.active.energyAttached, energy] } };
-    }
-    return { ...pl, discard: rest, bench: pl.bench.map(c => c.iid === targetIid ? { ...c, energyAttached: [...c.energyAttached, energy] } : c) };
-  });
-  if (restIids.length === 0) return s;
-  const allPokes = [...(s.players[actorIdx].active ? [s.players[actorIdx].active] : []), ...s.players[actorIdx].bench];
-  return withPending(s, {
-    type: 'heal-target', actorIdx: actorIdx, sourcePlayerIdx: actorIdx, minCount: 1, maxCount: 1,
-    effectKey: 'grumpig-energy-dance-distribute',
-    params: { energyIids: restIids, validIids: allPokes.map(c => c.iid), totalCount, placedCount: placedCount + 1 }
-  });
-});
+// v6.021：舊的逐張分配 resolver 已移除，附能改走中央附能鏈。
 
 // ── 鐵面忍者 (Ninjask) ────────────────────────────────────────────────────────────
 regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
