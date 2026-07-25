@@ -602,8 +602,33 @@ for (const f of files) {
 }
 
 
+// ── Check S：effects 端三 zone(deck-search/hand-discard/discard-search)的 filter 字面量必須被中央
+//   selection-filter evaluator 收錄，或在凍結白名單（P1-1 收尾：防新卡用未收錄 filter 掉 fallthrough）──
+{
+  const sfSrc = readFileSync(join(SRC, 'selection-filter.ts'), 'utf8');
+  const knownExact = new Set([...sfSrc.matchAll(/^\s*'([^']+)':\s*\(/gm)].map((m) => m[1]));
+  const knownPrefix = [...new Set([...sfSrc.matchAll(/\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
+  // v6.019 凍結白名單（dump 現況 deck-search 未收錄的 fallthrough filter；只准縮不准擴）
+  const S_WL_EXACT = new Set(['Basic:SameName','Basic:TOP5','BasicMetalEnergy:TOP4','BasicPokemon','DarknessPokemon:TOP7','EvilAwakening:EvolveFrom','Evolution','EvolutionPokemon','FirePokemonOrBasicFireEnergy','GrassBasicOrGrassEnergy:TOP7','GrassPokemonOrStadium','RakiPokemonOrFireEnergy','Stage1Or2:Metal','SturdyMightTree:Stage1','SturdyMightTree:Stage2','Supporter:TOP4','Supporter:TOP6','Supporter:TOP7','TOP2','TOP6','TOP8','Trainer:Supporter','Trainer:TOP_N','any']);
+  const S_WL_PREFIX = ['Basic:NamePrefix=', 'Card:', 'NameContains:'];
+  const sCovered = (fl) => knownExact.has(fl) || knownPrefix.some((p) => fl.startsWith(p)) || S_WL_EXACT.has(fl) || S_WL_PREFIX.some((p) => fl.startsWith(p));
+  const sZoneRe = /type:\s*'(deck-search|hand-discard|discard-search)'[\s\S]{0,600}?filter:\s*'([^']+)'/g;
+  for (const f of files) {
+    const src = readFileSync(f, 'utf8');
+    let m;
+    while ((m = sZoneRe.exec(src)) !== null) {
+      const fl = m[2];
+      if (!sCovered(fl)) {
+        const line = src.slice(0, m.index).split('\n').length;
+        violations.push(`[S] ${rel(f)}:${line} — pending filter '${fl}'(${m[1]}) 未被中央 selection-filter 收錄、也不在凍結白名單 → 會掉 inline fallthrough。請把 predicate 收進 selection-filter.ts，或（明示沿用 inline fallthrough）加進 Check S 白名單`);
+      }
+    }
+  }
+}
+
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
