@@ -15,6 +15,9 @@ import type {
   GameState, GameAction, CardInstance,
   PlayerState, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
+// v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
+import { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
+export { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType };
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
@@ -652,12 +655,7 @@ function deckToInstances(entries: { cardId: string; count: number }[]): CardInst
  * （例：<火箭隊的>操陷蛛 SV10 009/098 在原 JSON 缺 evolvesFrom、卻 subtype
  * 明確是 Stage1 → 若只靠 evolvesFrom 判斷會被誤當成 Basic 而直接上場）。
  */
-export function isBasicPokemonCard(card: Card | undefined): card is Card {
-  if (!card || card.supertype !== 'Pokemon') return false;
-  if (card.subtype === 'Other') return false; // 道具卡
-  if (card.subtype === 'Stage1' || card.subtype === 'Stage2') return false; // v2.62 加固
-  return !card.evolvesFrom;
-}
+// isBasicPokemonCard: 已下沉 selection-filter.ts（engine re-export）
 
 /** 從 pool 判斷一張牌是否為「基礎寶可夢」 */
 function isBasicPokemon(cardId: string, pool: Map<string, Card>): boolean {
@@ -707,23 +705,7 @@ export function canBeInitialActiveCard(card: Card | undefined): boolean {
  *           `subtype === 'ex' || name.endsWith('ex')` — 那會錯過 V/VMAX/VSTAR/GX
  *           以及未來新規則盒類型。grep `card.subtype === 'ex'` 確認沒有新增散落點。
  */
-export function isRulePokemon(card: Card | undefined): boolean {
-  if (!card) return false;
-  if (card.supertype !== 'Pokemon') return false;
-  // 1. tags 路徑（最 future-proof — scraper 給新卡 tag 即可）
-  const tags = card.tags ?? [];
-  if (tags.includes('規則盒')) return true;
-  for (const t of tags) {
-    if (RULE_BOX_SUBTYPES.has(t)) return true;
-  }
-  // 2. subtype 路徑（目前主力 — 標準環境 621 張 ex 卡走這條）
-  if (card.subtype && RULE_BOX_SUBTYPES.has(card.subtype)) return true;
-  // 3. rulesText 路徑（scraper 目前沒撈到，但 import 機制未來可能補上）
-  if (card.rulesText?.includes('擁有規則')) return true;
-  // 4. 卡名結尾兜底（防漏網；正常情況 subtype 已覆蓋）
-  if (card.name.endsWith('ex') || card.name.endsWith('EX')) return true;
-  return false;
-}
+// isRulePokemon: 已下沉 selection-filter.ts（engine re-export）
 
 /** 從 pool 判斷一張牌是否「可作為起始戰鬥寶可夢」（基礎 OR 瞬間爆發力） */
 function canBeInitialActive(cardId: string, pool: Map<string, Card>): boolean {
@@ -991,12 +973,7 @@ export function getEffectiveHP(
 
 /** 台灣卡牌中文屬性名稱 → EnergyType（當 pokemonType 欄位遺漏時備用） */
 // 備註：台灣卡面使用「鬥」（例：基本【鬥】能量），舊卡曾用「格」；兩者同對應 Fighting。
-const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
-  '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
-  '超': 'Psychic', '格': 'Fighting', '鬥': 'Fighting',
-  '惡': 'Darkness', '鋼': 'Metal',
-  '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
-};
+// ZH_ENERGY_TYPE: 已下沉 selection-filter.ts（本檔 import 使用）
 
 /**
  * v2.108 共用 helpers — 判定「基本 X 屬性能量」
@@ -1004,13 +981,7 @@ const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
  * 所以判斷「基本草能量」時一定要從 name parse，不能信 pokemonType。
  * v2.103 canAffordAttack 的繁茂 check 就是因為只檢查 pokemonType 才整個失效。
  */
-export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boolean {
-  if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
-  if (ec.pokemonType === type) return true;
-  const m = ec.name.match(/【(.+?)】/);
-  if (!m) return false;
-  return ZH_ENERGY_TYPE[m[1]] === type;
-}
+// isBasicEnergyOfType: 已下沉 selection-filter.ts（engine re-export）
 
 /**
  * v6.008：取「基本能量卡的屬性」。scraper 對基本能量的 pokemonType 幾乎都留空（現役 68 張基本能量
@@ -1018,13 +989,7 @@ export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boo
  *   基本能量」picker 去重（DistinctTypes）用。回 null=非基本能量或無法判定屬性。
  *   ⚠禁直接讀 card.pokemonType 判基本能量屬性（恒 null → 全被濾掉，玩家「選不了基礎能量」）。
  */
-export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
-  if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return null;
-  if (ec.pokemonType) return ec.pokemonType as EnergyType;
-  const m = ec.name.match(/【(.+?)】/);
-  if (!m) return null;
-  return (ZH_ENERGY_TYPE[m[1]] as EnergyType) ?? null;
-}
+// getBasicEnergyType: 已下沉 selection-filter.ts（engine re-export）
 
 /**
  * v6.010 中央 sanitize 閘（Fable 規劃 P0-1）：RESOLVE_SELECTION 把 client 傳來的 selectedIids 交給
@@ -1035,7 +1000,7 @@ export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
  *     modal-choice(payload 是選項字串非 iid)/reorder-deck-top(來源為 params.candidateIids)一律【原封放行】。
  *   filter 語義(如 BasicEnergy/限ex)本閘不驗,由 resolver 自驗(v6.009)或未來中央 filter evaluator(Stage 2)補。
  */
-export function sanitizeSelectedIids(state: GameState, pending: PendingSelection, iids: string[]): string[] {
+export function sanitizeSelectedIids(state: GameState, pending: PendingSelection, iids: string[], pool?: Map<string, Card>): string[] {
   if (!Array.isArray(iids) || iids.length === 0) return Array.isArray(iids) ? iids : [];
   const t = pending.type;
   const srcIdx = ((pending.sourcePlayerIdx ?? pending.actorIdx ?? 0) as 0 | 1);
@@ -1056,6 +1021,22 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
     if (validSet && !validSet.has(iid)) continue;
     seen.add(iid); out.push(iid);
     if (typeof pending.maxCount === 'number' && out.length >= pending.maxCount) break;
+  }
+  // v6.018 批5 Stage2:對「已收錄 filter」做語義驗證——把不符卡面 filter 的 client iid 濾掉（稜鏡塞非能量卡等）。
+  //   單項三態 fail-open：evaluateSelectionFilter 回 false 才濾，回 null（未收錄/查不到卡）一律保留，不誤殺；
+  //   pool 缺席（舊呼叫者/測試未傳）時跳過。閘與 UI/AI 用同一 predicate → 玩家合法候選必過閘。
+  const f = pending.filter;
+  if (pool && f && isKnownSelectionFilter('deck-search', f)) {
+    const bySemantic = out.filter((iid) => {
+      const inst = (zone ?? []).find((c) => c.iid === iid) as CardInstance | undefined;
+      const card = inst ? pool.get(inst.cardId) : undefined;
+      return evaluateSelectionFilter('deck-search', f, { iid }, card, {}) !== false;
+    });
+    // set-level 去重（BasicEnergy:DistinctTypes 首見保留）；語義=sanitize 非 reject
+    const insts = bySemantic
+      .map((iid) => (zone ?? []).find((c) => c.iid === iid) as CardInstance | undefined)
+      .filter((c): c is CardInstance => !!c);
+    return sanitizeSelectionSet('deck-search', f, insts, pool);
   }
   return out;
 }
@@ -2633,7 +2614,7 @@ function handlePlaying(
     let newState: GameState = { ...state, pendingSelection: undefined };
     if (resolver) {
       // v6.010 中央 sanitize 閘:消毒 client selectedIids(去重/zone成員/validIids交集/夾maxCount)後才交 resolver。
-      const _cleanIids = sanitizeSelectedIids(state, state.pendingSelection, action.selectedIids);
+      const _cleanIids = sanitizeSelectedIids(state, state.pendingSelection, action.selectedIids, pool);
       newState = resolver(newState, actorIdx, _cleanIids, params, pool);
     }
     // v4.898 重試徽章 — inline handler（無 regR 註冊；直接在此特判）

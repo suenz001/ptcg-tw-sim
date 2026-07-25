@@ -16,7 +16,47 @@
  */
 import type { Card } from './types';
 import type { EnergyType } from '$lib/cards/types';
-import { isBasicPokemonCard, isRulePokemon, getBasicEnergyType, isBasicEnergyOfType } from './engine';
+import { RULE_BOX_SUBTYPES } from './types';
+
+// ─── 卡片述詞 helper（v6.018 批5：從 engine.ts 下沉；engine 改 re-export，解 engine↔selection-filter 循環）───
+/** 台灣卡牌中文屬性名稱 → EnergyType（pokemonType 欄位遺漏時備用）。export 供 engine 內部 isEnergyOfType 等使用。 */
+export const ZH_ENERGY_TYPE: Record<string, EnergyType> = {
+  '草': 'Grass', '火': 'Fire', '水': 'Water', '雷': 'Lightning',
+  '超': 'Psychic', '格': 'Fighting', '鬥': 'Fighting',
+  '惡': 'Darkness', '鋼': 'Metal',
+  '妖': 'Fairy', '龍': 'Dragon', '無': 'Colorless',
+};
+export function isBasicPokemonCard(card: Card | undefined): card is Card {
+  if (!card || card.supertype !== 'Pokemon') return false;
+  if (card.subtype === 'Other') return false; // 道具卡
+  if (card.subtype === 'Stage1' || card.subtype === 'Stage2') return false; // v2.62 加固
+  return !card.evolvesFrom;
+}
+export function isRulePokemon(card: Card | undefined): boolean {
+  if (!card) return false;
+  if (card.supertype !== 'Pokemon') return false;
+  const tags = card.tags ?? [];
+  if (tags.includes('規則盒')) return true;
+  for (const t of tags) { if (RULE_BOX_SUBTYPES.has(t)) return true; }
+  if (card.subtype && RULE_BOX_SUBTYPES.has(card.subtype)) return true;
+  if (card.rulesText?.includes('擁有規則')) return true;
+  if (card.name.endsWith('ex') || card.name.endsWith('EX')) return true;
+  return false;
+}
+export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boolean {
+  if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return false;
+  if (ec.pokemonType === type) return true;
+  const m = ec.name.match(/【(.+?)】/);
+  if (!m) return false;
+  return ZH_ENERGY_TYPE[m[1]] === type;
+}
+export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
+  if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return null;
+  if (ec.pokemonType) return ec.pokemonType as EnergyType;
+  const m = ec.name.match(/【(.+?)】/);
+  if (!m) return null;
+  return (ZH_ENERGY_TYPE[m[1]] as EnergyType) ?? null;
+}
 
 export type SelectionFilterZone = 'deck-search' | 'hand-discard' | 'discard-search';
 

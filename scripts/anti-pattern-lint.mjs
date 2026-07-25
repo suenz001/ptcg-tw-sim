@@ -522,7 +522,7 @@ for (const f of files) {
     }
   }
   // leaf 純度鎖
-  for (const leaf of ['src/lib/game/effects/_shared.ts', 'src/lib/game/types.ts', 'src/lib/game/instance-flags.ts']) {
+  for (const leaf of ['src/lib/game/effects/_shared.ts', 'src/lib/game/types.ts', 'src/lib/game/instance-flags.ts', 'src/lib/game/selection-filter.ts']) {
     const lf = files.find((x) => x.slice(ROOT.length).replace(/^[/\\]+/, '').split(sepChar).join('/') === leaf);
     if (!lf) continue;
     for (const line of readFileSync(lf, 'utf8').split('\n')) {
