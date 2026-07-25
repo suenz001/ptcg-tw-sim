@@ -19,6 +19,8 @@ const KEY_ENABLED = 'ptcg.notify.enabled';
 const KEY_PROMPT_DISMISSED = 'ptcg.notify.promptDismissed';
 const KEY_PROMPTED = 'ptcg.notify.prompted';
 const KEY_SEEN = 'ptcg.notify.seen';
+/** v6.026：Web Push 訂閱「有沒有成功登記到伺服器」的最後結果（診斷用；瀏覽器端訂閱成功≠伺服器收到）。 */
+const KEY_PUSH_SERVER = 'ptcg.notify.pushServer';
 
 let _seen: Record<string, number> = {};
 let _loaded = false;
@@ -212,17 +214,42 @@ export async function sendTestNotification(): Promise<{ ok: boolean; via: string
 export async function getNotifyDiagnostics(): Promise<{
   supported: boolean; permission: string; enabled: boolean;
   swRegistered: boolean; pushSubscribed: boolean; iosNeedsInstall: boolean;
+  serverRegistered: boolean; serverStage: string; serverDetail: string; pushHost: string;
 }> {
   const out = {
     supported: supported(), permission: getPermission(), enabled: getNotifyEnabled(),
     swRegistered: false, pushSubscribed: false, iosNeedsInstall: isIOSNeedsInstall(),
+    // v6.026：拆開「瀏覽器已訂閱」與「伺服器已登記」——兩者不同步正是報到推播收不到的真根因，
+    //   舊版只顯示前者會出現假綠燈（本機看起來一切正常，伺服器其實一筆訂閱都沒有）。
+    serverRegistered: false, serverStage: '', serverDetail: '', pushHost: '',
   };
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.();
     out.swRegistered = !!reg;
-    if (reg?.pushManager) out.pushSubscribed = !!(await reg.pushManager.getSubscription());
+    if (reg?.pushManager) {
+      const sub = await reg.pushManager.getSubscription();
+      out.pushSubscribed = !!sub;
+      if (sub) { try { out.pushHost = new URL(sub.endpoint).hostname; } catch { /* 忽略 */ } }
+    }
   } catch { /* 保持 false */ }
+  const ss = getPushServerState();
+  if (ss) { out.serverRegistered = !!ss.ok; out.serverStage = ss.stage || ''; out.serverDetail = ss.detail || ''; }
   return out;
+}
+
+/** 各關卡的中文說明（診斷面板顯示，讓玩家自己看得懂卡在哪）。 */
+export function describePushStage(stage: string): string {
+  switch (stage) {
+    case 'ok': return '已登記到伺服器';
+    case 'no-permission': return '尚未取得通知權限';
+    case 'no-sw': return '背景服務尚未就緒（請完全關閉再重開本 App）';
+    case 'server-disabled': return '伺服器目前未啟用推播';
+    case 'subscribe-failed': return '瀏覽器建立推播訂閱失敗';
+    case 'server-reject': return '登記到伺服器被拒（多半是登入狀態尚未就緒）';
+    case 'unsubscribed': return '已取消訂閱';
+    case '': return '尚未嘗試登記';
+    default: return stage;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -246,23 +273,63 @@ function urlBase64ToUint8Array(base64: string): Uint8Array {
  * 向瀏覽器訂閱推播並把訂閱資料送到伺服器。
  * @param api 呼叫錦標賽 API 的函式（沿用對戰頁既有 tApi，含 Firebase 身分驗證）
  */
-export async function subscribePush(api: (path: string, body?: unknown) => Promise<unknown>): Promise<boolean> {
-  if (!hasWindow() || getPermission() !== 'granted') return false;
+export type PushSubStage =
+  | 'ok' | 'no-window' | 'no-permission' | 'no-sw' | 'server-disabled' | 'subscribe-failed' | 'server-reject';
+export type PushSubResult = { ok: boolean; stage: PushSubStage; detail?: string; host?: string };
+
+/** 寫入／讀取「伺服器登記結果」——診斷面板據此分辨假綠燈（瀏覽器有訂閱、伺服器沒收到）。 */
+function savePushServerState(s: { ok: boolean; stage: string; detail?: string; host?: string }): void {
+  if (!hasWindow()) return;
+  try { localStorage.setItem(KEY_PUSH_SERVER, JSON.stringify({ ...s, ts: Date.now() })); } catch { /* 忽略 */ }
+}
+export function getPushServerState(): { ok: boolean; ts: number; stage: string; detail?: string; host?: string } | null {
+  if (!hasWindow()) return null;
+  try { const raw = localStorage.getItem(KEY_PUSH_SERVER); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+
+/** 比對既有訂閱綁的 VAPID 公鑰是否等於伺服器現行公鑰。 */
+function sameApplicationServerKey(a: ArrayBuffer | null | undefined, b: Uint8Array): boolean {
+  if (!a) return false;
+  const av = new Uint8Array(a);
+  if (av.length !== b.length) return false;
+  for (let i = 0; i < av.length; i++) if (av[i] !== b[i]) return false;
+  return true;
+}
+
+export async function subscribePush(api: (path: string, body?: unknown) => Promise<unknown>): Promise<PushSubResult> {
+  if (!hasWindow()) return { ok: false, stage: 'no-window' };
+  if (getPermission() !== 'granted') return { ok: false, stage: 'no-permission' };
+  // v6.026：逐段標記進度，失敗時記錄「卡在哪一關」。原本整段吞錯只回 false，
+  //   最致命的情形（瀏覽器訂閱成功、但送伺服器那步 401 被吞）完全看不出來。
+  let stage: PushSubStage = 'no-sw';
   try {
     const reg = await navigator.serviceWorker?.getRegistration?.();
-    if (!reg || !reg.pushManager) return false;
+    if (!reg || !reg.pushManager) { savePushServerState({ ok: false, stage: 'no-sw' }); return { ok: false, stage: 'no-sw' }; }
+    stage = 'server-disabled';
     const info = await api('/push/pubkey') as { enabled?: boolean; publicKey?: string | null };
-    if (!info?.enabled || !info.publicKey) return false;   // 伺服器未啟用推播 → 靜默略過
+    if (!info?.enabled || !info.publicKey) { savePushServerState({ ok: false, stage: 'server-disabled' }); return { ok: false, stage: 'server-disabled' }; }
+    const key = urlBase64ToUint8Array(info.publicKey);
+    stage = 'subscribe-failed';
     let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(info.publicKey),
-      });
+    // v6.026：既有訂閱若綁的是**舊** VAPID 公鑰（伺服器重產過金鑰），推播會被推播服務以 403
+    //   VapidPkHashMismatch 擋掉；而伺服器端只清 404/410，這種死訂閱會永久殘留、永遠靜默失敗。
+    //   → 公鑰不符就先退訂再重訂，讓它自癒。
+    if (sub && !sameApplicationServerKey((sub.options as { applicationServerKey?: ArrayBuffer } | undefined)?.applicationServerKey, key)) {
+      try { await sub.unsubscribe(); } catch { /* 退訂失敗仍嘗試重訂 */ }
+      sub = null;
     }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    stage = 'server-reject';
     await api('/push/subscribe', { subscription: sub.toJSON() });
-    return true;
-  } catch { return false; }   // 不支援/被拒/網路失敗 → 只失去「關分頁也收得到」，本地通知不受影響
+    let host = '';
+    try { host = new URL(sub.endpoint).hostname; } catch { /* 忽略 */ }
+    savePushServerState({ ok: true, stage: 'ok', host });
+    return { ok: true, stage: 'ok', host };
+  } catch (e) {
+    const detail = String((e as Error)?.message ?? '').slice(0, 140);
+    savePushServerState({ ok: false, stage, detail });
+    return { ok: false, stage, detail };   // 只失去「關分頁也收得到」，本地通知與對戰不受影響
+  }
 }
 
 /** 取消推播訂閱（玩家在設定關閉通知時呼叫）。 */
@@ -275,6 +342,7 @@ export async function unsubscribePush(api: (path: string, body?: unknown) => Pro
       try { await api('/push/unsubscribe', { endpoint: sub.endpoint }); } catch { /* 伺服器端清不掉也無妨，推播失效會自動清 */ }
       await sub.unsubscribe();
     }
+    savePushServerState({ ok: false, stage: 'unsubscribed' });
   } catch { /* 忽略 */ }
 }
 
