@@ -162,7 +162,8 @@ regPost('超級毒藻龍ex|腐蝕液', (state, aIdx, pool) => {
       const ec = pool.get(e.cardId);
       return ec?.supertype === 'Energy' && ec.subtype === 'Special';
     });
-    const _g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: _isBench });
+    // v6.028：丟道具/特殊能量不是放指示物 → 對戰圓形不擋
+    const _g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: _isBench, counterPlacement: false });
     if (_g.blocked) {
       if (_tools.length > 0 || _specials.length > 0) blockedReason = _g.reason || '免疫招式效果';
       continue;

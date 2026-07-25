@@ -146,8 +146,24 @@ export function canApplyEffectToTarget(
      * v5.279: 跳過 stadium-level 防護 (對戰圓形/中立中心).
      * 用於非「放指示物」類招式效果 (例: 挪動一下移動能量, 換位).
      * 卡面對戰圓形只擋「放傷害指示物」, 不擋移動能量這種招式效果.
+     * v6.028：新 caller 請改用語意更精確的 counterPlacement（本旗標保留給既有 caller）。
      */
     skipStadium?: boolean;
+    /**
+     * v6.028【對戰圓形競技場的範圍界定】
+     * 卡面：「雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而【被放置傷害指示物】。」
+     * → 它**只**擋「放置/移轉傷害指示物」，不擋換位、退化、丟道具/能量、回手/回牌庫、效果 KO 等。
+     *
+     * 本旗標讓 caller 表態「我這個效果是不是在放指示物」：
+     *   true  = 是放指示物 → 對戰圓形應擋（行為與舊版相同）
+     *   false = 不是放指示物 → 對戰圓形不擋（修正誤擋）
+     *   未傳  = **保守視同 true（照擋）**。刻意設計成 fail-closed：漏標時維持舊行為（誤擋），
+     *           玩家會看到「不受…影響」的 log 而回報；反之 fail-open 會變成無聲的公平性漏洞
+     *           （攻方多打一次效果卻沒人發現）——本專案已多次因靜默 fail 吃虧。
+     * ⚠只影響對戰圓形/中立中心這類 stadium 分支；球形盾牌、藏隱、化隱、太晶等各自的
+     *   卡面範圍不同，完全不讀此旗標。
+     */
+    counterPlacement?: boolean;
   },
 ): DefenseCheckResult {
   // 1. 光之翼（超級皮可西ex 特性）— ability-effect 全攔
@@ -300,7 +316,7 @@ export function canApplyEffectToTarget(
     }
   }
   if (effectiveIsBench !== false) {
-    const r = resolveBenchGuard(state, pool, actorIdx, targetCard, kind);
+    const r = resolveBenchGuard(state, pool, actorIdx, targetCard, kind, { counterPlacement: options?.counterPlacement });
     if (r.blocked) {
       // v5.279: skipStadium=true 時跳過「對戰圓形」(stadium-level), 其他個別寶可夢級防護維持
       const isStadiumReason = r.reason === '對戰圓形競技場效果' || r.reason === '中立中心競技場 效果';
@@ -459,10 +475,13 @@ export const DEFENSE_RULES_DOC = [
   {
     card: '對戰圓形競技場',
     type: 'stadium',
-    blocks: ['attack-effect', 'ability-effect'],
+    // v6.028 對齊卡面：只擋「放置/移轉傷害指示物」那一類效果，不是所有招式/特性效果。
+    //   由 canApplyEffectToTarget 的 counterPlacement 旗標區分（未傳=保守照擋）。
+    blocks: ['attack-effect(僅放指示物)', 'ability-effect(僅放指示物)'],
     scope: 'bench (雙方)',
-    via: 'resolveBenchGuard / isBenchProtected',
-    note: '卡面：雙方備戰不會因招式與特性的效果而被放傷害指示物（會受招式傷害）',
+    via: 'resolveBenchGuard / isBenchProtected + counterPlacement 旗標',
+    note: '卡面：雙方備戰不會因招式與特性的效果而被放傷害指示物（會受招式傷害）。'
+        + 'v6.028 前誤擋換位/退化/丟道具/bounce/效果KO（玩家回報：對戰圓形在場時鐵掌力士抓不到備戰）',
   },
   {
     card: '球形盾牌',

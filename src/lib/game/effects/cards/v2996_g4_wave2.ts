@@ -292,8 +292,9 @@ regR('archeops-primal-wing', (st, idx, iids, _params, pool) => {
   // v5.984 Bug3b：特性對「對手」寶可夢施退化＝特性效果 → 須過 ability-effect 免疫 gate
   //   (化隱/對戰圓形/羽毛化石等應擋;比照 v5.974 戰槌龍ex 為特性補 gate)。原缺 gate=免疫目標仍被退化。
   {
+    // v6.028：退化不是放指示物 → 對戰圓形不擋（原註解誤稱「對戰圓形應擋」，與卡面不符）
     const _g = canApplyEffectToTarget(st, idx, target, pool.get(target.cardId), 'ability-effect', pool,
-      { isBench: dp.active?.iid !== targetIid });
+      { isBench: dp.active?.iid !== targetIid, counterPlacement: false });
     if (_g.blocked) return addLog(st, `原始之翼：${pool.get(target.cardId)?.name ?? '?'}｜${_g.reason}`, idx);
   }
   const removedCardId = target.cardId;

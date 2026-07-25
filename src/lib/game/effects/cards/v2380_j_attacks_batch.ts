@@ -174,7 +174,8 @@ regPost('伊裴爾塔爾ex|死亡靈魂', (state, aIdx, pool) => {
     if (remainingHP > 0 && remainingHP <= 50) {
       // v4.53 Phase 3：unified('attack-effect') per-target — bench target 補球形盾牌/藏隱等
       const _deathIsBench = pk.iid !== _oppActiveIid;
-      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', pool, { isBench: _deathIsBench });
+      // v6.028：效果 KO 不是放指示物 → 對戰圓形不擋
+      const guard = canApplyEffectToTarget(state, aIdx, pk, card, 'attack-effect', pool, { isBench: _deathIsBench, counterPlacement: false });
       if (guard.blocked) {
         blocked.push(`${card.name}｜${guard.reason}`);
         continue;

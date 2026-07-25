@@ -407,6 +407,8 @@ export function resolveBenchGuard(
   actorIdx: 0 | 1,
   targetCard: Card | undefined,
   kind: DamageKind,
+  /** v6.028：counterPlacement=false 代表「此效果不是放置傷害指示物」→ 對戰圓形不擋（見下）。 */
+  opts?: { counterPlacement?: boolean },
 ): { blocked: true; reason: string } | { blocked: false } {
   // v5.503：護城龍|太古防壁 — defender 備戰有護城龍 + 攻擊方能量單位 ≤2 → 擋對「備戰」的招式傷害。
   //   原僅 canApplyEffectToTarget(defense.ts) 檢查；但 bench-hit-N resolver(噴射打擊等「對備戰N傷害」)
@@ -418,7 +420,13 @@ export function resolveBenchGuard(
     const _atkUnits = state._attackTimeAttackerEnergyUnits ?? Infinity;
     return { blocked: true, reason: `太鼓防壁 免疫能量 ${_atkUnits} 個（≤2）的對手招式傷害` };
   }
-  if (kind === 'attack-effect' || kind === 'ability-effect') {
+  // v6.028 對齊卡面：【對戰圓形競技場】只擋「被放置傷害指示物」，不擋其他招式/特性效果。
+  //   卡面：「雙方的所有備戰寶可夢，不會因對手的招式與特性的效果而【被放置傷害指示物】。」
+  //   舊版把所有 attack-effect / ability-effect 一律擋掉 → 誤擋了換位(C-05 家族)、退化、
+  //   丟道具/特殊能量、回手/回牌庫、效果 KO 等十餘種效果（玩家回報：場上有對戰圓形時
+  //   【鐵掌力士｜大力捕捉器】抓不到對手備戰）。
+  //   counterPlacement 未傳時**保守照擋**（fail-closed，見 defense.ts 該旗標 JSDoc）。
+  if ((kind === 'attack-effect' || kind === 'ability-effect') && opts?.counterPlacement !== false) {
     if (isBenchProtected(state, pool)) {
       return { blocked: true, reason: '對戰圓形競技場效果' };
     }
@@ -8333,7 +8341,7 @@ regR('opp-swap-dmg', (st, actorIdx, iids, params, pool) => {
   const label = (params?.label as string) ?? '';
   // v5.995 fail-safe：被選備戰目標若免疫招式效果（化隱等）→ 不互換（正常已被 validIids 擋，防繞過）。
   {
-    const _tg = canApplyEffectToTarget(st, actorIdx, defender.bench[benchIdx], pool.get(defender.bench[benchIdx].cardId), 'attack-effect', pool, { isBench: true });
+    const _tg = canApplyEffectToTarget(st, actorIdx, defender.bench[benchIdx], pool.get(defender.bench[benchIdx].cardId), 'attack-effect', pool, { isBench: true, counterPlacement: false });  // v6.028 互換≠放指示物`
     if (_tg.blocked) return addLog(st, `${label}：${_tg.reason}（此備戰寶可夢不可被選為互換目標）`, actorIdx);
   }
   const newActiveOrig = defender.bench[benchIdx];
@@ -8406,7 +8414,11 @@ export function oppPokemonImmuneToAttackEffect(
   const dp = state.players[dIdx];
   const inst = dp.active?.iid === iid ? dp.active : (dp.bench.find(b => b.iid === iid) ?? null);
   if (!inst) return { blocked: false, reason: '', name: '?' };
-  const g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: dp.active?.iid !== iid });
+  // v6.028：本述詞的所有 caller 都是「非放指示物」的招式效果（回手/回牌庫、丟特殊能量、
+  //   強制留下…）→ 恒傳 counterPlacement:false，對戰圓形不該擋這些。
+  //   ⚠若未來有「放置傷害指示物」的效果想做免疫判定，**不要**用本述詞（會 fail-open），
+  //   請直接呼叫 canApplyEffectToTarget 並傳 counterPlacement:true。
+  const g = canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench: dp.active?.iid !== iid, counterPlacement: false });
   return { blocked: g.blocked, reason: g.reason ?? '', name: pool.get(inst.cardId)?.name ?? '?' };
 }
 
@@ -8423,7 +8435,9 @@ export function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
     //   免疫 gate 收斂到目標端：備戰候選過 canApplyEffectToTarget(isBench) — 免疫招式效果的
     //   備戰寶可夢不可被選為互換目標（同老大的指令 validIids 過濾模式）。
     const validIids = defender.bench
-      .filter(b => !canApplyEffectToTarget(state, aIdx, b, pool.get(b.cardId), 'attack-effect', pool, { isBench: true }).blocked)
+      // v6.028：互換位置不是「放置傷害指示物」→ 對戰圓形不該擋（filter 與上面 resolver 的
+      //   fail-safe 必須同步，否則會變成 picker 列得出來但點了無效）。
+      .filter(b => !canApplyEffectToTarget(state, aIdx, b, pool.get(b.cardId), 'attack-effect', pool, { isBench: true, counterPlacement: false }).blocked)
       .map(b => b.iid);
     if (validIids.length === 0) {
       return addLog(state, `${label}：對手備戰寶可夢皆不受招式效果影響，無法互換`, aIdx);

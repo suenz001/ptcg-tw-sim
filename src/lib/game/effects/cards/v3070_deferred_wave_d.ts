@@ -103,7 +103,8 @@ export const supercatExpAbility_LureTail: OnDiscardFromHandFn = (st, idx, _pool,
   }
   // v5.995：C-05 目標端免疫 — 免疫特性效果的備戰（化隱等，備戰也生效）不可被選為互換目標
   const validIids = opp.bench
-    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true }).blocked)
+    // v6.028：互換不是放指示物 → 對戰圓形不擋
+    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
     .map(b => b.iid);
   if (validIids.length === 0) {
     return addLog(st, '誘導之尾：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);

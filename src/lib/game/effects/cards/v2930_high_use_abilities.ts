@@ -293,7 +293,8 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
   // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
   //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
   const validIids = opp.bench
-    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true }).blocked)
+    // v6.028：互換位置不是「放置傷害指示物」→ 對戰圓形競技場不該擋（玩家回報本卡被誤擋）
+    .filter(b => !canApplyEffectToTarget(st, idx, b, _pool.get(b.cardId), 'ability-effect', _pool, { isBench: true, counterPlacement: false }).blocked)
     .map(b => b.iid);
   if (validIids.length === 0) return addLog(st, '大力捕捉器：對手備戰寶可夢皆不受特性效果影響，無法互換', idx);
   const s = addLog(st, '大力捕捉器：選 1 隻對手備戰寶可夢與戰鬥場互換', idx);

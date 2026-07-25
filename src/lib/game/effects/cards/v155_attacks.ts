@@ -397,7 +397,8 @@ regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
   }
   dPlayer.bench.forEach((b, idx) => {
     const card = pool.get(b.cardId);
-    const _gb = canApplyEffectToTarget(state, aIdx, b, card, 'attack-effect', pool, { isBench: true });
+    // v6.028：退化不是放指示物 → 對戰圓形不擋
+    const _gb = canApplyEffectToTarget(state, aIdx, b, card, 'attack-effect', pool, { isBench: true, counterPlacement: false });
     if ((card?.stage === 'Stage1' || card?.stage === 'Stage2') && !_gb.blocked) {
       targets.push({ iid: b.iid, slot: { kind: 'bench', idx } });
     }

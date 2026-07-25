@@ -323,7 +323,8 @@ function buildScavengeOptions(state: import('../../types').GameState, aIdx: 0 | 
   ];
   const opts: { id: string; text: string; inspectIid?: string; inspectPlayerIdx?: 0 | 1 }[] = [];
   for (const { inst, pos, isBench } of all) {
-    if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench }).blocked) continue;
+    // v6.028：丟道具不是放指示物 → 對戰圓形不擋
+    if (canApplyEffectToTarget(state, aIdx, inst, pool.get(inst.cardId), 'attack-effect', pool, { isBench, counterPlacement: false }).blocked) continue;
     const ownerName = pool.get(inst.cardId)?.name ?? '?';
     for (const t of getAllAttachedTools(inst)) {
       opts.push({ id: `${dIdx}:${inst.iid}:${t.iid}`, text: `🔧 對手 ${pos} ${ownerName} 的「${pool.get(t.cardId)?.name ?? '?'}」`, inspectIid: inst.iid, inspectPlayerIdx: dIdx });
@@ -621,7 +622,8 @@ regR('h-wave3-devolve', (state, aIdx, iids, _params, pool) => {
     const _dp = state.players[dIdx];
     const _tgt = _dp.active?.iid === tIid ? _dp.active : _dp.bench.find(b => b.iid === tIid);
     if (_tgt) {
-      const _g = canApplyEffectToTarget(state, aIdx, _tgt, pool.get(_tgt.cardId), 'attack-effect', pool, { isBench: _dp.active?.iid !== tIid });
+      // v6.028：退化不是放指示物 → 對戰圓形不擋
+      const _g = canApplyEffectToTarget(state, aIdx, _tgt, pool.get(_tgt.cardId), 'attack-effect', pool, { isBench: _dp.active?.iid !== tIid, counterPlacement: false });
       if (_g.blocked) return addLog(state, `奧密之眼：${pool.get(_tgt.cardId)?.name ?? '?'}｜${_g.reason}`, aIdx);
     }
   }
