@@ -3965,8 +3965,17 @@ window.showPlayerDetail = async function(email) {
       + '<div>' + escapeHtml(f.content || '') + '</div>'
       + (f.reply ? '<div class="small" style="color:#2e7d32;margin-top:2px;">↳ ' + escapeHtml(f.reply) + '</div>' : '')
       + '</div>').join('');
+    // v1.53：曾使用過的暱稱（去重，標來源與最後使用時間）——從舊 log/截圖的名字反查同一個人
+    const nickHtml = (pf.nicknames || []).length
+      ? '<div style="margin:2px 0 10px;"><span class="small muted">曾使用的暱稱：</span>'
+        + pf.nicknames.map((n) => '<span style="display:inline-block;padding:1px 8px;margin:1px 4px 1px 0;border-radius:10px;background:#e8eef7;color:#33507a;font-size:12px;" title="來源：' + escapeHtml(n.sources.join('、'))
+            + (n.lastAt ? '｜最後使用 ' + new Date(n.lastAt).toLocaleDateString('zh-TW') : '') + '">'
+            + escapeHtml(n.name) + '<span class="small" style="opacity:.65;"> · ' + escapeHtml(n.sources.join('/')) + '</span></span>').join('')
+        + '</div>'
+      : '';
     box.innerHTML =
-      '<div class="small muted" style="margin:2px 0 10px;">' + accHtml + '</div>'
+      nickHtml
+      + '<div class="small muted" style="margin:2px 0 10px;">' + accHtml + '</div>'
       + '<div class="stats-grid" style="margin-bottom:10px;">'
       + '<div class="stat-card"><div class="stat-label">錦標賽參賽</div><div class="stat-value">' + (t.events || 0) + '</div></div>'
       + '<div class="stat-card"><div class="stat-label">賽事勝-負</div><div class="stat-value">' + (t.wins || 0) + ' - ' + (t.losses || 0) + '</div></div>'
