@@ -631,6 +631,12 @@ function showApp() {
   document.getElementById('login-section').style.display = 'none';
   document.getElementById('app-section').style.display = 'block';
   loadActive();
+  // v1.50：處理進站時就帶著的 #/player/… 深連結，並監聽之後的 hash 變化
+  if (!window._adminRouteBound) {
+    window._adminRouteBound = true;
+    window.addEventListener('hashchange', handleAdminRoute);
+  }
+  handleAdminRoute();
   // v1.16：移除 30 秒自動刷新 — 一律手動按 Refresh 重刷（Wilson 偏好手動，
   //   且避免「總覽」頁在沒按 Refresh 時自己重整）。
 }
@@ -836,7 +842,7 @@ async function loadTournamentAdmin() {
     else {
       html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th>暱稱</th><th>Email</th><th>牌組</th><th>報名時間</th></tr></thead><tbody>';
       data.regs.slice().sort((a, b) => (a.registeredAt || 0) - (b.registeredAt || 0)).forEach((r, i) => {
-        html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.name || '') + '</td><td>' + escapeHtml(r.email || '') + '</td><td>' + (r.deckCount || 0) + ' 張</td><td>' + (r.registeredAt ? new Date(r.registeredAt).toLocaleString('zh-TW') : '') + '</td></tr>';
+        html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(r.name || '') + '</td><td>' + playerLink(r.email) + '</td><td>' + (r.deckCount || 0) + ' 張</td><td>' + (r.registeredAt ? new Date(r.registeredAt).toLocaleString('zh-TW') : '') + '</td></tr>';
       });
       html += '</tbody></table>';
       html += '<h3 style="margin-top:16px;">📋 報名者牌組（可複製貼回「編輯我的牌組」匯入功能）</h3>';
@@ -1320,7 +1326,7 @@ function renderTournamentStats(el, data) {
   else {
     html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">戰績</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th></tr></thead><tbody>';
     champRank.forEach((p, i) => {
-      html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + escapeHtml(p.email || '（匿名）') + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
+      html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + playerLink(p.email) + '</td><td><b>' + p.titles + '</b> 🏆</td><td>' + p.events
         + '</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
     });
     html += '</tbody></table>';
@@ -1332,7 +1338,7 @@ function renderTournamentStats(el, data) {
   html += '<section class="stats-section"><h3>🎯 3. 玩家戰績排行 <span class="small muted">（只計雙方都到場的真實對局，不含輪空）</span></h3>';
   html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">勝</th><th class="sortable" onclick="_tsSortTable(this)">負</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th></tr></thead><tbody>';
   playerRank.forEach((p, i) => {
-    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + escapeHtml(p.email || '（匿名）') + '</td><td>' + p.events + '</td><td>' + p.wins
+    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + playerLink(p.email) + '</td><td>' + p.events + '</td><td>' + p.wins
       + '</td><td>' + p.losses + '</td><td>' + _tsPct(p.wins, p.losses) + '%</td><td>' + (p.titles ? (p.titles + ' 🏆') : '—') + '</td></tr>';
   });
   html += '</tbody></table></section>';
@@ -1778,7 +1784,7 @@ function renderRoomRow(r, source) {
     const nm = escapeHtml(seat.name || '?');
     // (1) server enrich 給了 email — 最準確
     if (seat.email) {
-      return nm + '<div class="small" style="color:#7aa3ef;font-size:10px">' + escapeHtml(seat.email) + '</div>';
+      return nm + '<div class="small" style="color:#7aa3ef;font-size:10px">' + playerLink(seat.email) + '</div>';
     }
     // (2) v0.79: session anon (client 自產 anon_xxx，非 firebase auth uid)
     if (seat.provider === 'session-anon') {
@@ -2028,6 +2034,39 @@ window.popModal = function() {
 };
 window.closeModal = function() {
   document.getElementById('modal-container').innerHTML = '';
+  // v1.50 玩家總覽：關閉時清掉 #/player/ 深連結，避免重整又跳回 modal
+  if (String(location.hash || '').startsWith('#/player/')) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+};
+
+// ══ v1.50 玩家總覽（批次1）══════════════════════════════════════════════════
+//   目標：admin **任何**頁面點到玩家 email，都能開出同一份完整玩家檔案。
+//   做法：全站一律呼叫 playerLink() 產生連結（禁止各頁自己手刻 onclick），
+//         連結寫進網址 hash（#/player/xxx）→ 可分享、可重整、可上一頁。
+//   ⚠沒有 email 的玩家（本機對戰 P2／匿名）天生無法建檔：matchRecords 只存 email 不存 uid，
+//     此時退回純文字並標「匿名」，不要產生點了沒反應的假連結。
+window.openPlayer = function(email) {
+  if (!email || !String(email).includes('@')) return;
+  location.hash = '#/player/' + encodeURIComponent(email);
+};
+/** 全站唯一的玩家連結產生器。label 省略時顯示 email 本身。 */
+window.playerLink = function(email, label, cls) {
+  const txt = escapeHtml(label != null && label !== '' ? String(label) : String(email || ''));
+  if (!email || !String(email).includes('@')) {
+    return '<span class="small muted">' + (txt || '（匿名）') + '</span>';
+  }
+  const safe = String(email).replace(/'/g, '&apos;');
+  return '<a href="#/player/' + encodeURIComponent(email) + '" class="' + (cls || 'player-name')
+    + '" title="開啟玩家總覽" onclick="openPlayer(\'' + safe + '\'); return false;">' + txt + '</a>';
+};
+/** hash 路由：目前只有 #/player/{email}；未來 #/event/… 等在此擴充。 */
+window.handleAdminRoute = function() {
+  const h = String(location.hash || '');
+  if (h.startsWith('#/player/')) {
+    const em = decodeURIComponent(h.slice('#/player/'.length));
+    if (em) showPlayerDetail(em);
+  }
 };
 
 // ── Messages modal (chat only, no game log) ─────────────────────
@@ -2229,7 +2268,7 @@ function renderUsersRows(users) {
     }
     return `
       <tr>
-        <td title="${escapeHtml(u.email || '')}"><div class="trunc-inner">${escapeHtml(u.email || '')}${u.email ? '' : '<span class="small">(匿名)</span>'}</div></td>
+        <td title="${escapeHtml(u.email || '')}"><div class="trunc-inner">${u.email ? playerLink(u.email) : '<span class="small">(匿名)</span>'}</div></td>
         <td class="mono small">${u.uid.slice(0, 12)}…</td>
         <td>${typeCell}</td>
         <td class="small">${u.lastSignIn ? new Date(u.lastSignIn).toLocaleString('zh-TW') : '-'}</td>
@@ -2392,7 +2431,7 @@ function renderFeedbackItem(f) {
       <div class="feedback-meta">
         📅 <b>${created}</b>
         · <span class="mono small">UID: ${uidShort}…</span>
-        ${f.uid ? (fbLooked ? (fbEmail ? ' · <span class="mono small" style="color:#5b8def;font-weight:600;">✉ ' + escapeHtml(fbEmail) + '</span>' : ' · <span class="mono small" style="color:#b0b6c0;">✉ 無 email（匿名）</span>') : ' · <span class="mono small" style="color:#9aa3b0;">✉ 查詢中…</span>') : ''}
+        ${f.uid ? (fbLooked ? (fbEmail ? ' · <span class="mono small" style="font-weight:600;">✉ ' + playerLink(fbEmail) + '</span>' : ' · <span class="mono small" style="color:#b0b6c0;">✉ 無 email（匿名）</span>') : ' · <span class="mono small" style="color:#9aa3b0;">✉ 查詢中…</span>') : ''}
         ${deviceShort ? ' · <span class="mono small">device: ' + deviceShort + '</span>' : ''}
         ${hasReply ? '<span class="reply-badge">✓ 已回覆</span>' : '<span class="unreply-badge">⏳ 待回覆</span>'}
       </div>
@@ -2644,8 +2683,8 @@ function renderMatchRow(r) {
   const p2Win = r.winner === 1;
   const p1Cls = p1Win ? 'winner-cell' : '';
   const p2Cls = p2Win ? 'winner-cell' : '';
-  const p1Email = r.p1?.email ? escapeHtml(r.p1.email) : '<span style="color:#bbb;">匿名</span>';
-  const p2Email = r.p2?.email ? escapeHtml(r.p2.email) : '<span style="color:#bbb;">匿名</span>';
+  const p1Email = r.p1?.email ? playerLink(r.p1.email) : '<span style="color:#bbb;">匿名</span>';
+  const p2Email = r.p2?.email ? playerLink(r.p2.email) : '<span style="color:#bbb;">匿名</span>';
   const mid = escapeHtml(r._id || '');
   const isOnline = !!r.roomCode;
   const modeBadge = isOnline
@@ -2790,7 +2829,7 @@ window.showMatchDeck = async function(matchId) {
   // 渲染單側 HTML
   const renderSide = (label, player, entries, win) => {
     const total = entries.reduce((s, e) => s + e.count, 0);
-    const emailLine = player?.email ? `<span class="player-email">(${escapeHtml(player.email)})</span>` : '<span class="player-email">(匿名)</span>';
+    const emailLine = player?.email ? `<span class="player-email">(${playerLink(player.email)})</span>` : '<span class="player-email">(匿名)</span>';
     const winBadge = win ? '<span style="background:#4caf50;color:white;padding:2px 8px;border-radius:4px;font-size:12px;margin-left:6px;">勝</span>' : '';
     if (!entries.length) return `
       <div class="deck-col${win ? ' winner-side' : ''}">
@@ -3453,9 +3492,7 @@ function playerRankRowHtml(row, i) {
   const wrText = (wr === null || wr === undefined) ? '-' : (wr * 100).toFixed(1) + '%';
   const wrColor = wr === null ? '#7a8898' : (wr > 0.55 ? '#2e7d32' : (wr < 0.45 ? '#c62828' : '#1a2332'));
   const idForDetail = row.email || row.key || row.name;
-  const idDisplay = row.email
-    ? `<a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.email)}</a>`
-    : `<span class="small muted">（匿名）</span>`;
+  const idDisplay = row.email ? playerLink(row.email) : `<span class="small muted">（匿名）</span>`;
   return `<tr>
     <td>${i + 1}</td>
     <td><a href="#" class="player-name" onclick="showPlayerDetail('${escapeHtml(idForDetail).replace(/'/g, '&apos;')}'); return false;">${escapeHtml(row.name || '-')}</a></td>
@@ -3603,7 +3640,7 @@ window.showPlayerDetail = async function(email) {
       <td>${fmtTime(m.endedAt)}</td>
       <td>${sideTag}</td>
       <td>${resultTag}</td>
-      <td>${escapeHtml(opp?.name || '-')} <span class="small muted">${opp?.email ? '(' + escapeHtml(opp.email) + ')' : '(匿名/AI)'}</span></td>
+      <td>${escapeHtml(opp?.name || '-')} <span class="small muted">${opp?.email ? '(' + playerLink(opp.email) + ')' : '(匿名/AI)'}</span></td>
       <td>${roomCell}</td>
       <td>${m.finalTurn ?? '-'}</td>
     </tr>`;
@@ -3618,7 +3655,10 @@ window.showPlayerDetail = async function(email) {
   document.getElementById('modal-container').innerHTML = `
     <div class="modal-bg" onclick="if(event.target===this)closeModal()">
       <div class="modal" style="min-width:720px; max-width:900px; max-height:88vh; overflow-y:auto;">
-        <h3>🧑 玩家戰績：${escapeHtml(email)}</h3>
+        <h3>🧑 玩家總覽：${escapeHtml(email)}</h3>
+        <!-- v1.50：跨【帳號／錦標賽／意見回饋】聚合，由 /api/admin/player-profile 懶載入 -->
+        <div id="player-profile-section"><div class="empty">玩家總覽載入中…</div></div>
+        <h4 style="margin:16px 0 8px;">🎮 一般對戰（休閒／本機）</h4>
         <div class="stats-grid" style="margin-bottom:16px;">
           <div class="stat-card"><div class="stat-label">總場次</div><div class="stat-value">${s.matches || 0}</div></div>
           <div class="stat-card"><div class="stat-label">勝</div><div class="stat-value" style="color:#2e7d32;">${s.wins || 0}</div></div>
@@ -3642,6 +3682,64 @@ window.showPlayerDetail = async function(email) {
         </div>
       </div>
     </div>`;
+  // ── v1.50 玩家總覽聚合區（與下面的儲存牌組並行載入）──
+  (async () => {
+    const box = document.getElementById('player-profile-section');
+    if (!box) return;
+    const pf = await api('/api/admin/player-profile?email=' + encodeURIComponent(email));
+    if (!box.isConnected) return;                       // modal 已被關掉
+    if (!pf || pf.error) { box.innerHTML = '<div class="empty">玩家總覽讀取失敗：' + escapeHtml(pf?.error || '?') + '</div>'; return; }
+    const pct = (v) => (v === null || v === undefined) ? '-' : (v * 100).toFixed(1) + '%';
+    const fmtD = (ms) => ms ? new Date(ms).toLocaleDateString('zh-TW') : '-';
+    const acc = pf.account;
+    const t = pf.tournament || {};
+    const accHtml = acc
+      ? '註冊 ' + fmtD(acc.createdAt) + '｜最後登入 ' + fmtD(acc.lastSignInAt)
+        + (acc.displayName ? '｜暱稱 ' + escapeHtml(acc.displayName) : '')
+        + (acc.disabled ? ' <span style="color:#c62828;font-weight:600;">（帳號已停用）</span>' : '')
+        + '｜<span class="mono small">' + escapeHtml(acc.uid) + '</span>'
+      : '<span class="muted">此 email 沒有對應的 Firebase 帳號（可能只在本機對戰用過）</span>';
+    const tournRows = (t.list || []).slice(0, 20).map((e) =>
+      '<tr><td>' + fmtD(e.finishedAt) + '</td>'
+      + '<td>' + (e.champion ? '🏆 ' : '') + escapeHtml(e.eventName || '') + (e.communityEvent ? ' <span class="small muted">(社群)</span>' : '') + '</td>'
+      + '<td>' + escapeHtml(e.deckName || '-') + '</td>'
+      + '<td>' + e.wins + ' - ' + e.losses + '</td>'
+      + '<td>' + (e.playerCount || '-') + ' 人</td></tr>').join('');
+    const fbRows = (pf.feedbacks || []).map((f) =>
+      '<div style="border-top:1px solid #eceff3;padding:6px 0;">'
+      + '<div class="small muted">' + (f.createdAt ? new Date(f.createdAt).toLocaleString('zh-TW') : '-')
+      + (f.reply ? ' · <span style="color:#2e7d32;">已回覆</span>' : ' · <span style="color:#e08a00;">待回覆</span>') + '</div>'
+      + '<div>' + escapeHtml(f.content || '') + '</div>'
+      + (f.reply ? '<div class="small" style="color:#2e7d32;margin-top:2px;">↳ ' + escapeHtml(f.reply) + '</div>' : '')
+      + '</div>').join('');
+    box.innerHTML =
+      '<div class="small muted" style="margin:2px 0 10px;">' + accHtml + '</div>'
+      + '<div class="stats-grid" style="margin-bottom:10px;">'
+      + '<div class="stat-card"><div class="stat-label">錦標賽參賽</div><div class="stat-value">' + (t.events || 0) + '</div></div>'
+      + '<div class="stat-card"><div class="stat-label">賽事勝-負</div><div class="stat-value">' + (t.wins || 0) + ' - ' + (t.losses || 0) + '</div></div>'
+      + '<div class="stat-card"><div class="stat-label">賽事勝率</div><div class="stat-value">' + pct(t.winRate) + '</div></div>'
+      + '<div class="stat-card"><div class="stat-label">冠軍次數</div><div class="stat-value">' + (t.championships || 0) + ' 🏆</div></div>'
+      + '<div class="stat-card"><div class="stat-label">意見回饋</div><div class="stat-value">' + (pf.feedbackCount || 0) + '</div></div>'
+      + '<div class="stat-card"><div class="stat-label">儲存牌組</div><div class="stat-value">' + (pf.savedDeckCount == null ? '-' : pf.savedDeckCount) + '</div></div>'
+      + '</div>'
+      + (tournRows
+          ? '<details open><summary style="cursor:pointer;font-weight:600;margin-bottom:6px;">🏆 錦標賽成績（最近 ' + Math.min(20, (t.list || []).length) + ' 場賽事）</summary>'
+            + '<div class="stats-box" style="padding:8px;overflow-x:auto;"><table><thead><tr><th>日期</th><th>賽事</th><th>使用牌組</th><th>勝-負</th><th>規模</th></tr></thead><tbody>'
+            + tournRows + '</tbody></table></div></details>'
+          : '<div class="small muted">尚無錦標賽參賽紀錄</div>')
+      + (fbRows
+          ? '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;">💬 最近意見回饋（共 ' + (pf.feedbackCount || 0) + ' 則）</summary>'
+            + '<div class="stats-box" style="padding:8px;">' + fbRows + '</div></details>'
+          : '')
+      + ((pf.regs || []).length
+          ? '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;">📝 報名紀錄（含未結束賽事，最近 ' + Math.min(20, pf.regs.length) + ' 筆）</summary>'
+            + '<div class="stats-box" style="padding:8px;overflow-x:auto;"><table><thead><tr><th>報名時間</th><th>報名暱稱</th><th>牌組名</th><th>報到</th></tr></thead><tbody>'
+            + pf.regs.slice(0, 20).map((r) => '<tr><td>' + (r.registeredAt ? new Date(r.registeredAt).toLocaleString('zh-TW') : '-') + '</td><td>'
+              + escapeHtml(r.name || '') + '</td><td>' + escapeHtml(r.deckName || '-') + '</td><td>' + (r.checkedIn ? '✅' : '—') + '</td></tr>').join('')
+            + '</tbody></table></div></details>'
+          : '');
+  })();
+
   // v0.94: 載入儲存牌組 list
   if (email && email.includes('@')) {
     const decksDiv = document.getElementById('player-decks-section');
