@@ -388,6 +388,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 廣播</div>
     <div class="tab" data-tab="tournament" onclick="switchTab('tournament')">🏆 賽事</div>
     <div class="tab" data-tab="tournament-stats" onclick="switchTab('tournament-stats')">📈 賽事統計</div>
+    <div class="tab" data-tab="deck-rules" onclick="switchTab('deck-rules')">🎴 牌組原型</div>
     <div class="tab" data-tab="changelog" onclick="switchTab('changelog')">📋 更新記錄</div>
   </div>
 
@@ -402,6 +403,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-broadcast" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament" class="tab-content" style="display:none;"></div>
     <div id="tab-tournament-stats" class="tab-content" style="display:none;"></div>
+    <div id="tab-deck-rules" class="tab-content" style="display:none;"></div>
     <div id="tab-changelog" class="tab-content" style="display:none;"></div>
   </main>
 </div>
@@ -1408,6 +1410,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'matches') p = loadMatchRecords(forceRefresh);  // v0.80: 對戰歷史
   else if (currentTab === 'stats') p = loadStats(forceRefresh);  // v0.83: Phase 2a 統計
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
+  else if (currentTab === 'deck-rules') p = loadDeckRules();  // v1.51 牌組原型規則
   else if (currentTab === 'changelog') p = loadChangelogAdmin();  // 首頁更新記錄編輯
   else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
   else if (currentTab === 'tournament-stats') p = loadTournamentStats(forceRefresh);  // 賽事統計
@@ -2038,6 +2041,179 @@ window.closeModal = function() {
   if (String(location.hash || '').startsWith('#/player/')) {
     history.replaceState(null, '', location.pathname + location.search);
   }
+};
+
+// ══ v1.51 牌組原型規則（批次2）═══════════════════════════════════════════════
+//   Wilson 自訂「必須含哪些卡 AND 不能含哪些卡」來識別牌組，例：
+//     祭典熱舞 = 含【果蜜蟲】【角金魚】、不含【蜜集大蛇ex】
+//   ⭐用卡名比對（Wilson 拍板）：同一張卡的印刷版本很多，用編號會漏掉新印刷版本。
+//   ⭐存檔前一定要按「預覽命中」：卡名打錯會 0 命中，預覽會直接把打錯的名字列出來。
+let _deckRules = [];
+let _rulePreview = null;   // { ruleName, hits, scannedDecks, samples, unknownCardNames }
+
+window.loadDeckRules = async function() {
+  const el = document.getElementById('tab-deck-rules');
+  if (!el.dataset.init) { el.innerHTML = '<div class="empty">Loading…</div>'; el.dataset.init = '1'; }
+  await ensureCardIndex();          // 卡名 datalist 用
+  const res = await api('/api/admin/deck-rules');
+  if (!res || res.error) { el.innerHTML = '<div class="empty">讀取失敗：' + escapeHtml(res?.error || '?') + '</div>'; return; }
+  _deckRules = res.rules || [];
+  renderDeckRules(el);
+};
+
+function renderDeckRules(el) {
+  // 卡名建議清單（去重後的顯示名，供 datalist 自動完成）
+  const names = new Set();
+  for (const k in (window.cardInfoMap || {})) { const n = cardInfoMap[k]?.name; if (n) names.add(n); }
+  const dlOpts = [...names].sort().map((n) => '<option value="' + escapeHtml(n) + '">').join('');
+
+  const rows = _deckRules.map((r) => {
+    const inc = (r.includes || []).map((x) => '<span class="rule-chip inc">' + escapeHtml(x) + '</span>').join('');
+    const exc = (r.excludes || []).map((x) => '<span class="rule-chip exc">' + escapeHtml(x) + '</span>').join('');
+    const ids = ((r.includeIds || []).length + (r.excludeIds || []).length)
+      ? '<div class="small muted">鎖定版本：' + ((r.includeIds || []).concat(r.excludeIds || []).map(escapeHtml).join(', ')) + '</div>' : '';
+    const rid = String(r._id).replace(/'/g, '&apos;');
+    return '<tr>'
+      + '<td>' + (r.enabled === false ? '⏸' : '✅') + '</td>'
+      + '<td><b>' + escapeHtml(r.name) + '</b>' + (r.note ? '<div class="small muted">' + escapeHtml(r.note) + '</div>' : '') + ids + '</td>'
+      + '<td>' + (inc || '<span class="small muted">—</span>') + '</td>'
+      + '<td>' + (exc || '<span class="small muted">—</span>') + '</td>'
+      + '<td>' + (r.priority ?? 100) + '</td>'
+      + '<td><button class="tiny ghost" onclick="editDeckRule(\'' + rid + '\')">編輯</button> '
+      + '<button class="tiny ghost" onclick="deleteDeckRule(\'' + rid + '\')">刪除</button></td>'
+      + '</tr>';
+  }).join('');
+
+  const pv = _rulePreview;
+  const pvHtml = !pv ? '' :
+    '<div class="stats-box" style="padding:10px;margin-top:8px;">'
+    + (pv.unknownCardNames && pv.unknownCardNames.length
+        ? '<div style="color:#c62828;font-weight:600;margin-bottom:6px;">⚠ 這些卡名在卡片資料庫中找不到（多半是打錯字或用了非官方譯名）：'
+          + pv.unknownCardNames.map(escapeHtml).join('、') + '</div>' : '')
+    + '<div>掃描最近 <b>' + pv.scannedDecks + '</b> 副牌組（' + pv.scannedMatches + ' 場對戰），命中 <b style="color:'
+    + (pv.hits ? '#2e7d32' : '#c62828') + ';">' + pv.hits + '</b> 副'
+    + (pv.hits === 0 ? ' — <span style="color:#c62828;">0 命中，請檢查卡名是否正確、或條件是否過嚴</span>' : '') + '</div>'
+    + (pv.samples && pv.samples.length
+        ? '<div class="small muted" style="margin-top:6px;">命中範例：' + pv.samples.map((x) =>
+            escapeHtml(x.name || '?') + (x.email ? '（' + escapeHtml(x.email) + '）' : '')).join('、') + '</div>' : '')
+    + '</div>';
+
+  el.innerHTML = `
+    <style>
+      .rule-chip{display:inline-block;padding:1px 7px;margin:1px 3px 1px 0;border-radius:10px;font-size:12px;}
+      .rule-chip.inc{background:#e3f2e6;color:#2e7d32;}
+      .rule-chip.exc{background:#fdecec;color:#c62828;}
+      .rule-form label{display:block;font-size:12px;color:#5a6472;margin:8px 0 2px;}
+      .rule-form input,.rule-form textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d6dbe3;border-radius:6px;font-size:13px;}
+      .rule-form textarea{min-height:56px;resize:vertical;font-family:inherit;}
+    </style>
+    <h3>🎴 牌組原型規則</h3>
+    <p class="small muted" style="margin:2px 0 12px;">
+      定義「一副牌要含哪些卡、不能含哪些卡」就算是某個牌組。之後的使用率／勝率統計會依這些規則分類。
+      一副牌同時符合多條規則時，取<b>優先序數字最小</b>的那條；都不符合就歸為「未分類」。
+    </p>
+    <div class="stats-box" style="padding:12px;margin-bottom:14px;">
+      <div class="rule-form">
+        <input type="hidden" id="rule-id" value="">
+        <label>規則名稱（就是牌組名，例：祭典熱舞）</label>
+        <input id="rule-name" placeholder="祭典熱舞" list="card-name-list-none">
+        <label>✅ 必須包含這些卡（一行一張，或用逗號分隔）</label>
+        <textarea id="rule-includes" placeholder="果蜜蟲&#10;角金魚" list="card-name-list"></textarea>
+        <label>🚫 不能包含這些卡（一行一張；留空表示不限制）</label>
+        <textarea id="rule-excludes" placeholder="蜜集大蛇ex"></textarea>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:120px;"><label>優先序（數字小者優先）</label><input id="rule-priority" type="number" value="100"></div>
+          <div style="flex:2;min-width:180px;"><label>備註（選填）</label><input id="rule-note" placeholder=""></div>
+        </div>
+        <label>🔒 鎖定特定卡片編號（進階，選填；同名不同效果時才需要。逗號分隔）</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input id="rule-include-ids" placeholder="必含的 cardId" style="flex:1;min-width:160px;">
+          <input id="rule-exclude-ids" placeholder="不可含的 cardId" style="flex:1;min-width:160px;">
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button onclick="previewDeckRule()">🔍 預覽命中（存檔前先按這個）</button>
+          <button onclick="saveDeckRule()">💾 儲存規則</button>
+          <button class="ghost" onclick="resetDeckRuleForm()">清空</button>
+          <label style="display:inline-flex;align-items:center;gap:4px;margin:0;"><input type="checkbox" id="rule-enabled" checked style="width:auto;"> 啟用</label>
+        </div>
+      </div>
+      ${pvHtml}
+    </div>
+    <div class="stats-box" style="padding:8px;overflow-x:auto;">
+      ${rows
+        ? '<table><thead><tr><th>啟用</th><th>牌組名稱</th><th>必須包含</th><th>不能包含</th><th>優先序</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<div class="empty">尚未建立任何規則。先在上面填一條試試，記得按「預覽命中」確認卡名沒打錯。</div>'}
+    </div>
+    <datalist id="card-name-list">${dlOpts}</datalist>`;
+}
+
+function readRuleForm() {
+  const val = (id) => (document.getElementById(id)?.value || '').trim();
+  return {
+    id: val('rule-id'),
+    name: val('rule-name'),
+    includes: val('rule-includes'),
+    excludes: val('rule-excludes'),
+    includeIds: val('rule-include-ids'),
+    excludeIds: val('rule-exclude-ids'),
+    priority: Number(val('rule-priority') || 100),
+    note: val('rule-note'),
+    enabled: !!document.getElementById('rule-enabled')?.checked,
+  };
+}
+window.resetDeckRuleForm = function() {
+  _rulePreview = null;
+  renderDeckRules(document.getElementById('tab-deck-rules'));
+};
+window.editDeckRule = function(id) {
+  const r = _deckRules.find((x) => String(x._id) === String(id));
+  if (!r) return;
+  _rulePreview = null;
+  renderDeckRules(document.getElementById('tab-deck-rules'));
+  const set = (k, v) => { const e = document.getElementById(k); if (e) e.value = v; };
+  set('rule-id', r._id); set('rule-name', r.name);
+  set('rule-includes', (r.includes || []).join('\n'));
+  set('rule-excludes', (r.excludes || []).join('\n'));
+  set('rule-include-ids', (r.includeIds || []).join(','));
+  set('rule-exclude-ids', (r.excludeIds || []).join(','));
+  set('rule-priority', r.priority ?? 100); set('rule-note', r.note || '');
+  const en = document.getElementById('rule-enabled'); if (en) en.checked = r.enabled !== false;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+window.deleteDeckRule = async function(id) {
+  const r = _deckRules.find((x) => String(x._id) === String(id));
+  if (!confirm('確定刪除規則「' + (r ? r.name : id) + '」？（統計是即時計算的，刪掉後該分類就會從統計消失）')) return;
+  const res = await api('/api/admin/deck-rules?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  if (!res || res.error) { alert('刪除失敗：' + (res?.error || '?')); return; }
+  await loadDeckRules();
+};
+window.previewDeckRule = async function() {
+  const body = readRuleForm();
+  if (!body.name) { alert('請先填規則名稱'); return; }
+  const res = await api('/api/admin/deck-rules/preview?limit=200', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res || res.error) { alert('預覽失敗：' + (res?.error || '?')); return; }
+  _rulePreview = res;
+  const form = readRuleForm();
+  renderDeckRules(document.getElementById('tab-deck-rules'));
+  // 重新填回表單內容（renderDeckRules 會重畫）
+  const set = (k, v) => { const e = document.getElementById(k); if (e) e.value = v; };
+  set('rule-id', form.id); set('rule-name', form.name);
+  set('rule-includes', form.includes); set('rule-excludes', form.excludes);
+  set('rule-include-ids', form.includeIds); set('rule-exclude-ids', form.excludeIds);
+  set('rule-priority', form.priority); set('rule-note', form.note);
+  const en = document.getElementById('rule-enabled'); if (en) en.checked = form.enabled;
+};
+window.saveDeckRule = async function() {
+  const body = readRuleForm();
+  if (!body.name) { alert('請先填規則名稱'); return; }
+  const res = await api('/api/admin/deck-rules', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!res || res.error) { alert('儲存失敗：' + (res?.error || '?')); return; }
+  _rulePreview = null;
+  await loadDeckRules();
 };
 
 // ══ v1.50 玩家總覽（批次1）══════════════════════════════════════════════════
