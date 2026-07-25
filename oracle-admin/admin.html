@@ -2084,6 +2084,20 @@ let _archStatsBusy = false;
 let _archSortKey = 'usage';   // usage | wins | losses | draws | winRate | name
 let _archSortAsc = false;     // 預設由大到小
 let _archSince = '0';   // '0'=全部；否則為天數
+// ⚠v1.58：本檔是 <script type="module">，模組層級的 let **不是 window 屬性**；
+//   而 inline on* handler 是在「全域」執行的。所以 onchange="_archSince=this.value"
+//   只會寫進一個同名的全域變數，模組內這個 _archSince 永遠停在初始值 '0'
+//   → 不論選 7 天還 30 天，送出去的 since 都是 0（全部時間），統計數字自然完全一樣。
+//   修法：① setter 掛 window 供 inline 呼叫 ② 讀取端一律以畫面上的 <select> 為單一真實來源。
+window.setArchSince = function (v) {
+  _archSince = String(v == null ? '0' : v);
+  loadArchetypeStats();
+};
+/** 時間範圍的單一真實來源＝畫面上的下拉；取不到才回退模組變數。 */
+function currentArchSince() {
+  const sel = document.getElementById('arch-since');
+  return sel ? String(sel.value || '0') : _archSince;
+}
 
 window.loadDeckRules = async function() {
   const el = document.getElementById('tab-deck-rules');
@@ -2185,7 +2199,7 @@ function renderDeckRules(el) {
     <h3 style="margin:22px 0 6px;">📊 牌組使用率與勝率</h3>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <label class="small" style="margin:0;">統計範圍：</label>
-      <select id="arch-since" onchange="_archSince=this.value; loadArchetypeStats();" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+      <select id="arch-since" onchange="setArchSince(this.value)" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
         <option value="0">全部時間</option>
         <option value="7">最近 7 天</option>
         <option value="30">最近 30 天</option>
@@ -2204,7 +2218,7 @@ window.loadArchetypeStats = async function() {
   _archStatsBusy = true;
   const box = document.getElementById('arch-stats-box');
   if (box) box.innerHTML = '<div class="empty">統計計算中…（第一次跑或規則剛改會久一點）</div>';
-  const days = Number(_archSince || 0);
+  const days = Number(currentArchSince() || 0);   // v1.58：以畫面上的下拉為準
   const since = days > 0 ? (Date.now() - days * 86400000) : 0;
   const res = await api('/api/admin/deck-archetype-stats?source=all&since=' + since);
   _archStatsBusy = false;
@@ -2222,7 +2236,7 @@ window.showArchetypeDetail = async function(ruleId, source) {
     '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="min-width:620px;">'
     + '<h3>🃏 牌組明細</h3><div class="empty">計算中…（會掃描全部符合此原型的牌組）</div></div></div>';
   await ensureCardIndex();
-  const days = Number(_archSince || 0);
+  const days = Number(currentArchSince() || 0);   // v1.58：以畫面上的下拉為準
   const since = days > 0 ? (Date.now() - days * 86400000) : 0;
   const res = await api('/api/admin/deck-archetype-detail?ruleId=' + encodeURIComponent(ruleId)
     + '&source=' + encodeURIComponent(source || 'casual') + '&since=' + since);
