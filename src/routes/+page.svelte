@@ -647,11 +647,15 @@
   /* v5.969 fetched changelog(改由 static/changelog.html 以 {@html} 載入,內容無 scoped hash class)→ 用 :global 補樣式,同時修好既有 Firestore override 顯示路徑的樣式缺失。 */
   .changelog-list :global(details) { border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; overflow: hidden; }
   .changelog-list :global(details[open]) { border-color: #c8d8f0; background: #f5f9ff; }
-  .changelog-list :global(summary) { padding: 0.55rem 0.85rem; cursor: pointer; font-size: 0.9rem; font-weight: 500; color: #333; display: flex; align-items: center; gap: 0.5rem; user-select: none; list-style: none; }
+  /* ⚠v6.030：這裡原本是 `display:flex; gap:.5rem`——但 changelog 的 summary 內容是**整段文字**，
+     flex 會把裡面每一個 inline 元素（<b>、<br>）與被切開的文字節點都變成獨立的 flex item，
+     各自佔一欄、還被塞進 gap 空隙，整條排版就爆掉（v6.028 的 <b> 與 v6.024 的 <br> 中招）。
+     改回正常的文字流（block），三角與版本徽章用 inline-block 排在句首即可。 */
+  .changelog-list :global(summary) { padding: 0.55rem 0.85rem; cursor: pointer; font-size: 0.9rem; font-weight: 500; color: #333; line-height: 1.65; user-select: none; list-style: none; }
   .changelog-list :global(summary::-webkit-details-marker) { display: none; }
-  .changelog-list :global(summary::before) { content: '\25B6'; font-size: 0.65rem; color: #999; transition: transform 0.15s; flex-shrink: 0; }
+  .changelog-list :global(summary::before) { content: '\25B6'; font-size: 0.65rem; color: #999; transition: transform 0.15s; display: inline-block; width: 0.95em; margin-right: 0.15rem; vertical-align: 0.12em; }
   .changelog-list :global(details[open] summary::before) { transform: rotate(90deg); }
-  .changelog-list :global(.ver-badge) { font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 0.78rem; font-weight: 600; background: #e8edf5; color: #3a5a8a; padding: 0.1rem 0.45rem; border-radius: 4px; flex-shrink: 0; }
+  .changelog-list :global(.ver-badge) { font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 0.78rem; font-weight: 600; background: #e8edf5; color: #3a5a8a; padding: 0.1rem 0.45rem; border-radius: 4px; display: inline-block; margin-right: 0.35rem; vertical-align: 0.05em; }
   .changelog-list :global(details[open] .ver-badge) { background: #d0e3fa; color: #1a4a8a; }
   .changelog-list :global(details ul) { margin: 0; padding: 0.5rem 0.85rem 0.7rem 1.8rem; font-size: 0.85rem; color: #444; line-height: 1.7; }
   .changelog-list :global(details li) { margin-bottom: 0.1rem; }
