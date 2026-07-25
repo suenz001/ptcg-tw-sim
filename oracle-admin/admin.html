@@ -1053,20 +1053,46 @@ window.tevShowBracket = function (eventIdEnc) {
   var byRound = {};
   (a.matches || []).forEach(function (m) { (byRound[m.round] = byRound[m.round] || []).push(m); });
   var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; });
+  // v1.54：uid → email 對照，讓賽程裡的每個名字都能點進玩家總覽
+  var uidEmail = {};
+  (a.players || []).forEach(function (p) { if (p && p.uid) uidEmail[String(p.uid)] = p.email || null; });
+  var pName = function (uid, name) {
+    var em = uid ? uidEmail[String(uid)] : null;
+    return em ? playerLink(em, name || em) : escapeHtml(name || '—');
+  };
   var h = '<h3 style="margin:0 28px 2px 0;">🏆 ' + escapeHtml(a.eventName || '錦標賽') + ' — 賽程</h3>';
-  h += '<p class="small muted" style="margin:0 0 10px;">' + (a.playerCount || 0) + ' 人' + (a.championName ? ' ｜ 冠軍：' + escapeHtml(a.championName) + ' 🏆' : '') + '　·　點任一場可看該局對戰 log</p>';
+  h += '<p class="small muted" style="margin:0 0 10px;">' + (a.playerCount || 0) + ' 人'
+    + (a.championName ? ' ｜ 冠軍：' + pName(a.championUid, a.championName) + ' 🏆' : '')
+    + '　·　點名字看玩家總覽、點對戰看該局 log</p>';
+  // v1.54 參賽名單（含使用牌組），每位都可點進玩家總覽
+  if ((a.players || []).length) {
+    h += '<details style="margin:0 0 10px;"><summary style="cursor:pointer;color:#bfe0ff;">👥 參賽名單（' + a.players.length + ' 人）</summary>'
+      + '<div style="max-height:32vh;overflow:auto;margin-top:6px;">'
+      + a.players.map(function (p) {
+          return '<div style="padding:4px 8px;border-bottom:1px solid #24322a;font-size:.88rem;">'
+            + (p.email ? playerLink(p.email, p.name || p.email) : escapeHtml(p.name || '—'))
+            + (p.deckName ? ' <span class="small muted">· ' + escapeHtml(p.deckName) + '</span>' : '')
+            + (p.email ? '' : ' <span class="small muted">(無 email)</span>')
+            + '</div>';
+        }).join('')
+      + '</div></details>';
+  }
   if (!rounds.length) { h += '<p class="empty">這場沒有賽程紀錄。</p>'; _tsModal(h); return; }
   rounds.forEach(function (r) {
     h += '<div style="margin:10px 0 4px;color:#bfe0ff;font-weight:600;">第 ' + r + ' 輪</div>';
     byRound[r].forEach(function (m) {
       var winP1 = m.winnerUid && m.winnerUid === m.p1uid, winP2 = m.winnerUid && m.winnerUid === m.p2uid;
-      var p1 = '<b style="color:' + (winP1 ? '#7fc97f' : '#ccc') + ';">' + escapeHtml(m.p1name || '—') + (winP1 ? ' 🏆' : '') + '</b>';
-      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : ('<b style="color:' + (winP2 ? '#7fc97f' : '#ccc') + ';">' + escapeHtml(m.p2name || '—') + (winP2 ? ' 🏆' : '') + '</b>');
+      var p1 = '<b style="color:' + (winP1 ? '#7fc97f' : '#ccc') + ';">' + pName(m.p1uid, m.p1name) + (winP1 ? ' 🏆' : '') + '</b>';
+      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : ('<b style="color:' + (winP2 ? '#7fc97f' : '#ccc') + ';">' + pName(m.p2uid, m.p2name) + (winP2 ? ' 🏆' : '') + '</b>');
       var label = p1 + ' <span class="muted">vs</span> ' + p2;
       var clickable = !m.bye && m.p1uid && m.p2uid;
       if (clickable) {
-        h += '<button onclick="tevShowMatchLog(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="display:block;width:100%;text-align:left;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #3a5a3a;background:#16241a;color:#dfe;cursor:pointer;font-size:.9rem;">'
-          + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + ' ▶ 看對戰 log</span></button>';
+        // v1.54：原本整列是 <button>，玩家名做成連結後會巢狀在按鈕內而無法點。
+        //   改成外層 div + 右側獨立「看對戰 log」按鈕，兩種點擊互不干擾。
+        h += '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #3a5a3a;background:#16241a;color:#dfe;font-size:.9rem;">'
+          + '<span style="flex:1;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></span>'
+          + '<button onclick="tevShowMatchLog(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="flex:none;padding:3px 10px;border-radius:5px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;cursor:pointer;font-size:.82rem;">▶ 對戰 log</button>'
+          + '</div>';
       } else {
         h += '<div style="margin:3px 0;padding:8px 11px;border-radius:6px;background:#101810;color:#9ab;font-size:.9rem;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></div>';
       }
@@ -2038,7 +2064,8 @@ window.popModal = function() {
 window.closeModal = function() {
   document.getElementById('modal-container').innerHTML = '';
   // v1.50 玩家總覽：關閉時清掉 #/player/ 深連結，避免重整又跳回 modal
-  if (String(location.hash || '').startsWith('#/player/')) {
+  const _h = String(location.hash || '');
+  if (_h.startsWith('#/player/') || _h.startsWith('#/event/')) {
     history.replaceState(null, '', location.pathname + location.search);
   }
 };
@@ -2313,12 +2340,36 @@ window.playerLink = function(email, label, cls) {
   return '<a href="#/player/' + encodeURIComponent(email) + '" class="' + (cls || 'player-name')
     + '" title="開啟玩家總覽" onclick="openPlayer(\'' + safe + '\'); return false;">' + txt + '</a>';
 };
-/** hash 路由：目前只有 #/player/{email}；未來 #/event/… 等在此擴充。 */
-window.handleAdminRoute = function() {
+// v1.54 批次4：賽事也做成可深連結的實體，玩家↔賽事↔對戰三者互通。
+window.openEvent = function(eventId) {
+  if (!eventId) return;
+  location.hash = '#/event/' + encodeURIComponent(eventId);
+};
+/** 賽事連結（與 playerLink 同規格：全站唯一產生器，禁止各頁手刻）。 */
+window.eventLink = function(eventId, label) {
+  const txt = escapeHtml(label != null && label !== '' ? String(label) : String(eventId || ''));
+  if (!eventId) return '<span class="small muted">' + txt + '</span>';
+  const safe = String(eventId).replace(/'/g, '&apos;');
+  return '<a href="#/event/' + encodeURIComponent(eventId) + '" class="player-name" title="開啟賽事賽程"'
+    + ' onclick="openEvent(\'' + safe + '\'); return false;">' + txt + '</a>';
+};
+/** hash 路由：#/player/{email}、#/event/{eventId}。 */
+window.handleAdminRoute = async function() {
   const h = String(location.hash || '');
   if (h.startsWith('#/player/')) {
     const em = decodeURIComponent(h.slice('#/player/'.length));
     if (em) showPlayerDetail(em);
+  } else if (h.startsWith('#/event/')) {
+    const ev = decodeURIComponent(h.slice('#/event/'.length));
+    if (!ev) return;
+    // tevShowBracket 讀的是「賽事統計」頁的快取（tournStatsCache 是模組層級變數，非 window 屬性）。
+    //   從深連結直接進來時可能還沒載過 → 先補載；loadTournamentStats 需要該分頁的 DOM 容器存在，
+    //   容器在 HTML 就寫死了（display:none 也讀得到），故不必先切分頁。
+    if (!tournStatsCache || !(tournStatsCache.archives || []).length) {
+      _tsModal('<div class="empty">載入賽事資料…（首次約 3-8 秒）</div>');
+      try { await loadTournamentStats(false); } catch (e) { /* 失敗由下方 tevShowBracket 顯示訊息 */ }
+    }
+    tevShowBracket(encodeURIComponent(ev));
   }
 };
 
@@ -3954,7 +4005,7 @@ window.showPlayerDetail = async function(email) {
       : '<span class="muted">此 email 沒有對應的 Firebase 帳號（可能只在本機對戰用過）</span>';
     const tournRows = (t.list || []).slice(0, 20).map((e) =>
       '<tr><td>' + fmtD(e.finishedAt) + '</td>'
-      + '<td>' + (e.champion ? '🏆 ' : '') + escapeHtml(e.eventName || '') + (e.communityEvent ? ' <span class="small muted">(社群)</span>' : '') + '</td>'
+      + '<td>' + (e.champion ? '🏆 ' : '') + eventLink(e.eventId, e.eventName || e.eventId) + (e.communityEvent ? ' <span class="small muted">(社群)</span>' : '') + '</td>'
       + '<td>' + escapeHtml(e.deckName || '-') + '</td>'
       + '<td>' + e.wins + ' - ' + e.losses + '</td>'
       + '<td>' + (e.playerCount || '-') + ' 人</td></tr>').join('');
