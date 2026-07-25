@@ -121,5 +121,33 @@ T('打錯卡名 → 0 命中（預覽端點會把打錯的名字列出來，這�
   assert.ok(!idByName.has('果蜜蟲'), '「果蜜蟲」確實不是官方卡名（官方為「裹蜜蟲」）');
 });
 
+
+// ── 批次3：勝負歸屬判定（p1/p2 與 winner 的對應是最容易寫反的地方）──
+const { casualSideResult, tournSideResult } =
+  new Function([grabFn('casualSideResult'), grabFn('tournSideResult')].join('\n')
+    + '\nreturn { casualSideResult, tournSideResult };')();
+
+T('休閒：winner=0 代表 p1 勝', () => {
+  assert.equal(casualSideResult(0, true), 'win', 'p1 側應為勝');
+  assert.equal(casualSideResult(0, false), 'loss', 'p2 側應為負');
+});
+T('休閒：winner=1 代表 p2 勝', () => {
+  assert.equal(casualSideResult(1, true), 'loss');
+  assert.equal(casualSideResult(1, false), 'win');
+});
+T('休閒：winner=null 為平局（雙方都不記勝負）', () => {
+  assert.equal(casualSideResult(null, true), 'draw');
+  assert.equal(casualSideResult(undefined, false), 'draw');
+});
+T('休閒：winner 是非 0/1 的異常值時當平局，不可誤判成敗場', () => {
+  assert.equal(casualSideResult(2, true), 'draw');
+  assert.equal(casualSideResult('0', true), 'draw', '字串 0 不等於數字 0，應保守當平局而非誤判 p1 勝');
+});
+T('錦標賽：以 winnerUid 比對，且型別不一致（數字 vs 字串）也要正確', () => {
+  assert.equal(tournSideResult('uidA', 'uidA'), 'win');
+  assert.equal(tournSideResult('uidA', 'uidB'), 'loss');
+  assert.equal(tournSideResult(123, '123'), 'win', 'uid 型別不一致時仍應判為同一人');
+});
+
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

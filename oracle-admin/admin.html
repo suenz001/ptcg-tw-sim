@@ -2050,6 +2050,10 @@ window.closeModal = function() {
 //   ⭐存檔前一定要按「預覽命中」：卡名打錯會 0 命中，預覽會直接把打錯的名字列出來。
 let _deckRules = [];
 let _rulePreview = null;   // { ruleName, hits, scannedDecks, samples, unknownCardNames }
+// v1.52 批次3：牌組原型統計（休閒／錦標賽分開）
+let _archStats = null;
+let _archStatsBusy = false;
+let _archSince = '0';   // '0'=全部；否則為天數
 
 window.loadDeckRules = async function() {
   const el = document.getElementById('tab-deck-rules');
@@ -2144,7 +2148,80 @@ function renderDeckRules(el) {
         ? '<table><thead><tr><th>啟用</th><th>牌組名稱</th><th>必須包含</th><th>不能包含</th><th>優先序</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>'
         : '<div class="empty">尚未建立任何規則。先在上面填一條試試，記得按「預覽命中」確認卡名沒打錯。</div>'}
     </div>
+
+    <!-- v1.52 批次3：使用率／勝率統計 -->
+    <h3 style="margin:22px 0 6px;">📊 牌組使用率與勝率</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+      <label class="small" style="margin:0;">統計範圍：</label>
+      <select id="arch-since" onchange="_archSince=this.value" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+        <option value="0">全部時間</option>
+        <option value="7">最近 7 天</option>
+        <option value="30">最近 30 天</option>
+        <option value="90">最近 90 天</option>
+      </select>
+      <button onclick="loadArchetypeStats()">📊 計算統計</button>
+    </div>
+    <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
+  const sel = document.getElementById('arch-since'); if (sel) sel.value = _archSince;
+  if (_archStats) renderArchetypeStats();
+}
+
+window.loadArchetypeStats = async function() {
+  if (_archStatsBusy) return;
+  _archStatsBusy = true;
+  const box = document.getElementById('arch-stats-box');
+  if (box) box.innerHTML = '<div class="empty">統計計算中…（第一次跑或規則剛改會久一點）</div>';
+  const days = Number(_archSince || 0);
+  const since = days > 0 ? (Date.now() - days * 86400000) : 0;
+  const res = await api('/api/admin/deck-archetype-stats?source=all&since=' + since);
+  _archStatsBusy = false;
+  if (!res || res.error) { if (box) box.innerHTML = '<div class="empty">讀取失敗：' + escapeHtml(res?.error || '?') + '</div>'; return; }
+  _archStats = res;
+  renderArchetypeStats();
+};
+
+function renderArchetypeStats() {
+  const box = document.getElementById('arch-stats-box');
+  if (!box) return;
+  const d = _archStats;
+  if (!d) { box.innerHTML = '<div class="empty">按上方「📊 計算統計」開始。</div>'; return; }
+  const pct = (v) => (v === null || v === undefined) ? '-' : (v * 100).toFixed(1) + '%';
+  const wrCell = (r) => {
+    if (r.winRate === null) return '<td class="small muted">-</td>';
+    const col = r.winRate > 0.55 ? '#2e7d32' : (r.winRate < 0.45 ? '#c62828' : '#1a2332');
+    // 樣本太少的勝率灰掉：1 勝 0 負 =100% 會誤導
+    if (!r.sampleOk) return '<td class="small muted" title="樣本不足 10 副，勝率僅供參考">' + pct(r.winRate) + ' <span class="small">(樣本少)</span></td>';
+    return '<td style="color:' + col + ';font-weight:600;">' + pct(r.winRate) + '</td>';
+  };
+  const tbl = (title, blk, scannedText) => {
+    if (!blk) return '';
+    const rows = (blk.rows || []).map((r, i) =>
+      '<tr><td>' + (i + 1) + '</td><td><b>' + escapeHtml(r.name) + '</b></td><td>' + r.usage + '</td>'
+      + '<td>' + r.wins + '</td><td>' + r.losses + '</td><td>' + (r.draws || 0) + '</td>' + wrCell(r) + '</tr>').join('');
+    const u = blk.unclassified || {};
+    const uTop = (u.topCards || []).slice(0, 12).map((c) => escapeHtml(c.name) + '×' + c.decks).join('、');
+    return '<h4 style="margin:14px 0 6px;">' + title + '</h4>'
+      + '<div class="small muted" style="margin-bottom:6px;">' + scannedText + '</div>'
+      + '<div class="stats-box" style="padding:8px;overflow-x:auto;">'
+      + (rows
+          ? '<table><thead><tr><th>#</th><th>牌組原型</th><th>使用次數</th><th>勝</th><th>負</th><th>平</th><th>勝率</th></tr></thead><tbody>' + rows + '</tbody></table>'
+          : '<div class="empty">目前的規則在這個資料源沒有任何命中。</div>')
+      + '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dfe4ea;">'
+      + '<b>未分類</b>：' + (u.usage || 0) + ' 副（勝 ' + (u.wins || 0) + ' / 負 ' + (u.losses || 0) + '，勝率 ' + pct(u.winRate) + '）'
+      + (uTop ? '<div class="small muted" style="margin-top:4px;">未分類牌組裡最常出現的卡（可據此開新規則）：' + uTop + '</div>' : '')
+      + '</div></div>';
+  };
+  box.innerHTML =
+    tbl('🎮 一般對戰（休閒）', d.casual,
+        '掃描 ' + (d.scanned?.casualMatches || 0) + ' 場對戰、' + (d.scanned?.casualDecks || 0) + ' 副牌組'
+        + '（已排除 AI／本機對戰與「中途離開」致勝的場次）')
+  + tbl('🏆 錦標賽', d.tourn,
+        '掃描 ' + (d.scanned?.tournEvents || 0) + ' 場已結束賽事、' + (d.scanned?.tournDecks || 0) + ' 副次牌組'
+        + '（已排除輪空與無勝方的對局；一位選手一場賽事用同一副牌，每打一場算一次使用）')
+  + '<div class="small muted" style="margin-top:10px;">'
+  + '目前啟用中的規則 ' + (d.ruleCount || 0) + ' 條。統計為即時計算（快取 60 秒），改完規則按「計算統計」就會反映。'
+  + '一副牌同時符合多條規則時只計入優先序最小的那條。</div>';
 }
 
 function readRuleForm() {
