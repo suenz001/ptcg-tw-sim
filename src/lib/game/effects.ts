@@ -15595,7 +15595,11 @@ export const PASSIVE_ON_DAMAGED = new Map<string, PassiveOnDamagedFn>([
     return withPending(s, {
       type: 'deck-search',
       actorIdx: dIdx, sourcePlayerIdx: dIdx,
-      filter: 'NameContains:瓦斯彈',
+      // v6.025 修「特性沒發動」真根因：原用 'NameContains:瓦斯彈'，但該 filter 是 v5.155 為
+      //   【化石採掘場】寫的，UI/AI 端硬性限定 supertype==='Trainer' && subtype==='Item'（只列物品卡）
+      //   → 本特性要搜的是**寶可夢**卡，picker 一張都篩不出來＝玩家看到空視窗，體感「特性沒發動」。
+      //   改用中央三端（UI／AI／selection-filter 求值器）都已支援的 'Pokemon:NameContains='。
+      filter: 'Pokemon:NameContains=瓦斯彈',
       minCount: 0, maxCount: Math.min(2, slots),
       // v5.881 修:原 effectKey 'search-bench-reshuffle' 是死 key(無 resolver)→搜到沒放備戰。
       //   改用中央 bench-named-basic-from-deck(放備戰+重洗+公開 log),params.nameContains 對齊卡面「名稱中有瓦斯彈」。
