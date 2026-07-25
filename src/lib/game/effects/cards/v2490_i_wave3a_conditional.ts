@@ -219,7 +219,8 @@ regR('wave3a-snipe-bench', (state, aIdx, iids, params, pool) => {
   const target = s.players[dIdx].bench.find(b => b.iid === targetIid);
   if (!target) return s;
   const targetCard = pool.get(target.cardId);
-  const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, kind, pool, { isBench: true });
+  // v6.029：本 resolver 的 kind='attack-effect' 同樣只用於「放指示物型」備戰狙擊 → 對戰圓形應擋。
+  const guard = canApplyEffectToTarget(s, aIdx, target, targetCard, kind, pool, { isBench: true, counterPlacement: true });
   if (guard.blocked) {
     return addLog(s, `✋ ${label}：${targetCard?.name ?? '?'} 受到 ${guard.reason} 保護, 不受影響`, aIdx);
   }

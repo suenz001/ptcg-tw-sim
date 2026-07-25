@@ -2080,6 +2080,9 @@ let _rulePreview = null;   // { ruleName, hits, scannedDecks, samples, unknownCa
 // v1.52 批次3：牌組原型統計（休閒／錦標賽分開）
 let _archStats = null;
 let _archStatsBusy = false;
+// v1.55：統計表排序（休閒／錦標賽兩張表共用同一組設定，方便左右對照同一指標）
+let _archSortKey = 'usage';   // usage | wins | losses | draws | winRate | name
+let _archSortAsc = false;     // 預設由大到小
 let _archSince = '0';   // '0'=全部；否則為天數
 
 window.loadDeckRules = async function() {
@@ -2208,6 +2211,27 @@ window.loadArchetypeStats = async function() {
   renderArchetypeStats();
 };
 
+window.archSort = function(key) {
+  // 同一欄再點一次＝反向；換欄位時：文字欄預設升冪(A→Z)，數字欄預設降冪(大→小)
+  if (_archSortKey === key) _archSortAsc = !_archSortAsc;
+  else { _archSortKey = key; _archSortAsc = (key === 'name'); }
+  renderArchetypeStats();
+};
+
+/** 依目前排序設定排一份新陣列（不動原資料）。 */
+function sortArchRows(rows) {
+  const k = _archSortKey, dir = _archSortAsc ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    if (k === 'name') return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant') * dir;
+    const av = a[k], bv = b[k];
+    // ⭐勝率可能是 null（沒有分出勝負的場次）→ 無論升冪降冪都排最後，不要混在數字中間
+    if (av === null || av === undefined) return (bv === null || bv === undefined) ? 0 : 1;
+    if (bv === null || bv === undefined) return -1;
+    if (av === bv) return (b.usage - a.usage);   // 同值時用使用次數當第二排序，順序才穩定
+    return (av - bv) * dir;
+  });
+}
+
 function renderArchetypeStats() {
   const box = document.getElementById('arch-stats-box');
   if (!box) return;
@@ -2223,16 +2247,24 @@ function renderArchetypeStats() {
   };
   const tbl = (title, blk, scannedText) => {
     if (!blk) return '';
-    const rows = (blk.rows || []).map((r, i) =>
+    const sorted = sortArchRows(blk.rows || []);
+    const arrow = (k) => _archSortKey === k ? (_archSortAsc ? ' ▲' : ' ▼') : '';
+    const th = (k, label, title) =>
+      '<th onclick="archSort(\'' + k + '\')" style="cursor:pointer;user-select:none;white-space:nowrap;"'
+      + (title ? ' title="' + title + '"' : '') + '>' + label + arrow(k) + '</th>';
+    const rows = sorted.map((r, i) =>
       '<tr><td>' + (i + 1) + '</td><td><b>' + escapeHtml(r.name) + '</b></td><td>' + r.usage + '</td>'
       + '<td>' + r.wins + '</td><td>' + r.losses + '</td><td>' + (r.draws || 0) + '</td>' + wrCell(r) + '</tr>').join('');
     const u = blk.unclassified || {};
     const uTop = (u.topCards || []).slice(0, 12).map((c) => escapeHtml(c.name) + '×' + c.decks).join('、');
+    const headHtml = '<tr><th>#</th>' + th('name', '牌組原型') + th('usage', '使用次數')
+      + th('wins', '勝') + th('losses', '負') + th('draws', '平')
+      + th('winRate', '勝率', '樣本少於 10 副的勝率僅供參考，排序時會一併計入') + '</tr>';
     return '<h4 style="margin:14px 0 6px;">' + title + '</h4>'
       + '<div class="small muted" style="margin-bottom:6px;">' + scannedText + '</div>'
       + '<div class="stats-box" style="padding:8px;overflow-x:auto;">'
       + (rows
-          ? '<table><thead><tr><th>#</th><th>牌組原型</th><th>使用次數</th><th>勝</th><th>負</th><th>平</th><th>勝率</th></tr></thead><tbody>' + rows + '</tbody></table>'
+          ? '<table><thead>' + headHtml + '</thead><tbody>' + rows + '</tbody></table>'
           : '<div class="empty">目前的規則在這個資料源沒有任何命中。</div>')
       + '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dfe4ea;">'
       + '<b>未分類</b>：' + (u.usage || 0) + ' 副（勝 ' + (u.wins || 0) + ' / 負 ' + (u.losses || 0) + '，勝率 ' + pct(u.winRate) + '）'
@@ -2247,6 +2279,7 @@ function renderArchetypeStats() {
         '掃描 ' + (d.scanned?.tournEvents || 0) + ' 場已結束賽事、' + (d.scanned?.tournDecks || 0) + ' 副次牌組'
         + '（已排除輪空與無勝方的對局；一位選手一場賽事用同一副牌，每打一場算一次使用）')
   + '<div class="small muted" style="margin-top:10px;">'
+  + '點欄位標題可排序（再點一次反向）；勝率為空的原型一律排在最後。'
   + '目前啟用中的規則 ' + (d.ruleCount || 0) + ' 條。統計為即時計算（快取 60 秒），改完規則按「計算統計」就會反映。'
   + '一副牌同時符合多條規則時只計入優先序最小的那條。</div>';
 }

@@ -2748,7 +2748,8 @@ export function applyStatusToOppActive(
   // 3. 統一免疫關卡（化隱 / 純樸 / 薄霧 / 皇帝之勢 / 抵抗之幕 / 對戰圓形 …）
   //    僅招式/特性來源適用；道具來源（item-effect）跳過——化隱等卡面只擋「對手招式或特性效果」。
   if (opts.kind !== 'item-effect') {
-    const guard = canApplyEffectToTarget(state, srcIdx, def.active, pool.get(def.active.cardId), opts.kind, pool);
+    // v6.029：此 helper 的效果恒為「附加特殊狀態」，不是放置傷害指示物 → 對戰圓形不該擋。
+    const guard = canApplyEffectToTarget(state, srcIdx, def.active, pool.get(def.active.cardId), opts.kind, pool, { counterPlacement: false });
     if (guard.blocked) {
       return addLog(state, `${prefix}${defName}｜${guard.reason}`, srcIdx);
     }
@@ -7748,7 +7749,12 @@ export function dealAttackDamageToTarget(
   //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等
   //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 / 防護代碼 / 塗層攻擊
   //   注意：kind 透傳（snipe-variable 同時用於 attack-damage 跟 attack-effect — 飛來橫禍等放指示物）
-  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
+  // v6.029：本 helper 的 kind='attack-effect' **僅用於「放置傷害指示物」語意**（悄聲加害／熬返／
+  //   侵蝕詛咒／詛咒水滴／惡作劇之手／setOppActiveHPPost「放到剩 X HP」…）→ 對戰圓形應擋。
+  //   ⚠新卡若是「非放指示物」的招式效果（換位/退化/丟道具/bounce），**請勿走本 helper**，
+  //     否則會被對戰圓形誤擋；請直接呼叫 canApplyEffectToTarget 並傳 counterPlacement:false。
+  //   （kind='attack-damage' 時對戰圓形本來就不擋，此旗標無作用。）
+  const guard = canApplyEffectToTarget(st, actorIdx, target, targetCard, kind, pool, { isBench: !isActive, counterPlacement: true });
   if (guard.blocked) {
     const name = targetCard?.name ?? '?';
     return addLog(st, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
@@ -8393,7 +8399,8 @@ export function relocateOwnCounterToOpp(
   }));
   s = markDamageCounterMovedFrom(s, sourceIid);  // v5.947 來源指示物是被移動(非治療)→不算 healedThisTurn
   // 2. 目標免疫 gate(化隱/純樸=attack-effect;光之翼=ability-effect)。被擋 → 來源已移除,不放置。
-  const g = canApplyEffectToTarget(s, aIdx, target, pool.get(target.cardId), kind, pool, { isBench: !isActive });
+  // v6.029：把自己身上的傷害指示物「改放」到對手身上，對目標而言就是「被放置傷害指示物」→ 對戰圓形應擋。
+  const g = canApplyEffectToTarget(s, aIdx, target, pool.get(target.cardId), kind, pool, { isBench: !isActive, counterPlacement: true });
   if (g.blocked) {
     return addLog(s, `${label}：${pool.get(target.cardId)?.name ?? '?'}｜${g.reason}（來源指示物已移除,不放置於此目標）`, aIdx);
   }
@@ -8901,7 +8908,8 @@ export function discardOppActiveEnergyPost(
     if (!defender.active) return state;
     // v5.333：免疫招式效果的 active 不受此效果（C-17 per-target guard）
     {
-      const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), kind, pool);
+      // v6.029：丟棄能量不是放置傷害指示物 → 對戰圓形不該擋（目標亦為 active，實務上走不到）。
+      const _g = canApplyEffectToTarget(state, aIdx, defender.active, pool.get(defender.active.cardId), kind, pool, { counterPlacement: false });
       if (_g.blocked) return addLog(state, `${label}：${_g.reason}`, aIdx);
     }
     const defName = pool.get(defender.active.cardId)?.name ?? '?';
@@ -10044,7 +10052,8 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     // v5.861：flat 招式(skipDefEffects 語意,雙刃劍/出奇一擊)「不計算受傷寶可夢身上的附加效果」
     //   → 對齊 engine 主路徑 skipDefEffects,bypass 所有 defender 免疫(太晶備戰/謝米花之帷幔/
     //   防護代碼/飛翔/暗影惡能量/太鼓防壁…)。官方判例:不計算不受招式傷害的效果,可造成傷害。
-    const guard = flat ? null : canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive });
+    // v6.029：本 resolver 的 kind='attack-effect' 是保留給「放指示物型多目標」用的 → 對戰圓形應擋。
+    const guard = flat ? null : canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive, counterPlacement: true });
     if (guard?.blocked) {
       const name = targetCard?.name ?? '?';
       s = addLog(s, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);

@@ -644,8 +644,78 @@ for (const f of files) {
 }
 
 
+// ── Check V：對戰圓形競技場 counterPlacement 表態守衛（v6.029，凍結白名單，比照 Check S）──
+//   背景（v6.028）：【對戰圓形競技場】卡面只擋「備戰被**放置傷害指示物**」，舊實作卻擋掉所有
+//   attack-effect / ability-effect，誤擋了換位／退化／丟道具／bounce／效果 KO 等十餘種效果
+//   （玩家回報：場上有對戰圓形時鐵掌力士抓不到對手備戰）。
+//   修法是在 canApplyEffectToTarget 加 counterPlacement 旗標，**未傳＝保守照擋（fail-closed）**。
+//   本 Check 的用途：**新增**的呼叫點一律要顯式表態，避免日後新卡漏標而被靜默誤擋。
+//   既有未表態站點（全部經 Fable audit 確認 target 為對手戰鬥位、走不到 stadium 分支＝零影響）
+//   以「檔案層級凍結白名單」放行——白名單只准縮不准擴。
+{
+  const V_FROZEN_FILES = new Set([
+  'effects.ts',
+  'effects/cards/m5_preview.ts',
+  'effects/cards/maroon_dragon_deck.ts',
+  'effects/cards/six_decks.ts',
+  'effects/cards/v155_attacks.ts',
+  'effects/cards/v2352_j_mark_batch.ts',
+  'effects/cards/v2354_j_mark_batch.ts',
+  'effects/cards/v2370_new_decks_batch.ts',
+  'effects/cards/v2401_i_wave2_draw_swap_search.ts',
+  'effects/cards/v2670_i_wave17_complex2.ts',
+  'effects/cards/v2750_h_wave2_full.ts',
+  'effects/cards/v2995_g4_wave1.ts',
+  'effects/cards/v2998_g2.ts',
+  'engine.ts',
+]);
+  // 與 lint 其他 Check 一致：先移除註解與字串，避免 JSDoc 範例碼誤判
+  const vStrip = (src) => {
+    let out = '', st = 0;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i], n2 = src[i + 1] || '';
+      if (st === 0) {
+        if (c === '/' && n2 === '/') { st = 1; out += '  '; i++; continue; }
+        if (c === '/' && n2 === '*') { st = 2; out += '  '; i++; continue; }
+        if (c === "'") st = 3; else if (c === '"') st = 4; else if (c === '`') st = 5;
+        out += c; continue;
+      }
+      if (st === 1) { if (c === '\n') { st = 0; out += '\n'; } else out += ' '; continue; }
+      if (st === 2) { if (c === '*' && n2 === '/') { st = 0; out += '  '; i++; continue; } out += (c === '\n' ? '\n' : ' '); continue; }
+      if (c === '\\') { out += c + (src[i + 1] || ''); i++; continue; }
+      if ((st === 3 && c === "'") || (st === 4 && c === '"') || (st === 5 && c === '`')) st = 0;
+      out += c;
+    }
+    return out;
+  };
+  for (const f of files) {
+    // ⚠不用既有的 rel()：ROOT 結尾帶斜線導致它會多切一個字元（訊息路徑會少字母）。
+    //   這裡自己算「src/lib/game/ 之後」的穩定相對路徑當白名單 key。
+    const fSlash = f.replace(/\\/g, '/');
+    const relf = fSlash.slice(fSlash.lastIndexOf('/src/lib/game/') + '/src/lib/game/'.length);
+    if (V_FROZEN_FILES.has(relf)) continue;                  // 既有站點所在檔（凍結）
+    const src = vStrip(readFileSync(f, 'utf8'));
+    const re2 = /canApplyEffectToTarget\s*\(/g;
+    let m;
+    while ((m = re2.exec(src)) !== null) {
+      if (/function\s+$/.test(src.slice(Math.max(0, m.index - 40), m.index))) continue;  // 定義本體
+      let d = 1, j = m.index + m[0].length;
+      while (j < src.length && d) { if (src[j] === '(') d++; else if (src[j] === ')') d--; j++; }
+      const call = src.slice(m.index, j);
+      if (call.includes("'attack-damage'")) continue;         // 對戰圓形不擋招式傷害
+      if (/isBench:\s*false/.test(call)) continue;            // 目標在戰鬥位 → 走不到 bench 分支
+      if (call.includes('counterPlacement')) continue;        // 已表態
+      const line = src.slice(0, m.index).split('\n').length;
+      violations.push(`[V] ${relf}:${line} — canApplyEffectToTarget 的 attack-effect/ability-effect 呼叫未表態 `
+        + `counterPlacement。此旗標決定【對戰圓形競技場】要不要擋：放置/移轉傷害指示物→true，`
+        + `其餘(換位/退化/丟道具/bounce/效果KO/狀態)→false。未傳會保守照擋，可能誤擋你的新效果。`);
+    }
+  }
+}
+
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
