@@ -2183,7 +2183,7 @@ function renderDeckRules(el) {
     <h3 style="margin:22px 0 6px;">📊 牌組使用率與勝率</h3>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
       <label class="small" style="margin:0;">統計範圍：</label>
-      <select id="arch-since" onchange="_archSince=this.value" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
+      <select id="arch-since" onchange="_archSince=this.value; loadArchetypeStats();" style="padding:5px 8px;border:1px solid #d6dbe3;border-radius:6px;">
         <option value="0">全部時間</option>
         <option value="7">最近 7 天</option>
         <option value="30">最近 30 天</option>
@@ -2210,6 +2210,110 @@ window.loadArchetypeStats = async function() {
   _archStats = res;
   renderArchetypeStats();
 };
+
+// ══ v1.56 牌組原型明細：代表 60 張 / 只看獲勝場次 / 遺珠之憾 ═════════════════
+//   一鍵複製的牌表格式與「2.3 卡牌勝率 → 代表牌組」完全相同（已被牌組編輯器匯入驗證過）。
+let _archDetail = null, _archDetailWinOnly = false;
+
+window.showArchetypeDetail = async function(ruleId, source) {
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="min-width:620px;">'
+    + '<h3>🃏 牌組明細</h3><div class="empty">計算中…（會掃描全部符合此原型的牌組）</div></div></div>';
+  await ensureCardIndex();
+  const days = Number(_archSince || 0);
+  const since = days > 0 ? (Date.now() - days * 86400000) : 0;
+  const res = await api('/api/admin/deck-archetype-detail?ruleId=' + encodeURIComponent(ruleId)
+    + '&source=' + encodeURIComponent(source || 'casual') + '&since=' + since);
+  if (!res || res.error) {
+    document.getElementById('modal-container').innerHTML = '';
+    alert('讀取失敗：' + (res?.error || '?'));
+    return;
+  }
+  _archDetail = res; _archDetailWinOnly = false;
+  renderArchetypeDetail();
+};
+
+window.toggleArchDetailWinOnly = function(on) { _archDetailWinOnly = !!on; renderArchetypeDetail(); };
+
+function renderArchetypeDetail() {
+  const d = _archDetail;
+  if (!d) return;
+  const pct = (v) => (v === null || v === undefined) ? '-' : (v * 100).toFixed(1) + '%';
+  const list = _archDetailWinOnly ? (d.representative60Win || []) : (d.representative60 || []);
+  const total = _archDetailWinOnly ? (d.representative60WinTotal || 0) : (d.representative60Total || 0);
+  const sampleN = _archDetailWinOnly ? (d.winSample || 0) : (d.sample?.decks || 0);
+
+  const rowsHtml = list.map((p) => {
+    const info = cardInfoMap[p.repCardId] || {};
+    return '<div class="deck-entry" style="display:flex;justify-content:space-between;gap:10px;">'
+      + '<span><b>' + p.copies + '×</b> ' + escapeHtml(info.displayName || info.name || p.name)
+      + ' <span class="small muted">' + escapeHtml(info.setCode || '') + (info.collectorNumber ? '·' + escapeHtml(info.collectorNumber) : '') + '</span></span>'
+      + '<span class="small muted">' + (p.inclusion * 100).toFixed(0) + '% 採用</span></div>';
+  }).join('');
+
+  const gems = d.hiddenGems || [];
+  const gemsHtml = gems.length
+    ? gems.map((g) => {
+        const info = cardInfoMap[g.repCardId] || {};
+        const diff = (g.wrWith - g.wrWithout) * 100;
+        return '<div class="deck-entry" style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;">'
+          + '<span>' + escapeHtml(info.displayName || info.name || g.name)
+          + ' <span class="small muted">' + escapeHtml(info.setCode || '') + '</span>'
+          + ' <span class="small muted">（常見 ' + g.modalCount + ' 張）</span></span>'
+          + '<span class="small"><b style="color:' + (diff > 0 ? '#2e7d32' : '#7a8898') + ';">'
+          + (diff > 0 ? '+' : '') + diff.toFixed(1) + '%</b>'
+          + ' <span class="muted">｜有放 ' + pct(g.wrWith) + ' vs 沒放 ' + pct(g.wrWithout)
+          + '｜' + (g.inclusion * 100).toFixed(0) + '% 的人有放（' + g.nWith + ' 副）</span></span></div>';
+      }).join('')
+    : '<div class="small muted">目前沒有符合條件的推薦（需要該卡在 8%~60% 的牌組出現、且有放與沒放的樣本各至少 8 副）。樣本變多後會逐漸出現。</div>';
+
+  const importLines = [d.name + ' 代表牌組' + (_archDetailWinOnly ? '（獲勝場次）' : ''),
+                       '共 ' + total + ' 張 / 種類 ' + list.length]
+    .concat(list.map((p) => cardLabel(p.repCardId, p.copies)));
+  window._lastArchDetailCopyText = importLines.join('\n');
+
+  document.getElementById('modal-container').innerHTML = `
+    <div class="modal-bg" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="min-width:620px;max-width:860px;max-height:88vh;overflow-y:auto;">
+        <h3>🃏 ${escapeHtml(d.name)} — 代表牌組</h3>
+        <div style="margin:2px 0 8px;">
+          <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+            <input type="checkbox" ${_archDetailWinOnly ? 'checked' : ''} onchange="toggleArchDetailWinOnly(this.checked)">
+            只看獲勝場次的構築
+          </label>
+        </div>
+        <div class="small muted" style="margin-bottom:10px;">
+          資料來源：<b>${d.source === 'tourn' ? '錦標賽' : '一般對戰'}</b>
+          ${d.since ? '｜' + new Date(d.since).toLocaleDateString('zh-TW') + ' 起' : '｜全部時間'}
+          ｜樣本 <b>${sampleN}</b> 副${_archDetailWinOnly ? '獲勝牌組' : '牌組'}
+          ｜戰績 ${d.sample?.wins || 0} 勝 ${d.sample?.losses || 0} 負
+          ｜合計 <b>${total}</b> 張
+          ${sampleN < 10 ? '<span style="color:#c62828;font-weight:600;">（樣本不足 10 副，僅供參考）</span>' : ''}
+          <br>算法：取符合此原型的所有牌組，各張卡依「被放入的比例」排序，每張採<b>最常見的張數</b>湊成 60 張。
+          已套用 PTCG 規則：同名卡上限 4 張、ACE SPEC 每副 1 張、基本能量無上限。
+          這是<b>聚合</b>出來的代表構築，不是某一副真實牌組。
+          ${_archDetailWinOnly ? '<br><span style="color:#8a6d3b;">⚠「獲勝場次」只是把樣本縮到贏的那些場——同一副牌贏的場和輸的場構築相同，差異多半反映的是「誰贏得多」，不代表這樣組就會贏。</span>' : ''}
+        </div>
+        <div class="stats-box" style="padding:8px;">${rowsHtml || '<div class="empty">無足夠資料</div>'}</div>
+
+        <h4 style="margin:16px 0 6px;">💎 遺珠之憾（沒進 60 張，但值得考慮）</h4>
+        <div class="small muted" style="margin-bottom:6px;">
+          指標＝<b>同一原型內</b>「有放這張卡的勝率」減去「沒放的勝率」，並對前者取保守下界壓抑小樣本。
+          刻意不用全站的卡牌勝率——那個數字被「卡屬於哪個強牌組」和「誰在用」蓋過去，看不出這張卡本身的貢獻。
+          必含卡與基本能量不列入。
+        </div>
+        <div class="stats-box" style="padding:8px;">${gemsHtml}</div>
+
+        <details style="margin-top:12px;"><summary class="small muted" style="cursor:pointer;">📋 可匯入牌表預覽</summary>
+          <pre style="background:#f5f5f5;padding:10px;border-radius:4px;font-family:Consolas,Menlo,monospace;font-size:12px;line-height:1.6;max-height:40vh;overflow:auto;white-space:pre-wrap;user-select:text;margin-top:6px;">${escapeHtml(window._lastArchDetailCopyText)}</pre>
+        </details>
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="navigator.clipboard.writeText(window._lastArchDetailCopyText || ''); this.textContent='✅ 已複製，可到牌組編輯器匯入'; setTimeout(()=>this.textContent='📋 複製牌表（可匯入）',2500);">📋 複製牌表（可匯入）</button>
+          <button onclick="closeModal()">關閉</button>
+        </div>
+      </div>
+    </div>`;
+}
 
 window.archSort = function(key) {
   // 同一欄再點一次＝反向；換欄位時：文字欄預設升冪(A→Z)，數字欄預設降冪(大→小)
@@ -2248,17 +2352,29 @@ function renderArchetypeStats() {
   const tbl = (title, blk, scannedText) => {
     if (!blk) return '';
     const sorted = sortArchRows(blk.rows || []);
+    // v1.56：平手欄只在真的有平手資料時才顯示。
+    //   錦標賽側統計本來就跳過無勝方的對局（draws 恆 0）；休閒側平局極罕見（引擎每條結束路徑都會定勝負）。
+    //   ⚠後端的 draw 分支保留不動——時限平手判雙敗是真實存在的資料狀態，砍掉會在下次發生時炸統計。
+    const showDraws = (blk.rows || []).some((r) => (r.draws || 0) > 0) || (blk.unclassified?.draws || 0) > 0;
     const arrow = (k) => _archSortKey === k ? (_archSortAsc ? ' ▲' : ' ▼') : '';
     const th = (k, label, title) =>
       '<th onclick="archSort(\'' + k + '\')" style="cursor:pointer;user-select:none;white-space:nowrap;"'
       + (title ? ' title="' + title + '"' : '') + '>' + label + arrow(k) + '</th>';
+    // v1.56：牌組名可點 → 開該原型的牌組明細（代表 60 張／勝場版／遺珠之憾）
+    const srcKey = (title.indexOf('錦標賽') >= 0) ? 'tourn' : 'casual';
     const rows = sorted.map((r, i) =>
-      '<tr><td>' + (i + 1) + '</td><td><b>' + escapeHtml(r.name) + '</b></td><td>' + r.usage + '</td>'
-      + '<td>' + r.wins + '</td><td>' + r.losses + '</td><td>' + (r.draws || 0) + '</td>' + wrCell(r) + '</tr>').join('');
+      '<tr><td>' + (i + 1) + '</td>'
+      + '<td><a href="#" class="player-name" title="看這個原型的代表牌組與推薦搭配"'
+      + ' onclick="showArchetypeDetail(\'' + String(r.ruleId).replace(/'/g, '&apos;') + '\',\'' + srcKey + '\'); return false;"><b>'
+      + escapeHtml(r.name) + '</b></a></td>'
+      + '<td>' + r.usage + '</td>'
+      + '<td>' + r.wins + '</td><td>' + r.losses + '</td>'
+      + (showDraws ? '<td>' + (r.draws || 0) + '</td>' : '')
+      + wrCell(r) + '</tr>').join('');
     const u = blk.unclassified || {};
     const uTop = (u.topCards || []).slice(0, 12).map((c) => escapeHtml(c.name) + '×' + c.decks).join('、');
     const headHtml = '<tr><th>#</th>' + th('name', '牌組原型') + th('usage', '使用次數')
-      + th('wins', '勝') + th('losses', '負') + th('draws', '平')
+      + th('wins', '勝') + th('losses', '負') + (showDraws ? th('draws', '平') : '')
       + th('winRate', '勝率', '樣本少於 10 副的勝率僅供參考，排序時會一併計入') + '</tr>';
     return '<h4 style="margin:14px 0 6px;">' + title + '</h4>'
       + '<div class="small muted" style="margin-bottom:6px;">' + scannedText + '</div>'
@@ -2274,12 +2390,16 @@ function renderArchetypeStats() {
   box.innerHTML =
     tbl('🎮 一般對戰（休閒）', d.casual,
         '掃描 ' + (d.scanned?.casualMatches || 0) + ' 場對戰、' + (d.scanned?.casualDecks || 0) + ' 副牌組'
-        + '（已排除 AI／本機對戰與「中途離開」致勝的場次）')
+        + '（已排除 AI／本機對戰；「中途離開」致勝的場次只在雙方各打不到 2 個完整回合時排除，'
+        + '打到第 3 回合以後才離開的仍計入）')
   + tbl('🏆 錦標賽', d.tourn,
         '掃描 ' + (d.scanned?.tournEvents || 0) + ' 場已結束賽事、' + (d.scanned?.tournDecks || 0) + ' 副次牌組'
         + '（已排除輪空與無勝方的對局；一位選手一場賽事用同一副牌，每打一場算一次使用）')
   + '<div class="small muted" style="margin-top:10px;">'
-  + '點欄位標題可排序（再點一次反向）；勝率為空的原型一律排在最後。'
+  + '點<b>牌組名</b>可看該原型的代表 60 張與推薦搭配。點欄位標題可排序（再點一次反向）；勝率為空的原型一律排在最後。'
+  + '<br>目前統計範圍：<b>' + (d.since ? new Date(d.since).toLocaleDateString('zh-TW') + ' 起' : '全部時間')
+  + '</b>（掃描 ' + (d.scanned?.casualMatches || 0) + ' 場休閒 + ' + (d.scanned?.tournEvents || 0)
+  + ' 場賽事）。若切換時間範圍後數字不變，代表<b>現有資料都落在該範圍內</b>——可比對這裡的掃描場數確認。'
   + '目前啟用中的規則 ' + (d.ruleCount || 0) + ' 條。統計為即時計算（快取 60 秒），改完規則按「計算統計」就會反映。'
   + '一副牌同時符合多條規則時只計入優先序最小的那條。</div>';
 }

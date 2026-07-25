@@ -1,4 +1,4 @@
-// === ORACLE ADMIN ENDPOINTS === v0.90 (玩家總覽補「曾使用過的暱稱」:跨四個來源彙整去重——休閒對戰顯示名(matchRecords 該側 name,用 $addToSet 併進既有 aggregate 零額外查詢)、錦標賽報名暱稱(TREGS)、賽事歸檔當時暱稱(TARCHIVE players[].name)、Firebase 帳號顯示名;每個暱稱標來源與最後使用時間,依最近使用排序) + v0.89 (admin 牌組原型統計:GET /api/admin/deck-archetype-stats?source=casual|tourn|all —— 依 deckRules 分類每一副牌,回每個原型的使用次數/勝/負/平/勝率+未分類彙總+未分類高頻主力卡(供 Wilson 就地開新規則)。休閒源 matchRecords 沿用既有淨化規則(只算有房號的對戰以排 AI/本機、排除中途離開致勝場、可設 since);錦標賽源 tournamentArchives(排除 bye/無勝方);兩者分開統計並排顯示。統計即時算+60s TTL 快取(規則一改即刻生效,免重算批次);比對走批次2 的同一份 deckMatchesRule 不另寫) + v0.88 (admin 牌組原型規則引擎:新 collection deckRules{name,includes[],excludes[],includeIds[],excludeIds[],priority,enabled} + CRUD + 命中預覽端點。規則以【卡名】比對(Wilson 拍板:同名 reprint 極多,用 cardId 每條規則要枚舉所有印刷版本且新卡一出就靜默失準),必要時可用 includeIds/excludeIds 鎖特定印刷版本。cardId→卡名對照從 tournament-pool.json lazy 載入(CJS/ESM 雙寫法,v0.75 教訓)。preview 端點對最近 N 場休閒對戰即時試算命中數,讓 Wilson 存檔前就發現打錯卡名。統計端點在批次3) + v0.87 (admin 玩家總覽:新增 GET /api/admin/player-profile?email= —— 一次回該玩家跨【休閒對戰(matchRecords)／錦標賽(tournamentArchives)／意見回饋(Firestore feedbacks)／儲存牌組數】的完整摘要,供 admin 任一頁點 email 直接開玩家檔案。四路平行查詢無 N+1、TARCHIVE 以 projection 排除 deckEntries 大欄位、per-email 30s 記憶體快取(比照 leaderboard 60s 先例);明細一律由既有端點懶載,不在此端點膨脹) + v0.86 (推播診斷+缺口修補:①GET push/status 回本人訂閱筆數/通道host/登記時間/現行VAPID公鑰前綴 ②POST push/selftest 由伺服器實際推一則給自己並回 per-endpoint statusCode(60s節流)——這兩支才能分清『訂閱沒登記到伺服器』與『有訂閱但推不到』 ③修缺口:admin 手動把賽事切到報到/進行中時,原本不推播、也不設 checkInDeadline/roundStartedAt(致報到階段永不結束、可進場推播與未進場判負全失效)→ 比照排程器自動轉換補齊 ④sendPushToUids 非404/410錯誤補 console.warn,不再全部靜默) + v0.85 (錦標賽推播通知 Web Push:只推②低頻事件[報到開始/本輪可進場],換手不推降載;web-push CJS/ESM 雙寫法+vapid.json 缺檔自動停用;訂閱端點 push/subscribe|unsubscribe|pubkey;失效訂閱 404/410 自動清;可進場用 enterPushedAt 原子搶占去重) + v0.84 (錦標賽:報名暱稱預填——/event 的 me 附上 lastName=最近一次報名暱稱[從已抓 myRegs 取最新,零額外查詢;從沒報過退帳號顯示名 id.name],前端未報名任何賽事時預填,免每次重打) + v0.83 (錦標賽對戰回放-半回合快照[Fable審補強:重賽deleteMany清舊快照/game-over不重存/濾舊格避混排/投降場finalLog+finalState讀房間fallback]+攤牌手牌獎賞+log逐步:snapshot 觸發由回合邊界改 activePlayerIndex 換手邊界=先攻/後攻各存一格+開局(setup→playing)格;key _t{turn}_p{active}唯一(與舊 _t{turn} 不衝突);新增 logLen 存 log 長度→前端逐步切片 finalLog 讓對戰log跟隨回放進度;/replay 依 logLen 排序回 activePlayerIndex+logLen) + v0.81 (錦標賽對戰回放-Phase1後端:①逐回合盤面快照存獨立 collection tournamentReplayTurns(不塞TMATCH避免既有無projection查詢讀放大;TTL 90天自動過期;冪等upsert;/action 回合邊界 fire-and-forget 不await;strip log佔73%,逐回合文字由finalLog供);②公開 GET /replay?matchId= 回 snapshots+finalLog+finalState(攤牌不redact手牌,Wilson決策;gate:賽事已歸檔或該場done才開放,比照match-log)。純新增,不動對戰/判負熱路徑讀取。前端回放檢視器Phase2另做) + v0.80 (錦標賽:每場比賽顯示觀戰人數——觀戰者輪詢 /spectate/state 當心跳,記錄 per-room distinct uid(8s內),/bracket 每場 playing match 即時算 viewers 回傳(不含2位對戰者,他們走/state);前端賽程表 VS👁 旁顯示(N)=N人觀戰中。純顯示,記憶體心跳 map 上限200房+lazy prune) + v0.79 (錦標賽:①/bracket 支援官方+社群賽並行——前端改每個進行中賽事各抓一次(帶eventId,伺服器本就 per-eventId 快取);②/bracket 每場 match 補 roomId(僅 status='playing' 才回,done/pending 回 null 免殘留)供前端把觀戰按鈕併入賽程表 VS(點 VS👁 即觀戰);移除獨立觀戰清單輪詢降載,/spectate/list 端點保留向後相容) + v0.78 (錦標賽:輪空(bye)玩家的大廳也顯示本輪進場倒數+可觀戰提示——/event 回應新增 myBye{round,enterOpenAt};僅在無 myMatch 時以單一 $in 查詢我本輪 bye match(status=done,bye,p1uid=我),讓輪空者知道其他對戰何時開打、可去觀戰。純顯示不影響配對/判負) + v0.77 (錦標賽:新增 client 端診斷回傳端點 /api/tournament/clientdiag——client 只在真異常指紋[隱形手牌/setup看門狗連續觸發/手動同步]才回傳一小包,寫 tournamentClientDiag[TTL 7天自動清];tournIdentity 驗證+per-uid 60s 記憶體節流+body 2KB cap+fail-silent,與對戰路徑完全隔離不影響) + v0.76 (錦標賽:非報名者(已登入)聊天暱稱改用【最近一次錦標賽報名的暱稱=個人資料分頁名稱】,不再顯示 email 帳號名;從沒報過賽事才退回 email 前綴;5分鐘記憶體快取避免每則訊息查 TREGS) + v0.75 (錦標賽:修 v0.72 gzip 從未生效根因——整段 patch 包在 import().then(async) 內=ESM host 無 require,v0.72 gzip 只用 require 載 compression 拋 require-is-not-defined 被吞→gzip 沒開;compression 套件其實已裝。修:改比照 TENG 的 try-require→catch-dynamic-import 雙寫法,ESM host 用 await import。裝後 JSON 壓 6~9× 降頻寬改善進場 lag) + v0.74 (錦標賽：修 setup 開局「一方 mulligan 補抽後加備戰(mpb)、對手還沒放出場」時 currentActorSeat 因 mpb 最優先誤把 mpb 擁有者當唯一該動作者→3分鐘誤判他閒置敗,且對手放置UI被誤 gate 掉→deadlock(信諺vs慶仔實例)。修:mpb 但對手未 setupDone→回 -1(雙方都可動作、閒置判負不單判、mpb 鍵與對手放置 UI 都啟用),對手已 setupDone 才由 mpb 擁有者單獨;前後端 setupActorSeat 逐行同步) + v0.73 (錦標賽：修「官方賽已淘汰出局的玩家卻無法報名新社群賽」——防同時被兩場召喚的衝突判據,由『在其他未結束賽事有任何對戰』收緊為『有【進行中(status!=done)】的對戰』;已出局者(對戰皆done)不算衝突,可正常報名新賽事;仍在比者維持原行為[移出新場、保留舊場],Fable 三輪審過的並行防護不動) + v0.72 (錦標賽降載:回應 gzip 壓縮(防呆 require compression,未裝自動略過;SSE/小回應不壓;瀏覽器自動解壓前端不用改)——盤面/大廳/聊天 JSON 壓 ~6-9×降頻寬;VM 需 npm install compression 才生效) + v0.71 (錦標賽降載:對戰 log 佔完整盤面~73%(長對局累積數百行);/state /action /spectate 回應只送最近 60 行 log(TROOMS 儲存盤面+finalLog 快照仍完整);前端動畫游標改用 timestamp 偵測新事件故截尾透明) + v0.70 (錦標賽：官方賽與社群賽改為可【並行】舉辦——移除 v0.45 全域自動順延+propose 的官方賽避讓(1h/進行中禁辦);為避免同一玩家被兩場同時召喚,改在 seedEventBracket 開賽配對前移除「已在開賽時間較早且未結束的其他賽事報到」的重複玩家(保留較早的、取消較晚的=本場),標 autoRemovedConflict+公告) + v0.69 (錦標賽降載續:/event(大廳最重端點,原每呼叫8~12次mongo含N+1)共用重查詢加 3s TTL 快取+per-user改批次查詢;/bracket 的 standings 重算(O(n²)OWP/OOWP)加 3s TTL 快取(per event,含20上限淘汰)——輪次交替 ~50 人同時回大廳打 /bracket 不再各自重算,只算一次;currentRound/status 變即失效;per-user mine 回應時再貼) + v0.68 (錦標賽降載+社群:①/state 端點加 client 版本比對(v=cv)——相符只回精簡 unchanged(免序列化/傳輸整個 gameState),先以 projection 排除 gameState 取輕量 doc 比版本,不同才第二次查完整盤面→對戰中每 1.2s×N 人輪詢大降 CPU/頻寬/mongo傳輸;②/spectate/state 同加版本比對(相符免深拷貝蓋手牌);③對戰中大廳聊天輪詢由每 1.2s 改每 ~6s(前端);④聊天室放寬:賽事期間只要已登入即可留言(不限報名者,未報名仍顯示暱稱);⑤社群賽避讓官方賽事的禁辦期由開賽前 2h 縮為 1h) + v0.67 (錦標賽：修 setup 階段閒置判負漏洞——閒置判負原要求「雙方都已進場」才判,但 setup 時若一方已進場鋪好場在線等待、另一方掛著卻還沒按「進入對戰」,該掛著方逃過 3 分鐘閒置判負、只受 8 分鐘未進場保護→在線方空等且輪到自己時反被判(丞龍 vs 承瀚 實例)。修:setup 階段只要「該動作方」逾時未動作且【對手已進場】即判該方敗(currentActorSeat 於 setup 一律回未完成 setup 那方,故被判者必為掛著方);對局中維持雙方都進場才判) + v0.66 (錦標賽：大廳聊天室懶載入——/chat 改成 since=0/初始回「最新」一頁(原回最舊80則要多輪才追到最新、費流量又慢)；新增 ?before=ts 上滑載更舊 + hasMore 旗標；前端預設只載最新一頁，滑到頂才續載舊訊息，省流量+載入快) + v0.65 (錦標賽：admin 編輯賽事設定新增「賽制」選項——可在開賽前(draft/registration)把單敗淘汰⇄瑞士制互改+設瑞士輪數/TopCut;已開賽則 disabled 且後端 gate 回 409(賽程已依賽制產生)。/event/update 接收 format/swissRounds/topCut) + v0.64 (錦標賽：/event/status 端點加防護——已開賽/已結束(checkin/bracket_ready/running/finished)的賽事禁止退回 draft/registration[會讓排程器因 registrationCloseAt 已過而重新產生賽程、刪掉進行中對戰並從第1輪重排,毀掉比賽];回 409 提示改用強制結束後重建。Wilson 手滑在進行中賽事按「開放報名」觸發) + v0.63 (錦標賽：勝負公告統一用「獲勝」取代「(自動)晉級」——因有瑞士制(無晉級/淘汰概念),投降/未進場/閒置/時限/管理員裁定的公告把「自動晉級」「勝出並自動晉級」改為「獲勝」,避免玩家誤會;瑞士制分支本就用獲勝) + v0.62 (錦標賽：setup『誰該動作』判定改成與實際 engine gating 一致——放出場階段依 PTCG 規則 mulligan 較少方先放+按準備(較多方需等),雙方都 setupDone 後才進揭示確認/補抽;修正 v0.60 用 mulligan 旗標判序錯誤,並讓前端 isMyTurn/提示共用同邏輯→提示與敗場判定一致) + v0.61 (錦標賽名人堂可看當初賽程：/champions 補回傳 eventId；新增公開 GET /api/tournament/champion-bracket?eventId= 從歸檔 TARCHIVE 取該賽事每輪 matches+勝負(winner 由 winnerUid 對 p1/p2uid 導出)，供前端名人堂點選後翻頁顯示) + v0.60 (錦標賽：修 setup 階段「等對方補抽」倒數到時誤判雙敗——閒置判負用的 currentActorSeat 在 setup 只看 setupDone，雙方都 false 就回 -1 雙敗，完全忽略 mulligan 子階段；實況是只有一方欠補抽/確認揭示、對手只是在等，卻被一起判雙敗。修：setup 先判 mulligan 待辦(pendingMulliganDraw/mulliganRevealConfirmed/mulliganPostBenchOpen)，只有欠 mulligan 的一方算「該動作」→ 單判該方敗、等待方獲勝；mulligan 都完成才退回看 setupDone) + v0.59 (錦標賽名人堂可從歸檔還原：新增 /admin/champions/restore-from-archive[從 TARCHIVE 重建 TCHAMPS,只補缺漏不覆蓋既有,救回被誤刪的冠軍];歸檔 recordTournamentArchive 補存 communityEvent 旗標供還原;admin.html 名人堂管理加「♻️從歸檔還原」鈕) + v0.58 (錦標賽：定期清掃「已結束賽事底下、沒打完(非done)的對戰」殘留——賽事 finished 後不清 TMATCH，致這種 pending 對戰累積、被監控誤算成「等開打」死資料(排程器本就以 listOpenEvents 排除 finished，故這些殘留零功能影響、不會幽靈開打)；scheduler 每~5分刪除 finished 賽事的非done對戰，一次涵蓋正常完賽/force-finish/取消所有結束路徑+自動清掉歷史殘留) + v0.57 (錦標賽：大廳聊天效能——①為 tournamentChat 建 {room,ts} 索引,讓 /chat 的 ts>since+sort 走索引範圍掃描,不再每次全表掃+記憶體排序[訊息越多越慢→高流量輪詢拖慢];②scheduler 每~5 分鐘定期修剪大廳聊天,只保留最近 800 則,避免 collection 無限長大) + v0.56 (錦標賽：修『打到一半被判未進場』——進場標記 entered 原是 read-modify-write 整包寫回,兩人同時進場時後者用讀到的舊值覆蓋掉前者的旗標→某方進場記錄遺失→未進場 tick 誤判已開打的對局[實例 Eg vs Gali]。修(A根因)進場端改原子 positional $set 只更新自己座位+建 match 時初始化 entered:[false,false];修(B保險)未進場判負前若房間 gameState 已 playing/game-over[雙方都完成 setup 確實到場]即不判未進場) + v0.55 (錦標賽：社群賽發起公告措辭微調[「就自動開賽（人越多越熱鬧）」→「就能開賽」] + 新增 /api/tournament/cancel-proposal[發起者本人，報名階段且報名人數未達門檻時可手動取消社群賽；原子搶占 status=registration→finished 防與 scheduler 開賽競態；不收 30 分冷卻、釋放全站 1 場名額] + /event 每場補 isProposer 旗標供前端顯示取消鈕) + v0.54 (錦標賽：社群賽發起公告文字修正——募集窗口會跑滿,期間都可報名,時間到達門檻才開賽[非一達標即開],避免『集滿即開賽』誤導) + v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
+// === ORACLE ADMIN ENDPOINTS === v0.92 (牌組原型明細:GET /api/admin/deck-archetype-detail?ruleId= —— 點選原型後展開①代表 60 張(採用率排序+眾數張數+貪婪湊60,同名4張/ACE SPEC 1張上限,基本能量無上限)②只看獲勝場次的 60 張③【遺珠之憾】推薦。⭐遺珠指標**不是**沿用既有的全域卡牌勝率(那個被原型效應與玩家實力完全混雜、無法回答『這張卡值不值得放』),改用**同一原型內的條件勝率差**:含此卡的勝率 Wilson 90%單尾下界 − 不含此卡的勝率,自動壓抑小樣本;排除必含卡/基本能量/已進 60 張者,出現率窗口 8~60%、雙側樣本各 >=8。回應含 per-card n/inclusion/wr_with/wr_without 供人工判讀是否為子變體。單次掃描算完三塊,60s TTL 快取) + v0.91 (休閒統計淨化規則收斂 buildCasualCleanFilter 單一來源[原 regex 在 2.3 卡牌勝率與牌組原型統計各寫一份=漂移風險] + Wilson 拍板調整:『中途離開致勝』場改為【只排除 finalTurn<=2】,雙方各完成 2 個完整回合後(finalTurn>=3)的離開場仍納入統計——原本一律排除,會把「打到一半才斷線」的真實對局也丟掉。finalTurn 語義查證:engine 只在後攻結束回合時 +1,故 turn>=3 ⇔ 雙方各完成 2 回合) + v0.90 (玩家總覽補「曾使用過的暱稱」:跨四個來源彙整去重——休閒對戰顯示名(matchRecords 該側 name,用 $addToSet 併進既有 aggregate 零額外查詢)、錦標賽報名暱稱(TREGS)、賽事歸檔當時暱稱(TARCHIVE players[].name)、Firebase 帳號顯示名;每個暱稱標來源與最後使用時間,依最近使用排序) + v0.89 (admin 牌組原型統計:GET /api/admin/deck-archetype-stats?source=casual|tourn|all —— 依 deckRules 分類每一副牌,回每個原型的使用次數/勝/負/平/勝率+未分類彙總+未分類高頻主力卡(供 Wilson 就地開新規則)。休閒源 matchRecords 沿用既有淨化規則(只算有房號的對戰以排 AI/本機、排除中途離開致勝場、可設 since);錦標賽源 tournamentArchives(排除 bye/無勝方);兩者分開統計並排顯示。統計即時算+60s TTL 快取(規則一改即刻生效,免重算批次);比對走批次2 的同一份 deckMatchesRule 不另寫) + v0.88 (admin 牌組原型規則引擎:新 collection deckRules{name,includes[],excludes[],includeIds[],excludeIds[],priority,enabled} + CRUD + 命中預覽端點。規則以【卡名】比對(Wilson 拍板:同名 reprint 極多,用 cardId 每條規則要枚舉所有印刷版本且新卡一出就靜默失準),必要時可用 includeIds/excludeIds 鎖特定印刷版本。cardId→卡名對照從 tournament-pool.json lazy 載入(CJS/ESM 雙寫法,v0.75 教訓)。preview 端點對最近 N 場休閒對戰即時試算命中數,讓 Wilson 存檔前就發現打錯卡名。統計端點在批次3) + v0.87 (admin 玩家總覽:新增 GET /api/admin/player-profile?email= —— 一次回該玩家跨【休閒對戰(matchRecords)／錦標賽(tournamentArchives)／意見回饋(Firestore feedbacks)／儲存牌組數】的完整摘要,供 admin 任一頁點 email 直接開玩家檔案。四路平行查詢無 N+1、TARCHIVE 以 projection 排除 deckEntries 大欄位、per-email 30s 記憶體快取(比照 leaderboard 60s 先例);明細一律由既有端點懶載,不在此端點膨脹) + v0.86 (推播診斷+缺口修補:①GET push/status 回本人訂閱筆數/通道host/登記時間/現行VAPID公鑰前綴 ②POST push/selftest 由伺服器實際推一則給自己並回 per-endpoint statusCode(60s節流)——這兩支才能分清『訂閱沒登記到伺服器』與『有訂閱但推不到』 ③修缺口:admin 手動把賽事切到報到/進行中時,原本不推播、也不設 checkInDeadline/roundStartedAt(致報到階段永不結束、可進場推播與未進場判負全失效)→ 比照排程器自動轉換補齊 ④sendPushToUids 非404/410錯誤補 console.warn,不再全部靜默) + v0.85 (錦標賽推播通知 Web Push:只推②低頻事件[報到開始/本輪可進場],換手不推降載;web-push CJS/ESM 雙寫法+vapid.json 缺檔自動停用;訂閱端點 push/subscribe|unsubscribe|pubkey;失效訂閱 404/410 自動清;可進場用 enterPushedAt 原子搶占去重) + v0.84 (錦標賽:報名暱稱預填——/event 的 me 附上 lastName=最近一次報名暱稱[從已抓 myRegs 取最新,零額外查詢;從沒報過退帳號顯示名 id.name],前端未報名任何賽事時預填,免每次重打) + v0.83 (錦標賽對戰回放-半回合快照[Fable審補強:重賽deleteMany清舊快照/game-over不重存/濾舊格避混排/投降場finalLog+finalState讀房間fallback]+攤牌手牌獎賞+log逐步:snapshot 觸發由回合邊界改 activePlayerIndex 換手邊界=先攻/後攻各存一格+開局(setup→playing)格;key _t{turn}_p{active}唯一(與舊 _t{turn} 不衝突);新增 logLen 存 log 長度→前端逐步切片 finalLog 讓對戰log跟隨回放進度;/replay 依 logLen 排序回 activePlayerIndex+logLen) + v0.81 (錦標賽對戰回放-Phase1後端:①逐回合盤面快照存獨立 collection tournamentReplayTurns(不塞TMATCH避免既有無projection查詢讀放大;TTL 90天自動過期;冪等upsert;/action 回合邊界 fire-and-forget 不await;strip log佔73%,逐回合文字由finalLog供);②公開 GET /replay?matchId= 回 snapshots+finalLog+finalState(攤牌不redact手牌,Wilson決策;gate:賽事已歸檔或該場done才開放,比照match-log)。純新增,不動對戰/判負熱路徑讀取。前端回放檢視器Phase2另做) + v0.80 (錦標賽:每場比賽顯示觀戰人數——觀戰者輪詢 /spectate/state 當心跳,記錄 per-room distinct uid(8s內),/bracket 每場 playing match 即時算 viewers 回傳(不含2位對戰者,他們走/state);前端賽程表 VS👁 旁顯示(N)=N人觀戰中。純顯示,記憶體心跳 map 上限200房+lazy prune) + v0.79 (錦標賽:①/bracket 支援官方+社群賽並行——前端改每個進行中賽事各抓一次(帶eventId,伺服器本就 per-eventId 快取);②/bracket 每場 match 補 roomId(僅 status='playing' 才回,done/pending 回 null 免殘留)供前端把觀戰按鈕併入賽程表 VS(點 VS👁 即觀戰);移除獨立觀戰清單輪詢降載,/spectate/list 端點保留向後相容) + v0.78 (錦標賽:輪空(bye)玩家的大廳也顯示本輪進場倒數+可觀戰提示——/event 回應新增 myBye{round,enterOpenAt};僅在無 myMatch 時以單一 $in 查詢我本輪 bye match(status=done,bye,p1uid=我),讓輪空者知道其他對戰何時開打、可去觀戰。純顯示不影響配對/判負) + v0.77 (錦標賽:新增 client 端診斷回傳端點 /api/tournament/clientdiag——client 只在真異常指紋[隱形手牌/setup看門狗連續觸發/手動同步]才回傳一小包,寫 tournamentClientDiag[TTL 7天自動清];tournIdentity 驗證+per-uid 60s 記憶體節流+body 2KB cap+fail-silent,與對戰路徑完全隔離不影響) + v0.76 (錦標賽:非報名者(已登入)聊天暱稱改用【最近一次錦標賽報名的暱稱=個人資料分頁名稱】,不再顯示 email 帳號名;從沒報過賽事才退回 email 前綴;5分鐘記憶體快取避免每則訊息查 TREGS) + v0.75 (錦標賽:修 v0.72 gzip 從未生效根因——整段 patch 包在 import().then(async) 內=ESM host 無 require,v0.72 gzip 只用 require 載 compression 拋 require-is-not-defined 被吞→gzip 沒開;compression 套件其實已裝。修:改比照 TENG 的 try-require→catch-dynamic-import 雙寫法,ESM host 用 await import。裝後 JSON 壓 6~9× 降頻寬改善進場 lag) + v0.74 (錦標賽：修 setup 開局「一方 mulligan 補抽後加備戰(mpb)、對手還沒放出場」時 currentActorSeat 因 mpb 最優先誤把 mpb 擁有者當唯一該動作者→3分鐘誤判他閒置敗,且對手放置UI被誤 gate 掉→deadlock(信諺vs慶仔實例)。修:mpb 但對手未 setupDone→回 -1(雙方都可動作、閒置判負不單判、mpb 鍵與對手放置 UI 都啟用),對手已 setupDone 才由 mpb 擁有者單獨;前後端 setupActorSeat 逐行同步) + v0.73 (錦標賽：修「官方賽已淘汰出局的玩家卻無法報名新社群賽」——防同時被兩場召喚的衝突判據,由『在其他未結束賽事有任何對戰』收緊為『有【進行中(status!=done)】的對戰』;已出局者(對戰皆done)不算衝突,可正常報名新賽事;仍在比者維持原行為[移出新場、保留舊場],Fable 三輪審過的並行防護不動) + v0.72 (錦標賽降載:回應 gzip 壓縮(防呆 require compression,未裝自動略過;SSE/小回應不壓;瀏覽器自動解壓前端不用改)——盤面/大廳/聊天 JSON 壓 ~6-9×降頻寬;VM 需 npm install compression 才生效) + v0.71 (錦標賽降載:對戰 log 佔完整盤面~73%(長對局累積數百行);/state /action /spectate 回應只送最近 60 行 log(TROOMS 儲存盤面+finalLog 快照仍完整);前端動畫游標改用 timestamp 偵測新事件故截尾透明) + v0.70 (錦標賽：官方賽與社群賽改為可【並行】舉辦——移除 v0.45 全域自動順延+propose 的官方賽避讓(1h/進行中禁辦);為避免同一玩家被兩場同時召喚,改在 seedEventBracket 開賽配對前移除「已在開賽時間較早且未結束的其他賽事報到」的重複玩家(保留較早的、取消較晚的=本場),標 autoRemovedConflict+公告) + v0.69 (錦標賽降載續:/event(大廳最重端點,原每呼叫8~12次mongo含N+1)共用重查詢加 3s TTL 快取+per-user改批次查詢;/bracket 的 standings 重算(O(n²)OWP/OOWP)加 3s TTL 快取(per event,含20上限淘汰)——輪次交替 ~50 人同時回大廳打 /bracket 不再各自重算,只算一次;currentRound/status 變即失效;per-user mine 回應時再貼) + v0.68 (錦標賽降載+社群:①/state 端點加 client 版本比對(v=cv)——相符只回精簡 unchanged(免序列化/傳輸整個 gameState),先以 projection 排除 gameState 取輕量 doc 比版本,不同才第二次查完整盤面→對戰中每 1.2s×N 人輪詢大降 CPU/頻寬/mongo傳輸;②/spectate/state 同加版本比對(相符免深拷貝蓋手牌);③對戰中大廳聊天輪詢由每 1.2s 改每 ~6s(前端);④聊天室放寬:賽事期間只要已登入即可留言(不限報名者,未報名仍顯示暱稱);⑤社群賽避讓官方賽事的禁辦期由開賽前 2h 縮為 1h) + v0.67 (錦標賽：修 setup 階段閒置判負漏洞——閒置判負原要求「雙方都已進場」才判,但 setup 時若一方已進場鋪好場在線等待、另一方掛著卻還沒按「進入對戰」,該掛著方逃過 3 分鐘閒置判負、只受 8 分鐘未進場保護→在線方空等且輪到自己時反被判(丞龍 vs 承瀚 實例)。修:setup 階段只要「該動作方」逾時未動作且【對手已進場】即判該方敗(currentActorSeat 於 setup 一律回未完成 setup 那方,故被判者必為掛著方);對局中維持雙方都進場才判) + v0.66 (錦標賽：大廳聊天室懶載入——/chat 改成 since=0/初始回「最新」一頁(原回最舊80則要多輪才追到最新、費流量又慢)；新增 ?before=ts 上滑載更舊 + hasMore 旗標；前端預設只載最新一頁，滑到頂才續載舊訊息，省流量+載入快) + v0.65 (錦標賽：admin 編輯賽事設定新增「賽制」選項——可在開賽前(draft/registration)把單敗淘汰⇄瑞士制互改+設瑞士輪數/TopCut;已開賽則 disabled 且後端 gate 回 409(賽程已依賽制產生)。/event/update 接收 format/swissRounds/topCut) + v0.64 (錦標賽：/event/status 端點加防護——已開賽/已結束(checkin/bracket_ready/running/finished)的賽事禁止退回 draft/registration[會讓排程器因 registrationCloseAt 已過而重新產生賽程、刪掉進行中對戰並從第1輪重排,毀掉比賽];回 409 提示改用強制結束後重建。Wilson 手滑在進行中賽事按「開放報名」觸發) + v0.63 (錦標賽：勝負公告統一用「獲勝」取代「(自動)晉級」——因有瑞士制(無晉級/淘汰概念),投降/未進場/閒置/時限/管理員裁定的公告把「自動晉級」「勝出並自動晉級」改為「獲勝」,避免玩家誤會;瑞士制分支本就用獲勝) + v0.62 (錦標賽：setup『誰該動作』判定改成與實際 engine gating 一致——放出場階段依 PTCG 規則 mulligan 較少方先放+按準備(較多方需等),雙方都 setupDone 後才進揭示確認/補抽;修正 v0.60 用 mulligan 旗標判序錯誤,並讓前端 isMyTurn/提示共用同邏輯→提示與敗場判定一致) + v0.61 (錦標賽名人堂可看當初賽程：/champions 補回傳 eventId；新增公開 GET /api/tournament/champion-bracket?eventId= 從歸檔 TARCHIVE 取該賽事每輪 matches+勝負(winner 由 winnerUid 對 p1/p2uid 導出)，供前端名人堂點選後翻頁顯示) + v0.60 (錦標賽：修 setup 階段「等對方補抽」倒數到時誤判雙敗——閒置判負用的 currentActorSeat 在 setup 只看 setupDone，雙方都 false 就回 -1 雙敗，完全忽略 mulligan 子階段；實況是只有一方欠補抽/確認揭示、對手只是在等，卻被一起判雙敗。修：setup 先判 mulligan 待辦(pendingMulliganDraw/mulliganRevealConfirmed/mulliganPostBenchOpen)，只有欠 mulligan 的一方算「該動作」→ 單判該方敗、等待方獲勝；mulligan 都完成才退回看 setupDone) + v0.59 (錦標賽名人堂可從歸檔還原：新增 /admin/champions/restore-from-archive[從 TARCHIVE 重建 TCHAMPS,只補缺漏不覆蓋既有,救回被誤刪的冠軍];歸檔 recordTournamentArchive 補存 communityEvent 旗標供還原;admin.html 名人堂管理加「♻️從歸檔還原」鈕) + v0.58 (錦標賽：定期清掃「已結束賽事底下、沒打完(非done)的對戰」殘留——賽事 finished 後不清 TMATCH，致這種 pending 對戰累積、被監控誤算成「等開打」死資料(排程器本就以 listOpenEvents 排除 finished，故這些殘留零功能影響、不會幽靈開打)；scheduler 每~5分刪除 finished 賽事的非done對戰，一次涵蓋正常完賽/force-finish/取消所有結束路徑+自動清掉歷史殘留) + v0.57 (錦標賽：大廳聊天效能——①為 tournamentChat 建 {room,ts} 索引,讓 /chat 的 ts>since+sort 走索引範圍掃描,不再每次全表掃+記憶體排序[訊息越多越慢→高流量輪詢拖慢];②scheduler 每~5 分鐘定期修剪大廳聊天,只保留最近 800 則,避免 collection 無限長大) + v0.56 (錦標賽：修『打到一半被判未進場』——進場標記 entered 原是 read-modify-write 整包寫回,兩人同時進場時後者用讀到的舊值覆蓋掉前者的旗標→某方進場記錄遺失→未進場 tick 誤判已開打的對局[實例 Eg vs Gali]。修(A根因)進場端改原子 positional $set 只更新自己座位+建 match 時初始化 entered:[false,false];修(B保險)未進場判負前若房間 gameState 已 playing/game-over[雙方都完成 setup 確實到場]即不判未進場) + v0.55 (錦標賽：社群賽發起公告措辭微調[「就自動開賽（人越多越熱鬧）」→「就能開賽」] + 新增 /api/tournament/cancel-proposal[發起者本人，報名階段且報名人數未達門檻時可手動取消社群賽；原子搶占 status=registration→finished 防與 scheduler 開賽競態；不收 30 分冷卻、釋放全站 1 場名額] + /event 每場補 isProposer 旗標供前端顯示取消鈕) + v0.54 (錦標賽：社群賽發起公告文字修正——募集窗口會跑滿,期間都可報名,時間到達門檻才開賽[非一達標即開],避免『集滿即開賽』誤導) + v0.53 (錦標賽：玩家發起社群賽[createdByPlayer]——/propose 限email帳號/全站同時僅1場/發起者30分冷卻/官方賽事開賽前2h內或未結束時禁止/選format+募集窗口15-30-60分/自動報名發起者;募集截止響應<門檻 or 報到<門檻自動取消;門檻單淘汰4瑞士8;名人堂冠軍帶 communityEvent 旗標) + v0.52 (錦標賽：修瑞士制排名把『剛配好還沒打的下一輪 pending 對戰』誤當雙敗計分[GG 1-1/aa 0-2 應為 1-0/0-1]——buildSwissPlayersFromMatches 改只計已結束;伺服器把 status 一併傳入) + v0.51 (錦標賽：瑞士制報到結束(確定簽到人數)時,在聊天室系統廣播——本場選手數、預計瑞士輪數、取前幾名進 Top Cut) + v0.50 (錦標賽：瑞士制階段的未進場/閒置判負文字改成不用「淘汰/晉級」字眼[輸贏都繼續比賽,雙未進場以雙敗處理];cut 階段下一輪廣播用 Top Cut 字樣) + v0.49 (錦標賽：/event events[] 補 format/swissRounds/topCut,讓大廳賽事卡正確顯示『瑞士制』而非一律單敗) + v0.48 (錦標賽：/bracket 回傳瑞士制即時排名表 standings[名次/戰績/積分/OWP] + event.format/phase/swissRounds/topCut + 每場 phase,供前端顯示瑞士排名與輪次標籤) + v0.47 (錦標賽：新增瑞士制+單淘汰Top Cut賽制[format='swiss-then-cut']——建賽事可選瑞士制,輪數/切牌依人數自動且admin可覆寫,每輪依戰績配對避重賽、勝3負0不平手、破同分OWP/OOWP,打完固定輪數依排名取前K名進單敗淘汰;純函式來自bundle TENG.*,單敗淘汰行為完全不變) + v0.46 (錦標賽：報到截止 seed 改原子搶占 checkin→bracket_ready，修『報到回200但 seedEventBracket 已讀完 regs→沒被排進賽程』的 TOCTOU 競態 + 防重疊 tick 重複 seed 洗掉賽程) + v0.45 (錦標賽：較晚賽事自動順延——若有開賽時間較早且尚未結束的其他賽事仍在進行，接近開賽前 10 分鐘內自動把本場開賽順延 10 分鐘並在聊天室公告，直到前場結束，避免同一玩家被兩場同時要求進場) + v0.44 (錦標賽：對局時限改官方「打完剩餘回合」制[時間到先打完當前回合，後攻方再結束他的下一個回合才比獎賞] + 平手自動判雙敗[雙方淘汰、下一輪對手輪空，不需管理員]) + v0.43 (錦標賽：/spectate/list 排除自己參賽的場,防參賽者誤觀戰自己對局看不到手牌) + v0.42 (錦標賽：/admin/match-log 取某場逐回合log供賽事統計下鑽) + v0.41 (錦標賽：/event events[] 補 myName+checkInDeadline 供前端每場卡片) + v0.40 (錦標賽：可同時公布多場賽事(時間不重疊)，玩家各自報名；scheduler 迴圈所有開放賽事；端點吃 eventId) + v0.36 (錦標賽：/event+/state 回 serverNow 給前端對時(倒數同步) + /chat 回 clearedAt(admin清空即時生效))
 // v0.35 (錦標賽：報名 coinPref 先後攻偏好 + admin /match/restart 重賽 + 完整賽事歸檔 tournamentArchives 永久保存)
 // v0.34 (錦標賽：報名名單回 deckText 可複製匯入 + 未進場判負勝方房間設 game-over 顯示勝利畫面)
 // v0.33 (錦標賽名人堂：歷屆冠軍 TCHAMPS + /champions 公開列表 + admin 編輯/刪除)
@@ -680,6 +680,64 @@ import('firebase-admin').then(async ({ default: admin }) => {
   //   GET  /api/admin/match-records (admin auth)
   // ═════════════════════════════════════════════════════════════════════════════
   (function registerMatchRecords() {
+    // ══ v0.92 卡片屬性表（湊 60 張時判斷「同名 4 張上限」的例外）════════════
+    //   基本能量無張數上限、ACE SPEC 整副只能 1 張 —— 這兩個例外必須查卡片屬性才知道。
+    //   ⚠不能用錦標賽段的 TPOOL（在另一個閉包，admin 段取不到會 ReferenceError），
+    //     這裡從同一份 tournament-pool.json 自建輕量屬性表（CJS/ESM 雙寫法，v0.75 教訓）。
+    let _cardAttrPromise = null;
+    function getCardAttrMap() {
+      if (!_cardAttrPromise) {
+        _cardAttrPromise = (async () => {
+          const P = '/opt/ptcg/api/tournament/tournament-pool.json';
+          let poolObj = null;
+          try { poolObj = require(P); }
+          catch (e1) {
+            try { const _fs = await import('fs'); poolObj = JSON.parse(_fs.readFileSync(P, 'utf8')); }
+            catch (e2) { console.warn('[deck-detail] 卡片屬性表載入失敗:', e2 && e2.message); return new Map(); }
+          }
+          const m = new Map();
+          for (const k of Object.keys(poolObj || {})) {
+            const c = poolObj[k];
+            if (!c) continue;
+            m.set(String(k), {
+              basicEnergy: c.supertype === 'Energy' && c.subtype === 'Basic',
+              aceSpec: Array.isArray(c.tags) && c.tags.includes('ACE SPEC'),
+            });
+          }
+          return m;
+        })();
+      }
+      return _cardAttrPromise;
+    }
+
+    // ══ v0.91 休閒統計「資料淨化」單一來源 ══════════════════════════════════
+    //   原本這組條件在「2.3 卡牌勝率」與「牌組原型統計」各手寫一份，v0.39 補措辭時就得改兩處
+    //   ＝典型漂移風險。收斂成一個 helper，兩邊共用。
+    //
+    //   ① excludeAI：只算「有房號」的對戰。client 端的 vsAI 旗標不可靠（v0.98 玩家規則），
+    //      有房號＝線上對玩家；本機對戰（含本機 vs AI）一律排除。
+    //   ② 中途離開致勝場（Wilson v0.91 裁定）：
+    //      ・finalTurn <= 2 → **排除**。這段常見情形是「房主開了局卻不在」或對手一看開局就跑，
+    //        勝負與牌組實力無關，會污染統計。
+    //      ・finalTurn >= 3 → **納入**。雙方各已完成 2 個完整回合、都實際操作過，
+    //        中途斷線仍是一場有意義的對局。
+    //      ⚠finalTurn 是「完整回合數」不是半回合：engine 只在**後攻方**結束回合時才 +1，
+    //        故先攻與後攻的第 1 回合 finalTurn 都是 1；turn>=3 ⇔ 雙方各完成 2 回合。
+    //      ⚠舊資料若無 finalTurn 欄位，$gte 判定為 false → 維持「排除」的舊行為（向後相容）。
+    const CASUAL_LEAVE_RE = /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i;
+    function buildCasualCleanFilter(opts) {
+      const o = opts || {};
+      const q = {};
+      if (o.excludeAI !== false) q.roomCode = { $type: 'string' };
+      if (o.since) q.endedAt = { $gte: o.since };
+      if (o.winnerOnly) q.winner = { $in: [0, 1] };
+      q.$or = [
+        { winReason: { $not: CASUAL_LEAVE_RE } },   // 不是離開場 → 一律納入（含無 winReason 的舊場）
+        { finalTurn: { $gte: 3 } },                 // 是離開場但雙方各已完成 2 回合 → 仍納入
+      ];
+      return q;
+    }
+
     // Rate-limit POST /api/match-result：避免惡意 client 灌資料
     const MR_RATE_WINDOW = 60 * 1000;
     const MR_RATE_MAX = 10;           // 每分鐘最多 10 筆 per IP（正常一場結束才 1 筆）
@@ -1345,6 +1403,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   ?excludeAI=true (default true — AI 對戰會污染勝率)
     app.get('/api/admin/stats/cards/winrate', requireFirebaseAdmin, async (req, res) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+      // v0.91：改用中央 buildCasualCleanFilter（含「離開場 finalTurn>=3 仍納入」的新規則）
       const baseMatch = { winner: { $in: [0, 1] } };  // 只算分出勝負的場（排除平局）
       if (req.query.mode === 'online') baseMatch.roomCode = { $type: 'string' };
       else if (req.query.mode === 'local') baseMatch.roomCode = null;
@@ -1359,7 +1418,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       // v0.27：排除「玩家中途離開」獲勝的場 — winReason 形如「<玩家名> 中途離開」
       //   （臨時有事/斷線等非實力因素，會污染真實卡牌勝率）。
       //   $not + regex：同時保留 winReason 不存在的舊場（不影響歷史資料）。
-      baseMatch.winReason = { $not: /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i };  // v0.39 補現行措辭「對手承認技不如人，先行離開了」(舊措辭=中途離開)
+      // v0.91：離開場改由中央 helper 判定（finalTurn<=2 排除、>=3 納入），不再整類排除
+      Object.assign(baseMatch, { $or: buildCasualCleanFilter({}).$or });
       const minDecks = Math.max(1, parseInt(req.query.minDecks) || 5);
       try {
         const pipeline = [
@@ -1866,6 +1926,219 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // ══ v0.92 牌組原型「明細」：代表 60 張 / 勝場版 / 遺珠之憾 ═══════════════
+    //   Wilson 需求：點選某個原型後，看到「依我的規則分類出來、最多人用的 60 張」，
+    //   可切換成只看獲勝場次，並推薦沒進 60 張但值得搭配的 15 張，且能一鍵複製牌表。
+    //
+    //   ⭐為什麼不沿用既有的「2.3 卡牌勝率」來做推薦（Fable 5 稽核結論）：
+    //     那張表的分母是全站的 deck-場次，沒有按牌組原型分層 → 一張卡的勝率同時被
+    //     「它所屬原型的強度」與「使用它的玩家實力」支配，量不到卡本身的邊際貢獻；
+    //     且雙方都帶同一張卡時同時 +1 勝 +1 負，熱門通用卡會被機械性拉向 50%。
+    //     正確的統計量是**同一原型內的條件勝率差**（把原型當分層變數，控制掉最大的混雜）：
+    //         Δ = P(勝 | 本原型 且 含卡c) − P(勝 | 本原型 且 不含卡c)
+    //     再對前項取 Wilson score 的 90% 單尾下界，讓小樣本自動被壓低，
+    //     不必另設「勝率差要多大才算數」這種武斷門檻。
+    const _archDetailCache = new Map();
+
+    /** Wilson score 區間下界（單尾）。n=0 回 0。用於壓抑小樣本的高勝率假象。 */
+    function wilsonLower(w, n, z) {
+      if (!n) return 0;
+      const p = w / n, z2 = z * z;
+      const denom = 1 + z2 / n;
+      const centre = p + z2 / (2 * n);
+      const margin = z * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n);
+      return Math.max(0, (centre - margin) / denom);
+    }
+
+    /** 卡名正規化：去掉括號註解，讓「老大的指令（烏羽）」等同名不同插畫合併成同一張。 */
+    function normCardName(n) {
+      return String(n || '').replace(/[（(][^）)]*[）)]/g, '').trim() || String(n || '');
+    }
+
+    app.get('/api/admin/deck-archetype-detail', requireFirebaseAdmin, async (req, res) => {
+      if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+      const ruleId = String((req.query && req.query.ruleId) || '');
+      if (!ruleId) return res.status(400).json({ error: '需要 ruleId' });
+      const source = String(req.query.source) === 'tourn' ? 'tourn' : 'casual';
+      const since = req.query.since ? parseInt(req.query.since) : 0;
+      const excludeAI = req.query.excludeAI !== 'false';
+      const ck = ruleId + '|' + source + '|' + since + '|' + excludeAI;
+      const now = Date.now();
+      const hit = _archDetailCache.get(ck);
+      if (hit && now - hit.at < 60000) return res.json({ ...hit.data, cached: true });
+      try {
+        const nameMap = await getCardNameMap();
+        if (!nameMap.size) return res.status(503).json({ error: '伺服器卡名對照尚未載入，稍後再試' });
+        const rules = await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray();
+        const target = rules.find((r) => String(r._id) === ruleId);
+        if (!target) return res.status(404).json({ error: '找不到這條規則（可能已刪除）' });
+
+        // 規則的必含卡（恆 100% 出現，不可能有「不含」對照組）→ 遺珠候選要排除
+        const mustHave = new Set((target.includes || []).map(normCardName));
+
+        // per-卡名 累積器
+        const C = new Map();   // 卡名 → { repId, repCount, nWith, wWith, dist:Map(張數→n), distWin:Map }
+        const bump = (name, cardId, copies, isWin, countWin) => {
+          let e = C.get(name);
+          if (!e) { e = { name, ids: new Map(), nWith: 0, wWith: 0, dist: new Map(), distWin: new Map() }; C.set(name, e); }
+          e.ids.set(String(cardId), (e.ids.get(String(cardId)) || 0) + 1);
+          e.nWith++; if (isWin) e.wWith++;
+          e.dist.set(copies, (e.dist.get(copies) || 0) + 1);
+          if (countWin) e.distWin.set(copies, (e.distWin.get(copies) || 0) + 1);
+        };
+        let decks = 0, wins = 0, losses = 0, draws = 0, winDecks = 0;
+
+        /** 把一副牌（cardCounts 物件 或 deckEntries 陣列）累積進統計。 */
+        function absorb(cardsRef, result) {
+          const sets = deckToSets(cardsRef, nameMap);
+          const cls = classifyDeck(sets, rules);            // ⚠只算一次（分類是本端點最重的運算）
+          if (!cls.rule || String(cls.rule._id) !== ruleId) return;
+          decks++;
+          const isWin = result === 'win';
+          if (isWin) { wins++; winDecks++; } else if (result === 'loss') losses++; else draws++;
+          // 同一卡名可能有多個印刷版本 → 先併成「卡名 → 總張數」
+          const byName = new Map();
+          const entries = Array.isArray(cardsRef)
+            ? cardsRef.map((x) => [x && x.cardId, x && x.count])
+            : Object.keys(cardsRef).map((k) => [k, cardsRef[k]]);
+          for (const [cid, cnt] of entries) {
+            if (cid == null) continue;
+            const nm = normCardName(nameMap.get(String(cid)) || '');
+            if (!nm) continue;
+            const cur = byName.get(nm) || { copies: 0, id: String(cid) };
+            cur.copies += Number(cnt) || 0;
+            byName.set(nm, cur);
+          }
+          for (const [nm, v] of byName) bump(nm, v.id, v.copies, isWin, isWin);
+        }
+
+        if (source === 'casual') {
+          const q = buildCasualCleanFilter({ excludeAI, since });
+          const rows = await db.collection('matchRecords')
+            .find(q, { projection: { 'p1.cardCounts': 1, 'p2.cardCounts': 1, winner: 1 } })
+            .sort({ endedAt: -1 }).limit(20000).toArray();
+          for (const m of rows) {
+            for (const side of ['p1', 'p2']) {
+              const cc = m[side] && m[side].cardCounts;
+              if (!cc || !Object.keys(cc).length) continue;
+              absorb(cc, casualSideResult(m.winner, side === 'p1'));
+            }
+          }
+        } else {
+          const q = {};
+          if (since) q.finishedAt = { $gte: since };
+          const archives = await db.collection('tournamentArchives').find(q).sort({ finishedAt: -1 }).limit(200).toArray();
+          for (const a of archives) {
+            const deckByUid = new Map();
+            for (const p of (a.players || [])) if (p && p.uid) deckByUid.set(String(p.uid), p.deckEntries || []);
+            for (const m of (a.matches || [])) {
+              if (!m || m.bye || !m.winnerUid) continue;
+              for (const uid of [m.p1uid, m.p2uid]) {
+                if (!uid) continue;
+                const entries = deckByUid.get(String(uid));
+                if (!entries || !entries.length) continue;
+                absorb(entries, tournSideResult(m.winnerUid, uid));
+              }
+            }
+          }
+        }
+
+        if (!decks) {
+          const empty = { ruleId, name: target.name, source, since, sample: { decks: 0, wins: 0, losses: 0, draws: 0 },
+                          cards: [], representative60: [], representative60Win: [], winSample: 0, hiddenGems: [] };
+          _archDetailCache.set(ck, { at: now, data: empty });
+          return res.json(empty);
+        }
+
+        // 眾數張數（只在「有放這張卡」的牌組內取）＋ 代表印刷版本 id
+        const modeOf = (m) => {
+          let best = 0, bestN = -1;
+          for (const [cnt, n] of m) if (n > bestN || (n === bestN && cnt > best)) { best = cnt; bestN = n; }
+          return best;
+        };
+        const cards = [...C.values()].map((e) => {
+          let repId = null, repN = -1;
+          for (const [id, n] of e.ids) if (n > repN) { repId = id; repN = n; }
+          return {
+            name: e.name, repCardId: repId,
+            inclusion: e.nWith / decks,
+            modalCount: modeOf(e.dist),
+            modalCountWin: e.distWin.size ? modeOf(e.distWin) : null,
+            nWith: e.nWith, wWith: e.wWith,
+            nWithout: decks - e.nWith, wWithout: wins - e.wWith,
+            isInclude: mustHave.has(e.name),
+            _distWinN: [...e.distWin.values()].reduce((a, b) => a + b, 0),
+          };
+        }).sort((a, b) => b.inclusion - a.inclusion || b.nWith - a.nWith);
+
+        // 貪婪湊 60（同名 4 張上限；ACE SPEC 整副 1 張；基本能量無上限）
+        // ⚠TPOOL 定義在錦標賽段的另一個閉包，admin 段取不到（用了會 ReferenceError）→ 走本段自建的屬性表
+        const attrMap = await getCardAttrMap();
+        const isBasicEnergy = (id) => !!(id != null && attrMap.get(String(id))?.basicEnergy);
+        const isAceSpec = (id) => !!(id != null && attrMap.get(String(id))?.aceSpec);
+        function build60(list, useWinMode) {
+          const picked = []; let total = 0, aceUsed = false;
+          for (const c of list) {
+            if (total >= 60) break;
+            let copies = useWinMode ? (c.modalCountWin ?? c.modalCount) : c.modalCount;
+            if (!copies) continue;
+            if (isAceSpec(c.repCardId)) { if (aceUsed) continue; copies = 1; }
+            else if (!isBasicEnergy(c.repCardId)) copies = Math.min(copies, 4);
+            if (copies > 60 - total) copies = 60 - total;   // 尾端調整：砍張數優於漏整張卡
+            picked.push({ name: c.name, repCardId: c.repCardId, copies, inclusion: c.inclusion });
+            total += copies;
+            if (isAceSpec(c.repCardId)) aceUsed = true;
+          }
+          // 湊不滿（4 張 cap 砍過後可能 <60）→ 用採用率最高的基本能量補（唯一無上限、永遠合法）
+          if (total < 60) {
+            const be = picked.find((p) => isBasicEnergy(p.repCardId)) || list.find((c) => isBasicEnergy(c.repCardId));
+            if (be) {
+              const inList = picked.find((p) => p.repCardId === be.repCardId);
+              if (inList) inList.copies += (60 - total);
+              else picked.push({ name: be.name, repCardId: be.repCardId, copies: 60 - total, inclusion: be.inclusion });
+              total = 60;
+            }
+          }
+          return { list: picked, total };
+        }
+        const rep = build60(cards, false);
+        const repWin = build60(cards.filter((c) => c._distWinN > 0)
+          .sort((a, b) => (b._distWinN / (winDecks || 1)) - (a._distWinN / (winDecks || 1)) || b.nWith - a.nWith), true);
+        const in60 = new Set(rep.list.map((x) => x.name));
+
+        // ── 遺珠之憾：同原型內條件勝率差（Wilson 下界 − 基線）──
+        const gems = cards.filter((c) =>
+            !in60.has(c.name) && !c.isInclude && !isBasicEnergy(c.repCardId)
+            && c.inclusion >= 0.08 && c.inclusion <= 0.60
+            && c.nWith >= 8 && c.nWithout >= 8)
+          .map((c) => {
+            const wrWith = c.nWith ? c.wWith / c.nWith : 0;
+            const wrWithout = c.nWithout ? c.wWithout / c.nWithout : 0;
+            return { name: c.name, repCardId: c.repCardId, modalCount: c.modalCount,
+                     nWith: c.nWith, inclusion: c.inclusion, wrWith, wrWithout,
+                     score: wilsonLower(c.wWith, c.nWith, 1.64) - wrWithout };
+          })
+          .filter((g) => g.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 15);
+
+        const data = {
+          ruleId, name: target.name, source, since,
+          sample: { decks, wins, losses, draws }, winSample: winDecks,
+          cards: cards.map((c) => { const { _distWinN, ...rest } = c; return rest; }).slice(0, 120),
+          representative60: rep.list, representative60Total: rep.total,
+          representative60Win: repWin.list, representative60WinTotal: repWin.total,
+          hiddenGems: gems,
+        };
+        _archDetailCache.set(ck, { at: now, data });
+        if (_archDetailCache.size > 50) { const k = _archDetailCache.keys().next().value; _archDetailCache.delete(k); }
+        res.json(data);
+      } catch (e) {
+        console.warn('[deck-archetype-detail] error:', e.message);
+        res.status(500).json({ error: e.message });
+      }
+    });
+
     // ══ v0.89 牌組原型統計（admin 批次3）══════════════════════════════════════
     //   單位＝「每場對戰的每一側牌組」＝1 筆使用（一場貢獻 2 筆），勝負記到各側。
     //   休閒與錦標賽**分開**統計（資料品質不同：休閒含 AI/本機，錦標賽是正式對局）。
@@ -1905,10 +2178,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
 
         // ── 休閒（matchRecords）──沿用既有淨化規則（v0.98 只算有房號＝排 AI 與本機；v0.27/0.39 排中途離開）
         if (source === 'casual' || source === 'all') {
-          const q = {};
-          if (excludeAI) q.roomCode = { $type: 'string' };
-          if (since) q.endedAt = { $gte: since };
-          q.winReason = { $not: /中途離開|離開房間|斷線|斷開|退出|不在場|disconnect|技不如人|先行離開/i };
+          // v0.91：改用中央 buildCasualCleanFilter（單一來源，含離開場 finalTurn 門檻）
+          const q = buildCasualCleanFilter({ excludeAI, since });
           const rows = await db.collection('matchRecords')
             .find(q, { projection: { 'p1.cardCounts': 1, 'p2.cardCounts': 1, winner: 1 } })
             .sort({ endedAt: -1 }).limit(20000).toArray();
