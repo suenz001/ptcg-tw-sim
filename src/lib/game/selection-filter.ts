@@ -173,6 +173,10 @@ const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilte
  * 單卡求值。回傳 null = 此 (zone, filter) 批1 未收錄 → caller 走原 inline fallback。
  * 遷移完成後 unknown 一律回 true（保留現行 fallthrough 語義）+ lint 守新增。
  */
+/** deck-search 已收錄的「前綴型」filter（evaluateSelectionFilter 與 isKnownSelectionFilter 共用單一來源）。 */
+const DECK_SEARCH_NAME_PREFIXES = ['Name:', 'Pokemon:NamePrefix=', 'Pokemon:NameContains=',
+  'Pokemon:Name=', 'Pokemon:Names=', 'NameContains:', 'Card:', 'Basic:NamePrefix='] as const;
+
 export function evaluateSelectionFilter(
   zone: SelectionFilterZone,
   filter: string,
@@ -189,6 +193,22 @@ export function evaluateSelectionFilter(
     if (filter.startsWith('Name:')) return card.name === filter.slice(5);
     if (filter.startsWith('Pokemon:NamePrefix=')) return card.supertype === 'Pokemon' && card.name.startsWith(filter.slice(19));
     if (filter.startsWith('Pokemon:NameContains=')) return card.supertype === 'Pokemon' && card.name.includes(filter.slice(21));
+    // v6.027：把剩下四種「值是卡名字串」的 filter 一併收進中央（逐字對齊 UI inline，零行為變更）。
+    //   收進來的目的不只是收斂，更是讓 test-filter-yields-candidates（產能守衛）看得到它們——
+    //   這類 filter 一旦「卡名」與「卡型條件」對不上（例：NameContains: 只列物品卡，卻拿去搜寶可夢），
+    //   picker 會是空的、玩家體感「效果沒發動」，而引擎測試永遠是綠的。歷史上已重複發生兩次：
+    //   v3.58「Pokemon:脫殼忍者」被 generic Pokemon:<屬性> 吃掉、v5.155～v6.025「NameContains:瓦斯彈」。
+    if (filter.startsWith('Pokemon:Name=')) return card.supertype === 'Pokemon' && card.name === filter.slice('Pokemon:Name='.length);
+    if (filter.startsWith('Pokemon:Names=')) {
+      const ns = new Set(filter.slice('Pokemon:Names='.length).split(',').filter(Boolean));
+      return card.supertype === 'Pokemon' && ns.has(card.name);
+    }
+    // NameContains:X ＝【化石採掘場】專用語義：牌庫中名稱含 X 的**物品卡**（v5.155 建立）。
+    if (filter.startsWith('NameContains:')) {
+      return card.supertype === 'Trainer' && card.subtype === 'Item' && card.name.includes(filter.slice('NameContains:'.length));
+    }
+    if (filter.startsWith('Card:')) return card.name === filter.slice(5);
+    if (filter.startsWith('Basic:NamePrefix=')) return isBasicPokemonCard(card) && card.name.startsWith(filter.slice('Basic:NamePrefix='.length));
     return null;   // 其餘(TOP/Evolution/params/generic Pokemon:/BasicEnergy: 等)批次遷移 → caller fallback
   }
   if (zone === 'hand-discard') {
@@ -217,7 +237,10 @@ export function evaluateSelectionFilter(
 
 /** 此 (zone, filter) 是否已被中央求值器收錄（供 caller 判斷是否走 evaluator）。 */
 export function isKnownSelectionFilter(zone: SelectionFilterZone, filter: string): boolean {
-  if (zone === 'deck-search') return filter in DECK_SEARCH_PREDICATES;
+  // v6.027：deck-search 原本只判 exact，evaluator 支援的 prefix 規則全被漏掉 → engine Stage2 的
+  //   語義再驗證涵蓋不到這些 filter（公平性防呆有洞）。此處與 evaluateSelectionFilter 對齊。
+  if (zone === 'deck-search') return (filter in DECK_SEARCH_PREDICATES)
+    || DECK_SEARCH_NAME_PREFIXES.some((p) => filter.startsWith(p));
   if (zone === 'hand-discard') return (filter in HAND_DISCARD_PREDICATES)
     || filter.startsWith('BasicEnergy:') || filter.startsWith('Energy:');
   if (zone === 'discard-search') return (filter in DISCARD_SEARCH_PREDICATES)
