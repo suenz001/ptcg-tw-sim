@@ -114,6 +114,36 @@ sw.addEventListener('fetch', (event) => {
   event.respondWith(respond());
 });
 
+// v6.023 階段2 Web Push：伺服器推播進來（分頁關閉／iOS 凍結時的唯一途徑）。
+//   payload 由後端 sendPushToUids 送出：{ title, body, tag, requireInteraction }。
+//   ⚠userVisibleOnly 訂閱下**必須**顯示通知，否則瀏覽器會警告甚至撤銷訂閱 → 解析失敗也給預設文案。
+sw.addEventListener('push', (event) => {
+  let data: { title?: string; body?: string; tag?: string; requireInteraction?: boolean } = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* 非 JSON → 用預設 */ }
+  const title = data.title || '🔔 錦標賽通知';
+  const icon = new URL('icons/icon-192.png', sw.registration.scope.endsWith('/') ? sw.registration.scope : sw.registration.scope + '/').href;
+  event.waitUntil(sw.registration.showNotification(title, {
+    body: data.body || '請回到賽事頁查看。',
+    tag: data.tag || 'ptcg-t-push',
+    icon,
+    requireInteraction: data.requireInteraction === true,
+  }));
+});
+
+// 訂閱過期／被瀏覽器輪替時自動重訂（否則玩家會悄悄收不到推播）。
+//   ⚠此處拿不到使用者身分（無法呼叫需驗證的 subscribe 端點），僅重新向瀏覽器訂閱；
+//   真正的「送新訂閱到伺服器」由前端下次開啟頁面時的 subscribePush() 補上（它會 upsert）。
+sw.addEventListener('pushsubscriptionchange', (event) => {
+  const ev = event as ExtendableEvent & { oldSubscription?: PushSubscription };
+  ev.waitUntil((async () => {
+    try {
+      const old = ev.oldSubscription;
+      const key = old && (old.options as { applicationServerKey?: ArrayBuffer } | undefined)?.applicationServerKey;
+      if (key) await sw.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    } catch { /* 下次開頁由前端重訂 */ }
+  })());
+});
+
 // v6.022 錦標賽通知：點擊通知 → 聚焦既有分頁並用 SPA 導頁（不整頁 reload，避免重載整個 app 資源）。
 //   ⚠與 precache / cachesToDelete / version-skew 完全正交：不碰任何 cache 邏輯。
 sw.addEventListener('notificationclick', (event) => {

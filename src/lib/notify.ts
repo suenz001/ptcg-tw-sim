@@ -178,6 +178,59 @@ export async function sendTestNotification(): Promise<boolean> {
   return true;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// v6.023 階段2 Web Push：訂閱管理
+//   分頁關閉／iOS 被凍結時，改由伺服器推播（只推「報到開始」「可進場」兩個低頻事件；
+//   「換你行動」維持本地通知不推，避免對戰熱路徑壓垮主機）。
+//   ⚠訂閱與取消都要 best-effort：失敗只影響「關掉分頁後收不到」，絕不能擋住本地通知或對戰。
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** base64url VAPID 公鑰 → Uint8Array（PushManager.subscribe 要求）。 */
+function urlBase64ToUint8Array(base64: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+/**
+ * 向瀏覽器訂閱推播並把訂閱資料送到伺服器。
+ * @param api 呼叫錦標賽 API 的函式（沿用對戰頁既有 tApi，含 Firebase 身分驗證）
+ */
+export async function subscribePush(api: (path: string, body?: unknown) => Promise<unknown>): Promise<boolean> {
+  if (!hasWindow() || getPermission() !== 'granted') return false;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (!reg || !reg.pushManager) return false;
+    const info = await api('/push/pubkey') as { enabled?: boolean; publicKey?: string | null };
+    if (!info?.enabled || !info.publicKey) return false;   // 伺服器未啟用推播 → 靜默略過
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(info.publicKey),
+      });
+    }
+    await api('/push/subscribe', { subscription: sub.toJSON() });
+    return true;
+  } catch { return false; }   // 不支援/被拒/網路失敗 → 只失去「關分頁也收得到」，本地通知不受影響
+}
+
+/** 取消推播訂閱（玩家在設定關閉通知時呼叫）。 */
+export async function unsubscribePush(api: (path: string, body?: unknown) => Promise<unknown>): Promise<void> {
+  if (!hasWindow()) return;
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    if (sub) {
+      try { await api('/push/unsubscribe', { endpoint: sub.endpoint }); } catch { /* 伺服器端清不掉也無妨，推播失效會自動清 */ }
+      await sub.unsubscribe();
+    }
+  } catch { /* 忽略 */ }
+}
+
 /**
  * 掛 Service Worker 訊息監聽：使用者點擊通知後 SW 會 postMessage 過來，由前端用 SPA 導頁
  * （不整頁 reload，避免重載整個 app 資源）。

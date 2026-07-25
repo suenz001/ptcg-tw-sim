@@ -78,7 +78,8 @@
   // v6.022 錦標賽通知（本地通知；決策核心在 notify-core.ts 純函式、有單元測試）
   import { notifyScan, notifyTurn, shouldPromptOnLobby, requestNotifyPermission, markPrompted,
            getNotifyEnabled, saveNotifyEnabled, getPermission as getNotifyPermission,
-           sendTestNotification, isIOSNeedsInstall, initNotifyNav } from '$lib/notify';
+           sendTestNotification, isIOSNeedsInstall, initNotifyNav,
+           subscribePush, unsubscribePush } from '$lib/notify';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
@@ -5081,12 +5082,16 @@
     if (isTournament && !_notifyPromptChecked) {
       _notifyPromptChecked = true;
       if (shouldPromptOnLobby()) showNotifyPrompt = true;
+      // v6.023：已開通知者每次進賽事頁補訂閱一次（涵蓋訂閱過期/輪替、換裝置、階段1 就開了通知的舊玩家）
+      else if (getNotifyEnabled() && getNotifyPermission() === 'granted') void subscribePush(tApi);
     }
   });
   async function notifyPromptAccept() {
     showNotifyPrompt = false;
     notifyPerm = await requestNotifyPermission();
     notifyEnabled = getNotifyEnabled();
+    // v6.023：同時訂閱 Web Push（分頁關閉/iOS 凍結時仍收得到報到與進場通知）
+    if (notifyEnabled) void subscribePush(tApi);
   }
   function notifyPromptDecline() { showNotifyPrompt = false; markPrompted(true); }
 
@@ -10307,6 +10312,8 @@
                   notifyEnabled = want && getNotifyPermission() === 'granted';
                   saveNotifyEnabled(notifyEnabled);
                   notifyPerm = getNotifyPermission();
+                  // v6.023：開關連動 Web Push 訂閱
+                  if (notifyEnabled) void subscribePush(tApi); else void unsubscribePush(tApi);
                 }} />
               <span class="small" style="color:#9aa3b0">（報到開始、可進場、輪到你時提醒；此分頁需保持開啟）</span>
             </div>
