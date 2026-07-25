@@ -2112,7 +2112,9 @@ function renderDeckRules(el) {
       + '<td><b>' + escapeHtml(r.name) + '</b>' + (r.note ? '<div class="small muted">' + escapeHtml(r.note) + '</div>' : '') + ids + '</td>'
       + '<td>' + (inc || '<span class="small muted">—</span>') + '</td>'
       + '<td>' + (exc || '<span class="small muted">—</span>') + '</td>'
-      + '<td>' + (r.priority ?? 100) + '</td>'
+      + '<td title="條件越多＝描述越特定，一副牌同時符合多條規則時由條件多的那條勝出">'
+      + ((r.includes || []).length + (r.excludes || []).length
+         + (r.includeIds || []).length + (r.excludeIds || []).length) + ' 項</td>'
       + '<td><button class="tiny ghost" onclick="editDeckRule(\'' + rid + '\')">編輯</button> '
       + '<button class="tiny ghost" onclick="deleteDeckRule(\'' + rid + '\')">刪除</button></td>'
       + '</tr>';
@@ -2155,10 +2157,10 @@ function renderDeckRules(el) {
         <textarea id="rule-includes" placeholder="果蜜蟲&#10;角金魚" list="card-name-list"></textarea>
         <label>🚫 不能包含這些卡（一行一張；留空表示不限制）</label>
         <textarea id="rule-excludes" placeholder="蜜集大蛇ex"></textarea>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:120px;"><label>優先序（數字小者優先）</label><input id="rule-priority" type="number" value="100"></div>
-          <div style="flex:2;min-width:180px;"><label>備註（選填）</label><input id="rule-note" placeholder=""></div>
-        </div>
+        <!-- v1.57：優先序改由系統自動判定（條件較多＝較特定者優先），欄位保留但隱藏，
+             只在極少數「兩條規則條件數相同又同時命中」時才會用到。 -->
+        <input type="hidden" id="rule-priority" value="100">
+        <div><label>備註（選填）</label><input id="rule-note" placeholder=""></div>
         <label>🔒 鎖定特定卡片編號（進階，選填；同名不同效果時才需要。逗號分隔）</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input id="rule-include-ids" placeholder="必含的 cardId" style="flex:1;min-width:160px;">
@@ -2175,7 +2177,7 @@ function renderDeckRules(el) {
     </div>
     <div class="stats-box" style="padding:8px;overflow-x:auto;">
       ${rows
-        ? '<table><thead><tr><th>啟用</th><th>牌組名稱</th><th>必須包含</th><th>不能包含</th><th>優先序</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        ? '<table><thead><tr><th>啟用</th><th>牌組名稱</th><th>必須包含</th><th>不能包含</th><th title="一副牌同時符合多條規則時，條件較多（較特定）的那條勝出">條件數</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>'
         : '<div class="empty">尚未建立任何規則。先在上面填一條試試，記得按「預覽命中」確認卡名沒打錯。</div>'}
     </div>
 
@@ -2401,7 +2403,11 @@ function renderArchetypeStats() {
   + '</b>（掃描 ' + (d.scanned?.casualMatches || 0) + ' 場休閒 + ' + (d.scanned?.tournEvents || 0)
   + ' 場賽事）。若切換時間範圍後數字不變，代表<b>現有資料都落在該範圍內</b>——可比對這裡的掃描場數確認。'
   + '目前啟用中的規則 ' + (d.ruleCount || 0) + ' 條。統計為即時計算（快取 60 秒），改完規則按「計算統計」就會反映。'
-  + '一副牌同時符合多條規則時只計入優先序最小的那條。</div>';
+  + '<br>' + (d.multiHit
+      ? '⚠ 有 <b>' + d.multiHit + '</b> 副牌同時符合兩條以上的規則 —— 這些牌會歸給<b>條件較多（較特定）</b>的那條。'
+        + '若分類結果不如預期，可在較廣的那條規則加「不能包含」把它們排除掉。'
+      : '✅ 沒有任何一副牌同時符合兩條以上的規則，代表你的規則彼此互斥、分類不會有歧義。')
+  + '</div>';
 }
 
 function readRuleForm() {

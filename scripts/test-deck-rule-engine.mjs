@@ -19,9 +19,10 @@ function grabFn(name) {
   assert.ok(end > i, name + ' 找不到結尾');
   return src.slice(i, end + indent.length + 2);
 }
-const code = [grabFn('deckToSets'), grabFn('deckMatchesRule'), grabFn('classifyDeck')].join('\n')
-  + '\nreturn { deckToSets, deckMatchesRule, classifyDeck };';
-const { deckToSets, deckMatchesRule, classifyDeck } = new Function(code)();
+// ⚠classifyDeck 依賴 ruleStrictness（v0.93 起改「條件較嚴格者優先」），必須一起抽出來
+const code = [grabFn('deckToSets'), grabFn('deckMatchesRule'), grabFn('ruleStrictness'), grabFn('classifyDeck')].join('\n')
+  + '\nreturn { deckToSets, deckMatchesRule, ruleStrictness, classifyDeck };';
+const { deckToSets, deckMatchesRule, ruleStrictness, classifyDeck } = new Function(code)();
 
 // ── 現役卡池：建 cardId → 卡名 對照（與伺服器端 tournament-pool.json 同構）──
 const dir = join(ROOT, 'static/cards');
@@ -98,13 +99,37 @@ T('進階：includeIds / excludeIds 可鎖定特定印刷版本', () => {
   }
 });
 
-T('多規則命中時取優先序數字最小者，並回報全部命中的規則', () => {
+// ── v0.93：多規則命中改「條件較嚴格者優先」自動判定（Wilson 拍板，優先序降為 tie-break）──
+T('⭐多規則命中：條件較多（較特定）者勝出，不必看優先序', () => {
   const sets = deckToSets(deckOf(['裹蜜蟲', '角金魚']), nameMap);
-  const wide = { _id: 'r2', name: '草系通用', includes: ['裹蜜蟲'], excludes: [], priority: 50 };
-  const narrow = { _id: 'r1', name: '祭典熱舞', ...RULE, priority: 10 };
+  // wide 只有 1 個條件、narrow 有 3 個（2 必含 + 1 排除）→ narrow 勝
+  // 刻意讓 wide 的 priority 更小，證明「嚴格度」的優先層級高於 priority
+  const wide = { _id: 'r2', name: '草系通用', includes: ['裹蜜蟲'], excludes: [], priority: 1 };
+  const narrow = { _id: 'r1', name: '祭典熱舞', ...RULE, priority: 999 };
   const r = classifyDeck(sets, [wide, narrow]);
-  assert.equal(r.rule.name, '祭典熱舞', '應取 priority 較小的');
+  assert.equal(r.rule.name, '祭典熱舞', '條件較多者應勝出，即使它的 priority 數字較大');
   assert.equal(r.all.length, 2, '應回報兩條都命中');
+});
+
+T('條件數相同時才看優先序（tie-break，UI 已隱藏該欄位）', () => {
+  const sets = deckToSets(deckOf(['裹蜜蟲', '角金魚']), nameMap);
+  const a = { _id: 'ra', name: 'A型', includes: ['裹蜜蟲'], excludes: [], priority: 50 };
+  const b = { _id: 'rb', name: 'B型', includes: ['角金魚'], excludes: [], priority: 10 };
+  assert.equal(classifyDeck(sets, [a, b]).rule.name, 'B型', '同為 1 個條件 → priority 小者勝');
+});
+
+T('條件數與優先序都相同時，順序仍然穩定（不隨資料庫回傳順序飄動）', () => {
+  const sets = deckToSets(deckOf(['裹蜜蟲', '角金魚']), nameMap);
+  const a = { _id: 'ra', name: 'A型', includes: ['裹蜜蟲'], excludes: [], priority: 10 };
+  const b = { _id: 'rb', name: 'B型', includes: ['角金魚'], excludes: [], priority: 10 };
+  assert.equal(classifyDeck(sets, [a, b]).rule.name, classifyDeck(sets, [b, a]).rule.name,
+    '兩種輸入順序應得到同一個分類結果');
+});
+
+T('嚴格度計算涵蓋四種條件（含進階的鎖版本欄位）', () => {
+  assert.equal(ruleStrictness({ includes: ['a', 'b'], excludes: ['c'] }), 3);
+  assert.equal(ruleStrictness({ includes: ['a'], excludes: [], includeIds: ['1'], excludeIds: ['2'] }), 3);
+  assert.equal(ruleStrictness({}), 0, '沒有任何條件時應為 0，不可 throw');
 });
 
 T('都不符合 → 未分類（rule=null）', () => {
