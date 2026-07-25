@@ -167,15 +167,62 @@ export function notifyTurn(payload: { roomId: string; turn: number; apIdx: numbe
   void emitIntent(buildTurnIntent(payload), hidden);
 }
 
-/** 設定頁「發送測試通知」：略過背景判斷（玩家正在看設定頁，必須看得到結果）。 */
-export async function sendTestNotification(): Promise<boolean> {
-  if (!supported() || getPermission() !== 'granted') return false;
-  await showIntent({
+/**
+ * 設定頁「發送測試通知」：略過背景判斷（玩家正在看設定頁，必須看得到結果）。
+ * v6.024：回傳詳細結果供 UI 顯示——原本無論成功失敗都靜默，玩家按了沒反應完全無從判斷。
+ *   ⚠特別是 Windows：系統層級關閉通知或開啟「勿擾/專注輔助」時，瀏覽器**認為自己發送成功**、
+ *   不會 throw，但畫面上什麼都沒有。所以「送出成功」也要提示玩家去檢查系統設定。
+ */
+export async function sendTestNotification(): Promise<{ ok: boolean; via: string; hint: string }> {
+  if (!supported()) {
+    return { ok: false, via: 'unsupported', hint: isIOSNeedsInstall()
+      ? '此裝置需先「加入主畫面」並從主畫面開啟本站才支援通知。'
+      : '這個瀏覽器不支援通知功能。' };
+  }
+  if (getPermission() !== 'granted') {
+    return { ok: false, via: 'no-permission', hint: getPermission() === 'denied'
+      ? '通知已被瀏覽器封鎖，請點網址列鎖頭圖示 → 通知 → 允許。'
+      : '尚未取得通知權限，請先勾選上方的通知開關。' };
+  }
+  const intent: NotifyIntent = {
     kind: 'checkin', key: 'test', tag: 'ptcg-t-test',
     title: '🔔 通知測試',
     body: '通知已正常運作。賽事報到、可進場、輪到你行動時就會像這樣提醒你。',
-  });
-  return true;
+  };
+  // 先試 Service Worker（Android 必須；桌機也支援），失敗才退回頁面層 Notification
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    if (reg) {
+      const icon = new URL('icons/icon-192.png', reg.scope.endsWith('/') ? reg.scope : reg.scope + '/').href;
+      await reg.showNotification(intent.title, { body: intent.body, tag: intent.tag, icon, data: { kind: 'test' } });
+      return { ok: true, via: 'sw', hint: '已送出。若沒看到，請檢查 Windows 設定 → 系統 → 通知（總開關與 Edge／Chrome 皆需開啟），並關閉「勿讓我分心／專注輔助」；也可按 Win+N 查看通知中心。' };
+    }
+  } catch (e) {
+    return { ok: false, via: 'sw-error', hint: '透過背景服務發送失敗：' + ((e as Error)?.message ?? '未知錯誤') };
+  }
+  try {
+    new Notification(intent.title, { body: intent.body, tag: intent.tag });
+    return { ok: true, via: 'page', hint: '已送出（未使用背景服務）。若沒看到，請檢查系統通知設定與勿擾模式。' };
+  } catch (e) {
+    return { ok: false, via: 'page-error', hint: '發送失敗：' + ((e as Error)?.message ?? '未知錯誤') };
+  }
+}
+
+/** 設定頁診斷資訊：讓玩家（和維護者）一眼看出通知目前卡在哪一關，不必開開發者工具。 */
+export async function getNotifyDiagnostics(): Promise<{
+  supported: boolean; permission: string; enabled: boolean;
+  swRegistered: boolean; pushSubscribed: boolean; iosNeedsInstall: boolean;
+}> {
+  const out = {
+    supported: supported(), permission: getPermission(), enabled: getNotifyEnabled(),
+    swRegistered: false, pushSubscribed: false, iosNeedsInstall: isIOSNeedsInstall(),
+  };
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    out.swRegistered = !!reg;
+    if (reg?.pushManager) out.pushSubscribed = !!(await reg.pushManager.getSubscription());
+  } catch { /* 保持 false */ }
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

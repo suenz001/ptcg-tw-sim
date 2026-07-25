@@ -79,7 +79,7 @@
   import { notifyScan, notifyTurn, shouldPromptOnLobby, requestNotifyPermission, markPrompted,
            getNotifyEnabled, saveNotifyEnabled, getPermission as getNotifyPermission,
            sendTestNotification, isIOSNeedsInstall, initNotifyNav,
-           subscribePush, unsubscribePush } from '$lib/notify';
+           subscribePush, unsubscribePush, getNotifyDiagnostics, hasPrompted } from '$lib/notify';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
@@ -5071,6 +5071,16 @@
   let showNotifyPrompt = $state(false);
   let notifyIOSNeedsInstall = $state(false);
   let _notifyPromptChecked = false;
+  // v6.024 診斷：測試通知結果 + 目前卡在哪一關（免開發者工具）
+  let notifyTestMsg = $state<{ ok: boolean; hint: string } | null>(null);
+  let notifyDiag = $state<{ supported: boolean; permission: string; enabled: boolean; swRegistered: boolean; pushSubscribed: boolean; iosNeedsInstall: boolean } | null>(null);
+  async function refreshNotifyDiag() { try { notifyDiag = await getNotifyDiagnostics(); } catch { notifyDiag = null; } }
+  async function runNotifyTest() {
+    notifyTestMsg = null;
+    const r = await sendTestNotification();
+    notifyTestMsg = { ok: r.ok, hint: r.hint };
+    await refreshNotifyDiag();
+  }
   onMount(() => {
     notifyEnabled = getNotifyEnabled();
     notifyPerm = getNotifyPermission();
@@ -5082,6 +5092,9 @@
     if (isTournament && !_notifyPromptChecked) {
       _notifyPromptChecked = true;
       if (shouldPromptOnLobby()) showNotifyPrompt = true;
+      // v6.024：iOS Safari 未安裝成 PWA 時 Notification API 不存在 → 原本整個跳過，玩家什麼提示都沒有。
+      //   改為照樣顯示視窗，但內容換成「加入主畫面」引導（isIOSNeedsInstall 時模板會顯示該段）。
+      else if (isIOSNeedsInstall() && !hasPrompted()) { showNotifyPrompt = true; }
       // v6.023：已開通知者每次進賽事頁補訂閱一次（涵蓋訂閱過期/輪替、換裝置、階段1 就開了通知的舊玩家）
       else if (getNotifyEnabled() && getNotifyPermission() === 'granted') void subscribePush(tApi);
     }
@@ -9914,8 +9927,12 @@
         <p class="muted ios-hint">📱 iPhone / iPad 需先「加入主畫面」並從主畫面開啟本站，通知才會生效（需 iOS 16.4 以上）。</p>
       {/if}
       <div class="notify-prompt-btns">
-        <button class="btn-primary" onclick={() => notifyPromptAccept()}>開啟通知</button>
-        <button class="btn-secondary" onclick={() => notifyPromptDecline()}>不用了</button>
+        {#if notifyIOSNeedsInstall}
+          <button class="btn-primary" onclick={() => notifyPromptDecline()}>我知道了</button>
+        {:else}
+          <button class="btn-primary" onclick={() => notifyPromptAccept()}>開啟通知</button>
+          <button class="btn-secondary" onclick={() => notifyPromptDecline()}>不用了</button>
+        {/if}
       </div>
     </div>
   </div>
@@ -10317,17 +10334,27 @@
                 }} />
               <span class="small" style="color:#9aa3b0">（報到開始、可進場、輪到你時提醒；此分頁需保持開啟）</span>
             </div>
-            {#if notifyEnabled && notifyPerm === 'granted'}
-              <div class="setting-row">
-                <button class="btn-secondary" onclick={() => sendTestNotification()}>發送測試通知</button>
-                <span class="small" style="color:#9aa3b0">（確認通知在你的裝置上正常顯示）</span>
-              </div>
+            <div class="setting-row">
+              <button class="btn-secondary" onclick={() => runNotifyTest()}>發送測試通知</button>
+              <button class="btn-secondary" onclick={() => refreshNotifyDiag()}>檢查通知狀態</button>
+            </div>
+            {#if notifyTestMsg}
+              <p class="small" style={notifyTestMsg.ok ? 'color:#7cc4ff' : 'color:#e0a050'}>
+                {notifyTestMsg.ok ? '✅ ' : '⚠️ '}{notifyTestMsg.hint}
+              </p>
+            {/if}
+            {#if notifyDiag}
+              <p class="small" style="color:#9aa3b0">
+                狀態：瀏覽器支援 {notifyDiag.supported ? '✅' : '❌'}｜權限 {notifyDiag.permission === 'granted' ? '✅ 已允許' : (notifyDiag.permission === 'denied' ? '❌ 已封鎖' : '⏳ 尚未詢問')}｜開關 {notifyDiag.enabled ? '✅' : '❌'}｜背景服務 {notifyDiag.swRegistered ? '✅' : '❌'}｜推播訂閱 {notifyDiag.pushSubscribed ? '✅' : '❌'}
+              </p>
             {/if}
             {#if notifyPerm === 'denied'}
               <p class="small" style="color:#e0a050">⚠️ 通知已被瀏覽器封鎖。請點網址列的鎖頭圖示 → 通知 → 允許，再回來開啟。</p>
             {/if}
             {#if notifyIOSNeedsInstall}
               <p class="small" style="color:#e0a050">📱 iPhone / iPad 需先安裝才能收通知：Safari 分享鈕 → 加入主畫面，之後從主畫面圖示開啟本站（需 iOS 16.4 以上）。</p>
+            {:else if notifyDiag && !notifyDiag.supported}
+              <p class="small" style="color:#e0a050">⚠️ 這個瀏覽器不支援通知功能，本站無法提醒你（建議改用 Chrome／Edge／Firefox）。</p>
             {/if}
           {/if}
         </details>
