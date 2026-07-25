@@ -28,7 +28,7 @@ import {
   healResolver,
   getOwnBenchLimit,
 } from '../_shared';
-import { joinCardNames, abilityUsedAfterSwap, toBareCard } from '../_shared'; // v5.993 rescue 回牌庫裸化
+import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈)
 import { tryPromptPromoteActive } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
@@ -1731,27 +1731,31 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
 //      - instance 的 cardId 改成 stack[len-N] 的 cardId
 //      - evolvedFromStack 切到 stack.slice(0, len - N)
 //      - 設 evolvedThisTurn=true（達成「那個回合無法進化」）
-function isPsychicEvoOnField(insts: import('../../types').CardInstance[],
-                            pool: Map<string, import('$lib/cards/types').Card>): boolean {
-  return insts.some(c => {
+// v6.020：改回傳 iid 清單（gate 與 picker 同 predicate，杜絕漂移，v5.996 教訓）— 自己場上「進化的【超】寶可夢」
+function psychicEvoIids(insts: import('../../types').CardInstance[],
+                       pool: Map<string, import('$lib/cards/types').Card>): string[] {
+  return insts.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon' || card.pokemonType !== 'Psychic') return false;
     return card.subtype === 'Stage1' || card.subtype === 'Stage2'
       || card.stage === 'Stage1' || card.stage === 'Stage2';
-  });
+  }).map(c => c.iid);
 }
 regG('奇異時鐘', (st, idx, pool) => {
   const p = st.players[idx];
   const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
-  return isPsychicEvoOnField(fieldInsts, pool);
+  return psychicEvoIids(fieldInsts, pool).length > 0;
 });
-reg('奇異時鐘', (st, idx, _pool) => {
+reg('奇異時鐘', (st, idx, pool) => {
+  const p = st.players[idx];
+  const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
+  const validIids = psychicEvoIids(fieldInsts, pool);
   st = addLog(st, '奇異時鐘：選擇 1 隻自己的進化【超】寶可夢退化', idx);
   return withPending(st, {
     type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'odd-clock-step1',
-    params: { includeActive: true, label: '選擇要退化的【超】進化寶可夢' },
+    params: { includeActive: true, validIids, label: '選擇要退化的【超】進化寶可夢' },
   });
 });
 regR('odd-clock-step1', (st, idx, iids, _params, pool) => {

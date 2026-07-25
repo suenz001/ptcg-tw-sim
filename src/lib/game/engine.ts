@@ -13,7 +13,7 @@ import type { Card, EnergyType, Attack } from '$lib/cards/types';
 import { BENCH_SCRUB_LOCK_FLAGS } from './instance-flags';
 import type {
   GameState, GameAction, CardInstance,
-  PlayerState, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
+  PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
 import { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
@@ -761,7 +761,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
-import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy } from './effects/_shared';
+import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發

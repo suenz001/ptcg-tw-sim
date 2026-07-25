@@ -4,6 +4,7 @@
  * 嚴格按卡牌原文實裝。需新引擎機制者標 TODO 並 best-effort fallback。
  */
 
+import type { PlayerState } from '../../types'; // v6.020：補 type-only import(TS2304 scanner)
 import {
   regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle,
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS,

@@ -21,6 +21,7 @@
  *   - 雙方睡眠+下回合 +N（樹枕尾熊）
  */
 
+import type { PlayerState } from '../../types'; // v6.020：補 type-only import(TS2304 scanner)
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE, getAllAttachedTools } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate

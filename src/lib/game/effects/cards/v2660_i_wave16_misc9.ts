@@ -20,6 +20,7 @@
  *   - 雜 (1 張)
  */
 
+import type { PlayerState } from '../../types'; // v6.020：補 type-only import(TS2304 scanner)
 import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, getAllAttachedTools,
   bareCardsForReturn,
