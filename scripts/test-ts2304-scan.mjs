@@ -7,7 +7,9 @@ import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path'; import { fileURLToPath } from 'node:url';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 function walk(dir){ const o=[]; for(const e of readdirSync(dir)){ const p=join(dir,e); if(statSync(p).isDirectory())o.push(...walk(p)); else if(e.endsWith('.ts'))o.push(p); } return o; }
-const files = [...walk(join(ROOT,'src/lib/game')), ...walk(join(ROOT,'src/lib/cards'))];
+// v6.022：掃描範圍擴到整個 src/lib（原只有 game/cards）——通知模組等新檔也納入守衛。
+//   實測 125 檔 TS2304=0，無既有 noise。
+const files = walk(join(ROOT,'src/lib'));
 const options = {
   target: ts.ScriptTarget.ES2020,
   module: ts.ModuleKind.ESNext,

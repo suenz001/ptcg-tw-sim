@@ -75,6 +75,10 @@
   import { getAIAction } from '$lib/game/ai';
   import { VERSION } from '$lib/version';
   import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx } from '$lib/audio/sfx';
+  // v6.022 錦標賽通知（本地通知；決策核心在 notify-core.ts 純函式、有單元測試）
+  import { notifyScan, notifyTurn, shouldPromptOnLobby, requestNotifyPermission, markPrompted,
+           getNotifyEnabled, saveNotifyEnabled, getPermission as getNotifyPermission,
+           sendTestNotification, isIOSNeedsInstall, initNotifyNav } from '$lib/notify';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
@@ -244,6 +248,7 @@
     if (isTournament) {
       if (!tTickTimer) tTickTimer = setInterval(() => {
         tNow = Date.now() + tClockOffset;
+        notifyScan([], tMyMatch, tNow);   // v6.022 進場時間一到就通知（去重保證只發一次）
         // v5.591 輪詢看門狗：對戰中若輪詢停擺(>6s 沒成功回應)→ 重啟輪詢，避免 client 卡在舊狀態
         //   (看不到對手 KO 我方 → 無法換新戰鬥位 → 被閒置判敗)。伺服器權威，重抓永遠安全。
         if (tStep === 'playing' && game && !isTournSpectator && _tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000) {
@@ -294,11 +299,15 @@
             tAlertEvent = r?.event ?? null;
             tAlertMatch = r?.myMatch ?? null;
             if (r?.serverNow) tAlertOffset = r.serverNow - Date.now();
+            notifyScan(r?.events ?? [], tAlertMatch, Date.now() + tAlertOffset);   // v6.022 人在其他頁也能收到
           } catch { /* 未登入錦標賽 / 無賽事 / 網路 → 略過，不影響一般對戰 */ }
         };
         poll();
         tAlertPollTimer = setInterval(poll, 30000);
-        tAlertTickTimer = setInterval(() => { tAlertNow = Date.now() + tAlertOffset; }, 1000);
+        tAlertTickTimer = setInterval(() => {
+          tAlertNow = Date.now() + tAlertOffset;
+          notifyScan([], tAlertMatch, tAlertNow);   // v6.022 進場時間一到就通知（去重保證只發一次）
+        }, 1000);
       }
     } else {
       if (tAlertPollTimer) { clearInterval(tAlertPollTimer); tAlertPollTimer = null; }
@@ -4190,6 +4199,7 @@
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       tEvents = Array.isArray(r.events) ? r.events : [];
       tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null; tMyBye = r.myBye ?? null;
+      notifyScan(tEvents, tMyMatch, Date.now() + tClockOffset);   // v6.022 報到開始 / 可進場（僅背景時發）
       // 預填暱稱：用任一已報名賽事的暱稱
       if (!tNickname) {
         const mine = tEvents.find((e: any) => e.registered && e.myName);
@@ -5054,6 +5064,32 @@
   //   - 本機 2P 下 myIdx 跟著 activePlayerIndex 切 → 永遠「你的回合」（從新操作者視角，直覺正確）
   //   - 連線 / AI 下 myIdx 固定 → 對手 END_TURN 時顯示「你的回合」、自己 END_TURN 時顯示「對手回合」
   //   - 用普通 let 變數 _prevTurnPlayerIdx 當 prev tracker（不在 $state，不 trigger reactivity）
+  // v6.022 通知：設定開關 / 首次詢問視窗 / iOS 安裝引導
+  let notifyEnabled = $state(false);
+  let notifyPerm = $state<'granted' | 'denied' | 'default'>('default');
+  let showNotifyPrompt = $state(false);
+  let notifyIOSNeedsInstall = $state(false);
+  let _notifyPromptChecked = false;
+  onMount(() => {
+    notifyEnabled = getNotifyEnabled();
+    notifyPerm = getNotifyPermission();
+    notifyIOSNeedsInstall = isIOSNeedsInstall();
+    initNotifyNav((url) => { try { if (!location.href.startsWith(url)) goto(url); } catch { /* 導頁失敗不影響對戰 */ } });
+  });
+  // 首次進錦標賽大廳時詢問一次（Wilson 決策：不是一進站、也不是報名時）
+  $effect(() => {
+    if (isTournament && !_notifyPromptChecked) {
+      _notifyPromptChecked = true;
+      if (shouldPromptOnLobby()) showNotifyPrompt = true;
+    }
+  });
+  async function notifyPromptAccept() {
+    showNotifyPrompt = false;
+    notifyPerm = await requestNotifyPermission();
+    notifyEnabled = getNotifyEnabled();
+  }
+  function notifyPromptDecline() { showNotifyPrompt = false; markPrompted(true); }
+
   let turnBanner = $state<{ text: string; timestamp: number } | null>(null);
   let _prevTurnPlayerIdx = -1;
   $effect(() => {
@@ -5067,6 +5103,10 @@
       turnBanner = { text, timestamp: ts };
       // v3.91：播放回合切換音效（清亮上行三音 C5→E5→G5）
       playSfx('turn-start');
+      // v6.022 換你行動通知（僅錦標賽對戰中 + 分頁在背景時；同回合去重 + 同房間 30 秒節流）
+      if (isMine && isTournament && tStep === 'playing' && tActiveRoom) {
+        notifyTurn({ roomId: String(tActiveRoom), turn: game.turn, apIdx: newIdx });
+      }
       setTimeout(() => {
         // 1.5s 後若仍是同一次顯示 → 清掉（避免 race：若中途又切回合，新 banner 蓋掉舊的）
         if (turnBanner?.timestamp === ts) turnBanner = null;
@@ -9857,7 +9897,26 @@
   {/if}
 
   <!-- v3.900 回合切換 banner — 全螢幕中央彈「你的回合 / 對手回合」大字 1.5s ─────── -->
-  {#if turnBanner}
+  <!-- v6.022 錦標賽通知：首次進大廳詢問（先用自訂視窗問意願，按下才向瀏覽器要權限，
+     避免玩家直覺按掉導致瀏覽器永久封鎖、之後很難再開） -->
+{#if showNotifyPrompt}
+  <div class="modal-overlay notify-prompt-overlay" role="dialog" aria-modal="true" aria-label="開啟賽事通知">
+    <div class="notify-prompt-modal">
+      <h3>🔔 開啟賽事通知？</h3>
+      <p>開放報到、輪到你可以進場、以及對戰中輪到你行動時，就算你切到別的分頁或鎖屏，也會跳通知提醒你。</p>
+      <p class="muted">此分頁需保持開啟；你正在看畫面時不會打擾你。隨時可在設定中關閉。</p>
+      {#if notifyIOSNeedsInstall}
+        <p class="muted ios-hint">📱 iPhone / iPad 需先「加入主畫面」並從主畫面開啟本站，通知才會生效（需 iOS 16.4 以上）。</p>
+      {/if}
+      <div class="notify-prompt-btns">
+        <button class="btn-primary" onclick={() => notifyPromptAccept()}>開啟通知</button>
+        <button class="btn-secondary" onclick={() => notifyPromptDecline()}>不用了</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if turnBanner}
     <div class="turn-banner-overlay" transition:fade={{ duration: 200 }}>
       <div class="turn-banner-content">
         <div class="turn-banner-pokeball">⚪</div>
@@ -10238,6 +10297,31 @@
               <input id="play-hidden" type="checkbox" checked={playWhenHidden} onchange={(e) => { playWhenHidden = e.currentTarget.checked; savePlayWhenHidden(playWhenHidden); }} />
               <span class="small" style="color:#9aa3b0">（讓你聽 ready go 知道對戰開始）</span>
             </div>
+            <!-- v6.022 錦標賽通知開關（與上方「背景音效」成對：一個用聽的、一個用跳通知的） -->
+            <div class="setting-row">
+              <label for="notify-enabled">🔔 錦標賽背景通知：</label>
+              <input id="notify-enabled" type="checkbox" checked={notifyEnabled}
+                onchange={async (e) => {
+                  const want = e.currentTarget.checked;
+                  if (want && notifyPerm !== 'granted') { notifyPerm = await requestNotifyPermission(); }
+                  notifyEnabled = want && getNotifyPermission() === 'granted';
+                  saveNotifyEnabled(notifyEnabled);
+                  notifyPerm = getNotifyPermission();
+                }} />
+              <span class="small" style="color:#9aa3b0">（報到開始、可進場、輪到你時提醒；此分頁需保持開啟）</span>
+            </div>
+            {#if notifyEnabled && notifyPerm === 'granted'}
+              <div class="setting-row">
+                <button class="btn-secondary" onclick={() => sendTestNotification()}>發送測試通知</button>
+                <span class="small" style="color:#9aa3b0">（確認通知在你的裝置上正常顯示）</span>
+              </div>
+            {/if}
+            {#if notifyPerm === 'denied'}
+              <p class="small" style="color:#e0a050">⚠️ 通知已被瀏覽器封鎖。請點網址列的鎖頭圖示 → 通知 → 允許，再回來開啟。</p>
+            {/if}
+            {#if notifyIOSNeedsInstall}
+              <p class="small" style="color:#e0a050">📱 iPhone / iPad 需先安裝才能收通知：Safari 分享鈕 → 加入主畫面，之後從主畫面圖示開啟本站（需 iOS 16.4 以上）。</p>
+            {/if}
           {/if}
         </details>
 
@@ -14280,6 +14364,29 @@
   .btn-undo-cancel:hover { background: linear-gradient(180deg, #ef4444, #b91c1c); }
 
   /* v4.75 對手請求悔棋 modal */
+  /* v6.022 錦標賽通知：首次詢問視窗 */
+  .notify-prompt-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .notify-prompt-modal {
+    background: #1a1a2e;
+    border: 2px solid #4a9eff;
+    border-radius: 12px;
+    padding: 24px 28px;
+    max-width: 460px;
+    width: 90vw;
+    color: #e0e0e0;
+    box-shadow: 0 8px 32px rgba(74, 158, 255, 0.3);
+  }
+  .notify-prompt-modal h3 { margin: 0 0 12px 0; color: #7cc4ff; font-size: 20px; }
+  .notify-prompt-modal p { margin: 8px 0; line-height: 1.6; }
+  .notify-prompt-modal .muted { color: #9aa3b0; font-size: 13px; }
+  .notify-prompt-modal .ios-hint { color: #e0a050; }
+  .notify-prompt-btns { display: flex; gap: 12px; margin-top: 18px; justify-content: flex-end; }
+
   .undo-modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0, 0, 0, 0.65);

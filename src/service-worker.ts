@@ -7,6 +7,7 @@
 // 使用 $service-worker 虛擬模組取得 build / files / prerendered / version。
 import { build, files, prerendered, version } from '$service-worker';
 import { cachesToDelete } from '$lib/sw-policy';
+import { resolveClickUrl } from '$lib/notify-core'; // v6.022 通知點擊導頁(base path 由 scope 推)
 
 // Cast self to ServiceWorkerGlobalScope so TS knows the SW APIs.
 const sw = self as unknown as ServiceWorkerGlobalScope;
@@ -111,4 +112,21 @@ sw.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(respond());
+});
+
+// v6.022 錦標賽通知：點擊通知 → 聚焦既有分頁並用 SPA 導頁（不整頁 reload，避免重載整個 app 資源）。
+//   ⚠與 precache / cachesToDelete / version-skew 完全正交：不碰任何 cache 邏輯。
+sw.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = resolveClickUrl(sw.registration.scope);
+  event.waitUntil((async () => {
+    const cs = await sw.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const target = cs.find((c) => c.url.startsWith(sw.registration.scope)) ?? cs[0];
+    if (target) {
+      try { await target.focus(); } catch { /* 部分平台 focus 受限，仍送導頁訊息 */ }
+      target.postMessage({ type: 'ptcg-notify-nav', url });
+    } else {
+      await sw.clients.openWindow(url);
+    }
+  })());
 });
