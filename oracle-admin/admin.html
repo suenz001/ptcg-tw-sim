@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.64</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.65</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -682,10 +682,20 @@ async function api(path, options = {}) {
   if (!currentUser) return { error: 'not logged in' };
   async function fetchWithToken(forceRefresh) {
     const idToken = await currentUser.getIdToken(forceRefresh);
+    // ⚠v1.65 事故:送了 JSON 字串卻沒帶 Content-Type,express.json() **不會解析**,
+    //   伺服器端 req.body 就是空的 —— 而且不會有任何錯誤,端點還照樣回 200。
+    //   (實例:支援型寶可夢清單 POST 漏帶 header → 後端收到空 body → 把清單存成空陣列
+    //    還回 ok:true → 使用者點了「沒反應」,查不出原因。)
+    //   全站 20 個 POST 有 18 個各自手寫這個 header ＝ 遲早有人漏,在這裡統一補掉。
+    //   ⚠只對「字串 body」自動補:FormData / Blob 必須讓瀏覽器自己決定 Content-Type
+    //     (FormData 需要帶 boundary,手動指定會直接壞掉)。
+    const autoHeaders = {};
+    if (typeof options.body === 'string') autoHeaders['Content-Type'] = 'application/json';
     return fetch(path, {
       ...options,
       headers: {
         'Authorization': 'Bearer ' + idToken,
+        ...autoHeaders,
         ...(options.headers || {}),
       },
     });
@@ -2495,7 +2505,8 @@ window.addSupportPokemon = async function (name) {
   const cur = await api('/api/admin/support-pokemon');
   const names = (cur && Array.isArray(cur.names)) ? cur.names : [];
   if (names.includes(name)) { alert('「' + name + '」已經在支援型清單裡了。'); return; }
-  const r = await api('/api/admin/support-pokemon', { method: 'POST', body: JSON.stringify({ names: names.concat([name]) }) });
+  const r = await api('/api/admin/support-pokemon', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names: names.concat([name]) }) });
   if (!r || r.error) { alert('加入失敗：' + (r?.error || '?')); return; }
   await loadArchetypeStats();   // 後端已清快取，重算即可看到它從清單消失
 };
@@ -2521,7 +2532,8 @@ window.saveSupportPokemon = async function () {
   const ta = document.getElementById('sup-poke-ta');
   if (!ta) return;
   const names = ta.value.split('\n').map((s) => s.trim()).filter(Boolean);
-  const r = await api('/api/admin/support-pokemon', { method: 'POST', body: JSON.stringify({ names }) });
+  const r = await api('/api/admin/support-pokemon', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ names }) });
   if (!r || r.error) { alert('儲存失敗：' + (r?.error || '?')); return; }
   closeModal();
   await loadArchetypeStats();
@@ -2602,7 +2614,13 @@ async function miLogo() {
   _miLogoTried = true;
   try {
     const img = new Image();
-    img.src = 'icons/icon-192.png?v=1.64';
+    // ⚠v1.65：用**主站**的紅白球 icon，不是 admin 自己的紫色 ADMIN icon ——
+    //   這張圖是要發給玩家的，落款當然要是玩家認得的站台識別。
+    //   ⚠但**不可以**直接連 www.ptcg-tw-sim.com 的圖：跨來源圖片會把 canvas 標成
+    //     tainted，toBlob() 直接拋 SecurityError、整張圖匯不出來。
+    //     所以是把主站的 icon 複製一份到 oracle-admin/icons/site-icon-192.png（同源）。
+    //     update-admin-full.bat 本來就會整包上傳 icons/，會一併帶上去。
+    img.src = 'icons/site-icon-192.png?v=1.65';
     await img.decode();
     _miLogo = img;
   } catch (e) { _miLogo = null; }   // 載不到就退成純文字站名，不讓整張圖產不出來
@@ -2707,61 +2725,71 @@ async function miDraw(srcKey, cur, trend, days) {
   ctx.fillText(S.label + '　・　' + period + '　・　共 ' + total.toLocaleString('zh-TW') + ' 副',
                MI.PAD + 24, 234);
 
-  // ── 排行區（260–1170）：10 列 × 88，列距 3 ──
+  // ── 欄位表頭（玩家不會知道 bar 跟右邊那個大數字各是什麼，一定要標）──
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.dim; miFont(ctx, 22, false);
+  ctx.fillText('牌組', 116, 268);
+  ctx.fillText('使用率 ・ 使用次數', 508, 268);
+  ctx.textAlign = 'right';
+  ctx.fillText('勝率', 1012, 268);
+
+  // ── 排行區（286–1173）：10 列 × 86，列距 3 ──
   // 版面：排名 48–102｜名稱與 bar 116–690｜勝率右對齊 1012
   const maxShare = Math.max.apply(null, rows.map((r) => share(r.usage))) || 1;
   rows.forEach((r, i) => {
-    const y = 260 + i * 91;
-    ctx.fillStyle = K.row; miRR(ctx, MI.PAD, y, MI.W - MI.PAD * 2, 88, 12); ctx.fill();
+    const y = 286 + i * 89;
+    ctx.fillStyle = K.row; miRR(ctx, MI.PAD, y, MI.W - MI.PAD * 2, 86, 12); ctx.fill();
     if (i < 3) {   // 前三名左緣加獎牌色邊條
       ctx.fillStyle = [K.r1, K.r2, K.r3][i];
-      miRR(ctx, MI.PAD, y, 5, 88, 3); ctx.fill();
+      miRR(ctx, MI.PAD, y, 5, 86, 3); ctx.fill();
     }
     ctx.textAlign = 'center';
     ctx.fillStyle = i < 3 ? K.r1 : K.dim; miFont(ctx, 34, true);
-    ctx.fillText(String(i + 1), MI.PAD + 34, y + 44);
+    ctx.fillText(String(i + 1), MI.PAD + 34, y + 43);
 
     // 上層：原型名（＋趨勢）
     ctx.textAlign = 'left';
     ctx.fillStyle = K.txt; miFont(ctx, 32, true);
-    ctx.fillText(miFit(ctx, r.name, 360), 116, y + 27);
+    ctx.fillText(miFit(ctx, r.name, 360), 116, y + 26);
     const t = trend && trend.ok ? trend.by.get(String(r.ruleId)) : null;
     if (t && t.isNew) {
       miFont(ctx, 22, true);
-      const w = ctx.measureText('NEW').width + 20;
-      ctx.fillStyle = K.r1; miRR(ctx, 500, y + 14, w, 27, 13); ctx.fill();
+      const w = ctx.measureText('新登場').width + 20;
+      ctx.fillStyle = K.r1; miRR(ctx, 500, y + 13, w, 27, 13); ctx.fill();
       ctx.fillStyle = K.bg1; ctx.textAlign = 'center';
-      ctx.fillText('NEW', 500 + w / 2, y + 28);
+      ctx.fillText('新登場', 500 + w / 2, y + 26);
       ctx.textAlign = 'left';
     } else if (t && typeof t.dPP === 'number') {
-      // ±1.5pp 以內視為雜訊，畫成灰色「–」。不設門檻的話 ±0.2pp 也會被讀成趨勢。
+      // ±1.5 個百分點以內視為雜訊，畫成灰色「持平」。不設門檻的話 ±0.2 也會被讀成趨勢。
+      // ⚠給玩家看的圖不寫「pp」「n=」這類統計術語，一律講人話。
       const up = t.dPP >= 1.5, dn = t.dPP <= -1.5;
-      ctx.fillStyle = up ? K.up : (dn ? K.dn : K.mid); miFont(ctx, 25, true);
-      ctx.fillText((up ? '▲ +' : (dn ? '▼ ' : '– ')) + t.dPP.toFixed(1) + 'pp', 500, y + 27);
+      ctx.fillStyle = up ? K.up : (dn ? K.dn : K.mid); miFont(ctx, 24, true);
+      ctx.fillText(up ? '▲ 較上期 +' + t.dPP.toFixed(1) + '%'
+                 : (dn ? '▼ 較上期 ' + t.dPP.toFixed(1) + '%' : '－ 與上期持平'), 500, y + 26);
     }
 
     // 下層：使用率長條（以榜內最大佔比為滿長）＋ 佔比與樣本數
     const bw = Math.max(6, Math.round(380 * share(r.usage) / maxShare));
     const g = ctx.createLinearGradient(116, 0, 116 + bw, 0);
     g.addColorStop(0, S.a1); g.addColorStop(1, S.a2);
-    ctx.fillStyle = K.ln; miRR(ctx, 116, y + 54, 380, 16, 8); ctx.fill();
-    ctx.fillStyle = g; miRR(ctx, 116, y + 54, bw, 16, 8); ctx.fill();
+    ctx.fillStyle = K.ln; miRR(ctx, 116, y + 52, 380, 16, 8); ctx.fill();
+    ctx.fillStyle = g; miRR(ctx, 116, y + 52, bw, 16, 8); ctx.fill();
     ctx.fillStyle = K.dim; miFont(ctx, 23, false);
-    ctx.fillText(miPct(share(r.usage)) + '　・　n=' + r.usage, 508, y + 63);
+    ctx.fillText(miPct(share(r.usage)) + '　・　' + r.usage + ' 次', 508, y + 60);
 
     // 右欄：勝率大數字（三段色）。⚠樣本 <10 副一律顯示「—」，不管實際值多少。
     ctx.textAlign = 'right';
     if (!r.sampleOk || r.winRate === null || r.winRate === undefined) {
       ctx.fillStyle = K.mid; miFont(ctx, 40, true);
-      ctx.fillText('—', 1012, y + 34);
+      ctx.fillText('—', 1012, y + 32);
       ctx.fillStyle = K.dim; miFont(ctx, 21, false);
-      ctx.fillText('樣本少', 1012, y + 66);
+      ctx.fillText('資料太少', 1012, y + 64);
     } else {
       ctx.fillStyle = r.winRate >= 0.52 ? K.up : (r.winRate < 0.48 ? K.dn : K.mid);
       miFont(ctx, 46, true);
-      ctx.fillText(miPct(r.winRate), 1012, y + 34);
+      ctx.fillText(miPct(r.winRate), 1012, y + 32);
       ctx.fillStyle = K.dim; miFont(ctx, 21, false);
-      ctx.fillText('勝率', 1012, y + 66);
+      ctx.fillText('勝率', 1012, y + 64);
     }
   });
 
@@ -2771,11 +2799,11 @@ async function miDraw(srcKey, cur, trend, days) {
   const u = blk.unclassified || {};
   ctx.textAlign = 'left';
   ctx.strokeStyle = K.ln; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(MI.PAD, 1184); ctx.lineTo(MI.W - MI.PAD, 1184); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(MI.PAD, 1192); ctx.lineTo(MI.W - MI.PAD, 1192); ctx.stroke();
   ctx.fillStyle = K.dim; miFont(ctx, 24, false);
   ctx.fillText('未分類 ' + (u.usage || 0).toLocaleString('zh-TW') + ' 副（'
     + miPct(share(u.usage || 0)) + '　・　勝率 ' + (u.winRate === null || u.winRate === undefined ? '—' : miPct(u.winRate))
-    + '）　・　分類規則持續擴充中', MI.PAD, 1216);
+    + '）　・　分類規則持續擴充中', MI.PAD, 1222);
 
   // ── 頁腳（1250–1350）：網址在圖上出現兩次（頂部小、底部大置中），
   //    被裁切時至少留一個。──
@@ -2787,11 +2815,12 @@ async function miDraw(srcKey, cur, trend, days) {
   ctx.fillStyle = K.txt;
   ctx.fillText(MI_URL, cx + (logo ? 18 : 0), 1284);
   ctx.fillStyle = K.dim; miFont(ctx, 22, false);
+  // ⚠給玩家看的圖，說明一律講人話 —— 不寫 pp / n= / 樣本數 這類統計術語。
   const foot = (trend && trend.ok)
-    ? '對比期間：' + miDate(trend.prevFrom) + '–' + miDate(trend.prevTo)
-      + '（▲▼ 為使用率變化，門檻 ±1.5pp）　・　樣本 < 10 副之勝率以 — 表示'
-    : '本期為單期快照，未顯示趨勢' + (trend && trend.reason ? '（' + trend.reason + '）' : '')
-      + '　・　樣本 < 10 副之勝率以 — 表示';
+    ? '▲▼ 是與上一期（' + miDate(trend.prevFrom) + '–' + miDate(trend.prevTo)
+      + '）相比的使用率增減，變化不到 1.5% 視為持平　・　使用不到 10 次的牌組不顯示勝率'
+    : '本期為單期成績，未與上期比較' + (trend && trend.reason ? '（' + trend.reason + '）' : '')
+      + '　・　使用不到 10 次的牌組不顯示勝率';
   ctx.fillText(foot, cx, 1322);
   return cv;
 }

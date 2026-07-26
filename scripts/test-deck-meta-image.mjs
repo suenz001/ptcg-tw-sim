@@ -21,6 +21,7 @@ import assert from 'node:assert';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
+const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
 
 let pass = 0, fail = 0;
 const T = (n, fn) => { try { fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
@@ -172,7 +173,7 @@ T('⭐趨勢停用時圖上要說明原因，不可默默不畫箭頭（會被�
   const i = adm.indexOf('const foot =');
   const body = adm.slice(i, adm.indexOf('ctx.fillText(foot', i));
   assert.ok(/trend\.reason/.test(body), '頁腳要帶上停用理由');
-  assert.ok(/單期快照/.test(body), '要明講這是單期快照');
+  assert.ok(/未與上期比較/.test(body), '要明講沒有跟上期比較');
 });
 
 T('圖上要有網站網址與 logo（社群轉發的落款）', () => {
@@ -226,6 +227,83 @@ T('有預覽再下載，而不是按一下直接存檔', () => {
 T('統計還沒算之前匯出鈕是 disabled', () => {
   assert.ok(/id="meta-img-btn"[\s\S]{0,200}disabled/.test(adm), '按鈕初始應 disabled');
   assert.ok(/_mib\.disabled = false/.test(adm), '統計渲染後才啟用');
+});
+
+// ══ v1.65 追加：圖是給「玩家」看的，不是給我看的 ═════════════════════════
+T('⭐⭐落款用主站的紅白球 icon，不是 admin 自己的紫色 ADMIN icon', () => {
+  const i = adm.indexOf('async function miLogo(');
+  const body = adm.slice(i, adm.indexOf('\n}', i));
+  assert.ok(/icons\/site-icon-192\.png/.test(body),
+    '要用 icons/site-icon-192.png（主站紅白球的同源副本）');
+  assert.ok(!/icons\/icon-192\.png/.test(body),
+    'admin 的 icon-192.png 是紫色 ADMIN 圖示 —— 發給玩家的圖不能用它當落款');
+});
+
+T('⭐⭐logo 不可直連主站網址（跨來源會讓 canvas tainted，toBlob 直接拋錯匯不出圖）', () => {
+  const i = adm.indexOf('async function miLogo(');
+  const body = adm.slice(i, adm.indexOf('\n}', i));
+  assert.ok(!/https?:\/\//.test(body.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '')),
+    '不可用絕對網址載 logo —— 必須是同源的相對路徑，否則 toBlob() 會拋 SecurityError');
+});
+
+T('⭐⭐圖上不得出現統計術語（pp / n= 一般玩家看不懂）', () => {
+  const i = adm.indexOf('async function miDraw(');
+  const body = adm.slice(i, adm.indexOf('\nlet _miBusy', i))
+    .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');   // 註解裡可以解釋這些名詞
+  const bad = [];
+  if (/'[^']*\bpp\b[^']*'/.test(body) || /\+\s*'pp'/.test(body)) bad.push('pp（百分點）');
+  if (/n=/.test(body)) bad.push('n=（樣本數）');
+  if (/樣本/.test(body)) bad.push('樣本');
+  assert.deepEqual(bad, [],
+    '這張圖是要發給玩家的，不可出現：' + bad.join('、') + ' —— 請改成人話（如「較上期 +2.3%」「使用 142 次」）');
+});
+
+T('⭐排行有欄位表頭（不標的話玩家不知道長條與右邊的大數字各是什麼）', () => {
+  const i = adm.indexOf('async function miDraw(');
+  const body = adm.slice(i, adm.indexOf('\nlet _miBusy', i));
+  assert.ok(/欄位表頭/.test(body) || (/'使用率/.test(body) && /'勝率'/.test(body)),
+    '排行區上方要標出「使用率」與「勝率」兩欄');
+});
+
+// ══ v1.65 事故回歸鎖：POST 漏 Content-Type → body 靜默不被解析 ════════════
+// 真實事故：點「吉雉雞ex」把它加進支援型清單，結果清單毫無變化。
+//   根因不在後端邏輯，而是前端 POST **漏帶 Content-Type: application/json**，
+//   express.json() 因此不解析 body → 後端拿到空的 req.body →
+//   舊寫法「不是陣列就當空陣列」**靜默把整份清單存成空的、還回 ok:true**。
+//   全程沒有任何錯誤訊息，使用者只看得到「點了沒反應」。
+T('⭐⭐api() 送字串 body 時自動補 Content-Type（全站 20 個 POST 靠各自手寫遲早漏）', () => {
+  const i = adm.indexOf('async function api(path');
+  const body = adm.slice(i, adm.indexOf('\n}', i));
+  assert.ok(/typeof options\.body === 'string'/.test(body) && /application\/json/.test(body),
+    "api() 應在字串 body 時自動補 Content-Type");
+  assert.ok(/typeof options\.body === 'string'/.test(body),
+    '必須限定字串 body —— FormData 需要瀏覽器自己帶 boundary，手動指定會直接壞掉');
+});
+
+T('⭐⭐後端不可把「body 沒收到」靜默當成「使用者要清空清單」', () => {
+  const i = pat.indexOf("app.post('/api/admin/support-pokemon'");
+  const body = pat.slice(i, pat.indexOf('\n  });', i));
+  assert.ok(/status\(400\)/.test(body), '應在 body 無法解析時回 400');
+  assert.ok(/Content-Type/.test(body), '錯誤訊息要點出可能是漏帶 Content-Type，否則沒人查得到');
+  assert.ok(!/Array\.isArray\(req\.body\.names\)\s*\)\s*\?\s*req\.body\.names\s*:\s*\[\]/.test(body),
+    '不可用「不是陣列就當空陣列」—— 那會在 body 沒解析時把整份清單清空且無聲無息');
+});
+
+T('⭐所有帶 body 的 POST 都能送出 JSON（自動補或自己寫，兩者至少有一）', () => {
+  const auto = /typeof options\.body === 'string'/.test(adm);
+  const bad = [];
+  for (const m of adm.matchAll(/api\(\s*['"`][^'"`]*['"`]\s*,\s*\{/g)) {
+    const o = adm.indexOf('{', m.index + m[0].length - 1);
+    let d = 0, end = o;
+    for (let i = o; i < adm.length; i++) {
+      if (adm[i] === '{') d++;
+      else if (adm[i] === '}') { d--; if (d === 0) { end = i; break; } }
+    }
+    const opt = adm.slice(o, end + 1);
+    if (!/method:\s*'(POST|PUT|PATCH)'/.test(opt) || !/body:/.test(opt)) continue;
+    if (!auto && !/Content-Type/.test(opt)) bad.push(adm.slice(m.index, m.index + 60));
+  }
+  assert.deepEqual(bad, [], '這些 POST 帶了 body 卻沒有 Content-Type：\n  ' + bad.join('\n  '));
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
