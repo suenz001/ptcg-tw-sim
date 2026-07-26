@@ -368,7 +368,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.60</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.61</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1064,12 +1064,15 @@ function _tsModal(innerHtml) {
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'ts-modal-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;';  // v1.60 z-index 改由 bumpModalZ 動態給
+    // v1.61 改用與全站一致的白底樣式（原本是自成一格的墨綠 #13201a，看久了很刺眼）。
+    //   背景遮罩比照 .modal-bg，內容盒比照 .modal（白底、淺藍邊、圓角、陰影）。
+    ov.className = 'modal-bg';
+    ov.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:18px;';  // v1.60 z-index 由 bumpModalZ 動態給
     ov.addEventListener('click', function (e) { if (e.target === ov) _tsCloseModal(); });
     document.body.appendChild(ov);
   }
-  ov.innerHTML = '<div style="background:#13201a;border:1px solid #3a5a3a;border-radius:10px;max-width:840px;width:100%;max-height:88vh;overflow:auto;padding:18px 20px;position:relative;">'
-    + '<button onclick="_tsCloseModal()" style="position:absolute;top:10px;right:12px;background:#7a3a3a;color:#fdd;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">✕ 關閉</button>'
+  ov.innerHTML = '<div class="modal" style="max-width:840px;width:100%;max-height:88vh;min-width:0;padding:18px 20px;position:relative;">'
+    + '<button onclick="_tsCloseModal()" style="position:absolute;top:10px;right:12px;background:#f5f7fa;color:#5a6472;border:1px solid #d6dbe3;border-radius:6px;padding:4px 10px;cursor:pointer;">✕ 關閉</button>'
     + innerHtml + '</div>';
   ov.style.display = 'flex';
   bumpModalZ(ov);        // v1.60 每次開啟都浮到最上層
@@ -1102,7 +1105,7 @@ window.tevShowBracket = function (eventIdEnc) {
   var eventId = decodeURIComponent(eventIdEnc);
   var data = tournStatsCache || { archives: [] };
   var a = (data.archives || []).find(function (x) { return x.eventId === eventId; });
-  if (!a) { _tsModal('<p style="color:#f88;">找不到這場賽事的資料。</p>'); return; }
+  if (!a) { _tsModal('<p style="color:#c62828;">找不到這場賽事的資料。</p>'); return; }
   var byRound = {};
   (a.matches || []).forEach(function (m) { (byRound[m.round] = byRound[m.round] || []).push(m); });
   var rounds = Object.keys(byRound).map(Number).sort(function (x, y) { return x - y; });
@@ -1119,10 +1122,10 @@ window.tevShowBracket = function (eventIdEnc) {
     + '　·　點名字看玩家總覽、點對戰看該局 log</p>';
   // v1.54 參賽名單（含使用牌組），每位都可點進玩家總覽
   if ((a.players || []).length) {
-    h += '<details style="margin:0 0 10px;"><summary style="cursor:pointer;color:#bfe0ff;">👥 參賽名單（' + a.players.length + ' 人）</summary>'
+    h += '<details style="margin:0 0 10px;"><summary style="cursor:pointer;color:#3a5a8a;font-weight:600;">👥 參賽名單（' + a.players.length + ' 人）</summary>'
       + '<div style="max-height:32vh;overflow:auto;margin-top:6px;">'
       + a.players.map(function (p) {
-          return '<div style="padding:4px 8px;border-bottom:1px solid #24322a;font-size:.88rem;">'
+          return '<div style="padding:4px 8px;border-bottom:1px solid #e3e8ef;font-size:.88rem;">'
             + (p.email ? playerLink(p.email, p.name || p.email) : escapeHtml(p.name || '—'))
             + (p.deckName ? ' <span class="small muted">· ' + escapeHtml(p.deckName) + '</span>' : '')
             + (p.email ? '' : ' <span class="small muted">(無 email)</span>')
@@ -1132,25 +1135,25 @@ window.tevShowBracket = function (eventIdEnc) {
   }
   if (!rounds.length) { h += '<p class="empty">這場沒有賽程紀錄。</p>'; _tsModal(h); return; }
   rounds.forEach(function (r) {
-    h += '<div style="margin:10px 0 4px;color:#bfe0ff;font-weight:600;">第 ' + r + ' 輪</div>';
+    h += '<div style="margin:10px 0 4px;color:#3a5a8a;font-weight:600;">第 ' + r + ' 輪</div>';
     byRound[r].forEach(function (m) {
       var winP1 = m.winnerUid && m.winnerUid === m.p1uid, winP2 = m.winnerUid && m.winnerUid === m.p2uid;
-      var p1 = '<b style="color:' + (winP1 ? '#7fc97f' : '#ccc') + ';">' + pName(m.p1uid, m.p1name) + (winP1 ? ' 🏆' : '') + '</b>';
-      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : ('<b style="color:' + (winP2 ? '#7fc97f' : '#ccc') + ';">' + pName(m.p2uid, m.p2name) + (winP2 ? ' 🏆' : '') + '</b>');
+      var p1 = '<b style="color:' + (winP1 ? '#2e7d32' : '#5a6472') + ';">' + pName(m.p1uid, m.p1name) + (winP1 ? ' 🏆' : '') + '</b>';
+      var p2 = m.bye ? '<span class="muted">（輪空）</span>' : ('<b style="color:' + (winP2 ? '#2e7d32' : '#5a6472') + ';">' + pName(m.p2uid, m.p2name) + (winP2 ? ' 🏆' : '') + '</b>');
       var label = p1 + ' <span class="muted">vs</span> ' + p2;
       var clickable = !m.bye && m.p1uid && m.p2uid;
       if (clickable) {
         // v1.54：原本整列是 <button>，玩家名做成連結後會巢狀在按鈕內而無法點。
         //   改成外層 div + 右側獨立「看對戰 log」按鈕，兩種點擊互不干擾。
-        h += '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #3a5a3a;background:#16241a;color:#dfe;font-size:.9rem;">'
+        h += '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #e3e8ef;background:#f8fafc;color:#1a2332;font-size:.9rem;">'
           + '<span style="flex:1;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></span>'
           // v1.60 舊的文字「對戰 log」換成新的【回放】：主站的回放頁是公開連結（免登入），
           //   matchId 的組成規則與後端一致 = eventId + '_r' + round + '_m' + idx。
           //   開新分頁而不內嵌：回放是完整對戰 UI，塞進 840px 的 modal 既難用又跨網域。
-          + '<button onclick="tevOpenReplay(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="flex:none;padding:3px 10px;border-radius:5px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;cursor:pointer;font-size:.82rem;" title="在新分頁開啟這場的回放">▶ 回放</button>'
+          + '<button onclick="tevOpenReplay(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="flex:none;padding:3px 10px;border-radius:5px;border:1px solid #5b8def;background:#eaf1ff;color:#2a4a7a;cursor:pointer;font-size:.82rem;" title="在新分頁開啟這場的回放">▶ 回放</button>'
           + '</div>';
       } else {
-        h += '<div style="margin:3px 0;padding:8px 11px;border-radius:6px;background:#101810;color:#9ab;font-size:.9rem;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></div>';
+        h += '<div style="margin:3px 0;padding:8px 11px;border-radius:6px;background:#f0f2f5;color:#5a6472;font-size:.9rem;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></div>';
       }
     });
   });
@@ -1159,24 +1162,7 @@ window.tevShowBracket = function (eventIdEnc) {
 
 // v1.48 對戰 log 單行上色：依類型分類 + 卡牌連結 PUA marker(U+E100 iid U+E101 名 U+E102) 清成高亮卡名
 //   用 String.fromCharCode 純 ASCII 建 regex，避免不可見 PUA 字元在 Python patch/scp 上傳途中遺失。
-function _tsLogLineHtml(raw, i, p1name, p2name) {
-  var txt = (typeof raw === 'string') ? raw : (raw && raw.message ? raw.message : JSON.stringify(raw));
-  var _b0 = String.fromCharCode(57600), _b1 = String.fromCharCode(57601), _b2 = String.fromCharCode(57602);
-  var _cls = '[^' + _b0 + _b1 + _b2 + ']+';
-  var _cardRe = new RegExp(_b0 + _cls + _b1 + '(' + _cls + ')' + _b2, 'g');
-  var _stripRe = new RegExp('[' + _b0 + _b1 + _b2 + ']', 'g');
-  var esc = escapeHtml(txt).replace(_cardRe, '<span style="color:#ffd86b;font-weight:600;">$1</span>').replace(_stripRe, '');
-  var color = '#dce8dc', bg = '', bold = false;
-  if (/遊戲開始|對戰開始|Setup |回合結束|換 .+ 行動|先手行動/.test(txt)) { color = '#ffe08a'; bold = true; bg = 'background:#241f0e;border-radius:4px;'; }
-  else if (/擲|硬幣|正面|反面/.test(txt)) { color = '#7fd7e8'; }
-  else if (/傷害|昏厥|擊倒|KO|破壞|爆擊/.test(txt)) { color = '#ff9a8a'; }
-  else if (/獎賞/.test(txt)) { color = '#ffcf5a'; bold = true; }
-  else if (p1name && txt.indexOf(p1name) === 0) { color = '#9fd0ff'; }
-  else if (p2name && txt.indexOf(p2name) === 0) { color = '#ffb3d9'; }
-  return '<div style="padding:3px 6px;' + bg + 'display:flex;gap:9px;align-items:baseline;border-bottom:1px solid #ffffff0a;">'
-    + '<span style="color:#6a7e6a;min-width:2.4em;text-align:right;flex:none;font-size:.78rem;">' + (i + 1) + '</span>'
-    + '<span style="color:' + color + ';' + (bold ? 'font-weight:700;' : '') + 'word-break:break-word;flex:1;">' + esc + '</span></div>';
-}
+// v1.61：_tsLogLineHtml（對戰 log 的單行上色）在 v1.60 把文字 log 換成回放後已無人呼叫，移除死碼。
 
 // v1.60 開啟這場對戰的【回放】（取代舊的文字 log 檢視）。
 //   matchId 規則與後端 /api/tournament/admin/match-log 內完全一致：eventId_r{round}_m{idx}。
