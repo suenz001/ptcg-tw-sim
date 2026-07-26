@@ -6856,6 +6856,7 @@
             </label>
             <label class="tourn-field">募集時間
               <select class="deck-select" bind:value={tProposeRally}>
+                <option value={5}>5 分鐘</option>
                 <option value={15}>15 分鐘</option>
                 <option value={30}>30 分鐘</option>
                 <option value={60}>60 分鐘</option>

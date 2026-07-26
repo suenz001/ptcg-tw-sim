@@ -368,11 +368,12 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.51</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.60</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
       <button class="ghost" onclick="manualRefresh(this)">🔄 Refresh</button>
+      <button class="ghost" onclick="hardReloadAdmin(this)" title="清掉瀏覽器快取並重新載入最新版的 admin 頁（改版後看不到新功能時用）">🔄 強制更新版本（清快取）</button>
       <button class="ghost" onclick="doLogout()">Logout</button>
     </div>
   </header>
@@ -441,27 +442,38 @@ function rebuildUidEmailMap() {
 }
 // v0.5: 確保 uid→email map 至少嘗試載入過一次（不阻塞房間 tab 渲染）
 let _emailMapPrimed = false;
+// ══ v1.60 玩家帳號：唯一的取得管道（single-flight）══════════════════════════
+//   事故背景：原本有**兩條**路徑各自寫 allUsers ——
+//     ① primeEmailMap()：切到房間分頁時背景預熱（不 await、不共用 loadUsers 的 guard），
+//        成功後做 allUsers = collected，但**不會**設 _usersLoaded；
+//     ② loadUsers()：看到 _usersLoaded 是 false 就不用 cache，又因 allUsers.length > 0
+//        而不清空，於是從 pageToken=null 再全量抓一輪 concat 上去。
+//   → 「先開房間分頁、再進玩家帳號」必定每個帳號出現兩次，而且抓了兩輪所以特別慢。
+//   根治：兩邊都改成 await 同一個 promise，重複與 race 從結構上消失。
+let _usersFetchPromise = null;
+async function fetchAllUsers(force) {
+  if (force) _usersFetchPromise = null;
+  if (!_usersFetchPromise) {
+    _usersFetchPromise = api('/api/admin/firebase/users-all' + (force ? '?refresh=1' : ''))
+      .then((data) => {
+        if (!data || data.error || !Array.isArray(data.users)) {
+          throw new Error((data && data.error) || '玩家帳號載入失敗');
+        }
+        return data.users;
+      })
+      .catch((e) => { _usersFetchPromise = null; throw e; });   // 失敗不留下壞掉的 promise，下次可重試
+  }
+  return _usersFetchPromise;
+}
+
 async function primeEmailMap() {
   if (_emailMapPrimed) return;
   // v0.77 修：原本 `_emailMapPrimed = true` 設在 try 外是 fail-fast — 首次 API
   //   失敗（例如 v0.76 之前的 stale token 拿 403）會永久 disable，導致對戰紀錄
   //   永遠顯示「(匿名)」。改為「成功才 set primed；失敗 return 不 set，下次可重試」。
   try {
-    // v0.5b: 修 endpoint 為 /api/admin/firebase/users 並處理 pagination
-    let pageToken = null;
-    const collected = [];  // v0.77: 不污染 global allUsers 直到全部成功
-    while (true) {
-      const url = '/api/admin/firebase/users' + (pageToken ? '?pageToken=' + encodeURIComponent(pageToken) : '');
-      const data = await api(url);
-      if (!data || data.error) {
-        console.warn('[admin] primeEmailMap fetch failed:', data && data.error, '— 下次 polling 會重試');
-        return;  // 不 set primed=true，下次能 retry
-      }
-      if (Array.isArray(data.users)) collected.push(...data.users);
-      pageToken = data.pageToken;
-      if (!pageToken) break;
-    }
-    allUsers = collected;
+    // v1.60：改用與 loadUsers 共用的 single-flight（原本的逐頁迴圈是重複載入的來源）
+    allUsers = await fetchAllUsers(false);
     _emailMapPrimed = true;
     rebuildUidEmailMap();
     console.log('[admin] primeEmailMap: 載入', allUsers.length, 'users，uidEmailMap.size =', uidEmailMap.size);
@@ -479,7 +491,6 @@ async function primeEmailMap() {
     // 不 set primed=true，下次能 retry
   }
 }
-let usersPageToken = null;
 
 // ── Card index loader (lazy, fetch from GitHub Pages canonical) ─────
 // v4.91：改用 GitHub Pages 絕對 URL，避免 Oracle web/ 落後於主站 push 時
@@ -618,6 +629,29 @@ window.doLogin = async function() {
   } catch (err) {
     errEl.textContent = '登入失敗：' + (err.code || err.message);
   }
+};
+
+// v1.60 強制更新版本（清快取）—— 比照遊戲頁的同名按鈕。
+//   「Refresh」只是重抓資料；改版後若瀏覽器仍拿舊的 admin.html，要靠這顆。
+//   admin.html 目前沒有 Service Worker，但仍一併清 caches，將來若加了也不用改這裡。
+window.hardReloadAdmin = async function (btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '清除中…'; }
+  try {
+    if (typeof caches !== 'undefined' && caches.keys) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (e) { console.warn('[admin] 清快取失敗（不影響重新載入）', e); }
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch (e) { /* 沒有 SW 就跳過 */ }
+  // 加上時間戳 query 讓瀏覽器一定重新向伺服器要，而不是吃 HTTP 快取
+  const u = new URL(window.location.href);
+  u.searchParams.set('_v', String(Date.now()));
+  window.location.replace(u.toString());
 };
 
 window.doLogout = async function() {
@@ -1017,12 +1051,20 @@ let tournStatsCache = null;
 window.loadTournamentStats = (...a) => loadTournamentStats(...a);
 
 // v1.46 賽事統計下鑽：點賽事名稱 → 賽程 modal；點某場對戰 → 對戰 log
+// ══ v1.60 modal 疊層：中央 z-index 計數器 ══════════════════════════════════
+//   問題：賽程 modal（_tsModal 自建 #ts-modal-overlay）寫死 z-index:99999，
+//   而玩家總覽等一般 modal 用 .modal-bg 的 z-index:100 —— 從賽程點玩家暱稱開總覽時，
+//   總覽永遠被壓在賽程底下，必須先關掉賽程才看得到。
+//   解法：不比大小、改用「後開的就 +1」的單調遞增計數器，兩套 modal 共用。
+let _zTop = 200;
+function bumpModalZ(el) { if (el) el.style.zIndex = String(++_zTop); }
+
 function _tsModal(innerHtml) {
   var ov = document.getElementById('ts-modal-overlay');
   if (!ov) {
     ov = document.createElement('div');
     ov.id = 'ts-modal-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:18px;';  // v1.60 z-index 改由 bumpModalZ 動態給
     ov.addEventListener('click', function (e) { if (e.target === ov) _tsCloseModal(); });
     document.body.appendChild(ov);
   }
@@ -1030,8 +1072,19 @@ function _tsModal(innerHtml) {
     + '<button onclick="_tsCloseModal()" style="position:absolute;top:10px;right:12px;background:#7a3a3a;color:#fdd;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;">✕ 關閉</button>'
     + innerHtml + '</div>';
   ov.style.display = 'flex';
+  bumpModalZ(ov);        // v1.60 每次開啟都浮到最上層
 }
 window._tsCloseModal = function () { var ov = document.getElementById('ts-modal-overlay'); if (ov) ov.style.display = 'none'; };
+
+// v1.60 一般 modal 走 #modal-container.innerHTML = ...（呼叫點散佈全檔）。
+//   用 MutationObserver 在內容變動時自動 bump，不必逐一改動每個呼叫點。
+(function watchModalContainer() {
+  const mc = document.getElementById('modal-container');
+  if (!mc || typeof MutationObserver === 'undefined') return;
+  if (!mc.style.position) mc.style.position = 'relative';   // 沒有 position 就吃不到 z-index
+  new MutationObserver(() => { if (mc.querySelector('.modal-bg')) bumpModalZ(mc); })
+    .observe(mc, { childList: true });
+})();
 
 function _tsMatchOutcome(m) {
   if (m.bye) return '輪空晉級';
@@ -1091,7 +1144,10 @@ window.tevShowBracket = function (eventIdEnc) {
         //   改成外層 div + 右側獨立「看對戰 log」按鈕，兩種點擊互不干擾。
         h += '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;padding:8px 11px;border-radius:6px;border:1px solid #3a5a3a;background:#16241a;color:#dfe;font-size:.9rem;">'
           + '<span style="flex:1;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></span>'
-          + '<button onclick="tevShowMatchLog(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="flex:none;padding:3px 10px;border-radius:5px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;cursor:pointer;font-size:.82rem;">▶ 對戰 log</button>'
+          // v1.60 舊的文字「對戰 log」換成新的【回放】：主站的回放頁是公開連結（免登入），
+          //   matchId 的組成規則與後端一致 = eventId + '_r' + round + '_m' + idx。
+          //   開新分頁而不內嵌：回放是完整對戰 UI，塞進 840px 的 modal 既難用又跨網域。
+          + '<button onclick="tevOpenReplay(\'' + encodeURIComponent(eventId) + '\',' + m.round + ',' + m.idx + ')" style="flex:none;padding:3px 10px;border-radius:5px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;cursor:pointer;font-size:.82rem;" title="在新分頁開啟這場的回放">▶ 回放</button>'
           + '</div>';
       } else {
         h += '<div style="margin:3px 0;padding:8px 11px;border-radius:6px;background:#101810;color:#9ab;font-size:.9rem;">' + label + ' <span class="small muted">· ' + _tsMatchOutcome(m) + '</span></div>';
@@ -1122,37 +1178,15 @@ function _tsLogLineHtml(raw, i, p1name, p2name) {
     + '<span style="color:' + color + ';' + (bold ? 'font-weight:700;' : '') + 'word-break:break-word;flex:1;">' + esc + '</span></div>';
 }
 
-window.tevShowMatchLog = async function (eventIdEnc, round, idx) {
-  var eventId = decodeURIComponent(eventIdEnc);
-  _tsModal('<div class="empty">載入對戰 log…</div>');
-  var d;
-  try { d = await api('/api/tournament/admin/match-log?eventId=' + encodeURIComponent(eventId) + '&round=' + round + '&idx=' + idx); }
-  catch (e) { _tsModal('<p style="color:#f88;">載入失敗：' + escapeHtml(e.message) + '</p>'); return; }
-  if (!d || d.error) { _tsModal('<p style="color:#f88;">' + escapeHtml((d && d.error) || '載入失敗') + '</p>'); return; }
-  var h = '<h3 style="margin:0 28px 6px 0;">⚔️ ' + escapeHtml(d.p1name || 'P1') + ' vs ' + escapeHtml(d.p2name || 'P2') + '</h3>';
-  h += '<p class="small muted" style="margin:0 0 8px;">';
-  if (d.winnerName) h += '勝者：' + escapeHtml(d.winnerName) + ' 🏆　';
-  if (d.winReason) h += '｜ ' + escapeHtml(d.winReason) + '　';
-  if (d.turn) h += '｜ 共 ' + d.turn + ' 回合';
-  h += '</p>';
-  var btnBack = '<button onclick="tevShowBracket(\'' + encodeURIComponent(eventId) + '\')" style="background:#1e2e1e;color:#dfe;border:1px solid #4a6a4a;border-radius:6px;padding:4px 10px;cursor:pointer;margin-bottom:10px;">◀ 回賽程</button>';
-  h = btnBack + h;
-  if (!d.found || !d.log || !d.log.length) {
-    h += '<p class="empty">這場沒有保存對戰 log（可能是輪空、未進場判負，或對局尚未產生過盤面）。</p>';
-  } else {
-    h += '<div class="small" style="margin:0 0 7px;display:flex;gap:12px;flex-wrap:wrap;color:#aaa;">'
-      + '<span style="color:#ffe08a;">● 回合/階段</span>'
-      + '<span style="color:#7fd7e8;">● 擲硬幣</span>'
-      + '<span style="color:#ff9a8a;">● 傷害/昏厥</span>'
-      + '<span style="color:#ffcf5a;">● 獎賞卡</span>'
-      + '<span style="color:#9fd0ff;">● ' + escapeHtml(d.p1name || '玩家1') + '</span>'
-      + '<span style="color:#ffb3d9;">● ' + escapeHtml(d.p2name || '玩家2') + '</span>'
-      + '<span style="color:#ffd86b;">● 卡牌</span></div>';
-    h += '<div style="background:#0e140e;border:1px solid #2f422f;border-radius:8px;padding:6px 4px;font-size:.9rem;line-height:1.5;max-height:60vh;overflow:auto;">';
-    d.log.forEach(function (l, i) { h += _tsLogLineHtml(l, i, d.p1name, d.p2name); });
-    h += '</div>';
-  }
-  _tsModal(h);
+// v1.60 開啟這場對戰的【回放】（取代舊的文字 log 檢視）。
+//   matchId 規則與後端 /api/tournament/admin/match-log 內完全一致：eventId_r{round}_m{idx}。
+//   若該場是部署回放功能之前的舊對戰，主站回放頁會自行顯示「沒有可回放的資料」，
+//   所以這裡刻意不預先探測（逐場 probe 會讓賽程表多打 N 次 API）。
+window.tevOpenReplay = function (eventIdEnc, round, idx) {
+  const eventId = decodeURIComponent(eventIdEnc);
+  const matchId = eventId + '_r' + Number(round) + '_m' + Number(idx);
+  const url = 'https://www.ptcg-tw-sim.com/game?treplay=' + encodeURIComponent(matchId);
+  window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 window.tevDeleteArchive = (...a) => tevDeleteArchive(...a);
@@ -1258,11 +1292,171 @@ function _tsSortTable(th) {
 }
 window._tsSortTable = _tsSortTable; // v1.50 type="module" 下 inline onclick 需掛 window 才找得到
 
+// ══════════════════════════════════════════════════════════════════════════
+// v1.60 中央「排序 → 搜尋 → 分頁」單向管線（tv = table view）
+//
+// 為什麼要有這個：站內原本有三套各自為政的排序，其中 _tsSortTable 是**DOM 就地排序**
+//   （把 <tr> appendChild 重排、狀態存在 <table data-sort-col> 屬性上）。只要表格
+//   重新渲染（例如翻頁），DOM 與那個屬性一起蒸發 → 排序被打回原始順序。
+//   這就是「排序完再翻頁就變回原本排序」的根因，無法靠補綴修好。
+// 解法：固定成資料層的單向管線 —— filter(搜尋) → sort(資料值) → slice(分頁) → 渲染。
+//   翻頁只動 page，不碰 sortKey/sortDir，排序自然被保持。
+//
+// ⚠admin.html 是 <script type="module">：模組層級的 let 不是 window 屬性，
+//   inline on* handler 在全域執行 → 一律呼叫 window.tv*，且只 mutate registry
+//   **物件的屬性**（物件屬性的 mutation 在任何作用域都安全），絕不賦值模組變數。
+// ══════════════════════════════════════════════════════════════════════════
+const TV_PAGE_SIZE = 50;
+const tableViews = Object.create(null);
+
+/**
+ * 註冊/更新一張表。
+ *   id          唯一鍵（也用在 inline handler 的字串裡，請用簡單英數）
+ *   columns     { key: { get: row => 值, str?: true } } —— 排序值取自**資料**不是 DOM
+ *   defaultSort ['key', 'desc']
+ *   searchText  row => 可搜尋的小寫字串（沒給就沒有搜尋功能）
+ *   mount()     回傳「只包 table + 翻頁列」的容器（搜尋框不可放進來，見下）
+ *   render(v)   回傳 table 本體 HTML
+ * 重新註冊時會保留使用者當下的排序/頁碼/搜尋（切分頁回來不會被重置）。
+ */
+function tvDefine(def) {
+  const old = tableViews[def.id];
+  tableViews[def.id] = Object.assign(
+    { pageSize: TV_PAGE_SIZE, page: 1, search: '', sortKey: def.defaultSort[0], sortDir: def.defaultSort[1], rows: [] },
+    old ? { page: old.page, search: old.search, sortKey: old.sortKey, sortDir: old.sortDir } : null,
+    def);
+  return tableViews[def.id];
+}
+function tvSetRows(id, rows) { const tv = tableViews[id]; if (!tv) return; tv.rows = rows || []; tvRender(id); }
+
+/** filter → sort → slice。所有分頁表共用這一條管線。 */
+function tvView(id) {
+  const tv = tableViews[id];
+  let rows = tv.rows || [];
+  if (tv.search && tv.searchText) {
+    const q = tv.search.trim().toLowerCase();
+    if (q) rows = rows.filter((r) => String(tv.searchText(r) || '').includes(q));
+  }
+  const col = tv.columns[tv.sortKey];
+  if (col) {
+    const dir = tv.sortDir === 'asc' ? 1 : -1;
+    rows = rows.slice().sort((a, b) => {
+      const va = col.get(a), vb = col.get(b);
+      // 空值一律排最後（不論升冪降冪）——「沒有資料」不該被當成最小值衝到第一名
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return (col.str ? String(va).localeCompare(String(vb), 'zh-Hant') : (va - vb)) * dir;
+    });
+  }
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / tv.pageSize));
+  if (tv.page > totalPages) tv.page = totalPages;   // 搜尋縮小結果後把頁碼夾回範圍內
+  if (tv.page < 1) tv.page = 1;
+  const start = (tv.page - 1) * tv.pageSize;
+  return { pageRows: rows.slice(start, start + tv.pageSize), total, totalPages, page: tv.page, startIndex: start };
+}
+function tvRender(id) {
+  const tv = tableViews[id];
+  if (!tv) return;
+  const el = tv.mount();
+  if (!el) return;
+  const v = tvView(id);
+  el.innerHTML = tv.render(v, tv) + tvPagerHtml(id, v);
+}
+function tvPagerHtml(id, v) {
+  if (v.totalPages <= 1) return '<div class="small muted" style="margin-top:6px;">共 ' + v.total + ' 筆</div>';
+  const b = (label, p, dis) => '<button class="ghost" onclick="tvPage(\'' + id + '\',' + p + ')"' + (dis ? ' disabled' : '') + '>' + label + '</button>';
+  return '<div class="tv-pager" style="display:flex;gap:.4rem;align-items:center;justify-content:center;margin:.6rem 0;flex-wrap:wrap;">'
+    + b('« 第一頁', 1, v.page === 1) + b('‹ 上一頁', v.page - 1, v.page === 1)
+    + '<span style="font-size:.9rem;color:#9bbcef;">第 ' + v.page + ' / ' + v.totalPages + ' 頁（共 ' + v.total + ' 筆）</span>'
+    + b('下一頁 ›', v.page + 1, v.page === v.totalPages) + b('最後一頁 »', v.totalPages, v.page === v.totalPages)
+    + '<span style="margin-left:.4rem;font-size:.85rem;color:#bbb;">跳至：</span>'
+    + '<input id="tv-jump-' + id + '" type="number" min="1" max="' + v.totalPages + '" value="' + v.page + '" style="width:4.5rem;padding:.2rem .3rem;background:#222;color:#eee;border:1px solid #555;border-radius:4px;" onkeydown="if(event.key===\'Enter\')tvJump(\'' + id + '\')" />'
+    + '<button class="ghost" onclick="tvJump(\'' + id + '\')">跳頁</button></div>';
+}
+/** 可排序的表頭 <th>（含目前排序方向箭頭）。 */
+function tvTh(id, key, label, extra) {
+  const tv = tableViews[id];
+  const ar = tv && tv.sortKey === key ? (tv.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  return '<th class="sortable" onclick="tvSort(\'' + id + '\',\'' + key + '\')"' + (extra || '') + '>' + label + ar + '</th>';
+}
+/** 搜尋框。⚠必須放在 mount() 容器**之外**：tvSearch 每敲一鍵就重繪 mount，
+ *  搜尋框若在裡面會被一起重建而失去輸入焦點。 */
+function tvSearchBox(id, placeholder) {
+  const tv = tableViews[id];
+  return '<input class="search-box" id="tv-search-' + id + '" placeholder="' + (placeholder || '🔎 搜尋…')
+    + '" value="' + escapeHtml((tv && tv.search) || '') + '" oninput="tvSearch(\'' + id + '\', this.value)"'
+    + ' style="padding:6px 10px;min-width:260px;" />';
+}
+// ── window 接口（inline on* 只認得 window.*）──
+window.tvSort = function (id, key) {
+  const tv = tableViews[id];
+  if (!tv) return;
+  if (tv.sortKey === key) tv.sortDir = tv.sortDir === 'asc' ? 'desc' : 'asc';
+  else { tv.sortKey = key; tv.sortDir = (tv.columns[key] && tv.columns[key].str) ? 'asc' : 'desc'; }
+  tv.page = 1;                 // 換排序欄位 → 回第一頁
+  tvRender(id);
+};
+window.tvPage = function (id, p) {           // ⭐只動頁碼 → 排序完全保持
+  const tv = tableViews[id];
+  if (!tv) return;
+  tv.page = Math.max(1, parseInt(p, 10) || 1);
+  tvRender(id);
+};
+window.tvSearch = function (id, q) {
+  const tv = tableViews[id];
+  if (!tv) return;
+  tv.search = q || ''; tv.page = 1;
+  tvRender(id);
+};
+window.tvJump = function (id) {
+  const inp = document.getElementById('tv-jump-' + id);
+  const p = parseInt(inp && inp.value, 10);
+  if (Number.isFinite(p) && p >= 1) window.tvPage(id, p);
+};
+window.tvRender = tvRender;
+
+
+/** 目前篩選的中文標籤（掛在區塊標題後，避免看數字時忘了正在篩選）。 */
+function tsFilterLabel() {
+  return tsEventFilter === 'official' ? ' <span class="small muted">（僅官方賽）</span>'
+    : tsEventFilter === 'community' ? ' <span class="small muted">（僅社群自辦賽）</span>' : '';
+}
+function tsFilterBarHtml(nOfficial, nCommunity) {
+  const btn = (f, label, n) => '<span class="filter-btn' + (tsEventFilter === f ? ' active' : '')
+    + '" onclick="setTsEventFilter(\'' + f + '\')">' + label + ' (' + n + ')</span>';
+  return '<div class="toolbar" style="margin:8px 0 12px;">'
+    + btn('all', '全部賽事', nOfficial + nCommunity) + btn('official', '🏛️ 官方賽', nOfficial)
+    + btn('community', '👥 社群自辦賽', nCommunity)
+    + '<span class="small muted" style="margin-left:auto;">此選擇會同時套用到下方所有統計</span></div>';
+}
+
+// v1.60 官方賽 / 社群自辦賽 篩選。
+//   刻意切在**聚合的入口單點**（而不是每張表各切一次）：這樣總覽、冠軍榜、玩家戰績、
+//   歷屆賽事全部用同一份資料，數字彼此對得起來，日後也不會有某張表忘了跟著改的漂移。
+//   ⚠v0.59 之前的歸檔沒有 communityEvent 欄位（undefined）→ 會被歸進「官方」。
+//     早期本來就只有官方賽，這個歸類剛好正確，不是 bug，不必回填資料。
+let tsEventFilter = 'all';   // all | official | community
+window.setTsEventFilter = function (f) {
+  if (f !== 'all' && f !== 'official' && f !== 'community') return;
+  tsEventFilter = f;
+  const el = document.getElementById('tab-tournament-stats');
+  if (el && tournStatsCache) renderTournamentStats(el, tournStatsCache);
+};
+
 function renderTournamentStats(el, data) {
-  const archives = (data && data.archives) || [];
+  const allArchives = (data && data.archives) || [];
+  const archives = tsEventFilter === 'all' ? allArchives
+    : allArchives.filter((a) => (tsEventFilter === 'community' ? !!a.communityEvent : !a.communityEvent));
+  const _nOfficial = allArchives.filter((a) => !a.communityEvent).length;
+  const _nCommunity = allArchives.length - _nOfficial;
   if (!archives.length) {
     el.innerHTML = '<h2>📈 賽事統計 <button class="refresh-btn" style="float:right;font-size:.8rem;" onclick="loadTournamentStats(true)">🔄 重新整理</button></h2>'
-      + '<div class="empty">尚無已完成賽事的歸檔資料。賽事完賽（或管理員強制完賽）後會自動彙整到此。</div>';
+      + (allArchives.length ? tsFilterBarHtml(_nOfficial, _nCommunity) : '')
+      + '<div class="empty">' + (allArchives.length
+          ? '這個分類目前沒有已完成的賽事。'
+          : '尚無已完成賽事的歸檔資料。賽事完賽（或管理員強制完賽）後會自動彙整到此。') + '</div>';
     return;
   }
   // 只算「真實對局」：雙方都有人、已結束、非輪空
@@ -1339,7 +1533,8 @@ function renderTournamentStats(el, data) {
 
   // ── 1. 賽事總覽 ──
   let html = '<h2>📈 賽事統計 <button class="refresh-btn" style="float:right;font-size:.8rem;" onclick="loadTournamentStats(true)">🔄 重新整理</button></h2>';
-  html += '<section class="stats-section"><h3>📊 1. 賽事總覽</h3><div class="stats-grid">'
+  html += tsFilterBarHtml(_nOfficial, _nCommunity);
+  html += '<section class="stats-section"><h3>📊 1. 賽事總覽' + tsFilterLabel() + '</h3><div class="stats-grid">'
     + '<div class="stat-card"><div class="stat-label">完成賽事</div><div class="stat-value">' + totalEvents + '</div></div>'
     + '<div class="stat-card"><div class="stat-label">累計報名人次</div><div class="stat-value">' + totalEntries + '</div></div>'
     + '<div class="stat-card"><div class="stat-label">不重複玩家</div><div class="stat-value">' + uniquePlayers.size + '</div></div>'
@@ -1349,7 +1544,7 @@ function renderTournamentStats(el, data) {
 
   // ── 2. 冠軍榜（奪冠次數）──
   const champRank = Object.values(pmap).filter((p) => p.titles > 0).sort((a, b) => b.titles - a.titles || b.wins - a.wins);
-  html += '<section class="stats-section"><h3>🏆 2. 冠軍榜（奪冠次數）</h3>';
+  html += '<section class="stats-section"><h3>🏆 2. 冠軍榜（奪冠次數）' + tsFilterLabel() + '</h3>';
   if (!champRank.length) html += '<div class="empty">尚無冠軍紀錄。</div>';
   else {
     html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">戰績</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th></tr></thead><tbody>';
@@ -1363,37 +1558,22 @@ function renderTournamentStats(el, data) {
 
   // ── 3. 玩家戰績排行（依勝場）──
   const playerRank = Object.values(pmap).sort((a, b) => b.wins - a.wins || _tsPct(b.wins, b.losses) - _tsPct(a.wins, a.losses));
+  // v1.60 改走中央 tv 管線（每頁 50 筆＋排序後翻頁不會被打回原序）。
+  //   搜尋框刻意放在 mount 容器**外**，否則每敲一鍵重繪就會失去輸入焦點。
   html += '<section class="stats-section"><h3>🎯 3. 玩家戰績排行 <span class="small muted">（只計雙方都到場的真實對局，不含輪空）</span></h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">玩家</th><th class="sortable" onclick="_tsSortTable(this)">Email</th><th class="sortable" onclick="_tsSortTable(this)">參賽</th><th class="sortable" onclick="_tsSortTable(this)">勝</th><th class="sortable" onclick="_tsSortTable(this)">負</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th><th class="sortable" onclick="_tsSortTable(this)">奪冠</th></tr></thead><tbody>';
-  playerRank.forEach((p, i) => {
-    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td class="small muted">' + playerLink(p.email) + '</td><td>' + p.events + '</td><td>' + p.wins
-      + '</td><td>' + p.losses + '</td><td>' + _tsPct(p.wins, p.losses) + '%</td><td>' + (p.titles ? (p.titles + ' 🏆') : '—') + '</td></tr>';
-  });
-  html += '</tbody></table></section>';
+  html += '<div style="margin-bottom:8px;">' + tvSearchBox('tsPlayerRank', '🔎 搜尋玩家 / email…') + '</div>';
+  html += '<div id="tv-mount-tsPlayerRank"></div></section>';
 
   // ── 4. 主力寶可夢使用率 + 勝率 ──
   const pkRank = Object.keys(pkUse).map((nm) => ({ name: nm, ...pkUse[nm] })).sort((a, b) => b.use - a.use || b.wins - a.wins);
   html += '<section class="stats-section"><h3>⚔️ 4. 主力寶可夢使用率 <span class="small muted">（依牌組推測主力打手；勝率只計真實對局）</span></h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th><th class="sortable" onclick="_tsSortTable(this)">主力寶可夢</th><th class="sortable" onclick="_tsSortTable(this)">使用次數</th><th class="sortable" onclick="_tsSortTable(this)">使用率</th><th class="sortable" onclick="_tsSortTable(this)">戰績</th><th class="sortable" onclick="_tsSortTable(this)">勝率</th></tr></thead><tbody>';
-  pkRank.forEach((p, i) => {
-    const usePct = totalEntries ? Math.round(p.use / totalEntries * 100) : 0;
-    html += '<tr><td>' + (i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + p.use + '</td><td>' + usePct
-      + '%</td><td>' + p.wins + ' 勝 ' + p.losses + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>';
-  });
-  html += '</tbody></table></section>';
+  html += '<div style="margin-bottom:8px;">' + tvSearchBox('tsPkRank', '🔎 搜尋寶可夢…') + '</div>';
+  html += '<div id="tv-mount-tsPkRank"></div></section>';
 
   // ── 5. 歷屆賽事 ──
   html += '<section class="stats-section"><h3>📋 5. 歷屆賽事</h3>';
-  html += '<table class="data-table" style="font-size:.9rem;"><thead><tr><th class="sortable" onclick="_tsSortTable(this)">完賽時間</th><th class="sortable" onclick="_tsSortTable(this)">耗時</th><th class="sortable" onclick="_tsSortTable(this)">賽事名稱</th><th class="sortable" onclick="_tsSortTable(this)">人數</th><th class="sortable" onclick="_tsSortTable(this)">冠軍</th><th class="sortable" onclick="_tsSortTable(this)">冠軍牌型</th><th></th></tr></thead><tbody>';
-  archives.forEach((a) => {
-    const champRec = (a.players || []).find((p) => p.uid === a.championUid);
-    const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
-    const dur = (a.finishedAt && (a.startedAt || a.createdAt)) ? (a.finishedAt - (a.startedAt || a.createdAt)) : 0;
-    html += '<tr><td data-sort="' + (a.finishedAt||0) + '">' + _tsFmtDateTime(a.finishedAt) + '</td><td data-sort="' + (dur||0) + '">' + _tsFmtDuration(dur) + '</td><td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與對戰 log">' + escapeHtml(a.eventName || '錦標賽') + '</button></td><td>' + (a.playerCount || (a.players || []).length)
-      + '</td><td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
-      + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
-  });
-  html += '</tbody></table></section>';
+  html += '<div style="margin-bottom:8px;">' + tvSearchBox('tsArchives', '🔎 搜尋賽事名稱 / 冠軍…') + '</div>';
+  html += '<div id="tv-mount-tsArchives"></div></section>';
 
   // ── 6. 賽果分佈 ──
   const oTotal = Object.values(outcome).reduce((s, v) => s + v, 0);
@@ -1415,6 +1595,79 @@ function renderTournamentStats(el, data) {
   html += '</tbody></table></section>';
 
   el.innerHTML = html;
+
+  // ══ v1.60 三張大表交給中央 tv 管線（每頁 50 筆；排序 → 翻頁不會被打回原序）══
+  //   注意：一定要在 el.innerHTML 之後才註冊/餵資料，因為 mount() 要找得到剛寫進去的佔位 div。
+  tvDefine({
+    id: 'tsPlayerRank',
+    columns: {
+      name: { get: (r) => r.name, str: true }, email: { get: (r) => r.email || '', str: true },
+      events: { get: (r) => r.events }, wins: { get: (r) => r.wins }, losses: { get: (r) => r.losses },
+      rate: { get: (r) => _tsPct(r.wins, r.losses) }, titles: { get: (r) => r.titles || 0 },
+    },
+    defaultSort: ['wins', 'desc'],
+    searchText: (r) => ((r.name || '') + ' ' + (r.email || '')).toLowerCase(),
+    mount: () => document.getElementById('tv-mount-tsPlayerRank'),
+    render: (v) => '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th>'
+      + tvTh('tsPlayerRank', 'name', '玩家') + tvTh('tsPlayerRank', 'email', 'Email') + tvTh('tsPlayerRank', 'events', '參賽')
+      + tvTh('tsPlayerRank', 'wins', '勝') + tvTh('tsPlayerRank', 'losses', '負') + tvTh('tsPlayerRank', 'rate', '勝率')
+      + tvTh('tsPlayerRank', 'titles', '奪冠') + '</tr></thead><tbody>'
+      + v.pageRows.map((p, i) => '<tr><td>' + (v.startIndex + i + 1) + '</td><td>' + escapeHtml(p.name)
+        + '</td><td class="small muted">' + playerLink(p.email) + '</td><td>' + p.events + '</td><td>' + p.wins
+        + '</td><td>' + p.losses + '</td><td>' + _tsPct(p.wins, p.losses) + '%</td><td>'
+        + (p.titles ? (p.titles + ' 🏆') : '—') + '</td></tr>').join('')
+      + '</tbody></table>',
+  });
+  tvSetRows('tsPlayerRank', playerRank);
+
+  tvDefine({
+    id: 'tsPkRank',
+    columns: {
+      name: { get: (r) => r.name, str: true }, use: { get: (r) => r.use },
+      usePct: { get: (r) => (totalEntries ? r.use / totalEntries : 0) },
+      wins: { get: (r) => r.wins }, rate: { get: (r) => _tsPct(r.wins, r.losses) },
+    },
+    defaultSort: ['use', 'desc'],
+    searchText: (r) => String(r.name || '').toLowerCase(),
+    mount: () => document.getElementById('tv-mount-tsPkRank'),
+    render: (v) => '<table class="data-table" style="font-size:.9rem;"><thead><tr><th>#</th>'
+      + tvTh('tsPkRank', 'name', '主力寶可夢') + tvTh('tsPkRank', 'use', '使用次數') + tvTh('tsPkRank', 'usePct', '使用率')
+      + tvTh('tsPkRank', 'wins', '戰績') + tvTh('tsPkRank', 'rate', '勝率') + '</tr></thead><tbody>'
+      + v.pageRows.map((p, i) => '<tr><td>' + (v.startIndex + i + 1) + '</td><td>' + escapeHtml(p.name) + '</td><td>' + p.use
+        + '</td><td>' + (totalEntries ? Math.round(p.use / totalEntries * 100) : 0) + '%</td><td>' + p.wins + ' 勝 ' + p.losses
+        + ' 負</td><td>' + _tsPct(p.wins, p.losses) + '%</td></tr>').join('')
+      + '</tbody></table>',
+  });
+  tvSetRows('tsPkRank', pkRank);
+
+  tvDefine({
+    id: 'tsArchives',
+    columns: {
+      finishedAt: { get: (r) => r.finishedAt || 0 },
+      dur: { get: (r) => ((r.finishedAt && (r.startedAt || r.createdAt)) ? (r.finishedAt - (r.startedAt || r.createdAt)) : 0) },
+      name: { get: (r) => r.eventName || '', str: true },
+      players: { get: (r) => (r.playerCount || (r.players || []).length) },
+      champ: { get: (r) => r.championName || '', str: true },
+    },
+    defaultSort: ['finishedAt', 'desc'],
+    searchText: (r) => ((r.eventName || '') + ' ' + (r.championName || '')).toLowerCase(),
+    mount: () => document.getElementById('tv-mount-tsArchives'),
+    render: (v) => '<table class="data-table" style="font-size:.9rem;"><thead><tr>'
+      + tvTh('tsArchives', 'finishedAt', '完賽時間') + tvTh('tsArchives', 'dur', '耗時') + tvTh('tsArchives', 'name', '賽事名稱')
+      + tvTh('tsArchives', 'players', '人數') + tvTh('tsArchives', 'champ', '冠軍') + '<th>冠軍牌型</th><th></th></tr></thead><tbody>'
+      + v.pageRows.map((a) => {
+        const champRec = (a.players || []).find((p) => p.uid === a.championUid);
+        const champMain = champRec ? (detectMainPokemon({ deckEntries: champRec.deckEntries || [] }) || (champRec.deckName || '—')) : '—';
+        const dur = (a.finishedAt && (a.startedAt || a.createdAt)) ? (a.finishedAt - (a.startedAt || a.createdAt)) : 0;
+        return '<tr><td>' + _tsFmtDateTime(a.finishedAt) + '</td><td>' + _tsFmtDuration(dur) + '</td>'
+          + '<td><button onclick="tevShowBracket(\'' + encodeURIComponent(a.eventId) + '\')" style="background:none;border:none;color:#7fd0ff;text-decoration:underline;cursor:pointer;padding:0;font-size:.9rem;" title="點看賽程與回放">' + escapeHtml(a.eventName || '錦標賽') + '</button></td>'
+          + '<td>' + (a.playerCount || (a.players || []).length) + '</td>'
+          + '<td>' + (a.championName ? escapeHtml(a.championName) + ' 🏆' : '—') + '</td><td>' + escapeHtml(champMain) + '</td>'
+          + '<td><button style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:.8rem;" onclick="tevDeleteArchive(\'' + encodeURIComponent(a.eventId) + '\', this)">🗑️ 刪除</button></td></tr>';
+      }).join('')
+      + '</tbody></table>',
+  });
+  tvSetRows('tsArchives', archives);
 }
 
 window.switchTab = function(name) {
@@ -2115,7 +2368,8 @@ function renderDeckRules(el) {
   for (const k in (window.cardInfoMap || {})) { const n = cardInfoMap[k]?.name; if (n) names.add(n); }
   const dlOpts = [...names].sort().map((n) => '<option value="' + escapeHtml(n) + '">').join('');
 
-  const rows = _deckRules.map((r) => {
+  // v1.60 規則列改由中央 tv 管線逐頁渲染（支援關鍵字搜尋＋每頁 50 筆）
+  const ruleRowHtml = (r) => {
     const inc = (r.includes || []).map((x) => '<span class="rule-chip inc">' + escapeHtml(x) + '</span>').join('');
     const exc = (r.excludes || []).map((x) => '<span class="rule-chip exc">' + escapeHtml(x) + '</span>').join('');
     const ids = ((r.includeIds || []).length + (r.excludeIds || []).length)
@@ -2132,7 +2386,7 @@ function renderDeckRules(el) {
       + '<td><button class="tiny ghost" onclick="editDeckRule(\'' + rid + '\')">編輯</button> '
       + '<button class="tiny ghost" onclick="deleteDeckRule(\'' + rid + '\')">刪除</button></td>'
       + '</tr>';
-  }).join('');
+  };
 
   const pv = _rulePreview;
   const pvHtml = !pv ? '' :
@@ -2189,10 +2443,9 @@ function renderDeckRules(el) {
       </div>
       ${pvHtml}
     </div>
+    <div style="margin:10px 0 6px;">${tvSearchBox('deckRules', '🔎 搜尋牌組名稱 / 包含或排除的卡名 / 備註…')}</div>
     <div class="stats-box" style="padding:8px;overflow-x:auto;">
-      ${rows
-        ? '<table><thead><tr><th>啟用</th><th>牌組名稱</th><th>必須包含</th><th>不能包含</th><th title="一副牌同時符合多條規則時，條件較多（較特定）的那條勝出">條件數</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>'
-        : '<div class="empty">尚未建立任何規則。先在上面填一條試試，記得按「預覽命中」確認卡名沒打錯。</div>'}
+      <div id="tv-mount-deckRules"></div>
     </div>
 
     <!-- v1.52 批次3：使用率／勝率統計 -->
@@ -2210,6 +2463,35 @@ function renderDeckRules(el) {
     <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
   const sel = document.getElementById('arch-since'); if (sel) sel.value = _archSince;
+
+  // v1.60 規則列表交給中央 tv 管線：關鍵字搜尋（規則名／必含卡／排除卡／備註）＋每頁 50 筆
+  tvDefine({
+    id: 'deckRules',
+    columns: {
+      enabled: { get: (r) => (r.enabled === false ? 0 : 1) },
+      name: { get: (r) => r.name || '', str: true },
+      strict: { get: (r) => ((r.includes || []).length + (r.excludes || []).length
+                             + (r.includeIds || []).length + (r.excludeIds || []).length) },
+    },
+    defaultSort: ['name', 'asc'],
+    searchText: (r) => [r.name, r.note, (r.includes || []).join(' '), (r.excludes || []).join(' ')]
+      .filter(Boolean).join(' ').toLowerCase(),
+    mount: () => document.getElementById('tv-mount-deckRules'),
+    render: (v, tv) => {
+      if (!v.total) {
+        return '<div class="empty">' + (tv.search
+          ? '找不到符合「' + escapeHtml(tv.search) + '」的規則。'
+          : '尚未建立任何規則。先在上面填一條試試，記得按「預覽命中」確認卡名沒打錯。') + '</div>';
+      }
+      return '<table><thead><tr>' + tvTh('deckRules', 'enabled', '啟用') + tvTh('deckRules', 'name', '牌組名稱')
+        + '<th>必須包含</th><th>不能包含</th>'
+        + tvTh('deckRules', 'strict', '條件數', ' title="一副牌同時符合多條規則時，條件較多（較特定）的那條勝出"')
+        + '<th>操作</th></tr></thead><tbody>'
+        + v.pageRows.map(ruleRowHtml).join('') + '</tbody></table>';
+    },
+  });
+  tvSetRows('deckRules', _deckRules);
+
   if (_archStats) renderArchetypeStats();
 }
 
@@ -2626,47 +2908,24 @@ window.deleteRoomBySource = function(code, source) {
   else if (source === 'firebase') deleteFirebaseRoom(code);
 };
 
-// ── Tab: Users (auto-load all pages, with re-entry guard) ───────
-let _loadingUsers = false;
-let _usersLoaded = false;  // 已載入過就 cache，不重複載
-// v0.32: 排序狀態
-let usersSortKey = 'lastSignIn';  // 預設依最後登入時間排序
-let usersSortDir = 'desc';         // desc=新到舊, asc=舊到新
+// ── Tab: Users ───────────────────────────────────────────────────
+// v1.60：_loadingUsers / _usersLoaded / usersPageToken / usersSortKey / usersSortDir
+//   全部退役 —— 載入交給 single-flight fetchAllUsers()，排序分頁交給中央 tv 管線。
 async function loadUsers(reset = false) {
   const el = document.getElementById('tab-users');
-  // v0.21: re-entry guard 防止 setInterval 自動刷新 + manual click 同時觸發
-  if (_loadingUsers) {
-    console.log('[admin] loadUsers already in progress, skipping');
-    return;
+  // v1.60：資料取得完全交給 single-flight fetchAllUsers()。
+  //   舊的 _loadingUsers / _usersLoaded / usersPageToken 三個旗標與 while 迴圈全部退役 ——
+  //   它們正是「名單重複顯示」的成因（見 fetchAllUsers 上方說明）。
+  if (!allUsers.length || reset) {
+    el.innerHTML = '<h2>👤 玩家帳號</h2><div class="empty">Loading…（一次取回全部帳號，之後翻頁與排序都不再打伺服器）</div>';
   }
-  // v0.21: 已載入過則使用 cache（除非明確要求 reset，但 switchTab 不該強制 reset）
-  if (_usersLoaded && !reset && allUsers.length > 0) {
-    renderUsers(el);
-    return;
-  }
-  _loadingUsers = true;
   try {
-    if (reset || allUsers.length === 0) {
-      allUsers = [];
-      usersPageToken = null;
-      el.innerHTML = '<h2>👤 玩家帳號</h2><div class="empty">Loading…</div>';
-    }
-    while (true) {
-      const url = '/api/admin/firebase/users' + (usersPageToken ? '?pageToken=' + encodeURIComponent(usersPageToken) : '');
-      const data = await api(url);
-      if (!data || data.error) {
-        el.innerHTML = '<h2>👤 玩家帳號</h2><div class="empty">Error: ' + (data?.error || 'unknown') + '</div>';
-        return;
-      }
-      allUsers = allUsers.concat(data.users);
-      usersPageToken = data.pageToken;
-      if (!usersPageToken) break;
-      el.innerHTML = `<h2>👤 玩家帳號</h2><div class="empty">Loading... ${allUsers.length} loaded so far</div>`;
-    }
-    _usersLoaded = true;
+    allUsers = await fetchAllUsers(!!reset);
+    _emailMapPrimed = true;
+    rebuildUidEmailMap();
     renderUsers(el);
-  } finally {
-    _loadingUsers = false;
+  } catch (e) {
+    el.innerHTML = '<h2>👤 玩家帳號</h2><div class="empty">Error: ' + escapeHtml(e.message || String(e)) + '</div>';
   }
 }
 
@@ -2674,63 +2933,41 @@ function renderUsers(el) {
   const total = allUsers.length;
   const named = allUsers.filter(u => !u.anonymous).length;
   rebuildUidEmailMap();  // v0.5: users 載入完成 → 更新 email map
-  const sorted = sortUsers(allUsers);
+  // v1.60 改走中央 tv 管線：每頁 50 筆 + 排序後翻頁不會被打回原序。
+  //   搜尋框放在 mount 容器外，否則每敲一鍵重繪就會失去輸入焦點。
   el.innerHTML = `
     <h2>👤 玩家帳號（共 ${total} 個，註冊 ${named}，匿名 ${total - named}）</h2>
     <div class="toolbar">
-      <input class="search-box" placeholder="搜尋 email / uid / displayName" oninput="filterUsers(this.value)" />
-      <span class="small" style="color:#9aa3b0;">點欄位標題可排序</span>
+      ${tvSearchBox('users', '🔎 搜尋 email / uid / displayName…')}
+      <span class="small" style="color:#9aa3b0;">點欄位標題可排序；每頁 50 筆</span>
     </div>
-    <div class="table-wrap"><table><thead><tr>
-      <th class="sortable" onclick="sortUsersBy('email')">Email${sortArrow('email')}</th>
-      <th class="sortable" onclick="sortUsersBy('uid')">UID${sortArrow('uid')}</th>
-      <th class="sortable" onclick="sortUsersBy('type')">Type${sortArrow('type')}</th>
-      <th class="sortable" onclick="sortUsersBy('lastSignIn')">Last Sign-in${sortArrow('lastSignIn')}</th>
-      <th class="sortable" onclick="sortUsersBy('createdAt')">Created${sortArrow('createdAt')}</th>
-      <th>Actions</th>
-    </tr></thead><tbody id="users-tbody">
-    ${renderUsersRows(sorted)}
-    </tbody></table></div>
+    <div class="table-wrap"><div id="tv-mount-users"></div></div>
   `;
+  tvDefine({
+    id: 'users',
+    columns: {
+      email: { get: (u) => (u.email || '').toLowerCase(), str: true },
+      uid: { get: (u) => u.uid, str: true },
+      // Type 排序權重：已驗證 email=0、未驗證=1、匿名=2
+      type: { get: (u) => (u.anonymous ? 2 : (u.emailVerified ? 0 : 1)) },
+      lastSignIn: { get: (u) => (u.lastSignIn ? new Date(u.lastSignIn).getTime() : null) },
+      createdAt: { get: (u) => (u.createdAt ? new Date(u.createdAt).getTime() : null) },
+    },
+    defaultSort: ['lastSignIn', 'desc'],
+    searchText: (u) => ((u.email || '') + ' ' + (u.uid || '') + ' ' + (u.displayName || '')).toLowerCase(),
+    mount: () => document.getElementById('tv-mount-users'),
+    render: (v, tv) => {
+      if (!v.total) return '<div class="empty">' + (tv.search ? '查無符合帳號' : '沒有帳號資料') + '</div>';
+      return '<table><thead><tr>'
+        + tvTh('users', 'email', 'Email') + tvTh('users', 'uid', 'UID') + tvTh('users', 'type', 'Type')
+        + tvTh('users', 'lastSignIn', 'Last Sign-in') + tvTh('users', 'createdAt', 'Created')
+        + '<th>Actions</th></tr></thead><tbody>' + renderUsersRows(v.pageRows) + '</tbody></table>';
+    },
+  });
+  tvSetRows('users', allUsers);
 }
 
-// v0.32: 排序函數
-function sortUsers(users) {
-  const arr = [...users];
-  const dir = usersSortDir === 'asc' ? 1 : -1;
-  const cmp = (a, b) => {
-    let va, vb;
-    if (usersSortKey === 'email') { va = (a.email || '').toLowerCase(); vb = (b.email || '').toLowerCase(); }
-    else if (usersSortKey === 'uid') { va = a.uid; vb = b.uid; }
-    else if (usersSortKey === 'type') {
-      // 排序權重：emailVerified=0, emailUnverified=1, anonymous=2
-      const w = (u) => u.anonymous ? 2 : (u.emailVerified ? 0 : 1);
-      va = w(a); vb = w(b);
-    }
-    else if (usersSortKey === 'lastSignIn') { va = a.lastSignIn ? new Date(a.lastSignIn).getTime() : 0; vb = b.lastSignIn ? new Date(b.lastSignIn).getTime() : 0; }
-    else if (usersSortKey === 'createdAt') { va = a.createdAt ? new Date(a.createdAt).getTime() : 0; vb = b.createdAt ? new Date(b.createdAt).getTime() : 0; }
-    else { va = 0; vb = 0; }
-    if (va < vb) return -1 * dir;
-    if (va > vb) return 1 * dir;
-    return 0;
-  };
-  return arr.sort(cmp);
-}
-
-window.sortUsersBy = function(key) {
-  if (usersSortKey === key) {
-    usersSortDir = usersSortDir === 'asc' ? 'desc' : 'asc';
-  } else {
-    usersSortKey = key;
-    usersSortDir = 'desc';
-  }
-  renderUsers(document.getElementById('tab-users'));
-};
-
-function sortArrow(key) {
-  if (usersSortKey !== key) return '<span class="sort-arrow inactive"> ⇅</span>';
-  return '<span class="sort-arrow active"> ' + (usersSortDir === 'asc' ? '↑' : '↓') + '</span>';
-}
+// v1.60：sortUsers / sortUsersBy / sortArrow 已由中央 tv 管線取代（tableViews['users']）。
 
 function renderUsersRows(users) {
   return users.map(u => {
@@ -2756,16 +2993,7 @@ function renderUsersRows(users) {
   }).join('');
 }
 
-window.filterUsers = function(q) {
-  const tbody = document.getElementById('users-tbody');
-  const lc = q.toLowerCase();
-  const filtered = allUsers.filter(u =>
-    (u.email && u.email.toLowerCase().includes(lc)) ||
-    u.uid.toLowerCase().includes(lc) ||
-    (u.displayName && u.displayName.toLowerCase().includes(lc))
-  );
-  tbody.innerHTML = renderUsersRows(filtered);
-};
+// v1.60：filterUsers 已由中央 tv 管線的搜尋接手（tvSearchBox + tv.searchText）。
 
 window.viewUserDecks = async function(uid, label) {
   // 彈窗 modal，跟房間牌組一致
@@ -3502,6 +3730,33 @@ function renderStats(el) {
     ${renderHeatmap(statsHeatmapCache)}
     ${renderTrends(statsTrendsCache)}
   `;
+
+  // v1.60 玩家排行榜接中央 tv 管線（必須在 innerHTML 之後，mount 才找得到佔位 div）
+  if (statsPlayersCache && (statsPlayersCache.players || []).length) {
+    tvDefine({
+      id: 'playerRank',
+      columns: {
+        name: { get: (r) => r.name, str: true }, email: { get: (r) => r.email || '', str: true },
+        matches: { get: (r) => r.matches }, wins: { get: (r) => r.wins }, losses: { get: (r) => r.losses },
+        winRate: { get: (r) => r.winRate }, midLeaves: { get: (r) => r.midLeaves },
+        midLeaveRate: { get: (r) => r.midLeaveRate },
+      },
+      defaultSort: ['matches', 'desc'],
+      searchText: (r) => ((r.name || '') + ' ' + (r.email || '')).toLowerCase(),
+      mount: () => document.getElementById('tv-mount-playerRank'),
+      render: (v, tv) => {
+        if (!v.total) return '<div class="empty" style="text-align:center;padding:18px;">' + (tv.search ? '查無符合玩家' : '無資料') + '</div>';
+        return '<table><thead><tr><th>#</th>'
+          + tvTh('playerRank', 'name', '玩家') + tvTh('playerRank', 'email', 'Email / 身份')
+          + tvTh('playerRank', 'matches', '場次') + tvTh('playerRank', 'wins', '勝') + tvTh('playerRank', 'losses', '負')
+          + tvTh('playerRank', 'winRate', '勝率') + tvTh('playerRank', 'midLeaves', '中離') + tvTh('playerRank', 'midLeaveRate', '中離率')
+          + '</tr></thead><tbody>'
+          + v.pageRows.map((row, i) => playerRankRowHtml(row, v.startIndex + i)).join('')
+          + '</tbody></table>';
+      },
+    });
+    tvSetRows('playerRank', _playerRows);
+  }
 }
 
 // v0.83 全局 mode filter 切換 — 全部 / 線上 / 本機
@@ -3937,18 +4192,8 @@ window.setWinrateSort = function(col) {
   renderStats(document.getElementById('tab-stats'));
 };
 
-// v0.93: 玩家排行榜 client-side sort state
-let playerRankSort = 'matches';  // v1.07 預設依場次
-let playerRankSortDir = 'desc';
-window.setPlayerRankSort = function(col) {
-  if (playerRankSort === col) {
-    playerRankSortDir = playerRankSortDir === 'asc' ? 'desc' : 'asc';
-  } else {
-    playerRankSort = col;
-    playerRankSortDir = col === 'name' || col === 'email' ? 'asc' : 'desc';
-  }
-  renderStats(document.getElementById('tab-stats'));
-};
+// v1.60：玩家排行榜的 client-side 排序狀態（playerRankSort/Dir + setPlayerRankSort）
+//   已由中央 tv 管線接手（tableViews['playerRank']），整段移除避免留下沒人呼叫的死碼。
 
 window.setPokemonFilter = function(m) {
   if (m !== 'all' && m !== 'main' && m !== 'support') return;
@@ -3961,8 +4206,8 @@ window.setPokemonFilter = function(m) {
 // v0.84 Phase 2b render functions
 // ────────────────────────────────────────────────────────────────────────────
 
-// v1.04：2.1 玩家排行榜 即時搜尋（依玩家名 + email）
-let playerSearch = '';
+// v1.60：即時搜尋改由中央 tv 管線負責（tvSearchBox + tv.searchText），
+//   playerSearch / playerRankRowsHtml / filterPlayers 皆已移除。_playerRows 僅作為資料暫存。
 let _playerRows = [];
 function playerRankRowHtml(row, i) {
   const wr = row.winRate;
@@ -3982,19 +4227,6 @@ function playerRankRowHtml(row, i) {
     <td style="color:${(row.midLeaveRate != null && row.midLeaveRate > 0.2) ? '#c62828' : '#1a2332'};">${row.midLeaveRate == null ? '-' : (row.midLeaveRate * 100).toFixed(1) + '%'}</td>
   </tr>`;
 }
-function playerRankRowsHtml(rows) {
-  const q = (playerSearch || '').trim().toLowerCase();
-  let list = rows;
-  if (q) list = rows.filter(r => ((r.name || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)));
-  const shown = q ? list.slice(0, 200) : list.slice(0, 50);
-  if (shown.length === 0) return '<tr><td colspan="9" class="empty" style="text-align:center; padding:18px;">查無符合玩家</td></tr>';
-  return shown.map((row, i) => playerRankRowHtml(row, i)).join('');
-}
-window.filterPlayers = function(q) {
-  playerSearch = q;
-  const tb = document.getElementById('player-rank-tbody');
-  if (tb) tb.innerHTML = playerRankRowsHtml(_playerRows);
-};
 
 // 2.1 玩家排行榜（v0.86：name 為主鍵 + email 為附資訊；點玩家名看個人戰績）
 //   - server 端用 email || name 為複合 key 分組
@@ -4036,41 +4268,15 @@ function renderPlayerRanking(p) {
       </div>
     </section>`;
   }
-  // v0.93: client-side sort by selected column
-  const sortedPlayers = [...players].sort((a, b) => {
-    const dir = playerRankSortDir === 'asc' ? 1 : -1;
-    const va = a[playerRankSort], vb = b[playerRankSort];
-    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-    if (va == null) return 1; if (vb == null) return -1;
-    return String(va).localeCompare(String(vb), 'zh-Hant') * dir;
-  });
-  _playerRows = sortedPlayers;  // v1.04：全部排序後給搜尋用
+  // v1.60 排序/搜尋/分頁全交給中央 tv 管線（原本只顯示前 50 名、沒有翻頁，
+  //   而且搜尋與排序各走一套；現在統一成 filter → sort → slice 一條管線）。
+  _playerRows = players;
   const withEmailCount = players.filter(x => x.email).length;
   return `
     <section class="stats-section">
       <h3>👤 2.1 玩家排行榜 <span class="small muted">（共 ${players.length} 位玩家；已排除 AI；含 email ${withEmailCount} 位 / 匿名 ${players.length - withEmailCount} 位；點玩家名看個人戰績）</span></h3>
-      <div style="margin-bottom:8px;">
-        <input id="player-search" class="search-box" placeholder="🔎 搜尋玩家名稱 / email…" value="${escapeHtml(playerSearch)}" oninput="filterPlayers(this.value)" style="padding:6px 10px; min-width:260px;" />
-      </div>
-      <div class="stats-box" style="overflow-x:auto;">
-        <table>
-          <thead><tr>
-            <th>#</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('name')">玩家${playerRankSort==='name'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('email')">Email / 身份${playerRankSort==='email'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('matches')">場次${playerRankSort==='matches'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('wins')">勝${playerRankSort==='wins'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('losses')">負${playerRankSort==='losses'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('winRate')">勝率${playerRankSort==='winRate'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('midLeaves')">中離${playerRankSort==='midLeaves'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-            <th class="sortable-th" onclick="setPlayerRankSort('midLeaveRate')">中離率${playerRankSort==='midLeaveRate'?(playerRankSortDir==='asc'?' ▲':' ▼'):''}</th>
-          </tr></thead>
-          <tbody id="player-rank-tbody">
-            ${playerRankRowsHtml(sortedPlayers)}
-          </tbody>
-        </table>
-        ${players.length > 50 ? `<div class="small muted" style="margin-top:6px;">（顯示前 50 名，共 ${players.length} 位）</div>` : ''}
-      </div>
+      <div style="margin-bottom:8px;">${tvSearchBox('playerRank', '🔎 搜尋玩家名稱 / email…')}</div>
+      <div class="stats-box" style="overflow-x:auto;"><div id="tv-mount-playerRank"></div></div>
     </section>
   `;
 }
