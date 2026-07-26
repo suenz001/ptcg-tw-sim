@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.63</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.64</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2449,6 +2449,8 @@ function renderDeckRules(el) {
         <option value="90">最近 90 天</option>
       </select>
       <button onclick="loadArchetypeStats()">📊 計算統計</button>
+      <button id="meta-img-btn" onclick="openMetaImageExport()" disabled
+              title="產生可直接發佈給玩家的環境報告圖（1080×1350 PNG）">🖼️ 匯出環境報告圖</button>
     </div>
     <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
@@ -2523,6 +2525,353 @@ window.saveSupportPokemon = async function () {
   if (!r || r.error) { alert('儲存失敗：' + (r?.error || '?')); return; }
   closeModal();
   await loadArchetypeStats();
+};
+
+// ══ v1.64 牌組環境報告圖（匯出 PNG，供發佈給玩家看）════════════════════════
+//
+// 這張圖是要被轉發到 LINE／FB／Discord 的**傳播物**，設計約束跟網頁表格完全不同：
+//   ・4:5 直式 1080×1350 —— 手機動態牆不裁切的最大直式比例（1:1 浪費列高、
+//     16:9 在手機上字太小）。固定 2× 輸出＝2160×2700。
+//     ⚠**不用 devicePixelRatio**：輸出檔是要傳給別人的，跟本機螢幕的 DPR 無關。
+//   ・邏輯座標最小字級 22px：經 2× 放大再被 LINE 二次壓縮後仍讀得出來。
+//   ・使用率畫長條、勝率用「大數字＋三段色」。⚠兩者**量綱不同**（份額 vs 比率），
+//     都畫成長條的話讀者必然拿去互相比長短；且勝率集中在 40~60%，
+//     畫成 bar 會全部一樣長、毫無解析度。
+//
+// 【趨勢】Wilson 要的是「使用率趨勢」，但後端只回單一時間窗的快照、沒有時間序列。
+//   解法：usage/wins/losses/scanned 全都是「時間窗內的計數」→ 可加，
+//   所以呼叫兩次端點（since=N 天、since=2N 天）相減就得到「前一個等長窗」。
+//   ⚠**必須是 N 與 2N**：若用 30 天 vs 90 天，相減得到的是 60 天窗，
+//     窗長不等 → 絕對量與佔比都不可比，算出來的箭頭是假的。
+//   已逐行查證可加性成立：休閒側過濾用 endedAt:{$gte:since}、
+//   錦標賽側用 finishedAt:{$gte:since}，兩者都是單純的時間下界。
+const MI_URL = 'www.ptcg-tw-sim.com';
+const MI = {
+  W: 1080, H: 1350, S: 2, PAD: 48, TOPN: 10,
+  // ⚠canvas 的 font 不吃 CSS 繼承、每次都要寫全字串，且**含空白的字體名一定要加引號**。
+  F: '"Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif',
+  // 色票刻意用短鍵名（bg0/txt/dim…）而不是 background/color：
+  //   admin 有一條配色守衛會掃 `background:#xxx`／`color:#xxx` 這種 CSS 形態的字面，
+  //   在 JS 裡寫成 `background: '#0F1726'` 有被它誤判成「頁面上的深色底」的風險。
+  //   （這裡是畫進 canvas 的深色匯報圖，跟白底的 admin 頁面是兩回事。）
+  K: {
+    bg0: '#0F1726', bg1: '#1B2A45', row: '#223655', txt: '#F2F6FA', dim: '#8FA3BF',
+    ln: '#31456B', up: '#4ADE80', dn: '#F87171', mid: '#AAB8CC',
+    r1: '#F5C044', r2: '#C7D2E2', r3: '#D89A6A',
+  },
+  SRC: {
+    casual: { label: '一般對戰', a1: '#3ED6C0', a2: '#57B8F0' },
+    tourn: { label: '錦標賽', a1: '#F5C044', a2: '#F09A3E' },
+  },
+};
+// 後端的查詢上限（依時間新到舊取）。撞到上限＝2N 窗的舊資料根本沒被掃到。
+const MI_SCAN_CAP = { casual: ['casualMatches', 20000], tourn: ['tournEvents', 200] };
+
+/** 圓角矩形。⚠不用 ctx.roundRect —— VM 端的瀏覽器版本不確定，自己畫 8 行最保險。 */
+function miRR(ctx, x, y, w, h, r) {
+  const k = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + k, y);
+  ctx.lineTo(x + w - k, y); ctx.quadraticCurveTo(x + w, y, x + w, y + k);
+  ctx.lineTo(x + w, y + h - k); ctx.quadraticCurveTo(x + w, y + h, x + w - k, y + h);
+  ctx.lineTo(x + k, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - k);
+  ctx.lineTo(x, y + k); ctx.quadraticCurveTo(x, y, x + k, y);
+  ctx.closePath();
+}
+function miFont(ctx, px, bold) { ctx.font = (bold ? 'bold ' : '') + px + 'px ' + MI.F; }
+/** 量測後截斷。⚠不可用「字數×平均寬」估算：原型名常混半形（例「蜜集大蛇ex」），寬度不均。 */
+function miFit(ctx, s, maxW) {
+  let t = String(s === null || s === undefined ? '' : s);
+  if (ctx.measureText(t).width <= maxW) return t;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+function miPct(v, d) { return (v === null || v === undefined) ? '—' : (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
+function miDate(ms) { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate(); }
+function miStamp(ms) {
+  const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+}
+
+// logo 只載一次並快取。⚠`drawImage` 一張尚未 decode 完成的 Image 會**靜默不畫也不報錯**，
+//   成品就是 logo 憑空消失、完全沒有線索。用 decode() 而非 onload：它連解碼都等完。
+//   （icons/ 與 admin 頁面同源，所以畫進 canvas 不會 taint、toBlob 可正常匯出。）
+let _miLogo = null, _miLogoTried = false;
+async function miLogo() {
+  if (_miLogo || _miLogoTried) return _miLogo;
+  _miLogoTried = true;
+  try {
+    const img = new Image();
+    img.src = 'icons/icon-192.png?v=1.64';
+    await img.decode();
+    _miLogo = img;
+  } catch (e) { _miLogo = null; }   // 載不到就退成純文字站名，不讓整張圖產不出來
+  return _miLogo;
+}
+
+/**
+ * 由「本期(since=N)」與「寬窗(since=2N)」推導前一個等長窗的變化。
+ * 回 { ok:false, reason } 或 { ok:true, by:Map(ruleId→{isNew|dPP}), prevFrom, prevTo }。
+ * ⚠寬窗是**含本期**的累計，一定要相減才是前期。
+ */
+function miTrend(days, cur, wide, srcKey) {
+  const off = (reason) => ({ ok: false, reason });
+  if (!(days > 0)) return off('統計範圍選「全部時間」時沒有可對比的前期');
+  if (!wide) return off('前期資料讀取失敗');
+  const c = cur[srcKey], w = wide[srcKey];
+  if (!c || !w) return off('前期資料缺這個資料源');
+  // ⚠伺服器查詢有上限（休閒最多最近 20000 場、錦標賽最多最近 200 場賽事，皆新到舊）。
+  //   撞到上限代表寬窗的舊資料根本沒被掃到，相減會憑空生出一整片「下降」。
+  const cap = MI_SCAN_CAP[srcKey];
+  if ((wide.scanned && wide.scanned[cap[0]] || 0) >= cap[1]) return off('資料量已達伺服器查詢上限，前期不完整');
+  const dk = srcKey === 'casual' ? 'casualDecks' : 'tournDecks';
+  const curN = (cur.scanned && cur.scanned[dk]) || 0;
+  const prevN = ((wide.scanned && wide.scanned[dk]) || 0) - curN;
+  if (curN <= 0) return off('本期沒有資料');
+  // 前期明顯比本期少 → 多半是資料還沒累積滿兩期，這時算出來的「全面上升」是假象。
+  if (prevN < curN * 0.3) return off('前期樣本過少（資料可能尚未累積滿兩期）');
+
+  const wideUsage = new Map();
+  for (const r of (w.rows || [])) wideUsage.set(String(r.ruleId), r.usage || 0);
+  const by = new Map();
+  for (const r of (c.rows || [])) {
+    const id = String(r.ruleId);
+    const prevUsage = (wideUsage.get(id) || 0) - (r.usage || 0);
+    // 新原型（新彈剛發售）前期幾乎沒人用，算 Δ 會是無意義的暴漲 → 改標 NEW。
+    if (prevUsage < 5) { by.set(id, { isNew: true }); continue; }
+    const dPP = ((r.usage || 0) / curN - prevUsage / prevN) * 100;
+    by.set(id, { isNew: false, dPP });
+  }
+  const now = Date.now();
+  return { ok: true, by, curN, prevN, prevFrom: now - days * 2 * 86400000, prevTo: now - days * 86400000 };
+}
+
+/** 產生一張報告圖。回 canvas（該資料源沒有任何命中原型時回 null）。 */
+async function miDraw(srcKey, cur, trend, days) {
+  const blk = cur[srcKey];
+  if (!blk || !(blk.rows || []).length) return null;
+  const S = MI.SRC[srcKey], K = MI.K;
+  const rows = (blk.rows || []).slice(0, MI.TOPN);      // rows 後端已依 usage 由大到小排序
+  const dk = srcKey === 'casual' ? 'casualDecks' : 'tournDecks';
+  // ⚠分母用 scanned 的副數，不要用 rows 的 usage 加總：未分類那一大塊不在 rows 裡，
+  //   用加總當分母會把每個原型的佔比灌水。
+  const total = (cur.scanned && cur.scanned[dk]) || 0;
+  const share = (u) => (total > 0 ? u / total : 0);
+
+  const cv = document.createElement('canvas');
+  cv.width = MI.W * MI.S; cv.height = MI.H * MI.S;
+  const ctx = cv.getContext('2d');
+  ctx.scale(MI.S, MI.S);            // 之後一律用邏輯座標（1080×1350）
+  // ⚠預設 textBaseline='alphabetic' 對中文的視覺垂直中心偏移很明顯、混排數字更亂。
+  //   全圖統一 middle + 以列中心 y 定位，省掉所有手調。
+  ctx.textBaseline = 'middle';
+
+  // ── 背景 ──
+  const bg = ctx.createLinearGradient(0, 0, 0, MI.H);
+  bg.addColorStop(0, K.bg0); bg.addColorStop(1, K.bg1);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, MI.W, MI.H);
+  // 裝飾：斜置的卡牌剪影（63:88＝實體卡長寬比）。純程式繪製，不用任何官方素材。
+  ctx.save();
+  ctx.strokeStyle = K.ln; ctx.globalAlpha = 0.45; ctx.lineWidth = 2;
+  for (const d of [[960, 46, 0.22], [96, 1290, -0.18]]) {
+    for (let i = 0; i < 3; i++) {
+      ctx.save(); ctx.translate(d[0], d[1]); ctx.rotate(d[2] + i * 0.17);
+      miRR(ctx, -63, -88, 126, 176, 10); ctx.stroke(); ctx.restore();
+    }
+  }
+  ctx.restore();
+
+  // ── 品牌帶（0–140）──
+  const logo = await miLogo();
+  let tx = MI.PAD;
+  if (logo) { ctx.drawImage(logo, MI.PAD, 30, 76, 76); tx = MI.PAD + 94; }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.txt; miFont(ctx, 38, true);
+  ctx.fillText('PTCG 台灣線上對戰模擬器', tx, 56);
+  ctx.fillStyle = K.dim; miFont(ctx, 26, false);
+  ctx.fillText(MI_URL, tx, 92);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = K.dim; miFont(ctx, 24, false);
+  ctx.fillText('資料截至 ' + new Date().toLocaleDateString('zh-TW'), MI.W - MI.PAD, 56);
+
+  // ── 標題帶（140–260）──
+  ctx.fillStyle = S.a1;
+  miRR(ctx, MI.PAD, 166, 8, 62, 4); ctx.fill();
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.txt; miFont(ctx, 54, true);
+  ctx.fillText('本期牌組環境報告', MI.PAD + 24, 190);
+  const period = days > 0
+    ? miDate(Date.now() - days * 86400000) + '–' + miDate(Date.now())
+    : '全部時間';
+  ctx.fillStyle = K.dim; miFont(ctx, 28, false);
+  ctx.fillText(S.label + '　・　' + period + '　・　共 ' + total.toLocaleString('zh-TW') + ' 副',
+               MI.PAD + 24, 234);
+
+  // ── 排行區（260–1170）：10 列 × 88，列距 3 ──
+  // 版面：排名 48–102｜名稱與 bar 116–690｜勝率右對齊 1012
+  const maxShare = Math.max.apply(null, rows.map((r) => share(r.usage))) || 1;
+  rows.forEach((r, i) => {
+    const y = 260 + i * 91;
+    ctx.fillStyle = K.row; miRR(ctx, MI.PAD, y, MI.W - MI.PAD * 2, 88, 12); ctx.fill();
+    if (i < 3) {   // 前三名左緣加獎牌色邊條
+      ctx.fillStyle = [K.r1, K.r2, K.r3][i];
+      miRR(ctx, MI.PAD, y, 5, 88, 3); ctx.fill();
+    }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = i < 3 ? K.r1 : K.dim; miFont(ctx, 34, true);
+    ctx.fillText(String(i + 1), MI.PAD + 34, y + 44);
+
+    // 上層：原型名（＋趨勢）
+    ctx.textAlign = 'left';
+    ctx.fillStyle = K.txt; miFont(ctx, 32, true);
+    ctx.fillText(miFit(ctx, r.name, 360), 116, y + 27);
+    const t = trend && trend.ok ? trend.by.get(String(r.ruleId)) : null;
+    if (t && t.isNew) {
+      miFont(ctx, 22, true);
+      const w = ctx.measureText('NEW').width + 20;
+      ctx.fillStyle = K.r1; miRR(ctx, 500, y + 14, w, 27, 13); ctx.fill();
+      ctx.fillStyle = K.bg1; ctx.textAlign = 'center';
+      ctx.fillText('NEW', 500 + w / 2, y + 28);
+      ctx.textAlign = 'left';
+    } else if (t && typeof t.dPP === 'number') {
+      // ±1.5pp 以內視為雜訊，畫成灰色「–」。不設門檻的話 ±0.2pp 也會被讀成趨勢。
+      const up = t.dPP >= 1.5, dn = t.dPP <= -1.5;
+      ctx.fillStyle = up ? K.up : (dn ? K.dn : K.mid); miFont(ctx, 25, true);
+      ctx.fillText((up ? '▲ +' : (dn ? '▼ ' : '– ')) + t.dPP.toFixed(1) + 'pp', 500, y + 27);
+    }
+
+    // 下層：使用率長條（以榜內最大佔比為滿長）＋ 佔比與樣本數
+    const bw = Math.max(6, Math.round(380 * share(r.usage) / maxShare));
+    const g = ctx.createLinearGradient(116, 0, 116 + bw, 0);
+    g.addColorStop(0, S.a1); g.addColorStop(1, S.a2);
+    ctx.fillStyle = K.ln; miRR(ctx, 116, y + 54, 380, 16, 8); ctx.fill();
+    ctx.fillStyle = g; miRR(ctx, 116, y + 54, bw, 16, 8); ctx.fill();
+    ctx.fillStyle = K.dim; miFont(ctx, 23, false);
+    ctx.fillText(miPct(share(r.usage)) + '　・　n=' + r.usage, 508, y + 63);
+
+    // 右欄：勝率大數字（三段色）。⚠樣本 <10 副一律顯示「—」，不管實際值多少。
+    ctx.textAlign = 'right';
+    if (!r.sampleOk || r.winRate === null || r.winRate === undefined) {
+      ctx.fillStyle = K.mid; miFont(ctx, 40, true);
+      ctx.fillText('—', 1012, y + 34);
+      ctx.fillStyle = K.dim; miFont(ctx, 21, false);
+      ctx.fillText('樣本少', 1012, y + 66);
+    } else {
+      ctx.fillStyle = r.winRate >= 0.52 ? K.up : (r.winRate < 0.48 ? K.dn : K.mid);
+      miFont(ctx, 46, true);
+      ctx.fillText(miPct(r.winRate), 1012, y + 34);
+      ctx.fillStyle = K.dim; miFont(ctx, 21, false);
+      ctx.fillText('勝率', 1012, y + 66);
+    }
+  });
+
+  // ── 未分類帶（1170–1250）──
+  // 未分類刻意**不進排行**：它的 usage 常常是第一名，混進去會有一根巨大的「未分類」
+  //   長條主宰整張圖、資訊量為零。改成獨立一行誠實揭露。
+  const u = blk.unclassified || {};
+  ctx.textAlign = 'left';
+  ctx.strokeStyle = K.ln; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(MI.PAD, 1184); ctx.lineTo(MI.W - MI.PAD, 1184); ctx.stroke();
+  ctx.fillStyle = K.dim; miFont(ctx, 24, false);
+  ctx.fillText('未分類 ' + (u.usage || 0).toLocaleString('zh-TW') + ' 副（'
+    + miPct(share(u.usage || 0)) + '　・　勝率 ' + (u.winRate === null || u.winRate === undefined ? '—' : miPct(u.winRate))
+    + '）　・　分類規則持續擴充中', MI.PAD, 1216);
+
+  // ── 頁腳（1250–1350）：網址在圖上出現兩次（頂部小、底部大置中），
+  //    被裁切時至少留一個。──
+  ctx.textAlign = 'center';
+  const cx = MI.W / 2;
+  miFont(ctx, 30, true);
+  const uw = ctx.measureText(MI_URL).width;
+  if (logo) ctx.drawImage(logo, cx - uw / 2 - 44, 1268, 32, 32);
+  ctx.fillStyle = K.txt;
+  ctx.fillText(MI_URL, cx + (logo ? 18 : 0), 1284);
+  ctx.fillStyle = K.dim; miFont(ctx, 22, false);
+  const foot = (trend && trend.ok)
+    ? '對比期間：' + miDate(trend.prevFrom) + '–' + miDate(trend.prevTo)
+      + '（▲▼ 為使用率變化，門檻 ±1.5pp）　・　樣本 < 10 副之勝率以 — 表示'
+    : '本期為單期快照，未顯示趨勢' + (trend && trend.reason ? '（' + trend.reason + '）' : '')
+      + '　・　樣本 < 10 副之勝率以 — 表示';
+  ctx.fillText(foot, cx, 1322);
+  return cv;
+}
+
+// ── 匯出流程 ────────────────────────────────────────────────────────────────
+let _miBusy = false;
+let _miOut = { casual: null, tourn: null, stamp: '' };
+
+window.openMetaImageExport = async function () {
+  if (_miBusy) return;                       // 連點防呆
+  if (!_archStats) { alert('請先按「📊 計算統計」。'); return; }
+  const btn = document.getElementById('meta-img-btn');
+  const label = btn ? btn.textContent : '';
+  _miBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = '產生中…'; }
+  try {
+    // ⚠先把資料與參數快照成區域變數：產圖期間使用者可能又去動了時間下拉。
+    const cur = _archStats;
+    const days = Number(currentArchSince() || 0);
+    let wide = null;
+    if (days > 0) {
+      // 寬窗＝2N 天（含本期），相減才是「前一個等長窗」。失敗就降級成無趨勢快照，不整個失敗。
+      try {
+        const r = await api('/api/admin/deck-archetype-stats?source=all&since='
+          + (Date.now() - days * 2 * 86400000));
+        if (r && !r.error) wide = r;
+      } catch (e) { wide = null; }
+    }
+    _miOut = {
+      casual: await miDraw('casual', cur, miTrend(days, cur, wide, 'casual'), days),
+      tourn: await miDraw('tourn', cur, miTrend(days, cur, wide, 'tourn'), days),
+      stamp: miStamp(Date.now()),
+    };
+    if (!_miOut.casual && !_miOut.tourn) { alert('目前沒有任何命中的牌組原型，無法產圖。'); return; }
+    renderMetaImageModal(_miOut.casual ? 'casual' : 'tourn');
+  } catch (e) {
+    alert('產圖失敗：' + (e && e.message ? e.message : e));
+  } finally {
+    _miBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+// 預覽 modal：先看再存。手機上 a[download] 會改開新分頁，這裡改成長按圖片儲存即可。
+window.renderMetaImageModal = function (srcKey) {
+  const cv = _miOut[srcKey];
+  const tab = (k, label) => '<button class="' + (k === srcKey ? '' : 'ghost')
+    + '" onclick="renderMetaImageModal(\'' + k + '\')"' + (_miOut[k] ? '' : ' disabled') + '>' + label + '</button>';
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()">'
+    + '<div class="modal" style="max-width:640px;width:100%;">'
+    + '<h3>🖼️ 牌組環境報告圖</h3>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+    + tab('casual', '🎮 一般對戰') + tab('tourn', '🏆 錦標賽') + '</div>'
+    + (cv
+        ? '<img src="' + cv.toDataURL('image/png') + '" alt="環境報告圖"'
+          + ' style="width:100%;border-radius:10px;display:block;">'
+        : '<div class="empty">這個資料源沒有任何命中的牌組原型。</div>')
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">'
+    + '<button onclick="downloadMetaImage(\'' + srcKey + '\')"' + (cv ? '' : ' disabled') + '>⬇️ 下載這張</button>'
+    + '<button class="ghost" onclick="closeModal()">關閉</button></div>'
+    + '<div class="small muted" style="margin-top:8px;">'
+    + '1080×1350（2× 輸出），適合直接貼到 LINE／Facebook／Discord。手機可長按圖片儲存。</div>'
+    + '</div></div>';
+};
+
+window.downloadMetaImage = function (srcKey) {
+  const cv = _miOut[srcKey];
+  if (!cv) return;
+  cv.toBlob(function (blob) {          // ⚠toBlob 是 callback 非同步，不是回傳值
+    if (!blob) { alert('產生檔案失敗'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // 檔名全 ASCII：中文檔名在部分聊天軟體上傳時會有編碼問題。
+    a.download = 'ptcg-meta-' + srcKey + '-' + (_miOut.stamp || miStamp(Date.now())) + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    // ⚠立即 revoke 會讓部分瀏覽器取消下載，要延遲。
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }, 'image/png');
 };
 
 window.loadArchetypeStats = async function() {
@@ -2747,6 +3096,9 @@ function renderArchetypeStats() {
         + '若分類結果不如預期，可在較廣的那條規則加「不能包含」把它們排除掉。'
       : '✅ 沒有任何一副牌同時符合兩條以上的規則，代表你的規則彼此互斥、分類不會有歧義。')
   + '</div>';
+  // v1.64 有統計結果才開放匯出報告圖
+  const _mib = document.getElementById('meta-img-btn');
+  if (_mib) _mib.disabled = false;
 }
 
 function readRuleForm() {
