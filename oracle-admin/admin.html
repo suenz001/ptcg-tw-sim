@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.62</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.63</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2391,6 +2391,12 @@ function renderDeckRules(el) {
       .rule-chip{display:inline-block;padding:1px 7px;margin:1px 3px 1px 0;border-radius:10px;font-size:12px;}
       .rule-chip.inc{background:#e3f2e6;color:#2e7d32;}
       .rule-chip.exc{background:#fdecec;color:#c62828;}
+  /* v1.63 未分類高頻卡 chip（點一下設為支援型） */
+  .uncls-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .uncls-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;
+    background:#eef3fb;border:1px solid #d6e0f0;color:#2a4a7a;font-size:12px;cursor:pointer;}
+  .uncls-chip:hover{background:#fdecec;border-color:#ef9a9a;color:#c62828;}
+  .uncls-n{color:#7a8898;font-size:11px;}
       .rule-form label{display:block;font-size:12px;color:#5a6472;margin:8px 0 2px;}
       .rule-form input,.rule-form textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #d6dbe3;border-radius:6px;font-size:13px;}
       .rule-form textarea{min-height:56px;resize:vertical;font-family:inherit;}
@@ -2478,6 +2484,46 @@ function renderDeckRules(el) {
 
   if (_archStats) renderArchetypeStats();
 }
+
+// ══ v1.63 支援型寶可夢清單（未分類高頻卡的排除名單）══════════════════════
+//   吉雉雞ex、喵喵ex 這類幾乎每副牌都放的功能性寶可夢，出現在「未分類高頻卡」
+//   同樣沒有鑑別度 —— 它們不代表任何特定牌組。清單存伺服器，改完即刻反映在統計上。
+window.addSupportPokemon = async function (name) {
+  if (!name) return;
+  const cur = await api('/api/admin/support-pokemon');
+  const names = (cur && Array.isArray(cur.names)) ? cur.names : [];
+  if (names.includes(name)) { alert('「' + name + '」已經在支援型清單裡了。'); return; }
+  const r = await api('/api/admin/support-pokemon', { method: 'POST', body: JSON.stringify({ names: names.concat([name]) }) });
+  if (!r || r.error) { alert('加入失敗：' + (r?.error || '?')); return; }
+  await loadArchetypeStats();   // 後端已清快取，重算即可看到它從清單消失
+};
+
+window.openSupportPokemonEditor = async function () {
+  const cur = await api('/api/admin/support-pokemon');
+  const names = (cur && Array.isArray(cur.names)) ? cur.names : [];
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal" style="min-width:460px;max-width:640px;">'
+    + '<h3>🧩 支援型寶可夢清單</h3>'
+    + '<p class="small muted" style="margin:0 0 10px;">這些寶可夢不會出現在「未分類高頻卡」的建議裡。'
+    + '一行一張，卡名需與官方中文卡名完全一致。</p>'
+    + '<textarea id="sup-poke-ta" style="width:100%;box-sizing:border-box;height:220px;font-size:13px;'
+    + 'padding:8px;border:1px solid #d6dbe3;border-radius:6px;font-family:inherit;">'
+    + escapeHtml(names.join('\n')) + '</textarea>'
+    + '<div style="margin-top:14px;text-align:right;">'
+    + '<button class="ghost" onclick="closeModal()">取消</button> '
+    + '<button class="btn-primary" onclick="saveSupportPokemon()">儲存並重算</button>'
+    + '</div></div></div>';
+};
+
+window.saveSupportPokemon = async function () {
+  const ta = document.getElementById('sup-poke-ta');
+  if (!ta) return;
+  const names = ta.value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const r = await api('/api/admin/support-pokemon', { method: 'POST', body: JSON.stringify({ names }) });
+  if (!r || r.error) { alert('儲存失敗：' + (r?.error || '?')); return; }
+  closeModal();
+  await loadArchetypeStats();
+};
 
 window.loadArchetypeStats = async function() {
   if (_archStatsBusy) return;
@@ -2654,7 +2700,13 @@ function renderArchetypeStats() {
       + (showDraws ? '<td>' + (r.draws || 0) + '</td>' : '')
       + wrCell(r) + '</tr>').join('');
     const u = blk.unclassified || {};
-    const uTop = (u.topCards || []).slice(0, 12).map((c) => escapeHtml(c.name) + '×' + c.decks).join('、');
+    // v1.63 高頻卡改成可點的 chip：點一下就把該卡加進「支援型寶可夢」排除清單並重算。
+    //   後端已先濾掉非寶可夢（老大的指令／基本能量這類通用卡對「該開什麼規則」沒有鑑別度）。
+    const uTop = (u.topCards || []).slice(0, 20).map((c) =>
+      '<span class="uncls-chip" title="點一下：設為支援型寶可夢（從此清單排除）"'
+      + ' onclick="addSupportPokemon(\'' + String(c.name).replace(/'/g, '&apos;') + '\')">'
+      + escapeHtml(c.name) + '<span class="uncls-n">×' + c.decks + '</span></span>').join('');
+    const uFiltered = u.filteredOut || {};
     const headHtml = '<tr><th>#</th>' + th('name', '牌組原型') + th('usage', '使用次數')
       + th('wins', '勝') + th('losses', '負') + (showDraws ? th('draws', '平') : '')
       + th('winRate', '勝率', '樣本少於 10 副的勝率僅供參考，排序時會一併計入') + '</tr>';
@@ -2666,7 +2718,14 @@ function renderArchetypeStats() {
           : '<div class="empty">目前的規則在這個資料源沒有任何命中。</div>')
       + '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #dfe4ea;">'
       + '<b>未分類</b>：' + (u.usage || 0) + ' 副（勝 ' + (u.wins || 0) + ' / 負 ' + (u.losses || 0) + '，勝率 ' + pct(u.winRate) + '）'
-      + (uTop ? '<div class="small muted" style="margin-top:4px;">未分類牌組裡最常出現的卡（可據此開新規則）：' + uTop + '</div>' : '')
+      + (uTop
+          ? '<div class="small muted" style="margin-top:6px;">未分類牌組裡最常出現的<b>寶可夢</b>（可據此開新規則；點卡片可設為支援型並排除）：</div>'
+            + '<div class="uncls-chips">' + uTop + '</div>'
+            + '<div class="small muted" style="margin-top:4px;">'
+            + '已自動濾掉 ' + (uFiltered.nonPokemon || 0) + ' 種非寶可夢卡（物品／支援者／道具／能量）'
+            + '，以及 ' + (uFiltered.support || 0) + ' 種你標記過的支援型寶可夢。'
+            + ' <a href="#" onclick="openSupportPokemonEditor(); return false;">管理支援型清單</a></div>'
+          : '')
       + '</div></div>';
   };
   box.innerHTML =
