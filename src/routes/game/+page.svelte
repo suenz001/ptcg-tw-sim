@@ -80,7 +80,7 @@
            getNotifyEnabled, saveNotifyEnabled, getPermission as getNotifyPermission,
            sendTestNotification, isIOSNeedsInstall, initNotifyNav,
            subscribePush, unsubscribePush, getNotifyDiagnostics, hasPrompted,
-           describePushStage } from '$lib/notify';
+           describePushStage, getNotifyCommunity, saveNotifyCommunity } from '$lib/notify';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
@@ -5077,6 +5077,8 @@
                             serverRegistered: boolean; serverStage: string; serverDetail: string; pushHost: string } | null>(null);
   // v6.026：伺服器端推播自測結果（由伺服器真的推一則回來，能分清「訂閱沒登記」與「推播送不出」）
   let pushSelfTestMsg = $state<{ ok: boolean; text: string } | null>(null);
+  // v6.035 社群賽開辦通知偏好（真正生效處在伺服器，這裡只是 UI 狀態）
+  let notifyCommunity = $state(true);
   let pushSelfTestBusy = $state(false);
   async function refreshNotifyDiag() { try { notifyDiag = await getNotifyDiagnostics(); } catch { notifyDiag = null; } }
   async function runNotifyTest() {
@@ -5159,6 +5161,7 @@
   }
   onMount(() => {
     notifyEnabled = getNotifyEnabled();
+    notifyCommunity = getNotifyCommunity();
     notifyPerm = getNotifyPermission();
     notifyIOSNeedsInstall = isIOSNeedsInstall();
     initNotifyNav((url) => { try { if (!location.href.startsWith(url)) goto(url); } catch { /* 導頁失敗不影響對戰 */ } });
@@ -7275,6 +7278,13 @@
                 disabled={notifyOverall === 'ios' || notifyOverall === 'unsupported'}
                 onchange={(e) => onNotifyToggle(e.currentTarget.checked)} />
               <span>報到開始、輪到你可以進場、對戰中輪到你行動時提醒我</span>
+            </label>
+            <!-- v6.035 社群賽開辦通知：從屬於總開關（總開關關掉就收不到任何推播，故一併 disabled） -->
+            <label class="tourn-nt-toggle tourn-nt-sub">
+              <input type="checkbox" checked={notifyCommunity}
+                disabled={!notifyEnabled || notifyOverall === 'ios' || notifyOverall === 'unsupported'}
+                onchange={(e) => { notifyCommunity = e.currentTarget.checked; void saveNotifyCommunity(notifyCommunity, tApi); }} />
+              <span>有玩家發起<b>社群賽</b>時也通知我（會顯示賽事名稱、賽制與開賽門檻、募集剩餘時間）</span>
             </label>
             {#if notifyOverall === 'ios'}
               <p class="tourn-nt-note nt-warn">📱 iPhone / iPad 要先安裝才能收通知：Safari 分享鈕 →「加入主畫面」，之後從主畫面圖示開啟本站（需 iOS 16.4 以上）。</p>
@@ -11083,6 +11093,9 @@
   .tourn-nt-badge.nt-ios, .tourn-nt-badge.nt-unsupported { color: #ff9a9a; border-color: #7a3a3a; background: #2e1414; }
   .tourn-nt-toggle { display: flex; align-items: flex-start; gap: 8px; color: #cfe8cf; font-size: .85rem; cursor: pointer; }
   .tourn-nt-toggle input { margin-top: 2px; flex: none; }
+  /* v6.035 子項：視覺上從屬於上面的總開關 */
+  .tourn-nt-sub { margin-top: 8px; padding-left: 18px; border-left: 2px solid #2c402c; font-size: .82rem; }
+  .tourn-nt-sub input:disabled + span { opacity: .5; }
   .tourn-nt-note { font-size: .8rem; margin: 8px 0 0; line-height: 1.5; }
   .tourn-nt-note.nt-ok { color: #9fdca0; }
   .tourn-nt-note.nt-warn { color: #e0a050; }

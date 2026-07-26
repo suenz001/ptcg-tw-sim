@@ -21,6 +21,9 @@ const KEY_PROMPTED = 'ptcg.notify.prompted';
 const KEY_SEEN = 'ptcg.notify.seen';
 /** v6.026：Web Push 訂閱「有沒有成功登記到伺服器」的最後結果（診斷用；瀏覽器端訂閱成功≠伺服器收到）。 */
 const KEY_PUSH_SERVER = 'ptcg.notify.pushServer';
+// v0.98 社群賽開辦通知的偏好。⚠localStorage 只是 UI 快取 ——
+//   推播是**伺服器主動發**的，真正決定收不收的是伺服器上訂閱文件的 notifyCommunity 欄位。
+const KEY_COMMUNITY = 'ptcg.notify.community';
 
 let _seen: Record<string, number> = {};
 let _loaded = false;
@@ -44,6 +47,22 @@ export function getNotifyEnabled(): boolean {
   if (!hasWindow()) return false;
   try { return localStorage.getItem(KEY_ENABLED) === '1'; } catch { return false; }
 }
+/** 是否接收「有人發起社群賽」的通知。預設 true（與伺服器端「欄位缺席視為開啟」一致）。 */
+export function getNotifyCommunity(): boolean {
+  if (!hasWindow()) return true;
+  try { return localStorage.getItem(KEY_COMMUNITY) !== '0'; } catch { return true; }
+}
+/**
+ * 存社群賽通知偏好：**同時寫 localStorage（UI 用）與伺服器（推播實際依據）**。
+ * 只寫本機是沒有用的 —— 伺服器不會知道你關掉了，照樣推給你。
+ */
+export async function saveNotifyCommunity(on: boolean, api?: (path: string, body?: unknown) => Promise<unknown>): Promise<void> {
+  if (hasWindow()) { try { localStorage.setItem(KEY_COMMUNITY, on ? '1' : '0'); } catch { /* 忽略 */ } }
+  if (!api) return;
+  try { await api('/push/prefs', { notifyCommunity: on }); }
+  catch (e) { console.warn('[notify] 社群賽通知偏好送伺服器失敗（本機已記錄，下次進頁會補送）', e); }
+}
+
 export function saveNotifyEnabled(on: boolean): void {
   if (!hasWindow()) return;
   try { localStorage.setItem(KEY_ENABLED, on ? '1' : '0'); } catch { /* quota/隱私模式 → 忽略 */ }
@@ -367,6 +386,9 @@ export async function subscribePush(api: (path: string, body?: unknown) => Promi
     let host = '';
     try { host = new URL(sub.endpoint).hostname; } catch { /* 忽略 */ }
     savePushServerState({ ok: true, stage: 'ok', host });
+    // v0.98：訂閱成功後補送一次偏好——涵蓋「上次送伺服器失敗」與「換了新裝置」兩種情況，
+    //   否則本機顯示已關、伺服器卻還是照推。
+    try { await api('/push/prefs', { notifyCommunity: getNotifyCommunity() }); } catch { /* 非關鍵，下次再補 */ }
     return { ok: true, stage: 'ok', host };
   } catch (e) {
     const detail = String((e as Error)?.message ?? '').slice(0, 140);
