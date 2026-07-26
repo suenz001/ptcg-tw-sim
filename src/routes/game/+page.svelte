@@ -4261,7 +4261,12 @@
   function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile') {
     tTab = tab;
     if (tab === 'leaderboard' && !tLeaderboard) tLeaderboardLoad();
-    if (tab === 'profile' && !tProfile) tProfileLoad();
+    if (tab === 'profile') {
+      if (!tProfile) tProfileLoad();
+      // v6.032 進分頁即刷新診斷：少了這行，notifyDiag 是 null → 'server-missing' 永遠偵測不到，
+      //   徽章會顯示成「運作中」的假綠燈，而那正是最需要被看見的狀態。
+      void refreshNotifyDiag();
+    }
   }
   // v5.642 名人堂點選 → 載入該賽事「當初賽程」(歸檔 TARCHIVE)
   async function tHofOpen(c: any) {
@@ -5080,6 +5085,53 @@
     notifyTestMsg = { ok: r.ok, hint: r.hint };
     await refreshNotifyDiag();
   }
+  // ══ v6.032 通知設定搬到錦標賽大廳「🪪 個人資料」分頁 ═══════════════════════
+  // 把六個 boolean 收斂成單一「玩家看得懂」的整體狀態。順序有意義：
+  //   ios 必須排在 unsupported 之前 —— iPhone 未加入主畫面時 Notification API 根本不存在，
+  //   diag.supported 也會是 false，先判 unsupported 會讓 iOS 使用者看到「換瀏覽器」的錯誤指引。
+  // 'server-missing' = 本機訂閱成功但伺服器沒登記到 → 關掉分頁/App 就收不到報到與進場推播，
+  //   這是最需要被看見的異常（v6.026 的事故就是這個狀態被靜默吞掉）。
+  const notifyOverall = $derived.by<'ios' | 'unsupported' | 'blocked' | 'off' | 'server-missing' | 'on'>(() => {
+    if (notifyIOSNeedsInstall) return 'ios';
+    if (notifyDiag && !notifyDiag.supported) return 'unsupported';
+    if (notifyPerm === 'denied') return 'blocked';
+    if (!notifyEnabled) return 'off';
+    if (notifyDiag && notifyDiag.pushSubscribed && !notifyDiag.serverRegistered) return 'server-missing';
+    return 'on';
+  });
+  const NOTIFY_BADGE: Record<string, string> = {
+    ios: '需安裝', unsupported: '不支援', blocked: '被封鎖', off: '未開啟', 'server-missing': '⚠ 連線異常', on: '運作中',
+  };
+  /** 開關邏輯抽成具名函式：大廳的完整卡片與設定視窗保留的最小開關共用同一份，不會漂移。 */
+  async function onNotifyToggle(want: boolean) {
+    if (want && notifyPerm !== 'granted') { notifyPerm = await requestNotifyPermission(); }
+    notifyEnabled = want && getNotifyPermission() === 'granted';
+    saveNotifyEnabled(notifyEnabled);
+    notifyPerm = getNotifyPermission();
+    if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; await refreshNotifyDiag(); })();
+    else { _pushSubDone = false; void unsubscribePush(tApi); void refreshNotifyDiag(); }
+  }
+
+  // v6.032 測試結果訊息自動退場（Wilson：訊息會一直留在畫面上很礙眼）
+  //   ・成功訊息 8 秒後自動消失 —— 玩家只需要知道「有通」，留著就是視覺垃圾。
+  //   ・失敗訊息**不自動消失** —— 那是要照著做（開權限／裝 PWA）或截圖給管理員的排查資訊，
+  //     自動消失反而會讓人以為問題自己好了；改成訊息旁邊給一顆 ✕ 手動關掉。
+  //   ・timer 生命週期全交給 $effect 的 cleanup：重複點擊時 msg 換成新物件 → effect 重跑前
+  //     先執行 cleanup 清掉舊 timer（計時從最新訊息重算）；元件卸載時也會執行 cleanup。
+  //     兩條洩漏路徑都封死，不必手動維護 clearTimeout。
+  $effect(() => {
+    const m = notifyTestMsg;
+    if (!m || !m.ok) return;
+    const t = setTimeout(() => { notifyTestMsg = null; }, 8000);
+    return () => clearTimeout(t);
+  });
+  $effect(() => {
+    const m = pushSelfTestMsg;
+    if (!m || !m.ok) return;
+    const t = setTimeout(() => { pushSelfTestMsg = null; }, 8000);
+    return () => clearTimeout(t);
+  });
+
   // v6.026：先確保訂閱真的登記到伺服器（會回報卡在哪一關），再請伺服器實際推一則回來。
   //   這是唯一能分清「本機通知沒問題但伺服器根本沒有我的訂閱」與「有訂閱但推播送不到」的方法。
   async function runPushSelfTest() {
@@ -7209,6 +7261,60 @@
         </div>
       {:else if tTab === 'profile'}
         <div class="tourn-profile">
+          <!-- ══ v6.032 🔔 賽事通知（自設定視窗搬來）══════════════════════════════
+               ⚠必須放在 tProfileLoading / tProfile 的判斷**之外**：tProfile 為 null 的新玩家
+                 （還沒有已結束的賽事紀錄）整個分頁只會顯示一行「尚未開放」，
+                 通知設定若被關在裡面，新玩家就永遠設定不到通知。 -->
+          <div class="tourn-nt">
+            <div class="tourn-nt-head">
+              <span class="tourn-nt-title">🔔 賽事通知</span>
+              <span class="tourn-nt-badge nt-{notifyOverall}">{NOTIFY_BADGE[notifyOverall]}</span>
+            </div>
+            <label class="tourn-nt-toggle">
+              <input type="checkbox" checked={notifyEnabled}
+                disabled={notifyOverall === 'ios' || notifyOverall === 'unsupported'}
+                onchange={(e) => onNotifyToggle(e.currentTarget.checked)} />
+              <span>報到開始、輪到你可以進場、對戰中輪到你行動時提醒我</span>
+            </label>
+            {#if notifyOverall === 'ios'}
+              <p class="tourn-nt-note nt-warn">📱 iPhone / iPad 要先安裝才能收通知：Safari 分享鈕 →「加入主畫面」，之後從主畫面圖示開啟本站（需 iOS 16.4 以上）。</p>
+            {:else if notifyOverall === 'unsupported'}
+              <p class="tourn-nt-note nt-warn">⚠️ 這個瀏覽器不支援通知功能，本站無法提醒你（建議改用 Chrome / Edge / Firefox）。</p>
+            {:else if notifyOverall === 'blocked'}
+              <p class="tourn-nt-note nt-warn">⚠️ 通知已被瀏覽器封鎖。請點網址列的鎖頭圖示 → 通知 → 允許，再回來勾選開啟。</p>
+            {:else if notifyOverall === 'server-missing'}
+              <p class="tourn-nt-note nt-warn">⚠️ 通知已開啟，但與伺服器的連線沒有建立成功——關掉這個分頁或 App 之後，會收不到報到與進場提醒。請按下方「重新連線」。</p>
+            {:else if notifyOverall === 'on'}
+              <p class="tourn-nt-note nt-ok">✅ 通知運作中：即使切到其他分頁或手機鎖屏，也會提醒你。</p>
+            {/if}
+            {#if notifyOverall !== 'ios' && notifyOverall !== 'unsupported'}
+              <div class="tourn-nt-btns">
+                {#if notifyOverall === 'server-missing'}
+                  <button class="btn-primary" onclick={() => runPushSelfTest()} disabled={pushSelfTestBusy}>{pushSelfTestBusy ? '連線中…' : '🔄 重新連線'}</button>
+                {/if}
+                <button class="btn-secondary" onclick={() => runNotifyTest()}>發送測試通知</button>
+              </div>
+            {/if}
+            {#if notifyTestMsg}
+              <p class="tourn-nt-msg" class:ok={notifyTestMsg.ok}>{notifyTestMsg.ok ? '✅ ' : '⚠️ '}{notifyTestMsg.hint}{#if !notifyTestMsg.ok}<button class="tourn-nt-x" title="關閉這則訊息" onclick={() => (notifyTestMsg = null)}>✕</button>{/if}</p>
+            {/if}
+            {#if pushSelfTestMsg}
+              <p class="tourn-nt-msg" class:ok={pushSelfTestMsg.ok}>{pushSelfTestMsg.ok ? '✅ ' : '⚠️ '}{pushSelfTestMsg.text}{#if !pushSelfTestMsg.ok}<button class="tourn-nt-x" title="關閉這則訊息" onclick={() => (pushSelfTestMsg = null)}>✕</button>{/if}</p>
+            {/if}
+            <details class="tourn-nt-adv" ontoggle={(e) => { if (e.currentTarget.open) void refreshNotifyDiag(); }}>
+              <summary>進階診斷（收不到通知時，請展開後截圖給管理員）</summary>
+              <div class="tourn-nt-btns">
+                <button class="btn-secondary" onclick={() => runPushSelfTest()} disabled={pushSelfTestBusy}>{pushSelfTestBusy ? '測試中…' : '測試伺服器推播'}</button>
+                <button class="btn-secondary" onclick={() => refreshNotifyDiag()}>重新檢查</button>
+              </div>
+              {#if notifyDiag}
+                <p class="tourn-nt-diag">本機：瀏覽器支援 {notifyDiag.supported ? '✅' : '❌'}｜權限 {notifyDiag.permission === 'granted' ? '✅ 已允許' : (notifyDiag.permission === 'denied' ? '❌ 已封鎖' : '⏳ 尚未詢問')}｜開關 {notifyDiag.enabled ? '✅' : '❌'}｜背景服務 {notifyDiag.swRegistered ? '✅' : '❌'}</p>
+                <p class="tourn-nt-diag">推播：本機訂閱 {notifyDiag.pushSubscribed ? '✅' : '❌'}｜伺服器登記 {notifyDiag.serverRegistered ? '✅' : '❌'}（{describePushStage(notifyDiag.serverStage)}）{notifyDiag.pushHost ? '｜通道 ' + notifyDiag.pushHost : ''}</p>
+              {:else}
+                <p class="tourn-nt-diag">（按「重新檢查」取得目前狀態）</p>
+              {/if}
+            </details>
+          </div>
           {#if tProfileLoading}
             <p class="muted small" style="text-align:center;padding:18px;">載入個人資料中…</p>
           {:else if !tProfile}
@@ -10357,59 +10463,17 @@
               <input id="play-hidden" type="checkbox" checked={playWhenHidden} onchange={(e) => { playWhenHidden = e.currentTarget.checked; savePlayWhenHidden(playWhenHidden); }} />
               <span class="small" style="color:#9aa3b0">（讓你聽 ready go 知道對戰開始）</span>
             </div>
-            <!-- v6.022 錦標賽通知開關（與上方「背景音效」成對：一個用聽的、一個用跳通知的） -->
-            <div class="setting-row">
-              <label for="notify-enabled">🔔 錦標賽背景通知：</label>
-              <input id="notify-enabled" type="checkbox" checked={notifyEnabled}
-                onchange={async (e) => {
-                  const want = e.currentTarget.checked;
-                  if (want && notifyPerm !== 'granted') { notifyPerm = await requestNotifyPermission(); }
-                  notifyEnabled = want && getNotifyPermission() === 'granted';
-                  saveNotifyEnabled(notifyEnabled);
-                  notifyPerm = getNotifyPermission();
-                  // v6.023：開關連動 Web Push 訂閱
-                  if (notifyEnabled) void (async () => { const r = await subscribePush(tApi); if (r.ok) _pushSubDone = true; await refreshNotifyDiag(); })();
-                  else { _pushSubDone = false; void unsubscribePush(tApi); }
-                }} />
-              <span class="small" style="color:#9aa3b0">（報到開始、可進場、輪到你時提醒；此分頁需保持開啟）</span>
-            </div>
-            <div class="setting-row">
-              <button class="btn-secondary" onclick={() => runNotifyTest()}>發送測試通知</button>
-              <button class="btn-secondary" onclick={() => runPushSelfTest()} disabled={pushSelfTestBusy}>
-                {pushSelfTestBusy ? '測試中…' : '測試伺服器推播'}
-              </button>
-              <button class="btn-secondary" onclick={() => refreshNotifyDiag()}>檢查通知狀態</button>
-            </div>
-            {#if pushSelfTestMsg}
-              <p class="small" style={pushSelfTestMsg.ok ? 'color:#7cc4ff' : 'color:#e0a050'}>
-                {pushSelfTestMsg.ok ? '✅ ' : '⚠️ '}{pushSelfTestMsg.text}
-              </p>
-            {/if}
-            {#if notifyTestMsg}
-              <p class="small" style={notifyTestMsg.ok ? 'color:#7cc4ff' : 'color:#e0a050'}>
-                {notifyTestMsg.ok ? '✅ ' : '⚠️ '}{notifyTestMsg.hint}
-              </p>
-            {/if}
-            {#if notifyDiag}
-              <p class="small" style="color:#9aa3b0">
-                狀態：瀏覽器支援 {notifyDiag.supported ? '✅' : '❌'}｜權限 {notifyDiag.permission === 'granted' ? '✅ 已允許' : (notifyDiag.permission === 'denied' ? '❌ 已封鎖' : '⏳ 尚未詢問')}｜開關 {notifyDiag.enabled ? '✅' : '❌'}｜背景服務 {notifyDiag.swRegistered ? '✅' : '❌'}
-              </p>
-              <p class="small" style="color:#9aa3b0">
-                推播：本機訂閱 {notifyDiag.pushSubscribed ? '✅' : '❌'}｜伺服器登記 {notifyDiag.serverRegistered ? '✅' : '❌'}（{describePushStage(notifyDiag.serverStage)}）{notifyDiag.pushHost ? '｜通道 ' + notifyDiag.pushHost : ''}
-              </p>
-              {#if notifyDiag.pushSubscribed && !notifyDiag.serverRegistered}
-                <p class="small" style="color:#e0a050">⚠️ 本機已訂閱但伺服器沒有登記到——關掉分頁或 App 時就收不到報到與進場通知。請按上方「測試伺服器推播」重新登記。</p>
-              {/if}
-            {/if}
-            {#if notifyPerm === 'denied'}
-              <p class="small" style="color:#e0a050">⚠️ 通知已被瀏覽器封鎖。請點網址列的鎖頭圖示 → 通知 → 允許，再回來開啟。</p>
-            {/if}
-            {#if notifyIOSNeedsInstall}
-              <p class="small" style="color:#e0a050">📱 iPhone / iPad 需先安裝才能收通知：Safari 分享鈕 → 加入主畫面，之後從主畫面圖示開啟本站（需 iOS 16.4 以上）。</p>
-            {:else if notifyDiag && !notifyDiag.supported}
-              <p class="small" style="color:#e0a050">⚠️ 這個瀏覽器不支援通知功能，本站無法提醒你（建議改用 Chrome／Edge／Firefox）。</p>
-            {/if}
           {/if}
+          <!-- v6.032 通知的完整設定／測試／診斷已搬到 🏆 錦標賽大廳 ›「🪪 個人資料」分頁。
+               這裡只留一個開關，供對戰進行中（大廳畫面不存在時）臨時想關掉推播使用。
+               ⚠刻意放在 {#if !audioMuted} 的**外面**：通知跟音效靜音無關，
+                 原本整段被包在裡面 → 把音效靜音的玩家在設定視窗完全看不到通知設定（順手修掉的舊 bug）。 -->
+          <div class="setting-row">
+            <label for="notify-enabled">🔔 錦標賽背景通知：</label>
+            <input id="notify-enabled" type="checkbox" checked={notifyEnabled}
+              onchange={(e) => onNotifyToggle(e.currentTarget.checked)} />
+            <span class="small" style="color:#9aa3b0">（測試與診斷請到錦標賽大廳的「🪪 個人資料」）</span>
+          </div>
         </details>
 
         <!-- v2.45 解析度模式 — 為 1024×576 等小螢幕玩家加 fit-to-window 縮放 -->
@@ -11006,6 +11070,29 @@
   .tourn-pf-evrow:last-child { border-bottom: none; }
   .tourn-pf-evname { color: #eaffea; font-size: .9rem; font-weight: 600; }
   .tourn-pf-evmeta { color: #9fdca0; font-size: .78rem; }
+  /* ══ v6.032 賽事通知設定卡（個人資料分頁）══
+     ⚠note 的狀態 class 刻意叫 nt-warn / nt-ok 而不是 warn / ok：
+       本檔已有全域的 .warn（{#if tError}<p class="warn">）與其他 ok，避免選擇器互撞。 */
+  .tourn-nt { border: 1px solid #4a6a4a; border-radius: 12px; padding: 12px 14px; background: #142414; margin-bottom: 14px; }
+  .tourn-nt-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .tourn-nt-title { color: #eaffea; font-size: .95rem; font-weight: 700; }
+  .tourn-nt-badge { font-size: .7rem; padding: 2px 8px; border-radius: 999px; border: 1px solid #444; }
+  .tourn-nt-badge.nt-on { color: #9fdca0; border-color: #4a6a4a; background: #1a2e1a; }
+  .tourn-nt-badge.nt-off { color: #9aa3b0; border-color: #444; background: #1e1e1e; }
+  .tourn-nt-badge.nt-server-missing, .tourn-nt-badge.nt-blocked { color: #ffb35a; border-color: #7a5a2a; background: #2e2414; }
+  .tourn-nt-badge.nt-ios, .tourn-nt-badge.nt-unsupported { color: #ff9a9a; border-color: #7a3a3a; background: #2e1414; }
+  .tourn-nt-toggle { display: flex; align-items: flex-start; gap: 8px; color: #cfe8cf; font-size: .85rem; cursor: pointer; }
+  .tourn-nt-toggle input { margin-top: 2px; flex: none; }
+  .tourn-nt-note { font-size: .8rem; margin: 8px 0 0; line-height: 1.5; }
+  .tourn-nt-note.nt-ok { color: #9fdca0; }
+  .tourn-nt-note.nt-warn { color: #e0a050; }
+  .tourn-nt-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .tourn-nt-msg { font-size: .8rem; margin: 8px 0 0; color: #e0a050; line-height: 1.5; }
+  .tourn-nt-msg.ok { color: #7cc4ff; }
+  .tourn-nt-x { margin-left: 6px; padding: 0 6px; font-size: .75rem; border: 1px solid #666; background: #2a2a2a; color: #ccc; border-radius: 4px; cursor: pointer; }
+  .tourn-nt-adv { margin-top: 10px; border-top: 1px dashed #2c402c; padding-top: 8px; }
+  .tourn-nt-adv summary { font-size: .75rem; color: #7a9a7a; cursor: pointer; }
+  .tourn-nt-diag { font-size: .72rem; color: #9aa3b0; margin: 6px 0 0; word-break: break-all; }
   @media (max-width: 560px) { .tourn-lb-champ-cols { grid-template-columns: 1fr; } }
   .tourn-logout { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; border: 1px solid #888; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer; }
   .tourn-event { border: 1px solid #4a6a4a; border-radius: 10px; padding: 10px 14px; margin: 10px auto; max-width: 100%; background: #142414; }  /* v5.634 填滿欄位、邊緣對齊 */
