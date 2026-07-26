@@ -102,6 +102,82 @@ T('⭐事故重演鎖：helper 與其 caller 不可分處兩個「平行」的 I
     + '；helper 皆在最外層 → 讀得到');
 });
 
+// ══ v1.01：通用作用域掃描（取代「逐一點名少數 helper」）════════════════════
+// v0.94 是「helper 關在 IIFE 內、caller 在外」；v1.01 是它的**鏡像**——
+//   v1.00 新增的 getPokemonNameSet() 定義在外層，但它呼叫的 getCardNameMap
+//   當時還關在 registerStatsEndpoints 的 IIFE 內 → 一按「計算統計」就
+//   ReferenceError『getCardNameMap is not defined』，整個端點 500。
+// 兩次都不是語法錯，`node --check` 與「抽出函式文字執行」的單元測試都抓不到，
+//   只有真的部署上去點下去才會炸。上面那條 SHARED_HELPERS 是**逐一點名**的白名單，
+//   換個新 helper 名字就完全漏掉——所以這裡改成通用規則：
+//   **凡定義在所有 IIFE 之外的函式，它呼叫到的本檔函式也必須在外層看得到。**
+
+/** 把註解與字串換成等長空白：說明文字裡提到的函式名不是真的呼叫。 */
+function _blank(s) {
+  return s
+    .replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (x) => x.replace(/[^\n]/g, ' '))
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (x) => x.replace(/[^\n]/g, ' '));
+}
+/** 以大括號深度配對，找出某個 '{' 對應的 '}'。 */
+function _matchBrace(s, open) {
+  let d = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === '{') d++;
+    else if (s[i] === '}') { d--; if (d === 0) return i; }
+  }
+  return -1;
+}
+function _iifeRanges(s) {
+  const out = [];
+  for (const m of s.matchAll(/\(function\s+([A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g)) {
+    const open = s.indexOf('{', m.index), end = _matchBrace(s, open);
+    if (end > 0) out.push({ name: m[1] || '(匿名)', start: m.index, end });
+  }
+  return out;
+}
+function _funcDecls(s) {
+  const out = [];
+  for (const m of s.matchAll(/\bfunction\s+([A-Za-z0-9_$]+)\s*\(/g)) {
+    const open = s.indexOf('{', m.index), end = _matchBrace(s, open);
+    if (end > 0) out.push({ name: m[1], at: m.index, bodyStart: open, bodyEnd: end });
+  }
+  return out;
+}
+
+T('⭐⭐通用鎖：IIFE 外的函式不可呼叫「只存在於某個 IIFE 內」的函式（v1.01 事故）', () => {
+  const clean = _blank(src);
+  const iifes = _iifeRanges(src);
+  const decls = _funcDecls(src);
+  const enclosing = (pos) => iifes.filter((r) => pos > r.start && pos < r.end);
+
+  const outer = new Set(), innerOnly = new Map();
+  for (const d of decls) {
+    const rs = enclosing(d.at);
+    if (!rs.length) outer.add(d.name);
+    else if (!innerOnly.has(d.name)) innerOnly.set(d.name, rs[rs.length - 1].name);
+  }
+  for (const n of outer) innerOnly.delete(n);   // 外層也有一份就沒問題
+
+  const bad = [], seen = new Set();
+  for (const d of decls) {
+    if (enclosing(d.at).length) continue;        // 只查「定義在外層」的函式
+    const body = clean.slice(d.bodyStart, d.bodyEnd);
+    // 自己 body 內定義的巢狀函式當然看得到
+    const local = new Set([...body.matchAll(/\bfunction\s+([A-Za-z0-9_$]+)\s*\(/g)].map((x) => x[1]));
+    for (const c of body.matchAll(/\b([A-Za-z0-9_$]+)\s*\(/g)) {
+      const n = c[1];
+      if (n === d.name || local.has(n) || !innerOnly.has(n)) continue;
+      const k = d.name + '>' + n;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      bad.push(`${d.name}()（最外層）呼叫了 ${n}()，但 ${n} 只定義在 IIFE ${innerOnly.get(n)} 內 —— 執行到就 ReferenceError`);
+    }
+  }
+  assert.deepEqual(bad, [], '跨作用域引用：\n  ' + bad.join('\n  '));
+  console.log(`   掃描 ${decls.length} 個函式宣告 / ${iifes.length} 個 IIFE，外層函式 ${outer.size} 個 → 無跨作用域引用`);
+});
+
+
 T('整份 patch 語法可解析（等同 node --check，順手鎖住）', () => {
   // 用 Function 建構子做語法檢查；patch 是 script 不是 module，可直接丟
   assert.doesNotThrow(() => new Function(src.replace(/^#!.*\n/, '')), '語法應可解析');
