@@ -93,5 +93,31 @@ T('賽程內容不再殘留深色系配色（白底上會看不清楚）', () =>
   assert.deepEqual(dark, [], '賽程視窗仍有深色配色：' + dark.join('、'));
 });
 
+T('⭐全站不得殘留深色底／亮色字（admin 是白底頁面，深色元件會格格不入或看不清楚）', () => {
+  // 亮度公式（人眼感知加權）。深色底 <90、亮色字 >200 在白底頁面上都是問題。
+  const lum = (hex) => {
+    let x = hex.slice(1);
+    if (x.length === 3) x = [...x].map((c) => c + c).join('');
+    if (x.length !== 6) return null;
+    return 0.299 * parseInt(x.slice(0, 2), 16) + 0.587 * parseInt(x.slice(2, 4), 16) + 0.114 * parseInt(x.slice(4, 6), 16);
+  };
+  // 刻意保留的語意色（不是「深色底」，是有意義的彩色按鈕）
+  const INTENTIONAL = new Set(['#c62828', '#7a1fa2', '#7b1fa2', '#c00', '#fff', '#ffffff']);
+  const bad = [];
+  adm.split('\n').forEach((line, i) => {
+    // ⚠只比對 `background:` 與 `color:`，不可用寬鬆比對 —— `border-color:` 也含 "color"，
+    //   會把「淺橘底配淺橘邊」這種正常搭配誤判成亮色字。
+    for (const m of line.matchAll(/(?:^|[;"\s])(background|color)\s*:\s*(#[0-9a-fA-F]{3,6})/g)) {
+      const [, prop, hex] = m;
+      if (INTENTIONAL.has(hex.toLowerCase())) continue;
+      const L = lum(hex);
+      if (L === null) continue;
+      if (prop === 'background' && L < 90) bad.push(`第 ${i + 1} 行 深色底 ${hex}`);
+      else if (prop === 'color' && L > 200) bad.push(`第 ${i + 1} 行 亮色字 ${hex}`);
+    }
+  });
+  assert.deepEqual(bad, [], '這些顏色在白底的 admin 頁面上會有問題：\n  ' + bad.join('\n  '));
+});
+
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

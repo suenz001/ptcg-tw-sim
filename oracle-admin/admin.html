@@ -139,8 +139,8 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
   .feedback-item { background: #ffffff; padding: 14px; margin: 8px 0; border-radius: 6px; border-left: 3px solid #5b8def; }
   .feedback-meta { color: #9aa3b0; font-size: 11px; margin-bottom: 6px; }
   /* v1.13 意見回饋翻頁 */
-  .fb-page-btn { background:#2a3550; color:#dbe3f4; border:1px solid #3a4560; border-radius:5px; padding:5px 11px; font-size:12px; cursor:pointer; }
-  .fb-page-btn:hover:not(:disabled) { background:#34406b; }
+  .fb-page-btn { background:#ffffff; color:#5a6878; border:1px solid #e3e8ef; border-radius:5px; padding:5px 11px; font-size:12px; cursor:pointer; }
+  .fb-page-btn:hover:not(:disabled) { background:#eaf1fc; color:#4a7de0; border-color:#5b8def; }
   .fb-page-btn:disabled { opacity:0.4; cursor:default; }
   .feedback-text { white-space: pre-wrap; line-height: 1.5; font-size: 13px; }
   /* v0.4 feedback reply/delete */
@@ -229,10 +229,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
   .last-update { color: #9aa3b0; font-size: 11px; }
   .my-email { color: #9aa3b0; font-size: 11px; }
   .winner-trophy { color: #fa0; font-weight: bold; }
-  .log-line { padding: 2px 0; line-height: 1.4; }
-  .log-p0 { color: #6b9bef; }
-  .log-p1 { color: #fc6; }
-  .log-system { color: #8b96a3; }
+  /* v1.62：.log-line/.log-p0/.log-p1/.log-system 隨對戰 log 檢視一起退役（已改用回放），移除死 CSS。 */
 
   /* v0.6 明亮主題微調：補強對比 + soft shadows */
   body { background: #f5f7fa !important; color: #1a2332 !important; }
@@ -368,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.61</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.62</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -783,9 +780,10 @@ async function loadTournamentAdmin() {
   if (ev && ev.status === 'running') { try { pendData = await api('/api/tournament/admin/pending-matches?eventId=' + encodeURIComponent(ev._id)); if (!pendData || !pendData.pending) pendData = { pending: [] }; } catch (e) { pendData = { pending: [] }; } }
   let champData = { champions: [] };
   try { champData = await api('/api/tournament/champions'); if (!champData || !champData.champions) champData = { champions: [] }; } catch (e) { champData = { champions: [] }; }
-  const btnS = 'padding:6px 14px;border:1px solid #4a6a4a;background:#1e2e1e;color:#dfe;border-radius:6px;cursor:pointer;';
-  const btnD = 'padding:6px 14px;border:1px solid #7a3a3a;background:#2e1e1e;color:#fdd;border-radius:6px;cursor:pointer;';
-  const btnW = 'padding:6px 14px;border:1px solid #b8862a;background:#3a2e12;color:#ffd98a;border-radius:6px;cursor:pointer;';
+  // v1.62 三個動作按鈕改用全站的語意色（原本是深色底，與 admin 白底頁面格格不入）
+  const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
+  const btnD = 'padding:6px 14px;border:1px solid #ef9a9a;background:#fdecec;color:#c62828;border-radius:6px;cursor:pointer;font-weight:600;';
+  const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:760px;padding:16px;"><h2 style="margin-top:0;">🏆 錦標賽管理</h2>'
     + '<p style="color:#888;font-size:.85rem;">單敗淘汰 · Bo1 · 可同時公布多場（時間不重疊），玩家各自報名。建立後玩家於 /tournament 報名（牌組鎖定）。</p>'
     + '<div style="margin:6px 0 12px;"><button style="' + btnD + '" onclick="tevClearChat(this)">🧹 清除所有聊天室訊息</button></div>';
@@ -795,7 +793,7 @@ async function loadTournamentAdmin() {
   html += '<span style="color:#9ab;font-size:.9rem;font-weight:600;">選擇賽事（共 ' + evList.length + ' 場）：</span>';
   if (!evList.length) html += '<span style="color:#888;">目前沒有開放中賽事</span>';
   else {
-    html += '<select onchange="tevSelectEvent(this.value)" style="padding:7px 12px;border-radius:6px;background:#1a2230;color:#dfe;border:1px solid #4a6a6a;font-size:.92rem;min-width:260px;cursor:pointer;">';
+    html += '<select onchange="tevSelectEvent(this.value)" style="padding:7px 12px;border-radius:6px;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;font-size:.92rem;min-width:260px;cursor:pointer;">';
     evList.forEach(function (e) {
       var stL = _stLabels[e.status] || e.status;
       var selAttr = (e._id === tevSelEventId) ? ' selected' : '';
@@ -806,8 +804,8 @@ async function loadTournamentAdmin() {
   }
   html += '</div>';
   // 建立新賽事（永遠可用 — 可同時開多場）
-  html += '<details style="border:1px solid #555;border-radius:8px;padding:14px;margin-bottom:14px;"' + (evList.length ? '' : ' open') + '>'
-      + '<summary style="cursor:pointer;color:#bfe0ff;font-weight:700;">➕ 建立新賽事</summary>'
+  html += '<details style="border:1px solid #e3e8ef;border-radius:8px;padding:14px;margin-bottom:14px;"' + (evList.length ? '' : ' open') + '>'
+      + '<summary style="cursor:pointer;color:#2a4a7a;font-weight:700;">➕ 建立新賽事</summary>'
       + '<div style="padding-top:10px;">'
       + '<p style="color:#9ab;font-size:.8rem;margin:2px 0 8px;">（以下預設值＝你上次建立賽事的設定）</p>'
       + '<label style="display:block;margin:8px 0;">賽事名稱：<input id="tev-name" value="' + escapeHtml(L.name || '錦標賽') + '" style="width:60%;padding:5px;"></label>'
@@ -826,7 +824,7 @@ async function loadTournamentAdmin() {
     const stLabel = ({ draft: '籌備中', registration: '報名中', checkin: '簽到中', bracket_ready: '賽程已公布', running: '進行中', finished: '已結束' })[ev.status] || ev.status;
     html += '<div style="border:1px solid #4a6a4a;border-radius:8px;padding:14px;margin-bottom:14px;">'
       + '<h3 style="margin:0 0 6px;">' + escapeHtml(ev.name) + '</h3>'
-      + '<p style="color:#cfe8cf;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ ' + (ev.format === 'swiss-then-cut' ? ('瑞士制+TopCut Bo1' + (ev.swissRounds ? ('（' + ev.swissRounds + '輪→前' + (ev.topCut||'?') + '）') : '')) : '單敗淘汰 Bo1') + ' ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
+      + '<p style="color:#2e7d32;">狀態：<b>' + stLabel + '</b> ｜ 報名 ' + data.regs.length + (ev.maxPlayers ? (' / ' + ev.maxPlayers) : '（不限）') + ' 人 ｜ ' + (ev.format === 'swiss-then-cut' ? ('瑞士制+TopCut Bo1' + (ev.swissRounds ? ('（' + ev.swissRounds + '輪→前' + (ev.topCut||'?') + '）') : '')) : '單敗淘汰 Bo1') + ' ｜ 每場 ' + ev.roundLimitMin + ' 分 ｜ 未進場 ' + ev.noShowMin + ' 分判負</p>'
       + (ev.registrationOpenAt ? '<p style="color:#9ab;margin:2px 0;">報名開始：' + new Date(ev.registrationOpenAt).toLocaleString('zh-TW') + '</p>' : '')
       + (ev.registrationCloseAt ? '<p style="color:#9ab;margin:2px 0;">報名截止：' + new Date(ev.registrationCloseAt).toLocaleString('zh-TW') + '（到點自動公布賽程並開賽）</p>' : '')
       + '<p style="color:#9ab;margin:2px 0;">輪間休息倒數：' + (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3) + ' 分 ｜ 未進場判負：' + (ev.noShowMin || 5) + ' 分</p>'
@@ -836,7 +834,7 @@ async function loadTournamentAdmin() {
       + '<button style="' + btnS + '" onclick="tevStatus(\'finished\',this)">結束</button>'
       + '<button style="' + btnD + '" onclick="tevDelete(this)">刪除賽事</button>'
       + '</div>'
-      + '<details style="margin-top:10px;border-top:1px solid #2a3a2a;padding-top:8px;"><summary style="cursor:pointer;color:#bfe0ff;">✏️ 編輯賽事設定（名稱／參數，即時生效，不影響已報名者）</summary>'
+      + '<details style="margin-top:10px;border-top:1px solid #e3e8ef;padding-top:8px;"><summary style="cursor:pointer;color:#2a4a7a;">✏️ 編輯賽事設定（名稱／參數，即時生效，不影響已報名者）</summary>'
       + '<div style="padding:8px 0 2px;">'
       + '<label style="display:block;margin:6px 0;">賽事名稱：<input id="tev-e-name" value="' + escapeHtml(ev.name || '') + '" style="width:60%;padding:5px;"></label>'
       + '<label style="display:block;margin:6px 0;">賽制：<select id="tev-e-format" style="padding:5px;"' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' disabled') + '><option value="single-elim"' + (ev.format === 'swiss-then-cut' ? '' : ' selected') + '>單敗淘汰 Bo1</option><option value="swiss-then-cut"' + (ev.format === 'swiss-then-cut' ? ' selected' : '') + '>瑞士制 + Top Cut Bo1</option></select>' + ((ev.status === 'draft' || ev.status === 'registration') ? '' : ' <span style="color:#e88;font-size:.78rem;">已開賽，賽制不可改</span>') + '</label>'
@@ -852,7 +850,7 @@ async function loadTournamentAdmin() {
       + '</div></details>'
       + '</div>';
     if (tieData.ties && tieData.ties.length) {
-      html += '<div style="border:1px solid #a80;border-radius:8px;padding:10px;margin:10px 0;background:#2a2410;"><b style="color:#fd0;">⚖️ 待裁定平手場（' + tieData.ties.length + '）— 對局時限到且雙方獎賞卡數相同</b>';
+      html += '<div style="border:1px solid #e0c56a;border-radius:8px;padding:10px;margin:10px 0;background:#fff8e1;"><b style="color:#8a6d00;">⚖️ 待裁定平手場（' + tieData.ties.length + '）— 對局時限到且雙方獎賞卡數相同</b>';
       tieData.ties.forEach(function (t) {
         html += '<div style="margin:6px 0;">第 ' + t.round + ' 輪：<b>' + escapeHtml(t.p1name || '') + '</b> vs <b>' + escapeHtml(t.p2name || '') + '</b> &nbsp;'
           + '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',0,this)">判 ' + escapeHtml(t.p1name || 'P1') + ' 勝</button> '
@@ -861,10 +859,10 @@ async function loadTournamentAdmin() {
       html += '</div>';
     }
     if (pendData.pending && pendData.pending.length) {
-      html += '<div style="border:1px solid #5a7aa6;border-radius:8px;padding:12px;margin:10px 0;background:#2b3647;color:#eaf0f8;"><b style="color:#bfe0ff;font-size:1rem;">🛠️ 賽程管理：強制裁定卡死場（' + pendData.pending.length + ' 場未結束）</b>'
-        + '<p style="color:#c2cede;font-size:.85rem;margin:6px 0;">對手棄賽／異常卡住時用；判勝後該場直接晉級。兩格皆無玩家的場無法判勝（請用下方強制完賽）。</p>';
+      html += '<div style="border:1px solid #b9d0f5;border-radius:8px;padding:12px;margin:10px 0;background:#eaf1ff;color:#1a2332;"><b style="color:#2a4a7a;font-size:1rem;">🛠️ 賽程管理：強制裁定卡死場（' + pendData.pending.length + ' 場未結束）</b>'
+        + '<p style="color:#5a6472;font-size:.85rem;margin:6px 0;">對手棄賽／異常卡住時用；判勝後該場直接晉級。兩格皆無玩家的場無法判勝（請用下方強制完賽）。</p>';
       pendData.pending.forEach(function (t) {
-        html += '<div style="margin:8px 0;color:#eaf0f8;">第 ' + t.round + ' 輪（' + (t.status === 'playing' ? '對戰中' : t.status) + '）：<b style="color:#fff;">' + escapeHtml(t.p1name || '（空）') + '</b> vs <b style="color:#fff;">' + escapeHtml(t.p2name || '（空）') + '</b> &nbsp;'
+        html += '<div style="margin:8px 0;color:#1a2332;">第 ' + t.round + ' 輪（' + (t.status === 'playing' ? '對戰中' : t.status) + '）：<b style="color:#fff;">' + escapeHtml(t.p1name || '（空）') + '</b> vs <b style="color:#fff;">' + escapeHtml(t.p2name || '（空）') + '</b> &nbsp;'
           + (t.hasP1 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',0,this)">判 ' + escapeHtml(t.p1name || 'P1') + ' 勝</button> ' : '')
           + (t.hasP2 ? '<button style="' + btnS + '" onclick="tevResolveTie(\'' + t.matchId + '\',1,this)">判 ' + escapeHtml(t.p2name || 'P2') + ' 勝</button> ' : '')
           + ((t.hasP1 && t.hasP2) ? '<button style="' + btnW + '" onclick="tevRestartMatch(\'' + t.matchId + '\',this)">🔄 重賽（從擲幣開始）</button>' : '')
@@ -883,23 +881,23 @@ async function loadTournamentAdmin() {
       html += '</tbody></table>';
       html += '<h3 style="margin-top:16px;">📋 報名者牌組（可複製貼回「編輯我的牌組」匯入功能）</h3>';
       data.regs.slice().sort((a, b) => (a.registeredAt || 0) - (b.registeredAt || 0)).forEach((r, i) => {
-        html += '<details style="margin:6px 0;border:1px solid #4a6a4a;border-radius:6px;padding:6px 10px;background:#16201a;">'
-          + '<summary style="cursor:pointer;color:#cfe;">' + escapeHtml(r.name || '') + '（' + (r.deckCount || 0) + ' 張）</summary>'
-          + '<textarea id="deck-ta-' + i + '" readonly style="width:100%;box-sizing:border-box;height:230px;margin-top:6px;font-family:monospace;font-size:.82rem;line-height:1.5;background:#0f140f;color:#dfe;border:1px solid #3a5a3a;border-radius:4px;padding:8px;">' + escapeHtml(r.deckText || '') + '</textarea>'
+        html += '<details style="margin:6px 0;border:1px solid #e3e8ef;border-radius:6px;padding:6px 10px;background:#f8fafc;">'
+          + '<summary style="cursor:pointer;color:#2a4a7a;">' + escapeHtml(r.name || '') + '（' + (r.deckCount || 0) + ' 張）</summary>'
+          + '<textarea id="deck-ta-' + i + '" readonly style="width:100%;box-sizing:border-box;height:230px;margin-top:6px;font-family:monospace;font-size:.82rem;line-height:1.5;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px;padding:8px;">' + escapeHtml(r.deckText || '') + '</textarea>'
           + '<button style="' + btnS + 'margin-top:4px;" onclick="tevCopyDeck(' + i + ',this)">📋 複製牌組</button>'
           + '</details>';
       });
     }
   }
   // 名人堂管理（不限是否有進行中賽事）
-  html += '<div style="border:1px solid #6a5a2a;border-radius:8px;padding:10px;margin:14px 0;background:#16120a;"><h3 style="margin:0 0 8px;color:#ffd35a;">🏛️ 名人堂管理（歷屆冠軍，' + champData.champions.length + '）</h3>';
+  html += '<div style="border:1px solid #e0c56a;border-radius:8px;padding:10px;margin:14px 0;background:#fff8e1;"><h3 style="margin:0 0 8px;color:#8a6d00;">🏛️ 名人堂管理（歷屆冠軍，' + champData.champions.length + '）</h3>';
   html += '<div style="margin:0 0 10px;"><button style="' + btnS + '" onclick="tevChampRestore(this)">♻️ 從歸檔還原名人堂（補回被誤刪的冠軍，不覆蓋現有）</button></div>';
   if (!champData.champions.length) html += '<p style="color:#888;">尚無冠軍紀錄。賽事完賽（或強制完賽指定冠軍）後自動加入。</p>';
   else {
-    var ipS = 'padding:4px 6px;background:#222;color:#eee;border:1px solid #555;border-radius:4px;';
+    var ipS = 'padding:4px 6px;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px;';
     champData.champions.forEach(function (c, i) {
       var dateStr = c.finishedAt ? new Date(c.finishedAt).toLocaleDateString('zh-TW') : '';
-      html += '<div style="border-top:1px solid #2a2414;padding:8px 0;">'
+      html += '<div style="border-top:1px solid #e3e8ef;padding:8px 0;">'
         + '<div style="color:#9a8d6a;font-size:.8rem;margin-bottom:4px;">' + escapeHtml(dateStr) + ' ｜ ' + (c.playerCount || 0) + ' 人</div>'
         + '冠軍 <input id="cf-name-' + i + '" value="' + escapeHtml(c.championName || '') + '" style="' + ipS + 'width:130px;"> '
         + '賽事 <input id="cf-event-' + i + '" value="' + escapeHtml(c.eventName || '') + '" style="' + ipS + 'width:130px;"> '
@@ -1358,7 +1356,7 @@ function tvPagerHtml(id, v) {
     + '<span style="font-size:.9rem;color:#9bbcef;">第 ' + v.page + ' / ' + v.totalPages + ' 頁（共 ' + v.total + ' 筆）</span>'
     + b('下一頁 ›', v.page + 1, v.page === v.totalPages) + b('最後一頁 »', v.totalPages, v.page === v.totalPages)
     + '<span style="margin-left:.4rem;font-size:.85rem;color:#bbb;">跳至：</span>'
-    + '<input id="tv-jump-' + id + '" type="number" min="1" max="' + v.totalPages + '" value="' + v.page + '" style="width:4.5rem;padding:.2rem .3rem;background:#222;color:#eee;border:1px solid #555;border-radius:4px;" onkeydown="if(event.key===\'Enter\')tvJump(\'' + id + '\')" />'
+    + '<input id="tv-jump-' + id + '" type="number" min="1" max="' + v.totalPages + '" value="' + v.page + '" style="width:4.5rem;padding:.2rem .3rem;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px;" onkeydown="if(event.key===\'Enter\')tvJump(\'' + id + '\')" />'
     + '<button class="ghost" onclick="tvJump(\'' + id + '\')">跳頁</button></div>';
 }
 /** 可排序的表頭 <th>（含目前排序方向箭頭）。 */
@@ -1929,7 +1927,7 @@ function renderRoomsTab(el, source, rooms) {
       <button class="ghost" onclick="setRoomsPage(${page + 1}, '${source}')" ${page === totalPages ? 'disabled' : ''}>下一頁 ›</button>
       <button class="ghost" onclick="setRoomsPage(${totalPages}, '${source}')" ${page === totalPages ? 'disabled' : ''}>最後一頁 »</button>
       <span style="margin-left:0.4rem;font-size:0.85rem;color:#bbb">跳至：</span>
-      <input id="rooms-page-input-${source}" type="number" min="1" max="${totalPages}" value="${page}" style="width:4.5rem;padding:0.2rem 0.3rem;background:#222;color:#eee;border:1px solid #555;border-radius:4px" onkeydown="if(event.key==='Enter')jumpRoomsPage('${source}')" />
+      <input id="rooms-page-input-${source}" type="number" min="1" max="${totalPages}" value="${page}" style="width:4.5rem;padding:0.2rem 0.3rem;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px" onkeydown="if(event.key==='Enter')jumpRoomsPage('${source}')" />
       <button class="ghost" onclick="jumpRoomsPage('${source}')">跳頁</button>
     </div>
   ` : '';
@@ -3326,7 +3324,7 @@ function renderMatchPagination() {
     const active = p === curPage;
     pageBtns.push(
       '<button onclick="gotoMatchPage(' + p + ')"' +
-      (active ? ' style="background:#3a6a3a;color:#fff;border-color:#5aaa5a;"' : ' class="ghost"') +
+      (active ? ' style="background:#5b8def;color:#fff;border-color:#5b8def;"' : ' class="ghost"') +
       '>' + (label || (p + 1)) + '</button>'
     );
   };
@@ -3356,7 +3354,7 @@ function renderMatchPagination() {
     <button class="ghost" ${nextDisabled} onclick="gotoMatchPage(${curPage + 1})">下一頁 ›</button>
     <span style="margin-left:10px; font-size:0.85rem;">跳至：</span>
     <input type="number" min="1" max="${totalPages}" value="${curPage1}"
-      style="width:60px; padding:4px; background:#1a2630; color:#fff; border:1px solid #3a5a5a; border-radius:4px;"
+      style="width:60px; padding:4px; background:#ffffff; color:#1a2332; border:1px solid #d6dbe3; border-radius:4px;"
       onkeydown="if(event.key==='Enter')jumpMatchPage(this)" />
     <button onclick="jumpMatchPage(this.previousElementSibling)">跳頁</button>
   `;
