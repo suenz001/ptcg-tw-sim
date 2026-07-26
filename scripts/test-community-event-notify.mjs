@@ -33,25 +33,57 @@ T('⭐⭐預設開：伺服器用 $ne:false 判定（欄位缺席＝開啟）', 
     '必須用 { $ne: false } —— 寫成 === true 會讓所有既有訂閱者（沒有這個欄位）全部收不到，功能等於沒上線');
 });
 
+/** propose 端點內那段推播程式碼（v0.99 起包在 void (async () => {...})() 內）。 */
+function proposeBroadcastBlock() {
+  const i = pat.indexOf("title: '📣 有人發起社群賽'");
+  assert.ok(i > 0, 'propose 端點應有社群賽推播');
+  return pat.slice(Math.max(0, i - 600), i + 800);
+}
+
 T('⭐發起者自己不會收到自己開的賽事通知', () => {
-  const i = pat.indexOf('void broadcastPush(');
-  assert.ok(i > 0, 'propose 端點應呼叫 broadcastPush');
-  const call = pat.slice(i, pat.indexOf(');', i) + 2);
-  assert.ok(/excludeUid:\s*id\.uid/.test(call), '應以 excludeUid 排除發起者本人');
-  assert.ok(/prefKey:\s*'notifyCommunity'/.test(call), '應帶 prefKey 讓關閉此類通知的人不被推');
+  const block = proposeBroadcastBlock();
+  assert.ok(/excludeUid:\s*id\.uid/.test(block), '應以 excludeUid 排除發起者本人');
+  assert.ok(/prefKey:\s*'notifyCommunity'/.test(block), '應帶 prefKey 讓關閉此類通知的人不被推');
 });
 
 T('⭐推播失敗不可影響賽事建立（fire-and-forget）', () => {
-  // 全檔任何 broadcastPush 的呼叫點都不可被 await —— 推播服務逾時會拖著整個
-  // 「發起社群賽」的請求，玩家會看到轉圈圈甚至逾時，而賽事其實已經建好了。
-  const calls = [...pat.matchAll(/(\w+\s+)?broadcastPush\(/g)]
-    .filter((m) => !/async function/.test(pat.slice(Math.max(0, m.index - 20), m.index)));
-  assert.ok(calls.length >= 1, '應至少有一處呼叫 broadcastPush');
-  for (const c of calls) {
-    const prefix = pat.slice(Math.max(0, c.index - 10), c.index + 'broadcastPush('.length);
-    assert.ok(!/await\s+broadcastPush\($/.test(prefix), 'broadcastPush 不可被 await：' + prefix.trim());
+  // 推播服務逾時不可拖著整個「發起社群賽」的請求（玩家會看到轉圈圈，但賽事其實已建好）。
+  // v0.99 起要先 await getBusyUids()，所以整段包在 void (async () => {...})() 內：
+  //   內層的 await 在 IIFE 裡不影響主流程，外層的 void 才是「不阻塞」的保證。
+  const i = pat.indexOf("title: '📣 有人發起社群賽'");
+  const before = pat.slice(Math.max(0, i - 600), i);
+  // ⚠IIFE **內部**的 await 是必要且正確的（要先 await getBusyUids()）——
+  //   要防的是「沒有 void 包、直接寫在 handler 主流程」的 await。
+  //   判準：await broadcastPush 之前必須先出現 void (async () => {。
+  const voidAt = before.lastIndexOf('void (async () =>');
+  const awaitAt = before.lastIndexOf('await broadcastPush(');
+  if (awaitAt >= 0) {
+    assert.ok(voidAt >= 0 && voidAt < awaitAt,
+      'await broadcastPush 必須包在 void (async () => {…})() 內，否則會阻塞發起社群賽的請求');
+  } else {
+    assert.ok(/void\s+broadcastPush\(/.test(before), '推播必須是 fire-and-forget');
   }
-  assert.ok(pat.includes('void broadcastPush('), '應以 void 明示 fire-and-forget');
+});
+
+T('⭐⭐跳過正在對戰中的玩家（Wilson v0.99 更正：不打擾比賽中的人）', () => {
+  assert.ok(/async function getBusyUids\(/.test(pat), '應有 getBusyUids()');
+  const i = pat.indexOf('async function getBusyUids(');
+  const body = pat.slice(i, pat.indexOf('\n    }', i));
+  assert.ok(/TMATCH\.find\(\s*\{\s*status:\s*'playing'/.test(body), '應查錦標賽進行中的對戰');
+  assert.ok(/collection\('rooms'\)[\s\S]{0,120}status:\s*'playing'/.test(body), '應查休閒進行中的房間');
+  assert.ok(/memberUids/.test(body) && /p1uid/.test(body), '兩邊的玩家 uid 都要收集');
+  // 呼叫端必須真的把它帶進 broadcastPush
+  const call = pat.slice(pat.indexOf('void (async () => {'), pat.indexOf('})();', pat.indexOf('void (async () => {')));
+  assert.ok(call.includes('getBusyUids()') && /excludeUids:\s*busy/.test(call),
+    'propose 的廣播必須帶 excludeUids: busy');
+});
+
+T('⭐休閒房必須加 updatedAt 時間窗（否則殭屍房會讓玩家永遠收不到通知）', () => {
+  const i = pat.indexOf('async function getBusyUids(');
+  const body = pat.slice(i, pat.indexOf('\n    }', i));
+  assert.ok(/updatedAt:\s*\{\s*\$gte:\s*since\s*\}/.test(body),
+    "rooms 查詢必須有 updatedAt 時間窗 —— status:'playing' 會有殭屍殘留，"
+    + '一個卡住的舊房間會讓那兩位玩家從此再也收不到通知');
 });
 
 T('⭐偏好是「人」層級：同一玩家多裝置要一起更新', () => {
