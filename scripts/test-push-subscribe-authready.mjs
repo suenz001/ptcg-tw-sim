@@ -50,22 +50,29 @@ function makeEnv({ existingKey = null, subscribeFails = false, serverRejects = f
   });
   let current = existingKey ? mkSub(keyToBytes(existingKey)) : null;
   // Node 22 的 globalThis.navigator 是 getter-only，必須用 defineProperty 覆寫
+  // v6.033：mock 補上 `active` 與 `ready` —— 真實的 ServiceWorkerRegistration 有這兩者，
+  //   而 notify.ts 現在要求「registration 必須有 active worker」才會拿去發通知／訂閱
+  //   （沒有 active 就呼叫 showNotification 會拋 "No active registration available"）。
+  //   舊 mock 缺這兩個欄位＝與真實 API 形狀不符，不是斷言被放寬。
+  const mockReg = {
+    scope: 'https://www.ptcg-tw-sim.com/',
+    active: { state: 'activated' },
+    showNotification: async () => {},
+    pushManager: {
+      getSubscription: async () => current,
+      subscribe: async ({ applicationServerKey }) => {
+        if (subscribeFails) throw new Error('AbortError: push service error');
+        calls.subscribed++;
+        current = mkSub(applicationServerKey);
+        return current;
+      },
+    },
+  };
   defineGlobal('navigator', {
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
     serviceWorker: {
-      getRegistration: async () => ({
-        scope: 'https://www.ptcg-tw-sim.com/',
-        showNotification: async () => {},
-        pushManager: {
-          getSubscription: async () => current,
-          subscribe: async ({ applicationServerKey }) => {
-            if (subscribeFails) throw new Error('AbortError: push service error');
-            calls.subscribed++;
-            current = mkSub(applicationServerKey);
-            return current;
-          },
-        },
-      }),
+      getRegistration: async () => mockReg,
+      ready: Promise.resolve(mockReg),
     },
   });
   const api = async (path, body) => {

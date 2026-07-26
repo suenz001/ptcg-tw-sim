@@ -110,6 +110,40 @@ function saveSeen(): void {
   try { localStorage.setItem(KEY_SEEN, JSON.stringify(_seen)); } catch { /* 忽略 */ }
 }
 
+/**
+ * 取得**有 active worker** 的 Service Worker registration。
+ *
+ * ⚠為什麼需要這個（真實事故，Windows 桌機回報）：
+ *   `navigator.serviceWorker.getRegistration()` 只要註冊記錄存在就會回傳物件，
+ *   但那個 registration 可能還停在 installing / waiting、**`.active` 是 null**。
+ *   此時呼叫 `reg.showNotification()` 會直接拋：
+ *     "Failed to execute 'showNotification' on 'ServiceWorkerRegistration':
+ *      No active registration available on the ServiceWorkerRegistration."
+ *   最容易踩到的時機：①首次載入本站（SW 還在安裝）②剛清過快取／反註冊後重新註冊
+ *   ③版本更新後新 SW 尚未接手。
+ *
+ * 解法：`navigator.serviceWorker.ready` 會等到「有 active worker」才 resolve。
+ * ⚠但它在**從未註冊過 SW** 的環境（開發模式、SW 註冊失敗）會**永遠 pending**，
+ *   所以一定要加逾時，否則整個通知流程會卡死。
+ *
+ * @returns 有 active worker 的 registration；取不到則 null（呼叫端應退回頁面層通知）
+ */
+async function getActiveRegistration(timeoutMs = 3000): Promise<ServiceWorkerRegistration | null> {
+  if (!hasWindow() || !('serviceWorker' in navigator)) return null;
+  try {
+    // 快路徑：已經 active 就不必等
+    const cur = await navigator.serviceWorker.getRegistration();
+    if (cur?.active) return cur;
+    // 慢路徑：等它 activate（附逾時，避免從未註冊時永久 pending）
+    const ready = navigator.serviceWorker.ready;
+    const timed = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+    const reg = await Promise.race([ready, timed]);
+    return reg?.active ? reg : null;
+  } catch {
+    return null;
+  }
+}
+
 async function showIntent(intent: NotifyIntent): Promise<void> {
   const opts: NotificationOptions & { renotify?: boolean } = {
     body: intent.body,
@@ -118,13 +152,13 @@ async function showIntent(intent: NotifyIntent): Promise<void> {
     renotify: intent.renotify,
   };
   try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const reg = await getActiveRegistration();   // v6.033：必須有 active worker，否則 showNotification 會拋
     if (reg) {
       const icon = new URL('icons/icon-192.png', reg.scope.endsWith('/') ? reg.scope : reg.scope + '/').href;
       await reg.showNotification(intent.title, { ...opts, icon, data: { kind: intent.kind } });
       return;
     }
-  } catch { /* 無 SW（開發模式）→ 往下 fallback */ }
+  } catch { /* 無 SW（開發模式）或 SW 發送失敗 → 往下 fallback */ }
   // fallback：桌機可用；Android 會 throw，靜默略過
   try { new Notification(intent.title, opts); } catch { /* 忽略 */ }
 }
@@ -192,19 +226,26 @@ export async function sendTestNotification(): Promise<{ ok: boolean; via: string
     body: '通知已正常運作。賽事報到、可進場、輪到你行動時就會像這樣提醒你。',
   };
   // 先試 Service Worker（Android 必須；桌機也支援），失敗才退回頁面層 Notification
+  // ⚠v6.033：這裡原本有兩個 bug —— ①沒確認 registration 有 active worker（會拋
+  //   "No active registration available"）②catch 直接 return 失敗，**根本不會落到下面的
+  //   頁面層 fallback**。Windows 桌機明明完全支援頁面層 new Notification()，卻因此
+  //   在 SW 尚未 activate 時整個收不到通知。現在改成：SW 這條路不通就往下走，不提早 return。
+  let swErr = '';
   try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const reg = await getActiveRegistration();
     if (reg) {
       const icon = new URL('icons/icon-192.png', reg.scope.endsWith('/') ? reg.scope : reg.scope + '/').href;
       await reg.showNotification(intent.title, { body: intent.body, tag: intent.tag, icon, data: { kind: 'test' } });
       return { ok: true, via: 'sw', hint: '已送出。若沒看到，請檢查 Windows 設定 → 系統 → 通知（總開關與 Edge／Chrome 皆需開啟），並關閉「勿讓我分心／專注輔助」；也可按 Win+N 查看通知中心。' };
     }
+    swErr = '背景服務尚未啟用';
   } catch (e) {
-    return { ok: false, via: 'sw-error', hint: '透過背景服務發送失敗：' + ((e as Error)?.message ?? '未知錯誤') };
+    swErr = (e as Error)?.message ?? '未知錯誤';
   }
   try {
     new Notification(intent.title, { body: intent.body, tag: intent.tag });
-    return { ok: true, via: 'page', hint: '已送出（未使用背景服務）。若沒看到，請檢查系統通知設定與勿擾模式。' };
+    return { ok: true, via: 'page', hint: '已送出（改用一般通知，未經背景服務'
+      + (swErr ? '：' + swErr : '') + '）。若沒看到，請檢查系統通知設定與勿擾模式；重新整理頁面後背景服務通常就會就緒。' };
   } catch (e) {
     return { ok: false, via: 'page-error', hint: '發送失敗：' + ((e as Error)?.message ?? '未知錯誤') };
   }
@@ -224,8 +265,10 @@ export async function getNotifyDiagnostics(): Promise<{
     serverRegistered: false, serverStage: '', serverDetail: '', pushHost: '',
   };
   try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
-    out.swRegistered = !!reg;
+    // v6.033：原本 `!!reg` 只要有註冊記錄就顯示 ✅ —— 但 registration 可能還沒 active，
+    //   那個狀態下 showNotification 會直接拋錯。判 active 才是「真的能發通知」。
+    const reg = await getActiveRegistration();
+    out.swRegistered = !!reg?.active;
     if (reg?.pushManager) {
       const sub = await reg.pushManager.getSubscription();
       out.pushSubscribed = !!sub;
@@ -303,7 +346,7 @@ export async function subscribePush(api: (path: string, body?: unknown) => Promi
   //   最致命的情形（瀏覽器訂閱成功、但送伺服器那步 401 被吞）完全看不出來。
   let stage: PushSubStage = 'no-sw';
   try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const reg = await getActiveRegistration();   // v6.033 需有 active worker
     if (!reg || !reg.pushManager) { savePushServerState({ ok: false, stage: 'no-sw' }); return { ok: false, stage: 'no-sw' }; }
     stage = 'server-disabled';
     const info = await api('/push/pubkey') as { enabled?: boolean; publicKey?: string | null };
@@ -336,7 +379,7 @@ export async function subscribePush(api: (path: string, body?: unknown) => Promi
 export async function unsubscribePush(api: (path: string, body?: unknown) => Promise<unknown>): Promise<void> {
   if (!hasWindow()) return;
   try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const reg = await getActiveRegistration();   // v6.033 需有 active worker
     const sub = await reg?.pushManager?.getSubscription?.();
     if (sub) {
       try { await api('/push/unsubscribe', { endpoint: sub.endpoint }); } catch { /* 伺服器端清不掉也無妨，推播失效會自動清 */ }
