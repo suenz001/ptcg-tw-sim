@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 title PTCG Tournament Record Dump
 setlocal enabledelayedexpansion
 cd /d D:\ai
@@ -8,39 +7,64 @@ set HOST=ubuntu@140.245.109.103
 set SRC=E:\ptcg-tw-sim\oracle-admin\tournament
 set OUTDIR=E:\ptcg-tw-sim\tournament-dumps
 
+REM ===========================================================================
+REM  ASCII ONLY - see survey-archetype.bat for the full explanation.
+REM  Short version: cmd parses .bat with the system ANSI code page (CP950),
+REM  not `chcp 65001`. UTF-8 Chinese bytes reinterpreted as CP950 can contain
+REM  '&' and friends, which splits the line and executes the tail as a command.
+REM ===========================================================================
+
 echo ========================================
-echo   PTCG 錦標賽完整紀錄 Dump
-echo   可用：玩家名字 / email / matchId / eventId
-echo   (中文名若有亂碼問題，改用該玩家 email 或 matchId)
+echo   PTCG Tournament Record Dump
+echo   Query by: player name / email / matchId / eventId
+echo   (If a Chinese player name misbehaves, use their email or matchId.)
 echo ========================================
 echo.
 
-if "%~1"=="" (
-  set /p TERM="輸入查詢字串: "
-) else (
-  set TERM=%~1
-)
-if "!TERM!"=="" ( echo 未輸入查詢字串 & pause & exit /b 1 )
+if not "%~1"=="" goto HAVE_TERM
+set /p TERM="Query string: "
+goto CHECK_TERM
+:HAVE_TERM
+set TERM=%~1
+:CHECK_TERM
+if "!TERM!"=="" goto ERR_NOTERM
 
 echo.
-echo [1/3] 上傳 dump 腳本到伺服器...
+echo [1/3] Uploading dump script...
 scp -i %KEY% "%SRC%\dump-match-records.cjs" %HOST%:/tmp/dump-match-records.cjs
-if errorlevel 1 ( echo *** SCP 上傳失敗 *** & pause & exit /b 1 )
+if errorlevel 1 goto ERR_SCP
 
-echo [2/3] 在伺服器查詢「!TERM!」...
+echo [2/3] Querying "!TERM!" on server...
 ssh -i %KEY% %HOST% "cd /opt/ptcg/api && node /tmp/dump-match-records.cjs \"!TERM!\""
-if errorlevel 1 ( echo *** 查詢失敗 *** & pause & exit /b 1 )
+if errorlevel 1 goto ERR_RUN
 
-echo [3/3] 下載完整紀錄檔...
+echo [3/3] Downloading full record...
 if not exist "%OUTDIR%" mkdir "%OUTDIR%"
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value 2^>nul') do set DT=%%a
 set TS=!DT:~0,8!_!DT:~8,6!
 scp -i %KEY% %HOST%:/tmp/ptcg_tourn_dump.json "%OUTDIR%\dump_!TS!.json"
-if errorlevel 1 ( echo *** 下載失敗 *** & pause & exit /b 1 )
+if errorlevel 1 goto ERR_DL
 
 echo.
 echo ========================================
-echo  完成！紀錄檔: %OUTDIR%\dump_!TS!.json
-echo  把這個 json 檔丟給 Claude 就能分析該場 bug。
+echo   Done. Record: %OUTDIR%\dump_!TS!.json
+echo   Hand this json to Claude to analyse the bug.
 echo ========================================
+goto END
+
+:ERR_NOTERM
+echo *** No query string given ***
+goto END
+:ERR_SCP
+echo *** SCP upload failed ***
+goto END
+:ERR_RUN
+echo *** Query failed ***
+goto END
+:ERR_DL
+echo *** Download failed ***
+goto END
+
+:END
+echo.
 pause

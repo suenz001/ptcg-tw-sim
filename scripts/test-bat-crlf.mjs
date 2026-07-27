@@ -74,6 +74,26 @@ T('⭐⭐每支 .bat 都必須是 CRLF 換行（純 LF 會讓視窗一閃而過�
     '這些 .bat 有裸 LF 換行，在 Windows 上 if(...) 區塊會解析錯亂、視窗直接關閉：\n  ' + bad.join('\n  '));
 });
 
+T('⭐⭐.bat 一律純 ASCII（cmd 用系統 ANSI code page 解析 .bat，不是 chcp 設的那個）', () => {
+  // 真實事故（survey-archetype.bat 第二版，CRLF 已修但仍出錯）：執行時噴出
+  //   '少「可學習的對局」？' is not recognized as an internal or external command
+  //   '⚠數**：中文經' is not recognized as an internal or external command
+  // 根因：`chcp 65001` 只改「主控台輸出」的 code page，**不改 cmd 解析 .bat 檔的方式** ——
+  //   那是看系統 ANSI code page（繁中 Windows = CP950/Big5）。UTF-8 的中文位元組被當成
+  //   CP950 重新解讀後，可能剛好落在 '&' / '|' / '<' / '>' 上 → 整行被切斷、
+  //   後半段被當成新指令執行。**連 REM 註解行都會爆**（'&' 之後照樣執行）。
+  //   已知正確範例：update-tournament.bat 全英文，從來沒出過事。
+  // → .bat 一律純 ASCII；中文說明寫在被它呼叫的 .cjs / .sh（那些由 node/bash 讀，UTF-8 無虞）。
+  const bad = [];
+  for (const p of bats) {
+    const b = readFileSync(p);
+    const n = [...b].filter((x) => x > 127).length;
+    if (n > 0) bad.push(`${rel(p)}（非 ASCII 位元組 ${n} 個）`);
+  }
+  assert.deepEqual(bad, [],
+    '這些 .bat 含非 ASCII 字元，在繁中 Windows 上會被 CP950 誤讀、指令被切斷：\n  ' + bad.join('\n  '));
+});
+
 T('⭐.bat 不可有 UTF-8 BOM（cmd 會把它當成第一道指令的一部分）', () => {
   const bad = bats.filter((p) => {
     const b = readFileSync(p);

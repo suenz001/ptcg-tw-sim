@@ -1,26 +1,36 @@
 @echo off
-chcp 65001 > nul
-title 清除 PTCG Git Lock 檔
+title Clear PTCG Git Lock File
 cd /d %~dp0
 
+REM ===========================================================================
+REM  ASCII ONLY - cmd.exe parses .bat with the system ANSI code page (CP950 on
+REM  zh-TW), NOT the console page set by `chcp`. UTF-8 Chinese bytes read back
+REM  as CP950 can land on '&' / '|' / '<' / '>', splitting the line so the tail
+REM  runs as a bogus command. This bites even inside REM comments.
+REM ===========================================================================
+
 echo ====================================================
-echo  清除 .git\refs\remotes\origin\main.lock
-echo  每次 Claude push 完都會生一個，刪掉本地 git 才能 fetch
+echo  Clear .git\refs\remotes\origin\main.lock
+echo  Claude's push leaves one behind; delete it so local
+echo  git fetch / pull / IDE git panel work again.
 echo ====================================================
 echo.
 
-if exist ".git\refs\remotes\origin\main.lock" (
-    del /f /q ".git\refs\remotes\origin\main.lock"
-    if errorlevel 1 (
-        echo *** 刪除失敗 — 可能權限不足或檔案被其他程式鎖住 ***
-        echo *** 試關掉 VS Code / GitHub Desktop / SourceTree 等 git 工具再執行 ***
-    ) else (
-        echo OK: lock 檔已刪除
-        echo 現在 git fetch / git pull / IDE git 面板都能正常用了
-    )
-) else (
-    echo （沒有 lock 檔 — 本來就乾淨）
-)
+if not exist ".git\refs\remotes\origin\main.lock" goto NOLOCK
+del /f /q ".git\refs\remotes\origin\main.lock"
+if errorlevel 1 goto DELFAIL
+echo OK: lock file removed.
+goto END
 
+:NOLOCK
+echo No lock file - already clean.
+goto END
+
+:DELFAIL
+echo *** Delete failed - no permission, or the file is held by another app. ***
+echo *** Close VS Code / GitHub Desktop / SourceTree and try again. ***
+goto END
+
+:END
 echo.
 pause
