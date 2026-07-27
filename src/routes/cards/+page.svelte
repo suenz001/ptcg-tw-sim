@@ -1198,9 +1198,12 @@
     width: 42px;
     height: 42px;
     border-radius: 50%;
-    border: 1px solid #5a7aaa;
-    background: rgba(255, 255, 255, 0.08);
-    color: #cce0ff;
+    /* ⚠v6.044 修配色 bug：.modalInner 是白底(#fff)，但這裡原本沿用對戰頁的深色主題
+       配色（淺藍字 #cce0ff ＋ 近乎透明的白底），在白底上幾乎看不見，玩家找不到左右
+       切換鈕。改用 decks 頁同功能已在用的淺色配色。 */
+    border: 1px solid #c9d2e0;
+    background: #fff;
+    color: #2a4a78;
     font-size: 1.6rem;
     font-weight: 700;
     cursor: pointer;
@@ -1212,7 +1215,7 @@
     padding: 0;
     line-height: 1;
   }
-  .modal-nav:hover { background: rgba(255, 255, 255, 0.18); }
+  .modal-nav:hover { background: #eef3fa; border-color: #9fb4d0; }
   /* v5.000: button 完整放 modal 內側 16px，避免被 overflow-x: hidden 切掉 */
   .modal-nav-prev { left: 16px; transform: translateY(-50%); }
   .modal-nav-next { right: 16px; transform: translateY(-50%); }
@@ -1371,9 +1374,10 @@
   .evo-arrow { color: #99aacc; font-weight: 600; }
   .evo-or { color: #99aacc; }
   .evo-card-link {
-    border: 1px solid #5a7aaa;
-    background: rgba(255, 255, 255, 0.05);
-    color: #cce0ff;
+    /* ⚠同上：白底 modal 內不可用深色主題的淺藍字，對比度過低 */
+    border: 1px solid #c9d2e0;
+    background: #fff;
+    color: #2a4a78;
     border-radius: 4px;
     padding: 0.18rem 0.55rem;
     font-size: 0.85rem;
@@ -1381,7 +1385,7 @@
     font: inherit;
     transition: background 0.12s;
   }
-  .evo-card-link:hover { background: rgba(255, 255, 255, 0.15); }
+  .evo-card-link:hover { background: #eef3fa; border-color: #9fb4d0; }
   .evo-card-link.current { background: #4a7ab5; color: #fff; border-color: #4a7ab5; cursor: default; }
 
   .tagChips {
@@ -1502,5 +1506,21 @@
     .filter { padding: 0.35rem 0.55rem; font-size: 0.78rem; }
     .filter-tag, .filter-type, .filter-stage, .filter-mark { padding: 0.28rem 0.5rem; font-size: 0.74rem; }
     .typeChip { padding: 0.05rem 0.3rem; font-size: 0.74rem; }
+
+    /* ⭐v6.044 手機密度：Wilson 回報「每個按鈕圖案都太大，要翻很累」。
+       成因是欄寬用 minmax 固定下限 —— 手機扣掉 padding 只剩約 343px：
+         卡包列表 minmax(180px) → 一列只放得下 **1 個**，40 個卡包要滑 40 張全寬大圖；
+         卡片牆   minmax(140px) → 一列只有 **2 張**。
+       改為明確指定欄數，翻動距離直接砍半以上。桌機完全不受影響。 */
+    .setGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+    .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; padding: 0 0.6rem; }
+    /* 3 欄後卡名會太擠，縮字避免長卡名把卡片撐高、破壞對齊。
+       ⚠class 名是 `cardLabel`（駝峰）不是 card-label —— 寫錯不會報錯、只會靜默失效，
+         唯一的偵測管道是 svelte 的 unused CSS selector 警告。 */
+    .cardLabel { font-size: 0.68rem; line-height: 1.25; }
+    .cardLabel .num { font-size: 0.64rem; }
+    /* ⚠content-visibility：讓瀏覽器跳過畫面外卡片的排版成本（本頁 H/I/J 共 4040 張，
+       ALL 模式一次 render 全部 DOM）。純 CSS、零行為變更；不支援的瀏覽器等於沒加。 */
+    .cardBtn { content-visibility: auto; contain-intrinsic-size: auto 210px; }
   }
 </style>

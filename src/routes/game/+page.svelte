@@ -7438,7 +7438,6 @@
         <div class="mode-icon">🌐</div>
         <div class="mode-title">線上連線對戰</div>
         <div class="mode-desc">各自裝置，即時對戰</div>
-        <div class="mode-badge">M3 NEW</div>
       </button>
     </div>
   </main>

@@ -1,24 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
-  // ══ v6.042 首頁版面切換（modern / classic）══════════════════════════════
-  // 沿用對戰頁 `ptcg_battle_layout` 已驗證過的模式：初始化時**同步**讀 localStorage
-  // （不是等 onMount）、寫入包 try/catch（Safari 私密模式會對 setItem 丟 quota 例外）。
-  // ⚠一定要同步讀：等 onMount 才讀會先畫錯版面再跳掉。本站另有 splash 蓋在最前面
-  //   （app.html，mount 後才移除），兩層合起來確保玩家不會看到閃爍。
-  // 首次造訪（沒有偏好）預設 modern —— 兩版功能完全等價（都是點了跳頁），
-  //   預設舊版的話新版曝光率趨近於零；舊版切回鈕放在第一眼看得到的位置。
-  let homeLayout = $state<'modern' | 'classic'>('modern');
-  try {
-    const _hl = typeof localStorage !== 'undefined' ? localStorage.getItem('ptcg_home_layout') : null;
-    if (_hl === 'classic' || _hl === 'modern') homeLayout = _hl;
-  } catch { /* 讀不到就用預設值，不可讓首頁掛掉 */ }
 
-  function setHomeLayout(v: 'modern' | 'classic') {
-    homeLayout = v;
-    try { localStorage.setItem('ptcg_home_layout', v); } catch { /* 無痕模式：這次有效、下次回預設 */ }
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
   import { base } from '$app/paths';
   // v5.971：firebase 改動態 import(見 onMount),讓 firebase chunk 離開首頁關鍵路徑(首屏先畫再連線)。
   import type { User } from 'firebase/auth';
@@ -294,21 +277,22 @@
   }
 </script>
 
-<main class:home-modern={homeLayout === 'modern'}>
-{#if homeLayout === 'modern'}
-  <!-- ══ v6.042 新版首頁（modern）══════════════════════════════════════════
-       設計重點：舊版每個入口只有「一行文字連結」可點，觸控命中面積小、四個入口
-       與免責聲明看起來一樣重要。新版改為**整張卡片可點**、建立視覺層級。
-       ⚠這一段以下（社群／更新紀錄／意見回饋／免責聲明）兩版**完全共用**，
-         舊版 markup 一字未動 —— 改壞了切回舊版即可，回歸風險鎖在這個區塊內。 -->
+<main>
+  <!-- ══ v6.044 首頁（單一版面）══════════════════════════════════════════
+       v6.042 曾同時提供新舊兩版與切換鈕；Wilson 實測後認為兩版差異不大，
+       決定**只保留新版**並移除切換機制（少一套版面就少一份日後的維護與漂移）。
+       ⚠強制更新鈕改放 hero 右上（原切換鈕的位置）—— 它是 iOS PWA 卡在舊版時
+         玩家唯一的自救管道，必須一進站在最上面就看得到，不能藏在頁尾。 -->
   <div class="hm-hero">
     <div class="hm-hero-text">
       <h1>PTCG 實體賽事演練 <span class="version">v{VERSION}</span></h1>
       <p class="subtitle">免費線上・寶可夢集換式卡牌對戰模擬器 ｜ Pokémon TCG Simulator</p>
       <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
     </div>
-    <button class="hm-switch" onclick={() => setHomeLayout('classic')}
-      title="切換回原本的文字連結版面，之後開啟會記住你的選擇">↩ 切回舊版介面</button>
+    <button class="hard-refresh-btn hm-refresh-top" onclick={hardRefresh} disabled={hardRefreshing}
+      title="清快取並重新載入網頁（iOS PWA 加入主畫面後若卡舊版，點此可強制更新）">
+      {hardRefreshing ? '⏳ 更新中…' : '🔄 強制更新版本（清快取）'}
+    </button>
   </div>
 
   <nav class="hm-grid" aria-label="主要功能入口">
@@ -345,62 +329,6 @@
       <span class="hm-arrow" aria-hidden="true">→</span>
     </a>
   </nav>
-
-  <!-- ⚠強制更新鈕是 iOS PWA 卡舊版玩家唯一的自救管道，兩版都必須找得到 -->
-  <p class="hm-refresh-row">
-    <button class="hard-refresh-btn" onclick={hardRefresh} disabled={hardRefreshing}
-      title="清快取並重新載入網頁（iOS PWA 加入主畫面後若卡舊版，點此可強制更新）">
-      {hardRefreshing ? '⏳ 更新中…' : '🔄 強制更新版本（清快取）'}
-    </button>
-  </p>
-{:else}
-  <!-- ══ 舊版首頁（classic）：以下 markup 與 v6.041 完全相同，一字未改 ══ -->
-  <p class="hm-try-row">
-    <button class="hm-try-btn" onclick={() => setHomeLayout('modern')}>✨ 新版介面已推出，點此試用（可隨時切回）</button>
-  </p>
-  <h1>PTCG 實體賽事演練 <span class="version">v{VERSION}</span></h1>
-  <p class="subtitle">免費線上・寶可夢集換式卡牌對戰模擬器 ｜ Pokémon TCG Simulator</p>
-  <!-- v5.197：強制更新按鈕（手機 PWA 解套快取問題；桌面也可用） -->
-  <p class="hard-refresh-row">
-    <button class="hard-refresh-btn" onclick={hardRefresh} disabled={hardRefreshing}
-      title="清快取並重新載入網頁（iOS PWA 加入主畫面後若卡舊版，點此可強制更新）">
-      {hardRefreshing ? '⏳ 更新中…' : '🔄 強制更新版本（清快取）'}
-    </button>
-  </p>
-  <p class="tagline">Deck building testing and card database 牌組構築測試與卡牌資料庫</p>
-
-  <section>
-    <h2>卡牌資料庫</h2>
-    <p>
-      <a href="{base}/cards">瀏覽所有卡包 →</a>
-      <span class="hint">（標準賽 H / I / J 標，繁體中文）</span>
-    </p>
-  </section>
-
-  <section>
-    <h2>牌組編輯器</h2>
-    <p>
-      <a href="{base}/decks">建立我的牌組 →</a>
-      <span class="hint">（支援 Email 帳號跨裝置同步）</span>
-    </p>
-  </section>
-
-  <section>
-    <h2>⚔️ 對戰演練</h2>
-    <p>
-      <a href="{base}/game">開始演練 →</a>
-      <span class="hint">（牌組實戰測試及規則學習）</span>
-    </p>
-  </section>
-
-  <section>
-    <h2>🏆 錦標賽</h2>
-    <p>
-      <a href="{base}/tournament">進入賽事大廳 →</a>
-      <span class="hint">（瑞士制 · 淘汰制 · 線上即時對戰）</span>
-    </p>
-  </section>
-{/if}
 
   <!-- v2.43 社群連結：LINE 群組 + QR Code -->
   <section class="community-section">
@@ -577,7 +505,6 @@
     color: #666;
     margin-top: 0;
   }
-  .beta-tag { display: inline-block; font-size: 0.6em; vertical-align: middle; background: #c0392b; color: #fff; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: 700; letter-spacing: 0.5px; }
   section {
     margin-top: 1.5rem;
     padding: 1rem 1.25rem;
@@ -1046,16 +973,11 @@
   .hm-hero-text .subtitle { margin: 0 0 .3rem; }
   .hm-hero-text .tagline { margin: 0; }
 
-  .hm-switch, .hm-try-btn {
-    flex-shrink: 0; padding: .38rem .8rem; font-size: .82rem; cursor: pointer;
-    color: #5a6673; background: #fff; border: 1px solid #d7dde5; border-radius: 999px;
-    white-space: nowrap; transition: background .15s, border-color .15s;
-  }
-  .hm-switch:hover, .hm-try-btn:hover { background: #f3f6fa; border-color: #b9c4d2; }
-  .hm-try-row { margin: 0 0 1rem; }
-  .hm-try-btn { color: #2f6bd8; border-color: #cfe0f8; background: #f5f9ff; }
+  /* 強制更新鈕放在 hero 右上：玩家一進站在最上面就按得到（原本在頁尾太深） */
+  .hm-refresh-top { flex-shrink: 0; white-space: nowrap; }
 
   .hm-grid {
+    margin-top: 0;
     display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: .9rem; margin-bottom: 1.4rem;
   }
@@ -1088,7 +1010,6 @@
   .hm-card-game  .hm-icon { background: #fdeeec; }
   .hm-card-tourn .hm-icon { background: #fdf4e3; }
 
-  .hm-refresh-row { margin: 0 0 1.6rem; }
 
   /* ⭐響應式：桌機與手機的差異純粹是排版（幾欄、多大），行為完全相同，
      所以用 media query 而不是拆兩套元件。
@@ -1097,7 +1018,7 @@
   @media (max-width: 720px) {
     .hm-hero { flex-direction: column; gap: .8rem; padding: 1.2rem 1rem 1.1rem; }
     .hm-hero-text h1 { font-size: 1.35rem; }
-    .hm-switch { align-self: flex-start; }
+    .hm-refresh-top { align-self: flex-start; }
     .hm-grid { grid-template-columns: 1fr; gap: .7rem; }
     /* 手機改橫式列，整列可點；高度足夠拇指點擊 */
     .hm-card { min-height: 76px; padding: .9rem 1rem; }
