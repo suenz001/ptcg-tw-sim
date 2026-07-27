@@ -3,6 +3,8 @@
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
+  // v6.045 卡包排序（越新越靠左上、特典卡墊底）抽成模組才測得到，見 set-order.ts
+  import { orderSetsForPicker } from '$lib/cards/set-order';
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
    *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
@@ -365,38 +367,7 @@
 
 {#if data.mode === 'index'}
   <!-- ═══════════════════════ Set picker ═══════════════════════ -->
-  {@const markGroups = (() => {
-    const groups = new Map();
-    for (const set of data.sets) {
-      const m = set.regulationMark ?? '?';
-      if (!groups.has(m)) groups.set(m, []);
-      groups.get(m).push(set);
-    }
-    // v2.30: 每個 mark group 內依 releaseDate 升序（舊 → 新）——越新的越右邊。
-    // 沒填 releaseDate 的排到最後，最後用 code 字典序做 tiebreaker，
-    // 保證同一天發售（如 SV5K/SV5M、SV11B/SV11W）仍有穩定順序。
-    const byDateAsc = (a: SetSummary, b: SetSummary) => {
-      const da = a.releaseDate ?? '';
-      const db = b.releaseDate ?? '';
-      if (da && db && da !== db) return da.localeCompare(db);
-      if (da && !db) return -1;
-      if (!da && db) return 1;
-      return a.code.localeCompare(b.code);
-    };
-    for (const [, sets] of groups) sets.sort(byDateAsc);
-
-    // v2.115: Standard 賽制僅 H/I/J；G 標已輪替不顯示區塊（SVC/SVD/SVP1 已刪除）
-    // v4.9：M5（深淵之瞳）regulationMark 改為 J 與其他 J 標 set 合併，移除特殊 section
-    const ordered = [];
-    for (const mark of ['H', 'I', 'J']) {
-      if (groups.has(mark)) ordered.push([mark, groups.get(mark)]);
-    }
-    // Anything else (F/G/other) — 目前資料庫不應出現，保留防禦性落點
-    for (const [mark, sets] of groups) {
-      if (!['H', 'I', 'J'].includes(mark)) ordered.push([mark, sets]);
-    }
-    return ordered;
-  })()}
+  {@const markGroups = orderSetsForPicker(data.sets)}
 
   {@const markStartDate: Record<string, string> = {
     // v2.114 台灣賽制 regulation mark 啟用日期（以台灣區第一個該 mark set 發售日為準）
