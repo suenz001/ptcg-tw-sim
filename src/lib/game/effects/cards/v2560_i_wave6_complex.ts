@@ -269,8 +269,10 @@ regPost('千面避役|擊斃', (state, aIdx, pool) => {
     if (!tgtInst) return s;
     if (target.ownerIdx === aIdx) {
       return updatePlayer(s, aIdx, p => {
-        const na = p.active && p.active.iid === target.iid ? markFaintByEffect(p.active, pool, s) : p.active;
-        const nb = p.bench.map(b => b.iid === target.iid ? markFaintByEffect(b, pool, s) : b);
+        // v6.037：帶上來源「擊斃」→ sweep 的 log 才寫得出「擊斃：X 被昏厥！」，
+        //   而不是看起來像系統異常的「⚠️ 系統擊倒檢查」。
+        const na = p.active && p.active.iid === target.iid ? markFaintByEffect(p.active, pool, s, '擊斃') : p.active;
+        const nb = p.bench.map(b => b.iid === target.iid ? markFaintByEffect(b, pool, s, '擊斃') : b);
         return { ...p, active: na, bench: nb };
       });
     }
@@ -310,8 +312,8 @@ regR('striking-down-pick', (st, aIdx, iids, _params, pool) => {
   const pickIsActive = p.active?.iid === targetIid;
   if (ownerIdx === aIdx) {
     return updatePlayer(s, aIdx, pl => {
-      const na = pl.active && pl.active.iid === targetIid ? markFaintByEffect(pl.active, pool, s) : pl.active;
-      const nb = pl.bench.map(b => b.iid === targetIid ? markFaintByEffect(b, pool, s) : b);
+      const na = pl.active && pl.active.iid === targetIid ? markFaintByEffect(pl.active, pool, s, '擊斃') : pl.active;
+      const nb = pl.bench.map(b => b.iid === targetIid ? markFaintByEffect(b, pool, s, '擊斃') : b);
       return { ...pl, active: na, bench: nb };
     });
   }

@@ -2428,6 +2428,27 @@ function flushDiverCatchQueue(state: GameState, pool: Map<string, Card>): GameSt
   };
 }
 
+/**
+ * v6.037 中央：sanityKOSweep 的擊倒 log 措辭。
+ *
+ * ⚠原本所有走 sweep 的擊倒一律寫「⚠️ 系統擊倒檢查」——那是**兜底機制的名字**。
+ *   對「效果昏厥」型的卡（千面避役｜擊斃、咒詛炸彈、滲透寒氣、浸蝕污泥…）來說，
+ *   sweep 就是它們**正常的**結算路徑，玩家卻會看到一行像系統異常的警告，
+ *   完全看不出「這是我剛用的招式造成的」。（玩家實際回報「擊斃沒反應」的體感來源之一：
+ *   打到自己方的低 HP 寶可夢時，畫面上只有這行看起來像 bug 的訊息。）
+ * → 有 _faintReason 就用卡面來源寫；沒有才是真的兜底異常，維持原措辭。
+ *   這讓「系統擊倒檢查」回歸它真正的意義，之後看到它就代表**真的有東西沒收斂**。
+ */
+function koSweepLogLine(
+  inst: CardInstance, name: string, where: '戰鬥場' | '備戰位', hp: number, prizes: number,
+): string {
+  const who = `${cardLink(inst.iid, name)}`;
+  if (inst._faintReason) {
+    return `${inst._faintReason}：${who} 被昏厥！（${where}）對手獲得 ${prizes} 張獎賞卡`;
+  }
+  return `⚠️ 系統擊倒檢查：${who} 被擊倒（${where}，傷害 ${inst.damage} ≥ HP ${hp}）+${prizes} 張獎賞卡`;
+}
+
 function sanityKOSweep(
   state: GameState,
   attackerIdx: 0 | 1,
@@ -2458,7 +2479,7 @@ function sanityKOSweep(
       player.discard = [...player.discard, ...koDiscard];
       player.active = null;
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(ko.iid, card?.name ?? '?')} 被擊倒（戰鬥場，傷害 ${ko.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
+      s = addLog(s, koSweepLogLine(ko, card?.name ?? '?', '戰鬥場', hp, card ? prizesForKO(card) : 1), null);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterA);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !ko._faintByEffect);
@@ -2482,7 +2503,7 @@ function sanityKOSweep(
       ];
       player.discard = [...player.discard, ...koDiscard];
       if (card) prizesAcc += prizesForKO(card);
-      s = addLog(s, `⚠️ 系統擊倒檢查：${cardLink(b.iid, card?.name ?? '?')} 被擊倒（備戰位，傷害 ${b.damage} ≥ HP ${hp}）+${card ? prizesForKO(card) : 1} 張獎賞卡`, null);
+      s = addLog(s, koSweepLogLine(b, card?.name ?? '?', '備戰位', hp, card ? prizesForKO(card) : 1), null);
       s = enqueueDiverCatch(s, dIdx, card?.name ?? '?', heldWaterB);
       // v2.246：sanity sweep 大多是招式效果產生的 zombie KO，記錄為 attack cause
       s = recordOppKO(s, dIdx, card, 'attack', !b._faintByEffect);
@@ -6789,7 +6810,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (!c.damageAtMyNextEndOfTurn || c.damageAtMyNextEndOfTurn <= 0) return c;
       const _newDmgEnd = (c.damage ?? 0) + c.damageAtMyNextEndOfTurn;
       const n = { ...c, damage: _newDmgEnd };
-      if (_newDmgEnd >= getEffectiveHP(c, pool, state)) n._faintByEffect = true; // v5.926 滲透寒氣放指示物致死=效果昏厥
+      if (_newDmgEnd >= getEffectiveHP(c, pool, state)) { n._faintByEffect = true; n._faintReason = '滲透寒氣'; } // v5.926 滲透寒氣放指示物致死=效果昏厥（v6.037 帶來源）
       delete n.damageAtMyNextEndOfTurn;
       return n;
     };
@@ -6879,7 +6900,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   清除 flag（消費完）
     const triggerSludgeKO = (c: CardInstance): CardInstance => {
       if (!c.koAtMyNextEndOfTurn) return c;
-      const n = { ...c, damage: getEffectiveHP(c, pool, state), _faintByEffect: true }; // v5.926 浸蝕污泥效果昏厥
+      const n = { ...c, damage: getEffectiveHP(c, pool, state), _faintByEffect: true, _faintReason: '浸蝕污泥' }; // v5.926 浸蝕污泥效果昏厥（v6.037 帶來源）
       delete n.koAtMyNextEndOfTurn;
       return n;
     };

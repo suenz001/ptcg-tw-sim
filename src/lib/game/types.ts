@@ -29,6 +29,16 @@ export type TurnPhase =
 export interface CardInstance {
   /** v5.926 效果昏厥標記：markFaintByEffect 設；sanityKOSweep 據此傳 byDamage=false，使「因招式的傷害而昏厥」型復仇招式不誤觸發 */
   _faintByEffect?: boolean;
+  /**
+   * v6.037 效果昏厥的「來源名稱」（招式／特性名，例：'擊斃'、'咒詛炸彈'）。
+   * 用途：sanityKOSweep 是所有效果昏厥的**共同收斂點**，但它原本一律寫
+   *   「⚠️ 系統擊倒檢查：… 被擊倒」—— 那是**兜底機制的名字**，玩家看到會以為是
+   *   系統異常／bug，而不是「這是我剛用的招式的正常效果」。帶上來源後就能寫成
+   *   「擊斃：米立龍 被昏厥！…」，同時讓「系統擊倒檢查」回歸它真正的意義：
+   *   **只在沒有任何卡片標記來源的 zombie KO 時出現**（那才是真的該警覺）。
+   * ⚠transient：離場一律被 toBareCard 白名單裸化清掉（v5.993 起白名單不漂移）。
+   */
+  _faintReason?: string;
   /** 本場遊戲唯一 ID（每張卡不同，即使同名） */
   iid: string;
   /** 對應 Card.id（用來查牌庫資料） */

@@ -776,8 +776,17 @@ export function markFaintByEffect(
   inst: CardInstance,
   pool: Map<string, Card>,
   state?: GameState,
+  reason?: string,
 ): CardInstance {
-  return { ...inst, damage: effectiveHPInline(inst, pool, state), _faintByEffect: true };
+  // v6.037：帶上來源名稱（招式／特性名）。實際的棄牌／獎賞／game-over 結算都在
+  //   sanityKOSweep（每個 action 結束雙邊掃），這裡只負責「標記 + 說明它為什麼死」。
+  //   沒帶 reason 時行為完全不變。
+  return {
+    ...inst,
+    damage: effectiveHPInline(inst, pool, state),
+    _faintByEffect: true,
+    ...(reason ? { _faintReason: reason } : {}),
+  };
 }
 
 /**
