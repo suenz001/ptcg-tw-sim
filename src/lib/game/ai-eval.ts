@@ -20,7 +20,7 @@
  */
 import type { Card } from '$lib/cards/types';
 import type { GameState, CardInstance } from './types';
-import { applyAction, getAvailableAttacks } from './engine';
+import { applyAction, getAvailableAttacks, getEffectiveHP } from './engine';
 
 /** 一次試打的結果。dealt 只在「沒擊倒」時有意義（擊倒時傷害多寡不重要）。 */
 export interface AttackOutcome {
@@ -153,4 +153,169 @@ export function estimateIfPromoted(
   } catch {
     return DEAD;
   }
+}
+
+// ── 選招評估（批次 4d）─────────────────────────────────────────────────────
+/**
+ * 一次攻擊的完整評估。所有欄位都是**引擎試打後的盤面差**，不是我解讀卡面得來的：
+ * 這一擊讓我拿到幾張獎賞、對手全場多受多少傷、我自己付出什麼代價。
+ * 好處是不需要判斷「這張是不是 ex」（獎賞數 ex=2／Mega ex=3／一擊多殺全自動涵蓋），
+ * 也不需要讀懂招式敘述裡的副作用文字。
+ */
+export interface AttackEval extends AttackOutcome {
+  /** 這一擊讓我方新增幾張待取獎賞（pendingPrizes 差） */
+  prizes: number;
+  /** 對手全場（戰鬥位＋備戰）傷害增量 */
+  oppDamage: number;
+  /** 我方戰鬥位少了幾個能量（丟能量型招式的代價） */
+  selfEnergyLost: number;
+  /** 我方戰鬥位自身增加的傷害（反衝傷害） */
+  selfDamage: number;
+  /** 這一擊是否直接贏得對局 */
+  gameWon: boolean;
+  /** 綜合分數（越大越好） */
+  score: number;
+}
+
+const DEAD_EVAL: AttackEval = {
+  ...DEAD, prizes: 0, oppDamage: 0, selfEnergyLost: 0, selfDamage: 0, gameWon: false, score: -Infinity,
+};
+
+/**
+ * 這一擊對某方造成的**有效傷害**。
+ *
+ * ⚠不能只比「場上傷害指示物總和」的前後差 —— 被擊倒的那隻會直接離場，
+ *   牠身上的傷害跟著消失，差值反而會塌陷成 0（甚至負數）。第一版就是這樣寫的，
+ *   結果「真的擊倒對手」算出來的傷害是 0，分數輸給只是打了 130 但沒擊倒的招，
+ *   AI 因此**放棄能擊倒的招**（探針量到漏 KO 20%）。
+ *   正確作法：逐隻比對 iid —— 還在場上的算傷害增量，已離場的算牠被打前的剩餘 HP。
+ */
+function oppEffectiveDamage(
+  beforeSt: GameState, afterSt: GameState, oppIdx: 0 | 1, pool: Map<string, Card>,
+): number {
+  const listOf = (st: GameState) => {
+    const p = st.players[oppIdx];
+    return [...(p.active ? [p.active] : []), ...p.bench];
+  };
+  const after = new Map(listOf(afterSt).map((c) => [c.iid, c]));
+  let total = 0;
+  for (const b of listOf(beforeSt)) {
+    const a = after.get(b.iid);
+    if (a) total += Math.max(0, (a.damage ?? 0) - (b.damage ?? 0));
+    else total += Math.max(0, getEffectiveHP(b, pool, beforeSt) - (b.damage ?? 0));   // 被擊倒＝打掉牠的剩餘 HP
+  }
+  return total;
+}
+
+/**
+ * ⚠權重全部是**啟發式**（不是卡面規則）。設計原則只有兩條：
+ *   ① 獎賞是勝利條件 → 權重必須壓過任何傷害數字。
+ *   ② 其餘各項一律取自引擎事實，我只決定它們的相對份量。
+ * 特別注意 overkill：不寫死「印刷傷害小的優先」，而是讓「對備戰的額外傷害」與
+ * 「丟掉的能量」自己去比 —— 大招若真的有額外收益（例如順便打備戰）就該選它，
+ * 若只是白白多丟能量，小招自然勝出。這比我猜哪個好可靠得多。
+ */
+const W = { PRIZE: 1000, SELF_ENERGY: 30, SELF_DAMAGE: 0.5, CANT_ATTACK_NEXT: 150 };
+/** 一張獎賞卡在評分尺度上的份量。呼叫端做 fallback 估值時要用同一個尺度，否則
+ *  「能擊倒」與「傷害高」兩種估值混在一起比會得到亂七八糟的排序。 */
+export const PRIZE_SCORE_UNIT = W.PRIZE;
+
+/** 單次試打並回傳完整評估（不平均；平均版見 evaluateAttack）。 */
+function evaluateAttackOnce(
+  state: GameState,
+  actorIdx: 0 | 1,
+  attackIndex: number,
+  pool: Map<string, Card>,
+): AttackEval {
+  try {
+    const oppIdx = (1 - actorIdx) as 0 | 1;
+    const beforeOppActive = state.players[oppIdx].active;
+    if (!beforeOppActive) return DEAD_EVAL;
+    // ⚠獎賞有**兩條路徑**：沒有正面朝上的獎賞卡時是直接取走（自己的 prizes 堆變短），
+    //   只有需要玩家挑的時候才留在 pendingPrizes。第一版只讀 pendingPrizes，實測
+    //   「明明擊倒了對手卻算出 prizes=0」，分數因此輸給沒擊倒的招 —— 兩條都要算。
+    const beforePending = state.pendingPrizes?.[actorIdx] ?? 0;
+    const beforePrizeStack = state.players[actorIdx].prizes.length;
+    const beforeSelf = state.players[actorIdx].active;
+    const beforeSelfEnergy = beforeSelf?.energyAttached.length ?? 0;
+    const beforeSelfDmg = beforeSelf?.damage ?? 0;
+
+    return withIsolatedRandom(() => {
+      const after = applyAction(cloneState(state), { type: 'ATTACK', attackIndex, actorIdx }, pool);
+      if (!after || after === state) return DEAD_EVAL;
+
+      const gameWon = after.phase === 'game-over' && after.winner === actorIdx;
+      const oppNow = after.players[oppIdx].active;
+      const ko = !oppNow || oppNow.iid !== beforeOppActive.iid;
+      const prizes = Math.max(0, (after.pendingPrizes?.[actorIdx] ?? 0) - beforePending)
+        + Math.max(0, beforePrizeStack - after.players[actorIdx].prizes.length);
+      const oppDamage = oppEffectiveDamage(state, after, oppIdx, pool);
+
+      const selfNow = after.players[actorIdx].active;
+      // 自己被擊倒／換位時能量差沒有意義，記 0 避免誤判成「丟了很多能量」
+      const sameSelf = selfNow && beforeSelf && selfNow.iid === beforeSelf.iid;
+      const selfEnergyLost = sameSelf
+        ? Math.max(0, beforeSelfEnergy - selfNow.energyAttached.length) : 0;
+      const selfDamage = sameSelf ? Math.max(0, (selfNow.damage ?? 0) - beforeSelfDmg) : 0;
+      // ⚠欄位名一定要查證：正確的是 `cantAttackPending`（攻擊當下設，擁有者下個回合開始時
+      //   才 promote 成 cantAttackThisTurn）。我第一版寫成 cantAttackNextTurn／
+      //   mustRechargeNextTurn —— 兩個都不存在，TypeScript 不會報錯、值恆為 undefined，
+      //   結果是「下回合不能攻擊」這個代價**完全不被計入**而毫無徵兆。守衛已釘死此欄位。
+      const cantAttackNext = !!(sameSelf && selfNow.cantAttackPending);
+
+      let score = prizes * W.PRIZE + oppDamage
+        - selfEnergyLost * W.SELF_ENERGY
+        - selfDamage * W.SELF_DAMAGE
+        - (cantAttackNext ? W.CANT_ATTACK_NEXT : 0);
+      if (gameWon) score = Number.MAX_SAFE_INTEGER;
+
+      return {
+        ok: true, ko, dealt: ko ? Infinity : oppDamage, unresolved: !!after.pendingSelection,
+        prizes, oppDamage, selfEnergyLost, selfDamage, gameWon, score,
+      };
+    });
+  } catch {
+    return DEAD_EVAL;   // fail-open
+  }
+}
+
+/**
+ * 評估一招，**試打多次取平均**。
+ * ⚠為什麼要多次：擲幣類招式單試一次的結果是隨機的，只打一次會把「正面 200／反面 0」
+ *   當成確定值 —— 剛好擲到反面就會永遠低估那一招。取平均才是期望值。
+ *   次數少（預設 3）是為了瀏覽器效能；這是估計不是精算，註明於此免得日後誤解。
+ */
+export function evaluateAttack(
+  state: GameState,
+  actorIdx: 0 | 1,
+  attackIndex: number,
+  pool: Map<string, Card>,
+  samples = 3,
+): AttackEval {
+  let acc: AttackEval | null = null;
+  let okCount = 0, koCount = 0;
+  for (let i = 0; i < samples; i++) {
+    const r = evaluateAttackOnce(state, actorIdx, attackIndex, pool);
+    if (!r.ok) continue;
+    okCount++;
+    if (r.ko) koCount++;
+    acc = acc
+      ? { ...r,
+          prizes: acc.prizes + r.prizes, oppDamage: acc.oppDamage + r.oppDamage,
+          selfEnergyLost: acc.selfEnergyLost + r.selfEnergyLost, selfDamage: acc.selfDamage + r.selfDamage,
+          gameWon: acc.gameWon || r.gameWon,
+          score: acc.score === Number.MAX_SAFE_INTEGER || r.score === Number.MAX_SAFE_INTEGER
+            ? Number.MAX_SAFE_INTEGER : acc.score + r.score,
+          unresolved: acc.unresolved || r.unresolved }
+      : { ...r };
+  }
+  if (!acc || okCount === 0) return DEAD_EVAL;
+  const avg = (n: number) => n / okCount;
+  return {
+    ...acc,
+    ko: koCount * 2 > okCount,          // 過半數會擊倒才算「能擊倒」
+    prizes: avg(acc.prizes), oppDamage: avg(acc.oppDamage),
+    selfEnergyLost: avg(acc.selfEnergyLost), selfDamage: avg(acc.selfDamage),
+    score: acc.score === Number.MAX_SAFE_INTEGER ? acc.score : avg(acc.score),
+  };
 }

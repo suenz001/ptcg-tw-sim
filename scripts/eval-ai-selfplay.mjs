@@ -7,8 +7,15 @@
 //   門檻是**勝率差的 95% 信賴區間下界 > 0**（Wilson score interval，對極端比例比
 //   常態近似穩健）。下界沒過就是「這批看不出有效」，不是「有效但樣本不夠」。
 //
-// 【先後手公平】PTCG 先攻有優勢，所以每個配對都跑兩半：新版先攻一半、後攻一半。
-//   只讓新版當先攻的話，量到的是先攻優勢不是 AI 強度。
+// 【⭐先後手公平：必須「同一個 seed 跑兩次鏡像」】
+//   PTCG 先攻有優勢。第一版是「前一半 seed 讓新版坐 0、後一半坐 1」—— 這**不會**對消
+//   先攻優勢，因為每個 seed 的先攻方是固定的，兩半只是換了不同的牌局，不是同一局換邊。
+//   實測：把新舊 AI 換成**完全相同的邏輯**跑 A/A 測試，勝率是 39.1% 而不是 50% ——
+//   工具本身就有系統性偏差，任何結論都不可信。
+//   正確作法：每個 seed 跑兩場，新版分別坐 0 與坐 1。同一副牌、同一個隨機序列，
+//   先攻優勢在兩場之間完全抵銷，剩下的差異才是 AI 強度。
+//   ⚠新增測試方法時務必先跑 A/A（兩邊同一份程式碼）確認結果落在 50% 附近，
+//     否則量到的是工具的偏差。
 //
 // 用法：node scripts/eval-ai-selfplay.mjs [每組場數] [配對索引]
 import { build } from 'esbuild';
@@ -123,9 +130,12 @@ for (const [name, id] of list) {
   const entries = presetEntries(id);
   let nw = 0, ow = 0, dr = 0;
   for (let s = 0; s < N; s++) {
-    // 前一半新版先攻、後一半新版後攻 —— 否則量到的是先攻優勢
-    const r = playOne(7717 + (s + seedOff) * 104729, entries, s < N / 2 ? 0 : 1);
-    if (r === 'new') nw++; else if (r === 'old') ow++; else dr++;
+    // ⭐每個 seed 跑兩次鏡像：同一局分別讓新版坐 0 與坐 1，先攻優勢完全抵銷
+    const seed = 7717 + (s + seedOff) * 104729;
+    for (const seat of [0, 1]) {
+      const r = playOne(seed, entries, seat);
+      if (r === 'new') nw++; else if (r === 'old') ow++; else dr++;
+    }
   }
   totalNew += nw; totalOld += ow; totalDraw += dr;
   const dec = nw + ow;

@@ -29,7 +29,7 @@ import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-fil
 import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
-import { estimateIfPromoted } from './ai-eval';
+import { estimateIfPromoted, evaluateAttack, PRIZE_SCORE_UNIT } from './ai-eval';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -333,8 +333,33 @@ export function getAIAction(
       }
       return 0;
     };
+    // ── v6.040 批次4d：選招改用「引擎試打後的盤面差」評分 ────────────────
+    // 舊版只比 `estimateDamage`（印刷傷害），完全看不到弱點×2、減傷、免疫，
+    // 也看不到「這一擊拿幾張獎賞」與「我付出什麼代價」。
+    // 新版的收益／代價全部讀自引擎試打的盤面差，AI 不解讀卡面文字：
+    //   收益＝新增的待取獎賞（自動涵蓋 ex=2／Mega ex=3／一擊多殺）＋對手全場傷害增量
+    //   代價＝丟掉的能量、自身反衝傷害、下回合不能攻擊
+    const _oppIdx = (1 - myIdx) as 0 | 1;
+    const _oppActive = state.players[_oppIdx].active;
+    const _oppRem = _oppActive ? _remHP(_oppActive, pool, state) : 0;
+    const scoreOfAttack = (atkIdx: number): number => {
+      const ev = evaluateAttack(state, myIdx, atkIdx, pool);
+      // ⚠會開選擇視窗的招（暗黑底牌等）在試打當下傷害還沒結算 → 試打值會嚴重低估。
+      //   這類招退回舊的 estimateDamage 估值，並換算成同一個評分尺度：
+      //   估計傷害打得死對手戰鬥位就補上一張獎賞的份量，否則只算傷害。
+      //   不換算尺度的話，「能擊倒」的招（分數上千）會永遠輾過暗黑底牌（分數幾百）。
+      if (!ev.ok || ev.unresolved) {
+        const est = estimateDamage(atkIdx);
+        // ⚠fallback 判定「打得死」時只補**一張**獎賞的份量，不再加上 est ——
+        //   否則會超過真正試打出來的擊倒分數（打 ex 明明值 2 張獎賞），
+        //   AI 反而會選開選擇視窗的那一招而放掉真的能擊倒的招。
+        //   fallback 只有印刷傷害可用，不知道對手值幾張獎賞，保守給 1 張。
+        return (_oppRem > 0 && est >= _oppRem) ? PRIZE_SCORE_UNIT : est;
+      }
+      return ev.score;
+    };
     const best = atkIdxs.reduce((prev, cur) => {
-      return estimateDamage(cur) > estimateDamage(prev) ? cur : prev;
+      return scoreOfAttack(cur) > scoreOfAttack(prev) ? cur : prev;
     });
     // v3.883：AI 對 PRE_DISCARD_CHOICE 招式自動填 discardedEnergyIids
     //   目前只 special-case 激流水泵（厄鬼椪 水井面具ex）— 對手有 bench + 自身能量 ≥ required
