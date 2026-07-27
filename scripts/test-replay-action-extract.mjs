@@ -203,6 +203,40 @@ T('⭐⭐必須分得出「log 沒讀到」與「讀到了但措辭不符」', (
   assert.ok(/logDiag/.test(CJS), '診斷數字要一併寫進輸出 JSON');
 });
 
+T('⭐⭐log 卡名被包成 cardLink 標記，統計前必須剝掉（不剝的話每筆都帶 iid、聚合全廢）', () => {
+  // 真實事故：「交易丟棄」統計出來每一項都是 ×1，key 長得像「315a3p0mN的索羅亞」。
+  //   engine 的 cardLink 把卡名包成 {iid}{卡名}（給「點 log 卡名跳到實體卡」用），
+  //   這些是**私用區字元、主控台印出來是空白**，所以看起來就只是「卡名前面多了亂碼」，
+  //   完全不像壞掉 —— 但每個 iid 都不同，聚合等於完全失效。
+  const shared = readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8');
+  assert.ok(shared.includes('\\uE100${iid}\\uE101${name}\\uE102'),
+    'cardLink 的標記格式已改，抽取端的剝除正則要同步更新');
+  assert.ok(/\\uE100\[\^\\uE101\]\*\\uE101\(\[\^\\uE102\]\*\)\\uE102/.test(CJS),
+    '抽取端必須剝掉 cardLink 標記後才做統計');
+  // 直接拿同一條正則實跑，確認真的剝得乾淨
+  const m = CJS.match(/raw\.replace\(\/(\\uE100.*?)\/g, '\$1'\)/);
+  assert.ok(m, '應以 replace 剝除');
+  const re = new RegExp(m[1].replace(/\\\\/g, '\\'), 'g');
+  const sample = 'a1米立龍、b2好友寶芬';
+  assert.equal(sample.replace(re, '$1'), '米立龍、好友寶芬');
+});
+
+T('⭐⭐log 必須只取我方的行（同原型內戰時會混進對手的打法）', () => {
+  // 這套牌很熱門（31 位玩家在打），同原型內戰完全可能。不過濾就等於把對手
+  // （可能是低勝率玩家）的打法也學進來 —— 實測差了 13 次才發現。
+  const i = CJS.indexOf('for (const line of finalLog)');
+  const body = CJS.slice(i, i + 900);
+  assert.ok(/line\.playerIndex !== mySeat/.test(body), '應依 playerIndex 過濾成只取我方');
+  assert.ok(/playerIndex != null/.test(body), '系統訊息（playerIndex 為 null）要保留');
+});
+
+T('⭐兩個獨立來源要互相交叉驗證（log vs 動作序列）', () => {
+  assert.ok(/crossCheck/.test(CJS), '應輸出交叉驗證數字');
+  assert.ok(/darkCardFromLog/.test(CJS) && /darkCardFromActions/.test(CJS),
+    '應比對「log 抽到的暗黑底牌次數」與「動作序列的暗黑底牌攻擊次數」');
+  assert.ok(/交叉驗證不符/.test(CJS), '差太多要出警告 —— 那代表其中一邊被污染了');
+});
+
 // 這兩條措辭必須與引擎當前實作一致（引擎改字 → 這裡就該紅）
 T('⭐⭐抽取用的 log 措辭與引擎實作逐字一致', () => {
   const six = readFileSync(join(ROOT, 'src/lib/game/effects/cards/six_decks.ts'), 'utf8');

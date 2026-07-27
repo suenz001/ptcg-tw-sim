@@ -351,14 +351,24 @@ function loadCardNames() {
         //   所以下面每條都回報命中數，命中 0 就是措辭變了，不是「玩家沒用過」。
         logLinesRead += finalLog.length;
         for (const line of finalLog) {
+          // ⚠**只取我方的 log 行**。這套牌很熱門（31 位玩家在打），同原型內戰完全可能 ——
+          //   不過濾的話對手的暗黑底牌也會被算進來，等於把對手（可能是低勝率玩家）的打法
+          //   一起學進去。實測差了 13 次（log 69 vs 動作序列 56），就是這個原因。
+          //   系統訊息 playerIndex 為 null，保留（那些是雙方共同事件）。
+          if (line && typeof line === 'object' && line.playerIndex != null && line.playerIndex !== mySeat) continue;
           // ⚠v2 修：欄位是 **message**，不是 text（LogEntry = {turn, playerIndex, message, timestamp}）。
           //   第一版寫 line.text → 每一行都變空字串被跳過 → 暗黑底牌/交易丟棄一條都抽不到，
           //   而畫面上的提示卻說「多半是措辭改過」，把人指向完全錯誤的方向。
           //   → 這就是為什麼下面一定要回報 logLinesRead：**「log 讀不到」與「措辭不符」
           //     是兩種完全不同的失敗，混在一起就查不出來**。
-          const t = typeof line === 'string' ? line : ((line && (line.message || line.text)) || '');
-          if (!t) continue;
+          const raw = typeof line === 'string' ? line : ((line && (line.message || line.text)) || '');
+          if (!raw) continue;
           logLinesMatched++;
+          // ⚠剝掉 cardLink 標記。log 裡的卡名被包成 \uE100{iid}\uE101{卡名}\uE102
+          //   （v5.9xx「點 log 卡名跳到本場實體卡」的功能）。不剝的話統計 key 會**帶著 iid**，
+          //   每一筆都變成獨一無二 → 聚合完全失效，但畫面上看起來「有抓到資料」（全部 ×1），
+          //   完全不像壞掉。這些是私用區字元，主控台印出來還是空白，更難發現。
+          const t = raw.replace(/\uE100[^\uE101]*\uE101([^\uE102]*)\uE102/g, '$1');
           let m = t.match(/暗黑底牌：使用\s*(.+?)\s*的「(.+?)」/);
           if (m) inc(stat.darkCardCopied, m[1] + '｜' + m[2]);
           m = t.match(/交易：丟棄\s*(.+)$/);
@@ -407,6 +417,19 @@ function loadCardNames() {
     show('交易丟棄', outX.stats.tradeDiscarded);
     show('首次攻擊回合', outX.stats.firstAttackTurn);
     console.log(`  對戰log：${matchesWithLog}/${matchesAnalysed} 場讀到，共 ${logLinesRead} 行（可解析 ${logLinesMatched} 行）`);
+    // ⭐兩個**獨立來源**互相驗證：log 抽到的暗黑底牌次數，應該與動作序列裡的
+    //   attack extra='暗黑底牌' 次數一致。差很多就代表其中一邊被污染了
+    //   （實例：沒依 playerIndex 過濾時混進對手的暗黑底牌，log 69 vs 動作 56）。
+    const darkFromLog = outX.stats.darkCardCopied.reduce((s2, x) => s2 + x.n, 0);
+    const darkFromActions = (outX.stats.attackUsed.find((x) => x.key === '暗黑底牌') || { n: 0 }).n;
+    outX.crossCheck = { darkCardFromLog: darkFromLog, darkCardFromActions: darkFromActions };
+    const diff = Math.abs(darkFromLog - darkFromActions);
+    if (darkFromActions > 0 && diff > Math.max(3, darkFromActions * 0.1)) {
+      console.log(`  ⚠交叉驗證不符：log 抽到暗黑底牌 ${darkFromLog} 次，但動作序列只有 ${darkFromActions} 次`
+        + ' —— 其中一邊被污染了（最可能是 log 沒過濾成只取我方）。');
+    } else {
+      console.log(`  ✓交叉驗證：暗黑底牌 log ${darkFromLog} 次 vs 動作序列 ${darkFromActions} 次`);
+    }
     if (!logLinesRead) {
       console.log('  ⚠一行 log 都沒讀到 —— 是取 log 的路徑壞了（TMATCH.finalLog / 房間 fallback），不是措辭問題。');
     } else if (!logLinesMatched) {
