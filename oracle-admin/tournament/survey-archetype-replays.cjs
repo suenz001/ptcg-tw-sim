@@ -80,11 +80,13 @@ function loadCardNames() {
 }
 
 (async () => {
-  const keyCards = process.argv.slice(2).map((s) => String(s).trim()).filter(Boolean);
-  if (!keyCards.length) {
-    console.error('用法: node survey-archetype-replays.cjs "<關鍵卡名>" ["<關鍵卡名2>" ...]（全部都要含才算命中）');
-    process.exit(1);
-  }
+  // ⚠預設值刻意寫在這裡（UTF-8 原始碼），而**不是**由 .bat 傳中文參數進來 ——
+  //   中文經 cmd → ssh → bash 三層轉碼很容易變亂碼，卡名一旦亂碼就會「一場都比不中」，
+  //   而且看起來就像「這套牌沒人在打」，完全不像編碼問題。
+  const DEFAULT_KEY_CARDS = ['N的索羅亞克ex'];
+  const argv = process.argv.slice(2).map((s) => String(s).trim()).filter(Boolean);
+  const keyCards = argv.length ? argv : DEFAULT_KEY_CARDS;
+  if (!argv.length) console.log('（未指定關鍵卡，使用內建預設：' + DEFAULT_KEY_CARDS.join(' + ') + '）');
   const nameMap = loadCardNames();
   const uri = findUri();
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
