@@ -21,6 +21,7 @@ import {
   updatePlayer,
 } from '../_shared';
 import { flipCoinsWithLog, discardOppActiveEnergyPost } from '../../effects';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 
 // ── A. 幼基拉斯｜咬碎 ────────────────────────────────────────────────────────
 // 卡面：20 傷害。擲 1 次硬幣，若正面，丟棄對手戰鬥寶可夢身上 1 張能量。
@@ -56,11 +57,14 @@ regPost('振翼髮|暗夜羽擊', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   if (!def) return addLog(state, '暗夜羽擊：對手無戰鬥寶可夢', aIdx);
   const defName = pool.get(def.cardId)?.name ?? '?';
-  state = addLog(state, `暗夜羽擊：${defName} 的特性在下個對手回合無效`, aIdx);
-  return updatePlayer(state, dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, abilityNullifiedNextTurn: true } : null,
-  }));
+  // v6.046：收斂中央 applyOppActiveDebuffPost（含招式效果免疫 gate）。
+  //   ⚠此 reg key 目前無對應卡：現役 H/I/J 的振翼髮招式是 飛來橫禍／蠱惑挪移／月亮之力，
+  //     沒有「暗夜羽擊」。保留實作但接上中央管線，避免日後被當成範本照抄。
+  return applyOppActiveDebuffPost(
+    '暗夜羽擊',
+    (a) => ({ ...a, abilityNullifiedNextTurn: true }),
+    `暗夜羽擊：${defName} 的特性在下個對手回合無效`,
+  )(state, aIdx, pool);
 });
 
 // ── D. 超級巨牙鯊ex｜飢渴下巴 ───────────────────────────────────────────────

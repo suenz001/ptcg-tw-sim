@@ -10653,13 +10653,13 @@ function defCantAttackIfSubtypePost(
     if (!matches) {
       return addLog(state, `${label}：對手不符合條件（${cond === 'basic' ? '基礎' : '進化'}寶可夢），無附加效果`, aIdx);
     }
-    const players = [...state.players] as [PlayerState, PlayerState];
-    players[dIdx] = { ...players[dIdx], active: { ...def, cantAttackPending: true } };
-    return addLog(
-      { ...state, players },
+    // v6.046：卡面（冷卻噴射／障礙踩踏）「在下個對手的回合，受到這個招式的…寶可夢無法使用招式」
+    //   ＝招式效果 → 收斂中央 applyOppActiveDebuffPost（原直接寫旗標漏免疫 gate）。
+    return applyOppActiveDebuffPost(
+      label,
+      (a) => ({ ...a, cantAttackPending: true }),
       `${label}：${card.name} 在下個對手回合無法使用招式`,
-      aIdx,
-    );
+    )(state, aIdx, pool);
   };
 }
 

@@ -11,8 +11,9 @@
  * 4. 火箭隊的臭泥｜浸蝕污泥 0 — 下個對手回合結束時 KO defender（koAtMyNextEndOfTurn）
  */
 
-import { regPre, regPost, addLog, updatePlayer } from '../_shared';
+import { regPre, regPost, addLog } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 超級赫拉克羅斯ex｜重裝角擊 100+ — 增加上個對手回合此寶可夢受到的招式傷害
@@ -43,31 +44,24 @@ regPre('雙彈瓦斯|瘋狂炸彈', (state, aIdx, _pool) => {
 // 3. 帕奇利茲｜麻痺門牙 10 — 在受擊者上設 paralyzeFangPending
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('帕奇利茲|麻痺門牙', (s) => ({ state: s, damage: 10 }));
-regPost('帕奇利茲|麻痺門牙', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(
-    addLog(state, '麻痺門牙：在 defender 上設 paralyzeFangPending → 下個對手回合附能量時放 8 個指示物', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, paralyzeFangPending: true } : null,
-    }),
-  );
-});
+// v6.046：卡面「在下個對手的回合，每次對手從手牌將能量卡附於**受到這個招式的寶可夢**身上時…」
+//   ＝對受招者施加的招式效果 → 必須過免疫 gate（薄霧能量/化隱/純樸）。原直接寫旗標漏 gate。
+regPost('帕奇利茲|麻痺門牙', applyOppActiveDebuffPost(
+  '麻痺門牙',
+  (a) => ({ ...a, paralyzeFangPending: true }),
+  '麻痺門牙：在 defender 上設 paralyzeFangPending → 下個對手回合附能量時放 8 個指示物',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 火箭隊的臭泥｜浸蝕污泥 — 卡面「全部丟棄」(非昏厥)→設 strongKissDiscardPending(複用迷唇姐純丟棄機制,對手不獲獎賞;退備戰解除)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的臭泥|浸蝕污泥', (s) => ({ state: s, damage: 0 }));
-regPost('火箭隊的臭泥|浸蝕污泥', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(
-    addLog(state, '浸蝕污泥：在 defender 上設延遲丟棄旗標 → 下個對手回合結束時將該寶可夢與附加卡全部丟棄（非昏厥，對手不獲得獎賞卡；退備戰即解除）', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, strongKissDiscardPending: true } : null,
-    }),
-  );
-});
+// v6.046：與迷唇姐｜強烈之吻同機制同卡面措辭（「受到這個招式的寶可夢」）→ 同樣要過免疫 gate。
+regPost('火箭隊的臭泥|浸蝕污泥', applyOppActiveDebuffPost(
+  '浸蝕污泥',
+  (a) => ({ ...a, strongKissDiscardPending: true }),
+  '浸蝕污泥：在 defender 上設延遲丟棄旗標 → 下個對手回合結束時將該寶可夢與附加卡全部丟棄（非昏厥，對手不獲得獎賞卡；退備戰即解除）',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Wave 19 統計：4 張寶可夢招式 effect 實裝

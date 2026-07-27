@@ -36,6 +36,7 @@ import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中�
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { oppPokemonImmuneToAttackEffect, relocateOwnCounterToOpp } from '../../effects'; // v5.809 bounce免疫述詞;v5.825 改放指示物中央管線
 // v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
 //   重複 import 造成 build fail，本次移除我新加的這行（L26 既有 import 就夠用）。
@@ -640,16 +641,13 @@ regPost('夢妖魔|刺殺魔法', (state, aIdx, _pool) => {
 // 15. 穿山王｜潑沙 50 — 下回合 defender 用招式時擲幣反失敗
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('穿山王|潑沙', (s) => ({ state: s, damage: 50 }));
-regPost('穿山王|潑沙', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(
-    addLog(state, '潑沙：下回合對手戰鬥寶可夢使用招式時，對手擲 1 次硬幣，反面則招式失敗', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, attackFailureFlipCountPending: 1 } : null,
-    }),
-  );
-});
+// v6.046：卡面「在下個對手的回合，**受到這個招式的寶可夢**使用招式時，對手擲1次硬幣…」
+//   ＝對受招者施加的招式效果 → 過免疫 gate（原直接寫旗標漏 gate）。
+regPost('穿山王|潑沙', applyOppActiveDebuffPost(
+  '潑沙',
+  (a) => ({ ...a, attackFailureFlipCountPending: 1 }),
+  '潑沙：下回合對手戰鬥寶可夢使用招式時，對手擲 1 次硬幣，反面則招式失敗',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 16. 火箭隊的索偵蟲｜搜索之眼 — 看對手反面 1 張獎賞

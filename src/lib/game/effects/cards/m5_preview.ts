@@ -97,6 +97,7 @@ import {
   isEvolutionCard, // v5.860：判進化收斂中央 helper
   discardOppActiveEnergyPost, // v5.974：丟對手能量收斂中央(picker+免疫gate)
 } from '../../effects';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { totalEnergyUnits, computeActiveRetreatCostFor } from '../../engine'; // v5.862：host-aware 能量單位數
 import { RULE_BOX_SUBTYPES } from '../../types';
 import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
@@ -1992,18 +1993,18 @@ regPost('迷唇姐|強烈之吻', (state, aIdx, pool) => {
   if (!def.active) {
     return addLog(state, '強烈之吻：對手戰鬥場已無寶可夢，效果無對象', aIdx);
   }
-  const targetIid = def.active.iid;
   const targetName = pool.get(def.active.cardId)?.name ?? '?';
   // v5.443：改設 instance 級 strongKissDiscardPending（取代 player.strongKissTargetIid）。
   //   退備戰再回戰鬥場時，此旗標已被 clearActiveEffects 清 → 不會誤丟棄（玩家回報的 bug）。
-  void targetIid;
-  return updatePlayer(
-    addLog(state,
-      `強烈之吻：標記 ${targetName}，下個對手回合結束時若仍在戰鬥場 → 全部丟棄（非昏厥；退備戰即解除）`,
-      aIdx),
-    dIdx,
-    p => ({ ...p, active: p.active ? { ...p.active, strongKissDiscardPending: true } : null }),
-  );
+  // ⭐v6.046：改走中央 applyOppActiveDebuffPost。原本直接寫旗標，**完全沒過招式效果免疫 gate** —
+  //   【薄霧能量】卡面「附有這張卡的寶可夢不會受到對手的寶可夢使用招式的效果的影響」，
+  //   本招卡面「在下個對手的回合結束時，將受到這個招式的寶可夢與附加的卡全部丟棄」＝招式效果，
+  //   故附有薄霧能量/化隱/純樸者應完全不被標記（玩家回報：攻擊前就已附薄霧仍被丟棄）。
+  return applyOppActiveDebuffPost(
+    '強烈之吻',
+    (a) => ({ ...a, strongKissDiscardPending: true }),
+    `強烈之吻：標記 ${targetName}，下個對手回合結束時若仍在戰鬥場 → 全部丟棄（非昏厥；退備戰即解除）`,
+  )(state, aIdx, pool);
 });
 
 // ════════════════════════════════════════════════════════════════════════════

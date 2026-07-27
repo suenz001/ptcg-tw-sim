@@ -33,6 +33,7 @@ import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard, dealAttackDamageToTarget, selfHitPost,
   snipeOneOppBenchPost, koTargetByAttackEffect,
 } from '../../effects';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { oppPokemonImmuneToAttackEffect } from '../../effects'; // v5.809 bounce/招式效果免疫述詞
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -1980,13 +1981,12 @@ regPost('帕底亞 土王ex|毒陣', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 沙丘娃|潑沙 10 / 噬沙堡爺|潑沙 60 — defender 下回合擲反失敗
 function pothaPost(label: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    const dIdx = (1 - aIdx) as 0 | 1;
-    return updatePlayer(addLog(state, `${label}：下回合 defender 用招式時擲 1 次硬幣，反面則招式失敗`, aIdx), dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, attackFailureFlipCountPending: 1 } : null,
-    }));
-  };
+  // v6.046：收斂中央 applyOppActiveDebuffPost（原直接寫旗標漏免疫 gate）。
+  return applyOppActiveDebuffPost(
+    label,
+    (a) => ({ ...a, attackFailureFlipCountPending: 1 }),
+    `${label}：下回合 defender 用招式時擲 1 次硬幣，反面則招式失敗`,
+  );
 }
 regPre('沙丘娃|潑沙', (s) => ({ state: s, damage: 10 }));
 regPost('沙丘娃|潑沙', pothaPost('潑沙'));
@@ -2046,13 +2046,17 @@ regPost('小灰怪|躲藏', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 凱羅斯|慢嚼碎 — 棄全能量 + 下個對手回合結束時 KO
 regPre('凱羅斯|慢嚼碎', (s) => ({ state: s, damage: 0 }));
+// v6.046：卡面「…在下個對手的回合結束時，**受到這個招式的寶可夢**會【昏厥】」＝招式效果(效果 KO)
+//   → 收斂中央 applyOppActiveDebuffPost（原直接寫旗標漏免疫 gate）。
+//   ⚠自身丟能量(PRE 成本)照舊先執行：卡面「將這隻寶可夢身上附加的能量卡全部丟棄」是無條件的，
+//     不因對手免疫而免除。
 regPost('凱羅斯|慢嚼碎', (state, aIdx, pool) => {
-  let s = selfDiscardAllEnergyPost('慢嚼碎')(state, aIdx, pool);
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(s, '慢嚼碎：defender 下個對手回合結束時 KO', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, koAtMyNextEndOfTurn: true } : null,
-  }));
+  const s = selfDiscardAllEnergyPost('慢嚼碎')(state, aIdx, pool);
+  return applyOppActiveDebuffPost(
+    '慢嚼碎',
+    (a) => ({ ...a, koAtMyNextEndOfTurn: true }),
+    '慢嚼碎：defender 下個對手回合結束時 KO',
+  )(s, aIdx, pool);
 });
 
 // 冰伊布|滲透寒氣 30 — 下個對手回合結束時 defender 放 9 個指示物
@@ -2062,14 +2066,13 @@ regPost('凱羅斯|慢嚼碎', (state, aIdx, pool) => {
 //   折衷：先在 defender 上塞 1 個指示物，並標記延遲... 暫無此 hook，改為：直接放 90 dmg
 //   並 log 提示玩家「卡面是下回合結束時」。注意：這是已知簡化（待 engine v2.76 補完整 hook）
 regPre('冰伊布|滲透寒氣', (s) => ({ state: s, damage: 30 }));
-regPost('冰伊布|滲透寒氣', (state, aIdx, _pool) => {
-  // v2.78 用 damageAtMyNextEndOfTurn = 90 (9 個指示物)；engine 在 defender 自己 END_TURN 時應用
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '滲透寒氣：下個對手回合結束時 defender 放 9 個傷害指示物（90 點）', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, damageAtMyNextEndOfTurn: 90 } : null,
-  }));
-});
+// v6.046：卡面「在下個對手的回合結束時，在**受到這個招式的寶可夢**身上放置9個傷害指示物」
+//   ＝放置指示物型招式效果 → 收斂中央 applyOppActiveDebuffPost（原直接寫旗標漏免疫 gate）。
+regPost('冰伊布|滲透寒氣', applyOppActiveDebuffPost(
+  '滲透寒氣',
+  (a) => ({ ...a, damageAtMyNextEndOfTurn: 90 }),
+  '滲透寒氣：下個對手回合結束時 defender 放 9 個傷害指示物（90 點）',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 24: 牌庫頂操作 ===

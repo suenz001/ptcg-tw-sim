@@ -10,7 +10,7 @@
 
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
 // v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
-import { BENCH_SCRUB_LOCK_FLAGS } from './instance-flags';
+import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS } from './instance-flags';
 import type {
   GameState, GameAction, CardInstance,
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
@@ -5774,12 +5774,26 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const _gr = canApplyEffectToTarget(newState, aIdx, _a, pool.get(_a.cardId), 'attack-effect', pool);
         if (_gr.blocked) {
           const _da: any = { ..._a };
+          const _bAny = _b as any;
           let _reverted = false;
-          // 本次「新加」異常狀態（含雙狀態槽）→ 還原成攻擊前；只還原「新增/變更為非空狀態」，不還原被治癒清空的
-          if (_da.status && _da.status !== _b.status) { _da.status = _b.status; _reverted = true; }
-          if (_da.secondaryStatus && _da.secondaryStatus !== _b.secondaryStatus) { _da.secondaryStatus = _b.secondaryStatus; _reverted = true; }
-          if (_da.cantRetreatNextTurn && !_b.cantRetreatNextTurn) { delete _da.cantRetreatNextTurn; _reverted = true; }
-          if (_da.cantAttackPending && !_b.cantAttackPending) { delete _da.cantAttackPending; _reverted = true; }
+          // 本次「新加」異常狀態 → 還原成攻擊前；只還原「新增/變更為非空狀態」，不還原被治癒清空的。
+          // v6.046：補上第三狀態槽（原本只掃 status/secondaryStatus，三槽制下第三槽會漏）。
+          for (const _sf of ['status', 'secondaryStatus', 'tertiaryStatus'] as const) {
+            if (_da[_sf] && _da[_sf] !== _bAny[_sf]) { _da[_sf] = _bAny[_sf]; _reverted = true; }
+          }
+          // ⭐v6.046：其餘 debuff 旗標改由 instance-flags 的 OPP_ATTACK_DEBUFF_FLAGS 驅動。
+          //   原本這裡**硬編**只還原 cantRetreatNextTurn + cantAttackPending 兩個，其餘 15 個
+          //   跨回合 debuff 旗標整類不在名單內 → 玩家回報「附【薄霧能量】仍被強烈之吻丟棄」
+          //   （strongKissDiscardPending）就是漏網的一員。改成清單驅動後，新增旗標只要歸類，
+          //   這道兜底自動涵蓋（枚舉守衛 test-opp-debuff-immunity 會逼新欄位表態）。
+          for (const _f of OPP_ATTACK_DEBUFF_FLAGS) {
+            const _av = _da[_f as string];
+            const _bv = _bAny[_f as string];
+            if (_av !== undefined && _av !== _bv) {
+              if (_bv === undefined) delete _da[_f as string]; else _da[_f as string] = _bv;
+              _reverted = true;
+            }
+          }
           if (_reverted) {
             const _players = [...newState.players] as [PlayerState, PlayerState];
             _players[dIdx] = { ..._players[dIdx], active: _da };

@@ -14,6 +14,7 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { getOwnBenchLimit, joinCardNames } from '../_shared';
 import { flipCoinsWithLog, lockOppChosenAttackPost } from '../../effects';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import {
   addLog,
   regPost,
@@ -123,16 +124,17 @@ regPost('哲爾尼亞斯|光明角擊', (state, aIdx, pool) => {
 // 實裝：regPost 設 cantAttackPending: true 於對手戰鬥位
 // ※ 凍原堡壘（field-passive -50 for own water pokemon）實裝於 engine.ts
 regPre('冰雪巨龍|冰冷寒氣', (state) => ({ state, damage: 150 }));
+// v6.046：卡面「在下個對手的回合，**受到這個招式的寶可夢**無法使用招式」＝招式效果
+//   → 收斂中央 applyOppActiveDebuffPost（原直接寫旗標漏免疫 gate）。
 regPost('冰雪巨龍|冰冷寒氣', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx];
+  const def = state.players[(1 - aIdx) as 0 | 1];
   if (!def.active) return state;
   const defName = cardName(pool, def.active);
-  return updatePlayer(
-    addLog(state, `冰冷寒氣：${defName} 下個對手回合無法使用招式`, aIdx),
-    dIdx,
-    p => p.active ? { ...p, active: { ...p.active, cantAttackPending: true } } : p,
-  );
+  return applyOppActiveDebuffPost(
+    '冰冷寒氣',
+    (a) => ({ ...a, cantAttackPending: true }),
+    `冰冷寒氣：${defName} 下個對手回合無法使用招式`,
+  )(state, aIdx, pool);
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -217,6 +219,8 @@ regR('j-2355-memory-lock', (st, aIdx, iids, params, _pool) => {
 
   const players = [...st.players] as [PlayerState, PlayerState];
   const cur = def.active.blockedAttackNamesNextTurn ?? [];
+  // opp-debuff-ok: 免疫 gate 在**開 picker 那一端**（lockOppChosenAttackPost，v5.975）就做過了 —
+  //   免疫時根本不會開選擇視窗，走不到這個 resolver。此處重複 gate 只會讓玩家選完後才被拒絕。
   players[dIdx] = {
     ...def,
     active: {

@@ -6,6 +6,9 @@
  * Check J：讀傷害狀態(中毒/灼傷)只讀 status 主格漏三槽(secondary/tertiary) → 改 hasStatusInAnySlot。
  * Check I：數/丟附加道具只讀 toolAttached 漏 extraTools(多重轉接洛托姆) → 改 getAllAttachedTools。
  * Check H：對手寶可夢非傷害效果(換位/丟能量/丟道具/施狀態)直接 inline mutate 未過免疫 gate → 繞過化隱/純樸。
+ * Check U：對手 active 上寫「跨回合 debuff 旗標」(下回合無法攻擊/延遲丟棄/延遲KO…)未過免疫 gate。
+ *          ⭐Check H 只認得 5 種改動樣態(換位/備戰/能量/道具/狀態三槽)，**寫自訂旗標不在其中** →
+ *          整整一類招式從免疫檢查底下溜過去(v6.046 一次掃出 11 張卡，含玩家回報的迷唇姐｜強烈之吻)。
  * Run: node scripts/anti-pattern-lint.mjs  (exit 0=乾淨 / 1=有違規)
  * 見長期記憶 feedback-basic-energy-pokemontype-null / reference-discard-prize-log。
  */
@@ -714,8 +717,72 @@ for (const f of files) {
 }
 
 
+// ── Check U：對手 active 上寫「跨回合 debuff 旗標」未過免疫 gate ─────────────
+//   卡面主詞是「受到這個招式的寶可夢…」＝對受招者施加的招式效果 → 薄霧能量/化隱/純樸/
+//   皇帝之勢/抵抗之幕/化石 等「不受對手招式效果影響」一律要擋。
+//   正解：走中央 applyOppActiveDebuffPost(label, mutate, msg)（內含 gate + 免疫原因 log）。
+//   ⭐旗標清單直接讀 instance-flags.ts 的 OPP_ATTACK_DEBUFF_FLAGS —— 與引擎兜底 sweep 同一份，
+//     不會漂移；新增旗標歸類後，這道檢查自動涵蓋。
+//   合法豁免標 // opp-debuff-ok: 理由。見長期記憶 reference-opp-debuff-flag-immunity-central。
+{
+  /** 取 updatePlayer(狀態, 目標index, …) 的第二個引數；括號平衡且可跨行。 */
+  const uTargetIdx = (text) => {
+    let last = null, k = -1;
+    while ((k = text.indexOf('updatePlayer(', k + 1)) !== -1) {
+      let d = 1, j = k + 'updatePlayer('.length, start = j;
+      const args = [];
+      for (; j < text.length && d > 0; j++) {
+        const c = text[j];
+        if (c === '(' || c === '[' || c === '{') d++;
+        else if (c === ')' || c === ']' || c === '}') { d--; if (d === 0) { args.push(text.slice(start, j)); break; } }
+        else if (c === ',' && d === 1) { args.push(text.slice(start, j)); start = j + 1; }
+      }
+      if (args.length >= 2) last = args[1].trim().replace(/\s+/g, ' ');
+    }
+    return last;
+  };
+  const flagsSrc = readFileSync(join(SRC, 'instance-flags.ts'), 'utf8');
+  const uIdx0 = flagsSrc.indexOf('OPP_ATTACK_DEBUFF_FLAGS');
+  const uList = uIdx0 > 0 ? flagsSrc.slice(flagsSrc.indexOf('[', uIdx0), flagsSrc.indexOf('];', uIdx0)) : '';
+  const U_FLAGS = [...uList.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  if (U_FLAGS.length < 10) {
+    violations.push('[U] 讀不到 instance-flags.ts 的 OPP_ATTACK_DEBUFF_FLAGS（解析失效，Check U 形同關閉）');
+  }
+  const U_GUARD = /applyOppActiveDebuffPost|canApplyEffectToTarget|canApplyAttackEffectToTarget|oppPokemonImmuneToAttackEffect|defCantAttackNextPost|defCantRetreatNextPost|lockOppChosenAttackPost|defNextAtkReducePost|guard\.blocked|opp-debuff-ok/;
+  const U_FUNC_START = /^\s*(regR|regPost|regPre|regA|export\s+(async\s+)?function|function\s|[\w$]+\.set\(|[\w$]+\s*=\s*\()/;
+  const U_RE = new RegExp('\\b(' + U_FLAGS.join('|') + ')\\s*:(?!\\s*undefined)');
+  for (const f of files) {
+    const relf = f.slice(ROOT.length).split(sepChar).join('/');
+    // 引擎的 promote/清除、清單本身、型別定義不是「施加」→ 跳過
+    if (/src\/lib\/game\/(engine|instance-flags|types)\.ts$/.test(relf)) continue;
+    const lines = readFileSync(f, 'utf8').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const t = lines[i].trimStart();
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
+      const code = lines[i].replace(/\/\/.*$/, '');
+      if (!U_RE.test(code)) continue;
+      if (/opp-debuff-ok/.test(lines[i]) || /opp-debuff-ok/.test(lines[i - 1] ?? '')) continue;
+      let fstart = i;
+      for (let j = i; j >= Math.max(0, i - 100); j--) { if (U_FUNC_START.test(lines[j])) { fstart = j; break; } }
+      // 不能只用 mutatedIdx：它只認**同一行**的 updatePlayer(x, dIdx, …)，而這類招式常寫成多行
+      //   （updatePlayer 一行、addLog 一行、dIdx 一行、mutate 一行）—— 迷唇姐｜強烈之吻正是多行寫法，
+      //   第一版 Check U 因此對它靜默放行。改成跨行、括號平衡地取第二個引數。
+      const idx = uTargetIdx(lines.slice(fstart, i + 1).join('\n')) ?? mutatedIdx(lines, i, fstart);
+      if (!idx) continue;                                   // 找不到明確被改的一側 → 保守不報
+      if (C_ATTACKER.has(idx)) continue;                    // 寫在自己身上（反衝類）→ 不需 gate
+      const isDefender = /\bdIdx\b|\boppIdx\b/.test(idx) || /1\s*-\s*aIdx/.test(idx);
+      if (!isDefender) continue;
+      const span = lines.slice(fstart, i + 2).join('\n');
+      if (U_GUARD.test(span)) continue;
+      violations.push(`[U] ${relf}:${i + 1} — 在對手寶可夢身上寫跨回合 debuff 旗標未見免疫 gate`
+        + `（改走 applyOppActiveDebuffPost，或標 // opp-debuff-ok: 理由）`);
+    }
+  }
+}
+
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

@@ -30,6 +30,7 @@ import {
   countEnergyTypeHostAware,
   selfCantAttackNextPost, discardOppActiveEnergyPost,
 } from '../../effects';
+import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper（大多複製自 I 標 wave 14）
@@ -201,17 +202,16 @@ regPost('托戈德瑪爾|尖刺電光', coinHeadsImmunePost('尖刺電光'));
 // 6. 擲幣對手下回合無法用招式（1 張）— 飄香豚|芬香踩踏
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('飄香豚|芬香踩踏', (s) => ({ state: s, damage: 50 }));
-regPost('飄香豚|芬香踩踏', (state, aIdx, _pool) => {
+// v6.046：卡面「擲1次硬幣若為正面，則在下個對手的回合，**受到這個招式的寶可夢**無法使用招式」
+//   ＝招式效果 → 擲幣正面後仍要過免疫 gate（原直接寫旗標漏 gate）。
+regPost('飄香豚|芬香踩踏', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 1, '芬香踩踏', aIdx);
   if (r.heads === 0) return addLog(r.state, '芬香踩踏：反面', aIdx);
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(
-    addLog(r.state, '芬香踩踏：正面 → defender 下回合無法使用招式', aIdx),
-    dIdx, p => ({
-      ...p,
-      active: p.active ? { ...p.active, cantAttackPending: true } : null,
-    }),
-  );
+  return applyOppActiveDebuffPost(
+    '芬香踩踏',
+    (a) => ({ ...a, cantAttackPending: true }),
+    '芬香踩踏：正面 → defender 下回合無法使用招式',
+  )(r.state, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -300,14 +300,13 @@ regPre('密勒頓ex|抵制伏特', (state, aIdx, _pool) => {
 //    下回合弱點屬性改為【無】，×2 仍計算），對齊卡面。無需額外新 flag。（v5.843 更正過時 TODO）
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('智揮猩|掌握弱點', (s) => ({ state: s, damage: 0 }));
-regPost('智揮猩|掌握弱點', (state, aIdx, _pool) => {
-  // v2.78 用 weaknessOverrideTypeNextTurn = 'Colorless'
-  const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '掌握弱點：下回合 defender 弱點屬性改為【無】（×2 仍計算）', aIdx), dIdx, p => ({
-    ...p,
-    active: p.active ? { ...p.active, weaknessOverrideTypeNextTurn: 'Colorless' } : null,
-  }));
-});
+// v6.046：卡面「…**受到這個招式的寶可夢**弱點改為【無】屬性」＝對受招者施加的招式效果
+//   → 收斂中央 applyOppActiveDebuffPost（原直接寫旗標漏免疫 gate）。
+regPost('智揮猩|掌握弱點', applyOppActiveDebuffPost(
+  '掌握弱點',
+  (a) => ({ ...a, weaknessOverrideTypeNextTurn: 'Colorless' }),
+  '掌握弱點：下回合 defender 弱點屬性改為【無】（×2 仍計算）',
+));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 13. 泡沫栗鼠|掃除 — 棄對手 ≤2 道具

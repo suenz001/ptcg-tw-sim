@@ -59,7 +59,48 @@ export const BENCH_SCRUB_LOCK_FLAGS: readonly (keyof CardInstance)[] = [
   'pointySpinThisTurn',
 ];
 
+/**
+ * v6.046 — 由**對手的招式**施加在「受到這個招式的寶可夢」身上的跨回合 debuff 旗標。
+ *
+ * 用途有二，共用同一份清單以免漂移：
+ *   1. engine.ts ATTACK_POST 之後的免疫 sweep：防守 active 若對招式效果免疫
+ *      （薄霧能量／化隱／純樸／皇帝之勢／抵抗之幕／化石…），把本次新加的這些旗標**還原**。
+ *   2. anti-pattern-lint Check U：偵測新卡直接在對手 active 上寫這些旗標卻沒過免疫 gate。
+ *
+ * ⚠**判準是「這個旗標會不會被寫在對手身上」**，不是「它對誰有利」：
+ *   - `cantAttackPending`／`blockedAttackNamesNextTurn`／`takeExtraDamageNextTurn` 三個是
+ *     **兩用**的（反衝類招式寫在自己身上、封鎖類寫在對手身上）。仍要列入 —— sweep 只比對
+ *     **防守方 active** 的攻擊前後差異，攻擊方寫在自己身上的那份不在比對範圍內。
+ *   - `weaknessOverrideTypeNextTurn`（掌握弱點）對受招者未必不利，但它同樣是「對手招式施加
+ *     的效果」，免疫卡面說的是「不受效果影響」而不是「不受不利效果影響」→ 一樣要擋。
+ *
+ * ⚠**不可列入**：自身增益／自身罰則（`cantRetreatPendingSelf`、各 `immuneTo*`、
+ *   `weaknessDisabledNextTurn`、`damageBonus*`、`pointySpin*`…）。誤列會讓自己給自己上的
+ *   效果在對手免疫時被錯誤還原。
+ *
+ * 新增欄位時若忘了歸類，`scripts/test-opp-debuff-immunity.mjs` 的枚舉守衛會 FAIL 並要求表態。
+ */
+export const OPP_ATTACK_DEBUFF_FLAGS: readonly (keyof CardInstance)[] = [
+  // 行動封鎖
+  'cantAttackPending', 'cantRetreatNextTurn', 'blockedAttackNamesNextTurn',
+  'attackFailureFlipCountPending', 'cantAttachEnergyNextTurn',
+  // 費用增加
+  'attackCostIncreaseColorlessNextTurn', 'retreatCostIncreaseNextTurn',
+  // 受傷／弱點／獎賞
+  'takeExtraDamageNextTurn', 'weaknessOverrideTypeNextTurn', 'deferredPrizeBonusNextTurn',
+  'nextOwnAttackPenalty',
+  // 延遲結算（下個對手回合結束時才發生）
+  'koAtMyNextEndOfTurn', 'damageAtMyNextEndOfTurn', 'strongKissDiscardPending',
+  'paralyzeFangPending', 'endTurnOnOppAttachEnergyNextTurn',
+  // 特性無效
+  'abilityNullifiedNextTurn',
+];
+
 // 子集不變式 runtime 守護（漂移即炸；anti-pattern-lint Check F 亦靜態把關）。
 for (const k of BENCH_SCRUB_LOCK_FLAGS) {
   if (!CLEAR_ON_EXIT_FLAGS.includes(k)) throw new Error(`BENCH_SCRUB_LOCK_FLAGS 含非 CLEAR_ON_EXIT 旗標：${String(k)}`);
+}
+// v6.046：對手 debuff 旗標必然是「招式加在寶可夢身上的暫時效果」→ 退場一定要清，故必為子集。
+for (const k of OPP_ATTACK_DEBUFF_FLAGS) {
+  if (!CLEAR_ON_EXIT_FLAGS.includes(k)) throw new Error(`OPP_ATTACK_DEBUFF_FLAGS 含非 CLEAR_ON_EXIT 旗標：${String(k)}`);
 }
