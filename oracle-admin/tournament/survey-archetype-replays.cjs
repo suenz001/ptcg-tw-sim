@@ -239,6 +239,8 @@ function loadCardNames() {
     };
     const samples = [];
     let matchesAnalysed = 0, matchesSkipped = 0;
+    // ⚠診斷用：分清「finalLog 根本沒讀到」與「讀到了但措辭對不上」。
+    let logLinesRead = 0, logLinesMatched = 0, matchesWithLog = 0;
 
     for (const q of qualified) {
       for (const matchId of (q.matchIds || [])) {
@@ -264,6 +266,7 @@ function loadCardNames() {
             if (room && room.gameState && Array.isArray(room.gameState.log)) finalLog = room.gameState.log;
           }
         } catch (e) { /* 沒有 log 就只用動作序列 */ }
+        if (finalLog.length) matchesWithLog++;
 
         matchesAnalysed++;
         const sampleTurns = [];
@@ -346,9 +349,16 @@ function loadCardNames() {
         // ── finalLog 白名單事件（只抽這套牌關心的，不做通用解析器）──────────
         // ⚠log 是中文自然語言、**字面不是 API**：引擎改一個字這裡就抽不到。
         //   所以下面每條都回報命中數，命中 0 就是措辭變了，不是「玩家沒用過」。
+        logLinesRead += finalLog.length;
         for (const line of finalLog) {
-          const t = typeof line === 'string' ? line : (line && line.text) || '';
+          // ⚠v2 修：欄位是 **message**，不是 text（LogEntry = {turn, playerIndex, message, timestamp}）。
+          //   第一版寫 line.text → 每一行都變空字串被跳過 → 暗黑底牌/交易丟棄一條都抽不到，
+          //   而畫面上的提示卻說「多半是措辭改過」，把人指向完全錯誤的方向。
+          //   → 這就是為什麼下面一定要回報 logLinesRead：**「log 讀不到」與「措辭不符」
+          //     是兩種完全不同的失敗，混在一起就查不出來**。
+          const t = typeof line === 'string' ? line : ((line && (line.message || line.text)) || '');
           if (!t) continue;
+          logLinesMatched++;
           let m = t.match(/暗黑底牌：使用\s*(.+?)\s*的「(.+?)」/);
           if (m) inc(stat.darkCardCopied, m[1] + '｜' + m[2]);
           m = t.match(/交易：丟棄\s*(.+)$/);
@@ -367,6 +377,7 @@ function loadCardNames() {
       keyCards, generatedAt: new Date().toISOString(),
       players: qualified.map((q) => ({ name: q.name, matches: q.matches, winRate: q.winRate })),
       matchesAnalysed, matchesSkipped, halfTurnsAnalysed: stat.turnsAnalysed,
+      logDiag: { matchesWithLog, logLinesRead, logLinesMatched },
       stats: {
         setupActive: top(stat.setupActive, 12),
         benchNPokemon: top(stat.benchNPokemon, 20),
@@ -395,8 +406,13 @@ function loadCardNames() {
     show('交易/回合次數', outX.stats.tradePerTurn);
     show('交易丟棄', outX.stats.tradeDiscarded);
     show('首次攻擊回合', outX.stats.firstAttackTurn);
-    if (!outX.stats.darkCardCopied.length) {
-      console.log('  ⚠暗黑底牌一次都沒抽到 —— 多半是 log 措辭改過，不是玩家沒用過，請回報。');
+    console.log(`  對戰log：${matchesWithLog}/${matchesAnalysed} 場讀到，共 ${logLinesRead} 行（可解析 ${logLinesMatched} 行）`);
+    if (!logLinesRead) {
+      console.log('  ⚠一行 log 都沒讀到 —— 是取 log 的路徑壞了（TMATCH.finalLog / 房間 fallback），不是措辭問題。');
+    } else if (!logLinesMatched) {
+      console.log('  ⚠讀到 log 但一行都解析不出來 —— 欄位名不對（LogEntry 是 message 不是 text）。');
+    } else if (!outX.stats.darkCardCopied.length) {
+      console.log('  ⚠log 讀得到也解析得出來，但暗黑底牌一次都沒命中 —— 這才真的是措辭改過，請回報。');
     }
     console.log('明細已寫入 ' + PX);
     await client.close();

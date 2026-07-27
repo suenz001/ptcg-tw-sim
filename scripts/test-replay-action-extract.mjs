@@ -177,8 +177,30 @@ T('⭐座位判定用玩家暱稱比對，不可硬猜 seat', () => {
 T('⭐log 是中文自然語言、字面不是 API：抽不到要能看出是措辭變了', () => {
   assert.ok(/暗黑底牌：使用/.test(CJS), '應抽暗黑底牌複製了哪招');
   assert.ok(/交易：丟棄/.test(CJS), '應抽交易丟了什麼');
-  assert.ok(/多半是 log 措辭改過/.test(CJS),
+  assert.ok(/措辭改過/.test(CJS),
     '命中 0 時要明講「可能是措辭變了」——否則會被讀成「玩家沒用過這張卡」');
+});
+
+T('⭐⭐log 行的欄位名是 message（第一版寫成 text，整份 log 靜默失效）', () => {
+  // 真實事故：第一次跑真資料，暗黑底牌與「交易丟棄」一條都沒抽到。
+  //   守衛當時只檢查「措辭與 six_decks.ts 一致」→ 全綠，於是提示指向「措辭改過」，
+  //   但真根因是抽取端讀 `line.text`，而 LogEntry 的欄位是 **message** ——
+  //   每一行都變成空字串被 continue 掉。措辭再怎麼對也沒用。
+  const types = readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8');
+  const i = types.indexOf('export interface LogEntry');
+  const body = types.slice(i, types.indexOf('\n}', i));
+  assert.ok(/^\s*message:\s*string;/m.test(body), 'LogEntry 的公開訊息欄位應為 message');
+  assert.ok(/line\.message/.test(CJS), '抽取腳本必須讀 line.message');
+});
+
+T('⭐⭐必須分得出「log 沒讀到」與「讀到了但措辭不符」', () => {
+  // 這兩種失敗的處置完全不同（一個要修取 log 的路徑、一個要改正則），
+  // 混在一起報就會像這次一樣把人指向錯誤方向、白繞一圈。
+  assert.ok(/logLinesRead/.test(CJS) && /logLinesMatched/.test(CJS),
+    '要分別統計「讀到幾行」與「解析出幾行」');
+  assert.ok(/一行 log 都沒讀到/.test(CJS), '零行時要明講是取 log 的路徑壞了');
+  assert.ok(/這才真的是措辭改過/.test(CJS), '只有在 log 讀得到且解析得出來時，才可以說是措辭問題');
+  assert.ok(/logDiag/.test(CJS), '診斷數字要一併寫進輸出 JSON');
 });
 
 // 這兩條措辭必須與引擎當前實作一致（引擎改字 → 這裡就該紅）
