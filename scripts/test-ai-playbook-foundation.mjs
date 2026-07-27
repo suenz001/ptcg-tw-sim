@@ -107,11 +107,28 @@ T('⭐表內容真的被讀出來（不是空殼通過）', () => {
   assert.equal(pb.discardRankOf(real, '基本【惡】能量'), 0, '惡能量應是最優先丟的（可用ＰＰ提升劑撿回）');
 });
 
-T('⭐⭐本批次零消費點：ai.ts 尚未引用打法表（行為必須與先前完全一致）', () => {
+T('⭐⭐已接線（批次 4b）：ai.ts 引用打法表，但必須是「加法 +0」不可取代', () => {
+  // 這條在批次 4a 時是「ai.ts 尚未引用」（零消費點的機械化證明），
+  // 批次 4b 接線後依約改寫成正向斷言。真正的「無表時逐步等價」證明在
+  // test-ai-playbook-bench-hook.mjs —— 那裡跑兩場固定種子對局逐一比對動作序列。
   const ai = readFileSync(join(ROOT, 'src/lib/game/ai.ts'), 'utf8');
-  assert.ok(!/ai-playbook/.test(ai),
-    '批次 4a 是 Foundation，ai.ts 不得引用 —— 接線是批次 4b，屆時請把這條改成'
-    + '「引用了，但必須 try/catch 且無表時走原路徑」');
+  assert.ok(/from '\.\/ai-playbook'/.test(ai), 'ai.ts 應引用打法表');
+  // ⚠決策路徑只能同步查詢：getAIAction 是同步的，出現 await/fetch 就是把整條呼叫鏈改成 async
+  const i = ai.indexOf("from './ai-playbook'");
+  assert.ok(!/\bawait\s+loadPlaybook|fetch\(/.test(ai),
+    'ai.ts 不可在決策路徑做非同步載入 —— 載入是 ai-playbook.ts 與 +page.svelte 的職責');
+  assert.ok(i > 0);
+});
+
+T('⭐載入的呼叫端（+page.svelte）必須 fail-open', () => {
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  assert.ok(/prepareAIPlaybook/.test(pg), '本機 AI 對戰開始前應載表');
+  const i = pg.indexOf('prepareAIPlaybook(');
+  const around = pg.slice(Math.max(0, i - 700), i + 400);
+  assert.ok(/try\s*\{/.test(around) && /catch/.test(around),
+    '⚠一張策略表絕不該讓「開始對戰」這個動作失敗 —— 呼叫端要再包一層 try/catch');
+  assert.ok(/clearPlaybook\(\)/.test(around),
+    '非 AI 模式與失敗時都要 clear —— 上一局的表不可殘留到不同牌組的下一局');
 });
 
 T('⭐載入模組不可反向 import engine／effects（module-init 循環相依會讓對戰頁白屏）', () => {

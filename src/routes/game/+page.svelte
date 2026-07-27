@@ -73,6 +73,8 @@
     type Room, type Seat, type ChatMessage,
   } from '$lib/game/room';
   import { getAIAction } from '$lib/game/ai';
+  // v6.038 批次4b：本機 AI 對戰開始前，依 AI 那一側的牌組載入打法表（fail-open）。
+  import { prepareAIPlaybook, clearPlaybook } from '$lib/game/ai-playbook';
   import { VERSION } from '$lib/version';
   import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx } from '$lib/audio/sfx';
   // v6.022 錦標賽通知（本地通知；決策核心在 notify-core.ts 純函式、有單元測試）
@@ -5463,6 +5465,17 @@
     }
     aiThinking = false;
     if (aiTimer !== null) { clearTimeout(aiTimer); aiTimer = null; }
+    // v6.038：AI 模式才載打法表，且**只看 AI 那一側的牌組**（AI 本來就知道自己帶什麼牌）。
+    //   ⚠每局都要先 clear/重挑：上一局的表不可以殘留到不同牌組的下一局。
+    //   ⚠fail-open —— prepareAIPlaybook 內部已吞掉所有錯誤；這裡再包一層 try 是雙保險，
+    //     一張策略表絕不該讓「開始對戰」這個動作失敗。
+    try {
+      if (aiPlayerIndex !== null) {
+        await prepareAIPlaybook((aiPlayerIndex === 0 ? d1 : d2).entries, pool);
+      } else {
+        clearPlaybook();
+      }
+    } catch { clearPlaybook(); }
     // v3.75：先後攻偏好處理
     // - AI 模式：人類玩家偏好直接決定先手（不擲幣）
     //   先攻 → 人類先手；後攻 → AI 先手；隨機 → 擲幣決定

@@ -171,3 +171,36 @@ export function discardRankOf(pb: Playbook | null, cardName: string): number {
   const i = list.findIndex((r) => r.card === cardName);
   return i < 0 ? Infinity : i;
 }
+
+/**
+ * 目前有哪些打法表可用。⚠新增一套原型時要把 key 加進來 ——
+ *   忘了加的話那套表永遠不會被載入，而且**不會有任何錯誤訊息**（表只是沒生效）。
+ */
+export const KNOWN_PLAYBOOK_KEYS = ['n-zoroark-ex'] as const;
+
+/**
+ * 對戰開始前呼叫：依 **AI 那一側的牌組** 挑出適用的打法表並設為生效。
+ * 找不到適用的就維持「沒有表」（＝通用 AI）。**永不 throw**。
+ *
+ * ⚠只吃「AI 自己的牌組」——這不是上帝視角：AI 本來就知道自己帶了什麼牌。
+ * ⚠每局開始都先 clear：上一局的表不可以殘留到不同牌組的下一局。
+ */
+export async function prepareAIPlaybook(
+  entries: { cardId: string }[] | null | undefined,
+  pool: Map<string, { name?: string }>,
+  fetchFn: typeof fetch = fetch,
+): Promise<Playbook | null> {
+  clearPlaybook();
+  if (!entries || entries.length === 0) return null;
+  const names = new Set<string>();
+  for (const e of entries) {
+    const c = pool.get(String(e.cardId));
+    if (c?.name) names.add(c.name);
+  }
+  for (const key of KNOWN_PLAYBOOK_KEYS) {
+    const loaded = await loadPlaybook(key, fetchFn);
+    if (loaded && playbookApplies(loaded, names)) return loaded;
+    clearPlaybook();   // 不適用 → 不可留著（否則會被套到不對的牌組上）
+  }
+  return null;
+}

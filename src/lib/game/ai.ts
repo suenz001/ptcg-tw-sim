@@ -22,6 +22,10 @@ import {
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
 import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
+// v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
+//   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
+//   ⚠沒有表時所有查詢一律回 0/false，決策與接線前**完全等價**（有守衛以自對局逐步比對證明）。
+import { getPlaybook, benchScoreOf } from './ai-playbook';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -100,6 +104,13 @@ export function getAIAction(
         const c = pool.get(inst.cardId);
         if (c?.supertype === 'Pokemon' && c.evolvesFrom) handEvolutionTargets.add(c.evolvesFrom);
       }
+      // v6.038：打法表的備戰優先序（若這副牌有適用的表）。
+      //   ⚠原本的排序只看「能不能進化」「卡名有沒有冠名前綴」「HP 高不高」——
+      //     完全不知道「備戰放什麼決定了主攻手能打出什麼」。以 N的索羅亞克ex 為例：
+      //     暗黑底牌是複製**備戰區「N的寶可夢」**的招式，備戰有沒有 N的捷克羅姆
+      //     決定了它能不能用 2 顆惡能量打出 250（那招原本要 4 顆異色）——
+      //     而捷克羅姆 HP130 在舊排序裡贏不過任何一隻高 HP 的基礎。
+      const pbForBench = getPlaybook();
       const score = (iid: string): number => {
         const inst = player.hand.find(c => c.iid === iid);
         if (!inst) return 0;
@@ -108,6 +119,10 @@ export function getAIAction(
         let s = card.hp ?? 0;
         if (handEvolutionTargets.has(card.name)) s += 1000; // 大幅優先能進化的
         if (/^(N的|火箭隊的|竹蘭的|阿響的|莉莉艾的|火箭隊)/.test(card.name)) s += 500; // 冠名次優先
+        // 打法表分數放在最高位（×10000 蓋過上面所有項），表內未列到的卡加 0 →
+        //   **沒有表時整條加法為 +0，排序與接線前逐位相同**。表只負責「拉高它在乎的卡」，
+        //   其餘順序仍由原本的通用規則決定（表不需要窮舉整副牌）。
+        s += benchScoreOf(pbForBench, card.name) * 10000;
         return s;
       };
       const sorted = [...basics].sort((a, b) => score(b) - score(a));
