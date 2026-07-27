@@ -18,6 +18,7 @@ import {
   getUsableAbilities, canRetreat, isBasicPokemonCard,
   canBeInitialActiveCard, isRulePokemon,
   getEffectiveHP, canAffordAttack, isBasicEnergyOfType, getBasicEnergyType,
+  totalEnergyUnits, computeActiveRetreatCostFor,
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
@@ -26,6 +27,9 @@ import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-fil
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
 //   ⚠沒有表時所有查詢一律回 0/false，決策與接線前**完全等價**（有守衛以自對局逐步比對證明）。
 import { getPlaybook, benchScoreOf } from './ai-playbook';
+// v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
+//   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
+import { estimateIfPromoted } from './ai-eval';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -354,6 +358,41 @@ export function getAIAction(
     return aiDiscardedEnergyIids
       ? { type: 'ATTACK', attackIndex: best, discardedEnergyIids: aiDiscardedEnergyIids }
       : { type: 'ATTACK', attackIndex: best };
+  }
+
+  // ── v6.039 撤退換人 ────────────────────────────────────────────────────────
+  // ⭐**位置本身就是條件**：攻擊分支在上面，有招可發早就 return 了。能走到這裡
+  //   代表「這回合戰鬥位打不出任何招」—— 站在原地什麼都不做是純損失，這正是
+  //   人類玩家會換人的場面，也是舊 AI 唯一的選擇（END_TURN）。
+  //   放在這裡的另一個好處：行為變更範圍被限制在「原本會結束回合」的那些回合，
+  //   其餘決策一律不受影響。
+  //
+  // ⚠canRetreat 是引擎的單一真實來源（getRetreatBlockReason 的鏡射），已涵蓋
+  //   睡眠／麻痺／束縛／中毒禁撤／化石／備戰空／本回合已撤退／**能量是否付得起**。
+  //   用它當閘門，AI 就不會發出必定被引擎拒絕的動作（那會造成無限重試）。
+  if (canRetreat(state, pool) && player.active && player.bench.length > 0) {
+    // 撤退費太高時不換 —— 為了換人丟掉一大堆能量通常得不償失。
+    // ⚠這個上限是啟發式（非卡面規則），先取保守值 2。
+    const _retreatCost = computeActiveRetreatCostFor(state, myIdx, pool);
+    if (_retreatCost <= 2) {
+      // ⭐**收益門檻要隨撤退費上升**：撤退費不是零成本，丟掉的能量等於前幾回合的
+      //   附能全部作廢。自對局實測顯示「只要換上去打得動就撤」的版本勝率僅 49%
+      //   （與不撤退無異）—— 微小的傷害收益剛好被丟掉的能量抵銷。
+      //   免費撤退（費用 0）時任何正傷害都值得；要付費時就得換到夠份量的收益。
+      //   ⚠60 是啟發式門檻（約當一回合的常見傷害量級），不是卡面規則。
+      const _minGain = _retreatCost === 0 ? 1 : 60;
+      let _bestSwap: { iid: string; score: number } | null = null;
+      for (const b of player.bench) {
+        // 用引擎試打估「換上去打得出什麼」——弱點／減傷／免疫都由引擎算，AI 不重算公式
+        const o = estimateIfPromoted(state, myIdx, b, pool);
+        if (!o.ok) continue;
+        // 能擊倒一定值得（直接換獎賞卡）；否則要跨過與撤退費相稱的收益門檻
+        const score = o.ko ? Number.MAX_SAFE_INTEGER : o.dealt;
+        if (!o.ko && score < _minGain) continue;
+        if (!_bestSwap || score > _bestSwap.score) _bestSwap = { iid: b.iid, score };
+      }
+      if (_bestSwap) return { type: 'RETREAT', newActiveIid: _bestSwap.iid };
+    }
   }
 
   // 結束回合
@@ -1072,6 +1111,24 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
       let _cand = _srcAct ? _srcAct.energyAttached.map(e => e.iid) : [];
       if (_validE) _cand = _cand.filter(iid => _validE.includes(iid));
       if (_cand.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
+      // ⭐v6.039 撤退費 picker（effectKey='retreat-energy-discard'）是**單位數**而非張數判定。
+      //   resolver 驗的是 `totalEnergyUnits(選中) >= retreatCost`；原本自方能量一律只取
+      //   minCount(=1) 張，撤退費 2 而選中那張只有 1 unit 時 resolver 直接 return state
+      //   （動作被拒）→ AI 對同一動作無限重試而卡死。
+      //   ⚠這是**潛伏 bug**：AI 在 v6.039 之前從不撤退，所以永遠碰不到；一旦 AI 學會撤退
+      //     就會踩到。所以撤退決策接線前必須先補這裡。
+      //   累加方向與引擎自動丟棄一致（從後往前），避免同一場面 AI 與引擎丟出不同能量。
+      const _retreatCost = sel.params?.retreatCost as number | undefined;
+      if (_retreatCost != null && _srcAct) {
+        const _cap = Math.min(sel.maxCount ?? _cand.length, _cand.length);
+        const _picked: string[] = [];
+        for (let i = _cand.length - 1; i >= 0 && _picked.length < _cap; i--) {
+          _picked.unshift(_cand[i]);
+          const _insts = _srcAct.energyAttached.filter(e => _picked.includes(e.iid));
+          if (totalEnergyUnits(_insts, pool, state, sel.actorIdx, _srcAct) >= _retreatCost) break;
+        }
+        return { type: 'RESOLVE_SELECTION', selectedIids: _picked };
+      }
       const _isOpp = sel.sourcePlayerIdx !== sel.actorIdx;
       // v5.949 unitTarget 模式(如噴射旋風):選 maxCount 張(k≤N,guard 已保證單位≥N→合法);否則原邏輯。
       const _uT = sel.params?.unitTarget as number | undefined;
