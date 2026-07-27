@@ -71,6 +71,31 @@ function cloneState(state: GameState): GameState {
 }
 
 /**
+ * ⭐⭐**資訊紅線的中央防線**：模擬前把雙方牌庫洗亂。
+ *
+ * 現役有 111 個招式會抽牌或查看牌庫（「從自己的牌庫抽出N張」「查看自己的牌庫上方9張」…）。
+ * 試打時引擎會**真的翻牌庫**，所以只要估值讀到任何受此影響的結果，AI 就等於偷看了
+ * 自己牌庫的順序 —— 這是本站一路守下來的紅線（v5.963／v6.021），而且**不可見**：
+ * 不會有錯誤訊息，只會讓 AI 在某些卡上莫名地強。
+ *
+ * 洗亂之後，模擬在資訊論上等價於一次合法的隨機採樣（牌庫順序本來就不可知），
+ * 即使估值端日後寫錯、讀了依賴牌庫的欄位，也讀不到真實順序。
+ * ⚠這是**中央**防線：所有模擬入口都必須經過它，不要在個別估值函式裡各自防。
+ * ⚠洗亂只在複本上做，絕不碰真實對局的 state。
+ */
+export function shuffleHiddenZonesForSim(st: GameState): GameState {
+  for (const p of st.players) {
+    const d = p.deck;
+    // Fisher-Yates；此處的 Math.random 已被 withIsolatedRandom 換成隔離 PRNG
+    for (let i = d.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [d[i], d[j]] = [d[j], d[i]];
+    }
+  }
+  return st;
+}
+
+/**
  * 試打一招，回傳結果。**永不 throw**（估值失敗一律當作「不能用」，讓 AI 走原路徑）。
  */
 export function simulateAttack(
@@ -84,7 +109,8 @@ export function simulateAttack(
     const before = state.players[oppIdx].active;
     if (!before) return DEAD;
     return withIsolatedRandom(() => {
-      const after = applyAction(cloneState(state), { type: 'ATTACK', attackIndex, actorIdx }, pool);
+      const after = applyAction(
+        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex, actorIdx }, pool);
       if (!after || after === state) return DEAD;
       const now = after.players[oppIdx].active;
       // 擊倒判定用 iid：被擊倒後戰鬥位會變空或換上別隻，兩種都算擊倒
@@ -139,7 +165,7 @@ export function estimateIfPromoted(
   pool: Map<string, Card>,
 ): AttackOutcome {
   try {
-    const hypo = cloneState(state);
+    const hypo = withIsolatedRandom(() => shuffleHiddenZonesForSim(cloneState(state)));
     const me = hypo.players[myIdx];
     const bIdx = me.bench.findIndex((b) => b.iid === candidate.iid);
     if (bIdx < 0) return DEAD;
@@ -241,7 +267,8 @@ function evaluateAttackOnce(
     const beforeSelfDmg = beforeSelf?.damage ?? 0;
 
     return withIsolatedRandom(() => {
-      const after = applyAction(cloneState(state), { type: 'ATTACK', attackIndex, actorIdx }, pool);
+      const after = applyAction(
+        shuffleHiddenZonesForSim(cloneState(state)), { type: 'ATTACK', attackIndex, actorIdx }, pool);
       if (!after || after === state) return DEAD_EVAL;
 
       const gameWon = after.phase === 'game-over' && after.winner === actorIdx;
