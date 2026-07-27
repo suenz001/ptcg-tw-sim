@@ -339,8 +339,8 @@
     <a class="hm-card hm-card-tourn" href="{base}/tournament">
       <span class="hm-icon" aria-hidden="true">🏆</span>
       <span class="hm-body">
-        <span class="hm-title">淘汰賽測試 <span class="beta-tag">Beta</span></span>
-        <span class="hm-desc">單敗淘汰・線上即時對戰・歡迎報名</span>
+        <span class="hm-title">錦標賽</span>
+        <span class="hm-desc">瑞士制／淘汰制・線上即時對戰</span>
       </span>
       <span class="hm-arrow" aria-hidden="true">→</span>
     </a>
@@ -394,10 +394,10 @@
   </section>
 
   <section>
-    <h2>🏆 淘汰賽測試 <span class="beta-tag">Beta</span></h2>
+    <h2>🏆 錦標賽</h2>
     <p>
       <a href="{base}/tournament">進入賽事大廳 →</a>
-      <span class="hint">（單敗淘汰 · 線上即時對戰 · 歡迎報名測試）</span>
+      <span class="hint">（瑞士制 · 淘汰制 · 線上即時對戰）</span>
     </p>
   </section>
 {/if}
