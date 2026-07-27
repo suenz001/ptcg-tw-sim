@@ -94,6 +94,10 @@ export const OPP_ATTACK_DEBUFF_FLAGS: readonly (keyof CardInstance)[] = [
   'paralyzeFangPending', 'endTurnOnOppAttachEnergyNextTurn',
   // 特性無效
   'abilityNullifiedNextTurn',
+  // v6.047 狀態的「參數槽」：本體狀態由中央 applyStatus* 施加（已 gate），但改變狀態**強度**的
+  //   附帶參數是另外寫的，同樣是對手招式加在受招者身上的跨回合資料 → 一併納入兜底。
+  //   （電燈怪｜錯亂閃光把混亂自傷改為 8 個、劇毒牙類把中毒傷害改為每次 N 點。）
+  'confusionSelfDamageCounters', 'poisonDamagePerCheckup',
 ];
 
 // 子集不變式 runtime 守護（漂移即炸；anti-pattern-lint Check F 亦靜態把關）。

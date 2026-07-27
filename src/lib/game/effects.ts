@@ -5494,14 +5494,21 @@ regPost('月亮伊布ex|月亮幻想', statusPost('confused'));
 // v5.679 完整實裝：卡面「將對手戰鬥寶可夢混亂。因這個混亂而放置的傷害指示物的數量改為 8 個」。
 //   = 該寶可夢之後因混亂自傷時放 8 個指示物(80)而非預設 3 個(30)。先套混亂(走中央免疫)，再設覆蓋值。
 regPost('電燈怪|錯亂閃光', (state, aIdx, pool) => {
-  let s = statusPost('confused')(state, aIdx, pool);
+  const s = statusPost('confused')(state, aIdx, pool);
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = s.players[dIdx].active;
-  if (da && (da.status === 'confused' || da.secondaryStatus === 'confused' || da.tertiaryStatus === 'confused')) {
-    s = updatePlayer(s, dIdx, p => p.active ? { ...p, active: { ...p.active, confusionSelfDamageCounters: 8 } } : p);
-    s = addLog(s, '錯亂閃光：此混亂的自傷指示物改為 8 個（80）', aIdx);
+  // ⭐v6.047：第二句的覆蓋值也必須過招式效果免疫 gate。原本只判「defender 現在是不是混亂」，
+  //   目標**本來就混亂**又對招式效果免疫（薄霧能量/化隱/純樸）時，混亂並沒有被重新施加
+  //   （沒有卡面說的「這個【混亂】」），指示物覆蓋值卻照樣寫上去 → 之後混亂自傷從 30 變成 80。
+  //   走 applyOppActiveDebuffPost 即自帶 gate 與免疫原因 log。
+  if (!da || !(da.status === 'confused' || da.secondaryStatus === 'confused' || da.tertiaryStatus === 'confused')) {
+    return s;
   }
-  return s;
+  return applyOppActiveDebuffPost(
+    '錯亂閃光',
+    (a) => ({ ...a, confusionSelfDamageCounters: 8 }),
+    '錯亂閃光：此混亂的自傷指示物改為 8 個（80）',
+  )(s, aIdx, pool);
 });
 
 // ── C. 將自己混亂 2 張 ─────────────────────────────────────────────────────

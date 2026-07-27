@@ -1450,7 +1450,12 @@ export function canAffordAttack(
       const defCard = pool.get(defActive.cardId);
       if (defCard?.name === '陳舊的根狀化石') {
         const attackerCard = pool.get(pokemon.cardId);
-        if (isBasicPokemonCard(attackerCard)) {
+        // v6.047：同 aura 裁定 —— 這是對手的**特性**加在我方寶可夢身上的費用增加，
+        //   化隱／光之翼（卡面明寫不受對手特性效果影響）應擋下。薄霧能量只擋招式效果，不擋這裡。
+        const _rootGuard = isBasicPokemonCard(attackerCard)
+          ? canApplyEffectToTarget(state, dIdx, pokemon, attackerCard, 'ability-effect', pool, { isBench: false })
+          : { blocked: false as const };
+        if (isBasicPokemonCard(attackerCard) && !_rootGuard.blocked) {
           cost = [...cost, 'Colorless'];
         }
       }
@@ -8405,6 +8410,18 @@ function applyAbilityRetreatMod(
         //   passive 振翼髮｜暗夜羽擊 / 黏著束縛」壓制時，撤退費修正失效。原本只擋火箭隊監視塔【無】特性，
         //   漏了 holder-effective → 對手振翼髮暗夜羽擊在戰鬥場時，我方小火龍「一身輕」仍錯誤免撤退（Wilson 回報）。
         if (!isAbilityHolderEffective(state, inst, card, ownerIdx, ab.name, position, pool)) continue;
+        // ⭐v6.047：跨方 aura（阿利多斯｜大網、超級水晶燈火靈ex｜咒縛火焰＝對手撤退費 +1）
+        //   要過「不受對手特性效果影響」的 gate。Wilson 裁定：化隱卡面逐字寫「不會受到對手的
+        //   招式**與特性**的效果的影響」，aura 也是特性的效果。
+        //   ⚠kind 必須是 'ability-effect'：【薄霧能量】卡面只寫「招式的效果」，不擋特性 aura
+        //     （官方判例佐證同一方向：附薄霧能量仍會被帝牙海獅｜凍結獠牙鎖住招式）。
+        //   ⚠只擋跨方；自己場上的特性給自己減撤退費不受此 gate 影響。
+        if (ownerIdx !== retreatingOwnerIdx) {
+          const _auraGuard = canApplyEffectToTarget(
+            state, ownerIdx, retreatingInst, retreatingCard, 'ability-effect', pool, { isBench: false },
+          );
+          if (_auraGuard.blocked) continue;
+        }
         const r = fn({
           holderInst: inst,
           holderCard: card,
