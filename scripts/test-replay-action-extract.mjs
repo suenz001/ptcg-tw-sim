@@ -234,7 +234,30 @@ T('⭐兩個獨立來源要互相交叉驗證（log vs 動作序列）', () => {
   assert.ok(/crossCheck/.test(CJS), '應輸出交叉驗證數字');
   assert.ok(/darkCardFromLog/.test(CJS) && /darkCardFromActions/.test(CJS),
     '應比對「log 抽到的暗黑底牌次數」與「動作序列的暗黑底牌攻擊次數」');
-  assert.ok(/交叉驗證不符/.test(CJS), '差太多要出警告 —— 那代表其中一邊被污染了');
+  assert.ok(/交叉驗證異常/.test(CJS), '真異常要出警告 —— 那代表其中一邊被污染了');
+});
+
+T('⭐⭐致勝的最後一擊不會進動作序列（engine 的 phase gate）—— 引擎端事實鎖', () => {
+  // 這是「log 必然 ≥ 動作序列」的**唯一合理來源**。若哪天引擎改掉這個 gate，
+  // 交叉驗證的判準就要跟著改，否則會把正常結果誤判成資料污染（或反過來放過真污染）。
+  const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
+  const i = eng.indexOf('function recordTurnAction(');
+  assert.ok(i > 0, '應有 recordTurnAction');
+  const head = eng.slice(i, i + 700);
+  assert.ok(/if \(after\.phase !== 'playing'\) return after;/.test(head),
+    'recordTurnAction 仍應在 phase 非 playing 時不記錄（致勝一擊因此不會入列）');
+});
+
+T('⭐⭐交叉驗證的判準必須是「有方向性」的（log ≥ 動作才正常）', () => {
+  // 第一版用 Math.abs 判絕對差距 → 把「致勝一擊不記入」這個**正常且必然**的落差
+  // 誤報成「資料被污染」，把人指向錯誤方向（實際 69 vs 56 就是這樣被誤判的）。
+  const i = CJS.indexOf('const gap = darkFromLog - darkFromActions');
+  assert.ok(i > 0, '應以有號差值判斷，不可用絕對值');
+  const body = CJS.slice(i, i + 900);
+  assert.ok(/gap >= 0/.test(body), 'log 少於動作序列才是異常方向');
+  assert.ok(/gap <= matchesAnalysed/.test(body), '差距上限應以分析場數為界（每場最多漏 1 次）');
+  assert.ok(!/Math\.abs\(darkFromLog/.test(CJS), '不可再用絕對差距判斷');
+  assert.ok(/caveats/.test(CJS), '輸出 JSON 要註明「動作序列不含致勝一擊」這個限制');
 });
 
 // 這兩條措辭必須與引擎當前實作一致（引擎改字 → 這裡就該紅）

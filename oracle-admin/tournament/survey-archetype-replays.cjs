@@ -402,6 +402,11 @@ function loadCardNames() {
       },
       samples,
       note: '本檔不含任何手牌內容與牌庫內容（只有張數）——避免以上帝視角學到假規律。',
+      caveats: [
+        'attackUsed／actionKinds 等來自動作序列的統計，**不含每場致勝的最後一擊**'
+        + '（engine 在 phase 變成 game-over 後就不再記錄動作）。相對比例可信，絕對次數略低。',
+        'darkCardCopied 來自對戰 log，含致勝一擊，所以會比 attackUsed 的「暗黑底牌」略多。',
+      ],
     };
     const PX = '/tmp/ptcg_archetype_playstyle.json';
     fs.writeFileSync(PX, JSON.stringify(outX, null, 2), 'utf8');
@@ -417,18 +422,32 @@ function loadCardNames() {
     show('交易丟棄', outX.stats.tradeDiscarded);
     show('首次攻擊回合', outX.stats.firstAttackTurn);
     console.log(`  對戰log：${matchesWithLog}/${matchesAnalysed} 場讀到，共 ${logLinesRead} 行（可解析 ${logLinesMatched} 行）`);
-    // ⭐兩個**獨立來源**互相驗證：log 抽到的暗黑底牌次數，應該與動作序列裡的
-    //   attack extra='暗黑底牌' 次數一致。差很多就代表其中一邊被污染了
-    //   （實例：沒依 playerIndex 過濾時混進對手的暗黑底牌，log 69 vs 動作 56）。
+    // ⭐兩個**獨立來源**互相驗證：log 抽到的暗黑底牌次數 vs 動作序列裡的 attack extra。
+    //
+    // ⚠**已查證的系統性落差：log 必然「多於或等於」動作序列。**
+    //   engine 的 recordTurnAction 開頭有 `if (after.phase !== 'playing') return after;`
+    //   → **致勝的最後一擊會讓 phase 變成 game-over，那個動作就不會被記進 turnActionsLog**，
+    //     但 addLog 照樣寫。所以每一場「以攻擊收尾」的對局，動作序列都會少記 1 次攻擊。
+    //   （實測重現：對手還有備戰時 log 1 / 動作 1 一致；對手無備戰、這一擊結束對局時
+    //     log 1 / 動作 0。這也是先前 69 vs 56 差 13 的真正原因 —— 不是資料被污染，
+    //     是 38 場裡約 13 場用暗黑底牌收尾。）
+    //   → 判準因此是**有方向性**的：
+    //     ・log ≥ 動作，且差距 ≤ 分析場數 → 正常（差多少 ≈ 有多少場以這招收尾）
+    //     ・log < 動作，或差距 > 場數     → 才是真的有一邊被污染
     const darkFromLog = outX.stats.darkCardCopied.reduce((s2, x) => s2 + x.n, 0);
     const darkFromActions = (outX.stats.attackUsed.find((x) => x.key === '暗黑底牌') || { n: 0 }).n;
-    outX.crossCheck = { darkCardFromLog: darkFromLog, darkCardFromActions: darkFromActions };
-    const diff = Math.abs(darkFromLog - darkFromActions);
-    if (darkFromActions > 0 && diff > Math.max(3, darkFromActions * 0.1)) {
-      console.log(`  ⚠交叉驗證不符：log 抽到暗黑底牌 ${darkFromLog} 次，但動作序列只有 ${darkFromActions} 次`
-        + ' —— 其中一邊被污染了（最可能是 log 沒過濾成只取我方）。');
-    } else {
-      console.log(`  ✓交叉驗證：暗黑底牌 log ${darkFromLog} 次 vs 動作序列 ${darkFromActions} 次`);
+    const gap = darkFromLog - darkFromActions;
+    outX.crossCheck = {
+      darkCardFromLog: darkFromLog, darkCardFromActions: darkFromActions, gap,
+      note: '致勝的最後一擊不會被記進動作序列（engine recordTurnAction 的 phase gate），'
+        + '故 log 必然 >= 動作序列，差距約等於「以這招收尾的場數」。',
+    };
+    if (darkFromActions > 0 && gap >= 0 && gap <= matchesAnalysed) {
+      console.log(`  ✓交叉驗證：暗黑底牌 log ${darkFromLog} 次 vs 動作序列 ${darkFromActions} 次`
+        + `（差 ${gap}＝約有 ${gap} 場以這招收尾；致勝一擊不記入動作序列，屬已知且正常）`);
+    } else if (darkFromActions > 0) {
+      console.log(`  ⚠交叉驗證異常：log ${darkFromLog} 次 vs 動作序列 ${darkFromActions} 次（差 ${gap}）`
+        + ' —— 這個方向／幅度無法用「致勝一擊不記入」解釋，其中一邊被污染了，請回報。');
     }
     if (!logLinesRead) {
       console.log('  ⚠一行 log 都沒讀到 —— 是取 log 的路徑壞了（TMATCH.finalLog / 房間 fallback），不是措辭問題。');
