@@ -712,6 +712,117 @@ function canBeInitialActive(cardId: string, pool: Map<string, Card>): boolean {
   return canBeInitialActiveCard(pool.get(cardId));
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.051 互動式開局（閃焰王牌｜瞬間爆發力）
+//
+// 官方 PTCG RULES §17.40.G（規則庫原文）：
+//   Q: 在對戰準備時，若最初抽出的7張手牌中沒有[基礎]寶可夢，僅有閃焰王牌，
+//      可以因特性「瞬間爆發力」的效果，將閃焰王牌放置於戰鬥場上並開始對戰嗎？  A: 可以。
+//   Q: …那麼**可以不將**閃焰王牌放置於戰鬥場上嗎？
+//      A: **可以。／這個情況下，可選擇是否將閃焰王牌放置於戰鬥場上。**
+// 也就是這是**玩家的選擇**，而引擎原本一律替玩家選了「放上去」，等於剝奪了一個官方選項
+// —— 而且它會影響「誰重抽比較多次」，進而影響對手可以多抽幾張。
+//
+// 其他相關官方明文（同檔）：
+//   ・手牌有 1 張以上【基礎】寶可夢時**不可以**重抽 → 選擇權只存在於「無基礎 ∧ 有瞬爆卡」
+//   ・重抽不限次數，直到手牌有【基礎】寶可夢為止
+//   ・對手可抽「對手重抽次數 − 自己重抽次數」張，且**可選擇**抽或不抽（現行 NET 公式正確）
+// Wilson 裁定（官方查無明文的兩點）：
+//   ・重抽後又只抽到閃焰王牌 → **可以再選一次**（每輪判準相同、不限次數）
+//   ・雙方各自獨立決定、**不互相等待**，也不顯示對手目前的重抽次數
+//
+// ⚠**風險控制**：只有「雙方牌組任一含此特性」的對局才會走這條新路；其餘對局一個 byte 都不動。
+//   本批（v6.051）再收窄到**本機／AI**：線上、再來一局、錦標賽的呼叫端一律傳
+//   `forceLegacyOpening: true`，等本機跑穩再逐條打開。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** v6.051 一鍵回滾點：設 false → 所有對局都走 v6.050 以前的同步發牌。 */
+export const INTERACTIVE_OPENING_ENABLED = true;
+
+/**
+ * 牌組是否含「瞬間爆發力」特性的卡。
+ * ⚠**用特性名判定，不要用卡名/卡號**：官方 Q&A §17.6.G 顯示還有另一張同特性的「倫琴貓」
+ *   （目前未收錄本站卡池）。用特性名的話，日後補收錄時這條路自動生效。
+ */
+function deckHasInstantBurst(
+  entries: Array<{ cardId: string }>, pool: Map<string, Card>,
+): boolean {
+  return entries.some(e => pool.get(e.cardId)?.abilities?.some(ab => ab.name === '瞬間爆發力'));
+}
+
+/** 一手牌的三態分類。 */
+type OpeningHandKind = 'has-basic' | 'burst-only' | 'none';
+function classifyOpeningHand(player: PlayerState, pool: Map<string, Card>): OpeningHandKind {
+  if (player.hand.some(c => isBasicPokemon(c.cardId, pool))) return 'has-basic';
+  if (player.hand.some(c => canBeInitialActive(c.cardId, pool))) return 'burst-only';
+  return 'none';
+}
+
+/** 把手牌洗回牌庫並重抽 7 張（不做任何判定）。 */
+function redrawOpeningHand(player: PlayerState): void {
+  player.deck = shuffle([...player.deck, ...player.hand]);
+  player.hand = [];
+  for (let i = 0; i < 7; i++) {
+    const top = player.deck.shift();
+    if (top) player.hand.push(top);
+  }
+}
+
+/**
+ * 互動式開局：替某一側推進到「手牌定案」或「停在玩家要做選擇的點」。
+ * 純資料操作（直接改傳入的 player 物件，與 dealOpeningHand 同風格），回傳新的累計狀態。
+ *
+ * @param alreadyDrawn true = 目前手上這 7 張還沒判定過（createGame 剛發完）；
+ *                     false = 需要先重抽一手再判（玩家選了 MULLIGAN）
+ */
+function advanceOpeningHand(
+  player: PlayerState,
+  pool: Map<string, Card>,
+  acc: { mulligans: number; revealedHands: string[][] },
+  alreadyDrawn: boolean,
+): { kind: 'done' | 'choice'; mulligans: number; revealedHands: string[][] } {
+  // v5.378 的 fail-open 保留：牌組完全沒有可上場的卡（非法牌組）→ 再抽也沒用，直接放行避免無限迴圈
+  const deckHasPlaceable = [...player.deck, ...player.hand]
+    .some(c => canBeInitialActive(c.cardId, pool));
+  let first = alreadyDrawn;
+  for (let attempts = 0; attempts < 200; attempts++) {
+    if (!first) redrawOpeningHand(player);
+    first = false;
+    const kind = classifyOpeningHand(player, pool);
+    if (kind === 'has-basic') return { kind: 'done', ...acc };
+    if (kind === 'burst-only') return { kind: 'choice', ...acc };
+    // 完全沒有可上場的卡 → 展示手牌後重抽（＝現行自動 mulligan）
+    acc.revealedHands.push(player.hand.map(c => c.cardId));
+    acc.mulligans += 1;
+    if (!deckHasPlaceable) return { kind: 'done', ...acc };
+  }
+  return { kind: 'done', ...acc };
+}
+
+/**
+ * 雙方手牌都定案後，一次寫入現行的 mulligan 欄位 —— 寫完之後的世界與 v6.050 以前完全相同
+ * （NET 抵銷、揭示、確認、補抽、tryAdvanceToPlaying 全部原封不動）。
+ */
+function finalizeOpening(state: GameState): GameState {
+  const [m1, m2] = state.mulliganCounts;
+  const revealed = state.mulliganRevealedHands ?? { p1: [], p2: [] };
+  return {
+    ...state,
+    openingChoicePending: [false, false],
+    openingDone: [true, true],
+    pendingMulliganDraw: [Math.max(0, m2 - m1), Math.max(0, m1 - m2)],
+    mulliganRevealConfirmed: [m2 === 0, m1 === 0],
+    mulliganRevealedHands: revealed,
+  };
+}
+
+/** 互動式開局是否還在進行中（尚未雙方定案）→ 期間擋住 PLACE_ACTIVE / FINISH_SETUP。 */
+export function isOpeningInProgress(state: GameState): boolean {
+  if (state.openingFlow !== 'interactive') return false;
+  const done = state.openingDone ?? [true, true];
+  return !done[0] || !done[1];
+}
+
 // ── v2.187 化石機制 ────────────────────────────────────────────────────────
 /**
  * 化石 Item 名稱（5 張，全部 supertype=Trainer / subtype=Item，但卡面寫
@@ -1887,6 +1998,12 @@ export function createGame(
       'random' | 'first' | 'second' | 'opponent',
       'random' | 'first' | 'second' | 'opponent',
     ];
+    /**
+     * v6.051：強制走 v6.050 以前的同步開局（即使牌組含閃焰王牌）。
+     * 本批只讓「本機／AI」走互動式；線上、再來一局、錦標賽的呼叫端都傳 true，
+     * 等本機驗證穩定後再逐條打開（也是出事時的第一層逃生口）。
+     */
+    forceLegacyOpening?: boolean;
   }
 ): GameState {
   const p1 = emptyPlayer(spec1.name);
@@ -1906,9 +2023,26 @@ export function createGame(
   p1.deck = shuffle(deckToInstances(_e1));
   p2.deck = shuffle(deckToInstances(_e2));
 
+  // v6.051：只有「雙方牌組任一含瞬間爆發力」且未被強制 legacy 時，才走互動式開局。
+  //   其餘對局（全站絕大多數）完全走下面這段原本的同步發牌，行為 0 diff。
+  const _interactiveOpening = INTERACTIVE_OPENING_ENABLED
+    && !options?.forceLegacyOpening
+    && (deckHasInstantBurst(_e1, pool) || deckHasInstantBurst(_e2, pool));
+
   // 各抽 7 張（記錄 mulligan 次數 + v3.74 揭示手牌）
-  const opening1 = dealOpeningHand(p1, pool);
-  const opening2 = dealOpeningHand(p2, pool);
+  const opening1 = _interactiveOpening ? { mulligans: 0, revealedHands: [] as string[][] } : dealOpeningHand(p1, pool);
+  const opening2 = _interactiveOpening ? { mulligans: 0, revealedHands: [] as string[][] } : dealOpeningHand(p2, pool);
+  // 互動式：先各發一手，再推進到「定案」或「停在玩家選擇」
+  const _openKind: ['done' | 'choice', 'done' | 'choice'] = ['done', 'done'];
+  if (_interactiveOpening) {
+    for (const [pl, acc, slot] of [[p1, opening1, 0], [p2, opening2, 1]] as const) {
+      for (let i = 0; i < 7; i++) { const top = pl.deck.shift(); if (top) pl.hand.push(top); }
+      const r = advanceOpeningHand(pl, pool, { mulligans: acc.mulligans, revealedHands: acc.revealedHands }, true);
+      acc.mulligans = r.mulligans;
+      acc.revealedHands = r.revealedHands;
+      _openKind[slot] = r.kind;
+    }
+  }
   const m1 = opening1.mulligans;
   const m2 = opening2.mulligans;
   // v3.74：mulligan 揭示 — 每方記下每次失敗的 7 張 cardIds 給對方確認
@@ -1970,7 +2104,13 @@ export function createGame(
     isFirstTurn: true,
     setupDone: [false, false],
     mulliganCounts: [m1, m2],
-    pendingMulliganDraw: [extraForP1, extraForP2],
+    // v6.051：互動式開局在雙方定案前不先給補抽（finalizeOpening 才算 NET）
+    pendingMulliganDraw: _interactiveOpening ? [0, 0] : [extraForP1, extraForP2],
+    ...(_interactiveOpening ? {
+      openingFlow: 'interactive' as const,
+      openingChoicePending: [_openKind[0] === 'choice', _openKind[1] === 'choice'] as [boolean, boolean],
+      openingDone: [_openKind[0] === 'done', _openKind[1] === 'done'] as [boolean, boolean],
+    } : {}),
     mulliganRevealedHands,
     mulliganRevealConfirmed,
     log: [],
@@ -2124,7 +2264,9 @@ function handleSetup(
     action.type !== 'FINISH_SETUP' &&
     action.type !== 'MULLIGAN_DRAW_DECISION' &&
     action.type !== 'CONFIRM_MULLIGAN_REVEAL' &&
-    action.type !== 'FINISH_MULLIGAN_POST_BENCH'  // v5.138
+    action.type !== 'FINISH_MULLIGAN_POST_BENCH' &&  // v5.138
+    action.type !== 'OPENING_KEEP' &&                 // v6.051 互動式開局
+    action.type !== 'OPENING_MULLIGAN'
   ) {
     return state;
   }
@@ -2203,6 +2345,66 @@ function handleSetup(
     next = addLog(next, `${state.players[senderIdx].name} 已確認對方的 mulligan 揭示`, senderIdx);
     next = tryAdvanceToPlaying(next);
     return next;
+  }
+
+  // ── v6.051 互動式開局：兩個選擇 ────────────────────────────────────────
+  if (action.type === 'OPENING_KEEP' || action.type === 'OPENING_MULLIGAN') {
+    if (state.phase !== 'setup') return state;
+    if (state.openingFlow !== 'interactive') return state;
+    if (!state.openingChoicePending?.[pIdx]) return state;   // 沒輪到這一側做選擇
+    const _players = [...state.players] as [PlayerState, PlayerState];
+    const _p = { ..._players[pIdx], hand: [..._players[pIdx].hand], deck: [..._players[pIdx].deck] };
+    const _counts = [...state.mulliganCounts] as [number, number];
+    const _revealed = {
+      p1: [...(state.mulliganRevealedHands?.p1 ?? [])],
+      p2: [...(state.mulliganRevealedHands?.p2 ?? [])],
+    };
+    const _pending = [...(state.openingChoicePending ?? [false, false])] as [boolean, boolean];
+    const _done = [...(state.openingDone ?? [false, false])] as [boolean, boolean];
+    let _s = state;
+
+    if (action.type === 'OPENING_KEEP') {
+      // 用閃焰王牌開局 —— 這就是 v6.050 以前的唯一行為
+      _pending[pIdx] = false; _done[pIdx] = true;
+      _s = addLog(_s, `${_p.name} 選擇以「瞬間爆發力」的寶可夢開局`, pIdx);
+    } else {
+      // 視同沒有【基礎】寶可夢 → 官方規則：先向對手展示手牌，再洗回重抽
+      const acc = { mulligans: _counts[pIdx], revealedHands: [] as string[][] };
+      acc.revealedHands.push(_p.hand.map(c => c.cardId));
+      acc.mulligans += 1;
+      const r = advanceOpeningHand(_p, pool, acc, false);
+      _counts[pIdx] = r.mulligans;
+      const key = pIdx === 0 ? 'p1' : 'p2';
+      for (const h of r.revealedHands) _revealed[key].push(h.join('|'));
+      _pending[pIdx] = r.kind === 'choice';
+      _done[pIdx] = r.kind === 'done';
+      _s = addLog(_s,
+        `${_p.name} 選擇視同沒有【基礎】寶可夢並重抽手牌（累計重抽 ${_counts[pIdx]} 次）`, pIdx);
+    }
+
+    _players[pIdx] = _p;
+    let next: GameState = {
+      ..._s, players: _players, mulliganCounts: _counts,
+      mulliganRevealedHands: _revealed,
+      openingChoicePending: _pending, openingDone: _done,
+    };
+    // 雙方都定案 → 一次寫回現行 mulligan 欄位，之後完全走原本的流程
+    if (_done[0] && _done[1]) {
+      next = finalizeOpening(next);
+      const [f1, f2] = next.mulliganCounts;
+      if (f1 > 0 || f2 > 0) {
+        next = addLog(next,
+          `開局重抽結果：${next.players[0].name} ${f1} 次 / ${next.players[1].name} ${f2} 次`
+          + `（可多抽：${next.pendingMulliganDraw[0]} / ${next.pendingMulliganDraw[1]} 張）`, null);
+      }
+    }
+    return next;
+  }
+  // 互動式開局尚未雙方定案 → 擋住所有 setup 擺場動作（避免搶跑造成盤面不一致）
+  if (isOpeningInProgress(state)
+      && (action.type === 'PLACE_ACTIVE' || action.type === 'BENCH_POKEMON'
+          || action.type === 'FINISH_SETUP')) {
+    return state;
   }
 
   // 已完成 setup 的玩家不能再操作（place/bench/finish）

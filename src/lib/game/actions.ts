@@ -9,6 +9,9 @@ export const GameActions = {
   placeActive:       (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'PLACE_ACTIVE', iid, senderIdx }),
   benchPokemon:      (iid: string, senderIdx: 0 | 1): GameAction => ({ type: 'BENCH_POKEMON', iid, senderIdx }),
   finishSetup:       (senderIdx: 0 | 1): GameAction => ({ type: 'FINISH_SETUP', senderIdx }),
+  // v6.051 互動式開局（閃焰王牌｜瞬間爆發力）
+  openingKeep:       (senderIdx: 0 | 1): GameAction => ({ type: 'OPENING_KEEP', senderIdx }),
+  openingMulligan:   (senderIdx: 0 | 1): GameAction => ({ type: 'OPENING_MULLIGAN', senderIdx }),
   mulliganDrawDecision: (count: number, senderIdx: 0 | 1): GameAction =>
                        ({ type: 'MULLIGAN_DRAW_DECISION', count, senderIdx }),
   // v3.74：玩家確認對方的 mulligan 揭示

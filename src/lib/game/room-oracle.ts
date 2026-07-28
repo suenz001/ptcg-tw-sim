@@ -467,7 +467,7 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
         { name: p1.name ?? 'P1', entries: p1.deckEntries },
         { name: p2.name ?? 'P2', entries: p2.deckEntries },
         pool,
-        { firstChoicePreferences: prefs },
+        { firstChoicePreferences: prefs, forceLegacyOpening: true },  // v6.051 批1：暫走舊開局
       );
       didReset = true;
       return {

@@ -738,6 +738,23 @@ export interface GameState {
    * 只允許 BENCH_POKEMON（不能換 active、不能再 FINISH_SETUP）。
    */
   mulliganPostBenchOpen?: [boolean, boolean];
+
+  // ── v6.051 互動式開局（閃焰王牌｜瞬間爆發力）────────────────────────────
+  /**
+   * 這一局的開局流程走哪一套。**只有雙方牌組任一含「瞬間爆發力」特性時才會是 'interactive'**；
+   * 其餘對局（全站絕大多數）連碰都不碰新流程，走與 v6.050 以前完全相同的同步發牌。
+   *
+   * ⚠必須存在 state 裡而不是各 client 自己重算：線上收端、錦標賽（client 只收盤面）、
+   *   回放都要能知道這局是哪一套；兩端卡池版本若有差異，各自重算會判定漂移 → desync。
+   */
+  openingFlow?: 'interactive';
+  /**
+   * 該座位正停在「手牌沒有【基礎】寶可夢、但有閃焰王牌」的決定點。
+   * 官方 §17.40.G：「可以不將閃焰王牌放置於戰鬥場上嗎？→ 可以。可選擇是否放置。」
+   */
+  openingChoicePending?: [boolean, boolean];
+  /** 該座位的起手手牌已定案（有基礎寶可夢、或已選擇用閃焰王牌開局）。 */
+  openingDone?: [boolean, boolean];
   /** 行動紀錄（給 UI 顯示用） */
   log: LogEntry[];
   /** 勝者（game-over 時填入） */
@@ -1057,6 +1074,13 @@ export type GameAction =
   | { type: 'PLACE_ACTIVE'; iid: string; senderIdx: 0 | 1 }
   | { type: 'BENCH_POKEMON'; iid: string; senderIdx: 0 | 1 }
   | { type: 'FINISH_SETUP'; senderIdx: 0 | 1 }
+  /**
+   * v6.051 互動式開局：手牌只有閃焰王牌（瞬間爆發力）時的兩個選擇。
+   * KEEP     = 用它開局（＝v6.050 以前的唯一行為）
+   * MULLIGAN = 視同沒有【基礎】寶可夢，展示手牌後重抽（重抽次數 +1，對手可多抽）
+   */
+  | { type: 'OPENING_KEEP'; senderIdx: 0 | 1 }
+  | { type: 'OPENING_MULLIGAN'; senderIdx: 0 | 1 }
   /** 對手 mulligan 補抽（v4.923）：count = 補抽張數（0 ~ pendingMulliganDraw[senderIdx]），engine 端會 clamp */
   | { type: 'MULLIGAN_DRAW_DECISION'; count: number; senderIdx: 0 | 1 }
   /** v3.74：玩家確認對方的 mulligan 揭示（看完 modal 後按確認）。設 mulliganRevealConfirmed[senderIdx]=true */

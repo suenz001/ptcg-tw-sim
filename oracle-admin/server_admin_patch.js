@@ -2907,7 +2907,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const d0 = { name: (names && names[0]) || 'P1', entries: decks[0] };
       const d1 = { name: (names && names[1]) || 'P2', entries: decks[1] };
       const fc = Array.isArray(prefs) ? [prefs[0] || 'random', prefs[1] || 'random'] : ['random', 'random'];
-      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: fc });
+      // v6.051 批1：錦標賽暫走舊開局（互動式先只在本機驗證，之後才逐條打開）
+      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: fc, forceLegacyOpening: true });
     }
     // ── 伺服器權威 actor gate：防止玩家替對手送動作 ──
     function canSeatAct(gs, seat, action) {

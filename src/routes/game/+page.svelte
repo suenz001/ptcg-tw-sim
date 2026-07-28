@@ -5499,19 +5499,21 @@
     // - AI 模式：人類玩家偏好直接決定先手（不擲幣）
     //   先攻 → 人類先手；後攻 → AI 先手；隨機 → 擲幣決定
     // - 本機雙人：擲幣 + 套贏家偏好（與線上同邏輯）
-    let createOpts: Parameters<typeof createGame>[3] = undefined;
+    // v6.051 批1：互動式開局的引擎邏輯已完備，但 UI 選擇視窗還沒做 →
+    //   本批所有模式都先走舊流程（零行為變化）。批2 接好 UI 後才拿掉本機這一個。
+    let createOpts: Parameters<typeof createGame>[3] = { forceLegacyOpening: true };
     if (aiPlayerIndex !== null) {
       const humanIdx = (1 - aiPlayerIndex) as 0 | 1;
       const humanPref = humanIdx === 0 ? p1FirstPref : p2FirstPref;
       if (humanPref === 'first') {
-        createOpts = { firstPlayerOverride: humanIdx };
+        createOpts = { firstPlayerOverride: humanIdx, forceLegacyOpening: true };
       } else if (humanPref === 'second') {
-        createOpts = { firstPlayerOverride: (1 - humanIdx) as 0 | 1 };
+        createOpts = { firstPlayerOverride: (1 - humanIdx) as 0 | 1, forceLegacyOpening: true };
       }
       // random → 不傳 override → 走擲幣 random
     } else {
       // 本機雙人：擲幣 + 雙方偏好
-      createOpts = { firstChoicePreferences: [p1FirstPref, p2FirstPref] };
+      createOpts = { firstChoicePreferences: [p1FirstPref, p2FirstPref], forceLegacyOpening: true };
     }
     game = createGame(
       { name: p1Name || d1.name, entries: d1.entries },
@@ -6048,7 +6050,7 @@
       { name: p1.name ?? 'P1', entries: p1.deckEntries },
       { name: p2.name ?? 'P2', entries: p2.deckEntries },
       pool,
-      { firstChoicePreferences: prefs },
+      { firstChoicePreferences: prefs, forceLegacyOpening: true },  // v6.051 批1：線上暫走舊開局
     );
     // v5.492：先確認本端 startGame transaction 是否 commit（成為房間 canonical 局）才採用本地 game。
     //   再來一局/開局時雙方各自 createGame race（不同 id），輸掉 transaction 的一端若先用自己的
