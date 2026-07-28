@@ -34,7 +34,8 @@ import {
   snipeOneOppBenchPost, koTargetByAttackEffect,
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
-import { oppPokemonImmuneToAttackEffect } from '../../effects'; // v5.809 bounce/招式效果免疫述詞
+import { oppPokemonImmuneToAttackEffect } from '../../effects';
+import { hasAnyEffectiveAbility } from './v3001_g3_wave3'; // v6.049「擁有特性的寶可夢」中央述詞 // v5.809 bounce/招式效果免疫述詞
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -2257,10 +2258,12 @@ regPost('死神棺|冥府之律', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   for (const idx of [0, 1] as const) {
     const p = s.players[idx];
-    const updateOne = (c: CardInstance | null): CardInstance | null => {
+    const updateOne = (c: CardInstance | null, loc: 'active' | 'bench' = 'active'): CardInstance | null => {
       if (!c) return c;
       const card = pool.get(c.cardId);
-      if (!card?.abilities || card.abilities.length === 0) return c;
+      // v6.049：卡面「所有**擁有特性的**寶可夢」→ 特性被消除者（監視塔/初始化/暗夜羽擊/
+      //   黏著束縛）就不是目標。原本只看卡片印刷。
+      if (!hasAnyEffectiveAbility(s, c, card, idx, loc, pool)) return c;
       // v4.53 Phase 3：僅對手側檢查（自方招式作用自方寶可夢不擋）；用 unified('attack-effect')
       //   涵蓋對戰圓形 / 球形盾牌 / 藏隱 / 深度下潛 / 羽毛化石 / 光之翼 / 薄霧 / 抵抗之幕 / 全能硬殼 等
       if (idx === dIdx) {

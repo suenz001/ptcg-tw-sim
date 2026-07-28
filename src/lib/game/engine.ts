@@ -771,6 +771,7 @@ import {
   isOppItemPlayBlocked,
   isAbilityNullifiedByPassive,
   isAbilityHolderEffective,
+  hasAnyEffectiveAbility,
   isReturnToHandBlockedByCalmGround as _calmGroundBlocksReturn,
   hasEffectiveCalmGroundOnSide as _hasCalmGround,
   hasEffectiveKageHide,
@@ -4859,7 +4860,9 @@ function handlePlaying(
     // v5.124：加 !skipDefEffects gate
     if (!skipDefEffects && baseDamage > 0
         && defender.active.immuneToAbilityPokemonThisTurn
-        && attackerCard.abilities && attackerCard.abilities.length > 0) {
+        // v6.049：攻擊方的特性若已被消除（例：監視塔在場的【無】寶可夢），
+        //   它就不是「擁有特性的寶可夢」，精神防護不該擋。
+        && hasAnyEffectiveAbility(state, attacker.active, attackerCard, aIdx, 'active', pool)) {
       workingState = addLog(workingState,
         `${defenderCard.name} 因精神防護效果，不受擁有特性的寶可夢招式傷害`, dIdx);
       baseDamage = 0;
@@ -6397,17 +6400,24 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //        因為：pendingPrizes 會被 activePlayerIndex 方 TAKE_PRIZES，
     //        但 checkup 時 activePlayerIndex 仍是 aIdx，勝方卻可能是任何一方。
     //        改成直接從勝方自己的獎賞堆轉到勝方手牌（與 selfKOInstance 同樣手法）。
-    const countFrosmoth = (pl: PlayerState): number => {
+    // v6.049：持有者自己的特性若被消除（監視塔/初始化/暗夜羽擊/黏著束縛），冰冷之帳不生效。
+    //   卡面「只要這隻寶可夢在場上」是持續型特性 —— 特性被消除就沒有這個效果。
+    const countFrosmoth = (pl: PlayerState, ownerIdx: 0 | 1): number => {
+      const ok = (c: CardInstance, loc: 'active' | 'bench'): boolean => {
+        const cd = pool.get(c.cardId);
+        if (cd?.name !== '雪妖女') return false;
+        return isAbilityHolderEffective(state, c, cd, ownerIdx, '冰冷之帳', loc, pool);
+      };
       let n = 0;
-      if (pl.active && pool.get(pl.active.cardId)?.name === '雪妖女') n += 1;
-      n += pl.bench.filter(c => pool.get(c.cardId)?.name === '雪妖女').length;
+      if (pl.active && ok(pl.active, 'active')) n += 1;
+      n += pl.bench.filter(c => ok(c, 'bench')).length;
       return n;
     };
     // v4.08：對戰圓形擋對手特性放置備戰指示物 — 改 per-side 計算
     //   - 戰鬥場：own + opp frosmoth 都生效（戰鬥場無 BENCH_PROTECTION）
     //   - 備戰：對戰圓形啟動 → 對手 frosmoth 對自方備戰的指示物被擋（「對手特性」）；
     //           自家 frosmoth 對自方備戰不擋（「自己特性」）
-    const frosmothByOwner: [number, number] = [countFrosmoth(players[0]), countFrosmoth(players[1])];
+    const frosmothByOwner: [number, number] = [countFrosmoth(players[0], 0), countFrosmoth(players[1], 1)];
     const frosmothN = frosmothByOwner[0] + frosmothByOwner[1];
     const benchProtected = (() => {
       if (!state.activeStadium) return false;
@@ -6428,9 +6438,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const hasMagicalShine = (card: Card | undefined): boolean => {
         return card?.abilities?.some(a => a.name === '光之翼') ?? false;
       };
-      const isFrosmothCheckupTarget = (c: CardInstance): boolean => {
+      // ⭐v6.049：卡面是「**擁有特性的**所有寶可夢」。原本只看卡片印刷有沒有特性，
+      //   完全不管特性有沒有被消除 → 火箭隊的監視塔（「雙方場上所有【無】寶可夢的特性
+      //   全部消除」）在場時，【無】寶可夢已經沒有特性了，卻仍被放指示物（玩家回報）。
+      //   鐵荊棘ex｜初始化、暗夜羽擊、黏著束縛 同理。改走中央述詞。
+      const isFrosmothCheckupTarget = (c: CardInstance, ownerIdx: 0 | 1, loc: 'active' | 'bench'): boolean => {
         const card = pool.get(c.cardId);
-        if (!card?.abilities || card.abilities.length === 0) return false;
+        if (!hasAnyEffectiveAbility(state, c, card, ownerIdx, loc, pool)) return false;
         if (isFrosmothName(card)) return false;
         if (hasMagicalShine(card)) return false;  // 光之翼免疫
         return true;
@@ -6457,7 +6471,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const benchCounters = benchProtected ? ownFrosmoth : (ownFrosmoth + oppFrosmoth);
         // 戰鬥區
         // v5.083：per-target counter — 化隱寶可夢只算自家雪妖女（擋對手雪妖女特性效果）
-        if (pl.active && isFrosmothCheckupTarget(pl.active)) {
+        if (pl.active && isFrosmothCheckupTarget(pl.active, i, 'active')) {
           const activeCardC = pool.get(pl.active.cardId);
           const effectiveActiveCounters = hasHuayinAbility(activeCardC) ? ownFrosmoth : activeCounters;
           if (effectiveActiveCounters > 0) {
@@ -6485,7 +6499,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v5.083：per-target — 化隱寶可夢只算 ownFrosmoth（擋對手）
         const newBench: CardInstance[] = [];
         for (const b of pl.bench) {
-          if (!isFrosmothCheckupTarget(b)) { newBench.push(b); continue; }
+          if (!isFrosmothCheckupTarget(b, i, 'bench')) { newBench.push(b); continue; }
           const benchCardC = pool.get(b.cardId);
           const effBenchCounters = hasHuayinAbility(benchCardC)
             ? (benchProtected ? ownFrosmoth : ownFrosmoth)  // 化隱：擋對手 frosmoth 兩種情境都只算自家
@@ -7790,7 +7804,11 @@ export function applyDefenderReductionsBlockA(
           }
         }
         const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
-        if (abilFn && baseDamage > 0) {
+        // v6.049：卡面「受到對手的**擁有特性的**寶可夢招式的傷害-30」→ 特性被消除就不該減。
+        //   gate 放在呼叫端而不是改 map 的 callback 簽名（那支 map 有兩個 caller，改簽名風險較高）。
+        const _attackerHasAbility = hasAnyEffectiveAbility(
+          workingState, attacker.active, attackerCard, aIdx, 'active', pool);
+        if (abilFn && baseDamage > 0 && _attackerHasAbility) {
           const reduce = abilFn(attackerCard);
           if (reduce > 0) {
             baseDamage = Math.max(0, baseDamage - reduce);
@@ -9008,8 +9026,11 @@ export function getUsableAbilities(
         const opp = state.players[oppIdx];
         if (!opp.active && opp.bench.length === 0) return;
       }
-      // v2.372 通用「移放傷害指示物」特性 → 探探鼠｜監視之眼禁用
-      if (isAbilityBlockedByOakEye(state, ab.name, pool)) return;
+      // ⭐v6.049 探探鼠｜監視之眼（「雙方的所有寶可夢身上放置的傷害指示物，無法改放於
+      //   其他寶可夢身上」）**不再隱藏特性按鈕**。Wilson 裁定：監視之眼擋的是「改放指示物」
+      //   這個**效果**，被擋住的寶可夢**仍然是擁有特性的寶可夢**，特性照樣可以發動，
+      //   只是發動之後效果被擋下而失效（該特性的 regA 入口仍有 gate 會 log 原因）。
+      //   原本在這裡 return 會讓按鈕直接消失，玩家看不出「特性還在、只是被擋」。
       // v2.53 碧綠之舞：手牌必須至少有 1 張基本草能量（否則按了只會輸出警告 log，
       // Leon 反饋希望 UI 直接隱藏按鈕，而不是誤按後才提示）。
       // v5.510 熱浪鱗粉（火神蛾）：手牌需有基本【火】能量 + 對手 active 非已灼傷（碧綠之舞 pattern 隱藏按鈕）

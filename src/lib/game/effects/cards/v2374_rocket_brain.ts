@@ -39,7 +39,8 @@ import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示�
 regA('火箭隊的以歐路普', 0, (st, idx, pool) => {
   // 監視之眼 gate（v2.372 通用標籤判定）
   if (isAbilityBlockedByOakEye(st, '火箭腦力', pool)) {
-    return addLog(st, '火箭腦力：被探探鼠的監視之眼消除（傷害指示物無法改放）', idx);
+    // v6.049 措辭更正：阻擋效果 ≠ 消除特性
+    return addLog(st, '火箭腦力：發動了，但被探探鼠的監視之眼擋下（傷害指示物無法改放）', idx);
   }
 
   const player = st.players[idx];

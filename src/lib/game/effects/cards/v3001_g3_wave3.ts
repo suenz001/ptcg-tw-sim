@@ -153,6 +153,29 @@ export function isInitializeNullified(
   return false;
 }
 
+/**
+ * ⭐v6.049 火箭隊的監視塔（Stadium，卡面：「雙方場上所有【無】寶可夢的特性全部消除。」）
+ *
+ * 原本這個消除來源**不在中央述詞內**，而是 engine 內另有一個 `isColorlessAbilityBlocked`，
+ * 只包在 USE_ABILITY / getUsableAbilities / BENCH_PLACE_TRIGGERS 三個「發動點」。
+ * 結果所有**被動**套用點（受傷反擊、免疫、費用修正、以及「是不是擁有特性的寶可夢」判定）
+ * 全都看不到它 —— 玩家回報「監視塔在場時，【無】寶可夢仍被雪妖女｜冰冷之帳打」正是其一。
+ *
+ * ⚠用字面值比對卡名而不是 import `stadiums.ts` 的常數：stadiums.ts 已經 import 本檔上游的
+ *   `_shared.ts`，反向 import 會造成循環相依（同 `hasOakEye` 的既有作法）。
+ */
+function isNullifiedByRocketWatchtower(
+  state: GameState | undefined,
+  holderCard: Card | null | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || !holderCard || !pool) return false;
+  if (holderCard.pokemonType !== 'Colorless') return false;
+  const st = state.activeStadium;
+  if (!st) return false;
+  return pool.get(st.cardId)?.name === '火箭隊的監視塔';
+}
+
 export function isAbilityHolderEffective(
   state: GameState | undefined,
   holderInst: CardInstance | null | undefined,
@@ -165,6 +188,8 @@ export function isAbilityHolderEffective(
   if (!state || !holderInst || !holderCard || holderOwnerIdx == null || !abilityName || !pool) return false;
   // 0. 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除
   if (isInitializeNullified(state, holderCard, pool)) return false;
+  // 0b. v6.049 火箭隊的監視塔 —【無】寶可夢特性全部消除
+  if (isNullifiedByRocketWatchtower(state, holderCard, pool)) return false;
   // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標
   if (location === 'active' && holderInst.abilityNullifiedThisTurn) return false;
   // 2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → active 位置的特性失效
@@ -177,6 +202,38 @@ export function isAbilityHolderEffective(
     return false;
   }
   return true;
+}
+
+/**
+ * ⭐v6.049「這隻**場上**寶可夢當下是否擁有（任何有效的）特性」— 中央述詞。
+ *
+ * 給所有卡面寫「**擁有特性的寶可夢**」的判定共用（冰冷之帳／冥府之律／精神防護／
+ * 神聖護符／複眼／礎石之勢…）。這些點原本一律裸判 `card.abilities.length > 0`，
+ * 也就是**只看卡片印刷**，完全不管特性有沒有被消除。
+ *
+ * ⚠**只能用在「場上的實例」**。以下情境**不可**使用（誤用會製造新 bug）：
+ *   - 賽吉：卡面「（擁有特性的寶可夢除外）」指的是**牌庫裡拿的那張進化卡**——
+ *     牌庫不在場上，特性消除只作用於「雙方**場上**」。
+ *   - 火箭隊的阿柏怪｜瞪眼效用：判的是**手牌**裡的候選卡。
+ *   - 悔念錨／抹茶旋濺／魂之末：判的是**棄牌區**裡的卡。
+ *   以上三類判的都是卡片的固有屬性，不是場上狀態。
+ *
+ * ⚠**「效果被阻擋」≠「沒有特性」**：探探鼠｜監視之眼只是讓「改放傷害指示物」失效，
+ *   被它擋住的願增猿**仍然是擁有特性的寶可夢**（Wilson 裁定），
+ *   所以這個述詞**不看** `isAbilityBlockedByOakEye`。
+ */
+export function hasAnyEffectiveAbility(
+  state: GameState | undefined,
+  inst: CardInstance | null | undefined,
+  card: Card | null | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  location: 'active' | 'bench',
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!card?.abilities || card.abilities.length === 0) return false;
+  // 缺少場上脈絡時 fail-open 回「有特性」＝維持舊行為，不會比現在更糟
+  if (!state || !inst || ownerIdx == null || !pool) return true;
+  return card.abilities.some(ab => isAbilityHolderEffective(state, inst, card, ownerIdx, ab.name, location, pool));
 }
 
 /**

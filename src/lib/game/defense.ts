@@ -1,4 +1,4 @@
-import { isAbilityHolderEffective } from './effects/cards/v3001_g3_wave3';
+import { isAbilityHolderEffective, hasAnyEffectiveAbility } from './effects/cards/v3001_g3_wave3';
 /**
  * Defense 統一架構檔（v4.5 Phase 1 引入，v4.59 補完文件）
  *
@@ -431,7 +431,9 @@ export function resolveActiveAttackGuard(
   }
 
   // 5. 精神防護（代歐奇希斯）— 不受擁有特性的寶可夢招式（attacker 有 abilities 陣列非空）
-  if (defender.immuneToAbilityPokemonThisTurn && attackerCard.abilities && attackerCard.abilities.length > 0) {
+  // v6.049：攻擊方特性被消除（監視塔/初始化/暗夜羽擊/黏著束縛）時就不是「擁有特性的寶可夢」
+  if (defender.immuneToAbilityPokemonThisTurn
+      && hasAnyEffectiveAbility(state, state.players[actorIdx].active, attackerCard, actorIdx, 'active', pool)) {
     return { blocked: true, reason: '精神防護免疫擁有特性的寶可夢招式傷害' };
   }
 

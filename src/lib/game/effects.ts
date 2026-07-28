@@ -1062,7 +1062,10 @@ function _applyBenchAbilityReduce(
           }
         }
         const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);
-        if (abilFn && dmg > 0) {
+        // v6.049：卡面「受到對手的**擁有特性的**寶可夢招式的傷害-30」→ 特性被消除就不該減。
+        //   ⚠這是狙擊/備戰路徑，與 engine 主管線是兩份獨立實作，兩邊都要判（漏一邊就會漂移）。
+        const _atkHasAbilityT = hasAnyEffectiveAbility(state, _atkInst, _atkCardT, attackerIdx, 'active', pool);
+        if (abilFn && dmg > 0 && _atkHasAbilityT) {
           const reduce = abilFn(_atkCardT);
           if (reduce > 0) { const _b = dmg; dmg = Math.max(0, dmg - reduce); if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`); }
         }
@@ -3862,9 +3865,14 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
   ['輝煌聲援', (att) => att.name.includes('竹蘭的') ? 30 : 0],
   // v2.133 電蜘蛛｜複眼 — 自己的「電蜘蛛」攻擊時，對「擁有特性」的對手戰鬥場 +50
   //   只在 attacker 真的是電蜘蛛時觸發（避免另一隻電蜘蛛在備戰也疊加）
-  ['複眼', (att, def) => {
+  // v6.049：「擁有特性的」要看**當下有效的**特性（監視塔/初始化/暗夜羽擊/黏著束縛消除後就不算）
+  ['複眼', (att, def, state, aIdx, pool) => {
     if (att.name !== '電蜘蛛') return 0;
-    return (def?.abilities && def.abilities.length > 0) ? 50 : 0;
+    if (!def) return 0;
+    if (!state || aIdx == null || !pool) return (def.abilities?.length ?? 0) > 0 ? 50 : 0;
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const defInst = state.players[dIdx].active;
+    return hasAnyEffectiveAbility(state, defInst, def, dIdx, 'active', pool) ? 50 : 0;
   }],
   // v2.154 鐵頭殼ex｜鈷藍指令 — 只要場上，自己「未來」寶可夢（鐵頭殼ex 除外）+20 傷害
   //   engine 在 attacker 場上每張卡都會檢查 abilities → 鐵頭殼ex 觸發此項
@@ -3981,7 +3989,9 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 奇麒麟ex 尾甲 — 免疫 Basic ex 招式
   ['尾甲', (att) => att.subtype === 'ex' && !att.evolvesFrom],
   // 厄鬼椪 礎石面具ex 礎石之勢 — 免疫有特性的寶可夢招式
-  ['礎石之勢', (att) => !!att.abilities && att.abilities.length > 0],
+  // v6.049：同上 —— 攻擊方特性被消除時就不是「擁有特性的寶可夢」，礎石之勢不該免疫
+  ['礎石之勢', (att, _baseDamage, state, aIdx, pool) =>
+    hasAnyEffectiveAbility(state, state?.players?.[aIdx]?.active, att, aIdx, 'active', pool)],
   // 暴噬龜 鐵壁硬殼 — 免疫 ≥200 傷害
   ['鐵壁硬殼', (_att, baseDamage) => baseDamage >= 200],
   // 堅盾劍怪 神秘之盾 — 免疫 ex/V 招式
@@ -17443,7 +17453,7 @@ registerV3000G3W2Passives();
 // 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
 //   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
-import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified, hasEffectiveKageHide } from './effects/cards/v3001_g3_wave3';
+import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified, hasEffectiveKageHide, hasAnyEffectiveAbility } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
 
 // v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）

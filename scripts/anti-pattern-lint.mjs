@@ -377,6 +377,7 @@ for (const f of files) {
   ]);
   const WL = {
   "defense.ts→v3001_g3_wave3": [
+    "hasAnyEffectiveAbility",
     "isAbilityHolderEffective"
   ],
   "effects.ts→stadiums": [
@@ -421,6 +422,7 @@ for (const f of files) {
     "registerV3000G3W2Passives"
   ],
   "effects.ts→v3001_g3_wave3": [
+    "hasAnyEffectiveAbility",
     "hasEffectiveKageHide",
     "isAbilityHolderEffective",
     "isAbilityNullifiedByPassive",
@@ -468,6 +470,7 @@ for (const f of files) {
     "magmarFlowingBurnBonus"
   ],
   "engine.ts→v3001_g3_wave3": [
+    "hasAnyEffectiveAbility",
     "getOppRetreatTriggers",
     "hasAbilityOnActive",
     "hasEffectiveCalmGroundOnSide",

@@ -148,7 +148,9 @@ regR('scouting-order', (st, idx, iids, params, pool) => {
 regA('願增猿', 0, (st, idx, pool) => {
   // v2.372 探探鼠｜監視之眼 — 改用 _shared.ts 的通用標籤判定（MOVE_DAMAGE_COUNTER_ABILITIES）
   if (isAbilityBlockedByOakEye(st, '腎上腺腦力', pool)) {
-    return addLog(st, '腎上腺腦力：被探探鼠的監視之眼消除（傷害指示物無法改放）', idx);
+    // v6.049 措辭更正：監視之眼**阻擋的是效果**，特性本身沒有被消除（願增猿仍是
+    //   「擁有特性的寶可夢」）。原本寫「消除」會讓玩家誤以為特性不見了。
+    return addLog(st, '腎上腺腦力：發動了，但被探探鼠的監視之眼擋下（傷害指示物無法改放）', idx);
   }
   const p = st.players[idx];
   const self = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
