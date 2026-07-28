@@ -21,10 +21,11 @@ const S = join(ROOT, '.x-oi-s.js'), E = join(ROOT, '.x-oi-e.ts'), O = join(ROOT,
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";export const assets="";');
 writeFileSync(E, "export { createGame, applyAction, INTERACTIVE_OPENING_ENABLED, isOpeningInProgress } from './src/lib/game/engine';\n"
+  + "export { getAIAction } from './src/lib/game/ai';\n"
   + "import './src/lib/game/effects';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
-const { createGame, applyAction, INTERACTIVE_OPENING_ENABLED, isOpeningInProgress } = await import(pathToFileURL(O).href);
+const { createGame, applyAction, INTERACTIVE_OPENING_ENABLED, isOpeningInProgress, getAIAction } = await import(pathToFileURL(O).href);
 
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));
@@ -181,13 +182,70 @@ T('⭐feature flag 存在且目前為開（關掉即全站回到舊流程）', (
   assert.ok(/export const INTERACTIVE_OPENING_ENABLED/.test(src), '回滾點必須是單一常數');
 });
 
-T('⭐⭐本批所有 createGame 呼叫端都還走舊流程（UI 未接前不可讓玩家卡在選擇點）', () => {
-  const files = ['src/routes/game/+page.svelte', 'src/lib/game/room.ts',
-    'src/lib/game/room-oracle.ts', 'oracle-admin/server_admin_patch.js'];
+// ── v6.051 批2：本機／AI 接上選擇視窗；線上／錦標賽仍鎖在舊流程 ────────────
+T('⭐⭐批2：線上／房間／錦標賽三個呼叫端仍鎖 forceLegacyOpening（尚未接 UI，接了會卡死）', () => {
+  const files = ['src/lib/game/room.ts', 'src/lib/game/room-oracle.ts',
+    'oracle-admin/server_admin_patch.js'];
   for (const f of files) {
     const src = readFileSync(join(ROOT, f), 'utf8');
     assert.ok(src.includes('forceLegacyOpening'), `${f} 應傳 forceLegacyOpening`);
   }
+  // 對戰頁有兩個 createGame：本機／AI（已放行）與線上（仍鎖）
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  assert.ok(pg.includes('forceLegacyOpening: true },  // v6.051 批1：線上暫走舊開局'),
+    '對戰頁的線上 createGame 仍應鎖 forceLegacyOpening');
+});
+
+T('⭐⭐批2：本機／AI 的 createOpts 已不再傳 forceLegacyOpening（否則新流程永不生效）', () => {
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  const seg = pg.slice(pg.indexOf('let createOpts'), pg.indexOf('game = createGame('));
+  assert.ok(seg.length > 0 && seg.length < 2000, '找不到本機 createOpts 區塊');
+  assert.ok(!seg.includes('forceLegacyOpening'),
+    '本機／AI createOpts 不應再傳 forceLegacyOpening');
+});
+
+T('⭐⭐批2：AI 遇到開局選擇時會送 OPENING_KEEP（＝v6.050 以前的行為，策略 0 diff）', () => {
+  const g = withSeed(4242, () => createGame(deck(burstOnlyDeck), deck(noBurstDeck), pool));
+  assert.equal(g.openingFlow, 'interactive');
+  assert.ok(g.openingChoicePending?.[0], 'P1 應停在選擇點');
+  const a = getAIAction(g, pool, 0);
+  assert.ok(a, 'AI 必須有動作，否則會空轉到無進展防呆');
+  assert.equal(a.type, 'OPENING_KEEP');
+  assert.equal(a.senderIdx, 0);
+  // 送出後真的推進（不是被引擎默默吃掉）
+  const after = applyAction(g, a, pool);
+  assert.ok(!after.openingChoicePending?.[0] && after.openingDone?.[0], 'AI 的選擇必須生效');
+});
+
+T('⭐⭐批2：AI 已定案的一側不會重複送 OPENING_KEEP（避免 setup 迴圈）', () => {
+  const g = withSeed(4242, () => createGame(deck(burstOnlyDeck), deck(noBurstDeck), pool));
+  const after = applyAction(g, { type: 'OPENING_KEEP', senderIdx: 0 }, pool);
+  const a = getAIAction(after, pool, 0);
+  assert.ok(!a || a.type !== 'OPENING_KEEP', '定案後不該再送 OPENING_KEEP');
+});
+
+T('⭐批2：本機雙人視角切換與 setupActorSeat 都認得 openingChoicePending', () => {
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  // 視角：openingChoicePending 必須排在 pendingMulliganDraw 之前（否則 P2 要選時看不到視窗）
+  const iOpen = pg.indexOf('game.openingChoicePending?.[0]');
+  const iPmd = pg.indexOf('(game.pendingMulliganDraw?.[0] ?? 0) > 0\n          ? 0');
+  assert.ok(iOpen > 0, '本機雙人視角鏈沒有 openingChoicePending');
+  assert.ok(iPmd > 0 && iOpen < iPmd, 'openingChoicePending 必須擁有最高優先序');
+  // setupActorSeat：新分支必須在 sd0/sd1 之前 return
+  const seat = pg.slice(pg.indexOf('function setupActorSeat'), pg.indexOf('const isMyTurn'));
+  assert.ok(seat.includes('openingChoicePending'), 'setupActorSeat 沒接 openingChoicePending');
+  assert.ok(seat.indexOf('openingChoicePending') < seat.indexOf('const sd0'),
+    'openingChoicePending 分支必須排在 setupDone 判斷之前');
+  // AI 排程 gate 兩處都要補（tickAI + $effect）
+  const n = pg.split('!!g.openingChoicePending?.[ai]').length - 1;
+  assert.equal(n, 2, `AI 排程 gate 應有 2 處，實際 ${n}`);
+});
+
+T('⭐批2：選擇視窗存在，且兩個按鈕分別派送 KEEP / MULLIGAN', () => {
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  assert.ok(pg.includes("game.openingChoicePending?.[myIdx]"), '缺少選擇視窗的顯示條件');
+  assert.ok(pg.includes('GameActions.openingKeep(myIdx)'), '缺少「用牠開局」按鈕');
+  assert.ok(pg.includes('GameActions.openingMulligan(myIdx)'), '缺少「重抽」按鈕');
 });
 
 console.log(`\n=== ${pass} PASS, ${fail} FAIL ===`);

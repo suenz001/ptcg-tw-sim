@@ -2187,7 +2187,7 @@
       const ai = aiPlayerIndex;
       const g = game!;
       // v5.138：mulliganPostBenchOpen=true 時 AI 也要行動（送 FINISH_MULLIGAN_POST_BENCH）
-      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死)
+      if (g.phase === 'setup') return !!g.openingChoicePending?.[ai] || !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死) / v6.051 批2 補 openingChoicePending
       if (g.phase !== 'playing') return false;
 
       // 取獎賞卡或選擇 — 由誰的行動決定
@@ -2301,7 +2301,7 @@
 
     const shouldAct = (() => {
       // v5.138：mulliganPostBenchOpen=true 時也要 scheduleAI
-      if (g.phase === 'setup') return !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死)
+      if (g.phase === 'setup') return !!g.openingChoicePending?.[ai] || !g.setupDone[ai] || (g.pendingMulliganDraw?.[ai] ?? 0) > 0 || !!g.mulliganPostBenchOpen?.[ai] || !g.mulliganRevealConfirmed?.[ai]; // v5.198 補 mulliganRevealConfirmed gate (雙方都 mulligan 時 AI 卡死) / v6.051 批2 補 openingChoicePending
       if (g.phase !== 'playing') return false;
       if ((g.pendingPrizes?.[ai] ?? 0) > 0) return true;
       if (g.pendingSelection) return g.pendingSelection.actorIdx === ai;
@@ -2648,7 +2648,13 @@
       // v5.185：補 mulliganRevealConfirmed 優先 — 若哪邊還沒 confirm 對方揭示就切到那邊
       //   不然 setupDone[0]?1:0 會把 myIdx 切到對手視角，揭示 modal 條件 !mulliganRevealConfirmed[myIdx] 失敗 → 卡死
       //   插入順序：pendingMulliganDraw（最高）→ mulliganRevealConfirmed → mulliganPostBenchOpen → setupDone
-      ? (((game.pendingMulliganDraw?.[0] ?? 0) > 0
+      // v6.051 批2：互動式開局的選擇擁有最高優先序 —— 此時雙方 setupDone 都還是 false，
+      //   舊鏈的末端 `setupDone[0] ? 1 : 0` 會恆定切到 P1，P2 要選時永遠看不到視窗 → 死結。
+      ? ((game.openingChoicePending?.[0]
+          ? 0
+          : game.openingChoicePending?.[1]
+            ? 1
+          : (game.pendingMulliganDraw?.[0] ?? 0) > 0
           ? 0
           : (game.pendingMulliganDraw?.[1] ?? 0) > 0
             ? 1
@@ -2696,6 +2702,15 @@
   // v5.643 setup「誰該動作」— 與伺服器 currentActorSeat 同一套邏輯(敗場判定/UI 提示一致):
   //   放出場階段 mulligan 較少方先放(較多方等);雙方 setupDone 後才進揭示確認/補抽。回 0/1=該方,-1=雙方(都該動)。
   function setupActorSeat(g: any): 0 | 1 | -1 {
+    // v6.051 批2：互動式開局尚未定案時，「該動作的人」＝還要做選擇的那一側（雙方都要選 → -1）。
+    //   ⚠伺服器 currentActorSeat 尚未同步（批4）。但線上／錦標賽目前一律 forceLegacyOpening，
+    //     openingChoicePending 在那些模式恆為 undefined → 這條分支是死碼，不會造成閒置判負分歧。
+    const _oc = g?.openingChoicePending;
+    if (_oc && (_oc[0] || _oc[1])) {
+      if (_oc[0] && !_oc[1]) return 0;
+      if (_oc[1] && !_oc[0]) return 1;
+      return -1;
+    }
     const sd0 = !!g?.setupDone?.[0], sd1 = !!g?.setupDone?.[1];
     const pmd = g?.pendingMulliganDraw ?? [0, 0];
     const mrc = g?.mulliganRevealConfirmed ?? [true, true];
@@ -5499,21 +5514,22 @@
     // - AI 模式：人類玩家偏好直接決定先手（不擲幣）
     //   先攻 → 人類先手；後攻 → AI 先手；隨機 → 擲幣決定
     // - 本機雙人：擲幣 + 套贏家偏好（與線上同邏輯）
-    // v6.051 批1：互動式開局的引擎邏輯已完備，但 UI 選擇視窗還沒做 →
-    //   本批所有模式都先走舊流程（零行為變化）。批2 接好 UI 後才拿掉本機這一個。
-    let createOpts: Parameters<typeof createGame>[3] = { forceLegacyOpening: true };
+    // v6.051 批2：本機／AI 已接好選擇視窗 → 這條路開放互動式開局。
+    //   引擎端仍只在「雙方牌組任一含瞬間爆發力」時才走新流程，其餘對局逐欄位 0 diff。
+    //   線上（6049）／錦標賽仍傳 forceLegacyOpening: true，待批3／批4。
+    let createOpts: Parameters<typeof createGame>[3] = {};
     if (aiPlayerIndex !== null) {
       const humanIdx = (1 - aiPlayerIndex) as 0 | 1;
       const humanPref = humanIdx === 0 ? p1FirstPref : p2FirstPref;
       if (humanPref === 'first') {
-        createOpts = { firstPlayerOverride: humanIdx, forceLegacyOpening: true };
+        createOpts = { firstPlayerOverride: humanIdx };
       } else if (humanPref === 'second') {
-        createOpts = { firstPlayerOverride: (1 - humanIdx) as 0 | 1, forceLegacyOpening: true };
+        createOpts = { firstPlayerOverride: (1 - humanIdx) as 0 | 1 };
       }
       // random → 不傳 override → 走擲幣 random
     } else {
       // 本機雙人：擲幣 + 雙方偏好
-      createOpts = { firstChoicePreferences: [p1FirstPref, p2FirstPref], forceLegacyOpening: true };
+      createOpts = { firstChoicePreferences: [p1FirstPref, p2FirstPref] };
     }
     game = createGame(
       { name: p1Name || d1.name, entries: d1.entries },
@@ -9371,6 +9387,57 @@
        自己先放戰鬥場 + bench + 按準備（setupDone=true），才看對手 mulligan 揭示。
        原 v3.74 玩家一進 setup 就 popup mulligan reveal modal，強制看完才能放
        戰鬥場 — 順序違反 PTCG 規則「先放基礎到戰鬥場」。 -->
+  <!-- v6.051 批2 互動式開局（閃焰王牌｜瞬間爆發力）：起手沒有【基礎】寶可夢、但有可用
+       「瞬間爆發力」上場的寶可夢時，由玩家二選一。
+       官方 PTCG RULES §17.40.G：「（起手）僅有擁有特性『瞬間爆發力』的閃焰王牌，那麼可以
+       不將閃焰王牌放置於戰鬥場上嗎？→ 可以。／這個情況下，可選擇是否將閃焰王牌放置於戰鬥場上。」
+       ＝引擎不可以替玩家決定；這個選擇會改變雙方的重抽次數與對手可多抽的張數。 -->
+  {#if game && game.phase==='setup' && game.openingChoicePending?.[myIdx] && (
+        (mode==='online' && myPlayerIndex===myIdx) ||
+        (mode!=='online' && aiPlayerIndex === null) ||
+        (aiPlayerIndex !== null && aiPlayerIndex !== myIdx)
+      )}
+    {@const burstNames = [...new Set((myPlayer?.hand ?? [])
+        .filter(c => canBeInitialActiveCard(pool.get(c.cardId)))
+        .map(c => pool.get(c.cardId)?.name ?? '?'))]}
+    <div class="selection-overlay" class:dragged={modalDragged}>
+      <div class="selection-modal mulligan-modal mulligan-reveal-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
+        <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
+          <h3>🔥 起手沒有【基礎】寶可夢</h3>
+          <p class="sel-hint">
+            你的起手沒有【基礎】寶可夢，但有 <strong>{burstNames.join('、')}</strong>，
+            可用特性「瞬間爆發力」反面朝上放置於戰鬥場開局。
+            <br/>依官方規則，你<strong>也可以</strong>視同沒有【基礎】寶可夢而重抽手牌
+            —— 此時需先向對手展示這 7 張牌，你的重抽次數 +1（對手可因此多抽牌）。
+          </p>
+        </div>
+        <div class="mulligan-reveal-body">
+          <div class="mulligan-reveal-grid">
+            {#each (myPlayer?.hand ?? []) as hc (hc.iid)}
+              {@const hcc = pool.get(hc.cardId)}
+              <div class="mulligan-reveal-card" class:opening-burst={canBeInitialActiveCard(hcc)}>
+                {#if hcc?.imageUrl}
+                  <img src={hcc.imageUrl} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable" />
+                {:else}
+                  <div class="card-placeholder">{hcc?.name ?? hc.cardId}</div>
+                {/if}
+                <div class="card-name-label">{hcc?.name ?? '?'}</div>
+              </div>
+            {/each}
+          </div>
+        </div>
+        <div class="sel-footer mulligan-footer">
+          <button class="btn-act" onclick={() => dispatch(GameActions.openingMulligan(myIdx))}>
+            🔄 視同沒有基礎，重抽手牌
+          </button>
+          <button class="btn-act primary" onclick={() => dispatch(GameActions.openingKeep(myIdx))}>
+            ✅ 用牠開局
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   {#if game && game.phase==='setup'
        && game.setupDone?.[myIdx]
        && (((oppIdx === 0 ? game.mulliganRevealedHands?.p1 : game.mulliganRevealedHands?.p2)?.length ?? 0) > 0)
@@ -13742,6 +13809,12 @@
     font-size:.65rem; color:#ddd; text-align:center; line-height:1.1;
     max-width:100%; word-break:break-all; overflow:hidden;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  }
+  /* v6.051 批2：開局選擇視窗中，可用「瞬間爆發力」上場的那張卡加高亮外框 */
+  .mulligan-reveal-card.opening-burst img,
+  .mulligan-reveal-card.opening-burst .card-placeholder{
+    outline:2px solid #ff9a3c; outline-offset:1px;
+    box-shadow:0 0 10px rgba(255,154,60,.75);
   }
   .mulligan-reveal-card .card-placeholder{
     width:100%; aspect-ratio:2.5/3.5; background:#333; border-radius:4px;

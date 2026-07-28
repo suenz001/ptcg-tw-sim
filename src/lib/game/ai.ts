@@ -427,6 +427,14 @@ export function getAIAction(
 // ── Setup 階段 AI ─────────────────────────────────────────────────────────────
 
 function handleSetupAI(state: GameState, pool: Map<string, Card>, pIdx: 0 | 1): GameAction | null {
+  // v6.051 批2：互動式開局（閃焰王牌｜瞬間爆發力）的二選一。
+  //   AI 一律選 KEEP —— 這正是 v6.050 以前引擎替所有人做的決定，因此 AI 的行為 0 diff。
+  //   （放上去開局 vs 重抽 何者較優需要牌組層級的評估，本批不做；日後要改是純策略改動。）
+  //   ⚠必須排在 setupDone 分支之前：開局未定案時 setupDone 恆為 false，
+  //     而 PLACE_ACTIVE 會被引擎擋下 → 不先處理選擇，AI 會空轉到無進展防呆。
+  if (state.openingChoicePending?.[pIdx]) {
+    return { type: 'OPENING_KEEP', senderIdx: pIdx };
+  }
   // v5.158：順序重整 — PTCG 規則：先 setup placement (PLACE_ACTIVE/BENCH/FINISH_SETUP)
   //   才看對手 mulligan reveal + 補抽決定 + mulliganPostBenchOpen flow。
   //   v5.133 修了 UI modal popup gate 但 ai.ts 沒同步，造成 AI 一進 setup 就先
