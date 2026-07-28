@@ -76,7 +76,9 @@
   // v6.038 批次4b：本機 AI 對戰開始前，依 AI 那一側的牌組載入打法表（fail-open）。
   import { prepareAIPlaybook, clearPlaybook } from '$lib/game/ai-playbook';
   import { VERSION } from '$lib/version';
-  import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx } from '$lib/audio/sfx';
+  import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx, playSfxEvents } from '$lib/audio/sfx';
+  // v6.048：音效決策收斂到純函式（三條路徑共用，可寫自動化守衛）
+  import { computeSfxEvents } from '$lib/audio/sfx-events';
   // v6.022 錦標賽通知（本地通知；決策核心在 notify-core.ts 純函式、有單元測試）
   import { notifyScan, notifyTurn, shouldPromptOnLobby, requestNotifyPermission, markPrompted,
            getNotifyEnabled, saveNotifyEnabled, getPermission as getNotifyPermission,
@@ -1714,6 +1716,10 @@
     const next = coinFlipQueue[0];
     coinFlipQueue = coinFlipQueue.slice(1);
     coinFlip = next;
+    // v6.048：擲硬幣音效 —— sfx.ts 裡的 playCoin 早就寫好了，但全專案**沒有任何地方呼叫**，
+    //   所以擲幣從來沒有聲音。掛在動畫佇列上，與翻面動畫同步；正面/反面用不同音，
+    //   讓玩家不用盯著畫面也知道結果。
+    try { playSfx(next.result === 'heads' ? 'coin' : 'coin-tails', { force: true }); } catch { /* 音效不影響遊戲 */ }
     coinTimer = setTimeout(processCoinQueue, COIN_FLIP_MS);
   }
 
@@ -4470,8 +4476,19 @@
       spectators: [], createdAt: Date.now(), updatedAt: Date.now(),
     } as any;
   }
-  function tAdopt(state: any, version: number) {
+  function tAdopt(state: any, version: number, opts?: { skipSfx?: boolean }) {
     if (typeof version === 'number' && version < tVersion) return; // 拒收 stale
+    // ⭐v6.048：錦標賽「對手的動作」只會經由這裡進來，而這裡原本完全沒有音效
+    //   → 對手攻擊、擊倒我方寶可夢、施加狀態、拿獎賞全程無聲，連**我輸掉這一局**
+    //   的勝負音都不會播（game-over 音只掛在本機 action 與休閒線上兩條路徑上）。
+    //   自己的動作走 tournamentDispatch（它會自己算音效）→ 傳 skipSfx 避免播兩次。
+    const _sfxPrev = game;
+    if (!opts?.skipSfx && _sfxPrev && state && (_sfxPrev as GameState).id === (state as GameState).id) {
+      try {
+        playSfxEvents(computeSfxEvents(_sfxPrev as GameState, state as GameState, null, pool,
+          { mode, myPlayerIndex, aiPlayerIndex }));
+      } catch { /* 音效不影響對戰 */ }
+    }
     game = state as GameState;
     // v5.921：錦標賽盤面由伺服器送來,client 只載過自己牌組的卡包→對手(或促銷卡集如 SV-P-H/SVPN)
     //   的卡 getCard 查不到→無法顯示/同名 fallback 錯版。依盤面實際 cardId 補載其卡包(缺卡才動作)。
@@ -4604,7 +4621,7 @@
     try {
       const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });
       if (r.gameState) {
-        tAdopt(r.gameState, r.version);
+        tAdopt(r.gameState, r.version, { skipSfx: true });   // v6.048 自己的動作由下一行算音效
         try { if (game && game !== prev) dispatchSfxForAction(action as any, prev as any, game as any); } catch { /* sfx best-effort */ }
       }
       // v5.598：伺服器樂觀並發 CAS 落敗(stale) → 已同步到最新狀態，自動重試一次。
@@ -5214,7 +5231,9 @@
       const ts = Date.now();
       turnBanner = { text, timestamp: ts };
       // v3.91：播放回合切換音效（清亮上行三音 C5→E5→G5）
-      playSfx('turn-start');
+      // v6.048：回放模式不播 —— 逐步導覽時每按一次「下一步」幾乎都會跨半回合，
+      //   會變成一直嗶。回放要的是看盤面，不是重播音效。
+      if (!isTReplay) playSfx('turn-start');
       // v6.022 換你行動通知（僅錦標賽對戰中 + 分頁在背景時；同回合去重 + 同房間 30 秒節流）
       if (isMine && isTournament && tStep === 'playing' && tActiveRoom) {
         notifyTurn({ roomId: String(tActiveRoom), turn: game.turn, apIdx: newIdx });
@@ -6618,216 +6637,31 @@
   });
 
 
-  // v4.928: 計算 actor 的 stereo pan（紙牌空間感）
-  //   線上：自己中央、對手偏右；AI：玩家中央、AI 偏右；本機 2P：P0 偏左、P1 偏右
-  function panForActor(actor: 0 | 1): number {
-    if (mode === 'online' && myPlayerIndex !== null) {
-      return actor === myPlayerIndex ? 0 : 0.3;
-    }
-    if (aiPlayerIndex !== null) {
-      return actor === aiPlayerIndex ? 0.3 : 0;
-    }
-    return actor === 0 ? -0.25 : 0.25;
-  }
-
+  // ⭐v6.048：音效決策全部搬到 `$lib/audio/sfx-events.ts` 的純函式。
+  //   原本這裡有三段各自為政的邏輯（本機 action / 休閒線上 diff / 錦標賽完全沒有），
+  //   同一件事在不同模式聽到的東西不一樣。現在三條路徑都走 computeSfxEvents()，
+  //   改一次全模式生效，而且規則可以用 scripts/test-sfx-events.mjs 自動驗證。
   function dispatchSfxForAction(
     action: ReturnType<typeof GameActions[keyof typeof GameActions]>,
     prev: GameState,
     next: GameState,
   ): void {
     try {
-      const actorIdx = (prev.activePlayerIndex ?? 0) as 0 | 1;
-      const pan = panForActor(actorIdx);
-      // v4.967: helper — 從 prev/next state 算 handDelta（actor 視角）
-      const handDeltaForActor = (): number => {
-        const ai = next.activePlayerIndex;
-        return (next.players[ai]?.hand?.length ?? 0) - (prev.players[ai]?.hand?.length ?? 0);
-      };
-      switch (action.type) {
-        case 'DRAW_CARD': {
-          // v4.967: 抽多張 stagger（莉莉艾決意 / 博士的研究等抽 6~8 張）
-          const n = Math.max(1, handDeltaForActor());
-          if (n === 1) playSfx('draw', { pan });
-          else staggerSfx('draw', n, { pan, intervalMs: 90 });
-          break;
-        }
-        case 'MULLIGAN_DRAW_DECISION': {
-          // v4.967: mulligan 補抽多張也 stagger
-          const count = ((action as any).count ?? 0) as number;
-          if (count > 0) {
-            if (count === 1) playSfx('draw', { pan });
-            else staggerSfx('draw', count, { pan, intervalMs: 90 });
-          }
-          break;
-        }
-        case 'FINISH_SETUP':
-          // v4.964：ready-go 改到 lobby→setup 那一刻播；這裡不播；純 click
-          playSfx('click', { pan });
-          break;
-        // v4.928: 紙牌質感拆音
-        case 'EVOLVE':
-          playSfx('evolve', { pan });
-          break;
-        case 'ATTACH_ENERGY':
-          playSfx('attach-energy', { pan });
-          break;
-        // v4.967: 改用 place-card（紙牌落桌音）取代 click，明確區隔 UI 切 tab 音
-        case 'PLAY_BASIC':
-        case 'BENCH_POKEMON':
-          playSfx('place-card', { pan });
-          break;
-        case 'USE_STADIUM':
-          playSfx('click', { pan });
-          break;
-        case 'RETREAT':
-          playSfx('shuffle', { volume: 0.5, pan });
-          break;
-        case 'END_TURN':
-          playSfx('click', { volume: 0.6, pan });
-          break;
-        case 'PLAY_TRAINER': {
-          playSfx('click', { pan });
-          // v4.967: 物品 / supporter 抽多張時 stagger
-          const n = handDeltaForActor();
-          if (n > 0) {
-            setTimeout(() => {
-              if (n === 1) playSfx('draw', { volume: 0.6, pan });
-              else staggerSfx('draw', n, { pan, intervalMs: 90, baseVolume: 0.75 });
-            }, 100);
-          }
-          break;
-        }
-        // v4.928: 特性發動專屬音（chime）
-        case 'USE_ABILITY':
-          playSfx('ability', { pan });
-          break;
-        case 'RESOLVE_SELECTION': {
-          playSfx('click', { volume: 0.6, pan });
-          // v4.967: resolver 抽多張也 stagger（多支 supporter / item 走 RESOLVE_SELECTION）
-          const n = handDeltaForActor();
-          if (n > 0) {
-            setTimeout(() => {
-              if (n === 1) playSfx('draw', { volume: 0.6, pan });
-              else staggerSfx('draw', n, { pan, intervalMs: 90, baseVolume: 0.75 });
-            }, 150);
-          }
-          const myIdx = next.activePlayerIndex;
-          const deckDelta = prev.players[myIdx].deck.length - next.players[myIdx].deck.length;
-          if (deckDelta >= 2) setTimeout(() => playSfx('shuffle', { volume: 0.4, pan }), 150);
-          break;
-        }
-        case 'ATTACK': {
-          const aIdx = prev.activePlayerIndex;
-          const attacker = prev.players[aIdx].active;
-          if (!attacker) break;
-          const atkCard = pool.get(attacker.cardId);
-          const etype: EnergyType = atkCard?.pokemonType ?? 'Colorless';
-          const atkData = atkCard?.attacks?.[action.attackIndex];
-          const rawDmg = (atkData?.damage ?? '').toString().trim();
-          const isZeroDamage = rawDmg === '' || rawDmg === '0';
-          playSfx(`attack-${etype}` as `attack-${EnergyType}`, { pan });
-          if (!isZeroDamage) {
-            const defender = next.players[1 - aIdx].active;
-            triggerAttackFx(aIdx as 0 | 1, attacker.iid, defender?.iid ?? null, etype);
-          }
-          break;
-        }
-        // v4.928: 拿獎賞分音 — 最後一張用 victory-fanfare
-        case 'TAKE_PRIZES': {
-          const acted = (action as any).playerIdx as 0 | 1 | undefined;
-          const oppIdx = acted !== undefined ? ((1 - acted) as 0 | 1) : ((1 - actorIdx) as 0 | 1);
-          const oppPrizesAfter = next.players[oppIdx]?.prizes?.length ?? 6;
-          const myPan = acted !== undefined ? panForActor(acted) : pan;
-          if (oppPrizesAfter === 0) {
-            playSfx('victory-fanfare', { pan: myPan });
-          } else {
-            playSfx('prize-take', { pan: myPan });
-          }
-          break;
-        }
-        case 'SEND_NEW_ACTIVE':
-          // v4.967: 換新戰鬥位用 place-card 音
-          playSfx('place-card', { pan });
-          break;
-        default:
-          break;
-      }
-
-      detectStatusAndKOSfx(prev, next);
-      // v4.928: 對局結束音（game-over 轉換時播 win/lose）
-      if (prev.phase !== 'game-over' && next.phase === 'game-over' && next.winner !== null && next.winner !== undefined) {
-        const winnerIdx = next.winner;
-        const isLocalWin = (() => {
-          if (mode === 'online' && myPlayerIndex !== null) return myPlayerIndex === winnerIdx;
-          if (aiPlayerIndex !== null) return aiPlayerIndex !== winnerIdx;
-          return true; // 本機 2P：誰贏都播 game-win
-        })();
-        setTimeout(() => playSfx(isLocalWin ? 'game-win' : 'game-lose'), 300);
-      }
-    } catch {
-      // 音效失敗不影響遊戲
-    }
+      playSfxEvents(computeSfxEvents(prev, next, action as unknown as ({ type: string } & Record<string, unknown>),
+        pool, { mode, myPlayerIndex, aiPlayerIndex }));
+    } catch { /* 音效不影響遊戲 */ }
   }
 
-  // v4.929：觀戰 + 線上對手 action 來時，state-diff 偵測核心事件並播音
-  // v4.932：曾在此偵測 setup→playing 播 ready-go；v4.964 移除（時機改到 lobby→setup）
+  /** 線上/觀戰：只有盤面（沒有 action 物件）時，一樣走同一套決策。 */
   function detectSpectatorStateDiffSfx(prev: GameState, next: GameState): void {
-    // 換回合
-    if (prev.activePlayerIndex !== next.activePlayerIndex && next.phase === 'playing') {
-      playSfx('turn-start');
-    }
-    // KO + status（重用既有偵測）
-    detectStatusAndKOSfx(prev, next);
-    // 對局結束
-    if (prev.phase !== 'game-over' && next.phase === 'game-over'
-        && next.winner !== null && next.winner !== undefined) {
-      const winnerIdx = next.winner;
-      const isLocalWin = (() => {
-        if (mode === 'online' && myPlayerIndex !== null) return myPlayerIndex === winnerIdx;
-        if (aiPlayerIndex !== null) return aiPlayerIndex !== winnerIdx;
-        return true;
-      })();
-      setTimeout(() => playSfx(isLocalWin ? 'game-win' : 'game-lose'), 300);
-    }
-    // 拿獎賞（prizes 數量減少）+ 抽牌（hand 增加）
-    for (const idx of [0, 1] as const) {
-      const prevPrz = prev.players[idx]?.prizes?.length ?? 6;
-      const nextPrz = next.players[idx]?.prizes?.length ?? 6;
-      if (nextPrz < prevPrz) {
-        const opp = (1 - idx) as 0 | 1;
-        const pan = panForActor(opp);
-        if (nextPrz === 0) playSfx('victory-fanfare', { pan });
-        else playSfx('prize-take', { pan });
+    try {
+      if (prev.activePlayerIndex !== next.activePlayerIndex && next.phase === 'playing' && !isTReplay) {
+        playSfx('turn-start');
       }
-      const prevHand = prev.players[idx]?.hand?.length ?? 0;
-      const nextHand = next.players[idx]?.hand?.length ?? 0;
-      if (nextHand > prevHand) {
-        playSfx('draw', { pan: panForActor(idx as 0 | 1) });
-      }
-    }
+      playSfxEvents(computeSfxEvents(prev, next, null, pool, { mode, myPlayerIndex, aiPlayerIndex }));
+    } catch { /* 音效不影響遊戲 */ }
   }
 
-  /** 比對 prev/next 找出新出現的異常狀態 + KO，播對應音效。 */
-  function detectStatusAndKOSfx(prev: GameState, next: GameState): void {
-    for (const idx of [0, 1] as const) {
-      const prevP = prev.players[idx];
-      const nextP = next.players[idx];
-      // 戰鬥位 KO（從有 → 無）
-      if (prevP.active && !nextP.active) {
-        playSfx('ko');
-      }
-      // 戰鬥位 status：比對同一 iid 前後狀態
-      if (prevP.active && nextP.active && prevP.active.iid === nextP.active.iid) {
-        if (!prevP.active.status && nextP.active.status) {
-          const s = nextP.active.status;
-          if (s === 'poisoned') playSfx('poison');
-          else if (s === 'burned') playSfx('burn');
-          else if (s === 'asleep') playSfx('sleep');
-          else if (s === 'confused') playSfx('confuse');
-        }
-      }
-    }
-  }
 </script>
 
 <svelte:head>

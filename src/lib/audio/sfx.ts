@@ -22,8 +22,8 @@ import type { EnergyType } from '$lib/cards/types';
 
 // ─── 型別 ─────────────────────────────────────────────────────────────────
 export type SfxName =
-  | 'coin' | 'deal' | 'draw' | 'shuffle' | 'click' | 'ko'
-  | 'poison' | 'burn' | 'sleep' | 'confuse'
+  | 'coin' | 'coin-tails' | 'deal' | 'draw' | 'shuffle' | 'click' | 'ko'
+  | 'poison' | 'burn' | 'sleep' | 'confuse' | 'paralyze'
   | 'turn-start'
   | 'ready-go'  // v4.929 對戰開始通知音（sample-based）
   | 'place-card'  // v4.967 紙牌落桌音（基本上場 / 備戰 / 換場通用）
@@ -35,13 +35,15 @@ export type SfxName =
   | 'victory-fanfare'  // 拿最後一張獎賞（即將勝利）
   | 'game-win'         // 對局勝利
   | 'game-lose'        // 對局失敗
+  // v6.048 新增
+  | 'attack-nodamage'  // 純效果招式（卡面沒有傷害、或這次實際造成 0 傷害）
   | `attack-${EnergyType}`;
 
 // ─── Sub-bus 分類（決定走哪條音量控制） ──────────────────────────────────
 type BusName = 'ui' | 'sfx' | 'status';
 function classifyBus(name: SfxName): BusName {
   if (name === 'click' || name === 'draw' || name === 'deal' || name === 'shuffle'
-      || name === 'coin' || name === 'turn-start' || name === 'evolve'
+      || name === 'coin' || name === 'coin-tails' || name === 'turn-start' || name === 'evolve'
       || name === 'attach-energy' || name === 'ability' || name === 'prize-take'
       || name === 'place-card') {
     return 'ui';
@@ -50,7 +52,7 @@ function classifyBus(name: SfxName): BusName {
       || name === 'game-lose' || name === 'ready-go' || name.startsWith('attack-')) {
     return 'sfx';
   }
-  // poison / burn / sleep / confuse
+  // poison / burn / sleep / confuse / paralyze
   return 'status';
 }
 
@@ -232,6 +234,7 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
   const t = c.currentTime;
   try {
     if (name === 'coin') playCoin(c, gain, t);
+    else if (name === 'coin-tails') playCoinTails(c, gain, t);
     else if (name === 'deal') playDeal(c, gain, t);
     else if (name === 'draw') playDraw(c, gain, t);
     else if (name === 'shuffle') playShuffle(c, gain, t);
@@ -241,6 +244,7 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
     else if (name === 'burn') playBurn(c, gain, t);
     else if (name === 'sleep') playSleep(c, gain, t);
     else if (name === 'confuse') playConfuse(c, gain, t);
+    else if (name === 'paralyze') playParalyze(c, gain, t);
     else if (name === 'turn-start') playTurnStart(c, gain, t);
     else if (name === 'evolve') playEvolve(c, gain, t);
     else if (name === 'attach-energy') playAttachEnergy(c, gain, t);
@@ -251,6 +255,7 @@ export function playSfx(name: SfxName, opts?: PlaySfxOpts): void {
     else if (name === 'game-lose') playGameLose(c, gain, t);
     else if (name === 'ready-go') playReadyGo(c, gain, t);
     else if (name === 'place-card') playPlaceCard(c, gain, t);
+    else if (name === 'attack-nodamage') playAttackNoDamage(c, gain, t);
     else if (name.startsWith('attack-')) {
       const etype = name.slice(7) as EnergyType;
       playAttack(c, gain, t, etype);
@@ -315,6 +320,16 @@ function metalClink(c: AudioContext, out: GainNode, t: number, base: number, pea
 function playCoin(c: AudioContext, out: GainNode, t: number): void {
   metalClink(c, out, t,         1400, 0.22);
   metalClink(c, out, t + 0.18,  1050, 0.18);
+}
+
+/**
+ * v6.048 擲硬幣「反面」— 與正面同一組金屬素材，但第二聲**往下走**且更悶。
+ * 設計理由：正/反必須一聽就分得出來，但不能是兩個不相干的音（會像兩個事件）。
+ * 同素材 + 相反的音高走向，是最省成本又最直覺的區分方式（正面上揚、反面下沉）。
+ */
+function playCoinTails(c: AudioContext, out: GainNode, t: number): void {
+  metalClink(c, out, t,         1150, 0.20);
+  metalClink(c, out, t + 0.18,   720, 0.15);
 }
 
 // ─ Paper swish helper（紙張纖維摩擦感）─────────
@@ -469,6 +484,59 @@ function playConfuse(c: AudioContext, out: GainNode, t: number): void {
   trackNode(osc);
 }
 
+/**
+ * v6.048【麻痺】— 五種特殊狀態裡唯一沒有音效的（poison/burn/sleep/confuse 都有）。
+ * 音色：高頻方波 + 快速斷續的 gain 抖動 ＝「電流麻痺」的聽感，
+ *   與 confuse 的三角波滑音（連續、上下飄）形成明顯區隔，不會聽混。
+ */
+function playParalyze(c: AudioContext, out: GainNode, t: number): void {
+  const osc = c.createOscillator();
+  const g = c.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(220, t);
+  osc.frequency.linearRampToValueAtTime(180, t + 0.28);
+  // 斷續抖動：6 段 on/off，模擬電流間歇
+  g.gain.setValueAtTime(0, t);
+  for (let i = 0; i < 6; i++) {
+    const s0 = t + i * 0.045;
+    g.gain.setValueAtTime(0.16 * (1 - i / 8), s0);
+    g.gain.setValueAtTime(0.0001, s0 + 0.022);
+  }
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+  // 帶通讓方波不刺耳
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 900;
+  bp.Q.value = 1.2;
+  osc.connect(bp); bp.connect(g); g.connect(out);
+  osc.start(t); osc.stop(t + 0.35);
+  trackNode(osc);
+}
+
+/**
+ * v6.048【純效果招式】— 卡面沒有傷害值，或這一次實際造成 0 點傷害
+ * （被【薄霧能量】等完全免疫、減傷到 0、擲幣全反面…）。
+ * 音色：低音量的柔和 whoosh（窄帶噪音向下掃頻），**刻意不做打擊感**——
+ *   玩家一聽就知道「招式發動了，但沒有打中/沒有傷害」。
+ * ⚠不重用 'ability' 的 chime：那是特性發動音，混用會讓玩家分不出招式與特性。
+ */
+function playAttackNoDamage(c: AudioContext, out: GainNode, t: number): void {
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c, 0.35);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.setValueAtTime(1800, t);
+  bp.frequency.exponentialRampToValueAtTime(500, t + 0.3);
+  bp.Q.value = 0.9;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.16, t + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+  src.connect(bp); bp.connect(g); g.connect(out);
+  src.start(t); src.stop(t + 0.36);
+  trackNode(src);
+}
+
 // ─ Attack ────────────────────────────────────────
 interface AttackPattern {
   osc?: { type: OscillatorType; start: number; end: number; peakGain: number };
@@ -612,6 +680,28 @@ function playPlaceCard(c: AudioContext, out: GainNode, t: number): void {
 // ─ Stagger helper — v4.967 ────────────────────────────────────────────
 //   抽多張卡 / 起手發牌 stagger 播放：每張間隔 N ms，音量遞減營造「連續發牌」感。
 //   force=true 跳過 throttle 確保每張都響。max=10 上限避免極端 N 炸音。
+/**
+ * v6.048：播放 `sfx-events.ts` 算出來的音效清單。
+ * 決策（要播什麼）在純函式裡、播放（AudioContext／setTimeout／throttle）在這裡，
+ * 兩邊分開才寫得出音效規則的自動化守衛。
+ */
+export function playSfxEvents(events: Array<{
+  name: SfxName; volume?: number; pan?: number;
+  count?: number; intervalMs?: number; delayMs?: number; force?: boolean;
+}>): void {
+  for (const ev of events) {
+    if ((ev.count ?? 1) > 1) {
+      staggerSfx(ev.name, ev.count as number, {
+        pan: ev.pan, baseVolume: ev.volume, delayMs: ev.delayMs, intervalMs: ev.intervalMs,
+      });
+    } else if (ev.delayMs && ev.delayMs > 0) {
+      setTimeout(() => playSfx(ev.name, { volume: ev.volume, pan: ev.pan, force: ev.force }), ev.delayMs);
+    } else {
+      playSfx(ev.name, { volume: ev.volume, pan: ev.pan, force: ev.force });
+    }
+  }
+}
+
 export function staggerSfx(
   name: SfxName,
   count: number,
