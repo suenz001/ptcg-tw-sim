@@ -5861,10 +5861,20 @@
         playSfx('ready-go');
         staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
       }
-      // SFX（保留）：同局 incoming（對手 action / 觀戰 sync）播 state-diff 音效
-      if (game && incoming && game.id === incoming.id) {
-        try { detectSpectatorStateDiffSfx(game, incoming); } catch { /* sfx 不影響遊戲 */ }
-      }
+      // v6.050：音效移到**決策之後**才播（見下方 decision 之後），並用「真正被採用的盤面」做 diff。
+      //   原本在這裡、也就是 stale 守衛**之前**就播：被 reject 的舊 snapshot 一樣會發出聲音
+      //   （例如舊的 activePlayerIndex 與現況不同 → 誤播回合切換音，真 snapshot 到達後再播一次）。
+      const _sfxPrevGame = game;
+      // ⭐v6.050：對手回合的音效 —— 用 decision 決定要採用的盤面做 diff。
+      //   之前這條路徑只播「換回合／KO／狀態／勝負／拿獎／抽牌」，對手的攻擊、進化、附能、
+      //   放卡、特性、撤退全部無聲（同一場對戰打 AI 有聲、打線上就沒有）。
+      //   v6.048 把音效決策收斂成純函式之後，這裡只要換成「決策後的盤面」就能一次補齊。
+      const _emitCasualSfx = (nextGame: GameState | null | undefined): void => {
+        if (!_sfxPrevGame || !nextGame) return;
+        if (_sfxPrevGame.id !== nextGame.id) return;      // 不同局（重新開局等）不 diff
+        if (_sfxPrevGame === nextGame) return;
+        try { detectSpectatorStateDiffSfx(_sfxPrevGame, nextGame); } catch { /* 音效不影響遊戲 */ }
+      };
       // v5.408：收端決策統一改由 sync-guards.resolveRoomUpdate（單一來源，受
       //   scripts/test-online-sync-guards.mjs 回歸網保護）。原本散落 inline 的
       //   createGame race / 悔棋繞過 / 防舊 / game-over 終態 / phase 倒退 / 開局單調
@@ -5876,6 +5886,8 @@
         roomRestartCount: (room.restartProposalCount as number | undefined) ?? 0,
         lastAdoptedRestartCount,
       });
+      // reject / ignore 不會改變盤面 → 不發出任何聲音（這正是移到守衛之後的目的）
+      if (decision.kind !== 'reject' && decision.kind !== 'ignore') _emitCasualSfx(decision.game);
       switch (decision.kind) {
         case 'reject':
           console.warn('[Online] reject snapshot:', decision.reason);
