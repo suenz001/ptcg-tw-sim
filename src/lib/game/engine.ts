@@ -803,24 +803,60 @@ function advanceOpeningHand(
  * 雙方手牌都定案後，一次寫入現行的 mulligan 欄位 —— 寫完之後的世界與 v6.050 以前完全相同
  * （NET 抵銷、揭示、確認、補抽、tryAdvanceToPlaying 全部原封不動）。
  */
-function finalizeOpening(state: GameState): GameState {
+export function finalizeOpening(state: GameState): GameState {
   const [m1, m2] = state.mulliganCounts;
   const revealed = state.mulliganRevealedHands ?? { p1: [], p2: [] };
   return {
     ...state,
     openingChoicePending: [false, false],
     openingDone: [true, true],
+    openingFinalized: true,
     pendingMulliganDraw: [Math.max(0, m2 - m1), Math.max(0, m1 - m2)],
     mulliganRevealConfirmed: [m2 === 0, m1 === 0],
     mulliganRevealedHands: revealed,
   };
 }
 
+/**
+ * v6.053 批3：「該座位的開局已定案」的**唯一判準**（含版本 skew 逃生規則）。
+ *
+ * ⭐`openingDone[i] || setupDone[i]` —— 後半是逃生口，理由如下：
+ *   漸進部署期間一定會出現「新 client × 舊 client」同房（PWA 的 Service Worker 會讓舊
+ *   chunk 存活好幾天）。舊 client 的引擎沒有 opening gate，它的玩家可以照常
+ *   PLACE_ACTIVE（閃焰王牌本來就過得了 `canBeInitialActiveCard`）＋ FINISH_SETUP，
+ *   於是推回來的盤面是「setupDone[opp]=true 但 openingDone[opp] 永遠 false」。
+ *   若不設逃生口，新端的 `isOpeningInProgress` 會恆為 true、把自己的擺場動作全部擋死，
+ *   而 setup 階段**沒有** `_forceAdoptNext` 自癒（那段明文排除 setup）→ 永久卡局。
+ *   語義上這也是正確的：對方既然把寶可夢放上戰鬥場並按了準備，就等於做了 KEEP
+ *   （他的 mulliganCounts 沒有增加，與 KEEP 完全一致）。
+ *
+ * ⚠新×新的正常流程不會誤觸發：開局未定案時 FINISH_SETUP 被擋，setupDone 恆為 false。
+ */
+export function effectiveOpeningDone(state: GameState): [boolean, boolean] {
+  const done = state.openingDone ?? [true, true];
+  const sd = state.setupDone ?? [false, false];
+  return [!!(done[0] || sd[0]), !!(done[1] || sd[1])];
+}
+
 /** 互動式開局是否還在進行中（尚未雙方定案）→ 期間擋住 PLACE_ACTIVE / FINISH_SETUP。 */
 export function isOpeningInProgress(state: GameState): boolean {
   if (state.openingFlow !== 'interactive') return false;
-  const done = state.openingDone ?? [true, true];
+  const done = effectiveOpeningDone(state);
   return !done[0] || !done[1];
+}
+
+/**
+ * v6.053 批3：冪等的開局結算。線上是雙端各自 applyAction，可能發生
+ * 「雙方同時各做一次選擇」→ 兩端本地都只看到單邊 done → **誰都不會結算**；
+ * 合併後才湊齊雙 done，因此收端合併完必須再跑一次這個函式。
+ * 冪等靠 `openingFinalized` 旗標保證（結算一次後永不重跑）。
+ */
+export function ensureOpeningFinalized(state: GameState): GameState {
+  if (state.openingFlow !== 'interactive') return state;
+  if (state.openingFinalized) return state;
+  const done = effectiveOpeningDone(state);
+  if (!done[0] || !done[1]) return state;
+  return finalizeOpening(state);
 }
 
 // ── v2.187 化石機制 ────────────────────────────────────────────────────────
@@ -2230,6 +2266,12 @@ export function tryAdvanceToPlaying(state: GameState): GameState {
   //   去重旗標是模組層級全域 → 多局交錯時 reason 一直變、去重失效 → 大型錦標賽高流量下每個 setup 動作
   //   都狂寫 pm2 log，灌爆 error.log/吃 CPU/塞事件迴圈 → API 卡頓+crash-loop。改成 no-op(gate 行為不變,只是不印)。
   const auditFail = (_reason: string) => state;
+  // v6.053 批3：互動式開局未定案 → 絕不推進（保險 gate）。
+  //   正常流程走不到這裡（FINISH_SETUP 被擋 → setupDone 到不了雙 true），但版本 skew
+  //   或未來新增路徑可能把 setupDone 湊齊，此時 pendingMulliganDraw / 揭示確認尚未結算，
+  //   放行等於「該補抽的靜默消失、直接開打」＝公平性 bug（比卡死更難被發現）。
+  //   ⚠判準必須與 isOpeningInProgress 同一個（effectiveOpeningDone），否則與逃生規則打架。
+  if (isOpeningInProgress(state)) return auditFail('互動式開局尚未定案');
   if (!state.setupDone[0] || !state.setupDone[1]) return auditFail(`setup 未完成: P1=${state.setupDone[0]}, P2=${state.setupDone[1]}`);
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return auditFail(`pendingMulliganDraw 未處理: [${state.pendingMulliganDraw[0]}, ${state.pendingMulliganDraw[1]}]`);
   if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return auditFail(`mulliganRevealConfirmed 未完成: [${state.mulliganRevealConfirmed[0]}, ${state.mulliganRevealConfirmed[1]}]`);

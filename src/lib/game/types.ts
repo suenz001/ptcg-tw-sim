@@ -755,6 +755,16 @@ export interface GameState {
   openingChoicePending?: [boolean, boolean];
   /** 該座位的起手手牌已定案（有基礎寶可夢、或已選擇用閃焰王牌開局）。 */
   openingDone?: [boolean, boolean];
+  /**
+   * v6.053 批3：開局結果已結算（`finalizeOpening` 跑過）＝ 重抽次數已換算成
+   * `pendingMulliganDraw` / `mulliganRevealConfirmed`。
+   *
+   * ⚠這個旗標是**線上合併的關鍵**：休閒線上是雙端各自 applyAction 後推整份盤面，
+   *   結算只會發生在其中一端。沒有旗標的話，收端無從分辨
+   *   「pendingMulliganDraw=[0,0] 是還沒結算」還是「結算完、玩家也已經領完補抽」
+   *   → 前者要採對方的結算結果，後者若重跑結算會**把補抽重新發一次**（作弊面）。
+   */
+  openingFinalized?: boolean;
   /** 行動紀錄（給 UI 顯示用） */
   log: LogEntry[];
   /** 勝者（game-over 時填入） */

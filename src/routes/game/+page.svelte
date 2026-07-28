@@ -2702,16 +2702,25 @@
   // v5.643 setup「誰該動作」— 與伺服器 currentActorSeat 同一套邏輯(敗場判定/UI 提示一致):
   //   放出場階段 mulligan 較少方先放(較多方等);雙方 setupDone 後才進揭示確認/補抽。回 0/1=該方,-1=雙方(都該動)。
   function setupActorSeat(g: any): 0 | 1 | -1 {
-    // v6.051 批2：互動式開局尚未定案時，「該動作的人」＝還要做選擇的那一側（雙方都要選 → -1）。
-    //   ⚠伺服器 currentActorSeat 尚未同步（批4）。但線上／錦標賽目前一律 forceLegacyOpening，
-    //     openingChoicePending 在那些模式恆為 undefined → 這條分支是死碼，不會造成閒置判負分歧。
+    const sd0 = !!g?.setupDone?.[0], sd1 = !!g?.setupDone?.[1];
+    // v6.051 批2 / v6.053 批3：互動式開局尚未定案時，「該動作的人」＝還要做選擇的那一側
+    //   （雙方都要選 → -1，閒置判負對 -1 不單判任一方）。
+    //   ⚠必須排在下面的 mulligan 次數比較之前：opening 期間雙方 setupDone 都是 false，
+    //     舊邏輯會走 `m0 !== m1` 分支回傳「重抽次數較少」那一側 —— 但那一側往往正是
+    //     **已經選完在等待**的人，而他被引擎的 opening gate 擋住什麼都不能做
+    //     → 3 分鐘後被誤判閒置敗（v0.60/v0.62/v0.67/v0.74 同款事故的第五種路徑）。
+    //   ⚠判準要和 effectiveOpeningDone 一致：舊版 client（沒有 opening 流程）會直接
+    //     PLACE_ACTIVE + FINISH_SETUP，它的 openingChoicePending 永遠停在 true，
+    //     只看 pending 會把「其實已經完成」的舊 client 誤判成掛機。
+    //   ⚠與伺服器 currentActorSeat 逐行同步（閒置判負用）。
     const _oc = g?.openingChoicePending;
-    if (_oc && (_oc[0] || _oc[1])) {
-      if (_oc[0] && !_oc[1]) return 0;
-      if (_oc[1] && !_oc[0]) return 1;
+    const _oPend0 = !!(_oc && _oc[0]) && !sd0;
+    const _oPend1 = !!(_oc && _oc[1]) && !sd1;
+    if (_oPend0 || _oPend1) {
+      if (_oPend0 && !_oPend1) return 0;
+      if (_oPend1 && !_oPend0) return 1;
       return -1;
     }
-    const sd0 = !!g?.setupDone?.[0], sd1 = !!g?.setupDone?.[1];
     const pmd = g?.pendingMulliganDraw ?? [0, 0];
     const mrc = g?.mulliganRevealConfirmed ?? [true, true];
     const mpb = g?.mulliganPostBenchOpen ?? [false, false];
@@ -5516,7 +5525,7 @@
     // - 本機雙人：擲幣 + 套贏家偏好（與線上同邏輯）
     // v6.051 批2：本機／AI 已接好選擇視窗 → 這條路開放互動式開局。
     //   引擎端仍只在「雙方牌組任一含瞬間爆發力」時才走新流程，其餘對局逐欄位 0 diff。
-    //   線上（6049）／錦標賽仍傳 forceLegacyOpening: true，待批3／批4。
+    //   v6.053 批3／批4：線上與錦標賽也已放行，全站統一。
     let createOpts: Parameters<typeof createGame>[3] = {};
     if (aiPlayerIndex !== null) {
       const humanIdx = (1 - aiPlayerIndex) as 0 | 1;
@@ -6066,7 +6075,7 @@
       { name: p1.name ?? 'P1', entries: p1.deckEntries },
       { name: p2.name ?? 'P2', entries: p2.deckEntries },
       pool,
-      { firstChoicePreferences: prefs, forceLegacyOpening: true },  // v6.051 批1：線上暫走舊開局
+      { firstChoicePreferences: prefs },  // v6.053 批3：休閒線上放行互動式開局
     );
     // v5.492：先確認本端 startGame transaction 是否 commit（成為房間 canonical 局）才採用本地 game。
     //   再來一局/開局時雙方各自 createGame race（不同 id），輸掉 transaction 的一端若先用自己的

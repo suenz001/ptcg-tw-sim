@@ -2907,8 +2907,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const d0 = { name: (names && names[0]) || 'P1', entries: decks[0] };
       const d1 = { name: (names && names[1]) || 'P2', entries: decks[1] };
       const fc = Array.isArray(prefs) ? [prefs[0] || 'random', prefs[1] || 'random'] : ['random', 'random'];
-      // v6.051 批1：錦標賽暫走舊開局（互動式先只在本機驗證，之後才逐條打開）
-      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: fc, forceLegacyOpening: true });
+      // v6.053 批4：錦標賽放行互動式開局（伺服器權威，client 送 OPENING_* → 這裡 applyAction）
+      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: fc });
     }
     // ── 伺服器權威 actor gate：防止玩家替對手送動作 ──
     function canSeatAct(gs, seat, action) {
@@ -2933,6 +2933,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   mulligan「較少」方先放戰鬥場+按準備,較多方需等(engine PLACE_ACTIVE 擋 myMul>oppMul && !setupDone[opp])
         //   →較少方未準備=較少方該動(較多方在等);②雙方都 setupDone 後才進揭示確認/補抽,欠者該動。
         const sd0 = !!(gs.setupDone && gs.setupDone[0]), sd1 = !!(gs.setupDone && gs.setupDone[1]);
+        // v6.053 批4：互動式開局（閃焰王牌｜瞬間爆發力）尚未定案 → 該動作的是「還要做選擇」那一側。
+        //   ⚠必須排在下面的 mulligan 次數比較之前。實測（v6.053 前的碼）：
+        //     openingChoicePending=[true,false]、mulliganCounts=[1,0]、雙方 setupDone=false 時，
+        //     舊邏輯走 m0!==m1 分支回傳 lessIdx=1 —— 但座位 1 已經選完在等，且被引擎的
+        //     opening gate 擋住什麼都不能做 → 3 分鐘後**等待方**被誤判閒置敗。
+        //     這是 v0.60/v0.62/v0.67/v0.74 同款事故的第五種路徑。
+        //   ⚠判準含「尚未 setupDone」：舊版 client 沒有 opening 流程，會直接 PLACE_ACTIVE +
+        //     FINISH_SETUP，它的 openingChoicePending 永遠停在 true；只看 pending 會把
+        //     「其實已經完成」的舊 client 誤判成掛機（與引擎 effectiveOpeningDone 同一判準）。
+        //   ⚠與前端 setupActorSeat 逐行同步。
+        const oc = gs.openingChoicePending;
+        const oPend0 = !!(oc && oc[0]) && !sd0;
+        const oPend1 = !!(oc && oc[1]) && !sd1;
+        if (oPend0 || oPend1) {
+          if (oPend0 && !oPend1) return 0;
+          if (oPend1 && !oPend0) return 1;
+          return -1;
+        }
         const pmd = gs.pendingMulliganDraw || [0, 0];
         const mrc = gs.mulliganRevealConfirmed || [true, true];
         const mpb = gs.mulliganPostBenchOpen || [false, false];

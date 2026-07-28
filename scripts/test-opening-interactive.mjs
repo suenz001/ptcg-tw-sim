@@ -183,17 +183,17 @@ T('⭐feature flag 存在且目前為開（關掉即全站回到舊流程）', (
 });
 
 // ── v6.051 批2：本機／AI 接上選擇視窗；線上／錦標賽仍鎖在舊流程 ────────────
-T('⭐⭐批2：線上／房間／錦標賽三個呼叫端仍鎖 forceLegacyOpening（尚未接 UI，接了會卡死）', () => {
-  const files = ['src/lib/game/room.ts', 'src/lib/game/room-oracle.ts',
-    'oracle-admin/server_admin_patch.js'];
+T('⭐⭐批3：全站五個 createGame 呼叫端一致放行（互動式的分流只由引擎的牌組判定決定）', () => {
+  // v6.051 批1 全部鎖 legacy → v6.052 批2 放行本機／AI → v6.053 批3/4 放行線上與錦標賽。
+  // 逃生口只剩「引擎頂層的 INTERACTIVE_OPENING_ENABLED」一個總開關（見下一案）。
+  const files = ['src/routes/game/+page.svelte', 'src/lib/game/room.ts',
+    'src/lib/game/room-oracle.ts', 'oracle-admin/server_admin_patch.js'];
   for (const f of files) {
     const src = readFileSync(join(ROOT, f), 'utf8');
-    assert.ok(src.includes('forceLegacyOpening'), `${f} 應傳 forceLegacyOpening`);
+    const bad = src.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
+      && !/^\s*(\/\/|\*|\/\*)/.test(ln));
+    assert.equal(bad.length, 0, `${f} 仍鎖著 forceLegacyOpening`);
   }
-  // 對戰頁有兩個 createGame：本機／AI（已放行）與線上（仍鎖）
-  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-  assert.ok(pg.includes('forceLegacyOpening: true },  // v6.051 批1：線上暫走舊開局'),
-    '對戰頁的線上 createGame 仍應鎖 forceLegacyOpening');
 });
 
 T('⭐⭐批2：本機／AI 的 createOpts 已不再傳 forceLegacyOpening（否則新流程永不生效）', () => {
@@ -234,8 +234,10 @@ T('⭐批2：本機雙人視角切換與 setupActorSeat 都認得 openingChoiceP
   // setupActorSeat：新分支必須在 sd0/sd1 之前 return
   const seat = pg.slice(pg.indexOf('function setupActorSeat'), pg.indexOf('const isMyTurn'));
   assert.ok(seat.includes('openingChoicePending'), 'setupActorSeat 沒接 openingChoicePending');
-  assert.ok(seat.indexOf('openingChoicePending') < seat.indexOf('const sd0'),
-    'openingChoicePending 分支必須排在 setupDone 判斷之前');
+  // v6.053 批3：分支要讀 setupDone（舊版 client 逃生），所以排在 sd0 宣告「之後」，
+  //   但必須排在 mulligan 次數比較（lessIdx）之前 —— 否則等待方會被誤判閒置敗。
+  assert.ok(seat.indexOf('_oPend0') < seat.indexOf('lessIdx'),
+    'openingChoicePending 分支必須排在 mulligan 次數比較之前');
   // AI 排程 gate 兩處都要補（tickAI + $effect）
   const n = pg.split('!!g.openingChoicePending?.[ai]').length - 1;
   assert.equal(n, 2, `AI 排程 gate 應有 2 處，實際 ${n}`);

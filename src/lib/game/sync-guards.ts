@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { GameState } from './types';
-import { tryAdvanceToPlaying } from './engine';
+import { tryAdvanceToPlaying, effectiveOpeningDone, ensureOpeningFinalized } from './engine';
 
 /**
  * 推送端防舊（room-oracle.ts pushGameState，v5.346）。
@@ -152,6 +152,10 @@ export function resolveRoomUpdate(
   if (local && local.phase === 'setup' && incoming.phase === 'setup'
       && ctx.myPlayerIndex !== null) {
     let merged = mergeSetupMonotonic(local, incoming, ctx.myPlayerIndex);
+    // v6.053 批3：互動式開局的結算必須在**合併之後**再跑一次。
+    //   雙方同時各做一次選擇時，兩端本地都只看到單邊 done → 誰都不會在 applyAction 裡結算；
+    //   要等合併把雙方的 openingDone 湊齊，這裡才算得出來。冪等（靠 openingFinalized 旗標）。
+    merged = ensureOpeningFinalized(merged);
     const advanced = tryAdvanceToPlaying(merged);
     if (advanced.phase === 'playing') {
       return { kind: 'merge-setup', game: advanced, advanced: true };
@@ -183,7 +187,7 @@ export function mergeSetupMonotonic(
   incoming: GameState,
   me: 0 | 1,
 ): GameState {
-  return {
+  const base: GameState = {
     ...incoming,
     players: (me === 0
       ? [local.players[0], (local.setupDone[1] && !incoming.setupDone[1]) ? local.players[1] : incoming.players[1]]
@@ -203,6 +207,100 @@ export function mergeSetupMonotonic(
     mulliganPostBenchOpen: (me === 0
       ? [local.mulliganPostBenchOpen?.[0] ?? false, incoming.mulliganPostBenchOpen?.[1] ?? false]
       : [incoming.mulliganPostBenchOpen?.[0] ?? false, local.mulliganPostBenchOpen?.[1] ?? false]) as [boolean, boolean],
+  };
+  // v6.053 批3：非互動式開局（全站絕大多數對局）到此為止 —— 逐欄位與 v6.052 以前完全相同。
+  if (local.openingFlow !== 'interactive' && incoming.openingFlow !== 'interactive') return base;
+  return mergeInteractiveOpening(local, incoming, base);
+}
+
+/**
+ * v6.053 批3：互動式開局（閃焰王牌｜瞬間爆發力）在 setup 合併時的額外規則。
+ *
+ * ⭐核心不變式：**一個座位的開局進度只有該座位的玩家能推進**，而且是單調的
+ *   （`mulliganCounts` 只增、`openingDone` 只 false→true）。因此每個座位都可以獨立地
+ *   「取較前進的那一份」，兩端最終必然收斂到同一結果，不需要誰等誰。
+ *
+ * ⚠**同源原則（避免縫合怪）**：`players[i]` / `mulliganCounts[i]` / `mulliganRevealedHands`
+ *   的第 i 半必須來自**同一份 snapshot**。若各欄位各自取極值，會做出「重抽次數是新的、
+ *   手牌卻是舊的」這種現實中不存在的盤面 —— 對手能多抽幾張就會算錯。
+ *   本函式用單一述詞 `oppLocalAhead` 同時決定這三個欄位。
+ *
+ * ⚠`setupDone` / `mulliganPostBenchOpen` / `players` 的己側規則**沿用** base（legacy），
+ *   因為開局定案之後玩家還會繼續擺場，那段的權威規則不變。
+ */
+function mergeInteractiveOpening(
+  local: GameState,
+  incoming: GameState,
+  base: GameState,
+): GameState {
+  const lDone = effectiveOpeningDone(local);
+  const iDone = effectiveOpeningDone(incoming);
+  const lCnt = local.mulliganCounts ?? [0, 0];
+  const iCnt = incoming.mulliganCounts ?? [0, 0];
+  const lRev = local.mulliganRevealedHands ?? { p1: [], p2: [] };
+  const iRev = incoming.mulliganRevealedHands ?? { p1: [], p2: [] };
+
+  /**
+   * 座位 i：本地是否比 incoming 更前進（→ 保留本地那一半，防 stale 回退）。
+   * 判準依序：已定案 > 重抽次數 > 已按準備。
+   * （三者都是單調量；同一座位的兩份 snapshot 必有偏序，不會互相矛盾 ——
+   *   定案之後不可能再重抽，所以不存在「done 較舊但 counts 較新」的組合。）
+   */
+  const localAhead = (i: 0 | 1): boolean =>
+    (lDone[i] && !iDone[i])
+    || (lCnt[i] > iCnt[i])
+    || (!!local.setupDone?.[i] && !incoming.setupDone?.[i]);
+
+  const ahead: [boolean, boolean] = [localAhead(0), localAhead(1)];
+  const pick = <T,>(i: 0 | 1, l: T, inc: T): T => (ahead[i] ? l : inc);
+
+  const players = [
+    pick(0, local.players[0], incoming.players[0]),
+    pick(1, local.players[1], incoming.players[1]),
+  ] as GameState['players'];
+  const mulliganCounts = [
+    pick(0, lCnt[0], iCnt[0]),
+    pick(1, lCnt[1], iCnt[1]),
+  ] as [number, number];
+  const mulliganRevealedHands = {
+    p1: pick(0, lRev.p1 ?? [], iRev.p1 ?? []),
+    p2: pick(1, lRev.p2 ?? [], iRev.p2 ?? []),
+  };
+  const openingDone: [boolean, boolean] = [
+    !!((local.openingDone?.[0] ?? false) || (incoming.openingDone?.[0] ?? false)),
+    !!((local.openingDone?.[1] ?? false) || (incoming.openingDone?.[1] ?? false)),
+  ];
+  // `pending` 與 `done` 在引擎裡恆為互補（createGame 與兩個 handler 三處都這樣寫），
+  // 直接導出即可，少一條合併規則就少一個洞。用 effective done（含 skew 逃生）。
+  const effDone: [boolean, boolean] = [
+    openingDone[0] || !!base.setupDone?.[0],
+    openingDone[1] || !!base.setupDone?.[1],
+  ];
+
+  // ⭐結算後才寫入的兩個欄位（pendingMulliganDraw / mulliganRevealConfirmed）不能用
+  //   legacy 的 MIN / OR：
+  //   ・MIN：一端結算出 [2,0]、另一端還是 [0,0] → MIN 把補抽整個吃掉（靜默少抽，公平性）
+  //   ・OR ：`mulliganRevealConfirmed` 在互動式下**不是單調的** —— createGame 先用「當下
+  //         次數」算過一次（雙方 0 次時是 [true,true]），finalizeOpening 再用「最終次數」
+  //         重算，可能 true→false。OR 會把 stale 的 true 復活 → 跳過對手的揭示確認。
+  //   修法：只有「兩端結算狀態相同」時才用 legacy 規則；恰一端結算過就整組採該端。
+  const lFin = !!local.openingFinalized;
+  const iFin = !!incoming.openingFinalized;
+  const finSrc = lFin === iFin ? null : (lFin ? local : incoming);
+
+  return {
+    ...base,
+    players,
+    mulliganCounts,
+    mulliganRevealedHands,
+    openingDone,
+    openingChoicePending: [!effDone[0], !effDone[1]] as [boolean, boolean],
+    openingFinalized: lFin || iFin,
+    openingFlow: 'interactive',
+    ...(finSrc ? {
+      pendingMulliganDraw: [...(finSrc.pendingMulliganDraw ?? [0, 0])] as [number, number],
+      mulliganRevealConfirmed: [...(finSrc.mulliganRevealConfirmed ?? [true, true])] as [boolean, boolean],
+    } : {}),
   };
 }
 
