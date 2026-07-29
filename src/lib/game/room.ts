@@ -896,8 +896,8 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
         { name: p1.name ?? 'P1', entries: p1.deckEntries },
         { name: p2.name ?? 'P2', entries: p2.deckEntries },
         pool,
-        // ⚠v6.054 止血：與建局端一致，暫時退回舊開局
-        { firstChoicePreferences: prefs, forceLegacyOpening: true },
+        // v6.057：與建局端一致，放行互動式開局
+        { firstChoicePreferences: prefs },
       );
       tx.update(ref, {
         gameState: JSON.parse(JSON.stringify(newGame)),

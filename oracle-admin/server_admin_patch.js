@@ -2907,8 +2907,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const d0 = { name: (names && names[0]) || 'P1', entries: decks[0] };
       const d1 = { name: (names && names[1]) || 'P2', entries: decks[1] };
       const fc = Array.isArray(prefs) ? [prefs[0] || 'random', prefs[1] || 'random'] : ['random', 'random'];
-      // ⚠v6.054 止血：錦標賽暫時退回舊開局（與休閒線上一致；currentActorSeat 的修正保留）
-      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: fc, forceLegacyOpening: true });
+      // v6.057：錦標賽放行互動式開局（伺服器權威；client 送 OPENING_* → 這裡 applyAction）
+      //   ⚠需跑 update-tournament.bat 重建 server-engine.cjs 才生效。
+      return TENG.createGame(d0, d1, TPOOL, { firstChoicePreferences: fc });
     }
     // ── 伺服器權威 actor gate：防止玩家替對手送動作 ──
     function canSeatAct(gs, seat, action) {

@@ -946,11 +946,19 @@
   /** v6.055 診斷：卡包載入自我重呼叫的次數（防無聲無限重試）。 */
   let _poolRetry = 0;
   /**
-   * v6.055 診斷開關：網址帶 `?opening=1` 才在**休閒線上**放行互動式開局（閃焰王牌）。
-   * 用途是重現「雙方按準備後卡在建局」的回報。沒帶參數的一般玩家完全不受影響。
+   * 互動式開局（閃焰王牌｜瞬間爆發力）的逃生開關。
+   *
+   * v6.057：**預設放行**。網址帶 `?opening=0` 可強制退回舊開局 ——
+   * 這是留給 Wilson 的即時逃生口：萬一線上開局出問題，不必等我改版，
+   * 開房時網址加 `?opening=0` 就能立刻用舊流程開一局。
+   *
+   * ⚠**只有「建局方」（房主，seat 0）帶這個參數才有意義** —— 局走哪一套是建局那一刻
+   *   由 `createGame` 決定並寫進盤面，加入方之後只是收盤面。
+   *   （v6.055 用 `?opening=1` 當「開啟」開關就是踩到這點：玩家分不清自己是不是建局方，
+   *     參數帶在加入方身上完全無效，看起來就像功能沒生效。）
    */
-  const openingDiagMode = typeof location !== 'undefined'
-    && new URLSearchParams(location.search).get('opening') === '1';
+  const forceLegacyOpeningParam = typeof location !== 'undefined'
+    && new URLSearchParams(location.search).get('opening') === '0';
   let isSyncing     = $state(false);
   /** v2.269：從 roomData.seats 推導 — 0=P1, 1=P2, null=觀戰或未在房 */
   let myPlayerIndex = $state<0 | 1 | null>(null);
@@ -6093,15 +6101,15 @@
     ];
     // ⚠v6.054 止血：休閒線上預設退回舊開局（v6.053 實測雙方按準備後卡在建局）。
     //   v6.053 的合併規則／錦標賽閒置判定修正全部保留 —— 它們對舊開局是 0 diff，無害。
-    // v6.055 診斷：網址加 `?opening=1` 才放行互動式開局，供重現這個 bug 用。
-    //   一般玩家（沒有這個參數）完全走舊流程，不受任何影響。
+    // v6.057：線上正式放行互動式開局（引擎端仍只在「雙方牌組任一含瞬間爆發力」時生效）。
+    //   `?opening=0` 為即時逃生口。
     let newGame: GameState;
     try {
       newGame = createGame(
         { name: p1.name ?? 'P1', entries: p1.deckEntries },
         { name: p2.name ?? 'P2', entries: p2.deckEntries },
         pool,
-        { firstChoicePreferences: prefs, forceLegacyOpening: !openingDiagMode },
+        { firstChoicePreferences: prefs, forceLegacyOpening: forceLegacyOpeningParam },
       );
     } catch (err) {
       // 原本 createGame 沒有 try/catch —— 它一拋例外，整個 checkAndStartOnlineGame 就中斷，

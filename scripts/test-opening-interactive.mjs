@@ -183,24 +183,23 @@ T('⭐feature flag 存在且目前為開（關掉即全站回到舊流程）', (
 });
 
 // ── v6.051 批2：本機／AI 接上選擇視窗；線上／錦標賽仍鎖在舊流程 ────────────
-T('⭐⭐v6.054 止血：線上／再來一局／錦標賽三處鎖回舊開局，本機／AI 維持放行', () => {
-  // v6.053 把線上與錦標賽也放行，但實測「雙方按準備後卡在建局」→ 先鎖回已知穩定的組合。
-  // ⚠這一案就是止血狀態的鎖：根因修好、線上實測通過之前，不可以把這三處放行。
+T('⭐⭐v6.057：全站五個 createGame 呼叫端一致放行（分流只由引擎的牌組判定決定）', () => {
+  // v6.051 全鎖 → v6.052 放行本機/AI → v6.053 放行線上(後因 Firestore 巢狀陣列事故止血)
+  // → v6.056 修好底層 → v6.057 正式全站放行。
   for (const f of ['src/lib/game/room.ts', 'src/lib/game/room-oracle.ts',
     'oracle-admin/server_admin_patch.js']) {
     const src = readFileSync(join(ROOT, f), 'utf8');
     const live = src.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
       && !/^\s*(\/\/|\*|\/\*)/.test(ln));
-    assert.ok(live.length >= 1, `${f} 應鎖 forceLegacyOpening`);
+    assert.equal(live.length, 0, `${f} 不應再鎖 forceLegacyOpening`);
   }
-  // v6.055：對戰頁的線上建局改成「預設鎖、網址帶 ?opening=1 才放行」——這是重現用的診斷開關，
-  //   一般玩家不帶參數就等同 forceLegacyOpening: true。
   const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-  assert.ok(pg.includes('forceLegacyOpening: !openingDiagMode'),
-    '對戰頁的線上 createGame 應由 openingDiagMode 控制（預設鎖）');
-  assert.ok(/const openingDiagMode[^\n]*\n?[^\n]*opening'\) === '1'/.test(pg),
-    'openingDiagMode 必須來自網址參數 ?opening=1，預設為 false');
-  // 本機／AI 那一個 createOpts 仍不得帶 forceLegacyOpening
+  // 線上建局改由「逃生參數」控制：預設 false（＝放行），?opening=0 才強制舊開局
+  assert.ok(pg.includes('forceLegacyOpening: forceLegacyOpeningParam'),
+    '線上 createGame 應由 forceLegacyOpeningParam 控制');
+  assert.ok(pg.includes("get('opening') === '0'"),
+    '⚠逃生參數必須是 ?opening=0（預設放行）。v6.055 用 ?opening=1 當開啟開關，'
+    + '但參數只有「建局方」帶才有效，玩家分不清自己是不是建局方 → 看起來像功能沒生效。');
   const seg = pg.slice(pg.indexOf('let createOpts'), pg.indexOf('game = createGame('));
   assert.ok(!seg.includes('forceLegacyOpening'), '本機／AI 不應鎖 forceLegacyOpening');
 });
