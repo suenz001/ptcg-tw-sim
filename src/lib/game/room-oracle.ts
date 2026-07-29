@@ -467,7 +467,8 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
         { name: p1.name ?? 'P1', entries: p1.deckEntries },
         { name: p2.name ?? 'P2', entries: p2.deckEntries },
         pool,
-        { firstChoicePreferences: prefs },  // v6.053 批3：再來一局同樣放行（與建局端一致）
+        // ⚠v6.054 止血：與建局端一致，暫時退回舊開局
+        { firstChoicePreferences: prefs, forceLegacyOpening: true },
       );
       didReset = true;
       return {

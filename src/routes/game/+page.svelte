@@ -6075,7 +6075,9 @@
       { name: p1.name ?? 'P1', entries: p1.deckEntries },
       { name: p2.name ?? 'P2', entries: p2.deckEntries },
       pool,
-      { firstChoicePreferences: prefs },  // v6.053 批3：休閒線上放行互動式開局
+      // ⚠v6.054 止血：休閒線上暫時退回舊開局（v6.053 實測雙方按準備後卡在建局，根因調查中）。
+      //   v6.053 的合併規則／錦標賽閒置判定修正全部保留 —— 它們對舊開局是 0 diff，無害。
+      { firstChoicePreferences: prefs, forceLegacyOpening: true },
     );
     // v5.492：先確認本端 startGame transaction 是否 commit（成為房間 canonical 局）才採用本地 game。
     //   再來一局/開局時雙方各自 createGame race（不同 id），輸掉 transaction 的一端若先用自己的

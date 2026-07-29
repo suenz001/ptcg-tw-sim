@@ -183,17 +183,20 @@ T('⭐feature flag 存在且目前為開（關掉即全站回到舊流程）', (
 });
 
 // ── v6.051 批2：本機／AI 接上選擇視窗；線上／錦標賽仍鎖在舊流程 ────────────
-T('⭐⭐批3：全站五個 createGame 呼叫端一致放行（互動式的分流只由引擎的牌組判定決定）', () => {
-  // v6.051 批1 全部鎖 legacy → v6.052 批2 放行本機／AI → v6.053 批3/4 放行線上與錦標賽。
-  // 逃生口只剩「引擎頂層的 INTERACTIVE_OPENING_ENABLED」一個總開關（見下一案）。
-  const files = ['src/routes/game/+page.svelte', 'src/lib/game/room.ts',
-    'src/lib/game/room-oracle.ts', 'oracle-admin/server_admin_patch.js'];
-  for (const f of files) {
+T('⭐⭐v6.054 止血：線上／再來一局／錦標賽三處鎖回舊開局，本機／AI 維持放行', () => {
+  // v6.053 把線上與錦標賽也放行，但實測「雙方按準備後卡在建局」→ 先鎖回已知穩定的組合。
+  // ⚠這一案就是止血狀態的鎖：根因修好、線上實測通過之前，不可以把這三處放行。
+  for (const f of ['src/lib/game/room.ts', 'src/lib/game/room-oracle.ts',
+    'oracle-admin/server_admin_patch.js']) {
     const src = readFileSync(join(ROOT, f), 'utf8');
-    const bad = src.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
+    const live = src.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
       && !/^\s*(\/\/|\*|\/\*)/.test(ln));
-    assert.equal(bad.length, 0, `${f} 仍鎖著 forceLegacyOpening`);
+    assert.ok(live.length >= 1, `${f} 應鎖 forceLegacyOpening`);
   }
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  const live = pg.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
+    && !/^\s*(\/\/|\*|\/\*)/.test(ln));
+  assert.equal(live.length, 1, '對戰頁應恰好鎖住「線上」那一個 createGame（本機／AI 仍放行）');
 });
 
 T('⭐⭐批2：本機／AI 的 createOpts 已不再傳 forceLegacyOpening（否則新流程永不生效）', () => {

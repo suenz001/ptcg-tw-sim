@@ -337,14 +337,13 @@ T('*前端 setupActorSeat 與伺服器 currentActorSeat 逐行同步（含 openi
   }
 });
 
-T('*線上／錦標賽的 createGame 呼叫端都已放行（漏一處＝開新房互動、再來一局 legacy）', () => {
-  for (const f of ['src/routes/game/+page.svelte', 'src/lib/game/room.ts',
-    'src/lib/game/room-oracle.ts', 'oracle-admin/server_admin_patch.js']) {
+T('*v6.054 止血：線上三處與錦標賽鎖回舊開局（合併規則本身仍全部生效、可隨時再放行）', () => {
+  for (const f of ['src/lib/game/room.ts', 'src/lib/game/room-oracle.ts',
+    'oracle-admin/server_admin_patch.js']) {
     const src = readFileSync(join(ROOT, f), 'utf8');
-    // 只看真正的程式碼行（註解裡提到欄位名不算）
-    const bad = src.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
+    const live = src.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
       && !/^\s*(\/\/|\*|\/\*)/.test(ln));
-    assert.equal(bad.length, 0, f + ' 仍鎖著 forceLegacyOpening：' + bad.join(' | '));
+    assert.ok(live.length >= 1, f + ' 應鎖 forceLegacyOpening');
   }
 });
 
