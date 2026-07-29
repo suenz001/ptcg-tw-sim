@@ -225,8 +225,10 @@ export function mergeSetupMonotonic(
  *   手牌卻是舊的」這種現實中不存在的盤面 —— 對手能多抽幾張就會算錯。
  *   本函式用單一述詞 `oppLocalAhead` 同時決定這三個欄位。
  *
- * ⚠`setupDone` / `mulliganPostBenchOpen` / `players` 的己側規則**沿用** base（legacy），
- *   因為開局定案之後玩家還會繼續擺場，那段的權威規則不變。
+ * ⚠`setupDone` / `mulliganPostBenchOpen` 沿用 base（legacy）。
+ * ⚠`players[i]`：**只在該座位的開局尚未雙方定案時**才用 pick；一旦雙定案就回到 base
+ *   （己側恆 local）—— 定案後玩家還要繼續擺場／領補抽，那段的權威規則必須是 legacy。
+ *   v6.057 以前這裡整組用 pick，造成己側進度被對手的正常 push 洗掉（見 bothSettled 註解）。
  */
 function mergeInteractiveOpening(
   local: GameState,
@@ -254,9 +256,24 @@ function mergeInteractiveOpening(
   const ahead: [boolean, boolean] = [localAhead(0), localAhead(1)];
   const pick = <T,>(i: 0 | 1, l: T, inc: T): T => (ahead[i] ? l : inc);
 
+  /**
+   * ⚠⚠v6.058：**開局定案之後，`players[i]` 必須回到 legacy 規則（己側恆 local）**。
+   *
+   * v6.057 以前整組走 pick，於是在「雙方都定案、重抽次數相等、setupDone 也相等」時
+   * `localAhead(me)` 三項全 false → 己側採 incoming ＝ 對手端最後看到的你（必然較舊）。
+   * 但開局定案後玩家還要繼續擺場、領補抽、按準備 —— 這些進度就會被對手的每一次
+   * 正常 push 洗掉。實測兩個後果：
+   *   R1 剛放上戰鬥場的寶可夢被洗回手牌（active → null）
+   *   R2 剛領到的補抽被洗回、而 `pendingMulliganDraw` 已歸 0 → **永久少抽**（公平性）
+   * ⚠這不是罕見時序：setup 階段雙方每個動作都會 push（dispatch 的 canIPush 對 setup 一律放行），
+   *   對手的 push 幾乎必然夾在你「動作 → push → 收回」的往返之間。
+   *
+   * 判準用 effective done（含版本 skew 逃生），與 `isOpeningInProgress` 同一套。
+   */
+  const bothSettled = (i: 0 | 1): boolean => lDone[i] && iDone[i];
   const players = [
-    pick(0, local.players[0], incoming.players[0]),
-    pick(1, local.players[1], incoming.players[1]),
+    bothSettled(0) ? base.players[0] : pick(0, local.players[0], incoming.players[0]),
+    bothSettled(1) ? base.players[1] : pick(1, local.players[1], incoming.players[1]),
   ] as GameState['players'];
   const mulliganCounts = [
     pick(0, lCnt[0], iCnt[0]),

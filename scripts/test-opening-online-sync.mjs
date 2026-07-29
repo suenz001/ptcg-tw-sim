@@ -24,14 +24,14 @@ const S = join(ROOT, '.x-oos-s.js'), E = join(ROOT, '.x-oos-e.ts'), O = join(ROO
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";export const assets="";');
 writeFileSync(E,
-  "export { createGame, applyAction, isOpeningInProgress, tryAdvanceToPlaying, effectiveOpeningDone, ensureOpeningFinalized } from './src/lib/game/engine';\n"
+  "export { createGame, applyAction, isOpeningInProgress, tryAdvanceToPlaying, effectiveOpeningDone, ensureOpeningFinalized, canBeInitialActiveCard } from './src/lib/game/engine';\n"
   + "export { resolveRoomUpdate, mergeSetupMonotonic, shouldSkipStalePush } from './src/lib/game/sync-guards';\n"
   + "import './src/lib/game/effects';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const {
   createGame, applyAction, isOpeningInProgress, tryAdvanceToPlaying, effectiveOpeningDone,
-  resolveRoomUpdate, mergeSetupMonotonic, shouldSkipStalePush,
+  canBeInitialActiveCard, resolveRoomUpdate, mergeSetupMonotonic, shouldSkipStalePush,
 } = await import(pathToFileURL(O).href);
 
 const dir = join(ROOT, 'static/cards');
@@ -194,6 +194,42 @@ T('結算後確認過揭示，stale 不得把確認狀態洗掉', () => {
   assert.equal(p1.mulliganRevealConfirmed[0], true, '前提：已確認');
   const merged = resolveRoomUpdate(p1, clone(b), CTX(0)).game;
   assert.equal(merged.mulliganRevealConfirmed[0], true, '確認狀態被 stale 洗掉');
+});
+
+// == R1/R2：**開局定案之後**，己側進度不得被對手的正常 push 洗掉 ============
+//   ⚠關鍵差異：incoming 必須是「**已收斂**」的快照（我側 openingDone 也是 true），
+//   而非未收斂的單邊快照 —— 既有案例「結算後領完補抽」用的是後者，localAhead 第一項
+//   就保護到了，因此完全沒測到這個洞。定案後對手的每一次正常 push 都是「已收斂」形態。
+T('**R1：定案後放上戰鬥場，收到對手的收斂快照不得把寶可夢洗回手牌', () => {
+  const g = bothPending();
+  let a = applyAction(clone(g), { type: 'OPENING_KEEP', senderIdx: 0 }, pool);
+  let b = applyAction(clone(g), { type: 'OPENING_KEEP', senderIdx: 1 }, pool);
+  const m = crossMerge(a, b); a = m[0]; b = m[1];
+  assert.ok(a.openingFinalized && b.openingFinalized, '前提：兩端都已結算');
+  const card = a.players[0].hand.find((c) => canBeInitialActiveCard(pool.get(c.cardId)));
+  assert.ok(card, '前提：手上有可放場的卡');
+  const placed = applyAction(a, { type: 'PLACE_ACTIVE', iid: card.iid, senderIdx: 0 }, pool);
+  assert.ok(placed.players[0].active, '前提：已放上戰鬥場');
+  const merged = resolveRoomUpdate(placed, clone(b), CTX(0)).game;
+  assert.ok(merged.players[0].active,
+    '己側已放上戰鬥場的寶可夢被對手的 stale 快照洗掉（active → null）');
+  assert.equal(merged.players[0].active.iid, card.iid, '放上場的必須還是同一隻');
+});
+
+T('**R2：定案後領完補抽，收到對手的收斂快照不得把牌洗回（會永久少抽）', () => {
+  const g = bothPending();
+  let a = applyAction(clone(g), { type: 'OPENING_KEEP', senderIdx: 0 }, pool);
+  let b = mulliganThenKeep(g, 1);
+  const m = crossMerge(a, b); a = m[0]; b = m[1];
+  const n = a.pendingMulliganDraw[0];
+  assert.ok(n >= 1, '前提：P1 有補抽可領');
+  const before = a.players[0].hand.length;
+  const drawn = applyAction(a, { type: 'MULLIGAN_DRAW_DECISION', count: n, senderIdx: 0 }, pool);
+  assert.equal(drawn.players[0].hand.length, before + n, '前提：已領到補抽');
+  const merged = resolveRoomUpdate(drawn, clone(b), CTX(0)).game;
+  assert.equal(merged.players[0].hand.length, before + n,
+    '領到的補抽被洗回、而 pendingMulliganDraw 已歸 0 → 玩家永久少抽（公平性）');
+  assert.equal(merged.pendingMulliganDraw?.[0] ?? 0, 0, '補抽也不該被重新發放');
 });
 
 // == 7-8：版本 skew（漸進部署期一定會發生）================================
