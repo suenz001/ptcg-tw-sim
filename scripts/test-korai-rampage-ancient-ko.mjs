@@ -3,7 +3,9 @@
 //   改用遊戲層級 ancientAttackedIidsLastSelfTurn(存活至KO後)。
 //   ① 讀取：故勒頓 active(場上無其他古代)，但上回合有『別隻』古代使過招(已離場,只在遊戲層級陣列)
 //      → 輪番狂攻 = 180(30+150)。HEAD 只掃場上→30 → HEAD-FAIL。
-//   ② 引擎記錄+promote：古代寶可夢使招→ancientAttackedIidsThisTurn[me] 記其iid；END_TURN→LastSelfTurn。
+//   ② 引擎記錄+promote：古代寶可夢使招→ancientAttackedIidsThisTurn[p1|p2] 記其iid；END_TURN→LastSelfTurn。
+//   ⚠v6.056：形狀由 [string[],string[]] 改為 {p1,p2} —— Firestore 不支援巢狀陣列，舊形狀
+//     會讓整份線上盤面寫不進房間（見 scripts/test-firestore-nested-array.mjs）。
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path'; import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -34,25 +36,25 @@ function base(){
 T('① 上回合別隻古代使過招(已離場,只在遊戲層級) → 輪番狂攻=180', () => {
   const {s}=base();
   // 模擬:上個自己的回合有別隻古代(ghostIid,現已離場)使過招
-  const st={...s, ancientAttackedIidsLastSelfTurn:[['ghost-ancient-iid'],[]], ancientAttackedIidsThisTurn:[[],[]]};
+  const st={...s, ancientAttackedIidsLastSelfTurn:{p1:['ghost-ancient-iid'],p2:[]}, ancientAttackedIidsThisTurn:{p1:[],p2:[]}};
   const r=applyAction(st,{type:'ATTACK',attackIndex:0},pool);
   const dmg=r.players[1].active?.damage ?? 0;
   assert.equal(dmg,180,'應為 30+150=180(古代已離場仍算);實際 '+dmg);
 });
 T('② 場上/遊戲層級都無其他古代使招 → 輪番狂攻=30', () => {
   const {s}=base();
-  const r=applyAction({...s,ancientAttackedIidsLastSelfTurn:[[],[]],ancientAttackedIidsThisTurn:[[],[]]},{type:'ATTACK',attackIndex:0},pool);
+  const r=applyAction({...s,ancientAttackedIidsLastSelfTurn:{p1:[],p2:[]},ancientAttackedIidsThisTurn:{p1:[],p2:[]}},{type:'ATTACK',attackIndex:0},pool);
   assert.equal(r.players[1].active?.damage ?? 0,30,'無古代使招應=30');
 });
 T('③ 只有故勒頓自己上回合使招(同iid,排除) → 輪番狂攻=30', () => {
   const {s,korai}=base();
-  const r=applyAction({...s,ancientAttackedIidsLastSelfTurn:[[korai.iid],[]],ancientAttackedIidsThisTurn:[[],[]]},{type:'ATTACK',attackIndex:0},pool);
+  const r=applyAction({...s,ancientAttackedIidsLastSelfTurn:{p1:[korai.iid],p2:[]},ancientAttackedIidsThisTurn:{p1:[],p2:[]}},{type:'ATTACK',attackIndex:0},pool);
   assert.equal(r.players[1].active?.damage ?? 0,30,'「這隻寶可夢以外」→自身iid應排除=30');
 });
-T('④ 引擎記錄:古代使招→ancientAttackedIidsThisTurn[me] 記其iid', () => {
+T('④ 引擎記錄:古代使招→ancientAttackedIidsThisTurn.p1 記其iid', () => {
   const {s,korai}=base();
   const r=applyAction(s,{type:'ATTACK',attackIndex:0},pool);
-  const arr=r.ancientAttackedIidsThisTurn?.[0] ?? [];
+  const arr=r.ancientAttackedIidsThisTurn?.p1 ?? [];
   assert(arr.includes(korai.iid),'古代故勒頓使招後應記錄其iid;實際 '+JSON.stringify(arr));
 });
 console.log(`\n=== 輪番狂攻 古代KO離場仍增傷(v5.911): ${pass} PASS, ${fail} FAIL ===`);

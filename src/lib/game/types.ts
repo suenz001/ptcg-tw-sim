@@ -910,8 +910,19 @@ export interface GameState {
   oppAttackKOdMeInLastOppTurn?: [number, number];
   // v5.911 輪番狂攻(故勒頓):記錄「古代」寶可夢使招的 iid(遊戲層級,存活至該寶可夢 KO 離場後),
   //   供「在上個自己的回合,若這隻寶可夢以外的古代寶可夢使用了招式」判定(不能只掃場上,KO 會漏)。
-  ancientAttackedIidsThisTurn?: [string[], string[]];
-  ancientAttackedIidsLastSelfTurn?: [string[], string[]];
+  /**
+   * v5.911 輪番狂攻：本回合「古代」寶可夢使過招的 iid（遊戲層級，存活至該寶可夢 KO 離場後）。
+   *
+   * ⚠**v6.056：型別由 `[string[], string[]]` 改為 `{ p1, p2 }` —— Firestore 禁止巢狀陣列**
+   *   （array 的元素不可以再是 array；map 裡包 array 才可以）。原本的形狀讓
+   *   `startGame` / `pushGameState` 的寫入被 Firestore 整包拒收
+   *   （`Nested arrays are not supported`），**休閒線上從 v5.911 起完全建不起對局**，
+   *   而且錯誤只進 console → 畫面永遠停在「⏳ 雙方已準備」。
+   *   同型前例：`mulliganRevealedHands`（v3.741 / v2.84）也是為了這條規則改成 `{ p1, p2 }`。
+   *   新增 per-player 陣列欄位時**一律用 `{ p1, p2 }`，不要用 `T[][]`**（有 lint Check W 擋）。
+   */
+  ancientAttackedIidsThisTurn?: { p1: string[]; p2: string[] };
+  ancientAttackedIidsLastSelfTurn?: { p1: string[]; p2: string[] };
   oppAbilityKOdMeInLastOppTurn?: [number, number];
   oppAttackKOdMyRocketInLastOppTurn?: [number, number];
   oppAbilityKOdMyRocketInLastOppTurn?: [number, number];

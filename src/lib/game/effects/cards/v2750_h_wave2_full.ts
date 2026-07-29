@@ -1381,7 +1381,7 @@ regPre('故勒頓|輪番狂攻', (state, aIdx, pool) => {
   // v5.911：改用遊戲層級 ancientAttackedIidsLastSelfTurn(存活至古代寶可夢 KO 離場後)。
   //   卡面「上個自己的回合,若這隻寶可夢以外的古代寶可夢使用了招式」→ 只要上個自己回合有
   //   『別隻』古代寶可夢使過招即觸發,不論它是否還在場上(舊實作只掃場上 instance,古代被 KO 就漏)。
-  const _ancientIids = state.ancientAttackedIidsLastSelfTurn?.[aIdx] ?? [];
+  const _ancientIids = state.ancientAttackedIidsLastSelfTurn?.[aIdx === 0 ? 'p1' : 'p2'] ?? [];
   const _triggeredIid = _ancientIids.find(iid => iid !== attacker.iid);
   // 場上仍存在的古代寶可夢(供 audit log 顯示;找不到 instance 代表已 KO 離場,仍算觸發)
   const others: CardInstance[] = [

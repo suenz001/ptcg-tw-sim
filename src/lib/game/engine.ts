@@ -712,6 +712,15 @@ function canBeInitialActive(cardId: string, pool: Map<string, Card>): boolean {
   return canBeInitialActiveCard(pool.get(cardId));
 }
 
+/**
+ * v6.056：per-player 欄位在 GameState 裡若寫成 `T[][]`，Firestore 會整包拒收
+ * （`Nested arrays are not supported`）→ 線上對局根本存不進房間。
+ * 因此這類欄位一律用 `{ p1, p2 }`，並用這個 helper 把 seat index 轉成 key。
+ */
+export function ancientKey(idx: 0 | 1): 'p1' | 'p2' {
+  return idx === 0 ? 'p1' : 'p2';
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // v6.051 互動式開局（閃焰王牌｜瞬間爆發力）
 //
@@ -2167,8 +2176,8 @@ export function createGame(
     oppDamageKOdMyHopThisTurn: [0, 0],
     oppDamageKOdMyAxiangThisTurn: [0, 0],
     oppAttackKOdMeInLastOppTurn: [0, 0],
-    ancientAttackedIidsThisTurn: [[], []],
-    ancientAttackedIidsLastSelfTurn: [[], []],
+    ancientAttackedIidsThisTurn: { p1: [], p2: [] },
+    ancientAttackedIidsLastSelfTurn: { p1: [], p2: [] },
     oppAbilityKOdMeInLastOppTurn: [0, 0],
     oppAttackKOdMyRocketInLastOppTurn: [0, 0],
     oppAbilityKOdMyRocketInLastOppTurn: [0, 0],
@@ -6107,12 +6116,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v5.911 輪番狂攻:記錄「古代」寶可夢本回合使招的 iid(遊戲層級,存活至 KO 離場後)
         const _atkCard = pool.get(curAtk.cardId);
         if (_atkCard?.tags?.includes('古代')) {
-          const _prevAnc = newState.ancientAttackedIidsThisTurn ?? [[], []];
-          const _arr = [...(_prevAnc[aIdx] ?? [])];
+          const _k = ancientKey(aIdx);
+          const _prevAnc = newState.ancientAttackedIidsThisTurn ?? { p1: [], p2: [] };
+          const _arr = [...(_prevAnc[_k] ?? [])];
           if (!_arr.includes(curAtk.iid)) _arr.push(curAtk.iid);
-          const _nextAnc: [string[], string[]] = [_prevAnc[0] ?? [], _prevAnc[1] ?? []];
-          _nextAnc[aIdx] = _arr;
-          newState = { ...newState, ancientAttackedIidsThisTurn: _nextAnc };
+          newState = { ...newState, ancientAttackedIidsThisTurn: { ..._prevAnc, [_k]: _arr } };
         }
       }
     }
@@ -6417,13 +6425,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v5.911 輪番狂攻:promote 古代使招 iid ThisTurn→LastSelfTurn(結束方 aIdx),清 ThisTurn。
         //   保留另一方 LastSelfTurn(其上回合古代紀錄,供其下次故勒頓判定)。
         ancientAttackedIidsLastSelfTurn: (() => {
-          const _prev = state.ancientAttackedIidsLastSelfTurn ?? [[], []];
-          const _cur = state.ancientAttackedIidsThisTurn ?? [[], []];
-          const _next: [string[], string[]] = [_prev[0] ?? [], _prev[1] ?? []];
-          _next[aIdx] = _cur[aIdx] ?? [];
-          return _next;
+          const _prev = state.ancientAttackedIidsLastSelfTurn ?? { p1: [], p2: [] };
+          const _cur = state.ancientAttackedIidsThisTurn ?? { p1: [], p2: [] };
+          const _k = ancientKey(aIdx);
+          return { ..._prev, [_k]: _cur[_k] ?? [] };
         })(),
-        ancientAttackedIidsThisTurn: [[], []],
+        ancientAttackedIidsThisTurn: { p1: [], p2: [] },
         oppAbilityKOdMeInLastOppTurn: state.oppAbilityKOdMeThisTurn ?? [0, 0],
         oppAttackKOdMyRocketInLastOppTurn: state.oppAttackKOdMyRocketThisTurn ?? [0, 0],
         oppAbilityKOdMyRocketInLastOppTurn: state.oppAbilityKOdMyRocketThisTurn ?? [0, 0],
