@@ -934,6 +934,10 @@ export async function startGame(
       return true;
     });
   } catch (err) {
+    // v6.055 診斷：原本錯誤只進 console，UI 完全無聲 → 玩家只看到「⏳ 雙方已準備」卡住。
+    //   留一份給對戰頁顯示在畫面上（純診斷，不影響任何流程）。
+    (globalThis as unknown as { __ptcgStartGameError?: string }).__ptcgStartGameError =
+      (err as Error)?.message ?? String(err);
     console.error('startGame transaction failed:', err);
     return false;
   }

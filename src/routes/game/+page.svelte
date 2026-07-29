@@ -943,6 +943,14 @@
   let roomData    = $state<Room | null>(null);
   let onlineLoading = $state(false);
   let onlineError   = $state('');
+  /** v6.055 診斷：卡包載入自我重呼叫的次數（防無聲無限重試）。 */
+  let _poolRetry = 0;
+  /**
+   * v6.055 診斷開關：網址帶 `?opening=1` 才在**休閒線上**放行互動式開局（閃焰王牌）。
+   * 用途是重現「雙方按準備後卡在建局」的回報。沒帶參數的一般玩家完全不受影響。
+   */
+  const openingDiagMode = typeof location !== 'undefined'
+    && new URLSearchParams(location.search).get('opening') === '1';
   let isSyncing     = $state(false);
   /** v2.269：從 roomData.seats 推導 — 0=P1, 1=P2, null=觀戰或未在房 */
   let myPlayerIndex = $state<0 | 1 | null>(null);
@@ -6062,23 +6070,47 @@
     })) return;
 
     // v5.894：建局前確保雙方牌組卡包已載入（完整性 fallback）。缺卡→先載入再自我重呼叫本函式。
+    // v6.055 診斷：這段是「自我重呼叫」迴圈 —— 若某張卡永遠載不進 pool 就會**無聲無限重試**，
+    //   症狀正好是「雙方已準備 ⏳ 但永遠不開始」。加重試上限，超過就把原因寫到畫面上。
     if (!deckEntriesAllInPool(p1.deckEntries, pool) || !deckEntriesAllInPool(p2.deckEntries, pool)) {
+      _poolRetry += 1;
+      if (_poolRetry > 6) {
+        const _miss = [...p1.deckEntries, ...p2.deckEntries]
+          .map((e) => e.cardId).filter((id) => !pool.has(String(id)));
+        onlineError = `建局卡住：牌組卡包載入失敗（已重試 ${_poolRetry - 1} 次）。缺少卡片 id：`
+          + [...new Set(_miss)].slice(0, 8).join('、') + (_miss.length > 8 ? ' …' : '');
+        console.error('[建局診斷] pool 載入失敗', _miss);
+        return;
+      }
       ensurePoolForDeckEntries([p1.deckEntries, p2.deckEntries], true).then(() => checkAndStartOnlineGame());
       return;
     }
+    _poolRetry = 0;
     // v3.75：讀雙方 seat 上的先後攻偏好（贏擲幣的一方套用自己的偏好）
     const prefs: ['random'|'first'|'second'|'opponent', 'random'|'first'|'second'|'opponent'] = [
       p1.firstChoicePreference ?? 'random',
       p2.firstChoicePreference ?? 'random',
     ];
-    const newGame = createGame(
-      { name: p1.name ?? 'P1', entries: p1.deckEntries },
-      { name: p2.name ?? 'P2', entries: p2.deckEntries },
-      pool,
-      // ⚠v6.054 止血：休閒線上暫時退回舊開局（v6.053 實測雙方按準備後卡在建局，根因調查中）。
-      //   v6.053 的合併規則／錦標賽閒置判定修正全部保留 —— 它們對舊開局是 0 diff，無害。
-      { firstChoicePreferences: prefs, forceLegacyOpening: true },
-    );
+    // ⚠v6.054 止血：休閒線上預設退回舊開局（v6.053 實測雙方按準備後卡在建局）。
+    //   v6.053 的合併規則／錦標賽閒置判定修正全部保留 —— 它們對舊開局是 0 diff，無害。
+    // v6.055 診斷：網址加 `?opening=1` 才放行互動式開局，供重現這個 bug 用。
+    //   一般玩家（沒有這個參數）完全走舊流程，不受任何影響。
+    let newGame: GameState;
+    try {
+      newGame = createGame(
+        { name: p1.name ?? 'P1', entries: p1.deckEntries },
+        { name: p2.name ?? 'P2', entries: p2.deckEntries },
+        pool,
+        { firstChoicePreferences: prefs, forceLegacyOpening: !openingDiagMode },
+      );
+    } catch (err) {
+      // 原本 createGame 沒有 try/catch —— 它一拋例外，整個 checkAndStartOnlineGame 就中斷，
+      // 畫面永遠停在「⏳ 雙方已準備」而且什麼都不顯示。這是本次 bug 的頭號嫌疑路徑。
+      const _msg = (err as Error)?.message ?? String(err);
+      onlineError = `建局失敗（createGame）：${_msg}`;
+      console.error('[建局診斷] createGame 拋例外', err);
+      return;
+    }
     // v5.492：先確認本端 startGame transaction 是否 commit（成為房間 canonical 局）才採用本地 game。
     //   再來一局/開局時雙方各自 createGame race（不同 id），輸掉 transaction 的一端若先用自己的
     //   phantom 局抽牌/設置寶可夢，待 canonical 局 push 進來被 adopt → 進度突然回復重洗（v5.457 後症狀）。
@@ -6092,9 +6124,62 @@
         staggerSfx('deal', 7, { delayMs: 350, intervalMs: 110, baseVolume: 0.7 });
       } else {
         console.log('[online] startGame 未 commit（對方已建 canonical 局）→ 不用本地 phantom 局，等同步 adopt');
+        // v6.055 診斷：`won=false` 有兩種意思 —— 「對方先建好了」（正常，稍後會 adopt）
+        //   與「寫入被拒／房間已有殘留盤面」（異常，會永遠卡住）。後者原本完全無聲。
+        const _wErr = (globalThis as any).__ptcgStartGameError;
+        if (_wErr) {
+          onlineError = `建局失敗（startGame 寫入）：${_wErr}`;
+          console.error('[建局診斷] startGame 寫入失敗', _wErr);
+        } else {
+          setTimeout(() => {
+            if (!game && roomData && !roomData.gameState && bothPlayersReady(roomData.seats)) {
+              onlineError = '建局未完成：對方也沒有建立對局（房間仍無盤面）。請雙方重新整理再試一次。';
+            }
+          }, 8000);
+        }
       }
-    }).catch((e) => console.warn('[startGame] failed:', e));
+    }).catch((e) => {
+      const _msg = (e as Error)?.message ?? String(e);
+      onlineError = `建局失敗（startGame）：${_msg}`;
+      console.error('[建局診斷] startGame 拋例外', e);
+    });
   }
+
+  /**
+   * v6.055 建局逾時看門狗。
+   *
+   * 「⏳ 雙方已準備，遊戲即將開始⋯」卡住時，玩家（和我）完全看不到是哪一關沒過 ——
+   * 建局路徑上有好幾個會**無聲 return** 的 gate：
+   *   ① `poolReady` 還是 false（卡包還在載）
+   *   ② 認不出自己的座位（`myUid` 與 seats[].uid 對不起來）→ shouldAttemptStartGame 恆 false
+   *   ③ 牌組卡包缺卡 → `ensurePoolForDeckEntries` 自我重呼叫**無限重試**
+   *   ④ createGame 拋例外／startGame 寫入失敗
+   * 這個看門狗在雙方就緒 12 秒後仍沒有盤面時，把每一關的實際值直接寫到畫面上。
+   * 純診斷，不改變任何流程。
+   */
+  $effect(() => {
+    if (game || !roomData) return;
+    if (roomData.gameState) return;
+    if (roomData.status !== 'lobby') return;
+    if (!bothPlayersReady(roomData.seats)) return;
+    const _rd = roomData;
+    const t = setTimeout(() => {
+      if (game || !roomData || roomData.gameState || roomData.status !== 'lobby') return;
+      if (onlineError) return;   // 已經有更精確的錯誤了就不覆蓋
+      const seat = _rd.seats.findIndex((s) => !!s.uid && s.uid === myUid);
+      const p1 = _rd.seats[0], p2 = _rd.seats[1];
+      const miss = [...(p1?.deckEntries ?? []), ...(p2?.deckEntries ?? [])]
+        .map((e) => String(e.cardId)).filter((id) => !pool.has(id));
+      onlineError = '建局逾時診斷 → '
+        + `我的座位=${seat}${seat < 0 ? '（認不出自己，uid 對不上）' : ''}`
+        + `｜卡池已載入=${poolReady}`
+        + `｜雙方牌組張數=${(p1?.deckEntries?.length ?? 0)}/${(p2?.deckEntries?.length ?? 0)}`
+        + `｜卡池缺卡=${miss.length}${miss.length ? '（' + [...new Set(miss)].slice(0, 6).join('、') + '）' : ''}`
+        + `｜卡包重試=${_poolRetry}`;
+      console.error('[建局診斷] 逾時', { seat, poolReady, miss, _poolRetry, myUid, room: _rd });
+    }, 12000);
+    return () => clearTimeout(t);
+  });
 
   // ── 房間內互動 ─────────────────────────────────────────────────────────
   async function handleTakeSeat(targetIdx: number) {

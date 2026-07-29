@@ -579,6 +579,9 @@ export async function startGame(roomCode: string, gameState: GameState): Promise
     });
     return started;
   } catch (err) {
+    // v6.055 診斷：同 room.ts —— 留一份錯誤給 UI 顯示，否則建局失敗完全無聲。
+    (globalThis as unknown as { __ptcgStartGameError?: string }).__ptcgStartGameError =
+      (err as Error)?.message ?? String(err);
     console.error('[oracle startGame]', err);
     return false;
   }

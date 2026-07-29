@@ -193,10 +193,31 @@ T('⭐⭐v6.054 止血：線上／再來一局／錦標賽三處鎖回舊開局�
       && !/^\s*(\/\/|\*|\/\*)/.test(ln));
     assert.ok(live.length >= 1, `${f} 應鎖 forceLegacyOpening`);
   }
+  // v6.055：對戰頁的線上建局改成「預設鎖、網址帶 ?opening=1 才放行」——這是重現用的診斷開關，
+  //   一般玩家不帶參數就等同 forceLegacyOpening: true。
   const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-  const live = pg.split('\n').filter((ln) => ln.includes('forceLegacyOpening: true')
-    && !/^\s*(\/\/|\*|\/\*)/.test(ln));
-  assert.equal(live.length, 1, '對戰頁應恰好鎖住「線上」那一個 createGame（本機／AI 仍放行）');
+  assert.ok(pg.includes('forceLegacyOpening: !openingDiagMode'),
+    '對戰頁的線上 createGame 應由 openingDiagMode 控制（預設鎖）');
+  assert.ok(/const openingDiagMode[^\n]*\n?[^\n]*opening'\) === '1'/.test(pg),
+    'openingDiagMode 必須來自網址參數 ?opening=1，預設為 false');
+  // 本機／AI 那一個 createOpts 仍不得帶 forceLegacyOpening
+  const seg = pg.slice(pg.indexOf('let createOpts'), pg.indexOf('game = createGame('));
+  assert.ok(!seg.includes('forceLegacyOpening'), '本機／AI 不應鎖 forceLegacyOpening');
+});
+
+T('⭐v6.055 診斷：建局的三條失敗路徑都必須把原因顯示在畫面上（原本全部無聲）', () => {
+  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  assert.ok(pg.includes('建局失敗（createGame）'), 'createGame 拋例外要顯示');
+  assert.ok(pg.includes('建局失敗（startGame'), 'startGame 失敗要顯示');
+  assert.ok(pg.includes('建局卡住：牌組卡包載入失敗'), '卡包無限重試要顯示');
+  assert.ok(pg.includes('_poolRetry'), '卡包重試必須有上限（否則無聲無限迴圈）');
+  for (const f of ['src/lib/game/room.ts', 'src/lib/game/room-oracle.ts']) {
+    const src = readFileSync(join(ROOT, f), 'utf8');
+    assert.ok(src.includes('__ptcgStartGameError'), `${f} 的 startGame catch 要把錯誤留給 UI`);
+  }
+  // 看門狗要涵蓋「函式根本沒被呼叫」（poolReady / 認不出座位）這一類
+  assert.ok(pg.includes('建局逾時診斷'), '缺少建局逾時看門狗');
+  assert.ok(pg.includes('認不出自己，uid 對不上'), '看門狗要能指出 uid 對不上');
 });
 
 T('⭐⭐批2：本機／AI 的 createOpts 已不再傳 forceLegacyOpening（否則新流程永不生效）', () => {
