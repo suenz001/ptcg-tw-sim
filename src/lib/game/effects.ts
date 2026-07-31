@@ -18515,7 +18515,21 @@ export function registerHandRevealAttack(opts: {
 
 import './effects/cards/m6_wave11'; // v6.078 M6 新機制招式 批次11
 import './effects/cards/m6_wave12'; // v6.078 M6 新機制招式 批次12
+
+/**
+ * v6.084：把 local `hitBenchAll` 開放給卡檔用（M6 蓋歐卡｜狂暴漩渦）。
+ * 「對手的所有備戰寶可夢各受到 N 點傷害。[在備戰區不計算弱點・抵抗力。]」
+ * ⚠ 一律走這個中央路徑 —— 內建「不計弱抗」＋太古防壁／太晶備戰免疫等 gate（v5.832）。
+ */
+export function hitBenchAllForCard(
+  state: GameState, attackerIdx: 0 | 1, targetIdx: 0 | 1,
+  amount: number, pool: Map<string, Card>, attackLabel: string,
+): GameState {
+  return hitBenchAll(state, attackerIdx, targetIdx, amount, pool, attackLabel);
+}
+
 import './effects/cards/m6_wave14'; // v6.081 M6 能量加速特性 批次14
+import './effects/cards/m6_wave15'; // v6.084 M6 傳說競技場連動三卡 批次15
 import './effects/cards/m6_wave10'; // v6.072 M6 訓練家實裝 批次10
 import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8

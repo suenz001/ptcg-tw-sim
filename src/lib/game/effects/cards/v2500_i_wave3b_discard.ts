@@ -16,6 +16,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost,
   addLog, updatePlayer,
+  discardActiveStadium,  // v6.084 競技場離場中央出口（帶 activeStadiumPartner）
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { discardOppActiveEnergyPost } from '../../effects'; // v5.801 中央能量丟棄(picker+免疫gate+host-aware)
@@ -65,20 +66,17 @@ function selfDiscardAllEnergyPost(label: string): AttackPostFn {
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: 棄場上競技場
 // ══════════════════════════════════════════════════════════════════════════════
+// v6.084：手刻 inline 收斂到中央 discardActiveStadium（全站競技場離場點 3 → 2）。
+//   原本這份自己清 activeStadium/OwnerIdx，**不知道 activeStadiumPartner 的存在** →
+//   兩張合一的競技場被象牙豬摧毀/筋斗強襲丟掉時第二張會憑空蒸發（卡片守恆破損）。
+//   中央版另外會清 stadiumUsedThisTurn（本來就該清）。
 function discardStadiumPostInline(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     if (!state.activeStadium) {
       return addLog(state, `${label}：場上無競技場`, aIdx);
     }
-    const removed: CardInstance = { ...state.activeStadium };
-    const stadiumName = pool.get(removed.cardId)?.name ?? '?';
-    const ownerIdx = state.activeStadiumOwnerIdx;
-    // v2.994 修 tsc error：GameState 沒有 string index signature，改用 undefined 賦值
-    //  （activeStadium / activeStadiumOwnerIdx 在 types.ts 都是 optional）
-    let s: typeof state = { ...state, activeStadium: undefined, activeStadiumOwnerIdx: undefined };
-    if (ownerIdx === 0 || ownerIdx === 1) {
-      s = updatePlayer(s, ownerIdx, p => ({ ...p, discard: [...p.discard, removed] }));
-    }
+    const stadiumName = pool.get(state.activeStadium.cardId)?.name ?? '?';
+    const s = discardActiveStadium(state, aIdx);
     return addLog(s, `${label}：場上競技場（${stadiumName}）丟棄到棄牌區`, aIdx);
   };
 }

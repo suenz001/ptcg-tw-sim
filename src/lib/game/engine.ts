@@ -922,7 +922,7 @@ import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽�
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
-import { isStadiumPendingImplementation } from './effects/_shared';
+import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium } from './effects/_shared'; // v6.084 兩張合一競技場
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
 // v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
 import { isTrainerPendingImplementation } from './effects';
@@ -3613,7 +3613,16 @@ function handlePlaying(
       return addLog(state, `${trainerCard.name}（${trainerCard.subtype}）效果尚未實裝，暫時無法使用`, aIdx);
     }
     if (trainerCard.subtype === 'Stadium' && isStadiumPendingImplementation(trainerCard.name)) {
-      return addLog(state, `${trainerCard.name}：傳說競技場（需兩張合一）尚未開放使用`, aIdx);
+      return addLog(state, `${trainerCard.name}：這張競技場的效果尚未實裝，暫時無法使用`, aIdx);
+    }
+    // v6.084「兩張合一」競技場：手牌要**同時有兩張**才能打出（Wilson 裁定）。
+    //   ⚠ 這裡讀的是「還沒被移出手牌的原始 state」——本 handler 上方已把打出的那張 filter 掉並存進
+    //     attacker.hand（尚未 commit），所以用 state.players[aIdx].hand 才看得到完整兩張。
+    //   ⚠ 必須與 getPlayableTrainers 的同一個述詞同 commit（見 canPlayTwoCardStadium 註解）。
+    if (trainerCard.subtype === 'Stadium' && isTwoCardStadiumName(trainerCard.name)
+        && !canPlayTwoCardStadium(state.players[aIdx].hand, trainerInst.cardId)) {
+      return addLog(state,
+        `${trainerCard.name}：這是由兩張實體卡合成的場地，手牌必須同時有兩張才能放置`, aIdx);
     }
     if (trainerCard.subtype === 'Stadium' && state.players[aIdx].cantPlayStadiumThisTurn) {
       return addLog(state, `${trainerCard.name}：本回合被「燒灼大地」效果禁止使出競技場`, aIdx);
@@ -3658,12 +3667,15 @@ function handlePlaying(
       // v2.244 stadium 換新時，舊 stadium 應丟回原擁有者棄牌堆（不一定是 attacker）
       if (prevStadium) {
         const prevOwnerIdx = state.activeStadiumOwnerIdx ?? aIdx;
+        // v6.084：被覆蓋的若是「兩張合一」競技場 → 兩張一起回原擁有者棄牌區
+        const prevLeaving = [prevStadium,
+          ...(state.activeStadiumPartner ? [state.activeStadiumPartner] : [])];
         if (prevOwnerIdx === aIdx) {
-          attacker.discard = [...attacker.discard, prevStadium];
+          attacker.discard = [...attacker.discard, ...prevLeaving];
         } else {
           players[prevOwnerIdx] = {
             ...players[prevOwnerIdx],
-            discard: [...players[prevOwnerIdx].discard, prevStadium],
+            discard: [...players[prevOwnerIdx].discard, ...prevLeaving],
           };
         }
       }
@@ -3682,9 +3694,21 @@ function handlePlaying(
       const prevPrismFlag = state.prismTowerPlayedThisTurn ?? [false, false];
       const newPrismFlag: [boolean, boolean] = [prevPrismFlag[0], prevPrismFlag[1]];
       if (trainerCard.name === '稜鏡塔') newPrismFlag[aIdx] = true;
+      // v6.084「兩張合一」：從（已移除第一張的）手牌再抽出同 cardId 的第二張一起放上場。
+      //   ⚠ 兩張都要離手，否則第二張留在手牌 ＝ 憑空多一張（複製卡）。
+      let stadiumPartner: CardInstance | undefined;
+      if (isTwoCardStadiumName(trainerCard.name)) {
+        const partnerIdx = attacker.hand.findIndex(c => c.cardId === trainerInst.cardId);
+        if (partnerIdx >= 0) {
+          stadiumPartner = attacker.hand[partnerIdx];
+          attacker.hand = attacker.hand.filter((_, i) => i !== partnerIdx);
+          players[aIdx] = attacker;
+        }
+      }
       let newState: GameState = {
         ...state, players,
         activeStadium: trainerInst,
+        ...(stadiumPartner ? { activeStadiumPartner: stadiumPartner } : { activeStadiumPartner: undefined }),
         activeStadiumOwnerIdx: aIdx, // v2.244 標記擁有者
         stadiumPlayedThisTurn: newPlayed,
         stadiumUsedThisTurn: newUsedReset,
@@ -9122,6 +9146,9 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       // v6.066：未實裝的訓練家卡在手牌就不亮框（也避免 AI 反覆挑到被 engine 退回的卡）
       if (isTrainerPendingImplementation(c.name, c.subtype)) return false;
       if (c.subtype === 'Stadium' && isStadiumPendingImplementation(c.name)) return false;
+      // v6.084「兩張合一」競技場：手牌沒湊到兩張就不亮框（與 PLAY_TRAINER handler 同一述詞）
+      if (c.subtype === 'Stadium' && isTwoCardStadiumName(c.name)
+          && !canPlayTwoCardStadium(state.players[state.activePlayerIndex].hand, inst.cardId)) return false;
       if (c.subtype === 'Stadium' && state.players[state.activePlayerIndex].cantPlayStadiumThisTurn) return false;
       if (c.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, state.activePlayerIndex, pool)) return false;
       // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性時，物品卡不可打出

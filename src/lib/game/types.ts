@@ -811,6 +811,19 @@ export interface GameState {
    * 一律在 activeStadium 被設定時同步設定本欄；activeStadium 被清為 undefined 時亦清掉。
    */
   activeStadiumOwnerIdx?: 0 | 1;
+
+  /**
+   * v6.084「兩張合一」競技場（M6 傳說的海溝／山頂／熔岩洞）的**第二張實體卡**。
+   *
+   * 官方這三張場地是兩張實體卡拼成一個場地：打出時要同時把手牌裡的兩張放上去，
+   * 離場時兩張一起進棄牌區。`activeStadium` 放第一張、本欄放第二張，
+   * 與 `activeStadiumOwnerIdx` 同生同滅（一起設、一起清）。
+   *
+   * ⚠ 刻意放 GameState 頂層而**不是**塞進 CardInstance 內：CardInstance 會經過
+   *   序列化／回放／toBareCard 等泛用路徑，漏拆＝複製卡、被 strip＝整張蒸發（v6.000 教訓）。
+   * ⚠ 單一物件欄位，不是陣列的陣列 → Firestore 安全（見 T[][] 禁令）。
+   */
+  activeStadiumPartner?: CardInstance;
   /** 雙方本回合是否已使用競技場效果 [P1, P2] */
   stadiumUsedThisTurn?: [boolean, boolean];
   /**

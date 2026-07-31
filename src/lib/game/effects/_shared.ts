@@ -1007,17 +1007,48 @@ export function discardActiveStadium(
   if (!stadium) return state;
   const ownerIdx = state.activeStadiumOwnerIdx ?? fallbackIdx;
   const players = [...state.players] as [PlayerState, PlayerState];
+  // v6.084：「兩張合一」競技場離場時**兩張一起**進棄牌區。
+  //   ⚠ 這是全站唯一的競技場離場中央出口（v6.084 把 v2500 的手刻 inline 也收斂進來），
+  //     漏處理 partner ＝ 第二張卡憑空蒸發（卡片守恆破損，assertIidIntegrity 會抓）。
+  const leaving = [stadium, ...(state.activeStadiumPartner ? [state.activeStadiumPartner] : [])];
   players[ownerIdx] = {
     ...players[ownerIdx],
-    discard: [...players[ownerIdx].discard, stadium],
+    discard: [...players[ownerIdx].discard, ...leaving],
   };
   return {
     ...state,
     players,
     activeStadium: undefined,
+    activeStadiumPartner: undefined,
     activeStadiumOwnerIdx: undefined,
     stadiumUsedThisTurn: undefined,
   };
+}
+
+/**
+ * v6.084「兩張合一」競技場（M6 傳說的海溝／山頂／熔岩洞）。
+ *
+ * Wilson 裁定：牌組中兩張實體卡各算 1 張；**手牌要同時有兩張**才能打出；
+ * 場上顯示兩張合併後的背景圖。
+ *
+ * ⚠ 判準用「卡名含『傳說』」而非硬編三張：卡面的分類依據就是名稱，未來新卡自動涵蓋。
+ *   與 `LEGEND_STADIUM_NAMES` / 牌組層 `TWO_CARD_STADIUM_NAMES` 由
+ *   `scripts/test-two-card-stadium.mjs` 守衛三份一致。
+ */
+export function isTwoCardStadiumName(name: string | undefined | null): boolean {
+  return !!name && LEGEND_STADIUM_NAMES.has(name);
+}
+
+/**
+ * v6.084：手牌是否湊得出一套「兩張合一」競技場（同 cardId ≥ 2 張）。
+ * ⚠ engine 的兩個消費點（PLAY_TRAINER handler、getPlayableTrainers）**必須同 commit** 都改，
+ *   本專案多次事故：只改一端 → 卡片列得出來但點了無效／或反過來。
+ */
+export function canPlayTwoCardStadium(
+  hand: { cardId: string }[],
+  cardId: string,
+): boolean {
+  return hand.filter(c => c.cardId === cardId).length >= 2;
 }
 
 export function shuffle<T>(arr: T[]): T[] {
@@ -2011,9 +2042,9 @@ export function pluckOppEnergyActiveOrDiscard(
 //   傳說的熔岩洞：雙方場上所有進化寶可夢的特性全部消除。
 // ⚠ 另有「小楓與小南的修行」(Supporter) 依賴「場上有名稱中有『傳說』的競技場卡」→ 同批實作。
 export const PENDING_STADIUMS = new Set<string>([
-  '傳說的海溝',
-  '傳說的山頂',
-  '傳說的熔岩洞',
+  // v6.084：M6 三張「傳說」競技場已完成實裝（場地效果 v6.077、牌組層 v6.082、
+  //   兩張合一出牌機制 v6.084）→ 從 fail-closed 名單移除。
+  //   這個 Set 保留給下一批「已進 DB 但效果還沒做」的競技場用。
 ]);
 
 /** 該競技場是否為「尚未實裝 → 禁止打出」。engine 打出路徑與可打出清單 filter 兩端共用此述詞。 */
