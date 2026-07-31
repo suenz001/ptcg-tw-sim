@@ -24,6 +24,30 @@ import type { Deck, DeckValidationResult } from './types';
 const STANDARD_MARKS = new Set(['H', 'I', 'J']);
 
 /**
+ * v6.082「兩張合一」競技場（M6 傳說的海溝／山頂／熔岩洞）。
+ *
+ * 官方這三張場地卡是**兩張實體卡拼成一個場地**（卡面編號寫成兩個號碼），
+ * Wilson 裁定（2026-08-01）：
+ *   1. 牌組中兩張實體卡**各算 1 張**（一套佔 2 張）
+ *   2. 同名 4 張上限 ⇒ 最多 4 張 ＝ **2 套**
+ *   3. 編輯器 ＋／－ 一次 **±2**，牌組驗證要求張數為**偶數**
+ *
+ * ⚠ 這份名單必須與 `src/lib/game/effects/_shared.ts` 的 `LEGEND_STADIUM_NAMES` 一致
+ *   —— 兩處分開是為了不讓牌組驗證層 import 整個對戰引擎（bundle 體積）。
+ *   `scripts/test-two-card-stadium.mjs` 有守衛比對兩份清單，新增卡時兩邊都要改。
+ */
+export const TWO_CARD_STADIUM_NAMES = new Set<string>([
+  '傳說的海溝',
+  '傳說的山頂',
+  '傳說的熔岩洞',
+]);
+
+/** 這張卡是不是「兩張實體卡合成一個場地」型（放牌組要成雙） */
+export function isTwoCardStadium(card: Card | undefined): boolean {
+  return !!card && TWO_CARD_STADIUM_NAMES.has(card.name);
+}
+
+/**
  * v3.61：「Reprint exception」— 重印於 H/I/J 標、舊版本（含 G 標）也合法的卡名清單。
  * 加入新例外時：去 https://www.ptcg.com.tw 確認該卡確實有 H/I/J 標的版本。
  */
@@ -137,6 +161,11 @@ export function validateDeck(
       continue;
     }
     total += entry.count;
+
+    // v6.082「兩張合一」競技場：一套＝兩張實體卡 → 牌組張數必須是偶數（單數張湊不成一套）
+    if (isTwoCardStadium(card) && entry.count % 2 !== 0) {
+      issues.push(`「${card.name}」是由兩張實體卡合成的場地，張數必須是偶數（目前 ${entry.count} 張，單張湊不成一套）`);
+    }
 
     if (!isBasicEnergy(card)) {
       byName.set(card.name, (byName.get(card.name) ?? 0) + entry.count);
