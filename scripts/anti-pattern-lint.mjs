@@ -622,7 +622,7 @@ for (const f of files) {
   const knownExact = new Set([...sfSrc.matchAll(/^\s*'([^']+)':\s*\(/gm)].map((m) => m[1]));
   const knownPrefix = [...new Set([...sfSrc.matchAll(/\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
   // v6.019 凍結白名單（dump 現況 deck-search 未收錄的 fallthrough filter；只准縮不准擴）
-  const S_WL_EXACT = new Set(['Basic:SameName','Basic:TOP5','BasicMetalEnergy:TOP4','BasicPokemon','DarknessPokemon:TOP7','EvilAwakening:EvolveFrom','Evolution','EvolutionPokemon','FirePokemonOrBasicFireEnergy','GrassBasicOrGrassEnergy:TOP7','GrassPokemonOrStadium','RakiPokemonOrFireEnergy','Stage1Or2:Metal','SturdyMightTree:Stage1','SturdyMightTree:Stage2','Supporter:TOP4','Supporter:TOP6','Supporter:TOP7','TOP2','TOP6','TOP8','Trainer:Supporter','Trainer:TOP_N','any']);
+  const S_WL_EXACT = new Set(['Basic:SameName','Basic:TOP5','BasicMetalEnergy:TOP4','BasicPokemon','DarknessPokemon:TOP7','EvilAwakening:EvolveFrom','Evolution','EvolutionPokemon','FirePokemonOrBasicFireEnergy','GrassBasicOrGrassEnergy:TOP7','GrassPokemonOrStadium','RakiPokemonOrFireEnergy','Stage1Or2:Metal','SturdyMightTree:Stage1','SturdyMightTree:Stage2','Supporter:TOP4','Supporter:TOP6','Supporter:TOP7','TOP2','TOP4','TOP6','TOP8','Trainer:Supporter','Trainer:TOP_N','any']);
   // v6.027：'Basic:NamePrefix=' / 'Card:' / 'NameContains:' 已收進中央 selection-filter → 移出白名單
   //   （白名單只准縮不准擴）。剩餘前綴型 fallthrough：無。
   const S_WL_PREFIX = [];

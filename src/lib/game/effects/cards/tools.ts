@@ -745,6 +745,92 @@ export const TOOL_END_TURN_DISCARD = new Set<string>();
 //   - regPost('招式學習器 螢石|螢石') 招式效果：
 //     * 棄掉 active 上所有能量
 //     * 找場上所有「太晶」tag 寶可夢，HP 全恢復（damage = 0）
+// ── 超級烈空坐帽子（J, M6 19616）v6.081 ──────────────────────────────────────
+// 卡面：附有這張卡的寶可夢，可使用這張卡上寫的招式。[需要有足夠使用招式的能量。]
+// 招式 德爾塔之禮 [無]：
+//   從牌庫附給自己的所有身上附有「超級烈空坐帽子」的寶可夢各1張基本能量卡。並且重洗牌庫。
+//
+// ⚠「所有身上附有這張卡的寶可夢」→ 找 host 一律用 toolAttached ＋ extraTools
+//   （多重轉接時道具會在 extraTools，只讀 toolAttached 會漏，v5.835 教訓）。
+// ⚠「各 1 張」→ 每隻**剛好 1 張**，不是自由分配 → 逐隻開 picker（禁 startEnergyChain 的自由分配）。
+// ⚠ 無 attach gate（卡面沒限定持有者）、不自棄（卡面沒寫回合結束丟棄）。
+reg('超級烈空坐帽子', toolAttachEffect('超級烈空坐帽子'));
+
+/** 找出自己場上所有「身上附有指定道具」的寶可夢（含 extraTools） */
+function hostsWithTool(state: GameState, idx: 0 | 1, pool: Map<string, Card>, toolName: string): CardInstance[] {
+  const p = state.players[idx];
+  const all = [...(p.active ? [p.active] : []), ...p.bench];
+  return all.filter(c => {
+    const tools = [c.toolAttached, ...(c.extraTools ?? [])].filter(Boolean) as CardInstance[];
+    return tools.some(t => pool.get(t.cardId)?.name === toolName);
+  });
+}
+
+/** 逐隻附 1 張基本能量的 chain step（i = 目前處理到第幾隻） */
+function deltaGiftStep(state: GameState, idx: 0 | 1, pool: Map<string, Card>, hostIids: string[], i: number): GameState {
+  const p = state.players[idx];
+  if (i >= hostIids.length) {
+    return updatePlayer(addLog(state, '德爾塔之禮：重洗牌庫', idx), idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  const hostIid = hostIids[i];
+  const host = [...(p.active ? [p.active] : []), ...p.bench].find(c => c.iid === hostIid);
+  if (!host) return deltaGiftStep(state, idx, pool, hostIids, i + 1);   // 已離場 → 跳過
+  const hostName = pool.get(host.cardId)?.name ?? '?';
+  const basicIids = p.deck
+    .filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })
+    .map(c => c.iid);
+  if (basicIids.length === 0) {
+    return deltaGiftStep(addLog(state, `德爾塔之禮：牌庫已無基本能量（${hostName} 沒拿到）`, idx),
+      idx, pool, hostIids, i + 1);
+  }
+  return withPending(addLog(state, `德爾塔之禮：從牌庫選 1 張基本能量附於 ${hostName}`, idx), {
+    type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
+    filter: 'BasicEnergy',
+    minCount: 0, maxCount: 1,
+    effectKey: 'm6-delta-gift-step',
+    params: { validIids: basicIids, hostIids, i, hostIid },
+  });
+}
+
+regPost('超級烈空坐帽子|德爾塔之禮', (state, aIdx, pool) => {
+  const hosts = hostsWithTool(state, aIdx, pool, '超級烈空坐帽子');
+  if (hosts.length === 0) {
+    return updatePlayer(addLog(state, '德爾塔之禮：場上沒有附有「超級烈空坐帽子」的寶可夢', aIdx),
+      aIdx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
+  }
+  return deltaGiftStep(
+    addLog(state, `德爾塔之禮：${hosts.length} 隻寶可夢各附 1 張基本能量`, aIdx),
+    aIdx, pool, hosts.map(h => h.iid), 0);
+});
+
+regR('m6-delta-gift-step', (state, idx, iids, params, pool) => {
+  const hostIids = (params?.hostIids as string[]) ?? [];
+  const i = Number(params?.i ?? 0);
+  const hostIid = params?.hostIid as string | undefined;
+  const p = state.players[idx];
+  // ⚠ 自驗：只認「還在牌庫內 ∧ 是基本能量」的 iid，且最多 1 張（卡面「各 1 張」）
+  const chosen = p.deck.find(c => iids.includes(c.iid)
+    && (() => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })());
+  let s = state;
+  if (chosen && hostIid) {
+    const eName = pool.get(chosen.cardId)?.name ?? '?';
+    const hostName = pool.get(
+      [...(p.active ? [p.active] : []), ...p.bench].find(c => c.iid === hostIid)?.cardId ?? '')?.name ?? '?';
+    s = addLog(s, `德爾塔之禮：將 ${eName} 附於 ${hostName}`, idx);
+    s = updatePlayer(s, idx, pl => {
+      const give = (c: CardInstance | null) =>
+        c && c.iid === hostIid ? { ...c, energyAttached: [...c.energyAttached, chosen] } : c;
+      return {
+        ...pl,
+        active: give(pl.active) ?? null,
+        bench: pl.bench.map(b => give(b)!),
+        deck: pl.deck.filter(c => c.iid !== chosen.iid),
+      };
+    });
+  }
+  return deltaGiftStep(s, idx, pool, hostIids, i + 1);
+});
+
 TOOL_END_TURN_DISCARD.add('招式學習器 螢石');
 reg('招式學習器 螢石', toolAttachEffect('招式學習器 螢石'));
 

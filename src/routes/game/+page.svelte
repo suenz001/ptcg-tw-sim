@@ -2789,6 +2789,11 @@
           const top8 = new Set<string>((pendingSelection.params?.top8Iids as string[]) ?? []);
           return src.deck.filter(c => top8.has(c.iid));
         }
+        // v6.081 超級烈空坐ex｜霸者咆哮：牌庫上方 4 張（顯示全部＝「查看」，可勾的限制走 validIids）
+        if (f === 'TOP4') {
+          const top4 = new Set<string>((pendingSelection.params?.top4Iids as string[]) ?? []);
+          return src.deck.filter(c => top4.has(c.iid));
+        }
         if (f === 'TOP2') {
           const top2 = new Set<string>((pendingSelection.params?.top2Iids as string[]) ?? []);
           return src.deck.filter(c => top2.has(c.iid));

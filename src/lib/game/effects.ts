@@ -16955,6 +16955,7 @@ export const ON_PLAY_FROM_HAND_ABILITIES = new Set([
   '迅速游標',     // 鐵斑葉ex — 與戰鬥場互換+搬能量
   '突然削退',     // 鐵蟻ex — 丟對手牌庫頂
   '臨場背負',     // v2.998 大蔥鴨 — 牌庫搜寶可夢道具附身 + 重洗
+  '霸者咆哮',     // v6.081 M6 超級烈空坐ex — 牌庫上方4張選1基本能量附於自己，其餘重洗放牌庫下方
 ]);
 
 /** 「從手牌進化時」可發動 1 次的特性名稱 */
@@ -18506,6 +18507,7 @@ export function registerHandRevealAttack(opts: {
 
 import './effects/cards/m6_wave11'; // v6.078 M6 新機制招式 批次11
 import './effects/cards/m6_wave12'; // v6.078 M6 新機制招式 批次12
+import './effects/cards/m6_wave14'; // v6.081 M6 能量加速特性 批次14
 import './effects/cards/m6_wave10'; // v6.072 M6 訓練家實裝 批次10
 import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8

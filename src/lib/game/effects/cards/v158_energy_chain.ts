@@ -530,6 +530,9 @@ regR('v158-energy-chain-start', (st, aIdx, energyIids, params, pool) => {
     source: (params?.source as 'deck' | 'discard' | 'hand') ?? 'deck',
     scope: (params?.scope as 'bench-only' | 'any-own') ?? 'any-own',
     filterType: params?.filterType as EnergyTypeFilter | undefined,
+    // v6.081：可附目標白名單（卡面指名寶可夢／限屬性時用）。undefined = 不限（舊行為）。
+    //   例：鴨嘴炎獸｜拍檔提升 只能附「電擊魔獸」「鴨嘴炎獸」；杖尾鱗甲龍｜鱗片律動 只能附【龍】。
+    targetIids: params?.targetIids as string[] | undefined,
   }, pool);
 });
 
