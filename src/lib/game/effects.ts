@@ -8790,7 +8790,10 @@ export function registerSelfDiscardMultiply(
       const setIds = new Set(eligible.map(e => e.iid));
       discarded = all.filter(e => setIds.has(e.iid));
       remaining = all.filter(e => !setIds.has(e.iid));
-    } else if (chosenIids && chosenIids.length > 0) {
+    } else if (chosenIids !== undefined) {
+      // ⚠ v6.083：`!== undefined` 而非 `length > 0` —— [] 是玩家按「不丟（0 傷害）」的明確選擇，
+      //   原本會落到下面的 fallback「自動丟到上限」（電壓錘 max=99 → 基本能量全丟光）。
+      //   undefined（AI/headless 沒傳）才走 fallback。同時修好 熔岩光芒 等既有 min=0 的卡。
       const allowed = new Set(eligible.map(e => e.iid));
       const capped = chosenIids.filter(id => allowed.has(id)).slice(0, max);
       const setIds = new Set(capped);
@@ -18489,7 +18492,12 @@ export function registerHandRevealAttack(opts: {
     const chosenIids = action?.discardedEnergyIids;
     // 自驗：只認「在手牌內 ∧ 符合卡面條件」的 iid
     const allowed = new Set(eligible.map(c => c.iid));
-    const picked = (chosenIids && chosenIids.length > 0)
+    // ⚠ v6.083：判準必須是 `!== undefined` 而不是 `length > 0`。
+    //   action 契約（actions.ts v3.28）：undefined = 沒傳（AI/headless）→ fallback；
+    //   [] = 玩家在 picker 按了「不給對手看（0 傷害）」→ **就是要展示 0 張**。
+    //   原本用 length>0 會把 [] 當「沒傳」→ 玩家拒絕展示反而把手牌中全部符合的卡
+    //   強制公開展示並照全額算傷害（意圖反轉 ＋ 隱藏資訊外洩）。
+    const picked = (chosenIids !== undefined)
       ? eligible.filter(c => allowed.has(c.iid) && chosenIids.includes(c.iid))
       // AI / headless fallback：沒傳選擇 → 全部展示（傷害最大化）
       : eligible;

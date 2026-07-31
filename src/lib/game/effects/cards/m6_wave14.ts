@@ -37,7 +37,9 @@ regAByName('鴨嘴炎獸', '拍檔提升', (st, idx, pool) => {
     addLog(st, '拍檔提升：從手牌選「基本【火】能量」與「基本【雷】能量」最多各 1 張', idx), {
       type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
       filter: 'Energy',
-      minCount: 0, maxCount: Math.min(2, valid.length),
+      // ⚠ v6.083：maxCount 依「有幾種屬性」而非總張數 —— 卡面是「各最多 1 張」，
+      //   手牌只有 2 張火時上限應是 1（原本可勾 2 張，resolver 靜默只收 1 張＝體感沒做完）。
+      minCount: 0, maxCount: (fireIids.length > 0 ? 1 : 0) + (ltngIids.length > 0 ? 1 : 0),
       effectKey: 'm6-partner-boost-pick',
       params: {
         validIids: valid,
@@ -105,9 +107,13 @@ regAByName('杖尾鱗甲龍', '鱗片律動', (st, idx, pool) => {
 //   ⚠ 只附給「這隻寶可夢」（發動特性的那隻），不是任選。
 regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
   const p = st.players[idx];
-  if (p.abilityNamesUsedThisTurn?.includes('霸者咆哮')) {
-    return addLog(st, '霸者咆哮：這個回合已經使用過', idx);
-  }
+  // ⚠ v6.083：**不**用 abilityNamesUsedThisTurn 擋（原 v6.081 寫法過嚴）。
+  //   卡面「在自己的回合，從手牌將**這張卡**放置於備戰區時，可使用1次」——「1 次」綁的是
+  //   「這一次放置」，同回合放第二隻超級烈空坐ex 應該各自可以發動。
+  //   對照組：喵喵ex｜殺手鐧捕捉 之所以用名稱層級，是因為它卡面**另有明文**
+  //   「在這個回合，若已經使出了名稱中有『殺手鐧』的特性，則這個特性無法使用」。本卡沒有這句。
+  //   觸發點只有 promptPlayAbilities 的「放置時詢問」（engine 不把 ON_PLAY 特性放進手動清單），
+  //   所以一次放置天然只會問一次，不需要額外的 per-turn gate。
   const selfIid = cardInst?.iid;
   if (!selfIid) return addLog(st, '霸者咆哮：找不到發動的寶可夢', idx);
   if (p.deck.length === 0) return addLog(st, '霸者咆哮：牌庫為空', idx);
@@ -115,9 +121,7 @@ regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
   const basicEnergyIids = top4
     .filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })
     .map(c => c.iid);
-  const s = updatePlayer(
-    addLog(st, `霸者咆哮：查看牌庫上方 ${top4.length} 張，選 1 張基本能量附於自己`, idx),
-    idx, pl => ({ ...pl, abilityNamesUsedThisTurn: [...(pl.abilityNamesUsedThisTurn ?? []), '霸者咆哮'] }));
+  const s = addLog(st, `霸者咆哮：查看牌庫上方 ${top4.length} 張，選 1 張基本能量附於自己`, idx);
   return withPending(s, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'TOP4',

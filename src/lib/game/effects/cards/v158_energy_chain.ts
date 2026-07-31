@@ -108,6 +108,12 @@ regR('v87-energy-distribute-flat', (st, aIdx, selectedIids, params, pool) => {
   const label = String(params?.label ?? '能量分配');
   const energyIids = ((params?.energyIids as string[] | undefined) ?? []).slice();
   const energyTypeName = (params?.energyTypeName as string | undefined) ?? '';
+  // ⚠ v6.083 公平性（v6.009 通則）：卡面指名目標時（拍檔提升限「電擊魔獸」「鴨嘴炎獸」、
+  //   鱗片律動限【龍】、密勒頓/太樂巴戈斯限標籤），resolver 必須自驗 client 送來的目標
+  //   在白名單內 —— engine 的 sanitizeSelectedIids 對 energy-distribute 是「原封放行」
+  //   （合法用重複編碼計數），不會幫忙擋。undefined = 不限（舊行為）。
+  const allowTargets = params?.targetIids as string[] | undefined;
+  const allowSet = Array.isArray(allowTargets) ? new Set(allowTargets) : null;
 
   if (selectedIids.length === 0 || energyIids.length === 0) {
     return addLog(st, `${label}：未分配任何能量`, aIdx);
@@ -118,6 +124,7 @@ regR('v87-energy-distribute-flat', (st, aIdx, selectedIids, params, pool) => {
 
   for (let i = 0; i < useCount; i++) {
     const targetIid = selectedIids[i];
+    if (allowSet && !allowSet.has(targetIid)) continue;   // v6.083 白名單外的目標一律忽略
     const energyIid = energyIids[i];
     const p = s.players[aIdx];
     const energyInst = p.discard.find(c => c.iid === energyIid);
@@ -435,8 +442,12 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
   } else {
     const useCount = Math.min(selectedIids.length, currentEnergyIids.length);
     const tally = new Map<string, number>();
+    // v6.083 公平性：同 v87-energy-distribute-flat —— targetIids 白名單要在 attach 端強制，
+    //   原本只拿來算「下一波的候選」，本波的 attach 沒驗（改造 client 可附給白名單外的寶可夢）。
+    const allowSetW = Array.isArray(targetIids) ? new Set(targetIids) : null;
     for (let i = 0; i < useCount; i++) {
       const targetIid = selectedIids[i];
+      if (allowSetW && !allowSetW.has(targetIid)) continue;
       const energyIid = currentEnergyIids[i];
       const p = st.players[aIdx];
       const energyInst = p.discard.find(c => c.iid === energyIid);

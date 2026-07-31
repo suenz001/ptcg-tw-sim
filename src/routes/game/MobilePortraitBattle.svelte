@@ -589,7 +589,7 @@
         if (oppHasStage2Local()) {
           out.push({
             label: '⚡ 緊急迴轉 (放備戰)',
-            action: () => { closeSheet(); onAction(GameActions.useHandAbility(iid, 0)); },
+            action: () => { closeSheet(); onAction(GameActions.useHandAbility(iid, getHandActivatableAbilities(game, myIdx as 0 | 1, pool).find(a => a.iid === iid)?.abilityIndex ?? 0)); },
             primary: true,
           });
         }

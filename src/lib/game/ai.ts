@@ -530,7 +530,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     // 牌庫搜尋
     case 'deck-search': {
       const f = sel.filter ?? '';
+      // v6.083：AI 一律再套 params.validIids 交集 —— 很多卡的「可勾範圍」是用 validIids 表達
+      //   （filter 只負責顯示哪幾張）。AI 只看 filter 會選到 validIids 外的卡，接著被 engine 的
+      //   sanitizeSelectedIids 清成空 → 效果靜默不發生。fail-open：沒有 validIids 就不縮限。
+      const _validIids = sel.params?.validIids as string[] | undefined;
+      const _validSet = Array.isArray(_validIids) ? new Set(_validIids) : null;
       let candidates = srcPlayer.deck.filter(c => {
+        if (_validSet && !_validSet.has(c.iid)) return false;
         const card = pool.get(c.cardId);
         if (!card) return false;
         // v6.013 P1-1批2：中央 selection-filter 求值器優先(已收錄回 boolean;未收錄回 null→走下方 inline
@@ -539,6 +545,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (_central !== null) return _central;
         const top6 = new Set<string>((sel.params?.top6Iids as string[]) ?? []);
         if (f === 'TOP6')            return top6.has(c.iid);
+        // v6.083：'TOP4'（超級烈空坐ex｜霸者咆哮）。沒有這條的話 AI 會 fallthrough `return true`
+        //   → 拿整副牌庫當候選 → 被 engine sanitizeSelectedIids 的 validIids 交集清成空 →
+        //   AI 的霸者咆哮永遠附不到能量（靜默 no-op）。
+        if (f === 'TOP4') {
+          const top4 = new Set<string>((sel.params?.top4Iids as string[]) ?? []);
+          return top4.has(c.iid);
+        }
         if (f === 'Supporter:TOP6')  return top6.has(c.iid) && card.subtype === 'Supporter';
         // v2.56 寶可裝置3.0：牌庫頂 7 張中的支援者
         if (f === 'Supporter:TOP7') {
