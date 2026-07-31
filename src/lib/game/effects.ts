@@ -600,6 +600,7 @@ import './effects/cards/v3700_audit_orphans';
 import './effects/cards/m5_preview';
 import './effects/cards/m5_j_coverage_fix';
 import './effects/cards/m6_wave1';  // v6.060 M6 招式實裝 批次1（純類推既有 helper）
+import './effects/cards/m6_wave2';  // v6.061 M6 招式實裝 批次2（12 招）
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
@@ -5480,7 +5481,8 @@ export function flipCoinsWithLog(
 }
 
 /** 簡易 coin flip +N helper：基礎傷害 + (正面 ? N : 0) */
-function coinPlusPre(base: number, bonus: number, attackName: string): AttackPreFn {
+// v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
+export function coinPlusPre(base: number, bonus: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool, action) => {
     // v5.257：forward action._retryInjectedFlips 給 flipCoinsWithLog
     const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
@@ -5894,7 +5896,8 @@ regPre('袋獸|迷昏拳', coinHeadsMultiplyPre(2, 90, '迷昏拳'));
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── (A) coin-tails-fail helper + 4 張 ─────────────────────────────────────
-function coinTailsFailPre(base: number, attackName: string): AttackPreFn {
+// v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
+export function coinTailsFailPre(base: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool, action) => {
     // v5.257：forward action._retryInjectedFlips
     const injected = (action as { _retryInjectedFlips?: string[] } | undefined)?._retryInjectedFlips;
@@ -6094,7 +6097,8 @@ regPre('波盪水ex|宣洩吼嘯', (state, aIdx, _pool) => {
 });
 
 // 若對手戰鬥寶可夢為 ex/V → +N（多張）
-function defIsExPre(base: number, bonus: number, label: string): AttackPreFn {
+// v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
+export function defIsExPre(base: number, bonus: number, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
@@ -6115,7 +6119,8 @@ regPre('蒼炎刃鬼|鬥士的巨劍', defIsExPre(100, 100, '鬥士的巨劍'));
 regPre('無極汰那|汰那爆破', defIsExPre(10, 80, '汰那爆破'));
 
 // 若對手戰鬥寶可夢為進化寶可夢 → +N
-function defIsEvolvedPre(base: number, bonus: number, label: string): AttackPreFn {
+// v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
+export function defIsEvolvedPre(base: number, bonus: number, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
@@ -8020,7 +8025,59 @@ function selfBenchMultiplyPre(base: number, per: number, label: string): AttackP
   };
 }
 
-function oppBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+// v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.061 中央收斂：以下 3 個 helper 原本分散在卡檔（v2347 / v2490）為 local function，
+//   M6 批次2 需要復用 → **逐字搬到中央並 export**，原卡檔改 import（刪掉 local 版）。
+//   逐字搬移＝行為與 log 字串完全不變，既有卡的 test 斷言不受影響。
+// ══════════════════════════════════════════════════════════════════════════════
+export function chooseOppPokemonDamage(state: GameState, aIdx: 0 | 1, damage: number, label: string) {
+  const dIdx = 1 - aIdx as 0 | 1;
+  const d = state.players[dIdx];
+  if (!d.active && d.bench.length === 0) return addLog(state, `${label}：對手場上無寶可夢`, aIdx);
+  return withPending(addLog(state, `${label}：選擇對手 1 隻寶可夢造成 ${damage} 傷害`, aIdx), {
+    type: 'opp-poke-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-variable',
+    params: { damage, label, kind: 'attack-damage' },
+  });
+}
+
+export function chooseOppBenchDamage(state: GameState, aIdx: 0 | 1, damage: number, label: string) {
+  const dIdx = 1 - aIdx as 0 | 1;
+  if (state.players[dIdx].bench.length === 0) return addLog(state, `${label}：對手無備戰寶可夢`, aIdx);
+  return withPending(addLog(state, `${label}：選擇對手 1 隻備戰寶可夢造成 ${damage} 傷害`, aIdx), {
+    type: 'opp-bench-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'snipe-variable',
+    params: { damage, label, kind: 'attack-damage' },
+  });
+}
+
+export function prizesConditionPre(
+  base: number,
+  bonus: number,
+  side: 'self' | 'opp',
+  comparison: 'gte' | 'lte' | 'eq',
+  threshold: number,  // 比對的張數（注意：「剩餘獎賞」= prizes.length；「已獲得獎賞」= 6 - prizes.length）
+  measureType: 'remaining' | 'taken',
+  label: string,
+): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const targetIdx = side === 'self' ? aIdx : (1 - aIdx) as 0 | 1;
+    const remaining = state.players[targetIdx].prizes.length;
+    const value = measureType === 'remaining' ? remaining : (6 - remaining);
+    let cond = false;
+    if (comparison === 'gte') cond = value >= threshold;
+    else if (comparison === 'lte') cond = value <= threshold;
+    else cond = value === threshold;
+    const dmg = cond ? base + bonus : base;
+    const s = addLog(state, `${label}：${side === 'self' ? '自方' : '對方'}${measureType === 'remaining' ? '剩餘' : '已獲得'}獎賞 ${value} 張 → ${cond ? `+${bonus}` : '不增傷'} = ${dmg}`, aIdx);
+    return { state: s, damage: dmg };
+  };
+}
+
+export function oppBenchMultiplyPre(base: number, per: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const count = state.players[dIdx].bench.length;

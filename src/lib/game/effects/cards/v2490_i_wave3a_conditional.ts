@@ -28,7 +28,7 @@ import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
-import { flipCoinsWithLog, countAttachedEnergyAsUnits, countEnergyTypeHostAware } from '../../effects';
+import { flipCoinsWithLog, countAttachedEnergyAsUnits, countEnergyTypeHostAware, prizesConditionPre } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: A 擲 N 次硬幣，正面數 × K 傷害（damage='Nx30+' 等）
@@ -65,28 +65,6 @@ function selfEnergyCountPre(
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: C 條件式獎賞數 +N（自方/對方）
 // ══════════════════════════════════════════════════════════════════════════════
-function prizesConditionPre(
-  base: number,
-  bonus: number,
-  side: 'self' | 'opp',
-  comparison: 'gte' | 'lte' | 'eq',
-  threshold: number,  // 比對的張數（注意：「剩餘獎賞」= prizes.length；「已獲得獎賞」= 6 - prizes.length）
-  measureType: 'remaining' | 'taken',
-  label: string,
-): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const targetIdx = side === 'self' ? aIdx : (1 - aIdx) as 0 | 1;
-    const remaining = state.players[targetIdx].prizes.length;
-    const value = measureType === 'remaining' ? remaining : (6 - remaining);
-    let cond = false;
-    if (comparison === 'gte') cond = value >= threshold;
-    else if (comparison === 'lte') cond = value <= threshold;
-    else cond = value === threshold;
-    const dmg = cond ? base + bonus : base;
-    const s = addLog(state, `${label}：${side === 'self' ? '自方' : '對方'}${measureType === 'remaining' ? '剩餘' : '已獲得'}獎賞 ${value} 張 → ${cond ? `+${bonus}` : '不增傷'} = ${dmg}`, aIdx);
-    return { state: s, damage: dmg };
-  };
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: D 對手戰鬥場能量數 × K（增傷或減傷）

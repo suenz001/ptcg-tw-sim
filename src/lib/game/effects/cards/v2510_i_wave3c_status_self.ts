@@ -43,11 +43,15 @@ regPre('自爆磁怪|衝天電光', (state, aIdx, pool) => {
   if (!a) return { state, damage: 50 };
   // evolvedFromStack 含此回合進化的來源卡，檢查是否包含「三合一磁怪」
   const evolvedThisTurn = a.evolvedThisTurn === true;
-  const fromName = pool.get(a.cardId)?.evolvesFrom;  // 卡面定義的「進化自」
+  // v6.061 修正：原本還 OR 了 `pool.get(a.cardId)?.evolvesFrom === '三合一磁怪'`，
+  //   但那是自爆磁怪**自己卡面**的「進化自」，恆等於 '三合一磁怪' → 整個條件退化成只看
+  //   evolvedThisTurn。用【神奇糖果】從小磁怪直接進化成自爆磁怪（Stage2 跳級）時，
+  //   卡面「若這隻寶可夢從『三合一磁怪』進化」並不成立，卻仍誤加 120。
+  //   判準只能看**實際的進化來源**（evolvedFromStack 末端），與同檔 小霞的寶石海星｜乍然閃光 一致。
   // 用 evolvedFromStack 的最後 1 張（最近進化來源）
   const stack = a.evolvedFromStack ?? [];
   const lastEvoSource = stack.length > 0 ? pool.get(stack[stack.length - 1].cardId)?.name : null;
-  const fromMagneton = evolvedThisTurn && (lastEvoSource === '三合一磁怪' || fromName === '三合一磁怪');
+  const fromMagneton = evolvedThisTurn && lastEvoSource === '三合一磁怪';
   const dmg = fromMagneton ? 50 + 120 : 50;
   const s = addLog(state, `衝天電光：${fromMagneton ? '從三合一磁怪進化 +120' : '本回合非從三合一磁怪進化'} = ${dmg}`, aIdx);
   return { state: s, damage: dmg };

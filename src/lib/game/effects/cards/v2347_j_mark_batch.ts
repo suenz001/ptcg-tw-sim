@@ -1,4 +1,5 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
+import { chooseOppPokemonDamage, chooseOppBenchDamage } from '../../effects';
 import type { Card } from '$lib/cards/types';
 import { addLog, regPost, regPre, updatePlayer, withPending } from '../_shared';
 
@@ -17,28 +18,7 @@ function discardActiveEnergy(state: GameState, aIdx: 0 | 1, count: number | 'all
   return addLog(s, `${label}：丟棄 ${toDiscard.length} 個自身附加能量`, aIdx);
 }
 
-function chooseOppPokemonDamage(state: GameState, aIdx: 0 | 1, damage: number, label: string) {
-  const dIdx = 1 - aIdx as 0 | 1;
-  const d = state.players[dIdx];
-  if (!d.active && d.bench.length === 0) return addLog(state, `${label}：對手場上無寶可夢`, aIdx);
-  return withPending(addLog(state, `${label}：選擇對手 1 隻寶可夢造成 ${damage} 傷害`, aIdx), {
-    type: 'opp-poke-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'snipe-variable',
-    params: { damage, label, kind: 'attack-damage' },
-  });
-}
 
-function chooseOppBenchDamage(state: GameState, aIdx: 0 | 1, damage: number, label: string) {
-  const dIdx = 1 - aIdx as 0 | 1;
-  if (state.players[dIdx].bench.length === 0) return addLog(state, `${label}：對手無備戰寶可夢`, aIdx);
-  return withPending(addLog(state, `${label}：選擇對手 1 隻備戰寶可夢造成 ${damage} 傷害`, aIdx), {
-    type: 'opp-bench-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'snipe-variable',
-    params: { damage, label, kind: 'attack-damage' },
-  });
-}
 
 function healAllPlayers(state: GameState, amount: number): GameState {
   const players = state.players.map((p) => ({
