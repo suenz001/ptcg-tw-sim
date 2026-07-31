@@ -21,6 +21,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
+import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -372,76 +373,10 @@ regR('cell-awaken-evolve-step', (st, aIdx, iids, params, pool) => {
 //   pattern: filter validIids=deck 中 evolvesFrom=base 名稱的進化卡，resolver 把該卡
 //   放戰鬥場完成進化（保留 damage / energy / tool / 推進 evolvedFromStack）+ 重洗牌庫。
 // ══════════════════════════════════════════════════════════════════════════════
-const DIRECT_EVOLVE_AWAKEN: Array<[string, string, number, string]> = [
-  // [attackKey, baseName, damage, effectKey]
-  ['夢妖|覺醒',                  '夢妖',             0,  'misdreavus-awaken-evolve'],
-  ['火箭隊的沙基拉斯|爆裂覺醒',   '火箭隊的沙基拉斯',  30, 'tr-larvitar-awaken-evolve'],
-];
-for (const [attackKey, baseName, dmg, effectKey] of DIRECT_EVOLVE_AWAKEN) {
-  regPre(attackKey, (s) => ({ state: s, damage: dmg }));
-  regPost(attackKey, (state, aIdx, pool) => {
-    const player = state.players[aIdx];
-    if (!player.active) {
-      return addLog(state, `${attackKey.split('|')[1]}：戰鬥場無寶可夢`, aIdx);
-    }
-    const activeCard = pool.get(player.active.cardId);
-    if (activeCard?.name !== baseName) {
-      // 戰鬥場已非該 base（例如被招式換走 — 罕見）— 改重洗
-      return updatePlayer(
-        addLog(state, `${attackKey.split('|')[1]}：戰鬥場已非「${baseName}」，僅重洗牌庫`, aIdx),
-        aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
-      );
-    }
-    // 從牌庫挑「evolvesFrom === baseName」的進化卡
-    const validIids = player.deck
-      .filter(c => pool.get(c.cardId)?.evolvesFrom === baseName)
-      .map(c => c.iid);
-    const s = addLog(state,
-      validIids.length > 0
-        ? `${attackKey.split('|')[1]}：從牌庫選 1 張從「${baseName}」進化而來的卡，立即進化於自身`
-        : `${attackKey.split('|')[1]}：牌庫內無對應的進化卡（仍進行搜尋並重洗）`,
-      aIdx);
-    return withPending(s, {
-      type: 'deck-search',
-      actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'Evolution',
-      minCount: 0, maxCount: 1,
-      effectKey,
-      params: { validIids, baseName },
-    });
-  });
-  // resolver：把 evolution 直接進化於戰鬥場（仿石居蟹|覺醒 / 伊布|覺醒）
-  regR(effectKey, (state, aIdx, iids, params, pool) => {
-    const baseN = (params?.baseName as string | undefined) ?? baseName;
-    const player = state.players[aIdx];
-    if (iids.length === 0 || !player.active) {
-      return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-    }
-    const evoIid = iids[0];
-    const evoIdx = player.deck.findIndex(c => c.iid === evoIid);
-    if (evoIdx < 0) {
-      return addLog(state, `${attackKey.split('|')[1]}：找不到所選進化卡，僅重洗牌庫`, aIdx);
-    }
-    const evoInst = player.deck[evoIdx];
-    const evoCard = pool.get(evoInst.cardId);
-    if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== baseN) {
-      return addLog(state, `${attackKey.split('|')[1]}：所選非從「${baseN}」進化的卡，僅重洗牌庫`, aIdx);
-    }
-    const activeCard = pool.get(player.active.cardId);
-    if (activeCard?.name !== baseN) {
-      return addLog(state, `${attackKey.split('|')[1]}：戰鬥場已非「${baseN}」，僅重洗牌庫`, aIdx);
-    }
-    const base = player.active;
-    const evolved: CardInstance = buildEvolvedInstance(base, evoInst, state, pool);
-    let s = state;
-    s = updatePlayer(s, aIdx, p => ({
-      ...p,
-      active: evolved,
-      deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
-    }));
-    return addLog(s, `${attackKey.split('|')[1]}：${evoCard.name} 進化於戰鬥場的「${baseN}」，並重洗牌庫`, aIdx);
-  });
-}
+// v6.078：收斂到 effects.ts registerDirectEvolveAwaken（本檔原 table + for-loop 版本
+//   與 石居蟹／伊布 兩份複製碼合併為單一來源）。effectKey 全部沿用不變。
+registerDirectEvolveAwaken('夢妖|覺醒', '夢妖', 0, 'misdreavus-awaken-evolve');
+registerDirectEvolveAwaken('火箭隊的沙基拉斯|爆裂覺醒', '火箭隊的沙基拉斯', 30, 'tr-larvitar-awaken-evolve');
 
 
 // ══════════════════════════════════════════════════════════════════════════════

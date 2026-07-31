@@ -26,6 +26,7 @@ import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost, oppSwapDmgPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
+import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import {
@@ -1810,65 +1811,10 @@ regPost('彩粉蝶|進化粉', (state, aIdx, pool) => {
   return cellAwakeningStep(state, aIdx, pool, 0, '進化粉');
 });
 
-// 伊布|覺醒 — 從牌庫挑 1 張從這隻寶可夢進化而來的卡，放置於自身完成進化
-// v4.0 修 Rule 7：原 v2.75 簡化為「加手」違反卡面「放置於這隻寶可夢身上完成進化」。
-//   改為仿石居蟹|覺醒（v2370_new_decks_batch.ts:46）的「直接進化」模式 —
-//   filter validIids=deck 中 evolvesFrom='伊布' 的進化卡（樹葉伊布 / 火伊布 / 水伊布
-//   / 雷伊布 / 仙子伊布 / 冰伊布 / 太陽伊布 / 月亮伊布 等），resolver 把該卡放戰鬥場
-//   完成進化（保留 damage / energy / tool / 推進 evolvedFromStack）+ 重洗牌庫。
-regPre('伊布|覺醒', (s) => ({ state: s, damage: 0 }));
-regPost('伊布|覺醒', (state, aIdx, pool) => {
-  const player = state.players[aIdx];
-  if (!player.active) {
-    return addLog(state, '覺醒：戰鬥場無寶可夢', aIdx);
-  }
-  // 從牌庫挑「evolvesFrom === '伊布'」的進化卡
-  const validIids = player.deck
-    .filter(c => pool.get(c.cardId)?.evolvesFrom === '伊布')
-    .map(c => c.iid);
-  const s = addLog(state,
-    validIids.length > 0
-      ? '覺醒：從牌庫選 1 張從伊布進化而來的卡，立即進化於自身'
-      : '覺醒：牌庫內無對應的進化卡（仍進行搜尋並重洗）',
-    aIdx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Evolution',
-    minCount: 0, maxCount: 1,
-    effectKey: 'eevee-awaken-evolve',
-    params: { validIids },
-  });
-});
-regR('eevee-awaken-evolve', (state, aIdx, iids, _params, pool) => {
-  const player = state.players[aIdx];
-  if (iids.length === 0 || !player.active) {
-    return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-  }
-  const evoIid = iids[0];
-  const evoIdx = player.deck.findIndex(c => c.iid === evoIid);
-  if (evoIdx < 0) {
-    return addLog(state, '覺醒：找不到所選進化卡，僅重洗牌庫', aIdx);
-  }
-  const evoInst = player.deck[evoIdx];
-  const evoCard = pool.get(evoInst.cardId);
-  if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== '伊布') {
-    return addLog(state, '覺醒：所選非從伊布進化的卡，僅重洗牌庫', aIdx);
-  }
-  const activeCard = pool.get(player.active.cardId);
-  if (activeCard?.name !== '伊布') {
-    return addLog(state, '覺醒：戰鬥場已非伊布，僅重洗牌庫', aIdx);
-  }
-  const base = player.active;
-  const evolved: CardInstance = buildEvolvedInstance(base, evoInst, state, pool);
-  let s = state;
-  s = updatePlayer(s, aIdx, p => ({
-    ...p,
-    active: evolved,
-    deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
-  }));
-  return addLog(s, `覺醒：${evoCard.name} 進化於戰鬥場的伊布，並重洗牌庫`, aIdx);
-});
+// 伊布|覺醒 — v6.078 收斂到 effects.ts registerDirectEvolveAwaken
+//   （石居蟹／夢妖／火箭隊的沙基拉斯／M6 穿山鼠措辭逐字相同 → 單一來源）。
+//   effectKey 沿用 'eevee-awaken-evolve' 不變。
+registerDirectEvolveAwaken('伊布|覺醒', '伊布', 0, 'eevee-awaken-evolve');
 
 // 蛋蛋|早熟進化 — 直接進化（先攻第一回合限定由 engine firstTurnOnly flag 處理）
 // v5.082 修 Rule 15：原 v2.75 簡化為「加手」違反卡面「放置於這隻寶可夢身上完成進化」。

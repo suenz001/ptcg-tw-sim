@@ -46,6 +46,7 @@
  */
 
 import { recruitNamedToBenchPost } from '../../effects'; // v6.069 收斂：牌庫指名放備戰
+import { registerBugPanicAttack } from '../../effects'; // v6.078 蟲蟲恐慌中央 helper
 import {
   reg,
   regA,
@@ -1851,59 +1852,9 @@ reg('格拉吉歐的決戰', (st, idx) => {
 // engine 既有 wouldBeKO + PASSIVE_PREVENT_KO 路徑自動處理）。
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── 蟲蟲恐慌 PRE：計算傷害（牌庫下方 7 張，計擁有此招式的寶可夢 × 50）─────
-regPre('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
-  const deck = state.players[aIdx].deck;
-  if (deck.length === 0) {
-    return { state: addLog(state, '蟲蟲恐慌：牌庫為空 → 0 傷害', aIdx), damage: 0 };
-  }
-  const bottomCount = Math.min(7, deck.length);
-  const bottom = deck.slice(deck.length - bottomCount);
-  let count = 0;
-  for (const inst of bottom) {
-    const c = pool.get(inst.cardId);
-    if (c?.supertype === 'Pokemon' && c.attacks?.some(a => a.name === '蟲蟲恐慌')) {
-      count++;
-    }
-  }
-  const dmg = count * 50;
-  return {
-    state: addLog(state,
-      `蟲蟲恐慌：牌庫下方 ${bottomCount} 張中，擁有「蟲蟲恐慌」招式的寶可夢 ${count} 張 → ${count} × 50 = ${dmg} 傷害`,
-      aIdx),
-    damage: dmg,
-  };
-});
-
-// ── 蟲蟲恐慌 POST：移牌（reveal + 寶可夢洗回 + 其他棄牌）────────────────
-regPost('燒火蚣|蟲蟲恐慌', (state, aIdx, pool) => {
-  const p = state.players[aIdx];
-  if (p.deck.length === 0) return state;
-  const bottomCount = Math.min(7, p.deck.length);
-  const bottom = p.deck.slice(p.deck.length - bottomCount);
-  const remaining = p.deck.slice(0, p.deck.length - bottomCount);
-
-  // 揭示：log 列出翻面的卡（雙方可見，PTCG「翻為正面」規則）
-  const revealNames = bottom.map(b => pool.get(b.cardId)?.name ?? '?').join('、');
-  let s = addLog(state, `蟲蟲恐慌：翻為正面 ${bottom.length} 張 ─ ${revealNames}`, aIdx);
-
-  // 分流：寶可夢 → 洗回牌庫，其他 → 棄牌
-  const pokemon = bottom.filter(inst => pool.get(inst.cardId)?.supertype === 'Pokemon');
-  const nonPokemon = bottom.filter(inst => pool.get(inst.cardId)?.supertype !== 'Pokemon');
-
-  const newDeck = shuffle([...remaining, ...pokemon]);
-
-  s = updatePlayer(s, aIdx, pl => ({
-    ...pl,
-    deck: newDeck,
-    discard: [...pl.discard, ...nonPokemon],
-  }));
-
-  s = addLog(s,
-    `蟲蟲恐慌：${pokemon.length} 張寶可夢卡洗回牌庫，${nonPokemon.length} 張其他卡進棄牌堆`,
-    aIdx);
-  return s;
-});
+// v6.078：收斂到 effects.ts registerBugPanicAttack（M6 雨翅蛾／三蜜蜂／圓絲蛛
+//   與本卡措辭逐字相同，原本四份複製碼 → 單一來源）。行為與 v4.89 版完全一致。
+registerBugPanicAttack('燒火蚣');
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 8c 結束。

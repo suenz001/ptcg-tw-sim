@@ -660,6 +660,7 @@ import { addPendingPrize, getPendingPrize } from './effects/_shared';
 import { tryPromptPromoteActive } from './effects/_shared';
 import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央
 import { buildEvolvedInstance } from './effects/_shared'; // v5.796 中央進化體建構(保留 base iid)
+import { revealTopCardsLog } from './effects/_shared'; // v6.078 「翻到正面」公開揭示中央 log
 import { getAbilityFn, hasAbilityFn } from './effects/_shared'; // v5.872 特性查詢中央(by-name+by-index)
 // v3.0 Group 3 Wave 2 helper — 用於 resolveBenchGuard 蟲甲聖球形盾牌
 import { hasBugAegislashShield, canRelicanthDiverCatchTrigger, isBasicWaterEnergy } from './effects/cards/v3000_g3_wave2';
@@ -18216,6 +18217,218 @@ export function countOwnFireLightningEnergyUnion(
   return n;
 }
 
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.078 M6 批次11 — 三個跨卡中央 helper（原本各卡複製貼上，本版收斂成單一來源）
+//
+// ⚠ 收斂原則：卡面措辭**逐字相同**的招式才共用 helper；措辭不同（多目標／限屬性／
+//   「所有備戰」型）一律不併入，見各 helper 上方「不適用」清單。
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── (1) 「從自己的牌庫選擇1張從這隻寶可夢進化而來的卡，放置於這隻寶可夢身上完成進化。
+//         並且重洗牌庫。」──────────────────────────────────────────────────────
+// 適用（措辭逐字相同，僅傷害值與 cost 不同）：
+//   石居蟹|覺醒(M2a) / 夢妖|覺醒(M2a) / 伊布|覺醒(SV5a) /
+//   火箭隊的沙基拉斯|爆裂覺醒(SV10, 30 傷害) / 穿山鼠|覺醒(M6)
+// **不**適用（措辭不同，各自實作）：
+//   蛋蛋|早熟進化（多一句「可在先攻玩家的最初回合使用」）
+//   火箭隊的尼多娜|惡之覺醒（最多 2 隻自己的【惡】寶可夢）
+//   雙卵細胞球|細胞進化（1 隻自己的**場上**寶可夢，不限戰鬥位）
+//   人造細胞卵|細胞覺醒（所有**備戰**寶可夢各 1 張）
+// ⚠ 招式效果進化不受「該回合放置／進化速度」限制（不是 EVOLVE action），故不 gate。
+// ⚠ 進化體一律走中央 buildEvolvedInstance（保留 iid / 傷害 / 能量 / 道具 / 狀態規則）。
+export function registerDirectEvolveAwaken(
+  attackKey: string,      // 'ex: 穿山鼠|覺醒'
+  baseName: string,       // 這隻寶可夢的卡名（= 進化卡的 evolvesFrom）
+  damage: number,         // 招式印刷傷害（多數為 0）
+  effectKey: string,      // ⚠ 既有卡沿用原 effectKey，勿更動（既有回歸測試會斷言）
+) {
+  const label = attackKey.split('|')[1] ?? attackKey;
+  regPre(attackKey, (s) => ({ state: s, damage }));
+  regPost(attackKey, (state, aIdx, pool) => {
+    const player = state.players[aIdx];
+    if (!player.active) return addLog(state, `${label}：戰鬥場無寶可夢`, aIdx);
+    const activeCard = pool.get(player.active.cardId);
+    if (activeCard?.name !== baseName) {
+      // 戰鬥場已非該 base（被換走等罕見情形）→ 僅重洗
+      return updatePlayer(
+        addLog(state, `${label}：戰鬥場已非「${baseName}」，僅重洗牌庫`, aIdx),
+        aIdx, p => ({ ...p, deck: shuffle(p.deck) }),
+      );
+    }
+    const validIids = player.deck
+      .filter(c => pool.get(c.cardId)?.evolvesFrom === baseName)
+      .map(c => c.iid);
+    const s = addLog(state,
+      validIids.length > 0
+        ? `${label}：從牌庫選 1 張從「${baseName}」進化而來的卡，立即進化於自身`
+        : `${label}：牌庫內無對應的進化卡（仍進行搜尋並重洗）`,
+      aIdx);
+    return withPending(s, {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Evolution',
+      minCount: 0, maxCount: 1,
+      effectKey,
+      params: { validIids, baseName },
+    });
+  });
+  regR(effectKey, (state, aIdx, iids, params, pool) => {
+    const baseN = (params?.baseName as string | undefined) ?? baseName;
+    const player = state.players[aIdx];
+    if (iids.length === 0 || !player.active) {
+      return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    }
+    const evoIid = iids[0];
+    const evoIdx = player.deck.findIndex(c => c.iid === evoIid);
+    if (evoIdx < 0) return addLog(state, `${label}：找不到所選進化卡，僅重洗牌庫`, aIdx);
+    const evoInst = player.deck[evoIdx];
+    const evoCard = pool.get(evoInst.cardId);
+    if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== baseN) {
+      return addLog(state, `${label}：所選非從「${baseN}」進化的卡，僅重洗牌庫`, aIdx);
+    }
+    const activeCard = pool.get(player.active.cardId);
+    if (activeCard?.name !== baseN) {
+      return addLog(state, `${label}：戰鬥場已非「${baseN}」，僅重洗牌庫`, aIdx);
+    }
+    const evolved: CardInstance = buildEvolvedInstance(player.active, evoInst, state, pool);
+    const s = updatePlayer(state, aIdx, p => ({
+      ...p,
+      active: evolved,
+      deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
+    }));
+    return addLog(s, `${label}：${evoCard.name} 進化於戰鬥場的「${baseN}」，並重洗牌庫`, aIdx);
+  });
+}
+
+// ── (2) 蟲蟲恐慌（燒火蚣 M5 / 雨翅蛾・三蜜蜂・圓絲蛛 M6）─────────────────────
+// 卡面：「將自己的牌庫下方7張卡翻到正面，造成其中持有招式『蟲蟲恐慌』的寶可夢卡的
+//         張數×50點傷害。將翻到正面的寶可夢卡放回牌庫並重洗。將剩餘卡丟棄。」
+// ⚠ 計數限「持有『蟲蟲恐慌』招式的寶可夢」；但「放回牌庫」的是**全部寶可夢卡**
+//   （包含沒有此招式的），兩者範圍不同，勿混用。
+// ⚠ 「翻到正面」= 公開揭示 → log 逐張列出卡名（雙方可見）。
+// ⚠ 用 attacks.some(name==='蟲蟲恐慌') 判定，未來新增同招式的卡自動計入（禁硬編卡名清單）。
+// ⚠ 常數放函式內（不是模組層級 const）—— effects.ts 在檔尾 import 卡檔形成循環，
+//   `export function` 會 hoist 但模組層級 `const` 不會（TDZ），卡檔若在更早的 import
+//   位置就呼叫 helper 會 ReferenceError。
+export function registerBugPanicAttack(cardName: string) {
+  const BUG_PANIC_ATTACK_NAME = '蟲蟲恐慌';
+  const BUG_PANIC_BOTTOM_N = 7;
+  const BUG_PANIC_PER = 50;
+  const key = `${cardName}|${BUG_PANIC_ATTACK_NAME}`;
+  regPre(key, (state, aIdx, pool) => {
+    const deck = state.players[aIdx].deck;
+    if (deck.length === 0) {
+      return { state: addLog(state, `${BUG_PANIC_ATTACK_NAME}：牌庫為空 → 0 傷害`, aIdx), damage: 0 };
+    }
+    const bottomCount = Math.min(BUG_PANIC_BOTTOM_N, deck.length);
+    const bottom = deck.slice(deck.length - bottomCount);
+    let count = 0;
+    for (const inst of bottom) {
+      const c = pool.get(inst.cardId);
+      if (c?.supertype === 'Pokemon' && c.attacks?.some(a => a.name === BUG_PANIC_ATTACK_NAME)) count++;
+    }
+    const dmg = count * BUG_PANIC_PER;
+    return {
+      state: addLog(state,
+        `${BUG_PANIC_ATTACK_NAME}：牌庫下方 ${bottomCount} 張中，擁有「${BUG_PANIC_ATTACK_NAME}」招式的寶可夢 ${count} 張 → ${count} × ${BUG_PANIC_PER} = ${dmg} 傷害`,
+        aIdx),
+      damage: dmg,
+    };
+  });
+  regPost(key, (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return state;
+    const bottomCount = Math.min(BUG_PANIC_BOTTOM_N, p.deck.length);
+    const bottom = p.deck.slice(p.deck.length - bottomCount);
+    const remaining = p.deck.slice(0, p.deck.length - bottomCount);
+    const revealNames = bottom.map(b => pool.get(b.cardId)?.name ?? '?').join('、');
+    let s = addLog(state, `${BUG_PANIC_ATTACK_NAME}：翻為正面 ${bottom.length} 張 ─ ${revealNames}`, aIdx);
+    const pokemon = bottom.filter(inst => pool.get(inst.cardId)?.supertype === 'Pokemon');
+    const nonPokemon = bottom.filter(inst => pool.get(inst.cardId)?.supertype !== 'Pokemon');
+    s = updatePlayer(s, aIdx, pl => ({
+      ...pl,
+      deck: shuffle([...remaining, ...pokemon]),
+      discard: [...pl.discard, ...nonPokemon],
+    }));
+    return addLog(s,
+      `${BUG_PANIC_ATTACK_NAME}：${pokemon.length} 張寶可夢卡洗回牌庫，${nonPokemon.length} 張其他卡進棄牌堆`,
+      aIdx);
+  });
+}
+
+// ── (3) 「將對手的牌庫上方N張卡翻到正面，從其中選擇任意數量的【基礎】寶可夢卡，
+//         放置於對手的備戰區。將剩餘卡放回牌庫並重洗。」─────────────────────────
+// 適用：配樂之笛(SV6, Item, 5 張) / 勾魂眼|引誘出來(M6, 招式, 5 張)
+// ⚠ 對手備戰上限一律走 getOwnBenchLimit（零之大空洞＋太晶 → 上限 8，禁硬編 5）。
+// ⚠ 即使無基礎寶可夢可放也開 picker（讓玩家看完揭示資訊；v5.704 教訓）。
+// ⚠ 放到對手備戰一律走 placedBenchInstance（裸化 + justPlaced，v5.745）。
+// ⚠ 目標是「對手的牌庫／備戰區」而非對手某隻寶可夢 → 不套 canApplyEffectToTarget
+//   （化隱保護的是「這隻寶可夢」，此效果不指定寶可夢）。與配樂之笛既有行為一致。
+export function openLureOutOppTopN(
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+  label: string, effectKey: string, topN: number,
+): GameState {
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[oppIdx];
+  const top = opp.deck.slice(0, topN);
+  const topIids = top.map(c => c.iid);
+  let s = addLog(state,
+    `${label}：將對手牌庫上方 ${topN} 張翻到正面，選任意數量基礎寶可夢放對手備戰`, aIdx);
+  s = revealTopCardsLog(s, aIdx, top, pool, label);
+  const space = Math.max(0, getOwnBenchLimit(s, oppIdx, pool) - opp.bench.length);
+  const basics = top.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
+  const placeableN = Math.min(space, basics.length);
+  // ⚠ topN 目前只支援 5：filter 字面量 'Basic:TOP5' 已同時接線 UI(routes/game/+page.svelte)、
+  //   AI(ai.ts) 與 anti-pattern-lint Check S 白名單。要新增其他 N 必須**同 commit** 補這三處，
+  //   否則 picker 掉 fallthrough（列不出可勾的卡＝玩家體感「特性/招式沒發動」，v6.025 教訓）。
+  const filterKey = topN === 5 ? 'Basic:TOP5' : `Basic:TOP${topN}`;
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: oppIdx,
+    filter: filterKey,
+    minCount: 0, maxCount: Math.max(1, placeableN),
+    effectKey,
+    params: {
+      topIids,
+      top5Iids: topIids, // 相容：配樂之笛既有 params 名稱
+      titleOverride: placeableN > 0
+        ? `${label}：${opp.name} 牌庫頂 ${topN} 張中的基礎寶可夢（選 0–${placeableN} 隻放對手備戰）`
+        : `${label}：${opp.name} 牌庫頂 ${topN} 張（無基礎寶可夢可放，看過後確認洗回）`,
+    },
+  });
+}
+export function resolveLureOutOppTopN(
+  state: GameState, aIdx: 0 | 1, iids: string[], pool: Map<string, Card>,
+  label: string, topN: number,
+): GameState {
+  const oppIdx = (1 - aIdx) as 0 | 1;
+  const opp = state.players[oppIdx];
+  const top = opp.deck.slice(0, topN);
+  const chosenSet = new Set(iids);
+  // v6.009 公平性：resolver 一律自驗 client 傳來的 iid（必須在翻開的 N 張內、且是基礎寶可夢、
+  //   且不超過對手備戰空位），禁原封照收。
+  const space = Math.max(0, getOwnBenchLimit(state, oppIdx, pool) - opp.bench.length);
+  const chosen = top
+    .filter(c => chosenSet.has(c.iid) && isBasicPokemonCard(pool.get(c.cardId)))
+    .slice(0, space);
+  const chosenIids = new Set(chosen.map(c => c.iid));
+  const rest = top.filter(c => !chosenIids.has(c.iid));
+  let s = state;
+  if (chosen.length > 0) {
+    s = addLog(s, `${label}：將 ${joinCardNames(chosen, pool)} 放到 ${opp.name} 的備戰區`, aIdx);
+  } else {
+    s = addLog(s, `${label}：未選擇任何寶可夢，全部洗回對手牌庫`, aIdx);
+  }
+  return updatePlayer(s, oppIdx, p => ({
+    ...p,
+    bench: [...p.bench, ...chosen.map(c => placedBenchInstance(c))],
+    deck: shuffle([...p.deck.slice(top.length), ...rest]),
+  }));
+}
+
+import './effects/cards/m6_wave11'; // v6.078 M6 新機制招式 批次11
 import './effects/cards/m6_wave10'; // v6.072 M6 訓練家實裝 批次10
 import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8

@@ -36,6 +36,7 @@ import {
   withPending,
 } from '../_shared';
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
+import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
 
 // ══════════════════════════════════════════════════════════════════════════════
 // A. 石居蟹｜覺醒 — 招式驅動「從牌庫直接進化」
@@ -44,63 +45,9 @@ import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741
 //   這隻寶可夢身上完成進化。並且重洗牌庫。」
 // cost: ['Colorless']，無傷害。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('石居蟹|覺醒', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('石居蟹|覺醒', (state, aIdx, pool) => {
-  const player = state.players[aIdx];
-  if (!player.active) {
-    return addLog(state, '覺醒：戰鬥場無寶可夢', aIdx);
-  }
-  // 從牌庫挑「evolvesFrom === '石居蟹'」的進化卡（多半是「岩殿居蟹」）
-  const validIids = player.deck
-    .filter(c => pool.get(c.cardId)?.evolvesFrom === '石居蟹')
-    .map(c => c.iid);
-
-  let s = addLog(state,
-    validIids.length > 0
-      ? '覺醒：從牌庫選 1 張可進化「石居蟹」的進化卡，立即進化於自身'
-      : '覺醒：牌庫內無對應的進化卡（仍進行搜尋並重洗）',
-    aIdx);
-  return withPending(s, {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Evolution',
-    minCount: 0, maxCount: 1,
-    effectKey: 'crab-awaken-evolve',
-    params: { validIids },
-  });
-});
-
-regR('crab-awaken-evolve', (state, aIdx, iids, _params, pool) => {
-  const player = state.players[aIdx];
-  if (iids.length === 0 || !player.active) {
-    return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-  }
-  const evoIid = iids[0];
-  const evoIdx = player.deck.findIndex(c => c.iid === evoIid);
-  if (evoIdx < 0) {
-    return addLog(state, '覺醒：找不到所選進化卡，僅重洗牌庫', aIdx);
-  }
-  const evoInst = player.deck[evoIdx];
-  const evoCard = pool.get(evoInst.cardId);
-  if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== '石居蟹') {
-    return addLog(state, '覺醒：所選非「石居蟹」進化卡，僅重洗牌庫', aIdx);
-  }
-  const activeCard = pool.get(player.active.cardId);
-  if (activeCard?.name !== '石居蟹') {
-    return addLog(state, '覺醒：戰鬥場已非石居蟹，僅重洗牌庫', aIdx);
-  }
-
-  const base = player.active;
-  const evolved: CardInstance = buildEvolvedInstance(base, evoInst, state, pool);
-
-  let s = state;
-  s = updatePlayer(s, aIdx, p => ({
-    ...p,
-    active: evolved,
-    deck: shuffle(p.deck.filter((_, i) => i !== evoIdx)),
-  }));
-  return addLog(s, `覺醒：${evoCard.name} 進化於戰鬥場的石居蟹，並重洗牌庫`, aIdx);
-});
+// v6.078：收斂到 effects.ts registerDirectEvolveAwaken（夢妖／伊布／火箭隊的沙基拉斯／
+//   M6 穿山鼠措辭逐字相同 → 單一來源）。effectKey 沿用 'crab-awaken-evolve' 不變。
+registerDirectEvolveAwaken('石居蟹|覺醒', '石居蟹', 0, 'crab-awaken-evolve');
 
 // ══════════════════════════════════════════════════════════════════════════════
 // B. 岩殿居蟹｜偉大剪 — 120 傷害，不計算對手戰鬥寶可夢身上附加效果

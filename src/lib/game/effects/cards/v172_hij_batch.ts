@@ -27,6 +27,7 @@ import { getAllAttachedTools } from '../_shared'; // v5.995 可怕的哥哥:數/
 import { isImmuneToOppSupporter } from './v3080_deferred_wave_c'; // v5.995 支援者效果目標免疫過濾
 import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
+import { openLureOutOppTopN, resolveLureOutOppTopN } from '../../effects'; // v6.078 對手牌庫頂 N 張選基礎放對手備戰
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 
@@ -832,58 +833,13 @@ regG('配樂之笛', (st, idx, pool) => {
   //         寶可夢時對手備戰上限 8。改用 getBenchLimit 精確判定。
   return opp.deck.length > 0 && opp.bench.length < getOwnBenchLimit(st, oppIdx2, pool);
 });
-reg('配樂之笛', (st, idx, pool) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  const opp = st.players[oppIdx];
-  const top5 = opp.deck.slice(0, 5);
-  const top5Iids = top5.map(c => c.iid);
-  st = addLog(st, '配樂之笛：將對手牌庫上方 5 張翻到正面，選任意數量基礎寶可夢放對手備戰', idx);
-  // v5.719：卡面「翻到正面」= 公開揭示，列出全部 5 張卡名（含非基礎/沒被選的），玩家才看得到「沒翻到的是哪些」。
-  st = revealTopCardsLog(st, idx, top5, pool, '配樂之笛');
-  // 算對手能放幾隻（受備戰上限）
-  const limit = getOwnBenchLimit(st, oppIdx, pool);
-  const space = Math.max(0, limit - opp.bench.length);
-  const basicsInTop5 = top5.filter(c => isBasicPokemonCard(pool.get(c.cardId)));
-  const placeableN = Math.min(space, basicsInTop5.length); // 實際可放幾隻基礎
-  // v5.704：一律開 deck-search picker（比照米立龍集客 / 寶可裝置3.0），即使無基礎寶可夢
-  //   (placeableN===0) 也讓玩家看完翻開的對手牌庫頂 5 張再確認（選 0）。原 maxN===0 早退會
-  //   直接洗回 → 玩家看不到揭示資訊（翻對手牌庫是重要情報）。filter='Basic:TOP5' 限定只基礎可勾；
-  //   maxCount 至少 1 確保 picker 開啟（無基礎時 0 可勾，玩家確認 0 → resolver 洗回）。
-  return withPending(st, {
-    type: 'deck-search',
-    actorIdx: idx, sourcePlayerIdx: oppIdx,
-    filter: 'Basic:TOP5',
-    minCount: 0, maxCount: Math.max(1, placeableN),
-    effectKey: 'melody-flute-place',
-    params: {
-      top5Iids,
-      titleOverride: placeableN > 0
-        ? `配樂之笛：${st.players[oppIdx].name} 牌庫頂 5 張中的基礎寶可夢（選 0–${placeableN} 隻放對手備戰）`
-        : `配樂之笛：${st.players[oppIdx].name} 牌庫頂 5 張（無基礎寶可夢可放，看過後確認洗回）`,
-    },
-  });
-});
-regR('melody-flute-place', (st, idx, iids, _params, pool) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  const opp = st.players[oppIdx];
-  const top5 = opp.deck.slice(0, 5);
-  const chosenSet = new Set(iids);
-  const chosen = top5.filter(c => chosenSet.has(c.iid));
-  const rest = top5.filter(c => !chosenSet.has(c.iid));
-  if (chosen.length > 0) {
-    const names = chosen.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-    st = addLog(st, `配樂之笛：將 ${names} 放到 ${opp.name} 的備戰區`, idx);
-  } else {
-    st = addLog(st, '配樂之笛：未選擇任何寶可夢，全部洗回對手牌庫', idx);
-  }
-  return updatePlayer(st, oppIdx, p => ({
-    ...p,
-    bench: [...p.bench, ...chosen.map(c => ({ ...c, justPlaced: true }))],
-    // 新 deck = 原 deck 去除 top 5 後 + 剩餘 top 5（rest）→ shuffle
-    // chosen 已搬到 bench，rest 洗回 deck 剩餘卡的後段
-    deck: shuffle([...p.deck.slice(top5.length), ...rest]),
-  }));
-});
+// v6.078：收斂到 effects.ts openLureOutOppTopN / resolveLureOutOppTopN
+//   （M6 勾魂眼｜引誘出來 卡面逐字相同 → 單一來源）。
+//   ⚠ 一併補上 v6.009 公平性自驗（resolver 重新檢查 client 送來的 iid 確實在翻開的
+//     5 張內、是【基礎】寶可夢、且不超過對手備戰空位）與 placedBenchInstance 裸化。
+reg('配樂之笛', (st, idx, pool) => openLureOutOppTopN(st, idx, pool, '配樂之笛', 'melody-flute-place', 5));
+regR('melody-flute-place', (st, idx, iids, _params, pool) =>
+  resolveLureOutOppTopN(st, idx, iids, pool, '配樂之笛', 5));
 
 // ── 壯偉碩木 resolver（Stadium / H, v2.211）── ─────────────────────────────
 // USE_STADIUM 在 engine.ts 開 step1 pending（filter='SturdyMightTree:Stage1'）
