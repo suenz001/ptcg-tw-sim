@@ -601,6 +601,7 @@ import './effects/cards/m5_preview';
 import './effects/cards/m5_j_coverage_fix';
 import './effects/cards/m6_wave1';  // v6.060 M6 招式實裝 批次1（純類推既有 helper）
 import './effects/cards/m6_wave2';  // v6.061 M6 招式實裝 批次2（12 招）
+import './effects/cards/m6_wave3';  // v6.062 M6 招式實裝 批次3（8 招）
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
@@ -6002,6 +6003,20 @@ regPre('索財靈|連續擲幣', coinUntilTailsMultiplyPre(20, 0, '連續擲幣'
 // Session 38o v1.65 H 標第 10 波 — self-heal 招式（22 張）
 // 招式造成傷害後，將自己（戰鬥寶可夢）恢復 N HP。
 // ══════════════════════════════════════════════════════════════════════════════
+
+// v6.062 中央收斂：原為 v2400 卡檔 local（單招 recharge：只鎖該招名，不鎖整隻）。
+//   ⚠ 與 selfCantAttackNextPost（cantAttackPending＝鎖全部招式）是不同機制，別混用。
+export function rechargePost(attackName: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    return updatePlayer(state, aIdx, p => ({
+      ...p,
+      active: p.active ? {
+        ...p.active,
+        blockedAttackNamesNextTurn: [...(p.active.blockedAttackNamesNextTurn ?? []), attackName],
+      } : null,
+    }));
+  };
+}
 
 export function selfHealPost(amount: number, attackName: string): AttackPostFn {
   return (state, aIdx) => {

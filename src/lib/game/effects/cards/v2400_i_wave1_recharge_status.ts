@@ -21,23 +21,12 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { regPre, regPost, updatePlayer } from '../_shared';
 import type { AttackPostFn } from '../_shared';
-import { statusPost, coinStatusPost, defCantRetreatNextPost } from '../../effects';
+import { statusPost, coinStatusPost, defCantRetreatNextPost, rechargePost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helper: rechargePost — 攻擊後鎖此招式名直到下回合自己（promote NextTurn → ThisTurn）
 // 用 blockedAttackNamesNextTurn flag（既有引擎 v2.159 機制）
 // ══════════════════════════════════════════════════════════════════════════════
-function rechargePost(attackName: string): AttackPostFn {
-  return (state, aIdx, _pool) => {
-    return updatePlayer(state, aIdx, p => ({
-      ...p,
-      active: p.active ? {
-        ...p.active,
-        blockedAttackNamesNextTurn: [...(p.active.blockedAttackNamesNextTurn ?? []), attackName],
-      } : null,
-    }));
-  };
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. Recharge 招式（damage + 下回合無法用此招）— 7 張
