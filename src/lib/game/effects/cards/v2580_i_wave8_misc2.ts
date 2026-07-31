@@ -20,6 +20,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { snipeCountersPost } from '../../effects'; // v6.069 收斂：放置 N 個傷害指示物
 import { flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
 import { defNextAtkReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate)
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
@@ -142,23 +143,12 @@ regPost('烈腿蝗|跳躍射擊', (state, aIdx, _pool) => {
 // E. 簡單放指示物 (1 張)
 // 納噬草|悄聲加害 0 + 對手 1 隻寶可夢放 1 指示物
 // ══════════════════════════════════════════════════════════════════════════════
+// v6.069：收斂到中央 snipeCountersPost（effects.ts）——與 綿綿泡芙｜悄聲加害、
+//   M6 勾魂眼｜不祥之眼 同一維度（只差指示物個數）。行為差異僅一處且是改善：
+//   對手「沒有備戰」時不再開只有一個選項的 picker，直接走中央 dealAttackDamageToTarget
+//   打戰鬥位（與綿綿泡芙 v5.960 的作法一致）。
 regPre('納噬草|悄聲加害', (s) => ({ state: s, damage: 0 }));
-regPost('納噬草|悄聲加害', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  const targets: string[] = [];
-  if (opp.active) targets.push(opp.active.iid);
-  for (const b of opp.bench) targets.push(b.iid);
-  if (targets.length === 0) return state;
-  const s = addLog(state, '悄聲加害：選 1 隻對手寶可夢放置 1 個傷害指示物（10 點傷害）', aIdx);
-  return withPending(s, {
-    type: 'opp-poke-choose',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'wave6-snipe-any-opp-flat',  // 復用 v2.56 的 resolver
-    params: { amount: 10, label: '悄聲加害', kind: 'attack-effect', validIids: targets },
-  });
-});
+regPost('納噬草|悄聲加害', snipeCountersPost(1, '悄聲加害'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // F. 擲幣反面失敗 (2 張)

@@ -45,6 +45,7 @@
  *   - 不動 engine.ts / types.ts — 純用既有 helper
  */
 
+import { recruitNamedToBenchPost } from '../../effects'; // v6.069 收斂：牌庫指名放備戰
 import {
   reg,
   regA,
@@ -533,65 +534,12 @@ regR('m5-screwdriller-call-allies', (state, aIdx, iids, params) => {
 });
 
 // ── 燈火幽靈|亮光增長 — 從自己牌庫選 ≤3 張「燈火幽靈」，放置於備戰區
-//   卡面：「從自己的牌庫選擇最多 3 張『燈火幽靈』，放置於備戰區。然後重洗牌庫。」
-//   實裝：用 'Name:燈火幽靈' filter — 但 deck-search filter 是否認此 pattern 需確認；
-//   採取 picker + resolver 內 filter by name 的保險作法。
+//   卡面：「從自己的牌庫選擇最多 3 張『燈火幽靈』，放置於備戰區。並且重洗牌庫。」
+//   v6.069：收斂到中央 recruitNamedToBenchPost（effects.ts）——與 M6 溜溜糖球｜增長
+//   卡面逐字相同（只差張數）。原本 card-local 的備戰上限 trim(v5.389) 與 0 候選重洗(v5.496)
+//   已完整搬進中央 helper 與 resolver 'recruit-named-to-bench'，行為不變。
 regPre('燈火幽靈|亮光增長', (state) => ({ state, damage: 0 }));
-regPost('燈火幽靈|亮光增長', (state, aIdx, pool) => {
-  const p = state.players[aIdx];
-  if (p.deck.length === 0) return addLog(state, '亮光增長：牌庫為空', aIdx);
-  // 預先 filter 牌庫中「燈火幽靈」可選候選
-  const candidates = p.deck.filter(c => pool.get(c.cardId)?.name === '燈火幽靈');
-  if (candidates.length === 0) {
-    return openDeckViewReshuffle(state, aIdx, '亮光增長'); // v5.496：仍開檢視 picker + 重洗
-  }
-  // v5.389：bench-cap — 放備戰受備戰上限約束（卡面「最多 3 張」但不能超過備戰上限）。
-  //   原本 maxN 沒減剩餘空位 → 只有 1 空位卻能選 3 → 撐爆備戰 → 誤觸「零之大空洞效果失去」清除。
-  //   鏡射螺釘地鼠|呼朋引伴 v5.059 寫法。
-  const limit = getOwnBenchLimit(state, aIdx, pool);
-  const remainingSlots = Math.max(0, limit - p.bench.length);
-  if (remainingSlots <= 0) {
-    // 備戰已滿 → 放 0 張，但卡面「並且重洗牌庫」仍執行
-    return updatePlayer(addLog(state, '亮光增長：備戰區已滿，僅重洗牌庫', aIdx), aIdx, pp => ({
-      ...pp,
-      deck: shuffle([...pp.deck]),
-    }));
-  }
-  const maxN = Math.min(3, candidates.length, remainingSlots);
-  return withPending(addLog(state, `亮光增長：從牌庫選 ≤${maxN} 張「燈火幽靈」放備戰（可選 0 張）`, aIdx), {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Name:燈火幽靈',
-    minCount: 0, maxCount: maxN,
-    effectKey: 'm5-litwick-enlight',
-    params: { benchLimitAtPick: limit },  // v5.389：帶到 resolver 做 safety trim
-  });
-});
-regR('m5-litwick-enlight', (state, aIdx, iids, params, pool) => {
-  if (iids.length === 0) {
-    return updatePlayer(addLog(state, '亮光增長：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
-      ...p,
-      deck: shuffle([...p.deck]),
-    }));
-  }
-  // v5.389：safety trim — 防 picker 漏 cap，最多只放到備戰剩餘空位，避免撐爆誤觸大空洞清除。
-  const p0 = state.players[aIdx];
-  const validAll = p0.deck.filter(c => iids.includes(c.iid) && pool.get(c.cardId)?.name === '燈火幽靈');
-  const limitAtPick = (params?.benchLimitAtPick as number | undefined) ?? 5;
-  const slotsAvail = Math.max(0, limitAtPick - p0.bench.length);
-  const safeValid = validAll.slice(0, slotsAvail);
-  const safeIids = new Set(safeValid.map(c => c.iid));
-  return updatePlayer(addLog(state, `亮光增長：放置 ${safeValid.length} 張燈火幽靈到備戰並重洗`, aIdx), aIdx, p => {
-    const placed = p.deck.filter(c => safeIids.has(c.iid));
-    const remaining = p.deck.filter(c => !safeIids.has(c.iid));  // 沒放的(含被 trim 掉的選擇)留在牌庫重洗
-    const shuffled = shuffle([...remaining]);
-    return {
-      ...p,
-      deck: shuffled,
-      bench: [...p.bench, ...placed.map(placedBenchInstance)],
-    };
-  });
-});
+regPost('燈火幽靈|亮光增長', recruitNamedToBenchPost('燈火幽靈', 3, '亮光增長'));
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase 2 結束。已實裝 14 (Phase 1) + 17 (Phase 2) = 31 個招式。

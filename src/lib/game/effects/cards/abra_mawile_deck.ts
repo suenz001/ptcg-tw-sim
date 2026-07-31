@@ -155,7 +155,7 @@ regA('土龍節節', 0, (st, idx, pool, cardInst) => {
 });
 
 // ── 謝米｜親送花朵 — 從牌庫選 1 張基本【草】能量附於我方 1 隻備戰寶可夢 ────────
-function deckEnergyAttachBenchPost(targetType: EnergyType | null, label: string): AttackPostFn {
+export function deckEnergyAttachBenchPost(targetType: EnergyType | null, label: string): AttackPostFn {
   // v5.821：targetType 是「附加目標寶可夢的屬性」(如謝米「備戰區的【草】寶可夢」)，不是能量屬性。
   //   能量=卡面「能量卡」= 任意能量(基本或特殊皆可)。先前誤把 targetType 當能量過濾 → 雙錯
   //   (能量被限基本該屬性、目標未限屬性)。

@@ -15,6 +15,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
+import { registerDiscardBasicEnergyMultiply } from '../../effects'; // v6.069 收斂：棄牌區基本能量張數×N
 import { countEnergyTypeHostAware } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import {
@@ -261,40 +262,11 @@ regR('wave5-place-basic-bench', (state, aIdx, iids, _params, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 9. 蓋歐卡|逆流 — 棄牌區所有基本【水】能量數 ×20，然後放回牌庫並重洗
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('蓋歐卡|逆流', (state, aIdx, pool) => {
-  const player = state.players[aIdx];
-  // 找棄牌區所有基本水能量
-  const waterEnergies = player.discard.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic'
-      && (card.pokemonType === 'Water' || /【水】/.test(card.name));
-  });
-  const dmg = waterEnergies.length * 20;
-  const s = addLog(state, `逆流：棄牌區基本【水】能量 ${waterEnergies.length} 張 → ${waterEnergies.length}×20 = ${dmg}`, aIdx);
-  return { state: s, damage: dmg };
-});
-
-regPost('蓋歐卡|逆流', (state, aIdx, pool) => {
-  const player = state.players[aIdx];
-  const waterIids: string[] = [];
-  for (const c of player.discard) {
-    const card = pool.get(c.cardId);
-    if (card?.supertype === 'Energy' && card.subtype === 'Basic'
-        && (card.pokemonType === 'Water' || /【水】/.test(card.name))) {
-      waterIids.push(c.iid);
-    }
-  }
-  if (waterIids.length === 0) return state;
-  const set = new Set(waterIids);
-  return updatePlayer(
-    addLog(state, `逆流：將 ${waterIids.length} 張基本【水】能量從棄牌區放回牌庫並重洗`, aIdx),
-    aIdx, p => {
-      const moved = p.discard.filter(c => set.has(c.iid));
-      const rest = p.discard.filter(c => !set.has(c.iid));
-      return { ...p, discard: rest, deck: shuffle([...p.deck, ...moved]) };
-    },
-  );
-});
+// v6.069：收斂到中央 registerDiscardBasicEnergyMultiply（effects.ts）——
+//   與 M6 加熱洛托姆ex｜再次加熱 卡面逐字相同（只差屬性與倍率）。
+//   順帶修掉原本直讀 card.pokemonType 的寫法：v6.008 已查證現役 68 張基本能量
+//   pokemonType 恒 null（原碼靠 /【水】/ regex fallback 才沒炸），中央改用 getBasicEnergyType。
+registerDiscardBasicEnergyMultiply('蓋歐卡|逆流', 'Water', 20, '逆流');
 
 // 輔助：unused import 防護
 export type _v2550Sentinel = PlayerState;

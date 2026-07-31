@@ -25,7 +25,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
-import { isBasicPokemonCard } from './selection-filter';
+import { isBasicPokemonCard, getBasicEnergyType } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
@@ -7066,32 +7066,12 @@ regPost('熔岩蝸牛ex|熾熱熔岩', statusPost('burned'));
 regPre('飄浮泡泡 太陽的樣子|灼熱', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('飄浮泡泡 太陽的樣子|灼熱', statusPost('burned'));
 
-// 綿綿泡芙|悄聲加害 — 對對手 1 隻寶可夢放置 2 個傷害指示物（= 20 傷害，使用現成 snipe-10 邏輯的 20 變種）
-regPre('綿綿泡芙|悄聲加害', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('綿綿泡芙|悄聲加害', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const defender = state.players[dIdx];
-  if (defender.bench.length === 0 && !defender.active) return state;
-  if (defender.bench.length === 0 && defender.active) {
-    // v5.960 no-bench 也走中央 dealAttackDamageToTarget(對齊 picker 路徑):補 active 弱點/免疫/prevent-KO/受傷反擊/有效HP
-    return dealAttackDamageToTarget(state, aIdx, defender.active.iid, 20, pool, { kind: 'attack-effect', label: '悄聲加害' });
-  }
-  let s = addLog(state, '悄聲加害：選擇對手任一寶可夢，放置 2 個傷害指示物', aIdx);
-  return withPending(s, {
-    type: 'opp-poke-choose',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'snipe-20',
-    params: { includeActive: true },
-  });
-});
-
-regR('snipe-20', (st, actorIdx, selectedIids, _params, pool) => {
-  const targetIid = selectedIids[0];
-  if (!targetIid) return st;
-  // v5.440：放置2個傷害指示物(attack-effect, flat 不計弱抗)走中央。
-  return dealAttackDamageToTarget(st, actorIdx, targetIid, 20, pool, { kind: 'attack-effect', label: '悄聲加害' });
-});
+// 綿綿泡芙／納噬草｜悄聲加害 — 在對手的 1 隻寶可夢身上放置 N 個傷害指示物
+// v6.069：收斂到中央 snipeCountersPost（與 M6 勾魂眼｜不祥之眼 5 個版卡面逐字相同）。
+//   原本的 regR('snipe-20') 專屬 resolver 由參數化的 'snipe-variable' 取代（行為相同：
+//   attack-effect kind、no-bench 走中央 dealAttackDamageToTarget）。
+regPre('綿綿泡芙|悄聲加害', (state) => ({ state, damage: 0 }));
+regPost('綿綿泡芙|悄聲加害', snipeCountersPost(2, '悄聲加害'));
 
 // 由克希|痛楚記憶 — 對手所有寶可夢各放置 2 個指示物（= 20 傷害）
 regPre('由克希|痛楚記憶', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -7283,6 +7263,13 @@ function isEnergyOfType(ec: any, type: string): boolean {
 //   火箭隊能量=2/燃火進化=3/新衝天Stage2=2/繁茂基本草×2),已於上方 import + 上方 re-export。
 //   原 effects.ts 本地副本只認新衝天(火箭隊/燃火算1),違反卡面「能量的數量」=個語意(Wilson 裁定)。
 
+// v6.069 ⭐ 全站「數能量單位」漏傳 state/ownerIdx 修正（8 個呼叫點）：
+//   countAttachedEnergyAsUnits 不傳 state+ownerIdx 時，getEnergyDiscardUnits 拿不到
+//   「大竺葵｜繁茂」(在場時自己寶可夢身上的基本【草】能量各算 2 個) → 整條繁茂修正失效。
+//   證據：卡面逐字相同的 優雅貓｜能量粉碎(走 v2353 energyMultiplyPre，有傳) 同一盤面算 4 個，
+//   而 塗標客｜能量塗鴉／霏歐納｜能量壓制(走本檔 helper) 只算 2 個 —— 同措辭兩種結果。
+//   涵蓋 selfAttached / defActive / oppAll / selfAll 四個 helper ＋ 吞食獸｜張大嘴、
+//   椰蛋樹｜投球時刻、迷唇姐｜精神強念 三處 inline。
 function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
@@ -7291,7 +7278,7 @@ function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: Energy
     const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     const count = isTypeFilter
       ? countEnergyTypeHostAware(att, filter as EnergyType, pool)
-      : filter === 'all' ? countAttachedEnergyAsUnits(att, pool) : countOneEnergy(att, filter, pool); // v5.448：'all'→單位計數(新衝天Stage2×2)
+      : filter === 'all' ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : countOneEnergy(att, filter, pool); // v5.448：'all'→單位計數(新衝天Stage2×2)
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：自身能量 ${count} → ${dmg}`, aIdx), damage: dmg };
   };
@@ -7306,14 +7293,14 @@ function defActiveEnergyMultiplyPre(base: number, per: number, filter: EnergyFil
     const count = def
       ? (isTypeFilter
           ? countEnergyTypeHostAware(def, filter as EnergyType, pool)
-          : filter === 'all' ? countAttachedEnergyAsUnits(def, pool) : countOneEnergy(def, filter, pool)) // v5.448：'all'→單位計數
+          : filter === 'all' ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : countOneEnergy(def, filter, pool)) // v5.448：'all'→單位計數
       : 0;
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手出場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
   };
 }
 
-function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+export function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
@@ -7324,7 +7311,7 @@ function oppAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter
       if (!p) continue;
       count += isTypeFilter
         ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
-        : filter === 'all' ? countAttachedEnergyAsUnits(p, pool) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
+        : filter === 'all' ? countAttachedEnergyAsUnits(p, pool, state, dIdx) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
     }
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
@@ -7348,7 +7335,7 @@ function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilte
       if (!bloom) {
         count += isTypeFilter
           ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
-          : filter === 'all' ? countAttachedEnergyAsUnits(p, pool) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
+          : filter === 'all' ? countAttachedEnergyAsUnits(p, pool, state, aIdx) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
         continue;
       }
       // 繁茂啟用：iterate 每個 energy，基本【草】 +2、其他依 filter 規則 +1
@@ -8323,8 +8310,8 @@ regPre('吞食獸|張大嘴', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
   // v5.676：卡面「能量的數量」= 能量單位數(個)，非卡張數 → host-aware（火箭隊能量=2、燃火進化=3 等）
-  const selfE = att ? countAttachedEnergyAsUnits(att, pool) : 0;
-  const defE = def ? countAttachedEnergyAsUnits(def, pool) : 0;
+  const selfE = att ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : 0;
+  const defE = def ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : 0;
   const bonus = selfE > defE ? 160 : 0;
   const dmg = 10 + bonus;
   return { state: addLog(state, `張大嘴：自能量 ${selfE} vs 對手 ${defE}${bonus ? ' +160' : ''} → ${dmg}`, aIdx), damage: dmg };
@@ -10767,7 +10754,7 @@ regPre('椰蛋樹|投球時刻', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const att = state.players[aIdx].active;
   const def = state.players[dIdx].active;
-  const n = (att ? countAttachedEnergyAsUnits(att, pool) : 0) + (def ? countAttachedEnergyAsUnits(def, pool) : 0);
+  const n = (att ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : 0) + (def ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : 0);
   if (n === 0) return { state: addLog(state, '投球時刻：雙方出場皆無能量', aIdx), damage: 0 };
   const r = flipCoinsWithLog(state, n, '投球時刻', aIdx);
   const dmg = r.heads * 60;
@@ -11520,7 +11507,7 @@ regPre('N的萊希拉姆|強力激怒', (state, aIdx, _pool) => {
 regPre('迷唇姐|精神強念', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const def = state.players[dIdx].active;
-  const energyCount = def ? countAttachedEnergyAsUnits(def, pool) : 0;
+  const energyCount = def ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : 0;
   const dmg = 30 + energyCount * 30;
   const s = addLog(state, `精神強念：對手能量 ${energyCount} × 30 → ${dmg}`, aIdx);
   return { state: s, damage: dmg };
@@ -11567,7 +11554,7 @@ regPost('狐大盜|貪慾狩獵', (state, aIdx, pool, action) => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Helper: drawToHandPost — 從牌庫抽卡直到手牌滿 N ────────────────────────
-function drawToHandPost(n: number, label: string): AttackPostFn {
+export function drawToHandPost(n: number, label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
     const need = Math.max(0, n - p.hand.length);
@@ -11951,19 +11938,27 @@ regPre('美錄坦|搬運破爛', (state, _aIdx, _pool) => ({ state, damage: 0 })
 regPost('美錄坦|搬運破爛', deckSearchToHandPost(1, 'Tool', '搬運破爛'));
 
 // (D) 穿著熊|力量充能 30 — 從牌庫選 1 張基本能量附於自己，並重洗
-function deckEnergyAttachSelfPost(typeFilter: EnergyType | null, label: string): AttackPostFn {
+// v6.069：opts.anyEnergy —— 卡面寫「能量卡」= 任意能量(含特殊)，寫「基本能量卡」才限基本。
+//   雷公ex｜雷霆纏身 是前者；既有 caller 都不傳 opts，行為完全不變。
+export function deckEnergyAttachSelfPost(
+  typeFilter: EnergyType | null,
+  label: string,
+  opts?: { anyEnergy?: boolean },
+): AttackPostFn {
+  const anyEnergy = opts?.anyEnergy === true;
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
     const cand = p.deck.filter(c => {
       const card = pool.get(c.cardId);
-      if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+      if (!card || card.supertype !== 'Energy') return false;
+      if (!anyEnergy && card.subtype !== 'Basic') return false;
       if (typeFilter && !energyMatchesType(card, typeFilter as EnergyType)) return false; // v5.450：基本能量 pokemonType=null，名稱-aware
       return true;
     });
     if (cand.length === 0) return openDeckViewReshuffle(state, aIdx, label); // v5.496
-    const filterStr = typeFilter ? `Energy:${typeFilter}` : 'BasicEnergy';
-    const s = addLog(state, `${label}：從牌庫選 1 張基本能量附於自己`, aIdx);
+    const filterStr = typeFilter ? `Energy:${typeFilter}` : (anyEnergy ? 'Energy' : 'BasicEnergy');
+    const s = addLog(state, `${label}：從牌庫選 1 張${anyEnergy ? '能量' : '基本能量'}附於自己`, aIdx);
     return withPending(s, {
       type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr, minCount: 0, maxCount: 1,
@@ -14902,7 +14897,7 @@ regPre('甲賀忍蛙ex|變幻手裏劍', coinPlusDmg(100, 100));
 //     這幾隻攻擊者實務上無卡會對其設這些旗標（格拉吉歐限非規則寶可夢且為低傷輔助招），
 //     與 櫻花魚漸強波／波動突刺 同 pattern，可接受。
 const DAMAGE_AFTER_DECK_SEARCH_KEY = 'damage-after-deck-search-to-hand';
-function registerDamageThenOptionalDeckSearchToHand(
+export function registerDamageThenOptionalDeckSearchToHand(
   attackName: string, opts: { damage: number; maxCount: number; logName: string },
 ): void {
   // 傷害延後：引擎主管線造 0，真正傷害在搜尋後由 resolver / 「否」分支結算
@@ -17930,3 +17925,176 @@ ATTACK_PRE_DISCARD_CHOICE.set('火箭隊的貓老大ex|高傲指令', {
 //   避免「先問是否查看」與「picker」雙重詢問。實作見 v2760_h_wave3_complex.ts。
 
 // v5.681：好啦魷|惡作劇觸手 改用 modal-choice（先揭示對手牌庫頂再決定重洗），不再借殼 binary-yes-no。
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.069 M6 批次7 中央 helper —— 同時把同措辭的既有卡收斂進來（見各 helper 註解）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 「從自己的牌庫選擇最多 N 張『某卡名』，放置於備戰區。並且重洗牌庫。」
+ * 收斂自 燈火幽靈｜亮光增長（v5.389 備戰上限 trim ／ v5.496 0 候選仍開檢視重洗）。
+ * ⚠ 卡面「最多 N 張」仍受備戰上限約束——撐爆備戰會誤觸「零之大空洞效果失去」清除。
+ * ⚠ 候選 0 張也要開牌庫檢視 + 重洗（v5.963：不重洗＝看完整副牌庫可被利用）。
+ */
+export function recruitNamedToBenchPost(cardName: string, maxN: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const candidates = p.deck.filter(c => pool.get(c.cardId)?.name === cardName);
+    if (candidates.length === 0) return openDeckViewReshuffle(state, aIdx, label);
+    const limit = getOwnBenchLimit(state, aIdx, pool);
+    const remainingSlots = Math.max(0, limit - p.bench.length);
+    if (remainingSlots <= 0) {
+      return updatePlayer(addLog(state, `${label}：備戰區已滿，僅重洗牌庫`, aIdx), aIdx, pp => ({
+        ...pp, deck: shuffle([...pp.deck]),
+      }));
+    }
+    const n = Math.min(maxN, candidates.length, remainingSlots);
+    return withPending(addLog(state, `${label}：從牌庫選 ≤${n} 張「${cardName}」放備戰（可選 0 張）`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: `Name:${cardName}`,
+      minCount: 0, maxCount: n,
+      effectKey: 'recruit-named-to-bench',
+      params: { benchLimitAtPick: limit, cardName, label },
+    });
+  };
+}
+regR('recruit-named-to-bench', (state, aIdx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '放置備戰';
+  const cardName = (params?.cardName as string) ?? '';
+  if (iids.length === 0) {
+    return updatePlayer(addLog(state, `${label}：玩家選 0 張，僅重洗牌庫`, aIdx), aIdx, p => ({
+      ...p, deck: shuffle([...p.deck]),
+    }));
+  }
+  // v5.389 safety trim：防 picker 漏 cap（撐爆備戰會誤觸大空洞清除）。
+  // v6.009：resolver 一律自行 re-validate client 傳來的 iids（禁原封處理）。
+  const p0 = state.players[aIdx];
+  const validAll = p0.deck.filter(c => iids.includes(c.iid) && pool.get(c.cardId)?.name === cardName);
+  const limitAtPick = (params?.benchLimitAtPick as number | undefined) ?? 5;
+  const slotsAvail = Math.max(0, limitAtPick - p0.bench.length);
+  const safeIids = new Set(validAll.slice(0, slotsAvail).map(c => c.iid));
+  return updatePlayer(addLog(state, `${label}：放置 ${safeIids.size} 張「${cardName}」到備戰並重洗`, aIdx), aIdx, p => {
+    const placed = p.deck.filter(c => safeIids.has(c.iid));
+    const remaining = p.deck.filter(c => !safeIids.has(c.iid));
+    return { ...p, deck: shuffle([...remaining]), bench: [...p.bench, ...placed.map(placedBenchInstance)] };
+  });
+});
+
+/**
+ * 「在給對手看過自己的棄牌區的所有『基本【X】能量』卡後，造成其張數×N 點傷害。
+ *   然後，將給對手看過的能量卡放回牌庫並重洗。」
+ * 收斂自 蓋歐卡｜逆流（原逐張手刻 + 直讀 pokemonType）。
+ * ⚠ 卡面是「張數」不是「數量」→ **逐張**計數，不走 host-aware units。
+ * ⚠ v6.008：現役基本能量 pokemonType 恒 null → 一律走中央 getBasicEnergyType（卡名推）。
+ * ⚠ 棄牌區是公開資訊，「給對手看過」不需額外揭示 log（與搜牌庫加手牌不同）。
+ */
+export function registerDiscardBasicEnergyMultiply(
+  key: string, energyType: EnergyType, per: number, label: string,
+): void {
+  const pickIids = (state: GameState, aIdx: 0 | 1, pool: Map<string, Card>): string[] =>
+    state.players[aIdx].discard
+      .filter(c => getBasicEnergyType(pool.get(c.cardId)) === energyType)
+      .map(c => c.iid);
+  regPre(key, (state, aIdx, pool) => {
+    const n = pickIids(state, aIdx, pool).length;
+    const dmg = n * per;
+    return { state: addLog(state, `${label}：棄牌區基本能量 ${n} 張 × ${per} → ${dmg}`, aIdx), damage: dmg };
+  });
+  regPost(key, (state, aIdx, pool) => {
+    const iids = new Set(pickIids(state, aIdx, pool));
+    if (iids.size === 0) return state;
+    return updatePlayer(
+      addLog(state, `${label}：將 ${iids.size} 張基本能量從棄牌區放回牌庫並重洗`, aIdx),
+      aIdx, p => {
+        const moved = p.discard.filter(c => iids.has(c.iid));
+        const rest = p.discard.filter(c => !iids.has(c.iid));
+        return { ...p, discard: rest, deck: shuffle([...p.deck, ...moved]) };
+      });
+  });
+}
+
+/**
+ * 「在對手的 1 隻寶可夢身上放置 N 個傷害指示物。」
+ * 收斂自 綿綿泡芙／納噬草｜悄聲加害。
+ * ⚠ 放置傷害指示物＝**招式效果**（化隱擋、太晶不擋、不計弱點抵抗力），
+ *   一律 kind:'attack-effect'，禁走 attack-damage。
+ * ⚠ 對手沒有備戰時仍要走中央 dealAttackDamageToTarget 打 active
+ *   （v5.960：inline 分支會漏弱點／免疫／prevent-KO／有效 HP）。
+ */
+export function snipeCountersPost(counters: number, label: string): AttackPostFn {
+  const dmg = counters * 10;   // 1 個傷害指示物 = 10 點
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const defender = state.players[dIdx];
+    if (!defender.active && defender.bench.length === 0) return state;
+    if (defender.bench.length === 0 && defender.active) {
+      return dealAttackDamageToTarget(state, aIdx, defender.active.iid, dmg, pool, { kind: 'attack-effect', label });
+    }
+    return withPending(addLog(state, `${label}：選擇對手任一寶可夢，放置 ${counters} 個傷害指示物`, aIdx), {
+      type: 'opp-poke-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'snipe-variable',
+      params: { includeActive: true, damage: dmg, label, kind: 'attack-effect' },
+    });
+  };
+}
+
+/**
+ * 「雙方玩家各自將手牌全部放回牌庫並重洗。然後，各自從牌庫抽出 N 張卡。」
+ * ⚠ 這是**玩家層級**效果（不作用於某隻寶可夢）→ **不**過 canApplyEffectToTarget
+ *   （v5.929 背蓋化石誤擋玩家層級 lock 的教訓）。
+ */
+export function bothReturnHandAndDrawPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx) => {
+    const oIdx = (1 - aIdx) as 0 | 1;
+    let s = addLog(state, `${label}：雙方手牌放回牌庫重洗，各抽 ${n} 張`, aIdx);
+    s = returnHandToDeck(s, aIdx);
+    s = returnHandToDeck(s, oIdx);
+    s = drawCards(s, aIdx, n);
+    s = drawCards(s, oIdx, n);
+    return s;
+  };
+}
+
+/**
+ * 「增加對手的場上擁有特性的寶可夢的數量 × N 點傷害。」
+ * ⚠ v6.049：「擁有特性」＝**當下有效的**特性 —— 特性被消除（監視塔／初始化／暗夜羽擊／
+ *   黏著束縛）就不算；「效果被擋」（監視之眼）仍算有特性。一律走中央 hasAnyEffectiveAbility，
+ *   禁裸判 `abilities.length`。
+ */
+export function oppAbilityHolderCountPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const d = state.players[dIdx];
+    let n = 0;
+    if (d.active && hasAnyEffectiveAbility(state, d.active, pool.get(d.active.cardId), dIdx, 'active', pool)) n++;
+    for (const b of d.bench) {
+      if (hasAnyEffectiveAbility(state, b, pool.get(b.cardId), dIdx, 'bench', pool)) n++;
+    }
+    const dmg = base + per * n;
+    return { state: addLog(state, `${label}：對手場上有特性的寶可夢 ${n} 隻 × ${per} + ${base} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * 「在下個對手的回合，這隻寶可夢不會受到招式的傷害。」
+ * ⚠ 只免**傷害**，招式效果照常 → immuneToAttackDamageNextTurn。
+ *   卡面若寫「不會受到招式的傷害與效果」才是 immuneToAllAttackNextTurn（別混用，
+ *   v5.888 全免疫 vs 減傷 helper 同名 footgun 的同一家族）。
+ */
+export function selfImmuneToAttackDamageNextPost(label: string): AttackPostFn {
+  return (state, aIdx) => {
+    const p = state.players[aIdx];
+    if (!p.active) return state;
+    return updatePlayer(
+      addLog(state, `${label}：下個對手回合這隻寶可夢不會受到招式的傷害`, aIdx),
+      aIdx, pl => (pl.active ? { ...pl, active: { ...pl.active, immuneToAttackDamageNextTurn: true } } : pl),
+    );
+  };
+}
+
+import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）

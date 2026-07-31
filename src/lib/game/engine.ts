@@ -8472,7 +8472,9 @@ const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);
 //   仙子伊布ex｜天仙石 屬此類。舊實作把冷卻鎖在 attacker instance(blockedAttackNamesNextTurn)，會被撤退／
 //   換位／第二張同名卡繞過。改在招式禁用 gate 掃自己全場的中央 attackUsedLastSelfTurn(招式結算自動蓋章、
 //   不隨離場清除)判定，任一隻上個自己回合用過此招即禁用。
-const PLAYER_LEVEL_ATTACK_COOLDOWN = new Set<string>(['天仙石']);
+//   v6.069 騎拉帝納｜渾沌匍匐（M6）：「在上個自己的回合，若自己的寶可夢使用了『渾沌匍匐』，
+//   則無法使用這個招式」—— 主詞是「自己的寶可夢」非「這隻寶可夢」，同 天仙石。
+const PLAYER_LEVEL_ATTACK_COOLDOWN = new Set<string>(['天仙石', '渾沌匍匐']);
 
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 export function getAvailableAttacks(

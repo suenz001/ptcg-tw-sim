@@ -266,6 +266,7 @@ export const FIRST_TURN_USABLE_ATTACKS = new Set<string>([
   '急速飛行',    // 卡璞・鳴鳴
   '早熟進化',    // 蛋蛋（v5.460 audit 補；卡面「這個招式可在先攻玩家的最初回合使用」）
   '急速信號',    // 電螢蟲（v5.460 audit 補；同上標記，亦在 BENCH_FILL_ATTACK_NAMES）
+  '雷霆纏身',    // 雷公ex（v6.069 M6；卡面「這個招式在先攻玩家的最初回合也可使用」）
 ]);
 
 export function hasMeloettaExDebut(
