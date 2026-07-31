@@ -921,6 +921,8 @@ import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, has
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation } from './effects/_shared';
+// v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
+import { isTrainerPendingImplementation } from './effects';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
@@ -3573,6 +3575,11 @@ function handlePlaying(
     // ① 大王銅象｜爆大身軀 — 對手戰鬥場有 → 我方無法使出『競技場』卡
     // v6.059：M6 傳說競技場 — 「兩張實體卡合一」機制尚未實作 → 先擋住不可打出（fail-closed）。
     //   寧可明確擋下並告知，也不要讓玩家放上場卻毫無效果（silent stub）。
+    // v6.066：未實裝的 物品／支援者／寶可夢道具 → 擋住不可打出（fail-closed）。
+    //   原本會照常打出、消耗支援者權、進棄牌區，只留一行 log ＝ 玩家白白損失一張卡＋支援者權。
+    if (isTrainerPendingImplementation(trainerCard.name, trainerCard.subtype)) {
+      return addLog(state, `${trainerCard.name}（${trainerCard.subtype}）效果尚未實裝，暫時無法使用`, aIdx);
+    }
     if (trainerCard.subtype === 'Stadium' && isStadiumPendingImplementation(trainerCard.name)) {
       return addLog(state, `${trainerCard.name}：傳說競技場（需兩張合一）尚未開放使用`, aIdx);
     }
@@ -8955,6 +8962,8 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       if ((c.subtype === 'Item' || c.subtype === 'PokemonTool')
           && isOppItemPlayBlocked(state, state.activePlayerIndex, pool)) return false;
       // v6.059：傳說競技場未實裝 → filter 端同步擋掉（否則手牌會亮框、AI 會反覆挑到被 engine 退回的卡）
+      // v6.066：未實裝的訓練家卡在手牌就不亮框（也避免 AI 反覆挑到被 engine 退回的卡）
+      if (isTrainerPendingImplementation(c.name, c.subtype)) return false;
       if (c.subtype === 'Stadium' && isStadiumPendingImplementation(c.name)) return false;
       if (c.subtype === 'Stadium' && state.players[state.activePlayerIndex].cantPlayStadiumThisTurn) return false;
       if (c.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, state.activePlayerIndex, pool)) return false;

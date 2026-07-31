@@ -109,6 +109,37 @@ export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_ST
 // v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
 export { PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/_shared';
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.066 未實裝訓練家卡 fail-closed（Wilson 裁定）
+// ──────────────────────────────────────────────────────────────────────────────
+// 問題：`TRAINER_EFFECTS` 找不到 handler 時，engine 仍讓卡片打出、**消耗支援者權、進棄牌區**，
+//   只補一行「效果尚未實裝，已棄置」→ 玩家白白損失一張卡＋該回合的支援者權。
+//   這與傳說競技場「直接擋住不可打出」的待遇不一致。
+//
+// ⭐判定用**動態**而非硬編清單：`Item / Supporter / PokemonTool` 只要沒有 TRAINER_EFFECTS
+//   handler 就視為未實裝。實測（v6.066）全站 live H/I/J 去重後，這三類共 207 張中
+//   只有 7 張沒有 handler，且全部是尚未實作的 M6 新卡 → 零誤擋。
+//   好處是**一勞永逸**：日後任何新卡包進資料庫但還沒實作效果時，會自動 fail-closed，
+//   不會再出現「打得出去但沒效果」的 silent stub。
+//
+// ⚠ **Stadium 不適用**：34 張競技場**全部**沒有 TRAINER_EFFECTS handler（它們走
+//   PASSIVE_STADIUMS / ACTIVE 觸發型），用這個判準會把全部競技場誤擋。
+//   競技場另有 PENDING_STADIUMS 專門處理。
+//
+// ⚠ 若未來出現「刻意不需要 handler」的 Item/Tool（效果完全由別的被動管線實作），
+//   把卡名加進下面的白名單，並在該處註明是哪條管線負責。目前為空。
+export const TRAINER_NO_HANDLER_OK = new Set<string>([]);
+
+/** 該訓練家卡是否「尚未實裝 → 禁止打出」。engine 打出路徑與可打出清單 filter 兩端共用。 */
+export function isTrainerPendingImplementation(
+  name: string | undefined | null, subtype: string | undefined | null,
+): boolean {
+  if (!name || !subtype) return false;
+  if (subtype !== 'Item' && subtype !== 'Supporter' && subtype !== 'PokemonTool') return false;
+  if (TRAINER_NO_HANDLER_OK.has(name)) return false;
+  return !TRAINER_EFFECTS.has(name);
+}
+
 /**
  * v2.22：對戰圓形競技場（Stadium）— 備戰保護判定
  * 當場上活動場地卡為 BENCH_PROTECTION_STADIUMS（對戰圓形競技場）時，
