@@ -18,6 +18,12 @@
 //   C. evolvesFrom 指向一張 **ex／GX／V／超級** 版本 → 正是上述爬蟲 pattern 的指紋
 //   D. Basic 卡卻有 evolvesFrom（基礎不該有前一階）
 //   E. Stage1／Stage2 卻沒有 evolvesFrom（進化卡沒前一階＝永遠放不上場）
+//   F. 同名寶可夢的 stage／evolvesFrom **跨印刷必須一致**
+//      ⭐ v6.076 由 Wilson 糾正而加：大力鱷(SV-P-I) 被標成 1 階，但同名卡在 MC/SV5K/SV8a
+//        三個印刷都是 2 階、HP 全部 180、evolvesFrom 全部藍鱷 —— 同一張卡不可能階段不同。
+//        我當時卻因為官方 detail 頁寫「1階進化」就當成官方特例放行，是**信錯了證據層級**。
+//      ⚠ 只比這兩個欄位：HP／屬性在不同卡包本來就會不同（實測 hp/pokemonType 有數十組正常差異），
+//        比下去會變成誤報機器。stage／evolvesFrom 實測全站 0 組差異 → 零誤報，可安全當守衛。
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,12 +44,15 @@ for (const f of readdirSync(dir)) {
 const pokeNames = new Set(all.map(c => c.name));
 const HIJ = all.filter(c => ['H', 'I', 'J'].includes(c.regulationMark));
 
-// ⚠ 已查證為「官方頁自己就這樣標」的例外（不是我們的資料錯）。加白名單前必須先看官方 detail 頁。
-const KNOWN_OK = new Set([
-  // 大力鱷(SV-P-I 222/SV-P)：官方頁明寫「1階進化」，但同名卡在 MC/SV5K/SV8a 都是 2 階。
-  //   官方資料本身就不一致 → 忠實反映官方頁，不改。實務上 evolvesFrom=藍鱷 進化流程仍正確。
-  '大力鱷←藍鱷',
-]);
+// ⚠ 白名單目前**刻意保持空的**。
+//   ⭐ v6.076 教訓（Wilson 糾正）：我原本把「大力鱷(SV-P-I 222/SV-P)」加進白名單，理由是
+//     官方 detail 頁上寫「1階進化」。但實體卡是 **2 階進化**，官方頁那欄不可盡信。
+//     我當時**漏看了更硬的站內證據**：同名的 MC/SV5K/SV8a 三個印刷 HP 全部都是 180、
+//     evolvesFrom 全部是藍鱷，只有那一筆階段不同 —— 同一張卡的不同印刷，階段不可能不一樣。
+//   ⭐ 通則：**跨印刷比對（同名卡在別的卡包長怎樣）優先於官方單一網頁欄位**。
+//     多數印刷一致、少數一筆不同 → 那一筆才是異常值，不要當成「官方特例」放行。
+//     真的要加白名單，先做跨印刷比對，並在此註明查證過程。
+const KNOWN_OK = new Set([]);
 
 const STAGE_ORDER = { Basic: 0, Stage1: 1, Stage2: 2 };
 let fail = 0;
@@ -80,6 +89,22 @@ for (const c of HIJ) {
     if (c.evolvesFrom) report('D 基礎卻有前一階', `[${c._set}] ${c.name}(Basic) ← ${c.evolvesFrom}`);
   } else if (STAGE_ORDER[String(c.stage)] !== undefined && !c.evolvesFrom) {
     report('E 進化卡沒前一階', `[${c._set}] ${c.name}(${c.stage}) 沒有 evolvesFrom → 永遠放不上場`);
+  }
+}
+// F：同名寶可夢的 stage／evolvesFrom 跨印刷一致性
+{
+  const byName = {};
+  for (const c of all) (byName[c.name] ||= []).push(c);
+  for (const [nm, xs] of Object.entries(byName)) {
+    for (const field of ['stage', 'evolvesFrom']) {
+      const variants = [...new Set(xs.map(c => String(c[field] ?? '-')))];
+      if (variants.length < 2) continue;
+      const detail = variants.map(v => {
+        const where = [...new Set(xs.filter(c => String(c[field] ?? '-') === v).map(c => `${c._set} ${c.collectorNumber}`))];
+        return `${v}(${where.join('、')})`;
+      }).join('  vs  ');
+      report('F 跨印刷不一致', `${nm}.${field}：${detail}　同一張卡的不同印刷不該有差異，少數的那筆才是異常值`);
+    }
   }
 }
 if (fail) {
