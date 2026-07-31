@@ -154,6 +154,20 @@ export function isTrainerPendingImplementation(
  *   所以行為跟 engine.ts 的 isRulePokemon 等價。
  *   新規則寶可夢類型上線時，只需更新 types.ts 的 set，兩處自動同步。
  */
+/**
+ * v6.070：卡面「寶可夢【ex】」的中央判定述詞。
+ * 全站 live H/I/J 實測 subtype==='ex' 與「卡名結尾 ex」100% 一致（兩個方向各 0 例外），
+ * 兩個條件都認，避免日後某一邊的資料缺漏造成靜默漏判。
+ * ⚠ 這不等於 isRulePokemon（後者還包含 V/VSTAR/VMAX 等 rule box）。
+ *   卡面只寫「寶可夢【ex】」時用本述詞；寫「寶可夢【ex】・【V】」時用 isRulePokemon 家族。
+ */
+export function isPokemonExCard(card: Card | undefined): boolean {
+  if (!card) return false;
+  if (card.supertype !== 'Pokemon' && card.supertype !== 'Pokémon') return false;
+  if (card.subtype === 'ex') return true;
+  return card.name.endsWith('ex') || card.name.endsWith('EX');
+}
+
 export function isRulePokemon(card: Card | undefined): boolean {
   if (!card) return false;
   if (card.supertype !== 'Pokemon') return false;
@@ -4055,7 +4069,8 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
   // 岩殿居蟹｜神秘石居 — 「這隻寶可夢不會受到對手的『寶可夢【ex】』招式的傷害。」
   //   (SV9a Stage1 150HP) 卡面只擋傷害（不擋效果），跟「神秘之盾」不同（神秘之盾還擋 V/VMAX，
   //   PTCG 繁中版實務沒 V/VMAX）。
-  ['神秘石居', (att) => att.subtype === 'ex'],
+  // v6.070：改走中央 isPokemonExCard（與 膽小蟲｜懦弱 同一述詞；實測零行為變更）
+  ['神秘石居', (att) => isPokemonExCard(att)],
   // 美納斯ex｜璀璨鱗片 — 「這隻寶可夢不會受到對手的『太晶』寶可夢招式的傷害與效果的影響。」
   //   (SV8 Stage1 270HP) 太晶是 tags 元素（不是 subtype）。
   //   v2.267：先做擋傷害版本，「效果的影響」需要更廣的 hook（status / 拔能量 / 移指示物 等）
@@ -4245,6 +4260,21 @@ export const ABILITY_RETREAT_MOD = new Map<string, (
     const energyMap = p.countEnergy(p.retreatingInst);
     if ((energyMap.get('Metal') ?? 0) < 1) return {};
     return { zero: true };
+  }],
+
+  // v6.070 膽小蟲（M6・J）｜懦弱 —
+  //   「若對手的場上有『寶可夢【ex】』，則這隻寶可夢【撤退】所需的能量全部消除。」
+  //   - 只對自身生效（「這隻寶可夢」）→ holder 必須等於 retreating。
+  //   - 「對手的場上」= 對手的戰鬥位 + 備戰區。
+  //   ⚠ 同名卡陷阱：另有一張 J 標【水】膽小蟲沒有特性，本 map 以**特性名**為 key，
+  //     只有真的帶「懦弱」的那張會進來，不會撞號。
+  ['懦弱', (p) => {
+    if (p.holderInst.iid !== p.retreatingInst.iid) return {};
+    const oppIdx = (1 - p.holderOwnerIdx) as 0 | 1;
+    const opp = p.state.players[oppIdx];
+    const hasEx = [...(opp.active ? [opp.active] : []), ...opp.bench]
+      .some(c => isPokemonExCard(p.pool.get(c.cardId)));
+    return hasEx ? { zero: true } : {};
   }],
 
   // 陸地水母｜森林秘道（SVM）—
@@ -15673,6 +15703,12 @@ export const PASSIVE_DAMAGE_REDUCE_COND = new Map<string, (
 ) => number>([
   // 雷吉洛克(I) | 岩石盔甲 — 附能量時受招式傷害 -30
   ['岩石盔甲', (inst) => inst.energyAttached.length > 0 ? 30 : 0],
+  // v6.070 大鋼蛇(M6・J) | 高密度盔甲 —
+  //   「若這隻寶可夢的HP是全滿的狀態，則這隻寶可夢受到對手的寶可夢招式的傷害『-60』點。」
+  //   ⚠「HP 全滿」= 身上沒有傷害指示物（damage === 0）。不可讀 getEffectiveHP 去比
+  //     ——+HP 道具/特性讓上限變動時，damage===0 仍然就是「全滿」。
+  //   ⚠ 同名卡陷阱：另有 I 標【鋼】大鋼蛇（無特性），本 map 以特性名為 key，不會撞號。
+  ['高密度盔甲', (inst) => (inst.damage ?? 0) === 0 ? 60 : 0],
 ]);
 
 /**
@@ -18097,4 +18133,13 @@ export function selfImmuneToAttackDamageNextPost(label: string): AttackPostFn {
   };
 }
 
+/**
+ * v6.070：卡面「只要這隻寶可夢在場上，自己的所有【基礎】寶可夢【撤退】所需的能量全部消除。」
+ * 目前兩張逐字相同：拉帝亞斯ex｜天空徑線（既有）、七夕青鳥｜棉花搬運（M6）。
+ * engine computeActiveRetreatCostFor 讀本集合（原本硬編 '天空徑線' 單一字串）。
+ * ⚠ 持有者的特性必須「當下有效」（被初始化/暗夜羽擊等消除則失效）——gate 在 engine 端。
+ */
+export const FREE_RETREAT_BASIC_ABILITY_NAMES = new Set<string>(['天空徑線', '棉花搬運']);
+
+import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8
 import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）

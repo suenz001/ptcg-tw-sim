@@ -34,6 +34,7 @@ import {
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_END_TURN_DISCARD,
   ABILITY_RETREAT_MOD,
+  FREE_RETREAT_BASIC_ABILITY_NAMES,  // v6.070 天空徑線/棉花搬運（撤退費歸零・【基礎】限定）
   BENCH_PLACE_TRIGGERS, JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS,
   SPECIAL_ENERGY_ATTACH,
   SPECIAL_ENERGY_HP_BONUS, SPECIAL_ENERGY_RETREAT_MOD,
@@ -8797,15 +8798,18 @@ export function computeActiveRetreatCostFor(
     }
   }
   add += gravityCountC;
-  // 天空徑線（v5.472：holder 須特性有效，被初始化等消除則失效）
+  // 天空徑線 / 棉花搬運（v5.472：holder 須特性有效，被初始化等消除則失效）
+  //   v6.070：改由 FREE_RETREAT_BASIC_ABILITY_NAMES 集合驅動（原本硬編單一字串 '天空徑線'，
+  //   M6 七夕青鳥｜棉花搬運 卡面逐字相同）。新增同措辭卡只要進集合即可，不必改本函式。
   const skyIdxC = playerIdx as 0 | 1;
   const hasSkyPath = [
     ...(player.active ? [{ c: player.active, loc: 'active' as const }] : []),
     ...player.bench.map(c => ({ c, loc: 'bench' as const })),
   ].some(({ c, loc }) => {
     const cc = pool.get(c.cardId);
-    return !!cc?.abilities?.some(a => a.name === '天空徑線')
-      && isAbilityHolderEffective(state, c, cc, skyIdxC, '天空徑線', loc, pool);
+    const abName = cc?.abilities?.find(a => FREE_RETREAT_BASIC_ABILITY_NAMES.has(a.name))?.name;
+    if (!abName) return false;
+    return isAbilityHolderEffective(state, c, cc, skyIdxC, abName, loc, pool);
   });
   if (hasSkyPath && isBasicPokemonCard(card)) freeRetreat = true;
   // 競技場
