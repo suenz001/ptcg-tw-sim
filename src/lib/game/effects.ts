@@ -15439,21 +15439,55 @@ export function getKyuremElectroplasmaEffectiveCost(
 }
 
 /**
- * v2.385 狙射樹梟ex｜狙擊手之眼 — 若對手手牌恰為 4 張，
- *   則狙射樹梟ex 使用招式所需的【無】能量全部消除。
- *   範圍：對狙射樹梟ex 持有的所有招式生效（卡面非 attack-specific）。
+ * v6.070 中央 registry：卡面「這隻寶可夢使用招式所需的【無】能量**全部消除**」型特性。
+ *   key = 特性名（⚠ 不是卡名 —— 同名卡可能沒有這個特性）；value = 條件述詞。
+ *   目前成員：
+ *     ・狙擊手之眼（狙射樹梟ex）—— 對手手牌恰為 4 張
+ *     ・化身團結（龍捲雲／雷電雲／土地雲／眷戀雲，M6）—— 自己場上四種化身雲**全部**在場
+ * ⚠ 只收「全部消除」這一子語意；「減少 N 個【無】」（事先準備／喧鬧競技等）語意不同，不併入。
+ */
+export const ABILITY_COLORLESS_COST_ZERO = new Map<string, (
+  holderCard: Card, state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+) => boolean>([
+  // v2.385 狙射樹梟ex｜狙擊手之眼 — 對手手牌恰為 4 張（中文「恰為4張」= === 4）
+  ['狙擊手之眼', (_c, state) => {
+    const dIdx = (1 - state.activePlayerIndex) as 0 | 1;
+    return state.players[dIdx].hand.length === 4;
+  }],
+  // v6.070 化身團結（M6・J，四張各一份）—
+  //   「若自己的場上有『龍捲雲』『雷電雲』『土地雲』『眷戀雲』，則這隻寶可夢使用招式
+  //     所需的【無】能量全部消除。」
+  //   ⭐ Wilson 裁定（2026-07-31）：**四種都要同時在場**（AND）。
+  //     依據：同一卡包的 鴨嘴炎獸｜拍檔提升 要表達「或」時明寫「或者」，本卡沒寫。
+  //   ⚠ 只看**卡名**（不看是不是帶特性的那一版）—— 卡面寫的是卡名，不是特性。
+  ['化身團結', (_c, state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const names = new Set(
+      [...(p.active ? [p.active] : []), ...p.bench].map(c => pool.get(c.cardId)?.name ?? ''),
+    );
+    return ['龍捲雲', '雷電雲', '土地雲', '眷戀雲'].every(n => names.has(n));
+  }],
+]);
+
+/**
+ * v2.385 狙射樹梟ex｜狙擊手之眼 → v6.070 改為集合驅動（見 ABILITY_COLORLESS_COST_ZERO）。
+ *   attacker 只要**自己**帶了登錄在冊的特性且條件成立，其所有招式的【無】需求全部消除。
+ * ⚠ 這是「這隻寶可夢」型（不是場上任一隻），所以只讀 attackerCard 自己的 abilities。
  */
 export function getDecidueyeSnipeEffectiveCost(
   attackerCard: Card,
   state: GameState,
   originalCost: import('$lib/cards/types').EnergyType[],
+  pool?: Map<string, Card>,
 ): import('$lib/cards/types').EnergyType[] {
-  if (attackerCard.name !== '狙射樹梟ex') return originalCost;
-  // 防範同名卡未來不同特性 — 必須有「狙擊手之眼」特性
-  if (!attackerCard.abilities?.some(a => a.name === '狙擊手之眼')) return originalCost;
-  // 對手手牌恰為 4 張
-  const dIdx = (1 - state.activePlayerIndex) as 0 | 1;
-  if (state.players[dIdx].hand.length !== 4) return originalCost;
+  const abs = attackerCard.abilities ?? [];
+  if (abs.length === 0) return originalCost;
+  const aIdx = state.activePlayerIndex as 0 | 1;
+  const hit = abs.some(a => {
+    const cond = ABILITY_COLORLESS_COST_ZERO.get(a.name);
+    return !!cond && cond(attackerCard, state, aIdx, pool ?? new Map());
+  });
+  if (!hit) return originalCost;
   // 移除 cost 中的 Colorless（【無】能量需求消除）
   const filtered = originalCost.filter(c => c !== 'Colorless');
   return filtered.length === originalCost.length ? originalCost : filtered;
@@ -18141,5 +18175,34 @@ export function selfImmuneToAttackDamageNextPost(label: string): AttackPostFn {
  */
 export const FREE_RETREAT_BASIC_ABILITY_NAMES = new Set<string>(['天空徑線', '棉花搬運']);
 
+/**
+ * v6.071 超級烈空坐ex｜綠寶石風暴
+ *   卡面：「造成自己的所有寶可夢身上附加的【火】與【雷】能量的數量×50點傷害。」
+ * ⭐ Wilson 裁定（2026-07-31）：**同一張能量卡只算一次（取聯集）**。
+ *   例：一張古舊能量（提供全屬性各 1 個）算 1 個，不是「火 1 + 雷 1 = 2」。
+ *   實作＝逐張能量，只要它「提供【火】**或**【雷】」就取它在該 host 上的單位數（取兩者較大者），
+ *   而不是把火的計數與雷的計數相加。
+ * ⚠ 單位數仍是 host-aware（火箭隊能量=2、燃火附進化=3、新衝天 on Stage2=2、繁茂基本草=2）。
+ */
+export function countOwnFireLightningEnergyUnion(
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+): number {
+  const p = state.players[aIdx];
+  let n = 0;
+  for (const host of [...(p.active ? [p.active] : []), ...p.bench]) {
+    for (const e of host.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (!ec || ec.supertype !== 'Energy') continue;
+      const isFire = energyProvidesType(host, e, 'Fire', pool);
+      const isLtng = energyProvidesType(host, e, 'Lightning', pool);
+      if (!isFire && !isLtng) continue;
+      // 聯集：同一張只算一次，取它在此 host 上的單位數
+      n += getEnergyDiscardUnits(e.cardId, host, pool, state, aIdx);
+    }
+  }
+  return n;
+}
+
+import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8
 import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）

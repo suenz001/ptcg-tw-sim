@@ -1514,9 +1514,13 @@ export function canAffordAttack(
     // v2.161 八爪武師｜觸手激怒 — 身上有傷害指示物則只需 1 個【鬥】
     const overridden3 = getOctopusTentacleEffectiveCost(pokemon, attackerName, attackName, cost);
     if (overridden3 !== cost) cost = overridden3;
-    // v2.385 狙射樹梟ex｜狙擊手之眼 — 對手手牌 = 4 張時無能量 cost 消除
-    if (attackerCard) {
-      const overridden4 = getDecidueyeSnipeEffectiveCost(attackerCard, state, cost);
+    // v2.385 狙射樹梟ex｜狙擊手之眼 → v6.070 改為 ABILITY_COLORLESS_COST_ZERO 集合驅動
+    //   （狙擊手之眼＋M6 化身團結×4）。化身團結要讀場上卡名 → 多傳 pool。
+    // ⚠ v6.071：本項也必須過 isColorlessAbilityBlocked gate —— M6 龍捲雲｜化身團結 是
+    //   **【無】屬性**寶可夢，火箭隊的監視塔在場時它的特性應被消除。
+    //   （狙射樹梟ex 是【草】，gate 內先判 pokemonType==='Colorless'，故對它零影響。）
+    if (attackerCard && !colorlessAbilityNullified) {
+      const overridden4 = getDecidueyeSnipeEffectiveCost(attackerCard, state, cost, pool);
       if (overridden4 !== cost) cost = overridden4;
     }
     // v2.997 好勝毛蟹／輕身鱈｜事先準備 — 招式所需【無】減自方棄牌「海岱」張數
