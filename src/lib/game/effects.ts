@@ -101,11 +101,13 @@ export {
 // stadiums.ts 包含 3 個 USE_STADIUM 的 pending resolver（神秘花園、夜間學院、
 // 月光丘陵）以及 JAMMING_TOWER_STADIUMS / ROCKET_WATCHTOWER_STADIUMS 兩個
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
-import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS, PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/cards/stadiums';
+import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
 // v5.293: import field-wide damage-reduce helpers for bench damage path
 import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce } from './effects/cards/v2999_g3_wave1';
 import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887 神奇糖果進化也要過瞪眼效用 gate
-export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS, PENDING_STADIUMS, isStadiumPendingImplementation };
+export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
+// v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
+export { PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/_shared';
 
 /**
  * v2.22：對戰圓形競技場（Stadium）— 備戰保護判定

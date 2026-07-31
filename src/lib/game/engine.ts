@@ -919,8 +919,8 @@ import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
-// v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。stadiums.ts 是葉子檔，直接匯入避免循環。
-import { isStadiumPendingImplementation } from './effects/cards/stadiums';
+// v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
+import { isStadiumPendingImplementation } from './effects/_shared';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
