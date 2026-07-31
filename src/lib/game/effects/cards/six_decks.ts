@@ -13,6 +13,7 @@ import { tryPromptPromoteActive, damageCounterCount } from '../_shared'; // v5.7
 import { copyAttackPostDispatch } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
+import { recruitBasicToBenchPost } from '../../effects';  // v6.067 呼朋引伴族中央 helper
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
@@ -190,27 +191,9 @@ regR('lie-cheat-to-deck-bottom', (state, aIdx, selectedIids, _params, pool) => {
 // 毒電嬰｜呼朋引伴 — 牌庫搜 ≤2【基礎】寶可夢放備戰
 // v5.270: 牌庫內有 basic 可選時 minCount=min(maxN,1) (至少選 1, 不可跳過);
 //   牌庫沒有 basic 時直接 log 跳過 (避免手機版 picker maxCount=1+minCount=0 卡確認 button)
-regPost('毒電嬰|呼朋引伴', (state, aIdx, pool) => {
-  // v3.78：支援零之大空洞
-  const limit = getOwnBenchLimit(state, aIdx, pool);
-  if (state.players[aIdx].bench.length >= limit) return addLog(state, '呼朋引伴：備戰區已滿', aIdx);
-  const maxN = Math.min(2, limit - state.players[aIdx].bench.length);
-  // v5.270: pre-scan 牌庫是否有 basic 可選, 沒有就 log 跳過
-  const hasBasicInDeck = state.players[aIdx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && isBasicPokemonCard(card);
-  });
-  if (!hasBasicInDeck) return addLog(state, '呼朋引伴：牌庫內無可選的基礎寶可夢', aIdx);
-  // v5.271: revert minCount 回 0 — 卡面「最多 2 張」, 玩家可選 0~2 (跳過合法).
-  //   v5.270 改 minCount=1 違反卡面 (Wilson 明確要求 revert).
-  return withPending(addLog(state, `呼朋引伴：從牌庫選 0~${maxN} 張基礎寶可夢放備戰`, aIdx), {
-    type: 'deck-search',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'BasicPokemon',
-    minCount: 0, maxCount: maxN,
-    effectKey: 'recruit-to-bench',
-  });
-});
+// v6.067：收斂到中央 recruitBasicToBenchPost（與 M6 電擊獸｜呼朋引伴 卡面逐字相同，共用同一份）。
+//   行為不變：benchLimit gate → 牌庫預掃 → deck-search picker（minCount=0，卡面「最多」可選 0 張）。
+regPost('毒電嬰|呼朋引伴', recruitBasicToBenchPost(2, '呼朋引伴'));
 regR('recruit-to-bench', (state, aIdx, selectedIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };

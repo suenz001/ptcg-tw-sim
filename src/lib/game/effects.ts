@@ -25,6 +25,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
+import { isBasicPokemonCard } from './selection-filter';
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
@@ -634,6 +635,7 @@ import './effects/cards/m6_wave1';  // v6.060 M6 招式實裝 批次1（純類�
 import './effects/cards/m6_wave2';  // v6.061 M6 招式實裝 批次2（12 招）
 import './effects/cards/m6_wave3';  // v6.062 M6 招式實裝 批次3（8 招）
 import './effects/cards/m6_wave4';  // v6.063 M6 招式實裝 批次4（3 招）
+import './effects/cards/m6_wave5';  // v6.067 M6 招式實裝 批次5（5 招）
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
@@ -5680,6 +5682,31 @@ regPost('功夫鼬|拍落', oppDiscardChosenConcealedPost(1, '拍落'));
 // ⚠ 揭示語義：卡面「查看…正面」的結果**公開**寫進對戰紀錄（與既有 火箭隊的喵喵｜占為己有 一致）。
 //   這不是資訊洩漏 —— 對手看著自己的手牌，本來就知道少了哪張；公開只是讓觀戰/回放能還原。
 // ⚠ 用中央 shuffle（禁 inline Math.random 洗牌，lint Check L）。
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.067 中央收斂：「從自己的牌庫選擇最多 N 張【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。」
+//   原本只有 六_decks 的 毒電嬰｜呼朋引伴 有實作；M6 電擊獸｜呼朋引伴 卡面**逐字相同**，
+//   故抽成中央 helper 共用（resolver `recruit-to-bench` 是全域註冊，兩張共用同一份）。
+// ⚠ 卡面是「**最多** N 張」→ minCount=0（玩家可以選 0 張跳過，這是合法選擇）。
+//   v5.271 曾把 minCount 改成 1，Wilson 明確要求 revert —— 別再改。
+// ⚠ 備戰區已滿 / 牌庫沒有基礎寶可夢時，直接寫 log 不開 picker（避免空視窗＝體感沒發動）。
+export function recruitBasicToBenchPost(maxCards: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const limit = getOwnBenchLimit(state, aIdx, pool);   // v3.78：支援零之大空洞
+    const free = limit - state.players[aIdx].bench.length;
+    if (free <= 0) return addLog(state, `${label}：備戰區已滿`, aIdx);
+    const maxN = Math.min(maxCards, free);
+    const hasBasic = state.players[aIdx].deck.some(c => isBasicPokemonCard(pool.get(c.cardId)));
+    if (!hasBasic) return addLog(state, `${label}：牌庫內無可選的基礎寶可夢`, aIdx);
+    return withPending(addLog(state, `${label}：從牌庫選 0~${maxN} 張基礎寶可夢放備戰`, aIdx), {
+      type: 'deck-search',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'BasicPokemon',
+      minCount: 0, maxCount: maxN,
+      effectKey: 'recruit-to-bench',
+    });
+  };
+}
+
 export function oppReturnChosenConcealedToDeckPost(n: number, label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
