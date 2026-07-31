@@ -13,8 +13,11 @@
 //
 // 三條檢查（只掃 live 卡包的 H/I/J，與全站維護範圍一致）：
 //   A. evolvesFrom 指向的卡名在全站寶可夢中**不存在** → 這張進化卡永遠打不出來
-//   B. evolvesFrom 指向的卡與自己**同 stage** → 進化必須跨階，必為資料錯
+//   B. 階段沒有**正好差 1**（Basic→Stage1→Stage2）→ 進化必須逐階，必為資料錯
+//      ⚠ 原本只擋「同階」，但「差 2 階」（Stage2 ← Basic）同樣不合法，會漏 → 已收緊。
 //   C. evolvesFrom 指向一張 **ex／GX／V／超級** 版本 → 正是上述爬蟲 pattern 的指紋
+//   D. Basic 卡卻有 evolvesFrom（基礎不該有前一階）
+//   E. Stage1／Stage2 卻沒有 evolvesFrom（進化卡沒前一階＝永遠放不上場）
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +45,7 @@ const KNOWN_OK = new Set([
   '大力鱷←藍鱷',
 ]);
 
+const STAGE_ORDER = { Basic: 0, Stage1: 1, Stage2: 2 };
 let fail = 0;
 const report = (tag, msg) => { fail++; console.log(`  ❌ [${tag}] ${msg}`); };
 const seen = new Set();
@@ -61,10 +65,21 @@ for (const c of HIJ) {
     report('C 指向ex/GX版本', `[${c._set}] ${c.name} ← 「${c.evolvesFrom}」（官方進化面板是「該編號所有卡片」，抓錯就會指到 ex/GX 版）`);
     continue;
   }
-  // B
+  // B：階段必須正好差 1
   const pre = all.find(x => x.name === c.evolvesFrom);
-  if (pre && String(pre.stage) === String(c.stage)) {
-    report('B 同階進化', `[${c._set}] ${c.name}(${c.stage}) ← ${c.evolvesFrom}(${pre.stage})　進化必須跨階`);
+  if (pre) {
+    const a = STAGE_ORDER[String(c.stage)], b = STAGE_ORDER[String(pre.stage)];
+    if (a !== undefined && b !== undefined && a - b !== 1) {
+      report('B 階段不連續', `[${c._set}] ${c.name}(${c.stage}) ← ${c.evolvesFrom}(${pre.stage})　差 ${a - b} 階，進化必須逐階`);
+    }
+  }
+}
+// D／E：階段與 evolvesFrom 的有無必須一致
+for (const c of HIJ) {
+  if (String(c.stage) === 'Basic') {
+    if (c.evolvesFrom) report('D 基礎卻有前一階', `[${c._set}] ${c.name}(Basic) ← ${c.evolvesFrom}`);
+  } else if (STAGE_ORDER[String(c.stage)] !== undefined && !c.evolvesFrom) {
+    report('E 進化卡沒前一階', `[${c._set}] ${c.name}(${c.stage}) 沒有 evolvesFrom → 永遠放不上場`);
   }
 }
 if (fail) {
