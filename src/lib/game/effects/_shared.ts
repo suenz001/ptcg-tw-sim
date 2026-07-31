@@ -192,7 +192,7 @@ export interface PreDiscardSpec {
    *   UI 顯示 stepper overlay；regPre 看 action.discardedEnergyIids.length = 玩家選的 N。
    *   spec.min / spec.max 作為下/上限。spec.damagePerEnergy = 每個 counter 加的傷害。
    */
-  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'hand-energy' | 'binary-yes-no' | 'self-counter-stepper';
+  scope: 'attacker' | 'any-own' | 'own-bench' | 'hand-rocket-supporter' | 'hand-tool' | 'hand-energy' | 'binary-yes-no' | 'self-counter-stepper' | 'hand-reveal';
   /**
    * v2.255：scope='binary-yes-no' / 'self-counter-stepper' 時的提示文字。
    *   choicePrompt：modal 主問句（例：「是否將自身回牌庫，增加 80 點傷害？」）
@@ -222,7 +222,7 @@ export interface PreDiscardSpec {
    * 對少數「放回手牌 / 放回牌庫」類招式（忍者飛旋 / 叢林鞭打 / 時間爆炸 / 激流水泵）
    * 設為對應 verb，UI 標題與按鈕會顯示「放回手牌」/「放回牌庫」而非誤導的「丟棄」。
    */
-  verb?: 'discard' | 'return-to-hand' | 'return-to-deck';
+  verb?: 'discard' | 'return-to-hand' | 'return-to-deck' | 'reveal'; // v6.078 'reveal'=給對手看（不移動卡）
   /**
    * v4.16：picker UI 限定的能量屬性（如忍者飛旋限【水】）。
    * 設此值後，picker 只顯示「視為該屬性」的能量：
@@ -233,6 +233,30 @@ export interface PreDiscardSpec {
    * 不符的能量在 picker 內隱藏，避免玩家點選後被 regPre 退回。
    */
   energyTypeFilter?: 'Grass' | 'Fire' | 'Water' | 'Lightning' | 'Psychic' | 'Fighting' | 'Darkness' | 'Metal' | 'Dragon' | 'Colorless';
+  /**
+   * v6.078：picker 只顯示「**基本**能量卡」（subtype === 'Basic'）。
+   *   用於卡面寫「將…身上附加的任意數量的**基本能量卡**丟棄」的招式（電擊魔獸｜電壓錘）。
+   *   ⚠ 與 energyTypeFilter 正交：energyTypeFilter 篩「視為某屬性」（含特殊/古舊/稜鏡），
+   *     basicEnergyOnly 篩「卡片本身是基本能量」。同時設定 = 兩者都要滿足。
+   *   ⚠ 沒有這個欄位時 regPre 仍會過濾掉特殊能量，但 picker 會**顯示**它們 →
+   *     玩家勾了 3 張只丟得掉 2 張、傷害對不上（UI 與引擎不一致）。
+   */
+  basicEnergyOnly?: boolean;
+
+  /**
+   * v6.078：scope='hand-reveal' 專用 —— 「從自己的手牌將**任意數量**的○○**給對手看過後**，
+   *   造成…傷害」型招式（雙劍鞘｜劍武備、變隱龍｜鮮豔鞭打）。
+   *   ⚠ 這類招式**不移動任何卡**（只揭示），regPre 不可動 hand。
+   *   ⚠ 卡面寫「任意數量」→ 必須由玩家挑，**禁自動全展示**：少展示是有意義的選擇
+   *     （手牌內容是隱藏資訊，玩家可能不想讓對手知道自己握著幾張）。
+   *   ⚠ 揭示 = 公開資訊 → regPre 要用公開 addLog 列出被展示的卡名。
+   *   handRevealNames：限定卡名（劍武備）；handRevealSupertype：限定大類（鮮豔鞭打＝寶可夢卡）。
+   *   兩者都設時取交集；都不設 = 手牌全部可選。
+   */
+  handRevealNames?: string[];
+  handRevealSupertype?: 'Pokemon' | 'Trainer' | 'Energy';
+  /** picker 標題/說明用的中文描述（例：「寶可夢卡」） */
+  handRevealLabel?: string;
   /**
    * v5.992：「若希望，付出（丟棄/放回）N 個能量 → 加傷/施加狀態」E-10 語義中央機制。
    * Wilson 官方裁定（金屬之錘 QA 一般化）：

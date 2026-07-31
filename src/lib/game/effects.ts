@@ -8763,6 +8763,9 @@ export function registerSelfDiscardMultiply(
       energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic' || typeFilter === 'Fairy')
         ? undefined
         : (typeFilter as Exclude<EnergyType, 'Fairy'>),
+      // v6.078：typeFilter='basic'（卡面「基本能量卡」）時，picker 也要只顯示基本能量。
+      //   原本只有 regPre 端過濾 → picker 會列出特殊能量，玩家勾了卻丟不掉、傷害對不上。
+      basicEnergyOnly: typeFilter === 'basic' ? true : undefined,
     });
   }
   regPre(key, (state, aIdx, pool, action) => {
@@ -8817,6 +8820,11 @@ registerSelfDiscardMultiply('固拉多|熔岩光芒', '熔岩光芒', 0, 60, 4, 
 // 席多藍恩|鋼鐵爆炸 — 丟棄所有自身 Metal 能量 × 50（卡面「全部丟棄」= 強制）
 // v4.72: forceAll=true，不開 picker，regPre 直接全丟
 registerSelfDiscardMultiply('席多藍恩|鋼鐵爆炸', '鋼鐵爆炸', 0, 50, 99, 'Metal', true);
+
+// 電擊魔獸｜電壓錘 — v6.078 M6：將**這隻寶可夢**身上附加的任意數量**基本能量卡**丟棄，張數 × 60。
+//   scope='attacker'（卡面主詞是「這隻寶可夢」，不是「場上」）；typeFilter='basic' 讓
+//   picker 與 regPre 兩端都只認基本能量卡（古舊／稜鏡／火箭隊等特殊能量不可選）。
+registerSelfDiscardMultiply('電擊魔獸|電壓錘', '電壓錘', 0, 60, 99, 'basic');
 
 // ── KO 類（2 張） ──────────────────────────────────────────────────────────
 
@@ -18428,7 +18436,75 @@ export function resolveLureOutOppTopN(
   }));
 }
 
+
+// ── (4) v6.078「從自己的手牌將**任意數量**的○○**給對手看過後**，造成…傷害」───────
+// 適用：雙劍鞘｜劍武備（限三個指名卡名，張數×60）、變隱龍｜鮮豔鞭打（寶可夢卡，屬性種類×30）
+// ⚠ 只揭示、**不移動任何卡**（regPre 不動 hand）。
+// ⚠ 卡面「任意數量」→ 一律開 picker 由玩家挑；**禁自動全展示**（少展示是有意義的選擇，
+//   手牌是隱藏資訊）。這是 v6.078 修正 劍武備 的點。
+// ⚠ 揭示 = 公開資訊 → 公開 addLog 列出實際展示的卡名（Iron Rule：給對手看過必須公開揭示）。
+// ⚠ 公平性：regPre 自驗 client 傳來的 iid 必須在手牌內且符合卡面條件（v6.009 通則）。
+export function registerHandRevealAttack(opts: {
+  key: string;
+  label: string;
+  names?: string[];
+  supertype?: 'Pokemon' | 'Trainer' | 'Energy';
+  revealLabel: string;
+  /** 依「實際展示的卡」算傷害 */
+  damageOf: (revealed: Card[]) => number;
+  /** log 用的計算說明（例：「3 種屬性 × 30」） */
+  describe: (revealed: Card[], damage: number) => string;
+  /** 沒有任何可展示的卡時的 log 文字 */
+  emptyText: string;
+}) {
+  const { key, label, names, supertype, revealLabel, damageOf, describe, emptyText } = opts;
+  const eligibleOf = (hand: CardInstance[], pool: Map<string, Card>): CardInstance[] =>
+    hand.filter(h => {
+      const c = pool.get(h.cardId);
+      if (!c) return false;
+      if (names && !names.includes(c.name)) return false;
+      if (supertype && c.supertype !== supertype) return false;
+      return true;
+    });
+
+  ATTACK_PRE_DISCARD_CHOICE.set(key, {
+    min: 0, max: null, scope: 'hand-reveal', baseDamage: 0,
+    // damagePerEnergy 只影響 UI 的「預估傷害」；屬性種類型無法用線性倍率表示，
+    // 給 0 讓 UI 不顯示估算（真實傷害由 regPre 的 damageOf 決定）。
+    damagePerEnergy: 0,
+    verb: 'reveal',
+    handRevealNames: names,
+    handRevealSupertype: supertype,
+    handRevealLabel: revealLabel,
+  });
+
+  regPre(key, (state, aIdx, pool, action) => {
+    const hand = state.players[aIdx].hand;
+    const eligible = eligibleOf(hand, pool);
+    if (eligible.length === 0) {
+      return { state: addLog(state, `${label}：${emptyText} → 0 傷害`, aIdx), damage: 0 };
+    }
+    const chosenIids = action?.discardedEnergyIids;
+    // 自驗：只認「在手牌內 ∧ 符合卡面條件」的 iid
+    const allowed = new Set(eligible.map(c => c.iid));
+    const picked = (chosenIids && chosenIids.length > 0)
+      ? eligible.filter(c => allowed.has(c.iid) && chosenIids.includes(c.iid))
+      // AI / headless fallback：沒傳選擇 → 全部展示（傷害最大化）
+      : eligible;
+    if (picked.length === 0) {
+      return { state: addLog(state, `${label}：未展示任何卡 → 0 傷害`, aIdx), damage: 0 };
+    }
+    const cards = picked.map(c => pool.get(c.cardId)!).filter(Boolean);
+    const dmg = damageOf(cards);
+    const s = addLog(state,
+      `${label}：給對手看 ${picked.length} 張（${joinCardNames(picked, pool)}）→ ${describe(cards, dmg)}`,
+      aIdx);
+    return { state: s, damage: dmg };
+  });
+}
+
 import './effects/cards/m6_wave11'; // v6.078 M6 新機制招式 批次11
+import './effects/cards/m6_wave12'; // v6.078 M6 新機制招式 批次12
 import './effects/cards/m6_wave10'; // v6.072 M6 訓練家實裝 批次10
 import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8

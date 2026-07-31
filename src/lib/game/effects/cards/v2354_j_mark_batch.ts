@@ -55,21 +55,9 @@ function totalEnergyCount(p: { active: CardInstance | null | undefined; bench: C
 
 // ── Group A：手牌計數攻擊 ────────────────────────────────────────────────────
 
-// 雙劍鞘｜劍武備：60×
-// 卡面：從自己的手牌將任意數量的「獨劍鞘」「雙劍鞘」「堅盾劍怪」給對手看過後，
-//        造成其張數×60點傷害。
-// 實裝：計算手牌中符合名稱的卡，damage = count × 60（最少 0）。
-const SWORD_NAMES = new Set(['獨劍鞘', '雙劍鞘', '堅盾劍怪']);
-regPre('雙劍鞘|劍武備', (state, aIdx, pool) => {
-  const p = state.players[aIdx];
-  const matched = p.hand.filter(c => SWORD_NAMES.has(pool.get(c.cardId)?.name ?? ''));
-  const dmg = matched.length * 60;
-  const names = matched.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  const s = matched.length > 0
-    ? addLog(state, `劍武備：展示手牌中 ${matched.length} 張（${names}）→ ${dmg} 傷害`, aIdx)
-    : addLog(state, '劍武備：手牌中無獨劍鞘/雙劍鞘/堅盾劍怪 → 0 傷害', aIdx);
-  return { state: s, damage: dmg };
-});
+// 雙劍鞘｜劍武備 — v6.078 移至 effects.ts registerHandRevealAttack（M6 變隱龍｜鮮豔鞭打
+//   卡面同為「從手牌將任意數量的○○給對手看過後」→ 收斂成同一個 picker 機制）。
+//   ⚠ 同時修正：原本自動全展示，卡面寫「任意數量」應由玩家挑幾張。
 
 // ── Group B：對手手牌操作 ─────────────────────────────────────────────────────
 

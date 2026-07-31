@@ -5292,7 +5292,7 @@
   //   ownerName 顯示卡名（讓玩家看清楚要丟哪張）
   function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> {
     if (!game || !activePlayer) return [];
-    const out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> = [];
+    let out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> = []; // v6.078 basicEnergyOnly 需重新指派
     if (spec.scope === 'hand-rocket-supporter') {
       // v2.143 火箭羽毛：列出手牌中「火箭隊」支援者
       const placeholder = activePlayer.active ?? activePlayer.bench[0];
@@ -5314,6 +5314,20 @@
         if (hc?.supertype === 'Trainer' && hc.subtype === 'PokemonTool') {
           out.push({ iid: h.iid, cardId: h.cardId, ownerIid: 'hand', ownerName: hc.name, hostInst: placeholder });
         }
+      }
+      return out;
+    }
+    // v6.078：scope='hand-reveal' —— 「從手牌將任意數量的○○給對手看過後」型招式。
+    //   ⚠ 只揭示、不移動卡；玩家自行決定展示幾張（卡面寫「任意數量」，禁自動全展示）。
+    if (spec.scope === 'hand-reveal') {
+      const placeholder = activePlayer.active ?? activePlayer.bench[0];
+      if (!placeholder) return [];
+      for (const h of activePlayer.hand) {
+        const hc = getCard(h.cardId);
+        if (!hc) continue;
+        if (spec.handRevealNames && !spec.handRevealNames.includes(hc.name)) continue;
+        if (spec.handRevealSupertype && hc.supertype !== spec.handRevealSupertype) continue;
+        out.push({ iid: h.iid, cardId: h.cardId, ownerIid: 'hand', ownerName: hc.name, hostInst: placeholder });
       }
       return out;
     }
@@ -5343,6 +5357,11 @@
     } else {
       addFrom(activePlayer.active);
       for (const b of activePlayer.bench) addFrom(b);
+    }
+    // v6.078：spec.basicEnergyOnly — 只留「基本能量卡」（卡面寫「基本能量卡」的招式）。
+    //   與 energyTypeFilter 正交，先套這一層再套屬性層。
+    if (spec.basicEnergyOnly) {
+      out = out.filter(item => getCard(item.cardId)?.subtype === 'Basic');
     }
     // v4.16：spec.energyTypeFilter 設定時，filter 出「視為該屬性」的能量
     //   覆蓋基本/特殊能量規則；新衝天 (Stage2) 視為所有屬性；稜鏡 (Basic) 視為所有屬性
@@ -9796,7 +9815,8 @@
     {@const pickedCount = preAttackDiscard.picked.size}
     {@const pickedAmount = computePickedAmount(spec, preAttackDiscard.picked, energies)}
     {@const isUnits = spec.countMode === 'units'}
-    {@const isHandDiscard = spec.scope === 'hand-rocket-supporter' || spec.scope === 'hand-tool' || spec.scope === 'hand-energy'}
+    {@const isHandDiscard = spec.scope === 'hand-rocket-supporter' || spec.scope === 'hand-tool' || spec.scope === 'hand-energy' || spec.scope === 'hand-reveal'}
+    {@const isHandReveal = spec.scope === 'hand-reveal'}
     {@const isHandTool = spec.scope === 'hand-tool'}
     {@const unit = isUnits ? '個' : '張'}
     {@const minOk = pickedAmount >= effectivePreDiscardMin(spec, _maxDiscardAmount(spec))}
@@ -9816,10 +9836,12 @@
           <h3>{isHandDiscard ? '🪶' : '⚡'} {preAttackDiscard.attackName}：選擇要{
             spec.verb === 'return-to-hand' ? '放回手牌的' :
             spec.verb === 'return-to-deck' ? '放回牌庫的' :
+            spec.verb === 'reveal' ? '給對手看的' :
             '丟棄的'
           }{
             spec.scope === 'hand-rocket-supporter' ? '火箭隊支援者' :
             spec.scope === 'hand-energy' ? '能量卡' :
+            isHandReveal ? (spec.handRevealLabel ?? '手牌') :
             isHandTool ? '寶可夢道具' :
             '能量'
           }</h3>
@@ -9832,6 +9854,7 @@
               spec.scope === 'own-bench' ? '僅自己備戰寶可夢身上的能量' :
               spec.scope === 'hand-rocket-supporter' ? '從自己手牌中名稱含「火箭隊」的支援者卡' :
               spec.scope === 'hand-energy' ? '從自己手牌中的能量卡（任意屬性）' :
+              isHandReveal ? `從自己手牌中的${spec.handRevealLabel ?? '卡'}（只給對手看，不會離開手牌）` :
               isHandTool ? '從自己手牌中的寶可夢道具卡' :
               '自己場上任一寶可夢身上的能量'
             }
@@ -9860,7 +9883,7 @@
             {/if}
           {/each}
           {#if energies.length === 0}
-            <p class="sel-empty">（沒有可丟棄的{isHandDiscard ? '支援者' : '能量'}）</p>
+            <p class="sel-empty">（沒有可{isHandReveal ? '展示的' + (spec.handRevealLabel ?? '卡') : (isHandDiscard ? '丟棄的支援者' : '丟棄的能量')}）</p>
           {/if}
         </div>
         <div class="sel-footer">
@@ -9868,7 +9891,7 @@
             {#if req !== undefined}
               啟用追加效果（需放回 {req} 個能量，目前 {pickedCount}/{req}）
             {:else}
-              確定使用招式（{spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '放回' : '丟'} {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
+              確定使用招式（{spec.verb === 'reveal' ? '給對手看' : (spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '放回' : '丟')} {pickedCount} 張{isUnits ? `／${pickedAmount} 個能量` : ''}）
             {/if}
           </button>
           {#if spec.min === 0}
@@ -9876,7 +9899,7 @@
               {#if req !== undefined}
                 不啟用追加效果（不放回任何能量）
               {:else}
-                {spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '不放回' : '不丟'}（0 傷害）
+                {spec.verb === 'reveal' ? '不給對手看' : (spec.verb === 'return-to-hand' || spec.verb === 'return-to-deck' ? '不放回' : '不丟')}（0 傷害）
               {/if}
             </button>
           {/if}
