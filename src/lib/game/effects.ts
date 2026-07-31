@@ -602,6 +602,7 @@ import './effects/cards/m5_j_coverage_fix';
 import './effects/cards/m6_wave1';  // v6.060 M6 招式實裝 批次1（純類推既有 helper）
 import './effects/cards/m6_wave2';  // v6.061 M6 招式實裝 批次2（12 招）
 import './effects/cards/m6_wave3';  // v6.062 M6 招式實裝 批次3（8 招）
+import './effects/cards/m6_wave4';  // v6.063 M6 招式實裝 批次4（3 招）
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
@@ -5612,7 +5613,8 @@ regPost('振翼髮|月亮之力', defNextAtkReducePost(30, '月亮之力'));
 regPost('仙子伊布ex|魔法魅惑', defNextAtkReducePost(100, '魔法魅惑'));
 
 // ── F. 丟對手隨機 1 張手牌 2 張 ───────────────────────────────────────────
-function oppDiscardRandomHand(n: number, attackName: string): AttackPostFn {
+// v6.063：export 供 M6 批次4 卡檔復用（原為 local，行為完全未變）
+export function oppDiscardRandomHand(n: number, attackName: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const pickCount = Math.min(n, state.players[dIdx].hand.length);
@@ -8589,7 +8591,8 @@ const TYPE_TO_TAG: Record<string, string> = {
   Fairy: '【妖】', Dragon: '【龍】', Colorless: '【無】',
 };
 
-function registerSelfDiscardMultiply(
+// v6.063：export 供 M6 批次4 卡檔復用（原為 local，行為完全未變）
+export function registerSelfDiscardMultiply(
   key: string,
   label: string,
   baseDamage: number,
