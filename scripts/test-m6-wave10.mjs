@@ -209,5 +209,46 @@ function mk(o={}){
     }
   }
 }
+// ── F) 希嘉娜的信賴：互換 ＋ 選 1 個能量改附 ─────────────────────────────
+{
+  const c=byName('希嘉娜的信賴');
+  const rush=byName('急進開關');   // 同型範本（差別：那張是「任意數量」）
+  const en=all.find(x=>x.name==='基本【水】能量');
+  if(!c||!en) chk('希嘉娜的信賴 harness 前置',false);
+  else{
+    const card=inst(c.id);
+    const A=inst(PLAIN.id); A.energyAttached=[inst(en.id),inst(en.id)];
+    const B=inst(PLAIN.id);
+    const st=mk({a:A,ab:[B],hand:[card]});
+    const r1=applyAction(st,{type:'PLAY_TRAINER',iid:card.iid},pool);
+    chk('希嘉娜的信賴：先開 bench-choose 選換入的備戰', r1?.pendingSelection?.type==='bench-choose', r1?.pendingSelection?.type);
+    const r2=applyAction(r1,{type:'RESOLVE_SELECTION',selectedIids:[B.iid]},pool);
+    chk('希嘉娜的信賴：互換完成（B 上戰鬥場）', r2?.players?.[0]?.active?.iid===B.iid, r2?.players?.[0]?.active?.iid);
+    const p2=r2?.pendingSelection;
+    chk('希嘉娜的信賴：接著開能量 picker、且**只能選 1 個**（卡面「1個」非任意數量）',
+        p2?.type==='active-energy-discard' && p2?.minCount===1 && p2?.maxCount===1,
+        `${p2?.type} min=${p2?.minCount} max=${p2?.maxCount}`);
+    const eIid=A.energyAttached[0].iid;
+    const r3=applyAction(r2,{type:'RESOLVE_SELECTION',selectedIids:[eIid]},pool);
+    chk('希嘉娜的信賴：能量移到新戰鬥寶可夢',
+        (r3?.players?.[0]?.active?.energyAttached ?? []).some(e=>e.iid===eIid),
+        JSON.stringify((r3?.players?.[0]?.active?.energyAttached ?? []).map(e=>e.iid)));
+    chk('希嘉娜的信賴：換下去那隻少 1 張能量',
+        (r3?.players?.[0]?.bench?.find(b=>b.iid===A.iid)?.energyAttached ?? []).length===1);
+    // ⚠ client 送 2 個 iid 也只能移 1 張（引擎不驗 maxCount → resolver 自己夾）
+    const r3b=applyAction(r2,{type:'RESOLVE_SELECTION',selectedIids:A.energyAttached.map(e=>e.iid)},pool);
+    chk('希嘉娜的信賴：client 送 2 個也只移 1 張（resolver 自行夾上限）',
+        (r3b?.players?.[0]?.active?.energyAttached ?? []).length===1,
+        `${(r3b?.players?.[0]?.active?.energyAttached ?? []).length}`);
+    // 換下去那隻沒能量 → 只互換、不開 picker
+    const card2=inst(c.id);
+    const A2=inst(PLAIN.id), B2=inst(PLAIN.id);
+    const q=applyAction(mk({a:A2,ab:[B2],hand:[card2]}),{type:'PLAY_TRAINER',iid:card2.iid},pool);
+    const q2=applyAction(q,{type:'RESOLVE_SELECTION',selectedIids:[B2.iid]},pool);
+    chk('希嘉娜的信賴：換下的沒能量 → 只互換不開 picker',
+        !q2?.pendingSelection && q2?.players?.[0]?.active?.iid===B2.iid, q2?.pendingSelection?.type);
+  }
+  chk('既有 急進開關 仍有 handler（同型正對照）', !!rush && TRAINER_EFFECTS.has('急進開關'));
+}
 console.log(`m6-wave10:PASS ${pass} / FAIL ${fail}`);
 if(fail>0)process.exit(1);

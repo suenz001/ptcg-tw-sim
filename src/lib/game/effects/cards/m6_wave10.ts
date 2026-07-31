@@ -10,7 +10,8 @@
 //   ・超級烈空坐帽子 → 道具賦予招式，需新機制
 //   ・主持人的帶動 → 與既有 SV9a 同名同文，已自動承接 handler
 
-import { reg, regG, regR, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { reg, regG, regR, addLog, updatePlayer, withPending, shuffle,
+         clearActiveEffects, tryPromptPromoteActive } from '../_shared';
 
 // ── 1. 美味飯糰（Item）────────────────────────────────────────────────────
 // 卡面：將自己的戰鬥寶可夢恢復「30」HP。
@@ -88,3 +89,81 @@ reg('基利', (st, idx) => withPending(
     filter: 'SupporterOrStadium', minCount: 0, maxCount: 3,
     effectKey: 'search-generic-to-hand',   // 既有中央 resolver（公開揭示 + 重洗）
   }));
+
+// ── 4. 希嘉娜的信賴（Supporter）──────────────────────────────────────────
+// 卡面：將自己的戰鬥寶可夢與備戰寶可夢互換。然後，選擇1個換入備戰區的寶可夢身上
+//        附加的能量，改附於新的戰鬥寶可夢身上。
+//   範本 急進開關（Item）—— 只差最後一段：急進開關是「**任意數量**的能量卡」，
+//   本卡是「**1個**能量」。
+//   ⚠「選擇 1 個能量」的既有全站語意＝**選 1 張能量卡**（幸福蛋ex｜幸福切換、
+//     能量轉移、白海獅｜沖刷 等都是逐張 modal 選一張），不是「1 個單位」。
+//   ⚠ 是「然後」＝互換一定會發生；換下去那隻身上沒能量時只互換、不開能量 picker。
+regG('希嘉娜的信賴', (st, idx) => !!st.players[idx].active && st.players[idx].bench.length > 0);
+reg('希嘉娜的信賴', (st, idx) => {
+  const p = st.players[idx];
+  if (!p.active || p.bench.length === 0) {
+    return addLog(st, '希嘉娜的信賴：備戰區沒有寶可夢，無法互換', idx);
+  }
+  return withPending(addLog(st, '希嘉娜的信賴：選擇換入戰鬥場的備戰寶可夢', idx), {
+    type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    effectKey: 'm6-sigana-swap',
+  });
+});
+regR('m6-sigana-swap', (st, idx, iids, _params, pool) => {
+  const p = st.players[idx];
+  if (!p.active) return st;
+  const prevActiveIid = p.active.iid;
+  const target = p.bench.find(c => c.iid === iids[0]);
+  if (!target) return st;
+  const newName = pool.get(target.cardId)?.name ?? '?';
+  const oldName = pool.get(p.active.cardId)?.name ?? '?';
+  let s = addLog(st, `希嘉娜的信賴：將 ${oldName} 換到備戰區，派出 ${newName} 到戰鬥場`, idx);
+  s = updatePlayer(s, idx, pl => {
+    if (!pl.active) return pl;
+    const bIdx = pl.bench.findIndex(c => c.iid === iids[0]);
+    if (bIdx < 0) return pl;
+    // v3.812 保留 justPlaced/playedFromHand；v4.978 set movedToActiveThisTurn（特性 gate 需要）
+    const newActive = { ...pl.bench[bIdx], movedToActiveThisTurn: true };
+    const newBench = [...pl.bench];
+    newBench[bIdx] = clearActiveEffects(pl.active);   // 離開戰鬥場清狀態
+    return { ...pl, active: newActive, bench: newBench };
+  });
+  const nowBench = s.players[idx].bench.find(c => c.iid === prevActiveIid);
+  if (!nowBench || nowBench.energyAttached.length === 0 || !s.players[idx].active) {
+    return tryPromptPromoteActive(addLog(s, '希嘉娜的信賴：換下的寶可夢身上沒有能量可移動', idx), idx, pool);
+  }
+  // 卡面「選擇 1 個…能量」→ 只能選 1 張（急進開關是任意數量，這裡 max=1）
+  return withPending(
+    addLog(s, `希嘉娜的信賴：選擇 1 個要從 ${oldName} 移到 ${newName} 的能量`, idx), {
+      type: 'active-energy-discard',
+      actorIdx: idx, sourcePlayerIdx: idx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'm6-sigana-energy',
+      params: { targetIid: prevActiveIid, newActiveIid: s.players[idx].active.iid,
+                titleOverride: '希嘉娜的信賴：選擇 1 個要移到新戰鬥寶可夢的能量' },
+    });
+});
+regR('m6-sigana-energy', (st, idx, iids, params, pool) => {
+  const fromIid = params?.targetIid as string | undefined;
+  const toIid = params?.newActiveIid as string | undefined;
+  if (!fromIid || !toIid) return st;
+  const p = st.players[idx];
+  const src = p.bench.find(c => c.iid === fromIid);
+  if (!src || !p.active || p.active.iid !== toIid) {
+    return addLog(st, '希嘉娜的信賴：來源／目標寶可夢已不在預期位置（中斷）', idx);
+  }
+  // v6.009 + lint Check Q：自行 re-validate、去重、夾卡面上限 1 張
+  const uniq = [...new Set(iids)];
+  const move = src.energyAttached.filter(e => uniq.includes(e.iid)).slice(0, 1);
+  if (move.length === 0) return addLog(st, '希嘉娜的信賴：未移動能量', idx);
+  const moveSet = new Set(move.map(e => e.iid));
+  const s = addLog(st,
+    `希嘉娜的信賴：將 ${pool.get(move[0].cardId)?.name ?? '?'} 從 ${pool.get(src.cardId)?.name ?? '?'} 移到 ${pool.get(p.active.cardId)?.name ?? '?'}`, idx);
+  return tryPromptPromoteActive(updatePlayer(s, idx, pl => ({
+    ...pl,
+    active: pl.active ? { ...pl.active, energyAttached: [...pl.active.energyAttached, ...move] } : null,
+    bench: pl.bench.map(b => b.iid === fromIid
+      ? { ...b, energyAttached: b.energyAttached.filter(e => !moveSet.has(e.iid)) } : b),
+  })), idx, pool);
+});
