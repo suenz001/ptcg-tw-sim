@@ -258,3 +258,28 @@ export const PASSIVE_STADIUMS = new Set<string>([
   ...ROCKET_WATCHTOWER_STADIUMS,
   ...STATIC_PASSIVE_STADIUMS,
 ]);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.059 — M6「綠寶石風暴」傳說競技場：效果尚未實裝 → fail-closed（不可打出）
+// ══════════════════════════════════════════════════════════════════════════════
+// 這三張是官方新機制「傳說競技場」：**一張卡由兩張實體卡拼成**（collectorNumber 各帶兩個
+// 編號，如「071/076,072/076」），牌組中算 2 張、手牌需同時持有 2 張才能使出（Wilson 裁定）。
+// 該機制（牌組張數計算／手牌雙持檢查／場上兩張合併圖）尚未實作，因此本版**先擋住不可打出**，
+// 而不是掛半套 hook 讓玩家放上場卻無效果 —— 後者是「名字在 set 卻是 silent stub」，
+// 正是 test-stadium-coverage 守衛要根絕的東西。
+//
+// 官方卡面（static/cards M6.json rulesText，台灣官方中文）：
+//   傳說的海溝  ：雙方的所有寶可夢恢復HP時，恢復的HP改為2倍。
+//   傳說的山頂  ：雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少1張。
+//   傳說的熔岩洞：雙方場上所有進化寶可夢的特性全部消除。
+// ⚠ 另有「小楓與小南的修行」(Supporter) 依賴「場上有名稱中有『傳說』的競技場卡」→ 同批實作。
+export const PENDING_STADIUMS = new Set<string>([
+  '傳說的海溝',
+  '傳說的山頂',
+  '傳說的熔岩洞',
+]);
+
+/** 該競技場是否為「尚未實裝 → 禁止打出」。engine 打出路徑與可打出清單 filter 兩端共用此述詞。 */
+export function isStadiumPendingImplementation(name: string | undefined | null): boolean {
+  return !!name && PENDING_STADIUMS.has(name);
+}

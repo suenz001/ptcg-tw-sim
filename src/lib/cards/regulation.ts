@@ -49,6 +49,7 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
   MC: 'J',
   M3: 'J',
   M4: 'J',
+  M6: 'J',   // 綠寶石風暴（2026-08-07）
   // v2.115: MJ 發售於 2026/2/26（J 標啟用 2026/1/16 之後），歸 J 標；
   // 會按 releaseDate 自然排在 M3（2026/2/6）之後（Leon 指示）。
   // 卡包內 H/I/J/G 混收，個別卡 regulationMark 依卡面真實值保留。

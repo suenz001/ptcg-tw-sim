@@ -101,11 +101,11 @@ export {
 // stadiums.ts 包含 3 個 USE_STADIUM 的 pending resolver（神秘花園、夜間學院、
 // 月光丘陵）以及 JAMMING_TOWER_STADIUMS / ROCKET_WATCHTOWER_STADIUMS 兩個
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
-import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
+import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS, PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/cards/stadiums';
 // v5.293: import field-wide damage-reduce helpers for bench damage path
 import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce } from './effects/cards/v2999_g3_wave1';
 import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887 神奇糖果進化也要過瞪眼效用 gate
-export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
+export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS, PENDING_STADIUMS, isStadiumPendingImplementation };
 
 /**
  * v2.22：對戰圓形競技場（Stadium）— 備戰保護判定
@@ -3027,6 +3027,10 @@ regPost('帝牙海獅|百萬噸墜落', selfHitPost(50));
 regPost('傘電蜥|突擊', selfHitPost(10));
 regPost('獨劍鞘|突擊', selfHitPost(10));
 regPost('伊布|突擊', selfHitPost(10));
+// M6 綠寶石風暴（v6.059）：無條件固定自傷，卡面 damage 由引擎讀卡資料，故只註冊 POST 自傷。
+regPost('赫拉克羅斯|十萬馬力', selfHitPost(30));      // M6 130 傷 + 自傷30
+regPost('風速狗|熱力衝撞', selfHitPost(50));          // M6 200 傷 + 自傷50
+regPost('超級泥偶巨人ex|巨兵拳', selfHitPost(30));    // M6 300 傷 + 自傷30
 // 鐵骨土人|蠻力：base 50 + 若希望 +30 + 自傷 30
 // v2.159：升級為 modal-choice — 用 ATTACK_PRE_DISCARD_CHOICE 借殼讓 UI 彈出能量挑選
 //   作為 binary 選擇（選 0 個 = 不執行；選 ≥1 個 = 執行 +30 自傷 30）

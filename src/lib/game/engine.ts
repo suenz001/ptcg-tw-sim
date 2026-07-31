@@ -919,6 +919,8 @@ import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
+// v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。stadiums.ts 是葉子檔，直接匯入避免循環。
+import { isStadiumPendingImplementation } from './effects/cards/stadiums';
 export { sameEvoName };
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
@@ -3569,6 +3571,11 @@ function handlePlaying(
     // 義務性前置檢查：夜間擔架棄牌為空、寶可夢交替備戰為空等情況禁止打出
     // v3.01 Wave 3 — 對手戰鬥場特性禁止本方打出 trainer
     // ① 大王銅象｜爆大身軀 — 對手戰鬥場有 → 我方無法使出『競技場』卡
+    // v6.059：M6 傳說競技場 — 「兩張實體卡合一」機制尚未實作 → 先擋住不可打出（fail-closed）。
+    //   寧可明確擋下並告知，也不要讓玩家放上場卻毫無效果（silent stub）。
+    if (trainerCard.subtype === 'Stadium' && isStadiumPendingImplementation(trainerCard.name)) {
+      return addLog(state, `${trainerCard.name}：傳說競技場（需兩張合一）尚未開放使用`, aIdx);
+    }
     if (trainerCard.subtype === 'Stadium' && state.players[aIdx].cantPlayStadiumThisTurn) {
       return addLog(state, `${trainerCard.name}：本回合被「燒灼大地」效果禁止使出競技場`, aIdx);
     }
@@ -8947,6 +8954,8 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
       //   AI 看不到濾過的清單會反覆挑到被鎖的卡 → engine 退回 → 死迴圈
       if ((c.subtype === 'Item' || c.subtype === 'PokemonTool')
           && isOppItemPlayBlocked(state, state.activePlayerIndex, pool)) return false;
+      // v6.059：傳說競技場未實裝 → filter 端同步擋掉（否則手牌會亮框、AI 會反覆挑到被 engine 退回的卡）
+      if (c.subtype === 'Stadium' && isStadiumPendingImplementation(c.name)) return false;
       if (c.subtype === 'Stadium' && state.players[state.activePlayerIndex].cantPlayStadiumThisTurn) return false;
       if (c.subtype === 'Stadium' && isOppStadiumPlayBlocked(state, state.activePlayerIndex, pool)) return false;
       // v2.362 班基拉斯｜威迫目光 — 對手戰鬥場有此特性時，物品卡不可打出
