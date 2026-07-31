@@ -29,6 +29,8 @@ import { joinCardNames } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import { statusPost } from '../../effects'; // v5.797 中央施狀態(gate 化隱/憨憨臉/特殊能量/祭典會場)
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
+// v6.065「不看正面→從對手手牌選擇」維度中央收斂（卡面是「選擇」，不是隨機）
+import { oppDiscardChosenConcealedPost, oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import { defCantAttackNextPost } from '../../effects'; // v5.805 中央禁招(免疫gate)
 import { selfCantAttackNextPost } from '../../effects'; // v5.982 全鎖(無法使用招式)自鎖
@@ -245,70 +247,38 @@ regPost('天蠍王|毒陣', (state, aIdx, pool) => {
 // H. 盲選棄/回對手手牌 (4 張)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('長尾怪手|驚嚇', (s) => ({ state: s, damage: 20 }));
-regPost('長尾怪手|驚嚇', returnOppHandRandomToDeckPost(1, '驚嚇'));
+regPost('長尾怪手|驚嚇', oppReturnChosenConcealedToDeckPost(1, '驚嚇'));
 
 regPre('火箭隊的喵喵|占為己有', (s) => ({ state: s, damage: 0 }));
 // v5.179 Bug 2 完整實裝: 卡面「在不看正面的情況下, 從對手手牌選 1 張, 查看那張卡的正面後
 // 放回對手牌庫並重洗」 — 改為 hand-discard picker (concealed mode 防揭露對手其他手牌),
 // 玩家選 1 張背面 → resolver 揭示卡名 (公開 addLog) + 放回對手牌庫 + 重洗。
 // 原 v2.x 用 returnOppHandRandomToDeckPost(1) 隨機選 + 不揭示, 違反卡面 (Rule 15)
-regPost('火箭隊的喵喵|占為己有', (state, aIdx) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  if (opp.hand.length === 0) {
-    return addLog(state, '占為己有：對手手牌為空', aIdx);
-  }
-  const s = addLog(state, '占為己有：從對手手牌選 1 張背面卡 (盲選, 查看正面後放回牌庫並重洗)', aIdx);
-  return withPending(s, {
-    type: 'hand-discard',
-    actorIdx: aIdx,
-    sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'meowth-thievery-reveal-return',
-    params: { concealed: true, label: '占為己有' },
-  });
-});
-regR('meowth-thievery-reveal-return', (state, aIdx, iids, _params, pool) => {
-  if (iids.length === 0) return state;
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  const pickedIid = iids[0];
-  const pickedInst = opp.hand.find(c => c.iid === pickedIid);
-  if (!pickedInst) return state;
-  const pickedCard = pool.get(pickedInst.cardId);
-  const cardName = pickedCard?.name ?? '?';
-  // 卡面「查看那張卡的正面」→ 公開揭示卡名 (addLog 全域可見)
-  let s = addLog(state, `占為己有：查看到「${cardName}」, 放回對手牌庫並重洗`, aIdx);
-  // 放回對手牌庫並重洗
-  s = updatePlayer(s, dIdx, p => {
-    const remaining = p.hand.filter(c => c.iid !== pickedIid);
-    const newDeck = [...p.deck, pickedInst];
-    // shuffle
-    for (let i = newDeck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [newDeck[i], newDeck[j]] = [newDeck[j], newDeck[i]];
-    }
-    return { ...p, hand: remaining, deck: newDeck };
-  });
-  return s;
-});
+// v6.065：收斂到中央 oppReturnChosenConcealedToDeckPost（原 local 實作與 resolver 已移除；
+//   行為不變：concealed picker → 公開揭示卡名 → 放回牌庫重洗，只是改用中央 shuffle）。
+regPost('火箭隊的喵喵|占為己有', oppReturnChosenConcealedToDeckPost(1, '占為己有'));
 
 regPre('酷豹|拍落', (s) => ({ state: s, damage: 50 }));
-regPost('酷豹|拍落', discardOppHandRandomPost(1, '拍落'));
+regPost('酷豹|拍落', oppDiscardChosenConcealedPost(1, '拍落'));
 
 regPre('火箭隊的鈴鐺響|鈴鈴吵鬧', (s) => ({ state: s, damage: 0 }));
-regPost('火箭隊的鈴鐺響|鈴鈴吵鬧', discardOppHandRandomPost(1, '鈴鈴吵鬧'));
+regPost('火箭隊的鈴鐺響|鈴鈴吵鬧', oppDiscardChosenConcealedPost(1, '鈴鈴吵鬧'));
 
 // 超級頭巾混混ex|不法之足 160 + 棄對手 1 手牌 + 棄對手牌庫頂 1
 regPre('超級頭巾混混ex|不法之足', (s) => ({ state: s, damage: 160 }));
 regPost('超級頭巾混混ex|不法之足', (state, aIdx, pool) => {
-  let s = discardOppHandRandomPost(1, '不法之足')(state, aIdx, pool);
-  // 再棄對手牌庫頂 1
+  // v6.065：手牌那半改為 concealed picker（卡面是「選擇」不是隨機）。
+  // ⚠ 順序：picker 是非同步的（withPending），所以**先**把「棄對手牌庫頂 1 張」做完，
+  //   再開 picker；否則 picker 之後的程式碼會在玩家還沒選之前就執行。
+  //   兩件事彼此獨立，先後對結果無影響。
   const dIdx = (1 - aIdx) as 0 | 1;
+  let s = state;
   const top = s.players[dIdx].deck.slice(0, 1);
-  if (top.length === 0) return s;
-  s = addLog(s, `不法之足：棄對手牌庫頂 1 張：${joinCardNames(top, pool)}`, aIdx);
-  return updatePlayer(s, dIdx, p => ({ ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] }));
+  if (top.length > 0) {
+    s = addLog(s, `不法之足：棄對手牌庫頂 1 張：${joinCardNames(top, pool)}`, aIdx);
+    s = updatePlayer(s, dIdx, p => ({ ...p, deck: p.deck.slice(1), discard: [...p.discard, ...top] }));
+  }
+  return oppDiscardChosenConcealedPost(1, '不法之足')(s, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

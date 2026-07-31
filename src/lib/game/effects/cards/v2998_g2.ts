@@ -39,6 +39,8 @@ import {
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
+// v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
+import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -172,35 +174,12 @@ regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
 //   公開 log 公布卡名（卡面寫「查看那些卡的正面」— 自己看得到，因為己方主動
 //   執行的搬動，公開揭示亦合理）。
 // ══════════════════════════════════════════════════════════════════════════════
-regA('雙尾怪手', 0, (st, idx, pool, _cardInst) => {
-  const oppIdx = (1 - idx) as 0 | 1;
+// 雙尾怪手｜使壞之尾 — v6.065：卡面「擲2次硬幣，在不看手牌正面的情況下，從對手的手牌**選擇**
+//   與正面出現的次數相同數量的卡，查看那些卡的正面後放回對手的牌庫並重洗」→ 玩家盲選，不是隨機。
+regA('雙尾怪手', 0, (st, idx, pool) => {
   const r = flipCoinsWithLog(st, 2, '使壞之尾', idx);
-  let s = r.state;
-  const heads = r.heads;
-  if (heads === 0) {
-    return addLog(s, '使壞之尾：0 次正面 → 不抽對手手牌', idx);
-  }
-  const opp = s.players[oppIdx];
-  const pickCount = Math.min(heads, opp.hand.length);
-  if (pickCount === 0) {
-    return addLog(s, '使壞之尾：對手手牌為空，無法執行', idx);
-  }
-  // 隨機抽 pickCount 張對手手牌（等同「不看正面挑」）
-  let oppHand = [...opp.hand];
-  const picked: CardInstance[] = [];
-  for (let i = 0; i < pickCount; i++) {
-    const ridx = Math.floor(Math.random() * oppHand.length);
-    picked.push(oppHand[ridx]);
-    oppHand = oppHand.filter((_, j) => j !== ridx);
-  }
-  const pickedNames = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  s = addLog(s, `使壞之尾：${heads} 次正面 → 隨機抽對手手牌 ${pickCount} 張：${pickedNames}（揭示後放回對手牌庫並重洗）`, idx);
-  // 把選中卡放回對手牌庫並重洗
-  return updatePlayer(s, oppIdx, p => ({
-    ...p,
-    hand: oppHand,
-    deck: shuffle([...p.deck, ...picked]),
-  }));
+  if (r.heads === 0) return addLog(r.state, '使壞之尾：0 次正面 → 不抽對手手牌', idx);
+  return oppReturnChosenConcealedToDeckPost(r.heads, '使壞之尾')(r.state, idx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

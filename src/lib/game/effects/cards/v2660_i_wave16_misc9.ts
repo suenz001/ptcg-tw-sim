@@ -31,6 +31,8 @@ import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
+// v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
+import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -323,20 +325,8 @@ regPost('超級雷電獸ex|閃光射線', (state, aIdx, _pool) => {
 //   攻方應該看到那張卡是什麼（揭示）。原實作只 addLog 公開 log 沒 addPrivateLog 揭示給攻方。
 //   修法：addPrivateLog — public log「對手手牌隨機 1 張回牌庫」+ private（只攻方看到）「那張卡是 XX」
 regPre('洛托姆|驚嚇', (s) => ({ state: s, damage: 20 }));
-regPost('洛托姆|驚嚇', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  if (opp.hand.length === 0) return addLog(state, '驚嚇：對手手牌已空', aIdx);
-  const idx = Math.floor(Math.random() * opp.hand.length);
-  const picked = opp.hand[idx];
-  const pickedName = pool.get(picked.cardId)?.name ?? '?';
-  // v5.863：放回牌庫的卡名雙方公開揭示(Wilson裁定,原 addPrivateLog 只給攻方看)
-  let s = addLog(state, `驚嚇：對手手牌隨機 1 張（${pickedName}）回牌庫並重洗`, aIdx);
-  return updatePlayer(s, dIdx, p => {
-    const newHand = [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)];
-    return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
-  });
-});
+// v6.065：卡面是「**選擇**1張，查看正面後放回牌庫」→ 玩家盲選，不是隨機。
+regPost('洛托姆|驚嚇', oppReturnChosenConcealedToDeckPost(1, '驚嚇'));
 
 // 魔牆人偶｜模仿 — 自手牌洗回, 抽 = 對手手牌數
 regPre('魔牆人偶|模仿', (s) => ({ state: s, damage: 0 }));

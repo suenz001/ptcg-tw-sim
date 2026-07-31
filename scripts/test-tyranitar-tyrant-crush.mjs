@@ -2,7 +2,9 @@
  * 班基拉斯ex|暴君粉碎 — 固定 150 傷害（v5.686）
  * 卡面（SVM 12148, static/cards 權威）：傷害固定 150，效果「在不看正面的情況下，從對手的手牌選擇1張，將其丟棄」。
  * 原 bug：regPre 誤植硬寫 `damage: 50`（殘留「50×」錯誤註解，台灣無 50× 版）→ 暴君粉碎只打 50。
- * 修：移除 regPre，改由引擎讀卡面 150；保留 regPost 隨機棄對手手牌 1 張。
+ * 修：移除 regPre，改由引擎讀卡面 150；regPost 棄對手手牌 1 張。
+ * v6.065 更新：卡面是「**選擇**1張」→ 改走 concealed picker（玩家看卡背盲選），不再是隨機直接丟。
+ *   本測試同步從「手牌立刻 2→1」改為「開 hand-discard + concealed picker、選 1 張」。
  */
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
@@ -46,10 +48,16 @@ T('★暴君粉碎固定 150 傷害（HEAD 硬寫 50 → FAIL）', () => {
   const out = runTyrantCrush();
   assert.equal(out.players[1].active.damage, 150, '對手應受 150 傷害（非 50）');
 });
-T('暴君粉碎隨機棄對手手牌 1 張（regPost 保留）', () => {
+T('暴君粉碎開 concealed picker 選 1 張對手手牌（v6.065：卡面是「選擇」不是隨機）', () => {
   const out = runTyrantCrush();
-  assert.equal(out.players[1].hand.length, 1, '對手手牌應從 2 → 1（棄 1 張）');
-  assert.equal(out.players[1].discard.length, 1, '棄牌區應 +1');
+  const p = out.pendingSelection;
+  assert.equal(p?.type, 'hand-discard', '應開 hand-discard picker');
+  assert.equal(p?.params?.concealed, true, '應為 concealed（看卡背、不揭示卡名）');
+  assert.equal(p?.minCount, 1, '應選剛好 1 張');
+  assert.equal(p?.maxCount, 1, '應選剛好 1 張');
+  // ⚠ picker 尚未 resolve → 對手手牌此時不得被動到
+  assert.equal(out.players[1].hand.length, 2, 'picker 未選完前，對手手牌應維持 2 張');
+  assert.equal(out.players[1].discard.length, 0, 'picker 未選完前，棄牌區應為 0');
 });
 T('暴君粉碎不再註冊 regPre（base 由卡面 150 決定）', () => {
   assert.ok(!ATTACK_PRE.has('班基拉斯ex|暴君粉碎'), '應移除誤植的 regPre');

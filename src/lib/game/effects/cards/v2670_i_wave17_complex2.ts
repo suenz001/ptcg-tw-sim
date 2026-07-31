@@ -36,6 +36,8 @@ import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中�
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
+// v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
+import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { oppPokemonImmuneToAttackEffect, relocateOwnCounterToOpp } from '../../effects'; // v5.809 bounce免疫述詞;v5.825 改放指示物中央管線
 // v5.230 註：v5.229 加 canApplyEffectToTarget import 但已存在 L26 (v5.113 加的)，
@@ -572,36 +574,20 @@ regPre('火箭隊的引夢貘人|備戰區操縱', (state, aIdx, _pool) => {
 //         返還的卡名，對手與觀戰者只見張數（資訊不對稱符合 PTCG 設計）。
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('墓揚犬|恐怖啃咬', (s) => ({ state: s, damage: 30 }));
+// v6.065：卡面「擲硬幣直到出現反面，在不看手牌正面的情況下，從對手的手牌**選擇**與正面
+//   出現的次數相同數量的卡，查看那些卡的正面後放回對手的牌庫並重洗」→ 玩家盲選，不是隨機。
+//   ⚠ 保留原本 10 次的安全上限（防無限迴圈）。
 regPost('墓揚犬|恐怖啃咬', (state, aIdx, pool) => {
   let heads = 0;
   let s = state;
-  while (true) {
+  while (heads < 10) {
     const r = flipCoinsWithLog(s, 1, '恐怖啃咬', aIdx);
     s = r.state;
     if (r.heads === 0) break;
     heads++;
-    if (heads >= 10) break;
   }
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = s.players[dIdx];
-  if (heads === 0 || opp.hand.length === 0) {
-    return addLog(s, `恐怖啃咬：0 正面或對手手牌空`, aIdx);
-  }
-  const k = Math.min(heads, opp.hand.length);
-  const indices = Array.from({ length: opp.hand.length }, (_, i) => i);
-  shuffle(indices);
-  const pickIdx = new Set(indices.slice(0, k));
-  // 取出被選中的卡（攻擊方私訊揭示用）
-  const pickedCards = opp.hand.filter((_, i) => pickIdx.has(i));
-  const pickedNames = pickedCards.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  // 攻擊方私訊：揭示牌名；對手與觀戰者公開：只見張數
-  // v5.863：放回牌庫的卡名雙方公開揭示(Wilson裁定,原 addPrivateLog 只給攻方看)
-  s = addLog(s, `恐怖啃咬：將對手 ${k} 張手牌放回牌庫並重洗 — ${pickedNames}`, aIdx);
-  return updatePlayer(s, dIdx, p => {
-    const picked = p.hand.filter((_, i) => pickIdx.has(i));
-    const rest = p.hand.filter((_, i) => !pickIdx.has(i));
-    return { ...p, hand: rest, deck: shuffle([...p.deck, ...picked]) };
-  });
+  if (heads === 0) return addLog(s, '恐怖啃咬：第一次就反面 → 無效果', aIdx);
+  return oppReturnChosenConcealedToDeckPost(heads, '恐怖啃咬')(s, aIdx, pool);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -5631,7 +5631,7 @@ export function oppDiscardRandomHand(n: number, attackName: string): AttackPostF
     return updatePlayer(s, dIdx, p => ({ ...p, hand: p.hand.filter(c => !_diids.has(c.iid)), discard: [...p.discard, ...discarded] }));
   };
 }
-regPost('功夫鼬|拍落', oppDiscardRandomHand(1, '拍落'));
+regPost('功夫鼬|拍落', oppDiscardChosenConcealedPost(1, '拍落'));
 // v3.9998 修 Rule 7：原 v2 用 oppDiscardRandomHand 隨機，違反卡面
 //   「在不看正面的情況下，從對手的手牌選擇 1 張，將其丟棄」
 //   改用 hand-discard picker + concealed=true：UI 端顯示卡背，玩家僅看到「幾張」
@@ -5644,6 +5644,47 @@ regPost('功夫鼬|拍落', oppDiscardRandomHand(1, '拍落'));
 //   v3.9998 已對 太陽伊布ex｜精神出局 做過此裁定；本版抽成中央 helper 供同措辭卡共用。
 // ⚠ resolver key 沿用既有的 'sunny-eevee-mental-out'（改 key 會弄壞既有 test 斷言），
 //   但 label 改由 params 帶入，讓每張卡的對戰紀錄顯示自己的招式名。
+// ── 同維度的「放回牌庫」變體 ─────────────────────────────────────────────────
+// 卡面：「在不看正面的情況下，從對手的手牌選擇 N 張，**查看那些卡的正面後放回對手的牌庫並重洗**」
+// ⚠ 揭示語義：卡面「查看…正面」的結果**公開**寫進對戰紀錄（與既有 火箭隊的喵喵｜占為己有 一致）。
+//   這不是資訊洩漏 —— 對手看著自己的手牌，本來就知道少了哪張；公開只是讓觀戰/回放能還原。
+// ⚠ 用中央 shuffle（禁 inline Math.random 洗牌，lint Check L）。
+export function oppReturnChosenConcealedToDeckPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const oppHand = state.players[dIdx].hand;
+    if (oppHand.length === 0) return addLog(state, `${label}：對手手牌為空`, aIdx);
+    const pick = Math.min(n, oppHand.length);
+    if (pick <= 0) return addLog(state, `${label}：沒有可選的張數`, aIdx);
+    const st = addLog(state, `${label}：在不看正面的情況下，從對手手牌（${oppHand.length} 張）選 ${pick} 張，查看後放回牌庫並重洗`, aIdx);
+    return withPending(st, {
+      type: 'hand-discard',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: pick, maxCount: pick,
+      effectKey: 'meowth-thievery-reveal-return',
+      params: { validIids: oppHand.map(c => c.iid), concealed: true, label,
+                titleOverride: `${label}：選擇要查看並放回牌庫的對手手牌（不看正面）` },
+    });
+  };
+}
+regR('meowth-thievery-reveal-return', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return state;
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const label = (typeof (_params as { label?: unknown })?.label === 'string'
+    ? (_params as { label: string }).label : '占為己有');
+  const picked = state.players[dIdx].hand.filter(c => iids.includes(c.iid));
+  if (picked.length === 0) return state;
+  const pids = new Set(picked.map(c => c.iid));
+  // 卡面「查看那些卡的正面」→ 公開揭示卡名
+  let s = addLog(state, `${label}：查看到 ${joinCardNames(picked, pool)}，放回對手牌庫並重洗`, aIdx);
+  s = updatePlayer(s, dIdx, p => ({
+    ...p,
+    hand: p.hand.filter(c => !pids.has(c.iid)),
+    deck: shuffle([...p.deck, ...picked]),
+  }));
+  return s;
+});
+
 export function oppDiscardChosenConcealedPost(n: number, label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -5690,8 +5731,11 @@ regR('sunny-eevee-mental-out', (state, aIdx, iids, _params, pool) => {
 
 // 巨牙鯊｜咬棄 — 擲 3 次硬幣，丟對手正面數量的手牌（不看正面）
 regPost('巨牙鯊|咬棄', (state, aIdx, pool) => {
+  // v6.065：卡面「在不看手牌正面的情況下，**選擇**與正面出現的次數相同數量的對手的手牌」
+  //   → 先擲幣定出張數，再由玩家盲選那麼多張（不是隨機）。0 個正面時不開 picker。
   const r = flipCoinsWithLog(state, 3, '咬棄', aIdx);
-  return oppDiscardRandomHand(r.heads, '咬棄')(r.state, aIdx, pool);
+  if (r.heads === 0) return addLog(r.state, '咬棄：0 個正面 → 不丟棄', aIdx);
+  return oppDiscardChosenConcealedPost(r.heads, '咬棄')(r.state, aIdx, pool);
 });
 
 // 鐵螯龍蝦｜喀嚓喀嚓 — 擲 2 次硬幣，對手牌庫上方正面數的牌丟棄
@@ -8290,21 +8334,9 @@ regPost('賽富豪ex|淘金潮', (state, aIdx, pool) => {
   });
 });
 
-// 雪童子|驚嚇 — 傷害 20（pre 不需），post：對手手牌隨機 1 張回牌庫並重洗
-regPost('雪童子|驚嚇', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const oppHand = state.players[dIdx].hand;
-  if (oppHand.length === 0) return addLog(state, '驚嚇：對手手牌已空', aIdx);
-  const idx = Math.floor(Math.random() * oppHand.length);
-  const picked = oppHand[idx];
-  const pickedName = pool.get(picked.cardId)?.name ?? '?';
-  // v5.863：放回牌庫的卡名雙方公開揭示(Wilson裁定,原 log 無卡名)
-  const s = addLog(state, `驚嚇：對手手牌隨機 1 張（${pickedName}）返回牌庫並重洗`, aIdx);
-  return updatePlayer(s, dIdx, p => {
-    const newHand = p.hand.filter((_, i) => i !== idx);
-    return { ...p, hand: newHand, deck: shuffle([...p.deck, picked]) };
-  });
-});
+// 雪童子｜驚嚇 — v6.065：卡面是「在不看正面的情況下，從對手的手牌**選擇**1張，
+//   查看那張卡的正面後放回對手的牌庫並重洗」→ 玩家盲選，不是隨機。
+regPost('雪童子|驚嚇', oppReturnChosenConcealedToDeckPost(1, '驚嚇'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 38v v1.72 H 標第 17 波 — self-discard-N-energy post-attack（26 張）
@@ -11356,7 +11388,7 @@ regPost('霸王花|花粉炸彈', (state, aIdx, pool) => {
 
 // ── (E) oppDiscardRandomHand / oppSwapDmgPost / discardOppActiveEnergyPost ──
 // 滑滑小子｜拍落 20 + 對手手牌隨機丟 1
-regPost('滑滑小子|拍落', oppDiscardRandomHand(1, '拍落'));
+regPost('滑滑小子|拍落', oppDiscardChosenConcealedPost(1, '拍落'));
 
 // 皮皮｜看我嘛 0 + 選對手備戰 1 隻與戰鬥場互換（無傷）
 regPre('皮皮|看我嘛', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -16791,7 +16823,7 @@ export const ON_EVOLVE_FROM_HAND_ABILITIES = new Set([
   '增長繭',       // v5.588 甲殼繭 — 進化時搜牌庫放甲殼繭/盾甲繭上備戰（改自動提示 modal，原僅手動按鈕）
   // v2.998 Group 2 — 12 張進化觸發特性 + 1 張雙觸發（沙之羽擊也走 PASSIVE_ON_KO）
   '繁星花紋',     // 安瓢蟲 — HP≤90 對手備戰 ↔ 戰鬥場互換
-  '使壞之尾',     // 雙尾怪手 — 擲 2 幣，正面數量隨機抽對手手牌放回牌庫並重洗
+  '使壞之尾',     // 雙尾怪手 — 擲 2 幣，正面數量由玩家盲選對手手牌放回牌庫並重洗（v6.065 改盲選）
   '柔柔治癒',     // 風妖精 — 戰鬥場是【草】寶可夢時全恢復 HP + 棄能量
   '飽腹時間',     // 麻花犬ex — 自方所有進化全恢復 HP + 棄能量
   '臨場之錘',     // 巧鍛匠 — 擲 1 幣，正面則丟對手戰鬥位 1 個能量

@@ -13,6 +13,8 @@
 import type { CardInstance, GameState } from '../../types';
 import { startEnergyChain } from './v158_energy_chain';
 import { flipCoinsWithLog } from '../../effects';
+// v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
+import { oppDiscardChosenConcealedPost } from '../../effects';
 import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
 import {
   addLog,
@@ -75,25 +77,15 @@ regPre('雙劍鞘|劍武備', (state, aIdx, pool) => {
 // 卡面：在不看正面的情況下，將對手的手牌丟棄直到張數變為5張為止。
 // 實裝：對手手牌超過 5 張時，從手牌頭部隨機移除至剩 5 張（不看正面 = 隨機）。
 regPre('多麗米亞|手部造型', (state) => ({ state, damage: 0 }));
+// v6.065：卡面「在不看正面的情況下，將對手的手牌丟棄直到張數變為5張為止」。
+//   ⚠ 卡面**沒有寫「選擇」**，誰選有歧義 → Wilson 裁定：**由使用招式的玩家盲選**，
+//     與同批其他「不看正面」卡一致（原實作是隨機打亂取前 N 張）。
+//   張數 = 對手手牌 − 5（≤5 時無效果）。
 regPost('多麗米亞|手部造型', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const dp = state.players[dIdx];
-  if (dp.hand.length <= 5) {
-    return addLog(state, '手部造型：對手手牌 ≤5 張，無效果', aIdx);
-  }
-  const removeCount = dp.hand.length - 5;
-  // 隨機打亂後取前 removeCount 張作為丟棄目標（不看正面 = 隨機）
-  const shuffledHand = shuffle([...dp.hand]);
-  const toDiscard = shuffledHand.slice(0, removeCount);
-  const remaining = shuffledHand.slice(removeCount);
-  const discardSet = new Set(toDiscard.map(c => c.iid));
-  const _hsNames = toDiscard.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  let s = addLog(state, `手部造型：將對手手牌丟棄 ${removeCount} 張（剩餘 5 張）— ${_hsNames}`, aIdx);
-  return updatePlayer(s, dIdx, p => ({
-    ...p,
-    hand: p.hand.filter(c => !discardSet.has(c.iid)),
-    discard: [...p.discard, ...toDiscard],
-  }));
+  const n = state.players[dIdx].hand.length - 5;
+  if (n <= 0) return addLog(state, '手部造型：對手手牌 ≤5 張，無效果', aIdx);
+  return oppDiscardChosenConcealedPost(n, '手部造型')(state, aIdx, pool);
 });
 
 // 念力土偶｜退化光線：50 傷 + 對手戰鬥寶可夢退化1階（進化卡回對手手牌）
@@ -436,26 +428,11 @@ regA('彩粉蝶', 0, (st, idx) => {
 // 烈箭鷹｜穹天狩獵（特性，1 回 1 次）
 // 卡面：在自己的回合時可使用1次。擲1次硬幣若為正面，則在不看正面的情況下，
 //        從對手的手牌選擇1張，將其丟棄。
-// 實裝：Math.random() 決定正反；正面 → 隨機丟棄 1 張對手手牌
+// v6.065：卡面是「**選擇**」→ 玩家看卡背盲選，不是電腦隨機（原實作用 Math.random）。
 regA('烈箭鷹', 0, (st, idx, pool) => {
-  const dIdx = (1 - idx) as 0 | 1;
   const rqh = flipCoinsWithLog(st, 1, '穹天狩獵', idx);
-  const isHeads = rqh.heads === 1;
-  let s = rqh.state;
-  if (!isHeads) return addLog(s, '穹天狩獵：反面，無效果', idx);
-
-  const dp = s.players[dIdx];
-  if (dp.hand.length === 0) return addLog(s, '穹天狩獵：正面，但對手手牌為空', idx);
-
-  // 隨機選 1 張（不看正面）
-  const randIdx = Math.floor(Math.random() * dp.hand.length);
-  const discarded = dp.hand[randIdx];
-  s = addLog(s, `穹天狩獵：正面，盲選丟棄對手手牌「${pool.get(discarded.cardId)?.name ?? '?'}」`, idx);
-  return updatePlayer(s, dIdx, p => ({
-    ...p,
-    hand: p.hand.filter((_, i) => i !== randIdx),
-    discard: [...p.discard, discarded],
-  }));
+  if (rqh.heads !== 1) return addLog(rqh.state, '穹天狩獵：反面，無效果', idx);
+  return oppDiscardChosenConcealedPost(1, '穹天狩獵')(rqh.state, idx, pool);
 });
 
 // 莉佳的霸王花ex｜動人香氣（特性，1 回 1 次）

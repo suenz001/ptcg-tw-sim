@@ -35,6 +35,8 @@ import {
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import { oppPokemonImmuneToAttackEffect } from '../../effects';
+// v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
+import { oppDiscardChosenConcealedPost } from '../../effects';
 import { hasAnyEffectiveAbility } from './v3001_g3_wave3'; // v6.049「擁有特性的寶可夢」中央述詞 // v5.809 bounce/招式效果免疫述詞
 // v3.12: 海紋石之雨升級為多目標分配，借 startEnergyChain 處理
 import { startEnergyChain } from './v158_energy_chain';
@@ -1583,18 +1585,8 @@ regPre('班基拉斯ex|壓碎', (state, aIdx, pool) => {
 // 班基拉斯ex|暴君粉碎 — 固定 150 + 從對手手牌（不看正面）隨機棄 1 張
 //   卡面（SVM 12148, static/cards 權威）：傷害固定 150，效果僅「在不看正面的情況下，從對手的手牌選擇1張，將其丟棄」。
 //   v5.686：移除誤植的 regPre（曾硬寫 damage:50，殘留「50×」錯誤註解，台灣無 50× 版）→ 改由引擎讀卡面 150；僅保留 regPost 棄牌效果。
-regPost('班基拉斯ex|暴君粉碎', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const opp = state.players[dIdx];
-  if (opp.hand.length === 0) return addLog(state, '暴君粉碎：對手手牌空', aIdx);
-  const idx = Math.floor(Math.random() * opp.hand.length);
-  const picked = opp.hand[idx];
-  return updatePlayer(addLog(state, `暴君粉碎：從對手手牌隨機棄 1 張 — ${_pool.get(picked.cardId)?.name ?? '?'}`, aIdx), dIdx, p => ({
-    ...p,
-    hand: [...p.hand.slice(0, idx), ...p.hand.slice(idx + 1)],
-    discard: [...p.discard, picked],
-  }));
-});
+// v6.065：卡面是「**選擇**1張丟棄」→ 玩家盲選，不是隨機。
+regPost('班基拉斯ex|暴君粉碎', oppDiscardChosenConcealedPost(1, '暴君粉碎'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 15: 自身互換、對手互換、自方備戰互換 ===

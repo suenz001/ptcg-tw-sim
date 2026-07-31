@@ -9,6 +9,8 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
+// v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
+import { oppDiscardChosenConcealedPost } from '../../effects';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { selfReturnToHandPost as _selfReturnToHandPost } from '../../effects'; // v5.986 自身回手中央 helper(含平穩境地gate)
 import type { EnergyType } from '$lib/cards/types';
@@ -384,33 +386,12 @@ regR('j-2353-landorus-return-energy', (state, aIdx, iids, _params, pool) => {
 
 // 南瓜怪人ex｜幽靈之觸：140，在不看正面情況下從對手手牌隨機棄 1 張
 regPre('南瓜怪人ex|幽靈之觸', (state) => ({ state, damage: 140 }));
-regPost('南瓜怪人ex|幽靈之觸', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const d = state.players[dIdx];
-  if (d.hand.length === 0) return addLog(state, '幽靈之觸：對手手牌為空', aIdx);
-  const idx = Math.floor(Math.random() * d.hand.length);
-  const picked = d.hand[idx];
-  return updatePlayer(
-    addLog(state, `幽靈之觸：隨機棄對手手牌 1 張：${joinCardNames([picked], pool)}`, aIdx),
-    dIdx,
-    p => ({ ...p, hand: p.hand.filter((_, i) => i !== idx), discard: [...p.discard, picked] }),
-  );
-});
+// v6.065：卡面是「**選擇**1張丟棄」→ 玩家盲選，不是隨機。
+regPost('南瓜怪人ex|幽靈之觸', oppDiscardChosenConcealedPost(1, '幽靈之觸'));
 
 // 禿鷹娜ex｜禿鷹爪：160，在不看正面情況下從對手手牌隨機棄 1 張
 regPre('禿鷹娜ex|禿鷹爪', (state) => ({ state, damage: 160 }));
-regPost('禿鷹娜ex|禿鷹爪', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const d = state.players[dIdx];
-  if (d.hand.length === 0) return addLog(state, '禿鷹爪：對手手牌為空', aIdx);
-  const idx = Math.floor(Math.random() * d.hand.length);
-  const picked = d.hand[idx];
-  return updatePlayer(
-    addLog(state, `禿鷹爪：隨機棄對手手牌 1 張：${joinCardNames([picked], pool)}`, aIdx),
-    dIdx,
-    p => ({ ...p, hand: p.hand.filter((_, i) => i !== idx), discard: [...p.discard, picked] }),
-  );
-});
+regPost('禿鷹娜ex|禿鷹爪', oppDiscardChosenConcealedPost(1, '禿鷹爪'));
 
 // 朽木妖｜詛咒根：30，受到這個招式的寶可夢下個回合無法附上從手牌使出的能量卡
 regPre('朽木妖|詛咒根', (state) => ({ state, damage: 30 }));
