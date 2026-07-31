@@ -11,6 +11,7 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
+import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
 
@@ -796,6 +797,10 @@ export function koPrizesAdjusted(
     // v5.768：影藏持有者須「處於有效狀態」(§17.42.B) — 收斂中央 hasEffectiveKageHide
     //   （原只查特性名，漏 isAbilityHolderEffective → 鐵荊棘ex｜初始化消除超級耿鬼ex特性時仍誤 -1）。
     const isExAttacker = !!atkCard && (atkCard.name.endsWith('ex') || atkCard.name.endsWith('EX'));
+    // v6.077 M6 傳說的山頂 —【無】寶可夢被對手招式傷害 KO → 獎賞 −1。與影藏同型、可疊加。
+    //   ⭐ 接在本中央函式＝一次涵蓋註解自述的 18+ 條 KO 路徑（狙擊／指示物／手動 KO…）。
+    //   ⚠ 已在 koByAttackDamage gate 內 → 效果KO／checkup KO 自動不觸發，符合卡面。
+    adjust += legendPeakPrizeReduction(s, koCard, pool, true);
     if (isExAttacker && koCard.pokemonType === 'Darkness' && hasEffectiveKageHide(s, defenderIdx, pool)) {
       adjust -= 1;
     }

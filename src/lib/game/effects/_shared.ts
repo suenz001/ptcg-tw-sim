@@ -604,6 +604,70 @@ export function hasOakEye(state: GameState, pool: Map<string, Card>): boolean {
 }
 
 /**
+ * ══ M6 傳說競技場（一張卡由兩張實體卡拼成）中央述詞 ══════════════════════
+ *
+ * ⚠ 依 hasOakEye(上方) 的既有慣例：**用字面值比對卡名**，不要從
+ *   `effects/cards/stadiums.ts` import —— 那個檔已經 import 自本檔，會循環相依。
+ *
+ * 三張競技場（卡面逐字取自 static/cards/M6.json 的 rulesText）：
+ *   ・傳說的海溝  ：雙方的所有寶可夢恢復HP時，恢復的HP改為2倍。
+ *   ・傳說的山頂  ：雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少1張。
+ *   ・傳說的熔岩洞：雙方場上所有進化寶可夢的特性全部消除。
+ */
+export const LEGEND_STADIUM_NAMES = new Set<string>([
+  '傳說的海溝', '傳說的山頂', '傳說的熔岩洞',
+]);
+
+/** 目前場上競技場的卡名（沒有競技場則 undefined）。 */
+export function getActiveStadiumName(
+  state: GameState | undefined, pool: Map<string, Card> | undefined,
+): string | undefined {
+  if (!state || !pool) return undefined;
+  const st = state.activeStadium;
+  if (!st) return undefined;
+  return pool.get(st.cardId)?.name;
+}
+
+/** 場上是否為指定名稱的競技場。 */
+export function isStadiumActive(
+  state: GameState | undefined, pool: Map<string, Card> | undefined, name: string,
+): boolean {
+  return getActiveStadiumName(state, pool) === name;
+}
+
+/**
+ * 卡面「若場上有名稱中有『傳說』的競技場卡」（蓋歐卡｜狂暴漩渦、固拉多｜狂暴大地、
+ * 小楓與小南的修行 共用）。
+ * ⚠ 逐字對齊卡面用 `includes('傳說')`，**不要**改成枚舉 LEGEND_STADIUM_NAMES ——
+ *   卡面判準就是「名稱中有『傳說』」，日後新卡自動涵蓋。
+ */
+export function hasLegendStadiumInPlay(
+  state: GameState | undefined, pool: Map<string, Card> | undefined,
+): boolean {
+  return (getActiveStadiumName(state, pool) ?? '').includes('傳說');
+}
+
+/**
+ * 傳說的山頂：被 KO 者是【無】寶可夢且**因對手的寶可夢招式傷害**昏厥 → 獎賞 −1。
+ * 回傳要疊加到 prizeAdjust 的值（0 或 -1）。
+ *
+ * ⚠ 卡面「受到對手的寶可夢招式的**傷害**而【昏厥】」→ 只有招式傷害 KO 算：
+ *   ・受傷反擊造成的 KO **不算**（反擊非招式，v5.981 Wilson 裁定）
+ *   ・中毒／灼傷 checkup KO、放傷害指示物等效果 KO **都不算**（koByAttackDamage=false）
+ * ⚠ 卡面寫「**雙方的**【無】寶可夢」→ 兩邊被 KO 都適用，不分持有者。
+ */
+export function legendPeakPrizeReduction(
+  state: GameState | undefined,
+  koCard: Card | null | undefined,
+  pool: Map<string, Card> | undefined,
+  koByAttackDamage: boolean,
+): number {
+  if (!koByAttackDamage) return 0;
+  if (koCard?.pokemonType !== 'Colorless') return 0;
+  return isStadiumActive(state, pool, '傳說的山頂') ? -1 : 0;
+}
+
+/**
  * 此特性是否被「探探鼠｜監視之眼」禁用？= 屬於 MOVE_DAMAGE_COUNTER_ABILITIES
  *   且場上有探探鼠。caller 在 ability gate / callback 入口呼叫一次即可 short-circuit。
  */

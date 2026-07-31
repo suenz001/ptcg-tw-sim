@@ -230,6 +230,12 @@ export const STATIC_PASSIVE_STADIUMS = new Set<string>([
   '中立中心',       // v3.67 已實裝 — 非規則寶可夢不受對手 ex/V 招式傷害（NEUTRAL_CENTER_STADIUMS in effects.ts）
   '石之洞窟',       // v3.77 已實裝 — 「大吾的」寶可夢受傷 -30（engine.ts attack pipeline）
   '樂園度假地',     // v2.177 已實裝 — 可達鴨撤退 -1
+  // ── M6 傳說競技場（一張卡由兩張實體卡拼成）─────────────────────────────
+  //   ⚠ 目前仍在 PENDING_STADIUMS（fail-closed，不可打出）→ 效果已實裝但正常對局尚不會出現；
+  //     兩張合一機制上線（批3）後才會真正生效。
+  '傳說的海溝',     // v6.077 已實裝 — 恢復HP×2（engine.ts markHealsByDamageDecrease，applyAction 唯一出口）
+  '傳說的山頂',     // v6.077 已實裝 —【無】被招式傷害KO獎賞-1（engine.ts prizeAdjust + effects.ts koPrizesAdjusted）
+  '傳說的熔岩洞',   // v6.077 已實裝 — 進化寶可夢特性全消（v3001_g3_wave3.ts isAbilityHolderEffective step 0c）
 ]);
 
 // ── 被動競技場（UI 用）── v2.31 ───────────────────────────────────────────────

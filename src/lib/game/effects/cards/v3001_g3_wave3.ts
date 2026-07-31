@@ -176,6 +176,26 @@ function isNullifiedByRocketWatchtower(
   return pool.get(st.cardId)?.name === '火箭隊的監視塔';
 }
 
+/**
+ * v6.077 M6 傳說的熔岩洞 —「雙方場上所有**進化**寶可夢的特性全部消除。」
+ * 與 0b 火箭隊的監視塔（【無】寶可夢特性消除）完全同型，接在同一個 gate。
+ * ⚠ 判準是**階段**不是進化來源：`stage !== 'Basic'` 即為進化寶可夢。
+ *   化石放到備戰後是 Basic（fossilOnField）→ 不消除，符合卡面。
+ * ⚠ 用字面值比對卡名，避免從 stadiums.ts 反向 import（同 0b 的理由）。
+ */
+function isNullifiedByLegendCave(
+  state: GameState | undefined,
+  holderCard: Card | null | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || !holderCard || !pool) return false;
+  const stage = holderCard.stage ?? holderCard.subtype;
+  if (stage === 'Basic' || stage == null) return false;   // 只消除進化寶可夢
+  const st = state.activeStadium;
+  if (!st) return false;
+  return pool.get(st.cardId)?.name === '傳說的熔岩洞';
+}
+
 export function isAbilityHolderEffective(
   state: GameState | undefined,
   holderInst: CardInstance | null | undefined,
@@ -190,6 +210,8 @@ export function isAbilityHolderEffective(
   if (isInitializeNullified(state, holderCard, pool)) return false;
   // 0b. v6.049 火箭隊的監視塔 —【無】寶可夢特性全部消除
   if (isNullifiedByRocketWatchtower(state, holderCard, pool)) return false;
+  // 0c. v6.077 傳說的熔岩洞 — 雙方場上所有**進化**寶可夢特性全部消除
+  if (isNullifiedByLegendCave(state, holderCard, pool)) return false;
   // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標
   if (location === 'active' && holderInst.abilityNullifiedThisTurn) return false;
   // 2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → active 位置的特性失效

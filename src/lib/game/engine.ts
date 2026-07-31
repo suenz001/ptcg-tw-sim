@@ -923,6 +923,7 @@ import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, has
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation } from './effects/_shared';
+import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
 // v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
 import { isTrainerPendingImplementation } from './effects';
 export { sameEvoName };
@@ -1779,7 +1780,21 @@ function clearTurnFlags(c: CardInstance): CardInstance {
  *   邊際：先傷後回最終 damage < prev → 視為 heal（正確）。
  *   邊際：先回後傷最終 damage >= prev → flag 已設過不清，下次擁有者 END_TURN reset（正確）。
  */
-export function markHealsByDamageDecrease(prev: GameState, next: GameState): GameState {
+export function markHealsByDamageDecrease(
+  prev: GameState,
+  next: GameState,
+  pool?: Map<string, Card>,   // v6.077：傳說的海溝需要查場上競技場卡名
+): GameState {
+  // v6.077 M6 傳說的海溝 —「雙方的所有寶可夢恢復HP時，恢復的HP改為2倍。」
+  //   ⭐ 為何接在這裡：全站 heal 站點分散 18+ 處（healResolver／engine inline／各卡 effect），
+  //     而本函式是 applyAction **唯一出口**的 heal 偵測中央點 —— 接一處即涵蓋全部。
+  //   ⚠ 已有的 movedSet（_counterMoveSrcIids, v5.947）會排除「移動傷害指示物≠恢復」，直接沿用。
+  //   ⚠ 已知邊界：同一個 action 內「先回血後受傷、net 沒有下降」偵測不到（極罕見，
+  //     例如同招式先治療再自傷）。此為 diff 式偵測的固有限制，已寫進測試記錄。
+  const legendTrench = !!pool && (() => {
+    const st = next.activeStadium;
+    return !!st && pool.get(st.cardId)?.name === '傳說的海溝';
+  })();
   // 建 prev 的 iid → damage 對照表（含雙方 active + bench）
   const prevDamage = new Map<string, number>();
   for (const idx of [0, 1] as const) {
@@ -1793,6 +1808,7 @@ export function markHealsByDamageDecrease(prev: GameState, next: GameState): Gam
   const movedSet = new Set<string>(next._counterMoveSrcIids ?? []);
 
   let changed = false;
+  const trenchDoubled: string[] = [];   // v6.077 被海溝加倍的 iid（用於補 log）
   const players = [...next.players] as [PlayerState, PlayerState];
 
   for (const idx of [0, 1] as const) {
@@ -1803,11 +1819,17 @@ export function markHealsByDamageDecrease(prev: GameState, next: GameState): Gam
       const prevDmg = prevDamage.get(c.iid);
       if (prevDmg === undefined) return c;  // 新進場（換場/進化新 iid）→ 不算 heal
       const newDmg = c.damage ?? 0;
-      if (newDmg < prevDmg && !c.healedThisTurn && !movedSet.has(c.iid)) {
-        pChanged = true;
-        return { ...c, healedThisTurn: true };
-      }
-      return c;
+      const healed = prevDmg - newDmg;
+      if (healed <= 0 || movedSet.has(c.iid)) return c;
+      // v6.077 傳說的海溝：恢復量再扣一次（＝2 倍），下限 0。
+      //   ⚠ 加倍要**每次恢復都判**（卡面「恢復HP時」），不能被 healedThisTurn 短路；
+      //     但「只標記一次」的原行為必須保留 —— 否則已標記的實例每次都產生新物件，
+      //     identity 改變會波及其他 diff 邏輯（recordTurnAction 等）。
+      const dmgAfter = legendTrench ? Math.max(0, newDmg - healed) : newDmg;
+      if (dmgAfter === newDmg && c.healedThisTurn) return c;   // 無變化且已標記 → 維持原物件
+      pChanged = true;
+      if (dmgAfter !== newDmg) trenchDoubled.push(c.iid);
+      return { ...c, damage: dmgAfter, healedThisTurn: true };
     };
 
     if (np.active) {
@@ -1825,7 +1847,11 @@ export function markHealsByDamageDecrease(prev: GameState, next: GameState): Gam
     }
   }
 
-  const _out = changed ? { ...next, players } : next;
+  let _out = changed ? { ...next, players } : next;
+  // v6.077：各 heal 站點自己寫的 log 是「原始恢復量」，與實際不符 → 中央補一行揭示
+  if (trenchDoubled.length > 0) {
+    _out = addLog(_out, `傳說的海溝：恢復的HP改為 2 倍（${trenchDoubled.length} 隻寶可夢）`, null);
+  }
   // v5.947 _counterMoveSrcIids 為 per-action 標記,消費後即清除(避免殘留誤跳過後續真回血)
   if (_out._counterMoveSrcIids !== undefined) { const _o = { ..._out }; delete _o._counterMoveSrcIids; return _o; }
   return _out;
@@ -5336,6 +5362,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (isExAttacker && isDefenderDark && hasEffectiveKageHide(state, dIdx, pool)) {
         prizeAdjust = -1;
       }
+      // v6.077 M6 傳說的山頂 —「雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，
+      //   被獲得的獎賞卡減少1張。」與影藏同段可疊加；總式已有 Math.max(0,…) 下限。
+      //   ⚠ 這裡已在「baseDamage > 0 且 newDamage >= defenderHP」的招式傷害 KO 分支內。
+      prizeAdjust += legendPeakPrizeReduction(state, defenderCard, pool, true);
     }
 
     // v2.160：把實際造成傷害寫入 state.lastDealtDamage，供 POST 讀取
@@ -8215,7 +8245,7 @@ function applyActionImpl(
   }
 
   // v4.43：偵測寶可夢 damage 減少 → 標記 healedThisTurn（用於活潑鮮花 / 活潑針等條件）
-  next = markHealsByDamageDecrease(state, next);
+  next = markHealsByDamageDecrease(state, next, pool);
 
   // v5.055：對手回合動作 panel — 比對 before/after 後 push 對應 ActionRecord
   next = recordTurnAction(state, next, action, pool);
