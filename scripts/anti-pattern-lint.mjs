@@ -387,6 +387,10 @@ for (const f of files) {
     "ROCKET_WATCHTOWER_STADIUMS"
   ],
   "effects.ts→tools": [
+    // v6.072：訂製背心用的新 map。與同 edge 既有 12 個 TOOL_* 完全同家族
+    //   （都是 tools.ts 的 side-effect registry，engine 從 effects re-export 取用），
+    //   不是新的反向 edge、也不是新的相依方向 → 屬白名單內既有結構的延伸。
+    "TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD",
     "TOOL_ATTACH_GATE",
     "TOOL_ATTACK_BONUS",
     "TOOL_BOTH_SIDES_RETREAT_PLUS",

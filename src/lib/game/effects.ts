@@ -87,12 +87,14 @@ export { OPTIN_NO_PAYMENT, OPTIN_SENTINELS }; // v5.992
 //   (c) 透過 export { ... } 轉發給 engine.ts（engine 從 './effects' import TOOL_*）
 import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
+  TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
 } from './effects/cards/tools';
 export {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
+  TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
@@ -1121,6 +1123,12 @@ function _applyBenchAbilityReduce(
         const _atkHasAbilityT = hasAnyEffectiveAbility(state, _atkInst, _atkCardT, attackerIdx, 'active', pool);
         if (abilFn && dmg > 0 && _atkHasAbilityT) {
           const reduce = abilFn(_atkCardT);
+          if (reduce > 0) { const _b = dmg; dmg = Math.max(0, dmg - reduce); if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`); }
+        }
+        // v6.072：依攻擊方**卡片**的減傷（訂製背心）— 無「攻擊方須有特性」前置，判準在 callback。
+        const cardFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD.get(defTool.name);
+        if (cardFn && dmg > 0) {
+          const reduce = cardFn(_atkCardT, victimCard);
           if (reduce > 0) { const _b = dmg; dmg = Math.max(0, dmg - reduce); if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`); }
         }
       }
@@ -18203,6 +18211,7 @@ export function countOwnFireLightningEnergyUnion(
   return n;
 }
 
+import './effects/cards/m6_wave10'; // v6.072 M6 訓練家實裝 批次10
 import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8
 import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）

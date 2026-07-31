@@ -25,11 +25,13 @@
  */
 
 import type { Card, EnergyType } from '$lib/cards/types';
+import { isMegaExCard } from '../../selection-filter'; // v6.072 訂製背心：Mega ex 中央述詞（leaf）
 import type { GameState, CardInstance } from '../../types';
 import type { EffectFn } from '../_shared';
 import {
   TRAINER_EFFECTS,
   reg, regR, regG, regPost,
+  TRAINER_GUARDS,  // v6.072 自動 Tool guard：已自訂 guard 的道具不覆蓋
   addLog, updatePlayer, withPending, shuffle,
   hasMultiToolRelay, isLotomFamily,
 } from '../_shared';
@@ -74,6 +76,16 @@ export const TOOL_DEFENSE_REDUCE_BY_TYPE = new Map<string, {
  */
 export const TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY = new Map<string, (
   attackerCard: Card
+) => number>();
+/**
+ * v6.072：依「攻擊方**卡片本身**」的防守減傷。與上面 _ABILITY 那支的差別＝
+ *   呼叫端**不會**先要求「攻擊方有有效特性」，判準完全由 callback 自己決定。
+ *   額外傳 holderCard，因為卡面常帶「附有這張卡的寶可夢（…除外）」這種持有者條件。
+ * ⚠ 新增成員時 engine.ts 主傷害管線與 effects.ts 狙擊/備戰管線**兩處都要接**
+ *   （v6.049 已痛過：兩份獨立實作，漏一邊就會漂移）。
+ */
+export const TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD = new Map<string, (
+  attackerCard: Card, holderCard: Card | undefined
 ) => number>();
 export const TOOL_PREVENT_KO = new Map<string, (
   holderInst: CardInstance, holderCard: Card, incomingDamage: number
@@ -157,6 +169,17 @@ TOOL_DEFENSE_REDUCE_BY_TYPE.set('渾厚鱗片', {
 // v2.176 神聖護符：附有這張卡的寶可夢，受到對手擁有特性的寶可夢招式 -30（不丟棄）
 TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.set('神聖護符', (attackerCard) => {
   return (attackerCard.abilities && attackerCard.abilities.length > 0) ? 30 : 0;
+});
+
+// v6.072 訂製背心（M6・J，PokemonTool）—
+//   「附有這張卡的寶可夢（『超級進化寶可夢【ex】除外』）受到對手的
+//     『超級進化寶可夢【ex】』招式的傷害「-60」點。」
+//   ⚠ 兩個條件都要：攻擊方是 Mega ex **且** 持有者自己**不是** Mega ex。
+//   ⚠ 卡面沒寫「丟棄這張卡」→ 觸發後不丟。
+TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD.set('訂製背心', (attackerCard, holderCard) => {
+  if (!isMegaExCard(attackerCard)) return 0;
+  if (isMegaExCard(holderCard)) return 0;   // 卡面「超級進化寶可夢【ex】除外」
+  return 60;
 });
 
 // ── 防 KO（滿血被 KO 時留 10 HP） ─────────────────────────────────────────
@@ -675,6 +698,8 @@ export const ATTACH_TOOL_NAMES = new Set<string>([
   // v5.439：神聖護符等「攻擊方有特性時減傷」道具 — 原本漏 spread 此 map → 無法附加
   //   (玩家回報神聖護符「找不到 attach 效果註冊」退回手牌)。
   ...TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.keys(),
+  // v6.072：依攻擊方卡片減傷的道具（訂製背心）也要能被附加
+  ...TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD.keys(),
 ]);
 
 {
@@ -809,4 +834,21 @@ regPost('核心記憶碟|大地光炮', (state, aIdx, pool) => {
 //   - 都不可附加 → guard 返回 false → UI 不亮卡、engine 拒絕
 //
 // 注意：必須在 TOOL_ATTACH_GATE 全部登記完之後才能跑（檔案最尾段）。
-// ═══════════════════════════════�
+//
+// ⚠⚠ v6.072：這一整段在某次「大檔讀取截斷」中連同檔尾一起遺失（檔案結尾停在上面那條
+//   註解框線的半個 UTF-8 位元組，而且已經 commit 進 repo）。esbuild/vite 用 lossy decode
+//   吃下了壞掉的結尾，所以 build 一直是綠的、沒人發現。
+//   行為實測（v6.072 守衛）：場上所有寶可夢都已附道具時，getPlayableTrainers 仍列出該 Tool，
+//   打出後只是「道具回到手牌」、盤面零變化 —— 正是本段當初要根絕的 AI 無限迴圈條件。
+//   ⭐ 通則：檔案結尾出現不完整 UTF-8 = 曾被截斷，**必須檢查尾段 code 是不是整段不見了**，
+//     不能只把壞位元組砍掉了事。
+// ══════════════════════════════════════════════════════════════════════════════
+{
+  for (const name of ATTACH_TOOL_NAMES) {
+    // 已經自訂 guard 的道具不覆蓋（如需額外條件的卡自己註冊）
+    if (TRAINER_GUARDS.has(name)) continue;
+    // v5.851 單一真相來源：與 toolAttachEffect 的 picker validIids 共用 toolAttachableTargets，
+    //   一致涵蓋洛托姆ex｜多重轉接的第 2 張道具（兩份各寫一份就會漂移）。
+    regG(name, (st, idx, pool) => toolAttachableTargets(st, idx, pool, name).length > 0);
+  }
+}

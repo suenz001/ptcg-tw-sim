@@ -25,6 +25,7 @@ import {
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
+  TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   hasFlowerVeil,
   // v5.186：抵抗之幕 attack-time snapshot 仿 v3.892 花之帷幔 pattern
@@ -8071,6 +8072,21 @@ export function applyDefenderReductionsBlockA(
               formula.push({ sign: '-', value: _actual, label: defTool.name });
             }
             if (defense.discardOnTrigger) defenseReduceToolToDiscard = t;
+          }
+        }
+        // v6.072：依攻擊方**卡片**的減傷（訂製背心）— 無「攻擊方須有特性」前置。
+        //   ⚠ 與 effects.ts 狙擊/備戰管線是兩份獨立實作，兩邊都要接（v6.049 教訓）。
+        const cardFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD.get(defTool.name);
+        if (cardFn && baseDamage > 0) {
+          const reduce = cardFn(attackerCard, defenderCardForTool);
+          if (reduce > 0) {
+            const _b = baseDamage;
+            baseDamage = Math.max(0, baseDamage - reduce);
+            const _a = _b - baseDamage;
+            if (_a > 0) {
+              workingState = addLog(workingState, `${defTool.name}：招式傷害 -${_a}`, dIdx);
+              formula.push({ sign: '-', value: _a, label: defTool.name });
+            }
           }
         }
         const abilFn = TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY.get(defTool.name);

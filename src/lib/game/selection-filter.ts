@@ -50,6 +50,18 @@ export function isBasicEnergyOfType(ec: Card | undefined, type: EnergyType): boo
   if (!m) return false;
   return ZH_ENERGY_TYPE[m[1]] === type;
 }
+/**
+ * v6.072：卡面「超級進化寶可夢【ex】」（Mega ex）的中央述詞。
+ * 判準沿用全站既有模式：`subtype === 'ex'` 且卡名以「超級」開頭
+ * （prizesForKO 給 3 張獎賞、飯匙蛇｜激動力量、AI 的 _isMegaEx 都是同一條）。
+ * ⚠ 與 isPokemonExCard 不同：那是「寶可夢【ex】」（含非 Mega 的一般 ex）。
+ */
+export function isMegaExCard(c: Card | undefined): boolean {
+  if (!c) return false;
+  if (c.supertype !== 'Pokemon' && c.supertype !== 'Pokémon') return false;
+  return c.subtype === 'ex' && c.name.startsWith('超級');
+}
+
 export function getBasicEnergyType(ec: Card | undefined): EnergyType | null {
   if (!ec || ec.supertype !== 'Energy' || ec.subtype !== 'Basic') return null;
   if (ec.pokemonType) return ec.pokemonType as EnergyType;
@@ -79,7 +91,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'PsychicBasic': (c) => c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Psychic',
   'Resistance:Fighting': (c) => c.supertype === 'Pokemon' && c.resistance?.type === 'Fighting',
   'ex':           (c) => c.supertype === 'Pokemon' && c.subtype === 'ex',
-  'MegaEx':       (c) => c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.startsWith('超級'),
+  'MegaEx':       (c) => isMegaExCard(c),
   'TeraPokemon':  (c) => c.supertype === 'Pokemon' && !!c.tags?.includes('太晶'),
   'ColorlessPokeHP100': (c) => c.supertype === 'Pokemon' && c.pokemonType === 'Colorless' && (c.hp ?? 999) <= 100,
   // 能量
@@ -100,6 +112,8 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   'Tool':         (c) => c.supertype === 'Trainer' && c.subtype === 'PokemonTool',
   'PokemonTool':  (c) => c.supertype === 'Trainer' && c.subtype === 'PokemonTool',
   'Stadium':      (c) => c.supertype === 'Trainer' && c.subtype === 'Stadium',
+  // v6.072 基利（M6）：卡面「支援者卡與競技場卡**合計**最多 3 張」→ 兩類混選的單一 picker
+  'SupporterOrStadium': (c) => c.supertype === 'Trainer' && (c.subtype === 'Supporter' || c.subtype === 'Stadium'),
   'Trainer':      (c) => c.supertype === 'Trainer',
   'AnyTrainer':   (c) => c.supertype === 'Trainer',
   // 具名寶可夢（卡名前綴/包含）
