@@ -5636,39 +5636,56 @@ regPost('功夫鼬|拍落', oppDiscardRandomHand(1, '拍落'));
 //   「在不看正面的情況下，從對手的手牌選擇 1 張，將其丟棄」
 //   改用 hand-discard picker + concealed=true：UI 端顯示卡背，玩家僅看到「幾張」
 //   選 1 張，resolver 端丟棄到對手棄牌區。
-regPost('太陽伊布ex|精神出局', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const oppHand = state.players[dIdx].hand;
-  if (oppHand.length === 0) return addLog(state, '精神出局：對手手牌為空', aIdx);
-  const st = addLog(state, `精神出局：在不看正面的情況下，從對手手牌（${oppHand.length} 張）選 1 張丟棄`, aIdx);
-  return withPending(st, {
-    type: 'hand-discard',
-    actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'sunny-eevee-mental-out',
-    params: {
-      validIids: oppHand.map(c => c.iid),
-      concealed: true,  // v3.9998：UI 端讀此 flag → 卡背顯示，不揭示卡名/圖
-      titleOverride: '精神出局：選擇要丟棄的對手手牌（不看正面）',
-    },
-  });
-});
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.064 中央收斂：「在不看正面的情況下，從對手的手牌選擇 N 張，將其丟棄」
+// ──────────────────────────────────────────────────────────────────────────────
+// ⚠ 這個措辭**不是隨機**：卡面明寫「選擇」，攻方是盲選**位置**（看卡背），不是均勻抽樣。
+//   差別有實戰意義 —— 手牌位置是可推理資訊（剛看過對手手牌、追蹤抽牌/回收順序）。
+//   v3.9998 已對 太陽伊布ex｜精神出局 做過此裁定；本版抽成中央 helper 供同措辭卡共用。
+// ⚠ resolver key 沿用既有的 'sunny-eevee-mental-out'（改 key 會弄壞既有 test 斷言），
+//   但 label 改由 params 帶入，讓每張卡的對戰紀錄顯示自己的招式名。
+export function oppDiscardChosenConcealedPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const oppHand = state.players[dIdx].hand;
+    if (oppHand.length === 0) return addLog(state, `${label}：對手手牌為空`, aIdx);
+    const pick = Math.min(n, oppHand.length);
+    if (pick <= 0) return state;
+    const st = addLog(state, `${label}：在不看正面的情況下，從對手手牌（${oppHand.length} 張）選 ${pick} 張丟棄`, aIdx);
+    return withPending(st, {
+      type: 'hand-discard',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: pick, maxCount: pick,
+      effectKey: 'sunny-eevee-mental-out',
+      params: {
+        validIids: oppHand.map(c => c.iid),
+        concealed: true,  // v3.9998：UI 端讀此 flag → 卡背顯示，不揭示卡名/圖
+        label,
+        titleOverride: `${label}：選擇要丟棄的對手手牌（不看正面）`,
+      },
+    });
+  };
+}
+regPost('太陽伊布ex|精神出局', oppDiscardChosenConcealedPost(1, '精神出局'));
 regR('sunny-eevee-mental-out', (state, aIdx, iids, _params, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
-  const targetIid = iids[0];
-  if (!targetIid) return state;
-  // v5.603：丟到棄牌區後本就是公開資訊 → 用中央 joinCardNames 在雙方對戰紀錄揭示被丟棄的卡名
-  const picked = state.players[dIdx].hand.find(c => c.iid === targetIid);
-  if (!picked) return state;
+  const label = (typeof (_params as { label?: unknown })?.label === 'string'
+    ? (_params as { label: string }).label : '精神出局');
+  const targets = state.players[dIdx].hand.filter(c => iids.includes(c.iid));
+  if (targets.length === 0) return state;
+  const tids = new Set(targets.map(c => c.iid));
   let st = updatePlayer(state, dIdx, p => ({
     ...p,
-    hand: p.hand.filter(c => c.iid !== targetIid),
-    discard: [...p.discard, picked],
+    hand: p.hand.filter(c => !tids.has(c.iid)),
+    discard: [...p.discard, ...targets],
   }));
-  st = addLog(st, `精神出局：丟棄了對手的 ${joinCardNames([picked], pool)}`, aIdx);
+  // v5.603：丟到棄牌區後本就是公開資訊 → 用中央 joinCardNames 在雙方對戰紀錄揭示被丟棄的卡名
+  st = addLog(st, `${label}：丟棄了對手的 ${joinCardNames(targets, pool)}`, aIdx);
   return st;
 });
-// v3.9998：拍落仍用隨機（卡面寫「隨機」），維持舊邏輯
+// ⚠ 其餘同措辭卡（功夫鼬／滑滑小子／酷豹／班基拉斯ex／南瓜怪人ex／禿鷹娜ex／火箭隊的鈴鐺響／
+//   超級頭巾混混ex／巨牙鯊｜咬棄 等）目前仍用隨機，是既有 bug，待 Wilson 裁定後一次收斂。
+//   （原本此處註解寫「卡面寫『隨機』」與 static/cards 卡面不符，已更正。）
 
 
 // 巨牙鯊｜咬棄 — 擲 3 次硬幣，丟對手正面數量的手牌（不看正面）

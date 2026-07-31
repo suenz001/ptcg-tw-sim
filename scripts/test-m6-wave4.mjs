@@ -74,14 +74,32 @@ for(const [cn,an,need] of [['加熱洛托姆ex','強力閃焰',2],['千面避役
   if(cn==='加熱洛托姆ex' && p) chk('⭐加熱洛托姆ex｜強力閃焰 強制剛好 2 個(min=max=2)',
       p.minCount===2 && p.maxCount===2, `min=${p.minCount} max=${p.maxCount}`);
 }
-// 2 隨機丟對手手牌 1 張（既有正對照：滑滑小子｜拍落）
-for(const [cn,an] of [['好啦魷','拍落'],['滑滑小子','拍落']]){
+// 2 「不看正面」從對手手牌**選擇**1張丟棄 → 必須開 concealed picker（不是隨機）
+//   ⚠ 正對照改用 太陽伊布ex｜精神出局（v3.9998 已裁定的正確實作）。
+//     **不可**用 滑滑小子｜拍落 當正對照 —— 它本身就是仍未修的既有 bug（隨機），
+//     第一版守衛就是拿它當正對照才讓錯誤實作全綠。
+for(const [cn,an] of [['好啦魷','拍落'],['太陽伊布ex','精神出局']]){
   const c=find(cn,an); if(!c){chk(`${cn}|${an} 存在`,false);continue;}
   const r=run(an,c,EVO,{oppHand:3});
-  chk(`${cn}｜${an} 對手手牌 3→2、棄牌 +1${cn==='滑滑小子'?'(既有正對照)':''}`,
-      cnt(r?.players?.[1]?.hand)===2 && cnt(r?.players?.[1]?.discard)===1,
-      `hand=${cnt(r?.players?.[1]?.hand)} discard=${cnt(r?.players?.[1]?.discard)}`);
+  const p=r?.pendingSelection;
+  chk(`${cn}｜${an} 開 hand-discard picker${cn==='太陽伊布ex'?'(既有正對照)':''}`,
+      p?.type==='hand-discard', p?.type);
+  chk(`${cn}｜${an} concealed=true(看卡背、不揭示卡名)`, p?.params?.concealed===true, JSON.stringify(p?.params?.concealed));
+  chk(`${cn}｜${an} 選剛好 1 張、候選=對手全手牌 3 張`,
+      p?.minCount===1 && p?.maxCount===1 && (p?.params?.validIids||[]).length===3,
+      `min=${p?.minCount} max=${p?.maxCount} valid=${(p?.params?.validIids||[]).length}`);
+  // ⭐picker 還沒 resolve 前，對手手牌不得先被動到
+  chk(`${cn}｜${an} 未 resolve 前對手手牌仍 3 張`, cnt(r?.players?.[1]?.hand)===3, cnt(r?.players?.[1]?.hand));
 }
+// ⭐反例守衛：好啦魷不得走「隨機直接丟」——若哪天被改回隨機，picker 不會出現，上面會 FAIL。
+//   另補 resolver 落地驗證：送 RESOLVE_SELECTION 後手牌 3→2、棄牌 +1。
+{ const c=find('好啦魷','拍落');
+  const r=run('拍落',c,EVO,{oppHand:3});
+  const pick=(r?.pendingSelection?.params?.validIids||[])[0];
+  let done=null; try{ done=applyAction(r,{type:'RESOLVE_SELECTION',selectedIids:[pick]},pool);}catch(e){done={__err:e.message};}
+  chk('好啦魷｜拍落 resolve 後 對手手牌 3→2、棄牌 +1',
+      cnt(done?.players?.[1]?.hand)===2 && cnt(done?.players?.[1]?.discard)===1,
+      `hand=${cnt(done?.players?.[1]?.hand)} discard=${cnt(done?.players?.[1]?.discard)} err=${done?.__err}`); }
 // 3 中毒 + 每次檢查傷害改為 40（＝卡面「4 個指示物」×10）
 //   ⚠ 單位是傷害點數不是個數；既有範本 致死猛毒 卡面 16 個 → 實作傳 160，故此處應為 40。
 for(const [cn,an,want] of [['阿利多斯','劇痛毒',40],['超級毒藻龍ex','致死猛毒',160]]){

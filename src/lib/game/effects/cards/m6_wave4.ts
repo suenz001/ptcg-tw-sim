@@ -12,7 +12,7 @@
 
 import { regPre, regPost } from '../_shared';
 import {
-  registerSelfDiscardMultiply, oppDiscardRandomHand, applyStatusToOppActive,
+  registerSelfDiscardMultiply, oppDiscardChosenConcealedPost, applyStatusToOppActive,
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -24,11 +24,15 @@ import {
 registerSelfDiscardMultiply('加熱洛托姆ex|強力閃焰', '強力閃焰', 170, 0, 2, 'all', false, 2);
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 2 隨機丟棄對手手牌 N 張（既有 14 張，中央 oppDiscardRandomHand）
+// 2 「不看正面」從對手手牌**選擇** 1 張丟棄（中央 oppDiscardChosenConcealedPost）
 //   好啦魷｜拍落 damage='10'：在不看正面的情況下，從對手的手牌選擇1張，將其丟棄。
-//   ⚠ 卡面「不看正面」＝隨機抽一張丟，不是玩家挑（helper 已是隨機）。
+//   ⚠⚠ 這裡**不是隨機**。卡面明寫「選擇」，攻方盲選位置（看卡背）；站上 v3.9998 已對
+//     逐字相同的 太陽伊布ex｜精神出局 做過此裁定。
+//     本檔第一版誤用 oppDiscardRandomHand，原因是照抄了 滑滑小子｜拍落 —— 但**那張本身就是
+//     既有 bug**。教訓：「措辭相同＋既有範本多」不等於安全，範本本身可能是錯的；
+//     照抄前要先確認該範本有沒有對應的裁定紀錄（本例 effects.ts v3.9998 註解就寫著）。
 // ══════════════════════════════════════════════════════════════════════════════
-regPost('好啦魷|拍落', oppDiscardRandomHand(1, '拍落'));
+regPost('好啦魷|拍落', oppDiscardChosenConcealedPost(1, '拍落'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3 中毒且改變每次檢查的傷害（既有 9 張，範本：超級毒藻龍ex｜致死猛毒）
