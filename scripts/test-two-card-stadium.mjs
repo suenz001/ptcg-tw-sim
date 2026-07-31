@@ -73,5 +73,24 @@ for (const n of ['傳說的海溝','傳說的山頂','傳說的熔岩洞']) {
   chk('否定對照：一般卡 3 張不報偶數問題', !normalOdd.issues.some(s=>s.includes('偶數')), JSON.stringify(normalOdd.issues));
 }
 
+// ⭐ v6.085（Fable 5 審 v6.084 指出的潛伏雷）：對戰層用 **cardId** 聚合手牌（同 cardId ≥2 才算一套），
+//   牌組層用 **卡名** 判偶數。目前三張各只有一個印刷 id 所以一致；但本站有「補收秘密稀有印刷」的慣例，
+//   一旦同名出現第二個 cardId，玩家放「A 印刷 1 張 + B 印刷 1 張」會**過牌組驗證（偶數 2）卻永遠打不出**
+//   （每個 cardId 都只有 1 張）—— 靜默軟鎖，玩家講不清楚。
+//   這個守衛讓那一天在上線前就 FAIL，逼我們把對戰層改成卡名聚合。
+{
+  const idsByName = new Map();
+  for (const c of byId.values()) {
+    if (!TWO_CARD.has(c.name)) continue;
+    if (!idsByName.has(c.name)) idsByName.set(c.name, new Set());
+    idsByName.get(c.name).add(String(c.id));
+  }
+  for (const [name, ids] of idsByName) {
+    chk(`⭐「${name}」只有一個印刷 id（多印刷會讓對戰層的 cardId 聚合失效 → 見本段註解）`,
+        ids.size === 1, `ids=${[...ids].join(',')}`);
+  }
+  chk('三張兩張合一競技場都在 DB 內', idsByName.size === 3, String(idsByName.size));
+}
+
 console.log(`test-two-card-stadium: ${pass} passed, ${fail} failed`);
 if (fail>0) process.exit(1);

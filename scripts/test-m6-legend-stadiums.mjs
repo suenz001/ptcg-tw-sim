@@ -1,6 +1,6 @@
 // v6.077 守衛：M6 傳說競技場三個場地效果（批2 — 效果 hook，機制尚未上線）
 //
-// ⚠ 此時三張仍在 PENDING_STADIUMS（fail-closed，不可打出）→ 正常對局不會出現，
+//   （v6.084 起三張已開放使用；本檔只驗場地效果本身，不驗打出流程 —— 打出流程在 test-legend-stadium-two-card.mjs）
 //   所以測試直接構造 state.activeStadium 驗證效果本身。
 // ⭐ 每個效果都配**否定對照**：沒有該場地時不得觸發（否則就是誤傷全站）。
 import { build } from 'esbuild';

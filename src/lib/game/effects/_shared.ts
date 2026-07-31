@@ -1009,7 +1009,9 @@ export function discardActiveStadium(
   const players = [...state.players] as [PlayerState, PlayerState];
   // v6.084：「兩張合一」競技場離場時**兩張一起**進棄牌區。
   //   ⚠ 這是全站唯一的競技場離場中央出口（v6.084 把 v2500 的手刻 inline 也收斂進來），
-  //     漏處理 partner ＝ 第二張卡憑空蒸發（卡片守恆破損，assertIidIntegrity 會抓）。
+  //     漏處理 partner ＝ 第二張卡憑空蒸發（卡片守恆破損）。
+  //     守衛：test-legend-stadium-two-card.mjs 的 totalCards ＋ v6.085 起 test-iid-integrity-conservation
+  //     的全域去重也涵蓋 activeStadium/activeStadiumPartner。
   const leaving = [stadium, ...(state.activeStadiumPartner ? [state.activeStadiumPartner] : [])];
   players[ownerIdx] = {
     ...players[ownerIdx],

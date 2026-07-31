@@ -35,6 +35,13 @@ function assertIidIntegrity(state, expectPerPlayer, tag){
   const all=[];
   const counts=[];
   for(const pl of state.players){ const ids=collectIids(pl); counts.push(ids.length); all.push(...ids); }
+  // v6.085：競技場 zone 也納入「全域無重複」檢查（Fable 5 審 v6.084 指出的守恆網缺口）。
+  //   ⚠ 兩張合一競技場（M6 傳說的海溝／山頂／熔岩洞）第二張放在 GameState.activeStadiumPartner，
+  //     不在任何 player zone 裡 —— 原本這張卡完全不在守恆網的視野內，
+  //     任何新的離場路徑漏處理 partner（＝複製或蒸發）這個全域網都抓不到。
+  //   ⚠ 只加進「無重複」那一項，**不**計入 counts —— counts 是 per-player 張數守恆，
+  //     競技場在場上時本來就不屬於任何一方的 zone，加進去會弄壞既有斷言。
+  for (const s of [state.activeStadium, state.activeStadiumPartner]) if (s?.iid) all.push(s.iid);
   // (1) 全域無重複 iid
   const dup=all.length!==new Set(all).size;
   assert.ok(!dup, `${tag}: 發現重複 iid(複製卡/dup)`);
