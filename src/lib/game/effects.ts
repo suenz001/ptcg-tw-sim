@@ -636,6 +636,7 @@ import './effects/cards/m6_wave2';  // v6.061 M6 招式實裝 批次2（12 招�
 import './effects/cards/m6_wave3';  // v6.062 M6 招式實裝 批次3（8 招）
 import './effects/cards/m6_wave4';  // v6.063 M6 招式實裝 批次4（3 招）
 import './effects/cards/m6_wave5';  // v6.067 M6 招式實裝 批次5（5 招）
+import './effects/cards/m6_wave6';  // v6.068 M6 招式實裝 批次6（4 招）
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
 import { addPendingPrize, getPendingPrize } from './effects/_shared';
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
@@ -9813,7 +9814,8 @@ export function selfSwapPost(label: string): AttackPostFn {
 }
 
 // 從牌庫選 N 張（filter）加手牌（使用 search-to-hand-reshuffle）
-function deckSearchToHandPost(max: number, filter: string, label: string): AttackPostFn {
+// v6.068：export 供 M6 批次6 復用（原為 local，行為未變）
+export function deckSearchToHandPost(max: number, filter: string, label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
