@@ -16938,8 +16938,7 @@ regR('inferno-fandango-attach', (st, idx, iids, params, pool) => {
 import {
   supercatExpAbility_LureTail,
   volcaronaAbility_HeatScale,
-  klingerAbility_EmergencyRotate,
-} from './effects/cards/v3070_deferred_wave_d';
+  klingerAbility_EmergencyRotate, talonflameExAbility_ExcitingDive } from './effects/cards/v3070_deferred_wave_d';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v2.320 — 「從手牌使出/進化時」特性自動提示機制
@@ -17053,6 +17052,8 @@ export const ON_HAND_ACTIVATE_ABILITIES = new Map<
   (state: GameState, idx: 0 | 1, pool: Map<string, Card>, handInst: CardInstance) => GameState
 >([
   ['齒輪怪', klingerAbility_EmergencyRotate], // 對手有 Stage 2 時放此卡到備戰
+  // v6.080 M6：烈箭鷹ex｜激動俯衝 —— 自己場上有【無】超級進化ex 時放此卡到備戰（gate 在 engine）
+  ['烈箭鷹ex', talonflameExAbility_ExcitingDive],
 ]);
 
 

@@ -24,6 +24,7 @@
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
+    getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
   } from '$lib/game/engine';
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
@@ -2569,50 +2570,17 @@
     return out;
   });
 
-  // 機制 B: 手牌寶可夢自身為 trigger（齒輪怪｜緊急迴轉）
-  // key = 手牌 iid, value = { abilityName, label }
-  const handActivateAbilities = $derived.by<Map<string, { abilityName: string; label: string }>>(() => {
-    const out = new Map<string, { abilityName: string; label: string }>();
+  // 機制 B: 手牌寶可夢自身為 trigger（齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝）
+  // v6.080：條件判斷收斂到 engine getHandActivatableAbilities（引擎 handler 與手機版同一份）。
+  //   原本這裡自己寫一份，且硬編 `bench.length < 5` 沒走 getBenchLimit（零之大空洞上限 8）→
+  //   引擎放行但卡片不亮。新增同型卡只改 engine 的 HAND_ACTIVATE_GATES。
+  // key = 手牌 iid, value = { abilityName, abilityIndex, label }
+  const handActivateAbilities = $derived.by<Map<string, { abilityName: string; abilityIndex: number; label: string }>>(() => {
+    const out = new Map<string, { abilityName: string; abilityIndex: number; label: string }>();
     if (!game || !poolReady) return out;
-    if (game.phase !== 'playing' || game.turnPhase !== 'main') return out;
-    if (game.pendingSelection) return out;
     if (!isMyTurn()) return out;
-    const me = game.players[myIdx];
-    const opp = game.players[1 - myIdx];
-    const usedNames = me.abilityNamesUsedThisTurn ?? [];
-
-    // 對手場上是否有 Stage 2 寶可夢（齒輪怪 gate）— 用 evolvesFrom 二層偵測
-    const oppHasStage2Local = (): boolean => {
-      const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
-      for (const inst of all) {
-        const card = pool.get(inst.cardId);
-        if (!card || card.supertype !== 'Pokemon') continue;
-        const sub = (card.subtype ?? '') as string;
-        if (typeof sub === 'string' && (sub.includes('Stage 2') || sub.includes('Stage2')
-            || sub.includes('2 階') || sub.includes('二階') || sub === '2階進化')) {
-          return true;
-        }
-        if (card.evolvesFrom) {
-          for (const v of pool.values()) {
-            if (v.name === card.evolvesFrom && v.evolvesFrom) return true;
-          }
-        }
-      }
-      return false;
-    };
-
-    // 1) 齒輪怪｜緊急迴轉 — 對手有 Stage 2 + 自方備戰 < 5 + 名稱未用過
-    if (!usedNames.includes('緊急迴轉') && me.bench.length < 5 && oppHasStage2Local()) {
-      for (const inst of me.hand) {
-        const card = pool.get(inst.cardId);
-        // v5.898：同名多特性——只有實際有「緊急迴轉」特性的齒輪怪(非齒輪塗層版)才曝露此手牌特性
-        if (card?.name === '齒輪怪' && (card.abilities?.some(a => a.name === '緊急迴轉') ?? false)) {
-          out.set(inst.iid, {
-            abilityName: '緊急迴轉',
-            label: '⚡ 緊急迴轉 (放備戰)',
-          });
-        }
-      }
+    for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) {
+      out.set(a.iid, { abilityName: a.abilityName, abilityIndex: a.abilityIndex, label: `⚡ ${a.abilityName} (放備戰)` });
     }
     return out;
   });
@@ -2626,8 +2594,8 @@
   function triggerHandActivateAbility(handIid: string): void {
     const meta = handActivateAbilities.get(handIid);
     if (!meta) return;
-    // abilityIndex=0（齒輪怪緊急迴轉是 abilities[0]）
-    dispatch(GameActions.useHandAbility(handIid, 0));
+    // v6.080：abilityIndex 由中央 gate 給（原本硬編 0，同名多特性卡會指錯）
+    dispatch(GameActions.useHandAbility(handIid, meta.abilityIndex));
   }
 
 

@@ -4351,19 +4351,12 @@ function handlePlaying(
     const abilityName = handCard.abilities?.[action.abilityIndex]?.name;
     if (!abilityName) return state;
 
-    // gate: 該 ability 名稱本回合已用過 → 拒絕
+    // v6.080：gate 走中央 getHandActivatableAbilities（與兩套 UI 同一份判斷）。
+    //   ⚠ 禁在這裡另寫卡名 if —— 三份漂移是既有事故來源（UI 硬編 bench<5 沒走 getBenchLimit）。
     const usedNames = attacker.abilityNamesUsedThisTurn ?? [];
-    if (usedNames.includes(abilityName)) return state;
-
-    // gate: 各卡名專屬條件
-    // v5.898：同名多特性消歧義——齒輪怪有「緊急迴轉」(SV7,放備戰)與「齒輪塗層」(Stage2 被動減傷)兩版,
-    //   ON_HAND_ACTIVATE_ABILITIES 以卡名 key→齒輪塗層版(Stage2)也被曝露緊急迴轉(把 Stage2 從手牌放備戰=非法)。
-    //   改判「這張卡實際有緊急迴轉特性」才放行。
-    if (handCard.name === '齒輪怪') {
-      if (!(handCard.abilities?.some(a => a.name === '緊急迴轉') ?? false)) return state;
-      if (!oppHasStage2(defender, pool)) return state;
-      if (attacker.bench.length >= getBenchLimit(state, aIdx, pool)) return state;
-    }
+    const activatable = getHandActivatableAbilities(state, aIdx, pool);
+    const hit = activatable.find(a => a.iid === handInst.iid && a.abilityIndex === action.abilityIndex);
+    if (!hit) return state;
 
     // 標記 abilityNamesUsedThisTurn → fn 處理 hand → bench
     const newPlayers1: [PlayerState, PlayerState] = [...state.players] as [PlayerState, PlayerState];
@@ -4689,20 +4682,12 @@ function handlePlaying(
       );
     }
 
-    // v2.57 火箭隊的超夢ex｜力量抑制者 — 自己場上「火箭隊的」寶可夢 < 4 時無法使用招式
+    // v6.080：「只有在…時，這隻寶可夢才可使用招式」型**自身條件 gate** 中央收斂。
+    //   原本只有 力量抑制者 一張，硬編在這裡與 getAvailableAttacks 兩處（易漂移）。
+    //   ⚠ 兩處必須用同一個述詞，否則會出現「按鈕亮著但點了沒反應」/「明明可以打卻反白」。
     {
-      const actCard = pool.get(attacker.active.cardId);
-      if (actCard?.name === '火箭隊的超夢ex' && actCard.abilities?.some(a => a.name === '力量抑制者')) {
-        const allOwn: CardInstance[] = [attacker.active, ...attacker.bench];
-        const rocketCount = allOwn.filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
-        if (rocketCount < 4) {
-          return addLog(
-            state,
-            `${actCard.name} 力量抑制者：自己場上「火箭隊的」寶可夢只有 ${rocketCount} 隻（未達 4 隻），無法使用招式`,
-            aIdx
-          );
-        }
-      }
+      const blockReason = selfAttackPreconditionBlock(state, aIdx, pool);
+      if (blockReason) return addLog(state, blockReason, aIdx);
     }
 
     const attackerCard = getCard(attacker.active.cardId, pool);
@@ -8528,6 +8513,126 @@ const SECOND_PLAYER_FIRST_TURN_ONLY = new Set<string>(['絕叫', '慢芬香']);
 const PLAYER_LEVEL_ATTACK_COOLDOWN = new Set<string>(['天仙石', '渾沌匍匐']);
 
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.080 手牌特性（USE_HAND_ABILITY）中央 gate — 引擎與兩套 UI 單一來源
+//
+// 收錄（卡面逐字）：
+//   ・齒輪怪｜緊急迴轉（SV7）：若手牌有這張卡，且**對手**場上有【2階進化】寶可夢
+//   ・烈箭鷹ex｜激動俯衝（M6）：若手牌有這張卡，且**自己**場上有【無】屬性的
+//     「超級進化寶可夢【ex】」
+// 共同條件：自己的回合 main 階段、無 pending、該特性名本回合未用過、備戰未滿。
+//
+// ⚠ 原本這份判斷在**三個地方各寫一份**（engine USE_HAND_ABILITY handler、
+//   桌機 +page.svelte handActivateAbilities、手機 MobilePortraitBattle
+//   handAbilityActivatableIids），三份已經漂移：兩套 UI 硬編 `bench.length < 5`，
+//   沒走 getBenchLimit（零之大空洞下上限是 8）→ 卡片不會亮但引擎其實放行。
+//   本版收斂成這一份，UI 兩端改為呼叫 getHandActivatableAbilities。
+// ⚠ 新增同型卡只改 HAND_ACTIVATE_GATES；禁再往任何一端塞 if。
+const HAND_ACTIVATE_GATES: Record<string, (s: GameState, idx: 0 | 1, pool: Map<string, Card>, handCard: Card) => boolean> = {
+  緊急迴轉: (s, idx, pool, handCard) => {
+    // v5.898 同名多特性：只有真的帶「緊急迴轉」的那版齒輪怪（非齒輪塗層 Stage2）才放行
+    if (!(handCard.abilities?.some(a => a.name === '緊急迴轉') ?? false)) return false;
+    const opp = s.players[(1 - idx) as 0 | 1];
+    const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
+    return all.some(inst => {
+      const c = pool.get(inst.cardId);
+      if (!c || c.supertype !== 'Pokemon') return false;
+      const sub = String(c.subtype ?? '');
+      if (c.stage === 'Stage2' || sub.includes('Stage2') || sub.includes('Stage 2')
+          || sub.includes('2 階') || sub.includes('二階') || sub === '2階進化') return true;
+      // fallback：前一階本身也是進化 → 這張是 2 階
+      if (c.evolvesFrom) {
+        for (const v of pool.values()) if (v.name === c.evolvesFrom && v.evolvesFrom) return true;
+      }
+      return false;
+    });
+  },
+  激動俯衝: (s, idx, pool, handCard) => {
+    if (!(handCard.abilities?.some(a => a.name === '激動俯衝') ?? false)) return false;
+    // 卡面：自己的場上有【無】屬性的「超級進化寶可夢【ex】」
+    //   超級進化 ex 的判準與 engine 既有的獎賞計算（3 張）一致：卡名以「超級」開頭且以「ex」結尾。
+    const me = s.players[idx];
+    const field = [...(me.active ? [me.active] : []), ...me.bench];
+    return field.some(inst => {
+      const c = pool.get(inst.cardId);
+      return !!c && c.name.startsWith('超級') && c.name.endsWith('ex') && c.pokemonType === 'Colorless';
+    });
+  },
+};
+
+/**
+ * v6.080：列出「現在可以從手牌發動」的特性（USE_HAND_ABILITY 用）。
+ * 兩套 UI 與引擎 handler 共用；回傳空陣列＝目前不能發動。
+ */
+export function getHandActivatableAbilities(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): Array<{ iid: string; abilityIndex: number; abilityName: string; cardName: string }> {
+  const out: Array<{ iid: string; abilityIndex: number; abilityName: string; cardName: string }> = [];
+  if (state.phase !== 'playing' || state.turnPhase !== 'main') return out;
+  if (state.pendingSelection) return out;
+  const me = state.players[idx];
+  if (!me) return out;
+  const usedNames = me.abilityNamesUsedThisTurn ?? [];
+  if (me.bench.length >= getBenchLimit(state, idx, pool)) return out;  // 這批全是「放備戰」型
+  for (const inst of me.hand) {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities?.length) continue;
+    if (!ON_HAND_ACTIVATE_ABILITIES.has(card.name)) continue;
+    card.abilities.forEach((ab, i) => {
+      const gate = HAND_ACTIVATE_GATES[ab.name];
+      if (!gate) return;
+      if (usedNames.includes(ab.name)) return;
+      if (!gate(state, idx, pool, card)) return;
+      out.push({ iid: inst.iid, abilityIndex: i, abilityName: ab.name, cardName: card.name });
+    });
+  }
+  return out;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.080 「只有在…時，這隻寶可夢才可使用招式」— 持有者自身條件 gate（中央述詞）
+//
+// 收錄（卡面逐字）：
+//   ・火箭隊的超夢ex｜力量抑制者：只有在自己的場上的「火箭隊的寶可夢」數量為 4 隻以上時
+//   ・超級泥偶巨人ex｜啟動限制（M6）：只有在自己的手牌為 10 張以上時
+// ⚠ 這是**持有者自己的特性** → 必須過 isAbilityHolderEffective（被監視塔／初始化／
+//   暗夜羽擊等消除特性時，這個限制也跟著消失）。v2.57 的原實作漏了這個 gate。
+// ⚠ 回傳「阻擋原因字串」而非 boolean —— ATTACK handler 要把原因寫進 log，
+//   getAvailableAttacks 只看有沒有值。兩處共用同一份判斷，禁各寫一份。
+// ⚠ 新增同型卡時只改這裡；不要再往兩個呼叫點塞 if。
+function selfAttackPreconditionBlock(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): string | null {
+  const player = state.players[idx];
+  const act = player?.active;
+  if (!act) return null;
+  const card = pool.get(act.cardId);
+  if (!card?.abilities?.length) return null;
+
+  for (const ab of card.abilities) {
+    if (ab.name === '力量抑制者') {
+      if (!isAbilityHolderEffective(state, act, card, idx, ab.name, 'active', pool)) continue;
+      const rocketCount = [act, ...player.bench]
+        .filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
+      if (rocketCount < 4) {
+        return `${card.name} 力量抑制者：自己場上「火箭隊的」寶可夢只有 ${rocketCount} 隻（未達 4 隻），無法使用招式`;
+      }
+    }
+    if (ab.name === '啟動限制') {
+      if (!isAbilityHolderEffective(state, act, card, idx, ab.name, 'active', pool)) continue;
+      const handSize = player.hand.length;
+      if (handSize < 10) {
+        return `${card.name} 啟動限制：自己的手牌只有 ${handSize} 張（未達 10 張），無法使用招式`;
+      }
+    }
+  }
+  return null;
+}
+
 export function getAvailableAttacks(
   state: GameState,
   pool: Map<string, Card>
@@ -8560,12 +8665,8 @@ export function getAvailableAttacks(
   if (player.noAttacksThisTurn) return [];
   const card = pool.get(player.active.cardId);
   if (!card) return [];
-  // v2.57 力量抑制者：自己場上「火箭隊的」寶可夢 < 4 → 禁用所有招式
-  if (card.name === '火箭隊的超夢ex' && card.abilities?.some(a => a.name === '力量抑制者')) {
-    const allOwn: CardInstance[] = [player.active, ...player.bench];
-    const rocketCount = allOwn.filter(c => pool.get(c.cardId)?.name?.startsWith('火箭隊的')).length;
-    if (rocketCount < 4) return [];
-  }
+  // v6.080：自身條件 gate（力量抑制者 / 啟動限制）走同一個中央述詞（見 selfAttackPreconditionBlock）
+  if (selfAttackPreconditionBlock(state, state.activePlayerIndex as 0 | 1, pool)) return [];
   // v2.214：合併工具招式（招式學習器 螢石 / 核心記憶碟 等）
   const effective = getEffectiveAttacks(state, player.active, pool);
   if (effective.length === 0) return [];

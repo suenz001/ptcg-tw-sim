@@ -41,7 +41,8 @@
     getPlayableBasics, getPlayableFossils, getUsableAbilities,
     canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit,
     getEffectiveHP,
-    canBeInitialActiveCard
+    canBeInitialActiveCard,
+    getHandActivatableAbilities  // v6.080 手牌特性中央 gate
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
@@ -267,27 +268,13 @@
   let playableBasicIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableBasics(game, pool)) : new Set<string>());
   let playableFossilIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableFossils(game, pool)) : new Set<string>());
   let playableEvoIids = $derived(new Set<string>(evolvableTargets.flatMap(e => e.toIids)));
-  // v5.511：緊急迴轉(齒輪怪) 可用時也讓手牌卡顯示黃框（點卡→sheet 發動；與桌機「點卡發動」一致）
+  // v5.511：手牌特性可用時讓手牌卡顯示黃框（點卡→sheet 發動；與桌機「點卡發動」一致）
+  // v6.080：判斷收斂到 engine getHandActivatableAbilities（原本本檔自寫一份，且硬編
+  //   `bench.length >= myBenchLimit` 之外的條件與桌機／引擎三份漂移）。
   let handAbilityActivatableIids = $derived.by<Set<string>>(() => {
     const out = new Set<string>();
     if (!(isPlaying && isMyTurn && isMainPhase && !pendingSelection)) return out;
-    const me = myPlayer, opp = oppPlayer;
-    const usedNames = me.abilityNamesUsedThisTurn ?? [];
-    if (usedNames.includes('緊急迴轉') || me.bench.length >= myBenchLimit) return out;
-    const oppHasStage2 = (() => {
-      const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
-      for (const p of all) {
-        const card = pool.get(p.cardId);
-        if (!card || card.supertype !== 'Pokemon') continue;
-        const sub = (card.subtype ?? '') as string;
-        if (typeof sub === 'string' && (sub.includes('Stage 2') || sub.includes('Stage2')
-            || sub.includes('2 階') || sub.includes('二階') || sub === '2階進化')) return true;
-        if (card.evolvesFrom) { for (const v of pool.values()) if (v.name === card.evolvesFrom && v.evolvesFrom) return true; }
-      }
-      return false;
-    })();
-    if (!oppHasStage2) return out;
-    for (const inst of me.hand) { const gc = pool.get(inst.cardId); if (gc?.name === '齒輪怪' && (gc.abilities?.some(a => a.name === '緊急迴轉') ?? false)) out.add(inst.iid); } // v5.898 只緊急迴轉版
+    for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) out.add(a.iid);
     return out;
   });
 

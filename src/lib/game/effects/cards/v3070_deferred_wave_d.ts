@@ -160,6 +160,43 @@ export const volcaronaAbility_HeatScale: OnDiscardFromHandFn = (st, idx, pool, _
 //   2) 從 hand 取出 → bench append（重新生成乾淨 inst flags 不必要 — 沿用 inst）
 //   3) mark abilityNamesUsedThisTurn 入「緊急迴轉」（每回合 1 次）
 // ════════════════════════════════════════════════════════════════════════════
+// v6.080：抽成通用 helper —— 「將這張卡放置於備戰區」型手牌特性（緊急迴轉 / 激動俯衝）
+//   ⚠ 放備戰的實體一律裸化（清傷害/狀態/道具/進化堆疊）＋ justPlaced，與 PLAY_BASIC 對齊；
+//     否則從手牌帶著殘留旗標上場（v5.993 transient 外洩事故同型）。
+export function makeHandToBenchAbility(label: string): OnHandActivateFn {
+  return (st, idx, pool, handInst) => {
+    const p = st.players[idx];
+    const handIdx = p.hand.findIndex(c => c.iid === handInst.iid);
+    if (handIdx < 0) return addLog(st, `${label}：找不到此卡（手牌異常）`, idx);
+    const cardName = pool.get(handInst.cardId)?.name ?? '?';
+    const placed: CardInstance = {
+      ...handInst,
+      energyAttached: handInst.energyAttached ?? [],
+      damage: 0,
+      status: undefined,
+      secondaryStatus: undefined,
+      tertiaryStatus: undefined,
+      toolAttached: undefined,
+      evolvedFromStack: undefined,
+      evolvedFromIid: undefined,
+      evolvedThisTurn: undefined,
+      abilityUsedThisTurn: undefined,
+      movedToActiveThisTurn: undefined,
+      playedFromHand: true,
+      justPlaced: true,
+    };
+    const s = addLog(st, `${label}：將 ${cardName} 從手牌放置於備戰區`, idx);
+    return updatePlayer(s, idx, pl => ({
+      ...pl,
+      hand: pl.hand.filter(c => c.iid !== handInst.iid),
+      bench: [...pl.bench, placed],
+    }));
+  };
+}
+
+/** v6.080 M6 烈箭鷹ex｜激動俯衝 —— 與緊急迴轉同型（條件在 engine HAND_ACTIVATE_GATES） */
+export const talonflameExAbility_ExcitingDive: OnHandActivateFn = makeHandToBenchAbility('激動俯衝');
+
 export const klingerAbility_EmergencyRotate: OnHandActivateFn = (st, idx, pool, handInst) => {
   const p = st.players[idx];
   // 從 hand 中取出此 inst（呼叫端已 gate；此處 fail-safe）

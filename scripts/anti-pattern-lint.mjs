@@ -446,6 +446,9 @@ for (const f of files) {
   ],
   "effects.ts→v3070_deferred_wave_d": [
     "klingerAbility_EmergencyRotate",
+    // v6.080 M6 烈箭鷹ex｜激動俯衝 —— 與 klingerAbility_EmergencyRotate 同檔同型（手牌→備戰），
+    //   兩者都是 ON_HAND_ACTIVATE_ABILITIES 的 value fn，不在模組初始化期被呼叫（TDZ 安全）。
+    "talonflameExAbility_ExcitingDive",
     "registerV3070DeferredWaveD",
     "supercatExpAbility_LureTail",
     "volcaronaAbility_HeatScale"
