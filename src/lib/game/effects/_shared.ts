@@ -1067,15 +1067,62 @@ export function twoCardStadiumHalfIndex(
   const target = zone.find(c => c.iid === iid);
   if (!target) return null;
   if (!isTwoCardStadiumName(pool.get(target.cardId)?.name)) return null;
+  // ⭐ v6.090：優先讀該實體卡自己的持久身分（Wilson 裁定：左右各是一張卡片）。
+  //   舊存檔／線上版本 skew 沒有這欄時，才退回舊的「同 cardId 在該 zone 的出現序 % 2」。
+  const half = (target as { stadiumHalf?: 0 | 1 }).stadiumHalf;
+  if (half === 0 || half === 1) return half;
   const pos = zone.filter(c => c.cardId === target.cardId).findIndex(c => c.iid === iid);
   return pos < 0 ? null : ((pos % 2) as 0 | 1);
 }
 
+/**
+ * v6.090 依「牌組內出現序」給每張兩張合一競技場指派左右身分（左=0、右=1 交錯）。
+ * ⭐ 只在 createGame 建牌組時呼叫一次（洗牌**之前或之後都可以**，身分寫在實體卡上）。
+ *   Wilson 對牌組編輯器的指示也是同一條規則：「依據編號分為左邊那張與右邊那張」。
+ * ⚠ 冪等：已經有 stadiumHalf 的不覆蓋。
+ */
+export function assignTwoCardStadiumHalves(
+  insts: CardInstance[],
+  pool: Map<string, Card> | undefined,
+): CardInstance[] {
+  if (!pool) return insts;
+  const seen = new Map<string, number>();
+  return insts.map(inst => {
+    if (!isTwoCardStadiumName(pool.get(inst.cardId)?.name)) return inst;
+    if (inst.stadiumHalf === 0 || inst.stadiumHalf === 1) return inst;
+    const n = seen.get(inst.cardId) ?? 0;
+    seen.set(inst.cardId, n + 1);
+    return { ...inst, stadiumHalf: (n % 2) as 0 | 1 };
+  });
+}
+
+/**
+ * v6.090 從手牌裡找出「一左一右」的配對；找不到回 null（＝不可打出）。
+ * ⭐ Wilson 裁定：要**同時一左一右**才能放到場上。手上兩張都是左半 → 不可打出。
+ * ⚠ 舊存檔／版本 skew（沒有 stadiumHalf）→ fail-open 回退舊判準「同 cardId 有 2 張以上」，
+ *   否則舊 client 建的局會突然打不出來。
+ */
+export function findTwoCardStadiumPair<T extends { iid: string; cardId: string; stadiumHalf?: 0 | 1 }>(
+  hand: T[], cardId: string,
+): { left: T; right: T } | null {
+  const same = hand.filter(c => c.cardId === cardId);
+  if (same.length < 2) return null;
+  const left = same.find(c => c.stadiumHalf === 0);
+  const right = same.find(c => c.stadiumHalf === 1);
+  if (left && right) return { left, right };
+  // fail-open：這副牌組完全沒有左右身分（舊局）→ 沿用舊行為取前兩張
+  if (same.every(c => c.stadiumHalf !== 0 && c.stadiumHalf !== 1)) {
+    return { left: same[0], right: same[1] };
+  }
+  return null;
+}
+
 export function canPlayTwoCardStadium(
-  hand: { cardId: string }[],
+  hand: { iid: string; cardId: string; stadiumHalf?: 0 | 1 }[],
   cardId: string,
 ): boolean {
-  return hand.filter(c => c.cardId === cardId).length >= 2;
+  // v6.090：改判「手上有一左一右」（Wilson 裁定）。舊局無身分時 findTwoCardStadiumPair 會 fail-open。
+  return findTwoCardStadiumPair(hand, cardId) !== null;
 }
 
 export function shuffle<T>(arr: T[]): T[] {
@@ -1576,7 +1623,12 @@ export function hasAnyPendingPrize(state: GameState): boolean {
  * 附加卡（能量/道具/進化棧的卡）進手牌/牌庫前也應各自 toBareCard。
  */
 export function toBareCard(inst: CardInstance): CardInstance {
-  return { iid: inst.iid, cardId: inst.cardId, damage: 0, energyAttached: [] };
+  // ⚠ v6.090：stadiumHalf 與 fossilOnField 同屬「持久性定義屬性」而非回合旗標，必須保留 —
+  //   否則傳說場地卡被洗回牌庫／進棄牌區再回到手上就失去左右身分（顯示與可打出判定都會壞）。
+  return {
+    iid: inst.iid, cardId: inst.cardId, damage: 0, energyAttached: [],
+    ...(inst.stadiumHalf === 0 || inst.stadiumHalf === 1 ? { stadiumHalf: inst.stadiumHalf } : {}),
+  };
 }
 
 /**

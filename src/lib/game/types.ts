@@ -382,6 +382,17 @@ export interface CardInstance {
    * - 被打 KO 時走正常昏厥流程（給對手 1 張獎賞）
    */
   fossilOnField?: boolean;
+  /**
+   * v6.090「傳說」兩張合一競技場（傳說的海溝／山頂／熔岩洞）—— 這張實體卡是左半還是右半。
+   *   0 = 左半、1 = 右半。
+   * ⭐ Wilson 裁定（2026-08-01）：三張傳說場地卡「**分別視為左、右各為一張卡片**，
+   *   但唯獨要同時一左一右才能使用、放到場上」。
+   *   → 左右是**每張實體卡自己的身分**（建牌組時就定），不是渲染時數順序算出來的。
+   * ⚠ 這是「持久性定義屬性」不是回合旗標 —— 同 fossilOnField，
+   *   `toBareCard` 必須保留，否則洗回牌庫／棄牌區再回手就失去左右身分。
+   * ⚠ 舊存檔／線上版本 skew 可能沒有這欄 → 讀取端一律 fail-open 回退成舊的「出現序 % 2」。
+   */
+  stadiumHalf?: 0 | 1;
   /** v2.362 振翼髮｜暗夜羽擊 — 特性被消除旗標（跨回合 promote 模型）
    * NextTurn 由攻擊 ATTACK_POST 設置；END_TURN 時 promotePending 將 NextTurn → ThisTurn。
    * ThisTurn 表示本回合無法使用此寶可夢的主動特性，同時被動封鎖。

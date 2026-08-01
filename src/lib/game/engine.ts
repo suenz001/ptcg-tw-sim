@@ -633,12 +633,17 @@ function newInstance(cardId: string): CardInstance {
 }
 
 /** 把一組 cardId 轉為 CardInstance 陣列（供建立牌組用） */
-function deckToInstances(entries: { cardId: string; count: number }[]): CardInstance[] {
+function deckToInstances(
+  entries: { cardId: string; count: number }[],
+  pool?: Map<string, Card>,
+): CardInstance[] {
   const result: CardInstance[] = [];
   for (const { cardId, count } of entries) {
     for (let i = 0; i < count; i++) result.push(newInstance(cardId));
   }
-  return result;
+  // v6.090：兩張合一競技場在建牌組時就定下左右身分（依牌組內出現序交錯）。
+  //   之後洗牌／抽牌／棄牌都不會改變身分 —— 這正是 Wilson 要的「左右各是一張卡片」。
+  return assignTwoCardStadiumHalves(result, pool);
 }
 
 /**
@@ -922,7 +927,7 @@ import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽�
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
-import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium } from './effects/_shared'; // v6.084 兩張合一競技場
+import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分
 import { twoCardStadiumHalfIndex } from './effects/_shared'; // v6.086 手牌裁半（左/右）
 export { twoCardStadiumHalfIndex, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
@@ -2103,8 +2108,8 @@ export function createGame(
   const _e2 = spec2.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) }));
 
   // 洗牌 + 建牌組
-  p1.deck = shuffle(deckToInstances(_e1));
-  p2.deck = shuffle(deckToInstances(_e2));
+  p1.deck = shuffle(deckToInstances(_e1, pool));
+  p2.deck = shuffle(deckToInstances(_e2, pool));
 
   // v6.051：只有「雙方牌組任一含瞬間爆發力」且未被強制 legacy 時，才走互動式開局。
   //   其餘對局（全站絕大多數）完全走下面這段原本的同步發牌，行為 0 diff。
@@ -3704,7 +3709,12 @@ function handlePlaying(
       //   ⚠ 兩張都要離手，否則第二張留在手牌 ＝ 憑空多一張（複製卡）。
       let stadiumPartner: CardInstance | undefined;
       if (isTwoCardStadiumName(trainerCard.name)) {
-        const partnerIdx = attacker.hand.findIndex(c => c.cardId === trainerInst.cardId);
+        // v6.090：要配「另一半」。打出的是左半就找右半，反之亦然（Wilson 裁定：需一左一右）。
+        //   舊局（沒有 stadiumHalf）→ 沿用舊行為取同 cardId 的第一張。
+        const myHalf = trainerInst.stadiumHalf;
+        const partnerIdx = (myHalf === 0 || myHalf === 1)
+          ? attacker.hand.findIndex(c => c.cardId === trainerInst.cardId && c.stadiumHalf === (1 - myHalf))
+          : attacker.hand.findIndex(c => c.cardId === trainerInst.cardId);
         if (partnerIdx >= 0) {
           stadiumPartner = attacker.hand[partnerIdx];
           attacker.hand = attacker.hand.filter((_, i) => i !== partnerIdx);
