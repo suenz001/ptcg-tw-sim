@@ -2176,7 +2176,11 @@
     border: 1px solid #6a4aaa;
   }
 
-  /* v6.086「兩張合一」競技場手牌裁半（官方只給一張合併橫圖，容器是直卡比例） */
-  .mp-hand-card img.legend-half-l { object-fit: cover; object-position: 0% 50%; }
-  .mp-hand-card img.legend-half-r { object-fit: cover; object-position: 100% 50%; }
+  /* v6.086「兩張合一」競技場手牌裁半（官方只給一張合併橫圖）。
+     手機的 .mp-hand-card img 有固定寬高（cover 本來就會裁），仍明寫 aspect-ratio 與桌機一致，
+     避免日後有人改了容器尺寸就靜默失效（v6.087 桌機就是這樣沒生效）。 */
+  .mp-hand-card img.legend-half-l,
+  .mp-hand-card img.legend-half-r { aspect-ratio: 868 / 1212; object-fit: cover; }
+  .mp-hand-card img.legend-half-l { object-position: 0% 50%; }
+  .mp-hand-card img.legend-half-r { object-position: 100% 50%; }
 </style>

@@ -8749,7 +8749,7 @@
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
       {#if isTReplay}
         <!-- v5.940 回放:攤開行動方真手牌(面朝上,唯讀,點擊放大) -->
-        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
+        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name} class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0} class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
       {:else if isTournSpectator}
         {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
       {:else}
@@ -15212,8 +15212,15 @@
   }
 
 
-  /* v6.086「兩張合一」競技場手牌裁半 —— 官方只有一張合併橫圖（767×536 ≈ 兩張直卡並排），
-     容器本來就是直卡比例，用 cover + object-position 取左半／右半即可，不需要新圖片。 */
-  .hand-card img.legend-half-l { object-fit: cover; object-position: 0% 50%; }
-  .hand-card img.legend-half-r { object-fit: cover; object-position: 100% 50%; }
+  /* v6.086「兩張合一」競技場手牌裁半 —— 官方只有一張合併橫圖（767×536 ≈ 兩張直卡並排）。
+     ⚠ v6.087 修：`.hand-card img` 只設 width、**沒設 height/aspect-ratio** → img 盒高度 auto
+       ＝跟著圖片天然比例走，盒比例 == 圖比例時 `cover` 根本不會裁切、object-position 也就無效
+       （Fable 5 審 v6.086 抓到，桌機主戰場整個沒生效）。補 aspect-ratio 讓盒子變回直卡比例。
+     ⚠ 只加在 .legend-half-* 上，不動其他手牌卡。868/1212 = 官方直式卡圖比例。 */
+  .hand-card img.legend-half-l,
+  .hand-card img.legend-half-r,
+  .replay-hand-img.legend-half-l,
+  .replay-hand-img.legend-half-r { aspect-ratio: 868 / 1212; height: auto; object-fit: cover; }
+  .hand-card img.legend-half-l, .replay-hand-img.legend-half-l { object-position: 0% 50%; }
+  .hand-card img.legend-half-r, .replay-hand-img.legend-half-r { object-position: 100% 50%; }
 </style>
