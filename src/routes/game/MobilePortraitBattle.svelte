@@ -43,7 +43,8 @@
     getEffectiveHP,
     canBeInitialActiveCard,
     getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
-    twoCardStadiumHalfIndex       // v6.086 兩張合一競技場手牌裁半
+    twoCardStadiumHalfIndex,      // v6.086 兩張合一競技場手牌裁半
+    isTwoCardStadiumName          // v6.091 棄牌區兩張合一不聚合判準
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
@@ -366,7 +367,9 @@
   //   sheet.list 變動時 template 重新呼叫此函式，無 reactivity 問題。
   //   v5.116~v5.120 曾用 template 內 IIFE / reduce 嘗試 5 次 build fail，
   //   v5.121 才發現是另處 changelog raw {@const} 造成。本版用 script helper 最安全。
-  type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined; subtype: string | undefined };
+  // v6.091：key ＝ each 的穩定 key（一般卡用 cardId、兩張合一競技場拆開後用 iid，
+  //   ⚠ 不改 key 會 each_key_duplicate 直接白屏）；half ＝ 左/右半。
+  type DiscardGroup = { cardId: string; inst: CardInstance; count: number; name: string; supertype: string | undefined; subtype: string | undefined; key: string; half?: 0 | 1 | null };
   // v5.606 防呆：依 iid 去重，避免瞬時重複 iid 讓 keyed {#each} 崩潰（each_key_duplicate 白屏）。
   function dedupeByIid<T extends { iid?: string }>(list: readonly T[] | null | undefined): T[] {
     if (!list) return [];
@@ -377,18 +380,28 @@
   function groupDiscardList(list: CardInstance[]): DiscardGroup[] {
     const m = new Map<string, DiscardGroup>();
     for (const inst of list) {
+      const c0 = pool.get(inst.cardId);
+      // v6.091「傳說」兩張合一競技場不聚合 —— 左右半各自一格（Wilson 裁定）。
+      if (isTwoCardStadiumName(c0?.name)) {
+        m.set(inst.iid, {
+          cardId: inst.cardId, inst, count: 1, key: inst.iid,
+          name: c0?.name ?? '?', supertype: c0?.supertype, subtype: c0?.subtype,
+          half: twoCardStadiumHalfIndex(list, inst.iid, pool),
+        });
+        continue;
+      }
       const existing = m.get(inst.cardId);
       if (existing) {
         existing.count++;
       } else {
-        const c = pool.get(inst.cardId);
         m.set(inst.cardId, {
           cardId: inst.cardId,
           inst,
           count: 1,
-          name: c?.name ?? '?',
-          supertype: c?.supertype,
-          subtype: c?.subtype,
+          key: inst.cardId,
+          name: c0?.name ?? '?',
+          supertype: c0?.supertype,
+          subtype: c0?.subtype,
         });
       }
     }
@@ -1308,15 +1321,16 @@
         <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">🗑 {sheet.owner}棄牌區（{sheet.list.length} 張）</div>
         <!-- v5.129：改 grid 顯示「卡圖縮圖 + 右下角紅色數字」，更易檢索 -->
         <div class="mp-discard-grid">
-          {#each groupDiscardList(sheet.list) as g (g.cardId)}
+          {#each groupDiscardList(sheet.list) as g (g.key)}
             {@const gc = pool.get(g.cardId)}
             <button class="mp-discard-cell" onclick={() => { closeSheet(); onOpenZoom(g.cardId, g.inst); }} title="放大查看 {g.name}">
               {#if gc?.imageUrl}
-                <img src={gc.imageUrl} alt={g.name} class="mp-discard-img"/>
+                <img src={gc.imageUrl} alt={g.name} class="mp-discard-img"
+                  class:legend-half-l={g.half === 0} class:legend-half-r={g.half === 1}/>
               {:else}
                 <div class="mp-discard-placeholder">{g.name}</div>
               {/if}
-              <span class="mp-discard-count">×{g.count}</span>
+              {#if g.half !== 0 && g.half !== 1}<span class="mp-discard-count">×{g.count}</span>{/if}
             </button>
           {/each}
         </div>
@@ -2049,6 +2063,12 @@
     object-fit: contain;
     display: block;
   }
+  /* v6.091「傳說」兩張合一競技場：手機棄牌區也裁半。
+     cell 用 padding-bottom 固定直式框、img 絕對定位鋪滿 → 框比例與圖片無關，
+     只要改成 cover + object-position 就能精準取左/右半（預設 contain 不動）。 */
+  .mp-discard-img.legend-half-l, .mp-discard-img.legend-half-r { object-fit: cover; }
+  .mp-discard-img.legend-half-l { object-position: 0% 50%; }
+  .mp-discard-img.legend-half-r { object-position: 100% 50%; }
   .mp-discard-placeholder {
     position: absolute;
     inset: 0;

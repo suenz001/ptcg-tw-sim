@@ -26,6 +26,7 @@
     tryPromoteToMainForFestival,
     getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
     twoCardStadiumHalfIndex,      // v6.086 兩張合一競技場手牌裁半
+    isTwoCardStadiumName,         // v6.091 棄牌區兩張合一不聚合判準
   } from '$lib/game/engine';
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
@@ -9085,7 +9086,9 @@
                       <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
                       <span class="sel-name">???</span>
                     {:else}
-                      <img src={c.imageUrl} alt={c.name} loading="lazy"/><span class="sel-name">{c.name}</span>
+                      <img src={c.imageUrl} alt={c.name} loading="lazy"
+                        class:legend-half-l={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 0}
+                        class:legend-half-r={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 1}/><span class="sel-name">{c.name}</span>
                       {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
                     {/if}
                     {#if isEnergyPicker && energyOwnerMap.has(item.iid)}
@@ -10417,6 +10420,15 @@
       const map = new Map();
       for (const inst of viewPlayer.discard) {
         const card = pool.get(inst.cardId);
+        // v6.091「傳說」兩張合一競技場不聚合 —— 左右半各自一格個別顯示（Wilson 裁定）。
+        //   Map key 改用 iid 才不會和同 cardId 的另一半互相覆蓋。
+        if (isTwoCardStadiumName(card?.name)) {
+          map.set(inst.iid, {
+            name: card?.name ?? inst.cardId, count: 1, cardId: inst.cardId,
+            half: twoCardStadiumHalfIndex(viewPlayer.discard, inst.iid, pool),
+          });
+          continue;
+        }
         const entry = map.get(inst.cardId);
         if (entry) entry.count++;
         else map.set(inst.cardId, { name: card?.name ?? inst.cardId, count: 1, cardId: inst.cardId });
@@ -10435,8 +10447,10 @@
           {#each discardGrouped as g}{@const c=getCard(g.cardId)}
             {#if c}
               <button class="sel-card" onclick={() => openZoom(g.cardId)}>
-                <img src={c.imageUrl} alt={c.name} loading="lazy"/><span class="sel-name">{c.name}</span>
-                <span class="deck-cell-count">×{g.count}</span>
+                <img src={c.imageUrl} alt={c.name} loading="lazy"
+                  class:legend-half-l={g.half === 0} class:legend-half-r={g.half === 1}/><span class="sel-name">{c.name}</span>
+                <!-- v6.091：兩張合一競技場已拆成一格一張，×1 徽章反而容易誤讀成聚合，故不顯示 -->
+                {#if g.half !== 0 && g.half !== 1}<span class="deck-cell-count">×{g.count}</span>{/if}
               </button>
             {/if}
           {/each}
@@ -13813,6 +13827,12 @@
   .sel-zoom{ position:absolute; top:.2rem; right:.2rem; z-index:2; background:rgba(0,0,0,.72); border:1px solid #6aaa6a; color:#cfc; font-size:.7rem; line-height:1; padding:.18rem .32rem; border-radius:4px; cursor:pointer; }
   .sel-zoom:hover{ background:rgba(74,138,74,.9); color:#fff; }
   .sel-card img{ width:64px; border-radius:3px; }
+  /* v6.091「傳說」兩張合一競技場：picker 選擇盤 / 棄牌區也裁半（與手牌一致）。
+     ⚠ aspect-ratio 不能省（v6.087 教訓）：.sel-card img 只設 width 時，img 框比例＝圖片比例
+     → object-fit:cover 永遠不會裁 → 半裁靜默失效。對 .sel-grid-energy 的 88px 寬同樣成立。 */
+  .sel-card img.legend-half-l, .sel-card img.legend-half-r { aspect-ratio: 868 / 1212; height:auto; object-fit:cover; }
+  .sel-card img.legend-half-l { object-position: 0% 50%; }
+  .sel-card img.legend-half-r { object-position: 100% 50%; }
   .sel-name{ text-align:center; font-size:.6rem; }
   /* v3.827: 能量 picker 來源寶可夢標籤 */
   .sel-energy-source{ display:inline-block; font-size:.7rem; line-height:1.25; color:#9cd49c; background:rgba(0,0,0,.55); border:1px solid rgba(156,212,156,.4); border-radius:4px; padding:.1rem .35rem; margin-top:.2rem; max-width:100%; white-space:normal; overflow-wrap:anywhere; word-break:break-word; cursor:pointer; transition:background .15s, border-color .15s; } /* v5.664：移除截斷,來源寶可夢名完整換行 */

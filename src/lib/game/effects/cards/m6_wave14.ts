@@ -125,7 +125,10 @@ regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
   return withPending(s, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'TOP4',
-    minCount: 0, maxCount: 1,
+    // v6.091：卡面「從其中**選擇1張**基本能量卡」沒有「最多」字樣，且這 4 張已經被玩家看過
+    //   ＝已知資訊 → 有候選時必選（站內既有規則：已知資訊的選擇不給「不選」鈕）。
+    //   4 張裡完全沒有基本能量時 minCount 必須是 0，否則玩家會被卡在關不掉的 picker。
+    minCount: basicEnergyIids.length > 0 ? 1 : 0, maxCount: 1,
     effectKey: 'm6-overlord-roar',
     params: {
       top4Iids: top4.map(c => c.iid),
