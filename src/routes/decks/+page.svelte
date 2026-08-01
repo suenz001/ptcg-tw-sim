@@ -1722,17 +1722,12 @@
           <ul class="deck-entries">
             {#each activeEntries as { entry, card } (card.id)}
               <li class="entry" data-st={card.supertype}>
-                <button class="entry-thumb" class:legend-pair={isTwoCardStadium(card)} onclick={() => openPreview(card)} title="查看詳情">
-                  {#if isTwoCardStadium(card)}
-                    <!-- v6.091「傳說」兩張合一競技場：依編號拆成左右各一張顯示（Wilson 裁定）。
-                         第 1 份左、第 2 份右、第 3 份左… 與引擎建牌組時的指派規則完全一致。 -->
-                    {#each Array(entry.count) as _, i}
-                      <img src={card.imageUrl} alt={card.name} loading="lazy"
-                        class:legend-half-l={i % 2 === 0} class:legend-half-r={i % 2 === 1} />
-                    {/each}
-                  {:else}
-                    <img src={card.imageUrl} alt={card.name} loading="lazy" />
-                  {/if}
+                <button class="entry-thumb" onclick={() => openPreview(card)} title="查看詳情">
+                  <!-- v6.092：這裡本來 v6.091 想依份數把左右半並排，但 .entry 的第一個 grid 欄
+                       是固定 40px（:2621），塞 N 張 40px 圖會被壓成細條或整排溢出蓋到卡名 →
+                       撤回成單張、固定顯示左半（與下方卡片選擇區一致）。
+                       牌組清單要怎麼呈現「左 N 張／右 N 張」需要重新設計版面，待 Wilson 拍板。 -->
+                  <img src={card.imageUrl} alt={card.name} loading="lazy" class:legend-half-l={isTwoCardStadium(card)} />
                 </button>
                 <div class="entry-meta">
                   <div class="entry-name">{card.name}</div>
@@ -3019,9 +3014,7 @@
      ⚠ 這裡不需要 aspect-ratio（v6.087 那個陷阱是「只設 width」）：本框 width/height 兩維都固定
      且已是 object-fit:cover，橫圖 cover 後寬恰為兩張直卡 → 只要 object-position 就能精準取半。
      附帶修好一件事：現況這些縮圖顯示的是橫圖正中間亂裁的一條。 */
-  .entry-thumb.legend-pair { display:flex; gap:2px; }
   .entry-thumb img.legend-half-l, .pick-thumb img.legend-half-l { object-position: 0% 50%; }
-  .entry-thumb img.legend-half-r, .pick-thumb img.legend-half-r { object-position: 100% 50%; }
 
   /* Picker enhancements */
   .pick-thumb {

@@ -43,12 +43,19 @@ const ok = (c, l) => { if (c) pass++; else { fail++; console.log('  FAIL:', l); 
     '⭐ A3 手機棄牌半圖有覆蓋成 object-fit:cover（該處預設是 contain）');
 
   // A4 牌組編輯器
-  ok(/\{#each Array\(entry\.count\) as _, i\}/.test(decks),
-    '⭐ A4 牌組內容清單：依份數拆成多張（第1份左、第2份右…）');
-  ok(/class:legend-half-l=\{i % 2 === 0\}/.test(decks), 'A4 依編號交錯左右（與引擎指派規則一致）');
-  ok(/class:legend-half-l=\{isTwoCardStadium\(card\)\}/.test(decks), 'A4 卡片選擇區固定顯示左半');
-  ok(/\.entry-thumb\.legend-pair\s*\{[^}]*display:\s*flex/.test(decks), 'A4 清單縮圖並排的 flex 容器');
+  // ⚠ v6.092：清單縮圖曾嘗試「依份數把左右半並排」，但 .entry 第一個 grid 欄固定 40px
+  //   → 會被壓成細條或整排溢出蓋到卡名，已撤回成單張左半（與選擇區一致）。
+  //   這條守衛就是防止有人再把並排寫法加回來而沒有一併改 grid 軌。
+  ok(!/\{#each Array\(entry\.count\) as _, i\}/.test(decks),
+    '⭐ A4 牌組清單縮圖沒有多張並排（.entry 第一欄固定 40px，並排會爆版）');
+  ok(!/\.entry-thumb\.legend-pair/.test(decks), 'A4 legend-pair flex 容器已移除');
+  ok((decks.match(/class:legend-half-l=\{isTwoCardStadium\(card\)\}/g) || []).length === 2,
+    '⭐ A4 牌組清單與卡片選擇區兩處縮圖都固定顯示左半');
   ok(/\.entry-thumb img\.legend-half-l, \.pick-thumb img\.legend-half-l/.test(decks), 'A4 兩處縮圖共用 object-position');
+  ok(!/\.pick-thumb img\.legend-half-r/.test(decks), 'A4 沒有用不到的右半選擇器（dead CSS）');
+  // 手機回放手牌要和桌機對稱
+  ok(/class:legend-half-l=\{twoCardStadiumHalfIndex\(myPlayer\.hand/.test(mpb),
+    '⭐ A4 手機回放手牌也有接切半（桌機有、手機漏掉會不對稱）');
 
   // 負對照：守衛確實在檢查字串（可失敗）
   ok(!/class:legend-half-l=\{twoCardStadiumHalfIndex\(selectionItemsXX/.test(page), 'A 負對照：守衛比對的是真實字串');

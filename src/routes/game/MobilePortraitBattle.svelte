@@ -1145,7 +1145,9 @@
       {#each dedupeByIid(myPlayer.hand) as inst (inst.iid)}
         {@const c = cardOf(inst)}
         <button class="mp-hand-card mp-hand-replay" onclick={() => onOpenZoom(inst.cardId, inst)} title={c?.name} aria-label={c?.name ?? '手牌'}>
-          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{:else}<div class="mp-card-back mp-hand-back-fill"><span class="mp-card-back-mark">?</span></div>{/if}
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}
+            class:legend-half-l={twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool) === 0}
+            class:legend-half-r={twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool) === 1}/>{:else}<div class="mp-card-back mp-hand-back-fill"><span class="mp-card-back-mark">?</span></div>{/if}
         </button>
       {/each}
     {:else if isTournSpectator}
