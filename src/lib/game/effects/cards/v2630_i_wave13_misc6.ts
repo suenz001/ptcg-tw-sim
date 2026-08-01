@@ -6,7 +6,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, openDeckTopRevealOptionalDiscard,
   getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
-import { joinCardNames } from '../_shared';
+import { joinCardNames, logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { flipCoinsWithLog, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
 
@@ -85,6 +85,9 @@ regR('wave13-deck-energy-attach', (state, aIdx, iids, params, pool) => {
 // 從牌庫挑 ≤N 寶可夢加手（filter）
 function deckSearchPokemonToHandPost(
   filterStr: string, max: number, effectKeyName: string, label: string,
+  // v6.097：卡面是否寫「在給對手看過後加入手牌」→ 決定結算時公開卡名或只公開張數。
+  //   必填、無預設：兩個方向各自都會出錯（見 _shared.logPickedCards）。
+  publicReveal: boolean,
 ): AttackPostFn {
   return (state, aIdx, _pool) => {
     const player = state.players[aIdx];
@@ -96,20 +99,30 @@ function deckSearchPokemonToHandPost(
       filter: filterStr,
       minCount: 0, maxCount: max,
       effectKey: effectKeyName,
+      params: { label, publicReveal },
     });
   };
 }
 
+// v6.097：原本結算 log 只有「挑 N 張卡加手牌」**完全沒有卡名** —— 但共用此 resolver 的
+//   卡面絕大多數寫「在給對手看過後加入手牌」（熔蟻獸｜舔舔捕捉、扒手貓｜邪惡邀請、
+//   小霞的拉普拉斯｜一起游水、夢夢蝕｜夢境呼喚、嗡蝠｜搬運破爛、牙牙｜集力、霜奶仙｜彩色甜點），
+//   依站規（v5.859）必須**公開揭示卡名**。反之頭巾混混｜偷竊、賽富豪｜抓到飽 官方卡面
+//   只寫「加入手牌」**沒有給對手看** → 必須走私訊（自己看名稱、對手只看張數）。
+//   ⇒ 由呼叫端依卡面傳 `params.publicReveal`，此處只負責照做（中央 logPickedCards）。
 regR('wave13-deck-take-any', (state, aIdx, iids, _params, _pool) => {
+  const label = ((_params as { label?: string } | undefined)?.label) ?? '牌庫搜尋';
+  const publicReveal = ((_params as { publicReveal?: boolean } | undefined)?.publicReveal) === true;
   if (iids.length === 0) {
-    return updatePlayer(addLog(state, '搜尋未選擇；重洗', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return updatePlayer(addLog(state, `${label}：未選擇任何卡（牌庫已重洗）`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
+  const picked = state.players[aIdx].deck.filter(c => iids.includes(c.iid));
   return updatePlayer(
-    addLog(state, `從牌庫挑 ${iids.length} 張卡加手牌；重洗`, aIdx),
+    logPickedCards(state, aIdx, picked, _pool, label, '加入手牌（牌庫已重洗）', { publicReveal }),
     aIdx, p => {
-      const picked = p.deck.filter(c => iids.includes(c.iid));
+      const pick = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));
-      return { ...p, deck: shuffle(rest), hand: [...p.hand, ...picked] };
+      return { ...p, deck: shuffle(rest), hand: [...p.hand, ...pick] };
     },
   );
 });
@@ -354,13 +367,13 @@ regPost('厄鬼椪 水井面具|水之神樂', deckSearchBasicEnergyAttachOnePos
 // 9. 牌庫挑寶可夢加手 (3 張)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('扒手貓|邪惡邀請', (s) => ({ state: s, damage: 0 }));
-regPost('扒手貓|邪惡邀請', deckSearchPokemonToHandPost('Pokemon:Darkness', 3, 'wave13-deck-take-any', '邪惡邀請'));
+regPost('扒手貓|邪惡邀請', deckSearchPokemonToHandPost('Pokemon:Darkness', 3, 'wave13-deck-take-any', '邪惡邀請', true));
 
 regPre('小霞的拉普拉斯|一起游水', (s) => ({ state: s, damage: 0 }));
-regPost('小霞的拉普拉斯|一起游水', deckSearchPokemonToHandPost('Pokemon:NamePrefix=小霞的', 3, 'wave13-deck-take-any', '一起游水'));
+regPost('小霞的拉普拉斯|一起游水', deckSearchPokemonToHandPost('Pokemon:NamePrefix=小霞的', 3, 'wave13-deck-take-any', '一起游水', true));
 
 regPre('夢夢蝕|夢境呼喚', (s) => ({ state: s, damage: 0 }));
-regPost('夢夢蝕|夢境呼喚', deckSearchPokemonToHandPost('Card:真菰', 60, 'wave13-deck-take-any', '夢境呼喚'));
+regPost('夢夢蝕|夢境呼喚', deckSearchPokemonToHandPost('Card:真菰', 60, 'wave13-deck-take-any', '夢境呼喚', true));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 10. 牌庫挑寶可夢放備戰 (3 張)
@@ -378,10 +391,10 @@ regPost('電飛鼠|呼朋引伴', deckSearchPokemonToBenchPost('Basic', 2, 'wave
 // 11. 牌庫挑物品/能量加手 (2 張)
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('嗡蝠|搬運破爛', (s) => ({ state: s, damage: 0 }));
-regPost('嗡蝠|搬運破爛', deckSearchPokemonToHandPost('Tool', 1, 'wave13-deck-take-any', '搬運破爛'));
+regPost('嗡蝠|搬運破爛', deckSearchPokemonToHandPost('Tool', 1, 'wave13-deck-take-any', '搬運破爛', true));
 
 regPre('牙牙|集力', (s) => ({ state: s, damage: 0 }));
-regPost('牙牙|集力', deckSearchPokemonToHandPost('BasicEnergy', 2, 'wave13-deck-take-any', '集力'));
+regPost('牙牙|集力', deckSearchPokemonToHandPost('BasicEnergy', 2, 'wave13-deck-take-any', '集力', true));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 12. 自方備戰【鬥】寶可夢指示物 ×20 (1 張) — 龐岩怪|復仇加農炮

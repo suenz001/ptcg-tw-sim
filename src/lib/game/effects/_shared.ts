@@ -1869,11 +1869,10 @@ export function resolveInfiniteShadowKo(
   const tools = getAllAttachedTools(koInst);
   const stack = koInst.evolvedFromStack ?? [];
   if (eligible && card?.abilities?.some((a) => a.name === '無限之影')) {
-    const clean = (cc: CardInstance): CardInstance => ({
-      ...cc, damage: 0, energyAttached: [], toolAttached: undefined, extraTools: [],
-      evolvedFromStack: undefined, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined,
-    });
-    return { toHand: [clean(koInst), ...stack.map(clean)], toDiscard: [...koInst.energyAttached, ...tools] };
+    // v6.097：改走中央 splitPokemonReturnToHand（與火箭隊的叉字蝠ex｜刺殺迴旋 同一來源）。
+    //   原本此處手刻黑名單 clean（`...cc` 保留其餘欄位）→ 會外洩 abilityUsedThisTurn /
+    //   immune*ThisTurn 等回合旗標；改用 toBareCard 白名單（見 v5.993 通則）後一併收乾淨。
+    return splitPokemonReturnToHand(koInst);
   }
   return { toHand: [], toDiscard: [koInst, ...koInst.energyAttached, ...tools, ...stack] };
 }
@@ -1891,6 +1890,59 @@ export function bareCardsForReturn(inst: CardInstance): CardInstance[] {
     ...getAllAttachedTools(inst).map(toBareCard),
     ...(inst.evolvedFromStack ?? []).map(toBareCard),
   ];
+}
+
+/**
+ * v6.097：「寶可夢本體（含進化來源實體卡）放回手牌／牌庫，寶可夢以外的卡全部丟棄」的**單一來源**。
+ *   卡面措辭範例（static/cards 台灣官方中文）：
+ *     ・火箭隊的叉字蝠ex｜刺殺迴旋「若希望，將這隻寶可夢放回手牌。（寶可夢以外的卡全部丟棄。）」
+ *     ・耿鬼｜無限之影（受對手招式傷害昏厥時，本體不進棄牌區而回手牌）
+ *   ⚠ **必須含 `evolvedFromStack`** —— 進化體回手時底下疊著的實體卡（例：火箭隊的超音蝠／大嘴蝠）
+ *   也是「寶可夢卡」，卡面沒有任何讓它們消失的措辭。過去刺殺迴旋只搬最上層 →
+ *   進化來源既沒進手牌也沒進棄牌區，**直接從對局消失**（破壞卡片守恆）。
+ *   `normalizeNonFieldStacks` 救不了：它只攤平「還掛著 stack 的非場區卡」，
+ *   而 stack 在建 mainCard 當下就被丟了。
+ *   與 [bareCardsForReturn] 是同一卡集合的兩種去向：toHand ∪ toDiscard === bareCardsForReturn(inst)。
+ *   一律走 `toBareCard` 白名單裸化（v5.993 通則：離場進非場區必須清乾淨，避免旗標外洩）。
+ */
+/**
+ * v6.097：「搜尋／挑選出來的卡」的**揭示 log 單一來源**。
+ *   站規（v5.859）：卡面寫「在給對手看過後加入手牌」→ **必須公開 addLog 卡名**，
+ *   只寫張數（甚至只寫「（已給對手看過）」）都是假揭示；反之卡面**沒有**該句
+ *   （例：頭巾混混｜偷竊、賽富豪｜抓到飽 —— 官方卡面只寫「加入手牌」）→
+ *   **不可**公開卡名，走 addPrivateLog（自己看得到名稱、對手只看到張數）。
+ *   ⚠ `publicReveal` 一律由呼叫端**依卡面逐字判定**後明示傳入，不設預設值 —— 兩個方向
+ *   各自都會出錯（該公開的沒公開＝對手資訊短缺；不該公開的公開＝資訊洩漏）。
+ * @param label 招式／卡名（顯示在 log 前綴）
+ * @param tail  接在後面的敘述，例："加入手牌（牌庫已重洗）"
+ */
+export function logPickedCards(
+  st: GameState,
+  idx: 0 | 1,
+  picked: CardInstance[],
+  pool: Map<string, Card>,
+  label: string,
+  tail: string,
+  opts: { publicReveal: boolean },
+): GameState {
+  if (picked.length === 0) return addLog(st, `${label}：未選擇任何卡（${tail}）`, idx);
+  const names = picked.map((c) => pool.get(c.cardId)?.name ?? '?').join('、');
+  if (opts.publicReveal) {
+    return addLog(st, `${label}：${names} ${tail}`, idx);
+  }
+  return addPrivateLog(st, `${label}：${names} ${tail}`, `${label}：${picked.length} 張卡 ${tail}`, idx);
+}
+
+export function splitPokemonReturnToHand(
+  inst: CardInstance,
+): { toHand: CardInstance[]; toDiscard: CardInstance[] } {
+  return {
+    toHand: [toBareCard(inst), ...(inst.evolvedFromStack ?? []).map(toBareCard)],
+    toDiscard: [
+      ...inst.energyAttached.map(toBareCard),
+      ...getAllAttachedTools(inst).map(toBareCard),
+    ],
+  };
 }
 
 /**

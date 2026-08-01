@@ -11,6 +11,7 @@ import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
   getOwnBenchLimit,
 } from '../_shared';
+import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -458,16 +459,24 @@ function deckSearchTrainerSubtypePost(
       filter: filterStr,
       minCount: 0, maxCount: 1,  // v3.996：玩家可不選
       effectKey: effectKeyName,
+      // v6.097：共用此 helper 的三張卡面（火箭隊的咩利羊｜籌備、探探鼠｜籌備、赫普的沙包蛇｜築窩）
+      //   皆為「…在給對手看過後加入手牌」→ 一律公開揭示卡名。
+      params: { label, publicReveal: true },
     });
   };
 }
 
+// v6.097：原結算 log 只有張數、**沒有卡名** → 違反站規（卡面「在給對手看過後加入手牌」
+//   必須公開揭示）。改走中央 logPickedCards，公開/私下由呼叫端依卡面傳入。
 regR('wave12-deck-take-trainer', (state, aIdx, iids, _params, _pool) => {
+  const label = ((_params as { label?: string } | undefined)?.label) ?? '牌庫搜尋';
+  const publicReveal = ((_params as { publicReveal?: boolean } | undefined)?.publicReveal) === true;
   if (iids.length === 0) {
-    return updatePlayer(addLog(state, '搜尋未選擇；重洗', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return updatePlayer(addLog(state, `${label}：未選擇任何卡（牌庫已重洗）`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
+  const pickedForLog = state.players[aIdx].deck.filter(c => iids.includes(c.iid));
   return updatePlayer(
-    addLog(state, `從牌庫挑 ${iids.length} 張卡加手牌；重洗`, aIdx),
+    logPickedCards(state, aIdx, pickedForLog, _pool, label, '加入手牌（牌庫已重洗）', { publicReveal }),
     aIdx, p => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
       const rest = p.deck.filter(c => !iids.includes(c.iid));

@@ -12493,7 +12493,9 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
       minCount: 0, maxCount: maxSearch,
       effectKey: 'search-to-hand-reshuffle',
       filter: 'Any',
-      params: { label },
+      // v6.097：白蓬蓬｜微風之禮 卡面「…從牌庫任意選擇最多3張卡加入手牌。並且重洗牌庫。」
+      //   **沒有**「在給對手看過後」→ 卡名不可對外公開。
+      params: { label, privateReveal: true },
     });
   };
 }
@@ -13620,7 +13622,10 @@ regR('energy-pro-search', (st, idx, iids, _params, pool) => {
     kept.push(c);
   }
   const keptNames = kept.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  st = addPrivateLog(st, `能量輸送PRO：搜到 ${keptNames}（${kept.length} 張）加入手牌`, `能量輸送PRO：搜到 ${kept.length} 張卡加入手牌`, idx);
+  // v6.097 修：卡面（SV7a 11082）「從自己的牌庫選擇任意數量的各不同屬性的基本能量卡各1張，
+  //   **在給對手看過後**加入手牌。並且重洗牌庫。」→ 必須**公開**揭示卡名，原本用 addPrivateLog
+  //   （對手只看得到張數）違反站規；姊妹卡「能量輸送」本來就是公開的，兩張原本不一致。
+  st = addLog(st, `能量輸送PRO：搜到 ${keptNames}（${kept.length} 張）加入手牌`, idx);
   if (dupes.length > 0) {
     st = addLog(st, `（同屬重複 ${dupes.length} 張放回牌庫）`, idx);
   }
@@ -15843,6 +15848,9 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
       filter: 'Any',
       minCount: 0, maxCount: 1,
       effectKey: 'search-to-hand-reshuffle',
+      // v6.097：桃歹郎｜最後鎖鏈 特性卡面「…從自己的牌庫任意選擇1張卡加入手牌。並且重洗牌庫。」
+      //   **沒有**「在給對手看過後」→ 卡名不可對外公開。
+      params: { privateReveal: true },
     });
   }],
   // 願增猿ex(H) | 鬆口氣 — 場上有桃歹郎ex 則對手 pendingPrize -1

@@ -67,6 +67,7 @@ import {
   regG} from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { openDeckViewReshuffle } from '../_shared';
+import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { copyAttackPostDispatch } from '../_shared';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { clearActiveEffects } from '../_shared';  // v5.527 收斂 m5ClearTurnFlags→中央
@@ -911,14 +912,17 @@ regPost('好啦魷|籌備', (state, aIdx) => {
     },
   );
 });
-regR('m5-inkay-procurement', (state, aIdx, iids) => {
+regR('m5-inkay-procurement', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
     return updatePlayer(addLog(state, '籌備：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p,
       deck: shuffle([...p.deck]),
     }));
   }
-  return updatePlayer(addLog(state, `籌備：取得 ${iids.length} 張物品（已給對手看過）→ 加入手牌並重洗牌庫`, aIdx), aIdx, p => {
+  // v6.097：卡面（M5 19193）「從自己的牌庫選擇1張物品卡，**在給對手看過後**加入手牌。」
+  //   原本只寫張數 +「（已給對手看過）」＝**假揭示**（對手根本不知道拿了什麼），改為公開卡名。
+  const pickedForLog = state.players[aIdx].deck.filter(c => iids.includes(c.iid));
+  return updatePlayer(logPickedCards(state, aIdx, pickedForLog, pool, '籌備', '加入手牌（牌庫已重洗）', { publicReveal: true }), aIdx, p => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
     const shuffled = shuffle([...remaining]);
@@ -1073,9 +1077,12 @@ regPost('熱帶龍|果實香氣', (state, aIdx, pool) => {
     },
   );
 });
-regR('m5-tropius-fruit-aroma', (state, aIdx, iids) => {
+// v6.097：卡面（M5 19145）「…從其中選擇任意數量的寶可夢卡，**在給對手看過後**加入手牌。」
+//   原本只寫張數＝假揭示，改為公開卡名。
+regR('m5-tropius-fruit-aroma', (state, aIdx, iids, _params, pool) => {
+  const pickedForLog = state.players[aIdx].deck.filter(c => iids.includes(c.iid));
   return updatePlayer(
-    addLog(state, `果實香氣：取 ${iids.length} 張寶可夢加入手牌（已給對手看過）+ 重洗牌庫`, aIdx),
+    logPickedCards(state, aIdx, pickedForLog, pool, '果實香氣', '加入手牌（剩餘卡放回牌庫並重洗）', { publicReveal: true }),
     aIdx,
     p => {
       const picked = p.deck.filter(c => iids.includes(c.iid));
@@ -1163,7 +1170,7 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //
 // 特性（regA / regAByName 機制）：
 //   1. 銃嘴大鳥|天空抽牌（1 回合 1 次：從牌庫抽 1 張）
-//   2. 銀伴戰獸|夥伴呼喚（gate: 手牌 = 0 + 1 回合 1 次 → 牌庫選 1 支援者加手牌）
+//   2. 銀伴戰獸|拍檔呼喚（gate: 手牌 = 0 + 1 回合 1 次 → 牌庫選 1 支援者加手牌）
 //   3. 戰槌龍ex|破壞之頭錘（gate: 戰鬥場 + 1 回合 1 次 → 擲幣正面則對手戰鬥位丟 1 能量）
 //
 // 訓練家（reg / regG 機制）：
@@ -1198,17 +1205,17 @@ regA('銃嘴大鳥', 0, (st, idx) => {
   }));
 });
 
-// ── 2. 銀伴戰獸|夥伴呼喚 — gate: 手牌=0 + 1 回合 1 次 ───────────
+// ── 2. 銀伴戰獸|拍檔呼喚 — gate: 手牌=0 + 1 回合 1 次 ───────────
 //   卡面：「若自己的手牌為 0 張，則在自己的回合時可使用 1 次。
 //          從自己的牌庫選擇 1 張支援者，給對手看過後加入手牌。然後重洗牌庫。」
 regA('銀伴戰獸', 0, (st, idx) => {
   const p = st.players[idx];
   if (p.hand.length !== 0) {
-    return addLog(st, '夥伴呼喚：自己手牌須為 0 張才能使用', idx);
+    return addLog(st, '拍檔呼喚：自己手牌須為 0 張才能使用', idx);
   }
-  if (p.deck.length === 0) return addLog(st, '夥伴呼喚：牌庫為空', idx);
+  if (p.deck.length === 0) return addLog(st, '拍檔呼喚：牌庫為空', idx);
   return withPending(
-    addLog(st, '夥伴呼喚：從牌庫選 1 張支援者加手牌（給對手看過後）', idx),
+    addLog(st, '拍檔呼喚：從牌庫選 1 張支援者加手牌（給對手看過後）', idx),
     {
       type: 'deck-search',
       actorIdx: idx, sourcePlayerIdx: idx,
@@ -1218,13 +1225,18 @@ regA('銀伴戰獸', 0, (st, idx) => {
     },
   );
 });
-regR('m5-silvally-partner-call', (state, aIdx, iids) => {
+// v6.097 兩修：①原 log 只寫張數 +「（已給對手看過）」＝假揭示 —— 官方特性卡面
+//   （M5 19212）「若自己1張手牌都沒有，則在自己的回合時可使用1次。從自己的牌庫選擇1張支援者卡，
+//   **在給對手看過後**加入手牌。並且重洗牌庫。」→ 必須公開卡名。
+//   ②玩家可見文字誤用「夥伴呼喚」，官方特性名是「**拍檔呼喚**」。
+regR('m5-silvally-partner-call', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) {
-    return updatePlayer(addLog(state, '夥伴呼喚：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
+    return updatePlayer(addLog(state, '拍檔呼喚：玩家選 0 張，僅重洗牌庫', aIdx), aIdx, p => ({
       ...p, deck: shuffle([...p.deck]),
     }));
   }
-  return updatePlayer(addLog(state, '夥伴呼喚：取 1 張支援者加手牌（已給對手看過）+ 重洗牌庫', aIdx), aIdx, p => {
+  const pickedForLog = state.players[aIdx].deck.filter(c => iids.includes(c.iid));
+  return updatePlayer(logPickedCards(state, aIdx, pickedForLog, pool, '拍檔呼喚', '加入手牌（牌庫已重洗）', { publicReveal: true }), aIdx, p => {
     const picked = p.deck.filter(c => iids.includes(c.iid));
     const remaining = p.deck.filter(c => !iids.includes(c.iid));
     return { ...p, deck: shuffle([...remaining]), hand: [...p.hand, ...picked] };

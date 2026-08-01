@@ -286,6 +286,9 @@ regPost('焰后蜥ex|詭計', (state, aIdx) => {
     minCount: 0,
     maxCount: 2,
     effectKey: 'search-to-hand-reshuffle',
+    // v6.097：焰后蜥ex｜詭計 卡面「從自己的牌庫任意選擇最多2張卡加入手牌。並且重洗牌庫。」
+    //   **沒有**「在給對手看過後」→ 卡名不可對外公開（自己看得到、對手只看張數）。
+    params: { privateReveal: true },
   });
 });
 

@@ -38,7 +38,10 @@ function isEnergyOfType(ec: any, type: string): boolean {
   return zh[m[1]] === type;
 }
 
-function deckPickOnePokemonToHandPost(label: string): AttackPostFn {
+// v6.097 ⚠ 本 helper 目前**零呼叫端**（EVOLVE_SEARCH 已於 v5.082/5.083 清空，全部改成
+//   direct-evolve / chain picker）。保留簽名並要求呼叫端明示 publicReveal，
+//   避免將來被接上時靜默落到錯誤方向（見 _shared.logPickedCards）。
+function deckPickOnePokemonToHandPost(label: string, publicReveal: boolean = true): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
     if (p.deck.length === 0) return addLog(state, `${label}：牌庫已空`, aIdx);
@@ -49,6 +52,7 @@ function deckPickOnePokemonToHandPost(label: string): AttackPostFn {
       filter: 'Pokemon',
       minCount: 0, maxCount: 1,
       effectKey: 'wave13-deck-take-any',  // 復用 v2.63 既有 resolver
+      params: { label, publicReveal },
     });
   };
 }

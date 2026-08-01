@@ -22,7 +22,7 @@
  */
 
 import type { PlayerState } from '../../types'; // v6.020：補 type-only import(TS2304 scanner)
-import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE, getAllAttachedTools } from '../_shared';
+import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardActiveStadium, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
 
@@ -32,7 +32,7 @@ import { canApplyEffectToTarget } from '../../defense';
 import { deckSearchAttachToAnyPost, discardSearchAttachToBenchPost } from './v2750_h_wave2_full';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
-import { bareCardsForReturn } from '../_shared'; // v5.781 bounce 到牌庫中央收斂
+import { bareCardsForReturn, splitPokemonReturnToHand } from '../_shared'; // v5.781 bounce 到牌庫中央收斂 / v6.097 本體+進化棧回手、其餘丟棄
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
@@ -154,19 +154,18 @@ regPost('火箭隊的叉字蝠ex|刺殺迴旋', (state, aIdx, _pool, action) => 
     addLog(state, '刺殺迴旋：選「是」 → 自身放回手牌（附加能量/道具棄）', aIdx),
     aIdx, p => {
       if (!p.active) return p;
-      const mainCard = { iid: p.active.iid, cardId: p.active.cardId, damage: 0, energyAttached: [] };
-      const discardedAttached: CardInstance[] = [
-        ...p.active.energyAttached.map(e => ({ ...e, damage: 0, energyAttached: [] })),
-      ];
-      // v5.841：丟全部道具含 extraTools(多重轉接洛托姆),原只丟 toolAttached 漏 extraTools。
-      for (const t of getAllAttachedTools(p.active)) {
-        discardedAttached.push({ ...t, damage: 0, energyAttached: [] });
-      }
+      // v6.097 修真 bug：原本只把「最上層那張」搬進手牌（手刻 mainCard），
+      //   進化體底下的 evolvedFromStack（例：火箭隊的超音蝠／大嘴蝠）**既沒進手牌也沒進棄牌區
+      //   → 直接從對局消失**（破壞卡片守恆）。卡面「將這隻寶可夢放回手牌（寶可夢以外的卡全部丟棄）」
+      //   —— 疊在下面的進化來源本身就是寶可夢卡，必須一起回手。
+      //   改走中央 splitPokemonReturnToHand（與耿鬼｜無限之影同一來源）；
+      //   v5.841 的「丟全部道具含 extraTools」由該 helper 內的 getAllAttachedTools 承接。
+      const { toHand, toDiscard } = splitPokemonReturnToHand(p.active);
       return {
         ...p,
         active: null,
-        hand: [...p.hand, mainCard],
-        discard: [...p.discard, ...discardedAttached],
+        hand: [...p.hand, ...toHand],
+        discard: [...p.discard, ...toDiscard],
       };
     },
   );
@@ -486,6 +485,9 @@ regPost('熔蟻獸|舔舔捕捉', (state, aIdx, _pool) => {
     filter: 'FirePokemonOrBasicFireEnergy',
     minCount: 0, maxCount: 3,
     effectKey: 'wave13-deck-take-any',
+    // v6.097 熔蟻獸｜舔舔捕捉 卡面「…合計最多3張，在給對手看過後加入手牌」→ 必須公開揭示卡名
+    //   （玩家回報：拿了什麼完全看不到）。
+    params: { label: '舔舔捕捉', publicReveal: true },
   });
 });
 
@@ -531,6 +533,9 @@ regPost('賽富豪|抓到飽', (state, aIdx, _pool) => {
     filter: 'Any',
     minCount: 0, maxCount: heads,
     effectKey: 'wave13-deck-take-any',
+    // v6.097 ⚠ 賽富豪｜抓到飽 官方卡面：「…從自己的牌庫任意選擇最多與正面出現的次數相同
+    //   數量的卡，加入手牌。並且重洗牌庫。」——**沒有「在給對手看過後」** → 不可公開卡名。
+    params: { label: '抓到飽', publicReveal: false },
   });
 });
 

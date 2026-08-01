@@ -13,6 +13,7 @@ import {
   fireOnHandEnergyAttached, // v5.782 從手牌附能→對手反應
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
@@ -251,7 +252,7 @@ function sameHandCountPre(base: number, label: string): AttackPreFn {
 }
 
 // 牌庫挑 ≤N 基本能量分配備戰（共通，先簡化為加手）
-function deckSearchBasicEnergiesAnyPost(max: number, label: string, sameTypes: boolean = false): AttackPostFn {
+function deckSearchBasicEnergiesAnyPost(max: number, label: string, sameTypes: boolean = false, publicReveal: boolean = true): AttackPostFn {
   return (state, aIdx, _pool) => {
     if (state.players[aIdx].deck.length === 0) return state;
     return withPending(addLog(state, `${label}：從牌庫挑 0~${max} 張基本能量加手（玩家手動分配；重洗）`, aIdx), {
@@ -260,6 +261,9 @@ function deckSearchBasicEnergiesAnyPost(max: number, label: string, sameTypes: b
       filter: sameTypes ? 'BasicEnergy:DistinctTypes' : 'BasicEnergy',
       minCount: 0, maxCount: max,
       effectKey: 'wave13-deck-take-any',
+      // v6.097 ⚠ 本 helper 目前**零呼叫端**（v3.10 起三個原使用者都改成「附於寶可夢身上」）。
+      //   保留簽名，publicReveal 由參數帶入，避免將來被接上時預設成錯誤方向。
+      params: { label, publicReveal },
     });
   };
 }
@@ -304,10 +308,14 @@ function discardSearchBasicEnergiesPost(max: number, label: string, type?: strin
     });
   };
 }
-regR('h-wave2-pickup-energy-to-hand', (state, aIdx, iids, _params, _pool) => {
+// v6.097：原 log 只有張數。共用此 resolver 的卡面（差不多娃娃｜招喚
+//   「從自己的棄牌區選擇1張支援者卡，在給對手看過後加入手牌」等）都要求揭示卡名。
+//   來源是棄牌區＝公開資訊，寫出卡名不可能造成資訊洩漏，一律公開。
+regR('h-wave2-pickup-energy-to-hand', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const set = new Set(iids);
-  return updatePlayer(addLog(state, `從棄牌區挑 ${iids.length} 張卡加手`, aIdx), aIdx, p => {
+  const pickedForLog = state.players[aIdx].discard.filter(c => set.has(c.iid));
+  return updatePlayer(logPickedCards(state, aIdx, pickedForLog, pool, '從棄牌區取回', '加入手牌', { publicReveal: true }), aIdx, p => {
     const picked = p.discard.filter(c => set.has(c.iid));
     const rest = p.discard.filter(c => !set.has(c.iid));
     return { ...p, discard: rest, hand: [...p.hand, ...picked] };
@@ -1094,6 +1102,9 @@ regPost('頭巾混混|偷竊', (state, aIdx, _pool) => {
     filter: 'Any',
     minCount: 0, maxCount: benchN,
     effectKey: 'wave13-deck-take-any',
+    // v6.097 ⚠ 頭巾混混｜偷竊 官方卡面：「從自己的牌庫任意選擇最多與自己的備戰寶可夢數量
+    //   相同數量的卡，加入手牌。並且重洗牌庫。」——**沒有「在給對手看過後」** → 不可公開卡名。
+    params: { label: '偷竊', publicReveal: false },
   });
 });
 
@@ -1208,10 +1219,13 @@ regPost('烏波|打水', (state, aIdx, pool) => {
     params: { validIids },
   });
 });
-regR('h-wave2-discard-back-to-deck', (state, aIdx, iids, _params, _pool) => {
-  if (iids.length === 0) return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+// v6.097：烏波｜打水 卡面「從自己的棄牌區選擇最多3張『基本【水】能量』卡，
+//   **在給對手看過後**放回牌庫並重洗。」→ 補上卡名（棄牌區公開，無洩漏疑慮）。
+regR('h-wave2-discard-back-to-deck', (state, aIdx, iids, _params, pool) => {
+  if (iids.length === 0) return updatePlayer(addLog(state, '打水：未選擇任何卡（牌庫已重洗）', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   const set = new Set(iids);
-  return updatePlayer(addLog(state, `打水：將 ${iids.length} 張卡放回牌庫並重洗`, aIdx), aIdx, p => {
+  const pickedForLog = state.players[aIdx].discard.filter(c => set.has(c.iid));
+  return updatePlayer(logPickedCards(state, aIdx, pickedForLog, pool, '打水', '放回牌庫並重洗', { publicReveal: true }), aIdx, p => {
     const picked = p.discard.filter(c => set.has(c.iid));
     const rest = p.discard.filter(c => !set.has(c.iid));
     return { ...p, discard: rest, deck: shuffle([...p.deck, ...picked]) };
@@ -2634,6 +2648,8 @@ regPost('霜奶仙|彩色甜點', (state, aIdx, pool) => {
       filter: `Pokemon:Types=${typeList}`,
       minCount: 0, maxCount: 5,
       effectKey: 'wave13-deck-take-any',
+      // v6.097 霜奶仙｜彩色甜點 卡面「…合計最多5張，在給對手看過後加入手牌」→ 公開揭示卡名。
+      params: { label: '彩色甜點', publicReveal: true },
     },
   );
 });

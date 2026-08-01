@@ -45,6 +45,7 @@ import {
   ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import { energyMatchesType } from '../_shared';
+import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import type { AttackPostFn } from '../_shared';
 import { isBasicEnergyOfType, getEnergyUnits, getEffectiveHP } from '../../engine';
 import { flipCoinsWithLog, canApplyAttackEffectToTarget, koTargetByAttackEffect, relocateOwnCounterToOpp, discardOppActiveEnergyPost } from '../../effects'; // v5.825 改放指示物中央管線
@@ -294,7 +295,10 @@ function smallMessengerPost(label: string) {
       filter: 'BasicEnergy',
       minCount: 0, maxCount: 2,
       effectKey: 'small-messenger-search',
-      params: { label },
+      // v6.097：電飛鼠｜小使者 / 青木的姆克兒｜小使者 卡面皆為
+      //   「從自己的牌庫選擇最多2張基本能量卡，在給對手看過後加入手牌。並且重洗牌庫。」
+      //   → 必須公開揭示卡名（原 resolver **完全沒有 log**）。
+      params: { label, publicReveal: true },
     });
   };
 }
@@ -304,17 +308,23 @@ regPre('青木的姆克兒|小使者', (s, _a, _p) => ({ state: s, damage: 0 }))
 regPost('青木的姆克兒|小使者', smallMessengerPost('小使者'));
 
 regR('small-messenger-search', (state, aIdx, iids, _params, _pool) => {
+  const label = ((_params as { label?: string } | undefined)?.label) ?? '小使者';
+  const publicReveal = ((_params as { publicReveal?: boolean } | undefined)?.publicReveal) === true;
   if (iids.length === 0) {
-    return updatePlayer(state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    return updatePlayer(addLog(state, `${label}：未選擇任何卡（牌庫已重洗）`, aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
-  return updatePlayer(state, aIdx, p => {
-    const taken = p.deck.filter(c => iids.includes(c.iid));
-    return {
-      ...p,
-      deck: shuffle(p.deck.filter(c => !iids.includes(c.iid))),
-      hand: [...p.hand, ...taken],
-    };
-  });
+  const pickedForLog = state.players[aIdx].deck.filter(c => iids.includes(c.iid));
+  return updatePlayer(
+    logPickedCards(state, aIdx, pickedForLog, _pool, label, '加入手牌（牌庫已重洗）', { publicReveal }),
+    aIdx, p => {
+      const taken = p.deck.filter(c => iids.includes(c.iid));
+      return {
+        ...p,
+        deck: shuffle(p.deck.filter(c => !iids.includes(c.iid))),
+        hand: [...p.hand, ...taken],
+      };
+    },
+  );
 });
 
 // ── 14. 哲爾尼亞斯｜大地風暴 — 30× 自己所有寶可夢身上超能量數 ─────────────────

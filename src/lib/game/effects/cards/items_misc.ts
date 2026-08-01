@@ -30,6 +30,7 @@ import {
 } from '../_shared';
 import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈)
 import { tryPromptPromoteActive } from '../_shared';
+import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
 // v3.08 美納斯｜平穩境地 — 阻擋對手寶可夢/附加卡 → 對手手牌
@@ -317,9 +318,11 @@ reg('能量回收器', (st, idx, pool) => {
     effectKey: 'energy-retrieval',
   });
 });
-regR('energy-retrieval', (st, idx, iids, _params, _pool) => {
-  const n = iids.length;
-  st = addLog(st, `能量回收器：${n} 張基本能量洗回牌庫`, idx);
+// v6.097：卡面（SVOD 12589）「從自己的棄牌區選擇最多5張基本能量卡，**在給對手看過後**
+//   放回牌庫並重洗。」→ 原 log 只有張數，補上卡名（棄牌區公開，無洩漏疑慮）。
+regR('energy-retrieval', (st, idx, iids, _params, pool) => {
+  const pickedForLog = st.players[idx].discard.filter(c => iids.includes(c.iid));
+  st = logPickedCards(st, idx, pickedForLog, pool, '能量回收器', '洗回牌庫', { publicReveal: true });
   return updatePlayer(st, idx, (p) => {
     const chosen = p.discard.filter(c => iids.includes(c.iid));
     const newDiscard = p.discard.filter(c => !iids.includes(c.iid));

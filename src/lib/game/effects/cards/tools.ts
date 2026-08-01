@@ -204,6 +204,9 @@ TOOL_ON_KO.set('希望護身符', (state, dIdx, _aIdx, _pool, _koInst) => {
     minCount: 0, maxCount: Math.min(3, state.players[dIdx].deck.length),
     filter: 'any',
     effectKey: 'search-to-hand-reshuffle',
+    // v6.097：希望護身符 卡面「…從自己的牌庫任意選擇最多3張卡加入手牌。並且重洗牌庫。」
+    //   **沒有**「在給對手看過後」→ 卡名不可對外公開。
+    params: { privateReveal: true },
   });
 });
 // v2.233 升級為玩家自選 + 逐張分配（之前簡化為「最近 3 張基本能量自動附第 1 個備戰」）
