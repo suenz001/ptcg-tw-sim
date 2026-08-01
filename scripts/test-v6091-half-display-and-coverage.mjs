@@ -60,6 +60,28 @@ const ok = (c, l) => { if (c) pass++; else { fail++; console.log('  FAIL:', l); 
   ok(/class:legend-half-l=\{twoCardStadiumHalfIndex\(myPlayer\.hand/.test(mpb),
     '⭐ A4 手機回放手牌也有接切半（桌機有、手機漏掉會不對稱）');
 
+  // ══ v6.095：其餘「一格一張」的卡片檢視也比照棄牌區拆開／裁半 ══
+  // A5 查看牌庫剩餘全部 —— 這份原本是按 cardId 聚合（會顯示 ×4），要比照棄牌區拆開
+  ok(/isTwoCardStadiumName\(card\?\.name\)\) \{[\s\S]{0,220}map\.set\(c\.iid/.test(page),
+    '⭐ A5 查看牌庫剩餘全部：兩張合一競技場改用 iid 當 key（不聚合）');
+  ok(/class:legend-half-l=\{entry\.half === 0\}/.test(page), 'A5 牌庫檢視的卡圖有接切半');
+  ok(/\{#if entry\.half !== 0 && entry\.half !== 1\}<span class="deck-cell-count">/.test(page),
+    'A5 拆開後的半圖格不顯示 ×N');
+  // A6 其餘三處一格一張的檢視
+  ok(/class:legend-half-l=\{twoCardStadiumHalfIndex\(peekedOthers/.test(page), '⭐ A6 翻牌看到的其他張有裁半');
+  ok(/class:legend-half-l=\{twoCardStadiumHalfIndex\(otherHand/.test(page), '⭐ A6 對手手牌其餘 N 張有裁半');
+  ok(/class:legend-half-l=\{twoCardStadiumSide\(p\.inst\.cardId\) === 0\}/.test(page), '⭐ A6 高傲指令翻到的 10 張有裁半');
+  // A7 互動式開局手牌展示／重抽回顧
+  ok(/class:legend-half-l=\{twoCardStadiumHalfIndex\(myPlayer\?\.hand, hc\.iid, pool\) === 0\}/.test(page),
+    '⭐ A7 互動式開局的手牌展示有裁半');
+  ok(/class:legend-half-l=\{twoCardStadiumSide\(cid\) === 0\}/.test(page),
+    '⭐ A7 重抽手牌回顧有裁半（該處只有 cardId，用 side 直接判）');
+  // A8 兩組 CSS
+  ok(/\.deck-cell-img\.legend-half-l, \.deck-cell-img\.legend-half-r \{ object-fit:cover; \}/.test(page),
+    '⭐ A8 .deck-cell-img 的預設 contain 有被覆蓋成 cover（否則不會裁）');
+  ok(/\.deck-cell-img\.legend-half-r \{ object-position: 100% 50%; \}/.test(page), 'A8 牌庫檢視右半 object-position');
+  ok(/\.mulligan-reveal-card img\.legend-half-r \{ object-position: 100% 50%; \}/.test(page), 'A8 開局展示右半 object-position');
+
   // 負對照：守衛確實在檢查字串（可失敗）
   ok(!/class:legend-half-l=\{twoCardStadiumHalfIndex\(selectionItemsXX/.test(page), 'A 負對照：守衛比對的是真實字串');
 }

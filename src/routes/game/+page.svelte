@@ -27,6 +27,7 @@
     getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
     twoCardStadiumHalfIndex,      // v6.086 兩張合一競技場手牌裁半
     isTwoCardStadiumName,         // v6.091 棄牌區兩張合一不聚合判準
+    twoCardStadiumSide,           // v6.095 依 cardId 直接判左右半（重抽回顧只有 cardId 沒有 iid）
   } from '$lib/game/engine';
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
@@ -9118,10 +9119,16 @@
           {@const srcP = game.players[pendingSelection.sourcePlayerIdx]}
           {@const deckGrouped = (() => {
             // v2.43：保留 cardId 讓每組旁邊的放大鏡可呼叫 openZoom（與枇琶下拉一致）
-            const map = new Map<string, { name: string; count: number; cardId: string }>();
+            const map = new Map<string, { name: string; count: number; cardId: string; half?: 0 | 1 | null }>();
             for (const c of srcP.deck) {
               const card = pool.get(c.cardId);
               const name = card?.name ?? c.cardId;
+              // v6.095「傳說」兩張合一競技場不聚合 —— 比照棄牌區，左右半各自一格個別顯示。
+              //   Map key 改用 iid 才不會和同一半的其他張互相覆蓋。
+              if (isTwoCardStadiumName(card?.name)) {
+                map.set(c.iid, { name, count: 1, cardId: c.cardId, half: twoCardStadiumHalfIndex(srcP.deck, c.iid, pool) });
+                continue;
+              }
               const entry = map.get(c.cardId);
               if (entry) entry.count++;
               else map.set(c.cardId, { name, count: 1, cardId: c.cardId });
@@ -9140,9 +9147,11 @@
               {#each deckGrouped as entry}{@const _dc=getCard(entry.cardId)}
                 <button class="deck-cell" title="{entry.count}× {entry.name} — 點擊放大"
                   onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>
-                  {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"/>
+                  {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"
+                    class:legend-half-l={entry.half === 0} class:legend-half-r={entry.half === 1}/>
                   {:else}<div class="deck-cell-fallback">{entry.name}</div>{/if}
-                  <span class="deck-cell-count">×{entry.count}</span>
+                  <!-- v6.095：兩張合一競技場已拆成一格一張，×1 徽章會誤讀成聚合 -->
+                  {#if entry.half !== 0 && entry.half !== 1}<span class="deck-cell-count">×{entry.count}</span>{/if}
                 </button>
               {/each}
             </div>
@@ -9184,7 +9193,9 @@
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"/>
+                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
+                        class:legend-half-l={twoCardStadiumHalfIndex(peekedOthers, inst.iid, pool) === 0}
+                        class:legend-half-r={twoCardStadiumHalfIndex(peekedOthers, inst.iid, pool) === 1}/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
                     </button>
                   {/if}
@@ -9217,7 +9228,9 @@
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"/>
+                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
+                        class:legend-half-l={twoCardStadiumHalfIndex(otherHand, inst.iid, pool) === 0}
+                        class:legend-half-r={twoCardStadiumHalfIndex(otherHand, inst.iid, pool) === 1}/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
                     </button>
                   {/if}
@@ -9523,7 +9536,9 @@
               {@const hcc = pool.get(hc.cardId)}
               <div class="mulligan-reveal-card" class:opening-burst={canBeInitialActiveCard(hcc)}>
                 {#if hcc?.imageUrl}
-                  <img src={hcc.imageUrl} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable" />
+                  <img src={hcc.imageUrl} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable"
+                    class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, hc.iid, pool) === 0}
+                    class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, hc.iid, pool) === 1} />
                 {:else}
                   <div class="card-placeholder">{hcc?.name ?? hc.cardId}</div>
                 {/if}
@@ -9584,7 +9599,9 @@
               {@const cc = pool.get(cid)}
               <div class="mulligan-reveal-card">
                 {#if cc?.imageUrl}
-                  <img src={cc.imageUrl} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable" />
+                  <img src={cc.imageUrl} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable"
+                    class:legend-half-l={twoCardStadiumSide(cid) === 0}
+                    class:legend-half-r={twoCardStadiumSide(cid) === 1} />
                 {:else}
                   <div class="card-placeholder">{cc?.name ?? cid}</div>
                 {/if}
@@ -10083,7 +10100,9 @@
                 {#each _peekedOthers as p (p.inst.iid)}
                   <button class="deck-cell" title="{p.card.name} — 點擊放大"
                     onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>
-                    {#if p.card.imageUrl}<img src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img" loading="lazy"/>
+                    {#if p.card.imageUrl}<img src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img" loading="lazy"
+                      class:legend-half-l={twoCardStadiumSide(p.inst.cardId) === 0}
+                      class:legend-half-r={twoCardStadiumSide(p.inst.cardId) === 1}/>
                     {:else}<div class="deck-cell-fallback">{p.card.name}</div>{/if}
                   </button>
                 {/each}
@@ -13797,6 +13816,12 @@
   .deck-cell{ position:relative; display:block; width:100%; height:0; padding:0 0 140% 0; background:rgba(255,255,255,.04); border:1px solid #444; border-radius:6px; overflow:hidden; cursor:pointer; }
   .deck-cell:hover{ border-color:#4a8a4a; }
   .deck-cell-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; }
+  /* v6.095「傳說」兩張合一競技場：牌庫檢視／翻牌檢視／對手手牌檢視也裁半。
+     .deck-cell 用 padding-bottom 撐出固定直式框、img 絕對定位鋪滿 → 框比例與圖片無關，
+     只要把預設的 contain 覆蓋成 cover 再給 object-position 即可（不需要 aspect-ratio）。 */
+  .deck-cell-img.legend-half-l, .deck-cell-img.legend-half-r { object-fit:cover; }
+  .deck-cell-img.legend-half-l { object-position: 0% 50%; }
+  .deck-cell-img.legend-half-r { object-position: 100% 50%; }
   .deck-cell-fallback{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#ccc; font-size:.55rem; padding:2px; text-align:center; box-sizing:border-box; line-height:1.1; }
   .deck-cell-count{ position:absolute; right:2px; bottom:2px; background:rgba(220,38,38,.95); color:#fff; font-size:.7rem; font-weight:800; padding:0 5px; border-radius:8px; border:1.5px solid rgba(255,255,255,.9); box-shadow:0 1px 2px rgba(0,0,0,.5); min-width:20px; text-align:center; line-height:1.2; }
   /* v2.39 行內放大鏡：flex 左文字 + 右 🔍，避免長名稱爆版 */
@@ -13927,6 +13952,9 @@
   .mulligan-reveal-card{
     display:flex; flex-direction:column; align-items:center; gap:.2rem;
   }
+  /* v6.095：開局手牌展示／重抽回顧的裁半（本框已有 aspect-ratio + cover，只需 object-position） */
+  .mulligan-reveal-card img.legend-half-l { object-position: 0% 50%; }
+  .mulligan-reveal-card img.legend-half-r { object-position: 100% 50%; }
   .mulligan-reveal-card img{
     width:100%; height:auto; aspect-ratio:2.5/3.5; object-fit:cover;
     border-radius:4px; cursor:zoom-in;
