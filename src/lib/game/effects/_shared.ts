@@ -1069,6 +1069,28 @@ export function twoCardStadiumSide(cardId: string | undefined | null): 0 | 1 | n
   return TWO_CARD_STADIUM_LEFT_IDS.has(cardId) ? 0 : 1;
 }
 
+/**
+ * v6.094 建局入口的 fail-safe：把「舊格式的傳說競技場 entry」（只有左半 id、N 張）
+ * 攤成左 ⌈N/2⌉ ＋ 右 ⌊N/2⌋。
+ *
+ * ⚠ 為什麼引擎端也要有一份：`migrateDeck`（牌組層）只掛在玩家「載入自己的牌組」那條路徑上，
+ *   但**錦標賽報名時存下來的 deckEntries 快照**與**線上房間 seats[].deckEntries**都是繞過它的
+ *   —— v6.093 上線前報名、上線後開打的賽事會拿舊格式建局，那副牌組就永遠打不出傳說競技場。
+ *   在 createGame 這個雙方共同咽喉點再攤一次（冪等）即可 fail-safe。
+ */
+export function splitTwoCardStadiumDeckEntries<T extends { cardId: string; count: number }>(entries: T[]): T[] {
+  const out: T[] = [];
+  for (const e of entries) {
+    const partnerId = TWO_CARD_STADIUM_LEFT_IDS.has(e.cardId) ? TWO_CARD_STADIUM_PAIR_IDS[e.cardId] : null;
+    // 已經有右半（＝已攤過）／本身就是右半／張數異常 → 原樣保留，保持冪等
+    if (!partnerId || entries.some(x => x.cardId === partnerId) || e.count <= 0) { out.push(e); continue; }
+    const left = Math.ceil(e.count / 2);
+    out.push({ ...e, count: left });
+    if (e.count - left > 0) out.push({ ...e, cardId: partnerId, count: e.count - left });
+  }
+  return out;
+}
+
 export function isTwoCardStadiumName(name: string | undefined | null): boolean {
   return !!name && LEGEND_STADIUM_NAMES.has(name);
 }
@@ -1123,6 +1145,11 @@ export function assignTwoCardStadiumHalves(
   const seen = new Map<string, number>();
   return insts.map(inst => {
     if (!isTwoCardStadiumName(pool.get(inst.cardId)?.name)) return inst;
+    // ⭐⭐ v6.094（Fable 5 審 v6.093 抓到的真 bug）：卡片已經拆成左右兩張之後，這裡**絕對不能再指派**。
+    //   否則「手上兩張都是左半(19621)」會被標成 stadiumHalf 0 和 1 → findTwoCardStadiumPair 的
+    //   legacy 分支命中 → 兩張左半被當成一套打出去，正是這一版最想擋的東西。
+    //   ⇒ `stadiumHalf` 從此只代表「拆卡之前建立的舊局」，legacy 分支只服務那些對局。
+    if (twoCardStadiumPartnerCardId(inst.cardId)) return inst;
     if (inst.stadiumHalf === 0 || inst.stadiumHalf === 1) return inst;
     const n = seen.get(inst.cardId) ?? 0;
     seen.set(inst.cardId, n + 1);

@@ -927,7 +927,7 @@ import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽�
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
-import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡
+import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId, splitTwoCardStadiumDeckEntries } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡 / v6.094 建局入口 fail-safe
 import { twoCardStadiumHalfIndex } from './effects/_shared'; // v6.086 手牌裁半（左/右）
 export { twoCardStadiumHalfIndex, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
@@ -2104,8 +2104,8 @@ export function createGame(
   //   「Card not found」→ 整局卡死。此處在本機/AI/Oracle 線上「所有對戰」共同咽喉點 createGame
   //   對雙方 entries 再做一次 migrateCardId，徹底杜絕舊 id 進入 game state。非 M5 id 原樣回傳，
   //   零副作用 (migrateCardId table 只含 M5 81 條 jp→tw)。
-  const _e1 = spec1.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) }));
-  const _e2 = spec2.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) }));
+  const _e1 = splitTwoCardStadiumDeckEntries(spec1.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })));
+  const _e2 = splitTwoCardStadiumDeckEntries(spec2.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })));
 
   // 洗牌 + 建牌組
   p1.deck = shuffle(deckToInstances(_e1, pool));

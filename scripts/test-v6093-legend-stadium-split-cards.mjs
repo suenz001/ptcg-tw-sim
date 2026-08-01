@@ -22,7 +22,7 @@ writeFileSync(S, 'export const base="";');
 writeFileSync(E,
   "export { validateDeck, isTwoCardStadium, TWO_CARD_STADIUM_NAMES, twoCardStadiumPartnerCardId as vPartner, twoCardStadiumSide as vSide } from './src/lib/decks/validation';\n" +
   "export { migrateDeck, splitTwoCardStadiumEntries } from './src/lib/decks/cardIdMigration';\n" +
-  "export { twoCardStadiumPartnerCardId, twoCardStadiumSide, canPlayTwoCardStadium, findTwoCardStadiumPair } from './src/lib/game/effects/_shared';");
+  "export { twoCardStadiumPartnerCardId, twoCardStadiumSide, canPlayTwoCardStadium, findTwoCardStadiumPair, assignTwoCardStadiumHalves, splitTwoCardStadiumDeckEntries } from './src/lib/game/effects/_shared';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const M = await import(pathToFileURL(O).href);
@@ -112,6 +112,17 @@ ok(M.twoCardStadiumSide('19551') === null, 'A 否定對照：一般卡沒有左�
 // ══ D) 對戰層：要一左一右才能打出 ══
 {
   const L = String(byNum('傳說的熔岩洞', '075/076').id), R = String(byNum('傳說的熔岩洞', '076/076').id);
+  // ⚠⚠ v6.094（Fable 5 審 v6.093 抓到）：一定要**先過 assignTwoCardStadiumHalves**再判 ——
+  //   v6.093 的守衛直接餵沒有 stadiumHalf 的手牌，繞過了建局時的指派步驟 ⇒ **假綠**。
+  //   當時 assign 會把「兩張左半」標成 half 0/1，legacy 分支命中 → 兩張左半可以當一套打出去。
+  const assigned = M.assignTwoCardStadiumHalves(
+    [{ iid: '1', cardId: L }, { iid: '2', cardId: L }, { iid: '3', cardId: R }, { iid: '4', cardId: R }], byId);
+  ok(assigned.every(c => c.stadiumHalf === undefined),
+    '⭐⭐ D 建局指派不再對「已拆成兩張卡」的競技場寫 stadiumHalf（否則會讓 legacy 分支誤命中）');
+  const twoLeftAssigned = assigned.filter(c => c.cardId === L);
+  ok(M.canPlayTwoCardStadium(twoLeftAssigned, L) === false,
+    '⭐⭐ D 經過建局指派後，手上兩張都是左半 → 仍然不可打出（v6.093 這裡是假綠）');
+  ok(M.canPlayTwoCardStadium([assigned[0], assigned[2]], L) === true, 'D 正對照：一左一右（經指派）→ 可打出');
   ok(M.canPlayTwoCardStadium([{ iid: '1', cardId: L }, { iid: '2', cardId: L }], L) === false,
     '⭐ D 手上兩張都是左半 → 不可打出');
   ok(M.canPlayTwoCardStadium([{ iid: '1', cardId: L }, { iid: '2', cardId: R }], L) === true, 'D 一左一右 → 可打出');
@@ -129,5 +140,29 @@ ok(M.twoCardStadiumSide('19551') === null, 'A 否定對照：一般卡沒有左�
   ok(!/const step = isTwoCardStadium\(card\) \? 2 : 1/.test(decks), 'E 舊的「同一張卡 ±2」寫法已移除');
 }
 
-console.log(`v6093 傳說競技場拆成兩張獨立卡片：PASS ${pass} / FAIL ${fail}`);
+// ══ F) v6.094 建局入口 fail-safe：舊格式 deckEntries 也要被攤開 ══
+//    （錦標賽報名快照／線上房間 seats[].deckEntries 都繞過玩家端的 migrateDeck）
+{
+  const L = String(byNum('傳說的山頂', '073/076').id), R = String(byNum('傳說的山頂', '074/076').id);
+  const out = M.splitTwoCardStadiumDeckEntries([{ cardId: L, count: 4 }, { cardId: '19551', count: 10 }]);
+  const c = (id) => out.filter(e => e.cardId === id).reduce((n, e) => n + e.count, 0);
+  ok(c(L) === 2 && c(R) === 2, '⭐ F 建局入口：舊格式 4 張 → 左 2 ＋ 右 2（錦標賽報名快照也救得回來）');
+  ok(c('19551') === 10, 'F 其他卡不受影響');
+  const twice = M.splitTwoCardStadiumDeckEntries(out);
+  ok(twice.filter(e => e.cardId === R).reduce((n, e) => n + e.count, 0) === 2, 'F 冪等：再攤一次不會變多');
+  const already = M.splitTwoCardStadiumDeckEntries([{ cardId: L, count: 2 }, { cardId: R, count: 2 }]);
+  ok(already.length === 2 && already.every(e => e.count === 2), 'F 已是新格式 → 原樣不動');
+}
+
+// ══ G) 牌組編輯器：右半要顯示右半的圖（v6.094 修）══
+{
+  const decks = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
+  ok((decks.match(/class:legend-half-r=\{twoCardStadiumSide\(card\.id\) === 1\}/g) || []).length === 2,
+    '⭐ G 牌組清單與卡池兩處，右半那筆都用右半圖（原本兩筆都拿左半圖）');
+  ok(/\.entry-thumb img\.legend-half-r, \.pick-thumb img\.legend-half-r/.test(decks), 'G 右半的 object-position CSS 存在');
+  ok(/splitTwoCardStadiumEntries\(\{ \.\.\.newDeck\(deckName/.test(decks),
+    '⭐ G 文字匯入也會攤成左右各半（否則匯入當下就是「左 4 右 0」）');
+}
+
+console.log(`v6093/v6094 傳說競技場拆成兩張獨立卡片：PASS ${pass} / FAIL ${fail}`);
 if (fail > 0) process.exit(1);

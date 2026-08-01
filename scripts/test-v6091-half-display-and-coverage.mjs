@@ -49,10 +49,13 @@ const ok = (c, l) => { if (c) pass++; else { fail++; console.log('  FAIL:', l); 
   ok(!/\{#each Array\(entry\.count\) as _, i\}/.test(decks),
     '⭐ A4 牌組清單縮圖沒有多張並排（.entry 第一欄固定 40px，並排會爆版）');
   ok(!/\.entry-thumb\.legend-pair/.test(decks), 'A4 legend-pair flex 容器已移除');
-  ok((decks.match(/class:legend-half-l=\{isTwoCardStadium\(card\)\}/g) || []).length === 2,
-    '⭐ A4 牌組清單與卡片選擇區兩處縮圖都固定顯示左半');
-  ok(/\.entry-thumb img\.legend-half-l, \.pick-thumb img\.legend-half-l/.test(decks), 'A4 兩處縮圖共用 object-position');
-  ok(!/\.pick-thumb img\.legend-half-r/.test(decks), 'A4 沒有用不到的右半選擇器（dead CSS）');
+  // ⚠ v6.093/6.094 起左右已是兩張不同的卡 → 縮圖改成「依 cardId 決定左右半」，
+  //   不再是「固定顯示左半」，右半的 CSS 也從 dead selector 變成必要的。
+  ok((decks.match(/class:legend-half-l=\{twoCardStadiumSide\(card\.id\) === 0\}/g) || []).length === 2,
+    '⭐ A4 牌組清單與卡片選擇區兩處縮圖都依 cardId 判左半');
+  ok(/\.entry-thumb img\.legend-half-l, \.pick-thumb img\.legend-half-l/.test(decks), 'A4 兩處縮圖共用左半 object-position');
+  ok(/\.entry-thumb img\.legend-half-r, \.pick-thumb img\.legend-half-r/.test(decks),
+    '⭐ A4 右半的 object-position 存在（v6.094 起右半那筆要顯示右半圖）');
   // 手機回放手牌要和桌機對稱
   ok(/class:legend-half-l=\{twoCardStadiumHalfIndex\(myPlayer\.hand/.test(mpb),
     '⭐ A4 手機回放手牌也有接切半（桌機有、手機漏掉會不對稱）');

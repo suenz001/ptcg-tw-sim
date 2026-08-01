@@ -38,7 +38,7 @@ for (const f of readdirSync(dir)) {
 const byName = (n, pred) => { for (const [, c] of pool) { if (c.name === n && ['H','I','J'].includes(c.regulationMark) && (!pred || pred(c))) return c; } return null; };
 
 let pass = 0, fail = 0;
-const ok = (c, l) => { if (c) pass++; else { fail++; console.log('  FAIL:', l); } };
+const ok = (c, l, extra = '') => { if (c) pass++; else { fail++; console.log('  FAIL:', l, extra); } };
 
 const trench = byName('傳說的海溝', c => c.collectorNumber === '071/076');   // 左半
 const trenchR = byName('傳說的海溝', c => c.collectorNumber === '072/076');  // 右半（v6.093 新增）
@@ -58,11 +58,15 @@ ok(!!trench && !!trenchR && trench.id !== trenchR.id && trench.name === trenchR.
     { iid: 'y', cardId: String(lava.id) },
   ];
   const out = mod.assignTwoCardStadiumHalves(insts, pool);
-  ok(out.map(c => c.stadiumHalf).join(',') === '0,1,0,1,0,1',
-    '⭐ 依牌組內編號交錯指派左右（每個 cardId 各自從左開始）');
+  // ⭐⭐ v6.094：卡片已經拆成左右兩張之後，這個 helper **不可以再指派** ——
+  //   否則「兩張左半」會被標成 0/1，讓 findTwoCardStadiumPair 的 legacy 分支誤命中，
+  //   兩張左半就能當成一套打出去（v6.093 的真 bug，Fable 5 審查抓到）。
+  ok(out.every(c => c.stadiumHalf === undefined),
+    '⭐⭐ v6.094：對已拆成兩張卡的競技場不再指派 stadiumHalf', JSON.stringify(out.map(c => c.stadiumHalf)));
+  ok(out.every((c, i) => c.cardId === insts[i].cardId && c.iid === insts[i].iid), '其餘欄位原樣保留');
   // 冪等
   const again = mod.assignTwoCardStadiumHalves(out, pool);
-  ok(again.every((c, i) => c.stadiumHalf === out[i].stadiumHalf), '重複呼叫不改變已指派的身分（冪等）');
+  ok(again.every((c, i) => c.stadiumHalf === out[i].stadiumHalf), '重複呼叫結果一致（冪等）');
   // 非兩張合一的卡不受影響
   const other = mod.assignTwoCardStadiumHalves([{ iid: 'z', cardId: String(byName('傷藥').id) }], pool);
   ok(other[0].stadiumHalf === undefined, '一般卡不會被加上 stadiumHalf');

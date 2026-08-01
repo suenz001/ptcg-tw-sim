@@ -15,6 +15,7 @@
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
+  import { splitTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';   // v6.094 匯入時也攤成左右各半
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
@@ -1353,7 +1354,9 @@
     }
     if (entries.length === 0) { alert('沒有找到任何可匯入的卡片'); return; }
 
-    const d = { ...newDeck(deckName || '匯入牌組'), entries };
+    // v6.094：匯入的來源（卡名／setCode+編號／官方書籤 cardId）都只會對到左半那張 →
+    //   直接存會變成「左 4 右 0」，玩家一匯入就看到「左右要成套」的紅字。這裡先攤成左右各半（冪等）。
+    const d = splitTwoCardStadiumEntries({ ...newDeck(deckName || '匯入牌組'), entries });
     addDeckOnTop(d);
     activeId = d.id;
     setDirty(d.id);  // v5.114
@@ -1731,7 +1734,9 @@
                        是固定 40px（:2621），塞 N 張 40px 圖會被壓成細條或整排溢出蓋到卡名 →
                        撤回成單張、固定顯示左半（與下方卡片選擇區一致）。
                        牌組清單要怎麼呈現「左 N 張／右 N 張」需要重新設計版面，待 Wilson 拍板。 -->
-                  <img src={card.imageUrl} alt={card.name} loading="lazy" class:legend-half-l={isTwoCardStadium(card)} />
+                  <img src={card.imageUrl} alt={card.name} loading="lazy"
+                    class:legend-half-l={twoCardStadiumSide(card.id) === 0}
+                    class:legend-half-r={twoCardStadiumSide(card.id) === 1} />
                 </button>
                 <div class="entry-meta">
                   <div class="entry-name">{card.name}</div>
@@ -1874,7 +1879,9 @@
               <button class="pick-thumb" onclick={() => openPreview(card)} title="查看詳情">
                 <!-- v6.091：選擇區每張卡只出現一次、沒有「第幾份」概念 → 固定顯示左半
                      （左半含完整卡名框，代表性最高；點縮圖開 preview 仍看得到整張橫圖）。 -->
-                <img src={card.imageUrl} alt={card.name} loading="lazy" class:legend-half-l={isTwoCardStadium(card)} />
+                <img src={card.imageUrl} alt={card.name} loading="lazy"
+                  class:legend-half-l={twoCardStadiumSide(card.id) === 0}
+                  class:legend-half-r={twoCardStadiumSide(card.id) === 1} />
               </button>
               <button class="pick-meta" onclick={() => openPreview(card)}>
                 <div class="pick-name">{card.name}</div>
@@ -3019,6 +3026,7 @@
      且已是 object-fit:cover，橫圖 cover 後寬恰為兩張直卡 → 只要 object-position 就能精準取半。
      附帶修好一件事：現況這些縮圖顯示的是橫圖正中間亂裁的一條。 */
   .entry-thumb img.legend-half-l, .pick-thumb img.legend-half-l { object-position: 0% 50%; }
+  .entry-thumb img.legend-half-r, .pick-thumb img.legend-half-r { object-position: 100% 50%; }
 
   /* Picker enhancements */
   .pick-thumb {

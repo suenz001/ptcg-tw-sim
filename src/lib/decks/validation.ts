@@ -200,7 +200,8 @@ export function validateDeck(
     if (isTwoCardStadium(card)) {
       const partnerId = twoCardStadiumPartnerCardId(entry.cardId);
       if (partnerId) {
-        const partnerCount = deck.entries.find(e => e.cardId === partnerId)?.count ?? 0;
+        // v6.094：用加總而非 find 單筆 —— 同一個 cardId 若出現多筆 entry（自製 JSON 匯入）會誤判。
+        const partnerCount = deck.entries.filter(e => e.cardId === partnerId).reduce((n, e) => n + e.count, 0);
         if (partnerCount !== entry.count) {
           const side = twoCardStadiumSide(entry.cardId) === 0 ? '左' : '右';
           issues.push(`「${card.name}」的左右兩張要成套：目前${side}半 ${entry.count} 張、另一半 ${partnerCount} 張，張數必須相同`);
