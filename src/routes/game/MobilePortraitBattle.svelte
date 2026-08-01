@@ -578,35 +578,22 @@
           primary: true,
         });
       }
-      // 機制 B: ON_HAND_ACTIVATE — 齒輪怪｜緊急迴轉
-      if (c.name === '齒輪怪'
-          && (c.abilities?.some(a => a.name === '緊急迴轉') ?? false) /* v5.898 只緊急迴轉版非齒輪塗層版 */
-          && !usedNames.includes('緊急迴轉')
-          && me.bench.length < myBenchLimit) {
-        // 對手場上有 Stage 2
-        const oppHasStage2Local = (): boolean => {
-          const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
-          for (const p of all) {
-            const card = pool.get(p.cardId);
-            if (!card || card.supertype !== 'Pokemon') continue;
-            const sub = (card.subtype ?? '') as string;
-            if (typeof sub === 'string' && (sub.includes('Stage 2') || sub.includes('Stage2')
-                || sub.includes('2 階') || sub.includes('二階') || sub === '2階進化')) return true;
-            if (card.evolvesFrom) {
-              for (const v of pool.values()) {
-                if (v.name === card.evolvesFrom && v.evolvesFrom) return true;
-              }
-            }
-          }
-          return false;
-        };
-        if (oppHasStage2Local()) {
-          out.push({
-            label: '⚡ 緊急迴轉 (放備戰)',
-            action: () => { closeSheet(); onAction(GameActions.useHandAbility(iid, getHandActivatableAbilities(game, myIdx as 0 | 1, pool).find(a => a.iid === iid)?.abilityIndex ?? 0)); },
-            primary: true,
-          });
-        }
+      // 機制 B: ON_HAND_ACTIVATE（從手牌發動、把自己放到備戰區的特性）
+      // ⚠⚠ v6.098 修真 bug：這裡原本**硬編**「齒輪怪｜緊急迴轉」＋自寫一份
+      //   `oppHasStage2Local()`，所以 v6.080 新增的「烈箭鷹ex｜激動俯衝」在手機版
+      //   **完全沒有按鈕**（黃框會亮＝判定正確，但點開卡片只有「查看詳情」）→
+      //   玩家回報「場上有超級袋獸ex 時烈箭鷹ex 無法使用激動俯衝」。
+      //   v6.080 當時只把「判定」收斂到 engine getHandActivatableAbilities，
+      //   **動作入口這一半漏了**（同型教訓：中央述詞寫好 ≠ 每個消費點都接上）。
+      //   ⇒ 改為逐項讀中央 gate 產生按鈕，label 與桌機版逐字一致。
+      //   ⚠ 新增同型卡只改 engine 的 HAND_ACTIVATE_GATES；**禁止**再往這裡塞 if 判卡名。
+      for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) {
+        if (a.iid !== iid) continue;
+        out.push({
+          label: `⚡ ${a.abilityName} (放備戰)`,
+          action: () => { closeSheet(); onAction(GameActions.useHandAbility(iid, a.abilityIndex)); },
+          primary: true,
+        });
       }
     }
     // 永遠可：查看詳情
