@@ -555,29 +555,17 @@
         const all = [...(me.active ? [me.active] : []), ...me.bench];
         return all.some(p => pool.get(p.cardId)?.name === name);
       };
-      // 1) 棄『悠哉尾草棒』→ 觸發超能妙喵｜誘導之尾
-      if (c.name === '悠哉尾草棒'
-          && hasOnField('超能妙喵')
-          && !usedNames.includes('誘導之尾')
-          && opp.active && opp.bench.length > 0) {
-        out.push({
-          label: '🌀 棄此卡 → 觸發 超能妙喵｜誘導之尾',
-          action: () => { closeSheet(); onAction(GameActions.useHandDiscardAbility('超能妙喵', iid)); },
-          primary: true,
-        });
-      }
-      // 2) 棄『基本【火】能量』→ 觸發火神蛾｜熱浪鱗粉
-      if (c.supertype === 'Energy' && c.subtype === 'Basic'
-          && (c.name?.includes('【火】') ?? false)
-          && hasOnField('火神蛾')
-          && !usedNames.includes('熱浪鱗粉')
-          && opp.active && opp.active.status !== 'burned') {
-        out.push({
-          label: '🔥 棄此卡 → 觸發 火神蛾｜熱浪鱗粉',
-          action: () => { closeSheet(); onAction(GameActions.useHandDiscardAbility('火神蛾', iid)); },
-          primary: true,
-        });
-      }
+      // ⚠⚠ v6.099 移除死按鈕：這裡原本硬編兩個「棄此卡 → 觸發 超能妙喵｜誘導之尾 /
+      //   火神蛾｜熱浪鱗粉」的按鈕，但 **v5.510 起 `ON_DISCARD_FROM_HAND_ABILITIES` 已清空**
+      //   （兩張都改成寶可夢身上的 regA 特性按鈕，避免同一個效果有兩個按鈕）。
+      //   engine 的 USE_HAND_DISCARD_ABILITY handler 第一關就是 `Map.get(triggerName)`，
+      //   查不到直接 return → **這兩個按鈕按下去 100% 沒反應、連 log 都不會有**。
+      //   桌機端 v5.510 當時就已清空同一份 Map（`+page.svelte` 的 handDiscardAbilityTriggers
+      //   直接 `return out`），**只有手機版留著死入口**，兩端行為不一致。
+      //   ⇒ 一併移除；要用這兩個特性請點寶可夢身上的特性按鈕（走 USE_ABILITY / regA）。
+      //   ⚠ 未來若把卡加回 ON_DISCARD_FROM_HAND_ABILITIES，**兩套 UI 要同時加回入口**
+      //     （守衛 test-v6098-hand-ability-ui-central 的 ③ 區塊會在 Map 非空卻沒有 UI 入口時亮紅）。
+
       // 機制 B: ON_HAND_ACTIVATE（從手牌發動、把自己放到備戰區的特性）
       // ⚠⚠ v6.098 修真 bug：這裡原本**硬編**「齒輪怪｜緊急迴轉」＋自寫一份
       //   `oppHasStage2Local()`，所以 v6.080 新增的「烈箭鷹ex｜激動俯衝」在手機版

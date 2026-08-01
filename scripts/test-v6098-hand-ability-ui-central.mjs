@@ -11,6 +11,14 @@
 //   ② 靜態端：兩套 UI 的手牌特性入口都必須走中央 gate，且**不得**硬編任何 gate 的特性名
 //      （附故意壞樣本正對照，證明守衛真的會紅）
 //
+// ── v6.099 續（同一維度、Wilson 交辦「一起修、盡量一致」）─────────────────────
+//   機制 A（ON_DISCARD_FROM_HAND：棄 1 張指定手牌 → 觸發場上寶可夢特性）的 UI 入口
+//   在**手機版**還留著硬編的兩個按鈕（超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉），但
+//   `ON_DISCARD_FROM_HAND_ABILITIES` **自 v5.510 起就是空 Map**（兩張都改走寶可夢身上的
+//   regA 特性按鈕，避免雙按鈕）→ engine handler 第一關就 return ⇒ **按下去 100% 沒反應**。
+//   桌機當時已把該 derived 清成空 Map，但 helper/模板按鈕仍是死碼。v6.099 兩端一起清乾淨。
+//   ⇒ 守衛 ③ 用**雙向**斷言鎖住：Map 空 ⟺ 兩套 UI 都沒有入口；Map 非空則兩端都必須有。
+//
 // ⚠ 誠實說明 HEAD-FAIL 範圍：這次的 bug **純在 UI 端**，engine 的 gate 本來就是對的，
 //   所以把 MobilePortraitBattle.svelte 還原成 v6.097 時，只有 ②-B 與 ②-C 兩項會 FAIL；
 //   ①-* 行為端在修正前後都會 PASS（它們是回歸保護，不是本 bug 的重現）。
@@ -23,10 +31,11 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S=join(ROOT,'.v98-s.js'),E=join(ROOT,'.v98-e.ts'),O=join(ROOT,'.v98-o.mjs');
 process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p)}catch{}}});
 writeFileSync(S,'export const base="";');
-writeFileSync(E,"export { applyAction, getHandActivatableAbilities, getBenchLimit } from './src/lib/game/engine';\nimport './src/lib/game/effects';");
+writeFileSync(E,"export { applyAction, getHandActivatableAbilities, getBenchLimit, getUsableAbilities } from './src/lib/game/engine';\n"
+              +"export { ON_DISCARD_FROM_HAND_ABILITIES } from './src/lib/game/effects';\nimport './src/lib/game/effects';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',
   alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
-const { applyAction, getHandActivatableAbilities } = await import(pathToFileURL(O).href);
+const { applyAction, getHandActivatableAbilities, getUsableAbilities, ON_DISCARD_FROM_HAND_ABILITIES } = await import(pathToFileURL(O).href);
 
 const dir=join(ROOT,'static/cards');
 const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
@@ -141,5 +150,71 @@ T('②-D 【正對照】故意塞回硬編 → 守衛必須抓到（證明它不
   assert.ok(caught, '守衛對故意硬編的壞樣本必須失敗（否則等於永遠綠）');
 });
 
-console.log(`\n=== v6.098 手牌特性 UI 中央收斂: ${pass} PASS, ${fail} FAIL ===`);
+// ══ ③ v6.099：機制 A（棄手牌觸發）— Map 與 UI 入口必須雙向一致 ══
+const UI_SRC = UI_FILES.map(f => [f, readFileSync(join(ROOT, f), 'utf8')]);
+// ⚠ 兩種寫法都要抓：走 GameActions helper，或直接手寫 dispatch({type:'USE_HAND_DISCARD_ABILITY'…})。
+const hasDiscardEntry = (src) => {
+  const bare = stripComments(src);
+  return bare.includes('useHandDiscardAbility(') || bare.includes("'USE_HAND_DISCARD_ABILITY'") || bare.includes('"USE_HAND_DISCARD_ABILITY"');
+};
+
+T('③-1 ON_DISCARD_FROM_HAND_ABILITIES 讀得到（Map 實例）', () => {
+  assert.ok(ON_DISCARD_FROM_HAND_ABILITIES instanceof Map, '應為 Map，實際 ' + typeof ON_DISCARD_FROM_HAND_ABILITIES);
+});
+T('③-2 【雙向】Map 空 ⟺ 兩套 UI 都沒有棄手牌觸發入口', () => {
+  const size = ON_DISCARD_FROM_HAND_ABILITIES.size;
+  for (const [f, src] of UI_SRC) {
+    const has = hasDiscardEntry(src);
+    if (size === 0) {
+      assert.ok(!has, f + '：ON_DISCARD_FROM_HAND_ABILITIES 是空的（engine 會直接 return）'
+        + '，UI 不得留 useHandDiscardAbility 入口 —— 那是按下去毫無反應的死按鈕');
+    } else {
+      assert.ok(has, f + '：Map 已有 ' + size + ' 張卡（' + [...ON_DISCARD_FROM_HAND_ABILITIES.keys()].join('、')
+        + '），兩套 UI 都必須提供入口，否則玩家無法發動');
+    }
+  }
+});
+T('③-3 行為端：Map 為空時舊 action 確實是 no-op（證明它真的是死按鈕，不是我誤判）', () => {
+  if (ON_DISCARD_FROM_HAND_ABILITIES.size > 0) { return; }  // Map 有卡時本項不適用
+  const MEOWS = byName('超能妙喵', c => (c.abilities || []).some(a => a.name === '誘導之尾'));
+  const SLOW = byName('悠哉尾草棒');
+  assert.ok(MEOWS && SLOW, '找得到超能妙喵（誘導之尾）與悠哉尾草棒');
+  const st = mk(); st.players[0].active = inst(MEOWS.id); st.players[0].hand = [inst(SLOW.id)];
+  st.players[1].bench = [inst(BASIC.id)];
+  // ⚠ 不比整包 JSON：applyAction 出口會做無害正規化（把 status:null 之類的 falsy 欄位清掉），
+  //   那不是「效果執行了」。只比對真正有意義的欄位。
+  const snap = (g) => JSON.stringify({
+    hand: g.players[0].hand.map(c => c.iid),
+    discard: g.players[0].discard.map(c => c.iid),
+    oppActive: g.players[1].active?.iid, oppStatus: g.players[1].active?.status ?? null,
+    oppBench: g.players[1].bench.map(c => c.iid),
+    used: g.players[0].abilityNamesUsedThisTurn ?? [],
+    pending: g.pendingSelection?.effectKey ?? g.pendingSelection?.type ?? null,  // 誘導之尾成功時會開 picker
+  });
+  const before = snap(st);
+  const out = applyAction(st, { type: 'USE_HAND_DISCARD_ABILITY', triggerCardName: '超能妙喵', discardIid: st.players[0].hand[0].iid, actorIdx: 0 }, pool);
+  assert.strictEqual(snap(out), before, '盤面不應有任何實質變化（Map 空 → handler 直接 return）');
+  assert.strictEqual(out.log.length, st.log.length, '不應產生任何 log');
+});
+T('③-4 回歸保護：兩張卡改走的 regA 特性按鈕確實可用（功能沒有被一起刪掉）', () => {
+  const MEOWS = byName('超能妙喵', c => (c.abilities || []).some(a => a.name === '誘導之尾'));
+  const SLOW = byName('悠哉尾草棒');
+  const VOLC = byName('火神蛾', c => (c.abilities || []).some(a => a.name === '熱浪鱗粉'));
+  const FIRE = [...pool.values()].find(c => c.supertype === 'Energy' && c.subtype === 'Basic' && (c.name || '').includes('【火】'));
+  assert.ok(MEOWS && SLOW && VOLC && FIRE, '找得到四張卡');
+  // 超能妙喵｜誘導之尾
+  const st1 = mk(); st1.players[0].active = inst(MEOWS.id); st1.players[0].hand = [inst(SLOW.id)];
+  st1.players[1].bench = [inst(BASIC.id)];
+  assert.ok(getUsableAbilities(st1, pool).some(u => u.abilityName === '誘導之尾'), '誘導之尾應在可用特性清單');
+  const o1 = applyAction(st1, { type: 'USE_ABILITY', iid: st1.players[0].active.iid, abilityIndex: (MEOWS.abilities || []).findIndex(a => a.name === '誘導之尾'), actorIdx: 0 }, pool);
+  assert.strictEqual(o1.players[0].hand.length, 0, '悠哉尾草棒應被丟棄');
+  assert.ok(o1.players[0].discard.some(c => pool.get(c.cardId)?.name === '悠哉尾草棒'), '應進棄牌區');
+  // 火神蛾｜熱浪鱗粉
+  const st2 = mk(); st2.players[0].active = inst(VOLC.id); st2.players[0].hand = [inst(FIRE.id)];
+  assert.ok(getUsableAbilities(st2, pool).some(u => u.abilityName === '熱浪鱗粉'), '熱浪鱗粉應在可用特性清單');
+  const o2 = applyAction(st2, { type: 'USE_ABILITY', iid: st2.players[0].active.iid, abilityIndex: (VOLC.abilities || []).findIndex(a => a.name === '熱浪鱗粉'), actorIdx: 0 }, pool);
+  assert.strictEqual(o2.players[1].active?.status, 'burned', '對手戰鬥寶可夢應被灼傷');
+});
+
+console.log(`\n=== v6.098/6.099 手牌特性 UI 中央收斂: ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);

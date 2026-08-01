@@ -2541,37 +2541,15 @@
   const usableAbilities = $derived(game && poolReady ? getUsableAbilities(game, pool) : []);
   const stadiumCard = $derived(game?.activeStadium ? pool.get(game.activeStadium.cardId) : null);
 
-  // ─── v3.07 Deferred Wave D — 手牌觸發特性（3 張） ───────────────────────────
-  // 機制 A: ON_DISCARD_FROM_HAND（超能妙喵 / 火神蛾）— 棄 1 張指定手牌觸發
-  // 機制 B: ON_HAND_ACTIVATE（齒輪怪）— 手牌寶可夢自身觸發放上備戰
-  //
-  // 條件 gate（必須在 UI 渲染前 derived，避免按按鈕後被 engine 拒絕的壞 UX）：
-  //   - 自己回合 + main phase + 無 pendingSelection
-  //   - 該特性名本回合未用過（abilityNamesUsedThisTurn）
-  //   - 各卡專屬條件（場上有 trigger holder / 對手 active 非 burned / 對手有 Stage 2 / 自方備戰未滿）
-  //
-  // 回傳：手牌中可作為「discard cost」觸發某 trigger holder 特性的 cardIid 對應 trigger 卡名 Map
-  // key = handIid, value = { triggerName, abilityName }（若多 trigger 候選只取第一個）
-  const handDiscardAbilityTriggers = $derived.by<Map<string, { triggerName: string; abilityName: string; label: string }>>(() => {
-    const out = new Map<string, { triggerName: string; abilityName: string; label: string }>();
-    if (!game || !poolReady) return out;
-    if (game.phase !== 'playing' || game.turnPhase !== 'main') return out;
-    if (game.pendingSelection) return out;
-    if (!isMyTurn()) return out;
-    const me = game.players[myIdx];
-    const opp = game.players[1 - myIdx];
-    const usedNames = me.abilityNamesUsedThisTurn ?? [];
-    // 場上是否有指定 trigger holder（active or bench）
-    const hasOnField = (name: string): boolean => {
-      const all = [...(me.active ? [me.active] : []), ...me.bench];
-      return all.some(c => pool.get(c.cardId)?.name === name);
-    };
-
-    // v5.510：超能妙喵|誘導之尾 / 火神蛾|熱浪鱗粉 已改為寶可夢上的 regA 啟動特性（碧綠之舞 pattern），
-    //   不再走手牌棄牌按鈕（玩家回報按鈕應在寶可夢上）。機制 A 基礎設施保留供未來使用，此處不再加入這兩張。
-    void hasOnField; void usedNames; void opp; void me;
-    return out;
-  });
+  // ─── v3.07 Deferred Wave D — 手牌觸發特性 ───────────────────────────────────
+  // ⚠ v6.099：機制 A（ON_DISCARD_FROM_HAND：棄 1 張指定手牌觸發場上寶可夢的特性）
+  //   的 UI 入口**已整段移除**。v5.510 起 `ON_DISCARD_FROM_HAND_ABILITIES` 就是空 Map
+  //   （超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉 都改成寶可夢身上的 regA 特性按鈕，避免雙按鈕），
+  //   engine 的 USE_HAND_DISCARD_ABILITY handler 第一關 `Map.get()` 查不到就 return
+  //   → 這裡留著的 derived/按鈕是**死碼**（本檔當時已 `return out` 空 Map，手機版則還留著
+  //   會按下去毫無反應的死按鈕，兩端不一致；v6.099 一併清乾淨）。
+  //   ⚠ 未來若把卡加回該 Map，**兩套 UI 要同時加回入口**（守衛 test-v6098 會亮紅提醒）。
+  // 以下只保留機制 B（ON_HAND_ACTIVATE：手牌寶可夢自身觸發、把自己放上備戰）。
 
   // 機制 B: 手牌寶可夢自身為 trigger（齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝）
   // v6.080：條件判斷收斂到 engine getHandActivatableAbilities（引擎 handler 與手機版同一份）。
@@ -2589,11 +2567,6 @@
   });
 
   // dispatch helpers — 用 onclick 呼叫
-  function triggerHandDiscardAbility(handIid: string): void {
-    const meta = handDiscardAbilityTriggers.get(handIid);
-    if (!meta) return;
-    dispatch(GameActions.useHandDiscardAbility(meta.triggerName, handIid));
-  }
   function triggerHandActivateAbility(handIid: string): void {
     const meta = handActivateAbilities.get(handIid);
     if (!meta) return;
@@ -8830,14 +8803,7 @@
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>
             <span class="hand-name">{c.name}</span>
-            <!-- v3.07 Deferred Wave D — 手牌觸發特性按鈕 -->
-            {#if handDiscardAbilityTriggers.has(inst.iid)}
-              {@const _trig = handDiscardAbilityTriggers.get(inst.iid)!}
-              <button class="hand-trigger-btn"
-                onpointerdown={(e)=>e.stopPropagation()}
-                onclick={(e)=>{e.stopPropagation(); triggerHandDiscardAbility(inst.iid);}}
-                title={_trig.label}>{_trig.label}</button>
-            {/if}
+            <!-- v6.099：機制 A 的手牌觸發按鈕已移除（死碼，見上方說明） -->
             <!-- v5.511：緊急迴轉 改為「黃框可用 + 點卡發動」（見 .hand-card onclick / canHandActivate），不再顯示按鈕標示 -->
             {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
@@ -13698,22 +13664,7 @@
   .hand-hint.hl{ color:#ffd44a; font-weight:600; }
   .energy-hint{ color:#aaff44; }
   /* v1.02：統一黃框表示「當下可用」— 涵蓋能量/基礎/訓練家/進化 */
-  /* v3.07 Deferred Wave D — 手牌觸發特性按鈕（誘導之尾 / 熱浪鱗粉 / 緊急迴轉） */
-  .hand-trigger-btn {
-    margin-top: 0.15rem;
-    padding: 0.18rem 0.3rem;
-    font-size: 0.6rem;
-    line-height: 1.1;
-    background: #5a3a8a;
-    color: #fff;
-    border: 1px solid #aa66ff;
-    border-radius: 4px;
-    cursor: pointer;
-    width: 100%;
-    box-shadow: 0 0 6px #aa66ff66;
-  }
-  .hand-trigger-btn:hover { background: #7050a0; }
-  .hand-trigger-btn:active { transform: scale(0.95); }
+  /* v6.099：.hand-trigger-btn 隨機制 A 的手牌按鈕一起移除（該按鈕已是死碼，見上方說明） */
 
     .hand-card.can-actionable{
     border-color:#e0b030;
