@@ -42,10 +42,43 @@ export const TWO_CARD_STADIUM_NAMES = new Set<string>([
   '傳說的熔岩洞',
 ]);
 
-/** 這張卡是不是「兩張實體卡合成一個場地」型（放牌組要成雙） */
+/** 這張卡是不是「兩張實體卡合成一個場地」型（左右各一張、要成套） */
 export function isTwoCardStadium(card: Card | undefined): boolean {
   return !!card && TWO_CARD_STADIUM_NAMES.has(card.name);
 }
+
+/**
+ * v6.093「傳說」競技場：**左右各是一張獨立的卡片**（Wilson 2026-08-01 裁定）
+ *   「傳說的山頂(左) 當作編號073那張、傳說的山頂(右) 當作編號074那張，
+ *     等於完全就當成是2張牌來處理」
+ *
+ * 官方 collectorNumber（`static/cards/M6.json`，唯一權威）本來就標成兩個編號：
+ *   傳說的海溝 071/076 + 072/076 ／ 傳說的山頂 073/076 + 074/076 ／ 傳說的熔岩洞 075/076 + 076/076
+ *
+ * ⭐ **卡名刻意維持相同**（兩筆都叫「傳說的山頂」）——
+ *   這讓三個場地效果 hook、reg key、官方「同名卡最多 4 張」規則全部自動保持正確，
+ *   左右改由 **cardId** 區分。左半沿用原本的 id，右半是新增的 id
+ *   （舊牌組存的正是左半 id → 遷移時只要把一半換成右半即可）。
+ */
+export const TWO_CARD_STADIUM_PAIR_IDS: Readonly<Record<string, string>> = {
+  '19621': '19624', '19624': '19621',   // 傳說的海溝   071/076 ↔ 072/076
+  '19622': '19625', '19625': '19622',   // 傳說的山頂   073/076 ↔ 074/076
+  '19623': '19626', '19626': '19623',   // 傳說的熔岩洞 075/076 ↔ 076/076
+};
+/** 左半的 cardId（＝編號較小的那張、也是舊牌組存的那個 id） */
+export const TWO_CARD_STADIUM_LEFT_IDS: ReadonlySet<string> = new Set(['19621', '19622', '19623']);
+
+/** 這張卡的另一半是哪個 cardId；不是兩張合一競技場則回 null */
+export function twoCardStadiumPartnerCardId(cardId: string | undefined | null): string | null {
+  if (!cardId) return null;
+  return TWO_CARD_STADIUM_PAIR_IDS[cardId] ?? null;
+}
+/** 這張卡是左半(0)還是右半(1)；不是兩張合一競技場則回 null */
+export function twoCardStadiumSide(cardId: string | undefined | null): 0 | 1 | null {
+  if (!cardId || !(cardId in TWO_CARD_STADIUM_PAIR_IDS)) return null;
+  return TWO_CARD_STADIUM_LEFT_IDS.has(cardId) ? 0 : 1;
+}
+
 
 /**
  * v3.61：「Reprint exception」— 重印於 H/I/J 標、舊版本（含 G 標）也合法的卡名清單。
@@ -162,9 +195,17 @@ export function validateDeck(
     }
     total += entry.count;
 
-    // v6.082「兩張合一」競技場：一套＝兩張實體卡 → 牌組張數必須是偶數（單數張湊不成一套）
-    if (isTwoCardStadium(card) && entry.count % 2 !== 0) {
-      issues.push(`「${card.name}」是由兩張實體卡合成的場地，張數必須是偶數（目前 ${entry.count} 張，單張湊不成一套）`);
+    // v6.093「兩張合一」競技場：左右是兩張獨立的卡 → 兩邊張數必須相等（否則有半張湊不成套）。
+    //   （v6.082 原本是「同一個 cardId 的張數必須偶數」，拆成兩張卡後改成左右對稱檢查。）
+    if (isTwoCardStadium(card)) {
+      const partnerId = twoCardStadiumPartnerCardId(entry.cardId);
+      if (partnerId) {
+        const partnerCount = deck.entries.find(e => e.cardId === partnerId)?.count ?? 0;
+        if (partnerCount !== entry.count) {
+          const side = twoCardStadiumSide(entry.cardId) === 0 ? '左' : '右';
+          issues.push(`「${card.name}」的左右兩張要成套：目前${side}半 ${entry.count} 張、另一半 ${partnerCount} 張，張數必須相同`);
+        }
+      }
     }
 
     if (!isBasicEnergy(card)) {

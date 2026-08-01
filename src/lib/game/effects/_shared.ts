@@ -1037,6 +1037,38 @@ export function discardActiveStadium(
  *   與 `LEGEND_STADIUM_NAMES` / 牌組層 `TWO_CARD_STADIUM_NAMES` 由
  *   `scripts/test-two-card-stadium.mjs` 守衛三份一致。
  */
+/**
+ * v6.093「傳說」競技場：**左右各是一張獨立的卡片**（Wilson 2026-08-01 裁定）
+ *   「傳說的山頂(左) 當作編號073那張、傳說的山頂(右) 當作編號074那張，
+ *     等於完全就當成是2張牌來處理」
+ *
+ * 官方 collectorNumber（`static/cards/M6.json`，唯一權威）本來就標成兩個編號：
+ *   傳說的海溝 071/076 + 072/076 ／ 傳說的山頂 073/076 + 074/076 ／ 傳說的熔岩洞 075/076 + 076/076
+ *
+ * ⭐ **卡名刻意維持相同**（兩筆都叫「傳說的山頂」）——
+ *   這讓三個場地效果 hook、reg key、官方「同名卡最多 4 張」規則全部自動保持正確，
+ *   左右改由 **cardId** 區分。左半沿用原本的 id，右半是新增的 id
+ *   （舊牌組存的正是左半 id → 遷移時只要把一半換成右半即可）。
+ */
+export const TWO_CARD_STADIUM_PAIR_IDS: Readonly<Record<string, string>> = {
+  '19621': '19624', '19624': '19621',   // 傳說的海溝   071/076 ↔ 072/076
+  '19622': '19625', '19625': '19622',   // 傳說的山頂   073/076 ↔ 074/076
+  '19623': '19626', '19626': '19623',   // 傳說的熔岩洞 075/076 ↔ 076/076
+};
+/** 左半的 cardId（＝編號較小的那張、也是舊牌組存的那個 id） */
+export const TWO_CARD_STADIUM_LEFT_IDS: ReadonlySet<string> = new Set(['19621', '19622', '19623']);
+
+/** 這張卡的另一半是哪個 cardId；不是兩張合一競技場則回 null */
+export function twoCardStadiumPartnerCardId(cardId: string | undefined | null): string | null {
+  if (!cardId) return null;
+  return TWO_CARD_STADIUM_PAIR_IDS[cardId] ?? null;
+}
+/** 這張卡是左半(0)還是右半(1)；不是兩張合一競技場則回 null */
+export function twoCardStadiumSide(cardId: string | undefined | null): 0 | 1 | null {
+  if (!cardId || !(cardId in TWO_CARD_STADIUM_PAIR_IDS)) return null;
+  return TWO_CARD_STADIUM_LEFT_IDS.has(cardId) ? 0 : 1;
+}
+
 export function isTwoCardStadiumName(name: string | undefined | null): boolean {
   return !!name && LEGEND_STADIUM_NAMES.has(name);
 }
@@ -1067,8 +1099,10 @@ export function twoCardStadiumHalfIndex(
   const target = zone.find(c => c.iid === iid);
   if (!target) return null;
   if (!isTwoCardStadiumName(pool.get(target.cardId)?.name)) return null;
-  // ⭐ v6.090：優先讀該實體卡自己的持久身分（Wilson 裁定：左右各是一張卡片）。
-  //   舊存檔／線上版本 skew 沒有這欄時，才退回舊的「同 cardId 在該 zone 的出現序 % 2」。
+  // ⭐ v6.093：左右已經是兩張不同的卡（不同 cardId）→ 直接由 cardId 判定，最權威。
+  const sideById = twoCardStadiumSide(target.cardId);
+  if (sideById !== null) return sideById;
+  // v6.090 舊局：實體卡上的持久 stadiumHalf（拆卡之前建立的對局）。
   const half = (target as { stadiumHalf?: 0 | 1 }).stadiumHalf;
   if (half === 0 || half === 1) return half;
   const pos = zone.filter(c => c.cardId === target.cardId).findIndex(c => c.iid === iid);
@@ -1105,13 +1139,27 @@ export function assignTwoCardStadiumHalves(
 export function findTwoCardStadiumPair<T extends { iid: string; cardId: string; stadiumHalf?: 0 | 1 }>(
   hand: T[], cardId: string,
 ): { left: T; right: T } | null {
+  // ⭐ v6.093：左右是兩張不同的卡 → 找手上有沒有「另一半那張卡」。
+  const partnerId = twoCardStadiumPartnerCardId(cardId);
+  if (partnerId) {
+    const self = hand.find(c => c.cardId === cardId);
+    const partner = hand.find(c => c.cardId === partnerId);
+    if (self && partner) {
+      return twoCardStadiumSide(cardId) === 0 ? { left: self, right: partner } : { left: partner, right: self };
+    }
+    // ⚠ 找不到另一半時**不要**直接 return null —— v6.093 拆卡之前建立、還在進行中的對局
+    //   手上是「同一個 cardId 兩張 ＋ stadiumHalf」，直接 return 會讓那些對局突然打不出來。
+    //   往下走 legacy 分支。
+  }
+  // v6.090 舊局（拆卡之前建立的對局）：同一個 cardId ＋ 實體卡上的 stadiumHalf。
   const same = hand.filter(c => c.cardId === cardId);
   if (same.length < 2) return null;
   const left = same.find(c => c.stadiumHalf === 0);
   const right = same.find(c => c.stadiumHalf === 1);
   if (left && right) return { left, right };
-  // fail-open：這副牌組完全沒有左右身分（舊局）→ 沿用舊行為取前兩張
-  if (same.every(c => c.stadiumHalf !== 0 && c.stadiumHalf !== 1)) {
+  // ⚠ 「同一個 cardId 兩張、且都沒有 stadiumHalf」只有在**這張卡不在 v6.093 的左右對照表裡**時
+  //   才 fail-open —— 否則新模型下「手上兩張都是左半(071)」會被誤判成可以打出。
+  if (!twoCardStadiumPartnerCardId(cardId) && same.every(c => c.stadiumHalf !== 0 && c.stadiumHalf !== 1)) {
     return { left: same[0], right: same[1] };
   }
   return null;

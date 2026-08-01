@@ -927,7 +927,7 @@ import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽�
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
-import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分
+import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡
 import { twoCardStadiumHalfIndex } from './effects/_shared'; // v6.086 手牌裁半（左/右）
 export { twoCardStadiumHalfIndex, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
@@ -3709,12 +3709,19 @@ function handlePlaying(
       //   ⚠ 兩張都要離手，否則第二張留在手牌 ＝ 憑空多一張（複製卡）。
       let stadiumPartner: CardInstance | undefined;
       if (isTwoCardStadiumName(trainerCard.name)) {
-        // v6.090：要配「另一半」。打出的是左半就找右半，反之亦然（Wilson 裁定：需一左一右）。
-        //   舊局（沒有 stadiumHalf）→ 沿用舊行為取同 cardId 的第一張。
+        // ⭐ v6.093：左右是兩張不同的卡 → 直接找「另一半那張卡」的 cardId。
+        //   v6.090 舊局（同 cardId + stadiumHalf）與更早的舊局各自 fallback。
+        const _partnerCardId = twoCardStadiumPartnerCardId(trainerInst.cardId);
         const myHalf = trainerInst.stadiumHalf;
-        const partnerIdx = (myHalf === 0 || myHalf === 1)
-          ? attacker.hand.findIndex(c => c.cardId === trainerInst.cardId && c.stadiumHalf === (1 - myHalf))
-          : attacker.hand.findIndex(c => c.cardId === trainerInst.cardId);
+        // ⚠ 新模型找不到另一半時要退回舊模型（拆卡前建立、還在進行中的對局），否則那些對局會卡住。
+        let partnerIdx = _partnerCardId
+          ? attacker.hand.findIndex(c => c.cardId === _partnerCardId)
+          : -1;
+        if (partnerIdx < 0) {
+          partnerIdx = (myHalf === 0 || myHalf === 1)
+            ? attacker.hand.findIndex(c => c.cardId === trainerInst.cardId && c.stadiumHalf === (1 - myHalf))
+            : attacker.hand.findIndex(c => c.cardId === trainerInst.cardId);
+        }
         if (partnerIdx >= 0) {
           stadiumPartner = attacker.hand[partnerIdx];
           attacker.hand = attacker.hand.filter((_, i) => i !== partnerIdx);

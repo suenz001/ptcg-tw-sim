@@ -14,7 +14,7 @@
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
-  import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, isTwoCardStadium } from '$lib/decks/validation';
+  import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
@@ -758,18 +758,21 @@
       }
       return;
     }
-    // v6.082「兩張合一」競技場（傳說的海溝／山頂／熔岩洞）：一套＝兩張實體卡 →
-    //   ＋ 一次加 2 張（Wilson 裁定）。剩餘容量不足 2 時不給加（單張湊不成一套）。
-    const step = isTwoCardStadium(card) ? 2 : 1;
-    if (step === 2 && remaining < 2) {
-      alert(`「${card.name}」是由兩張實體卡合成的場地，要成套加入（一次 2 張），目前剩餘容量不足。`);
+    // v6.093「兩張合一」競技場：左右是**兩張不同的卡**，但要成套才能用 →
+    //   按任何一半都是「左右各 +1」（一次佔 2 張容量）。容量不足 2 時不給加。
+    const partnerId = twoCardStadiumPartnerCardId(card.id);
+    if (partnerId && remaining < 2) {
+      alert(`「${card.name}」的左右兩張要成套加入（一次 2 張），目前剩餘容量不足。`);
       return;
     }
     const entries = [...active.entries];
-    const i = entries.findIndex((e) => e.cardId === card.id);
-    const currentCount = i >= 0 ? entries[i].count : 0;
-    if (i >= 0) entries[i] = { ...entries[i], count: currentCount + step };
-    else entries.push({ cardId: card.id, count: step });
+    const bump = (id: string, n: number) => {
+      const k = entries.findIndex((e) => e.cardId === id);
+      if (k >= 0) entries[k] = { ...entries[k], count: entries[k].count + n };
+      else entries.push({ cardId: id, count: n });
+    };
+    bump(card.id, 1);
+    if (partnerId) bump(partnerId, 1);
     const updated = { ...active, entries };
     decks = upsertDeck(updated);
     setDirty(updated.id);  // v5.114
@@ -777,10 +780,11 @@
 
   function removeCard(cardId: string) {
     if (!active || isPresetActive) return;
-    // v6.082：「兩張合一」競技場一次 −2（與 ＋ 對稱，避免留下單張湊不成套）
-    const stepDown = isTwoCardStadium(poolById.get(cardId)) ? 2 : 1;
+    // v6.093：「兩張合一」競技場左右各 −1（與 ＋ 對稱，避免留下半張湊不成套）
+    const partnerId = twoCardStadiumPartnerCardId(cardId);
+    const drop = new Set([cardId, ...(partnerId ? [partnerId] : [])]);
     const entries = active.entries
-      .map((e) => (e.cardId === cardId ? { ...e, count: e.count - stepDown } : e))
+      .map((e) => (drop.has(e.cardId) ? { ...e, count: e.count - 1 } : e))
       .filter((e) => e.count > 0);
     const updated = { ...active, entries };
     decks = upsertDeck(updated);

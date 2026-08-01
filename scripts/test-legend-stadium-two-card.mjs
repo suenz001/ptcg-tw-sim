@@ -35,8 +35,11 @@ let n=0; const inst=(cid,e={})=>({iid:`L${++n}`,cardId:String(cid),damage:0,ener
 let pass=0,fail=0; const chk=(t,c,extra='')=>{ if(c){pass++;} else {fail++;console.log('  ❌',t,extra);} };
 const logText=(l)=>String(l?.message ?? l?.text ?? l);
 
-const TRENCH = byName('傳說的海溝');
-const PEAK   = byName('傳說的山頂');
+// ⭐ v6.093：左右已經是兩張獨立的卡（官方 collectorNumber 本來就是兩個編號）
+const TRENCH  = byName('傳說的海溝', c => c.collectorNumber === '071/076');   // 左半
+const TRENCH_R= byName('傳說的海溝', c => c.collectorNumber === '072/076');   // 右半
+const PEAK    = byName('傳說的山頂', c => c.collectorNumber === '073/076');
+const PEAK_R  = byName('傳說的山頂', c => c.collectorNumber === '074/076');
 const NORMAL = [...pool.values()].find(c=>c.subtype==='Stadium' && !c.name.includes('傳說') && ['H','I','J'].includes(c.regulationMark));
 const KYOGRE = byName('蓋歐卡', c=>(c.attacks||[]).some(a=>a.name==='狂暴漩渦'));
 const GROUDON= byName('固拉多', c=>(c.attacks||[]).some(a=>a.name==='狂暴大地'));
@@ -68,13 +71,13 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
       r1.log.map(logText).slice(-1)[0]);
   chk('手牌只有 1 張 → 卡片沒消失', r1.players[0].hand.length===1);
 
-  const a=inst(TRENCH.id), b=inst(TRENCH.id);
+  const a=inst(TRENCH.id), b=inst(TRENCH_R.id);
   const st2=mk({ hand:[a,b] });
   chk('手牌有 2 張 → 在可打出清單', getPlayableTrainers(st2,pool).includes(a.iid));
   const before=totalCards(st2);
   const r2=applyAction(st2,{type:'PLAY_TRAINER',iid:a.iid,actorIdx:0},pool);
   chk('打出後 activeStadium 設定', r2.activeStadium?.cardId===String(TRENCH.id));
-  chk('打出後 activeStadiumPartner 設定', r2.activeStadiumPartner?.cardId===String(TRENCH.id),
+  chk('打出後 activeStadiumPartner 設定（另一半那張卡）', r2.activeStadiumPartner?.cardId===String(TRENCH_R.id),
       JSON.stringify(r2.activeStadiumPartner));
   chk('兩張都離開手牌', r2.players[0].hand.length===0, String(r2.players[0].hand.length));
   chk('⭐ 卡片守恆（總數不變）', totalCards(r2)===before, `${totalCards(r2)} vs ${before}`);
@@ -85,7 +88,7 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
     players:[{...r2.players[0], hand:[inst(NORMAL.id)]}, r2.players[1]]};
   const b4=totalCards(st3);
   const r3=applyAction(st3,{type:'PLAY_TRAINER',iid:st3.players[0].hand[0].iid,actorIdx:0},pool);
-  chk('被覆蓋 → 兩張都進棄牌（+2）', r3.players[0].discard.filter(c=>c.cardId===String(TRENCH.id)).length===2,
+  chk('被覆蓋 → 兩張都進棄牌（+2）', r3.players[0].discard.filter(c=>c.cardId===String(TRENCH.id)||c.cardId===String(TRENCH_R.id)).length===2,
       String(r3.players[0].discard.length));
   chk('被覆蓋 → partner 清空', r3.activeStadiumPartner===undefined);
   chk('⭐ 卡片守恆（覆蓋後）', totalCards(r3)===b4, `${totalCards(r3)} vs ${b4}`);
@@ -93,7 +96,7 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
 
 // ══ 3. 中央 discardActiveStadium（象牙豬摧毀型走這條）══
 {
-  const a=inst(TRENCH.id), b=inst(TRENCH.id);
+  const a=inst(TRENCH.id), b=inst(TRENCH_R.id);
   const st=mk({}, {}, { activeStadium:a, activeStadiumPartner:b, activeStadiumOwnerIdx:0 });
   const before=totalCards(st);
   const r=M.discardActiveStadium(st,0);
@@ -124,7 +127,7 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
   if (typeof pre==='function') {
     const noSt=mk();
     chk('狂暴大地：無傳說競技場 → 100', pre(noSt,0,pool,{}).damage===100, String(pre(noSt,0,pool,{}).damage));
-    const withSt=mk({},{},{ activeStadium:inst(PEAK.id), activeStadiumPartner:inst(PEAK.id), activeStadiumOwnerIdx:0 });
+    const withSt=mk({},{},{ activeStadium:inst(PEAK.id), activeStadiumPartner:inst(PEAK_R.id), activeStadiumOwnerIdx:0 });
     chk('狂暴大地：有傳說競技場 → 270', pre(withSt,0,pool,{}).damage===270, String(pre(withSt,0,pool,{}).damage));
     // ⭐ 對手打出的傳說競技場也算（卡面是「場上」不分擁有者）
     const oppSt={...withSt, activeStadiumOwnerIdx:1};
@@ -141,7 +144,7 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
     const r0=post(noSt,0,pool);
     chk('狂暴漩渦：無傳說競技場 → 備戰 0 傷害',
         r0.players[1].bench.every(b=>(b.damage??0)===0), JSON.stringify(r0.players[1].bench.map(b=>b.damage)));
-    const withSt=mkB({ activeStadium:inst(TRENCH.id), activeStadiumPartner:inst(TRENCH.id), activeStadiumOwnerIdx:0 });
+    const withSt=mkB({ activeStadium:inst(TRENCH.id), activeStadiumPartner:inst(TRENCH_R.id), activeStadiumOwnerIdx:0 });
     const r1=post(withSt,0,pool);
     chk('狂暴漩渦：有傳說競技場 → 對手備戰各 50',
         r1.players[1].bench.every(b=>(b.damage??0)===50), JSON.stringify(r1.players[1].bench.map(b=>b.damage)));
@@ -155,7 +158,7 @@ const totalCards=(s)=>s.players.reduce((a,p)=>a+p.hand.length+p.deck.length+p.di
     const deck=[inst(EID.Water),inst(EID.Water),inst(EID.Water)];
     // 引擎流程：卡已進棄牌區才跑效果
     const withSt=mk({ deck, discard:[self] }, {},
-      { activeStadium:inst(TRENCH.id), activeStadiumPartner:inst(TRENCH.id), activeStadiumOwnerIdx:0 });
+      { activeStadium:inst(TRENCH.id), activeStadiumPartner:inst(TRENCH_R.id), activeStadiumOwnerIdx:0 });
     const r=fn(withSt,0,pool,self);
     chk('小楓與小南：抽 2 張', r.players[0].hand.filter(c=>c.cardId!==String(TRAIN.id)).length===2,
         String(r.players[0].hand.length));

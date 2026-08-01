@@ -100,5 +100,38 @@ export function migrateCardId(cardId: string): string {
 /** v5.301: 統一 migrateDeck helper (storage.ts + cloud.ts 共用) — load deck 時自動 map jp→tw cardId */
 import type { Deck } from './types';
 export function migrateDeck(d: Deck): Deck {
-  return { ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) };
+  return splitTwoCardStadiumEntries({ ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) });
+}
+
+/**
+ * v6.093「傳說」競技場拆成左右兩張獨立卡片後的舊牌組自動轉換（Wilson 裁定：玩家無感）。
+ *
+ * 拆卡之前，牌組裡存的是**左半那個 cardId**（19621/19622/19623），一筆 N 張。
+ * 拆卡之後左右各是一張卡 → 把那 N 張攤成「左 ⌈N/2⌉ 張 ＋ 右 ⌊N/2⌋ 張」。
+ *   例：舊的 4 張 → 左 2 ＋ 右 2（＝2 套，與拆卡前完全等價）。
+ * ⚠ 奇數張（例如舊資料壞掉留下 3 張）→ 左 2 ＋ 右 1，牌組驗證會提示左右張數不等，
+ *   讓玩家自己修，**不要**在這裡靜默改成偶數（會無聲動到玩家的牌組）。
+ * ⚠ 冪等：已經有右半 entry 的牌組（＝已轉換過）原樣回傳，不會愈轉愈多。
+ */
+const TWO_CARD_STADIUM_SPLIT: Readonly<Record<string, string>> = {
+  '19621': '19624',   // 傳說的海溝   071/076 → 072/076
+  '19622': '19625',   // 傳說的山頂   073/076 → 074/076
+  '19623': '19626',   // 傳說的熔岩洞 075/076 → 076/076
+};
+export function splitTwoCardStadiumEntries(d: Deck): Deck {
+  const rightIds = new Set(Object.values(TWO_CARD_STADIUM_SPLIT));
+  const entries: Deck['entries'] = [];
+  for (const e of d.entries) {
+    const rightId = TWO_CARD_STADIUM_SPLIT[e.cardId];
+    // 已經含有對應右半 → 這副牌組轉換過了，原樣保留（冪等）
+    if (!rightId || d.entries.some(x => x.cardId === rightId) || rightIds.has(e.cardId) || e.count <= 0) {
+      entries.push(e);
+      continue;
+    }
+    const left = Math.ceil(e.count / 2);
+    const right = e.count - left;
+    entries.push({ ...e, count: left });
+    if (right > 0) entries.push({ ...e, cardId: rightId, count: right });
+  }
+  return { ...d, entries };
 }
