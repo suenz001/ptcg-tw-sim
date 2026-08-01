@@ -4205,6 +4205,19 @@ function handlePlaying(
       return state;
     }
 
+    // ⭐ v6.088：中央「持有者特性是否生效」述詞 —— **玩家主動使用特性**這條路徑原本完全沒接。
+    //   下面那幾條（監視塔／初始化／濕氣）是逐張硬編的歷史寫法，中央述詞涵蓋的其他消除來源
+    //   （M6 傳說的熔岩洞「雙方場上所有進化寶可夢的特性全部消除」、暗夜羽擊、黏著束縛、
+    //   監視之眼…）在這裡全部漏掉 → Wilson 實測「熔岩洞在場，多龍奇仍能用偵查指令」。
+    //   ⚠ 通則：新增「特性被消除」來源時只改 isAbilityHolderEffective；**消費點必須呼叫它**，
+    //     不要再往這裡加 if（既有硬編保留是為了它們各自的 log 文案，不是判斷來源）。
+    {
+      const _abLoc: 'active' | 'bench' = attacker.active?.iid === targetPoke.iid ? 'active' : 'bench';
+      if (pokeCard && !isAbilityHolderEffective(state, targetPoke, pokeCard, aIdx, ability.name, _abLoc, pool)) {
+        return addLog(state, `${pokeCard.name} 的特性「${ability.name}」目前被消除，無法使用`, aIdx);
+      }
+    }
+
     // 火箭隊的監視塔：場上此 Stadium 時，【無】屬寶可夢的特性全部消除
     if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
 
@@ -9258,6 +9271,9 @@ export function getUsableAbilities(
     card.abilities.forEach((ab, abIdx) => {
       // v3.01 Wave 3 — 暗夜羽擊（passive）/ 黏著束縛 特性消除：被消除的特性不列入清單
       if (isAbilityNullifiedByPassive(state, state.activePlayerIndex, pk, card, ab.name, pkLocation, pool)) return;
+      // ⭐ v6.088：與 USE_ABILITY handler 同一個中央述詞（涵蓋傳說的熔岩洞等所有消除來源）。
+      //   兩端必須同 commit —— 只改一端會變成「按鈕亮著但點了沒反應」或反過來。
+      if (!isAbilityHolderEffective(state, pk, card, state.activePlayerIndex as 0 | 1, ab.name, pkLocation, pool)) return;
       // 只列出在 ABILITY_EFFECTS 中有登錄的主動特性
       // v4.4995：用 helper（by-name 優先 fallback by-index）
       if (!hasAbilityFn(card.name, ab.name, abIdx)) return;

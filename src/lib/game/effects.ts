@@ -4866,6 +4866,11 @@ reg('仙后', (st, idx) => {
 // v3.999：改為 hand-discard picker，actorIdx=oppIdx 讓被作用的對手自己選要丟哪些
 //   原 v2 簡化實裝用 p.hand.slice(-discardN) 自動取最後 N 張，違反 Rule 7「嚴禁簡化實裝」+
 //   PTCG 規則：自己手牌要丟的卡永遠由持有手牌的玩家自己選擇（卡面：「對手將對手自己的手牌丟棄」）
+// v6.088 guard：卡面「對手將對手自己的手牌丟棄**直到變為3張為止**」→ 對手手牌 ≤3 張時
+//   打出完全沒有效果，卻會白白吃掉一張卡＋該回合的支援者權（與 v6.066「未實裝訓練家 fail-closed」
+//   同一個玩家保護原則；站內既有的「義務性前置檢查」慣例＝夜間擔架棄牌為空、寶可夢交替備戰為空…）。
+//   ⚠ 對手手牌張數是**公開資訊**（雙方都看得到張數），用它當 gate 不洩漏任何隱藏資訊。
+regG('庫瑟洛斯奇的企圖', (st, idx) => st.players[(1 - idx) as 0 | 1].hand.length > 3);
 reg('庫瑟洛斯奇的企圖', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
