@@ -3104,7 +3104,11 @@ function handlePlaying(
     // 火箭隊的監視塔：【無】屬寶可夢的特性全部消除，跳過此觸發
     const placeFn = BENCH_PLACE_TRIGGERS.get(card.name);
     // v5.524：鐵荊棘ex 初始化也消除「放到備戰即觸發」型特性（規則寶可夢，未來除外）
-    if (placeFn && !isColorlessAbilityBlocked(afterPlace, card, pool) && !isInitializeBlocking(afterPlace, placed, pool)) {
+    // v6.089：補接中央述詞 isAbilityHolderEffective —— 此處原本只手刻 監視塔／初始化 兩個來源，
+    //   其他「特性被消除」來源（暗夜羽擊、黏著束縛、傳說的熔岩洞…）完全看不到，屬與 v6.088 同型的漏接。
+    const _placeAbName = card.abilities?.[0]?.name;
+    const _placeEff = !_placeAbName || isAbilityHolderEffective(afterPlace, placed, card, aIdx, _placeAbName, 'bench', pool);
+    if (placeFn && _placeEff && !isColorlessAbilityBlocked(afterPlace, card, pool) && !isInitializeBlocking(afterPlace, placed, pool)) {
       afterPlace = placeFn(afterPlace, aIdx, pool);
     }
     // v5.866：險惡廢墟改走 applyAction 出口中央偵測(applyRuggedRuinsBenchPlace),此處不再呼叫
@@ -4331,6 +4335,15 @@ function handlePlaying(
     // gate: 該 ability 名稱本回合已用過 → 拒絕
     const usedNames = attacker.abilityNamesUsedThisTurn ?? [];
     if (usedNames.includes(triggeredAbilityName)) return state;
+
+    // v6.089：補接中央述詞 —— 超能妙喵／火神蛾都是 Stage1（進化寶可夢），
+    //   傳說的熔岩洞在場時它們的特性應被消除；此路徑原本完全沒 gate（與 v6.088 同型漏接）。
+    {
+      const _hdLoc: 'active' | 'bench' = attacker.active?.iid === triggerInst.iid ? 'active' : 'bench';
+      if (triggerCard && !isAbilityHolderEffective(state, triggerInst, triggerCard, aIdx, triggeredAbilityName, _hdLoc, pool)) {
+        return addLog(state, `${triggerCard.name} 的特性「${triggeredAbilityName}」目前被消除，無法使用`, aIdx);
+      }
+    }
 
     // gate: discardIid 在手牌
     const handIdx = attacker.hand.findIndex(c => c.iid === action.discardIid);

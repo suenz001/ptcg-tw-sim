@@ -163,6 +163,9 @@ reg('莉莉艾的決意', (st, idx) => {
 //   - UI 會以 validIids 限定「只有物品卡可點選」；非物品的手牌在 UI 下方
 //     揭露區塊（`<details>` 對手手牌其餘卡）裡僅供查看，不可選。
 //   - Resolver 把選取的 iids 從對手 hand 移到對手 discard。
+// v6.089：卡面「查看對手的手牌，從其中選擇最多2張物品卡丟棄」→ 對手手牌 0 張時
+//   連看都沒得看，打出完全沒效果。對手手牌張數是公開資訊（同瑪琪艾兒的既有守衛）。
+regG('枇琶', (st, idx) => st.players[(1 - idx) as 0 | 1].hand.length > 0);
 reg('枇琶', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const oppHand = st.players[dIdx].hand;
@@ -240,6 +243,10 @@ regR('loquat-discard-opp-items', (st, actorIdx, selectedIids, _params, pool) => 
 // ══════════════════════════════════════════════════════════════════════════════
 
 // 艾莉絲的鬥志 — 丟棄 1 張手牌，抽至 6 張
+// v6.089：卡面「這張卡必須將自己的1張手牌丟棄才可使用」＝印刷 cost。
+//   手牌只剩這張時 cost 付不出來 → 照卡娜莉／秘密箱的既有守衛形態 gate（含此卡需 ≥2 張）。
+//   ⚠ 只 gate cost，不 gate「手牌已≥6 抽 0 張」——抽牌類依站內慣例一律放行。
+regG('艾莉絲的鬥志', (st, idx) => st.players[idx].hand.length >= 2);
 reg('艾莉絲的鬥志', (st, idx) => {
   const hand = st.players[idx].hand;
   if (hand.length === 0) {

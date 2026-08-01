@@ -10,6 +10,7 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import {
   addLog,
   reg,
+  regG,
   regPost,
   regPre,
   updatePlayer,
@@ -38,6 +39,12 @@ function healAllOnField(state: GameState, amount: number): GameState {
   return { ...state, players: newPlayers };
 }
 
+// v6.089：卡面「將雙方的所有寶可夢各恢復50HP」→ 雙方全場皆滿血時恢復 0，完全沒效果。
+//   照傷藥等 20+ 張治療卡的既有守衛形態 gate（範圍含雙方）。
+regG('古歷', (st, idx) => {
+  const sides = [st.players[0], st.players[1]];
+  return sides.some(p => [...(p.active ? [p.active] : []), ...p.bench].some(c => c.damage > 0));
+});
 reg('古歷', (state, aIdx) => {
   const s = healAllOnField(state, 50);
   return addLog(s, '古歷：雙方所有寶可夢各恢復 50 HP', aIdx);

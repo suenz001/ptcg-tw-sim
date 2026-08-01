@@ -974,6 +974,9 @@ regR('full-shaker-discard', (state, aIdx, selectedIids, _params) => {
 });
 
 // AZ的平和（Supporter）— 戰鬥↔備戰互換，換入 ex 到備戰回 80 HP
+// v6.089：卡面「將自己的戰鬥寶可夢與備戰寶可夢互換」→ 備戰區為空時互換不可能，
+//   打出完全沒效果。照寶可夢交替／急進開關的既有守衛形態 gate。
+regG('AZ的平和', (st, idx) => !!st.players[idx].active && st.players[idx].bench.length > 0);
 reg('AZ的平和', (st, idx, pool) => {
   if (!st.players[idx].active || st.players[idx].bench.length === 0) {
     return addLog(st, 'AZ的平和：需要戰鬥位 + 備戰區寶可夢', idx);

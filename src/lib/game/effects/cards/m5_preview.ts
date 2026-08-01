@@ -1355,6 +1355,17 @@ reg('暗黑鈴', (st, idx, pool) => {
 //   卡面：「從對手場上 1 隻寶可夢身上選擇 1 個能量，丟棄。」
 //   gate（rulesText）：「這張卡只有在上個對手回合自己的寶可夢【昏厥】時才能使用。」
 //   v5.228：原 JSON 誤譯「未昏厥」+ deferred 不做 gate，本次更正並實裝 gate。
+// v6.089：卡面「必須在上個對手的回合自己的寶可夢【昏厥】了才可使用」＝印刷使用條件；
+//   且效果為「丟棄對手場上寶可夢的能量」→ 對手全場無能量時打出完全沒效果。
+//   兩者皆為公開資訊，照八朔／不公印章／火箭隊的阿波羅的既有守衛形態 gate。
+regG('鏽蝕組手下', (st, idx, pool) => {
+  const attackKO = st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0;
+  const abilityKO = st.oppAbilityKOdMeInLastOppTurn?.[idx] ?? 0;
+  if ((attackKO + abilityKO) <= 0) return false;
+  const opp = st.players[(1 - idx) as 0 | 1];
+  const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
+  return all.some(pk => (pk.energyAttached?.length ?? 0) > 0);
+});
 reg('鏽蝕組手下', (st, idx, pool) => {
   // v5.228 gate — 上個對手回合自己無寶可夢 KO → 不能用
   const attackKOd = (st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0) > 0;
