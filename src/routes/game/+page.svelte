@@ -25,6 +25,7 @@
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
     getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
+    twoCardStadiumHalfIndex,      // v6.086 兩張合一競技場手牌裁半
   } from '$lib/game/engine';
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
@@ -8815,7 +8816,13 @@
               onpointerdown={(e)=>e.stopPropagation()}
               onclick={(e)=>e.stopPropagation()}
               title="長按查看 {c.name}">🔍</button>
-            <img src={c.imageUrl} alt={c.name}/>
+            <!-- v6.086「兩張合一」競技場：官方只給一張合併橫圖（≈兩張直卡並排），
+                 手牌依 Wilson 裁定顯示成**兩張直立的卡** → 同一張圖裁左半／右半（零新圖片資源）。
+                 ⚠ 這裡不能用 {@const}（Svelte 5 限定它只能是 #if/#each 等的直接子節點），
+                   直接寫成 class: 的表達式；手牌張數很少，重複呼叫成本可忽略。 -->
+            <img src={c.imageUrl} alt={c.name}
+              class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0}
+              class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>
             <span class="hand-name">{c.name}</span>
             <!-- v3.07 Deferred Wave D — 手牌觸發特性按鈕 -->
             {#if handDiscardAbilityTriggers.has(inst.iid)}
@@ -15204,4 +15211,9 @@
     .playmat.layout-fable .log-toggle-btn{ display:none; }
   }
 
+
+  /* v6.086「兩張合一」競技場手牌裁半 —— 官方只有一張合併橫圖（767×536 ≈ 兩張直卡並排），
+     容器本來就是直卡比例，用 cover + object-position 取左半／右半即可，不需要新圖片。 */
+  .hand-card img.legend-half-l { object-fit: cover; object-position: 0% 50%; }
+  .hand-card img.legend-half-r { object-fit: cover; object-position: 100% 50%; }
 </style>

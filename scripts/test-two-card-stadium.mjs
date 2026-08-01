@@ -10,7 +10,7 @@ const S=join(ROOT,'.tcs-s.js'),E=join(ROOT,'.tcs-e.ts'),O=join(ROOT,'.tcs-o.mjs'
 process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p)}catch{}}});
 writeFileSync(S,'export const base="";');
 writeFileSync(E,"export { validateDeck, isTwoCardStadium, TWO_CARD_STADIUM_NAMES } from './src/lib/decks/validation';\n"
-              +"export { LEGEND_STADIUM_NAMES } from './src/lib/game/effects/_shared';");
+              +"export { LEGEND_STADIUM_NAMES, twoCardStadiumHalfIndex } from './src/lib/game/effects/_shared';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',
   alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
 const M = await import(pathToFileURL(O).href);
@@ -90,6 +90,22 @@ for (const n of ['傳說的海溝','傳說的山頂','傳說的熔岩洞']) {
         ids.size === 1, `ids=${[...ids].join(',')}`);
   }
   chk('三張兩張合一競技場都在 DB 內', idsByName.size === 3, String(idsByName.size));
+}
+
+// ⭐ v6.086 手牌裁半（左半／右半）判定 —— 桌機／手機兩端共用這一份
+{
+  const half = M.twoCardStadiumHalfIndex ?? (() => null);   // HEAD-FAIL 安全
+  const trench = byName('傳說的海溝');
+  const normal = [...byId.values()].find(c=>c.subtype==='Stadium' && !TWO_CARD.has(c.name));
+  const mk=(cid,iid)=>({iid,cardId:String(cid)});
+  const hand=[mk(trench.id,'a'), mk(normal.id,'n1'), mk(trench.id,'b'), mk(trench.id,'c'), mk(trench.id,'d')];
+  chk('裁半：第 1 張傳說競技場 → 左半(0)', half(hand,'a',byId)===0, String(half(hand,'a',byId)));
+  chk('裁半：第 2 張 → 右半(1)', half(hand,'b',byId)===1, String(half(hand,'b',byId)));
+  chk('裁半：第 3 張（第二套）→ 左半(0)', half(hand,'c',byId)===0, String(half(hand,'c',byId)));
+  chk('裁半：第 4 張 → 右半(1)', half(hand,'d',byId)===1, String(half(hand,'d',byId)));
+  chk('否定對照：普通競技場 → null（整張顯示）', half(hand,'n1',byId)===null, String(half(hand,'n1',byId)));
+  chk('否定對照：找不到 iid → null', half(hand,'zzz',byId)===null);
+  chk('否定對照：zone/pool 缺 → null（fail-safe）', half(undefined,'a',byId)===null && half(hand,'a',undefined)===null);
 }
 
 console.log(`test-two-card-stadium: ${pass} passed, ${fail} failed`);

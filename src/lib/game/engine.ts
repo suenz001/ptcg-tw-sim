@@ -923,6 +923,8 @@ import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, has
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium } from './effects/_shared'; // v6.084 兩張合一競技場
+import { twoCardStadiumHalfIndex } from './effects/_shared'; // v6.086 手牌裁半（左/右）
+export { twoCardStadiumHalfIndex, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
 // v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
 import { isTrainerPendingImplementation } from './effects';

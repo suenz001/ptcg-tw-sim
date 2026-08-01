@@ -42,7 +42,8 @@
     canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit,
     getEffectiveHP,
     canBeInitialActiveCard,
-    getHandActivatableAbilities  // v6.080 手牌特性中央 gate
+    getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
+    twoCardStadiumHalfIndex       // v6.086 兩張合一競技場手牌裁半
   } from '$lib/game/engine';
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
@@ -1154,8 +1155,11 @@
           handAbilityActivatableIids.has(inst.iid)
         )}
         {@const isPlayableTrainer = playableTrainerIids.has(inst.iid) && !!c && (c.supertype === 'Trainer')}
+        <!-- v6.086「兩張合一」競技場：手牌顯示成兩張直立的卡（同一張合併橫圖裁左半／右半） -->
+        {@const _half = twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool)}
         <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>
-          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}/>{/if}
+          {#if c?.imageUrl}<img src={c.imageUrl} alt={c.name}
+            class:legend-half-l={_half === 0} class:legend-half-r={_half === 1}/>{/if}
           {#if isPlayableTrainer && isMyTurn}
             <div class="mp-card-hint">{c?.subtype === 'Stadium' ? '🏟' : c?.subtype === 'Supporter' ? '👤' : '🎴'}</div>
           {/if}
@@ -2171,4 +2175,8 @@
     color: #e8d0ff;
     border: 1px solid #6a4aaa;
   }
+
+  /* v6.086「兩張合一」競技場手牌裁半（官方只給一張合併橫圖，容器是直卡比例） */
+  .mp-hand-card img.legend-half-l { object-fit: cover; object-position: 0% 50%; }
+  .mp-hand-card img.legend-half-r { object-fit: cover; object-position: 100% 50%; }
 </style>

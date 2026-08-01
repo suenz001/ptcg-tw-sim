@@ -1046,6 +1046,31 @@ export function isTwoCardStadiumName(name: string | undefined | null): boolean {
  * ⚠ engine 的兩個消費點（PLAY_TRAINER handler、getPlayableTrainers）**必須同 commit** 都改，
  *   本專案多次事故：只改一端 → 卡片列得出來但點了無效／或反過來。
  */
+/**
+ * v6.086「兩張合一」競技場的**手牌顯示**用：這張 instance 該畫左半還是右半的卡圖。
+ *
+ * 官方三張傳說競技場只提供**一張合併橫圖**（767×536 ≈ 兩張直卡並排，Wilson 已確認三張皆同）。
+ * Wilson 裁定：**手牌裡就跟其他卡一樣是兩張直立的卡**，合併橫圖只是「放到場地區之後」的樣子。
+ * → 手牌用 CSS 把同一張橫圖裁左半／右半，兩張各顯示一半 = 零新圖片資源。
+ *
+ * 回傳 0（左半）/ 1（右半）/ null（不是兩張合一卡 → 照原樣整張顯示）。
+ * ⚠ 依「同 cardId 在該區的出現序」決定左右，不寫進 CardInstance —— 純顯示邏輯，
+ *   不動資料層就不會經過序列化／回放／toBareCard 等泛用路徑（v6.000 教訓）。
+ * ⚠ 桌機／手機／回放三處手牌渲染共用這一份，避免三端各寫一套又漂移。
+ */
+export function twoCardStadiumHalfIndex(
+  zone: { iid: string; cardId: string }[] | undefined,
+  iid: string,
+  pool: Map<string, Card> | undefined,
+): 0 | 1 | null {
+  if (!zone || !pool) return null;
+  const target = zone.find(c => c.iid === iid);
+  if (!target) return null;
+  if (!isTwoCardStadiumName(pool.get(target.cardId)?.name)) return null;
+  const pos = zone.filter(c => c.cardId === target.cardId).findIndex(c => c.iid === iid);
+  return pos < 0 ? null : ((pos % 2) as 0 | 1);
+}
+
 export function canPlayTwoCardStadium(
   hand: { cardId: string }[],
   cardId: string,
