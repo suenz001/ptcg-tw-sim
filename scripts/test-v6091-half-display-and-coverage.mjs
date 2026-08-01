@@ -82,6 +82,16 @@ const ok = (c, l) => { if (c) pass++; else { fail++; console.log('  FAIL:', l); 
   ok(/\.deck-cell-img\.legend-half-r \{ object-position: 100% 50%; \}/.test(page), 'A8 牌庫檢視右半 object-position');
   ok(/\.mulligan-reveal-card img\.legend-half-r \{ object-position: 100% 50%; \}/.test(page), 'A8 開局展示右半 object-position');
 
+  // ══ v6.096（Fable 5 審 v6.095 指出的漏點）══
+  ok((page.match(/class:legend-half-l=\{twoCardStadiumHalfIndex\((?:opp|my)Player\?\.prizes/g) || []).length === 2,
+    '⭐ A9 獎賞卡翻正面（雙方各一處）有裁半 —— 回放會把 6 張全翻正面，最容易撞到');
+  ok(/\.prize-face-img\.legend-half-r \{ object-position: 100% 50%; \}/.test(page), 'A9 獎賞卡右半 object-position');
+  ok(/class:legend-half-l=\{twoCardStadiumSide\(act\.cardId\) === 0\}/.test(page), '⭐ A9 對手回合面板有裁半');
+  ok(/\.opp-turn-card-img\.legend-half-l[^{]*\{[^}]*aspect-ratio/.test(page),
+    '⭐ A9 .opp-turn-card-img 只有 width 沒有 height → 切半 CSS 必須自帶 aspect-ratio（v6.087 教訓）');
+  ok(/entry\.half === 0 \|\| entry\.half === 1 \? entry\.name : entry\.count/.test(page),
+    'A9 牌庫檢視半張格的 title 不顯示「1×」');
+
   // 負對照：守衛確實在檢查字串（可失敗）
   ok(!/class:legend-half-l=\{twoCardStadiumHalfIndex\(selectionItemsXX/.test(page), 'A 負對照：守衛比對的是真實字串');
 }

@@ -8307,7 +8307,9 @@
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
+            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+              class:legend-half-l={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
+              class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
         {/key}
         <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
@@ -8514,7 +8516,9 @@
         <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}/>{/if}</div>{/each}
+            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+              class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
+              class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}
         </div>
       </div>
@@ -9145,7 +9149,7 @@
             <div class="full-deck-note">※ 對照你的原牌組，不在清單中的 6 張通常是獎賞卡（或已在手牌/場上/棄牌）</div>
             <div class="full-deck-list">
               {#each deckGrouped as entry}{@const _dc=getCard(entry.cardId)}
-                <button class="deck-cell" title="{entry.count}× {entry.name} — 點擊放大"
+                <button class="deck-cell" title="{entry.half === 0 || entry.half === 1 ? entry.name : entry.count + '× ' + entry.name} — 點擊放大"
                   onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>
                   {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"
                     class:legend-half-l={entry.half === 0} class:legend-half-r={entry.half === 1}/>
@@ -10211,6 +10215,8 @@
                   title={(_c?.name ?? '?') + (act.extra ? ' / ' + act.extra : '') + (act.type === 'discard' ? '（被丟棄）' : '')}>
                   {#if _c?.imageUrl}
                     <img class="opp-turn-card-img" src={_c.imageUrl} alt={_c?.name ?? '?'}
+                      class:legend-half-l={twoCardStadiumSide(act.cardId) === 0}
+                      class:legend-half-r={twoCardStadiumSide(act.cardId) === 1}
                       onclick={() => openZoom(act.cardId, null)} />
                   {:else}
                     <div class="opp-turn-card-placeholder">?</div>
@@ -12759,6 +12765,11 @@
   .prize-card{ width:32px; height:45px; background:linear-gradient(135deg,#1e4a8a,#2a6ab0); border:1px solid #4a8ac0; border-radius:4px; }
   .prize-card.prize-faceup{ overflow:hidden; border-color:#ffd23f; box-shadow:0 0 4px #ffd23f; background:#111; }
   .prize-face-img{ width:100%; height:100%; object-fit:cover; border-radius:3px; display:block; }
+  /* v6.096「傳說」兩張合一競技場：獎賞卡翻正面也裁半。
+     ⭐ 回放（isTReplay）會把 6 張獎賞全部翻正面 → 只要牌組帶傳說、有半張進獎賞就會看到。
+     .prize-card 是 32×45 固定框 + 本來就 cover → 只需 object-position（不需 aspect-ratio）。 */
+  .prize-face-img.legend-half-l { object-position: 0% 50%; }
+  .prize-face-img.legend-half-r { object-position: 100% 50%; }
   .prize-card.my-prize{ background:linear-gradient(135deg,#2a6a1a,#3a8a2a); border-color:#5aaa4a; }
   .prize-card.prize-gone{ background:transparent; border-color:#2a3a2a; opacity:.25; animation:none !important; }
   /* 獎賞卡放置動畫：從上方 fly-in + rotate + scale，by animation-delay 錯開 */
@@ -13676,6 +13687,12 @@
     transform:translate(-50%, -100%);
     filter:drop-shadow(0 10px 26px rgba(0,0,0,.85)); }
   .hand-preview-float img{ width:340px; border-radius:10px; border:2px solid rgba(255,212,74,.6); }
+  /* v6.096「傳說」兩張合一競技場：對手回合面板也裁半。
+     ⚠ .opp-turn-card-img 只設了 width/max-width（沒有 height）→ **必須自己補 aspect-ratio**，
+     否則 object-fit:cover 永遠不會裁（v6.087 的教訓）。868/1212 = 官方直式卡圖比例。 */
+  .opp-turn-card-img.legend-half-l, .opp-turn-card-img.legend-half-r { aspect-ratio: 868 / 1212; height:auto; object-fit:cover; }
+  .opp-turn-card-img.legend-half-l { object-position: 0% 50%; }
+  .opp-turn-card-img.legend-half-r { object-position: 100% 50%; }
   .hand-name{ font-size:.68rem; color:#bbb; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
   .hand-hint{ font-size:.65rem; color:#bbb; }
   .hand-hint.hl{ color:#ffd44a; font-weight:600; }

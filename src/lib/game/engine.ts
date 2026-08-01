@@ -928,8 +928,11 @@ import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, has
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId, splitTwoCardStadiumDeckEntries } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡 / v6.094 建局入口 fail-safe
-import { twoCardStadiumHalfIndex } from './effects/_shared'; // v6.086 手牌裁半（左/右）
-export { twoCardStadiumHalfIndex, isTwoCardStadiumName };
+import { twoCardStadiumHalfIndex, twoCardStadiumSide } from './effects/_shared'; // v6.086 手牌裁半（左/右）／v6.095 依 cardId 判左右
+// ⚠ v6.096：UI（`routes/game/+page.svelte`）是從這裡拿這幾個 helper 的 —— 新增 import 一定要同步加進這行 export，
+//   否則 vite build 會直接紅（"X is not exported by engine.ts"），而**完整 npm test 抓不到**
+//   （測試鏈只跑 .ts 與字串比對，不做 .svelte 的 named-import 解析）。v6.095 就是這樣掛掉的。
+export { twoCardStadiumHalfIndex, twoCardStadiumSide, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
 // v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
 import { isTrainerPendingImplementation } from './effects';
