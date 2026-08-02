@@ -8058,26 +8058,10 @@
   <!-- ── Play Mat ── -->
   
 <!-- v5.225 對手 3 分鐘無動作警告 banner —— fixed 在頂部 -->
-{#if oppInactivityWarn && (game?.phase === 'playing' || game?.phase === 'setup') && (mySeatIdx === 0 || mySeatIdx === 1)}
-  <div class="opp-inactive-banner">
-    <span class="opp-inactive-text">⚠️ 對手長時間無回應</span>
-    <button class="opp-inactive-btn" onclick={onClickClaimForfeit}>宣告對手棄權獲勝</button>
-  </div>
-{/if}
+
 
 <!-- v5.225 確認 modal —— 點按鈕後二次確認 -->
-{#if showForfeitConfirm}
-  <div class="forfeit-modal-backdrop" onclick={() => showForfeitConfirm = false} role="presentation">
-    <div class="forfeit-modal" onclick={(e) => e.stopPropagation()} role="dialog">
-      <h3 class="forfeit-title">確定宣告對手棄權？</h3>
-      <p class="forfeit-desc">對手已 3 分鐘無回應。確認後系統會立刻判定你獲勝，無法撤回。</p>
-      <div class="forfeit-actions">
-        <button class="forfeit-confirm" onclick={confirmClaimForfeit}>確定獲勝</button>
-        <button class="forfeit-cancel" onclick={() => showForfeitConfirm = false}>再等等</button>
-      </div>
-    </div>
-  </div>
-{/if}
+
 
 {#if isTReplay && tReplay}
   {@const _steps = tReplaySteps()}
@@ -8822,6 +8806,30 @@
     </div>
   </div>
   {/if}<!-- /isPortraitMobile && playing -->
+
+<!-- ⭐ v6.107：「對手長時間無回應 → 宣告棄權」banner 與確認視窗原本寫在上面那個
+     {#if isPortraitMobile}…{:else}…{/if} 的**桌機分支內**，手機直式版完全看不到 ——
+     計時邏輯照跑、oppInactivityWarn 照樣變 true，但沒有任何 UI 消費它
+     （與 v6.098「黃框會亮但按鈕不存在」同型）。移到區塊外，兩種版面共用同一份。
+     ⚠ 不要再把它搬回任何一個版面分支裡。 -->
+{#if oppInactivityWarn && (game?.phase === 'playing' || game?.phase === 'setup') && (mySeatIdx === 0 || mySeatIdx === 1)}
+  <div class="opp-inactive-banner">
+    <span class="opp-inactive-text">⚠️ 對手長時間無回應</span>
+    <button class="opp-inactive-btn" onclick={onClickClaimForfeit}>宣告對手棄權獲勝</button>
+  </div>
+{/if}
+{#if showForfeitConfirm}
+  <div class="forfeit-modal-backdrop" onclick={() => showForfeitConfirm = false} role="presentation">
+    <div class="forfeit-modal" onclick={(e) => e.stopPropagation()} role="dialog">
+      <h3 class="forfeit-title">確定宣告對手棄權？</h3>
+      <p class="forfeit-desc">對手已超過 {fmtMMSS(Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)))} 無回應。確認後系統會立刻判定你獲勝，無法撤回。</p>
+      <div class="forfeit-actions">
+        <button class="forfeit-confirm" onclick={confirmClaimForfeit}>確定獲勝</button>
+        <button class="forfeit-cancel" onclick={() => showForfeitConfirm = false}>再等等</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
   <!-- PendingSelection — 只對 actor 玩家顯示（避免對手看到或搶先操作）
        v2.196 修：mode='local' 嚴格 check，不接受 null。線上模式剛 join 時 mode 還未確定

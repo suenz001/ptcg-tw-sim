@@ -9,6 +9,93 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.107 — 休閒線上「閒置自動判負」（玩家回報：掛機十分鐘沒結果）
+
+**玩家回報**：一般（休閒）對戰「遇到很多那種掛機的人，右上角時間過了大概十分鐘都沒有什麼結果
+就這樣給它掛著。不是有限定閒置時間直接判敗嗎？」Wilson 指名由 Fable 5 找根因（此問題反覆發生、
+多次修過沒根治）。
+
+### 三個各自獨立、都足以單獨致死的斷點（Fable 找出，我逐一查證屬實）
+1. **休閒原本只有「手動宣告」制**，沒有伺服器自動判負；錦標賽才有（`server_admin_patch.js` 的賽事迴圈）。
+   玩家把錦標賽的功能誤以為全站通用。他說的「右上角時間」其實是**對戰經過時間**計時器（v4.24），
+   閒置倒數 UI 第一行就是 `if (!isTournament …) return null` —— 休閒根本沒有倒數。
+2. **宣告按鈕只渲染在桌機版面**：banner 與確認視窗都寫在
+   `+page.svelte` 的 `{#if isPortraitMobile}…{:else}…{/if}` 的桌機那一半，
+   `MobilePortraitBattle.svelte` 搜「棄權/forfeit/inactiv」**零命中**。
+   計時邏輯照跑、`oppInactivityWarn` 照樣變 true，但**沒有任何 UI 消費它** ——
+   ⭐ 與 v6.098「黃框會亮但按鈕不存在」完全同型。
+3. **房間會被伺服器整個刪掉**（最致命，也是「修了很多次還是沒用」的結構性原因）：
+   - `startZombieRoomCleanup`：`status='playing'` 且 5 分鐘沒寫入 → `deleteMany` 整房。
+   - `+page.svelte:5583`：**對戰中不送心跳**（v2.83 為避免與 pushGameState race）。
+     那段註解假設「playing 房一定有人在 push」—— 但「對手掛機、我在等」時**雙方都零寫入**。
+   - 時間線（預設 3 分鐘）：T0 對手最後動作 → T0+3min banner 出現 → **T0+5~7min 房被刪** →
+     `claimOpponentForfeit` 讀不到房 → throw → 回 false → 前端把 false 一律顯示成
+     「**對手其實已經行動了，現在輪到你！**」。沒有人被判勝負，掛機者零代價。
+   - 房主還能把門檻設到 5 分鐘 ＝ banner 出現的瞬間房剛好被刪。
+
+### Wilson 的裁定（AskUserQuestion）
+- 處置方式：**伺服器自動判負**（不是只修手動按鈕）
+- 門檻：**沿用房主設定**（60~300 秒，預設 180）
+
+### 修法
+**伺服器端**（`oracle-admin/server_admin_patch.js` v1.03）
+- 新增 `startCasualIdleForfeit()`，放在**錦標賽 IIFE 內**——那裡才拿得到 `currentActorSeat` 與 `db`。
+- ⭐ **中央收斂：判「現在該誰動作」直接複用錦標賽的 `currentActorSeat`**。那個函式已被
+  v0.60/v0.62/v0.67/v0.74/v6.053 **五次事故**淬鍊過，正確處理 setup／mulligan 不對稱／
+  互動式開局（閃焰王牌）各子階段。休閒的舊判定（前端 `_waitingOnOpp`）從未跟上這些修正 ——
+  **這就是「開局掛機完全無解」的真正原因**（Fable 用真 engine 重現了 3 種盤面）。
+  ⚠ 絕對不要在休閒端另寫一份判定，那是新一輪漂移的起點。
+- 每 30 秒掃一次；門檻＝`idleTimeoutSec`（clamp 60~300）＋15 秒緩衝；
+  `actor` 為 -1（雙方都欠動作）或 null（判不出）→ **不判**；
+  判負只把房寫成 `game-over` + `status:'ended'`（**不刪房**，玩家看得到結果）。
+- **樂觀鎖**：`updateOne({ _id, updatedAt: room.updatedAt, status:'playing' })` ——
+  這一輪讀到之後對方若剛好動作了，更新不會命中，下一輪用新的 updatedAt 重算，不會誤判邊緣行動者。
+- `PLAYING_STALE_MS` 5 分鐘 → **20 分鐘**：讓判負先收場，刪房只負責清「連判都判不出來」的真殭屍。
+
+**前端**：banner + 確認視窗整段移出版面分支 ⇒ 手機／桌機共用同一份（H-1）。
+
+### 守衛 `scripts/test-v6107-casual-idle-forfeit.mjs`（16 項，HEAD 7 FAIL）
+- ① 從 patch 抽出**真的** `currentActorSeat` 跑 setup 各子階段（A 重抽不對稱／B 欠揭示確認／
+  B2 欠補抽／C 互動式開局／D 雙方都欠→-1／E 對戰中／F game-over→null）。
+- ② 靜態斷言休閒判負**必須呼叫 `currentActorSeat`**、有 -1/null 保護、寫 ended 不刪房、讀 idleTimeoutSec。
+  ⚠ 錨點要用 `(function startCasualIdleForfeit()` —— 用名字 indexOf 會抓到別處註解裡的提及 → 假 FAIL。
+- ③ `PLAYING_STALE_MS` 必須 > 判負門檻上限。
+- ④ banner/modal 不得回到版面分支內（含正對照）。
+
+### ⭐⭐ Fable 5 審查抓到的致命點：休閒房版本欄位是 `_version` 不是 `version`
+我第一版寫 `version: (room.version||1)+1`（那是**錦標賽 TROOMS** 的欄位名），`names` 同樣是錦標賽欄位。
+休閒房用 `_version`（`oracle-client.ts` 的 `oraclePollRoom` **只在 `room._version !== lastVersion` 才回呼**，
+且 server 對 `?since=_version` 相同時直接回 204 無 body）。後果三連：
+① 勝方在正常輪詢路徑上**永遠收不到判負**（只能靠 v5.360 那個 8 秒卡住自癒 resubscribe 僥倖搭便車）；
+② 敗方分頁完全收不到，畫面停在 playing；
+③ 掛機者醒來時用**舊 `_version`** 當 expectedVersion 的 PUT 會把 game-over + ended **整包蓋回 playing**
+（我的 `updatedAt` 樂觀鎖只保護 sweep 不蓋別人，保護不了別人不蓋 sweep）。
+⭐ **通則：跨子系統複用程式碼時，欄位名契約要逐一查證** —— 我把判負函式放進錦標賽 IIFE 以複用
+`currentActorSeat`（正確決定），卻連帶把錦標賽的**資料欄位名**也一起抄了進來。
+⭐⭐ **16 項守衛當時全綠** —— 綠燈完全沒有反映「玩家看不看得到」。已補兩項：
+釘 `_version` bump ＋ 樂觀鎖比對 ＋ 禁 `version:`/`room.names`；另加**正對照**斷言
+`oracle-client.ts` 確實只認 `_version` 變化（那個契約若改了，判負送達會再次靜默失效）。
+
+### 其他順手項（Fable 指出）
+- `[zombie-cleanup]` 啟動 log 文案還印「playing>5min」→ 改 v0.4「playing>20min」，否則部署後看 log 會被誤導。
+- 錦標賽 IIFE 的 catch 訊息寫「正常對戰/admin 不受影響」——休閒判負現在住在裡面，這句已不成立 → 補上警語。
+- 判負啟動時 console.log 一行，部署後可用 log 確認它活著。
+- 確認 modal 硬寫「對手已 **3 分鐘**無回應」與可調門檻不符 → 改讀 `idleTimeoutSec`。
+
+### 已知小窗（不修，記錄）
+- 練習模式 undoRequest／restart／return-to-room 提案 pending 時，**提案者本身是 actor**，
+  對手不回應會判提案者敗。舊的手動宣告制同樣存在此窗（等回應的 actor 也按不了宣告鈕），發生率低。
+- actor=-1/null 的真殭屍房（雙方都掉線）會在大廳「進行中」多掛 15 分鐘。
+
+### ⚠⚠ 測試站無法驗證這個功能
+`deploy.yml` **沒有設 `VITE_BACKEND_MODE`** ⇒ GitHub Pages 測試站的休閒房走 **Firestore**，
+VM 的 sweep 摸不到（測試站也因此沒有殭屍刪房問題）。**只有正式站（Oracle 模式）會生效。**
+回報的玩家若在測試站，這版對他無效 —— 下次要先確認玩家在哪一站。
+
+### ⚠ 部署
+伺服器端改動**必須跑 `update-tournament.bat`**（＋ `update-admin-full.bat`）才生效，
+否則正式站的休閒房仍是舊行為（沒有自動判負、5 分鐘刪房）。
+
 ## v6.106 — 首頁更新記錄再精簡（Wilson 交辦）＋ 建立本內部檔
 
 **Wilson 原話**：「首頁的 changelog 還是寫得太長了，請讓內容簡單明瞭，只要讓玩家知道他們需要知道的

@@ -2797,7 +2797,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
 (function startZombieRoomCleanup() {
   const ZOMBIE_INTERVAL_MS = 2 * 60 * 1000;             // v0.3: 每 2 分鐘掃（從 5 → 2）
   const LOBBY_STALE_MS = 5 * 60 * 1000;                 // v0.3: lobby 5 分鐘無動作（從 10 → 5）
-  const PLAYING_STALE_MS = 5 * 60 * 1000;               // playing 5 分鐘無動作（不改）
+  // ⭐ v1.03：5 分鐘 → 20 分鐘。原本 playing 房 5 分鐘沒寫入就整個刪掉，但「對手掛機、我在等」
+  //   的場景雙方都零寫入（對戰中不送心跳），於是房間在閒置判負門檻（最長 5 分鐘）之後很快被
+  //   蒸發 —— 玩家按宣告鈕只會拿到「對手其實已經行動了」，沒有人被判勝負。
+  //   現在由 startCasualIdleForfeit 先把它判成 game-over + ended（玩家看得到結果），
+  //   這裡只負責清「連判都判不出來」的真殭屍（actor=-1/null，例如雙方都掉線）。
+  const PLAYING_STALE_MS = 20 * 60 * 1000;              // playing 20 分鐘無動作才刪（v1.03 從 5 分鐘拉長）
   const ENDED_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;  // ended 房保留 90 天（不改）
 
   async function sweepZombies() {
@@ -2848,7 +2853,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     sweepZombies();
     setInterval(sweepZombies, ZOMBIE_INTERVAL_MS);
   }, 15 * 1000);
-  console.log('[zombie-cleanup] v0.3 已啟動：lobby>5min / playing>5min / ended>90天 自動清，每 2 分鐘掃一次');
+  console.log('[zombie-cleanup] v0.4 已啟動：lobby>5min / playing>20min / ended>90天 自動清，每 2 分鐘掃一次');
 })();
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -2987,6 +2992,88 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (gs.players && gs.players[1] && gs.players[1].active === null) return 1;
       return (gs.activePlayerIndex === 0 || gs.activePlayerIndex === 1) ? gs.activePlayerIndex : null;
     }
+    // ════════════════════════════════════════════════════════════════════════
+    // v1.03 ⭐ 休閒線上對戰「閒置自動判負」（Wilson 裁定：改成伺服器自動判，門檻沿用房主設定）
+    // ════════════════════════════════════════════════════════════════════════
+    // 玩家回報：一般（休閒）對戰遇到掛機的人，掛十分鐘都沒有任何結果。
+    //
+    // 為什麼會這樣（三個獨立斷點，任一個都足以致死）：
+    //   ① 休閒原本只有「手動宣告」制：等待方要自己按「宣告對手棄權獲勝」。
+    //   ② 那個按鈕**只渲染在桌機版面**，手機直式版完全沒有（同版一併補上）。
+    //   ③ 對戰中 client 不送心跳（v2.83 為避免與 pushGameState race），而「對手掛機、我在等」
+    //      時雙方都零寫入 ⇒ 房間的 updatedAt 不再更新 ⇒ **startZombieRoomCleanup 在 5 分鐘後
+    //      把整個房間刪掉**。房沒了之後按宣告鈕只會拿到「對手其實已經行動了」的錯誤訊息，
+    //      沒有人被判勝負、掛機者零代價。這就是「掛十分鐘沒結果」的完整解釋。
+    //
+    // ⭐ 中央收斂：判「現在該誰動作」**直接複用錦標賽的 currentActorSeat**（同一個 scope）。
+    //    那個函式已被 v0.60/v0.62/v0.67/v0.74/v6.053 五次事故淬鍊過，正確處理
+    //    setup／mulligan 不對稱／互動式開局（閃焰王牌）各子階段 —— 休閒過去的判定
+    //    （前端 _waitingOnOpp）從未跟上這些修正，正是「開局掛機完全無解」的原因。
+    //    ⚠ 絕對不要在這裡另寫一份判定，那就是新一輪漂移的開始。
+    //
+    // 安全設計：
+    //   ・actor 為 -1（雙方都該動作）或 null（判不出來）→ **不判**，留給殭屍清掃。
+    //   ・只把房間寫成 game-over + status:'ended'（**不刪房**），雙方都能看到結果畫面。
+    //   ・門檻＝房主設定的 idleTimeoutSec（60~300，預設 180），與畫面上那行說明一致。
+    //   ・多加 15 秒緩衝，避免和前端「剛好在門檻邊緣送出動作」打架。
+    (function startCasualIdleForfeit() {
+      const TICK_MS = 30 * 1000;          // 每 30 秒掃一次（門檻最短 60 秒，取樣要夠密）
+      const GRACE_MS = 15 * 1000;         // 門檻外的緩衝
+      let running = false;                // 重入鎖：DB 慢查詢時不讓兩個 tick 重疊
+      async function sweepCasualIdle() {
+        if (running) return;
+        if (typeof db === 'undefined' || !db) return;
+        running = true;
+        try {
+          const now = Date.now();
+          // 只看對戰中、且至少已經超過最短門檻（60s）的房，避免每 tick 撈全部
+          const rooms = await db.collection('rooms').find(
+            { status: 'playing', updatedAt: { $lt: now - 60000 } },
+            { projection: { _id: 1, gameState: 1, _version: 1, updatedAt: 1, idleTimeoutSec: 1 } }
+          ).limit(200).toArray();
+          for (const room of rooms) {
+            const gs = room && room.gameState;
+            if (!gs || gs.phase === 'game-over') continue;
+            const sec = Math.min(300, Math.max(60, Number(room.idleTimeoutSec) || 180));
+            if (now <= (room.updatedAt || 0) + sec * 1000 + GRACE_MS) continue;
+            const actor = currentActorSeat(gs);
+            // -1（雙方都欠動作）/ null（判不出）→ 不判任何一方
+            if (actor !== 0 && actor !== 1) continue;
+            const winSeat = (1 - actor);
+            const nameOf = (i) => (gs.players && gs.players[i] && gs.players[i].name) || ('P' + (i + 1));
+            const loserName = nameOf(actor), winnerName = nameOf(winSeat);
+            const mins = Math.round(sec / 60 * 10) / 10;
+            const reason = loserName + ' 閒置逾 ' + mins + ' 分鐘無動作，' + winnerName + ' 獲勝';
+            const og = JSON.parse(JSON.stringify(gs));
+            og.phase = 'game-over';
+            og.winner = winSeat;
+            og.winReason = reason;
+            og.log = (Array.isArray(og.log) ? og.log : []).concat([
+              { turn: og.turn, playerIndex: null, message: '⏰ ' + reason },
+            ]);
+            // ⚠⚠ 休閒房的版本欄位是 **_version**（不是 version，那是錦標賽 TROOMS 的欄位名）。
+            //   client 的輪詢只在 `room._version !== lastVersion` 才回呼（oracle-client.ts），
+            //   而且 server 對 ?since=_version 相同時直接回 204 無 body。
+            //   ⇒ 沒 bump _version 的話：判負寫進 DB 了，但**兩邊玩家都看不到結果**，
+            //     而且掛機者醒來時用舊 _version 當 expectedVersion 的 PUT 還會把 game-over 整包蓋回 playing。
+            // ⚠ 樂觀鎖同時比對 updatedAt + _version：這一輪讀到之後對方若剛好動作了，更新不會命中，
+            //   下一輪 tick 用新值重算 —— 不會誤判剛好在邊緣行動的人。
+            await db.collection('rooms').updateOne(
+              { _id: room._id, updatedAt: room.updatedAt, _version: room._version, status: 'playing' },
+              { $set: { gameState: og, status: 'ended', _version: (room._version || 0) + 1, updatedAt: now } }
+            );
+            console.log('[casual-idle] ' + room._id + ' → ' + reason);
+          }
+        } catch (err) {
+          console.warn('[casual-idle] sweep error:', (err && err.message) || err);
+        } finally {
+          running = false;
+        }
+      }
+      console.log('[casual-idle] v1.0 已啟動：休閒房閒置逾房主設定（60~300 秒）自動判負，每 30 秒掃一次');
+      setTimeout(() => { sweepCasualIdle(); setInterval(sweepCasualIdle, TICK_MS); }, 20 * 1000);
+    })();
+
     // 強制 senderIdx/playerIdx = 自己 seat，防偽造替對手操作
     function normalizeAction(action, seat) {
       const a = Object.assign({}, action);
@@ -5021,7 +5108,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }, 30000);
     console.log('[tournament] endpoints registered: join/state/action/reset + event/register/unregister + chat + bracket/seed/match-enter + admin event/chat');
   } catch (_te) {
-    console.warn('[tournament] init failed → 錦標賽停用（正常對戰/admin 不受影響）:', _te && _te.message);
+    console.warn('[tournament] init failed → 錦標賽停用；⚠ 休閒閒置自動判負也住在這個區塊內，會一併停用（其餘正常對戰/admin 不受影響）:', _te && _te.message);
   }
 })();
 
