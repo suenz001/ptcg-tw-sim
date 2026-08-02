@@ -2746,7 +2746,7 @@
     return true; // 本機雙人模式
   });
 
-  const selectionItems = $derived.by(() => {
+  const selectionItemsRaw = $derived.by(() => {
     if (!pendingSelection || !game) return [] as CardInstance[];
     const src = game.players[pendingSelection.sourcePlayerIdx];
     switch (pendingSelection.type) {
@@ -3411,6 +3411,38 @@
       default: return [] as CardInstance[];
     }
   });
+  // ⚠ v6.108：四個消費此清單的 {#each} 都是 keyed (item.iid)。keyed each 遇到重複 key 會
+  //   **直接 throw、整個對戰頁白屏**（v5.606 已被咬過一次）。正常盤面 iid 唯一（引擎出口有
+  //   normalizeNonFieldStacks ＋ 守恆測試），這個 dedupe 純屬保險：萬一版本 skew 或引擎瞬時
+  //   產生重複 iid，寧可少顯示一張也不要整頁崩掉。
+  const selectionItems = $derived.by(() => dedupeByIid(selectionItemsRaw));
+
+  // ⭐ v6.108 防呆：把「已選了哪幾張」轉成玩家看得懂的卡名。
+  //   玩家 DCG_Bear 回報「我要拿的是祭典會場，結果變成捕蟲組合」——引擎與送出路徑逐項查證都正確
+  //   （全程綁 iid、iid 無碰撞、錦標賽 client 不跑本地 applyAction），最可能是單選 picker 的
+  //   「點第二張會靜默換掉選取」(v2.86) 加上「確認前完全不顯示選了什麼」造成的誤選。
+  //   ⚠ 這是**唯一來源**：提示列與確認鈕都讀它，不要各自再拼一份字串（會漂移）。
+  const selectedCardNames = $derived.by(() => {
+    if (!pendingSelection) return [] as string[];
+    // ⭐⭐ 公平性（Fable 5 審 v6.108 抓到）：concealed = 卡面「在**不看正面**的情況下選擇」
+    //   （功夫鼬／滑滑小子｜拍落、太陽伊布ex｜精神出局／咬棄、貓貓｜占為己有）。
+    //   那些 picker 的卡面本來就顯示卡背 + ???，若這裡把真名寫出來，玩家可以逐張 toggle
+    //   讀提示列，**把對手整副手牌掃一遍**再決定丟哪張 —— 等於把防呆做成作弊工具。
+    if (pendingSelection.params?.concealed === true) return [] as string[];
+    return selectionItems.filter(it => selectionPicked.has(it.iid))
+      .map(it => getCard(it.cardId)?.name ?? '?');
+  });
+  /** 已選卡名的顯示字串；超過 3 張只顯示張數（避免確認鈕爆版）。空字串＝不顯示。 */
+  const selectedNamesLabel = $derived(
+    selectedCardNames.length === 0 || selectedCardNames.length > 3
+      ? '' : selectedCardNames.map(n => '《' + n + '》').join('、')
+  );
+
+  // ⚠ v6.108：四個消費此清單的 {#each} 都改成 keyed (item.iid) 了。keyed each 遇到重複 key 會
+  //   **直接 throw、整個對戰頁白屏**（v5.606 已被咬過一次）。正常盤面 iid 唯一（引擎出口有
+  //   normalizeNonFieldStacks + 守恆測試），這裡的 dedupe 只是保險：萬一版本 skew 或引擎瞬時
+  //   產生重複 iid，寧可少顯示一張也不要整頁崩掉。
+
 
   // 赤松（akamatsu-split）：選 2 張能量時必須是不同屬性；只選 1 張或 0 張永遠合法
   // 注意：基本能量卡的 `pokemonType` 欄位在卡表資料中常為空（undefined），
@@ -8893,7 +8925,7 @@
             <p class="sel-hint">
               選 {pendingSelection.minCount===pendingSelection.maxCount?`${pendingSelection.minCount}`:`${pendingSelection.minCount}～${pendingSelection.maxCount}`} 張
               {#if pendingSelection.filter&&pendingSelection.filter!=='TOP6'&&!pendingSelection.filter.startsWith('Supporter')}（{describeFilter(pendingSelection.filter)}）{/if}
-              · 已選 {selectionPicked.size}
+              · 已選 {selectionPicked.size}{#if selectedNamesLabel}：<b class="sel-picked-names">{selectedNamesLabel}</b>{/if}
               {#if isPokePicker}· 點放大鏡 🔍 查看詳情{/if}
             </p>
             <!-- v5.147：撤退能量 picker 加能量需求進度顯示 (Wilson 要求 X/Y 格式) -->
@@ -8915,7 +8947,7 @@
           {@const srcActiveIid = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
           {@const isOppPicker = pendingSelection.type==='opp-poke-choose' || pendingSelection.type==='opp-bench-choose'}
           <div class="retreat-grid">
-            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+            {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
               {#if c}
                 {@const eff=hpTotal(item)}
                 {@const rem=hpRemaining(item)}
@@ -8946,7 +8978,7 @@
           {@const srcActiveIidD = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
           {@const batchFull = selectionBatchSum >= pendingSelection.maxCount}
           <div class="retreat-grid">
-            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+            {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
               {#if c}
                 {@const eff=hpTotal(item)}
                 {@const rem=hpRemaining(item)}
@@ -8988,7 +9020,7 @@
           {@const srcActiveIidE = game?.players[pendingSelection.sourcePlayerIdx].active?.iid ?? null}
           {@const batchFullE = selectionBatchSum >= pendingSelection.maxCount}
           <div class="retreat-grid">
-            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+            {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
               {#if c}
                 {@const eff=hpTotal(item)}
                 {@const rem=hpRemaining(item)}
@@ -9042,7 +9074,7 @@
           })()}
           {@const concealed = pendingSelection.params?.concealed === true}
           <div class="sel-grid" class:sel-grid-energy={isEnergyPicker}>
-            {#each selectionItems as item}{@const c=getCard(item.cardId)}
+            {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
               {#if c}
                 {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item)}
                 <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed} class:bd-disabled={_bdDisabled}>
@@ -9382,7 +9414,8 @@
             <!-- v5.384：reorder-deck-top 用 selectionReorderKeep，同樣不能用 selectionPicked.size -->
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（保留 {selectionReorderKeep.length} 張）</button>
           {:else}
-            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（{selectionPicked.size}張）</button>
+            <!-- v6.108：確認鈕直接寫出要拿／要處理的是哪幾張，讓誤選在按下去之前就看得見 -->
+            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>{selectedNamesLabel ? '確定 ' + selectedNamesLabel : '確定（' + selectionPicked.size + '張）'}</button>
             {#if selectionAllowsSkip({ type: pendingSelection.type, actorIdx: pendingSelection.actorIdx, sourcePlayerIdx: pendingSelection.sourcePlayerIdx, effectKey: pendingSelection.effectKey, minCount: pendingSelection.minCount })}
               <button class="btn-act secondary" onclick={abandonSelection}>{pendingSelection.effectKey === 'attach-tool' ? '取消（道具退回手牌）' : pendingSelection.effectKey === 'sakura-crescendo-attach' ? '不附能量（直接造成傷害）' : '不選（跳過）'}</button>
             {/if}
@@ -13819,6 +13852,8 @@
     padding-right: 4px;
   }
 
+  /* v6.108：提示列裡的「已選卡名」— 要一眼看得到，這是防誤選的主要視覺錨點 */
+  .sel-picked-names { color: #ffd54a; font-weight: 700; }
   /* deck-search / generic selection：放大鏡 + 挑選按鈕的 wrapper */
   .sel-card-wrap{ position:relative; display:flex; flex-direction:column; }
   .sel-card-wrap.sel-picked .sel-card{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }

@@ -9,6 +9,80 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.108 — 選卡防呆：確認前先寫出「你選的是哪張」（DCG_Bear 回報選錯卡）
+
+**玩家回報**：DCG_Bear 在錦標賽 `evt_msb1nw9i_r1_m14`（2026-08-02 00:10 UTC 開賽）說
+「第 11 步我要拿的是**祭典會場**，結果卻變成**捕蟲組合**」。
+
+### 我查證的客觀事實（回放 API，不是推測）
+T5 log 序列：寶可平板（deck-search #1，resolver 內含 shuffle）→ 進化 → **衝衝鼓**
+（deck-search #2，`filter:'Any'` 整副牌庫）→「搜到 1 張卡加入手牌」（私下 log 不顯示卡名）
+→ 玩家隨即打出捕蟲組合、開 7 張卻**一張都沒選**。
+盤面 diff：**捕蟲組合 牌庫 1→0**、**祭典會場 牌庫 2→2（動都沒動）**、棄牌捕蟲組合 1→2。
+⇒ 玩家說的沒錯，他確實拿到了捕蟲組合。
+
+### 但引擎與送出路徑逐項查證都正確（列出來，下次別重查）
+- 全程綁 **iid**：`toggleSelection(iid)` → `selectionPicked:Set<string>` → `confirmSelection`
+  送 `[...selectionPicked]` → server `TENG.applyAction` 用**自己的盤面** → `sanitizeSelectedIids`
+  （deck-search 只做 zone 成員／去重／validIids 交集／maxCount 夾取，不換卡）→ resolver
+  `search-generic-to-hand-private` 的 `deck.filter(c => iids.includes(c.iid))`。**無一處用 index。**
+- **iid 零碰撞**：掃 11 個快照、雙方 hand/deck/discard/prizes/active/bench，無重複。
+- **錦標賽 client 完全不跑本地 `applyAction`**（`+page.svelte` 的 `dispatch` 對 isTournament
+  直接 return），client 不會自己 shuffle ⇒ 玩家看到的順序＝伺服器順序，不存在錯位窗口。
+- **不是 v6.101 的 `retryImg`**：那個 action 是比賽後 2.5 小時（02:40 UTC）才上線的。
+- `pool` 是 `$state` 且整包替換；`getCard` 無快取；`getCard` 回 undefined 時是**整格不渲染**
+  （`{#if c}`），不會「用別張的圖配這張的 iid」。
+- 手機直式版**沒有第二份 picker**（`MobilePortraitBattle` 明文把 modal 交給 `+page.svelte`）。
+⇒ 找不到任何「顯示 A、實得 B」的成立路徑。**沒有為了交差發明 bug。**
+
+### 最可能的成因（Wilson 裁定做防呆，不動引擎）
+單選 picker 的 **v2.86「maxCount===1 時點另一張會靜默換掉選取」** ＋ 整副牌庫 17 張小卡圖
+亂序平鋪 ＋ **確認前全程不顯示所選卡名**（提示列只寫「已選 1」、按鈕只寫「確定（1張）」）
+＋ 衝衝鼓是**私下**搜尋（log 不寫卡名，第一個發現點是手牌）。
+
+### 本版做的（Wilson 選「顯示卡名＋加穩定 key」，不加二次確認）
+1. **中央 `selectedCardNames` / `selectedNamesLabel`**（單一來源）。⚠ 提示列與確認鈕**兩個
+   消費點各接一次**——記憶教訓 v6.088/6.098：中央述詞寫好 ≠ 消費點有接，且要拆「判定端」
+   與「動作端」各問一次。守衛就是照這個拆的。
+2. 提示列：`已選 1：《祭典會場》`；確定鈕：`確定 《祭典會場》`（>3 張時退回顯示張數，避免爆版）。
+3. **四處 `{#each selectionItems as item}` 補 `(item.iid)` key**。本案雖非根因，但 v6.101 已
+   證實非 keyed 節點重用會咬人（action 內部狀態殘留），一次消滅這一族群。
+4. 守衛 `test-v6108-selection-name-confirm.mjs`（8 項，HEAD 6 FAIL）：key 全覆蓋（含正對照）、
+   卡名只能用 iid 比對、兩個消費點各一條、禁退回舊寫法、**卡名不得流進 addLog/dispatch**
+   （避免防呆反而洩漏對手看不到的私下搜尋內容）。
+
+### ⭐⭐ Fable 5 審查抓到的兩個回歸（我查證屬實，已修）
+1. **concealed picker 會洩漏對手蓋牌的卡名 —— 公平性 bug，比原本要修的問題還嚴重。**
+   `params.concealed:true` 的效果（功夫鼬／滑滑小子｜拍落、太陽伊布ex｜精神出局／咬棄、
+   貓貓｜占為己有）卡面是「**在不看正面的情況下**選擇」，UI 顯示卡背 + `???`。
+   我的新提示列會把 `getCard(cardId).name` 印出來 ⇒ 玩家可**逐張 toggle 讀卡名，
+   把對手整副手牌掃一遍**再決定丟哪張，等於把防呆做成作弊工具。
+   修：`selectedCardNames` 開頭 `if (params?.concealed === true) return []`。
+   ⚠ 原本守衛的「不得流進 addLog/dispatch」那條**抓不到這個洩漏**（假綠），已單獨釘一條 + 正對照。
+   ⭐ 通則：**任何「把內部資料顯示給玩家看」的新 UI，都要先問一次「這個 picker 的卡面
+   有沒有說玩家不該看到」** —— 顯示層的洩漏和 log 洩漏是兩個不同的維度。
+   （公平性修正，依鐵律不寫首頁 changelog。）
+2. **keyed each 撞到重複 key 會 throw、整個對戰頁白屏**（prod 也會，v5.606 已被咬過一次）。
+   正常盤面 iid 唯一，但版本 skew／引擎瞬時異常都可能造成。已在 `selectionItems` 出口套
+   既有的 `dedupeByIid`（單點護住四個 each），fail 模式從「白屏」降回「少顯示一張」。
+   ⚠ 順帶：`selectionItems` 拆成 `selectionItemsRaw`(原邏輯) + `selectionItems`(dedupe 出口)，
+   並把 `selectedCardNames` 移到宣告之後 —— `$derived` 雖然惰性不會踩 TDZ，但別留這種地雷。
+
+### 附帶收益
+keyed each 讓 DOM 節點身分跟著 iid 走 ⇒ `use:retryImg` 那類「action 內部狀態殘留在被重用的
+節點上」的錯位（v6.101）在這四個清單裡從根本上不會再發生。
+
+### Fable 確認不需要改的（省得下次再想）
+- 確定鈕的動詞是中性的「確定」，動作語意由 `selectionTitle` 承擔（v3.62 起已中性化），
+  在「丟棄／放回牌庫／移除能量」型 picker 讀起來仍正確。
+- 觀戰／回放看不到這個 modal（`myPlayerIndex === null` 三個分支全 false，v2.196 的隱私 gate）。
+- `selectionPicked` 全部寫入點都是 `= new Set(...)` 整包替換（零筆 `.add/.delete/.clear`），
+  `$derived` 一定會重跑 ⇒ 卡名會即時更新。
+
+### 下次遇到同型回報的查法（省時間）
+`GET /api/tournament/replay?matchId=<id>` → 比對**該回合前後的牌庫組成 diff**，
+比讀 log 快也準（私下搜尋的 log 本來就不寫卡名）。
+
 ## v6.107 — 休閒線上「閒置自動判負」（玩家回報：掛機十分鐘沒結果）
 
 **玩家回報**：一般（休閒）對戰「遇到很多那種掛機的人，右上角時間過了大概十分鐘都沒有什麼結果
