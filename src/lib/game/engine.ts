@@ -4731,12 +4731,18 @@ function handlePlaying(
         }
       }
 
-      // v2.219 — 後攻方最初回合限定招式（吼叫尾ex｜絕叫 等）
+      // v2.219 — 後攻方最初回合限定招式（吼叫尾ex｜絕叫、甜甜螢｜慢芬香）
       // 卡面：「這個招式只可在後攻玩家的最初回合使用。」
-      // 條件：state.isFirstTurn && aIdx 是後攻方（!= firstPlayerIdx）
+      // ⭐ v6.103 修死招：原本判 `state.isFirstTurn && isSecondPlayer`，這個組合**永遠不成立** ——
+      //   `isFirstTurn` 的語意是「**先攻方**的第 1 個回合」，END_TURN finalize 無條件寫
+      //   `isFirstTurn: false`，所以輪到後攻方時它早就是 false ⇒ 這兩張卡的招式在真實對局
+      //   （UI 反白 + 引擎攔截）**完全打不出來**。
+      //   正解用 turn：`newTurn` 只在**後攻方**結束回合時 +1（見 END_TURN 的 v?.? 註解），
+      //   故「turn === 1 且行動者是後攻方」＝ 後攻玩家的最初回合。與 items_misc.ts v4.940
+      //   幫忙鈴／悠哉尾草棒 的修法（改用 st.turn）同一慣例。
       if (attackName && SECOND_PLAYER_FIRST_TURN_ONLY.has(attackName)) {
         const isSecondPlayer = aIdx !== state.firstPlayerIdx;
-        if (!state.isFirstTurn || !isSecondPlayer) {
+        if (state.turn !== 1 || !isSecondPlayer) {
           return addLog(state,
             `${atkName}：「${attackName}」只能在後攻方最初回合使用`,
             aIdx);
@@ -8746,10 +8752,12 @@ export function getAvailableAttacks(
     .map(({ atk }, i) => {
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
-      // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫）— UI 層反白
+      // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫、甜甜螢｜慢芬香）— UI 層反白
+      // ⭐ v6.103：判準與引擎端一起從 isFirstTurn 改為 turn === 1（原寫法永遠 false，見上方詳解）。
+      //   兩端**必須同步改**，否則會出現「按鈕亮著但送出被擋」或反之。
       if (SECOND_PLAYER_FIRST_TURN_ONLY.has(atk.name)) {
         const isSecondPlayer = state.activePlayerIndex !== state.firstPlayerIdx;
-        if (!state.isFirstTurn || !isSecondPlayer) return -1;
+        if (state.turn !== 1 || !isSecondPlayer) return -1;
       }
       // v5.010：bench-fill 類招式（如「呼朋引伴」放基礎寶可夢到備戰）— 備戰滿時禁用
       //   原本只在 regPost 內做檢查（attack 已 fire、log「備戰區已滿」），

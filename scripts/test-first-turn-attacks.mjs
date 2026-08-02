@@ -46,6 +46,10 @@ test('甜甜螢|慢芬香：非最初回合應被擋(後攻最初回合限定)',
   const n=applyAction(st,{type:'ATTACK',attackIndex:atkIdx(CID.illumise,'慢芬香')},pool);
   assert.notEqual(n.pendingSelection?.type,'opp-bench-choose','慢芬香非最初回合應被擋(不開彈回 pending)');
 });
+// ⚠⚠ v6.103 註記：本案例手工塞 { isFirstTurn:true, activePlayerIndex:1 } —— **真實 END_TURN
+//   產生不出這種盤面**（finalize 無條件寫 isFirstTurn:false），所以它一路綠燈卻沒抓到
+//   engine 那兩處死招。走真實流程的版本在 scripts/test-v6103-second-player-first-turn.mjs，
+//   **那份才是本機制的權威守衛**；這裡保留作為判準的單元級對照。
 test('甜甜螢|慢芬香：後攻方最初回合可用', ()=>{
   const s=createGame({name:'P1',entries:[{cardId:CID.def,count:1}]},{name:'P2',entries:[{cardId:CID.def,count:1}]},pool);
   const st={...s,phase:'playing',turnPhase:'main',activePlayerIndex:1,firstPlayerIdx:0,isFirstTurn:true,turn:1,setupDone:[true,true],pendingMulliganDraw:[0,0],pendingPrizes:[0,0],
