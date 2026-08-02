@@ -61,5 +61,33 @@ T('⑦ 每一則都有標題（<b>…</b>），不會出現空白條目', () => 
   const bad = blocks.filter(b => !/<b>[^<]/.test(b.slice(0, 400)) && b.includes('ver-badge'));
   assert.strictEqual(bad.length, 0, bad.length + ' 則沒有標題');
 });
+// ⭐ v6.106（Wilson：「再簡化，只要讓玩家知道他們需要知道的事情就好」）
+//   首頁每一則改成「一句話＋必要提醒」（約 40~80 字），來龍去脈／伺服器／程式細節
+//   一律只寫進 docs/changelog-internal.md —— 內部檔不打包進網站、玩家看不到、
+//   也不佔進站載入量。**新增條目時請照這個規格寫，別再寫成長篇說明。**
+const entriesTxt = [...cl.matchAll(/<summary>([\s\S]*?)<\/summary>/g)]
+  .map((m) => m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+T('⑧ 每一則 ≤ 150 字（防再度膨脹成長篇說明）', () => {
+  const lens = entriesTxt.map((t) => t.length);
+  const worst = Math.max(...lens);
+  assert.ok(worst <= 150,
+    `最長 ${worst} 字：「${entriesTxt[lens.indexOf(worst)].slice(0, 60)}…」—— 細節請寫進 docs/changelog-internal.md`);
+});
+T('⑨ 全部合計 ≤ 5000 字（v6.106 精簡後約 3700）', () => {
+  const total = entriesTxt.reduce((a, t) => a + t.length, 0);
+  assert.ok(total <= 5000, `目前合計 ${total} 字`);
+});
+T('⑩ 內部詳細版 docs/changelog-internal.md 存在', () => {
+  assert.ok(existsSync(join(ROOT, 'docs/changelog-internal.md')),
+    '細部紀錄要寫在這裡（玩家看不到），首頁只留精簡版');
+});
+T('⑪ 內部詳細版確實比首頁詳細（不是複製一份精簡版過去）', () => {
+  const md = readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8');
+  // ⚠ 比**純文字**長度：首頁是 HTML，標籤本身就佔一堆字元，直接比檔案大小會失真。
+  const plainTotal = entriesTxt.reduce((a, t) => a + t.length, 0);
+  assert.ok(md.length > plainTotal * 2,
+    `內部 ${md.length} vs 首頁純文字 ${plainTotal} —— 細節沒有真的寫進內部檔`);
+  assert.ok(md.includes('不是給玩家看的'), '內部檔開頭要寫明用途，免得日後被誤當成公開文件');
+});
 console.log(`\n=== v6.100 changelog 精簡與封存: ${pass} PASS, ${fail} FAIL ===`);
 process.exit(fail ? 1 : 0);
