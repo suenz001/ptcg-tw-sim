@@ -3323,8 +3323,8 @@ reg('賽吉', (st, idx, pool) => {
   }
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    // v2.993：卡面寫「選 1 張」mandatory；牌庫無可進化卡時允許 Pass
-    filter: 'Evolution', minCount: validIids.length > 0 ? 1 : 0, maxCount: 1,
+    // ⭐ v6.104（Wilson 裁定）：牌庫搜尋一律 minCount 0（同火箭隊的超級球，理由見該處註解）。
+    filter: 'Evolution', minCount: 0, maxCount: 1,
     effectKey: 'sage-evolve',
     params: { validIids },
   });

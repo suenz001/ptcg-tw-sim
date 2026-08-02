@@ -59,8 +59,12 @@ reg('火箭隊的超級球', (st, idx, pool) => {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Pokemon',
-    // v2.993：卡面寫「選 1 張」mandatory；候選 0 張時允許 Pass
-    minCount: validIids.length > 0 ? 1 : 0, maxCount: 1,
+    // ⭐ v6.104（Wilson 裁定）：牌庫搜尋一律 minCount 0 —— 玩家有權「找不到」。
+    //   牌庫是隱藏資訊，若必選與否隨牌庫內容改變，對手可從「你有沒有被強迫選」
+    //   反推你牌庫還有沒有那類卡；官方 fail-to-find 也允許宣告找不到（站規 v2.321）。
+    //   舊註解「v2.993 卡面寫選 1 張 mandatory」早於 v4.942 的統一裁定，是當年按
+    //   `hasX ? 1 : 0` 字面 grep 修 13 處時漏掉的等價拼法。
+    minCount: 0, maxCount: 1,
     effectKey: 'rocket-superball-pick',
     params: { validIids },
   });

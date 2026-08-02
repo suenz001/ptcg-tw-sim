@@ -107,7 +107,11 @@ echo ""
 # 豁免判準：命中行附近（±12 行，即同一個 withPending 區塊內）出現 TOP_N 或 topIids
 #   ＝ 已經把候選限縮到「玩家看過的那 N 張」→ 放行。
 echo "── Rule 14: 搜尋整副牌庫的 minCount 必須永遠 0（看頂 N 張的已知資訊型除外）"
-raw=$(grep -rnE 'minCount:\s*has\w+\s*\?\s*1\s*:\s*0' src/lib/game/ 2>/dev/null || true)
+# ⭐ v6.104：主 grep 從只認 `hasX ? 1 : 0` 擴到**等價拼法** `xxx.length > 0 ? 1 : 0`
+#   —— 當年 v4.942 按字面修 13 處，等價拼法整批倖存（火箭隊的超級球／賽吉，已於本版改為 0）。
+#   同時排除 G 標卡檔（v29xx_g4_*）：站規只維護 H/I/J，G 標一律不處理，掃了只會製造永久噪音。
+raw=$(grep -rnE 'minCount:\s*(has\w+|\w+\.length\s*>\s*0)\s*\?\s*1\s*:\s*0' src/lib/game/ 2>/dev/null \
+      | grep -vE '/v[0-9]+_g[0-9]+_' || true)
 matches=""
 if [ -n "$raw" ]; then
   while IFS= read -r line; do
@@ -118,7 +122,8 @@ if [ -n "$raw" ]; then
     lo=$(( n > 12 ? n - 12 : 1 )); hi=$(( n + 12 ))
     ctx=$(sed -n "${lo},${hi}p" "$f" 2>/dev/null || true)
     # 已知資訊型（看過的固定 N 張）→ 豁免
-    if echo "$ctx" | grep -qE 'TOP_N|topIids'; then
+    # 豁免 token 要涵蓋各種「看頂 N 張」的寫法：filter 'TOP_N' / 'TOP4'、params topIids / top4Iids
+    if echo "$ctx" | grep -qE 'TOP_?[0-9]|TOP_N|top[0-9]*Iids'; then
       continue
     fi
     matches="${matches}${line}"$'\n'
