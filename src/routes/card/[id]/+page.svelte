@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { retryImg } from '$lib/img-retry';
   import { ENERGY_LABEL } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
   import type { PageData } from './$types';
@@ -57,7 +58,7 @@
   <h1>{h1}</h1>
 
   <div class="body">
-    <img class="img" src={card.imageUrl} alt={card.name} loading="lazy" width="367" height="512" />
+    <img use:retryImg={card.imageUrl} class="img" src={card.imageUrl} alt={card.name} loading="lazy" width="367" height="512" />
     <table class="info">
       <tbody>
         <tr><th>類別</th><td>{SUPERTYPE_ZH[card.supertype] ?? card.supertype}{card.subtype && card.subtype !== 'None' ? '／' + card.subtype : ''}</td></tr>

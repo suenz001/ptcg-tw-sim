@@ -98,6 +98,33 @@
 {@render children()}
 
 <style>
+  /*
+   * v6.101：卡圖載入失敗「重試中」的全站佔位樣式。
+   * 由 $lib/img-retry.ts 的 use:retryImg 在圖片載入失敗期間掛上 data-img-retrying，
+   * 載入成功時自動移除。放在 layout 的 :global 是為了讓對戰／牌組／卡片各頁共用同一份外觀。
+   * ⚠ 刻意不換成卡背圖：卡背在本站代表「未揭曉的牌」，用在載入失敗會讓玩家誤判盤面資訊。
+   *   這裡改成暗色框＋卡名（<img> 失敗時瀏覽器會顯示 alt，而全站 alt 就是卡名）＋緩慢呼吸動畫，
+   *   讓玩家一眼看出「圖還在載，不是這張卡有問題」。
+   */
+  :global(img[data-img-retrying]) {
+    background: #1d2330;
+    border: 1px dashed rgba(255, 255, 255, 0.28);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 10px;
+    line-height: 1.25;
+    text-align: center;
+    overflow: hidden;
+    animation: img-retry-breathe 1.6s ease-in-out infinite;
+  }
+  @keyframes img-retry-breathe {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 0.9; }
+  }
+  /* 使用者偏好減少動態時不閃爍（無障礙） */
+  @media (prefers-reduced-motion: reduce) {
+    :global(img[data-img-retrying]) { animation: none; opacity: 0.7; }
+  }
   /* v2.202+：統一 body baseline — 所有頁面預設白底，
      避免跨頁導航時殘留前一頁的深色背景（例如 /game 的墨綠）。
      /game 頁的 :global(body) 會在該頁載入時覆蓋此值。 */

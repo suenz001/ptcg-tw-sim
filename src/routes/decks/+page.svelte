@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import type { Card, EnergyType } from '$lib/cards/types';
+  import { retryImg } from '$lib/img-retry';
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
@@ -15,7 +16,9 @@
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
-  import { splitTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';   // v6.094 匯入時也攤成左右各半
+  import { splitTwoCardStadiumEntries, mergeTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';
+  //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
+  //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
@@ -1082,7 +1085,11 @@
       // v5.381：合併相同 cardId（不同官方印刷版可能替換到同一張本站版）
       const mergedMap = new Map<string, number>();
       for (const mEntry of matched) mergedMap.set(mEntry.cardId, (mergedMap.get(mEntry.cardId) ?? 0) + mEntry.count);
-      const mergedEntries: DeckEntry[] = [...mergedMap].map(([cardId, count]) => ({ cardId, count }));
+      let mergedEntries: DeckEntry[] = [...mergedMap].map(([cardId, count]) => ({ cardId, count }));
+      // v6.101：官網回傳的是「傳說」場地卡的官方單一 id ×N（N＝實體張數），本站要展開成左右各半
+      //   ——文字匯入在 v6.094 就已經套了，官網代碼這條漏掉：匯入當下畫面會變成「左半 ×N」，
+      //   要等下次重載才自癒。（split 是冪等的，重複套用不會愈拆愈多。）
+      mergedEntries = splitTwoCardStadiumEntries({ entries: mergedEntries } as Deck).entries;
       // 更新 active deck — v4.972 hotfix: saveDecks 沒 module top-level import
       //   仿 line 374 pattern：dynamic import storage.saveDecks + pushDeck() cloud sync
       const updated = { ...active!, entries: mergedEntries, updatedAt: Date.now() };
@@ -1113,13 +1120,19 @@
     if (activeEntries.length === 0) { alert('牌組空白，無法匯出'); return; }
     const totalCards = activeEntries.reduce((s, x) => s + x.entry.count, 0);
     // 構造 entries — cardId 用我們系統的 id（= 官網 cardId，v4.970 已驗證），cardName 用繁中卡名
-    const entries = activeEntries.map(({ entry, card }) => ({
+    const entriesRaw = activeEntries.map(({ entry, card }) => ({
       // v5.533：優先用 twDeckBuildId（台灣官網對應 id）。少數特典卡（古歷/超級妖火紅狐ex）
       //   資料來自港版、其 id 台灣官網 deck-builder 不認得，會導致匯出失敗；補登錄後採用之。
       cardId: card.twDeckBuildId ?? card.id,
       cardName: card.name,
       count: entry.count,
     }));
+    // ⚠⚠ v6.101：「傳說」場地卡的右半 id（19624-19626）是本站拆卡時自己造的，**官網沒有這個 id**。
+    //   官網 API 連 id 存不存在都不驗 → 送出去不會報錯，而是**靜默發行一副含幽靈 id 的壞牌組**。
+    //   ⇒ 送出前一律先把右半併回官方那張卡的 id（count 相加＝實體張數，與官網 count 語義一致）。
+    //   ⭐ 直接把含 cardName 的 entry 丟進去合併（helper 會保留其餘欄位）：左右半的官方卡名
+    //   逐字相同，所以就算牌組只剩右半（壞資料）也拿得到正確卡名，不會送出空的 cardName。
+    const entries = mergeTwoCardStadiumEntries(entriesRaw);
     // 警告 — 牌組會在官網 DB 永久留下紀錄
     const warnMsg = totalCards < 60
       ? `牌組目前 ${totalCards} 張（未滿 60），官網實測仍可發行但屬「非正規」狀態。\n\n按確定後會把此牌組永久發行到台灣官網，並回傳代碼。確定繼續嗎？`
@@ -1734,7 +1747,7 @@
                        是固定 40px（:2621），塞 N 張 40px 圖會被壓成細條或整排溢出蓋到卡名 →
                        撤回成單張、固定顯示左半（與下方卡片選擇區一致）。
                        牌組清單要怎麼呈現「左 N 張／右 N 張」需要重新設計版面，待 Wilson 拍板。 -->
-                  <img src={card.imageUrl} alt={card.name} loading="lazy"
+                  <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy"
                     class:legend-half-l={twoCardStadiumSide(card.id) === 0}
                     class:legend-half-r={twoCardStadiumSide(card.id) === 1} />
                 </button>
@@ -1879,7 +1892,7 @@
               <button class="pick-thumb" onclick={() => openPreview(card)} title="查看詳情">
                 <!-- v6.091：選擇區每張卡只出現一次、沒有「第幾份」概念 → 固定顯示左半
                      （左半含完整卡名框，代表性最高；點縮圖開 preview 仍看得到整張橫圖）。 -->
-                <img src={card.imageUrl} alt={card.name} loading="lazy"
+                <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy"
                   class:legend-half-l={twoCardStadiumSide(card.id) === 0}
                   class:legend-half-r={twoCardStadiumSide(card.id) === 1} />
               </button>
@@ -1937,7 +1950,7 @@
       <!-- Top: image + quick info -->
       <div class="pv-top">
         <button class="pv-img-btn" type="button" onclick={() => openLightbox(pv.imageUrl)} title="點擊放大">
-          <img class="pv-img" src={pv.imageUrl} alt={pv.name} />
+          <img use:retryImg={pv.imageUrl} class="pv-img" src={pv.imageUrl} alt={pv.name} />
           <span class="pv-zoom-hint">🔍</span>
         </button>
 
@@ -2292,7 +2305,7 @@
     aria-label="放大卡牌圖片"
     onclick={closeLightbox}
   >
-    <img class="lightboxImg" src={lightboxUrl} alt="放大圖片" onclick={closeLightbox} />
+    <img class="lightboxImg" use:retryImg={{ url: lightboxUrl, width: 900 }} src={lightboxUrl} alt="放大圖片" onclick={closeLightbox} />
     <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
   </div>
 {/if}

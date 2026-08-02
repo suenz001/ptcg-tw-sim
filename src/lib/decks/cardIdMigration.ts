@@ -98,7 +98,7 @@ export function migrateCardId(cardId: string): string {
 
 
 /** v5.301: 統一 migrateDeck helper (storage.ts + cloud.ts 共用) — load deck 時自動 map jp→tw cardId */
-import type { Deck } from './types';
+import type { Deck, DeckEntry } from './types';
 export function migrateDeck(d: Deck): Deck {
   return splitTwoCardStadiumEntries({ ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) });
 }
@@ -118,6 +118,32 @@ const TWO_CARD_STADIUM_SPLIT: Readonly<Record<string, string>> = {
   '19622': '19625',   // 傳說的山頂   073/076 → 074/076
   '19623': '19626',   // 傳說的熔岩洞 075/076 → 076/076
 };
+/**
+ * v6.101：`splitTwoCardStadiumEntries` 的**反向**操作 —— 把右半併回官方那張卡的 id。
+ *
+ * ⚠ 為什麼需要：右半的 id（19624/19625/19626）是本站 v6.093 拆卡時**自己造的**，
+ *   官方卡表根本沒有這幾個 id（它們的 sourceUrl／imageUrl 都指回左半）。
+ *   把它們送去台灣官網牌組構築工具 → 官網**連 id 存不存在都不驗**，
+ *   不會報錯，而是**靜默發行一副含幽靈 id 的牌組**（代碼打開後右半那幾張會壞掉）。
+ *   ⇒ 任何「把 cardId 送到站外」的出口都必須先跑這個合併。
+ *
+ * count 語義：官網 deckData 的 count 單位是**實體張數**（與本站一致，1 套＝2 張），
+ *   所以左 2 ＋ 右 2 → 送 `{cardId:'19622', count:4}`。
+ */
+export function mergeTwoCardStadiumEntries(entries: DeckEntry[]): DeckEntry[] {
+  const rightToLeft: Record<string, string> = {};
+  for (const [left, right] of Object.entries(TWO_CARD_STADIUM_SPLIT)) rightToLeft[right] = left;
+  const out: DeckEntry[] = [];
+  const idx = new Map<string, number>();
+  for (const e of entries) {
+    const id = rightToLeft[e.cardId] ?? e.cardId;
+    const at = idx.get(id);
+    if (at === undefined) { idx.set(id, out.length); out.push({ ...e, cardId: id }); }
+    else out[at] = { ...out[at], count: out[at].count + e.count };
+  }
+  return out;
+}
+
 export function splitTwoCardStadiumEntries(d: Deck): Deck {
   const rightIds = new Set(Object.values(TWO_CARD_STADIUM_SPLIT));
   const entries: Deck['entries'] = [];

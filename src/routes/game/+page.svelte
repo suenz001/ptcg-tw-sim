@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
+  import { retryImg } from '$lib/img-retry';
   import { resolveLogCard } from '$lib/game/log_zoom';
   import { onMount, onDestroy, untrack } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
@@ -8113,7 +8114,7 @@
     <!-- v4.22 場地卡在場時的背景圖層（只抓上半藝術圖區 + 低調透明度） -->
     {#if stadiumCard}
       <div class="stadium-bg-layer" aria-hidden="true">
-        <img src={stadiumCard.imageUrl} alt="" />
+        <img use:retryImg={stadiumCard.imageUrl} src={stadiumCard.imageUrl} alt="" />
       </div>
     {/if}
 
@@ -8156,7 +8157,7 @@
                 <div class="bench-name">{bc?.name}</div>
                 <div class="bench-stat">HP {hpRemaining(b)}/{hpTotal(b)}</div>
                 <div class="bench-middle">
-                  <img src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
+                  <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name} onclick={()=>openZoom(b.cardId,b)} class="zoomable" onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
                   <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
                   {#if battleLayout !== 'classic'}
                     {@const _attOB = attachedCardsOf(b)}
@@ -8166,7 +8167,7 @@
                       {@const _stepOB = Math.max(12, 32 - _attOB.length * 3)}
                       <!-- v5.098：對手 bench 堆疊方向改往下（top 正值），玩家回報 -->
                       <div class="att-card-stack">
-                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                        {#each _attOB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{(i+1) * _stepOB}px;z-index:{110-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                       </div>
                       <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                       <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
@@ -8218,13 +8219,13 @@
               style={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
               out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             >
-              <img src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
+              <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
               <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
               {#if battleLayout !== 'classic'}
                 {@const _attOA = attachedCardsOf(oppPlayer.active)}
                 {#if _attOA.length > 0}
                   <div class="att-card-stack">
-                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                    {#each _attOA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                   </div>
                   <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                   <div class="tt-attach-overlay">{#each energyPips(oppPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if oppPlayer.active.toolAttached || (oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{oppPlayer.active.extraTools && oppPlayer.active.extraTools.length > 0 ? `×${1 + oppPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
@@ -8280,7 +8281,7 @@
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
@@ -8453,7 +8454,7 @@
         {@const stadiumIid = game.activeStadium.cardId}
         <div class="stadium-display" title="場地卡 — 點擊查看詳情" onclick={()=>openZoom(stadiumIid, null)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(stadiumIid, null);}} role="button" tabindex="0">
           <div class="stadium-display-label">🏟 場地</div>
-          <img src={stadiumCard.imageUrl} alt={stadiumCard.name} />
+          <img use:retryImg={stadiumCard.imageUrl} src={stadiumCard.imageUrl} alt={stadiumCard.name} />
           <div class="stadium-display-name">{stadiumCard.name} 🔍</div>
         </div>
       {/if}
@@ -8489,7 +8490,7 @@
         <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}
@@ -8533,7 +8534,7 @@
             data-drop-iid={myPlayer.active.iid}
             out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             onclick={()=>selectedEnergyIid&&!pendingSelection&&isMyTurn()&&onAttachEnergy(myPlayer!.active!.iid)}>
-            <img src={ac?.imageUrl} alt={ac?.name} class="active-img"
+            <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img"
               class:zoomable={!selectedEnergyIid}
               onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(myPlayer!.active!.cardId,myPlayer!.active);}}}
               onpointerenter={(e)=>enterAttCard(e, myPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
@@ -8542,7 +8543,7 @@
               {@const _attMA = attachedCardsOf(myPlayer.active)}
               {#if _attMA.length > 0}
                 <div class="att-card-stack">
-                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                  {#each _attMA as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="left:calc(var(--fan-step, 32px) * {i+1});z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                 </div>
                 <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                 <div class="tt-attach-overlay">{#each energyPips(myPlayer.active) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if myPlayer.active.toolAttached || (myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{myPlayer.active.extraTools && myPlayer.active.extraTools.length > 0 ? `×${1 + myPlayer.active.extraTools.length}` : ''}</span>{/if}</div>
@@ -8635,7 +8636,7 @@
               <!-- v2.51：加寬 slot + 能量 pip 改為垂直排列在圖片右側，避免能量超過 2 個時撐高
                    v2.53：bench-nrg 條件渲染 — 沒能量就不 render 右側欄，讓 img 置中填滿 slot -->
               <div class="bench-middle">
-                <img src={bc?.imageUrl} alt={bc?.name}
+                <img use:retryImg={bc?.imageUrl} src={bc?.imageUrl} alt={bc?.name}
                   class:zoomable={!selectedEnergyIid}
                   onclick={(e)=>{if(!selectedEnergyIid){e.stopPropagation();openZoom(b.cardId,b);}}}
                   onpointerenter={(e)=>enterAttCard(e, b.cardId)} onpointerleave={leaveAttCard}/>
@@ -8646,7 +8647,7 @@
                     <!-- v5.038：疊牌動態間距 — 越多張疊得越密（同對手 bench 邏輯） -->
                     {@const _stepMB = Math.max(12, 32 - _attMB.length * 3)}
                     <div class="att-card-stack">
-                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
+                      {#each _attMB as itm, i (itm.iid)}{@const _c=getCard(itm.cardId)}{#if _c}<img use:retryImg={_c.imageUrl} class="att-card att-{itm.kind}" style="top:{-(i+1) * _stepMB}px;z-index:{50-i}" onpointerenter={(e)=>enterAttCard(e, itm.cardId)} onpointerleave={leaveAttCard} onclick={(e)=>{e.stopPropagation();openZoom(itm.cardId,null);}} src={_c.imageUrl} alt={_c.name} title={_c.name}/>{/if}{/each}
                     </div>
                     <!-- v5.410：桌墊版能量/道具 compact overlay（疊在卡圖上，仿手機版）-->
                     <div class="tt-attach-overlay">{#each energyPips(b) as pip}<span class="nrg-pip" class:nrg-pip-rainbow={pip.type === 'Rainbow'} style={pip.type === 'Rainbow' ? undefined : `background:${ENERGY_COLOR[pip.type as EnergyType]}`} title="{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]} × {pip.count}">{pip.label ?? ENERGY_LABEL[pip.type as EnergyType]}{pip.count > 1 ? pip.count : ''}</span>{/each}{#if b.toolAttached || (b.extraTools && b.extraTools.length > 0)}<span class="tt-tool" title="附加道具">🔧{b.extraTools && b.extraTools.length > 0 ? `×${1 + b.extraTools.length}` : ''}</span>{/if}</div>
@@ -8728,7 +8729,7 @@
       {#if !game || game.phase !== 'setup' || coinFlipStage === 'done'}
       {#if isTReplay}
         <!-- v5.940 回放:攤開行動方真手牌(面朝上,唯讀,點擊放大) -->
-        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name} class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0} class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
+        {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}{@const _rc=getCard(inst.cardId)}<div class="hand-card spectator-hand-face" title={_rc?.name ?? ''} onclick={() => openZoom(inst.cardId, inst)} onkeydown={(e)=>{if(e.key==='Enter')openZoom(inst.cardId, inst);}} role="button" tabindex="0">{#if _rc?.imageUrl}<img use:retryImg={_rc.imageUrl} class="replay-hand-img" src={_rc.imageUrl} alt={_rc.name} class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0} class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>{:else}<div class="card-back card-back-sm"><span class="card-back-mark">?</span></div>{/if}</div>{/each}
       {:else if isTournSpectator}
         {#each dedupeByIid(myPlayer?.hand) as inst (inst.iid)}<div class="hand-card spectator-hand-back"><div class="card-back card-back-sm"><span class="card-back-mark">?</span></div></div>{/each}
       {:else}
@@ -8799,7 +8800,7 @@
                  手牌依 Wilson 裁定顯示成**兩張直立的卡** → 同一張圖裁左半／右半（零新圖片資源）。
                  ⚠ 這裡不能用 {@const}（Svelte 5 限定它只能是 #if/#each 等的直接子節點），
                    直接寫成 class: 的表達式；手牌張數很少，重複呼叫成本可忽略。 -->
-            <img src={c.imageUrl} alt={c.name}
+            <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>
             <span class="hand-name">{c.name}</span>
@@ -8917,7 +8918,7 @@
                     onclick={(e)=>{e.stopPropagation();openZoom(item.cardId, item);}}>🔍</button>
                   <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();toggleSelection(item.iid);}}>
                     {#if isActivePoke}{@render activeSpotBadge(isOppPicker)}{/if}
-                    <img src={c.imageUrl} alt={c.name}/>
+                    <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
@@ -8957,7 +8958,7 @@
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
                     {#if isActivePoke}{@render activeSpotBadge(true)}{/if}
-                    <img src={c.imageUrl} alt={c.name}/>
+                    <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
@@ -8996,7 +8997,7 @@
                     oncontextmenu={(e)=>{e.preventDefault();decrementCount(item.iid);}}
                     onclick={(e)=>{e.stopPropagation();incrementCount(item.iid);}}>
                     {#if isActivePoke}{@render activeSpotBadge(false)}{/if}
-                    <img src={c.imageUrl} alt={c.name}/>
+                    <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}/>
                     <div class="retreat-name">{c.name}</div>
                     <div class="retreat-hp">HP {rem}/{eff}</div>
                     <div class="retreat-nrg">{energySummary(item)}</div>
@@ -9057,7 +9058,7 @@
                       <div class="sel-card-back"><div class="sel-card-back-icon">🎴</div><div class="sel-card-back-q">?</div></div>
                       <span class="sel-name">???</span>
                     {:else}
-                      <img src={c.imageUrl} alt={c.name} loading="lazy"
+                      <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(selectionItems, item.iid, pool) === 1}/><span class="sel-name">{c.name}</span>
                       {#if c.hp}<span class="sel-hp">HP{c.hp}</span>{/if}
@@ -9117,7 +9118,7 @@
               {#each deckGrouped as entry}{@const _dc=getCard(entry.cardId)}
                 <button class="deck-cell" title="{entry.half === 0 || entry.half === 1 ? entry.name : entry.count + '× ' + entry.name} — 點擊放大"
                   onclick={(e)=>{e.stopPropagation();openZoom(entry.cardId);}}>
-                  {#if _dc?.imageUrl}<img src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"
+                  {#if _dc?.imageUrl}<img use:retryImg={_dc.imageUrl} src={_dc.imageUrl} alt={entry.name} class="deck-cell-img" loading="lazy"
                     class:legend-half-l={entry.half === 0} class:legend-half-r={entry.half === 1}/>
                   {:else}<div class="deck-cell-fallback">{entry.name}</div>{/if}
                   <!-- v6.095：兩張合一競技場已拆成一格一張，×1 徽章會誤讀成聚合 -->
@@ -9163,7 +9164,7 @@
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
+                      {#if c.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(peekedOthers, inst.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(peekedOthers, inst.iid, pool) === 1}/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
@@ -9198,7 +9199,7 @@
                   {#if c}
                     <button class="deck-cell" title="{c.name} — 點擊放大"
                       onclick={(e)=>{e.stopPropagation();openZoom(inst.cardId, inst);}}>
-                      {#if c.imageUrl}<img src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
+                      {#if c.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} class="deck-cell-img" loading="lazy"
                         class:legend-half-l={twoCardStadiumHalfIndex(otherHand, inst.iid, pool) === 0}
                         class:legend-half-r={twoCardStadiumHalfIndex(otherHand, inst.iid, pool) === 1}/>
                       {:else}<div class="deck-cell-fallback">{c.name}</div>{/if}
@@ -9397,7 +9398,7 @@
       <div class="float-evo-title">選擇進化</div>
       {#each floatingEvoMenu.evoOpts as evo}{@const ec=getCard(evo.cardId)}
         <button class="evo-choice wide-evo" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
-          <img src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
+          <img use:retryImg={ec?.imageUrl} src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
         </button>
       {/each}
     </div>
@@ -9412,7 +9413,7 @@
         <div class="hand-preview-float"
           style="left:{hoverHandAnchor.x}px; top:{hoverHandAnchor.y - 8}px;"
           in:fade={{ duration: 120 }} aria-hidden="true">
-          <img src={pc.imageUrl} alt={pc.name}/>
+          <img use:retryImg={pc.imageUrl} src={pc.imageUrl} alt={pc.name}/>
         </div>
       {/if}
     {/if}
@@ -9426,7 +9427,7 @@
       <div class="hand-preview-float att-preview-float" class:att-preview-below={hoverAttBelow}
         style="left:{hoverAttAnchor.x}px; top:{hoverAttAnchor.y - (hoverAttBelow ? 0 : 8)}px;"
         in:fade={{ duration: 120 }} aria-hidden="true">
-        <img src={ac.imageUrl} alt={ac.name}/>
+        <img use:retryImg={ac.imageUrl} src={ac.imageUrl} alt={ac.name}/>
       </div>
     {/if}
   {/if}
@@ -9461,7 +9462,7 @@
   <!-- Floating Drag Preview -->
   {#if dragging && dragging.moved}
     <div class="drag-preview" style="left:{dragging.x / gameZoom}px;top:{dragging.y / gameZoom}px;" aria-hidden="true">
-      <img src={dragging.imageUrl} alt=""/>
+      <img use:retryImg={dragging.imageUrl} src={dragging.imageUrl} alt=""/>
       <div class="drag-hint">
         {#if dragging.kind==='energy'}⚡ 拖到寶可夢附加
         {:else if dragging.kind==='basic'}📥 拖到備戰空格
@@ -9506,7 +9507,7 @@
               {@const hcc = pool.get(hc.cardId)}
               <div class="mulligan-reveal-card" class:opening-burst={canBeInitialActiveCard(hcc)}>
                 {#if hcc?.imageUrl}
-                  <img src={hcc.imageUrl} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable"
+                  <img use:retryImg={hcc.imageUrl} src={hcc.imageUrl} alt={hcc.name} onclick={() => openZoom(hc.cardId, null)} class="zoomable"
                     class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.hand, hc.iid, pool) === 0}
                     class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, hc.iid, pool) === 1} />
                 {:else}
@@ -9569,7 +9570,7 @@
               {@const cc = pool.get(cid)}
               <div class="mulligan-reveal-card">
                 {#if cc?.imageUrl}
-                  <img src={cc.imageUrl} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable"
+                  <img use:retryImg={cc.imageUrl} src={cc.imageUrl} alt={cc.name} onclick={() => openZoom(cid, null)} class="zoomable"
                     class:legend-half-l={twoCardStadiumSide(cid) === 0}
                     class:legend-half-r={twoCardStadiumSide(cid) === 1} />
                 {:else}
@@ -9844,7 +9845,7 @@
                     onclick={(e2) => { e2.stopPropagation(); openZoom(e.hostInst.cardId, e.hostInst); }}>🔍</button>
                 {/if}
                 <button class="sel-card" class:sel-picked={picked} onclick={() => togglePreAttackEnergy(e.iid)}>
-                  <img src={ec.imageUrl} alt={ec.name}/>
+                  <img use:retryImg={ec.imageUrl} src={ec.imageUrl} alt={ec.name}/>
                   <span class="sel-name">{ec.name}{isUnits && eUnits > 1 ? `（${eUnits}個）` : ''}</span>
                   <span class="sel-hp">{isHandDiscard ? '在手牌中' : `附於 ${e.ownerName}`}</span>
                   {#if picked}<span class="sel-check">✓</span>{/if}
@@ -9891,7 +9892,7 @@
           {#each copyAttackPicker.candidates as cand (cand.inst.iid)}
             {#if cand.card}
               <div class="copy-attack-poke">
-                <img src={cand.card.imageUrl} alt={cand.card.name} class="copy-attack-img"/>
+                <img use:retryImg={cand.card.imageUrl} src={cand.card.imageUrl} alt={cand.card.name} class="copy-attack-img"/>
                 <div class="copy-attack-col">
                   <div class="copy-attack-name">{cand.card.name}</div>
                   <div class="copy-attack-atks">
@@ -9932,7 +9933,7 @@
         </div>
         <div class="copy-attack-list">
           <div class="copy-attack-poke">
-            <img src={op.card.imageUrl} alt={op.card.name} class="copy-attack-img"/>
+            <img use:retryImg={op.card.imageUrl} src={op.card.imageUrl} alt={op.card.name} class="copy-attack-img"/>
             <div class="copy-attack-col">
               <div class="copy-attack-name">{op.card.name}（對手戰鬥場）</div>
               <div class="copy-attack-atks">
@@ -9971,7 +9972,7 @@
         </div>
         <div class="copy-attack-list">
           <div class="copy-attack-poke">
-            <img src={tp.card.imageUrl} alt={tp.card.name} class="copy-attack-img"/>
+            <img use:retryImg={tp.card.imageUrl} src={tp.card.imageUrl} alt={tp.card.name} class="copy-attack-img"/>
             <div class="copy-attack-col">
               <div class="copy-attack-name">{tp.card.name}（牌庫頂）</div>
               <div class="copy-attack-atks">
@@ -10021,7 +10022,7 @@
           <div class="copy-attack-list rocket-command-scroll" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:.5rem">
             {#each rocketCommandPicker.top10All as p (p.inst.iid)}
               <div class="copy-attack-poke" style="flex-direction:column;align-items:center;text-align:center">
-                <img src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img" style="max-width:110px"/>
+                <img use:retryImg={p.card.imageUrl} src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img" style="max-width:110px"/>
                 <div class="copy-attack-name" style="font-size:.78rem">{p.card.name}</div>
               </div>
             {/each}
@@ -10030,7 +10031,7 @@
         <div class="copy-attack-list rocket-command-scroll">
           {#each rocketCommandPicker.pokeList as p (p.inst.iid)}
             <div class="copy-attack-poke">
-              <img src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img"/>
+              <img use:retryImg={p.card.imageUrl} src={p.card.imageUrl} alt={p.card.name} class="copy-attack-img"/>
               <div class="copy-attack-col">
                 <div class="copy-attack-name">{p.card.name}</div>
                 <div class="copy-attack-atks">
@@ -10070,7 +10071,7 @@
                 {#each _peekedOthers as p (p.inst.iid)}
                   <button class="deck-cell" title="{p.card.name} — 點擊放大"
                     onclick={(e)=>{e.stopPropagation();openZoom(p.inst.cardId, p.inst);}}>
-                    {#if p.card.imageUrl}<img src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img" loading="lazy"
+                    {#if p.card.imageUrl}<img use:retryImg={p.card.imageUrl} src={p.card.imageUrl} alt={p.card.name} class="deck-cell-img" loading="lazy"
                       class:legend-half-l={twoCardStadiumSide(p.inst.cardId) === 0}
                       class:legend-half-r={twoCardStadiumSide(p.inst.cardId) === 1}/>
                     {:else}<div class="deck-cell-fallback">{p.card.name}</div>{/if}
@@ -10180,7 +10181,7 @@
                 <div class="opp-turn-action-item" class:discard={act.type === 'discard'}
                   title={(_c?.name ?? '?') + (act.extra ? ' / ' + act.extra : '') + (act.type === 'discard' ? '（被丟棄）' : '')}>
                   {#if _c?.imageUrl}
-                    <img class="opp-turn-card-img" src={_c.imageUrl} alt={_c?.name ?? '?'}
+                    <img use:retryImg={_c.imageUrl} class="opp-turn-card-img" src={_c.imageUrl} alt={_c?.name ?? '?'}
                       class:legend-half-l={twoCardStadiumSide(act.cardId) === 0}
                       class:legend-half-r={twoCardStadiumSide(act.cardId) === 1}
                       onclick={() => openZoom(act.cardId, null)} />
@@ -10298,7 +10299,7 @@
                 <button class="retreat-zoom" title="放大檢視：{bc.name}"
                   onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
                 <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
-                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
                   <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
@@ -10344,7 +10345,7 @@
                 <button class="retreat-zoom" title="放大檢視：{bc.name}"
                   onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
                 <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, dIdx));}}>
-                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
                   <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
@@ -10384,7 +10385,7 @@
                 <button class="retreat-zoom" title="放大檢視：{bc.name}"
                   onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
                 <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, myIdx));}}>
-                  <img src={bc.imageUrl} alt={bc.name}/>
+                  <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
                   <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
@@ -10438,7 +10439,7 @@
           {#each discardGrouped as g}{@const c=getCard(g.cardId)}
             {#if c}
               <button class="sel-card" onclick={() => openZoom(g.cardId)}>
-                <img src={c.imageUrl} alt={c.name} loading="lazy"
+                <img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} loading="lazy"
                   class:legend-half-l={g.half === 0} class:legend-half-r={g.half === 1}/><span class="sel-name">{c.name}</span>
                 <!-- v6.091：兩張合一競技場已拆成一格一張，×1 徽章反而容易誤讀成聚合，故不顯示 -->
                 {#if g.half !== 0 && g.half !== 1}<span class="deck-cell-count">×{g.count}</span>{/if}
@@ -10695,7 +10696,7 @@
         <div class="zoom-body">
           <!-- v2.129：點擊 zoom-img 開全螢幕 lightbox -->
           <button class="zoom-img-btn" type="button" onclick={() => openLightboxImg(zoomCard!.imageUrl)} title="點擊放大">
-            <img src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
+            <img use:retryImg={{ url: zoomCard.imageUrl, width: 840 }} src={zoomCard.imageUrl} alt={zoomCard.name} class="zoom-img"/>
             <span class="zoom-img-hint">🔍</span>
           </button>
           <div class="zoom-info">
@@ -10868,7 +10869,7 @@
           ">
           <!-- v5.137：對手取獎賞只顯示卡背，不暴露對手手牌（PTCG 隱私規則） -->
           {#if p.isMine && pc?.imageUrl}
-            <img src={pc.imageUrl} alt={pc.name}/>
+            <img use:retryImg={pc.imageUrl} src={pc.imageUrl} alt={pc.name}/>
           {:else}
             <div class="card-back prize-pick-back"><span class="card-back-mark">?</span></div>
           {/if}
@@ -10881,7 +10882,7 @@
   {#if lightboxUrl}
     <div class="lightbox-overlay" role="dialog" aria-modal="true" aria-label="放大卡牌圖片"
       onclick={closeLightboxImg}>
-      <img class="lightbox-img" src={lightboxUrl} alt="放大圖片" onclick={closeLightboxImg}/>
+      <img class="lightbox-img" use:retryImg={{ url: lightboxUrl, width: 900 }} src={lightboxUrl} alt="放大圖片" onclick={closeLightboxImg}/>
       <button class="lightbox-close" onclick={closeLightboxImg} aria-label="關閉">×</button>
     </div>
   {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { base } from '$app/paths';
+  import { retryImg } from '$lib/img-retry';
   import type { Card, SetSummary, EnergyType } from '$lib/cards/types';
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
@@ -573,7 +574,7 @@
   <div class="grid">
     {#each filtered as card (card.id)}
       <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
-        <img src={card.imageUrl} alt={card.name} loading="lazy" />
+        <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy" />
         <span class="cardLabel">
           <span class="num">
             {#if data.setCode === 'ALL'}<span class="setPrefix">{card.setCode}</span>{' '}{/if}{card.collectorNumber}
@@ -603,7 +604,7 @@
             aria-label="放大卡牌圖片"
             title="點擊放大"
           >
-            <img class="detailImg" src={selected.imageUrl} alt={selected.name} />
+            <img use:retryImg={selected.imageUrl} class="detailImg" src={selected.imageUrl} alt={selected.name} />
             <span class="zoomHint">🔍</span>
           </button>
           <div class="detailInfo">
@@ -749,7 +750,7 @@
       aria-label="放大卡牌圖片"
       onclick={closeLightbox}
     >
-      <img class="lightboxImg" src={lightbox} alt="放大圖片" onclick={closeLightbox} />
+      <img class="lightboxImg" use:retryImg={{ url: lightbox, width: 900 }} src={lightbox} alt="放大圖片" onclick={closeLightbox} />
       <button class="lightboxClose" onclick={closeLightbox} aria-label="關閉">×</button>
     </div>
   {/if}
