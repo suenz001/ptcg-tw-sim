@@ -162,13 +162,20 @@ regR('gold-flame-pick-energy', (st, idx, energyIids, _params, pool) => {
     const energies = p.hand.filter(c => energyIids.includes(c.iid));
     let s = addLog(st,
       `金色火焰：將 ${energies.length} 張基本【火】能量附於 ${tName}`, idx);
-    return updatePlayer(s, idx, pl => ({
+    const attached = updatePlayer(s, idx, pl => ({
       ...pl,
       hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
       bench: pl.bench.map(c => c.iid === target.iid
         ? { ...c, energyAttached: [...c.energyAttached, ...energies] }
         : c),
     }));
+    // ⭐ v6.105（Fable 覆核抓到）：這條「備戰只有 1 隻 → 直接附」的捷徑，原本漏了
+    //   下面 gold-flame-attach（備戰 ≥2 隻）有做的兩件事 —— 從**手牌**附能必須觸發
+    //   對手的附能反應被動（耿鬼ex｜侵蝕詛咒、麻痺門牙）與己方瑪機雅娜｜自動治癒。
+    //   結果同一張卡「備戰 1 隻」與「備戰 2 隻以上」行為不一致。
+    //   ⚠ 通則：**fast-path 與 picker path 必須做完全一樣的副作用**，只能省掉「選誰」。
+    return fireOnHandEnergyAttached(
+      applyMagearnaHandAttachHeal(attached, idx, [target.iid], pool), idx, target.iid, pool);
   }
 
   return withPending(st, {

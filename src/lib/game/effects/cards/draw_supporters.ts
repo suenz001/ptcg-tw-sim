@@ -388,6 +388,16 @@ regR('naruei-encourage-commit', (st, idx, iids, params, pool) => {
   const p = st.players[idx];
   const target = p.active?.iid === targetIid ? p.active : p.bench.find(c => c.iid === targetIid);
   if (!target) return st;
+  // ⭐ v6.105 公平性（Fable 覆核抓到）：resolver 收到的 iid 來自 client，必須自驗。
+  //   卡面限「自己的 1 隻【2階進化】寶可夢」；引擎的中央 sanitize 對非 deck-search
+  //   是原封放行的，這裡不驗就能把能量附到任何一隻自家寶可夢。
+  const validIids = (params?.validIids as string[] | undefined) ?? [];
+  if (validIids.length > 0 && !validIids.includes(targetIid)) {
+    return addLog(st, '鳴依的勉勵：選擇的目標不合法，取消附加', idx);
+  }
+  if (!isStage2PokemonCardLocal(pool.get(target.cardId), pool)) {
+    return addLog(st, '鳴依的勉勵：目標不是 2 階進化寶可夢，取消附加', idx);
+  }
   const energies = p.discard.filter(c => energyIids.includes(c.iid));
   if (energies.length === 0) return st;
   const targetName = pool.get(target.cardId)?.name ?? '?';

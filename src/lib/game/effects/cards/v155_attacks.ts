@@ -186,20 +186,22 @@ regPost('大吾的金屬怪|金屬斬', (state, aIdx) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // (8) 燃燒充能（火伊布ex）— 130 + 從牌庫搜最多 2 張基本能量，玩家逐張選目標附寶
 // ══════════════════════════════════════════════════════════════════════════════
-// v2.158：升級為玩家自選分配（之前簡化為均附 active）
+// ⭐ v6.105 修正（玩家回報）：卡面是「附於自己的**1隻**寶可夢身上」——兩張要附**同一隻**。
+//   v2.158 當年把它跟「以任意方式」型一起升級成逐張自選分配，等於多給了玩家分散的自由，
+//   與卡面不符。改為傳 singleTarget:true 走同一條中央管線的單目標分支。
 regPre('火伊布ex|燃燒充能', (state) => ({ state, damage: 130 }));
 regPost('火伊布ex|燃燒充能', (state, aIdx) => {
   const player = state.players[aIdx];
   if (player.deck.length === 0) return addLog(state, '燃燒充能：牌庫為空', aIdx);
   const max = Math.min(2, player.deck.length);
-  const s = addLog(state, `燃燒充能：從牌庫選 ≤${max} 張基本能量（接著逐張選目標）`, aIdx);
+  const s = addLog(state, `燃燒充能：從牌庫選 ≤${max} 張基本能量（接著選 1 隻寶可夢全部附上）`, aIdx);
   return withPending(s, {
     type: 'deck-search',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     filter: 'BasicEnergy',
     minCount: 0, maxCount: max,
     effectKey: 'v158-energy-chain-start',
-    params: { label: '燃燒充能', source: 'deck', scope: 'any-own', filterType: 'Any' },
+    params: { label: '燃燒充能', source: 'deck', scope: 'any-own', filterType: 'Any', singleTarget: true },
   });
 });
 
@@ -359,7 +361,13 @@ regR('kissy-attach-all-to-target', (st, aIdx, iids, params, pool) => {
   const energyIids = (params?.energyIids as string[]) ?? [];
   if (!targetIid || energyIids.length === 0) return st;
   const player = st.players[aIdx];
-  const targetPoke = player.active?.iid === targetIid ? player.active : player.bench.find(b => b.iid === targetIid);
+  // ⭐ v6.105 公平性（Fable 覆核抓到）：卡面是「附於 1 隻**備戰**寶可夢身上」——
+  //   原本目標查找含 active，改造過的 client 送戰鬥位 iid 就能把能量附到戰鬥場。
+  //   resolver 一律自驗（引擎的中央 sanitize 對非 deck-search 是原封放行的）。
+  const targetPoke = player.bench.find(b => b.iid === targetIid);
+  if (!targetPoke) {
+    return addLog(st, '樂呵呵之吻：目標不是自己的備戰寶可夢，取消附加', aIdx);
+  }
   const targetName = targetPoke ? (pool.get(targetPoke.cardId)?.name ?? '?') : '?';
   st = updatePlayer(st, aIdx, p => {
     const energies = p.discard.filter(c => energyIids.includes(c.iid));

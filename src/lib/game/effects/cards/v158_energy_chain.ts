@@ -214,6 +214,17 @@ export interface EnergyChainOpts {
   filterType?: EnergyTypeFilter;
   // v5.823：可附目標的 iid 白名單(標籤型如密勒頓「未來」/太樂巴戈斯「太晶」寶可夢)。undefined=不限。
   targetIids?: string[];
+  /**
+   * ⭐ v6.105：卡面是「附於自己的**1隻**寶可夢身上」→ 選好的能量**全部附到同一隻**，
+   * 不可分散。預設 false ＝「以任意方式」型（可逐張／分波分散）。
+   *
+   * ⚠ 這兩種卡面**必須嚴格區分**，是兩條不同的規則：
+   *   ・「以任意方式附於自己的寶可夢身上」 → 可分散（singleTarget 不填）
+   *   ・「附於自己的 1 隻寶可夢身上」／「附於 1 隻備戰寶可夢身上」 → 只能一隻
+   * v2.158 當初把兩者混在一起升級（見本檔頭「適用招式」列表把樂呵呵之吻也列進來），
+   * 迷唇娃後來被改回單目標，但**火伊布ex｜燃燒充能一直錯到 v6.105**（玩家回報）。
+   */
+  singleTarget?: boolean;
 }
 
 export function startEnergyChain(
@@ -300,6 +311,27 @@ export function startEnergyChain(
     // v5.539：source==='hand' → 觸發對手附能被動（耿鬼ex|侵蝕詛咒 等）
     if (source === 'hand') st = fireOnHandEnergyAttached(st, aIdx, target.iid, pool);
     return addLog(st, `${label}：場上僅有 1 個合法目標 → 全 ${energyIids.length} 張能量附到 ${tname}`, aIdx);
+  }
+
+  // ⭐ v6.105：卡面「附於自己的 1 隻寶可夢」型 —— 開**一次**目標 picker，全部能量附同一隻。
+  //   （目標只有 1 隻時上面已自動全附，這裡處理 2 隻以上。）
+  //   走與「以任意方式」型同一條管線，只差這個分支 —— 能量搬移／目標 filter／詛咒根／
+  //   標籤白名單／hand-source 被動觸發全部共用，不再各卡手刻一份。
+  if (opts.singleTarget) {
+    const pickerType = scope === 'bench-only' ? 'bench-choose' : 'heal-target';
+    st = addLog(st, `${label}：選 1 隻寶可夢，${energyIids.length} 張能量全部附給它`, aIdx);
+    return withPending(st, {
+      type: pickerType,
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'v158-energy-single-target-attach',
+      params: {
+        label, source,
+        energyIids,
+        validIids: validTargets.map(c => c.iid),
+        titleOverride: `${label}：選擇要附上 ${energyIids.length} 張能量的寶可夢（全部附同一隻）`,
+      },
+    });
   }
 
   // v2.87 同屬性偵測：若所有能量都同屬性 → 改用 +/- 計數器 UI（一次選完不必逐張按）
@@ -534,6 +566,45 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
 //   params: { label, source, scope, filterType? }
 // })
 //
+/**
+ * ⭐ v6.105：單一目標附能的 resolver（卡面「附於自己的 1 隻寶可夢身上」）。
+ * 把 params.energyIids 全部從 attacker.discard 搬到玩家選的那一隻身上。
+ * ⚠ 公平性：只認 params.validIids 白名單內的目標（client 送來的 iid 一律重驗，
+ *   同 v6.009 的 resolver 自驗原則）。
+ */
+regR('v158-energy-single-target-attach', (st, aIdx, pickedIids, params, pool) => {
+  const label = String(params?.label ?? '附加能量');
+  const energyIids = (params?.energyIids as string[] | undefined) ?? [];
+  const validIids = (params?.validIids as string[] | undefined) ?? [];
+  const source = params?.source as 'deck' | 'discard' | 'hand' | undefined;
+  const targetIid = pickedIids[0];
+  if (!targetIid || energyIids.length === 0) {
+    return addLog(st, `${label}：未選擇目標，能量留在棄牌區`, aIdx);
+  }
+  if (validIids.length > 0 && !validIids.includes(targetIid)) {
+    return addLog(st, `${label}：選擇的目標不合法，能量留在棄牌區`, aIdx);
+  }
+  const tname = pool.get(
+    [st.players[aIdx].active, ...st.players[aIdx].bench].find(c => c?.iid === targetIid)?.cardId ?? ''
+  )?.name ?? '?';
+  st = updatePlayer(st, aIdx, p => {
+    const energies = p.discard.filter(c => energyIids.includes(c.iid));
+    const remDiscard = p.discard.filter(c => !energyIids.includes(c.iid));
+    const attach = (poke: CardInstance) => poke.iid === targetIid
+      ? { ...poke, energyAttached: [...poke.energyAttached, ...energies] }
+      : poke;
+    return {
+      ...p,
+      discard: remDiscard,
+      active: p.active ? attach(p.active) : p.active,
+      bench: p.bench.map(attach),
+    };
+  });
+  // v5.539：從手牌附能要觸發對手的附能反應被動（耿鬼ex｜侵蝕詛咒 等）
+  if (source === 'hand') st = fireOnHandEnergyAttached(st, aIdx, targetIid, pool);
+  return addLog(st, `${label}：${energyIids.length} 張能量全部附到 ${tname}`, aIdx);
+});
+
 regR('v158-energy-chain-start', (st, aIdx, energyIids, params, pool) => {
   return startEnergyChain(st, aIdx, energyIids, {
     label: String(params?.label ?? '招式'),
@@ -541,6 +612,8 @@ regR('v158-energy-chain-start', (st, aIdx, energyIids, params, pool) => {
     source: (params?.source as 'deck' | 'discard' | 'hand') ?? 'deck',
     scope: (params?.scope as 'bench-only' | 'any-own') ?? 'any-own',
     filterType: params?.filterType as EnergyTypeFilter | undefined,
+    // v6.105：卡面「附於自己的 1 隻寶可夢」→ 全部附同一隻（見 EnergyChainOpts.singleTarget）
+    singleTarget: params?.singleTarget === true,
     // v6.081：可附目標白名單（卡面指名寶可夢／限屬性時用）。undefined = 不限（舊行為）。
     //   例：鴨嘴炎獸｜拍檔提升 只能附「電擊魔獸」「鴨嘴炎獸」；杖尾鱗甲龍｜鱗片律動 只能附【龍】。
     targetIids: params?.targetIids as string[] | undefined,
