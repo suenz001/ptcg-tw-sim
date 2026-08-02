@@ -32,7 +32,10 @@
 
   onMount(() => {
     // v5.969：內建 changelog 改由 static/changelog.html 執行時載入(不再編譯進 bundle,縮小首頁)。override(Firestore)仍優先。
-    fetch(`${base}/changelog.html?v=${VERSION}`).then((r) => (r.ok ? r.text() : '')).then((t) => { if (t) changelogBuiltin = t; }).catch(() => { /* 載入失敗就顯示載入中 */ });
+    // v6.100：changelog.html 只留最近 50 則(173KB→33KB)，更早的移到 static/changelog-archive.html。
+    //   ⚠ 該檔是靜態片段、用 {@html} 插入，裡面寫不了 svelte 的 {base}；因此連結先寫成
+    //   `__BASE__/changelog-archive.html` 佔位，載入時在這裡換成實際 base（GitHub Pages 有子路徑前綴）。
+    fetch(`${base}/changelog.html?v=${VERSION}`).then((r) => (r.ok ? r.text() : '')).then((t) => { if (t) changelogBuiltin = t.replaceAll('__BASE__', base); }).catch(() => { /* 載入失敗就顯示載入中 */ });
 
     // v5.971：firebase 動態載入(首屏先畫、mount 後才連線)。onMount 不可宣告為 async(其回傳值不會被當 teardown)，
     //   故用內層 async IIFE + disposed/unsub 收尾模式，確保 onAuthStateChanged 的退訂在元件卸載時正確執行。
@@ -51,7 +54,10 @@
       const { doc, getDoc } = firestore;
       // v5.755：首頁更新記錄可由 admin 後台編輯(Firebase config/homeChangelog,兩站共用);讀到才覆蓋程式內建。
       getDoc(doc(db, 'config', 'homeChangelog')).then((snap) => {
-        if (snap.exists()) { const h = snap.data()?.html; if (typeof h === 'string' && h.trim()) changelogOverride = h; }
+        if (snap.exists()) { const h = snap.data()?.html;
+          // v6.100：後台 override 的內容若也貼了 __BASE__ 佔位（例如複製了封存連結），一併換掉，
+          //   否則連結會變成字面 __BASE__/... 而 404。
+          if (typeof h === 'string' && h.trim()) changelogOverride = h.replaceAll('__BASE__', base); }
       }).catch(() => { /* 沒設定 → 用程式內建 */ });
       const u = onAuthStateChanged(
         auth,

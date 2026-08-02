@@ -22,7 +22,10 @@ const CACHE_NAME = `ptcg-tw-sim-${version}`;
 //   （fetch handler 的 network-first 會在首次 fetch 時自動寫入快取）。原本安裝要一次抓 ~21MB，
 //   會跟前景「載入卡池」搶頻寬、拖慢首次載入（玩家回報卡『載入卡池中』~30 秒）。改後安裝只預快取
 //   app 本體 + 卡牌(~4MB 內)，安裝輕量、不搶頻寬；封面/音樂第一次用到時才下載並快取。
-const HEAVY_MEDIA = (u: string) => u.includes('/covers/') || u.includes('/music/');
+// v6.100：changelog-archive.html（完整更新歷史，~174KB）只有玩家點「查看完整更新歷史」時才需要，
+//   不該在每位訪客安裝 SW／每次版本更新時就背景預抓 —— 那會抵銷本版把首頁 changelog
+//   從 173KB 降到 34KB 的用意。改成「用到才快取」（與 covers／music 同一條路）。
+const HEAVY_MEDIA = (u: string) => u.includes('/covers/') || u.includes('/music/') || u.includes('changelog-archive');
 // v5.966：/card/ 子樹是 SEO 預渲染頁（3,839 張卡片頁，build/card ~73MB、近 8000 個請求）。
 //   之前把整包 prerendered（含全部 /card/ 頁）丟進「安裝時預快取」→ 首次進站 SW install 要一次抓 ~73MB，
 //   與前景 app bundle / Firestore 搶頻寬 → 手機白屏很久；且 CACHE_NAME 含 version，幾乎每日出版都讓回訪
