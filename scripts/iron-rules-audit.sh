@@ -86,12 +86,47 @@ else
 fi
 echo ""
 
-# ── Rule 14: minCount: hasX ? 1 : 0（強迫玩家在牌庫有候選時選 1 張）────────
-# v4.942 把 13 處修為 minCount: 0
-echo "── Rule 14: deck-search 的 minCount 必須永遠 0，禁用 hasX ? 1 : 0"
-matches=$(grep -rnE 'minCount:\s*has\w+\s*\?\s*1\s*:\s*0' src/lib/game/ 2>/dev/null || true)
+# ── Rule 14: 「搜尋整副牌庫」型 picker 的 minCount 必須永遠 0 ─────────────
+# v4.942 把 13 處 `minCount: hasX ? 1 : 0` 修為 0。
+#
+# ⭐ v6.102（Wilson 裁定）判準由「寫法」改為「情境」——原本純字串 grep 會誤報。
+#
+# 為什麼「搜尋整副牌庫」不可以動態 minCount：
+#   ① 牌庫是**隱藏資訊**。若「有沒有被強迫選」隨牌庫內容改變，玩家可以從自己被迫與否
+#      反推「牌庫裡還有沒有那類卡」——這是資訊洩漏。
+#   ② 官方規則允許「搜尋可以找不到」（fail-to-find），玩家有權不拿（站規 v2.321）。
+#
+# 為什麼「查看牌庫上方 N 張」是**例外**（豁免）：
+#   那 N 張已經攤開在玩家眼前 ＝ **已知資訊**，不存在①的反推、也沒有②的「找不到」問題；
+#   卡面若寫「從其中選擇 1 張…」（沒有「可以」）就是強制，此時 minCount 必須隨候選存在與否
+#   動態決定 —— 沒有候選時給 0，否則玩家會沒東西可選又沒有【不選】鈕而卡死。
+#   例：女服務生「查看自己的牌庫上方6張卡，從其中選擇1張基本能量卡…」。
+#   同型的偵查指令／探險家的嚮導／辛俐 走的是 selection-ui.ts 的
+#   MANDATORY_TOP_PICK_EFFECT_KEYS 白名單（那份白名單是無條件強制，不看候選數）。
+#
+# 豁免判準：命中行附近（±12 行，即同一個 withPending 區塊內）出現 TOP_N 或 topIids
+#   ＝ 已經把候選限縮到「玩家看過的那 N 張」→ 放行。
+echo "── Rule 14: 搜尋整副牌庫的 minCount 必須永遠 0（看頂 N 張的已知資訊型除外）"
+raw=$(grep -rnE 'minCount:\s*has\w+\s*\?\s*1\s*:\s*0' src/lib/game/ 2>/dev/null || true)
+matches=""
+if [ -n "$raw" ]; then
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    f="${line%%:*}"
+    rest="${line#*:}"
+    n="${rest%%:*}"
+    lo=$(( n > 12 ? n - 12 : 1 )); hi=$(( n + 12 ))
+    ctx=$(sed -n "${lo},${hi}p" "$f" 2>/dev/null || true)
+    # 已知資訊型（看過的固定 N 張）→ 豁免
+    if echo "$ctx" | grep -qE 'TOP_N|topIids'; then
+      continue
+    fi
+    matches="${matches}${line}"$'\n'
+  done <<< "$raw"
+fi
+matches=$(printf '%s' "$matches")
 if [ -n "$matches" ]; then
-  print_violation "14" "minCount 寫成 hasX ? 1 : 0（牌庫有候選時強迫選 1 張）" "$matches"
+  print_violation "14" "搜尋整副牌庫卻用 minCount: hasX ? 1 : 0（會洩漏牌庫是否還有該類卡，且剝奪官方允許的「找不到」）" "$matches"
 else
   echo -e "${GREEN}✓ Rule 14 clean${NC}"
 fi
