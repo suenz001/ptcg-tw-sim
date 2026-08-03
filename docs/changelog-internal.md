@@ -9,6 +9,63 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.114 — 大廳「對戰中的房間」顯示雙方場上寶可夢 ＋ 大廳排版重構（批 1／純前端）
+
+**來源**：玩家許願「希望可以在對戰房間外面顯示裡面對戰的卡組，例如雙方戰鬥區跟備戰區目前放的
+寶可夢，這樣想觀戰特定卡組學習的時候比較方便找。」Wilson 裁定照 Fable 5 的分批走，
+牌組原型標籤放到批 3（僅正式站，未命中顯示「未分類」）。
+
+### 勘查更正（我原本的假設是錯的）
+- **正式站（Oracle）大廳拿不到盤面**：`server.js` 的 `GET /api/rooms` 有
+  `projection: { 'seats.deckEntries': 0, gameState: 0 }`。所以本批的場面預覽
+  **只有測試站（Firebase `onSnapshot` 拿整份 room doc）看得到**，正式站要等批 2 的摘要端點。
+  ⚠ repo 裡的 `server js.txt` 是 2026-06-24 的副本，VM 現行版需 Wilson 確認。
+- **卡圖例外只有 5 張**（Fable 說 248 張是把非 live 的 `M5_jp_legacy` 246 張算進去了）：
+  M-P-J 兩張只有港版圖、M6 傳說競技場三張共用同一張官方圖。
+- 大廳頁的 `pool` 是進對戰後才依牌組載入的，**大廳階段沒有卡片資料庫** → 顯示卡名要額外載 DB，
+  顯示卡圖反而便宜（URL 由 cardId 合成）。
+
+### 中央管線 `src/lib/game/lobby-preview.ts`
+`buildLobbyFieldPreview(room)` 是**唯一**的資料出口，UI 不得直讀 `r.gameState`（守衛有擋）。
+**白名單建構**（逐欄位挑出來組新物件），不是「複製後 delete 私有欄位」—— 後者只要來源多一個
+欄位就會靜默外洩。輸出只有：雙方 active/bench 的 cardId、獎賞**張數**、回合數。
+形狀用 `{ p1, p2 }` 而非 `T[][]`（Firestore 巢狀陣列禁令，v6.056）；批 2 的伺服器端點回同一形狀，
+UI 不必再改一次。
+
+### ⚠⚠ 兩條真的洩漏路徑（都已 gate + 守衛）
+1. **setup 階段一律不預覽**。對戰畫面本身是 `oppHidden = (game.phase === 'setup')`，
+   開局放置期間雙方互相看不到場面；但房間此時 `status` 已經是 `playing`，若大廳照畫，
+   玩家只要**另開一個分頁看大廳**就能偷看對手還沒揭示的備戰區。（這條 Fable 沒抓到。）
+2. **等待中（lobby）的房間永遠不顯示任何場面／牌組資訊**。雙方已選牌組但還沒開打，
+   先看到對方牌組再決定加不加入＝牌組狙擊。守衛用結構 anchor 截出 lobbyRooms 區塊，
+   斷言區塊內不得出現 `buildLobbyFieldPreview` / `gameState` / `deckEntries` / `or-field`。
+
+顯示「場上寶可夢」本身**不是**洩漏：戰鬥區／備戰區、獎賞剩餘張數是 PTCG 規則上的公開資訊，
+何況觀戰模式本來就是上帝視角（有「看 P1／看 P2」工具列）。
+
+### 排版重構（Wilson：必須兼顧手機版）
+舊版 `.open-room-row` 是**單行 flex 且沒有 flex-wrap**，一列硬塞 6 個元素，375px 寬下房名被
+壓成幾個字、其餘互相擠爆；`.open-room-list` 還有 `max-height:240px` 內滾動 → 手機變成
+「頁面滾動 + 清單內滾動」雙層滾動。改成三行卡片式（`or-main` / `or-meta` / `or-field`），
+每行各自 `flex-wrap`，手機 media query 解除內滾動。名稱未填時補一行提示（舊版只是把按鈕反白，
+不說為什麼）。既有功能全部保留：練習房標籤、等待開戰標籤、房主在線圓點、房齡、房號、
+手動房號加入、私密房過濾、觀戰開關。
+
+### 卡圖
+`lobbyCardImageUrl(cardId)` 由 id 合成官方網址，5 張例外走 `CARD_IMG_EXCEPTIONS`。
+⭐ **枚舉守衛**：掃 `static/cards` 的 live 卡，凡 imageUrl 不等於合成值就**必須**在例外表裡，
+且例外表不得有多餘項 —— 以後新卡出現例外而沒補表會直接紅燈。
+載入失敗用 `or-img-failed` class 隱藏，**`onload` 會把 class 拿掉** —— keyed each 會重用節點，
+不復原的話上一張的失敗狀態會被帶到新卡上（v6.101 教訓）。備戰區 each 用 `cardId + index` 複合 key
+（只用 cardId 遇到場上兩隻同名會撞 key → 整頁白屏）。
+
+### 守衛
+`test-v6114-lobby-preview.mjs`（16 項，HEAD 13 FAIL）。
+
+### ⚠ 部署
+本批**純前端**，`npm run build` 的測試站即可驗收；正式站的大廳同樣吃這份前端，
+但因為端點沒回 `gameState`，**正式站要等批 2 才看得到場面**。
+
 ## v6.113 —「自身條件才可使用招式」維度收斂（請假王ex 漏 4 種特性消除）
 
 **Wilson 回報**：「超級泥偶巨人ex 能在手牌不滿 10 張的狀況下使用招式。」

@@ -58,6 +58,8 @@
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
   import { ORACLE_MODE, oracleAuth } from '$lib/game/oracle-client';
+  // v6.114 大廳「對戰中房間」場面預覽 —— 公開資訊白名單的單一來源（見 lobby-preview.ts 檔頭）
+  import { buildLobbyFieldPreview, lobbyCardImageUrl } from '$lib/game/lobby-preview';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
@@ -7622,15 +7624,24 @@
                 {@const _bothSeated = !!(r.seats?.[0]?.uid && r.seats?.[1]?.uid)}
                 {@const _host = hostPresence(r)}
                 <li class="open-room-row" class:practice-room={r.allowUndo} class:room-full={_bothSeated}>
-                  <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
-                  {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式 — 雙方同意可悔棋">🎯 練習</span>{/if}
-                  {#if _bothSeated}<span class="or-waiting-tag" title="雙方就坐，等待開戰中 — 進去只能加入觀戰位">⏳ 等待開戰</span>{/if}
-                  <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{r.hostName}</span>
-                  <span class="or-age muted small">· {fmtRoomAge(r.createdAt)}</span>
-                  <span class="or-code">房號 {r.roomId}</span>
-                  <button class="btn-sm primary" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
-                    {_bothSeated ? '👁 觀戰' : '加入'}
-                  </button>
+                  <!-- v6.114 第一行：房名 + 標籤 + 主要動作鈕（手機自動折行） -->
+                  <div class="or-main">
+                    <span class="or-host">🎮 {r.roomName ?? r.hostName}</span>
+                    {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式 — 雙方同意可悔棋">🎯 練習</span>{/if}
+                    {#if _bothSeated}<span class="or-waiting-tag" title="雙方就坐，等待開戰中 — 進去只能加入觀戰位">⏳ 等待開戰</span>{/if}
+                    <button class="btn-sm primary or-act" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
+                      {_bothSeated ? '👁 觀戰' : '加入'}
+                    </button>
+                  </div>
+                  <!-- v6.114 第二行：次要資訊縮成一行小字 -->
+                  <div class="or-meta">
+                    <span class="or-host-name" title={_host === 'online' ? '房主在線' : '房主可能已離開（心跳逾時）'}>{_host === 'online' ? '🟢' : '⚪'} 房主：{r.hostName}</span>
+                    <span class="or-age">· {fmtRoomAge(r.createdAt)}</span>
+                    <span class="or-code">房號 {r.roomId}</span>
+                  </div>
+                  {#if !myName.trim()}<div class="or-hint">↑ 請先在上方填寫玩家名稱才能加入</div>{/if}
+                  <!-- ⚠ 等待中的房間永遠不顯示任何牌組／場面資訊：雙方已選牌組但還沒開打，
+                       先看到對方牌組再決定要不要加入＝牌組狙擊。場面預覽只掛在下面的「對戰中」區。 -->
                 </li>
               {/each}
             </ul>
@@ -7645,16 +7656,48 @@
           {:else}
             <ul class="open-room-list playing-list">
               {#each playingRooms as r (r.roomId)}
+                {@const _fp = buildLobbyFieldPreview(r)}
                 <li class="open-room-row playing-row" class:practice-room={r.allowUndo}>
-                  <span class="or-host">⚔️ {r.roomName ?? r.hostName}</span>
-                  {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式">🎯 練習</span>{/if}
-                  <span class="or-host-name">
-                    {r.seats?.[0]?.name ?? '?'} vs {r.seats?.[1]?.name ?? '?'}
-                  </span>
-                  <span class="or-code">房號 {r.roomId}</span>
-                  <button class="btn-sm spectator-btn" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
-                    👁 觀戰
-                  </button>
+                  <div class="or-main">
+                    <span class="or-host">⚔️ {r.roomName ?? r.hostName}</span>
+                    {#if r.allowUndo}<span class="or-practice-tag" title="此房為練習模式">🎯 練習</span>{/if}
+                    <button class="btn-sm spectator-btn or-act" onclick={() => handleJoinFromList(r.roomId)} disabled={onlineLoading || !myName.trim()}>
+                      👁 觀戰
+                    </button>
+                  </div>
+                  <div class="or-meta">
+                    <span class="or-host-name">{r.seats?.[0]?.name ?? '?'} vs {r.seats?.[1]?.name ?? '?'}</span>
+                    {#if _fp}<span class="or-age">· 第 {_fp.turn} 回合</span>{/if}
+                    <span class="or-code">房號 {r.roomId}</span>
+                  </div>
+                  {#if !myName.trim()}<div class="or-hint">↑ 請先在上方填寫玩家名稱才能觀戰</div>{/if}
+                  <!-- v6.114 迷你場面列：只畫戰鬥區／備戰區寶可夢與剩餘獎賞張數，
+                       全部是 PTCG 規則上的公開資訊。資料一律經由 buildLobbyFieldPreview
+                       白名單過濾，UI 這裡拿不到手牌／牌庫／獎賞內容。 -->
+                  {#if _fp}
+                    <div class="or-field">
+                      {#each [_fp.sides.p1, _fp.sides.p2] as _sd, _si (_si)}
+                        <div class="or-side">
+                          <span class="or-side-tag">P{_si + 1}</span>
+                          {#if _sd.activeCardId}
+                            {@const _au = lobbyCardImageUrl(_sd.activeCardId)}
+                            <img class="or-card or-active-card" use:retryImg={{ url: _au, width: 120 }} src={_au}
+                              alt="戰鬥區寶可夢" loading="lazy" decoding="async" />
+                          {:else}
+                            <span class="or-card or-active-card or-card-empty" title="戰鬥區無寶可夢"></span>
+                          {/if}
+                          <span class="or-bench">
+                            {#each _sd.benchCardIds as _bid, _bi (_bid + '_' + _bi)}
+                              {@const _bu = lobbyCardImageUrl(_bid)}
+                              <img class="or-card or-bench-card" use:retryImg={{ url: _bu, width: 120 }} src={_bu}
+                                alt="備戰區寶可夢" loading="lazy" decoding="async" />
+                            {/each}
+                          </span>
+                          <span class="or-prize" title="剩餘獎賞卡張數">🏆{_sd.prizesLeft}</span>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
                 </li>
               {/each}
             </ul>
@@ -11504,15 +11547,44 @@
   .open-rooms-section{ background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.7rem .9rem; }
   .open-rooms-section h3{ margin:0 0 .5rem; font-size:.95rem; color:#aaffcc; }
   .small{ font-size:.8rem; }
-  .open-room-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; max-height:240px; overflow-y:auto; }
-  .open-room-row{ display:flex; align-items:center; gap:.6rem; padding:.5rem .75rem; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:6px; }
-  .or-host{ flex:1; font-weight:600; color:#f0f0f0; }
+  /* v6.114 大廳房間列改「卡片式多行」：原本一列硬塞 6 個元素、單行 flex 又沒有 flex-wrap，
+     手機（375px）下房名會被壓成幾個字、其餘元素互相擠爆。改成
+       第一行 or-main（房名 + 標籤 + 動作鈕）／第二行 or-meta（房主・房齡・房號）／
+       第三行 or-field（僅對戰中：迷你場面列）
+     每一行各自 flex-wrap，手機自然折行。 */
+  .open-room-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; max-height:420px; overflow-y:auto; }
+  .open-room-row{ display:flex; flex-direction:column; align-items:stretch; gap:.3rem; padding:.5rem .75rem; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:6px; }
+  .or-main{ display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+  .or-meta{ display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; font-size:.8rem; color:#9a9a9a; }
+  .or-act{ margin-left:auto; }
+  .or-hint{ font-size:.75rem; color:#e0b060; }
+  .or-host{ flex:1; min-width:6rem; font-weight:600; color:#f0f0f0; word-break:break-word; }
   .or-code{ font-family:monospace; letter-spacing:.15em; color:#aaf; font-size:.85rem; }
+  /* v6.114 迷你場面列 —— 只有戰鬥區／備戰區寶可夢與剩餘獎賞張數（皆為規則上的公開資訊） */
+  .or-field{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding-top:.15rem; border-top:1px dashed #2f4a2f; }
+  .or-side{ display:flex; align-items:center; gap:.25rem; }
+  .or-side-tag{ font-size:.7rem; color:#8aa; min-width:1.4rem; }
+  .or-bench{ display:inline-flex; gap:.12rem; flex-wrap:wrap; }
+  .or-card{ display:inline-block; border-radius:3px; background:#0c1a0c; border:1px solid #2a4a2a; object-fit:cover; object-position:top; }
+  .or-active-card{ width:32px; height:44px; }
+  .or-bench-card{ width:22px; height:30px; }
+  .or-card-empty{ opacity:.35; }
+  /* 卡圖載入失敗一律走全站的 use:retryImg（自動重試 + 代理縮圖 + :global 佔位樣式），
+     不要自己寫 onerror —— keyed each 會重用節點，自製的失敗狀態不復原就會帶到下一張卡上。 */
+  .or-prize{ font-size:.75rem; color:#ffd97a; white-space:nowrap; }
   .btn-sm{ padding:.3rem .8rem; border:none; border-radius:5px; cursor:pointer; font-size:.85rem; }
   .btn-sm.primary{ background:#3a7a3a; color:#fff; }
   .btn-sm.primary:hover:not(:disabled){ background:#4a9a4a; }
   .btn-sm:disabled{ opacity:.5; cursor:not-allowed; }
   .manual-code{ background:#0e1e0e; border:1px solid #2a4a2a; border-radius:6px; padding:.5rem .8rem; }
+  /* v6.114 手機版大廳：原本清單有 max-height:240px 內滾動，在手機上會變成
+     「頁面滾動 + 清單內滾動」的雙層滾動，很難操作 —— 手機直接解除，交給頁面滾動。 */
+  @media (max-width:600px){
+    .open-room-list{ max-height:none; overflow-y:visible; }
+    .or-act{ margin-left:auto; min-height:34px; }
+    .or-field{ flex-direction:column; align-items:flex-start; gap:.3rem; }
+    .or-meta{ font-size:.75rem; }
+  }
   .manual-code summary{ cursor:pointer; color:#ccc; font-size:.88rem; }
   .manual-code label{ margin-top:.5rem; }
   .manual-code button{ margin-top:.5rem; }
