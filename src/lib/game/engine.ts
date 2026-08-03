@@ -995,6 +995,29 @@ function isEnergy(cardId: string, pool: Map<string, Card>): boolean {
 }
 
 /**
+ * 化石卡作為寶可夢放置於場上時的**基礎** HP。卡面：「這張卡可作為 HP60 的【無】屬性的
+ * 【基礎】寶可夢放置於場上。」—— 它是 base，不是最終值（見 getEffectiveHP）。
+ */
+export const FOSSIL_BASE_HP = 60;
+
+/**
+ * ⭐ v6.112「這張卡在**場上**是不是【基礎】寶可夢」的中央述詞。
+ *
+ * 化石卡的 `pool.get(cardId)` 是 **Trainer**（`stage:null`／`hp:null`／`pokemonType:null`），
+ * 所以任何寫成 `card.stage === 'Basic'` 的判斷都**不會**命中化石 —— 但卡面明寫它
+ * 「可作為…【基礎】寶可夢放置於場上」。以「【基礎】寶可夢」為條件的場上效果
+ * （例：激動競技場「雙方場上所有【基礎】寶可夢最大HP各+30」）必須用這個述詞，
+ * 不要各自手刻 `card.stage === 'Basic' || inst.fossilOnField`。
+ */
+export function isBasicPokemonOnField(
+  inst: CardInstance | null | undefined,
+  card: Card | undefined,
+): boolean {
+  if (inst?.fossilOnField) return true;
+  return card?.stage === 'Basic';
+}
+
+/**
  * 計算寶可夢的「有效 HP」— 基礎 HP + 附加道具的 HP 加成。
  * 被 KO 判定、UI 顯示血條都要用這個函式，而非直接讀 card.hp。
  */
@@ -1004,9 +1027,43 @@ export function getEffectiveHP(
   state?: GameState
 ): number {
   if (!inst) return 0;
-  // v2.187：化石上場永遠 60HP，且不吃任何 Tool/能量/Stadium 加減
-  if (inst.fossilOnField) return 60;
   const card = pool.get(inst.cardId);
+  // ⭐⭐ v6.112（玩家回報「英雄斗篷附在化石上沒作用」，Wilson 裁定：依現行卡面，加成生效）
+  //   舊寫法是 `if (inst.fossilOnField) return 60;`（v2.187「化石不吃任何 Tool/能量/Stadium 加減」）。
+  //   **那條限制我們自己加的，現行卡面與官方規則都沒有**：
+  //   ・現行台灣官方卡面只有兩個限制 —— 「不會陷入特殊狀態」「無法撤退」。
+  //   ・官方規則 1031 條 Q&A 全文查不到任何「化石不受寶可夢道具影響／HP 固定 60」的條文；
+  //     反而 §17.39.I 明示「治癒襁褓**可以**恢復場上化石的 HP」、§17.38.B 化石可被效果KO、
+  //     §17.37.C 化石可被進化 —— 在場上就是一隻普通的寶可夢。
+  //   ・§128 寶可夢道具通則：「處於附加狀態時，寶可夢道具的效果**皆為有效狀態**。」
+  //   ⚠ 舊寫法的來源已查出：`static/cards/M5_jp_legacy.json`（日文預覽版舊文本）曾寫
+  //     「無法被附加能量，也不受弱點和抵抗力的影響」—— **現行卡面已刪除這兩句**，程式沒跟上。
+  //   ⚠ 而且舊行為是最糟的組合：UI 讓你附、log 說附上了、只有 HP 加成被吞掉。
+  //   修法＝**只換 base，不早退**，之後整條既有加成鏈（阻礙之塔 gate → 道具 → 特殊能量 →
+  //   場地 → 被動特性）原封不動走完；屬性／卡名不符的（增強【草】能量、引力山岳）本來就不會命中。
+  if (inst.fossilOnField) {
+    // 化石在場上是 Trainer 卡，pool 查到的 card 沒有 hp/stage —— base 用卡面明寫的 60。
+    let fhp = FOSSIL_BASE_HP;
+    if (!(state ? isToolsJammed(state, pool) : false)) {
+      for (const t of getAllAttachedTools(inst)) {
+        const tool = pool.get(t.cardId);
+        const bonusFn = tool ? TOOL_HP_BONUS.get(tool.name) : undefined;
+        // ⚠ TOOL_HP_BONUS 的 fn 吃「持有者的 Card」做 gate（勇氣護符要 !evolvesFrom、
+        //   豪華斗篷要 !isRulePokemon）。化石的 card 是 Trainer：evolvesFrom 為 undefined、
+        //   不是規則寶可夢 —— 這兩個 gate 的答案本來就正確，直接把 card 傳進去即可。
+        if (bonusFn && card) fhp += bonusFn(card);
+      }
+    }
+    for (const e of inst.energyAttached) {
+      const ec = pool.get(e.cardId);
+      const fn = ec ? SPECIAL_ENERGY_HP_BONUS.get(ec.name) : undefined;
+      if (fn && card) fhp += fn(card);
+    }
+    // 場地：只有「以【基礎】寶可夢為條件」的那條會命中（走中央述詞，不手刻）。
+    const stName = state?.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
+    if (stName === '激動競技場' && isBasicPokemonOnField(inst, card)) fhp += 30;
+    return Math.max(0, fhp);
+  }
   if (!card) return 0;
   let hp = card.hp ?? 0;
   // v5.999：被動「最大HP」特性(雜草魂/生機森巴/大師工藝/腎上腺力量/暴龍根性)被暗夜羽擊/初始化/黏著
@@ -1047,8 +1104,9 @@ export function getEffectiveHP(
     hp = Math.max(0, hp - 30);
   }
   // v2.265：激動競技場（Stadium）— 雙方場上所有【基礎】寶可夢最大 HP +30
-  //   （化石上場走 line 354 早退、不吃 Stadium 加減；本 hook 對 fossilOnField 不會觸發）
-  if (stadiumNameHP === '激動競技場' && card.stage === 'Basic') {
+  //   v6.112：判準改走中央述詞 isBasicPokemonOnField（化石在場上也是【基礎】寶可夢，
+  //   但它的 card 是 Trainer、stage 恆 null，寫 card.stage==='Basic' 永遠不會命中）。
+  if (stadiumNameHP === '激動競技場' && isBasicPokemonOnField(inst, card)) {
     hp += 30;
   }
   // v2.382：昂主花葉蒂（Stadium, M4）— 雙方場上所有「超級花葉蒂ex」最大 HP +150

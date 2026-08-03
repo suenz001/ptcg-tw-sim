@@ -1423,11 +1423,6 @@ function tsFilterBarHtml(nOfficial, nCommunity) {
   return '<div class="toolbar" style="margin:8px 0 12px;">'
     + btn('all', '全部賽事', nOfficial + nCommunity) + btn('official', '🏛️ 網站賽', nOfficial)
     + btn('community', '👥 社群自辦賽', nCommunity)
-    // v1.66 奪冠報告圖：⚠ 這顆鈕**不受上面的篩選影響** —— 圖裡固定同時呈現網站賽與社群賽，
-    //   用的是全量 archives。按鈕擺這裡只是位置方便，行為上與 tsEventFilter 無關。
-    + '<button id="champ-img-btn" style="margin-left:12px;" onclick="openChampionReportExport()"'
-    + ' title="產生可直接發佈給玩家的奪冠報告圖（1080×1350 PNG）；內容固定含網站賽與社群賽，不受左邊的篩選影響">'
-    + '🏆 匯出奪冠報告圖</button>'
     + '<span class="small muted" style="margin-left:auto;">此選擇會同時套用到下方所有統計</span></div>';
 }
 
@@ -2468,6 +2463,11 @@ function renderDeckRules(el) {
       <button onclick="loadArchetypeStats()">📊 計算統計</button>
       <button id="meta-img-btn" onclick="openMetaImageExport()" disabled
               title="產生可直接發佈給玩家的環境報告圖（1080×1350 PNG）">🖼️ 匯出環境報告圖</button>
+      <!-- v6.112（Wilson）：奪冠報告圖挪來這裡，與環境報告圖並排、共用左邊的「統計範圍」下拉。
+           ⚠ 它**不需要**先按「計算統計」（那是牌組原型統計；本圖自己抓賽事歸檔），所以不 disabled。
+           ⚠ 也**不受**賽事統計分頁的網站賽／社群賽篩選影響 —— 圖裡固定兩者都呈現。 -->
+      <button id="champ-img-btn" onclick="openChampionReportExport()"
+              title="產生可直接發佈給玩家的奪冠報告圖（1080×1350 PNG）；時間範圍用左邊的「統計範圍」">🏆 匯出奪冠報告圖</button>
     </div>
     <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
@@ -2931,7 +2931,7 @@ window.downloadMetaImage = function (srcKey) {
 const CR = {
   MAXCHAMP: 3,       // 冠軍列最多幾列（超過改成「冠軍牌組次數榜」）
   MAXTOP4: 6,        // 四強牌組榜最多幾列
-  MAXCOMM: 2,        // 社群賽冠軍列最多幾列
+  MAXCOMM: 5,        // 社群賽奪冠牌組榜最多幾列（列高 56，比冠軍列 92 省空間）
   MIN_FOR_TOP4: 8,   // ⭐ 參賽 < 8 人不計四強：4 人賽的「四強」＝全體參賽者，數字正確但荒謬
 };
 let _crOut = null, _crBusy = false;
@@ -2972,7 +2972,13 @@ function crBuild(allArchives, reportMap, days) {
     };
   };
   const siteChamps = site.map(champRow).filter(Boolean);
-  const commChamps = comm.map(champRow).filter(Boolean);
+  // ⭐ v6.112（Wilson）：社群賽**不列玩家名字** —— 這張圖是給玩家看「哪些牌組目前強勢」，
+  //   不是個人成績表。社群賽改成「該期間奪冠次數最多的前幾名牌組」。
+  const commChampRows = comm.map(champRow).filter(Boolean);
+  const commMap = new Map();
+  for (const c of commChampRows) commMap.set(c.deck, (commMap.get(c.deck) || 0) + 1);
+  const commRank = [...commMap.entries()].map(([name, n]) => ({ name: name, n: n }))
+    .sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
   // 四強牌組次數（只計網站賽、且參賽 >= MIN_FOR_TOP4 人；口徑與大廳排行榜一致：社群賽不算名次）
   const t4 = new Map();
   let t4Events = 0, t4Skipped = 0, noCut = 0, noChamp = site.length - siteChamps.length;
@@ -2996,7 +3002,7 @@ function crBuild(allArchives, reportMap, days) {
     .sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
   const times = arcs.map((a) => a.finishedAt || 0).filter(Boolean);
   return {
-    days: days, siteChamps: siteChamps, commChamps: commChamps,
+    days: days, siteChamps: siteChamps, commRank: commRank, commChampCount: commChampRows.length,
     t4Rows: t4Rows, t4Total: t4Total, t4Events: t4Events, t4Skipped: t4Skipped,
     noCut: noCut, noChamp: noChamp, champRank: champRank,
     nSite: site.length, nComm: comm.length,
@@ -3009,7 +3015,7 @@ function crBuild(allArchives, reportMap, days) {
 
 /** 畫奪冠報告圖。沒有任何冠軍可列時回 null。 */
 async function crDraw(d) {
-  if (!d || (!d.siteChamps.length && !d.commChamps.length)) return null;
+  if (!d || (!d.siteChamps.length && !d.commRank.length)) return null;
   const cv = document.createElement('canvas');
   cv.width = MI.W * MI.S; cv.height = MI.H * MI.S;
   const ctx = cv.getContext('2d');
@@ -3041,6 +3047,11 @@ async function crDraw(d) {
     + d.entries + ' 人次參賽', PAD + 24, 232);
 
   let y = 280;
+  // ⚠ v6.112：第一版每區都用固定 max 列數、y 一路累加 —— 社群賽場次一多就把註腳與頁腳
+  //   整個蓋過去（Wilson 回報「很多字疊在一起」）。改成**畫之前先算剩餘空間**，
+  //   列數 = min(想畫的, 塞得下的)；註腳／頁腳是硬保留區，永遠不會被吃掉。
+  const NOTE_TOP = MI.H - 168;
+  const roomFor = (rowH, reserve) => Math.max(0, Math.floor((NOTE_TOP - (reserve || 0) - y) / rowH));
   const sectionHead = (icon, title, right, color) => {
     miFont(ctx, 30, true); ctx.fillStyle = color;
     ctx.fillText(icon + ' ' + title, PAD, y);
@@ -3085,12 +3096,14 @@ async function crDraw(d) {
   };
 
   // ── 網站賽冠軍
+  // ⚠ reserve＝後面兩區（四強、社群賽）各留「標題＋2 列」的高度，否則這區會把後面擠掉。
+  const RESERVE_AFTER_CHAMP = (34 + 56 * 2 + 30) * 2;
   if (d.siteChamps.length > CR.MAXCHAMP) {
     sectionHead('🏆', '網站賽　冠軍牌組', d.nSite + ' 場合計', A1);
-    rankRows(d.champRank.map((r) => ({ name: r.name, n: r.n })), CR.MAXCHAMP + 1, A1);
+    rankRows(d.champRank, Math.min(CR.MAXCHAMP + 1, roomFor(56, RESERVE_AFTER_CHAMP)), A1);
   } else if (d.siteChamps.length) {
     sectionHead('🏆', '網站賽　冠軍', d.siteChamps.length + ' 場', A1);
-    champRows(d.siteChamps, CR.MAXCHAMP, A1);
+    champRows(d.siteChamps, Math.min(CR.MAXCHAMP, roomFor(92, RESERVE_AFTER_CHAMP)), A1);
   } else {
     sectionHead('🏆', '網站賽　冠軍', '', A1);
     miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有已完賽的網站賽', PAD + 8, y + 10); y += 46;
@@ -3099,7 +3112,8 @@ async function crDraw(d) {
   // ── 四強牌組
   y += 12;
   sectionHead('🥈', '網站賽　四強牌組（含冠亞）', d.t4Total ? ('共 ' + d.t4Total + ' 位') : '', K.dim);
-  if (d.t4Rows.length) rankRows(d.t4Rows, CR.MAXTOP4, A2);
+  const RESERVE_AFTER_T4 = 30 + 34 + 56 * 2 + 30;
+  if (d.t4Rows.length) rankRows(d.t4Rows, Math.min(CR.MAXTOP4, roomFor(56, RESERVE_AFTER_T4)), A2);
   else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有可判定四強的網站賽', PAD + 8, y + 10); y += 46; }
 
   // ── 社群賽冠軍（永遠保留區塊，沒資料也印一行，避免版面塌陷）
@@ -3107,13 +3121,13 @@ async function crDraw(d) {
   ctx.strokeStyle = K.ln; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(PAD, y - 6); ctx.lineTo(MI.W - PAD, y - 6); ctx.stroke();
   y += 18;
-  sectionHead('👥', '社群賽　冠軍', d.nComm + ' 場', C1);
-  if (d.commChamps.length) champRows(d.commChamps, CR.MAXCOMM, C1);
+  sectionHead('👥', '社群賽　奪冠最多的牌組', d.nComm + ' 場', C1);
+  if (d.commRank.length) rankRows(d.commRank, Math.min(CR.MAXCOMM, roomFor(56, 0)), C1);
   else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有社群賽', PAD + 8, y + 10); y += 46; }
 
   // ── 註腳（把口徑講清楚，避免玩家拿去跟大廳排行榜對數字時誤會）
   const notes = [];
-  notes.push('四強＝準決賽的 4 位選手（含冠亞）　・　社群賽場次少，只列冠軍、不做排名');
+  notes.push('四強＝準決賽的 4 位選手（含冠亞）　・　社群賽只統計奪冠牌組、不列個人成績');
   if (d.t4Skipped) notes.push('未滿 ' + CR.MIN_FOR_TOP4 + ' 人的賽事不計四強（' + d.t4Skipped + ' 場）');
   if (d.noCut) notes.push('另有 ' + d.noCut + ' 場因賽程結構無法判定四強');
   if (d.noChamp > 0) notes.push('另有 ' + d.noChamp + ' 場沒有冠軍（賽事取消或雙方未到）');
@@ -3136,8 +3150,16 @@ async function crDraw(d) {
 
 window.openChampionReportExport = async function () {
   if (_crBusy) return;
+  // ⚠ v6.112：按鈕移到「牌組原型」分頁後，使用者可能根本沒開過「賽事統計」→ 快取是 null。
+  //   自己補載一次（同一支端點，載完賽事統計分頁也受惠）。
   if (!tournStatsCache || !((tournStatsCache.archives || []).length)) {
-    alert('請先讓「📈 賽事統計」載入完成。'); return;
+    try {
+      const d0 = await api('/api/tournament/admin/stats');
+      if (d0 && !d0.error) tournStatsCache = d0;
+    } catch (e) { /* 下面統一報錯 */ }
+  }
+  if (!tournStatsCache || !((tournStatsCache.archives || []).length)) {
+    alert('讀不到賽事歸檔資料（或目前沒有已完賽的賽事）。'); return;
   }
   const btn = document.getElementById('champ-img-btn');
   const label = btn ? btn.textContent : '';

@@ -89,6 +89,32 @@ T('⭐ 全圖不出現百分比（奪冠是個位數事件，畫比率必然誤�
   ok(!/'%'/.test(draw) && !/\+ '%/.test(draw), 'crDraw 有拼接百分比符號');
 });
 
+// ⚠ v6.112：Wilson 回報第一版「很多字疊在一起」—— 每區固定 max 列數＋y 一路累加，
+//   社群賽場次一多就壓過註腳與頁腳。修法＝畫之前先算剩餘空間。
+T('⭐ 版面用 roomFor 動態算列數，且註腳有硬保留區（不得再壓字）', () => {
+  const draw = section(CRSEC, 'async function crDraw', 'window.openChampionReportExport');
+  ok(/const roomFor = /.test(draw), '沒有 roomFor —— 列數又寫死了');
+  ok(/const NOTE_TOP = /.test(draw), '沒有註腳保留區');
+  const calls = (draw.match(/roomFor\(/g) || []).length;
+  ok(calls >= 4, 'roomFor 只被用了 ' + (calls - 1) + ' 次（應該每個會長高的區塊都要用）');
+});
+
+T('⭐ 匯出按鈕在「牌組原型」分頁、與環境報告圖並排（Wilson 指定位置）', () => {
+  const i = ADM.indexOf('id="meta-img-btn"');
+  ok(i > 0, '找不到環境報告圖按鈕');
+  const win = ADM.slice(i, i + 900);
+  ok(/id="champ-img-btn"/.test(win), '奪冠報告圖按鈕不在環境報告圖旁邊');
+  ok(/arch-since/.test(ADM.slice(Math.max(0, i - 1500), i)), '兩顆鈕上方應該就是「統計範圍」下拉');
+  // 舊位置（賽事統計的篩選列）不得殘留
+  ok(!/tsFilterBarHtml[\s\S]{0,600}champ-img-btn/.test(ADM), '賽事統計分頁還留著舊按鈕');
+});
+
+T('⭐ 快取沒載過也要能產圖（按鈕換頁後 tournStatsCache 可能是 null）', () => {
+  const open = section(CRSEC, 'window.openChampionReportExport', 'window.renderChampionReportModal');
+  ok(/api\('\/api\/tournament\/admin\/stats'\)/.test(open),
+    '沒有在快取為空時自己補載 —— 使用者從沒開過「賽事統計」就會按不出圖');
+});
+
 T('⭐ 也不做「較上期」趨勢（奪冠數的期間差幾乎全是噪音）', () => {
   const draw = section(CRSEC, 'async function crDraw', 'window.openChampionReportExport');
   ok(!/miTrend\(/.test(draw), 'crDraw 引用了 miTrend —— 這張圖刻意不做趨勢');
@@ -185,13 +211,40 @@ T('⭐ 未滿 8 人的網站賽不計四強（但仍計冠軍）', () => {
   ok(d.t4Total === 1, '四強只該算 16 人那場的 1 位，實得 ' + d.t4Total);
 });
 
-T('⭐ 社群賽只進 commChamps，完全不進四強統計（與大廳排行榜口徑一致）', () => {
+T('⭐ 社群賽只算牌組次數、完全不進四強統計（與大廳排行榜口徑一致）', () => {
   const arcs = [ev('c1', true, 8, 'u1')];
   const rep = new Map([['c1', { championArchetype: 'A', top4: [{ uid: 'u1', archetype: 'A' }], placementsOk: true }]]);
   const d = crBuild(arcs, rep, 0);
-  ok(d.commChamps.length === 1, '社群賽冠軍應有 1 場');
+  ok(d.commRank.length === 1 && d.commRank[0].n === 1, '社群賽奪冠牌組榜應有 1 筆 ×1');
   ok(d.siteChamps.length === 0, '社群賽不該進網站賽冠軍');
   ok(d.t4Total === 0, '社群賽不該進四強統計，實得 ' + d.t4Total);
+});
+
+// ⭐ v6.112（Wilson）：「社群賽不要列玩家名字，這個圖是讓玩家參考哪些牌組強勢，
+//   不是針對個人玩家的成績」→ 社群賽改成「該期間奪冠次數最多的前幾名牌組」。
+T('⭐ 社群賽同一牌組多次奪冠會累加成次數榜（而不是一場一列玩家）', () => {
+  const arcs = [ev('c1', true, 8, 'u1'), ev('c2', true, 8, 'u2'), ev('c3', true, 8, 'u3')];
+  const rep = new Map([
+    ['c1', { championArchetype: '甲牌組', top4: [], placementsOk: false }],
+    ['c2', { championArchetype: '甲牌組', top4: [], placementsOk: false }],
+    ['c3', { championArchetype: '乙牌組', top4: [], placementsOk: false }],
+  ]);
+  const d = crBuild(arcs, rep, 0);
+  ok(d.commRank.length === 2, '應聚合成 2 種牌組，實得 ' + d.commRank.length);
+  ok(d.commRank[0].name === '甲牌組' && d.commRank[0].n === 2, '次數最多的應排第一且為 2');
+  ok(d.commChampCount === 3, '總冠軍場次應為 3');
+});
+
+T('⭐ 社群賽區塊不得再輸出玩家名字（欄位層級的保證）', () => {
+  ok(!/commChamps/.test(CRSEC), '還留著 commChamps（一場一列、會印玩家暱稱）');
+  const draw = section(CRSEC, 'async function crDraw', 'window.openChampionReportExport');
+  // ⚠ anchor 用區塊標題的 emoji，不要用「社群賽」三個字 —— 它在副標
+  //   （「網站賽 X 場・社群賽 Y 場」）就出現過一次，會抓到錯的位置。
+  const i = draw.indexOf("sectionHead('👥'");
+  ok(i > 0, '找不到社群賽區塊');
+  const win = draw.slice(i, i + 400);
+  ok(!/champRows\(/.test(win), '社群賽區塊仍用 champRows（那個會印暱稱）');
+  ok(/rankRows\(/.test(win), '社群賽區塊應改用牌組次數榜 rankRows');
 });
 
 T('沒有冠軍的場次（取消／雙方未到）不列，但要計入註腳數字', () => {
