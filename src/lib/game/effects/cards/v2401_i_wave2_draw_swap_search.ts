@@ -118,7 +118,12 @@ function deckSearchBasicEnergyPost(
     return withPending(s, {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: 'BasicEnergy',
+      // ⭐ v6.109：卡面是「基本【草】／【水】／【雷】能量」——filter 要逐字對齊到**屬性**，
+      //   不能只寫 'BasicEnergy'（那會把牌庫**所有**基本能量列進可勾區，玩家在一堆點不動的
+      //   能量裡找目標，畫面也沒說明為何點不下去）。'BasicEnergy:<Type>' 是既有中央 filter，
+      //   UI／ai.ts／selection-filter 三處都已接線（走 isBasicEnergyOfType，基本能量 pokemonType
+      //   恒 null 時用卡名【X】判斷）。
+      filter: `BasicEnergy:${type}`,
       minCount: 0, maxCount: n,
       effectKey: resolverKey,
       params: { validIids, label },

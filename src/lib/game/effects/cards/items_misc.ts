@@ -1201,7 +1201,11 @@ reg('招式學習器機', (st, idx, pool) => {
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'PokemonTool',
+    // ⭐ v6.109：卡面「名稱中有『招式學習器』的『寶可夢道具』卡」——兩個條件都要進 filter。
+    //   舊寫法 'PokemonTool' 會列出牌庫**所有**寶可夢道具、只靠 validIids 擋。
+    //   ⚠ 不能用既有的 'NameContains:'：那個 prefix 的語義是「名稱含 X 的**物品卡**」
+    //   （化石採掘場 v5.155 建立），會把 Item 的「招式學習器機」本身也列進來、卻列不到道具。
+    filter: 'Tool:NameContains=招式學習器',
     minCount: 0, maxCount: Math.min(3, validIids.length),
     effectKey: 'tm-machine-pick',
     params: { validIids },

@@ -71,8 +71,11 @@ regR('m6-partner-boost-pick', (st, idx, iids, params, pool) => {
 // ── 2. 杖尾鱗甲龍｜鱗片律動 ───────────────────────────────────────────────
 // 卡面：在自己的回合時可使用1次。查看自己的牌庫上方6張卡，從其中選擇任意數量的
 //        基本能量卡，以任意方式附於自己的【龍】寶可夢身上。將剩餘卡放回牌庫並重洗。
-//   ⚠ filter 用已接線的 'TOP6'（picker 顯示翻開的 6 張全部＝「查看」），
-//     可勾選的限制走 validIids（只有基本能量）。
+//   ⚠ v6.109：filter 用 **'BasicEnergy:TOP_N'**（既有中央 filter，UI／ai.ts 都已接線）——
+//     可勾區只顯示「翻到的 6 張裡的基本能量」，其餘非能量卡走 UI 的
+//     「🔍 查看翻到的其他 N 張（本次不可選）」下拉（同寶可裝置3.0 的做法）。
+//     ⚠ 舊寫法 filter:'TOP6' 是把 6 張全丟進可勾區、只靠 validIids 擋 ——
+//     玩家要在一堆不能選的卡裡找能量，且「為什麼點不下去」沒有任何解釋。
 //   ⚠「以任意方式」→ startEnergyChain 逐張選目標；目標限自己的【龍】寶可夢。
 regAByName('杖尾鱗甲龍', '鱗片律動', (st, idx, pool) => {
   const p = st.players[idx];
@@ -87,10 +90,13 @@ regAByName('杖尾鱗甲龍', '鱗片律動', (st, idx, pool) => {
   return withPending(
     addLog(st, `鱗片律動：查看牌庫上方 ${top6.length} 張，選任意數量基本能量附於自己的【龍】寶可夢`, idx), {
       type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-      filter: 'TOP6',
+      filter: 'BasicEnergy:TOP_N',
       minCount: 0, maxCount: Math.max(1, basicEnergyIids.length),
       effectKey: 'v158-energy-chain-start',
       params: {
+        // ⚠ 'BasicEnergy:TOP_N' 讀的是 **topIids**（UI／ai.ts 兩端都是）；
+        //   top6Iids 保留給「查看翻到的其他 N 張」的 fallback 鏈與既有 test。
+        topIids: top6.map(c => c.iid),
         top6Iids: top6.map(c => c.iid),
         validIids: basicEnergyIids,
         label: '鱗片律動', source: 'deck', scope: 'any-own', filterType: 'Any',
@@ -124,13 +130,19 @@ regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
   const s = addLog(st, `霸者咆哮：查看牌庫上方 ${top4.length} 張，選 1 張基本能量附於自己`, idx);
   return withPending(s, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'TOP4',
+    // ⭐ v6.109（玩家回報）：只把「翻到的 4 張裡的基本能量」放進可勾區，
+    //   非能量卡走 UI 的「🔍 查看翻到的其他 N 張（本次不可選）」下拉 —— 同寶可裝置3.0。
+    //   舊寫法 filter:'TOP4' 把 4 張全丟進可勾區、只靠 validIids 擋，玩家看不出為何點不下去。
+    //   ⚠ 用既有中央 filter 'BasicEnergy:TOP_N'（讀 params.topIids），不新增 filter 字面量
+    //   ——新字面量要 UI／ai.ts／lint Check S 三處都接，是漂移的來源。
+    filter: 'BasicEnergy:TOP_N',
     // v6.091：卡面「從其中**選擇1張**基本能量卡」沒有「最多」字樣，且這 4 張已經被玩家看過
     //   ＝已知資訊 → 有候選時必選（站內既有規則：已知資訊的選擇不給「不選」鈕）。
     //   4 張裡完全沒有基本能量時 minCount 必須是 0，否則玩家會被卡在關不掉的 picker。
     minCount: basicEnergyIids.length > 0 ? 1 : 0, maxCount: 1,
     effectKey: 'm6-overlord-roar',
     params: {
+      topIids: top4.map(c => c.iid),
       top4Iids: top4.map(c => c.iid),
       validIids: basicEnergyIids,
       selfIid,

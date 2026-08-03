@@ -85,9 +85,11 @@ const HAT      = byName('超級烈空坐帽子');
     const st=mk({ active:self, bench:[], hand:[], deck });
     const r=fn(st,0,pool,self);
     const ps=r.pendingSelection;
-    chk('鱗片律動：開 deck-search TOP6', ps?.type==='deck-search' && ps?.filter==='TOP6', `${ps?.type}/${ps?.filter}`);
+    // v6.109：filter 由純 'TOP6' 改為類別型 'BasicEnergy:TOP_N'（可勾區只顯示基本能量，
+    //   其餘卡走 UI 的「查看翻到的其他 N 張」下拉）——見 test-v6109-peek-typed-filter.mjs
+    chk('鱗片律動：開 deck-search BasicEnergy:TOP_N', ps?.type==='deck-search' && ps?.filter==='BasicEnergy:TOP_N', `${ps?.type}/${ps?.filter}`);
     chk('鱗片律動：接中央 energy-chain', ps?.effectKey==='v158-energy-chain-start', ps?.effectKey);
-    chk('鱗片律動：翻開的是牌庫頂 6 張', (ps?.params?.top6Iids??[]).length===6);
+    chk('鱗片律動：翻開的是牌庫頂 6 張', (ps?.params?.topIids??[]).length===6 && (ps?.params?.top6Iids??[]).length===6);
     const valid=new Set(ps?.params?.validIids ?? []);
     chk('鱗片律動：可勾的只有基本能量（特殊能量不可勾）',
         valid.has(deck[0].iid)&&!valid.has(deck[1].iid)&&!valid.has(deck[3].iid), JSON.stringify([...valid]));
@@ -113,7 +115,7 @@ const HAT      = byName('超級烈空坐帽子');
     const st=mk({ active:null, bench:[self], hand:[], deck });
     const r=fn(st,0,pool,self);
     const ps=r.pendingSelection;
-    chk('霸者咆哮：開 deck-search TOP4', ps?.type==='deck-search' && ps?.filter==='TOP4', `${ps?.type}/${ps?.filter}`);
+    chk('霸者咆哮：開 deck-search BasicEnergy:TOP_N', ps?.type==='deck-search' && ps?.filter==='BasicEnergy:TOP_N', `${ps?.type}/${ps?.filter}`);
     chk('霸者咆哮：最多 1 張', ps?.maxCount===1, String(ps?.maxCount));
     const valid=new Set(ps?.params?.validIids ?? []);
     chk('霸者咆哮：候選只含前 4 張裡的基本能量',

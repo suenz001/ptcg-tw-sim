@@ -107,8 +107,15 @@ function collectChainCalls() {
       const lines = src.split('\n');
       lines.forEach((ln, i) => {
         if (!ln.includes("effectKey: 'v158-energy-chain-start'")) return;
-        // params 通常緊接在 effectKey 之後 1~4 行內
-        const ctx = lines.slice(i, i + 6).join('\n');
+        // ⚠ v6.109：原本窗口寫死 6 行 —— 只要有人在 params 裡多加一行欄位或兩行註解，
+        //   label 就被推出窗口、變成「反查不到卡面」，守衛涵蓋率靜默下降（我在 v6.109 就踩到）。
+        //   改成 20 行，並在遇到**下一個** effectKey 時截斷（避免抓到隔壁呼叫點的 label）。
+        const win = [];
+        for (let j = i; j < Math.min(lines.length, i + 20); j++) {
+          if (j > i && lines[j].includes('effectKey:')) break;
+          win.push(lines[j]);
+        }
+        const ctx = win.join('\n');
         const m = /label:\s*'([^']+)'/.exec(ctx);
         out.push({ file: ent.name, line: i + 1, label: m ? m[1] : null, singleTarget: /singleTarget:\s*true/.test(ctx) });
       });

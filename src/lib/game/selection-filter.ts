@@ -221,6 +221,12 @@ export function evaluateSelectionFilter(
     if (filter.startsWith('NameContains:')) {
       return card.supertype === 'Trainer' && card.subtype === 'Item' && card.name.includes(filter.slice('NameContains:'.length));
     }
+    // v6.109 Tool:NameContains=X ＝【招式學習器機】語義：名稱含 X 的**寶可夢道具**卡。
+    //   ⚠ 與上面的 'NameContains:'（化石採掘場＝物品卡）是**不同 subtype**，別合併。
+    if (filter.startsWith('Tool:NameContains=')) {
+      return card.supertype === 'Trainer' && card.subtype === 'PokemonTool'
+        && card.name.includes(filter.slice('Tool:NameContains='.length));
+    }
     if (filter.startsWith('Card:')) return card.name === filter.slice(5);
     if (filter.startsWith('Basic:NamePrefix=')) return isBasicPokemonCard(card) && card.name.startsWith(filter.slice('Basic:NamePrefix='.length));
     return null;   // 其餘(TOP/Evolution/params/generic Pokemon:/BasicEnergy: 等)批次遷移 → caller fallback

@@ -245,7 +245,11 @@ regPost('樹才怪|考驗之旅', (state, aIdx, pool) => {
     type: 'deck-search',
     actorIdx: aIdx,
     sourcePlayerIdx: aIdx,
-    filter: 'Any',
+    // ⭐ v6.109：卡面「選擇最多2張**『變化之書』**」——filter 用既有中央 'Name:' 精確比對，
+    //   可勾區只放變化之書。舊寫法 'Any' 會顯示**整副牌庫**、只靠 validIids 擋，
+    //   玩家得在 50 張裡找那兩張。⚠ 玩家仍看得到整副牌庫——非 TOP 型 picker 會顯示
+    //   「📖 查看牌庫剩餘全部」下拉（Iron Rule 14 的「查看」語義不受影響）。
+    filter: 'Name:變化之書',
     minCount: 0,
     maxCount: realMax,
     effectKey: 'j-2354-morphbk-search',

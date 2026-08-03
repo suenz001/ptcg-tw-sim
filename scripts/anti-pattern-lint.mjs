@@ -791,8 +791,37 @@ for (const f of files) {
 }
 
 
+// ── Check W：deck-search 用純 'TOPn' 卻帶 validIids（可勾限制沒反映在顯示上）──────────
+//   背景（v6.109，玩家回報超級烈空坐ex｜霸者咆哮）：卡面「查看牌庫上方 N 張，從其中選擇
+//   **某類別**的卡」若寫成 filter:'TOPn'，UI 會把 N 張**全部**丟進可勾區，只靠 validIids
+//   擋住不能選的 —— 玩家要在一堆點不動的卡裡找目標，而且畫面完全沒說明為什麼點不下去。
+//   正解（同寶可裝置3.0）：filter 用**類別型**（'BasicEnergy:TOP_N' / 'Supporter:TOP7' …），
+//   可勾區只留該類別，其餘走 UI 的「🔍 查看翻到的其他 N 張（本次不可選）」下拉。
+//   ⚠ 純 'TOPn' 本身沒錯 —— 卡面若是「選任意 N 張卡」（探險家的嚮導／八朔／多龍奇｜偵查指令）
+//   就該全部可勾。判準是「**有沒有 validIids**」：有 = 卡面限了類別 = 顯示也要限。
+{
+  const W_RE = /filter:\s*'TOP\d+'/;
+  for (const f of files) {
+    const relf = f.slice(ROOT.length).split(sepChar).join('/');
+    if (!/src\/lib\/game\/effects/.test(relf)) continue;
+    const lines = readFileSync(f, 'utf8').split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const code = lines[i].replace(/\/\/.*$/, '');
+      if (!W_RE.test(code)) continue;
+      // 同一個 withPending 物件內（往後 25 行）出現 validIids ⇒ 可勾集合是子集
+      const span = lines.slice(i, i + 25).join('\n').replace(/\/\/[^\n]*/g, '');
+      if (!/validIids\s*:/.test(span)) continue;
+      if (/top-filter-ok/.test(lines[i]) || /top-filter-ok/.test(lines[i - 1] ?? '')) continue;
+      violations.push(`[W] ${relf}:${i + 1} — deck-search 用純 'TOPn' 卻帶 validIids：`
+        + `可勾的只有子集、畫面卻顯示全部（玩家看不出為何點不下去）。`
+        + `改用類別型 filter（如 'BasicEnergy:TOP_N' + params.topIids），`
+        + `其餘卡會自動走「查看翻到的其他 N 張」下拉；或標 // top-filter-ok: 理由`);
+    }
+  }
+}
+
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);
