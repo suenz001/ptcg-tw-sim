@@ -4733,15 +4733,10 @@ function handlePlaying(
         aIdx
       );
     }
-    // v2.997 請假王ex｜懶怠個性 — 對手場上沒有 ex/V 時無法使用招式
-    if (isLazyTraitBlockingAttack(attacker.active, state, pool)) {
-      const atkName = pool.get(attacker.active.cardId)?.name ?? '?';
-      return addLog(
-        { ...state, players, turnPhase: 'end' },
-        `${atkName} 因「懶怠個性」效果，對手場上沒有寶可夢【ex】・【V】，無法使用招式！`,
-        aIdx
-      );
-    }
+    // v6.113：請假王ex｜懶怠個性已收進 selfAttackPreconditionBlock（見下方那個 gate）。
+    //   ⚠ 舊寫法除了自己判一份（漏掉大部分特性消除來源），還會 `turnPhase:'end'`
+    //     ——「無法使用招式」不該連回合都耗掉；同維度另兩張（力量抑制者／啟動限制）
+    //     都只是拒絕並寫 log。三張統一成同一種行為。
 
     // 潑沙 / 墨汁噴射類：下次使用招式時擲 N 次硬幣，只要有反面則招式失敗。
     if (attacker.active.attackFailureFlipCountThisTurn && attacker.active.attackFailureFlipCountThisTurn > 0) {
@@ -8733,6 +8728,10 @@ export function getHandActivatableAbilities(
 // 收錄（卡面逐字）：
 //   ・火箭隊的超夢ex｜力量抑制者：只有在自己的場上的「火箭隊的寶可夢」數量為 4 隻以上時
 //   ・超級泥偶巨人ex｜啟動限制（M6）：只有在自己的手牌為 10 張以上時
+//   ・請假王ex｜懶怠個性：若對手的場上沒有「寶可夢【ex】・【V】」，則這隻寶可夢無法使用招式
+//     （v6.113 收進來；原本自己一份 isLazyTraitBlockingAttack，只 gate 了火箭隊的監視塔，
+//      **漏掉招式版暗夜羽擊／振翼髮 passive／傳說的熔岩洞／鐵荊棘ex 初始化**——
+//      這四種都會消除它的特性，特性沒了限制就該消失。已用 harness 逐一重現過。）
 // ⚠ 這是**持有者自己的特性** → 必須過 isAbilityHolderEffective（被監視塔／初始化／
 //   暗夜羽擊等消除特性時，這個限制也跟著消失）。v2.57 的原實作漏了這個 gate。
 // ⚠ 回傳「阻擋原因字串」而非 boolean —— ATTACK handler 要把原因寫進 log，
@@ -8765,6 +8764,14 @@ function selfAttackPreconditionBlock(
         return `${card.name} 啟動限制：自己的手牌只有 ${handSize} 張（未達 10 張），無法使用招式`;
       }
     }
+    if (ab.name === '懶怠個性') {
+      if (!isAbilityHolderEffective(state, act, card, idx, ab.name, 'active', pool)) continue;
+      // isLazyTraitBlockingAttack 只判**卡面條件**（對手場上有沒有 ex/V）；
+      // 特性有沒有被消除一律由上面這行的中央述詞負責，不要在那支函式裡再判一次。
+      if (isLazyTraitBlockingAttack(act, state, pool)) {
+        return `${card.name} 因「懶怠個性」效果，對手場上沒有寶可夢【ex】・【V】，無法使用招式`;
+      }
+    }
   }
   return null;
 }
@@ -8795,8 +8802,6 @@ export function getAvailableAttacks(
   if (player.active.status === 'asleep') return [];
   if (player.active.status === 'paralyzed') return [];
   if (player.active.cantAttackThisTurn) return [];
-  // v2.997 請假王ex｜懶怠個性 — 對手場上沒有 ex/V 時，UI 直接反白
-  if (isLazyTraitBlockingAttack(player.active, state, pool)) return [];
   // Wave 36：玩家級封鎖（電擊魔獸｜雷電在地類）
   if (player.noAttacksThisTurn) return [];
   const card = pool.get(player.active.cardId);

@@ -15651,11 +15651,11 @@ export function isLazyTraitBlockingAttack(
   if (atkCard?.name !== '請假王ex') return false;
   // 防範同名卡未來不同特性 — 必須有「懶怠個性」特性
   if (!atkCard.abilities?.some(a => a.name === '懶怠個性')) return false;
-  // v4.922 火箭隊的監視塔 gate：請假王ex pokemonType='Colorless'，此 stadium 在場
-  // 時雙方所有 Colorless 寶可夢特性（含「懶怠個性」）全部消除。
-  // 用字面值比對避免從 stadiums.ts import 造成循環（_shared.ts → stadiums.ts 已 import _shared）。
-  const stadiumCardLazy = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
-  if (stadiumCardLazy?.name === '火箭隊的監視塔' && atkCard.pokemonType === 'Colorless') return false;
+  // ⚠ v6.113：這裡**只判卡面條件**（對手場上有沒有 ex/V）。
+  //   「特性有沒有被消除」一律交給 engine 的 selfAttackPreconditionBlock →
+  //   isAbilityHolderEffective 統一處理（火箭隊的監視塔／傳說的熔岩洞／鐵荊棘ex 初始化／
+  //   招式版暗夜羽擊／振翼髮 passive 全都涵蓋）。
+  //   舊版在這裡自己 gate 了監視塔一種，結果**漏掉其餘四種**——那正是 v6.113 修的 bug。
   const aIdx = state.activePlayerIndex;
   const dIdx = (1 - aIdx) as 0 | 1;
   const opp = state.players[dIdx];
