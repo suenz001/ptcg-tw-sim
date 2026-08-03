@@ -2265,6 +2265,76 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //     不同原型。名次推導反過來走 app.locals（同一個理由，方向相反）。
     //   ⚠ 作用域陷阱（v0.94/v1.01 兩次事故）：跨 IIFE 的東西一律在 **handler 執行時**才從
     //     app.locals 取，不要在註冊時就解構——那時另一個 IIFE 可能還沒跑完。
+    // ── v6.115 大廳「對戰中的房間」牌組原型標籤 ────────────────────────────────
+    // 玩家許願：在房間外就能看出裡面雙方在打什麼牌組，想學特定牌組的人比較好找對局觀戰。
+    //
+    // ⭐ 為什麼一定在後端算：分類規則存在 mongo 的 deckRules，讀取端點掛 requireFirebaseAdmin
+    //    （admin 私有），前端拿不到；而且分類要吃整副 60 張牌表，那是隱藏資訊，不能送到大廳。
+    //    本端點**只回原型名稱字串**，牌表一張都不出去（白名單建構，不是 delete 私有欄位）。
+    //    放在 registerDeckRules 這個 IIFE 內是因為 deckToSets/classifyDeck/TRULES/getCardNameMap
+    //    都在這個作用域 —— 不可以為了「放在房間區塊比較順」而把分類邏輯抄第二份
+    //    （classifyDeck 的註解已寫明：兩份若不同版，同一副牌會被分到不同原型）。
+    //
+    // ⚠⚠ 兩條刻意的限制：
+    //   ① 只處理 status === 'playing' 的房間。等待中的房間雙方已選牌組但還沒開打，
+    //      先看到對方牌組再決定加不加入＝牌組狙擊（Wilson 裁定：只對戰中顯示）。
+    //   ② 連 playing 房也要 gameState.phase === 'playing' 才回。開局放置階段對戰畫面本身是
+    //      oppHidden（雙方互相看不到場面），若大廳先報出牌組，玩家另開一個分頁就能依對手
+    //      牌組決定自己的開局策略。
+    //
+    // 回傳語義（前端靠這個分辨兩種「沒有」）：
+    //   ・字串（含 '未分類'）＝ 有牌表且已比對完成
+    //   ・null / 該 roomId 不在回應裡 ＝ 還不知道（未開打、規則庫沒載入、房間不存在）
+    const _roomArchCache = new Map();   // roomId -> { at, p1, p2 }；一場對戰內牌組不會變
+    app.get('/api/rooms-archetypes', async (req, res) => {
+      if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+      try {
+        const ids = String(req.query.ids || '').split(',')
+          .map((s) => String(s || '').trim().toUpperCase())
+          .filter((s) => /^[A-Z0-9]{1,8}$/.test(s))
+          .slice(0, 40);
+        if (!ids.length) return res.json({ rooms: {} });
+        const now = Date.now();
+        const out = {};
+        const need = [];
+        for (const id of ids) {
+          const hit = _roomArchCache.get(id);
+          if (hit && now - hit.at < 300000) out[id] = { p1: hit.p1, p2: hit.p2 };
+          else need.push(id);
+        }
+        if (need.length) {
+          const nameMap = await getCardNameMap();
+          const rules = nameMap.size
+            ? await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray()
+            : [];
+          const docs = await db.collection('rooms').find(
+            { _id: { $in: need }, status: 'playing' },
+            { projection: { 'seats.deckEntries': 1, 'gameState.phase': 1, status: 1 } },
+          ).toArray();
+          const nameOf = (entries) => {
+            if (!entries || !entries.length) return null;        // 沒牌表 ＝ 不知道
+            if (!nameMap.size || !rules.length) return null;      // 規則庫沒載入 ＝ 不知道
+            const c = classifyDeck(deckToSets(entries, nameMap), rules);
+            return c.rule ? (c.rule.name || '未分類') : '未分類';  // 有牌表就一定給得出答案
+          };
+          for (const r of docs) {
+            if (!r.gameState || r.gameState.phase !== 'playing') continue;   // ⚠ 限制②
+            const seats = Array.isArray(r.seats) ? r.seats : [];
+            const p1 = nameOf(seats[0] && seats[0].deckEntries);
+            const p2 = nameOf(seats[1] && seats[1].deckEntries);
+            _roomArchCache.set(String(r._id), { at: now, p1, p2 });
+            out[String(r._id)] = { p1, p2 };   // ⭐ 白名單：只有這兩個字串會離開伺服器
+          }
+          if (_roomArchCache.size > 500) {
+            for (const [k, v] of _roomArchCache) if (now - v.at > 600000) _roomArchCache.delete(k);
+          }
+        }
+        res.json({ rooms: out });
+      } catch (e) {
+        res.status(500).json({ error: String((e && e.message) || e) });
+      }
+    });
+
     app.get('/api/admin/champion-report', requireFirebaseAdmin, async (req, res) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
       try {

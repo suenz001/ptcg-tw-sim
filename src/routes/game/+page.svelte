@@ -57,9 +57,7 @@
     type User,
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
-  import { ORACLE_MODE, oracleAuth } from '$lib/game/oracle-client';
-  // v6.114 大廳「對戰中房間」場面預覽 —— 公開資訊白名單的單一來源（見 lobby-preview.ts 檔頭）
-  import { buildLobbyFieldPreview, lobbyCardImageUrl } from '$lib/game/lobby-preview';
+  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes } from '$lib/game/oracle-client';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
@@ -981,6 +979,36 @@
   // v3.992：把 openRooms 依 status 分組（lobby = 等待中可加入；playing = 對戰中可觀戰）
   const lobbyRooms = $derived(openRooms.filter(r => r.status === 'lobby'));
   const playingRooms = $derived(openRooms.filter(r => r.status === 'playing'));
+  /**
+   * v6.115 大廳「對戰中房間」的牌組原型名稱：roomId → { p1, p2 }。
+   * 值是伺服器比對 admin「牌組原型」規則後回傳的**名稱字串**（含 '未分類'）；
+   * 拿不到就是 undefined／null，UI 直接不顯示標籤（fail-open，絕不猜）。
+   * ⚠ 只有正式站（Oracle）有這份規則庫；測試站走 Firebase，沒有規則可比對。
+   */
+  let roomArchetypes = $state<Record<string, { p1: string | null; p2: string | null }>>({});
+  /** 問過但還沒有結果的房間，記下時間避免每 2 秒重問一次（一場對戰內牌組不會變）。 */
+  const _archAskedAt = new Map<string, number>();
+  const ARCH_RETRY_MS = 30000;
+
+  async function ensureRoomArchetypes(rooms: Room[]) {
+    if (!ORACLE_MODE) return;                       // 測試站沒有規則庫，不必打端點
+    const now = Date.now();
+    const need = rooms
+      .filter(r => r.status === 'playing' && !roomArchetypes[r.roomId]
+                   && now - (_archAskedAt.get(r.roomId) ?? 0) > ARCH_RETRY_MS)
+      .map(r => r.roomId)
+      .slice(0, 30);
+    if (!need.length) return;
+    for (const id of need) _archAskedAt.set(id, now);
+    try {
+      const got = await oracleRoomArchetypes(need);
+      if (got && typeof got === 'object' && Object.keys(got).length) {
+        roomArchetypes = { ...roomArchetypes, ...got };
+      }
+    } catch {
+      /* 端點不存在／伺服器還沒更新 → 就是不顯示標籤，不影響大廳其他功能 */
+    }
+  }
   let unsubOpenRooms: (() => void) | null = null;
   // v2.272 Phase 2：聊天室
   let chatMessages = $state<ChatMessage[]>([]);
@@ -3916,7 +3944,12 @@
       unsubOpenRooms?.();
       openRoomsErr = '';
       unsubOpenRooms = subscribeOpenRooms(
-        rooms => { openRooms = rooms; openRoomsErr = ''; },
+        rooms => {
+          openRooms = rooms; openRoomsErr = '';
+          // v6.115：只問「還沒有標籤且 30 秒內沒問過」的對戰中房間 —— 一場對戰內牌組不會變，
+          //   所以正常情況每間房只會問一次，不會隨大廳每 2 秒輪詢一起放大。
+          void ensureRoomArchetypes(rooms);
+        },
         err => {
           openRoomsErr = err?.message?.includes('index')
             ? '房間查詢需要 Firestore 索引（尚未部署），已退回手動房號。'
@@ -7656,7 +7689,7 @@
           {:else}
             <ul class="open-room-list playing-list">
               {#each playingRooms as r (r.roomId)}
-                {@const _fp = buildLobbyFieldPreview(r)}
+                {@const _arch = roomArchetypes[r.roomId]}
                 <li class="open-room-row playing-row" class:practice-room={r.allowUndo}>
                   <div class="or-main">
                     <span class="or-host">⚔️ {r.roomName ?? r.hostName}</span>
@@ -7665,39 +7698,19 @@
                       👁 觀戰
                     </button>
                   </div>
+                  <!-- v6.115 牌組原型標籤：名稱由伺服器比對「牌組原型」規則後回傳，
+                       前端只拿得到名稱字串，拿不到任何牌表內容。
+                       ⚠ 只有「對戰中」的房間有（等待中顯示＝牌組狙擊），
+                       且伺服器在開局放置階段不回（那時對手還看不到你的場面）。 -->
                   <div class="or-meta">
-                    <span class="or-host-name">{r.seats?.[0]?.name ?? '?'} vs {r.seats?.[1]?.name ?? '?'}</span>
-                    {#if _fp}<span class="or-age">· 第 {_fp.turn} 回合</span>{/if}
+                    <span class="or-host-name">
+                      {r.seats?.[0]?.name ?? '?'}{#if _arch?.p1}<span class="or-arch">【{_arch.p1}】</span>{/if}
+                      <span class="or-vs">vs</span>
+                      {r.seats?.[1]?.name ?? '?'}{#if _arch?.p2}<span class="or-arch">【{_arch.p2}】</span>{/if}
+                    </span>
                     <span class="or-code">房號 {r.roomId}</span>
                   </div>
                   {#if !myName.trim()}<div class="or-hint">↑ 請先在上方填寫玩家名稱才能觀戰</div>{/if}
-                  <!-- v6.114 迷你場面列：只畫戰鬥區／備戰區寶可夢與剩餘獎賞張數，
-                       全部是 PTCG 規則上的公開資訊。資料一律經由 buildLobbyFieldPreview
-                       白名單過濾，UI 這裡拿不到手牌／牌庫／獎賞內容。 -->
-                  {#if _fp}
-                    <div class="or-field">
-                      {#each [_fp.sides.p1, _fp.sides.p2] as _sd, _si (_si)}
-                        <div class="or-side">
-                          <span class="or-side-tag">P{_si + 1}</span>
-                          {#if _sd.activeCardId}
-                            {@const _au = lobbyCardImageUrl(_sd.activeCardId)}
-                            <img class="or-card or-active-card" use:retryImg={{ url: _au, width: 120 }} src={_au}
-                              alt="戰鬥區寶可夢" loading="lazy" decoding="async" />
-                          {:else}
-                            <span class="or-card or-active-card or-card-empty" title="戰鬥區無寶可夢"></span>
-                          {/if}
-                          <span class="or-bench">
-                            {#each _sd.benchCardIds as _bid, _bi (_bid + '_' + _bi)}
-                              {@const _bu = lobbyCardImageUrl(_bid)}
-                              <img class="or-card or-bench-card" use:retryImg={{ url: _bu, width: 120 }} src={_bu}
-                                alt="備戰區寶可夢" loading="lazy" decoding="async" />
-                            {/each}
-                          </span>
-                          <span class="or-prize" title="剩餘獎賞卡張數">🏆{_sd.prizesLeft}</span>
-                        </div>
-                      {/each}
-                    </div>
-                  {/if}
                 </li>
               {/each}
             </ul>
@@ -11549,8 +11562,7 @@
   .small{ font-size:.8rem; }
   /* v6.114 大廳房間列改「卡片式多行」：原本一列硬塞 6 個元素、單行 flex 又沒有 flex-wrap，
      手機（375px）下房名會被壓成幾個字、其餘元素互相擠爆。改成
-       第一行 or-main（房名 + 標籤 + 動作鈕）／第二行 or-meta（房主・房齡・房號）／
-       第三行 or-field（僅對戰中：迷你場面列）
+       第一行 or-main（房名 + 標籤 + 動作鈕）／第二行 or-meta（房主・房齡・房號・牌組原型）
      每一行各自 flex-wrap，手機自然折行。 */
   .open-room-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.4rem; max-height:420px; overflow-y:auto; }
   .open-room-row{ display:flex; flex-direction:column; align-items:stretch; gap:.3rem; padding:.5rem .75rem; background:#1a2a1a; border:1px solid #3a5a3a; border-radius:6px; }
@@ -11560,18 +11572,9 @@
   .or-hint{ font-size:.75rem; color:#e0b060; }
   .or-host{ flex:1; min-width:6rem; font-weight:600; color:#f0f0f0; word-break:break-word; }
   .or-code{ font-family:monospace; letter-spacing:.15em; color:#aaf; font-size:.85rem; }
-  /* v6.114 迷你場面列 —— 只有戰鬥區／備戰區寶可夢與剩餘獎賞張數（皆為規則上的公開資訊） */
-  .or-field{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; padding-top:.15rem; border-top:1px dashed #2f4a2f; }
-  .or-side{ display:flex; align-items:center; gap:.25rem; }
-  .or-side-tag{ font-size:.7rem; color:#8aa; min-width:1.4rem; }
-  .or-bench{ display:inline-flex; gap:.12rem; flex-wrap:wrap; }
-  .or-card{ display:inline-block; border-radius:3px; background:#0c1a0c; border:1px solid #2a4a2a; object-fit:cover; object-position:top; }
-  .or-active-card{ width:32px; height:44px; }
-  .or-bench-card{ width:22px; height:30px; }
-  .or-card-empty{ opacity:.35; }
-  /* 卡圖載入失敗一律走全站的 use:retryImg（自動重試 + 代理縮圖 + :global 佔位樣式），
-     不要自己寫 onerror —— keyed each 會重用節點，自製的失敗狀態不復原就會帶到下一張卡上。 */
-  .or-prize{ font-size:.75rem; color:#ffd97a; white-space:nowrap; }
+  /* v6.115 牌組原型標籤（名稱來自伺服器比對 admin 的「牌組原型」規則） */
+  .or-arch{ color:#ffd97a; font-weight:600; }
+  .or-vs{ color:#c4a84a; margin:0 .15rem; }
   .btn-sm{ padding:.3rem .8rem; border:none; border-radius:5px; cursor:pointer; font-size:.85rem; }
   .btn-sm.primary{ background:#3a7a3a; color:#fff; }
   .btn-sm.primary:hover:not(:disabled){ background:#4a9a4a; }
@@ -11582,7 +11585,6 @@
   @media (max-width:600px){
     .open-room-list{ max-height:none; overflow-y:visible; }
     .or-act{ margin-left:auto; min-height:34px; }
-    .or-field{ flex-direction:column; align-items:flex-start; gap:.3rem; }
     .or-meta{ font-size:.75rem; }
   }
   .manual-code summary{ cursor:pointer; color:#ccc; font-size:.88rem; }

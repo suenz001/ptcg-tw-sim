@@ -185,6 +185,24 @@ export async function oracleListRooms(status?: string): Promise<OracleRoom[]> {
 }
 
 /**
+ * v6.115 取得「對戰中房間」的牌組原型名稱（大廳標籤用）。
+ *
+ * ⭐ 伺服器只回名稱字串，**牌表一張都不會出來**（分類在後端做，規則庫是 admin 私有的）。
+ * 回傳語義：字串（含 '未分類'）＝ 已比對出結果；null 或該 roomId 不在回應裡 ＝ 還不知道
+ * （尚未開打／規則庫沒載入／房間不存在）。前端要靠這個分辨，不要把 null 當成「未分類」。
+ */
+export async function oracleRoomArchetypes(
+  roomIds: string[],
+): Promise<Record<string, { p1: string | null; p2: string | null }>> {
+  const ids = roomIds.map((s) => String(s || '').toUpperCase()).filter(Boolean).slice(0, 40);
+  if (!ids.length) return {};
+  const { rooms } = await oracleApi<{ rooms: Record<string, { p1: string | null; p2: string | null }> }>(
+    `/api/rooms-archetypes?ids=${encodeURIComponent(ids.join(','))}`,
+  );
+  return rooms || {};
+}
+
+/**
  * Polling subscribe（取代 firestore onSnapshot）。
  * 每 intervalMs 拉一次 GET /api/rooms/:code，_version 變了 callback。
  * 回傳 unsubscribe function。
