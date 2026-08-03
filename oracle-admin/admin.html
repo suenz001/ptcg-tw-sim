@@ -1414,19 +1414,21 @@ window.tvRender = tvRender;
 
 /** 目前篩選的中文標籤（掛在區塊標題後，避免看數字時忘了正在篩選）。 */
 function tsFilterLabel() {
-  return tsEventFilter === 'official' ? ' <span class="small muted">（僅官方賽）</span>'
+  return tsEventFilter === 'official' ? ' <span class="small muted">（僅網站賽）</span>'
     : tsEventFilter === 'community' ? ' <span class="small muted">（僅社群自辦賽）</span>' : '';
 }
 function tsFilterBarHtml(nOfficial, nCommunity) {
   const btn = (f, label, n) => '<span class="filter-btn' + (tsEventFilter === f ? ' active' : '')
     + '" onclick="setTsEventFilter(\'' + f + '\')">' + label + ' (' + n + ')</span>';
   return '<div class="toolbar" style="margin:8px 0 12px;">'
-    + btn('all', '全部賽事', nOfficial + nCommunity) + btn('official', '🏛️ 官方賽', nOfficial)
+    + btn('all', '全部賽事', nOfficial + nCommunity) + btn('official', '🏛️ 網站賽', nOfficial)
     + btn('community', '👥 社群自辦賽', nCommunity)
     + '<span class="small muted" style="margin-left:auto;">此選擇會同時套用到下方所有統計</span></div>';
 }
 
-// v1.60 官方賽 / 社群自辦賽 篩選。
+// v1.60 網站賽 / 社群自辦賽 篩選。
+//   ⚠ v6.110 更名：使用者可見文字一律「網站賽」（本站是非官方同好站，用「官方」會被誤會
+//     成寶可夢官方）。**篩選值 'official' 與資料欄位 communityEvent 不動** —— 那是 API 契約。
 //   刻意切在**聚合的入口單點**（而不是每張表各切一次）：這樣總覽、冠軍榜、玩家戰績、
 //   歷屆賽事全部用同一份資料，數字彼此對得起來，日後也不會有某張表忘了跟著改的漂移。
 //   ⚠v0.59 之前的歸檔沒有 communityEvent 欄位（undefined）→ 會被歸進「官方」。

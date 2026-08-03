@@ -7097,12 +7097,14 @@
       {/each}
       <!-- v5.620：報名中／籌備中的賽事（下一場、下下場…）排在進行中賽事與觀戰之下 -->
       {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
-      <!-- v5.652 名人堂分兩段下拉：官方賽（在前、預設展開「直接呈現」）與社群自辦賽（在後、預設收摺「點選才看」）。
-           因官方賽人數多、社群自辦賽人數少（最低 4 人），奪冠難度不同，分開呈現較清楚。依 communityEvent 旗標分流。 -->
+      <!-- v5.652 名人堂分兩段下拉：網站賽（在前、預設展開「直接呈現」）與社群自辦賽（在後、預設收摺「點選才看」）。
+           v6.110 更名：使用者可見文字一律「網站賽」，不再用「官方賽」——本站是非官方同好站，
+           用「官方」會被誤會成寶可夢官方、有版權爭議。⚠ 資料欄位（communityEvent／championsOfficial）不動。
+           因網站賽人數多、社群自辦賽人數少（最低 4 人），奪冠難度不同，分開呈現較清楚。依 communityEvent 旗標分流。 -->
       {#if tChampions.some((c) => !c.communityEvent)}
         <div class="tourn-bracket tourn-hof">
           <div class="tourn-bracket-head tourn-hof-toggle" role="button" tabindex="0" style="cursor:pointer;user-select:none;" onclick={() => tHofOfficialOpen = !tHofOfficialOpen} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (tHofOfficialOpen = !tHofOfficialOpen)}>
-            <span style="display:inline-block;width:1em;">{tHofOfficialOpen ? '▾' : '▸'}</span>🏛️ 官方歷屆冠軍（{tChampions.filter((c) => !c.communityEvent).length}）<span class="muted small" style="font-weight:400;">{tHofOfficialOpen ? ' ｜ 點擊冠軍看當初賽程' : ' ｜ 點此展開'}</span>
+            <span style="display:inline-block;width:1em;">{tHofOfficialOpen ? '▾' : '▸'}</span>🏛️ 網站賽歷屆冠軍（{tChampions.filter((c) => !c.communityEvent).length}）<span class="muted small" style="font-weight:400;">{tHofOfficialOpen ? ' ｜ 點擊冠軍看當初賽程' : ' ｜ 點此展開'}</span>
           </div>
           {#if tHofOfficialOpen}
           {#each tChampions.filter((c) => !c.communityEvent) as c (c.id)}
@@ -7221,7 +7223,7 @@
                 <div class="tourn-lb-title">🏆 冠軍榜</div>
                 <div class="tourn-lb-champ-cols">
                   <div>
-                    <div class="tourn-lb-sub">🏛️ 官方賽</div>
+                    <div class="tourn-lb-sub">🏛️ 網站賽</div>
                     {#if !tLeaderboard.champions?.official?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
                     {#each (tLeaderboard.champions?.official ?? []) as r, i}
                       <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
@@ -7236,9 +7238,9 @@
                   </div>
                 </div>
               </div>
-              {@render lbBoard('⚔️ 勝場榜（官方+社群）', tLeaderboard.wins, '勝')}
-              {@render lbBoard('🥇 8 強榜（官方）', tLeaderboard.top8, '次')}
-              {@render lbBoard('🏅 決賽次數榜（官方）', tLeaderboard.finals, '次')}
+              {@render lbBoard('⚔️ 勝場榜（網站賽+社群賽）', tLeaderboard.wins, '勝')}
+              {@render lbBoard('🥇 8 強榜（網站賽）', tLeaderboard.top8, '次')}
+              {@render lbBoard('🏅 決賽次數榜（網站賽）', tLeaderboard.finals, '次')}
               {@render lbBoard('📣 社群賽主辦榜', tLeaderboard.communityHost, '場')}
             </div>
             <p class="muted small" style="text-align:center;margin-top:8px;">※ 依帳號統計，顯示玩家最後一場賽事所用暱稱。</p>
@@ -7317,11 +7319,11 @@
               <div class="tourn-pf-email">{tProfile.email ?? firebaseUser?.email}</div>
             </div>
             <div class="tourn-pf-tiles">
-              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.championsOfficial ?? 0}</div><div class="tourn-pf-lbl">官方奪冠</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.championsOfficial ?? 0}</div><div class="tourn-pf-lbl">網站賽奪冠</div></div>
               <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.championsCommunity ?? 0}</div><div class="tourn-pf-lbl">社群奪冠</div></div>
-              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.finals ?? 0}</div><div class="tourn-pf-lbl">決賽(官方)</div></div>
-              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.top4 ?? 0}</div><div class="tourn-pf-lbl">4 強(官方)</div></div>
-              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.top8 ?? 0}</div><div class="tourn-pf-lbl">8 強(官方)</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.finals ?? 0}</div><div class="tourn-pf-lbl">決賽(網站賽)</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.top4 ?? 0}</div><div class="tourn-pf-lbl">4 強(網站賽)</div></div>
+              <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.top8 ?? 0}</div><div class="tourn-pf-lbl">8 強(網站賽)</div></div>
               <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.communityEntered ?? 0}</div><div class="tourn-pf-lbl">社群賽參加</div></div>
               <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.totalWins ?? 0}-{tProfile.totalLosses ?? 0}</div><div class="tourn-pf-lbl">總勝-敗</div></div>
               <div class="tourn-pf-tile"><div class="tourn-pf-num">{tProfile.eventsPlayed ?? 0}</div><div class="tourn-pf-lbl">參賽場數</div></div>
