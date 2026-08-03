@@ -1423,6 +1423,11 @@ function tsFilterBarHtml(nOfficial, nCommunity) {
   return '<div class="toolbar" style="margin:8px 0 12px;">'
     + btn('all', '全部賽事', nOfficial + nCommunity) + btn('official', '🏛️ 網站賽', nOfficial)
     + btn('community', '👥 社群自辦賽', nCommunity)
+    // v1.66 奪冠報告圖：⚠ 這顆鈕**不受上面的篩選影響** —— 圖裡固定同時呈現網站賽與社群賽，
+    //   用的是全量 archives。按鈕擺這裡只是位置方便，行為上與 tsEventFilter 無關。
+    + '<button id="champ-img-btn" style="margin-left:12px;" onclick="openChampionReportExport()"'
+    + ' title="產生可直接發佈給玩家的奪冠報告圖（1080×1350 PNG）；內容固定含網站賽與社群賽，不受左邊的篩選影響">'
+    + '🏆 匯出奪冠報告圖</button>'
     + '<span class="small muted" style="margin-left:auto;">此選擇會同時套用到下方所有統計</span></div>';
 }
 
@@ -2901,6 +2906,292 @@ window.downloadMetaImage = function (srcKey) {
     a.download = 'ptcg-meta-' + srcKey + '-' + (_miOut.stamp || miStamp(Date.now())) + '.png';
     document.body.appendChild(a); a.click(); a.remove();
     // ⚠立即 revoke 會讓部分瀏覽器取消下載，要延遲。
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }, 'image/png');
+};
+
+
+// ══ v1.66（站台 v6.111）奪冠報告圖 ═══════════════════════════════════════════
+//
+// 跟「牌組環境報告圖」是**兩種量綱**，所以是兩張圖不是兩個分頁：
+//   環境報告＝連續的份額／勝率（分母是幾千場對局，畫比率有意義）；
+//   奪冠報告＝**離散的個位數事件**（一期可能只有 3 場網站賽）。
+//   ⭐ 因此本圖**全圖不出現任何百分比**，一律「N 場」「N 位」。
+//   同理不做「較上期 ▲▼」——奪冠數的期間差幾乎全是噪音（環境圖的 miTrend 不引用）。
+//
+// 資料來源兩份，用 eventId／uid 對照：
+//   ① `tournStatsCache`（/api/tournament/admin/stats）— 賽事名／時間／人數／matches／deckEntries
+//   ② `/api/admin/champion-report` — 伺服器端算好的「冠軍與四強 → 牌組原型」
+//      ⭐ 為什麼要後端算：分類要用 classifyDeck（總表與明細共用的同一份），
+//         前端自己抄一份必然漂移；而且伺服器的卡名對照與前端的 CARDS_BASE 是兩份來源。
+//      ⚠ 端點刻意**不回 deckEntries** —— 那份 ① 已經有了，再傳一次每場 N×60 張很肥。
+//
+// ⚠⚠ 一律用 `tournStatsCache.archives` **全量**，不可以用被 tsEventFilter 篩過的那份：
+//   使用者切到「社群自辦賽」再按產圖，網站賽區塊會整塊空掉，而且完全不會報錯。
+const CR = {
+  MAXCHAMP: 3,       // 冠軍列最多幾列（超過改成「冠軍牌組次數榜」）
+  MAXTOP4: 6,        // 四強牌組榜最多幾列
+  MAXCOMM: 2,        // 社群賽冠軍列最多幾列
+  MIN_FOR_TOP4: 8,   // ⭐ 參賽 < 8 人不計四強：4 人賽的「四強」＝全體參賽者，數字正確但荒謬
+};
+let _crOut = null, _crBusy = false;
+
+/** 把兩份資料聚合成畫圖用的結構。archives 必須是**全量**（未經 tsEventFilter 過濾）。 */
+function crBuild(allArchives, reportMap, days) {
+  const since = days > 0 ? (Date.now() - days * 86400000) : 0;
+  const inRange = (a) => !since || (a.finishedAt || 0) >= since;
+  const arcs = (allArchives || []).filter(inRange);
+  const site = arcs.filter((a) => !a.communityEvent);
+  const comm = arcs.filter((a) => !!a.communityEvent);
+  // 冠軍那副牌的原型：後端分類優先 → 玩家自填牌組名 → 主力寶可夢 → 未分類
+  const deckLabel = (a, uid, arch) => {
+    if (arch) return arch;
+    const p = (a.players || []).find((x) => String(x.uid) === String(uid));
+    if (p && p.deckName) return p.deckName;
+    const main = p && p.deckEntries ? detectMainPokemon(p.deckEntries) : null;
+    return main || '（未分類）';
+  };
+  const champRow = (a) => {
+    const rep = reportMap.get(a.eventId) || {};
+    const uid = a.championUid || rep.championUid || null;
+    if (!uid) return null;                       // 取消場／雙方未進場：沒有冠軍
+    const p = (a.players || []).find((x) => String(x.uid) === String(uid));
+    let w = 0, l = 0;
+    for (const m of (a.matches || [])) {
+      if (!m || m.bye || !m.winnerUid) continue;
+      if (String(m.p1uid) === String(uid) || String(m.p2uid) === String(uid)) {
+        if (String(m.winnerUid) === String(uid)) w++; else l++;
+      }
+    }
+    let rounds = 0;
+    for (const m of (a.matches || [])) if ((m.round || 1) > rounds) rounds = m.round || 1;
+    return {
+      eventId: a.eventId, eventName: a.eventName || '賽事', finishedAt: a.finishedAt || 0,
+      name: (p && p.name) || a.championName || '—',
+      deck: deckLabel(a, uid, rep.championArchetype), players: a.playerCount || 0, w: w, l: l, rounds: rounds,
+    };
+  };
+  const siteChamps = site.map(champRow).filter(Boolean);
+  const commChamps = comm.map(champRow).filter(Boolean);
+  // 四強牌組次數（只計網站賽、且參賽 >= MIN_FOR_TOP4 人；口徑與大廳排行榜一致：社群賽不算名次）
+  const t4 = new Map();
+  let t4Events = 0, t4Skipped = 0, noCut = 0, noChamp = site.length - siteChamps.length;
+  for (const a of site) {
+    const rep = reportMap.get(a.eventId);
+    if (!rep || !rep.placementsOk) { noCut++; continue; }
+    if ((a.playerCount || 0) < CR.MIN_FOR_TOP4) { t4Skipped++; continue; }
+    t4Events++;
+    for (const e of (rep.top4 || [])) {
+      const k = deckLabel(a, e.uid, e.archetype);
+      t4.set(k, (t4.get(k) || 0) + 1);
+    }
+  }
+  const t4Rows = [...t4.entries()].map(([name, n]) => ({ name: name, n: n }))
+    .sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  const t4Total = t4Rows.reduce((s, r) => s + r.n, 0);
+  // 冠軍牌組次數榜（網站賽 > MAXCHAMP 場時改用）
+  const cm = new Map();
+  for (const c of siteChamps) cm.set(c.deck, (cm.get(c.deck) || 0) + 1);
+  const champRank = [...cm.entries()].map(([name, n]) => ({ name: name, n: n }))
+    .sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  const times = arcs.map((a) => a.finishedAt || 0).filter(Boolean);
+  return {
+    days: days, siteChamps: siteChamps, commChamps: commChamps,
+    t4Rows: t4Rows, t4Total: t4Total, t4Events: t4Events, t4Skipped: t4Skipped,
+    noCut: noCut, noChamp: noChamp, champRank: champRank,
+    nSite: site.length, nComm: comm.length,
+    entries: arcs.reduce((s, a) => s + (a.playerCount || 0), 0),
+    from: times.length ? Math.min.apply(null, times) : 0,
+    to: times.length ? Math.max.apply(null, times) : 0,
+    capped: (allArchives || []).length >= 500,
+  };
+}
+
+/** 畫奪冠報告圖。沒有任何冠軍可列時回 null。 */
+async function crDraw(d) {
+  if (!d || (!d.siteChamps.length && !d.commChamps.length)) return null;
+  const cv = document.createElement('canvas');
+  cv.width = MI.W * MI.S; cv.height = MI.H * MI.S;
+  const ctx = cv.getContext('2d');
+  ctx.scale(MI.S, MI.S);
+  ctx.textBaseline = 'middle';
+  const K = MI.K, PAD = MI.PAD, IW = MI.W - PAD * 2;
+  const A1 = MI.SRC.tourn.a1, A2 = MI.SRC.tourn.a2;   // 網站賽＝金橘
+  const C1 = MI.SRC.casual.a1;                        // 社群賽＝青
+  ctx.fillStyle = K.bg0; ctx.fillRect(0, 0, MI.W, MI.H);
+
+  // ── 品牌帶
+  const logo = await miLogo();
+  if (logo) ctx.drawImage(logo, PAD, 32, 76, 76);
+  miFont(ctx, 38, true); ctx.fillStyle = K.txt;
+  ctx.fillText('PTCG 台灣線上對戰模擬器', PAD + (logo ? 96 : 0), 58);
+  miFont(ctx, 26); ctx.fillStyle = K.dim;
+  ctx.fillText(MI_URL, PAD + (logo ? 96 : 0), 94);
+  ctx.textAlign = 'right';
+  ctx.fillText('資料截至 ' + miDate(Date.now()), MI.W - PAD, 58);
+  ctx.textAlign = 'left';
+
+  // ── 標題帶
+  ctx.fillStyle = A1; ctx.fillRect(PAD, 150, 8, 62);
+  miFont(ctx, 54, true); ctx.fillStyle = K.txt;
+  ctx.fillText('本期奪冠報告', PAD + 24, 182);
+  miFont(ctx, 28); ctx.fillStyle = K.dim;
+  const span = d.from && d.to ? (miDate(d.from) + '–' + miDate(d.to)) : '全部時間';
+  ctx.fillText(span + '　・　網站賽 ' + d.nSite + ' 場　・　社群賽 ' + d.nComm + ' 場　・　共 '
+    + d.entries + ' 人次參賽', PAD + 24, 232);
+
+  let y = 280;
+  const sectionHead = (icon, title, right, color) => {
+    miFont(ctx, 30, true); ctx.fillStyle = color;
+    ctx.fillText(icon + ' ' + title, PAD, y);
+    if (right) { miFont(ctx, 24); ctx.fillStyle = K.dim; ctx.textAlign = 'right'; ctx.fillText(right, MI.W - PAD, y); ctx.textAlign = 'left'; }
+    y += 34;
+  };
+  /** 名次／次數列（絕對數，不畫比率）。 */
+  const rankRows = (rows, max, barColor) => {
+    const top = rows.slice(0, max);
+    const peak = top.length ? top[0].n : 1;
+    for (const r of top) {
+      miRR(ctx, PAD, y, IW, 46, 8); ctx.fillStyle = K.row; ctx.fill();
+      miFont(ctx, 30); ctx.fillStyle = K.txt;
+      ctx.fillText(miFit(ctx, r.name, IW - 300), PAD + 16, y + 23);
+      const bx = PAD + IW - 250, bw = 160;
+      miRR(ctx, bx, y + 17, bw, 12, 6); ctx.fillStyle = K.ln; ctx.fill();
+      miRR(ctx, bx, y + 17, Math.max(10, bw * (r.n / peak)), 12, 6); ctx.fillStyle = barColor; ctx.fill();
+      miFont(ctx, 34, true); ctx.fillStyle = K.txt; ctx.textAlign = 'right';
+      ctx.fillText(r.n + ' 位', MI.W - PAD - 8, y + 23);
+      ctx.textAlign = 'left';
+      y += 56;
+    }
+    if (rows.length > max) { miFont(ctx, 22); ctx.fillStyle = K.dim; ctx.fillText('…另有 ' + (rows.length - max) + ' 種牌組', PAD + 16, y + 8); y += 28; }
+  };
+  /** 冠軍列（單場一列）。 */
+  const champRows = (list, max, accent) => {
+    for (const c of list.slice(0, max)) {
+      miRR(ctx, PAD, y, IW, 82, 10); ctx.fillStyle = K.row; ctx.fill();
+      ctx.fillStyle = accent; ctx.fillRect(PAD, y + 8, 5, 66);
+      miFont(ctx, 24); ctx.fillStyle = K.dim;
+      ctx.fillText(miDate(c.finishedAt) + '　' + miFit(ctx, c.eventName, 300), PAD + 20, y + 22);
+      miFont(ctx, 34, true); ctx.fillStyle = K.txt;
+      const nameW = ctx.measureText(miFit(ctx, c.name, 260)).width;
+      ctx.fillText(miFit(ctx, c.name, 260), PAD + 20, y + 56);
+      miFont(ctx, 32, true); ctx.fillStyle = accent;
+      ctx.fillText(miFit(ctx, c.deck, IW - nameW - 230), PAD + 40 + nameW, y + 56);
+      miFont(ctx, 24); ctx.fillStyle = K.dim; ctx.textAlign = 'right';
+      ctx.fillText(c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負', MI.W - PAD - 12, y + 22);
+      ctx.textAlign = 'left';
+      y += 92;
+    }
+  };
+
+  // ── 網站賽冠軍
+  if (d.siteChamps.length > CR.MAXCHAMP) {
+    sectionHead('🏆', '網站賽　冠軍牌組', d.nSite + ' 場合計', A1);
+    rankRows(d.champRank.map((r) => ({ name: r.name, n: r.n })), CR.MAXCHAMP + 1, A1);
+  } else if (d.siteChamps.length) {
+    sectionHead('🏆', '網站賽　冠軍', d.siteChamps.length + ' 場', A1);
+    champRows(d.siteChamps, CR.MAXCHAMP, A1);
+  } else {
+    sectionHead('🏆', '網站賽　冠軍', '', A1);
+    miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有已完賽的網站賽', PAD + 8, y + 10); y += 46;
+  }
+
+  // ── 四強牌組
+  y += 12;
+  sectionHead('🥈', '網站賽　四強牌組（含冠亞）', d.t4Total ? ('共 ' + d.t4Total + ' 位') : '', K.dim);
+  if (d.t4Rows.length) rankRows(d.t4Rows, CR.MAXTOP4, A2);
+  else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有可判定四強的網站賽', PAD + 8, y + 10); y += 46; }
+
+  // ── 社群賽冠軍（永遠保留區塊，沒資料也印一行，避免版面塌陷）
+  y += 12;
+  ctx.strokeStyle = K.ln; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, y - 6); ctx.lineTo(MI.W - PAD, y - 6); ctx.stroke();
+  y += 18;
+  sectionHead('👥', '社群賽　冠軍', d.nComm + ' 場', C1);
+  if (d.commChamps.length) champRows(d.commChamps, CR.MAXCOMM, C1);
+  else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有社群賽', PAD + 8, y + 10); y += 46; }
+
+  // ── 註腳（把口徑講清楚，避免玩家拿去跟大廳排行榜對數字時誤會）
+  const notes = [];
+  notes.push('四強＝準決賽的 4 位選手（含冠亞）　・　社群賽場次少，只列冠軍、不做排名');
+  if (d.t4Skipped) notes.push('未滿 ' + CR.MIN_FOR_TOP4 + ' 人的賽事不計四強（' + d.t4Skipped + ' 場）');
+  if (d.noCut) notes.push('另有 ' + d.noCut + ' 場因賽程結構無法判定四強');
+  if (d.noChamp > 0) notes.push('另有 ' + d.noChamp + ' 場沒有冠軍（賽事取消或雙方未到）');
+  notes.push('牌組分類依 ' + new Date().toLocaleDateString('zh-TW') + ' 的分類規則');
+  if (d.capped) notes.push('已達查詢上限，更早的賽事未納入');
+  miFont(ctx, 22); ctx.fillStyle = K.dim;
+  let ny = MI.H - 158;
+  for (const t of notes.slice(0, 3)) { ctx.fillText(miFit(ctx, t, IW), PAD, ny); ny += 26; }
+
+  // ── 頁腳
+  ctx.textAlign = 'center';
+  if (logo) ctx.drawImage(logo, MI.W / 2 - 108, MI.H - 74, 32, 32);
+  miFont(ctx, 30, true); ctx.fillStyle = K.txt;
+  ctx.fillText(MI_URL, MI.W / 2 + 20, MI.H - 58);
+  miFont(ctx, 22); ctx.fillStyle = K.dim;
+  ctx.fillText('本站為非官方、非營利之愛好者社群交流平台', MI.W / 2, MI.H - 24);
+  ctx.textAlign = 'left';
+  return cv;
+}
+
+window.openChampionReportExport = async function () {
+  if (_crBusy) return;
+  if (!tournStatsCache || !((tournStatsCache.archives || []).length)) {
+    alert('請先讓「📈 賽事統計」載入完成。'); return;
+  }
+  const btn = document.getElementById('champ-img-btn');
+  const label = btn ? btn.textContent : '';
+  _crBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = '產生中…'; }
+  try {
+    // ⚠ 主力寶可夢 fallback 需要卡片索引與標籤，沒 await 會產出「支援型寶可夢奪冠」的笑話圖。
+    await ensureCardIndex(); await ensureCardTags();
+    const days = Number(currentArchSince() || 0);
+    const since = days > 0 ? (Date.now() - days * 86400000) : 0;
+    const rep = await api('/api/admin/champion-report?since=' + since);
+    if (!rep || rep.error) { alert('取得奪冠資料失敗：' + ((rep && rep.error) || '未知錯誤')); return; }
+    const map = new Map();
+    for (const e of (rep.events || [])) map.set(e.eventId, e);
+    // ⚠ 全量 archives，不是被 tsEventFilter 篩過的那份
+    const data = crBuild(tournStatsCache.archives || [], map, days);
+    const cv = await crDraw(data);
+    if (!cv) { alert('這個時間範圍內沒有任何冠軍紀錄，無法產圖。'); return; }
+    _crOut = { cv: cv, stamp: miStamp(Date.now()) };
+    renderChampionReportModal();
+  } catch (e) {
+    alert('產圖失敗：' + (e && e.message ? e.message : e));
+  } finally {
+    _crBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
+window.renderChampionReportModal = function () {
+  const cv = _crOut && _crOut.cv;
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this)closeModal()">'
+    + '<div class="modal" style="max-width:640px;width:100%;">'
+    + '<h3>🏆 奪冠報告圖</h3>'
+    + (cv ? '<img src="' + cv.toDataURL('image/png') + '" alt="奪冠報告圖" style="width:100%;border-radius:10px;display:block;">'
+          : '<div class="empty">沒有可用資料。</div>')
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">'
+    + '<button onclick="downloadChampionReport()"' + (cv ? '' : ' disabled') + '>⬇️ 下載</button>'
+    + '<button class="ghost" onclick="closeModal()">關閉</button></div>'
+    + '<div class="small muted" style="margin-top:8px;">'
+    + '1080×1350（2× 輸出），適合直接貼到 LINE／Facebook／Discord。手機可長按圖片儲存。</div>'
+    + '</div></div>';
+};
+
+window.downloadChampionReport = function () {
+  const cv = _crOut && _crOut.cv;
+  if (!cv) return;
+  cv.toBlob(function (blob) {
+    if (!blob) { alert('產生檔案失敗'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ptcg-champions-' + ((_crOut && _crOut.stamp) || miStamp(Date.now())) + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }, 'image/png');
 };

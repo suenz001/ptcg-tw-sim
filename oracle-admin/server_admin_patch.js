@@ -2254,6 +2254,60 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   休閒與錦標賽**分開**統計（資料品質不同：休閒含 AI/本機，錦標賽是正式對局）。
     //   即時計算 + 60s 快取：規則一改就立刻反映，不需要重算批次、也不會有落地欄位失效問題。
     const _archStatsCache = new Map();
+    // ══ v6.111 奪冠報告資料端點（給 admin 的「匯出奪冠報告圖」用）══════════════
+    //   卡面上的定位：這支只回**分類結果**（每場的冠軍／四強 → 牌組原型），**不回 deckEntries**。
+    //   賽事名稱／時間／人數／賽制／matches 前端已經有一份（/api/tournament/admin/stats
+    //   的 tournStatsCache），再傳一次會很肥（每場 N×60 張卡）。前端用 eventId + uid 對照即可。
+    //
+    //   ⭐ 為什麼放在 registerDeckRules 這個 IIFE 內：分類要用 deckToSets/classifyDeck/TRULES/
+    //     getCardNameMap，它們都在這個作用域。**不可以**為了「放在錦標賽區塊比較順」而把分類
+    //     邏輯抄一份過去——classifyDeck 的註解已經寫明：總表與明細若不同版，同一副牌會被分到
+    //     不同原型。名次推導反過來走 app.locals（同一個理由，方向相反）。
+    //   ⚠ 作用域陷阱（v0.94/v1.01 兩次事故）：跨 IIFE 的東西一律在 **handler 執行時**才從
+    //     app.locals 取，不要在註冊時就解構——那時另一個 IIFE 可能還沒跑完。
+    app.get('/api/admin/champion-report', requireFirebaseAdmin, async (req, res) => {
+      if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
+      try {
+        const since = req.query.since ? parseInt(req.query.since) : 0;
+        const nameMap = await getCardNameMap();
+        if (!nameMap.size) return res.status(503).json({ error: '伺服器卡名對照尚未載入，稍後再試' });
+        const rules = await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray();
+        const detectCut = (app.locals || {})._detectCutPlacements;
+        const q = {};
+        if (since) q.finishedAt = { $gte: since };
+        // limit 與 /api/tournament/admin/stats 對齊（500），否則前端兩份資料的時間範圍會不一致。
+        const archives = await db.collection('tournamentArchives')
+          .find(q).sort({ finishedAt: -1 }).limit(500).toArray();
+        const archetypeOf = (entries) => {
+          if (!entries || !entries.length) return null;
+          const c = classifyDeck(deckToSets(entries, nameMap), rules);
+          return c.rule ? (c.rule.name || null) : null;
+        };
+        const events = archives.map((a) => {
+          const deckByUid = new Map();
+          for (const p of (a.players || [])) if (p && p.uid) deckByUid.set(String(p.uid), p.deckEntries || []);
+          const champUid = a.championUid ? String(a.championUid) : null;
+          // ⚠ detectCut 拿不到（載入順序異常）時一律回「判不出名次」，不要自己補一套。
+          const cut = (typeof detectCut === 'function' && a.matches)
+            ? detectCut(a.matches) : { finals: new Set(), top4: new Set(), top8: new Set() };
+          const top4 = [...(cut.top4 || [])].map((uid) => ({
+            uid: String(uid), archetype: archetypeOf(deckByUid.get(String(uid))),
+          }));
+          return {
+            eventId: a.eventId,
+            championUid: champUid,
+            championArchetype: champUid ? archetypeOf(deckByUid.get(champUid)) : null,
+            finals: [...(cut.finals || [])].map(String),
+            top4,
+            // 名次推不出來時（決賽非單一場＝賽程結構異常）明確標出來，讓圖上可以誠實說明，
+            // 而不是靜默把那場當成「沒有四強」。
+            placementsOk: (cut.top4 || new Set()).size > 0,
+          };
+        });
+        res.json({ events, scannedEvents: archives.length, ruleCount: rules.length, generatedAt: Date.now() });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     app.get('/api/admin/deck-archetype-stats', requireFirebaseAdmin, async (req, res) => {
       if (typeof db === 'undefined' || !db) return res.status(503).json({ error: 'db not ready' });
       const source = ['casual', 'tourn', 'all'].includes(String(req.query.source)) ? String(req.query.source) : 'all';
@@ -4559,6 +4613,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
       return out;
     }
+    // ⭐ v6.111：名次推導是**唯一來源**，掛到 app.locals 供「奪冠報告」端點重用。
+    //   ⚠ 絕對不要在別處再抄一份 —— 這個函式的保守條件（決賽必須是單一場、四強必須是
+    //   決賽兩人的上一輪、八強同理）是刻意寫死的；抄一份出去、哪天只改一邊，
+    //   兩處就會對同一場賽事算出不同名次，而且沒有任何錯誤訊息。
+    app.locals = app.locals || {};
+    app.locals._detectCutPlacements = _detectCutPlacements;
+
     // 把多筆 archives 聚合成 Map<email, stat>。
     function _aggregateArchives(archives) {
       const acc = new Map();
