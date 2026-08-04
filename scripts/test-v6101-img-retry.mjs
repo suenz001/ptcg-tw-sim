@@ -120,12 +120,29 @@ installFakeEnv();
     img._fire('error'); runPending();
     assert.strictEqual(img.srcHistory.length, before);
   });
-  ok('1-7 destroy 後三處 listener 都移除、不留計時器', () => {
+  // v6.118：全域 online/visibilitychange 改成「模組層級各一個 listener + Set 分發」，
+  //   所以 destroy 不再解綁全域事件（那是共用的）。改成用**行為端**斷言更強的性質：
+  //   destroy 之後，觸發全域事件不得再讓這個節點重試（＝已從分發集合移除，不會洩漏）。
+  ok('1-7 destroy 後：節點自身 listener 移除、且全域事件不再叫到它、不留計時器', () => {
     h.destroy();
     assert.strictEqual(img._listenerCount('error'), 0);
     assert.strictEqual(img._listenerCount('load'), 0);
-    assert.strictEqual(globalThis.window._count('online'), 0);
-    assert.strictEqual(globalThis.document._count('visibilitychange'), 0);
+    const before = img.srcHistory.length;
+    globalThis.window._fire('online');
+    globalThis.document._fire('visibilitychange');
+    runPending();
+    assert.strictEqual(img.srcHistory.length, before,
+      'destroy 後仍被全域事件叫到 → kickers 沒清掉，會洩漏並汙染重用的節點');
+  });
+  ok('⭐ v6.118 全域 listener 只綁一份（4930 張卡不得掛出近萬個全域監聽器）', () => {
+    // 同一個 window 上再掛 50 個 img，全域 listener 數量必須維持 1
+    const extra = [];
+    for (let i = 0; i < 50; i++) { const m = makeImg(); extra.push(retryImg(m)); }
+    assert.strictEqual(globalThis.window._count('online'), 1,
+      'window online listener 應恆為 1，實得 ' + globalThis.window._count('online'));
+    assert.strictEqual(globalThis.document._count('visibilitychange'), 1,
+      'document visibilitychange listener 應恆為 1');
+    for (const h2 of extra) h2.destroy();
   });
 }
 {

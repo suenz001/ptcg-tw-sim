@@ -992,6 +992,7 @@
 
   async function ensureRoomArchetypes(rooms: Room[]) {
     if (!ORACLE_MODE) return;                       // 測試站沒有規則庫，不必打端點
+    if (isTournament) return;                       // v6.118：錦標賽頁沒有休閒大廳，雙保險
     const now = Date.now();
     const need = rooms
       .filter(r => r.status === 'playing' && !roomArchetypes[r.roomId]
@@ -3939,8 +3940,19 @@
   }
 
   // 在線上 Lobby 的 join 步驟訂閱開放房間列表
+  //
+  // ⚠⚠⚠ v6.118 效能事故修正：這裡以前**沒有 `!isTournament` gate**。
+  //   /tournament 路由是 `<GamePage tournamentMode={true} />`（同一個元件），而
+  //   `onlineStep` 的初始值就是 `'join'`，且錦標賽流程從頭到尾不會去改它
+  //   （三個 `onlineStep = 'room'` 賦值點全在休閒線上的建房／加入／admin 觀戰路徑上）；
+  //   正式站又會在 onMount 無條件 `oracleAuth()` 設好 `myUid`。
+  //   ⇒ **每個開著錦標賽頁的玩家，整場都在每 2 秒打兩支 `/api/rooms`**
+  //     （subscribeOpenRooms 的 tick 是 2000ms，一次 lobby 一次 playing）。
+  //     30 人賽 ≈ 每秒 30 個純浪費的請求打進 Oracle 的單執行緒，
+  //     疊在錦標賽本身的輪詢上就是玩家回報的「人一多就很 lag」。
+  //   錦標賽頁根本不顯示休閒大廳列表，這些資料一筆都用不到。
   $effect(() => {
-    if (onlineStep === 'join' && myUid) {
+    if (!isTournament && onlineStep === 'join' && myUid) {
       unsubOpenRooms?.();
       openRoomsErr = '';
       unsubOpenRooms = subscribeOpenRooms(

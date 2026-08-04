@@ -9,6 +9,65 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.118 — 兩個效能退化：錦標賽 30 人 lag ＋ 卡牌資料庫「所有卡牌」卡住
+
+站長回報＋玩家回報。**Fable 5 協助診斷，我逐條查證過**（兩條線的主因都不是「最近的新功能」，
+是既有結構被資料量／人數放大 —— 但我 v6.115 確實在其中一個缺口上疊了東西）。
+
+### ⭐⭐⭐ B 線根因：錦標賽頁整場都在跑「休閒大廳」的 2 秒輪詢
+`/tournament` 是 `<GamePage tournamentMode={true} />`（**同一個元件**）。而：
+- `onlineStep` 的初始值就是 `'join'`（`game/+page.svelte` 的 state 宣告）
+- 錦標賽流程**從頭到尾不會改它** —— 三個 `onlineStep = 'room'` 賦值點全在
+  休閒線上的「建房／加入房／admin 觀戰」路徑上，錦標賽有自己的 `tStep`
+- 正式站在 onMount 會無條件 `oracleAuth()` 設好 `myUid`
+
+⇒ 訂閱條件 `onlineStep === 'join' && myUid` **永遠成立** ⇒ 每位參賽者每 2 秒打兩支
+`/api/rooms`（lobby + playing）。**30 人 ≈ 每秒 30 個純浪費請求**打進 Oracle 的單執行緒，
+疊在錦標賽本身的輪詢（`/state` 1.2s/人、`/event`+`/chat` 3s、`/bracket` 9s）上。
+錦標賽頁根本不顯示休閒大廳列表，這些資料一筆都用不到。
+
+⚠ 這是**既有**缺口（我比對過 v6.113/v6.114 的同段程式碼，gate 完全相同），
+之前 50 人賽 lag 做過兩輪降載也沒動到它 —— 那兩輪只 gate 了錦標賽自己的 5 支 API。
+⚠ **但我 v6.115 把 `ensureRoomArchetypes()` 掛在同一個 callback**，所以錦標賽頁也會打
+`/api/rooms-archetypes`。它有 per-room 30 秒節流＋伺服器 5 分鐘 TTL，量級小，但確實是我疊上去的。
+
+**修法**：`$effect` 條件加 `!isTournament`；`ensureRoomArchetypes` 內再加一道 `isTournament` 早退
+（雙保險，即使將來 `$effect` 又被改壞）。
+
+### A 線根因：/cards?set=ALL 一次全量渲染 4930 張
+- ALL 模式 fetch 42 個卡包 JSON，實測 **4.43 MB**（v6.116 後 4930 張）
+- `{#each filtered as card (card.id)}` **完全沒有虛擬捲動／分頁** ⇒ 4930 張 × 每張約 5–6 個
+  DOM 節點 ≈ **近 3 萬個節點在同一個任務裡建完**，主執行緒整段凍住
+- ⚠ v6.101 的 `use:retryImg` **每個 `<img>` 各自**掛 `window:online` 與
+  `document:visibilitychange` ⇒ **9,860 個全域監聽器**。掛載成本之外，每次切回分頁
+  瀏覽器要同步迭代全部 handler
+- 搜尋沒有 debounce：每敲一個字對 4930 張全量重跑 filter ＋ 4930 節點 keyed diff
+
+**修法（純前端，三項）**：
+1. `retryImg` 改成**模組層級各一個** listener ＋ `Set<kick>` 分發；
+   用 `WeakSet<window>` 記「已綁過的 window」而不是布林旗標（SSR→CSR／測試換 window 才會重綁）
+2. `/cards` 增量渲染：`PAGE_SIZE = 240`，`{#each shown}`＋IntersectionObserver 哨兵
+   （`rootMargin: 600px`，捲到附近就先追加，使用者無感）；篩選／搜尋一變就把 `visibleCount` 歸零
+3. 搜尋 150ms debounce（`filtered` 改讀 `debouncedQuery`）
+
+### 守衛
+`test-v6118-perf-guards.mjs`（9 項，HEAD 6 FAIL）：訂閱條件必須含 `!isTournament`／
+`ensureRoomArchetypes` 有雙保險早退／大廳輪詢間隔不得 < 2000ms／grid 不得直接吃 `filtered`／
+必須有 IntersectionObserver 追加且篩選變動歸零／搜尋必須 debounce／
+`retryImg` 內不得再出現 `window.addEventListener`。各配正對照。
+`test-v6101-img-retry.mjs` 的 1-7 改成**行為端**斷言（destroy 後全域事件不得再叫到該節點，
+比數 listener 數量更強），並新增一條「掛 50 個 img 後全域 listener 仍恆為 1」。38 項全綠。
+
+### ⚠ 還沒做的（下一批，需要動 Oracle patch → 要跑 bat）
+Fable 另外指出三個**既有**的伺服器端可改善點，這版沒動：
+- `TREGS` 沒有索引（`/event` 每 3 秒 × 人數做全表掃）
+- 閒置判負掃描每 30 秒對每場 playing match 做 `TROOMS.findOne` **不帶 projection**
+  （整份 gameState 含 log 拉出來只為算 `currentActorSeat`，log 佔約 73%）
+- `/api/rooms-archetypes` 的 `TRULES.find` 每次 cache miss 都重查（可加 60s TTL）
+
+### ⚠ 部署
+本版**純前端**，不需要跑 bat。
+
 ## v6.117 — 把上一輪踩到的兩個坑做成常設守衛，順手修出兩個既有資料 bug
 
 上一輪（v6.116 補 572 張重印）踩了兩個「當下沒有任何測試會紅」的坑。這一版把它們變成

@@ -49,6 +49,24 @@ function paramWidth(p: RetryImgParam): number {
   return (typeof p === 'object' && p?.width) || DEFAULT_PROXY_WIDTH;
 }
 
+/**
+ * v6.118 全域事件收斂：以前**每一個掛了 use:retryImg 的 <img> 都各自** addEventListener
+ * 'online' 與 'visibilitychange'。卡牌資料庫「所有卡牌」一次渲染 4930 張卡 ＝
+ * 近 1 萬個全域監聽器，掛載／卸載本身就是可觀成本，而且每次切回分頁瀏覽器要同步
+ * 迭代全部 handler。改成**模組層級各一個** listener，用 Set 分發給還活著的節點。
+ */
+const kickers = new Set<(resetTries: boolean) => void>();
+/** 記「已經綁過的 window 物件」而不是一個布林 —— SSR→CSR、或測試換掉 globalThis.window 時
+ *  才會重新綁；正常瀏覽器只有一個 window，所以實際上就是各綁一次。 */
+const boundWindows = new WeakSet<object>();
+function bindGlobalOnce() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (boundWindows.has(window as unknown as object)) return;
+  boundWindows.add(window as unknown as object);
+  window.addEventListener('online', () => { kickers.forEach((k) => k(true)); });
+  document.addEventListener('visibilitychange', () => { kickers.forEach((k) => k(false)); });
+}
+
 /** 官網 CDN → 圖片代理縮圖（帶 CORS、長效快取、體積小很多） */
 function proxied(url: string, width: number): string {
   // ⚠ 只代理絕對 http(s) 網址。站內相對路徑（/covers/…、data:、blob:）交給代理會直接壞掉，
@@ -96,13 +114,11 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
     clear();
     attempt();
   };
-  const onOnline = () => kick(true);      // 斷線期間耗掉的次數不算數
-  const onVisible = () => kick(false);
-
   node.addEventListener('error', onError);
   node.addEventListener('load', onLoad);
-  window.addEventListener('online', onOnline);
-  document.addEventListener('visibilitychange', onVisible);
+  // v6.118：改登記到模組層級的單一 listener（見檔案上方 kickers）
+  bindGlobalOnce();
+  kickers.add(kick);
 
   // 掛上時就已經是失敗狀態（例如前一次渲染就壞了）→ 立刻排一次重試
   if (node.complete && node.naturalWidth === 0 && (node.currentSrc || node.src)) onError();
@@ -126,8 +142,7 @@ export function retryImg(node: HTMLImageElement, param?: RetryImgParam) {
       clear();
       node.removeEventListener('error', onError);
       node.removeEventListener('load', onLoad);
-      window.removeEventListener('online', onOnline);
-      document.removeEventListener('visibilitychange', onVisible);
+      kickers.delete(kick);   // v6.118：從模組層級的分發集合移除（全域 listener 不解綁）
     },
   };
 }

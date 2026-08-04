@@ -54,6 +54,25 @@
   }
 
   let query = $state('');
+  /**
+   * v6.118：搜尋改吃「延遲 150ms 的查詢字串」。
+   * 「所有卡牌」有 4930 張，每敲一個字就對全部重跑 filter＋做 4930 節點的 keyed diff，
+   * 打字會一頓一頓。debounce 之後只有停手才算一次。
+   */
+  let debouncedQuery = $state('');
+  $effect(() => {
+    const q = query;
+    const id = setTimeout(() => { debouncedQuery = q; }, 150);
+    return () => clearTimeout(id);
+  });
+  /**
+   * v6.118 增量渲染：以前 `{#each filtered}` 是**全量**掛上去 ——「所有卡牌」4930 張
+   * ×每張約 5~6 個 DOM 節點 ≈ 近 3 萬個節點在同一個任務裡建完，主執行緒整段凍住，
+   * 體感就是「開啟所有卡牌會卡住」。改成先渲染 PAGE_SIZE 張，捲到底再追加。
+   * ⚠ 篩選條件或搜尋字串一變就要歸零，否則會停在上一次的捲動量。
+   */
+  const PAGE_SIZE = 240;
+  let visibleCount = $state(PAGE_SIZE);
   // v2.184：搜尋模式切換
   //   normal  — 只搜卡名 / 招式名 / 特性名 / 卡號（原行為）
   //   keyword — 全文搜尋，含 rulesText、招式 effect、特性 effect、特性 label
@@ -287,7 +306,7 @@
   }
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
-    const q = query.trim().toLowerCase();
+    const q = debouncedQuery.trim().toLowerCase();
     const cats = selectedCategories;
     const tags = selectedTags;
     const types = selectedTypes;
@@ -352,6 +371,25 @@
       );
     });
   });
+  const shown = $derived(filtered.slice(0, visibleCount));
+  const hasMore = $derived(visibleCount < filtered.length);
+  /** 任何會改變 filtered 的輸入變動 → 回到第一頁。 */
+  $effect(() => {
+    void debouncedQuery; void selectedCategories; void selectedTags;
+    void selectedTypes; void selectedStages; void selectedRegMarks; void data.setCode;
+    visibleCount = PAGE_SIZE;
+  });
+  /** 捲到接近底部時追加下一批（sentinel 進入視窗即觸發）。 */
+  function moreSentinel(node: HTMLElement) {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && visibleCount < filtered.length) visibleCount += PAGE_SIZE;
+      }
+    }, { rootMargin: '600px 0px' });
+    io.observe(node);
+    return { destroy() { io.disconnect(); } };
+  }
 
   function closeModal() {
     selected = null;
@@ -572,7 +610,7 @@
   </div>
 
   <div class="grid">
-    {#each filtered as card (card.id)}
+    {#each shown as card (card.id)}
       <button class="cardBtn" onclick={() => (selected = card)} aria-label={card.name}>
         <img use:retryImg={card.imageUrl} src={card.imageUrl} alt={card.name} loading="lazy" />
         <span class="cardLabel">
@@ -584,6 +622,10 @@
       </button>
     {/each}
   </div>
+  {#if hasMore}
+    <!-- v6.118：捲到這裡就再載一批（不是按鈕，使用者無感） -->
+    <div class="moreSentinel" use:moreSentinel>載入更多…（已顯示 {shown.length} / {filtered.length}）</div>
+  {/if}
 
   {#if selected}
     <div class="modal" role="dialog" aria-modal="true" onclick={closeModal}>
@@ -1080,6 +1122,14 @@
     color: #fff;
   }
 
+  /* v6.118 增量渲染的哨兵列（捲到這裡自動載下一批） */
+  .moreSentinel {
+    grid-column: 1 / -1;
+    padding: 1.2rem 0 2rem;
+    text-align: center;
+    color: #778;
+    font-size: 0.85rem;
+  }
   .grid {
     max-width: 1200px;
     margin: 0 auto 3rem;
