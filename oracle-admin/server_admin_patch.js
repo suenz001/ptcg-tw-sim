@@ -3384,6 +3384,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // Phase1-B：賽事 collections + 報名（一次一 active 賽事；單敗淘汰 Bo1）
     // ════════════════════════════════════════════════════════════════════
     const TEVENTS = db.collection('tournamentEvents');
+    // v6.120：TEVENTS 原本**除了 _id 完全沒有索引**，但 status 是全站最常被過濾的欄位
+    //   （listOpenEvents 的 $ne:'finished'、排程器每 tick 的 find({status:'running'})、
+    //     社群賽的 createdByPlayer + status）。賽事只增不減，久了每次都是全集合掃描。
+    //   索引不改變查詢結果（只換 query plan），且只在服務啟動時建一次。
+    TEVENTS.createIndex({ status: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
     const TREGS = db.collection('tournamentRegistrations');
     // v6.119 效能：TREGS 從來沒有索引，但它是**永久累積**的（正常完賽不刪報名，
     //   而且 v0.84 預填暱稱、v0.90 聊天暱稱都刻意依賴歷史報名）。熱路徑全是全表掃：
@@ -3406,11 +3411,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // 舊前端相容：多場開放時挑「最該顯示」的一場（running > checkin > bracket_ready > registration > draft，同階取 createdAt 最早）。
     const _EV_RANK = { running: 0, checkin: 1, bracket_ready: 2, registration: 3, draft: 4 };
-    async function getActiveEvent() {
-      const all = await listOpenEvents();
-      if (!all.length) return null;
+    // v6.120 中央收斂：把「挑最該顯示的一場」的排序抽成純函式，讓 /event 可以直接餵 3 秒快取的
+    //   openList（不必再打一次未快取的 listOpenEvents）。getActiveEvent 改呼叫它 ⇒ 排序規則只有
+    //   一份，兩條路徑不會漂移。
+    //   ⚠ **必須 slice() 再 sort**：呼叫端可能傳進來的是 _eventShared.openList（快取物件本身），
+    //     in-place 排序會把快取的順序改成「顯示優先序」，而 /event 回傳的 events 清單依賴
+    //     原本的 createdAt 順序 ⇒ 會靜默改變前端賽事列表的排列。
+    function pickActiveFromList(list) {
+      if (!list || !list.length) return null;
+      const all = list.slice();
       all.sort((a, b) => ((_EV_RANK[a.status] != null ? _EV_RANK[a.status] : 9) - (_EV_RANK[b.status] != null ? _EV_RANK[b.status] : 9)) || ((a.createdAt || 0) - (b.createdAt || 0)));
       return all[0];
+    }
+    async function getActiveEvent() {
+      return pickActiveFromList(await listOpenEvents());
     }
     // 端點解析目標賽事：優先 body/query 的 eventId（多賽事化的 admin/前端），否則 fallback 舊單場行為。
     async function resolveEventFromReq(req) {
@@ -3472,8 +3486,19 @@ import('firebase-admin').then(async ({ default: admin }) => {
       try {
         const id = await tournIdentity(req);
         if (id.error) return res.status(id.code || 401).json({ error: id.error });
-        const ev = await resolveEventFromReq(req);
+        // v6.120 降載：/event 是全站最高頻的端點（每人每 3 秒）。原本第一行 resolveEventFromReq
+        //   會走 getActiveEvent → listOpenEvents，也就是**每個請求各一次未快取的**
+        //   `TEVENTS.find({ status: { $ne: 'finished' } })`；而下一行的 getEventShared() 早就把
+        //   **同一份清單**快取了 3 秒。改成先取 shared、再從 shared.openList 解析現行賽事。
+        //   ⚠ 只改這個唯讀端點。`resolveEventFromReq` 本身一個字都不動 —— register/checkin/
+        //     admin 那些**會寫入**的端點仍走未快取的新鮮讀取，絕不用 3 秒前的狀態做寫入決策。
+        //   ⚠ 帶了 eventId 但不在開放清單裡（例如查看已結束的賽事）→ 仍用 getEventById 精確補查，
+        //     行為與原本的 resolveEventFromReq 完全相同。
         const shared = await getEventShared();
+        const _reqEid = (req.body && req.body.eventId) || (req.query && req.query.eventId) || null;
+        let ev;
+        if (_reqEid) ev = shared.openList.find((e) => e._id === String(_reqEid)) || await getEventById(_reqEid);
+        else ev = pickActiveFromList(shared.openList);
         // per-user：一次抓我的所有報名（取代原對每個開放賽事各一次 findOne 的 N+1）
         // v6.119 降載：以前這裡把「本人所有歷屆報名」的完整 doc（含各 60 張 deckEntries）
         //   整包拉回來，但 handler 只用到 eventId/name/deckName/checkedIn/autoRemovedConflict/
@@ -4163,6 +4188,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { /* 絕不影響對戰 */ }
     }
     try { await TMATCH.createIndex({ eventId: 1 }); } catch (e) { /* v0.70：去重查詢走 eventId,建索引(best-effort) */ }
+    // v6.120：排程器每 30 秒對每個 running 賽事做 find({ eventId, status }) / find({ eventId, round, status })。
+    //   TMATCH 隨賽事場次永久累積，單靠 eventId 索引仍要把該賽事所有輪次的 match 全撈出來再過濾。
+    TMATCH.createIndex({ eventId: 1, status: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
+    TMATCH.createIndex({ eventId: 1, round: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
     const TCHAMPS = db.collection('tournamentChampions'); // v0.33 名人堂（歷屆冠軍）
     const TARCHIVE = db.collection('tournamentArchives'); // v0.35 完整賽事歸檔（永久保存，刪賽事不影響）
     // 每輪動態配對：⌊n/2⌋ 場對戰；n 為奇數 → 落單 1 人輪空保送下一輪（優先給「還沒輪空過的人」，避免同一人連續被保送）。
@@ -5220,6 +5249,22 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const playing = await TMATCH.find({ eventId: ev._id, status: 'playing', roomId: { $ne: null }, gameStartedAt: { $ne: null } }).toArray();
           for (const m of playing) {
             if (now <= m.gameStartedAt + limitMin * 60000) continue;
+            // ── v6.120 降載：兩段式讀取（同 v6.119 閒置判負的做法）─────────────────────
+            //   時限一到，**該輪還在打的每一場**都會走到這裡，每 30 秒各拉一份完整 gameState
+            //   （log 佔約 73%）。而絕大多數 tick 只是在等「後攻方結束他的下一個回合」，
+            //   判斷只需要 phase 與 turn 兩個純量。
+            //   ⚠⚠ **不能**直接對下面那支 findOne 加 projection：底下三個判定分支都會
+            //     `JSON.parse(JSON.stringify(gs))` 把盤面整包 `$set` 回去，殘缺盤面寫回會永久
+            //     洗掉 log（回放靠它）。所以只加「輕量早退」，**過了早退就走原本一字未改的完整讀取**，
+            //     真正的判定（平手/比獎賞/標記時限）全部仍由完整 doc 決定 ⇒ 零行為變更。
+            //   早退條件與下面原本的 continue 條件逐字對應：
+            //     (a) 房間不存在 / 無盤面 / 已 game-over → 原本就 continue
+            //     (b) 已標記時限、且最後回合還沒打完 → 原本就 continue
+            //   `_lt` 為 null（房間不見了）也直接 continue，等同原本 `!gs → continue`。
+            const _lt = await TROOMS.findOne({ _id: m.roomId }, { projection: { 'gameState.phase': 1, 'gameState.turn': 1 } });
+            const _ltgs = _lt && _lt.gameState;
+            if (!_ltgs || _ltgs.phase === 'game-over') continue;
+            if (m.timeLimitReached && typeof _ltgs.turn === 'number' && _ltgs.turn <= (m.timeLimitTurn || 0)) continue;
             const room = await TROOMS.findOne({ _id: m.roomId });
             const gs = room && room.gameState;
             if (!gs || gs.phase === 'game-over') continue;

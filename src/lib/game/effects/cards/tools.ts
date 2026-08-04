@@ -295,12 +295,32 @@ TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
 //   同一 fn 同時註冊到 TOOL_ON_DAMAGED + TOOL_ON_KO。
 //   damage 參數在 KO 路徑傳 0（適用於不依賴 damage 值的道具；
 //   依賴 baseDamage 的「豪邁炸彈」240 點以上條件未來 v5.081 處理）。
+/**
+ * v6.120 ⭐ 這些道具的**卡面是「受到…傷害時」，不是「昏厥時」**。
+ *
+ * 之所以同一支 fn 也被塞進 `TOOL_ON_KO`，純粹是為了讓「引擎主管線的 KO 分支」也能觸發 ——
+ * 那條分支不會跑 `TOOL_ON_DAMAGED`（KO 與非 KO 是互斥的 if/else），而依 PTCG 規則
+ * 「受到傷害時」是包含「被這次傷害打死」的情況的。所以它是一個**補償性的鏡射**。
+ *
+ * ⚠⚠ 但中央傷害 helper（狙擊／延後傷害／多目標）跟引擎主管線的結構不同：它們是
+ * **先 `fireDefenderOnDamaged`、KO 時再 `fireDefenderOnKO`**，兩者都會跑。
+ * 於是同一次傷害就把這些道具觸發了**兩次**（玩家回報「手持循環扇發動 2 次」；
+ * 幸運頭盔會抽 4 張、凸凸頭盔會反傷 40）。
+ *
+ * 因此把「哪些名字是鏡射來的」公開出來，讓 `fireDefenderOnKO` 在
+ * 「這次傷害的 on-damaged 已經跑過了」時跳過它們。
+ * ⭐ 通則：**同一個效果同時掛在兩個 hook 上時，一定要有一個地方知道「另一個 hook 跑過沒有」**，
+ *   否則只要有任何一條路徑同時跑兩個 hook，就會靜默地觸發兩次。
+ */
+export const TOOL_ON_KO_MIRRORED_FROM_DAMAGED = new Set<string>();
+
 function registerToolOnDamagedAndKO(
   name: string,
   fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>) => import('../../types').GameState,
 ): void {
   TOOL_ON_DAMAGED.set(name, fn);
   TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, _koInst) => fn(state, dIdx, aIdx, 0, pool));
+  TOOL_ON_KO_MIRRORED_FROM_DAMAGED.add(name);
 }
 
 registerToolOnDamagedAndKO('幸運頭盔', (state, dIdx) => {

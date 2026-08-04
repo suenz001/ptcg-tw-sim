@@ -90,6 +90,7 @@ import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
+  TOOL_ON_KO_MIRRORED_FROM_DAMAGED,  // v6.120 防同一次傷害觸發兩次
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
 } from './effects/cards/tools';
@@ -7633,6 +7634,12 @@ export function fireDefenderOnDamaged(
 export function fireDefenderOnKO(
   state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>,
   koInst: CardInstance, isActive: boolean, koByAttackDamage: boolean = true,
+  // v6.120：這一次傷害是否**已經**跑過 fireDefenderOnDamaged。
+  //   中央傷害 helper（狙擊／延後傷害／多目標）是「先 on-damaged、KO 時再 on-KO」，
+  //   兩者都會跑；而 TOOL_ON_KO 裡有一批是從 TOOL_ON_DAMAGED **鏡射**過來的
+  //   （卡面寫「受到…傷害時」，見 TOOL_ON_KO_MIRRORED_FROM_DAMAGED），
+  //   不跳過就會同一次傷害觸發兩次。預設 false＝維持既有呼叫端行為。
+  onDamagedAlreadyFired: boolean = false,
 ): GameState {
   // v5.573：收斂「戰鬥位被招式 KO」時的防守方 on-KO 機制——原本只有引擎主管線觸發，
   //   走中央 helper dealAttackDamageToTarget / inline 傷害 resolver 的招式 KO 戰鬥位時會漏。
@@ -7673,6 +7680,12 @@ export function fireDefenderOnKO(
     for (const t of getAllAttachedTools(koInst)) {
       const tool = pool.get(t.cardId);
       if (!tool) continue;
+      // v6.120 ⚠ 卡面寫「受到…傷害時」、只是為了引擎 KO 分支才鏡射進 TOOL_ON_KO 的道具
+      //   （幸運頭盔／凸凸頭盔／火箭隊的催眠裝置／逆境保險／奢華炸彈／手持循環扇），
+      //   若這一次傷害的 on-damaged 已經跑過，這裡再跑就是**第二次**。
+      //   ⚠ 用 continue 而非把它們從 TOOL_ON_KO 拿掉 —— 引擎主管線的 KO 分支
+      //   （不跑 on-damaged）仍然要靠這條鏡射才會觸發。
+      if (onDamagedAlreadyFired && TOOL_ON_KO_MIRRORED_FROM_DAMAGED.has(tool.name)) continue;
       const fn = TOOL_ON_KO.get(tool.name);
       if (fn) s = fn(s, dIdx, aIdx, pool, koInst);
     }
@@ -8066,7 +8079,10 @@ export function dealAttackDamageToTarget(
   }
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
   //   龐克頭盔/還擊斧/反擊特性/警備濁霧）。共用 fireDefenderOnDamaged，與 snipe-multi 同一條。
-  if (isActive && kind === 'attack-damage' && effDmg > 0) {
+  // v6.120：記下「這一次傷害有沒有跑過 on-damaged」，下方 fireDefenderOnKO 需要它
+  //   才知道要不要跳過鏡射型道具（否則手持循環扇/幸運頭盔等會觸發兩次）。
+  const _onDamagedFired = isActive && kind === 'attack-damage' && effDmg > 0;
+  if (_onDamagedFired) {
     st = fireDefenderOnDamaged(st, dIdx, actorIdx, effDmg, pool);
     if (st.phase === 'game-over') return st;
   }
@@ -8112,7 +8128,7 @@ export function dealAttackDamageToTarget(
     s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
     // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
     //   中央 helper 原漏呼叫，導致狙擊/分配招式 KO 帶接力棒的寶可夢時能量直接消失。
-    s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, kind === 'attack-damage');
+    s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, kind === 'attack-damage', _onDamagedFired);
     if (s.phase === 'game-over') return s;
     // v5.830：對手戰鬥位被狙擊/延後傷害 KO → 攻擊方「奇跡之吻」擲幣+1(卡面「對手戰鬥寶可夢昏厥時」不分主傷害/狙擊)。
     if (isActive) s = applyMiracleKissOnOppActiveKO(s, actorIdx, pool);
@@ -10366,7 +10382,9 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     }
     // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged，
     //   升級原本只有 SPECIAL_ENERGY 的版本；補 TOOL_ON_DAMAGED/還擊斧/龐克頭盔/反擊特性/警備濁霧）。
-    if (isActive && effDmg > 0) {
+    // v6.120：同 dealAttackDamageToTarget —— 記下 on-damaged 是否跑過。
+    const _onDamagedFired = isActive && effDmg > 0;
+    if (_onDamagedFired) {
       s = fireDefenderOnDamaged(s, dIdx, actorIdx, effDmg, pool);
       if (s.phase === 'game-over') return s;
     }
@@ -10398,7 +10416,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       s = addLog({ ...s, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, targetCard, 'attack');
       // v5.613 收斂：多目標狙擊招式 KO 戰鬥位 → 補觸發防守方 on-KO（沉重接力棒/反擊等），與引擎主管線/中央 helper 一致
-      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true);
+      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true, _onDamagedFired);
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDefender = { ...defenderNow };
@@ -15142,7 +15160,9 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       if (_ca.avoided) dmg = 0;
     }
     // v5.436：active 受招式傷害 → 觸發防守方 on-damaged 全機制（共用 fireDefenderOnDamaged）。
-    if (isActive && dmg > 0) {
+    // v6.120：同 dealAttackDamageToTarget —— 記下 on-damaged 是否跑過。
+    const _onDamagedFired = isActive && dmg > 0;
+    if (_onDamagedFired) {
       s = fireDefenderOnDamaged(s, dIdx, actorIdx, dmg, pool);
       if (s.phase === 'game-over') return s;
     }
@@ -15176,7 +15196,7 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       // v2.246：clone-strike-multi-hit 屬於招式 KO（共用大吼大叫 / 三色炮 / 分身連打）
       s = recordOppKO(s, dIdx, targetCard, 'attack');
       // v5.613 收斂：分身連打/三色炮類 KO 戰鬥位 → 補觸發防守方 on-KO（沉重接力棒/反擊等）
-      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true);
+      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg }, isActive, true, _onDamagedFired);
       // 戰鬥場昏厥且對手沒有備戰 → game over
       if (isActive && newDef.bench.length === 0) {
         s = { ...s, phase: 'game-over', winner: actorIdx, winReason: `${defenderNow.name} 沒有可上場的寶可夢` };

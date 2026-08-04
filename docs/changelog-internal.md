@@ -9,6 +9,86 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.120 — 「受到傷害時」道具重複觸發（玩家回報）＋ 伺服器降載收尾
+
+站長：「還有未處理的就繼續下一輪。」本版兩件事：接續 v6.119 的伺服器降載尾巴，
+以及久候的玩家回報「手持循環扇發動 2 次」。
+
+### ⭐⭐⭐ A. 手持循環扇「發動 2 次」——真因是同一個效果掛在兩個 hook 上
+
+**維度**：`registerToolOnDamagedAndKO` 把同一支 fn **同時**塞進 `TOOL_ON_DAMAGED` 與
+`TOOL_ON_KO`。這個鏡射本身是對的 —— 引擎主管線的 KO 分支與非 KO 分支是**互斥的
+if/else**，KO 時不會跑 `TOOL_ON_DAMAGED`，而依 PTCG 規則「受到傷害時」是包含
+「被這次傷害打死」的，所以需要鏡射才會觸發。
+
+**但中央傷害 helper 的結構不同**：`dealAttackDamageToTarget` /
+snipe-multi / clone-strike-multi-hit 這三條都是
+「先 `fireDefenderOnDamaged`、KO 時再 `fireDefenderOnKO`」，**兩條都會跑**
+⇒ 同一次傷害觸發兩次。
+
+harness 實測（一擊 KO 帶道具的戰鬥位）：
+
+| 道具 | 卡面 | bug 版 |
+|---|---|---|
+| 幸運頭盔 | 抽 2 張 | **抽 4 張** |
+| 手持循環扇 | 抽走 1 個能量 | **連開 2 個 picker，抽走 2 個** |
+| 凸凸頭盔 | 反傷 20 | **反傷 40** |
+
+其餘同批：火箭隊的催眠裝置／逆境保險／奢華炸彈。
+
+**修法（中央收斂）**：`tools.ts` 公開 `TOOL_ON_KO_MIRRORED_FROM_DAMAGED`
+（由 `registerToolOnDamagedAndKO` 自動登記，單一來源）；`fireDefenderOnKO` 新增
+`onDamagedAlreadyFired` 參數，為 true 時**跳過鏡射來的那批**。
+三個中央 helper 各自用 `const _onDamagedFired = ...` 記下實情再傳進去；
+引擎主管線不傳（預設 false）⇒ 那條路徑行為一個字都沒變。
+
+⭐ **通則：同一個效果同時掛在兩個 hook 上時，一定要有一個地方知道「另一個 hook 跑過沒有」。**
+只要有任何一條路徑同時跑兩個 hook，就會靜默地觸發兩次，而且不會有任何錯誤訊息。
+
+**枚舉守衛**（`test-v6120-ondamaged-tool-double-fire.mjs`，10 項，HEAD 5 FAIL）：
+除了三個行為端斷言，還有跨表枚舉 ——
+把 `TOOL_ON_DAMAGED`／`PASSIVE_RETALIATION`／`PASSIVE_ON_DAMAGED`／
+`SPECIAL_ENERGY_ON_DAMAGED`（受傷側）與
+`TOOL_ON_KO`／`PASSIVE_KO_RETALIATION`／`PASSIVE_ON_KO`（昏厥側）取交集，
+**任何同時出現在兩側的名字都必須登記在鏡射名單裡**，否則 FAIL。
+本次掃描確認：除了那 6 張道具，特性／特殊能量**沒有**任何一個被同時掛兩邊（維度乾淨）。
+另有反向斷言（沉重接力棒／希望護身符這種真正的「昏厥時」道具不得混進名單、不得被跳過）
+與「引擎主管線 KO 時幸運頭盔仍要抽 2」的正對照 —— 防止有人把鏡射整個拿掉。
+
+### B. 伺服器降載收尾（接 v6.119 的 🔨 待辦）
+
+三項，**全部只動讀取路徑，寫回路徑一個字不改**：
+
+1. **`/event` 現行賽事解析改吃 3 秒快取**。原本 handler 第一行 `resolveEventFromReq`
+   會走 `getActiveEvent → listOpenEvents`，等於**每個請求各一次未快取的**
+   `TEVENTS.find({status:{$ne:'finished'}})`；而下一行 `getEventShared()` 早就把
+   **同一份清單**快取了 3 秒。改成先取 shared、再從 `shared.openList` 解析。
+   ⚠ 只改這個唯讀端點，`resolveEventFromReq` 本身不動 —— register／checkin 等
+   **會寫入**的端點仍走未快取的新鮮讀取。
+   ⚠ 排序抽成 `pickActiveFromList`，**必須先 `slice()` 再 sort**：呼叫端傳的是
+   `_eventShared.openList` 這個快取物件本身，in-place sort 會把快取順序改成
+   「顯示優先序」，而 `/event` 回傳的 events 清單依賴原本的 createdAt 順序。
+2. **索引**：`TEVENTS` 原本除 `_id` 外**完全沒索引**（status 是全站最常過濾的欄位、
+   賽事只增不減）→ 補 `{status:1}`；`TMATCH` 補 `(eventId,status)`／`(eventId,round)` 複合索引。
+3. **對局時限掃描兩段式讀**：時限一到，該輪還在打的**每一場**都會每 30 秒各拉一份
+   完整 gameState（log 佔約 73%），但判斷只需要 phase 與 turn 兩個純量。
+   改成輕量 projection 早退 + **過了早退才走原本一字未改的完整讀取**。
+   ⚠⚠ 同 v6.119 的地雷：底下三個判定分支都會 `JSON.parse(JSON.stringify(gs))`
+   把盤面整包 `$set` 回去，**完整讀取絕不能加 projection**（會永久洗掉 log）。
+   守衛裡有一條**全域否定斷言**：掃描所有 `JSON.parse(JSON.stringify(` 的位置，
+   往前回溯最近的 `TROOMS.findOne`，該次讀取一律不得帶 projection。
+
+守衛 `test-v6120-event-shared-and-roundlimit.mjs`（13 項，HEAD 9 FAIL），
+含 `pickActiveFromList` 的**行為端**斷言（真的跑起來，驗證它不改動傳入的陣列）。
+
+### 驗證
+完整 npm test **440** 綠；`anti-pattern-lint` 無違規；`tsc` TS2304 = 0；
+`node --check server_admin_patch.js` 過。
+
+### ⚠ 部署
+本版動到 **引擎（effects.ts / tools.ts）** 與 **`oracle-admin/server_admin_patch.js`**
+⇒ 三支 bat 都要跑（`update-tournament.bat` 一定要，它同時重建錦標賽 server-engine 與上傳 patch）。
+
 ## v6.119 — 錦標賽伺服器端查詢降載（Fable 5 評估 + 逐條查證）
 
 接續 v6.118（那批是純前端）。站長：「盡量把找到的問題徹底解決，但要避免風險。」

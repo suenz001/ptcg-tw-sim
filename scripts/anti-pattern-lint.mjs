@@ -400,6 +400,9 @@ for (const f of files) {
     "TOOL_HP_BONUS",
     "TOOL_ON_DAMAGED",
     "TOOL_ON_KO",
+    // v6.120：TOOL_ON_KO 裡「從 TOOL_ON_DAMAGED 鏡射過來」的名字集合。
+    //   同一家族的 side-effect registry，不是新的相依方向。
+    "TOOL_ON_KO_MIRRORED_FROM_DAMAGED",
     "TOOL_PREVENT_KO",
     "TOOL_PRIZE_BONUS",
     "TOOL_RETREAT_MOD"
