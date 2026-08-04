@@ -135,16 +135,16 @@
   "code": "SV8a",
   "name": "太晶慶典ex",
   "regulationMark": "H",
-  "cardCount": 237,
+  "cardCount": 334,
   "supertypeCounts": {
-   "Pokemon": 168,
-   "Trainer": 66,
-   "Energy": 3
+   "Pokemon": 237,
+   "Trainer": 93,
+   "Energy": 4
   },
   "coverImageUrl": "covers/SV8a.png",
   "scrapedAt": "2026-04-16T08:01:07.033Z",
   "releaseDate": "2024-12-20",
-  "count": 237
+  "count": 334
  },
  {
   "code": "M1L",
@@ -178,30 +178,31 @@
   "code": "M2",
   "name": "烈獄狂火X",
   "regulationMark": "I",
-  "cardCount": 80,
+  "cardCount": 116,
   "supertypeCounts": {
-   "Pokemon": 72,
-   "Trainer": 8
+   "Pokemon": 98,
+   "Trainer": 17,
+   "Energy": 1
   },
   "coverImageUrl": "covers/M2.png",
   "scrapedAt": "2026-04-16T08:17:56.312Z",
   "releaseDate": "2025-10-09",
-  "count": 80
+  "count": 116
  },
  {
   "code": "M2a",
   "name": "超級進化夢想ex",
   "regulationMark": "I",
-  "cardCount": 250,
+  "cardCount": 486,
   "supertypeCounts": {
-   "Pokemon": 190,
+   "Pokemon": 426,
    "Trainer": 57,
    "Energy": 3
   },
   "coverImageUrl": "covers/M2a.png",
   "scrapedAt": "2026-04-16T08:19:18.390Z",
   "releaseDate": "2025-12-05",
-  "count": 250
+  "count": 486
  },
  {
   "code": "MBD",
@@ -252,31 +253,31 @@
   "code": "SV11B",
   "name": "漆黑伏特",
   "regulationMark": "I",
-  "cardCount": 174,
+  "cardCount": 253,
   "supertypeCounts": {
-   "Pokemon": 163,
-   "Trainer": 10,
-   "Energy": 1
+   "Pokemon": 235,
+   "Trainer": 16,
+   "Energy": 2
   },
   "coverImageUrl": "covers/SV11B.png",
   "scrapedAt": "2026-04-16T08:12:18.580Z",
   "releaseDate": "2025-06-20",
-  "count": 174
+  "count": 253
  },
  {
   "code": "SV11W",
   "name": "純白閃焰",
   "regulationMark": "I",
-  "cardCount": 174,
+  "cardCount": 254,
   "supertypeCounts": {
-   "Pokemon": 163,
-   "Trainer": 10,
-   "Energy": 1
+   "Pokemon": 235,
+   "Trainer": 17,
+   "Energy": 2
   },
   "coverImageUrl": "covers/SV11W.png",
   "scrapedAt": "2026-04-16T08:08:59.091Z",
   "releaseDate": "2025-06-20",
-  "count": 174
+  "count": 254
  },
  {
   "code": "SV9",
@@ -370,16 +371,16 @@
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 65,
+  "cardCount": 89,
   "supertypeCounts": {
-   "Pokemon": 55,
-   "Trainer": 4,
-   "Energy": 6
+   "Pokemon": 74,
+   "Trainer": 6,
+   "Energy": 9
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 65
+  "count": 89
  },
  {
   "code": "M3",
@@ -564,16 +565,30 @@
   "code": "SV-P-I",
   "name": "SV-P特典卡(I)",
   "regulationMark": "I",
-  "cardCount": 23,
+  "cardCount": 30,
   "supertypeCounts": {
    "Pokemon": 10,
-   "Trainer": 5,
+   "Trainer": 12,
    "Energy": 8
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012567.png",
   "scrapedAt": "2026-04-25T17:32:23.798013Z",
   "releaseDate": null,
-  "count": 23
+  "count": 30
+ },
+ {
+  "code": "SV-P-J",
+  "name": "SV-P特典卡(J)",
+  "regulationMark": "J",
+  "cardCount": 13,
+  "supertypeCounts": {
+   "Trainer": 5,
+   "Energy": 8
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007812.png",
+  "scrapedAt": "2026-08-04T08:05:52.335336Z",
+  "releaseDate": null,
+  "count": 13
  },
  {
   "code": "M5",
