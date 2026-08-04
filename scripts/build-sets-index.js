@@ -4,7 +4,17 @@
  * This lets the frontend show a set picker without having to load every
  * per-set JSON upfront.
  *
- * Run: node scripts/build-sets-index.js
+ * ⚠⚠⚠ 這支腳本會**整份重生** `static/cards/index.json` 與 `static/card-set-map.json`。
+ *   index.json 裡有一些**手工整理、原始碼裡沒有的欄位**（卡包中文名、releaseDate、
+ *   covers 路徑…）。重生會把它們退回原始碼版 —— 例如「深淵之瞳」會變回 "M5"、
+ *   regulationMark 會變成 null。**補卡時請改用「讀進 index.json → 只手術更新該卡包的
+ *   cardCount / count / supertypeCounts」的做法，不要跑這支。**
+ *
+ * ⚠ v6.117：它以前**不解析任何參數**，所以 `node scripts/build-sets-index.js --help`
+ *   不是「查用法」，是直接執行重生（我真的踩過一次，把 index.json 洗掉）。
+ *   現在未知參數一律印用法後 exit 1；要真的重生必須明確帶 `--write`。
+ *
+ * Run: node scripts/build-sets-index.js --write
  */
 
 import fs from 'node:fs';
@@ -162,4 +172,34 @@ function main() {
   }
 }
 
+// ── v6.117 參數閘：預設**不寫檔**，避免「想查用法卻把 index.json 重生掉」 ──────────
+//   （這支腳本以前完全不看 argv，任何參數都會直接跑完整重生。）
+const USAGE = [
+  'build-sets-index.js — 重生 static/cards/index.json 與 static/card-set-map.json',
+  '',
+  '用法：',
+  '  node scripts/build-sets-index.js --write    真的重生（會覆蓋檔案）',
+  '  node scripts/build-sets-index.js --help     只印這段說明',
+  '',
+  '⚠ index.json 含手工整理的欄位（卡包中文名／releaseDate／covers）。',
+  '  重生會把它們退回原始碼版（深淵之瞳 → "M5"、regulationMark → null）。',
+  '  補卡請改用「讀進 index.json 只手術更新 cardCount/count/supertypeCounts」。',
+].join('\n');
+
+const argv = process.argv.slice(2);
+if (argv.includes('--help') || argv.includes('-h')) {
+  console.log(USAGE);
+  process.exit(0);
+}
+const unknown = argv.filter((a) => a !== '--write');
+if (unknown.length) {
+  console.error('未知參數：' + unknown.join(' ') + '\n');
+  console.error(USAGE);
+  process.exit(1);
+}
+if (!argv.includes('--write')) {
+  console.error('未加 --write，不做任何事（避免誤觸重生）。\n');
+  console.error(USAGE);
+  process.exit(1);
+}
 main();

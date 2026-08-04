@@ -8285,7 +8285,7 @@
  },
  {
   "id": "12438",
-  "name": "招式學習器 ‌衰退",
+  "name": "招式學習器 衰退",
   "supertype": "Trainer",
   "subtype": "PokemonTool",
   "setCode": "SV8a",
