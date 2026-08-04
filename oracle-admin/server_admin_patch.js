@@ -1891,6 +1891,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   資料來源：休閒對戰 matchRecords.p{1,2}.cardCounts（cardId→張數，每場雙方各 60 張全紀錄）
     //     與錦標賽 tournamentArchives.players[].deckEntries（批次3 使用）。
     const TRULES = db.collection('deckRules');
+    // v6.119：deckRules 幾乎不變，但這裡以前每次 cache-miss 都重查一次 mongo。
+    //   ⚠ miss 比想像多：setup 階段的房間永遠不會進 _roomArchCache（見下方 phase gate），
+    //   所以大廳只要有一間房在開局，每輪輪詢都會觸發一次 TRULES 查詢。
+    //   加 30 秒 TTL；規則 CRUD 時主動失效（比原本「本端點結果已被 per-room 快取 5 分鐘」更即時）。
+    let _rulesCache = { at: 0, rules: null };
+    function invalidateRulesCache() { _rulesCache = { at: 0, rules: null }; }
+    async function getEnabledRulesCached() {
+      const now = Date.now();
+      if (_rulesCache.rules && now - _rulesCache.at < 30000) return _rulesCache.rules;
+      const rules = await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray();
+      _rulesCache = { at: now, rules };
+      return rules;
+    }
+
 
     /** 把一副牌的 cardCounts / deckEntries 正規化成 {names:Set, ids:Set}。 */
     function deckToSets(cardCounts, nameMap) {
@@ -1991,6 +2005,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           || ('rule_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7));
         const doc = { ...s.doc, updatedAt: Date.now(), updatedBy: ((req.adminUser && req.adminUser.email) || null) };
         await TRULES.updateOne({ _id: id }, { $set: doc }, { upsert: true });
+        invalidateRulesCache();   // v6.119：規則一改就讓 rooms-archetypes 的 30s 快取立刻失效
         res.json({ ok: true, id, rule: { _id: id, ...doc } });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -2000,6 +2015,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const id = String((req.query && req.query.id) || '');
         if (!id) return res.status(400).json({ error: '需要 id' });
         await TRULES.deleteOne({ _id: id });
+        invalidateRulesCache();   // v6.119：規則一改就讓 rooms-archetypes 的 30s 快取立刻失效
         res.json({ ok: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -2304,9 +2320,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         if (need.length) {
           const nameMap = await getCardNameMap();
-          const rules = nameMap.size
-            ? await TRULES.find({ enabled: { $ne: false } }).sort({ priority: 1 }).toArray()
-            : [];
+          const rules = nameMap.size ? await getEnabledRulesCached() : [];   // v6.119：30s TTL
           const docs = await db.collection('rooms').find(
             { _id: { $in: need }, status: 'playing' },
             { projection: { 'seats.deckEntries': 1, 'gameState.phase': 1, status: 1 } },
@@ -3371,6 +3385,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // ════════════════════════════════════════════════════════════════════
     const TEVENTS = db.collection('tournamentEvents');
     const TREGS = db.collection('tournamentRegistrations');
+    // v6.119 效能：TREGS 從來沒有索引，但它是**永久累積**的（正常完賽不刪報名，
+    //   而且 v0.84 預填暱稱、v0.90 聊天暱稱都刻意依賴歷史報名）。熱路徑全是全表掃：
+    //     ・/event 每人每 3 秒 find({ uid })          ← 最痛，人數 × 歷屆報名量
+    //     ・getEventShared 的 countDocuments({ eventId })、報到名單 find({ eventId })
+    //   索引不可能改變查詢結果（只換 query plan），且只在服務啟動時建一次（部署本來就會重啟）。
+    TREGS.createIndex({ uid: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
+    TREGS.createIndex({ eventId: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
     const TADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
     function isTournAdmin(id) { return !!(id && id.verified && id.email && TADMIN_EMAILS.includes(String(id.email).toLowerCase())); }
     // v0.40 多賽事：可同時公布多場（時間不重疊），玩家各自報名。
@@ -3454,12 +3475,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const ev = await resolveEventFromReq(req);
         const shared = await getEventShared();
         // per-user：一次抓我的所有報名（取代原對每個開放賽事各一次 findOne 的 N+1）
-        const myRegs = await TREGS.find({ uid: id.uid }).toArray();
+        // v6.119 降載：以前這裡把「本人所有歷屆報名」的完整 doc（含各 60 張 deckEntries）
+        //   整包拉回來，但 handler 只用到 eventId/name/deckName/checkedIn/autoRemovedConflict/
+        //   registeredAt，**只有「當前賽事那一筆」需要 deckEntries**（算 deckCount）。
+        //   老玩家累積數十筆報名 ≈ 每 3 秒白拉上百 KB。改成 projection 掉 deckEntries，
+        //   需要的那一筆再用 _id 點查補回（走主鍵，極便宜）。
+        const myRegs = await TREGS.find({ uid: id.uid }, { projection: { deckEntries: 0 } }).toArray();
         const myRegBy = new Map(myRegs.map((r) => [r.eventId, r]));
         let me = { registered: false, checkedIn: false };
         if (ev) {
           const reg = myRegBy.get(ev._id);
-          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(reg.deckEntries), name: reg.name, deckName: reg.deckName || null, autoRemovedConflict: !!reg.autoRemovedConflict };
+          // v6.119：deckEntries 已被 projection 掉，這一筆單獨補查（_id 點查）。
+          //   ⚠ deckCount(undefined) 會回 -1（非 0），前端會誤顯示 → 一定要補回來。
+          const _regDeck = reg ? await TREGS.findOne({ _id: reg._id }, { projection: { deckEntries: 1 } }) : null;
+          if (reg) me = { registered: true, checkedIn: !!reg.checkedIn, deckCount: deckCount(_regDeck && _regDeck.deckEntries), name: reg.name, deckName: reg.deckName || null, autoRemovedConflict: !!reg.autoRemovedConflict };
         }
         // v0.84 預填暱稱:附「最近一次報名的暱稱」供前端未報名任何賽事時預填(從已抓的 myRegs 取最新,無額外查詢);從沒報過退帳號顯示名 id.name
         const _lastReg = myRegs.filter((r) => r.name).sort((a, b) => (b.registeredAt || 0) - (a.registeredAt || 0))[0];
@@ -4115,6 +4144,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
     // v0.81 對戰回放:逐回合盤面快照存獨立 collection(不塞TMATCH避免既有無projection查詢讀放大);TTL 90天;冪等upsert;fire-and-forget。
     const TREPLAY = db.collection('tournamentReplayTurns');
     TREPLAY.createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 }).catch(() => { /* TTL index best-effort */ });
+    // v6.119：回放快照是全站最大的 collection 之一（90 天 × 每半回合一份完整盤面），
+    //   但 find({ matchId })（看回放，行為公開端點）與 deleteMany({ matchId })（重賽清舊局）
+    //   以前都是全表掃。
+    TREPLAY.createIndex({ matchId: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
     const REPLAY_SNAPSHOT_ENABLED = true;  // 出事一鍵關
     const REPLAY_TTL_MS = 90 * 24 * 3600 * 1000;
     function snapshotTurn(matchId, eventId, gs) {
@@ -5107,7 +5140,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               // v0.56 防呆：對局若其實已開打(房間 gameState 進入 playing/game-over = 雙方都完成 setup 確實到場)，
               //   不可因 entered 旗標異常而誤判未進場(根因已於進場端原子化修正，此為第二道保險)。
               if ((!e0 || !e1) && m.roomId) {
-                try { const _rm = await TROOMS.findOne({ _id: m.roomId }); const _ph = _rm && _rm.gameState && _rm.gameState.phase; if (_ph === 'playing' || _ph === 'game-over') { e0 = true; e1 = true; } } catch (e) { /* best-effort */ }
+                try { const _rm = await TROOMS.findOne({ _id: m.roomId }, { projection: { 'gameState.phase': 1 } }); const _ph = _rm && _rm.gameState && _rm.gameState.phase;  /* v6.119：這裡是純讀（只看 phase、不寫回），可安全 projection；下面設 game-over 的那次仍讀完整 doc */ if (_ph === 'playing' || _ph === 'game-over') { e0 = true; e1 = true; } } catch (e) { /* best-effort */ }
               }
               if (e0 && e1) continue; // 雙方都進場 = 對戰中，不判負
               if (e0 || e1) {
@@ -5130,6 +5163,21 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const idleMin = (ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3);
           const playingI = await TMATCH.find({ eventId: ev._id, status: 'playing', roomId: { $ne: null } }).toArray();
           for (const m of playingI) {
+            // ── v6.119 降載：先用「輕量讀」判掉「還沒到閒置門檻」的絕大多數情況 ──────────
+            //   以前每 30 秒對**每一場** playing match 都整份 TROOMS doc 拉出來（gameState 的 log
+            //   佔約 73%），只為了算 currentActorSeat。30 人賽 ≈ 15 場 × 每 30 秒 × 數百 KB。
+            //   ⚠⚠ **不能**直接對下面那個 findOne 加 projection：判負分支會
+            //     `JSON.parse(JSON.stringify(gs))` 整包寫回（見下方 og），projection 過的殘缺盤面
+            //     寫回去會把 log 永久洗掉 → 投降/閒置場的回放（靠房間 gameState.log fallback）會壞。
+            //   所以改成兩段式：輕量讀只做門檻判斷，**過了門檻才走原本一字未改的完整路徑**，
+            //   判負與否的每一個決策仍由完整 doc 決定 ⇒ 零行為變更。
+            //   門檻判斷用的 fallback 鏈與下面的 `last` 逐字相同；_light 為 null（房不見了）就
+            //   直接落到完整讀，由原本的 `!gs → continue` 處理。
+            const _light = await TROOMS.findOne({ _id: m.roomId }, { projection: { lastActionAt: 1, updatedAt: 1 } });
+            if (_light) {
+              const _lastLight = _light.lastActionAt || _light.updatedAt || m.gameStartedAt || now;
+              if (now <= _lastLight + idleMin * 60000) continue;
+            }
             const room = await TROOMS.findOne({ _id: m.roomId });
             const gs = room && room.gameState;
             if (!gs || gs.phase === 'game-over') continue;

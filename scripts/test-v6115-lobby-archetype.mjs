@@ -74,8 +74,10 @@ async function runEndpoint(query, roomDocs, opts) {
     const all = rules.filter(r => (r.includes || []).every(n => sets.names.has(n)));
     return { rule: all[0] || null, all };
   };
-  const fn = new Function('app', 'db', 'getCardNameMap', 'TRULES', 'classifyDeck', 'deckToSets', EP_SRC);
-  fn(app, db, getCardNameMap, TRULES, classifyDeck, deckToSets);
+  // v6.119：端點改用 getEnabledRulesCached()（TRULES 查詢加了 30s TTL），一起注入。
+  const getEnabledRulesCached = async () => await TRULES.find().sort().toArray();
+  const fn = new Function('app', 'db', 'getCardNameMap', 'TRULES', 'classifyDeck', 'deckToSets', 'getEnabledRulesCached', EP_SRC);
+  fn(app, db, getCardNameMap, TRULES, classifyDeck, deckToSets, getEnabledRulesCached);
   ok(typeof handler === 'function', '\u7aef\u9ede\u6c92\u6709\u8a3b\u518c handler');
   let out = null, code = 200;
   const res = { json: (x) => { out = x; return res; }, status: (c) => { code = c; return res; } };
@@ -160,7 +162,7 @@ T('\u2b50 \u7aef\u9ede\u4e0d\u5f97\u6389\u9032 admin \u6b0a\u9650\uff08\u5927\u5
 T('\u7aef\u9ede\u8a9e\u6cd5\u6b63\u78ba\uff08patch \u6574\u4efd\u53ef parse\uff09', () => {
   // node --check \u5df2\u5728 CI \u7684 lint \u968e\u6bb5\u8dd1\uff1b\u9019\u88e1\u81f3\u5c11\u78ba\u4fdd\u62bd\u53d6\u51fa\u4f86\u7684\u90a3\u6bb5\u80fd\u88ab\u7de8\u8b6f
   ok(EP_SRC && EP_SRC.length > 500, '\u7aef\u9ede\u539f\u59cb\u78bc\u592a\u77ed\uff0c\u53ef\u80fd\u62bd\u932f\u4e86');
-  new Function('app', 'db', 'getCardNameMap', 'TRULES', 'classifyDeck', 'deckToSets', EP_SRC);
+  new Function('app', 'db', 'getCardNameMap', 'TRULES', 'classifyDeck', 'deckToSets', 'getEnabledRulesCached', EP_SRC);
 });
 
 console.log('\u2463 UI \u7aef');

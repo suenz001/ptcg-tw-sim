@@ -9,6 +9,69 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.119 — 錦標賽伺服器端查詢降載（Fable 5 評估 + 逐條查證）
+
+接續 v6.118（那批是純前端）。站長：「盡量把找到的問題徹底解決，但要避免風險。」
+**Fable 5 抓到一個我原本會踩的地雷**，逐條查證後採用它的方案。
+
+### ⚠⚠⚠ 差點踩的地雷：閒置判負「不能」直接加 projection
+我原本打算對閒置判負的 `TROOMS.findOne` 加 `projection`（只讀 currentActorSeat 需要的欄位）。
+Fable 指出：**判負分支會 `JSON.parse(JSON.stringify(gs))` 把整份盤面 clone 後寫回**
+（`$set: { gameState: og }`）。projection 過的殘缺盤面寫回去 ⇒ **log 被永久洗掉**，
+投降／閒置場的回放（`/replay`、`/match-log` 都靠房間 `gameState.log` fallback）會壞。
+
+我逐字讀完 `currentActorSeat`（含 setup 的 5 種路徑）自行列出它碰的欄位，與 Fable 的清單一致
+（phase / setupDone / openingChoicePending / pendingMulliganDraw / mulliganRevealConfirmed /
+mulliganPostBenchOpen / mulliganCounts / pendingSelection.actorIdx / pendingPrizes /
+players[i].active / activePlayerIndex，**不讀 log**）。但那不是重點 ——
+**寫回路徑才是**。而且這個函式的註解裡有 v0.60/v0.62/v0.67/v0.74/v6.053 五次「誤判閒置敗」事故史，
+是全站最不能亂動的地方之一。
+
+⇒ 採用**兩段式讀取**（同檔 v0.68 `/state` 已驗證過的 pattern）：
+輕量讀 `{ projection: { lastActionAt: 1, updatedAt: 1 } }` 只做門檻判斷，
+**過門檻才走原本一字未改的完整讀取＋判定**。門檻的 fallback 鏈與完整路徑逐字相同；
+`_light` 為 null 就落到完整讀由原本的 `!gs → continue` 處理。
+判負與否的每一個決策仍由完整 doc 決定 ⇒ **零行為變更**，只可能多讀一次 200 bytes 的小 doc。
+玩家對戰中每幾秒就有動作 ⇒ 99% 的 (場 × tick) 在輕量讀就結束。
+
+### 本批六項（全部逐條查證過）
+1. **TREGS 索引 `{uid}` `{eventId}`** —— 這個 collection 從來沒有索引，卻是**永久累積**的
+   （正常完賽不刪報名，v0.84 預填暱稱、v0.90 聊天暱稱都刻意依賴歷史報名）。
+   `/event` 每人每 3 秒 `find({uid})` 是全表掃。索引不可能改變查詢結果，只換 query plan。
+2. **TREPLAY 索引 `{matchId}`** —— 回放快照是最大的 collection 之一（90 天 × 每半回合一份
+   完整盤面），但 `find({matchId})`（看回放）與 `deleteMany({matchId})`（重賽清舊局）都是全表掃。
+3. **閒置判負兩段式**（上面）。
+4. **未進場判負的防呆探測加 projection** —— 那次 `findOne` 只讀 `gameState.phase` 且**不寫回**
+   （逐字確認），可安全 projection。⚠ 同一分支下方「設 game-over」那次仍讀完整 doc（會寫回）。
+5. **TRULES 30s TTL 快取 ＋ CRUD 主動失效** —— rooms-archetypes 以前每次 cache-miss 都重查。
+   ⚠ miss 比想像多：**setup 階段的房間永遠不會進 `_roomArchCache`**（被 phase gate 擋掉），
+   所以大廳只要有一間房在開局，每輪輪詢都會觸發一次查詢。
+   ⚠ 快取與失效函式**移到 `TRULES` 宣告旁**（呼叫點在 handler、定義原本在後面 —— 雖然
+   function 會 hoist、`let` 在 handler 執行時也早已初始化，但 v0.94/v1.01 兩次作用域事故
+   讓我不想留任何疑慮）。
+6. **`/event` 的 myRegs 不再拉回歷屆報名的完整 60 張牌表** —— handler 只用到
+   eventId/name/deckName/checkedIn/autoRemovedConflict/registeredAt，**只有當前賽事那一筆**
+   需要 deckEntries（算 deckCount）。改成 `projection: { deckEntries: 0 }` ＋ 對那一筆
+   `_id` 點查補回。⚠ `deckCount(undefined)` 會回 **-1**（不是 0），不補回來前端會顯示錯的張數。
+   已確認 `_events` 那邊只用 `_reg` 的 checkedIn/autoRemovedConflict/deckName/name。
+
+### 刻意不做（Fable 也標「留下次」）
+- **對局時限掃描**（同樣是全量讀）：它的兩個判定寫回點同樣是整包 clone，
+  要改就得連寫回一起改成「重讀完整 doc 再 clone」——**這是本批唯一會動到寫入路徑的改動**，
+  值得單獨一批＋單獨驗證（開一場 `roundLimitMin=1` 的測試賽跑到加時）。
+- `/event` 內 active event 改讀 shared.openList（碰到 gate 語義）。
+- 非 playing 房負快取、TEVENTS `$ne` 索引、判負寫回改 dotted `$set`。
+
+### 守衛
+`test-v6119-tournament-query-load.mjs`（12 項，HEAD 10 FAIL）。
+⭐ 最重要的一條是**否定型**：閒置判負路徑必須仍有一次「不帶 projection」的完整讀取，
+並斷言輕量讀排在它前面、fallback 鏈逐字相同。附正對照。
+⚠ `test-v6115-lobby-archetype` 因為端點改用 `getEnabledRulesCached()` 而 FAIL ——
+那是**正確的抓取**（它把端點原始碼抽出來實跑，依賴變了就會炸），補注入該函式後 16 項全綠。
+
+### ⚠ 部署
+只動 `server_admin_patch.js` → **必須跑 `update-tournament.bat`**（前端無變更）。
+
 ## v6.118 — 兩個效能退化：錦標賽 30 人 lag ＋ 卡牌資料庫「所有卡牌」卡住
 
 站長回報＋玩家回報。**Fable 5 協助診斷，我逐條查證過**（兩條線的主因都不是「最近的新功能」，
