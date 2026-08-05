@@ -17,6 +17,57 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## admin v1.66 — 後台卡片索引「保證新鮮」＋ 載入失敗不再靜默
+
+站長回報：admin 看玩家牌組明細出現 `#18594 × 2`；同一份文字貼進遊戲站「匯入」，
+又出現「特殊紅牌 使用 M4·072/083（自動替代，原 083-106/083 不在牌池）」。
+
+### 診斷（兩個現象同一個根）
+- `18594` =「燃火能量」M2 109/080 I 標，是 **v6.116** 補進卡庫的 572 張重印之一。
+- 牌組文字裡「特殊紅牌 **083** · 106/083」的 setCode「083」，是 **v6.117** 修掉的舊值
+  （原本誤把分母寫進 setCode）。⚠ 該卡本身從 v2.107 就在庫裡，不是新卡。
+⇒ **admin 那個分頁手上的卡片索引，是卡庫更新以前的快照。**
+匯入端的「自動替代」是**正確行為** —— 它拿最新卡池找不到 setCode「083」，
+於是退回同名卡並如實告知。真正該修的是 admin 匯出了過期的 setCode。
+
+### 三個放大器（全部修掉）
+| # | 問題 | 修法 |
+|---|---|---|
+| a | 兩個卡片 `fetch` 完全沒有 revalidate | 收斂到 `_fetchCardJson()`，一律 `cache:'no-cache'`（GH Pages 有 ETag，沒變只回 304，不會重抓 4MB） |
+| b | `_cardLoadPromise` 是**分頁生命週期**快取 —— 後台分頁開好幾天就永遠是舊的 | 加 `CARD_INDEX_TTL_MS = 10 分鐘` |
+| c | 逐包 `catch {}` 是**空的** —— 某一包沒載到完全無聲，只看到一堆 `#id` | 收集失敗卡包 → `console.error` ＋ 畫面非阻塞警告條 |
+
+另外補了兩個既有缺陷：
+- **cardCount 對帳**：`index.json` 每個卡包都宣告 `cardCount`，載完逐包比對實際張數；
+  不符先 `cache:'reload'` 重抓一次，仍不符就列進警告。本次事故「宣告 116 張、實際 80 張」
+  有這條會**一秒現形**。
+- **外層 catch 原本把 `_cardLoadPromise` 留成「已解決的空結果」** → index.json 一次網路抖動，
+  這個分頁從此所有卡片永遠是 `#id` 且永不重試。改成失敗時設回 `null`。
+
+### ⚠⚠ 最需要小心的一點（Fable 5 指出，我複驗屬實）
+牌組明細那段文字是**機器格式** —— `src/routes/decks/+page.svelte` 的 mAdmin regex
+`/^(.+)\s+(\S+)\s+·\s+(\S+)\s+·\s+([GHIJ])\s+×\s+(\d+)$/` 逐字依賴
+「卡名 卡包 · 卡號 · 標 × N」。所以 `cardLabel` 的 **fallback 絕對不能長得像它** ——
+否則匯入端會把「索引沒載到」的那行當成一張合法的卡，靜默匯入到錯的卡片，
+比顯示 `#id` 糟得多。現行「解析不了 → 匯入端明確報錯」是**安全的失敗**，必須保住。
+守衛因此用**行為端**斷言：把 fallback 字串真的餵進那條 regex，必須解不出來；
+同時正對照「正常格式仍解得出來」，證明機器格式沒被改壞。
+
+### ⚠ 另一個查到但沒動的問題（未爆彈）
+正式站 `www.ptcg-tw-sim.com/cards/index.json` 走 Cloudflare，實測 `cf-cache-status: HIT`、
+`age` 約 **4.2 天**（遠大於 origin 的 max-age），回的是缺 M6 與 SV-P-J 的舊版；
+加 `?nocache=` 重抓就是最新的。目前**沒有實際受害者** —— 遊戲站所有 runtime fetch
+（`pool.ts` / `routes/cards/+page.ts`）都帶 `?v=${VERSION}`。
+但這代表：**www 上任何不帶 query 的 static 資源都可能舊好幾天**。
+守衛第 ④ 條因此寫成全 repo 掃描：任何對卡片 JSON 的 fetch 都必須帶 `?v=` 或指定 cache 模式。
+
+### 守衛
+`scripts/test-card-index-freshness.mjs`（9 項，HEAD 8 FAIL），已進 npm test。
+
+### ⚠ 部署
+只動 `oracle-admin/admin.html` ⇒ 跑 **`update-admin-html.bat`**（或 `update-admin-full.bat`）。
+本版**不上首頁 changelog** —— 純後台問題，玩家沒有任何要做的事（見 v6.121 訂的規範）。
+
 ## v6.121 — 首頁 changelog 改成公告語氣，並移除只有站長需要知道的條目
 
 站長：「首頁 changelog 的寫法應該是要給所有玩家看的扼要改版內容，而不是針對我（網站作者）

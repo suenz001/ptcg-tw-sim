@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.65</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.66</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -497,6 +497,18 @@ const CARDS_BASE = 'https://suenz001.github.io/ptcg-tw-sim/cards';
 let cardInfoMap = {};
 let cardCanonicalMap = new Map();  // v0.83: canonicalKey → [cardId, ...]（同名同效不同版本聚合）
 let _cardLoadPromise = null;
+// ⭐ v1.66 事故：牌組明細出現「#18594 × 2」「特殊紅牌 083 · 106/083」。
+//   #18594 是 v6.116 補的重印、setCode「083」是 v6.117 修掉的舊值 ——
+//   也就是這個分頁手上那份卡片索引是**卡牌資料庫更新以前**的快照。
+//   三個放大器（全部修掉）：
+//     (a) fetch 完全沒有 revalidate → 瀏覽器/CDN 可以餵舊檔
+//     (b) `_cardLoadPromise` 是**分頁生命週期**快取 —— 後台分頁一開好幾天就永遠是舊的
+//     (c) 逐包 `catch {}` 是空的 → 某一包沒載到完全無聲，只會看到一堆 #id
+//   ⚠ 這不只是顯示問題：牌組明細的文字是**機器格式**，站長會複製去「匯入文字」，
+//     舊的 setCode 會讓匯入端找不到卡而自動替代成別的版本。
+const CARD_INDEX_TTL_MS = 10 * 60 * 1000;   // 超過就重新 revalidate（ETag 命中只花 header 流量）
+let _cardLoadAt = 0;
+let _cardIndexIssues = [];                   // 這次載入有問題的卡包（代號 + 原因）
 
 // v0.83 canonical key：同名 + 同 supertype/subtype + 同 attacks + 同 abilities + 同 rulesText = 同一張卡
 //   不同版本（不同 setCode/collectorNumber/art）會合併為同一個邏輯卡，避免統計重複計算同卡。
@@ -514,16 +526,36 @@ function computeCanonicalKey(c) {
   const baseName = (c.name || '').replace(/[（(][^）)]*[）)]/g, '').trim();
   return `${c.supertype || ''}|${c.subtype || ''}|${baseName}|A:${attacksKey}|B:${abilitiesKey}|R:${rulesKey}`;
 }
+// v1.66：一律 revalidate。GitHub Pages 有 ETag，沒變只回 304（不重抓 4MB），
+//   變了才下載 —— 比手動維護的 ?v= 版本號可靠（改卡片資料時不必記得 bump admin 版本）。
+async function _fetchCardJson(url, forceReload) {
+  const res = await fetch(url, { cache: forceReload ? 'reload' : 'no-cache' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
 async function ensureCardIndex() {
-  if (_cardLoadPromise) return _cardLoadPromise;
+  // v1.66：分頁開很久也要能拿到新資料（原本 promise 一旦建立就終身沿用）。
+  if (_cardLoadPromise && (Date.now() - _cardLoadAt) < CARD_INDEX_TTL_MS) return _cardLoadPromise;
+  _cardLoadAt = Date.now();
   _cardLoadPromise = (async () => {
+    const issues = [];
     try {
-      const sets = await (await fetch(CARDS_BASE + '/index.json')).json();
+      const sets = await _fetchCardJson(CARDS_BASE + '/index.json');
       const map = {};
       const canonicalMap = new Map();  // canonicalKey → [cardId, ...]（v0.83 同名同效合併）
       await Promise.all(sets.map(async (s) => {
         try {
-          const cards = await (await fetch(CARDS_BASE + '/' + s.code + '.json')).json();
+          // ⭐ v1.66 對帳：index.json 宣告的 cardCount 與實際卡片數不符 ⇒ 這包是舊檔／半殘，
+          //   強制 reload 重抓一次；仍不符就記進 issues 讓畫面說出來（不再靜默）。
+          //   本次事故就是 M2 實際 80 張、宣告 116 張 —— 有這條一秒現形。
+          let cards = await _fetchCardJson(CARDS_BASE + '/' + s.code + '.json');
+          const want = s.cardCount ?? s.count;
+          if (typeof want === 'number' && cards.length !== want) {
+            cards = await _fetchCardJson(CARDS_BASE + '/' + s.code + '.json', true);
+            if (cards.length !== want) {
+              issues.push(s.code + '（宣告 ' + want + ' 張、實際 ' + cards.length + ' 張）');
+            }
+          }
           for (const c of cards) {
             // v0.83 擴充：加 supertype/subtype/pokemonType 供統計分群用 + 預計算 canonicalKey
             const canonicalKey = computeCanonicalKey(c);
@@ -544,7 +576,12 @@ async function ensureCardIndex() {
             if (!canonicalMap.has(canonicalKey)) canonicalMap.set(canonicalKey, []);
             canonicalMap.get(canonicalKey).push(String(c.id));
           }
-        } catch {}
+        } catch (e) {
+          // ⚠ v1.66：原本是空的 `catch {}` —— 某一包沒載到，那包的卡片全部變成「#id」，
+          //   而畫面上完全沒有任何線索。維持 per-set fail-open（其他包照載），但要留下紀錄。
+          issues.push(s.code + '（載入失敗：' + (e && e.message ? e.message : e) + '）');
+          console.error('[admin] card set load failed:', s.code, e);
+        }
       }));
       // v1.00: M5 JP→TW cardId alias (跟 game src/lib/decks/cardIdMigration.ts 同 table).
       //   舊 matchRecord / 玩家牌組可能存 JP cardId (50220-50300), v5.300 game 已 migrate but
@@ -556,17 +593,45 @@ async function ensureCardIndex() {
       }
       cardCanonicalMap = canonicalMap;
       cardInfoMap = map;
-      console.log('[admin] card index loaded:', Object.keys(map).length, 'cards');
+      _cardIndexIssues = issues;
+      console.log('[admin] card index loaded:', Object.keys(map).length, 'cards',
+        issues.length ? '⚠ 有問題的卡包: ' + issues.join('、') : '');
+      renderCardIndexWarning();
     } catch (err) {
       console.error('[admin] card index load failed:', err);
+      // ⚠ v1.66：原本失敗時 `_cardLoadPromise` 會留成「已解決的空結果」→ 這個分頁從此
+      //   所有卡片永遠是 #id、而且永遠不會再重試。改成清掉，下次呼叫重新載。
+      _cardLoadPromise = null;
+      _cardLoadAt = 0;
+      _cardIndexIssues = ['卡片索引整份載入失敗（' + (err && err.message ? err.message : err) + '）'];
+      renderCardIndexWarning();
     }
   })();
   return _cardLoadPromise;
 }
+// v1.66：非阻塞警告條（不能用 alert —— ensureCardIndex 被十幾處 modal 呼叫會反覆炸）。
+function renderCardIndexWarning() {
+  let el = document.getElementById('card-index-warning');
+  if (!_cardIndexIssues.length) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'card-index-warning';
+    el.style.cssText = 'margin:0.5rem 0;padding:0.6rem 0.8rem;border:1px solid #e0b400;'
+      + 'border-radius:6px;background:#fff8e1;color:#6b4e00;font-size:0.9rem;line-height:1.6;';
+    const host = document.getElementById('app-section') || document.body;
+    host.insertBefore(el, host.firstChild);
+  }
+  el.innerHTML = '⚠️ <b>卡片索引沒有完整載入</b>，以下卡包的卡片會顯示成 <code>#編號</code>，'
+    + '牌組明細與統計都會不準：<br>' + escapeHtml(_cardIndexIssues.join('、'))
+    + '<br>請按頁首的「強制更新版本（清快取）」重試。';
+}
 
 function cardLabel(cardId, count) {
   const info = cardInfoMap[cardId];
-  if (!info) return `#${cardId} × ${count}`;
+  // ⚠ v1.66：解出來的格式「卡名 卡包 · 卡號 · 標 × N」是**機器格式**，
+  //   decks/+page.svelte 的匯入 regex 逐字依賴它 —— 這裡的 fallback 千萬不能長得像它
+  //   （否則會被誤判成合法卡行、匯入到錯的卡）。維持「解析不了 → 匯入端報錯」的安全失敗。
+  if (!info) return `#${cardId} ×${count}（卡片索引未載入此卡）`;
   const parts = [info.name, info.setCode];
   if (info.collectorNumber) parts.push('· ' + info.collectorNumber);
   if (info.regulationMark) parts.push('· ' + info.regulationMark);
