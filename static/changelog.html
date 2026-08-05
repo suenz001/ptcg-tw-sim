@@ -1,11 +1,8 @@
 <details open>
-        <summary><span class="ver-badge">v6.120</span> <b>【手持循環扇】等「受到傷害時」的道具，被一擊打倒時不再觸發兩次</b><br>幸運頭盔會抽 4 張、手持循環扇會連問你兩次能量，都修好了。⚠ 另外錦標賽伺服器再降一輪負載。</summary>
+        <summary><span class="ver-badge">v6.120</span> <b>【手持循環扇】等「受到傷害時」的道具，被一擊打倒時不再觸發兩次</b><br>原本幸運頭盔會抽 4 張、手持循環扇會連續要求選兩次能量，共 6 張道具受影響。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.119</span> <b>錦標賽伺服器再降載，人多時應該更順</b><br>幾個每隔幾秒就跑、但其實可以省掉的資料庫查詢改掉了（含閒置判負掃描不再整份盤面拉出來）。⚠ 判負／回放行為完全不變。</summary>
-      </details>
-      <details>
-        <summary><span class="ver-badge">v6.118</span> <b>錦標賽人多時的卡頓、以及「所有卡牌」開啟會卡住，都修好了</b><br>錦標賽頁原本會在背景一直查詢休閒房間列表（完全用不到），人一多就拖慢伺服器；卡牌資料庫改成捲動時分批載入。⚠ 建議清一次快取或重新整理。</summary>
+        <summary><span class="ver-badge">v6.118</span> <b>錦標賽人多時的卡頓、以及「所有卡牌」開啟會卡住，都修好了</b><br>錦標賽頁移除了背景多餘的連線；卡牌資料庫改成捲動時分批載入。⚠ 建議清一次快取或重新整理。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.117</span> <b>修好「忍者飛旋」37 張高稀有度卡的卡包標示</b><br>牌組編輯器用卡包篩選時，這 37 張原本篩不出來，匯出的牌組文字也會標成「083」而不是「M4」。⚠ 對戰使用不受影響，只有篩選與匯出會遇到。</summary>
@@ -17,10 +14,10 @@
         <summary><span class="ver-badge">v6.115</span> <b>大廳的「對戰中的房間」會顯示雙方在打什麼牌組</b><br>系統比對雙方牌表，標出對應的牌組名稱，想找特定牌組觀戰學習更方便。⚠ 只有對戰中的房間會顯示；等待中的房間與開局放置階段<b>不會</b>，避免被針對。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.114</span> <b>大廳版面重做，手機上不再擠成一團</b><br>房名、房主、房齡、房號分行顯示，清單也不再有惱人的內部捲動。名稱沒填時會直接告訴你為什麼按鈕按不動。</summary>
+        <summary><span class="ver-badge">v6.114</span> <b>大廳版面重做，手機上不再擠成一團</b><br>房名、房主、房齡、房號分行顯示，清單也不再有惱人的內部捲動。名稱沒填時會直接說明按鈕無法點選的原因。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.113</span> <b>請假王ex 的「懶怠個性」被消除時，現在真的能使用招式了</b><br>被暗夜羽擊、振翼髮、傳說的熔岩洞等效果消除特性後，原本仍會被擋住。⚠ 另外被這類限制擋下時不再直接結束你的回合。</summary>
+        <summary><span class="ver-badge">v6.113</span> <b>請假王ex 的「懶怠個性」被消除時，現在真的能使用招式了</b><br>被暗夜羽擊、振翼髮、傳說的熔岩洞等效果消除特性後，原本仍會被擋住。⚠ 另外被這類限制擋下時，不會再直接結束該回合。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.112</span> <b>化石變成的寶可夢，身上的道具／場地加成現在會生效</b><br>例如附上【英雄斗篷】的化石，最大 HP 會是 160（原本被當成固定 60）；【激動競技場】也會 +30。⚠ 屬性或卡名不符的加成（增強【草】能量等）本來就不會生效，維持不變。</summary>
@@ -32,13 +29,10 @@
         <summary><span class="ver-badge">v6.109</span> <b>選卡視窗只列出「真的能選」的卡</b><br>像超級烈空坐ex 的霸者咆哮，現在只把翻到的基本能量放進選擇區，其他卡改放「查看翻到的其他 N 張」下拉；另有 5 張卡同樣調整。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.108</span> <b>選卡時會直接寫出你選的是哪一張</b><br>提示列與「確定」按鈕都會顯示卡名（例如「確定《祭典會場》」）。⚠ 只能選 1 張的情況下，點第二張會把原本的選取換掉，現在按下去之前就看得出來。</summary>
+        <summary><span class="ver-badge">v6.108</span> <b>選卡時會直接顯示選中的是哪一張</b><br>提示列與「確定」按鈕都會顯示卡名（例如「確定《祭典會場》」）。⚠ 只能選 1 張時，點第二張會取代原本的選取，現在按下前即可看出。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.107</span> <b>一般對戰：掛機的人會自動被判負</b><br>輪到對方行動卻超過設定時間沒動作，系統會自動判他落敗、結束對局（時間由房主設定，1～5 分鐘，預設 3 分鐘）。<br>手機版也補上了「宣告對手棄權獲勝」的按鈕，之前只有電腦版看得到。</summary>
-      </details>
-      <details>
-        <summary><span class="ver-badge">v6.106</span> <b>更新記錄再精簡：每則只講「你會看到什麼變化」</b><br>拿掉原因說明與技術細節，篇幅少了約三分之二。仍維持最近 50 則，更早的在最下方的完整更新歷史。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.105</span> <b>火伊布ex｜燃燒充能：2 張能量只能附給同一隻</b><br>卡面是「附於自己的<b>1隻</b>寶可夢」，之前可以拆開分給兩隻。<br>另修「阿響的鳳王ex｜金色火焰」：備戰只有 1 隻時，附能沒有觸發對手的反應效果。</summary>
@@ -51,9 +45,6 @@
       </details>
       <details>
         <summary><span class="ver-badge">v6.101</span> <b>卡圖沒顯示會自動重新載入 ＋ 「傳說」場地卡匯出官網代碼修正</b><br>還在載的位置會顯示深色外框與卡名（對戰、牌組、卡牌資料庫都適用）。<br>⚠ 之前匯出過含「傳說的海溝／山頂／熔岩洞」的官網代碼，請重新匯出一次。</summary>
-      </details>
-      <details>
-        <summary><span class="ver-badge">v6.100</span> <b>首頁只顯示最近 50 次更新</b><br>更早的紀錄移到最下方的「完整更新歷史」，一則都沒有刪掉。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.099</span> <b>手機版：移除兩個按了沒反應的按鈕</b><br>超能妙喵｜誘導之尾、火神蛾｜熱浪鱗粉。<br>功能沒少 —— 請改點<b>場上那隻寶可夢</b>的特性按鈕，一樣會自動丟棄手牌的卡。</summary>
@@ -71,13 +62,13 @@
         <summary><span class="ver-badge">v6.094</span> <b>修正手上兩張左半也能當成一套放到場上</b><br>另外：牌組編輯器右半會顯示自己那半的圖，文字匯入會自動排成左右各半。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.093</span> <b>「傳說」場地卡正式拆成左右兩張獨立卡片（各有官方編號）</b><br>牌組上限不變（左右合計最多 4 張＝2 套），已存好的牌組會自動轉換。<br>⚠ 舊資料若是奇數張會轉成例如左 2＋右 1，牌組檢查會提醒你補齊。</summary>
+        <summary><span class="ver-badge">v6.093</span> <b>「傳說」場地卡正式拆成左右兩張獨立卡片（各有官方編號）</b><br>牌組上限不變（左右合計最多 4 張＝2 套），已存好的牌組會自動轉換。<br>⚠ 舊資料若是奇數張會轉成例如左 2＋右 1，牌組檢查會提示補齊。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.092</span> <b>修正牌組編輯器的「傳說」場地卡縮圖擠爛</b><br>另補上手機版回放時的手牌切半。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.091</span> <b>「傳說」場地卡在選擇視窗、棄牌區、牌組編輯器也切成左右兩張</b><br>另外，超級烈空坐ex｜霸者咆哮改為必選（卡面沒有「最多」，且那 4 張已給你看過）。</summary>
+        <summary><span class="ver-badge">v6.091</span> <b>「傳說」場地卡在選擇視窗、棄牌區、牌組編輯器也切成左右兩張</b><br>另外，超級烈空坐ex｜霸者咆哮改為必選（卡面沒有「最多」，且那 4 張已公開）。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.090</span> <b>「傳說」場地卡的左右身分改由卡片本身決定</b><br>洗牌、抽牌都不會再互換；必須手上<b>同時有左半和右半</b>才能放到場上。</summary>
@@ -104,7 +95,7 @@
         <summary><span class="ver-badge">v6.080</span> <b>M6 特性 2 個 ＋ 修正手牌特性在備戰上限 6～8 時不亮</b><br>超級泥偶巨人ex｜啟動限制、烈箭鷹ex｜激動俯衝。<br>另修齒輪怪｜緊急迴轉 在零之大空洞下手牌不亮、點了沒反應。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.079</span> <b>M6 招式 2 招 ＋ 修正雙劍鞘｜劍武備</b><br>電擊魔獸｜電壓錘、變隱龍｜鮮豔鞭打。<br>劍武備原本會自動展示手牌全部符合的卡，現改為由你自行勾選。</summary>
+        <summary><span class="ver-badge">v6.079</span> <b>M6 招式 2 招 ＋ 修正雙劍鞘｜劍武備</b><br>電擊魔獸｜電壓錘、變隱龍｜鮮豔鞭打。<br>劍武備原本會自動展示手牌全部符合的卡，現改為由玩家自行勾選。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.078</span> <b>M6 招式 5 招</b><br>蟲蟲恐慌（雨翅蛾／三蜜蜂／圓絲蛛）、穿山鼠｜覺醒、勾魂眼｜引誘出來。</summary>
@@ -140,7 +131,7 @@
         <summary><span class="ver-badge">v6.066</span> <b>效果還沒實裝的訓練家卡，現在會直接擋住不讓打出</b><br>不會再「打出去卻沒效果、還白白吃掉一張卡和支援者權」。實裝完成後自動開放。</summary>
       </details>
       <details>
-        <summary><span class="ver-badge">v6.065</span> <b>「在不看正面的情況下，從對手的手牌選擇N張」全面改為由你盲選（共 16 張卡）</b><br>卡面寫的是「選擇」—— 你看著卡背挑位置，不是電腦隨機抽。<br>⚠ 多麗米亞｜手部造型 卡面只寫「不看正面」，經裁定同樣由你盲選。</summary>
+        <summary><span class="ver-badge">v6.065</span> <b>「在不看正面的情況下，從對手的手牌選擇N張」全面改為由玩家盲選（共 16 張卡）</b><br>卡面寫的是「選擇」—— 玩家看著卡背挑位置，不是電腦隨機抽。<br>⚠ 多麗米亞｜手部造型 卡面只寫「不看正面」，經裁定同樣由玩家盲選。</summary>
       </details>
       <details>
         <summary><span class="ver-badge">v6.063</span> <b>M6 招式 3 招</b><br>加熱洛托姆ex｜強力閃焰、好啦魷｜拍落、阿利多斯｜劇痛毒。</summary>
@@ -150,6 +141,6 @@
       </details>
       
       <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
-        📚 這裡顯示<b>最近 50 次更新</b>，只列出跟你有關的變化。更早的紀錄（189 則）完整保留在 →
+        📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →
         <a href="__BASE__/changelog-archive.html" target="_blank" rel="noopener" style="color:#2a5fa8;font-weight:600;">查看完整更新歷史</a>
       </p>

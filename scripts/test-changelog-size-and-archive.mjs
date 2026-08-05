@@ -51,7 +51,9 @@ T('⑤ changelog-archive.html 存在、是可直接開啟的完整頁面、且�
 T('⑥ 首頁 changelog 不得再出現偏技術面的字眼（Wilson：只顯示跟玩家有關的內容）', () => {
   // ⚠ 這是「玩家視角」的硬性檢查：新增條目若寫了根因/內部名稱會被擋下。
   const BAD = ['根因', '中央收斂', '收斂到', '守衛', 'resolver', 'effectKey', 'commit',
-               'bundle', 'TS2304', 'helper', '程式碼', '重構'];
+               'bundle', 'TS2304', 'helper', '程式碼', '重構',
+               // v6.121：只有站長需要知道的內部題材，一律不上首頁（寫進 docs/changelog-internal.md）
+               '降載', '資料庫查詢', '輪詢', '索引', 'projection', 'API'];
   const hit = BAD.filter(w => cl.includes(w));
   assert.strictEqual(hit.length, 0,
     '出現技術用語：' + hit.join('、') + ' —— 更新記錄請只寫「玩家會看到什麼變化」');
@@ -67,6 +69,30 @@ T('⑦ 每一則都有標題（<b>…</b>），不會出現空白條目', () => 
 //   也不佔進站載入量。**新增條目時請照這個規格寫，別再寫成長篇說明。**
 const entriesTxt = [...cl.matchAll(/<summary>([\s\S]*?)<\/summary>/g)]
   .map((m) => m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+// ⭐ v6.121（Wilson：「首頁 changelog 是給所有玩家看的扼要改版內容，
+//   不是針對我這個網站作者的說明」）——兩條硬性規範：
+//   ⑫ 不得用第二人稱：條目是公告，不是對著某一個人講話。
+//      ✗「會連問你兩次能量」「牌組檢查會提醒你補齊」
+//      ✓「會連續要求選兩次能量」「牌組檢查會提示補齊」
+//   ⑬ 與遊戲／網站內容無關、或玩家不需要知道的（純伺服器內部調整、更新記錄自己的寫法），
+//      **整則都不要放上首頁**，只寫進 docs/changelog-internal.md。
+T('⑫ 首頁 changelog 不得出現第二人稱（公告語氣，不是對站長說明）', () => {
+  const PRONOUN = ['你', '妳', '您'];
+  const bad = [];
+  for (const t of entriesTxt) for (const w of PRONOUN) if (t.includes(w)) bad.push(w + '｜' + t.slice(0, 40));
+  assert.strictEqual(bad.length, 0,
+    '出現第二人稱：\n      ' + bad.join('\n      ')
+    + '\n      → 改成中性敘述（「玩家」「該回合」「系統」）或直接省略主詞');
+  // 正對照：確保這個檢查真的抓得到
+  assert.ok(['會提醒你補齊'].some((probe) => PRONOUN.some((w) => probe.includes(w))), '正對照失效');
+});
+T('⑬ 首頁 changelog 不得出現「只有站長需要知道」的題材', () => {
+  // 這些題材玩家沒有任何要做的事、也感受不到規則差異 → 應整則移除，只留在內部詳細版。
+  const OWNER_ONLY = ['更新記錄再精簡', '首頁只顯示最近', '伺服器降載', '部署', 'bat 檔'];
+  const hit = OWNER_ONLY.filter((w) => cl.includes(w));
+  assert.strictEqual(hit.length, 0,
+    '出現站長專屬題材：' + hit.join('、') + ' —— 這類改版整則都不要放上首頁');
+});
 T('⑧ 每一則 ≤ 150 字（防再度膨脹成長篇說明）', () => {
   const lens = entriesTxt.map((t) => t.length);
   const worst = Math.max(...lens);
