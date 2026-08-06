@@ -17,6 +17,62 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.122 — 補位（派出新的戰鬥寶可夢）改「選取 → 確定」兩段式
+
+玩家回報：「戰鬥寶可夢昏厥或需要替換時，選擇備戰寶可夢上場，現在只要點選就立即上場，
+希望增加確定的按鈕避免按錯。」
+
+### ⚠⚠ 這個流程搞砸的後果很嚴重
+補位卡住 = 玩家無法行動 → 錦標賽會被**閒置判負**。所以每一項改動都以「不能讓玩家按不到
+確定鈕」為第一原則，並請 Fable 5 先審過（它抓到三個我漏掉的點，見下）。
+
+### 現況勘查
+補位 UI 只有兩個 modal，都在 `src/routes/game/+page.svelte`：
+- **A 防守方版**：`defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection`
+- **B 自 KO 版**：`myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection`
+
+⭐ **手機直式（MobilePortraitBattle）沒有自己的補位 UI** —— 它只顯示「請從備戰區派出新的
+戰鬥寶可夢（下方視窗選擇）」，實際用的就是上面兩個 modal（它們刻意放在
+`{#if isPortraitMobile}` 區塊**之外**）。所以改這兩個 modal＝桌機手機一起改到。
+
+### 改法
+1. 卡片點擊改成**選取／取消選取**（`sel-picked` + ✓），不再直接 dispatch。
+2. 兩個 modal 各加 `sel-footer` 確定鈕，未選時 `disabled` 並顯示「請先點選要上場的寶可夢」，
+   選了顯示「✅ 確定讓「〇〇」上場」。
+3. 卡片格子收斂成單一 `{#snippet promoteGrid(...)}`，兩處 `@render`（原本各抄一份會漂移）。
+4. **`confirmSendNewActive()` 是全檔唯一送出 SEND_NEW_ACTIVE 的地方**，送出前 re-validate。
+
+### Fable 5 抓到、我複驗屬實的三點
+1. ⭐⭐ **兩個 modal 的 pick state 不可共用**。一般情況 A、B 列的是同一份備戰區，但
+   **本機雙人「雙方同時自傷 KO」**時 A 列防守方、B 列攻方 —— 是兩份不同的清單疊在一起，
+   共用一份 state 會跨清單汙染。⇒ 改成 `promotePickDef` / `promotePickSelf` 兩個獨立 state。
+2. ⭐⭐ **不要用 `$effect` 主動清 state**（loop／時序風險）。改用 derived 的
+   `_pickOk`（pick 存在且仍在該 bench）控制 disabled，dispatch 前再驗一次、成功後才清。
+   線上盤面被對手動作 merge 掉時，確定鈕自動變灰、玩家重選即可，不會卡死。
+3. ⭐ **兩個 modal 原本都沒有 `!isSpectator`**（既有 bug）：觀戰／回放停在 active=null 的
+   半回合快照時，會蓋一個點不動也關不掉的 modal。dispatch 本來就擋觀戰者，補 gate 零風險。
+
+⚠ 另外 Fable 提醒的判負風險：兩段式下「點選」不產生 server action，玩家選了忘記按確定，
+閒置計時照跑。緩解＝確定鈕顯眼、hint 文案改成「先點選…再按下方的『確定上場』」、
+手機版把 footer 釘住（見下）。
+
+### 手機版 CSS
+手機直式把**整個 modal**當捲動容器（v5.299 拿掉 `.retreat-grid` 內層捲動、v5.308 給
+`.selection-modal` 加 `overflow-y:auto`），備戰滿場時 footer 會落在折疊線下面要捲才看得到。
+⇒ 只在 `.retreat-modal .sel-footer` 加 `position:sticky; bottom:0`（不碰其他 25 個
+`sel-footer` 消費者）。
+
+### 驗證
+svelte compile OK 且**警告數與 HEAD 相同（98）**；完整 npm test **442** 綠；
+守衛 `test-v6122-promote-confirm.mjs`（11 項，HEAD 9 FAIL）。
+守衛含正對照（把舊的「卡片直接 dispatch」寫法餵進同一判準必須被抓到）、
+以及反向護欄（`MobilePortraitBattle.svelte` 不得出現 `sendNewActive`，防未來有人在手機
+分支另做一份直送 UI）。
+
+⚠ 沙盒教訓：mount 的 `node_modules` 是 Windows 版 esbuild，Linux 跑不了。
+不必整包 `npm ci` —— 抓一份 `@esbuild/linux-x64` 的 binary、設 `ESBUILD_BINARY_PATH`
+就能沿用 mount 的 node_modules 跑完整測試鏈。
+
 ## admin v1.66 — 後台卡片索引「保證新鮮」＋ 載入失敗不再靜默
 
 站長回報：admin 看玩家牌組明細出現 `#18594 × 2`；同一份文字貼進遊戲站「匯入」，

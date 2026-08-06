@@ -2759,6 +2759,29 @@
     return true; // 本機雙人模式
   });
   // 線上模式：我是否為防守方（被擊倒後需送出寶可夢）
+  // ── v6.122 補位（派出新的戰鬥寶可夢）改「選取 → 確定」兩段式 ────────────────
+  //   玩家回報：昏厥後選備戰上場「只要點選就立即上場」，很容易按錯。
+  //   ⚠ 這個流程搞砸的後果很嚴重：補位卡住 = 玩家無法行動 → 錦標賽會被閒置判負。
+  //   所以：①選取只改本地 state、不送 action ②確定鈕才送 ③送出前再驗一次。
+  //   ⚠⚠ **兩個 modal 各自一份 pick state，不可共用**：
+  //     Modal A（防守方版）列的是 defenderPlayer.bench、Modal B（自 KO 版）列的是
+  //     myPlayer.bench。一般情況兩者相同，但**本機雙人「雙方同時自傷 KO」**時是
+  //     兩份不同的備戰區疊在一起 —— 共用一份 state 會跨清單汙染。
+  let promotePickDef = $state<string | null>(null);   // Modal A：防守方補位
+  let promotePickSelf = $state<string | null>(null);  // Modal B：自 KO 補位
+  /**
+   * v6.122 中央收斂：**全檔唯一**送出 SEND_NEW_ACTIVE 的地方（守衛會釘死這件事）。
+   * ⚠ 送出前必須再驗一次 iid 仍在該玩家的備戰區 —— 線上盤面可能在玩家選好之後被
+   *   對手的動作 merge 進來而改變；送 stale iid 會被引擎拒絕，玩家只會看到「按了沒反應」。
+   */
+  function confirmSendNewActive(iid: string | null, senderIdx: 0 | 1, bench: { iid: string }[]) {
+    if (!iid) return;
+    if (!(bench ?? []).some((b) => b.iid === iid)) return;
+    dispatch(GameActions.sendNewActive(iid, senderIdx));
+    promotePickDef = null;
+    promotePickSelf = null;
+  }
+
   const isMyDefenderTurn = $derived(() => {
     if (!game) return false;
     // 線上模式必須優先判斷
@@ -10434,44 +10457,63 @@
     </div>
   {/if}
 
+  <!-- ⭐ v6.122 補位卡片格子：兩個 modal 共用同一份 markup（原本各抄一份、會漂移）。
+       pick／onPick 由呼叫端各自傳入自己的 state —— 不共用（見 confirmSendNewActive 上方註解）。 -->
+  {#snippet promoteGrid(bench: any[], pick: string | null, onPick: (iid: string) => void)}
+    <div class="retreat-grid">
+      {#each bench as b (b.iid)}{@const bc=getCard(b.cardId)}
+        {#if bc}
+          {@const eff=hpTotal(b)}
+          {@const rem=hpRemaining(b)}
+          {@const picked = pick === b.iid}
+          <div class="retreat-card" class:sel-picked={picked}>
+            <button class="retreat-zoom" title="放大檢視：{bc.name}"
+              onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
+            <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();onPick(b.iid);}}>
+              <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
+              <div class="retreat-name">{bc.name}</div>
+              <div class="retreat-hp">HP {rem}/{eff}</div>
+              <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
+              {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
+              {#each (b.extraTools ?? []) as etSN}{@const tcSN=getCard(etSN.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcSN?.name ?? '?'}</div>{/each}
+              {#if b.status}<div class="retreat-status" title="特殊狀態">
+                ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
+              </div>{/if}
+              {#if picked}<span class="sel-check">✓</span>{/if}
+            </button>
+          </div>
+        {/if}
+      {/each}
+      {#if bench.length===0}
+        <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
+      {/if}
+    </div>
+  {/snippet}
+
   <!-- Send New Active Modal（戰鬥寶可夢昏厥後派出新戰鬥寶可夢，使用統一的橫向 grid + 放大鏡介面）
        v2.123：去掉 turnPhase==='end' 限制 — 特性/招式 KO 時 turnPhase 仍為 'main'，
        舊條件會不彈 modal 造成卡住。
        v2.197：加 !pendingSelection guard — 攻擊方還在 pending（如幻影奇襲分配
        6 counter）時，防守方先不彈 modal；等 pending 結束後再彈，避免「modal 已開
-       但 button 按了沒反應」的卡頓視覺。 -->
-  {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection}
+       但 button 按了沒反應」的卡頓視覺。
+       v6.122：改「選取 → 確定」兩段式；並補 !isSpectator（觀戰者的 dispatch 本來就被擋，
+       原本卻仍會蓋一個點不動也關不掉的 modal 在觀戰畫面上）。 -->
+  {#if game && game.phase==='playing' && defenderPlayer?.active===null && isMyDefenderTurn() && !pendingSelection && !isSpectator}
+    {@const _benchD = defenderPlayer?.bench ?? []}
+    {@const _pickOkD = !!promotePickDef && _benchD.some((b) => b.iid === promotePickDef)}
+    {@const _pickNameD = _pickOkD ? (getCard(_benchD.find((b) => b.iid === promotePickDef)!.cardId)?.name ?? '') : ''}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
-          <p class="sel-hint">請從備戰區挑一隻寶可夢上場；點放大鏡 🔍 查看詳情</p>
+          <p class="sel-hint">先點選要上場的寶可夢，再按下方的「確定上場」；點放大鏡 🔍 查看詳情</p>
         </div>
-        <div class="retreat-grid">
-          {#each defenderPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
-            {#if bc}
-              {@const eff=hpTotal(b)}
-              {@const rem=hpRemaining(b)}
-              <div class="retreat-card">
-                <button class="retreat-zoom" title="放大檢視：{bc.name}"
-                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
-                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, dIdx));}}>
-                  <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
-                  <div class="retreat-name">{bc.name}</div>
-                  <div class="retreat-hp">HP {rem}/{eff}</div>
-                  <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
-                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
-                  {#each (b.extraTools ?? []) as etSN}{@const tcSN=getCard(etSN.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcSN?.name ?? '?'}</div>{/each}
-                  {#if b.status}<div class="retreat-status" title="特殊狀態">
-                    ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
-                  </div>{/if}
-                </button>
-              </div>
-            {/if}
-          {/each}
-          {#if (defenderPlayer?.bench??[]).length===0}
-            <p class="sel-empty">（備戰區沒有可上場的寶可夢）</p>
-          {/if}
+        {@render promoteGrid(_benchD, promotePickDef, (iid) => { promotePickDef = promotePickDef === iid ? null : iid; })}
+        <div class="sel-footer">
+          <button class="btn-act primary" disabled={!_pickOkD}
+            onclick={()=>confirmSendNewActive(promotePickDef, dIdx, _benchD)}>
+            {_pickOkD ? `✅ 確定讓「${_pickNameD}」上場` : '請先點選要上場的寶可夢'}
+          </button>
         </div>
       </div>
     </div>
@@ -10479,36 +10521,24 @@
 
   <!-- Send New Active Modal（自 KO 版）：主動方自 KO（如咒詛炸彈、中毒）後自己戰鬥場空欄 → 從自己備戰區選
        v2.123：去掉 turnPhase!=='end' 限制 — 中毒於 END_TURN 觸發時 turnPhase 可能已是 'end'，
-       舊條件會擋掉 modal 造成當機。 -->
-  {#if game && game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection}
+       舊條件會擋掉 modal 造成當機。
+       v6.122：同上，改兩段式 + 補 !isSpectator。 -->
+  {#if game && game.phase==='playing' && myPlayer?.active===null && (myPlayer?.bench??[]).length>0 && !pendingSelection && !isSpectator}
+    {@const _benchS = myPlayer?.bench ?? []}
+    {@const _pickOkS = !!promotePickSelf && _benchS.some((b) => b.iid === promotePickSelf)}
+    {@const _pickNameS = _pickOkS ? (getCard(_benchS.find((b) => b.iid === promotePickSelf)!.cardId)?.name ?? '') : ''}
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal retreat-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`} onclick={(e)=>e.stopPropagation()}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
           <h3>⚠️ 派出新的戰鬥寶可夢</h3>
-          <p class="sel-hint">請從備戰區挑一隻寶可夢上場；點放大鏡 🔍 查看詳情</p>
+          <p class="sel-hint">先點選要上場的寶可夢，再按下方的「確定上場」；點放大鏡 🔍 查看詳情</p>
         </div>
-        <div class="retreat-grid">
-          {#each myPlayer?.bench??[] as b}{@const bc=getCard(b.cardId)}
-            {#if bc}
-              {@const eff=hpTotal(b)}
-              {@const rem=hpRemaining(b)}
-              <div class="retreat-card">
-                <button class="retreat-zoom" title="放大檢視：{bc.name}"
-                  onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
-                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.sendNewActive(b.iid, myIdx));}}>
-                  <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
-                  <div class="retreat-name">{bc.name}</div>
-                  <div class="retreat-hp">HP {rem}/{eff}</div>
-                  <div class="retreat-nrg" title="附加的能量">⚡ {energySummary(b)}</div>
-                  {#if b.toolAttached}{@const tc=getCard(b.toolAttached.cardId)}<div class="retreat-tool" title="附加道具">🔧 道具：{tc?.name ?? '?'}</div>{/if}
-                  {#each (b.extraTools ?? []) as etSN2}{@const tcSN2=getCard(etSN2.cardId)}<div class="retreat-tool" title="附加道具（多重轉接）">🔧 道具：{tcSN2?.name ?? '?'}</div>{/each}
-                  {#if b.status}<div class="retreat-status" title="特殊狀態">
-                    ⚠️ 狀態：{b.status==='poisoned'?'☠️ 中毒':b.status==='burned'?'🔥 灼傷':b.status==='asleep'?'💤 睡眠':b.status==='confused'?'😵 混亂':b.status==='paralyzed'?'⚡ 麻痺':b.status}
-                  </div>{/if}
-                </button>
-              </div>
-            {/if}
-          {/each}
+        {@render promoteGrid(_benchS, promotePickSelf, (iid) => { promotePickSelf = promotePickSelf === iid ? null : iid; })}
+        <div class="sel-footer">
+          <button class="btn-act primary" disabled={!_pickOkS}
+            onclick={()=>confirmSendNewActive(promotePickSelf, myIdx, _benchS)}>
+            {_pickOkS ? `✅ 確定讓「${_pickNameS}」上場` : '請先點選要上場的寶可夢'}
+          </button>
         </div>
       </div>
     </div>
@@ -14466,6 +14496,16 @@
     .retreat-grid {
       max-height: none !important;
       overflow-y: visible !important;
+    }
+    /* ⭐ v6.122：手機直式整個 modal 才是捲動容器（見上方 v5.299/v5.308），
+       備戰滿場時「確定上場」會落在折疊線下面、要捲才看得到。
+       補位是**判負攸關**的流程（沒補位 → 錦標賽會被判閒置敗），確定鈕不能藏起來
+       ⇒ 只在補位/寶可夢 picker 這類 .retreat-modal 內把 footer 釘在底部。 */
+    .retreat-modal .sel-footer {
+      position: sticky; bottom: 0; z-index: 2;
+      background: #12261a; margin: 0 -0.6rem -0.6rem;
+      padding: 0.5rem 0.6rem 0.6rem;
+      box-shadow: 0 -6px 12px rgba(0,0,0,.45);
     }
     .sel-grid {
       grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)) !important;
