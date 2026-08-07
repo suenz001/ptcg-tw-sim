@@ -22,7 +22,7 @@ const S = join(ROOT, '.x123-s.js'), E = join(ROOT, '.x123-e.ts'), O = join(ROOT,
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch { /* */ } } });
 writeFileSync(S, 'export const base="";');
 writeFileSync(E,
-  "export { TRAINER_EFFECTS, RESOLVERS } from './src/lib/game/effects';\n"
+  "export { TRAINER_EFFECTS, RESOLVERS, ATTACK_POST } from './src/lib/game/effects';\n"
   + "import './src/lib/game/effects';\n");
 await build({
   entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
@@ -118,23 +118,31 @@ T('⭐⭐⭐ 只重洗「那些卡」—— 牌庫其餘部分順序必須逐張
   ok(restBefore === restAfter,
     '牌庫其餘部分被重洗了。\n'
     + '      卡面：「將**那些卡**全部翻回反面並重洗，放回牌庫下方」—— 只有那 3 張要洗。\n'
-    + '      把 rest 也洗掉會摧毀玩家已知的牌庫順序（例：上一次推理組合／蕾荷排好的頂部）。\n'
+    + '      把 rest 也洗掉會摧毀玩家已知的牌庫順序（例：上一次推理組合排好的頂部）。\n'
     + '      before rest=' + restBefore + '\n      after  rest=' + restAfter);
 });
 
-console.log('③ 不得波及共用同一個 resolver 的其他卡（蕾荷／天眼／攪亂雷達）');
+console.log('③ 不得波及共用同一個 resolver 的其他卡（哥德小童｜天眼、火箭隊的天罩蟲｜攪亂雷達）');
 
-T('⭐⭐ 蕾荷的 pending 不得帶 altAction（fail-closed，建構上就不可能觸發）', () => {
-  const fn = mod.TRAINER_EFFECTS.get('蕾荷');
-  ok(fn, '找不到蕾荷');
-  const s = fn(mkState(), 0, pool);
-  ok(s.pendingSelection?.type === 'reorder-deck-top', '蕾荷應開 reorder-deck-top');
-  ok(!s.pendingSelection.params?.altAction, '蕾荷不該有 altAction');
+T('⭐⭐ 其他共用 reorder-deck-top 的卡不得帶 altAction（fail-closed，建構上就不可能觸發）', () => {
+  // ⚠ 只用 H/I/J 標的卡當對照（G 標不在標準賽範圍，本站不維護，也不該當回歸基準）。
+  //   哥德小童｜天眼(I)、火箭隊的天罩蟲｜攪亂雷達(I) 走同一個 reorder-deck-top-apply。
+  let checked = 0;
+  for (const key of ['哥德小童|天眼', '火箭隊的天罩蟲|攪亂雷達']) {
+    const post = mod.ATTACK_POST.get(key);
+    if (!post) continue;
+    const s = post(mkState(), 0, pool, {});
+    ok(s.pendingSelection?.type === 'reorder-deck-top', key + ' 應開 reorder-deck-top');
+    ok(!s.pendingSelection.params?.altAction, key + ' 不該有 altAction');
+    ok(s.pendingSelection.params?.targetIdx === 1, key + ' 應該排的是對手牌庫');
+    checked++;
+  }
+  ok(checked === 2, '只驗到 ' + checked + ' 張對照卡（應為 2）—— 卡池或註冊 key 變了，請重新檢視本守衛');
 });
 
 T('⭐⭐⭐ 正對照 fail-closed：拿掉 params.altAction 後送同一個哨兵字串 → 分支不得進入', () => {
   // ⚠ 這條要用 allowDiscard:false 的 pending 來驗。
-  //   蕾荷是 allowDiscard:true（卡面「選任意數量丟棄」，minCount=0），
+  //   allowDiscard:true 的 pending（卡面「選任意數量丟棄」，minCount=0）
   //   送任何非候選字串＝「一張都不留」→ 全部進棄牌，那是它**正常的**語義，不能拿來當正對照
   //   （我第一版就寫錯，測試紅了才發現）。
   const s0 = mod.TRAINER_EFFECTS.get('推理組合')(mkState(12), 0, pool);
@@ -150,17 +158,18 @@ T('⭐⭐⭐ 正對照 fail-closed：拿掉 params.altAction 後送同一個哨�
     + '      before=' + before.join(',') + '\n      after =' + after.join(','));
 });
 
-T('⭐ 蕾荷本身的語義不受影響：留 2 張丟 3 張仍然照舊', () => {
-  const s0 = mod.TRAINER_EFFECTS.get('蕾荷')(mkState(12), 0, pool);
-  const { params } = s0.pendingSelection;
-  const cand = params.candidateIids;
+T('⭐ allowDiscard:true 分支（保留 N 張、其餘丟棄）不受影響', () => {
+  // ⚠ 站內唯一用 allowDiscard:true 的卡是 G 標，不當回歸基準；
+  //   改成**直接構造**同型 params 餵中央 resolver —— 驗的是 resolver 契約，不綁任何一張卡。
+  const s0 = mkState(12);
+  const cand = s0.players[0].deck.slice(0, 5).map((c) => c.iid);
   const keep = cand.slice(0, 2);
-  const r = mod.RESOLVERS.get('reorder-deck-top-apply');
-  const s1 = r({ ...s0, pendingSelection: null }, 0, keep, params, pool);
+  const params = { candidateIids: cand, allowDiscard: true };
+  const s1 = mod.RESOLVERS.get('reorder-deck-top-apply')(s0, 0, keep, params, pool);
   ok(s1.players[0].deck.slice(0, 2).map((c) => c.iid).join(',') === keep.join(','),
-    '蕾荷的保留+排序壞了');
+    'allowDiscard 分支的「保留 + 依送出順序排回牌庫頂」壞了');
   ok(s1.players[0].discard.length === cand.length - 2,
-    '蕾荷的丟棄張數不對：' + s1.players[0].discard.length);
+    'allowDiscard 分支的丟棄張數不對：' + s1.players[0].discard.length);
 });
 
 T('⭐ 排序路徑（送 iid 順序）仍然正常：反轉頂 3 張', () => {

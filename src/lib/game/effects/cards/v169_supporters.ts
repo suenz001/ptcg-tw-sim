@@ -17,6 +17,7 @@ import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, isOwnFirstTurn,
+  deckWithCardsToBottom,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
 
@@ -317,7 +318,10 @@ regR('lingonberry-pick', (st, idx, iids, params, pool) => {
       const topSet = new Set(topIids);
       const rest = p.deck.filter(c => !topSet.has(c.iid));
       const remaining = p.deck.filter(c => topSet.has(c.iid));
-      return { ...p, deck: shuffle([...rest, ...remaining]) };
+      // v6.124：卡面「將剩餘卡全部翻回反面並重洗，放回牌庫**下方**」——重洗的主詞是「剩餘卡」，
+      //   牌庫其餘部分順序不動。原本 shuffle([...rest, ...remaining]) 把整副洗掉了。
+      //   ⚠ 同檔的 杜若／女服務生 卡面是「放回牌庫並重洗」（沒有「下方」）＝整副重洗，兩者不同。
+      return { ...p, deck: deckWithCardsToBottom(rest, remaining, 'shuffled') };
     });
   }
   const targetIid = iids[0];
@@ -331,11 +335,14 @@ regR('lingonberry-pick', (st, idx, iids, params, pool) => {
       const topSet = new Set(topIids);
       const rest = p.deck.filter(c => !topSet.has(c.iid));
       const remaining = p.deck.filter(c => topSet.has(c.iid));
-      return { ...p, deck: shuffle([...rest, ...remaining]) };
+      // v6.124：卡面「將剩餘卡全部翻回反面並重洗，放回牌庫**下方**」——重洗的主詞是「剩餘卡」，
+      //   牌庫其餘部分順序不動。原本 shuffle([...rest, ...remaining]) 把整副洗掉了。
+      //   ⚠ 同檔的 杜若／女服務生 卡面是「放回牌庫並重洗」（沒有「下方」）＝整副重洗，兩者不同。
+      return { ...p, deck: deckWithCardsToBottom(rest, remaining, 'shuffled') };
     });
   }
   const name = pool.get(inst.cardId)?.name ?? '?';
-  st = addLog(st, `越橘的一步棋：${name} 放置到備戰區，剩餘洗回牌庫`, idx);
+  st = addLog(st, `越橘的一步棋：${name} 放置到備戰區，剩餘洗回牌庫下方`, idx);
   return updatePlayer(st, idx, p => {
     // v3.78：支援零之大空洞
     if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return p;
@@ -344,7 +351,8 @@ regR('lingonberry-pick', (st, idx, iids, params, pool) => {
     const remaining = p.deck.filter(c => topSet.has(c.iid) && c.iid !== targetIid);
     return {
       ...p,
-      deck: shuffle([...rest, ...remaining]),
+      // v6.124：同上——只洗剩餘那幾張放牌庫下方，不洗整副牌庫。
+      deck: deckWithCardsToBottom(rest, remaining, 'shuffled'),
       bench: [...p.bench, { ...inst, justPlaced: true }],
     };
   });

@@ -1209,6 +1209,35 @@ export function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/**
+ * v6.124：卡面「（將那些卡翻回反面並重洗，）放回牌庫下方」的**唯一**管線。
+ *
+ * ⚠ 這條規則的關鍵在**重洗的範圍**。卡面重洗的主詞是「那些卡」（剛剛查看過的那幾張、
+ *   剛剛收回的那幾張手牌），所以只有 `toBottom` 這幾張要被打亂，
+ *   **牌庫其餘部分（`rest`）的順序必須原封不動**。
+ *
+ *   寫成 `shuffle([...rest, ...toBottom])` 是把**整副牌庫**洗掉 —— 那是另一條規則
+ *   （「放回牌庫並重洗」，例如從牌庫搜尋之後的重洗），兩者不可混用。差別是玩家看得見的：
+ *   玩家可能已經藉由其他效果（查看牌庫頂、重排牌庫）知道牌庫下層的順序，多洗一次
+ *   等於把那個已知資訊憑空銷毀，也讓「先看牌庫頂、再把不要的放到下方」這類卡失去意義。
+ *
+ * `mode` 刻意設成必填，強迫呼叫端回去讀卡面再決定：
+ *   ・`'shuffled'`   卡面有「重洗／洗亂」字樣（推理組合、越橘的一步棋、霸者咆哮、
+ *                    金屬製造者、悟松、妨害信函、彩粉蝶、特殊紅牌、調換票…）
+ *   ・`'keep-order'` 卡面只說「放回牌庫下方」，沒有重洗（多龍奇｜偵查指令、海岱、
+ *                    胖嘟嘟｜深海抽出、狂歡浪舞鴨｜快節奏）
+ *
+ * 事故背景：v6.123 修掉推理組合的 `shuffle(rest)`（洗錯邊）後，同維度 audit 又抓到
+ *   越橘的一步棋（3 處）與悟松（1 處）把整副牌庫洗掉。收斂成單一 helper 以絕後患。
+ */
+export function deckWithCardsToBottom<T>(
+  rest: readonly T[],
+  toBottom: readonly T[],
+  mode: 'shuffled' | 'keep-order',
+): T[] {
+  return [...rest, ...(mode === 'shuffled' ? shuffle([...toBottom]) : [...toBottom])];
+}
+
 export function updatePlayer(
   state: GameState,
   idx: 0 | 1,

@@ -12,6 +12,7 @@
 
 import type { CardInstance, GameState } from '../../types';
 import { startEnergyChain } from './v158_energy_chain';
+import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { flipCoinsWithLog } from '../../effects';
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppDiscardChosenConcealedPost } from '../../effects';
@@ -396,13 +397,14 @@ regA('彩粉蝶', 0, (st, idx) => {
   let s = st;
   if (dp.hand.length > 0) {
     // 洗亂手牌後放到牌庫下方
-    const shuffledHand = shuffle([...dp.hand]);
+    const handCount = dp.hand.length;
+    // v6.124 收斂：卡面「全部翻回反面並重洗，放回牌庫下方」——只洗對手手牌那幾張。
     s = updatePlayer(s, dIdx, p => ({
       ...p,
       hand: [],
-      deck: [...p.deck, ...shuffledHand],
+      deck: deckWithCardsToBottom(p.deck, p.hand, 'shuffled'),
     }));
-    s = addLog(s, `大飛翅：對手 ${shuffledHand.length} 張手牌洗亂後放回牌庫下方`, idx);
+    s = addLog(s, `大飛翅：對手 ${handCount} 張手牌洗亂後放回牌庫下方`, idx);
   } else {
     s = addLog(s, '大飛翅：對手手牌為空，跳過放回牌庫', idx);
   }

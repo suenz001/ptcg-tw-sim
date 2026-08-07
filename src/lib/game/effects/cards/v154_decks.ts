@@ -19,6 +19,7 @@ import {
   reg, regR, regG, regA,
   addLog, updatePlayer, withPending,
   shuffle,
+  deckWithCardsToBottom,
 } from '../_shared';
 import { isBasicEnergyOfType, totalEnergyUnits } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
@@ -176,7 +177,8 @@ regR('metal-maker-attach', (st, idx, energyIids, params, pool) => {
     // leftover（top4 中沒選的）洗一洗放牌庫底；選的能量暫存 discard
     return {
       ...p,
-      deck: [...rest, ...shuffle(leftover)],
+      // v6.124 收斂：卡面「將剩餘卡全部翻回反面並重洗，放回牌庫下方」（只洗那 4 張裡沒選的）
+      deck: deckWithCardsToBottom(rest, leftover, 'shuffled'),
       discard: [...p.discard, ...validEnergies],
     };
   });

@@ -23,7 +23,8 @@ import {
   addPendingPrize, getOwnBenchLimit, revealTopCardsLog} from '../_shared';
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { joinCardNames } from '../_shared';
-import { getAllAttachedTools } from '../_shared'; // v5.995 可怕的哥哥:數/丟道具含 extraTools(多重轉接)
+import { getAllAttachedTools } from '../_shared';
+import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線 // v5.995 可怕的哥哥:數/丟道具含 extraTools(多重轉接)
 import { isImmuneToOppSupporter } from './v3080_deferred_wave_c'; // v5.995 支援者效果目標免疫過濾
 import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
@@ -294,11 +295,14 @@ reg('滑稽演員', (st, idx) => {
 // ── 悟松（Supporter / H）── 雙方手洗回，各 coin → 抽 6/3
 regG('悟松', () => true);
 reg('悟松', (st, idx) => {
-  st = addLog(st, '悟松：雙方手牌洗回牌庫，雙方各擲硬幣決定抽 6 或 3', idx);
+  st = addLog(st, '悟松：雙方手牌洗回牌庫下方，雙方各擲硬幣決定抽 6 或 3', idx);
   const players = [...st.players] as [PlayerState, PlayerState];
   for (const i of [0, 1] as const) {
     const p = { ...players[i] };
-    p.deck = shuffle([...p.deck, ...p.hand]);
+    // v6.124：卡面「將自己的手牌全部翻回反面並重洗，放回牌庫**下方**」——重洗的是**手牌那幾張**，
+    //   牌庫原本的順序不動。原本 shuffle([...p.deck, ...p.hand]) 連整副牌庫一起洗掉了。
+    //   ⚠ 同檔「滑稽演員」卡面是「放回牌庫並重洗」（沒有「下方」）＝整副重洗，寫法像但語義不同。
+    p.deck = deckWithCardsToBottom(p.deck, p.hand, 'shuffled');
     p.hand = [];
     const rws = flipCoinsWithLog(st, 1, '悟松', idx);
     st = rws.state;

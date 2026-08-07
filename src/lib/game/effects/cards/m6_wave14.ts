@@ -4,7 +4,7 @@
 // ⚠「以任意方式附於…」一律走中央 startEnergyChain（逐張選目標分散），
 //    禁「選 1 隻塞全部」（v5.858 教訓）。
 
-import { regAByName, regR, addLog, updatePlayer, withPending, shuffle } from '../_shared';
+import { regAByName, regR, addLog, updatePlayer, withPending, deckWithCardsToBottom } from '../_shared';
 import { startEnergyChain } from './v158_energy_chain'; // v6.081 「以任意方式附加」中央 chain
 
 // ── 1. 鴨嘴炎獸｜拍檔提升 ─────────────────────────────────────────────────
@@ -176,7 +176,8 @@ regR('m6-overlord-roar', (st, idx, iids, params, pool) => {
       ...pl,
       active: attachTo(pl.active) ?? null,
       bench: pl.bench.map(b => attachTo(b)!),
-      deck: [...remainingDeck, ...shuffle(rest)],
+      // v6.124 收斂：卡面「將剩餘卡翻回反面並重洗，放回牌庫下方」（只洗那 4 張裡沒附加的）
+      deck: deckWithCardsToBottom(remainingDeck, rest, 'shuffled'),
     };
   });
 });

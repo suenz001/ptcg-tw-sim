@@ -30,6 +30,7 @@ import {
 } from '../_shared';
 import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈)
 import { tryPromptPromoteActive } from '../_shared';
+import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
@@ -553,8 +554,8 @@ reg('調換票', (st, idx) => {
   let s = updatePlayer(st, idx, p => {
     if (p.prizes.length === 0) return p;
     // 把獎賞卡洗一洗放到牌庫最底
-    const shuffled = shuffle([...p.prizes]);
-    const newDeckPre = [...p.deck, ...shuffled];
+    // v6.124 收斂：卡面「全部翻回反面並重洗，放回牌庫下方」——只洗獎賞那幾張。
+    const newDeckPre = deckWithCardsToBottom(p.deck, p.prizes, 'shuffled');
     // 從新牌庫上方抽 count 張當新獎賞（牌庫不夠時取所有）
     const take = Math.min(p.prizes.length, newDeckPre.length);
     const newPrizes = newDeckPre.slice(0, take);
@@ -1180,7 +1181,8 @@ regR('energy-duster-pick', (st, idx, iids, _params, pool) => {
   return updatePlayer(st, dIdx, p => ({
     ...p,
     hand: p.hand.filter(c => c.iid !== targetIid),
-    deck: [...p.deck, inst],  // 牌庫下方
+    // v6.124 收斂：卡面「放回對手的牌庫下方」沒有「重洗」→ keep-order。
+    deck: deckWithCardsToBottom(p.deck, [inst], 'keep-order'),
   }));
 });
 
@@ -1448,8 +1450,8 @@ reg('妨害信函', (st, idx, _pool) => {
   if (handCount === 0) return st;
   st = addLog(st, `妨害信函：對手手牌 ${handCount} 張全部洗回牌庫底，再抽相同張數`, idx);
   st = updatePlayer(st, dIdx, p => {
-    const shuffledHand = shuffle(p.hand);
-    return { ...p, hand: [], deck: [...p.deck, ...shuffledHand] };
+    // v6.124 收斂：卡面「全部翻回反面並重洗，放回牌庫下方」——只洗手牌那幾張。
+    return { ...p, hand: [], deck: deckWithCardsToBottom(p.deck, p.hand, 'shuffled') };
   });
   st = drawCards(st, dIdx, handCount);
   return st;

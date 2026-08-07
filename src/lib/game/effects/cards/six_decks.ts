@@ -9,7 +9,8 @@
  *     蓋諾賽克特｜ACE消弭（canPlayTrainer gate）
  *   - 特殊能量（engine canAffordAttack inline）：稜鏡能量 / 新衝天能量
  */
-import { tryPromptPromoteActive, damageCounterCount } from '../_shared'; // v5.785 指示物個數中央
+import { tryPromptPromoteActive, damageCounterCount } from '../_shared';
+import { deckWithCardsToBottom } from '../_shared'; // v6.124 「放回牌庫下方」中央管線 // v5.785 指示物個數中央
 import { copyAttackPostDispatch } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
@@ -182,7 +183,8 @@ regR('lie-cheat-to-deck-bottom', (state, aIdx, selectedIids, _params, pool) => {
   const pick = opp.hand.find(c => selectedIids.includes(c.iid));
   if (!pick) return addLog(state, '暗槓：未選取卡', aIdx);
   opp.hand = opp.hand.filter(c => c.iid !== pick.iid);
-  opp.deck = [...opp.deck, pick];  // 放到牌庫「下方」（陣列末端）
+  // v6.124 收斂：卡面「放回對手的牌庫下方」沒有「重洗」→ keep-order。
+  opp.deck = deckWithCardsToBottom(opp.deck, [pick], 'keep-order');
   players[dIdx] = opp;
   const name = pool.get(pick.cardId)?.name ?? '?';
   return addLog({ ...state, players }, `暗槓：將對手的 ${name} 放回對手牌庫下方`, aIdx);

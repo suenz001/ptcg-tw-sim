@@ -48,7 +48,7 @@ import {
   // Public
   canPlayTrainer,
   // Helpers
-  shuffle, updatePlayer, addLog, addPrivateLog,
+  shuffle, deckWithCardsToBottom, updatePlayer, addLog, addPrivateLog,
   drawCards, discardHand, returnHandToDeck,
   withPending,
   clearActiveEffects,
@@ -3502,9 +3502,15 @@ regR('hydai-bottom-draw4', (st, idx, iids, _params, pool) => {
     st = addPrivateLog(st, `海岱：${names} 放到牌庫底`, `海岱：將 ${chosen.length} 張手牌放到牌庫底`, idx);
   }
   return updatePlayer(st, idx, p => {
-    const picked = p.hand.filter(c => iids.includes(c.iid));
+    // v6.124：卡面「**以任意順序排列**，放回牌庫下方」——順序是玩家的權利，
+    //   要照 picker 送出的 iids 順序排，不是照手牌原本的排列（牌庫底順序在本站可觀察：
+    //   蟲甲聖ex｜相反抽出、蟲蟲恐慌、黑暗球 都會動到牌庫下方）。
+    const picked = iids
+      .map((iid) => p.hand.find((c) => c.iid === iid))
+      .filter((c): c is NonNullable<typeof c> => !!c);
     const newHand = p.hand.filter(c => !iids.includes(c.iid));
-    const newDeck = [...p.deck, ...picked];
+    // 卡面沒有「重洗」→ keep-order。
+    const newDeck = deckWithCardsToBottom(p.deck, picked, 'keep-order');
     const taken = newDeck.slice(0, 4);
     return { ...p, hand: [...newHand, ...taken], deck: newDeck.slice(4) };
   });
@@ -4644,10 +4650,9 @@ regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
     state = addLog(state, `推理組合：將牌庫頂 ${topN} 張翻反並重洗放回下方`, aIdx);
     return updatePlayer(state, aIdx, p => {
       const rest = p.deck.slice(topN);
-      // ⚠ v6.123 一併修既有 bug：卡面是「將**那些卡**（3 張）翻回反面並重洗，放回牌庫下方」，
-      //   **牌庫其餘部分不該被重洗**。原本寫 shuffle(rest) 會把玩家已知的牌庫順序整個摧毀
-      //   （例：上一次推理組合／蕾荷排好的頂部）。
-      return { ...p, deck: [...rest, ...shuffle(topCards)] };
+      // v6.124 收斂：卡面是「將**那些卡**（3 張）翻回反面並重洗，放回牌庫下方」，
+      //   牌庫其餘部分不得被重洗（v6.123 修過洗錯邊，v6.124 收斂到中央管線防再犯）。
+      return { ...p, deck: deckWithCardsToBottom(rest, topCards, 'shuffled') };
     });
   }
   // (A) 排序放回頂 — 開 reorder-deck-top picker
@@ -5010,8 +5015,8 @@ regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
     return updatePlayer(state, _tIdx, p => {
       const top = p.deck.slice(0, _n);
       const rest = p.deck.slice(_n);
-      // ⚠ 只重洗「那些卡」，牌庫其餘部分維持原順序（卡面沒有說要洗整個牌庫）
-      return { ...p, deck: [...rest, ...shuffle(top)] };
+      // v6.124 收斂：只重洗「那些卡」，牌庫其餘部分維持原順序（卡面沒有說要洗整個牌庫）
+      return { ...p, deck: deckWithCardsToBottom(rest, top, 'shuffled') };
     });
   }
   // v5.903：targetIdx 支援排「對手」牌庫(天眼/攪亂雷達)；未指定=自己(推理組合等既有自己向不變)。

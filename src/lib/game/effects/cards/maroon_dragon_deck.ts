@@ -20,6 +20,7 @@
 
 import type { GameState, PlayerState, CardInstance } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
+import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import {
   reg, regR, regG, regA,
   BENCH_PLACE_TRIGGERS,
@@ -127,10 +128,10 @@ regR('scouting-order', (st, idx, iids, params, pool) => {
     const rest = p.deck.filter(c => !top2Iids.includes(c.iid));
     const picked = top2.filter(c => iids.includes(c.iid));
     const remaining = top2.filter(c => !iids.includes(c.iid));
-    // 剩餘牌放回牌庫下方（不洗牌）：rest（原本 top2 以下的部分） + remaining
+    // v6.124 收斂：卡面「將剩餘卡放回牌庫下方」——沒有「重洗」字樣 → keep-order。
     return {
       ...p,
-      deck: [...rest, ...remaining],
+      deck: deckWithCardsToBottom(rest, remaining, 'keep-order'),
       hand: [...p.hand, ...picked],
     };
   });
@@ -323,9 +324,10 @@ reg('特殊紅牌', (st, idx) => {
   //   原用 returnHandToDeck 會把 hand+deck 一起 shuffle（手牌混進牌庫各處），
   //   違反卡面「放回牌庫下方」。改用 inline：hand 內部 shuffle 後 append 到 deck 末端。
   st = addLog(st, '特殊紅牌：對手手牌重洗後放回牌庫下方，並抽 3 張', idx);
+  // v6.124 收斂：只洗「對手手牌那幾張」再接到牌庫下方，對手牌庫原本的順序不動。
   st = updatePlayer(st, dIdx, p => ({
     ...p,
-    deck: [...p.deck, ...shuffle(p.hand)],
+    deck: deckWithCardsToBottom(p.deck, p.hand, 'shuffled'),
     hand: [],
   }));
   return drawCards(st, dIdx, 3);
