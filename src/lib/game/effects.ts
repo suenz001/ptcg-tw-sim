@@ -4887,7 +4887,12 @@ reg('仙后', (st, idx) => {
   st = addLog(st, '仙后：從牌庫選最多 2 張卡加手牌', idx);
   return withPending(st, {
     type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
-    filter: '', minCount: 0, maxCount: 2,
+        // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454 親送無人機／L1708 仙后／L2333 君主蛇ex｜青草命令／
+    //   L1373 呆呆王ex｜才智頭擊）：從牌庫「**任意選擇**」（無類別限定）**不可以 1 張都不選**，
+    //   必須選 1 張以上 —— 因為牌庫非空就一定找得到「任意 1 張」，不適用官方 fail-to-find。
+    //   ⚠ 卡面就算寫「若希望」也一樣（君主蛇ex 就是「若希望，任意選擇最多3張」卻被裁定必選）。
+    //   ⚠ 對照：**帶條件**的搜尋（找寶可夢卡／能量卡…）仍可宣告「找不到」而選 0。
+    filter: '', minCount: 1, maxCount: 2,
     effectKey: 'search-to-hand-reshuffle',
     // v2.993：仙后卡面無「給對手看過」→ 私下揭示
     params: { privateReveal: true },
@@ -12576,7 +12581,12 @@ function selfReturnToDeckThenSearchPost(maxSearch: number, label: string): Attac
     return withPending(afterReturn, {
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      minCount: 0, maxCount: maxSearch,
+            // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454 親送無人機／L1708 仙后／L2333 君主蛇ex｜青草命令／
+      //   L1373 呆呆王ex｜才智頭擊）：從牌庫「**任意選擇**」（無類別限定）**不可以 1 張都不選**，
+      //   必須選 1 張以上 —— 因為牌庫非空就一定找得到「任意 1 張」，不適用官方 fail-to-find。
+      //   ⚠ 卡面就算寫「若希望」也一樣（君主蛇ex 就是「若希望，任意選擇最多3張」卻被裁定必選）。
+      //   ⚠ 對照：**帶條件**的搜尋（找寶可夢卡／能量卡…）仍可宣告「找不到」而選 0。
+      minCount: Math.min(1, maxSearch), maxCount: maxSearch,
       effectKey: 'search-to-hand-reshuffle',
       filter: 'Any',
       // v6.097：白蓬蓬｜微風之禮 卡面「…從牌庫任意選擇最多3張卡加入手牌。並且重洗牌庫。」
@@ -15071,7 +15081,12 @@ export function registerDamageThenOptionalDeckSearchToHand(
       type: 'deck-search',
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: 'any',
-      minCount: 0, maxCount: max,
+      // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454 親送無人機／L1708 仙后／L2333 君主蛇ex｜青草命令／
+      //   L1373 呆呆王ex｜才智頭擊）：從牌庫「**任意選擇**」（無類別限定）**不可以 1 張都不選**，
+      //   必須選 1 張以上 —— 因為牌庫非空就一定找得到「任意 1 張」，不適用官方 fail-to-find。
+      //   ⚠ 卡面就算寫「若希望」也一樣（君主蛇ex 就是「若希望，任意選擇最多3張」卻被裁定必選）。
+      //   ⚠ 對照：**帶條件**的搜尋（找寶可夢卡／能量卡…）仍可宣告「找不到」而選 0。
+      minCount: Math.min(1, max), maxCount: max,
       effectKey: DAMAGE_AFTER_DECK_SEARCH_KEY,
       params: { dmg: opts.damage, logName: ln },
     });
@@ -15934,7 +15949,12 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
       type: 'deck-search',
       actorIdx: dIdx, sourcePlayerIdx: dIdx,
       filter: 'Any',
-      minCount: 0, maxCount: 1,
+            // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454 親送無人機／L1708 仙后／L2333 君主蛇ex｜青草命令／
+      //   L1373 呆呆王ex｜才智頭擊）：從牌庫「**任意選擇**」（無類別限定）**不可以 1 張都不選**，
+      //   必須選 1 張以上 —— 因為牌庫非空就一定找得到「任意 1 張」，不適用官方 fail-to-find。
+      //   ⚠ 卡面就算寫「若希望」也一樣（君主蛇ex 就是「若希望，任意選擇最多3張」卻被裁定必選）。
+      //   ⚠ 對照：**帶條件**的搜尋（找寶可夢卡／能量卡…）仍可宣告「找不到」而選 0。
+      minCount: 1, maxCount: 1,
       effectKey: 'search-to-hand-reshuffle',
       // v6.097：桃歹郎｜最後鎖鏈 特性卡面「…從自己的牌庫任意選擇1張卡加入手牌。並且重洗牌庫。」
       //   **沒有**「在給對手看過後」→ 卡名不可對外公開。
@@ -15999,7 +16019,10 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
         actorIdx: dIdx, sourcePlayerIdx: dIdx,
         minCount: 0, maxCount: maxPick, validIids: basicEnergyIids,
         effectKey: 'photon-code-pick-energy',
-        params: { label: '光子纜線' },
+        // ⭐ v6.126 站長裁定 B 案：兩段一致可跳過。
+        //   ⚠ phase 2（'m5-mirieton-photon-code'）早就在 OPTIONAL 白名單（log 寫「或跳過」），
+        //   phase 1 卻強制 → 玩家被迫選能量、再在第二步跳過（淨零效果）。半套必錯。
+        params: { label: '光子纜線', allowSkipZero: true },
       },
     );
   }],

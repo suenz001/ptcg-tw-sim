@@ -224,13 +224,13 @@ const MANDATORY_BY_SITE_RULE = new Set([
   'h-wave2-pickup-energy-to-bench-stage1',  // 花舞鳥｜能量支援(H)「附於1隻」＝必選
                                  //   ⚠ 同 factory 的渦輪刀鋒／啪滋啪滋充電／能量寫生「以任意方式」→ 走 params 旗標
   'h-wave2-discard-back-to-deck',// 烏波｜打水(H)：最多3張，無「任意」字樣
-  'm5-mirieton-photon-code',     // 密勒頓｜光子纜線(J)：最多2張，無「任意」字樣
   'lighting-city-pick',          // 釀光市(I)：最多2張，無「任意」字樣
   'v310-discard-pickup-energy-to-any-stage1',  // ⚠ 死碼：discardSearchAttachToAnyPost 零呼叫者
   'h-wave2-pickup-energy-to-hand',             // ⚠ 死碼：discardSearchBasicEnergiesPost 零呼叫者
                                  //   （v3.09/v3.10 已把渦輪刀鋒等改成「附於備戰」，這個 factory 就沒人用了）
-  'brailliant-attach',           // 力之沙漏(H)：回合結束「可」從棄牌區附基本能量（在 legacy 白名單裡）
-  'photon-code-pick-energy',     // 密勒頓｜光子纜線(J) 第一段選能量：最多2張
+  // ⚠ v6.126 移除 'brailliant-attach' 與 'm5-mirieton-photon-code'：
+  //   它們**在 OPTIONAL 白名單裡**（判定順序 OPTIONAL 在前），列在這裡是講反話的死註解。
+  //   'photon-code-pick-energy' 也移除 —— 站長裁定 B 案，phase 1 改走 params.allowSkipZero。
 ]);
 
 /**

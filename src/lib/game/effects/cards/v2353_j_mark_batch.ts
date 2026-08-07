@@ -283,7 +283,10 @@ regPost('焰后蜥ex|詭計', (state, aIdx) => {
     actorIdx: aIdx,
     sourcePlayerIdx: aIdx,
     filter: 'Any',
-    minCount: 0,
+        // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454/L1708/**L2333 君主蛇ex｜青草命令**/L1373）：
+    //   從牌庫「任意選擇」（無類別限定）**不可以 1 張都不選**，必須選 1 張以上。
+    //   ⚠ 卡面寫「若希望」也一樣（君主蛇ex 正是「若希望，任意選擇最多3張」卻被裁定必選）。
+    minCount: 1,
     maxCount: 2,
     effectKey: 'search-to-hand-reshuffle',
     // v6.097：焰后蜥ex｜詭計 卡面「從自己的牌庫任意選擇最多2張卡加入手牌。並且重洗牌庫。」

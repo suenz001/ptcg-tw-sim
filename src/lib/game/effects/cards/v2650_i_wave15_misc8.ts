@@ -205,6 +205,12 @@ regPost('雙卵細胞球|細胞進化', (state, aIdx, pool) => {
     params: {
       includeActive: true,
       validIids,
+      // ⭐ v6.126：phase A（選場上底座）可跳過。resolver 的 0-branch、titleOverride、log
+      //   三處早就寫「（可跳過）」，只有 UI 不給鈕（bench-choose=已知資訊，站規預設擋）。
+      //   官方 fail-to-find（PTCG_RULES.md L832「可以1張卡牌都不選擇…也需要重洗牌庫」）
+      //   支持整個效果可以不執行；phase B 是 deck-search 本來就能選 0，
+      //   強制 phase A 只是逼玩家多按一步，結果完全相同。
+      allowSkipZero: true,
       titleOverride: '細胞進化：選擇 1 隻自方場上寶可夢進化（可跳過）',
     },
   });
@@ -423,6 +429,12 @@ function evilAwakeningPickBase(
       validIids,
       baseIdx,
       prevBaseIid,
+      // ⭐ v6.126：phase A（選場上底座）可跳過。resolver 的 0-branch、titleOverride、log
+      //   三處早就寫「（可跳過）」，只有 UI 不給鈕（bench-choose=已知資訊，站規預設擋）。
+      //   官方 fail-to-find（PTCG_RULES.md L832「可以1張卡牌都不選擇…也需要重洗牌庫」）
+      //   支持整個效果可以不執行；phase B 是 deck-search 本來就能選 0，
+      //   強制 phase A 只是逼玩家多按一步，結果完全相同。
+      allowSkipZero: true,
       titleOverride: `惡之覺醒：選擇第 ${baseIdx} 隻自方【惡】寶可夢進化（可跳過）`,
     },
   });
