@@ -502,7 +502,8 @@ regPost('圖圖犬|能量寫生', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '能量寫生', aIdx);
   if (r.heads === 0) return addLog(r.state, '能量寫生：0 正面', aIdx);
   // 注意：卡面未限基本能量類型（任意基本能量）
-  return discardSearchAttachToBenchPost(r.heads, '能量寫生', undefined, true)(r.state, aIdx, pool);
+  // 卡面：「擲3次硬幣，…最多與正面出現的次數相同數量的基本能量卡，**以任意方式**附於備戰寶可夢身上。」→ 可選 0
+  return discardSearchAttachToBenchPost(r.heads, '能量寫生', undefined, true, true)(r.state, aIdx, pool);
 });
 // 舊 resolver 'wave17-pickup-energy-to-hand' 已 obsolete（A12 唯一 caller）
 //   保留 dead key 不會造成 runtime error（resolver Map 查不到時 engine 已有 fallback），
@@ -554,6 +555,12 @@ regPost('長毛狗|氣味偵測', (state, aIdx, _pool) => {
     filter: 'Any',
     minCount: 0, maxCount: r.heads,
     effectKey: 'discard-to-hand',
+    // ⚠ v6.125：卡面「從自己的棄牌區**任意選擇**最多與正面出現的次數相同數量的卡」→ 可 0 張。
+    //   這張卡原本在 OPTIONAL_SELECTION_EFFECT_KEYS（key 'wave17-pickup-energy-to-hand'），
+    //   v5.881 改掛中央 'discard-to-hand' 後白名單條目就變死碼，【不選】鈕跟著消失。
+    //   ⚠ 不能把整個 'discard-to-hand' 放進白名單 —— 奇跡耳麥／釣竿MAX／水蓮的照顧／能量回收
+    //   共用它，那些卡面是「最多N張」而站規維持必選。改用逐卡旗標。
+    params: { allowSkipZero: true },
   });
 });
 

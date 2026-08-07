@@ -324,7 +324,13 @@ regR('h-wave2-pickup-energy-to-hand', (state, aIdx, iids, _params, pool) => {
 
 // v3.09 從棄牌區挑 ≤N 基本能量 → 附到 1 隻備戰寶可夢身上（雙階段 pending）
 //   花舞鳥｜能量支援（MC 133/742）等卡使用此 pattern
-function discardSearchAttachToBenchPost(max: number, label: string, type?: string, distribute = false): AttackPostFn {
+function discardSearchAttachToBenchPost(max: number, label: string, type?: string, distribute = false,
+  /**
+   * v6.125：卡面是否允許「1 張都不選」。**必填**，強迫呼叫端回去讀卡面。
+   * ⚠ 不可用 `distribute` 推導 —— 烈咬陸鯊ex｜水炮著陸 卡面寫「以任意方式」卻沒傳 distribute，
+   *   兩個旗標並非一一對應（那是另一個待處理的 G 標問題）。
+   */
+  optional: boolean = false): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (p.bench.length === 0) return addLog(state, `${label}：備戰區沒有寶可夢`, aIdx);
@@ -355,7 +361,7 @@ function discardSearchAttachToBenchPost(max: number, label: string, type?: strin
       filter: 'BasicEnergy',
       minCount: 0, maxCount: Math.min(max, validIids.length),
       effectKey: 'h-wave2-pickup-energy-to-bench-stage1',
-      params: { validIids, label },
+      params: { validIids, label, allowSkipZero: optional },
     });
   };
 }
@@ -557,6 +563,8 @@ regR('v310-deck-pickup-energy-to-any-stage2', (state, aIdx, picked, params, pool
 // v3.10 從棄牌區挑 ≤N 基本能量 → 附到「自方任一寶可夢」身上（active + bench 皆可）
 //   目前無已知 caller，但保留 export 以備未來「黑魯加 棄牌版鼓勵」類卡使用。
 //   (未在 v3.10 實際使用 — 7 張 bug 中的 active+bench 類都是「牌庫」來源)
+// ⚠ v6.125：全 repo 零呼叫者（死碼）。保留以免破壞 import，但其 effectKey
+//   'v310-discard-pickup-energy-to-any-stage1' 不需要表態 —— 它永遠不會被開出來。
 export function discardSearchAttachToAnyPost(max: number, label: string, type?: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
@@ -1193,13 +1201,15 @@ regPost('逐電犬|輸電衝刺', deckSearchAttachToBenchPost(2, '輸電衝刺',
 // 鬃岩狼人|渦輪刀鋒 50 + 棄牌挑最多 2 基本鬥能量分配備戰
 regPre('鬃岩狼人|渦輪刀鋒', (s) => ({ state: s, damage: 50 }));
 // v3.10 修 bug：原本 discardSearchBasicEnergiesPost 加到手牌；卡面是「附於備戰寶可夢身上」
-regPost('鬃岩狼人|渦輪刀鋒', discardSearchAttachToBenchPost(2, '渦輪刀鋒', 'Fighting', true));
+// 卡面：「…最多2張『基本【鬥】能量』卡，**以任意方式**附於備戰寶可夢身上。」→ 可選 0
+regPost('鬃岩狼人|渦輪刀鋒', discardSearchAttachToBenchPost(2, '渦輪刀鋒', 'Fighting', true, true));
 
 // 花舞鳥|能量支援 — 棄牌區挑最多 2 基本能量附 1 隻備戰
 regPre('花舞鳥|能量支援', (s) => ({ state: s, damage: 0 }));
 // v3.09 修 bug：原本用 discardSearchBasicEnergiesPost（拿到手牌）違反卡面
 // 卡面（MC 133/742）：「從自己的棄牌區選擇最多 2 張『基本能量』卡，附於自己的 1 隻備戰寶可夢身上」
-regPost('花舞鳥|能量支援', discardSearchAttachToBenchPost(2, '能量支援'));
+// 卡面：「…最多2張基本能量卡，附於**1隻**備戰寶可夢身上。」——無「以任意方式」→ 站規維持必選
+regPost('花舞鳥|能量支援', discardSearchAttachToBenchPost(2, '能量支援', undefined, false, false));
 
 // 烏波|打水 — 棄牌挑最多 3 基本水能量，給對手看後放回牌庫並重洗（純展示+混回）
 regPre('烏波|打水', (s) => ({ state: s, damage: 0 }));
@@ -1240,7 +1250,8 @@ regPost('帕奇利茲|啪滋啪滋充電', (state, aIdx, pool) => {
   const r = flipCoinsWithLog(state, 3, '啪滋啪滋充電', aIdx);
   if (r.heads === 0) return addLog(r.state, '啪滋啪滋充電：0 正面', aIdx);
   // 動態 max = heads（呼叫共用 helper 但帶上 heads 上限）
-  return discardSearchAttachToBenchPost(r.heads, '啪滋啪滋充電', 'Lightning', true)(r.state, aIdx, pool);
+  // 卡面：「擲3次硬幣，…最多與正面出現的次數相同數量的『基本【雷】能量』卡，**以任意方式**附於…」→ 可選 0
+  return discardSearchAttachToBenchPost(r.heads, '啪滋啪滋充電', 'Lightning', true, true)(r.state, aIdx, pool);
 });
 
 // 夠讚狗ex|猛毒筋力 — 牌庫挑 ≤2 基本【惡】能量附自身 + 自身中毒
@@ -2687,12 +2698,15 @@ regPost('烏賊王|勾結觸手', (state, aIdx, pool) => {
 // v3.11 — 烈咬陸鯊ex|水炮著陸（cost: 1 鬥）
 //   卡面：從棄牌區選擇最多 3 張基本【鬥】能量，以任意方式附於備戰寶可夢身上
 regPre('烈咬陸鯊ex|水炮著陸', (s) => ({ state: s, damage: 0 }));
-regPost('烈咬陸鯊ex|水炮著陸', discardSearchAttachToBenchPost(3, '水炮著陸', 'Fighting'));
+// ⚠ 烈咬陸鯊ex 是 G 標（不在維護範圍）→ 維持現狀。（卡面其實有「以任意方式」，
+//   連 distribute 都沒傳，是既有的 G 標問題，本站不處理。）
+regPost('烈咬陸鯊ex|水炮著陸', discardSearchAttachToBenchPost(3, '水炮著陸', 'Fighting', false, false));
 
 // v3.11 — 怒鸚哥ex|幹勁十足（cost: 1 無）
 //   卡面：從棄牌區選擇最多 2 張基本能量，附於 1 隻備戰寶可夢身上（同花舞鳥|能量支援 pattern）
 regPre('怒鸚哥ex|幹勁十足', (s) => ({ state: s, damage: 0 }));
-regPost('怒鸚哥ex|幹勁十足', discardSearchAttachToBenchPost(2, '幹勁十足'));
+// 怒鸚哥ex(G)：卡面「附於**1隻**備戰寶可夢身上」無「以任意方式」→ 必選
+regPost('怒鸚哥ex|幹勁十足', discardSearchAttachToBenchPost(2, '幹勁十足', undefined, false, false));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Wave 2 統計：80+ 張

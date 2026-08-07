@@ -477,7 +477,8 @@ regPost('優雅貓|能量攪拌', (state, aIdx, _pool) => {
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 0, maxCount: allEnergyIids.length,
     effectKey: 'elegant-cat-energy-stir',
-    params: { scope: 'all-own', validIids: allEnergyIids, titleOverride: '能量攪拌：選擇要移動的能量（可不選），之後逐張選附加目標' },
+    // v6.125 卡面：「選擇自己的場上寶可夢身上附加的**任意數量**的能量卡，以**任意方式**改附…」→ 可 0 張
+    params: { scope: 'all-own', validIids: allEnergyIids, allowSkipZero: true, titleOverride: '能量攪拌：選擇要移動的能量（可不選），之後逐張選附加目標' },
   });
 });
 regR('elegant-cat-energy-stir', (state, aIdx, iids, _params, pool) => {
@@ -747,7 +748,8 @@ regPost('塗標客|惡作劇作畫', (state, aIdx, pool) => {
     filter: 'Energy',
     minCount: 0, maxCount: Math.min(3, energyIids.length),
     effectKey: 'prank-paint-pick-energy',
-    params: { validIids: energyIids },
+    // v6.125 卡面：「從對手的棄牌區選擇最多3張能量卡，**以任意方式**附於對手的寶可夢身上。」→ 可選 0
+    params: { validIids: energyIids, allowSkipZero: true },
   });
 });
 // helper:逐張把 buffered 能量(仍在對手棄牌區)附到攻擊方選的對手寶可夢

@@ -7,6 +7,12 @@
 
 /**
  * 已知資訊卻「卡面合法允許選 0」的 picker effectKey 白名單。
+ *
+ * ⚠ v6.125 起，**新卡請改用 `params.allowSkipZero`**（逐卡宣告，見 SkipDecisionInput 註解）。
+ *   這份白名單保留給既有的「單卡獨佔 effectKey」，不再擴充 —— 因為 effectKey 粒度
+ *   解不了「多張卡共用同一 resolver、但卡面一個可選 0 一個必選」的衝突。
+ *   （事故：胖嘟嘟｜深海抽出「若希望」被迫放回 1 張，就是漏加白名單；
+ *     長毛狗｜氣味偵測「任意選擇」曾在白名單，v5.881 換 effectKey 時整個掉了。）
  * 依據：static/cards/*.json 卡面含「任意數量 / 若希望 / 任意方式」或被動 on-KO「或跳過」。
  * 維護：新增同類卡時把其 withPending 的 effectKey 加進來即可（單一維護點，免改各 withPending）。
  */
@@ -29,8 +35,6 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'energy-duster-pick',            // 能量撢子：查看對手手牌（未知資訊）
   'heavy-baton-pick-energies',     // 沉重接力棒（on-KO）：任意方式改附
   'alloy-forge-pick',              // 鋁鋼橋龍ex｜合金建造：任意方式附加
-  'wave17-pickup-energy-to-hand',  // 長毛狗｜氣味偵測：擲幣後任意選擇（含 0）
-  'cleansing-support-pick-bench',  // 拉帝歐斯｜潔淨支援：任意數量能量改附
   'pulse-thrust-energies-picked',  // 超級路卡利歐ex｜波動突刺：自選填能（可不選）
   'ursaluna-bm-attach',            // 月月熊 赫月｜經驗法則：自選附能（可不附）
   'm5-mirieton-photon-code',       // 密勒頓｜光子纜線（on-KO）：或跳過
@@ -62,6 +66,21 @@ export interface SkipDecisionInput {
   sourcePlayerIdx: 0 | 1;
   effectKey: string;
   minCount?: number;  // v5.607：卡面要求的最低選取數（權威信號）
+  /**
+   * v6.125：**逐卡**宣告「卡面允許選 0 張」（由 withPending 的 `params.allowSkipZero` 帶進來）。
+   *
+   * ⚠ 為什麼需要它、而不是繼續加 `OPTIONAL_SELECTION_EFFECT_KEYS`：
+   *   白名單的粒度是 **effectKey**，但站內大量 resolver 是**多張卡共用**的中央管線。
+   *   例：`v158-energy-chain-start` 同時被
+   *     ・艾姆利多｜滿載心田(H)「最多2張，**以任意方式**附於…」→ 卡面可選 0
+   *     ・吉利蛋｜幸運貼附(H)「選擇**1張**基本能量卡，附於…」→ 卡面**必選**
+   *   共用，整個 key 放進白名單就等於讓吉利蛋可以跳過必付的代價（公平性漏洞）；
+   *   不放又讓艾姆利多違反卡面。**effectKey 粒度天生解不了這種衝突。**
+   *   `allowSkipZero` 由 withPending 的呼叫端設定 —— 那裡才知道現在是哪一張卡。
+   *
+   * ⚠ 仍受 `minCount >= 1` 短路保護：卡面要求至少選 N 的效果，設了這個旗標也不會放行。
+   */
+  allowSkipZero?: boolean;
 }
 
 /** 未知資訊 picker：自己的牌庫（牌庫搜尋 / 牌庫頂排序）或對手的手牌（hand-* 且來源為對手）。 */
@@ -84,6 +103,8 @@ export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
   //   通則：任何 picker 只要 minCount>=1 就不該能跳過(送 0)，這是純語意防呆，零誤傷
   //   (「最多 N/任意數量/可不選」型卡面 minCount 本就=0 → 不受影響)。
   if ((p.minCount ?? 0) >= 1) return false;
+  // v6.125：逐卡宣告的「卡面允許選 0」優先於下面所有分類（解共用 resolver 的衝突，見型別註解）。
+  if (p.allowSkipZero === true) return true;
   // v5.543：「看牌庫上方 N 張，強制選擇加手牌」型（已揭示、必選）→ 無【不選】。
   //   ★ 注意「搜尋牌庫找特定卡」型（賽吉/喵頭目 等）依官方「找不到」規則仍可不選，故不列入此名單。
   if (MANDATORY_TOP_PICK_EFFECT_KEYS.has(p.effectKey)) return false;

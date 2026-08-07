@@ -12,7 +12,7 @@ await build({ entryPoints: [join(ROOT,'src/lib/game/selection-ui.ts')], outfile:
 const M = await import(pathToFileURL(O).href);
 const { selectionAllowsSkip, selectionConfirmFloor, isUnknownInfoPicker } = M;
 let pass=0, fail=[]; const ck=(n,ok,d='')=>{ ok?pass++:fail.push(n+(d?' — '+d:'')); };
-const mk=(type,effectKey='x',src=0,act=0,minCount=0)=>({type,effectKey,sourcePlayerIdx:src,actorIdx:act,minCount});
+const mk=(type,effectKey='x',src=0,act=0,minCount=0,allowSkipZero=undefined)=>({type,effectKey,sourcePlayerIdx:src,actorIdx:act,minCount,allowSkipZero});
 ck('一般牌庫搜尋→可不選', selectionAllowsSkip(mk('deck-search')));
 // v5.543：「看牌庫上方N張強制選加手牌」型 → 不可不選（白名單）
 ck('偵查指令(看上方2選1)→強制', !selectionAllowsSkip(mk('deck-search','scouting-order',0,0)));
@@ -36,7 +36,18 @@ ck('琵魯(若希望,自手牌)→可不選', selectionAllowsSkip(mk('hand-disca
 ck('呆呆獸丟到飽→可不選', selectionAllowsSkip(mk('hand-discard','m5-slowpoke-discard-all',0,0)));
 ck('迅速游標→可不選', selectionAllowsSkip(mk('active-energy-discard','swiftcursor-energy-pick',0,0)));
 ck('狡兔三窟換場→可不選', selectionAllowsSkip(mk('bench-choose','self-swap-active-bench',0,0)));
-ck('拉帝歐斯潔淨支援→可不選', selectionAllowsSkip(mk('bench-choose','cleansing-support-pick-bench',0,0)));
+// v6.125：拉帝歐斯｜潔淨支援 在 v5.907 已收斂到 active-energy-discard + swiftcursor-energy-pick
+//   （第 37 行那條就是它），舊的 cleansing-support-pick-bench 是零 producer 的死 key，已從白名單移除。
+// ── v6.125 新契約：params.allowSkipZero 逐卡宣告（解共用 resolver 的衝突）──
+ck('已知資訊+allowSkipZero=true→可不選（胖嘟嘟｜深海抽出「若希望」）',
+   selectionAllowsSkip(mk('hand-discard','m6-wailord-deep-draw-bottom',0,0,0,true)));
+ck('同一 key 但沒宣告 allowSkipZero→維持必選（站規：已知資訊預設不給不選）',
+   !selectionAllowsSkip(mk('hand-discard','m6-wailord-deep-draw-bottom',0,0,0,false)));
+ck('⭐ allowSkipZero 不得凌駕 minCount>=1（卡面要求至少選 N 就不能跳過）',
+   !selectionAllowsSkip(mk('hand-discard','whatever',0,0,1,true)));
+ck('共用 key 分流：吉利蛋｜幸運貼附(必選) vs 艾姆利多(可選0) 靠 params 分開',
+   !selectionAllowsSkip(mk('hand-discard','v158-energy-chain-start',0,0,1,false))
+   && selectionAllowsSkip(mk('hand-discard','v158-energy-chain-start',0,0,0,true)));
 // v5.607：minCount>=1 一律不給【不選】(minCount 權威)；衝衝鼓任意檢索強制選1
 ck('衝衝鼓(任意檢索 minCount=1)→必選不可跳過', !selectionAllowsSkip(mk('deck-search','search-generic-to-hand-private',0,0,1)));
 ck('詭計(任意檢索 最多2 minCount=0)→仍可不選', selectionAllowsSkip(mk('deck-search','search-to-hand-reshuffle',0,0,0)));

@@ -323,10 +323,13 @@ regPost('咚咚鼠|擺尾發電', (state, aIdx, pool) => {
     minCount: 0,
     maxCount: realMax,
     effectKey: 'j-2354-raichu-charge-pick',
+    // v6.125 卡面：「…最多與對手的所有寶可夢身上附加的能量的數量相同數量的『基本【雷】能量』卡，
+    //   **以任意方式**附於自己的【雷】寶可夢身上。」→ 可 0 張
     params: {
       label: '擺尾發電',
       validIids: cand.map(c => c.iid),
       lightningPokeIids: lightningPokes.map(c => c.iid),
+      allowSkipZero: true,
     },
   });
 });

@@ -69,7 +69,10 @@ regA('胖嘟嘟', 0, (st, idx, pool, cardInst) => {
     actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 0, maxCount: 1,        // 「若希望」→ 可選 0 張
     effectKey: 'm6-wailord-deep-draw-bottom',
-    params: { label: '深海抽出' },
+    // v6.125 玩家回報：卡面「然後，**若希望**，選擇1張自己的手牌，放回牌庫下方」——
+    //   「若希望」＝可以 0 張。minCount:0 本來就對，缺的是 UI 的【不選】鈕：
+    //   自己手牌屬「已知資訊」，站規預設不給【不選】，要逐卡宣告才會出現。
+    params: { label: '深海抽出', allowSkipZero: true },
   });
 });
 regR('m6-wailord-deep-draw-bottom', (st, idx, iids) => {

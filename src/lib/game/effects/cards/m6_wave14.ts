@@ -41,11 +41,13 @@ regAByName('鴨嘴炎獸', '拍檔提升', (st, idx, pool) => {
       //   手牌只有 2 張火時上限應是 1（原本可勾 2 張，resolver 靜默只收 1 張＝體感沒做完）。
       minCount: 0, maxCount: (fireIids.length > 0 ? 1 : 0) + (ltngIids.length > 0 ? 1 : 0),
       effectKey: 'm6-partner-boost-pick',
+    // v6.125 卡面：「…最多各1張，**以任意方式**附於自己的『電擊魔獸』或者『鴨嘴炎獸』身上。」→ 可 0 張
       params: {
         validIids: valid,
         fireIids, ltngIids,
         targetIids: targets.map(t => t.iid),
         titleOverride: '拍檔提升：選基本【火】／基本【雷】能量（各最多 1 張，接著選要附給哪隻）',
+        allowSkipZero: true,
       },
     });
 });

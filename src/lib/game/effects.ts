@@ -2945,7 +2945,10 @@ regPost('胡地|奇異駭入', (state, aIdx, pool) => {
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
     minCount: 0, maxCount: totalCounters,
     effectKey: 'abra-hack-remove',
-    params: { abraRemove: true, totalCounters, counterDamage: 10, placedCounters: 0, includeActive: true },
+    // v6.125 卡面：「將對手的戰鬥寶可夢【混亂】。選擇**任意數量**的對手的場上寶可夢身上
+    //   放置的傷害指示物，以**任意方式**改放於對手的場上寶可夢身上。」→ 可以 1 個都不移動
+    //   （【混亂】在開 picker 之前就結算完了，跳過移動不會連帶跳過混亂）。
+    params: { abraRemove: true, totalCounters, counterDamage: 10, placedCounters: 0, includeActive: true, allowSkipZero: true },
   });
 });
 
@@ -10301,6 +10304,14 @@ function discardEnergyAttachPost(
   max: number,
   typeFilter: EnergyType | null,
   label: string,
+  /**
+   * v6.125：卡面是否允許「1 張都不選」。**必填**，強迫呼叫端回去讀卡面。
+   *   true  = 卡面有「任意數量／以任意方式／若希望／任意選擇」（莫魯貝可｜撿拾附上）
+   *   false = 卡面是「最多N張…附於自己的**1隻**寶可夢身上」等無上述字樣者
+   * ⚠ 這個 factory 被多張卡共用，effectKey 都是 'v158-energy-chain-start' ——
+   *   所以**不能**用 effectKey 白名單表達（會一次放行全部，含該必選的卡）。
+   */
+  optional: boolean,
 ): AttackPostFn {
   // v3.12 升級：改用 v158-energy-chain-start resolver（source: 'discard'），
   // 支援多目標分配（單一目標自動全附；同類能量批次 +/- UI；混合屬性逐張 picker）。
@@ -10321,13 +10332,15 @@ function discardEnergyAttachPost(
     return withPending(s, {
       type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr,
-      // v3.12: minCount=0 允許「不選」
-      minCount: 0, maxCount: realMax,
+      // v6.125：minCount 由卡面決定（非一律 0）——不可選 0 的卡就該由 minCount 擋，
+      //   而不是靠「effectKey 不在白名單」這種間接的巧合。
+      minCount: optional ? 0 : 1, maxCount: realMax,
       effectKey: 'v158-energy-chain-start',
       params: {
         label,
         source: 'discard',
         scope: 'any-own',
+        allowSkipZero: optional,
       },
     });
   };
@@ -10481,16 +10494,16 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
 
 // ── 棄牌能量附加（6 張） ────────────────────────────────────────────────────
 regPre('古劍豹|雪之到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('古劍豹|雪之到來', discardEnergyAttachPost(2, 'Water', '雪之到來'));
+regPost('古劍豹|雪之到來', discardEnergyAttachPost(2, 'Water', '雪之到來', false));
 
 regPre('古玉魚|閃焰到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('古玉魚|閃焰到來', discardEnergyAttachPost(2, 'Fire', '閃焰到來'));
+regPost('古玉魚|閃焰到來', discardEnergyAttachPost(2, 'Fire', '閃焰到來', false));
 
 regPre('古簡蝸|綠葉到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('古簡蝸|綠葉到來', discardEnergyAttachPost(2, 'Grass', '綠葉到來'));
+regPost('古簡蝸|綠葉到來', discardEnergyAttachPost(2, 'Grass', '綠葉到來', false));
 
 regPre('古鼎鹿|沙之到來', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('古鼎鹿|沙之到來', discardEnergyAttachPost(2, 'Fighting', '沙之到來'));
+regPost('古鼎鹿|沙之到來', discardEnergyAttachPost(2, 'Fighting', '沙之到來', false));
 
 regPre('土地雲|真氣之拳', (state, _aIdx, _pool) => ({ state, damage: 30 }));
 regPost('土地雲|真氣之拳', (state, aIdx, pool) => {
@@ -11694,6 +11707,8 @@ function handAttachEnergyPost(
   max: number,
   typeFilter: EnergyType | null,
   label: string,
+  /** v6.125：卡面是否允許「1 張都不選」。必填，理由同 discardEnergyAttachPost。 */
+  optional: boolean,
 ): AttackPostFn {
   // v3.12 升級：原本只支援單一目標寶可夢接收（多目標也是全附給同一隻）。
   // 現透過 v158-energy-chain-start resolver 將「source: hand」能量分配到自方任意寶可夢，
@@ -11713,14 +11728,16 @@ function handAttachEnergyPost(
     return withPending(s, {
       type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: aIdx,
       filter: filterStr,
-      // v3.12: minCount=0 改為符合卡面允許「不選」的彈性（艾姆利多/熱帶狂燒/幸運貼附）
-      minCount: 0, maxCount: realMax,
+      // v6.125：minCount 由卡面決定。原本一律 0 是錯的 —— 吉利蛋｜幸運貼附卡面是
+      //   「從自己的手牌選擇**1張**基本能量卡」＝必選，minCount 本來就該是 1。
+      minCount: optional ? 0 : 1, maxCount: realMax,
       effectKey: 'v158-energy-chain-start',
       params: {
         label,
         source: 'hand',
         scope: 'any-own',
         validIids: cand.map(c => c.iid),
+        allowSkipZero: optional,
       },
     });
   };
@@ -11914,7 +11931,8 @@ regPost('超音蝠|引路', deckSearchToHandPost(1, 'Supporter', '引路'));
 
 // ── (C) 棄牌區能量附加 ──────────────────────────────────────────────────
 regPre('莫魯貝可|撿拾附上', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('莫魯貝可|撿拾附上', discardEnergyAttachPost(2, null, '撿拾附上'));
+// 卡面：「從自己的棄牌區選擇最多2張基本能量卡，**以任意方式**附於自己的寶可夢身上。」→ 可選 0
+regPost('莫魯貝可|撿拾附上', discardEnergyAttachPost(2, null, '撿拾附上', true));
 
 // ── (D) 單目標 + 多目標 snipe ──────────────────────────────────────────
 regPre('月亮伊布|出奇一擊', (state, _aIdx, _pool) => ({ state, damage: 0 }));
@@ -11946,16 +11964,22 @@ regPost('夜巡靈|前往渡魂', discardSameNameBenchPost(3, '夜巡靈', '前�
 
 // ── (G) 手牌附能（基本能量從手牌） ────────────────────────────────────
 regPre('艾姆利多|滿載心田', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('艾姆利多|滿載心田', handAttachEnergyPost(2, 'Psychic', '滿載心田'));
+// 卡面：「…選擇最多2張『基本【超】能量』卡，**以任意方式**附於自己的寶可夢身上。」→ 可選 0
+regPost('艾姆利多|滿載心田', handAttachEnergyPost(2, 'Psychic', '滿載心田', true));
 
 regPre('固拉多|充溢之力', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('固拉多|充溢之力', handAttachEnergyPost(1, 'Fighting', '充溢之力'));
+// 固拉多是 G 標（不在維護範圍）；卡面「選擇1張」＝必選，與吉利蛋同型，維持必選。
+regPost('固拉多|充溢之力', handAttachEnergyPost(1, 'Fighting', '充溢之力', false));
 
 regPre('吉利蛋|幸運貼附', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('吉利蛋|幸運貼附', handAttachEnergyPost(1, null, '幸運貼附'));
+// ⚠ 卡面：「從自己的手牌選擇**1張**基本能量卡，附於自己的寶可夢身上。」——沒有「最多」
+//   也沒有「任意數量/以任意方式」→ **必選**。原本 minCount 是 0，只靠「effectKey 不在
+//   OPTIONAL 白名單」擋著才沒破功，是脆弱的巧合；v6.125 改由 minCount 正面擋。
+regPost('吉利蛋|幸運貼附', handAttachEnergyPost(1, null, '幸運貼附', false));
 
 regPre('阿羅拉 椰蛋樹ex|熱帶狂燒', (state, _aIdx, _pool) => ({ state, damage: 150 }));
-regPost('阿羅拉 椰蛋樹ex|熱帶狂燒', handAttachEnergyPost(99, null, '熱帶狂燒'));
+// 卡面：「…選擇**任意數量**的基本能量卡，以任意方式附於自己的寶可夢身上。」→ 可選 0
+regPost('阿羅拉 椰蛋樹ex|熱帶狂燒', handAttachEnergyPost(99, null, '熱帶狂燒', true));
 
 // ── (H) 對手所有 ex/V snipe ─────────────────────────────────────────
 regPre('水伊布ex|重磅驟雨', (state, _aIdx, _pool) => ({ state, damage: 0 }));
