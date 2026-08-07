@@ -4594,26 +4594,46 @@ reg('危險光線', (st, idx, pool) => {
   return s;
 });
 
-// 推理組合 — 卡面：看牌庫頂 3 張，二選一：(A) 以任意順序排列放回頂；(B) 全部翻反洗回底
-// v2.164：完整實裝（modal-choice 二選一 → A 路徑開 reorder-deck-top）
+// 推理組合 — 卡面（台灣官方）：
+//   「查看自己的牌庫上方3張卡，以任意順序排列，放回牌庫上方。
+//     或者將那些卡全部翻回反面並重洗，放回牌庫下方。」
+//
+// ⭐⭐ v6.123 修正決策時序（玩家回報）：卡面是「**查看**…以任意順序排列…**或者**…」——
+//   先看完 3 張，看完才二選一。v2.164 的實裝卻是**先開 modal-choice 問**，
+//   這時玩家還沒看到那 3 張是什麼 —— 等於逼玩家盲猜，卡面資訊完全沒用上。
+//   改法：直接開 reorder-deck-top（3 張攤開給玩家看），並在排序畫面上多給一顆
+//   `altAction` 按鈕＝「重洗放回牌庫下方」。決策點因此落在資訊揭露之後。
+//   ⭐ 通則：**卡面的「查看」在前、「或者」在後 ⇒ 選擇 UI 必須在揭露之後**。
 regG('推理組合', (st, idx) => st.players[idx].deck.length > 0);
 reg('推理組合', (st, idx, _pool) => {
-  const topN = Math.min(3, st.players[idx].deck.length);
-  st = addLog(st, `推理組合：選擇處理牌庫頂 ${topN} 張的方式`, idx);
+  const player = st.players[idx];
+  const topN = Math.min(3, player.deck.length);
+  const topCards = player.deck.slice(0, topN);
+  st = addLog(st, `推理組合：查看牌庫頂 ${topN} 張，決定排序或重洗放回下方`, idx);
   return withPending(st, {
-    type: 'modal-choice',
+    type: 'reorder-deck-top',
     actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'inference-combination-choice',
+    minCount: topN, maxCount: topN,  // 排序路徑必須全部保留（卡面沒有丟棄選項）
+    effectKey: 'reorder-deck-top-apply',
     params: {
-      label: '推理組合',
-      options: [
-        { id: 'reorder', text: `①以任意順序排列頂 ${topN} 張，放回牌庫上方` },
-        { id: 'shuffle-bottom', text: `②將頂 ${topN} 張翻反並重洗，放回牌庫下方` },
-      ],
+      candidateIids: topCards.map(c => c.iid),
+      allowDiscard: false,
+      titleOverride: '推理組合：查看牌庫頂 3 張',
+      // ⭐ v6.123 次要動作：卡面「或者」那一半。id 放在 params 裡（不是全域魔法字串）
+      //   ⇒ 沒帶 altAction 的 pending（蕾荷／天眼／攪亂雷達）在**建構上**就不可能觸發這條分支。
+      altAction: {
+        id: 'inference-shuffle-bottom',
+        label: '🔀 重洗放回牌庫下方',
+        logText: `推理組合：將查看的 ${topN} 張翻回反面並重洗，放回牌庫下方`,
+      },
     },
   });
 });
+// ⚠ v6.123 相容用（**已無 producer**）：v6.123 之前的 client 若在這個 pending 掛著時
+//   重整並換到新版，房間 state 裡會殘留 `inference-combination-choice`。
+//   若這裡沒有 resolver，engine 會直接清掉 pending → 效果靜默蒸發。留著即可完全消除。
+//   ⚠ anti-pattern-lint 的 Check N 只抓「effectKey 沒有 resolver」，不抓孤兒 resolver，
+//   所以保留不會紅燈。等舊 client 都汰換後可以刪。
 regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
   const choice = iids[0];
   const player = state.players[aIdx];
@@ -4624,7 +4644,10 @@ regR('inference-combination-choice', (state, aIdx, iids, _params, _pool) => {
     state = addLog(state, `推理組合：將牌庫頂 ${topN} 張翻反並重洗放回下方`, aIdx);
     return updatePlayer(state, aIdx, p => {
       const rest = p.deck.slice(topN);
-      return { ...p, deck: [...shuffle(rest), ...shuffle(topCards)] };
+      // ⚠ v6.123 一併修既有 bug：卡面是「將**那些卡**（3 張）翻回反面並重洗，放回牌庫下方」，
+      //   **牌庫其餘部分不該被重洗**。原本寫 shuffle(rest) 會把玩家已知的牌庫順序整個摧毀
+      //   （例：上一次推理組合／蕾荷排好的頂部）。
+      return { ...p, deck: [...rest, ...shuffle(topCards)] };
     });
   }
   // (A) 排序放回頂 — 開 reorder-deck-top picker
@@ -4975,6 +4998,22 @@ reg('蕾荷', (st, idx, _pool) => {
 regR('reorder-deck-top-apply', (state, aIdx, iids, params, pool) => {
   const candidateIids = (params?.candidateIids as string[] | undefined) ?? [];
   const allowDiscard = (params?.allowDiscard as boolean | undefined) ?? false;
+  // ⭐ v6.123 次要動作（推理組合的「或者：翻回反面重洗放回牌庫下方」）。
+  //   ⚠ fail-closed：只有 pending 自己帶了 params.altAction 才可能進來
+  //     ⇒ 蕾荷／天眼／攪亂雷達（不帶 altAction）在建構上不可能觸發，行為零變更。
+  //   ⚠ 必須擺在下方 candidateSet 過濾之前 —— altAction.id 不是 iid，會被過濾掉。
+  const _alt = params?.altAction as { id: string; label?: string; logText?: string } | undefined;
+  if (_alt && iids.length > 0 && iids[0] === _alt.id) {
+    const _tIdx = ((params?.targetIdx as 0 | 1 | undefined) ?? aIdx);
+    const _n = candidateIids.length;
+    state = addLog(state, _alt.logText ?? `將查看的 ${_n} 張翻回反面並重洗，放回牌庫下方`, aIdx);
+    return updatePlayer(state, _tIdx, p => {
+      const top = p.deck.slice(0, _n);
+      const rest = p.deck.slice(_n);
+      // ⚠ 只重洗「那些卡」，牌庫其餘部分維持原順序（卡面沒有說要洗整個牌庫）
+      return { ...p, deck: [...rest, ...shuffle(top)] };
+    });
+  }
   // v5.903：targetIdx 支援排「對手」牌庫(天眼/攪亂雷達)；未指定=自己(推理組合等既有自己向不變)。
   //   log viewer 仍是 aIdx(執行者=看牌庫的攻擊方),私訊順序給攻擊方看。
   const targetIdx = ((params?.targetIdx as 0 | 1 | undefined) ?? aIdx);

@@ -17,6 +17,69 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.123 — 【推理組合】決策點搬到「看完 3 張之後」＋ 修重洗範圍過大
+
+站長：「道具卡【推理組合】的做法錯了 —— 應該是要讓玩家**看完 3 張以後**，才決定要排順序或是
+放回牌庫下方。建議在排序畫面上，除了確定按鈕以外，旁邊增加一個【重洗放回牌庫下方】按鈕。」
+
+### 卡面（static/cards MC 17116 / SV8 11274，H 標）
+「查看自己的牌庫上方3張卡，以任意順序排列，放回牌庫上方。
+　**或者**將那些卡全部翻回反面並重洗，放回牌庫下方。」
+⇒ 先「查看」，看完才二選一。站長的判讀正確。
+
+### 舊實作錯在哪
+v2.164 是先開 `modal-choice` 問「①排序 ②洗回底」，**此時 3 張還沒攤開給玩家看**
+（`topCards` 只活在 resolver 的閉包裡）—— 等於逼玩家盲猜，卡面給的資訊完全沒用上。
+
+### 改法
+- `reg('推理組合')` 直接開 `reorder-deck-top`（3 張攤開），
+  params 新增 `altAction: { id, label, logText }` ＝ 卡面「或者」那一半。
+- 共用 resolver `reorder-deck-top-apply` 加一條分支：`params.altAction && iids[0] === altAction.id`。
+  ⚠ **必須擺在 candidateSet 過濾之前** —— altAction.id 不是 iid，會被濾掉。
+- UI：reorder 的 footer 在 `params.altAction` 存在時多渲染一顆次要按鈕。
+- ⭐ **通則：卡面的「查看」在前、「或者」在後 ⇒ 選擇 UI 必須在揭露之後。**
+
+### ⚠⚠ 一併修掉的既有 bug（Fable 5 抓到，我複驗屬實）
+舊的洗回底分支寫 `deck: [...shuffle(rest), ...shuffle(topCards)]` ——
+卡面只說「將**那些卡**（3 張）翻回反面並重洗」，**牌庫其餘部分不該被重洗**。
+`shuffle(rest)` 會把玩家已知的牌庫順序整個摧毀（例：上一次推理組合／蕾荷排好的頂部）。
+新分支＝`[...rest, ...shuffle(top)]`；舊 resolver 那份也一併修。
+
+### Fable 5 審查的四個結論（我逐條複驗）
+1. **哨兵不會被中央 sanitize 閘吃掉** —— `engine.ts` 的 `sanitizeSelectedIids`
+   只對 `t === 'deck-search'` 消毒，其餘 `else return iids;` 原封放行（註解也明寫
+   reorder-deck-top 原封放行）。✅ 屬實。
+2. **既有的「不選（跳過）」路徑不能重用** —— `selection-ui.ts` 的 `selectionAllowsSkip`
+   在 `minCount>=1` 一律回 false，而推理組合是 `minCount=maxCount=3`；
+   而且送 `[]` 的語義是「原順序放回頂」，跟「洗回底」是兩件事。✅ 屬實。
+3. **AI 零回歸** —— `ai.ts` 的 `reorder-deck-top` case 回「全部候選、原順序」，
+   而改版前 AI 走 modal-choice 是「選第一個非 disabled 選項」＝排序。兩者**逐 bit 相同**。
+   已在 ai.ts 補註解說明 AI 刻意不採用 altAction。
+4. **舊 resolver 要保留** —— 舊 client 在該 pending 掛著時重整換版，房間 state 會殘留
+   `inference-combination-choice`；沒有 resolver 的話 engine 會直接清 pending、效果靜默蒸發。
+   保留即可消除。⚠ lint 的 Check N 只抓「effectKey 沒有 resolver」，**不抓孤兒 resolver**，
+   保留不會紅燈。
+
+### ⚠ 我自己踩到的測試坑
+正對照第一版寫「拿蕾荷送哨兵字串 → 牌庫順序不變」，**紅了**。
+因為蕾荷是 `allowDiscard: true`（卡面「選任意數量丟棄」，minCount=0），
+送任何非候選字串＝「一張都不留」→ 全部進棄牌，那是它**正常的**語義。
+正確的正對照＝拿推理組合的 params **刪掉 altAction** 再送同一個哨兵 → 分支不得進入。
+⭐ **通則：寫 fail-closed 正對照時，對照組必須只差「那個旗標」，其餘條件要完全相同。**
+
+### 同型卡掃描
+用「揭露動詞（查看/翻開/抽出/展示）× 分歧連接（或者/或將/，或/也可以/可以改為）」
+掃全部 H/I/J 卡的 rulesText＋attacks＋abilities：**唯一命中就是推理組合**。
+「先看後二選一」目前是孤例，altAction 不急著一般化，但寫成 params 驅動等於免費預留。
+
+### 驗證
+守衛 `test-v6123-inference-look-before-choose.mjs`（11 項，HEAD 9 FAIL）；
+完整 npm test **443** 綠；svelte compile 警告數與 HEAD 相同（98）；tsc 無新錯。
+
+### ⚠ 部署
+動到引擎（effects.ts）⇒ **三支 bat 都要跑**（`update-tournament.bat` 一定要，
+它會重建錦標賽的 server-engine，否則兩站行為會分岔）。
+
 ## v6.122 — 補位（派出新的戰鬥寶可夢）改「選取 → 確定」兩段式
 
 玩家回報：「戰鬥寶可夢昏厥或需要替換時，選擇備戰寶可夢上場，現在只要點選就立即上場，

@@ -6511,6 +6511,24 @@
     }
   }
 
+  /**
+   * ⭐ v6.123 picker 的「次要動作」（目前只有推理組合的「或者：重洗放回牌庫下方」）。
+   * 卡面把兩個選項並列在「查看之後」，所以 UI 也要在同一個畫面上並列兩顆按鈕。
+   * ⚠ 不能重用 confirmSelection()：它有 `if (!selectionValid) return` 的 gate，
+   *   而且 payload 固定是 selectionReorderKeep —— 次要動作要送的是 altAction.id。
+   * ⚠ 要比照 abandonSelection 帶 sid（線上模式的 senderIdx），否則對手側 race 時語義不對。
+   */
+  function confirmSelectionAlt() {
+    const alt = pendingSelection?.params?.altAction as { id?: string } | undefined;
+    if (!alt?.id) return;
+    const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
+    dispatch(GameActions.resolveSelection([alt.id], sid));
+    selectionPicked = new Set();
+    selectionCounts = {};
+    selectionReorderKeep = [];
+    selectionReorderDiscard = new Set();
+  }
+
   // v2.121 全域安全網：當 pending 的候選列表為空（例：搜卡但牌庫/棄牌/手牌無符合條件的卡）
   // 允許玩家「放棄」以空 selection 前進，避免卡死。resolver 收到空 iids 應能 graceful 結束。
   function abandonSelection() {
@@ -9506,6 +9524,14 @@
           {:else if pendingSelection.type === 'reorder-deck-top'}
             <!-- v5.384：reorder-deck-top 用 selectionReorderKeep，同樣不能用 selectionPicked.size -->
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（保留 {selectionReorderKeep.length} 張）</button>
+            <!-- ⭐ v6.123 次要動作：推理組合卡面的「或者：翻回反面重洗，放回牌庫下方」。
+                 只有帶 params.altAction 的 pending 才渲染 ⇒ 蕾荷／天眼／攪亂雷達不受影響。 -->
+            {#if pendingSelection.params?.altAction}
+              <button class="btn-act secondary" onclick={confirmSelectionAlt}
+                title="卡面的另一個選項：不排序，把這幾張翻回反面重洗後放到牌庫最下方">
+                {pendingSelection.params.altAction.label ?? '重洗放回牌庫下方'}
+              </button>
+            {/if}
           {:else}
             <!-- v6.108：確認鈕直接寫出要拿／要處理的是哪幾張，讓誤選在按下去之前就看得見 -->
             <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>{selectedNamesLabel ? '確定 ' + selectedNamesLabel : '確定（' + selectionPicked.size + '張）'}</button>

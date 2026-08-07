@@ -1113,6 +1113,10 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
     case 'reorder-deck-top': {
       const candIids = (sel.params?.candidateIids as string[] | undefined) ?? [];
       // AI 簡化：保留所有候選並維持原順序（即使 allowDiscard 也不丟棄）
+      // ⚠ v6.123：推理組合改成「看完再決定」後會帶 params.altAction（重洗放回牌庫下方）。
+      //   AI **刻意不採用** altAction，維持既有的「保留原順序」簡化 ——
+      //   這與 v6.123 之前 AI 走 modal-choice 一律選第一個選項（＝排序）的行為**逐 bit 相同**，
+      //   所以本次改動對 AI 對局零回歸。日後 audit 看到這裡不必當成缺口。
       return { type: 'RESOLVE_SELECTION', selectedIids: [...candIids] };
     }
 
