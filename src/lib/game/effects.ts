@@ -2182,6 +2182,12 @@ reg('希特隆的機智', (st, idx, pool) => {
 });
 
 // 蓋伊 — 從牌庫抽 3 張（支援者）
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「從自己的牌庫抽出3張卡」 → 牌庫為空＝完全無效果（官方 L821 同型）。
+regG('蓋伊', (st, idx) => st.players[idx].deck.length > 0);
 reg('蓋伊', (st, idx) => {
   return updatePlayer(addLog(st, '蓋伊：從牌庫抽 3 張', idx), idx, p => {
     const taken = p.deck.slice(0, 3);
@@ -2240,6 +2246,12 @@ regR('surfer-switch', (st, idx, iids, _params, pool) => {
 });
 
 // 精靈球 — 擲硬幣，正面則從牌庫選 1 張寶可夢加手牌（物品）
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡…加入手牌」 → 牌庫為空＝完全無效果（官方 L821 同型）。
+regG('精靈球', (st, idx) => st.players[idx].deck.length > 0);
 reg('精靈球', (st, idx, pool) => {
   const r = flipCoinsWithLog(st, 1, '精靈球', idx);
   if (!r.heads) return addLog(r.state, '精靈球：反面 → 什麼都沒發生', idx);
@@ -3175,6 +3187,16 @@ RESOLVERS.set('spike-shell-discard', (st, idx, iids, _params, pool) => {
 // v3.9991：原 v2 簡化用 p.hand.slice(-discardN) 自動取最後 N 張，違反 Iron Rule 7。
 //   卡面：「雙方玩家各將自己的手牌丟棄直到變為 5 張為止。（對手先丟棄。手牌為 5 張以下的玩家不丟棄。）」
 //   修法：chained picker — 先 actorIdx=oppIdx，resolver 完成後若 myNeed>0 再開 actorIdx=userIdx 自己 picker。
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「雙方玩家各將自己的手牌丟棄直到變為5張為止」→ 雙方手牌都 ≤5 就完全沒有卡會被丟。
+//   ⚠ gate 時這張卡**還在自己手上**，所以自己那側要 −1。
+regG('手部修剪器', (st, idx) => {
+  const opp = st.players[(1 - idx) as 0 | 1];
+  return opp.hand.length > 5 || (st.players[idx].hand.length - 1) > 5;
+});
 reg('手部修剪器', (st, idx) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
@@ -3259,6 +3281,12 @@ regR('hand-clipper-self-discard', (st, idx, iids, _params, pool) => {
 });
 
 // 高級香氛 — 從牌庫選最多 3 張 Stage1 寶可夢加手牌
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「從自己的牌庫選擇最多3張【1階進化】寶可夢卡…加入手牌」 → 牌庫為空＝完全無效果（官方 L821 同型）。
+regG('高級香氛', (st, idx) => st.players[idx].deck.length > 0);
 reg('高級香氛', (st, idx) => {
   st = addLog(st, '高級香氛：從牌庫選最多 3 張 1 階進化寶可夢加手牌', idx);
   return withPending(st, {
@@ -3270,6 +3298,12 @@ reg('高級香氛', (st, idx) => {
 
 // 覺醒戰鼓 — 抽與自己場上「古代」寶可夢相同數量的卡
 // v2.67：改用真正的 card.tags 查詢（v2.48 太晶 tag 同 pattern）。
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「從牌庫抽出與自己的場上的『古代』寶可夢相同數量的卡」→ 0 隻古代或牌庫空＝抽 0 張＝無效果。
+regG('覺醒戰鼓', (st, idx, pool) => countAncientOnField(st, idx, pool) > 0 && st.players[idx].deck.length > 0);
 reg('覺醒戰鼓', (st, idx, pool) => {
   const count = countAncientOnField(st, idx, pool);
   if (count === 0) {
@@ -4865,12 +4899,24 @@ reg('超級球', (st, idx, pool) => {
 });
 
 // 黑連（支援者）— 抽 3
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「從自己的牌庫抽出3張卡」 → 牌庫為空＝完全無效果（官方 L821 同型）。
+regG('黑連', (st, idx) => st.players[idx].deck.length > 0);
 reg('黑連', (st, idx) => updatePlayer(addLog(st, '黑連：抽 3 張', idx), idx, p => {
   const taken = p.deck.slice(0, 3);
   return { ...p, deck: p.deck.slice(3), hand: [...p.hand, ...taken] };
 }));
 
 // 野餐女孩 — 擲硬幣 正面抽 4 反面抽 2
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「擲1次硬幣。若為正面則抽4張，反面則抽2張」（無論正反都要有牌庫） → 牌庫為空＝完全無效果（官方 L821 同型）。
+regG('野餐女孩', (st, idx) => st.players[idx].deck.length > 0);
 reg('野餐女孩', (st, idx) => {
   const r = flipCoinsWithLog(st, 1, '野餐女孩', idx);
   const n = r.heads ? 4 : 2;
@@ -14334,6 +14380,19 @@ reg('火箭隊的接收器', (st, idx) => {
 });
 
 // ---- 火箭隊的雅典娜（Supporter）- 抽到 5（若全場都是火箭隊則抽到 8）----------
+// ⭐ v6.127 官方判準（PTCG_RULES.md）：**效果完全無法執行時，訓練家卡／特性不能使用**。
+//   L805 電氣發生器（備戰無雷寶）「不可以」／L819 野餐籃（雙方無傷害指示物）「不可以」／
+//   L821 電氣發生器（牌庫0）「不可以」／L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以」。
+//   ⚠ 招式不同：L1578 鐵斑葉｜補全之網 棄牌區只有1張仍「可以」使用（效果不發動即可）。
+// 卡面「從牌庫抽卡直到自己的手牌滿5張（全『火箭隊的』寶可夢則8張）為止」
+//   → 手牌已達標或牌庫空＝抽 0 張。⚠ gate 時這張卡還在手上，要 −1。
+regG('火箭隊的雅典娜', (st, idx, pool) => {
+  const p = st.players[idx];
+  if (p.deck.length === 0) return false;
+  const field = [...(p.active ? [p.active] : []), ...p.bench];
+  const allRocket = field.length > 0 && field.every(c => (pool.get(c.cardId)?.name ?? '').includes('火箭隊的'));
+  return (p.hand.length - 1) < (allRocket ? 8 : 5);
+});
 reg('火箭隊的雅典娜', (st, idx, pool) => {
   const p = st.players[idx];
   const field = [...(p.active ? [p.active] : []), ...p.bench];

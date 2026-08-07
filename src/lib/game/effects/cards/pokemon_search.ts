@@ -247,6 +247,10 @@ reg('甜蜜球', (st, idx, pool) => {
 //   限定 picker 候選只在牌庫下方 7 張寶可夢內。
 //   加 addPrivateLog 揭示 bottom 7 內容（自己看具體卡名 / 對手只看「查看 N 張」）。
 //   選到的卡用 addLog 公開卡名（卡面寫「給對手看過」）— search-pokemon-to-hand resolver 已處理。
+// ⭐ v6.127 官方判準：效果完全無法執行時，訓練家卡不能使用
+//   （PTCG_RULES.md L805 電氣發生器／L819 野餐籃／L821 牌庫0／L1957 過度放電）。
+// 卡面「查看自己的牌庫下方7張卡，從其中選擇1張寶可夢卡…」→ 牌庫為空＝完全無效果。
+regG('黑暗球', (st, idx) => st.players[idx].deck.length > 0);
 reg('黑暗球', (st, idx, pool) => {
   const deckLen = st.players[idx].deck.length;
   if (deckLen === 0) {
@@ -303,6 +307,10 @@ regR('search-pokemon-to-hand', (st, idx, iids, _params, pool) => {
 //   - 點 Basic → 可再點 Basic（最多 2）/ Evolution 變灰
 //   - 點 Evolution → 其他全變灰（最多 1 隻）
 // effectKey 'brocks-dig-unified' 是 UI 端 brocksDigPickState 的判別 key
+// ⭐ v6.127 官方判準：效果完全無法執行時，訓練家卡不能使用
+//   （PTCG_RULES.md L805 電氣發生器／L819 野餐籃／L821 牌庫0／L1957 過度放電）。
+// 卡面「從自己的牌庫選擇最多2張【基礎】寶可夢卡，或者1張進化寶可夢卡…」→ 牌庫空＝完全無效果。
+regG('小剛的發掘', (st, idx) => st.players[idx].deck.length > 0);
 reg('小剛的發掘', (st, idx) => {
   st = addLog(st, '小剛的發掘：從牌庫選最多 2 隻【基礎】寶可夢卡，或 1 隻進化寶可夢卡加手牌', idx);
   return withPending(st, {

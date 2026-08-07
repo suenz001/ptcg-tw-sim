@@ -1332,6 +1332,24 @@ regR('m5-trainer-mokujou', (state, aIdx, iids, _params, pool) => {
 //   卡面：「將雙方的戰鬥寶可夢（惡屬性寶可夢除外），各別【混亂】。物品在自己的回合可使用任意數量。」
 //   v4.872 修正：之前 v4.82 把「惡屬性寶可夢」誤譯為「化石寶可夢」，filter 寫錯。
 //                 改用 card.pokemonType === 'Darkness' 才正確。
+// ⭐ v6.127 官方判準：效果完全無法執行時，訓練家卡不能使用
+//   （PTCG_RULES.md L805 電氣發生器／L819 野餐籃／L821 牌庫0／L1957 過度放電）。
+// 卡面「將雙方的戰鬥寶可夢（【惡】寶可夢除外）【混亂】」
+//   → 雙方戰鬥位都是【惡】、或都已經【混亂】＝完全沒有狀態會改變（官方 L2321 危險光線同型：
+//     對手已經灼傷+混亂時「不可以使用」）。
+//   ⚠ **站長裁定（2026-08-07）：混亂『免疫』不算進 gate** —— 免疫是防禦方的能力，
+//     不該讓攻擊方連卡都打不出來；官方 L2321 只涵蓋「狀態已經存在」。
+regG('暗黑鈴', (st, _idx, pool) => {
+  for (const side of [0, 1] as const) {
+    const act = st.players[side].active;
+    if (!act) continue;
+    if (pool.get(act.cardId)?.pokemonType === 'Darkness') continue;   // 卡面排除【惡】
+    if (act.status === 'confused' || act.secondaryStatus === 'confused'
+      || act.tertiaryStatus === 'confused') continue;                 // 已經混亂＝不會有變化
+    return true;
+  }
+  return false;
+});
 reg('暗黑鈴', (st, idx, pool) => {
   let s = st;
   for (const side of [0, 1] as const) {

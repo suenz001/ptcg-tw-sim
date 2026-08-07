@@ -9775,6 +9775,22 @@ export function getUsableAbilities(
         const hasLightningPoke = field.some(c => pool.get(c.cardId)?.pokemonType === 'Lightning');
         if (!hasLightningPoke) return;
       }
+      // ⭐ v6.127 幸福蛋ex｜幸福切換：場上要有「附了基本能量的寶可夢」+「另一隻可接收的寶可夢」。
+      //   卡面：「在自己的回合時可使用1次。選擇1個自己的場上寶可夢身上附加的基本能量，
+      //          改附於自己的**其他**寶可夢身上。」
+      //   ⚠ 這條原本**完全沒有 gate** —— 而 USE_ABILITY 是「先標記本回合已用特性、再執行特性函式」，
+      //     所以條件不符時按下去 = 只 log 一行、**特性權已經被吃掉**（玩家白白損失）。
+      //   官方同型鐵證：L1957 三合一磁怪｜過度放電（棄牌區無基本能量）「不可以使用」，
+      //   而過度放電站內**有** gate（見上方）—— 這是一致性缺口，不是新規則。
+      if (ab.name === '幸福切換') {
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        if (field.length < 2) return;   // 需要「其他寶可夢」當接收方
+        const hasBasicE = field.some(c => c.energyAttached.some(e => {
+          const ec = pool.get(e.cardId);
+          return ec?.supertype === 'Energy' && ec.subtype === 'Basic';
+        }));
+        if (!hasBasicE) return;
+      }
       // v2.229 蜜集大蛇ex｜熟成充能：手牌有基本【草】能量 + 場上有寶可夢
       if (ab.name === '熟成充能') {
         const hasGrassE = player.hand.some(c => {

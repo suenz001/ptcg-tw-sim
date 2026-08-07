@@ -40,6 +40,16 @@ function isStage2PokemonCardLocal(
 
 // 管理員 — 抽 2 張；若場上有「居民會館」則不丟棄這張，放回牌庫並重洗
 // v2.228 補：之前漏掉「若場上有居民會館，則不丟棄這張管理員，放回牌庫並重洗」
+// ⭐ v6.127 官方判準：效果完全無法執行時，訓練家卡不能使用
+//   （PTCG_RULES.md L805 電氣發生器／L819 野餐籃／L821 牌庫0／L1957 過度放電）。
+// 卡面「從自己的牌庫抽出2張卡。然後，若場上有『居民會館』，則不丟棄這張『管理員』，
+//   而是放回牌庫並重洗。」→ 牌庫空**且**場上沒有居民會館時才完全無效果；
+//   ⚠ 有居民會館時即使牌庫空，「這張卡放回牌庫」仍會改變盤面 → 仍可使用
+//     （官方 L1712 夜間學院：牌庫0仍可用，因為另一部分效果能執行）。
+regG('管理員', (st, idx, pool) => {
+  if (st.players[idx].deck.length > 0) return true;
+  return (st.activeStadium ? pool.get(st.activeStadium.cardId)?.name : null) === '居民會館';
+});
 reg('管理員', (st, idx, pool) => {
   st = addLog(st, '管理員：抽 2 張', idx);
   st = drawCards(st, idx, 2);
@@ -69,6 +79,10 @@ reg('管理員', (st, idx, pool) => {
 });
 
 // 帕底亞的夥伴 — 抽 3 張
+// ⭐ v6.127 官方判準：效果完全無法執行時，訓練家卡不能使用
+//   （PTCG_RULES.md L805 電氣發生器／L819 野餐籃／L821 牌庫0／L1957 過度放電）。
+// 卡面「從自己的牌庫抽出3張卡」→ 牌庫為空＝完全無效果（官方 L821 同型）。
+regG('帕底亞的夥伴', (st, idx) => st.players[idx].deck.length > 0);
 reg('帕底亞的夥伴', (st, idx) => {
   st = addLog(st, '帕底亞的夥伴：抽 3 張', idx);
   return drawCards(st, idx, 3);
