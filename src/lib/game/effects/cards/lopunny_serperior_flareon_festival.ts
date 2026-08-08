@@ -100,15 +100,9 @@ regR('serperior-mature-charge', (st, idx, iids, params, pool) => {
 //   從自己的牌庫任意選擇 1 張卡加入手牌。並且重洗牌庫。」
 //
 // gate：active.cardId.abilities 含 name='祭典樂舞'
-regG('啪咚猴', (st, idx, pool) => {
-  const active = st.players[idx].active;
-  if (!active) return false;
-  const card = pool.get(active.cardId);
-  if (!card?.abilities?.some(a => a.name === '祭典樂舞')) return false;
-  // v5.456 暗夜羽擊：戰鬥位的「祭典樂舞」被對手 passive 消除 → 衝衝鼓條件失敗
-  if (isAbilityNullifiedByPassive(st, idx, active, card, '祭典樂舞', 'active', pool)) return false;
-  return true;
-});
+// v6.131 移除死碼：regG 註冊進 TRAINER_GUARDS，只有 canPlayTrainer（出訓練家卡）會查；
+//   啪咚猴是**寶可夢**，特性 gate 走 engine 的 getUsableAbilities（那裡的 '衝衝鼓' 條件更完整：
+//   戰鬥位有『祭典樂舞』＋未被 passive 消除＋牌庫非空）。lint Check Y 防再犯。
 regA('啪咚猴', 0, (st, idx, pool) => {
   const active = st.players[idx].active;
   if (!active) return st;

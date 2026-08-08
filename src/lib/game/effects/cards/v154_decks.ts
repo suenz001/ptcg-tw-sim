@@ -34,10 +34,8 @@ import { startEnergyChain } from './v158_energy_chain';
 //   Step 1：bench-choose（含 active）— 選來源寶可夢（必須有基本草能量）
 //   Step 2：bench-choose — 選目標寶可夢（不能是來源同一隻）
 //   Resolver：把來源的 1 張基本草能量 auto-pick 移到目標
-regG('超級妙蛙花ex', (st, idx, pool) => {
-  const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
-  return all.some(c => c.energyAttached.some(e => isBasicEnergyOfType(pool.get(e.cardId), 'Grass')));
-});
+// v6.131 移除死碼：regG 只有 canPlayTrainer（出訓練家卡）會查；超級妙蛙花ex 是**寶可夢**，
+//   特性 gate 走 engine 的 getUsableAbilities（'日光轉移'，同版已補上「場上需 ≥2 隻」）。
 regA('超級妙蛙花ex', 0, (st, idx, pool) => {
   const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
   const sourceIids = all
@@ -138,9 +136,9 @@ regR('sunlight-transfer-target', (st, idx, iids, params, pool) => {
 //
 // v2.158：升級為玩家自選分配 — top 4 leftover 仍洗回牌庫底；選的鋼能量先暫存到
 //   discard 然後呼叫 v158 chain，玩家逐張選自己的【鋼】寶可夢（active+bench）。
-regG('金屬怪', (st, idx) => {
-  return st.players[idx].deck.length > 0;
-});
+// v6.131 移除死碼：`regG` 註冊進 TRAINER_GUARDS，只有 canPlayTrainer（出訓練家卡）會查。
+//   金屬怪是**寶可夢**，它的特性 gate 走 engine 的 getUsableAbilities ⇒ 這條永遠不會被呼叫。
+//   （deck > 0 的條件 engine 那邊本來就有。）新增 lint Check Y 防再犯。
 regA('金屬怪', 0, (st, idx, _pool) => {
   const p = st.players[idx];
   if (p.deck.length === 0) return addLog(st, '金屬製造者：牌庫為空', idx);

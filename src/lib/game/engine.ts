@@ -9688,15 +9688,15 @@ export function getUsableAbilities(
       }
       // v2.340 哈克龍｜進化指引：持有者身上需有能量，牌庫需有進化寶可夢。
       if (ab.name === '進化指引') {
-        if (pk.energyAttached.length === 0) return;
-        const hasEvolution = player.deck.some(c => {
-          const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Pokemon' && (
-            cc.stage === 'Stage1' || cc.stage === 'Stage2' ||
-            cc.subtype === 'Stage1' || cc.subtype === 'Stage2'
-          );
-        });
-        if (!hasEvolution) return;
+        if (pk.energyAttached.length === 0) return;   // 卡面「若這隻寶可夢身上附有能量卡」（已知資訊，可 gate）
+        // v6.131 ⚠ 原本還掃「牌庫裡有沒有進化寶可夢」→ 兩層錯：
+        //   ① 牌庫是隱藏資訊，**帶條件的牌庫搜尋可以宣告「找不到」**（官方 fail-to-find，PTCG_RULES L832）
+        //      ⇒ 牌庫沒有目標時玩家仍可使用（查看→找不到→重洗）。同函式 v2.324 對「金屬信號」「王者呼聲」
+        //      已明寫 `no gate needed — deck content is hidden info`，這條是漏網。
+        //   ② regA 端本來就寫著「v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）」
+        //      ⇒ gate 比 regA 嚴，玩家牌庫剛好沒進化寶可夢時整個特性按不下去。
+        //   牌庫**張數**是公開資訊 ⇒ 只 gate 到「牌庫是不是空的」（官方 L821 電氣發生器同判準）。
+        if (player.deck.length === 0) return;
       }
       // v2.340 超級快龍ex｜天空搬運：需有備戰可互換。
       if (ab.name === '天空搬運' && player.bench.length === 0) return;
@@ -9770,14 +9770,27 @@ export function getUsableAbilities(
       // v2.229 三合一磁怪｜過度放電：棄牌區有基本【雷】能量 + 場上有【雷】寶可夢
       //   （此特性自 KO，所以不檢查可達鴨濕氣 — 已在 SELF_KO 區塊處理）
       if (ab.name === '過度放電') {
-        const hasLightningE = player.discard.some(c => {
+        // v6.131 玩家回報「棄牌區有能量、備戰有【雷】寶可夢卻不能用」。
+        //   卡面：「…從自己的棄牌區選擇最多3張**基本能量卡**，以任意方式附於自己的【雷】寶可夢身上。」
+        //   ⚠ 舊 gate 多要求「棄牌區有基本**【雷】**能量」—— 卡面只寫「基本能量卡」，屬性限制
+        //     **只在附加目標**（【雷】寶可夢），不在來源能量。regA 端 v5.500 早就改對了
+        //     （註解明寫「卡面『基本能量卡』任意屬性(雷限制只對附加目標)」），engine 的 gate 沒跟著改
+        //     ⇒ gate 比實作嚴，玩家棄牌區只有非雷的基本能量時整個特性按不下去。
+        const hasBasicE = player.discard.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.pokemonType === 'Lightning' || cc.name.includes('【雷】'));
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic';
         });
-        if (!hasLightningE) return;
+        if (!hasBasicE) return;
+        // ⚠⚠ 附加目標**含這隻磁怪自己** —— 官方 Q&A（PTCG RULES/PTCG_RULES.md:1959-1960 §17.29.F）：
+        //   「使用三合一磁怪的特性『過度放電』時，可以將基本能量卡附加給使用了特性的三合一磁怪自己嗎？→ **可以**。」
+        //   （這隻磁怪本身就是【雷】，所以只要它在場上，這個條件實質恒真。）
+        //   ⚠ 我一度想在這裡排除「即將昏厥的自己」來對齊 regA，那會與上面這條官方裁定相反 —— 不可以那樣做。
+        //   ⚠ 已知偏差（**既有**、非本版引入）：regA 是在 selfKOInstance **之後**才判「場上還有【雷】寶可夢」，
+        //     所以「場上只有這隻磁怪是【雷】」時 regA 會擋 ⇒ gate 放行但效果不發生。
+        //     照官方應該要能附給自己。要修得動 regA 的 KO/附加順序，已列 todo 待站長裁定，
+        //     本版**不動**（寧可保留既有偏差，也不引入與官方相反的新行為）。
         const field = [...(player.active ? [player.active] : []), ...player.bench];
-        const hasLightningPoke = field.some(c => pool.get(c.cardId)?.pokemonType === 'Lightning');
-        if (!hasLightningPoke) return;
+        if (!field.some(c => pool.get(c.cardId)?.pokemonType === 'Lightning')) return;
       }
       // ⭐ v6.127 幸福蛋ex｜幸福切換：場上要有「附了基本能量的寶可夢」+「另一隻可接收的寶可夢」。
       //   卡面：「在自己的回合時可使用1次。選擇1個自己的場上寶可夢身上附加的基本能量，
@@ -9840,6 +9853,10 @@ export function getUsableAbilities(
       // v2.229 超級妙蛙花ex｜日光轉移：場上有寶可夢身上有基本【草】能量
       if (ab.name === '日光轉移') {
         const field = [...(player.active ? [player.active] : []), ...player.bench];
+        // v6.131 卡面「改附於自己的**其他**寶可夢身上」→ 需要接收方；regA 端本來就有
+        //   `if (all.length < 2) return addLog(...)`，gate 卻沒有 ⇒ 場上只有 1 隻時按下去只 log 一行。
+        //   （與 v6.127 幸福切換同型：gate 與 regA 是兩份條件，改一邊忘另一邊。）
+        if (field.length < 2) return;
         const hasGrassEnergyOnField = field.some(p =>
           p.energyAttached.some(e => {
             const cc = pool.get(e.cardId);
@@ -9850,10 +9867,12 @@ export function getUsableAbilities(
       }
       // v2.229 金屬怪｜金屬製造者：牌庫不空 + 場上有【鋼】寶可夢
       if (ab.name === '金屬製造者') {
+        // v6.131 同型（與過度放電一起修）：卡面「…以任意方式附於自己的**寶可夢**身上」**沒有屬性限制**。
+        //   舊 gate 多要求「場上有【鋼】寶可夢」。regA 端 v4.29 就已經移除這個誤限制
+        //   （註解明寫「卡面沒屬性限制，玩家可附給任何自己場上的寶可夢(含【無】等)」），
+        //   engine 的 gate 卻沒跟著改 ⇒ 又是「修了 resolver、忘了同步 gate」。
+        //   active 一定存在 ⇒ 場上必有可附加目標，只需 deck > 0。
         if (player.deck.length === 0) return;
-        const field = [...(player.active ? [player.active] : []), ...player.bench];
-        const hasMetal = field.some(c => pool.get(c.cardId)?.pokemonType === 'Metal');
-        if (!hasMetal) return;
       }
       // v2.229 竹蘭的尖牙陸鯊｜王者呼聲
       //   v2.324：移除牌庫竹蘭寶可夢 gate（隱藏資訊規則）— 讓玩家可搜尋牌庫
@@ -10000,13 +10019,15 @@ export function getUsableAbilities(
         const opp = state.players[oppIdx];
         // v5.040：bench >= 5 改 getBenchLimit 支援零之大空洞 + 太晶 (5→8)
         if (opp.bench.length >= getBenchLimit(state, oppIdx, pool)) return;
-        const hasCand = opp.hand.some(c => {
-          const cc = pool.get(c.cardId);
-          if (!cc || cc.supertype !== 'Pokemon') return false;
-          const isBasic = cc.subtype === 'Basic' || cc.stage === 'Basic';
-          return isBasic && typeof cc.hp === 'number' && cc.hp <= 70;
-        });
-        if (!hasCand) return;
+        // v6.131 ⚠ 這裡原本會掃「對手手牌**內容**」（有沒有 HP≤70 的基礎寶可夢）來決定按鈕亮暗
+        //   ⇒ 兩個問題：①按鈕的亮/暗直接把對手手牌的組成洩漏給使用者（隱藏區資訊洩漏）；
+        //   ②對手手牌對使用者是隱藏資訊，依站內既定作法不得拿來 gate
+        //     （同函式內先例：v2.324「金屬信號」與「王者呼聲」的 `no gate needed — deck content is hidden info`）。
+        //   ⚠ 官方 Rule 26「效果無法執行就不能使用」的判例（L805/L819/L1957）全都是**已知區**
+        //     （自己的備戰／棄牌區）；L821 電氣發生器「牌庫 0 張不可以」之所以能 gate，是因為
+        //     **牌庫張數是公開資訊**（內容才是隱藏的）。同理：對手手牌**張數**公開、**內容**隱藏
+        //     ⇒ 只能 gate「手牌是不是 0 張」，不能 gate「裡面有沒有符合的卡」。
+        if (opp.hand.length === 0) return;
       }
       // 奇樹的電肚蛙ex｜電氣流：手牌有【雷】基本能量 + 場上有「奇樹的」寶可夢
       if (ab.name === '電氣流') {

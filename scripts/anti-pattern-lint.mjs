@@ -720,6 +720,47 @@ for (const f of files) {
   }
 }
 
+// ── Check Y：`regG` 只能用在**訓練家**卡名（用在寶可夢＝死碼，永遠不會被呼叫）──────
+//   v6.131：`regG` 註冊進 TRAINER_GUARDS，而 TRAINER_GUARDS 只有 canPlayTrainer（出訓練家卡的
+//   路徑）會查。寶可夢的**特性** gate 走的是 engine 的 getUsableAbilities，完全不看 TRAINER_GUARDS。
+//   所以 `regG('金屬怪', …)`（金屬怪是寶可夢）是死碼 —— 寫的人以為擋住了，其實從沒生效。
+//   ⚠ 這型錯誤在測試裡是隱形的：條件寫對、程式沒錯、只是那段永遠不執行。
+{
+  const dir = join(ROOT, 'static/cards');
+  let live, pokeNames = new Set(), trainerNames = new Set();
+  try {
+    live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
+      for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) {
+        if (!c?.name) continue;
+        if (c.supertype === 'Pokemon') pokeNames.add(c.name);
+        else if (c.supertype === 'Trainer') trainerNames.add(c.name);
+      }
+    }
+  } catch { pokeNames = new Set(); }
+  if (pokeNames.size < 500) {
+    violations.push(`[Y] 掃描器異常 — 只讀到 ${pokeNames.size} 個寶可夢卡名（預期 >500），本 check 形同虛設`);
+  } else {
+    let ySeen = 0;
+    for (const f of files) {
+      const src = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      for (const m of src.matchAll(/\bregG\(\s*'([^']+)'/g)) {
+        ySeen++;
+        const nm = m[1];
+        // 同名同時是寶可夢與訓練家時放行（無法判別意圖，交給人工）
+        if (pokeNames.has(nm) && !trainerNames.has(nm)) {
+          const line = src.slice(0, m.index).split('\n').length;
+          violations.push(`[Y] ${rel(f)}:${line} — regG('${nm}') 的對象是**寶可夢**，但 regG 註冊進 TRAINER_GUARDS，`
+            + `只有 canPlayTrainer（出訓練家卡）會查 → 這段是死碼、永遠不會被呼叫。`
+            + `寶可夢的特性 gate 要寫在 engine.ts 的 getUsableAbilities。`);
+        }
+      }
+    }
+    if (ySeen < 10) violations.push(`[Y] 掃描器異常 — 只掃到 ${ySeen} 個 regG 呼叫（預期 ≥10）`);
+  }
+}
+
 // ── Check T：開 picker 前的公開 addLog 不得帶「候選 N 張 / 發現 N 張」隱藏 zone 統計（資訊洩漏，P1 收尾）──
 //   picker UI 本就顯示候選卡，log 帶數量純冗餘、且把隱藏 zone（自己手牌/牌庫）構成洩漏給對手。全禁。
 //   G 標批（v2996_g4 / v2998_g2，不維護，鐵律）整檔豁免。
@@ -899,7 +940,7 @@ for (const f of files) {
 }
 
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部) / X: pending頂層寫validIids(型別只認params.validIids→限制死資料失效)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部) / X: pending頂層寫validIids(型別只認params.validIids→限制死資料失效) / Y: regG用在寶可夢(註冊進TRAINER_GUARDS→死碼永不呼叫)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

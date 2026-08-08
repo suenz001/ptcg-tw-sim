@@ -10663,10 +10663,10 @@
               <!-- v3.84: 為避免版權風險，移除 3 首官方 BGM（v6.130 已把 mp3 檔案本身也從網站移除）。
                    v6.130: 上架站長原創曲。新增曲目＝在這加一個 option + 把 .mp3 放進 static/music/
                    + 把代號加進上面的 BGM_TRACKS 白名單（三處都要，否則舊值 fallback 會把它擋掉）。 -->
-              <option value="last-card">最後一張牌（站長原創）</option>
+              <option value="last-card">最後一張牌</option>
             </select>
           </div>
-          <div class="bgm-note">「最後一張牌」為站長自行作詞、作曲的原創歌曲。選擇後才會開始下載，不選就完全不佔流量。</div>
+          <div class="bgm-note">選擇曲目後才會開始下載，不選就完全不佔流量。</div>
           {#if bgmTrack !== 'none' && bgmBlocked}
             <div class="bgm-note bgm-blocked">🔇 瀏覽器擋住了自動播放 —— 在畫面上點一下就會開始播放。</div>
           {/if}
