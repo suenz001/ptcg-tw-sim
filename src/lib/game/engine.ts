@@ -9482,6 +9482,11 @@ export function getUsableAbilities(
       // P1：光電傘蜥 | 頸傘發電 — carnelliPlayedThisTurn
       if (ab.name === '頸傘發電') {
         if (!player.carnelliPlayedThisTurn) return;
+        // v6.132 站長裁定：牌庫 0 時不能使用。卡面「從自己的牌庫選擇最多2張『基本【雷】能量』卡…
+        //   並且重洗牌庫」→ 牌庫空時整個效果無事可做，而這是每回合 1 次（白按會吃掉特性權）。
+        //   ⚠ 只判**張數**（公開資訊，官方 L821 電氣發生器同判準）；不得掃牌庫**內容**
+        //   （帶條件搜尋可宣告找不到，見 v6.131）。
+        if (player.deck.length === 0) return;
       }
       // P1：小木靈 | 怨恨進化 — 手牌有對應進化卡 + v5.192 加「無法在自己的最初回合使用」gate
       if (ab.name === '怨恨進化') {
@@ -9669,6 +9674,8 @@ export function getUsableAbilities(
       if (ab.name === '惡棍衝天') {
         const hasDarkBench = player.bench.some(b => pool.get(b.cardId)?.pokemonType === 'Darkness');
         if (!hasDarkBench) return;
+        // v6.132 站長裁定：牌庫 0 時不能使用（同頸傘發電；只判張數不看內容）。
+        if (player.deck.length === 0) return;
       }
       // v2.117 必殺手裡劍（超級甲賀忍蛙ex）：須在戰鬥場 && 手牌有基本【水】能量。
       if (ab.name === '必殺手裡劍') {
@@ -9807,6 +9814,22 @@ export function getUsableAbilities(
           return ec?.supertype === 'Energy' && ec.subtype === 'Basic';
         }));
         if (!hasBasicE) return;
+      }
+      // v6.132 站長裁定 + 卡面「若這隻寶可夢在戰鬥場上」──────────────────────
+      //   燈罩夜菇｜平靜之光「若這隻寶可夢在戰鬥場上，則在自己的回合時可使用1次。將對手的戰鬥寶可夢【睡眠】。」
+      //   波爾凱尼恩ex｜燒灼蒸汽「若這隻寶可夢在戰鬥場上，…將對手的戰鬥寶可夢【灼傷】。」
+      //   ⚠ 卡面的「若這隻寶可夢在戰鬥場上」**已經**由上方那條複合 gate
+      //     （`ab.name === '瞬間移動者' || '平靜之光' || '燒灼蒸汽' || '勸誘羽'`）負責，這裡不重複判。
+      //   ⚠ 站長裁定（2026-08-08）：對手戰鬥寶可夢**已經是該狀態**時不能使用 —— 這兩張都是每回合 1 次，
+      //     而 USE_ABILITY 先標記已用再執行 ⇒ 白按一次就把特性權吃掉。
+      //     判定必須跨三槽 → hasStatusInAnySlot（與熱浪鱗粉 v5.842 同一判準；直接讀 .status 會漏 2/3 槽）。
+      //   ⚠ **免疫不算進 gate** —— 沿用 v6.127 站長對暗黑鈴的裁定：免疫是防禦方的能力，
+      //     不該讓攻擊方連按都不能按。這裡只判「狀態已經存在」。
+      if (ab.name === '平靜之光' || ab.name === '燒灼蒸汽') {
+        const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
+        if (!oppA) return;                                     // 對手戰鬥場沒有寶可夢 → 效果無對象
+        const cond = ab.name === '平靜之光' ? 'asleep' : 'burned';
+        if (hasStatusInAnySlot(oppA, cond)) return;            // 已經是該狀態 → 站長裁定：不能使用
       }
       // v2.229 蜜集大蛇ex｜熟成充能：手牌有基本【草】能量 + 場上有寶可夢
       if (ab.name === '熟成充能') {

@@ -158,7 +158,8 @@ regR('rasoten-mega-heal-60', healResolver);
 // ── 5. 燈罩夜菇｜平靜之光 ────────────────────────────────────────────────────
 // 卡面：「若這隻寶可夢在戰鬥場上，則在自己的回合時可使用 1 次。
 //        將對手的戰鬥寶可夢【睡眠】。」
-// gate：cardInst 必須在戰鬥場（engine 加 gate）+ 每回合 1 次
+// gate：cardInst 必須在戰鬥場（engine getUsableAbilities 的複合 gate）+ 每回合 1 次
+//   + v6.132 站長裁定：對手戰鬥寶可夢**已經處於該狀態**時不能使用（跨三槽判定）
 regA('燈罩夜菇', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
@@ -170,7 +171,8 @@ regA('燈罩夜菇', 0, (st, idx, pool, _cardInst) => {
 // ── 6. 波爾凱尼恩ex｜燒灼蒸汽 ────────────────────────────────────────────────
 // 卡面：「若這隻寶可夢在戰鬥場上，則在自己的回合時可使用 1 次。
 //        將對手的戰鬥寶可夢【灼傷】。」
-// gate：cardInst 必須在戰鬥場（engine 加 gate）+ 每回合 1 次
+// gate：cardInst 必須在戰鬥場（engine getUsableAbilities 的複合 gate）+ 每回合 1 次
+//   + v6.132 站長裁定：對手戰鬥寶可夢**已經處於該狀態**時不能使用（跨三槽判定）
 regA('波爾凱尼恩ex', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];

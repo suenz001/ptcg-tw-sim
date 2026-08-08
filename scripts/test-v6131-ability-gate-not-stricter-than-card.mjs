@@ -51,14 +51,37 @@ ok(face.size > 100, `卡面特性表只掃到 ${face.size} 個 → 掃描器壞�
 const ENGINE = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
 ok(ENGINE.length > 300000, `engine.ts 只讀到 ${ENGINE.length} bytes → 疑似被 mount 截斷`);
 
+// ⚠ 抽取器必須支援**複合條件**（`if (ab.name === 'A' || ab.name === 'B') {`）。
+//   第一版只認 `if (ab.name === 'X') {` 這種單一形式 —— 那不只會對複合條件給假 FAIL，
+//   更糟的是**日後有人把 gate 寫成複合條件時會被靜默漏掉（假 PASS）**，整條網對那條 gate 失效。
+//   ⇒ 改成：以每個 `ab.name === 'NAME'` 為錨點，往前找最近的 `if (`、做括號配對找到條件結尾，
+//     再配對 body；同一個 if 內的多個名稱各自 map 到同一份 body。
 const gates = new Map();
-for (const m of ENGINE.matchAll(/if \(ab\.name === '([^']+)'\) \{/g)) {
-  let d = 0, k = m.end - 1;
-  for (k = m.index + m[0].length - 1; k < ENGINE.length; k++) {
-    if (ENGINE[k] === '{') d++;
-    else if (ENGINE[k] === '}') { d--; if (d === 0) break; }
+for (const m of ENGINE.matchAll(/ab\.name === '([^']+)'/g)) {
+  const ifPos = ENGINE.lastIndexOf('if (', m.index);
+  if (ifPos < 0) continue;
+  // 條件括號配對
+  let d = 0, condEnd = -1;
+  for (let i = ifPos + 3; i < ENGINE.length; i++) {
+    if (ENGINE[i] === '(') d++;
+    else if (ENGINE[i] === ')') { d--; if (d === 0) { condEnd = i; break; } }
   }
-  gates.set(m[1], ENGINE.slice(m.index, k + 1));
+  if (condEnd < 0) continue;
+  const after = ENGINE.slice(condEnd + 1, condEnd + 4);
+  if (!after.trimStart().startsWith('{')) continue;   // 單行 if（無 body 大括號）→ 跳過
+  const bodyStart = ENGINE.indexOf('{', condEnd);
+  let bd = 0, bodyEnd = -1;
+  for (let i = bodyStart; i < ENGINE.length; i++) {
+    if (ENGINE[i] === '{') bd++;
+    else if (ENGINE[i] === '}') { bd--; if (bd === 0) { bodyEnd = i; break; } }
+  }
+  if (bodyEnd < 0) continue;
+  // ⚠ 同一個特性可能被**多條** gate 涵蓋（例：「在戰鬥場上」由一條複合 gate 管、
+  //   「對手已處於該狀態」由另一條管）。用覆蓋語意會只留最後一條 ⇒ 對前面那條完全盲。
+  //   （這個盲點在 v6.132 當場害我誤判「平靜之光完全沒有 gate」，差點寫進 changelog。）
+  const prev = gates.get(m[1]);
+  const body = ENGINE.slice(ifPos, bodyEnd + 1);
+  gates.set(m[1], prev && !prev.includes(body) ? prev + '\n' + body : (prev ?? body));
 }
 ok(gates.size >= 60, `只掃到 ${gates.size} 條 per-card gate（預期 ≥60）→ 掃描器錨點失效`);
 
@@ -112,6 +135,35 @@ console.log('② 逐卡回歸：本次修的兩張，gate 不得再出現卡面�
   ok(/deck\.length === 0/.test(metal), '金屬製造者：gate 仍必須檢查牌庫非空（卡面「查看自己的牌庫上方4張卡」）');
 }
 
+console.log('②c ⭐ 站長裁定（v6.132）：四條 gate');
+{
+  // 燈罩夜菇｜平靜之光「**若這隻寶可夢在戰鬥場上**，則在自己的回合時可使用1次。將對手的戰鬥寶可夢【睡眠】。」
+  // 波爾凱尼恩ex｜燒灼蒸汽「**若這隻寶可夢在戰鬥場上**，…將對手的戰鬥寶可夢【灼傷】。」
+  //   ⚠ 這兩張原本**完全沒有 gate** —— regA 的註解寫著「gate：cardInst 必須在戰鬥場（engine 加 gate）」，
+  //     但 engine 從來沒加 ⇒ 備戰區也能發動，直接違反卡面。這條斷言把那張空頭支票釘成真的。
+  const calm = strip(gates.get('平靜之光') ?? '') + '\n' + strip(gates.get('燒灼蒸汽') ?? '');
+  ok(calm.trim().length > 0, '平靜之光／燒灼蒸汽 必須有 gate');
+  ok(/player\.active\?\.iid !== pk\.iid/.test(calm),
+    '平靜之光／燒灼蒸汽：必須 gate「這隻寶可夢在戰鬥場上」（卡面白紙黑字）—— 由既有的複合 gate'
+    + '（瞬間移動者/平靜之光/燒灼蒸汽/勸誘羽）負責，這條斷言確保它不會在重構時被拆掉');
+  ok(/hasStatusInAnySlot/.test(calm),
+    '平靜之光／燒灼蒸汽：判「對手已處於該狀態」必須用 hasStatusInAnySlot（跨三槽），'
+    + '直接讀 .status 會漏掉 secondary/tertiary');
+  ok(/'asleep'/.test(calm) && /'burned'/.test(calm),
+    '平靜之光→asleep、燒灼蒸汽→burned 兩種狀態都要判');
+  // ⚠ 免疫不算進 gate（沿用 v6.127 站長對暗黑鈴的裁定：免疫是防禦方能力，不該讓攻擊方連按都不能按）
+  ok(!/immune|canApplyEffectToTarget/i.test(calm),
+    '平靜之光／燒灼蒸汽：gate **不得**把「對手對該狀態免疫」算進去（v6.127 站長裁定）');
+
+  for (const [nm, zh] of [['頸傘發電', '基本【雷】能量'], ['惡棍衝天', '基本【惡】能量']]) {
+    const g = strip(gates.get(nm) ?? '');
+    ok(g.length > 0, `找不到 ${nm} 的 gate`);
+    ok(/player\.deck\.length === 0/.test(g),
+      `${nm}：站長裁定牌庫 0 時不能使用（卡面「從自己的牌庫選擇…${zh}…並且重洗牌庫」，`
+      + `牌庫空＝整個效果無事可做，而這是每回合1次，白按會吃掉特性權）`);
+  }
+}
+
 console.log('②b gate 不得讀「隱藏區的內容」（對手手牌／任一方牌庫）—— 按鈕亮暗會洩漏');
 //   判準來源：對手手牌與牌庫的**張數是公開的、內容是隱藏的**。
 //   官方 L821（電氣發生器牌庫 0 張「不可以」）能成立正是因為張數公開；
@@ -147,6 +199,14 @@ console.log('③ 掃描器自我驗證（防安慰劑）');
   ok(got.has('雷'), '正對照：判準必須抓得到 pokemonType === \'Lightning\'');
   ok(strip("  // pokemonType === 'Lightning'\nreal").includes('Lightning') === false,
     '正對照：strip 必須剝掉 // 註解（否則說明文字會造成整片假 FAIL）');
+  // 抽取器對複合條件的正對照（第一版就是敗在這）
+  {
+    const sample = `if (ab.name === 'A' || ab.name === 'B') {\n  doSomething();\n}`;
+    const found = [];
+    for (const mm of sample.matchAll(/ab\.name === '([^']+)'/g)) found.push(mm[1]);
+    ok(found.length === 2 && found[0] === 'A' && found[1] === 'B',
+      '正對照：抽取器必須從複合條件 `ab.name === \'A\' || ab.name === \'B\'` 抽出兩個名稱');
+  }
   const alias = ALIAS['鬥'];
   ok(alias.includes('格'), '正對照：【鬥】必須接受卡面印作【格】的別名');
 }
