@@ -23,7 +23,11 @@ T('★光子纜線:選 e2,e3 → 移 e2,e3 到備戰、留 e1', () => {
     players:[
       {name:'P1',active:{iid:'A',cardId:poke,damage:0,energyAttached:[]},bench:[{iid:'BN',cardId:poke,damage:0,energyAttached:[]}],hand:[],deck:[],discard:[en('e1'),en('e2'),en('e3')],prizes:[1,1,1,1,1,1]},
       {name:'P2',active:{iid:'B',cardId:poke,damage:0,energyAttached:[]},bench:[],hand:[],deck:[],discard:[],prizes:[1,1,1,1,1,1]}],
-    pendingSelection:{type:'discard-search',actorIdx:0,sourcePlayerIdx:0,minCount:2,maxCount:2,validIids:['e1','e2','e3'],effectKey:'photon-code-pick-energy',params:{label:'光子纜線'}}};
+    // v6.129：validIids 必須在 params —— PendingSelection 型別沒有頂層 validIids，UI/AI/engine
+    //   三端只讀 params.validIids。本測試原本照抄了錯誤寫法，等於把 bug 固化成契約。
+    pendingSelection:{type:'discard-search',actorIdx:0,sourcePlayerIdx:0,minCount:2,maxCount:2,
+      filter:'BasicEnergy:Lightning',effectKey:'photon-code-pick-energy',
+      params:{label:'光子纜線',validIids:['e1','e2','e3']}}};
   st=applyAction(st,{type:'RESOLVE_SELECTION',selectedIids:['e2','e3']},pool);
   assert.ok(st.pendingSelection && st.pendingSelection.effectKey==='m5-mirieton-photon-code', `應開 bench-choose,實 ${st.pendingSelection&&st.pendingSelection.effectKey}`);
   st=applyAction(st,{type:'RESOLVE_SELECTION',selectedIids:['BN']},pool);

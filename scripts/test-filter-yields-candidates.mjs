@@ -54,6 +54,12 @@ for (const f of files) {
 }
 
 // 值含中文＝卡名字串型 filter（危險類：卡名與卡型條件不符就零產能）
+// v6.129：TOP 型 filter 的 params —— 每個 topNIids key 都含掃描用的 iid 'x'。
+//   （key 名沿用各卡 pending 宣告：top2Iids / top4Iids / top5Iids / top6Iids / top7Iids / top8Iids / topIids）
+const TOPN_PARAMS = Object.fromEntries(
+  ['topIids', 'top2Iids', 'top4Iids', 'top5Iids', 'top6Iids', 'top7Iids', 'top8Iids', 'top9Iids'].map((k) => [k, ['x']]),
+);
+
 const hasCJK = (s) => /[一-鿿]/.test(s);
 
 const violations = [];
@@ -61,7 +67,10 @@ let okCount = 0, uncoveredCount = 0;
 for (const [, info] of found) {
   let yields = 0, evaluable = false;
   for (const c of cards) {
-    const r = ev(info.zone, info.fl, { iid: 'x' }, c, {});
+    // v6.129：TOP 型 filter（'DarknessPokemon:TOP7' 等）的 predicate 依賴 params.topNIids。
+    //   產能守衛問的是「這個 filter 對全卡池有沒有卡型產能」，TOP **範圍**限制不該影響這個判定
+    //   → 餵一份「本卡就在牌庫頂」的 params，讓它退化成純卡型判定。
+    const r = ev(info.zone, info.fl, { iid: 'x' }, c, { params: TOPN_PARAMS });
     if (r === true) { yields++; evaluable = true; } else if (r === false) evaluable = true;
   }
   const where = `${info.file}:${info.line}`;

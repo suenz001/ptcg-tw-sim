@@ -16076,12 +16076,19 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
       {
         type: 'discard-search',
         actorIdx: dIdx, sourcePlayerIdx: dIdx,
-        minCount: 0, maxCount: maxPick, validIids: basicEnergyIids,
+        minCount: 0, maxCount: maxPick,
+        // v6.129 卡面「選擇最多2張**這隻寶可夢身上附加的**『基本【雷】能量』卡」。
+        //   ⚠原本 validIids 寫在 pending **頂層** → 型別沒這個欄位、三端(UI/AI/engine)全讀
+        //   params.validIids → 限制完全失效：UI 顯示**整個棄牌區**、resolver 又不驗卡型，
+        //   玩家可把棄牌區任意 2 張卡（訓練家/寶可夢）當能量附到備戰寶可夢身上。
+        //   修：filter 補上卡型（中央 discard-search 的 'BasicEnergy:<屬性>' prefix）＋
+        //       validIids 移進 params（本次 KO 前的身上能量快照，兩者取交集）。
+        filter: 'BasicEnergy:Lightning',
         effectKey: 'photon-code-pick-energy',
         // ⭐ v6.126 站長裁定 B 案：兩段一致可跳過。
         //   ⚠ phase 2（'m5-mirieton-photon-code'）早就在 OPTIONAL 白名單（log 寫「或跳過」），
         //   phase 1 卻強制 → 玩家被迫選能量、再在第二步跳過（淨零效果）。半套必錯。
-        params: { label: '光子纜線', allowSkipZero: true },
+        params: { label: '光子纜線', allowSkipZero: true, validIids: basicEnergyIids },
       },
     );
   }],

@@ -205,9 +205,11 @@ regPost('龍頭地鼠ex|貫通鑽', (state, aIdx, pool) => {
   }
   return withPending(addLog(state, '貫通鑽：選 1 隻受傷的對手備戰寶可夢，受到 60 點傷害', aIdx), {
     type: 'opp-bench-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: 1, maxCount: 1, validIids: wounded.map(w => w.iid),
+    minCount: 1, maxCount: 1,
     effectKey: 'snipe-variable',
-    params: { damage: 60, label: '貫通鑽', kind: 'attack-damage' },
+    // v6.129 ⚠ validIids 原本寫在 pending 頂層 → 三端都讀不到（型別只認 params.validIids）
+    //   ⇒ 卡面「**受傷的**對手備戰」限制失效，可打沒受傷的那隻。
+    params: { damage: 60, label: '貫通鑽', kind: 'attack-damage', validIids: wounded.map(w => w.iid) },
   });
 });
 

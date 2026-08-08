@@ -2099,6 +2099,14 @@ regPost('狐大盜|技能大盜', copyAttackPostDispatch);
 //   限制：≥3 張 basic 能量時，目前 auto-pick 前 2 張（玩家選哪 2 張之 UI deferred）
 // v5.846：≥3 張時玩家先選哪 2 張雷能量(discard-search)→ 收後開 bench-choose 選備戰。
 regR('photon-code-pick-energy', (st, idx, iids, params, _pool) => {
+  // v6.129 resolver 自驗：engine 的 sanitizeSelectedIids 只消毒 deck-search，discard-search
+  //   一律原封放行 ⇒ client 送什麼 iid 這裡就吃什麼。本 resolver 的產物會被 phase 2 當成
+  //   「能量卡」直接塞進 energyAttached，不驗就等於「棄牌區任意卡都能當能量」。
+  //   ⇒ 一律與 params.validIids（KO 前身上的基本【雷】能量快照）取交集。
+  const allowed = new Set((params?.validIids as string[] | undefined) ?? []);
+  const picked = allowed.size > 0 ? iids.filter((i) => allowed.has(i)) : [];
+  if (picked.length === 0) return addLog(st, '光子纜線：未選能量，效果結束', idx);
+  iids = picked;
   if (iids.length === 0) return addLog(st, '光子纜線：未選能量，效果結束', idx);
   if (st.players[idx].bench.length === 0) return addLog(st, '光子纜線：備戰區無寶可夢', idx);
   return withPending(

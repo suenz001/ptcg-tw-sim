@@ -80,7 +80,13 @@ export interface SelectionFilterCtx {
 }
 
 /** 批1 收錄的 deck-search 純 predicate（key = filter 字串）。逐字對齊 +page.svelte HEAD selectionItems。 */
-const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx) => boolean> = {
+/**
+ * v6.129：predicate 第三參數 `inst`（卡片實體，只用 iid）。
+ *   TOP 型 filter（'Supporter:TOP4' / 'DarknessPokemon:TOP7' …）語義是「牌庫頂 N 張 ∩ 某卡型」，
+ *   必須拿得到 iid 才能跟 params.topNIids 比對 —— 沒有這個參數，這一整類 filter 永遠收不進中央，
+ *   只能留在 UI/AI 各一份 inline（漂移來源）。
+ */
+const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx, inst: { iid: string }) => boolean> = {
   // 基礎/階段/寶可夢型（v2.132：階段用 stage ?? subtype，避免 ex 進化被 subtype='ex' 排除）
   'Basic':        (c) => isBasicPokemonCard(c),
   'Basic:HP70':   (c) => isBasicPokemonCard(c) && (c.hp ?? 0) <= 70,
@@ -129,6 +135,60 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
     if (c.supertype === 'Energy' && c.subtype === 'Basic') return c.pokemonType === 'Grass' || c.name.includes('【草】');
     return false;
   },
+  // ══ v6.129：AI 端漂移修補 ══════════════════════════════════════════════════
+  //   下列 filter 原本只有 UI(+page.svelte) 有 inline case，ai.ts 完全沒有對應分支 →
+  //   落到 ai.ts deck-search 的 `return true` fallthrough ＝ **AI 把整副牌庫當候選**，
+  //   再依 usefulness 排序取前 N。玩家回報：蓋諾賽克特ex｜金屬信號（應搜【鋼】進化寶可夢）
+  //   AI 卻抓到「火箭隊的拉姆達」(支援者)、「火箭隊的接收器」(物品)。
+  //   收進中央後 UI/AI/engine 三端同時吃到，且 engine 的 Stage2 語義再驗證閘
+  //   （isKnownSelectionFilter 為 true 才生效）也一併補上 —— 這些 filter 先前
+  //   對 client 竄改 selectedIids 是 fail-open 的（公平性）。
+  //   ⚠語義一律逐字對齊 +page.svelte 的 inline（UI 是 canonical）。
+
+  // 哈克龍｜進化指引(I)「從自己的牌庫選擇1張進化寶可夢卡」
+  'EvolutionPokemon': (c) => c.supertype === 'Pokemon' && !!c.evolvesFrom,
+
+  // 時拉比｜時間輪轉(I)「【草】寶可夢卡與競技場卡合計最多3張」
+  'GrassPokemonOrStadium': (c) => {
+    if (c.supertype === 'Pokemon' && c.pokemonType === 'Grass') return true;
+    if (c.supertype === 'Trainer' && c.subtype === 'Stadium') return true;
+    return false;
+  },
+
+  // 熔蟻獸｜舔舔捕捉(I)「【火】寶可夢卡與『基本【火】能量』卡合計最多3張」
+  'FirePokemonOrBasicFireEnergy': (c) => {
+    if (c.supertype === 'Pokemon' && c.pokemonType === 'Fire') return true;
+    if (c.supertype === 'Energy' && c.subtype === 'Basic') {
+      if (c.pokemonType === 'Fire') return true;
+      if (c.name.includes('【火】')) return true;
+    }
+    return false;
+  },
+
+  // deckSameNameBenchPost（一家鼠｜家族行軍(H)、蟲電寶｜並排 等）「選擇最多N張『同名卡』放置於備戰區」
+  //   ⚠validIids 的交集由 caller（UI 的 src.deck.filter / AI 的 _validSet）負責，
+  //     predicate 只判卡片屬性 —— 與 UI inline 等價（UI: validIids ∩ Pokemon ∧ name===targetName）。
+  'Basic:SameName': (c, ctx) => {
+    if (c.supertype !== 'Pokemon') return false;
+    const targetName = ctx.params?.targetName as string | undefined;
+    if (targetName && c.name !== targetName) return false;
+    return true;
+  },
+
+  // 越橘的一步棋(I)「查看自己的牌庫上方7張卡，從其中選擇1張【惡】寶可夢卡」
+  'DarknessPokemon:TOP7': (c, ctx, inst) => {
+    const top7 = new Set<string>((ctx.params?.top7Iids as string[]) ?? []);
+    if (!top7.has(inst.iid)) return false;
+    return c.supertype === 'Pokemon' && c.pokemonType === 'Darkness';
+  },
+
+  // 金屬怪｜金屬製造者(H)「查看自己的牌庫上方4張卡，從其中選擇任意數量的『基本【鋼】能量』卡」
+  'BasicMetalEnergy:TOP4': (c, ctx, inst) => {
+    const top4 = new Set<string>((ctx.params?.top4Iids as string[]) ?? []);
+    if (!top4.has(inst.iid)) return false;
+    return isBasicEnergyOfType(c, 'Metal' as EnergyType);
+  },
+
   'FightingBasicOrFightingEnergy': (c) => {
     if (c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Fighting') return true;
     if (c.supertype === 'Energy' && c.subtype === 'Basic') return c.pokemonType === 'Fighting' || c.name.includes('【鬥】') || c.name.includes('【格】');
@@ -189,19 +249,20 @@ const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilte
  */
 /** deck-search 已收錄的「前綴型」filter（evaluateSelectionFilter 與 isKnownSelectionFilter 共用單一來源）。 */
 const DECK_SEARCH_NAME_PREFIXES = ['Name:', 'Pokemon:NamePrefix=', 'Pokemon:NameContains=',
-  'Pokemon:Name=', 'Pokemon:Names=', 'NameContains:', 'Card:', 'Basic:NamePrefix='] as const;
+  'Pokemon:Name=', 'Pokemon:Names=', 'NameContains:', 'Card:', 'Basic:NamePrefix=',
+  'Tool:NameContains=', 'Stage1Or2:'] as const;
 
 export function evaluateSelectionFilter(
   zone: SelectionFilterZone,
   filter: string,
-  _inst: { iid: string },
+  inst: { iid: string },
   card: Card | undefined,
   ctx: SelectionFilterCtx = {},
 ): boolean | null {
   if (!card) return null;
   if (zone === 'deck-search') {
     const pred = DECK_SEARCH_PREDICATES[filter];
-    if (pred) return pred(card, ctx);
+    if (pred) return pred(card, ctx, inst);   // v6.129：inst 供 TOP 型 filter 比對 params.topNIids
     // v6.013 批2：卡名前綴規則(固定順序 specific 在 generic 前;根治 ai.ts 死碼——generic 'Pokemon:' 若排前
     //   會把 'Pokemon:NamePrefix=' 當屬性比對恒 false)。
     if (filter.startsWith('Name:')) return card.name === filter.slice(5);
@@ -226,6 +287,15 @@ export function evaluateSelectionFilter(
     if (filter.startsWith('Tool:NameContains=')) {
       return card.supertype === 'Trainer' && card.subtype === 'PokemonTool'
         && card.name.includes(filter.slice('Tool:NameContains='.length));
+    }
+    // v6.129 'Stage1Or2:<屬性>' ＝蓋諾賽克特ex｜金屬信號(I)「最多2張【鋼】屬性的**進化**寶可夢卡」。
+    //   ⚠階段用 (stage ?? subtype)：ex 進化寶可夢 subtype='ex'，直讀 subtype 會漏掉整組 ex 進化卡。
+    if (filter.startsWith('Stage1Or2:')) {
+      const t = filter.slice('Stage1Or2:'.length);
+      if (card.supertype !== 'Pokemon') return false;
+      if (card.pokemonType !== t) return false;
+      const stage = card.stage ?? card.subtype;
+      return stage === 'Stage1' || stage === 'Stage2';
     }
     if (filter.startsWith('Card:')) return card.name === filter.slice(5);
     if (filter.startsWith('Basic:NamePrefix=')) return isBasicPokemonCard(card) && card.name.startsWith(filter.slice('Basic:NamePrefix='.length));

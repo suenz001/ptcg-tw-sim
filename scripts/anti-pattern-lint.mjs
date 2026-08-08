@@ -625,7 +625,11 @@ for (const f of files) {
   const knownExact = new Set([...sfSrc.matchAll(/^\s*'([^']+)':\s*\(/gm)].map((m) => m[1]));
   const knownPrefix = [...new Set([...sfSrc.matchAll(/\.startsWith\('([^']+)'\)/g)].map((m) => m[1]))];
   // v6.019 凍結白名單（dump 現況 deck-search 未收錄的 fallthrough filter；只准縮不准擴）
-  const S_WL_EXACT = new Set(['Basic:SameName','Basic:TOP5','BasicMetalEnergy:TOP4','BasicPokemon','DarknessPokemon:TOP7','EvilAwakening:EvolveFrom','Evolution','EvolutionPokemon','FirePokemonOrBasicFireEnergy','GrassBasicOrGrassEnergy:TOP7','GrassPokemonOrStadium','RakiPokemonOrFireEnergy','Stage1Or2:Metal','SturdyMightTree:Stage1','SturdyMightTree:Stage2','Supporter:TOP4','Supporter:TOP6','Supporter:TOP7','TOP2','TOP4','TOP6','TOP8','Trainer:Supporter','Trainer:TOP_N','any']);
+  // v6.129：'Basic:SameName' / 'BasicMetalEnergy:TOP4' / 'DarknessPokemon:TOP7' / 'EvolutionPokemon'
+  //   / 'FirePokemonOrBasicFireEnergy' / 'GrassPokemonOrStadium' / 'Stage1Or2:Metal' 已收進中央
+  //   selection-filter → 移出白名單（白名單只准縮不准擴）。這 7 個原本只有 UI 有 inline，
+  //   ai.ts 完全沒有對應分支 → AI 落 `return true` 把整副牌庫當候選（玩家回報：金屬信號抓到訓練家）。
+  const S_WL_EXACT = new Set(['Basic:TOP5','BasicPokemon','EvilAwakening:EvolveFrom','Evolution','GrassBasicOrGrassEnergy:TOP7','RakiPokemonOrFireEnergy','SturdyMightTree:Stage1','SturdyMightTree:Stage2','Supporter:TOP4','Supporter:TOP6','Supporter:TOP7','TOP2','TOP4','TOP6','TOP8','Trainer:Supporter','Trainer:TOP_N','any']);
   // v6.027：'Basic:NamePrefix=' / 'Card:' / 'NameContains:' 已收進中央 selection-filter → 移出白名單
   //   （白名單只准縮不准擴）。剩餘前綴型 fallthrough：無。
   const S_WL_PREFIX = [];
@@ -644,6 +648,77 @@ for (const f of files) {
   }
 }
 
+
+// ── Check X：pendingSelection 物件的**頂層**不得出現 validIids（型別只認 params.validIids）──
+//   v6.129：`PendingSelection`（types.ts）沒有頂層 `validIids` 欄位，UI(+page.svelte)／AI(ai.ts)／
+//   engine(sanitizeSelectedIids) 三端一律只讀 `params.validIids`。寫在頂層 ＝ 死資料 ＝
+//   「可勾範圍」限制**完全失效**，而且靜默：picker 照開、效果照跑，只是限制不見了。
+//   實際踩到 4 張卡（光子纜線／貫通鑽／龍之猛暴／重新啟動箱），其中光子纜線最嚴重——
+//   棄牌區任意卡（訓練家/寶可夢）可被當能量附到備戰寶可夢身上（公平性）。
+//   ⚠ tsc 的 excess property check 本該擋下這型錯誤，但本專案 `tsc -p` 依賴
+//     `.svelte-kit/tsconfig.json`（需先 svelte-kit sync），CI 以外常態假綠 → 只能靠 lint。
+{
+  // 以 `effectKey: '...'` 為唯一錨點**往回**配對出物件開頭（別用「withPending 後第一個 {」——
+  //   template literal 的 ${} 會打亂括號配對，且 engine.ts 有直接寫 pendingSelection 的地方）。
+  const topLevelKeysOf = (src, objStart) => {
+    let depth = 0, inStr = null;
+    const keys = [];
+    for (let i = objStart; i < src.length; i++) {
+      const ch = src[i];
+      if (inStr) { if (ch === '\\') { i++; continue; } if (ch === inStr) inStr = null; continue; }
+      if (ch === "'" || ch === '"' || ch === '`') { inStr = ch; continue; }
+      if (ch === '{') { depth++; continue; }
+      if (ch === '}') { depth--; if (depth === 0) break; continue; }
+      if (depth === 1 && /[A-Za-z_$]/.test(ch)) {
+        const m = /^([A-Za-z_$][\w$]*)\s*:/.exec(src.slice(i, i + 40));
+        if (m) { keys.push(m[1]); i += m[0].length - 1; }
+      }
+    }
+    return keys;
+  };
+  const findObjStart = (src, from) => {
+    let depth = 0;
+    for (let i = from; i >= 0; i--) {
+      if (src[i] === '}') depth++;
+      else if (src[i] === '{') { if (depth === 0) return i; depth--; }
+    }
+    return -1;
+  };
+  let xScanned = 0;
+  for (const f of files) {
+    const src = readFileSync(f, 'utf8');
+    for (const m of src.matchAll(/effectKey:\s*'[^']+'/g)) {
+      const st = findObjStart(src, m.index);
+      if (st < 0) continue;
+      xScanned++;
+      if (topLevelKeysOf(src, st).includes('validIids')) {
+        const line = src.slice(0, m.index).split('\n').length;
+        violations.push(`[X] ${rel(f)}:${line} — pending 物件的**頂層**寫了 validIids。`
+          + `PendingSelection 型別沒有這個欄位，UI/AI/engine 三端只讀 params.validIids →`
+          + ` 這份限制是死資料、完全失效（picker 照開、效果照跑，但可勾範圍變成全部）。`
+          + ` 請移進 params：{ ..., validIids: [...] }`);
+      }
+    }
+  }
+  // ⚠ 掃描器自身防假綠：掃不到 pending 物件時測試會「全部通過」，看起來跟乾淨一樣。
+  if (xScanned < 300) {
+    violations.push(`[X] 掃描器異常 — 只配對到 ${xScanned} 個 pending 物件（預期 >300）。`
+      + `effectKey 錨點或括號回推壞了，本 check 形同虛設。`);
+  }
+  // 正對照：餵一個違規樣本，確認判準真的抓得到（否則「永遠 PASS」＝安慰劑）。
+  {
+    const sample = `withPending(st, { type: 'heal-target', minCount: 1, validIids: xs, effectKey: 'sample-x', params: { a: 1 } });`;
+    const st = findObjStart(sample, sample.indexOf("effectKey:"));
+    if (!topLevelKeysOf(sample, st).includes('validIids')) {
+      violations.push('[X] 正對照失敗 — 判準抓不到刻意植入的違規樣本，Check X 是死的');
+    }
+    const clean = `withPending(st, { type: 'heal-target', minCount: 1, effectKey: 'sample-x', params: { validIids: xs } });`;
+    const st2 = findObjStart(clean, clean.indexOf("effectKey:"));
+    if (topLevelKeysOf(clean, st2).includes('validIids')) {
+      violations.push('[X] 反向對照失敗 — 判準把合法的 params.validIids 誤判成違規（假陽性）');
+    }
+  }
+}
 
 // ── Check T：開 picker 前的公開 addLog 不得帶「候選 N 張 / 發現 N 張」隱藏 zone 統計（資訊洩漏，P1 收尾）──
 //   picker UI 本就顯示候選卡，log 帶數量純冗餘、且把隱藏 zone（自己手牌/牌庫）構成洩漏給對手。全禁。
@@ -824,7 +899,7 @@ for (const f of files) {
 }
 
 if (violations.length === 0) {
-  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部)）');
+  console.log('反模式 lint：✅ 無違規（A: _pool ReferenceError / B: 基本能量屬性比對 / C: 對手直接加傷漏免疫 guard / D: 9999假傷害KO / E: markFaint用於對手 / F: scrub鎖清單純度 / G: 從手牌附能治療漏對手反應 / H: 對手非傷害效果 inline 漏免疫 gate / I: 數丟道具漏 extraTools / J: 讀傷害狀態漏三槽 / K: 清狀態漏三槽(寫入端) / L: 有偏洗牌.sort(Math.random)→中央shuffle / M: reg空字串key死碼 / N: withPending死effectKey無resolver / P: opp-bench/poke-choose帶filter欄(改validIids) / Q: resolver保序map client iids重建牌庫未去重夾上限(疊牌/複製卡) / R: UI/AI判基本能量屬性直讀pokemonType(恒null選不到) / S: effects的filter字面量未收錄中央selection-filter且不在白名單→掉fallthrough / T: picker log帶候選/發現N張洩漏隱藏zone統計 / U: 對手active寫跨回合debuff旗標漏免疫gate(強烈之吻類) / V: canApplyEffectToTarget未表態counterPlacement(對戰圓形只擋放指示物) / W: deck-search純TOPn卻帶validIids(可勾子集但顯示全部) / X: pending頂層寫validIids(型別只認params.validIids→限制死資料失效)）');
   process.exit(0);
 }
 console.log(`反模式 lint：❌ 發現 ${violations.length} 處違規\n`);

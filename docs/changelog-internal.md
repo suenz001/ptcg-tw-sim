@@ -17,6 +17,89 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.129 — AI 抓錯卡：7 個 picker 篩選條件只有玩家端有、AI 端沒有
+
+玩家回報：跟 AI 對戰時，**蓋諾賽克特ex(I)｜金屬信號**（卡面「從自己的牌庫選擇最多2張
+**【鋼】屬性的進化寶可夢卡**」）AI 卻抓到「火箭隊的拉姆達」(支援者)、「火箭隊的接收器」(物品)。
+
+### 根因
+pending 宣告 `filter: 'Stage1Or2:Metal'`。這個 filter **只有 UI（`+page.svelte` 的
+`selectionItemsRaw`）有 inline case**，`ai.ts` 的 `case 'deck-search'` 完全沒有對應分支
+→ 落到該 chain 尾端的 `return true;` fallthrough ＝ **AI 把整副牌庫當候選**，
+再依 `_usefulness` 排序取前 N（非寶可夢 usefulness=1，排在「無上一階的進化寶可夢」=0 之前）
+⇒ 抓到訓練家卡。
+
+### 掃法：行為端，不是靜態 grep
+刻意**實際跑 `getAIAction`**（餵一副含 10 種代表卡的牌庫，看 AI 選走幾類），因為 ai.ts 有
+`f.startsWith('Trainer:')` / `'Pokemon:'` 等 generic prefix 分支 —— 字面量 grep 會把
+`'Trainer:Supporter'` 誤判成「AI 沒有」（假陽性），也看不出「有 case 但寫錯」（假陰性）。
+掃出同型漂移共 **7 個**（皆 H/I/J，逐字查證台灣官方卡面）：
+
+| filter | 卡 |
+|---|---|
+| `Stage1Or2:Metal` | 蓋諾賽克特ex(I)｜金屬信號 |
+| `EvolutionPokemon` | 哈克龍(I)｜進化指引 |
+| `GrassPokemonOrStadium` | 時拉比(I)｜時間輪轉 |
+| `FirePokemonOrBasicFireEnergy` | 熔蟻獸(I)｜舔舔捕捉 |
+| `DarknessPokemon:TOP7` | 越橘的一步棋(I) |
+| `BasicMetalEnergy:TOP4` | 金屬怪(H)｜金屬製造者 |
+| `Basic:SameName` | 一家鼠(H)｜家族行軍 等（deckSameNameBenchPost） |
+
+### 中央收斂
+7 個 predicate 全部收進 `selection-filter.ts`（逐字對齊 UI 的 inline，UI 那三個早退分支不動＝
+零 UI 行為變更）。為了讓 **TOP 型**收得進來，predicate 簽名加第三參數 `inst`（要 iid 才比對得了
+`params.topNIids`）—— 沒有這個參數，這一整類 filter 永遠只能留在 UI/AI 各一份 inline。
+同時 `DECK_SEARCH_NAME_PREFIXES` 補上 `'Stage1Or2:'` 與 `'Tool:NameContains='`
+（後者 evaluator 本來就有處理、只是沒列進這個陣列 → `isKnownSelectionFilter` 回 false）。
+Check S 凍結白名單 25 → 18。
+
+⚠ **最大回歸點**：`engine.ts` 的 `sanitizeSelectedIids`（Stage2 語義閘）原本傳空 ctx `{}`
+給 evaluator。TOP 型收進中央後，topN 集合會是空的 ⇒ **玩家合法選的卡也被濾掉**、
+越橘的一步棋／金屬製造者會靜默失效。改傳 `pending.params`（對既有已收錄 filter 零行為變更，
+唯一讀 ctx 的 `BasicEnergy:DistinctTypes` 讀的是 `excludeEnergyTypes`，engine 不傳）。
+零產能守衛 `test-filter-yields-candidates` 同步餵 `TOPN_PARAMS`，否則 TOP 型會永遠零產能假 FAIL。
+
+### 順帶修：`validIids` 寫在 pending **頂層**＝死資料（4 張卡，Fable 5 審出）
+`PendingSelection` 型別**沒有頂層 `validIids` 欄位**，UI／AI／engine 三端一律只讀
+`params.validIids`。寫在頂層 ＝ 那份「可勾範圍」限制完全失效，而且靜默（picker 照開、效果照跑）。
+
+- **密勒頓(J)｜光子纜線**（最嚴重，公平性）：卡面「選擇最多2張**這隻寶可夢身上附加的**
+  『基本【雷】能量』卡，改附於1隻備戰寶可夢」。原本 ①沒有 `filter` ②`validIids` 在頂層
+  ③phase1 resolver 不驗卡型 ⇒ UI 顯示**整個棄牌區**、resolver 照單全收，
+  **棄牌區任意卡（訓練家／寶可夢）都能被當能量附到備戰寶可夢身上**。行為端已重現。
+  修：補 `filter: 'BasicEnergy:Lightning'` ＋ validIids 移進 params ＋ phase1 resolver
+  自驗交集（`discard-search` 不走 engine 的 sanitize 閘，resolver 是唯一防線）。
+- **龍頭地鼠ex(I)｜貫通鑽**：卡面「對手1隻**受傷**備戰」→ 限制失效，可打沒受傷的。
+- **龍之猛暴**：卡面限【龍】寶可夢 → 可附給任何自己場上寶可夢。
+- **重新啟動箱**：卡面限「未來」寶可夢 → 可附給任何寶可夢。
+
+⚠ 三支既有測試（`test-photon-code-energy-picker` / `test-restart-box-player-distribute` /
+`test-photon-cable-lightning`）原本**照抄了錯誤寫法**去斷言頂層 `validIids`，等於把 bug
+固化成契約 —— 一併改成 `params.validIids`。
+
+### 一勞永逸：lint **Check X**
+`anti-pattern-lint` 新增：pending 物件的**頂層**不得出現 `validIids`。
+以 `effectKey:` 為唯一錨點**往回**配對物件開頭（不用「withPending 後第一個 `{`」——
+template literal 的 `${}` 會打亂括號配對，且 engine.ts 有直接寫 pendingSelection 的地方），
+含**掃描器下限斷言**（配對到的 pending 物件 <300 就報錯）＋**正對照**（餵違規樣本確認抓得到）
+＋**反向對照**（合法的 `params.validIids` 不得誤報）。
+
+⚠ tsc 的 excess property check 本該擋下這型錯誤，但本專案 `tsc -p` 依賴
+`.svelte-kit/tsconfig.json`（需先 svelte-kit sync），常態假綠 → 只能靠 lint。
+
+### 守衛
+新增 `scripts/test-v6129-deck-search-filter-parity.mjs`（114 項，進 npm test chain）：
+① 行為端跑 `getAIAction`，斷言每個現役 deck-search filter 都不得選走全部候選
+（`any`/`Any` 白名單例外）＋ filter 全集**數量下限斷言**（≥70）防掃描器假綠
+② 逐卡正對照（含「【鋼】ex 進化寶可夢 subtype='ex' 必須靠 stage 判」「TOP 範圍外不可選」）
+③ 既有 filter 未被 `inst` 參數擴充改壞 ＋ 未收錄仍回 `null`（三態契約）
+④ 行為端：engine 閘不得誤殺 TOP 型合法選擇 ＋ 反向對照（TOP 外仍要被清掉）
+⑤ 行為端：光子纜線 —— client 送 validIids 外的棄牌區卡不得被當能量附上去 ＋ 正對照
+
+HEAD-FAIL 證明：把 `selection-filter.ts` 還原成 v6.128 → 77 PASS / 32 FAIL；
+把 engine 改回空 ctx → ④ 兩項紅；把 `effects.ts` 還原 → Check X 紅。
+完整 `npm test` 449 步全綠、兩張免疫網全過、`anti-pattern-lint` 無違規。
+
 ## v6.128 — 多部效果卡灰區三張：牌庫空時不能執行（站長裁定）
 
 v6.127 留下的灰區，站長 2026-08-08 裁定：**納莉／丹瑜／小霞的朝氣 牌庫空時不能執行**。

@@ -670,8 +670,11 @@ regPost('赤面龍|龍之猛暴', (state, aIdx, pool) => {
   }
   return withPending(addLog(state, '龍之猛暴：選 1 隻【龍】寶可夢附上基本火能量', aIdx), {
     type: 'heal-target', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1, validIids: dragons.map(d => d.iid),
-    effectKey: 'ryu-moubou-attach', params: { energyIid: energy.iid },
+    minCount: 1, maxCount: 1,
+    effectKey: 'ryu-moubou-attach',
+    // v6.129 ⚠ validIids 原本寫在 pending 頂層 → 三端都讀不到 ⇒ 可附給場上任何寶可夢，
+    //   卡面「附於自己的1隻【龍】寶可夢」限制失效。
+    params: { energyIid: energy.iid, validIids: dragons.map(d => d.iid) },
   });
 });
 // v5.848：龍之猛暴選龍寶可夢附火能量 resolver。

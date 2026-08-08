@@ -45,7 +45,8 @@ T('★選能量後開「玩家分配」picker(非自動亂填)', () => {
   assert.ok(afterEnergy.pendingSelection, '選完能量應開「分配」picker(非自動附完)');
   assert.equal(afterEnergy.pendingSelection.type,'heal-target','應為 heal-target 分配 picker');
   assert.equal(afterEnergy.pendingSelection.effectKey,'restart-box-chain-attach','玩家逐張分配');
-  assert.equal(afterEnergy.pendingSelection.validIids.length, 2, '候選=2隻未來寶可夢');
+  // v6.129：改讀 params.validIids —— 型別沒有頂層 validIids 欄位，三端也只讀 params。
+  assert.equal(afterEnergy.pendingSelection.params.validIids.length, 2, '候選=2隻未來寶可夢');
 });
 
 T('★玩家逐張分配:各隻未來寶可夢各得1張(各1張上限)', () => {

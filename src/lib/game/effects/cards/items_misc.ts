@@ -1371,9 +1371,12 @@ function _restartBoxChainStep(st: GameState, idx: 0 | 1, energyIids: string[], f
   st = addLog(st, `重新啟動箱：選擇「${eName}」要附給哪一隻「未來」寶可夢（各 1 張）`, idx);
   return withPending(st, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1, validIids: validFutures,
+    minCount: 1, maxCount: 1,
     effectKey: 'restart-box-chain-attach',
+    // v6.129 ⚠ validIids 原本寫在 pending 頂層 → 三端都讀不到 ⇒ 可附給任何寶可夢，
+    //   卡面「附於自己的『未來』寶可夢」限制失效。
     params: {
+      validIids: validFutures,
       currentEnergy,
       remainingEnergy: energyIids.slice(1),
       remainingFutures: validFutures,

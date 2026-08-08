@@ -1262,7 +1262,11 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
     const bySemantic = out.filter((iid) => {
       const inst = (zone ?? []).find((c) => c.iid === iid) as CardInstance | undefined;
       const card = inst ? pool.get(inst.cardId) : undefined;
-      return evaluateSelectionFilter('deck-search', f, { iid }, card, {}) !== false;
+      // v6.129：必須傳 pending.params —— TOP 型 filter（'DarknessPokemon:TOP7' 等）的
+      //   predicate 要拿 params.topNIids 才判得出「在不在牌庫頂 N 張內」。
+      //   空 ctx 會讓 topN 集合為空 ⇒ 玩家**合法**選的卡也被濾掉（效果靜默失效）。
+      return evaluateSelectionFilter('deck-search', f, { iid }, card,
+        { params: pending.params as Record<string, unknown> | undefined }) !== false;
     });
     // set-level 去重（BasicEnergy:DistinctTypes 首見保留）；語義=sanitize 非 reject
     const insts = bySemantic
