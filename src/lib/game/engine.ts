@@ -9051,6 +9051,36 @@ function applyAbilityRetreatMod(
  *
  * 改動本函式時務必同步 getRetreatCost（L7081）— 兩處邏輯必須一致。
  */
+/**
+ * v6.136 對「剛被擊倒、已離開戰鬥場」的那隻寶可夢，計算它**昏厥當下**的有效撤退費。
+ *
+ * 用途：沉重接力棒卡面「附有這張卡的**【撤退】所需的能量為4個**的寶可夢，在戰鬥場上
+ *   受到對手的寶可夢招式的傷害而【昏厥】時…」——判定條件需要那一瞬間的撤退費。
+ *
+ * ⚠ 為什麼不能直接呼叫 computeActiveRetreatCostFor：
+ *   `fireDefenderOnKO` 被呼叫時，防守方的 `active` **已經被設成 null**
+ *   （effects.ts 的中央 KO 結算是「先 newDefender.active = null，再 fireDefenderOnKO」），
+ *   直接呼叫會命中 `if (!player.active) return 0` → 恆回 0 → 條件永遠不成立。
+ *
+ * 做法：把 koInst 暫時放回 active，再走**同一支**中央函式 —— 不複製任何修正邏輯，
+ *   氣球／緊急滑板／重力之玉／天空徑線／N的城堡／樂園度假地／磁鐵【鋼】能量／
+ *   特性類（咒縛火焰・大網・一身輕…）／鼓擊 全部自動一致。
+ *
+ * 官方裁定（PTCG RULES）：附有 **3 張「重力之玉」**（撤退費各 +1）與「沉重接力棒」的
+ *   普隆隆姆ex 受對手招式傷害昏厥時 → **可以**發動沉重接力棒。
+ *   ⇒ 判定基準是「**當下的有效撤退費**（含所有增減修正）」，不是卡面印刷值。
+ */
+export function computeRetreatCostForKOedActive(
+  state: GameState,
+  playerIdx: 0 | 1,
+  koInst: CardInstance,
+  pool: Map<string, Card>,
+): number {
+  const players = [...state.players] as [PlayerState, PlayerState];
+  players[playerIdx] = { ...players[playerIdx], active: koInst };
+  return computeActiveRetreatCostFor({ ...state, players }, playerIdx, pool);
+}
+
 export function computeActiveRetreatCostFor(
   state: GameState,
   playerIdx: 0 | 1,

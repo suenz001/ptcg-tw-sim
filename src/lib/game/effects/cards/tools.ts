@@ -36,7 +36,7 @@ import {
   hasMultiToolRelay, isLotomFamily,
 } from '../_shared';
 // v3.66：規則寶可夢統一判定 helper
-import { isRulePokemon } from '../../engine';
+import { isRulePokemon, computeRetreatCostForKOedActive } from '../../engine';  // v6.136 沉重接力棒判有效撤退費
 import { applyStatusToOppActive } from '../../effects';
 // v5.070：沉重接力棒分配能量改用 startEnergyChain — UI 顯示能量類型 + 同屬性 +/- counter
 import { startEnergyChain } from './v158_energy_chain';
@@ -220,6 +220,13 @@ TOOL_ON_KO.set('希望護身符', (state, dIdx, _aIdx, _pool, _koInst) => {
 TOOL_ON_KO.set('沉重接力棒', (state, dIdx, _aIdx, pool, koInst) => {
   const player = state.players[dIdx];
   if (player.bench.length === 0) return state;
+  // v6.136 ⚠ 卡面條件「附有這張卡的**【撤退】所需的能量為4個**的寶可夢」——
+  //   舊實作完全沒判這一條，任何撤退費的寶可夢附上去都會生效（玩家回報）。
+  //   走中央 computeRetreatCostForKOedActive：判定基準是**昏厥當下的有效撤退費**
+  //   （含氣球/緊急滑板/重力之玉/天空徑線/N的城堡/磁鐵【鋼】能量/特性/鼓擊等全部修正），
+  //   不是卡面印刷值 —— 依官方裁定「附 3 張重力之玉的普隆隆姆ex 被 KO 時可以發動」。
+  //   ⚠ 不能用 computeActiveRetreatCostFor：此時 active 已被設為 null（恆回 0）。
+  if (computeRetreatCostForKOedActive(state, dIdx, koInst, pool) !== 4) return state;
   // v5.067：直接從 koInst.energyAttached snapshot 撈基本能量（最多 3 張）
   //   舊邏輯「discard 倒序遇非基本能量就 break」會在第一張工具卡（沉重接力棒自己）
   //   就 break，導致吼鯨王ex 等附工具卡的寶可夢的能量都撈不到 → 反擊效果不觸發。

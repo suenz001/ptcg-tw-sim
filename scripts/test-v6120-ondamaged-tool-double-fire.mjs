@@ -130,7 +130,19 @@ T('⭐ 中央 helper 一擊 KO → 幸運頭盔仍要觸發（不能因為修 bu
 });
 
 T('⭐⭐ 真正的「昏厥時」道具（沉重接力棒）不得被誤跳過', () => {
+  // v6.136 ⚠ 卡面條件是「附有這張卡的【撤退】所需的能量**為4個**的寶可夢…昏厥時」，
+  //   所以持有者必須是撤退費 4 才會觸發。原本的 DEF 是「HP ≤ 60 的基礎寶可夢」，
+  //   撤退費不一定是 4 —— 這一項要驗的是「鏡射跳過邏輯不得誤傷沉重接力棒」，
+  //   不是撤退費條件本身（那個由 test-v6136-heavy-baton-* 負責），所以這裡把前提補正。
+  let DEF4 = null;
+  for (const [id, c] of pool) {
+    if (!String(c.supertype || '').startsWith('Pok') || !HIJ(c)) continue;
+    if (c.stage !== 'Basic' || c.abilities?.length) continue;
+    if ((c.retreatCost?.length ?? 0) === 4) { DEF4 = id; break; }
+  }
+  ok(DEF4, '找不到撤退費 4 且無特性的基礎寶可夢（沉重接力棒卡面前提）');
   const st = mkState(BATON);
+  st.players[1].active = inst(DEF4, 'd1', { toolAttached: inst(BATON, 't1') });
   st.players[1].active.energyAttached = [inst(BASIC_ENERGY, 'be1'), inst(BASIC_ENERGY, 'be2')];
   const s = mod.dealAttackDamageToTarget(st, 0, 'd1', 300, pool, { kind: 'attack-damage', label: 'T' });
   const hit = s.log.some((l) => String(l.message ?? l.text ?? '').includes('沉重接力棒'))
