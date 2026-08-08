@@ -673,6 +673,15 @@
   .changelog-list :global(details[open] summary::before) { transform: rotate(90deg); }
   .changelog-list :global(.ver-badge) { font-family: ui-monospace, 'Cascadia Code', monospace; font-size: 0.78rem; font-weight: 600; background: #e8edf5; color: #3a5a8a; padding: 0.1rem 0.45rem; border-radius: 4px; display: inline-block; margin-right: 0.35rem; vertical-align: 0.05em; }
   .changelog-list :global(details[open] .ver-badge) { background: #d0e3fa; color: #1a4a8a; }
+  /* ⚠v6.133：`.log-body`（v6.129 起用來放「展開才看到的補充說明」）**當初漏了這條規則** →
+     changelog.html 是用 {@html} 載入的，Svelte 的 scoped 樣式對它無效，**沒寫 :global() 就等於沒樣式**，
+     於是它吃瀏覽器預設的 1rem（16px），比 summary 的 0.9rem 明顯大一截，四則新紀錄的字都爆掉。
+     ⇒ 新增 `test-changelog-html-classes-have-global-css` 守衛：changelog.html／archive 用到的每個
+     class 都必須在這裡有對應的 :global() 規則，不能再靠人記得。 */
+  .changelog-list :global(.log-body) { padding: 0 0.85rem 0.7rem 1.95rem; font-size: 0.85rem; color: #555; line-height: 1.7; }
+  /* 同一個缺陷的第二例（守衛一寫完就抓到）：「查看更早的更新紀錄」連結也沒有 :global 規則。 */
+  .changelog-list :global(.changelog-archive-link) { display: block; text-align: center; padding: 0.6rem; font-size: 0.85rem; color: #3a5a8a; text-decoration: none; }
+  .changelog-list :global(.changelog-archive-link:hover) { text-decoration: underline; }
   .changelog-list :global(details ul) { margin: 0; padding: 0.5rem 0.85rem 0.7rem 1.8rem; font-size: 0.85rem; color: #444; line-height: 1.7; }
   .changelog-list :global(details li) { margin-bottom: 0.1rem; }
 

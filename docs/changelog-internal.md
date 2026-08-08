@@ -17,6 +17,42 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.133 — 首頁 changelog 的 `.log-body` 沒有樣式（字體爆大）＋ 根治守衛
+
+站長回報：v6.132 那則的「這幾個特性每回合只能用一次…」那段字**特別大**。
+
+### 根因
+首頁的 changelog 是 `fetch()` + `{@html}` 注入的（v5.969 為了縮小 bundle）。
+**Svelte 的 scoped CSS 只作用在編譯期就存在的標記上** —— 執行期注入的 HTML 拿不到 scope hash，
+所以樣式一律得寫成 `.changelog-list :global(...)`。
+
+我從 v6.129 起用 `<div class="log-body">` 放「展開才看到的補充說明」，**卻沒有加對應的 `:global` 規則**
+⇒ 它吃瀏覽器預設的 `1rem`(16px)，而周圍的 summary 是 `0.9rem`、`details ul` 是 `0.85rem`，
+並排就明顯大一截。v6.129～v6.132 四則全中。
+
+⚠ 這種缺陷的麻煩之處：**不會報錯、不會壞版、測試也不會紅**，只是安靜地變醜 —— 靠人眼每次都抓到不現實。
+
+### 修法
+`.changelog-list :global(.log-body) { padding: 0 0.85rem 0.7rem 1.95rem; font-size: 0.85rem; color: #555; line-height: 1.7; }`
+
+### 一勞永逸：`test-changelog-html-classes-have-global-css`
+**`static/changelog.html` 用到的每個 class，都必須在 `+page.svelte` 有對應的 `:global()` 規則。**
+這條網一寫完就當場抓到**第二例**：`.changelog-archive-link`（「查看更早的更新紀錄」那個連結）
+同樣沒有規則、同樣在吃瀏覽器預設樣式 —— 一併補上。
+
+⚠ 守衛自身的兩個坑（都當場踩到、都修了）：
+1. 第一版把 `changelog-archive.html` 也納入掃描 → 4 條假 FAIL。它是 `<!DOCTYPE html>` 開頭的
+   **獨立完整頁面**、有自己的 `<style>`，根本不走首頁 CSS。
+   ⇒ 只掃 `changelog.html`（片段），並加一條**前提檢查**：archive 必須仍是「有自己 `<style>` 的獨立頁面」，
+   哪天若被改成片段，守衛會提醒把它加回掃描範圍。
+2. 下限斷言 `PAGE.length > 50000` 設太高（`+page.svelte` 實際 34KB）→ 假 FAIL。改 20000。
+   （Rule 25 說掃描器要有下限斷言防假綠，但**下限值本身設錯就會變成假紅**，一樣要驗。）
+
+HEAD-FAIL：拿掉 `.log-body` 那條規則 → 守衛紅。完整 `npm test` 452 步全綠、lint 無違規、svelte compile 通過。
+
+⚠ 本版**不寫首頁 changelog** —— 純樣式修正、無規則差異，依 changelog 規範第 2 條
+（「玩家不需要知道的整則不放」）。但仍 bump 版本（SW 快取）。
+
 ## v6.132 — 站長裁定四條特性 gate（v6.131 的同維度收尾）
 
 站長裁定（2026-08-08），全部是 v6.131 由 Fable 5 指出、當時列為「待裁定」的同維度漏網：
