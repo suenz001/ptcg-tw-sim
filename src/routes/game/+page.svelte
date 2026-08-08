@@ -4216,17 +4216,37 @@
 
   // ── 動作分派（本機 + 線上共用） ─────────────────────────────────────────────
   // ── 錦標賽 transport（伺服器權威）：dispatch 在 isTournament 時改走這裡 ──
-  async function tApi(path: string, body?: any) {
+  async function tApi(path: string, body?: any, opts?: { timeoutMs?: number }) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     // v0.5 A1：帶 Firebase ID token，伺服器 verifyIdToken 驗證身分（禁匿名）
     try { if (firebaseUser && !firebaseUser.isAnonymous) headers['Authorization'] = 'Bearer ' + (await firebaseUser.getIdToken()); } catch { /* 取 token 失敗 → 伺服器退回 playerId fallback */ }
-    const res = await fetch(T_API + path, {
-      method: body ? 'POST' : 'GET',
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
-    return res.json();
+    // v6.135 逾時保護：fetch 預設沒有 timeout（瀏覽器要幾百秒才放棄）。
+    //   隧道排隊/黑洞時 `await fetch` 既不 resolve 也不 reject
+    //   → tournamentDispatch 的 `finally { tBusy = false }` 永遠不執行
+    //   → tBusy 永久 true → 之後**所有**點擊被 `if (tBusy) return` 靜默吞掉，
+    //     而 tBusy 沒有任何 template 綁定（按鈕不會變灰）⇒ 玩家只會看到「按了沒反應」。
+    //   POST(動作) 12s、GET(輪詢/查詢) 8s：伺服器 P95 是 8ms，正常情況遠不會觸發。
+    //   進場/報名這種「失敗有狀態副作用」的呼叫可用 opts.timeoutMs 放寬（慢網路不該被誤殺）。
+    const _toMs = opts?.timeoutMs ?? (body ? 12000 : 8000);
+    const _ac = new AbortController();
+    let _timedOut = false;  // 只認「這顆計時器造成的 abort」，不把其他來源的 AbortError 誤判成逾時
+    const _to = setTimeout(() => { _timedOut = true; try { _ac.abort(); } catch { /* ignore */ } }, _toMs);
+    try {
+      const res = await fetch(T_API + path, {
+        method: body ? 'POST' : 'GET',
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: _ac.signal,
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      return await res.json();
+    } catch (e: any) {
+      // AbortError → 換成看得懂的訊息（呼叫端會顯示在 tError）
+      if (_timedOut && e && (e.name === 'AbortError' || String(e).includes('AbortError'))) {
+        throw new Error(`連線逾時（${Math.round(_toMs / 1000)} 秒沒有回應）`);
+      }
+      throw e;
+    } finally { clearTimeout(_to); }
   }
   async function tournLogin() {
     if (!authEmail || !authPassword) { authError = '請輸入 Email 和密碼'; return; }
@@ -4344,10 +4364,10 @@
   async function tEnterMatch() {
     tError = ''; tBusy = true;
     try {
-      const r = await tApi('/match/enter', {});
+      const r = await tApi('/match/enter', {}, { timeoutMs: 20000 });  // v6.135 失敗會踢回大廳 → 放寬
       if (r.error) { tError = r.error; return; }
       tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
-      const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+      const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`, undefined, { timeoutMs: 20000 });  // v6.135 同上
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
       if (sst && typeof sst.lastActionAt === 'number') tLastActionAt = sst.lastActionAt;
@@ -4718,12 +4738,19 @@
     tPollTimer = setInterval(async () => {
       try {
         _gpTick++;
+        const reqV = tVersion;  // v6.135 送出當下的版本（亂序守衛用）
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
-        else if (r && typeof r.version === 'number' && r.version < tVersion && r.gameState) { game = r.gameState; tVersion = r.version; }  // v5.593 client 版本超前伺服器(desync/房重置)→ 強制回正(伺服器權威)
+        // v5.593 client 版本超前伺服器(desync/房重置)→ 強制回正(伺服器權威)
+        // v6.135 ⚠ 加亂序守衛 `reqV === tVersion`：setInterval **不等前一發完成**，RTT 抖動時多發並行。
+        //   情境：A、B 兩發並行，B 帶回 v12（已採納，tVersion=12），A 晚到帶回 v11 → 舊條件 `11 < 12` 成立
+        //   → **盤面倒回 v11**，1.2 秒後又跳回 v12 ⇒ 玩家看到「動作出現又消失」。
+        //   既有的 `gen !== tPollGen` 只擋「離開對戰後的舊回應」，擋不住同一輪詢內的亂序。
+        //   真 desync 的特徵是「送出當下 client 就已經超前」⇒ 用 reqV 判定，晚到的舊回應一律丟棄。
+        else if (r && typeof r.version === 'number' && r.version < tVersion && r.gameState && reqV === tVersion) { game = r.gameState; tVersion = r.version; }
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
@@ -4733,7 +4760,17 @@
     }, 1200);
   }
   async function tournamentDispatch(action: any, _retried = false) {
-    if (tBusy) return; tBusy = true; tError = '';
+    // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
+    //   玩家在等待往返時連點會完全沒有回饋 ⇒ 體感就是「按下去沒反應」。改為顯性提示。
+    if (tBusy) {
+      // v6.135 這則是暫時性提示，2 秒後自動收掉——成功路徑不會清 tError，
+      //   不自動清會讓紅色 toast 在「動作其實成功了」之後一直掛著（玩家可能整段對手回合都看著它）。
+      tError = '上一個動作還在送出中，請稍候…';
+      const _msg = tError;
+      setTimeout(() => { if (tError === _msg) tError = ''; }, 2000);
+      return;
+    }
+    tBusy = true; tError = '';
     const prev = game;
     try {
       const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });

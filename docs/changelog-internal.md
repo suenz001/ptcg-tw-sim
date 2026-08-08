@@ -17,6 +17,81 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.135 — 錦標賽網路層三項防護（PR-1，不含樂觀更新）
+
+承 v6.134 的診斷。**樂觀更新是大改動、留給 PR-2**；這一版先修三個「現行就存在、與樂觀更新無關」的問題。
+
+### ① `tApi` 完全沒有 timeout → `tBusy` 可能永久鎖死
+
+`fetch` 預設沒有 timeout（瀏覽器要幾百秒才放棄）。隧道排隊/黑洞時 `await fetch` **既不 resolve
+也不 reject** → `tournamentDispatch` 的 `finally { tBusy = false }` 永遠不執行 → `tBusy` 永久 true
+→ 之後**所有**點擊被 `if (tBusy) return` 靜默吞掉。而 `tBusy` 沒有任何 template 綁定（按鈕不會變灰）
+⇒ 玩家只會看到「按了沒反應」，且完全看不出自己被吞了。
+
+修：`AbortController` + `setTimeout`，POST 12s / GET 8s，`AbortError` 轉成可讀訊息。
+
+⚠ `return res.json()` 改成 `return await res.json()` **是正確性關鍵不是風格**：沒有 `await` 的話
+try block 在 headers 到達就結束、`finally` 立刻 `clearTimeout`，計時器只保護到 headers ——
+而黑洞常發生在 **body 傳輸中途**，那時 `res.json()` 永不 settle、`tBusy` 照樣永鎖，等於白改。
+
+⚠ 兩個 Fable 5 審查後補的收尾：
+- `_timedOut` 旗標：只認「**這顆**計時器造成的 abort」，避免其他來源的 AbortError 被誤報成逾時。
+- `tApi` 加 `opts.timeoutMs`，`tEnterMatch` 的 `/match/enter` 與 `/state?v=-1` 兩發放寬到 **20s**
+  —— 它的 catch 會 `tStep = 'lobby'` **把玩家踢回大廳**，8s 誤殺代價是慢網路玩家進不了場（可能吃 noShow 判負）。
+  其餘呼叫端逐一掃過，全部有 try/catch 且失敗是靜默忽略或顯示 tError，不會因 throw 壞掉。
+  回放 `tStartReplay` 走裸 fetch **不經 tApi**，最大 payload 不受影響。
+
+### ② 輪詢亂序會把盤面倒回舊版本（現行閃爍源，符合「重整無效」）
+
+`startTournamentPoll` 的 `setInterval(…, 1200)` **不等前一發完成**，RTT 抖動時多發並行。
+情境：A、B 兩發並行，B 帶回 v12（採納，`tVersion=12`），A 晚到帶回 v11 → 舊條件
+`r.version < tVersion` 成立 → **盤面倒回 v11**，1.2 秒後又跳回 v12 ⇒ 玩家看到「動作出現又消失」。
+既有的 `gen !== tPollGen` 只擋「離開對戰後的舊回應」，擋不住同一輪詢內的亂序。
+
+修：捕捉送出當下的 `const reqV = tVersion`，回正分支加 `&& reqV === tVersion`。
+真 desync 的特徵是「送出當下 client 就已經超前」——**單發情況下 `reqV === tVersion` 恆真**，
+所以守衛只會擋掉「期間有另一發改過版本」的亂序，房重置/離場重進都不受影響；
+就算真被擋到，下一輪輪詢（1.2s）必回正，另有 6s 輪詢看門狗與 8s 新鮮度看門狗兜底。
+
+🔨 **PR-2 待辦**：兩條 `v=-1` 路徑（輪詢看門狗、`tForceResync`）**繞過這個守衛也繞過 tAdopt 的
+stale 擋板**，自己就有同款亂序倒退風險（`fr.version !== tVersion` 包含倒退方向）。機率低
+（8s 節流＋觸發條件是盤面停滯），但該補同款 reqV 守衛。
+
+### ③ in-flight 不再靜默吞點擊
+
+`if (tBusy) return;` → 改成寫 `tError` 顯性提示。
+⚠ 並加 2 秒自動清除：**成功路徑不會清 `tError`**，而 `.tourn-toast` 沒有任何自動消失計時器
+（唯一特例是複製回放連結的 2.5s）——不自動清會讓紅色 toast 在「動作其實已經成功」之後
+一直掛著，玩家可能整段對手回合都看著它。
+
+### 守衛
+
+`scripts/test-v6135-tournament-net-hardening.mjs`（17 項）：三項各自的正面斷言＋反向對照
+（舊寫法不得存在）、`tEnterMatch` 放寬的**正對照**（確認它失敗真的會踢回大廳，理由成立）、
+以及一條前瞻斷言「`tVersion` 不得被 client 自行遞增」——**釘住 PR-2 樂觀更新的前提**：
+`tVersion` 語義必須永遠是「伺服器確認過的版本」，本地預測絕不 bump，否則回正分支會誤判。
+含掃描器下限斷言（檔案 < 500KB 視為 mount 截斷直接 exit 1）。
+
+HEAD-FAIL：改前 PASS 2 / FAIL 15，改後 17 / 0。v6.134 守衛金絲雀 7/0（確認 base 沒抓錯）。
+
+### 🔨 PR-2（樂觀更新）的設計要點（Fable 5 已審，尚未實作）
+
+- **不要枚舉哪些 action 可預測，改執行期試跑**：dispatch 前本地跑一次 `applyAction`，期間把
+  `Math.random` 暫時換掉並計數，**碰到任何隨機就放棄預測**退回現行行為。擲幣招式、洗牌搜尋、
+  混亂撤退、有灼傷的回合結束全自動被擋。此手法 repo 有先例（`ai-eval.ts:46` 引擎試打評估）。
+- 第一批只放 `ATTACH_ENERGY`（高頻、零隨機、零 pending、無連鎖）。
+- `tVersion` 絕不因預測 bump；伺服器 state 無條件贏；回滾機制免費（伺服器每條失敗路徑都附權威 gameState）。
+- 回滾把卡塞回手牌會誤觸 draw-fly 動畫＋`arrivingIids` opacity:0（v5.932 隱形手牌事故家族）→ 需 `noDrawAnim` 路徑。
+
+### ⚠ 另記（不進公開 changelog）
+
+Fable 5 查證：`/api/tournament/state` 與 `/action` 回給 client 的 gameState **完全未遮蔽**
+（`server_admin_patch.js:3310/3352` 只做 log 截尾），對手手牌與雙方牌庫順序全在 client 記憶體，
+開發者工具讀得到。redact 只做在 `/spectate/state` 與回放。樂觀更新**不加劇也不改善**這一點
+（它不需要任何新資訊）。要真正封死需要 per-seat redact ＋「洗牌結果延遲決定」，是大工程，
+且會讓 PR-2 的抽卡類動作永遠無法預測 —— 若日後要做 redact，分批順序應把抽卡類永遠留在白名單外。
+
+
 ## v6.134 — 休閒大廳輪詢 gate 補 `mode === 'online'`（錦標賽 lag 調查的第一項）
 
 **現象**：玩家回報錦標賽瑞士制第四輪開始很卡。能連 Oracle 的工程師實測伺服器端全綠
