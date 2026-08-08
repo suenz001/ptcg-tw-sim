@@ -2,7 +2,7 @@
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { retryImg } from '$lib/img-retry';
   import { resolveLogCard } from '$lib/game/log_zoom';
-  import { onMount, onDestroy, untrack } from 'svelte';
+  import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
@@ -3671,6 +3671,13 @@
   let bgmTrack = $state('none');
   let bgmVolume = $state(0.5);
   let bgmAudioEl: HTMLAudioElement | null = $state(null);
+  // v6.130 BGM 上架站長原創曲。瀏覽器的 autoplay policy 會擋掉「無使用者手勢的自動播放」，
+  //   而重整回訪時 bgmTrack 是從 localStorage 讀回來的（沒有手勢）→ 一定被擋。
+  //   ⚠ <audio autoplay> 屬性被擋是**靜默**的（拿不到 promise）；改用程式呼叫 play() 才 catch 得到
+  //   NotAllowedError，才有辦法在首次點擊時補播。否則玩家會以為「設定沒存住」。
+  let bgmBlocked = $state(false);
+  /** 可選曲目白名單。localStorage 存的是曲目代號，舊值/壞值一律退回 'none'（避免拼出 404 網址）。 */
+  const BGM_TRACKS = ['none', 'last-card'] as const;
 
   function onVolumeChange(v: number) {
     audioVolume = v;
@@ -3680,10 +3687,21 @@
     audioMuted = !audioMuted;
     saveMuted(audioMuted);
   }
+  /** 嘗試播放 BGM；被 autoplay policy 擋下時標記 bgmBlocked，等玩家第一次點擊再補播。 */
+  function tryPlayBgm() {
+    const el = bgmAudioEl;
+    if (!el || bgmTrack === 'none') return;
+    el.play().then(() => { bgmBlocked = false; }).catch(() => { bgmBlocked = true; });
+  }
   function onBgmTrackChange(track: string) {
     bgmTrack = track;
     setBgmTrack(track);
+    // 這裡仍在 <select> change 的使用者手勢窗內 → play() 會成功；
+    // tick() 是等 {#if bgmTrack !== 'none'} 把 <audio> 掛上去、bgmAudioEl 綁定完成。
+    void tick().then(() => tryPlayBgm());
   }
+  /** 首次任何點擊 → 若先前被擋就補播（對戰頁玩家必然會點，體感上幾乎無感）。 */
+  function unlockBgmOnGesture() { if (bgmBlocked) tryPlayBgm(); }
   function onBgmVolumeChange(v: number) {
     bgmVolume = v;
     setBgmVolume(v);
@@ -3703,8 +3721,14 @@
     // v4.968: 換成「Start the game already.mp3」(用戶提供的開戰語音)
     playWhenHidden = getPlayWhenHidden();
     preloadReadyGoSample(`${base}/sounds/start-the-game-already.mp3`);
-    bgmTrack = getBgmTrack();
+    // v6.130：舊值/壞值退回 'none'，避免拼出 /music/<不存在>.mp3 的 404
+    const _savedTrack = getBgmTrack();
+    bgmTrack = (BGM_TRACKS as readonly string[]).includes(_savedTrack) ? _savedTrack : 'none';
     bgmVolume = getBgmVolume();
+    // 重整回訪且先前選過曲目 → 這裡沒有使用者手勢，play() 多半被擋（bgmBlocked=true），
+    // 由 unlockBgmOnGesture 在玩家第一次點擊時補播。
+    void tick().then(() => tryPlayBgm());
+    window.addEventListener('pointerdown', unlockBgmOnGesture);
     // 匿名登入（線上對戰需要）— v4.924 改用 Firebase + Oracle 並行：
     //   v4.65 原本是 if/else 二擇一，但 vite 沒 swap $lib/firebase，Firebase
     //   Auth SDK 在 Oracle build 下完全可用（牌組編輯器頁就是這樣跑的）。
@@ -3850,6 +3874,7 @@
 
   onDestroy(() => {
     stopHeartbeat();
+    window.removeEventListener('pointerdown', unlockBgmOnGesture);   // v6.130 BGM 手勢解鎖
     closeAudio();  // v4.928: 釋放 AudioContext + 停所有 in-flight oscillators
     if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; tPollGen++; }
     unsubRoom?.();
@@ -8036,12 +8061,15 @@
        conditional 之外，always render — 兩種 layout 都能觸發 modal。 -->
 
   <!-- 背景音樂播放器 (全域) -->
+  <!-- v6.130 ⚠ 這個 {#if} 就是「玩家沒選就零下載」的保證：bgmTrack==='none' 時 DOM 裡根本
+       沒有 <audio> 元素，不會發出任何請求。SW 端另有 HEAVY_MEDIA 把 /music/ 排除預快取。
+       ⚠ 不放 autoplay 屬性 —— 被瀏覽器擋下時是靜默的；改由 tryPlayBgm() 呼叫 play() 才 catch 得到。 -->
   {#if bgmTrack !== 'none'}
-    <audio 
-      src="{base}/music/{bgmTrack}.mp3" 
-      loop 
-      autoplay 
-      bind:this={bgmAudioEl} 
+    <audio
+      src="{base}/music/{bgmTrack}.mp3"
+      loop
+      preload="auto"
+      bind:this={bgmAudioEl}
       bind:volume={bgmVolume}
     ></audio>
   {/if}
@@ -10632,9 +10660,16 @@
             <label for="bgm-select">選擇曲目：</label>
             <select id="bgm-select" value={bgmTrack} onchange={(e) => onBgmTrackChange(e.currentTarget.value)}>
               <option value="none">無 (關閉)</option>
-              <!-- v3.84: 為避免版權風險，移除 3 首官方 BGM。功能容器保留，之後補新音樂直接在這加 option + 在 static/music/ 放 .mp3 即可。 -->
+              <!-- v3.84: 為避免版權風險，移除 3 首官方 BGM（v6.130 已把 mp3 檔案本身也從網站移除）。
+                   v6.130: 上架站長原創曲。新增曲目＝在這加一個 option + 把 .mp3 放進 static/music/
+                   + 把代號加進上面的 BGM_TRACKS 白名單（三處都要，否則舊值 fallback 會把它擋掉）。 -->
+              <option value="last-card">最後一張牌（站長原創）</option>
             </select>
           </div>
+          <div class="bgm-note">「最後一張牌」為站長自行作詞、作曲的原創歌曲。選擇後才會開始下載，不選就完全不佔流量。</div>
+          {#if bgmTrack !== 'none' && bgmBlocked}
+            <div class="bgm-note bgm-blocked">🔇 瀏覽器擋住了自動播放 —— 在畫面上點一下就會開始播放。</div>
+          {/if}
           {#if bgmTrack !== 'none'}
             <div class="setting-row">
               <label for="bgm-vol">音樂音量：</label>
@@ -13998,6 +14033,15 @@
 
   /* v6.108：提示列裡的「已選卡名」— 要一眼看得到，這是防誤選的主要視覺錨點 */
   .sel-picked-names { color: #ffd54a; font-weight: 700; }
+  /* v6.130 BGM 說明文字（原創聲明 / autoplay 被擋提示） */
+  .bgm-note {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    opacity: 0.75;
+    margin: 0.25rem 0 0.5rem;
+  }
+  .bgm-blocked { opacity: 1; color: #f0b23c; }
+
   /* deck-search / generic selection：放大鏡 + 挑選按鈕的 wrapper */
   .sel-card-wrap{ position:relative; display:flex; flex-direction:column; }
   .sel-card-wrap.sel-picked .sel-card{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }

@@ -17,6 +17,78 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.130 — BGM 上架站長原創曲【最後一張牌】＋ 真的移除三首官方 BGM 檔案
+
+站長自行作詞作曲了【最後一張牌】，要上架到「設定 → 背景音樂 (BGM)」，**預設仍是關閉**，
+且**玩家點選之後才下載**（5.5MB，不能讓所有人進站就吃）。方案先請 Fable 5 規劃，逐項自行查證後採用。
+
+### ⚠ 順帶發現：v3.84 的版權處理其實沒做完
+v3.84 註解寫「為避免版權風險，移除 3 首官方 BGM」，但**只拿掉了選單的 option，mp3 檔案還躺在
+`static/music/`**（Aim to Be a Pokemon Master / Pokemon XYZ Opening / We Go，共約 10MB）——
+`static/` 會被完整部署，任何人打網址就能直接下載。這是**持續中的公開散布**，和「選單看不到」無關。
+站長裁定：一併從 HEAD 移除（不改寫 git 歷史 —— filter-repo/BFG 會換掉全部 sha，直接毀掉本專案
+「以 sha 當 patch base」的推送紀律，見 IRON_RULES Rule 24；歷史殘留的風險量級遠低於線上任人下載）。
+
+### 檔名用 ASCII：`最後一張牌.mp3` → `last-card.mp3`
+中文檔名技術上其實可行（CJK 沒有 NFC/NFD 分解形，瀏覽器自動 percent-encode，SW 的 Cache key
+與 `event.request.url` 一致）。改 ASCII 的真正理由是：**曲目代號會寫進玩家的 localStorage
+（`ptcg.audio.bgm.track`）並拼進網址** —— 用中文會把這個持久化鍵綁死在中文檔名上，日後改名
+就讓舊玩家指向 404；而且本專案有過零寬字元混進字串的前科（v6.117），ASCII 是肉眼可驗的。
+
+### 三處必須同步（少一處就壞）
+`BGM_TRACKS` 白名單 ⟺ `<option value>` ⟺ `static/music/<代號>.mp3`。
+onMount 讀回 localStorage 後會用白名單過濾，舊值/壞值一律退回 `none`（避免拼出 404）；
+所以只加 option 不加白名單 ＝ 玩家「選了重整就跳回關閉」。守衛對三方做雙向斷言。
+
+### ⚠ 最大的行為變化：拿掉 `autoplay` 屬性
+玩家選過曲目後 localStorage 會記住，**下次重整進頁面時 `bgmTrack !== 'none'`，audio 會在
+沒有任何使用者手勢的情況下嘗試播放** → Chrome/Safari/iOS 的 autoplay policy 都會擋。
+以前沒有任何曲目可選，所以這條路徑從沒被走過。
+
+關鍵：**`<audio autoplay>` 屬性被擋是「靜默」的**（拿不到 promise，無從偵測）；
+只有程式呼叫 `el.play()` 才會得到可 catch 的 `NotAllowedError`。
+⇒ 拿掉屬性，改 `tryPlayBgm()` → `play().then().catch()`，被擋時設 `bgmBlocked`，
+並掛一次性的 `pointerdown` 解鎖（對戰頁玩家必然會點，體感幾乎無感）+ 畫面上給一行提示。
+`onBgmTrackChange` 用 `tick()` 等 `<audio>` 掛上去再 play（此時仍在 select change 的手勢窗內，必成功）。
+
+### 「點選後才下載」的保證
+`{#if bgmTrack !== 'none'}` 為 false 時 DOM 裡**根本沒有 `<audio>` 元素**，不發任何請求 ——
+這是唯一的保證，守衛用「audio 標籤往回 600 字必須有這個 {#if}」釘住（一旦改成永遠渲染、
+只切換 src，所有玩家進站就會吃流量）。SW 端 `HEAVY_MEDIA` 另有一道，把 `/music/` 排除在安裝預快取外。
+`preload` 明寫 `auto`（各瀏覽器缺省值不一致）。
+
+### Service Worker：`/music/` 完全繞過 SW
+fetch handler 早退（不 respondWith）→ 走瀏覽器原生 fetch + HTTP cache + Range。
+理由不是省空間，是 **`CACHE_NAME` 含 `version`、activate 只保留現行版＋前一版**，本站幾乎日更，
+音樂若走「用到才快取」，每次出版快取就蒸發、常聽的玩家反覆重抓 5.5MB。原生 HTTP cache 跨 SW
+版本存活，之後都是 304。
+
+另外兩個 Range/Cache API 的地雷（查證後確認現況）：
+- `cache.put()` 對 206 回應會直接 reject；現行 `status === 200` gate 剛好擋掉，不會炸，
+  但也意味著**音樂其實從沒被成功快取過**（媒體元素首個請求通常帶 `Range: bytes=0-`，Pages 回 206）。
+- `cache.match()` 預設無視 Range header，會把整包 200 回給帶 Range 的請求，Safari 媒體管線可能播不動。
+早退後這兩條路徑都不存在。代價：音樂不支援離線播放（可接受）。
+
+### 歌詞
+mp3 的 ID3 內有 USLT 歌詞 frame（1.6KB），但**瀏覽器沒有任何 API 讀得到**，要顯示就得先抓整個
+mp3 再用 JS 解析 ID3 —— 直接違反「點選後才下載」。站長裁定這版先不放；日後要放就手動貼一份靜態文字。
+
+### 守衛
+`scripts/test-v6130-bgm-lazy-and-licensing.mjs`（31 項，進 npm test chain）三條不變式：
+① 版權（`static/music/` 白名單 ＋ 三首官方曲名寫死黑名單「不得復活」）
+② 延遲載入（`{#if}` 包住 audio ＋ SW 預快取排除 ＋ fetch 早退）
+③ autoplay（禁屬性、必須有 play().then().catch()、必須掛/清 pointerdown）
+＋ 白名單/option/實體檔三方雙向一致 ＋ 預設值必須是 none。
+
+⚠ **守衛第一版自己踩坑**：`indexOf('<audio')` 抓到的是**註解裡**的「`<audio autoplay>` 屬性被擋
+是靜默的」那行說明文字，導致三條斷言假 FAIL。改成**先剝註解**（`<!-- -->`、`/* */`、`//`）
+＋ 用 `/<audio\b[\s\S]*?<\/audio>/` 取真標籤 ＋ 斷言「剝完後剛好 1 個 audio 元素」。
+守衛內另含自我驗證段（餵違規樣本確認判準抓得到、餵合法樣本確認不誤報、驗剝註解器本身）。
+同型教訓：v6.112 的「舊寫法不得復活」守衛也被修正說明裡引用的舊寫法抓到過。
+
+HEAD-FAIL：還原 +page.svelte → 6 條紅；還原 service-worker → fetch 早退那條紅；
+把 `We Go.mp3` 放回來 → 版權兩條紅。完整 npm test 450 步全綠、lint 無違規、svelte compile 通過。
+
 ## v6.129 — AI 抓錯卡：7 個 picker 篩選條件只有玩家端有、AI 端沒有
 
 玩家回報：跟 AI 對戰時，**蓋諾賽克特ex(I)｜金屬信號**（卡面「從自己的牌庫選擇最多2張

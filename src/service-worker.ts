@@ -64,6 +64,15 @@ sw.addEventListener('activate', (event) => {
 
 sw.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // v6.130 音樂完全繞過 SW（不 respondWith → 走瀏覽器原生 fetch + HTTP cache + Range）。
+  //   ⚠ 理由不是省空間，是 CACHE_NAME 含 version、activate 只保留現行版+前一版 → 本站幾乎日更，
+  //     音樂若走「用到才快取」，每次出版快取就蒸發，常聽的玩家會反覆重抓 5.5MB。
+  //     原生 HTTP cache 跨 SW 版本存活，之後都是 304 revalidate。
+  //   ⚠ 另一層：媒體元素首個請求通常帶 Range → GitHub Pages 回 206，而 cache.put() 對 206 會 reject
+  //     （現行 `status === 200` gate 剛好擋掉，不會炸，但也代表音樂其實從沒被快取成功）；
+  //     且 cache.match() 預設無視 Range、會把整包 200 回給帶 Range 的請求，Safari 媒體管線可能播不動。
+  //     早退後這兩條路徑都不存在。代價：音樂不支援離線播放（可接受）。
+  if (event.request.url.includes('/music/')) return;
 
   const url = new URL(event.request.url);
 
