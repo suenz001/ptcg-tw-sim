@@ -17,6 +17,92 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.137 — 錦標賽樂觀更新 slice 1（PR-2，只放行 ATTACH_ENERGY）
+
+承 v6.134 診斷（錦標賽對戰完全沒有樂觀更新）與 v6.135（PR-1 網路層止血）。
+
+### 核心設計：不枚舉「哪些 action 可預測」，改**執行期試跑**
+
+新模組 `src/lib/game/optimistic.ts` 的 `tryPredictAction()`：本地先跑一次 `applyAction`，
+期間把 `Math.random` 換掉並**計數**，**碰到任何隨機就放棄預測**退回現行行為（等伺服器）。
+⇒ 擲幣招式、洗牌搜尋、混亂撤退、有灼傷/睡眠的回合結束…全部自動被擋，不必逐卡維護清單。
+手法在本 repo 有先例（`ai-eval.ts` 的 `withIsolatedRandom`，引擎試打評估）。
+
+十道 gate，全部 **fail-closed**（判不出來就不預測，最壞情況與改動前完全相同）：
+① 白名單（第一批只有 `ATTACH_ENERGY`）② `phase === 'playing'` ③ 沒有 pendingSelection 開著
+④ 引擎 throw ⑤ **rng 計數 > 0** ⑥ 引擎拒絕（回傳同一物件）⑦ 階段改變 ⑧ 開啟 pendingSelection
+⑨ **換手** ⑩ **pendingPrizes 變動** ⑪ **iid 集合改變**
+
+### ⚠ Fable 5 審查抓到一個擋刀級問題：**假回滾**（已修）
+
+原本 catch 路徑只呼叫 `tForceResync()` 就宣稱「畫面已還原」。但 `tForceResync` 只在
+`fr.version !== tVersion` 才覆蓋 `game` —— 動作**沒送達伺服器**時版本根本沒動 ⇒ 版本相等
+⇒ **預測畫面不會被還原**。而且 `tForceResync` 還無條件更新 `_tLastStateChangeAt` 把看門狗
+安撫掉 ⇒ 幽靈能量永久掛在畫面上；`energyAttachedThisTurn` 已被預測設 true、UI 把附能鎖灰，
+「請重試」的提示與畫面自相矛盾。
+
+修法：`restorePrediction()` 用**物件同一性**判斷 —— `if (tPredicted && game === predictedRef) game = prev`。
+⚠ 不能無條件 `game = prev`：若輪詢在 await 期間已帶回更新盤面（動作其實成功、只是回應丟了），
+盲目還原會把畫面倒退到比 `tVersion` 還舊。三條路徑都接上：catch、`r` 沒帶 gameState、stale 重試前。
+
+⚠⚠ **守衛原本為這個假回滾亮綠燈** —— 它只斷言「catch 裡有出現 `tForceResync()`」。
+這是 IRON_RULES Rule 25「掃描器本身要先驗會不會漏」的活教材；已改成斷言**真回滾**
+（`game === predictedRef` 與 `game = prev` 兩個字面都必須在）。
+
+### Fable 5 其餘採納項（均自行查證屬實）
+
+- **`tPredicted` / `predictedRef` 改函式內區域變數**：伺服器有一條 `{ error:'對局尚未開始', waiting }`
+  **不帶 gameState**（房間剛被 reset 的競態），不進任何清除點 → 元件層級旗標會殘留到下一次
+  dispatch，害下次誤跳音效、誤觸回滾。
+- **gate ⑨ 換手**：`engine.ts` 的 ATTACH_ENERGY handler 內部有一條「引夢貘人｜白日夢」路徑
+  （目標帶 `endTurnOnOppAttachEnergyThisTurn` 時**直接呼叫 `applyAction(END_TURN)`**）。
+  若當下 checkup 沒有要擲幣的狀態，整條是確定性的 ⇒ rng gate 放行 ⇒「只放 ATTACH_ENERGY」
+  實際會預測出「換手＋checkup＋對手抽牌」。同構於伺服器所以不是正確性 bug，但完全違背
+  slice 1「把爆炸半徑鎖在一張能量」的意圖。
+- **gate ⑩ pendingPrizes**：附能仍可能間接造成昏厥（對手侵蝕詛咒、白日夢路徑的 checkup 毒傷），
+  牽涉獎賞與補位一律讓伺服器裁定。
+
+Fable 查證但**不需要**改的（我複驗過）：音效不會因輪詢搶先而雙重播放
+（附能音效是 action-based，`switch (action?.type)`，輪詢那條 action 為 null）；
+觀戰／回放三層都封死（`dispatch()` 在 `isTournament` 分支**之前**擋 `isSpectator`）；
+ATTACH_ENERGY 全程無 `uid()`，iid 不變；`normalizeAction` 對它是 no-op。
+
+### 其他接線
+
+- 拆 `tInFlight`（對戰動作網路鎖）與 `tBusy`（大廳操作，保留原用途與 template 綁定）
+- 新鮮度看門狗加 `&& !tInFlight`：送出中不強制重抓，否則會把預測畫面倒回、回應到達又前進＝閃爍
+- **`tVersion` 完全沒動** —— 它的語義永遠是「伺服器確認過的版本」，動了會讓 v6.135 才修好的
+  輪詢亂序守衛誤判。守衛有一條專門盯這個。
+
+### 守衛
+
+`scripts/test-v6137-optimistic-predict.mjs`（30 項，行為端 + 靜態）。關鍵幾條：
+- 預測結果與再跑一次 `applyAction` **逐位元等價**（去 log 時戳）
+- **rng gate 本體**：灼傷狀態的 `END_TURN`（用 `allowedTypes` 臨時放行）→ `randomness:1` 被擋；
+  **正對照**：無狀態的 `END_TURN` 可預測（證明計數器不是恆真）
+- 白日夢旗標 → `turn-flipped`；正對照：一般盤面仍可預測
+- `Math.random` 在正常與 throw 路徑都還原
+- 靜態：真回滾、區域變數、`tVersion` 不得遞增、看門狗 gate、stale 前清旗標
+
+HEAD-FAIL：保留 `optimistic.ts`、只還原 `+page.svelte` → 接線端 **9 條紅**。
+
+⚠ `test-v6135` 的 ③ 因變數改名（tBusy → tInFlight）而假紅，已把斷言改成
+「in-flight 分支（兩個名字都接受）不得靜默吞點擊」—— 守衛盯的是**意圖**不是變數名。
+
+### 驗證
+
+完整 `npm test` **457 步分 4 批全綠**；免疫網（25/0、19/0）、selection-ui 35/0、
+anti-pattern-lint 無違規、tsc TS2304 = 0。
+
+### 🔨 下一批（PR-3）候選
+
+`SEND_NEW_ACTIVE`（KO 後補位是體感重災區，但與獎賞/pending 交錯較多）、`PLAY_BASIC`、`EVOLVE`、
+`RETREAT`（gate ⑤ 會自動擋混亂撤退）。⚠ 每批各自附 fixture 守衛；
+`RESOLVE_SELECTION` 與 pending queue 留到最後，且要先跑「兩端 sanitize 收斂」的對照實驗。
+⚠ 另有一條 Fable 提的既有問題（非本 PR 引入）：預測沒發動時，
+「輪詢先帶回 ＋ `dispatchSfxForAction` 再播一次」的雙重音效在 v6.136 基準版就存在，可另開 slice。
+
+
 ## v6.136 — 沉重接力棒漏判「【撤退】所需的能量為4個」＋ 撤退費維度 audit
 
 玩家回報：撤退費不是 4 的寶可夢附上沉重接力棒後也會發動。**屬實**。

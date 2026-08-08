@@ -86,10 +86,13 @@ else no('② 反向對照：仍存在無亂序守衛的回正分支');
 const dispIdx = SRC.indexOf('async function tournamentDispatch(');
 if (dispIdx > 0) {
   const win = SRC.slice(dispIdx, dispIdx + 900);
-  if (/if \(tBusy\)\s*\{[^}]*tError/.test(win)) ok('③ tournamentDispatch 的 in-flight 分支有寫 tError');
+  // v6.137 對戰動作的網路鎖已從 tBusy 拆成 tInFlight（tBusy 留給大廳操作）。
+  //   這裡斷言的是**意圖**「in-flight 分支不得靜默吞點擊」，兩個名字都接受，
+  //   避免日後再改名時守衛因為變數名過期而假紅。
+  if (/if \((tBusy|tInFlight)\)\s*\{[^}]*tError/.test(win)) ok('③ tournamentDispatch 的 in-flight 分支有寫 tError');
   else no('③ tournamentDispatch 的 in-flight 分支沒有給玩家任何回饋（靜默吞點擊）');
-  if (!/if \(tBusy\) return;\s*tBusy = true/.test(win)) ok('③ 反向對照：舊的靜默 `if (tBusy) return;` 已不存在');
-  else no('③ 反向對照：仍是舊的靜默 `if (tBusy) return;`');
+  if (!/if \((tBusy|tInFlight)\) return;\s*(tBusy|tInFlight) = true/.test(win)) ok('③ 反向對照：舊的靜默 `if (鎖) return;` 已不存在');
+  else no('③ 反向對照：仍是舊的靜默 `if (鎖) return;`');
 } else {
   no('③ 找不到 tournamentDispatch');
 }

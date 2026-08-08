@@ -80,6 +80,7 @@
   import { getAIAction } from '$lib/game/ai';
   // v6.038 批次4b：本機 AI 對戰開始前，依 AI 那一側的牌組載入打法表（fail-open）。
   import { prepareAIPlaybook, clearPlaybook } from '$lib/game/ai-playbook';
+  import { tryPredictAction, OPTIMISTIC_ACTION_TYPES } from '$lib/game/optimistic';  // v6.137 錦標賽樂觀更新
   import { VERSION } from '$lib/version';
   import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx, playSfxEvents } from '$lib/audio/sfx';
   // v6.048：音效決策收斂到純函式（三條路徑共用，可寫自動化守衛）
@@ -282,6 +283,7 @@
         if (tStep === 'playing' && game && !isTournSpectator
             && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > _freshStaleMs
             && (Date.now() - _tLastForceResyncAt) > 8000
+            && !tInFlight   // v6.137 動作送出中不強制重抓：會把本地預測畫面倒回，伺服器回應到達後又前進＝閃爍
             && !(game.pendingSelection && game.pendingSelection.actorIdx === mySeatIdx)) {
           _tLastForceResyncAt = Date.now();
           _freshWatchdogFires++;  // v5.933 連續觸發計數
@@ -4759,10 +4761,18 @@
       } catch { /* 忽略單次輪詢失敗 */ }
     }, 1200);
   }
+  // v6.137 樂觀更新狀態 —— 與 tBusy 分開：
+  //   tBusy    仍是「大廳操作鎖」（報名/進場/離場…，template 有多處綁定）
+  //   tInFlight 是「對戰動作的網路單發鎖」
+  //   tPredicted 表示「目前畫面上的 game 是本地預測、尚未被伺服器確認」
+  //   ⚠ tVersion 絕不因預測遞增 —— 它的語義永遠是「伺服器確認過的版本」，
+  //     動了會讓輪詢的「client 超前回正」分支誤判（v6.135 才剛修過亂序倒退）。
+  let tInFlight = $state(false);
+
   async function tournamentDispatch(action: any, _retried = false) {
     // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
     //   玩家在等待往返時連點會完全沒有回饋 ⇒ 體感就是「按下去沒反應」。改為顯性提示。
-    if (tBusy) {
+    if (tInFlight) {
       // v6.135 這則是暫時性提示，2 秒後自動收掉——成功路徑不會清 tError，
       //   不自動清會讓紅色 toast 在「動作其實成功了」之後一直掛著（玩家可能整段對手回合都看著它）。
       tError = '上一個動作還在送出中，請稍候…';
@@ -4770,20 +4780,68 @@
       setTimeout(() => { if (tError === _msg) tError = ''; }, 2000);
       return;
     }
-    tBusy = true; tError = '';
+    tInFlight = true; tError = '';
     const prev = game;
+    // ⚠ tPredicted / predictedRef 一律用**函式內區域變數** —— 放元件層級會跨呼叫洩漏：
+    //   伺服器有一條 `{ error:'對局尚未開始', waiting }`（房間剛被 reset 的競態）**不帶 gameState**，
+    //   不進任何清除點 → 旗標殘留到下一次 dispatch，害下次誤跳音效、誤觸回滾。
+    let tPredicted = false;
+    let predictedRef: any = null;
+    // v6.137 樂觀更新：先在本地試跑一次，通過所有 gate 才把預測畫面上畫。
+    //   fail-closed —— 任何 gate 沒過就維持現行行為（等伺服器），最壞情況與改動前完全相同。
+    //   ⚠ 只在「重試前的第一次」預測：stale 重試時 game 已被伺服器 fresh state 覆蓋，
+    //     那一輪要以新盤面重新判定（由遞迴呼叫自己的這段負責）。
+    if (!_retried && poolReady) {
+      const pr = tryPredictAction(game, action, pool, { allowedTypes: OPTIMISTIC_ACTION_TYPES });
+      if (pr.ok) {
+        game = pr.predicted;
+        predictedRef = pr.predicted;
+        tPredicted = true;
+        // 音效在預測當下就播（原本是等伺服器回應才播）；伺服器確認那一次要跳過，避免播兩次。
+        try { dispatchSfxForAction(action as any, prev as any, game as any); } catch { /* sfx best-effort */ }
+      }
+    }
+    // v6.137 ⚠ **真回滾**：`tForceResync()` 只在 `fr.version !== tVersion` 才覆蓋 game
+    //   （見該函式）—— 動作**沒送達伺服器**時版本根本沒動 ⇒ 版本相等 ⇒ 預測畫面**不會被還原**，
+    //   而且 tForceResync 還會無條件更新 _tLastStateChangeAt 把看門狗安撫掉
+    //   ⇒ 幽靈能量會永久掛在畫面上，且 energyAttachedThisTurn 已被預測設 true、UI 把附能鎖灰，
+    //     「請重試」的提示與畫面自相矛盾。所以必須自己把 game 換回去。
+    //   ⚠ 用**物件同一性**判斷而不是無條件 `game = prev`：若輪詢在 await 期間已帶回更新的盤面
+    //     （動作其實成功、只是回應丟了），盲目還原會把畫面倒退到比 tVersion 還舊。
+    const restorePrediction = (): void => {
+      if (tPredicted && game === predictedRef) game = prev;
+      tPredicted = false; predictedRef = null;
+    };
     try {
       const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });
       if (r.gameState) {
+        // 伺服器權威：無條件採納（含 error/rejected/stale 三條失敗路徑回傳的舊 state ＝ 自動回滾）
         tAdopt(r.gameState, r.version, { skipSfx: true });   // v6.048 自己的動作由下一行算音效
-        try { if (game && game !== prev) dispatchSfxForAction(action as any, prev as any, game as any); } catch { /* sfx best-effort */ }
+        // v6.137 已預測過就不再算一次音效（預測當下已播）
+        if (!tPredicted) {
+          try { if (game && game !== prev) dispatchSfxForAction(action as any, prev as any, game as any); } catch { /* sfx best-effort */ }
+        }
+        tPredicted = false;
       }
       // v5.598：伺服器樂觀並發 CAS 落敗(stale) → 已同步到最新狀態，自動重試一次。
       //   setup 雙方同時擺場時常見；雙方擺自己側不衝突，重試必成功。只重試一次避免迴圈。
-      if (r.stale && !_retried) { tBusy = false; return await tournamentDispatch(action, true); }
+      else {
+        // 回應沒帶 gameState（伺服器唯一這條：{ error:'對局尚未開始', waiting }）→ 預測畫面回不去，必須自己還原
+        restorePrediction();
+      }
+      if (r.stale && !_retried) { tPredicted = false; predictedRef = null; tInFlight = false; return await tournamentDispatch(action, true); }
       if (r.error) tError = r.error;
-    } catch (e: any) { tError = String(e?.message ?? e); }
-    finally { tBusy = false; }
+    } catch (e: any) {
+      // v6.137 送出失敗（含 v6.135 的 12 秒逾時）→ 預測畫面必須回滾到伺服器權威盤面。
+      //   不回滾的話玩家會看到「我打出去了」但伺服器其實沒收到 → 之後盤面對不上、也可能被閒置判負。
+      tError = String(e?.message ?? e);
+      if (tPredicted) {
+        restorePrediction();   // 真的把 game 換回 prev（tForceResync 在版本相等時不會動它）
+        tError = (tError ? tError + '　' : '') + '（動作可能未送達，畫面已還原，請重試）';
+        void tForceResync();   // 第二道保險：若動作其實成功了，這裡會把伺服器新盤面抓回來
+      }
+    }
+    finally { tInFlight = false; }
   }
   async function tournamentReset() {
     if (!confirm('重置測試房？會清空目前對局，雙方需重新選牌組進場。')) return;
