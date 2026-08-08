@@ -4000,7 +4000,7 @@
   //     疊在錦標賽本身的輪詢上就是玩家回報的「人一多就很 lag」。
   //   錦標賽頁根本不顯示休閒大廳列表，這些資料一筆都用不到。
   $effect(() => {
-    if (!isTournament && onlineStep === 'join' && myUid) {
+    if (!isTournament && mode === 'online' && onlineStep === 'join' && myUid) {
       unsubOpenRooms?.();
       openRoomsErr = '';
       unsubOpenRooms = subscribeOpenRooms(

@@ -17,6 +17,56 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.134 — 休閒大廳輪詢 gate 補 `mode === 'online'`（錦標賽 lag 調查的第一項）
+
+**現象**：玩家回報錦標賽瑞士制第四輪開始很卡。能連 Oracle 的工程師實測伺服器端全綠
+（HTTP P95 8ms、event loop p95 1.21ms、Mongo queued 0/0、nginx 5xx 0、5 分鐘 38,694 req 零錯誤），
+但抓到 5 分鐘內流量最大的端點是 `/api/rooms`：**74.9 MB / 5942 req，佔總頻寬約 60%**。
+
+**根因**：`src/routes/game/+page.svelte` 的 `subscribeOpenRooms` gate 是
+
+```js
+if (!isTournament && onlineStep === 'join' && myUid) {
+```
+
+三個條件都成立得太容易：
+- `mode` 初始值是 `null`（行 434）
+- `onlineStep` 初始值就是 `'join'`（行 575）
+- 正式站 onMount 無條件 `oracleAuth()` 設好 `myUid`
+
+⇒ **任何開著 `/game` 的分頁都在輪詢**——停在「本機／線上」模式選擇畫面、選牌組、打 AI 對戰中、
+本機雙人對戰中，全部每 2 秒打兩支 `GET /api/rooms`（`?status=lobby` + `?status=playing`，
+`room-oracle.ts:644` 的 tick 是 2000ms），直到分頁關掉。
+19.8 req/s ÷ 1 req/s per client ≈ 20 個開著 /game 的分頁，與觀測吻合。
+
+而**大廳列表 UI 本來就只在 `mode === 'online'` 分支渲染**
+（模板結構：`{#if mode === null}` → `{:else if mode === 'local'}` → `{:else}`（線上），
+`{#each lobbyRooms}` 在最後那個分支裡）⇒ 這些請求的資料一筆都沒被用到。
+
+**修正**：gate 補上 `mode === 'online'`。**零 UI 行為變更**——只停掉「畫面上沒有顯示大廳列表時」
+的輪詢。
+
+**這不是 v6.118 漏修**：v6.118 加的 `!isTournament` 還在、也有效（錦標賽頁與錦標賽對戰中都不會輪詢）。
+這次是**另一個範圍問題**：gate 少判了「有沒有真的進到線上模式」。
+同型教訓仍然適用——**共用頁面用旗標切模式時，每一條 `$effect` 都要問「另一個模式需要嗎」**。
+
+**守衛** `scripts/test-v6134-lobby-poll-gate.mjs`（7 項）：
+① gate 四個條件逐一斷言（`!isTournament` / `mode === 'online'` / `onlineStep === 'join'` / `myUid`）
+② `subscribeOpenRooms` 全站呼叫點唯一（新增呼叫點會紅 → 強迫重新審 gate）
+③ 自我驗證：舊 gate 字串不得存在（反向對照）
+④ 正對照：大廳列表 UI 必須位於 mode 線上分支之後（UI 若搬家會紅 → 提醒重審 gate）
+＋掃描器下限斷言（檔案 < 500KB 視為 mount 截斷，直接 exit 1）
+
+HEAD-FAIL 已驗證：未改 gate 時 PASS 5 / FAIL 2；改後 PASS 7 / FAIL 0。
+
+**⚠ 這一項不是玩家回報「卡」的主因，只是省下 60% 的浪費頻寬。**
+真正的主因另記：**錦標賽對戰完全沒有樂觀更新**——`dispatch()`（行 4735）對錦標賽直接走
+`tournamentDispatch()`，`await tApi('/action')` 等伺服器回應才更新畫面，期間 `tBusy` 還會
+吃掉所有後續點擊；對手的動作則要等 1.2 秒一次的 `/state` 輪詢。人一多、往返一長，
+體感就是「按下去沒反應、對手動作很久才出現」，且**重新整理無效**（結構性，不是狀態累積）。
+這條要另開一輪處理，需先設計好「本地預測 vs 伺服器權威」的對帳與衝突回滾。
+
+
 ## v6.133 — 首頁 changelog 的 `.log-body` 沒有樣式（字體爆大）＋ 根治守衛
 
 站長回報：v6.132 那則的「這幾個特性每回合只能用一次…」那段字**特別大**。
