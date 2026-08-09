@@ -25,6 +25,7 @@ import {
   wouldNeutralCenterBlock,
   koPrizesAdjusted,
   fireDefenderOnDamaged,
+  resolveMultiTargetDamageGuard,   // v6.141 多目標傷害免疫中央閘
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -529,7 +530,11 @@ regR('fan-call-hand', (st, idx, iids, _params, pool) => {
 //   造成其選擇次數×20 點傷害。（1 隻可選擇 2 次以上。）」
 // 實裝：damage-distribute pending with includeActive=true（可選對手任意寶可夢 含戰鬥場），
 //   totalCounters=6, counterDamage=20。傷害以指示物形式放置（不經 weakness pipeline）。
-regPre('奧利瓦ex|油之機關槍', (s) => ({ state: s, damage: 0, skipWeakRes: true, skipDefEffects: true }));
+// ⚠ v6.141：拿掉原本的 `skipDefEffects: true`。卡面逐字只有「不計算**弱點・抵抗力**」，
+//   **沒有**「不計算對手的戰鬥寶可夢身上的附加效果」那一句 —— 而 skipDefEffects 的語意正是後者
+//   （會 bypass 掉全部 defender 免疫與減傷）。玩家回報雷電獸｜閃光屏障擋不住這招即與此有關。
+//   判準：卡面有沒有那句話，不是實作方便。
+regPre('奧利瓦ex|油之機關槍', (s) => ({ state: s, damage: 0, skipWeakRes: true }));
 regPost('奧利瓦ex|油之機關槍', (state, aIdx) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const dp = state.players[dIdx];
@@ -641,51 +646,24 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     // v5.190：加中立中心 check — 對 active+bench 都擋（奧利瓦ex 是規則寶可夢，對非規則寶可夢應該擋）
     //   玩家回報：場上有中立中心時，奧利瓦ex 油之機關槍應該對非規則寶可夢都不會受到傷害
     //   既有實作 active target 完全沒檢查中立中心 → bug
-    const attackerInst = s.players[actorIdx].active;
-    const attackerCard = attackerInst ? pool.get(attackerInst.cardId) : undefined;
-    if (wouldNeutralCenterBlock(s, pool, attackerCard, targetCard)) {
+    // v6.141【中央收斂】原本這裡手刻了「中立中心 → 特性免疫 → 備戰守衛 → 擲幣免疫」四段，
+    //   但**獨漏 active 的 per-turn 免疫旗標**（閃光屏障／飛翔／要害斬／阿塞蘿拉／精神防護／
+    //   熔岩牆／防護代碼／塗層攻擊）——「這隻寶可夢不會受到進化寶可夢招式的傷害」對這招完全沒作用。
+    //   改走單一中央閘 resolveMultiTargetDamageGuard，四層一次到位，日後新增免疫來源不必再逐處補。
+    const isBenchTargetOO = defender.active?.iid !== iid;
+    const guardOO = resolveMultiTargetDamageGuard(s, actorIdx, target, targetCard, pool, {
+      isBench: isBenchTargetOO,
+    });
+    s = guardOO.state;
+    if (guardOO.blocked) {
       if (!blockedTargetsOO.has(iid)) {
         blockedTargetsOO.add(iid);
-        s = addLog(s, `${label}：${targetCard?.name ?? '?'} 中立中心競技場 效果（免疫此招式傷害）`, actorIdx);
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOO.reason}（免疫此招式傷害）`, actorIdx);
       }
       continue;
     }
-    // v5.367：條件式完全免疫特性（神秘石居 等）對 active+bench 都要擋 —
-    //   油之機關槍是【ex 寶可夢招式傷害】，神秘石居/神秘守護 卡面「不受對手 ex 招式傷害」應免疫。
-    {
-      const piOO = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
-      if (piOO.blocked) {
-        if (!blockedTargetsOO.has(iid)) {
-          blockedTargetsOO.add(iid);
-          s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${piOO.reason}（免疫此招式傷害）`, actorIdx);
-        }
-        continue;
-      }
-    }
-    // v3.993 招式傷害免疫（attack-damage — only bench；active 不受花之帷幔保護）
-    if (defender.active?.iid !== iid) {
-      const guardOOdmg = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
-      if (guardOOdmg.blocked) {
-        if (!blockedTargetsOO.has(iid)) {
-          blockedTargetsOO.add(iid);
-          s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${guardOOdmg.reason}（免疫此招式傷害）`, actorIdx);
-        }
-        continue;
-      }
-    }
-
-    // v5.368：順滑大衣等擲幣型免疫 — active+bench 皆適用，真結算擲幣
-    {
-      const coinOO = passiveCoinImmunity(s, actorIdx, targetCard, pool);
-      s = coinOO.state;
-      if (coinOO.immune) {
-        if (!blockedTargetsOO.has(iid)) {
-          blockedTargetsOO.add(iid);
-          s = addLog(s, `${label}：${targetCard?.name ?? '?'} 擲幣免疫（正面）（免疫此招式傷害）`, actorIdx);
-        }
-        continue;
-      }
-    }
+    // （v5.367 特性免疫 / v3.993 備戰守衛 / v5.368 擲幣免疫 三段已收斂進上面的中央閘，
+    //   行為等價；順序也維持原樣。）
     // v3.994 計算最終傷害：base × count + attacker buff（per-target 一次套用）
     const baseAmt = counterDamage * count;
     const buff = computeOliveOilBuff(s, actorIdx, target, targetCard, pool);

@@ -1205,6 +1205,26 @@ function hitBenchAll(
       newBench.push(c);
       continue;
     }
+    // v6.141【中央收斂】hitBenchAll 的 inline guard 只手刻了太晶／藏隱・深度下潛／花之帷幔／
+    //   神秘石居／擲幣／太古防壁，**漏掉整組 per-turn 與 passive 的備戰免疫**——最明顯的是
+    //   蟲甲聖｜球形盾牌（卡面「只要這隻寶可夢在場上，自己的所有備戰寶可夢不會受到對手的
+    //   寶可夢招式的傷害與效果的影響」），實測電飛鼠｜天空波對它保護下的備戰仍照打 10。
+    //   接上與油之機關槍同一支中央閘（Fable 5 review 行為端指出，我已自行重現確認）。
+    //   ⚠ 兩件事必須保留：
+    //     ・`attackerIdx !== targetIdx` 分流 —— 中央閘是「對手側」語意，自傷 bench
+    //       （地震／燃燒熱浪）不可套用，否則自己的備戰會被自己的盾牌擋住。
+    //     ・`skipCoin: true` —— 本函式下方已有自己的擲幣段，不能再擲一次。
+    if (attackerIdx !== targetIdx) {
+      const gBench = resolveMultiTargetDamageGuard(coinWS, attackerIdx, c, card, pool, {
+        isBench: true, skipCoin: true,
+      });
+      coinWS = gBench.state;
+      if (gBench.blocked) {
+        teraImmunNames.push(`${card?.name ?? '?'}（${gBench.reason}）`);
+        newBench.push(c);
+        continue;
+      }
+    }
     // v5.367/v5.368：hitBenchAll 走 inline guard（不經 resolveBenchGuard）— 補條件式完全免疫
     //   (神秘石居等 boolean) + 擲幣型(順滑大衣)。僅對手對我方時生效。
     if (attackerIdx !== targetIdx) {
@@ -4213,6 +4233,76 @@ export function passiveCoinImmunity(
 //   bench 走 resolveBenchGuard（球形盾牌/花之帷幔/太晶/化石/v5.367 神秘石居等 boolean 免疫）／
 //   active 走 passiveImmunityDamageBlock（boolean）＋ 擲幣型 passiveCoinImmunity。threads state。
 //   只在真結算呼叫，不可用於預覽。
+
+/**
+ * v6.141【中央收斂】多目標／自跑傷害迴圈的「單一 target 招式傷害免疫」總閘。
+ *
+ * **為什麼需要**：engine 主路徑與 `dealAttackDamageToTarget` 都有完整的免疫判定，但
+ * 「自己跑傷害迴圈」的 resolver（油之機關槍的 damage-distribute 之類）是各自手刻的，
+ * 每次都要記得逐一補上每一層檢查，漏一層就是靜默的規則錯誤。
+ *
+ * 玩家回報（v6.141）：雷電獸｜閃光屏障（卡面「在下個對手的回合，這隻寶可夢不會受到
+ * **進化寶可夢招式的傷害**」）擋不住奧利瓦ex｜油之機關槍（Stage2＝進化寶可夢）。
+ * 根因是那條迴圈**完全沒有 active-side 的免疫判定** —— v4.18 把
+ * `canApplyAttackEffectToTarget` 移掉（理由正確：薄霧能量那類只擋招式效果、不該擋傷害），
+ * 但**沒有換成 attack-damage 語意的版本**，於是連「不受某類寶可夢招式傷害」這種
+ * 純傷害免疫也一起失去了。
+ *
+ * 四層（順序與既有 resolver 手刻版一致 ⇒ 行為等價，外加補回 active 那層）：
+ *   1. 中立中心競技場（規則寶可夢的招式 → 非規則寶可夢免疫）
+ *   2. 條件式完全免疫**特性**（神秘石居／神秘守護 等）
+ *   3. `canApplyEffectToTarget('attack-damage')` —— 內含備戰守衛（step 3）與
+ *      **active 的 per-turn 免疫旗標**（step 4：飛翔／要害斬／阿塞蘿拉／中立中心／
+ *      精神防護／**閃光屏障**／熔岩牆／防護代碼／塗層攻擊）
+ *   4. 擲幣型免疫（順滑大衣等；會真的擲幣 ⇒ 必須回傳 state）
+ *
+ * ⚠ 用 `'attack-damage'` 而**不是** `'attack-effect'`：後者會把薄霧能量／對戰圓形／
+ *   皇帝之勢／硬岩能量這些「只擋招式效果」的來源也算進來，那正是 v4.18 要修掉的誤擋。
+ *
+ * ⚠ 卡面寫「不計算對手的戰鬥寶可夢身上的附加效果」的招式（跳躍扣殺／偉大剪／星雲光束／
+ *   高速星星／打垮／鑽破壞…）**不該**走這支 —— 它們用 `skipDefEffects` 由 engine 主路徑
+ *   bypass 全部防禦。判準是**卡面逐字有沒有那句話**，不是實作方便。
+ *
+ * @returns `blocked=true` 時 caller 應 log `reason` 並跳過這個 target 的傷害。
+ */
+export function resolveMultiTargetDamageGuard(
+  state: GameState,
+  actorIdx: 0 | 1,
+  target: CardInstance,
+  targetCard: Card | undefined,
+  pool: Map<string, Card>,
+  opts: { isBench: boolean; skipCoin?: boolean },
+): { state: GameState; blocked: boolean; reason: string } {
+  let s = state;
+  const attackerInst = s.players[actorIdx].active;
+  const attackerCard = attackerInst ? pool.get(attackerInst.cardId) : undefined;
+
+  // 1. 中立中心競技場
+  if (wouldNeutralCenterBlock(s, pool, attackerCard, targetCard)) {
+    return { state: s, blocked: true, reason: '中立中心競技場 效果' };
+  }
+  // 2. 條件式完全免疫特性（神秘石居 等）
+  const pi = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
+  if (pi.blocked) return { state: s, blocked: true, reason: pi.reason };
+
+  // 3. 中央閘：備戰守衛 ＋ active 的 per-turn 免疫旗標（閃光屏障就在這一層）
+  const gate = canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-damage', pool, {
+    isBench: opts.isBench,
+  });
+  if (gate.blocked) return { state: s, blocked: true, reason: gate.reason ?? '免疫招式傷害' };
+
+  // 4. 擲幣型免疫（真結算擲幣 ⇒ 回傳 state）
+  //   ⚠ `skipCoin`：caller 自己已經跑過擲幣段時必須傳 true。這一層會**真的消耗亂數**，
+  //     跑兩次等於讓防守方多擲一次幣（v6.120「同一效果掛兩個 hook」的同型陷阱）。
+  if (!opts.skipCoin) {
+    const coin = passiveCoinImmunity(s, actorIdx, targetCard, pool);
+    s = coin.state;
+    if (coin.immune) return { state: s, blocked: true, reason: '擲幣免疫（正面）' };
+  }
+
+  return { state: s, blocked: false, reason: '' };
+}
+
 export function manualDamageImmunity(
   state: GameState,
   actorIdx: 0 | 1,
