@@ -17,6 +17,42 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.140 — 牌組公布欄 批次 3（投稿、按讚、我的投稿、賽事名次一鍵分享）
+
+功能到此完整。後端新增 `GET /api/deck-posts-mine`（⚠ 又是**連字號前綴**，寫成
+`/api/deck-posts/mine` 會被 `/:id` 吃掉，v6.138 的坑）。前端加「全部投稿／我的投稿」分頁、
+投稿 modal、明細按讚鈕、以及登入後才出現的賽事名次橫幅。
+
+### Fable 5 code review（均自行查證屬實）
+
+- **BLOCKING：刪除是裸按鈕**。緊貼 ♥/⬇ 統計、手機極易誤觸，一下就軟刪且讚數歸零，玩家端
+  無復原路徑。更糟的是沒有 busy 防護 —— 連點第二下會撞伺服器的 `status: { $ne: 'deleted' }`
+  回 404「找不到你的這篇投稿」⇒ **刪除明明成功了卻對玩家報錯**。補 confirm ＋ `deleteBusy`。
+- **按讚失敗會把整份牌表炸掉**：`toggleLike` 的 catch 寫 `detailError`，而 modal 分支順序是
+  `detailLoading → detailError → openPost` ⇒ 遇到 429 或這篇剛被下架時，玩家眼前的 60 張牌表
+  會被一行錯誤取代，看起來像明細壞了。改用獨立的 `likeError` 顯示在按鈕旁。
+- **被下架的投稿會把玩家永遠關在門外**：`ALIVE_CAP` 用 `status:{$ne:'deleted'}` 計，hidden 算在內；
+  DELETE 端點其實允許刪 hidden，但前端只在 `published` 時渲染刪除鈕 ⇒ 被下架 10 篇的人
+  從此不能投稿也無法自救。改成 `status !== 'deleted'` 都可刪。
+- **投稿冷卻在驗證失敗時也被扣掉**：`dpRate` 在任何驗證**之前**就消耗 ⇒ 挑到一副不合法的牌
+  被退回後，換一副合法的立刻撞 429，看起來像系統在刁難人。新增 `dpRateRefund`，
+  **只在 400（內容不合格）時退**；409／429 照扣。
+- **`fetchMine` 無代次防護**：auth callback 與切分頁可能同時在飛兩發，而 `deleteMine` 只改本地
+  狀態 ⇒ 遲到的舊回應會把「已刪除」蓋回「published」，刪除鈕重新出現，再點就是上面那個假 404。
+  補 `mineSeq`（頁內已有 `listSeq`/`detailSeq` 樣板）。
+- **守衛對本批幾乎零覆蓋**：尤其「如果有人把 `-mine` 改成 `res.json(docs)` 裸回，uid/email 直接
+  外流，而現有 32 項照樣全綠」—— 守衛①只測 `dpPublic` 函式本身，不測「`-mine` 有沒有走它」。
+  後端 +3 項、前端 +8 項。
+
+Fable 查證後確認無誤的：契約全對齊；`-mine` 有 projection ＋ `dpPublic` 雙層防護；
+按讚是**伺服器權威寫回**（以 `r.likeCount` 為準、寫回前確認還是同一篇）不是本地 +1；
+`countDownload` 刻意用裸 `fetch` 而非 `api()` 是對的（204 無 content-type，走 `api()` 會誤觸
+`apiUnavailable` 把整頁藏掉）；`onAuthStateChanged` 不在 token refresh 時觸發，無重發也無漏發。
+
+守衛：`test-deck-posts.mjs` 35 項、`test-deck-posts-page.mjs` 24 項。完整 `npm test` 全綠。
+
+⚠ 需跑 `redeploy-oracle.bat`（`-mine` 端點與冷卻退還）。
+
 ## v6.139 — 牌組公布欄 批次 2（頁面上線：瀏覽 ＋ 匯入）
 
 新頁 `/deck-posts`。本批**只做瀏覽與匯入**；投稿入口、按讚按鈕、「我的投稿」在批次 3。

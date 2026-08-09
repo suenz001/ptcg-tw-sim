@@ -287,6 +287,34 @@ T('⭐ fail-open 不是靜默的（沒有訊號就沒有人會發現驗證其實
     '投稿沒有記錄「進來時完整驗證有沒有開」—— 事後無法回溯補驗');
 });
 
+console.log('\n⑤-3 「我的投稿」端點（v6.140 批次3）');
+
+T('⭐⭐⭐ -mine 用獨立前綴，且回應必須經過 dpPublic（裸回 doc 會外流 uid/email）', () => {
+  ok(/app\.get\('\/api\/deck-posts-mine'/.test(DP), '找不到 -mine 端點');
+  ok(!/app\.get\('\/api\/deck-posts\/mine'/.test(SAP), '寫成 /api/deck-posts/mine 會被 :id 吃掉');
+  const ep = section(DP, "app.get('/api/deck-posts-mine'", "app.get('/api/deck-posts-tournament/eligibility'");
+  ok(/dpPublic\(d,/.test(ep),
+    '-mine 沒有走 dpPublic —— 直接 res.json(docs) 會把 uid 與 email 一起送出去，而守衛①只測 dpPublic 本身');
+  ok(/projection:\s*\{[^}]*email:\s*0/.test(ep), '-mine 的 projection 沒排除 email');
+  ok(/projection:\s*\{[^}]*entries:\s*0/.test(ep), '-mine 的 projection 沒排除 entries');
+});
+
+T('⭐⭐ -mine 要顯式帶 status（前端的刪除鈕與下架徽章全靠它）', () => {
+  const ep = section(DP, "app.get('/api/deck-posts-mine'", "app.get('/api/deck-posts-tournament/eligibility'");
+  ok(/status:\s*d\.status/.test(ep), '沒有回 status —— 玩家不會知道自己的投稿被下架了，刪除鈕也會消失');
+  ok(/dpIdentity\(req\)/.test(ep), '沒有身分 gate');
+  ok(/uid:\s*id\.uid/.test(ep), '沒有限定只查本人的投稿');
+  ok(/no-store/.test(ep), '沒設 no-store');
+});
+
+T('⭐⭐ 投稿被「內容不合格」退回時要退還冷卻額度', () => {
+  ok(/function dpRateRefund/.test(DP), '沒有 refund 機制');
+  const ep = section(DP, "app.post('/api/deck-posts',", "app.delete('/api/deck-posts/:id'");
+  ok(/r\.code === 400/.test(ep) && /dpRateRefund/.test(ep),
+    '驗證失敗沒退冷卻 —— 玩家挑錯一副牌，換一副合法的立刻撞 429，看起來像系統在刁難他');
+  ok(!/r\.code === 409[\s\S]{0,60}dpRateRefund/.test(ep), '連 409（已投過同一副）也退 —— 那就等於沒有冷卻');
+});
+
 console.log('\n⑥ 隔離與快取');
 
 T('⭐⭐⭐ 整段自帶 try/catch，不得讓 throw 冒泡到賽事段', () => {

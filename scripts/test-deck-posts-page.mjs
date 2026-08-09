@@ -151,6 +151,64 @@ T('⭐ 下載計數失敗不得影響匯入（未登入時伺服器回 204，本
   ok(!/throw/.test(fn), '計數失敗往外丟了');
 });
 
+console.log('\n④-2 投稿／按讚／我的投稿（v6.140 批次3）');
+
+T('⭐⭐⭐ 刪除必須有確認與 busy 防護（不可逆，且連點會顯示假錯誤）', () => {
+  const fn = P.slice(P.indexOf('async function deleteMine'), P.indexOf('function openPostModal'));
+  ok(/confirm\(/.test(fn), '刪除沒有確認 —— 手機上緊貼統計數字，一 tap 就永久毀損且無復原路徑');
+  ok(/deleteBusy/.test(fn),
+    '沒有 busy 防護 —— 連點第二下會撞伺服器的 status:{$ne:deleted} 回 404，刪除成功卻對玩家報錯');
+  ok(/mineSeq\+\+/.test(fn), '刪除後沒讓還在飛的 fetchMine 作廢 —— 遲到的回應會把「已刪除」蓋回去');
+});
+
+T('⭐⭐ 按讚失敗不得寫進 detailError（那會把整份牌表換成一行錯誤）', () => {
+  const fn = P.slice(P.indexOf('async function toggleLike'), P.indexOf('async function fetchMine'));
+  ok(!/detailError\s*=/.test(fn),
+    '按讚的 catch 寫了 detailError —— modal 分支順序是 detailError 優先於 openPost，遇到 429 或投稿剛被下架時整份牌表會消失');
+  ok(/likeError\s*=/.test(fn), '沒有獨立的按讚錯誤狀態');
+});
+
+T('⭐⭐ 按讚以伺服器回傳的數字為準，不是本地 +1', () => {
+  const fn = P.slice(P.indexOf('async function toggleLike'), P.indexOf('async function fetchMine'));
+  ok(/r\.likeCount/.test(fn), '沒有採用伺服器回傳的 likeCount —— 本地 +1 會和唯一鍵去重的實際結果不一致');
+  ok(/openPost\.id === p\.id/.test(fn), '寫回前沒確認還是同一篇 —— 玩家切到別篇時會寫錯對象');
+});
+
+T('⭐⭐ 被站長下架（hidden）的投稿也要能刪', () => {
+  ok(/p\.status !== 'deleted'/.test(P),
+    '只讓 published 可刪 —— 投稿總量上限算的是「未刪除」的，被下架 10 篇的玩家會永遠不能再投稿也無法自救');
+});
+
+T('⭐⭐ fetchMine 有代次防護（與本地刪除狀態會打架）', () => {
+  ok(/mineSeq/.test(P), 'fetchMine 沒有代次 —— auth callback 與切分頁會同時在飛兩發');
+  const fn = P.slice(P.indexOf('async function fetchMine'), P.indexOf('function switchTab'));
+  ok(/seq !== mineSeq/.test(fn), 'fetchMine 沒有在寫回前檢查代次');
+});
+
+T('⭐ 三個寫入動作都有 busy 防護（連點不得重複送出）', () => {
+  for (const [name, flag, a, b] of [
+    ['投稿', 'postBusy', 'async function doPost', 'async function fetchEligibility'],
+    ['賽事分享', 'tSubmitBusy', 'async function submitTournament', 'function fmtDate'],
+  ]) {
+    const fn = P.slice(P.indexOf(a), P.indexOf(b));
+    ok(new RegExp(flag).test(fn), name + ' 沒有 busy 旗標');
+  }
+  ok(/likeBusy/.test(P), '按讚沒有 busy 旗標');
+});
+
+T('⭐⭐ 投稿／按讚／賽事分享的入口都 gate 在「已登入非匿名」（後端對匿名一律 403）', () => {
+  ok(/const canPost = \$derived\(!!firebaseUser && !firebaseUser\.isAnonymous\)/.test(P),
+    '沒有 canPost 判定 —— 顯示可按但按下去 403 是最糟的錯誤體驗');
+  ok(/\{#if canPost\}/.test(P), 'template 沒有用 canPost 分流');
+});
+
+T('⭐⭐ 需要登入的兩支查詢只在拿到非匿名使用者後才發（v6.026 auth-race 教訓）', () => {
+  const fn = P.slice(P.indexOf('onMount(()'), P.indexOf('const canPost'));
+  ok(/isAnonymous/.test(fn),
+    'onAuthStateChanged 裡沒判匿名 —— 訂閱 effect 跑得比 auth 還早會拿不到 token，401 被靜默吞掉');
+  ok(/fetchEligibility\(\)/.test(fn), 'eligibility 不是在 auth callback 裡發');
+});
+
 console.log('\n⑤ 入口與身分');
 
 T('⭐ 牌組編輯器有公布欄入口（沒有入口等於沒上線）', () => {

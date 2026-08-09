@@ -35,8 +35,18 @@
     createdAt: number;
     tournament: null | { eventId: string; eventName: string; finishedAt: number; placementLabel: string };
   };
-  type PostDetail = PostSummary & { entries: { cardId: string; count: number }[] };
+  type PostDetail = PostSummary & {
+    entries: { cardId: string; count: number }[];
+    likedByMe?: boolean;
+    downloadedByMe?: boolean;
+    mine?: boolean;
+  };
+  type MyPost = PostSummary & { status: 'published' | 'hidden' | 'deleted' };
+  type Eligible = { eventId: string; eventName: string; finishedAt: number; placementLabel: string; alreadyPosted: boolean };
 
+  // ⚠ 賽事與「我的投稿」端點的路徑是 /api/deck-posts-xxx（**連字號**，不是 /api/deck-posts/xxx）。
+  //   後者會被伺服器的 `/api/deck-posts/:id` 單段 pattern 整個吃掉、永遠回 404（v6.138 踩過）。
+  //   所以下面呼叫時是 api('-mine') / api('-tournament/submit')，字串直接接在 API 後面。
   const API = '/api/deck-posts';
 
   let firebaseUser = $state<User | null>(null);
@@ -58,6 +68,33 @@
   let detailMissing = $state<string[]>([]);
   let importMsg = $state('');
   let importWarn = $state('');
+  let likeBusy = $state(false);
+  // ⚠ 按讚失敗**不能**寫進 detailError：modal 的分支順序是 detailLoading → detailError → openPost，
+  //   detailError 一有值就會把整份牌表換成一行錯誤，看起來像明細壞掉（Fable 5 review 指出）。
+  let likeError = $state('');
+  // ⚠ 刪除是不可逆的（讚數與收藏數會歸零），而且連點第二下會撞伺服器的
+  //   `status: { $ne: 'deleted' }` 條件回 404 ——「刪除明明成功了卻對玩家報錯」。
+  let deleteBusy = $state('');
+  let mineSeq = 0;
+
+  // v6.140 批次 3：分頁、投稿、我的投稿、賽事名次一鍵投稿
+  let tab = $state<'all' | 'mine'>('all');
+  let myPosts = $state<MyPost[]>([]);
+  let myLoading = $state(false);
+  let myError = $state('');
+  let eligible = $state<Eligible[]>([]);
+
+  let postOpen = $state(false);
+  let myDecks = $state<Deck[]>([]);
+  let pickDeckId = $state('');
+  let postNotes = $state('');
+  let postBusy = $state(false);
+  let postError = $state('');
+  let postOk = $state('');
+
+  let tSubmitBusy = $state('');
+  let tSubmitMsg = $state('');
+  let tSubmitError = $state('');
 
   // ⚠ 請求代次（Fable 5 review 指出，我查證屬實）。兩個問題共用同一套解法：
   //   ① 明細載入中沒有關閉按鈕、closeDetail 又不清 detailLoading ⇒ 慢請求會把玩家鎖在
@@ -71,10 +108,18 @@
   const totalPages = $derived(Math.max(1, Math.ceil(total / pageSize)));
 
   onMount(() => {
-    const un = onAuthStateChanged(auth, (u) => { firebaseUser = u; });
+    const un = onAuthStateChanged(auth, (u) => {
+      firebaseUser = u;
+      // ⚠ 登入狀態要等 Firebase 還原完才知道（v6.026 推播的教訓：訂閱 effect 跑得比 auth 還早
+      //   → 拿不到 token → 401 被吞掉）。所以這兩支只在拿到「非匿名使用者」後才發。
+      if (u && !u.isAnonymous) { void fetchEligibility(); if (tab === 'mine') void fetchMine(); }
+      else { eligible = []; myPosts = []; }
+    });
     void fetchList();
     return un;
   });
+
+  const canPost = $derived(!!firebaseUser && !firebaseUser.isAnonymous);
 
   /** 帶 Firebase ID token（拿不到就不帶 —— 未登入者仍可瀏覽與匯入，只是不計數）。 */
   async function authHeaders(): Promise<Record<string, string>> {
@@ -167,7 +212,7 @@
   /** ⚠ 一定要遞增 detailSeq 並清掉 detailLoading，否則載入中的 modal 關不掉。 */
   function closeDetail() {
     detailSeq++;
-    openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = '';
+    openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = ''; likeError = '';
   }
 
   /** 依卡種分組的牌表（文字，不渲染卡圖）。 */
@@ -234,6 +279,144 @@
     } catch { /* 計數失敗不影響玩家，靜默 */ }
   }
 
+  // ── 按讚 ──────────────────────────────────────────────────────────
+  async function toggleLike() {
+    const p = openPost;
+    if (!p || likeBusy || !canPost) return;
+    likeBusy = true; likeError = '';
+    const on = !p.likedByMe;
+    try {
+      const r = await api('/' + encodeURIComponent(p.id) + '/like', {
+        method: on ? 'POST' : 'DELETE',
+        headers: await authHeaders(),
+      });
+      // 伺服器是唯一權威：它回什麼就顯示什麼（唯一鍵擋重放，重複按不會加倍）
+      if (openPost && openPost.id === p.id) {
+        openPost = { ...openPost, likedByMe: on, likeCount: r.likeCount ?? openPost.likeCount };
+      }
+      const i = posts.findIndex((x) => x.id === p.id);
+      if (i >= 0) { const c = [...posts]; c[i] = { ...c[i], likeCount: r.likeCount ?? c[i].likeCount }; posts = c; }
+    } catch (e: any) {
+      if (String(e?.message) !== 'unavailable') likeError = String(e?.message ?? e);
+    } finally {
+      likeBusy = false;
+    }
+  }
+
+  // ── 我的投稿 ──────────────────────────────────────────────────────
+  async function fetchMine() {
+    if (!canPost) { myPosts = []; return; }
+    // 代次：auth callback 與切分頁可能同時在飛兩發，而 deleteMine 只改本地狀態 ——
+    //   一發遲到的舊回應會把「已刪除」蓋回「published」，刪除鈕重新出現，再點就是假 404。
+    const seq = ++mineSeq;
+    myLoading = true; myError = '';
+    try {
+      const r = await api('-mine', { headers: await authHeaders() });
+      if (seq !== mineSeq) return;
+      myPosts = r.posts || [];
+    } catch (e: any) {
+      if (seq !== mineSeq) return;
+      if (String(e?.message) !== 'unavailable') myError = String(e?.message ?? e);
+    } finally {
+      if (seq === mineSeq) myLoading = false;
+    }
+  }
+  function switchTab(t: 'all' | 'mine') {
+    if (tab === t) return;
+    tab = t;
+    if (t === 'mine' && canPost) void fetchMine();
+  }
+  async function deleteMine(id: string) {
+    if (!canPost || deleteBusy) return;
+    const target = myPosts.find((x) => x.id === id);
+    if (!confirm('確定要刪除「' + (target ? target.deckName : '這篇投稿') + '」嗎？\n\n'
+      + '刪除後其他玩家就看不到了，讚數與收藏數也會歸零。重新投稿會從零開始計算，無法復原。')) return;
+    deleteBusy = id;
+    mineSeq++;   // 讓還在飛的 fetchMine 回應作廢，否則會把「已刪除」蓋回去
+    myError = '';
+    try {
+      await api('/' + encodeURIComponent(id), { method: 'DELETE', headers: await authHeaders() });
+      myPosts = myPosts.map((x) => (x.id === id ? { ...x, status: 'deleted' as const } : x));
+      void fetchList();
+    } catch (e: any) {
+      if (String(e?.message) !== 'unavailable') myError = String(e?.message ?? e);
+    } finally {
+      deleteBusy = '';
+    }
+  }
+
+  // ── 投稿 ──────────────────────────────────────────────────────────
+  function openPostModal() {
+    postOpen = true; postError = ''; postOk = ''; postNotes = '';
+    myDecks = loadDecks();
+    pickDeckId = myDecks.length ? myDecks[0].id : '';
+  }
+  function closePostModal() { postOpen = false; }
+
+  const pickedDeck = $derived(myDecks.find((d) => d.id === pickDeckId) ?? null);
+  const pickedIssue = $derived.by(() => {
+    const d = pickedDeck;
+    if (!d) return '';
+    const n = d.entries.reduce((a, e) => a + e.count, 0);
+    // 只擋「一定會被伺服器退回」的結構問題；完整合法性由伺服器用同一份 validateDeck 判。
+    if (n !== 60) return '這副牌是 ' + n + ' 張，投稿需要剛好 60 張';
+    return '';
+  });
+
+  async function doPost() {
+    const d = pickedDeck;
+    if (!d || postBusy || pickedIssue) return;
+    postBusy = true; postError = ''; postOk = '';
+    try {
+      await api('', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deckName: d.name,
+          notes: postNotes,
+          entries: d.entries.map((e) => ({ cardId: e.cardId, count: e.count })),
+        }),
+      });
+      postOk = '投稿完成，其他玩家已經可以看到了。';
+      postOpen = false;                      // 關掉 modal，避免玩家對著成功訊息再按一次吃 409
+      page = 1; sort = 'new';
+      void fetchList();
+      if (tab === 'mine') void fetchMine();
+    } catch (e: any) {
+      postError = String(e?.message) === 'unavailable' ? '這個功能只在正式站提供' : String(e?.message ?? e);
+    } finally {
+      postBusy = false;
+    }
+  }
+
+  // ── 賽事名次一鍵投稿 ─────────────────────────────────────────────
+  async function fetchEligibility() {
+    try {
+      const r = await api('-tournament/eligibility', { headers: await authHeaders() });
+      eligible = r.events || [];
+    } catch { eligible = []; /* 沒有資格或站上沒有這個 API：不顯示橫幅即可，不吵玩家 */ }
+  }
+  async function submitTournament(ev: Eligible) {
+    if (tSubmitBusy) return;
+    tSubmitBusy = ev.eventId; tSubmitMsg = ''; tSubmitError = '';
+    try {
+      const r = await api('-tournament/submit', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId: ev.eventId }),
+      });
+      tSubmitMsg = '已分享「' + ev.eventName + '」的' + (r.placementLabel || ev.placementLabel) + '牌組。';
+      eligible = eligible.map((x) => (x.eventId === ev.eventId ? { ...x, alreadyPosted: true } : x));
+      page = 1; sort = 'new';
+      void fetchList();
+      if (tab === 'mine') void fetchMine();
+    } catch (e: any) {
+      tSubmitError = String(e?.message) === 'unavailable' ? '這個功能只在正式站提供' : String(e?.message ?? e);
+    } finally {
+      tSubmitBusy = '';
+    }
+  }
+
   function fmtDate(ts: number): string {
     if (!ts) return '';
     const d = new Date(ts);
@@ -261,6 +444,86 @@
       目前所在的測試站沒有公布欄的伺服器端。
     </p>
   {:else}
+    {#if eligible.length > 0}
+      <section class="tourn-banner">
+        <h2>你在網站賽有名次，可以分享當時的牌組</h2>
+        <p class="sub">分享的是報名時登記的那一副，系統會自動附上賽事名稱與名次。</p>
+        <ul>
+          {#each eligible as ev (ev.eventId)}
+            <li>
+              <span class="ev-name">{ev.eventName}</span>
+              <span class="badge tourn">{ev.placementLabel}</span>
+              {#if ev.alreadyPosted}
+                <span class="done">已分享</span>
+              {:else}
+                <button class="primary small" disabled={tSubmitBusy === ev.eventId} onclick={() => submitTournament(ev)}>
+                  {tSubmitBusy === ev.eventId ? '分享中…' : '分享這副牌組'}
+                </button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        {#if tSubmitMsg}<p class="ok">{tSubmitMsg}</p>{/if}
+        {#if tSubmitError}<p class="error">{tSubmitError}</p>{/if}
+      </section>
+    {/if}
+
+    <div class="tabs">
+      <button class:active={tab === 'all'} onclick={() => switchTab('all')}>全部投稿</button>
+      <button class:active={tab === 'mine'} onclick={() => switchTab('mine')}>我的投稿</button>
+      <span class="spacer"></span>
+      {#if canPost}
+        <button class="primary small" onclick={openPostModal}>＋ 投稿牌組</button>
+      {:else}
+        <span class="hint">登入 email 帳號後就能投稿</span>
+      {/if}
+    </div>
+
+    {#if tab === 'mine'}
+      {#if !canPost}
+        <p class="empty">請先登入 email 帳號。</p>
+      {:else if myLoading}
+        <p class="empty">載入中…</p>
+      {:else if myError}
+        <p class="error">{myError}</p>
+      {:else if myPosts.length === 0}
+        <p class="empty">你還沒有投稿過牌組。</p>
+      {:else}
+        <ul class="post-list">
+          {#each myPosts as p (p.id)}
+            <li>
+              <div class="post-card mine-card">
+                <div class="row1">
+                  <span class="deck-name">{p.deckName}</span>
+                  {#if p.tournament}
+                    <span class="badge tourn">{p.tournament.eventName} ｜ {p.tournament.placementLabel}</span>
+                  {/if}
+                  {#if p.status === 'hidden'}
+                    <span class="badge hidden-b">已被站長下架</span>
+                  {:else if p.status === 'deleted'}
+                    <span class="badge hidden-b">已刪除</span>
+                  {/if}
+                </div>
+                <div class="row2">
+                  <span class="date">{fmtDate(p.createdAt)}</span>
+                  <span class="spacer"></span>
+                  <span class="stat">♥ {p.likeCount}</span>
+                  <span class="stat">⬇ {p.downloadCount}</span>
+                  <!-- hidden 也要能刪：投稿總量上限算的是「未刪除」的，被下架的仍佔名額，
+                       只讓 published 可刪的話，被下架 10 篇的玩家會永遠不能再投稿也無法自救。 -->
+                  {#if p.status !== 'deleted'}
+                    <button class="small danger" disabled={deleteBusy === p.id}
+                            onclick={() => deleteMine(p.id)}>{deleteBusy === p.id ? '刪除中…' : '刪除'}</button>
+                  {/if}
+                </div>
+                {#if p.notes}<p class="notes">{p.notes}</p>{/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
+        <p class="hint small-note">投稿不能修改內容。要更新請刪除後重新投稿（讚數與收藏數會重新計算）。</p>
+      {/if}
+    {:else}
     <div class="toolbar">
       <div class="sorts">
         <button class:active={sort === 'new'} onclick={() => changeSort('new')}>最新</button>
@@ -276,6 +539,7 @@
     {#if loadError}
       <p class="error">載入失敗：{loadError}</p>
     {/if}
+    {#if postOk}<p class="ok">{postOk}</p>{/if}
 
     {#if loading}
       <p class="empty">載入中…</p>
@@ -320,6 +584,7 @@
           <button disabled={page >= totalPages} onclick={() => goPage(page + 1)}>下一頁 →</button>
         </nav>
       {/if}
+    {/if}
     {/if}
   {/if}
 </main>
@@ -377,11 +642,63 @@
 
         {#if importMsg}<p class="ok">{importMsg}</p>{/if}
         {#if importWarn}<p class="warn">{importWarn}</p>{/if}
+        {#if likeError}<p class="warn">{likeError}</p>{/if}
 
         <div class="modal-foot">
+          {#if canPost}
+            <button class="like-btn" class:liked={openPost.likedByMe} disabled={likeBusy} onclick={toggleLike}
+                    title={openPost.likedByMe ? '取消讚' : '給這副牌組一個讚'}>
+              {openPost.likedByMe ? '♥' : '♡'} {openPost.likeCount}
+            </button>
+          {:else}
+            <span class="stat" title="登入 email 帳號後可以按讚">♥ {openPost.likeCount}</span>
+          {/if}
           <button class="primary" onclick={doImport}>匯入到我的牌組</button>
           <a class="linkbtn" href="{base}/decks">前往牌組編輯器</a>
           <button onclick={closeDetail}>關閉</button>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+{#if postOpen}
+  <div class="modal-backdrop" role="presentation" onclick={closePostModal}>
+    <div class="modal narrow" role="dialog" aria-modal="true" aria-label="投稿牌組" onclick={(e) => e.stopPropagation()}>
+      <header class="modal-head">
+        <h2>投稿牌組</h2>
+        <button class="close" onclick={closePostModal} aria-label="關閉">✕</button>
+      </header>
+      {#if myDecks.length === 0}
+        <p class="empty">你還沒有任何牌組。先去牌組編輯器建一副吧。</p>
+        <div class="modal-foot"><a class="linkbtn" href="{base}/decks">前往牌組編輯器</a></div>
+      {:else}
+        <label class="field">
+          <span>選擇要分享的牌組</span>
+          <select bind:value={pickDeckId}>
+            {#each myDecks as d (d.id)}
+              <option value={d.id}>{d.name}</option>
+            {/each}
+          </select>
+        </label>
+        {#if pickedIssue}
+          <p class="warn">{pickedIssue}</p>
+        {/if}
+        <label class="field">
+          <span>說明（選填，最多 200 字）</span>
+          <textarea bind:value={postNotes} maxlength="200" rows="3"
+                    placeholder="這副牌的打法重點、對局思路…"></textarea>
+        </label>
+        <p class="hint small-note">
+          投稿會公開顯示你的暱稱與牌組內容，而且<b>不能修改</b>——要更新請刪除後重新投稿。
+        </p>
+        {#if postError}<p class="error">{postError}</p>{/if}
+        {#if postOk}<p class="ok">{postOk}</p>{/if}
+        <div class="modal-foot">
+          <button class="primary" disabled={postBusy || !!pickedIssue || !pickedDeck} onclick={doPost}>
+            {postBusy ? '送出中…' : '確認投稿'}
+          </button>
+          <button onclick={closePostModal}>關閉</button>
         </div>
       {/if}
     </div>
@@ -448,6 +765,35 @@
   .modal-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .modal-foot button, .linkbtn { padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; text-decoration: none; }
   .modal-foot button.primary { background: rgba(80,140,255,.9); border-color: transparent; color: #fff; font-weight: 600; }
+
+  .tourn-banner { background: rgba(220,160,40,.12); border: 1px solid rgba(220,160,40,.45); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .tourn-banner h2 { font-size: .95rem; margin: 0 0 2px; }
+  .tourn-banner .sub { font-size: .78rem; opacity: .75; margin: 0 0 8px; }
+  .tourn-banner ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .tourn-banner li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .85rem; }
+  .ev-name { font-weight: 600; }
+  .done { font-size: .78rem; opacity: .6; }
+
+  .tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+  .tabs > button { padding: 5px 14px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; font-size: .85rem; }
+  .tabs > button.active { background: rgba(128,128,128,.18); font-weight: 600; }
+  button.primary { background: rgba(80,140,255,.9); border-color: transparent; color: #fff; font-weight: 600; }
+  button.primary:disabled { opacity: .5; }
+  button.small { padding: 4px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; font-size: .8rem; }
+  button.danger { color: #d33; border-color: rgba(211,51,51,.4); }
+  .mine-card { cursor: default; }
+  .mine-card:hover { background: rgba(128,128,128,.07); }
+  .badge.hidden-b { background: rgba(211,51,51,.15); border: 1px solid rgba(211,51,51,.4); }
+  .small-note { font-size: .76rem; opacity: .65; margin-top: 10px; line-height: 1.5; }
+
+  .modal.narrow { max-width: 460px; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: .85rem; }
+  .field select, .field textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; width: 100%; box-sizing: border-box; }
+  .field textarea { resize: vertical; }
+
+  .like-btn { padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; }
+  .like-btn.liked { color: #d3467a; border-color: rgba(211,70,122,.5); background: rgba(211,70,122,.1); font-weight: 600; }
+  .like-btn:disabled { opacity: .5; }
 
   @media (max-width: 600px) {
     main { padding: 10px 12px 40px; }

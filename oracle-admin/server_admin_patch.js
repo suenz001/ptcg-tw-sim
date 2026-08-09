@@ -4807,6 +4807,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
       //   但 x-forwarded-for 的**第一段是 client 可以任意填的**（Cloudflare 是 append 到尾端），
       //   拿它當限流 key ⇒ 每個請求換一個假 IP 就完全穿透。CF-Connecting-IP 由 Cloudflare
       //   覆寫、外部偽造不了，優先用它。（Fable 5 review 指出）
+      /**
+       * 退回一次 dpRate 的額度。
+       * ⚠ 投稿冷卻在**任何驗證之前**就被消耗，所以「挑錯牌組被退回」也會吃掉 60 秒
+       *   —— 玩家換一副合法的立刻撞 429，看起來像系統在刁難他（Fable 5 review 指出）。
+       *   純粹是使用者輸入不合法時才退，濫用者送出的請求仍然照算。
+       */
+      function dpRateRefund(key) {
+        const arr = _dpBuckets.get(key);
+        if (arr && arr.length) arr.pop();
+      }
       function dpIp(req) {
         const h = req.headers || {};
         const cf = h['cf-connecting-ip'];
@@ -5021,7 +5031,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const b = req.body || {};
           if (JSON.stringify(b).length > 32768) return res.status(413).json({ error: '資料過大' });
           const r = await dpInsert(id, { deckName: b.deckName, entries: b.entries, notes: b.notes, tournament: null });
-          if (r.error) return res.status(r.code).json({ error: r.error });
+          if (r.error) {
+            // 400 = 內容不合格（牌組不合法／格式錯）⇒ 不該扣冷卻，否則玩家換一副就撞 429。
+            // 409/429 是「你已經投過了／太頻繁」⇒ 照扣。
+            if (r.code === 400) dpRateRefund('p:' + id.uid);
+            return res.status(r.code).json({ error: r.error });
+          }
           res.json({ ok: true, id: r.doc._id });
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
@@ -5138,6 +5153,22 @@ import('firebase-admin').then(async ({ default: admin }) => {
       //   時它 100% 打不到，而且回的是 404「找不到這篇投稿」，連錯誤 log 都不會有
       //   （Fable 5 code review 抓到）。改前綴比「小心註冊順序」可靠：日後再加
       //   「我的投稿」之類的具名 GET 也不會重蹈覆轍。
+      // 「我的投稿」：含被 admin 下架（hidden）與自己刪掉（deleted）的，讓玩家知道發生什麼事。
+      //   ⚠ 路徑同樣用 /api/deck-posts-mine 這種獨立前綴，**不能**寫成 /api/deck-posts/mine
+      //     —— 那會被上面的 `/:id` 單段 pattern 整個吃掉（v6.138 踩過一次）。
+      app.get('/api/deck-posts-mine', async (req, res) => {
+        try {
+          res.set('Cache-Control', 'no-store');
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('m:' + id.uid, 60000, 30)) return res.status(429).json({ error: '請求過於頻繁' });
+          const docs = await DPOSTS.find({ uid: id.uid }, { projection: { entries: 0, email: 0, entriesHash: 0 } })
+            .sort({ createdAt: -1 }).limit(100).toArray();
+          // status 是自己的資料，回給本人沒有洩漏問題（dpPublic 白名單不含它，這裡顯式補上）
+          res.json({ posts: docs.map((d) => dpPublic(d, { status: d.status })) });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
       app.get('/api/deck-posts-tournament/eligibility', async (req, res) => {
         try {
           res.set('Cache-Control', 'no-store');
