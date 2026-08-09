@@ -1573,6 +1573,8 @@
     <a href="{base}/" class="back">← 首頁</a>
     <h1>牌組編輯器 <span class="version-tag">v{VERSION}</span></h1>
     <span class="hint">Standard · H / I / J 標</span>
+    <!-- v6.139：牌組公布欄入口（批次 2 只有瀏覽與匯入，投稿在批次 3） -->
+    <a href="{base}/deck-posts" class="to-board">📋 牌組公布欄</a>
     <span class="sync-pill sync-{dirtyDeckIds.size > 0 ? 'unsaved' : syncStatus}" title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組未存檔（按 💾 存檔 推到雲端）` : (syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : '')}>
       {#if dirtyDeckIds.size > 0}📝 未存檔 ({dirtyDeckIds.size}){:else if syncStatus === 'syncing'}⏳ 同步中{:else if syncStatus === 'synced'}☁️ 已同步{:else if syncStatus === 'error'}⚠️ 離線（hover 看原因）{:else}⬜ 本機{/if}
     </span>
@@ -2568,6 +2570,10 @@
     background: #fee2e2;
     border-color: #fca5a5;
     color: #c00;
+  }
+  .to-board {
+    font-size: .8rem; text-decoration: none; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid rgba(80,140,255,.45); background: rgba(80,140,255,.12); white-space: nowrap;
   }
   .deck-actions {
     grid-area: actions;

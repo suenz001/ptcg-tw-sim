@@ -318,6 +318,14 @@
       </span>
       <span class="hm-arrow" aria-hidden="true">→</span>
     </a>
+    <a class="hm-card hm-card-decks" href="{base}/deck-posts">
+      <span class="hm-icon" aria-hidden="true">📋</span>
+      <span class="hm-body">
+        <span class="hm-title">牌組公布欄</span>
+        <span class="hm-desc">看別人的牌組，一鍵匯入</span>
+      </span>
+      <span class="hm-arrow" aria-hidden="true">→</span>
+    </a>
     <a class="hm-card hm-card-game" href="{base}/game">
       <span class="hm-icon" aria-hidden="true">⚔️</span>
       <span class="hm-body">
