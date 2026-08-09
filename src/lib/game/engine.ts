@@ -53,6 +53,7 @@ import {
   getOctopusTentacleEffectiveCost,
   getUrsalunaBloodMoonEffectiveCost,
   getDecidueyeSnipeEffectiveCost,
+  isCostModifierAbilityEffective,
   getCorphishPreparationEffectiveCost,
   getSkeledirgeRowdyContestEffectiveCost,
   getAzumarillSparkleSplashEffectiveCost,
@@ -1572,7 +1573,17 @@ export function canAffordAttack(
   if (state && attackName) {
     const attackerCard = pool.get(pokemon.cardId);
     const attackerName = attackerCard?.name ?? '';
-    const overridden = getKyuremElectroplasmaEffectiveCost(attackerName, attackName, state, pool, cost);
+    // ⭐⭐v6.145 中央閘：以下每一個「**特性**改寫招式所需能量」的點，都必須先問
+    //   「這個特性此刻還有效嗎」（初始化／監視塔／熔岩洞／暗夜羽擊／黏著束縛）。
+    //   在此之前 7 個點全部沒問 → 特性被消除後減費照樣生效（行為端實測 7/7 皆中）。
+    //   ⚠ 只 gate「特性」來源；招式自帶條件（觸手激怒／反撲剪）、場地（夜間礦山）、
+    //     道具（反擊增幅器／赫普的講究頭帶）不是特性，不走這個閘。
+    const abilityOn = (abilityName: string): boolean =>
+      isCostModifierAbilityEffective(state, pokemon, attackerCard, attackerIdx, abilityName, pool);
+    // 酋雷姆｜反等離子（特性）
+    const overridden = abilityOn('反等離子')
+      ? getKyuremElectroplasmaEffectiveCost(attackerName, attackName, state, pool, cost)
+      : cost;
     if (overridden !== cost) cost = overridden;
     // v2.133 月月熊 赫月ex｜老練招式 — 「血月」所需【無】減少對手已獲得獎賞數
     // v5.723：老練招式是【無】寶可夢(月月熊赫月ex)的「特性」改寫 cost — 火箭隊的監視塔在場時【無】寶可夢
@@ -1581,7 +1592,7 @@ export function canAffordAttack(
     //   好勝毛蟹水)或為招式自帶條件(觸手激怒/反撲剪)，不受監視塔影響。通則:新增【無】寶可夢特性型 cost-modifier
     //   都要走此 isColorlessAbilityBlocked gate。
     const colorlessAbilityNullified = isColorlessAbilityBlocked(state, attackerCard, pool);
-    if (!colorlessAbilityNullified) {
+    if (!colorlessAbilityNullified && abilityOn('老練招式')) {
       const overridden2 = getUrsalunaBloodMoonEffectiveCost(attackerName, attackName, state, pool, cost);
       if (overridden2 !== cost) cost = overridden2;
     }
@@ -1594,20 +1605,26 @@ export function canAffordAttack(
     //   **【無】屬性**寶可夢，火箭隊的監視塔在場時它的特性應被消除。
     //   （狙射樹梟ex 是【草】，gate 內先判 pokemonType==='Colorless'，故對它零影響。）
     if (attackerCard && !colorlessAbilityNullified) {
-      const overridden4 = getDecidueyeSnipeEffectiveCost(attackerCard, state, cost, pool);
+      const overridden4 = getDecidueyeSnipeEffectiveCost(attackerCard, state, cost, pool, abilityOn);
       if (overridden4 !== cost) cost = overridden4;
     }
     // v2.997 好勝毛蟹／輕身鱈｜事先準備 — 招式所需【無】減自方棄牌「海岱」張數
-    const overridden5 = getCorphishPreparationEffectiveCost(attackerName, attackName, state, pool, cost);
+    const overridden5 = abilityOn('事先準備')
+      ? getCorphishPreparationEffectiveCost(attackerName, attackName, state, pool, cost)
+      : cost;
     if (overridden5 !== cost) cost = overridden5;
     // v2.997 熾焰咆哮虎ex｜喧鬧競技 — 招式所需【無】減對手備戰寶可夢數量
-    const overridden6 = getSkeledirgeRowdyContestEffectiveCost(attackerName, attackName, state, pool, cost);
+    const overridden6 = abilityOn('喧鬧競技')
+      ? getSkeledirgeRowdyContestEffectiveCost(attackerName, attackName, state, pool, cost)
+      : cost;
     if (overridden6 !== cost) cost = overridden6;
     // v2.997 瑪力露麗｜亮亮泡 — 自方場上有「太晶」寶可夢時，「捨身衝撞」cost 改為 1【超】
-    const overridden7 = getAzumarillSparkleSplashEffectiveCost(attackerName, attackName, state, pool, cost);
+    const overridden7 = abilityOn('亮亮泡')
+      ? getAzumarillSparkleSplashEffectiveCost(attackerName, attackName, state, pool, cost)
+      : cost;
     if (overridden7 !== cost) cost = overridden7;
     // v2.997 音波龍｜調諧迴響 — 雙方手牌張數相同時，「恐慌嚎鳴」cost 全部消除
-    if (!colorlessAbilityNullified) {  // v5.723：音波龍|調諧迴響是【無】寶可夢特性 → 監視塔在場消除
+    if (!colorlessAbilityNullified && abilityOn('調諧迴響')) {  // v5.723：音波龍|調諧迴響是【無】寶可夢特性 → 監視塔在場消除
       const overridden8 = getSonidoTuningResonanceEffectiveCost(attackerName, attackName, state, pool, cost);
       if (overridden8 !== cost) cost = overridden8;
     }
@@ -1688,7 +1705,9 @@ export function canAffordAttack(
     const defActive = state.players[dIdx].active;
     if (defActive?.fossilOnField) {
       const defCard = pool.get(defActive.cardId);
-      if (defCard?.name === '陳舊的根狀化石') {
+      // ⭐v6.145：這是**對手化石的特性**「原始根」，特性被消除（初始化／暗夜羽擊等）就不該再加費。
+      const rootAbilityOn = isCostModifierAbilityEffective(state, defActive, defCard, dIdx, '原始根', pool);
+      if (defCard?.name === '陳舊的根狀化石' && rootAbilityOn) {
         const attackerCard = pool.get(pokemon.cardId);
         // v6.047：同 aura 裁定 —— 這是對手的**特性**加在我方寶可夢身上的費用增加，
         //   化隱／光之翼（卡面明寫不受對手特性效果影響）應擋下。薄霧能量只擋招式效果，不擋這裡。
@@ -3477,10 +3496,17 @@ function handlePlaying(
     // v2.360 黏美龍｜黏滑失足 — 對手場上有此特性，撤退前擲幣，反面撤退失敗
     // 規則：「這個特性的效果不會重複」— 只要至少 1 隻黏美龍有此特性即觸發，不疊加。
     {
+      // ⭐v6.145：同一輪 audit 的鄰居缺口 —— 這裡只查「卡上印了黏滑失足」，
+      //   沒問特性此刻有沒有被消除（初始化／監視塔／熔岩洞／暗夜羽擊／黏著束縛）。
+      //   黏美龍是 Stage2 進化寶可夢 → 傳說的熔岩洞在場時特性應消失，原本卻照樣擲幣擋撤退。
       const hasStickFoot = [
-        ...(defender.active ? [defender.active] : []),
-        ...defender.bench,
-      ].some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '黏滑失足'));
+        ...(defender.active ? [{ inst: defender.active, loc: 'active' as const }] : []),
+        ...defender.bench.map(b => ({ inst: b, loc: 'bench' as const })),
+      ].some(({ inst, loc }) => {
+        const cc = pool.get(inst.cardId);
+        if (!cc?.abilities?.some(a => a.name === '黏滑失足')) return false;
+        return isAbilityHolderEffective(state, inst, cc, dIdx, '黏滑失足', loc, pool);
+      });
       if (hasStickFoot) {
         const r = flipCoinsWithLog(state, 1, '黏滑失足', aIdx);
         if (!r.heads) {

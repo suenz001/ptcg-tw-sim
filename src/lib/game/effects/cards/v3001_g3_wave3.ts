@@ -166,11 +166,15 @@ export function isInitializeNullified(
  */
 function isNullifiedByRocketWatchtower(
   state: GameState | undefined,
+  holderInst: CardInstance | null | undefined,
   holderCard: Card | null | undefined,
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!state || !holderCard || !pool) return false;
-  if (holderCard.pokemonType !== 'Colorless') return false;
+  // ⭐v6.145：化石卡放到場上是「HP60 的【無】屬性【基礎】寶可夢」（卡面 rulesText 明文），
+  //   但**卡片本身**的 pokemonType 是 null（它印刷上是 Item）→ 原本判不到，監視塔漏消除化石特性。
+  const isColorlessOnField = holderCard.pokemonType === 'Colorless' || !!holderInst?.fossilOnField;
+  if (!isColorlessOnField) return false;
   const st = state.activeStadium;
   if (!st) return false;
   return pool.get(st.cardId)?.name === '火箭隊的監視塔';
@@ -180,15 +184,20 @@ function isNullifiedByRocketWatchtower(
  * v6.077 M6 傳說的熔岩洞 —「雙方場上所有**進化**寶可夢的特性全部消除。」
  * 與 0b 火箭隊的監視塔（【無】寶可夢特性消除）完全同型，接在同一個 gate。
  * ⚠ 判準是**階段**不是進化來源：`stage !== 'Basic'` 即為進化寶可夢。
- *   化石放到備戰後是 Basic（fossilOnField）→ 不消除，符合卡面。
+ * ⚠⚠ v6.145：原註解寫「化石放到場上是 Basic → 不消除」，但**程式碼並沒有做這件事** ——
+ *   化石卡的 `stage` 是 undefined、`subtype` 是 'Item'，`stage ?? subtype` 取到 'Item' ≠ 'Basic'
+ *   → 被當成進化寶可夢誤消除。卡面 rulesText 明文「可作為 HP60 的【無】屬性的【基礎】寶可夢
+ *   放置於場上」，所以熔岩洞不該消除化石特性（原始根／羽毛守護／背蓋等）。現已改讀 fossilOnField。
  * ⚠ 用字面值比對卡名，避免從 stadiums.ts 反向 import（同 0b 的理由）。
  */
 function isNullifiedByLegendCave(
   state: GameState | undefined,
+  holderInst: CardInstance | null | undefined,
   holderCard: Card | null | undefined,
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!state || !holderCard || !pool) return false;
+  if (holderInst?.fossilOnField) return false;            // 化石在場上是【基礎】→ 不是進化寶可夢
   const stage = holderCard.stage ?? holderCard.subtype;
   if (stage === 'Basic' || stage == null) return false;   // 只消除進化寶可夢
   const st = state.activeStadium;
@@ -209,9 +218,9 @@ export function isAbilityHolderEffective(
   // 0. 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除
   if (isInitializeNullified(state, holderCard, pool)) return false;
   // 0b. v6.049 火箭隊的監視塔 —【無】寶可夢特性全部消除
-  if (isNullifiedByRocketWatchtower(state, holderCard, pool)) return false;
+  if (isNullifiedByRocketWatchtower(state, holderInst, holderCard, pool)) return false;
   // 0c. v6.077 傳說的熔岩洞 — 雙方場上所有**進化**寶可夢特性全部消除
-  if (isNullifiedByLegendCave(state, holderCard, pool)) return false;
+  if (isNullifiedByLegendCave(state, holderInst, holderCard, pool)) return false;
   // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標
   if (location === 'active' && holderInst.abilityNullifiedThisTurn) return false;
   // 2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → active 位置的特性失效

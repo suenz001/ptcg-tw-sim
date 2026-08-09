@@ -15726,6 +15726,39 @@ export function getKyuremElectroplasmaEffectiveCost(
 }
 
 /**
+ * ⭐⭐v6.145 中央閘：**特性型**「招式所需能量改寫」一律先問「這個特性此刻還有效嗎」。
+ *
+ * 事故：canAffordAttack 內 7 個費用改寫點（狙擊手之眼／化身團結／喧鬧競技／事先準備／
+ *   老練招式／反等離子／原始根）全都只判「卡名或特性名對不對」，**完全沒有問特性有沒有
+ *   被消除**。行為端實測：把持有者標上 `abilityNullifiedThisTurn`（招式版暗夜羽擊）後，
+ *   7 個點的減費／加費**照樣生效** —— 也就是特性明明被消掉了，玩家仍然打得出招式。
+ *   （同檔的被動最大HP v5.999、繁茂 v5.601 早就走 isAbilityHolderEffective，
+ *     費用改寫這一族是漏網的 outlier。）
+ *
+ * 涵蓋的消除來源全部由 isAbilityHolderEffective 統一處理：
+ *   鐵荊棘ex｜初始化／火箭隊的監視塔（【無】）／傳說的熔岩洞（進化）／
+ *   招式版暗夜羽擊（active）／振翼髮｜暗夜羽擊（對手 active）／海兔獸｜黏著束縛（備戰2階）。
+ *
+ * ⚠ fail-open 的兩種情形（皆為「維持既有行為」而非放行 bug）：
+ *   ①場上脈絡不齊（沒有 state／instance／pool）→ 回 true。canAffordAttack 有不傳 state 的呼叫端。
+ *   ②這張卡根本沒印這個特性 → 回 true，交由原本的卡名比對決定（不歸本閘管）。
+ */
+export function isCostModifierAbilityEffective(
+  state: GameState | undefined,
+  holderInst: CardInstance | null | undefined,
+  holderCard: Card | null | undefined,
+  holderOwnerIdx: 0 | 1 | undefined,
+  abilityName: string,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || !holderInst || !holderCard || holderOwnerIdx == null || !pool) return true;
+  if (!(holderCard.abilities ?? []).some(a => a.name === abilityName)) return true;
+  const loc: 'active' | 'bench' =
+    state.players[holderOwnerIdx]?.active?.iid === holderInst.iid ? 'active' : 'bench';
+  return isAbilityHolderEffective(state, holderInst, holderCard, holderOwnerIdx, abilityName, loc, pool);
+}
+
+/**
  * v6.070 中央 registry：卡面「這隻寶可夢使用招式所需的【無】能量**全部消除**」型特性。
  *   key = 特性名（⚠ 不是卡名 —— 同名卡可能沒有這個特性）；value = 條件述詞。
  *   目前成員：
@@ -15765,14 +15798,17 @@ export function getDecidueyeSnipeEffectiveCost(
   attackerCard: Card,
   state: GameState,
   originalCost: import('$lib/cards/types').EnergyType[],
-  pool?: Map<string, Card>,
+  pool: Map<string, Card> | undefined,
+  // ⭐v6.145：**必填**——「這個特性此刻有效嗎」。刻意不給預設值，
+  //   新增呼叫端若忘了傳，TypeScript 直接報錯（而不是靜默地又變回沒有 gate 的舊行為）。
+  abilityEffective: (abilityName: string) => boolean,
 ): import('$lib/cards/types').EnergyType[] {
   const abs = attackerCard.abilities ?? [];
   if (abs.length === 0) return originalCost;
   const aIdx = state.activePlayerIndex as 0 | 1;
   const hit = abs.some(a => {
     const cond = ABILITY_COLORLESS_COST_ZERO.get(a.name);
-    return !!cond && cond(attackerCard, state, aIdx, pool ?? new Map());
+    return !!cond && abilityEffective(a.name) && cond(attackerCard, state, aIdx, pool ?? new Map());
   });
   if (!hit) return originalCost;
   // 移除 cost 中的 Colorless（【無】能量需求消除）
