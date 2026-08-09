@@ -209,6 +209,31 @@ T('⭐⭐ 需要登入的兩支查詢只在拿到非匿名使用者後才發（v
   ok(/fetchEligibility\(\)/.test(fn), 'eligibility 不是在 auth callback 裡發');
 });
 
+console.log('\n④-3 iOS 動態島安全區（玩家回報：按不到「← 首頁」）');
+
+T('⭐⭐ 頁面頂部必須留 safe-area-inset-top（全站標準，/cards /decks 首頁都有）', () => {
+  ok(/env\(safe-area-inset-top/.test(RAW),
+    '沒有 safe-area-inset-top —— 有動態島的 iPhone 上「← 首頁」會被系統 UI 蓋住按不到');
+  const mainBlock = /\bmain\s*\{[^}]*\}/.exec(RAW);
+  ok(mainBlock && /env\(safe-area-inset-top/.test(mainBlock[0]), 'main 的 padding 沒有帶 safe-area-inset-top');
+});
+
+T('⭐⭐ 手機斷點不得把 safe-area 整條覆蓋掉（改窄邊距時最容易犯）', () => {
+  const mq = /@media \(max-width: 600px\)\s*\{[\s\S]*?\n  \}/.exec(RAW);
+  ok(mq, '找不到手機斷點');
+  // 斷點內若有重新宣告 main 的 padding，就必須一併帶 env()
+  const mainInMq = /\bmain\s*\{[^}]*padding[^}]*\}/.exec(mq[0]);
+  if (mainInMq) {
+    ok(/env\(safe-area-inset-top/.test(mainInMq[0]),
+      '手機斷點重新宣告了 main 的 padding 卻沒帶 env() —— 會整條蓋掉桌機版的 safe-area');
+  }
+});
+
+T('⭐ modal 也要避開動態島（貼齊上緣時關閉鈕會被蓋住）', () => {
+  const bd = /\.modal-backdrop\s*\{[^}]*\}/.exec(RAW);
+  ok(bd && /env\(safe-area-inset-top/.test(bd[0]), 'modal backdrop 沒有 safe-area-inset-top');
+});
+
 console.log('\n⑤ 入口與身分');
 
 T('⭐ 牌組編輯器有公布欄入口（沒有入口等於沒上線）', () => {

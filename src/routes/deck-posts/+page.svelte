@@ -706,7 +706,17 @@
 {/if}
 
 <style>
-  main { max-width: 900px; margin: 0 auto; padding: 12px 16px 48px; }
+  /* iOS 動態島／瀏海：viewport-fit=cover 已在 app.html，env() 才有值。
+     比照 /cards（1rem）、/decks（1.5rem）、首頁（2rem）的全站標準 —— 沒加的話
+     「← 首頁」會被動態島蓋住按不到。左右也補，處理橫向瀏海。 */
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: calc(12px + env(safe-area-inset-top, 0px))
+             max(16px, env(safe-area-inset-right, 0px))
+             48px
+             max(16px, env(safe-area-inset-left, 0px));
+  }
   .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .page-head h1 { font-size: 1.35rem; margin: 0; }
   .version-tag { font-size: .7rem; opacity: .55; font-weight: 400; }
@@ -745,8 +755,22 @@
   .pager button { padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; }
   .pager button:disabled { opacity: .4; cursor: default; }
 
-  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 60; }
-  .modal { background: var(--bg, #fff); color: inherit; border-radius: 12px; max-width: 720px; width: 100%; max-height: 88vh; overflow-y: auto; padding: 16px 18px 18px; }
+  /* modal 同樣要避開動態島：手機上 modal 貼齊上緣時關閉鈕會被蓋住。
+     比照 /decks 的 .pv-overlay / .pv-inner 寫法。 */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    z-index: 60;
+  }
+  .modal {
+    background: var(--bg, #fff); color: inherit; border-radius: 12px;
+    max-width: 720px; width: 100%;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
+    overflow-y: auto; padding: 16px 18px 18px;
+  }
   :global(html.dark) .modal { background: #1c1f24; }
   .modal-head { display: flex; align-items: center; gap: 12px; }
   .modal-head h2 { margin: 0; font-size: 1.1rem; flex: 1; }
@@ -796,7 +820,14 @@
   .like-btn:disabled { opacity: .5; }
 
   @media (max-width: 600px) {
-    main { padding: 10px 12px 40px; }
+    /* ⚠ 這裡只縮小基礎邊距，env() 那一項**必須保留** —— 直接寫 `padding: 10px 12px 40px`
+       會把上面的 safe-area 整條覆蓋掉，動態島機種就又會按不到「← 首頁」。 */
+    main {
+      padding: calc(10px + env(safe-area-inset-top, 0px))
+               max(12px, env(safe-area-inset-right, 0px))
+               40px
+               max(12px, env(safe-area-inset-left, 0px));
+    }
     .to-decks { margin-left: 0; }
   }
 </style>

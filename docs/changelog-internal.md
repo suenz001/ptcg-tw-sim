@@ -17,6 +17,26 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.142 — 牌組公布欄手機版避開 iOS 動態島
+
+玩家回報：有動態島的 iPhone 上，公布欄頁最上方的「← 首頁」被系統 UI 蓋住按不到。
+
+`/deck-posts` 是新頁，我寫的時候 `main` 直接用 `padding: 12px 16px 48px`，**沒有帶
+`env(safe-area-inset-top)`** —— 而全站其他頁早就有這個標準：`/cards` 是
+`calc(1rem + env(safe-area-inset-top, 0))`、`/decks` 是 1.5rem、首頁是 2rem，
+`app.html` 也早就有 `viewport-fit=cover`（`env()` 要有它才有值）。照同一套補上。
+
+三處都補：
+- `main` 的 padding（上緣＋左右，左右處理橫向瀏海）
+- `.modal-backdrop` / `.modal`（modal 貼齊上緣時關閉鈕同樣會被蓋住；`max-height` 也要扣掉
+  上下安全區，否則內容會被推出畫面）
+- ⚠ **手機斷點**：原本 `@media (max-width: 600px)` 裡寫的是 `padding: 10px 12px 40px`，
+  這會把上面那條 safe-area **整條覆蓋掉** —— 也就是說只補桌機版的話，動態島機種依然按不到。
+  這是這類修正最容易漏的地方，守衛專門釘了一條。
+
+守衛 `test-deck-posts-page.mjs` +3 項（27 項）。HEAD-FAIL：還原頁面後恰好那 3 條紅。
+完整 `npm test` 全綠。
+
 ## v6.141 — 閃光屏障擋不住油之機關槍（＋同維度第二個漏網：球形盾牌）
 
 玩家回報：雷電獸使用「閃光屏障」後仍被奧利瓦ex「油之機關槍」打死。**屬實**，行為端已重現。
