@@ -17,6 +17,66 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.147 — 「按了沒反應」的兩個真因：tInFlight 零 template 綁定 ＋ 樂觀更新只放行一種動作
+
+**站長原話**：「這個 lag 的問題修了好多次都沒處理好」。前幾輪修的都是**伺服器負載端**
+（v6.118 誤訂閱大廳輪詢、v6.119/120 降載、v6.146 對戰結束後的空轉），
+但玩家喊的「卡」在**自己回合按下按鈕到畫面更新**這一段。Fable 5 獨立診斷 + 我方逐行查證。
+
+### ① `tInFlight` 加了旗標，卻沒有任何 template 綁定
+v6.137 引進 `tInFlight`（對戰動作的網路單發鎖），但 **`disabled={tInFlight}` 在整份
+`+page.svelte` 出現 0 次**（grep 確認）⇒ 往返期間按鈕外觀完全不變，玩家第二次點擊還會被
+`tournamentDispatch` 開頭直接丟棄並跳一行紅字。體感就是「按了沒反應、要再按一次」。
+
+修法：建立**唯一**的中央述詞 `const actionBusy = $derived(isTournament && tInFlight)`，
+桌機 13 類送出點 + 手機直式 4 類全部綁上，狀態列加「⏳ 送出中…」chip。
+⚠ 刻意**不做全畫面遮罩** —— `tApi` 有 12 秒逾時保護，全域鎖會讓網路卡住時玩家連
+設定／離開／放大鏡都按不了。手機版是子元件，必須新增 `actionBusy` prop 傳進去
+（不傳就永遠是 false ＝ 靜默失效，守衛有釘住父層有沒有傳）。
+
+### ② 樂觀更新白名單第二批
+放行 `PLAY_BASIC` / `RETREAT` / `PLAY_FOSSIL`（`ATTACH_ENERGY` 是第一批）。
+**白名單一律用 harness 對真盤面實跑決定，不照直覺列**，實跑結論：
+- `EVOLVE` —— 30 條進化鏈 30/30 `randomness:1`。進化建新實例、新 iid 來自 `uid()`
+  ⇒ 同時踩 gate ⑩。本地 iid 與伺服器必然不同，玩家若拿預測 iid 送 `RESOLVE_SELECTION`
+  會被伺服器 sanitize 清空 → 效果**靜默消失**（v6.129「validIids 死資料」的鏡像）。**結構性，不放行。**
+- `PLAY_TRAINER`（含只附道具）—— `opens-pending`，第一段就開 picker。它本來就是
+  「兩個串行往返」的結構，要改善得改成單段動作，不是放寬白名單能解決。
+- `END_TURN` —— `turn-flipped`，本來就該等伺服器。
+
+### ⭐⭐ 順手抓到的 gate 漏洞：gate ⑤ 只比物件同一性
+`USE_STADIUM` 第一次實跑顯示「可預測」，差點就放行了。**真相是 fixture 場上沒有場地卡、
+引擎其實什麼都沒做，卻回了一份淺拷貝** —— 舊的 gate ⑤（`predicted === base`）判不出來，
+於是把「什麼都沒發生」當成有效預測畫上去。備戰已滿的 `PLAY_BASIC` 也是同一形狀。
+⇒ 新增 **gate ⑤b**：用輕量指紋（雙方 active/bench/各區張數 + log 長度 + 回合 + 場地 iid）
+比對，盤面完全沒變一律判成不預測。不用 `JSON.stringify`（盤面含整份 log，太重）。
+**通則：「引擎拒絕」不能只看物件同一性 —— 有的 handler 拒絕時仍會回新物件。**
+
+### Fable 5 審查追加（同版補上）
+- ⭐**點擊派附能整條沒 gate**：我只擋了手牌的 `onpointerdown`（拖曳派），但「點手牌能量 → 點目標」
+  這條 `onclick → onAttachEnergy` 完全沒查 —— 而附能是最高頻動作。已在 `onAttachEnergy` 與
+  `triggerHandActivateAbility` 兩個函式端 + 手牌 `onclick` 三處補 `if (actionBusy) return;`。
+- **setup / mulligan 六顆按鈕沒綁**（準備完成／完成補抽／開局重抽／用牠開局，桌機＋手機）。
+  setup 是 CAS 衝突歷史事故最密集的區段，「按了沒反應」的回報有一部分來自這裡。已補。
+- **兩個自動計時器**（自動取獎、自動結束回合）撞上 in-flight 會被丟棄並跳「上一個動作還在送出中」
+  紅字，玩家完全不知道那是計時器發的。已改成 `if (actionBusy) return;`（計時器會再排）。
+- Fable 實測發現、**列為下一批**的一條：`tryPredictAction` 沒有「盤面上的 cardId 是否都在 pool」
+  的 gate —— 對手卡包尚未載入時（`ensurePoolForStateIds` 是 async void，有 race 窗），
+  引擎讀不到對手特性會**靜默當成沒有**，於是像「對手黏美龍｜黏滑失足」這種本該擋下預測的情境
+  會被誤放行。不是公平性問題（伺服器權威、回滾健全），是低機率的畫面閃爍。
+- Fable 確認的兩件事：①`actionBusy` 只在錦標賽為真是對的（休閒線上的 dispatch 本來就是
+  先本地 applyAction 再 push，天生樂觀，掛上去反而鎖住即時 UI）；
+  ②我調整兩個既有守衛前提的判斷正確，沒有「把 bug 固化成契約」的成分。
+
+### 守衛 `scripts/test-v6147-optimistic-batch2-and-busy.mjs`（17 項，v6.146 跑 11 FAIL）
+- A 行為端：四個放行動作各一條正對照；負對照包含「對手【黏美龍】｜黏滑失足在場時撤退要擲幣」。
+  ⚠ 這裡刻意**不用**「混亂狀態撤退」當負對照 —— 現行規則的混亂只影響使用招式，
+  撤退不受影響，那條路徑本來就是確定性的，拿它當負對照是錯的期待（我第一版就寫錯，被實跑打臉）。
+- 三條「不得放行」的鎖（EVOLVE / PLAY_TRAINER / END_TURN），其中 EVOLVE 還加了
+  「就算有人硬放進白名單，底層 gate 也必須擋住」的雙保險。
+- B 靜態：`actionBusy` 必須由 `isTournament && tInFlight` 算出、13 類桌機送出點逐一釘住、
+  手機 Props/解構/父層傳遞三處都要有、且**禁止**改成全畫面遮罩。全部在 stripComments 之後比對。
+
 ## v6.146 — 對戰結束後三條迴圈仍在全速跑（含一個 8 秒抓全量盤面的無限迴圈）
 
 **來源**：站長回報「很多玩家反應錦標賽很卡」，營運端 AI 觀測到「對戰已 `status=done`，

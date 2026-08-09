@@ -101,8 +101,14 @@ console.log('③ Math.random 隔離與還原');
   // 讓 applyAction throw：pool 給空的 → 還原仍要成立
   mod.tryPredictAction(mkState(), ATTACH, new Map());
   chk('引擎 throw 後 Math.random 仍還原（try/finally）', Math.random === before);
-  chk('白名單只有 ATTACH_ENERGY（逐批放行，避免一次開太多）',
-      mod.OPTIMISTIC_ACTION_TYPES.size === 1 && mod.OPTIMISTIC_ACTION_TYPES.has('ATTACH_ENERGY'));
+  // v6.147：白名單進入第二批。本檔只鎖「第一批那一個不得被誤刪」與「逐批放行的節奏」；
+  //   白名單的**完整內容**由 test-v6147-optimistic-batch2-and-busy.mjs 負責（那裡有逐個動作的
+  //   行為端正對照與「不得放行」的鎖）。⚠ 這條原本寫死 size === 1，是 slice 1 當下的批次邊界，
+  //   不是安全性質 —— 放行第二批時一起更新是正確的，不是把 bug 固化成契約。
+  chk('第一批的 ATTACH_ENERGY 仍在白名單內（不得被後續批次誤刪）',
+      mod.OPTIMISTIC_ACTION_TYPES.has('ATTACH_ENERGY'));
+  chk('白名單仍維持「逐批放行」的規模（一次開太多就該重新審）',
+      mod.OPTIMISTIC_ACTION_TYPES.size <= 6);
 }
 
 console.log('③b ⭐ rng gate 本體：碰到隨機必須放棄預測（這是整個設計的核心）');

@@ -74,6 +74,8 @@
     isTournSpectator?: boolean;
     // v5.954 回放：攤開主視角(行動方)手牌明牌
     isTReplay?: boolean;
+    // v6.147 錦標賽動作送出往返期間：所有會送出動作的按鈕一律 disable（父層唯一述詞 actionBusy）
+    actionBusy?: boolean;
     // Callbacks
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
@@ -96,6 +98,7 @@
     isSpectator = false,  // v5.116
     isTournSpectator = false,  // v5.895
     isTReplay = false,  // v5.954
+    actionBusy = false,  // v6.147
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     undoAvailable = false,
     onUndo,
@@ -823,16 +826,17 @@
     <span class="mp-spacer"></span>
     {#if aiThinking}<span class="mp-tag">🤖</span>{/if}
     {#if isSyncing}<span class="mp-tag">⏳</span>{/if}
+        {#if actionBusy}<span class="mp-tag">⏳送出中</span>{/if}
     {#if isSetup && !game.setupDone[myIdx] && !isSpectator}
       <!-- v2.287 修：setup 階段雙方各自準備，不依 isMyTurn 判定（後手玩家 isMyTurn=false 會看不到按鈕） -->
       <!-- v5.116：觀戰者不顯示準備按鈕 -->
-      <button class="mp-end-btn" disabled={!myPlayer.active}
+      <button class="mp-end-btn" disabled={actionBusy || !myPlayer.active}
         onclick={() => onAction(GameActions.finishSetup(myIdx))}>✅ 準備</button>
     {:else if isSetup && game.mulliganPostBenchOpen?.[myIdx] && !isSpectator}
       <!-- v5.189：手機版補抽後設置按鈕（補桌面版 +page.svelte L6248 對應分支）
            玩家補抽完手牌後 mulliganPostBenchOpen=true，需此按鈕進入 playing phase
            不依 isMyTurn — myIdx 已由 +page.svelte L2151 myIdx 切換邏輯處理（v5.185 補 mulliganPostBenchOpen 優先級）-->
-      <button class="mp-end-btn"
+      <button class="mp-end-btn" disabled={actionBusy}
         onclick={() => onAction(GameActions.finishMulliganPostBench(myIdx))}>✅ 完成補抽</button>
     {:else if isMyTurn && isPlaying && !pendingSelection && !sheet && (game.pendingPrizes?.[0] ?? 0) === 0 && (game.pendingPrizes?.[1] ?? 0) === 0}
       <!-- v2.289：不限 turnPhase==='end'，主階段也顯示（等同「跳過攻擊 + 結束回合」合一）
@@ -843,7 +847,7 @@
       {:else if needSendActiveOpp}
         <button class="mp-end-btn" disabled title="等待對手送出新戰鬥寶可夢">⏭ 結束回合</button>
       {:else}
-        <button class="mp-end-btn" onclick={() => onAction(GameActions.endTurn())}>⏭ 結束回合</button>
+        <button class="mp-end-btn" disabled={actionBusy} onclick={() => onAction(GameActions.endTurn())}>⏭ 結束回合</button>
       {/if}
     {/if}
     <button class="mp-icon-btn" onclick={onOpenSettings} title="設定">⚙</button>
@@ -1065,7 +1069,7 @@
     <button class="mp-chip mp-clickable" onclick={() => openDiscard(myPlayer.discard, '我方')} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
     {#if canUseStadium && isMyTurn}
-      <button class="mp-chip mp-clickable mp-stadium-btn" onclick={() => onAction(GameActions.useStadium())}>🏟 使用競技場</button>
+      <button class="mp-chip mp-clickable mp-stadium-btn" disabled={actionBusy} onclick={() => onAction(GameActions.useStadium())}>🏟 使用競技場</button>
     {:else}
       <span class="mp-right-chips">
         {#if roomCode}<span class="mp-chip mp-room" title="房間代碼（邀請朋友觀戰 / 回報 bug 用）">🔑 {roomCode}</span>{/if}
@@ -1078,7 +1082,7 @@
   {#if (pendingPrizes ?? 0) > 0 && !isSpectator}
     <div class="mp-prize-alert">
       🏆 取 {pendingPrizes} 張獎賞卡
-      <button class="mp-prize-btn" onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>
+      <button class="mp-prize-btn" disabled={actionBusy} onclick={() => onAction(GameActions.takePrizes(pendingPrizes!, myIdx, myIdx))}>取得</button>
     </div>
   {/if}
 
@@ -1148,7 +1152,7 @@
         {@const isPlayableTrainer = playableTrainerIids.has(inst.iid) && !!c && (c.supertype === 'Trainer')}
         <!-- v6.086「兩張合一」競技場：手牌顯示成兩張直立的卡（同一張合併橫圖裁左半／右半） -->
         {@const _half = twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool)}
-        <button class="mp-hand-card" class:mp-playable={playable} onclick={() => tapHand(inst)} title={c?.name}>
+        <button class="mp-hand-card" class:mp-playable={playable} disabled={actionBusy} onclick={() => tapHand(inst)} title={c?.name}>
           {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name}
             class:legend-half-l={_half === 0} class:legend-half-r={_half === 1}/>{/if}
           {#if isPlayableTrainer && isMyTurn}
@@ -1179,7 +1183,7 @@
           <div class="mp-sheet-empty">本回合無可執行動作</div>
         {/if}
         {#each acts as a}
-          <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+          <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled || actionBusy} onclick={a.action}>{a.label}</button>
         {/each}
       {:else if sheet.type === 'active'}
         {@const acts = activeActions()}
@@ -1191,7 +1195,7 @@
           {#if a.zoomIid}
             <!-- v3.32 撤退類項目：主按鈕 + 🔍 zoom 副按鈕 -->
             <div class="mp-sheet-row">
-              <button class="mp-sheet-btn mp-sheet-btn-flex" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+              <button class="mp-sheet-btn mp-sheet-btn-flex" class:primary={a.primary} disabled={a.disabled || actionBusy} onclick={a.action}>{a.label}</button>
               <button class="mp-sheet-zoom" title="放大檢視" onclick={() => {
                 closeSheet();
                 const inst = [...(myPlayer.active ? [myPlayer.active] : []), ...myPlayer.bench].find(x => x.iid === a.zoomIid);
@@ -1199,7 +1203,7 @@
               }}>🔍</button>
             </div>
           {:else}
-            <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled} onclick={a.action}>{a.label}</button>
+            <button class="mp-sheet-btn" class:primary={a.primary} disabled={a.disabled || actionBusy} onclick={a.action}>{a.label}</button>
           {/if}
         {/each}
       {:else if sheet.type === 'bench'}
@@ -1207,7 +1211,7 @@
         {@const c = cardOf(sheet.inst)}
         <div class="mp-sheet-title mp-sheet-drag-handle" onpointerdown={onSheetHeaderPointerDown} onpointermove={onSheetHeaderPointerMove} onpointerup={onSheetHeaderPointerUp} title="拖曳視窗位置">{c?.name ?? '?'}</div>
         {#each acts as a}
-          <button class="mp-sheet-btn" class:primary={a.primary} onclick={a.action}>{a.label}</button>
+          <button class="mp-sheet-btn" class:primary={a.primary} disabled={actionBusy} onclick={a.action}>{a.label}</button>
         {/each}
       {:else if sheet.type === 'pick-energy-target'}
         <!-- v5.200：附加能量目標改卡圖網格（鏡射桌面送新戰鬥位 modal UX）-->
@@ -1221,7 +1225,7 @@
               {#if tinst.iid === myPlayer.active?.iid}<span class="mp-pick-active-badge">⚔️ 戰鬥</span>{/if}
               <button class="mp-pick-zoom" title="放大檢視：{c?.name ?? '?'}"
                 onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(tinst.cardId, tinst); }}>🔍</button>
-              <button class="mp-pick-btn" onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
+              <button class="mp-pick-btn" disabled={actionBusy} onclick={() => attachEnergy(sheet!.type === 'pick-energy-target' ? sheet!.energyIid : '', tinst.iid)}>
                 {#if c?.imageUrl}<img use:retryImg={c.imageUrl} src={c.imageUrl} alt={c.name} loading="lazy"/>{/if}
                 <div class="mp-pick-name">{c?.name ?? '?'}</div>
                 <div class="mp-pick-meta">HP {hpRemaining(tinst)}/{hpMax(tinst)}</div>
@@ -1251,7 +1255,7 @@
                 {#if inst.iid === myPlayer.active?.iid}<span class="mp-pick-active-badge">⚔️ 戰鬥</span>{/if}
                 <button class="mp-pick-zoom" title="放大檢視：{ic?.name ?? '?'}"
                   onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(inst.cardId, inst); }}>🔍</button>
-                <button class="mp-pick-btn" onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
+                <button class="mp-pick-btn" disabled={actionBusy} onclick={() => evolveTo(fromIid, (sheet as { evoIid: string }).evoIid)}>
                   {#if ic?.imageUrl}<img use:retryImg={ic.imageUrl} src={ic.imageUrl} alt={ic.name} loading="lazy"/>{/if}
                   <div class="mp-pick-name">{ic?.name ?? '?'}</div>
                   <div class="mp-pick-meta">HP {hpRemaining(inst)}/{hpMax(inst)}</div>
@@ -1279,7 +1283,7 @@
             <div class="mp-pick-card">
               <button class="mp-pick-zoom" title="放大檢視：{bc?.name ?? '?'}"
                 onclick={(e) => { e.stopPropagation(); closeSheet(); onOpenZoom(b.cardId, b); }}>🔍</button>
-              <button class="mp-pick-btn" onclick={() => retreatTo(b.iid)}>
+              <button class="mp-pick-btn" disabled={actionBusy} onclick={() => retreatTo(b.iid)}>
                 {#if bc?.imageUrl}<img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name} loading="lazy"/>{/if}
                 <div class="mp-pick-name">{bc?.name ?? '?'}</div>
                 <div class="mp-pick-meta">HP {hpRemaining(b)}/{hpMax(b)}</div>
@@ -1854,6 +1858,8 @@
     font-weight: 600;
   }
   .mp-sheet-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  /* v6.147 送出中：pick 鈕與手牌一併給 disabled 視覺 */
+  .mp-pick-btn:disabled, .mp-hand-card:disabled, .mp-prize-btn:disabled { opacity: 0.45; cursor: progress; }
   .mp-sheet-btn:active:not(:disabled) { transform: scale(0.98); }
 
   /* v5.205：mp-sheet 拖曳支援 — overlay.dragged 透明化讓玩家看到底下場上 */

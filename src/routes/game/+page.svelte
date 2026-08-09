@@ -2337,6 +2337,9 @@
               takePrizeTimerId = null;
             }
             if (game && myPendingPrizes > 0) {
+              // v6.147：自動取獎撞上動作送出中 → 會被丟棄並跳「上一個動作還在送出中」紅字，
+              //   玩家完全不知道那是自動計時器發的。直接跳過這一次（計時器會再排）。
+              if (actionBusy) return;
               dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx));
             }
           }
@@ -2428,6 +2431,7 @@
         if (game.activePlayerIndex !== myPlayerIndex) return;
       }
       if (mode !== 'online' && aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
+      if (actionBusy) return;   // v6.147 同上：自動結束回合撞上送出中 → 跳過這一次
       dispatch(GameActions.endTurn());
     }, 600);
   });
@@ -2608,6 +2612,7 @@
 
   // dispatch helpers — 用 onclick 呼叫
   function triggerHandActivateAbility(handIid: string): void {
+    if (actionBusy) return;   // v6.147 同上：手牌特性也走 hand-card 的 onclick，不是拖曳
     const meta = handActivateAbilities.get(handIid);
     if (!meta) return;
     // v6.080：abilityIndex 由中央 gate 給（原本硬編 0，同名多特性卡會指錯）
@@ -4790,6 +4795,14 @@
   //     動了會讓輪詢的「client 超前回正」分支誤判（v6.135 才剛修過亂序倒退）。
   let tInFlight = $state(false);
 
+  // ⭐⭐v6.147「按了沒反應」的真兇之一：`tInFlight` 在 v6.137 加進來時**沒有任何 template 綁定**
+  //   （`disabled={tInFlight}` 整份檔案出現 0 次），所以動作送出往返期間按鈕外觀完全不變，
+  //   玩家第二次點擊還會被 tournamentDispatch 開頭直接丟棄並跳一行紅字。
+  //   ⇒ 這裡建立**唯一**的視覺 busy 述詞，所有送出動作的按鈕一律綁它。
+  //   ⚠ 刻意**只** disable「會送出動作的元素」，不做全畫面遮罩 ——
+  //     tApi 有 12 秒逾時保護，全域遮罩會讓網路卡住時玩家連設定/離開/放大鏡都按不了。
+  const actionBusy = $derived(isTournament && tInFlight);
+
   async function tournamentDispatch(action: any, _retried = false) {
     // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
     //   玩家在等待往返時連點會完全沒有回饋 ⇒ 體感就是「按下去沒反應」。改為顯性提示。
@@ -6546,6 +6559,10 @@
   // ── 選擇互動 ─────────────────────────────────────────────────────────────────
   function onAttachEnergy(targetIid: string) {
     if (!selectedEnergyIid) return;
+    // ⭐v6.147（Fable 5 審查抓到）：拖曳派已由 hand-card 的 onpointerdown gate 住，
+    //   但**點擊派**（點手牌能量 → 點目標）整條沒查 —— 而附能是最高頻動作，
+    //   busy 期間點下去會被 tournamentDispatch 丟棄、只換來一行紅字。
+    if (actionBusy) return;
     dispatch(GameActions.attachEnergy(selectedEnergyIid, targetIid));
   }
   function toggleSelection(iid: string) {
@@ -8208,6 +8225,7 @@
       version={VERSION}
       roomCode={roomCode}
       onResync={isTournament ? tForceResync : undefined}
+      actionBusy={actionBusy}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
@@ -8279,6 +8297,7 @@
           {/if}
         </span>
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
+        {#if actionBusy}<span class="chip syncing-chip">⏳ 送出中…</span>{/if}
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip" title={isTournament ? '若遲遲沒換你，可能是畫面沒更新 → 點此重新同步（不必重整網頁）' : undefined} style={isTournament ? 'cursor:pointer;' : undefined} onclick={() => { if (isTournament) { _tSendClientDiag('manual-sync'); tForceResync(); } }}>等待對手行動{#if isTournament} 🔄{/if}</span>{/if}
       {/if}
       <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
@@ -8583,7 +8602,7 @@
               <span class="prize-countdown">⏱️ {takePrizeCountdown}s 後自動取得</span>
             {/if}
             <!-- v3.791：takePrizes 也改用 myIdx，本機雙人模式 myPlayerIndex=null 時才不會誤抓 P1 -->
-            <button class="btn-xs primary" onclick={()=>dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx))}>取得</button>
+            <button class="btn-xs primary" disabled={actionBusy} onclick={()=>dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx))}>取得</button>
           </div>
         {/if}
         <!-- v2.123：send-new-active alert 去掉 turnPhase==='end' 限制
@@ -8620,14 +8639,14 @@
 
       <div class="action-btns">
         {#if game.phase==='setup' && isMyTurn() && !game.setupDone[myIdx]}
-          <button class="btn-act primary" disabled={!myPlayer?.active}
+          <button class="btn-act primary" disabled={actionBusy||!myPlayer?.active}
             onclick={()=>dispatch(GameActions.finishSetup(myIdx))}>
             ✅ 準備完成
           </button>
         {:else if game.phase==='setup' && isMyTurn() && game.mulliganPostBenchOpen?.[myIdx]}
           <!-- v5.138：mulligan 補抽後加備戰完成（PTCG 規則：不需重抽方補抽後可選擇加備戰） -->
           <div class="alert info-alert" style="margin-bottom:6px">📝 補抽完成！可從手牌加新基礎寶可夢到備戰（限自由選擇）</div>
-          <button class="btn-act primary"
+          <button class="btn-act primary" disabled={actionBusy}
             onclick={()=>dispatch(GameActions.finishMulliganPostBench(myIdx))}>
             ✅ 完成補抽後設置
           </button>
@@ -8642,7 +8661,7 @@
             {#each eff as { atk, sourceCardName, isFromTool }, i}
               {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
               <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
-                disabled={!availableAttacks.includes(i)||!!pendingSelection}
+                disabled={actionBusy||!availableAttacks.includes(i)||!!pendingSelection}
                 title={(_shinyOn ? '璀璨結晶：可免除任一能量需求；剩餘 cost 仍需對應屬性能量（例如 1 顆草能無法付【火】或【超】）\n\n' : '') + (isFromTool ? `來自工具：${sourceCardName}` : '')}
                 onclick={()=>initiateAttack(i)}>
                 <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：免除其中 1 顆能量需求（任意屬性）；其餘 cost 仍需對應屬性能量">🔮-1</span>{/if}</span>
@@ -8654,11 +8673,11 @@
                  才 disabled；對方 pending 不擋（理論上 isMyTurn() 已 gate，但雙保險）。
                  PTCG 「跳過攻擊」= 自己選擇放棄本回合攻擊直接結束，應永遠可按。 -->
             <button class="btn-act secondary"
-              disabled={!!pendingSelection && pendingSelection.actorIdx === myIdx}
+              disabled={actionBusy || (!!pendingSelection && pendingSelection.actorIdx === myIdx)}
               onclick={()=>dispatch(GameActions.endTurn())}>跳過攻擊 →</button>
           {/if}
           {#if canUseStadium && isMyTurn()}
-            <button class="btn-act stadium-btn" onclick={()=>dispatch(GameActions.useStadium())}>
+            <button class="btn-act stadium-btn" disabled={actionBusy} onclick={()=>dispatch(GameActions.useStadium())}>
               🏟 {stadiumCard?.name}
             </button>
           {/if}
@@ -8669,7 +8688,7 @@
                改 if/else 兩態，行為一致 zone-active 按鈕。 -->
           {#if !pendingSelection && isMyTurn() && myPlayer?.active && !myPlayer.active.fossilOnField && (myPlayer.bench?.length??0) > 0 && game.phase==='playing' && game.turnPhase==='main'}
             {#if canRetreatNow}
-              <button class="btn-act btn-retreat-mirror" onclick={(e)=>openFloatingRetreat(e)} title="撤退戰鬥場寶可夢到備戰，換另一隻上場">
+              <button class="btn-act btn-retreat-mirror" disabled={actionBusy} onclick={(e)=>openFloatingRetreat(e)} title="撤退戰鬥場寶可夢到備戰，換另一隻上場">
                 🔄 撤退（{retreatCostOf(myPlayer.active)}⚡）
               </button>
             {:else}
@@ -8688,7 +8707,7 @@
             </button>
           {/if}
           {#if canEndTurn}
-            <button class="btn-act primary" onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
+            <button class="btn-act primary" disabled={actionBusy} onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
           <!-- v4.74 練習模式 — AI 對戰悔棋（直接回到上一手）-->
           {#if undoSnapshot && mode !== 'online' && aiPlayerIndex !== null && !pendingSelection && game.phase === 'playing'}
@@ -8872,7 +8891,7 @@
             <!-- v5.160：觀戰者隱藏特性按鈕（isMyTurn 對觀戰者永遠 false） -->
             {#if isMyTurn()}
               {#each usableAbilities.filter(a=>a.iid===myPlayer!.active!.iid) as ab}
-                <button class="ability-btn" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
+                <button class="ability-btn" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>
                   ✨{ab.abilityName}
                 </button>
               {/each}
@@ -8950,7 +8969,7 @@
               <!-- v5.160：觀戰者隱藏特性按鈕（isMyTurn 對觀戰者永遠 false） -->
               {#if isMyTurn()}
                 {#each usableAbilities.filter(a=>a.iid===b.iid) as ab}
-                  <button class="ability-btn-sm" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
+                  <button class="ability-btn-sm" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.useAbility(ab.iid,ab.abilityIndex));}}>✨{ab.abilityName}</button>
                 {/each}
               {/if}
               <!-- v2.189 化石卡【丟棄】按鈕：備戰版本 -->
@@ -9040,7 +9059,7 @@
           {@const isActionable = canEnergy || canBasic || canFossil || canTrainer || canEvolve}
           <!-- v5.511 緊急迴轉(齒輪怪) — 滿足條件直接黃框可用、點卡發動，不另顯示按鈕標示 -->
           {@const canHandActivate = handActivateAbilities.has(inst.iid)}
-          <div class="hand-card"
+          <div class="hand-card" class:action-busy={actionBusy}
             class:selected={selectedEnergyIid===inst.iid}
             class:can-actionable={isActionable || canHandActivate}
             class:dragging={dragging?.iid===inst.iid}
@@ -9053,8 +9072,8 @@
             out:fly={{ y: -220, duration: 220, easing: cubicOut }}
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
-            onpointerdown={(e)=>{leaveHandCard(); if(dragKind)startDrag(e, inst, dragKind, c);}}
-            onclick={()=>{if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            onpointerdown={(e)=>{leaveHandCard(); if(dragKind && !actionBusy)startDrag(e, inst, dragKind, c);}}
+            onclick={()=>{if(actionBusy)return; if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={canHandActivate?`點擊使用特性（放備戰） · ${c.name}`:(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
             <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
                  預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。
@@ -9570,7 +9589,7 @@
                 disabled={selectionStepperValue >= stepper.max}
                 onclick={() => { selectionStepperValue = Math.min(stepper.max, selectionStepperValue + stepper.step); }}
                 title="加 {stepper.step}">+</button>
-              <button class="btn-act primary stepper-confirm"
+              <button class="btn-act primary stepper-confirm" disabled={actionBusy}
                 onclick={() => confirmSelection()}>✓ 確認</button>
             </div>
             <p class="sel-hint stepper-hint">範圍 {stepper.min}–{stepper.max} · 每次 ±{stepper.step}</p>
@@ -9606,7 +9625,7 @@
                   {@const _inst = _ip.active?.iid === opt.inspectIid ? _ip.active : _ip.bench.find(b => b.iid === opt.inspectIid)}
                   <div class="modal-choice-row">
                     <button class="btn-act modal-choice-btn modal-choice-btn-flex"
-                      disabled={!!opt.disabled}
+                      disabled={actionBusy||!!opt.disabled}
                       onclick={() => {
                         // v5.208：modal-choice 直接 dispatch payload，避開 confirmSelection 內 selectionValid 早退
                         //   (Svelte 5 state replace 與 derived 同步順序不可靠，single-click flow 易踩)
@@ -9626,7 +9645,7 @@
                   </div>
                 {:else}
                   <button class="btn-act modal-choice-btn"
-                    disabled={!!opt.disabled}
+                    disabled={actionBusy||!!opt.disabled}
                     onclick={() => {
                       // v5.208：modal-choice 直接 dispatch (同上)
                       const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
@@ -9649,7 +9668,7 @@
           {#if pendingSelection.type === 'modal-choice'}
             <!-- modal-choice 直接點按鈕 resolve，不需要確認/跳過 footer -->
           {:else if isDmgDist}
-            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>
+            <button class="btn-act primary" disabled={actionBusy||!selectionValid} onclick={confirmSelection}>
               確認本批次（{selectionBatchSum}／{pendingSelection.maxCount} 個指示物）
             </button>
             {#if selectionBatchSum > 0}
@@ -9659,7 +9678,7 @@
             <!-- v5.384：energy-distribute 用 selectionCounts/selectionBatchSum 計數；
                  原本沒有專屬 footer → 落到下方預設分支顯示 selectionPicked.size 永遠 0
                  （金屬製造者等「分配附能量」picker 的「(0)確定」bug）。 -->
-            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>
+            <button class="btn-act primary" disabled={actionBusy||!selectionValid} onclick={confirmSelection}>
               確認分配（{selectionBatchSum}／{pendingSelection.maxCount} 個能量）
             </button>
             {#if selectionBatchSum > 0}
@@ -9667,7 +9686,7 @@
             {/if}
           {:else if pendingSelection.type === 'reorder-deck-top'}
             <!-- v5.384：reorder-deck-top 用 selectionReorderKeep，同樣不能用 selectionPicked.size -->
-            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>確定（保留 {selectionReorderKeep.length} 張）</button>
+            <button class="btn-act primary" disabled={actionBusy||!selectionValid} onclick={confirmSelection}>確定（保留 {selectionReorderKeep.length} 張）</button>
             <!-- ⭐ v6.123 次要動作：推理組合卡面的「或者：翻回反面重洗，放回牌庫下方」。
                  只有帶 params.altAction 的 pending 才渲染 ⇒ 蕾荷／天眼／攪亂雷達不受影響。 -->
             {#if pendingSelection.params?.altAction}
@@ -9678,9 +9697,9 @@
             {/if}
           {:else}
             <!-- v6.108：確認鈕直接寫出要拿／要處理的是哪幾張，讓誤選在按下去之前就看得見 -->
-            <button class="btn-act primary" disabled={!selectionValid} onclick={confirmSelection}>{selectedNamesLabel ? '確定 ' + selectedNamesLabel : '確定（' + selectionPicked.size + '張）'}</button>
+            <button class="btn-act primary" disabled={actionBusy||!selectionValid} onclick={confirmSelection}>{selectedNamesLabel ? '確定 ' + selectedNamesLabel : '確定（' + selectionPicked.size + '張）'}</button>
             {#if selectionAllowsSkip({ type: pendingSelection.type, actorIdx: pendingSelection.actorIdx, sourcePlayerIdx: pendingSelection.sourcePlayerIdx, effectKey: pendingSelection.effectKey, minCount: pendingSelection.minCount, allowSkipZero: pendingSelection.params?.allowSkipZero === true })}
-              <button class="btn-act secondary" onclick={abandonSelection}>{pendingSelection.effectKey === 'attach-tool' ? '取消（道具退回手牌）' : pendingSelection.effectKey === 'sakura-crescendo-attach' ? '不附能量（直接造成傷害）' : '不選（跳過）'}</button>
+              <button class="btn-act secondary" disabled={actionBusy} onclick={abandonSelection}>{pendingSelection.effectKey === 'attach-tool' ? '取消（道具退回手牌）' : pendingSelection.effectKey === 'sakura-crescendo-attach' ? '不附能量（直接造成傷害）' : '不選（跳過）'}</button>
             {/if}
             <!-- v2.121 全域安全網：候選為空且 minCount>0 時開放「放棄」避免卡住 -->
             {#if pendingStuckEmpty}
@@ -9701,7 +9720,7 @@
     <div class="float-evo-menu" style="left:{floatingEvoMenu.x}px;top:{floatingEvoMenu.y}px;">
       <div class="float-evo-title">選擇進化</div>
       {#each floatingEvoMenu.evoOpts as evo}{@const ec=getCard(evo.cardId)}
-        <button class="evo-choice wide-evo" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
+        <button class="evo-choice wide-evo" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.evolve(floatingEvoMenu!.fromIid,evo.iid));floatingEvoMenu=null;}}>
           <img use:retryImg={ec?.imageUrl} src={ec?.imageUrl} alt={ec?.name}/><span>{ec?.name}</span>
         </button>
       {/each}
@@ -9823,10 +9842,10 @@
           </div>
         </div>
         <div class="sel-footer mulligan-footer">
-          <button class="btn-act" onclick={() => dispatch(GameActions.openingMulligan(myIdx))}>
+          <button class="btn-act" disabled={actionBusy} onclick={() => dispatch(GameActions.openingMulligan(myIdx))}>
             🔄 視同沒有基礎，重抽手牌
           </button>
-          <button class="btn-act primary" onclick={() => dispatch(GameActions.openingKeep(myIdx))}>
+          <button class="btn-act primary" disabled={actionBusy} onclick={() => dispatch(GameActions.openingKeep(myIdx))}>
             ✅ 用牠開局
           </button>
         </div>
@@ -10602,7 +10621,7 @@
               <div class="retreat-card">
                 <button class="retreat-zoom" title="放大檢視：{bc.name}"
                   onclick={(e)=>{e.stopPropagation();openZoom(b.cardId, b);}}>🔍</button>
-                <button class="retreat-pick" onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
+                <button class="retreat-pick" disabled={actionBusy} onclick={(e)=>{e.stopPropagation();dispatch(GameActions.retreat(b.iid));floatingRetreatMenu=null;}}>
                   <img use:retryImg={bc.imageUrl} src={bc.imageUrl} alt={bc.name}/>
                   <div class="retreat-name">{bc.name}</div>
                   <div class="retreat-hp">HP {rem}/{eff}</div>
@@ -10680,7 +10699,7 @@
         </div>
         {@render promoteGrid(_benchD, promotePickDef, (iid) => { promotePickDef = promotePickDef === iid ? null : iid; })}
         <div class="sel-footer">
-          <button class="btn-act primary" disabled={!_pickOkD}
+          <button class="btn-act primary" disabled={actionBusy||!_pickOkD}
             onclick={()=>confirmSendNewActive(promotePickDef, dIdx, _benchD)}>
             {_pickOkD ? `✅ 確定讓「${_pickNameD}」上場` : '請先點選要上場的寶可夢'}
           </button>
@@ -10705,7 +10724,7 @@
         </div>
         {@render promoteGrid(_benchS, promotePickSelf, (iid) => { promotePickSelf = promotePickSelf === iid ? null : iid; })}
         <div class="sel-footer">
-          <button class="btn-act primary" disabled={!_pickOkS}
+          <button class="btn-act primary" disabled={actionBusy||!_pickOkS}
             onclick={()=>confirmSendNewActive(promotePickSelf, myIdx, _benchS)}>
             {_pickOkS ? `✅ 確定讓「${_pickNameS}」上場` : '請先點選要上場的寶可夢'}
           </button>
@@ -13004,6 +13023,8 @@
   .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
+  /* v6.147 錦標賽動作送出中：手牌整排變淡且不可拖（真正的擋是 onpointerdown 的 gate，這裡只是視覺回饋） */
+  .hand-card.action-busy{ opacity:.5; cursor:progress; }
   .fs-chip{ background:#1a2a3a; color:#8cf; border-color:#2a4a6a; cursor:pointer; font-size:0.68rem; }
   .fs-chip:hover{ background:#2a3a5a; }
   .waiting-msg{ color:#fa8; font-size:0.85rem; font-style:italic; }

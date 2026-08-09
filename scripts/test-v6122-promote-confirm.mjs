@@ -65,7 +65,9 @@ for (const [label, anchor, pickVar] of [['A 防守方版', A, 'promotePickDef'],
     ok(!/dispatch\(/.test(w),
       label + ' 的 modal 裡還有直接 dispatch —— 等於沒有二段確認，玩家還是會按錯');
     ok(/<div class="sel-footer">/.test(w), label + ' 沒有 sel-footer（確定鈕列）');
-    ok(/disabled=\{!_pickOk/.test(w), label + ' 的確定鈕沒有 disabled 條件（可能送出空選取）');
+    // v6.147：確定鈕多了「動作送出中」的 busy 條件（disabled={actionBusy||!_pickOkX}），
+    //   本條的判準是「有沒有 disabled 到那個選取旗標」，允許前面再 or 別的條件。
+    ok(/disabled=\{(?:[^}]*\|\|)?!_pickOk/.test(w), label + ' 的確定鈕沒有 disabled 條件（可能送出空選取）');
     ok(new RegExp('confirmSendNewActive\\(' + pickVar).test(w),
       label + ' 的確定鈕沒有呼叫 confirmSendNewActive(' + pickVar + ' …)');
   });

@@ -27,8 +27,39 @@ import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 import { applyAction } from './engine';
 
-/** 第一批只放 ATTACH_ENERGY：高頻、零隨機、零 pendingSelection、無連鎖、就算回滾也只是一張能量。 */
-export const OPTIMISTIC_ACTION_TYPES: ReadonlySet<string> = new Set(['ATTACH_ENERGY']);
+/**
+ * 放行清單。**每一批都是「先用 harness 對真盤面實跑、看十道 gate 的實際結果」才決定的**，
+ * 不是照直覺列（見 `scripts/test-v6147-optimistic-batch2.mjs`）。
+ *
+ * 第一批（v6.137）：`ATTACH_ENERGY` —— 高頻、零隨機、零 pendingSelection、無連鎖。
+ *
+ * 第二批（v6.147）：`PLAY_BASIC` / `RETREAT` / `PLAY_FOSSIL`。
+ *   三個都是玩家自己回合的高頻動作，實跑確認會通過十一道 gate（確定性、不開 picker、不換手、
+ *   不動獎賞、不產新 iid）。異常情境仍會被既有 gate 自動擋掉，不必額外列表：
+ *     ・混亂狀態撤退要擲幣、對手黏美龍｜黏滑失足要擲幣 → gate ④（randomness）
+ *     ・備戰已滿 / 先攻第一回合不能放 → gate ⑤（engine-rejected）
+ *     ・場地卡本身會開選擇 → gate ⑦（opens-pending）
+ *
+ * ⚠ **實跑後確定不能放行、且原因是結構性的**（記在這裡，免得下一輪又去試）：
+ *   ・`EVOLVE` —— 30 條進化鏈實跑 30/30 全部 `randomness:1`。進化會建新的場上實例、
+ *     新 iid 來自 `uid()`（會動到隨機源）⇒ 同時也會踩 gate ⑩（iid 集合改變）。
+ *     本地產的 iid 與伺服器產的必然不同，玩家若拿預測 iid 去送 `RESOLVE_SELECTION`
+ *     會被伺服器 sanitize 清空 → 效果**靜默消失**（v6.129「validIids 死資料」的鏡像）。
+ *   ・`PLAY_TRAINER`（含只附道具那種）—— 實跑是 `opens-pending`：出牌後由引擎開 picker
+ *     讓玩家選目標，第一段就踩 gate ⑦。它本來就是「兩個串行往返」的結構，
+ *     要改善得先改成單段動作，不是放寬白名單能解決的。
+ *   ・`END_TURN` —— `turn-flipped`（gate ⑧），本來就該等伺服器。
+ *   ・`USE_STADIUM` —— ⚠ 這一項是**被新的 gate ⑤b 抓回來的假陽性**：第一次實跑顯示「可預測」，
+ *     但那是因為 fixture 場上沒有場地卡、引擎其實什麼都沒做卻回了淺拷貝（舊的 gate ⑤ 判不出來）。
+ *     場地卡的啟動效果多半是搜尋型、會開 picker ⇒ 要放行必須先用「真的有場地在場」的
+ *     fixture 逐張確認，本輪不放行。**這正是為什麼白名單一律要實跑決定，不能照直覺列。**
+ */
+export const OPTIMISTIC_ACTION_TYPES: ReadonlySet<string> = new Set([
+  'ATTACH_ENERGY',   // v6.137 第一批
+  'PLAY_BASIC',      // v6.147 第二批
+  'RETREAT',
+  'PLAY_FOSSIL',
+]);
 
 export type PredictResult =
   | { ok: true; predicted: GameState }
@@ -52,6 +83,29 @@ function collectIids(s: GameState): Set<string> {
   }
   if (s.activeStadium) out.add(s.activeStadium.iid);
   return out;
+}
+
+/**
+ * ⭐v6.147 盤面「有沒有真的變」的輕量指紋。
+ *
+ * 為什麼需要：gate ⑤ 原本用**物件同一性**（`predicted === base`）判斷「引擎拒絕」，
+ * 但實測發現有的 handler 就算什麼都沒做也會回傳一份淺拷貝 —— 例：備戰已滿時的 `PLAY_BASIC`，
+ * 引擎正確地沒有放下去（bench 5、hand 1 都沒變）卻回了新物件 ⇒ gate ⑤ 判不出來，
+ * 於是我們會把一個「什麼都沒發生」的盤面當成預測畫上去、還把 tPredicted 設起來。
+ * 不是正確性 bug（伺服器同樣會拒絕），但預測/回滾機制空轉，而且會掩蓋掉真正的拒絕。
+ *
+ * 只取「玩家看得到會變的東西」，不做 JSON.stringify（盤面含整份 log，太重）。
+ */
+function fingerprint(s: GameState): string {
+  const zone = (p: GameState['players'][number]): string => [
+    p.active ? `${p.active.iid}:${p.active.damage}:${p.active.energyAttached?.length ?? 0}:${String(p.active.status)}` : '-',
+    (p.bench ?? []).map(b => `${b.iid}:${b.damage}:${b.energyAttached?.length ?? 0}`).join(','),
+    (p.hand ?? []).length, (p.deck ?? []).length, (p.discard ?? []).length, (p.prizes ?? []).length,
+  ].join('|');
+  return [
+    s.activePlayerIndex, s.turn, s.turnPhase, (s.log ?? []).length,
+    s.activeStadium?.iid ?? '-', ...(s.players ?? []).map(zone),
+  ].join('#');
 }
 
 const sameSet = (a: Set<string>, b: Set<string>): boolean => {
@@ -101,6 +155,10 @@ export function tryPredictAction(
 
   // gate ⑤：引擎拒絕（回傳同一個 state 物件）→ 不預測，但呼叫端仍會照送（伺服器權威裁定）
   if (predicted === base) return { ok: false, reason: 'engine-rejected' };
+
+  // gate ⑤b（v6.147）：回了新物件但**什麼都沒變** —— 同樣視為拒絕，不畫預測。
+  //   例：備戰已滿時的 PLAY_BASIC（引擎正確地沒放下去，卻回了淺拷貝）。
+  if (fingerprint(predicted) === fingerprint(base)) return { ok: false, reason: 'no-op' };
 
   // gate ⑥：改變階段（進 game-over）一律等伺服器
   if (predicted.phase !== base.phase) return { ok: false, reason: 'phase-changed' };
