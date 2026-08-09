@@ -4548,18 +4548,25 @@
   function startSpectatePoll() {
     if (tPollTimer) clearInterval(tPollTimer);
     const gen = ++tPollGen;
-    let _spGoTick = 0;   // v6.146 對戰結束後的降頻計數
+    let _spLastFetchAt = 0;   // v6.148 與主輪詢同一套節奏述詞
+    let _spBusy = false;
     tPollTimer = setInterval(async () => {
+      // ⚠ 同主輪詢：早退必須在 try 之外，否則 finally 會把在途那一發的旗標清掉。
+      if (_spBusy) return;                       // v6.148 C4 防自我壅塞
+      const _now = Date.now();
+        // v6.146/148 對戰結束後畫面不會再更新（version 不再遞增），但原本仍每 2 秒下載一整份
+        //   redact 過的 gameState。觀戰者常常看完就把分頁擱著 → 結束後降到 10 秒。
+      if (_now - _spLastFetchAt < tPollDesiredMs(true)) return;
+      _spLastFetchAt = _now;
+      _spBusy = true;
       try {
-        // v6.146 對戰結束後畫面不會再更新（version 不再遞增），但原本仍每 2 秒下載一整份
-        //   redact 過的 gameState。觀戰者常常看完就把分頁擱著 → 改為每 5 輪（約 10 秒）。
-        if (game && (game as any).phase === 'game-over' && (++_spGoTick % 5) !== 0) return;
         const r = await tApi(`/spectate/state?room=${tSpectateRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開觀戰 → 丟棄在路上的回應
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
       } catch { /* 忽略單次失敗 */ }
-    }, 2000);
+      finally { _spBusy = false; }
+    }, 400);
   }
   function tLeaveSpectate() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
@@ -4695,8 +4702,15 @@
     try {
       const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
       if (fr && fr.gameState && typeof fr.version === 'number') {
-        if (fr.version !== tVersion) { void ensurePoolForStateIds(fr.gameState); game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }  // 漏接或客戶端超前 → 一律回正;v5.932 補 ensurePoolForStateIds(比照 tAdopt,避免對手卡包未載渲染成'?')
-        _tLastStateChangeAt = Date.now();
+        if (fr.version !== tVersion) {
+          void ensurePoolForStateIds(fr.gameState); game = fr.gameState; tVersion = fr.version; tStep = 'playing';  // 漏接或客戶端超前 → 一律回正;v5.932 補 ensurePoolForStateIds(比照 tAdopt,避免對手卡包未載渲染成'?')
+          // ⭐⭐v6.148（Fable 5 實測抓到）：這行原本在 if **外面**無條件執行 ——
+          //   新鮮度看門狗每 8 秒觸發一次 resync，每次都把 anchor 推到現在，
+          //   於是「盤面最近有變動」永遠成立，`tPollDesiredMs` 的快檔變成**常態**
+          //   （對手長考 120 秒的模擬：93% 的時間都落在快檔）。
+          //   anchor 的語義是「盤面**真的**變過」，所以只在版本真的不同時才更新。
+          _tLastStateChangeAt = Date.now();
+        }
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
       if (fr && typeof fr.serverNow === 'number') { tClockOffset = fr.serverNow - Date.now(); tNow = Date.now() + tClockOffset; }
@@ -4748,24 +4762,51 @@
       tStep = 'lobby';
     } finally { tBusy = false; }
   }
+  // ⭐⭐v6.148 輪詢節奏的**唯一**中央述詞（對戰與觀戰共用同一套判準）。
+  //   ① 對戰已結束 → 大幅降頻（v6.146）。⚠ 是降頻不是停：`winner == null` 的平手要等管理員裁定，
+  //      裁定會 bump 伺服器盤面版本，停掉輪詢玩家永遠等不到結果。
+  //   ② 盤面「最近才變動過」＝雙方正在你來我往 → 加密到 600ms，把「對手動作到我看到」的
+  //      最壞延遲從 1.2 秒砍半。長考／掛機時自動退回 1.2 秒，所以不會變成常態負載。
+  //   ③ 其餘維持 1.2 秒。
+  function tPollDesiredMs(spectate: boolean): number {
+    const g = game as { phase?: string; winner?: number | null; activePlayerIndex?: number } | null;
+    if (g && g.phase === 'game-over') {
+      if (spectate) return 10000;
+      return (g.winner == null) ? 6000 : 12000;   // 平手待裁定要早點看到結果
+    }
+    if (spectate) return 2000;
+    // ⚠ 快檔三個條件缺一不可：
+    //   ① 只在 playing —— setup 有自己的 3.5 秒看門狗，50 人同時開局全員進快檔會變成尖峰。
+    //   ② 只在「等對手」—— 自己回合的動作走 dispatch，回應本身就即時，不需要快 poll；
+    //      這一條把快檔人口直接砍半。
+    //   ③ 盤面 15 秒內真的變動過（見 tForceResync 的 anchor 修正）。
+    // ⚠ base tick 是 400ms，所以 800 是**實際會發生**的間隔；寫 600 會被量化成 800，
+    //   等於文件與行為不符（Fable 5 審查指出）。誠實寫 800：1.2 秒 → 0.8 秒。
+    const _waitingOpp = !!g && (g as { activePlayerIndex?: number }).activePlayerIndex !== mySeatIdx;
+    if (g && g.phase === 'playing' && _waitingOpp
+        && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) < 15000) return 800;
+    return 1200;
+  }
   function startTournamentPoll() {
     if (tPollTimer) clearInterval(tPollTimer);
     const gen = ++tPollGen;
-    let _gpTick = 0;  // v0.68 降載:對戰中大廳聊天改每 5 輪(~6s)刷新,非每 1.2s
-    let _goTick = 0;   // v6.146 對戰已結束後的降頻計數
+    let _lastChatAt = 0;       // v6.148 大廳聊天改時間判準（原本綁輪詢輪數，節奏一變就漂移）
+    let _lastFetchAt = 0;      // v6.148 上一次真的送出 /state 的時刻
+    let _pollBusy = false;     // v6.148 上一發還沒回來
     tPollTimer = setInterval(async () => {
+      // ⭐⭐v6.148 C4 防自我壅塞：setInterval **不等前一發完成**，RTT 飆高時會一直疊送，
+      //   在隧道排隊反而讓延遲雪上加霜（v6.135 只修了亂序的**正確性**，沒防壅塞）。
+      // ⚠⚠ 這兩個早退**必須放在 try 之外**：`return` 在 try 內一樣會執行 finally，
+      //   於是每個「因為忙碌而跳過」的 tick 都會把**在途那一發設的旗標**清掉 ⇒ 防壅塞完全失效。
+      //   （Fable 5 實測：RTT 2 秒時同時在途最高 3 發，修正後才是 1 發。）
+      if (_pollBusy) return;
+      // ⭐v6.148 節奏 gate：base tick 固定 400ms，實際多久送一次由 tPollDesiredMs 決定。
+      //   （v6.146 用「每 N 輪」的計數器實作，改成時間判準後兩邊共用同一個中央述詞。）
+      const _now = Date.now();
+      if (_now - _lastFetchAt < tPollDesiredMs(false)) return;
+      _lastFetchAt = _now;
+      _pollBusy = true;
       try {
-        // ⭐⭐v6.146 對戰結束後降頻 —— 玩家常常停在勝負視窗不按「返回賽事大廳」
-        //   （沒有自動跳轉，是設計而非 bug），原本會**一直**以 1.2 秒打 /state。
-        //   實測一場 50 人賽事有 3 場對戰同時掛著、5 分鐘 819 個無效 request。
-        //   ⚠ 不能完全 clearInterval：`winner == null` 的平手要「等待管理員裁定」，
-        //     裁定會改伺服器盤面，停掉輪詢玩家就永遠等不到結果。
-        //   ⇒ 有勝負 → 每 10 輪（約 12 秒）；平手待裁定 → 每 5 輪（約 6 秒）。省 90%+。
-        if (game && (game as any).phase === 'game-over') {
-          const _every = ((game as any).winner == null) ? 5 : 10;
-          if ((++_goTick % _every) !== 0) return;
-        } else if (_goTick !== 0) { _goTick = 0; }
-        _gpTick++;
         const reqV = tVersion;  // v6.135 送出當下的版本（亂序守衛用）
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
@@ -4783,9 +4824,12 @@
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
         tNow = Date.now() + tClockOffset;
-        if (_gpTick % 5 === 0) tChatLoad(); // v5.577/v0.68 對戰中大廳聊天每 5 輪(~6s)更新(降載)
+        // v5.577/v0.68 對戰中大廳聊天降載。v6.148 改**時間判準**：原本綁「每 5 輪」，
+        //   輪詢節奏一變（400ms base）就會跟著漂移，與它自己的降載意圖脫鉤。
+        if (_now - _lastChatAt >= 6000) { _lastChatAt = _now; tChatLoad(); }
       } catch { /* 忽略單次輪詢失敗 */ }
-    }, 1200);
+      finally { _pollBusy = false; }   // v6.148 一定要放掉，否則輪詢永久停擺
+    }, 400);
   }
   // v6.137 樂觀更新狀態 —— 與 tBusy 分開：
   //   tBusy    仍是「大廳操作鎖」（報名/進場/離場…，template 有多處綁定）

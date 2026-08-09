@@ -46,15 +46,17 @@ T('⭐掃描器自我驗證：stripComments 真的有剝掉註解（否則整張
   assert.ok(!probe.includes('game-over'), '註解沒被剝掉');
   assert.ok(probe.includes('const a = 1;') && probe.includes('const b = 2;'), '把程式碼一起剝掉了');
   assert.ok(RAW.length === SRC.length, 'stripComments 必須等長替換（行號/位移要對得起來）');
-  assert.ok(RAW.includes('對戰結束後降頻'), '前提：被測檔應含本版註解');
-  assert.ok(!SRC.includes('對戰結束後降頻'), '被測檔的註解沒被剝掉 → 下面的斷言都不可信');
+  assert.ok(RAW.includes('是降頻不是停'), '前提：被測檔應含本版註解（錨點過期請更新）');
+  assert.ok(!SRC.includes('是降頻不是停'), '被測檔的註解沒被剝掉 → 下面的斷言都不可信');
 });
 
-T('⭐⭐主輪詢：對戰結束後必須降頻（且不是 clearInterval —— 平手待裁定仍需收更新）', () => {
-  const body = sliceBetween(SRC, 'function startTournamentPoll()', '}, 1200);');
-  assert.ok(/phase\s*===\s*'game-over'/.test(body), '主輪詢內沒有判 phase === game-over');
-  assert.ok(/_goTick/.test(body), '沒有降頻計數器');
-  assert.ok(/winner\s*==\s*null/.test(body), '沒有區分「平手待管理員裁定」與「已分勝負」的頻率');
+T('⭐⭐輪詢節奏必須收斂在單一中央述詞 tPollDesiredMs（v6.148 從「每 N 輪」改成時間判準）', () => {
+  const fn = sliceBetween(SRC, 'function tPollDesiredMs(', '\n  function startTournamentPoll()');
+  assert.ok(/phase\s*===\s*'game-over'/.test(fn), '中央述詞沒有判 game-over');
+  assert.ok(/winner\s*==\s*null/.test(fn), '沒有區分「平手待管理員裁定」與「已分勝負」的頻率');
+  assert.ok(/6000\s*:\s*12000/.test(fn), 'game-over 的降頻數值不見了（平手 6s／有勝負 12s）');
+  const body = sliceBetween(SRC, 'function startTournamentPoll()', '}, 400);');
+  assert.ok(/tPollDesiredMs\(false\)/.test(body), '主輪詢沒有走中央節奏述詞');
   assert.ok(!/clearInterval\s*\(\s*tPollTimer\s*\)/.test(body.slice(body.indexOf('setInterval'))),
     '不可在輪詢回呼內 clearInterval —— 平手待裁定的玩家會永遠等不到裁定結果');
 });
@@ -79,9 +81,10 @@ T('⭐_tOver 必須是「當下盤面」算出來的，不能是殘留旗標', (
 });
 
 T('⭐觀戰輪詢：對戰結束後必須降頻（伺服器對 /spectate/state 一律回全量 redact 盤面）', () => {
-  const body = sliceBetween(SRC, 'function startSpectatePoll()', '}, 2000);');
-  assert.ok(/phase\s*===\s*'game-over'/.test(body), '觀戰輪詢沒有判 game-over');
-  assert.ok(/_spGoTick/.test(body), '觀戰輪詢沒有降頻計數器');
+  const body = sliceBetween(SRC, 'function startSpectatePoll()', '}, 400);');
+  assert.ok(/tPollDesiredMs\(true\)/.test(body), '觀戰輪詢沒有走中央節奏述詞');
+  const fn = sliceBetween(SRC, 'function tPollDesiredMs(', '\n  function startTournamentPoll()');
+  assert.ok(/spectate\)\s*return 10000/.test(fn), '觀戰在 game-over 後的降頻數值不見了');
 });
 
 T('⭐離場路徑仍然要真的停 timer（降頻不能取代停止）', () => {
@@ -92,6 +95,25 @@ T('⭐離場路徑仍然要真的停 timer（降頻不能取代停止）', () =>
   }
 });
 
+T('⭐⭐v6.148 C4：輪詢不得自我壅塞（上一發沒回就跳過本 tick，主輪詢與觀戰都要）', () => {
+  for (const [name, open, close, flag] of [
+    ['主輪詢', 'function startTournamentPoll()', '}, 400);', '_pollBusy'],
+    ['觀戰輪詢', 'function startSpectatePoll()', '}, 400);', '_spBusy'],
+  ]) {
+    const body = sliceBetween(SRC, open, close);
+    assert.ok(new RegExp(`if \\(${flag}\\) return;`).test(body), `${name} 沒有 in-flight 早退`);
+    assert.ok(new RegExp(`finally \\{ ${flag} = false;`).test(body),
+      `${name} 沒有在 finally 放掉旗標 —— 一次例外就會讓輪詢永久停擺`);
+    // ⭐⭐⭐ 早退**必須在 try 之外**：`return` 在 try 內一樣會執行 finally，
+    //   於是「因忙碌而跳過」的 tick 會把在途那一發設的旗標清掉 ⇒ 防壅塞完全失效。
+    //   ⚠ 本守衛第一版就是斷言那個壞掉的 pattern 為「正確」（v6.137「斷言有呼叫≠事情有發生」的翻版），
+    //     Fable 5 實測 RTT 2 秒時同時在途最高 3 發才抓出來。
+    const iRet = body.indexOf(`if (${flag}) return;`);
+    const iTry = body.indexOf('try {');
+    assert.ok(iRet >= 0 && iTry >= 0 && iRet < iTry,
+      `${name} 的 in-flight 早退寫在 try 內（return 會觸發 finally 把在途旗標清掉）`);
+  }
+});
 T('⭐⭐降頻計數器是 closure 變數 → startTournamentPoll() 的呼叫點必須全部被 game-over 擋住', () => {
   // Fable 5 審查指出的隱性耦合：_goTick 住在 startTournamentPoll() 的 closure 裡，
   //   任何人重建 timer 就會把計數歸零、降頻靜默失效。目前 4 個呼叫點中的兩個看門狗

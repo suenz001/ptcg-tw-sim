@@ -108,6 +108,29 @@ function fingerprint(s: GameState): string {
   ].join('#');
 }
 
+/** 回傳第一個「不在 pool 裡」的 cardId；全部都在則回 null。 */
+function missingFromPool(s: GameState, pool: Map<string, Card>): string | null {
+  const chk = (c: CardInstance | null | undefined): string | null => {
+    if (!c) return null;
+    if (!pool.has(String(c.cardId))) return String(c.cardId);
+    for (const e of c.energyAttached ?? []) if (!pool.has(String(e.cardId))) return String(e.cardId);
+    if (c.toolAttached && !pool.has(String(c.toolAttached.cardId))) return String(c.toolAttached.cardId);
+    for (const t of c.extraTools ?? []) if (!pool.has(String(t.cardId))) return String(t.cardId);
+    return null;
+  };
+  for (const p of s.players ?? []) {
+    // ⚠ **只查場上**（雙方 active/bench 與其附加物）＋場地。手牌/牌庫/棄牌/獎賞一律不查：
+    //   ①白名單四個動作對「手牌卡缺 pool」本來就 fail-closed（引擎自己會 reject 或 throw，
+    //     由 gate ③/⑤ 接住），不必在這裡重複；
+    //   ②把那些區也算進來會讓預測在對手卡包補載完成前長時間全面失效。
+    //   （Fable 5 審查：原註解寫「只查場上與自己手牌」，但碼裡根本沒查手牌 —— 註解與碼相反，已改正。）
+    const r0 = chk(p.active); if (r0) return r0;
+    for (const b of p.bench ?? []) { const r = chk(b); if (r) return r; }
+  }
+  if (s.activeStadium && !pool.has(String(s.activeStadium.cardId))) return String(s.activeStadium.cardId);
+  return null;
+}
+
 const sameSet = (a: Set<string>, b: Set<string>): boolean => {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
@@ -136,6 +159,17 @@ export function tryPredictAction(
   // gate ②（階段）：setup 是 CAS 衝突與歷史事故最密集的區段；game-over 一律等伺服器裁定
   if (base.phase !== 'playing') return { ok: false, reason: 'phase:' + String(base.phase) };
   if (base.pendingSelection) return { ok: false, reason: 'pending-open' };
+
+  // gate ②b（v6.148，Fable 5 實測抓到）：**盤面上有卡不在 pool ⇒ 不預測**。
+  //   引擎讀對手特性用的是 `pool.get(inst.cardId)`，卡包還沒載入時會拿到 undefined 而
+  //   **靜默當成「沒有這個特性」** —— 實測：對手備戰有黏美龍｜黏滑失足時，
+  //   full pool 正確回 `randomness:1`（撤退要擲幣），把黏美龍從 pool 拿掉就變成「預測成功」。
+  //   `ensurePoolForStateIds` 是 async void，進場/對手換卡包時有 race 窗。
+  //   不是公平性問題（伺服器權威、回滾健全），但會造成畫面閃爍 ⇒ 依 fail-closed 原則擋掉。
+  {
+    const missing = missingFromPool(base, pool);
+    if (missing) return { ok: false, reason: 'pool-incomplete:' + missing };
+  }
 
   const beforeIids = collectIids(base);
 
