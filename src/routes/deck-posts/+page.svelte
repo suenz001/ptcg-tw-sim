@@ -76,10 +76,12 @@
   //   `status: { $ne: 'deleted' }` 條件回 404 ——「刪除明明成功了卻對玩家報錯」。
   let deleteBusy = $state('');
   let mineSeq = 0;
-  // 改顯示名稱（只有 authorName 可改；牌組內容與說明維持不可編輯）
-  let renameId = $state('');
-  let renameVal = $state('');
-  let renameBusy = $state(false);
+  // 編輯顯示名稱與說明（⚠ 牌組內容 entries 與 deckName 永遠不可改 —— 換皮繼承讚的
+  //   風險在牌組本身，名稱與說明文字不影響「這是哪一副牌」）
+  let editId = $state('');
+  let editName = $state('');
+  let editNotes = $state('');
+  let editBusy = $state(false);
 
   // v6.140 批次 3：分頁、投稿、我的投稿、賽事名次一鍵投稿
   let tab = $state<'all' | 'mine'>('all');
@@ -349,27 +351,30 @@
     }
   }
 
-  // ── 改顯示名稱 ───────────────────────────────────────────────────
-  function startRename(p: MyPost) { renameId = p.id; renameVal = p.authorName; }
-  function cancelRename() { renameId = ''; renameVal = ''; }
-  async function saveRename() {
-    const nm = renameVal.trim();
-    if (!renameId || renameBusy || !nm) return;
-    renameBusy = true; myError = '';
-    const id = renameId;
+  // ── 編輯顯示名稱與說明 ───────────────────────────────────────────
+  function startEdit(p: MyPost) { editId = p.id; editName = p.authorName; editNotes = p.notes || ''; }
+  function cancelEdit() { editId = ''; editName = ''; editNotes = ''; }
+  async function saveEdit() {
+    const nm = editName.trim();
+    if (!editId || editBusy || !nm) return;
+    editBusy = true; myError = '';
+    const id = editId;
     try {
       const r = await api('/' + encodeURIComponent(id) + '/rename', {
         method: 'POST',
         headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authorName: nm }),
+        // ⚠ 只送這兩個欄位。牌組內容不在可編輯範圍內。
+        body: JSON.stringify({ authorName: nm, notes: editNotes }),
       });
-      myPosts = myPosts.map((x) => (x.id === id ? { ...x, authorName: r.authorName ?? nm } : x));
-      cancelRename();
-      void fetchList();   // 公開列表上的名字也要跟著換
+      myPosts = myPosts.map((x) => (x.id === id
+        ? { ...x, authorName: r.authorName ?? nm, notes: r.notes ?? editNotes }
+        : x));
+      cancelEdit();
+      void fetchList();   // 公開列表上的名稱與說明也要跟著換
     } catch (e: any) {
       if (String(e?.message) !== 'unavailable') myError = String(e?.message ?? e);
     } finally {
-      renameBusy = false;
+      editBusy = false;
     }
   }
 
@@ -533,17 +538,10 @@
                   {/if}
                 </div>
                 <div class="row2">
-                  {#if renameId === p.id}
-                    <input class="rename-input" bind:value={renameVal} maxlength="24"
-                           placeholder="顯示名稱" onkeydown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') cancelRename(); }} />
-                    <button class="small" disabled={renameBusy || !renameVal.trim()} onclick={saveRename}>
-                      {renameBusy ? '存檔中…' : '儲存'}
-                    </button>
-                    <button class="small" onclick={cancelRename}>取消</button>
-                  {:else}
+                  {#if editId !== p.id}
                     <span class="author">{p.authorName}</span>
                     {#if p.status !== 'deleted'}
-                      <button class="small" onclick={() => startRename(p)} title="改成你想顯示的名稱">改名稱</button>
+                      <button class="small" onclick={() => startEdit(p)} title="修改顯示名稱與說明">編輯</button>
                     {/if}
                   {/if}
                   <span class="dot">·</span>
@@ -558,14 +556,36 @@
                             onclick={() => deleteMine(p.id)}>{deleteBusy === p.id ? '刪除中…' : '刪除'}</button>
                   {/if}
                 </div>
-                {#if p.notes}<p class="notes">{p.notes}</p>{/if}
+                {#if editId === p.id}
+                  <div class="edit-box">
+                    <label class="field">
+                      <span>顯示名稱</span>
+                      <input bind:value={editName} maxlength="24" placeholder="顯示名稱"
+                             onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }} />
+                    </label>
+                    <label class="field">
+                      <span>說明（最多 200 字）</span>
+                      <textarea bind:value={editNotes} maxlength="200" rows="3"
+                                placeholder="這副牌的打法重點、對局思路…"></textarea>
+                    </label>
+                    <p class="hint small-note">牌組內容與牌組名稱不能修改，要更新請刪除後重新投稿。</p>
+                    <div class="edit-actions">
+                      <button class="primary small" disabled={editBusy || !editName.trim()} onclick={saveEdit}>
+                        {editBusy ? '存檔中…' : '儲存'}
+                      </button>
+                      <button class="small" onclick={cancelEdit}>取消</button>
+                    </div>
+                  </div>
+                {:else if p.notes}
+                  <p class="notes">{p.notes}</p>
+                {/if}
               </div>
             </li>
           {/each}
         </ul>
         <p class="hint small-note">
-          顯示名稱可以隨時修改；牌組內容與說明不能改，要更新請刪除後重新投稿（讚數與收藏數會重新計算）。
-          賽事名次投稿預設用你<b>報名那場賽事時填的暱稱</b>。
+          顯示名稱與說明可以隨時修改；<b>牌組內容不能改</b>，要更新請刪除後重新投稿（讚數與收藏數會重新計算）。
+          顯示名稱預設用最近一次報名賽事時填的暱稱。
         </p>
       {/if}
     {:else}
@@ -850,10 +870,18 @@
   button.primary:disabled { opacity: .5; }
   button.small { padding: 4px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; font-size: .8rem; }
   button.danger { color: #d33; border-color: rgba(211,51,51,.4); }
-  .rename-input {
-    font: inherit; font-size: .82rem; padding: 3px 8px; border-radius: 6px;
-    border: 1px solid rgba(128,128,128,.45); background: transparent; color: inherit; max-width: 11em;
+  .edit-box {
+    margin-top: 8px; padding: 10px; border-radius: 8px;
+    background: rgba(128,128,128,.08); border: 1px solid rgba(128,128,128,.25);
   }
+  .edit-box .field { margin: 6px 0; }
+  .edit-box input, .edit-box textarea {
+    font: inherit; font-size: .85rem; padding: 5px 8px; border-radius: 6px;
+    border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit;
+    width: 100%; box-sizing: border-box;
+  }
+  .edit-box textarea { resize: vertical; }
+  .edit-actions { display: flex; gap: 8px; margin-top: 8px; }
   .mine-card { cursor: default; }
   .mine-card:hover { background: rgba(128,128,128,.07); }
   .badge.hidden-b { background: rgba(211,51,51,.15); border: 1px solid rgba(211,51,51,.4); }

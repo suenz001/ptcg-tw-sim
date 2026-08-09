@@ -250,20 +250,21 @@ T('⭐ modal 也要避開動態島（貼齊上緣時關閉鈕會被蓋住）', (
 
 console.log('\n④-4 改顯示名稱（v6.143）');
 
-T('⭐⭐ 只改名稱，不得送出牌組內容或說明', () => {
+T('⭐⭐⭐ 編輯只送名稱與說明，**絕不送牌組內容**', () => {
   // ⚠ 切片 anchor **不能用註解** —— P 是剝過註解的，indexOf 會回 -1，
-  //   slice(start, -1) 就變成「整個檔案剩下的部分」，斷言等於在掃全檔（本輪假紅）。
-  const fn = sliceFn(P, 'async function saveRename', 'function openPostModal');
-  ok(/authorName/.test(fn), 'saveRename 沒有送 authorName');
-  ok(!/entries|deckName|notes/.test(fn), 'saveRename 送出了牌組內容或說明 —— 那會變成可編輯投稿');
-  ok(/renameBusy/.test(fn), '沒有 busy 防護');
-  ok(/fetchList\(\)/.test(fn), '改完沒重抓公開列表 —— 列表上還是舊名字');
+  //   slice(start, -1) 就變成「整個檔案剩下的部分」，斷言等於在掃全檔（v6.143 假紅）。
+  const fn = sliceFn(P, 'async function saveEdit', 'function openPostModal');
+  ok(/authorName/.test(fn) && /notes/.test(fn), 'saveEdit 沒有送 authorName 或 notes');
+  ok(!/entries|deckName/.test(fn),
+    'saveEdit 送出了 entries 或 deckName —— 換皮繼承讚的漏洞');
+  ok(/editBusy/.test(fn), '沒有 busy 防護');
+  ok(/fetchList\(\)/.test(fn), '改完沒重抓公開列表 —— 列表上還是舊資料');
 });
 
-T('⭐ 已刪除的投稿不給改名', () => {
-  ok(/renameId === p\.id/.test(P), '沒有 per-post 的編輯狀態');
-  const seg = P.slice(P.indexOf('{#if renameId === p.id}'), P.indexOf('<span class="dot">'));
-  ok(/p\.status !== 'deleted'/.test(seg), '已刪除的投稿仍顯示改名鈕');
+T('⭐ 已刪除的投稿不給編輯', () => {
+  ok(/editId === p\.id/.test(P) || /editId !== p\.id/.test(P), '沒有 per-post 的編輯狀態');
+  const seg = sliceFn(P, '{#if editId !== p.id}', '<span class="dot">');
+  ok(/p\.status !== 'deleted'/.test(seg), '已刪除的投稿仍顯示編輯鈕');
 });
 
 console.log('\n⑤ 入口與身分');

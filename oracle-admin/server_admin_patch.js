@@ -3852,6 +3852,31 @@ import('firebase-admin').then(async ({ default: admin }) => {
     const TCONFIG = db.collection('tournamentConfig'); // v0.36 聊天清空標記等
     const _chatRate = new Map(); // uid -> last post ts（記憶體限速）
     const _chatNickCache = new Map(); // v0.76 uid -> { name, at }：非報名者聊天暱稱(最近一次錦標賽報名暱稱)5分鐘快取
+    /**
+     * v6.144【中央收斂】取某個 uid「最近一次錦標賽報名時填的暱稱」。
+     *
+     * ⚠ 這是全站「該顯示什麼名字」的單一來源。`tournIdentity` 回的 `name` 在 Firebase token
+     *   沒有 displayName 時會退成 **email 前綴**（`dec.email.split('@')[0]`），拿它當顯示名
+     *   等於把帳號名貼在公開頁面上 —— 玩家回報牌組公布欄顯示的就是 email 前綴。
+     *   v0.76 早就為聊天室做了正確的版本，但只寫在那一支 handler 裡，公布欄沒接到；
+     *   本版抽成 helper，聊天與公布欄共用同一份（禁再抄第三份）。
+     *
+     * 回 null 代表這個人從沒報名過任何賽事，caller 自行決定 fallback。
+     */
+    async function getLastRegisteredNick(uid) {
+      if (!uid) return null;
+      const now = Date.now();
+      const c = _chatNickCache.get(uid);
+      if (c && (now - c.at) < 300000) return c.name;
+      let nick = null;
+      try {
+        const lr = await TREGS.find({ uid }, { projection: { name: 1, registeredAt: 1 } })
+          .sort({ registeredAt: -1 }).limit(1).toArray();
+        nick = (lr[0] && lr[0].name) || null;
+      } catch (_e) { /* best-effort：查不到就當沒報過 */ }
+      _chatNickCache.set(uid, { name: nick, at: now });
+      return nick;
+    }
     // v0.57 大廳聊天效能：①建 {room,ts} 索引→/chat 的 `ts > since` + sort 走索引範圍掃描，不再每次全表掃+記憶體排序
     //   （訊息越多越慢，高流量下每位玩家每 3s 都打一次會拖垮）。索引建立冪等，重啟重複呼叫安全。
     TCHAT.createIndex({ room: 1, ts: 1 }).catch(() => { /* best-effort，已存在即略過 */ });
@@ -3915,16 +3940,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (isAdm) chatName = '系統管理員';
         else if (regc && regc.name) chatName = regc.name;
         else {
-          let _nick = null;
-          const _cn = _chatNickCache.get(id.uid);
-          if (_cn && (now - _cn.at) < 300000) { _nick = _cn.name; }
-          else {
-            try {
-              const _lr = await TREGS.find({ uid: id.uid }, { projection: { name: 1, registeredAt: 1 } }).sort({ registeredAt: -1 }).limit(1).toArray();
-              _nick = (_lr[0] && _lr[0].name) || null;
-            } catch (_e) { /* best-effort */ }
-            _chatNickCache.set(id.uid, { name: _nick, at: now });
-          }
+          // v6.144：收斂到 getLastRegisteredNick（原本這段 inline 版是全站唯一一份，
+          //   公布欄因此沒接到、顯示成 email 前綴）。行為等價。
+          const _nick = await getLastRegisteredNick(id.uid);
           chatName = _nick || (id.email ? String(id.email).split('@')[0] : (id.name || '玩家'));
         }
         await TCHAT.insertOne({ room: 'lobby', uid: id.uid, name: chatName, text, ts: now, admin: isAdm || undefined });
@@ -5005,7 +5023,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
           email: id.email || null,
           // ⚠ 賽事投稿要用「**報名這場賽事時填的暱稱**」（歸檔的 players[].name），
           //   不是帳號當下的顯示名 —— 玩家改過帳號暱稱時，公布欄上的名字才會跟賽程表對得起來。
-          //   一般投稿沒有這個來源，就退回帳號名。
+          //   一般投稿由呼叫端帶「最近一次報名的暱稱」；都沒有才退回 id.name
+          //   （⚠ 那可能是 email 前綴，是最後手段而不是預設值）。
           authorName: String(authorName || id.name || '玩家').slice(0, 24),
           deckName: String(deckName || '牌組').slice(0, DP_MAX_NAME),
           notes: String(notes || '').slice(0, DP_MAX_NOTES),
@@ -5033,7 +5052,13 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (!dpRate('p:' + id.uid, DP_POST_COOLDOWN, 1)) return res.status(429).json({ error: '投稿太頻繁，請稍候再試' });
           const b = req.body || {};
           if (JSON.stringify(b).length > 32768) return res.status(413).json({ error: '資料過大' });
-          const r = await dpInsert(id, { deckName: b.deckName, entries: b.entries, notes: b.notes, tournament: null });
+          // v6.144：一般投稿的顯示名預設用「最近一次報名的暱稱」。
+          //   ⚠ 不能直接用 id.name —— token 沒 displayName 時它是 email 前綴（玩家回報的就是這個）。
+          const _defaultNick = await getLastRegisteredNick(id.uid);
+          const r = await dpInsert(id, {
+            deckName: b.deckName, entries: b.entries, notes: b.notes, tournament: null,
+            authorName: _defaultNick || undefined,
+          });
           if (r.error) {
             // 400 = 內容不合格（牌組不合法／格式錯）⇒ 不該扣冷卻，否則玩家換一副就撞 429。
             // 409/429 是「你已經投過了／太頻繁」⇒ 照扣。
@@ -5108,25 +5133,38 @@ import('firebase-admin').then(async ({ default: admin }) => {
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
 
-      // ── 改投稿者顯示名稱 ─────────────────────────────────────────────
-      //   Wilson 指定：投稿後仍可隨時改「顯示的玩家名稱」。
-      //   ⚠ **只開放 authorName**：牌組內容與說明維持不可編輯 —— 能改內容就能拿高讚投稿
-      //     換皮繼承別人給的讚（這是當初刻意設計成 immutable 的理由）。改名字沒有這個問題。
-      //   ⚠ 路徑是 /:id/rename（兩段），不會被上面的 `/:id` 單段 pattern 吃掉，比照 /:id/like。
+      // ── 編輯投稿的顯示名稱與說明 ─────────────────────────────────────
+      //   Wilson 指定：投稿後仍可隨時改「顯示的玩家名稱」與「說明內容」。
+      //   ⚠ **`entries` 與 `deckName` 永遠不可改**：換皮繼承讚的風險在**牌組內容**
+      //     —— 拿一篇高讚投稿把 60 張換掉，讚數就白白繼承了。這是當初把投稿設計成
+      //     immutable 的唯一理由。顯示名稱與說明文字不影響「這是哪一副牌」，可以開放；
+      //     內容不當則有 admin 下架機制（先發後審）兜底。
+      //   ⚠ 路徑維持 /:id/rename（兩段，不會被 `/:id` 單段 pattern 吃掉）。雖然現在管兩個
+      //     欄位、名字略窄，但路徑是已上線的 API，改名的破壞性大於命名精確性。
       app.post('/api/deck-posts/:id/rename', async (req, res) => {
         try {
           const id = await dpIdentity(req);
           if (id.error) return res.status(id.code).json({ error: id.error });
           if (!dpRate('r:' + id.uid, 60000, 10)) return res.status(429).json({ error: '操作過於頻繁' });
-          const nm = String((req.body && req.body.authorName) || '').trim().slice(0, 24);
-          if (!nm) return res.status(400).json({ error: '名稱不能空白' });
+          const b = req.body || {};
+          const $set = { updatedAt: Date.now() };
+          // 兩個欄位都是「有送才改」：只想改說明的人不必連名字一起送。
+          if (b.authorName !== undefined) {
+            const nm = String(b.authorName || '').trim().slice(0, 24);
+            if (!nm) return res.status(400).json({ error: '名稱不能空白' });
+            $set.authorName = nm;
+          }
+          if (b.notes !== undefined) $set.notes = String(b.notes || '').slice(0, DP_MAX_NOTES);
+          if ($set.authorName === undefined && $set.notes === undefined) {
+            return res.status(400).json({ error: '沒有要修改的內容' });
+          }
           const r = await DPOSTS.updateOne(
             { _id: String(req.params.id), uid: id.uid, status: { $ne: 'deleted' } },
-            { $set: { authorName: nm, updatedAt: Date.now() } },
+            { $set },
           );
           if (!r.matchedCount) return res.status(404).json({ error: '找不到你的這篇投稿' });
           _dpListCache.clear();
-          res.json({ ok: true, authorName: nm });
+          res.json({ ok: true, authorName: $set.authorName, notes: $set.notes });
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
 
@@ -5263,6 +5301,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
       }
       app.post('/api/admin/deck-posts/:id/hide', (req, res) => dpAdminSetStatus(req, res, 'hidden'));
       app.post('/api/admin/deck-posts/:id/restore', (req, res) => dpAdminSetStatus(req, res, 'published'));
+      // v6.144 回填：把既有投稿裡「當初退成 email 前綴」的顯示名，換成該玩家最近一次報名的暱稱。
+      //   ⚠ 判準必須精確：**只改 `authorName === email 的 @ 前面那段`** 的投稿。
+      //     那正是 tournIdentity fallback 的產物；玩家自己改過的名字不會剛好等於它，
+      //     所以這條件不會覆蓋任何人手動設定的名稱。查不到報名暱稱的一律略過（不亂編）。
+      app.post('/api/admin/deck-posts/backfill-names', async (req, res) => {
+        try {
+          const id = await tournIdentity(req);
+          if (!isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+          const dry = String((req.query && req.query.dry) || '') === '1';
+          const docs = await DPOSTS.find({ status: { $ne: 'deleted' } },
+            { projection: { _id: 1, uid: 1, email: 1, authorName: 1 } }).toArray();
+          const changed = [];
+          const skipped = { notEmailPrefix: 0, noNick: 0, sameName: 0 };
+          for (const d of docs) {
+            const prefix = d.email ? String(d.email).split('@')[0] : '';
+            if (!prefix || d.authorName !== prefix) { skipped.notEmailPrefix++; continue; }
+            const nick = await getLastRegisteredNick(d.uid);
+            if (!nick) { skipped.noNick++; continue; }
+            if (nick === d.authorName) { skipped.sameName++; continue; }
+            changed.push({ id: d._id, from: d.authorName, to: nick });
+            if (!dry) await DPOSTS.updateOne({ _id: d._id }, { $set: { authorName: String(nick).slice(0, 24), updatedAt: Date.now() } });
+          }
+          if (!dry && changed.length) _dpListCache.clear();
+          res.json({ ok: true, dryRun: dry, scanned: docs.length, changed: changed.length, skipped, detail: changed.slice(0, 50) });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
       // 計數對帳：likeCount/downloadCount 是非正規化快照，權威永遠是明細表。
       app.post('/api/admin/deck-posts/recount', async (req, res) => {
         try {

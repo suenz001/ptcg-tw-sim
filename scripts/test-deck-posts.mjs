@@ -325,20 +325,55 @@ T('⭐⭐ 賽事投稿用「報名那場賽事時填的暱稱」，不是帳號�
   ok(/authorName \|\| id\.name/.test(fn), 'dpInsert 沒有讓呼叫端覆寫 authorName（或覆寫時沒保留 fallback）');
 });
 
-T('⭐⭐⭐ 改名端點只能改 authorName，且只能改自己的、不能改已刪除的', () => {
+T('⭐⭐⭐ 編輯端點只放行 authorName / notes，**牌組內容永遠不可改**', () => {
   const ep = section(DP, "app.post('/api/deck-posts/:id/rename'", '// ════════ 賽事名次投稿');
-  ok(ep.length > 200, '找不到 rename 端點');
-  ok(/\$set:\s*\{ authorName: nm, updatedAt/.test(ep),
-    'rename 改了 authorName 以外的欄位 —— 能改內容就能拿高讚投稿換皮繼承別人的讚');
-  ok(!/entries|deckName:|notes:/.test(ep), 'rename 端點碰到了牌組內容或說明');
+  ok(ep.length > 200, '找不到編輯端點');
+  ok(/\$set\.authorName = nm/.test(ep) && /\$set\.notes = /.test(ep),
+    '沒有開放 authorName 與 notes 兩個欄位');
+  // ⚠ 這是整個功能的安全底線：能改 entries 就能拿高讚投稿把 60 張換掉、繼承別人給的讚
+  ok(!/\$set\.entries|\$set\.deckName|entries:/.test(ep),
+    '編輯端點碰到了 entries 或 deckName —— 換皮繼承讚的漏洞');
   ok(/uid:\s*id\.uid/.test(ep), '沒有限定本人');
   ok(/status:\s*\{ \$ne:\s*'deleted' \}/.test(ep), '沒有排除已刪除的投稿');
   ok(/dpIdentity\(req\)/.test(ep) && /dpRate\(/.test(ep), '缺身分 gate 或限流');
-  ok(/_dpListCache\.clear\(\)/.test(ep), '改名後沒清列表快取 —— 公開列表會顯示舊名字最多 30 秒');
+  ok(/_dpListCache\.clear\(\)/.test(ep), '編輯後沒清列表快取 —— 公開列表會顯示舊資料最多 30 秒');
+  ok(/b\.authorName !== undefined/.test(ep) && /b\.notes !== undefined/.test(ep),
+    '兩個欄位不是「有送才改」—— 只想改說明的人會被迫連名字一起送，漏送就變空白');
 });
 
 T('⭐ rename 路徑是兩段（/:id/rename），不會被 /:id 單段 pattern 吃掉', () => {
   ok(/app\.post\('\/api\/deck-posts\/:id\/rename'/.test(DP), 'rename 路徑不是 /:id/rename');
+});
+
+console.log('\n⑤-5 顯示名稱來源與回填（v6.144）');
+
+T('⭐⭐⭐ 顯示名稱有中央來源，不得再各自 inline 查 TREGS', () => {
+  ok(/async function getLastRegisteredNick\(uid\)/.test(SAP), '沒有中央 helper');
+  // 聊天室（v0.76 的原始版）必須也改走中央 helper，否則兩份會漂移
+  const chat = section(SAP, "await TCHAT.insertOne", 'res.json({ ok: true });');
+  ok(/getLastRegisteredNick/.test(section(SAP, 'let chatName;', 'await TCHAT.insertOne')),
+    '聊天室還在用自己那份 inline 查詢 —— 這正是公布欄沒接到、顯示成 email 前綴的原因');
+  // 全站不得有第三份「查最近一次報名暱稱」的 inline 實作
+  const inlineCopies = (SAP.match(/TREGS\.find\(\{ uid[^)]*\}[^)]*\)\s*\n?\s*\.sort\(\{ registeredAt: -1 \}\)/g) || []).length;
+  ok(inlineCopies <= 1, '出現 ' + inlineCopies + ' 份 inline 的「最近一次報名暱稱」查詢，應收斂成 1 份');
+});
+
+T('⭐⭐ 一般投稿預設用最近一次報名暱稱，不是 email 前綴', () => {
+  const ep = section(DP, "app.post('/api/deck-posts',", "app.post('/api/deck-posts/:id/rename'");
+  ok(/getLastRegisteredNick\(id\.uid\)/.test(ep),
+    '一般投稿沒有取最近一次報名暱稱 —— tournIdentity 的 name 在沒 displayName 時是 email 前綴');
+  ok(/authorName: _defaultNick/.test(ep), '取到了卻沒傳給 dpInsert');
+});
+
+T('⭐⭐⭐ 回填端點的判準必須精確（只改「等於 email 前綴」的，不得覆蓋玩家手改過的名字）', () => {
+  const ep = section(DP, "app.post('/api/admin/deck-posts/backfill-names'", '// 計數對帳');
+  ok(ep.length > 300, '找不到回填端點');
+  ok(/isTournAdmin\(id\)/.test(ep), '回填沒有 admin 權限 gate');
+  ok(/d\.authorName !== prefix/.test(ep),
+    '沒有「只改等於 email 前綴者」的判準 —— 會把玩家自己設定的名稱一起覆蓋掉');
+  ok(/if \(!nick\)/.test(ep), '查不到報名暱稱時沒有略過 —— 不可以亂編名字');
+  ok(/dry/.test(ep), '沒有 dry-run —— 這種批次改寫應該可以先預覽再執行');
+  ok(/status: \{ \$ne: 'deleted' \}/.test(ep), '回填掃到了已刪除的投稿');
 });
 
 console.log('\n⑥ 隔離與快取');
