@@ -76,6 +76,10 @@
   //   `status: { $ne: 'deleted' }` 條件回 404 ——「刪除明明成功了卻對玩家報錯」。
   let deleteBusy = $state('');
   let mineSeq = 0;
+  // 改顯示名稱（只有 authorName 可改；牌組內容與說明維持不可編輯）
+  let renameId = $state('');
+  let renameVal = $state('');
+  let renameBusy = $state(false);
 
   // v6.140 批次 3：分頁、投稿、我的投稿、賽事名次一鍵投稿
   let tab = $state<'all' | 'mine'>('all');
@@ -345,6 +349,30 @@
     }
   }
 
+  // ── 改顯示名稱 ───────────────────────────────────────────────────
+  function startRename(p: MyPost) { renameId = p.id; renameVal = p.authorName; }
+  function cancelRename() { renameId = ''; renameVal = ''; }
+  async function saveRename() {
+    const nm = renameVal.trim();
+    if (!renameId || renameBusy || !nm) return;
+    renameBusy = true; myError = '';
+    const id = renameId;
+    try {
+      const r = await api('/' + encodeURIComponent(id) + '/rename', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authorName: nm }),
+      });
+      myPosts = myPosts.map((x) => (x.id === id ? { ...x, authorName: r.authorName ?? nm } : x));
+      cancelRename();
+      void fetchList();   // 公開列表上的名字也要跟著換
+    } catch (e: any) {
+      if (String(e?.message) !== 'unavailable') myError = String(e?.message ?? e);
+    } finally {
+      renameBusy = false;
+    }
+  }
+
   // ── 投稿 ──────────────────────────────────────────────────────────
   function openPostModal() {
     postOpen = true; postError = ''; postOk = ''; postNotes = '';
@@ -505,6 +533,20 @@
                   {/if}
                 </div>
                 <div class="row2">
+                  {#if renameId === p.id}
+                    <input class="rename-input" bind:value={renameVal} maxlength="24"
+                           placeholder="顯示名稱" onkeydown={(e) => { if (e.key === 'Enter') saveRename(); if (e.key === 'Escape') cancelRename(); }} />
+                    <button class="small" disabled={renameBusy || !renameVal.trim()} onclick={saveRename}>
+                      {renameBusy ? '存檔中…' : '儲存'}
+                    </button>
+                    <button class="small" onclick={cancelRename}>取消</button>
+                  {:else}
+                    <span class="author">{p.authorName}</span>
+                    {#if p.status !== 'deleted'}
+                      <button class="small" onclick={() => startRename(p)} title="改成你想顯示的名稱">改名稱</button>
+                    {/if}
+                  {/if}
+                  <span class="dot">·</span>
                   <span class="date">{fmtDate(p.createdAt)}</span>
                   <span class="spacer"></span>
                   <span class="stat">♥ {p.likeCount}</span>
@@ -521,7 +563,10 @@
             </li>
           {/each}
         </ul>
-        <p class="hint small-note">投稿不能修改內容。要更新請刪除後重新投稿（讚數與收藏數會重新計算）。</p>
+        <p class="hint small-note">
+          顯示名稱可以隨時修改；牌組內容與說明不能改，要更新請刪除後重新投稿（讚數與收藏數會重新計算）。
+          賽事名次投稿預設用你<b>報名那場賽事時填的暱稱</b>。
+        </p>
       {/if}
     {:else}
     <div class="toolbar">
@@ -805,6 +850,10 @@
   button.primary:disabled { opacity: .5; }
   button.small { padding: 4px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; font-size: .8rem; }
   button.danger { color: #d33; border-color: rgba(211,51,51,.4); }
+  .rename-input {
+    font: inherit; font-size: .82rem; padding: 3px 8px; border-radius: 6px;
+    border: 1px solid rgba(128,128,128,.45); background: transparent; color: inherit; max-width: 11em;
+  }
   .mine-card { cursor: default; }
   .mine-card:hover { background: rgba(128,128,128,.07); }
   .badge.hidden-b { background: rgba(211,51,51,.15); border: 1px solid rgba(211,51,51,.4); }

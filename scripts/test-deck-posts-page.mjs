@@ -23,6 +23,20 @@ function T(name, fn) {
 function ok(cond, msg) { if (!cond) throw new Error(msg); }
 
 /**
+ * 取兩個 anchor 之間的區段，**兩端都必須找得到**。
+ * ⚠ 直接用 `indexOf` 當 slice 參數的話，anchor 失效時會回 -1，
+ *   `slice(start, -1)` 是合法的「切到倒數第一個字元」—— 斷言就靜默地變成在掃全檔。
+ *   （本輪就是拿註解當結尾 anchor，而掃描的是剝過註解的版本。）
+ */
+function sliceFn(src, startAnchor, endAnchor) {
+  const i = src.indexOf(startAnchor);
+  ok(i >= 0, '切片起點 anchor 失效：' + startAnchor);
+  const j = src.indexOf(endAnchor, i + startAnchor.length);
+  ok(j > i, '切片結尾 anchor 失效：' + endAnchor + '（anchor 不能用註解 —— 掃描的是剝過註解的版本）');
+  return src.slice(i, j);
+}
+
+/**
  * 剝掉註解。
  *
  * ⚠ 這是**否定型斷言的必要前置**。本輪就踩了：頁面頂部的註解寫著「全頁不得出現 {@html}」
@@ -232,6 +246,24 @@ T('⭐⭐ 手機斷點不得把 safe-area 整條覆蓋掉（改窄邊距時最�
 T('⭐ modal 也要避開動態島（貼齊上緣時關閉鈕會被蓋住）', () => {
   const bd = /\.modal-backdrop\s*\{[^}]*\}/.exec(RAW);
   ok(bd && /env\(safe-area-inset-top/.test(bd[0]), 'modal backdrop 沒有 safe-area-inset-top');
+});
+
+console.log('\n④-4 改顯示名稱（v6.143）');
+
+T('⭐⭐ 只改名稱，不得送出牌組內容或說明', () => {
+  // ⚠ 切片 anchor **不能用註解** —— P 是剝過註解的，indexOf 會回 -1，
+  //   slice(start, -1) 就變成「整個檔案剩下的部分」，斷言等於在掃全檔（本輪假紅）。
+  const fn = sliceFn(P, 'async function saveRename', 'function openPostModal');
+  ok(/authorName/.test(fn), 'saveRename 沒有送 authorName');
+  ok(!/entries|deckName|notes/.test(fn), 'saveRename 送出了牌組內容或說明 —— 那會變成可編輯投稿');
+  ok(/renameBusy/.test(fn), '沒有 busy 防護');
+  ok(/fetchList\(\)/.test(fn), '改完沒重抓公開列表 —— 列表上還是舊名字');
+});
+
+T('⭐ 已刪除的投稿不給改名', () => {
+  ok(/renameId === p\.id/.test(P), '沒有 per-post 的編輯狀態');
+  const seg = P.slice(P.indexOf('{#if renameId === p.id}'), P.indexOf('<span class="dot">'));
+  ok(/p\.status !== 'deleted'/.test(seg), '已刪除的投稿仍顯示改名鈕');
 });
 
 console.log('\n⑤ 入口與身分');

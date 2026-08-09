@@ -4973,7 +4973,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
       });
 
       // ════════ 投稿（一般）════════
-      async function dpInsert(id, { deckName, entries, notes, tournament }) {
+      async function dpInsert(id, { deckName, entries, notes, tournament, authorName }) {
         const norm = dpNormalizeEntries(entries);
         if (!norm) return { error: '牌組資料格式不正確', code: 400 };
         // ⚠ 賽事名次投稿的牌組來自**伺服器歸檔**，不是 client 送的。而報名端點當初只驗
@@ -5003,7 +5003,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
           status: 'published',
           uid: id.uid,
           email: id.email || null,
-          authorName: String(id.name || '玩家').slice(0, 24),
+          // ⚠ 賽事投稿要用「**報名這場賽事時填的暱稱**」（歸檔的 players[].name），
+          //   不是帳號當下的顯示名 —— 玩家改過帳號暱稱時，公布欄上的名字才會跟賽程表對得起來。
+          //   一般投稿沒有這個來源，就退回帳號名。
+          authorName: String(authorName || id.name || '玩家').slice(0, 24),
           deckName: String(deckName || '牌組').slice(0, DP_MAX_NAME),
           notes: String(notes || '').slice(0, DP_MAX_NOTES),
           entries: norm,
@@ -5102,6 +5105,28 @@ import('firebase-admin').then(async ({ default: admin }) => {
           if (changed) _dpListCache.clear();
           const cur = await DPOSTS.findOne({ _id: postId }, { projection: { downloadCount: 1 } });
           res.json({ ok: true, changed, downloadCount: (cur && cur.downloadCount) || 0 });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // ── 改投稿者顯示名稱 ─────────────────────────────────────────────
+      //   Wilson 指定：投稿後仍可隨時改「顯示的玩家名稱」。
+      //   ⚠ **只開放 authorName**：牌組內容與說明維持不可編輯 —— 能改內容就能拿高讚投稿
+      //     換皮繼承別人給的讚（這是當初刻意設計成 immutable 的理由）。改名字沒有這個問題。
+      //   ⚠ 路徑是 /:id/rename（兩段），不會被上面的 `/:id` 單段 pattern 吃掉，比照 /:id/like。
+      app.post('/api/deck-posts/:id/rename', async (req, res) => {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('r:' + id.uid, 60000, 10)) return res.status(429).json({ error: '操作過於頻繁' });
+          const nm = String((req.body && req.body.authorName) || '').trim().slice(0, 24);
+          if (!nm) return res.status(400).json({ error: '名稱不能空白' });
+          const r = await DPOSTS.updateOne(
+            { _id: String(req.params.id), uid: id.uid, status: { $ne: 'deleted' } },
+            { $set: { authorName: nm, updatedAt: Date.now() } },
+          );
+          if (!r.matchedCount) return res.status(404).json({ error: '找不到你的這篇投稿' });
+          _dpListCache.clear();
+          res.json({ ok: true, authorName: nm });
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
 
@@ -5204,6 +5229,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           // ② 牌組固定用歸檔那副，client 送什麼都不採用
           const r = await dpInsert(id, {
             deckName: me.deckName || '牌組',
+            authorName: me.name,              // 報名這場賽事時填的暱稱
             entries: me.deckEntries,
             notes: String((req.body && req.body.notes) || '').slice(0, DP_MAX_NOTES),
             tournament: { eventId, eventName: a.eventName || '網站賽', finishedAt: a.finishedAt || 0, placementLabel: label },

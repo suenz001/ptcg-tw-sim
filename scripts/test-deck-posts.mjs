@@ -315,6 +315,32 @@ T('⭐⭐ 投稿被「內容不合格」退回時要退還冷卻額度', () => {
   ok(!/r\.code === 409[\s\S]{0,60}dpRateRefund/.test(ep), '連 409（已投過同一副）也退 —— 那就等於沒有冷卻');
 });
 
+console.log('\n⑤-4 顯示名稱（v6.143）');
+
+T('⭐⭐ 賽事投稿用「報名那場賽事時填的暱稱」，不是帳號當下的顯示名', () => {
+  const ep = section(DP, "app.post('/api/deck-posts-tournament/submit'", '// ════════ admin');
+  ok(/authorName:\s*me\.name/.test(ep),
+    '沒有帶歸檔的 players[].name —— 玩家改過帳號暱稱後，公布欄的名字會跟賽程表對不起來');
+  const fn = extractFn(DP, 'dpInsert');
+  ok(/authorName \|\| id\.name/.test(fn), 'dpInsert 沒有讓呼叫端覆寫 authorName（或覆寫時沒保留 fallback）');
+});
+
+T('⭐⭐⭐ 改名端點只能改 authorName，且只能改自己的、不能改已刪除的', () => {
+  const ep = section(DP, "app.post('/api/deck-posts/:id/rename'", '// ════════ 賽事名次投稿');
+  ok(ep.length > 200, '找不到 rename 端點');
+  ok(/\$set:\s*\{ authorName: nm, updatedAt/.test(ep),
+    'rename 改了 authorName 以外的欄位 —— 能改內容就能拿高讚投稿換皮繼承別人的讚');
+  ok(!/entries|deckName:|notes:/.test(ep), 'rename 端點碰到了牌組內容或說明');
+  ok(/uid:\s*id\.uid/.test(ep), '沒有限定本人');
+  ok(/status:\s*\{ \$ne:\s*'deleted' \}/.test(ep), '沒有排除已刪除的投稿');
+  ok(/dpIdentity\(req\)/.test(ep) && /dpRate\(/.test(ep), '缺身分 gate 或限流');
+  ok(/_dpListCache\.clear\(\)/.test(ep), '改名後沒清列表快取 —— 公開列表會顯示舊名字最多 30 秒');
+});
+
+T('⭐ rename 路徑是兩段（/:id/rename），不會被 /:id 單段 pattern 吃掉', () => {
+  ok(/app\.post\('\/api\/deck-posts\/:id\/rename'/.test(DP), 'rename 路徑不是 /:id/rename');
+});
+
 console.log('\n⑥ 隔離與快取');
 
 T('⭐⭐⭐ 整段自帶 try/catch，不得讓 throw 冒泡到賽事段', () => {
