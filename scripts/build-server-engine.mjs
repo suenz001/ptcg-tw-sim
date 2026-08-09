@@ -16,6 +16,11 @@ export { createGame, applyAction };
 export type { Card };
 // 瑞士制純函式（單一真相來源，harness 已驗）：伺服器 server_admin_patch.js 透過 TENG.* 使用
 export * from '$lib/tournament/swiss';
+// v6.138 牌組公布欄：伺服器投稿端要驗牌組合法性（60 張／同名 4 張／重印例外／ACE SPEC／兩張合一）。
+//   ⚠ 這些規則**只能有一份**。在 server_admin_patch.js 抄第二份必然與前端漂移
+//     （v0.88／v0.93 的 classifyDeck 就是這個教訓）。validation.ts 只 import 型別、
+//     零 runtime 依賴，可以安全打包進來。
+export { validateDeck } from '$lib/decks/validation';
 `);
 await build({
   entryPoints: [ENTRY],

@@ -4752,6 +4752,495 @@ import('firebase-admin').then(async ({ default: admin }) => {
     app.locals = app.locals || {};
     app.locals._detectCutPlacements = _detectCutPlacements;
 
+    // ════════════════════════════════════════════════════════════════════
+    // v6.138 批次1：牌組公布欄（deckPosts）後端
+    //
+    // 設計定案見 docs/牌組公布欄-設計定案.md。四項 Wilson 拍板：
+    //   ① 名次標示＝冠軍／亞軍／四強（單敗淘汰沒有季軍賽，3 與 4 名本來就分不出）
+    //   ② 賽事投稿鎖定「比賽當時那副」（報名時已存進 TREGS.deckEntries → 歸檔 players[]）
+    //   ③ 先發後審：即時上架，admin 可下架
+    //   ④ 名次投稿只開網站賽（champion-report 的名次推導本來就排除社群賽）
+    //
+    // ⚠ 整段包在自己的 try/catch 內。這裡是**賽事段閉包內部**（要用 tournIdentity /
+    //   TPOOL / TARCHIVE / TEVENTS / _detectCutPlacements），而賽事段的外層 catch 一掛
+    //   會連「休閒閒置自動判負」一起停用 —— 所以本段任何 throw 都必須就地吞掉，
+    //   絕不能往上冒泡。
+    // ════════════════════════════════════════════════════════════════════
+    try {
+      const DPOSTS = db.collection('deckPosts');
+      const DPLIKES = db.collection('deckPostLikes');
+      const DPDOWNS = db.collection('deckPostDownloads');
+      // 列表查詢的三種排序都要索引；status 一定在 filter 裡。
+      DPOSTS.createIndex({ status: 1, createdAt: -1 }).catch(() => { /* best-effort */ });
+      DPOSTS.createIndex({ status: 1, likeCount: -1 }).catch(() => { /* best-effort */ });
+      DPOSTS.createIndex({ status: 1, downloadCount: -1 }).catch(() => { /* best-effort */ });
+      DPOSTS.createIndex({ uid: 1 }).catch(() => { /* best-effort */ });
+      DPOSTS.createIndex({ 'tournament.eventId': 1, uid: 1 }).catch(() => { /* best-effort */ });
+      DPLIKES.createIndex({ postId: 1 }).catch(() => { /* best-effort */ });
+      DPDOWNS.createIndex({ postId: 1 }).catch(() => { /* best-effort */ });
+
+      const DP_MAX_NOTES = 200;
+      const DP_MAX_NAME = 40;
+      const DP_TOURN_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;   // 賽後 30 天內可投稿
+      const DP_PER_DAY = 3;          // 每人每日投稿上限
+      const DP_ALIVE_CAP = 10;       // 每人未刪投稿總量上限
+      const DP_POST_COOLDOWN = 60 * 1000;
+      const DP_LIST_TTL = 30 * 1000;
+      const DP_PLACEMENT = { CHAMPION: '冠軍', FINALS: '亞軍', TOP4: '四強' };
+
+      // ── 限流：記憶體滑動窗（比照 rateLimitExport / mrRateLimitCheck 的既有慣例，本檔無 Redis）──
+      const _dpBuckets = new Map();   // key -> [timestamps]
+      function dpRate(key, windowMs, max) {
+        const now = Date.now();
+        const arr = (_dpBuckets.get(key) || []).filter((t) => now - t < windowMs);
+        if (arr.length >= max) { _dpBuckets.set(key, arr); return false; }
+        arr.push(now); _dpBuckets.set(key, arr);
+        // ⚠ 淘汰要**先刪已過期的**。舊寫法按插入序砍 1000 個 key，被大量假 key 灌爆時
+        //   會把別人（和自己）還在生效的投稿冷卻一起刪掉 —— 限流反而被沖掉。
+        if (_dpBuckets.size > 5000) {
+          for (const [k, v] of _dpBuckets) if (!v.length || now - v[v.length - 1] > 3600000) _dpBuckets.delete(k);
+          if (_dpBuckets.size > 5000) { for (const k of _dpBuckets.keys()) { _dpBuckets.delete(k); if (_dpBuckets.size <= 4000) break; } }
+        }
+        return true;
+      }
+      // ⚠ 正式站走 cloudflared tunnel，origin 看到的 req.ip 是 localhost。
+      //   但 x-forwarded-for 的**第一段是 client 可以任意填的**（Cloudflare 是 append 到尾端），
+      //   拿它當限流 key ⇒ 每個請求換一個假 IP 就完全穿透。CF-Connecting-IP 由 Cloudflare
+      //   覆寫、外部偽造不了，優先用它。（Fable 5 review 指出）
+      function dpIp(req) {
+        const h = req.headers || {};
+        const cf = h['cf-connecting-ip'];
+        if (cf) return String(cf).trim();
+        return String(h['x-forwarded-for'] || req.ip || '').split(',')[0].trim() || 'unknown';
+      }
+
+      // ── 身分：投稿／按讚／計數一律要 verified（tournIdentity 對沒帶 token 的請求會回
+      //    verified:false 的 playerId 身分，那種身分可以隨便捏造 uid ⇒ 不能拿來當唯一鍵）──
+      async function dpIdentity(req) {
+        const id = await tournIdentity(req);
+        if (!id || id.error) return { error: (id && id.error) || '需要登入', code: (id && id.code) || 401 };
+        if (!id.verified) return { error: '請用 email 帳號登入後再操作', code: 403 };
+        return id;
+      }
+      // 只讀身分：拿不到就回 null，不當錯誤（公開讀允許未登入）
+      async function dpIdentitySoft(req) {
+        try { const id = await tournIdentity(req); return (id && !id.error && id.verified) ? id : null; }
+        catch (_e) { return null; }
+      }
+
+      // ── entries 正規化：只留 {cardId, count}，丟掉 role 等前端欄位 ──
+      function dpNormalizeEntries(raw) {
+        if (!Array.isArray(raw) || raw.length === 0 || raw.length > 120) return null;
+        const merged = new Map();
+        for (const e of raw) {
+          if (!e || typeof e !== 'object') return null;
+          const cid = String(e.cardId == null ? '' : e.cardId);
+          const n = Number(e.count);
+          if (!/^[0-9]+$/.test(cid)) return null;
+          if (!Number.isInteger(n) || n < 1 || n > 60) return null;
+          merged.set(cid, (merged.get(cid) || 0) + n);
+        }
+        const out = [...merged.entries()].map(([cardId, count]) => ({ cardId, count }));
+        out.sort((a, b) => (a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : 0));
+        return out;
+      }
+
+      // ── 牌組合法性：走引擎 bundle 匯出的**同一支** validateDeck（src/lib/decks/validation.ts）──
+      //   ⚠ 絕不在這裡抄一份規則。同名 4 張／重印例外／ACE SPEC 1 張／兩張合一偶數
+      //      這些規則只要有第二份實作就一定漂移（v0.88／v0.93 的 classifyDeck 是同一個教訓）。
+      //   ⚠ fail-open：舊版 server-engine.cjs 還沒 export validateDeck（要跑
+      //      update-tournament.bat 重建）。此時只做結構檢查就放行 —— 投稿一副不合法的牌組
+      //      後果是內容品質，不是安全漏洞；讓功能在舊 bundle 上直接 500 才是真的糟。
+      function dpValidateDeck(entries, deckName) {
+        const total = entries.reduce((n, e) => n + e.count, 0);
+        if (total !== 60) return '牌組必須剛好 60 張（目前 ' + total + ' 張）';
+        for (const e of entries) if (!TPOOL.get(e.cardId)) return '牌組含有本站沒有的卡片（id ' + e.cardId + '）';
+        if (typeof TENG.validateDeck !== 'function') return null;   // 舊 bundle：只做結構檢查
+        try {
+          const r = TENG.validateDeck({ id: 'dp', name: deckName || '牌組', entries, createdAt: 0, updatedAt: 0 }, TPOOL);
+          // ⚠ 欄位名是 legal（不是 valid）—— 寫錯會恆為 undefined ⇒ 驗證整條靜默失效
+          if (r && r.legal === false && Array.isArray(r.issues) && r.issues.length) return r.issues[0];
+        } catch (_e) { /* 驗證器本身出錯不擋投稿 */ }
+        return null;
+      }
+
+      // ── 內容 hash：同一人重複投稿同一副牌時去重。不用 crypto（v0.75：ESM host 沒有 require）──
+      function dpHash(entries) {
+        const s = entries.map((e) => e.cardId + 'x' + e.count).join(',');
+        let h1 = 0x811c9dc5, h2 = 0x01000193;
+        for (let i = 0; i < s.length; i++) {
+          const c = s.charCodeAt(i);
+          h1 = ((h1 ^ c) * 16777619) >>> 0;
+          h2 = ((h2 + c) * 2654435761) >>> 0;
+        }
+        return h1.toString(36) + h2.toString(36) + '_' + s.length;
+      }
+
+      // ── 序列化白名單：uid / email 絕不出現在任何公開回應 ──
+      //   （比照 /api/rooms-archetypes 與 champion-report 的既有作法：逐欄挑，不 spread 整份 doc）
+      function dpPublic(doc, extra) {
+        const o = {
+          id: doc._id,
+          authorName: doc.authorName || '玩家',
+          deckName: doc.deckName || '牌組',
+          notes: doc.notes || '',
+          archetype: doc.archetype || '',
+          cardTotal: doc.cardTotal || 0,
+          likeCount: doc.likeCount || 0,
+          downloadCount: doc.downloadCount || 0,
+          createdAt: doc.createdAt || 0,
+          tournament: doc.tournament
+            ? { eventId: doc.tournament.eventId, eventName: doc.tournament.eventName, finishedAt: doc.tournament.finishedAt || 0, placementLabel: doc.tournament.placementLabel }
+            : null,
+        };
+        if (extra) for (const k of Object.keys(extra)) o[k] = extra[k];
+        return o;
+      }
+
+      // ── 原型分類：重用 admin 段的 classifyDeck（跨 IIFE helper 一律在**執行時**才從
+      //    app.locals 取，不可在註冊時解構 —— v0.94／v1.01 兩次事故都是這樣炸的）──
+      async function dpClassify(entries) {
+        try {
+          const H = (app.locals || {})._deckRuleHelpers;
+          if (!H || typeof H.classifyDeck !== 'function' || typeof H.deckToSets !== 'function') return '';
+          const rules = await db.collection('deckRules').find({ enabled: { $ne: false } }).toArray();
+          if (!rules.length) return '';
+          if (typeof H.getCardNameMap !== 'function') return '';
+          const nameMap = await H.getCardNameMap();
+          // ⚠ 簽名是 deckToSets(cardCounts, nameMap)，且回傳是 { rule, all } —— 不是 { name }。
+          //    這兩個介面我一開始都寫錯，查了實作才對上（別憑印象接中央 helper）。
+          const sets = H.deckToSets(entries, nameMap);
+          const hit = H.classifyDeck(sets, rules);
+          return (hit && hit.rule && hit.rule.name) ? String(hit.rule.name) : '';
+        } catch (_e) { return ''; }
+      }
+
+      // ════════ 公開讀 ════════
+      const _dpListCache = new Map();   // key -> { at, payload }
+      app.get('/api/deck-posts', async (req, res) => {
+        try {
+          // ⚠ 正式站走 Cloudflare tunnel，公開 GET 曾被快取住（index.json 被快取 4 天）。
+          res.set('Cache-Control', 'no-store');
+          const sort = ({ new: { createdAt: -1 }, likes: { likeCount: -1, createdAt: -1 }, downloads: { downloadCount: -1, createdAt: -1 } })[String((req.query && req.query.sort) || 'new')] || { createdAt: -1 };
+          const page = Math.max(1, Math.min(200, parseInt((req.query && req.query.page) || '1', 10) || 1));
+          const pageSize = Math.max(1, Math.min(50, parseInt((req.query && req.query.pageSize) || '20', 10) || 20));
+          const q = { status: 'published' };
+          const arche = String((req.query && req.query.archetype) || '').slice(0, 60);
+          if (arche) q.archetype = arche;
+          if (String((req.query && req.query.tournamentOnly) || '') === '1') q.tournament = { $ne: null };
+          const ck = JSON.stringify([q, sort, page, pageSize]);
+          const hit = _dpListCache.get(ck);
+          if (hit && Date.now() - hit.at < DP_LIST_TTL) return res.json(hit.payload);
+          // ⚠ 列表**不回 entries**：每筆 60 張 × 每頁 20 筆是純浪費（v6.119 的讀放大教訓）。
+          const [docs, total] = await Promise.all([
+            DPOSTS.find(q, { projection: { entries: 0, uid: 0, email: 0, entriesHash: 0 } }).sort(sort).skip((page - 1) * pageSize).limit(pageSize).toArray(),
+            DPOSTS.countDocuments(q),
+          ]);
+          const payload = { posts: docs.map((d) => dpPublic(d)), total, page, pageSize };
+          _dpListCache.set(ck, { at: Date.now(), payload });
+          if (_dpListCache.size > 200) _dpListCache.clear();
+          res.json(payload);
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      app.get('/api/deck-posts/:id', async (req, res) => {
+        try {
+          res.set('Cache-Control', 'no-store');
+          if (!dpRate('d:' + dpIp(req), 60000, 60)) return res.status(429).json({ error: '請求過於頻繁' });
+          const doc = await DPOSTS.findOne({ _id: String(req.params.id), status: 'published' });
+          if (!doc) return res.status(404).json({ error: '找不到這篇投稿' });
+          const id = await dpIdentitySoft(req);
+          const extra = { entries: (doc.entries || []).map((e) => ({ cardId: e.cardId, count: e.count })) };
+          if (id) {
+            const [lk, dn] = await Promise.all([
+              DPLIKES.findOne({ _id: doc._id + '__' + id.uid }, { projection: { _id: 1 } }),
+              DPDOWNS.findOne({ _id: doc._id + '__' + id.uid }, { projection: { _id: 1 } }),
+            ]);
+            extra.likedByMe = !!lk; extra.downloadedByMe = !!dn; extra.mine = (doc.uid === id.uid);
+          }
+          res.json({ post: dpPublic(doc, extra) });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // ════════ 投稿（一般）════════
+      async function dpInsert(id, { deckName, entries, notes, tournament }) {
+        const norm = dpNormalizeEntries(entries);
+        if (!norm) return { error: '牌組資料格式不正確', code: 400 };
+        // ⚠ 賽事名次投稿的牌組來自**伺服器歸檔**，不是 client 送的。而報名端點當初只驗
+        //   「60 張」（沒跑 validateDeck），所以歸檔那副在今天的標準下可能已經不合法
+        //   （卡片輪替、或報名時就沒驗）。若在這裡擋下來，玩家會拿著真名次卻永遠投不出去，
+        //   而設計上又規定必須用那副 —— 等於把合法使用者關在門外。
+        //   ⇒ 賽事路徑只做結構檢查，合法性不擋（Fable 5 review 指出，我查證報名端點
+        //     3568／3596 行確實只有 deckCount !== 60）。
+        const bad = tournament ? null : dpValidateDeck(norm, deckName);
+        if (bad) return { error: bad, code: 400 };
+        const hash = dpHash(norm);
+        // ⚠ 去重要帶 eventId 維度：同一副 60 張連兩場拿名次是常態，兩篇投稿的內容一樣但
+        //   代表不同賽事。只比 hash 會讓第二場永遠 409，而 eligibility 又顯示「可投稿」。
+        const dupQ = { uid: id.uid, entriesHash: hash, status: { $ne: 'deleted' } };
+        dupQ['tournament.eventId'] = tournament ? tournament.eventId : null;
+        const dup = await DPOSTS.findOne(dupQ, { projection: { _id: 1 } });
+        if (dup) return { error: '你已經投稿過同樣內容的牌組了', code: 409 };
+        const now = Date.now();
+        const [dayCount, aliveCount] = await Promise.all([
+          DPOSTS.countDocuments({ uid: id.uid, createdAt: { $gt: now - 86400000 } }),
+          DPOSTS.countDocuments({ uid: id.uid, status: { $ne: 'deleted' } }),
+        ]);
+        if (dayCount >= DP_PER_DAY) return { error: '今天的投稿次數已達上限（每日 ' + DP_PER_DAY + ' 篇）', code: 429 };
+        if (aliveCount >= DP_ALIVE_CAP) return { error: '你的投稿數已達上限（' + DP_ALIVE_CAP + ' 篇），請先刪除舊的', code: 429 };
+        const doc = {
+          _id: 'dp_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 10),
+          status: 'published',
+          uid: id.uid,
+          email: id.email || null,
+          authorName: String(id.name || '玩家').slice(0, 24),
+          deckName: String(deckName || '牌組').slice(0, DP_MAX_NAME),
+          notes: String(notes || '').slice(0, DP_MAX_NOTES),
+          entries: norm,
+          entriesHash: hash,
+          archetype: await dpClassify(norm),
+          cardTotal: norm.reduce((n, e) => n + e.count, 0),
+          tournament: tournament || null,
+          // 記錄這篇進來時完整驗證有沒有開（舊 bundle 期間為 false）→ 事後可回溯補驗／清理
+          validated: typeof TENG.validateDeck === 'function',
+          likeCount: 0,
+          downloadCount: 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await DPOSTS.insertOne(doc);
+        _dpListCache.clear();
+        return { doc };
+      }
+
+      app.post('/api/deck-posts', async (req, res) => {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('p:' + id.uid, DP_POST_COOLDOWN, 1)) return res.status(429).json({ error: '投稿太頻繁，請稍候再試' });
+          const b = req.body || {};
+          if (JSON.stringify(b).length > 32768) return res.status(413).json({ error: '資料過大' });
+          const r = await dpInsert(id, { deckName: b.deckName, entries: b.entries, notes: b.notes, tournament: null });
+          if (r.error) return res.status(r.code).json({ error: r.error });
+          res.json({ ok: true, id: r.doc._id });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // ── 刪除：本人軟刪（明細表保留，計數可對帳）──
+      app.delete('/api/deck-posts/:id', async (req, res) => {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('x:' + id.uid, 60000, 10)) return res.status(429).json({ error: '操作過於頻繁' });
+          const r = await DPOSTS.updateOne({ _id: String(req.params.id), uid: id.uid, status: { $ne: 'deleted' } }, { $set: { status: 'deleted', updatedAt: Date.now() } });
+          if (!r.matchedCount) return res.status(404).json({ error: '找不到你的這篇投稿' });
+          _dpListCache.clear();
+          res.json({ ok: true });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // ════════ 按讚／收藏計數 ════════
+      //   ⚠ 唯一鍵 postId__uid：insert 撞 DuplicateKey 就代表按過了。
+      //     每帳號每篇恆為 0 或 1，client 重放幾次都一樣 —— 這是不靠 client 誠實的關鍵。
+      async function dpToggle(coll, field, postId, uid, on) {
+        const key = postId + '__' + uid;
+        if (on) {
+          try { await coll.insertOne({ _id: key, postId, uid, at: Date.now() }); }
+          catch (e) { if (e && e.code === 11000) return false; throw e; }
+          await DPOSTS.updateOne({ _id: postId }, { $inc: { [field]: 1 } });
+          return true;
+        }
+        const r = await coll.deleteOne({ _id: key });
+        if (!r.deletedCount) return false;
+        await DPOSTS.updateOne({ _id: postId }, { $inc: { [field]: -1 } });
+        return true;
+      }
+
+      async function dpLikeHandler(req, res, on) {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('l:' + id.uid, 60000, 30)) return res.status(429).json({ error: '操作過於頻繁' });
+          const postId = String(req.params.id);
+          const doc = await DPOSTS.findOne({ _id: postId, status: 'published' }, { projection: { _id: 1 } });
+          if (!doc) return res.status(404).json({ error: '找不到這篇投稿' });
+          const changed = await dpToggle(DPLIKES, 'likeCount', postId, id.uid, on);
+          if (changed) _dpListCache.clear();
+          const cur = await DPOSTS.findOne({ _id: postId }, { projection: { likeCount: 1 } });
+          res.json({ ok: true, changed, likeCount: (cur && cur.likeCount) || 0, likedByMe: on });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      }
+      app.post('/api/deck-posts/:id/like', (req, res) => dpLikeHandler(req, res, true));
+      app.delete('/api/deck-posts/:id/like', (req, res) => dpLikeHandler(req, res, false));
+
+      // 下載計數：語意是「多少個**不同帳號**拿過」，不是「按了幾次」。
+      //   未登入者照樣可以匯入，只是不計數（回 204）。
+      app.post('/api/deck-posts/:id/download', async (req, res) => {
+        try {
+          const id = await dpIdentitySoft(req);
+          if (!id) return res.status(204).end();
+          if (!dpRate('n:' + id.uid, 60000, 30)) return res.status(204).end();
+          const postId = String(req.params.id);
+          const doc = await DPOSTS.findOne({ _id: postId, status: 'published' }, { projection: { _id: 1 } });
+          if (!doc) return res.status(404).json({ error: '找不到這篇投稿' });
+          const changed = await dpToggle(DPDOWNS, 'downloadCount', postId, id.uid, true);
+          if (changed) _dpListCache.clear();
+          const cur = await DPOSTS.findOne({ _id: postId }, { projection: { downloadCount: 1 } });
+          res.json({ ok: true, changed, downloadCount: (cur && cur.downloadCount) || 0 });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // ════════ 賽事名次投稿 ════════
+      //   client 只送 eventId。名次與牌組**全部由伺服器從歸檔推導**，
+      //   沒有任何一條路徑可以讓玩家自報名次或換掉牌組。
+      async function dpEligibility(uid) {
+        const out = [];
+        const since = Date.now() - DP_TOURN_WINDOW_MS;
+        const detectCut = (app.locals || {})._detectCutPlacements;   // ⚠ 執行時取，不在註冊時解構
+        const archives = await TARCHIVE.find(
+          { finishedAt: { $gt: since }, communityEvent: { $ne: true }, 'players.uid': uid },
+          { projection: { 'players.uid': 1, matches: 1, championUid: 1, eventName: 1, eventId: 1, finishedAt: 1, communityEvent: 1 } },
+        ).sort({ finishedAt: -1 }).limit(20).toArray();
+        for (const a of archives) {
+          const label = dpPlacementOf(a, uid, detectCut);
+          if (!label) continue;
+          out.push({ eventId: a.eventId || String(a._id || '').replace(/^arch_/, ''), eventName: a.eventName || '賽事', finishedAt: a.finishedAt || 0, placementLabel: label });
+        }
+        return out;
+      }
+
+      // 名次判定（純函式，守衛可直接驗）。回 null＝此人沒有可投稿的名次。
+      //   ⚠ placementsOk=false（賽程結構推不出名次，例如最後一輪不只一場）時 **fail-closed**：
+      //     只放行冠軍 —— championUid 是歸檔的明確欄位，不靠推導。
+      function dpPlacementOf(archive, uid, detectCut) {
+        if (!archive || !uid) return null;
+        if (archive.communityEvent === true) return null;                 // ④ 只開網站賽
+        if (archive.championUid && archive.championUid === uid) return DP_PLACEMENT.CHAMPION;
+        if (typeof detectCut !== 'function') return null;
+        let cut = null;
+        try { cut = detectCut(archive.matches || []); } catch (_e) { return null; }
+        if (!cut || !cut.finals || !cut.top4) return null;
+        // ⚠ _detectCutPlacements 是為**單敗淘汰**設計的保守推導。瑞士制邊角
+        //   （cut 覆寫成 top2、小人數瑞士）會讓「最後一輪瑞士」被當成四強輪，
+        //   把整輪的人（含輪空者，playersIn 會把 bye 的 p1 也算進去）標成「四強」。
+        //   統計頁算錯還能人工看出來，這裡是**自動鑄造公開頭銜**，標準不同 ⇒ 要求結構
+        //   恰好是標準四強：決賽 2 人、四強 4 人。任何一邊對不上就 fail-closed 回冠軍那條路。
+        //   （Fable 5 review 指出，我查證歸檔確實有存 format 且瑞士制邊角成立。）
+        if (cut.finals.size !== 2 || cut.top4.size !== 4) return null;
+        if (cut.finals.has(uid)) return DP_PLACEMENT.FINALS;              // 打進決賽但不是冠軍 ⇒ 亞軍
+        if (cut.top4.has(uid)) return DP_PLACEMENT.TOP4;                  // ① 3、4 名分不出 ⇒ 一律「四強」
+        return null;
+      }
+
+      // ⚠⚠⚠ 路徑用獨立前綴 /api/deck-posts-tournament/*，**不是** /api/deck-posts/xxx。
+      //   Express 依註冊順序比對，`/api/deck-posts/:id` 是單段 pattern，會把任何
+      //   `/api/deck-posts/具名子路徑` 整個吃掉 —— 第一版寫成 /api/deck-posts/tournament-eligibility
+      //   時它 100% 打不到，而且回的是 404「找不到這篇投稿」，連錯誤 log 都不會有
+      //   （Fable 5 code review 抓到）。改前綴比「小心註冊順序」可靠：日後再加
+      //   「我的投稿」之類的具名 GET 也不會重蹈覆轍。
+      app.get('/api/deck-posts-tournament/eligibility', async (req, res) => {
+        try {
+          res.set('Cache-Control', 'no-store');
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('e:' + id.uid, 60000, 20)) return res.status(429).json({ error: '請求過於頻繁' });
+          const list = await dpEligibility(id.uid);
+          const posted = list.length
+            ? await DPOSTS.find({ uid: id.uid, status: { $ne: 'deleted' }, 'tournament.eventId': { $in: list.map((x) => x.eventId) } }, { projection: { 'tournament.eventId': 1 } }).toArray()
+            : [];
+          const done = new Set(posted.map((p) => p.tournament && p.tournament.eventId));
+          res.json({ events: list.map((x) => ({ ...x, alreadyPosted: done.has(x.eventId) })) });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      app.post('/api/deck-posts-tournament/submit', async (req, res) => {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('t:' + id.uid, 60000, 1)) return res.status(429).json({ error: '操作太頻繁，請稍候再試' });
+          const eventId = String((req.body && req.body.eventId) || '');
+          if (!eventId) return res.status(400).json({ error: '缺少 eventId' });
+          const a = await TARCHIVE.findOne({ _id: 'arch_' + eventId });
+          if (!a) return res.status(404).json({ error: '找不到這場賽事的歸檔' });
+          if (a.communityEvent === true) return res.status(403).json({ error: '社群自辦賽暫不開放名次投稿，可改用一般投稿' });
+          if (!a.finishedAt || Date.now() - a.finishedAt > DP_TOURN_WINDOW_MS) return res.status(403).json({ error: '這場賽事已超過投稿期限（賽後 30 天內）' });
+          const label = dpPlacementOf(a, id.uid, (app.locals || {})._detectCutPlacements);
+          if (!label) return res.status(403).json({ error: '這場賽事沒有查到你的四強以上名次' });
+          const me = (a.players || []).find((p) => p && p.uid === id.uid);
+          if (!me || !Array.isArray(me.deckEntries) || !me.deckEntries.length) return res.status(404).json({ error: '找不到你在這場賽事登記的牌組' });
+          const dup = await DPOSTS.findOne({ uid: id.uid, 'tournament.eventId': eventId, status: { $ne: 'deleted' } }, { projection: { _id: 1 } });
+          if (dup) return res.status(409).json({ error: '你已經投稿過這場賽事的牌組了' });
+          // ② 牌組固定用歸檔那副，client 送什麼都不採用
+          const r = await dpInsert(id, {
+            deckName: me.deckName || '牌組',
+            entries: me.deckEntries,
+            notes: String((req.body && req.body.notes) || '').slice(0, DP_MAX_NOTES),
+            tournament: { eventId, eventName: a.eventName || '網站賽', finishedAt: a.finishedAt || 0, placementLabel: label },
+          });
+          if (r.error) return res.status(r.code).json({ error: r.error });
+          res.json({ ok: true, id: r.doc._id, placementLabel: label });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // ════════ admin（③ 先發後審：下架／復原／計數對帳）════════
+      app.get('/api/admin/deck-posts', async (req, res) => {
+        try {
+          const id = await tournIdentity(req);
+          if (!isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+          const q = {};
+          const st = String((req.query && req.query.status) || '');
+          if (st) q.status = st;
+          const docs = await DPOSTS.find(q, { projection: { entries: 0 } }).sort({ createdAt: -1 }).limit(300).toArray();
+          res.json({ posts: docs.map((d) => ({ ...dpPublic(d), status: d.status, email: d.email || '', updatedAt: d.updatedAt || 0 })) });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+      async function dpAdminSetStatus(req, res, status) {
+        try {
+          const id = await tournIdentity(req);
+          if (!isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+          const r = await DPOSTS.updateOne({ _id: String(req.params.id) }, { $set: { status, updatedAt: Date.now() } });
+          if (!r.matchedCount) return res.status(404).json({ error: '找不到這篇投稿' });
+          _dpListCache.clear();
+          res.json({ ok: true });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      }
+      app.post('/api/admin/deck-posts/:id/hide', (req, res) => dpAdminSetStatus(req, res, 'hidden'));
+      app.post('/api/admin/deck-posts/:id/restore', (req, res) => dpAdminSetStatus(req, res, 'published'));
+      // 計數對帳：likeCount/downloadCount 是非正規化快照，權威永遠是明細表。
+      app.post('/api/admin/deck-posts/recount', async (req, res) => {
+        try {
+          const id = await tournIdentity(req);
+          if (!isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+          const [likes, downs] = await Promise.all([
+            DPLIKES.aggregate([{ $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
+            DPDOWNS.aggregate([{ $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
+          ]);
+          const lm = new Map(likes.map((x) => [x._id, x.n]));
+          const dm = new Map(downs.map((x) => [x._id, x.n]));
+          const all = await DPOSTS.find({}, { projection: { _id: 1, likeCount: 1, downloadCount: 1 } }).toArray();
+          let fixed = 0;
+          for (const p of all) {
+            const l = lm.get(p._id) || 0, d = dm.get(p._id) || 0;
+            if ((p.likeCount || 0) !== l || (p.downloadCount || 0) !== d) { await DPOSTS.updateOne({ _id: p._id }, { $set: { likeCount: l, downloadCount: d } }); fixed++; }
+          }
+          _dpListCache.clear();
+          res.json({ ok: true, checked: all.length, fixed });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      });
+
+      // 守衛與未來的管理端會用到；比照 _detectCutPlacements 的作法掛出去。
+      app.locals._dpPlacementOf = dpPlacementOf;
+      // ⚠ fail-open 必須出聲。v3.84「以為版權素材移掉了」、v6.130「以為 autoplay 有效」
+      //   都是同一類靜默失效 —— 沒有訊號就沒有人會發現驗證其實沒開。
+      if (typeof TENG.validateDeck !== 'function') {
+        console.warn('[deck-posts] ⚠ 目前的 server-engine.cjs 沒有 validateDeck → 牌組完整驗證停用'
+          + '（只驗 60 張與卡片存在）。請跑 update-tournament.bat 重建 bundle。');
+      }
+      console.log('[deck-posts] endpoints registered');
+    } catch (_dpe) {
+      console.warn('[deck-posts] init failed → 牌組公布欄停用（賽事與對戰不受影響）:', _dpe && _dpe.message);
+    }
+
     // 把多筆 archives 聚合成 Map<email, stat>。
     function _aggregateArchives(archives) {
       const acc = new Map();

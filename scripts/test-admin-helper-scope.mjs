@@ -166,6 +166,11 @@ T('⭐⭐通用鎖：IIFE 外的函式不可呼叫「只存在於某個 IIFE 內
     const local = new Set([...body.matchAll(/\bfunction\s+([A-Za-z0-9_$]+)\s*\(/g)].map((x) => x[1]));
     for (const c of body.matchAll(/\b([A-Za-z0-9_$]+)\s*\(/g)) {
       const n = c[1];
+      // ⚠ v6.138：只算**裸呼叫**。`H.deckToSets(...)` 這種成員存取是從 app.locals 取出 helper
+      //   後才呼叫的 —— 那正是本守衛想鼓勵的正確做法（v0.94／v1.01 的修法就是掛 app.locals），
+      //   舊版把它一起算進來會把正解判成事故。前一個非空白字元是 `.` 就跳過。
+      const prev = body.slice(0, c.index).replace(/\s+$/, '');
+      if (prev.endsWith('.')) continue;
       if (n === d.name || local.has(n) || !innerOnly.has(n)) continue;
       const k = d.name + '>' + n;
       if (seen.has(k)) continue;

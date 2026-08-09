@@ -17,6 +17,79 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.138 — 牌組公布欄 批次 1（後端，玩家還看不到）
+
+**純後端，前端零變更**；批次 2 才會有玩家看得到的頁面。設計定案見 `docs/牌組公布欄-設計定案.md`。
+
+Wilson 拍板四項：① 名次標示＝**冠軍／亞軍／四強**（單敗淘汰沒有季軍賽，3 與 4 名本來就分不出）
+② 賽事投稿**鎖定比賽當時那副**（報名時已存進 `TREGS.deckEntries` → 歸檔 `players[]`，玩家不必重傳）
+③ 先發後審 ④ 名次投稿只開網站賽（`champion-report` 的名次推導本來就排除社群賽）。
+
+### 實作
+
+新 IIFE 掛在**賽事段閉包內**（要用 `tournIdentity` / `TPOOL` / `TENG` / `TARCHIVE` / `_detectCutPlacements`），
+但**自帶 try/catch** —— 賽事段那個 catch 一觸發會連「休閒閒置自動判負」一起停用。
+三個 collection：`deckPosts` / `deckPostLikes` / `deckPostDownloads`，
+後兩者用 **`_id = postId + '__' + uid` 複合唯一鍵**（比照 `TREG._id: eventId+'__'+uid` 的既有慣例）
+⇒ 每帳號每篇恆為 0 或 1，client 重放幾次都一樣；權威在明細表，`recount` 端點可對帳。
+下載數的語意因此是「**多少個不同帳號拿過**」，不是「按了幾次」。
+
+**牌組合法性走 `TENG.validateDeck`** —— 本版在 `build-server-engine.mjs` 的 entry 加
+`export { validateDeck } from '$lib/decks/validation'`。`validation.ts` 只 import 型別、零 runtime 依賴，
+可以安全打包。⚠ 這是為了**不在伺服器抄第二份規則**（v0.88／v0.93 的 `classifyDeck` 就是這個教訓）。
+舊 bundle（還沒跑 `update-tournament.bat`）時 fail-open，只驗 60 張＋卡片存在，但會 `console.warn`
+並在 doc 記 `validated: false` —— **fail-open 不能是靜默的**（v3.84／v6.130 同一類教訓）。
+
+### 自行查證推翻了三處我照設計文件寫的介面
+
+`DeckValidationResult` 的欄位是 **`legal`** 不是 `valid`（寫錯會恆為 `undefined`，整條驗證靜默失效）；
+`deckToSets(cardCounts, nameMap)` 吃陣列＋Map，不是物件；`classifyDeck` 回 **`{rule, all}`** 不是 `{name}`。
+三個都是「接中央 helper 前必須讀實作，不能憑印象」。
+
+### Fable 5 code review 抓到一個擋刀級 bug（已查證屬實）
+
+**`/api/deck-posts/tournament-eligibility` 是死路由**：Express 依註冊順序比對，
+`/api/deck-posts/:id`（4932 行）在它（5103 行）之前 ⇒ 100% 被單段 pattern 吃掉，
+變成 `findOne({_id:'tournament-eligibility'})` → 永遠回 **404「找不到這篇投稿」**。
+不是 500、沒有 log，批次 2 一接就是全體玩家的「賽事投稿」入口壞死。
+修法選**改前綴** `/api/deck-posts-tournament/*` 而不是「調整註冊順序」—— 後者是隱性契約，
+日後再加「我的投稿」之類的具名 GET 就會重蹈覆轍。守衛加了一條掃「有沒有人再把具名子路徑掛回 `/api/deck-posts/`」。
+
+其餘採納（均自行查證）：
+- **瑞士制邊角會鑄出錯的公開頭銜**：`_detectCutPlacements` 是為單敗淘汰設計的，
+  cut 覆寫成 top2 或小人數瑞士時，「最後一輪瑞士」會被當成四強輪，整輪的人（含輪空者，
+  `playersIn` 會把 bye 的 p1 也算進去）都被標成「四強」。改成要求**結構恰好是標準四強**
+  （`finals.size === 2 && top4.size === 4`）。統計頁算錯還能人工看出來，這裡是自動鑄造公開頭銜。
+- **同一副牌連兩場拿名次會永遠 409**：`entriesHash` 去重補上 `tournament.eventId` 維度。
+- **賽事投稿不跑合法性驗證**：那副牌是伺服器歸檔給的，而報名端點當初只驗 `deckCount !== 60`
+  ⇒ 擋下來等於把有真名次的玩家永遠關在門外，而設計上又規定必須用那副。
+- **限流 key 改讀 `CF-Connecting-IP`**：`x-forwarded-for` 第一段是 client 可任意填的
+  （Cloudflare 是 append 到尾端），拿它當 key 每個請求換一個假 IP 就完全穿透；
+  且假 key 灌爆後舊的淘汰迴圈會**把別人還在生效的投稿冷卻一起刪掉**（改成先刪過期）。
+
+### 守衛
+
+`scripts/test-deck-posts.mjs`（32 項）。名次判定那組是**抽出真函式跑真值**
+（`_detectCutPlacements` 與 `dpPlacementOf` 都用括號配對抽出來 `new Function` 求值），
+含正對照與 fail-closed 案例。
+
+⚠ **守衛自己有過兩個 bug**：① `extractFn` 遇到**參數解構** `function f(id, { a, b })` 會把參數列的
+`{}` 當函式主體，只抽到參數列 → 後續斷言全在檢查一段不是函式主體的文字（本輪造成兩項假紅；
+若是否定型斷言就會變假綠）。② 「client 不得送名次」那條原本用 `req.body[^;]*placement` 跨句掃，
+誤命中回應那一行的 `placementLabel` → 假紅。
+
+⚠ 另外修了 `test-admin-helper-scope` 的**假陽性**：它的跨作用域偵測把 `H.deckToSets(...)`
+（正確地從 `app.locals` 取出 helper 後呼叫）當成裸呼叫 —— 它想鼓勵的正解反而被它判成事故。
+加「前一個非空白字元是 `.` 就跳過」，並用**人工注入裸呼叫**驗證它仍抓得到真陽性。
+
+完整 `npm test` **458 步全綠**。
+
+### ⚠ 部署
+
+本版需要跑 `redeploy-oracle.bat`（新端點）與 `update-tournament.bat`（`server-engine.cjs` 要重建才有
+`validateDeck`；沒跑的話功能仍可用，只是完整驗證停用並在 log 出現警告）。
+**beta 測試站（github.io）沒有這些 API，驗不到** —— 與 `/tournament` 同一限制。
+
 ## v6.137 — 錦標賽樂觀更新 slice 1（PR-2，只放行 ATTACH_ENERGY）
 
 承 v6.134 診斷（錦標賽對戰完全沒有樂觀更新）與 v6.135（PR-1 網路層止血）。
