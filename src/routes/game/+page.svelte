@@ -263,7 +263,9 @@
         notifyScan([], tMyMatch, tNow);   // v6.022 進場時間一到就通知（去重保證只發一次）
         // v5.591 輪詢看門狗：對戰中若輪詢停擺(>6s 沒成功回應)→ 重啟輪詢，避免 client 卡在舊狀態
         //   (看不到對手 KO 我方 → 無法換新戰鬥位 → 被閒置判敗)。伺服器權威，重抓永遠安全。
-        if (tStep === 'playing' && game && !isTournSpectator && _tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000) {
+        // v6.146 對戰已結束 → 盤面不會再動，這條「自癒」沒有對象，只是每 6 秒白抓一份全量 gameState。
+        const _tOver = !!game && (game as any).phase === 'game-over';
+        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000) {
           _tLastPollOkAt = Date.now();  // 防重複觸發
           // v5.593 輪詢停擺 → 立即強制重抓最新狀態並「強制採用」(伺服器權威，繞過版本檢查) + 重啟輪詢，
           //   治「第一隻昏厥後 client 沒收到 active=空 → 無法換場 → 閒置判敗」型卡住，最多 6~7 秒自動恢復。
@@ -280,7 +282,11 @@
         // v5.618 新鮮度看門狗：對戰/setup 中盤面 >8s 沒任何更新（poll 成功卻漏接/版本卡住，如「對手補抽放置完成後我方手牌沒亮」）
         //   → 強制重抓伺服器權威最新盤面。涵蓋 setup（tStep 一有 gameState 即 playing）。gate：我方 picker 進行中不擾動；節流 8s。
         const _freshStaleMs = (game && game.phase === 'setup') ? 3500 : 8000;  // v5.931/932 setup 首次觸發加快(3.5s);節流維持 8s 限負載(50人賽避免每3.5s全量抓)
-        if (tStep === 'playing' && game && !isTournSpectator
+        //   ⚠⚠ v6.146：原本**沒有排除 game-over**。tForceResync 末尾是無條件把 _tLastStateChangeAt
+        //     推到現在，於是對戰結束後形成「8 秒 stale → 抓一次 v=-1 全量盤面 → 重設計時 → 再 8 秒」
+        //     的無限迴圈，而且每次還會 startTournamentPoll() 重建 timer。這就是伺服器 log 裡
+        //     週期性出現的 4~5KB `?v=-1` 請求的來源（不是玩家在按 F5）。
+        if (tStep === 'playing' && game && !_tOver && !isTournSpectator
             && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > _freshStaleMs
             && (Date.now() - _tLastForceResyncAt) > 8000
             && !tInFlight   // v6.137 動作送出中不強制重抓：會把本地預測畫面倒回，伺服器回應到達後又前進＝閃爍
@@ -4537,8 +4543,12 @@
   function startSpectatePoll() {
     if (tPollTimer) clearInterval(tPollTimer);
     const gen = ++tPollGen;
+    let _spGoTick = 0;   // v6.146 對戰結束後的降頻計數
     tPollTimer = setInterval(async () => {
       try {
+        // v6.146 對戰結束後畫面不會再更新（version 不再遞增），但原本仍每 2 秒下載一整份
+        //   redact 過的 gameState。觀戰者常常看完就把分頁擱著 → 改為每 5 輪（約 10 秒）。
+        if (game && (game as any).phase === 'game-over' && (++_spGoTick % 5) !== 0) return;
         const r = await tApi(`/spectate/state?room=${tSpectateRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開觀戰 → 丟棄在路上的回應
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
@@ -4737,8 +4747,19 @@
     if (tPollTimer) clearInterval(tPollTimer);
     const gen = ++tPollGen;
     let _gpTick = 0;  // v0.68 降載:對戰中大廳聊天改每 5 輪(~6s)刷新,非每 1.2s
+    let _goTick = 0;   // v6.146 對戰已結束後的降頻計數
     tPollTimer = setInterval(async () => {
       try {
+        // ⭐⭐v6.146 對戰結束後降頻 —— 玩家常常停在勝負視窗不按「返回賽事大廳」
+        //   （沒有自動跳轉，是設計而非 bug），原本會**一直**以 1.2 秒打 /state。
+        //   實測一場 50 人賽事有 3 場對戰同時掛著、5 分鐘 819 個無效 request。
+        //   ⚠ 不能完全 clearInterval：`winner == null` 的平手要「等待管理員裁定」，
+        //     裁定會改伺服器盤面，停掉輪詢玩家就永遠等不到結果。
+        //   ⇒ 有勝負 → 每 10 輪（約 12 秒）；平手待裁定 → 每 5 輪（約 6 秒）。省 90%+。
+        if (game && (game as any).phase === 'game-over') {
+          const _every = ((game as any).winner == null) ? 5 : 10;
+          if ((++_goTick % _every) !== 0) return;
+        } else if (_goTick !== 0) { _goTick = 0; }
         _gpTick++;
         const reqV = tVersion;  // v6.135 送出當下的版本（亂序守衛用）
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);

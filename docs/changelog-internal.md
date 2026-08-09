@@ -17,6 +17,55 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.146 — 對戰結束後三條迴圈仍在全速跑（含一個 8 秒抓全量盤面的無限迴圈）
+
+**來源**：站長回報「很多玩家反應錦標賽很卡」，營運端 AI 觀測到「對戰已 `status=done`，
+玩家前端仍高頻 poll `/api/tournament/state`」，一場賽事三場對戰同時掛著，5 分鐘 819 個無效 request。
+
+**逐行查證結果**（`src/routes/game/+page.svelte`）：
+- 勝負視窗出現後**沒有自動跳轉**，玩家要自己按「🏆 返回賽事大廳」（11239）—— 這是設計不是 bug，
+  但玩家不知道要按，於是掛著。
+- 停 `tPollTimer` 只有 5 處，全部是「主動離開」（onDestroy 3877／tLeaveMatch 4384／tLeaveSpectate 4549／
+  登出／重建 timer），**沒有任何一處看 `phase === 'game-over'`**。
+- ⭐⭐ 更關鍵：新鮮度看門狗（8 秒盤面沒動 → `tForceResync()` 抓 `v=-1` 全量盤面）也沒排除 game-over，
+  而 `tForceResync()` 末尾是**無條件**把 `_tLastStateChangeAt` 推到現在（4694）
+  ⇒「8 秒 stale → 抓全量 → 重設計時 → 再 8 秒」的**無限迴圈**，而且每次還 `startTournamentPoll()` 重建 timer。
+  伺服器 log 裡週期性出現的 4~5KB `?v=-1` 就是這個，**不是玩家在按 F5**。
+- 觀戰輪詢 2 秒一次，done 之後照抓，且 `/spectate/state` 一律回全量 redact 盤面。
+
+**修法**：三條迴圈都改成「game-over 時降頻」而**不是** clearInterval —
+⚠ `winner == null` 的平手要「等待管理員裁定」，裁定會 bump 伺服器盤面版本
+（`oracle-admin/server_admin_patch.js:4651`），停掉輪詢那些玩家就永遠等不到結果。
+⇒ 有勝負→每 10 輪（約 12 秒）；平手待裁定→每 5 輪（約 6 秒）；觀戰→每 5 輪（約 10 秒）。省 90%+。
+
+**Fable 5 審查追加**：`_goTick` 是 `startTournamentPoll()` 的 closure 變數，任何人重建 timer 就會歸零。
+目前 4 個呼叫點中兩個看門狗已被 `!_tOver` 擋住、另兩個是人為進場 —— 但這是隱性耦合，
+所以守衛加一條「`startTournamentPoll()` 出現次數 === 5（1 定義 + 4 呼叫）」的枚舉鎖。
+
+**守衛** `scripts/test-v6146-gameover-poll-throttle.mjs`（8 項，HEAD 跑 6 FAIL）。
+⚠ 本檔與被測檔的註解裡都寫滿 `game-over`，所有斷言都在 **stripComments 之後**的原始碼上比對，
+並附四條自我驗證（剝註解有效／沒把程式碼一起剝掉／等長替換／被測檔註解確實消失）——
+v6.139 就是被頁面註解餵成假綠過。
+
+**⚠ 這一版治的是伺服器負載端，不是玩家喊的「卡」。** Fable 5 獨立診斷的真因排序見下一節。
+
+### 玩家「卡」的真因排序（Fable 5 診斷 + 我方查證，尚未實作）
+
+- **B1（最大宗）自己回合每個動作 = 一次阻塞式 RTT，且往返期間 UI 零回饋、連點被丟棄。**
+  樂觀更新白名單只有 `ATTACH_ENERGY` 一種（`src/lib/game/optimistic.ts:33`）。
+  ⭐ **`disabled={tInFlight}` 在整份 `+page.svelte` 出現 0 次**（我 grep 確認）——
+  往返期間按鈕外觀完全不變，第二擊還會被 4796 分支丟棄並跳紅字。玩家翻譯＝「按了沒反應」。
+  物品/支援者幾乎都是 `PLAY_TRAINER` + `RESOLVE_SELECTION` **兩個串行 RTT**，重物品牌組一回合 10~15 次。
+- **B2 跨玩家互動 = 輪詢間隔疊加**：pendingSelection ping-pong 一次 2~3 秒起跳。
+- **B3 渲染端可排除**：hot derived 都是線性掃描、主要 each 都有 iid key、`ensurePoolForStateIds` 有早退。
+- B4 每個 `tApi` 都 `await getIdToken()`（4230），token 每小時刷新那發多一次 Google 往返。
+
+**下一批建議順序**：①`tInFlight` 接視覺 busy 態（純前端、風險最低、體感最大）
+②樂觀更新第二批白名單（`PLAY_BASIC`／`EVOLVE`／`RETREAT`／化石／`USE_STADIUM`／
+`PLAY_TRAINER` 僅限 `PokemonTool`；**不要放** `RESOLVE_SELECTION`）
+③等待端 burst 輪詢，中期做伺服器長輪詢 `/state?wait=1`
+④poll 防自我壅塞（上一發未回就跳過本 tick）⑤RTT 量測經 `/clientdiag` 採樣上報。
+
 ## v6.145 — 「改寫招式所需能量」的特性整族漏掉特性生效閘（7 個點行為端 7/7 中）
 
 **觸發**：Wilson 回報「狙射樹梟ex 特性發動疑似有誤」。
