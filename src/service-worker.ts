@@ -82,6 +82,19 @@ sw.addEventListener('fetch', (event) => {
   // 跳過開發伺服器 hot reload 通道
   if (url.pathname.startsWith('/@vite') || url.pathname.startsWith('/__vite')) return;
 
+  // ⭐⭐⭐v6.149 **API 一律不進 SW**（事故驅動，2026-08-09 網站賽-61 R6 閒置誤判）
+  //   `/api/tournament/…` 是**同源**路徑，原本會落到下面的 network-first：成功寫進 cache、
+  //   ⚠ 這行刻意寫成「…」而不是星號 —— 在 `//` 行註解裡寫 `/` 加星號會被「先剝區塊註解」的
+  //     掃描器當成 block comment 開頭，一路吃掉底下的真程式碼（本版守衛就是這樣抓到我的）。
+  //   **失敗就把同 URL 的舊 200 回給頁面**。連鎖後果：
+  //     ① `tApi` 拿到假成功 → `_tLastPollOkAt` 被更新 ⇒ 唯一偵測斷線的「6 秒輪詢停擺看門狗」
+  //        永遠不會 fire ⇒ 玩家失聯八分鐘，畫面停在舊盤面、零提示。
+  //     ② 進場時抓的 `v=-1` 全量也被快取，而兩個看門狗的救援都是 `v=-1` 且**繞過版本檢查
+  //        直接覆蓋 game** ⇒ 斷線時會把盤面倒轉回開局快照 —— 自癒機制變成餵毒機制。
+  //     ③ `unchanged` 回應帶 `serverNow`，吃到快取版會把時鐘校到過去。
+  //   對戰狀態、賽事、聊天全部是「即時且會變」的資料，**沒有任何一條該被離線快取**。
+  if (url.pathname.startsWith('/api/')) return;
+
   async function respond(): Promise<Response> {
     const cache = await caches.open(CACHE_NAME);
 

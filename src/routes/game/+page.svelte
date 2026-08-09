@@ -166,6 +166,13 @@
   let _tLastPollOkAt = 0;  // v5.591 上次輪詢成功回應時間（看門狗判斷輪詢是否停擺）
   let _tLastStateChangeAt = 0;  // v5.618 上次盤面實際更新時間（新鮮度看門狗：poll 成功卻漏接更新時也能自動重抓）
   let _tLastForceResyncAt = 0;  // v5.618 上次強制重抓時間（節流）
+  // ⭐⭐v6.149 輪詢停擺看門狗的**節流專用**時間戳。
+  //   原本它是直接把 `_tLastPollOkAt` 推到現在來「防重複觸發」—— 那等於**自我安撫**：
+  //   救援成功與否都重置，`_tLastPollOkAt` 因此永遠不會累積成「已失聯 N 秒」，
+  //   也就永遠無法升級成玩家看得到的警示。節流與「上次真的收到伺服器回應」必須分開記。
+  let _tPollStallGuardAt = 0;
+  let _tNetBannerDismissAt = $state(0);   // 玩家手動關掉橫幅的時間（同一次失聯不再重複打擾）
+  //   ⚠ 必須是 $state：plain let 要等下一次 tOfflineSec 重算才收掉橫幅（最多延遲 1 秒，玩家會連點）。
   let _diagSentCount = 0;              // v5.933 客戶端診斷回傳 per-page 上限(3)
   let _freshWatchdogFires = 0;         // v5.933 新鮮度看門狗連續觸發次數(盤面 tAdopt 即歸零)
   let _invisibleHandDiagSent = false;  // v5.933 隱形手牌指紋已回傳一次(避免每 tick 重送)
@@ -265,13 +272,19 @@
         //   (看不到對手 KO 我方 → 無法換新戰鬥位 → 被閒置判敗)。伺服器權威，重抓永遠安全。
         // v6.146 對戰已結束 → 盤面不會再動，這條「自癒」沒有對象，只是每 6 秒白抓一份全量 gameState。
         const _tOver = !!game && (game as any).phase === 'game-over';
-        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000) {
-          _tLastPollOkAt = Date.now();  // 防重複觸發
+        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLastPollOkAt > 0
+            && (Date.now() - _tLastPollOkAt) > 6000 && (Date.now() - _tPollStallGuardAt) > 6000) {
+          _tPollStallGuardAt = Date.now();  // v6.149 只節流，**不**動 _tLastPollOkAt（見宣告處）
           // v5.593 輪詢停擺 → 立即強制重抓最新狀態並「強制採用」(伺服器權威，繞過版本檢查) + 重啟輪詢，
           //   治「第一隻昏厥後 client 沒收到 active=空 → 無法換場 → 閒置判敗」型卡住，最多 6~7 秒自動恢復。
           (async () => {
             try {
               const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+              // ⭐⭐v6.149（Fable 5 審查）：救援成功也是**貨真價實的伺服器回應**，必須算進存活。
+              //   否則 RTT 持續 ≥6 秒時形成活鎖：看門狗每 6 秒 ++tPollGen，在途 poll 全被
+              //   `gen !== tPollGen` 丟棄而不記存活 ⇒ _tLastPollOkAt 永遠不前進 ⇒
+              //   橫幅一直爬升、每 6 秒再送一發 v=-1 全量（失聯時反而加重）。
+              if (fr) _tLastPollOkAt = Date.now();
               if (fr && fr.gameState) { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }
               if (fr && typeof fr.serverNow === 'number') tClockOffset = fr.serverNow - Date.now();
               if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
@@ -4701,6 +4714,7 @@
     if (!isTournament || isTournSpectator || !tActiveRoom) return;
     try {
       const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+      if (fr) _tLastPollOkAt = Date.now();   // v6.149 同上：手動/看門狗同步成功也算存活（按了鈕橫幅要能立刻收掉）
       if (fr && fr.gameState && typeof fr.version === 'number') {
         if (fr.version !== tVersion) {
           void ensurePoolForStateIds(fr.gameState); game = fr.gameState; tVersion = fr.version; tStep = 'playing';  // 漏接或客戶端超前 → 一律回正;v5.932 補 ensurePoolForStateIds(比照 tAdopt,避免對手卡包未載渲染成'?')
@@ -4846,6 +4860,19 @@
   //   ⚠ 刻意**只** disable「會送出動作的元素」，不做全畫面遮罩 ——
   //     tApi 有 12 秒逾時保護，全域遮罩會讓網路卡住時玩家連設定/離開/放大鏡都按不了。
   const actionBusy = $derived(isTournament && tInFlight);
+
+  // ⭐⭐⭐v6.149 連線健康橫幅 —— 事故驅動（2026-08-09 網站賽-61 R6）。
+  //   玩家與伺服器失聯約 8 分鐘，畫面停在「對手回合」的舊盤面、本地把對手的閒置倒數走到 0，
+  //   於是他看到「對方閒置超時」；伺服器依權威盤面判的卻是他自己閒置逾時。
+  //   ⚠ 當時三處失敗路徑（輪詢 / 兩個看門狗）**全部靜默 catch**，畫面沒有任何一個像素提示。
+  //   ⚠ 這個秒數必須是「上次真的收到伺服器回應」到現在，不能被看門狗的自我安撫重置。
+  const tOfflineSec = $derived(
+    isTournament && tStep === 'playing' && !!game && (game as { phase?: string }).phase !== 'game-over'
+    && !isTournSpectator && _tLastPollOkAt > 0
+      ? Math.max(0, Math.floor((tNow - _tLastPollOkAt) / 1000))
+      : 0,
+  );
+  const tNetBannerOn = $derived(tOfflineSec >= 10 && _tNetBannerDismissAt < _tLastPollOkAt);
 
   async function tournamentDispatch(action: any, _retried = false) {
     // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
@@ -8251,6 +8278,20 @@
     ></audio>
   {/if}
 
+  <!-- ⭐⭐v6.149 連線健康橫幅：失聯 10 秒以上就明講，並提醒閒置倒數仍在跑。
+       ⚠⚠ 必須放在「手機直式 vs 桌機」那個版面分支的**外面** —— 第一版寫在桌機那半邊，
+       ⚠ 這行刻意不把該分支的條件字面寫出來：既有守衛是用「第一個含該字串的行」定位分支起點，
+         寫在註解裡會變成假錨點（v6.139 被頁面註解騙過一次，這裡是同一個坑）。
+         分支裡，手機直式玩家完全看不到，而註解還寫著「不在 isPortraitMobile 分支內」
+         （Fable 5 審查抓到：註解與碼相反）。事故當事人很可能就是手機玩家。
+         同 v6.122 補位 modal 的既定做法：兩版共用的東西一律放在分支外。 -->
+  {#if tNetBannerOn}
+    <div class="net-warn-banner" role="alert">
+      <span>⚠ 與伺服器失聯 {tOfflineSec} 秒 —— 畫面可能不是最新的，閒置判負的倒數仍在計算。</span>
+      <button class="net-warn-btn" onclick={() => { tForceResync(); startTournamentPoll(); }}>🔄 立即重新同步</button>
+      <button class="net-warn-x" title="關閉提示" onclick={() => { _tNetBannerDismissAt = Date.now(); }}>✕</button>
+    </div>
+  {/if}
   {#if isPortraitMobile && game}
     <MobilePortraitBattle
       {game}
@@ -13067,6 +13108,14 @@
   .version-chip{ background:#2a1a3a; color:#c0a0e0; border-color:#4a3a6a; font-family:monospace; }
   .wait-chip{ background:#3a2a1a; color:#fa8; border-color:#5a3a1a; }
   .syncing-chip{ background:#3a3a1a; color:#ff8; border-color:#5a5a1a; }
+  /* v6.149 連線健康橫幅（失聯提示）*/
+  .net-warn-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
+    background:#5a1f1f; color:#ffdede; border:1px solid #a34; border-radius:6px;
+    padding:.45rem .8rem; margin:0 0 .4rem; font-size:.9rem; font-weight:600; }
+  .net-warn-btn{ background:#fff; color:#7a1f1f; border:none; border-radius:4px; padding:.2rem .6rem;
+    font:inherit; font-weight:700; cursor:pointer; }
+  .net-warn-x{ background:transparent; color:#ffdede; border:1px solid #a34; border-radius:4px;
+    padding:.1rem .4rem; font:inherit; cursor:pointer; }
   /* v6.147 錦標賽動作送出中：手牌整排變淡且不可拖（真正的擋是 onpointerdown 的 gate，這裡只是視覺回饋） */
   .hand-card.action-busy{ opacity:.5; cursor:progress; }
   .fs-chip{ background:#1a2a3a; color:#8cf; border-color:#2a4a6a; cursor:pointer; font-size:0.68rem; }

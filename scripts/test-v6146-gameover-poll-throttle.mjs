@@ -62,7 +62,9 @@ T('⭐⭐輪詢節奏必須收斂在單一中央述詞 tPollDesiredMs（v6.148 �
 });
 
 T('⭐⭐輪詢停擺看門狗（6 秒）：對戰結束後不得再抓 v=-1 全量盤面', () => {
-  const seg = sliceBetween(SRC, "_tLastPollOkAt > 0 && (Date.now() - _tLastPollOkAt) > 6000", 'startTournamentPoll();');
+  // ⚠ 錨點只取「不會因為換行/加條件而變動」的最短片段（v6.149 把這個 if 拆成多行時，
+  //   原本含 `&&` 的長錨點就失效了 —— 守衛應該鎖語義，不是鎖排版）。
+  const seg = sliceBetween(SRC, "(Date.now() - _tLastPollOkAt) > 6000", 'startTournamentPoll();');
   const cond = SRC.slice(SRC.indexOf("if (tStep === 'playing' && game &&", SRC.indexOf('notifyScan([], tMyMatch, tNow);')), SRC.indexOf('_tLastPollOkAt = Date.now();  '));
   assert.ok(/_tOver/.test(cond), '條件沒有排除 game-over（缺 !_tOver）');
   assert.ok(seg.includes('v=-1'), '前提：這條看門狗確實會抓 v=-1（錨點還對）');
@@ -119,8 +121,11 @@ T('⭐⭐降頻計數器是 closure 變數 → startTournamentPoll() 的呼叫�
   //   任何人重建 timer 就會把計數歸零、降頻靜默失效。目前 4 個呼叫點中的兩個看門狗
   //   已被 !_tOver 擋住，另兩個是人為進場（本來就該歸零）。
   //   ⇒ 鎖住「呼叫點總數」，有人新增第五個就會紅，逼他回來想清楚。
+  // v6.149：+1 = 連線健康橫幅的「立即重新同步」按鈕。它安全，因為：
+  //   ①那是玩家手動按的，重建 timer 只會多送一發，之後仍由 tPollDesiredMs 決定節奏；
+  //   ②橫幅本身已排除 game-over（沒有東西要同步），所以不會在降頻期間被按到。
   const sites = [...SRC.matchAll(/startTournamentPoll\(\)/g)].length;
-  assert.equal(sites, 5, `startTournamentPoll() 出現 ${sites} 次（1 個定義 + 4 個呼叫）。`
+  assert.equal(sites, 6, `startTournamentPoll() 出現 ${sites} 次（1 個定義 + 5 個呼叫）。`
     + '新增呼叫點時請確認：它會不會在 game-over 之後重建 timer 而讓降頻失效？確認後再更新這個數字。');
 });
 
