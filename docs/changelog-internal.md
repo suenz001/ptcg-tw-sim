@@ -17,6 +17,47 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.155 — 監控分頁第一次上線就被自己的誤報淹沒（setup 指紋收斂）
+
+**事故**：v6.154 的監控分頁上線後 24 小時內 `setup-watchdog-repeat` 收到 **118 次 / 59 人**，
+幾乎每個參賽者都中，站長以為是「開局同步卡住」的真 bug。
+
+**判讀**（兩筆真實 payload）：`sincePollOk` 只有 **211ms / 944ms** ⇒ 輪詢完全正常、沒斷線；
+`sinceStateChange` 12.3s / 15.2s ⇒ 伺服器盤面真的沒動，因為**在等某個人做開局選擇**。
+舊判準 `_freshWatchdogFires >= 2 && phase === 'setup'`，而 setup 門檻 3500ms + 節流 8000ms
+⇒ 實際是「盤面連續約 11.5 秒沒變就回報」。人類看揭示／選出場／放備戰本來就超過 11.5 秒。
+⭐ **雜訊最大的傷害不是吵，是把真訊號淹掉** —— 下次真的有人卡住會埋在 118 筆裡找不到。
+
+**修法（只改「要不要回報」，看門狗的自癒完全不動）**：
+- 新增中央述詞 `_setupSelfPending(g, seat)`，回傳我這邊卡在哪一步（四種）或 `null`（都做完了）。
+  欄位缺席一律回 `null` —— **fail-closed 到不回報**，寧可漏報也不製造新雜訊。
+- 判準改成三條同時成立：①我這邊確實還有動作沒做 ②盤面 60 秒沒動 ③每場只報一次。
+- payload 加 `selfPending`，讓「等對手」與「我卡住」日後分得出來。
+- `tLeaveMatch` 重置 `_setupDiagSent` / `_invisibleHandDiagSent`（跨場次殘留會讓下一場漏報）。
+
+**⚠ `visHand` 一直是假證據**：選擇器只認桌機的 `.hand-strip .hand-card`，
+手機直式用的是 `.mp-hand-card` ⇒ **手機上這個數字恆為 0**。所以樣本裡 iPhone 的 `visHand:0`
+不能當「手牌隱形」的證據，而且 `invisible-hand` 指紋在手機上等於無條件成立。
+已抽成 `_countVisibleHandCards()` 同時數兩套 class。
+⚠ `.mp-hand-card.arriving` 是**死查詢**（arrivingIids 只接在桌機），手機端 `arrivingDom` 恆 0，
+判讀手機 payload 要看 `render.arrivingSize`（那是 state 不是 DOM）。已在碼上註明。
+
+**⭐⭐ Fable 5 審查抓到的漏報路徑（同版補上）**：
+`manual-sync` 會吃掉每頁 3 發的診斷配額，而**玩家覺得卡的時候最愛按「等待對手 🔄」**；
+更糟的是伺服器的 per-uid 60 秒節流**不分 reason** ⇒ 剛按過手動同步、緊接著觸發的
+`setup-watchdog-repeat` 會被 throttle 丟掉，而 client 已把 `_setupDiagSent` 設 true 不會重送
+⇒ **真訊號被 manual-sync 吃掉**。改成 manual-sync 不佔配額 + 自帶 60 秒節流。
+
+**Fable 5 指出、留到下一版的靜音死角**：雙方 `setupDone=true`、mulligan 旗標全清、
+但 `openingFinalized`/tryAdvanceToPlaying 卡住 ⇒ 兩邊 `selfPending` 都是 null、**永遠不報**。
+建議加降級指紋 `setup-stalled-both-done`（雙方都做完 + 120 秒沒動）。
+
+admin 的指紋說明文字同步改成新語意（⚠ admin 走 `update-admin-full.bat` 另一條部署路），
+版本 v1.67 → v1.68。順手把 `docs/handoff-v6150-v6154-錦標賽lag與監控.md` 帶進版控。
+
+**守衛** `scripts/test-v6155-setup-diag-noise.mjs`（14 項，對 v6.154 跑 10 FAIL）——
+把 `_setupSelfPending` 從原始碼抽出來用 `new Function` **實跑**，含兩筆真實樣本重演。
+
 ## v6.154 — admin 新增「📡 監控」分頁（連線設定 ＋ 玩家端異常指紋）
 
 站長要求把兩件事都放進 https://www.ptcg-tw-sim.com/admin 的獨立分頁，不要再下指令。

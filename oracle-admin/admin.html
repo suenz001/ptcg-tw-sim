@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.67</title>
+<title>PTCG Oracle Admin v1.68</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.67</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.68</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2586,7 +2586,7 @@ const MON_REASON_INFO = {
   'invisible-hand': ['手牌有卡卻一張都沒畫出來',
     '開局同步的老問題（v5.932 已修根因），再出現要回頭查。'],
   'setup-watchdog-repeat': ['開局同步連續卡住',
-    '放出場／重抽階段的盤面沒同步過來，強制重抓後仍卡。'],
+    '自己還有開局待辦（放出場／重抽／確認揭示），但盤面 60 秒沒有任何更新。單純在等對手不會觸發。明細的 state.selfPending 顯示卡在哪一步。'],
   'manual-sync': ['玩家自己按了「重新同步」',
     '不一定是 bug，但次數變多代表玩家覺得畫面不對。'],
 };

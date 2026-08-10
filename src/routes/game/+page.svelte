@@ -191,8 +191,42 @@
   let tAuthLost = $state(false);
   //   ⚠ 必須是 $state：plain let 要等下一次 tOfflineSec 重算才收掉橫幅（最多延遲 1 秒，玩家會連點）。
   let _diagSentCount = 0;              // v5.933 客戶端診斷回傳 per-page 上限(3)
+  let _lastManualDiagAt = 0;           // v6.155 manual-sync 自帶節流（不佔上述配額）
   let _freshWatchdogFires = 0;         // v5.933 新鮮度看門狗連續觸發次數(盤面 tAdopt 即歸零)
   let _invisibleHandDiagSent = false;  // v5.933 隱形手牌指紋已回傳一次(避免每 tick 重送)
+  let _setupDiagSent = false;          // v6.155 setup 指紋每場只回報一次
+
+/** v6.155 目前畫面上真的畫出來的手牌張數 —— 桌機與手機直式是兩套 class，兩邊都要數。 */
+function _countVisibleHandCards(): number {
+  if (typeof document === 'undefined') return -1;
+  return document.querySelectorAll('.hand-strip .hand-card, .mp-hand-card').length;
+}
+
+/**
+ * ⭐⭐v6.155 setup 階段「輪到我、我卻動不了」的中央述詞。
+ *
+ * 事故：v6.154 上線後監控收到 `setup-watchdog-repeat` **118 次 / 59 人** —— 幾乎每個參賽者都中。
+ *   實際查兩筆樣本：`sincePollOk` 只有 211ms / 944ms（輪詢完全正常、沒斷線），
+ *   `sinceStateChange` 12.3s / 15.2s（伺服器盤面真的沒動）。原因很單純：**在等對方做開局選擇**。
+ *   舊判準是「setup 期間盤面連續約 11.5 秒沒變」（3.5s 門檻 + 8s 節流 → 第 2 次 fire），
+ *   而人類看揭示、選出場、放備戰本來就會超過 11.5 秒 ⇒ 判準太敏感，不是 bug。
+ *   ⚠ 這種雜訊最大的傷害不是吵，是**把真訊號淹掉**：下次真的有人卡住，會埋在 118 筆裡找不到。
+ *
+ * 修法（保留原始意圖、只砍雜訊）：
+ *   ・看門狗本身的自癒完全不動（仍是 setup 3.5 秒就強制重抓）—— 只改「要不要回報診斷」。
+ *   ・只有「**我這邊還有動作沒做**」才算異常；已經做完在等對手，盤面不動是正常的。
+ *   ・門檻拉到 60 秒（遠高於人類讀牌/選牌的時間），且每場只報一次。
+ */
+function _setupSelfPending(g: any, seat: number): string | null {
+  if (!g || g.phase !== 'setup' || seat !== 0 && seat !== 1) return null;
+  // ⚠ 逐項都用「明確為真」判斷，欄位缺席（舊版伺服器/舊盤面）一律當成「沒有待辦」——
+  //   fail-closed 到「不回報」，寧可漏報也不要製造新的雜訊。
+  if (g.setupDone?.[seat] === false) return 'setup-not-done';
+  if ((g.pendingMulliganDraw?.[seat] ?? 0) > 0) return 'mulligan-draw';
+  if (g.mulliganRevealConfirmed?.[seat] === false) return 'reveal-not-confirmed';
+  if (g.mulliganPostBenchOpen?.[seat] === true) return 'post-bench-open';
+  return null;
+}
   const T_API = '/api/tournament';
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
@@ -330,7 +364,15 @@
           _tLastForceResyncAt = Date.now();
           _freshWatchdogFires++;  // v5.933 連續觸發計數
           if (_freshWatchdogFires === 1) _freshWatchdogVersionAt = tVersion;
-          if (_freshWatchdogFires >= 2 && game && game.phase === 'setup') _tSendClientDiag('setup-watchdog-repeat');  // v5.933 force-resync 後仍卡 → 回傳診斷
+          // ⭐⭐v6.155 setup 指紋收斂（見 _setupSelfPending 的註解）：
+          //   舊判準「連續觸發 2 次」＝盤面約 11.5 秒沒變就報 ⇒ 118 次 / 59 人 的雜訊。
+          //   新判準：①我這邊確實還有動作沒做（純等對手不算異常）②盤面 60 秒沒動 ③每場只報一次。
+          if (!_setupDiagSent && game && game.phase === 'setup'
+              && _setupSelfPending(game, mySeatIdx) !== null
+              && (Date.now() - _tLastStateChangeAt) > 60000) {
+            _setupDiagSent = true;
+            _tSendClientDiag('setup-watchdog-repeat');
+          }
           // ⭐v6.151 新增 stale-version 指紋：**playing 階段的版本卡住**原本不屬於任何現有診斷
           //   指紋，什麼都不會回傳（v6.149 事故就是這一類，只能靠玩家口述還原）。
           //   判準＝看門狗連續觸發 3 次、而 tVersion 一步都沒有前進。
@@ -342,7 +384,10 @@
         if (tStep === 'playing' && game && !isTournSpectator && !_invisibleHandDiagSent && arrivingIids.size > 0) {
           const _hl = game.players?.[mySeatIdx]?.hand?.length ?? 0;
           if (_hl > 0) {
-            let _vis = -1; try { _vis = document.querySelectorAll('.hand-strip .hand-card').length; } catch { /* */ }
+            // v6.155 ⚠ 原本只認桌機的 .hand-strip .hand-card —— 手機直式用的是 .mp-hand-card，
+            //   於是手機上這個數字**恆為 0**，害 invisible-hand 在手機端形同無條件成立、
+            //   也讓 setup 診斷 payload 裡的 visHand 在手機上完全不能當證據。
+            let _vis = -1; try { _vis = _countVisibleHandCards(); } catch { /* */ }
             if (_vis === 0) { _invisibleHandDiagSent = true; _tSendClientDiag('invisible-hand'); }
           }
         }
@@ -4468,6 +4513,7 @@
     // v6.151 跨場次殘留清乾淨：actorSeat 帶著上一場的值，會讓下一場在第一個輪詢回來之前
     //   用錯的方向算倒數；RTT 樣本混到上一場則會讓 slow-rtt 指紋掛在錯誤的場次上。
     tServerActorSeat = undefined; _rttSamples = []; _rttDiagSent = false;
+    _setupDiagSent = false; _invisibleHandDiagSent = false;   // v6.155 診斷旗標同樣是每場一次，殘留會讓下一場漏報
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
@@ -4754,13 +4800,30 @@
   // v5.933 客戶端診斷回傳(setup/同步異常定根因/確認用)——只在真異常指紋才送,fire-and-forget,絕不阻塞/影響對戰。
   function _tSendClientDiag(reason: string) {
     try {
+      const now0 = Date.now();
       if (!isTournament || isTournSpectator || !tActiveRoom) return;
-      if (_diagSentCount >= 3) return;
-      _diagSentCount++;
+      // ⭐⭐v6.155（Fable 5 審查）：`manual-sync` 不佔每頁 3 發的配額，且自帶 60 秒節流。
+      //   兩條真實的漏報路徑：
+      //   ①玩家覺得卡的時候最愛按「等待對手 🔄」，三下就把配額用光 ⇒ 之後**所有**指紋全靜音；
+      //   ②伺服器的 per-uid 60 秒節流**不分 reason** ⇒ 剛按過手動同步，緊接著觸發的
+      //     `setup-watchdog-repeat` 會被 throttle 丟掉，而 client 已把 `_setupDiagSent` 設 true
+      //     不會重送 ⇒ **真訊號被 manual-sync 吃掉**。
+      //   manual-sync 本來就「不一定是 bug」，不該排擠真異常指紋。
+      const _isManual = reason === 'manual-sync';
+      if (_isManual) {
+        if (now0 - _lastManualDiagAt < 60000) return;
+        _lastManualDiagAt = now0;
+      } else {
+        if (_diagSentCount >= 3) return;
+        _diagSentCount++;
+      }
       const g: any = game;
       let visHand = -1, arrivingDom = -1;
-      try { visHand = document.querySelectorAll('.hand-strip .hand-card').length; } catch { /* */ }
-      try { arrivingDom = document.querySelectorAll('.hand-strip .hand-card.arriving').length; } catch { /* */ }
+      try { visHand = _countVisibleHandCards(); } catch { /* */ }
+      // ⚠ v6.155：手機直式的手牌**沒有** arriving class（整套 arrivingIids 只接在桌機 hand-card），
+      //   所以 `.mp-hand-card.arriving` 是死查詢、手機端這個值恆為 0。
+      //   判讀手機的 payload 請看 `render.arrivingSize`（那是 state 不是 DOM），別把 0 讀成「沒有殘留」。
+      try { arrivingDom = document.querySelectorAll('.hand-strip .hand-card.arriving, .mp-hand-card.arriving').length; } catch { /* */ }
       const now = Date.now();
       const payload = {
         reason, room: tActiveRoom, ts: now, ver: VERSION,
@@ -4769,6 +4832,9 @@
           pendingMulliganDraw: g?.pendingMulliganDraw ?? null, mulliganRevealConfirmed: g?.mulliganRevealConfirmed ?? null,
           mulliganPostBenchOpen: g?.mulliganPostBenchOpen ?? null,
           actorSeat: (() => { try { return tCurrentActorSeat(g); } catch { return null; } })(), mySeatIdx,
+          // v6.155：null = 我這邊都做完了（在等對手）；有值 = 我還有這件事沒做。
+          //   舊版診斷分不出這兩種，是誤報淹沒真訊號的主因。
+          selfPending: (() => { try { return _setupSelfPending(g, mySeatIdx); } catch { return null; } })(),
         },
         render: {
           coinFlipStage, arrivingSize: arrivingIids.size, drawAnims: drawAnims.length,
