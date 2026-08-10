@@ -17,6 +17,96 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.157 — 根治錦標賽「開局死角」（伺服器端 level-triggered 補推）
+
+### 症狀
+
+錦標賽偶發：雙方都已經放好戰鬥場、都按過「準備完成」，畫面卻一直停在準備階段不開打。
+兩個人都以為在等對方，誰也不會再送任何動作，最後被閒置掃描判掉
+（v6.156 之後是改記平手 `pending-admin`、丟給站長人工裁定）。
+
+### 真因：`tryAdvanceToPlaying` 是 **edge-triggered**
+
+`src/lib/game/engine.ts` 的 `tryAdvanceToPlaying(state)` 是 setup → playing 的守門員，
+要五個條件同時成立才推進：
+①互動式開局已定案 ②雙方 `setupDone` ③`pendingMulliganDraw` 皆 0
+④`mulliganRevealConfirmed` 雙 true ⑤`mulliganPostBenchOpen` 皆 false。
+條件沒到就**原樣回傳**（冪等、安全）。
+
+問題不在條件，而在**誰來呼叫它**：全站只有 `applyAction` 內 4 個 handler 結尾會呼叫
+（FINISH_SETUP / MULLIGAN_DRAW_DECISION / CONFIRM_MULLIGAN_REVEAL /
+FINISH_MULLIGAN_POST_BENCH），`oracle-admin/server_admin_patch.js` 的呼叫次數是 **0**。
+於是只要「讓五個條件湊齊的最後一筆狀態變化」走的是**不呼叫它**的路徑
+（線上 setup 合併 `mergeSetupMonotonic`／CAS 寫回／版本 skew 補寫），
+而兩位玩家又都在等對方、不會再送 action ⇒ **永遠沒有人來推它**。
+
+⚠ 先前一度懷疑是「引擎與伺服器的判準不一致」，已被反證推翻，別再往那個方向查：
+`effectiveOpeningDone` 是 `openingDone[i] || setupDone[i]`，所以 `setupDone` 為 true
+就視為開局已定案 ⇒ 死角當下 `isOpeningInProgress` 必為 false ⇒ 五個條件其實全部成立、
+引擎**願意**推進；伺服器 `currentActorSeat` 的 opening 分支同樣被 `&& !setupDone` 收掉，
+兩邊一致。純粹是沒有人去按那個開關。
+
+### 改動（兩處）
+
+**(A) `scripts/build-server-engine.mjs`**：entry 加上 `tryAdvanceToPlaying` 的 import/export。
+在此之前伺服器端根本拿不到這個函式。
+
+**(B) `oracle-admin/server_admin_patch.js`**（v1.08）：既有的閒置掃描裡，掃到
+`gs.phase === 'setup'` 就先跑一次 `TENG.tryAdvanceToPlaying(gs)`（level-triggered）。
+推得動就：**CAS 寫回** + bump 版本 + **更新 `lastActionAt`** + 房間 log 留一則系統訊息
++ 大廳聊天室公告 + `continue`（本輪不判任何人輸贏）。推不動就原樣落回 v6.156 的
+`pending-admin` 行為，一字未改。
+
+幾個踩過坑才有的細節：
+
+- **必須 CAS**。這是繼 v6.151 `idleWarn60` 之後第二個「非終局的整包寫回」。
+  讀 doc 到寫回之間玩家可能剛好送出動作，沒有 CAS 會把它整個蓋掉，
+  **而且版本號一樣**（都是 `room.version + 1`）⇒ client 的 `?v=cv` 版本比對全回
+  unchanged，自癒完全失效。CAS 未命中 ⇒ 盤面本來就在動 ⇒ 這場根本不是死角。
+- **`lastActionAt` 一定要更新**。行動權才剛交給先手方，閒置倒數必須從現在重新起算，
+  否則 30 秒後的下一輪掃描會拿「卡住的那段時間」直接把剛拿到行動權的人判負。
+  （這與 v6.151 的 60 秒警告刻意**不動** `lastActionAt` 剛好相反 —— 那邊動了等於幫
+  掛機方重置倒數；這邊不動等於處罰無辜的人。判準是「盤面有沒有因為我而前進」。）
+- **判「有沒有真的推進」用 `phase`，不用物件同一性**。條件不滿足時引擎回的是同一個
+  參考，但哪天改成回淺拷貝，比同一性就會靜默失效（v6.148 gate⑤b 的教訓）。
+- **fail-open 且必須出聲**。舊的 `server-engine.cjs` 沒有這個 export，
+  `typeof TENG.tryAdvanceToPlaying !== 'function'` 就跳過（比照 `validateDeck` 的既有寫法），
+  但要 `console.warn` 提示跑 `update-tournament.bat`。
+  ⚠ 只 warn 一次（`global.__ptcgSetupAdvanceWarned`）—— 伺服器引擎是所有對局共用，
+  每 30 秒對每一場印一行會灌爆 pm2 log（v5.636 就是這樣把 error.log 灌爆的）。
+- **讀 room 不加 projection**（v6.119 教訓：整包寫回會把 log 永久洗掉）。
+- 補推的觸發時點沿用既有閒置掃描 ⇒ 最晚會在「閒置門檻（預設 3 分鐘）+ 一個 tick」內自癒，
+  而且**搶在** `pending-admin` 之前。不另外加一條每 30 秒掃全部 playing match 的迴圈，
+  那會把 v6.119 的降載整個吃回去。
+
+### 守衛 `scripts/test-v6157-setup-advance-level-triggered.mjs`（39 條）
+
+把兩個改過的檔還原成 v6.156 重跑 ⇒ **17 條 FAIL**（HEAD-FAIL 已實測）。
+
+- 靜態端：entry 有 import/export；伺服器**真的呼叫**了它；呼叫點在「算 actor」與
+  `pending-admin` **之前**；寫回**在** `if (advanced.phase === 'playing')` 區塊內
+  （用括號平衡切區塊，斷言的是**位置**——「有呼叫某函式」不等於「那件事有發生」，
+  v6.137 假回滾就是這樣亮綠燈的）；CAS filter、`version+1`、`lastActionAt`、`actorSeat`
+  逐項；fail-open 與去重旗標。
+- 行為端：把補推區塊的**真程式碼**切出來，配**真引擎** + 假 DB 實跑 8 個情境
+  （死角 / 條件沒滿足 / 只有一方 done / playing 房 / 舊 bundle / CAS 未命中 / version 非數值）。
+  死角盤面是用真實成因造的：雙方各自 `FINISH_SETUP`，再把兩半合起來。
+- 剝註解的掃描器**保長度**（剝除後索引與原檔逐字元對齊，位置關係斷言才成立），
+  並附 6 條自我驗證：`//` 註解裡的 `/api/*` 不會被當 block comment 吃掉真程式碼、
+  多行 block comment 要整段剝掉、`http://` 不會被誤判、`mode='all'` 與 `'comments'`
+  行為正確、剝完既有真程式碼還在（沒剝爆）。
+- ⚠ 第 3 節（引擎行為）在 v6.156 **也會 PASS**，檔內已明確標註它不算 HEAD-FAIL 證明。
+
+### 部署
+
+改到 bundle 進入點與 Oracle 伺服器 ⇒ Wilson 需跑 `update-tournament.bat`（重建
+`server-engine.cjs`，否則新 export 不存在、補推被 fail-open 跳過）與 `redeploy-oracle.bat`。
+
+### 首頁 changelog
+
+**不放**。判準是「玩家看了之後有任何要做的事、或感受得到的規則差異嗎」——
+這是伺服器端自癒，玩家沒有任何要做的事。
+
 ## v6.156 — 閒置判負前的「我還在」確認框 ＋ Fable 5 最終審查修正
 
 站長 2026-08-10 的裁定：「我不會一直去監控啊，應該是要提醒他們『系統已經計時囉』，

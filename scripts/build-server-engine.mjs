@@ -1,5 +1,5 @@
 // 伺服器權威用：把遊戲引擎打包成 Node CJS bundle，給 Oracle 伺服器(server_admin_patch.js)require。
-//   輸出 oracle-admin/tournament/server-engine.cjs，export { createGame, applyAction } + 瑞士制純函式(pairSwissRound/computeStandings/seedTopCut/buildSwissPlayersFromMatches/...)
+//   輸出 oracle-admin/tournament/server-engine.cjs，export { createGame, applyAction, tryAdvanceToPlaying } + 瑞士制純函式(pairSwissRound/computeStandings/seedTopCut/buildSwissPlayersFromMatches/...)
 import { build } from 'esbuild';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -9,10 +9,15 @@ const STUB = join(ROOT, 'oracle-admin/tournament/.appstub.js');
 writeFileSync(STUB, 'export const base = "";');
 const ENTRY = join(ROOT, 'oracle-admin/tournament/.engine-entry.ts');
 writeFileSync(ENTRY, `
-import { createGame, applyAction } from '$lib/game/engine';
+import { createGame, applyAction, tryAdvanceToPlaying } from '$lib/game/engine';
 import type { Card } from '$lib/cards/types';
 // buildPool：從 static/cards/*.json 組 pool（伺服器端用 fs 讀，故這裡只 re-export engine 函式）
-export { createGame, applyAction };
+// v6.157 tryAdvanceToPlaying：setup -> playing 的推進 gate（五個條件的守門員）。
+//   引擎內部只在 applyAction 的 handler 結尾呼叫它＝**edge-triggered**；當「讓條件湊齊的
+//   最後一筆狀態變化」走的是不呼叫它的路徑（線上 setup 合併／CAS 寫回／版本 skew 補寫），
+//   而雙方玩家都在等對方、不會再送 action ⇒ **永遠沒有人來推它**，房間卡死在 setup。
+//   ⇒ 伺服器的閒置掃描要能自己 level-triggered 地補推一次，故必須 export 出去。
+export { createGame, applyAction, tryAdvanceToPlaying };
 export type { Card };
 // 瑞士制純函式（單一真相來源，harness 已驗）：伺服器 server_admin_patch.js 透過 TENG.* 使用
 export * from '$lib/tournament/swiss';
