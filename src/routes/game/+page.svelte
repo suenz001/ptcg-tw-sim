@@ -145,6 +145,10 @@
   // v6.151 回前景時間：背景頁籤的 setInterval 會被節流，tNow 停在舊值 ⇒ 一回前景會先算出
   //   「剩 0 秒」嚇人。短暫抑制倒數提示，等下一次 tick 對時後再顯示。
   let _tForegroundAt = $state(0);
+  // ⭐v6.152 伺服器是否已啟用長輪詢（灰度旗標，伺服器端預設關閉）。
+  //   **只有伺服器宣告啟用後 client 才會送 `wait=1`**，所以旗標關著時行為與 v6.151 逐字相同。
+  let tLongPollReady = $state(false);
+  let _tLongPollAt = 0;                // 長輪詢在途的送出時間（0 = 沒有在途）
   let _rttSamples: number[] = [];      // v6.151 動作往返時間取樣（只在明顯偏慢時回報一次）
   let _rttDiagSent = false;
   let _freshWatchdogVersionAt = -1;    // v6.151 新鮮度看門狗第一次觸發當下的版本
@@ -285,7 +289,10 @@
         //   (看不到對手 KO 我方 → 無法換新戰鬥位 → 被閒置判敗)。伺服器權威，重抓永遠安全。
         // v6.146 對戰已結束 → 盤面不會再動，這條「自癒」沒有對象，只是每 6 秒白抓一份全量 gameState。
         const _tOver = !!game && (game as any).phase === 'game-over';
-        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLastPollOkAt > 0
+        // ⚠v6.152 長輪詢在途時**不算停擺** —— 那一發本來就會掛在伺服器最多 25 秒，
+        //   6 秒沒回應是正常的。若真的黑洞，30 秒逾時後 _tLongPollAt 歸零，這條看門狗自動恢復。
+        const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < 30000;
+        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLastPollOkAt > 0 && !_lpInFlight
             && (Date.now() - _tLastPollOkAt) > 6000 && (Date.now() - _tPollStallGuardAt) > 6000) {
           _tPollStallGuardAt = Date.now();  // v6.149 只節流，**不**動 _tLastPollOkAt（見宣告處）
           // v5.593 輪詢停擺 → 立即強制重抓最新狀態並「強制採用」(伺服器權威，繞過版本檢查) + 重啟輪詢，
@@ -4448,6 +4455,7 @@
       if (sst && typeof sst.lastActionAt === 'number') tLastActionAt = sst.lastActionAt;
       if (sst && typeof sst.idleForfeitMin === 'number') tIdleMin = sst.idleForfeitMin;
       if (sst && 'actorSeat' in sst) tServerActorSeat = (typeof sst.actorSeat === 'number' ? sst.actorSeat : null);   // v6.151 伺服器權威
+      if (sst && typeof sst.longPoll === 'boolean') tLongPollReady = sst.longPoll;   // v6.152
       if (sst && typeof sst.serverNow === 'number') tClockOffset = sst.serverNow - Date.now();
       tNow = Date.now() + tClockOffset;
       startTournamentPoll();
@@ -4460,6 +4468,7 @@
     // v6.151 跨場次殘留清乾淨：actorSeat 帶著上一場的值，會讓下一場在第一個輪詢回來之前
     //   用錯的方向算倒數；RTT 樣本混到上一場則會讓 slow-rtt 指紋掛在錯誤的場次上。
     tServerActorSeat = undefined; _rttSamples = []; _rttDiagSent = false;
+    tLongPollReady = false; _tLongPollAt = 0;   // v6.152
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
     tournLoadEvent(); tBracketLoad();
@@ -4801,6 +4810,7 @@
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
       if (fr && 'actorSeat' in fr) tServerActorSeat = (typeof fr.actorSeat === 'number' ? fr.actorSeat : null);   // v6.151 伺服器權威
+      if (fr && typeof fr.longPoll === 'boolean') tLongPollReady = fr.longPoll;   // v6.152
       if (fr && typeof fr.serverNow === 'number') { tClockOffset = fr.serverNow - Date.now(); tNow = Date.now() + tClockOffset; }
       tAuthLost = false;   // v6.150 同步成功 ⇒ 身分是好的
     } catch (e: any) { if (e && e.status === 401) tAuthLost = true; /* 其餘忽略 */ }
@@ -4897,12 +4907,20 @@
       // ⭐v6.148 節奏 gate：base tick 固定 400ms，實際多久送一次由 tPollDesiredMs 決定。
       //   （v6.146 用「每 N 輪」的計數器實作，改成時間判準後兩邊共用同一個中央述詞。）
       const _now = Date.now();
-      if (_now - _lastFetchAt < tPollDesiredMs(false)) return;
+      // ⭐v6.152 長輪詢模式：伺服器會把這一發掛起最多 25 秒、盤面一變就回。
+      //   ① 不再套 tPollDesiredMs 節流 —— 回來就立刻再送一發，等待端的延遲才降得到 ~RTT；
+      //   ② 逾時放寬到 30 秒（比伺服器的 25 秒上限多一點餘裕）；
+      //   ③ `_pollBusy` 仍然擋住重疊送出（v6.148 的防自我壅塞在這裡更重要）；
+      //   ④ 對戰結束後不長輪詢 —— 那時要的是降頻，不是低延遲。
+      const _lp = tLongPollReady && !isTournSpectator && !!game && (game as any).phase !== 'game-over';
+      if (!_lp && _now - _lastFetchAt < tPollDesiredMs(false)) return;
       _lastFetchAt = _now;
       _pollBusy = true;
       try {
         const reqV = tVersion;  // v6.135 送出當下的版本（亂序守衛用）
-        const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
+        if (_lp) _tLongPollAt = Date.now();
+        const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}` + (_lp ? '&wait=1' : ''),
+          undefined, _lp ? { timeoutMs: 30000 } : undefined);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
         tAuthLost = false;            // v6.150 拿到正常回應 ⇒ 身分是好的
@@ -4918,13 +4936,14 @@
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && 'actorSeat' in r) tServerActorSeat = (typeof r.actorSeat === 'number' ? r.actorSeat : null);   // v6.151 伺服器權威
+        if (r && typeof r.longPoll === 'boolean') tLongPollReady = r.longPoll;   // v6.152 伺服器宣告是否已啟用長輪詢
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
         tNow = Date.now() + tClockOffset;
         // v5.577/v0.68 對戰中大廳聊天降載。v6.148 改**時間判準**：原本綁「每 5 輪」，
         //   輪詢節奏一變（400ms base）就會跟著漂移，與它自己的降載意圖脫鉤。
         if (_now - _lastChatAt >= 6000) { _lastChatAt = _now; tChatLoad(); }
       } catch (e: any) { if (e && e.status === 401) tAuthLost = true; /* 其餘忽略單次輪詢失敗 */ }
-      finally { _pollBusy = false; }   // v6.148 一定要放掉，否則輪詢永久停擺
+      finally { _pollBusy = false; _tLongPollAt = 0; }   // v6.148 一定要放掉，否則輪詢永久停擺
     }, 400);
   }
   // v6.137 樂觀更新狀態 —— 與 tBusy 分開：
