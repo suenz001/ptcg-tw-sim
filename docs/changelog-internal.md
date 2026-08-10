@@ -17,6 +17,96 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.151 — 伺服器權威 `actorSeat` ＋ 判負前 60 秒警告 ＋ 對戰收尾三項
+
+（交接文件 `docs/handoff-錦標賽伺服器三批次.md` 的**批次 3**。）
+
+### ① 伺服器權威 `currentActorSeat`（根治 v6.149 事故的鏡像）
+
+閒置判負是**伺服器**用它自己那份盤面算的，而 client 各自跑一份 `tCurrentActorSeat(game)` ——
+只要 client 版本落後，「誰在倒數」就會反向（v6.149 當事人看到「對手閒置中」，伺服器其實在倒數他）。
+
+- `/action` 寫盤面時一併 `actorSeat: currentActorSeat(newGs)` 存進房間 doc 頂層。
+- `/state` 的 **`unchanged` 精簡回應**讀那個欄位；**完整回應**直接用同一支 `currentActorSeat` 現算
+  （有盤面時現算最權威，也不依賴欄位存不存在）。
+- 建局（`/match/enter` 的 `$setOnInsert`）與 admin 重建房都寫入初始值。
+- client：`tServerActorSeat`（`undefined` = 舊伺服器沒回這欄位 ⇒ 退回本地推算），
+  `tIdleWarnSec` 的方向改讀它。
+- ⚠ 樂觀更新期間本地盤面會比 `tServerActorSeat` 前進一步 —— 方向是**安全的那一邊**：
+  伺服器還認為輪到我 ⇒ 不會誤顯示「對手閒置中」。
+
+### ② 判負前 60 秒警告
+
+- 推播給「該動作的那一方」（`actor === -1` 時雙方都推）。**client 連線全掛時 web-push 是唯一
+  到得了的通道**。
+- 同時在房間 `gameState.log` 塞一則系統訊息 —— 這會 bump 版本，**順便打醒「還活著但版本卡住」
+  的 client**（盤面一變，前端的自癒路徑就會跑）。
+- ⚠ **不動 `lastActionAt`** —— 動了就等於幫掛機方把閒置倒數重置。
+- ⚠ 讀完整 doc（不能加 projection：整包寫回會把 log 永久洗掉，v6.119 教訓）。
+- ⚠ 冪等用 `idleWarnAt` 原子搶占，判準是 `idleWarnAt < _lastLight` 而不是「存在與否」——
+  對手一動作 `lastActionAt` 就前進，**下一個閒置窗口必須能再警告一次**。
+- ⚠ 整段掛在 v6.119 那個輕量讀早退的**前面**，但只有在「最後 60 秒」才會走進去讀完整 doc，
+  所以降載維持不變。守衛有釘住「警告寫在早退之前」（寫在之後＝永遠走不到的死碼）。
+
+### ③ 新鮮度看門狗：playing 8 秒 → 20 秒
+
+這一發是**單發成本最大**的（每次都是整份 `v=-1` 全量盤面），而輪詢本身的版本比對已經涵蓋
+「漏接」自癒 —— 這條只是最後的保險網。`setup` 維持 3.5 秒（歷史事故最密集、而且盤面小）。
+
+### ④ `visibilitychange`：回前景立即對盤面
+
+背景頁籤的 `setInterval` 會被瀏覽器節流到分鐘級，回來時畫面可能落後好幾個版本 ——
+而閒置判負的倒數是伺服器在算，不會跟著暫停。回前景時：先把 `tNow` 拉回現在 →
+`tForceResync()` → `startTournamentPoll()`。
+⚠ 回前景後 3 秒內不顯示「剩 N 秒」：`tNow` 是每秒 tick 算的，背景期間沒更新，
+一回來會先算出「剩 0 秒」嚇人。
+⚠ `onMount` 有回傳 cleanup 解除 listener（全站原本只有 `src/lib/img-retry.ts` 掛過
+`visibilitychange`）。
+
+### ⑤ RTT 量測 ＋ `stale-version` 診斷指紋
+
+- `tournamentDispatch` 頭尾量動作往返時間；只在 p95 ≥ 3 秒時回報**一次** `slow-rtt`
+  診斷（正常是幾十毫秒）。⚠ 逾時那一發不計入（12 秒會扭曲統計）。
+  伺服器端指標一直是全綠的，但那不含隧道排隊與網路往返 —— 這正是 v6.134「第四輪很卡」
+  一直缺的那份資料。
+- 新增 `stale-version` 指紋：**playing 階段的版本卡住**原本不屬於任何現有診斷指紋，
+  什麼都不會回傳（v6.149 就是這一類，只能靠玩家口述還原）。判準＝看門狗連續觸發 3 次
+  且 `tVersion` 一步都沒前進。
+
+### Fable 5 審查抓到的（同版一起修）
+
+1. **⭐`idleWarn60` 的寫回沒有 CAS**（高）。全檔的整包寫回都是 game-over 終局（被蓋掉無害），
+   **這是第一個「非終局」的**。讀 doc 到寫回之間有數十毫秒窗口，而那個時機（剛要提醒玩家）
+   正是他最可能突然送出動作的時候 ⇒ 會把玩家剛寫進去的動作整個蓋掉，**而且版本號一樣**
+   （兩邊都是 `room.version + 1`）⇒ client 的 `?v=cv` 版本比對全回 `unchanged`，那條自癒
+   完全失效，只剩新鮮度看門狗能救 —— 而本版剛好把它從 8 秒放寬到 20 秒，**兩個改動互相放大**。
+   ⇒ 改 `updateOne({ _id, version: room.version }, …)`；CAS 未命中就整個放棄，**連推播都不發**
+   （對方剛動作過 ⇒ 他根本沒閒置）。
+2. **⭐`unchanged` 分支把「欄位缺席」壓成 `null`**（中）。client 只把 `undefined` 當「伺服器沒講」，
+   `null` 會被當成權威的「無人該動作」⇒ 閒置倒數整條消失。而**掛機中的房永遠不會有 `/action`
+   來補寫這個欄位**（v6.151 部署前就已開打的房、測試房都一樣）⇒ 正好在最需要倒數的情境失效。
+   ⇒ 欄位缺席就**省略這個鍵**，client 的 `'actorSeat' in r` 判準自然退回本地推算。
+3. **回前景 3 秒抑制用了混時鐘**（中低）：`tNow` 是伺服器域、`_tForegroundAt` 原本寫 `Date.now()`
+   是本機域，兩者差值就等於 `tClockOffset` ⇒ 裝置時鐘慢 3 秒以上抑制永遠不生效、快 30 秒則
+   抑制長達 33 秒。⇒ `_tForegroundAt = tNow`（同域，而且仍隨每秒 tick 反應式更新）。
+4. `/action` 回應原本不帶 `actorSeat`，方向最多落後一個輪詢週期（≤1.2 秒）。順手補上。
+5. `tServerActorSeat` / RTT 樣本跨場次不清 ⇒ 下一場的第一個輪詢回來之前方向會用上一場的值、
+   `slow-rtt` 指紋會掛在錯誤的場次上。⇒ `tLeaveMatch` 一併清掉。
+
+### 未處理（判斷後決定不動）
+
+- `actorSeat === -1`（雙方都該動作，setup 常見）時 client 仍會顯示「對手閒置中」——
+  這是 v6.150 之前就有的既有行為，不是本版引入，不在這批改。
+
+### 守衛
+
+`scripts/test-v6151-server-actor-and-idle-warn.mjs`（71 項）：`idleWarn60` 用 `new Function`
+抽出來注入假的 TROOMS / sendPushToUids **實跑**（推給誰、log 寫了什麼、有沒有動到
+`lastActionAt`、game-over 不動作的正對照），其餘為靜態＋掃描器自我驗證。
+HEAD-FAIL：對 v6.150 的檔案跑 → 3 FAIL。
+
+**部署**：動到 `oracle-admin/server_admin_patch.js` ⇒ 要跑 `redeploy-oracle.bat`。
+
 ## v6.150 — 錦標賽玩家端盤面遮蔽（公平性缺口）＋ /action 未驗證身分可假冒座位
 
 > ⚠ **公平性／作弊類修正，依既有規則不寫首頁 changelog**（寫出來等於教人怎麼鑽）。

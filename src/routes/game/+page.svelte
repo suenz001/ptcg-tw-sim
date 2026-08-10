@@ -138,6 +138,16 @@
   let tNow = $state(Date.now()); // 倒數計時用（輪詢時更新）
   let tLastActionAt = $state(0);   // v5.569：對局最後動作時間(伺服器回)，等待方閒置倒數用
   let tIdleMin = $state(3);        // 閒置判負分鐘(伺服器回)
+  // ⭐v6.151 伺服器權威「現在輪到誰」。閒置判負是**伺服器**用它自己那份盤面算的，
+  //   client 各自本地推算 ⇒ 只要版本落後就會對不上（v6.149 事故：玩家看到「對手在倒數」，
+  //   伺服器其實在倒數他）。undefined = 伺服器還沒回過這個欄位（舊版）⇒ 退回本地推算。
+  let tServerActorSeat = $state<number | null | undefined>(undefined);
+  // v6.151 回前景時間：背景頁籤的 setInterval 會被節流，tNow 停在舊值 ⇒ 一回前景會先算出
+  //   「剩 0 秒」嚇人。短暫抑制倒數提示，等下一次 tick 對時後再顯示。
+  let _tForegroundAt = $state(0);
+  let _rttSamples: number[] = [];      // v6.151 動作往返時間取樣（只在明顯偏慢時回報一次）
+  let _rttDiagSent = false;
+  let _freshWatchdogVersionAt = -1;    // v6.151 新鮮度看門狗第一次觸發當下的版本
   // ── 觀戰 ──
   let tSpectateList = $state<any[]>([]);
   let tChampions = $state<any[]>([]); // v5.570 名人堂（歷屆冠軍）
@@ -297,7 +307,10 @@
         }
         // v5.618 新鮮度看門狗：對戰/setup 中盤面 >8s 沒任何更新（poll 成功卻漏接/版本卡住，如「對手補抽放置完成後我方手牌沒亮」）
         //   → 強制重抓伺服器權威最新盤面。涵蓋 setup（tStep 一有 gameState 即 playing）。gate：我方 picker 進行中不擾動；節流 8s。
-        const _freshStaleMs = (game && game.phase === 'setup') ? 3500 : 8000;  // v5.931/932 setup 首次觸發加快(3.5s);節流維持 8s 限負載(50人賽避免每3.5s全量抓)
+        // v6.151：playing 的保險由 8s 放寬到 20s。這一發是**單發成本最大**的（每次都是整份
+        //   `v=-1` 全量盤面），而輪詢本身的版本比對已經涵蓋「漏接」自癒 —— 這條只是最後的保險網。
+        //   setup 維持 3.5s（那裡是歷史事故最密集的區段，而且盤面小）。
+        const _freshStaleMs = (game && game.phase === 'setup') ? 3500 : 20000;
         //   ⚠⚠ v6.146：原本**沒有排除 game-over**。tForceResync 末尾是無條件把 _tLastStateChangeAt
         //     推到現在，於是對戰結束後形成「8 秒 stale → 抓一次 v=-1 全量盤面 → 重設計時 → 再 8 秒」
         //     的無限迴圈，而且每次還會 startTournamentPoll() 重建 timer。這就是伺服器 log 裡
@@ -309,7 +322,12 @@
             && !(game.pendingSelection && game.pendingSelection.actorIdx === mySeatIdx)) {
           _tLastForceResyncAt = Date.now();
           _freshWatchdogFires++;  // v5.933 連續觸發計數
+          if (_freshWatchdogFires === 1) _freshWatchdogVersionAt = tVersion;
           if (_freshWatchdogFires >= 2 && game && game.phase === 'setup') _tSendClientDiag('setup-watchdog-repeat');  // v5.933 force-resync 後仍卡 → 回傳診斷
+          // ⭐v6.151 新增 stale-version 指紋：**playing 階段的版本卡住**原本不屬於任何現有診斷
+          //   指紋，什麼都不會回傳（v6.149 事故就是這一類，只能靠玩家口述還原）。
+          //   判準＝看門狗連續觸發 3 次、而 tVersion 一步都沒有前進。
+          if (_freshWatchdogFires >= 3 && game && game.phase === 'playing' && tVersion === _freshWatchdogVersionAt) _tSendClientDiag('stale-version');
           tForceResync();
           startTournamentPoll();
         }
@@ -1186,6 +1204,27 @@
   onMount(() => {
     // v5.939 分享回放連結:?treplay=<matchId> 進頁直接進回放(公開端點免登入)
     try { const _rid = new URLSearchParams(window.location.search).get('treplay'); if (_rid) tStartReplay(_rid); } catch { /* ignore */ }
+  });
+  // ⭐v6.151 回前景立即與伺服器對一次盤面。背景頁籤的 setInterval 會被瀏覽器節流到分鐘級，
+  //   回來時畫面可能已經落後好幾個版本 —— 而閒置判負的倒數是**伺服器**在算，不會跟著暫停。
+  //   全站原本只有 src/lib/img-retry.ts 掛過 visibilitychange。
+  onMount(() => {
+    if (typeof document === 'undefined') return;
+    const onVis = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      tNow = Date.now() + tClockOffset;   // 先把時鐘拉回現在，倒數才不會用背景期間的舊值
+      // ⚠ 與 tNow 同一個時鐘域（都是伺服器域）。寫成 Date.now() 的話兩者差值就是 tClockOffset，
+      //   裝置時鐘慢 3 秒以上抑制永遠不生效、快 30 秒則抑制長達 33 秒（Fable 5 審查抓到）。
+      _tForegroundAt = tNow;
+      if (!isTournament || isTournSpectator || !tActiveRoom || tStep !== 'playing') return;
+      // ⚠ 對戰已結束 → 沒有東西要同步，而且重建 timer 會讓 game-over 的降頻重新開始
+      //   （v6.146 那條守衛鎖的就是這件事）。平手待裁定仍由既有的降頻輪詢帶回結果。
+      if (game && (game as any).phase === 'game-over') return;
+      void tForceResync();
+      startTournamentPoll();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); };
   });
   onMount(() => {
     // 載入 localStorage 設定
@@ -4408,6 +4447,7 @@
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
       if (sst && typeof sst.lastActionAt === 'number') tLastActionAt = sst.lastActionAt;
       if (sst && typeof sst.idleForfeitMin === 'number') tIdleMin = sst.idleForfeitMin;
+      if (sst && 'actorSeat' in sst) tServerActorSeat = (typeof sst.actorSeat === 'number' ? sst.actorSeat : null);   // v6.151 伺服器權威
       if (sst && typeof sst.serverNow === 'number') tClockOffset = sst.serverNow - Date.now();
       tNow = Date.now() + tClockOffset;
       startTournamentPoll();
@@ -4417,6 +4457,9 @@
   // 對戰結束 → 返回賽事大廳（清本地對局、刷新賽程）
   function tLeaveMatch() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
+    // v6.151 跨場次殘留清乾淨：actorSeat 帶著上一場的值，會讓下一場在第一個輪詢回來之前
+    //   用錯的方向算倒數；RTT 樣本混到上一場則會讓 slow-rtt 指紋掛在錯誤的場次上。
+    tServerActorSeat = undefined; _rttSamples = []; _rttDiagSent = false;
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
     tournLoadEvent(); tBracketLoad();
@@ -4682,6 +4725,23 @@
     _tLastStateChangeAt = Date.now();  // v5.618 記錄盤面更新時間（新鮮度看門狗用）
     _freshWatchdogFires = 0;  // v5.933 真盤面更新 → 看門狗連續觸發計數歸零
   }
+  // v6.151 動作往返時間（RTT）取樣。伺服器端 P95 是 8ms，所以往返幾乎都是隧道排隊 + 網路，
+  //   那正是 v6.134「第四輪很卡」一直缺的那份資料。⚠ 只記成功的往返：逾時是 12 秒，記進去會扭曲統計。
+  function _rttStats(): { n: number; p50: number; p95: number; max: number } | null {
+    if (_rttSamples.length === 0) return null;
+    const a = [..._rttSamples].sort((x, y) => x - y);
+    const at = (q: number) => a[Math.min(a.length - 1, Math.floor(a.length * q))];
+    return { n: a.length, p50: at(0.5), p95: at(0.95), max: a[a.length - 1] };
+  }
+  function _tRecordRtt(ms: number): void {
+    if (!isTournament || isTournSpectator || !(ms >= 0)) return;
+    _rttSamples.push(ms);
+    if (_rttSamples.length > 30) _rttSamples.shift();
+    if (_rttDiagSent || _rttSamples.length < 10) return;
+    const st = _rttStats();
+    // 門檻 3 秒：正常是幾十毫秒，會踩到這條的一定是真的在排隊。只回報一次。
+    if (st && st.p95 >= 3000) { _rttDiagSent = true; _tSendClientDiag('slow-rtt'); }
+  }
   // v5.933 客戶端診斷回傳(setup/同步異常定根因/確認用)——只在真異常指紋才送,fire-and-forget,絕不阻塞/影響對戰。
   function _tSendClientDiag(reason: string) {
     try {
@@ -4708,6 +4768,9 @@
         poll: {
           sincePollOk: _tLastPollOkAt ? now - _tLastPollOkAt : -1, sinceStateChange: _tLastStateChangeAt ? now - _tLastStateChangeAt : -1,
           sinceForceResync: _tLastForceResyncAt ? now - _tLastForceResyncAt : -1, pollGen: tPollGen, watchdogFires: _freshWatchdogFires,
+          // v6.151：伺服器端指標一直是全綠的，但那不含隧道排隊與網路往返（v6.134 的教訓）。
+          //   這裡回報 client 實測的動作往返時間，才對得上玩家說的「很卡」。
+          rtt: _rttStats(),
         },
         env: {
           vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
@@ -4737,6 +4800,7 @@
         }
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
+      if (fr && 'actorSeat' in fr) tServerActorSeat = (typeof fr.actorSeat === 'number' ? fr.actorSeat : null);   // v6.151 伺服器權威
       if (fr && typeof fr.serverNow === 'number') { tClockOffset = fr.serverNow - Date.now(); tNow = Date.now() + tClockOffset; }
       tAuthLost = false;   // v6.150 同步成功 ⇒ 身分是好的
     } catch (e: any) { if (e && e.status === 401) tAuthLost = true; /* 其餘忽略 */ }
@@ -4762,7 +4826,12 @@
   const tIdleWarnSec = $derived.by(() => {
     if (!isTournament || isTournSpectator || !game || !tLastActionAt) return null;
     if ((game as any).phase === 'game-over') return null;
-    const actor = tCurrentActorSeat(game);
+    // ⭐v6.151 回前景後短暫不顯示：背景頁籤的 tick 被瀏覽器節流，tNow 停在舊值，
+    //   一回來會先算出「剩 0 秒」嚇人一跳（畫面其實還沒對時）。
+    if (_tForegroundAt > 0 && tNow - _tForegroundAt < 3000) return null;
+    // ⭐v6.151 方向以**伺服器**為準：閒置判負是伺服器用它那份盤面算的，client 本地推算
+    //   只要版本落後就會反向（v6.149 事故）。伺服器沒回這個欄位（舊版）才退回本地推算。
+    const actor = (tServerActorSeat !== undefined) ? tServerActorSeat : tCurrentActorSeat(game);
     if (actor == null || actor === mySeatIdx) return null; // 只在「該對手動作」時提示等待方
     const remain = Math.ceil((tLastActionAt + tIdleMin * 60000 - tNow) / 1000);
     return remain > 0 ? remain : 0;
@@ -4848,6 +4917,7 @@
         else if (r && typeof r.version === 'number' && r.version < tVersion && r.gameState && reqV === tVersion) { game = r.gameState; tVersion = r.version; }
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
+        if (r && 'actorSeat' in r) tServerActorSeat = (typeof r.actorSeat === 'number' ? r.actorSeat : null);   // v6.151 伺服器權威
         if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
         tNow = Date.now() + tClockOffset;
         // v5.577/v0.68 對戰中大廳聊天降載。v6.148 改**時間判準**：原本綁「每 5 輪」，
@@ -4930,7 +5000,9 @@
       tPredicted = false; predictedRef = null;
     };
     try {
+      const _rttT0 = Date.now();
       const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });
+      _tRecordRtt(Date.now() - _rttT0);   // v6.151 只記成功的往返（逾時是 12 秒，記進去會扭曲）
       if (r.gameState) {
         // 伺服器權威：無條件採納（含 error/rejected/stale 三條失敗路徑回傳的舊 state ＝ 自動回滾）
         tAdopt(r.gameState, r.version, { skipSfx: true });   // v6.048 自己的動作由下一行算音效

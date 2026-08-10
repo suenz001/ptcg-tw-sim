@@ -124,8 +124,13 @@ T('⭐⭐降頻計數器是 closure 變數 → startTournamentPoll() 的呼叫�
   // v6.149：+1 = 連線健康橫幅的「立即重新同步」按鈕。它安全，因為：
   //   ①那是玩家手動按的，重建 timer 只會多送一發，之後仍由 tPollDesiredMs 決定節奏；
   //   ②橫幅本身已排除 game-over（沒有東西要同步），所以不會在降頻期間被按到。
+  // v6.151：+1 = 回前景（visibilitychange）的立即同步。它安全，因為那個 handler 自己
+  //   **明確排除了 game-over**（對戰結束沒有東西要同步），所以不會在降頻期間重建 timer。
+  //   ⚠ 順帶更正上面那段註解：`_goTick` 這個 closure 計數器在 v6.148 已經被
+  //     `tPollDesiredMs` 的時間判準取代，現在重建 timer 只會多送一發、不會讓降頻失效；
+  //     但「新增呼叫點要回來想清楚」這條規矩仍然有價值，數字繼續鎖。
   const sites = [...SRC.matchAll(/startTournamentPoll\(\)/g)].length;
-  assert.equal(sites, 6, `startTournamentPoll() 出現 ${sites} 次（1 個定義 + 5 個呼叫）。`
+  assert.equal(sites, 7, `startTournamentPoll() 出現 ${sites} 次（1 個定義 + 6 個呼叫）。`
     + '新增呼叫點時請確認：它會不會在 game-over 之後重建 timer 而讓降頻失效？確認後再更新這個數字。');
 });
 
