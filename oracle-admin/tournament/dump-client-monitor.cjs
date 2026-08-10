@@ -1,0 +1,512 @@
+#!/usr/bin/env node
+// 📡 對戰連線監控 — 完整 dump（在 Oracle VM 上執行）
+//   用法: cd /opt/ptcg/api && node /tmp/dump-client-monitor.cjs [7d|24h|72h|<小時數>]
+//   預設 7d（＝168 小時＝伺服器保留上限，見下方 TTL 說明）。
+//
+// ── 為什麼要有這支 ────────────────────────────────────────────────────────
+//   admin 的「📡 對戰連線監控」分頁走 3 支 API，但那 3 支都是**給畫面看的摘要**：
+//     GET /api/tournament/admin/longpoll   → { config:{enabled,maxWaitMs,pollMs,maxHold}, held, rooms }
+//     GET /api/tournament/admin/redact     → { enabled }
+//     GET /api/tournament/admin/clientdiag?hours=N
+//         → byReason（整個時間窗，沒截斷）
+//           slowRtt（伺服器端就先 .limit(200)，而且畫面只畫前 20 筆）
+//           rows   （伺服器端硬寫 .limit(120)，**沒有** offset/limit 參數可以翻頁）
+//   ⇒ 想把整包資料交給 AI 分析時，明細最多只拿得到 120 筆、RTT 最多 200 筆。
+//   這支腳本**不改任何後端端點**，直接讀同一批 mongo collection，把整個時間窗撈乾淨：
+//     tournamentClientDiag  ← 玩家端異常指紋（/api/tournament/clientdiag 寫入的那張表）
+//     tournamentConfig      ← _id:'longPoll' / _id:'redactState'（兩個灰度旗標的持久化來源）
+//
+// ── ⚠ 兩個做不到的地方（誠實標示，不要腦補）─────────────────────────────
+//   1. longpoll 的 held（現在掛著幾條連線）與 rooms（幾個房間）**只存在跑著的 server
+//      process 記憶體裡**（server_admin_patch.js 的 _lpHeld / _lpWaiters.size），
+//      沒有寫進 mongo ⇒ 這支腳本拿不到，一律輸出 null。要看即時值請開 admin 的 📡 分頁。
+//      （而且它是「此刻」的瞬時值，賽事結束後再 dump 本來就會是 0，對事後分析沒有意義。）
+//   2. tournamentClientDiag 有 TTL index（expireAfterSeconds: 604800 ＝ 7 天），
+//      超過 7 天的資料是**真的被 mongo 刪掉了**，任何工具都撈不回來 ⇒ 7d 就是全部。
+//
+// ── ⚠ diag 欄位的 2KB 截斷（判讀關鍵）───────────────────────────────────
+//   /api/tournament/clientdiag 寫入時做 `JSON.stringify(req.body).slice(0, 2048)`。
+//   client payload 的 key 順序是 reason → room → ts → ver → state → render → poll → perf → env，
+//   所以一旦超過 2048 字元，被切掉的**一定是尾端的 perf 與 env.ua**，而且整串不再是合法 JSON。
+//   伺服器那支 /admin/clientdiag 對 JSON.parse 失敗的列是「直接略過」⇒ 這些列在畫面上
+//   連 slowRtt 表都不會出現。本腳本改成：解析失敗時退回 regex 抽 ver / ua / poll.rtt，
+//   並在 truncated 欄位標記，另外在摘要裡報出被截斷的比例（截斷率高本身就是一個發現）。
+//
+// 輸出：/tmp/ptcg_monitor_dump.json（完整資料）
+//       /tmp/ptcg_monitor_summary.txt（給站長看的人話摘要，UTF-8 with BOM）
+const fs = require('fs');
+
+function loadMongo() {
+  for (const c of ['/opt/ptcg/api/node_modules/mongodb', 'mongodb']) { try { return require(c); } catch (e) { /* 換下一個 */ } }
+  throw new Error('找不到 mongodb 模組（請在 /opt/ptcg/api 下執行）');
+}
+const { MongoClient } = loadMongo();
+
+// ── mongo URI 探測（與 dump-match-records.cjs 同一套，已驗證可用）────────
+function readEnvFile(p) {
+  try {
+    const txt = fs.readFileSync(p, 'utf8');
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/=\s*["']?(mongodb(?:\+srv)?:\/\/[^"'\s]+)/i);
+      if (m) return m[1];
+    }
+  } catch (e) { /* 檔案不存在就換下一個 */ }
+  return null;
+}
+// 從「正在執行的 server 行程」環境變數抓 mongo URI（與 server 同一條已認證連線，最準）。
+function fromProcEnviron() {
+  try {
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid)) continue;
+      let cmd = '';
+      try { cmd = fs.readFileSync('/proc/' + pid + '/cmdline', 'utf8'); } catch (e) { continue; }
+      if (!/server\.js|ptcg/.test(cmd)) continue;
+      let env = '';
+      try { env = fs.readFileSync('/proc/' + pid + '/environ', 'utf8'); } catch (e) { continue; }
+      for (const v of env.split('\0')) {
+        const m = v.match(/^[^=]*=(mongodb(?:\+srv)?:\/\/[^\s]+)$/);
+        if (m) return m[1];
+      }
+    }
+  } catch (e) { /* /proc 讀不到就往下走 */ }
+  return null;
+}
+function findUri() {
+  if (process.env.MONGO_URL) return process.env.MONGO_URL;
+  if (process.env.MONGODB_URI) return process.env.MONGODB_URI;
+  const fp = fromProcEnviron(); if (fp) return fp;
+  for (const p of ['/opt/ptcg/api/.env', '/opt/ptcg/.env', '/opt/ptcg/api/.env.production', '/opt/ptcg/api/.env.local']) {
+    const u = readEnvFile(p); if (u) return u;
+  }
+  for (const p of ['/opt/ptcg/api/server.js', '/opt/ptcg/server.js']) {
+    try { const s = fs.readFileSync(p, 'utf8'); const m = s.match(/mongodb(\+srv)?:\/\/[^'"`\s)]+/); if (m) return m[0]; } catch (e) { /* 換下一個 */ }
+  }
+  return 'mongodb://127.0.0.1:27017';
+}
+function dbNameFromUri(u) {
+  try { const m = u.match(/mongodb(?:\+srv)?:\/\/[^/]+\/([^?]+)/); return m && m[1] ? decodeURIComponent(m[1]) : null; } catch (e) { return null; }
+}
+function maskUri(u) { return String(u).replace(/:\/\/[^@/]*@/, '://***@'); }
+
+// ── 時間範圍參數 ────────────────────────────────────────────────────────
+//   接受 7d / 168h / 168。上限 168 小時 —— 不是我們想省，是 TTL 只留 7 天。
+function parseRange(arg) {
+  const s = String(arg || '').trim().toLowerCase();
+  if (!s) return { hours: 168, label: '7 天', raw: '(預設)' };
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*([dh]?)$/);
+  if (!m) return { hours: 168, label: '7 天', raw: s, badArg: true };
+  let h = Number(m[1]);
+  if (m[2] === 'd') h = h * 24;
+  if (!isFinite(h) || h <= 0) h = 168;
+  const clamped = Math.max(1, Math.min(168, Math.round(h)));
+  return {
+    hours: clamped,
+    label: clamped >= 24 && clamped % 24 === 0 ? (clamped / 24) + ' 天' : clamped + ' 小時',
+    raw: s,
+    clampedDown: Math.round(h) > 168,
+  };
+}
+
+// ── 指紋中文標題（逐字對齊 admin.html 的 MON_REASON_INFO，站長兩邊看到同一個詞）──
+const REASON_LABEL = {
+  'slow-rtt': '動作往返太慢（p95 ≥ 3 秒）',
+  'stale-version': '畫面版本卡住（對戰中盤面不再更新）',
+  'invisible-hand': '手牌有卡卻一張都沒畫出來',
+  'setup-watchdog-repeat': '開局同步連續卡住',
+  'setup-stalled-both-done': '死角：雙方都完成準備卻推不動',
+  'action-forbidden': '動作被伺服器拒絕（身分不被接受）',
+  'manual-sync': '玩家自己按了「重新同步」',
+};
+// ⚠ 不可以直接 REASON_LABEL[reason] —— reason 若是 'constructor'/'__proto__' 會拿到
+//   原型鏈上的 truthy 非字串（admin.html 踩過同一顆地雷）。
+function reasonLabel(r) {
+  return Object.prototype.hasOwnProperty.call(REASON_LABEL, r) ? REASON_LABEL[r] : String(r || '(未標)');
+}
+
+// ── diag 解析（含截斷 fallback）──────────────────────────────────────────
+function parseDiag(s) {
+  const out = { parsed: false, truncated: false, obj: null, ver: null, ua: null, rtt: null, perf: null, hc: null, dm: null };
+  if (!s) return out;
+  try { out.obj = JSON.parse(s); out.parsed = true; } catch (e) { out.truncated = true; }
+  const o = out.obj;
+  if (o && typeof o === 'object') {
+    out.ver = typeof o.ver === 'string' ? o.ver : null;
+    const env = o.env && typeof o.env === 'object' ? o.env : null;
+    out.ua = env && typeof env.ua === 'string' ? env.ua : null;
+    out.hc = env && typeof env.hc === 'number' ? env.hc : null;
+    out.dm = env && typeof env.dm === 'number' ? env.dm : null;
+    const poll = o.poll && typeof o.poll === 'object' ? o.poll : null;
+    out.rtt = poll && poll.rtt && typeof poll.rtt === 'object' ? poll.rtt : null;
+    out.perf = o.perf && typeof o.perf === 'object' ? o.perf : null;
+    return out;
+  }
+  // 截斷列：ver 排在 payload 第 4 個 key，幾乎一定還在；ua/perf 在尾端，多半已經被切掉。
+  const mv = s.match(/"ver"\s*:\s*"([^"]{0,32})"/); if (mv) out.ver = mv[1];
+  const mu = s.match(/"ua"\s*:\s*"([^"]{0,200})"/); if (mu) out.ua = mu[1];
+  // _sampleStats 的 key 順序固定是 n,p50,p95,max（見 +page.svelte），所以這條 regex 是穩的。
+  const mr = s.match(/"rtt"\s*:\s*\{\s*("n"\s*:\s*\d+\s*,\s*"p50"\s*:\s*\d+\s*,\s*"p95"\s*:\s*\d+\s*,\s*"max"\s*:\s*\d+)\s*\}/);
+  if (mr) { try { out.rtt = JSON.parse('{' + mr[1] + '}'); } catch (e) { /* 抽不到就算了 */ } }
+  return out;
+}
+
+// ── 小工具 ──────────────────────────────────────────────────────────────
+function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
+function pct(a, b) { return b > 0 ? (a * 100 / b).toFixed(1) + '%' : '—'; }
+function quant(arr, q) {
+  if (!arr.length) return null;
+  const a = arr.slice().sort(function (x, y) { return x - y; });
+  return a[Math.min(a.length - 1, Math.floor(a.length * q))];
+}
+function ms(v) {
+  if (typeof v !== 'number' || !isFinite(v)) return '—';
+  return v >= 1000 ? (v / 1000).toFixed(1) + ' 秒' : Math.round(v) + ' ms';
+}
+function tw(ts) {
+  try { return new Date(ts).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }); } catch (e) { return new Date(ts).toISOString(); }
+}
+// ⚠ 中日韓文字在等寬字型裡佔 **兩格**。用 String.length 補空白，摘要的表格在記事本
+//   一定會歪掉（站長就是要看這份表）⇒ 補到「顯示寬度」而不是字元數。
+function dispW(s) {
+  let w = 0;
+  for (const ch of String(s)) {
+    const c = ch.codePointAt(0);
+    w += (c >= 0x1100 && (c <= 0x115f || c === 0x2329 || c === 0x232a
+      || (c >= 0x2e80 && c <= 0xa4cf && c !== 0x303f)
+      || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff)
+      || (c >= 0xfe30 && c <= 0xfe6f) || (c >= 0xff00 && c <= 0xff60)
+      || (c >= 0xffe0 && c <= 0xffe6) || (c >= 0x20000 && c <= 0x3fffd))) ? 2 : 1;
+  }
+  return w;
+}
+function pad(s, n) { s = String(s); let w = dispW(s); while (w < n) { s += ' '; w++; } return s; }
+function padL(s, n) { s = String(s); let w = dispW(s); while (w < n) { s = ' ' + s; w++; } return s; }
+// 版本字串比大小：'6.159' > '6.144' > '6.99'（逐段數字比，不是字典序）。
+function verCmp(a, b) {
+  const pa = String(a || '').replace(/^v/, '').split('.').map(Number);
+  const pb = String(b || '').replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = isFinite(pa[i]) ? pa[i] : -1, y = isFinite(pb[i]) ? pb[i] : -1;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+// 只留 UA 裡真正有辨識度的那一小段（整串 80 字塞進摘要會完全沒法讀）。
+function uaShort(ua) {
+  if (!ua) return '(未知)';
+  const s = String(ua);
+  if (/iPhone|iPad|iPod/.test(s)) return 'iOS / Safari 系';
+  if (/Android/.test(s)) return 'Android';
+  if (/Windows/.test(s)) return 'Windows';
+  if (/Macintosh|Mac OS/.test(s)) return 'macOS';
+  if (/Linux/.test(s)) return 'Linux';
+  return s.slice(0, 30);
+}
+
+(async () => {
+  const range = parseRange(process.argv[2]);
+  const uri = findUri();
+  console.log('mongo uri:', maskUri(uri));
+  console.log('時間範圍:', range.label, '(' + range.hours + ' 小時)');
+  if (range.badArg) console.log('⚠ 看不懂的範圍參數「' + range.raw + '」，已改用預設 7 天。');
+  if (range.clampedDown) console.log('⚠ 資料只保留 7 天（mongo TTL），已自動收斂成 168 小時。');
+
+  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
+  await client.connect();
+  // 找出含 tournamentClientDiag 的 db（沒有回報時該 collection 可能還不存在 → 退回
+  // tournamentMatches，再退回 URI 內的 db 名）。
+  let db = null;
+  try {
+    const { databases } = await client.db().admin().listDatabases();
+    for (const want of ['tournamentClientDiag', 'tournamentMatches']) {
+      for (const d of databases) {
+        const cand = client.db(d.name);
+        const cols = await cand.listCollections({ name: want }).toArray();
+        if (cols.length) { db = cand; break; }
+      }
+      if (db) break;
+    }
+  } catch (e) { /* 認證使用者可能無 listDatabases 權限 → 用 URI 內 db 名 */ }
+  if (!db) { const dn = dbNameFromUri(uri); db = dn ? client.db(dn) : client.db(); }
+
+  const TCDIAG = db.collection('tournamentClientDiag');
+  const TCONFIG = db.collection('tournamentConfig');
+
+  // ── ① 連線設定 ────────────────────────────────────────────────────────
+  //   正規化方式**逐項對齊** server_admin_patch.js 的 lpConfig()／redactEnabled()，
+  //   否則 dump 出來的數字會跟伺服器實際用的值不一樣（例如 doc 裡寫了 999999 但伺服器 clamp 到 60000）。
+  const TLP_DEFAULT = { enabled: false, maxWaitMs: 25000, pollMs: 1500, maxHold: 200 };
+  let lpDoc = null, rdDoc = null;
+  try { lpDoc = await TCONFIG.findOne({ _id: 'longPoll' }); } catch (e) { /* 讀不到就用預設 */ }
+  try { rdDoc = await TCONFIG.findOne({ _id: 'redactState' }); } catch (e) { /* 讀不到就用預設 */ }
+  const lpCfg = Object.assign({}, TLP_DEFAULT, lpDoc || {});
+  lpCfg.enabled = lpCfg.enabled === true;
+  lpCfg.maxWaitMs = Math.max(1000, Math.min(60000, Number(lpCfg.maxWaitMs) || TLP_DEFAULT.maxWaitMs));
+  lpCfg.pollMs = Math.max(300, Math.min(10000, Number(lpCfg.pollMs) || TLP_DEFAULT.pollMs));
+  lpCfg.maxHold = Math.max(1, Math.min(2000, Number(lpCfg.maxHold) || TLP_DEFAULT.maxHold));
+  delete lpCfg._id;
+  const redactEnabled = !!(rdDoc && rdDoc.enabled === true);
+
+  // ── ② 明細：整個時間窗、**不設 limit** ────────────────────────────────
+  const since = Date.now() - range.hours * 3600000;
+  const raw = await TCDIAG.find({ ts: { $gte: since } }).sort({ ts: -1 }).toArray();
+
+  // ── ③ 指紋彙總（與 /admin/clientdiag 同一段 aggregate）────────────────
+  const agg = await TCDIAG.aggregate([
+    { $match: { ts: { $gte: since } } },
+    { $group: { _id: '$reason', n: { $sum: 1 }, uids: { $addToSet: '$uid' } } },
+  ]).toArray();
+  const byReason = agg
+    .map(function (a) { return { reason: a._id || '(未標)', label: reasonLabel(a._id), n: a.n, players: (a.uids || []).length }; })
+    .sort(function (x, y) { return y.n - x.n; });
+
+  // ── ④ 逐列展開 ────────────────────────────────────────────────────────
+  const rows = [];
+  const rtt = [];
+  const verMap = new Map();          // ver -> { n, uids:Set }
+  const uidSet = new Set();
+  const perfVals = { net: [], dl: [], tok: [], parse: [], adopt: [], paint: [] };
+  const ltVals = { n: [], total: [], max: [] };
+  let ltUnsupported = 0, perfRows = 0, truncated = 0;
+  const devMap = new Map();          // 'hc核/dmGB' -> count
+  const uaMap = new Map();           // 平台 -> { n, uids:Set }
+
+  for (const r of raw) {
+    const d = parseDiag(r.diag || '');
+    if (d.truncated) truncated++;
+    if (r.uid) uidSet.add(r.uid);
+    const verKey = d.ver || '(未知)';
+    if (!verMap.has(verKey)) verMap.set(verKey, { n: 0, uids: new Set() });
+    const vm = verMap.get(verKey); vm.n++; if (r.uid) vm.uids.add(r.uid);
+
+    const plat = uaShort(d.ua);
+    if (!uaMap.has(plat)) uaMap.set(plat, { n: 0, uids: new Set() });
+    const um = uaMap.get(plat); um.n++; if (r.uid) um.uids.add(r.uid);
+
+    if (d.rtt && num(d.rtt.p95) !== null) {
+      rtt.push({
+        ts: r.ts, tsLocal: tw(r.ts), email: r.email || null, uid: r.uid || null, room: r.room || '',
+        reason: r.reason || '', ver: d.ver || null,
+        n: num(d.rtt.n), p50: num(d.rtt.p50), p95: num(d.rtt.p95), max: num(d.rtt.max),
+        perf: d.perf || null, hc: d.hc, dm: d.dm, ua: d.ua || null,
+        truncated: d.truncated,
+      });
+    }
+    if (d.perf) {
+      perfRows++;
+      const api = d.perf.api || {};
+      const g = function (o) { return o && num(o.p95) !== null ? o.p95 : null; };
+      const push = function (arr, v) { if (v !== null) arr.push(v); };
+      push(perfVals.net, g(api.net)); push(perfVals.dl, g(api.dl));
+      push(perfVals.tok, g(api.tok)); push(perfVals.parse, g(api.parse));
+      push(perfVals.adopt, g(d.perf.adopt)); push(perfVals.paint, g(d.perf.paint));
+      const lt = d.perf.lt;
+      if (lt && num(lt.n) !== null) { ltVals.n.push(lt.n); ltVals.total.push(lt.total); ltVals.max.push(lt.max); }
+      else ltUnsupported++;   // ⚠ lt === null ＝ Safari/iOS 不提供，**不是**「這台很順」
+    }
+    if (d.hc !== null || d.dm !== null) {
+      const k = (d.hc !== null ? d.hc + ' 核' : '?核') + ' / ' + (d.dm !== null ? d.dm + ' GB' : '?GB');
+      devMap.set(k, (devMap.get(k) || 0) + 1);
+    }
+
+    rows.push({
+      ts: r.ts, tsLocal: tw(r.ts), uid: r.uid || null, email: r.email || null,
+      room: r.room || '', reason: r.reason || '', reasonLabel: reasonLabel(r.reason),
+      ver: d.ver || null, ua: d.ua || null, hc: d.hc, dm: d.dm,
+      diagLen: (r.diag || '').length,
+      truncated: d.truncated,
+      diagParsed: d.obj,     // 解析成功才有；失敗是 null（看 diag 原文）
+      diag: r.diag || '',    // 原始字串永遠保留（ground truth）
+    });
+  }
+  rtt.sort(function (a, b) { return (b.p95 || 0) - (a.p95 || 0); });
+
+  const byVersion = [...verMap.entries()]
+    .map(function (e) { return { ver: e[0], n: e[1].n, players: e[1].uids.size }; })
+    .sort(function (a, b) { return verCmp(b.ver, a.ver); });
+  const knownVers = byVersion.filter(function (v) { return v.ver !== '(未知)'; });
+  const latestVer = knownVers.length ? knownVers[0].ver : null;
+
+  const byPlatform = [...uaMap.entries()]
+    .map(function (e) { return { platform: e[0], n: e[1].n, players: e[1].uids.size }; })
+    .sort(function (a, b) { return b.n - a.n; });
+
+  // 每位玩家的 RTT 概況（站長最常問的「是誰在卡」）
+  const byPlayer = new Map();
+  for (const r of rtt) {
+    const k = r.email || r.uid || '(未知)';
+    if (!byPlayer.has(k)) byPlayer.set(k, { who: k, reports: 0, worstP95: 0, p95s: [], vers: new Set() });
+    const p = byPlayer.get(k);
+    p.reports++; p.p95s.push(r.p95); if (r.p95 > p.worstP95) p.worstP95 = r.p95;
+    if (r.ver) p.vers.add(r.ver);
+  }
+  const players = [...byPlayer.values()].map(function (p) {
+    return { who: p.who, reports: p.reports, worstP95: p.worstP95, medianP95: quant(p.p95s, 0.5), vers: [...p.vers] };
+  }).sort(function (a, b) { return b.worstP95 - a.worstP95; });
+
+  // ── 輸出 JSON ─────────────────────────────────────────────────────────
+  const out = {
+    generatedAt: new Date().toISOString(),
+    generatedAtLocal: tw(Date.now()),
+    uri: maskUri(uri),
+    db: db.databaseName,
+    range: { hours: range.hours, label: range.label, since: since, sinceLocal: tw(since) },
+    ttlNote: 'tournamentClientDiag 有 TTL index（604800 秒＝7 天），超過 7 天的紀錄已被 mongo 刪除，任何工具都撈不回來。',
+    sourceNote: '本檔直接讀 mongo（tournamentClientDiag / tournamentConfig），與 admin 📡 分頁同一批資料，'
+      + '但不受該 API 的 rows .limit(120) 與 slowRtt .limit(200) 限制。',
+    config: {
+      longPoll: { enabled: lpCfg.enabled, maxWaitMs: lpCfg.maxWaitMs, pollMs: lpCfg.pollMs, maxHold: lpCfg.maxHold, rawDoc: lpDoc || null },
+      redact: { enabled: redactEnabled, rawDoc: rdDoc || null },
+      held: null,
+      rooms: null,
+      heldRoomsNote: 'held / rooms 是 server process 的記憶體變數（_lpHeld / _lpWaiters.size），沒有持久化 ⇒ '
+        + '只能在 admin 📡 分頁看即時值，離線 dump 拿不到（賽後 dump 本來也會是 0）。',
+    },
+    totals: {
+      rows: rows.length,
+      players: uidSet.size,
+      truncatedRows: truncated,
+      rowsWithRtt: rtt.length,
+      rowsWithPerf: perfRows,
+      latestClientVersion: latestVer,
+    },
+    byReason: byReason,
+    byVersion: byVersion,
+    byPlatform: byPlatform,
+    deviceMix: [...devMap.entries()].map(function (e) { return { device: e[0], n: e[1] }; }).sort(function (a, b) { return b.n - a.n; }),
+    rttPlayers: players,
+    rtt: rtt,      // ⭐ 全部，不是 20 筆也不是 200 筆
+    rows: rows,    // ⭐ 全部，不是最近 120 筆
+  };
+  fs.writeFileSync('/tmp/ptcg_monitor_dump.json', JSON.stringify(out, null, 2), 'utf8');
+
+  // ── 輸出 TXT 摘要（站長自己看的人話版）────────────────────────────────
+  const L = [];
+  L.push('⚠ 這份檔案含玩家 email（管理員本來就看得到），要分享出去之前請自行斟酌。');
+  L.push('============================================================');
+  L.push('📡 對戰連線監控 — 摘要');
+  L.push('產生時間：' + tw(Date.now()) + '（台灣時間）');
+  L.push('資料範圍：最近 ' + range.label + '（' + range.hours + ' 小時），自 ' + tw(since) + ' 起');
+  L.push('⚠ 伺服器只保留 7 天，更早的資料已被自動刪除 —— 「7 天」就是全部。');
+  L.push('資料來源：直接讀資料庫，沒有畫面上的 120 筆／20 筆截斷。');
+  L.push('');
+  L.push('【① 連線設定現況】');
+  L.push('  🚀 長輪詢：' + (lpCfg.enabled ? '已啟用' : '關閉')
+    + '　掛起上限 ' + Math.round(lpCfg.maxWaitMs / 1000) + ' 秒'
+    + '（保險輪詢 ' + lpCfg.pollMs + ' ms、同時掛起上限 ' + lpCfg.maxHold + ' 條）');
+  L.push('  🙈 玩家端盤面遮蔽：' + (redactEnabled ? '已啟用' : '關閉'));
+  L.push('  📶 目前掛起連線數／房間數：拿不到。這兩個數字只活在「正在跑的伺服器記憶體」裡，');
+  L.push('     沒有存進資料庫 ⇒ 要看即時值請開 admin 的「📡 監控」分頁。');
+  L.push('');
+  L.push('【② 玩家端異常指紋（整個時間窗，沒有截斷）】');
+  if (!byReason.length) {
+    L.push('  這段期間沒有任何異常回報 👍');
+  } else {
+    for (const r of byReason) {
+      L.push('  ・' + pad(r.label, 30) + padL(r.n, 6) + ' 次 /' + padL(r.players, 4) + ' 人   [' + r.reason + ']');
+    }
+    L.push('  ── 合計 ' + rows.length + ' 筆回報，來自 ' + uidSet.size + ' 位玩家。');
+    L.push('  （人數比次數重要：同一個人重複觸發，不代表全站有問題。）');
+  }
+  L.push('');
+  L.push('【③ ⭐ client 版本分佈】←「還有多少人停在舊版」看這裡');
+  if (!byVersion.length) {
+    L.push('  沒有資料。');
+  } else {
+    L.push('  ' + pad('版本', 12) + padL('筆數', 8) + padL('佔比', 9) + padL('人數', 8) + padL('人數佔比', 11));
+    for (const v of byVersion) {
+      L.push('  ' + pad('v' + v.ver, 12) + padL(v.n, 8) + padL(pct(v.n, rows.length), 9)
+        + padL(v.players, 8) + padL(pct(v.players, uidSet.size), 11)
+        + (latestVer && v.ver === latestVer ? '   ← 最新' : ''));
+    }
+    const oldRows = byVersion.filter(function (v) { return v.ver !== latestVer; }).reduce(function (a, v) { return a + v.n; }, 0);
+    L.push('  ⚠ 非最新版本的回報共 ' + oldRows + ' 筆（' + pct(oldRows, rows.length) + '）。');
+    L.push('    「最新」是以本次資料裡出現過的最高版本（v' + (latestVer || '?') + '）為準，不是寫死的。');
+    L.push('    舊版畫面（v6.159 之前）不會回報 perf 欄位 ⇒ 那些人在 admin 表格右邊全部是「—」，');
+    L.push('    不是他們很順，是他們的畫面還沒更新。');
+  }
+  L.push('');
+  L.push('【④ 動作往返時間（RTT）分佈】');
+  if (!rtt.length) {
+    L.push('  這段期間沒有任何帶 RTT 數字的回報。');
+  } else {
+    const slowOnly = rtt.filter(function (r) { return r.reason === 'slow-rtt'; }).length;
+    L.push('  有 RTT 數字的回報共 ' + rtt.length + ' 筆（其中 slow-rtt 指紋 ' + slowOnly + ' 筆；');
+    L.push('  admin 畫面那張表只畫 slow-rtt 的前 20 筆，這裡是全部）。');
+    const buckets = [
+      ['< 1 秒（正常）', function (v) { return v < 1000; }],
+      ['1 ~ 3 秒', function (v) { return v >= 1000 && v < 3000; }],
+      ['3 ~ 5 秒', function (v) { return v >= 3000 && v < 5000; }],
+      ['5 ~ 10 秒', function (v) { return v >= 5000 && v < 10000; }],
+      ['≥ 10 秒（很嚴重）', function (v) { return v >= 10000; }],
+    ];
+    for (const b of buckets) {
+      const c = rtt.filter(function (r) { return b[1](r.p95); }).length;
+      L.push('    ' + pad(b[0], 20) + padL(c, 6) + ' 筆' + padL(pct(c, rtt.length), 9));
+    }
+    const all95 = rtt.map(function (r) { return r.p95; });
+    L.push('  全體 p95 的中位數 ' + ms(quant(all95, 0.5)) + '，最差 ' + ms(Math.max.apply(null, all95)) + '。');
+    L.push('');
+    L.push('  最慢的玩家（依最差 p95 排序，最多列 15 位）：');
+    L.push('    ' + pad('玩家', 34) + padL('最差p95', 10) + padL('中位p95', 10) + padL('回報數', 8) + '  版本');
+    for (const p of players.slice(0, 15)) {
+      L.push('    ' + pad(p.who, 34) + padL(ms(p.worstP95), 10) + padL(ms(p.medianP95), 10)
+        + padL(p.reports, 8) + '  ' + (p.vers.length ? p.vers.map(function (v) { return 'v' + v; }).join(',') : '(未知)'));
+    }
+    if (players.length > 15) L.push('    …另有 ' + (players.length - 15) + ' 位，完整名單在 JSON 的 rttPlayers。');
+  }
+  L.push('');
+  L.push('【⑤ 卡在網路，還是卡在那台裝置？（v6.159 起才有的分段數字）】');
+  if (!perfRows) {
+    L.push('  這段期間沒有任何 v6.159 之後的回報 ⇒ 分不出來。等玩家更新畫面後再跑一次。');
+  } else {
+    L.push('  有分段數字的回報：' + perfRows + ' 筆（' + pct(perfRows, rows.length) + '，＝已更新到 v6.159 以後的畫面）。');
+    L.push('  以下每一欄都是「各筆 p95 的中位數 / 最大值」：');
+    const rowsOut = [
+      ['網路（送出→伺服器回第一個位元組）', perfVals.net, '網路／隧道'],
+      ['下載（把整份盤面收下來）', perfVals.dl, '網路／隧道'],
+      ['權杖（登入憑證換發，正常是 0）', perfVals.tok, '那台裝置'],
+      ['解析（JSON 轉物件）', perfVals.parse, '那台裝置'],
+      ['採納（把新盤面吃進畫面狀態）', perfVals.adopt, '那台裝置'],
+      ['重繪（畫面真的更新）', perfVals.paint, '那台裝置'],
+    ];
+    L.push('    ' + pad('項目', 36) + padL('中位數', 10) + padL('最大', 10) + '  歸屬');
+    for (const rr of rowsOut) {
+      const arr = rr[1];
+      L.push('    ' + pad(rr[0], 36) + padL(arr.length ? ms(quant(arr, 0.5)) : '—', 10)
+        + padL(arr.length ? ms(Math.max.apply(null, arr)) : '—', 10) + '  ' + rr[2]);
+    }
+    if (ltVals.n.length) {
+      L.push('    長任務（每分鐘卡住主執行緒）：' + ltVals.n.length + ' 筆有數字，'
+        + '次數中位數 ' + quant(ltVals.n, 0.5) + ' 次、單次最長 ' + ms(Math.max.apply(null, ltVals.max)));
+    }
+    L.push('    ⚠ 有 ' + ltUnsupported + ' 筆長任務顯示「不支援」＝那台是 iPhone／Safari，瀏覽器不給這個數字，');
+    L.push('      不是代表它很順（請改看「重繪」那一欄）。');
+    L.push('  判讀：網路／下載小，但解析／採納／重繪／長任務大 ⇒ 瓶頸在玩家自己的裝置，');
+    L.push('        再怎麼修伺服器都不會有效果。反過來才是伺服器／隧道要處理的。');
+    L.push('        ⚠ 裝置忙不過來時，網路／下載也會跟著被灌水，不要只看一欄就下結論。');
+  }
+  if (byPlatform.length) {
+    L.push('');
+    L.push('  裝置平台分佈（從 User-Agent 推）：');
+    for (const p of byPlatform) L.push('    ' + pad(p.platform, 18) + padL(p.n, 6) + ' 筆 /' + padL(p.players, 4) + ' 人');
+  }
+  L.push('');
+  L.push('【⑥ 資料完整性】');
+  L.push('  明細共 ' + rows.length + ' 筆，其中 ' + truncated + ' 筆（' + pct(truncated, rows.length) + '）的診斷內容');
+  L.push('  被伺服器的 2KB 上限切斷 ⇒ 那幾筆的 perf 與 User-Agent 沒能存下來。');
+  L.push('  （這些被切斷的列在 admin 📡 分頁的 RTT 表上是**完全看不到**的，這裡已用文字比對盡量救回。）');
+  L.push('');
+  L.push('【⑦ 接下來】');
+  L.push('  完整資料在同一個資料夾、同名的 .json（每一筆 payload 的 poll.rtt / perf.* / env.ua 都在裡面）。');
+  L.push('  把那個 .json 整包交給 AI，它才有辦法幫你定位「到底是誰卡、卡在哪一段」。');
+  L.push('============================================================');
+  // BOM：站長會直接用記事本／Excel 開，加了 BOM 才保證不會變亂碼。
+  fs.writeFileSync('/tmp/ptcg_monitor_summary.txt', '﻿' + L.join('\r\n') + '\r\n', 'utf8');
+
+  console.log('');
+  console.log(L.join('\n').replace(/^﻿/, ''));
+  console.log('');
+  console.log('完整資料已寫出: /tmp/ptcg_monitor_dump.json (' + rows.length + ' 筆明細 / ' + rtt.length + ' 筆 RTT)');
+  console.log('摘要已寫出:     /tmp/ptcg_monitor_summary.txt');
+  await client.close();
+})().catch(function (e) { console.error('ERROR:', e && e.message); process.exit(1); });
