@@ -7,6 +7,7 @@
   import type { User } from 'firebase/auth';
   import type { Unsubscribe } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
+  import { hardRefreshNow } from '$lib/hard-refresh';   // v6.160 清快取唯一實作（與錦標賽報到共用）
 
   // v2.53 我的回饋歷史 + admin 回覆顯示
   interface FeedbackHistoryItem {
@@ -245,41 +246,17 @@
 
   // v5.197：強制更新按鈕 — 解套 iOS PWA「加入主畫面」cache 不更新問題
   //   玩家回報 iOS 加入主畫面後 app cache 卡舊版，關 app 重開仍是舊版本。
-  //   解法：卸載 Service Workers + 清空 Cache API + 加 timestamp query param 強制 reload。
-  //   不清 localStorage / IndexedDB → 牌組與帳號資料保留 ✓
+  // ⭐⭐v6.160：清快取的實際動作**抽到 `$lib/hard-refresh` 成為全站唯一一份**
+  //   （錦標賽報到的「版本太舊」提示視窗要按同一顆鈕，兩份實作會漂移）。
+  //   本函式只保留「確認對話框 + 按鈕狀態」這層 UI，動作一律委派給 hardRefreshNow()。
+  //   ⚠ hardRefreshNow() 內建 2.5 秒逾時保險（v5.909 的「一直卡在更新中…」），這裡不必再包一層。
   let hardRefreshing = $state(false);
   async function hardRefresh() {
     if (hardRefreshing) return;
     const ok = confirm('將清除瀏覽器快取並重新載入網頁，取得最新版本。\n\n✅ 您的牌組與帳號資料會保留\n❌ 暫存的網頁 / 程式 / 圖檔會清除\n\n確定要強制更新嗎？');
     if (!ok) return;
     hardRefreshing = true;
-    // v5.909：清快取包 Promise.race + 逾時保險。原本逐一 await getRegistrations()/caches.delete(),
-    //   在某些瀏覽器/PWA 狀態下這些 API 會「既不 reject 也不 resolve」永遠卡住 → 後面的 location.replace
-    //   永不執行 → 按鈕一直停在「更新中…」(玩家回報)。try/catch 只擋 error 不擋 hang。
-    //   改成：清快取最多等 2.5 秒,無論完成或卡住都強制 reload(?_v 已 bypass HTTP 快取,新版 SW 會重新預快取)。
-    const cleanup = (async () => {
-      try {
-        // 1. 卸載所有 Service Workers
-        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map(r => r.unregister().catch(() => false)));
-        }
-        // 2. 清空 Cache API 所有 caches
-        if (typeof window !== 'undefined' && 'caches' in window) {
-          const names = await caches.keys();
-          await Promise.all(names.map(n => caches.delete(n).catch(() => false)));
-        }
-      } catch (e) {
-        console.warn('[hardRefresh] cleanup error:', e);
-      }
-    })();
-    await Promise.race([cleanup, new Promise<void>((res) => setTimeout(res, 2500))]);
-    // 3. 加 timestamp query param 強制 fresh HTML (bypass browser HTTP cache)
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('_v', String(Date.now()));
-      window.location.replace(url.toString());
-    }
+    await hardRefreshNow();
   }
 </script>
 

@@ -17,6 +17,102 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.160 — 錦標賽「報到」的 client 版本閘（提示更新，但絕不擋人）
+
+站長：「有辦法在錦標賽報到的時候，強制玩家去更新版本嗎？是否能把首頁那個強制更新版本的
+按鈕功能，一起套用到報到這邊？」
+
+動機：監控顯示線上仍有停在 **v6.141 / v6.144** 的 client（現行 v6.159）。他們的 Service
+Worker 卡住舊 bundle ⇒ 拿不到任何修正，而且**會拖累對手**（一台舊/慢 client 讓對戰雙方都覺得卡）。
+報到是最好的攔截點：比賽還沒開始，重載零代價。
+
+### ⚠⚠⚠ 這一版的核心紀律：唯一的失敗模式是「把玩家鎖在賽外」
+報不了到 ＝ 那場比賽他打不了。所以每一條路徑都 fail-open，站長裁定「本站是練習站，
+**可用性優先於版本一致性**，寧可放一個舊 client 進來，也不要把人擋在賽外」。
+具體四條：
+1. **絕不自動重載** —— 重載後版本仍舊 ⇒ 無限重載迴圈 ⇒ 那位玩家永遠報不了到。
+   一律跳視窗、由玩家自己點。守衛直接斷言「判定函式裡不得出現 `hardRefreshNow(`」。
+2. **更新過一輪仍太舊 ⇒ 不再擋**，並記一筆 `checkin-stale-after-update` 診斷。
+3. **報到剩不到 90 秒 ⇒ 不擋**。按更新要重載＋重新登入，整輪十幾秒；剩不到 90 秒還把人
+   推去重載，等他回來 `ev.status` 已不是 `checkin`、後端回 409 ⇒ 等於我們親手害他報不了到。
+4. 視窗上永遠有「先不更新，直接報到」的逃生口。
+
+### 沿用既有實作：清快取收斂成全站唯一一份
+新增 `src/lib/hard-refresh.ts` 的 `hardRefreshNow()`（卸 SW → 清 caches → `Promise.race`
+2.5 秒逾時保險 → 帶 `_v=<ts>` `location.replace`）。原本站上其實有**三份**：
+- `src/routes/+page.svelte` 的 `hardRefresh()`（首頁那顆鈕，v5.197/v5.909，最完整的一份）
+- `oracle-admin/admin.html` 的 `hardReloadAdmin()`（v1.60，另一個 repo 面向，維持原樣）
+- ⭐ `src/routes/game/+page.svelte` 的 `hardReloadBrokenReg()`（v5.991「特性註冊不完整」自救鈕）
+  —— 這份**少了 2.5 秒逾時保險、且用 `location.reload()` 沒有 cache-bypass**，偏偏它正是
+  「特性按鈕靜默消失」時玩家唯一的自救管道。一併收斂。
+
+### ⭐ 版本比較是「十進位小數」，不是 semver 段落
+`version.ts` 的規則明寫小更新 +0.01、大更新 +0.1、重大 +1，歷史上真的出現過 `1.09` → `1.1`。
+照 semver 逐段當整數比會得到 [1,9] > [1,1] ⇒ **判反**。
+⇒ `isClientTooOld()` 把 minor **右側補 0 到等長**再當整數比（不用 parseFloat，避開浮點誤差）：
+`'6.9' vs '6.159'` → `900 vs 159`；`'1.09' vs '1.1'` → `09 vs 10`；`'10.0' vs '6.159'` 先比 major。
+⭐ 正面副作用：Mongo 若把門檻存成數字，`String(6.150)` → `'6.15'`，而兩者在本語義下**相等**
+⇒ 尾隨零遺失不會讓門檻靜默降級。
+⚠ 解析不出來（空字串、`'6.'`、`'.9'`、三段式、超長、非字串）一律回 `false` ＝ 不擋。
+
+### 「剛更新過」的訊號：URL 的 `_v=`，**不是** sessionStorage
+Fable 5 審查抓到的鎖死路徑：Safari 無痕／儲存被政策關閉時 `sessionStorage.setItem` 會 **throw**，
+而逃生鈕若把 setItem 放第一步，那一 throw 就把「先不更新，直接報到」整條路徑打斷 ⇒ 玩家被鎖在賽外。
+⇒ 改讀 `hardRefreshNow()` 本來就會加的 `_v=<timestamp>`（10 分鐘窗）。讀 URL 不會 throw、
+不需要權限、清快取也清不掉它。整個版本閘**零 Web Storage 依賴**，守衛明文鎖住這件事。
+⚠ 未來時間戳也放行 —— 這個述詞回 true ＝ 不擋人，寬鬆的一邊才是安全的一邊。
+
+### 後端（`server_admin_patch.js` v1.10）
+- 新灰度旗標 `tournamentConfig._id='minClientVer'` `{enabled, min}`，`minVerConfig()` 10 秒 TTL，
+  完全比照 `lpConfig()` / `redactEnabled()` 的慣例（只有明確 `true` 才算開、寫入後 `_mvCfgAt = 0`）。
+  **預設 `enabled:false` 且 `min:''`** ⇒ 沒設定不擋任何人。
+- `/event` 回 `minClientVer`（關閉時回空字串）。⚠ 改門檻最長 ~13 秒生效（10s TTL ＋ /event 3s 共用快取）。
+- `/checkin` 收下 `ver` 寫進 reg doc 的 `clientVer`。**永遠不因版本回 4xx** —— 在後端加 gate
+  等於製造「玩家自己救不了自己」的死路。守衛直接斷言 `/checkin` 區段裡 ver/clientVer 附近沒有 `res.status(4`。
+- admin `GET/POST /api/tournament/admin/minclientver`；啟用但沒有有效門檻回 400（不可靜默假開）。
+
+### ⚠⚠⚠ 最重要的限制：門檻**只對 v6.160 以上的 client 生效**
+擋人的判斷寫在 client，而 v6.159 以下的 bundle 根本沒有那段程式碼、也不會送 `ver`。
+⇒ 這一版**擋不到現在那些 6.141/6.144 的人**，它是給「下一次」用的基礎建設。
+⭐ 唯一能識別他們的訊號：`/checkin` 沒帶 `ver` ⇒ 記成 `clientVer: 'pre-gate'`。這是這一版
+真正立刻有用的東西，別把它拿掉。
+
+### ⚠⚠ Cloudflare / Service Worker：這顆鈕到底有沒有用？（實測）
+`curl -I https://www.ptcg-tw-sim.com/…`：
+| 資源 | 結果 | 判讀 |
+|---|---|---|
+| `/`、`/game`、`/tournament`（含帶 `?_v=`） | `cf-cache-status: DYNAMIC` | Cloudflare **不快取 HTML** ⇒ 重載一定拿得到最新 HTML ⇒ **這顆鈕是有效的** |
+| `/_app/immutable/*` | `max-age=31536000`、`HIT` | 檔名含 content hash，新版是新檔名 ⇒ 正確且無害 |
+| `/service-worker.js` | `HIT`、`max-age=14400`、實測 `age: 2425` | ⚠ **邊緣快取 4 小時** |
+
+⇒ 結論：**按了有效**。清 SW ＋ HTML 走 origin ＋ chunk 是新 hash，當下那次載入必定拿到新版。
+⚠ 但 `/service-worker.js` 4 小時的邊緣快取代表：重載後重新註冊到的 SW 腳本可能是最多 4 小時前
+那一版 build 的。而 `/tournament` 是 `prerender = true` ⇒ 它在 SW 的 `PRECACHE` 名單裡
+⇒ SW 對它是 **cache-first**（不是 network-first —— 這點審查時被誤判過，已用 `service-worker.ts`
+第 114~120 行複驗）。這正是玩家日後再度變舊的來路。
+⇒ **根治要在 Cloudflare 對 `/service-worker.js` 設 bypass cache 的 Cache Rule（站長端操作）**，
+client 端沒有任何寫法能繞過邊緣快取。
+
+### 守衛
+`scripts/test-v6160-checkin-version-gate.mjs`（57 條，**HEAD 52 FAIL**），已進 npm test。
+版本比較與「剛更新過」是**行為端**斷言（esbuild 轉譯真模組、跑真輸入），只有接線用結構掃描。
+⚠ 模組不存在時不讓守衛以 ENOENT 爆掉 —— 「還沒做」要看起來像測試沒過，不能像測試環境壞了。
+
+### Fable 5 審查（逐項複驗後採納）
+| # | 指出 | 複驗結果 |
+|---|---|---|
+| P1 | 門檻只對 v6.160+ 生效，擋不到現在那批人 | **屬實**，已改預設 `min:''` ＋ 補 `pre-gate` 訊號 ＋ 寫進文件 |
+| P2 | `sessionStorage.setItem` 會 throw ⇒ 逃生口壞死 | **屬實**，改用 URL `_v`，整層 Web Storage 拿掉 |
+| P3 | 主張「SW 對 HTML 是 network-first，不會釘住舊版」 | ⚠ **反駁**：`/tournament` 是 `prerender = true` ⇒ 在 `PRECACHE` 內 ⇒ **cache-first**。已複驗 `+page.ts` 與 `service-worker.ts` |
+| P4 | Mongo 存數字會讓 `6.150` 變 `6.15` | 屬實但**十進位語義下兩者相等**、不會降級；仍加 regex 驗證擋垃圾 |
+| P5 | 報到快截止時叫人去更新＝害他報不了到 | **屬實**，加 90 秒門檻 |
+| P6 | 診斷指紋語義混淆 | 屬實，拆成 prompted / skipped / stale-after-update / deadline-near 四種 |
+| P8 | admin 誤填超高版本 | 架構上安全（不會鎖人），加現行版本對照與紅字警告 |
+
+### ⚠ 部署
+動到 `src/**` ⇒ 網站本體照常出版；另動到 `oracle-admin/server_admin_patch.js`（**`redeploy-oracle.bat`**）
+與 `oracle-admin/admin.html`（**`update-admin-html.bat`**）。三支 bat 一律由站長自己跑。
+
 ## v6.159 — 只加量測，不做效能修正：把「網路慢」和「主執行緒慢」分開量
 
 > ⚠ **這一版刻意不修任何東西。** 錦標賽的 lag 修了十幾版都沒處理好，

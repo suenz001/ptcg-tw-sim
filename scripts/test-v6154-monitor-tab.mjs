@@ -62,9 +62,17 @@ const ok = (name, cond, extra = '') => {
     && ADMIN.includes("api('/api/tournament/admin/clientdiag?hours='"));
   // ⚠ api() **從不 reject**（非 2xx 回 { error: text }）⇒ 用 .catch 判斷是死碼，
   //   舊版伺服器會被當成「正常但沒資料」而顯示假綠（Fable 5 審查抓到）。
+  // v6.160：資料來源會增加（本版加了第 4 支 minclientver），所以不再逐一點名，
+  //   改成通用斷言：`loadMonitor` 裡每一個 `_r[N]` 都必須經過 `_ok()` 包裝。
   ok('★舊版伺服器偵測用 .error 判斷，不是 .catch',
-    ADMIN.includes("const _ok = function (r) { return (r && !r.error) ? r : null; };")
-    && /const lp = _ok\(_r\[0\]\), rd = _ok\(_r\[1\]\), dg = _ok\(_r\[2\]\);/.test(ADMIN));
+    (() => {
+      if (!ADMIN.includes("const _ok = function (r) { return (r && !r.error) ? r : null; };")) return false;
+      const line = (ADMIN.match(/const lp = _ok\(_r\[0\]\)[^\n]*/) || [''])[0];
+      const idx = [...line.matchAll(/_r\[(\d+)\]/g)].map((m) => m[1]);
+      if (idx.length < 3) return false;
+      // 每一個 _r[N] 前面都要緊接著 _ok(
+      return idx.every((n) => line.includes('_ok(_r[' + n + '])'));
+    })());
   ok('★掃描器自我驗證：.catch 死碼寫法會被判為未修',
     !"api('/x').catch(function () { return null; })".includes('_ok('));
   ok('伺服器還是舊版時有明確提示（而不是靜默空白）', ADMIN.includes('伺服器還是舊版'));
@@ -107,7 +115,11 @@ const ok = (name, cond, extra = '') => {
 
 // ── 4. client 端送出的 reason 與 admin 的說明表要對得上 ───────────────────
 {
+  // ⚠ v6.160 盲點修補：原本只掃 `_tSendClientDiag`，而大廳（報到階段）的指紋走的是
+  //   另一支 `tSendLobbyDiag`（既有那支開頭就 `if (!tActiveRoom) return`，大廳送不出去）。
+  //   漏掃的後果是新指紋在 admin 上顯示成代號而沒有白話說明，站長看不懂。
   const sent = new Set([...PAGE.matchAll(/_tSendClientDiag\('([a-z-]+)'/g)].map((m) => m[1]));
+  for (const m of PAGE.matchAll(/tSendLobbyDiag\('([a-z-]+)'/g)) sent.add(m[1]);
   ok('client 端至少送這幾種指紋', sent.size >= 5, [...sent].join(','));
   const missing = [...sent].filter((r) => !new RegExp("'" + r + "': \\[").test(ADMIN));
   ok('★client 送的每一種指紋，admin 都有對應的白話說明（新增指紋時會紅）',

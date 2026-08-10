@@ -82,6 +82,9 @@
   import { prepareAIPlaybook, clearPlaybook } from '$lib/game/ai-playbook';
   import { tryPredictAction, OPTIMISTIC_ACTION_TYPES } from '$lib/game/optimistic';  // v6.137 錦標賽樂觀更新
   import { VERSION } from '$lib/version';
+  // ⭐⭐⭐v6.160 錦標賽報到的「client 版本太舊」提示。清快取動作與首頁那顆鈕**共用同一份實作**。
+  import { hardRefreshNow } from '$lib/hard-refresh';
+  import { isClientTooOld, recentlyHardRefreshed } from '$lib/version-compare';
   import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx, playSfxEvents } from '$lib/audio/sfx';
   // v6.048：音效決策收斂到純函式（三條路徑共用，可寫自動化守衛）
   import { computeSfxEvents } from '$lib/audio/sfx-events';
@@ -109,16 +112,12 @@
   let poolReady = $state(false);
   // v5.991：特性註冊 runtime 自檢 — 偵測 effects 註冊不完整(SW 舊 chunk / chunk 載入失敗 / 循環相依)時顯示重新整理提示
   let abilityRegBroken = $state(false);
-  async function hardReloadBrokenReg() {
-    try {
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister().catch(() => false)));
-      }
-      if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
-    } catch (_e) {}
-    location.reload();
-  }
+  // ⭐⭐v6.160：這裡原本是**第三份**清快取實作，而且比首頁那份少了兩樣東西——
+  //   ①沒有 v5.909 的 2.5 秒逾時保險（列舉 SW 註冊／刪 cache 的那兩支 API 在某些 PWA 狀態下
+  //     會既不 resolve 也不 reject ⇒ 後面的 reload 永不執行 ⇒ 按了完全沒反應）；
+  //   ②用 location.reload() 而不是帶 `_v=` ⇒ 沒有 bypass HTTP 快取。
+  //   正好是「特性按鈕靜默消失」最需要它可靠的時候。收斂到唯一實作。
+  async function hardReloadBrokenReg() { await hardRefreshNow(); }
   let decks = $state<Deck[]>([]);
   const allDecks = $derived([...PRESET_DECKS, ...decks]);
   // ── v0.4 錦標賽伺服器權威模式（/tournament wrapper 傳入 tournamentMode=true）──
@@ -279,6 +278,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const T_ROOM = 'TOURNAMENT-TEST';
   // ── Phase1-B：賽事狀態 ──
   let tEvents = $state<any[]>([]);   // 多賽事：開放中賽事清單（每場一張卡，各自報名）
+  // ⭐⭐⭐v6.160 報到版本閘（灰度，伺服器 tournamentConfig.minClientVer 決定門檻）。
+  //   ⚠ 空字串 ＝ 沒設定／伺服器是舊版沒有這個欄位 ⇒ `isClientTooOld` 解析不出來 ⇒ **不擋任何人**。
+  //     這條 fail-open 是硬約束：把玩家擋在報到之外＝他打不了那場比賽。
+  let tMinClientVer = $state('');
+  let tVerModalEventId = $state('');   // 非空 ＝ 正在顯示「版本太舊」提示視窗（該場賽事 id）
+  let tVerModalBusy = $state(false);
   let tRegFormEventId = $state('');  // 目前展開報名表單的賽事 id（點某場「報名」才展開）
   // v5.629 玩家發起社群賽
   let tProposeOpen = $state(false);
@@ -4557,6 +4562,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       tEvents = Array.isArray(r.events) ? r.events : [];
       tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null; tMyBye = r.myBye ?? null;
+      // v6.160：舊版伺服器沒有這個欄位 ⇒ 維持 '' ⇒ 不擋任何人（fail-open）。
+      tMinClientVer = (typeof r.minClientVer === 'string') ? r.minClientVer : '';
       notifyScan(tEvents, tMyMatch, Date.now() + tClockOffset);   // v6.022 報到開始 / 可進場（僅背景時發）
       // 預填暱稱：用任一已報名賽事的暱稱
       if (!tNickname) {
@@ -4820,14 +4827,89 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } catch (e: any) { tError = '發起失敗：' + String(e?.message ?? e); } finally { tBusy = false; }
   }
   // v5.590 報到：報到階段按鈕，已報名者標記 checkedIn=true
+  //
+  // ⭐⭐⭐v6.160 報到前的版本閘。線上仍有停在 v6.141/v6.144 的 client（Service Worker 對
+  //   `/tournament` 是 cache-first ⇒ 卡住舊 bundle ⇒ 拿不到任何修正，而且會拖累對手）。
+  //   報到是最好的攔截點：比賽還沒開始，重載零代價。
+  //
+  // ⚠⚠⚠ 這裡的每一條規則都是為了「**絕不把玩家鎖在賽外**」而寫的，改動前請先讀完：
+  //   ①**絕不自動重載**。重載後版本仍舊 ⇒ 無限重載迴圈 ⇒ 那位玩家永遠報不了到、打不了比賽。
+  //     一律跳視窗、由玩家自己點。
+  //   ②**更新過一輪仍太舊就不再擋**（fail-open）。訊號是 URL 上的 `_v=`（hardRefreshNow 加的），
+  //     不是 sessionStorage —— Safari 無痕的 `setItem` 會 throw，逃生鈕會整條壞掉。
+  //   ③**報到快截止時不擋**。按更新要重載＋重新登入，整輪十幾秒；剩不到 90 秒還把人推去重載，
+  //     等他回來 `ev.status` 已經不是 checkin，後端回 409 ⇒ 我們親手害他報不了到。
+  //   ④視窗上永遠有「先不更新，直接報到」的逃生口。可用性優先於版本一致性（站長裁定）。
+  function tCheckinBlockedByVersion(eventId: string): boolean {
+    try {
+      if (!isClientTooOld(VERSION, tMinClientVer)) return false;
+      // ②更新過一輪還是舊的 ⇒ 放行，並記一筆診斷讓站長看得到「更新沒生效」這件事。
+      const _href = (typeof window !== 'undefined' && window.location) ? window.location.href : '';
+      if (recentlyHardRefreshed(_href, Date.now())) {
+        tSendLobbyDiag('checkin-stale-after-update', eventId);
+        return false;
+      }
+      // ③報到剩餘時間不足 ⇒ 放行（寧可讓他帶著舊版打，也不要害他錯過報到）。
+      const _ev = tEvents.find((e: any) => e && e._id === eventId);
+      const _left = (_ev && _ev.checkInDeadline) ? (_ev.checkInDeadline - tNow) : Infinity;
+      if (_left < 90000) { tSendLobbyDiag('checkin-stale-deadline-near', eventId); return false; }
+      return true;
+    } catch { return false; }   // 判斷本身出任何錯 ⇒ 不擋（fail-open）
+  }
   async function tCheckin(eventId: string) {
+    // ⚠ 只在這裡開視窗、**不呼叫 API**；視窗的兩顆鈕才會走下面的 tCheckinCommit。
+    if (tCheckinBlockedByVersion(eventId)) {
+      tVerModalEventId = eventId;
+      tSendLobbyDiag('checkin-update-prompted', eventId);
+      return;
+    }
+    await tCheckinCommit(eventId);
+  }
+  async function tCheckinCommit(eventId: string) {
     tBusy = true; tError = '';
     try {
-      const r = await tApi('/checkin', { eventId });
+      // v6.160：帶上 client 版本供伺服器記錄（admin 報名名單看得到誰還停在舊版）。
+      //   ⚠ 後端**永遠不會**因為這個欄位拒絕報到 —— 擋人的判斷只在 client，且處處 fail-open。
+      const r = await tApi('/checkin', { eventId, ver: VERSION });
       if (r?.error) tError = r.error;
       else { tournLoadEvent(); }
     } catch (e: any) { tError = '報到失敗：' + (e?.message ?? e); }
     finally { tBusy = false; }
+  }
+  // 視窗：「🔄 更新並重新載入」。⚠ 不在這裡報到 —— 重載後版本就會是新的，玩家自己再按一次報到。
+  //   若重載後版本**仍舊**，`recentlyHardRefreshed` 會讓下一次報到直接放行（fail-open ②）。
+  async function tVerModalUpdate() {
+    if (tVerModalBusy) return;
+    tVerModalBusy = true;
+    // ⚠⚠⚠ 最後一塊「絕不鎖人」的拼圖（Fable 5 審查抓到）：
+    //   `hardRefreshNow()` 保證會**呼叫** location.replace，但不保證瀏覽器真的導航離開
+    //   （PWA／異常狀態下 replace 可能回來了卻沒換頁 —— 正是 v5.909 那一族的親戚）。
+    //   那種情況下 tVerModalBusy 會永遠是 true ⇒ **兩顆鈕都 disabled，連逃生口都按不動**。
+    //   ⇒ 先掛一個 5 秒看門狗：真的離開頁面就無感，沒離開則逃生鈕自己復活。
+    setTimeout(() => { tVerModalBusy = false; }, 5000);
+    try { await hardRefreshNow(); }
+    catch { tVerModalBusy = false; tVerModalEventId = ''; }   // 清快取炸了也不能卡住視窗
+  }
+  // 視窗：逃生口「先不更新，直接報到」。這條路徑不可以有任何會 throw 的前置動作。
+  async function tVerModalSkip() {
+    const _id = tVerModalEventId;
+    tVerModalEventId = '';
+    tSendLobbyDiag('checkin-update-skipped', _id);
+    await tCheckinCommit(_id);
+  }
+  // ⭐v6.160 大廳診斷。⚠ 既有的 `_tSendClientDiag` 開頭就 `if (!tActiveRoom) return`，
+  //   在大廳（還沒進對戰房）**送不出去** —— 報到階段正是沒有 tActiveRoom 的時候。
+  //   所以這裡另寫一支輕量的，走同一支 `/clientdiag` 端點與既有指紋慣例。
+  //   ⚠ 伺服器的 per-uid 60 秒節流是**不分 reason** 的：大廳這幾則會佔用配額。
+  //     量很小（一位玩家一場賽事最多幾則），可接受。
+  function tSendLobbyDiag(reason: string, eventId: string) {
+    try {
+      if (!isTournament) return;
+      void tApi('/clientdiag', {
+        reason, room: '', ts: Date.now(), ver: VERSION,
+        lobby: { eventId, minVer: tMinClientVer, href: (typeof window !== 'undefined' && window.location ? String(window.location.href).slice(0, 120) : '') },
+      }).catch(() => { /* fire-and-forget：診斷絕不影響報到 */ });
+    } catch { /* 同上 */ }
   }
   async function tournUnregister(eventId: string) {
     if (!confirm('確定退賽？')) return;
@@ -8117,6 +8199,27 @@ function _setupSelfPending(g: any, seat: number): string | null {
        —— 一個是「對手在被倒數」、一個是「我在被倒數」，方向由伺服器權威的 actorSeat 決定。
      ⚠ 手機在背景／鎖屏時看不到任何畫面 ⇒ 仍要靠 v6.151 的 60 秒推播叫醒。彈窗是補強不是取代。 -->
 {#if isTournament && !isTournSpectator && tMyIdleSec != null && tMyIdleSec <= 60}<div class="tourn-still-here" role="alertdialog" aria-live="assertive"><div class="tsh-title">⏰ 系統已開始計時</div><div class="tsh-body">剩 <strong>{tMyIdleSec}</strong> 秒未行動就會被判負。如果你還在，按一下確認。</div><button class="tsh-btn" disabled={tStillHereBusy} onclick={tStillHere}>{tStillHereBusy ? '確認中…' : '我還在'}</button>{#if tStillHereNote}<div class="tsh-note">{tStillHereNote}</div>{/if}</div>{/if}
+
+<!-- ⭐⭐⭐v6.160 報到版本閘提示視窗。
+     ⚠ 這個視窗**沒有 X 也沒有點背景關閉**，但那不是把人關起來 —— 兩顆鈕都會離開視窗，
+       其中「先不更新，直接報到」一定會完成報到。刻意不給第三條「什麼都不做」的出口，
+       是因為那條路只會讓玩家以為報到鈕壞了。
+     ⚠ `tVerModalEventId` 只有 tCheckinBlockedByVersion() 回 true 時才會被設起來，
+       而那支函式處處 fail-open（沒設門檻／版本解析不了／剛更新過／報到快截止 → 一律不擋）。 -->
+{#if isTournament && !isTournSpectator && tVerModalEventId}
+  <div class="tourn-vergate-mask" role="alertdialog" aria-modal="true" aria-labelledby="tvg-title">
+    <div class="tourn-vergate">
+      <div class="tvg-title" id="tvg-title">🔄 你的版本較舊，建議先更新</div>
+      <div class="tvg-body">
+        目前這個瀏覽器載入的是 <strong>v{VERSION}</strong>，賽事建議的最低版本是 <strong>v{tMinClientVer}</strong>。
+        <br>舊版可能沒有近期的對戰修正，連線也容易卡頓，<b>並且會一起拖慢對手</b>。
+        <br><span class="tvg-note">更新會清除網頁快取並重新載入，牌組與帳號資料都會保留。更新後請再按一次「我要報到」。</span>
+      </div>
+      <button class="tvg-btn tvg-primary" disabled={tVerModalBusy} onclick={tVerModalUpdate}>{tVerModalBusy ? '更新中…' : '🔄 更新並重新載入'}</button>
+      <button class="tvg-btn tvg-ghost" disabled={tVerModalBusy} onclick={tVerModalSkip}>先不更新，直接報到</button>
+    </div>
+  </div>
+{/if}
 {#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 {#if isTournSpectator && game && !isTReplay}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
@@ -12072,6 +12175,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-still-here .tsh-body { font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
   .tourn-still-here .tsh-body strong { color: #ffd35a; font-size: 17px; }
   .tourn-still-here .tsh-btn { width: 100%; padding: 10px 0; border: none; border-radius: 8px; background: #d64545; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+
+  /* v6.160 報到版本閘視窗 */
+  .tourn-vergate-mask { position: fixed; inset: 0; z-index: 10000; background: rgba(0,0,0,0.62); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .tourn-vergate { width: min(94vw, 420px); background: #1e2530; color: #e8eef6; border: 2px solid #4a8fd6; border-radius: 14px; padding: 18px 18px 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.65); text-align: center; }
+  .tourn-vergate .tvg-title { font-size: 17px; font-weight: 800; color: #8fc6ff; margin-bottom: 8px; }
+  .tourn-vergate .tvg-body { font-size: 13.5px; line-height: 1.65; margin-bottom: 14px; text-align: left; }
+  .tourn-vergate .tvg-body strong { color: #ffd35a; }
+  .tourn-vergate .tvg-note { display: block; margin-top: 6px; font-size: 12px; color: #9fb0c4; }
+  .tourn-vergate .tvg-btn { width: 100%; padding: 11px 0; border-radius: 9px; font-size: 15px; font-weight: 800; cursor: pointer; border: none; }
+  .tourn-vergate .tvg-btn:disabled { opacity: .55; cursor: wait; }
+  .tourn-vergate .tvg-primary { background: #3d84d6; color: #fff; margin-bottom: 8px; }
+  .tourn-vergate .tvg-ghost { background: transparent; color: #a8bccf; border: 1px solid #46566b; font-weight: 600; font-size: 13.5px; }
   .tourn-still-here .tsh-btn:disabled { opacity: 0.6; cursor: default; }
   .tourn-still-here .tsh-note { margin-top: 8px; font-size: 12px; color: #ffd35a; }
   .tourn-coin-hint { display: block; color: #889; font-size: 11px; margin-top: 3px; }
