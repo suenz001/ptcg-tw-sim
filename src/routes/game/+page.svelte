@@ -151,6 +151,27 @@
   let _tLongPollAt = 0;                // 長輪詢在途的送出時間（0 = 沒有在途）
   let _rttSamples: number[] = [];      // v6.151 動作往返時間取樣（只在明顯偏慢時回報一次）
   let _rttDiagSent = false;
+  // ⭐⭐⭐v6.159【只加量測，不做任何效能修正】
+  //   錦標賽的「卡」修了十幾版都沒中，因為每一版都在修伺服器，而伺服器端指標一直是全綠的。
+  //   本版的唯一目的：讓下一場賽事的數據能**決定性地**分辨「網路慢」與「client 主執行緒慢」。
+  //   ⚠ v6.151 的 `rtt` 是從 `tApi` 進函式起算的 —— 它**包含**
+  //     `await firebaseUser.getIdToken()`、`res.json()` 解析、以及 await 續行還要排隊等
+  //     主執行緒空檔 ⇒ 它從來就不是純網路時間，我們一直誤讀它。這裡把它拆成四段。
+  let _segTok: number[] = [];          // ① await firebaseUser.getIdToken()
+  let _segNet: number[] = [];          // ② fetch 送出 → response **header** 回來
+  //   ⚠⚠ Fable 5 審查抓到：`fetch` 在 header 到達就 resolve，**body 還沒下載**。
+  //     若把 `res.json()` 整段當成「解析」，行動網路 + 大盤面時「解析」欄會被**下載時間**灌爆，
+  //     而「網路」欄反而很小 ⇒ 會做出**與事實相反**的結論（把網路慢誤診成裝置慢），
+  //     那正好顛覆這一版唯一的目的。所以拆成「下載 body」與「純 JSON.parse」兩段。
+  let _segDl: number[] = [];           // ③ res.text()：body 下載（**網路吞吐量**，不是主執行緒）
+  let _segParse: number[] = [];        // ④ JSON.parse（**純主執行緒 CPU**）
+  let _segTotal: number[] = [];        // ⑤ tApi 函式總耗時（①~④ + 等主執行緒空檔）
+  let _adoptSamples: number[] = [];    // tAdopt 本身的同步執行時間
+  let _paintSamples: number[] = [];    // tAdopt 開始 → 下一個 animation frame（重繪成本的代理指標）
+  let _paintPending = false;           // 同時只掛一個 rAF —— 量測本身絕不可以變成新的主執行緒負擔
+  let _visSeq = 0;                     // 頁籤可見性代次：背景時 rAF 完全不 fire，跨越可見性變動的樣本一律丟棄
+  let _ltSamples: { t: number; d: number }[] = [];   // longtask（>50ms 的主執行緒任務）滾動窗
+  let _ltSupported = false;            // ⚠ Safari/iOS 沒有 longtask ⇒ 一律回 null（不是 0），且絕不 throw
   let _freshWatchdogVersionAt = -1;    // v6.151 新鮮度看門狗第一次觸發當下的版本
   // ⭐v6.156「我還在」：把「事後看監控」換成「當場問玩家」。真掛機照樣判負，在思考的人不會被冤枉。
   let tStillHereBusy = $state(false);
@@ -1225,6 +1246,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       obs = new PerformanceObserver((list) => {
         for (const e of list.getEntries()) {
+          // ⭐v6.159 順手累計進診斷用的滾動窗。**刻意共用這顆既有的 observer**：
+          //   多開一顆 PerformanceObserver 等於替主執行緒再加一份回呼負擔，
+          //   而這一版整個重點就是量主執行緒 —— 量測自己不能變成被量的對象。
+          _ltSamples.push({ t: Date.now(), d: e.duration });
+          if (_ltSamples.length > 200) _ltSamples.splice(0, _ltSamples.length - 200);
           if (e.duration >= 600) {
             const bc = (globalThis as any).__ptcgLB;
             console.error('[PTCG] \u26a0\ufe0f \u4e3b\u57f7\u884c\u7dd2\u5361 ' + Math.round(e.duration) + 'ms'
@@ -1233,8 +1259,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
         }
       });
       obs.observe({ entryTypes: ['longtask'] });
+      // ⚠⚠ v6.159：Safari/iOS **有** PerformanceObserver 但**沒有** longtask，而 `observe()`
+      //   對不支援的 entryType **不會 throw**（只在 console 警告）⇒ 絕不可以用「observe 沒爆」
+      //   當支援判據，那會把整批 Safari 使用者誤記成「主執行緒完全沒有長任務」（假綠）。
+      //   唯一可信的判據是 supportedEntryTypes；查不到就保守當作不支援 → 回報 null。
+      const _sup = (PerformanceObserver as any).supportedEntryTypes;
+      _ltSupported = Array.isArray(_sup) && _sup.indexOf('longtask') >= 0;
     } catch { /* longtask 不支援就略過 */ }
-    return () => { try { obs?.disconnect(); } catch { /* ignore */ } };
+    return () => { _ltSupported = false; try { obs?.disconnect(); } catch { /* ignore */ } };
   });
 
   // v4.05：擋瀏覽器返回手勢避免右滑中斷對戰
@@ -1305,6 +1337,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   onMount(() => {
     if (typeof document === 'undefined') return;
     const onVis = (): void => {
+      _visSeq++;   // v6.159 只是計數：背景頁籤的 rAF 根本不 fire，跨越可見性變動的重繪樣本必須丟棄
       if (document.visibilityState !== 'visible') return;
       tNow = Date.now() + tClockOffset;   // 先把時鐘拉回現在，倒數才不會用背景期間的舊值
       // ⚠ 與 tNow 同一個時鐘域（都是伺服器域）。寫成 Date.now() 的話兩者差值就是 tClockOffset，
@@ -4380,8 +4413,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // ── 錦標賽 transport（伺服器權威）：dispatch 在 isTournament 時改走這裡 ──
   async function tApi(path: string, body?: any, opts?: { timeoutMs?: number }) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    // ⭐v6.159 四段拆分的起點。⚠ 只是三個數字：沒有 await、沒有物件配置、沒有任何分支改變，
+    //   控制流程與 v6.158 逐字相同（這一版的紀律是「只加量測」）。
+    const _segT0 = _pnow();
+    let _segT1 = _segT0, _segT2 = _segT0;
     // v0.5 A1：帶 Firebase ID token，伺服器 verifyIdToken 驗證身分（禁匿名）
     try { if (firebaseUser && !firebaseUser.isAnonymous) headers['Authorization'] = 'Bearer ' + (await firebaseUser.getIdToken()); } catch { /* 取 token 失敗 → 伺服器退回 playerId fallback */ }
+    _segT1 = _pnow();   // ① token 段結束
     // v6.135 逾時保護：fetch 預設沒有 timeout（瀏覽器要幾百秒才放棄）。
     //   隧道排隊/黑洞時 `await fetch` 既不 resolve 也不 reject
     //   → tournamentDispatch 的 `finally { tBusy = false }` 永遠不執行
@@ -4400,6 +4438,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         body: body ? JSON.stringify(body) : undefined,
         signal: _ac.signal,
       });
+      _segT2 = _pnow();   // ② 網路段結束（response header 已回來，body 還沒讀）
       if (!res.ok) {
         // v6.150：錦標賽 /state 對「認不出座位」回 401（不再回一份連自己都遮的盤面）。
         //   呼叫端必須分得出「身分失效」與「網路斷線」——兩者在畫面上的自救方式完全不同，
@@ -4408,7 +4447,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
         _err.status = res.status;
         throw _err;
       }
-      return await res.json();
+      // ⚠ `res.text()` + `JSON.parse` 與 `res.json()` 語義相同（規範上 json() 就是 UTF-8 解碼後
+      //   再 JSON.parse，壞 JSON 一樣丟 SyntaxError、一樣落到下面的 catch）。
+      //   拆開的唯一理由是**量測**：把「body 下載（網路）」與「JSON.parse（主執行緒）」分開，
+      //   這正是這一版要分辨的那兩件事。
+      const _txt = await res.text();
+      const _segT3 = _pnow();   // ③ body 下載段結束
+      const _json = JSON.parse(_txt);
+      // ⚠ 與 v6.151 的 rtt 同一條紀律：**只記成功的往返**。錯誤/逾時路徑（12 秒）記進去會扭曲統計。
+      _tRecordApiSegments(path, _segT0, _segT1, _segT2, _segT3, _pnow());
+      return _json;
     } catch (e: any) {
       // AbortError → 換成看得懂的訊息（呼叫端會顯示在 tError）
       if (_timedOut && e && (e.name === 'AbortError' || String(e).includes('AbortError'))) {
@@ -4555,6 +4603,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // v6.151 跨場次殘留清乾淨：actorSeat 帶著上一場的值，會讓下一場在第一個輪詢回來之前
     //   用錯的方向算倒數；RTT 樣本混到上一場則會讓 slow-rtt 指紋掛在錯誤的場次上。
     tServerActorSeat = undefined; _rttSamples = []; _rttDiagSent = false;
+    // ⭐v6.159 同一條「跨場殘留」紀律：新的四段/採納/重繪樣本混到上一場，
+    //   會讓下一場的判讀掛在錯誤的場次上（longtask 是頁面級的，刻意不清）。
+    _segTok = []; _segNet = []; _segDl = []; _segParse = []; _segTotal = [];
+    // ⚠ _paintPending 也要放掉：離場瞬間若有在途 rAF，它會把上一場尾端那一筆推進下一場
+    //   的新陣列（Fable 5 審查）。
+    _adoptSamples = []; _paintSamples = []; _paintPending = false;
     _setupDiagSent = false; _invisibleHandDiagSent = false;   // v6.155 診斷旗標同樣是每場一次，殘留會讓下一場漏報
     _staleDiagVersion = -1; _actionAuthDiagSent = false; _tActionAuthErr = false; _tActionAuthErrAt = 0;   // v6.158 同上
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
@@ -4804,6 +4858,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function tAdopt(state: any, version: number, opts?: { skipSfx?: boolean }) {
     if (typeof version === 'number' && version < tVersion) return; // 拒收 stale
+    const _adoptT0 = _pnow();   // ⭐v6.159 只量測，不改這個函式的任何行為
     // ⭐v6.048：錦標賽「對手的動作」只會經由這裡進來，而這裡原本完全沒有音效
     //   → 對手攻擊、擊倒我方寶可夢、施加狀態、拿獎賞全程無聲，連**我輸掉這一局**
     //   的勝負音都不會播（game-over 音只掛在本機 action 與休閒線上兩條路徑上）。
@@ -4823,14 +4878,90 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (state) tStep = 'playing';
     _tLastStateChangeAt = Date.now();  // v5.618 記錄盤面更新時間（新鮮度看門狗用）
     _freshWatchdogFires = 0;  // v5.933 真盤面更新 → 看門狗連續觸發計數歸零
+    _tRecordAdopt(_adoptT0);   // ⭐v6.159 量測（必須是最後一行：要含整個函式的成本）
   }
   // v6.151 動作往返時間（RTT）取樣。伺服器端 P95 是 8ms，所以往返幾乎都是隧道排隊 + 網路，
   //   那正是 v6.134「第四輪很卡」一直缺的那份資料。⚠ 只記成功的往返：逾時是 12 秒，記進去會扭曲統計。
-  function _rttStats(): { n: number; p50: number; p95: number; max: number } | null {
-    if (_rttSamples.length === 0) return null;
-    const a = [..._rttSamples].sort((x, y) => x - y);
+  // ⭐v6.159 統計工具收斂：rtt / 四段拆分 / tAdopt / 重繪代理 全部共用同一份 p50/p95/max
+  //   與同一個 30 筆滾動窗 —— 各寫一套必然漂移，admin 端也就沒辦法用同一種讀法判讀。
+  //   ⚠ 樣本原本就是整數毫秒（Date.now 差值），改用 performance.now 之後才會有小數，
+  //     所以這裡統一 round：對既有 rtt 是 identity，行為不變。
+  type _PStat = { n: number; p50: number; p95: number; max: number };
+  function _sampleStats(src: number[]): _PStat | null {
+    if (src.length === 0) return null;
+    const a = [...src].sort((x, y) => x - y);
     const at = (q: number) => a[Math.min(a.length - 1, Math.floor(a.length * q))];
-    return { n: a.length, p50: at(0.5), p95: at(0.95), max: a[a.length - 1] };
+    return { n: a.length, p50: Math.round(at(0.5)), p95: Math.round(at(0.95)), max: Math.round(a[a.length - 1]) };
+  }
+  function _pushSample(arr: number[], ms: number): void {
+    if (typeof ms !== 'number' || !isFinite(ms) || ms < 0) return;
+    arr.push(ms);
+    if (arr.length > 30) arr.shift();   // 沿用 rtt 的 30 筆滾動窗
+  }
+  // ⚠ Date.now() 只有 1ms 解析度，而 getIdToken 命中快取時是 0.x ms ⇒ 全部會被記成 0，
+  //   看不出「token 其實沒事」。performance.now() 不可用就退回 Date.now()（絕不 throw）。
+  function _pnow(): number {
+    try {
+      return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
+    } catch { return Date.now(); }
+  }
+  function _rttStats(): _PStat | null { return _sampleStats(_rttSamples); }
+  // ⭐v6.159 四段拆分的記錄點。範圍守衛與 `_tRecordRtt` 完全一致（只記錦標賽對戰者），
+  //   而且**刻意不新增任何觸發條件** —— 這一版只負責讓資料搭既有的
+  //   slow-rtt / manual-sync 指紋順風車進到 `/clientdiag`，不製造新的回報噪音。
+  function _tRecordApiSegments(path: string, t0: number, t1: number, t2: number, t3: number, t4: number): void {
+    if (!isTournament || isTournSpectator) return;
+    // ⚠⚠⚠ Fable 5 審查抓到的致命污染源：`tApi` 是**所有**錦標賽端點的共同入口，
+    //   其中 `/state?…&wait=1` 是長輪詢（v6.152 灰度）——伺服器**刻意把請求掛起最多 25 秒**。
+    //   把它記進來，`net` 的 p95 會 by design 變成 ~25000ms ⇒「網路欄大＝真的網路慢」
+    //   直接變成假訊號，而下一場賽事正好可能開這個灰度實測。
+    //   大廳端點（/chat /event /bracket /leaderboard…）也不是對戰熱路徑，混進來只會稀釋。
+    //   ⇒ 只記對戰熱路徑：`/action` 與**短輪詢**的 `/state`。
+    if (path.indexOf('wait=1') >= 0) return;
+    if (!(path.indexOf('/action') === 0 || path.indexOf('/state') === 0)) return;
+    _pushSample(_segTok, t1 - t0);
+    _pushSample(_segNet, t2 - t1);
+    _pushSample(_segDl, t3 - t2);
+    _pushSample(_segParse, t4 - t3);
+    _pushSample(_segTotal, t4 - t0);
+  }
+  // ⭐v6.159 盤面採納耗時。Fable 5 的診斷假說：`game = state` 每次都指到一棵**全新的 JSON 樹**，
+  //   物件同一性整批換掉 ⇒ Svelte 無法細粒度更新 ⇒ 每次版本變動＝整個盤面全量重繪。
+  //   本機對戰因為引擎有結構共享沒這問題，**只有錦標賽路徑缺這優勢**。
+  //   ⚠ 本版**不做任何修正**，只把兩個數字量出來讓下一場賽事的數據自己說話：
+  //     adopt = tAdopt 自己的同步執行時間；
+  //     paint = tAdopt 開始 → 下一個 animation frame（Svelte flush + 樣式/版面/繪製排隊之後的間隔）。
+  function _tRecordAdopt(t0: number): void {
+    if (!isTournament || isTournSpectator) return;
+    _pushSample(_adoptSamples, _pnow() - t0);
+    // 同時只掛一個 rAF：量測不可以自己製造負擔。
+    if (_paintPending) return;
+    if (typeof requestAnimationFrame !== 'function') return;
+    // ⚠ 背景頁籤的 rAF 根本不會 fire ⇒ 不在可見狀態就不排（否則切回前景時會一次收到一筆
+    //   幾十秒的假樣本，而那是「頁籤被切走」不是「重繪很慢」）。
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+    const _seq = _visSeq;
+    _paintPending = true;
+    try {
+      requestAnimationFrame(() => {
+        _paintPending = false;
+        if (_seq !== _visSeq) return;   // 期間切過背景 ⇒ 這筆不是重繪成本，丟棄
+        _pushSample(_paintSamples, _pnow() - t0);
+      });
+    } catch { _paintPending = false; }
+  }
+  // ⭐v6.159 longtask 統計（最近 N 秒內的數量／總時長／最長一筆）。
+  //   ⚠⚠ Safari/iOS 不支援 ⇒ `_ltSupported` 為 false 時回 **null**，不是回 0 ——
+  //     0 會被判讀成「這台裝置主執行緒很順」，那正好是最會誤導人的假訊號。
+  function _longTaskStats(winMs = 60000): { win: number; n: number; total: number; max: number } | null {
+    if (!_ltSupported) return null;
+    const cut = Date.now() - winMs;
+    let n = 0, total = 0, max = 0;
+    for (const e of _ltSamples) {
+      if (!e || e.t < cut) continue;
+      n++; total += e.d; if (e.d > max) max = e.d;
+    }
+    return { win: Math.round(winMs / 1000), n, total: Math.round(total), max: Math.round(max) };
   }
   function _tRecordRtt(ms: number): void {
     if (!isTournament || isTournSpectator || !(ms >= 0)) return;
@@ -4897,10 +5028,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
           sinceLastAction: tLastActionAt ? now - tLastActionAt : -1,
           longPoll: tLongPollReady,
         },
+        // ⭐⭐⭐v6.159 「網路慢」vs「主執行緒慢」的判別資料（本版只量測，不做任何修正）。
+        //   判讀規則（寫給站長，admin 監控分頁上也有同一段）：
+        //     ・`api.net`（到 header）或 `api.dl`（body 下載）大 ⇒ 真的是**網路／隧道**。
+        //     ・這兩者小、但 `api.parse` / `api.total` / `adopt` / `paint` / `lt` 大
+        //       ⇒ 瓶頸在**那台裝置的主執行緒**，再修伺服器不會有任何效果。
+        //     ・`lt` 為 null ＝ 這台裝置（Safari/iOS）不支援 longtask，**不是**「沒有長任務」。
+        //     ⚠ 每個切點都是 await 續行 ⇒ 主執行緒被長任務佔住時 `net`／`dl` 也會被灌水，
+        //       所以「網路欄大」要**同時看 `lt`／`paint`** 才能定案（單看一欄會誤判）。
+        //     ⚠ `api.*` 涵蓋「動作 ＋ 短輪詢」；`poll.rtt` 只涵蓋動作 —— 兩者不可直接相減。
+        perf: {
+          api: { tok: _sampleStats(_segTok), net: _sampleStats(_segNet), dl: _sampleStats(_segDl), parse: _sampleStats(_segParse), total: _sampleStats(_segTotal) },
+          adopt: _sampleStats(_adoptSamples), paint: _sampleStats(_paintSamples),
+          lt: _longTaskStats(),
+        },
         env: {
           vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
           w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
           ua: (typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 80) : ''),
+          // ⭐v6.159 裝置等級（都要 feature-detect；拿不到一律 null，絕不 throw）。
+          //   旁證顯示多數玩家 RTT 中位數 0.2~0.8 秒、少數 3~7 秒 ⇒ per-裝置成因，
+          //   核心數／記憶體正是驗證「就是那幾台弱裝置」最直接的一欄。
+          hc: (typeof navigator !== 'undefined' && typeof (navigator as any).hardwareConcurrency === 'number' ? (navigator as any).hardwareConcurrency : null),
+          dm: (typeof navigator !== 'undefined' && typeof (navigator as any).deviceMemory === 'number' ? (navigator as any).deviceMemory : null),
         },
       };
       void tApi('/clientdiag', payload).catch(() => { /* fire-and-forget,診斷絕不影響對戰 */ });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.69</title>
+<title>PTCG Oracle Admin v1.70</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.68</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.70</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2604,6 +2604,43 @@ const MON_REASON_INFO = {
   'manual-sync': ['玩家自己按了「重新同步」',
     '不一定是 bug，但次數變多代表玩家覺得畫面不對。'],
 };
+// ⭐⭐v6.159 顯示端的**唯一**數字出口。舊版 client 回報的 payload 沒有 perf / hc / dm ⇒
+//   這些欄位一律可能是 null / undefined / 非數字。拿不到就顯示「—」，
+//   ⚠ 絕不可以讓一格 undefined 把整張表格弄空白或爆版（v6.154 的教訓：守衛全綠但畫面打不開）。
+function monMs(v) {
+  if (typeof v !== 'number' || !isFinite(v)) return '—';
+  return v >= 1000 ? (v / 1000).toFixed(1) + ' 秒' : Math.round(v) + ' ms';
+}
+function monStat(st, key) {
+  return (st && typeof st === 'object' && typeof st[key] === 'number') ? st[key] : null;
+}
+// 一列的「新欄位」儲存格。抽成獨立函式是為了讓守衛能餵一份**沒有新欄位的舊 payload**
+//   實際跑它、斷言不 throw 也不回空字串（只驗字串存在的守衛擋不住接線沒接上）。
+function monPerfCells(r) {
+  const pf = (r && r.perf) || {};
+  const pa = pf.api || {};
+  const lt = pf.lt;
+  // ⚠ Fable 5 審查抓到：舊 client（整包沒有 perf）原本也會顯示「不支援」，
+  //   與說明「不支援＝那台是 iPhone/Safari」直接衝突 ⇒ 站長會把舊版 client 誤讀成 Safari 裝置。
+  //   ⇒ 沒有 perf（舊 client）顯示「—」；有 perf 但 lt 是 null（新 client、瀏覽器不給）才是「不支援」。
+  const hasPerf = !!(r && r.perf && typeof r.perf === 'object');
+  const ltTxt = (lt && typeof lt.n === 'number')
+    ? (lt.n + ' 次／' + monMs(lt.total) + '（最長 ' + monMs(lt.max) + '）')
+    : (hasPerf ? '<span style="color:#aab;">不支援</span>' : '—');
+  const dev = [
+    (r && typeof r.hc === 'number') ? (r.hc + ' 核') : null,
+    (r && typeof r.dm === 'number') ? (r.dm + ' GB') : null,
+  ].filter(Boolean).join(' / ') || '—';
+  const td = 'padding:6px 8px;text-align:right;';
+  return '<td style="' + td + '">' + monMs(monStat(pa.net, 'p95')) + '</td>'
+    + '<td style="' + td + '">' + monMs(monStat(pa.dl, 'p95')) + '</td>'
+    + '<td style="' + td + '">' + monMs(monStat(pa.tok, 'p95')) + '</td>'
+    + '<td style="' + td + '">' + monMs(monStat(pa.parse, 'p95')) + '</td>'
+    + '<td style="' + td + '">' + monMs(monStat(pf.adopt, 'p95')) + '</td>'
+    + '<td style="' + td + '">' + monMs(monStat(pf.paint, 'p95')) + '</td>'
+    + '<td style="' + td + 'white-space:nowrap;">' + ltTxt + '</td>'
+    + '<td style="' + td + 'white-space:nowrap;">' + dev + '</td>';
+}
 // ⚠ 不可以直接 MON_REASON_INFO[reason] —— reason 若是 'constructor'/'__proto__' 這類
 //   原型鏈上的 key 會拿到 truthy 的非陣列，標題就變成空字串。
 function monReasonInfo(reason) {
@@ -2697,11 +2734,39 @@ async function loadMonitor() {
         + '<div style="font-weight:700;margin-bottom:4px;">⏱️ 動作往返時間（每筆是該玩家當下 30 發的統計）</div>'
         + '<p class="small muted" style="margin:2px 0 8px;">正常是幾十毫秒。如果<b>多位不同玩家</b>同時出現好幾秒，'
         + '瓶頸在隧道或 VM；只有固定那幾位，是他們自己的網路。</p>'
-        + '<table style="width:100%;border-collapse:collapse;">'
+        + '<div style="background:#fffdf3;border:1px solid #f0e3b0;border-radius:6px;padding:9px 11px;margin:0 0 10px;">'
+        + '<b>怎麼讀右邊那幾欄（v6.159 新增）</b><br>'
+        + '這幾欄把「玩家實際等待的時間」拆開，用來回答一個問題：<b>卡在網路，還是卡在那台裝置本身？</b><br>'
+        + '<b>屬於網路的：</b>　・<b>網路</b>：送出到伺服器回應第一個位元組。'
+        + '　・<b>下載</b>：把整份盤面資料收下來（手機訊號差時這欄會很大）。<br>'
+        + '<b>屬於那台裝置的：</b>　・<b>權杖</b>：登入憑證換發（正常是 0）。'
+        + '　・<b>解析</b>／<b>採納</b>／<b>重繪</b>／<b>長任務</b>：全部發生在<b>玩家自己的電腦或手機上</b>。'
+        + '這幾欄大而「網路」「下載」都小，就代表<b>再怎麼修伺服器都不會有效果</b>，'
+        + '問題在那台裝置畫面重繪不過來。<br>'
+        + '<b>判讀時要注意：</b><br>'
+        + '・那台裝置忙不過來的時候，連「網路」「下載」也會跟著變大（要排隊才輪得到處理回應）。'
+        + '所以看到「網路」大，<b>要同時看「長任務」和「重繪」</b>再下結論，不要只看一欄。<br>'
+        + '・<b>長任務</b>顯示「不支援」＝那台是 iPhone／Safari，瀏覽器不提供這個數字，'
+        + '<b>不是</b>代表它很順（請改看「重繪」欄）。<br>'
+        + '・<b>重繪</b>本來就有幾毫秒的底線（畫面每秒只更新 60~120 次），小數字正常，看的是有沒有明顯偏大。<br>'
+        + '・欄位是「—」＝那位玩家的畫面還是舊版本（v6.159 之前），下次進場更新後就會有數字。<br>'
+        + '・左邊「中位數／p95／最大」只統計<b>玩家送出的動作</b>；右邊這幾欄同時涵蓋動作與畫面同步，'
+        + '兩邊<b>不能直接相減</b>。'
+        + '</div>'
+        + '<div style="overflow-x:auto;">'
+        + '<table style="width:100%;border-collapse:collapse;min-width:1040px;">'
         + '<tr style="background:#f5f7fa;"><th style="text-align:left;padding:6px 8px;">時間</th>'
         + '<th style="text-align:left;padding:6px 8px;">玩家</th>'
         + '<th style="text-align:right;padding:6px 8px;">中位數</th><th style="text-align:right;padding:6px 8px;">p95</th>'
-        + '<th style="text-align:right;padding:6px 8px;">最大</th></tr>';
+        + '<th style="text-align:right;padding:6px 8px;">最大</th>'
+        + '<th style="text-align:right;padding:6px 8px;">網路</th>'
+        + '<th style="text-align:right;padding:6px 8px;">下載</th>'
+        + '<th style="text-align:right;padding:6px 8px;">權杖</th>'
+        + '<th style="text-align:right;padding:6px 8px;">解析</th>'
+        + '<th style="text-align:right;padding:6px 8px;">採納</th>'
+        + '<th style="text-align:right;padding:6px 8px;">重繪</th>'
+        + '<th style="text-align:right;padding:6px 8px;">長任務／分</th>'
+        + '<th style="text-align:right;padding:6px 8px;">裝置</th></tr>';
       dg.slowRtt.slice(0, 20).forEach(function (r) {
         html += '<tr style="border-top:1px solid #eef1f5;">'
           + '<td style="padding:6px 8px;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW')) + '</td>'
@@ -2709,9 +2774,10 @@ async function loadMonitor() {
           + '<td style="padding:6px 8px;text-align:right;">' + (r.p50 != null ? (r.p50 / 1000).toFixed(1) + ' 秒' : '-') + '</td>'
           + '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#c62828;">' + (r.p95 != null ? (r.p95 / 1000).toFixed(1) + ' 秒' : '-') + '</td>'
           + '<td style="padding:6px 8px;text-align:right;">' + (r.max != null ? (r.max / 1000).toFixed(1) + ' 秒' : '-') + '</td>'
+          + monPerfCells(r)   // ⭐v6.159 舊 payload 沒有這些欄位 → 一律回「—」，不會空白也不會爆版
           + '</tr>';
       });
-      html += '</table></div>';
+      html += '</table></div></div>';   // ⭐v6.159 多包一層 overflow-x:auto（欄位變多，窄螢幕要能橫向捲）
     }
     html += '<details style="border-top:1px dashed #e3e8ef;padding-top:12px;">'
       + '<summary style="cursor:pointer;color:#2a4a7a;font-weight:700;">📋 最近 ' + (dg.rows || []).length + ' 筆明細（含原始診斷內容）</summary>'

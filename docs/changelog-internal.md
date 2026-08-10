@@ -17,6 +17,146 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.159 — 只加量測，不做效能修正：把「網路慢」和「主執行緒慢」分開量
+
+> ⚠ **這一版刻意不修任何東西。** 錦標賽的 lag 修了十幾版都沒處理好，
+> 每一版都在修伺服器，而伺服器端指標一直是全綠的 —— 我們連續多版憑假說出手都沒中。
+> 本版唯一的目的：**讓下一場賽事的數據能決定性地分辨「網路慢」vs「client 主執行緒慢」**。
+> 不重構 `tAdopt`、不改輪詢、不改 Svelte 結構、不新增任何自動回報觸發條件。
+
+### 為什麼懷疑是 client 主執行緒（Fable 5 診斷）
+
+1. `tAdopt`（`src/routes/game/+page.svelte`）每次同步把**整棵全新的 JSON 樹**指給 `game`
+   ⇒ 物件同一性整批換掉 ⇒ Svelte 無法細粒度更新 ⇒ **每次版本變動＝整個盤面全量重繪**。
+   本機對戰因為引擎有結構共享沒這問題，**只有錦標賽路徑缺這優勢**。
+2. v6.151 加的 `rtt` 是從 `tApi` **進函式**起算的 —— 它**包含**
+   `await firebaseUser.getIdToken()`、`res.json()` 解析、以及 await 續行還要排隊等主執行緒空檔。
+   ⇒ 它從來就不是純網路時間，我們一直誤讀它（把「主執行緒塞住」讀成「網路慢」）。
+3. 旁證：2026-08-10 賽事的 RTT 表，多數玩家中位數 0.2~0.8 秒、少數 3~7 秒
+   ⇒ **per-裝置**成因，不是共用基礎設施。
+
+### 加了什麼（全部併進**既有**的 `/clientdiag` 管線，沒有新開第二條）
+
+`payload.perf`（新區塊）與 `payload.env` 的兩個新欄位：
+
+| 欄位 | 量的是什麼 |
+|---|---|
+| `perf.api.tok` | `await firebaseUser.getIdToken()` 的耗時 |
+| `perf.api.net` | `fetch` 送出 → response **header** 回來 |
+| `perf.api.dl` | `res.text()`：body 下載（**網路吞吐量**）|
+| `perf.api.parse` | `JSON.parse`（**純主執行緒 CPU**）|
+| `perf.api.total` | `tApi` 函式總耗時（前四段 ＋ 等主執行緒空檔）|
+| `perf.adopt` | `tAdopt` 自己的同步執行時間 |
+| `perf.paint` | `tAdopt` 開始 → 下一個 animation frame（**重繪成本的代理指標**）|
+| `perf.lt` | 最近 60 秒 longtask 的數量／總時長／最長一筆 |
+| `env.hc` / `env.dm` | `navigator.hardwareConcurrency` / `navigator.deviceMemory` |
+
+五段與 adopt/paint 全部沿用 v6.151 `rtt` 的**同一組** p50/p95/max 與 30 筆滾動窗
+（`_sampleStats` / `_pushSample`）—— 各寫一套必然漂移，admin 端也就沒辦法用同一種讀法判讀。
+`_rttStats()` 改成呼叫 `_sampleStats(_rttSamples)`，行為不變（樣本本來就是整數毫秒，`round` 是 identity）。
+
+### ⭐⭐⭐ Fable 5 審查抓到的兩個「會做出相反結論」的坑（都已修）
+
+**① `fetch` 在 header 到達就 resolve —— body 下載其實落在 `res.json()` 裡。**
+我第一版把 `res.json()` 整段當成「解析」。實測（本地 http server 故意分兩段送 body）：
+`fetch` 62ms / `res.json()` 298ms —— **body 傳輸時間確實在 `res.json()` 那一段**。
+⇒ 行動網路 + 大盤面時，「解析」欄會被**下載時間**灌爆，而「網路」欄反而很小，
+而 admin 說明寫著「解析＝發生在玩家自己的裝置上」 ⇒ 會把**網路慢誤診成裝置慢**，
+正好與這一版唯一的目的相反。
+**修法**：改成 `const _txt = await res.text(); … JSON.parse(_txt)`，
+把「下載 body（網路）」與「純 `JSON.parse`（主執行緒）」拆成兩段。
+規範上 `res.json()` 就是 UTF-8 解碼後再 `JSON.parse`，壞 JSON 一樣丟 `SyntaxError`
+一樣落到同一個 catch ⇒ **行為等價**，拆開的唯一理由就是量測。
+
+**② `tApi` 是所有端點的共同入口 —— 長輪詢會 by design 毒化「網路」欄。**
+`/state?…&wait=1`（v6.152 灰度）伺服器**刻意把請求掛起最多 25 秒**（client 逾時放寬到 30 秒）。
+記進去的話 `api.net` 的 p95 會 by design 變成 ~25000ms ⇒
+「網路欄大＝真的網路慢」立刻變成假訊號，而下一場賽事正好可能開這個灰度實測。
+大廳端點（`/chat` `/event` `/bracket` `/leaderboard`…）也不是對戰熱路徑，混進來只會稀釋。
+**修法**：`_tRecordApiSegments` 加路徑閘 —— 帶 `wait=1` 一律不記；
+只記 `/action` 與**短輪詢**的 `/state`。
+⚠ 因此 `perf.api.*` 涵蓋「動作 ＋ 短輪詢」，而 `poll.rtt` 只涵蓋動作，**兩者不可直接相減**
+（admin 說明已寫明）。
+
+另外採納的三項（都是 Fable 5 抓到的）：
+- admin 的長任務欄，**舊 client**（整包沒有 `perf`）原本也顯示「不支援」，
+  與說明「不支援＝那台是 iPhone/Safari」直接衝突 ⇒ 站長會把舊版 client 誤讀成 Safari 裝置。
+  改成：沒有 `perf` → 「—」；有 `perf` 但 `lt` 是 `null` → 「不支援」。
+- `tLeaveMatch` 補清 `_paintPending`（離場瞬間的在途 rAF 會把上一場尾端那筆推進下一場）。
+- 欄位變多（表格 13 欄）⇒ 外面包一層 `overflow-x:auto` + `min-width`，窄螢幕不爆版。
+- admin 判讀說明補一句：**主執行緒忙的時候「網路」「下載」也會跟著變大**
+  （每個切點都是 await 續行），所以看到「網路」大要**同時看「長任務」「重繪」**再下結論；
+  以及「重繪」本來就有一個 vsync（8~16ms）的底線。
+
+### 量測本身不可以變成負擔（這一版最需要小心的地方）
+
+- **longtask 共用既有那顆 observer**（v5.350 的主執行緒卡死偵測器），**沒有新開第二顆**。
+  多開一顆 PerformanceObserver 等於替主執行緒再加一份回呼負擔，而本版整個重點就是量主執行緒。
+- **rAF 防重入**：`_paintPending` 保證同時只掛一個 rAF。
+- **背景頁籤完全不排 rAF**（背景時 rAF 根本不 fire），且用 `_visSeq` 代次把
+  「期間切過背景」的樣本丟掉 —— 否則量到的是「切回前景的等待時間」不是重繪成本。
+- 計時只是 `performance.now()` 相減：沒有 await、沒有物件配置、沒有任何分支改變。
+  `tApi` / `tAdopt` 的控制流程與 v6.158 逐字相同。
+
+### ⚠ Safari/iOS 沒有 longtask —— 而且 `observe()` 不會 throw
+
+`PerformanceObserver` 在 Safari 存在，但 `longtask` 不在它的 `supportedEntryTypes` 裡，
+而 `observe({ entryTypes: ['longtask'] })` 對不支援的 entryType **只在 console 警告、不 throw**。
+⇒ **絕不可以用「observe 沒爆」當支援判據**，那會把整批 Safari 使用者誤記成
+「主執行緒完全沒有長任務」（假綠）。唯一可信的判據是 `supportedEntryTypes`；
+查不到就保守當作不支援，回報 **`null`（不是 0）** —— 0 會被判讀成「這台裝置很順」。
+
+### payload 大小
+
+伺服器端 `/clientdiag` 有 **2048 bytes 的 cap**（`JSON.stringify(req.body).slice(0, 2048)`），
+超過會截斷成無法 `JSON.parse` 的字串 ⇒ **連既有的 rtt 一起讀不出來**。
+實測最壞情況：v6.158 是 827 bytes，v6.159 是 **1257 bytes**（新增 430），餘裕 791 ⇒ **不必動 cap**。
+⚠ cap 是 `slice(0, 2048)` ＝**截斷不是拒收**：一旦超標整筆會變成壞 JSON，
+admin 端 `JSON.parse` 失敗 ⇒ 該筆從統計裡**靜默消失**（連既有的 rtt 一起讀不到）。
+以後再加欄位務必先重算。
+
+### admin「📡 監控」分頁
+
+往返時間表格右邊加 8 欄：網路／下載／權杖／解析／採納／重繪／長任務／裝置，
+外加一段**寫給站長的判讀規則**。伺服器端 `/api/tournament/admin/clientdiag`
+把 `perf` / `env.hc` / `env.dm` 一併帶出來，**缺欄一律正規化成 `null` 而不是 undefined**
+（undefined 會被 `JSON.stringify` 整個吃掉，顯示端就分不出「舊 client」與「這欄真的是 0」）。
+
+⚠ **舊 client 的 payload 沒有這些欄位** ⇒ 顯示端 `monPerfCells()` 對 undefined / null /
+半殘物件一律回「—」或「不支援」，守衛餵五種殘缺 payload 實跑並斷言不 throw、`<td>` 欄數不變。
+表頭 `<th>` 數與資料列 `<td>` 數有對帳斷言（欄數不對＝整張表格錯位）。
+
+### 下一場賽事怎麼讀這些數字（判讀規則）
+
+- `api.net`（到 header）或 `api.dl`（body 下載）**大** ⇒ 真的是**網路／隧道**。
+- 這兩者**小**，但 `api.parse` / `api.total` / `adopt` / `paint` / `lt` **大**
+  ⇒ 瓶頸在**那台裝置的主執行緒**，**再修伺服器不會有任何效果**。
+- `api.total` 遠大於 `tok + net + dl + parse` 的和 ⇒ 差額就是「await 續行在排隊等主執行緒」。
+- ⚠ 每個切點都是 await 續行 ⇒ 主執行緒被長任務佔住時 `net`／`dl` **也會被灌水**。
+  所以「網路欄大」**不可以單獨當結論**，要同時看 `lt` 與 `paint`。
+- `paint` 大而 `adopt` 小 ⇒ 成本在 Svelte 重繪（＝`tAdopt` 全新物件樹那個假說），
+  這就是「該不該重構 `tAdopt`」的決定性證據。
+- `lt` 是 `null` ＝ 那台是 Safari/iOS，**不是**「沒有長任務」；改看 `paint`。
+- 欄位是「—」＝那位玩家的畫面還是 v6.159 以前的版本。
+
+### 守衛
+
+`scripts/test-v6159-client-perf-instrumentation.mjs`（107 條，已進 `npm test` 鏈）。
+⚠ 刻意**不只驗字串存在**（v6.154 的教訓：22 條守衛全綠、分頁卻打不開）：
+七個新量測函式用 esbuild 轉成 JS **實際執行**，驗五段入帳、**長輪詢與大廳端點不入帳**、
+滾動窗 30 筆、壞樣本不入帳、Safari 回 null、窗外樣本被濾掉、rAF 防重入、
+可見性代次丟樣本、觀戰者不記；
+admin 顯示端與伺服器端的正規化也都是**實跑**。否定型掃描先剝註解並自我驗證。
+對 v6.158 原始碼跑：**32 FAIL**（HEAD-FAIL 證明）。
+
+### 部署
+
+**不影響對戰邏輯**，但 `oracle-admin/server_admin_patch.js` 與 `oracle-admin/admin.html`
+都有改 ⇒ 需要 `redeploy-oracle.bat` ＋ `update-admin-full.bat`。
+`update-tournament.bat` 本版沒有新的必要性（沒動 engine／卡庫），但 v6.157 那次仍未跑的話要補。
+
+---
+
 ## v6.158 — setup「誰該動作」單一判準 ＋ 開局全螢幕遮罩不再擋住該動作方
 
 > ⚠ 本版只動 **client**（`src/routes/game/+page.svelte`）與 admin 監控說明。
