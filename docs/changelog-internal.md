@@ -17,6 +17,156 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.150 — 錦標賽玩家端盤面遮蔽（公平性缺口）＋ /action 未驗證身分可假冒座位
+
+> ⚠ **公平性／作弊類修正，依既有規則不寫首頁 changelog**（寫出來等於教人怎麼鑽）。
+
+**缺口**：`/api/tournament/state` 與 `/api/tournament/action` 一直是**直接回傳整份
+`doc.gameState`**，只有 `/spectate/state` 會把手牌蓋成卡背。⇒ 對戰中任一方打開 devtools 就能讀到
+**對手的手牌內容、牌庫順序、獎賞內容**。而且不必猜房號 —— `/bracket` 從 v0.79 起就把每場
+`playing` 的 `roomId` 公開回給所有人（觀戰按鈕用的）。
+
+**第二個缺口（順手一起修）**：`/action` 的身分是 `tournIdentity(req)`，它在沒有 Bearer token 時
+會退回 `req.body.playerId` 且 `verified:false`。而**雙方的 uid 就寫在 `/state` 回應的 `seats` 裡** ⇒
+任何人抄下對手 uid、用 `playerId` 送 `/action`，就能**替對手送動作**。這也讓遮蔽本身失效
+（假冒座位即可換到未遮蔽盤面），所以兩件事必須同一版修。
+
+### 遮蔽規則（每一條都對應卡面或既有 UI 行為，不是「一律蓋掉」）
+
+中央函式 `_stateForSeat(gs, seat)`（`server_admin_patch.js`，`REDACT BLOCK BEGIN/END` 之間）：
+
+1. **只遮對手的 `hand` / `deck` / `prizes` 的內容**，換成 `{ iid, cardId:'__HIDDEN__', damage:0,
+   energyAttached:[] }`（與觀戰端同一個佔位 id）。**長度與 iid 一律保留** —— 對戰頁有雙方手牌張數
+   chip、牌庫/獎賞張數；iid 保留才不會動到 `assertIidIntegrity` 那一類卡片守恆網。
+2. **`phase === 'game-over'` 完全不遮**（攤牌）。與 `/replay` 的既有決策一致，
+   同時讓對戰結束時 client 上報 `matchRecords` 的雙方牌組統計維持正確（`fireMatchRecord` 會掃
+   雙方全區 cardId；若那時還遮著，牌組原型統計會被 `__HIDDEN__` 汙染）。
+3. **面朝上的獎賞（`faceUp`）不遮** —— 那本來就是雙方可見的。
+4. **效果已合法揭示給我看的卡不遮**：`pendingSelection` / `pendingChainQueue` 裡
+   `actorIdx === 我 && sourcePlayerIdx === 對手` 的那幾筆。`params` 裡點名的 iid 逐一放行；
+   `hand-discard` / `hand-choose` 型再整手牌放行（枇琶、能量撢子、莉莉艾的蝶結萌虻 …
+   UI 會畫「對手手牌其餘 N 張」）。
+   ⚠ `params.concealed === true`（卡面「在不看正面的情況下」）一律**不**放行 —— 遮蔽在這裡
+   剛好與卡面同向。
+   ⚠ 故意**不用 params key 白名單**（`validIids` / `top5Iids` / `candidateIids`…）：那種白名單一定
+   漂移（IRON_RULES Rule 25／28）。改成把 `params` 底下所有字串收成 Set，對手隱藏區某張卡的 iid
+   若**完整相符**就放行（完整字串比對，不用 `indexOf` 以免短 iid 誤中）。
+5. **火箭隊的貓老大ex｜高傲指令**（Wilson 裁定）：這張卡的完整版 picker 在 **client 端攔截**，
+   直接讀 `game.players[對手].deck.slice(0, 10)` 自己畫（engine 端只有 binary-yes-no），
+   那個時間點**還沒有 pendingSelection 可以當揭示依據**。⇒ 依卡面條件式放行對手牌庫頂 10 張：
+   `phase==='playing'` ∧ `activePlayerIndex===我` ∧ 我的**戰鬥場**卡帶有「高傲指令」。
+   他本來就能立刻用這招看到，差別只在「看了可以選擇不用」。
+   ⚠ 也涵蓋 **狐大盜｜技能大盜**（engine gate：手牌 0）借用對手場上貓老大ex 的招式那條路徑。
+   ⚠ **沒有做能量足夠與否的判斷** —— 伺服器端沒有能量單位計算的中央 helper（特殊能量提供
+   多單位／多屬性），自己寫近似值只要偏嚴就會讓卡直接壞掉，偏鬆又沒有意義。
+6. **座位只認 `verified`（Bearer token 驗過）的 uid**。理由見上面第二個缺口。
+7. **認不出座位的（正式賽房）⇒ 兩邊都遮（fail-closed）**；**沒有 `matchId` 的測試房**
+   （`TOURNAMENT-TEST`，走 playerId fallback）維持原行為完全不遮，開發測試不受影響。
+
+套用點：`/state`（完整回應）、`/action`（**五處**：actor gate 拒絕、動作無效、引擎拒絕、
+CAS stale、成功）、`/join`。`/state` 的 `unchanged` 精簡回應本來就不含盤面，不受影響；
+`/spectate/state` 與 `/replay` 不動。
+
+### 前端配套（一行，但不改會有效能回歸）
+
+`ensurePoolForStateIds` 會把盤面上所有 cardId 收起來、`ids.every(pool.has)` 為 false 就補載卡包。
+佔位 id 永遠不在 pool 裡 ⇒ **每次盤面更新都會走到 `loadAllSets()`**，把 40 個卡包重新灌進一份新的
+Map。加一行過濾即可。⚠ 這不是新 bug —— **觀戰端從 v0.68 起就一直在做這件事**，一起修掉。
+
+### 查證與守衛
+
+- `scripts/test-v6150-state-redact.mjs`（62 項）：把 REDACT BLOCK 用 `new Function` 抽出來跑純函式。
+  含**掃描器自我驗證**（抽到的區塊必須真的含那幾個函式）、**正對照**（未遮蔽的輸入必須被判為
+  洩漏）、以及靜態掃描「每一個 `res.json` 的 `gameState:` 都走 `_stateForSeat`」＋該掃描器的
+  故意壞掉樣本。HEAD-FAIL：對 v6.149 的檔案跑 → 9 FAIL。
+- `scripts/test-v6150-optimistic-under-redaction.mjs`（21 項）：**真 pool + 真 engine 實跑**。
+  client 的樂觀更新會拿遮蔽後的盤面跑一次 `applyAction`，只要引擎有任何一條路徑去查對手手牌/
+  牌庫的卡就會 throw ⇒ 樂觀更新會**靜默全滅**。實測 `ATTACH_ENERGY` / `PLAY_BASIC` / `RETREAT` /
+  `PLAY_FOSSIL` 遮蔽前後都 `ok:true`，且自己那一側逐欄相同。
+  對手隱藏區故意混入「有特性的寶可夢」與訓練家（最容易讓引擎去查 pool 的形狀）。
+  順帶釘住「白名單仍是那四個」——白名單長大就必須重跑這支實測。
+- handoff 文件裡列的風險 1（gate ②b 會不會被佔位卡擋掉）**查證結果是不會**：
+  `missingFromPool` 註解與程式碼都寫明**只查場上與場地**，手牌/牌庫/棄牌/獎賞一律不查。
+
+### Fable 5 審查抓到的（同版一起修）
+
+1. **`/spectate/state` 是整條繞道**（既有洞，但它讓本版的遮蔽等於白做）：那個端點**沒有**檢查
+   請求者是不是這場對戰的當事人（排除自己的邏輯只做在 `/spectate/list` 的 query），而且它**只蓋
+   `hand`、牌庫順序與獎賞內容照樣送**。房號由 `/bracket` 公開回傳 ⇒ 對戰中的玩家打
+   `spectate/state?room=<自己的房>` 就拿到對手的完整牌庫序與獎賞。
+   ⇒ 收斂到同一條 `_stateForSeat(gs, -1)`（雙方三區都遮）＋ 當事人一律 403（gate 放在
+   `markSpectator` 之前，否則自己還會被算進觀戰人數）。
+   ⚠ 行為變更：觀戰者在**對局結束後**看得到雙方手牌（`game-over` 攤牌），與 `/replay` 一致。
+2. **`gs.log` 的 `privateMessage` 從來沒被遮**：`addPrivateLog` 會把「搜到 XX 加入手牌」這種
+   **含具體卡名**的版本寫進共享 log，client 只是靠 `entry.playerIndex === myIdx` 決定顯示哪一版 ——
+   資料本身早就在 payload 裡。公開的 `/match-log` 端點早就有剝除，live 對戰路徑卻沒有。
+   ⇒ `_redactLogForSeat`：非本人的 `privateMessage` 一律拿掉（觀戰視角全拿掉）。
+3. **`/join` 漏了 verified gate**：`/join` 的 `seat` 是 `doc.seats.indexOf(pid)` 算的，`pid` 在
+   沒有 token 時來自未驗證的 `playerId` ⇒ 任何人 POST `/join {room:'mr_xxx', playerId:'<對手uid>'}`
+   就能拿到「以對手視角遮蔽」的盤面（＝對手三區全開），還能覆寫該座位的暱稱與牌組。
+   `/state`、`/action` 都補了就它沒補。⇒ 比照補上。
+4. **`/state` 原本 fail-closed 回「雙邊都遮」的 200**：token 取不到的瞬間（頁面重載空窗、
+   token 過期且刷新失敗）client 會照單全收 ⇒ **玩家自己的手牌整排變卡背**，正是 clientdiag
+   在抓的「隱形手牌」指紋。⇒ 改回 401，讓前端走 v6.149 的失聯處理與重新登入。
+5. **⭐本版引入的實質回歸：concealed picker 會整片空白、使用者被閒置判負**。
+   `+page.svelte` 的選擇視窗是 `{@const c=getCard(item.cardId)}` 之後「有卡面才渲染整格」。
+   卡面「在不看正面的情況下」那類招式（太陽伊布ex｜精神出局、拍落 ×3、占為己有、驚嚇 ×2、
+   鈴鈴吵鬧、咬棄、不法之足 —— 共 10 招）的 pending 是 `concealed:true`，伺服器**正確地不放行**
+   ⇒ `getCard('__HIDDEN__')` 回 undefined ⇒ 一張卡背都畫不出來；`selectionItems.length` 又不是 0，
+   連「（沒有符合條件的卡牌）」都不會顯示；minCount ≥ 1、攻擊中途的 pending 沒有取消鈕
+   ⇒ **使用該招式的玩家卡死到被 3 分鐘閒置判負**。
+   ⇒ 改成「有卡面**或** concealed」才渲染（concealed 分支本來就只畫卡背與 ???，不需要卡面資料）。
+   ⚠ 只改 `sel-grid` 那一個 each；另外三個 `retreat-grid` 是場上寶可夢、不會被遮，維持原樣
+   （守衛有釘住「另外三處仍是舊寫法」）。
+
+### Fable 5 第二輪複審抓到的（也一起修）
+
+6. **對手牌庫的「順序」還是洩漏 —— 經由刻意保留的 iid**。棄牌區與場上是公開區，
+   任何**曾經公開過的卡**（例如被效果從棄牌區洗回牌庫的能量）其 iid↔卡片對應對方早就知道；
+   照原順序回傳牌庫等於告訴他「那張卡現在在牌庫第 3 張」，還能跨輪詢一路追蹤。
+   實體遊戲洗回去就是不知道位置 —— 這是超出規則的資訊。
+   ⇒ 新增 `_redactDeckZone`：被遮的那些卡**依 iid 字典序重排**後填回原本那幾個位置。
+   ⚠ 必須是確定性排序（不能用亂數），否則 client 每次輪詢都會看到牌庫「換了一批卡」。
+   ⚠ 被放行的卡（pending 點名／高傲指令的牌庫頂 N 張）維持**原索引**，否則「牌庫頂 10 張」
+   會指到別的地方。⚠ 手牌與獎賞**不需要**這樣處理：靠 iid 追蹤對手手上還留著哪張看過的卡，
+   等同於實體遊戲裡的記憶，本來就合法；獎賞則是開局分配後不再洗。
+7. **401 在前端會被畫成「與伺服器失聯」，而且按重新同步也沒反應**：`tApi` 對非 2xx 一律
+   `throw new Error('401: …')`，status 沒有外露，輪詢與 `tForceResync` 的 catch 都是靜默的。
+   玩家（在其他分頁登出／憑證被撤銷）只會看到失聯橫幅、按鈕無效、閒置倒數照跑，然後被判負，
+   全程沒有一句「請重新登入」。⇒ `tApi` 把 `status` 掛到 Error 上；新增 `tAuthLost` 旗標
+   （⚠ 並確認 template 真的有消費它 —— v6.148 的 `tInFlight` 就是加了旗標卻零綁定）；
+   橫幅在身分失效時換專屬文案；「立即重新同步」鈕改成**先 `getIdToken(true)` 強制刷新**再重試，
+   憑證過期就能就地自救（重新登入等於離開對戰，很可能直接被判負）。
+8. **守衛自己的兩個洞**（Rule 25：掃描器要先被驗證會不會漏）：
+   - 「當事人 gate 在 markSpectator 之前」原本只比 `indexOf` 大小 —— 訊息文字一改就變 `-1`，
+     而 `-1 < 任何正數` 恆成立 ⇒ 從此永遠 PASS。改成先斷言兩個錨點都存在。
+   - `res.json` 的 gameState 掃描器原本**逐行**掃、要求 `res.json(` 與 `gameState:` 同一行 ——
+     同檔的 `/replay` 就是多行 `res.json({ … })`，那種寫法會整個被漏掉。改成往前找最近的
+     `res.json(` / DB 寫入關鍵字來歸類，並補上「跨多行的壞樣本也要被抓到」「DB 寫入不可誤判成
+     回應」兩條自我驗證。
+   - fixture 也修了一個安慰劑：牌庫的 iid 原本是 `D0…D19`，剛好等於字典序 ⇒
+     「順序有沒有被打亂」那條永遠測不出東西。改成不照字典序排。
+
+### 未處理（Fable 提出、判斷後決定不動）
+
+- **高傲指令的放行時機比卡面寬**：只要輪到我、戰鬥場是貓老大ex 就常駐放行整個回合，而不是
+  「宣告該招式時」。要收緊就得先讓 client 在宣告前先跟伺服器要一次揭示（＝把這張卡改成
+  伺服器端 pending），那是 Wilson 已裁定不在本批做的選項。
+- **`/action` 要求 verified 的代價**：超過 1 小時的長對局、且瀏覽器連不上 Google 的 token 刷新端點
+  （但連得到 Oracle VM）時，玩家會被 403 擋住所有動作直到判負。改版前這種玩家靠 fallback 還能打完。
+  安全性換來的已知代價，屬邊緣案例。
+
+### 已知缺口（留給下一批）
+
+- **自己的牌庫順序與獎賞內容，client 端仍看得到**。這個**不能**照樣遮：站上「牌庫裡沒有可搜尋
+  對象 ⇒ 訓練家不能使用」這類 gate（Rule 26a）是**在 client 算的**，遮掉自己的牌庫會讓那些 gate
+  全部誤判。要根治得把可用性判定搬到伺服器（＝既有待辦「伺服器單邊建局」）。
+- `/state` 回應仍含 `seats`（雙方 Firebase uid）。因為座位判定已改成只認 verified token，知道 uid
+  也無法假冒；列在這裡是提醒它還在。
+
+**部署**：動到 `oracle-admin/server_admin_patch.js` ⇒ Wilson 要跑 `redeploy-oracle.bat`
+（另兩支 bat 照常）。
+
 ## v6.149 — 事故根治：Service Worker 把 `/api/` 的斷線偽裝成正常回應 ＋ 失聯零提示
 
 **事故**（2026-08-09 網站賽-61 R6，`mr_evt_mskq8zkv_r6_m1`，dump 已存檔）：

@@ -172,6 +172,9 @@
   //   也就永遠無法升級成玩家看得到的警示。節流與「上次真的收到伺服器回應」必須分開記。
   let _tPollStallGuardAt = 0;
   let _tNetBannerDismissAt = $state(0);   // 玩家手動關掉橫幅的時間（同一次失聯不再重複打擾）
+  // v6.150：伺服器回 401（登入憑證失效／在別的分頁登出／被撤銷）時為真。與「網路失聯」分開，
+  //   因為自救方式不同：這個要重新登入或強制刷新 token，重連是沒有用的。
+  let tAuthLost = $state(false);
   //   ⚠ 必須是 $state：plain let 要等下一次 tOfflineSec 重算才收掉橫幅（最多延遲 1 秒，玩家會連點）。
   let _diagSentCount = 0;              // v5.933 客戶端診斷回傳 per-page 上限(3)
   let _freshWatchdogFires = 0;         // v5.933 新鮮度看門狗連續觸發次數(盤面 tAdopt 即歸零)
@@ -4264,7 +4267,14 @@
         body: body ? JSON.stringify(body) : undefined,
         signal: _ac.signal,
       });
-      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      if (!res.ok) {
+        // v6.150：錦標賽 /state 對「認不出座位」回 401（不再回一份連自己都遮的盤面）。
+        //   呼叫端必須分得出「身分失效」與「網路斷線」——兩者在畫面上的自救方式完全不同，
+        //   否則玩家只會看到「與伺服器失聯」，按重新同步也沒反應，然後被閒置判負。
+        const _err: any = new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+        _err.status = res.status;
+        throw _err;
+      }
       return await res.json();
     } catch (e: any) {
       // AbortError → 換成看得懂的訊息（呼叫端會顯示在 tError）
@@ -4728,7 +4738,8 @@
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
       if (fr && typeof fr.serverNow === 'number') { tClockOffset = fr.serverNow - Date.now(); tNow = Date.now() + tClockOffset; }
-    } catch { /* ignore */ }
+      tAuthLost = false;   // v6.150 同步成功 ⇒ 身分是好的
+    } catch (e: any) { if (e && e.status === 401) tAuthLost = true; /* 其餘忽略 */ }
   }
   // v5.569：算「當前該動作的座位」(鏡射伺服器 currentActorSeat)，給等待方閒置倒數判斷
   function tCurrentActorSeat(g: any): number | null {
@@ -4825,6 +4836,7 @@
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
+        tAuthLost = false;            // v6.150 拿到正常回應 ⇒ 身分是好的
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
         if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
         // v5.593 client 版本超前伺服器(desync/房重置)→ 強制回正(伺服器權威)
@@ -4841,7 +4853,7 @@
         // v5.577/v0.68 對戰中大廳聊天降載。v6.148 改**時間判準**：原本綁「每 5 輪」，
         //   輪詢節奏一變（400ms base）就會跟著漂移，與它自己的降載意圖脫鉤。
         if (_now - _lastChatAt >= 6000) { _lastChatAt = _now; tChatLoad(); }
-      } catch { /* 忽略單次輪詢失敗 */ }
+      } catch (e: any) { if (e && e.status === 401) tAuthLost = true; /* 其餘忽略單次輪詢失敗 */ }
       finally { _pollBusy = false; }   // v6.148 一定要放掉，否則輪詢永久停擺
     }, 400);
   }
@@ -6321,9 +6333,14 @@
     const ps = state && state.players;
     if (!Array.isArray(ps)) return;
     const ids: string[] = [];
+    // v6.150：錦標賽伺服器把**對手隱藏區**（手牌/牌庫/獎賞）的 cardId 換成佔位 id。
+    //   它不是真卡、永遠不在 pool 裡 ⇒ 不濾掉的話 `ids.every(pool.has)` 永遠 false，
+    //   每次盤面更新都會走 loadDeckSets → missingIds 非空 → loadAllSets() 把 40 個卡包
+    //   重建一次 Map（觀戰端從 v0.68 起就一直在做這件事，同步修掉）。
+    const HIDDEN_CARD_ID = '__HIDDEN__';
     const pushInst = (it: any) => {
       if (!it) return;
-      if (it.cardId) ids.push(String(it.cardId));
+      if (it.cardId && String(it.cardId) !== HIDDEN_CARD_ID) ids.push(String(it.cardId));
       if (Array.isArray(it.energyAttached)) for (const e of it.energyAttached) if (e && e.cardId) ids.push(String(e.cardId));
       if (it.toolAttached && it.toolAttached.cardId) ids.push(String(it.toolAttached.cardId));
       if (Array.isArray(it.extraTools)) for (const t of it.extraTools) if (t && t.cardId) ids.push(String(t.cardId));
@@ -8287,8 +8304,14 @@
          同 v6.122 補位 modal 的既定做法：兩版共用的東西一律放在分支外。 -->
   {#if tNetBannerOn}
     <div class="net-warn-banner" role="alert">
-      <span>⚠ 與伺服器失聯 {tOfflineSec} 秒 —— 畫面可能不是最新的，閒置判負的倒數仍在計算。</span>
-      <button class="net-warn-btn" onclick={() => { tForceResync(); startTournamentPoll(); }}>🔄 立即重新同步</button>
+      {#if tAuthLost}
+        <span>⚠ 登入狀態已失效（憑證過期，或在其他分頁登出）—— 畫面不會再更新，請重新登入後回到對戰；閒置判負的倒數仍在計算。</span>
+      {:else}
+        <span>⚠ 與伺服器失聯 {tOfflineSec} 秒 —— 畫面可能不是最新的，閒置判負的倒數仍在計算。</span>
+      {/if}
+      <!-- v6.150：先強制刷新一次 Firebase token 再重試 —— 憑證過期造成的 401 這樣就能自救，
+           不必離開對戰重新登入（重新登入等於離開對戰，很可能直接被判負）。 -->
+      <button class="net-warn-btn" onclick={() => { void (async () => { try { if (firebaseUser) await firebaseUser.getIdToken(true); } catch { /* 刷新失敗就照原樣重試 */ } tForceResync(); startTournamentPoll(); })(); }}>🔄 立即重新同步</button>
       <button class="net-warn-x" title="關閉提示" onclick={() => { _tNetBannerDismissAt = Date.now(); }}>✕</button>
     </div>
   {/if}
@@ -9433,8 +9456,13 @@
           })()}
           {@const concealed = pendingSelection.params?.concealed === true}
           <div class="sel-grid" class:sel-grid-energy={isEnergyPicker}>
+            <!-- v6.150：concealed（卡面「在不看正面的情況下」）的候選卡，錦標賽伺服器不會揭示
+                 cardId（揭示了就違反卡面），所以 getCard 一定回 undefined。concealed 分支本來就
+                 只畫卡背與 ???、完全不需要卡面資料；若沿用「有卡面才渲染」的判斷，選擇視窗會整片
+                 空白，而這類 picker minCount 至少 1 又沒有取消鈕 ⇒ 使用該招式的玩家會被閒置判負
+                 （太陽伊布ex｜精神出局、拍落、占為己有、驚嚇、鈴鈴吵鬧 … 共 10 招）。 -->
             {#each selectionItems as item (item.iid)}{@const c=getCard(item.cardId)}
-              {#if c}
+              {#if c || concealed}
                 {@const _bdDisabled = isBrocksDigDisabled(item) || isFishnetDisabled(item)}
                 <div class="sel-card-wrap" class:sel-picked={selectionPicked.has(item.iid)} class:sel-concealed={concealed} class:bd-disabled={_bdDisabled}>
                   {#if !concealed}
