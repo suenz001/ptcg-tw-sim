@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.51</title>
+<title>PTCG Oracle Admin v1.67</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.66</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.67</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -386,6 +386,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="broadcast" onclick="switchTab('broadcast')">📢 廣播</div>
     <div class="tab" data-tab="tournament" onclick="switchTab('tournament')">🏆 賽事</div>
     <div class="tab" data-tab="tournament-stats" onclick="switchTab('tournament-stats')">📈 賽事統計</div>
+    <div class="tab" data-tab="monitor" onclick="switchTab('monitor')">📡 監控</div>
     <div class="tab" data-tab="deck-rules" onclick="switchTab('deck-rules')">🎴 牌組原型</div>
     <div class="tab" data-tab="changelog" onclick="switchTab('changelog')">📋 更新記錄</div>
   </div>
@@ -403,6 +404,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-tournament-stats" class="tab-content" style="display:none;"></div>
     <div id="tab-deck-rules" class="tab-content" style="display:none;"></div>
     <div id="tab-changelog" class="tab-content" style="display:none;"></div>
+    <div id="tab-monitor" class="tab-content" style="display:none;"></div>
   </main>
 </div>
 
@@ -1754,6 +1756,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'changelog') p = loadChangelogAdmin();  // 首頁更新記錄編輯
   else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
   else if (currentTab === 'tournament-stats') p = loadTournamentStats(forceRefresh);  // 賽事統計
+  else if (currentTab === 'monitor') p = loadMonitor();  // v1.67 對戰連線監控
   document.getElementById('last-update').textContent = 'Updated: ' + new Date().toLocaleTimeString('zh-TW');
   return p;
 };
@@ -2568,6 +2571,170 @@ function renderDeckRules(el) {
 
   if (_archStats) renderArchetypeStats();
 }
+
+// ══ v1.67 📡 監控分頁 ═══════════════════════════════════════════════════
+//   兩塊：①對戰連線設定（伺服器端的兩個灰度旗標，改完立即生效、不必重新部署）
+//         ②玩家端回報的異常指紋（v0.77 起一直在寫 tournamentClientDiag，但從來沒有讀的地方）
+//   ⚠ admin.html 是 module script —— inline on* 只看得到掛在 window 上的東西。
+window.monHours = 24;
+const MON_REASON_INFO = {
+  'slow-rtt': ['動作往返太慢（p95 ≥ 3 秒）',
+    '玩家送出動作到伺服器回應的時間。伺服器端指標不含隧道排隊與玩家自己的網路，這個數字才對得上「很卡」的體感。'
+    + '若多位玩家同時出現 → 隧道／VM 端；只有少數幾位 → 他們自己的網路。'],
+  'stale-version': ['畫面版本卡住（對戰中盤面不再更新）',
+    '輪詢還活著、但盤面版本一直沒前進。v6.149 的閒置誤判事故就是這一類。出現就代表有人畫面凍結過。'],
+  'invisible-hand': ['手牌有卡卻一張都沒畫出來',
+    '開局同步的老問題（v5.932 已修根因），再出現要回頭查。'],
+  'setup-watchdog-repeat': ['開局同步連續卡住',
+    '放出場／重抽階段的盤面沒同步過來，強制重抓後仍卡。'],
+  'manual-sync': ['玩家自己按了「重新同步」',
+    '不一定是 bug，但次數變多代表玩家覺得畫面不對。'],
+};
+// ⚠ 不可以直接 MON_REASON_INFO[reason] —— reason 若是 'constructor'/'__proto__' 這類
+//   原型鏈上的 key 會拿到 truthy 的非陣列，標題就變成空字串。
+function monReasonInfo(reason) {
+  const has = Object.prototype.hasOwnProperty.call(MON_REASON_INFO, reason);
+  return has ? MON_REASON_INFO[reason] : [String(reason || '(未標)'), ''];
+}
+async function loadMonitor() {
+  const el = document.getElementById('tab-monitor');
+  if (el) el.innerHTML = '<div style="padding:24px;color:#888;">載入中…</div>';
+  // ⚠ api() **從不 reject** —— 非 2xx 會回 { error: text }（見該函式）。用 .catch 判斷是死碼，
+  //   舊版伺服器（端點 404）會被當成「正常但沒資料」而顯示假綠（Fable 5 審查抓到）。
+  const _ok = function (r) { return (r && !r.error) ? r : null; };
+  const _r = await Promise.all([
+    api('/api/tournament/admin/longpoll'),
+    api('/api/tournament/admin/redact'),
+    api('/api/tournament/admin/clientdiag?hours=' + window.monHours),
+  ]);
+  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]);
+  const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
+  const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
+  let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
+
+  // ── ① 連線設定 ──────────────────────────────────────────────────────
+  html += '<div style="border:1px solid #e3e8ef;border-radius:8px;padding:14px;margin-bottom:18px;">'
+    + '<h3 style="margin:0 0 10px;">⚙️ 連線設定</h3>';
+  if (!lp) {
+    html += '<p style="color:#c62828;margin:0;">讀不到設定 —— 伺服器還是舊版（需要 v6.152 以上，跑過 redeploy-oracle.bat）。</p>';
+  } else {
+    const c = lp.config || {};
+    const on = c.enabled === true;
+    html += '<div style="margin-bottom:16px;">'
+      + '<div style="font-weight:700;margin-bottom:4px;">🚀 長輪詢　'
+      + (on ? '<span style="color:#2e7d32;">已啟用</span>' : '<span style="color:#888;">關閉</span>')
+      + '　<span class="small muted">目前掛著 ' + (lp.held || 0) + ' 條連線 / ' + (lp.rooms || 0) + ' 個房間</span></div>'
+      + '<p class="small muted" style="margin:2px 0 8px;">開啟後，等待端不再每 1.2 秒問一次，而是把請求掛在伺服器上、'
+      + '對手一動作就立刻回 —— 延遲降到接近網路往返時間，請求數反而下降。關閉時完全回到原本的輪詢。</p>'
+      + '<label style="display:inline-block;margin:4px 12px 8px 0;">掛起上限（秒，建議先用 8 觀察，沒問題再加到 25）：'
+      + '<input id="mon-lp-wait" value="' + escapeHtml(String(Math.round((c.maxWaitMs || 25000) / 1000))) + '" style="width:70px;padding:5px;"></label><br>'
+      + '<button style="' + btnS + '" onclick="monSetLongPoll(true, this)">啟用長輪詢</button> '
+      + '<button style="' + btnW + '" onclick="monSetLongPoll(false, this)">關閉</button>'
+      + '</div>';
+  }
+  if (rd) {
+    const on2 = rd.enabled === true;
+    html += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;">'
+      + '<div style="font-weight:700;margin-bottom:4px;">🙈 玩家端盤面遮蔽　'
+      + (on2 ? '<span style="color:#2e7d32;">已啟用</span>' : '<span style="color:#888;">關閉</span>') + '</div>'
+      + '<p class="small muted" style="margin:2px 0 8px;">開啟後，送給玩家的盤面會蓋掉<b>對手的</b>手牌／牌庫／獎賞內容（張數照常顯示）。'
+      + '本站是練習性質，預設關閉。⚠ 開啟會讓少數「要先看到對手隱藏區才畫得出選擇視窗」的卡片相依浮現，開了之後請實際打一場確認。</p>'
+      + '<button style="' + btnS + '" onclick="monSetRedact(true, this)">啟用遮蔽</button> '
+      + '<button style="' + btnW + '" onclick="monSetRedact(false, this)">關閉</button>'
+      + '</div>';
+  }
+  html += '</div>';
+
+  // ── ② 玩家端異常指紋 ────────────────────────────────────────────────
+  html += '<div style="border:1px solid #e3e8ef;border-radius:8px;padding:14px;">'
+    + '<h3 style="margin:0 0 6px;">🩺 玩家端回報的異常</h3>'
+    + '<p class="small muted" style="margin:0 0 10px;">玩家的畫面只有在<b>真的出問題</b>時才會回報一小包診斷（有節流，不是常態上報）。'
+    + '下次再有人說「很卡」，先看這裡。</p>'
+    + '<div style="margin-bottom:12px;">時間範圍：'
+    + [24, 72, 168].map(function (h) {
+        const sel = (window.monHours === h);
+        return '<button style="padding:5px 12px;margin-right:6px;border-radius:6px;cursor:pointer;border:1px solid '
+          + (sel ? '#2a4a7a;background:#e8f0fe;color:#2a4a7a;font-weight:700;' : '#d6dbe3;background:#fff;color:#555;')
+          + '" onclick="monSetHours(' + h + ')">' + (h === 168 ? '7 天' : h + ' 小時') + '</button>';
+      }).join('')
+    + '</div>';
+  if (!dg) {
+    html += '<p style="color:#c62828;">讀不到診斷 —— 伺服器還是舊版（需要 v6.154 以上）。</p>';
+  } else if (!dg.byReason || !dg.byReason.length) {
+    html += '<p style="color:#2e7d32;font-weight:600;">這段期間沒有任何異常回報 👍</p>';
+  } else {
+    html += '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">'
+      + '<tr style="background:#f5f7fa;"><th style="text-align:left;padding:7px 8px;">指紋</th>'
+      + '<th style="text-align:right;padding:7px 8px;width:80px;">次數</th>'
+      + '<th style="text-align:right;padding:7px 8px;width:110px;">受影響玩家</th></tr>';
+    dg.byReason.forEach(function (r) {
+      const info = monReasonInfo(r.reason);
+      html += '<tr style="border-top:1px solid #eef1f5;">'
+        + '<td style="padding:7px 8px;"><b>' + escapeHtml(info[0]) + '</b>'
+        + '<div class="small muted" style="margin-top:2px;">' + escapeHtml(info[1]) + '</div>'
+        + '<div class="small muted" style="margin-top:2px;color:#aab;">' + escapeHtml(r.reason) + '</div></td>'
+        + '<td style="padding:7px 8px;text-align:right;font-weight:700;">' + r.n + '</td>'
+        + '<td style="padding:7px 8px;text-align:right;font-weight:700;color:' + (r.players >= 3 ? '#c62828' : '#333') + ';">' + r.players + ' 人</td>'
+        + '</tr>';
+    });
+    html += '</table>';
+    if (dg.slowRtt && dg.slowRtt.length) {
+      html += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-bottom:12px;">'
+        + '<div style="font-weight:700;margin-bottom:4px;">⏱️ 動作往返時間（每筆是該玩家當下 30 發的統計）</div>'
+        + '<p class="small muted" style="margin:2px 0 8px;">正常是幾十毫秒。如果<b>多位不同玩家</b>同時出現好幾秒，'
+        + '瓶頸在隧道或 VM；只有固定那幾位，是他們自己的網路。</p>'
+        + '<table style="width:100%;border-collapse:collapse;">'
+        + '<tr style="background:#f5f7fa;"><th style="text-align:left;padding:6px 8px;">時間</th>'
+        + '<th style="text-align:left;padding:6px 8px;">玩家</th>'
+        + '<th style="text-align:right;padding:6px 8px;">中位數</th><th style="text-align:right;padding:6px 8px;">p95</th>'
+        + '<th style="text-align:right;padding:6px 8px;">最大</th></tr>';
+      dg.slowRtt.slice(0, 20).forEach(function (r) {
+        html += '<tr style="border-top:1px solid #eef1f5;">'
+          + '<td style="padding:6px 8px;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW')) + '</td>'
+          + '<td style="padding:6px 8px;">' + escapeHtml(r.email || '(未知)') + '</td>'
+          + '<td style="padding:6px 8px;text-align:right;">' + (r.p50 != null ? (r.p50 / 1000).toFixed(1) + ' 秒' : '-') + '</td>'
+          + '<td style="padding:6px 8px;text-align:right;font-weight:700;color:#c62828;">' + (r.p95 != null ? (r.p95 / 1000).toFixed(1) + ' 秒' : '-') + '</td>'
+          + '<td style="padding:6px 8px;text-align:right;">' + (r.max != null ? (r.max / 1000).toFixed(1) + ' 秒' : '-') + '</td>'
+          + '</tr>';
+      });
+      html += '</table></div>';
+    }
+    html += '<details style="border-top:1px dashed #e3e8ef;padding-top:12px;">'
+      + '<summary style="cursor:pointer;color:#2a4a7a;font-weight:700;">📋 最近 ' + (dg.rows || []).length + ' 筆明細（含原始診斷內容）</summary>'
+      + '<div style="padding-top:10px;">';
+    (dg.rows || []).forEach(function (r) {
+      const info = monReasonInfo(r.reason);
+      html += '<details style="margin-bottom:6px;border:1px solid #eef1f5;border-radius:6px;padding:8px;">'
+        + '<summary style="cursor:pointer;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW'))
+        + '　<b>' + escapeHtml(info[0]) + '</b>　' + escapeHtml(r.email || '(未知)')
+        + (r.room ? '　<span class="small muted">' + escapeHtml(r.room) + '</span>' : '') + '</summary>'
+        + '<pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;background:#fafbfc;padding:8px;border-radius:4px;margin:8px 0 0;">'
+        + escapeHtml(r.diag || '') + '</pre></details>';
+    });
+    html += '</div></details>';
+  }
+  html += '</div></div>';
+  if (el) el.innerHTML = html;
+}
+window.monSetHours = function (h) { window.monHours = h; loadMonitor(); };
+window.monSetLongPoll = async function (enabled, btn) {
+  const secEl = document.getElementById('mon-lp-wait');
+  const sec = secEl ? Number(secEl.value) : 25;
+  if (!(sec >= 1 && sec <= 60)) { alert('掛起上限請填 1~60 秒。'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  const r = await api('/api/tournament/admin/longpoll', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: !!enabled, maxWaitMs: Math.round(sec * 1000) }) });
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) btn.disabled = false; return; }
+  await loadMonitor();
+};
+window.monSetRedact = async function (enabled, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  const r = await api('/api/tournament/admin/redact', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !!enabled }) });
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) btn.disabled = false; return; }
+  await loadMonitor();
+};
 
 // ══ v1.63 支援型寶可夢清單（未分類高頻卡的排除名單）══════════════════════
 //   吉雉雞ex、喵喵ex 這類幾乎每副牌都放的功能性寶可夢，出現在「未分類高頻卡」
