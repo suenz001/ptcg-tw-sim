@@ -40,13 +40,18 @@ ok('_viewerSeat 不在 BLOCK 內（它依賴 tournIdentity，不該被純函式�
 
 if (!BLOCK) { console.log(`\n${pass} PASS / ${fail} FAIL`); process.exit(1); }
 
-const factory = new Function('TPOOL', '_capLog', BLOCK + '\nreturn { _redactStateForSeat, _stateForSeat, _pendingReveal, _oppDeckTopReveal, TSEAT_NO_REDACT, TREDACT_CARD_ID };');
+// v6.153：遮蔽是**預設關閉**的旗標。`_redactOn` 宣告在 BLOCK 之外，所以這裡注入它；
+//   下面的行為測試預設注入「已開啟」，另有一組專門驗「關閉時玩家視角原樣回」。
+const mkFactory = () => new Function('TPOOL', '_capLog', '_redactOn',
+  BLOCK + '\nreturn { _redactStateForSeat, _stateForSeat, _pendingReveal, _oppDeckTopReveal, TSEAT_NO_REDACT, TREDACT_CARD_ID };');
+const factory = mkFactory();
 const TPOOL = new Map([
   ['CAT', { name: '火箭隊的貓老大ex', attacks: [{ name: '高傲指令' }] }],
   ['FOX', { name: '狐大盜', attacks: [{ name: '技能大盜' }] }],
   ['PLAIN', { name: '普通寶可夢', attacks: [{ name: '撞擊' }] }],
 ]);
-const R = factory(TPOOL, (gs) => gs);
+const R = factory(TPOOL, (gs) => gs, () => true);          // 旗標開：驗遮蔽行為
+const ROFF = mkFactory()(TPOOL, (gs) => gs, () => false);   // 旗標關：驗零影響
 const HID = R.TREDACT_CARD_ID;
 
 // ── fixture ────────────────────────────────────────────────────────────────
@@ -255,7 +260,8 @@ function scanGameStateExprs(src) {
   const s0 = SRC.indexOf("app.get('/api/tournament/state'");
   const s1 = SRC.indexOf("app.post('/api/tournament/action'");
   const seg = SRC.slice(s0, s1);
-  ok('/state 取得請求者座位', /const _vseat = await _viewerSeat\(req, doc\);/.test(seg));
+  // v6.153：只有遮蔽開啟時才去判座位（關閉時直接走不遮的哨兵值，見 10d 那組斷言）
+  ok('/state 取得請求者座位', /_vseat = _redactOn\(\) \? await _viewerSeat\(req, doc\) : TSEAT_NO_REDACT/.test(seg));
   ok('/state 用 _stateForSeat 出口', /gameState: _stateForSeat\(doc\.gameState, _vseat\)/.test(seg));
   ok('_viewerSeat 只採信 verified 身分', /if \(!id \|\| id\.error \|\| !id\.verified/.test(SRC));
   ok('_viewerSeat 對無 matchId 的測試房回 TSEAT_NO_REDACT', /if \(!doc \|\| !doc\.matchId\) return TSEAT_NO_REDACT;/.test(SRC));
@@ -296,6 +302,53 @@ function scanGameStateExprs(src) {
   ok('第 11 張起被遮且順序被打亂',
     catOut.players[1].deck.slice(10).every((c) => c.cardId === HID)
     && catOut.players[1].deck.slice(10).map((c) => c.iid).join(',') !== origIids.slice(10).join(','));
+}
+
+// ── 10c. v6.153 遮蔽總開關：預設關閉時玩家視角必須零影響 ─────────────────
+{
+  const gs = mkGs();
+  ok('★旗標關閉 ⇒ 玩家視角原樣回（連物件都不換，＝ v6.149 行為）',
+    ROFF._redactStateForSeat(gs, 0) === gs);
+  ok('★旗標關閉 ⇒ 對手手牌看得到（正對照：證明上面那條不是因為別的原因才通過）',
+    ROFF._redactStateForSeat(gs, 0).players[1].hand.every((c) => c.cardId !== HID));
+  // ⚠ 觀戰視角**不受旗標影響**：那是 v6.149 就有的既有行為，關掉旗標不可以讓觀戰者看到手牌
+  const spec = ROFF._redactStateForSeat(mkGs(), -1);
+  ok('★★旗標關閉時觀戰視角仍然遮（不可以退化成看得見雙方手牌）',
+    spec.players[0].hand.every((c) => c.cardId === HID) && spec.players[1].hand.every((c) => c.cardId === HID));
+  ok('旗標關閉時觀戰的牌庫/獎賞也仍然遮',
+    spec.players[0].deck.every((c) => c.cardId === HID) && spec.players[1].prizes.every((c) => c.cardId === HID));
+  ok('旗標開啟時玩家視角照常遮（對照組）', R._redactStateForSeat(mkGs(), 0).players[1].hand.every((c) => c.cardId === HID));
+}
+
+// ── 10d. 靜態：旗標的預設與接線 ────────────────────────────────────────────
+{
+  ok('★遮蔽旗標預設關閉', /let _redactFlag = false, _redactAt = 0;/.test(SRC));
+  ok('只有明確 true 才算開（避免 "true" 字串誤開）', /_redactFlag = !!\(d && d\.enabled === true\);/.test(SRC));
+  ok('旗標在 BLOCK 之外（BLOCK 才能被純函式測試注入）', !BLOCK.includes('let _redactFlag'));
+  ok('BLOCK 內用 _redactOn() 判斷，且只套用在玩家視角',
+    BLOCK.includes('if ((seat === 0 || seat === 1) && !_redactOn()) return gs;'));
+  // ⚠ 以下一律 scope 到各自的區段再比對 —— 全檔比對會被別處的同款字面滿足而變成安慰劑
+  //   （Fable 5 第三輪審查實測：`/_redactAt = 0;/` 全檔比對會被宣告行 `let _redactFlag = false, _redactAt = 0;`
+  //   滿足，把 admin 端點裡真正的失效那行刪掉照樣 PASS）。
+  const _segState = SRC.slice(SRC.indexOf("app.get('/api/tournament/state'"), SRC.indexOf("app.post('/api/tournament/action'"));
+  const _iRedact = SRC.indexOf("app.post('/api/tournament/admin/redact'");
+  const _segRedactPost = SRC.slice(_iRedact, _iRedact + 900);
+  const _segAction = SRC.slice(SRC.indexOf("app.post('/api/tournament/action'"), SRC.indexOf("app.post('/api/tournament/reset'"));
+  ok('/state 每次都會刷新旗標（10 秒快取）', /await redactEnabled\(\);/.test(_segState));
+  ok('★遮蔽關閉時 /state 完全不做身分判定、直接走「不遮」的哨兵值',
+    /const _vseat = _redactOn\(\) \? await _viewerSeat\(req, doc\) : TSEAT_NO_REDACT;/.test(_segState));
+  ok('★★關閉時不可以只把 401 拿掉就算數（-1 在 _redactStateForSeat 是「兩邊都遮」＝玩家自己手牌變卡背）',
+    !/const _vseat = await _viewerSeat\(req, doc\);/.test(_segState));
+  ok('遮蔽開啟時仍然擋認不出座位的請求（401）', /if \(_vseat === -1\) return res\.status\(401\)/.test(_segState));
+  ok('admin 開關端點有管理員 gate', /isTournAdmin\(id\)/.test(_segRedactPost));
+  ok('改設定後快取立刻失效（scope 到 admin POST，不是全檔）', /_redactAt = 0;/.test(_segRedactPost));
+  ok('★掃描器自我驗證：宣告行不該讓上一條 PASS',
+    !/_redactAt = 0;/.test("    let _redactFlag = false, _redactAtX = 0;"));
+  // ⚠ /action 與 /join 的 verified 要求**不**受旗標影響：那擋的是「替對手送動作」，
+  //   是會直接破壞別人對局的，與「偷看手牌」不同一件事。
+  ok('★/action 的 verified 要求不受遮蔽旗標影響（scope 到 /action 區段）',
+    /if \(doc\.matchId && !_id\.verified\) return res\.status\(403\)/.test(_segAction)
+    && !/_redactOn\(\)[\s\S]{0,80}!_id\.verified/.test(_segAction));
 }
 
 // ── 11. log 的 privateMessage 只能給本人 ─────────────────────────────────────
@@ -355,7 +408,8 @@ function scanGameStateExprs(src) {
   const s0 = SRC.indexOf("app.get('/api/tournament/state'");
   const s1 = SRC.indexOf("app.post('/api/tournament/action'");
   const segS = SRC.slice(s0, s1);
-  ok('/state 認不出座位時回 401，而不是回一份「連自己都遮」的 200 盤面',
+  // v6.153：關閉時 _vseat 直接是「不遮」的哨兵值、根本不會是 -1，所以這條 401 只有開啟時才會走到
+  ok('（遮蔽開啟時）認不出座位回 401，而不是回一份「連自己都遮」的 200 盤面',
     /if \(_vseat === -1\) return res\.status\(401\)/.test(segS));
 }
 

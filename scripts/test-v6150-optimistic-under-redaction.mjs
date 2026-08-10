@@ -42,7 +42,9 @@ const BEGIN = '── v6.150 REDACT BLOCK BEGIN ──', END = '── v6.150 RE
 const i0 = SRC.indexOf(BEGIN), i1 = SRC.indexOf(END);
 if (i0 < 0 || i1 < i0) { console.log('  FAIL 找不到 REDACT BLOCK（server patch 未套用？）'); process.exit(1); }
 const BLOCK = SRC.slice(i0 + BEGIN.length, i1);
-const R = new Function('TPOOL', '_capLog', BLOCK + '\nreturn { _redactStateForSeat, TREDACT_CARD_ID };')(pool, (g) => g);
+// v6.153：遮蔽是預設關閉的旗標；這支要驗的是「開啟時樂觀更新仍能預測」⇒ 注入「已開啟」。
+const R = new Function('TPOOL', '_capLog', '_redactOn',
+  BLOCK + '\nreturn { _redactStateForSeat, TREDACT_CARD_ID };')(pool, (g) => g, () => true);
 
 let pass = 0, fail = 0;
 const chk = (label, cond, extra = '') => {
