@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.68</title>
+<title>PTCG Oracle Admin v1.69</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1166,6 +1166,9 @@ window._tsCloseModal = function () { var ov = document.getElementById('ts-modal-
 
 function _tsMatchOutcome(m) {
   if (m.bye) return '輪空晉級';
+  // v1.69（Fable 5 審查）：沒有這一條，系統死角平手場會落到最後的「正常分勝負」——
+  //   而 v6.156 刻意不重用 doubleNoShow 就是為了事後分得出「掛機」與「系統卡住」。
+  if (m.deadlockDraw) return (m.status === 'pending-admin' ? '系統死角（待裁定）' : '系統死角改判平手');
   if (m.doubleNoShow) return '雙方未進場';
   if (m.noShow) return '未進場判負';
   if (m.forfeit) return '投降判負';
@@ -1566,6 +1569,7 @@ function renderTournamentStats(el, data) {
     (a.matches || []).forEach((m) => {
       // 賽果分佈（互斥優先序）
       if (m.bye) outcome.bye++;
+      else if (m.deadlockDraw) { outcome.deadlockDraw = (outcome.deadlockDraw || 0) + 1; }
       else if (m.doubleNoShow) outcome.doubleNoShow++;
       else if (m.adminResolved) outcome.adminResolved++;
       else if (m.idleForfeit) outcome.idleForfeit++;
@@ -2587,6 +2591,9 @@ const MON_REASON_INFO = {
     '開局同步的老問題（v5.932 已修根因），再出現要回頭查。'],
   'setup-watchdog-repeat': ['開局同步連續卡住',
     '自己還有開局待辦（放出場／重抽／確認揭示），但盤面 60 秒沒有任何更新。單純在等對手不會觸發。明細的 state.selfPending 顯示卡在哪一步。'],
+  'setup-stalled-both-done': ['死角：雙方都完成準備卻推不動',
+    '玩家按了「我還在」（v6.156），伺服器也確認雙方都該動作，但盤面仍然沒有前進 —— 這不是掛機，是系統把局面卡住了。'
+    + '出現就代表有一場比賽需要人工處理；閒置時間到之後那場會自動改判**平手**並在聊天室通知。'],
   'manual-sync': ['玩家自己按了「重新同步」',
     '不一定是 bug，但次數變多代表玩家覺得畫面不對。'],
 };
@@ -2721,18 +2728,21 @@ window.monSetLongPoll = async function (enabled, btn) {
   const secEl = document.getElementById('mon-lp-wait');
   const sec = secEl ? Number(secEl.value) : 25;
   if (!(sec >= 1 && sec <= 60)) { alert('掛起上限請填 1~60 秒。'); return; }
+  const _t0 = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
   const r = await api('/api/tournament/admin/longpoll', { method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled: !!enabled, maxWaitMs: Math.round(sec * 1000) }) });
-  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) btn.disabled = false; return; }
+  // v1.68（Fable 5 審查）：失敗路徑只放開 disabled 而沒還原文字 ⇒ 按鈕永遠停在「處理中…」
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
   await loadMonitor();
 };
 window.monSetRedact = async function (enabled, btn) {
+  const _t0 = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
   const r = await api('/api/tournament/admin/redact', { method: 'POST',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !!enabled }) });
-  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) btn.disabled = false; return; }
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
   await loadMonitor();
 };
 

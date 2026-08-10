@@ -4,8 +4,13 @@
 >
 > 前一份交接文件 `docs/handoff-錦標賽伺服器三批次.md` 的**三個批次已全部做完**，這份是它的後續。
 >
-> ⚠ **下一版的 BASE 一律用 `6051a7d81e3192b8ea498075a1d4e79eb41d3395`**
-> （IRON_RULES Rule 24：用 sha push 之後，後續 patch 的 base 必須是那個 sha）。
+> ⚠⚠ **最新狀態（2026-08-10）：v6.156 已在本機 commit，但 push 失敗** —— 沙盒的
+> HTTPS proxy 擋掉 GitHub（403）。本機 `main` 已經指到 v6.156。
+> **接手的第一件事就是把它推上去：** `git push origin main:refs/heads/main`
+> （內容見第 7、8 節；先用 `git log --oneline -2` 確認 HEAD 是 v6.156、parent 是 `99538b00`）。
+>
+> ⚠ **下一版的 BASE 用 v6.156 的 sha**（`git rev-parse main` 取得；push 上去之後那就是
+> 遠端 main）—— IRON_RULES Rule 24：用 sha push 之後，後續 patch 的 base 必須是那個 sha。
 >
 > 每一項都標了「已查證 / 未查證」——**標為未查證的一律要自己再確認一次**。
 
@@ -213,3 +218,157 @@ https://suenz001:ghp_xxxxxxxx@github.com/suenz001/ptcg-tw-sim.git
 
 它在這次診斷時被讀到過（因此出現在對話紀錄裡）。建議去 GitHub **撤銷該 token 重發**，
 並改用 credential helper 或 SSH key，不要把 token 寫在 remote URL 中。
+
+---
+
+# 7. 【✅ 已於 v6.156 實作完成】閒置判負前的「我還在」確認彈窗
+
+> 由站長 2026-08-10 提出並裁定。**已實作完成，見第 8 節。**
+> BASE 用 `99538b0062c50aebc9ff5026a21a4d43f3f203a9`（v6.155）。
+> 下面保留原始規格，方便與實作對照（實作時多補了一條規格沒寫的規則，見 8.2）。
+
+## 動機（站長原話大意）
+> 「我不會一直去監控啊，應該是你要提醒他們『系統已經計時囉』，然後彈出一個框框讓玩家點選。
+> 沒點選表示人在掛機不在，就可以判敗；相反的，如果玩家在、只是在思考，就可以點那個框框，證明還在。」
+
+⇒ 把「事後看監控」換成「當場問玩家」。真掛機照樣判敗，在思考的人不會被冤枉。
+
+## 站長的三個裁定
+
+| 項目 | 裁定 |
+|---|---|
+| 點了「我還在」之後 | **重置閒置倒數，不限次數** |
+| 彈窗出現時機 | **所有閒置情境都彈**（對戰中長考、開局卡住、雙方都推不動的死角） |
+| 死角情境點了仍卡住 | **改判平手 ＋ 聊天室通知站長人工裁定**（不是雙敗、也不重打） |
+
+## ⚠⚠ 實作前必須解決的一個漏洞（我查證後發現，站長還不知道）
+
+「不限次數重置」的天花板是**對局時限**（`server_admin_patch.js` 的 timeLimit 掃描：
+時限到 → 標記 `timeLimitReached` + 記下當下 turn → 廣播「進行最後回合」→
+等後攻方結束他的下一個回合 → 依雙方剩餘獎賞卡判定）。**這個機制確實存在且會強制結束對局。**
+
+**但是**：時限到之後要「打完最後回合」才會判定，而拖延方只要每 3 分鐘點一次「我還在」，
+最後回合就**永遠打不完** ⇒ 比賽卡死，時限形同虛設。
+
+⇒ **必加規則：`timeLimitReached === true` 之後，「我還在」不再重置倒數**（按鈕可以還在、
+但只顯示「對局時限已到，請盡快完成最後回合」）。這樣對局時限才是真正的天花板。
+
+## 設計要點
+
+**伺服器（`server_admin_patch.js`，要跑 `redeploy-oracle.bat`）**
+1. 新端點 `POST /api/tournament/still-here`：驗身分 → 確認 uid 在該房 seats 內 →
+   `$set: { lastActionAt: Date.now() }`（重用既有欄位，閒置掃描就是讀它）。
+   ⚠ **不可整包寫回 gameState**（v6.151 `idleWarn60` 的教訓：非終局的整包寫回一定要 CAS，
+   否則會蓋掉玩家剛送出的動作、而且版本號一樣讓自癒失效）。這個端點只碰 `lastActionAt`，最安全。
+2. `timeLimitReached` 時拒絕（回 `{ ok:false, reason:'time-limit' }`），由 client 顯示不同文案。
+3. 死角判定：`currentActorSeat(gs) === -1` 且 `phase === 'setup'` 且雙方 `setupDone` 皆 true
+   → 改判**平手**（`winnerUid: null`、`draw: true`，**不要**用現有的 `doubleNoShow`）
+   + `postSystemChat` 通知站長人工裁定。
+   ⚠ 現行碼在 `actor === -1` 是走「雙方皆閒置 → 雙淘汰（doubleNoShow）」，要改的就是這一條。
+
+**Client（`src/routes/game/+page.svelte` ＋ `MobilePortraitBattle.svelte`）**
+4. 倒數剩 60 秒時彈確認框（v6.151 已經有 60 秒推播，兩者對齊同一時點）。
+   ⚠ 彈窗必須放在**手機/桌機版面分支之外**（v6.149 剛踩過：橫幅寫在桌機 else 分支裡，手機看不到）。
+5. 死角情境（`actorSeat === -1`）**兩邊都要彈**，而且點下去要**同時 `tForceResync()`**——
+   點了「我還在」但盤面還是推不動，才是真 bug；此時送 `setup-stalled-both-done` 診斷。
+6. ⚠ 手機在背景/鎖屏看不到彈窗 → 仍要靠 v6.151 的推播叫醒。彈窗是補強不是取代。
+7. ⚠ 「有實際動作」本來就會更新 `lastActionAt`，不要因為加了彈窗就改掉那條 —— 正常出牌的人
+   不該被要求額外點確認。
+
+**守衛**
+8. 行為端：still-here 端點只改 `lastActionAt`、不碰 gameState；`timeLimitReached` 時必須拒絕；
+   非該房玩家呼叫必須 403。
+9. 靜態：彈窗在版面分支之外（斷言**位置**，不是只斷言「有渲染」——v6.148 的教訓）。
+10. 死角改判平手的分支要有 HEAD-FAIL 對照（現行碼是 doubleNoShow）。
+
+---
+
+# 8. v6.156 實作結果（已在本機 commit，⚠ 尚未 push）
+
+> BASE = `99538b0062c50aebc9ff5026a21a4d43f3f203a9`（v6.155）。
+> 本機 `main` 已指到 v6.156（sha 用 `git rev-parse main` 取得）。
+> 完整 `npm test` **472 步分 4 批全部 exit=0**、`npm run build` 通過。
+
+## 8.1 改到的檔案
+
+```
+oracle-admin/server_admin_patch.js   新端點 /still-here（v6.156 STILL HERE BLOCK）＋ 死角改判平手
+src/routes/game/+page.svelte         tMyIdleSec ＋ tStillHere() ＋ 彈窗（版面分支之外）＋ CSS
+                                     ＋ 新鮮度看門狗加 !_lpInFlight（Fable 審查）
+oracle-admin/admin.html              setup-stalled-both-done 指紋說明 ＋ 按鈕文字還原 ＋ title v1.69
+src/lib/version.ts                   6.155 → 6.156
+docs/changelog-internal.md           新增 v6.156 一段
+static/changelog.html                新增 v6.156 一則（玩家感受得到 ⇒ 上首頁），並把最舊的 v6.089 搬進 archive
+static/changelog-archive.html        接收 v6.089
+scripts/test-v6156-still-here.mjs    新增（47 項）
+scripts/test-v6151-…mjs / test-v6152-longpoll.mjs   守衛安慰劑修正（71→74、44→52）
+package.json                         測試鏈 471 → 472 步
+```
+
+**部署**：伺服器端有改 ⇒ **必跑 `redeploy-oracle.bat`**；admin.html 有改 ⇒ **必跑 `update-admin-full.bat`**。
+
+## 8.2 ⚠⚠ 規格沒寫、實作時查證後補上的一條規則
+
+**只有「該動作的那一方」能按「我還在」重置倒數。**
+
+閒置倒數的語意就是「該動作方沒動作」。若放行等待方呼叫，等待方就能替**掛機的對手**
+無限續命 —— 判負機制直接失效，而且是對手幫他做的，掛機者本人什麼都不用做。
+`actor === -1`（雙方都該動作＝系統死角）時兩邊都放行，那正是這個功能要救的情境。
+守衛已用行為端釘死（等待方呼叫必須 `reason: 'not-your-turn'` **且完全沒有寫入**）。
+
+## 8.3 三個裁定的實作對照
+
+| 站長裁定 | 實作 |
+|---|---|
+| ①點了就重置、不限次數 | `$set: { lastActionAt: now }`，沒有次數上限。**不整包寫回 gameState、也不 bump version** —— 盤面沒變，bump 只會讓兩邊各抓一份完整盤面白花流量 |
+| ②所有閒置情境都彈 | 判準是 `actor === mySeatIdx \|\| actor === -1`，setup／playing／死角都涵蓋 |
+| ③死角改判平手＋通知站長 | 閒置掃描的 `actor === -1` 分支分歧：setup 且雙方 setupDone → **`status: 'pending-admin'`** ＋ `draw: true, deadlockDraw: true` ＋ 聊天室請站長到 admin「待裁定場次」處理，**且不推進輪次**；**非死角仍走原本的 doubleNoShow + done**（賽果對帳要分得出「掛機」與「系統卡住」）<br>⚠ 第二輪 Fable 審查抓到：第一版設成 `done` ⇒ resolve 回 409、pending 清單不列 ⇒ 「人工裁定」根本做不到，實質仍是雙淘汰 |
+| 交接文件點名的時限漏洞 | `timeLimitReached` 之後伺服器拒絕重置，client 顯示「對局時限已到，請盡快完成最後回合」 |
+
+## 8.4 同批併入：Fable 5 最終審查的三項修正
+
+15 個發現逐一自行複驗後確認並修掉三項（其餘為誤判或已知取捨，見第 7 節之外的 changelog-internal）：
+
+1. **⭐ 新鮮度看門狗會把長輪詢的效益整個吃掉**（只在長輪詢旗標打開後才現形）——
+   20 秒看門狗沒有長輪詢守衛，會 ①每 20 秒白抓一份全量 ②丟棄在途的長輪詢回應
+   ③**誤發 `stale-version` 指紋**，污染站長要用來判讀「版本卡住」的訊號。修法：加 `&& !_lpInFlight`。
+2. **⭐⭐ 三條守衛安慰劑**（把修正還原掉，測試照樣全綠，均以突變實測確認）——
+   `test-v6152` 的「掛起後重讀」被掛起**前**的第一次輕量讀誤滿足、`_lpCfgAt = 0;` 被
+   **宣告行**誤滿足；`test-v6151` 的 RTT 負向斷言只防 `catch` 一種拼法。
+   第一條的後果最重：長輪詢叫醒後拿舊版本比對 → 回 unchanged → client 立刻再掛一發
+   ⇒ **長輪詢退化成忙碌空轉**，而測試全綠。
+3. admin 監控分頁：旗標開關失敗時按鈕永遠停在「處理中…」。
+
+**Fable 的一項主張複驗後判定為誤判**：「舊世代 `finally` 會誤清新世代在途長輪詢的
+`_tLongPollAt`、形成每 6~8 秒迴圈」—— `_pollBusy` 是模組層級旗標，舊那一發沒回來之前
+新世代根本送不出去，兩發不會並存。
+
+## 8.4b 第二輪 Fable 5 審查（v6.156 自己的審查）抓到並修掉的四項
+
+1. **⭐ 嚴重：「請站長人工裁定」原本做不到** —— 死角場設成 `status:'done'` 之後，
+   `admin/match/resolve` 回 409、`admin/pending-matches` 不列，而且 `checkRoundAdvance`
+   立刻推進輪次（單淘汰下兩人直接從賽程消失）。⇒ 改用 `pending-admin` ＋ 不推進輪次。
+2. `draw` / `deadlockDraw` 沒進歸檔與 summary 的 mapping ⇒ 賽果頁顯示「正常分勝負」，
+   「不重用 doubleNoShow」的目的整個落空。
+3. 死角時「對手閒置中→自動判你勝」橫幅與「剩 N 秒被判負」確認框同時出現、方向相反。
+4. `setup-stalled-both-done` 指紋在非死角的 `-1` 也會發，而且會吃光每頁 3 發的診斷配額。
+
+守衛跟著補到 **62 項**，突變實測 7 個全紅。其中「彈窗在版面分支之外」的斷言也從
+**檔案先後順序**（Fable 指出是安慰劑）改成**巢狀深度證明**。
+
+## 8.5 站長上線後要看的東西
+
+1. 部署（`redeploy-oracle.bat` ＋ `update-admin-full.bat`）。
+2. 辦一場賽事，看 admin 監控分頁有沒有出現 **`setup-stalled-both-done`** ——
+   有，就代表真的有比賽被系統卡住過（不是玩家掛機）。
+   **⚠ 那一場會停在「待裁定」，賽程不會自己往下走** —— 要到 admin 的「待裁定場次」
+   把它判掉（判給任一方，或視情況重賽），賽程才會繼續。聊天室也會發一則通知。
+3. 長輪詢旗標仍**預設關閉**。要開的話先把掛起上限設 8 秒、`maxHold` 壓小，看監控分頁的
+   「掛起數」再往上加（滿載 200 條時保險輪詢約 133 qps 打在 mongo 上）。
+
+## 8.6 下一批的 BASE
+
+v6.156 的 sha（`git rev-parse main`）—— IRON_RULES Rule 24。
+
+⚠ push 之後記得用 GitHub API 的 `conclusion` 欄位確認 build 與 deploy **兩個 job 都 success**，
+再提醒站長跑 `redeploy-oracle.bat` ＋ `update-admin-full.bat`。

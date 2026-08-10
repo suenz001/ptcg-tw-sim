@@ -152,6 +152,10 @@
   let _rttSamples: number[] = [];      // v6.151 動作往返時間取樣（只在明顯偏慢時回報一次）
   let _rttDiagSent = false;
   let _freshWatchdogVersionAt = -1;    // v6.151 新鮮度看門狗第一次觸發當下的版本
+  // ⭐v6.156「我還在」：把「事後看監控」換成「當場問玩家」。真掛機照樣判負，在思考的人不會被冤枉。
+  let tStillHereBusy = $state(false);
+  let tStillHereNote = $state('');     // 伺服器拒絕時的說明（時限已到／不是你該動作／已結束）
+  let _stalledDiagSent = false;        // setup-stalled-both-done 每場只送一次（診斷配額每頁只有 3 發）
   // ── 觀戰 ──
   let tSpectateList = $state<any[]>([]);
   let tChampions = $state<any[]>([]); // v5.570 名人堂（歷屆冠軍）
@@ -356,7 +360,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //     推到現在，於是對戰結束後形成「8 秒 stale → 抓一次 v=-1 全量盤面 → 重設計時 → 再 8 秒」
         //     的無限迴圈，而且每次還會 startTournamentPoll() 重建 timer。這就是伺服器 log 裡
         //     週期性出現的 4~5KB `?v=-1` 請求的來源（不是玩家在按 F5）。
-        if (tStep === 'playing' && game && !_tOver && !isTournSpectator
+        //   ⭐⭐v6.155（Fable 5 最終審查）：**長輪詢在途時這條保險網必須整條停用**。
+        //     長輪詢的語意就是「盤面一變伺服器立刻回」，所以「20 秒沒更新」在長輪詢模式下
+        //     是**對手在長考**的正常狀態，不是漏接。沒有這個守衛會有三個後果：
+        //     ① 每 20 秒白抓一份 `v=-1` 全量盤面 —— 正好抵銷長輪詢要省的那筆流量；
+        //     ② 順帶的 startTournamentPoll() 會 ++tPollGen，把**掛在伺服器上、對手一動就會回**
+        //        的那一發長輪詢回應判為過期丟棄 ⇒ 對手第 21 秒動作時反而多等一個 RTT；
+        //     ③ 最糟的是 `_freshWatchdogFires` 會累加到 3 而 tVersion 沒動 ⇒ 誤發
+        //        `stale-version` 診斷指紋。那個指紋是站長在 admin 監控分頁用來判讀
+        //        「版本是不是真的卡住」的訊號，被長考誤報淹掉就再也讀不出真的卡住。
+        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && !_lpInFlight
             && _tLastStateChangeAt > 0 && (Date.now() - _tLastStateChangeAt) > _freshStaleMs
             && (Date.now() - _tLastForceResyncAt) > 8000
             && !tInFlight   // v6.137 動作送出中不強制重抓：會把本地預測畫面倒回，伺服器回應到達後又前進＝閃爍
@@ -4515,6 +4528,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     tServerActorSeat = undefined; _rttSamples = []; _rttDiagSent = false;
     _setupDiagSent = false; _invisibleHandDiagSent = false;   // v6.155 診斷旗標同樣是每場一次，殘留會讓下一場漏報
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
+    tStillHereBusy = false; tStillHereNote = ''; _stalledDiagSent = false;   // v6.156（Fable 5 審查：跨場殘留）
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
     tournLoadEvent(); tBracketLoad();
@@ -4908,10 +4922,69 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.151 方向以**伺服器**為準：閒置判負是伺服器用它那份盤面算的，client 本地推算
     //   只要版本落後就會反向（v6.149 事故）。伺服器沒回這個欄位（舊版）才退回本地推算。
     const actor = (tServerActorSeat !== undefined) ? tServerActorSeat : tCurrentActorSeat(game);
-    if (actor == null || actor === mySeatIdx) return null; // 只在「該對手動作」時提示等待方
+    // ⚠ v6.156（Fable 5 審查）：`actor === -1`（雙方都該動作＝系統死角）也要回 null。
+    //   否則死角時**同一個畫面**會同時出現「⏳ 對手閒置中：將自動判你勝」（這句在死角情境
+    //   是錯的 —— 結果是平手待裁定，不是我勝）與「剩 N 秒未行動就會被判負」的確認框，
+    //   兩句話方向相反。v6.156 起 -1 一律由「我還在」確認框負責。
+    if (actor == null || actor === -1 || actor === mySeatIdx) return null;
     const remain = Math.ceil((tLastActionAt + tIdleMin * 60000 - tNow) / 1000);
     return remain > 0 ? remain : 0;
   });
+  // ⭐v6.156 **我自己**再過幾秒會被判負（tIdleWarnSec 的反方向）。
+  //   ⚠ `actor === -1`（雙方都該動作＝系統死角）兩邊都要看到 —— 站長裁定②「所有閒置情境都彈」，
+  //     而死角正是最需要當場問的那一種：兩個人都在等對方，誰也不知道自己正在被倒數。
+  //   ⚠ 方向同樣以**伺服器**為準（v6.149 事故：本地推算只要版本落後就會反向）。
+  const tMyIdleSec = $derived.by(() => {
+    if (!isTournament || isTournSpectator || !game || !tLastActionAt) return null;
+    if ((game as any).phase === 'game-over') return null;
+    // 回前景後短暫不顯示（同 tIdleWarnSec：背景頁籤 tick 被節流，tNow 停在舊值會先算出「剩 0 秒」）
+    if (_tForegroundAt > 0 && tNow - _tForegroundAt < 3000) return null;
+    const actor = (tServerActorSeat !== undefined) ? tServerActorSeat : tCurrentActorSeat(game);
+    if (actor == null) return null;
+    if (!(actor === mySeatIdx || actor === -1)) return null;
+    const remain = Math.ceil((tLastActionAt + tIdleMin * 60000 - tNow) / 1000);
+    return remain > 0 ? remain : 0;
+  });
+  /**
+   * v6.156 按下「我還在」。
+   * ⚠ 伺服器只接受「該動作方」的呼叫（否則等待方就能替掛機的對手無限續命）。
+   * ⚠ 對局時限已到之後伺服器會拒絕 —— 那時倒數不該再被重置，否則最後回合永遠打不完。
+   */
+  async function tStillHere() {
+    if (tStillHereBusy) return;
+    tStillHereBusy = true; tStillHereNote = '';
+    try {
+      const r = await tApi('/still-here', { room: tActiveRoom, playerId: tPlayerId() });
+      if (r && r.ok) {
+        if (typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
+        // 死角（雙方都該動作）：點了「我還在」但盤面還是推不動，**那才是真 bug** ⇒
+        //   強制重抓一次權威盤面，並送診斷指紋讓站長在監控分頁看得到。
+        if (r.actorSeat === -1) {
+          tForceResync();
+          // ⚠ v6.156（Fable 5 審查）：伺服器回 -1 **不等於**「雙方都完成準備」——
+          //   例如雙方同 mulligan 數、都還沒放出場也是 -1。指紋名稱與 admin 的白話說明
+          //   都是「雙方都完成準備卻推不動」，誤發會直接誤導站長。
+          //   而且這個指紋走一般配額（每頁 3 發），死角裡玩家每 2.5 分鐘點一次，
+          //   三次就把配額吃光 ⇒ 之後真正的 stale-version 全部靜音。⇒ 加判準 + 每場只送一次。
+          const _sd = (game as any)?.setupDone;
+          if (!_stalledDiagSent && (game as any)?.phase === 'setup' && !!(_sd && _sd[0]) && !!(_sd && _sd[1])) {
+            _stalledDiagSent = true; _tSendClientDiag('setup-stalled-both-done');
+          }
+        }
+      } else if (r && r.reason === 'time-limit') {
+        tStillHereNote = '對局時限已到，請盡快完成最後回合。';
+      } else if (r && r.reason === 'not-your-turn') {
+        // 伺服器認為現在不是我該動作 ⇒ 我手上的盤面落後了，重抓才是對的處置
+        tStillHereNote = '盤面已更新，正在重新同步…'; tForceResync();
+      } else if (r && r.reason === 'game-over') {
+        tStillHereNote = '這場對戰已經結束。'; tForceResync();
+      } else if (r && r.error) {
+        tStillHereNote = r.error;
+      }
+    } catch (e: any) {
+      tStillHereNote = '網路不穩，請再按一次。';
+    } finally { tStillHereBusy = false; }
+  }
   async function tournamentJoin() {
     const deck = allDecks.find(d => d.id === tDeckId);
     if (!deck) { tError = '請先選擇牌組'; return; }
@@ -7838,6 +7911,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
 {:else}
 {#if isTournament && tError}<div class="tourn-toast">{tError}</div>{/if}
 {#if isTournament && tIdleWarnSec != null && tIdleWarnSec <= 90}<div class="tourn-idle-warn">⏳ 對手閒置中：剩 {tIdleWarnSec} 秒未行動將自動判你勝</div>{/if}
+<!-- ⭐⭐v6.156「我還在」確認框：把「事後看監控」換成「當場問玩家」。
+     ⚠⚠ 這個區塊**必須留在手機／桌機版面分支之外**（v6.149 剛踩過：失聯橫幅寫在桌機的
+       else 分支裡，手機玩家整個看不到）。它與上一行的 tourn-idle-warn 同層，兩者互斥
+       —— 一個是「對手在被倒數」、一個是「我在被倒數」，方向由伺服器權威的 actorSeat 決定。
+     ⚠ 手機在背景／鎖屏時看不到任何畫面 ⇒ 仍要靠 v6.151 的 60 秒推播叫醒。彈窗是補強不是取代。 -->
+{#if isTournament && !isTournSpectator && tMyIdleSec != null && tMyIdleSec <= 60}<div class="tourn-still-here" role="alertdialog" aria-live="assertive"><div class="tsh-title">⏰ 系統已開始計時</div><div class="tsh-body">剩 <strong>{tMyIdleSec}</strong> 秒未行動就會被判負。如果你還在，按一下確認。</div><button class="tsh-btn" disabled={tStillHereBusy} onclick={tStillHere}>{tStillHereBusy ? '確認中…' : '我還在'}</button>{#if tStillHereNote}<div class="tsh-note">{tStillHereNote}</div>{/if}</div>{/if}
 {#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 {#if isTournSpectator && game && !isTReplay}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
@@ -11778,6 +11857,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
   .tourn-idle-warn { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(40,30,10,0.95); color: #ffd35a; border: 1px solid #a80; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  /* v6.156「我還在」確認框：置中偏下，避開頂部的 tourn-idle-warn 與底部手牌列 */
+  .tourn-still-here { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 9998; width: min(92vw, 360px); background: rgba(40,18,18,0.97); color: #ffe0e0; border: 2px solid #e05a5a; border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); text-align: center; }
+  .tourn-still-here .tsh-title { font-size: 15px; font-weight: 800; color: #ff9a9a; margin-bottom: 4px; }
+  .tourn-still-here .tsh-body { font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+  .tourn-still-here .tsh-body strong { color: #ffd35a; font-size: 17px; }
+  .tourn-still-here .tsh-btn { width: 100%; padding: 10px 0; border: none; border-radius: 8px; background: #d64545; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; }
+  .tourn-still-here .tsh-btn:disabled { opacity: 0.6; cursor: default; }
+  .tourn-still-here .tsh-note { margin-top: 8px; font-size: 12px; color: #ffd35a; }
   .tourn-coin-hint { display: block; color: #889; font-size: 11px; margin-top: 3px; }
   .tourn-chat-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid #2a3a2a; }
   .tourn-chat-input input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; }

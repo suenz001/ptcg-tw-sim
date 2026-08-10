@@ -231,7 +231,25 @@ const IDLE = 3;               // 3 分鐘判負
   ok('樣本太少不回報（避免第一發就誤判）', PAGE.includes('_rttSamples.length < 10'));
   ok('只回報一次（診斷不能變成常態上報）', PAGE.includes('_rttDiagSent = true;'));
   ok('門檻是 p95 ≥ 3 秒', PAGE.includes('st.p95 >= 3000'));
-  ok('★逾時的那一發不計入（12 秒會扭曲統計）', !/catch[\s\S]{0,200}_tRecordRtt/.test(PAGE));
+  // ⚠⚠ v6.155（Fable 5 最終審查抓到的**部分安慰劑**）：原本只用負向 regex 防「寫在 catch 裡」
+  //   這一種拼法。實測把記錄搬進 `try { … } finally { _tRecordRtt(…) }`（逾時的 12 秒照記，
+  //   正是這條要防的行為）⇒ 71 PASS / 0 FAIL 全綠。而且全檔比對還有假紅風險。
+  //   ⇒ 改成**正向**鎖定：記錄必須緊跟在 `await tApi('/action'…)` 成功回傳之後的同一條
+  //     同步路徑上，且量測起點與記錄之間不得出現 catch / finally。
+  {
+    const i0 = PAGE.indexOf('const _rttT0 = Date.now();');
+    ok('RTT 量測起點可定位', i0 > 0, `i0=${i0}`);
+    const rseg = PAGE.slice(i0, i0 + 400);
+    ok('★RTT 記錄緊跟在 /action 成功回傳之後（同一條同步路徑）',
+      /const _rttT0 = Date\.now\(\);\s*\n\s*const r = await tApi\('\/action'[^\n]*\);\s*\n\s*_tRecordRtt\(Date\.now\(\) - _rttT0\);/.test(rseg));
+    const iRec = rseg.indexOf('_tRecordRtt(');
+    ok('★量測起點與記錄之間沒有 catch / finally（逾時的那一發不能計入）',
+      iRec > 0 && !/catch|finally/.test(rseg.slice(0, iRec)), `iRec=${iRec}`);
+    // 自我驗證（正向）：把同一條 regex 套到 finally 變體樣本上，必須判為不合格。
+    const _mut = "const _rttT0 = Date.now();\n      let r;\n      try { r = await tApi('/action', {}); } finally { _tRecordRtt(Date.now() - _rttT0); }";
+    ok('（自我驗證）finally 變體會被這條 regex 判為不合格',
+      !/const _rttT0 = Date\.now\(\);\s*\n\s*const r = await tApi\('\/action'[^\n]*\);\s*\n\s*_tRecordRtt\(Date\.now\(\) - _rttT0\);/.test(_mut));
+  }
 }
 
 console.log(`\n${pass} PASS / ${fail} FAIL`);

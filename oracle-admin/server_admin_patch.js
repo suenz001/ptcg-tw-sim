@@ -3711,6 +3711,49 @@ import('firebase-admin').then(async ({ default: admin }) => {
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // ── v6.156 STILL HERE BLOCK BEGIN ──
+    /**
+     * v6.156「我還在」：閒置判負倒數剩 60 秒時 client 彈確認框，玩家按下去就重置倒數。
+     * 站長裁定：①點了就重置、**不限次數** ②所有閒置情境都彈 ③死角點了仍卡住 → 改判平手＋通知站長。
+     *
+     * ⚠⚠ **只有「該動作的那一方」能重置**（這一條交接文件沒寫，是實作時查證後補的）：
+     *   閒置倒數的語意就是「該動作方沒動作」。若放行等待方呼叫，等待方就能替**掛機的對手**
+     *   無限續命 —— 判負機制直接失效，而且是對手幫他做的，掛機者本人什麼都不用做。
+     *   `actor === -1`（雙方都該動作＝死角）時兩邊都放行，那正是這個功能要救的情境。
+     * ⚠ 只 `$set: { lastActionAt }`，**不整包寫回 gameState**（v6.151 idleWarn60 的教訓：
+     *   非終局的整包寫回一定要 CAS，否則會蓋掉玩家剛送出的動作、而且版本號一樣讓自癒失效）。
+     *   只碰一個純量欄位 ⇒ 不需要 CAS。**也刻意不 bump version** —— 盤面一個位元都沒變，
+     *   bump 了只會讓兩邊 client 各抓一份完整盤面，白花流量。
+     * ⚠ 對局時限已到（timeLimitReached）之後**不再重置**：否則拖延方每 3 分鐘點一次，
+     *   「打完最後回合」就永遠打不完，對局時限這個天花板形同虛設。
+     */
+    app.post('/api/tournament/still-here', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (id.error) return res.status(id.code || 401).json({ error: id.error });
+        const room = String((req.body && req.body.room) || '');
+        if (!room) return res.status(400).json({ error: '缺少房間' });
+        const doc = await TROOMS.findOne({ _id: room });
+        if (!doc) return res.status(404).json({ error: '房間不存在' });
+        // 正式賽房一律要求已驗證身分（與 /action、/join 同一標準：擋「替對手按我還在」）
+        if (doc.matchId && !id.verified) return res.status(403).json({ error: '請重新登入後再試' });
+        const seat = Array.isArray(doc.seats) ? doc.seats.indexOf(id.uid) : -1;
+        if (seat !== 0 && seat !== 1) return res.status(403).json({ error: '你不在這場對戰中' });
+        const gs = doc.gameState;
+        if (!gs || gs.phase === 'game-over') return res.json({ ok: false, reason: 'game-over' });
+        const actor = currentActorSeat(gs);
+        if (!(actor === seat || actor === -1)) return res.json({ ok: false, reason: 'not-your-turn' });
+        if (doc.matchId) {
+          const _m = await TMATCH.findOne({ _id: doc.matchId }, { projection: { timeLimitReached: 1 } });
+          if (_m && _m.timeLimitReached) return res.json({ ok: false, reason: 'time-limit' });
+        }
+        const now = Date.now();
+        await TROOMS.updateOne({ _id: room }, { $set: { lastActionAt: now } });
+        res.json({ ok: true, lastActionAt: now, actorSeat: (typeof actor === 'number' ? actor : null) });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // ── v6.156 STILL HERE BLOCK END ──
+
     app.post('/api/tournament/reset', async (req, res) => {
       try {
         const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
@@ -4785,7 +4828,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           format: ev.format || 'single-elim', bestOf: ev.bestOf || 1, playerCount: regs.length,
           championUid: ev.championUid || null, championName: ev.championName || null, communityEvent: !!ev.createdByPlayer,
           players: regs.map((r) => ({ uid: r.uid, name: r.name, email: r.email || null, deckName: r.deckName || '', coinPref: r.coinPref || 'random', deckEntries: r.deckEntries || [] })),
-          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
+          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
         } }, { upsert: true });
       } catch (e) { /* best-effort 歸檔 */ }
     }
@@ -6052,7 +6095,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             communityEvent: !!a.communityEvent, format: a.format || null,
             championUid: a.championUid || null, championName: a.championName || null,
             players: (a.players || []).map((p) => ({ uid: p.uid, name: p.name, email: p.email || '', deckName: p.deckName || '', coinPref: p.coinPref || 'random', deckEntries: p.deckEntries || [] })),
-            matches: (a.matches || []).map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
+            matches: (a.matches || []).map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
           })),
           champions: champions.map((c) => ({ eventId: c.eventId, eventName: c.eventName, championUid: c.championUid, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0 })),
         });
@@ -6294,10 +6337,28 @@ import('firebase-admin').then(async ({ default: admin }) => {
               await postSystemChat(swissPhase(ev) ? ('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，本場由 ' + wName + ' 獲勝（瑞士制：雙方仍繼續後續輪次）。') : ('⏰ ' + (lName || '一方') + ' 閒置逾 ' + idleMin + ' 分鐘判負，' + wName + ' 獲勝。'));
               await advanceOrFinish(m, wUid, wName);
             } else if (actor === -1) {
-              await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'done', winnerUid: null, doubleNoShow: true } });
-              try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = '雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
-              await postSystemChat(swissPhase(ev) ? ('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，以雙敗處理（瑞士制：雙方仍可繼續比賽）。') : ('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰，無人晉級。'));
-              await checkRoundAdvance(ev._id);
+              // ⭐v6.156 站長裁定③：setup 階段**雙方都已按過準備、卻誰也推不動**的死角，
+              //   不是「兩個人都在掛機」而是系統把局面卡住了 —— 用雙敗處理等於處罰兩個無辜的人。
+              //   ⇒ 改判**平手**（winnerUid: null + draw），並在聊天室請站長人工裁定。
+              //   ⚠ 刻意**不重用** doubleNoShow：那個旗標在賽果頁與歸檔裡的語意是「兩人都沒出現」，
+              //     混用會讓事後對帳分不出「掛機」與「系統卡住」。
+              const _sd = gs.setupDone || [];
+              const _deadlock = gs.phase === 'setup' && !!_sd[0] && !!_sd[1];
+              // ⚠⚠ Fable 5 審查（嚴重）：死角場**不能**設成 status:'done' ——
+              //   `admin/match/resolve` 開頭就 `if (m.status === 'done') return 409`，
+              //   `admin/pending-matches` 也只列 `status: { $ne: 'done' }` ⇒ 設成 done 之後
+              //   這場既不會出現在待裁定清單、也無法被裁定端點改判，「請站長人工裁定」
+              //   會變成純文案，實質仍是雙淘汰。
+              //   ⇒ 用 **'pending-admin'**：閒置／時限掃描都只找 `status: 'playing'`，不會再重複觸發；
+              //     pending 清單（$ne 'done'）會列出它；resolve（status 非 done）可以裁定。
+              await TMATCH.updateOne({ _id: m._id }, { $set: _deadlock
+                ? { status: 'pending-admin', winnerUid: null, draw: true, deadlockDraw: true, deadlockAt: now }
+                : { status: 'done', winnerUid: null, doubleNoShow: true } });
+              try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = _deadlock ? '雙方皆已完成準備卻無人可行動（系統死角），本場改判平手，待站長人工裁定' : ('雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰'); await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
+              await postSystemChat(_deadlock ? ('\u2696\ufe0f 第 ' + m.round + ' 輪 ' + (m.p1name || 'P1') + ' vs ' + (m.p2name || 'P2') + '：雙方皆已完成準備卻無人可行動（系統死角），本場暫記**平手**並保留給管理員裁定 —— 請到 admin 的「待裁定場次」處理，處理完賽程才會往下走。') : (swissPhase(ev) ? ('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，以雙敗處理（瑞士制：雙方仍可繼續比賽）。') : ('⏰ 本場雙方皆閒置逾 ' + idleMin + ' 分鐘，雙淘汰，無人晉級。')));
+              // ⚠ 死角場**不推進輪次**：它還沒有結果，等站長裁定完由 resolve 那條路徑推進。
+              //   （單淘汰下若照推，這兩個人會直接從賽程消失。）
+              if (!_deadlock) await checkRoundAdvance(ev._id);
             }
           }
         }

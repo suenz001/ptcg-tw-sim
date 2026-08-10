@@ -112,8 +112,24 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
   const seg = SRC.slice(s0, s1);
   ok('★掛起的三個條件缺一不可（旗標開 ∧ client 要求 ∧ 版本相符）',
     /_lpCfgNow\.enabled && String\(req\.query\.wait \|\| ''\) === '1'\s*\n\s*&& Number\.isFinite\(cv\) && cv >= 0 && cv === light\.version/.test(seg));
-  ok('掛起後會重讀一次盤面版本（否則永遠回舊版本）',
-    /light = await TROOMS\.findOne\(\{ _id: room \}, \{ projection: \{ gameState: 0 \} \}\);/.test(seg));
+  // ⚠⚠ v6.155（Fable 5 最終審查抓到的**安慰劑**）：這條原本是對整個 /state 區段比對，
+  //   而掛起**之前**的第一次輕量讀 `let light = await TROOMS.findOne({ _id: room }, …)`
+  //   本身就含有一模一樣的字面 ⇒ 把醒來後的重讀整段刪掉，這支測試照樣 44 PASS / 0 FAIL。
+  //   而那個 bug 的後果正是長輪詢**空轉**：被 _lpNotify 叫醒後拿舊 light.version 去比對，
+  //   判定「沒變」→ 回 unchanged → client 立刻再掛一發 ⇒ 長輪詢退化成忙碌等待。
+  //   ⇒ 必須 scope 到 `_lpWait(...)` 之後、版本比對之前的那一小段。
+  {
+    const w0 = seg.indexOf('const _why = await _lpWait(');
+    const w1 = seg.indexOf('if (Number.isFinite(cv) && cv >= 0 && cv === light.version) {', w0 + 1);
+    ok('掛起段可定位', w0 > 0 && w1 > w0, `w0=${w0} w1=${w1}`);
+    const wseg = seg.slice(w0, w1);
+    ok('★掛起醒來後會重讀一次盤面版本（否則叫醒了卻回舊版本 ⇒ 長輪詢空轉）',
+      /light = await TROOMS\.findOne\(\{ _id: room \}, \{ projection: \{ gameState: 0 \} \}\);/.test(wseg));
+    // 自我驗證（正向）：證明「掛起之前」的區段確實含有會誤中的同一條字面 ——
+    //   這就是舊寫法之所以是安慰劑的原因，也證明上面的 scope 不是裝飾。
+    ok('（自我驗證）掛起前的第一次輕量讀確實會誤中同一條 regex',
+      /light = await TROOMS\.findOne\(\{ _id: room \}, \{ projection: \{ gameState: 0 \} \}\);/.test(seg.slice(0, w0)));
+  }
   ok('★client 已離開就不要再寫回應（避免 write-after-end）', /if \(_why === 'closed'\) return;/.test(seg));
   ok('回應會宣告伺服器是否已啟用（client 據此決定要不要送 wait=1）', /longPoll: _lpCfgNow\.enabled/.test(seg));
   ok('unchanged 回應帶 waited（0 不帶）', /if \(_waited\) _un\.waited = _waited;/.test(seg));
@@ -133,7 +149,19 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
 {
   ok('admin 開關端點有管理員 gate',
     /app\.(get|post)\('\/api\/tournament\/admin\/longpoll'[\s\S]{0,400}isTournAdmin\(id\)/.test(SRC));
-  ok('改設定後會讓快取立刻失效（否則要等 10 秒才生效）', /_lpCfgAt = 0;/.test(SRC));
+  // ⚠⚠ v6.155（Fable 5 最終審查抓到的**安慰劑**）：原本全檔比對 `_lpCfgAt = 0;`，
+  //   會被**宣告行** `let _lpCfg = null, _lpCfgAt = 0;` 滿足 ⇒ 刪掉 admin POST 裡真正的
+  //   失效行，測試照樣全綠。同一款坑 v6.150 那支已經修過一次（`_redactAt = 0;`），
+  //   這支當時沒跟著修。⇒ scope 到 admin POST 區段。
+  {
+    const p0 = SRC.indexOf("app.post('/api/tournament/admin/longpoll'");
+    const p1 = SRC.indexOf("app.post('/api/tournament/admin/event/create'", p0 + 1);
+    ok('admin POST longpoll 區段可定位', p0 > 0 && p1 > p0, `p0=${p0} p1=${p1}`);
+    const pseg = SRC.slice(p0, p1);
+    ok('★改設定後會讓快取立刻失效（否則要等 10 秒才生效）', /_lpCfgAt = 0;/.test(pseg));
+    // 自我驗證（正向）：證明宣告行確實含有會誤中的同一條字面。
+    ok('（自我驗證）宣告行確實會誤中同一條 regex', /let _lpCfg = null, _lpCfgAt = 0;/.test(SRC));
+  }
   ok('admin 查詢會回目前掛起數（開啟後用來觀察負載）', /held: _lpHeld, rooms: _lpWaiters\.size/.test(SRC));
 }
 
@@ -149,9 +177,31 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
   ok('長輪詢模式不套 tPollDesiredMs 節流（否則延遲降不下來）',
     PAGE.includes('if (!_lp && _now - _lastFetchAt < tPollDesiredMs(false)) return;'));
   ok('對戰結束後不長輪詢（那時要的是降頻）', PAGE.includes("(game as any).phase !== 'game-over'"));
-  ok('★輪詢停擺看門狗在長輪詢在途時不誤判（那一發本來就會掛 25 秒）',
-    PAGE.includes('const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < 30000;')
-    && PAGE.includes('&& !_lpInFlight'));
+  // ⚠ v6.155（Fable 5 最終審查）：這一條原本是 `PAGE.includes('&& !_lpInFlight')` 全檔比對 ——
+  //   新鮮度看門狗補上守衛之後，全檔會有兩處，刪掉任何一處都還是綠 ⇒ 會退化成安慰劑。
+  //   ⇒ 改成把兩條看門狗各自 scope 出來、分別斷言，並驗證兩段切片真的沒重疊。
+  {
+    const d0 = PAGE.indexOf('const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < 30000;');
+    ok('_lpInFlight 定義可定位', d0 > 0, `d0=${d0}`);
+    const i0 = PAGE.indexOf('const _freshStaleMs =', d0 + 1);
+    const i1 = PAGE.indexOf('tForceResync();', i0 + 1);
+    ok('兩條看門狗區段可定位且順序正確', i0 > d0 && i1 > i0, `i0=${i0} i1=${i1}`);
+    const segStall = PAGE.slice(d0, i0);   // 6 秒停擺看門狗
+    const segFresh = PAGE.slice(i0, i1);   // 20 秒新鮮度看門狗
+    ok('★輪詢停擺看門狗在長輪詢在途時不誤判（那一發本來就會掛 25 秒）', /&& !_lpInFlight/.test(segStall));
+    // ⭐ v6.155 新增：長輪詢在途時 20 秒新鮮度看門狗也必須整條停用。沒有這個守衛會有三個後果：
+    //   ①每 20 秒白抓一份 v=-1 全量（抵銷長輪詢省下來的流量）②順帶的 startTournamentPoll()
+    //   會 ++tPollGen，把掛在伺服器上、對手一動就回的那一發判為過期丟棄 ⇒ 反而多等一個 RTT
+    //   ③_freshWatchdogFires 累加到 3 而 tVersion 沒動 ⇒ 誤發 stale-version 診斷指紋，
+    //     污染站長在 admin 監控分頁用來判讀「版本是不是真的卡住」的訊號。
+    ok('★長輪詢在途時新鮮度看門狗不觸發（否則白抓全量＋丟棄在途長輪詢＋誤報 stale-version）',
+      /&& !_lpInFlight/.test(segFresh));
+    // 掃描器自我驗證：兩段切片必須各自恰含一條看門狗的節流標記，否則一條守衛會滿足兩個斷言。
+    ok('（自我驗證）兩段切片不重疊且各自恰含一條看門狗',
+      (segStall.match(/_tPollStallGuardAt = Date\.now\(\);/g) || []).length === 1
+      && (segFresh.match(/_tLastForceResyncAt = Date\.now\(\);/g) || []).length === 1
+      && !/_tLastForceResyncAt = Date\.now\(\);/.test(segStall));
+  }
   ok('在途旗標一定會被放掉（finally）', PAGE.includes('finally { _pollBusy = false; _tLongPollAt = 0; }'));
   ok('離場會清乾淨', PAGE.includes('tLongPollReady = false; _tLongPollAt = 0;'));
   ok('★掃描器自我驗證：舊寫法（無條件節流）會被判為未修',
