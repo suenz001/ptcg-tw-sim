@@ -42,13 +42,19 @@ function extractFn(src, name) {
   for (; j < src.length; j++) { if (src[j] === '{') d++; else if (src[j] === '}') { d--; if (d === 0) break; } }
   // 去掉 TS 型別標註（`: any` / `: number` / `: string | null`）讓 new Function 吃得下
   return src.slice(i, j + 1)
-    .replace(/\)\s*:\s*[A-Za-z<>|\s]+\{/, ') {')
+    // ⚠ v6.158：setupActorSeat 的回傳型別是 `0 | 1 | -1`（含數字與負號），
+    //   內部也有 `const lessIdx: 0 | 1 =` —— 舊的 [A-Za-z<>|\s]+ 吃不下，
+    //   一定要一起放寬，否則抽出來的是壞碼（跑起來是語法錯，不是真的 FAIL）。
+    .replace(/\)\s*:\s*[A-Za-z0-9<>|\s-]+\{/, ') {')
+    .replace(/const (\w+)\s*:\s*[0-9|\s-]+=/g, 'const $1 =')
     .replace(/([(,]\s*\w+)\s*:\s*[A-Za-z<>|\s]+/g, '$1');
 }
 // ⚠ 抽出失敗（例如還沒實作）不能讓整支腳本 throw —— 那會變成 node crash 而不是乾淨的 FAIL，
 //   HEAD-FAIL 對照時看不出是「哪幾條」該紅。改成失敗時留 null，由各條斷言各自報。
 let selfPending = null, _extractErr = '';
-try { selfPending = new Function(`${extractFn(P, '_setupSelfPending')}; return _setupSelfPending;`)(); }
+// ⚠ v6.158 起 _setupSelfPending 會呼叫 setupActorSeat（全站唯一一份「誰該動作」判準，
+//   與伺服器 currentActorSeat 逐行同步），抽取時必須把它一起帶進來。
+try { selfPending = new Function(`${extractFn(P, 'setupActorSeat')}; ${extractFn(P, '_setupSelfPending')}; return _setupSelfPending;`)(); }
 catch (e) { _extractErr = String(e && e.message || e); }
 const SP = (...a) => {
   assert.ok(selfPending, '_setupSelfPending 抽不出來或不存在：' + _extractErr);

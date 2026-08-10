@@ -17,6 +17,123 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.158 — setup「誰該動作」單一判準 ＋ 開局全螢幕遮罩不再擋住該動作方
+
+> ⚠ 本版只動 **client**（`src/routes/game/+page.svelte`）與 admin 監控說明。
+> `oracle-admin/server_admin_patch.js` 完全沒動 —— v6.157 的 `update-tournament.bat` 仍必須跑。
+
+### 事故資料（2026-08-10 賽事，線上跑的是 v6.156，v6.157 尚未部署）
+
+監控 24 小時：`stale-version` 75 次/33 人、`setup-watchdog-repeat` 64 次/36 人、
+`slow-rtt` 25 次/15 人（RTT 表 20 筆裡 14 個不同玩家 p95 ≥ 3 秒，3.1s~11.8s，橫跨 21:08~22:56）。
+
+兩間房完全同簽名的「開局卡住」指紋：
+
+```
+ver 6.156  mySeatIdx 1
+tVersion=1, phase=setup, setupDone=[false,false],
+pendingMulliganDraw=[2,0], mulliganRevealConfirmed=[false,true],
+actorSeat=-1, selfPending="setup-not-done", rtt=null
+```
+
+### 實跑查證（不是讀碼推論）
+
+把 `oracle-admin/server_admin_patch.js` 的 `currentActorSeat`（L3314）用 `new Function` 抽出來，
+餵這兩組盤面：
+
+| 盤面 | 伺服器 currentActorSeat | client `setupActorSeat` | client `tCurrentActorSeat`（診斷用） |
+|---|---|---|---|
+| pmd=[2,0] mc=[0,2] | **0** | 0 | **-1** |
+| pmd=[1,0] mc=[0,1] | **0** | 0 | **-1** |
+
+`mulliganCounts` 由引擎公式反推：`engine.ts` L2231 `pendingMulliganDraw[0] = max(0, m2-m1)`、
+L2225 `mulliganRevealConfirmed = [m2===0, m1===0]` ⇒ `pmd=[2,0]` 且 `mrc=[false,true]`
+唯一解就是 `mulliganCounts=[0,2]`（座位 1 重抽 2 次）。依 PTCG 規則 mulligan 較少方先放，
+所以**正解是座位 0**，`actorSeat=-1` 不是伺服器的判斷。
+
+⇒ **三個結論**：
+
+1. **`actorSeat=-1` 是 client 診斷自己算錯的**。payload 用的是 `tCurrentActorSeat`
+   （v5.569 舊副本，setup 只看 `setupDone`，雙方都沒完成就一律 -1）。
+   它同時是 v6.151 倒數方向的 fallback。**修法：setup 分支直接呼 `setupActorSeat`**
+   （那一份與伺服器逐行同步）。守衛用 896 組 setup 狀態做三方等價比對。
+2. **`selfPending='setup-not-done'` 是假陽性**。回報者是座位 1＝重抽較多方，
+   `engine.ts` L2605 的 `PLACE_ACTIVE` gate（`myMul > oppMul && !setupDone[oppIdx]`）
+   本來就擋著他 ——「規則叫他等」不是卡住。`_setupSelfPending` 改成先問 `setupActorSeat`：
+   actor 不是 -1 且不是我 ⇒ 回 null。這會把 64 次裡的一大塊直接消掉。
+3. **真 bug（v6.158 主修）**：`{:else if ... pendingMulliganDraw?.[oppIdx] > 0 && mode==='online' ...}`
+   那一層「⏳ 等待對手決定補抽」是 `.selection-overlay`（`position:fixed; inset:0; z-index:100`）。
+   `pendingMulliganDraw[對手]` 在 **makeGame 當下就已經 > 0**，所以重抽方整個開局都被蓋住；
+   等對手按下【準備完成】，`setupActorSeat` 就指向重抽方了（`sd=[true,false]`、`m=[0,2]` ⇒ 回 1），
+   遮罩卻還在 ⇒ **他什麼都按不到，而伺服器同時在倒數判他閒置敗**。
+   修法：加 `&& setupActorSeat(game) === oppIdx`。文案也改成對手真正卡在哪一步
+   （舊文案不論如何都寫「正在決定是否多抽」，但那時候對手其實還在選出場寶可夢）。
+
+### 未定位（誠實列出）
+
+「兩間房 tVersion 都停在 1 超過 60 秒」這件事，**從這兩筆指紋無法斷定伺服器端有 bug**：
+
+- 兩筆都來自座位 1（正在合法等待的一方），`rtt=null` 是「等待方本來就不送動作」的必然結果，
+  不能當成「送不出去」的證據。
+- 座位 0 那一側的 UI 實查過**沒有任何遮罩**（補抽視窗要 `mrc[0]===true`、揭示視窗要 `setupDone[0]`，
+  兩個在這個盤面都不成立），`isMyTurn()` 也是 true ⇒ 座位 0 是**能動作的**。
+- 最省事的解釋是座位 0 尚未進場／人不在，而那正是 3 分鐘閒置判負該處理的情境。
+- ⇒ 需要下一場帶著 v6.158 新增的 `srvActor` / `sinceLastAction` 欄位再看一次。
+
+### `stale-version` 門檻（同一類雜訊）
+
+舊判準＝看門狗連續觸發 3 次且版本沒動。實際換算：playing 門檻 20 秒 + 節流 8 秒 × 2
+⇒ **盤面只要 36 秒沒動就報**，而且雙方的 client 會各報一次。對手長考 40 秒完全符合。
+75 次/33 人（還受「每頁 3 發」與伺服器 per-uid 60 秒節流壓過）就是這個量級。
+⇒ 門檻拉齊 v6.155 的 setup 指紋（60 秒），並在 payload 補
+`srvActor`（伺服器權威該動作座位）、`sinceLastAction`（伺服器上多久沒人動作）、`longPoll`，
+下一場才分得出「對手在長考」與「真的卡住」。admin 監控的說明同步改寫。
+
+### slow-rtt 的判斷（量測 vs 假說）
+
+- **已量測（client 端）**：`_tRecordRtt` 記的是 `POST /action` 的完整往返，
+  只記成功的樣本。20 筆裡 14 個不同玩家 p95 ≥ 3 秒、橫跨整場 ⇒ 依既有判準**不是個別玩家的網路**。
+- **已排除**：長輪詢佔用連線 —— 當下只掛著 6 條／3 房，`_lpWait` 的保險輪詢是
+  `pollMs`（預設 1500ms）一次的 `findOne` + projection version，6 條 ≈ 4 q/s，量級不對。
+- **仍是假說（本次無法量測，沒有 VM 端存取）**：cloudflared 隧道排隊、VM CPU（gzip + 每次
+  `/action` 都整份 `gameState` 讀寫）、Express event loop 被定時掃描搶走。
+  要證實需要在 VM 上量 `/action` 的 handler 內耗時 vs 端到端耗時的差；**本版沒有做這件事**。
+
+### Fable 5 審查後追加的兩項（它抓到、我逐行查證過才採納）
+
+**① `stale-version` 沒有 per-stall 去重。** 看門狗每 8 秒觸發一次，條件持續成立就連發，
+一次 70 秒的長考就把 `_diagSentCount` 的 3 發配額燒光 ⇒ 之後 `invisible-hand` 等真指紋全部靜音。
+與 v6.155 把 `manual-sync` 移出配額時點名的是同一型缺陷。
+⇒ 新增 `_staleDiagVersion`：同一個卡住的版本只報一次，版本一前進自動失效；`tLeaveMatch` 歸零。
+
+**② ⭐⭐⭐`/action` 403 是「開局停在 v1」最有力的可查證解釋（本版做了可觀測性，沒有動後端）。**
+
+- `server_admin_patch.js` `/action`：`if (doc.matchId && !_id.verified) return res.status(403)`（v6.150）。
+- `/state`：`const _vseat = _redactOn() ? await _viewerSeat(req, doc) : TSEAT_NO_REDACT;`
+  —— **遮蔽關閉時（這場就是關的）`/state` 完全不驗身分，永遠 200**。
+- `tApi` 只在 `firebaseUser && !firebaseUser.isAnonymous` 時帶 Bearer；取 token 失敗是 `catch {}` 吞掉。
+- ⇒ 只要憑證過期／`firebaseUser` 為 null（**記憶裡「線上休閒大廳偶發打不開，疑 firebaseUser 為 null」是同一個現象**），
+  就會出現：**輪詢正常、畫面正常、輪到我、但每一發動作都 403，版本永遠停在 1**。
+- 舊版的可見度：只有一則會被下一個動作蓋掉的紅色 toast。失聯橫幅（連同它唯一的自救鈕
+  「立即重新同步」＝`getIdToken(true)` 強制換憑證）因為 `tOfflineSec` 恆為 0 **永遠不會出現**；
+  `tAuthLost` 只認 401，而且輪詢每次成功都把它清成 false。診斷指紋也完全沒有這一類。
+- ⇒ 本版：401/403 → `_tActionAuthErr` 旗標（**只有 `/action` 成功回應才准清**，輪詢成功不算，
+  因為 `/state` 根本不驗身分）→ 橫幅亮起並優先顯示這一種文案 → 送出一次 `action-forbidden` 指紋。
+  admin 監控加上這個指紋的說明（含「不是掛機、該場閒置判負要人工複核」）。
+- ⚠ **這仍是假說**，不是已證實的當晚成因 —— 要確認請查 VM 上那段時間 `/action` 有沒有 403。
+  下一場只要再發生，`action-forbidden` 就會直接出現在監控分頁。
+
+### 守衛
+
+`scripts/test-v6158-setup-actor-single-source.mjs`（18 條，已進 `npm test`）：
+掃描器自我驗證 → 伺服器 `currentActorSeat` 實跑正對照 → `tCurrentActorSeat` 等價 →
+`_setupSelfPending` 不再誤報且四種真待辦仍認得 → **896 組 setup 狀態三方等價** →
+把 `{:else if}` 的條件字串抽出來 `new Function` 求值，斷言「輪到我時遮罩必須不顯示、
+真的在等對手時必須顯示」（斷言的是**行為**不是「有沒有呼叫某函式」）→ 門檻與 payload 欄位 →
+admin 說明。另含伺服器 `/action` 403 gate 與 `/state` 不驗身分的**前提查證**（前提一變守衛就紅），
+以及把 `tNetBannerOn` 的 `$derived` 運算式抽出來實跑的行為斷言。
+HEAD-FAIL：還原成 v6.157 blob 重跑 = **13 條 FAIL**。
+
 ## v6.157 — 根治錦標賽「開局死角」（伺服器端 level-triggered 補推）
 
 ### 症狀

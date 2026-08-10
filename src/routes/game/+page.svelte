@@ -199,6 +199,20 @@
   let _freshWatchdogFires = 0;         // v5.933 新鮮度看門狗連續觸發次數(盤面 tAdopt 即歸零)
   let _invisibleHandDiagSent = false;  // v5.933 隱形手牌指紋已回傳一次(避免每 tick 重送)
   let _setupDiagSent = false;          // v6.155 setup 指紋每場只回報一次
+  // ⭐⭐v6.158（Fable 5 審查抓到）：stale-version 原本**沒有** per-stall 去重 ——
+  //   看門狗每 8 秒觸發一次、條件持續成立就會連發，一次 70 秒的長考就把
+  //   `_diagSentCount` 的 3 發配額燒光，之後 invisible-hand 等真指紋全部靜音
+  //   （與 v6.155 把 manual-sync 移出配額時點名的是同一型缺陷）。
+  //   ⇒ 記住「已回報過的那個卡住版本」，版本一前進就自動失效、可以再報。
+  let _staleDiagVersion = -1;
+  // ⭐⭐v6.158：`/action` 在正式賽房會對未驗證身分回 403（server_admin_patch.js
+  //   `doc.matchId && !_id.verified`），而盤面遮蔽關閉時 `/state` **完全不驗身分**、永遠 200
+  //   ⇒ 會出現「輪詢正常、畫面正常、輪到我，但每一發動作都被拒」而版本永遠不前進。
+  //   舊版只會閃一則紅色 toast，失聯橫幅（連同它的「刷新憑證」自救鈕）因為 tOfflineSec=0 不會出現，
+  //   也沒有任何診斷指紋 ⇒ 站長事後完全看不到。
+  let _tActionAuthErr = $state(false);
+  let _tActionAuthErrAt = $state(0);
+  let _actionAuthDiagSent = false;
 
 /** v6.155 目前畫面上真的畫出來的手牌張數 —— 桌機與手機直式是兩套 class，兩邊都要數。 */
 function _countVisibleHandCards(): number {
@@ -223,6 +237,15 @@ function _countVisibleHandCards(): number {
  */
 function _setupSelfPending(g: any, seat: number): string | null {
   if (!g || g.phase !== 'setup' || seat !== 0 && seat !== 1) return null;
+  // ⭐⭐v6.158：「我還沒做」不等於「現在輪得到我做」。
+  //   依 PTCG 規則，mulligan 【較多】方必須等較少方先放好戰鬥場、按下準備（引擎
+  //   PLACE_ACTIVE 直接擋）—— 他的 setupDone 必然是 false，但那是【規則叫他等】，
+  //   不是卡住。v6.155 只看 setupDone[我]===false 就回 'setup-not-done'，
+  //   → 這一類全部變成假陽性（2026-08-10 賽事的 setup-watchdog-repeat 64 次/36 人含大量這種）。
+  //   ⭐ 【只能有一份判準】：不在這裡再拄一份順序邏輯，一律問 setupActorSeat
+  //   （它與伺服器 currentActorSeat 逐行同步）。-1 = 雙方都該動作 ⇒ 仍視為我有待辦。
+  const _actor = setupActorSeat(g);
+  if (_actor !== -1 && _actor !== seat) return null;
   // ⚠ 逐項都用「明確為真」判斷，欄位缺席（舊版伺服器/舊盤面）一律當成「沒有待辦」——
   //   fail-closed 到「不回報」，寧可漏報也不要製造新的雜訊。
   if (g.setupDone?.[seat] === false) return 'setup-not-done';
@@ -389,7 +412,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
           // ⭐v6.151 新增 stale-version 指紋：**playing 階段的版本卡住**原本不屬於任何現有診斷
           //   指紋，什麼都不會回傳（v6.149 事故就是這一類，只能靠玩家口述還原）。
           //   判準＝看門狗連續觸發 3 次、而 tVersion 一步都沒有前進。
-          if (_freshWatchdogFires >= 3 && game && game.phase === 'playing' && tVersion === _freshWatchdogVersionAt) _tSendClientDiag('stale-version');
+          //   ⭐⭐v6.158：舊判準（連續觸發 3 次）實際只代表【盤面 36 秒沒動】（20s 門檻 + 8s 節流 × 2）——
+  //     對手長考 40 秒本來就超過它，而且雙方的 client 會各報一次。2026-08-10 賽事 75 次/33 人
+  //     就是這個量級。門檻拉齊 v6.155 的 setup 指紋（60 秒），並在 payload 補上
+  //     `sinceLastAction` / `srvActor`，下一場才分得出「對手在長考」與「真的卡住」。
+          if (_freshWatchdogFires >= 3 && game && game.phase === 'playing' && tVersion === _freshWatchdogVersionAt
+              && (Date.now() - _tLastStateChangeAt) > 60000
+              && _staleDiagVersion !== tVersion) { _staleDiagVersion = tVersion; _tSendClientDiag('stale-version'); }
           tForceResync();
           startTournamentPoll();
         }
@@ -4527,6 +4556,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   用錯的方向算倒數；RTT 樣本混到上一場則會讓 slow-rtt 指紋掛在錯誤的場次上。
     tServerActorSeat = undefined; _rttSamples = []; _rttDiagSent = false;
     _setupDiagSent = false; _invisibleHandDiagSent = false;   // v6.155 診斷旗標同樣是每場一次，殘留會讓下一場漏報
+    _staleDiagVersion = -1; _actionAuthDiagSent = false; _tActionAuthErr = false; _tActionAuthErrAt = 0;   // v6.158 同上
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
     tStillHereBusy = false; tStillHereNote = ''; _stalledDiagSent = false;   // v6.156（Fable 5 審查：跨場殘留）
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
@@ -4860,6 +4890,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
           // v6.151：伺服器端指標一直是全綠的，但那不含隧道排隊與網路往返（v6.134 的教訓）。
           //   這裡回報 client 實測的動作往返時間，才對得上玩家說的「很卡」。
           rtt: _rttStats(),
+          // ⭐v6.158：光看「版本沒前進」分不出「對手在長考」與「真的卡住」。
+          //   srvActor = 伺服器權威的該動作座位（不是 client 自己推算的）；
+          //   sinceLastAction = 伺服器上【真的有人動作】到現在過了多久。
+          srvActor: (tServerActorSeat === undefined ? 'n/a' : tServerActorSeat),
+          sinceLastAction: tLastActionAt ? now - tLastActionAt : -1,
+          longPoll: tLongPollReady,
         },
         env: {
           vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
@@ -4898,12 +4934,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // v5.569：算「當前該動作的座位」(鏡射伺服器 currentActorSeat)，給等待方閒置倒數判斷
   function tCurrentActorSeat(g: any): number | null {
     if (!g || g.phase === 'game-over') return null;
-    if (g.phase === 'setup') {
-      const d0 = !!(g.setupDone && g.setupDone[0]), d1 = !!(g.setupDone && g.setupDone[1]);
-      if (d0 && !d1) return 1;
-      if (!d0 && d1) return 0;
-      return -1;
-    }
+    // ⭐⭐v6.158：setup 分支原本是【只看 setupDone】的 v5.569 舊副本 ——
+    //   雙方都未完成時一律回 -1，完全忽略 mulligan 子階段。後果不只是閃避倒數：
+  //   診斷 payload 的 `actorSeat` 就是用它算的，2026-08-10 賽事兩筆「開局卡住」回報回
+  //   `actorSeat=-1`（看起來像【沒人該動作的死角】），但同一組盤面送進伺服器的
+  //   currentActorSeat 實跑是 0（mulligan 較少方先放）—— 完全誤導診斷方向。
+  //   ⭐【只能有一份判準】：setup 一律改呼 setupActorSeat（與伺服器逐行同步那一份）。
+    if (g.phase === 'setup') return setupActorSeat(g);
     if (g.phase !== 'playing') return null;
     if (g.pendingSelection && (g.pendingSelection.actorIdx === 0 || g.pendingSelection.actorIdx === 1)) return g.pendingSelection.actorIdx;
     if (g.pendingPrizes && (g.pendingPrizes[0] || 0) > 0) return 0;
@@ -5112,7 +5149,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
       ? Math.max(0, Math.floor((tNow - _tLastPollOkAt) / 1000))
       : 0,
   );
-  const tNetBannerOn = $derived(tOfflineSec >= 10 && _tNetBannerDismissAt < _tLastPollOkAt);
+  // ⭐v6.158：身分被拒也要出橫幅 —— 它帶的「立即重新同步」會先 getIdToken(true) 強制換憑證，
+  //   那正是這種情況唯一的自救路徑。⚠ 關閉條件用 _tActionAuthErrAt 而不是 _tLastPollOkAt：
+  //   輪詢一直在成功，用 _tLastPollOkAt 的話按了叉叉下一秒又跳出來。
+  const tNetBannerOn = $derived(
+    (tOfflineSec >= 10 && _tNetBannerDismissAt < _tLastPollOkAt)
+    || (_tActionAuthErr && _tNetBannerDismissAt < _tActionAuthErrAt));
 
   async function tournamentDispatch(action: any, _retried = false) {
     // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
@@ -5161,6 +5203,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const _rttT0 = Date.now();
       const r = await tApi('/action', { room: tActiveRoom, playerId: tPlayerId(), action });
       _tRecordRtt(Date.now() - _rttT0);   // v6.151 只記成功的往返（逾時是 12 秒，記進去會扭曲）
+      _tActionAuthErr = false;   // v6.158 動作真的送進去了 ⇒ 身分是好的（只有這條路徑能證明）
       if (r.gameState) {
         // 伺服器權威：無條件採納（含 error/rejected/stale 三條失敗路徑回傳的舊 state ＝ 自動回滾）
         tAdopt(r.gameState, r.version, { skipSfx: true });   // v6.048 自己的動作由下一行算音效
@@ -5186,6 +5229,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
         restorePrediction();   // 真的把 game 換回 prev（tForceResync 在版本相等時不會動它）
         tError = (tError ? tError + '　' : '') + '（動作可能未送達，畫面已還原，請重試）';
         void tForceResync();   // 第二道保險：若動作其實成功了，這裡會把伺服器新盤面抓回來
+      }
+      // ⭐⭐v6.158：401/403 是「身分不被伺服器接受」，跟斷線完全不同 ——
+      //   輪詢會繼續成功（遮蔽關閉時 /state 不驗身分），所以 tOfflineSec 恆為 0、
+      //   失聯橫幅永遠不會出現，玩家只看得到一閃而過的紅字，然後被閒置判負。
+      if (e && (e.status === 401 || e.status === 403)) {
+        _tActionAuthErr = true; _tActionAuthErrAt = Date.now();
+        if (!_actionAuthDiagSent) { _actionAuthDiagSent = true; _tSendClientDiag('action-forbidden'); }
       }
     }
     finally { tInFlight = false; }
@@ -8540,7 +8590,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
          同 v6.122 補位 modal 的既定做法：兩版共用的東西一律放在分支外。 -->
   {#if tNetBannerOn}
     <div class="net-warn-banner" role="alert">
-      {#if tAuthLost}
+      {#if _tActionAuthErr}
+        <span>⚠ 動作送不出去：伺服器不認得目前的登入身分（憑證過期，或在其他分頁登出）。畫面看起來正常，但每一個動作都會被拒絕、盤面不會前進 —— 請先按「立即重新同步」刷新憑證；閒置判負的倒數仍在計算。</span>
+      {:else if tAuthLost}
         <span>⚠ 登入狀態已失效（憑證過期，或在其他分頁登出）—— 畫面不會再更新，請重新登入後回到對戰；閒置判負的倒數仍在計算。</span>
       {:else}
         <span>⚠ 與伺服器失聯 {tOfflineSec} 秒 —— 畫面可能不是最新的，閒置判負的倒數仍在計算。</span>
@@ -10315,13 +10367,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       </div>
     </div>
-  {:else if game && game.phase==='setup' && (game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 && mode==='online' && myPlayerIndex===myIdx}
-    <!-- 對手還沒決定重抽補抽 — 僅在線上模式需顯示等待 -->
+  {:else if game && game.phase==='setup' && (game.pendingMulliganDraw?.[oppIdx] ?? 0) > 0 && mode==='online' && myPlayerIndex===myIdx && setupActorSeat(game) === oppIdx}
+    <!-- 對手還沒決定重抽補抽 — 僅在線上模式需顯示等待
+         ⭐⭐v6.158 `setupActorSeat(game) === oppIdx` 不是贅字：`pendingMulliganDraw[對手]`
+         在【建局當下】就已經 &gt; 0（makeGame 就算好了），而這是一層
+         `position:fixed; inset:0` 的全螢幕遮罩。舊條件下，重抽過的那一方整個開局都被蓋住；
+         等對手一按【準備完成】，規則上就輪到他放出場了（setupActorSeat 回他），
+         盤面卻還是被這層遮罩擋著—— 他什麼都按不到，而伺服器正在倒數判他閒置敗。 -->
     <div class="selection-overlay" class:dragged={modalDragged}>
       <div class="selection-modal mulligan-modal" style:transform={`translate(${modalOffset.x}px, ${modalOffset.y}px)`}>
         <div class="sel-header" onpointerdown={onModalHeaderPointerDown} onpointermove={onModalHeaderPointerMove} onpointerup={onModalHeaderPointerUp} title="拖曳視窗">
-          <h3>⏳ 等待對手決定補抽</h3>
-          <p class="sel-hint">你因起手無基礎寶可夢重抽了 {game.mulliganCounts[myIdx]} 次，對手正在決定是否多抽 {game.pendingMulliganDraw[oppIdx]} 張…</p>
+          <h3>⏳ 等待對手</h3>
+          <!-- v6.158 文案改成【對手現在真的卡在哪一步】：舊文案一律寫「正在決定是否多抽」，
+               但對手那時候其實還在選出場寶可夢（揭示確認、補抽都要等他 setupDone 之後）。 -->
+          <p class="sel-hint">起手無基礎寶可夢，已重抽 {game.mulliganCounts?.[myIdx] ?? 0} 次。{!game.setupDone?.[oppIdx] ? '對手正在選出場寶可夢並按準備…' : (!game.mulliganRevealConfirmed?.[oppIdx] ? '對手正在確認起手揭示…' : ('對手正在決定是否多抽 ' + game.pendingMulliganDraw[oppIdx] + ' 張…'))}</p>
         </div>
       </div>
     </div>

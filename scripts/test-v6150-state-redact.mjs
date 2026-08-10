@@ -433,7 +433,11 @@ function scanGameStateExprs(src) {
   ok('拿到正常回應時會清掉旗標（否則橫幅永遠掛著）',
     (PAGE3.match(/tAuthLost = false;/g) || []).length === 2);
   ok('橫幅有身分失效的專屬文案（不能沿用「與伺服器失聯」）', PAGE3.includes('⚠ 登入狀態已失效'));
-  ok('⭐旗標有被 template 消費（新增狀態旗標必問「UI 有沒有用它」）', PAGE3.includes('{#if tAuthLost}'));
+  // ⚠ v6.158：橫幅前面多了一個「動作被 403 拒絕」的分支（那一種的自救方式不同），
+  //   tAuthLost 因此從 `{#if}` 變成 `{:else if}`。守衛要的是「旗標真的被 template 消費」，
+  //   兩種寫法都算數 —— 但不可以退化成「檔案裡有出現這個字」。
+  ok('⭐旗標有被 template 消費（新增狀態旗標必問「UI 有沒有用它」）',
+    PAGE3.includes('{#if tAuthLost}') || PAGE3.includes('{:else if tAuthLost}'));
   ok('重新同步鈕會先強制刷新 token（憑證過期可就地自救）', PAGE3.includes('await firebaseUser.getIdToken(true)'));
 }
 
