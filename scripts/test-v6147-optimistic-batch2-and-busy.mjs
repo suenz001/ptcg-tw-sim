@@ -142,6 +142,14 @@ T('掃描器自我驗證：註解確實被剝掉（本版註解裡也寫滿 acti
 T('⭐⭐actionBusy 必須是唯一中央述詞，且只在錦標賽動作送出期間為真', () => {
   const m = P.match(/const actionBusy\s*=\s*\$derived\(([^)]*)\)/);
   assert.ok(m, '找不到 actionBusy 的 $derived 宣告');
+  // ⭐⭐⭐v6.172：actionBusy 由「有動作在途」收緊成「有動作在途**且佇列已滿**」。
+  //   原因：v6.170 的重送窗讓 tInFlight 最長 33 秒，舊定義等於把玩家鎖死 33 秒
+  //   （手牌拖曳被靜默丟棄）。「有沒有在送」改由 actionSending 表示（純視覺、不擋操作）。
+  //   本條斷言的意圖不變：**只能有一個中央述詞**，而且只在錦標賽動作路徑上為真。
+  assert.ok(/tActQueue\.length >= TACT_QUEUE_MAX/.test(m[1]),
+    'actionBusy 必須只在佇列已滿時為真（否則又會鎖死玩家）：' + m[1]);
+  const ms = P.match(/const actionSending\s*=\s*\$derived\(([^)]*)\)/);
+  assert.ok(ms && /isTournament && tInFlight/.test(ms[1]), '找不到 actionSending（純視覺的送出中述詞）');
   assert.ok(/isTournament/.test(m[1]) && /tInFlight/.test(m[1]),
     `actionBusy 應由 isTournament && tInFlight 算出，實際：${m[1]}`);
 });
@@ -159,12 +167,13 @@ T('⭐⭐所有會送出動作的關鍵按鈕都要綁 actionBusy（v6.137 的�
     ['picker 放棄', /disabled=\{actionBusy\} onclick=\{abandonSelection\}/],
     ['補位確認(防守方)', /disabled=\{actionBusy\|\|!_pickOkD\}/],
     ['補位確認(自KO)', /disabled=\{actionBusy\|\|!_pickOkS\}/],
-    ['手牌拖曳 gate', /if\(dragKind && !actionBusy\)startDrag/],
+    // ⭐v6.172 這四處由「靜默 return」改成「講出來再 return」（tActSay），gate 本身還在。
+    ['手牌拖曳 gate', /if\(dragKind\)\{ if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);\} else startDrag/],
     // ⭐ Fable 5 審查抓到的缺口：拖曳派已擋，但**點擊派**（點手牌能量→點目標）整條沒查，
     //   而附能是最高頻動作。函式端與 onclick 端都要 gate。
-    ['點擊派附能', /function onAttachEnergy\(targetIid: string\) \{\s*if \(!selectedEnergyIid\) return;\s*if \(actionBusy\) return;/],
-    ['手牌特性(點擊)', /function triggerHandActivateAbility\(handIid: string\): void \{\s*if \(actionBusy\) return;/],
-    ['手牌 onclick', /onclick=\{\(\)=>\{if\(actionBusy\)return;/],
+    ['點擊派附能', /function onAttachEnergy\(targetIid: string\) \{\s*if \(!selectedEnergyIid\) return;[\s\S]{0,600}?if \(actionBusy\) \{ tActSay\(TACT_BLOCKED_MSG, 5000\); return; \}/],
+    ['手牌特性(點擊)', /function triggerHandActivateAbility\(handIid: string\): void \{\s*if \(actionBusy\) \{ tActSay\(TACT_BLOCKED_MSG, 5000\); return; \}/],
+    ['手牌 onclick', /onclick=\{\(\)=>\{if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);return;\}/],
     // setup / mulligan 是 CAS 衝突歷史事故最密集的區段
     ['準備完成', /disabled=\{actionBusy\|\|!myPlayer\?\.active\}/],
     ['完成補抽', /disabled=\{actionBusy\}\s*\n\s*onclick=\{\(\)=>dispatch\(GameActions\.finishMulliganPostBench/],
@@ -189,8 +198,10 @@ T('⭐手機直式必須拿得到 actionBusy（子元件，不傳就永遠是 fa
 });
 T('⭐兩個自動計時器（自動取獎／自動結束回合）撞上送出中要跳過，不得噴莫名紅字給玩家', () => {
   for (const [name, re] of [
-    ['自動取獎', /if \(actionBusy\) return;\s*\n\s*dispatch\(GameActions\.takePrizes/],
-    ['自動結束回合', /if \(actionBusy\) return;[^\n]*\n\s*dispatch\(GameActions\.endTurn\(\)\);/],
+    // ⭐v6.172：自動計時器改守 actionSending —— actionBusy 已改成「佇列已滿」，
+    //   繼續守它會讓自動動作被排進佇列，網路恢復時補送一個玩家早就不想要的動作。
+    ['自動取獎', /if \(actionSending\) return;\s*\n\s*dispatch\(GameActions\.takePrizes/],
+    ['自動結束回合', /if \(actionSending\) return;[^\n]*\n\s*dispatch\(GameActions\.endTurn\(\)\);/],
   ]) assert.ok(re.test(P), `「${name}」沒有 actionBusy 早退`);
 });
 T('⭐不得改用全畫面遮罩（網路卡住時玩家會連設定/離開都按不了）', () => {

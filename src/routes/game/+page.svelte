@@ -199,7 +199,31 @@
   const TACT_POST_TIMEOUT = 8000;      // ⚠ 由 12000 降下來：p99 的 net 是 3.6 秒，等 12 秒才知道要重試太久了。
                                        //   有了冪等鍵，「提早放棄並重送」不再有重複套用的風險。
   type TActCtx = { action: any; actId: string; prev: any; predictedRef: any; predicted: boolean; attempt: number; startedAt: number };
-  let _actCtx: TActCtx | null = null;  // 同時只有一個（actionBusy 保證同時只有一個邏輯動作在途）
+  let _actCtx: TActCtx | null = null;  // 同時只有一個（tournamentDispatch 開頭的 tInFlight 單發鎖保證）
+  // ⭐⭐⭐v6.172【拖曳被鎖死最長 33 秒】的根治：手勢改成「排隊」，不再靜默丟棄。
+  //   v6.170 的重送狀態機讓 tInFlight 最長撐 TACT_RETRY_MS(25s) + TACT_POST_TIMEOUT(8s) ≈ 33 秒，
+  //   而 v6.147 的 actionBusy 直接 gate 住手牌的 onpointerdown ⇒ 那 33 秒之內每一個拖曳
+  //   （附能量、放寶可夢到場上）都被丟掉，而且畫面沒有任何提示。v6.121 沒有這個旗標，
+  //   玩家說的「舊版順、新版卡」指的就是這件事。
+  //   ⚠ 直接放行是錯的：兩個邏輯動作同時在途，伺服器依抵達順序套用，順序一亂就變成另一場對局。
+  //   ⇒ 唯一安全的做法是「收下手勢、排進佇列、嚴格照順序送」：
+  //     ① 網路上同時仍然只有一個動作（tInFlight 單發鎖完全不動）⇒ v6.170 的 actId 冪等照舊成立；
+  //     ② 每個手勢**出佇列時才走 tournamentDispatch**，於是各自拿到自己的 actId，
+  //        不同手勢絕不共用鍵、也就不可能被伺服器誤判成重複而吞掉；
+  //     ③ 佇列滿了才真的擋，而且擋下來時**一定講出來**（靜默丟棄是最糟的）。
+  const TACT_QUEUE_MAX = 3;
+  type TActQueued = { action: any; sig: string };
+  let tActQueue = $state<TActQueued[]>([]);
+  let tActNotice = $state('');   // 「剛剛那一下怎麼了」的可見說明（template 綁定）
+  let _tActNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+  function _tActSig(a: any): string { try { return JSON.stringify(a); } catch { return String(a && a.type); } }
+  /** ⭐ 唯一的「告訴玩家剛剛那一下怎麼了」出口。⚠ 任何擋下手勢的地方都必須呼叫它，不可以只 return。 */
+  function tActSay(msg: string, ms = 2600): void {
+    tActNotice = msg;
+    if (_tActNoticeTimer) clearTimeout(_tActNoticeTimer);
+    _tActNoticeTimer = setTimeout(() => { tActNotice = ''; _tActNoticeTimer = null; }, ms);
+  }
+  const TACT_BLOCKED_MSG = '⚠ 前面已經排了 ' + TACT_QUEUE_MAX + ' 個動作還沒送出 —— 剛剛這一下沒有生效，請稍候再試一次。';
   let _actRetryTimer: ReturnType<typeof setTimeout> | null = null;
   let tActRetry = $state<{ n: number; max: number } | null>(null);   // template 綁定：重送中的可見狀態
   let tOppQuietSec = $state(0);        // ⭐v6.170【B-4】伺服器回報「對手安靜幾秒」（0／未回報 = 不提示）
@@ -233,7 +257,35 @@
   let tBusy = $state(false);
   let tPollTimer: ReturnType<typeof setInterval> | null = null;
   let tPollGen = 0;  // v5.586 poll 世代：離開對戰時 ++，使在路上的 in-flight 回應失效（防返回大廳後被彈回對戰）
-  let _tLastPollOkAt = 0;  // v5.591 上次輪詢成功回應時間（看門狗判斷輪詢是否停擺）
+  let _tLastPollOkAt = 0;  // v5.591 上次輪詢成功回應時間（**只給輪詢停擺看門狗用**，語義刻意不變）
+  // ⭐⭐⭐v6.172 連線健康的**單一錨點**（「與伺服器失聯」的判準只准有這一份）。
+  //   舊判準 `(tNow - _tLastPollOkAt)/1000` 有兩個各自獨立、都會誤報的缺陷：
+  //   ① `_tLastPollOkAt` 只有 /state 輪詢、看門狗、手動 resync 會更新 —— `POST /action`
+  //      往返成功**不算**。⇒ 動作全部成功、伺服器 5xx=0，橫幅照樣跳「與伺服器失聯 xx 秒」。
+  //   ② 站長已開啟長輪詢：伺服器 by design 把 /state 掛起最多 25 秒 —— 在舊判準眼裡就是
+  //      「失聯 25 秒」⇒ **對手每次長考都誤報**。玩家回報的「一直出現失聯」就是這個。
+  //   新判準只有一句話：**距離「上一次能證明伺服器還連得上」過了多久**。
+  //   ・任何一次成功的伺服器往返都算 —— 在 tApi 的成功出口**單點**記錄（/state、長輪詢正常
+  //     回應、POST /action、看門狗與手動 resync 全部經過那裡，不必也不准各自再寫一份）。
+  //   ・在途的長輪詢，在它**自己的逾時**到期前不構成失聯的證據 ⇒ 掛起期間一律 0 秒。
+  //   ⚠ 正對照（真的斷線仍要跳）：斷線時那一發長輪詢會在 T_LP_CLIENT_TIMEOUT_MS 逾時，
+  //     finally 清掉掛起窗 ⇒ 秒數立刻從「上次成功往返」起算（那時已經 ≥30 秒）⇒ 橫幅**立刻**
+  //     跳出來，比舊版還早，而不是要再慢慢爬 10 秒。
+  const T_LP_CLIENT_TIMEOUT_MS = 30000;   // 長輪詢的 client 逾時（伺服器掛起上限 25 秒 + 餘裕）
+  const T_OFFLINE_BANNER_SEC = 10;        // 失聯幾秒才跳橫幅
+  let _tLastServerOkAt = $state(0);       // 任何一次成功的伺服器往返
+  let _tLpHangUntil = $state(0);          // 在途長輪詢「合法掛起」到什麼時候（0 = 沒有在途）
+  // ⭐⭐v6.172（Fable 5 審查抓到）長輪詢「黑洞式斷線」的補洞。
+  //   掛起期間我們分不出「伺服器正常掛住」與「封包被丟掉」，所以掛起窗會壓住橫幅最長 30 秒，
+  //   比 v6.171 的 10 秒晚 —— 那是把誤報修過頭。⇒ 用一發**便宜的**探針把偵測時間補回來：
+  //   只在「長輪詢在途、而且已經 12 秒沒有任何一次成功往返」時送，帶目前版本
+  //   ⇒ 伺服器回精簡的 unchanged（不是 v=-1 全量，v6.155 的教訓）。
+  //   ・探針成功 ⇒ tApi 的成功出口自動記錄存活（連線其實是好的，橫幅本來就不該跳）；
+  //   ・探針失敗 ⇒ 撤銷掛起窗，失聯秒數立刻從「上次成功往返」起算 ⇒ 橫幅約 12～17 秒就出現。
+  const T_CONN_PROBE_AFTER_MS = 12000;    // 幾秒沒有任何成功往返才值得送探針
+  const T_CONN_PROBE_THROTTLE_MS = 15000; // 探針自己的節流（絕不能變成第二條輪詢）
+  let _tConnProbeAt = 0;
+  function _tMarkServerAlive(): void { _tLastServerOkAt = Date.now(); }
   let _tLastStateChangeAt = 0;  // v5.618 上次盤面實際更新時間（新鮮度看門狗：poll 成功卻漏接更新時也能自動重抓）
   let _tLastForceResyncAt = 0;  // v5.618 上次強制重抓時間（節流）
   // ⭐⭐v6.149 輪詢停擺看門狗的**節流專用**時間戳。
@@ -442,7 +494,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         const _tOver = !!game && (game as any).phase === 'game-over';
         // ⚠v6.152 長輪詢在途時**不算停擺** —— 那一發本來就會掛在伺服器最多 25 秒，
         //   6 秒沒回應是正常的。若真的黑洞，30 秒逾時後 _tLongPollAt 歸零，這條看門狗自動恢復。
-        const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < 30000;
+        const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < T_LP_CLIENT_TIMEOUT_MS;
         if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLastPollOkAt > 0 && !_lpInFlight
             && (Date.now() - _tLastPollOkAt) > 6000 && (Date.now() - _tPollStallGuardAt) > 6000) {
           _tPollStallGuardAt = Date.now();  // v6.149 只節流，**不**動 _tLastPollOkAt（見宣告處）
@@ -462,6 +514,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
             } catch { /* ignore */ }
           })();
           startTournamentPoll();
+        }
+        // ⭐⭐v6.172 長輪詢黑洞探針（見 _tConnProbeAt 宣告處）。
+        //   ⚠ 刻意**不採納**回應的盤面：它只是「連線還通不通」的探針，盤面一律讓長輪詢/看門狗處理。
+        if (tStep === 'playing' && game && !_tOver && !isTournSpectator && _tLongPollAt > 0
+            && _tLastServerOkAt > 0 && (Date.now() - _tLastServerOkAt) > T_CONN_PROBE_AFTER_MS
+            && (Date.now() - _tConnProbeAt) > T_CONN_PROBE_THROTTLE_MS) {
+          _tConnProbeAt = Date.now();
+          (async () => {
+            try { await tApi(`/state?room=${tActiveRoom}&v=${tVersion}`, undefined, { timeoutMs: 5000 }); }
+            catch { _tLpHangUntil = 0; }   // 探針也不通 ⇒ 掛起窗不再是「可能還會成功」的理由
+          })();
         }
         // v5.618 新鮮度看門狗：對戰/setup 中盤面 >8s 沒任何更新（poll 成功卻漏接/版本卡住，如「對手補抽放置完成後我方手牌沒亮」）
         //   → 強制重抓伺服器權威最新盤面。涵蓋 setup（tStep 一有 gameState 即 playing）。gate：我方 picker 進行中不擾動；節流 8s。
@@ -2608,9 +2671,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
               takePrizeTimerId = null;
             }
             if (game && myPendingPrizes > 0) {
-              // v6.147：自動取獎撞上動作送出中 → 會被丟棄並跳「上一個動作還在送出中」紅字，
-              //   玩家完全不知道那是自動計時器發的。直接跳過這一次（計時器會再排）。
-              if (actionBusy) return;
+              // v6.147：自動取獎撞上動作送出中 → 會被丟棄並跳紅字，玩家完全不知道那是自動
+              //   計時器發的。直接跳過這一次（計時器會再排）。
+              // ⭐⭐v6.172（Fable 5 審查抓到）守衛必須換成 `actionSending` —— `actionBusy` 的語義
+              //   已經改成「佇列已滿」，繼續守它等於**自動動作也會被排進佇列**，網路恢復時補送一個
+              //   玩家早就不想要的動作。自動計時器不是玩家手勢，跳過這一次就好（它會自己再來）。
+              if (actionSending) return;
               dispatch(GameActions.takePrizes(myPendingPrizes, myIdx, myIdx));
             }
           }
@@ -2702,7 +2768,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         if (game.activePlayerIndex !== myPlayerIndex) return;
       }
       if (mode !== 'online' && aiPlayerIndex !== null && game.activePlayerIndex === aiPlayerIndex) return;
-      if (actionBusy) return;   // v6.147 同上：自動結束回合撞上送出中 → 跳過這一次
+      // ⭐⭐⭐v6.172（Fable 5 審查抓到）同上，而且這一個更嚴重：END_TURN 若被排進佇列，
+      //   前一發被伺服器拒絕時它仍可能被送出去 ⇒ **玩家還沒攻擊就被換手**。守 actionSending。
+      if (actionSending) return;   // v6.147 同上：自動結束回合撞上送出中 → 跳過這一次
       dispatch(GameActions.endTurn());
     }, 600);
   });
@@ -2883,7 +2951,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   // dispatch helpers — 用 onclick 呼叫
   function triggerHandActivateAbility(handIid: string): void {
-    if (actionBusy) return;   // v6.147 同上：手牌特性也走 hand-card 的 onclick，不是拖曳
+    if (actionBusy) { tActSay(TACT_BLOCKED_MSG, 5000); return; }   // v6.147 同上：手牌特性也走 hand-card 的 onclick，不是拖曳
     const meta = handActivateAbilities.get(handIid);
     if (!meta) return;
     // v6.080：abilityIndex 由中央 gate 給（原本硬編 0，同名多特性卡會指錯）
@@ -4562,6 +4630,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const _json = JSON.parse(_txt);
       // ⚠ 與 v6.151 的 rtt 同一條紀律：**只記成功的往返**。錯誤/逾時路徑（12 秒）記進去會扭曲統計。
       _tRecordApiSegments(path, _segT0, _segT1, _segT2, _segT3, _pnow());
+      // ⭐⭐⭐v6.172 連線健康的**唯一**寫入點：任何一次成功的伺服器往返都算「連得上」。
+      //   這就是為什麼 `POST /action` 全部成功之後不會再誤報失聯 —— 不必在每個呼叫端補一行，
+      //   也不會有第二份判準漂移。
+      _tMarkServerAlive();
       return _json;
     } catch (e: any) {
       // AbortError → 換成看得懂的訊息（呼叫端會顯示在 tError）
@@ -4732,6 +4804,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
     tStillHereBusy = false; tStillHereNote = ''; _stalledDiagSent = false;   // v6.156（Fable 5 審查：跨場殘留）
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
+    tActAbortAll('已離開對戰');   // ⭐v6.172 在途動作＋佇列一律作廢（否則舊手勢會打進下一場）
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
     tournLoadEvent(); tBracketLoad();
   }
@@ -4908,6 +4981,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function tLeaveSpectate() {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
+    tActAbortAll('已離開觀戰');   // ⭐v6.172 同 tLeaveMatch（觀戰理論上沒有在途動作，但不留例外）
     game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
     tournLoadEvent(); tBracketLoad();
   }
@@ -5617,11 +5691,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
       _pollBusy = true;
       try {
         const reqV = tVersion;  // v6.135 送出當下的版本（亂序守衛用）
-        if (_lp) _tLongPollAt = Date.now();
+        // ⭐⭐v6.172 掛起窗：這一發本來就會被伺服器掛住最多 25 秒，
+        //   在它自己的逾時到期前**不得**被算成「失聯」（否則長輪詢＝橫幅常駐）。
+        if (_lp) { _tLongPollAt = Date.now(); _tLpHangUntil = Date.now() + T_LP_CLIENT_TIMEOUT_MS; }
         // ⭐v6.170 `s=` 是**心跳**：讓伺服器知道我這個座位還連得上，對手才看得到誠實的
         //   「對手連線不穩」提示（B-4 鏡像效應）。純視覺用途，不進遮蔽判定、不碰閒置判負。
         const r = await tApi(`/state?room=${tActiveRoom}&v=${tVersion}&s=${mySeatIdx}` + (_lp ? '&wait=1' : ''),
-          undefined, _lp ? { timeoutMs: 30000 } : undefined);
+          undefined, _lp ? { timeoutMs: T_LP_CLIENT_TIMEOUT_MS } : undefined);
         if (gen !== tPollGen) return; // v5.586 已離開對戰 → 丟棄在路上的回應，避免 tAdopt 把人彈回對戰畫面
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
         tAuthLost = false;            // v6.150 拿到正常回應 ⇒ 身分是好的
@@ -5646,7 +5722,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //   輪詢節奏一變（400ms base）就會跟著漂移，與它自己的降載意圖脫鉤。
         if (_now - _lastChatAt >= 6000) { _lastChatAt = _now; tChatLoad(); }
       } catch (e: any) { if (e && e.status === 401) tAuthLost = true; /* 其餘忽略單次輪詢失敗 */ }
-      finally { _pollBusy = false; _tLongPollAt = 0; }   // v6.148 一定要放掉，否則輪詢永久停擺
+      // ⭐v6.172 掛起窗一併關閉：逾時／失敗 ⇒ 立刻恢復計算失聯秒數（正對照的關鍵）。
+      finally { _pollBusy = false; _tLongPollAt = 0; _tLpHangUntil = 0; }   // v6.148 一定要放掉，否則輪詢永久停擺
     }, 400);
   }
   // v6.137 樂觀更新狀態 —— 與 tBusy 分開：
@@ -5663,17 +5740,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ⇒ 這裡建立**唯一**的視覺 busy 述詞，所有送出動作的按鈕一律綁它。
   //   ⚠ 刻意**只** disable「會送出動作的元素」，不做全畫面遮罩 ——
   //     tApi 有 12 秒逾時保護，全域遮罩會讓網路卡住時玩家連設定/離開/放大鏡都按不了。
-  const actionBusy = $derived(isTournament && tInFlight);
+  // ⭐⭐⭐v6.172 這裡拆成**兩個**述詞，因為它們回答的是兩個不同的問題：
+  //   `actionSending` ——「現在有動作在網路上嗎？」⇒ 只拿來顯示 ⏳ 提示，**不擋任何操作**。
+  //   `actionBusy`    ——「這一下真的不能做嗎？」⇒ **唯一**可以 disable 元素／擋拖曳的述詞。
+  //   v6.171 以前兩者是同一個 ⇒「有動作在途」＝「什麼都不能做」，最長 33 秒（重送窗）。
+  //   現在只有**佇列已滿**（前面已經排了 TACT_QUEUE_MAX 個手勢還沒送出）才會真的擋，
+  //   而且擋下來一定有文字說明（tActSay ／ TACT_BLOCKED_MSG）。
+  const actionSending = $derived(isTournament && tInFlight);
+  const actionBusy = $derived(isTournament && tInFlight && tActQueue.length >= TACT_QUEUE_MAX);
 
   // ⭐⭐⭐v6.149 連線健康橫幅 —— 事故驅動（2026-08-09 網站賽-61 R6）。
   //   玩家與伺服器失聯約 8 分鐘，畫面停在「對手回合」的舊盤面、本地把對手的閒置倒數走到 0，
   //   於是他看到「對方閒置超時」；伺服器依權威盤面判的卻是他自己閒置逾時。
   //   ⚠ 當時三處失敗路徑（輪詢 / 兩個看門狗）**全部靜默 catch**，畫面沒有任何一個像素提示。
   //   ⚠ 這個秒數必須是「上次真的收到伺服器回應」到現在，不能被看門狗的自我安撫重置。
+  // ⭐⭐⭐v6.172 中央述詞：距離「上一次能證明伺服器還連得上」幾毫秒。
+  //   ⚠ 用 `tNow - tClockOffset` 而不是 tNow：兩個錨點都是本機時鐘，直接拿伺服器時鐘相減
+  //     會把時鐘偏移一起算成失聯秒數（tNow 的定義就是 Date.now() + tClockOffset）。
+  //   ⚠ `_tLpHangUntil` 是**未來**的時間戳 ⇒ 長輪詢掛起期間這個值恆為 0，橫幅不可能跳。
+  const tConnStaleMs = $derived(Math.max(0, (tNow - tClockOffset) - Math.max(_tLastServerOkAt, _tLpHangUntil)));
   const tOfflineSec = $derived(
     isTournament && tStep === 'playing' && !!game && (game as { phase?: string }).phase !== 'game-over'
-    && !isTournSpectator && _tLastPollOkAt > 0
-      ? Math.max(0, Math.floor((tNow - _tLastPollOkAt) / 1000))
+    && !isTournSpectator && _tLastServerOkAt > 0
+      ? Math.floor(tConnStaleMs / 1000)
       : 0,
   );
   // ⭐v6.158：身分被拒也要出橫幅 —— 它帶的「立即重新同步」會先 getIdToken(true) 強制換憑證，
@@ -5695,7 +5784,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     && tOppQuietSec > 0
     && typeof tServerActorSeat === 'number' && tServerActorSeat >= 0 && tServerActorSeat !== mySeatIdx);
   const tNetBannerOn = $derived(
-    (tOfflineSec >= 10 && _tNetBannerDismissAt < _tLastPollOkAt)
+    (tOfflineSec >= T_OFFLINE_BANNER_SEC && _tNetBannerDismissAt < _tLastServerOkAt)
     || (_tActionAuthErr && _tNetBannerDismissAt < _tActionAuthErrAt));
 
   // ⭐⭐⭐v6.170 動作送出狀態機（B-1 冪等重試 ／ B-2 恢復偵測 ／ B-3 不鎖死）。
@@ -5713,6 +5802,40 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (_actCtx !== ctx) return;
     _actCtx = null; tActRetry = null; tInFlight = false;
     if (_actRetryTimer) { clearTimeout(_actRetryTimer); _actRetryTimer = null; }
+  }
+  /** ⭐v6.172 丟掉整條佇列。⚠ 一定要說出來 —— 玩家做過的手勢消失而畫面不講，就是這一版要根治的事。 */
+  function _tActClearQueue(why: string): void {
+    if (!tActQueue.length) return;
+    const n = tActQueue.length;
+    tActQueue = [];
+    tActSay('已取消 ' + n + ' 個排隊中的動作（' + why + '）—— 這些動作沒有送出，請以畫面為準重做。', 6000);
+  }
+  /**
+   * ⭐⭐⭐v6.172（Fable 5 審查抓到）離開對戰／重置房間 ⇒ **在途動作與整條佇列一律作廢**。
+   * ⚠⚠ 只清佇列是不夠的：在途那一發回來時會 `tAdopt`，那會把 `tStep` 拉回 'playing'、`game` 復活，
+   *   於是 drain 的 game-over 防線形同虛設，舊手勢就會用新的 actId 打進**下一場**對局。
+   *   ⇒ 必須同時把 `_actCtx` 設成 null —— `_tActAttempt` 開頭的 `_actCtx !== ctx` 會讓那一發的
+   *     回應在 tAdopt **之前**就被丟棄。
+   */
+  function tActAbortAll(why: string): void {
+    if (_actRetryTimer) { clearTimeout(_actRetryTimer); _actRetryTimer = null; }
+    _actCtx = null; tActRetry = null; tInFlight = false;
+    _tActClearQueue(why);
+  }
+  /**
+   * ⭐⭐⭐v6.172 送出佇列最前面那一個。
+   * ⚠⚠ 一次只放一個出去（`tInFlight` 仍然是單發鎖）—— 這是「不會重複套用、也不會亂序」的根據：
+   *   ・同時只有一個動作在網路上 ⇒ v6.170 的 actId 冪等語義完全沒變；
+   *   ・出佇列時才走 tournamentDispatch ⇒ 每個手勢拿到**自己的** actId；
+   *   ・佇列長度有上限且每次必定移除一個 ⇒ 這條自我重呼叫鏈有明確上限，不可能無限展開。
+   */
+  function _tActDrain(): void {
+    if (tInFlight || !tActQueue.length) return;
+    if (game && (game as { phase?: string }).phase === 'game-over') { _tActClearQueue('對局已結束'); return; }
+    if (tStep !== 'playing' || !tActiveRoom) { _tActClearQueue('已離開對戰'); return; }
+    const next = tActQueue[0];
+    tActQueue = tActQueue.slice(1);
+    void tournamentDispatch(next.action);
   }
   function _tActCanRetry(ctx: TActCtx): boolean {
     if (_actCtx !== ctx) return false;                       // 已被取消／被新動作取代
@@ -5757,8 +5880,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   若是我自己的兩發並發、其中一發已寫進去，重送會被伺服器認出來回 duplicate。兩種都對。
       // ⚠ 與網路重送**共用同一份 attempt 預算**，不另開一套計數（否則兩套交錯可以繞過上限）。
       if (r.stale && _tActCanRetry(ctx)) { _tActSchedule(ctx, 0); return; }
+      // ⭐⭐⭐v6.172（Fable 5 審查抓到）：**只有「這一發真的套用了」才可以放下一個手勢出去。**
+      //   伺服器有三種「沒有套用」的回應：`error`（現在不是你能操作的時機／動作無效／對局尚未開始）、
+      //   `rejected`（引擎拒絕，盤面沒變）、`stale` 而重送預算已用完（也帶 rejected）。
+      //   這三種情況下，排在後面的手勢是**依據一個根本沒有發生的盤面**做出來的 ——
+      //   最糟的情形是「自動結束回合」被照送出去（玩家還沒攻擊就換手）。⇒ 一律丟棄並講清楚。
+      //   ⚠ `duplicate`（重送被認出來）**不算沒套用**：它代表更早那一發已經生效 ⇒ 照常放行。
+      const _applied = !r.error && !r.rejected;
       if (r.error) tError = r.error;
       _tActDone(ctx);
+      if (_applied) _tActDrain();   // 這一發真的套用了 ⇒ 放下一個排隊中的手勢出去（嚴格照順序、一次一個）
+      else _tActClearQueue('前一個動作沒有被伺服器接受');
     } catch (e: any) {
       if (_actCtx !== ctx) return;
       // ⭐⭐v6.158：401/403 是「身分不被伺服器接受」，跟斷線完全不同 —— 重送幾次都一樣，
@@ -5767,7 +5899,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         _tActionAuthErr = true; _tActionAuthErrAt = Date.now();
         if (!_actionAuthDiagSent) { _actionAuthDiagSent = true; _tSendClientDiag('action-forbidden'); }
         tError = String(e?.message ?? e);
-        _tRestorePrediction(ctx); _tActDone(ctx); return;
+        _tRestorePrediction(ctx); _tActDone(ctx);
+        _tActClearQueue('身分沒有被伺服器接受');   // ⭐v6.172 後面那些一定也會被拒，不要一個一個再撞一次
+        return;
       }
       if (_tActCanRetry(ctx)) {
         // ⭐⭐⭐ 逾時／斷線 ⇒ **不回滾、不報錯**，排一次自動重送。
@@ -5781,6 +5915,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       tError = (tError ? tError + '　' : '') + '（已自動重送 ' + ctx.attempt + ' 次仍送不出去，畫面已還原）';
       void tForceResync();   // 第二道保險：若動作其實成功了，這裡會把伺服器新盤面抓回來
       _tActDone(ctx);
+      // ⭐⭐v6.172 前一個動作最終失敗、畫面已經還原 ⇒ 排在它後面的手勢是**依據那個已被還原的
+      //   盤面**做出來的，照送就變成玩家沒有意圖的動作。一律丟掉並講清楚（不是靜默丟）。
+      _tActClearQueue('前一個動作送不出去');
     }
   }
   // ⭐⭐v6.170【B-3 逃生口】停止重送並立刻解鎖 UI。
@@ -5793,6 +5930,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     _actCtx = null; tActRetry = null; tInFlight = false;
     if (ctx) _tRestorePrediction(ctx);
     tError = '已停止重送。這個動作可能已經生效，畫面正在以伺服器為準重新同步。';
+    _tActClearQueue('已停止重送');   // ⭐v6.172 前一個動作的結果都不確定了，後面那些不可以照送
     void tForceResync();
   }
   // ⭐⭐v6.170【B-2 恢復偵測】斷流結束的那一刻就重送，不要傻等退避計時器跑完。
@@ -5810,11 +5948,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // v6.135 不再靜默 return：tBusy 沒有 template 綁定，按鈕外觀不會變，
     //   玩家在等待往返時連點會完全沒有回饋 ⇒ 體感就是「按下去沒反應」。改為顯性提示。
     if (tInFlight) {
-      // v6.135 這則是暫時性提示，2 秒後自動收掉——成功路徑不會清 tError，
-      //   不自動清會讓紅色 toast 在「動作其實成功了」之後一直掛著（玩家可能整段對手回合都看著它）。
-      tError = '上一個動作還在送出中，請稍候…';
-      const _msg = tError;
-      setTimeout(() => { if (tError === _msg) tError = ''; }, 2000);
+      // ⭐⭐⭐v6.172 這裡以前是「丟掉 ＋ 一行紅字」。現在改成**排隊**：手勢一定被收下，
+      //   前一個動作一送完就依序執行。⚠ 仍然 return —— 網路上同時只有一個動作，
+      //   這正是「不會重複套用、也不會亂序」的根據，絕不可以為了『順』而拿掉。
+      const _sig = _tActSig(action);
+      if (_actCtx && _tActSig(_actCtx.action) === _sig) { tActSay('這個動作已經在送出中了，不會重複送出。'); return; }
+      if (tActQueue.some((q) => q.sig === _sig)) { tActSay('這個動作已經排在佇列裡了，不會重複送出。'); return; }
+      if (tActQueue.length >= TACT_QUEUE_MAX) { tActSay(TACT_BLOCKED_MSG, 5000); return; }
+      tActQueue = [...tActQueue, { action, sig: _sig }];
+      tActSay('⏳ 已排隊（第 ' + tActQueue.length + ' 個）—— 前一個動作送出後會自動依序執行，不必重按。');
       return;
     }
     tInFlight = true; tError = '';
@@ -5844,6 +5986,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try { await tApi('/reset', { room: tActiveRoom, playerId: tPlayerId() }); }
     catch (e: any) { tError = String(e?.message ?? e); }
     finally { tBusy = false; }
+    tActAbortAll('房間已重置');   // ⭐v6.172 同 tLeaveMatch
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
   }
 
@@ -7528,7 +7671,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.147（Fable 5 審查抓到）：拖曳派已由 hand-card 的 onpointerdown gate 住，
     //   但**點擊派**（點手牌能量 → 點目標）整條沒查 —— 而附能是最高頻動作，
     //   busy 期間點下去會被 tournamentDispatch 丟棄、只換來一行紅字。
-    if (actionBusy) return;
+    if (actionBusy) { tActSay(TACT_BLOCKED_MSG, 5000); return; }
     dispatch(GameActions.attachEnergy(selectedEnergyIid, targetIid));
   }
   function toggleSelection(iid: string) {
@@ -9242,6 +9385,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <button class="net-warn-btn" onclick={tActCancel}>停止重送</button>
     </div>
   {/if}
+  <!-- ⭐⭐⭐v6.172 排隊中的手勢一定要看得見（靜默丟棄是最糟的）。
+       ⚠ 與上面兩則同樣放在 isPortraitMobile 分支**之外** —— v6.149 的教訓。 -->
+  {#if tActQueue.length}
+    <div class="act-queue-banner" role="status">
+      <span>⏳ 已排隊 {tActQueue.length} 個動作 —— 前一個動作送出後會自動依序執行，不必重按。</span>
+    </div>
+  {/if}
+  {#if tActNotice}
+    <div class="act-notice-banner" role="status"><span>{tActNotice}</span></div>
+  {/if}
   <!-- ⭐⭐v6.170【B-4】對手斷線時，我方畫面不該看起來像網站壞掉。判準見 tOppQuietOn。 -->
   {#if tOppQuietOn}
     <div class="opp-quiet-banner" role="status">
@@ -9267,6 +9420,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       roomCode={roomCode}
       onResync={isTournament ? tForceResync : undefined}
       actionBusy={actionBusy}
+      actionSending={actionSending}
+      actionQueued={tActQueue.length}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
@@ -9338,7 +9493,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {/if}
         </span>
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
-        {#if actionBusy}<span class="chip syncing-chip">⏳ 送出中…</span>{/if}
+        {#if actionSending}<span class="chip syncing-chip">⏳ 送出中…</span>{/if}
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip" title={isTournament ? '若遲遲沒換你，可能是畫面沒更新 → 點此重新同步（不必重整網頁）' : undefined} style={isTournament ? 'cursor:pointer;' : undefined} onclick={() => { if (isTournament) { _tSendClientDiag('manual-sync'); tForceResync(); } }}>等待對手行動{#if isTournament} 🔄{/if}</span>{/if}
       {/if}
       <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
@@ -10113,8 +10268,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
             out:fly={{ y: -220, duration: 220, easing: cubicOut }}
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
-            onpointerdown={(e)=>{leaveHandCard(); if(dragKind && !actionBusy)startDrag(e, inst, dragKind, c);}}
-            onclick={()=>{if(actionBusy)return; if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            onpointerdown={(e)=>{leaveHandCard(); if(dragKind){ if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);} else startDrag(e, inst, dragKind, c); }}}
+            onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;} if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
             title={canHandActivate?`點擊使用特性（放備戰） · ${c.name}`:(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
             <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
                  預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。
@@ -14112,7 +14267,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .opp-quiet-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
     background:#16324a; color:#cfe6ff; border:1px solid #2f6d9e; border-radius:6px;
     padding:.45rem .8rem; margin:0 0 .4rem; font-size:.88rem; font-weight:600; }
-  /* v6.147 錦標賽動作送出中：手牌整排變淡且不可拖（真正的擋是 onpointerdown 的 gate，這裡只是視覺回饋） */
+  /* v6.172 動作排隊中（綠：系統收到了、正在照順序處理，不是錯誤也不是警告）*/
+  .act-queue-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
+    background:#14371f; color:#cdf5da; border:1px solid #2f7d4c; border-radius:6px;
+    padding:.45rem .8rem; margin:0 0 .4rem; font-size:.88rem; font-weight:600; }
+  /* v6.172 「剛剛那一下怎麼了」的短暫說明（灰：純告知，數秒後自動收掉）*/
+  .act-notice-banner{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; justify-content:center;
+    background:#2a2f38; color:#e6ecf5; border:1px solid #4a5568; border-radius:6px;
+    padding:.4rem .8rem; margin:0 0 .4rem; font-size:.86rem; font-weight:600; }
+  /* v6.147 錦標賽動作送出中：手牌整排變淡且不可拖（v6.172 起只有「佇列已滿」才會這樣，見 actionBusy） */
   .hand-card.action-busy{ opacity:.5; cursor:progress; }
   .fs-chip{ background:#1a2a3a; color:#8cf; border-color:#2a4a6a; cursor:pointer; font-size:0.68rem; }
   .fs-chip:hover{ background:#2a3a5a; }

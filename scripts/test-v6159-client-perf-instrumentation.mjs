@@ -97,7 +97,8 @@ ok('★掃描器自我驗證：grabFn 對「回傳型別含大括號」的簽章
   ok('★★④ body 下載自成一段（res.text()），不可以和 JSON.parse 混在一起',
     /const _txt = await res\.text\(\);\s*\n\s*const _segT3 = _pnow\(\);/.test(seg));
   ok('★★⑤ JSON.parse 之後才記錄（純 CPU 段要含在裡面）',
-    /const _json = JSON\.parse\(_txt\);\s*\n\s*_tRecordApiSegments\(path, _segT0, _segT1, _segT2, _segT3, _pnow\(\)\);\s*\n\s*return _json;/.test(seg));
+    /const _json = JSON\.parse\(_txt\);\s*\n\s*_tRecordApiSegments\(path, _segT0, _segT1, _segT2, _segT3, _pnow\(\)\);/.test(seg)
+    && /_tMarkServerAlive\(\);\s*\n\s*return _json;/.test(seg));   // v6.172 記錄之後、return 之前多一行連線健康錨點
   ok('★★不得再用 res.json()（那會把 body 下載算進「解析」）', !/await res\.json\(\)/.test(seg));
 
   // ★★ 只記成功的往返 —— 與 v6.151 的 rtt 同一條紀律（逾時是 12 秒，記進去會扭曲統計）

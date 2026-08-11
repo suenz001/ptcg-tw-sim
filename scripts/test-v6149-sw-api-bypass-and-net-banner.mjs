@@ -75,7 +75,16 @@ T('⭐⭐輪詢停擺看門狗**不得**自我安撫（原本把 _tLastPollOkAt 
 T('⭐⭐失聯秒數必須由「上次真的收到伺服器回應」算出，且橫幅有實際渲染', () => {
   const m = P.match(/const tOfflineSec = \$derived\(([\s\S]{0,400}?)\);/);
   assert.ok(m, '找不到 tOfflineSec');
-  assert.ok(/_tLastPollOkAt/.test(m[1]) && /tNow/.test(m[1]), 'tOfflineSec 應由 tNow - _tLastPollOkAt 算出');
+  // ⭐⭐⭐v6.172 錨點由 `_tLastPollOkAt`（只有 /state 輪詢會動）換成 `_tLastServerOkAt`
+  //   （tApi 成功出口單點記錄 ⇒ POST /action 與長輪詢正常回應都算）。
+  //   本條斷言的**意圖完全沒變**：秒數必須由「上次真的收到伺服器回應」算出，
+  //   而且不可以被看門狗的自我安撫重置。只是那個「上次真的收到回應」現在涵蓋得更完整。
+  //   ⚠ v6.171 的舊錨點會在長輪詢掛起 25 秒時誤報，那正是 v6.172 要修的事。
+  assert.ok(/tConnStaleMs/.test(m[1]), 'tOfflineSec 應由中央述詞 tConnStaleMs 導出，實際：' + m[1]);
+  const cm = P.match(/const tConnStaleMs = \$derived\(([\s\S]{0,300}?)\);/);
+  assert.ok(cm, '找不到 tConnStaleMs（失聯判準的單一中央述詞）');
+  assert.ok(/_tLastServerOkAt/.test(cm[1]) && /tNow/.test(cm[1]),
+    'tConnStaleMs 應由「現在 − 上次成功往返」算出，實際：' + cm[1]);
   assert.ok(/tNetBannerOn/.test(P), '找不到橫幅開關');
   assert.ok(/\{#if tNetBannerOn\}/.test(P), '橫幅沒有實際渲染 —— v6.137/v6.147 的教訓：加了旗標卻沒有 template 綁定＝等於沒做');
   assert.ok(/net-warn-banner/.test(P), '橫幅缺 class（樣式對不上）');

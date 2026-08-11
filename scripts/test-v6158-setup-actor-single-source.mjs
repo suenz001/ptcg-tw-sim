@@ -267,8 +267,12 @@ T('⭐⭐【行為端】身分被拒時失聯橫幅必須亮，且按叉叉之�
   assert.ok(bi > 0, '找不到 tNetBannerOn');
   const end = P.indexOf(';', P.indexOf('$derived(', bi));
   const expr = P.slice(P.indexOf('$derived(', bi) + '$derived('.length, end).replace(/\)\s*$/, '');
-  const on = new Function('tOfflineSec', '_tNetBannerDismissAt', '_tLastPollOkAt', '_tActionAuthErr', '_tActionAuthErrAt',
-    'return !!(' + expr + ');');
+  // ⭐v6.172 錨點由 _tLastPollOkAt 換成 _tLastServerOkAt（tApi 成功出口單點記錄，
+  //   POST /action 與長輪詢正常回應都算），門檻改用具名常數 T_OFFLINE_BANNER_SEC。
+  //   本條斷言的意圖完全沒變，只是參數名跟著中央述詞走。
+  const _BSEC = Number((/const T_OFFLINE_BANNER_SEC = (\d+);/.exec(P) || [])[1] || 10);
+  const on = new Function('T_OFFLINE_BANNER_SEC', 'tOfflineSec', '_tNetBannerDismissAt', '_tLastServerOkAt', '_tActionAuthErr', '_tActionAuthErrAt',
+    'return !!(' + expr + ');').bind(null, _BSEC);
   const NOW = 1000000;
   // 輪詢完全正常（tOfflineSec=0、剛剛才成功）＋ 動作被 403 ⇒ 必須亮
   assert.equal(on(0, 0, NOW, true, NOW - 5000), true, '身分被拒卻不亮橫幅 ⇒ 玩家只會看到動作沒反應');

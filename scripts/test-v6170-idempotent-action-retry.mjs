@@ -291,9 +291,13 @@ try {
 
 console.log('④ client：重送狀態機（B-1/B-2/B-3，**實跑**）');
 try {
-  const names = ['_tRestorePrediction', '_tActDone', '_tActCanRetry', '_tActSchedule', '_tActAttempt', 'tActCancel', '_tOnNetRecovered'];
+  // ⭐v6.172 狀態機多了「佇列」兩支（_tActClearQueue / _tActDrain）—— 它們被 _tActAttempt 與
+  //   tActCancel 直接呼叫，不一起抽出來這台機器就跑不起來（ReferenceError）。
+  //   ⚠ 佇列本身的行為由 test-v6172 守；這裡只要它們存在且不干擾重送語義。
+  const names = ['_tRestorePrediction', '_tActDone', '_tActClearQueue', '_tActDrain', '_tActCanRetry', '_tActSchedule', '_tActAttempt', 'tActCancel', '_tOnNetRecovered'];
   const src = names.map((n) => grabFn(PAGE, n)).join('\n');
-  ok('★重送狀態機七支函式都抽得到', names.every((n) => src.includes(n === 'tActCancel' ? 'function tActCancel' : 'function ' + n)));
+  ok('★重送狀態機各支函式都抽得到', names.every((n) => src.includes(n === 'tActCancel' ? 'function tActCancel' : 'function ' + n)),
+    names.filter((n) => !src.includes('function ' + n)).join(','));
   const MAXN = num(PAGE, 'TACT_RETRY_MAX');
   const out = await transform(src, { loader: 'ts' });
 
@@ -305,6 +309,10 @@ try {
       const TACT_RETRY_MS = ${opts.windowMs ?? 25000};
       const TACT_POST_TIMEOUT = 8000;
       let _actCtx = null, _actRetryTimer = null, tActRetry = null, tInFlight = false;
+      // v6.172 佇列的最小環境（佇列行為本身由 test-v6172 守；這裡讓重送狀態機跑得起來）
+      let tActQueue = [], tActNotice = '';
+      const tActSay = (msg) => { tActNotice = msg; };
+      const tournamentDispatch = async () => { __log.drained = (__log.drained || 0) + 1; };
       let game = ${JSON.stringify(opts.game ?? { phase: 'playing', n: 0 })};
       let tError = '', tActiveRoom = 'R', _tActionAuthErr = false, _tActionAuthErrAt = 0, _actionAuthDiagSent = false;
       const tPlayerId = () => 'me';

@@ -89,8 +89,13 @@ if (dispIdx > 0) {
   // v6.137 對戰動作的網路鎖已從 tBusy 拆成 tInFlight（tBusy 留給大廳操作）。
   //   這裡斷言的是**意圖**「in-flight 分支不得靜默吞點擊」，兩個名字都接受，
   //   避免日後再改名時守衛因為變數名過期而假紅。
-  if (/if \((tBusy|tInFlight)\)\s*\{[^}]*tError/.test(win)) ok('③ tournamentDispatch 的 in-flight 分支有寫 tError');
+  // ⭐v6.172 這個分支由「丟掉手勢 + 一行紅字」改成**排隊**（tActQueue）+ tActSay 說明。
+  //   斷言的意圖完全沒變：**in-flight 分支不得靜默吞點擊**。三種實作都接受，
+  //   但一定要有其中一種可見回饋（tError / tActSay / 進佇列）。
+  if (/if \((tBusy|tInFlight)\)\s*\{[\s\S]{0,900}?(tError|tActSay\()/.test(win)) ok('③ tournamentDispatch 的 in-flight 分支有給玩家看得到的回饋');
   else no('③ tournamentDispatch 的 in-flight 分支沒有給玩家任何回饋（靜默吞點擊）');
+  if (/tActQueue = \[\.\.\.tActQueue, \{ action, sig: _sig \}\];/.test(win)) ok('③ v6.172：手勢是被**收下排隊**，不是丟掉');
+  else no('③ v6.172：in-flight 的手勢又被丟掉了（回歸 v6.171 的靜默丟棄）');
   if (!/if \((tBusy|tInFlight)\) return;\s*(tBusy|tInFlight) = true/.test(win)) ok('③ 反向對照：舊的靜默 `if (鎖) return;` 已不存在');
   else no('③ 反向對照：仍是舊的靜默 `if (鎖) return;`');
 } else {
@@ -125,8 +130,11 @@ if (entIdx > 0) {
 // in-flight 提示必須會自己消失（成功路徑不清 tError → 紅 toast 會永掛）
 const dIdx = SRC.indexOf('async function tournamentDispatch(');
 const dWin = dIdx > 0 ? SRC.slice(dIdx, dIdx + 900) : '';
-if (/setTimeout\(\s*\(\)\s*=>\s*\{[^}]*tError\s*=\s*''/.test(dWin)) ok('⑤ in-flight 提示有自動清除（避免紅色 toast 永掛）');
-else no('⑤ in-flight 提示沒有自動清除 —— 動作成功後紅字會一直掛著');
+// ⭐v6.172 提示改走 tActSay（它自己就帶自動清除的計時器）——意圖不變：提示不可以永掛。
+const saySrc = SRC.slice(SRC.indexOf('function tActSay('), SRC.indexOf('function tActSay(') + 400);
+if (/setTimeout\(\s*\(\)\s*=>\s*\{[^}]*tError\s*=\s*''/.test(dWin)
+    || /setTimeout\(\(\) => \{ tActNotice = ''/.test(saySrc)) ok('⑤ in-flight 提示有自動清除（避免提示永掛）');
+else no('⑤ in-flight 提示沒有自動清除 —— 動作成功後提示會一直掛著');
 
 console.log('\n[v6135-tournament-net-hardening] PASS ' + pass + ' / FAIL ' + fail);
 process.exit(fail ? 1 : 0);

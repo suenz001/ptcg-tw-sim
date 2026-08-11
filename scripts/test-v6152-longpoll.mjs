@@ -183,7 +183,8 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
     PAGE.includes("const _lp = tLongPollReady && !isTournSpectator && !!game && (game as any).phase !== 'game-over';"));
   ok('★wait=1 只在長輪詢模式送', PAGE.includes("(_lp ? '&wait=1' : '')"));
   ok('★逾時只在長輪詢模式放寬（否則網路黑洞要 30 秒才發現）',
-    PAGE.includes('_lp ? { timeoutMs: 30000 } : undefined'));
+    PAGE.includes('_lp ? { timeoutMs: T_LP_CLIENT_TIMEOUT_MS } : undefined')
+    && /const T_LP_CLIENT_TIMEOUT_MS = 30000;/.test(PAGE));   // v6.172 改成具名常數（掛起窗與逾時必須是同一個數）
   ok('長輪詢模式不套 tPollDesiredMs 節流（否則延遲降不下來）',
     PAGE.includes('if (!_lp && _now - _lastFetchAt < tPollDesiredMs(false)) return;'));
   ok('對戰結束後不長輪詢（那時要的是降頻）', PAGE.includes("(game as any).phase !== 'game-over'"));
@@ -191,7 +192,7 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
   //   新鮮度看門狗補上守衛之後，全檔會有兩處，刪掉任何一處都還是綠 ⇒ 會退化成安慰劑。
   //   ⇒ 改成把兩條看門狗各自 scope 出來、分別斷言，並驗證兩段切片真的沒重疊。
   {
-    const d0 = PAGE.indexOf('const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < 30000;');
+    const d0 = PAGE.indexOf('const _lpInFlight = _tLongPollAt > 0 && (Date.now() - _tLongPollAt) < T_LP_CLIENT_TIMEOUT_MS;');   // v6.172 具名常數
     ok('_lpInFlight 定義可定位', d0 > 0, `d0=${d0}`);
     const i0 = PAGE.indexOf('const _freshStaleMs =', d0 + 1);
     const i1 = PAGE.indexOf('tForceResync();', i0 + 1);
@@ -212,7 +213,10 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
       && (segFresh.match(/_tLastForceResyncAt = Date\.now\(\);/g) || []).length === 1
       && !/_tLastForceResyncAt = Date\.now\(\);/.test(segStall));
   }
-  ok('在途旗標一定會被放掉（finally）', PAGE.includes('finally { _pollBusy = false; _tLongPollAt = 0; }'));
+  // ⭐v6.172 finally 多清一個 `_tLpHangUntil`（長輪詢的「合法掛起窗」）——
+  //   不清掉的話，真的斷線時失聯橫幅也不會跳（＝把誤報修成永遠不跳）。
+  ok('在途旗標一定會被放掉（finally），且長輪詢掛起窗一併關閉',
+    PAGE.includes('finally { _pollBusy = false; _tLongPollAt = 0; _tLpHangUntil = 0; }'));
   ok('離場會清乾淨', PAGE.includes('tLongPollReady = false; _tLongPollAt = 0;'));
   ok('★掃描器自我驗證：舊寫法（無條件節流）會被判為未修',
     !'      if (_now - _lastFetchAt < tPollDesiredMs(false)) return;'.includes('!_lp &&'));

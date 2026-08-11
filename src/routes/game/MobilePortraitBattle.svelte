@@ -74,8 +74,13 @@
     isTournSpectator?: boolean;
     // v5.954 回放：攤開主視角(行動方)手牌明牌
     isTReplay?: boolean;
-    // v6.147 錦標賽動作送出往返期間：所有會送出動作的按鈕一律 disable（父層唯一述詞 actionBusy）
+    // v6.147 錦標賽動作送出往返期間：會送出動作的按鈕一律 disable（父層唯一述詞 actionBusy）
+    // ⭐v6.172 `actionBusy` 現在只在「佇列已滿、這一下真的不能做」時為真（原本是「有動作在途」，
+    //   最長會鎖 33 秒）。「有動作在網路上」改由 actionSending 表示，它**純視覺、不 disable 任何東西**；
+    //   actionQueued 是排隊中的手勢數（>0 就要讓玩家看得到，靜默丟棄是最糟的）。
     actionBusy?: boolean;
+    actionSending?: boolean;
+    actionQueued?: number;
     // Callbacks
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
@@ -99,6 +104,8 @@
     isTournSpectator = false,  // v5.895
     isTReplay = false,  // v5.954
     actionBusy = false,  // v6.147
+    actionSending = false,  // v6.172
+    actionQueued = 0,       // v6.172
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     undoAvailable = false,
     onUndo,
@@ -826,7 +833,8 @@
     <span class="mp-spacer"></span>
     {#if aiThinking}<span class="mp-tag">🤖</span>{/if}
     {#if isSyncing}<span class="mp-tag">⏳</span>{/if}
-        {#if actionBusy}<span class="mp-tag">⏳送出中</span>{/if}
+        {#if actionSending}<span class="mp-tag">⏳送出中</span>{/if}
+    {#if actionQueued}<span class="mp-tag">⏳已排隊 {actionQueued}</span>{/if}
     {#if isSetup && !game.setupDone[myIdx] && !isSpectator}
       <!-- v2.287 修：setup 階段雙方各自準備，不依 isMyTurn 判定（後手玩家 isMyTurn=false 會看不到按鈕） -->
       <!-- v5.116：觀戰者不顯示準備按鈕 -->
