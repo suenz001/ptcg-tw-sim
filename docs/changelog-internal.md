@@ -17,6 +17,143 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.165 — 站長裁定三項：①迴旋充能「這隻寶可夢」用 iid 追蹤 ②鐵壁硬殼在手動傷害路徑失效 ③自動治癒維持現狀
+
+### ① 大電海燕ex｜迴旋充能 — 互換要真的發生，能量要附給「本體」
+
+卡面（`static/cards/SV-P-H.json` id 10518，台灣官方中文，唯一權威）：
+
+> 「將這隻寶可夢與備戰寶可夢互換。然後，從自己的手牌選擇最多2張「基本【雷】能量」卡，附於這隻寶可夢身上。」
+
+**上一輪（v6.164）的診斷有一半是錯的，本輪複驗推翻**：
+「`selfSwapPostInline` 開的互換 picker 被緊接著的 `withPending(hand-choose)` 覆蓋 ⇒ 互換根本沒發生」——
+**不成立**。`withPending`（`_shared.ts`）在 `state.pendingSelection` 已存在時會把新的 pending
+push 進 `pendingChainQueue` 排隊，`RESOLVE_SELECTION` 解完第一個之後 engine 會自動 pop。
+行為端實測（完整 `applyAction ATTACK → RESOLVE_SELECTION`）：互換確實發生，順序也正確。
+
+**真正的 bug 只有一半**：resolver `h-wave2-attach-from-hand` 把附能目標寫死成
+`state.players[aIdx].active`。互換之後大電海燕ex 本體人在**備戰區**，於是 2 張基本【雷】能量
+全附到「剛換上來的那一隻」。實測：本體 energy=1（只剩攻擊費用），新上場那隻 energy=2。
+
+**修法（中央收斂）**：`_shared.ts` 新增兩支中央 helper——
+- `findOwnFieldPokemon(state, idx, iid)`：依 iid 在自己場上（戰鬥位＋備戰區）找一隻，回 `{ inst, zone }`。
+- `attachEnergyToOwnPokemonByIid(state, idx, hostIid, energies)`：依 iid 附能，戰鬥位／備戰區都涵蓋。
+
+`regPost` 在**互換前**抓住本體 iid，放進 `pendingSelection.params.hostIid`；resolver 改用它定位。
+舊 state（升版前已經開好的 pending）沒有 `hostIid` → fallback 回舊行為，不讓進行中的對局卡住。
+找不到本體時**不動手牌**（能量不可以憑空消失）。
+
+⭐ **通則**：凡是「跨越一個 `pendingSelection` 之後才結算」的自體目標，一律 **iid 追蹤、禁用位置**。
+
+### ② 「picker 開了又被後續 withPending 覆蓋」這一維的掃描結果
+
+寫了掃描器（剝註解 → 遞迴求出所有「會開 pending」的 helper 閉包 → 掃每個
+`regPost/regA/regR` body 內 opener 出現次數 ≥2 者），49 個候選逐一讀 body。
+
+結論：**`withPending` 的 queue 機制讓「覆蓋」這件事整站不存在**；真正會出事的是
+**「第一個 pending 改變了盤面位置，第二個 pending 的 resolver 卻用位置定位」**。
+會改變自己戰鬥位的 opener 只有 `selfSwapPostInline`（6 個呼叫點）、`tryPromptPromoteActive`、
+`selfKOInstance`。逐一檢查：
+
+| 卡 | 第二個 pending | 判定 |
+|---|---|---|
+| 大電海燕ex｜迴旋充能 | hand-choose 附能給「這隻寶可夢」 | **BUG（本版修）** |
+| 鐵包袱｜內部噴射 | 強制對手互換（對手側） | OK（不受自互影響） |
+| 遠古巨蜓｜陀螺音波／風妖精｜急速折返／音波龍ex｜狡兔三窟 | 無 | OK |
+| 激流旋渦／烏栗／m6-sigana-swap | 換位本身，不再指涉本體 | OK |
+| 阿羅拉 椰蛋樹ex｜嗡嗡榍石／千面避役｜擊斃／伊裴爾塔爾ex｜死亡靈魂 | KO 對手，目標帶 iid | OK |
+
+⇒ 這一維 **outlier 只有 1 張**。
+
+### ③ 暴噬龜｜鐵壁硬殼 — 依傷害量判定的免疫在所有手動傷害路徑失效
+
+卡面（`static/cards/SV7.json` id 10921・H）：
+
+> 「這隻寶可夢不會受到對手的寶可夢「200」以上的招式的傷害。」
+
+官方裁定（`PTCG RULES/PTCG_RULES.md`，唯一權威）：
+- §17.27.D L1750-1751：故勒頓ex「瘋狂衝擊」220 −「硬硬束帶」30 ＝ 190 → **可以造成傷害**
+  ⇒ 判準是**減傷之後實際造成的傷害**，不是招式印刷值。
+- §17.27.D L1762-1763：電燈怪「閃電伏特」140 對【雷】弱點的暴噬龜 → **不可以造成傷害**，
+  「由於先計算弱點」⇒ **弱點×2 也計入**。
+- §17.27.B L1730-1731：古簡蝸ex「追擊蔦」對**備戰區**的暴噬龜 → **不可以造成傷害**
+  ⇒ **備戰區同樣適用**。
+
+**根因**：`passiveImmunityDamageBlock` 以假值 `baseDamage = 1` 探測述詞（它同時服務會被
+UI 預覽呼叫的 `resolveBenchGuard`，那裡拿不到真實傷害）⇒ `1 >= 200` 恆 false ⇒ 鐵壁硬殼在
+**所有**手動結算傷害的路徑上永遠不成立。引擎主傷害管線（`engine.ts` 5400 附近）有傳真實
+`baseDamage`，且位置正好在弱點／抵抗／防守方減傷**之後** —— 那裡一直是對的，也就是官方三條
+判例都能通過的原因；漏的是狙擊／多目標／備戰 AOE／油之機關槍這些自跑傷害迴圈的路徑。
+
+**修法（中央收斂）**：
+1. `DAMAGE_AMOUNT_DEPENDENT_IMMUNITY`（逐卡宣告，目前只有「鐵壁硬殼」）。
+2. `passiveImmunityDamageBlock` **跳過**表內特性 —— **行為等價**（`1 >= 200` 本來就恆 false），
+   所以 **UI 預覽端（`resolveBenchGuard`）零行為變化**，並以測試釘住預期值（不得 blocked）。
+3. 新增 `passiveImmunityByDamageAmount(state, actorIdx, targetCard, pool, finalDamage)`，
+   前置判定（初始化消除／火箭隊的監視塔）與 `passiveImmunityDamageBlock` 完全一致。
+4. 接到 5 條自跑傷害迴圈的**最終傷害算完之後、擲幣免傷與 on-damaged 之前**（鏡射引擎順序）：
+   `dealAttackDamageToTarget`（狙擊／延後型，active＋bench）、`snipe-multi`、
+   `clone-strike-multi-hit`、`hitBenchAll`、油之機關槍（`mega_decks.ts`）。
+   flat／`skipDefEffects`（「不計算受傷寶可夢身上的附加效果」）招式一律 bypass，
+   與同一段的擲幣免傷判準一致。
+
+**為什麼不塞進 `resolveMultiTargetDamageGuard`**：那支閘在算傷害**之前**跑（要決定整個 target
+跳不跳過），那時候還沒有傷害量。早於弱點判會把「110×弱點2＝220」誤判成 110 而漏擋。
+
+### ④ 「以假傷害值探測被動免疫」這一維
+
+全站掃 `PASSIVE_IMMUNITY` 述詞的呼叫點，只有兩處傳字面量：`passiveImmunityDamageBlock`（本版修）
+與 `passiveCoinImmunity`（唯一 entry「順滑大衣」不看傷害量，無害）。其餘 hook
+（`PASSIVE_DAMAGE_REDUCE*` / `TOOL_PREVENT_KO` …）都傳真實傷害。**維度乾淨。**
+
+守衛 `test-v6165-damage-threshold-immunity.mjs` 掃 `PASSIVE_IMMUNITY` 每個述詞的**第 2 個參數名**：
+不以 `_` 開頭 ＝ 有在用傷害量，卻沒登記進 `DAMAGE_AMOUNT_DEPENDENT_IMMUNITY` ⇒ FAIL。
+含掃描器自我驗證（正對照：故意餵「有用／沒用／只有一個參數」三種樣本）、下限斷言、死條目檢查。
+
+### ⑤ 瑪機雅娜｜自動治癒（站長裁定：維持現狀）
+
+已確認 v6.164 就是 per-energy-card：`applyMagearnaHandAttachHeal` 的 `energyCardCount` 參數
+→ `perCard × N`（附 2 張回 180），比照耿鬼ex｜侵蝕詛咒（官方 §17.21.F 一次附 2 張放 4 個指示物）。
+測試已釘住：`test-hand-attach-percard-reaction.mjs` 兩處 90×2＝180 斷言。**本版不動。**
+
+### ⑥ Fable 5 審查後補強（逐項自行查證過才採納）
+
+**採納（真洞）**：
+1. **`passiveImmunityByDamageAmount` 缺特性有效性 gate。** engine 主管線逐特性過
+   `isAbilityHolderEffective`（含**傳說的熔岩洞**：雙方場上所有**進化**寶可夢特性全部消除），
+   新 helper 原本只做 `isInitializeNullified` ＋ 監視塔。暴噬龜是 **Stage1**（查 `SV7.json`）⇒
+   熔岩洞在場時鐵壁硬殼應失效，否則兩條路徑對「特性還在不在」給出不同答案。
+   → helper 改收 `target: CardInstance` ＋ `opts.isBench`，迴圈內走 `isAbilityHolderEffective`。
+   （舊 `passiveImmunityDamageBlock` 也有同款缺口，但它對鐵壁硬殼恆 false，這個缺口是本版才「可達」。）
+2. **`bench-hit-N`（`hitBenchPickPost` 的 resolver）是第 6 條自跑傷害迴圈，漏接。**
+   目前 caller 最大 130 ⇒ 今天打不到門檻、不是 live bug，仍一併接上。
+3. **守衛枚舉盲點**：原掃描器只用 `applyDefenderCoinAvoid(` 當錨點且只掃 `effects.ts` ⇒
+   hitBenchAll／bench-hit-N（走 `passiveCoinImmunity`）與油之機關槍（在 `mega_decks.ts`）
+   永遠掃不到，「把那兩行刪掉守衛照樣全綠」。→ 改用 `_applyBenchAbilityReduce(`（每條迴圈恰好一個，
+   往**後**找）＋ `applyDefenderCoinAvoid(`（往**前**找）雙錨點，跨兩檔掃，下限 ≥8，四種正對照。
+4. **迴旋充能沒觸發 瑪機雅娜｜自動治癒。** `applyMagearnaHandAttachHeal` 的舊註解假設
+   「攻擊型從手牌附能的攻擊者自己佔住戰鬥位 ⇒ 不可能與自動治癒共存」——**迴旋充能會先互換**，
+   換上來的那一隻可以是瑪機雅娜，是該假設的例外（v6.164 的幸福禮物已是同款先例）。
+   → resolver 補呼叫，per-energy-card（附 2 張回 180），測試釘住。
+5. **resolver 未自驗 client 送來的 iids**（v6.009 紀律）→ 補「只認手上的基本【雷】能量」再驗一次。
+6. 註解筆誤的守衛檔名修正。
+
+**不採納（附理由）**：
+- 「`dealAttackDamageToTarget` 的 `noWeakness` 應比照 snipe-multi 的 `!flat` bypass 新免疫」——
+  **不改**。`noWeakness` 的卡面語意是「這個招式的傷害**不計算弱點・抵抗力**」（重磅驟雨／橄欖石音波），
+  與 flat/`skipDefEffects` 的「**不計算受傷寶可夢身上的附加效果**」是兩回事；只有後者才 bypass 防禦方
+  的免疫。維持現狀＝正確。
+- 「declaredHost 有值但不在場時應留手牌而非 fallback 到 active」—— fallback 是為了**舊 state 相容**
+  （升版前已開好、沒有 hostIid 的 pending），不加此分支對局才不會卡住；且該情境不可達。
+
+### 守衛（皆有 HEAD-FAIL 證明）
+
+- `scripts/test-v6165-swirl-charge-host-iid.mjs`（8 項）— 還原 v2750＋_shared 至 BASE ⇒ **5 FAIL**。
+- `scripts/test-v6165-damage-threshold-immunity.mjs`（19 項）— 移除 effects.ts 的 2 個插入點
+  （保留 export，證明「插入點」本身必要）⇒ **5 FAIL**。
+  含：宣告表掃描器（第 2 參數名判準 ＋ 三種正對照 ＋ 死條目檢查）、傷害迴圈枚舉（雙錨點跨檔 ＋ 四種正對照
+  ＋ 下限 ≥8）、UI 預覽端零行為變化的釘樁、官方三條判例的行為斷言、熔岩洞消除特性的對照。
+
 ## v6.164 — 兩個玩家回報：①「每次附能」的反應要 per-energy-card ②多目標招式對戰鬥位漏 PASSIVE_IMMUNITY
 
 ### 回報 1：耿鬼ex｜侵蝕詛咒 對「金色火焰填 2 顆火能量」只放 2 個指示物（應為 4 個）

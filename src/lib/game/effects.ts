@@ -1245,6 +1245,11 @@ function hitBenchAll(
         reduceLogs.push(`${card.name}：${r.logs.join('、')}`);
       }
     }
+    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）—— 最終傷害算完後才判，鏡射引擎主管線順序。
+    if (attackerIdx !== targetIdx && perAmt > 0) {
+      const _pdt = passiveImmunityByDamageAmount(coinWS, attackerIdx, c, card, pool, perAmt, { isBench: true });
+      if (_pdt.blocked) { teraImmunNames.push(`${card?.name ?? '?'}（${_pdt.reason}）`); newBench.push(c); continue; }
+    }
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
@@ -1446,6 +1451,13 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       if (r.logs.length > 0) {
         benchReduceLogs.push(`${card.name}：${r.logs.join('、')}`);
       }
+    }
+    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）—— 最終傷害算完後才判（官方 §17.27.B：
+    //   備戰區同樣適用）。目前 bench-hit-N 的 caller 最大 130 ⇒ 今天打不到門檻，
+    //   但這條迴圈與其他五條同型，一併接上避免下一張卡靜默失效。
+    if (targetIdx !== actorIdx && perAmt > 0) {
+      const _pdt = passiveImmunityByDamageAmount(st, actorIdx, c, card, pool, perAmt, { isBench: true });
+      if (_pdt.blocked) { guardBlockedLog.push(`${card?.name ?? '?'}：${_pdt.reason}`); newBench.push(c); continue; }
     }
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, st);
@@ -4166,6 +4178,28 @@ export const PASSIVE_IMMUNITY = new Map<string, ImmunityCheck>([
 //   的 active 分支共用同一判定。只認「純 boolean predicate」型 entry（依攻擊方屬性判定、無副作用）；
 //   跳過「順滑大衣」這種擲幣 mutate state 的 entry（resolveBenchGuard 會被 UI 預覽呼叫，預覽不能擲幣）—
 //   擲幣型免疫仍只在主管線（active 防守方）生效。
+/**
+ * ⭐ v6.165【逐卡宣告】`PASSIVE_IMMUNITY` 裡**依「這一次的傷害量」判定**的特性名。
+ *
+ * 這張表存在的理由：`passiveImmunityDamageBlock` 服務的路徑（含會被 UI 預覽呼叫的
+ * `resolveBenchGuard`）**拿不到真實傷害**，只能拿 `baseDamage = 1` 去探測述詞。對
+ * 「攻擊方是不是 ex／有沒有特性」這種**與傷害量無關**的述詞完全正確；但對
+ * **暴噬龜｜鐵壁硬殼**（卡面 SV7 10921：「這隻寶可夢不會受到對手的寶可夢『200』以上的
+ * 招式的傷害。」）這種依傷害量的述詞，`1 >= 200` 恆為 false ⇒ **該特性在所有手動結算
+ * 傷害的路徑上永遠不成立**（引擎主傷害管線有傳真實 baseDamage，那裡一直是對的）。
+ *
+ * ⇒ 這類特性改由 `passiveImmunityByDamageAmount` 在**最終傷害算完之後**判定
+ *   （鏡射 engine.ts 主管線的順序：弱點／抵抗 → 防守方減傷 → PASSIVE_IMMUNITY → 擲幣免傷）。
+ *
+ * ⚠ 新增「依傷害量」的免疫特性時**必須**同時登記到這裡，否則它會被
+ *   `passiveImmunityDamageBlock` 以假值 1 探測 ⇒ 靜默失效。
+ *   `scripts/test-v6165-damage-threshold-immunity.mjs` 會掃 `PASSIVE_IMMUNITY` 的每個述詞，
+ *   凡是「第 2 個參數（baseDamage）沒有以 `_` 開頭」＝有在用傷害量，卻不在本表 ⇒ FAIL。
+ */
+export const DAMAGE_AMOUNT_DEPENDENT_IMMUNITY = new Set<string>([
+  '鐵壁硬殼',  // 暴噬龜（SV7 10921・H）— 免疫「200」以上的招式傷害
+]);
+
 export function passiveImmunityDamageBlock(
   state: GameState,
   actorIdx: 0 | 1,
@@ -4186,11 +4220,61 @@ export function passiveImmunityDamageBlock(
   if (!atkCard) return { blocked: false };
   for (const ab of targetCard.abilities) {
     if (ab.name === '順滑大衣') continue; // 擲幣型，有副作用，不在無狀態/預覽 guard 內呼叫
+    // v6.165：依「傷害量」判定的述詞（鐵壁硬殼）不能用假值 1 探測 —— 交給
+    //   passiveImmunityByDamageAmount 在最終傷害算完後判。**行為等價**：
+    //   `1 >= 200` 本來就恆 false，所以這一行不改變任何既有結果（含 UI 預覽端）。
+    if (DAMAGE_AMOUNT_DEPENDENT_IMMUNITY.has(ab.name)) continue;
     const immune = PASSIVE_IMMUNITY.get(ab.name);
     if (!immune) continue;
     const result = immune(atkCard, 1, state, actorIdx, pool, targetCard.name);
     if (result === true) {
       return { blocked: true, reason: `${ab.name}（不受對手該寶可夢招式的傷害）` };
+    }
+  }
+  return { blocked: false };
+}
+
+/**
+ * ⭐ v6.165【中央收斂】「依這一次的傷害量判定」的被動完全免疫（暴噬龜｜鐵壁硬殼）。
+ *
+ * **呼叫時機（非常重要）**：必須在該 target 的**最終傷害算完之後**、寫進 `damage` 之前，
+ * 且在 on-damaged 反應／擲幣免傷之前 —— 鏡射 `engine.ts` 主傷害管線的既有順序
+ * （弱點×2 → 抵抗力 → 防守方減傷 → **PASSIVE_IMMUNITY** → 擲幣免傷 → on-damaged）。
+ * 早於弱點去判，「170×弱點2＝340」就會被判成 170 而漏擋。
+ *
+ * **為什麼不塞進 `resolveMultiTargetDamageGuard`**：那支閘是在算傷害**之前**跑的
+ * （它要決定「這個 target 要不要整個跳過」），那時候還沒有傷害量可用。
+ *
+ * @param finalDamage 這一次**實際即將造成**的傷害（已含弱抗／加成／減傷）。
+ * @returns blocked=true 時 caller 應 log `reason` 並把該 target 的傷害視為 0（不觸發 on-damaged）。
+ */
+export function passiveImmunityByDamageAmount(
+  state: GameState,
+  actorIdx: 0 | 1,
+  target: CardInstance | undefined,
+  targetCard: Card | undefined,
+  pool: Map<string, Card>,
+  finalDamage: number,
+  opts: { isBench: boolean },
+): { blocked: true; reason: string } | { blocked: false } {
+  if (!targetCard?.abilities || !target || !(finalDamage > 0)) return { blocked: false };
+  const atkInst = state.players[actorIdx].active;
+  const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
+  if (!atkCard) return { blocked: false };
+  const defenderIdx = (1 - actorIdx) as 0 | 1;
+  const loc: 'active' | 'bench' = opts.isBench ? 'bench' : 'active';
+  for (const ab of targetCard.abilities) {
+    if (!DAMAGE_AMOUNT_DEPENDENT_IMMUNITY.has(ab.name)) continue;
+    const immune = PASSIVE_IMMUNITY.get(ab.name);
+    if (!immune) continue;
+    // ⭐ 特性有效性走中央 isAbilityHolderEffective（鐵荊棘ex｜初始化／火箭隊的監視塔／
+    //   **傳說的熔岩洞**（消除進化寶可夢特性；暴噬龜是 Stage1）／暗夜羽擊／黏著束縛…），
+    //   與 engine.ts 主傷害管線同一條判準 —— 兩條路徑不可以對「特性還在不在」有不同答案。
+    if (!isAbilityHolderEffective(state, target, targetCard, defenderIdx, ab.name, loc, pool)) continue;
+    // 依傷害量的述詞一律是純 boolean（無副作用、不擲幣）—— 由守衛釘住，故此處不 thread state。
+    const result = immune(atkCard, finalDamage, state, actorIdx, pool, targetCard.name);
+    if (result === true) {
+      return { blocked: true, reason: `${ab.name}（不受此傷害量的對手招式傷害）` };
     }
   }
   return { blocked: false };
@@ -8286,6 +8370,14 @@ export function dealAttackDamageToTarget(
       st = updatePlayer(st, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === targetIid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
     }
   }
+  // v6.165：依傷害量判定的被動免疫（暴噬龜｜鐵壁硬殼）。狙擊/延後型招式對戰鬥位可以輕鬆
+  //   超過 200（例：180 × 弱點 2 = 360），過去這條路徑用假值 1 探測 ⇒ 該特性完全失效。
+  if (kind === 'attack-damage' && effDmg > 0) {
+    const _pdt = passiveImmunityByDamageAmount(st, actorIdx, target, targetCard, pool, effDmg, { isBench: !isActive });
+    if (_pdt.blocked) {
+      return addLog(st, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
+    }
+  }
   // v5.599 受招式傷害擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套（中央 helper 過去漏,只引擎主管線有）。
   if (kind === 'attack-damage' && effDmg > 0) {
     const _ca = applyDefenderCoinAvoid(st, target, targetCard, dIdx, effDmg, pool);
@@ -10608,6 +10700,15 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
       if (_rd.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄
         const _td = _rd.toolToDiscard;
         s = updatePlayer(s, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === iid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
+      }
+    }
+    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）。flat（「不計算受傷寶可夢身上的附加效果」）
+    //   招式一律 bypass，與 engine skipDefEffects 及上方擲幣免傷同一判準。
+    if (effDmg > 0 && !flat) {
+      const _pdt = passiveImmunityByDamageAmount(s, actorIdx, target, targetCard, pool, effDmg, { isBench: !isActive });
+      if (_pdt.blocked) {
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
+        continue;
       }
     }
     // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套
@@ -15426,6 +15527,14 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       if (_rd.toolToDiscard) { // v5.818：防具道具果實觸發 → 從備戰目標丟棄
         const _td = _rd.toolToDiscard;
         s = updatePlayer(s, dIdx, pl => ({ ...pl, bench: pl.bench.map(b => b.iid === iid ? _stripBenchTool(b, _td.iid) : b), discard: [...pl.discard, _td] }));
+      }
+    }
+    // v6.165：依傷害量判定的被動免疫（鐵壁硬殼）—— 最終傷害算完後才判。
+    if (dmg > 0) {
+      const _pdt = passiveImmunityByDamageAmount(s, actorIdx, target, targetCard, pool, dmg, { isBench: !isActive });
+      if (_pdt.blocked) {
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
+        continue;
       }
     }
     // v5.599 擲幣免傷（躲藏高手/腎上腺費洛蒙）：active+bench 皆套

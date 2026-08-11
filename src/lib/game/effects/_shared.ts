@@ -1263,6 +1263,57 @@ export function updatePlayer(
 }
 
 /**
+ * ⭐ v6.165【中央收斂】依 iid 在「自己場上」（戰鬥位 ＋ 備戰區）找一隻寶可夢。
+ *
+ * **為什麼需要**：卡面寫「**這隻寶可夢**」＝使用招式／特性的那一隻本體。可是有一整類
+ * 卡面是「先互換／換位，**然後**……附於這隻寶可夢身上」——互換之後本體已經不在戰鬥位了。
+ * 用 `players[idx].active` 定位本體就會打到「剛換上來的那一隻」（v6.165 玩家可見 bug：
+ * 大電海燕ex｜迴旋充能 的 2 張基本【雷】能量附錯對象）。
+ *
+ * ⇒ **凡是「跨越一個 pendingSelection 之後才結算」的自體目標，一律用 iid 追蹤，禁用位置。**
+ * （`withPending` 有 `pendingChainQueue`：同一個 ATTACK_POST 內開的第二個 picker 會排隊，
+ *   等第一個 resolve 完才輪到 —— 這中間盤面已經變了。）
+ */
+export function findOwnFieldPokemon(
+  state: GameState,
+  idx: 0 | 1,
+  iid: string | undefined | null,
+): { inst: CardInstance; zone: 'active' | 'bench' } | null {
+  if (!iid) return null;
+  const p = state.players[idx];
+  if (p.active?.iid === iid) return { inst: p.active, zone: 'active' };
+  const b = p.bench.find(c => c.iid === iid);
+  return b ? { inst: b, zone: 'bench' } : null;
+}
+
+/**
+ * ⭐ v6.165【中央收斂】把能量卡實體附到「自己場上指定 iid」的那一隻寶可夢身上
+ * （戰鬥位或備戰區都可以）。找不到該 iid（已被擊倒／已離場）時原封不動回傳。
+ *
+ * ⚠ 本 helper **只做附加**；「從手牌附能」的對手／自方反應（侵蝕詛咒／麻痺門牙／
+ * 瑪機雅娜｜自動治癒）仍由呼叫端各自以 `fireOnHandEnergyAttached` /
+ * `applyMagearnaHandAttachHeal` 觸發（它們要的是 per-energy-card 次數）。
+ */
+export function attachEnergyToOwnPokemonByIid(
+  state: GameState,
+  idx: 0 | 1,
+  hostIid: string | undefined | null,
+  energies: CardInstance[],
+): GameState {
+  if (!hostIid || energies.length === 0) return state;
+  if (!findOwnFieldPokemon(state, idx, hostIid)) return state;
+  return updatePlayer(state, idx, p => ({
+    ...p,
+    active: p.active && p.active.iid === hostIid
+      ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] }
+      : p.active,
+    bench: p.bench.map(b => b.iid === hostIid
+      ? { ...b, energyAttached: [...b.energyAttached, ...energies] }
+      : b),
+  }));
+}
+
+/**
  * v4.934：產生「卡名連結」marker 字串，用於 addLog 訊息內嵌精確 iid。
  *   `${cardLink(inst.iid, card.name)} 被擊倒！` → 玩家點該卡名 button → 直接定位該 inst。
  * 解決原本只用 string-match + sourceIid hint 在「同名多隻」場景對應錯誤的問題。

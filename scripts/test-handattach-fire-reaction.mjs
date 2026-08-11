@@ -23,6 +23,10 @@ for (const f of readdirSync(dir)) { if (!f.endsWith('.json') || f === 'index.jso
 
 const GENGAR = '16916', TORNADUS = '17081', ENTEI = '16583', URSALUNA = '10607', WISHIWASHI = '12775', WUGTRIO = '10518';
 const E_FIRE = '18518', E_FIGHT = '11178', E_WATER = '18519';
+// v6.165：迴旋充能的卡面是「選擇最多2張『基本【雷】能量』卡」，resolver 已依 v6.009 紀律
+//   自驗 client 送來的 iid ⇒ fixture 必須用**基本【雷】能量**（原本誤用基本【水】能量，
+//   舊實作不驗才會通過）。⚠ 常數 WUGTRIO=10518 其實就是 大電海燕ex（命名沿用，id 正確）。
+const E_LIGHTNING = '18520';
 let nn = 0;
 const inst = (cid, e = {}) => ({ iid: 'i' + (++nn), cardId: String(cid), damage: 0, energyAttached: [], ...e });
 const eng = (cid) => ({ iid: 'e' + (++nn), cardId: String(cid), damage: 0, energyAttached: [] });
@@ -63,12 +67,15 @@ T('★經驗法則:從手牌附能→侵蝕詛咒+20', () => {
 });
 
 // (3) 迴旋充能 — h-wave2-attach-from-hand
+//   v6.165：params 不帶 hostIid（模擬升版前開好的舊 pending）→ resolver fallback 回戰鬥位，
+//   對局不會卡住；侵蝕詛咒仍要 per-card 觸發。
 T('★迴旋充能:從手牌附能→侵蝕詛咒+20', () => {
-  const st = mk(WUGTRIO, [E_WATER]); // active 占位即可
+  const st = mk(WUGTRIO, [E_LIGHTNING]); // active = 大電海燕ex(10518)
   const energyIid = st.players[0].hand[0].iid;
   st.pendingSelection = { type: 'hand-choose', actorIdx: 0, sourcePlayerIdx: 0, minCount: 0, maxCount: 2, effectKey: 'h-wave2-attach-from-hand', params: {} };
   const out = applyAction(st, RESOLVE([energyIid]), pool);
   assert.equal(out.players[0].active.damage, 20, '附能後 +20(HEAD=0)');
+  assert.equal(out.players[0].active.energyAttached.length, 1, 'v6.165 舊 pending(無 hostIid) 仍附到戰鬥位');
 });
 
 // (4) 漸強波 — sakura-crescendo-attach

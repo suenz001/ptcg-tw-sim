@@ -11,6 +11,7 @@ import {
   bareCardsForReturn, // v5.781 bounce 到牌庫中央收斂
   getOwnBenchLimit, countAttachedEnergyAsUnits, energyMatchesType,
   fireOnHandEnergyAttached, // v5.782 從手牌附能→對手反應
+  findOwnFieldPokemon, attachEnergyToOwnPokemonByIid, // v6.165 互換後仍要附給本體 → 一律 iid 追蹤
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
@@ -20,6 +21,7 @@ import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
 import { getBasicEnergyType } from '../../engine'; // v6.009 resolver 端 re-validate 基本能量屬性(防作弊)
 import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
 import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
@@ -1620,16 +1622,27 @@ regPost('班基拉斯ex|暴君粉碎', oppDiscardChosenConcealedPost(1, '暴君�
 // ══════════════════════════════════════════════════════════════════════════════
 // === Section 15: 自身互換、對手互換、自方備戰互換 ===
 // ══════════════════════════════════════════════════════════════════════════════
-// 大電海燕ex|迴旋充能 — 自互 + 從手牌挑最多 2 張基本雷能量附自身
+// 大電海燕ex|迴旋充能 — 自互 + 從手牌挑最多 2 張基本雷能量附「這隻寶可夢」
+// 卡面（SV-P-H 10518，static/cards 台灣官方，唯一權威）：
+//   「將這隻寶可夢與備戰寶可夢互換。然後，從自己的手牌選擇最多2張『基本【雷】能量』卡，
+//     附於這隻寶可夢身上。」
+// ⭐ v6.165 兩件事：
+//   ① 互換**確實要發生**。`withPending` 遇到已有 pending 會 push 進 `pendingChainQueue`
+//      （不是覆蓋），所以 bench-choose(互換) → hand-choose(附能) 依序解，順序正確。
+//   ② 「這隻寶可夢」＝**使用招式的大電海燕ex 本體**，不是互換後新上場的那一隻。
+//      互換完成後本體人在**備戰區** ⇒ 附能目標一律用 **iid 追蹤**（`params.hostIid`），
+//      **禁用位置**（舊版寫死 `players[aIdx].active` ⇒ 2 張雷能量全附到換上來的那隻）。
 regPre('大電海燕ex|迴旋充能', (s) => ({ state: s, damage: 0 }));
 regPost('大電海燕ex|迴旋充能', (state, aIdx, pool) => {
-  // 1) 自互
   let s = state;
+  // 本體 iid：先在互換前抓住，之後不管它被換到哪一區都追得到。
+  const hostIid = state.players[aIdx].active?.iid;
   // 2) 提供 hand-choose 互動讓玩家挑 0~2 張基本雷能量
   const validIids = state.players[aIdx].hand.filter(c => {
     const card = pool.get(c.cardId);
     return isEnergyOfType(card, 'Lightning') && card?.subtype === 'Basic';
   }).map(c => c.iid);
+  // 1) 自互（開 bench-choose；備戰為空時中央 helper 自己會跳過）
   s = selfSwapPostInline('迴旋充能')(s, aIdx, pool);
   if (validIids.length > 0) {
     s = withPending(s, {
@@ -1638,7 +1651,7 @@ regPost('大電海燕ex|迴旋充能', (state, aIdx, pool) => {
       filter: 'BasicEnergy:Lightning',
       minCount: 0, maxCount: Math.min(2, validIids.length),
       effectKey: 'h-wave2-attach-from-hand',
-      params: { validIids },
+      params: { validIids, hostIid },
     });
   }
   return s;
@@ -1646,17 +1659,41 @@ regPost('大電海燕ex|迴旋充能', (state, aIdx, pool) => {
 regR('h-wave2-attach-from-hand', (state, aIdx, iids, _params, pool) => {
   if (iids.length === 0) return state;
   const set = new Set(iids);
-  const hostIid = state.players[aIdx].active?.iid; // v5.782 附能目標(迴旋充能後自身戰鬥位)
-  const after = updatePlayer(addLog(state, `從手牌附 ${iids.length} 張能量到自身`, aIdx), aIdx, p => {
-    const energies = p.hand.filter(c => set.has(c.iid));
-    return {
-      ...p,
-      hand: p.hand.filter(c => !set.has(c.iid)),
-      active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] } : null,
-    };
-  });
+  // v6.165：附能目標＝招式宣告時記下的本體 iid（互換後可能在備戰區）。
+  //   舊 state（升版前開好的 pending）沒有 hostIid → 退回舊行為(戰鬥位)，不讓對局卡住。
+  const declaredHost = (_params as { hostIid?: string } | undefined)?.hostIid;
+  const hostIid = (declaredHost && findOwnFieldPokemon(state, aIdx, declaredHost))
+    ? declaredHost
+    : state.players[aIdx].active?.iid;
+  // v6.009 紀律：resolver 收到的是 client 送來的 iids ⇒ 自己再驗一次「真的是手上的
+  //   基本【雷】能量卡」（與 regPost 產 validIids 時同一組判準），不信任 client。
+  {
+    const allow = new Set(state.players[aIdx].hand.filter(c => {
+      const card = pool.get(c.cardId);
+      return isEnergyOfType(card, 'Lightning') && card?.subtype === 'Basic';
+    }).map(c => c.iid));
+    for (const i of [...set]) if (!allow.has(i)) set.delete(i);
+    if (set.size === 0) return state;
+  }
+  // 找不到本體（理論上不可能：自己的招式不會把自己打死）→ 不動手牌，能量不可以憑空消失。
+  const hostFound = findOwnFieldPokemon(state, aIdx, hostIid);
+  if (!hostFound) return addLog(state, '迴旋充能：找不到附能目標，能量留在手牌', aIdx);
+  const energies = state.players[aIdx].hand.filter(c => set.has(c.iid));
+  const hostName = pool.get(hostFound.inst.cardId)?.name ?? '自身';
+  let after = updatePlayer(
+    addLog(state, `從手牌附 ${set.size} 張能量到 ${hostName}`, aIdx),
+    aIdx, p => ({ ...p, hand: p.hand.filter(c => !set.has(c.iid)) }),
+  );
+  // v6.165：中央 helper 依 iid 附能（戰鬥位／備戰區都找得到），禁用位置。
+  after = attachEnergyToOwnPokemonByIid(after, aIdx, hostIid, energies);
+  // v6.165：自方 瑪機雅娜｜自動治癒（卡面「只要這隻寶可夢在**戰鬥場上**，每次從自己的手牌
+  //   將能量卡附於寶可夢身上時，將那隻寶可夢恢復『90』HP」）。
+  //   ⚠ 一般的攻擊型「從手牌附能」不需要接（攻擊者自己佔住戰鬥位，不可能同時是瑪機雅娜）——
+  //     但**迴旋充能會先互換**，換上來的那一隻可以是瑪機雅娜 ⇒ 這張是該假設的例外。
+  //   per-energy-card（附 N 張回 90×N），與 v6.164 侵蝕詛咒同一個「每次＝每張」判準。
+  after = applyMagearnaHandAttachHeal(after, aIdx, hostIid ? [hostIid] : [], pool, set.size);
   // v6.164：卡面「最多2張」→ per-energy-card 觸發（侵蝕詛咒/麻痺門牙 各張都算）
-  return hostIid ? fireOnHandEnergyAttached(after, aIdx, hostIid, pool, iids.length) : after; // v5.782 補對手反應
+  return hostIid ? fireOnHandEnergyAttached(after, aIdx, hostIid, pool, set.size) : after; // v5.782 補對手反應
 });
 
 // 遠古巨蜓|陀螺音波 110 — 自互

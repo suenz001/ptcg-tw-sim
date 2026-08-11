@@ -26,6 +26,7 @@ import {
   koPrizesAdjusted,
   fireDefenderOnDamaged,
   resolveMultiTargetDamageGuard,   // v6.141 多目標傷害免疫中央閘
+  passiveImmunityByDamageAmount,   // v6.165 依傷害量判定的被動免疫（鐵壁硬殼）
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -676,6 +677,16 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     //   凸凸頭盔 / 扣殺能量 / 尖刺盔甲 / 還擊斧…)。收斂共用中央 fireDefenderOnDamaged(與 dealAttackDamageToTarget、
     //   snipe-multi 同一條);on-damaged 先於 KO(卡面「受到傷害時」即使被打死仍觸發)。備戰目標不觸發。
     //   玩家回報:油之機關槍打席多藍恩(灼熱之軀)沒灼傷攻擊方——本 resolver 自跑傷害迴圈漏了這步。
+    // v6.165：依傷害量判定的被動免疫（暴噬龜｜鐵壁硬殼「不受『200』以上的招式傷害」）——
+    //   本 resolver 自跑傷害迴圈，最終傷害在這裡才算得出來（count×20＋buff），故在此判。
+    //   免疫成立 ⇒ 該 target 這一次不受傷害，也不觸發 on-damaged（鏡射引擎主管線）。
+    if (finalDmg > 0) {
+      const _pdt = passiveImmunityByDamageAmount(s, actorIdx, target, targetCard, pool, finalDmg, { isBench: isBenchTargetOO });
+      if (_pdt.blocked) {
+        s = addLog(s, `${label}：${targetCard?.name ?? '?'} ${_pdt.reason}`, actorIdx);
+        continue;
+      }
+    }
     if (defender.active?.iid === iid && finalDmg > 0) {
       s = fireDefenderOnDamaged(s, dIdx, actorIdx, finalDmg, pool);
       if (s.phase === 'game-over') return s;  // 反傷把攻擊方打死 → game-over
