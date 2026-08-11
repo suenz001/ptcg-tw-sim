@@ -17,6 +17,128 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.166 — 首頁嵌入 YouTube 最新影片（lazy facade，點擊前零播放器負擔）
+
+站長需求：把 @ptcg-tw-sim 頻道的**最新**宣傳影片放在首頁「玩家社群 QR Code 之下、版本更新記錄之上」，
+但**不能增加玩家進站的載入負擔**，原則是「勿擾民、確定要看才載入」。
+
+頻道 channelId = `UCddJpPmz3z66MHTRpuVr17A`（從頻道頁 HTML 取得，並以 RSS 回傳的 `yt:channelId` 交叉驗證）。
+
+### ① 為什麼不直接嵌 iframe
+
+直接放 `<iframe src="https://www.youtube.com/embed/...">` 會在首頁載入時就把 YouTube 播放器拉進來
+（約 1MB 以上的 JS、十幾個第三方請求、還會種 cookie），而這一區在版面下方、多數玩家根本不會看。
+改用 **lazy facade**：先畫一張 `i.ytimg.com/vi/<id>/hqdefault.jpg` 縮圖 ＋ 純 CSS 播放鍵，
+**按下去才把 iframe 換上來**（`youtube-nocookie.com/embed/<id>?autoplay=1&rel=0`）。
+
+縮圖選 `hqdefault`（實測 17,020 bytes）而不是 `maxresdefault`（168,245 bytes）。
+`hqdefault` 是 4:3、上下有黑邊，用 `object-fit: cover` 裁成 16:9；載入失敗才退 `mqdefault`。
+
+### ② 實測負擔（vite build 前後對照，同一台機器、同一份 node_modules）
+
+| 項目 | BASE v6.165 | v6.166 | 差 |
+|---|---|---|---|
+| 首頁 route node JS（gzip） | 6,238 | 7,289 | **+1,051** |
+| 首頁 CSS（gzip） | 2,932 | 3,324 | **+392** |
+| 未捲到／未點擊時的額外 HTTP 請求 | — | — | **0** |
+
+- 捲到影片區時：**1 個**跨域請求 `i.ytimg.com` 17,020 bytes（`loading="lazy"`，沒捲到就不下載）
+- SW install 會多預快取一份 `static/home-video.json`（117 bytes，每版一次，不在首頁載入路徑上）
+- 對 YouTube 播放器的請求：**只有按下播放鍵之後才有**
+
+⚠措辭要精確：「對 YouTube 網域零請求」只在**未捲動且未點擊**時成立 ——
+縮圖的 `i.ytimg.com` 就是 Google 網域，捲近這一區時 IP/UA 就會送給 Google（該網域不設 cookie）。
+
+### ③ 「最新影片」三個方案的取捨 —— 選 (a) 建置時抓一次
+
+| 方案 | runtime 成本 | 站長操作 | 風險 |
+|---|---|---|---|
+| (a) build 時抓 RSS，編進 bundle | **0 個額外請求** | 發片後跟著出下一版即可 | build 多一次外部請求（已 fail-open） |
+| (b) admin 後台手動填影片 ID | 首頁多一次 Firestore 讀取 | 每次發片都要開後台貼 ID | 忘了貼就永遠是舊片 |
+| (c) Oracle 代理 RSS + 伺服器快取 | 首頁多一次跨服務請求 | 全自動 | 首頁目前**完全不依賴** Oracle，等於新增一個失敗面 |
+
+站長的優先序是「勿擾民、不增加負擔」＞「一定要即時最新」，(a) 是唯一能做到
+**玩家端對 YouTube 零 runtime 依賴**的：YouTube 掛掉、變慢、被擋，首頁都不受影響。
+本站幾乎每天出版，發片之後只要跟著出下一版，影片就會自動換成最新的。
+
+⭐**且刻意不做 runtime fetch**（初版做過，Fable 覆核時要求拿掉，查證後採納）：
+這份資料建置時就定案，runtime 再抓一次換不到任何即時性，卻要多一個請求，
+而且區塊會在首繪之後才插進「社群區」與「更新記錄」之間，把下面的內容往下推（＝CLS）。
+改成 `import homeVideoData from '$lib/home-video.json'` 讓 vite 編進 bundle：
+**首繪就決定畫不畫這一區，零額外請求、零位移。**
+
+### ④ fail-open，而且不可以「倒退」
+
+`scripts/fetch-latest-video.mjs` 是 `npm run build` 的第一步。初版只有兩層（RSS → repo 內舊值），
+Fable 覆核抓到破口：第 N 版抓到新片 X ⇒ 站上顯示 X；第 N+1 版 RSS 掛了 ⇒ 退回 commit 裡的舊片，
+**站上影片會倒退**。因此改成三個候選、取 `publishedAt` 最新者：
+
+1. YouTube 頻道 RSS
+2. 正式站現行的 `https://www.ptcg-tw-sim.com/home-video.json`（＝上一次成功發布的值）
+3. repo 內既有的 `src/lib/home-video.json`（最後保底）
+
+所以 build 會把同一份內容寫兩個地方：`src/lib/home-video.json`（給 bundle import，玩家端唯一用到的）
+與 `static/home-video.json`（**玩家端不讀**，只是把「本次成功發布的值」發佈出去，給下一次 build 當備援）。
+
+三個全部拿不到才寫空值 ⇒ 首頁整區不顯示。任何一步都不丟例外、不讓 build 失敗。
+前端那一側也一樣：`videoId` 不是合法的 11 碼就當作沒有影片，元件整個不渲染。
+
+⚠已知風險（記著，不修）：GitHub Actions 是 datacenter IP，YouTube 的 feeds 端點對這類 IP 有 429 前科；
+真被長期擋住的話會停在「正式站現行值」而不會壞掉，但 console 那行 log 沒人會看到。
+另外測試站與正式站是各自 build 各自抓，兩站顯示的影片有可能短暫不同。
+RSS 第一個 entry 也可能是 Shorts／排程首映，那種情況縮圖在、按下去 embed 會說無法播放。
+
+### ⑤ CLS 與手機直式
+
+`.hv-stage` 是 `aspect-ratio: 16 / 9` 的固定比例容器，縮圖與 iframe 都 `position:absolute; inset:0`
+填滿它 ⇒ 縮圖載入前後高度一樣，點擊換成 iframe 也不抽動。
+⚠`.hv-stage` **刻意不設 flex**（v6.030 首頁 changelog 爆版就是把裝內容的容器設成 flex）。
+手機直式：`width:100%` + `max-width:640px`，沒有任何寫死的像素寬；
+`@media (max-width: 480px)` 只縮播放鍵與內距（首頁允許 `@media`，「禁用 @media 當手機開關」是針對對戰頁）。
+
+### ⑥ 版面數量：首頁只有一套（長期記憶要更新）
+
+記憶寫的是「首頁有新舊雙版面，改首頁兩套都要處理」——**這條已經過時**：
+`v6.044` 已把 classic 版與切換鈕整套移除（見 `scripts/test-home-layout-switch.mjs` 開頭的沿革）。
+本版守衛第 ⑨ 條把這件事釘住：日後若又變回雙版面，`homeLayout` / `ptcg_home_layout` /
+`setHomeLayout` / `hm-switch` 任一出現就 FAIL，提醒必須兩套都補上影片區。
+
+### ⑦ 守衛 `scripts/test-v6166-home-video-facade.mjs`（19 條）
+
+⚠不用 grep。這支守衛**真的把元件 SSR 渲染出來**
+（`svelte compile → generate:'server'` → `svelte/server` 的 `render()`），對渲染出的 HTML 下斷言：
+
+- ① 預設狀態的 HTML **不得含 iframe**，且「會發出網路請求的資源」恰好只有 1 個（縮圖）
+- ② `initiallyPlaying=true` 渲染出的 iframe，src 必須以 `https://www.youtube-nocookie.com/embed/<id>` 開頭且含 `autoplay=1`
+- ③ `videoId=''` 渲染輸出必須是空字串（連空殼容器都不能留）
+- ④ **template AST 祖先鏈**：iframe 必須在 `{#if playing}` 的 consequent 內、且同時在 `{#if videoId}` 內；
+  facade 按鈕的 `onclick` 必須把 `playing` 設為 true —— 補上 SSR 點不到的那一段
+- ⑩ 首頁**不得**出現 `fetch(...home-video...)`（擋「改回 runtime fetch」造成的請求與位移）
+- ⑭ `pickNewest` 的「不倒退」語意：RSS 掛掉時要退到正式站現行值而非 repo 舊值
+
+`initiallyPlaying` 這個 prop 只為了讓守衛能渲染出「已按下播放」的 DOM；
+第 ⑧ 條反過來鎖住**首頁不得傳它**，且該條先剝註解再掃、並附自我驗證正反例。
+
+最後有 5 條 **mutation 自我驗證**：拿刻意寫壞的元件變體（iframe 不包在 if 內／換成 www.youtube.com／
+沒影片仍渲染／拿掉 `loading="lazy"`）重跑同一組檢查函式，壞樣本必須被擋下 —— 抓不到就代表守衛失效。
+
+HEAD-FAIL 證明（BASE `53628879782c966ec338eb8063e0450a502c66cc`）：
+- BASE 全樹：頂層 assert 直接失敗（`src/lib/HomeVideo.svelte` 不存在）
+- 情境 A「元件都在但 `+page.svelte` 沒接線」：⑦⑩ FAIL —— 這正是「接線沒接上」那類事故
+- 情境 B「接線接好但元件改成 naive 直接嵌 iframe」：①④ FAIL
+
+### ⑧ 其他順手處理
+
+- `scripts/test-v6101-img-retry.mjs` 的 `EXEMPT` 加 `class="hv-thumb"`：`retryImg` 是為**官網卡圖 CDN**
+  寫的（切代理、加 cache-buster、套重試佔位樣式），套在 YouTube 縮圖上只會做出錯誤的代理請求；
+  這張圖失敗有自己的處理（`onerror` → `mqdefault`），再失敗也只剩深色底＋播放鍵。
+- `oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 跟到 6.166（`test-v6160-checkin-version-gate` 鎖住）。
+- changelog.html 加第 51 則會超過 50 則上限，最舊的 v6.094 已搬進 `static/changelog-archive.html`。
+- 加了 `svelte-ignore state_referenced_locally`（`$state(initiallyPlaying)` 刻意只取初值）；
+  按下播放後把焦點移到 iframe（原本的 button 已離開 DOM，焦點會掉回 body）。
+- 已知限制：iOS Safari 對「點 facade 才建 iframe」的 `autoplay=1` 常不生效，玩家可能要再按一次播放
+  —— 這是 facade 模式的通病，不是壞掉。
+
 ## v6.165 — 站長裁定三項：①迴旋充能「這隻寶可夢」用 iid 追蹤 ②鐵壁硬殼在手動傷害路徑失效 ③自動治癒維持現狀
 
 ### ① 大電海燕ex｜迴旋充能 — 互換要真的發生，能量要附給「本體」

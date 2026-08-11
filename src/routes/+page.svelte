@@ -8,6 +8,8 @@
   import type { Unsubscribe } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
   import { hardRefreshNow } from '$lib/hard-refresh';   // v6.160 清快取唯一實作（與錦標賽報到共用）
+  import HomeVideo from '$lib/HomeVideo.svelte';    // v6.166 首頁最新影片（lazy facade，點擊前不建 iframe）
+  import homeVideoData from '$lib/home-video.json';  // v6.166 建置時寫入的最新影片（見 scripts/fetch-latest-video.mjs）
 
   // v2.53 我的回饋歷史 + admin 回覆顯示
   interface FeedbackHistoryItem {
@@ -26,6 +28,14 @@
   let status = $state('初始化中...');
   let changelogOverride = $state('');  // v5.755 admin 可在後台編輯的首頁更新記錄(Firebase config/homeChangelog);空=用程式內建
   let changelogBuiltin = $state('');   // v5.969 內建 changelog 改由 static/changelog.html 執行時 fetch(移出 bundle,縮小首頁 route node)
+  // v6.166 首頁「最新影片」：影片 ID 在**建置時**就由 scripts/fetch-latest-video.mjs
+  //   抓 YouTube 頻道 RSS 寫進 src/lib/home-video.json，這裡由 vite 直接編進 bundle。
+  //   ⭐所以玩家端：對 YouTube 零 runtime 依賴、零額外請求，而且首繪就決定要不要畫這一區
+  //     （不會等 fetch 回來才插進版面把下面的更新記錄往下推 ＝ 零版面跳動）。
+  //   ⚠fail-open：抓不到影片時這個 JSON 的 videoId 會是空字串 ⇒ 整區不顯示，首頁其餘照常。
+  //   ⚠仍然驗一次 11 碼格式：資料是建置時寫進來的，但不該讓任何來源直接決定 iframe 的網址。
+  const homeVideoId = /^[A-Za-z0-9_-]{11}$/.test(homeVideoData.videoId) ? homeVideoData.videoId : '';
+  const homeVideoTitle = homeVideoId ? homeVideoData.title : '';
 
   // v5.971：firebase 模組於 onMount 動態載入後填入;feedback 相關函式使用它們並以 guard 防未載入。
   let fbMod: typeof import('$lib/firebase') | null = null;
@@ -345,6 +355,10 @@
       </div>
     </div>
   </section>
+
+  <!-- v6.166 最新影片（站長指定位置：玩家社群 QR Code 之下、版本更新記錄之上）。
+       ⚠沒有影片設定時整個元件不渲染，這一段就完全不存在。 -->
+  <HomeVideo videoId={homeVideoId} title={homeVideoTitle} />
 
   <section class="changelog-section">
     <details class="changelog-outer">

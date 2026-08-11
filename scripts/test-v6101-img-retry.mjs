@@ -257,6 +257,11 @@ const FILES = [
  */
 const EXEMPT = [
   'coverUrl(',   // 卡包封面：站內 /covers/ 圖，由 Service Worker 快取，不走官網 CDN
+  // v6.166 首頁最新影片的 YouTube 縮圖（i.ytimg.com）。retryImg 是為**官網卡圖 CDN**寫的
+  //   （會切換 pokemon-card.com 的代理、加 cache-buster、套「重試中」佔位樣式），
+  //   套在 YouTube 縮圖上只會做出錯誤的代理請求。這張圖失敗有自己的處理：
+  //   onerror → 退回一定存在的 mqdefault；再失敗就只剩深色底＋播放鍵，功能完全不受影響。
+  'class="hv-thumb"',
 ];
 /**
  * 取出所有 <img …> 標籤。
