@@ -153,12 +153,18 @@ T('⭐樣本不足（sampleOk=false）的勝率一律顯示「—」，不管實
 });
 
 T('⭐佔比分母用 scanned 的副數，不可用 rows 的 usage 加總', () => {
-  const i = adm.indexOf('async function miDraw(');
-  const body = adm.slice(i, i + 2000);
-  assert.ok(/cur\.scanned/.test(body) && /casualDecks/.test(body),
-    '應讀 scanned.*Decks');
-  assert.ok(!/rows[\s\S]{0,80}reduce\(/.test(body),
+  // v1.71：分母／佔比收斂到 miComputeRows（單頁版 miDraw 與完整版多頁共用同一份），
+  //   判準因此從「miDraw 裡有沒有讀 scanned」改成「唯一那一份有沒有讀對 ＋ miDraw 有接上」。
+  const j = adm.indexOf('function miComputeRows(');
+  const one = adm.slice(j, adm.indexOf('\n}', j));
+  assert.ok(/cur\.scanned/.test(one) && /miDeckKey\(/.test(one), '唯一的分母來源沒有讀 scanned 的副數');
+  const k = adm.indexOf('function miDeckKey(');
+  assert.ok(/casualDecks/.test(adm.slice(k, k + 200)), 'miDeckKey 沒有對到 casualDecks / tournDecks');
+  assert.ok(!/rows[\s\S]{0,80}reduce\(/.test(one),
     '不可用 rows 加總當分母 —— 未分類那一大塊不在 rows 裡，會把每個原型的佔比灌水');
+  const i = adm.indexOf('async function miDraw(');
+  assert.ok(/miComputeRows\(/.test(adm.slice(i, i + 2000)),
+    'miDraw 沒有接上 miComputeRows —— 兩份分母只要改一邊就會靜默漂移');
 });
 
 T('⭐未分類不進排行（它常是第一名，混進去會有一根巨大長條主宰整張圖）', () => {

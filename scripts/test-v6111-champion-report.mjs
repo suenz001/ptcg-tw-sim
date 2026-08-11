@@ -110,7 +110,8 @@ T('⭐ 匯出按鈕在「牌組原型」分頁、與環境報告圖並排（Wils
 });
 
 T('⭐ 快取沒載過也要能產圖（按鈕換頁後 tournStatsCache 可能是 null）', () => {
-  const open = section(CRSEC, 'window.openChampionReportExport', 'window.renderChampionReportModal');
+  // v1.71：資料取得已收斂到 crLoadData（單頁版與完整版多頁共用同一份），本條改查那一段。
+  const open = section(CRSEC, 'async function crLoadData', 'window.renderChampionReportModal');
   ok(/api\('\/api\/tournament\/admin\/stats'\)/.test(open),
     '沒有在快取為空時自己補載 —— 使用者從沒開過「賽事統計」就會按不出圖');
 });
@@ -138,7 +139,8 @@ T('固定 2× 輸出，不用 devicePixelRatio（輸出檔跟本機螢幕無關�
 });
 
 T('⭐ 主力寶可夢 fallback 前有 await ensureCardIndex/ensureCardTags', () => {
-  const open = section(CRSEC, 'window.openChampionReportExport', 'window.renderChampionReportModal');
+  // v1.71：資料取得已收斂到 crLoadData（單頁版與完整版多頁共用同一份），本條改查那一段。
+  const open = section(CRSEC, 'async function crLoadData', 'window.renderChampionReportModal');
   ok(/await ensureCardIndex\(\);\s*await ensureCardTags\(\)/.test(open),
     '沒有 await 卡片索引與標籤 —— 會把支援型寶可夢當成主力，產出笑話圖');
 });

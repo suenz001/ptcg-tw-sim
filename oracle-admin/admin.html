@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.70</title>
+<title>PTCG Oracle Admin v1.71</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.70</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.71</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2540,6 +2540,14 @@ function renderDeckRules(el) {
            ⚠ 也**不受**賽事統計分頁的網站賽／社群賽篩選影響 —— 圖裡固定兩者都呈現。 -->
       <button id="champ-img-btn" onclick="openChampionReportExport()"
               title="產生可直接發佈給玩家的奪冠報告圖（1080×1350 PNG）；時間範圍用左邊的「統計範圍」">🏆 匯出奪冠報告圖</button>
+      <!-- v1.71（Wilson）：每週宣傳影片的素材。上面兩顆單頁版受版面限制會省略排名；
+           完整版改成 16:9 1920×1080 的多頁 PNG，打包成 ZIP（01.png、02.png…），
+           拖進 Canva 就是正確順序。⚠ 完整版與單頁版讀的是**同一份**統計
+           （miComputeRows／crBuild），只是排版不同，數字不會有第二種算法。 -->
+      <button id="meta-img-full-btn" onclick="openMetaImageFullExport()" disabled
+              title="環境報告完整版：不省略任何排名，1920×1080 多頁 PNG 打包成 ZIP（做影片用）">🎬 環境報告・完整版（多頁 ZIP）</button>
+      <button id="champ-img-full-btn" onclick="openChampionReportFullExport()"
+              title="奪冠報告完整版：不省略任何一筆，1920×1080 多頁 PNG 打包成 ZIP（做影片用）">🎬 奪冠報告・完整版（多頁 ZIP）</button>
     </div>
     <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
@@ -2856,7 +2864,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.167';
+window.SITE_VERSION_HINT = '6.168';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -2999,6 +3007,123 @@ function miStamp(ms) {
   return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
 }
 
+// ══ MP-PURE-BEGIN ── v1.71 完整版（多頁）的口徑與分頁：純函式，node 端可直接跑 ══
+//
+// ⭐ 統計口徑**只有這一份**：單頁版（miDraw）與完整版（mpPlanMeta）都從 miComputeRows
+//    拿 rows／分母／佔比函式。抄第二份必然漂移，而且漂移了不會有任何錯誤訊息。
+// ⚠ 這一段刻意寫成完全不碰 DOM／canvas，守衛才能真的把它跑起來 ——
+//    只驗「字串存在」的守衛擋不住「接線沒接上」。
+
+/** 該資料源在 scanned 裡的副數欄位名。（miTrend 與 miComputeRows 共用，避免兩份字面量。） */
+function miDeckKey(srcKey) { return srcKey === 'casual' ? 'casualDecks' : 'tournDecks'; }
+
+/**
+ * 報告圖的資料底：rows（後端已依 usage 由大到小排序）＋分母＋佔比函式。
+ * ⚠ 分母用 scanned 的副數，**不可**用 rows 的 usage 加總 —— 未分類那一大塊不在 rows 裡，
+ *   用加總當分母會把每個原型的佔比灌水。
+ * 回 null＝該資料源沒有任何命中原型（呼叫端據此不產圖）。
+ */
+function miComputeRows(srcKey, cur) {
+  const blk = cur && cur[srcKey];
+  if (!blk || !((blk.rows || []).length)) return null;
+  const total = (cur.scanned && cur.scanned[miDeckKey(srcKey)]) || 0;
+  return {
+    blk: blk,
+    rows: (blk.rows || []),
+    total: total,
+    share: function (u) { return total > 0 ? u / total : 0; },
+  };
+}
+
+/**
+ * 純分頁。回 [{ pageIndex, startRank, items }]；**所有頁的 items 加總 === 原始筆數**。
+ * ⚠ 空陣列也回 1 頁（空頁）：頁數永遠 >= 1，版面尺寸不會因為沒資料而消失。
+ */
+function mpPaginate(items, per) {
+  const list = items || [];
+  const n = Math.max(1, Math.floor(per) || 0);
+  const total = Math.max(1, Math.ceil(list.length / n));
+  const out = [];
+  for (let i = 0; i < total; i++) {
+    out.push({ pageIndex: i, startRank: i * n + 1, items: list.slice(i * n, (i + 1) * n) });
+  }
+  return out;
+}
+
+/** 收尾：補上全域頁碼。影片是一路播下去的，所以頁碼跨區段連續。 */
+function mpNumber(pages) {
+  pages.forEach(function (p, i) { p.page = i + 1; p.pageTotal = pages.length; });
+  return pages;
+}
+
+/**
+ * 環境報告完整版的頁面計畫。**不截斷任何一筆**（單頁版是 slice(0, MI.TOPN)）。
+ * 一般對戰的所有頁 → 錦標賽的所有頁；名次在各資料源內跨頁連續。
+ */
+function mpPlanMeta(cur, per) {
+  const pages = [];
+  ['casual', 'tourn'].forEach(function (srcKey) {
+    const st = miComputeRows(srcKey, cur);
+    if (!st) return;
+    // ⚠ 長條的滿長基準必須是**全體**最大佔比（不是本頁最大）——
+    //   每頁各自歸一化的話，第 3 頁的第 21 名會畫得跟第 1 名一樣長，直接騙人。
+    let peak = 0;
+    st.rows.forEach(function (r) { const s = st.share(r.usage); if (s > peak) peak = s; });
+    const chunks = mpPaginate(st.rows, per);
+    chunks.forEach(function (c, i) {
+      pages.push({
+        kind: 'meta', srcKey: srcKey, st: st, rows: c.items, peak: peak || 1,
+        startRank: c.startRank, sectionTotal: st.rows.length, sub: i + 1, subTotal: chunks.length,
+      });
+    });
+  });
+  return mpNumber(pages);
+}
+
+/**
+ * 奪冠報告完整版的頁面計畫。四個區段依序、每段自己分頁、名次在段內跨頁連續。
+ * ⚠ perChamp／perRank 用參數傳進來、不讀 CR —— 這樣守衛可以獨立跑這支純函式。
+ */
+function mpPlanChampion(d, perChamp, perRank) {
+  const pages = [];
+  const add = function (kind, icon, title, accent, items, per, unit) {
+    const list = items || [];
+    if (!list.length) return;
+    const peak = list[0] && list[0].n ? list[0].n : 1;   // rows 已依 n 由大到小排序
+    const chunks = mpPaginate(list, per);
+    chunks.forEach(function (c, i) {
+      pages.push({
+        kind: kind, icon: icon, title: title, accent: accent, unit: unit, peak: peak,
+        rows: c.items, startRank: c.startRank, sectionTotal: list.length,
+        sub: i + 1, subTotal: chunks.length,
+      });
+    });
+  };
+  // ⚠ 單位詞一律「位」，與單頁版 crDraw 的 rankRows 逐字一致 —— 同一週發出去的兩張圖
+  //   對同一筆資料寫不同單位，讀者一定會問哪個才對。（次數榜的「N 位」＝ N 位冠軍用了這副牌。）
+  // ⚠ 只有 1 場網站賽時「冠軍牌組次數榜」與「冠軍（逐場）」完全等價（每列都是 1），
+  //   那一頁沒有任何資訊量 —— 這是同一份資料的兩種呈現重複，不是把資料截斷掉。
+  const champRank = (d && d.siteChamps && d.siteChamps.length > 1) ? d.champRank : null;
+  add('rank', '🏆', '網站賽　冠軍牌組次數榜', 'a1', champRank, perRank, '位');
+  add('champ', '🏆', '網站賽　冠軍（逐場）', 'a1', d && d.siteChamps, perChamp, '');
+  add('rank', '🥈', '網站賽　四強牌組（含冠亞）', 'a2', d && d.t4Rows, perRank, '位');
+  add('rank', '👥', '社群賽　奪冠最多的牌組', 'c1', d && d.commRank, perRank, '位');
+  return mpNumber(pages);
+}
+
+/**
+ * 版面只放得下 3 則註腳，但 crNotes 最多會產 6 則；「已達查詢上限，更早的賽事未納入」
+ * 是「完整版其實不完整」的唯一警訊，一旦 t4Skipped／noCut／noChamp 同時成立就會被擠掉。
+ * ⇒ 把它提到第 2 則。⚠ 回新陣列，不動呼叫端傳進來的那份（單頁版還在用同一個 crNotes）。
+ */
+function mpHoistCapNote(notes) {
+  const out = (notes || []).slice();
+  const i = out.findIndex(function (t) { return String(t).indexOf('已達查詢上限') >= 0; });
+  if (i > 1) out.splice(1, 0, out.splice(i, 1)[0]);
+  return out;
+}
+// ══ MP-PURE-END ══════════════════════════════════════════════════════════════
+
 // logo 只載一次並快取。⚠`drawImage` 一張尚未 decode 完成的 Image 會**靜默不畫也不報錯**，
 //   成品就是 logo 憑空消失、完全沒有線索。用 decode() 而非 onload：它連解碼都等完。
 //   （icons/ 與 admin 頁面同源，所以畫進 canvas 不會 taint、toBlob 可正常匯出。）
@@ -3036,7 +3161,7 @@ function miTrend(days, cur, wide, srcKey) {
   //   撞到上限代表寬窗的舊資料根本沒被掃到，相減會憑空生出一整片「下降」。
   const cap = MI_SCAN_CAP[srcKey];
   if ((wide.scanned && wide.scanned[cap[0]] || 0) >= cap[1]) return off('資料量已達伺服器查詢上限，前期不完整');
-  const dk = srcKey === 'casual' ? 'casualDecks' : 'tournDecks';
+  const dk = miDeckKey(srcKey);
   const curN = (cur.scanned && cur.scanned[dk]) || 0;
   const prevN = ((wide.scanned && wide.scanned[dk]) || 0) - curN;
   if (curN <= 0) return off('本期沒有資料');
@@ -3060,15 +3185,15 @@ function miTrend(days, cur, wide, srcKey) {
 
 /** 產生一張報告圖。回 canvas（該資料源沒有任何命中原型時回 null）。 */
 async function miDraw(srcKey, cur, trend, days) {
-  const blk = cur[srcKey];
-  if (!blk || !(blk.rows || []).length) return null;
+  // ⭐ v1.71：rows／分母／佔比一律走 miComputeRows —— 單頁版與完整版（多頁）
+  //   共用同一份口徑；任何一邊自己再算一次都會靜默漂移。
+  const st = miComputeRows(srcKey, cur);
+  if (!st) return null;
+  const blk = st.blk;
   const S = MI.SRC[srcKey], K = MI.K;
-  const rows = (blk.rows || []).slice(0, MI.TOPN);      // rows 後端已依 usage 由大到小排序
-  const dk = srcKey === 'casual' ? 'casualDecks' : 'tournDecks';
-  // ⚠分母用 scanned 的副數，不要用 rows 的 usage 加總：未分類那一大塊不在 rows 裡，
-  //   用加總當分母會把每個原型的佔比灌水。
-  const total = (cur.scanned && cur.scanned[dk]) || 0;
-  const share = (u) => (total > 0 ? u / total : 0);
+  const rows = st.rows.slice(0, MI.TOPN);      // rows 後端已依 usage 由大到小排序
+  const total = st.total;
+  const share = st.share;
 
   const cv = document.createElement('canvas');
   cv.width = MI.W * MI.S; cv.height = MI.H * MI.S;
@@ -3297,6 +3422,334 @@ window.downloadMetaImage = function (srcKey) {
   }, 'image/png');
 };
 
+// ══ v1.71 完整版（多頁）報告圖：站長每週宣傳影片的素材 ══════════════════════
+//
+// 站長的流程：admin 按一下 → 拿到一疊 PNG → 拖進 Canva → 配背景音樂 → 上傳 YouTube。
+// 設計約束跟單頁版（4:5 直式、給 LINE／FB 轉發）完全不同：
+//
+//   ・**16:9 1920×1080、1× 輸出**：成品是 1080p 影片，畫布就等於影片的一個 frame。
+//     再放大 2× 只會被 Canva／YouTube 縮回去，白白多吃 4 倍記憶體（見下面的釋放）。
+//   ・**每頁尺寸完全一致**，最後一頁不足就留白、絕不縮版 —— 尺寸一跳，影片播放時會抖。
+//   ・**一筆都不截斷**：分頁走純函式 mpPlanMeta／mpPlanChampion，
+//     所有頁的筆數加總 === 原始筆數（守衛實跑釘住）。
+//   ・**每頁 8 筆**（不是 10）：1080 高扣掉品牌帶（0–140）、標題帶（140–290）、
+//     註腳與頁腳硬保留區（928–1080）後只剩約 630px。8 列可以給到 72px 列高、
+//     原型名 38px、勝率 46px；10 列會壓到 55px 列高、字級掉到 30px 以下。
+//     影片會被觀眾在手機上以約 400px 寬觀看（縮 0.21 倍），字級是這裡唯一該優先保住的。
+//   ・**檔名 01.png／02.png…**（頁數超過 99 自動補到 3 位）：Canva 匯入後就是正確順序。
+//   ・**ZIP 用 store（不壓縮）自己寫**：PNG 本來就已壓縮、store 不會變大；
+//     admin.html 目前只有 firebase 一個外部相依，不想為了打包再拉一支 CDN 函式庫進來
+//     （VM 端網路不穩時等於多一個單點失敗，而且離線就整個功能死掉）。
+
+const MP = {
+  W: 1920, H: 1080, S: 1, PAD: 72,
+  PER: 8,            // 名次類每頁筆數
+  PER_CHAMP: 5,      // 冠軍逐場列（資訊較多、列高 116）每頁筆數
+  ROW: 72, GAP: 8, ROW_CHAMP: 116, GAP_CHAMP: 10,
+  TOP: 296,          // 列區起點 y
+  NOTE_Y: 958, FOOT_Y: 1052,
+};
+
+// ══ MP-ZIP-BEGIN ── store-only ZIP（不壓縮）。純函式，守衛可實跑驗結構 ═════════
+const _mpCrcTab = (function () {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function mpCrc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = _mpCrcTab[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+/**
+ * files = [{ name, bytes:Uint8Array }] → ZIP Blob（method 0＝store）。
+ * ⚠ DOS 時間欄位要給真的值：填 0 等於 1980-00-00，部分解壓工具會抱怨或顯示怪日期。
+ */
+function mpZip(files) {
+  const enc = new TextEncoder();
+  const u16 = (v) => [v & 255, (v >>> 8) & 255];
+  const u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  const now = new Date();
+  const dosT = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+  const dosD = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+  const parts = [], central = [];
+  let off = 0, cdSize = 0;
+  for (const f of files) {
+    const nm = enc.encode(f.name);
+    const crc = mpCrc32(f.bytes), sz = f.bytes.length;
+    const lh = new Uint8Array([].concat(
+      u32(0x04034b50), u16(20), u16(0), u16(0), u16(dosT), u16(dosD),
+      u32(crc), u32(sz), u32(sz), u16(nm.length), u16(0)));
+    parts.push(lh, nm, f.bytes);
+    const ch = new Uint8Array([].concat(
+      u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(dosT), u16(dosD),
+      u32(crc), u32(sz), u32(sz), u16(nm.length), u16(0), u16(0), u16(0), u16(0),
+      u32(0), u32(off)));
+    central.push(ch, nm);
+    cdSize += ch.length + nm.length;
+    off += lh.length + nm.length + sz;
+  }
+  const end = new Uint8Array([].concat(
+    u32(0x06054b50), u16(0), u16(0), u16(files.length), u16(files.length),
+    u32(cdSize), u32(off), u16(0)));
+  return new Blob(parts.concat(central, [end]), { type: 'application/zip' });
+}
+// ══ MP-ZIP-END ═══════════════════════════════════════════════════════════════
+
+/**
+ * 逐頁產圖 → PNG bytes → 打包成 ZIP。
+ * ⚠ 一張 1920×1080 的 canvas 就佔約 8MB，十幾頁全留著會直接把分頁吃爆 ⇒
+ *   每頁轉完 blob 就把 canvas 縮成 1×1 讓 GC 回收（只釋放 backing store，不需 dispose）。
+ * ⚠ 每一頁的畫布尺寸都是同一組常數，不隨內容變動 —— 尺寸不一致剪成影片會跳動。
+ */
+async function mpExportPages(pages, drawFn, btn) {
+  const files = [];
+  const pad = Math.max(2, String(pages.length).length);
+  // ⚠ 現在 admin 全用系統字體，沒有 webfont；但只要哪天加了，第 1 頁會用 fallback 量寬、
+  //   後面幾頁用真字體，同一個牌組名在不同頁的截斷位置就會不一樣。一行保險。
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) { /* 舊瀏覽器沒有就算了 */ } }
+  // ⚠ miLogo 的 img.decode() 沒有逾時：icon 請求 hang 住（不是失敗，是不回應）時，
+  //   第一頁的 await 會永遠等下去、按鈕停在「產生中…」而且連 finally 都到不了。
+  //   先在這裡用一個有逾時的 race 預熱：逾時後 miLogo 內的 _miLogoTried 已經是 true，
+  //   後續每頁再呼叫都會立刻回 null（退成純文字站名），整批圖照樣產得完。
+  await Promise.race([
+    miLogo().catch(function () { return null; }),
+    new Promise(function (r) { setTimeout(r, 8000); }),
+  ]);
+  for (let i = 0; i < pages.length; i++) {
+    if (btn) btn.textContent = '產生中… ' + (i + 1) + '/' + pages.length;
+    const cv = document.createElement('canvas');
+    cv.width = MP.W * MP.S; cv.height = MP.H * MP.S;
+    const ctx = cv.getContext('2d');
+    if (MP.S !== 1) ctx.scale(MP.S, MP.S);
+    ctx.textBaseline = 'middle';
+    await drawFn(ctx, pages[i]);
+    const blob = await new Promise(function (res) { cv.toBlob(res, 'image/png'); });
+    if (!blob) throw new Error('第 ' + (i + 1) + ' 頁產生失敗');
+    files.push({ name: String(i + 1).padStart(pad, '0') + '.png',
+                 bytes: new Uint8Array(await blob.arrayBuffer()) });
+    cv.width = 1; cv.height = 1;
+  }
+  return mpZip(files);
+}
+
+function mpSaveBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  // ⚠立即 revoke 會讓部分瀏覽器取消下載，要延遲。
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+}
+
+/** 共用頁框：底、卡牌剪影、品牌帶、標題帶、**頁碼**、註腳保留區、頁腳。 */
+async function mpFrame(ctx, o) {
+  const K = MI.K, W = MP.W, H = MP.H, PAD = MP.PAD;
+  ctx.textBaseline = 'middle';
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, K.bg0); bg.addColorStop(1, K.bg1);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.strokeStyle = K.ln; ctx.globalAlpha = 0.4; ctx.lineWidth = 2;
+  for (const d of [[1770, 150, 0.22], [140, 950, -0.18]]) {
+    for (let i = 0; i < 3; i++) {
+      ctx.save(); ctx.translate(d[0], d[1]); ctx.rotate(d[2] + i * 0.17);
+      miRR(ctx, -63, -88, 126, 176, 10); ctx.stroke(); ctx.restore();
+    }
+  }
+  ctx.restore();
+
+  // ⚠ logo 一律走既有的 miLogo（內含 await img.decode()）—— drawImage 一張尚未 decode 的
+  //   Image 會**靜默不畫也不報錯**；多頁版一次畫十幾張，人工更不可能發現漏了哪一張。
+  const logo = await miLogo();
+  let tx = PAD;
+  if (logo) { ctx.drawImage(logo, PAD, 34, 88, 88); tx = PAD + 108; }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.txt; miFont(ctx, 42, true);
+  ctx.fillText('PTCG 台灣線上對戰模擬器', tx, 62);
+  ctx.fillStyle = K.dim; miFont(ctx, 28, false);
+  ctx.fillText(MI_URL, tx, 104);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = K.dim; miFont(ctx, 26, false);
+  ctx.fillText('資料截至 ' + new Date().toLocaleDateString('zh-TW'), W - PAD, 56);
+  ctx.fillStyle = K.txt; miFont(ctx, 34, true);
+  ctx.fillText('第 ' + o.page + ' / ' + o.pageTotal + ' 頁', W - PAD, 104);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = o.accent; miRR(ctx, PAD, 148, 10, 72, 5); ctx.fill();
+  ctx.fillStyle = K.txt; miFont(ctx, 60, true);
+  ctx.fillText(o.title, PAD + 30, 182);
+  ctx.fillStyle = K.dim; miFont(ctx, 30, false);
+  ctx.fillText(miFit(ctx, o.sub, W - PAD * 2 - 40), PAD + 30, 234);
+
+  // 註腳是硬保留區：列區永遠畫不到這裡（每頁筆數固定，不會像單頁版那樣長高）。
+  ctx.strokeStyle = K.ln; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, MP.NOTE_Y - 22); ctx.lineTo(W - PAD, MP.NOTE_Y - 22); ctx.stroke();
+  // ⚠ 影片會被觀眾在手機上以約 400px 寬觀看（縮 0.21 倍）：22px 的註腳只剩 4.6px，等於沒寫。
+  //   拉到 24px／行距 28（三行下緣 1026，離頁腳的 logo 頂 1036 還有 10px）。
+  ctx.fillStyle = K.dim; miFont(ctx, 24, false);
+  let ny = MP.NOTE_Y;
+  for (const t of (o.notes || []).slice(0, 3)) { ctx.fillText(miFit(ctx, t, W - PAD * 2 - 40), PAD, ny); ny += 28; }
+
+  // 頁腳：網址在圖上出現兩次（頂部小、底部大）—— 被裁切時至少留一個。
+  ctx.textAlign = 'center';
+  const cx = W / 2;
+  miFont(ctx, 28, true);
+  const line = MI_URL + '　・　本站為非官方、非營利之愛好者社群交流平台';
+  const lw = ctx.measureText(line).width;
+  if (logo) ctx.drawImage(logo, cx - lw / 2 - 46, MP.FOOT_Y - 16, 32, 32);
+  ctx.fillStyle = K.txt;
+  ctx.fillText(line, cx, MP.FOOT_Y);
+  ctx.textAlign = 'left';
+}
+
+/** 完整版：環境報告的一頁（版面 16:9，一列一筆）。 */
+async function mpDrawMeta(ctx, p) {
+  const K = MI.K, S = MI.SRC[p.srcKey], PAD = MP.PAD, W = MP.W;
+  const share = p.st.share;
+  const period = p.days > 0
+    ? miDate(Date.now() - p.days * 86400000) + '–' + miDate(Date.now())
+    : '全部時間';
+  const last = p.startRank + p.rows.length - 1;
+  await mpFrame(ctx, {
+    page: p.page, pageTotal: p.pageTotal, accent: S.a1,
+    title: '本期牌組環境報告',
+    sub: S.label + '　・　' + period + '　・　共 ' + p.st.total.toLocaleString('zh-TW') + ' 副'
+       + '　・　第 ' + p.startRank + '–' + last + ' 名（全部 ' + p.sectionTotal + ' 種牌組）',
+    notes: p.notes || [],
+  });
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = K.dim; miFont(ctx, 24, false);
+  ctx.fillText('牌組', 168, 268);
+  ctx.fillText('較上期', 706, 268);
+  ctx.fillText('使用率', 1012, 268);
+  ctx.fillText('使用次數', 1470, 268);
+  ctx.textAlign = 'right';
+  ctx.fillText('勝率', W - PAD, 268);
+  ctx.textAlign = 'left';
+
+  const peak = p.peak || 1;
+  p.rows.forEach(function (r, i) {
+    const y = MP.TOP + i * (MP.ROW + MP.GAP), mid = y + MP.ROW / 2;
+    const rank = p.startRank + i;
+    ctx.fillStyle = K.row; miRR(ctx, PAD, y, W - PAD * 2, MP.ROW, 12); ctx.fill();
+    if (rank <= 3) { ctx.fillStyle = [K.r1, K.r2, K.r3][rank - 1]; miRR(ctx, PAD, y, 6, MP.ROW, 3); ctx.fill(); }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = rank <= 3 ? K.r1 : K.dim; miFont(ctx, 38, true);
+    ctx.fillText(String(rank), PAD + 44, mid);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = K.txt; miFont(ctx, 38, true);
+    ctx.fillText(miFit(ctx, r.name, 500), 168, mid);
+
+    const t = p.trend && p.trend.ok ? p.trend.by.get(String(r.ruleId)) : null;
+    if (t && t.isNew) {
+      miFont(ctx, 26, true);
+      const tw = ctx.measureText('新登場').width + 26;
+      ctx.fillStyle = K.r1; miRR(ctx, 706, mid - 18, tw, 36, 18); ctx.fill();
+      ctx.fillStyle = K.bg1; ctx.textAlign = 'center';
+      ctx.fillText('新登場', 706 + tw / 2, mid);
+      ctx.textAlign = 'left';
+    } else if (t && typeof t.dPP === 'number') {
+      // ±1.5 個百分點以內視為雜訊。⚠給玩家看的圖不寫 pp／n= 這類統計術語。
+      const up = t.dPP >= 1.5, dn = t.dPP <= -1.5;
+      // ⚠ 這裡不重複寫「較上期」：表頭已經寫了、註腳也解釋了，省下來的寬度拿去把字級
+      //   從 28 拉到 32（手機上 28px ≈ 5.8px，讀不到）。
+      ctx.fillStyle = up ? K.up : (dn ? K.dn : K.mid); miFont(ctx, 32, true);
+      ctx.fillText(up ? '▲ +' + t.dPP.toFixed(1) + '%'
+                 : (dn ? '▼ ' + t.dPP.toFixed(1) + '%' : '－ 持平'), 706, mid);
+    }
+
+    const bw = Math.max(6, Math.round(300 * share(r.usage) / peak));
+    const g = ctx.createLinearGradient(1012, 0, 1012 + bw, 0);
+    g.addColorStop(0, S.a1); g.addColorStop(1, S.a2);
+    ctx.fillStyle = K.ln; miRR(ctx, 1012, mid - 9, 300, 18, 9); ctx.fill();
+    ctx.fillStyle = g; miRR(ctx, 1012, mid - 9, bw, 18, 9); ctx.fill();
+    ctx.fillStyle = K.txt; miFont(ctx, 32, false);
+    ctx.fillText(miPct(share(r.usage)), 1330, mid);      // 「12.3%」32px 約 85px 寬，止於 ~1415
+    ctx.fillStyle = K.dim; miFont(ctx, 30, false);
+    ctx.fillText(r.usage + ' 次', 1470, mid);            // 「9999 次」30px 約 110px，止於 ~1580
+
+    // ⚠樣本 <10 副一律顯示「—」，不管實際值多少（1 勝 0 負 = 100% 被截圖傳開就收不回來）。
+    ctx.textAlign = 'right';
+    if (!r.sampleOk || r.winRate === null || r.winRate === undefined) {
+      ctx.fillStyle = K.mid; miFont(ctx, 30, true);
+      ctx.fillText('—　資料太少', W - PAD, mid);          // 30px 約 180px 寬，起點 ~1668，不撞使用次數
+    } else {
+      ctx.fillStyle = r.winRate >= 0.52 ? K.up : (r.winRate < 0.48 ? K.dn : K.mid);
+      miFont(ctx, 46, true);
+      ctx.fillText(miPct(r.winRate), W - PAD, mid);
+    }
+    ctx.textAlign = 'left';
+  });
+}
+
+/** 註腳：與單頁版同一套說明；未分類只印在該資料源的最後一頁。 */
+function mpMetaNotes(p, trend) {
+  const notes = [];
+  notes.push((trend && trend.ok)
+    ? '▲▼ 是與上一期（' + miDate(trend.prevFrom) + '–' + miDate(trend.prevTo)
+      + '）相比的使用率增減，變化不到 1.5% 視為持平　・　使用不到 10 次的牌組不顯示勝率'
+    : '本期為單期成績，未與上期比較' + (trend && trend.reason ? '（' + trend.reason + '）' : '')
+      + '　・　使用不到 10 次的牌組不顯示勝率');
+  if (p.sub === p.subTotal) {
+    const u = (p.st.blk && p.st.blk.unclassified) || {};
+    notes.push('未分類 ' + (u.usage || 0).toLocaleString('zh-TW') + ' 副（'
+      + miPct(p.st.share(u.usage || 0)) + '　・　勝率 '
+      + (u.winRate === null || u.winRate === undefined ? '—' : miPct(u.winRate))
+      + '）　・　分類規則持續擴充中');
+  }
+  return notes;
+}
+
+let _mpBusy = false;
+
+window.openMetaImageFullExport = async function () {
+  if (_mpBusy) return;
+  if (!_archStats) { alert('請先按「📊 計算統計」。'); return; }
+  const btn = document.getElementById('meta-img-full-btn');
+  const label = btn ? btn.textContent : '';
+  _mpBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = '產生中…'; }
+  try {
+    // ⚠先把資料與參數快照成區域變數：產圖期間使用者可能又去動了時間下拉。
+    const cur = _archStats;
+    const days = Number(currentArchSince() || 0);
+    let wide = null;
+    if (days > 0) {
+      // 寬窗＝2N 天（含本期），相減才是「前一個等長窗」。與單頁版同一個推導。
+      try {
+        const r = await api('/api/admin/deck-archetype-stats?source=all&since='
+          + (Date.now() - days * 2 * 86400000));
+        if (r && !r.error) wide = r;
+      } catch (e) { wide = null; }
+    }
+    const pages = mpPlanMeta(cur, MP.PER);
+    if (!pages.length) { alert('目前沒有任何命中的牌組原型，無法產圖。'); return; }
+    const trends = { casual: miTrend(days, cur, wide, 'casual'), tourn: miTrend(days, cur, wide, 'tourn') };
+    for (const p of pages) {
+      p.days = days;
+      p.trend = trends[p.srcKey];
+      p.notes = mpMetaNotes(p, trends[p.srcKey]);
+    }
+    const zip = await mpExportPages(pages, mpDrawMeta, btn);
+    mpSaveBlob(zip, 'ptcg-meta-full-' + miStamp(Date.now()) + '.zip');
+    alert('已產生 ' + pages.length + ' 頁（01.png、02.png…），打包成 ZIP 下載。\n解壓後整批拖進 Canva 就是正確順序。');
+  } catch (e) {
+    alert('產圖失敗：' + (e && e.message ? e.message : e));
+  } finally {
+    _mpBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+};
+
 
 // ══ v1.66（站台 v6.111）奪冠報告圖 ═══════════════════════════════════════════
 //
@@ -3398,6 +3851,21 @@ function crBuild(allArchives, reportMap, days) {
     to: times.length ? Math.max.apply(null, times) : 0,
     capped: (allArchives || []).length >= 500,
   };
+}
+
+/**
+ * 奪冠報告的註腳（單頁版與完整版共用；口徑說明只有這一份）。
+ * ⚠ 這些數字是「為什麼圖上的場數對不上」的唯一線索，玩家會拿去跟大廳排行榜對。
+ */
+function crNotes(d) {
+  const notes = [];
+  notes.push('四強＝準決賽的 4 位選手（含冠亞）　・　社群賽只統計奪冠牌組、不列個人成績');
+  if (d.t4Skipped) notes.push('未滿 ' + CR.MIN_FOR_TOP4 + ' 人的賽事不計四強（' + d.t4Skipped + ' 場）');
+  if (d.noCut) notes.push('另有 ' + d.noCut + ' 場因賽程結構無法判定四強');
+  if (d.noChamp > 0) notes.push('另有 ' + d.noChamp + ' 場沒有冠軍（賽事取消或雙方未到）');
+  notes.push('牌組分類依 ' + new Date().toLocaleDateString('zh-TW') + ' 的分類規則');
+  if (d.capped) notes.push('已達查詢上限，更早的賽事未納入');
+  return notes;
 }
 
 /** 畫奪冠報告圖。沒有任何冠軍可列時回 null。 */
@@ -3513,13 +3981,7 @@ async function crDraw(d) {
   else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有社群賽', PAD + 8, y + 10); y += 46; }
 
   // ── 註腳（把口徑講清楚，避免玩家拿去跟大廳排行榜對數字時誤會）
-  const notes = [];
-  notes.push('四強＝準決賽的 4 位選手（含冠亞）　・　社群賽只統計奪冠牌組、不列個人成績');
-  if (d.t4Skipped) notes.push('未滿 ' + CR.MIN_FOR_TOP4 + ' 人的賽事不計四強（' + d.t4Skipped + ' 場）');
-  if (d.noCut) notes.push('另有 ' + d.noCut + ' 場因賽程結構無法判定四強');
-  if (d.noChamp > 0) notes.push('另有 ' + d.noChamp + ' 場沒有冠軍（賽事取消或雙方未到）');
-  notes.push('牌組分類依 ' + new Date().toLocaleDateString('zh-TW') + ' 的分類規則');
-  if (d.capped) notes.push('已達查詢上限，更早的賽事未納入');
+  const notes = crNotes(d);
   miFont(ctx, 22); ctx.fillStyle = K.dim;
   let ny = MI.H - 158;
   for (const t of notes.slice(0, 3)) { ctx.fillText(miFit(ctx, t, IW), PAD, ny); ny += 26; }
@@ -3535,8 +3997,11 @@ async function crDraw(d) {
   return cv;
 }
 
-window.openChampionReportExport = async function () {
-  if (_crBusy) return;
+/**
+ * 奪冠報告的資料取得（單頁版與完整版共用 —— 口徑只有這一份，抄第二份必然漂移）。
+ * 回 crBuild 的結果；失敗時已 alert 並回 null。
+ */
+async function crLoadData() {
   // ⚠ v6.112：按鈕移到「牌組原型」分頁後，使用者可能根本沒開過「賽事統計」→ 快取是 null。
   //   自己補載一次（同一支端點，載完賽事統計分頁也受惠）。
   if (!tournStatsCache || !((tournStatsCache.archives || []).length)) {
@@ -3546,23 +4011,29 @@ window.openChampionReportExport = async function () {
     } catch (e) { /* 下面統一報錯 */ }
   }
   if (!tournStatsCache || !((tournStatsCache.archives || []).length)) {
-    alert('讀不到賽事歸檔資料（或目前沒有已完賽的賽事）。'); return;
+    alert('讀不到賽事歸檔資料（或目前沒有已完賽的賽事）。'); return null;
   }
+  // ⚠ 主力寶可夢 fallback 需要卡片索引與標籤，沒 await 會產出「支援型寶可夢奪冠」的笑話圖。
+  await ensureCardIndex(); await ensureCardTags();
+  const days = Number(currentArchSince() || 0);
+  const since = days > 0 ? (Date.now() - days * 86400000) : 0;
+  const rep = await api('/api/admin/champion-report?since=' + since);
+  if (!rep || rep.error) { alert('取得奪冠資料失敗：' + ((rep && rep.error) || '未知錯誤')); return null; }
+  const map = new Map();
+  for (const e of (rep.events || [])) map.set(e.eventId, e);
+  // ⚠ 全量 archives，不是被 tsEventFilter 篩過的那份
+  return crBuild(tournStatsCache.archives || [], map, days);
+}
+
+window.openChampionReportExport = async function () {
+  if (_crBusy) return;
   const btn = document.getElementById('champ-img-btn');
   const label = btn ? btn.textContent : '';
   _crBusy = true;
   if (btn) { btn.disabled = true; btn.textContent = '產生中…'; }
   try {
-    // ⚠ 主力寶可夢 fallback 需要卡片索引與標籤，沒 await 會產出「支援型寶可夢奪冠」的笑話圖。
-    await ensureCardIndex(); await ensureCardTags();
-    const days = Number(currentArchSince() || 0);
-    const since = days > 0 ? (Date.now() - days * 86400000) : 0;
-    const rep = await api('/api/admin/champion-report?since=' + since);
-    if (!rep || rep.error) { alert('取得奪冠資料失敗：' + ((rep && rep.error) || '未知錯誤')); return; }
-    const map = new Map();
-    for (const e of (rep.events || [])) map.set(e.eventId, e);
-    // ⚠ 全量 archives，不是被 tsEventFilter 篩過的那份
-    const data = crBuild(tournStatsCache.archives || [], map, days);
+    const data = await crLoadData();
+    if (!data) return;                     // 失敗訊息由 crLoadData 統一 alert
     const cv = await crDraw(data);
     if (!cv) { alert('這個時間範圍內沒有任何冠軍紀錄，無法產圖。'); return; }
     _crOut = { cv: cv, stamp: miStamp(Date.now()) };
@@ -3603,6 +4074,101 @@ window.downloadChampionReport = function () {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }, 'image/png');
+};
+
+// ══ v1.71 奪冠報告・完整版（多頁）══════════════════════════════════════════
+// 單頁版會依剩餘空間砍列數（roomFor），完整版**一筆都不砍**：四個區段依序分頁，
+// 每頁固定筆數、固定 1920×1080。註腳與 crDraw 共用 crNotes（口徑只有一份）。
+
+/** 完整版：奪冠報告的一頁。 */
+async function mpDrawChampion(ctx, p) {
+  const K = MI.K, PAD = MP.PAD, W = MP.W;
+  const ACC = { a1: MI.SRC.tourn.a1, a2: MI.SRC.tourn.a2, c1: MI.SRC.casual.a1 };
+  const accent = ACC[p.accent] || ACC.a1;
+  const d = p.d || {};
+  const span = (d.from && d.to) ? (miDate(d.from) + '–' + miDate(d.to)) : '全部時間';
+  const last = p.startRank + p.rows.length - 1;
+  await mpFrame(ctx, {
+    page: p.page, pageTotal: p.pageTotal, accent: accent,
+    title: '本期奪冠報告',
+    sub: span + '　・　網站賽 ' + (d.nSite || 0) + ' 場　・　社群賽 ' + (d.nComm || 0)
+       + ' 場　・　共 ' + (d.entries || 0) + ' 人次參賽',
+    notes: p.notes || [],
+  });
+
+  ctx.textAlign = 'left'; ctx.fillStyle = accent; miFont(ctx, 34, true);
+  ctx.fillText(p.icon + ' ' + p.title + '　（第 ' + p.startRank + '–' + last
+    + ' 筆，全部 ' + p.sectionTotal + ' 筆）', PAD, 268);
+
+  if (p.kind === 'champ') {
+    p.rows.forEach(function (c, i) {
+      const y = MP.TOP + i * (MP.ROW_CHAMP + MP.GAP_CHAMP);
+      const n = p.startRank + i;
+      ctx.fillStyle = K.row; miRR(ctx, PAD, y, W - PAD * 2, MP.ROW_CHAMP, 12); ctx.fill();
+      ctx.fillStyle = accent; ctx.fillRect(PAD, y + 12, 6, MP.ROW_CHAMP - 24);
+      ctx.textAlign = 'center'; ctx.fillStyle = K.dim; miFont(ctx, 34, true);
+      ctx.fillText(String(n), PAD + 46, y + MP.ROW_CHAMP / 2);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = K.dim; miFont(ctx, 26, false);
+      ctx.fillText(miDate(c.finishedAt) + '　' + miFit(ctx, c.eventName, 420), PAD + 92, y + 34);
+      ctx.fillStyle = K.txt; miFont(ctx, 40, true);
+      const nm = miFit(ctx, c.name, 300);
+      const nw = ctx.measureText(nm).width;
+      ctx.fillText(nm, PAD + 92, y + 80);
+      ctx.fillStyle = accent; miFont(ctx, 38, true);
+      ctx.fillText(miFit(ctx, c.deck, 760), PAD + 124 + nw, y + 80);
+      ctx.textAlign = 'right'; ctx.fillStyle = K.dim; miFont(ctx, 28, false);
+      ctx.fillText(c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負', W - PAD - 20, y + 34);
+      ctx.textAlign = 'left';
+    });
+    return;
+  }
+
+  // 名次／次數列（絕對數，不畫比率 —— 奪冠是個位數事件）
+  const peak = p.peak || 1;
+  p.rows.forEach(function (r, i) {
+    const y = MP.TOP + i * (MP.ROW + MP.GAP), mid = y + MP.ROW / 2;
+    const n = p.startRank + i;
+    ctx.fillStyle = K.row; miRR(ctx, PAD, y, W - PAD * 2, MP.ROW, 12); ctx.fill();
+    if (n <= 3) { ctx.fillStyle = [K.r1, K.r2, K.r3][n - 1]; miRR(ctx, PAD, y, 6, MP.ROW, 3); ctx.fill(); }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = n <= 3 ? K.r1 : K.dim; miFont(ctx, 38, true);
+    ctx.fillText(String(n), PAD + 44, mid);
+    ctx.textAlign = 'left'; ctx.fillStyle = K.txt; miFont(ctx, 38, true);
+    ctx.fillText(miFit(ctx, r.name, 900), 168, mid);
+    // 長條 1200–1620（右側次數欄 44px 右對齊 1848，起點約 1710，還留 90px）
+    const bw = Math.max(10, Math.round(420 * (r.n / peak)));
+    ctx.fillStyle = K.ln; miRR(ctx, 1200, mid - 9, 420, 18, 9); ctx.fill();
+    ctx.fillStyle = accent; miRR(ctx, 1200, mid - 9, bw, 18, 9); ctx.fill();
+    ctx.textAlign = 'right'; ctx.fillStyle = K.txt; miFont(ctx, 44, true);
+    ctx.fillText(r.n + ' ' + p.unit, W - PAD, mid);
+    ctx.textAlign = 'left';
+  });
+}
+
+window.openChampionReportFullExport = async function () {
+  if (_mpBusy) return;
+  const btn = document.getElementById('champ-img-full-btn');
+  const label = btn ? btn.textContent : '';
+  _mpBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = '產生中…'; }
+  try {
+    const d = await crLoadData();          // ⭐與單頁版同一支資料來源
+    if (!d) return;
+    const pages = mpPlanChampion(d, MP.PER_CHAMP, MP.PER);
+    if (!pages.length) { alert('這個時間範圍內沒有任何冠軍紀錄，無法產圖。'); return; }
+    // 只調整完整版的顯示順序，crNotes 本身與單頁版的呈現都不動。
+    const notes = mpHoistCapNote(crNotes(d));
+    for (const p of pages) { p.d = d; p.notes = notes; }
+    const zip = await mpExportPages(pages, mpDrawChampion, btn);
+    mpSaveBlob(zip, 'ptcg-champions-full-' + miStamp(Date.now()) + '.zip');
+    alert('已產生 ' + pages.length + ' 頁（01.png、02.png…），打包成 ZIP 下載。\n解壓後整批拖進 Canva 就是正確順序。');
+  } catch (e) {
+    alert('產圖失敗：' + (e && e.message ? e.message : e));
+  } finally {
+    _mpBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
 };
 
 window.loadArchetypeStats = async function() {
@@ -3830,6 +4396,9 @@ function renderArchetypeStats() {
   // v1.64 有統計結果才開放匯出報告圖
   const _mib = document.getElementById('meta-img-btn');
   if (_mib) _mib.disabled = false;
+  // v1.71 完整版（多頁）同樣要有統計結果才能產
+  const _mibf = document.getElementById('meta-img-full-btn');
+  if (_mibf) _mibf.disabled = false;
 }
 
 function readRuleForm() {
