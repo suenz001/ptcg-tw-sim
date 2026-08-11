@@ -302,6 +302,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   const tUpcomingEvents = $derived(tEvents.filter((e: any) => e.status === 'registration' || e.status === 'draft').slice().sort(_byStart));
   let tIsAdmin = $state(false);
   let tEventPollTimer: ReturnType<typeof setInterval> | null = null;
+  // ⭐⭐⭐v6.161 大廳（＝沒有在對戰的人）降頻用的狀態。判準一律取自**伺服器回來的賽事資料**，
+  //   不看畫面狀態；而且每一項都 fail-open —— 判斷不出來就當作「在對戰」用正常頻率。
+  let _tEventOkAt = 0;        // /event 最後一次**成功**回應的時刻（0＝從沒成功過 ⇒ 一律正常頻率）
+  let _tLobbyResumeAt = 0;    // 最後一次「立刻恢復正常頻率」的時刻（輪次推進／回前景／剛進大廳）
+  let _tTabHidden = false;    // 分頁在背景（visibilitychange 維護；回前景會立即強制同步）
+  let _tLobbyEventAt = 0;     // 大廳輪詢三個端點各自的節奏錨點（時間判準，不用 v5.637 的輪數計數器）
+  let _tLobbyChatAt = 0;
+  let _tLobbyBracketAt = 0;
   let tTickTimer: ReturnType<typeof setInterval> | null = null; // v5.575 1秒tick平滑倒數
   let tClockOffset = $state(0);   // v5.575 伺服器時間 - 本機時間(對時，所有倒數用)
   let tChatClearedAt = $state(0); // v5.575 已知聊天清空時間(admin清空即時生效)
@@ -353,13 +361,26 @@ function _setupSelfPending(g: any, seat: number): string | null {
         tNow = Date.now() + tClockOffset; tournLoadEvent().then(() => tBracketLoad()); tChatLoad(); tChampionsLoad();
         // v5.637 降載：原本每 3s 同時打 5 支 API，大型錦標賽多人同時在大廳時把單一 node 進程打爆（事件迴圈尖峰→502）。
         //   常變的 /event /chat 維持 3s；/bracket /spectate 改每 3 tick(9s)；/champions（名人堂幾乎不變）只在進入大廳抓一次、不週期刷新（v5.647）。
-        let _tPollTick = 0;
+        // ⭐⭐⭐v6.161 「沒有在對戰的人」降頻：base tick 仍是 3 秒，實際多久送一次改由中央述詞
+        //   `tPollDesiredMs(false, 'lobby')` 決定（v5.637 的 `_tPollTick % 3` 是輪數計數器，
+        //   節奏一變就漂移——v6.148 在對戰端已經踩過同一個坑，這裡改成同一套時間判準）。
+        //   ⚠ `- 100` 是 setInterval 抖動的容差：沒有它的話，3050ms 的 tick 會讓「正常頻率」
+        //     每次都晚一整拍（3 秒變 6 秒），等於把快要上場的人也一起降頻了。
+        _tLobbyResumeAt = Date.now();   // 剛進大廳的 60 秒一律正常頻率（進場鈕與倒數都在這段出現）
+        _tLobbyEventAt = Date.now(); _tLobbyChatAt = Date.now(); _tLobbyBracketAt = Date.now();
         tEventPollTimer = setInterval(() => {
           tNow = Date.now() + tClockOffset;
-          _tPollTick++;
-          tournLoadEvent();
-          tChatLoad();
-          if (_tPollTick % 3 === 0) { tBracketLoad(); }
+          const _now = Date.now();
+          // ⚠⚠ 牆鐘被往回校（NTP／使用者改系統時間）會讓 `_now - 錨點` 變成負數 ⇒ 三個端點
+          //   一起停發，最壞停到牆鐘追上來為止（可能好幾分鐘）—— 那真的會害人被判未進場。
+          //   舊版每個 tick 無條件送、沒有這個弱點，所以這裡明確補回來：任一錨點跑到「未來」
+          //   就當作時鐘被動過，走 tLobbyResume() 重錨（fail-open：寧可多送一發）。
+          if (_tLobbyEventAt > _now || _tLobbyChatAt > _now || _tLobbyBracketAt > _now) tLobbyResume();
+          const _evMs = tPollDesiredMs(false, 'lobby');
+          const _brMs = _evMs * 3;   // /bracket 一向是 /event 的 1/3（v5.637），維持這個比例
+          if (_now - _tLobbyEventAt >= _evMs - 100) { _tLobbyEventAt = _now; tournLoadEvent(); }
+          if (_now - _tLobbyChatAt >= _evMs - 100) { _tLobbyChatAt = _now; tChatLoad(); }
+          if (_now - _tLobbyBracketAt >= _brMs - 100) { _tLobbyBracketAt = _now; tBracketLoad(); }
           // v5.647 降載：名人堂(/champions)移出輪詢——冠軍只在賽事結束才變,週期刷新無意義;
           //   只在「進入/重入錦標賽大廳」初始那次抓(上方首抓已有 tChampionsLoad()),降低 Oracle 負擔。
         }, 3000);
@@ -1343,7 +1364,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (typeof document === 'undefined') return;
     const onVis = (): void => {
       _visSeq++;   // v6.159 只是計數：背景頁籤的 rAF 根本不 fire，跨越可見性變動的重繪樣本必須丟棄
+      _tTabHidden = (document.visibilityState !== 'visible');   // ⭐v6.161 大廳降頻讀這個旗標
       if (document.visibilityState !== 'visible') return;
+      // ⭐⭐⭐v6.161 回前景 ⇒ 大廳輪詢**立刻**恢復正常頻率並馬上再抓一次。
+      //   ⚠⚠ 必須放在下面那行 `tStep !== 'playing'` 早退**之前** —— 大廳的人正好就是
+      //   tStep !== 'playing'，寫在早退之後等於完全沒接上（本專案反覆踩過的「早退擺錯位置」）。
+      tLobbyResume();
       tNow = Date.now() + tClockOffset;   // 先把時鐘拉回現在，倒數才不會用背景期間的舊值
       // ⚠ 與 tNow 同一個時鐘域（都是伺服器域）。寫成 Date.now() 的話兩者差值就是 tClockOffset，
       //   裝置時鐘慢 3 秒以上抑制永遠不生效、快 30 秒則抑制長達 33 秒（Fable 5 審查抓到）。
@@ -1355,6 +1381,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       void tForceResync();
       startTournamentPoll();
     };
+    _tTabHidden = (document.visibilityState !== 'visible');   // ⭐v6.161 初值（在背景載入的頁面不會收到 visibilitychange）
     document.addEventListener('visibilitychange', onVis);
     return () => { document.removeEventListener('visibilitychange', onVis); };
   });
@@ -4557,11 +4584,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
     catch (e: any) { tError = String(e?.message ?? e); }
   }
   async function tournLoadEvent() {
+    // ⭐⭐⭐v6.161 降頻的「立即恢復」判準：先記下套用這一發回應**之前**的輪次/狀態/我的對戰，
+    //   套用後若有任何一項變了，就是「輪次推進／我有新比賽」⇒ 立刻回正常頻率並馬上再抓一次。
+    //   ⚠ 必須在覆寫 tEvents/tMyMatch **之前**取，否則永遠比不出差異（「改了卻沒生效」的典型形式）。
+    const _prevSig = tEvents.map((e: any) => (e && e._id) + ':' + (e && e.currentRound) + ':' + (e && e.status)).join('|');
+    const _prevMatchId = (tMyMatch && tMyMatch.matchId) || '';
     try {
       const r = await tApi('/event');
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
       tEvents = Array.isArray(r.events) ? r.events : [];
       tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null; tMyBye = r.myBye ?? null;
+      // ⭐v6.161 只有真的拿到回應才算「判斷得出來」（fail-open 的另一半見 tPollDesiredMs 的 lobby 分支）。
+      _tEventOkAt = Date.now();
+      const _sig = tEvents.map((e: any) => (e && e._id) + ':' + (e && e.currentRound) + ':' + (e && e.status)).join('|');
+      const _matchId = (tMyMatch && tMyMatch.matchId) || '';
+      if (_prevSig !== '' && (_sig !== _prevSig || _matchId !== _prevMatchId)) tLobbyResume();
       // v6.160：舊版伺服器沒有這個欄位 ⇒ 維持 '' ⇒ 不擋任何人（fail-open）。
       tMinClientVer = (typeof r.minClientVer === 'string') ? r.minClientVer : '';
       notifyScan(tEvents, tMyMatch, Date.now() + tClockOffset);   // v6.022 報到開始 / 可進場（僅背景時發）
@@ -5274,13 +5311,46 @@ function _setupSelfPending(g: any, seat: number): string | null {
       tStep = 'lobby';
     } finally { tBusy = false; }
   }
+  // ⭐⭐⭐v6.161 「立刻回到正常頻率」的唯一入口：把三個節奏錨點歸零（下一個 base tick，≤3 秒，
+  //   就會送出 /event /chat /bracket），並把 _tLobbyResumeAt 推到現在（接下來 60 秒一律正常頻率）。
+  //   呼叫時機：①輪次推進／我有新比賽（tournLoadEvent 對照出差異） ②分頁回到前景 ③剛進大廳。
+  function tLobbyResume() {
+    _tLobbyResumeAt = Date.now();
+    _tLobbyEventAt = 0; _tLobbyChatAt = 0; _tLobbyBracketAt = 0;
+  }
   // ⭐⭐v6.148 輪詢節奏的**唯一**中央述詞（對戰與觀戰共用同一套判準）。
   //   ① 對戰已結束 → 大幅降頻（v6.146）。⚠ 是降頻不是停：`winner == null` 的平手要等管理員裁定，
   //      裁定會 bump 伺服器盤面版本，停掉輪詢玩家永遠等不到結果。
   //   ② 盤面「最近才變動過」＝雙方正在你來我往 → 加密到 600ms，把「對手動作到我看到」的
   //      最壞延遲從 1.2 秒砍半。長考／掛機時自動退回 1.2 秒，所以不會變成常態負載。
   //   ③ 其餘維持 1.2 秒。
-  function tPollDesiredMs(spectate: boolean): number {
+  function tPollDesiredMs(spectate: boolean, mode: 'battle' | 'lobby' = 'battle'): number {
+    // ⭐⭐⭐v6.161 lobby 分支：大廳（＝沒有在對戰的人）的 /event /chat /bracket 節奏
+    //   也收進這支中央述詞，**不另外寫一份**。40 人打到第四輪時，出局／輪空／
+    //   本輪已打完的人逐輪累積，卻一直以對戰中的頻率在打伺服器。
+    // ⚠⚠ 這裡每一條都是 **fail-open**：判斷不出來一律回正常頻率。
+    //   寧可多打伺服器，不可因為降頻害人晚一步發現比賽開始而被判未進場。
+    if (mode === 'lobby') {
+      const _now = Date.now();
+      // ① 從沒成功抓過 /event，或最近 30 秒沒有成功回應 ⇒ 判斷不出來 ⇒ 正常頻率。
+      if (_tEventOkAt <= 0 || (_now - _tEventOkAt) > 30000) return 3000;
+      // ② 剛輪次推進／剛回前景／剛進大廳 ⇒ 60 秒內一律正常頻率。
+      if (_tLobbyResumeAt > 0 && (_now - _tLobbyResumeAt) < 60000) return 3000;
+      // ③ 我本輪有還沒打完的對戰（含還沒進場）⇒ 正常頻率。這是最不能降的一群人。
+      //   伺服器的 myMatch 查的就是 status ≠ done 的本輪對戰，是權威資料、不是畫面狀態。
+      if (tMyMatch) return 3000;
+      // ④ 我已報名且該賽事正在報到／賽程產生中 ⇒ 正常頻率（下一步就是我的第一場）。
+      if (tEvents.some((e: any) => e && e.registered && (e.status === 'checkin' || e.status === 'bracket_ready'))) return 3000;
+      // ⑤ 其餘＝出局／輪空／本輪已打完／純逛大廳 ⇒ 降頻。
+      //   ⚠ base tick 是 3000ms，只有 3000 的倍數是**實際會發生**的間隔（v6.148 的量化教訓）：
+      //     寫 8000 會被量化成 9000，那就是文件與行為不符 ⇒ 誠實寫 9000。3 秒 → 9 秒。
+      //   ⚠ 遲到的代價：/event 是「我的下一場開始了」的輪詢通道，最壞多 6 秒才發現；
+      //     而輪次推進後還有 roundCountdownMin（預設 3 分）休息倒數 ＋ noShowMin（預設 5 分）
+      //     遲到容許，共 480 秒；6 秒佔 1.25%，不可能因此被判未進場。
+      //     （實作比對：一般對戰頁的跨房提醒 tAlertPollTimer 本來就是 30 秒一次。）
+      if (_tTabHidden) return 21000;   // 背景分頁再保守一點（回前景會立即強制同步，見 onVis）
+      return 9000;
+    }
     const g = game as { phase?: string; winner?: number | null; activePlayerIndex?: number } | null;
     if (g && g.phase === 'game-over') {
       if (spectate) return 10000;
