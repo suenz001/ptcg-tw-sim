@@ -162,7 +162,12 @@ const IDLE = 3;               // 3 分鐘判負
 
 // ── 3. 靜態：伺服器權威 actorSeat 的產生與回傳 ─────────────────────────────
 {
-  ok('/action 寫盤面時一併存 actorSeat', /lastActionAt: Date\.now\(\), actorSeat: currentActorSeat\(newGs\)/.test(SRC));
+  // ⚠ v6.170 把 /action 的「查重→套用→CAS 寫入」抽成純函式 `tActionApplyOnce`（守衛才跑得起來），
+  //   actorSeat 改由 deps 注入。意圖不變：**寫盤面的同一次 $set 一定要帶上 actorSeat**。
+  ok('/action 寫盤面時一併存 actorSeat（同一次 $set 內）',
+    /lastActionAt: now, actorSeat: deps\.actorSeat\(newGs\)/.test(SRC));
+  ok('/action 注入的 actorSeat 就是伺服器權威的 currentActorSeat（不是別的東西）',
+    /actorSeat: currentActorSeat,/.test(SRC));
   ok('/state 的 unchanged 精簡回應回傳存下來的 actorSeat',
     /if \(typeof light\.actorSeat === 'number'\) _un\.actorSeat = light\.actorSeat;/.test(SRC));
   // ⚠ 欄位缺席時**必須省略這個鍵**（不能回 null）：client 只把 undefined 當「伺服器沒講」，
@@ -239,9 +244,12 @@ const IDLE = 3;               // 3 分鐘判負
   {
     const i0 = PAGE.indexOf('const _rttT0 = Date.now();');
     ok('RTT 量測起點可定位', i0 > 0, `i0=${i0}`);
-    const rseg = PAGE.slice(i0, i0 + 400);
+    const rseg = PAGE.slice(i0, i0 + 700);   // v6.170 呼叫換行 + 取消守衛 ⇒ 視窗放寬
+    // ⚠ v6.170：`tApi('/action', …)` 因為多帶了 actId 與逾時而換行了，而且 await 之後多一行
+    //   「取消守衛」早退（玩家按過『停止重送』⇒ 這一發的結果作廢，連 RTT 都不該記）。
+    //   正向鎖定的意圖不變：記錄必須在**成功回傳之後的同一條同步路徑**上，中間只允許那道守衛。
     ok('★RTT 記錄緊跟在 /action 成功回傳之後（同一條同步路徑）',
-      /const _rttT0 = Date\.now\(\);\s*\n\s*const r = await tApi\('\/action'[^\n]*\);\s*\n\s*_tRecordRtt\(Date\.now\(\) - _rttT0\);/.test(rseg));
+      /const _rttT0 = Date\.now\(\);\s*\n\s*const r = await tApi\('\/action',[\s\S]{0,220}?\);\s*\n(\s*\/\/[^\n]*\n)*\s*if \(_actCtx !== ctx\) return;\s*\n\s*_tRecordRtt\(Date\.now\(\) - _rttT0\);/.test(rseg));
     const iRec = rseg.indexOf('_tRecordRtt(');
     ok('★量測起點與記錄之間沒有 catch / finally（逾時的那一發不能計入）',
       iRec > 0 && !/catch|finally/.test(rseg.slice(0, iRec)), `iRec=${iRec}`);

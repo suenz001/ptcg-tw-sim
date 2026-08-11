@@ -2654,8 +2654,31 @@ function monPerfCells(r) {
     (r && typeof r.hc === 'number') ? (r.hc + ' 核') : null,
     (r && typeof r.dm === 'number') ? (r.dm + ' GB') : null,
   ].filter(Boolean).join(' / ') || '—';
+  // ⭐⭐⭐v6.170 連線層（PerformanceResourceTiming）。這一欄回答的是
+  //   「這個人的請求是不是一直在**重新建連線**」—— 那是無線斷訊／NAT 逾時最直接的指紋。
+  //   ⚠ 三種「沒有數字」必須分得出來，不可以都顯示成 0：
+  //     ・舊 client（整包沒有 perf）           → 「—」
+  //     ・新 client 但瀏覽器不支援 observer    → 「不支援」
+  //     ・有量到但每一筆 timing 都被閹割       → 「無權限」（本站同源，出現就代表哪裡不對，要查）
+  const rs = pf.res;
+  var connTxt;
+  if (!hasPerf) connTxt = '—';
+  else if (!rs || typeof rs !== 'object') connTxt = '<span style="color:#aab;">不支援</span>';
+  else if (typeof rs.n !== 'number' || rs.n === 0) connTxt = '<span style="color:#c50;">無權限(' + (rs.bad || 0) + ')</span>';
+  else {
+    var protoTop = '?';
+    var protoN = -1;
+    var pm = rs.proto || {};
+    Object.keys(pm).forEach(function (k) { if (pm[k] > protoN) { protoN = pm[k]; protoTop = k; } });
+    var fp = (typeof rs.freshPct === 'number') ? rs.freshPct : null;
+    connTxt = escapeHtml(protoTop) + ' · 重建 '
+      + (fp === null ? '—' : (fp + '%'))
+      + '<span style="color:#89a;"> (' + rs.n + ')</span>';
+    if (fp !== null && fp >= 20) connTxt = '<b style="color:#c00;">' + connTxt + '</b>';
+  }
   const td = 'padding:6px 8px;text-align:right;';
-  return '<td style="' + td + '">' + monMs(monStat(pa.net, 'p95')) + '</td>'
+  return '<td style="' + td + 'white-space:nowrap;">' + connTxt + '</td>'
+    + '<td style="' + td + '">' + monMs(monStat(pa.net, 'p95')) + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.dl, 'p95')) + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.tok, 'p95')) + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.parse, 'p95')) + '</td>'
@@ -2800,6 +2823,11 @@ async function loadMonitor() {
         + '・<b>長任務</b>顯示「不支援」＝那台是 iPhone／Safari，瀏覽器不提供這個數字，'
         + '<b>不是</b>代表它很順（請改看「重繪」欄）。<br>'
         + '・<b>重繪</b>本來就有幾毫秒的底線（畫面每秒只更新 60~120 次），小數字正常，看的是有沒有明顯偏大。<br>'
+        + '　・<b>連線</b>（v6.170 新增）：格式是「協定 · 重建 N%（樣本數）」。'
+        + '<b>重建 N%</b> 是「這一發請求必須重新建立連線」的比例 —— 正常情況瀏覽器會一直重用同一條連線，'
+        + '所以健康的人應該接近 0%。<b>這個數字偏高（紅字，≥20%）就代表那位玩家的連線一直在斷、一直重建</b>，'
+        + '每次重建都要重付一整套 DNS＋TCP＋TLS 往返，這就是「間歇性斷流」看得見的證據。<br>'
+        + '　　協定 h2／h3 只是統計用；壞樣本清一色 h2 代表那個人的網路擋 UDP，換 HTTP/3 幫不了他。<br>'
         + '・欄位是「—」＝那位玩家的畫面還是舊版本（v6.159 之前），下次進場更新後就會有數字。<br>'
         + '・左邊「中位數／p95／最大」只統計<b>玩家送出的動作</b>；右邊這幾欄同時涵蓋動作與畫面同步，'
         + '兩邊<b>不能直接相減</b>。'
@@ -2810,6 +2838,7 @@ async function loadMonitor() {
         + '<th style="text-align:left;padding:6px 8px;">玩家</th>'
         + '<th style="text-align:right;padding:6px 8px;">中位數</th><th style="text-align:right;padding:6px 8px;">p95</th>'
         + '<th style="text-align:right;padding:6px 8px;">最大</th>'
+        + '<th style="text-align:right;padding:6px 8px;">連線</th>'
         + '<th style="text-align:right;padding:6px 8px;">網路</th>'
         + '<th style="text-align:right;padding:6px 8px;">下載</th>'
         + '<th style="text-align:right;padding:6px 8px;">權杖</th>'
@@ -2864,7 +2893,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.169';
+window.SITE_VERSION_HINT = '6.170';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

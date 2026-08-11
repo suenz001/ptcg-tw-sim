@@ -150,9 +150,14 @@ ok('★掃描器自我驗證：grabFn 對「回傳型別含大括號」的簽章
 // 3. longtask —— 共用既有 observer + Safari feature-detect
 // ══════════════════════════════════════════════════════════════════════════
 {
-  ok('★★只有一顆 PerformanceObserver（多開一顆＝替主執行緒再加一份回呼負擔）',
-    (BARE.match(/new PerformanceObserver\(/g) || []).length === 1,
+  // ⚠ v6.170 新增第二顆 observer（`resource`，量「這一發有沒有重新建連線」）。
+  //   原意是「不要無節制地多開」而不是「永遠只能有一顆」⇒ 上限改成 2，並釘住這兩顆分別是誰，
+  //   多冒出第三顆一樣會紅。resource 的回呼只做幾次算術與計數，沒有配置也沒有 DOM 存取。
+  ok('★★PerformanceObserver 最多兩顆（longtask + resource），不得再多開',
+    (BARE.match(/new PerformanceObserver\(/g) || []).length === 2,
     String((BARE.match(/new PerformanceObserver\(/g) || []).length));
+  ok('★★這兩顆分別是 longtask 與 resource（不是同一種開兩次）',
+    /entryTypes: \['longtask'\]/.test(BARE) && /type: 'resource', buffered: false/.test(BARE));
   ok('longtask entry 有累積進滾動窗', /_ltSamples\.push\(\{ t: Date\.now\(\), d: e\.duration \}\);/.test(BARE));
   ok('滾動窗有上限（診斷資料會無限累積）', /_ltSamples\.length > 200/.test(BARE));
   // ★★ Safari/iOS 有 PerformanceObserver 但沒有 longtask，而 observe() 對不支援的
@@ -363,7 +368,7 @@ try {
     M.monStat(undefined, 'p95') === null && M.monStat(null, 'p95') === null && M.monStat({}, 'p95') === null
     && M.monStat({ p95: 12 }, 'p95') === 12);
 
-  const CELLS = 8;   // 網路／下載／權杖／解析／採納／重繪／長任務／裝置
+  const CELLS = 9;   // v6.170 新增「連線」欄：連線／網路／下載／權杖／解析／採納／重繪／長任務／裝置
   // ★★ 舊 client（v6.158 以前）的 payload：完全沒有 perf / hc / dm
   const LEGACY = { ts: 1786512345678, email: 'a@b.c', p50: 1234, p95: 6789, max: 12345, n: 30 };
   let out = null, threw = null;

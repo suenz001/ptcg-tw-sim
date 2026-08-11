@@ -141,10 +141,20 @@ const CFG_POLL = { enabled: true, maxWaitMs: 3000, pollMs: 30, maxHold: 200 }; /
   const seg = SRC.slice(a0, a1);
   ok('/action 寫入成功後會通知掛起者', /_lpNotify\(room\);/.test(seg));
   // ⚠ 位置：必須在 CAS 寫入成功之後（寫入前通知＝叫醒了卻讀到舊版本，白跑一趟）
-  const iCas = seg.indexOf('if (!wr || wr.matchedCount === 0)');
+  // ⚠⚠ v6.170 把 CAS 抽進純函式 `tActionApplyOnce`（守衛才跑得起來），handler 裡只剩判決分支。
+  //   等價的位置條件變成：`_lpNotify` 必須排在**所有沒寫進去的判決**（duplicate / notyourturn /
+  //   invalid / rejected / stale）的早退之後 —— 走到那一行就代表 CAS 真的成功了。
+  const iStale = seg.indexOf("if (_verdict.kind === 'stale')");
   const iNotify = seg.indexOf('_lpNotify(room);');
   ok('★通知寫在 CAS 成功之後（寫入前通知會讓對方讀到舊版本、白跑一趟）',
-    iCas > -1 && iNotify > iCas, `iCas=${iCas} iNotify=${iNotify}`);
+    iStale > -1 && iNotify > iStale, `iStale=${iStale} iNotify=${iNotify}`);
+  for (const k of ['duplicate', 'notyourturn', 'invalid', 'rejected', 'stale']) {
+    ok(`★沒寫進盤面的判決（${k}）在 _lpNotify 之前就 return（否則會叫醒掛起者去讀一份沒變的盤面）`,
+      seg.indexOf(`if (_verdict.kind === '${k}')`) > -1 && seg.indexOf(`if (_verdict.kind === '${k}')`) < iNotify);
+  }
+  // CAS 落敗必須被判成 stale（否則上面那條位置檢查就失去意義）
+  ok('★CAS 落敗（matchedCount === 0）在核心裡被判成 stale',
+    /if \(!wr \|\| wr\.matchedCount === 0\) \{[\s\S]{0,200}kind: 'stale'/.test(SRC));
 }
 {
   ok('admin 開關端點有管理員 gate',

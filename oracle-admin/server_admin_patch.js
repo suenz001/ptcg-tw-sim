@@ -3629,6 +3629,124 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // ── v6.152 LONGPOLL BLOCK END ──
 
+    // ── v6.170 CONNECTION RESILIENCE BLOCK BEGIN ──
+    /**
+     * ⭐⭐⭐v6.170【對手心跳】—— 「鏡像效應」的解藥。
+     *
+     * v6.159 的資料說得很清楚：`stale-version` 指紋 138 筆裡，**94 筆發生在對手回合、
+     * 108 筆自己的輪詢是健康的** ⇒ 多數玩家喊「卡住」其實是**對面那個人斷線**的投影。
+     * 一個爛連線讓兩個人一起喊卡，而喊卡的那一位什麼問題都沒有，只看到畫面不動。
+     *
+     * ⇒ 記錄「每個座位上一次向伺服器要盤面是什麼時候」，讓等待方知道自己在等什麼。
+     * ⚠ 心跳記在請求**抵達**當下，不是回應當下 —— 長輪詢會刻意把請求掛起 8~25 秒，
+     *   記在回應端的話，一個健康的等待者看起來就會像斷線了 25 秒。
+     * ⚠ in-memory：與 `_lpWaiters`／觀戰心跳同一個前提（pm2 fork 單 instance）。
+     *   重啟後 map 是空的 ⇒ **一律回「不知道」而不是一個大數字**，否則重啟那一瞬間
+     *   全場每個人都會看到「對手連線不穩」——誤報一次，這個提示以後就沒人信了。
+     */
+    const _seatSeen = new Map();
+    function _seatSeenMark(room, seat) {
+      if (seat !== 0 && seat !== 1) return;
+      // 上限保護：一輪賽事最多幾十個房間，400 是很寬鬆的天花板。超過就丟最舊的鍵。
+      if (_seatSeen.size > 400) { const k = _seatSeen.keys().next().value; _seatSeen.delete(k); }
+      _seatSeen.set(room + '|' + seat, Date.now());
+    }
+    /**
+     * 對手安靜了幾秒（未達門檻回 0 ＝ 不提示）。
+     * ⚠⚠ 門檻由**伺服器自己的長輪詢設定**推導，不讓 client 拿一個寫死的數字去猜：
+     *   站長把 maxWaitMs 從 25 秒改成 8 秒（或改回去），寫死門檻的那一版就會開始誤報。
+     *   一個健康的長輪詢客戶端最壞情況是「掛滿 maxWaitMs ＋ 一個往返 ＋ 下一次節流」，
+     *   所以門檻取 `maxWaitMs * 2 + 8 秒`，且不低於 20 秒（短輪詢是 1.2 秒一發，20 秒＝漏了 16 發）。
+     */
+    function _oppQuietSec(room, mySeat, lpCfg) {
+      if (mySeat !== 0 && mySeat !== 1) return 0;
+      const t = _seatSeen.get(room + '|' + (1 - mySeat));
+      if (!t) return 0;                       // 沒紀錄 ⇒ 不知道 ⇒ 不提示（fail-closed）
+      const quiet = Date.now() - t;
+      const hold = (lpCfg && lpCfg.enabled) ? (Number(lpCfg.maxWaitMs) || 0) : 0;
+      const th = Math.max(20000, hold * 2 + 8000);
+      return quiet >= th ? Math.round(quiet / 1000) : 0;
+    }
+
+    /**
+     * ⭐⭐⭐v6.170【動作冪等鍵】—— 這一版的主菜。
+     *
+     * 問題：`POST /action` 逾時或連線斷掉時，玩家**根本不知道那一發有沒有送到**。
+     * v6.169 的行為是「回滾樂觀畫面 ＋ 跳一行紅字『動作可能未送達，請重試』」，
+     * 也就是把這個不確定性**原封不動丟給玩家**。玩家如果重按，就有機率把同一個動作
+     * 套用兩次（附兩次能量、抽兩次牌）；如果不按，動作就真的遺失、然後被閒置判負。
+     * ⇒ 只要動作可以安全地自動重送，「間歇性斷流」的代價就從「毀掉一局」降到「延遲幾秒」。
+     *
+     * 做法：client 對**一個使用者手勢**產生一個 actId，跨所有重送 attempt **保持同一個**；
+     * 伺服器把已套用的 actId 記在房間 doc 裡，重送時認出來就不再套用、直接回最新盤面。
+     *
+     * ⚠⚠⚠ 去重紀錄與盤面**寫在同一次 CAS updateOne 的 $set 裡**（原子），這是整個設計的地基：
+     *   兩發同 actId 並發 → 兩發都讀到舊 doc、都沒看到 actId、都算了一次 applyAction，
+     *   但 CAS（filter 帶 version）只有一發寫得進去；落敗那發回 stale、client 用**同一個 actId**
+     *   重送 → 這次讀到的 doc 已含該 actId → 回 duplicate。**淨結果永遠只套用一次。**
+     * ⚠ 用 `recentActs.s0` / `recentActs.s1` 的**點路徑** $set：只碰自己座位那一格，
+     *   對手的紀錄一個位元都不會動（也就不可能被對手的動作沖掉，見下面的 TTL 說明）。
+     * ⚠ 其他寫盤面的地方（閒置判負／時限／投降／管理員裁定／setup 自癒）用的都是
+     *   `$set: {gameState, version, ...}` —— `$set` 只覆蓋列出的欄位，`recentActs`
+     *   會原樣留著，所以那些路徑不會抹掉去重歷史（已逐一比對過那 8 個寫入點）。
+     * ⚠ 舊 client 不會送 actId ⇒ 完全退回 v6.169 的行為（不查重、不寫紀錄），fail-open。
+     */
+    // 淘汰一律**只看年齡**：client 端的重送窗上限是 25 秒（見 +page.svelte 的 TACT_RETRY_MS），
+    //   120 秒的保存期是它的 4.8 倍 ⇒ 在途的重送絕不可能被淘汰掉。
+    //   （若改成「只留最近 N 筆」，對手一個手忙腳亂的回合就能把我在途的紀錄沖掉 ⇒ 重複套用。
+    //     這正是 Fable 5 審查抓到的第一個洞；點路徑 $set ＋ 年齡淘汰同時堵掉它。）
+    const TACT_RING_TTL_MS = 120000;
+    const TACT_RING_MAX = 100;      // 純粹是 doc 大小的天花板（120 秒內超過 100 個動作才會碰到）
+    function _actDupHit(doc, seat, actId) {
+      if (!actId) return null;
+      const ring = (doc && doc.recentActs && doc.recentActs['s' + seat]) || [];
+      for (const e of ring) if (e && e.i === actId) return { v: e.v, t: e.t };
+      return null;
+    }
+    function _actRingPush(doc, seat, actId, version, now) {
+      const ring = (doc && doc.recentActs && doc.recentActs['s' + seat]) || [];
+      const next = [];
+      for (const e of ring) {
+        if (!e || e.i === actId) continue;
+        if (now - (e.t || 0) > TACT_RING_TTL_MS) continue;
+        next.push(e);
+      }
+      next.push({ i: String(actId).slice(0, 64), v: version, t: now });
+      while (next.length > TACT_RING_MAX) next.shift();
+      return next;
+    }
+    /**
+     * 冪等動作核心。**刻意抽成不碰 express/身分/遮蔽的純邏輯**，守衛才能真的把它跑起來
+     * 驗「同一個 actId 送兩次只套用一次」，而不是只驗某個字串存在
+     * （v6.154 的教訓：22 條守衛全綠、分頁卻打不開）。
+     * ⚠⚠ 查重必須排在 canAct **之前**：重送抵達時動作早就套用完、已經輪到對手了，
+     *   先跑 canAct 會回「現在不是你能操作的時機」—— 那等於把一個**成功的動作**
+     *   回報成錯誤給玩家看，正好是這一版要修掉的病。
+     */
+    async function tActionApplyOnce(doc, seat, actId, deps) {
+      const dup = _actDupHit(doc, seat, actId);
+      if (dup) {
+        const fresh = await deps.reload();
+        return { kind: 'duplicate', gs: (fresh && fresh.gameState) || doc.gameState, version: fresh ? fresh.version : doc.version };
+      }
+      if (!deps.canAct(doc.gameState)) return { kind: 'notyourturn', gs: doc.gameState, version: doc.version };
+      let newGs;
+      try { newGs = deps.applyAction(doc.gameState); }
+      catch (e) { return { kind: 'invalid', message: (e && e.message) || String(e), gs: doc.gameState, version: doc.version }; }
+      if (newGs === doc.gameState) return { kind: 'rejected', gs: doc.gameState, version: doc.version };
+      const now = deps.now();
+      const nv = doc.version + 1;
+      const set = { gameState: newGs, version: nv, updatedAt: now, lastActionAt: now, actorSeat: deps.actorSeat(newGs) };
+      if (actId) set['recentActs.s' + seat] = _actRingPush(doc, seat, actId, nv, now);
+      const wr = await deps.cas(doc.version, set);
+      if (!wr || wr.matchedCount === 0) {
+        const fresh = await deps.reload();
+        return { kind: 'stale', gs: (fresh && fresh.gameState) || doc.gameState, version: fresh ? fresh.version : doc.version };
+      }
+      return { kind: 'applied', gs: newGs, version: nv, prevGs: doc.gameState };
+    }
+    // ── v6.170 CONNECTION RESILIENCE BLOCK END ──
+
     app.get('/api/tournament/state', async (req, res) => {
       try {
         const room = String(req.query.room || 'TOURNAMENT-TEST');
@@ -3638,6 +3756,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
         //   輪詢的 CPU/頻寬。僅版本不同(或 cv<0 強制重抓)才第二次查詢取完整 gameState。
         let light = await TROOMS.findOne({ _id: room }, { projection: { gameState: 0 } });
         if (!light) return res.json({ version: -1, waiting: true });
+        // ⭐v6.170 對手心跳：在**這裡**（請求剛抵達、長輪詢還沒掛起）記下我這一座位還活著。
+        //   `s` 是 client 自報的座位；只影響「要不要顯示連線提示」這件純視覺的事，
+        //   既不進遮蔽判定、也不碰閒置判負，所以不需要（也刻意不做）身分驗證——
+        //   /state 在遮蔽關閉時本來就不驗身分，為了一個提示去加 verifyIdToken 是本末倒置。
+        const _hbSeat = Number(req.query.s);
+        _seatSeenMark(room, _hbSeat);
         // ── v6.152 長輪詢：版本相符 且 client 明確要求 且 旗標已開 → 掛起等盤面變動 ──
         //   旗標關著時這一整段不會執行，行為與上一版逐字相同。
         const _lpCfgNow = await lpConfig();
@@ -3656,6 +3780,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
         }
         if (Number.isFinite(cv) && cv >= 0 && cv === light.version) {
           const _un = { version: light.version, unchanged: true, seats: light.seats, names: light.names, lastActionAt: light.lastActionAt || null, idleForfeitMin: light.idleForfeitMin || 3, serverNow: Date.now() };
+          // ⭐v6.170 對手安靜太久 ⇒ 帶一個秒數給 client 顯示「對手連線不穩」。
+          //   ⚠ 未達門檻／沒紀錄時**整個欄位省略**（不是回 0 或 false）——
+          //     client 的判準是「有這個欄位才提示」，省略即 fail-closed，舊 client 也自然無感。
+          const _oq = _oppQuietSec(room, _hbSeat, _lpCfgNow);
+          if (_oq) _un.oppQuietSec = _oq;
           // ⚠ 欄位缺席（v6.151 部署前就已開打的房、或測試房）**不要**回 null ——
           //   client 會把 null 當成權威的「無人該動作」而不是「伺服器沒講」，閒置倒數會整條消失。
           //   而挂機中的房永遠不會有 /action 來補寫這個欄位 ⇒ 正好在最需要倒數的情境失效。
@@ -3682,7 +3811,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // v6.151 actorSeat：完整回應這裡有盤面，直接用同一支 currentActorSeat 現算（最權威，
         //   也不依賴 doc 欄位存不存在）；unchanged 精簡回應沒有盤面，才讀存下來的欄位。
         const _actorSeat = doc.gameState ? currentActorSeat(doc.gameState) : null;
-        res.json({ longPoll: _lpCfgNow.enabled, waited: _waited || undefined, gameState: _stateForSeat(doc.gameState, _vseat), version: doc.version, seats: doc.seats, names: doc.names, actorSeat: _actorSeat, waiting: !doc.gameState, lastActionAt: doc.lastActionAt || null, idleForfeitMin: doc.idleForfeitMin || 3, serverNow: Date.now() });
+        const _oqFull = _oppQuietSec(room, _hbSeat, _lpCfgNow);   // v6.170 同上：0 ⇒ 省略欄位
+        res.json({ longPoll: _lpCfgNow.enabled, waited: _waited || undefined, gameState: _stateForSeat(doc.gameState, _vseat), version: doc.version, seats: doc.seats, names: doc.names, actorSeat: _actorSeat, waiting: !doc.gameState, lastActionAt: doc.lastActionAt || null, idleForfeitMin: doc.idleForfeitMin || 3, serverNow: Date.now(), oppQuietSec: _oqFull || undefined });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
@@ -3704,24 +3834,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const gs = doc.gameState;
         if (!gs) return res.json({ error: '對局尚未開始', waiting: true, version: doc.version });
         if (!action || !action.type) return res.status(400).json({ error: 'no action' });
-        if (!canSeatAct(gs, seat, action)) return res.json({ error: '現在不是你能操作的時機', gameState: _stateForSeat(gs, _vseat), version: doc.version });
-        let newGs;
-        try { newGs = TENG.applyAction(gs, normalizeAction(action, seat), TPOOL); }
-        catch (e) { return res.json({ error: '動作無效：' + e.message, gameState: _stateForSeat(gs, _vseat), version: doc.version }); }
-        if (newGs === gs) return res.json({ rejected: true, gameState: _stateForSeat(gs, _vseat), version: doc.version });
-        const nv = doc.version + 1;
-        // v5.598 樂觀並發控制（CAS）：filter 加 version:doc.version，只在版本未被其他並發動作改寫時才寫入。
-        //   setup 階段雙方會「同時各自擺場」→ 兩個 /action 都讀到 version N、都寫 N+1，原本後寫會覆蓋前寫
-        //   (lost update) 抹掉其中一方擺場而卡死。CAS 後只有一個寫成功；落敗者 matchedCount=0，回傳最新狀態
-        //   讓 client 重新同步後再試（前端會自動重試一次；雙方擺自己側不衝突故必成功）。
-        // v6.151 伺服器權威 actorSeat：寫盤面的同時把「現在輪到誰」一起存進 doc 頂層。
-        //   閒置判負是伺服器用它自己那份盤面算的；client 各自本地推算 ⇒ 只要版本落後就會對不上
-        //   （v6.149 事故：玩家看到「對手在倒數」，伺服器其實在倒數他）。存起來讓 /state 一併回傳。
-        const wr = await TROOMS.updateOne({ _id: room, version: doc.version }, { $set: { gameState: newGs, version: nv, updatedAt: Date.now(), lastActionAt: Date.now(), actorSeat: currentActorSeat(newGs) } });
-        if (!wr || wr.matchedCount === 0) {
-          const fresh = await TROOMS.findOne({ _id: room });
-          return res.json({ rejected: true, stale: true, gameState: _stateForSeat(fresh ? fresh.gameState : gs, _vseat), version: fresh ? fresh.version : doc.version });
+        // ⭐⭐⭐v6.170 冪等鍵（client 產生，跨所有重送 attempt 不變）。舊 client 不送 ⇒ 空字串 ⇒
+        //   `tActionApplyOnce` 不查重也不寫紀錄，行為與 v6.169 逐字相同（fail-open）。
+        const actId = String((req.body && req.body.actId) || '').slice(0, 64);
+        const _verdict = await tActionApplyOnce(doc, seat, actId, {
+          reload: function () { return TROOMS.findOne({ _id: room }); },
+          canAct: function (g) { return canSeatAct(g, seat, action); },
+          applyAction: function (g) { return TENG.applyAction(g, normalizeAction(action, seat), TPOOL); },
+          // v6.151 伺服器權威 actorSeat：寫盤面的同時把「現在輪到誰」一起存進 doc 頂層。
+          actorSeat: currentActorSeat,
+          now: Date.now,
+          // v5.598 樂觀並發控制（CAS）：filter 帶 version，只在版本沒被其他並發動作改寫時才寫入。
+          cas: function (expectVer, set) { return TROOMS.updateOne({ _id: room, version: expectVer }, { $set: set }); },
+        });
+        if (_verdict.kind === 'duplicate') {
+          // ⭐ 重送抵達、而這個動作**早就成功套用過**了 ⇒ 回最新盤面，不是回錯誤。
+          //   這一行就是「玩家網路斷了 12 秒卻不會毀掉一局」的差別所在。
+          return res.json({ duplicate: true, gameState: _stateForSeat(_verdict.gs, _vseat), version: _verdict.version, actorSeat: _verdict.gs ? currentActorSeat(_verdict.gs) : null });
         }
+        if (_verdict.kind === 'notyourturn') return res.json({ error: '現在不是你能操作的時機', gameState: _stateForSeat(_verdict.gs, _vseat), version: _verdict.version });
+        if (_verdict.kind === 'invalid') return res.json({ error: '動作無效：' + _verdict.message, gameState: _stateForSeat(_verdict.gs, _vseat), version: _verdict.version });
+        if (_verdict.kind === 'rejected') return res.json({ rejected: true, gameState: _stateForSeat(_verdict.gs, _vseat), version: _verdict.version });
+        if (_verdict.kind === 'stale') return res.json({ rejected: true, stale: true, gameState: _stateForSeat(_verdict.gs, _vseat), version: _verdict.version });
+        const newGs = _verdict.gs;
+        const nv = _verdict.version;
         _lpNotify(room);   // v6.152 盤面已寫入 → 立刻叫醒掛在這個房間的長輪詢（~RTT 就看得到）
         // v0.82 回放:半回合快照(先攻/後攻各一格)——activePlayerIndex 改變=回合換手邊界;開局(setup→playing)也存一格。fire-and-forget 不 await 不影響回應。
         if (doc.matchId) {
@@ -3782,7 +3918,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const room = String((req.body && req.body.room) || 'TOURNAMENT-TEST');
         const prev = await TROOMS.findOne({ _id: room });
         const nv = ((prev && prev.version) || 0) + 1;
-        await TROOMS.updateOne({ _id: room }, { $set: { seats: [null, null], names: [null, null], decks: [null, null], gameState: null, version: nv, updatedAt: Date.now() } }, { upsert: true });
+        // v6.170 房間重建 ⇒ 一併清掉冪等去重紀錄（留著不會造成錯誤——actId 是 UUID，
+        //   舊紀錄只可能讓一個「屬於上一局的重送」被正確地擋下來——但留著純粹是垃圾）。
+        await TROOMS.updateOne({ _id: room }, { $set: { seats: [null, null], names: [null, null], decks: [null, null], gameState: null, version: nv, updatedAt: Date.now(), recentActs: { s0: [], s1: [] } } }, { upsert: true });
         res.json({ ok: true, version: nv, waiting: true });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
@@ -5270,7 +5408,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         catch (e) { return res.status(500).json({ error: '建立對局失敗：' + e.message }); }
         const roomId = m.roomId || ('mr_' + m._id);
         const prev = await TROOMS.findOne({ _id: roomId });
-        await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: ((prev && prev.version) || 0) + 1, matchId: m._id, eventId: m.eventId, updatedAt: Date.now(), lastActionAt: Date.now(), idleForfeitMin: (ev && ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3), actorSeat: currentActorSeat(gs) } }, { upsert: true });   // v6.151 初始 actorSeat
+        await TROOMS.updateOne({ _id: roomId }, { $set: { _id: roomId, seats: [m.p1uid, m.p2uid], names: [m.p1name, m.p2name], decks: [reg1.deckEntries, reg2.deckEntries], gameState: gs, version: ((prev && prev.version) || 0) + 1, matchId: m._id, eventId: m.eventId, updatedAt: Date.now(), lastActionAt: Date.now(), recentActs: { s0: [], s1: [] }, idleForfeitMin: (ev && ev.idleForfeitMin > 0 ? ev.idleForfeitMin : 3), actorSeat: currentActorSeat(gs) } }, { upsert: true });   // v6.151 初始 actorSeat
         await TMATCH.updateOne({ _id: m._id }, { $set: { roomId, status: 'playing', winnerUid: null, winnerName: null, gameStartedAt: Date.now(), entered: [true, true] }, $unset: { noShow: '', doubleNoShow: '', forfeit: '', idleForfeit: '', timeLimit: '', adminResolved: '', timeLimitReached: '', timeLimitTurn: '', timeLimitCalledAt: '', draw: '' } });
         await TREPLAY.deleteMany({ matchId: m._id }).catch(() => {});  // v0.83 重賽重用 matchId→清舊局快照,避免 $setOnInsert 冪等把兩局混成一場
         await postSystemChat('🔄 管理員將「' + m.p1name + ' vs ' + m.p2name + '」重新開賽（從擲幣重新開始）。');

@@ -161,20 +161,31 @@ console.log('④ 接線端紅線（靜態）');
   // ⚠ 這條原本只斷言「catch 裡有呼叫 tForceResync」——**那是假回滾**：
   //   tForceResync 只在 fr.version !== tVersion 才覆蓋 game，動作沒送達時版本沒動 ⇒ 不會還原。
   //   守衛必須盯住「真的把 game 換回 prev」，而且要用物件同一性避免蓋掉輪詢帶回的新盤面。
-  chk('⭐ 真回滾：有 restorePrediction 且用物件同一性把 game 換回 prev',
-      /const restorePrediction[\s\S]{0,300}game === predictedRef[\s\S]{0,60}game = prev/.test(PAGE));
-  chk('⭐ catch 路徑呼叫 restorePrediction（不是只靠 tForceResync）',
-      /catch \(e: any\)[\s\S]{0,400}restorePrediction\(\)/.test(PAGE));
+  // ⚠⚠ v6.170 把單發的 tournamentDispatch 換成**重送狀態機**（冪等鍵 + 自動重試），
+  //   預測狀態從 `tPredicted / predictedRef` 兩個區域變數搬進 `ctx` 物件（一個手勢一份）。
+  //   下面每一條的**意圖完全沒變**，只是跟著改識別名；行為端的實跑驗證在
+  //   `test-v6170-idempotent-action-retry.mjs`（含「重送等待期間不回滾」那條）。
+  chk('⭐ 真回滾：有 _tRestorePrediction 且用物件同一性把 game 換回 prev',
+      /function _tRestorePrediction[\s\S]{0,400}game === ctx\.predictedRef[\s\S]{0,60}game = ctx\.prev/.test(PAGE));
+  chk('⭐ catch 路徑呼叫 _tRestorePrediction（不是只靠 tForceResync）',
+      /catch \(e: any\)[\s\S]{0,1600}_tRestorePrediction\(ctx\)/.test(PAGE));
   chk('⭐ 回應沒帶 gameState 的路徑也會還原（伺服器的「對局尚未開始」）',
-      /else \{[\s\S]{0,240}restorePrediction\(\)/.test(PAGE));
-  chk('⭐ tPredicted / predictedRef 是函式內區域變數（不得跨呼叫洩漏）',
-      /let tPredicted = false;\s*\n\s*let predictedRef/.test(PAGE)
-      && !/^\s{2}let tPredicted\b/m.test(PAGE));
-  chk('stale 重試前會清掉 tPredicted', /r\.stale && !_retried[\s\S]{0,80}tPredicted = false/.test(PAGE));
-  chk('伺服器回應採納後會清 tPredicted（避免下一次誤判已預測）',
-      /tAdopt\(r\.gameState[\s\S]{0,400}tPredicted = false/.test(PAGE));
-  chk('預測只在非重試時進行（重試那輪由遞迴自己重判）',
-      /if \(!_retried && poolReady\)[\s\S]{0,200}tryPredictAction/.test(PAGE));
+      /\} else \{[\s\S]{0,240}_tRestorePrediction\(ctx\)/.test(PAGE));
+  chk('⭐ 預測狀態是函式內區域物件（不得跨呼叫洩漏）',
+      /const ctx: TActCtx = \{ action, actId: _newActId\(\), prev: game, predictedRef: null, predicted: false/.test(PAGE)
+      && !/^\s{2}let tPredicted\b/m.test(PAGE)
+      && !/^\s{2}let predictedRef\b/m.test(PAGE));
+  chk('⭐ stale 重試前預測旗標已清乾淨（重試那輪以伺服器盤面重新判定）',
+      /ctx\.predicted = false;[\s\S]{0,900}if \(r\.stale && _tActCanRetry\(ctx\)\)/.test(PAGE));
+  chk('伺服器回應採納後會清 ctx.predicted（避免下一次誤判已預測）',
+      /tAdopt\(r\.gameState[\s\S]{0,400}ctx\.predicted = false/.test(PAGE));
+  chk('⭐ 預測**每個手勢只做一次**：只在 tournamentDispatch 裡，重送迴圈 _tActAttempt 內沒有',
+      (PAGE.match(/tryPredictAction\(/g) || []).length === 1
+      && /async function tournamentDispatch[\s\S]{0,1400}tryPredictAction\(/.test(PAGE));
+  // ⭐⭐v6.170 新增：重送期間**不可以**回滾（回滾＋自動重送會讓玩家看到動作閃一下又消失）。
+  chk('⭐⭐ 逾時後若還能重送 ⇒ 走 _tActSchedule 直接 return，不碰 _tRestorePrediction',
+      /if \(_tActCanRetry\(ctx\)\) \{[\s\S]{0,400}_tActSchedule\(ctx,[\s\S]{0,140}return;[\s\S]{0,20}\}/.test(PAGE)
+      && !/if \(_tActCanRetry\(ctx\)\) \{[^}]*_tRestorePrediction/.test(PAGE));
 }
 
 console.log(`\n[v6137-optimistic-predict] PASS ${n - bad} / FAIL ${bad}`);

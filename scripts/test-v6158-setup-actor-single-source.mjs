@@ -236,16 +236,21 @@ T('⭐⭐⭐前提查證：伺服器 /action 真的會對未驗證身分回 403�
     '/action 的 verified gate 不見了 —— 下面的 client 端斷言前提就不成立了');
   const si = SRV_RAW.indexOf("app.get('/api/tournament/state'");
   assert.ok(si > 0, '找不到 /state 端點');
-  const sseg = SRV_RAW.slice(si, SRV_RAW.indexOf('serverNow: Date.now() });', si));
+  // ⚠ v6.170 完整回應尾端補了 oppQuietSec（B-4 對手心跳）⇒ 舊的結尾錨點會抓到更後面的
+  //   端點而讓區塊爆長。改用「/state 端點的下一個端點起點」當結尾，不再依賴回應的最後一個欄位。
+  const sseg = SRV_RAW.slice(si, SRV_RAW.indexOf("app.post('/api/tournament/action'", si));
   assert.ok(sseg.length > 1000 && sseg.length < 20000, '/state 區塊抽取異常：' + sseg.length);
   assert.ok(/_redactOn\(\) \? await _viewerSeat\(req, doc\)/.test(sseg),
     '/state 的身分檢查改成無條件了？那這條路徑的前提要重新評估');
 });
 T('⭐⭐⭐動作被拒必須①標記②留下診斷指紋（舊版只閃一則紅字就沒了）', () => {
-  const di = P.indexOf('async function tournamentDispatch(');
-  assert.ok(di > 0, '找不到 tournamentDispatch');
+  // ⚠⚠ v6.170：送出與重試搬進 `_tActAttempt`（tournamentDispatch 只剩「產 actId ＋ 樂觀更新
+  //   ＋ 交給狀態機」）。這條斷言的對象是**整台動作送出狀態機**，所以區間從 _tActAttempt 起算。
+  const di = P.indexOf('async function _tActAttempt(');
+  assert.ok(di > 0, '找不到 _tActAttempt（動作送出狀態機）');
   const body = P.slice(di, P.indexOf('async function tournamentReset()', di));
-  assert.ok(body.length > 2000, 'tournamentDispatch 抽取異常：' + body.length);
+  assert.ok(body.length > 2000, '動作送出狀態機抽取異常：' + body.length);
+  assert.ok(/async function tournamentDispatch\(/.test(body), '區間應涵蓋 tournamentDispatch');
   assert.ok(/e\.status === 401 \|\| e\.status === 403/.test(body), 'catch 沒有分辨「身分被拒」與一般網路錯誤');
   assert.ok(/_tActionAuthErr = true/.test(body), '沒有設身分被拒旗標 ⇒ 橫幅出不來');
   assert.ok(/_tSendClientDiag\('action-forbidden'\)/.test(body), '沒有回報診斷指紋 ⇒ 站長事後看不到');
