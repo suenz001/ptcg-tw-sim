@@ -789,9 +789,22 @@ export const OPP_ENERGY_ATTACH_PASSIVE = new Map<string, (
  */
 export function fireOnHandEnergyAttached(
   state: GameState, attacherIdx: 0 | 1, targetIid: string, pool: Map<string, Card>,
+  energyCardCount: number = 1,
 ): GameState {
   let s = state;
+  // ⭐ v6.164【官方裁定】卡面措辭是「**每次**……將能量卡附於寶可夢身上時」——
+  //   一次效果同時附 N 張能量卡 = 觸發 N 次，不是 1 次。
+  //   官方 Q&A（PTCG RULES/PTCG_RULES.md）：
+  //     §17.21.F L1511 「菜種的活力」為 1 隻備戰附 2 張【草】能量 → 侵蝕詛咒放置 **4 個**指示物。
+  //     §17.37.A L2196 櫻花魚｜漸強波 造成傷害前從手牌附 **5 張**【水】能量 → **10 個**指示物。
+  //   帕奇利茲｜麻痺門牙（M1S/MC，I 標）卡面同樣是「每次對手從手牌將能量卡附於……時，
+  //   放置 8 個傷害指示物」，措辭平行 ⇒ 一併 per-energy-card。
+  //   ⚠ 呼叫端一次只附 1 張時傳預設 1；一次附多張（金色火焰/漸強波/滿載心田/幸福禮物…）
+  //     **必須**傳入實際張數，否則就是靜默的 under-count。
+  const reps = Math.max(1, Math.floor(energyCardCount));
+  for (let _rep = 0; _rep < reps; _rep++) {
   // ① 對手場上被動特性（侵蝕詛咒 等）
+  //   ⚠ 每一次 rep 都重讀場面：前一次的指示物可能已讓目標昏厥／場面變動。
   const opp = s.players[(1 - attacherIdx) as 0 | 1];
   const oppField: CardInstance[] = [...(opp.active ? [opp.active] : []), ...opp.bench];
   // v5.725：同名被動特性「疊加」——卡面「只要這隻寶可夢在場上…」是針對每一個持有者
@@ -825,6 +838,7 @@ export function fireOnHandEnergyAttached(
     }));
     s = addLog(s, `麻痺門牙：${tName} 因附加能量被放 8 個傷害指示物（+80 點）`, attacherIdx);
   }
+  }  // end for _rep（v6.164 per-energy-card）
   return s;
 }
 

@@ -1655,7 +1655,8 @@ regR('h-wave2-attach-from-hand', (state, aIdx, iids, _params, pool) => {
       active: p.active ? { ...p.active, energyAttached: [...p.active.energyAttached, ...energies] } : null,
     };
   });
-  return hostIid ? fireOnHandEnergyAttached(after, aIdx, hostIid, pool) : after; // v5.782 補對手反應
+  // v6.164：卡面「最多2張」→ per-energy-card 觸發（侵蝕詛咒/麻痺門牙 各張都算）
+  return hostIid ? fireOnHandEnergyAttached(after, aIdx, hostIid, pool, iids.length) : after; // v5.782 補對手反應
 });
 
 // 遠古巨蜓|陀螺音波 110 — 自互

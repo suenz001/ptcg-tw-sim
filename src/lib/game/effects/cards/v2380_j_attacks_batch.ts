@@ -35,7 +35,8 @@
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
-import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
+import { hasOakEye, fireOnHandEnergyAttached } from '../_shared'; // v5.789 監視之眼 gate；v6.164 從手牌附能→對手反應
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2'; // v6.164 從手牌附能→自方瑪機雅娜｜自動治癒
 
 import { canApplyEffectToTarget } from '../../defense';
 import type { Card } from '$lib/cards/types';
@@ -642,6 +643,16 @@ regR('lucky-gift-attach', (state, actorIdx, targetIids, params, pool) => {
     const tname = pool.get(target.cardId)?.name ?? '?';
     const ename = pool.get(energyInst.cardId)?.name ?? '基本能量';
     s = addLog(s, `幸福禮物：「${ename}」附到 ${tname}`, actorIdx);
+    // ⭐ v6.164：卡面「雙方玩家若希望，各自**從自己的手牌**選擇最多3張基本能量卡，
+    //   以任意方式附於自己的寶可夢身上。」——來源是手牌 ⇒ 必須觸發「每次從手牌附能」
+    //   的反應（耿鬼ex｜侵蝕詛咒 / 帕奇利茲｜麻痺門牙）。本 resolver 一次只附 1 張
+    //   （逐張遞迴），故 count = 1；雙方各自 phase 都要觸發，attacherIdx 用 actorIdx。
+    //   （實作上能量先暫存到棄牌區再附，但官方來源仍是手牌 ⇒ 照樣觸發。）
+    //   同理自方的 瑪機雅娜｜自動治癒（「每次**從自己的手牌**將能量卡附於寶可夢身上時，
+    //   將那隻寶可夢恢復 90 HP」）——幸福禮物**雙方**都是「從自己的手牌附給自己的寶可夢」，
+    //   所以對手 phase（actorIdx = 對手）時，對手戰鬥場若是瑪機雅娜就該回血。
+    s = applyMagearnaHandAttachHeal(s, actorIdx, [targetIid], pool, 1);
+    s = fireOnHandEnergyAttached(s, actorIdx, targetIid, pool, 1);
   }
 
   // 遞迴下一張（chain 自帶 phase 切換邏輯）

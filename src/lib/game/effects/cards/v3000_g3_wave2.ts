@@ -319,8 +319,16 @@ export function applyMagearnaHandAttachHeal(
   attacherIdx: 0 | 1,
   targetIids: string[],
   pool: Map<string, Card>,
+  /**
+   * ⭐ v6.164：本次附到**該目標**的能量卡張數。卡面「**每次**從自己的手牌將能量卡附於
+   * 寶可夢身上時，將那隻寶可夢恢復『90』HP」——與耿鬼ex｜侵蝕詛咒（官方 §17.21.F：
+   * 一次附 2 張 → 4 個指示物）同一個「每次＝每張」判準，一次附 N 張要恢復 90×N。
+   * 呼叫端一次只附 1 張時可省略。
+   */
+  energyCardCount: number = 1,
 ): GameState {
-  const healAmt = magearnaAutoHealAmount(state, attacherIdx, pool);
+  const perCard = magearnaAutoHealAmount(state, attacherIdx, pool);
+  const healAmt = perCard * Math.max(1, Math.floor(energyCardCount));
   if (healAmt <= 0 || targetIids.length === 0) return state;
   const ids = new Set(targetIids);
   const healedNames: string[] = [];

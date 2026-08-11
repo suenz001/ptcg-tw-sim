@@ -42,6 +42,14 @@ import {
   shuffle, addLog, withPending, updatePlayer,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手被動（侵蝕詛咒 等）
 } from '../_shared';
+// v6.164：從手牌附能 → 自方 瑪機雅娜｜自動治癒（卡面「每次從自己的手牌將能量卡附於寶可夢
+//   身上時，將那隻寶可夢恢復『90』HP」）。本管線過去只接了「對手」的附能反應
+//   （fireOnHandEnergyAttached），漏了自方這一支 —— 走 chain 且來源是手牌的**特性**
+//   （鴨嘴炎獸｜拍檔提升 J 標「最多各1張」）瑪機雅娜可同時在戰鬥場，會漏回血。
+//   招式型（滿載心田／熱帶狂燒／幸福禮物）攻擊者本身佔住 active，helper 內部查不到
+//   瑪機雅娜會回 0，統一呼叫是安全的。
+//   ⚠ v3000_g3_wave2 只 import ../_shared，不 import 本檔 ⇒ 無循環 import／TDZ 疑慮。
+import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // pokemonType helpers — 判斷寶可夢屬性是否符合 filter
@@ -147,8 +155,11 @@ regR('v87-energy-distribute-flat', (st, aIdx, selectedIids, params, pool) => {
   }
 
   // v5.539：從手牌附能 → 對被附能的寶可夢觸發對手附能被動（耿鬼ex|侵蝕詛咒 等）
+  // v6.164：per-energy-card —— tally 記的就是「這隻拿了幾張」，必須整數傳下去
+  //   （官方 §17.21.F：一次附 2 張 → 侵蝕詛咒放 4 個指示物）。
   if (params?.source === 'hand') {
-    for (const iid of tally.keys()) s = fireOnHandEnergyAttached(s, aIdx, iid, pool);
+    // v6.164：自方自動治癒（heal）＋ 對手附能反應（fire），兩者都 per-energy-card
+    for (const [iid, n] of tally) s = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(s, aIdx, [iid], pool, n), aIdx, iid, pool, n);
   }
 
   const parts: string[] = [];
@@ -309,7 +320,8 @@ export function startEnergyChain(
       };
     });
     // v5.539：source==='hand' → 觸發對手附能被動（耿鬼ex|侵蝕詛咒 等）
-    if (source === 'hand') st = fireOnHandEnergyAttached(st, aIdx, target.iid, pool);
+    // v6.164：這條是「唯一合法目標 → 全附」，一次附 energyIids.length 張 ⇒ per-energy-card
+    if (source === 'hand') st = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(st, aIdx, [target.iid], pool, energyIids.length), aIdx, target.iid, pool, energyIids.length); // v6.164 heal+fire 皆 per-card
     return addLog(st, `${label}：場上僅有 1 個合法目標 → 全 ${energyIids.length} 張能量附到 ${tname}`, aIdx);
   }
 
@@ -499,8 +511,10 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
       tally.set(targetIid, (tally.get(targetIid) ?? 0) + 1);
     }
     // v5.539：從手牌附能 → 觸發對手附能被動
+    // v6.164：per-energy-card（tally = 這隻拿了幾張）
     if (params?.source === 'hand') {
-      for (const iid of tally.keys()) st = fireOnHandEnergyAttached(st, aIdx, iid, pool);
+      // v6.164：自方自動治癒＋對手附能反應，兩者都 per-energy-card
+      for (const [iid, n] of tally) st = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(st, aIdx, [iid], pool, n), aIdx, iid, pool, n);
     }
     const parts: string[] = [];
     for (const [iid, n] of tally) {
@@ -601,7 +615,8 @@ regR('v158-energy-single-target-attach', (st, aIdx, pickedIids, params, pool) =>
     };
   });
   // v5.539：從手牌附能要觸發對手的附能反應被動（耿鬼ex｜侵蝕詛咒 等）
-  if (source === 'hand') st = fireOnHandEnergyAttached(st, aIdx, targetIid, pool);
+  // v6.164：singleTarget 全附型 —— 一次附 energyIids.length 張 ⇒ per-energy-card
+  if (source === 'hand') st = fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(st, aIdx, [targetIid], pool, energyIids.length), aIdx, targetIid, pool, energyIids.length); // v6.164 heal+fire 皆 per-card
   return addLog(st, `${label}：${energyIids.length} 張能量全部附到 ${tname}`, aIdx);
 });
 

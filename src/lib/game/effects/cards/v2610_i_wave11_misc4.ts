@@ -483,6 +483,8 @@ regPost('櫻花魚|漸強波', (state, aIdx, pool) => {
 regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
   const defIid = params?.defIid as string | undefined;
   let s = state;
+  let _host: string | undefined;   // v6.164：附能反應延到傷害之後才觸發（官方 §17.37.A）
+  let _fireCount = 0;
   const valid = (iids ?? []).filter(iid => {
     const inst = s.players[aIdx].hand.find(c => c.iid === iid);
     const card = inst ? pool.get(inst.cardId) : undefined;
@@ -499,8 +501,8 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
       };
     });
     s = addLog(s, `漸強波：從手牌附 ${valid.length} 張「基本【水】能量」到櫻花魚`, aIdx);
-    const _host = s.players[aIdx].active?.iid; // v5.782 從手牌附能→補對手反應(侵蝕詛咒/麻痺門牙)
-    if (_host) s = fireOnHandEnergyAttached(s, aIdx, _host, pool);
+    _host = s.players[aIdx].active?.iid; // v5.782 從手牌附能→補對手反應(侵蝕詛咒/麻痺門牙)
+    _fireCount = valid.length;
   } else {
     s = addLog(s, '漸強波：未選擇附加能量', aIdx);
   }
@@ -509,6 +511,16 @@ regR('sakura-crescendo-attach', (state, aIdx, iids, params, pool) => {
   const dmg = cnt * 30;
   s = addLog(s, `漸強波：自身【水】能量 ${cnt} 顆 → ${cnt}×30 = ${dmg}`, aIdx);
   if (defIid && dmg > 0) s = dealAttackDamageToTarget(s, aIdx, defIid, dmg, pool, { kind: 'attack-damage', label: '漸強波' });
+  // ⭐ v6.164【官方 §17.37.A L2196-2197】對手有【侵蝕詛咒】耿鬼ex 時，漸強波從手牌附 5 張
+  //   【水】能量 → 放置 10 個指示物讓櫻花魚剩餘 HP 變 0；官方問「漸強波還會造成傷害嗎？」
+  //   答：「**會**。／此情況應**先處理招式『漸強波』造成的傷害，再處理櫻花魚的[昏厥]**。」
+  //   ⇒ 附能反應（會立即 KO 攻擊者）必須排在傷害結算**之後**。原本寫在附能後面，
+  //     per-energy-card 化之後 5 張 = 100 點必然打死櫻花魚 → active 變 null → cnt=0 →
+  //     對手 0 傷害，與官方裁定完全相反。
+  //   ⚠ 通則：regPre 傷害延後（damage:0）、由 regPost/regR 自己結算傷害的招式，
+  //     若同一招還會「從手牌附能」，附能反應一律排在自己的傷害結算之後。
+  //     （走 engine 主管線的 regPre 固定傷害招式沒有這個問題 —— 傷害早在 ATTACK_POST 之前就結算了。）
+  if (_host && _fireCount > 0) s = fireOnHandEnergyAttached(s, aIdx, _host, pool, _fireCount);
   return s;
 });
 

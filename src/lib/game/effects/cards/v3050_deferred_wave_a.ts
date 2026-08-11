@@ -253,7 +253,10 @@ regR('clamperl-bombard-attach', (st, idx, iids, params, pool) => {
       : c),
   }));
   // v5.662：補對手附能反應(侵蝕詛咒/麻痺門牙)
-  return fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(_att, idx, [hostIid], pool), idx, hostIid, pool);
+  // v6.164：卡面「最多2張」→ per-energy-card
+  return fireOnHandEnergyAttached(
+    applyMagearnaHandAttachHeal(_att, idx, [hostIid], pool, validInsts.length),
+    idx, hostIid, pool, validInsts.length);
 });
 
 // ════════════════════════════════════════════════════════════════════════════

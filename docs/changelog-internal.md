@@ -17,6 +17,143 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.164 — 兩個玩家回報：①「每次附能」的反應要 per-energy-card ②多目標招式對戰鬥位漏 PASSIVE_IMMUNITY
+
+### 回報 1：耿鬼ex｜侵蝕詛咒 對「金色火焰填 2 顆火能量」只放 2 個指示物（應為 4 個）
+
+**卡面（static/cards，台灣官方中文）**
+- 耿鬼ex｜侵蝕詛咒（MC/SV5K，H 標，特性）：「只要這隻寶可夢在場上，**每次**對手從手牌將能量卡附於寶可夢身上時，在那隻寶可夢身上放置2個傷害指示物。」
+- 阿響的鳳王ex｜金色火焰（SV9a/M2a，I 標，特性）：「在自己的回合時可使用1次。從自己的手牌選擇最多2張「基本【火】能量」卡，附於備戰區的1隻「阿響的寶可夢」身上。」
+- 瑪機雅娜｜自動治癒（I 標，特性）：「只要這隻寶可夢在戰鬥場上，**每次**從自己的手牌將能量卡附於寶可夢身上時，將那隻寶可夢恢復「90」HP。」
+- 帕奇利茲｜麻痺門牙（M1S/MC，I 標，**招式**）：「在下個對手的回合，**每次**對手從手牌將能量卡附於受到這個招式的寶可夢身上時，在那隻寶可夢身上放置8個傷害指示物。」
+
+**官方裁定（`PTCG RULES/PTCG_RULES.md`，唯一權威）**
+- §17.21.F L1511-1512：對手場上有【侵蝕詛咒】耿鬼ex 時，用支援者「菜種的活力」為 1 隻備戰附 **2 張**【草】能量 → 放置的傷害指示物為 **4 個**。
+- §17.37.A L2196-2197：櫻花魚｜漸強波 造成傷害前從手牌附 **5 張**基本【水】能量 → 侵蝕詛咒放置 **10 個**指示物（該櫻花魚剩餘 HP 歸 0，但仍先結算漸強波的傷害）。
+⇒ 「每次」＝**每一張能量卡各一次**，不是「每一次效果一次」。
+
+**真因**：中央 helper `fireOnHandEnergyAttached()`（`effects/_shared.ts`）與
+`applyMagearnaHandAttachHeal()`（`effects/cards/v3000_g3_wave2.ts`）都是「呼叫一次＝觸發一次」，
+而所有 bespoke 附能 resolver 在附完 N 張之後**只呼叫一次**。一次只附 1 張的卡（碧綠之舞／
+玉樹臨風／烈火亂舞／嫩葉之恩／吃飽先…）剛好正確，一次附多張的卡全部 under-count。
+（v5.782 的記憶裡其實已經留下「gold-flame 等 bespoke handler 每次 attach fire 一次，
+侵蝕詛咒對多能量可能 under-count；全站一致性另案」——本版把那個「另案」做完。）
+
+**中央收斂**
+- `fireOnHandEnergyAttached(state, attacherIdx, targetIid, pool, energyCardCount = 1)`
+  ——整段反應（① OPP_ENERGY_ATTACH_PASSIVE ② 麻痺門牙）包進 `for (_rep < reps)`，
+  每個 rep 重讀場面（前一次的指示物可能已造成昏厥／場面變動）。
+- `applyMagearnaHandAttachHeal(..., energyCardCount = 1)`——恢復量 = 90 × 張數。
+- 8 個呼叫端改傳**實際張數**（禁手刻）：
+  `gold-flame`（fast-path 與 picker path 兩條都要）、`sakura-crescendo-attach`（漸強波）、
+  `h-wave2-attach-from-hand`（迴旋充能）、`clamperl-bombard-attach`（返回重載）、
+  經驗法則（effects.ts inline）、`v158-energy-chain` **4 處**
+  （tally per-target 兩處＋「唯一合法目標全附」「singleTarget 全附」兩處，
+  涵蓋 滿載心田／熱帶狂燒／莫魯貝可 等「以任意方式」型）。
+- **順帶補零觸發**：信使鳥｜幸福禮物（`lucky-gift-attach`）卡面「雙方玩家若希望，各自
+  **從自己的手牌**選擇最多3張基本能量卡，以任意方式附於自己的寶可夢身上」——
+  整條 resolver **完全沒有** `fireOnHandEnergyAttached`（v5.782 那輪的漏網）。
+  本 resolver 逐張遞迴，故 count = 1，雙方 phase 都觸發（attacherIdx 用 actorIdx）。
+
+**為什麼不改成「必填參數」**：TS 必填會強迫 20+ 個一次只附 1 張的呼叫端一起改，
+風險大於收益；改用**卡面驅動的枚舉守衛**鎖住（見下），新卡出現就會紅燈。
+
+### 回報 2：酋雷姆｜三重冰霜 打得到戰鬥場的 厄鬼椪 礎石面具ex
+
+**卡面**
+- 厄鬼椪 礎石面具ex｜礎石之勢（MC/SV6/SV8a，H 標）：「這隻寶可夢不會受到對手的擁有特性的寶可夢招式的傷害。」
+- 酋雷姆｜反等離子（SV6a，H 標）：「若對手的棄牌區有名稱中有「阿克羅瑪」的卡，則這隻寶可夢使用「三重冰霜」所需的能量，改為1個【無】能量。」
+- 酋雷姆｜三重冰霜：「將這隻寶可夢身上附加的能量卡全部丟棄，對手的3隻寶可夢各受到110點傷害。[在備戰區不計算弱點・抵抗力。]」
+⇒ 酋雷姆**擁有特性**（有沒有滿足發動條件無關），三重冰霜造成的是**傷害** ⇒ 礎石面具ex 應完全不受。**玩家回報成立。**
+
+**真因**：`regR('snipe-multi')` 的守衛只呼叫 `canApplyEffectToTarget(...)`。
+`PASSIVE_IMMUNITY` 這一層（礎石之勢／神秘之盾／神秘石居／神秘守護／璀璨鱗片／尾甲／
+鐵壁硬殼）在**備戰側**早在 v5.367 就併進 `resolveBenchGuard`，**戰鬥位側從來沒有**；
+擲幣型免疫（順滑大衣，`passiveCoinImmunity`）同樣漏。
+v6.141 已經為了同型 bug（閃光屏障擋不住油之機關槍）建了中央閘
+`resolveMultiTargetDamageGuard`，但只有 damage-distribute 那條接上去。
+
+**跨卡維度掃描**：剝註解後掃全 `src/lib/game` 的 1564 個 `regR`/`regPost` 區塊，
+找「手動累加 damage 且會打到 active 且沒有任何 damage-immunity helper」者，得 14 個候選，
+逐一對卡面判讀後 **真 outlier 只有 2 個**：
+- `snipe-multi`（三重冰霜；月亮伊布｜出奇一擊 與 鐵頭殼ex｜雙刃劍 是 `flat` 招式，
+  卡面「不計算……身上的附加效果」⇒ 本來就 bypass，不受影響）
+- `clone-strike-multi-hit`（甲賀忍蛙ex｜分身連打、三海地鼠ex｜三色炮、吼叫尾｜大吼大叫）
+其餘 12 個是**放置傷害指示物**（attack-effect / ability-effect：手之力量／必殺手裡劍／
+亂咬／腎上腺腦力／幻影奇襲／咒詛炸彈…）或換位／治癒 —— 礎石之勢那類卡面**只寫「傷害」**，
+不該擋招式效果，維持原狀是正確的。
+
+**中央收斂**
+- `resolveMultiTargetDamageGuard` 加 `kind?: DamageKind`（預設 `'attack-damage'`）與
+  `counterPlacement?: boolean`；**只有 `attack-damage` 才套第 1/2/4 層**
+  （中立中心／PASSIVE_IMMUNITY／擲幣免疫），`attack-effect` 只走 `canApplyEffectToTarget`。
+- `snipe-multi`、`clone-strike-multi-hit` 兩個 resolver 改走這支中央閘。
+- ⚠ 已確認 `passiveCoinImmunity`（PASSIVE_IMMUNITY 的擲幣型 entry＝順滑大衣）與
+  這兩個 resolver 原本就有的 `applyDefenderCoinAvoid`（`PASSIVE_COIN_AVOID`＝躲藏高手／
+  腎上腺費洛蒙）是**兩張不同的表**，不會 double-flip。
+
+### 守衛（皆有 HEAD-FAIL 證明）
+
+- `scripts/test-hand-attach-percard-reaction.mjs`（10 項）：金色火焰 2 張→40／1 張→20（正對照）、
+  自動治癒 90×2、漸強波 3 張→60、滿載心田集中→40 與分散→各 20、迴旋充能→40、幸福禮物→40，
+  外加**卡面枚舉守衛**（regex 只認「從自己的手牌選擇…能量」＋「最多≥2張／任意數量」，
+  排除「從手牌使出這張卡並完成進化時」那種來源其實是牌庫的進化特性；有 `scanned > 3000`
+  下限斷言與 8 張的固定清單，新卡出現即紅燈）。
+- `scripts/test-multitarget-active-passive-immunity.mjs`（7 項）：三重冰霜 vs 礎石之勢
+  （戰鬥位／備戰位）、分身連打 vs 神秘石居，**外加三條正對照**——一般寶可夢仍受 110、
+  神秘石居擋不住非 ex 的酋雷姆、甲賀忍蛙ex 沒有特性 ⇒ 礎石面具ex 照樣受傷（防過度免疫）。
+- **HEAD-FAIL 實測**：把 9 個改過的檔全部還原成 BASE blob，
+  第一支 6/10 條紅、第二支 2/7 條紅，正對照在 BASE 就是綠（證明不是「全綠假象」）。
+
+### Fable 5 審查（v6.164）抓到、經自行查證後追加的修正
+
+1. **【必須修，已修】官方 §17.37.A 的處理順序**：漸強波 regPre 傷害延後（damage:0）、由
+   `sakura-crescendo-attach` 自己結算傷害，而原本「附能 → fire → 算傷害」的順序在
+   per-energy-card 化之後，附 5 張 = 100 點指示物**必然打死櫻花魚**（HP 90）→ `active` 變 null
+   → `cnt=0` → 對手 0 傷害。官方 L2196-2197 明文「**會**造成傷害／應**先處理漸強波的傷害，
+   再處理櫻花魚的[昏厥]**」。已把 `fireOnHandEnergyAttached` 移到 `dealAttackDamageToTarget`
+   之後。**沙盒實測**：修前 耿鬼ex 受 0 傷害且我方直接判負，修後受 150（5×30）、櫻花魚隨後昏厥。
+   ⇒ 通則寫進註解：**regPre 延後傷害、自行結算的招式，若同一招還會從手牌附能，
+   附能反應一律排在自己的傷害結算之後**（走 engine 主管線的固定傷害招式沒這問題）。
+2. **【建議修，已修】信使鳥｜幸福禮物 漏 `applyMagearnaHandAttachHeal`**：卡面是「雙方玩家
+   ……各自從自己的手牌選擇……附於自己的寶可夢身上」，對手 phase 時對手戰鬥場若是瑪機雅娜
+   就該回 90 HP。
+3. **【建議修，已修】`v158 startEnergyChain`（source:'hand'）整條管線從未接自動治癒**：
+   4 個 hand-source 分支全補（與 fire 一起 nested 呼叫）。實害是**鴨嘴炎獸｜拍檔提升**
+   （J 標**特性**，「基本【火】能量卡與基本【雷】能量卡最多**各1張**」）—— 特性型的持有者不佔
+   active，瑪機雅娜可同時在戰鬥場。已補行為測試（附火+雷 2 張 → 回 180）。
+4. **【建議修，已修】枚舉守衛 regex 漏「最多各N張」措辭**：補 `最多各[1-9]張`，
+   清單因此多出 鴨嘴炎獸｜拍檔提升 與 烈焰猴｜火焰蹈舞（後者兩階段各 1 張、各自 fire 一次，
+   本來就是 per-card 正確）。⇒ 列管卡數 8 → 10。
+5. **【建議修，已修（改註解）】`resolveMultiTargetDamageGuard` 註解原本宣稱涵蓋「鐵壁硬殼」**：
+   `passiveImmunityDamageBlock` 是用 `baseDamage = 1` 探測述詞（它同時服務會被 UI 預覽呼叫的
+   `resolveBenchGuard`，拿不到真實傷害），所以**依傷害量判定**的鐵壁硬殼（≥200）在這條路徑
+   永不成立。engine 主傷害管線有傳真實 baseDamage，那裡是對的。現行 H/I/J 沒有單次 ≥200 的
+   多目標招式 ⇒ 無實害，本版只修正註解，不動架構。
+6. **`anti-pattern-lint` Check G 的掃描器盲點（已修）**：它「往回找函式開頭再數大括號」的
+   span 偵測，在「for 迴圈內的單行 nested 呼叫」會提早收掉 span → 對
+   `fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(...), …)` 這種**正是它自己建議的寫法**
+   誤報。加一條「本行自己就含 `fireOnHandEnergyAttached` ⇒ 已成對」。
+   **已用正對照驗證**：刻意拿掉 返回重載 的 fire，lint 仍抓得到（1 筆 [G]）。
+
+### ⚠ 本輪順帶發現、**未在本版修**的獨立 bug（待站長裁定）
+
+**大電海燕ex｜迴旋充能：互換其實不會發生，附能目標也可能不對**
+（`effects/cards/v2750_h_wave2_full.ts:1624-1660`）
+卡面：「將這隻寶可夢與備戰寶可夢互換。**然後**，從自己的手牌選擇最多2張「基本【雷】能量」卡，
+附於**這隻寶可夢**身上。」
+實作先呼叫 `selfSwapPostInline('迴旋充能')` 開一個 `bench-choose` picker（effectKey
+`h-wave2-self-swap`），**緊接著又 `withPending(hand-choose)` 把它整個覆蓋掉** ⇒ 互換從未發生。
+而且 `h-wave2-attach-from-hand` 的附能目標寫死 `players[aIdx].active`，
+若互換真的修好了，能量會附給**換上來的新戰鬥寶可夢**而不是卡面指的大電海燕ex 本體。
+本版只把測試斷言改成「自方場上總傷害」，**刻意不用測試固化任何一種行為**。
+
+### 測試 fixture 的坑（記給下一輪）
+
+`byName()` 只用卡名找卡會抓到**沒有那個招式的印刷版本**：甲賀忍蛙ex 的 MC 版只有
+「變幻手裏劍」，SV5a 版才有「分身連打」→ `attackIndex` 對不上、`applyAction` 靜默不動作、
+log 是空的。需要特定招式時必須帶 `attackName` 一起找。
+
 ## v6.163 — 補 v6.162 漏掉的第 5 處「90 秒」：首頁 changelog（玩家看得到的那份）
 
 v6.162 把報到版本閘的門檻由 90 秒改成 30 秒，並同步了「90 秒」這個**說法**的四處：

@@ -179,6 +179,10 @@ for (const f of files) {
     if (/const _magHeal\s*=/.test(lines[i])) continue; // 別名定義行本身不算
     if (/function applyMagearnaHandAttachHeal/.test(lines[i])) continue;
     if (/dmg-direct-ok|handattach-heal-only-ok/.test(lines[i])) continue;
+    // v6.164：同一行就把兩者 nested 包起來（正是本檢查訊息建議的寫法）＝已成對。
+    //   必須先擋掉：下面的「往回找函式開頭再數大括號」在深巢狀（for 迴圈內的單行語句）
+    //   會提早把 span 收掉，導致 span 不含本行 → 誤報。
+    if (/fireOnHandEnergyAttached/.test(lines[i])) continue;
     let fs = i;
     for (let j = i; j >= Math.max(0, i - 80); j--) { if (C_FUNC_START.test(lines[j])) { fs = j; break; } }
     let depth = 0, end = lines.length, started = false;

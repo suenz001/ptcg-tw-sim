@@ -4271,30 +4271,57 @@ export function resolveMultiTargetDamageGuard(
   target: CardInstance,
   targetCard: Card | undefined,
   pool: Map<string, Card>,
-  opts: { isBench: boolean; skipCoin?: boolean },
+  opts: {
+    isBench: boolean;
+    skipCoin?: boolean;
+    /**
+     * ⭐ v6.164：多目標 resolver 有些同時服務「造成傷害」與「放置傷害指示物」兩種卡面
+     * （snipe-multi 的 params.kind）。**只有 `attack-damage` 才是「招式傷害」**，
+     * 才套第 1/2/4 層（中立中心／PASSIVE_IMMUNITY／擲幣免疫）——那些卡面一律寫
+     * 「不會受到……招式的**傷害**」。`attack-effect`（放指示物）只走第 3 層。
+     * 預設 'attack-damage'（維持既有 caller 行為不變）。
+     */
+    kind?: DamageKind;
+    /** 透傳給 canApplyEffectToTarget（對戰圓形等「放置指示物」專屬判定）。 */
+    counterPlacement?: boolean;
+  },
 ): { state: GameState; blocked: boolean; reason: string } {
   let s = state;
+  const kind: DamageKind = opts.kind ?? 'attack-damage';
+  const isDamage = kind === 'attack-damage';
   const attackerInst = s.players[actorIdx].active;
   const attackerCard = attackerInst ? pool.get(attackerInst.cardId) : undefined;
 
-  // 1. 中立中心競技場
-  if (wouldNeutralCenterBlock(s, pool, attackerCard, targetCard)) {
-    return { state: s, blocked: true, reason: '中立中心競技場 效果' };
+  if (isDamage) {
+    // 1. 中立中心競技場
+    if (wouldNeutralCenterBlock(s, pool, attackerCard, targetCard)) {
+      return { state: s, blocked: true, reason: '中立中心競技場 效果' };
+    }
+    // 2. 條件式完全免疫特性（礎石之勢／神秘之盾／神秘石居／神秘守護／璀璨鱗片／尾甲 …）
+    //    ⚠ 已知限制：`passiveImmunityDamageBlock` 是以 `baseDamage = 1` 探測述詞（它同時
+    //      服務會被 UI 預覽呼叫的 resolveBenchGuard，拿不到真實傷害），所以**依傷害量判定**
+    //      的「暴噬龜｜鐵壁硬殼（免疫 ≥200 傷害）」在這條路徑永遠不成立；engine 主傷害管線
+    //      有傳真實 baseDamage，那裡是正確的。現行 H/I/J 沒有單次 ≥200 的多目標招式 ⇒ 無實害。
+    //    ⚠ 備戰側 resolveBenchGuard 早在 v5.367 就含這層，**戰鬥位側從來沒有**——
+    //      漏的就是這裡（v6.164 玩家回報：酋雷姆｜三重冰霜 打得到戰鬥場的
+    //      厄鬼椪 礎石面具ex，而它的特性「礎石之勢」寫明不受擁有特性的寶可夢招式傷害）。
+    const pi = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
+    if (pi.blocked) return { state: s, blocked: true, reason: pi.reason };
   }
-  // 2. 條件式完全免疫特性（神秘石居 等）
-  const pi = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
-  if (pi.blocked) return { state: s, blocked: true, reason: pi.reason };
 
   // 3. 中央閘：備戰守衛 ＋ active 的 per-turn 免疫旗標（閃光屏障就在這一層）
-  const gate = canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-damage', pool, {
+  const gate = canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, {
     isBench: opts.isBench,
+    counterPlacement: opts.counterPlacement,
   });
   if (gate.blocked) return { state: s, blocked: true, reason: gate.reason ?? '免疫招式傷害' };
 
   // 4. 擲幣型免疫（真結算擲幣 ⇒ 回傳 state）
   //   ⚠ `skipCoin`：caller 自己已經跑過擲幣段時必須傳 true。這一層會**真的消耗亂數**，
   //     跑兩次等於讓防守方多擲一次幣（v6.120「同一效果掛兩個 hook」的同型陷阱）。
-  if (!opts.skipCoin) {
+  //   ⚠ 這是 PASSIVE_IMMUNITY 的擲幣型 entry（順滑大衣）；與 PASSIVE_COIN_AVOID
+  //     （躲藏高手／腎上腺費洛蒙，走 applyDefenderCoinAvoid）是**兩張不同的表**，不重複。
+  if (isDamage && !opts.skipCoin) {
     const coin = passiveCoinImmunity(s, actorIdx, targetCard, pool);
     s = coin.state;
     if (coin.immune) return { state: s, blocked: true, reason: '擲幣免疫（正面）' };
@@ -10531,7 +10558,19 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     //   → 對齊 engine 主路徑 skipDefEffects,bypass 所有 defender 免疫(太晶備戰/謝米花之帷幔/
     //   防護代碼/飛翔/暗影惡能量/太鼓防壁…)。官方判例:不計算不受招式傷害的效果,可造成傷害。
     // v6.029：本 resolver 的 kind='attack-effect' 是保留給「放指示物型多目標」用的 → 對戰圓形應擋。
-    const guard = flat ? null : canApplyEffectToTarget(s, actorIdx, target, targetCard, kind, pool, { isBench: !isActive, counterPlacement: true });
+    // ⭐ v6.164【中央收斂】原本只呼叫 canApplyEffectToTarget —— 那一層對**戰鬥位**目標
+    //   不含 PASSIVE_IMMUNITY（礎石之勢／神秘之盾／神秘石居／璀璨鱗片／尾甲／鐵壁硬殼）
+    //   也不含擲幣型免疫（順滑大衣）；備戰側因為 resolveBenchGuard 內含 v5.367 那層才沒事。
+    //   玩家回報：酋雷姆｜三重冰霜（走本 resolver）打得到戰鬥場的 厄鬼椪 礎石面具ex。
+    //   → 統一改走 v6.141 就已經存在的中央閘 resolveMultiTargetDamageGuard。
+    let guard: { blocked: boolean; reason: string } | null = null;
+    if (!flat) {
+      const g = resolveMultiTargetDamageGuard(s, actorIdx, target, targetCard, pool, {
+        isBench: !isActive, kind, counterPlacement: true,
+      });
+      s = g.state;
+      guard = { blocked: g.blocked, reason: g.reason };
+    }
     if (guard?.blocked) {
       const name = targetCard?.name ?? '?';
       s = addLog(s, `${label}：${name} 因${guard.reason}不受傷害`, actorIdx);
@@ -15347,9 +15386,13 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     //   bench: 對戰圓形 / 花之帷幔 / 太晶 / 中立中心 等（同 v2.129 原行為）
     //   active: 飛翔 / 要害斬 / 阿塞蘿拉 / 中立中心 / 精神防護 / 閃光屏障 / 熔岩牆 等
     //   （v4.975 新增；之前只查 bench 路徑導致 ex.g. 飛翔擋不住分身連打 bug）
-    const guard = canApplyEffectToTarget(s, actorIdx, target, targetCard, 'attack-damage', pool, { isBench: !isActive });
-    if (guard.blocked) {
-      s = addLog(s, `${label}：${targetCard?.name ?? '?'} 因${guard.reason}不受傷害`, actorIdx);
+    // ⭐ v6.164【中央收斂】同 snipe-multi —— 原本只有 canApplyEffectToTarget，
+    //   戰鬥位目標漏掉 PASSIVE_IMMUNITY（礎石之勢等）與擲幣型免疫（順滑大衣）。
+    //   分身連打／大吼大叫／三色炮 都是卡面「造成傷害」型 ⇒ kind 固定 'attack-damage'。
+    const _g = resolveMultiTargetDamageGuard(s, actorIdx, target, targetCard, pool, { isBench: !isActive });
+    s = _g.state;
+    if (_g.blocked) {
+      s = addLog(s, `${label}：${targetCard?.name ?? '?'} 因${_g.reason}不受傷害`, actorIdx);
       continue;
     }
     // 戰鬥場：套用弱點 ×2；備戰位：不計弱抗（卡面明示）
@@ -15489,7 +15532,8 @@ regR('ursaluna-bm-attach', (state, aIdx, selectedIids, params, pool) => {
   players[aIdx] = p;
   const names = energies.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   // v5.782：從手牌附能 → 補對手反應(侵蝕詛咒/麻痺門牙)
-  return fireOnHandEnergyAttached(_magHeal(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, [hostIid], pool), aIdx, hostIid, pool);
+  // v6.164：卡面「最多2張」→ per-energy-card（侵蝕詛咒/自動治癒 各張都算）
+  return fireOnHandEnergyAttached(_magHeal(addLog({ ...state, players }, `經驗法則：附 ${energies.length} 張基本【鬥】能量（${names}）到月月熊 赫月`, aIdx), aIdx, [hostIid], pool, energies.length), aIdx, hostIid, pool, energies.length);
 });
 
 // ── 5) 菊草葉｜叫聲 — 對手戰鬥位下回合招式 -20（沿用 嘎啦嘎啦|叫聲 的 helper）

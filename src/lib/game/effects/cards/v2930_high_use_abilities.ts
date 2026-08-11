@@ -174,8 +174,11 @@ regR('gold-flame-pick-energy', (st, idx, energyIids, _params, pool) => {
     //   對手的附能反應被動（耿鬼ex｜侵蝕詛咒、麻痺門牙）與己方瑪機雅娜｜自動治癒。
     //   結果同一張卡「備戰 1 隻」與「備戰 2 隻以上」行為不一致。
     //   ⚠ 通則：**fast-path 與 picker path 必須做完全一樣的副作用**，只能省掉「選誰」。
+    // v6.164：卡面「最多 2 張」→ 一次附 N 張，「每次附能」反應要觸發 N 次
+    //   （官方 §17.21.F：侵蝕詛咒對一次附 2 張放 4 個指示物）。
     return fireOnHandEnergyAttached(
-      applyMagearnaHandAttachHeal(attached, idx, [target.iid], pool), idx, target.iid, pool);
+      applyMagearnaHandAttachHeal(attached, idx, [target.iid], pool, energies.length),
+      idx, target.iid, pool, energies.length);
   }
 
   return withPending(st, {
@@ -212,7 +215,10 @@ regR('gold-flame-attach', (st, idx, iids, params, pool) => {
       : c),
   }));
   // v5.662：補對手附能反應(侵蝕詛咒/麻痺門牙)
-  return fireOnHandEnergyAttached(applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool), idx, targetIid, pool);
+  // v6.164：per-energy-card（一次附 N 張 → 反應觸發 N 次）
+  return fireOnHandEnergyAttached(
+    applyMagearnaHandAttachHeal(attached, idx, [targetIid], pool, energies.length),
+    idx, targetIid, pool, energies.length);
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
