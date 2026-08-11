@@ -17,6 +17,84 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.171 — derived_inert 事故：只加診斷，不做行為修正（真因**尚未定位**）
+
+**回報**：2026-08-11 正式站 `/tournament`，站長 Console 實拍
+`284 https://svelte.dev/e/derived_inert` ＋ `5` 次同碼（另一個呼叫點）＋ 一次
+`[PTCG] ⚠ 主執行緒卡 922ms`。玩家回報「一直出現與伺服器失聯 xx 秒」
+「拖曳附加能量、放寶可夢到場上都沒辦法動作」。同時段 nginx 1min 6383 req、5xx=0、
+CPU load 1.08、uptime 沒重啟 ⇒ 伺服器無罪。另有玩家用 v6.121 說「今天都很順」。
+
+**`derived_inert` 的確切語意（查 svelte 5.55.4 原始碼，不是猜的）**
+- `reactivity/deriveds.js` `execute_derived()`：
+  `if (!is_destroying_effect && parent !== null && (parent.f & (DESTROYED | INERT)) !== 0) w.derived_inert()`
+  ⇒ 兩個條件同時成立才會噴：① 這個 derived **需要重算**（dirty）② 它的 owner effect
+  已 **DESTROYED 或 INERT**。讀到的值是 `derived.v`，也就是**過期值**。
+- `INERT` 由 `effects.js` 的 `pause_children()` 設，也就是分支正在跑離場動畫那段期間；
+  **沒有 transition 的分支是同步 destroy 的，沒有窗口**。
+- `warnings.js` 的 non-DEV 分支也會 `console.warn('https://svelte.dev/e/derived_inert')`
+  ⇒ 正式 build 一樣看得到，站長看到的就是這一行。
+
+**⚠⚠ 走過一條死路，寫下來避免下一個人重走**
+一度認定是「離場動畫的 220～360ms 期間，delegated 的 onpointerdown/onclick 打到還留在
+DOM 的卡片，讀到 owner 已 INERT 的 `{@const}`」。用 jsdom 最小重現確實能噴出 derived_inert，
+但**那是假的**：`transitions.js` 的 `out(fn)` 第一件事就是同步 `element.inert = true`
+（在 `outrostart` 派發之前），jsdom 沒有實作 inert 的 hit-testing 才會過。
+用**真實 Chromium 實測**（headless，兩個重疊 div）：
+`el.inert = true` 之後 pointerdown 直接打到後面那個元素、`document.elementFromPoint` 也回傳
+後面那個。⇒ 離場中的節點**本來就點不到、也不會被拖曳落點命中**，
+原本準備的 `use:inertOnOutro`（outrostart 時設 `pointer-events:none`）**整個撤回**：
+它不但多餘，而且 out-only 的元素在 outro 被 abort 時 `in()` 因 `is_intro === false` 早退、
+**不會派發 `introstart`** ⇒ `pointer-events:none` 會永久殘留，反而把備戰格／戰鬥位的
+拖放目標弄死。（Fable 5 審查指出，已自行用 Chromium 覆核成立。）
+
+**本版做了什麼：只加量測**
+- 攔 `console.warn`（call through 原函式、不吞任何一則、全包 try/catch、自己絕不再 warn），
+  收集 `svelte.dev/e/xxx` 的**次數**與**前 3 筆 stack**，併進既有 `/clientdiag`
+  的 `svelteWarn`（不另開管線，比照 v6.170 的 Resource Timing）。
+- 每筆 stack 帶「距離上一次 pointerdown 幾 ms」⇒ 分辨「玩家點出來的」vs「背景 burst」。
+  背景 burst ＝ 殭屍計時器／輪詢的 await 續行讀到**已銷毀元件**的 derived（parent DESTROYED），
+  那是目前最合理、且能一次解釋 284 次量級的假說。
+- `svelteWarn.inertNodes` ＝ `document.querySelectorAll('[inert]').length`。
+  `pause_effect` 要等所有 outro callback 回來才 `destroy_effect`；若某個 outro 的 onfinish
+  沒回來，該分支會**永久 INERT 但 DOM 還在**（畫面凍結＋該區塊點不到＋裡面的 derived 一直 inert）。
+  這一欄若持續 > 0 就是直接證據。
+
+**⚠ 誠實的結論：284 次的來源尚未定位。**
+本機用**未混淆的 svelte**（把 `derived.fn` 的原始碼直接印出來）＋ headless Chromium
+實跑 AI 對局（擲硬幣、拖曳擺出場、擺備戰、準備完成、附能量、結束回合）
+**一次都沒重現到**。錦標賽限定的路徑（伺服器權威輪詢、樂觀更新回滾、看門狗、重連 remount）
+在本機起不來，那才是最可疑的區域。下次事故請直接看 `/clientdiag` 的 `svelteWarn.first`。
+
+**已定位、但本版刻意不動的兩件事（留給站長裁定）**
+1. **「拖曳沒辦法動作」**：`actionBusy = isTournament && tInFlight`（v6.147）直接 gate 住
+   手牌的 `onpointerdown`（`if(dragKind && !actionBusy)startDrag(...)`）。
+   v6.170 的重送狀態機讓 `tInFlight` 最長可以真的撐到
+   `TACT_RETRY_MS = 25000` ＋ 最後一發 `TACT_POST_TIMEOUT = 8000` ≈ **33 秒**，
+   這段期間**所有拖曳都被靜默丟棄**（只有 `.hand-card.action-busy{opacity:.5}` 這個很弱的提示）。
+   v6.121 完全沒有 `tInFlight`／`actionBusy` ⇒ 這正是「舊版順、新版卡」最直接的差異。
+   ⚠ 放行有重複送出的風險：重送用**同一個** actId 去重，但玩家的新手勢是**新的** actId，
+   伺服器會照套 ⇒ 真的會生效兩次。所以不擅自改。
+2. **「與伺服器失聯 xx 秒」是誤報**：`tOfflineSec = (tNow - _tLastPollOkAt)/1000` 是**牆鐘**，
+   而 `_tLastPollOkAt` 只在 `/state` 輪詢成功、新鮮度看門狗、手動 resync 三處更新；
+   **動作往返成功（`_tActAttempt` 拿到 `r.gameState`）不會更新它**。
+   ⇒ 主執行緒被長任務塞住（例如那個 922ms）讓輪詢的 await 續行延後、或背景頁籤被節流時，
+   即使每個動作都成功、伺服器 5xx=0，橫幅照樣會跳。它量的是
+   「距離上次**處理到**輪詢回應多久」，不是「有沒有請求失敗」。
+   ⚠ v6.149 的註解明講這個錨點不可以被「自我安撫」地重置，改法會同時影響新鮮度看門狗
+   ⇒ 交由站長裁定，本版只回報不動手。
+
+**守衛**：`scripts/test-v6171-svelte-warn-diag.mjs`（已進 `npm test`）
+- A 行為層：把 hook 原始碼抓出來**實跑** —— 計數正確、非 svelte 的 warning 不計數也不改參數、
+  三則全部 call through、stack 有帶「距上次 pointerdown 幾 ms」、`first` 有上限、無遞迴。
+- B 接線層：在**編譯後**的 `_tSendClientDiag` 裡，`tApi('/clientdiag')` 之前的 payload
+  真的含 `svelteWarn` / `inertNodes`（不是只驗原始碼有這個字串）。
+- C 正對照：釘住「本版不加 pointer 防護」的兩個前提 —— svelte `out()` 仍同步
+  `element.inert = true`、`derived_inert` 的 guard 條件仍是 `(DESTROYED | INERT)`。
+  未來 svelte 升級動到任一個，這條就會 FAIL，提醒要重新評估。
+- D 掃描器自我驗證：拿掉計數行，A 必須抓得到。
+- HEAD-FAIL 證明：在 v6.170 原始碼上跑 ⇒ **6 條失敗、exit 1**。
+
 ## v6.170（server v1.11）— 連線韌性：動作冪等重試、對手心跳、Resource Timing 自動回報
 
 **問題定位（承 v6.159 的量測，不重驗）**

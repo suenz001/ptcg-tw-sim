@@ -433,7 +433,13 @@ try {
     !'const tOppQuietOn = $derived(isTournament && tOppQuietSec > 0);'.includes('tServerActorSeat !== mySeatIdx'));
   ok('★★舊的「請重試」單發路徑已經移除（不可與新狀態機並存）',
     !/（動作可能未送達，畫面已還原，請重試）/.test(PAGE));
-  ok('★版本已 bump 且 admin 對照值一致', /export const VERSION = '6\.170'/.test(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')) && ADMIN.includes("window.SITE_VERSION_HINT = '6.170';"));
+  // v6.171：原本寫死 '6.170'，每次 bump 都會假 FAIL。改成「≥ 6.170 且兩邊一致」——
+  //   要釘的本來就是「版本有 bump」與「admin 對照值沒忘記跟上」這兩件事。
+  const _verSrc = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
+  const _verM = /export const VERSION = '([\d.]+)'/.exec(_verSrc);
+  const _hintM = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(ADMIN);
+  ok('★版本已 bump（≥ 6.170）且 admin 對照值一致',
+    !!_verM && !!_hintM && _verM[1] === _hintM[1] && parseFloat(_verM[1]) >= 6.170);
 } catch (e) {
   fail++; console.log('  FAIL ★本節整個爆掉（新程式碼不存在 ⇒ HEAD-FAIL）— ' + ((e && e.message) || e));
 }

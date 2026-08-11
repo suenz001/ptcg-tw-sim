@@ -5256,6 +5256,49 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (st && st.p95 >= 3000) { _rttDiagSent = true; _tSendClientDiag('slow-rtt'); }
   }
   // v5.933 客戶端診斷回傳(setup/同步異常定根因/確認用)——只在真異常指紋才送,fire-and-forget,絕不阻塞/影響對戰。
+  // ⭐⭐⭐v6.171 診斷：Svelte 5 runtime warning 收集器（本版**只加量測，不做任何行為修正**）。
+  //   事故：2026-08-11 正式站 /tournament，Console 出現 `284 https://svelte.dev/e/derived_inert`。
+  //   正式 build 的 svelte warning 只會印一行網址（warnings.js 的 non-DEV 分支），
+  //   站長看得到「284 次」卻看不出是哪一段程式 ⇒ 這裡把次數與前幾筆 stack 收下來，
+  //   併進既有的 /clientdiag 管線（不另開管線，比照 v6.170 的 Resource Timing）。
+  //   ⚠ 只收集：不改 console 的輸出、不吞任何一則、一律 call through 原函式。
+  //   ⚠ 全包 try/catch，且**這段自己絕不可以再呼叫 console.warn**（會遞迴）。
+  //   ⚠ 只認純字串參數：把 $state proxy 丟進 console 會觸發 svelte 自己的 console_log_state。
+  const _svelteWarnCounts: Record<string, number> = {};
+  const _svelteWarnFirst: string[] = [];
+  // ⭐ 判別「互動觸發」vs「背景 burst」：warn 當下距離上一次 pointer 事件多久。
+  //   殭屍 interval／輪詢續行讀到已銷毀元件的 derived ⇒ 這個值會很大且規律。
+  let _lastPointerAt = 0;
+  if (typeof window !== 'undefined' && !(window as { __ptcgSvelteWarnHook?: boolean }).__ptcgSvelteWarnHook) {
+    (window as { __ptcgSvelteWarnHook?: boolean }).__ptcgSvelteWarnHook = true;
+    try {
+      window.addEventListener('pointerdown', () => { _lastPointerAt = Date.now(); }, { capture: true, passive: true });
+    } catch { /* 診斷絕不影響對戰 */ }
+    const _origWarn = console.warn.bind(console);
+    console.warn = function (...args: unknown[]) {
+      try {
+        const joined = args.map((a) => (typeof a === 'string' ? a : '')).join(' ');
+        const hit = /svelte\.dev\/e\/([a-z_]+)/.exec(joined);
+        if (hit) {
+          const code = hit[1];
+          _svelteWarnCounts[code] = (_svelteWarnCounts[code] ?? 0) + 1;
+          if (_svelteWarnFirst.length < 3) {
+            const st = String(new Error().stack ?? '').split('\n').slice(2, 8).join(' <= ');
+            _svelteWarnFirst.push(code + ' +' + (_lastPointerAt ? Date.now() - _lastPointerAt : -1) + 'ms @ ' + st.slice(0, 700));
+          }
+        }
+      } catch { /* 診斷絕不影響對戰 */ }
+      return _origWarn(...(args as []));
+    };
+  }
+  // ⭐⭐v6.171 假說驗證用：畫面上還掛著幾個 inert 節點。
+  //   Svelte 的 pause_effect 要等所有 outro callback 回來才 destroy_effect；
+  //   若某個 outro 的 onfinish 沒回來，那個分支會**永久 INERT 但 DOM 還在**
+  //   ⇒ 畫面凍結 ＋ 該區塊點不到 ＋ 裡面的 derived 一直被判 inert。
+  //   這一欄若持續 > 0，就是那個假說的直接證據。
+  function _inertNodeCount(): number {
+    try { return document.querySelectorAll('[inert]').length; } catch { return -1; }
+  }
   function _tSendClientDiag(reason: string) {
     try {
       const now0 = Date.now();
@@ -5332,6 +5375,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
           //   ・整個 `res` 為 null ＝ 這台裝置不支援 PerformanceObserver，**不是**「連線都很好」。
           res: _resTimingStats(),
         },
+        // ⭐⭐⭐v6.171 Svelte runtime warning。`derived_inert` ＝ 讀到「owner effect 已銷毀／
+        //   正在離場」的 derived ⇒ 讀到的是**過期值**。判讀：
+        //   ・`first` 帶 chunk:line:col，配 sourcemap 就能定位到底是哪一個 derived。
+        //   ・`+NNNms` 是距離上一次 pointerdown 的時間：很大 ⇒ 不是玩家點出來的，
+        //     多半是殭屍計時器／輪詢續行讀到已銷毀元件的 derived。
+        //   ・`inertNodes` 持續 > 0 ⇒ 有分支永久卡在 INERT（離場動畫沒收尾）。
+        svelteWarn: { counts: { ..._svelteWarnCounts }, first: _svelteWarnFirst.slice(0, 3), inertNodes: _inertNodeCount() },
         env: {
           vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
           w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
