@@ -184,15 +184,18 @@ T('空資料也回 1 頁（頁數永遠 >= 1，版面不會因為沒資料而消
   ok(P.mpPaginate([], 8)[0].items.length === 0, '那一頁應是空的');
 });
 
+// ⚠ v6.169（站長裁定）：三個牌組榜數的是「發生了幾次」不是「幾個人」⇒ 單位詞由「位」改「次」，
+//   單頁版與完整版一起改。逐處語意判斷與更嚴格的斷言在 test-v6169-report-full-7rows-sections。
 T('⭐單位詞與單頁版逐字一致（同一週發出去的兩張圖對同一筆資料不能寫不同單位）', () => {
   const P = needPure();
   const mk = (n, k) => Array.from({ length: n }, (_, i) => ({ name: k + i, n: n - i }));
   const d = { champRank: mk(3, 'A'), t4Rows: mk(3, 'B'), commRank: mk(2, 'C'),
               siteChamps: [{ name: 'x', deck: 'y' }, { name: 'z', deck: 'w' }] };
   for (const p of P.mpPlanChampion(d, 5, 8)) {
-    if (p.kind === 'rank') ok(p.unit === '位', p.title + ' 的單位是「' + p.unit + '」，單頁版 rankRows 寫的是「位」');
+    if (p.kind === 'rank') ok(p.unit === '次', p.title + ' 的單位是「' + p.unit + '」，單頁版 rankRows 傳的是「次」');
   }
-  ok((ADM.match(/r\.n \+ ' 位'/g) || []).length === 1, '單頁版 rankRows 的單位詞被動到了');
+  ok((ADM.match(/r\.n \+ ' ' \+ unit/g) || []).length === 1, '單頁版 rankRows 的單位詞不再由呼叫端宣告');
+  ok(!/r\.n \+ ' 位'/.test(ADM), '單頁版 rankRows 還硬寫著「位」');
 });
 
 T('⭐只有 1 場網站賽時不重複出「冠軍牌組次數榜」頁（與逐場頁完全等價、每列都是 1）', () => {
@@ -252,7 +255,9 @@ T('⭐奪冠報告的資料取得（crLoadData）與註腳（crNotes）單頁／
   ok(/async function crLoadData\(\)/.test(ADM), '沒有 crLoadData');
   ok(/function crNotes\(d\)/.test(ADM), '沒有 crNotes');
   const single = slice(ADM, 'window.openChampionReportExport', 'window.renderChampionReportModal');
-  const full = slice(ADM, 'window.openChampionReportFullExport', '\n};');
+  // ⚠ v6.169：完整版的產圖本體搬到 runChampionReportFullExport（按鈕先開勾選視窗）
+  const full = slice(ADM, 'async function runChampionReportFullExport()', '\n}\n');
+  ok(full.length > 200, '抽不到完整版產圖本體（錨點失效＝這條檢查等於沒做）');
   ok(/crLoadData\(\)/.test(single) && /crLoadData\(\)/.test(full), '兩邊應該都呼叫 crLoadData');
   ok(!/champion-report\?since=/.test(full), '完整版自己又打了一次端點 —— 兩份查詢參數會漂移');
   const defs = (ADM.match(/crBuild\(tournStatsCache/g) || []).length;
@@ -487,9 +492,13 @@ T('⭐新按鈕掛 window（admin 是 module script，模組層級 function 全�
     '算完統計後沒有把完整版按鈕解鎖 ⇒ 永遠按不了');
 });
 
+// ⚠ v6.169：奪冠完整版的按鈕改成先開「分段勾選」視窗，真正產圖搬到 runChampionReportFullExport
+//   （具名函式宣告 + window 別名）⇒ 錨點跟著搬，不然這條會抓到空字串而永遠 PASS。
 T('⭐連點防呆＋finally 復原按鈕文字（多頁產圖會跑好幾秒）', () => {
-  for (const fn of ['openMetaImageFullExport', 'openChampionReportFullExport']) {
-    const body = slice(ADM, 'window.' + fn + ' = async function', '\n};');
+  for (const [fn, anchor] of [['openMetaImageFullExport', 'window.openMetaImageFullExport = async function'],
+                              ['runChampionReportFullExport', 'async function runChampionReportFullExport()']]) {
+    const body = slice(ADM, anchor, '\n}\n');
+    ok(body.length > 200, fn + ' 抽不到函式本體（錨點失效＝這條檢查等於沒做）');
     ok(/_mpBusy/.test(body), fn + ' 沒有 in-flight flag');
     ok(/finally \{/.test(body) && /btn\.textContent = label/.test(body),
       fn + ' 沒有 finally 還原按鈕 ⇒ 一次失敗就永遠停在「產生中…」');

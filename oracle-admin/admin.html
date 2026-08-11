@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.71</title>
+<title>PTCG Oracle Admin v1.72</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.71</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.72</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -2547,7 +2547,7 @@ function renderDeckRules(el) {
       <button id="meta-img-full-btn" onclick="openMetaImageFullExport()" disabled
               title="環境報告完整版：不省略任何排名，1920×1080 多頁 PNG 打包成 ZIP（做影片用）">🎬 環境報告・完整版（多頁 ZIP）</button>
       <button id="champ-img-full-btn" onclick="openChampionReportFullExport()"
-              title="奪冠報告完整版：不省略任何一筆，1920×1080 多頁 PNG 打包成 ZIP（做影片用）">🎬 奪冠報告・完整版（多頁 ZIP）</button>
+              title="奪冠報告完整版：可自己勾選要出哪幾段、排順序；不省略任何一筆，1920×1080 多頁 PNG 打包成 ZIP（做影片用）">🎬 奪冠報告・完整版（多頁 ZIP）</button>
     </div>
     <div id="arch-stats-box"><div class="empty">按「📊 計算統計」開始（規則改完後重按即可更新）。</div></div>
     <datalist id="card-name-list">${dlOpts}</datalist>`;
@@ -2864,7 +2864,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.168';
+window.SITE_VERSION_HINT = '6.169';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3081,35 +3081,116 @@ function mpPlanMeta(cur, per) {
 }
 
 /**
- * 奪冠報告完整版的頁面計畫。四個區段依序、每段自己分頁、名次在段內跨頁連續。
- * ⚠ perChamp／perRank 用參數傳進來、不讀 CR —— 這樣守衛可以獨立跑這支純函式。
+ * 奪冠完整版的四個區段定義。**陣列順序＝預設順序**；站長可在 UI 勾選與上下調序（v1.72）。
+ * ⭐ 這張表是唯一來源：勾選 UI 的清單、頁面計畫、單位詞都讀它 —— 標題／單位不得在別處再抄一份。
+ *
+ * ⭐⭐ **單位詞逐段判斷**（v1.72 站長裁定：指人留「位」、指次數改「次」，不是一律取代）：
+ *   ・champRank  ＝ crBuild 把每一場網站賽的冠軍依牌組聚合 ⇒ n 是「這副牌**奪冠幾次**」→「次」
+ *   ・t4Rows     ＝ 每場賽事的 top4 逐筆累加 ⇒ 同一個人在兩場賽事會各算一次
+ *                  ⇒ n 是「這副牌**進四強幾次**」（人次），不是「幾個人」→「次」
+ *   ・commRank   ＝ 社群賽冠軍依牌組聚合 ⇒ n 是「奪冠幾次」→「次」
+ *   ・siteChamps ＝ 逐場列，每列就是一場賽事，本來就沒有單位。
+ *   ⚠ 反例（**維持「位」**）：`crNotes` 的「四強＝準決賽的 4 位選手」指的是活生生的 4 個人；
+ *     單頁版四強區塊的抬頭原本寫「共 N 位」，但 N 是 t4Rows 的加總（＝人次）⇒ 改「共 N 人次」，
+ *     與同一張圖上早就有的「共 N 人次參賽」同一個口徑。
  */
-function mpPlanChampion(d, perChamp, perRank) {
+const CR_SECTIONS = [
+  { k: 'champRank',  kind: 'rank',  icon: '🏆', title: '網站賽　冠軍牌組次數榜',     accent: 'a1', per: 'rank',  unit: '次' },
+  { k: 'siteChamps', kind: 'champ', icon: '🏆', title: '網站賽　冠軍（逐場）',       accent: 'a1', per: 'champ', unit: '' },
+  { k: 't4Rows',     kind: 'rank',  icon: '🥈', title: '網站賽　四強牌組（含冠亞）', accent: 'a2', per: 'rank',  unit: '次' },
+  { k: 'commRank',   kind: 'rank',  icon: '👥', title: '社群賽　奪冠最多的牌組',     accent: 'c1', per: 'rank',  unit: '次' },
+];
+
+/**
+ * 某一段實際要出的資料列（回陣列，永不回 null）。
+ * ⚠ 只有 1 場網站賽時「冠軍牌組次數榜」與「冠軍（逐場）」完全等價（每列都是 1），
+ *   那一頁沒有任何資訊量 —— 這是同一份資料的兩種呈現重複，不是把資料截斷掉。
+ */
+function crSectionRows(d, k) {
+  if (!d) return [];
+  if (k === 'champRank') return ((d.siteChamps || []).length > 1) ? (d.champRank || []) : [];
+  return d[k] || [];
+}
+
+/**
+ * 勾了某一段卻不會出頁的原因（會出就回 null）。
+ * ⚠⚠ v1.72 把契約從「系統決定出哪幾段」改成「站長勾什麼就出什麼」⇒ **靜默少一段是重大缺陷**：
+ *   站長要到剪片時才會發現素材缺了一塊，而且完全不知道為什麼。所以產完圖一定要把
+ *   「勾了但沒出」連同原因回報給他。
+ * ⚠ champRank 的抑制規則（只有 1 場網站賽時與逐場完全等價）本身沒錯，錯的是不講。
+ */
+function crSkipReason(d, k) {
+  if (crSectionRows(d, k).length) return null;
+  if (k === 'champRank' && (((d && d.champRank) || []).length)) {
+    return '只有 1 場網站賽，內容與「冠軍（逐場）」完全相同，不重複輸出';
+  }
+  return '這個時間範圍內沒有資料';
+}
+
+/**
+ * 奪冠報告完整版的頁面計畫：每段自己分頁、名次在段內跨頁連續、頁碼跨段連續。
+ * @param sel 要輸出的區段 key 陣列，**依站長設定的順序**。
+ *   ⚠ `null`／`undefined` ＝呼叫端沒有指定 → 四段全出（既有呼叫端與舊守衛的預設行為）；
+ *     **空陣列 ＝ 一段都不出，回 0 頁**。這兩者一定要分開 —— 若把 `[]` 也當成「全出」，
+ *     就會出現「一段都沒勾卻產出四段」這種最難察覺的錯（產得出來、看起來也對）。
+ *   ⚠ 未知 key（舊設定殘留／手動改壞 localStorage）直接忽略，不讓整批產圖炸掉。
+ * ⭐ 頁碼的分母 N 由 mpNumber 在最後一次寫入 ⇒ 只勾兩段時 N 自動是那兩段的頁數，
+ *   不可能出現「第 3 / 8 頁」卻只有 3 頁這種對不上的情形。
+ * ⚠ perChamp／perRank 用參數傳進來、不讀 MP —— 這樣守衛可以獨立跑這支純函式。
+ */
+function mpPlanChampion(d, perChamp, perRank, sel) {
+  const keys = (sel === null || sel === undefined)
+    ? CR_SECTIONS.map(function (x) { return x.k; })
+    : sel;
   const pages = [];
-  const add = function (kind, icon, title, accent, items, per, unit) {
-    const list = items || [];
+  keys.forEach(function (k) {
+    const sec = CR_SECTIONS.filter(function (x) { return x.k === k; })[0];
+    if (!sec) return;
+    const list = crSectionRows(d, k);
     if (!list.length) return;
-    const peak = list[0] && list[0].n ? list[0].n : 1;   // rows 已依 n 由大到小排序
-    const chunks = mpPaginate(list, per);
+    const peak = (list[0] && list[0].n) ? list[0].n : 1;   // rows 已依 n 由大到小排序
+    const chunks = mpPaginate(list, sec.per === 'champ' ? perChamp : perRank);
     chunks.forEach(function (c, i) {
       pages.push({
-        kind: kind, icon: icon, title: title, accent: accent, unit: unit, peak: peak,
+        kind: sec.kind, icon: sec.icon, title: sec.title, accent: sec.accent,
+        unit: sec.unit, secKey: sec.k, peak: peak,
         rows: c.items, startRank: c.startRank, sectionTotal: list.length,
         sub: i + 1, subTotal: chunks.length,
       });
     });
-  };
-  // ⚠ 單位詞一律「位」，與單頁版 crDraw 的 rankRows 逐字一致 —— 同一週發出去的兩張圖
-  //   對同一筆資料寫不同單位，讀者一定會問哪個才對。（次數榜的「N 位」＝ N 位冠軍用了這副牌。）
-  // ⚠ 只有 1 場網站賽時「冠軍牌組次數榜」與「冠軍（逐場）」完全等價（每列都是 1），
-  //   那一頁沒有任何資訊量 —— 這是同一份資料的兩種呈現重複，不是把資料截斷掉。
-  const champRank = (d && d.siteChamps && d.siteChamps.length > 1) ? d.champRank : null;
-  add('rank', '🏆', '網站賽　冠軍牌組次數榜', 'a1', champRank, perRank, '位');
-  add('champ', '🏆', '網站賽　冠軍（逐場）', 'a1', d && d.siteChamps, perChamp, '');
-  add('rank', '🥈', '網站賽　四強牌組（含冠亞）', 'a2', d && d.t4Rows, perRank, '位');
-  add('rank', '👥', '社群賽　奪冠最多的牌組', 'c1', d && d.commRank, perRank, '位');
+  });
   return mpNumber(pages);
 }
+
+// ── 完整版的分段設定（勾選＋順序）：純函式部分 ──────────────────────────────
+// ⚠⚠ Safari 無痕模式的 `localStorage.setItem` 會 **throw**（QuotaExceededError），
+//   某些內嵌情境連讀 `localStorage` 這個屬性本身都會 throw ⇒ 一律包 try/catch。
+//   失敗只代表「這台機器不記設定」，當下這一次的勾選／排序／產圖必須照常運作
+//   （狀態放在記憶體的 _crFullSel，localStorage 只是持久化，不是真實來源）。
+const CR_FULL_LSKEY = 'ptcgAdminChampFullSections';
+function mpLsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function mpLsSet(key, val) { try { localStorage.setItem(key, val); return true; } catch (e) { return false; } }
+function mpParseJson(txt) { try { return JSON.parse(txt); } catch (e) { return null; } }
+
+/**
+ * 把存下來的設定正規化成 [{ k, on }]：
+ * ・照舊設定的順序排；未知 key 丟掉、重複 key 只留第一次
+ * ・**這一版新增的區段補在最後、預設勾選** ⇒ 升級不會讓某一段靜默消失
+ * ・完全讀不到（第一次用／localStorage 壞掉）＝四段全勾、預設順序
+ */
+function mpNormalizeSel(raw) {
+  const known = CR_SECTIONS.map(function (x) { return x.k; });
+  const out = [], seen = {};
+  (Array.isArray(raw) ? raw : []).forEach(function (it) {
+    const k = (it && typeof it === 'object') ? it.k : it;
+    if (known.indexOf(k) < 0 || seen[k]) return;
+    seen[k] = 1;
+    out.push({ k: k, on: (it && typeof it === 'object') ? (it.on !== false) : true });
+  });
+  known.forEach(function (k) { if (!seen[k]) { seen[k] = 1; out.push({ k: k, on: true }); } });
+  return out;
+}
+
 
 /**
  * 版面只放得下 3 則註腳，但 crNotes 最多會產 6 則；「已達查詢上限，更早的賽事未納入」
@@ -3432,10 +3513,18 @@ window.downloadMetaImage = function (srcKey) {
 //   ・**每頁尺寸完全一致**，最後一頁不足就留白、絕不縮版 —— 尺寸一跳，影片播放時會抖。
 //   ・**一筆都不截斷**：分頁走純函式 mpPlanMeta／mpPlanChampion，
 //     所有頁的筆數加總 === 原始筆數（守衛實跑釘住）。
-//   ・**每頁 8 筆**（不是 10）：1080 高扣掉品牌帶（0–140）、標題帶（140–290）、
-//     註腳與頁腳硬保留區（928–1080）後只剩約 630px。8 列可以給到 72px 列高、
-//     原型名 38px、勝率 46px；10 列會壓到 55px 列高、字級掉到 30px 以下。
-//     影片會被觀眾在手機上以約 400px 寬觀看（縮 0.21 倍），字級是這裡唯一該優先保住的。
+//   ・**每頁 7 筆**（v1.72 站長裁定，原本 8、更早評估過的 10）：
+//     可用的列區是 y=296（TOP）到 y=936（NOTE_Y-22 那條註腳分隔線）＝ **640px**，
+//     上面是品牌帶（0–140）＋標題帶（140–250）＋欄位表頭（268），
+//     下面是註腳（958／986／1014）與頁腳（1052）的**硬保留區**。
+//       ・8 筆：8×72 + 7×8 = 632px（列高 72）→ 原型名 38px、勝率 46px
+//       ・7 筆：7×83 + 6×8 = 629px（列高 **83**，底 y=925，離分隔線 936 還有 11px）
+//              → 原型名 **42px**、勝率 **50px**、名次 42px、較上期／使用率 35px、
+//                使用次數 33px、欄位表頭 26px、長條高 20px（各約 ×1.10~1.15 等比放大）
+//     影片會被觀眾在手機上以約 400px 寬觀看（縮 0.21 倍）：42px 的原型名只剩 8.8px，
+//     38px 只剩 7.9px —— 字級是這裡唯一該優先保住的東西，多 14% 的頁數換得起。
+//   ・**冠軍（逐場）維持每頁 5 筆**：它的列高是 116（一列兩行：賽事名／冠軍＋牌組），
+//     5×116 + 4×10 = 620px 已經幾乎吃滿那 640px；6 列要 746px，放不下。
 //   ・**檔名 01.png／02.png…**（頁數超過 99 自動補到 3 位）：Canva 匯入後就是正確順序。
 //   ・**ZIP 用 store（不壓縮）自己寫**：PNG 本來就已壓縮、store 不會變大；
 //     admin.html 目前只有 firebase 一個外部相依，不想為了打包再拉一支 CDN 函式庫進來
@@ -3443,9 +3532,10 @@ window.downloadMetaImage = function (srcKey) {
 
 const MP = {
   W: 1920, H: 1080, S: 1, PAD: 72,
-  PER: 8,            // 名次類每頁筆數
-  PER_CHAMP: 5,      // 冠軍逐場列（資訊較多、列高 116）每頁筆數
-  ROW: 72, GAP: 8, ROW_CHAMP: 116, GAP_CHAMP: 10,
+  // ⭐ v1.72（站長裁定）名次類每頁 8 → **7** 筆：頁數多約 14%，換來每一列都放得下更大的字。
+  PER: 7,
+  PER_CHAMP: 5,      // 冠軍逐場列（資訊較多、列高 116）每頁筆數；7 筆的改動不動它，理由見上方說明
+  ROW: 83, GAP: 8, ROW_CHAMP: 116, GAP_CHAMP: 10,
   TOP: 296,          // 列區起點 y
   NOTE_Y: 958, FOOT_Y: 1052,
 };
@@ -3626,7 +3716,7 @@ async function mpDrawMeta(ctx, p) {
   });
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = K.dim; miFont(ctx, 24, false);
+  ctx.fillStyle = K.dim; miFont(ctx, 26, false);
   ctx.fillText('牌組', 168, 268);
   ctx.fillText('較上期', 706, 268);
   ctx.fillText('使用率', 1012, 268);
@@ -3642,18 +3732,18 @@ async function mpDrawMeta(ctx, p) {
     ctx.fillStyle = K.row; miRR(ctx, PAD, y, W - PAD * 2, MP.ROW, 12); ctx.fill();
     if (rank <= 3) { ctx.fillStyle = [K.r1, K.r2, K.r3][rank - 1]; miRR(ctx, PAD, y, 6, MP.ROW, 3); ctx.fill(); }
     ctx.textAlign = 'center';
-    ctx.fillStyle = rank <= 3 ? K.r1 : K.dim; miFont(ctx, 38, true);
+    ctx.fillStyle = rank <= 3 ? K.r1 : K.dim; miFont(ctx, 42, true);
     ctx.fillText(String(rank), PAD + 44, mid);
 
     ctx.textAlign = 'left';
-    ctx.fillStyle = K.txt; miFont(ctx, 38, true);
+    ctx.fillStyle = K.txt; miFont(ctx, 42, true);
     ctx.fillText(miFit(ctx, r.name, 500), 168, mid);
 
     const t = p.trend && p.trend.ok ? p.trend.by.get(String(r.ruleId)) : null;
     if (t && t.isNew) {
-      miFont(ctx, 26, true);
+      miFont(ctx, 28, true);
       const tw = ctx.measureText('新登場').width + 26;
-      ctx.fillStyle = K.r1; miRR(ctx, 706, mid - 18, tw, 36, 18); ctx.fill();
+      ctx.fillStyle = K.r1; miRR(ctx, 706, mid - 20, tw, 40, 20); ctx.fill();
       ctx.fillStyle = K.bg1; ctx.textAlign = 'center';
       ctx.fillText('新登場', 706 + tw / 2, mid);
       ctx.textAlign = 'left';
@@ -3662,7 +3752,7 @@ async function mpDrawMeta(ctx, p) {
       const up = t.dPP >= 1.5, dn = t.dPP <= -1.5;
       // ⚠ 這裡不重複寫「較上期」：表頭已經寫了、註腳也解釋了，省下來的寬度拿去把字級
       //   從 28 拉到 32（手機上 28px ≈ 5.8px，讀不到）。
-      ctx.fillStyle = up ? K.up : (dn ? K.dn : K.mid); miFont(ctx, 32, true);
+      ctx.fillStyle = up ? K.up : (dn ? K.dn : K.mid); miFont(ctx, 35, true);
       ctx.fillText(up ? '▲ +' + t.dPP.toFixed(1) + '%'
                  : (dn ? '▼ ' + t.dPP.toFixed(1) + '%' : '－ 持平'), 706, mid);
     }
@@ -3670,21 +3760,21 @@ async function mpDrawMeta(ctx, p) {
     const bw = Math.max(6, Math.round(300 * share(r.usage) / peak));
     const g = ctx.createLinearGradient(1012, 0, 1012 + bw, 0);
     g.addColorStop(0, S.a1); g.addColorStop(1, S.a2);
-    ctx.fillStyle = K.ln; miRR(ctx, 1012, mid - 9, 300, 18, 9); ctx.fill();
-    ctx.fillStyle = g; miRR(ctx, 1012, mid - 9, bw, 18, 9); ctx.fill();
-    ctx.fillStyle = K.txt; miFont(ctx, 32, false);
-    ctx.fillText(miPct(share(r.usage)), 1330, mid);      // 「12.3%」32px 約 85px 寬，止於 ~1415
-    ctx.fillStyle = K.dim; miFont(ctx, 30, false);
-    ctx.fillText(r.usage + ' 次', 1470, mid);            // 「9999 次」30px 約 110px，止於 ~1580
+    ctx.fillStyle = K.ln; miRR(ctx, 1012, mid - 10, 300, 20, 10); ctx.fill();
+    ctx.fillStyle = g; miRR(ctx, 1012, mid - 10, bw, 20, 10); ctx.fill();
+    ctx.fillStyle = K.txt; miFont(ctx, 35, false);
+    ctx.fillText(miPct(share(r.usage)), 1330, mid);      // 「100.0%」35px 約 116px 寬，止於 ~1446（欄距 1470）
+    ctx.fillStyle = K.dim; miFont(ctx, 33, false);
+    ctx.fillText(r.usage + ' 次', 1470, mid);            // 「99999 次」33px 約 142px，止於 ~1612
 
     // ⚠樣本 <10 副一律顯示「—」，不管實際值多少（1 勝 0 負 = 100% 被截圖傳開就收不回來）。
     ctx.textAlign = 'right';
     if (!r.sampleOk || r.winRate === null || r.winRate === undefined) {
-      ctx.fillStyle = K.mid; miFont(ctx, 30, true);
-      ctx.fillText('—　資料太少', W - PAD, mid);          // 30px 約 180px 寬，起點 ~1668，不撞使用次數
+      ctx.fillStyle = K.mid; miFont(ctx, 33, true);
+      ctx.fillText('—　資料太少', W - PAD, mid);          // 33px 約 198px 寬，起點 ~1650，不撞使用次數（止於 1612）
     } else {
       ctx.fillStyle = r.winRate >= 0.52 ? K.up : (r.winRate < 0.48 ? K.dn : K.mid);
-      miFont(ctx, 46, true);
+      miFont(ctx, 50, true);
       ctx.fillText(miPct(r.winRate), W - PAD, mid);
     }
     ctx.textAlign = 'left';
@@ -3756,7 +3846,9 @@ window.openMetaImageFullExport = async function () {
 // 跟「牌組環境報告圖」是**兩種量綱**，所以是兩張圖不是兩個分頁：
 //   環境報告＝連續的份額／勝率（分母是幾千場對局，畫比率有意義）；
 //   奪冠報告＝**離散的個位數事件**（一期可能只有 3 場網站賽）。
-//   ⭐ 因此本圖**全圖不出現任何百分比**，一律「N 場」「N 位」。
+//   ⭐ 因此本圖**全圖不出現任何百分比**，一律「N 場」「N 次」「N 人次」。
+//   ⚠ v1.72 單位詞逐處校正：牌組榜的 n 是「發生了幾次」→「次」；只有真的在數人的地方
+//     （註腳「準決賽的 4 位選手」）才是「位」。逐段判斷見 CR_SECTIONS 上方。
 //   同理不做「較上期 ▲▼」——奪冠數的期間差幾乎全是噪音（環境圖的 miTrend 不引用）。
 //
 // 資料來源兩份，用 eventId／uid 對照：
@@ -3913,8 +4005,13 @@ async function crDraw(d) {
     if (right) { miFont(ctx, 24); ctx.fillStyle = K.dim; ctx.textAlign = 'right'; ctx.fillText(right, MI.W - PAD, y); ctx.textAlign = 'left'; }
     y += 34;
   };
-  /** 名次／次數列（絕對數，不畫比率）。 */
-  const rankRows = (rows, max, barColor) => {
+  /**
+   * 名次／次數列（絕對數，不畫比率）。
+   * ⚠ v1.72：單位詞改成**由呼叫端逐段宣告**（原本硬寫「位」）—— 這三段的 n 全都是
+   *   「這副牌發生了幾次」而不是「幾個人」，逐處判斷見 CR_SECTIONS 上方的說明。
+   *   單頁版與完整版的單位詞必須逐字一致（同一週發出去的兩張圖不能寫不同單位）。
+   */
+  const rankRows = (rows, max, barColor, unit) => {
     const top = rows.slice(0, max);
     const peak = top.length ? top[0].n : 1;
     for (const r of top) {
@@ -3925,7 +4022,7 @@ async function crDraw(d) {
       miRR(ctx, bx, y + 17, bw, 12, 6); ctx.fillStyle = K.ln; ctx.fill();
       miRR(ctx, bx, y + 17, Math.max(10, bw * (r.n / peak)), 12, 6); ctx.fillStyle = barColor; ctx.fill();
       miFont(ctx, 34, true); ctx.fillStyle = K.txt; ctx.textAlign = 'right';
-      ctx.fillText(r.n + ' 位', MI.W - PAD - 8, y + 23);
+      ctx.fillText(r.n + ' ' + unit, MI.W - PAD - 8, y + 23);
       ctx.textAlign = 'left';
       y += 56;
     }
@@ -3955,7 +4052,7 @@ async function crDraw(d) {
   const RESERVE_AFTER_CHAMP = (34 + 56 * 2 + 30) * 2;
   if (d.siteChamps.length > CR.MAXCHAMP) {
     sectionHead('🏆', '網站賽　冠軍牌組', d.nSite + ' 場合計', A1);
-    rankRows(d.champRank, Math.min(CR.MAXCHAMP + 1, roomFor(56, RESERVE_AFTER_CHAMP)), A1);
+    rankRows(d.champRank, Math.min(CR.MAXCHAMP + 1, roomFor(56, RESERVE_AFTER_CHAMP)), A1, '次');
   } else if (d.siteChamps.length) {
     sectionHead('🏆', '網站賽　冠軍', d.siteChamps.length + ' 場', A1);
     champRows(d.siteChamps, Math.min(CR.MAXCHAMP, roomFor(92, RESERVE_AFTER_CHAMP)), A1);
@@ -3966,9 +4063,11 @@ async function crDraw(d) {
 
   // ── 四強牌組
   y += 12;
-  sectionHead('🥈', '網站賽　四強牌組（含冠亞）', d.t4Total ? ('共 ' + d.t4Total + ' 位') : '', K.dim);
+  // ⚠ v1.72：t4Total = t4Rows 的 n 加總 = 每場賽事 top4 逐筆累加 ⇒ 同一個人在兩場賽事會被算兩次，
+  //   所以它是**人次**不是人數（跟這張圖副標的「共 N 人次參賽」同一個口徑）。原本寫「共 N 位」是錯的。
+  sectionHead('🥈', '網站賽　四強牌組（含冠亞）', d.t4Total ? ('共 ' + d.t4Total + ' 人次') : '', K.dim);
   const RESERVE_AFTER_T4 = 30 + 34 + 56 * 2 + 30;
-  if (d.t4Rows.length) rankRows(d.t4Rows, Math.min(CR.MAXTOP4, roomFor(56, RESERVE_AFTER_T4)), A2);
+  if (d.t4Rows.length) rankRows(d.t4Rows, Math.min(CR.MAXTOP4, roomFor(56, RESERVE_AFTER_T4)), A2, '次');
   else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有可判定四強的網站賽', PAD + 8, y + 10); y += 46; }
 
   // ── 社群賽冠軍（永遠保留區塊，沒資料也印一行，避免版面塌陷）
@@ -3977,7 +4076,7 @@ async function crDraw(d) {
   ctx.beginPath(); ctx.moveTo(PAD, y - 6); ctx.lineTo(MI.W - PAD, y - 6); ctx.stroke();
   y += 18;
   sectionHead('👥', '社群賽　奪冠最多的牌組', d.nComm + ' 場', C1);
-  if (d.commRank.length) rankRows(d.commRank, Math.min(CR.MAXCOMM, roomFor(56, 0)), C1);
+  if (d.commRank.length) rankRows(d.commRank, Math.min(CR.MAXCOMM, roomFor(56, 0)), C1, '次');
   else { miFont(ctx, 26); ctx.fillStyle = K.dim; ctx.fillText('本期沒有社群賽', PAD + 8, y + 10); y += 46; }
 
   // ── 註腳（把口徑講清楚，避免玩家拿去跟大廳排行榜對數字時誤會）
@@ -4096,9 +4195,12 @@ async function mpDrawChampion(ctx, p) {
     notes: p.notes || [],
   });
 
-  ctx.textAlign = 'left'; ctx.fillStyle = accent; miFont(ctx, 34, true);
+  // ⚠ v1.72：段落標 34→38px 之後，上緣 = 268 − 19 = 249，剛好貼上 mpFrame 副標的下緣
+  //   （234 + 30/2 = 249）。段落標開頭是 emoji（🏆🥈👥），emoji 字形常超出 em box ⇒ 會相碰。
+  //   baseline 挪到 272：上緣 253（離副標 4px）、下緣 291（離列區起點 296 還有 5px）。
+  ctx.textAlign = 'left'; ctx.fillStyle = accent; miFont(ctx, 38, true);
   ctx.fillText(p.icon + ' ' + p.title + '　（第 ' + p.startRank + '–' + last
-    + ' 筆，全部 ' + p.sectionTotal + ' 筆）', PAD, 268);
+    + ' 筆，全部 ' + p.sectionTotal + ' 筆）', PAD, 272);
 
   if (p.kind === 'champ') {
     p.rows.forEach(function (c, i) {
@@ -4132,44 +4234,155 @@ async function mpDrawChampion(ctx, p) {
     ctx.fillStyle = K.row; miRR(ctx, PAD, y, W - PAD * 2, MP.ROW, 12); ctx.fill();
     if (n <= 3) { ctx.fillStyle = [K.r1, K.r2, K.r3][n - 1]; miRR(ctx, PAD, y, 6, MP.ROW, 3); ctx.fill(); }
     ctx.textAlign = 'center';
-    ctx.fillStyle = n <= 3 ? K.r1 : K.dim; miFont(ctx, 38, true);
+    ctx.fillStyle = n <= 3 ? K.r1 : K.dim; miFont(ctx, 42, true);
     ctx.fillText(String(n), PAD + 44, mid);
-    ctx.textAlign = 'left'; ctx.fillStyle = K.txt; miFont(ctx, 38, true);
+    ctx.textAlign = 'left'; ctx.fillStyle = K.txt; miFont(ctx, 42, true);
     ctx.fillText(miFit(ctx, r.name, 900), 168, mid);
-    // 長條 1200–1620（右側次數欄 44px 右對齊 1848，起點約 1710，還留 90px）
+    // 長條 1200–1620（右側次數欄 50px 右對齊 1848，「99 次」約 138px、起點約 1710，還留 90px）
     const bw = Math.max(10, Math.round(420 * (r.n / peak)));
-    ctx.fillStyle = K.ln; miRR(ctx, 1200, mid - 9, 420, 18, 9); ctx.fill();
-    ctx.fillStyle = accent; miRR(ctx, 1200, mid - 9, bw, 18, 9); ctx.fill();
-    ctx.textAlign = 'right'; ctx.fillStyle = K.txt; miFont(ctx, 44, true);
+    ctx.fillStyle = K.ln; miRR(ctx, 1200, mid - 10, 420, 20, 10); ctx.fill();
+    ctx.fillStyle = accent; miRR(ctx, 1200, mid - 10, bw, 20, 10); ctx.fill();
+    ctx.textAlign = 'right'; ctx.fillStyle = K.txt; miFont(ctx, 50, true);
     ctx.fillText(r.n + ' ' + p.unit, W - PAD, mid);
     ctx.textAlign = 'left';
   });
 }
 
-window.openChampionReportFullExport = async function () {
+// ── v1.72 分段勾選與排序（站長裁定：不要替他決定順序）──────────────────────
+//
+// 站長沒有固定的影片腳本，每週想講的重點不一樣 ⇒ 由他自己勾選要輸出哪幾段、排成什麼順序。
+// ⚠ **不做拖曳**：admin 是單一 HTML 檔，拖曳要一整組 pointer/touch 事件與捲動相容處理，
+//   ▲▼ 兩顆按鈕就能達成同樣的事，越簡單越不會壞。
+// ⚠ 狀態的真實來源是記憶體裡的 _crFullSel，localStorage 只負責「下次打開沿用」；
+//   所以 Safari 無痕（setItem 會 throw）下勾選與排序照樣正常，只是不會被記住。
+let _crFullSel = null;
+function crFullSel() {
+  if (!_crFullSel) _crFullSel = mpNormalizeSel(mpParseJson(mpLsGet(CR_FULL_LSKEY)));
+  return _crFullSel;
+}
+function crFullSave() { mpLsSet(CR_FULL_LSKEY, JSON.stringify(_crFullSel)); }
+/** 目前勾選的區段 key，**依畫面上的順序**（就是產圖的出頁順序）。 */
+function crFullKeys() {
+  return crFullSel().filter(function (x) { return x.on; }).map(function (x) { return x.k; });
+}
+
+// 按鈕改成先開設定視窗，真正產圖在 runChampionReportFullExport（下面）。
+// ⚠ 這幾支寫成**具名函式宣告**再掛 window 別名（不是 `window.x = function`）：
+//   它們彼此互相呼叫（champFullToggle → renderChampFullPicker），裸名稱要在模組作用域內
+//   就解析得到；只掛 window 的話是靠「找不到就往全域找」才碰巧能動，守衛也抽不出來跑。
+function openChampionReportFullExport() {
   if (_mpBusy) return;
-  const btn = document.getElementById('champ-img-full-btn');
-  const label = btn ? btn.textContent : '';
+  renderChampFullPicker();
+}
+
+function renderChampFullPicker() {
+  const sel = crFullSel();
+  const onCount = sel.filter(function (x) { return x.on; }).length;
+  // ⚠⚠ 產圖進行中要把整個視窗鎖住：mpExportPages 是把進度寫進 #champ-full-run-btn 這個
+  //   **元素**（「產生中… 3/12」）。使用者這時去點勾選／▲▼ 會重繪，舊按鈕被換掉並 detach ⇒
+  //   進度從此寫進空氣、再按又被 _mpBusy 靜默擋掉，畫面看起來就是「卡住了」。
+  const busy = _mpBusy;
+  const dis = busy ? ' disabled' : '';
+  const rows = sel.map(function (it, i) {
+    const sec = CR_SECTIONS.filter(function (x) { return x.k === it.k; })[0] || { icon: '', title: it.k };
+    return '<div style="display:flex;align-items:center;gap:8px;border:1px solid #dde2ea;'
+      + 'border-radius:8px;padding:6px 10px;margin-bottom:6px;">'
+      + '<label style="flex:1;display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;">'
+      + '<input type="checkbox"' + (it.on ? ' checked' : '') + dis + ' onchange="champFullToggle(' + i + ')">'
+      + '<span>' + sec.icon + ' ' + sec.title + '</span></label>'
+      + '<button class="ghost" style="padding:2px 10px;" onclick="champFullMove(' + i + ',-1)"'
+      + (i === 0 || busy ? ' disabled' : '') + '>▲</button>'
+      + '<button class="ghost" style="padding:2px 10px;" onclick="champFullMove(' + i + ',1)"'
+      + (i === sel.length - 1 || busy ? ' disabled' : '') + '>▼</button>'
+      + '</div>';
+  }).join('');
+  document.getElementById('modal-container').innerHTML =
+    '<div class="modal-bg" onclick="if(event.target===this&&!champFullBusy())closeModal()">'
+    + '<div class="modal" style="max-width:560px;width:100%;">'
+    + '<h3>🎬 奪冠報告・完整版（多頁 ZIP）</h3>'
+    + '<div class="small muted" style="margin-bottom:10px;">勾選要輸出的段落，用 ▲▼ 調整順序'
+    + '（影片就照這個順序一頁一頁播）。每段內部一律不省略任何一筆。設定會記在這台電腦，下次打開沿用。</div>'
+    + rows
+    + '<div class="small muted" style="margin:2px 0 6px;">※「冠軍牌組次數榜」在該期間只有 1 場網站賽時不會輸出'
+    + '（內容會與「冠軍（逐場）」完全相同）；其他沒有資料的段落也會在產完後一併告知。</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">'
+    + '<button id="champ-full-run-btn" onclick="runChampionReportFullExport()"'
+    + (onCount && !busy ? '' : ' disabled') + '>🎬 產生 ZIP</button>'
+    + '<button class="ghost" onclick="closeModal()"' + dis + '>取消</button></div>'
+    + (onCount ? '' : '<div class="small" style="margin-top:8px;color:#c0392b;">⚠ 至少要勾選一個段落才能產圖。</div>')
+    + '</div></div>';
+}
+/** 產圖進行中？（modal-bg 的 inline onclick 要用，所以下面有掛 window。） */
+function champFullBusy() { return _mpBusy; }
+
+function champFullToggle(i) {
+  if (_mpBusy) return;                   // 產圖中：UI 已經全 disabled，這是第二道保險
+  const sel = crFullSel();
+  if (!sel[i]) return;
+  sel[i].on = !sel[i].on;
+  crFullSave();
+  renderChampFullPicker();
+}
+function champFullMove(i, dir) {
+  if (_mpBusy) return;                   // 同上
+  const sel = crFullSel();
+  const j = i + dir;
+  if (j < 0 || j >= sel.length) return;
+  const t = sel[i]; sel[i] = sel[j]; sel[j] = t;
+  crFullSave();
+  renderChampFullPicker();
+}
+
+async function runChampionReportFullExport() {
+  if (_mpBusy) return;
+  const keys = crFullKeys();
+  if (!keys.length) return;              // 按鈕本來就 disabled；這是第二道保險
   _mpBusy = true;
+  renderChampFullPicker();               // ⭐ 先重繪一次把整個視窗鎖住，再去抓那顆按鈕
+  const btn = document.getElementById('champ-full-run-btn');
+  const label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '產生中…'; }
   try {
     const d = await crLoadData();          // ⭐與單頁版同一支資料來源
     if (!d) return;
-    const pages = mpPlanChampion(d, MP.PER_CHAMP, MP.PER);
-    if (!pages.length) { alert('這個時間範圍內沒有任何冠軍紀錄，無法產圖。'); return; }
+    const pages = mpPlanChampion(d, MP.PER_CHAMP, MP.PER, keys);
+    // ⭐ 勾了卻不會出的段落，逐段講原因（不講的話站長剪片時才會發現素材缺一塊）。
+    const skipped = keys.map(function (k) {
+      const why = crSkipReason(d, k);
+      if (!why) return null;
+      const sec = CR_SECTIONS.filter(function (x) { return x.k === k; })[0] || { title: k };
+      return '・' + sec.title + '：' + why;
+    }).filter(Boolean);
+    if (!pages.length) {
+      alert('勾選的段落都沒有可輸出的內容：\n' + skipped.join('\n'));
+      return;
+    }
     // 只調整完整版的顯示順序，crNotes 本身與單頁版的呈現都不動。
     const notes = mpHoistCapNote(crNotes(d));
     for (const p of pages) { p.d = d; p.notes = notes; }
     const zip = await mpExportPages(pages, mpDrawChampion, btn);
     mpSaveBlob(zip, 'ptcg-champions-full-' + miStamp(Date.now()) + '.zip');
-    alert('已產生 ' + pages.length + ' 頁（01.png、02.png…），打包成 ZIP 下載。\n解壓後整批拖進 Canva 就是正確順序。');
+    closeModal();
+    alert('已產生 ' + pages.length + ' 頁（01.png、02.png…），打包成 ZIP 下載。\n解壓後整批拖進 Canva 就是正確順序。'
+      + (skipped.length ? '\n\n⚠ 以下勾選的段落沒有輸出：\n' + skipped.join('\n') : ''));
   } catch (e) {
     alert('產圖失敗：' + (e && e.message ? e.message : e));
   } finally {
     _mpBusy = false;
     if (btn) { btn.disabled = false; btn.textContent = label; }
+    // 成功時上面已 closeModal()；失敗／中止時視窗還開著 ⇒ 重繪把 disabled 解開。
+    if (document.getElementById('modal-container').innerHTML.indexOf('champ-full-run-btn') >= 0) {
+      renderChampFullPicker();
+    }
   }
-};
+}
+// inline on* handler 在**全域**作用域執行 ⇒ 這五支一定要掛 window，否則按了會 ReferenceError。
+window.openChampionReportFullExport = openChampionReportFullExport;
+window.renderChampFullPicker = renderChampFullPicker;
+window.champFullToggle = champFullToggle;
+window.champFullMove = champFullMove;
+window.runChampionReportFullExport = runChampionReportFullExport;
+window.champFullBusy = champFullBusy;
 
 window.loadArchetypeStats = async function() {
   if (_archStatsBusy) return;
