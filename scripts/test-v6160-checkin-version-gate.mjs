@@ -9,7 +9,7 @@
  *   **實際 import 真的模組跑真的輸入**（esbuild 轉譯 src/lib/*.ts），不是 grep 字串。
  *   只有「接線」（誰呼叫誰、模板有沒有那兩顆鈕）才用結構掃描，且每條都配自我驗證。
  */
-import { build } from 'esbuild';
+import { build, transform } from 'esbuild';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -144,7 +144,7 @@ console.log('⑤ 逃生口與接線');
     !PAGE.slice(PAGE.indexOf('function tCheckinBlockedByVersion'), PAGE.indexOf('function tSendLobbyDiag')).match(/sessionStorage|localStorage/));
   ok('報到真的會帶 client 版本給伺服器', PAGE.includes("tApi('/checkin', { eventId, ver: VERSION })"));
   ok('★門檻由 /event 收下，缺欄位退回空字串', PAGE.includes("tMinClientVer = (typeof r.minClientVer === 'string') ? r.minClientVer : '';"));
-  ok('★報到剩不到 90 秒不擋（別把人推去重載然後錯過報到）', /_left < 90000/.test(PAGE));
+  ok('★報到剩餘時間不足就不擋（門檻＝30 秒，行為端逐條驗在 ⑩）', /_left < 30000/.test(PAGE));
   ok('★大廳診斷不依賴 tActiveRoom（既有 _tSendClientDiag 在大廳送不出去）',
     /function tSendLobbyDiag[\s\S]{0,600}?tApi\('\/clientdiag'/.test(PAGE)
     && !/function tSendLobbyDiag[\s\S]{0,400}?tActiveRoom/.test(PAGE));
@@ -230,6 +230,66 @@ console.log('⑧ admin 分頁');
   ok('UI 明說門檻只對 v6.160 以上生效（避免站長誤以為擋得到舊 client）', ADMIN.includes('只對 v6.160 以上的玩家生效'));
   ok('UI 明說不會鎖人', ADMIN.includes('不會自動重載、也不會擋住報到'));
 }
+
+// ══ ⑩ 報到截止前的「剩餘時間門檻」＝30 秒（v6.162 站長裁定，原 90 秒）══════
+// ⚠ 這條**刻意不是**「grep 到那個數字就綠」—— 那種寫法實作改成幾就綠成幾，等於假綠。
+//   做法：把 tCheckinBlockedByVersion 的原始碼原封不動抽出來、注入 stub 之後**真的跑**，
+//   釘住「門檻確實存在、而且真的在 30 秒這個位置生效」：
+//     剩 31 秒 ⇒ 仍然提示更新；剩 29 秒 ⇒ 放行（fail-open，絕不把人推去重載）。
+//   最後一條是**變異測試**：把門檻改回 90000 的實作在「剩 31 秒」會放行 ⇒ 證明第一條
+//   真的擋得住回退，而不是永遠會過。
+console.log('⑩ 報到剩餘時間門檻（行為端）');
+{
+  const THRESHOLD_MS = 30000;
+  const _i0 = PAGE.indexOf('function tCheckinBlockedByVersion');
+  const src = _i0 < 0 ? '' : PAGE.slice(_i0, PAGE.indexOf('async function tCheckin(', _i0));
+  let mkErr = modErr;
+  const compile = async (source) => {
+    const wrapped = '(function(env){ const { isClientTooOld, recentlyHardRefreshed, VERSION, tMinClientVer, tEvents, tNow, tSendLobbyDiag } = env;\n'
+      + source + '\nreturn tCheckinBlockedByVersion; })';
+    const js = (await transform(wrapped, { loader: 'ts' })).code;
+    const f = (0, eval)(js);
+    if (typeof f !== 'function') throw new Error('抽出來的東西不是函式');
+    return f;
+  };
+  let mk = null, mkOld = null;
+  if (!mkErr) {
+    if (src.length < 200) mkErr = '抽不到 tCheckinBlockedByVersion 的原始碼（函式改名／搬走了？）';
+    else {
+      const oldSrc = src.replace('_left < ' + THRESHOLD_MS, '_left < 90000');
+      if (oldSrc === src) mkErr = '原始碼裡找不到 `_left < ' + THRESHOLD_MS + '`（門檻沒改到，或寫法變了）';
+      else {
+        try { mk = await compile(src); mkOld = await compile(oldSrc); }
+        catch (e) { mkErr = '轉譯/載入失敗：' + (e && e.message ? String(e.message).split('\n')[0] : e); }
+      }
+    }
+  }
+  const diag = [];
+  // 版本一定太舊（6.100 < 門檻 6.160）⇒ 唯一的變因就是「報到剩餘時間」。
+  const run = (factory, leftMs) => {
+    diag.length = 0;
+    const now = 1700000000000;
+    return factory({
+      isClientTooOld, recentlyHardRefreshed,
+      VERSION: '6.100', tMinClientVer: '6.160',
+      tEvents: [{ _id: 'E1', checkInDeadline: (leftMs === null) ? null : (now + leftMs) }],
+      tNow: now,
+      tSendLobbyDiag: (reason) => { diag.push(reason); },
+    })('E1');
+  };
+  const okx = (name, thunk) => ok(name, mkErr ? false : thunk, mkErr || '');
+  okx('★★★剩 31 秒（＞30 秒門檻）⇒ 仍然提示更新', () => (run(mk, 31000) === true));
+  okx('★★★剩 29 秒（＜30 秒門檻）⇒ 直接放行，絕不把人推去重載', () => (run(mk, 29000) === false));
+  okx('★邊界：剛好剩 30 秒不算「不足」⇒ 仍然提示更新', () => (run(mk, 30000) === true));
+  okx('★放行時要留下 checkin-stale-deadline-near 診斷（站長才看得到有人踩到）',
+    () => (run(mk, 29000) === false && diag.includes('checkin-stale-deadline-near')));
+  okx('★沒有 checkInDeadline ⇒ 剩餘時間視為無限 ⇒ 照常提示更新', () => (run(mk, null) === true));
+  okx('★★掃描器自我驗證（變異測試）：門檻退回 90000 的實作在「剩 31 秒」會放行',
+    () => (run(mkOld, 31000) === false && run(mk, 31000) === true));
+  ok('★註解與程式碼同步講 30 秒（改了數字沒改註解 ⇒ 下一個人被註解騙）',
+    /剩不到 30 秒還把人推去重載/.test(PAGE) && !/剩不到 90 秒/.test(PAGE) && !/_left < 90000/.test(PAGE));
+}
+
 
 console.log(`\nv6.160 報到版本閘守衛：${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

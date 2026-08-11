@@ -4874,7 +4874,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     一律跳視窗、由玩家自己點。
   //   ②**更新過一輪仍太舊就不再擋**（fail-open）。訊號是 URL 上的 `_v=`（hardRefreshNow 加的），
   //     不是 sessionStorage —— Safari 無痕的 `setItem` 會 throw，逃生鈕會整條壞掉。
-  //   ③**報到快截止時不擋**。按更新要重載＋重新登入，整輪十幾秒；剩不到 90 秒還把人推去重載，
+  //   ③**報到快截止時不擋**。按更新要重載＋重新登入，整輪十幾秒；剩不到 30 秒還把人推去重載，
   //     等他回來 `ev.status` 已經不是 checkin，後端回 409 ⇒ 我們親手害他報不了到。
   //   ④視窗上永遠有「先不更新，直接報到」的逃生口。可用性優先於版本一致性（站長裁定）。
   function tCheckinBlockedByVersion(eventId: string): boolean {
@@ -4888,8 +4888,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }
       // ③報到剩餘時間不足 ⇒ 放行（寧可讓他帶著舊版打，也不要害他錯過報到）。
       const _ev = tEvents.find((e: any) => e && e._id === eventId);
+      // ⚠ 門檻 30 秒（v6.162 站長裁定，v6.160 原為 90 秒）：「更新不需要那麼久，30 秒綽綽有餘」。
+      //   改這個數字時，scripts/test-v6160-checkin-version-gate.mjs 的 ⑩ 區塊（行為端）要一起改，
+      //   admin.html 的兩處說明文字也要一起改（「90 秒」這個說法散在四處，grep 數字只找得到這一處）。
       const _left = (_ev && _ev.checkInDeadline) ? (_ev.checkInDeadline - tNow) : Infinity;
-      if (_left < 90000) { tSendLobbyDiag('checkin-stale-deadline-near', eventId); return false; }
+      if (_left < 30000) { tSendLobbyDiag('checkin-stale-deadline-near', eventId); return false; }
       return true;
     } catch { return false; }   // 判斷本身出任何錯 ⇒ 不擋（fail-open）
   }

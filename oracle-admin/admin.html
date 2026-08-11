@@ -2596,7 +2596,7 @@ const MON_REASON_INFO = {
     + '（而 /tournament 在 SW 裡是 cache-first）。連續出現就去 Cloudflare 對該路徑加一條 bypass cache 的 Cache Rule。'
     + '⚠ 這一則出現時系統**不會再擋他**，他照常報到（fail-open）。'],
   'checkin-stale-deadline-near': ['版本太舊，但報到快截止所以直接放行',
-    '報到剩不到 90 秒，這時候把人推去重載會害他錯過報到，所以不提示、直接讓他報到。純紀錄，不必處理。'],
+    '報到剩不到 30 秒，這時候把人推去重載會害他錯過報到，所以不提示、直接讓他報到。純紀錄，不必處理。'],
   'slow-rtt': ['動作往返太慢（p95 ≥ 3 秒）',
     '玩家送出動作到伺服器回應的時間。伺服器端指標不含隧道排隊與玩家自己的網路，這個數字才對得上「很卡」的體感。'
     + '若多位玩家同時出現 → 隧道／VM 端；只有少數幾位 → 他們自己的網路。'],
@@ -2726,7 +2726,7 @@ async function loadMonitor() {
       + (mvOn && mvMin ? '<span style="color:#2e7d32;">已啟用（最低 v' + escapeHtml(mvMin) + '）</span>' : '<span style="color:#888;">關閉</span>')
       + '</div>'
       + '<p class="small muted" style="margin:2px 0 8px;">玩家按「✋ 我要報到」時，若他載入的版本低於門檻，會跳視窗引導他清快取更新。'
-      + '<b>不會自動重載、也不會擋住報到</b>——視窗上一定有「先不更新，直接報到」，而且按過更新後版本仍舊、或報到只剩不到 90 秒時一律直接放行。'
+      + '<b>不會自動重載、也不會擋住報到</b>——視窗上一定有「先不更新，直接報到」，而且按過更新後版本仍舊、或報到只剩不到 30 秒時一律直接放行。'
       + '<br>⚠ 這個門檻<b>只對 v6.160 以上的玩家生效</b>（更舊的版本沒有這段程式碼）。想找出更舊的人，看下面指紋區與報名名單的 clientVer：<code>pre-gate</code> 就是 v6.159 以下。'
       + '<br>⚠ 改完最多約 13 秒才會生效（伺服器兩層快取）。</p>'
       + '<label style="display:inline-block;margin:4px 12px 8px 0;">最低版本（例 6.160）：'
@@ -2856,7 +2856,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.161';
+window.SITE_VERSION_HINT = '6.162';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
