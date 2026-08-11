@@ -43,6 +43,7 @@ const HOME = rd('src/routes/+page.svelte');
 const HR = rd('src/lib/hard-refresh.ts');
 const SRV = rd('oracle-admin/server_admin_patch.js');
 const ADMIN = rd('oracle-admin/admin.html');
+const CLOG = rd('static/changelog.html');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
@@ -288,6 +289,12 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
     () => (run(mkOld, 31000) === false && run(mk, 31000) === true));
   ok('★註解與程式碼同步講 30 秒（改了數字沒改註解 ⇒ 下一個人被註解騙）',
     /剩不到 30 秒還把人推去重載/.test(PAGE) && !/剩不到 90 秒/.test(PAGE) && !/_left < 90000/.test(PAGE));
+  // ⚠v6.163 補漏：v6.162 掃「90 秒」的說法時只掃到 4 處（+page.svelte 註解、admin.html ×2、
+  //   server_admin_patch.js），漏了**第 5 處**——首頁 changelog 的 v6.160 條目。
+  //   那一處是**玩家直接看得到的公告**，寫著 90 秒、實作卻是 30 秒 = 對玩家講錯規則。
+  //   ⇒ 這條把玩家可見的那份也一起釘住。（門檻是站長裁定值，不是量測值，要改請先問站長。）
+  ok('★★首頁 changelog（玩家看得到的公告）也不得殘留 90 秒的說法',
+    CLOG.length > 0 && !/只剩不到 90 秒/.test(CLOG) && /只剩不到 30 秒/.test(CLOG));
 }
 
 

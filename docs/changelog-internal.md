@@ -17,6 +17,32 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.163 — 補 v6.162 漏掉的第 5 處「90 秒」：首頁 changelog（玩家看得到的那份）
+
+v6.162 把報到版本閘的門檻由 90 秒改成 30 秒，並同步了「90 秒」這個**說法**的四處：
+`src/routes/game/+page.svelte` 的註解、`oracle-admin/admin.html` 兩處、
+`oracle-admin/server_admin_patch.js` 的 v1.10 檔頭敘述。
+
+**漏掉第 5 處**：`static/changelog.html` 的 v6.160 條目仍寫著
+「或報到只剩不到 **90 秒**時，都會直接放行」。這一處和前面四處性質不同 ——
+前四處是給站長／開發者看的，這一處是**玩家直接看得到的公告**，
+等於在對玩家講一條錯的規則。（正式站尚未部署過 v6.160，所以還沒有玩家真的看到 90 秒的說法。）
+
+**改法**：只把該條目裡的數字 90 → 30，**不新增 changelog 條目**
+（門檻微調對玩家無感，屬於首頁規範②「玩家不需要知道的整則不放」）。
+⚠ 但**仍然 bump 版本**：只改 `static/changelog.html` 而不 bump，
+Service Worker 會繼續餵舊的 changelog.html（既有慣例，見本檔 v6.121 段）。
+`oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 一併跟到 6.163
+（既有守衛斷言它必須等於 `version.ts` 的 VERSION，否則 admin 的紅字警告會誤發）。
+
+**守衛**：`scripts/test-v6160-checkin-version-gate.mjs` 新增一條
+「首頁 changelog 不得殘留『只剩不到 90 秒』且必須出現『只剩不到 30 秒』」。
+v6.162 已有的那條只掃 `+page.svelte`，掃不到 `static/`。
+
+**教訓**：改一個數字時，「說法」散落的範圍比「常數」大得多，而且
+**玩家可見的那一份最容易被漏掉**——因為它不在 `src/` 也不在 `oracle-admin/`，
+grep 範圍常常沒帶到 `static/`。下次做這種數值裁定，枚舉範圍要含 `static/`。
+
 ## v6.162 — 報到版本閘的「剩餘時間門檻」90 秒 → 30 秒（站長裁定）
 
 站長裁定：**更新不需要那麼久，給玩家 30 秒去更新綽綽有餘**。v6.160 加報到版本閘時，
