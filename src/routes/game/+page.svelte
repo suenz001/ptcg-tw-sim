@@ -81,6 +81,8 @@
   // v6.038 批次4b：本機 AI 對戰開始前，依 AI 那一側的牌組載入打法表（fail-open）。
   import { prepareAIPlaybook, clearPlaybook } from '$lib/game/ai-playbook';
   import { tryPredictAction, OPTIMISTIC_ACTION_TYPES } from '$lib/game/optimistic';  // v6.137 錦標賽樂觀更新
+  // ⭐⭐⭐v6.173 錦標賽同步的結構共享（純函式，等價性由 test-v6173-adopt-structural-share 釘住）
+  import { shareStateIdentity } from '$lib/game/state-share';
   import { VERSION } from '$lib/version';
   // ⭐⭐⭐v6.160 錦標賽報到的「client 版本太舊」提示。清快取動作與首頁那顆鈕**共用同一份實作**。
   import { hardRefreshNow } from '$lib/hard-refresh';
@@ -5148,7 +5150,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
           { mode, myPlayerIndex, aiPlayerIndex }));
       } catch { /* 音效不影響對戰 */ }
     }
-    game = state as GameState;
+    // ⭐⭐⭐v6.173 結構共享：伺服器每一發都是剛 JSON.parse 出來的全新物件，直接 `game = state`
+    //   等於把每一個子物件都換成新的 Svelte proxy ⇒ 模板裡每一個 {@const} / derived 都被迫重算
+    //   ⇒ 每 400~800ms 一次**全量重繪**（本機/休閒因為引擎是 immutable 更新才沒這問題）。
+    //   shareStateIdentity 回傳一份與 state **逐位元組等價**、但沒變的子樹沿用舊物件的盤面。
+    //   ⚠ 這是純效能改動：盤面內容不可以有任何差異（守衛用真自對局序列逐步比對 JSON）。
+    //   ⚠ untrack：tAdopt 是網路回呼、正常不在 reaction 裡，但深讀 proxy 萬一落在某個 effect
+    //     內就會訂閱整棵樹 → 一律包起來 fail-closed。
+    const _sharePrev: unknown = game;
+    game = (_sharePrev ? untrack(() => shareStateIdentity(_sharePrev, state)) : state) as GameState;
     // v5.921：錦標賽盤面由伺服器送來,client 只載過自己牌組的卡包→對手(或促銷卡集如 SV-P-H/SVPN)
     //   的卡 getCard 查不到→無法顯示/同名 fallback 錯版。依盤面實際 cardId 補載其卡包(缺卡才動作)。
     void ensurePoolForStateIds(state);
@@ -9628,7 +9638,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       </div>
       <div class="zone-bench" class:bench-extended={oppBenchLimit > 5} style="--bench-n:{oppBenchLimit}">
-        {#each Array(Math.max(Math.min(5, (oppPlayer?.bench.length ?? 0) + 1), oppBenchLimit, 1)) as _, i}
+        {#each Array(Math.max(Math.min(5, (oppPlayer?.bench.length ?? 0) + 1), oppBenchLimit, 1)) as _, i (i)}
           {#if oppPlayer?.bench[i]}
             {@const b=oppPlayer.bench[i]}{@const bc=getCard(b.cardId)}
             {#if oppHidden}
@@ -9637,7 +9647,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="bench-name">？？？</div>
               </div>
             {:else}
-              <div class="bench-slot" out:scale={{ duration: 320, start: 0.55, opacity: 0 }}>
+              <!-- ⭐v6.173 對手側移除離場動畫：離場中的節點會多佔 320ms 的版面與一次 WAAPI 動畫，
+                   而且那段期間該子樹的 effect 是 INERT（讀到的 derived 會是過期值）。對手側的離場
+                   動畫對玩家判讀沒有價值，直接拿掉；我方仍保留。 -->
+              <div class="bench-slot">
                 <!-- v2.49：名字/HP 移到卡牌上方，避免與下方 chip/button 擠在一起 -->
                 <!-- v2.59：對手 bench 也要顯示附加能量（pip column），與我方備戰一致 — Leon 回報對手資訊看不到 -->
                 <div class="bench-name">{bc?.name}</div>
@@ -9703,7 +9716,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:status-glow-asleep={oppPlayer.active.status === 'asleep'}
               class:status-glow-confused={oppPlayer.active.status === 'confused'}
               style={attackFx && oppPlayer.active && attackFx.defenderIid === oppPlayer.active.iid ? `--flash-color:${ENERGY_COLOR[attackFx.energyType]}` : undefined}
-              out:scale={{ duration: 360, start: 0.55, opacity: 0 }}
             >
               <img use:retryImg={ac?.imageUrl} src={ac?.imageUrl} alt={ac?.name} class="active-img zoomable" onclick={()=>openZoom(oppPlayer!.active!.cardId,oppPlayer!.active)} onpointerenter={(e)=>enterAttCard(e, oppPlayer!.active!.cardId)} onpointerleave={leaveAttCard}/>
               <!-- v5.020 桌墊版：附加卡片小卡圖重疊呈現（能量/道具/進化堆）-->
@@ -9767,7 +9779,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <div class="zone-prizes">
         {#key prizeAnimKey[oppIdx]}
           <div class="prize-grid">
-            {#each Array(6) as _, i}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = oppPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card prize-anim" class:prize-gone={i>=(oppPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
@@ -9976,7 +9988,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
-            {#each Array(6) as _, i}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
+            {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
               class:legend-half-l={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 0}
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           {/key}
@@ -10104,7 +10116,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
 
       <div class="zone-bench" class:bench-extended={myBenchLimit > 5} style="--bench-n:{myBenchLimit}">
-        {#each Array(Math.max(Math.min(5, (myPlayer?.bench.length ?? 0) + 1), myBenchLimit, 1)) as _, i}
+        {#each Array(Math.max(Math.min(5, (myPlayer?.bench.length ?? 0) + 1), myBenchLimit, 1)) as _, i (i)}
           {#if myPlayer?.bench[i]}
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"

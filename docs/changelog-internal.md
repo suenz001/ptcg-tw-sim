@@ -17,6 +17,62 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.173 — 錦標賽同步：`tAdopt` 改為「結構共享合併」，不再每 tick 全量重繪
+
+**問題（有數字）**：同情境動作往返 p95 中位數 v6.155 265ms → v6.156 376ms → v6.167 818ms。
+19 位跨版本玩家 10 位變差／5 位變好／4 位持平。
+
+**真因**：`tAdopt()` 收到伺服器盤面後直接 `game = state`，而 `state` 是剛 `JSON.parse`
+出來的**全新物件**。`game` 是 Svelte 5 的深層 `$state` proxy —— 換掉根物件，等於每一個
+子物件都變成新的 proxy ⇒ 模板裡每一個 `{@const b = myPlayer.bench[i]}`、
+`{@const bc = getCard(b.cardId)}`、`energyPips(b)`… 全部拿到不同 identity、全部重算
+⇒ 每 400~800ms 一次**全量重繪**，把所有 `await` 續行都墊高（連帶把「網路時間」灌了水）。
+本機／休閒對戰沒這問題，是因為引擎是 immutable 更新：沒動到的子樹本來就沿用同一個物件；
+**錦標賽這條路徑獨缺這個性質**。
+
+**修法**：新增純函式 `src/lib/game/state-share.ts` 的 `shareStateIdentity(prev, next)` ——
+回傳一份與 `next` **逐位元組等價**、但「內容和 `prev` 一樣的子樹一律沿用 `prev` 那一份物件」
+的盤面（也就是沿用既有的 Svelte proxy）。`tAdopt` 改成
+`game = (prev ? untrack(() => shareStateIdentity(prev, state)) : state)`。
+陣列比對先試「同 `iid`」（否則 `bench`／`hand` 一有插入刪除，後面全部位移就一個都共享不到），
+同一個 iid 的 prev 元素**最多只取用一次**，避免 alias。
+
+等價性由構造保證：函式只會回傳 ① `next` 本身 ② 逐鍵逐序遞迴確認過完全一致的 `prev` 子樹
+③ 用 `next` 的鍵、依 `next` 的鍵順序新建的物件。鍵順序不同就不沿用 —— 所以連
+`JSON.stringify` 的位元組都一樣，不只是深度相等。
+
+**量到的效果**（jsdom + 真 Svelte 5.55.4，仿戰場結構的 micro-benchmark，120 次 adopt）：
+每 tick flush 8.4ms → 2.5ms，模板 helper 呼叫次數 9840 → 796（**-92%**）。
+守衛用「真的自對局跑出來的連續盤面」量到平均每步沿用 **96%** 的容器節點。
+
+**順手做的兩件小事**
+- 戰場四個 `{#each Array(...)}`（雙方備戰列、雙方獎賞列）補上穩定 key `(i)`。
+- 對手備戰位／對手戰鬥位移除 `out:scale` 離場動畫。
+
+**⚠⚠ 本輪推翻的一條假說（別再重走）**
+「離場動畫窗內的 fragment-owned derived 被下一發 tAdopt 標髒重算 ⇒ `derived_inert`」
+—— 用真 Svelte 5.55.4 + jsdom **實跑重現不到（0 次）**。原因在
+`reactivity/batch.js`：排程階段對 `(effect.f & (DESTROYED | INERT)) !== 0` 的 effect
+一律跳過（第 927／955／972 行），離場中的子樹根本不會被重算。
+實跑唯一能重現 `derived_inert` 的形狀是：**在非 effect 情境（事件處理器／計時器回呼）
+讀取 owner effect 已 INERT/DESTROYED 的 fragment derived** —— 此時 `execute_derived`
+會 warn 並回傳**過期值**（`return derived.v`），這正好對應玩家說的「按了沒反應」。
+⚠ 所以正式站那 284 次的來源**仍未定位**；本版移除對手側離場動畫只是消滅了兩個 INERT 窗，
+**不宣稱**已經解掉那 284 次。
+
+**守衛**：`scripts/test-v6173-adopt-structural-share.mjs`（21 條）
+- A 等價性：4000 組 fuzz 樹 ＋ 一整局自對局連續盤面，逐步比對 `JSON.stringify` 完全相同；
+  另有「鍵順序不同不沿用」「重複 iid 不產生 alias」「prev 多鍵不沿用」的定點案例。
+- B 有效性：⚠ 不是斷言「有呼叫 shareStateIdentity」，而是直接數**真的 `===` 沿用**的節點數
+  （> 60%），並反向釘住「內容有變時根物件一定是新物件」。
+- C 接線：`tAdopt` 內每一處 `game =` 都經過 `shareStateIdentity`（先剝註解再判，
+  因為註解裡就寫著 `game = state`）、有 `untrack`、有 `game` 為 null 的退路、
+  `_tRecordAdopt` 仍是最後一行（合併成本被誠實計入 perf 儀器）。
+- D/E 模板：AST 掃描 `{#each Array(...)}` 全部 keyed、對手側無 `out:`/`transition:`。
+- F 掃描器自我驗證：把 key 拿掉／把 out: 加回去／把 shareStateIdentity 換掉，都必須 FAIL。
+
+沒有動到卡效果／引擎／錦標賽伺服器邏輯。`SITE_VERSION_HINT` 與 `version.ts` 一起 bump。
+
 ## v6.171 — derived_inert 事故：只加診斷，不做行為修正（真因**尚未定位**）
 
 **回報**：2026-08-11 正式站 `/tournament`，站長 Console 實拍
