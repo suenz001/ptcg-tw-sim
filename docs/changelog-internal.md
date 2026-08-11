@@ -17,6 +17,128 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.167 — 🔴 P0：報到版本閘的提示視窗放錯版面分支 ⇒ 玩家「按了報到沒反應」＝被鎖在賽外
+
+### ① 回報與真因
+
+站長回報：「報到時如果版本落後，並不會出現提示（或是提示不夠明顯？），玩家反應**不能按報到按鈕**（沒有看到提示）。」
+
+真因（`src/routes/game/+page.svelte`，v6.166 行號）：
+
+- 「✋ 我要報到」鈕在 **L7870**，其 if-chain 最外層是 **L7739 `{#if isTournament && tStep !== 'playing'}` 的 then 分支**（＝賽事大廳）。
+- v6.160 的版本閘提示視窗在 **L8282**，其 if-chain 最外層是 **同一個 L7739 的 `{:else}` 分支**（＝對戰畫面）。
+
+兩者條件互斥 ⇒ **提示視窗在「可以報到」的那一刻永遠不可能出現在畫面上**。
+於是 `tCheckinBlockedByVersion()` 一旦回 true：`tCheckin()` 只設了 `tVerModalEventId` 就 `return`，
+**不呼叫 API、不設 `tBusy`、不寫 `tError`** ⇒ 按鈕外觀完全沒變、畫面完全沒變、再按幾次都一樣
+⇒ 玩家的描述必然是「按不了報到按鈕」。
+
+⚠ 這正是 v6.160 設計時寫明的**唯一失敗模式**（「把玩家鎖在賽外」）。當時做了五條 fail-open，
+但 ①~④ **全部建立在「視窗顯示得出來」這個前提上** —— 前提一破，五條一條都沒救到人。
+
+### ② A/B 分辨（先做，沒有跳過）
+
+- **(A) 版本閘**：機制成立且是 100% 決定性的 —— 只要閘擋人，**每一位**被擋的玩家都會被靜默鎖住。
+- **(B) 其他原因**：報到鈕的 `disabled` 只綁 `tBusy`（AST 求值確認，見守衛 ②），
+  而 `tBusy` 的每一處 `= true` 都有 `finally { tBusy = false }`，且 `tApi` 自 v6.135 起有 8/12 秒逾時 ⇒ 卡死機率低。
+  後端 `/checkin`（`server_admin_patch.js`）**沒有任何版本相關的拒絕邏輯**，`/event` 在
+  `minClientVer.enabled !== true` 時一律回空字串（L4053）⇒ 舊 client 與關閘情況下後端不會造成誤判。
+
+⚠ **誠實記錄**：閘是否真的被開著，**沙盒查不到**（要讀 Mongo 的 `tournamentConfig/minClientVer`，
+或看 admin「🔄 報到版本閘」的現值）。所以無法 100% 排除玩家遇到的是別的狀況。
+但 (A) 是一個確定存在、確定會鎖人的 P0 缺陷，且與回報症狀逐字吻合，先修它。
+**如果站長那邊確認閘從未開啟，請把這一則的診斷降級為「修掉一顆定時炸彈」，並回頭查 (B)。**
+
+### ③ v6.161 的大廳輪詢降頻：**沒有**造成報不了到
+
+`tPollDesiredMs(_, 'lobby')` 的 ⑤ 降頻分支（3s → 9s，背景 21s）確實會讓
+「registration → checkin」這個狀態轉換最壞晚 9 秒（背景 21 秒）才被發現，
+期間報到鈕還沒被 render 出來。但那是**延遲**不是**鎖住**：
+`tournLoadEvent()` 一旦看到 `_sig` 變動就呼叫 `tLobbyResume()`，之後 60 秒一律 3 秒頻率；
+而報到窗本身是分鐘級。且症狀是「按鈕不存在」而不是「按了沒反應」，與回報不符。⇒ 排除。
+
+### ④ 修正
+
+1. **把提示視窗搬到所有版面分支之外**（緊接在 `{#if isTournament && tStep !== 'playing'}` 之前，
+   fragment 的頂層），大廳與對戰兩邊都畫得出來。
+   同族事故：v6.149（失聯橫幅寫進桌機分支）、v6.154（監控分頁沒有內容容器）。
+2. **新增第 ⑤ 條 fail-open：同一場賽事最多只擋一次**（`_tVerPrompted: Set<string>`）。
+   這一條**不依賴 UI**：就算視窗因為任何理由（版面、CSS、未來重構）沒被畫出來，
+   玩家再按一次「我要報到」就一定會走到 `tCheckinCommit()` ⇒ 最壞情況收斂成「白按一次」。
+   刻意用非響應式的 `Set`（不驅動畫面），且只存在於本次頁面生命週期（重載後可再提示一次）。
+3. **報到鈕下方加一行自救說明**：「按了沒反應請再按一次；如仍無法報到，請至首頁更新版本。」
+   ⚠ 站長授權的原句是「如無法報到，請至首頁更新版本」。這裡**前面加了「按了沒反應請再按一次」**，
+   因為修正 2 之後那才是真正有效的第一步；只叫玩家去更新版本，在「真因不是版本」的情況下會誤導。
+
+### ⑤ 守衛 `scripts/test-v6167-checkin-never-locked.mjs`（已進 npm test，HEAD 9 FAIL）
+
+- ⓪ **掃描器自我驗證**（Rule 25）：互斥偵測器對合成的 then/else 範例要抓得到，對同層範例不可冤枉（正對照）。
+- ① **版面可達性用 svelte 編譯器 AST 實跑求值**：算出報到鈕與提示視窗各自的 if-chain，
+  只要出現「同一個條件、一個走 then 一個走 else」就 FAIL。**不是字串比對**。
+- ② 報到鈕的 `disabled` 表達式必須恰好是 `tBusy`（擋住日後有人加入可能永久成立的新條件）。
+- ③ **行為端**：把 `+page.svelte` 裡 `tCheckinBlockedByVersion` / `tCheckin` / `tCheckinCommit`
+  三支**真的抽出來執行**（esbuild transform TS），斷言的是 **`/checkin` 這一發 API 有沒有被送出**，
+  不是「有沒有呼叫某函式」。情境矩陣：閘關閉／閘開啟但 client 夠新／client 太舊／門檻是垃圾值／
+  門檻 null／剛強制更新過／剩不到 30 秒／找不到該場賽事／`checkInDeadline` 為 null／判定丟例外／
+  `VERSION` 解析不出來 —— **每一種都必須在 ≤2 次按下完成報到**。
+  另有正對照：該擋的時候第一次按確實只開視窗、沒有直接報到（否則全綠可能只是閘壞掉）。
+- ④ 自救說明文字與版本 bump。
+
+HEAD（v6.166）實跑 **16 passed / 9 failed**，其中 `★★★連按 5 次也一定至少報到一次` 的實測值是
+**Infinity** —— 這就是「玩家被鎖在賽外」的行為端證據。
+
+### ⑥ Fable 5 審查抓到、經自行查證後一併修的兩項
+
+**(a) 🔴 `tApi` 的 `getIdToken()` 在逾時計時器之前 ⇒ `tBusy` 可能永久 true。**
+`src/routes/game/+page.svelte` 的 `tApi()`：v6.135 加的 `AbortController` 逾時（POST 12s／GET 8s）
+只保護 `fetch`，但它是在 `await firebaseUser.getIdToken()` **之後**才建立的。
+Firebase 在 token 過期時會發真的網路請求；隧道黑洞／裝置睡眠喚醒時它可能既不 resolve 也不 reject
+⇒ 整支 `tApi` 掛住 ⇒ 呼叫端的 `finally { tBusy = false }` 永遠不執行
+⇒ **大廳每一顆鈕（含「✋ 我要報到」）永久 disabled、卡在「報到中…」**。
+這是與版本閘完全無關的**第二條**「報不了到」路徑，而且 disabled 是真的（不是「按了沒反應」）。
+⇒ 改成 `Promise.race([getIdToken(), 6 秒])`：逾時就不帶 `Authorization` 送出去，
+伺服器要嘛走 playerId fallback、要嘛回一個**看得見、按得動**的錯誤。可用性優先。
+⚠ 這一改動連帶讓 `test-v6159-client-perf-instrumentation.mjs` 的第 ② 條（原本用 regex 比對
+「`getIdToken());` 之後 80 字內接 `_segT1`」）失效。已把該條改成**判斷意圖**：
+`_segT1` 必須在 `getIdToken()` 之後、且中間不可以再有別的 `await`（否則那一段就不只是 token 段）。
+
+**(b) ⚠ 報到失敗的訊息看不到。**
+大廳的 `tError` 只印在 `<main>` 最底下的 in-flow `<p class="warn">`（對戰分支那個 fixed 的
+`.tourn-toast` 在 `{:else}` 裡、大廳看不到），賽事卡一多就捲出畫面
+⇒ 玩家按報到、後端回 409（不在報到階段／未報名／`autoRemovedConflict`），他看到的**還是**「按了沒反應」。
+⇒ 新增 `tCheckinErrId`，報到失敗時把訊息貼在報到鈕正下方。
+
+Fable 另外三項經查證**不需要動**：提示視窗搬到頂層後 CSS 是 `position:fixed; z-index:10000`，
+大廳唯一更高層的 `hof-modal`(100000) 要手動開啟且有關閉鈕、`rotate-prompt`(99999) 需要 `game !== null`；
+`tVerModalSkip` 先清 `tVerModalEventId` 再 commit，不會卡在視窗；輪詢降頻結論同上面 ③。
+
+### ⑦ 守衛因這一版一併更新的三支
+
+- `test-v6167-checkin-never-locked.mjs`（新，29 條）：另補 Fable 指出的兩個盲點 ——
+  ①提示視窗的 if-chain **深度必須恰好為 1**（比「字面互斥」強，任何巢狀都 FAIL；
+  原本的字面比對抓不到「語義互斥但字面不同」）；②逃生鈕 `tVerModalSkip` 納入行為端切片，
+  斷言它真的送出 `/checkin`、真的關掉視窗、且**沒有**順手觸發 `hardRefreshNow`。
+- `test-v6160-checkin-version-gate.mjs`：⑩ 區塊的 harness 補注入 `_tVerPrompted`。
+  ⚠ 沒補的話，抽出來的函式會 ReferenceError，**而那個錯誤會被函式自己的 `catch { return false; }` 吞掉**
+  ⇒ 六條斷言一起變紅，看起來像「門檻壞了」，實際是 harness 沒跟上（fail-open 的副作用）。
+- `test-v6159-client-perf-instrumentation.mjs`：第 ② 條改判意圖（見上面 (a)）。
+
+另：`oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 跟著 bump 到 `6.167`
+（v6.160 守衛釘住它與 `version.ts` 一致，否則 admin 會誤發紅字警告）；
+首頁 changelog 加到 51 則超過上限，最舊的 v6.095 依慣例搬進 `changelog-archive.html`。
+
+### ⑥ 未動的部分（誠實列出）
+
+- 後端 `server_admin_patch.js` **一行未改**（本版純 client；後端本來就不因版本拒絕報到）⇒ 不需要跑 `update-tournament.bat`。
+- ⚠ **`vite build` 沒能在沙盒跑完**：這次沙盒會在約 3 分鐘處砍掉背景程序，`rendering chunks` 階段每次都被中斷。
+  替代驗證：用 svelte 編譯器對改動後的 `+page.svelte` 跑 `compile(generate:'client')` 與 `'server'` **都通過**，
+  且警告數與 BASE 完全相同（98 → 98，無新增）——那正是 vite build 會對這個檔做的事，也是
+  「模板裡的裸 `<` `>` `{` `}` 弄壞 build」這個歷史坑的攔截點。另 `npx tsc --noEmit` 新增 TS2304 為 0、
+  改動檔零錯誤。真正的 build 由 CI 的 Deploy workflow 把關（push 後看 `conclusion`）。
+- v6.161 的降頻沒有調整（結論是與本次回報無關）。若站長希望「報到一開放就馬上看得到按鈕」，
+  可另外把 `tPollDesiredMs` 的 lobby ④ 條件放寬成「已報名且賽事在 registration 且接近 `registrationCloseAt`」，
+  但那是效能取捨，本版不動。
+
 ## v6.166 — 首頁嵌入 YouTube 最新影片（lazy facade，點擊前零播放器負擔）
 
 站長需求：把 @ptcg-tw-sim 頻道的**最新**宣傳影片放在首頁「玩家社群 QR Code 之下、版本更新記錄之上」，

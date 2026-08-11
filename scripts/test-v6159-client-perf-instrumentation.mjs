@@ -77,8 +77,18 @@ ok('★掃描器自我驗證：grabFn 對「回傳型別含大括號」的簽章
   ok('tApi 找得到', i > 0);
   const seg = BARE.slice(i, i + 3000);
   ok('① 進函式就取起點 _segT0', /const _segT0 = _pnow\(\);/.test(seg));
-  ok('② getIdToken 之後立刻切 _segT1（token 段）',
-    /getIdToken\(\)\);[\s\S]{0,80}?\}\s*\n\s*_segT1 = _pnow\(\);/.test(seg));
+  // ⚠ v6.167 起 `getIdToken()` 包在 `Promise.race` 的 6 秒逾時裡（原本是單行）——
+  //   那是為了修「token 取不回來 ⇒ tApi 永不 resolve ⇒ tBusy 永久 true ⇒ 大廳所有按鈕
+  //   （含報到）永久 disabled」。這條的**意圖**沒變：`_segT1` 必須緊接在 token 段之後，
+  //   中間不可以再有別的 await（有的話那一段就不只是 token 了，量測會失真）。
+  //   ⇒ 改成判斷意圖，不是判斷當時那一行長什麼樣子。
+  ok('② getIdToken 之後立刻切 _segT1（token 段），中間沒有別的 await', (() => {
+    const gi = seg.indexOf('getIdToken()');
+    const s1 = seg.indexOf('_segT1 = _pnow();');
+    if (gi < 0 || s1 < 0 || s1 < gi) return false;
+    const between = seg.slice(gi + 'getIdToken()'.length, s1);
+    return between.length < 400 && !/await\s/.test(between);
+  })());
   ok('③ fetch 回來（response header）立刻切 _segT2（網路段）',
     /signal: _ac\.signal,\s*\n\s*\}\);\s*\n\s*_segT2 = _pnow\(\);/.test(seg));
   // ⚠⚠ Fable 5 審查抓到：`fetch` 在 **header** 到達就 resolve，body 還沒下載

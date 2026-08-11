@@ -246,7 +246,7 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
   const src = _i0 < 0 ? '' : PAGE.slice(_i0, PAGE.indexOf('async function tCheckin(', _i0));
   let mkErr = modErr;
   const compile = async (source) => {
-    const wrapped = '(function(env){ const { isClientTooOld, recentlyHardRefreshed, VERSION, tMinClientVer, tEvents, tNow, tSendLobbyDiag } = env;\n'
+    const wrapped = '(function(env){ const { isClientTooOld, recentlyHardRefreshed, VERSION, tMinClientVer, tEvents, tNow, tSendLobbyDiag, _tVerPrompted } = env;\n'
       + source + '\nreturn tCheckinBlockedByVersion; })';
     const js = (await transform(wrapped, { loader: 'ts' })).code;
     const f = (0, eval)(js);
@@ -276,6 +276,9 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
       tEvents: [{ _id: 'E1', checkInDeadline: (leftMs === null) ? null : (now + leftMs) }],
       tNow: now,
       tSendLobbyDiag: (reason) => { diag.push(reason); },
+      // v6.167 新增的第 ⑤ 條 fail-open（同一場只擋一次）。每次跑都給一個空 Set，
+      // 讓這一區維持「只測剩餘時間門檻」這個單一變因；⑤ 本身由 test-v6167 專門守。
+      _tVerPrompted: new Set(),
     })('E1');
   };
   const okx = (name, thunk) => ok(name, mkErr ? false : thunk, mkErr || '');

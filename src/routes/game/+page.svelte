@@ -284,6 +284,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let tMinClientVer = $state('');
   let tVerModalEventId = $state('');   // 非空 ＝ 正在顯示「版本太舊」提示視窗（該場賽事 id）
   let tVerModalBusy = $state(false);
+  // ⭐v6.167 報到失敗的訊息要**貼著報到鈕**顯示。大廳的 `tError` 只印在 main 最底下
+  //   （in-flow 的 <p class="warn">，不是對戰分支那個 fixed 的 .tourn-toast），
+  //   賽事卡一多就會捲出畫面 ⇒ 玩家按了報到、伺服器回 409，他看到的一樣是「按了沒反應」。
+  let tCheckinErrId = $state('');   // 最後一次報到失敗的賽事 id（空字串＝沒有失敗）
+  // ⭐⭐⭐v6.167「同一場賽事最多只擋一次」——**不依賴提示視窗有沒有被畫出來**的最後一道 fail-open。
+  //   v6.160~v6.166 的事故就是：提示視窗被寫進「對戰中」那個版面分支（見模板上的 v6.167 註解），
+  //   玩家在大廳按報到時它根本不存在 ⇒ 只看到「按了沒反應」，而且再按幾次都一樣 ＝ 被鎖在賽外。
+  //   ⇒ 這個 Set 把最壞情況收斂成「白按一次」：第二次按下去一定會走到 tCheckinCommit。
+  //   ⚠ 刻意用非響應式的 Set（不是 $state）：它只影響判定，不需要驅動任何畫面。
+  //   ⚠ 只存在於這一次頁面生命週期；重載後可以再提示一次，這正是我們要的（重載＝版本可能已更新）。
+  const _tVerPrompted = new Set<string>();
   let tRegFormEventId = $state('');  // 目前展開報名表單的賽事 id（點某場「報名」才展開）
   // v5.629 玩家發起社群賽
   let tProposeOpen = $state(false);
@@ -4450,7 +4461,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const _segT0 = _pnow();
     let _segT1 = _segT0, _segT2 = _segT0;
     // v0.5 A1：帶 Firebase ID token，伺服器 verifyIdToken 驗證身分（禁匿名）
-    try { if (firebaseUser && !firebaseUser.isAnonymous) headers['Authorization'] = 'Bearer ' + (await firebaseUser.getIdToken()); } catch { /* 取 token 失敗 → 伺服器退回 playerId fallback */ }
+    // ⭐⭐⭐v6.167 這一段 await 在下面那顆逾時計時器**之前** —— v6.135 的逾時只保護 fetch，
+    //   `getIdToken()` 在 token 過期時會發真的網路請求，隧道黑洞／裝置睡眠喚醒時它可能
+    //   既不 resolve 也不 reject ⇒ 整支 tApi 掛住 ⇒ 呼叫端的 `finally { tBusy = false }`
+    //   永遠不執行 ⇒ 大廳每一顆鈕（含「✋ 我要報到」）永久 disabled、卡在「報到中…」
+    //   ＝玩家被鎖在賽外，而且畫面上沒有任何錯誤訊息可以讓他知道發生什麼事。
+    //   ⇒ 給它 6 秒上限。逾時就**不帶 Authorization** 送出去：伺服器要嘛走 playerId fallback、
+    //     要嘛回一個看得見的錯誤，兩者都比「按鈕永遠不會回來」好（可用性優先，站長裁定）。
+    //   ⚠ 逾時的那一支 getIdToken 仍在背景跑，只是我們不再等它；不 abort 是因為 Firebase
+    //     沒有提供取消介面，而硬中斷它會連帶影響其他共用同一份 token 的呼叫。
+    try {
+      if (firebaseUser && !firebaseUser.isAnonymous) {
+        const _tok: any = await Promise.race<any>([
+          firebaseUser.getIdToken(),
+          new Promise((r) => setTimeout(() => r(null), 6000)),
+        ]);
+        if (_tok) headers['Authorization'] = 'Bearer ' + _tok;
+      }
+    } catch { /* 取 token 失敗 → 伺服器退回 playerId fallback */ }
     _segT1 = _pnow();   // ① token 段結束
     // v6.135 逾時保護：fetch 預設沒有 timeout（瀏覽器要幾百秒才放棄）。
     //   隧道排隊/黑洞時 `await fetch` 既不 resolve 也不 reject
@@ -4877,9 +4905,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ③**報到快截止時不擋**。按更新要重載＋重新登入，整輪十幾秒；剩不到 30 秒還把人推去重載，
   //     等他回來 `ev.status` 已經不是 checkin，後端回 409 ⇒ 我們親手害他報不了到。
   //   ④視窗上永遠有「先不更新，直接報到」的逃生口。可用性優先於版本一致性（站長裁定）。
+  //   ⑤**同一場賽事最多只擋一次**（v6.167 補）。①~④ 全部都建立在「視窗真的顯示得出來」上，
+  //     而 v6.160~v6.166 正是栽在這個前提：視窗放錯版面分支 ⇒ 五條 fail-open 一條都沒救到人。
+  //     ⑤ 是唯一不依賴 UI 的那一條，也是守衛 test-v6167-checkin-never-locked.mjs 的核心不變式。
   function tCheckinBlockedByVersion(eventId: string): boolean {
     try {
       if (!isClientTooOld(VERSION, tMinClientVer)) return false;
+      // ⑤**同一場賽事最多只擋一次**（v6.167）。這條與視窗顯示與否完全無關：
+      //   就算提示視窗因為任何理由沒被畫出來（版面分支、CSS、未來重構…），
+      //   玩家再按一次「我要報到」就一定會完成報到 ⇒ 最壞情況只是白按一次，不會被鎖住。
+      if (_tVerPrompted.has(eventId)) return false;
       // ②更新過一輪還是舊的 ⇒ 放行，並記一筆診斷讓站長看得到「更新沒生效」這件事。
       const _href = (typeof window !== 'undefined' && window.location) ? window.location.href : '';
       if (recentlyHardRefreshed(_href, Date.now())) {
@@ -4900,20 +4935,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠ 只在這裡開視窗、**不呼叫 API**；視窗的兩顆鈕才會走下面的 tCheckinCommit。
     if (tCheckinBlockedByVersion(eventId)) {
       tVerModalEventId = eventId;
+      _tVerPrompted.add(eventId);   // v6.167：擋過一次就記下來，下一次按一定放行（見上面第 ⑤ 條）
       tSendLobbyDiag('checkin-update-prompted', eventId);
       return;
     }
     await tCheckinCommit(eventId);
   }
   async function tCheckinCommit(eventId: string) {
-    tBusy = true; tError = '';
+    tBusy = true; tError = ''; tCheckinErrId = '';
     try {
       // v6.160：帶上 client 版本供伺服器記錄（admin 報名名單看得到誰還停在舊版）。
       //   ⚠ 後端**永遠不會**因為這個欄位拒絕報到 —— 擋人的判斷只在 client，且處處 fail-open。
       const r = await tApi('/checkin', { eventId, ver: VERSION });
-      if (r?.error) tError = r.error;
+      if (r?.error) { tError = r.error; tCheckinErrId = eventId; }
       else { tournLoadEvent(); }
-    } catch (e: any) { tError = '報到失敗：' + (e?.message ?? e); }
+    } catch (e: any) { tError = '報到失敗：' + (e?.message ?? e); tCheckinErrId = eventId; }
     finally { tBusy = false; }
   }
   // 視窗：「🔄 更新並重新載入」。⚠ 不在這裡報到 —— 重載後版本就會是新的，玩家自己再按一次報到。
@@ -7736,6 +7772,36 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 
+<!-- ⭐⭐⭐v6.167 這個視窗**必須留在「大廳／對戰」兩個版面分支之外**（＝現在這個位置）。
+     v6.160~v6.166 它被寫在下面那個 isTournament && tStep !== 'playing' 區塊的 else
+     （＝對戰中）分支裡，而「✋ 我要報到」鈕在 then（＝大廳）分支 —— 兩者條件互斥，
+     於是版本閘一擋人，視窗永遠畫不出來，玩家只看到「按了沒反應」＝被鎖在賽外，
+     正是 v6.160 設計時列為唯一失敗模式的那一件事。
+     ⚠ 同族事故：v6.149 失聯橫幅寫進桌機分支（手機玩家看不到）、v6.154 監控分頁沒有內容容器。
+       通則：**跨版面的提示／視窗一律放在所有版面分支之外**，並用行為端守衛釘住可達性。
+     守衛 scripts/test-v6167-checkin-never-locked.mjs 用 svelte 編譯器 AST 實跑求值
+     報到鈕與本視窗的 if-chain，只要兩者出現互斥條件就 FAIL（不是字串比對）。 -->
+<!-- ⭐⭐⭐v6.160 報到版本閘提示視窗。
+     ⚠ 這個視窗**沒有 X 也沒有點背景關閉**，但那不是把人關起來 —— 兩顆鈕都會離開視窗，
+       其中「先不更新，直接報到」一定會完成報到。刻意不給第三條「什麼都不做」的出口，
+       是因為那條路只會讓玩家以為報到鈕壞了。
+     ⚠ `tVerModalEventId` 只有 tCheckinBlockedByVersion() 回 true 時才會被設起來，
+       而那支函式處處 fail-open（沒設門檻／版本解析不了／剛更新過／報到快截止 → 一律不擋）。 -->
+{#if isTournament && !isTournSpectator && tVerModalEventId}
+  <div class="tourn-vergate-mask" role="alertdialog" aria-modal="true" aria-labelledby="tvg-title">
+    <div class="tourn-vergate">
+      <div class="tvg-title" id="tvg-title">🔄 你的版本較舊，建議先更新</div>
+      <div class="tvg-body">
+        目前這個瀏覽器載入的是 <strong>v{VERSION}</strong>，賽事建議的最低版本是 <strong>v{tMinClientVer}</strong>。
+        <br>舊版可能沒有近期的對戰修正，連線也容易卡頓，<b>並且會一起拖慢對手</b>。
+        <br><span class="tvg-note">更新會清除網頁快取並重新載入，牌組與帳號資料都會保留。更新後請再按一次「我要報到」。</span>
+      </div>
+      <button class="tvg-btn tvg-primary" disabled={tVerModalBusy} onclick={tVerModalUpdate}>{tVerModalBusy ? '更新中…' : '🔄 更新並重新載入'}</button>
+      <button class="tvg-btn tvg-ghost" disabled={tVerModalBusy} onclick={tVerModalSkip}>先不更新，直接報到</button>
+    </div>
+  </div>
+{/if}
+
 {#if isTournament && tStep !== 'playing'}
   <main class="lobby tourn-lobby">
     <div class="tourn-topbar"><a class="tourn-home-btn" href="{base}/">← 回到首頁</a></div>
@@ -7869,6 +7935,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {:else}
                 <button class="tourn-enter-btn" onclick={() => tCheckin(ev._id)} disabled={tBusy}>{tBusy ? '報到中…' : '✋ 我要報到'}</button>
                 <div class="muted small" style="margin-top:4px;">逾時未報到將不列入賽程</div>
+                <div class="muted small" style="margin-top:2px;">按了沒反應請再按一次；如仍無法報到，請至首頁更新版本。</div>
+                {#if tCheckinErrId === ev._id && tError}<p class="warn small" style="margin-top:4px;">{tError}</p>{/if}
               {/if}
             </div>
           {/if}
@@ -8273,26 +8341,6 @@ function _setupSelfPending(g: any, seat: number): string | null {
      ⚠ 手機在背景／鎖屏時看不到任何畫面 ⇒ 仍要靠 v6.151 的 60 秒推播叫醒。彈窗是補強不是取代。 -->
 {#if isTournament && !isTournSpectator && tMyIdleSec != null && tMyIdleSec <= 60}<div class="tourn-still-here" role="alertdialog" aria-live="assertive"><div class="tsh-title">⏰ 系統已開始計時</div><div class="tsh-body">剩 <strong>{tMyIdleSec}</strong> 秒未行動就會被判負。如果你還在，按一下確認。</div><button class="tsh-btn" disabled={tStillHereBusy} onclick={tStillHere}>{tStillHereBusy ? '確認中…' : '我還在'}</button>{#if tStillHereNote}<div class="tsh-note">{tStillHereNote}</div>{/if}</div>{/if}
 
-<!-- ⭐⭐⭐v6.160 報到版本閘提示視窗。
-     ⚠ 這個視窗**沒有 X 也沒有點背景關閉**，但那不是把人關起來 —— 兩顆鈕都會離開視窗，
-       其中「先不更新，直接報到」一定會完成報到。刻意不給第三條「什麼都不做」的出口，
-       是因為那條路只會讓玩家以為報到鈕壞了。
-     ⚠ `tVerModalEventId` 只有 tCheckinBlockedByVersion() 回 true 時才會被設起來，
-       而那支函式處處 fail-open（沒設門檻／版本解析不了／剛更新過／報到快截止 → 一律不擋）。 -->
-{#if isTournament && !isTournSpectator && tVerModalEventId}
-  <div class="tourn-vergate-mask" role="alertdialog" aria-modal="true" aria-labelledby="tvg-title">
-    <div class="tourn-vergate">
-      <div class="tvg-title" id="tvg-title">🔄 你的版本較舊，建議先更新</div>
-      <div class="tvg-body">
-        目前這個瀏覽器載入的是 <strong>v{VERSION}</strong>，賽事建議的最低版本是 <strong>v{tMinClientVer}</strong>。
-        <br>舊版可能沒有近期的對戰修正，連線也容易卡頓，<b>並且會一起拖慢對手</b>。
-        <br><span class="tvg-note">更新會清除網頁快取並重新載入，牌組與帳號資料都會保留。更新後請再按一次「我要報到」。</span>
-      </div>
-      <button class="tvg-btn tvg-primary" disabled={tVerModalBusy} onclick={tVerModalUpdate}>{tVerModalBusy ? '更新中…' : '🔄 更新並重新載入'}</button>
-      <button class="tvg-btn tvg-ghost" disabled={tVerModalBusy} onclick={tVerModalSkip}>先不更新，直接報到</button>
-    </div>
-  </div>
-{/if}
 {#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 {#if isTournSpectator && game && !isTReplay}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
