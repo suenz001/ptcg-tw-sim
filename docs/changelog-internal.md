@@ -1,3 +1,204 @@
+# v6.178 休閒對戰終於有 gzip（v0.72 加、v0.75 修載入、順序錯了整整 100 版）
+
+## 真因：`app.use(compression())` 的**位置**，不是它有沒有被載入
+
+`oracle_admin_update.sh` 把整份 `oracle-admin/server_admin_patch.js` 插進 `/opt/ptcg/api/server.js`
+的 **`app.listen()` 之前**（server.js 裡那行註解寫得很清楚：
+`// Inserted before app.listen() by oracle_admin_install.sh (or _update.sh)`）。
+
+而休閒對戰的路由是在 `start()` 開頭就註冊完的：
+
+| server.js 行號 | 路由 |
+|---|---|
+| 68 | `GET /api/rooms` |
+| 76 | `GET /api/rooms/:code` |
+| 88 | `PUT /api/rooms/:code` |
+| 126 | `DELETE /api/rooms/:code` |
+| 135 / 147 | `GET/POST /api/rooms/:code/messages` |
+| 167 / 214 | `GET /api/rooms/:code/stream`、`/messages/stream`（SSE） |
+
+patch 從第 263 行才開始，gzip 的 `app.use` 又在 patch 內部很後面。
+Express 是依 **註冊順序** 逐層走 `app._router.stack` 的 layer：`/api/rooms/*` 的 handler 在更前面
+就 `res.json()` 把回應結束掉了，掛在 stack 尾端的 compression **永遠輪不到**。
+
+- v0.72 的註解甚至把這件事寫成優點（「本 app.use 只套用其後註冊的錦標賽路由，雙保險」），
+  所以沒有人回頭去看它其實同時也代表「休閒對戰永遠不會被壓縮」。
+- v0.75 修的是**另一件事**（patch 包在 `import().then(async)` 裡＝ESM host 沒有 `require`，
+  `require('compression')` 拋錯被 try/catch 吞掉）。修完之後錦標賽有 gzip 了，
+  於是「gzip 已經修好」變成一個錯誤的共識。
+
+實測（有 SSH 權限的另一支 AI 量的，已用程式碼交叉驗證）：
+
+| 端點 | 每次請求大小 | 有沒有 gzip |
+|---|---|---|
+| `/api/rooms/:CODE` | 26.9 KB | ✗ |
+| `/api/rooms?…` | 11.8 KB | ✗ |
+| `/api/tournament/state` | 1.9 KB | ✓ |
+
+休閒對戰佔全站 **94%** 流量（88MB / 3min），錦標賽只有 3.3MB。
+
+## 修法：`app.use` 之後把 layer 搬到「第一個 route layer 之前」
+
+```js
+app.use(_gzipMw);
+const _selfIdx = _stack.map((l) => (l && l.handle)).lastIndexOf(_gzipMw);
+const _firstRouteIdx = _stack.findIndex((l) => !!(l && l.route));
+if (_selfIdx > 0 && _firstRouteIdx >= 0 && _firstRouteIdx < _selfIdx) {
+  const _layer = _stack.splice(_selfIdx, 1)[0];
+  _stack.splice(_firstRouteIdx, 0, _layer);
+}
+```
+
+⚠ **為什麼不是 index 0**：stack 最前面是 Express 自己的 `query` / `expressInit`，接著才是
+`cors` / `express.json`。`expressInit` 才會把 express 的 request 原型裝上去（`req.path` 就是那時候才有的）。
+插在「第一個 `app.get`/`app.post` 之前」同時滿足「在所有路由之前」與「在內建 middleware 之後」。
+⇒ 因此 filter 內一律用 `req.originalUrl` / `req.url`（原生 http 就有），**不准用 `req.path`**。
+
+⚠ Express 4 的 `app.router` 是**會 throw 的 deprecated getter**，所以取 stack 一定要
+`app._router` 先試、且兩個各自包 try/catch（Express 5 才是 `app.router`）。
+
+⚠ 搬不動（拿不到 stack／找不到任何 route layer）就原樣留在尾端並 `console.warn`，
+退化成 v0.75 行為，絕不因此讓服務起不來。
+
+## SSE 排除：兩道，不是一道
+
+`/api/rooms/:code/stream` 與 `/api/rooms/:code/messages/stream` 是 SSE，gzip 會緩衝、會把即時串流打死。
+
+1. `Content-Type` 含 `text/event-stream` → 不壓（原本就有）。
+2. **新增**：路徑（去掉 query）以 `/stream` 結尾 → 不壓。
+
+第 2 道是必要的：compression 的 filter 是靠 `on-headers` 在**寫 header 時**才跑，
+不能賭「那個時間點 Content-Type 一定已經設好」。這兩支 SSE 用的是
+`res.set({...}); res.flushHeaders();`，順序上沒問題，但不該把正確性押在別人的寫法上。
+
+（順帶一提：休閒對戰實際上走的是 `subscribeRoom` 的**輪詢**，不是 SSE；
+`src/lib/game/oracle-client.ts:207` 的註解就寫「每 intervalMs 拉一次 GET /api/rooms/:code」。
+這兩支 SSE 端點目前沒有前端在用，但仍然照樣排除。）
+
+## CPU 成本評估
+
+- 27KB 的 JSON 用 zlib level 6（預設）壓一次約 0.5～1ms。117 req/s ⇒ 約 0.06～0.12 個核心。
+- **關鍵**：Node 的 zlib **stream** 跑在 libuv threadpool，不是 event loop
+  ⇒ 目前 event loop lag 0.16ms 不會被這件事拖住。
+- API CPU 目前約 20%，有餘裕。`threshold: 1024` 讓 204 / `{ok:true}` / v0.68 的 `unchanged`
+  精簡回應完全不進壓縮器。
+
+## ⚠ 這一項對「TTFB 1.2 秒」的誠實估計
+
+玩家端 v6.159 的拆段計時：**下載（body）中位數只有 22ms，`net`（送出→第一個位元組）中位數 1.2 秒**。
+⇒ **payload 體積不是主因**（是的話慢的會是下載段）。gzip 對 TTFB 幾乎沒有直接幫助。
+
+### ⚠⚠ 而且受益者**不是玩家**（實測，v6.178 才發現）
+
+`/api/*` 是掛在 `www.ptcg-tw-sim.com` 底下、走 Cloudflare 進來的：
+
+```
+curl -s -o /dev/null -D- -H 'Accept-Encoding: gzip, br' https://www.ptcg-tw-sim.com/api/health
+  HTTP/2 200 · server: cloudflare · cf-cache-status: DYNAMIC · content-encoding: br
+```
+
+（`/api/health` 的 body 只有 79 bytes，origin 的 threshold 1024 根本不會壓它，
+所以那個 `br` 一定是 Cloudflare 自己加的。）
+
+⇒ **Cloudflare 本來就會替所有 `/api/*` 回應壓縮再送給瀏覽器。**
+那位 AI 量到的「26.9KB/req 沒有 gzip」是 **origin → Cloudflare** 這一段，不是玩家那一段。
+
+所以這一版真正省下來的是：
+- **cloudflared 隧道的頻寬**（117 req/s × 27KB ≈ 3MB/s → 降到 ~0.4MB/s）。
+  隧道壅塞正好是 TTFB 1.2 秒的嫌疑之一，所以這一項有機會間接幫上忙，但**沒有證據**。
+- VM 對外流量（88MB/3min 的大部分）。
+
+⇒ **玩家端量不到差別**。因此 **v6.178 沒有寫首頁更新記錄** ——
+首頁是給玩家的公告，寫「更省流量、同步更順」會是假的。
+（另外確認過不會有 br 被降級成 gzip 的副作用：錦標賽端點 origin 早就 gzip 了，
+Cloudflare 回給瀏覽器的仍然是 `br`，代表 CF 會自己重壓。）
+
+## 沒有做：nginx upstream keepalive（設定檔不在 repo）
+
+`git ls-files` 在整個 repo 裡找不到任何 nginx 設定檔。已改為產出
+**`docs/nginx-keepalive-runbook.md`**（站長逐步操作單，含備份／`nginx -t`／reload／驗證／還原）。
+`keepalive 64` 的依據、以及為什麼 `proxy_set_header Connection "";` 少了就完全不會生效，都寫在那份裡。
+
+⚠⚠ **`keepalive_timeout` 必須設 3s，不能設 60s（Fable 抓到、已查證）**：
+Node 的 `http.Server` 預設 `keepAliveTimeout = 5000ms`。upstream 的閒置逾時只要大於它，
+就會出現「Node 先關掉連線、nginx 還沒收到 FIN 就把下一個請求寫進去」的競態
+⇒ `upstream prematurely closed connection`。GET 會被 nginx 自動改送到新連線，
+但 **PUT/POST 預設不重試（nginx 1.9.13 起）** —— 而 `PUT /api/rooms/:code`（存盤面）
+正是休閒對戰最熱的寫入路徑 ⇒ 玩家會吃到原本不存在的 502。
+設 3s（< Node 的 5s）讓 nginx 永遠先放手，競態就不存在；117 req/s 下連線幾乎不會閒置到 3 秒。
+
+⚠ `keepalive_timeout` / `keepalive_requests` 寫在 `upstream` 區塊內需要 **nginx ≥ 1.15.3**，
+操作單裡加了 `nginx -v` 這一步（真的太舊的話 `nginx -t` 會擋下來，不會弄壞網站）。
+
+⚠ `proxy_pass http://ptcg_api;` 會讓送往 Node 的 `Host` 從 `127.0.0.1:3000` 變成 `ptcg_api`。
+已逐檔 grep 確認 `server.js` 與 `server_admin_patch.js` **沒有任何一行**讀
+`req.headers.host` / `req.hostname`，CORS 也是 `cors()` 萬用設定 ⇒ 無影響。
+
+⚠ **誠實估計**：nginx→Node 是本機迴環，省下的交握成本大約 0.05～1ms，
+對「TTFB 中位數 1.2 秒」**幾乎沒有直接幫助**。它的價值是把 ephemeral port
+（現在 TIME-WAIT 佔 20.8%）從耗盡邊緣拉回來 —— 真的耗盡時是 SYN 重傳 1 秒起跳。
+這是預防針，不是止痛藥。
+
+## 沒有做（且**不建議**做）：`gameState.log` 儲存端截斷
+
+v0.71 只截**回應**（`_trimLogForWire`，`TOURN_LOG_CAP = 60`），儲存仍是完整的。
+評估結論：**現在不能截**，因為回放同時依賴這兩份：
+
+1. `TMATCH.finalLog` 是在 `onMatchGameOver` 直接寫 `finalLog: gs.log`
+   ⇒ 儲存端一截，快照下來的 finalLog 就已經是殘的。
+2. **投降／時限／閒置判負／pending-admin 的場根本不會走 `onMatchGameOver`**，
+   `/api/tournament/replay` 與 `/admin/match-log`、`/match-log` 三處都是 fallback 去讀
+   `TROOMS('mr_<matchId>').gameState.log`（patch 6239 / 6269 / 6297 行）⇒ 直接缺行。
+3. 更致命的是 `tournamentReplayTurns` 每格快照存的 **`logLen` 是 finalLog 的索引**
+   （v0.82，前端靠它切片讓對戰 log 跟著回放進度走）。儲存端截斷會讓所有既有快照的 logLen
+   全部指到錯的位置 ⇒ 不是缺行，是**錯行**。
+4. v6.119 的守衛已經為了同一件事釘死過一次（「閒置判負的完整讀取不得加 projection，
+   殘缺盤面寫回去會永久洗掉 log」）。
+
+要做的話唯一安全的切法是**只截休閒房（`rooms` collection）的 `gameState.log`**——
+休閒對戰沒有回放功能，`matchRecords` 也不存 log。錦標賽房（`TROOMS`）一行都不能動。
+**這一版沒有做任何截斷，交給站長裁定下一輪要不要只做休閒那半邊。**
+
+## 守衛
+
+`scripts/test-v6178-rooms-gzip-hoist.mjs`（17 條，HEAD v6.177 上 **FAIL 8**）。
+⚠ 它**不是**去 grep「有沒有寫 `app.use(compression)`」——那是 v0.75 就有的、而且沒生效。
+它用哨兵註解把 patch 裡那一段 gzip 區塊**原封抽出來**，`new Function` 實跑在一個
+模擬真實註冊順序的 Express router stack 上，然後斷言「compression 的 layer index
+真的小於每一條 `/api/rooms` 路由的 index」。抽不到哨兵時會退回舊版形狀的抽法，
+所以 HEAD 版也跑得起來、失敗在「順序」而不是「找不到」。另含正對照
+（只 `app.use` 不搬的樣本必須被判為不合格）。
+
+## Fable 審查（站長硬性要求）與逐項查證
+
+| Fable 提的 | 我怎麼查證 | 結論 |
+|---|---|---|
+| ⚠ Node `keepAliveTimeout` 5s vs upstream `keepalive_timeout` 60s ⇒ 偶發 502，且 PUT 不重試 | Node 官方預設值確為 5000ms；`PUT /api/rooms/:code` 確實是休閒最熱寫入路徑（`server js.txt` 第 88 行） | **採納**，操作單改成 `keepalive_timeout 3s` 並寫明理由，守衛釘住 |
+| ⚠ upstream 內的 `keepalive_timeout`/`keepalive_requests` 需 nginx ≥ 1.15.3 | 對照 nginx 文件的 "This directive appeared in version 1.15.3" | **採納**，加 `nginx -v` 步驟 |
+| ⚠ `proxy_pass` 改指 upstream 會改變 `Host` | `grep -n "headers.host\|req.hostname"` 掃 `server js.txt` 與 patch，**零命中** | 無影響，寫進操作單備註 |
+| ⚠ 長輪詢若中途 `res.write` 心跳，hoist 後會被 gzip 緩衝住 | `grep "res\.write("` 掃整份 patch → **零命中**（只有註解提到 event-stream）；`/state?wait=1` 是掛起後單次 `res.json()` | 不成立，但確實是對的疑慮方向 |
+| 建議改用 nginx `gzip on` 取代 hoist | 成立且更標準，但那要再改一次 VM 設定；本版的 hoist 已有 17 條行為守衛且能用 `update-tournament.bat` 部署 | **不改**，寫進操作單附錄當備案 |
+| 建議改安裝腳本的插入錨點 | `oracle_admin_install.sh` 在 VM 上、不在 repo 裡 ⇒ 這輪動不到 | 記錄，不做 |
+| gzip 對 1.2 秒 TTFB「幾乎沒有幫助」 | 與我方 v6.159 拆段量測一致（下載段中位數 22ms）；再加上 Cloudflare 已經在壓（實測見上） | **完全同意**，因此不寫首頁 |
+| 真兇建議先量 Resource Timing 的 `fetchStart→requestStart` vs `requestStart→responseStart`、鏈路二分、cloudflared metrics | 未做（超出本輪範圍） | **列為下一輪待辦** |
+
+Fable 說的「compression 內建會跳過 HEAD、跳過已有 Content-Encoding 的回應、
+ETag 是壓縮前算的所以 304 照常」這幾點我沒有逐行去讀 compression 原始碼，
+但它們都不是本版改動引入的（v0.72 起錦標賽就一直這樣跑），所以不擋這一版。
+
+## 下一輪待辦（站長裁定）
+
+1. **TTFB 1.2 秒的真兇**：先用 Resource Timing 把 `net` 拆成
+   `fetchStart→requestStart`（排隊 + Service Worker）與 `requestStart→responseStart`（真 TTFB）。
+   ⚠ Service Worker 有前科（v6.146~149「SW 沒排除 `/api/`」），先開 DevTools
+   「Bypass for network」對照跑一次。
+2. 鏈路二分：VM 上分別 `curl -w '%{time_starttransfer}'` 打 `127.0.0.1:3000` / 經 nginx / 站外探針打
+   `www.ptcg-tw-sim.com`，看 1.2 秒掉在哪一段。
+3. cloudflared metrics（隧道 RTT、in-flight 併發、重連紀錄）。
+4. `gameState.log` 截斷：**只截休閒房**那半邊（見上）。
+
+---
+
 # v6.177 「抓取中／抓取失敗不清空已顯示資料」中央收斂（stale-while-revalidate）
 
 ## 真因（玩家回報：賽程／排名整區消失、好幾秒才回來）
