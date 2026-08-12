@@ -1542,6 +1542,127 @@ export function clearActiveEffects(poke: CardInstance): CardInstance {
 }
 
 /**
+ * ⭐⭐ v6.174 中央：把 picker 送來的「場上目標 iid」解析成 CardInstance（active + bench 全掃）。
+ *   找不到一律回 null —— 呼叫端必須先判 null 再動盤面。
+ *
+ * ⚠ 為什麼要中央化：站內 150+ 個「選場上寶可夢當目標」的 resolver 各自 inline
+ *   `p.active?.iid === iid ? … : p.bench.map(…)`，其中一部分把「找不到目標」寫成
+ *   *靜默略過*，而**破壞性副作用已經先做掉了**（來源卡已從棄牌區/手牌移除）。
+ *   結果就是玩家回報的「log 印出『附給 ?』然後卡片消失」。
+ */
+export function findFieldInstance(p: PlayerState, iid: string | null | undefined): CardInstance | null {
+  if (!iid) return null;
+  if (p.active?.iid === iid) return p.active;
+  return p.bench.find(c => c.iid === iid) ?? null;
+}
+
+/** v6.174：附能來源區（由**卡面**決定，中央 helper 必填參數 → 強迫呼叫端回去讀卡面，禁用預設值猜）。 */
+export type EnergyAttachSourceZone = 'discard' | 'hand' | 'deck';
+
+/**
+ * ⭐⭐⭐ v6.174 中央：「從自己的某個區取 1 張能量卡 → 附到自己場上 1 隻寶可夢」原子化管線。
+ *
+ * ⚠ 真因（玩家回報：v6.173 錦標賽「薪水小偷 R2」火焰雞ex｜沸騰鬥志）：
+ *   原實作是「**先**把能量從棄牌區 filter 掉 → **後**用 selectedIids[0] 找目標」，
+ *   目標解析失敗時只把 log 的名字寫成 `?` 就結束 —— 能量已經離開棄牌區、卻沒有附到
+ *   任何寶可夢身上 ⇒ **那張卡從遊戲中永久消失**（牌張不守恆）。同型寫法站內成群
+ *   （沸騰鬥志 / 岩石武裝 / 惡棍衝天 / N的ＰＰ提升劑 …）。
+ *
+ * 這裡改成 **先解析、全部成功才動盤面**：能量不在指定區、或目標不在自己場上（或不在
+ * 卡面允許的目標集合內），一律 **完全 no-op** 並寫一行明確的 log，絕不留半套。
+ *
+ * @param opts.allowedTargetIids 卡面對目標的額外限制（例：只能備戰、只能【鬥】、只能「N的」）。
+ *   ⚠ 這是 resolver 端自驗（v6.009）：picker 的 validIids 是 client 可竄改的顯示層。
+ * @param opts.extraDamage 卡面附帶的傷害指示物（惡棍衝天「放 2 個傷害指示物」= 20）。
+ * @returns `{ state, ok, energy, target }` — ok=false 代表**沒有任何盤面變更**。
+ */
+export function attachEnergyFromZoneToOwnPokemon(
+  state: GameState,
+  ownerIdx: 0 | 1,
+  zone: EnergyAttachSourceZone,
+  energyIid: string | null | undefined,
+  targetIid: string | null | undefined,
+  pool: Map<string, Card>,
+  label: string,
+  opts?: { allowedTargetIids?: string[]; extraDamage?: number },
+): { state: GameState; ok: boolean; energy: CardInstance | null; target: CardInstance | null } {
+  const p = state.players[ownerIdx];
+  const zoneName = zone === 'discard' ? '棄牌區' : zone === 'hand' ? '手牌' : '牌庫';
+  const energy = energyIid ? (p[zone].find(c => c.iid === energyIid) ?? null) : null;
+  if (!energy) {
+    return { state: addLog(state, `${label}：指定的能量卡已不在${zoneName}，效果未執行`, ownerIdx), ok: false, energy: null, target: null };
+  }
+  let target = findFieldInstance(p, targetIid);
+  if (target && opts?.allowedTargetIids && !opts.allowedTargetIids.includes(target.iid)) target = null;
+  if (!target) {
+    return {
+      state: addLog(state, `${label}：沒有選到符合條件的自方寶可夢，效果未執行（能量留在${zoneName}）`, ownerIdx),
+      ok: false, energy: null, target: null,
+    };
+  }
+  const ename = pool.get(energy.cardId)?.name ?? '能量卡';
+  const tname = pool.get(target.cardId)?.name ?? '寶可夢';
+  const extra = opts?.extraDamage ?? 0;
+  const tIid = target.iid;
+  const next = updatePlayer(state, ownerIdx, (pl) => {
+    const attachTo = (c: CardInstance): CardInstance =>
+      c.iid === tIid
+        ? { ...c, energyAttached: [...c.energyAttached, energy], damage: c.damage + extra }
+        : c;
+    return {
+      ...pl,
+      [zone]: pl[zone].filter(c => c.iid !== energy.iid),
+      active: pl.active ? attachTo(pl.active) : pl.active,
+      bench: pl.bench.map(attachTo),
+    } as PlayerState;
+  });
+  const st = addLog(next, `${label}：將 ${ename} 附給 ${tname}`, ownerIdx);
+  return { state: st, ok: true, energy, target };
+}
+
+/**
+ * ⭐⭐ v6.174 中央：「把對手備戰區的某隻換到對手戰鬥場」（老大的指令 / 頂尖捕捉器 / 大力捕捉器…）。
+ *
+ * ⚠ 原本各卡都是「**先** addLog 宣告『已經把 X 換到戰鬥場』→ **後**才 findIndex，
+ *   找不到就 `return p` 靜默不換」。目標解析失敗時 log 會騙玩家說換過了
+ *   （實戰已出現：`將對手戰鬥場的 願增猿 換到備戰區，呼叫 ? 到對手戰鬥場`），
+ *   而且後續步驟（頂尖捕捉器還要再開自方換場 picker）仍然照跑 ⇒ 半套盤面。
+ *   收斂後：解析失敗 = 完全 no-op + 據實 log，呼叫端用 ok 決定要不要往下走。
+ */
+export function promoteOppBenchToActive(
+  state: GameState,
+  oppIdx: 0 | 1,
+  targetIid: string | null | undefined,
+  pool: Map<string, Card>,
+  label: string,
+  actorIdx: 0 | 1,
+): { state: GameState; ok: boolean } {
+  const oppPlayer = state.players[oppIdx];
+  const bIdx = targetIid ? oppPlayer.bench.findIndex(c => c.iid === targetIid) : -1;
+  if (!oppPlayer.active || bIdx < 0) {
+    return {
+      // ⚠ label 已由呼叫端帶好前綴（含冒號）→ 這裡不再自加冒號，否則會出現「頂尖捕捉器：：」
+      state: addLog(state, `${label}沒有選到對手備戰區的寶可夢，效果未執行`, actorIdx),
+      ok: false,
+    };
+  }
+  const newName = pool.get(oppPlayer.bench[bIdx].cardId)?.name ?? '寶可夢';
+  const oldName = pool.get(oppPlayer.active.cardId)?.name ?? '寶可夢';
+  let st = addLog(state, `${label}將對手戰鬥場的 ${oldName} 換到備戰區，呼叫 ${newName} 到對手戰鬥場`, actorIdx);
+  st = updatePlayer(st, oppIdx, (p) => {
+    if (!p.active) return p;
+    const i = p.bench.findIndex(c => c.iid === targetIid);
+    if (i < 0) return p;
+    const newBench = [...p.bench];
+    // v2.08：離開戰鬥場清狀態旗標
+    newBench[i] = clearActiveEffects(p.active);
+    // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
+    return { ...p, active: { ...p.bench[i] }, bench: newBench };
+  });
+  return { state: st, ok: true };
+}
+
+/**
  * 通用回復 resolver（heal-target pending 的共用處理）。
  *
  * v2.24：從 effects.ts 抽到 _shared.ts，統一給 heal-30 / heal-60-discard-1 /

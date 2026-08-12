@@ -14,6 +14,7 @@ import { deckWithCardsToBottom } from '../_shared'; // v6.124 「放回牌庫下
 import { copyAttackPostDispatch } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
+import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op（禁半套：能量已離開來源區卻沒附上）
 import { recruitBasicToBenchPost } from '../../effects';  // v6.067 呼朋引伴族中央 helper
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import type { PlayerState, GameState, CardInstance } from '../../types';
@@ -378,30 +379,17 @@ regR('blaziken-boiling-pick-energy', (state, aIdx, selectedEnergyIids) => {
     },
   });
 });
+// ⭐⭐⭐ v6.174（玩家回報：錦標賽「薪水小偷 R2」對局卡住，log 出現「沸騰鬥志：將 基本【超】能量 附給 ?」）
+//   原實作先把能量從棄牌區 filter 掉、再用 selectedPokeIids[0] 找目標，找不到就只把名字寫成 `?`
+//   ⇒ 能量既沒回棄牌區也沒附到任何寶可夢，**整張卡從遊戲中消失**。
+//   改走中央 attachEnergyFromZoneToOwnPokemon：先解析、全成功才動盤面，失敗一律完全 no-op。
+//   卡面（SVM 12086）：「從自己的棄牌區選擇1張基本能量卡，附於自己的寶可夢身上。」
+//   → 來源 discard、目標不限備戰/戰鬥場、無額外傷害。
 regR('blaziken-boiling-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   const energyIids = (params?.energyIids as string[]) ?? [];
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
-  const energy = p.discard.find(c => energyIids.includes(c.iid));
-  if (!energy) return addLog(state, '沸騰鬥志：能量不在棄牌區', aIdx);
-  p.discard = p.discard.filter(c => c.iid !== energy.iid);
-  const pIid = selectedPokeIids[0];
-  let tgtName = '?';
-  if (p.active?.iid === pIid) {
-    p.active = { ...p.active, energyAttached: [...p.active.energyAttached, energy] };
-    tgtName = pool.get(p.active.cardId)?.name ?? '?';
-  } else {
-    p.bench = p.bench.map(b => {
-      if (b.iid === pIid) {
-        tgtName = pool.get(b.cardId)?.name ?? '?';
-        return { ...b, energyAttached: [...b.energyAttached, energy] };
-      }
-      return b;
-    });
-  }
-  players[aIdx] = p;
-  const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `沸騰鬥志：將 ${ename} 附給 ${tgtName}`, aIdx);
+  return attachEnergyFromZoneToOwnPokemon(
+    state, aIdx, 'discard', energyIids[0], selectedPokeIids[0], pool, '沸騰鬥志',
+  ).state;
 });
 
 // 龜足巨鎧｜岩石武裝 — 手牌選 1 張「基本【鬥】能量」附給自己的【鬥】寶可夢（1/回合）
@@ -434,35 +422,30 @@ regA('龜足巨鎧', 0, (st, idx, pool) => {
     },
   });
 });
+// ⭐ v6.174 同 sweep：目標解析失敗時原本會把手牌那張基本【鬥】能量吃掉（同「附給 ?」型）。
+//   卡面（M3 18019 / M-P-J 18070）：「從自己的手牌選擇1張『基本【鬥】能量』卡，附於自己的【鬥】寶可夢身上。」
 regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
+  const p = state.players[aIdx];
   // v2.226：自動取手牌第 1 張基本【鬥】能量（gate 保證至少有 1 張）
   const energy = p.hand.find(c => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && /【鬥】/.test(card.name);
   });
   if (!energy) return addLog(state, '岩石武裝：手牌無基本【鬥】能量', aIdx);
-  p.hand = p.hand.filter(c => c.iid !== energy.iid);
-  const pIid = selectedPokeIids[0];
-  let tgtName = '?';
-  if (p.active?.iid === pIid) {
-    p.active = { ...p.active, energyAttached: [...p.active.energyAttached, energy] };
-    tgtName = pool.get(p.active.cardId)?.name ?? '?';
-  } else {
-    p.bench = p.bench.map(b => {
-      if (b.iid === pIid) {
-        tgtName = pool.get(b.cardId)?.name ?? '?';
-        return { ...b, energyAttached: [...b.energyAttached, energy] };
-      }
-      return b;
-    });
-  }
-  players[aIdx] = p;
-  const ename = pool.get(energy.cardId)?.name ?? '?';
+  // v5.184：詛咒根擋手牌附能 — 與 gate 同一份條件（resolver 自驗，禁只信 client 送的 iid）
+  const allMy = [...(p.active ? [p.active] : []), ...p.bench];
+  const allowed = allMy
+    .filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting' && !c.cantAttachEnergyThisTurn)
+    .map(c => c.iid);
+  const r = attachEnergyFromZoneToOwnPokemon(
+    state, aIdx, 'hand', energy.iid, selectedPokeIids[0], pool, '岩石武裝',
+    { allowedTargetIids: allowed },
+  );
+  if (!r.ok) return r.state;
+  const pIid = r.target!.iid;
   // v5.539：從手牌附能後觸發對手附能被動（侵蝕詛咒 等）
   return fireOnHandEnergyAttached(
-    applyMagearnaHandAttachHeal(addLog({ ...state, players }, `岩石武裝：將 ${ename} 附給 ${tgtName}`, aIdx), aIdx, [pIid], pool),  // v5.485 自動治癒
+    applyMagearnaHandAttachHeal(r.state, aIdx, [pIid], pool),  // v5.485 自動治癒
     aIdx, pIid, pool);
 });
 
@@ -505,22 +488,20 @@ regR('rascal-skyward-pick', (state, aIdx, selectedIids, _params, pool) => {
     },
   });
 });
+// ⭐ v6.174 同 sweep：原本目標解析失敗時能量已從牌庫移除卻沒附上（卡片消失）。
+//   卡面（M2 14375）：「從自己的牌庫選擇1張『基本【惡】能量』卡，附於備戰區的【惡】寶可夢身上。
+//   並且重洗牌庫。然後，在附上那張卡的寶可夢身上放置2個傷害指示物。」
+//   → 目標限「備戰區的【惡】」；傷害指示物 2 個 = 20；重洗牌庫是卡面獨立的一句，**無論有沒有附成功都要洗**。
 regR('rascal-skyward-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   const energyIids = (params?.energyIids as string[]) ?? [];
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
-  const energy = p.deck.find(c => energyIids.includes(c.iid));
-  if (!energy) return addLog(state, '惡棍衝天：能量不在牌庫', aIdx);
-  p.deck = p.deck.filter(c => c.iid !== energy.iid);
-  const pIid = selectedPokeIids[0];
-  p.bench = p.bench.map(b => b.iid === pIid ? { ...b, energyAttached: [...b.energyAttached, energy], damage: b.damage + 20 } : b);
-  // 重洗
-  p.deck = shuffle([...p.deck]);
-  players[aIdx] = p;
-  const tgt = p.bench.find(b => b.iid === pIid);
-  const name = tgt ? (pool.get(tgt.cardId)?.name ?? '?') : '?';
-  const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `惡棍衝天：將 ${ename} 附給 ${name}（放 2 個傷害指示物）並重洗牌庫`, aIdx);
+  const p = state.players[aIdx];
+  const allowed = p.bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Darkness').map(b => b.iid);
+  const r = attachEnergyFromZoneToOwnPokemon(
+    state, aIdx, 'deck', energyIids[0], selectedPokeIids[0], pool, '惡棍衝天',
+    { allowedTargetIids: allowed, extraDamage: 20 },
+  );
+  const shuffled = updatePlayer(r.state, aIdx, pl => ({ ...pl, deck: shuffle([...pl.deck]) }));
+  return addLog(shuffled, r.ok ? '惡棍衝天：放置 2 個傷害指示物並重洗牌庫' : '惡棍衝天：重洗牌庫', aIdx);
 });
 
 // 超級甲賀忍蛙ex｜必殺手裡劍 — 若在戰鬥場、棄 1 水能量 → 對手 1 寶可夢放 6 傷
@@ -629,25 +610,16 @@ regR('n-pp-pick-energy', (state, aIdx, selectedIids, _params, pool) => {
     },
   });
 });
+// ⭐ v6.174 同 sweep。卡面（MC 17106）：「從自己的棄牌區選擇1張基本能量卡，附於備戰區的『N的寶可夢』身上。」
+//   → 來源 discard、目標限「備戰區」且卡名以「N的」開頭。
 regR('n-pp-attach', (state, aIdx, selectedPokeIids, params, pool) => {
   const energyIids = (params?.energyIids as string[]) ?? [];
-  const players = [...state.players] as [PlayerState, PlayerState];
-  const p = { ...players[aIdx] };
-  const energy = p.discard.find(c => energyIids.includes(c.iid));
-  if (!energy) return addLog(state, 'N的ＰＰ提升劑：能量不在棄牌區', aIdx);
-  p.discard = p.discard.filter(c => c.iid !== energy.iid);
-  const pIid = selectedPokeIids[0];
-  let tgtName = '?';
-  p.bench = p.bench.map(b => {
-    if (b.iid === pIid) {
-      tgtName = pool.get(b.cardId)?.name ?? '?';
-      return { ...b, energyAttached: [...b.energyAttached, energy] };
-    }
-    return b;
-  });
-  players[aIdx] = p;
-  const ename = pool.get(energy.cardId)?.name ?? '?';
-  return addLog({ ...state, players }, `N的ＰＰ提升劑：將 ${ename} 附給 ${tgtName}`, aIdx);
+  const allowed = state.players[aIdx].bench
+    .filter(b => pool.get(b.cardId)?.name.startsWith('N的')).map(b => b.iid);
+  return attachEnergyFromZoneToOwnPokemon(
+    state, aIdx, 'discard', energyIids[0], selectedPokeIids[0], pool, 'N的ＰＰ提升劑',
+    { allowedTargetIids: allowed },
+  ).state;
 });
 
 // 阿杏的秘招（Supporter）

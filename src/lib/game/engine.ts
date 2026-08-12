@@ -1241,9 +1241,27 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
   // v6.010:保守只消毒 deck-search(暗碼迷疊牌/稜鏡去重的實際漏洞面;zone=deck 明確、無合法重複、
   //   無 resolver 讀非牌庫 iid)。hand/場上/heal-target 等通用型別 resolver 讀取語義多變(神奇糖果
   //   heal-target 進化目標走此型)→誤擋風險高,一律【原封放行】,由 resolver 自驗或 Stage 2 filter evaluator 補。
+  // ⭐⭐⭐ v6.174：非 deck-search 型別不再「完全原封放行」——一律再套一層 `params.validIids` 交集。
+  //   `validIids` 是「這個 picker 到底能勾什麼」的權威（UI 的 selectionItemsRaw 與 ai.ts 都只從它產候選），
+  //   所以任何不在其中的 iid 必然是失效 / 版本 skew / 竄改的產物，沒有任何合法情境。
+  //   過去原封放行 ⇒ 失效 iid 一路穿到 resolver，而站內大量 resolver 把「目標解析失敗」寫成
+  //   *只把 log 的名字寫成 `?`*、破壞性副作用卻已經先做掉了（玩家回報：火焰雞ex｜沸騰鬥志
+  //   把棄牌區的基本能量從遊戲中刪掉卻沒附到任何寶可夢身上）。這一刀讓 150+ 個場上目標型
+  //   resolver 一次拿到「要嘛有效、要嘛空」的輸入。
+  //   ⚠ 三類排除（語義上 validIids 不是 payload 白名單，或 payload 根本不是 iid）：
+  //     ・damage-distribute / energy-distribute：合法用**重複** iid 編碼「分配幾個」，
+  //       且 resolver 內已各自有 allowSet 檢查；這裡不濾也不去重。
+  //     ・modal-choice：payload 是選項 id 字串（'keep' / 'retry' …），不是 iid。
+  //     ・reorder-deck-top：候選來源是 params.candidateIids，且 payload 帶「順序」語義。
+  const VALID_IIDS_GATE_EXEMPT = new Set(['damage-distribute', 'energy-distribute', 'modal-choice', 'reorder-deck-top']);
   let zone: { iid: string }[] | undefined;
   if (t === 'deck-search') zone = p?.deck;
-  else return iids;   // 非 deck-search 型別 → 原封放行(不改變行為)
+  else {
+    const viRaw = pending.params?.validIids;
+    if (!Array.isArray(viRaw) || VALID_IIDS_GATE_EXEMPT.has(t)) return iids;
+    const allowSet = new Set(viRaw as string[]);
+    return iids.filter((iid) => allowSet.has(iid));
+  }
   const zoneSet = new Set((zone ?? []).map(c => c.iid));
   const vi = pending.params?.validIids as string[] | undefined;
   const validSet = Array.isArray(vi) ? new Set(vi) : null;

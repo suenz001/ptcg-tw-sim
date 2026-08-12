@@ -115,3 +115,26 @@ export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
 export function selectionConfirmFloor(minCount: number): number {
   return Math.max(1, minCount);
 }
+
+/**
+ * ⭐⭐⭐ v6.174 中央安全網述詞：這個 picker 現在**完全沒有出口**嗎？
+ *
+ * 「沒有出口」＝ 候選清單是空的（玩家一個都勾不到）、卡面又要求至少選 1，
+ * 而 `selectionAllowsSkip` 也不給【不選】鈕 ⇒ 玩家所有按鈕都是 disabled ⇒ **對局卡死**。
+ * 這種情況代表發動端的 gate 有洞（gate 都做對的話這顆按鈕永遠不該出現），
+ * 但在 gate 補好之前，玩家不能被鎖在畫面上。
+ *
+ * ⚠ v6.174 修的洞：原本這段判斷寫在 game/+page.svelte 的 `pendingStuckEmpty`，
+ *   而且**明文排除 damage-distribute / energy-distribute**（理由是「它們用 counts 不用 picked」）。
+ *   但那兩型同樣是「候選為空 → 確認鈕永遠 disabled」，排除掉等於**那兩型真的沒有任何逃生口**。
+ *   分配型的候選為空一樣要給放棄鈕；改成純函式後由 test-selection-ui 直接覆蓋。
+ *
+ * @param candidateCount picker 目前實際渲染出的候選數量（UI 的 selectionItems.length）。
+ */
+export function selectionHasNoExit(p: SkipDecisionInput & { minCount?: number }, candidateCount: number): boolean {
+  if (candidateCount > 0) return false;
+  if ((p.minCount ?? 0) <= 0) return false;
+  // 已經有【不選】鈕的 picker 本來就有出口
+  if (selectionAllowsSkip(p)) return false;
+  return true;
+}

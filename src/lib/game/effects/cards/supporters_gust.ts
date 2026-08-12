@@ -11,6 +11,7 @@
  */
 
 import { tryPromptPromoteActive } from '../_shared';
+import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
 import {
   reg, regR, regG,
   addLog, updatePlayer, withPending,
@@ -63,23 +64,13 @@ reg('老大的指令', (st, idx, pool) => {
   });
 });
 
+// ⭐ v6.174：原本是「**先** addLog 宣告已經換好 → **後**才 findIndex，找不到就靜默 return p」，
+//   目標解析失敗時 log 會騙玩家（實戰已出現 `呼叫 ? 到對手戰鬥場`）。收斂到中央
+//   promoteOppBenchToActive：解析失敗 = 完全 no-op + 據實 log。
 regR('gust-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  const oppPlayer = st.players[oppIdx];
-  const target = oppPlayer.bench.find(c => c.iid === iids[0]);
-  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
-  const oldName = oppPlayer.active ? (pool.get(oppPlayer.active.cardId)?.name ?? '?') : '?';
-  st = addLog(st, `將對手戰鬥場的 ${oldName} 換到備戰區，呼叫 ${newName} 到對手戰鬥場`, idx);
-  const afterSt = updatePlayer(st, oppIdx, (p) => {
-    if (!p.active) return p;
-    const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
-    if (bIdx < 0) return p;
-    const newBench = [...p.bench];
-    // v2.08：離開戰鬥場清狀態旗標
-    newBench[bIdx] = clearActiveEffects(p.active);
-    // v3.812：preserve justPlaced + playedFromHand
-    return { ...p, active: { ...p.bench[bIdx] }, bench: newBench };
-  });
+  // label 空字串＝維持既有成功 log 逐字格式「將對手戰鬥場的 X 換到備戰區，呼叫 Y 到對手戰鬥場」
+  const afterSt = promoteOppBenchToActive(st, oppIdx, iids[0], pool, '', idx).state;
   // v5.245：自方換位 ON_PROMOTE_TO_ACTIVE prompt（火箭隊的坂木自換 + 對換場景：
   //   self-swap 已 set 自方 active.movedToActiveThisTurn=true，gust-opp 完成後 prompt 自方特性。
   //   老大的指令場景：自方 active 沒換場 → helper 內 movedToActiveThisTurn check 會 skip）

@@ -25,9 +25,10 @@
 
 import type { CardInstance, PlayerState } from '../../types';
 import { applyStatusToOppActive, countEnergyTypeHostAware, flipCoinsWithLog, dealAttackDamageToTarget, selfReturnToHandPost, returnSelfActiveEnergyPost} from '../../effects'; // v5.795 host-aware；v5.797 中央施狀態
-import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached } from '../_shared'; // v5.782 fire
+import { regPre, regPost, addLog, updatePlayer, withPending, regR, fireOnHandEnergyAttached, shuffle } from '../_shared'; // v5.782 fire // v6.174 shuffle
 import { countSpecialConditions } from '../_shared'; // v5.834 特殊狀態數(三槽)
 import { energyMatchesType } from '../_shared';
+import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -314,41 +315,27 @@ regPost('厄鬼椪 礎石面具|石之神樂', (state, aIdx, pool) => {
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'v313-stone-kagura-attach',
-      params: { energyIid: fightCard.iid, label: '石之神樂' },
+      // ⭐ v6.174：補 validIids（UI/AI 產候選 + engine 中央 sanitize 閘的權威來源）。
+      //   卡面（MC 16898）「附於**自己的**寶可夢身上」→ active + bench 全部可選。
+      params: {
+        energyIid: fightCard.iid, label: '石之神樂',
+        validIids: [...(player.active ? [player.active.iid] : []), ...player.bench.map(b => b.iid)],
+      },
     },
   );
 });
 
 // v3.13 resolver: 把選中的能量附於玩家挑的目標寶可夢，並重洗牌庫
-regR('v313-stone-kagura-attach', (state, aIdx, iids, params, _pool) => {
-  if (iids.length === 0) return state;
+// ⭐ v6.174（Fable 5 審查抓到的同型漏網）：原實作先無條件把能量從牌庫 filter 掉、再判 target，
+//   解析失敗時能量從遊戲中消失（與火焰雞ex｜沸騰鬥志同一種 bug）。改走中央
+//   attachEnergyFromZoneToOwnPokemon（先解析、全成功才動盤面）。
+//   卡面（MC 16898）：「從自己的牌庫選擇1張『基本【鬥】能量』卡，附於自己的寶可夢身上。
+//   並且重洗牌庫。」→ 重洗是獨立的一句，**不論附加成功與否都要洗**（已經看過牌庫）。
+regR('v313-stone-kagura-attach', (state, aIdx, iids, params, pool) => {
   const energyIid = params?.energyIid as string | undefined;
   const label = (params?.label as string | undefined) ?? '石之神樂';
-  if (!energyIid) return state;
-  const targetIid = iids[0];
-  function _shuffle<T>(arr: T[]): T[] {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-  return updatePlayer(
-    addLog(state, `${label}：將能量附給選定的寶可夢；重洗牌庫`, aIdx),
-    aIdx, p => {
-      const energy = p.deck.find(c => c.iid === energyIid);
-      if (!energy) return p;
-      const newDeck = _shuffle(p.deck.filter(c => c.iid !== energyIid));
-      const newActive = p.active && p.active.iid === targetIid
-        ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] }
-        : p.active;
-      const newBench = p.bench.map(b => b.iid === targetIid
-        ? { ...b, energyAttached: [...b.energyAttached, energy] }
-        : b);
-      return { ...p, deck: newDeck, active: newActive, bench: newBench };
-    },
-  );
+  const r = attachEnergyFromZoneToOwnPokemon(state, aIdx, 'deck', energyIid, iids[0], pool, label);
+  return updatePlayer(r.state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

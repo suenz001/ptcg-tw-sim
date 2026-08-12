@@ -7,6 +7,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
   getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
 import { joinCardNames, logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
+import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { flipCoinsWithLog, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
 
@@ -54,32 +55,26 @@ function deckSearchBasicEnergyAttachOnePost(
       actorIdx: aIdx, sourcePlayerIdx: aIdx,
       minCount: 1, maxCount: 1,
       effectKey: 'wave13-deck-energy-attach',
-      params: { energyIid, label },
+      // ⭐ v6.174：補 validIids —— UI/AI 產候選、engine 中央 sanitize 閘都只認它；
+      //   原本缺這欄，失效 iid 可以一路穿到 resolver（見下方 resolver 註解）。
+      //   卡面「附於**自己的**寶可夢身上」→ active + bench 全部可選。
+      params: { energyIid, label, validIids: [...(player.active ? [player.active.iid] : []), ...player.bench.map(b => b.iid)] },
     });
   };
 }
 
+// ⭐ v6.174（Fable 5 審查抓到的同型漏網）：原實作「**無條件** shuffle(deck.filter(去掉能量))
+//   → 再分別判 active / bench 是否為 targetIid」，target 解析失敗時能量已離開牌庫卻沒附上
+//   ⇒ 卡片從遊戲中消失（與火焰雞ex｜沸騰鬥志同一種 bug）。改走中央
+//   attachEnergyFromZoneToOwnPokemon（先解析、全成功才動盤面）。
+//   卡面（厄鬼椪 碧草/火灶/水井面具，I 標）：「從自己的牌庫選擇1張『基本【X】能量』卡，
+//   附於自己的寶可夢身上。並且重洗牌庫。」→ 目標＝自己場上任一隻；重洗牌庫是獨立的一句，
+//   **不論附加成功與否都要洗**（已經看過牌庫）。
 regR('wave13-deck-energy-attach', (state, aIdx, iids, params, pool) => {
-  if (iids.length === 0) return state;
   const energyIid = params?.energyIid as string | undefined;
   const label = (params?.label as string | undefined) ?? '神樂';
-  if (!energyIid) return state;
-  const targetIid = iids[0];
-  return updatePlayer(
-    addLog(state, `${label}：將能量附給選定的寶可夢；重洗牌庫`, aIdx),
-    aIdx, p => {
-      const energy = p.deck.find(c => c.iid === energyIid);
-      if (!energy) return p;
-      const newDeck = shuffle(p.deck.filter(c => c.iid !== energyIid));
-      const newActive = p.active && p.active.iid === targetIid
-        ? { ...p.active, energyAttached: [...p.active.energyAttached, energy] }
-        : p.active;
-      const newBench = p.bench.map(b => b.iid === targetIid
-        ? { ...b, energyAttached: [...b.energyAttached, energy] }
-        : b);
-      return { ...p, deck: newDeck, active: newActive, bench: newBench };
-    },
-  );
+  const r = attachEnergyFromZoneToOwnPokemon(state, aIdx, 'deck', energyIid, iids[0], pool, label);
+  return updatePlayer(r.state, aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
 });
 
 // 從牌庫挑 ≤N 寶可夢加手（filter）

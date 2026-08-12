@@ -30,6 +30,7 @@ import {
 } from '../_shared';
 import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈)
 import { tryPromptPromoteActive } from '../_shared';
+import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
@@ -460,24 +461,13 @@ reg('頂尖捕捉器', (st, idx, pool) => {
     params: { validIids },
   });
 });
+// ⭐ v6.174：同 gust-opp — 先 log 後判定會騙玩家，且解析失敗時仍往下開「自己換誰上場」picker
+//   ⇒ 對手根本沒換、我方卻被要求換場（半套盤面）。收斂到中央 promoteOppBenchToActive。
 regR('top-catcher-opp', (st, idx, iids, _params, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  const oppPlayer = st.players[oppIdx];
-  const target = oppPlayer.bench.find(c => c.iid === iids[0]);
-  const newName = target ? (pool.get(target.cardId)?.name ?? '?') : '?';
-  const oldName = oppPlayer.active ? (pool.get(oppPlayer.active.cardId)?.name ?? '?') : '?';
-  st = addLog(st, `頂尖捕捉器：將對手戰鬥場的 ${oldName} 換到備戰區，呼叫 ${newName} 到對手戰鬥場`, idx);
-  // 切換對手備戰 → 對手出場
-  st = updatePlayer(st, oppIdx, (p) => {
-    if (!p.active) return p;
-    const bIdx = p.bench.findIndex(c => c.iid === iids[0]);
-    if (bIdx < 0) return p;
-    const newBench = [...p.bench];
-    // v2.08：離開戰鬥場清狀態旗標
-    newBench[bIdx] = clearActiveEffects(p.active);
-    // v3.812：preserve justPlaced + playedFromHand（位置交換不該清除剛打出 flag）
-    return { ...p, active: { ...p.bench[bIdx] }, bench: newBench };
-  });
+  const r = promoteOppBenchToActive(st, oppIdx, iids[0], pool, '頂尖捕捉器：', idx);
+  st = r.state;
+  if (!r.ok) return st;
   // 若自己也有備戰，選擇自己要換入的寶可夢
   if (st.players[idx].bench.length === 0) return st;
   return withPending(st, {

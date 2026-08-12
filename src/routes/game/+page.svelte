@@ -34,7 +34,7 @@
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
-  import { selectionAllowsSkip, selectionConfirmFloor } from '$lib/game/selection-ui';
+  import { selectionAllowsSkip, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
@@ -7816,12 +7816,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   // 判定：這個 pending 的候選是否為空且 minCount>0（玩家會被卡住 → 需要放棄按鈕）。
   // damage-distribute 用 counts 不用 picked，排除。
+  // ⭐ v6.174：判斷下沉到 selection-ui.ts 的中央述詞 selectionHasNoExit（純函式 → test-selection-ui 覆蓋）。
+  //   原本這裡把 damage-distribute / energy-distribute 直接 return false 排除掉，
+  //   但那兩型候選為空時「確認」鈕同樣永遠 disabled ⇒ 玩家一顆能按的按鈕都沒有 = 真的卡死。
   const pendingStuckEmpty = $derived.by(() => {
     if (!pendingSelection) return false;
-    if (pendingSelection.type === 'damage-distribute') return false;
-    if (pendingSelection.type === 'energy-distribute') return false;
-    if (pendingSelection.minCount <= 0) return false;
-    return selectionItems.length === 0;
+    return selectionHasNoExit({
+      type: pendingSelection.type,
+      actorIdx: pendingSelection.actorIdx,
+      sourcePlayerIdx: pendingSelection.sourcePlayerIdx,
+      effectKey: pendingSelection.effectKey,
+      minCount: pendingSelection.minCount,
+      allowSkipZero: pendingSelection.params?.allowSkipZero === true,
+    }, selectionItems.length);
   });
   // v2.121：判斷一張卡是否為指定屬性的基本能量。
   // 很多基本能量卡 JSON 的 pokemonType 欄位為 undefined（scraper 沒填），只能從卡名【X】解析。
@@ -10887,6 +10894,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {#if selectionBatchSum > 0}
               <button class="btn-act secondary" onclick={()=>{selectionCounts={};}}>清空本批次</button>
             {/if}
+            <!-- ⭐ v6.174：分配型也要有逃生口。候選為空時「確認本批次」因 selectionValid 永遠 disabled，
+                 而 selectionAllowsSkip 又被 minCount>=1 短路 ⇒ 玩家一顆能按的按鈕都沒有＝真卡死。 -->
+            {#if pendingStuckEmpty}
+              <button class="btn-act secondary" onclick={abandonSelection}
+                title="沒有可分配的目標 — 放棄此效果以繼續">
+                放棄（無可分配目標）
+              </button>
+            {/if}
           {:else if isEnergyDist}
             <!-- v5.384：energy-distribute 用 selectionCounts/selectionBatchSum 計數；
                  原本沒有專屬 footer → 落到下方預設分支顯示 selectionPicked.size 永遠 0
@@ -10896,6 +10911,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
             </button>
             {#if selectionBatchSum > 0}
               <button class="btn-act secondary" onclick={()=>{selectionCounts={};}}>清空</button>
+            {/if}
+            <!-- ⭐ v6.174：同上，分配能量的畫面也要有逃生口（候選為空時原本完全按不動）。 -->
+            {#if pendingStuckEmpty}
+              <button class="btn-act secondary" onclick={abandonSelection}
+                title="沒有可分配的目標 — 放棄此效果以繼續">
+                放棄（無可分配目標）
+              </button>
             {/if}
           {:else if pendingSelection.type === 'reorder-deck-top'}
             <!-- v5.384：reorder-deck-top 用 selectionReorderKeep，同樣不能用 selectionPicked.size -->

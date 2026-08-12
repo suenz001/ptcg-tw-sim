@@ -17,6 +17,93 @@
 
 （本檔由 v6.106 從當時的首頁 changelog 完整搬移建立，日期 2026-08-02）
 
+## v6.174 — picker「目標解析失敗」不得留下半套盤面（中央收斂）＋ pending 出口補洞
+
+**玩家回報**：錦標賽「薪水小偷 R2：南崁大雞雞 vs 蛋蛋戰隊-起士蛋」最後一回合，使用
+火焰雞ex｜沸騰鬥志後 log 出現 `沸騰鬥志：將 基本【超】能量 附給 ?`，然後無法繼續操作。
+dump：`tournament-dumps/dump_20260812_102715.json`（match idx 219，logSource=live-room，128 行 log）。
+
+**卡面查證**（`static/cards`，SVM 12086，H 標）：
+沸騰鬥志＝「在自己的回合時可使用1次。從自己的棄牌區選擇1張基本能量卡，附於自己的寶可夢身上。」
+→ 不限能量屬性（所以「基本【超】能量」配火屬性是**正確**的）、目標不限備戰／戰鬥場。
+
+**真因**（`src/lib/game/effects/cards/six_decks.ts` 舊 `blaziken-boiling-attach`）：
+resolver **先**把能量從棄牌區 `filter` 掉、**後**才用 `selectedPokeIids[0]` 找目標；
+目標解析失敗時只把 log 的名字寫成 `?` 就 return ⇒ 能量既沒留在棄牌區也沒附到任何寶可夢
+= **整張卡從遊戲中永久消失**（牌張不守恆）。行為端已完整重現：
+`applyAction USE_ABILITY → RESOLVE_SELECTION(['ENG1']) → RESOLVE_SELECTION([])`
+產出的 log 與玩家 dump 逐字相同。
+
+**這是維度不是單卡**。同型（先破壞、後解析、失敗只寫 `?`）在 `six_decks.ts` 一檔就有四張：
+沸騰鬥志（棄牌區）／龜足巨鎧｜岩石武裝（手牌）／顫弦蠑螈｜惡棍衝天（牌庫）／N的ＰＰ提升劑（棄牌區）。
+換場型（老大的指令 `gust-opp`／頂尖捕捉器 `top-catcher-opp`）是另一個變體：**先 addLog 宣告
+已經換好、後 findIndex 靜默不換** ⇒ log 騙玩家。實戰 dump 已出現過
+（`dump_20260723_164942.json`：`將對手戰鬥場的 願增猿 換到備戰區，呼叫 ? 到對手戰鬥場`），
+且頂尖捕捉器在對手根本沒換的情況下還會繼續開「我方換誰上場」的 picker（半套盤面）。
+
+**中央收斂**：
+1. `_shared.ts` 新增 `findFieldInstance()`（場上目標 iid → CardInstance，找不到回 null）。
+2. `_shared.ts` 新增 `attachEnergyFromZoneToOwnPokemon()` —— **先解析、全部成功才動盤面**；
+   `zone`（discard/hand/deck）是**必填**參數，強迫呼叫端回去讀卡面；
+   `opts.allowedTargetIids` 做 resolver 端自驗（v6.009 原則，不信 client 送的 iid）；
+   `opts.extraDamage` 給惡棍衝天的「放置2個傷害指示物」。四張卡全部改走它。
+3. `_shared.ts` 新增 `promoteOppBenchToActive()` —— 解析失敗＝完全 no-op ＋ 據實 log，
+   回傳 `ok` 讓呼叫端決定要不要往下走。`gust-opp` / `top-catcher-opp` 收斂進去。
+4. `engine.ts` `sanitizeSelectedIids`：**非 deck-search 型別不再原封放行**，一律再套一層
+   `params.validIids` 交集。validIids 是「這個 picker 能勾什麼」的權威（UI 的
+   `selectionItemsRaw` 與 `ai.ts` 都只從它產候選），不在其中的 iid 沒有任何合法情境。
+   這一刀讓 150+ 個場上目標型 resolver 一次拿到「要嘛有效、要嘛空」的輸入。
+   ⚠ 三類排除：damage-distribute / energy-distribute（合法用重複 iid 編碼計數，且 resolver
+   內已各有 allowSet）、modal-choice（payload 是選項字串）、reorder-deck-top（來源是
+   `params.candidateIids` 且 payload 帶順序語義）。
+
+**「pending 開了卻沒有出口」這一維**：`game/+page.svelte` 的 `pendingStuckEmpty` 是全域安全網
+（候選為空且 minCount>0 → 給「放棄（無符合卡）」鈕），但它**明文排除 damage-distribute 與
+energy-distribute**。那兩型候選為空時「確認」鈕同樣永遠 disabled、`selectionAllowsSkip` 也
+因 minCount>=1 短路而不給【不選】⇒ **一顆能按的按鈕都沒有＝真卡死**。已把判斷下沉成
+`selection-ui.ts` 的純函式 `selectionHasNoExit(input, candidateCount)` 並涵蓋那兩型，
+`+page.svelte` 改呼叫它（純函式才測得到）。
+
+**守衛**：`scripts/test-v6174-selection-target-resolve.mjs`（47 條，已進 `npm test` 鏈）。
+HEAD-FAIL 逐檔證明：six_decks.ts revert → 12 FAIL；supporters_gust.ts → 1 FAIL；
+items_misc.ts → 2 FAIL；engine.ts → 1 FAIL；selection-ui.ts → 4 FAIL。
+斷言以行為端為主（完整 `USE_ABILITY → RESOLVE_SELECTION` 流程 ＋ **全域牌張守恆計數**，
+含附加能量/道具/進化鏈），靜態掃描只用在「四張卡必須走中央 helper」，且附下限斷言與
+否定型判準的正對照。
+
+**Fable 5 審查抓到、本版一併修掉的三件事**（結論全部由我自己開檔查證過）：
+1. **接線沒接上（他抓得對，最重要）**：`selectionHasNoExit` 述詞雖然對 distribute 回 true，
+   但「放棄（無符合卡）」按鈕只渲染在 footer 的 `{:else}` 分支，`{:else if isDmgDist}` /
+   `{:else if isEnergyDist}` 兩個分支裡根本沒有那段 —— 修正等於 no-op。已把逃生鈕補進那兩個
+   分支，並加一條**模板層接線斷言**（切出 footer 的兩個分支、要求含 `pendingStuckEmpty` +
+   `abandonSelection`，附 anchor 長度上下限與正對照）。這就是 v6.154 的教訓：純函式回傳 true
+   ≠ 畫面上真的有那顆按鈕。
+2. **兩個同型漏網**（我逐行看過確認屬實）：
+   `v2630_i_wave13_misc6.ts` 的 `wave13-deck-energy-attach`（厄鬼椪 碧草/火灶/水井面具｜草・火・水之神樂，
+   共用 `deckSearchBasicEnergyAttachOnePost`）與 `v2610_i_wave11_misc4.ts` 的
+   `v313-stone-kagura-attach`（厄鬼椪 礎石面具｜石之神樂）——都是「無條件 `shuffle(deck.filter(去掉能量))`
+   → 再分別判 active/bench」，而且 pending **完全沒有 validIids** ⇒ 連新的中央閘都罩不到。
+   兩者都改走中央 helper，並補上 validIids。卡面（I 標）：「從自己的牌庫選擇1張『基本【X】能量』卡，
+   附於自己的寶可夢身上。並且重洗牌庫。」→ 目標＝自己場上任一隻；重洗是獨立句，不論成敗都洗。
+3. **log 雙冒號**：`promoteOppBenchToActive` 失敗訊息原本自加「：」，而 `top-catcher-opp` 傳進來的
+   label 已含冒號 ⇒「頂尖捕捉器：：」。改成 helper 不自加，由呼叫端帶完整前綴，並加守衛斷言。
+
+**Fable 提出但我查證後維持原樣的**：
+・`attachEnergyFromZoneToOwnPokemon` 同時 map active 與 bench 的理論 aliasing（同一 iid 同時出現在
+  兩處才會附兩份）—— 引擎出口有 `normalizeNonFieldStacks` 與 iid 守恆測試，正常盤面不可達。
+・惡棍衝天 `extraDamage` 不做昏厥判定 —— BASE 版即如此（非回歸），且 engine 每個 action 出口有
+  雙邊 sanity KO sweep 兜底。
+・`active-energy-discard` 的「validIids 為空陣列」語義分歧（`selection-candidates.ts` 當成不限制、
+  新 gate 當成全擋）—— 我掃過全部 42 個建立點，設 validIids 的都同時設了 scope/targetIid/fromDiscard
+  且必非空，現況不可達；記在這裡供日後統一。
+・`greninja-shuriken-6`（水能量代價在開 picker 前就已棄）目標失效時代價付了效果沒發生 —— 屬「代價
+  已付」而非「卡片消失」，且要改動代價時點，**列進待站長裁定**，本版不動。
+
+**仍待站長裁定（未動）**：`attach-tool`（打出寶可夢道具後選附加目標）的 `minCount` 是 1，
+但它同時在 `OPTIONAL_SELECTION_EFFECT_KEYS` 白名單、UI 也寫了專屬文案「取消（道具退回手牌）」。
+`selectionAllowsSkip` 的 `minCount>=1` 短路（官方判準②，SKILL 明列「不能拆」）讓那顆按鈕
+**永遠顯示不出來** ⇒ 玩家誤把道具拖到場上就再也收不回。要不要開放取消，屬於規則裁定，未自行更動。
+
 ## v6.173 — 錦標賽同步：`tAdopt` 改為「結構共享合併」，不再每 tick 全量重繪
 
 **問題（有數字）**：同情境動作往返 p95 中位數 v6.155 265ms → v6.156 376ms → v6.167 818ms。
