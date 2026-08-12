@@ -248,6 +248,12 @@ regPost('振翼髮|蠱惑挪移', (state, aIdx, pool) => {
     type: 'bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
+    // ⭐ v6.176：卡面「選擇1隻自己的**備戰區的『古代』寶可夢**」—— 目標帶條件。
+    //   原本沒有 validIids ⇒ UI 列出自己**全部**備戰，而 resolver 也只檢查「找得到 + 有指示物」
+    //   **沒有檢查古代** ⇒ 玩家可以把非古代備戰的指示物搬給對手（違反卡面）。
+    //   ⚠ 同檔上方的「吼叫尾｜唱歌鼓勵」v5.929 就已經傳了 validIids，這張是漏網的。
+    //   候選用的是 gate 判「有沒有候選」的同一份 ancientWithDmg ⇒ gate 與 picker 不會分岔。
+    params: { validIids: ancientWithDmg.map((c) => c.iid) },
     effectKey: 'h-wave3-move-bench-dmg-to-opp-active',
   });
 });

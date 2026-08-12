@@ -1,3 +1,67 @@
+# v6.176 跨 zone 同 iid 去重 + 場上目標型 picker 的中央消毒閘兜底
+
+## ① 跨 zone 幻影卡：v6.175 只做了「同區」，一半的案例逃掉
+
+`normalizeNonFieldStacks` 的 `seen` 是 **per-zone** 的，所以它只抓得到
+「扁平與巢狀同時落在**同一個** zone」的重複。
+
+行為端 3 行即可重現（`scripts/test-v6176-…` A 段）：
+獵斑魚｜潛者捕捉在確認選單選「是」時，把暫存的基本【水】能量**副本**加進**手牌**，
+而 KO 實例（連同身上巢狀的那一份）留在**棄牌區**
+⇒ 同一個 iid：`hand` 一份 + `discard/<KO 實例>.energy` 一份。
+（選「否」時兩份都落在棄牌區，才會被 v6.175 蓋到 —— 所以 v6.175 只修掉一半。）
+
+**修法**：`normalizeNonFieldStacks` 改成三個 pass（單一出口仍是 `applyAction`）：
+- pass A：四個非場區各自攤平 `evolvedFromStack` + **同區**頂層去重，
+  再**跨區**收集所有頂層（扁平）iid。
+  ⚠ 頂層去重刻意維持「同區」語意 —— 跨區兩張扁平同 iid 該留哪一份無從判斷，亂刪 = 掉卡。
+- pass B：收集 `active` + `bench` 的頂層與巢狀 iid（場上是**合法**的巢狀位置）。
+- pass C：非場區卡的巢狀附加物，iid 只要在 pass A/B 已經有一份，就把**巢狀那一份**剝掉。
+
+⚠⚠ **不可以**把「只有巢狀、別處都沒有」的攤平出來 —— 那是潛者捕捉**刻意**的暫存
+（KO 實例上的基本【水】能量在玩家確認前既不進棄牌也不進手牌）。
+守衛 A 段第 2 條就是釘這件事：確認未決時去重必須**什麼都不做**。
+（也因此 Fable 建議的「KO 生成源直接 toBareCard」不可行 —— 站長上一輪已實測 `test-sakura-relicanth` 會紅。）
+
+## ② 場上目標型 picker：80 個 occurrence 完全不經中央閘
+
+`sanitizeSelectedIids` 對非 `deck-search` 型是「**有** `params.validIids` 才濾」。
+站內 `heal-target` / `bench-choose` / `opp-bench-choose` / `opp-poke-choose` 這四型，
+minCount≥1 卻沒宣告 `validIids` 的有 **110 個 occurrence（80 個不同 effectKey）**
+⇒ client 送任何 iid 都原封進 resolver，v6.175 的 pending 蓋章對**舊版 client** 是 fail-open。
+
+**修法（中央單點）**：沒宣告 `validIids` 時，用 UI 產候選的**同一份述詞**即時算出「該側場上」當白名單。
+- 述詞下沉 `selection-candidates.ts` 的 `fieldPickerBaseCandidates` / `fieldPickerBaseIids`；
+  `+page.svelte` 的四個 case 與 `engine.sanitizeSelectedIids` 都 import 它
+  ⇒ 結構上不可能再發生 v6.109「看得到卻勾不動」。
+- **即時算、不寫進 params**：不會有快照過期把玩家鎖住的問題，線上 payload 也沒變大。
+- ⚠ 這是**兜底不是卡面**：卡面比「該側場上」窄的仍必須逐張宣告 `validIids`。
+
+### ⚠ v6.175 的枚舉守衛掃描器有盲點（Rule 25 再一次）
+舊掃描器「effectKey 往前 1500 字元找第一個 `type:` + `blk.includes('validIids')`」
+會抓到**鄰居物件**的欄位（假陽性 + 假陰性），而且 dedupe by key
+⇒ 同一個 key 有 10 個 producer 時只看得到 1 個。
+新掃描器：先 mask 掉註解／字串／模板，再從 `effectKey` 錨點**往回**括號配對取出**該物件**，
+逐 occurrence 統計，並附「鄰居污染」正對照。數字因此從 56 變成 110（誠實的數字）。
+
+## ③ 這一輪逐張補的兩張（都是卡面帶條件、原本 UI 列出超出卡面的目標）
+
+| 卡 | 卡面（static/cards） | 原本 | 修後 |
+|---|---|---|---|
+| 冰伊布ex｜藍柱石 | 「選擇1隻對手的**身上放置有6個傷害指示物的**寶可夢，將其【昏厥】」 | pending 只帶 `exactCounters: 6`，UI 列出對手全部寶可夢；勾錯 → resolver `return st` 靜默把招式吃掉 | `validIids` = gate 用的同一份 candidates |
+| 振翼髮｜蠱惑挪移 | 「選擇1隻自己的**備戰區的『古代』寶可夢**，將…傷害指示物全部改放於對手的戰鬥寶可夢身上」 | 沒有 validIids，**resolver 也沒有檢查古代** ⇒ 可以搬非古代備戰的指示物（違反卡面） | `validIids` = `ancientWithDmg`（與 gate 同一份） |
+
+⚠ 同檔上方的「吼叫尾｜唱歌鼓勵」v5.929 就已經傳了 validIids —— 蠱惑挪移是同一批裡漏網的那張。
+
+⚠ **待站長裁定**：蠱惑挪移的 `validIids` 目前用 `ancientWithDmg`（古代**且**有指示物），
+與 gate「沒有這種備戰就不觸發」同一份。卡面只說「古代」，沒說「有指示物」。
+選一隻沒有指示物的古代在規則上合法但效果為 0。要不要放寬成「全部古代備戰」請裁示。
+
+## 剩下的（棘輪列管，未逐張補）
+108 個 occurrence 仍未宣告 `validIids`，全部由 ② 的中央兜底保護（不再裸奔），
+但「卡面比該側場上窄」的還沒逐張查完。守衛 F 段釘住上限 110 與「已補的三張不准退回」
+（`lanzhushi-ko` / `h-wave3-move-bench-dmg-to-opp-active` / `greninja-shuriken-6`）。
+
 # v6.175 選擇必須綁定它回答的那個 picker（沸騰鬥志「附給 ?」真因）+ 非場區巢狀附加物收斂
 
 ## ① 真因（站長的質疑是對的：候選從來沒有空過）

@@ -15,6 +15,48 @@ import type { CardInstance } from './types';
 type SrcPlayer = { active: CardInstance | null; bench: CardInstance[]; discard?: CardInstance[] };
 
 /**
+ * ⭐⭐⭐ v6.176 中央述詞：**場上目標型 picker 的基礎候選**。
+ *
+ * 背景（v6.109 踩過的坑）：`filter`（UI 顯示什麼）與 `params.validIids`（中央閘允許勾什麼）
+ *   一旦各寫一份就會漂移 —— 玩家看得到卻勾不動、或勾得到不該勾的。
+ *   這個函式就是**唯一那一份**：
+ *     ・`+page.svelte` 的 selectionCandidates 四個 case 用它算「顯示什麼」；
+ *     ・`engine.sanitizeSelectedIids` 在 pending **沒有**宣告 validIids 時用它算「能勾什麼」。
+ *   兩端同源 ⇒ 結構上不可能漂移。
+ *
+ * 語義（逐字對齊原本 inline 在 +page.svelte 的四個 case，零行為變更）：
+ *   ・heal-target / opp-poke-choose：戰鬥位 + 備戰（這兩型天生含戰鬥位）
+ *   ・bench-choose / opp-bench-choose：只有備戰；`includeActive` 才加上戰鬥位
+ *
+ * ⚠ 這是「該側場上」而不是「卡面允許的範圍」。卡面若更窄（只能選有能量的／非ex／受傷的…），
+ *   呼叫端**必須**自己宣告 `params.validIids` 覆寫；本函式只負責兜底，不是卡面的替代品。
+ */
+export function fieldPickerBaseCandidates(
+  type: string,
+  src: SrcPlayer,
+  includeActive?: boolean,
+): CardInstance[] {
+  if (type === 'heal-target' || type === 'opp-poke-choose') {
+    return [...(src.active ? [src.active] : []), ...src.bench];
+  }
+  return includeActive === true && src.active ? [src.active, ...src.bench] : src.bench;
+}
+
+/** 同上，只取 iid（給 pending.params.validIids / 中央消毒閘用）。 */
+export function fieldPickerBaseIids(
+  type: string,
+  src: SrcPlayer,
+  includeActive?: boolean,
+): string[] {
+  return fieldPickerBaseCandidates(type, src, includeActive).map(c => c.iid);
+}
+
+/** 本函式涵蓋的 pending 型別（中央閘用來決定要不要套 fallback）。 */
+export const FIELD_TARGET_PICKER_TYPES = new Set([
+  'heal-target', 'bench-choose', 'opp-bench-choose', 'opp-poke-choose',
+]);
+
+/**
  * active-energy-discard picker 的能量候選（src = sourcePlayerIdx 對應的 player）。
  *   - scope 'all-own'/'all-opp'：列 src 場上(active+bench)所有寶可夢能量；validIids 限定；
  *     targetIid（若傳）排除「該寶可夢自己」的能量（自轉無意義，如挪動一下的來源）。

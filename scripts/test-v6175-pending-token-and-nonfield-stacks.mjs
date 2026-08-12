@@ -299,8 +299,8 @@ console.log('\n── F. 同維度枚舉（棘輪）：場上目標型 picker �
   ck('★ 掃描器有掃到東西（下限：場上目標型 pending >= 120 個）', scanned >= 120, `掃到 ${scanned}`);
   ck('★ 掃描器正對照：沒宣告 validIids 的樣本必須被算進來',
     !"type: 'heal-target', minCount: 1, effectKey: 'x'".includes('validIids'));
-  ck('★★★ 「minCount>=1 卻沒有 validIids」的場上目標型 picker 不得增加（棘輪 <= 56）',
-    noValid.length <= 56, `目前 ${noValid.length} 個：${noValid.slice(0, 6).join(', ')}…`);
+  ck('★★★ 「minCount>=1 卻沒有 validIids」的場上目標型 picker 不得增加（棘輪 <= 55）',
+    noValid.length <= 55, `目前 ${noValid.length} 個：${noValid.slice(0, 6).join(', ')}…`);
   ck('★ 必殺手裡劍已脫離名單', !noValid.some((x) => x.endsWith('greninja-shuriken-6')));
 }
 

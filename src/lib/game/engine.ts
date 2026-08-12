@@ -17,6 +17,8 @@ import type {
 import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
 import { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
+// v6.176：場上目標型 picker 的候選述詞（UI 與中央消毒閘共用同一份，見 selection-candidates.ts）
+import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES } from './selection-candidates';
 export { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType };
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
@@ -1258,7 +1260,22 @@ export function sanitizeSelectedIids(state: GameState, pending: PendingSelection
   if (t === 'deck-search') zone = p?.deck;
   else {
     const viRaw = pending.params?.validIids;
-    if (!Array.isArray(viRaw) || VALID_IIDS_GATE_EXEMPT.has(t)) return iids;
+    if (VALID_IIDS_GATE_EXEMPT.has(t)) return iids;
+    if (!Array.isArray(viRaw)) {
+      // ⭐⭐⭐ v6.176：**場上目標型 picker 的兜底**。
+      //   v6.174 把「有宣告 validIids 的」納入中央閘，但站內仍有 80 個 minCount>=1 的
+      //   場上目標型 pending **沒有**宣告 —— 它們完全不經消毒閘，舊版 client（不帶 pending
+      //   蓋章）送任何 iid 都會原封進 resolver。沸騰鬥志「附給 ?」就是這樣來的
+      //   （送進來的是**棄牌區能量**的 iid，根本不是場上寶可夢）。
+      //   ⇒ 沒宣告時就用 UI 產候選的**同一份述詞**即時算出「該側場上」當白名單。
+      //   ・即時算（不寫進 params）⇒ 永遠與當下盤面一致，不會有快照過期把玩家鎖住的問題。
+      //   ・與 UI 的 selectionCandidates 同源 ⇒ 玩家看得到的一定勾得動（v6.109）。
+      //   ⚠ 這是**兜底**不是卡面：卡面比「該側場上」窄的（只能選有能量的／非 ex／受傷的…）
+      //     仍必須由呼叫端宣告 params.validIids —— 這一刀不會讓那些卡變正確，只是不再裸奔。
+      if (!FIELD_TARGET_PICKER_TYPES.has(t) || !p) return iids;
+      const baseSet = new Set(fieldPickerBaseIids(t, p, pending.params?.includeActive === true));
+      return iids.filter((iid) => baseSet.has(iid));
+    }
     const allowSet = new Set(viRaw as string[]);
     return iids.filter((iid) => allowSet.has(iid));
   }
@@ -2732,6 +2749,10 @@ function applyAutoDraw(state: GameState): GameState {
 //   stack 欄位,並依 iid 去重(扁平與巢狀同 iid 只留一份)。在 sanityKOSweep(各 KO 路徑收斂點)末尾呼叫。
 function normalizeNonFieldStacks(state: GameState): GameState {
   let changed = false;
+  const NON_FIELD_ZONES = ['hand', 'deck', 'discard', 'prizes'] as const;
+  // ── pass A：攤平 evolvedFromStack（v5.735）+ **同區**頂層去重。
+  //   ⚠ 頂層（扁平）去重刻意維持「同區」語意：跨區的兩張扁平同 iid 該留哪一份無從判斷，
+  //     亂刪 = 掉卡。跨區在這裡只負責**記錄**（flatIids），刪除只發生在 pass C 的巢狀幻影。
   const fixZone = (zone: CardInstance[]): CardInstance[] => {
     const out: CardInstance[] = [];
     const seen = new Set<string>();
@@ -2751,39 +2772,71 @@ function normalizeNonFieldStacks(state: GameState): GameState {
     //   在同一區出現兩份**（行為端 3 行即可重現；2026-08-12 錦標賽 dump 440 個玩家側裡有 239 個中招）。
     //   後果與 v5.735 完全同型：之後用能量回收／赤松／沸騰鬥志把「扁平那份」拿回場上，
     //   就與棄牌堆裡「巢狀那份」iid 碰撞（前端 each key、picker 去重、盤面守恆全部受害）。
-    //   ⇒ 收斂範圍**只刪幻影、不搬卡**：巢狀附加物的 iid 若已經在本區有一份扁平的，
+    //   ⇒ 收斂範圍**只刪幻影、不搬卡**：巢狀附加物的 iid 若已經有一份扁平的，
     //     就把巢狀那一份拿掉（同一張卡不可以同時存在兩處）。
+    // ⭐⭐⭐ v6.176：去重範圍從「同一個 zone」擴大到**同一位玩家的所有 zone（含場上）**。
+    //   v6.175 的 seen 是 per-zone 的 ⇒ 抓不到「扁平在 A 區、巢狀在 B 區」這種跨區幻影。
+    //   實例（行為端可重現，見 test-v6176）：獵斑魚｜潛者捕捉選「是」時，把暫存能量的
+    //   **副本**加進**手牌**，但 KO 實例身上巢狀的那一份仍留在**棄牌區**
+    //   ⇒ 同一個 iid 跨 zone 各有一份。（選「否」時兩份都落在棄牌區，才會被 v6.175 的
+    //   同區去重蓋到 —— 所以 v6.175 只修掉一半。）
     //   ⚠⚠ **絕不**把「只有巢狀、沒有扁平」的那種攤平出來 —— 那是**有意義的暫存**：
     //     獵斑魚｜潛者捕捉把 KO 寶可夢身上的基本【水】能量「先不丟棄」暫掛在昏厥實例上，
     //     等玩家確認後才決定回手或進棄牌。攤平它會讓那些能量提早出現在棄牌區（守衛
     //     test-sakura-relicanth 會紅）。這裡的目標是「同 iid 兩份」，不是「幫忙歸位」。
-    let stripped = false;
-    for (let i = 0; i < out.length; i++) {
-      const c = out[i];
-      const en = c.energyAttached ?? [];
-      const ex = c.extraTools ?? [];
-      const enKeep = en.filter(e => !seen.has(e.iid));
-      const exKeep = ex.filter(e => !seen.has(e.iid));
-      const toolDup = !!c.toolAttached && seen.has(c.toolAttached.iid);
-      if (enKeep.length === en.length && exKeep.length === ex.length && !toolDup) continue;
-      stripped = true;
-      out[i] = {
-        ...c,
-        energyAttached: enKeep,
-        ...(toolDup ? { toolAttached: undefined } : {}),
-        ...(ex.length > 0 ? { extraTools: exKeep } : {}),
-      };
-    }
-    if (stripped) changed = true;
     return out;
   };
-  const players = state.players.map(pl => ({
-    ...pl,
-    discard: fixZone(pl.discard),
-    deck: fixZone(pl.deck),
-    hand: fixZone(pl.hand),
-    prizes: fixZone(pl.prizes),
-  })) as [PlayerState, PlayerState];
+  const players = state.players.map(pl => {
+    // pass A：四個非場區各自攤平（同區頂層去重），再跨區收集所有「扁平」iid。
+    const zones = {
+      hand: fixZone(pl.hand ?? []),
+      deck: fixZone(pl.deck ?? []),
+      discard: fixZone(pl.discard ?? []),
+      prizes: fixZone(pl.prizes ?? []),
+    } as Record<(typeof NON_FIELD_ZONES)[number], CardInstance[]>;
+    const flatIids = new Set<string>();
+    for (const z of NON_FIELD_ZONES) for (const c of zones[z]) flatIids.add(c.iid);
+    // pass B：場上（active + bench）的頂層與巢狀 iid —— 場上是**合法**的巢狀位置；
+    //   同一個 iid 若又出現在某張非場區卡的巢狀清單裡，那一份必然是幻影。
+    const onField = new Set<string>();
+    const addField = (c: CardInstance | null | undefined) => {
+      if (!c) return;
+      onField.add(c.iid);
+      for (const e of (c.energyAttached ?? [])) onField.add(e.iid);
+      if (c.toolAttached) onField.add(c.toolAttached.iid);
+      for (const e of (c.extraTools ?? [])) onField.add(e.iid);
+      for (const e of (c.evolvedFromStack ?? [])) onField.add(e.iid);
+    };
+    addField(pl.active);
+    for (const b of (pl.bench ?? [])) addField(b);
+    // pass C：剝掉「同一個 iid 在這位玩家的別處已經有一份」的巢狀附加物。
+    //   ⚠ 只有巢狀、別處都沒有的那種**不動**（＝潛者捕捉的暫存能量）。
+    const nestedSeen = new Set<string>();
+    const dupIid = (id: string) => flatIids.has(id) || onField.has(id) || nestedSeen.has(id);
+    for (const z of NON_FIELD_ZONES) {
+      const arr = zones[z];
+      for (let i = 0; i < arr.length; i++) {
+        const c = arr[i];
+        const en = c.energyAttached ?? [];
+        const ex = c.extraTools ?? [];
+        const enKeep = en.filter(e => !dupIid(e.iid));
+        const exKeep = ex.filter(e => !dupIid(e.iid));
+        const toolDup = !!c.toolAttached && dupIid(c.toolAttached.iid);
+        for (const e of enKeep) nestedSeen.add(e.iid);
+        for (const e of exKeep) nestedSeen.add(e.iid);
+        if (c.toolAttached && !toolDup) nestedSeen.add(c.toolAttached.iid);
+        if (enKeep.length === en.length && exKeep.length === ex.length && !toolDup) continue;
+        changed = true;
+        arr[i] = {
+          ...c,
+          energyAttached: enKeep,
+          ...(toolDup ? { toolAttached: undefined } : {}),
+          ...(ex.length > 0 ? { extraTools: exKeep } : {}),
+        };
+      }
+    }
+    return { ...pl, hand: zones.hand, deck: zones.deck, discard: zones.discard, prizes: zones.prizes };
+  }) as [PlayerState, PlayerState];
   return changed ? { ...state, players } : state;
 }
 

@@ -33,7 +33,7 @@
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
-  import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
+  import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
@@ -3645,22 +3645,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
           return true;
         });
       }
+      // ⭐⭐⭐ v6.176：這四型（bench-choose / opp-poke-choose / opp-bench-choose / heal-target）
+      //   的「基礎候選」全部收斂到 selection-candidates.ts 的 fieldPickerBaseCandidates —— 因為
+      //   engine 的中央消毒閘（sanitizeSelectedIids）在 pending 沒宣告 validIids 時，會用**同一個**
+      //   函式算出「能勾什麼」。兩端各寫一份就是 v6.109「看得到卻勾不動」的成因。
       case 'bench-choose': {
         // v3.813: 加 includeActive 支援（壯偉碩木 disambiguator 需可選 active）
         const validIids4 = pendingSelection.params?.validIids as string[] | undefined;
-        const includeActiveBC = pendingSelection.params?.includeActive === true;
-        const baseBC = includeActiveBC && src.active ? [src.active, ...src.bench] : src.bench;
+        const baseBC = fieldPickerBaseCandidates('bench-choose', src, pendingSelection.params?.includeActive === true);
         return validIids4 ? baseBC.filter(c => validIids4.includes(c.iid)) : baseBC;
       }
       case 'opp-poke-choose': {
-        const items: CardInstance[] = [...src.bench];
-        if (src.active) items.unshift(src.active);
+        const items = fieldPickerBaseCandidates('opp-poke-choose', src);
         const validIidsOpp = pendingSelection.params?.validIids as string[] | undefined;
         return validIidsOpp ? items.filter(c => validIidsOpp.includes(c.iid)) : items;
       }
       case 'opp-bench-choose': {
-        const includeActive = pendingSelection.params?.includeActive === true;
-        const base = includeActive && src.active ? [src.active, ...src.bench] : src.bench;
+        const base = fieldPickerBaseCandidates('opp-bench-choose', src, pendingSelection.params?.includeActive === true);
         const validIidsOppB = pendingSelection.params?.validIids as string[] | undefined;
         return validIidsOppB ? base.filter(c => validIidsOppB.includes(c.iid)) : base;
       }
@@ -3727,7 +3728,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
         // v5.718：邏輯抽至 selection-candidates.ts（純函式，test-selection-candidates 覆蓋）。
         return activeEnergyDiscardCandidates(pendingSelection.params, src);
       case 'heal-target':  {
-        const all = [...(src.active ? [src.active] : []), ...src.bench];
+        // v6.176：與 engine 中央閘共用 fieldPickerBaseCandidates（見上方註解）
+        const all = fieldPickerBaseCandidates('heal-target', src);
         const validIids3 = pendingSelection.params?.validIids as string[] | undefined;
         return validIids3 ? all.filter(c => validIids3.includes(c.iid)) : all;
       }

@@ -11378,7 +11378,11 @@ regPost('冰伊布ex|藍柱石', (state, aIdx, pool) => {
     minCount: 1,
     maxCount: 1,
     effectKey: 'lanzhushi-ko',
-    params: { exactCounters: 6 },
+    // ⭐ v6.176：卡面「選擇1隻對手的**身上放置有6個傷害指示物的**寶可夢，將其【昏厥】」——
+    //   目標範圍**帶條件**，不是「對手任意1隻」。原本沒有 validIids ⇒ UI 的 opp-poke-choose
+    //   會列出對手全部寶可夢，玩家勾了不符條件的那隻，resolver 只會 `return st`（靜默把招式
+    //   吃掉、連 log 都沒有）。candidates 就是 gate 用的同一份，直接傳下去 ⇒ 顯示 = 能勾。
+    params: { exactCounters: 6, validIids: candidates.map((c) => c.iid) },
   });
 });
 
