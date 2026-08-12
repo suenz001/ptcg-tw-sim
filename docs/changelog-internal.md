@@ -1,3 +1,121 @@
+# v6.177 「抓取中／抓取失敗不清空已顯示資料」中央收斂（stale-while-revalidate）
+
+## 真因（玩家回報：賽程／排名整區消失、好幾秒才回來）
+
+`src/routes/game/+page.svelte` 的 `tBracketLoad()`（HEAD 版第 4776~4785 行）是**清空型**：
+
+```ts
+const rs = await Promise.all(evs.map(ev => tApi('/bracket?eventId='+ev._id).catch(() => null)));
+tBrackets = rs.filter(r => r && Array.isArray(r.matches) && r.event);   // ← 失敗那筆被 filter 掉
+```
+
+- 任一支 `/bracket` 逾時／500（`.catch(() => null)`）⇒ 那場賽程從陣列消失。
+- 伺服器在查不到賽事時回 `{event:null, matches:[]}`（`server_admin_patch.js` `/api/tournament/bracket`）
+  ⇒ 同樣被 filter 掉。
+- 畫面是 `{#each tBrackets as brk (brk.event._id)}`，而且**完全沒有空狀態**
+  ⇒ 陣列一空就整區憑空消失（連「載入中」都沒有）。
+- 另有 `if (!evs || evs.length === 0) { tBrackets = []; return; }`，而
+  `tEvents = Array.isArray(r.events) ? r.events : []` 讓一發壞回應就能把整個大廳清空。
+
+**行為端重現**（把 `tBracketLoad` 切出來 esbuild 剝型別後實跑，見守衛 2b~2f）：
+兩支都失敗 ⇒ `tBrackets.length` 由 2 變 0；只有一場失敗 ⇒ 該場消失；`{event:null}` ⇒ 同樣消失。
+
+## v6.161 有沒有讓空白期變長：**有**
+
+把大廳輪詢的 `setInterval` 回呼實跑 40 個 base tick 數請求（守衛外的驗證腳本）：
+
+| 情境 | `/bracket` 實際間隔 |
+|---|---|
+| 本輪有對戰（`tMyMatch`） | 9 秒（與 v5.637 相同，沒變差） |
+| 出局／輪空／本輪已打完 | **27 秒**（v6.161 前是 9 秒） |
+| 背景分頁 | **63 秒** |
+
+`_brMs = tPollDesiredMs(false,'lobby') * 3`。所以「清空後要等下一次輪詢」的空白期被放大 3~7 倍。
+回報者說的「好幾秒」對得上 9 秒；本輪已打完的人會到 27 秒。
+
+## 修法：中央模組 `src/lib/ui/stale-keep.ts`
+
+- `adoptOrKeep(prev, next)`：`next` 為 `null`/`undefined`（＝這一發不可信）⇒ 沿用 `prev` 並回 `stale:true`；
+  `next` 是空陣列（＝伺服器權威地說沒有）⇒ 採納空的。
+  ⚠ 約定：呼叫端必須把「不可信」統一表達成 `null`，**不可以**自己塞空陣列進來
+  ——「權威的空」與「抓不到」分不出來，正是這一類 bug 的共同根。
+- `mergeKeyedOrKeep(prev, keyOf, incoming)`：`incoming` 是 `{key, value}[]`，`value` 為 `null` 代表那筆失敗
+  ⇒ 沿用 `prev` 裡同 key 的舊資料；**`prev` 有但 `incoming` 沒提到的 key 一律移除**
+  （賽事真的結束就要消失，否則「保留舊資料」會變成「永遠留著一場不存在的賽事」）。
+
+### 接上的 7 個呼叫點（同型掃描結果）
+
+| 檔案 | 位置 | HEAD 的清空寫法 |
+|---|---|---|
+| `+page.svelte` | `tBracketLoad` | `tBrackets = rs.filter(...)` |
+| `+page.svelte` | `tournLoadEvent` | `tEvents = Array.isArray(r.events) ? r.events : []` |
+| `+page.svelte` | `tLeaderboardLoad` | `catch { tLeaderboard = null }` |
+| `+page.svelte` | `tProfileLoad` | `catch { tProfile = null }` |
+| `+page.svelte` | `tChampionsLoad` | `? r.champions : []` |
+| `+page.svelte` | `tSpectateLoad` | `? r.matches : []`（自 v0.79 起未被呼叫，一併收斂） |
+| `room-oracle.ts` | `subscribeOpenRooms` | `oracleListRooms(k).catch(() => [])` |
+
+⚠ **`subscribeOpenRooms` 那條可能就是「線上休閒大廳偶發打不開」的一部分**：
+失敗被偽裝成空清單後，大廳顯示的是「目前沒有公開房間」——一個**假的空狀態**，
+玩家完全看不出是連線問題，而且每 2 秒重跑一次。改成逐 kind 保留上一份好資料
+（不是整發放棄——若 `playing` 那一支長期壞掉，整發放棄會讓大廳完全凍結）。
+
+## 保留舊資料不可以變成誤導
+
+- **輪次號碼一律用權威值**：新增 `liveRoundOf(brk)`，優先讀 `tEvents`（`/event` 每 3 秒更新、
+  且 v6.177 起只會被成功回應改寫）裡同 `_id` 的 `currentRound`；`pageOf` / `setBracketPage` /
+  標題「第 X/Y 輪」/ pager 的「進行中」標記全部改用它。少了這條，`/bracket` 連續失敗時
+  畫面會停在舊輪、還把舊輪標成「進行中」。
+- **進場鈕不受影響**：`myMatchBox` 讀的是 `tMyMatch`（`/event`，伺服器權威），
+  而且 template 第 8519 行本來就有「`tMyMatch` 對不到已載入 bracket 就頂層獨立渲染」的保底。
+  ⇒ 保留舊賽程不會害人錯過進場而被判未進場。
+- **輕量提示**：標題列 inline `<span class="tourn-stale">· 更新中</span>`，
+  CSS 只有 `font-size/color/margin-left/white-space`，**無 `display:block`、無 `height`** ⇒ 不造成版面跳動。
+- **空狀態**：`tBrackets` 真的空而又有進行中賽事時顯示「賽程載入中…」（曾成功過則顯示「賽程更新中…」）。
+
+## 立即拉回輪詢頻率（沿用 v6.161 的 `tLobbyResume()`，不另寫一份）
+
+`stale` 時呼叫 `tLobbyResume()` 把三個節奏錨點歸零 ⇒ 下一個 base tick（≤3 秒）就重抓。
+
+⚠⚠ 上限是「**每一段連續失敗期最多拉一次**」（`_tBracketFailStreak`），不是「每 N 秒拉一次」：
+40 人賽事 `/bracket` 正在噴 500 時，「越失敗→越加速→越失敗」是正回饋，會把掙扎中的端點推倒
+（Fable 5 審查點名，已採納）。背景分頁（`_tTabHidden`）不加速——那正是 v6.161 要省的人口。
+
+## 其他閃爍路徑（Fable 5 指出，已查證屬實並修）
+
+1. `{#each brk.standings as s (s.name + '_' + s.rank)}` —— **key 含每輪都會變的 `rank`**，
+   結算洗牌時所有 key 全變 ⇒ 整張排名表被拆掉重建。改用 `standingsKeyed()` 產生
+   以玩家名為身分、同名加出現序後綴的 `_k`（重複 key 會讓 Svelte 直接拋 `each_key_duplicate`）。
+2. `{#each _roundMatches as m}` 沒有 key ⇒ 補 `(m.round + '_' + m.idx)`。
+3. `tBracketLoad` 沒有代次守衛：`tLobbyResume` 會讓下一發提早送出，慢的那一發後到時，
+   **合併版**會把舊回應當成權威新資料收編（比舊的 filter 版更難察覺）⇒ 補 `_tBracketSeq`
+   （比照 v6.139 deck-posts 的 `listSeq`）。
+4. Fable 擔心的「`mergeKeyedOrKeep` 每次產生新物件參考造成整區重畫」**不成立**：
+   Svelte 5 的 keyed each 依 key 保留 block，只重算 `{@const}` 與細粒度 diff。
+
+## Fable 5 提出但**未採納**的一點
+
+「`tSwitchTab` 的 `!tLeaderboard` / `!tProfile` 會讓收斂後變成永不刷新的快取」——
+查證後只有一半成立：載入失敗時 `tLeaderboard` 本來就還是 `null`（從沒被寫過），
+所以重試路徑沒壞。但條件仍改成 `(!tLeaderboard || tLeaderboardStale)` 讓「成功過之後失敗」
+的情況也能重試，且不增加常態負載。
+
+## 守衛
+
+`scripts/test-v6177-keep-last-good.mjs`（已進 `npm test`）：**PASS 43 / FAIL 0**，
+把 HEAD 版的 `+page.svelte` 與 `room-oracle.ts` 換回去 ⇒ **FAIL 28**。
+斷言全部走行為端（把 `tBracketLoad` / `subscribeOpenRooms` / `stale-keep` / `liveRoundOf` /
+`standingsKeyed` 切出來 esbuild 剝型別後真的跑起來求值），否定型斷言一律先剝註解，
+且剝註解器本身有 3 條自我驗證。
+
+## 尚未處理／待站長裁定
+
+- `tRunningEvents` 包含 `finished` 的賽事 ⇒ 已結束賽事的 `/bracket` 仍會被輪詢。
+  這是 v5.620 以來的既有行為（賽後還要看賽程表），但 stale-keep 讓它更「黏」。
+  若要改，得先確認伺服器 `/event` 何時把 `finished` 賽事移出清單。
+- 保留舊資料時 `VS👁` 觀戰鈕可能指向已結束的房；`tSpectate`（4967 行）已有快速失敗回大廳的防呆，
+  只是 UX 噪音，本版不動。
+
 # v6.176 跨 zone 同 iid 去重 + 場上目標型 picker 的中央消毒閘兜底
 
 ## ① 跨 zone 幻影卡：v6.175 只做了「同區」，一半的案例逃掉

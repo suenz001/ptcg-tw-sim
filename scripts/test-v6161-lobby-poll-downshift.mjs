@@ -181,8 +181,12 @@ T('③報到／賽程產生中（我有報名）⇒ 正常頻率', () => {
 T('③tournLoadEvent 必須在**覆寫 tEvents/tMyMatch 之前**取舊值，並在有差異時呼叫 tLobbyResume', () => {
   const fn = slice('  async function tournLoadEvent() {', '\n  // 載入賽程表');
   const iPrev = fn.indexOf('const _prevSig');
-  const iOver = fn.indexOf('tEvents = Array.isArray');
+  // ⚠ v6.177 起覆寫寫法改成 `tEvents = r.events;`（壞回應整發不採納，不再 `? r.events : []`）
+  const iOver = fn.indexOf('tEvents = r.events');
   assert.ok(iPrev >= 0 && iOver > iPrev, '舊值沒有在覆寫之前取 ⇒ 永遠比不出差異');
+  // v6.177：形狀不對就整發不採納的守門，必須在 _tEventOkAt 之前（否則壞回應會假裝「判斷得出來」而降頻）
+  assert.ok(fn.indexOf('!Array.isArray(r.events)') >= 0 && fn.indexOf('!Array.isArray(r.events)') < fn.indexOf('_tEventOkAt = Date.now()'),
+    '壞回應仍會刷新 _tEventOkAt ⇒ tPollDesiredMs 會誤判成「最近成功過」而降頻');
   assert.ok(/currentRound/.test(fn.slice(iPrev, iOver)), '對照簽章沒有含 currentRound（輪次推進偵測不到）');
   assert.ok(/_prevMatchId/.test(fn), '沒有對照「我的對戰」有沒有換');
   assert.ok(/tLobbyResume\(\)/.test(fn), 'tournLoadEvent 沒有在偵測到差異時立即恢復頻率');

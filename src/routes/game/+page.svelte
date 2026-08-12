@@ -1,6 +1,8 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { retryImg } from '$lib/img-retry';
+  // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
+  import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
   import { resolveLogCard } from '$lib/game/log_zoom';
   import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
@@ -419,21 +421,51 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _tChatLoadingOlder = false;   // v5.752 載更舊並發防護
   // ── Phase1-D 賽程（單敗淘汰）──
   let tBrackets = $state<any[]>([]);   // v5.937 所有進行中賽事的賽程(官方+社群並行);每個 { event, matches(含roomId), standings }
+  // ⭐⭐⭐v6.177 賽程/排名「這一份是沿用上一次好資料」的旗標 → 標題列掛一個小小的「· 更新中」，
+  //   ⚠ 只加一個 inline <span>，不動版面高度（整區消失/版面跳動正是這一版要根治的症狀）。
+  let tBracketsStale = $state(false);
+  let _tBracketSeq = 0;              // v6.177 /bracket 代次：晚到的舊回應整發丟棄
+  let _tBracketFailStreak = 0;       // v6.177 連續失敗次數（只在 0→1 那一次拉回正常頻率）
+  // v6.177 賽程曾經成功載入過至少一次 ⇒ 空狀態要說「更新中」而不是「尚未產生」。
+  let tBracketsEverOk = $state(false);
+  let tLeaderboardStale = $state(false);
+  let tProfileStale = $state(false);
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
   let tMyBye = $state<any>(null);     // v5.935 我本輪輪空 { round, enterOpenAt }(輪空者也看倒數+可觀戰提示)
   let isTReplay = $state(false);         // v5.939 對戰回放模式
   let tReplay = $state<any>(null);       // { meta, finalLog, finalState, snapshots }
   let tReplayStep = $state(0);
+  // ⭐⭐⭐v6.177 賽程有可能是「上一份好資料」（/bracket 這一發失敗時沿用）⇒ **輪次號碼一律以
+  //   /event 的值為準**：/event 是每 3 秒更新的伺服器權威來源，而且 tEvents 只會被成功回應改寫。
+  //   少了這條，連續抓不到 /bracket 時畫面會停在舊輪、還把舊輪標成「進行中」——
+  //   那正是「保留舊資料反而誤導玩家」的具體形式（Fable 5 審查點名）。
+  function liveRoundOf(brk: any): number {
+    const id = brk && brk.event && brk.event._id;
+    const ev = id ? tEvents.find((e: any) => e && e._id === id) : null;
+    if (ev && typeof ev.currentRound === 'number') return ev.currentRound;
+    return (brk && brk.event && brk.event.currentRound) ?? 1;
+  }
+  // ⭐v6.177 排名表的穩定 key：舊寫法 `(s.name + '_' + s.rank)` 把**每輪都會變的 rank 寫進 key**，
+  //   結算一洗牌所有 key 全變 ⇒ 整張排名表被拆掉重建（＝玩家看到的另一半「閃一下」）。
+  //   改用玩家名當身分；同名玩家用出現序後綴保證唯一（重複 key 會讓 Svelte 直接拋 each_key_duplicate）。
+  function standingsKeyed(rows: any[]): any[] {
+    const seen = new Map<string, number>();
+    return (rows ?? []).map((r: any) => {
+      const nm = String((r && r.name) ?? '');
+      const n = (seen.get(nm) ?? 0) + 1; seen.set(nm, n);
+      return { ...r, _k: n === 1 ? nm : nm + '#' + n };
+    });
+  }
   // v5.937 賽程翻頁改 per-event(多賽事並存):存 {round,page};pageOf 判存的 round≠currentRound 即視為未設→跳當前輪(免 $effect/舊 hack)。
   let tBracketPages = $state<Record<string, { round: number; page: number }>>({});
   function pageOf(brk: any, rounds: number): number {
-    const cur = brk?.event?.currentRound ?? 1;
+    const cur = liveRoundOf(brk);
     const st = tBracketPages[brk?.event?._id];
     const p = (st && st.round === cur) ? st.page : cur;
     return Math.min(Math.max(1, p), rounds);
   }
   function setBracketPage(brk: any, page: number) {
-    const cur = brk?.event?.currentRound ?? 1;
+    const cur = liveRoundOf(brk);   // v6.177 必須與 pageOf 用同一個輪次來源，否則存進去的頁碼立刻失效
     tBracketPages = { ...tBracketPages, [brk.event._id]: { round: cur, page } };
   }
   let tActiveRoom = $state('TOURNAMENT-TEST'); // 目前對戰房（測試房=固定；正式賽=各場 mr_<matchId>）
@@ -4754,7 +4786,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       const r = await tApi('/event');
       if (r && typeof r.serverNow === 'number') tClockOffset = r.serverNow - Date.now();
-      tEvents = Array.isArray(r.events) ? r.events : [];
+      // ⭐⭐⭐v6.177 回應形狀不對（壞回應／代理回了 HTML／舊版伺服器）⇒ **整發不採納**：
+      //   保留畫面上已顯示的賽事卡，也**不**刷新 _tEventOkAt —— 讓 tPollDesiredMs 判成
+      //   「判斷不出來」而 fail-open 回正常頻率。舊寫法 `? r.events : []` 會把整個大廳清空。
+      if (!r || !Array.isArray(r.events)) return;
+      tEvents = r.events;
       tMe = r.me ?? { registered: false }; tIsAdmin = !!r.isAdmin; tMyMatch = r.myMatch ?? null; tMyBye = r.myBye ?? null;
       // ⭐v6.161 只有真的拿到回應才算「判斷得出來」（fail-open 的另一半見 tPollDesiredMs 的 lobby 分支）。
       _tEventOkAt = Date.now();
@@ -4774,13 +4810,47 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } catch { /* ignore */ }
   }
   // 載入賽程表（admin seed 後才有 matches）
+  // ⭐⭐⭐v6.177 根治「賽程/排名整區消失好幾秒」：
+  //   舊寫法 `tBrackets = rs.filter(r => r && ...)` 是**清空型**的——任一支 /bracket 逾時/500，
+  //   或伺服器在賽事查不到時回 `{event:null, matches:[]}`，那一場就被 filter 掉；
+  //   `{#each tBrackets}` 一筆都不畫 ⇒ 整區憑空消失，而且要等下一次輪詢才回來
+  //   （v6.161 之後：有本輪對戰 9 秒、出局/本輪打完 27 秒、背景分頁 63 秒）。
+  //   改成逐 eventId 合併：成功的用新的、失敗的**沿用上一份好資料**並標 stale。
   async function tBracketLoad() {
     // v5.937 官方+社群賽並行:每個進行中賽事各抓一次 /bracket?eventId=(伺服器 per-eventId 3s 快取,N≤2,並發不序列)。
     try {
       const evs = tRunningEvents;
-      if (!evs || evs.length === 0) { tBrackets = []; return; }
+      // ⚠ 這裡的「空」只有在 /event 真的成功回了一份不含進行中賽事的清單時才算權威
+      //   （v6.177 起 tournLoadEvent 對壞回應整發不採納 ⇒ tEvents 只會被成功回應改寫）。
+      if (!evs || evs.length === 0) { tBrackets = []; tBracketsStale = false; return; }
+      const _seq = ++_tBracketSeq;
       const rs = await Promise.all(evs.map((ev: any) => tApi('/bracket?eventId=' + encodeURIComponent(ev._id)).catch(() => null)));
-      tBrackets = rs.filter((r: any) => r && Array.isArray(r.matches) && r.event);
+      // ⭐v6.177 亂序守衛（比照 v6.139 deck-posts 的 listSeq）：tLobbyResume 會讓下一發提早送出，
+      //   慢的那一發後到時，**合併版**會把舊回應當成權威新資料收編（比舊的 filter 版更難察覺）。
+      if (_seq !== _tBracketSeq) return;
+      const incoming = evs.map((ev: any, i: number) => {
+        const r: any = rs[i];
+        // 可信＝真的拿到這場賽事的賽程；否則一律 null（= 這一筆不可信，交給中央述詞沿用舊的）
+        const ok = !!(r && r.event && Array.isArray(r.matches));
+        return { key: String(ev && ev._id), value: ok ? r : null };
+      });
+      const merged = mergeKeyedOrKeep<any>(tBrackets, (b: any) => String(b && b.event && b.event._id), incoming);
+      tBrackets = merged.list;
+      tBracketsStale = merged.stale;
+      if (!merged.stale && merged.list.length > 0) tBracketsEverOk = true;
+      // ⭐⭐⭐v6.177 資料一過期就**立刻拉回正常頻率**（沿用 v6.161 既有的 tLobbyResume，不另寫一份）：
+      //   否則出局/本輪打完的人要等 27 秒、背景分頁 63 秒才會重試，過期窗口被降頻放大。
+      // ⚠⚠ 上限是「**每一段連續失敗期最多拉一次**」，不是每 N 秒拉一次：
+      //   40 人賽事 /bracket 正在噴 500 時，「越失敗→越加速→越失敗」是正回饋，會把掙扎中的
+      //   端點推倒（Fable 5 審查點名）。偶發單次失敗（玩家回報的症狀）仍然 ≤3 秒就補上，
+      //   持續失敗則只加速這一次、60 秒寬限過後自動退回 v6.161 的降頻。
+      // ⚠ 背景分頁不加速：那正是 v6.161 要省下來的人口，而且他看不到畫面。
+      if (merged.stale) {
+        if (_tBracketFailStreak === 0 && !_tTabHidden) tLobbyResume();
+        _tBracketFailStreak++;
+      } else {
+        _tBracketFailStreak = 0;
+      }
     } catch { /* ignore */ }
   }
   // 進入我本輪的對戰（伺服器建/取對戰房，鎖定的牌組）
@@ -4826,27 +4896,31 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   // 名人堂：載入歷屆冠軍
   async function tChampionsLoad() {
-    try { const r = await tApi('/champions'); tChampions = (r && Array.isArray(r.champions)) ? r.champions : []; }
-    catch { /* ignore */ }
+    // v6.177 同一條紀律：回應形狀不對 ⇒ 沿用上一份（名人堂只在進大廳抓一次，清空後不會自己回來）。
+    try { const r = await tApi('/champions'); tChampions = adoptOrKeep<any[]>(tChampions, (r && Array.isArray(r.champions)) ? r.champions : null).data; }
+    catch { /* ignore：保留畫面上那一份 */ }
   }
   // v5.691 排行榜 / 個人資料載入（後端聚合端點，掃 TARCHIVE）
   async function tLeaderboardLoad() {
     if (tLbLoading) return; tLbLoading = true;
-    try { const r = await tApi('/leaderboard'); tLeaderboard = r ?? null; }
-    catch { tLeaderboard = null; }
+    // v6.177 抓失敗不再把排行榜指回 null（會讓整塊變成「排行榜尚未開放」的假空狀態）。
+    try { const _k = adoptOrKeep<any>(tLeaderboard, (await tApi('/leaderboard')) ?? null); tLeaderboard = _k.data; tLeaderboardStale = _k.stale; }
+    catch { tLeaderboardStale = true; }
     finally { tLbLoading = false; }
   }
   async function tProfileLoad() {
     if (tProfileLoading) return; tProfileLoading = true;
-    try { const r = await tApi('/profile'); tProfile = r ?? null; }
-    catch { tProfile = null; }
+    // v6.177 同上：抓失敗保留上一份個人資料，只標 stale。
+    try { const _k = adoptOrKeep<any>(tProfile, (await tApi('/profile')) ?? null); tProfile = _k.data; tProfileStale = _k.stale; }
+    catch { tProfileStale = true; }
     finally { tProfileLoading = false; }
   }
   function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile') {
     tTab = tab;
-    if (tab === 'leaderboard' && !tLeaderboard) tLeaderboardLoad();
+    // v6.177 保留舊資料後，失敗不再把它清成 null ⇒ 重試條件要改看 stale，否則切回分頁不會重抓。
+    if (tab === 'leaderboard' && (!tLeaderboard || tLeaderboardStale)) tLeaderboardLoad();
     if (tab === 'profile') {
-      if (!tProfile) tProfileLoad();
+      if (!tProfile || tProfileStale) tProfileLoad();   // v6.177 同上
       // v6.032 進分頁即刷新診斷：少了這行，notifyDiag 是 null → 'server-missing' 永遠偵測不到，
       //   徽章會顯示成「運作中」的假綠燈，而那正是最需要被看見的狀態。
       void refreshNotifyDiag();
@@ -4878,8 +4952,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function tMatchLogClose() { tMatchLog = null; tMatchLogLoading = false; }
   // 觀戰：列出進行中的對戰
   async function tSpectateLoad() {
-    try { const r = await tApi('/spectate/list'); tSpectateList = (r && Array.isArray(r.matches)) ? r.matches : []; }
-    catch { /* ignore */ }
+    // v6.177 同一條紀律（此函式自 v0.79 起未被呼叫，仍一併收斂避免日後接回來又踩同一個坑）。
+    try { const r = await tApi('/spectate/list'); tSpectateList = adoptOrKeep<any[]>(tSpectateList, (r && Array.isArray(r.matches)) ? r.matches : null).data; }
+    catch { /* ignore：保留畫面上那一份 */ }
   }
   // 觀戰：進入某場對戰（read-only，伺服器已 redact 雙方手牌；本端額外把手牌渲染成卡背）
   // ── v5.939 對戰回放 ──
@@ -8454,10 +8529,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {#snippet bracketBlock(brk)}
         {#if brk.standings && brk.standings.length}
           <div class="tourn-bracket">
-            <div class="tourn-bracket-head">📊 {brk.event?.name ?? ''} 瑞士制排名{#if brk.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if brk.event?.swissRounds} ｜ 第 {brk.event.currentRound}/{brk.event.swissRounds} 輪{/if}</div>
+            <div class="tourn-bracket-head">📊 {brk.event?.name ?? ''} 瑞士制排名{#if brk.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if brk.event?.swissRounds} ｜ 第 {liveRoundOf(brk)}/{brk.event.swissRounds} 輪{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}</div>
             <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
               <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
-              {#each brk.standings as s (s.name + '_' + s.rank)}
+              {#each standingsKeyed(brk.standings) as s (s._k)}
                 <div style="text-align:center;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.rank}</div>
                 <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;{s.mine ? 'color:#ffd56b;font-weight:700;' : ''}">{s.name}{#if s.mine} （你）{/if}</div>
                 <div style="text-align:center;">{s.w}-{s.l}</div>
@@ -8469,7 +8544,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {/if}
         {#if brk.matches && brk.matches.length}
           <div class="tourn-bracket">
-            <div class="tourn-bracket-head">📋 {brk.event?.name ?? ''} 賽程表{#if brk.event?.championName} ｜ 🏆 冠軍：<b>{brk.event.championName}</b>{/if}</div>
+            <div class="tourn-bracket-head">📋 {brk.event?.name ?? ''} 賽程表{#if brk.event?.championName} ｜ 🏆 冠軍：<b>{brk.event.championName}</b>{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}</div>
             {#if tMyMatch && tMyMatch.eventId === brk.event?._id}
               {@render myMatchBox()}
             {:else if tMyBye && tMyBye.eventId === brk.event?._id}
@@ -8479,7 +8554,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {@const _maxRound = brk.matches.reduce((mx: number, m: any) => Math.max(mx, m.round), 1)}
               {@const _rounds = Math.max(brk.event.rounds ?? 1, _maxRound)}
               {@const _page = pageOf(brk, _rounds)}
-              {@const _curR = brk.event.currentRound ?? 1}
+              {@const _curR = liveRoundOf(brk)}
               {@const _roundMatches = brk.matches.filter((m: any) => m.round === _page)}
               {@const _isCut = _roundMatches.some((m: any) => m.phase === 'cut')}
               {@const _isSwiss = _roundMatches.some((m: any) => m.phase === 'swiss')}
@@ -8493,7 +8568,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#if _roundMatches.length === 0}
                   <div class="muted small" style="text-align:center;padding:14px;">此輪賽程尚未產生（前一輪打完才會排定）</div>
                 {/if}
-                {#each _roundMatches as m}
+                <!-- v6.177 穩定 key：沒有 key 時 Svelte 依索引重用 DOM，輪次推進/名次變動會整排重畫造成閃爍 -->
+                {#each _roundMatches as m (m.round + '_' + m.idx)}
                   {@const _canSpec = m.status === 'playing' && m.roomId && !m.mine}
                   {@const _mid = brk.event._id + '_r' + m.round + '_m' + m.idx}
                   <div class="tourn-match" class:mine={m.mine} class:done={m.status === 'done'} class:bye={m.bye}>
@@ -8524,6 +8600,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {#each tBrackets as brk (brk.event._id)}
         {@render bracketBlock(brk)}
       {/each}
+      <!-- ⭐v6.177 核心②：真的沒有資料可畫時仍要有合理的空狀態（舊版是什麼都不畫＝整區憑空消失）。 -->
+      {#if tBrackets.length === 0 && tRunningEvents.length > 0}
+        <div class="tourn-bracket">
+          <div class="muted small" style="text-align:center;padding:14px;">
+            {tBracketsEverOk ? '賽程更新中…（連線不穩，正在重新取得）' : '賽程載入中…'}
+          </div>
+        </div>
+      {/if}
       <!-- v5.620：報名中／籌備中的賽事（下一場、下下場…）排在進行中賽事與觀戰之下 -->
       {#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
       <!-- v5.652 名人堂分兩段下拉：網站賽（在前、預設展開「直接呈現」）與社群自辦賽（在後、預設收摺「點選才看」）。
@@ -8626,7 +8710,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {/if}
       {:else if tTab === 'leaderboard'}
         <div class="tourn-lb">
-          {#if tLbLoading}
+          {#if tLbLoading && !tLeaderboard}
             <p class="muted small" style="text-align:center;padding:18px;">載入排行榜中…</p>
           {:else if !tLeaderboard}
             <p class="muted small" style="text-align:center;padding:18px;">排行榜尚未開放，或目前還沒有已結束的賽事資料。</p>
@@ -8738,7 +8822,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {/if}
             </details>
           </div>
-          {#if tProfileLoading}
+          {#if tProfileLoading && !tProfile}
             <p class="muted small" style="text-align:center;padding:18px;">載入個人資料中…</p>
           {:else if !tProfile}
             <p class="muted small" style="text-align:center;padding:18px;">個人資料尚未開放，或你還沒有已結束的賽事紀錄。</p>
@@ -12823,6 +12907,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   .tourn-bracket { max-width: 100%; margin: 12px auto; border: 1px solid #3a4a6a; border-radius: 10px; background: #0f1420; padding: 10px 12px; text-align: left; }
   .tourn-bracket-head { font-weight: 600; color: #cfe0f8; margin-bottom: 8px; }
+  /* v6.177 「更新中」輕量提示：inline、字級縮小、不換行、不佔額外高度 ⇒ 不會造成版面跳動 */
+  .tourn-stale { margin-left: 8px; font-size: 11px; font-weight: 400; color: #8fa3c4; white-space: nowrap; }
   .tourn-hof { border-color: #6a5a2a; background: #16120a; }
   .tourn-hof .tourn-bracket-head { color: #ffd35a; }
   .tourn-hof-row { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid #2a2414; }

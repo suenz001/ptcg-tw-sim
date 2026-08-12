@@ -24,6 +24,7 @@ import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { createGame } from './engine';
 import { shouldSkipStalePush } from './sync-guards';
+import { adoptOrKeep } from '$lib/ui/stale-keep';
 
 // ── re-export types & const from room.ts ────────────────────────────────────
 export type { Room, RoomData, Seat, SeatRole, DeckEntry, ChatMessage } from './room';
@@ -644,14 +645,34 @@ export function subscribeRoom(roomCode: string, callback: (room: Room | null) =>
 export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  // ⭐⭐⭐v6.177 同一條「載入時不要清空已顯示資料」的紀律（與錦標賽賽程同型）：
+  //   舊寫法 `.catch(() => [])` 把「請求失敗」偽裝成「伺服器說沒有房間」——
+  //   callback([]) 之後大廳的房間列表整個消失，還顯示成「目前沒有公開房間」
+  //   （openRoomsErr 同時被清成 ''），玩家完全看不出是連線問題；而且每 2 秒重跑一次。
+  //   ⚠ 一定要用 null 而不是 [] 來表達失敗，否則「伺服器權威地說沒有房間」與「抓不到」
+  //     就分不出來（v6.138 的同型教訓）。
+  //   ⚠⚠ 逐 kind 保留、**不是**整發放棄：若 'playing' 這一支長期壞掉而 'lobby' 正常，
+  //     整發放棄會讓休閒大廳完全凍結（新開的房永遠看不到）——Fable 5 審查點名。
+  let _lastLobby: OracleRoom[] | null = null;
+  let _lastPlaying: OracleRoom[] | null = null;
   const tick = async () => {
     if (!alive) return;
     try {
-      const [lobby, playing] = await Promise.all([
-        oracleListRooms('lobby').catch(() => []),
-        oracleListRooms('playing').catch(() => []),
+      const [lobbyRes, playingRes] = await Promise.all([
+        oracleListRooms('lobby').catch(() => null),
+        oracleListRooms('playing').catch(() => null),
       ]);
-      const rooms = ([...lobby, ...playing] as OracleRoom[])
+      const lobby = adoptOrKeep<OracleRoom[] | null>(_lastLobby, lobbyRes as OracleRoom[] | null).data;
+      const playing = adoptOrKeep<OracleRoom[] | null>(_lastPlaying, playingRes as OracleRoom[] | null).data;
+      if (lobbyRes !== null) _lastLobby = lobbyRes as OracleRoom[];
+      if (playingRes !== null) _lastPlaying = playingRes as OracleRoom[];
+      // 從來沒有成功過（兩邊都還是 null）⇒ 這一發沒有任何可顯示的資料，不 callback，
+      //   讓畫面維持既有的「載入中／空狀態」，而不是被填成假的「目前沒有公開房間」。
+      if (lobby === null && playing === null) {
+        if (alive) timer = setTimeout(tick, 2000);
+        return;
+      }
+      const rooms = ([...(lobby ?? []), ...(playing ?? [])] as OracleRoom[])
         .filter(r => {
           if ((r.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return false;
           if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
