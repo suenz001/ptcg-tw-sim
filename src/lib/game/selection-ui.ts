@@ -111,6 +111,29 @@ export function selectionAllowsSkip(p: SkipDecisionInput): boolean {
   return isUnknownInfoPicker(p) || OPTIONAL_SELECTION_EFFECT_KEYS.has(p.effectKey);
 }
 
+/**
+ * ⭐⭐⭐ v6.175 站長裁定：**「取消整個動作」不是「選 0 張」，不受 minCount 短路管轄。**
+ *
+ * `attach-tool`（打出寶可夢道具後選要附給誰）早在 v5.465 就把 resolver 的空選擇分支
+ * 寫成「道具**退回手牌**」，UI 也備好了「取消（道具退回手牌）」的文案，
+ * 但它的 `minCount` 是 1（卡面確實要選 1 隻），於是被 `selectionAllowsSkip` 的
+ * `minCount >= 1` 短路擋住 ⇒ **那顆鈕永遠渲染不出來、那條 0-branch 是死碼**。
+ * （這正是 audit skill 線索 ②：「實作端已經承諾過的『可跳過』比卡面更硬」。）
+ *
+ * 語義區分（不可混用，混用等於讓必付的代價可以跳過）：
+ *   ・`selectionAllowsSkip`  = 卡面允許「效果選 0 個目標」（效果照樣結算，只是沒選）。
+ *   ・`selectionAllowsCancel`= 取消**整個動作**、回到動作前（道具原封退回手牌）。
+ * ⇒ 只有「動作本身可以完整還原、不留任何半套狀態」的 picker 才可以列進來。
+ */
+export const CANCELLABLE_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<string>([
+  'attach-tool',   // v6.175：道具退回手牌（regR('attach-tool') 的空選擇分支已完整還原）
+]);
+
+/** 這個 picker 是否提供「取消整個動作」的出口。可由 `params.allowCancel` 逐卡宣告。 */
+export function selectionAllowsCancel(p: { effectKey: string; allowCancel?: boolean }): boolean {
+  return p.allowCancel === true || CANCELLABLE_SELECTION_EFFECT_KEYS.has(p.effectKey);
+}
+
 /** 【確定】可點的最低選取數：一律至少 1（全面防呆，未選不可按確定；選 0 走【不選】）。 */
 export function selectionConfirmFloor(minCount: number): number {
   return Math.max(1, minCount);
@@ -131,10 +154,12 @@ export function selectionConfirmFloor(minCount: number): number {
  *
  * @param candidateCount picker 目前實際渲染出的候選數量（UI 的 selectionItems.length）。
  */
-export function selectionHasNoExit(p: SkipDecisionInput & { minCount?: number }, candidateCount: number): boolean {
+export function selectionHasNoExit(p: SkipDecisionInput & { minCount?: number; allowCancel?: boolean }, candidateCount: number): boolean {
   if (candidateCount > 0) return false;
   if ((p.minCount ?? 0) <= 0) return false;
   // 已經有【不選】鈕的 picker 本來就有出口
   if (selectionAllowsSkip(p)) return false;
+  // v6.175：有【取消】鈕（道具退回手牌）也算有出口，不必再多長一顆「放棄」
+  if (selectionAllowsCancel(p)) return false;
   return true;
 }

@@ -523,11 +523,31 @@ regA('超級甲賀忍蛙ex', 0, (st, idx, pool, cardInst) => {
   p.discard = [...p.discard, energy];
   players[idx] = p;
   st = addLog({ ...st, players }, '必殺手裡劍：丟棄 1 張基本【水】能量，在對手 1 隻寶可夢身上放 6 個傷害指示物', idx);
+  // ⭐⭐⭐ v6.175 卡面逐字（M4 18442 / M-P-J 18516）：
+  //   「若這隻寶可夢在戰鬥場，且在自己的回合，**從自己的手牌將1張「基本【水】能量」卡丟棄，
+  //     則可使用1次**。在對手的1隻寶可夢身上放置6個傷害指示物。」
+  //   ⇒ 丟能量是**使用條件（代價）**，卡面順序就是「先付代價 → 才可使用 → 然後放指示物」，
+  //     所以這裡**不**改成「先選目標再付代價」（那會違背卡面）。
+  //   站長真正要的是「代價付了、效果沒發生」不可以留在盤面上 ⇒ 改用**原子化**：
+  //     目標解析不到（空選擇／iid 失效）⇒ resolver 把能量退回手牌並解除本回合已用標記，
+  //     整個動作完全還原。免疫擋下（光之翼等）**不算解析失敗**：那是防禦方的能力，
+  //     依站長 2026-08-07 裁定代價照付、效果不發動。
+  //   ⚠ 同時補上 validIids —— 沒有 validIids 的 pending 完全不經中央消毒閘（v6.010/v6.174），
+  //     等於這張卡對「錯位／竄改的 iid」毫無防線。
+  const oppAll = [
+    ...(st.players[(1 - idx) as 0 | 1].active ? [st.players[(1 - idx) as 0 | 1].active!] : []),
+    ...st.players[(1 - idx) as 0 | 1].bench,
+  ];
   return withPending(st, {
     type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: (1 - idx) as 0 | 1,
     minCount: 1, maxCount: 1,
     effectKey: 'greninja-shuriken-6',
+    params: {
+      validIids: oppAll.map(c => c.iid),
+      paidEnergyIid: energy.iid,
+      holderIid: cardInst?.iid,
+    },
   });
 });
 regR('greninja-shuriken-6', (state, aIdx, selectedIids, _params, pool) => {
@@ -535,6 +555,35 @@ regR('greninja-shuriken-6', (state, aIdx, selectedIids, _params, pool) => {
   const players = [...state.players] as [PlayerState, PlayerState];
   const def = { ...players[dIdx] };
   let name = '?';
+  // ⭐⭐⭐ v6.175 原子化：解析不到目標 ⇒ **完全還原**（能量退回手牌 + 解除本回合已用標記）。
+  //   原本是 `if (!target) return state;` —— 代價已經付掉、6 個指示物沒放、特性也用掉了，
+  //   玩家淨損一張基本【水】能量與一次特性權（與火焰雞ex 同一種「半套盤面」）。
+  {
+    const _tid = selectedIids[0];
+    // ⚠ Fable 5 審查：`_tid` 為 undefined 且 def.active 為 null 時 `undefined === undefined` 會誤判命中。
+    const _hit = _tid != null && (def.active?.iid === _tid || def.bench.some(b => b.iid === _tid));
+    if (!_hit) {
+      const paidIid = _params?.paidEnergyIid as string | undefined;
+      const holderIid = _params?.holderIid as string | undefined;
+      const me = { ...players[aIdx] };
+      const back = paidIid ? me.discard.find(c => c.iid === paidIid) : undefined;
+      if (back) {
+        me.discard = me.discard.filter(c => c.iid !== paidIid);
+        me.hand = [...me.hand, back];
+      }
+      if (holderIid) {
+        const unmark = (pk: CardInstance): CardInstance => {
+          if (pk.iid !== holderIid || !pk.abilityUsedThisTurn) return pk;
+          const n = { ...pk }; delete n.abilityUsedThisTurn; return n;
+        };
+        me.active = me.active ? unmark(me.active) : me.active;
+        me.bench = me.bench.map(unmark);
+      }
+      players[aIdx] = me;
+      return addLog({ ...state, players },
+        '必殺手裡劍：沒有選到對手的寶可夢，效果未執行（基本【水】能量退回手牌，本回合仍可再使用）', aIdx);
+    }
+  }
   // v4.51 Phase 2：改用統一 canApplyEffectToTarget helper（kind='ability-effect'）
   //   - 涵蓋光之翼（self-only 擋特性效果，active + bench 都擋）
   //   - 涵蓋對戰圓形（bench-only 擋招式/特性的效果）

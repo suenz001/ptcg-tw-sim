@@ -598,7 +598,10 @@ function toolAttachEffect(toolName: string): EffectFn {
       type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
       minCount: 1, maxCount: 1, filter: '',
       effectKey: 'attach-tool',
-      params: { toolInst, validIids },
+      // v6.175 站長裁定：寶可夢道具選目標可以反悔。⚠ 這裡只是**宣告**，
+      //   真正的還原在 regR('attach-tool') 的空選擇分支（道具原封回手牌，
+      //   道具卡沒有「每回合限一張」之類的旗標要清，故不會留下半套狀態）。
+      params: { toolInst, validIids, allowCancel: true },
     });
   };
 }

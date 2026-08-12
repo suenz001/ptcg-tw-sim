@@ -58,8 +58,11 @@ export const GameActions = {
                        ({ type: 'RETREAT', newActiveIid }),
   playTrainer:       (iid: string, params?: Record<string, unknown>): GameAction =>
                        ({ type: 'PLAY_TRAINER', iid, params }),
-  resolveSelection:  (selectedIids: string[], senderIdx?: 0 | 1): GameAction =>
-                       ({ type: 'RESOLVE_SELECTION', selectedIids, ...(senderIdx !== undefined && { senderIdx }) }),
+  // v6.175 pendingToken：這個選擇是在回答哪一個 picker。⚠ 一定要由呼叫端從
+  //   `game.pendingSelection.token` 現讀現帶 —— 這樣遲到／重按／排隊後才送達的選擇
+  //   就對不上當下的 pending，engine 會原封不動退回去而不是套到下一段。
+  resolveSelection:  (selectedIids: string[], senderIdx?: 0 | 1, pendingToken?: number): GameAction =>
+                       ({ type: 'RESOLVE_SELECTION', selectedIids, ...(senderIdx !== undefined && { senderIdx }), ...(typeof pendingToken === 'number' && { pendingToken }) }),
   useStadium:        (): GameAction => ({ type: 'USE_STADIUM' }),
   useAbility:        (iid: string, abilityIndex: number): GameAction =>
                        ({ type: 'USE_ABILITY', iid, abilityIndex }),

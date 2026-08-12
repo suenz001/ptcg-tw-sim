@@ -34,7 +34,7 @@
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates } from '$lib/game/selection-candidates';
-  import { selectionAllowsSkip, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
+  import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
@@ -2313,7 +2313,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           const validIids = (sel.params?.validIids as string[] | undefined) ?? [];
           if (validIids.includes(tIid)) {
             const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-            await dispatch(GameActions.resolveSelection([tIid], sid));
+            await dispatch(GameActions.resolveSelection([tIid], sid, (sel as { token?: number }).token));
           }
         }
       } finally {
@@ -2619,6 +2619,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (_sig === _aiPrevSig) _aiStuck++; else { _aiStuck = 0; _aiPrevSig = _sig; }
       if (_aiStuck >= 2) {
         _aiStuck = 0; _aiPrevSig = '';
+        // ⭐⭐⭐ v6.175（Fable 5 審查抓到的軟鎖）：engine 端新增「選擇整批不合法 ⇒ 不關 pending」的閘之後，
+        //   AI 送出不合法選擇時盤面 signature 完全不變（那個閘只動 log，而 log 刻意不在 sig 裡），
+        //   於是這裡連續兩次無進展就進到本分支 —— 但下面的強制 END_TURN 要求 `!pendingSelection`，
+        //   pending 還在就直接 return、不 dispatch、不 scheduleAI ⇒ **AI 從此不再有任何 tick**（真死結）。
+        //   ⇒ pending 還在時，先用「空選擇」把它解掉（＝v6.174 以前的行為），保證一定有進展。
+        if (_g.pendingSelection && _g.pendingSelection.actorIdx === aiPlayerIndex) {
+          console.warn('[AI no-progress guard] AI 連續無進展且 pending 未解 → 以空選擇強制推進');
+          aiThinking = true;
+          dispatch(GameActions.resolveSelection([], undefined, _g.pendingSelection.token), { fromAI: true });
+          scheduleAI();
+          return;
+        }
         if (_g.phase === 'playing' && _g.activePlayerIndex === aiPlayerIndex && _g.turnPhase === 'main'
             && !_g.pendingSelection && (_g.pendingPrizes?.[0] ?? 0) === 0 && (_g.pendingPrizes?.[1] ?? 0) === 0) {
           console.warn('[AI no-progress guard] AI 連續無進展(動作被拒) → 強制 END_TURN');
@@ -7730,6 +7742,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (cur - 1 <= 0) delete next[iid]; else next[iid] = cur - 1;
     selectionCounts = next;
   }
+  /**
+   * ⭐⭐⭐ v6.175：把「這個選擇是在回答哪一個 picker」一起送出去。
+   * ⚠ 一定要**現讀現帶**（每次送出時從 game.pendingSelection 取），不可以快取到變數 ——
+   *   整個修正的價值就在於「畫面上這個 picker 已經不是伺服器當下那個」時要對不上。
+   * 舊盤面沒有 token ⇒ 回 undefined ⇒ engine fail-open（維持既有行為）。
+   */
+  function _pendingTok(): number | undefined {
+    const t = (game as GameState | null)?.pendingSelection?.token;
+    return typeof t === 'number' ? t : undefined;
+  }
   function confirmSelection() {
     if (!selectionValid) return;
     // 線上模式帶 senderIdx 避免對手搶先 resolve
@@ -7749,7 +7771,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } else {
       payload = [...selectionPicked];
     }
-    dispatch(GameActions.resolveSelection(payload, sid));
+    dispatch(GameActions.resolveSelection(payload, sid, _pendingTok()));
     selectionPicked = new Set();
     selectionCounts = {};
     selectionReorderKeep = [];
@@ -7799,7 +7821,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const alt = pendingSelection?.params?.altAction as { id?: string } | undefined;
     if (!alt?.id) return;
     const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-    dispatch(GameActions.resolveSelection([alt.id], sid));
+    dispatch(GameActions.resolveSelection([alt.id], sid, _pendingTok()));
     selectionPicked = new Set();
     selectionCounts = {};
     selectionReorderKeep = [];
@@ -7810,7 +7832,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 允許玩家「放棄」以空 selection 前進，避免卡死。resolver 收到空 iids 應能 graceful 結束。
   function abandonSelection() {
     const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-    dispatch(GameActions.resolveSelection([], sid));
+    dispatch(GameActions.resolveSelection([], sid, _pendingTok()));
     selectionPicked = new Set();
     selectionCounts = {};
   }
@@ -7828,6 +7850,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       effectKey: pendingSelection.effectKey,
       minCount: pendingSelection.minCount,
       allowSkipZero: pendingSelection.params?.allowSkipZero === true,
+      allowCancel: pendingSelection.params?.allowCancel === true,   // v6.175 有【取消】鈕就有出口
     }, selectionItems.length);
   });
   // v2.121：判斷一張卡是否為指定屬性的基本能量。
@@ -10850,7 +10873,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                         // v5.208：modal-choice 直接 dispatch payload，避開 confirmSelection 內 selectionValid 早退
                         //   (Svelte 5 state replace 與 derived 同步順序不可靠，single-click flow 易踩)
                         const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-                        dispatch(GameActions.resolveSelection([opt.id], sid));
+                        dispatch(GameActions.resolveSelection([opt.id], sid, _pendingTok()));
                         selectionPicked = new Set();
                         selectionCounts = {};
                       }}>
@@ -10869,7 +10892,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     onclick={() => {
                       // v5.208：modal-choice 直接 dispatch (同上)
                       const sid = mode === 'online' && myPlayerIndex !== null ? myPlayerIndex : undefined;
-                      dispatch(GameActions.resolveSelection([opt.id], sid));
+                      dispatch(GameActions.resolveSelection([opt.id], sid, _pendingTok()));
                       selectionPicked = new Set();
                       selectionCounts = {};
                     }}>
@@ -10935,6 +10958,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <button class="btn-act primary" disabled={actionBusy||!selectionValid} onclick={confirmSelection}>{selectedNamesLabel ? '確定 ' + selectedNamesLabel : '確定（' + selectionPicked.size + '張）'}</button>
             {#if selectionAllowsSkip({ type: pendingSelection.type, actorIdx: pendingSelection.actorIdx, sourcePlayerIdx: pendingSelection.sourcePlayerIdx, effectKey: pendingSelection.effectKey, minCount: pendingSelection.minCount, allowSkipZero: pendingSelection.params?.allowSkipZero === true })}
               <button class="btn-act secondary" disabled={actionBusy} onclick={abandonSelection}>{pendingSelection.effectKey === 'attach-tool' ? '取消（道具退回手牌）' : pendingSelection.effectKey === 'sakura-crescendo-attach' ? '不附能量（直接造成傷害）' : '不選（跳過）'}</button>
+            {:else if selectionAllowsCancel({ effectKey: pendingSelection.effectKey, allowCancel: pendingSelection.params?.allowCancel === true })}
+              <!-- ⭐ v6.175 站長裁定：寶可夢道具可以反悔。這顆鈕過去被 minCount>=1 短路吃掉，
+                   resolver 早就寫好的「道具退回手牌」分支因此是永遠走不到的死碼。
+                   ⚠ 這不是「選 0 張」，是取消整個動作 → 走 selectionAllowsCancel 而非 selectionAllowsSkip。 -->
+              <button class="btn-act secondary" disabled={actionBusy} onclick={abandonSelection}
+                title="取消這次附加，道具原封退回手牌">取消（道具退回手牌）</button>
             {/if}
             <!-- v2.121 全域安全網：候選為空且 minCount>0 時開放「放棄」避免卡住 -->
             {#if pendingStuckEmpty}

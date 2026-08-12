@@ -1,3 +1,111 @@
+# v6.175 選擇必須綁定它回答的那個 picker（沸騰鬥志「附給 ?」真因）+ 非場區巢狀附加物收斂
+
+## ① 真因（站長的質疑是對的：候選從來沒有空過）
+玩家回報 v6.173 錦標賽「薪水小偷 R2」火焰雞ex｜沸騰鬥志出現
+`沸騰鬥志：將 基本【超】能量 附給 ?` 之後對局卡住。
+v6.174 把它修成「安全 no-op」，但那是治標。
+
+從 `tournament-dumps/dump_20260812_102715.json`（match `evt_mspfw1mturzw_r2_m0`，
+2026-08-12 10:22 TW）逐行還原：
+- log 121~123：進化出 94iqs0uq 火焰雞ex、放備戰 48h5nkce、撤退換 ravmbo09 上場
+  ⇒ 事發當下自己場上有 **1 戰鬥位 + 5 備戰**；引擎的 `params.validIids` 也確實是 6 個。
+  **候選從來沒有空過，「沒有目標」這個前提本身不成立。**
+- log 125 →（3.7 秒）→ 126「（繼續選擇下一步）」→（31.2 秒）→ 127「附給 ?」。
+- finalState 牌張守恆 61 vs 60、且 `pp5i8egq` 同一個 iid 在棄牌區出現兩份。
+
+真因是 **`RESOLVE_SELECTION` 完全沒有「這個選擇是在回答哪一個 picker」的資訊**：
+engine 收到就套到「當下那一個」pending。多段 picker（第 1 段選能量 → 第 2 段選目標）
+兩段的 payload 形狀一模一樣（都是 iid 陣列）⇒ 第 1 段的答案只要遲到 / 被重按 / 排隊後才送達，
+就會被當成第 2 段的答案吃下去，engine 拿「能量的 iid」去場上找寶可夢 ⇒ 必然找不到。
+
+行為端 byte-exact 重現（v6.173 樹）：
+`USE_ABILITY → RESOLVE(['wnoipo9e']) → RESOLVE(['wnoipo9e'])`
+⇒ log 一字不差是 `沸騰鬥志：將 基本【超】能量 附給 ?`，牌張 11 vs 12（能量從遊戲中消失）。
+
+為什麼是「現在」才炸：v6.172 把 in-flight 期間的第二個手勢從「靜默丟棄」改成「排隊後送出」，
+把這條路徑從偶發變成常見（重按會拿到**自己的 actId**，伺服器的冪等去重擋不住）。
+monitor 顯示 `stale-version（對戰中盤面不再更新）` 162 次 / 55 人 —— 玩家看到畫面沒動就再按一次，
+正是這一版的常態。
+
+## ② 修法（中央、兩層）
+1. `PendingSelection.token`：engine 在 `applyAction` **單一出口** `stampPendingToken` 蓋章。
+   規則只有一條——**pendingSelection 只要不是動作前那一個物件，就是新的 picker ⇒ 換新號**。
+   client（`_pendingTok()`，現讀現帶）在 `RESOLVE_SELECTION` 回帶 `pendingToken`；
+   對不上一律 `return state`（pending 留在原地）。舊 client 不帶 ⇒ fail-open。
+2. 保護**所有** client（monitor 顯示大量玩家停在 v6.13x~v6.16x）：
+   client 送了東西、卻被 `sanitizeSelectedIids` **整批消毒成空**、而 `minCount>=1`
+   ⇒ 這必然是錯位／版本落差／竄改，**不是「玩家選 0」** ⇒ 不執行、不關 pending、寫一行說明。
+   ⚠ 有上限 `RESOLVE_REJECT_STREAK_MAX = 3`（本機 AI／舊 client 可能持續送不合法選擇，
+   無條件保留會變死結）；超過就退回舊行為，任何情況下都不會軟鎖。
+
+## ③ 同維度 audit：非場上區的「巢狀附加物」= 同一張卡同 iid 兩份
+v5.735 只把 `evolvedFromStack` 攤平，**漏了同一種形狀的 `energyAttached` / `toolAttached` /
+`extraTools`**。KO 路徑把寶可夢連同身上附加物整包丟進棄牌區、又另外把每張能量攤平成獨立棄牌卡
+⇒ 同一個 iid 在同一區出現兩份。行為端 3 行可重現；上述 dump 的 440 個玩家側裡 **239 個**中招。
+後果與 v5.735 完全同型（前端 each key、picker 去重、盤面守恆）。
+⇒ `normalizeNonFieldStacks` 收斂：非場區一律不留巢狀附加物；已有扁平同 iid 就丟掉巢狀那份，
+沒有的才**append 到區尾**補成扁平卡（既有棄牌區順序完全不動）。
+
+## ④ 站長裁定 A：寶可夢道具可以反悔
+`attach-tool` 的 resolver 從 v5.465 起就有「空選擇 ⇒ 道具退回手牌」，UI 也備好文案，
+但 `minCount=1` 被 `selectionAllowsSkip` 的 `minCount>=1` 短路擋掉 ⇒ 那顆鈕永遠渲染不出來、
+那條 0-branch 是死碼（audit skill 線索 ②）。
+⇒ 新增中央述詞 `selectionAllowsCancel`（語義是「取消整個動作」，**不是**「選 0 張」，
+所以不能混進 `OPTIONAL_SELECTION_EFFECT_KEYS`），`attach-tool` 的 pending 宣告 `params.allowCancel`。
+乾淨退回已行為端驗證：道具回手牌、沒附到任何寶可夢、牌張守恆、可再打一次同一張。
+
+## ⑤ 站長裁定 B：必殺手裡劍 —— 卡面順序不動，改成原子化（詳見回報，需站長複裁）
+卡面逐字（M4 18442 / M-P-J 18516）：「…**從自己的手牌將1張「基本【水】能量」卡丟棄，
+則可使用1次**。在對手的1隻寶可夢身上放置6個傷害指示物。」
+⇒ 丟能量是**使用條件（代價）**，卡面順序就是「先付代價 → 才可使用 → 然後放指示物」。
+把它改成「先選目標再付代價」會違背卡面，故**未照字面執行站長指示**，改為達成同一目的的原子化：
+目標解析不到（空選擇／iid 失效）⇒ 能量退回手牌 + 解除 `abilityUsedThisTurn`，整個動作完全還原。
+免疫擋下（光之翼等）**不算解析失敗**：依站長 2026-08-07 裁定，代價照付、效果不發動。
+另補上 `params.validIids`（原本沒有 ⇒ 完全不經中央消毒閘）。
+
+## ⑥ 同維度枚舉（既有債，棘輪列管）
+場上目標型 pending（heal-target / bench-choose / opp-bench-choose / opp-poke-choose）
+`minCount>=1` 卻**沒有宣告 `params.validIids`` 者共 56 個 —— 它們的 client payload 完全不經
+中央消毒閘。這一輪只修在 scope 內的必殺手裡劍；其餘以守衛棘輪列管（數量不准再變多，新卡一律宣告）。
+⚠ 不做全域「一律限場上」的一刀切：`bench-basic-from-deck` / `reorder-deck-top-apply` 等
+確實用 heal-target 型 pending 承載**跨區** iid，一刀切會誤殺。
+
+## ⑦ Fable 5 審查抓到的（已全部修掉，且每一條我都自己回查驗證過）
+1. **本機 AI 軟鎖（最嚴重，真的會出事）**：`+page.svelte` 的 v5.617「無進展防呆」signature
+   刻意**不含 log.length**（v5.639 的教訓），而本版第 ② 條閘只動 log ⇒ AI 送出不合法選擇時
+   sig 完全不變 ⇒ 連兩次無進展就進防呆分支，但該分支的強制 END_TURN 要求 `!pendingSelection`
+   ⇒ **直接 return、不 dispatch、不 scheduleAI，AI 從此不再有任何 tick**（我逐 tick 追過，成立）。
+   ⇒ 修：pending 還在時先用空選擇把它推掉（＝v6.174 以前的行為），保證一定有進展。
+2. token 不符原本是**完全靜默**的 `return state` ⇒ 將來「按了沒反應」查不出來 ⇒ 補一行 log。
+3. `_pendingSeq` 會被「整包還原成攻擊前快照」的路徑（重試徽章）**倒退** ⇒ 重號 ⇒
+   排隊中的舊答案能對上不同的 picker ⇒ 發號機改 `Math.max(after, before)`，只前進。
+4. `_rejectedResolveStreak` 是全域計數、不綁 pending ⇒ 換 picker 時殘值會吃掉保護額度 ⇒
+   新增 `_rejectedResolveTok`，token 不同就重新計數。
+5. 必殺手裡劍 `_hit` 在 `selectedIids[0] === undefined && def.active === null` 時
+   `undefined === undefined` 誤判命中 ⇒ 補 `_tid != null &&`。
+
+### Fable 的兩條建議我**沒有**採納（自行查證後判定不對／不在本輪 scope）
+- 「KO 生成源直接 toBareCard」：不行。`engine.ts` 的 koDiscard 是
+  `[ko, ...ko.energyAttached.filter(e => !heldIds.has(e.iid)), ...]` ——
+  **獵斑魚｜潛者捕捉的暫存水能量就是靠「留在 ko 身上、不進扁平清單」實作的**，
+  在生成源裸化會直接打死那張卡（守衛 test-sakura-relicanth 會紅，我實測過）。
+  所以本版維持「出口只刪同區重複、不搬卡」。
+- 潛者捕捉選「是」時把 `heldEnergy` 加進手牌、而 ko 身上巢狀那份仍在棄牌區 ⇒
+  **跨 zone 同 iid 兩份**。這條 Fable 說得對，但屬另一維度（跨區去重），本輪不動，
+  留給下一輪（已記在待辦）。
+
+## ⑧ ⚠⚠⚠ 部署提醒（Fable 也點到，且這一條決定本版有沒有效）
+錦標賽伺服器跑的是 `scripts/build-server-engine.mjs` 產出的 `oracle-admin/tournament/server-engine.cjs`
+（**不在 repo 裡**，由 `update-tournament.bat` 現場重建）。
+**沒跑 update-tournament.bat ⇒ token 蓋章／比對、拒收閘、非場區去重在錦標賽端全部不存在（fail-open），
+出事現場的原始 bug 原樣存在。** 這正是 v6.157 踩過的坑。
+
+## 守衛
+`scripts/test-v6175-pending-token-and-nonfield-stacks.mjs`（52 條，全行為端實跑 applyAction）
+—— 對 v6.174 樹 6 條紅 + `selectionAllowsCancel` 直接 TypeError；對 v6.173 樹 10 條紅
+（含 byte-exact 的「附給 ?」與牌張 11 vs 12）。
+掃描器兩處都有**下限斷言 + 正對照**（違規樣本必須被抓到），避免「掃不到 = 全綠」的安慰劑。
+
 # 更新記錄（內部詳細版）
 
 > ⚠ **這份不是給玩家看的**，玩家看的是首頁的精簡版（`static/changelog.html`，只講「你會看到什麼變化」）。

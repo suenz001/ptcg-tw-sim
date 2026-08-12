@@ -198,7 +198,8 @@ T('⭐⭐ confirmSelectionAlt 必須自己送 altAction.id 並帶 sid（不得�
   const i = PAGE.indexOf('function confirmSelectionAlt()');
   ok(i >= 0, '找不到 confirmSelectionAlt');
   const body = PAGE.slice(i, PAGE.indexOf('\n  }', i));
-  ok(/resolveSelection\(\[alt\.id\], sid\)/.test(body),
+  // v6.175：多帶一個 pendingToken（第 3 個參數）是允許的，sid 仍必須在第 2 位。
+  ok(/resolveSelection\(\[alt\.id\], sid[,)]/.test(body),
     'confirmSelectionAlt 沒有送 [altAction.id] + sid。\n'
     + '      ⚠ 不能重用 confirmSelection()：它有 selectionValid gate，且 payload 固定是排序後的 iid。\n'
     + '      ⚠ sid（線上 senderIdx）不能省，否則對手側 race 時語義不對。');

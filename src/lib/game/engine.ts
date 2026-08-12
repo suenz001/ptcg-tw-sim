@@ -2745,6 +2745,36 @@ function normalizeNonFieldStacks(state: GameState): GameState {
         if (!seen.has(be.iid)) { seen.add(be.iid); out.push(be); } else { changed = true; }
       }
     }
+    // ⭐⭐⭐ v6.175：v5.735 只攤平了 `evolvedFromStack`，**漏掉了同一種形狀的
+    //   `energyAttached` / `toolAttached` / `extraTools`** —— KO 路徑把寶可夢連同身上的
+    //   附加物整個丟進棄牌區、又另外把每張能量/道具攤平成獨立棄牌卡 ⇒ **同一張卡、同一個 iid
+    //   在同一區出現兩份**（行為端 3 行即可重現；2026-08-12 錦標賽 dump 440 個玩家側裡有 239 個中招）。
+    //   後果與 v5.735 完全同型：之後用能量回收／赤松／沸騰鬥志把「扁平那份」拿回場上，
+    //   就與棄牌堆裡「巢狀那份」iid 碰撞（前端 each key、picker 去重、盤面守恆全部受害）。
+    //   ⇒ 收斂範圍**只刪幻影、不搬卡**：巢狀附加物的 iid 若已經在本區有一份扁平的，
+    //     就把巢狀那一份拿掉（同一張卡不可以同時存在兩處）。
+    //   ⚠⚠ **絕不**把「只有巢狀、沒有扁平」的那種攤平出來 —— 那是**有意義的暫存**：
+    //     獵斑魚｜潛者捕捉把 KO 寶可夢身上的基本【水】能量「先不丟棄」暫掛在昏厥實例上，
+    //     等玩家確認後才決定回手或進棄牌。攤平它會讓那些能量提早出現在棄牌區（守衛
+    //     test-sakura-relicanth 會紅）。這裡的目標是「同 iid 兩份」，不是「幫忙歸位」。
+    let stripped = false;
+    for (let i = 0; i < out.length; i++) {
+      const c = out[i];
+      const en = c.energyAttached ?? [];
+      const ex = c.extraTools ?? [];
+      const enKeep = en.filter(e => !seen.has(e.iid));
+      const exKeep = ex.filter(e => !seen.has(e.iid));
+      const toolDup = !!c.toolAttached && seen.has(c.toolAttached.iid);
+      if (enKeep.length === en.length && exKeep.length === ex.length && !toolDup) continue;
+      stripped = true;
+      out[i] = {
+        ...c,
+        energyAttached: enKeep,
+        ...(toolDup ? { toolAttached: undefined } : {}),
+        ...(ex.length > 0 ? { extraTools: exKeep } : {}),
+      };
+    }
+    if (stripped) changed = true;
     return out;
   };
   const players = state.players.map(pl => ({
@@ -3034,12 +3064,52 @@ function handlePlaying(
     const _coinFlippedBeforeResolve = state.coinFlippedThisAttack === true;
     // Guard：若明確指定 senderIdx，必須等於 actorIdx — 防止對手搶先操作
     if (action.senderIdx != null && action.senderIdx !== actorIdx) return state;
+    // ⭐⭐⭐ v6.175 真因修正①：**選擇必須對得上它當初回答的那一個 picker。**
+    //   錦標賽「薪水小偷 R2」火焰雞ex｜沸騰鬥志對局卡住的真因不是「候選為空」——
+    //   盤面上有 6 隻自己的寶可夢、validIids 也是 6 個，候選從來就沒空過。
+    //   真因是：`RESOLVE_SELECTION` 原本**完全沒有**「這是在回答哪一個 picker」的資訊，
+    //   而多段 picker（第 1 段選能量 → 第 2 段選附加目標）兩段的 payload 形狀一模一樣
+    //   （都是 iid 陣列）⇒ 只要第 1 段的選擇被重按 / 排隊 / 重送而遲到，
+    //   它就會被當成第 2 段的答案吃下去，engine 拿「能量的 iid」去場上找寶可夢 ⇒ 永遠找不到。
+    //   （v6.172 起 in-flight 期間的第二個手勢由「靜默丟棄」改成「排隊送出」，
+    //     等於把這條路徑從偶發變成常見。）
+    //   ⇒ pending 誕生時蓋 token，client 現讀現帶；對不上就原封退回、pending 留在原地讓玩家重選。
+    //   ⚠ 舊 client 不帶 pendingToken ⇒ fail-open（維持既有行為），由下面的消毒閘兜底。
+    if (typeof action.pendingToken === 'number'
+        && typeof state.pendingSelection.token === 'number'
+        && action.pendingToken !== state.pendingSelection.token) {
+      // ⚠ Fable 5 審查：這裡原本是完全靜默的 `return state` —— 「按了沒反應」將來完全查不出來。
+      //   一定要留痕（次數受玩家點擊與佇列上限 3 拘束，不會洗版）。
+      return addLog(state,
+        '⚠ 剛才那一次選擇是回答上一個選擇視窗的（重複送出或畫面較舊），沒有生效 —— 請在目前的視窗重新選一次。',
+        actorIdx);
+    }
     const endTurnAfter = params?.endTurnAfter === true;
     const resolver = RESOLVERS.get(effectKey);
-    let newState: GameState = { ...state, pendingSelection: undefined };
+    // v6.010 中央 sanitize 閘:消毒 client selectedIids(去重/zone成員/validIids交集/夾maxCount)後才交 resolver。
+    const _rawIids = Array.isArray(action.selectedIids) ? action.selectedIids : [];
+    const _cleanIids = sanitizeSelectedIids(state, state.pendingSelection, action.selectedIids, pool);
+    // ⭐⭐⭐ v6.175 真因修正②（保護**所有**client，含大量停在舊版的玩家）：
+    //   client 送了東西、但**整批都被消毒掉**（沒有一個在 validIids／來源區裡），
+    //   而卡面又要求至少選 1 ⇒ 這必然是錯位／版本落差／竄改，**絕不是「玩家選 0」**。
+    //   v6.174 只做到「不留半套盤面」，但 pending 照樣關掉 ⇒ 玩家的每回合 1 次特性被白白吃掉。
+    //   ⇒ 不執行、不關 pending、講清楚原因，讓玩家重選一次。
+    //   ⚠ 必須有上限：本機 AI／舊 client 可能持續送不合法選擇，無條件保留 pending 會變死結。
+    //     超過上限就退回舊行為（照常以空選擇解析）⇒ 任何情況下都不會軟鎖。
+    // ⚠ Fable 5 審查：streak 必須綁在**這一個** pending 上，否則換 picker 時殘值會把保護額度吃掉。
+    const _tokNow = state.pendingSelection.token;
+    const _rejStreak = (state._rejectedResolveTok === _tokNow) ? (state._rejectedResolveStreak ?? 0) : 0;
+    if (_rawIids.length > 0 && _cleanIids.length === 0
+        && (state.pendingSelection.minCount ?? 0) >= 1
+        && _rejStreak < RESOLVE_REJECT_STREAK_MAX) {
+      return addLog(
+        { ...state, _rejectedResolveStreak: _rejStreak + 1, _rejectedResolveTok: _tokNow },
+        '⚠ 剛才那一次選擇對不上目前的選擇視窗（重複送出或畫面較舊），沒有生效 —— 請重新選一次。',
+        actorIdx,
+      );
+    }
+    let newState: GameState = { ...state, pendingSelection: undefined, _rejectedResolveStreak: undefined, _rejectedResolveTok: undefined };
     if (resolver) {
-      // v6.010 中央 sanitize 閘:消毒 client selectedIids(去重/zone成員/validIids交集/夾maxCount)後才交 resolver。
-      const _cleanIids = sanitizeSelectedIids(state, state.pendingSelection, action.selectedIids, pool);
       newState = resolver(newState, actorIdx, _cleanIids, params, pool);
     }
     // v4.898 重試徽章 — inline handler（無 regR 註冊；直接在此特判）
@@ -8368,12 +8438,52 @@ function applyRuggedRuinsBenchPlace(before: GameState, after: GameState, pool: M
   return applyBenchPlaceSideEffects(after, idx, newIids, pool);
 }
 
+/**
+ * ⭐v6.175 同一個 pending 內，連續幾次「完全不合法的選擇」之後就放棄保護、退回舊行為。
+ * ⚠ 這個上限是死結防線，不是調校參數：沒有它，任何持續送出不合法選擇的 client／AI
+ *   都會把自己鎖在同一個 picker 上（自我重呼叫必須有上限）。
+ */
+const RESOLVE_REJECT_STREAK_MAX = 3;
+
+/**
+ * ⭐⭐⭐ v6.175 pending 蓋章（applyAction 單一出口，全站唯一發號處）。
+ *
+ * 規則只有一條：**pendingSelection 只要不是動作前那一個物件，就是一個新的 picker ⇒ 換新號。**
+ * 引擎與效果層全是 immutable 更新，所以「內容有任何改變」必然產生新物件 ⇒ 換號；
+ * 沒被動到就沿用同一個物件 ⇒ 號碼不變、client 手上的 token 仍然有效。
+ * ⚠ 不可以改成「內容 hash」：同一段 picker 分批進行（分配傷害指示物）時內容會變、
+ *   但那確實是**新的一批**，本來就該讓上一批的答案失效。
+ * ⚠ 舊盤面（DB 裡沒有 token 的對局）第一次經過這裡會補蓋一次號，之後恆定。
+ */
+function stampPendingToken(before: GameState, after: GameState): GameState {
+  const ps = after.pendingSelection;
+  const q = after.pendingChainQueue;
+  const needPs = !!ps && (ps !== before.pendingSelection || typeof ps.token !== 'number');
+  const needQ = !!q && q.some(x => typeof x.token !== 'number');
+  if (!needPs && !needQ) return after;
+  // ⚠ Fable 5 審查：重試徽章等「整包還原成攻擊前快照」的路徑會讓 `_pendingSeq` 倒退 ⇒ 重號 ⇒
+  //   排隊中的舊答案能對上一個**不同的** picker。發號機只能前進，取 max。
+  let seq = Math.max(after._pendingSeq ?? 0, before._pendingSeq ?? 0);
+  const out: GameState = { ...after };
+  if (needPs && ps) { seq += 1; out.pendingSelection = { ...ps, token: seq }; }
+  if (needQ && q) {
+    out.pendingChainQueue = q.map(x => {
+      if (typeof x.token === 'number') return x;
+      seq += 1;
+      return { ...x, token: seq };
+    });
+  }
+  out._pendingSeq = seq;
+  return out;
+}
+
 export function applyAction(
   state: GameState,
   action: GameAction,
   pool: Map<string, Card>
 ): GameState {
-  return applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(applyActionImpl(state, action, pool)), pool); // v5.866 險惡廢墟中央
+  return stampPendingToken(state,
+    applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(applyActionImpl(state, action, pool)), pool)); // v5.866 險惡廢墟中央 / v6.175 pending 蓋章
 }
 function applyActionImpl(
   state: GameState,

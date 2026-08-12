@@ -647,6 +647,19 @@ export interface PendingSelection {
   effectKey: string;
   /** 額外傳遞給 resolver 的參數 */
   params?: Record<string, unknown>;
+  /**
+   * ⭐⭐⭐ v6.175 這個 picker 的識別碼（engine 在「新的 pending 誕生時」單點蓋章，單調遞增）。
+   *
+   * ⚠ 為什麼需要它：`RESOLVE_SELECTION` 原本**完全沒有**「這個選擇是回答哪一個 picker」的資訊，
+   *   engine 收到就套到「當下那一個」pending。多段 picker（先選能量 → 再選目標）兩段的 payload
+   *   都是 `string[] of iid`，形狀一模一樣 ⇒ 只要有一發選擇遲到／被重按／排隊後才送達，
+   *   第 1 段的答案就會被當成第 2 段的答案吃下去。
+   *   （實證：錦標賽「薪水小偷 R2」火焰雞ex｜沸騰鬥志 —— 玩家把能量 iid 送成了「附加目標」，
+   *     engine 找不到那隻寶可夢，舊實作把能量從棄牌區扣掉卻沒附上去，整張卡消失。）
+   * client 於 RESOLVE_SELECTION 帶回 `pendingToken`；對不上一律不執行且 pending 留在原地。
+   * ⚠ 舊 client 不會帶 ⇒ fail-open（維持既有行為），由 sanitize 閘兜底。
+   */
+  token?: number;
 }
 
 // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
@@ -654,6 +667,20 @@ export interface PendingSelection {
 export interface GameState {
   /** 本局唯一 ID */
   id: string;
+  /**
+   * ⭐v6.175 pending 識別碼發號機（單調遞增）。engine 在 applyAction 單一出口蓋章，
+   * 只有「還沒有 token 的新 pending」才會拿號 ⇒ 同一個 picker 全程 token 不變。
+   */
+  _pendingSeq?: number;
+  /**
+   * ⭐v6.175 連續被拒的 RESOLVE_SELECTION 次數（同一個 pending 內累計，成功解析即歸零）。
+   * ⚠ 上限存在的理由：本機 AI／舊 client 有可能送出「完全不合法」的選擇，
+   *   若無條件保留 pending 會變成永遠解不掉的死結（自我重呼叫必須有上限）。
+   *   超過上限就退回舊行為（照常以空選擇解析），保證不會軟鎖。
+   */
+  _rejectedResolveStreak?: number;
+  /** ⭐v6.175 上面那個計數綁定的 pending token（換 picker 就重新計數）。 */
+  _rejectedResolveTok?: number;
   /**
    * v5.457 本局建立時間戳（createGame 設 Date.now()）。
    * 線上同步「跨局防舊」用：再來一局後，舊局殘留 snapshot 雖 log 較長，但 createdAt 較早 →
@@ -1142,7 +1169,7 @@ export type GameAction =
   | { type: 'EVOLVE'; fromIid: string; toIid: string }
   | { type: 'RETREAT'; newActiveIid: string }
   | { type: 'PLAY_TRAINER'; iid: string; params?: Record<string, unknown> }
-  | { type: 'RESOLVE_SELECTION'; selectedIids: string[]; senderIdx?: 0 | 1; _retryInjectedFlips?: string[]; _retryBadgeAlreadyAsked?: boolean }  // v5.431 retry 欄位（resolver 內擲幣重試徽章）
+  | { type: 'RESOLVE_SELECTION'; selectedIids: string[]; senderIdx?: 0 | 1; pendingToken?: number; _retryInjectedFlips?: string[]; _retryBadgeAlreadyAsked?: boolean }  // v5.431 retry 欄位（resolver 內擲幣重試徽章）／v6.175 pendingToken 綁定
   | {
       type: 'ATTACK';
       attackIndex: number;
