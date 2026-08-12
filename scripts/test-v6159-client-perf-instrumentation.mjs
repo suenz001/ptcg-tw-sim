@@ -369,7 +369,8 @@ try {
     M.monStat(undefined, 'p95') === null && M.monStat(null, 'p95') === null && M.monStat({}, 'p95') === null
     && M.monStat({ p95: 12 }, 'p95') === 12);
 
-  const CELLS = 9;   // v6.170 新增「連線」欄：連線／網路／下載／權杖／解析／採納／重繪／長任務／裝置
+  const CELLS = 13;  // v6.179 再加「排隊／傳輸／SW／續行」四欄：
+  //   連線／網路／排隊／傳輸／SW／續行／下載／權杖／解析／採納／重繪／長任務／裝置
   // ★★ 舊 client（v6.158 以前）的 payload：完全沒有 perf / hc / dm
   const LEGACY = { ts: 1786512345678, email: 'a@b.c', p50: 1234, p95: 6789, max: 12345, n: 30 };
   let out = null, threw = null;
@@ -418,12 +419,13 @@ try {
   // ★★ 欄數對帳：表頭 <th> 的新增數必須等於資料列 <td> 的新增數，否則整張表格會錯位/爆版
   const iTbl = ADMIN.indexOf("'<div style=\"font-weight:700;margin-bottom:4px;\">⏱️ 動作往返時間");
   ok('往返時間表格找得到', iTbl > 0);
-  const tbl = ADMIN.slice(iTbl, iTbl + 3500);
+  // ⚠ v6.179：表格上方的判讀規則變長了，3500 字元切不到表頭那一列 ⇒ 會數出偏少的欄數（假紅）。
+  const tbl = ADMIN.slice(iTbl, iTbl + 8000);
   const ths = (tbl.slice(0, tbl.indexOf('</tr>')).match(/<th /g) || []).length;
   ok('★★表頭欄數 = 既有 5 欄 + 新增 ' + CELLS + ' 欄（欄數不對＝整張表格錯位）',
     ths === 5 + CELLS, '實際 ' + ths);
   ok('★欄位變多 → 表格要能橫向捲（否則窄螢幕爆版）',
-    /overflow-x:auto;">'/.test(ADMIN) && /min-width:1040px;">'/.test(ADMIN)
+    /overflow-x:auto;">'/.test(ADMIN) && /min-width:1360px;">'/.test(ADMIN)
     && ADMIN.includes("html += '</table></div></div>';"));
   ok('★資料列有接上 monPerfCells（有 helper 沒接＝白寫）', /\+ monPerfCells\(r\)/.test(ADMIN));
   ok('★有寫給站長的判讀規則（數字沒人看得懂等於沒量）',

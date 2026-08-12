@@ -243,6 +243,12 @@ try {
   const mk = (supported) => new Function(
     'let _rtSupported = ' + supported + ', _rtN = 0, _rtBad = 0, _rtReuse = 0, _rtFresh = 0, _rtSw = 0;'
     + 'const _rtProto = {}; let _rtConnMs = [], _rtDnsMs = [], _rtTlsMs = [];'
+    // ⭐v6.179 `_tRecordResEntry` 尾端多了「對回哪一發 fetch」的段落，用到這幾個容器。
+    //   這台機器沒有開過任何 fetch 時間窗 ⇒ 這裡的 entry 一律對不上、計入 seg.bad，
+    //   本節既有的斷言（reuse / fresh / proto / bad）完全不受影響。
+    + 'let _rtSegN = 0, _rtSegBad = 0, _rtSwN = 0, _rtSwOdd = 0;'
+    + 'let _rtQueueMs = [], _rtWireMs = [], _rtSwMs = [], _rtLagMs = [], _rtPreMs = [], _rtWins = [];'
+    + 'let _rtSegAbort = 0, _rtLagNeg = 0;'
     + out.code + '; return { _tRecordResEntry, _resTimingStats, get n(){return _rtN;} };')();
 
   ok('★★★不支援 PerformanceObserver ⇒ 統計回 **null**（不是 0；0 會被誤讀成「這台連線都很好」）',

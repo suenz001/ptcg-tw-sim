@@ -38,15 +38,20 @@ const ok = (m) => console.log('  ✓ ' + m);
 
 /** 從元件原始碼抓出 hook 本體（含兩個累加容器），轉成可執行的 JS */
 function extractHook(source) {
-  const start = source.indexOf('const _svelteWarnCounts');
+  // ⭐v6.179 計數器搬到 window 層級（`window.__ptcgSvelteWarn`）——
+  //   v6.171 的元件實例變數在 /game 重掛載後會變成永遠讀不到的假零。
+  const start = source.indexOf('const _svelteWarn:');
   const endMark = '\n  }\n  // ⭐⭐v6.171 假說驗證用';
   const end = source.indexOf(endMark, start);
   if (start < 0 || end < 0) return null;
   let code = source.slice(start, end + 4);
   code = code
+    // ⚠ 先剝掉整段容器型別，再剝零件型別 —— 順序反了會留下 `{ counts: ; first: ; … }` 這種爛字串
+    .replace(/: \{ counts: Record<string, number>; first: string\[\]; lastPointerAt: number \}/g, '')
     .replace(/: Record<string, number>/g, '')
     .replace(/: string\[\]/g, '')
     .replace(/\(window as \{[^}]*\}\)/g, 'window')
+    .replace(/\(window as any\)/g, 'window')
     .replace(/\.\.\.args: unknown\[\]/g, '...args')
     .replace(/\.\.\.\(args as \[\]\)/g, '...args');
   return code;
@@ -59,7 +64,7 @@ function runHook(code) {
   const fakeWindow = { addEventListener: (t, f) => listeners.push([t, f]) };
   // eslint-disable-next-line no-new-func
   const fn = new Function('window', 'console', 'Date',
-    code + '\n; return { counts: _svelteWarnCounts, first: _svelteWarnFirst, warn: console.warn };');
+    code + '\n; return { counts: _svelteWarn.counts, first: _svelteWarn.first, store: _svelteWarn, win: window, warn: console.warn };');
   const r = fn(fakeWindow, fakeConsole, Date);
   return { ...r, calls, listeners, fakeConsole };
 }
@@ -87,7 +92,7 @@ else {
   if (!h.listeners.some(([t]) => t === 'pointerdown')) bad('沒有掛 pointerdown 監聽（拿不到互動時間）');
   else ok('有掛 pointerdown 監聽');
   // 遞迴保護：hook 自己不得再呼叫被包裝過的 console.warn
-  if (/_svelteWarnCounts[\s\S]*console\.warn\(/.test(hookCode.replace(/console\.warn = function/, 'X'))) bad('hook 內部自己呼叫了 console.warn（會無限遞迴）');
+  if (/_svelteWarn\.counts[\s\S]*console\.warn\(/.test(hookCode.replace(/console\.warn = function/, 'X'))) bad('hook 內部自己呼叫了 console.warn（會無限遞迴）');
   else ok('hook 內部不呼叫 console.warn（無遞迴風險）');
 }
 
@@ -99,7 +104,7 @@ console.log('[v6.171] B. 接線層：svelteWarn 真的在送出去的 /clientdia
   if (fi < 0 || ti < 0) bad('編譯輸出找不到 _tSendClientDiag → tApi(\'/clientdiag\') 這條路徑');
   else {
     const body = js.slice(fi, ti);
-    for (const k of ['svelteWarn', '_svelteWarnCounts', '_svelteWarnFirst', 'inertNodes']) {
+    for (const k of ['svelteWarn', '_svelteWarn.counts', '_svelteWarn.first', 'inertNodes']) {
       if (!body.includes(k)) { bad(`payload 少了 ${k}（診斷沒接上）`); }
     }
     if (body.includes('svelteWarn') && body.includes('inertNodes')) ok('payload 含 svelteWarn.counts / first / inertNodes');
@@ -131,7 +136,8 @@ console.log('[v6.171] D. 掃描器自我驗證（拿掉計數行，A 必須抓�
 {
   if (!hookCode) bad('無法自我驗證（前面已抓不到 hook）');
   else {
-    const mutated = hookCode.replace(/_svelteWarnCounts\[code\] = [^\n]*\n/, '');
+    // ⭐v6.179 計數器搬到 window 層級之後，計數行變成 `_svelteWarn.counts[code] = …`
+    const mutated = hookCode.replace(/_svelteWarn\.counts\[code\] = [^\n]*\n/, '');
     if (mutated === hookCode) bad('自我驗證失敗：找不到計數行');
     else {
       const h = runHook(mutated);

@@ -504,6 +504,9 @@ try {
       const T_API = 'https://x/api/tournament';
       const _pnow = () => Date.now();
       const _tRecordApiSegments = () => {};
+      // ⭐v6.179 tApi 多了「開一個 fetch 時間窗」的量測呼叫（回 null ＝ 這台機器不對齊）。
+      //   本節只驗連線健康錨點，對齊行為由 test-v6179 守。
+      const _tResWinOpen = () => null;
       const firebaseUser = null;
       const fetch = __fetch;
     `;

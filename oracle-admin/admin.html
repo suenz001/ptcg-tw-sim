@@ -2676,9 +2676,31 @@ function monPerfCells(r) {
       + '<span style="color:#89a;"> (' + rs.n + ')</span>';
     if (fp !== null && fp >= 20) connTxt = '<b style="color:#c00;">' + connTxt + '</b>';
   }
+  // ⭐⭐⭐v6.179 把「網路」再拆兩段（PerformanceResourceTiming）。
+  //   ⚠ 舊 client（v6.178 以前）根本沒有 `perf.res.seg` ⇒ 一律顯示「—」，
+  //     絕不可以讓一格 undefined 把整張表格弄空白或爆版。
+  const sg = (rs && typeof rs === 'object') ? rs.seg : null;
+  const hasSeg = !!(sg && typeof sg === 'object');
+  var queueTxt = hasSeg ? monMs(monStat(sg.queue, 'p95')) : '—';
+  // 對不上 fetch 的 entry 數：這個數字大代表 queue/wire 不可採信（而不是「很順」）。
+  if (hasSeg && typeof sg.bad === 'number' && sg.bad > 0) {
+    queueTxt += '<span style="color:#c50;"> ⚠' + sg.bad + '</span>';
+  }
+  const wireTxt = hasSeg ? monMs(monStat(sg.wire, 'p95')) : '—';
+  // ⭐v6.179（Fable 5 審查）：`lag`（殘差＝await 續行在等主執行緒）是本版判別
+  //   「網路慢 vs 主執行緒灌水」的關鍵欄，只放在原始明細 JSON 裡等於沒量 ⇒ 上表。
+  const lagTxt = hasSeg ? monMs(monStat(sg.lag, 'p95')) : '—';
+  var swTxt;
+  if (!hasSeg) swTxt = '—';
+  else if (!sg.swN) swTxt = '<span style="color:#aab;">未經 SW</span>';
+  else swTxt = monMs(monStat(sg.sw, 'p95')) + '<span style="color:#89a;"> (' + sg.swN + ')</span>';
   const td = 'padding:6px 8px;text-align:right;';
   return '<td style="' + td + 'white-space:nowrap;">' + connTxt + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.net, 'p95')) + '</td>'
+    + '<td style="' + td + 'white-space:nowrap;">' + queueTxt + '</td>'
+    + '<td style="' + td + '">' + wireTxt + '</td>'
+    + '<td style="' + td + 'white-space:nowrap;">' + swTxt + '</td>'
+    + '<td style="' + td + '">' + lagTxt + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.dl, 'p95')) + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.tok, 'p95')) + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.parse, 'p95')) + '</td>'
@@ -2828,18 +2850,40 @@ async function loadMonitor() {
         + '所以健康的人應該接近 0%。<b>這個數字偏高（紅字，≥20%）就代表那位玩家的連線一直在斷、一直重建</b>，'
         + '每次重建都要重付一整套 DNS＋TCP＋TLS 往返，這就是「間歇性斷流」看得見的證據。<br>'
         + '　　協定 h2／h3 只是統計用；壞樣本清一色 h2 代表那個人的網路擋 UDP，換 HTTP/3 幫不了他。<br>'
+        + '　・<b>排隊／傳輸／SW／續行</b>（v6.179 新增）：這四欄把左邊的<b>網路</b>那一段再拆開。'
+        + '上一輪量到「網路」中位 1.3 秒、但「下載」只有 27 毫秒，代表時間<b>全部花在等第一個位元組</b>，'
+        + '這三欄就是拿來回答「那 1.3 秒到底花在哪裡」的。<br>'
+        + '　　・<b>排隊</b>大 ⇒ 卡在<b>請求還沒送出去之前</b>：DNS＋TCP＋TLS＋瀏覽器連線排隊。'
+        + '請搭左邊的<b>連線</b>欄一起看：重建 % 也高就是一直在重新建線。<br>'
+        + '　　・<b>傳輸</b>大 ⇒ 卡在<b>真正的往返</b>：Cloudflare／隧道／VM。'
+        + '伺服器端指標全綠時，剩下的就是 CF 到 VM 那一段。<br>'
+        + '　　・<b>SW</b>（Service Worker 派送）：格式是「耗時（經過 SW 的樣本數）」。'
+        + '⭐ <b>這一段不包含在「排隊」裡</b> —— 規範上 SW 發生在更早的位置，'
+        + '所以它必須單獨一欄。Android 冷啟動 SW 執行緒可達數百毫秒，'
+        + '而「網路」那一欄是包含這段的。顯示「未經 SW」代表那些請求根本沒進 Service Worker。<br>'
+        + '　　・<b>續行</b>大 ⇒ 那 1.3 秒<b>不是網路</b>：請求早就回來了，'
+        + '是那台裝置的主執行緒忙到沒空處理回應（程式碼要排隊等空檔）。'
+        + '這一欄大而排隊／傳輸都小，<b>再怎麼修伺服器都不會有效果</b>。<br>'
+        + '　　・「排隊」旁邊出現橘色的 <b>⚠N</b> 代表有 N 筆量測對不回是哪一發請求（<b>已丟棄</b>，不硬湊）。'
+        + '這個數字大就代表這一列的排隊／傳輸<b>不可採信</b>，<b>不是</b>「很順」。<br>'
+        + '　　・這三欄是「—」而「網路」有數字 ⇒ 那位玩家還是 v6.178 以前的畫面，'
+        + '下次進場更新後就會有數字。<br>'
         + '・欄位是「—」＝那位玩家的畫面還是舊版本（v6.159 之前），下次進場更新後就會有數字。<br>'
         + '・左邊「中位數／p95／最大」只統計<b>玩家送出的動作</b>；右邊這幾欄同時涵蓋動作與畫面同步，'
         + '兩邊<b>不能直接相減</b>。'
         + '</div>'
         + '<div style="overflow-x:auto;">'
-        + '<table style="width:100%;border-collapse:collapse;min-width:1040px;">'
+        + '<table style="width:100%;border-collapse:collapse;min-width:1360px;">'
         + '<tr style="background:#f5f7fa;"><th style="text-align:left;padding:6px 8px;">時間</th>'
         + '<th style="text-align:left;padding:6px 8px;">玩家</th>'
         + '<th style="text-align:right;padding:6px 8px;">中位數</th><th style="text-align:right;padding:6px 8px;">p95</th>'
         + '<th style="text-align:right;padding:6px 8px;">最大</th>'
         + '<th style="text-align:right;padding:6px 8px;">連線</th>'
         + '<th style="text-align:right;padding:6px 8px;">網路</th>'
+        + '<th style="text-align:right;padding:6px 8px;">排隊</th>'
+        + '<th style="text-align:right;padding:6px 8px;">傳輸</th>'
+        + '<th style="text-align:right;padding:6px 8px;">SW</th>'
+        + '<th style="text-align:right;padding:6px 8px;">續行</th>'
         + '<th style="text-align:right;padding:6px 8px;">下載</th>'
         + '<th style="text-align:right;padding:6px 8px;">權杖</th>'
         + '<th style="text-align:right;padding:6px 8px;">解析</th>'
@@ -2893,7 +2937,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.178';
+window.SITE_VERSION_HINT = '6.179';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

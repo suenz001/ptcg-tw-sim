@@ -1,3 +1,119 @@
+# v6.179 把「網路」那 1.3 秒拆開：queue / wire / sw / lag（純量測，玩家零可見變化）
+
+## 為什麼要再拆一次
+
+v6.159 的四段拆分已經把範圍縮到一點上：`net`（送出 → 第一個位元組）中位 **1.3 秒**、最大 **14.9 秒**，
+而 `dl`（body 下載）只有 **27ms**、`parse` 1ms、`adopt` 3ms、`paint` 50ms、`lt` 中位 0。
+⇒ **時間全在「等第一個位元組」**，既不是體積也不是主執行緒。
+伺服器與隧道實測也無罪（VM 上 node 3.7ms、繞 Cloudflare 一圈 65ms；nginx 5xx=0、event loop 0.16ms、Mongo queued 0）。
+所以剩下的可能全部落在「請求真的送出去之前」那一段 —— 而 `perf.api.net` 是用 `performance.now()`
+包在 `fetch` 前後量的，那個區間裡其實藏了四件不同的事。本版把它們分開量。
+
+| 欄位 | 算式 | 代表什麼 |
+|---|---|---|
+| `seg.queue` | `requestStart - fetchStart` | DNS＋TCP＋TLS＋瀏覽器連線排隊（**請求還沒送出去**） |
+| `seg.wire` | `responseStart - requestStart` | 真正的請求往返（Cloudflare、隧道、VM） |
+| `seg.sw` | `fetchStart - workerStart` | **Service Worker 派送成本** |
+| `seg.lag` | `net(JS 量的) - (responseStart - startTime)` | 瀏覽器時間軸解釋不了的殘差＝`await` 續行在等主執行緒空檔 |
+
+## ⚠⚠⚠ 本輪最重要的更正：SW 派送成本**不在** `queue` 裡
+
+任務假設是「`queue = requestStart - fetchStart` ⇒ 瀏覽器排隊 **+ Service Worker 派送**」。
+查證後**這一半是錯的**：
+
+- W3C Resource Timing §3.3：`workerStart` 取 fetch timing info 的 **final service worker start time**；
+  `fetchStart` 取 **post-redirect start time**；`requestStart` 取 **final network-request start time**。
+  時間軸順序是 `startTime → workerStart → fetchStart → domainLookup… → requestStart → responseStart`。
+- MDN `PerformanceResourceTiming.workerStart` 的官方範例逐字寫著
+  `const workerProcessingTime = entry.fetchStart - entry.workerStart;`。
+
+⇒ SW 派送（含 Android 冷啟動 SW 執行緒的數百 ms）落在 **`workerStart → fetchStart`**，
+`requestStart - fetchStart` 完全不含它。若照原假設把它算進 `queue`，
+下一輪會得到**與事實相反**的結論。所以 `sw` 是**獨立一欄**，
+而且只在 `fetchStart - workerStart > 0` 才記，不合這個順序的瀏覽器記進 `swOdd`（不硬算）。
+
+⚠ 但 `perf.api.net` **確實包含** SW 那一段（它是 `performance.now()` 包在 fetch 前後量的），
+所以「`net` 大但 `queue`＋`wire` 都小」時，要去看 `sw` 與 `lag`。
+
+## 對齊策略（對不上就丟，絕不硬湊）
+
+Resource Timing 的 entry 必須對回「哪一發 fetch」才有意義：
+
+1. `tApi` 在 `_segT1`（token 段結束、fetch 即將送出）開一個時間窗 `{ u, t1, t2, used }`，
+   `_segT2`（header 回來）時關窗。範圍守衛與 `_tRecordApiSegments` 逐字一致
+   （只有 `/action` 與短輪詢 `/state`，排除 `wait=1`）—— 母體不一致的話「對不上」的比例會變假訊號。
+2. entry 進來時先做**逐筆自我驗證**：`startTime ≤ fetchStart ≤ requestStart ≤ responseStart`
+   且 `fetchStart > 0`，不成立就丟棄計入 `seg.bad`。
+3. 用 `entry.name`（絕對 URL）比字尾 + `entry.startTime` 落在 `[t1-2, t2+2]`（±2ms 容忍 Safari 的時戳粗化），
+   取 `|startTime - t1|` 最小的那個窗，**一對一認領**（`used`）。
+4. 對不上就 `seg.bad++` **並丟棄**。逾時／abort 的那一發永遠不會關窗（`t2` 維持 0）⇒ 直接跳過，
+   與 rtt／四段拆分同一條紀律：**只記成功的往返**。
+
+`seg.bad` 大 ⇒ 那一列的 `queue`／`wire` **不可採信**（而不是「很順」）。
+
+## 量測本身的成本
+
+- **不新開 PerformanceObserver**：沿用 v6.170 那顆 `resource` observer 的回呼（全站仍然只有 2 顆）。
+- 每發 fetch 只多配置一個四欄小物件，環形上限 16 筆。
+- 對齊是對 ≤16 筆的線性掃描，沒有 DOM 存取、沒有字串配置（用 `slice` 比字尾）。
+- 拿不到一律填 `null`，整段包 `try/catch`，**絕不 throw**。
+
+## 順帶修掉一個假零：`svelteWarn` 的計數器
+
+v6.171 用 `window.__ptcgSvelteWarnHook` 防止 hook 重複安裝，
+但計數器 `_svelteWarnCounts` / `_svelteWarnFirst` / `_lastPointerAt` 是**元件實例變數**。
+`/game` 重新掛載後，被包裝過的 `console.warn` 仍然閉包在**舊實例**的容器上，
+新實例讀到的永遠是初值 ⇒ 回報的 `svelteWarn.counts` 恆為 `{}`、`first` 恆為空、`+NNNms` 恆為 `-1`。
+**假說成立**（原始碼 `+page.svelte` v6.178 的 5440–5464 行逐行可驗）。
+⇒ 計數器搬到 `window.__ptcgSvelteWarn`，與 hook 同一個生命週期。
+
+## Fable 5 審查抓到的三件事（都已修，且都自行查證過）
+
+1. **⭐⭐⭐`/spectate/state` 會無上限污染 `seg.bad`。**
+   entry 端的過濾是 **substring**（`e.name.indexOf('/state') < 0`），開窗端是 **prefix**
+   （`path.indexOf('/state') === 0`）⇒ 觀戰輪詢（2 秒一發）每一發都必然對不上、全部記進 `bad`；
+   而 `tLeaveSpectate` 又不清計數器。後果：先觀戰十分鐘再打自己那場的玩家，
+   第一份診斷就揹著幾百的 `bad`，admin 會照我們**自己寫的規則**顯示「不可採信」——
+   假警報，正好打死這一版要的數字。
+   ⇒ entry 端排除 `/spectate/`，而且歸零收斂成單一的 `_tResetResSeg()`，
+   `tLeaveMatch` 與 `tLeaveSpectate` **共用同一份**（各寫一套必然漂移）。
+2. **逾時／abort 被算進 `bad`。** 較新的瀏覽器會給失敗 fetch 一筆 `requestStart > 0` 但
+   `responseStart === 0` 的 entry ⇒ 網路最爛的那群玩家（**正是我們在查的人**）`bad` 天然偏高。
+   ⇒ 分流成獨立的 `seg.abort`。
+3. **`startTime → workerStart` 沒有任何一欄承接** ⇒ 四欄加起來對不上 `net`，站長一對帳就會困惑。
+   ⇒ 補 `seg.pre`。現在**逐筆** `pre + sw + queue + wire + lag = net` 恰好成立（守衛有釘）。
+
+順帶（也照做了）：`e.name.slice(...)` 改成 `endsWith`（不配置字串）；
+`lag` 的微小負值 clamp 成 0 而不是丟掉（丟掉會讓分布系統性偏高），
+明顯負值（< -2ms）記進 `seg.lagNeg` 讓算式／時鐘的問題**看得見**；
+`seg.lag` 補上 admin 表格（只放在原始 JSON 裡等於沒量）。
+
+已知但**本版不修**（記錄下來）：
+- `svelteWarn.counts` 現在是**分頁生命週期**（跨場累積、`first` 永遠是本分頁最早三則）。
+  在「原本完全看不到」的基準上這已經是淨改善；要分場歸因需要 per-match snapshot diff，那是行為改動。
+- `tApi` 的 `/state?room=${tActiveRoom}` 沒有 `encodeURIComponent`。現行 room id 是 ASCII 安全的；
+  哪天 room id 含需編碼字元，字尾比對會 100% 對不上（會表現為 `seg.bad` 全紅，不是靜默）。
+- v6.170 的 `res.n` / `freshPct` 是頁面級、且從不歸零（既有行為，本版不動）。
+
+## admin 顯示
+
+📡 監控分頁的往返表新增 **排隊／傳輸／SW／續行** 四欄（共 13 欄，`min-width` 放寬到 1360px）。
+判讀規則寫在表格上方：
+- **排隊**大 ⇒ 卡在請求送出去之前（DNS／TCP／TLS／連線排隊），搭「連線」欄的重建 % 一起看；
+- **傳輸**大 ⇒ 卡在真正的往返（Cloudflare／隧道／VM）；
+- **SW** 單獨一欄且**不含在排隊裡**，顯示「未經 SW」代表那些請求根本沒進 Service Worker；
+- **續行**大 ⇒ **不是網路**，是那台裝置的主執行緒忙到沒空處理回應，再修伺服器都沒有效果；
+- 「排隊」旁的橘色 **⚠N** ＝ 對不上的筆數（**已丟棄**）⇒ 這一列不可採信，**不是**「很順」。
+
+舊 client 的 payload 沒有這些欄位 ⇒ 一律「—」，不空白也不爆版（守衛把 `monPerfCells`
+抽出來**實跑**四種半殘 payload，斷言 13 格、無 `undefined`／`NaN`）。
+
+## 首頁 changelog
+
+**不放**（純量測，玩家零可見變化）。
+
+---
+
 # v6.178 休閒對戰終於有 gzip（v0.72 加、v0.75 修載入、順序錯了整整 100 版）
 
 ## 真因：`app.use(compression())` 的**位置**，不是它有沒有被載入

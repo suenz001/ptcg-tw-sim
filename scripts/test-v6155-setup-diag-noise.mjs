@@ -124,8 +124,18 @@ T('⭐⭐手牌可見數必須同時數桌機與手機兩套 class（手機版�
   assert.equal(bare, 0, `還有 ${bare} 處只查桌機 class 的裸 querySelectorAll`);
 });
 T('⭐診斷旗標必須跨場次清乾淨（殘留會讓下一場漏報）', () => {
+  // ⚠ v6.179：原本切固定 900 字元 —— 只要函式前段多幾行註解，要檢查的那幾行就被推出視窗
+  //   而變成假紅（本版就踩到了）。改成**整個函式本體**（大括號配對），永久移掉這個脆弱點。
   const i = P.indexOf('function tLeaveMatch()');
-  const body = P.slice(i, i + 900);
+  const body = (() => {
+    const open = P.indexOf('{', i);
+    let d = 0;
+    for (let j = open; j < P.length; j++) {
+      if (P[j] === '{') d++;
+      else if (P[j] === '}') { d--; if (d === 0) return P.slice(i, j + 1); }
+    }
+    return P.slice(i, i + 900);
+  })();
   for (const f of ['_setupDiagSent', '_invisibleHandDiagSent']) {
     assert.ok(new RegExp(`${f} = false`).test(body), `tLeaveMatch 沒有重置 ${f}`);
   }

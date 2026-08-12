@@ -194,6 +194,40 @@
   let _rtConnMs: number[] = [];        // 建連耗時（只在「重新建連」的樣本才有意義）
   let _rtDnsMs: number[] = [];
   let _rtTlsMs: number[] = [];
+  // ⭐⭐⭐v6.179【把「網路」那 1.3 秒再拆成兩段】—— 只加量測，不改任何效能邏輯。
+  //   v6.159 量到 `net`（送出 → 第一個位元組）中位 1.3 秒、最大 14.9 秒，
+  //   而 `dl` 只有 27ms、`parse` 1ms、`adopt` 3ms、`paint` 50ms、`lt` 中位 0
+  //   ⇒ 時間**全在等第一個位元組**，不是體積也不是主執行緒。
+  //   伺服器與隧道實測無罪（VM 上 node 3.7ms、繞 Cloudflare 一圈 65ms），
+  //   所以這一版把 `net` 用 PerformanceResourceTiming 拆開：
+  //     queue = requestStart - fetchStart    ⇒ DNS＋TCP＋TLS＋瀏覽器排隊（**不含** SW，見下）
+  //     wire  = responseStart - requestStart ⇒ 真正的請求往返（含 CF、隧道、VM）
+  //     sw    = fetchStart - workerStart     ⇒ **Service Worker 派送成本就在這一段**
+  //     lag   = net(JS 量的) - (responseStart - startTime)
+  //             ⇒ 瀏覽器時間軸解釋不了的殘差＝await 續行在等主執行緒空檔
+  //             （這一欄大就代表 `net` 被主執行緒灌水，不是真的網路慢）
+  //   ⚠⚠⚠ 這一輪最重要的更正：規範上 `workerStart` **早於** `fetchStart`。
+  //     Resource Timing §3.3：workerStart 取 fetch timing info 的 final service worker start time，
+  //     fetchStart 取 post-redirect start time；MDN 明寫
+  //     `const workerProcessingTime = entry.fetchStart - entry.workerStart;`。
+  //     ⇒ SW 派送成本**不在 queue 裡**，把它當成 queue 的一部分會做出**完全相反**的結論。
+  //     所以 `sw` 是獨立一欄，而且只在 `fetchStart - workerStart > 0` 才記；
+  //     不合這個順序的瀏覽器記進 `swOdd`（硬算會生出負數或假 0）。
+  let _rtSegN = 0;                     // 成功對回「哪一發 fetch」的樣本數
+  let _rtSegBad = 0;                   // 對不上任何 fetch 時間窗 ⇒ **丟棄**，絕不硬湊
+  let _rtQueueMs: number[] = [];
+  let _rtWireMs: number[] = [];
+  let _rtSwMs: number[] = [];          // fetchStart - workerStart（SW 派送）
+  let _rtSwN = 0;                      // workerStart > 0 的樣本數
+  let _rtSwOdd = 0;                    // workerStart > 0 但 fetchStart - workerStart <= 0
+  let _rtLagMs: number[] = [];
+  let _rtPreMs: number[] = [];         // startTime → workerStart（無 SW 時 → fetchStart）：瀏覽器內部排程／SW 查找／redirect
+  let _rtSegAbort = 0;                 // responseStart 為 0（逾時／abort 的失敗往返）⇒ 與「對不上」分開記
+  let _rtLagNeg = 0;                   // 殘差為明顯負值（< -2ms）＝算式或時鐘有問題，必須看得見而不是被靜靜丟掉
+  // fetch 時間窗（對齊用）。⚠ 每發只存一個字串＋三個數字，
+  //   量測本身不可以變成新的主執行緒負擔（這是我們現在唯一的儀器）。
+  type _RtWin = { u: string; t1: number; t2: number; used: boolean };
+  let _rtWins: _RtWin[] = [];
   // ⭐⭐⭐v6.170【B-1/B-2/B-3：動作的冪等重試】
   //   斷流時 `POST /action` 逾時，玩家**根本不知道那一發有沒有送到**。v6.169 的做法是把這個
   //   不確定性原封不動丟給玩家（「動作可能未送達，請重試」）；重按就可能套用兩次，不按就遺失。
@@ -4642,6 +4676,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }
     } catch { /* 取 token 失敗 → 伺服器退回 playerId fallback */ }
     _segT1 = _pnow();   // ① token 段結束
+    // ⭐v6.179 開一個 fetch 時間窗，等 Resource Timing 的 entry 回來好對回「是哪一發」。
+    //   ⚠ 沒有 await、沒有分支改變，控制流程與 v6.178 逐字相同（這一版的紀律是「只加量測」）。
+    const _rtWin = _tResWinOpen(path, _segT1);
     // v6.135 逾時保護：fetch 預設沒有 timeout（瀏覽器要幾百秒才放棄）。
     //   隧道排隊/黑洞時 `await fetch` 既不 resolve 也不 reject
     //   → tournamentDispatch 的 `finally { tBusy = false }` 永遠不執行
@@ -4661,6 +4698,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         signal: _ac.signal,
       });
       _segT2 = _pnow();   // ② 網路段結束（response header 已回來，body 還沒讀）
+      // ⭐v6.179 關窗。⚠ 逐出（abort/逾時）的那一發永遠不會走到這行 ⇒ `t2` 維持 0
+      //   ⇒ 對齊時會被跳過（只排除，不靠它硬湊一發）—— 與 rtt/四段拆分同一條紀律：只記成功的往返。
+      if (_rtWin) _rtWin.t2 = _segT2;
       if (!res.ok) {
         // v6.150：錦標賽 /state 對「認不出座位」回 401（不再回一份連自己都遮的盤面）。
         //   呼叫端必須分得出「身分失效」與「網路斷線」——兩者在畫面上的自救方式完全不同，
@@ -4885,6 +4925,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠ _paintPending 也要放掉：離場瞬間若有在途 rAF，它會把上一場尾端那一筆推進下一場
     //   的新陣列（Fable 5 審查）。
     _adoptSamples = []; _paintSamples = []; _paintPending = false;
+    _tResetResSeg();   // ⭐v6.179 同上：seg 是用來解釋每場清空的 `perf.api.net` 的，母體必須一致
     _setupDiagSent = false; _invisibleHandDiagSent = false;   // v6.155 診斷旗標同樣是每場一次，殘留會讓下一場漏報
     _staleDiagVersion = -1; _actionAuthDiagSent = false; _tActionAuthErr = false; _tActionAuthErrAt = 0;   // v6.158 同上
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
@@ -5073,6 +5114,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try { if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; } } catch { /* ignore */ }
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
     tActAbortAll('已離開觀戰');   // ⭐v6.172 同 tLeaveMatch（觀戰理論上沒有在途動作，但不留例外）
+    _tResetResSeg();   // ⭐v6.179（Fable 5 審查）觀戰輪詢的殘留不可以揹到自己那一場的診斷裡
     game = null; tVersion = -1; tStep = 'lobby'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; tSpectateRoom = ''; mySeatIdx = -1; myPlayerIndex = null;
     tournLoadEvent(); tBracketLoad();
   }
@@ -5298,6 +5340,26 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } catch { /* 不支援就走下面的退路，絕不 throw */ }
     return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
   }
+  // ⭐v6.179 seg 樣本的**唯一**歸零點（tLeaveMatch 與 tLeaveSpectate 共用一份，各寫一套必然漂移）。
+  function _tResetResSeg(): void {
+    _rtSegN = 0; _rtSegBad = 0; _rtSegAbort = 0; _rtSwN = 0; _rtSwOdd = 0; _rtLagNeg = 0;
+    _rtQueueMs = []; _rtWireMs = []; _rtSwMs = []; _rtLagMs = []; _rtPreMs = []; _rtWins = [];
+  }
+  // ⭐⭐⭐v6.179 開一個 fetch 時間窗。
+  //   ⚠⚠ 範圍守衛必須與 `_tRecordApiSegments` / `_tRecordResEntry` 逐字一致（只有對戰熱路徑、
+  //     排除長輪詢）—— 窗與 entry 的母體不一致的話，「對不上」的比例會變成假訊號。
+  function _tResWinOpen(path: string, t1: number): _RtWin | null {
+    try {
+      if (!isTournament || isTournSpectator) return null;
+      if (path.indexOf('wait=1') >= 0) return null;
+      if (!(path.indexOf('/action') === 0 || path.indexOf('/state') === 0)) return null;
+      const w: _RtWin = { u: T_API + path, t1, t2: 0, used: false };
+      _rtWins.push(w);
+      // 上限 16：輪詢最快 1.2 秒一發、entry 幾毫秒內就回來，16 綽綽有餘。
+      if (_rtWins.length > 16) _rtWins.splice(0, _rtWins.length - 16);
+      return w;
+    } catch { return null; }   // 量測絕不影響對戰
+  }
   // ⭐v6.170 逐筆處理一個 PerformanceResourceTiming。**每一欄都 feature-detect，拿不到填 null**。
   function _tRecordResEntry(e: any): void {
     if (!e || typeof e.name !== 'string') return;
@@ -5306,6 +5368,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (e.name.indexOf('/api/tournament/') < 0) return;
     if (e.name.indexOf('/action') < 0 && e.name.indexOf('/state') < 0) return;
     if (e.name.indexOf('wait=1') >= 0) return;
+    // ⭐⭐⭐v6.179（Fable 5 審查抓到，已自行查證）：`/spectate/state?…`（觀戰輪詢，2 秒一發）
+    //   會通過上面那個 **substring** 的 `/state` 判斷，但開窗端用的是 **prefix**
+    //   （`path.indexOf('/state') === 0`）⇒ 觀戰的每一發都必然對不上、無上限累積進 `seg.bad`。
+    //   而 `tLeaveSpectate` 又不清計數器 ⇒ 先觀戰十分鐘再打自己那場的玩家，
+    //   第一份診斷就揹著幾百的 bad，admin 會照我們自己寫的規則顯示「不可採信」——
+    //   **假警報，正好打死這一版要的數字**。兩端母體必須一致：觀戰不是對戰熱路徑，直接排除。
+    if (e.name.indexOf('/spectate/') >= 0) return;
     const req = Number(e.requestStart);
     // requestStart 為 0 ＝ 這筆的 timing 被瀏覽器閹割（跨源無 TAO／異常）⇒ 丟棄，不假裝量到。
     if (!(req > 0)) { _rtBad++; return; }
@@ -5330,6 +5399,55 @@ function _setupSelfPending(g: any, seat: number): string | null {
     } else {
       _rtReuse++;
     }
+    // ━━ ⭐⭐⭐v6.179 把這一發對回「是哪一次 fetch」，才能把 `perf.api.net` 拆開 ━━
+    // ⚠ 對不上就**丟棄並記進 `seg.bad`**，絕不硬湊：硬湊出來的 queue/wire
+    //   會直接把下一輪的判斷帶到錯的方向（這比「沒有數字」更壞）。
+    const _fs = Number(e.fetchStart);
+    const _st = Number(e.startTime);
+    const _rs = Number(e.responseStart);
+    // ⭐v6.179（Fable 5 審查）：逾時／abort 的失敗往返，較新的瀏覽器會給一筆
+    //   `requestStart > 0` 但 `responseStart === 0` 的 entry。把它算進 `bad` 會讓
+    //   **網路最爛的那群玩家**（正是我們在查的人）bad 天然偏高，而判讀規則教站長
+    //   「bad 大＝不可採信」⇒ 自我否定。分流成獨立的 `abort`。
+    if (_rs === 0) { _rtSegAbort++; return; }
+    // 逐筆自我驗證：四個時戳必須單調遞增，否則這筆 timing 不可信（不是拿來硬算的）。
+    if (!(_fs > 0) || !(_st >= 0) || !(_rs >= req) || !(req >= _fs) || !(_fs >= _st)) { _rtSegBad++; return; }
+    let _w: _RtWin | null = null;
+    let _bestD = Infinity;
+    for (const cand of _rtWins) {
+      if (cand.used || !(cand.t2 > 0)) continue;
+      // 名稱：entry.name 是**絕對 URL**，fetch 用的是相對路徑 ⇒ 比字尾。
+      if (!e.name.endsWith(cand.u)) continue;   // ⚠ 不用 slice：那是每個候選窗都配置一個字串
+      // 時間窗：startTime 必須落在「呼叫 fetch」與「header 回來」之間。
+      //   ±2ms 容忍時戳粗化（Safari 會把時戳粗化到 ~1ms）。
+      if (_st < cand.t1 - 2 || _st > cand.t2 + 2) continue;
+      const _d = Math.abs(_st - cand.t1);
+      if (_d < _bestD) { _bestD = _d; _w = cand; }
+    }
+    if (!_w) { _rtSegBad++; return; }
+    _w.used = true;   // 一對一：同一個窗不可以被兩筆 entry 認領
+    _rtSegN++;
+    _pushSample(_rtQueueMs, req - _fs);
+    _pushSample(_rtWireMs, _rs - req);
+    // ⚠⚠ SW 派送成本在 workerStart → fetchStart，**不在 queue 裡**（規範順序如此）。
+    const _ws = Number(e.workerStart);
+    if (_ws > 0) {
+      _rtSwN++;
+      const _swMs = _fs - _ws;
+      if (_swMs > 0) _pushSample(_rtSwMs, _swMs); else _rtSwOdd++;
+    }
+    // ⭐v6.179（Fable 5 審查）：`startTime → workerStart`（沒有 SW 時是 → fetchStart）
+    //   本來沒有任何一欄承接 ⇒ 五欄加起來對不上 `net`，站長一對帳就會困惑。
+    //   這一段裝的是瀏覽器內部排程／SW registration 查找／redirect。補上之後
+    //   **逐筆** pre + sw + queue + wire + lag 恰好等於 net（p50/p95 是各自的分位數，不必相等）。
+    _pushSample(_rtPreMs, (_ws > 0 ? _ws : _fs) - _st);
+    // 殘差：JS 量到的 net（t2 - t1）減掉瀏覽器自己的「fetch 開始 → 第一個位元組」。
+    //   這一欄大 ⇒ `net` 是被 **await 續行排隊**灌水的，不是網路。
+    //   ⚠ 微小負值是時戳粗化 ⇒ clamp 成 0（直接丟掉會讓整個分布系統性偏高）；
+    //   明顯的負值（< -2ms）代表算式或時鐘有問題，記進 `lagNeg` 讓它**看得見**。
+    const _lag = (_w.t2 - _w.t1) - (_rs - _st);
+    if (_lag < -2) _rtLagNeg++;
+    _pushSample(_rtLagMs, _lag > 0 ? _lag : 0);
   }
   // ⚠⚠ Resource Timing buffer 預設只有 250 筆，對戰頁每 1.2 秒一發，幾分鐘就滿 ——
   //   滿了之後 getEntriesByType 會**靜默不再收錄**，長對局後段會全空而被誤讀成「沒有壞樣本」。
@@ -5360,6 +5478,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // 「這一發有沒有重新建連線」的比例（%）。分母 0 時回 null 而不是 0。
       freshPct: _rtN > 0 ? Math.round((_rtFresh / _rtN) * 100) : null,
       conn: _sampleStats(_rtConnMs), dns: _sampleStats(_rtDnsMs), tls: _sampleStats(_rtTlsMs),
+      // ⭐⭐⭐v6.179 `net` 的拆分。⚠ 一筆都沒對齊到（也沒對錯）⇒ 回 **null**，
+      //   絕不送一堆恆為 0 的欄位假裝有量到（與 longtask / freshPct 同一條紀律）。
+      seg: (_rtSegN === 0 && _rtSegBad === 0 && _rtSegAbort === 0) ? null : {
+        n: _rtSegN, bad: _rtSegBad, abort: _rtSegAbort,
+        pre: _sampleStats(_rtPreMs),
+        queue: _sampleStats(_rtQueueMs), wire: _sampleStats(_rtWireMs),
+        sw: _sampleStats(_rtSwMs), swN: _rtSwN, swOdd: _rtSwOdd,
+        lag: _sampleStats(_rtLagMs), lagNeg: _rtLagNeg,
+      },
     };
   }
   // ⭐v6.159 四段拆分的記錄點。範圍守衛與 `_tRecordRtt` 完全一致（只記錦標賽對戰者），
@@ -5437,15 +5564,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ⚠ 只收集：不改 console 的輸出、不吞任何一則、一律 call through 原函式。
   //   ⚠ 全包 try/catch，且**這段自己絕不可以再呼叫 console.warn**（會遞迴）。
   //   ⚠ 只認純字串參數：把 $state proxy 丟進 console 會觸發 svelte 自己的 console_log_state。
-  const _svelteWarnCounts: Record<string, number> = {};
-  const _svelteWarnFirst: string[] = [];
-  // ⭐ 判別「互動觸發」vs「背景 burst」：warn 當下距離上一次 pointer 事件多久。
-  //   殭屍 interval／輪詢續行讀到已銷毀元件的 derived ⇒ 這個值會很大且規律。
-  let _lastPointerAt = 0;
+  //   ⚠⚠⚠ v6.179 修掉一個**假零**（v6.171 埋的）：hook 用 `window.__ptcgSvelteWarnHook` 防重裝，
+  //     但計數器 `_svelteWarnCounts` / `_svelteWarnFirst` / `_lastPointerAt` 是**元件實例變數**。
+  //     /game 重新掛載後，被包裝過的 `console.warn` 仍然閉包在**舊實例**那三個容器上，
+  //     新實例讀到的永遠是初值 ⇒ `/clientdiag` 回報的 `svelteWarn.counts` 恆為 `{}`、
+  //     `first` 恆為空、`+NNNms` 恆為 -1 —— 看起來像「這一場完全沒有 warning」，
+  //     而那正是最會誤導人的假訊號（與 longtask 回 0 同一類錯誤）。
+  //     ⇒ 計數器搬到 window 層級，與 hook 同一個生命週期；同一個容器物件被兩邊共用。
+  const _svelteWarn: { counts: Record<string, number>; first: string[]; lastPointerAt: number } = (() => {
+    const _w = (typeof window !== 'undefined') ? (window as any) : null;
+    // SSR／非瀏覽器：不需要跨實例共享，回一個本地容器就好（絕不 throw）。
+    if (!_w) return { counts: {}, first: [], lastPointerAt: 0 };
+    if (!_w.__ptcgSvelteWarn || typeof _w.__ptcgSvelteWarn !== 'object') {
+      _w.__ptcgSvelteWarn = { counts: {}, first: [], lastPointerAt: 0 };
+    }
+    return _w.__ptcgSvelteWarn;
+  })();
   if (typeof window !== 'undefined' && !(window as { __ptcgSvelteWarnHook?: boolean }).__ptcgSvelteWarnHook) {
     (window as { __ptcgSvelteWarnHook?: boolean }).__ptcgSvelteWarnHook = true;
     try {
-      window.addEventListener('pointerdown', () => { _lastPointerAt = Date.now(); }, { capture: true, passive: true });
+      // ⭐ 判別「互動觸發」vs「背景 burst」：warn 當下距離上一次 pointer 事件多久。
+      //   殭屍 interval／輪詢續行讀到已銷毀元件的 derived ⇒ 這個值會很大且規律。
+      window.addEventListener('pointerdown', () => { _svelteWarn.lastPointerAt = Date.now(); }, { capture: true, passive: true });
     } catch { /* 診斷絕不影響對戰 */ }
     const _origWarn = console.warn.bind(console);
     console.warn = function (...args: unknown[]) {
@@ -5454,10 +5594,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         const hit = /svelte\.dev\/e\/([a-z_]+)/.exec(joined);
         if (hit) {
           const code = hit[1];
-          _svelteWarnCounts[code] = (_svelteWarnCounts[code] ?? 0) + 1;
-          if (_svelteWarnFirst.length < 3) {
+          _svelteWarn.counts[code] = (_svelteWarn.counts[code] ?? 0) + 1;
+          if (_svelteWarn.first.length < 3) {
             const st = String(new Error().stack ?? '').split('\n').slice(2, 8).join(' <= ');
-            _svelteWarnFirst.push(code + ' +' + (_lastPointerAt ? Date.now() - _lastPointerAt : -1) + 'ms @ ' + st.slice(0, 700));
+            _svelteWarn.first.push(code + ' +' + (_svelteWarn.lastPointerAt ? Date.now() - _svelteWarn.lastPointerAt : -1) + 'ms @ ' + st.slice(0, 700));
           }
         }
       } catch { /* 診斷絕不影響對戰 */ }
@@ -5546,6 +5686,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
           //   ・`res.proto` 看得到 h2/h3 佔比：壞樣本全是 h2 ⇒ 那些人的網路擋 UDP，h3 幫不了他們。
           //   ・`res.n` 為 0 但 `res.bad` 大 ⇒ timing 被閹割（不該發生，本站同源），要回頭查。
           //   ・整個 `res` 為 null ＝ 這台裝置不支援 PerformanceObserver，**不是**「連線都很好」。
+          //   ⭐⭐⭐v6.179 `res.seg` 把 `api.net`（送出 → 第一個位元組）再拆開，判讀規則：
+          //   ・`seg.queue` 大（requestStart - fetchStart）⇒ 卡在**送出去之前**：
+          //     DNS／TCP／TLS／瀏覽器連線排隊。配 `res.freshPct` 看是不是一直在重建連線。
+          //   ・`seg.wire` 大（responseStart - requestStart）⇒ 卡在**真正的往返**：
+          //     Cloudflare／隧道／VM。伺服器端指標全綠時，剩下的就是 CF 到 VM 那一段。
+          //   ・`seg.sw` 大（fetchStart - workerStart）⇒ **Service Worker 派送成本**。
+          //     ⚠ 這一段**不在** queue 裡（規範上 workerStart 早於 fetchStart）。
+          //     Android 冷啟動 SW 執行緒可達數百 ms，而 service-worker.ts 對 `/api/` 雖然是
+          //     early-return 放行，那一次派送成本仍然要付，且 `perf.api.net` 是用
+          //     performance.now() 包在 fetch 前後量的 ⇒ **包含這一段**。
+          //   ・`seg.lag` 大 ⇒ `net` 是被 **await 續行排隊**灌水的（主執行緒忙），不是網路。
+          //   ・`seg.pre`（startTime → workerStart／fetchStart）＝瀏覽器內部排程／SW 查找／redirect。
+          //     逐筆 `pre + sw + queue + wire + lag = net`，所以五欄可以拿來對帳。
+          //   ・`seg.abort` ＝逾時／abort 的失敗往返（**不是**對齊失敗）。網路爛的人這欄天然會大。
+          //   ・`seg.bad` 大 ⇒ 對齊失敗的比例高，queue/wire 這幾欄**不可採信**（要回頭查）。
+          //   ・`seg.lagNeg` > 0 ⇒ 殘差算出明顯負值，代表算式或時鐘有問題，要回頭查（正常恆為 0）。
+          //   ・`seg` 為 null ＝ 這台裝置一筆都沒對齊到，**不是**「每一段都是 0」。
           res: _resTimingStats(),
         },
         // ⭐⭐⭐v6.171 Svelte runtime warning。`derived_inert` ＝ 讀到「owner effect 已銷毀／
@@ -5554,7 +5711,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //   ・`+NNNms` 是距離上一次 pointerdown 的時間：很大 ⇒ 不是玩家點出來的，
         //     多半是殭屍計時器／輪詢續行讀到已銷毀元件的 derived。
         //   ・`inertNodes` 持續 > 0 ⇒ 有分支永久卡在 INERT（離場動畫沒收尾）。
-        svelteWarn: { counts: { ..._svelteWarnCounts }, first: _svelteWarnFirst.slice(0, 3), inertNodes: _inertNodeCount() },
+        //   ⚠ v6.179 起容器在 window 上（`window.__ptcgSvelteWarn`）—— /game 重掛載後仍讀得到，
+        //     不再是「新實例永遠回空」的假零。
+        svelteWarn: { counts: { ..._svelteWarn.counts }, first: _svelteWarn.first.slice(0, 3), inertNodes: _inertNodeCount() },
         env: {
           vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
           w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
