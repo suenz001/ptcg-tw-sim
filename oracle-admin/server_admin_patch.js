@@ -5556,6 +5556,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const DPOSTS = db.collection('deckPosts');
       const DPLIKES = db.collection('deckPostLikes');
       const DPDOWNS = db.collection('deckPostDownloads');
+      // v6.182 留言板：留言另存一張表（軟刪），deckPosts 上的 commentCount 只是非正規化快照。
+      const DPCOMM = db.collection('deckPostComments');
       // 列表查詢的三種排序都要索引；status 一定在 filter 裡。
       DPOSTS.createIndex({ status: 1, createdAt: -1 }).catch(() => { /* best-effort */ });
       DPOSTS.createIndex({ status: 1, likeCount: -1 }).catch(() => { /* best-effort */ });
@@ -5564,6 +5566,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
       DPOSTS.createIndex({ 'tournament.eventId': 1, uid: 1 }).catch(() => { /* best-effort */ });
       DPLIKES.createIndex({ postId: 1 }).catch(() => { /* best-effort */ });
       DPDOWNS.createIndex({ postId: 1 }).catch(() => { /* best-effort */ });
+      // 留言列表恆為「某一篇 × 未刪除 × 依時間」⇒ 這支複合索引就是全部查詢的形狀。
+      DPCOMM.createIndex({ postId: 1, status: 1, createdAt: -1 }).catch(() => { /* best-effort */ });
+      DPCOMM.createIndex({ uid: 1, createdAt: -1 }).catch(() => { /* best-effort */ });
 
       const DP_MAX_NOTES = 200;
       const DP_MAX_NAME = 40;
@@ -5572,6 +5577,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const DP_ALIVE_CAP = 10;       // 每人未刪投稿總量上限
       const DP_POST_COOLDOWN = 60 * 1000;
       const DP_LIST_TTL = 30 * 1000;
+      // v6.182 留言板。⚠ 這三個值是 Wilson 可調的政策參數，改動請一併更新前端的 COMMENT_MAX。
+      const DP_CMT_MAX = 300;        // 單則留言字數上限（trim 後計算）
+      const DP_CMT_PAGE = 50;        // 一次回幾則（預設值；上限 100）
+      const DP_CMT_PER_MIN = 10;     // 每人每分鐘可送出的留言數
+      const DP_CMT_RESERVED_NAME = '系統管理員';   // 只有 admin 的留言可以掛這個名字
       const DP_PLACEMENT = { CHAMPION: '冠軍', FINALS: '亞軍', TOP4: '四強' };
 
       // ── 限流：記憶體滑動窗（比照 rateLimitExport / mrRateLimitCheck 的既有慣例，本檔無 Redis）──
@@ -5684,6 +5694,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
           cardTotal: doc.cardTotal || 0,
           likeCount: doc.likeCount || 0,
           downloadCount: doc.downloadCount || 0,
+          // ⚠ 留言數走 deckPosts 上的非正規化欄位，**列表頁絕不可以為了它去查 deckPostComments**
+          //   —— 那就是每頁 20 次的 N+1（v6.119 讀放大的同一個教訓）。
+          //   夾在 0 以下是防守性的：真正的權威是明細表，admin 的 recount 端點負責修正漂移。
+          commentCount: Math.max(0, doc.commentCount || 0),
           createdAt: doc.createdAt || 0,
           tournament: doc.tournament
             ? { eventId: doc.tournament.eventId, eventName: doc.tournament.eventName, finishedAt: doc.tournament.finishedAt || 0, placementLabel: doc.tournament.placementLabel }
@@ -5805,6 +5819,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           validated: typeof TENG.validateDeck === 'function',
           likeCount: 0,
           downloadCount: 0,
+          commentCount: 0,
           createdAt: now,
           updatedAt: now,
         };
@@ -5935,6 +5950,177 @@ import('firebase-admin').then(async ({ default: admin }) => {
           res.json({ ok: true, authorName: $set.authorName, notes: $set.notes });
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
+
+      // ════════ 留言板（v6.182）════════
+      //
+      // ⚠⚠⚠ 路徑用**獨立前綴** `/api/deck-posts-comments`，絕不寫成 `/api/deck-posts/comments`。
+      //   Express 依註冊順序比對，上面的 `/api/deck-posts/:id` 是**單段** pattern，會把任何
+      //   同段數的 `/api/deck-posts/具名字串` 整個吃掉，而且回的是 404「找不到這篇投稿」
+      //   —— v6.138 的 tournament-eligibility 就是這樣 100% 打不到的。這裡沿用當時定下的
+      //   解法（`/api/deck-posts-mine`、`/api/deck-posts-tournament/*` 同一套）：換前綴，
+      //   讓遮蔽在**結構上不可能發生**，而不是靠「記得註冊順序」。
+      //   守衛 scripts/test-v6182-deck-post-comments.mjs 會把全檔的註冊路徑照順序抓出來，
+      //   用行為端的 router 模擬真的跑一次比對（不是驗字串），而且模擬器本身先用一組
+      //   「已知會被遮蔽」的合成路由表自我驗證過。
+
+      /**
+       * 留言內容正規化（**純函式**，守衛直接跑真值）。回 `{ text }` 或 `{ error }`。
+       * ⚠ 先把 \r\n 收斂成 \n 再 trim —— 否則「只按了幾個換行」會被當成有內容送出去。
+       */
+      function dpCommentNormalize(raw) {
+        const t = String(raw == null ? '' : raw).replace(/\r\n?/g, '\n').trim();
+        if (!t) return { error: '留言不能空白' };
+        if (t.length > DP_CMT_MAX) return { error: '留言最多 ' + DP_CMT_MAX + ' 字（目前 ' + t.length + ' 字）' };
+        return { text: t };
+      }
+
+      /**
+       * 公開序列化：與 dpPublic 同一個原則 —— **uid / email 絕不出現在任何公開回應**。
+       * `mine` 由伺服器比對後只回布林值，前端拿不到別人的 uid。
+       */
+      function dpCommentPublic(doc, viewerUid) {
+        return {
+          id: doc._id,
+          postId: doc.postId,
+          authorName: doc.authorName || '玩家',
+          text: doc.text || '',
+          createdAt: doc.createdAt || 0,
+          admin: !!doc.admin,
+          mine: !!(viewerUid && doc.uid === viewerUid),
+        };
+      }
+
+      /** 列出某一篇投稿的留言。公開讀（未登入也看得到），只是拿不到 mine/isAdmin。 */
+      async function dpCommentList(req, res) {
+        try {
+          res.set('Cache-Control', 'no-store');
+          const postId = String((req.query && req.query.postId) || '');
+          if (!postId) return res.status(400).json({ error: '缺少 postId' });
+          if (!dpRate('cl:' + dpIp(req), 60000, 120)) return res.status(429).json({ error: '請求過於頻繁' });
+          // 只有 published 的投稿才看得到留言：被站長下架或作者刪掉的投稿，留言也要跟著消失。
+          const post = await DPOSTS.findOne({ _id: postId, status: 'published' }, { projection: { _id: 1, commentCount: 1 } });
+          if (!post) return res.status(404).json({ error: '找不到這篇投稿' });
+          const before = Number((req.query && req.query.before) || 0) || 0;
+          const limit = Math.max(1, Math.min(100, parseInt((req.query && req.query.limit) || String(DP_CMT_PAGE), 10) || DP_CMT_PAGE));
+          const q = { postId, status: { $ne: 'deleted' } };
+          if (before > 0) q.createdAt = { $lt: before };
+          // 降序撈最新一頁再反轉成升序顯示（比照大廳聊天 /api/tournament/chat 的既有作法：
+          //   初次載入要看到**最新**的留言，不是最舊的）。
+          const docs = (await DPCOMM.find(q, { projection: { email: 0 } }).sort({ createdAt: -1 }).limit(limit).toArray()).reverse();
+          const hasMore = docs.length
+            ? (await DPCOMM.countDocuments({ postId, status: { $ne: 'deleted' }, createdAt: { $lt: docs[0].createdAt } })) > 0
+            : false;
+          const viewer = await dpIdentitySoft(req);
+          res.json({
+            comments: docs.map((d) => dpCommentPublic(d, viewer && viewer.uid)),
+            hasMore,
+            total: Math.max(0, post.commentCount || 0),
+            // 站長要能刪掉任何一則留言（先發後審的公開版面必須有管理手段）。
+            //   ⚠ 這只是**畫不畫按鈕**的提示；真正的授權在 dpCommentDelete 裡，不靠 client。
+            isAdmin: !!(viewer && isTournAdmin(viewer)),
+          });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      }
+
+      /**
+       * 新增留言。**只有登入（且 verified）的玩家可以留言**。
+       *
+       * ⚠ 三段的順序是刻意的（v6.140 的教訓：限流在驗證之前就被消耗，玩家把內容改好之後
+       *   立刻撞 429，看起來像系統在刁難他）：
+       *     ① 身分 → ② **純同步、不碰 DB 的內容驗證** → ③ 通過了才消耗限流額度。
+       *   ⚠ **但 404 不退額度**。第一版寫成「404 也 dpRateRefund」，被 Fable 5 review 指出
+       *     那讓淨消耗變成 0 —— 一個登入帳號拿不存在的 postId 跑迴圈，每發都吃一次
+       *     verifyIdToken ＋ 一次 findOne，限流卻永遠不會觸發。v6.140 要救的是
+       *     「內容不合格 → 改好再送」那種情境（400），而 400 在 ② 就擋掉、本來就沒消耗；
+       *     404 不是那種情境（投稿真的不存在／已下架），吃掉 1/10 格完全可以接受。
+       */
+      async function dpCommentCreate(req, res) {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          const b = req.body || {};
+          if (JSON.stringify(b).length > 8192) return res.status(413).json({ error: '資料過大' });
+          const postId = String(b.postId || '');
+          if (!postId) return res.status(400).json({ error: '缺少 postId' });
+          const norm = dpCommentNormalize(b.text);
+          if (norm.error) return res.status(400).json({ error: norm.error });
+          if (!dpRate('c:' + id.uid, 60000, DP_CMT_PER_MIN)) return res.status(429).json({ error: '留言太頻繁，請稍候再試' });
+          const post = await DPOSTS.findOne({ _id: postId, status: 'published' }, { projection: { _id: 1 } });
+          if (!post) return res.status(404).json({ error: '找不到這篇投稿' });
+          const isAdm = isTournAdmin(id);
+          // 顯示名沿用 v6.144 定下的規則：最近一次報名賽事時填的暱稱 > 帳號暱稱。
+          //   ⚠ 不能直接用 id.name —— token 沒 displayName 時它是 email 前綴。
+          const nick = isAdm ? null : await getLastRegisteredNick(id.uid);
+          // ⚠ authorName 來自玩家自己填的報名暱稱 ⇒ 有人可以取名叫「系統管理員」，
+          //   留言就會頂著跟站長一模一樣的名字出現（只差一個紅色樣式，玩家分不出來）。
+          //   （Fable 5 review 指出；大廳聊天 v0.31 有同一個缺口，那邊另案處理。）
+          let nm = String(nick || id.name || '玩家').slice(0, 24);
+          if (!isAdm && nm.replace(/[\s\u3000]/g, '') === DP_CMT_RESERVED_NAME) nm = '玩家';
+          const now = Date.now();
+          const doc = {
+            _id: 'dc_' + now.toString(36) + '_' + Math.random().toString(36).slice(2, 10),
+            postId,
+            uid: id.uid,
+            email: id.email || null,
+            authorName: isAdm ? DP_CMT_RESERVED_NAME : nm,
+            admin: isAdm || false,
+            text: norm.text,
+            status: 'published',
+            createdAt: now,
+          };
+          await DPCOMM.insertOne(doc);
+          // ⚠ 計數只在**真的寫進去之後**才 +1，而且與 dpCommentDelete 的 -1 嚴格配對
+          //   （只有 published → deleted 這個轉換才減）⇒ 連點刪除不會把它扣成負的。
+          //   權威永遠是 deckPostComments；/api/admin/deck-posts/recount 用明細重算修正漂移。
+          // ⚠⚠ 這一段**必須自己吞掉錯誤**。留言已經寫進去了，這裡再 throw 會讓外層回 500，
+          //   玩家看到「失敗」就再送一次 ⇒ 同一則留言變兩則。計數只是快照，壞了 recount 修得回來；
+          //   「已經成功卻回報失敗」修不回來（Fable 5 review 指出）。
+          try {
+            await DPOSTS.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
+            _dpListCache.clear();         // 列表上要顯示留言數 ⇒ 30 秒快取要作廢
+          } catch (_ce) { console.warn('[deck-posts] commentCount +1 failed（recount 可修）:', _ce && _ce.message); }
+          res.json({ ok: true, comment: dpCommentPublic(doc, id.uid) });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      }
+
+      /**
+       * 刪除留言：**作者本人或 admin**。軟刪（明細保留，計數可對帳）。
+       *
+       * ⚠ **必須冪等**。v6.140 踩過「刪除連點 → 第二發找不到目標就噴 404」——
+       *   玩家看到的是「明明刪掉了卻報錯」。這裡「找不到」與「已經是 deleted」一律回 200
+       *   `changed:false`，只有真正發生轉換時才 `changed:true` 並把 commentCount -1。
+       * ⚠ 限流：**no-op 也照算**。退額度會讓「拿假 cid 跑迴圈」的淨消耗變成 0
+       *   （Fable 5 review 指出）；連點兩下吃兩格、上限 30/分鐘，實務上綽綽有餘。
+       */
+      async function dpCommentDelete(req, res) {
+        try {
+          const id = await dpIdentity(req);
+          if (id.error) return res.status(id.code).json({ error: id.error });
+          if (!dpRate('cx:' + id.uid, 60000, 30)) return res.status(429).json({ error: '操作過於頻繁' });
+          const cid = String((req.params && req.params.cid) || '');
+          const c = await DPCOMM.findOne({ _id: cid });
+          if (!c) return res.json({ ok: true, changed: false });
+          const isAdm = isTournAdmin(id);
+          if (c.uid !== id.uid && !isAdm) return res.status(403).json({ error: '只能刪除自己的留言' });
+          const r = await DPCOMM.updateOne(
+            { _id: cid, status: { $ne: 'deleted' } },
+            { $set: { status: 'deleted', deletedAt: Date.now(), deletedBy: (c.uid === id.uid ? 'author' : 'admin') } },
+          );
+          const changed = !!(r && r.matchedCount);
+          if (changed) {
+            // 同 dpCommentCreate：計數失敗不可以害得「已經刪掉」被回報成失敗。
+            try {
+              await DPOSTS.updateOne({ _id: c.postId }, { $inc: { commentCount: -1 } });
+              _dpListCache.clear();
+            } catch (_ce) { console.warn('[deck-posts] commentCount -1 failed（recount 可修）:', _ce && _ce.message); }
+          }
+          res.json({ ok: true, changed, postId: c.postId });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      }
+
+      app.get('/api/deck-posts-comments', dpCommentList);
+      app.post('/api/deck-posts-comments', dpCommentCreate);
+      app.delete('/api/deck-posts-comments/:cid', dpCommentDelete);
 
       // ════════ 賽事名次投稿 ════════
       //   client 只送 eventId。名次與牌組**全部由伺服器從歸檔推導**，
@@ -6096,25 +6282,51 @@ import('firebase-admin').then(async ({ default: admin }) => {
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
 
-      // 計數對帳：likeCount/downloadCount 是非正規化快照，權威永遠是明細表。
-      app.post('/api/admin/deck-posts/recount', async (req, res) => {
+      // 計數對帳：likeCount/downloadCount/commentCount 都是非正規化快照，權威永遠是明細表。
+      //   ⚠ 抽成具名函式是為了讓守衛能把它抽出來**真的跑一遍**（先人為製造漂移再驗它修好），
+      //     而不是只斷言「檔案裡有出現 commentCount 這個字」。
+      async function dpAdminRecount(req, res) {
         try {
           const id = await tournIdentity(req);
           if (!isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
-          const [likes, downs] = await Promise.all([
+          const [likes, downs, cmts] = await Promise.all([
             DPLIKES.aggregate([{ $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
             DPDOWNS.aggregate([{ $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
+            // ⚠ 留言是**軟刪**，對帳一定要先濾掉 deleted，否則「重算」反而會把已刪的算回來。
+            DPCOMM.aggregate([{ $match: { status: { $ne: 'deleted' } } }, { $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
           ]);
           const lm = new Map(likes.map((x) => [x._id, x.n]));
           const dm = new Map(downs.map((x) => [x._id, x.n]));
-          const all = await DPOSTS.find({}, { projection: { _id: 1, likeCount: 1, downloadCount: 1 } }).toArray();
+          const cm = new Map(cmts.map((x) => [x._id, x.n]));
+          const all = await DPOSTS.find({}, { projection: { _id: 1, likeCount: 1, downloadCount: 1, commentCount: 1 } }).toArray();
           let fixed = 0;
           for (const p of all) {
-            const l = lm.get(p._id) || 0, d = dm.get(p._id) || 0;
-            if ((p.likeCount || 0) !== l || (p.downloadCount || 0) !== d) { await DPOSTS.updateOne({ _id: p._id }, { $set: { likeCount: l, downloadCount: d } }); fixed++; }
+            const l = lm.get(p._id) || 0, d = dm.get(p._id) || 0, c = cm.get(p._id) || 0;
+            if ((p.likeCount || 0) !== l || (p.downloadCount || 0) !== d || (p.commentCount || 0) !== c) {
+              await DPOSTS.updateOne({ _id: p._id }, { $set: { likeCount: l, downloadCount: d, commentCount: c } });
+              fixed++;
+            }
           }
           _dpListCache.clear();
           res.json({ ok: true, checked: all.length, fixed });
+        } catch (e) { res.status(500).json({ error: e && e.message }); }
+      }
+      app.post('/api/admin/deck-posts/recount', dpAdminRecount);
+
+      // admin 留言巡檢：跨投稿看最近的留言（含已刪），站長要能一眼掃過公開版面上的內容。
+      //   ⚠ 刪除不另開 admin 端點 —— 直接用 /api/deck-posts-comments/:cid，
+      //     授權在 dpCommentDelete 內部（作者或 admin），兩條路徑不會漂移。
+      app.get('/api/admin/deck-posts-comments', async (req, res) => {
+        try {
+          const id = await tournIdentity(req);
+          if (!isTournAdmin(id)) return res.status(403).json({ error: '需要管理員權限' });
+          const q = {};
+          const pid = String((req.query && req.query.postId) || '');
+          if (pid) q.postId = pid;
+          const st = String((req.query && req.query.status) || '');
+          if (st) q.status = st;
+          const docs = await DPCOMM.find(q).sort({ createdAt: -1 }).limit(300).toArray();
+          res.json({ comments: docs.map((d) => ({ ...dpCommentPublic(d, null), status: d.status || 'published', email: d.email || '' })) });
         } catch (e) { res.status(500).json({ error: e && e.message }); }
       });
 

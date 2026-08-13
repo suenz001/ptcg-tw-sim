@@ -1,3 +1,151 @@
+# v6.182 牌組公布欄「玩家留言板」
+
+站長需求（原話）：
+> 牌組公佈欄，請幫我在牌組點選進去後可以增加一個玩家的留言板，可以留言討論。
+> 介面除了也顯示愛心、下載數，也請顯示留言數，供玩家們參考。
+
+## 資料模型
+
+新增 collection `deckPostComments`（**軟刪**）：
+```
+{ _id:'dc_…', postId, uid, email, authorName, admin:bool, text, status:'published'|'deleted', createdAt, deletedAt?, deletedBy?:'author'|'admin' }
+```
+索引 `{postId:1, status:1, createdAt:-1}`（列表查詢的形狀就是這個）與 `{uid:1, createdAt:-1}`。
+
+`deckPosts` 新增非正規化欄位 `commentCount`。
+
+## 端點（⚠ 路徑遮蔽）
+
+```
+GET    /api/deck-posts-comments?postId=&before=&limit=
+POST   /api/deck-posts-comments            { postId, text }
+DELETE /api/deck-posts-comments/:cid
+GET    /api/admin/deck-posts-comments?postId=&status=
+```
+
+⚠⚠ **一律用連字號獨立前綴**，絕不寫 `/api/deck-posts/comments`。
+`/api/deck-posts/:id` 是**單段** pattern，任何**同段數**的 `/api/deck-posts/具名字串`
+都會被它整個吃掉，而且回的是 404「找不到這篇投稿」—— v6.138 的
+`tournament-eligibility` 就是這樣 100% 打不到、連錯誤 log 都沒有。
+
+⚠ Express 的實際語義要講精確（本輪把它寫進守衛的模擬器）：
+`/a/:id` **只吃同段數**的路徑，`/a/x/comments`（4 段）**不會**被 `/a/:id`（3 段）吃掉。
+真正的地雷是「段數相同、其中一段是具名字串」。守衛用這一點做**自我驗證**：
+先餵一組合成路由表 `['/api/deck-posts/:id', '/api/deck-posts/comments']`，
+確認模擬器真的判出遮蔽，再拿它去驗真實路由表。
+
+## 限流順序（v6.140 教訓）
+
+`dpCommentCreate` 的順序是刻意的：
+① `dpIdentity` → ② **純同步、不碰 DB 的內容驗證** → ③ 通過了才 `dpRate`。
+③ 之後才發生的 404（投稿不存在／已下架）會 `dpRateRefund` 退回。
+守衛用 mock 的 `dpRate` 記錄呼叫次數，**行為端**斷言「空白/超長被拒時 rateCalls 為 0」。
+
+`dpCommentDelete` 的 no-op（找不到／已經是 deleted）同樣退回額度 —— 否則連點兩下吃兩格。
+
+## 刪除冪等（v6.140 教訓）
+
+「找不到」與「已經是 deleted」一律回 **200 `{ok:true, changed:false}`**，不回 404。
+只有真正發生 `published → deleted` 轉換（`matchedCount === 1`）才：
+- `commentCount -1`
+- `_dpListCache.clear()`
+- 回 `changed:true`
+
+⇒ 連點 N 次，`commentCount` 不會被扣成負的。前端也只在 `r.changed` 為真時才扣本地計數。
+
+## 留言數怎麼不漂移
+
+1. `+1` 只發生在 `insertOne` 成功之後；`-1` 只發生在真正的狀態轉換之後（嚴格配對）。
+2. 軟刪 ⇒ **明細表永遠是權威**，快照壞了隨時算得回來。
+3. `/api/admin/deck-posts/recount` 一併對帳 `commentCount`
+   （`$match status != deleted` → `$group by postId`）。這支已抽成具名函式 `dpAdminRecount`，
+   守衛**人為製造漂移（塞 99）再跑它**，斷言修回 1 且軟刪的沒被算回來。
+4. 讀取端 `dpPublic` 夾 `Math.max(0, …)`，歷史髒資料不會顯示成負數。
+
+## 列表不得 N+1
+
+`commentCount` 直接掛在 `deckPosts` 上，`dpPublic`（**同步函式**）逐欄挑出來。
+守衛兩道：① 靜態斷言 `/api/deck-posts` 列表 handler 完全沒有出現 `DPCOMM`；
+② 行為端斷言 `dpPublic` 不是 async（是 async 就有機會在列表逐筆 await 查 DB）。
+
+## 權限
+
+- 留言：**只有 `dpIdentity` 通過（email 帳號、verified）的玩家**。匿名／未登入 401/403。
+- 刪除：**作者本人或 admin**（`isTournAdmin`）。其他人 403 且留言不受影響。
+- admin 的刪除按鈕：`GET /api/deck-posts-comments` 回 `isAdmin`，前端據此**畫按鈕**；
+  ⚠ 那只是 UI 提示，真正的授權在 `dpCommentDelete` 內部，不靠 client。
+  admin 刪除不另開端點 —— 兩條路徑會漂移。
+- 公開回應永不含 `uid` / `email`：`dpCommentPublic` 是白名單，`mine` 由伺服器比對後只回布林。
+
+## 政策參數（Wilson 可調）
+
+| 參數 | 值 | 位置 |
+|---|---|---|
+| 單則字數上限 | 300 | `DP_CMT_MAX` ＋ 前端 `COMMENT_MAX`（兩處要一起改） |
+| 一次回幾則 | 50（上限 100） | `DP_CMT_PAGE` |
+| 每人每分鐘留言數 | 10 | `DP_CMT_PER_MIN` |
+| 保留名（只有 admin 可用） | 系統管理員 | `DP_CMT_RESERVED_NAME` |
+| 刪除操作 | 30 次/分 | `dpRate('cx:'+uid, 60000, 30)` |
+| 列表讀取 | 120 次/分 per IP | `dpRate('cl:'+ip, 60000, 120)` |
+
+## 前端
+
+- `/deck-posts` 明細 modal 的 `modal-foot` **之後**加留言區（主要動作不被留言擠下去）。
+- 列表（全部投稿／我的投稿）與明細都顯示 `💬 n`，與 `♥`／`⬇` 並列。
+- 未登入 ⇒ 顯示「登入 email 帳號後可以留言討論。」，**不畫輸入框**。
+- 載入失敗 ⇒ 走 v6.177 中央 `adoptOrKeep`（`$lib/ui/stale-keep`），保留上一份好資料並標「更新中」，
+  **不清空、不另寫一套**。
+- 錯誤隔離：留言區的錯誤**只寫 `commentError`**。寫 `detailError` 會讓 modal 的
+  `detailLoading → detailError → openPost` 分支把整份牌表換成一行錯誤（v6.140 按讚踩過）。
+- 送出失敗**不清空輸入框**（v6.175：使用者輸入被丟棄）。
+- `commentSeq` 代次：切換／關閉明細時遞增，遲到的回應不會畫到另一篇上。
+- 手機：不新增任何 `@media`（本頁一直是單一自適應版面）；靠 `flex-wrap` ＋
+  `width:100%/box-sizing:border-box` ＋ `overflow-wrap:anywhere`（長英數字串會撐爆 modal）。
+
+## XSS
+
+全頁**零 `{@html}`**（守衛剝註解後做否定型掃描，並先自我驗證剝註解真的有作用）。
+留言內文與名稱都是 `{c.text}` / `{c.authorName}` 純插值，走 Svelte 預設跳脫。
+不做關鍵字過濾（練習站），管理手段＝admin 可刪任何一則。
+
+## Fable 5 review 抓到的（逐項自行查證後才改）
+
+| 發現 | 我的查證 | 處置 |
+|---|---|---|
+| `submitComment` 沒有代次守衛 | **屬實**。fetchComments/openDetail/closeDetail 都有，唯獨寫入路徑漏了；送出中切到另一篇，遲到的成功回應會把 A 篇的留言接到 B 篇列表 | 補 `const seq = commentSeq` ＋ 寫回前比對；`deleteComment` 一併補。守衛新增「代次要蓋到寫入路徑」且斷言比對發生在寫回之前 |
+| refund 讓「不消耗就能無限打 DB」 | **屬實**。create 404 與 delete no-op 都退額度 ⇒ 淨消耗 0，拿假 id 跑迴圈每發吃一次 verifyIdToken＋findOne | **兩個 refund 全拿掉**。v6.140 要救的是「內容不合格 → 改好再送」（400），而 400 在驗證階段就擋掉、本來就沒消耗；404／no-op 不是那種情境 |
+| insert 成功但 `$inc` 失敗會回 500 | **屬實**。留言已寫入卻回報失敗 ⇒ 玩家重送變兩則 | `$inc` ＋ cache clear 包 try/catch，失敗只 warn 仍回 200（計數交給 recount）。delete 的 `-1` 同樣處理 |
+| 「系統管理員」可被冒名 | **屬實**。`authorName` 來自玩家自填的報名暱稱 | 新增 `DP_CMT_RESERVED_NAME`，非 admin 的名字正規化（去半形／全形空白）後等於保留名就改成「玩家」。⚠ 大廳聊天 `/api/tournament/chat` 有同一缺口，**本版沒動**，另案 |
+| 明細標題數字可能與列表不一致 | 部分屬實，但**它說的原因是錯的**：它說 header 讀 30 秒快取的列表 payload；實際上 `/api/deck-posts/:id`（L5755~5759）是 `no-store` ＋ 直接 findOne，開啟當下是新鮮的。真正的窗口是「開明細」與「抓留言」兩發之間別人留言了 | 仍採納：`fetchComments` 成功時用伺服器回的 `total` 校正 `openPost.commentCount` |
+| `dpAdminRecount` 不原子 | 屬實，但這是既有 likeCount/downloadCount 對帳就有的性質（aggregate 快照 → 逐篇 `$set` 絕對值）。admin 手動、低頻 | 不改，記錄在此。若日後要自動排程，要先改成 diff 式 `$inc` |
+| 分頁游標 `$lt: createdAt` 同毫秒會跳過 | 屬實，機率極低（每人 10 則/分） | 不改，記錄 |
+| `dpIp` 信任 `cf-connecting-ip` | 既有設計（v6.138 就這樣），前提是 origin 只走 cloudflared | 不改 |
+
+## 守衛
+
+`scripts/test-v6182-deck-post-comments.mjs`（43 項，已進 npm test）。
+HEAD-FAIL 實測：還原 HEAD 的 `server_admin_patch.js` ⇒ FAIL 25；
+還原 HEAD 的 `+page.svelte` ⇒ FAIL 12。
+另外 `scripts/test-deck-posts.mjs` 的 recount 斷言 anchor 改抓 `async function dpAdminRecount`
+（v6.182 把它抽成具名函式），並加驗 `DPCOMM.aggregate`；下載／rename 兩處的結尾 anchor
+也收窄，避免留言板整段被切進否定型斷言的掃描範圍。還原 HEAD ⇒ 該檔 FAIL 2。
+
+⚠ 本輪自己踩到一次：handler 的 `try/catch` 會把 `ReferenceError` 吞成 500 ——
+沙盒少注入一個閉包相依（`DP_CMT_RESERVED_NAME`）時，下游斷言表現成「筆數不對：0」，
+完全看不出真因。已在環境自我驗證那一項加上 `statusCode !== 500` 的明確斷言。
+
+做法上兩點值得沿用：
+- **router 模擬器**：把全檔 `app.<method>('<path>'` 依序抓出來，用 Express 語義比對，
+  求值「這個 URL 會命中哪一支」。模擬器自己先用合成路由表驗過。
+- **記憶體 mongo mock**：`dpCommentNormalize` / `dpCommentList` / `dpCommentCreate` /
+  `dpCommentDelete` / `dpAdminRecount` / `dpPublic` 全部從原始碼抽出來注入 mock **真的跑**，
+  斷言的是 HTTP status、DB 內容與計數值，不是「有沒有呼叫某個函式」。
+
+## 部署
+
+⚠ 改了 `oracle-admin/server_admin_patch.js` ⇒ 站長要跑 `oracle-admin/update-tournament.bat`
+（伺服器端不會自己更新）。前端走一般部署流程。
+
 # v6.181 特性可用性收斂成單一述詞 ＋「拒絕 = 完全 no-op」單一出口
 
 ## 回報（玩家原話）

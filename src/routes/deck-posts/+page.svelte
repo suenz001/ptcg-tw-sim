@@ -22,6 +22,8 @@
   import { VERSION } from '$lib/version';
   import { auth } from '$lib/firebase';
   import { onAuthStateChanged, type User } from 'firebase/auth';
+  // ⚠ 留言載入失敗時「保留上一份好資料」一律走 v6.177 的中央述詞，不另寫一套、也不清空。
+  import { adoptOrKeep } from '$lib/ui/stale-keep';
 
   type PostSummary = {
     id: string;
@@ -32,6 +34,9 @@
     cardTotal: number;
     likeCount: number;
     downloadCount: number;
+    // ⚠ 宣告成選填：伺服器一定會回，但玩家瀏覽器可能還握著上一版（或 30 秒列表快取）
+    //   的舊 payload，全部讀取點一律 `?? 0`。
+    commentCount?: number;
     createdAt: number;
     tournament: null | { eventId: string; eventName: string; finishedAt: number; placementLabel: string };
   };
@@ -42,6 +47,16 @@
     mine?: boolean;
   };
   type MyPost = PostSummary & { status: 'published' | 'hidden' | 'deleted' };
+  /** 一則留言。⚠ 伺服器不回 uid：`mine` 是伺服器比對後的布林值。 */
+  type PostComment = {
+    id: string;
+    postId: string;
+    authorName: string;
+    text: string;
+    createdAt: number;
+    admin: boolean;
+    mine: boolean;
+  };
   type Eligible = { eventId: string; eventName: string; finishedAt: number; placementLabel: string; alreadyPosted: boolean };
 
   // ⚠ 賽事與「我的投稿」端點的路徑是 /api/deck-posts-xxx（**連字號**，不是 /api/deck-posts/xxx）。
@@ -101,6 +116,23 @@
   let tSubmitBusy = $state('');
   let tSubmitMsg = $state('');
   let tSubmitError = $state('');
+
+  // ── v6.182 留言板 ─────────────────────────────────────────────────
+  //   ⚠ 這整組狀態**與明細的載入狀態完全分開**。留言區的任何錯誤只能寫進 commentError，
+  //     絕不可以寫 detailError —— modal 的分支順序是 detailLoading → detailError → openPost，
+  //     detailError 一有值就會把整份牌表換成一行錯誤（v6.140 按讚踩過同一個坑）。
+  const COMMENT_MAX = 300;                       // ⚠ 與伺服器的 DP_CMT_MAX 對齊
+  let comments = $state<PostComment[]>([]);
+  let commentsLoading = $state(false);
+  let commentsHasMore = $state(false);
+  let commentsOlderBusy = $state(false);
+  let commentStale = $state(false);              // 這一份是沿用上一次的好資料（adoptOrKeep）
+  let commentIsAdmin = $state(false);            // 只決定畫不畫刪除鈕；真正授權在伺服器
+  let commentText = $state('');
+  let commentBusy = $state(false);
+  let commentDeleteBusy = $state('');
+  let commentError = $state('');
+  let commentSeq = 0;
 
   // ⚠ 請求代次（Fable 5 review 指出，我查證屬實）。兩個問題共用同一套解法：
   //   ① 明細載入中沒有關閉按鈕、closeDetail 又不清 detailLoading ⇒ 慢請求會把玩家鎖在
@@ -199,6 +231,11 @@
     const seq = ++detailSeq;
     detailLoading = true; detailError = ''; importMsg = ''; importWarn = '';
     openPost = null; detailCards = new Map(); detailMissing = [];
+    // 留言區重置：⚠ 用 commentSeq 讓上一篇還在飛的留言回應作廢，否則會把 A 篇的留言畫在 B 篇上。
+    commentSeq++;
+    comments = []; commentsHasMore = false; commentStale = false;
+    commentError = ''; commentText = ''; commentIsAdmin = false;
+    commentsLoading = false; commentsOlderBusy = false;
     try {
       const r = await api('/' + encodeURIComponent(id), { headers: await authHeaders() });
       if (seq !== detailSeq) return;           // 玩家已關閉或改點別篇 ⇒ 不得把 modal 彈回來
@@ -208,6 +245,8 @@
       openPost = post;
       detailCards = buildCardIndex(cards);
       detailMissing = missingIds;
+      // ⚠ 不 await：留言慢或掛掉都不該拖住牌表的呈現，錯誤也只會落在留言區。
+      void fetchComments(post.id);
     } catch (e: any) {
       if (seq !== detailSeq) return;
       if (String(e?.message) !== 'unavailable') detailError = String(e?.message ?? e);
@@ -218,7 +257,10 @@
   /** ⚠ 一定要遞增 detailSeq 並清掉 detailLoading，否則載入中的 modal 關不掉。 */
   function closeDetail() {
     detailSeq++;
+    commentSeq++;                       // 還在飛的留言回應作廢（不然關掉後才到的會寫進下一篇）
     openPost = null; detailLoading = false; detailError = ''; importMsg = ''; importWarn = ''; likeError = '';
+    comments = []; commentsLoading = false; commentError = ''; commentText = '';
+    commentsHasMore = false; commentStale = false; commentIsAdmin = false; commentsOlderBusy = false;
   }
 
   /** 依卡種分組的牌表（文字，不渲染卡圖）。 */
@@ -450,6 +492,134 @@
     }
   }
 
+  // ── 留言板 ────────────────────────────────────────────────────────
+  //   路徑是 /api/deck-posts-comments（**連字號前綴**）。寫成 /api/deck-posts/comments
+  //   會被伺服器的 `/api/deck-posts/:id` 單段 pattern 整個吃掉、永遠回 404（v6.138 教訓）。
+
+  /** 載入第一頁（最新 50 則）。⚠ 失敗時走 adoptOrKeep 保留畫面上那份，不清空。 */
+  async function fetchComments(postId: string) {
+    const seq = ++commentSeq;
+    commentsLoading = true; commentError = '';
+    let next: PostComment[] | null = null;       // ⚠ null = 這一發不可信（stale-keep 的約定）
+    try {
+      const r = await api('-comments?' + new URLSearchParams({ postId }).toString(), { headers: await authHeaders() });
+      if (seq !== commentSeq) return;
+      next = (r.comments || []) as PostComment[];
+      commentsHasMore = !!r.hasMore;
+      commentIsAdmin = !!r.isAdmin;
+      // 明細標題的數字與這一份列表對齊：開啟明細與抓留言是兩發請求，中間別人留言了
+      //   就會出現「畫了 5 則、標題寫 3」。伺服器回的 total 是同一次讀出來的權威值。
+      if (openPost && openPost.id === postId && typeof r.total === 'number') {
+        openPost = { ...openPost, commentCount: Math.max(0, r.total) };
+      }
+    } catch (e: any) {
+      if (seq !== commentSeq) return;
+      if (String(e?.message) !== 'unavailable') commentError = String(e?.message ?? e);
+      next = null;
+    } finally {
+      if (seq === commentSeq) commentsLoading = false;
+    }
+    if (seq !== commentSeq) return;
+    const kept = adoptOrKeep(comments, next);
+    comments = kept.data;
+    commentStale = kept.stale;
+  }
+
+  /** 往上載入更早的留言（游標＝目前最舊那則的時間）。失敗只顯示訊息，已載入的不動。 */
+  async function loadOlderComments() {
+    const p = openPost;
+    if (!p || commentsOlderBusy || comments.length === 0) return;
+    const seq = commentSeq;
+    commentsOlderBusy = true; commentError = '';
+    try {
+      const q = new URLSearchParams({ postId: p.id, before: String(comments[0].createdAt) });
+      const r = await api('-comments?' + q.toString(), { headers: await authHeaders() });
+      if (seq !== commentSeq) return;
+      const older = (r.comments || []) as PostComment[];
+      const seen = new Set(comments.map((c) => c.id));
+      comments = [...older.filter((c) => !seen.has(c.id)), ...comments];
+      commentsHasMore = !!r.hasMore;
+    } catch (e: any) {
+      if (seq !== commentSeq) return;
+      if (String(e?.message) !== 'unavailable') commentError = String(e?.message ?? e);
+    } finally {
+      commentsOlderBusy = false;
+    }
+  }
+
+  /** 留言數是三個地方顯示的同一個值（明細／全部投稿列表／我的投稿）⇒ 一起改。 */
+  function bumpCommentCount(postId: string, delta: number) {
+    const nxt = (n: number | undefined) => Math.max(0, (n ?? 0) + delta);
+    if (openPost && openPost.id === postId) openPost = { ...openPost, commentCount: nxt(openPost.commentCount) };
+    const i = posts.findIndex((x) => x.id === postId);
+    if (i >= 0) { const c = [...posts]; c[i] = { ...c[i], commentCount: nxt(c[i].commentCount) }; posts = c; }
+    const j = myPosts.findIndex((x) => x.id === postId);
+    if (j >= 0) { const c = [...myPosts]; c[j] = { ...c[j], commentCount: nxt(c[j].commentCount) }; myPosts = c; }
+  }
+
+  async function submitComment() {
+    const p = openPost;
+    const t = commentText.trim();
+    if (!p || commentBusy || !canPost || !t) return;
+    // ⚠ 代次要在**寫入路徑**也擋一次。fetchComments/openDetail/closeDetail 都有，
+    //   唯獨這裡漏了：送出中玩家關掉 modal 再開另一篇，遲到的成功回應照樣
+    //   `comments = [...comments, r.comment]` ⇒ A 篇的留言被畫進 B 篇
+    //   （Fable 5 review 指出，我查證屬實）。
+    const seq = commentSeq;
+    commentBusy = true; commentError = '';
+    try {
+      const r = await api('-comments', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postId: p.id, text: t }),
+      });
+      // ⚠ 留言數用捕獲的 p.id 記帳（那一篇的計數確實 +1 了，就算玩家已經切走也要對）。
+      bumpCommentCount(p.id, 1);
+      if (seq !== commentSeq) return;          // 已經切到別篇 ⇒ 不得把這則接到別人的列表上
+      if (r && r.comment) comments = [...comments, r.comment as PostComment];
+      // ⚠ 只有**送出成功**才清空輸入框。失敗時玩家打的字必須留著 ——
+      //   「使用者輸入被丟棄」是本站反覆踩過的回報來源（v6.175）。
+      commentText = '';
+      commentStale = false;
+    } catch (e: any) {
+      if (seq !== commentSeq) return;
+      commentError = String(e?.message) === 'unavailable' ? '這個功能只在正式站提供' : String(e?.message ?? e);
+    } finally {
+      commentBusy = false;
+    }
+  }
+
+  /**
+   * 刪除一則留言（自己的；站長可刪任何一則）。
+   * ⚠ 伺服器是冪等的：連點第二下回 `changed:false` 且 HTTP 200，不會噴「找不到」。
+   *   這裡也只在 `changed` 為真時才把留言數 -1，否則連點兩下會少算一則（v6.140 教訓）。
+   */
+  async function deleteComment(cid: string) {
+    if (!canPost || commentDeleteBusy) return;
+    if (!confirm('確定要刪除這則留言嗎？刪除後無法復原。')) return;
+    const p = openPost;
+    const seq = commentSeq;
+    commentDeleteBusy = cid; commentError = '';
+    try {
+      const r = await api('-comments/' + encodeURIComponent(cid), { method: 'DELETE', headers: await authHeaders() });
+      if (p && r && r.changed) bumpCommentCount(p.id, -1);
+      if (seq !== commentSeq) return;
+      comments = comments.filter((c) => c.id !== cid);
+    } catch (e: any) {
+      if (seq !== commentSeq) return;
+      if (String(e?.message) !== 'unavailable') commentError = String(e?.message ?? e);
+    } finally {
+      commentDeleteBusy = '';
+    }
+  }
+
+  function fmtDateTime(ts: number): string {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const q = (n: number) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + q(d.getMonth() + 1) + '-' + q(d.getDate()) + ' ' + q(d.getHours()) + ':' + q(d.getMinutes());
+  }
+
   function fmtDate(ts: number): string {
     if (!ts) return '';
     const d = new Date(ts);
@@ -549,6 +719,7 @@
                   <span class="spacer"></span>
                   <span class="stat">♥ {p.likeCount}</span>
                   <span class="stat">⬇ {p.downloadCount}</span>
+                  <span class="stat" title="留言數">💬 {p.commentCount ?? 0}</span>
                   <!-- hidden 也要能刪：投稿總量上限算的是「未刪除」的，被下架的仍佔名額，
                        只讓 published 可刪的話，被下架 10 篇的玩家會永遠不能再投稿也無法自救。 -->
                   {#if p.status !== 'deleted'}
@@ -633,6 +804,7 @@
                 <span class="spacer"></span>
                 <span class="stat" title="有多少位玩家按讚">♥ {p.likeCount}</span>
                 <span class="stat" title="有多少位不同玩家收藏過這副牌">⬇ {p.downloadCount}</span>
+                <span class="stat" title="這副牌組的留言數">💬 {p.commentCount ?? 0}</span>
               </div>
               {#if p.notes}
                 <p class="notes">{p.notes}</p>
@@ -722,6 +894,67 @@
           <a class="linkbtn" href="{base}/decks">前往牌組編輯器</a>
           <button onclick={closeDetail}>關閉</button>
         </div>
+
+        <section class="comments">
+          <h3 class="cmt-title">
+            <span>留言</span>
+            <span class="cnum">{openPost.commentCount ?? 0}</span>
+            {#if commentStale}<span class="stale">更新中…</span>{/if}
+          </h3>
+
+          {#if commentsHasMore}
+            <button class="small more-btn" disabled={commentsOlderBusy} onclick={loadOlderComments}>
+              {commentsOlderBusy ? '載入中…' : '載入更早的留言'}
+            </button>
+          {/if}
+
+          {#if commentsLoading && comments.length === 0}
+            <p class="empty">留言載入中…</p>
+          {:else if comments.length === 0 && commentError}
+            <p class="warn">留言載入失敗：{commentError}</p>
+          {:else if comments.length === 0}
+            <p class="empty">還沒有人留言，來當第一個吧。</p>
+          {:else}
+            <ul class="cmt-list">
+              {#each comments as c (c.id)}
+                <li class="cmt">
+                  <div class="cmt-head">
+                    <span class="cmt-name" class:adm={c.admin}>{c.authorName}</span>
+                    <span class="dot">·</span>
+                    <span class="cmt-time">{fmtDateTime(c.createdAt)}</span>
+                    <span class="spacer"></span>
+                    {#if c.mine || commentIsAdmin}
+                      <button class="small danger" disabled={commentDeleteBusy === c.id}
+                              onclick={() => deleteComment(c.id)}>
+                        {commentDeleteBusy === c.id ? '刪除中…' : '刪除'}
+                      </button>
+                    {/if}
+                  </div>
+                  <p class="cmt-text">{c.text}</p>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+
+          {#if comments.length > 0 && commentError}
+            <p class="warn">{commentError}</p>
+          {/if}
+
+          {#if canPost}
+            <div class="cmt-form">
+              <textarea bind:value={commentText} maxlength={COMMENT_MAX} rows="2"
+                        placeholder="聊聊這副牌組的打法、對局心得…"></textarea>
+              <div class="cmt-form-foot">
+                <span class="cmt-count">{commentText.trim().length} / {COMMENT_MAX}</span>
+                <button class="primary small" disabled={commentBusy || !commentText.trim()} onclick={submitComment}>
+                  {commentBusy ? '送出中…' : '送出留言'}
+                </button>
+              </div>
+            </div>
+          {:else}
+            <p class="hint small-note">登入 email 帳號後可以留言討論。</p>
+          {/if}
+        </section>
       {/if}
     </div>
   </div>
@@ -891,6 +1124,33 @@
   .field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: .85rem; }
   .field select, .field textarea { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; width: 100%; box-sizing: border-box; }
   .field textarea { resize: vertical; }
+
+  /* 留言板。⚠ 這一區刻意**不用 @media 當手機開關** —— 版型全靠 flex-wrap 與
+     width:100%/box-sizing:border-box 自適應，手機直式與桌機是同一套結構。
+     （本站的「手機/桌機兩套獨立分支」規範是給對戰畫面的；這頁一直是單一自適應版面，
+     再切一套分支只會多一份會漂移的樣式。） */
+  .comments { margin-top: 18px; border-top: 1px solid rgba(128,128,128,.25); padding-top: 12px; }
+  .cmt-title { display: flex; align-items: center; gap: 8px; font-size: .92rem; margin: 0 0 8px; flex-wrap: wrap; }
+  .cmt-title .cnum { font-size: .78rem; opacity: .7; background: rgba(128,128,128,.15); border-radius: 999px; padding: 1px 8px; }
+  .cmt-title .stale { font-size: .72rem; opacity: .6; font-weight: 400; }
+  .more-btn { margin-bottom: 8px; }
+  .cmt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .cmt { background: rgba(128,128,128,.07); border-radius: 8px; padding: 8px 10px; }
+  .cmt-head { display: flex; align-items: center; gap: 6px; font-size: .78rem; opacity: .8; flex-wrap: wrap; }
+  .cmt-name { font-weight: 600; }
+  .cmt-name.adm { color: #c0392b; }
+  .cmt-time { font-variant-numeric: tabular-nums; }
+  /* ⚠ 玩家自由輸入：一定要斷字，否則貼一長串英數字會把 modal 撐爆（手機直式先爆）。 */
+  .cmt-text { margin: 4px 0 0; font-size: .86rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+  .cmt-form { margin-top: 10px; }
+  .cmt-form textarea {
+    font: inherit; font-size: .86rem; padding: 6px 8px; border-radius: 6px;
+    border: 1px solid rgba(128,128,128,.4); background: transparent; color: inherit;
+    width: 100%; box-sizing: border-box; resize: vertical;
+  }
+  .cmt-form-foot { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .cmt-count { font-size: .74rem; opacity: .55; font-variant-numeric: tabular-nums; }
+  .cmt-form-foot button { margin-left: auto; }
 
   .like-btn { padding: 7px 14px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; color: inherit; }
   .like-btn.liked { color: #d3467a; border-color: rgba(211,70,122,.5); background: rgba(211,70,122,.1); font-weight: 600; }

@@ -184,13 +184,16 @@ T('⭐⭐⭐ 按讚／下載都用 postId__uid 複合唯一鍵，DuplicateKey �
 });
 
 T('⭐ 有對帳端點（計數是快照，權威在明細表）', () => {
-  const ep = section(DP, "app.post('/api/admin/deck-posts/recount'", '// 守衛與未來的管理端');
+  // ⚠ v6.182 把它抽成具名函式 dpAdminRecount（守衛要能抽出來實跑），所以 anchor 改抓函式本體
+  //   —— 只抓 `app.post(...)` 那一行的話會切到一段空的註冊敘述，斷言變成在檢查空字串。
+  const ep = section(DP, 'async function dpAdminRecount', 'app.post(\'/api/admin/deck-posts/recount\'');
   ok(/DPLIKES\.aggregate/.test(ep) && /DPDOWNS\.aggregate/.test(ep), 'recount 沒有從明細表重算');
+  ok(/DPCOMM\.aggregate/.test(ep), 'recount 沒有一併對帳留言數（v6.182）');
   ok(/isTournAdmin\(id\)/.test(ep), 'recount 沒有權限 gate');
 });
 
 T('⭐ 未登入者可以匯入但不計數（下載數語意＝多少個不同帳號拿過）', () => {
-  const ep = section(DP, "app.post('/api/deck-posts/:id/download'", '// ════════ 賽事名次投稿');
+  const ep = section(DP, "app.post('/api/deck-posts/:id/download'", '// ── 編輯投稿的顯示名稱');
   ok(/dpIdentitySoft/.test(ep), 'download 用了硬身分 —— 未登入者會被擋掉而不是靜默不計數');
   ok(/status\(204\)/.test(ep), '未登入沒有走 204 靜默路徑');
 });
@@ -255,7 +258,7 @@ T('⭐⭐ 公開查詢一律限定 status: published（漏掉＝被下架的內�
     ['列表', "app.get('/api/deck-posts',", "app.get('/api/deck-posts/:id'"],
     ['明細', "app.get('/api/deck-posts/:id',", '// ════════ 投稿'],
     ['按讚', 'async function dpLikeHandler', "app.post('/api/deck-posts/:id/like'"],
-    ['下載', "app.post('/api/deck-posts/:id/download'", '// ════════ 賽事名次投稿'],
+    ['下載', "app.post('/api/deck-posts/:id/download'", '// ── 編輯投稿的顯示名稱'],
   ]) ok(/status:\s*'published'/.test(section(DP, a, b)), name + '端點沒有限定 status: published');
 });
 
@@ -326,7 +329,7 @@ T('⭐⭐ 賽事投稿用「報名那場賽事時填的暱稱」，不是帳號�
 });
 
 T('⭐⭐⭐ 編輯端點只放行 authorName / notes，**牌組內容永遠不可改**', () => {
-  const ep = section(DP, "app.post('/api/deck-posts/:id/rename'", '// ════════ 賽事名次投稿');
+  const ep = section(DP, "app.post('/api/deck-posts/:id/rename'", '// ════════ 留言板');
   ok(ep.length > 200, '找不到編輯端點');
   ok(/\$set\.authorName = nm/.test(ep) && /\$set\.notes = /.test(ep),
     '沒有開放 authorName 與 notes 兩個欄位');
