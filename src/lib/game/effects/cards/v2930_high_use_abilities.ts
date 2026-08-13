@@ -18,8 +18,7 @@ import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 g
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending,
-  drawCards,
-} from '../_shared';
+  drawCards, rejectAbilityUse } from '../_shared';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -44,7 +43,7 @@ regA('奇樹的大電海燕', 0, (st, idx, pool, cardInst) => {
   const src = cardInst
     ? allPokes.find(c => c.iid === cardInst.iid)
     : allPokes.find(c => pool.get(c.cardId)?.name === '奇樹的大電海燕');
-  if (!src) return addLog(st, '閃光抽出：找不到奇樹的大電海燕', idx);
+  if (!src) return rejectAbilityUse(st, '閃光抽出：找不到奇樹的大電海燕', idx);
 
   // gate: 必須有基本【雷】能量在身上
   const lightningEnergyIdx = src.energyAttached.findIndex(e => {
@@ -118,7 +117,7 @@ regA('阿響的鳳王ex', 0, (st, idx, pool, _cardInst) => {
     return card.pokemonType === 'Fire' || card.name.includes('【火】');
   });
   if (fireEnergies.length === 0) {
-    return addLog(st, '金色火焰：手牌沒有基本【火】能量', idx);
+    return rejectAbilityUse(st, '金色火焰：手牌沒有基本【火】能量', idx);
   }
 
   // gate: 備戰區至少 1 隻「阿響的」寶可夢
@@ -246,7 +245,7 @@ regR('gold-flame-attach', (st, idx, iids, params, pool) => {
 regA('拉帝歐斯', 0, (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
   // gate：active 必須是超級拉帝亞斯ex 且本回合移到戰鬥場
-  if (!p.active) return addLog(st, '潔淨支援：戰鬥場無寶可夢', idx);
+  if (!p.active) return rejectAbilityUse(st, '潔淨支援：戰鬥場無寶可夢', idx);
   const activeName = pool.get(p.active.cardId)?.name;
   if (activeName !== '超級拉帝亞斯ex') {
     return addLog(st, '潔淨支援：戰鬥場非「超級拉帝亞斯ex」', idx);
@@ -301,8 +300,8 @@ regA('拉帝歐斯', 0, (st, idx, pool, _cardInst) => {
 regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
-  if (!opp.active) return addLog(st, '大力捕捉器：對手戰鬥場無寶可夢', idx);
-  if (opp.bench.length === 0) return addLog(st, '大力捕捉器：對手備戰區無寶可夢', idx);
+  if (!opp.active) return rejectAbilityUse(st, '大力捕捉器：對手戰鬥場無寶可夢', idx);
+  if (opp.bench.length === 0) return rejectAbilityUse(st, '大力捕捉器：對手備戰區無寶可夢', idx);
   // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
   //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
   const validIids = opp.bench
@@ -338,7 +337,7 @@ regA('鐵掌力士', 0, (st, idx, _pool, _cardInst) => {
 regA('狂歡浪舞鴨', 0, (st, idx, _pool, _cardInst) => {
   const p = st.players[idx];
   if (p.hand.length === 0) {
-    return addLog(st, '快節奏：手牌為空，無法支付 1 張手牌的代價', idx);
+    return rejectAbilityUse(st, '快節奏：手牌為空，無法支付 1 張手牌的代價', idx);
   }
   const s = addLog(st, '狂歡浪舞鴨：使用特性「快節奏」，選擇 1 張手牌放回牌庫下方', idx);
   return withPending(s, {
@@ -391,7 +390,7 @@ regR('quaquaval-fast-tempo', (st, idx, iids, _params, pool) => {
 regAByName('莫魯貝可', '搜尋點心', (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
   if (p.deck.length === 0) {
-    return addLog(st, '搜尋點心：牌庫為空，無法使用', idx);
+    return rejectAbilityUse(st, '搜尋點心：牌庫為空，無法使用', idx);
   }
   const topInst = p.deck[0];
   const topName = pool.get(topInst.cardId)?.name ?? '?';
@@ -447,7 +446,7 @@ regAByName('夢幻ex', '重啟', (state, aIdx, _pool, inst) => {
   const need = Math.max(0, 3 - p.hand.length);
   if (need === 0) return addLog(state, '重啟：手牌已達 3 張以上，不抽卡', aIdx);
   const drawn = Math.min(need, p.deck.length);
-  if (drawn === 0) return addLog(state, '重啟：牌庫為空', aIdx);
+  if (drawn === 0) return rejectAbilityUse(state, '重啟：牌庫為空', aIdx);
   const s = addLog(state, `重啟：抽到手牌滿 3（補 ${drawn} 張）`, aIdx);
   return drawCards(s, aIdx, drawn);
 });

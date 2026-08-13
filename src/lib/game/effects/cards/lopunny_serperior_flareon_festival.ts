@@ -22,6 +22,7 @@ import {
   addLog, updatePlayer, withPending,
   shuffle,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
+  rejectAbilityUse,         // ⭐v6.181 中央「拒絕出口」
 } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import { isBasicEnergyOfType } from '../../engine';
@@ -43,7 +44,7 @@ regA('蜜集大蛇ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
   const grassIdx = p.hand.findIndex(c => isBasicEnergyOfType(pool.get(c.cardId), 'Grass'));
   if (grassIdx < 0) return addLog(st, '熟成充能：手牌無基本【草】能量', idx);
-  if (!p.active && p.bench.length === 0) return addLog(st, '熟成充能：場上無寶可夢', idx);
+  if (!p.active && p.bench.length === 0) return rejectAbilityUse(st, '熟成充能：場上無寶可夢', idx);
   // v5.184：詛咒根擋手牌附能 — filter 可附能的場上寶可夢
   const allField: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
   const validIids = allField.filter(c => !c.cantAttachEnergyThisTurn).map(c => c.iid);
@@ -113,7 +114,7 @@ regA('啪咚猴', 0, (st, idx, pool) => {
     return addLog(st, '衝衝鼓：戰鬥位不是有效的祭典樂舞寶可夢（或已被對手特性消除）', idx);
   }
   if (st.players[idx].deck.length === 0) {
-    return addLog(st, '衝衝鼓：牌庫為空', idx);
+    return rejectAbilityUse(st, '衝衝鼓：牌庫為空', idx);
   }
   let s = addLog(st, '衝衝鼓：從牌庫選 1 張卡加入手牌（重洗）', idx);
   return withPending(s, {
@@ -152,7 +153,7 @@ regA('貓頭夜鷹', 0, (st, idx, pool, cardInst) => {
     return addLog(st, '搜尋寶石：自己場上無「太晶」寶可夢', idx);
   }
   if (st.players[idx].deck.length === 0) {
-    return addLog(st, '搜尋寶石：牌庫為空', idx);
+    return rejectAbilityUse(st, '搜尋寶石：牌庫為空', idx);
   }
   const max = Math.min(2, st.players[idx].deck.length);
   let s = addLog(st, `搜尋寶石：從牌庫選 ≤${max} 張訓練家卡加入手牌（重洗）`, idx);
@@ -193,7 +194,7 @@ regA('貓頭夜鷹', 0, (st, idx, pool, cardInst) => {
 //   在給對手看過後加入手牌。並且重洗牌庫。」
 // 實作：deck-search 用 'Pokemon' 寬 filter，resolver 內 validate 鋼屬性 + 進化階段
 regA('蓋諾賽克特ex', 0, (st, idx, pool) => {
-  if (st.players[idx].deck.length === 0) return addLog(st, '金屬信號：牌庫為空', idx);
+  if (st.players[idx].deck.length === 0) return rejectAbilityUse(st, '金屬信號：牌庫為空', idx);
   st = addLog(st, '金屬信號：從牌庫選最多 2 張【鋼】進化寶可夢加入手牌', idx);
   return withPending(st, {
     type: 'deck-search',
@@ -219,7 +220,7 @@ regA('蓋諾賽克特ex', 0, (st, idx, pool) => {
 //   然後啟動 v158_energy_chain 讓玩家逐張選目標寶可夢（限定【超】或【鋼】，可含 active）。
 regA('大吾的巨金怪ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
-  if (p.deck.length === 0) return addLog(st, 'X啟動：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, 'X啟動：牌庫為空', idx);
   // 場上必須有 超 或 鋼 寶可夢
   const hasTarget = [p.active, ...p.bench].some(c => {
     if (!c) return false;

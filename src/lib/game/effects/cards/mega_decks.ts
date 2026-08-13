@@ -13,8 +13,7 @@ import type { Card } from '$lib/cards/types';
 import {
   reg, regR, regG, regA, regPre, regPost,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, discardHand,
-  healResolver, recordOppKO, getAllAttachedTools, joinCardNames,
-} from '../_shared';
+  healResolver, recordOppKO, getAllAttachedTools, joinCardNames, rejectAbilityUse } from '../_shared';
 import {
   hitBenchPickPost, canApplyAttackEffectToTarget, resolveBenchGuard,
   passiveImmunityDamageBlock,
@@ -498,7 +497,7 @@ regA('旋轉洛托姆', 0, (st, idx) => {
     return addLog(st, '風扇呼喚：只能在自己的最初回合使用', idx);
   }
   if (st.players[idx].deck.length === 0) {
-    return addLog(st, '風扇呼喚：牌庫已空', idx);
+    return rejectAbilityUse(st, '風扇呼喚：牌庫已空', idx);
   }
   const s = addLog(st, '風扇呼喚：從牌庫選 0-3 張 HP≤100 的【無】寶可夢加手牌', idx);
   return withPending(s, {

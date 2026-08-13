@@ -29,8 +29,7 @@ import {
   sameEvoName,
   updatePlayer,
   withPending,
-  triggerOakeyeMillIfApplicable, isOwnFirstTurn,
-} from '../_shared';
+  triggerOakeyeMillIfApplicable, isOwnFirstTurn, rejectAbilityUse } from '../_shared';
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { countEnergy } from '../../engine';
 import { flipCoinsWithLog } from '../../effects';
@@ -190,7 +189,7 @@ regA('小木靈', 0, (state, aIdx, pool, inst) => {
     .map(c => c.iid);
 
   if (evoIids.length === 0) {
-    return addLog(state, '怨恨進化：手牌中沒有可進化的卡，效果無效', aIdx);
+    return rejectAbilityUse(state, '怨恨進化：手牌中沒有可進化的卡，效果無效', aIdx);
   }
 
   state = addLog(state, '怨恨進化：從手牌選擇 1 張進化卡進化此小木靈', aIdx);

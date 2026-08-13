@@ -64,7 +64,7 @@ import {
   // v5.172：深淵之瞳手動 KO 模式（recordOppKO / addPendingPrize 都在 _shared.ts）
   recordOppKO,
   addPendingPrize,
-  regG} from '../_shared';
+  regG, rejectAbilityUse } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { openDeckViewReshuffle } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
@@ -1169,9 +1169,9 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 // Phase 5 (v4.83) — 3 個特性 + 4 個訓練家（純 m5_preview 內實作，不動 engine）
 //
 // 特性（regA / regAByName 機制）：
-//   1. 銃嘴大鳥|天空抽牌（1 回合 1 次：從牌庫抽 1 張）
+//   1. 銃嘴大鳥|天空抽出（1 回合 1 次：從牌庫抽 1 張）
 //   2. 銀伴戰獸|拍檔呼喚（gate: 手牌 = 0 + 1 回合 1 次 → 牌庫選 1 支援者加手牌）
-//   3. 戰槌龍ex|破壞之頭錘（gate: 戰鬥場 + 1 回合 1 次 → 擲幣正面則對手戰鬥位丟 1 能量）
+//   3. 戰槌龍ex|破壞頭錘（gate: 戰鬥場 + 1 回合 1 次 → 擲幣正面則對手戰鬥位丟 1 能量）
 //
 // 訓練家（reg / regG 機制）：
 //   4. 沐淨（Supporter，棄手牌中 ≤2 張非規則寶可夢 → 抽 N×3 張）
@@ -1193,14 +1193,14 @@ regPost('超級達克萊伊ex|深淵之瞳', (state, aIdx, pool) => {
 //   - 閃電能量 — 需動既有 SPECIAL_ENERGY_TYPES + attack bonus hook
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── 1. 銃嘴大鳥|天空抽牌 — 1 回合 1 次：抽 1 張 ─────────────────────
+// ── 1. 銃嘴大鳥|天空抽出 — 1 回合 1 次：抽 1 張 ─────────────────────
 //   卡面：「在自己的回合時可使用 1 次。從自己的牌庫抽 1 張卡。」
 //   engine.ts 內 ABILITY_USED_THIS_TURN 由 regA 自動標記。
 regA('銃嘴大鳥', 0, (st, idx) => {
   const p = st.players[idx];
-  if (p.deck.length === 0) return addLog(st, '天空抽牌：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '天空抽出：牌庫為空', idx);
   const [drawn, ...rest] = p.deck;
-  return updatePlayer(addLog(st, '天空抽牌：從牌庫抽 1 張', idx), idx, pl => ({
+  return updatePlayer(addLog(st, '天空抽出：從牌庫抽 1 張', idx), idx, pl => ({
     ...pl, deck: rest, hand: [...pl.hand, drawn],
   }));
 });
@@ -1211,9 +1211,9 @@ regA('銃嘴大鳥', 0, (st, idx) => {
 regA('銀伴戰獸', 0, (st, idx) => {
   const p = st.players[idx];
   if (p.hand.length !== 0) {
-    return addLog(st, '拍檔呼喚：自己手牌須為 0 張才能使用', idx);
+    return rejectAbilityUse(st, '拍檔呼喚：自己手牌須為 0 張才能使用', idx);
   }
-  if (p.deck.length === 0) return addLog(st, '拍檔呼喚：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '拍檔呼喚：牌庫為空', idx);
   return withPending(
     addLog(st, '拍檔呼喚：從牌庫選 1 張支援者加手牌（給對手看過後）', idx),
     {
@@ -1243,23 +1243,23 @@ regR('m5-silvally-partner-call', (state, aIdx, iids, _params, pool) => {
   });
 });
 
-// ── 3. 戰槌龍ex|破壞之頭錘 — gate: 戰鬥場 + 1 回合 1 次 ─────────
+// ── 3. 戰槌龍ex|破壞頭錘 — gate: 戰鬥場 + 1 回合 1 次 ─────────
 //   卡面：「這隻寶可夢若在戰鬥場，則在自己的回合時可使用 1 次。
 //          擲 1 次硬幣，若為正面，從對手的戰鬥寶可夢身上選擇 1 個能量，丟棄。」
 regA('戰槌龍ex', 0, (st, idx, pool, inst) => {
   const p = st.players[idx];
   if (!inst || p.active?.iid !== inst.iid) {
-    return addLog(st, '破壞之頭錘：必須在戰鬥場才能使用', idx);
+    return rejectAbilityUse(st, '破壞頭錘：必須在戰鬥場才能使用', idx);
   }
   const r = flipCoinsWithLog(st, 1, '破壞頭錘', idx);
-  if (r.heads === 0) return addLog(r.state, '破壞之頭錘：反面，無效果', idx);
+  if (r.heads === 0) return addLog(r.state, '破壞頭錘：反面，無效果', idx);
   // v5.974：正面 → 中央 discardOppActiveEnergyPost(count=1, ability-effect gate:光之翼等擋;原 bespoke 漏 gate)。
   return discardOppActiveEnergyPost('破壞頭錘', 'any', 1, 'ability-effect')(r.state, idx, pool);
 });
 regR('m5-warlord-destroy-headbutt', (state, aIdx, iids) => {
   if (iids.length === 0) return state;
   const dIdx = (1 - aIdx) as 0 | 1;
-  return updatePlayer(addLog(state, '破壞之頭錘：對手戰鬥位丟 1 能量', aIdx), dIdx, p => {
+  return updatePlayer(addLog(state, '破壞頭錘：對手戰鬥位丟 1 能量', aIdx), dIdx, p => {
     if (!p.active) return p;
     const toDiscard = p.active.energyAttached.filter(e => iids.includes(e.iid));
     return {
@@ -1764,7 +1764,7 @@ regPre('破破舵輪|悔念錨', (state, aIdx, pool) => {
 // ── 西獅海壬|全滿旋律 — 進化當回合 1 次：恢復自方 1 隻寶可夢全部 HP ─
 regA('西獅海壬', 0, (st, idx, pool, inst) => {
   if (!inst || !inst.evolvedThisTurn) {
-    return addLog(st, '全滿旋律：只能在本回合從手牌進化時使用 1 次', idx);
+    return rejectAbilityUse(st, '全滿旋律：只能在本回合從手牌進化時使用 1 次', idx);
   }
   const p = st.players[idx];
   const allOwn: import('../../types').CardInstance[] = [
@@ -1772,7 +1772,7 @@ regA('西獅海壬', 0, (st, idx, pool, inst) => {
     ...p.bench,
   ];
   if (allOwn.length === 0) {
-    return addLog(st, '全滿旋律：場上無寶可夢可恢復', idx);
+    return rejectAbilityUse(st, '全滿旋律：場上無寶可夢可恢復', idx);
   }
   // 過濾出有受傷的寶可夢（damage > 0）做候選提示
   const injured = allOwn.filter(c => (c.damage ?? 0) > 0);

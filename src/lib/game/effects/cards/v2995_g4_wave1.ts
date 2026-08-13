@@ -39,8 +39,7 @@ import {
   regA, regAByName, regR,
   addLog, updatePlayer, withPending, shuffle, drawCards,
   clearActiveEffects,
-  healResolver,
-} from '../_shared';
+  healResolver, rejectAbilityUse } from '../_shared';
 import { flipCoinsWithLog, applyStatusToOppActive, energyProvidesType } from '../../effects'; // v5.702 host-aware 草能量述詞
 import type { Card } from '$lib/cards/types';
 
@@ -75,7 +74,7 @@ function hasMegaExOfType(
 regA('霜奶仙ex', 0, (st, idx, _pool, _cardInst) => {
   const p = st.players[idx];
   const hasAnyone = !!p.active || p.bench.length > 0;
-  if (!hasAnyone) return addLog(st, '甜點之禮：場上沒有寶可夢可恢復', idx);
+  if (!hasAnyone) return rejectAbilityUse(st, '甜點之禮：場上沒有寶可夢可恢復', idx);
   const s = addLog(st, '甜點之禮：選擇 1 隻自己的寶可夢恢復 30 HP', idx);
   return withPending(s, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
@@ -97,11 +96,11 @@ regA('壺壺', 0, (st, idx, pool, cardInst) => {
   const src = cardInst
     ? allPokes.find(c => c.iid === cardInst.iid)
     : allPokes.find(c => pool.get(c.cardId)?.name === '壺壺');
-  if (!src) return addLog(st, '發酵果汁：找不到壺壺', idx);
+  if (!src) return rejectAbilityUse(st, '發酵果汁：找不到壺壺', idx);
 
   // 檢查身上有【草】能量（v5.702 host-aware：古舊/稜鏡視為草也算，與 engine 可用性 gate 一致）
   const hasGrass = src.energyAttached.some(e => energyProvidesType(src, e, 'Grass', pool));
-  if (!hasGrass) return addLog(st, '發酵果汁：身上沒有【草】能量', idx);
+  if (!hasGrass) return rejectAbilityUse(st, '發酵果汁：身上沒有【草】能量', idx);
 
   const s = addLog(st, '發酵果汁：選擇 1 隻自己的寶可夢恢復 30 HP', idx);
   return withPending(s, {
@@ -119,7 +118,7 @@ regR('fermented-juice-heal-30', healResolver);
 //   注意：卡面只能恢復「戰鬥寶可夢」— 直接 mutate 不開 picker
 regA('寶包繭', 0, (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
-  if (!p.active) return addLog(st, '飛葉治癒：戰鬥場沒有寶可夢', idx);
+  if (!p.active) return rejectAbilityUse(st, '飛葉治癒：戰鬥場沒有寶可夢', idx);
   const name = pool.get(p.active.cardId)?.name ?? '?';
   const before = p.active.damage;
   const actual = Math.min(before, 20);
@@ -137,10 +136,10 @@ regA('寶包繭', 0, (st, idx, pool, _cardInst) => {
 regAByName('樂天河童', '激動治癒', (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
   if (!hasMegaExOfType(p, pool, 'Grass')) {
-    return addLog(st, '激動治癒：場上沒有【草】屬性的超級進化【ex】', idx);
+    return rejectAbilityUse(st, '激動治癒：場上沒有【草】屬性的超級進化【ex】', idx);
   }
   const hasAnyone = !!p.active || p.bench.length > 0;
-  if (!hasAnyone) return addLog(st, '激動治癒：場上沒有寶可夢可恢復', idx);
+  if (!hasAnyone) return rejectAbilityUse(st, '激動治癒：場上沒有寶可夢可恢復', idx);
   const s = addLog(st, '激動治癒：選擇 1 隻自己的寶可夢恢復 60 HP', idx);
   return withPending(s, {
     type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
@@ -163,7 +162,7 @@ regR('rasoten-mega-heal-60', healResolver);
 regA('燈罩夜菇', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
-  if (!dp.active) return addLog(st, '平靜之光：對手戰鬥場沒有寶可夢', idx);
+  if (!dp.active) return rejectAbilityUse(st, '平靜之光：對手戰鬥場沒有寶可夢', idx);
   // v5.444：改走中央 applyStatusToOppActive（ability-effect）— 化隱 / 不眠 / 祭典會場等免疫
   return applyStatusToOppActive(st, idx, 'asleep', pool, { kind: 'ability-effect', label: '平靜之光' });
 });
@@ -176,7 +175,7 @@ regA('燈罩夜菇', 0, (st, idx, pool, _cardInst) => {
 regA('波爾凱尼恩ex', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
-  if (!dp.active) return addLog(st, '燒灼蒸汽：對手戰鬥場沒有寶可夢', idx);
+  if (!dp.active) return rejectAbilityUse(st, '燒灼蒸汽：對手戰鬥場沒有寶可夢', idx);
   // v5.444：改走中央 applyStatusToOppActive（ability-effect）—【化隱】免疫對手特性效果
   //   （原本 inline 直接上灼傷，化隱寶可夢被燒灼蒸汽灼傷的 bug 根因）。
   return applyStatusToOppActive(st, idx, 'burned', pool, { kind: 'ability-effect', label: '燒灼蒸汽' });
@@ -293,9 +292,9 @@ regR('flowery-lure', (st, idx, iids, _params, pool) => {
 //        actorIdx 改為對手 dIdx — 由對手做選擇
 regA('大劍鬼', 0, (st, idx, _pool, _cardInst) => {
   const p = st.players[idx];
-  if (!p.active) return addLog(st, '激流旋渦：戰鬥場沒有寶可夢', idx);
+  if (!p.active) return rejectAbilityUse(st, '激流旋渦：戰鬥場沒有寶可夢', idx);
   if (p.bench.length === 0) {
-    return addLog(st, '激流旋渦：備戰區沒有寶可夢可互換', idx);
+    return rejectAbilityUse(st, '激流旋渦：備戰區沒有寶可夢可互換', idx);
   }
   const s = addLog(st, '激流旋渦：選 1 隻自己的備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
@@ -374,7 +373,7 @@ regA('直衝熊', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst || !p.active) return st;
   const bIdx = p.bench.findIndex(c => c.iid === cardInst.iid);
-  if (bIdx < 0) return addLog(st, '激動衝刺：直衝熊不在備戰區', idx);
+  if (bIdx < 0) return rejectAbilityUse(st, '激動衝刺：直衝熊不在備戰區', idx);
 
   // gate：場上需有超級進化ex
   const all: CardInstance[] = [p.active, ...p.bench];
@@ -383,7 +382,7 @@ regA('直衝熊', 0, (st, idx, pool, cardInst) => {
     return card?.name?.startsWith('超級')
       && (card?.subtype === 'ex' || (card?.name?.endsWith('ex') ?? false));
   });
-  if (!hasMegaEx) return addLog(st, '激動衝刺：場上沒有超級進化【ex】', idx);
+  if (!hasMegaEx) return rejectAbilityUse(st, '激動衝刺：場上沒有超級進化【ex】', idx);
 
   const oldActive = clearActiveEffects(p.active);
   // v5.248：補 movedToActiveThisTurn flag
@@ -408,7 +407,7 @@ regA('魔幻假面喵', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst || !p.active) return st;
   const bIdx = p.bench.findIndex(c => c.iid === cardInst.iid);
-  if (bIdx < 0) return addLog(st, '表演時間：魔幻假面喵不在備戰區', idx);
+  if (bIdx < 0) return rejectAbilityUse(st, '表演時間：魔幻假面喵不在備戰區', idx);
 
   const oldActive = clearActiveEffects(p.active);
   // v5.248：補 movedToActiveThisTurn flag
@@ -440,12 +439,12 @@ regA('魔幻假面喵', 0, (st, idx, pool, cardInst) => {
 //   引擎邏輯實測會在 USE_ABILITY 後 checkActiveAlive 觸發 promote 流程）。
 regA('凱西', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
-  if (!p.active) return addLog(st, '瞬間移動者：戰鬥場沒有寶可夢', idx);
+  if (!p.active) return rejectAbilityUse(st, '瞬間移動者：戰鬥場沒有寶可夢', idx);
   if (cardInst && p.active.iid !== cardInst.iid) {
-    return addLog(st, '瞬間移動者：凱西不在戰鬥場上', idx);
+    return rejectAbilityUse(st, '瞬間移動者：凱西不在戰鬥場上', idx);
   }
   if (p.bench.length === 0) {
-    return addLog(st, '瞬間移動者：備戰區沒有寶可夢可上場（規則：移除後將輸掉）', idx);
+    return rejectAbilityUse(st, '瞬間移動者：備戰區沒有寶可夢可上場（規則：移除後將輸掉）', idx);
   }
 
   const active = p.active;
@@ -521,7 +520,7 @@ regA('大力鱷', 0, (st, idx, pool, cardInst) => {
   const src = cardInst
     ? allPokes.find(c => c.iid === cardInst.iid)
     : allPokes.find(c => pool.get(c.cardId)?.name === '大力鱷');
-  if (!src) return addLog(st, '奔流之心：找不到大力鱷', idx);
+  if (!src) return rejectAbilityUse(st, '奔流之心：找不到大力鱷', idx);
   const name = pool.get(src.cardId)?.name ?? '大力鱷';
 
   const isActive = p.active?.iid === src.iid;

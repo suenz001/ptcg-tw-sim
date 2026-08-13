@@ -28,8 +28,7 @@ import {
   shuffle,
   buildDevolvedInstance, // v5.984 中央退化建構(暈眩山谷混亂例外+唯一removed iid)
   updatePlayer,
-  withPending,
-} from '../_shared';
+  withPending, rejectAbilityUse } from '../_shared';
 import { getAllAttachedTools, joinCardNames } from '../_shared'; // v5.841 丟道具含 extraTools(多重轉接) + v6.003 丟棄卡名 log
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
@@ -395,7 +394,7 @@ regA('彩粉蝶', 0, (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (dp.hand.length === 0 && dp.deck.length === 0) {
-    return addLog(st, '大飛翅：對手手牌與牌庫均為空', idx);
+    return rejectAbilityUse(st, '大飛翅：對手手牌與牌庫均為空', idx);
   }
   let s = st;
   if (dp.hand.length > 0) {

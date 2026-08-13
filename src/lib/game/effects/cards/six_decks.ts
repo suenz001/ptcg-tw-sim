@@ -23,6 +23,7 @@ import { isBasicPokemonCard } from '../../engine';  // v5.270: 毒電嬰呼朋�
 import type { Card } from '$lib/cards/types';
 import { regPre, regPost, regA, reg, regR, regG, addLog, addPrivateLog, drawCards, withPending, updatePlayer, applyBenchPlaceSideEffects, ATTACK_PRE, ATTACK_POST, ATTACK_PRE_DISCARD_CHOICE, discardActiveStadium, shuffle, getOwnBenchLimit,
   fireOnHandEnergyAttached, // v5.539 從手牌附能後觸發對手附能被動
+  rejectAbilityUse,         // ⭐v6.181 中央「拒絕出口」
 } from '../_shared';
 import { skipDefEffectsPre, coinHeadsMultiplyPre, bothBenchMultiplyPre, canApplyAttackEffectToTarget, isBenchProtected, dealAttackDamageToTarget, koTargetByAttackEffect, clearActiveEffects, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 
@@ -320,8 +321,8 @@ regPre('超級甲賀忍蛙ex|忍者飛旋', (state, aIdx, pool, action) => {
 //   v2.131：原 gate 寫 `< 2` 是錯的（卡面只需 1 張可丟）；改為 `=== 0`。
 //          getUsableAbilities 也加同樣的 gate（無手牌或牌庫空就隱藏按鈕）。
 regA('N的索羅亞克ex', 0, (st, idx) => {
-  if (st.players[idx].hand.length === 0) return addLog(st, '交易：手牌為空，無法丟棄', idx);
-  if (st.players[idx].deck.length === 0) return addLog(st, '交易：牌庫為空', idx);
+  if (st.players[idx].hand.length === 0) return rejectAbilityUse(st, '交易：手牌為空，無法丟棄', idx);
+  if (st.players[idx].deck.length === 0) return rejectAbilityUse(st, '交易：牌庫為空', idx);
   st = addLog(st, '交易：選 1 張手牌丟棄 → 抽 2 張', idx);
   return withPending(st, {
     type: 'hand-discard',
@@ -409,7 +410,7 @@ regA('龜足巨鎧', 0, (st, idx, pool) => {
   const allMy = [...(p.active ? [p.active] : []), ...p.bench];
   // v5.184：詛咒根擋手牌附能 — filter 受詛咒根影響的【鬥】寶可夢
   const fightPokes = allMy.filter(c => pool.get(c.cardId)?.pokemonType === 'Fighting' && !c.cantAttachEnergyThisTurn);
-  if (fightPokes.length === 0) return addLog(st, '岩石武裝：場上無可附能的【鬥】寶可夢', idx);
+  if (fightPokes.length === 0) return rejectAbilityUse(st, '岩石武裝：場上無可附能的【鬥】寶可夢', idx);
   st = addLog(st, '岩石武裝：選擇 1 隻【鬥】寶可夢，從手牌附 1 張基本【鬥】能量', idx);
   return withPending(st, {
     type: 'heal-target',
@@ -453,7 +454,7 @@ regR('rock-armor-attach', (state, aIdx, selectedPokeIids, _params, pool) => {
 // v2.117 修：filter 'BasicDarknessEnergy' engine 不認得 → 改用 'Energy:Darkness'。
 //   pending type 'attach-energy-bench-dark' 不存在 → 改用 heal-target + validIids（限備戰【惡】）。
 regA('顫弦蠑螈', 0, (st, idx, pool) => {
-  if (st.players[idx].deck.length === 0) return addLog(st, '惡棍衝天：牌庫為空', idx);
+  if (st.players[idx].deck.length === 0) return rejectAbilityUse(st, '惡棍衝天：牌庫為空', idx);
   const hasDarkBench = st.players[idx].bench.some(b => {
     const card = pool.get(b.cardId);
     return card?.pokemonType === 'Darkness';
@@ -507,7 +508,7 @@ regR('rascal-skyward-attach', (state, aIdx, selectedPokeIids, params, pool) => {
 // 超級甲賀忍蛙ex｜必殺手裡劍 — 若在戰鬥場、棄 1 水能量 → 對手 1 寶可夢放 6 傷
 regA('超級甲賀忍蛙ex', 0, (st, idx, pool, cardInst) => {
   if (st.players[idx].active?.iid !== cardInst?.iid) {
-    return addLog(st, '必殺手裡劍：這隻寶可夢必須在戰鬥場', idx);
+    return rejectAbilityUse(st, '必殺手裡劍：這隻寶可夢必須在戰鬥場', idx);
   }
   const waterIdx = st.players[idx].hand.findIndex(c => {
     const card = pool.get(c.cardId);

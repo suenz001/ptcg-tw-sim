@@ -1392,6 +1392,32 @@ export function addLog(
 }
 
 /**
+ * ⭐⭐⭐ v6.181 中央「拒絕出口」—— 動作條件不符時**唯一**該用的回傳方式。
+ *
+ * 背景（玩家回報 v6.181）：`USE_ABILITY` 是「先標記本回合已使用特性、再執行特性函式」，
+ * 所以特性函式內部 early-return 一行 log 時，特性權**已經被吃掉**了 —— 玩家整個回合
+ * 都不能再用那個特性。同型前科：v6.127 幸福切換、v6.131 日光轉移、v6.132 平靜之光。
+ *
+ * 用法：把原本的 `return addLog(st, '某某：條件不符', idx)` 改成
+ *       `return rejectAbilityUse(st, '某某：條件不符', idx)`。
+ * `applyAction` 的單一出口會偵測旗標，**原樣回傳動作前的 state**＋只補這一行原因，
+ * 所以呼叫端不需要自己小心「有沒有留下副作用」。
+ *
+ * ⚠ 只能用在「效果根本沒開始執行」的分支。
+ *   已經擲過硬幣／已經付過代價（棄能量、棄手牌）／已經揭示過隱藏區資訊之後，
+ *   那次特性**確實已經發動**，只是沒有結果 —— 那種分支要維持 `addLog`。
+ */
+export function rejectAbilityUse(
+  state: GameState,
+  msg: string,
+  playerIdx: 0 | 1 | null = null
+): GameState {
+  // ⚠ 原因 log 在這裡就寫好（很多既有測試／直接呼叫 regA 的路徑靠它看得到理由）。
+  //   applyAction 的出口在「整包回捲」時是從**動作前**的 state 重新補這一行，不會重複。
+  return { ...addLog(state, msg, playerIdx), _abilityUseRejected: msg, _abilityUseRejectedIdx: playerIdx };
+}
+
+/**
  * v2.130：寫一筆「私有/公開分流」log。
  * - 玩家 playerIdx 看 privateMsg（含具體卡名等敏感資訊）
  * - 對手 / 系統看 publicMsg（脫敏版，例：「搜到 一張卡片」）

@@ -28,8 +28,7 @@ import {
   reg, regR, regG, regPre, regPost, regA,
   type AttackPostFn,
   shuffle, updatePlayer, addLog, drawCards, withPending,
-  recordOppKO,
-} from '../_shared';
+  recordOppKO, rejectAbilityUse } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
@@ -229,7 +228,7 @@ regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const allPokes = [...(p.active ? [p.active] : []), ...p.bench];
   const src = cardInst ? allPokes.find(c => c.iid === cardInst.iid) : p.active;
-  if (!src) return addLog(st, '龐克練肌：找不到該寶可夢', idx);
+  if (!src) return rejectAbilityUse(st, '龐克練肌：找不到該寶可夢', idx);
 
   const cand = p.deck.filter(c => {
     const card = pool.get(c.cardId);
@@ -239,7 +238,7 @@ regA('瑪俐的長毛巨魔ex', 0, (st, idx, pool, cardInst) => {
   const maxN = Math.min(5, cand.length);
   // 找場上所有「瑪俐的」寶可夢
   const mariPokes = allPokes.filter(c => pool.get(c.cardId)?.name?.startsWith('瑪俐的'));
-  if (mariPokes.length === 0) return addLog(st, '龐克練肌：場上沒有「瑪俐的」寶可夢', idx);
+  if (mariPokes.length === 0) return rejectAbilityUse(st, '龐克練肌：場上沒有「瑪俐的」寶可夢', idx);
   if (maxN === 0) {
     // 無惡能量 — 仍展示牌庫搜尋 UI（minCount=0, maxCount=0 → 玩家只能按確認 → 重洗）
     const s = addLog(st, '龐克練肌：搜尋牌庫（重洗牌庫）', idx);

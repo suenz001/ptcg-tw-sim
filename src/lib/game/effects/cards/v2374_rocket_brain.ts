@@ -29,8 +29,7 @@ import type { CardInstance } from '../../types';
 import {
   regA, regR,
   addLog, updatePlayer, withPending,
-  isAbilityBlockedByOakEye,
-} from '../_shared';
+  isAbilityBlockedByOakEye, rejectAbilityUse } from '../_shared';
 import { markDamageCounterMovedFrom } from '../_shared'; // v5.947 移動指示物非治療
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -55,12 +54,12 @@ regA('火箭隊的以歐路普', 0, (st, idx, pool) => {
     return !!card?.name?.startsWith('火箭隊的') && c.damage >= 10;
   });
   if (sources.length === 0) {
-    return addLog(st, '火箭腦力：場上沒有「火箭隊的」寶可夢有傷害指示物', idx);
+    return rejectAbilityUse(st, '火箭腦力：場上沒有「火箭隊的」寶可夢有傷害指示物', idx);
   }
 
   // 目標候選：自己場上至少 ≥ 2 隻（含來源）才能轉移（必須有「其他寶可夢」可放）
   if (allOwn.length < 2) {
-    return addLog(st, '火箭腦力：場上沒有其他寶可夢可接收指示物', idx);
+    return rejectAbilityUse(st, '火箭腦力：場上沒有其他寶可夢可接收指示物', idx);
   }
 
   st = addLog(st, '火箭腦力：選 1 隻場上的「火箭隊的」寶可夢作為來源', idx);

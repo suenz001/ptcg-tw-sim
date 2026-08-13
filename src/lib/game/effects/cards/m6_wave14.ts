@@ -4,7 +4,7 @@
 // ⚠「以任意方式附於…」一律走中央 startEnergyChain（逐張選目標分散），
 //    禁「選 1 隻塞全部」（v5.858 教訓）。
 
-import { regAByName, regR, addLog, updatePlayer, withPending, deckWithCardsToBottom } from '../_shared';
+import { regAByName, regR, addLog, updatePlayer, withPending, deckWithCardsToBottom, rejectAbilityUse } from '../_shared';
 import { startEnergyChain } from './v158_energy_chain'; // v6.081 「以任意方式附加」中央 chain
 
 // ── 1. 鴨嘴炎獸｜拍檔提升 ─────────────────────────────────────────────────
@@ -25,12 +25,12 @@ regAByName('鴨嘴炎獸', '拍檔提升', (st, idx, pool) => {
   const fireIids = p.hand.filter(c => isBasicOf(c.cardId, '【火】')).map(c => c.iid);
   const ltngIids = p.hand.filter(c => isBasicOf(c.cardId, '【雷】')).map(c => c.iid);
   if (fireIids.length === 0 && ltngIids.length === 0) {
-    return addLog(st, '拍檔提升：手牌沒有基本【火】能量與基本【雷】能量', idx);
+    return rejectAbilityUse(st, '拍檔提升：手牌沒有基本【火】能量與基本【雷】能量', idx);
   }
   const targets = [...(p.active ? [p.active] : []), ...p.bench]
     .filter(c => PARTNER_BOOST_TARGET_NAMES.includes(pool.get(c.cardId)?.name ?? ''));
   if (targets.length === 0) {
-    return addLog(st, '拍檔提升：場上沒有「電擊魔獸」或「鴨嘴炎獸」', idx);
+    return rejectAbilityUse(st, '拍檔提升：場上沒有「電擊魔獸」或「鴨嘴炎獸」', idx);
   }
   const valid = [...fireIids, ...ltngIids];
   return withPending(
@@ -81,14 +81,14 @@ regR('m6-partner-boost-pick', (st, idx, iids, params, pool) => {
 //   ⚠「以任意方式」→ startEnergyChain 逐張選目標；目標限自己的【龍】寶可夢。
 regAByName('杖尾鱗甲龍', '鱗片律動', (st, idx, pool) => {
   const p = st.players[idx];
-  if (p.deck.length === 0) return addLog(st, '鱗片律動：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '鱗片律動：牌庫為空', idx);
   const top6 = p.deck.slice(0, 6);
   const basicEnergyIids = top6
     .filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })
     .map(c => c.iid);
   const dragons = [...(p.active ? [p.active] : []), ...p.bench]
     .filter(c => pool.get(c.cardId)?.pokemonType === 'Dragon');
-  if (dragons.length === 0) return addLog(st, '鱗片律動：場上沒有【龍】寶可夢', idx);
+  if (dragons.length === 0) return rejectAbilityUse(st, '鱗片律動：場上沒有【龍】寶可夢', idx);
   return withPending(
     addLog(st, `鱗片律動：查看牌庫上方 ${top6.length} 張，選任意數量基本能量附於自己的【龍】寶可夢`, idx), {
       type: 'deck-search', actorIdx: idx, sourcePlayerIdx: idx,
@@ -123,8 +123,8 @@ regAByName('超級烈空坐ex', '霸者咆哮', (st, idx, pool, cardInst) => {
   //   觸發點只有 promptPlayAbilities 的「放置時詢問」（engine 不把 ON_PLAY 特性放進手動清單），
   //   所以一次放置天然只會問一次，不需要額外的 per-turn gate。
   const selfIid = cardInst?.iid;
-  if (!selfIid) return addLog(st, '霸者咆哮：找不到發動的寶可夢', idx);
-  if (p.deck.length === 0) return addLog(st, '霸者咆哮：牌庫為空', idx);
+  if (!selfIid) return rejectAbilityUse(st, '霸者咆哮：找不到發動的寶可夢', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '霸者咆哮：牌庫為空', idx);
   const top4 = p.deck.slice(0, 4);
   const basicEnergyIids = top4
     .filter(c => { const cc = pool.get(c.cardId); return cc?.supertype === 'Energy' && cc.subtype === 'Basic'; })

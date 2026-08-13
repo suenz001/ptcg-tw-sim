@@ -64,6 +64,7 @@ import {
   triggerOakeyeMillIfApplicable,
   getOwnBenchLimit, joinCardNames,
   OPTIN_NO_PAYMENT, OPTIN_SENTINELS, type OptInPaySpec, // v5.992 若希望 opt-in 中央機制
+  rejectAbilityUse,                                     // ⭐v6.181 中央「拒絕出口」
 } from './effects/_shared';
 
 // re-export helper 給 engine.ts / 其他 resolver 用
@@ -2033,7 +2034,7 @@ regPost('謎擬Q|呼朋引伴', (state, aIdx, pool) => {
 regA('米立龍', 0, (st, idx) => {
   const p = st.players[idx];
   const top6 = p.deck.slice(0, 6);
-  if (top6.length === 0) return addLog(st, '集客：牌庫為空', idx);
+  if (top6.length === 0) return rejectAbilityUse(st, '集客：牌庫為空', idx);
   st = addLog(st, '集客：查看牌庫頂 6 張，選 1 張支援者加手牌', idx);
   return withPending(st, {
     type: 'deck-search',
@@ -2079,7 +2080,7 @@ regA('桃歹郎ex', 0, (st, idx, pool) => {
     return card?.pokemonType === 'Darkness' && card?.name !== '桃歹郎ex';
   });
   if (validBench.length === 0) {
-    return addLog(st, '支配鎖鏈：備戰區沒有可切換的惡寶可夢', idx);
+    return rejectAbilityUse(st, '支配鎖鏈：備戰區沒有可切換的惡寶可夢', idx);
   }
   st = addLog(st, '支配鎖鏈：選 1 隻備戰惡屬性寶可夢換出場，並中毒', idx);
   return withPending(st, {
@@ -5368,7 +5369,7 @@ regA('吉雉雞ex', 0, (st, idx) => {
   const attackKO = st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0;
   const abilityKO = st.oppAbilityKOdMeInLastOppTurn?.[idx] ?? 0;
   if (attackKO + abilityKO === 0) {
-    return addLog(st, '扭轉乾坤：上個對手主回合自己沒有寶可夢昏厥，無法使用', idx);
+    return rejectAbilityUse(st, '扭轉乾坤：上個對手主回合自己沒有寶可夢昏厥，無法使用', idx);
   }
   return updatePlayer(addLog(st, '吉雉雞ex 扭轉乾坤：抽 3 張', idx), idx, p => {
     const taken = p.deck.slice(0, 3);
@@ -5398,7 +5399,7 @@ regA('普隆隆姆', 0, (st, idx, pool) => {
   const energyInHand = st.players[idx].hand.filter(c =>
     pool.get(c.cardId)?.supertype === 'Energy'
   );
-  if (energyInHand.length === 0) return addLog(st, '轟鳴引擎：手牌沒有能量', idx);
+  if (energyInHand.length === 0) return rejectAbilityUse(st, '轟鳴引擎：手牌沒有能量', idx);
   st = addLog(st, '轟鳴引擎：選 1 張手牌能量丟棄，再從牌庫抽至手牌 6 張', idx);
   return withPending(st, {
     type: 'hand-discard',
@@ -5435,7 +5436,7 @@ regR('noisuru-rumble', (st, idx, iids, _params, pool) => {
 regA('鐵蟻ex', 0, (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   if (st.players[oppIdx].deck.length === 0) {
-    return addLog(st, '突然削退：對手牌庫為空', idx);
+    return rejectAbilityUse(st, '突然削退：對手牌庫為空', idx);
   }
   const _sdTop = st.players[oppIdx].deck.slice(0, 1);
   st = addLog(st, `突然削退：丟對手牌庫頂 1 張：${joinCardNames(_sdTop, pool)}`, idx);
@@ -14248,7 +14249,7 @@ regPost('竹蘭的烈咬陸鯊ex|龍之爆發', selfDiscardAllEnergyPost('龍之
 // 每回合 1 次（ABILITY_USED 一次性規則由 engine 管控）：從牌庫選 1 張「竹蘭的」寶可夢加手牌。
 regA('竹蘭的尖牙陸鯊', 0, (st, idx, pool) => {
   const p = st.players[idx];
-  if (p.deck.length === 0) return addLog(st, '王者呼聲：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '王者呼聲：牌庫為空', idx);
   
   st = addLog(st, '王者呼聲：從牌庫搜尋 1 張「竹蘭的」寶可夢加入手牌', idx);
   return withPending(st, {
@@ -14839,7 +14840,7 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
     if (card?.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
     return card.pokemonType === 'Grass' || card.name.includes('【草】');
   });
-  if (!grassEnergyInst) return addLog(st, '碧綠之舞：手牌中沒有基本草能量', idx);
+  if (!grassEnergyInst) return rejectAbilityUse(st, '碧綠之舞：手牌中沒有基本草能量', idx);
   const eName = pool.get(grassEnergyInst.cardId)?.name ?? '基本草能量';
   const sName = pool.get(src.cardId)?.name ?? '厄鬼椪 碧草面具ex';
   // 步驟 1：把能量從手牌直接附到自己身上（無需選擇 UI）
@@ -14944,7 +14945,7 @@ regA('火箭隊的操陷蛛', 0, (st, idx, pool, cardInst) => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic';
   });
-  if (cand.length === 0) return addLog(st, '充能：棄牌區沒有基本能量', idx);
+  if (cand.length === 0) return rejectAbilityUse(st, '充能：棄牌區沒有基本能量', idx);
   st = addLog(st, '充能：從棄牌區選 1 張基本能量附於此寶可夢', idx);
   return withPending(st, {
     type: 'discard-search', actorIdx: idx, sourcePlayerIdx: idx,
@@ -16443,7 +16444,7 @@ function isSleepImmune(inst: CardInstance | null, pool: Map<string, Card>): bool
 // v2.244：用 discardActiveStadium helper 丟回擁有者棄牌堆（不再簡化丟到觸發方）。
 regA('古劍豹', 0, (st, idx, pool, cardInst) => {
   if (!cardInst) return st;
-  if (!st.activeStadium) return addLog(st, '沉雪：場上沒有競技場卡', idx);
+  if (!st.activeStadium) return rejectAbilityUse(st, '沉雪：場上沒有競技場卡', idx);
   const stadiumCard = pool.get(st.activeStadium.cardId);
   return addLog(
     discardActiveStadium(st, idx),
@@ -16462,7 +16463,7 @@ regA('鐵斑葉ex', 0, (st, idx, pool, cardInst) => {
   if (!cardInst) return st;
   const player = st.players[idx];
   if (!player.active || player.active.iid === cardInst.iid) {
-    return addLog(st, '迅速游標：必須從備戰區發動且戰鬥場有寶可夢', idx);
+    return rejectAbilityUse(st, '迅速游標：必須從備戰區發動且戰鬥場有寶可夢', idx);
   }
   const benchIdx = player.bench.findIndex(c => c.iid === cardInst.iid);
   if (benchIdx < 0) return st;
@@ -16669,7 +16670,7 @@ PASSIVE_ATTACK_BONUS.set('勝利聲援', (att) => {
 // ── 阿響的火岩鼠｜旅途牽絆（特性）— 搜「阿響的冒險」到手 ────────────────────
 regA('阿響的火岩鼠', 0, (st, idx) => {
   const p = st.players[idx];
-  if (p.deck.length === 0) return addLog(st, '旅途牽絆：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '旅途牽絆：牌庫為空', idx);
   st = addLog(st, '旅途牽絆：從牌庫選 1 張「阿響的冒險」加手牌並重洗', idx);
   return withPending(st, {
     type: 'deck-search',
@@ -17343,7 +17344,7 @@ regA('炎武王', 0, (st, idx, pool) => {
     })
     .map(c => c.iid);
   if (fireEnergyIids.length === 0) {
-    return addLog(st, '烈火亂舞：手牌中沒有基本【火】能量', idx);
+    return rejectAbilityUse(st, '烈火亂舞：手牌中沒有基本【火】能量', idx);
   }
   st = addLog(st, '烈火亂舞：從手牌選 1 張基本【火】能量附於自己的寶可夢', idx);
   return withPending(st, {
@@ -17493,7 +17494,7 @@ regA('火神蛾', 0, (st, idx, pool) => {
     const cc = pool.get(c.cardId);
     return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.name?.includes('【火】') ?? false);
   });
-  if (!fire) return addLog(st, '熱浪鱗粉：手牌中沒有基本【火】能量', idx);
+  if (!fire) return rejectAbilityUse(st, '熱浪鱗粉：手牌中沒有基本【火】能量', idx);
   let s = updatePlayer(st, idx, pl => ({ ...pl, hand: pl.hand.filter(c => c.iid !== fire.iid), discard: [...pl.discard, fire] }));
   s = addLog(s, `熱浪鱗粉：從手牌丟棄 ${pool.get(fire.cardId)?.name ?? '基本【火】能量'}`, idx);
   return volcaronaAbility_HeatScale(s, idx, pool, fire);
@@ -17501,7 +17502,7 @@ regA('火神蛾', 0, (st, idx, pool) => {
 regA('超能妙喵', 0, (st, idx, pool) => {
   const p = st.players[idx];
   const slow = p.hand.find(c => pool.get(c.cardId)?.name === '悠哉尾草棒');
-  if (!slow) return addLog(st, '誘導之尾：手牌中沒有「悠哉尾草棒」', idx);
+  if (!slow) return rejectAbilityUse(st, '誘導之尾：手牌中沒有「悠哉尾草棒」', idx);
   let s = updatePlayer(st, idx, pl => ({ ...pl, hand: pl.hand.filter(c => c.iid !== slow.iid), discard: [...pl.discard, slow] }));
   s = addLog(s, '誘導之尾：從手牌丟棄「悠哉尾草棒」', idx);
   return supercatExpAbility_LureTail(s, idx, pool, slow);
@@ -17743,7 +17744,7 @@ regA('幸福蛋ex', 0, (st, idx, pool) => {
     })
   );
   if (sources.length === 0) {
-    return addLog(st, '幸福切換：沒有寶可夢身上有基本能量', idx);
+    return rejectAbilityUse(st, '幸福切換：沒有寶可夢身上有基本能量', idx);
   }
   return withPending(st, {
     type: 'heal-target',

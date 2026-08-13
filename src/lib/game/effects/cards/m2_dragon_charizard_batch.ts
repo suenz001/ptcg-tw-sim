@@ -23,8 +23,7 @@ import {
   regPost,
   regR,
   updatePlayer,
-  withPending,
-} from '../_shared';
+  withPending, rejectAbilityUse } from '../_shared';
 
 function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
@@ -64,7 +63,7 @@ function hasOwnFireMegaEx(st: GameState, idx: 0 | 1, pool: Map<string, Card>): b
 regA('超級快龍ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
   if (!p.active) return st;
-  if (p.bench.length === 0) return addLog(st, '天空搬運：沒有備戰寶可夢可互換', idx);
+  if (p.bench.length === 0) return rejectAbilityUse(st, '天空搬運：沒有備戰寶可夢可互換', idx);
   return withPending(addLog(st, '天空搬運：選擇 1 隻備戰寶可夢與戰鬥寶可夢互換', idx), {
     type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
@@ -133,7 +132,7 @@ regA('哈克龍', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const src = cardInst ? selfField(p).find(c => c.iid === cardInst.iid) : p.active;
   if (!src) return st;
-  if (src.energyAttached.length === 0) return addLog(st, '進化指引：這隻哈克龍身上沒有附加能量', idx);
+  if (src.energyAttached.length === 0) return rejectAbilityUse(st, '進化指引：這隻哈克龍身上沒有附加能量', idx);
   const cand = p.deck.filter(c => isEvolutionPokemon(pool.get(c.cardId)));
   // v3.853: 即使 cand=0 也仍開 picker — 讓玩家查看牌庫剩餘卡（Iron Rule 14）
   return withPending(addLog(st, '進化指引：從牌庫選擇 1 張進化寶可夢加入手牌', idx), {
@@ -148,11 +147,11 @@ regA('哈克龍', 0, (st, idx, pool, cardInst) => {
 // 若自己場上有【火】超級進化ex，可不限次數：手牌 1 張基本火能量附於備戰【火】寶可夢。
 regA('花舞鳥ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
-  if (!hasOwnFireMegaEx(st, idx, pool)) return addLog(st, '激動渦輪：場上沒有【火】屬性的超級進化寶可夢ex', idx);
+  if (!hasOwnFireMegaEx(st, idx, pool)) return rejectAbilityUse(st, '激動渦輪：場上沒有【火】屬性的超級進化寶可夢ex', idx);
   const energies = p.hand.filter(c => isBasicEnergyOf(pool.get(c.cardId), 'Fire', '【火】'));
-  if (energies.length === 0) return addLog(st, '激動渦輪：手牌沒有基本【火】能量', idx);
+  if (energies.length === 0) return rejectAbilityUse(st, '激動渦輪：手牌沒有基本【火】能量', idx);
   const targets = p.bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Fire');
-  if (targets.length === 0) return addLog(st, '激動渦輪：備戰區沒有【火】寶可夢', idx);
+  if (targets.length === 0) return rejectAbilityUse(st, '激動渦輪：備戰區沒有【火】寶可夢', idx);
   return withPending(addLog(st, '激動渦輪：選 1 張手牌基本【火】能量', idx), {
     type: 'hand-discard', actorIdx: idx, sourcePlayerIdx: idx,
     filter: 'Energy:Fire', minCount: 1, maxCount: 1,

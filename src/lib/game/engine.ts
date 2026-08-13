@@ -4512,6 +4512,25 @@ function handlePlaying(
       if (!hasFightEnergy) return state;
     }
 
+    // ⭐⭐⭐ v6.181 中央收斂：「這個特性現在能不能用」全站只有**一份**述詞 —— getUsableAbilities。
+    //   桌機 (+page.svelte)、手機 (MobilePortraitBattle.svelte)、本機 AI (ai.ts) 的特性按鈕
+    //   全部由它產生；引擎這裡改成「不在那份清單裡就完全不執行」⇒ 兩端不可能再漂移。
+    //   前科（同一家族、每次都是同型）：v6.127 幸福切換、v6.131 日光轉移／過度放電／金屬製造者、
+    //   v6.132 平靜之光／燒灼蒸汽 —— 都是「gate 與 regA 是兩份獨立條件，改了一邊忘了另一邊」。
+    //   ⚠ 例外只有一種：「從手牌使出／進化時／回備戰時可使用1次」那三類**觸發型**特性。
+    //     它們刻意被排除在手動清單之外（由 promptPlayAbilities / askUseRetreatToBenchAbility
+    //     彈 modal 詢問），但確認後仍是走 USE_ABILITY 派發 ⇒ 不能拿手動清單來判它們。
+    //     它們的 gate 留在本 handler 上方（evolvedThisTurn / playedFromHand 等）。
+    const _isTriggerOnlyAbility = ON_PLAY_FROM_HAND_ABILITIES.has(ability.name)
+      || ON_EVOLVE_FROM_HAND_ABILITIES.has(ability.name)
+      || ON_RETREAT_TO_BENCH_ABILITIES.has(ability.name);
+    if (!_isTriggerOnlyAbility) {
+      const _usableNow = getUsableAbilities(state, pool);
+      if (!_usableNow.some(u => u.iid === action.iid && u.abilityIndex === action.abilityIndex)) {
+        return state;   // 拒絕 = 完全 no-op（連 log 都不留，因為 UI 根本不該給這顆按鈕）
+      }
+    }
+
     // 查找 ABILITY_EFFECTS
     // v4.4995：先查 by-name (新)，fallback by-index (舊)
     const abilityFn = getAbilityFn(pokeCard!.name, ability.name, action.abilityIndex);
@@ -8535,8 +8554,27 @@ export function applyAction(
   action: GameAction,
   pool: Map<string, Card>
 ): GameState {
+  let raw = applyActionImpl(state, action, pool);
+  // ⭐⭐⭐ v6.181 單一「拒絕出口」——「動作被拒絕」與「動作做了一半」從此不可能混淆。
+  //   效果層只要回 `rejectAbilityUse(st, 原因, idx)`，這裡就**原樣回傳動作前的 state**，
+  //   只補那一行原因 log ⇒ 拒絕 = 完全 no-op（不消耗「本回合已使用特性」、不留旗標/代價）。
+  //   玩家回報：戰槌龍ex 在備戰按了特性 → 跳「必須在戰鬥場」，但特性權已被吃掉，整回合不能再用。
+  const rejMsg = raw._abilityUseRejected;
+  if (typeof rejMsg === 'string') {
+    const rejIdx = (raw._abilityUseRejectedIdx ?? state.activePlayerIndex) as 0 | 1 | null;
+    if (!state.pendingSelection) {
+      return addLog(state, rejMsg, rejIdx);
+    }
+    // ⚠ 這個 action 是在「解析既有 pending」——整包回捲會把 pending 一起還原，
+    //   玩家會被鎖在同一個永遠答不完的 picker 裡。這種情況只清旗標，不回捲
+    //   （原因 log 由 rejectAbilityUse 當場就寫進去了，這裡不重複補）。
+    const cleaned: GameState = { ...raw };
+    delete cleaned._abilityUseRejected;
+    delete cleaned._abilityUseRejectedIdx;
+    raw = cleaned;
+  }
   return stampPendingToken(state,
-    applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(applyActionImpl(state, action, pool)), pool)); // v5.866 險惡廢墟中央 / v6.175 pending 蓋章
+    applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(raw), pool)); // v5.866 險惡廢墟中央 / v6.175 pending 蓋章
 }
 function applyActionImpl(
   state: GameState,
@@ -10301,6 +10339,75 @@ export function getUsableAbilities(
         const hasKitree = allFs.some(c => pool.get(c.cardId)?.name?.startsWith('奇樹的') ?? false);
         if (!hasKitree) return;
       }
+      // ─── ⭐ v6.181 位置限制／已知區資源 gate 補完（玩家回報 戰槌龍ex 為起點的跨卡 audit）──
+      //   通則：這些條件 regA 端**本來就有**（不符就 early-return 一行 log），
+      //   但 getUsableAbilities 沒有同一份 ⇒ 按鈕照亮、按下去只吃掉特性權。
+      //   逐張都只用「卡面逐字寫的限制」或「公開／已知資訊」，沒有新增任何卡面沒有的限制。
+      // 戰槌龍ex｜破壞頭錘 — 卡面「**若這隻寶可夢在戰鬥場上**，則在自己的回合時可使用1次。
+      //   擲1次硬幣若為正面，則選擇1個對手的戰鬥寶可夢身上附加的能量，將其丟棄。」
+      //   ⚠ 第二個條件（對手戰鬥位要有能量）不是新裁定：毒粉蛾｜微風吹拂卡面與這張
+      //     **逐字同構**（同樣是「擲1次硬幣若為正面，則選擇1個對手的戰鬥寶可夢身上附加的
+      //     能量，…」，只差丟棄／放回手牌），站內既有 gate 就是這樣寫的（見本函式下方）。
+      //     這裡採同一判準以免同句型兩種行為；⚠ 已列進回報請站長複核（若要改成
+      //     「擲幣是無條件的第一步、不 gate」，破壞頭錘／微風吹拂／母親的誘引／媚惑引誘
+      //     四張要一起改，不可只改一張）。
+      if (ab.name === '破壞頭錘') {
+        if (player.active?.iid !== pk.iid) return;
+        const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
+        if (!oppA || oppA.energyAttached.length === 0) return;
+      }
+      // 弱丁魚ex｜大洋增輝 — 卡面「若這隻寶可夢**在戰鬥場上**，…將這隻寶可夢恢復「50」HP。」
+      //   damage === 0 時完全無事可做 → 同站內既定的治癒類 gate（飛葉治癒／甜點之禮／激動治癒）。
+      if (ab.name === '大洋增輝') {
+        if (player.active?.iid !== pk.iid) return;
+        if (pk.damage === 0) return;
+      }
+      // 尼多后｜母親的誘引 / 花潔夫人｜媚惑引誘 — 卡面「擲1次硬幣若為正面，則選擇1隻
+      //   **對手的備戰寶可夢**，與戰鬥寶可夢互換。」對手備戰是公開資訊；沒有備戰寶可夢時
+      //   正面也無事可做（同 毒粉蛾｜微風吹拂 的既有 gate，那張同樣是「擲幣→對手戰鬥位」型）。
+      if (ab.name === '母親的誘引' || ab.name === '媚惑引誘') {
+        const oppP = state.players[(1 - state.activePlayerIndex) as 0 | 1];
+        if (!oppP.active) return;
+        if (oppP.bench.length === 0) return;
+      }
+      // 鴨嘴炎獸｜拍檔提升 — 卡面「從自己的手牌選擇『基本【火】能量』卡與『基本【雷】能量』卡
+      //   最多各1張，以任意方式附於自己的『電擊魔獸』或者『鴨嘴炎獸』身上。」（手牌／自場＝已知區）
+      if (ab.name === '拍檔提升') {
+        const hasFireOrLtng = player.hand.some(c => {
+          const cc = pool.get(c.cardId);
+          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
+            && (/【火】/.test(cc.name) || /【雷】/.test(cc.name));
+        });
+        if (!hasFireOrLtng) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        if (!field.some(c => {
+          const n = pool.get(c.cardId)?.name ?? '';
+          return n === '電擊魔獸' || n === '鴨嘴炎獸';
+        })) return;
+      }
+      // 杖尾鱗甲龍｜鱗片律動 — 卡面「查看自己的牌庫上方6張卡，…附於自己的【龍】寶可夢身上。」
+      //   牌庫**張數**是公開資訊（官方 L821 電氣發生器同判準）；自己場上有沒有【龍】是已知區。
+      if (ab.name === '鱗片律動') {
+        if (player.deck.length === 0) return;
+        const field = [...(player.active ? [player.active] : []), ...player.bench];
+        if (!field.some(c => pool.get(c.cardId)?.pokemonType === 'Dragon')) return;
+      }
+      // 銀伴戰獸｜拍檔呼喚 — 卡面「若自己的手牌為0張，則在自己的回合時可使用1次。
+      //   從自己的牌庫選擇1張支援者…」（手牌張數＝自己已知；牌庫張數＝公開）
+      if (ab.name === '拍檔呼喚') {
+        if (player.hand.length !== 0) return;
+        if (player.deck.length === 0) return;
+      }
+      // 彩粉蝶｜大飛翅 — 卡面「對手將對手自己的手牌全部…放回牌庫下方。然後，對手從牌庫抽出4張卡。」
+      //   對手手牌／牌庫的**張數**都是公開資訊（內容才是隱藏的，不得拿內容 gate，見 v6.131 瞄準獵物）。
+      const _oppForBigWing = state.players[(1 - state.activePlayerIndex) as 0 | 1];
+      if (ab.name === '大飛翅' && _oppForBigWing.hand.length === 0 && _oppForBigWing.deck.length === 0) return;
+      // 「牌庫 0 張 ⇒ 整個效果無事可做」型（v6.132 站長裁定，只判張數不看內容）：
+      //   竹蘭的尖牙陸鯊｜王者呼聲、蓋諾賽克特ex｜金屬信號、銃嘴大鳥｜天空抽出。
+      //   ⚠ 這三張原本的註解寫「no gate needed — deck content is hidden info」——
+      //     那是對的（不能看**內容**），但**張數**是公開資訊，regA 端也早就寫了「牌庫為空」的拒絕。
+      if ((ab.name === '王者呼聲' || ab.name === '金屬信號' || ab.name === '天空抽出')
+          && player.deck.length === 0) return;
       // 毒粉蛾｜微風吹拂：對手戰鬥位有能量
       if (ab.name === '微風吹拂') {
         const oppIdx = (1 - state.activePlayerIndex) as 0 | 1;

@@ -14,7 +14,7 @@
 //                          與 赫普的啪嚓海膽ex｜反擊針 卡面逐字相同 → **不必實作即已生效**。
 //                          （守衛 test-m6-wave8.mjs 有實跑驗證，避免「以為會自動生效」的假設。）
 
-import { regA, addLog, updatePlayer, withPending, regR } from '../_shared';
+import { regA, addLog, updatePlayer, withPending, regR, rejectAbilityUse } from '../_shared';
 import type { CardInstance } from '../../types';
 
 // ── 弱丁魚ex｜大洋增輝 ─────────────────────────────────────────────────────
@@ -25,16 +25,16 @@ import type { CardInstance } from '../../types';
 regA('弱丁魚ex', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const act = p.active;
-  if (!act) return addLog(st, '大洋增輝：戰鬥場上沒有寶可夢', idx);
+  if (!act) return rejectAbilityUse(st, '大洋增輝：戰鬥場上沒有寶可夢', idx);
   // 觸發源必須就是戰鬥位那隻（engine 以 iid 傳入觸發源；備戰的同名卡不得發動）
   if (cardInst && cardInst.iid !== act.iid) {
-    return addLog(st, '大洋增輝：這隻寶可夢不在戰鬥場上，無法使用', idx);
+    return rejectAbilityUse(st, '大洋增輝：這隻寶可夢不在戰鬥場上，無法使用', idx);
   }
   if (!pool.get(act.cardId)?.abilities?.some(a => a.name === '大洋增輝')) {
-    return addLog(st, '大洋增輝：戰鬥場的寶可夢沒有這個特性', idx);
+    return rejectAbilityUse(st, '大洋增輝：戰鬥場的寶可夢沒有這個特性', idx);
   }
   const before = act.damage ?? 0;
-  if (before === 0) return addLog(st, '大洋增輝：HP 已全滿，無法恢復', idx);
+  if (before === 0) return rejectAbilityUse(st, '大洋增輝：HP 已全滿，無法恢復', idx);
   const healed = Math.min(50, before);
   return updatePlayer(
     addLog(st, `大洋增輝：弱丁魚ex 恢復 ${healed} HP`, idx),
@@ -55,7 +55,7 @@ regA('胖嘟嘟', 0, (st, idx, pool, cardInst) => {
     ? holders.find(c => c.iid === cardInst.iid)
     : holders.find(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '深海抽出'));
   if (!src || !pool.get(src.cardId)?.abilities?.some(a => a.name === '深海抽出')) {
-    return addLog(st, '深海抽出：找不到持有此特性的寶可夢', idx);
+    return rejectAbilityUse(st, '深海抽出：找不到持有此特性的寶可夢', idx);
   }
   // 步驟 1：抽 1 張
   let s = addLog(st, '深海抽出：從牌庫抽 1 張', idx);

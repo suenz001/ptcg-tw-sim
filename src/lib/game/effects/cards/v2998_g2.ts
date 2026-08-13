@@ -34,8 +34,7 @@ import { canApplyEffectToTarget } from '../../defense';
 import {
   regA, regAByName, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
-  getOwnBenchLimit,
-} from '../_shared';
+  getOwnBenchLimit, rejectAbilityUse } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
@@ -138,8 +137,8 @@ regR('v2998-swap-opp-active-bench', (st, idx, iids, params, pool) => {
 regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  if (!opp.active) return addLog(st, '繁星花紋：對手戰鬥場無寶可夢', idx);
-  if (opp.bench.length === 0) return addLog(st, '繁星花紋：對手備戰區為空', idx);
+  if (!opp.active) return rejectAbilityUse(st, '繁星花紋：對手戰鬥場無寶可夢', idx);
+  if (opp.bench.length === 0) return rejectAbilityUse(st, '繁星花紋：對手備戰區為空', idx);
   // 候選：剩 HP ≤ 90 的對手備戰寶可夢
   const validIids = opp.bench.filter(b => {
     const card = pool.get(b.cardId);
@@ -150,7 +149,7 @@ regA('安瓢蟲', 0, (st, idx, pool, _cardInst) => {
     return (getEffectiveHP(b, pool, st) - b.damage) <= 90; // v5.778 有效HP(含道具/場地),禁 base hp
   }).map(b => b.iid);
   if (validIids.length === 0) {
-    return addLog(st, '繁星花紋：對手備戰沒有剩餘 HP ≤ 90 的寶可夢', idx);
+    return rejectAbilityUse(st, '繁星花紋：對手備戰沒有剩餘 HP ≤ 90 的寶可夢', idx);
   }
   const s = addLog(st, '繁星花紋：選 1 隻對手剩餘 HP ≤ 90 的備戰寶可夢與戰鬥場互換', idx);
   return withPending(s, {
@@ -191,7 +190,7 @@ regA('雙尾怪手', 0, (st, idx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regA('風妖精', 0, (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
-  if (!p.active) return addLog(st, '柔柔治癒：戰鬥場無寶可夢', idx);
+  if (!p.active) return rejectAbilityUse(st, '柔柔治癒：戰鬥場無寶可夢', idx);
   const card = pool.get(p.active.cardId);
   if (card?.pokemonType !== 'Grass') {
     return addLog(st, `柔柔治癒：戰鬥場 ${card?.name ?? '?'} 不是【草】寶可夢`, idx);
@@ -228,7 +227,7 @@ regA('麻花犬ex', 0, (st, idx, pool, _cardInst) => {
   };
   const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
   const evolved = all.filter(isEvolved);
-  if (evolved.length === 0) return addLog(st, '飽腹時間：場上沒有進化寶可夢', idx);
+  if (evolved.length === 0) return rejectAbilityUse(st, '飽腹時間：場上沒有進化寶可夢', idx);
 
   // 累計棄能量
   const allDiscarded: CardInstance[] = [];
@@ -263,9 +262,9 @@ regA('麻花犬ex', 0, (st, idx, pool, _cardInst) => {
 regA('巧鍛匠', 0, (st, idx, _pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  if (!opp.active) return addLog(st, '臨場之錘：對手戰鬥場無寶可夢', idx);
+  if (!opp.active) return rejectAbilityUse(st, '臨場之錘：對手戰鬥場無寶可夢', idx);
   if (opp.active.energyAttached.length === 0) {
-    return addLog(st, '臨場之錘：對手戰鬥位沒有能量', idx);
+    return rejectAbilityUse(st, '臨場之錘：對手戰鬥位沒有能量', idx);
   }
   const r = flipCoinsWithLog(st, 1, '臨場之錘', idx);
   if (r.heads === 0) return addLog(r.state, '臨場之錘：反面，效果無效', idx);
@@ -310,7 +309,7 @@ regR('farfetchd-tcl-hammer-discard', (st, idx, iids, _params, pool) => {
 regAByName('怖納噬草', '恐慌牢籠', (st, idx, pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  if (!opp.active) return addLog(st, '恐慌牢籠：對手戰鬥場無寶可夢', idx);
+  if (!opp.active) return rejectAbilityUse(st, '恐慌牢籠：對手戰鬥場無寶可夢', idx);
   // v5.444：改走中央 applyStatusToOppActive（ability-effect）。
   //   原本註解「特性不走完整 attack-effect-shield，僅檢查憨憨臉」是錯的 —【化隱】
   //   卡面明寫免疫「對手的招式或特性的效果」，特性造成的混亂也應被化隱免疫。
@@ -332,7 +331,7 @@ regA('派帕的藏飽栗鼠', 0, (st, idx, pool, _cardInst) => {
     .filter(c => pool.get(c.cardId)?.name === '派帕的三明治')
     .map(c => c.iid);
   if (validIids.length === 0) {
-    return addLog(st, '貪慾點餐：棄牌區沒有「派帕的三明治」', idx);
+    return rejectAbilityUse(st, '貪慾點餐：棄牌區沒有「派帕的三明治」', idx);
   }
   const s = addLog(st,
     `貪慾點餐：從棄牌區選最多 2 張「派帕的三明治」加手牌（候選 ${validIids.length} 張）`,
@@ -374,7 +373,7 @@ regA('火箭隊的叉字蝠ex', 0, (st, idx, _pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
   const allOppCount = (opp.active ? 1 : 0) + opp.bench.length;
-  if (allOppCount === 0) return addLog(st, '亂咬：對手場上沒有寶可夢', idx);
+  if (allOppCount === 0) return rejectAbilityUse(st, '亂咬：對手場上沒有寶可夢', idx);
   const targetCount = Math.min(2, allOppCount);
   const s = addLog(st,
     `亂咬：選 ${targetCount} 隻對手寶可夢，各放 2 個傷害指示物`,
@@ -432,7 +431,7 @@ regA('火箭隊的大嘴蝠', 0, (st, idx, _pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
   const allOppCount = (opp.active ? 1 : 0) + opp.bench.length;
-  if (allOppCount === 0) return addLog(st, '暗中咬住：對手場上沒有寶可夢', idx);
+  if (allOppCount === 0) return rejectAbilityUse(st, '暗中咬住：對手場上沒有寶可夢', idx);
   const s = addLog(st, '暗中咬住：選 1 隻對手寶可夢放 2 個傷害指示物', idx);
   return withPending(s, {
     type: 'opp-poke-choose',
@@ -456,8 +455,8 @@ regA('莉莉艾的蝶結萌虻', 0, (st, idx, pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
   // v3.80：對手 bench 上限同樣考慮零之大空洞（oppIdx 視角）
-  if (opp.bench.length >= getOwnBenchLimit(st, oppIdx, pool)) return addLog(st, '邀請眨眼：對手備戰區已滿', idx);
-  if (opp.hand.length === 0) return addLog(st, '邀請眨眼：對手手牌為空', idx);
+  if (opp.bench.length >= getOwnBenchLimit(st, oppIdx, pool)) return rejectAbilityUse(st, '邀請眨眼：對手備戰區已滿', idx);
+  if (opp.hand.length === 0) return rejectAbilityUse(st, '邀請眨眼：對手手牌為空', idx);
   // 揭示對手手牌（公開）
   const handNames = opp.hand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
   let s = addLog(st, `邀請眨眼：查看對手手牌（${opp.hand.length} 張）— ${handNames}`, idx);
@@ -548,8 +547,8 @@ regR('lillie-ribombee-invite-place', (st, idx, iids, _params, pool) => {
 regA('赫普的毛毛角羊', 0, (st, idx, _pool, _cardInst) => {
   const oppIdx = (1 - idx) as 0 | 1;
   const opp = st.players[oppIdx];
-  if (!opp.active) return addLog(st, '挑戰角擊：對手戰鬥場無寶可夢', idx);
-  if (opp.bench.length === 0) return addLog(st, '挑戰角擊：對手備戰區為空', idx);
+  if (!opp.active) return rejectAbilityUse(st, '挑戰角擊：對手戰鬥場無寶可夢', idx);
+  if (opp.bench.length === 0) return rejectAbilityUse(st, '挑戰角擊：對手備戰區為空', idx);
   // v5.995 C-05 方向修正：效果對象是被選的【備戰寶可夢】→ 原戰鬥位免疫不擋（v5.839 舊 gate 方向相反，移除）；
   //   改過濾備戰候選（免疫特性效果的備戰不可被選為互換目標）。
   const validIids = opp.bench
@@ -577,12 +576,12 @@ regA('赫普的毛毛角羊', 0, (st, idx, _pool, _cardInst) => {
 regA('鬃岩狼人', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const src = findTriggerSource(p, pool, '鬃岩狼人', cardInst);
-  if (!src) return addLog(st, '尖刺纏身：找不到鬃岩狼人', idx);
+  if (!src) return rejectAbilityUse(st, '尖刺纏身：找不到鬃岩狼人', idx);
   const validIids = p.discard
     .filter(c => pool.get(c.cardId)?.name === '扣殺能量')
     .map(c => c.iid);
   if (validIids.length === 0) {
-    return addLog(st, '尖刺纏身：棄牌區沒有「扣殺能量」', idx);
+    return rejectAbilityUse(st, '尖刺纏身：棄牌區沒有「扣殺能量」', idx);
   }
   const s = addLog(st,
     `尖刺纏身：從棄牌區選最多 2 張「扣殺能量」附於這隻鬃岩狼人（候選 ${validIids.length} 張）`,
@@ -633,7 +632,7 @@ regR('lycanroc-spike-bind-attach', (st, idx, iids, params, pool) => {
 regA('大蔥鴨', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const src = findTriggerSource(p, pool, '大蔥鴨', cardInst);
-  if (!src) return addLog(st, '臨場背負：找不到大蔥鴨', idx);
+  if (!src) return rejectAbilityUse(st, '臨場背負：找不到大蔥鴨', idx);
   // 已有道具 → 不能再附（PTCG 規則：1 隻寶可夢只能附 1 張道具）
   if (src.toolAttached) {
     return addLog(st, '臨場背負：這隻寶可夢已附有道具，無法再附', idx);

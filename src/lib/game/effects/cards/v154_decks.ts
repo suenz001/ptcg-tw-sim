@@ -19,8 +19,7 @@ import {
   reg, regR, regG, regA,
   addLog, updatePlayer, withPending,
   shuffle,
-  deckWithCardsToBottom,
-} from '../_shared';
+  deckWithCardsToBottom, rejectAbilityUse } from '../_shared';
 import { isBasicEnergyOfType, totalEnergyUnits } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -41,7 +40,7 @@ regA('超級妙蛙花ex', 0, (st, idx, pool) => {
   const sourceIids = all
     .filter(c => c.energyAttached.some(e => isBasicEnergyOfType(pool.get(e.cardId), 'Grass')))
     .map(c => c.iid);
-  if (sourceIids.length === 0) return addLog(st, '日光轉移：場上無寶可夢附有基本【草】能量', idx);
+  if (sourceIids.length === 0) return rejectAbilityUse(st, '日光轉移：場上無寶可夢附有基本【草】能量', idx);
   if (all.length < 2) return addLog(st, '日光轉移：場上至少要 2 隻寶可夢', idx);
   let s = addLog(st, '日光轉移：選擇移出能量的寶可夢（來源）', idx);
   return withPending(s, {
@@ -141,7 +140,7 @@ regR('sunlight-transfer-target', (st, idx, iids, params, pool) => {
 //   （deck > 0 的條件 engine 那邊本來就有。）新增 lint Check Y 防再犯。
 regA('金屬怪', 0, (st, idx, _pool) => {
   const p = st.players[idx];
-  if (p.deck.length === 0) return addLog(st, '金屬製造者：牌庫為空', idx);
+  if (p.deck.length === 0) return rejectAbilityUse(st, '金屬製造者：牌庫為空', idx);
   // v4.29：移除「場上必須有【鋼】寶可夢」誤限制 — 卡面：「以任意方式附於自己的
   //   寶可夢身上」沒屬性限制，玩家可附給任何自己場上的寶可夢（含【無】等）。
   //   gate 只需 deck>0 即可；active 一定存在所以場上必有目標。

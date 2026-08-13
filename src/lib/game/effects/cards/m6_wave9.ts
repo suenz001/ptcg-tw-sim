@@ -3,7 +3,7 @@
 // ⚠ 卡面逐字取自 static/cards/M6.json，未經簡化。
 // ⚠ 本批兩項 Wilson 已裁定（2026-07-31），註解中標明依據，勿自行更動語意。
 
-import { regA, regPre, addLog, withPending } from '../_shared';
+import { regA, regPre, addLog, withPending, rejectAbilityUse } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense'; // v5.839 換位免疫 gate
 import { flipCoinsWithLog, countOwnFireLightningEnergyUnion } from '../../effects';
 
@@ -42,8 +42,8 @@ regPre('超級烈空坐ex|綠寶石風暴', (state, aIdx, pool) => {
 regA('尼多后', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const opp = st.players[dIdx];
-  if (!opp.active) return addLog(st, '母親的誘引：對手戰鬥場無寶可夢', idx);
-  if (opp.bench.length === 0) return addLog(st, '母親的誘引：對手備戰區無寶可夢', idx);
+  if (!opp.active) return rejectAbilityUse(st, '母親的誘引：對手戰鬥場無寶可夢', idx);
+  if (opp.bench.length === 0) return rejectAbilityUse(st, '母親的誘引：對手備戰區無寶可夢', idx);
   // ⚠ 擲幣先於「有無合法目標」的判定？—— 卡面順序是「擲1次硬幣若為正面，則選擇…」，
   //   擲幣是無條件的第一步，反面就結束（且已消耗當回合這次特性）。
   const r = flipCoinsWithLog(st, 1, '母親的誘引', idx);

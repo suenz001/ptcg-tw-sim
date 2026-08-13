@@ -46,8 +46,7 @@ import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741
 import {
   regA, regR,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, drawCards,
-  getOwnBenchLimit,
-} from '../_shared';
+  getOwnBenchLimit, rejectAbilityUse } from '../_shared';
 import { flipCoinsWithLog } from '../../effects';
 import type { Card } from '$lib/cards/types';
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
@@ -106,11 +105,11 @@ function findTriggerSource(
 regA('豆豆鴿', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const src = findTriggerSource(p, pool, '豆豆鴿', cardInst);
-  if (!src) return addLog(st, '緊急進化：找不到豆豆鴿', idx);
+  if (!src) return rejectAbilityUse(st, '緊急進化：找不到豆豆鴿', idx);
   const srcCard = pool.get(src.cardId);
   if (!srcCard?.hp) return st;
   const currentHP = getEffectiveHP(src, pool, st) - src.damage;  // v5.952 有效HP-傷害
-  if (currentHP > 30) return addLog(st, `緊急進化：剩餘 HP（${currentHP}） > 30，無法使用`, idx);
+  if (currentHP > 30) return rejectAbilityUse(st, `緊急進化：剩餘 HP（${currentHP}） > 30，無法使用`, idx);
 
   // 牌庫有「高傲雉雞」/「高傲雉雞ex」候選
   const validIids = p.deck
@@ -189,15 +188,15 @@ regR('duduge-emergency-evolve', (st, idx, iids, params, pool) => {
 regA('保母曼波', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst || p.active?.iid !== cardInst.iid) {
-    return addLog(st, '溫柔鰭：保母曼波不在戰鬥場', idx);
+    return rejectAbilityUse(st, '溫柔鰭：保母曼波不在戰鬥場', idx);
   }
   // v3.80：getOwnBenchLimit 支援零之大空洞
-  if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return addLog(st, '溫柔鰭：備戰區已滿', idx);
+  if (p.bench.length >= getOwnBenchLimit(st, idx, pool)) return rejectAbilityUse(st, '溫柔鰭：備戰區已滿', idx);
   const validIids = p.discard
     .filter(c => isBasicPokemonHPLE70(pool.get(c.cardId)))
     .map(c => c.iid);
   if (validIids.length === 0) {
-    return addLog(st, '溫柔鰭：棄牌區沒有 HP≤70 的【基礎】寶可夢', idx);
+    return rejectAbilityUse(st, '溫柔鰭：棄牌區沒有 HP≤70 的【基礎】寶可夢', idx);
   }
   const s = addLog(st, '溫柔鰭：從棄牌區選 1 張 HP≤70 的【基礎】寶可夢放置於備戰區', idx);
   return withPending(s, {
@@ -253,7 +252,7 @@ regR('mantyke-gentle-fin', (st, idx, iids, _params, pool) => {
 regA('始祖大鳥', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst || p.active?.iid !== cardInst.iid) {
-    return addLog(st, '原始之翼：始祖大鳥不在戰鬥場', idx);
+    return rejectAbilityUse(st, '原始之翼：始祖大鳥不在戰鬥場', idx);
   }
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效
   if (_calmGroundBlocks(st, (1 - idx) as 0 | 1, pool)) { // v5.985 被回手的是對手的卡
@@ -267,7 +266,7 @@ regA('始祖大鳥', 0, (st, idx, pool, cardInst) => {
     .filter(c => (c.evolvedFromStack?.length ?? 0) >= 1)
     .map(c => c.iid);
   if (validIids.length === 0) {
-    return addLog(st, '原始之翼：對手場上沒有進化寶可夢', idx);
+    return rejectAbilityUse(st, '原始之翼：對手場上沒有進化寶可夢', idx);
   }
   const s = addLog(st, '原始之翼：選擇 1 隻對手的進化寶可夢退化 1 層（卡放回對手手牌）', idx);
   return withPending(s, {
@@ -470,8 +469,8 @@ regR('flame-dance-attach-fight', (st, idx, iids, params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regA('火箭隊的多邊獸Ｚ', 0, (st, idx, _pool, _cardInst) => {
   const p = st.players[idx];
-  if (p.hand.length < 2) return addLog(st, '再構築：手牌不足 2 張', idx);
-  if (p.deck.length < 1) return addLog(st, '再構築：牌庫為空', idx);
+  if (p.hand.length < 2) return rejectAbilityUse(st, '再構築：手牌不足 2 張', idx);
+  if (p.deck.length < 1) return rejectAbilityUse(st, '再構築：牌庫為空', idx);
   const s = addLog(st, '再構築：選 2 張手牌丟棄 → 抽 1 張', idx);
   return withPending(s, {
     type: 'hand-discard',
@@ -523,7 +522,7 @@ regA('小霞的可達鴨', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst) return st;
   const bIdx = p.bench.findIndex(c => c.iid === cardInst.iid);
-  if (bIdx < 0) return addLog(st, '重步跳躍：這隻寶可夢不在備戰區', idx);
+  if (bIdx < 0) return rejectAbilityUse(st, '重步跳躍：這隻寶可夢不在備戰區', idx);
 
   const me = p.bench[bIdx];
   const myCardId = me.cardId;
@@ -596,7 +595,7 @@ regA('小霞的可達鴨', 0, (st, idx, pool, cardInst) => {
 regA('哥德小姐', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   if (!cardInst || p.active?.iid !== cardInst.iid) {
-    return addLog(st, '曲扭未來：哥德小姐不在戰鬥場', idx);
+    return rejectAbilityUse(st, '曲扭未來：哥德小姐不在戰鬥場', idx);
   }
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
@@ -637,8 +636,8 @@ regA('禿鷹娜', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   // v3.80：對手 bench 上限同樣考慮零之大空洞（dIdx 視角）
-  if (dp.bench.length >= getOwnBenchLimit(st, dIdx, pool)) return addLog(st, '瞄準獵物：對手備戰區已滿', idx);
-  if (dp.hand.length === 0) return addLog(st, '瞄準獵物：對手手牌為空', idx);
+  if (dp.bench.length >= getOwnBenchLimit(st, dIdx, pool)) return rejectAbilityUse(st, '瞄準獵物：對手備戰區已滿', idx);
+  if (dp.hand.length === 0) return rejectAbilityUse(st, '瞄準獵物：對手手牌為空', idx);
 
   // v3.9992：糾正錯誤註解 — 「查看對手手牌」只有「使用招式的玩家」能看到具體卡名；
   //   對手知道自己手牌（無感），但觀戰者不該被揭示。改用 addPrivateLog。
@@ -722,14 +721,14 @@ regA('奇樹的電肚蛙ex', 0, (st, idx, pool, _cardInst) => {
   const lightningIids = p.hand
     .filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Lightning'))
     .map(c => c.iid);
-  if (lightningIids.length === 0) return addLog(st, '電氣流：手牌沒有基本【雷】能量', idx);
+  if (lightningIids.length === 0) return rejectAbilityUse(st, '電氣流：手牌沒有基本【雷】能量', idx);
 
   const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
   // v5.184：詛咒根擋手牌附能 — filter 受詛咒根影響的「奇樹的」寶可夢
   const kitreeIids = all
     .filter(c => (pool.get(c.cardId)?.name?.startsWith('奇樹的') ?? false) && !c.cantAttachEnergyThisTurn)
     .map(c => c.iid);
-  if (kitreeIids.length === 0) return addLog(st, '電氣流：場上沒有可附能的「奇樹的」寶可夢', idx);
+  if (kitreeIids.length === 0) return rejectAbilityUse(st, '電氣流：場上沒有可附能的「奇樹的」寶可夢', idx);
 
   const s = addLog(st, '電氣流：選 1 張基本【雷】能量', idx);
   return withPending(s, {
@@ -796,9 +795,9 @@ regR('kitree-iron-bundle-flow-attach', (st, idx, iids, params, pool) => {
 regA('毒粉蛾', 0, (st, idx, pool, _cardInst) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
-  if (!dp.active) return addLog(st, '微風吹拂：對手戰鬥場無寶可夢', idx);
+  if (!dp.active) return rejectAbilityUse(st, '微風吹拂：對手戰鬥場無寶可夢', idx);
   if (dp.active.energyAttached.length === 0) {
-    return addLog(st, '微風吹拂：對手戰鬥位沒有能量', idx);
+    return rejectAbilityUse(st, '微風吹拂：對手戰鬥位沒有能量', idx);
   }
   // v3.08 美納斯｜平穩境地：對手場上有美納斯 → 整個效果無效（仍消耗每回合 1 次？
   //   保守採卡面解讀「效果不發生」→ 直接 short-circuit、不啟動擲幣，避免浪費觸發）

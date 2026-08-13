@@ -30,8 +30,7 @@ import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import { fireOnHandEnergyAttached } from '../_shared'; // v5.662 從手牌附能→對手反應(侵蝕詛咒/麻痺門牙)
 import {
   regA, regR,
-  addLog, updatePlayer, withPending, shuffle,
-} from '../_shared';
+  addLog, updatePlayer, withPending, shuffle, rejectAbilityUse } from '../_shared';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -71,7 +70,7 @@ regA('海豚俠', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const src = findOnBench(p, cardInst?.iid);
   if (!src) {
-    return addLog(st, '全能變身：找不到海豚俠（必須在備戰區）', idx);
+    return rejectAbilityUse(st, '全能變身：找不到海豚俠（必須在備戰區）', idx);
   }
   // 牌庫中是否有「海豚俠ex」？依 v2.321 隱藏資訊規則，仍可開搜尋讓玩家檢視牌庫
   // 即使無 ex 也可開（玩家可選「不選任何」結束）。
@@ -181,7 +180,7 @@ regA('鋼炮臂蝦', 0, (st, idx, pool, cardInst) => {
   const p = st.players[idx];
   const src = findOnBench(p, cardInst?.iid);
   if (!src) {
-    return addLog(st, '返回重載：找不到鋼炮臂蝦（必須在備戰區）', idx);
+    return rejectAbilityUse(st, '返回重載：找不到鋼炮臂蝦（必須在備戰區）', idx);
   }
   // 找出手牌中的基本【水】能量
   const waterEnergies = p.hand.filter(c => {
@@ -191,7 +190,7 @@ regA('鋼炮臂蝦', 0, (st, idx, pool, cardInst) => {
     return (card.name?.includes('【水】') ?? false);
   });
   if (waterEnergies.length === 0) {
-    return addLog(st, '返回重載：手牌中沒有「基本【水】能量」可附加', idx);
+    return rejectAbilityUse(st, '返回重載：手牌中沒有「基本【水】能量」可附加', idx);
   }
   const maxPick = Math.min(waterEnergies.length, 2);
   const s = addLog(st,

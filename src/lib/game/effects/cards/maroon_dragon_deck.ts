@@ -26,8 +26,7 @@ import {
   BENCH_PLACE_TRIGGERS,
   addLog, addPrivateLog, drawCards, updatePlayer, returnHandToDeck, withPending, shuffle,
   recordOppKO,
-  isAbilityBlockedByOakEye,
-} from '../_shared';
+  isAbilityBlockedByOakEye, rejectAbilityUse } from '../_shared';
 import {
   findAbilityUserIid,
   selfKOInstance,
@@ -50,7 +49,7 @@ regA('喵喵ex', 0, (st, aIdx, pool, inst) => {
     return addLog(st, '殺手鐧捕捉：這個回合已經使用過「殺手鐧捕捉」，無法再使用', aIdx);
   }
   if (p.deck.length === 0) {
-    return addLog(st, '殺手鐧捕捉：牌庫為空', aIdx);
+    return rejectAbilityUse(st, '殺手鐧捕捉：牌庫為空', aIdx);
   }
   const instInPlay = p.active?.iid === inst?.iid ? p.active : p.bench.find(c => c.iid === inst?.iid);
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
@@ -96,7 +95,7 @@ regA('黑夜魔靈', 0, (st, aIdx, pool, cardInst) => {
 regA('多龍奇', 0, (st, idx) => {
   const p = st.players[idx];
   const top2 = p.deck.slice(0, 2);
-  if (top2.length === 0) return addLog(st, '偵查指令：牌庫為空', idx);
+  if (top2.length === 0) return rejectAbilityUse(st, '偵查指令：牌庫為空', idx);
   st = addLog(st, `偵查指令：查看牌庫上方 ${top2.length} 張，選 1 張加手牌，其餘放回牌庫下方`, idx);
   return withPending(st, {
     type: 'deck-search',
@@ -157,11 +156,11 @@ regA('願增猿', 0, (st, idx, pool) => {
   const self = [p.active, ...p.bench].filter((c): c is CardInstance => !!c);
   const sources = self.filter(c => c.damage >= 10);
   if (sources.length === 0) {
-    return addLog(st, '腎上腺腦力：場上沒有受傷（≥10 傷害）的寶可夢', idx);
+    return rejectAbilityUse(st, '腎上腺腦力：場上沒有受傷（≥10 傷害）的寶可夢', idx);
   }
   const dp = st.players[(1 - idx) as 0 | 1];
   if (!dp.active && dp.bench.length === 0) {
-    return addLog(st, '腎上腺腦力：對手場上無寶可夢', idx);
+    return rejectAbilityUse(st, '腎上腺腦力：對手場上無寶可夢', idx);
   }
   st = addLog(st, '腎上腺腦力：選 1 隻受傷（≥10 傷害）的己方寶可夢', idx);
   return withPending(st, {

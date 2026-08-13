@@ -673,6 +673,16 @@ export interface GameState {
    */
   _pendingSeq?: number;
   /**
+   * ⭐⭐⭐ v6.181 「拒絕出口」旗標（transient，絕不落地）。
+   * 效果層用 `rejectAbilityUse()` 表態「這個動作條件不符、不該執行」時設此欄；
+   * `applyAction` 的單一出口看到它就**原樣回傳動作前的 state**（只補一行原因 log），
+   * 保證「拒絕 = 完全 no-op」——不消耗『本回合已使用特性』、不留旗標／代價／半開的 pending。
+   * ⚠ 只在同一次 applyAction 內存活，出口一定會清掉，不會寫進 Firestore。
+   */
+  _abilityUseRejected?: string;
+  /** ⭐ v6.181 拒絕原因 log 要記在哪個玩家名下（配合 `_abilityUseRejected`）。 */
+  _abilityUseRejectedIdx?: 0 | 1 | null;
+  /**
    * ⭐v6.175 連續被拒的 RESOLVE_SELECTION 次數（同一個 pending 內累計，成功解析即歸零）。
    * ⚠ 上限存在的理由：本機 AI／舊 client 有可能送出「完全不合法」的選擇，
    *   若無條件保留 pending 會變成永遠解不掉的死結（自我重呼叫必須有上限）。

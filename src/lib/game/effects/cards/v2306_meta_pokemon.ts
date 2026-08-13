@@ -3,8 +3,7 @@ import type { Card } from '$lib/cards/types';
 import { ABILITY_EFFECTS, addLog, drawCards, updatePlayer, withPending, RESOLVERS, regR, regA, regAByName,
   getOwnBenchLimit,
   toBareCard,
-  getAllAttachedTools,
-} from '../_shared';
+  getAllAttachedTools, rejectAbilityUse } from '../_shared';
 import { joinCardNames } from '../_shared';
 /**
  * v2.306 Meta Pokemon (H, I, J)
@@ -30,7 +29,7 @@ import { startEnergyChain } from './v158_energy_chain'; // v6.021 能量舞步�
 regAByName('叉字蝠', '夜間工作', (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.active?.iid !== inst.iid) return addLog(state, '夜間工作：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
+  if (p.active?.iid !== inst.iid) return rejectAbilityUse(state, '夜間工作：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
   if (p.active) p.active.abilityUsedThisTurn = true;
   let s = addLog(state, '叉字蝠：使用特性「夜間工作」，從牌庫選擇 1 張卡', aIdx);
   return withPending(s, {
@@ -105,7 +104,7 @@ regA('妖火紅狐', 0, (state, aIdx, pool, inst) => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card?.subtype === 'Basic' && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
   });
-  if (!hasFire) return addLog(state, '閃焰魔法：手牌沒有基本【火】能量，無法使用', aIdx);
+  if (!hasFire) return rejectAbilityUse(state, '閃焰魔法：手牌沒有基本【火】能量，無法使用', aIdx);
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '妖火紅狐：使用特性「閃焰魔法」，選擇手牌的 1 張基本【火】能量丟棄', aIdx);
@@ -150,7 +149,7 @@ regPre('妖火紅狐|能量風暴', (state, aIdx, pool) => {
 regA('噗噗豬', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.deck.length === 0) return addLog(state, '能量舞步：牌庫沒有卡片，無法使用', aIdx);
+  if (p.deck.length === 0) return rejectAbilityUse(state, '能量舞步：牌庫沒有卡片，無法使用', aIdx);
   // v6.021：abilityUsedThisTurn 由 engine USE_ABILITY 統一設 → 刪除手刻 direct mutation（反模式）。
   const count = Math.min(4, p.deck.length);
   const top4 = p.deck.slice(0, count);
@@ -204,7 +203,7 @@ regA('鐵面忍者', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
   // v3.80：getOwnBenchLimit 支援零之大空洞（5→8）
-  if (p.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '脫殼：備戰區已滿，無法放置寶可夢', aIdx);
+  if (p.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return rejectAbilityUse(state, '脫殼：備戰區已滿，無法放置寶可夢', aIdx);
   const hasShedinja = p.deck.length > 0;
   if (!hasShedinja) {
     let s = addLog(state, '脫殼：牌庫為空', aIdx);
@@ -298,8 +297,8 @@ regPre('鐵面忍者|急速折返', (state, aIdx, pool) => ({ state, damage: 90 
 regA('貓鼬探長', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.hand.length === 0) return addLog(state, '蒐證：手牌為空，無法使用', aIdx);
-  if (p.deck.length === 0) return addLog(state, '蒐證：牌庫為空，無法使用', aIdx);
+  if (p.hand.length === 0) return rejectAbilityUse(state, '蒐證：手牌為空，無法使用', aIdx);
+  if (p.deck.length === 0) return rejectAbilityUse(state, '蒐證：牌庫為空，無法使用', aIdx);
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '貓鼬探長：使用特性「蒐證」，選擇 1 張手牌與牌庫上方的卡互換', aIdx);
@@ -329,7 +328,7 @@ regPre('貓鼬探長|咬住', (state, aIdx, pool) => ({ state, damage: 50 }));
 regA('光電傘蜥', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (!p.carnelliPlayedThisTurn) return addLog(state, '頸傘發電：這個回合沒有使出「卡娜莉」，無法使用', aIdx);
+  if (!p.carnelliPlayedThisTurn) return rejectAbilityUse(state, '頸傘發電：這個回合沒有使出「卡娜莉」，無法使用', aIdx);
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
   if (instInPlay) instInPlay.abilityUsedThisTurn = true;
   let s = addLog(state, '光電傘蜥：使用特性「頸傘發電」，從牌庫選擇最多 2 張基本【雷】能量', aIdx);
@@ -377,8 +376,8 @@ regPre('光電傘蜥|強大伏特', (state, aIdx, pool) => {
 regA('遠古巨蜓ex', 0, (state, aIdx, pool, inst) => {
   if (!inst) return state;
   const p = state.players[aIdx];
-  if (p.active?.iid !== inst.iid) return addLog(state, '振翅高飛：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
-  if (!p.active.movedToActiveThisTurn) return addLog(state, '振翅高飛：這個回合沒有從備戰區放置於戰鬥場，無法使用', aIdx);
+  if (p.active?.iid !== inst.iid) return rejectAbilityUse(state, '振翅高飛：這隻寶可夢不在戰鬥場上，無法使用', aIdx);
+  if (!p.active.movedToActiveThisTurn) return rejectAbilityUse(state, '振翅高飛：這個回合沒有從備戰區放置於戰鬥場，無法使用', aIdx);
   if (p.active) p.active.abilityUsedThisTurn = true;
   let s = addLog(state, '遠古巨蜓ex：使用特性「振翅高飛」，從牌庫選擇最多 3 張基本【草】能量', aIdx);
   return withPending(s, {

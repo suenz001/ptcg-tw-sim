@@ -41,8 +41,7 @@ import { energyProvidesType } from '../../effects'; // v5.682 host-aware「視�
 import type { Card } from '$lib/cards/types';
 import {
   regA, regAByName, regR,
-  addLog, updatePlayer, withPending,
-} from '../_shared';
+  addLog, updatePlayer, withPending, rejectAbilityUse } from '../_shared';
 
 // v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
 function isEnergyOfType(ec: any, type: string): boolean {
@@ -59,7 +58,7 @@ function isEnergyOfType(ec: any, type: string): boolean {
 // ══════════════════════════════════════════════════════════════════════════════
 regAByName('白海獅', '沖刷', (st, idx, pool) => {
   const player = st.players[idx];
-  if (!player.active) return addLog(st, '沖刷：戰鬥場無寶可夢', idx);
+  if (!player.active) return rejectAbilityUse(st, '沖刷：戰鬥場無寶可夢', idx);
   // 找備戰寶可夢身上的【水】能量
   // v4.962：用 isWaterTypeEnergy helper 認基本【水】能量（pokemonType=null fallback）
   const sourcesWithWater: { iid: string; energyIid: string }[] = [];
@@ -282,10 +281,10 @@ regA('青木的樹枕尾熊', 0, (st, idx, pool, inst) => {
   const player = st.players[idx];
   // gate: 持有者必須在備戰
   if (player.active?.iid === inst.iid) {
-    return addLog(st, '無力充能：必須在備戰區才能使用', idx);
+    return rejectAbilityUse(st, '無力充能：必須在備戰區才能使用', idx);
   }
   // gate: 戰鬥場必須是「青木的」
-  if (!player.active) return addLog(st, '無力充能：戰鬥場無寶可夢', idx);
+  if (!player.active) return rejectAbilityUse(st, '無力充能：戰鬥場無寶可夢', idx);
   const activeName = pool.get(player.active.cardId)?.name ?? '';
   if (!activeName.startsWith('青木的')) {
     return addLog(st, '無力充能：戰鬥場不是「青木的」寶可夢', idx);
@@ -391,10 +390,10 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
   const player = st.players[idx];
   // gate: 必須在戰鬥場 + 本回合從備戰移到戰鬥場
   if (player.active?.iid !== inst.iid) {
-    return addLog(st, '金屬之路：必須在戰鬥場才能使用', idx);
+    return rejectAbilityUse(st, '金屬之路：必須在戰鬥場才能使用', idx);
   }
   if (!inst.movedToActiveThisTurn) {
-    return addLog(st, '金屬之路：必須在本回合從備戰區放置於戰鬥場時才能使用', idx);
+    return rejectAbilityUse(st, '金屬之路：必須在本回合從備戰區放置於戰鬥場時才能使用', idx);
   }
   // v2.471 移除 ad-hoc abilityNamesUsedThisTurn gate（誤把 per-instance 寫成 shared）
   // 卡面：「從備戰區放置於戰鬥場時可使用 1 次」 = per-instance + per-trigger（movedToActiveThisTurn）
@@ -409,7 +408,7 @@ regA('勾帕路翁ex', 0, (st, idx, pool, inst) => {
     }
   }
   if (metalEnergyIids.length === 0) {
-    return addLog(st, '金屬之路：備戰區沒有「鋼」能量可搬', idx);
+    return rejectAbilityUse(st, '金屬之路：備戰區沒有「鋼」能量可搬', idx);
   }
   const s = addLog(st, '金屬之路：選擇備戰寶可夢身上任意數量【鋼】能量，改附勾帕路翁ex（可跨來源自由選、可不選）', idx);
   return withPending(s, {
@@ -455,7 +454,7 @@ regA('麻麻鰻', 0, (st, idx, pool) => {
   }
   // gate: 至少 1 隻備戰寶可夢
   if (player.bench.length === 0) {
-    return addLog(st, '電氣發電機：備戰區無寶可夢', idx);
+    return rejectAbilityUse(st, '電氣發電機：備戰區無寶可夢', idx);
   }
   // v2.471 移除 abilityNamesUsedThisTurn 寫入（per-instance gate 由 engine 處理）
   const s = addLog(st, '電氣發電機：從棄牌區選 1 張基本【雷】能量', idx);
