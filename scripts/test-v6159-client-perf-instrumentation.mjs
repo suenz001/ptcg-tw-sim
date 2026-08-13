@@ -130,8 +130,11 @@ ok('★掃描器自我驗證：grabFn 對「回傳型別含大括號」的簽章
   const i = BARE.indexOf('function tAdopt(state: any, version: number');
   ok('tAdopt 找得到', i > 0);
   const body = grabFn(BARE, 'tAdopt');
+  // ⭐v6.180：拒收 stale 的判準改由中央閘 decideBoardAdopt 提供（四個採納點共用），
+  //   量測起點的意圖不變 —— 必須在「這一發確定會被採納」之後才開始計時。
   ok('採納耗時：進函式（拒收 stale 之後）就取起點',
-    /version < tVersion\) return;\s*\n\s*const _adoptT0 = _pnow\(\);/.test(body));
+    /_dec\.kind === 'drop'\)[^\n]*return;\s*\}?\s*\n\s*const _adoptT0 = _pnow\(\);/.test(body)
+    || /version < tVersion\) return;\s*\n\s*const _adoptT0 = _pnow\(\);/.test(body));
   ok('★採納耗時：記錄必須是函式的最後一行（否則量不到整個函式的成本）',
     /_tRecordAdopt\(_adoptT0\);\s*\n\}$/.test(body.trim()) || /_tRecordAdopt\(_adoptT0\);\s*\n\s*\}$/.test(body));
   ok('★重繪代理走 requestAnimationFrame（不是 setTimeout —— 那量的是計時器排隊不是重繪）',

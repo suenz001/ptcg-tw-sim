@@ -105,12 +105,18 @@ T('⭐⭐⭐anchor 只能在盤面**真的**變動時更新（否則看門狗每
   const i = P.indexOf('async function tForceResync()');
   assert.ok(i > 0, '找不到 tForceResync');
   const body = P.slice(i, P.indexOf('\n  function ', i + 10));
+  // ⭐v6.180：anchor 的更新已收斂進 tAdopt（唯一的盤面採納出口），tForceResync 只在
+  //   「版本不同」時才呼叫它 ⇒ 同一個意圖，而且更嚴格（被中央閘丟棄的舊回應完全不推 anchor）。
   const iIf = body.indexOf('fr.version !== tVersion');
-  const iAnchor = body.indexOf('_tLastStateChangeAt = Date.now();');
-  assert.ok(iIf >= 0 && iAnchor > iIf, 'anchor 更新必須在「版本不同」的分支內');
-  const branch = body.slice(iIf, iAnchor);
-  assert.ok(!/^\s*\}/m.test(branch.split('\n').slice(1).join('\n')) || branch.includes('tStep'),
-    'anchor 看起來又跑到 if 外面了');
+  assert.ok(iIf >= 0, 'tForceResync 必須先判「版本不同」才採納');
+  assert.ok(/if \(fr\.version !== tVersion\) tAdopt\(/.test(body),
+    'tForceResync 必須經由 tAdopt 採納（anchor 與 stale 守衛都在裡面）');
+  assert.ok(!/_tLastStateChangeAt = Date\.now\(\);/.test(body),
+    'tForceResync 不得自己推 anchor —— 那會繞過「真的採納了才推」的判準');
+  const adopt = P.slice(P.indexOf('function tAdopt(state: any'), P.indexOf('function tAdopt(state: any') + 3000);
+  const iDrop = adopt.indexOf("_dec.kind === 'drop'");
+  const iAnchor = adopt.indexOf('_tLastStateChangeAt = Date.now();');
+  assert.ok(iDrop >= 0 && iAnchor > iDrop, 'anchor 必須在「這一發真的被採納」之後才推進');
 });
 T('⭐base tick 必須比最短間隔小（否則節奏 gate 形同虛設）', () => {
   const bodies = ['function startTournamentPoll()', 'function startSpectatePoll()'].map((a) => {

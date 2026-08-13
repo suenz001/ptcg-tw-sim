@@ -447,7 +447,15 @@ try {
   ok('★★★判讀規則：⚠N 代表對不上（已丟棄），**不是**「很順」',
     ADMIN.includes('不可採信') && ADMIN.includes('<b>不是</b>「很順」'));
   ok('★判讀規則：三欄是「—」代表玩家還是舊版畫面', ADMIN.includes('那位玩家還是 v6.178 以前的畫面'));
-  ok('★admin 版本提示有 bump', ADMIN.includes("window.SITE_VERSION_HINT = '6.179';"));
+  // ⭐v6.180：原本寫死 '6.179'，下一版一 bump 就假紅（v6.171 已經在 test-v6170 修過同一型）。
+  //   意圖是「admin 的對照值有跟著站點版本走」⇒ 改成「≥ 6.179 且與 version.ts 一致」。
+  {
+    const _am = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(ADMIN);
+    const _vm = /VERSION = '([\d.]+)'/.exec(
+      readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
+    ok('★admin 版本提示有 bump（≥ 6.179 且與 version.ts 一致）',
+      !!_am && !!_vm && parseFloat(_am[1]) >= 6.179 && _am[1] === _vm[1], _am && _am[1]);
+  }
 } catch (e) { ok('★★★⑤ admin 顯示端整段可執行', false, String((e && e.message) || e)); }
 
 // ══════════════════════════════════════════════════════════════════════════

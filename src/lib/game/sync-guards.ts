@@ -411,3 +411,71 @@ export function shouldAttemptStartGame(opts: {
   if (opts.mySeat === 1) return opts.readyElapsedMs >= (opts.fallbackGraceMs ?? 6000); // fallback（v5.893：3000→6000ms 加大 grace，降低「P1 建局 push 未在時限內傳到 P2 → P2 也建局 → 開局後不久整局重洗」的競態；正常 P1 <1s 建局，P2 不會觸發；僅 P1 開局即斷線才 6s 後接手）
   return false;
 }
+
+// ── 錦標賽盤面採納：單一中央閘（v6.180）───────────────────────────────────────
+
+/** `decideBoardAdopt` 的判決。`drop` = 這一發是亂序的舊盤面，採納它畫面就會倒退。 */
+export type BoardAdoptDecision =
+  | { kind: 'adopt'; reason: 'no-version' | 'first' | 'forward' | 'client-ahead' }
+  | { kind: 'drop'; reason: 'out-of-order' };
+
+/**
+ * ⭐⭐⭐v6.180「錦標賽盤面只能往前，不能倒退」的**唯一**判準。
+ *
+ * ## 事故：玩家回報「盤面一直跳回上一步」
+ * 錦標賽同步一共有 **4 個**地方會把 `game` 指成伺服器送來的盤面，而版本守衛只有 1 個
+ * （`tAdopt` 開頭的 `version < tVersion` 早退）。另外 3 個都是刻意「繞過版本檢查」的
+ * 強制回正路徑，全部是 `?v=-1` 的請求：
+ *   ① 輪詢停擺看門狗的救援（v5.593）：`game = fr.gameState` —— 完全沒有版本判斷。
+ *   ② `tForceResync`（v5.618）：`fr.version !== tVersion` 就整包蓋上去 —— **包含比較舊的版本**。
+ *   ③ 主輪詢的 `r.version < tVersion` 分支（v5.593，v6.135 補了 `reqV === tVersion`）。
+ * ①②的請求與主輪詢是**並行**的（主輪詢是 `setInterval`，不等前一發回來），所以
+ * 「救援／重新同步的回應（版本 N）晚於主輪詢的回應（版本 N+1）抵達」是一個很普通的時序：
+ *   ⇒ 盤面被指回 N ＝ **畫面倒退一步**，下一發輪詢再把它推回 N+1 ＝ 玩家看到的「跳回上一步」。
+ * `tForceResync` 的呼叫點很多（8 秒節流的新鮮度看門狗、玩家點「等待對手行動 🔄」、
+ * 「我還在」確認框、動作送不出去、v6.170 的回前景／`online` 事件），所以會**反覆**發生。
+ *
+ * ## 為什麼「版本必須前進」是安全的（查證，不是假設）
+ * 錦標賽房間的 `version` 由伺服器單調遞增，**沒有任何一條路徑會讓它變小**：
+ *   ・`/action` 套用成功：`nv = doc.version + 1`（CAS filter 帶舊版本）
+ *   ・`/reset` 重置房間：`nv = (prev.version || 0) + 1` —— 是 **+1，不是歸零**
+ *   ・排程器（判負警告／level-triggered 補推）：`version: (room.version || 1) + 1`
+ * ⇒ 同一個房間內收到「比較小的版本」只可能是①亂序②client 自己超前，不可能是伺服器倒退。
+ *
+ * ## 合法的「版本重置」怎麼放行（⚠ 這比原 bug 更容易修壞）
+ *   ・**換房間**（下一輪對戰／再來一局／進場觀戰／房間重置）：client 在每個離場點都把
+ *     `tVersion = -1`，`tEnterMatch`／`tSpectate` 進場時也重設 ⇒ 走 `first` 一律放行。
+ *   ・**client 真的超前伺服器**（跨房殘留的回應把 `tVersion` 拉高、伺服器資料被還原…）：
+ *     `expectVersion` ＝**送出這一發當下**的 `tVersion`。若它與現在的 `tVersion` 相等，
+ *     代表「從送出到現在，本地一次都沒有採納過別的盤面」⇒ 這就不是亂序，是真的 client 超前
+ *     ⇒ 放行讓伺服器權威回正（`client-ahead`）。這條逃生口正是 v6.135 的判準，
+ *     只是本版把它從「主輪詢一處」升級成**所有採納點共用**。
+ *   ・伺服器沒給版本（舊端點／測試房）⇒ `no-version` 照收，維持改動前行為（fail-open）。
+ */
+export function decideBoardAdopt(opts: {
+  /** 目前畫面上盤面的版本（尚未採納過任何盤面時為 -1）。 */
+  localVersion: number;
+  /** 這一發回應帶回來的版本。非數字 ⇒ fail-open 照收。 */
+  incomingVersion: unknown;
+  /** 送出這一發**當下**的 `localVersion`；沒有提供 ⇒ 不主張「client 超前」。 */
+  expectVersion?: number | null;
+}): BoardAdoptDecision {
+  const inc = opts.incomingVersion;
+  if (typeof inc !== 'number' || !Number.isFinite(inc)) return { kind: 'adopt', reason: 'no-version' };
+  const local = (typeof opts.localVersion === 'number' && Number.isFinite(opts.localVersion))
+    ? opts.localVersion : -1;
+  if (local < 0) return { kind: 'adopt', reason: 'first' };
+  // ⚠⚠ 等長**必須放行**（`>=`，忠實沿用 v6.048 以來 `tAdopt` 只擋嚴格較舊的行為）。
+  //   Fable 5 審查建議收緊成嚴格 `>`（理由：等版本重採會洗掉畫面上的樂觀預測）——**查證後不採納**：
+  //   `/action` 的 `rejected` / `notyourturn` / `invalid` 三種回應都帶著**版本沒變**的權威盤面
+  //   （server_admin_patch.js：`version: doc.version`），而 `_tActAttempt` 正是靠這一發 `tAdopt`
+  //   把「引擎拒絕了、但畫面上還畫著」的樂觀預測洗掉（它下一行就把 `ctx.predicted` 設成 false，
+  //   之後再也沒有人會還原它）。改成 drop 的話，被拒絕的動作會**永遠留在畫面上**——
+  //   那正是我們這一版要根治的「畫面與伺服器不一致，稍後才跳回去」。
+  if (inc >= local) return { kind: 'adopt', reason: 'forward' };
+  const expect = opts.expectVersion;
+  if (typeof expect === 'number' && Number.isFinite(expect) && expect === local) {
+    return { kind: 'adopt', reason: 'client-ahead' };
+  }
+  return { kind: 'drop', reason: 'out-of-order' };
+}

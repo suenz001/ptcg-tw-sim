@@ -1,3 +1,101 @@
+# v6.180 錦標賽盤面「跳回上一步」：採納收斂成單一中央閘（版本必須前進）
+
+## 回報
+站長轉述：「蠻多玩家反應最近會一直跳回上一步，不確定他們的版本。」
+
+## 真因（兩條，都行為端重現過）
+
+### ① 盤面採納有 4 個入口，版本守衛只有 1 個
+`+page.svelte` 會把 `game` 指成伺服器盤面的地方一共 4 處，而只有 `tAdopt`（L5271）有
+`version < tVersion` 的早退。另外三條都是刻意「繞過版本檢查」的強制回正路徑，
+而且**全部是 `?v=-1` 的請求、與主輪詢並行**（主輪詢是 `setInterval(...,400)`，不等前一發完成）：
+
+| 路徑 | v6.179 的寫法 | 守衛 |
+|---|---|---|
+| 輪詢停擺救援（v5.593，L579） | `game = fr.gameState; tVersion = fr.version;` | **完全沒有** |
+| `tForceResync`（v5.618，L5740） | `if (fr.version !== tVersion) { game = …; }` | **`!==` 連較舊的也照收** |
+| 主輪詢 else 分支（v5.593，L5970） | `r.version < tVersion && reqV === tVersion` | v6.135 有亂序守衛 |
+| `tAdopt`（L5271） | `version < tVersion` return | 有 |
+
+⇒「救援／重新同步的回應（版本 N）晚於主輪詢的回應（版本 N+1）抵達」是很普通的時序，
+盤面就被指回 N ＝ **畫面倒退一步**，下一發輪詢再推回 N+1 ＝ 玩家說的「跳回上一步」。
+`tForceResync` 的呼叫點很多（新鮮度看門狗、玩家點「等待對手行動 🔄」、「我還在」確認框、
+動作送不出去、v6.170 的回前景／`online` 事件）⇒ 會**反覆**發生。
+
+⚠ **這不是 v6.170~v6.179 新造成的回歸**：v6.121（`e8475ca3`）逐字比對，三條路徑一模一樣，
+而且它的主輪詢 else 分支**連 v6.135 的 `reqV === tVersion` 都沒有**（v6.121 也沒有 v6.148 的
+`_pollBusy` 防自我壅塞 ⇒ RTT 一高就同時在途 3 發）⇒ 舊 client 只會更嚴重。
+
+### ② v6.137 的樂觀更新回滾守衛是**死碼**（Fable 5 審查抓到，我實跑證實）
+`_tRestorePrediction` 的 `if (ctx.predicted && game === ctx.predictedRef)`：
+`game` 是 Svelte 5 的**深層** `$state`，編譯產物是 `$.set(game, pr.predicted, true)`
+（`should_proxy=true`）⇒ 存進去的是 `proxy(pr.predicted)`，而 `proxy(raw) !== raw`
+（`svelte/src/internal/client/proxy.js`，5.55.4 實跑驗證）⇒ 讀回來的 `game` 永遠不等於
+`ctx.predictedRef`（存的是原始物件）⇒ **那道還原從上線至今一次都沒有執行過**。
+
+後果就是同一型症狀的另一半：動作最終送不出去時紅字寫「畫面已還原」，畫面上卻**還留著**
+伺服器根本沒套用的動作；等下一次版本前進（對手動作／看門狗）才被伺服器盤面洗掉
+⇒ 「過一下子突然跳回上一步」。`tActCancel`（停止重送）同理 —— 它接著呼叫的 `tForceResync`
+在版本沒變時（動作真的沒套用）`fr.version !== tVersion` 不成立，也不會回正。
+
+⚠ 我原本的假說是「v6.173 的 `shareStateIdentity` 沿用 prev 物件 ⇒ 打壞了那道 identity 守衛」，
+**這個假說是錯的**：守衛在 v6.173 之前就已經是死碼。我第一版的守衛用 plain 物件模擬 `game`，
+測到的是假語義（IRON_RULES Rule 25「掃描器自身要先驗」的重演）。已改成帶真 svelte proxy 的實跑。
+
+## 修法（中央收斂）
+
+`src/lib/game/sync-guards.ts` 新增純函式 `decideBoardAdopt({localVersion, incomingVersion, expectVersion})`：
+
+- `incomingVersion` 非有限數 ⇒ `no-version`（fail-open，維持改動前行為）
+- `localVersion < 0` ⇒ `first`（換房間／進場）
+- `incomingVersion >= localVersion` ⇒ `forward`
+- 否則 `expectVersion === localVersion` ⇒ `client-ahead`（送出到現在本地一次都沒採納過東西
+  ⇒ 是真的 client 超前，不是亂序 ⇒ 讓伺服器權威回正）
+- 否則 `out-of-order` ⇒ **丟棄**
+
+`tAdopt(state, version, { expectV, reason })` 成為**唯一**採納出口；四條路徑全部改走它。
+
+### 為什麼「版本必須前進」是安全的（查證，不是假設）
+`oracle-admin/server_admin_patch.js` 裡 `TROOMS.version` 的**每一個**寫入點都是 +1：
+`/action` 套用 `doc.version + 1`（CAS）、`/reset` `(prev.version || 0) + 1`（**不是歸零**）、
+排程器判負警告／level-triggered 補推／admin 裁定／重賽全是 `+1`。沒有任何路徑讓它變小。
+
+### 合法的「版本重置」怎麼放行（比原 bug 更容易修壞的地方）
+- **換房間**：`tEnterMatch` / `tSpectate` / `tournamentJoin` 進場時一律 `tVersion = -1`
+  （離場點本來就有；但「觀戰中發現是自己的場 → 直接 tEnterMatch」不經任何離場點）⇒ 走 `first`。
+- **client 真的超前**：`client-ahead` 逃生口（原 v6.135 的判準，升級成所有採納點共用）。
+- **伺服器沒給版本**：`no-version` 照收。
+
+### ⚠ `>=` 的「等於」刻意保留（Fable 5 建議收緊成 `>`，查證後不採納）
+`/action` 的 `rejected` / `notyourturn` / `invalid` 三種回應都帶**版本沒變**的權威盤面，
+而 `_tActAttempt` 正是靠那一發 `tAdopt` 把「引擎拒絕了、畫面上卻還畫著」的樂觀預測洗掉
+（下一行就把 `ctx.predicted` 設 false，之後沒有人會再還原它）。改成 drop ⇒ 被拒絕的動作
+**永遠留在畫面上**，正是本版要根治的症狀。
+
+## 一起修的（Fable 5 審查）
+1. `ctx.predictedRef = game`（存讀回來的 proxy）＋ `tVersion === ctx.baseV` 才可還原
+   ⇒ 回滾**真的**會執行，而且不會把伺服器已確認的動作洗掉。
+2. `tForceResync` 與停擺救援補**代次/房間快照**（`_rGen !== tPollGen || _rRoom !== tActiveRoom` 即作廢）：
+   版本閘天生擋不住跨房 —— 離場後 `tVersion` 歸 -1，晚到的回應反而會走 `first` 被照收，
+   把 `game` 復活、`tStep` 拉回 `'playing'`（玩家被彈回已結束的對戰）。主輪詢從 v5.586 就有這道，
+   這兩條一直沒有。`tournamentReset` 也補 `tPollGen++`。
+3. 觀戰輪詢收進同一條管線（觀戰者沒有 resync／看門狗可以自救，`client-ahead` 對他們更重要）。
+4. 診斷指紋 `stale-board-drop`：**累積 3 次**才送（偶發 1 次是守衛正常工作），且**不佔**
+   每頁 3 發配額（v6.158「真指紋被 manual-sync 吃掉」的教訓）；每一發診斷的 `poll` 區塊
+   都會帶 `staleAdopt` 計數與最後一筆 `來源:版本<本地版本`。
+
+## 沒有動到
+卡效果／引擎／伺服器端一行都沒動（本版是純 client）。休閒線上（`room-oracle.ts`）的
+`oraclePollRoom` 是**序列化**輪詢（await 完才排下一發）⇒ 結構上不存在這種亂序，
+收端 `resolveRoomUpdate` 的 log 長度單調守衛照舊；守衛裡有正反對照釘住。
+
+## 守衛
+`scripts/test-v6180-board-monotonic-adopt.mjs`：**PASS 50 / 在 v6.179 樹上 FAIL 21**。
+A 純函式判準（含 4 條正對照，防止修成「畫面永遠不更新」）｜
+B 行為端實跑 `tAdopt`｜C 行為端實跑 `tForceResync`（假 tApi 製造真正的亂序時序，
+v6.179 上實測 `v=20` ＝ 盤面真的倒退了）｜D 真 svelte proxy 語義下的回滾守衛｜
+E 接線否定型掃描（先剝註解）＋ 掃描器自我驗證｜F 休閒線上兩條正反對照｜G 版本標示。
+
 # v6.179 把「網路」那 1.3 秒拆開：queue / wire / sw / lag（純量測，玩家零可見變化）
 
 ## 為什麼要再拆一次

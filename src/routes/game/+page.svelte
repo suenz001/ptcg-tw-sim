@@ -34,7 +34,7 @@
   } from '$lib/game/engine';
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
-  import { resolveRoomUpdate, shouldAttemptStartGame } from '$lib/game/sync-guards';
+  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt } from '$lib/game/sync-guards';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
@@ -236,7 +236,7 @@
   const TACT_RETRY_MS = 25000;         // 重送窗牆鐘上限（伺服器端去重紀錄保存 120 秒 ＝ 這個的 4.8 倍）
   const TACT_POST_TIMEOUT = 8000;      // ⚠ 由 12000 降下來：p99 的 net 是 3.6 秒，等 12 秒才知道要重試太久了。
                                        //   有了冪等鍵，「提早放棄並重送」不再有重複套用的風險。
-  type TActCtx = { action: any; actId: string; prev: any; predictedRef: any; predicted: boolean; attempt: number; startedAt: number };
+  type TActCtx = { action: any; actId: string; prev: any; predictedRef: any; predicted: boolean; attempt: number; startedAt: number; baseV: number };
   let _actCtx: TActCtx | null = null;  // 同時只有一個（tournamentDispatch 開頭的 tInFlight 單發鎖保證）
   // ⭐⭐⭐v6.172【拖曳被鎖死最長 33 秒】的根治：手勢改成「排隊」，不再靜默丟棄。
   //   v6.170 的重送狀態機讓 tInFlight 最長撐 TACT_RETRY_MS(25s) + TACT_POST_TIMEOUT(8s) ≈ 33 秒，
@@ -569,14 +569,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
           // v5.593 輪詢停擺 → 立即強制重抓最新狀態並「強制採用」(伺服器權威，繞過版本檢查) + 重啟輪詢，
           //   治「第一隻昏厥後 client 沒收到 active=空 → 無法換場 → 閒置判敗」型卡住，最多 6~7 秒自動恢復。
           (async () => {
+            // ⭐v6.180 同 tForceResync：這一發與主輪詢並行 ⇒ 需要 expectV 才分得出亂序；
+            //   另外要帶代次/房間快照，否則離場後晚到的回應會把人彈回已結束的對戰。
+            const _rv = tVersion, _rGen = tPollGen, _rRoom = tActiveRoom;
             try {
               const fr = await tApi(`/state?room=${tActiveRoom}&v=-1`);
+              if (_rGen !== tPollGen || _rRoom !== tActiveRoom) return;   // 已離開對戰／換房 ⇒ 作廢
               // ⭐⭐v6.149（Fable 5 審查）：救援成功也是**貨真價實的伺服器回應**，必須算進存活。
               //   否則 RTT 持續 ≥6 秒時形成活鎖：看門狗每 6 秒 ++tPollGen，在途 poll 全被
               //   `gen !== tPollGen` 丟棄而不記存活 ⇒ _tLastPollOkAt 永遠不前進 ⇒
               //   橫幅一直爬升、每 6 秒再送一發 v=-1 全量（失聯時反而加重）。
               if (fr) _tLastPollOkAt = Date.now();
-              if (fr && fr.gameState) { game = fr.gameState; tVersion = fr.version; tStep = 'playing'; }
+              // ⭐⭐⭐v6.180 原本是 `game = fr.gameState` **完全沒有版本判斷**（也沒有 ensurePoolForStateIds、
+              //   沒有 shareStateIdentity）。救援的本意是「本地領先型卡死 ⇒ 伺服器權威回正」，
+              //   那正好就是中央閘的 `client-ahead`（`expectV === tVersion` ⇒ 從送出到現在本地沒採納過東西）
+              //   ⇒ 治卡死的能力一點都沒少，但晚到的舊盤面不再把畫面拖回上一步。
+              if (fr && fr.gameState) tAdopt(fr.gameState, fr.version, { expectV: _rv, reason: 'poll-stall' });
               if (fr && typeof fr.serverNow === 'number') tClockOffset = fr.serverNow - Date.now();
               if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
             } catch { /* ignore */ }
@@ -4899,7 +4907,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       const r = await tApi('/match/enter', {}, { timeoutMs: 20000 });  // v6.135 失敗會踢回大廳 → 放寬
       if (r.error) { tError = r.error; return; }
-      tActiveRoom = r.roomId; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
+      // ⚠⭐v6.180 換房間＝合法的版本重置（見 decideBoardAdopt 的 `first`）。
+      tActiveRoom = r.roomId; tVersion = -1; mySeatIdx = r.seat; myPlayerIndex = r.seat as 0 | 1; mode = 'online'; tStep = 'waiting'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
       const sst = await tApi(`/state?room=${tActiveRoom}&v=-1`, undefined, { timeoutMs: 20000 });  // v6.135 同上
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
       if (sst && sst.gameState) tAdopt(sst.gameState, sst.version);
@@ -5078,7 +5087,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (tMyMatch && tMyMatch.roomId && tMyMatch.roomId === roomId) { return tEnterMatch(); }
     tError = ''; tBusy = true;
     try {
-      isTournSpectator = true; tSpectateRoom = roomId; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; tStep = 'waiting';
+      // ⚠⭐v6.180 同 tEnterMatch：換房間是合法的版本重置，一定要歸 -1（見中央閘 `first`）。
+      isTournSpectator = true; tSpectateRoom = roomId; tVersion = -1; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; tStep = 'waiting';
       const sst = await tApi(`/spectate/state?room=${roomId}&v=-1`);
       if (sst && sst.waiting && !sst.gameState) { tError = '這場對戰已結束或尚未開始，無法觀戰'; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0; tSpectateRoom = ''; mySeatIdx = -1; tStep = 'lobby'; return; }  // v5.937 殘留/已結束房快速失敗,不卡 waiting
       if (sst && sst.names) tSyntheticRoom(sst.seats, sst.names);
@@ -5102,10 +5112,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       _spLastFetchAt = _now;
       _spBusy = true;
       try {
+        const reqV = tVersion;   // ⭐v6.180 同主輪詢：送出當下的版本（亂序守衛用）
         const r = await tApi(`/spectate/state?room=${tSpectateRoom}&v=${tVersion}`);
         if (gen !== tPollGen) return; // v5.586 已離開觀戰 → 丟棄在路上的回應
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
-        if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
+        // ⭐v6.180 觀戰也走同一個中央閘（`/spectate/state` 的 version 與對戰同一個 doc.version）。
+        //   觀戰者沒有 tForceResync／看門狗可以自救，萬一 tVersion 被污染就是永久停格
+        //   ⇒ `client-ahead` 這條逃生口對觀戰者特別重要。
+        if (r && typeof r.version === 'number' && r.version !== tVersion && r.gameState) tAdopt(r.gameState, r.version, { expectV: reqV, reason: 'spectate' });
       } catch { /* 忽略單次失敗 */ }
       finally { _spBusy = false; }
     }, 400);
@@ -5267,15 +5281,41 @@ function _setupSelfPending(g: any, seat: number): string | null {
       spectators: [], createdAt: Date.now(), updatedAt: Date.now(),
     } as any;
   }
-  function tAdopt(state: any, version: number, opts?: { skipSfx?: boolean }) {
-    if (typeof version === 'number' && version < tVersion) return; // 拒收 stale
+  // ⭐v6.180 亂序舊盤面被丟棄的診斷（走既有 /clientdiag，沿用既有指紋命名慣例）。
+  //   ⚠ 不可以靜默：這條閘一旦誤擋，症狀是「畫面不更新」，比原 bug 更糟 ——
+  //     一定要留下「丟了幾發、從哪條路徑來、版本差多少」才查得出來。
+  let _staleAdoptDrops = 0;
+  let _staleAdoptLast = '';
+  let _staleAdoptDiagSent = false;
+  // ⚠v6.180（Fable 5 審查）：在「`v=-1` 的救援/重新同步與主輪詢並行」的設計下，丟掉一發亂序舊盤面
+  //   是**守衛正常工作**的訊號，不是異常 ⇒ 偶發 1~2 次不值得回報（會排擠真異常指紋）。
+  //   累積到 3 次才送一發，而且**不佔每頁 3 發的配額**（見 _tSendClientDiag，v6.158 的教訓）。
+  const STALE_ADOPT_DIAG_MIN = 3;
+  function _tNoteStaleAdoptDrop(version: number, from: string): void {
+    _staleAdoptDrops++;
+    _staleAdoptLast = from + ':' + String(version) + '<' + String(tVersion);
+    if (_staleAdoptDrops >= STALE_ADOPT_DIAG_MIN && !_staleAdoptDiagSent) {
+      _staleAdoptDiagSent = true; _tSendClientDiag('stale-board-drop');
+    }
+  }
+  function tAdopt(state: any, version: number, opts?: { skipSfx?: boolean; expectV?: number | null; reason?: string }) {
+    // ⭐⭐⭐v6.180 **盤面採納的單一中央閘**（判準在 sync-guards.decideBoardAdopt，有單元＋行為守衛）。
+    //   在此之前只有這個函式擋 stale，另外三條路徑（輪詢停擺救援／tForceResync／主輪詢的
+    //   `version < tVersion` 分支）都刻意繞過版本檢查，而它們的請求與主輪詢**並行**
+    //   ⇒ 舊回應晚到就把盤面指回上一版 ＝ 玩家看到的「一直跳回上一步」。現在四條全走這裡。
+    //   ⚠ 合法的版本重置（換房／再來一局／client 真的超前）由該函式的 `first` / `client-ahead`
+    //     放行 —— 這道閘**不可以**修成「畫面永遠不更新」。
+    const _dec = decideBoardAdopt({ localVersion: tVersion, incomingVersion: version, expectVersion: opts?.expectV ?? null });
+    if (_dec.kind === 'drop') { _tNoteStaleAdoptDrop(version, opts?.reason ?? 'adopt'); return; }
     const _adoptT0 = _pnow();   // ⭐v6.159 只量測，不改這個函式的任何行為
     // ⭐v6.048：錦標賽「對手的動作」只會經由這裡進來，而這裡原本完全沒有音效
     //   → 對手攻擊、擊倒我方寶可夢、施加狀態、拿獎賞全程無聲，連**我輸掉這一局**
     //   的勝負音都不會播（game-over 音只掛在本機 action 與休閒線上兩條路徑上）。
     //   自己的動作走 tournamentDispatch（它會自己算音效）→ 傳 skipSfx 避免播兩次。
     const _sfxPrev = game;
-    if (!opts?.skipSfx && _sfxPrev && state && (_sfxPrev as GameState).id === (state as GameState).id) {
+    // ⚠v6.180 `client-ahead` 是「伺服器把我拉回較舊的權威盤面」——拿倒退的 diff 去算音效
+    //   會播出一串現實中沒有發生的事件（原本那條分支根本不播音效），一律靜音。
+    if (!opts?.skipSfx && _dec.reason !== 'client-ahead' && _sfxPrev && state && (_sfxPrev as GameState).id === (state as GameState).id) {
       try {
         playSfxEvents(computeSfxEvents(_sfxPrev as GameState, state as GameState, null, pool,
           { mode, myPlayerIndex, aiPlayerIndex }));
@@ -5624,12 +5664,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //     不會重送 ⇒ **真訊號被 manual-sync 吃掉**。
       //   manual-sync 本來就「不一定是 bug」，不該排擠真異常指紋。
       const _isManual = reason === 'manual-sync';
+      // ⭐v6.180 `stale-board-drop` 同理不佔配額：它每場最多送 1 發、且門檻是「亂序累積 3 次」，
+      //   本來就稀少；佔掉 1/3 配額卻可能害真異常指紋（invisible-hand／stale-version）靜音。
+      const _isExempt = _isManual || reason === 'stale-board-drop';
       if (_isManual) {
         if (now0 - _lastManualDiagAt < 60000) return;
         _lastManualDiagAt = now0;
       } else {
-        if (_diagSentCount >= 3) return;
-        _diagSentCount++;
+        // ⚠ 豁免的指紋不扣配額（理由同 manual-sync），但仍受各自的「每場一次」旗標拘束。
+        if (!_isExempt) {
+          if (_diagSentCount >= 3) return;
+          _diagSentCount++;
+        }
       }
       const g: any = game;
       let visHand = -1, arrivingDom = -1;
@@ -5657,6 +5703,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         poll: {
           sincePollOk: _tLastPollOkAt ? now - _tLastPollOkAt : -1, sinceStateChange: _tLastStateChangeAt ? now - _tLastStateChangeAt : -1,
           sinceForceResync: _tLastForceResyncAt ? now - _tLastForceResyncAt : -1, pollGen: tPollGen, watchdogFires: _freshWatchdogFires,
+          // ⭐v6.180 亂序舊盤面被中央閘丟掉的次數與最後一筆（`來源:收到的版本<當時的本地版本`）。
+          //   ⚠ 判讀：`n` 大 ＝ 這台裝置真的在亂序（原本這些都會讓畫面倒退一步）；
+          //     若同時有人回報「畫面不更新」而這一欄很大，才要回頭懷疑閘擋錯了。
+          staleAdopt: _staleAdoptDrops, staleAdoptLast: _staleAdoptLast || null,
           // v6.151：伺服器端指標一直是全綠的，但那不含隧道排隊與網路往返（v6.134 的教訓）。
           //   這裡回報 client 實測的動作往返時間，才對得上玩家說的「很卡」。
           rtt: _rttStats(),
@@ -5732,19 +5782,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   答玩家「輪到自己時系統會幫忙確認/不必 F5」：對戰中盤面卡住即可由看門狗自動或玩家點「🔄 同步」恢復。
   async function tForceResync() {
     if (!isTournament || isTournSpectator || !tActiveRoom) return;
+    // ⭐⭐⭐v6.180 送出當下的版本：這一發與**主輪詢並行**（主輪詢是 setInterval，不等前一發回來），
+    //   所以它的回應完全可能比輪詢剛採納的那一份還舊。`expectV` 讓中央閘分得出
+    //   「亂序的舊回應」（丟棄）與「client 真的超前伺服器」（放行回正）。
+    // ⚠⚠⭐v6.180（Fable 5 審查）：版本閘**擋不住跨房**——離場後 `tVersion` 歸 -1，晚到的舊回應
+    //   反而會走 `first` 被照收，把 `game` 復活、`tStep` 拉回 'playing'（玩家被彈回已結束的對戰）。
+    //   主輪詢從 v5.586 起就有 `gen !== tPollGen` 這道守衛，這兩條 `v=-1` 路徑一直沒有。
+    const _rv = tVersion, _rGen = tPollGen, _rRoom = tActiveRoom;
     try {
       const fr = await tApi(`/state?room=${tActiveRoom}&v=-1&s=${mySeatIdx}`);   // v6.170 順便打心跳
+      if (_rGen !== tPollGen || _rRoom !== tActiveRoom) return;   // 已離開對戰／換房 ⇒ 這一發整發作廢
       if (fr) _tLastPollOkAt = Date.now();   // v6.149 同上：手動/看門狗同步成功也算存活（按了鈕橫幅要能立刻收掉）
       if (fr && fr.gameState && typeof fr.version === 'number') {
-        if (fr.version !== tVersion) {
-          void ensurePoolForStateIds(fr.gameState); game = fr.gameState; tVersion = fr.version; tStep = 'playing';  // 漏接或客戶端超前 → 一律回正;v5.932 補 ensurePoolForStateIds(比照 tAdopt,避免對手卡包未載渲染成'?')
-          // ⭐⭐v6.148（Fable 5 實測抓到）：這行原本在 if **外面**無條件執行 ——
-          //   新鮮度看門狗每 8 秒觸發一次 resync，每次都把 anchor 推到現在，
-          //   於是「盤面最近有變動」永遠成立，`tPollDesiredMs` 的快檔變成**常態**
-          //   （對手長考 120 秒的模擬：93% 的時間都落在快檔）。
-          //   anchor 的語義是「盤面**真的**變過」，所以只在版本真的不同時才更新。
-          _tLastStateChangeAt = Date.now();
-        }
+        // ⭐⭐v6.148（Fable 5 實測抓到）：`_tLastStateChangeAt` 原本在 if **外面**無條件執行 ——
+        //   新鮮度看門狗每 8 秒觸發一次 resync，每次都把 anchor 推到現在，
+        //   於是「盤面最近有變動」永遠成立，`tPollDesiredMs` 的快檔變成**常態**
+        //   （對手長考 120 秒的模擬：93% 的時間都落在快檔）。
+        //   anchor 的語義是「盤面**真的**變過」，所以只在版本真的不同時才更新
+        //   —— v6.180 起 anchor 由 `tAdopt` 在**真的採納了**的時候推進，語義更嚴格（被丟棄就不推）。
+        // ⭐⭐⭐v6.180：這裡原本是 `!==` 就整包蓋上去（含**比較舊**的版本），是「跳回上一步」的
+        //   主要來源之一。改走中央閘：亂序丟棄、真超前才回正。ensurePoolForStateIds／tStep
+        //   ／anchor 都由 tAdopt 負責（v5.932 的補救也在裡面，不會漏）。
+        if (fr.version !== tVersion) tAdopt(fr.gameState, fr.version, { expectV: _rv, reason: 'resync' });
       }
       if (fr && typeof fr.lastActionAt === 'number') tLastActionAt = fr.lastActionAt;
       if (fr && 'actorSeat' in fr) tServerActorSeat = (typeof fr.actorSeat === 'number' ? fr.actorSeat : null);   // v6.151 伺服器權威
@@ -5849,7 +5908,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!deck) { tError = '請先選擇牌組'; return; }
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
-    tError = ''; tBusy = true; tStep = 'waiting'; tActiveRoom = T_ROOM;
+    tError = ''; tBusy = true; tStep = 'waiting'; tActiveRoom = T_ROOM; tVersion = -1;   // ⭐v6.180 進場＝合法的版本重置（同 tEnterMatch）
     try {
       const nm = (myName && myName.trim()) || '玩家';
       const r = await tApi('/join', { room: tActiveRoom, playerId: tPlayerId(), name: nm, deckEntries: deck.entries });
@@ -5960,14 +6019,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
         _tLastPollOkAt = Date.now();  // v5.591 標記輪詢存活（看門狗用）
         tAuthLost = false;            // v6.150 拿到正常回應 ⇒ 身分是好的
         if (r && r.names) tSyntheticRoom(r.seats, r.names);
-        if (r && typeof r.version === 'number' && r.version > tVersion && r.gameState) tAdopt(r.gameState, r.version);
         // v5.593 client 版本超前伺服器(desync/房重置)→ 強制回正(伺服器權威)
-        // v6.135 ⚠ 加亂序守衛 `reqV === tVersion`：setInterval **不等前一發完成**，RTT 抖動時多發並行。
+        // v6.135 ⚠ 亂序守衛 `reqV === tVersion`：setInterval **不等前一發完成**，RTT 抖動時多發並行。
         //   情境：A、B 兩發並行，B 帶回 v12（已採納，tVersion=12），A 晚到帶回 v11 → 舊條件 `11 < 12` 成立
         //   → **盤面倒回 v11**，1.2 秒後又跳回 v12 ⇒ 玩家看到「動作出現又消失」。
         //   既有的 `gen !== tPollGen` 只擋「離開對戰後的舊回應」，擋不住同一輪詢內的亂序。
         //   真 desync 的特徵是「送出當下 client 就已經超前」⇒ 用 reqV 判定，晚到的舊回應一律丟棄。
-        else if (r && typeof r.version === 'number' && r.version < tVersion && r.gameState && reqV === tVersion) { game = r.gameState; tVersion = r.version; }
+        // ⭐⭐⭐v6.180 前進／回正兩條分支收斂成**同一個中央閘**（`reqV` 就是 `expectV`）：
+        //   兩邊各寫一套的年代，另外三條採納路徑漏掉了這個判準（見 tAdopt 的註解）。
+        if (r && typeof r.version === 'number' && r.version !== tVersion && r.gameState) tAdopt(r.gameState, r.version, { expectV: reqV, reason: 'poll' });
         if (r && typeof r.lastActionAt === 'number') tLastActionAt = r.lastActionAt;
         if (r && typeof r.idleForfeitMin === 'number') tIdleMin = r.idleForfeitMin;
         if (r && 'actorSeat' in r) tServerActorSeat = (typeof r.actorSeat === 'number' ? r.actorSeat : null);   // v6.151 伺服器權威
@@ -6050,10 +6110,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   那句話把整個不確定性丟給玩家：重按可能套用兩次、不按就動作遺失然後被閒置判負。
   //   ⇒ 現在每個動作都帶一個 `actId`（一個手勢一個鍵，跨所有重送 attempt 不變），
   //     伺服器保證同一個鍵只套用一次 ⇒ 「網路一恢復就自動重送」變成安全的。
+  // ⚠ 用**物件同一性**判斷而不是無條件 `game = prev`：若輪詢在 await 期間已帶回更新的盤面
+  //   （動作其實成功、只是回應丟了），盲目還原會把畫面倒退到比 tVersion 還舊（v6.137 教訓）。
+  // ⭐⭐⭐v6.180 再加一條**版本**判準：只有「伺服器版本從我做預測到現在一步都沒動過」才可以還原。
+  //   物件同一性單獨用是不夠的 —— v6.173 起 `tAdopt` 走 `shareStateIdentity`，當伺服器盤面與本地
+  //   預測**逐位元組相同**（白名單四個動作都是決定性的、兩端同一份引擎）時它會**原封回傳 prev 本人**，
+  //   `game === ctx.predictedRef` 依然成立。那時伺服器其實已經確認了這個動作（tVersion 已前進），
+  //   只是那一發 POST 的回應沒回來（逾時／401／玩家按了「停止重送」）—— 還原它就是「跳回上一步」。
+  //   ⚠ 另一半見 tournamentDispatch：`predictedRef` 必須存**讀回來的** `game`（proxy），存原始物件
+  //     的話這個條件恆為 false，整段回滾是死碼（v6.137~v6.179 的實際行為）。
   function _tRestorePrediction(ctx: TActCtx): void {
-    // ⚠ 用**物件同一性**判斷而不是無條件 `game = prev`：若輪詢在 await 期間已帶回更新的盤面
-    //   （動作其實成功、只是回應丟了），盲目還原會把畫面倒退到比 tVersion 還舊（v6.137 教訓）。
-    if (ctx.predicted && game === ctx.predictedRef) game = ctx.prev;
+    if (ctx.predicted && game === ctx.predictedRef && tVersion === ctx.baseV) game = ctx.prev;
     ctx.predicted = false; ctx.predictedRef = null;
   }
   function _tActDone(ctx: TActCtx): void {
@@ -6221,7 +6288,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠ ctx 一律用**函式內區域物件**（不是元件層級變數）—— 放元件層級會跨呼叫洩漏：
     //   伺服器有一條 `{ error:'對局尚未開始', waiting }`（房間剛被 reset 的競態）**不帶 gameState**，
     //   不進任何清除點 → 旗標殘留到下一次 dispatch，害下次誤跳音效、誤觸回滾。
-    const ctx: TActCtx = { action, actId: _newActId(), prev: game, predictedRef: null, predicted: false, attempt: 0, startedAt: Date.now() };
+    // ⭐v6.180 baseV = 預測當下的伺服器版本（回滾判準，見 _tRestorePrediction）
+    const ctx: TActCtx = { action, actId: _newActId(), prev: game, predictedRef: null, predicted: false, attempt: 0, startedAt: Date.now(), baseV: tVersion };
     _actCtx = ctx;
     // v6.137 樂觀更新：先在本地試跑一次，通過所有 gate 才把預測畫面上畫。
     //   fail-closed —— 任何 gate 沒過就維持現行行為（等伺服器），最壞情況與改動前完全相同。
@@ -6230,7 +6298,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const pr = tryPredictAction(game, action, pool, { allowedTypes: OPTIMISTIC_ACTION_TYPES });
       if (pr.ok) {
         game = pr.predicted;
-        ctx.predictedRef = pr.predicted;
+        // ⚠⚠⚠v6.180（Fable 5 審查抓到，我實跑驗證過）：這裡原本存的是 `pr.predicted`（**原始物件**），
+        //   但 `game` 是 Svelte 5 的**深層** `$state` —— 編譯產物是 `$.set(game, pr.predicted, true)`，
+        //   第三個參數 `should_proxy=true` 會把值 `proxy()` 成一個**新的 Proxy** 才存進去
+        //   （`proxy(raw) !== raw`；已經是 proxy 的則原樣回傳）。
+        //   ⇒ 讀回來的 `game` 永遠不等於 `pr.predicted` ⇒ `_tRestorePrediction` 的
+        //     `game === ctx.predictedRef` **恆為 false** ⇒ v6.137 那道回滾從上線至今是**死碼**。
+        //   後果（玩家看得到）：動作最終送不出去時紅字寫著「畫面已還原」，畫面上卻還留著那個
+        //   **伺服器根本沒有套用**的動作；等下一次版本前進（對手動作／看門狗）才被伺服器盤面洗掉
+        //   ⇒ 就是「過一下子突然跳回上一步」。存讀回來的那一份才是真的物件同一性。
+        ctx.predictedRef = game;
         ctx.predicted = true;
         // 音效在預測當下就播（原本是等伺服器回應才播）；伺服器確認那一次要跳過，避免播兩次。
         try { dispatchSfxForAction(action as any, ctx.prev as any, game as any); } catch { /* sfx best-effort */ }
@@ -6245,6 +6322,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     catch (e: any) { tError = String(e?.message ?? e); }
     finally { tBusy = false; }
     tActAbortAll('房間已重置');   // ⭐v6.172 同 tLeaveMatch
+    tPollGen++;   // ⭐v6.180 同 tLeaveMatch：房間重置後，在途的 `v=-1` 回應不可以把舊盤面帶回來
     game = null; tVersion = -1; tStep = 'lobby'; myPlayerIndex = null; mySeatIdx = -1; tActiveRoom = T_ROOM; isTournSpectator = false; isTReplay = false; tReplay = null; tReplayStep = 0;
   }
 

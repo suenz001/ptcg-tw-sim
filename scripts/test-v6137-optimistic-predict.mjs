@@ -179,9 +179,17 @@ console.log('④ 接線端紅線（靜態）');
       /ctx\.predicted = false;[\s\S]{0,900}if \(r\.stale && _tActCanRetry\(ctx\)\)/.test(PAGE));
   chk('伺服器回應採納後會清 ctx.predicted（避免下一次誤判已預測）',
       /tAdopt\(r\.gameState[\s\S]{0,400}ctx\.predicted = false/.test(PAGE));
-  chk('⭐ 預測**每個手勢只做一次**：只在 tournamentDispatch 裡，重送迴圈 _tActAttempt 內沒有',
-      (PAGE.match(/tryPredictAction\(/g) || []).length === 1
-      && /async function tournamentDispatch[\s\S]{0,1400}tryPredictAction\(/.test(PAGE));
+  // ⭐v6.180：原本用「tournamentDispatch 起算 1400 字元窗」定位，註解一長就假紅。
+  //   改成**位置區間**判準（起點 = tournamentDispatch、終點 = 它的下一支函式），意圖完全不變：
+  //   全檔只有一處 tryPredictAction，而且必須落在 tournamentDispatch 之內（不在重送迴圈裡）。
+  {
+    const iDisp = PAGE.indexOf('async function tournamentDispatch');
+    const iNext = PAGE.indexOf('async function tournamentReset', iDisp);
+    const iPred = PAGE.indexOf('tryPredictAction(', iDisp);
+    chk('⭐ 預測**每個手勢只做一次**：只在 tournamentDispatch 裡，重送迴圈 _tActAttempt 內沒有',
+        (PAGE.match(/tryPredictAction\(/g) || []).length === 1
+        && iDisp > 0 && iNext > iDisp && iPred > iDisp && iPred < iNext);
+  }
   // ⭐⭐v6.170 新增：重送期間**不可以**回滾（回滾＋自動重送會讓玩家看到動作閃一下又消失）。
   chk('⭐⭐ 逾時後若還能重送 ⇒ 走 _tActSchedule 直接 return，不碰 _tRestorePrediction',
       /if \(_tActCanRetry\(ctx\)\) \{[\s\S]{0,400}_tActSchedule\(ctx,[\s\S]{0,140}return;[\s\S]{0,20}\}/.test(PAGE)

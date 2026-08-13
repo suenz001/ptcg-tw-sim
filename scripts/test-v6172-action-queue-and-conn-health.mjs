@@ -133,6 +133,7 @@ try {
       let game = ${JSON.stringify(opts.game ?? { phase: 'playing', n: 0 })};
       let tError = '', tActiveRoom = 'R', _tActionAuthErr = false, _tActionAuthErrAt = 0, _actionAuthDiagSent = false;
       let tStep = 'playing';
+      let tVersion = 0;   // ⭐v6.180 ctx 帶 baseV = 預測當下的伺服器版本（回滾判準）
       const poolReady = false, pool = null, OPTIMISTIC_ACTION_TYPES = [];
       const tryPredictAction = () => ({ ok: false });
       const tPlayerId = () => 'me';
