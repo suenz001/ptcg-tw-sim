@@ -5605,6 +5605,38 @@ import('firebase-admin').then(async ({ default: admin }) => {
       DPOSTS.createIndex({ status: 1, downloadCount: -1 }).catch(() => { /* best-effort */ });
       // ⭐v6.185 「最新留言」排序 —— 沒有這條索引就會整表掃描 + 記憶體排序。
       DPOSTS.createIndex({ status: 1, lastCommentAt: -1 }).catch(() => { /* best-effort */ });
+
+      /**
+       * ⭐⭐v6.185 一次性回填 lastCommentAt（啟動時 fire-and-forget，冪等）。
+       *
+       * ⚠ 為什麼一定要有這個：v6.182 起就有留言了，但那些投稿的 doc **沒有 lastCommentAt**
+       *   這個欄位。mongo 的 descending 把「欄位缺席」當 null 排在 0 之後 ⇒
+       *   **已經有留言的舊投稿會排在「完全沒有留言」的新投稿後面**，正好是反的。
+       *   靠站長手動打 /api/admin/deck-posts/recount 才會好 —— 那是個沒有按鈕的端點，
+       *   等於這個功能上線當天就是壞的。所以改成自己補。
+       * ⚠ 冪等：補完之後就不再有缺席的 doc ⇒ 下次啟動第一個查詢就回 0 筆、直接結束。
+       * ⚠ 全程 best-effort：任何一步失敗只會讓排序退化成「舊投稿排最後」，
+       *   絕不能讓整個 deckPosts 區段註冊失敗（那會連公布欄都打不開）。
+       */
+      async function dpBackfillLastCommentAt() {
+        const stale = await DPOSTS.find({ lastCommentAt: { $exists: false } }, { projection: { _id: 1 } }).limit(5000).toArray();
+        if (!stale.length) return 0;
+        const rows = await DPCOMM.aggregate([
+          { $match: { status: { $ne: 'deleted' } } },
+          { $group: { _id: '$postId', last: { $max: '$createdAt' } } },
+        ]).toArray();
+        const lm = new Map(rows.map((x) => [x._id, x.last || 0]));
+        let n = 0;
+        for (const p of stale) {
+          await DPOSTS.updateOne({ _id: p._id }, { $set: { lastCommentAt: lm.get(p._id) || 0 } });
+          n++;
+        }
+        _dpListCache.clear();
+        return n;
+      }
+      Promise.resolve().then(dpBackfillLastCommentAt).then((n) => {
+        if (n) console.log('[deck-posts] lastCommentAt 回填完成：' + n + ' 筆（v6.185 一次性，之後不再執行）');
+      }).catch((e) => console.warn('[deck-posts] lastCommentAt 回填失敗（可改用 admin 的 recount 端點）:', e && e.message));
       DPOSTS.createIndex({ uid: 1 }).catch(() => { /* best-effort */ });
       DPOSTS.createIndex({ 'tournament.eventId': 1, uid: 1 }).catch(() => { /* best-effort */ });
       DPLIKES.createIndex({ postId: 1 }).catch(() => { /* best-effort */ });

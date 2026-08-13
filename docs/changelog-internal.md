@@ -68,9 +68,19 @@
 - 離開對戰呼叫 `resetActNotify()`：殘留的 `prevKey` 會把下一場的第一個需求誤判成
   「同一串的延續」而只靜默更新 ⇒ 那就是漏響。
 
+### ⚠ 上線當天就會壞的那條：舊投稿的 lastCommentAt 是**缺席**不是 0
+
+v6.182 起就有留言了，那些 doc 沒有 `lastCommentAt`。descending 把缺席當 null 排在 0 之後
+⇒ **已經有留言的舊投稿會排在「完全沒有留言」的新投稿後面**，剛好是反的。
+`/api/admin/deck-posts/recount` 修得回來，但它是個**沒有按鈕的端點** ⇒ 等於功能一上線就是壞的。
+⇒ deckPosts 區段註冊時 fire-and-forget 跑一次 `dpBackfillLastCommentAt()`：
+只挑 `{ lastCommentAt: { $exists: false } }` 的 doc（補完就不再有 ⇒ 天然冪等），
+用一次 `$group/$max` 算出每篇的最新留言時間再逐筆 `$set`。全程 best-effort，
+失敗只讓排序退化成「舊投稿排最後」，絕不能讓整個 deckPosts 區段註冊失敗（那連公布欄都打不開）。
+
 ## 守衛
 
-`scripts/test-v6185-act-notify-and-comment-sort.mjs`，25 條，HEAD（v6.184）跑出 **20 FAIL**。
+`scripts/test-v6185-act-notify-and-comment-sort.mjs`，26 條，HEAD（v6.184）跑出 **20 FAIL**。
 兩半都是行為端：deck-posts 抽 handler 餵記憶體 mongo mock 真的跑（斷言 DB 裡的
 `lastCommentAt` 變成多少）；通知把對戰頁的 `tCurrentActorSeat`/`setupActorSeat`
 **原文抽出來**和真正的 `notify-core` + `notify.ts` glue 一起 bundle、用假的 `Notification`

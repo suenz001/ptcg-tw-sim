@@ -86,7 +86,8 @@ function matchQuery(doc, q) {
     if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
       if ('$ne' in cond && v === cond.$ne) return false;
       if ('$in' in cond && !cond.$in.includes(v)) return false;
-      const known = ['$ne', '$in'];
+      if ('$exists' in cond && (v !== undefined) !== cond.$exists) return false;
+      const known = ['$ne', '$in', '$exists'];
       for (const op of Object.keys(cond)) if (!known.includes(op)) throw new Error('mock 不支援查詢運算子 ' + op);
       continue;
     }
@@ -241,6 +242,15 @@ function buildDpHandlers(deps) {
   `);
   return f(deps);
 }
+function buildBackfill(deps) {
+  // eslint-disable-next-line no-new-func
+  const f = new Function('D', `
+    const { DPOSTS, DPCOMM, _dpListCache } = D;
+    ${extractFn(DP, 'dpBackfillLastCommentAt')}
+    return dpBackfillLastCommentAt;
+  `);
+  return f(deps);
+}
 function makeEnv() {
   const DPOSTS = makeColl(), DPCOMM = makeColl(), DPLIKES = makeColl(), DPDOWNS = makeColl();
   const env = { DPOSTS, DPCOMM, DPLIKES, DPDOWNS, identity: { uid: 'u1', email: 'u1@x.com', name: 'U1', verified: true }, admins: ['u1@x.com'] };
@@ -330,6 +340,32 @@ await TA('⭐⭐⭐ 對帳端點 recount 修得回人為製造的 lastCommentAt 
   ok((await env.DPOSTS.findOne({ _id: 'dp_1' })).commentCount === 1, 'recount 沒有把 commentCount 修回來');
   const oldDoc = await env.DPOSTS.findOne({ _id: 'dp_old' });
   ok(oldDoc.lastCommentAt === 0, '舊投稿（欄位缺席）沒有被回填成 0，實際 ' + JSON.stringify(oldDoc.lastCommentAt));
+});
+
+await TA('⭐⭐⭐ 啟動時自動回填 lastCommentAt：v6.182 起就有留言的舊投稿不會排到「沒有留言」的後面', async () => {
+  // ⚠ 這是「上線當天就壞」的路徑：舊 doc 沒有這個欄位，descending 會把它排在 0 之後
+  //   ⇒ 有留言的舊投稿反而墊底。靠站長手打一個沒有按鈕的 recount 端點才會好 ⇒ 必須自己補。
+  const env = makeEnv();
+  await env.DPOSTS.insertOne({ _id: 'dp_有留言舊', status: 'published', uid: 'a', likeCount: 0, downloadCount: 0, commentCount: 1 });  // 欄位缺席
+  await env.DPOSTS.insertOne({ _id: 'dp_沒留言舊', status: 'published', uid: 'a', likeCount: 0, downloadCount: 0, commentCount: 0 });  // 欄位缺席
+  await env.DPOSTS.insertOne({ _id: 'dp_新', status: 'published', uid: 'a', likeCount: 0, downloadCount: 0, commentCount: 0, lastCommentAt: 0 });
+  await env.DPCOMM.insertOne({ _id: 'dc_1', postId: 'dp_有留言舊', status: 'published', createdAt: 777 });
+  await env.DPCOMM.insertOne({ _id: 'dc_2', postId: 'dp_有留言舊', status: 'deleted', createdAt: 999 });   // 軟刪的不可以算進去
+
+  // 前置：證明「不回填」時排序確實是壞的（否則這條測試沒有意義）
+  const spec = evalSortSpec('comments');
+  const bad = sortDocs(env.DPOSTS._docs.map((d) => ({ ...d, createdAt: 0 })), spec).map((d) => d._id);
+  ok(bad.indexOf('dp_有留言舊') > bad.indexOf('dp_新'), '前置條件不成立：欄位缺席竟然沒有排到 0 後面');
+
+  const fn = buildBackfill(env.deps);
+  const n = await fn();
+  ok(n === 2, '回填筆數不對（' + n + '），應為 2 筆缺席的 doc');
+  ok((await env.DPOSTS.findOne({ _id: 'dp_有留言舊' })).lastCommentAt === 777, '有留言的舊投稿沒有補上最後一則留言的時間');
+  ok((await env.DPOSTS.findOne({ _id: 'dp_沒留言舊' })).lastCommentAt === 0, '沒留言的舊投稿沒有補成 0');
+  const good = sortDocs(env.DPOSTS._docs.map((d) => ({ ...d, createdAt: 0 })), spec).map((d) => d._id);
+  ok(good[0] === 'dp_有留言舊', '回填後有留言的舊投稿仍然沒有排到最前面：' + JSON.stringify(good));
+  // 冪等：再跑一次應該 0 筆（不會每次啟動都重掃重寫）
+  ok((await fn()) === 0, '回填不冪等 ⇒ 每次啟動都會全表重寫');
 });
 
 T('⭐ 前端排序列有「最新留言」按鈕，且沿用既有 .sorts 樣式與 changeSort 接線', () => {
