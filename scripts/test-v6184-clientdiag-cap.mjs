@@ -236,7 +236,14 @@ if (packFn) {
     ok('★★②新列的旗標會原樣帶到畫面', newRow.truncated === true && newRow.rawLen === 9999);
   } else { ok('抽得出 rows.map 回呼', false); }
   ok('★②admin 明細列會標出「⚠ 已截斷」', ADMIN.includes("r.truncated ? '　<span style=\"color:#c62828;font-weight:700;\">⚠ 已截斷'"));
-  ok('★②admin 版本提示已 bump', ADMIN.includes("window.SITE_VERSION_HINT = '6.184';"));
+  // ⚠v6.185 這條原本寫死 '6.184'，下一次 bump 就必紅。改成比照 v6.160／v6.180 既有作法：
+  //   admin 的提示必須**與 src/lib/version.ts 的 VERSION 一致**（這才是它真正要防的事 ——
+  //   出新版時忘了同步改 admin.html，站長端的版本紅字警告就會誤發）。
+  ok('★②admin 版本提示與 src/lib/version.ts 一致（出新版時兩邊都要改）', (() => {
+    const a = (ADMIN.match(/window\.SITE_VERSION_HINT = '([\d.]+)';/) || [])[1];
+    const v = (readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8').match(/VERSION = '([\d.]+)'/) || [])[1];
+    return !!a && !!v && a === v;
+  })());
 }
 
 // ══ ④ dump 腳本能正確報出截斷筆數與旗標 ═══════════════════════════════════

@@ -93,11 +93,13 @@
   // v6.048：音效決策收斂到純函式（三條路徑共用，可寫自動化守衛）
   import { computeSfxEvents } from '$lib/audio/sfx-events';
   // v6.022 錦標賽通知（本地通知；決策核心在 notify-core.ts 純函式、有單元測試）
-  import { notifyScan, notifyTurn, shouldPromptOnLobby, requestNotifyPermission, markPrompted,
+  import { notifyScan, notifyAct, resetActNotify, shouldPromptOnLobby, requestNotifyPermission, markPrompted,
            getNotifyEnabled, saveNotifyEnabled, getPermission as getNotifyPermission,
            sendTestNotification, isIOSNeedsInstall, initNotifyNav,
            subscribePush, unsubscribePush, getNotifyDiagnostics, hasPrompted,
            describePushStage, getNotifyCommunity, saveNotifyCommunity } from '$lib/notify';
+  // ⭐v6.185 「輪到我需要操作」的需求計算（純函式、有單元測試）
+  import { buildActNeed } from '$lib/notify-core';
   import { parseCoinFlipAnimationEvents } from '$lib/game/coinAnimation';
   import {
     loadAudioPrefs, saveVolume, saveMuted, isMuted as isAudioMuted, getMasterVolume as getAudioVolume,
@@ -6920,16 +6922,40 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // v6.048：回放模式不播 —— 逐步導覽時每按一次「下一步」幾乎都會跨半回合，
       //   會變成一直嗶。回放要的是看盤面，不是重播音效。
       if (!isTReplay) playSfx('turn-start');
-      // v6.022 換你行動通知（僅錦標賽對戰中 + 分頁在背景時；同回合去重 + 同房間 30 秒節流）
-      if (isMine && isTournament && tStep === 'playing' && tActiveRoom) {
-        notifyTurn({ roomId: String(tActiveRoom), turn: game.turn, apIdx: newIdx });
-      }
+      // ⭐⭐⭐v6.185 這裡**不再**發通知。原本 v6.022 的 notifyTurn 掛在這個
+      //   「activePlayerIndex 改變」的 edge 上 —— 而昏厥補位（SEND_NEW_ACTIVE）、
+      //   對手效果要我做選擇、開局階段、取獎賞卡**都不會改 activePlayerIndex**，
+      //   所以那些「輪到我要操作」的時機從來沒有通知過（站長回報的缺口）。
+      //   通知已收斂到下面那個 level 掃描的 $effect，單一述詞「不需要操作 → 需要操作」。
       setTimeout(() => {
         // 1.5s 後若仍是同一次顯示 → 清掉（避免 race：若中途又切回合，新 banner 蓋掉舊的）
         if (turnBanner?.timestamp === ts) turnBanner = null;
       }, 1500);
     }
     _prevTurnPlayerIdx = newIdx;
+  });
+
+  // ⭐⭐⭐ v6.185 「輪到我需要操作」通知 —— 全站唯一發送點（level 掃描，不是 edge）。
+  //
+  //   每次盤面落地都算一次「我現在需不需要操作」，把結果交給 notify-core 的單一述詞
+  //   decideActNotify：**從「不需要操作」變成「需要操作」才響**。
+  //   ⇒ 補位（SEND_NEW_ACTIVE）、對手效果要我做選擇、取獎賞卡、開局階段全部涵蓋，
+  //     而「補位完成後馬上輪到我」因為中間沒有出現過「不需要操作」⇒ 不會再響第二次；
+  //     「補位完成後對手還有動作、之後才輪到我」中間會觀察到一次「不需要操作」⇒ 照響。
+  //
+  // ⚠ 誰該動作**只問 tCurrentActorSeat**（與伺服器 currentActorSeat 逐行同步的那一份），
+  //   這裡絕不自己再拄一份條件 —— 否則就是第二份判準，必然漂移。
+  // ⚠ need 為 null 時也**必須**呼叫 notifyAct：「需求消失」是讓下一段需求能重新響的訊號。
+  // ⚠ 觀戰／回放／非錦標賽對戰不發（觀戰者沒有座位，回放是歷史盤面）。
+  $effect(() => {
+    const g = game;
+    const room = String(tActiveRoom || '');
+    const inBattle = isTournament && !isTournSpectator && !isTReplay && tStep === 'playing' && !!room && myPlayerIndex !== null;
+    // ⚠ 離開對戰（回大廳/換房/改觀戰）一定要清掉鏈式狀態 —— 殘留的 prevKey 會讓
+    //   下一場的第一個需求被誤判成「同一串的延續」而只靜默更新 ⇒ 那就是漏響。
+    if (!inBattle) { resetActNotify(); return; }
+    const seat = g ? tCurrentActorSeat(g) : null;
+    notifyAct(room, buildActNeed(g as any, myPlayerIndex as 0 | 1, seat, room));
   });
 
   // 取得「可被挑選丟棄」的卡片清單（依 scope 決定範圍）

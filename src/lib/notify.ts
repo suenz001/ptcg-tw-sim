@@ -10,9 +10,9 @@
  * ⚠偏好鍵沿用專案既有 pattern（比照 ptcg.audio.*）。
  */
 import {
-  decideNotify, scanTournamentAlerts, buildTurnIntent, pruneSeen,
-  TURN_MIN_INTERVAL_MS, SEEN_TTL_MS,
-  type NotifyIntent, type AlertEventLite, type AlertMatchLite,
+  decideNotify, scanTournamentAlerts, pruneSeen, decideActNotify,
+  TURN_MIN_INTERVAL_MS, SEEN_TTL_MS, ACT_RING_BURST_MAX, ACT_RING_BURST_WINDOW_MS,
+  type NotifyIntent, type AlertEventLite, type AlertMatchLite, type ActNeed,
 } from './notify-core';
 
 const KEY_ENABLED = 'ptcg.notify.enabled';
@@ -164,11 +164,13 @@ async function getActiveRegistration(timeoutMs = 3000): Promise<ServiceWorkerReg
 }
 
 async function showIntent(intent: NotifyIntent): Promise<void> {
-  const opts: NotificationOptions & { renotify?: boolean } = {
+  const opts: NotificationOptions & { renotify?: boolean; silent?: boolean } = {
     body: intent.body,
     tag: intent.tag,
     requireInteraction: intent.requireInteraction,
     renotify: intent.renotify,
+    // ⭐v6.185 連鎖需求（補位→馬上輪到我）只更新內容不再出聲
+    silent: intent.silent,
   };
   try {
     const reg = await getActiveRegistration();   // v6.033：必須有 active worker，否則 showNotification 會拋
@@ -214,12 +216,67 @@ export function notifyScan(events: AlertEventLite[] | null | undefined, myMatch:
   for (const intent of scanTournamentAlerts(events, myMatch, now)) void emitIntent(intent, hidden);
 }
 
-/** 換你行動：由對戰頁「回合換手」單一收斂點呼叫。 */
-export function notifyTurn(payload: { roomId: string; turn: number; apIdx: number; eventName?: string }): void {
-  if (!supported() || !getNotifyEnabled()) return;
+// ─────────────────────────────────────────────────────────────────────────────
+// ⭐⭐⭐ v6.185 「輪到我需要操作」通知（取代 v6.022 的 notifyTurn）。
+//
+// v6.022 的 notifyTurn 掛在對戰頁「回合換手 edge」上，所以**只有** activePlayerIndex 改變
+// 才會發 —— 昏厥補位、對手效果要我做選擇、開局、取獎賞卡通通不會改 activePlayerIndex，
+// 全部沒有通知。現在改成：對戰頁**每次盤面落地**都算一次「我現在需不需要操作」，
+// 由 decideActNotify 依「不需要 → 需要」這個唯一述詞決定要不要響。
+//
+// ⚠ 這裡的鏈式狀態**刻意只放記憶體、不寫 localStorage**：
+//   持久化的 seen 一旦兩個不同需求撞 key 就是**永久漏發**（比重複發嚴重得多）；
+//   只放記憶體的話最壞是重整後多響一次，而重整必然在前景、前景本來就不發。
+// ─────────────────────────────────────────────────────────────────────────────
+/** roomId → 上一次觀察到的需求 key（null = 當時不需要操作）。 */
+const _actPrev = new Map<string, string | null>();
+/** roomId → 這一串需求已經「響過」的 key（null = 這一串還沒響過）。 */
+const _actRung = new Map<string, string | null>();
+/** roomId → 最近幾次真的出聲的時間戳（爆量上限用；⚠只降級成靜默，絕不 drop）。 */
+const _actRingAts = new Map<string, number[]>();
+
+/**
+ * 對戰頁每次盤面落地呼叫一次（need 為 null 也**必須**呼叫 —— 「需求消失」正是
+ * 讓下一個需求能重新響的關鍵訊號；漏掉它就會把兩段本來該分開響的需求併成一串）。
+ */
+export function notifyAct(roomId: string, need: ActNeed | null): boolean {
+  if (!roomId) return false;
+  const prevKey = _actPrev.has(roomId) ? (_actPrev.get(roomId) ?? null) : undefined;
+  _actPrev.set(roomId, need ? need.key : null);
   const hidden = typeof document !== 'undefined' && document.hidden === true;
-  if (!hidden) return;
-  void emitIntent(buildTurnIntent(payload), hidden);
+  const now = Date.now();
+  const d = decideActNotify({
+    enabled: getNotifyEnabled(),
+    permission: getPermission(),
+    hidden,
+    need,
+    prevKey,
+    rungKey: _actRung.has(roomId) ? (_actRung.get(roomId) ?? null) : undefined,
+    now,
+    recentRingAts: (_actRingAts.get(roomId) ?? []).filter((t) => now - t < ACT_RING_BURST_WINDOW_MS),
+    burstWindowMs: ACT_RING_BURST_WINDOW_MS,
+    burstMax: ACT_RING_BURST_MAX,
+  });
+  _actRung.set(roomId, d.nextRungKey);
+  if (d.action === 'skip' || !need) return false;
+  if (!supported()) return false;
+  if (d.action === 'ring') {
+    _actRingAts.set(roomId, [...(_actRingAts.get(roomId) ?? []).filter((t) => now - t < ACT_RING_BURST_WINDOW_MS), now]);
+  }
+  void showIntent({
+    kind: 'turn', key: need.key, title: need.title, body: need.body,
+    // 同一個房間的對戰內通知共用一個 tag ⇒ 系統上互相覆蓋、通知中心永遠只有最新那一則
+    tag: `ptcg-t-turn-${roomId}`,
+    renotify: d.action === 'ring',
+    silent: d.action !== 'ring',
+  });
+  return true;
+}
+
+/** 離開對戰／回大廳時清掉鏈式狀態（下一場是全新的一串）。 */
+export function resetActNotify(roomId?: string): void {
+  if (roomId) { _actPrev.delete(roomId); _actRung.delete(roomId); _actRingAts.delete(roomId); return; }
+  _actPrev.clear(); _actRung.clear(); _actRingAts.clear();
 }
 
 /**

@@ -5603,6 +5603,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
       DPOSTS.createIndex({ status: 1, createdAt: -1 }).catch(() => { /* best-effort */ });
       DPOSTS.createIndex({ status: 1, likeCount: -1 }).catch(() => { /* best-effort */ });
       DPOSTS.createIndex({ status: 1, downloadCount: -1 }).catch(() => { /* best-effort */ });
+      // ⭐v6.185 「最新留言」排序 —— 沒有這條索引就會整表掃描 + 記憶體排序。
+      DPOSTS.createIndex({ status: 1, lastCommentAt: -1 }).catch(() => { /* best-effort */ });
       DPOSTS.createIndex({ uid: 1 }).catch(() => { /* best-effort */ });
       DPOSTS.createIndex({ 'tournament.eventId': 1, uid: 1 }).catch(() => { /* best-effort */ });
       DPLIKES.createIndex({ postId: 1 }).catch(() => { /* best-effort */ });
@@ -5739,6 +5741,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
           //   —— 那就是每頁 20 次的 N+1（v6.119 讀放大的同一個教訓）。
           //   夾在 0 以下是防守性的：真正的權威是明細表，admin 的 recount 端點負責修正漂移。
           commentCount: Math.max(0, doc.commentCount || 0),
+          // ⭐v6.185 最近一則留言時間（0 = 從來沒有留言）。「最新留言」排序就是照它排。
+          lastCommentAt: Math.max(0, doc.lastCommentAt || 0),
           createdAt: doc.createdAt || 0,
           tournament: doc.tournament
             ? { eventId: doc.tournament.eventId, eventName: doc.tournament.eventName, finishedAt: doc.tournament.finishedAt || 0, placementLabel: doc.tournament.placementLabel }
@@ -5772,7 +5776,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
         try {
           // ⚠ 正式站走 Cloudflare tunnel，公開 GET 曾被快取住（index.json 被快取 4 天）。
           res.set('Cache-Control', 'no-store');
-          const sort = ({ new: { createdAt: -1 }, likes: { likeCount: -1, createdAt: -1 }, downloads: { downloadCount: -1, createdAt: -1 } })[String((req.query && req.query.sort) || 'new')] || { createdAt: -1 };
+          // ⭐v6.185 新增 comments =「最新留言」：lastCommentAt 由新增/刪除留言時維護的
+          //   非正規化欄位（**絕不 N+1 去查 deckPostComments**，那是 v6.119 的讀放大教訓）。
+          //   ⚠ 沒有任何留言的投稿 lastCommentAt = 0 ⇒ 一律排在所有「有留言」的投稿之後，
+          //     彼此再依 createdAt 由新到舊 ⇒ 名次完全確定，不會每次重整就亂跳。
+          const sort = ({
+            new: { createdAt: -1 },
+            likes: { likeCount: -1, createdAt: -1 },
+            downloads: { downloadCount: -1, createdAt: -1 },
+            comments: { lastCommentAt: -1, createdAt: -1 },
+          })[String((req.query && req.query.sort) || 'new')] || { createdAt: -1 };
           const page = Math.max(1, Math.min(200, parseInt((req.query && req.query.page) || '1', 10) || 1));
           const pageSize = Math.max(1, Math.min(50, parseInt((req.query && req.query.pageSize) || '20', 10) || 20));
           const q = { status: 'published' };
@@ -5861,6 +5874,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
           likeCount: 0,
           downloadCount: 0,
           commentCount: 0,
+          // ⭐v6.185 **一定要寫 0 而不是留空**：mongo 的 descending 排序把「欄位缺席」
+          //   當成 null 排在 0 之後 ⇒ 新舊投稿會分裂成兩群，無留言者的相對名次就不穩定。
+          lastCommentAt: 0,
           createdAt: now,
           updatedAt: now,
         };
@@ -6116,8 +6132,11 @@ import('firebase-admin').then(async ({ default: admin }) => {
           // ⚠⚠ 這一段**必須自己吞掉錯誤**。留言已經寫進去了，這裡再 throw 會讓外層回 500，
           //   玩家看到「失敗」就再送一次 ⇒ 同一則留言變兩則。計數只是快照，壞了 recount 修得回來；
           //   「已經成功卻回報失敗」修不回來（Fable 5 review 指出）。
+          //   ⭐v6.185 lastCommentAt 用 **$max** 不是 $set —— 兩則留言幾乎同時寫入時
+          //     $set 會讓「後寫入但時間較早」那一發把較新的值蓋回去（時間戳倒退）；
+          //     $max 天生單調，永遠只會前進。
           try {
-            await DPOSTS.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
+            await DPOSTS.updateOne({ _id: postId }, { $inc: { commentCount: 1 }, $max: { lastCommentAt: now } });
             _dpListCache.clear();         // 列表上要顯示留言數 ⇒ 30 秒快取要作廢
           } catch (_ce) { console.warn('[deck-posts] commentCount +1 failed（recount 可修）:', _ce && _ce.message); }
           res.json({ ok: true, comment: dpCommentPublic(doc, id.uid) });
@@ -6150,8 +6169,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
           const changed = !!(r && r.matchedCount);
           if (changed) {
             // 同 dpCommentCreate：計數失敗不可以害得「已經刪掉」被回報成失敗。
+            // ⭐⭐v6.185 lastCommentAt 的漂移只可能發生在「刪掉的剛好是最後一則」——
+            //   $max 沒有反向操作，只能重算。這裡**用明細重算**：對單一 postId 取還活著的
+            //   最新一則（已有索引 {postId,status,createdAt}，是一次 limit(1) 的點查詢，
+            //   不是列表頁的 N+1 —— 刪除是低頻的單筆操作，這一次查詢完全付得起）。
+            //   全都刪光就寫回 0（不是 unset —— 見上面「欄位缺席會排到 0 之後」的理由）。
             try {
-              await DPOSTS.updateOne({ _id: c.postId }, { $inc: { commentCount: -1 } });
+              const _newest = await DPCOMM.find({ postId: c.postId, status: { $ne: 'deleted' } })
+                .sort({ createdAt: -1 }).limit(1).toArray();
+              const _lca = (_newest && _newest[0] && _newest[0].createdAt) || 0;
+              await DPOSTS.updateOne({ _id: c.postId }, { $inc: { commentCount: -1 }, $set: { lastCommentAt: _lca } });
               _dpListCache.clear();
             } catch (_ce) { console.warn('[deck-posts] commentCount -1 failed（recount 可修）:', _ce && _ce.message); }
           }
@@ -6334,17 +6361,24 @@ import('firebase-admin').then(async ({ default: admin }) => {
             DPLIKES.aggregate([{ $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
             DPDOWNS.aggregate([{ $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
             // ⚠ 留言是**軟刪**，對帳一定要先濾掉 deleted，否則「重算」反而會把已刪的算回來。
-            DPCOMM.aggregate([{ $match: { status: { $ne: 'deleted' } } }, { $group: { _id: '$postId', n: { $sum: 1 } } }]).toArray(),
+            //   ⭐v6.185 同一趟順便算出每篇的最新留言時間（$max）⇒ lastCommentAt 也能對帳。
+            DPCOMM.aggregate([{ $match: { status: { $ne: 'deleted' } } }, { $group: { _id: '$postId', n: { $sum: 1 }, last: { $max: '$createdAt' } } }]).toArray(),
           ]);
           const lm = new Map(likes.map((x) => [x._id, x.n]));
           const dm = new Map(downs.map((x) => [x._id, x.n]));
           const cm = new Map(cmts.map((x) => [x._id, x.n]));
-          const all = await DPOSTS.find({}, { projection: { _id: 1, likeCount: 1, downloadCount: 1, commentCount: 1 } }).toArray();
+          const km = new Map(cmts.map((x) => [x._id, x.last || 0]));
+          const all = await DPOSTS.find({}, { projection: { _id: 1, likeCount: 1, downloadCount: 1, commentCount: 1, lastCommentAt: 1 } }).toArray();
           let fixed = 0;
           for (const p of all) {
-            const l = lm.get(p._id) || 0, d = dm.get(p._id) || 0, c = cm.get(p._id) || 0;
-            if ((p.likeCount || 0) !== l || (p.downloadCount || 0) !== d || (p.commentCount || 0) !== c) {
-              await DPOSTS.updateOne({ _id: p._id }, { $set: { likeCount: l, downloadCount: d, commentCount: c } });
+            const l = lm.get(p._id) || 0, d = dm.get(p._id) || 0, c = cm.get(p._id) || 0, k = km.get(p._id) || 0;
+            // ⭐v6.185 lastCommentAt 一併對帳。⚠ 比對用 `!==` 而不是「有值才修」——
+            //   舊投稿的欄位是**缺席**（undefined），`(p.lastCommentAt || 0) !== 0` 為 false，
+            //   若只在不等時才寫就永遠補不進去；所以缺席時額外強制回填一次。
+            const needBackfill = typeof p.lastCommentAt !== 'number';
+            if (needBackfill || (p.likeCount || 0) !== l || (p.downloadCount || 0) !== d
+                || (p.commentCount || 0) !== c || (p.lastCommentAt || 0) !== k) {
+              await DPOSTS.updateOne({ _id: p._id }, { $set: { likeCount: l, downloadCount: d, commentCount: c, lastCommentAt: k } });
               fixed++;
             }
           }

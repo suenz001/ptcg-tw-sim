@@ -1,3 +1,85 @@
+# v6.185 ①牌組公布欄「最新留言」排序 ②對戰通知收斂成「不需要操作 → 需要操作」單一述詞
+
+## ① 最新留言排序
+
+`deckPosts` 新增非正規化欄位 `lastCommentAt`，排序值 `sort=comments` ⇒
+`{ lastCommentAt: -1, createdAt: -1 }`（並補上 `{status:1, lastCommentAt:-1}` 索引）。
+**列表頁不查 `deckPostComments`**（v6.119 讀放大／v6.182 已定的規矩）。
+
+防漂移的三道：
+
+| 事件 | 作法 | 為什麼 |
+|---|---|---|
+| 新增留言 | `$max: { lastCommentAt: now }` | `$set` 在兩則幾乎同時寫入時會讓「後寫入但時間較早」那發把新值蓋回去；`$max` 天生單調 |
+| 刪除留言 | 對該 postId 取「還活著的最新一則」重算後 `$set` | `$max` 沒有反向操作。刪掉的**剛好是最後一則**是唯一會漂移的路徑；刪除是低頻單筆操作，一次 `limit(1)` 點查詢（已有 `{postId,status,createdAt}` 索引）完全付得起，**不是**列表頁的 N+1 |
+| 事後對帳 | 沿用 v6.182 的 `/api/admin/deck-posts/recount`，同一趟 `$group` 多算一個 `$max: '$createdAt'` | 權威永遠是明細表 |
+
+⚠ **新投稿一定要寫 `lastCommentAt: 0`，不可以留空。** mongo 的 descending 把「欄位缺席」
+當 null 排在 0 **之後** ⇒ 新舊投稿會分裂成兩群、無留言者的相對名次不穩定。
+舊投稿（欄位缺席）由 recount 回填 —— 所以 recount 的比對條件除了「值不等」還要多一條
+「`typeof p.lastCommentAt !== 'number'`」，否則 `(undefined || 0) !== 0` 恆為 false，永遠補不進去。
+
+**無留言的怎麼排**：`lastCommentAt = 0` ⇒ 全部排在有留言的之後，彼此再依 `createdAt` 由新到舊。
+兩個排序鍵都是不會浮動的值 ⇒ 名次完全確定。
+
+## ② 通知：真因與收斂
+
+**真因**：`src/routes/game/+page.svelte` 唯一的 `notifyTurn` 呼叫掛在
+`_prevTurnPlayerIdx !== game.activePlayerIndex` 的 `$effect` 裡（v6.022）——
+是 **edge-trigger**。而昏厥補位（`SEND_NEW_ACTIVE`）**根本不會改 `activePlayerIndex`**
+⇒ edge 永遠不 fire。同一個 edge 也漏掉了：對手回合中對手效果要我做選擇
+（`pendingSelection.actorIdx = 我`）、開局階段輪到我、要我選取獎賞卡。
+＝ 站長回報的「補位不跳通知」與另外三個從來沒人回報過的缺口是**同一個** bug。
+
+**收斂**：對戰頁改成每次盤面落地跑一次 level 掃描 → `buildActNeed()` → `notifyAct()`。
+
+- 「誰該動作」**只問既有的 `tCurrentActorSeat(game)`**（與伺服器 `currentActorSeat` 逐行同步、
+  閒置判負在用的那一份），notify 這一側**不再拄第二份判準**。
+- 唯一例外且已標註：`iMustPromote`（我方 active 為 null 且備戰非空）。`tCurrentActorSeat`
+  的語義是「閒置判負該判誰」所以只回**一個**座位，雙方同時昏厥時固定先回 P1 ⇒ P2 永遠收不到。
+  這一條只讓通知**早一點**發、不會漏，而且不改任何 gate/判負。
+
+### 去重／冷卻（決策全在 `notify-core.ts` 的 `decideActNotify`，純函式）
+
+1. 需求消失 ⇒ 清「已響過」旗標。
+2. 同一個需求 key 再次觀察到 ⇒ skip（輪詢每 1.2 秒一發不會轟炸）。
+3. **上一次觀察就已經需要操作** ⇒ 同一串連鎖 ⇒ 靜默更新（同 tag 覆蓋、不再響）。
+
+站長問的「補位完成後馬上輪到我會不會再通知一次」被規則③擋掉；
+「補位完成後對手還有動作、之後才輪到我」中間必然觀察到一次「我不需要操作」⇒ 規則①清旗標 ⇒ **照響**。
+分界靠**機制**（中間有沒有經過「不需要操作」），不是靠猜時間 —— 時間分不出這兩件事。
+
+### 為什麼不用 30 秒最小間隔，改成「60 秒內最多出聲 6 次」
+
+沿用 `TURN_MIN_INTERVAL_MS`（30s）會把上面那個**完全正當**的正對照情境變成無聲
+（對手十幾秒內結束回合是常態）。改成爆量上限，數字推導：
+一個玩家回合內「我需要操作」的需求最多三段（取獎賞卡／補位／對手效果要我做選擇——
+這是 PTCG「一回合最多攻擊一次」的結構上界），本專案實測最快回合節奏約 30 秒／回合
+（`notify-core.ts` 既有註解，v6.022 依實際賽事觀察寫下）⇒ 一分鐘最多兩個回合段 ⇒ 3 × 2 = 6。
+**合法對局產不出第 7 次**。
+
+### ⚠ 兩條「絕不漏發」的設計決定
+
+- **爆量上限只降級成靜默，絕不 drop。** 舊的 `decideNotify` throttle 是直接不發，而
+  v6.022 的呼叫點是 edge ⇒ 被 throttle 掉的那一回合**永遠不會有人再呼叫一次** ⇒ 永久漏。
+- **act 的 key 只放記憶體，不寫 localStorage `seen`。** 持久化的 seen 一旦兩個不同需求
+  撞 key 就是永久漏發；只放記憶體最壞是重整後多響一次，而重整必然在前景、前景本來就不發。
+  失效方向永遠是「多響」。
+- 離開對戰呼叫 `resetActNotify()`：殘留的 `prevKey` 會把下一場的第一個需求誤判成
+  「同一串的延續」而只靜默更新 ⇒ 那就是漏響。
+
+## 守衛
+
+`scripts/test-v6185-act-notify-and-comment-sort.mjs`，25 條，HEAD（v6.184）跑出 **20 FAIL**。
+兩半都是行為端：deck-posts 抽 handler 餵記憶體 mongo mock 真的跑（斷言 DB 裡的
+`lastCommentAt` 變成多少）；通知把對戰頁的 `tCurrentActorSeat`/`setupActorSeat`
+**原文抽出來**和真正的 `notify-core` + `notify.ts` glue 一起 bundle、用假的 `Notification`
+攔截，斷言「有沒有真的發出通知、出不出聲」。
+extractFn／mongo mock（`$max` 單調）／排序器（mongo 的 null-before-number 語義）
+三個工具都先用已知答案的合成輸入**自我驗證**過。
+
+---
+
 # v6.184 診斷回報不再被靜默切掉（clientdiag 2KB → 8KB ＋ 截斷留痕）
 
 **玩家零可見變化 ⇒ 首頁 changelog 不放。** 純診斷管線修正。

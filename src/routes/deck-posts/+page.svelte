@@ -69,7 +69,10 @@
   let total = $state(0);
   let page = $state(1);
   const pageSize = 20;
-  let sort = $state<'new' | 'likes' | 'downloads'>('new');
+  // ⭐v6.185 新增 'comments' =「最新留言」（最近有人留言的牌組排最前面）。
+  //   ⚠ 伺服器端照 deckPosts.lastCommentAt 排，沒有任何留言的投稿該欄位是 0 ⇒
+  //     一律排在有留言的之後、彼此依發布時間新→舊，名次穩定不亂跳。
+  let sort = $state<'new' | 'likes' | 'downloads' | 'comments'>('new');
   let tournamentOnly = $state(false);
   let loading = $state(true);
   let loadError = $state('');
@@ -214,7 +217,7 @@
     }
   }
 
-  function changeSort(s: 'new' | 'likes' | 'downloads') {
+  function changeSort(s: 'new' | 'likes' | 'downloads' | 'comments') {
     if (sort === s) return;
     sort = s; page = 1; void fetchList();
   }
@@ -765,6 +768,7 @@
         <button class:active={sort === 'new'} onclick={() => changeSort('new')}>最新</button>
         <button class:active={sort === 'likes'} onclick={() => changeSort('likes')}>最多讚</button>
         <button class:active={sort === 'downloads'} onclick={() => changeSort('downloads')}>最多人收藏</button>
+        <button class:active={sort === 'comments'} onclick={() => changeSort('comments')}>最新留言</button>
       </div>
       <label class="filter">
         <input type="checkbox" checked={tournamentOnly} onchange={toggleTournamentOnly} />
