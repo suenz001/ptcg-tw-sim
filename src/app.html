@@ -42,12 +42,13 @@
 
     <!-- v4.26 PWA — manifest + icons + theme color -->
     <!-- v4.993: icon URL 加 ?v= 強制 cache-busting — iOS Safari 對 apple-touch-icon URL
-         有極頑固的 cache，binary 換了但 URL 沒換會用 cached 舊版。換 icon 時要 bump 數字。 -->
-    <link rel="manifest" href="%sveltekit.assets%/manifest.json?v=4.993" />
-    <link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/icon-180.png?v=4.993" />
-    <link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icons/icon-32.png?v=4.993" />
-    <link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/icon-192.png?v=4.993" />
-    <link rel="icon" type="image/png" sizes="512x512" href="%sveltekit.assets%/icons/icon-512.png?v=4.993" />
+         有極頑固的 cache，binary 換了但 URL 沒換會用 cached 舊版。換 icon 時要 bump 數字。
+         v6.183 全站換上「屬性色環」識別（logo-final/），五顆 icon 與 og-image 全換，?v= 一併 bump。 -->
+    <link rel="manifest" href="%sveltekit.assets%/manifest.json?v=6.183" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%sveltekit.assets%/icons/icon-180.png?v=6.183" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%sveltekit.assets%/icons/icon-32.png?v=6.183" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%sveltekit.assets%/icons/icon-192.png?v=6.183" />
+    <link rel="icon" type="image/png" sizes="512x512" href="%sveltekit.assets%/icons/icon-512.png?v=6.183" />
     <meta name="theme-color" content="#1e3a20" />
 
     <!-- v5.611 結構化資料：讓搜尋引擎理解為免費網頁遊戲應用 -->
@@ -74,13 +75,15 @@
          +layout onMount 掛載後移除(見 +layout.svelte)。失效保險:12 秒後自動淡出,避免卡死。 -->
     <div id="app-splash" role="status" aria-live="polite">
       <div class="app-splash-inner">
-        <img class="app-splash-icon" src="%sveltekit.assets%/icons/icon-192.png?v=4.993" alt="PTCG TW SIM" width="112" height="112" />
+        <img class="app-splash-icon" src="%sveltekit.assets%/icons/icon-192.png?v=6.183" alt="PTCG TW SIM" width="112" height="112" />
         <div class="app-splash-spinner"></div>
         <div class="app-splash-text">載入中…</div>
       </div>
     </div>
     <style>
-      /* v5.972 載入畫面改用新版 App 圖示(紅白精靈球)+白底,取代舊墨綠配色 */
+      /* v5.972 載入畫面改用 App 圖示+白底,取代舊墨綠配色
+         v6.183 圖示已換成「屬性色環」識別；⚠ spinner/按鈕的 #e0242b 與 theme-color 的 #1e3a20
+         仍是舊配色，站長要不要一起換成新識別的金/深藍另議，本版只換圖不動色。 */
       #app-splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#ffffff;color:#333;font-family:system-ui,'Noto Sans TC',sans-serif;transition:opacity .3s;text-align:center;padding:16px}
       #app-splash .app-splash-inner{text-align:center}
       #app-splash .app-splash-icon{width:112px;height:112px;margin:0 auto 1.1rem;display:block;border-radius:20px}

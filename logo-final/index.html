@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>PTCG TW SIM — 最終 Logo 素材包（方案 4「屬性色環」定稿）</title>
+<style>
+  :root{--navy:#0e1330;--light:#f5f3ec;--ink:#1b2140}
+  body{font-family:"Noto Sans TC",system-ui,sans-serif;margin:0;background:#e9e6dd;color:var(--ink)}
+  header{background:var(--navy);color:#fff;padding:28px 32px}
+  header h1{margin:0 0 6px;font-size:1.5rem}
+  header p{margin:0;opacity:.85;font-size:.92rem}
+  main{max-width:1100px;margin:0 auto;padding:28px 24px 64px}
+  section{margin-bottom:44px}
+  h2{border-left:6px solid #e0b23f;padding-left:12px;font-size:1.15rem}
+  .grid{display:flex;flex-wrap:wrap;gap:20px}
+  .tile{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.08);width:230px}
+  .tile .box{display:flex;align-items:center;justify-content:center;height:180px;border-radius:10px;margin-bottom:10px}
+  .box.light{background:var(--light)}
+  .box.dark{background:var(--navy)}
+  .box.checker{background:conic-gradient(#ccc 25%,#eee 0 50%,#ccc 0 75%,#eee 0) 0 0/24px 24px}
+  .tile h3{margin:.1rem 0 .3rem;font-size:.98rem}
+  .tile p{margin:0;font-size:.8rem;line-height:1.55;color:#555}
+  .tile code{font-size:.72rem;background:#f0edE4;padding:1px 5px;border-radius:4px}
+  img.px{image-rendering:pixelated}
+  .maskwrap{position:relative;width:160px;height:160px}
+  .maskwrap img{width:160px;height:160px;border-radius:50%;object-fit:cover}
+  .maskwrap.squircle img{border-radius:36%}
+  .swatches{display:flex;flex-wrap:wrap;gap:10px}
+  .sw{width:118px;border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.1);font-size:.8rem}
+  .sw .c{height:52px}
+  .sw .t{padding:6px 9px}
+  .note{background:#fff8e2;border:1px solid #e6d28a;border-radius:10px;padding:12px 16px;font-size:.86rem;line-height:1.7}
+</style>
+</head>
+<body>
+<header>
+  <h1>PTCG TW SIM — 最終 Logo（方案 4「屬性色環」）</h1>
+  <p>八段色環 = H/I/J 賽制實際存在「基本能量卡」的 8 屬性（草火水雷超鬥<b>惡</b>鋼）。色碼 100% 沿用站台 <code>src/lib/cards/energy.ts</code> 的 ENERGY_COLOR。已無「妖」。</p>
+</header>
+<main>
+
+<section>
+  <h2>屬性色票（站台官方 ENERGY_COLOR，src/lib/cards/energy.ts L19–31）</h2>
+  <div class="swatches">
+    <div class="sw"><div class="c" style="background:#6bb34c"></div><div class="t">草 Grass<br>#6bb34c</div></div>
+    <div class="sw"><div class="c" style="background:#e05a2b"></div><div class="t">火 Fire<br>#e05a2b</div></div>
+    <div class="sw"><div class="c" style="background:#4a92d4"></div><div class="t">水 Water<br>#4a92d4</div></div>
+    <div class="sw"><div class="c" style="background:#e8c423"></div><div class="t">雷 Lightning<br>#e8c423</div></div>
+    <div class="sw"><div class="c" style="background:#9b4ea0"></div><div class="t">超 Psychic<br>#9b4ea0</div></div>
+    <div class="sw"><div class="c" style="background:#a65a2a"></div><div class="t">鬥 Fighting<br>#a65a2a</div></div>
+    <div class="sw"><div class="c" style="background:#3f3a5c"></div><div class="t">惡 Darkness<br>#3f3a5c</div></div>
+    <div class="sw"><div class="c" style="background:#8d8f94"></div><div class="t">鋼 Metal<br>#8d8f94</div></div>
+  </div>
+  <p style="font-size:.84rem;color:#555">龍 #c8a332／無色 #c8c2b5 在 H/I/J 有出現，但兩者<b>沒有基本能量卡</b>，且色相與金框／鋼段相近，故不入環（詳見 README）。</p>
+</section>
+
+<section>
+  <h2>512px 主圖 — 網站頭圖、og-image、行銷素材底圖</h2>
+  <div class="grid">
+    <div class="tile"><div class="box light"><img src="logo-512-light.png" width="170"></div>
+      <h3>512 淺底</h3><p><code>logo-512-light.png</code><br>淺色頁面、文件、簡報、印刷。</p></div>
+    <div class="tile"><div class="box dark"><img src="logo-512-dark.png" width="170"></div>
+      <h3>512 深底</h3><p><code>logo-512-dark.png</code><br>站內深藍主題、YouTube 縮圖、宣傳片片頭。分隔線改亮色，惡段不沉底。</p></div>
+    <div class="tile"><div class="box checker"><img src="logo-512-transparent.png" width="170"></div>
+      <h3>512 透明底（母檔輸出）</h3><p><code>logo-512-transparent.png</code><br>要疊到任何底圖時用這張（淺底用；深底請改用 ondark SVG 重出）。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>128px — 站內頭像、報告圖落款、通知 icon 來源</h2>
+  <div class="grid">
+    <div class="tile"><div class="box light"><img src="logo-128-light.png" width="128"></div>
+      <h3>128 淺底</h3><p><code>logo-128-light.png</code><br>報告圖（淺色卡）落款、Email 簽名。</p></div>
+    <div class="tile"><div class="box dark"><img src="logo-128-dark.png" width="128"></div>
+      <h3>128 深底</h3><p><code>logo-128-dark.png</code><br>深色 UI 的中型識別、推播通知大圖示。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>32px — favicon（簡化版構圖）</h2>
+  <div class="grid">
+    <div class="tile"><div class="box light"><img src="logo-32-light.png" width="32" class="px" style="margin-right:18px"><img src="logo-32-light.png" width="128" class="px"></div>
+      <h3>32 淺底（原寸＋4x）</h3><p><code>logo-32-light.png</code><br>瀏覽器分頁 favicon。⚠ 32px 用「簡化版」：粗環、卡片只留金框＋單星。</p></div>
+    <div class="tile"><div class="box dark"><img src="logo-32-dark.png" width="32" class="px" style="margin-right:18px"><img src="logo-32-dark.png" width="128" class="px"></div>
+      <h3>32 深底（原寸＋4x）</h3><p><code>logo-32-dark.png</code><br>深色分頁列。多一圈亮緣，讓惡段在深底也有輪廓。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>單色版 — 單色印刷、浮水印、雕刻、低調場合</h2>
+  <div class="grid">
+    <div class="tile"><div class="box light"><img src="logo-mono-light-512.png" width="170"></div>
+      <h3>單色・淺底</h3><p><code>logo-mono-light-512.png</code>（墨色 #10142c）<br>黑白文件、傳真、印章。</p></div>
+    <div class="tile"><div class="box dark"><img src="logo-mono-dark-512.png" width="170"></div>
+      <h3>單色・深底</h3><p><code>logo-mono-dark-512.png</code>（米白 #f5f3ec）<br>深色簡報浮水印、衣服燙印。SVG 母檔 <code>logo-mono.svg</code> 用 currentColor 可自由換色。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>PWA maskable — Android 安裝圖示（★正式版＝淺底，內容放大到 96%）</h2>
+  <div class="grid">
+    <div class="tile"><div class="box light"><div class="maskwrap"><img src="logo-maskable-light-512.png"></div></div>
+      <h3>★ maskable 淺底（圓形裁切模擬）</h3><p><code>logo-maskable-light-512.png</code><br>manifest <code>purpose:maskable</code> <b>正式版</b>。內容比例 96%：色環外緣 200.9px＜W3C 安全圓半徑 204.8px（40%），留約 4px 緩衝。</p></div>
+    <div class="tile"><div class="box light"><div class="maskwrap squircle"><img src="logo-maskable-light-512.png"></div></div>
+      <h3>maskable 淺底（squircle 裁切模擬）</h3><p>同一檔的圓角方形裁切模擬。色環是同心圓構圖，對任何裁形都只會均勻削邊、不會切掉關鍵部位。</p></div>
+    <div class="tile"><div class="box dark"><div class="maskwrap"><img src="logo-maskable-navy-512.png"></div></div>
+      <h3>maskable 深藍底（備用）</h3><p><code>logo-maskable-navy-512.png</code><br>同為 96% 比例的深底備用版（含亮色外環，外緣 202.6px 仍在安全圓內）。</p></div>
+  </div>
+  <div class="note" style="margin-top:16px">
+    完整三種裁切模擬圖（正方形／圓角方形 rx=20%／80% 安全圓，含 96・72・48px 縮小檢視）：
+    <a href="maskable-crop-sim.png"><code>maskable-crop-sim.png</code></a> — 已逐一目視確認金框卡與 8 色環在最嚴的圓形裁切下完整保留。
+  </div>
+</section>
+
+<section>
+  <h2>行銷素材 — og-image 與 YouTube 縮圖</h2>
+  <div class="grid">
+    <div class="tile" style="width:492px"><div class="box light" style="height:auto;padding:10px"><img src="og-image-1200x630.png" style="width:100%;border-radius:6px"></div>
+      <h3>og-image（1200×630）</h3><p><code>og-image-1200x630.png</code><br>FB／LINE／Twitter 分享預覽卡。取代 <code>static/og-image.png</code>（沿用原檔名覆蓋即可）。文案在 <code>gen_marketing.py</code> 頂部 TEXTS，改字重跑即可。</p></div>
+    <div class="tile" style="width:492px"><div class="box dark" style="height:auto;padding:10px"><img src="youtube-thumb-1280x720.png" style="width:100%;border-radius:6px"></div>
+      <h3>YouTube 縮圖（1280×720，範例標題版）</h3><p><code>youtube-thumb-1280x720.png</code><br>每週環境報告縮圖範例。右側 x580–1240、y140–620 為<b>可替換標題區</b>。</p></div>
+    <div class="tile" style="width:492px"><div class="box dark" style="height:auto;padding:10px"><img src="youtube-thumb-base-1280x720.png" style="width:100%;border-radius:6px"></div>
+      <h3>YouTube 縮圖底圖（無標題）</h3><p><code>youtube-thumb-base-1280x720.png</code><br>上傳到 Canva 當底圖，每週只在右側空白區加當週標題文字（主標白色粗體約 100pt、副標金色 #FFD76A 約 55pt）。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>SVG 母檔與再生</h2>
+  <div class="note">
+    <b>母檔</b>：<code>logo-master.svg</code>（淺底用）／<code>logo-master-ondark.svg</code>（深底用：亮分隔線＋亮緣）／
+    <code>logo-simple.svg</code>・<code>logo-simple-ondark.svg</code>（32px 簡化構圖）／<code>logo-mono.svg</code>（currentColor 單色）。<br>
+    <b>重出全部 PNG</b>：<code>python3 gen_logo.py</code>（logo 系列）＋ <code>python3 gen_marketing.py</code>（og-image／YouTube 縮圖／裁切模擬；需 cairosvg 與 Noto Sans CJK TC 字型）。改色只需改腳本頂部 RING 表——但請先改 <code>src/lib/cards/energy.ts</code> 保持全站一致。<br>
+    <b>畫法完整紀錄</b>：<code>skill/SKILL.md</code>（給未來 AI 重現與延伸這套識別用；含查證方法、規格、替換清單、踩坑史）。<br>
+    <b>紅線自查</b>：色環為 8 段多色、無上下二分、無中央橫帶、無中央圓鈕（中央是矩形卡）；未使用官方能量符號圖形、角色、標準字。
+  </div>
+</section>
+
+</main>
+</body>
+</html>

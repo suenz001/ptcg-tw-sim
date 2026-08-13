@@ -1,3 +1,71 @@
+# v6.183 全站換上新識別（屬性色環 logo）
+
+站長已驗收通過方案 4「屬性色環」：**8 段屬性色環（草火水雷超鬥惡鋼，⚠無妖）＋中央金框深藍卡＋白色四芒星**。
+素材、產生器、規格與踩坑史全部進 repo：`logo-final/`（含 `skill/SKILL.md`，一份可獨立重現這套識別的說明）。
+
+## 換了哪些檔
+
+| 檔案 | 來源 | 驗證 |
+|---|---|---|
+| `static/icons/icon-32.png` | `logo-final/logo-32-light.png`（簡化版構圖） | 32×32 |
+| `static/icons/icon-180.png` | 完整版母檔以 180 重新光柵化 | 180×180 |
+| `static/icons/icon-192.png` | 完整版母檔以 192 重新光柵化 | 192×192 |
+| `static/icons/icon-512.png` | 完整版母檔以 512 重新光柵化 | 512×512 |
+| `static/icons/icon-512-maskable.png` | 淺底 96% 版 | 512×512 |
+| `static/og-image.png` | `og-image-1200x630.png` | 1200×630 |
+| `oracle-admin/icons/site-icon-192.png` | 同 `icon-192.png`（報告圖落款的同源副本） | 位元相同 |
+
+⚠ **180/192 不是拿 512 縮放存檔**，是在 `gen_logo.py` 加了 `site-icons/` 這一組 render 行、
+以目標尺寸重新光柵化（完整版的光澤、細縫、小星在縮圖時會糊掉；32px 更是一律用簡化版構圖）。
+五顆 icon 與 `logo-final/site-icons/` 位元相同，任何人重跑 `python3 gen_logo.py` 都能重現。
+
+## 快取三層
+
+1. `?v=`：`src/app.html` 6 處（manifest／apple-touch-icon／32／192／512／splash）與
+   `static/manifest.json` 3 處，全部 `4.993 → 6.183`。iOS 對 apple-touch-icon 的快取極頑固，
+   URL 不換就永遠是舊圖。
+2. SW precache：`CACHE_NAME = ptcg-tw-sim-${version}`，`static/` 下的檔案都在 `files` 裡，
+   版本一 bump 就是新的 cache key ⇒ `notify.ts`／`service-worker.ts` 的通知 icon 路徑不必改碼。
+3. Cloudflare：icons 沒有 bypass 規則 ⇒ 靠 `?v=` 換 URL 繞開。
+
+`oracle-admin/admin.html`：`SITE_VERSION_HINT` 跟到 6.183；報告圖落款 `icons/site-icon-192.png?v=1.65 → 1.66`。
+⚠ admin 自身的紫色 ADMIN favicon（head 4 條 `icons/icon-*.png`）與主站 logo 無關，**沒有動**。
+
+## 守衛 `scripts/test-v6183-site-logo-assets.mjs`（16 項，已進 npm test）
+
+「檔案存在／字串出現」擋不住這一類事故，所以守衛**自己解 PNG 看像素**（node:zlib + 手工 unfilter）：
+
+- ⓪ 解碼器先自我驗證：合成一張已知像素的 PNG 解回來比對，並用壞檔做正對照。
+- ④ 五顆 icon 各取 8 個扇形取樣點，做**最近鄰分類**確認「12 點鐘起順時針＝草火水雷超鬥惡鋼」。
+  ⚠ 取樣點會被光澤層洗淡，直接比 RGB 會把草段誤判成鋼段；改比
+  `(c-min)/(max-min)` 正規化彩度 —— 與白／黑做線性混合時它是不變量，實測 8 段誤差 0.000。
+  色票一律回頭讀 `src/lib/cards/energy.ts` 的 `ENERGY_COLOR`，不在守衛裡硬寫。
+- ⑥ maskable：r=195 在環上、r=204 已是底色（＝內容真的縮到 96%），而 icon-512 在 r=204 仍是環
+  ⇒ 兩顆不可能是同一個構圖。⑦ icon-32 的 8 段必須**接近原始色票**（簡化版沒有光澤層）
+  且 r=132 仍在環上（簡化版內半徑 120，完整版是 144）⇒ 證明不是把 512 縮下來。
+- ⑧ 五顆 icon 與 `logo-final/site-icons/` 位元相同；⑨⑩ `?v=` ≥ 6.183 且 app.html 與 manifest 一致、
+  三個 src 都指得到實際存在且尺寸相符的檔案；⑪ og-image 1200×630 且底部 8 色條＝ENERGY_COLOR；
+  ⑫ site-icon-192 與 icon-192 位元相同、admin `?v=` ≥ 1.66；⑬ admin 自身 favicon 沒被改掉；
+  ⑮ 全部換過的 PNG 都能完整解碼（magic bytes／IEND／zlib 流）—— 二進位被當文字處理過就會炸。
+
+HEAD-FAIL：在 v6.182 上跑同一支守衛 **11 項 FAIL**（④⑤⑥⑦⑧⑨⑩⑪⑫⑭⑮）。
+
+## 沒有動的
+
+- `static/line-group-qr.png`：實際解碼檢查過，是純黑白 QR（650×650、1.8KB），**中央沒有嵌任何 logo**，
+  不需要重出。
+- repo 根 `YouTube縮圖_1280x720.png`：**沒有被 git 追蹤**（站長本機的行銷素材）。已在本機換成新縮圖，
+  舊檔另存 `YouTube縮圖_1280x720.舊識別備份.png`；進 repo 的是 `logo-final/youtube-thumb-*.png`
+  （底圖無標題，供 Canva 每週疊字）。
+- `src/lib/notify.ts` L176/L256、`src/service-worker.ts` L149：路徑沿用 `icons/icon-192.png`，
+  不改碼（SW cache key 跟著版本走）。
+
+## ⚠ 玩家端何時看得到
+
+一般瀏覽器：`?v=` 換了 URL，重新整理即是新 icon。
+**已安裝的 iOS PWA 例外**：主畫面捷徑的圖示是安裝當下存下來的，不會因為 manifest 更新而換 ——
+必須移除捷徑後重新加入。首頁 changelog 已用玩家看得懂的說法寫了這一點。
+
 # v6.182 牌組公布欄「玩家留言板」
 
 站長需求（原話）：

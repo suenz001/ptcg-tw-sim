@@ -236,11 +236,11 @@ T('統計還沒算之前匯出鈕是 disabled', () => {
 });
 
 // ══ v1.65 追加：圖是給「玩家」看的，不是給我看的 ═════════════════════════
-T('⭐⭐落款用主站的紅白球 icon，不是 admin 自己的紫色 ADMIN icon', () => {
+T('⭐⭐落款用主站的 logo icon，不是 admin 自己的紫色 ADMIN icon', () => {
   const i = adm.indexOf('async function miLogo(');
   const body = adm.slice(i, adm.indexOf('\n}', i));
   assert.ok(/icons\/site-icon-192\.png/.test(body),
-    '要用 icons/site-icon-192.png（主站紅白球的同源副本）');
+    '要用 icons/site-icon-192.png（主站 logo 的同源副本；v6.183 起是屬性色環識別）');
   assert.ok(!/icons\/icon-192\.png/.test(body),
     'admin 的 icon-192.png 是紫色 ADMIN 圖示 —— 發給玩家的圖不能用它當落款');
 });
