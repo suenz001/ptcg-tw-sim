@@ -24,13 +24,18 @@
 //   2. tournamentClientDiag 有 TTL index（expireAfterSeconds: 604800 ＝ 7 天），
 //      超過 7 天的資料是**真的被 mongo 刪掉了**，任何工具都撈不回來 ⇒ 7d 就是全部。
 //
-// ── ⚠ diag 欄位的 2KB 截斷（判讀關鍵）───────────────────────────────────
-//   /api/tournament/clientdiag 寫入時做 `JSON.stringify(req.body).slice(0, 2048)`。
-//   client payload 的 key 順序是 reason → room → ts → ver → state → render → poll → perf → env，
-//   所以一旦超過 2048 字元，被切掉的**一定是尾端的 perf 與 env.ua**，而且整串不再是合法 JSON。
-//   伺服器那支 /admin/clientdiag 對 JSON.parse 失敗的列是「直接略過」⇒ 這些列在畫面上
-//   連 slowRtt 表都不會出現。本腳本改成：解析失敗時退回 regex 抽 ver / ua / poll.rtt，
-//   並在 truncated 欄位標記，另外在摘要裡報出被截斷的比例（截斷率高本身就是一個發現）。
+// ── ⚠ diag 欄位的截斷（判讀關鍵）────────────────────────────────────────
+//   /api/tournament/clientdiag 寫入時會把 payload 截到上限（v6.184 起 8192 字元，之前是 2048）。
+//   client payload 的 key 順序是 reason → room → ts → ver → state → render → poll → perf
+//   → svelteWarn → env，所以一旦超過上限，被切掉的**一定是尾端的 perf / svelteWarn / env.ua**，
+//   而且整串不再是合法 JSON。伺服器那支 /admin/clientdiag 對 JSON.parse 失敗的列是「直接略過」
+//   ⇒ 這些列在畫面上連 slowRtt 表都不會出現。
+//   本腳本的處理（兩層，缺一不可）：
+//     ①**伺服器旗標**（v6.184 起）：doc 上的 `truncated`（布林）與 `rawLen`（截斷前的字元數）。
+//       這是**紀錄**，不是推論 —— 連「原本有多長」都知道，才有辦法判斷 8KB 夠不夠用。
+//     ②**文字比對後援**（v6.184 之前的舊列唯一的線索）：JSON.parse 失敗時退回 regex
+//       抽 ver / ua / poll.rtt，並算成 legacy 截斷。
+//   摘要裡兩個數字分開報（截斷率高本身就是一個發現，而且要分得出「新列被切」與「舊列」）。
 //
 // 輸出：/tmp/ptcg_monitor_dump.json（完整資料）
 //       /tmp/ptcg_monitor_summary.txt（給站長看的人話摘要，UTF-8 with BOM）
@@ -40,7 +45,10 @@ function loadMongo() {
   for (const c of ['/opt/ptcg/api/node_modules/mongodb', 'mongodb']) { try { return require(c); } catch (e) { /* 換下一個 */ } }
   throw new Error('找不到 mongodb 模組（請在 /opt/ptcg/api 下執行）');
 }
-const { MongoClient } = loadMongo();
+// ⭐v6.184 `loadMongo()` 由「模組一載入就跑」改成**進 main() 才跑**：
+//   守衛（scripts/test-v6184-clientdiag-cap.mjs）要 require 這支來**實跑**截斷分類邏輯，
+//   而開發機／CI 沒有 mongodb 模組 —— 原本頂層就 throw，整支根本 require 不進來。
+//   ⚠ 在 VM 上直接執行時行為完全不變：main() 第一件事就是載，載不到照樣丟同一個訊息。
 
 // ── mongo URI 探測（與 dump-match-records.cjs 同一套，已驗證可用）────────
 function readEnvFile(p) {
@@ -149,6 +157,42 @@ function parseDiag(s) {
   return out;
 }
 
+// ── ⭐⭐⭐v6.184 截斷判定（單一判定點）──────────────────────────────────
+//   v6.184 之前只能靠「JSON.parse 失敗」反推 —— 那是**推論**不是紀錄：伺服器切完就直接寫進去，
+//   沒有留下任何痕跡，切了幾個字元、原本有多長全都不知道（上一輪就是靠其他人外推才敢下結論）。
+//   v6.184 起伺服器寫入時就帶 `truncated`（布林）與 `rawLen`（截斷前字元數），兩者合判：
+//     ・srvFlag   ＝伺服器**明確標記**被切（只有 v6.184 以後寫進去的列才有這個欄位）
+//     ・parseFail ＝JSON.parse 失敗（v6.184 以前唯一的線索，仍保留當後援）
+//     ・legacy    ＝parse 失敗但沒有伺服器旗標 ⇒ 舊列（或真的是壞資料）
+//   ⚠ 欄位缺席**不可以**被當成「這列沒被切」：舊列一定沒有這個欄位，「沒旗標」只代表「不知道」。
+//     這正是 legacy 要單獨算一欄的理由。
+const DIAG_CAP = 8192;   // ⚠ 逐字對齊 server_admin_patch.js 的 `_cdiagPack()` 的 LIMIT
+function classifyTrunc(row, d) {
+  const srvFlag = !!(row && row.truncated === true);
+  const parseFail = !!(d && d.truncated);
+  const rawLen = (row && typeof row.rawLen === 'number' && isFinite(row.rawLen)) ? row.rawLen : null;
+  return { truncated: srvFlag || parseFail, srvFlag: srvFlag, parseFail: parseFail, legacy: parseFail && !srvFlag, rawLen: rawLen };
+}
+// 整批的截斷統計（摘要 ⑥ 直接用這一份，不另外在迴圈裡數第二次 ⇒ 兩個數字不可能漂移）。
+const LEGACY_DIAG_CAP = 2048;   // v6.184 之前的舊上限（舊列的長度會**剛好**卡在這個數字）
+function truncSummary(rawRows) {
+  let total = 0, srv = 0, legacy = 0, maxRawLen = 0, capped = 0, legacyCapped = 0;
+  for (const r of (rawRows || [])) {
+    const tc = classifyTrunc(r, parseDiag((r && r.diag) || ''));
+    if (tc.truncated) total++;
+    if (tc.srvFlag) srv++;
+    if (tc.legacy) legacy++;
+    if (tc.rawLen !== null && tc.rawLen > maxRawLen) maxRawLen = tc.rawLen;
+    const _len = (((r && r.diag) || '').length);
+    // ⚠⚠ Fable 5 審查抓到的語義陷阱：舊列卡的是 **2048**，永遠不可能 >= 8192 ⇒
+    //   只數「>= 目前上限」的話，現有那 16 筆舊列會顯示成 0，跟上一行的「舊列 16 筆」自相矛盾。
+    //   兩個上限各數一欄，標籤也各自寫清楚。
+    if (_len >= DIAG_CAP) capped++;                 // 已經頂到**目前**的 8192 ⇒ 該再放大了
+    if (_len === LEGACY_DIAG_CAP) legacyCapped++;   // 頂到**舊的** 2048 ⇒ v6.184 之前寫進去的
+  }
+  return { total: total, srv: srv, legacy: legacy, maxRawLen: maxRawLen, capped: capped, legacyCapped: legacyCapped };
+}
+
 // ── 小工具 ──────────────────────────────────────────────────────────────
 function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
 function pct(a, b) { return b > 0 ? (a * 100 / b).toFixed(1) + '%' : '—'; }
@@ -202,7 +246,8 @@ function uaShort(ua) {
   return s.slice(0, 30);
 }
 
-(async () => {
+async function main() {
+  const { MongoClient } = loadMongo();   // v6.184：改在這裡載（頂層載會讓守衛 require 不進來）
   const range = parseRange(process.argv[2]);
   const uri = findUri();
   console.log('mongo uri:', maskUri(uri));
@@ -266,13 +311,15 @@ function uaShort(ua) {
   const uidSet = new Set();
   const perfVals = { net: [], dl: [], tok: [], parse: [], adopt: [], paint: [] };
   const ltVals = { n: [], total: [], max: [] };
-  let ltUnsupported = 0, perfRows = 0, truncated = 0;
+  let ltUnsupported = 0, perfRows = 0;
+  // ⭐v6.184 截斷統計走同一支 truncSummary（迴圈裡不再自己數一份，避免兩個數字漂移）。
+  const trunc = truncSummary(raw);
   const devMap = new Map();          // 'hc核/dmGB' -> count
   const uaMap = new Map();           // 平台 -> { n, uids:Set }
 
   for (const r of raw) {
     const d = parseDiag(r.diag || '');
-    if (d.truncated) truncated++;
+    const tc = classifyTrunc(r, d);
     if (r.uid) uidSet.add(r.uid);
     const verKey = d.ver || '(未知)';
     if (!verMap.has(verKey)) verMap.set(verKey, { n: 0, uids: new Set() });
@@ -288,7 +335,7 @@ function uaShort(ua) {
         reason: r.reason || '', ver: d.ver || null,
         n: num(d.rtt.n), p50: num(d.rtt.p50), p95: num(d.rtt.p95), max: num(d.rtt.max),
         perf: d.perf || null, hc: d.hc, dm: d.dm, ua: d.ua || null,
-        truncated: d.truncated,
+        truncated: tc.truncated, srvTruncated: tc.srvFlag, rawLen: tc.rawLen,
       });
     }
     if (d.perf) {
@@ -313,7 +360,8 @@ function uaShort(ua) {
       room: r.room || '', reason: r.reason || '', reasonLabel: reasonLabel(r.reason),
       ver: d.ver || null, ua: d.ua || null, hc: d.hc, dm: d.dm,
       diagLen: (r.diag || '').length,
-      truncated: d.truncated,
+      // ⭐v6.184：`truncated` 是「伺服器旗標 or parse 失敗」的合判；另外兩欄讓人分得出來源。
+      truncated: tc.truncated, srvTruncated: tc.srvFlag, rawLen: tc.rawLen,
       diagParsed: d.obj,     // 解析成功才有；失敗是 null（看 diag 原文）
       diag: r.diag || '',    // 原始字串永遠保留（ground truth）
     });
@@ -351,6 +399,9 @@ function uaShort(ua) {
     db: db.databaseName,
     range: { hours: range.hours, label: range.label, since: since, sinceLocal: tw(since) },
     ttlNote: 'tournamentClientDiag 有 TTL index（604800 秒＝7 天），超過 7 天的紀錄已被 mongo 刪除，任何工具都撈不回來。',
+    truncNote: 'v6.184 起伺服器寫入時就標記 truncated / rawLen（上限 ' + DIAG_CAP + ' 字元）。'
+      + 'truncatedFlaggedByServer 是**紀錄**；truncatedLegacyGuess 是 v6.184 之前的舊列，只能從 JSON.parse 失敗推論。'
+      + 'maxRawLen 是所有列裡「截斷前」最長的一筆 —— 它逼近上限就代表該再放大了。',
     sourceNote: '本檔直接讀 mongo（tournamentClientDiag / tournamentConfig），與 admin 📡 分頁同一批資料，'
       + '但不受該 API 的 rows .limit(120) 與 slowRtt .limit(200) 限制。',
     config: {
@@ -364,7 +415,15 @@ function uaShort(ua) {
     totals: {
       rows: rows.length,
       players: uidSet.size,
-      truncatedRows: truncated,
+      truncatedRows: trunc.total,
+      // ⭐v6.184 拆開報：伺服器明確標記 vs 只能從 parse 失敗推論的舊列 vs 剛好卡在上限的長度。
+      truncatedFlaggedByServer: trunc.srv,
+      truncatedLegacyGuess: trunc.legacy,
+      rowsAtCap: trunc.capped,
+      rowsAtLegacyCap: trunc.legacyCapped,
+      legacyDiagCap: LEGACY_DIAG_CAP,
+      maxRawLen: trunc.maxRawLen || null,
+      diagCap: DIAG_CAP,
       rowsWithRtt: rtt.length,
       rowsWithPerf: perfRows,
       latestClientVersion: latestVer,
@@ -492,9 +551,20 @@ function uaShort(ua) {
   }
   L.push('');
   L.push('【⑥ 資料完整性】');
-  L.push('  明細共 ' + rows.length + ' 筆，其中 ' + truncated + ' 筆（' + pct(truncated, rows.length) + '）的診斷內容');
-  L.push('  被伺服器的 2KB 上限切斷 ⇒ 那幾筆的 perf 與 User-Agent 沒能存下來。');
-  L.push('  （這些被切斷的列在 admin 📡 分頁的 RTT 表上是**完全看不到**的，這裡已用文字比對盡量救回。）');
+  L.push('  明細共 ' + rows.length + ' 筆，其中 ' + trunc.total + ' 筆（' + pct(trunc.total, rows.length) + '）的診斷內容被切斷，');
+  L.push('  那幾筆的 perf／svelteWarn／User-Agent 沒能完整存下來。');
+  L.push('  （被切斷的列在 admin 📡 分頁的 RTT 表上是**完全看不到**的，這裡已用文字比對盡量救回。）');
+  L.push('    ・伺服器明確標記被切：' + trunc.srv + ' 筆　←v6.184 起才有，這是紀錄不是推論');
+  L.push('    ・只能從解析失敗推論：' + trunc.legacy + ' 筆　←v6.184 之前寫進去的舊列');
+  L.push('    ・長度已頂到目前上限 ' + DIAG_CAP + ' 字元：' + trunc.capped + ' 筆　←這欄不是 0 就代表該再放大');
+  L.push('    ・長度卡在舊上限 ' + LEGACY_DIAG_CAP + ' 字元：' + trunc.legacyCapped + ' 筆　←v6.184 之前寫進去的');
+  if (trunc.maxRawLen) {
+    L.push('  截斷前最長的一筆是 ' + trunc.maxRawLen + ' 字元（上限 ' + DIAG_CAP + '，用掉 '
+      + Math.round(trunc.maxRawLen * 100 / DIAG_CAP) + '%）。');
+    L.push('  ⚠ 這個百分比逼近 100% 就代表上限又該放大了 —— 不要等到又有人的資料整組不見才發現。');
+  } else {
+    L.push('  ⚠ 沒有任何一筆帶 rawLen ⇒ 這批全是 v6.184 之前寫進去的舊列（那時候還沒有這個欄位）。');
+  }
   L.push('');
   L.push('【⑦ 接下來】');
   L.push('  完整資料在同一個資料夾、同名的 .json（每一筆 payload 的 poll.rtt / perf.* / env.ua 都在裡面）。');
@@ -509,4 +579,11 @@ function uaShort(ua) {
   console.log('完整資料已寫出: /tmp/ptcg_monitor_dump.json (' + rows.length + ' 筆明細 / ' + rtt.length + ' 筆 RTT)');
   console.log('摘要已寫出:     /tmp/ptcg_monitor_summary.txt');
   await client.close();
-})().catch(function (e) { console.error('ERROR:', e && e.message); process.exit(1); });
+}
+
+// ⭐v6.184 只有被**直接執行**時才跑（`node /tmp/dump-client-monitor.cjs 7d` 與以前完全相同）；
+//   被 require 進來時只匯出純函式，讓守衛可以實跑判定邏輯而不需要任何資料庫。
+module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp };
+if (require.main === module) {
+  main().catch(function (e) { console.error('ERROR:', e && e.message); process.exit(1); });
+}

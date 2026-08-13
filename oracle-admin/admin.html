@@ -2916,7 +2916,12 @@ async function loadMonitor() {
       html += '<details style="margin-bottom:6px;border:1px solid #eef1f5;border-radius:6px;padding:8px;">'
         + '<summary style="cursor:pointer;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW'))
         + '　<b>' + escapeHtml(info[0]) + '</b>　' + escapeHtml(r.email || '(未知)')
-        + (r.room ? '　<span class="small muted">' + escapeHtml(r.room) + '</span>' : '') + '</summary>'
+        + (r.room ? '　<span class="small muted">' + escapeHtml(r.room) + '</span>' : '')
+        // ⭐v6.184：伺服器寫入時就標記過的截斷列，這裡直接標出來 —— 這一列的 perf/env 是**殘缺**的，
+        //   不標的話展開只會看到一串被切一半的 JSON，看起來像「client 送了壞資料」。
+        //   ⚠ 舊列（v6.184 之前）沒有這個欄位 ⇒ 一律 falsy，不會誤標。
+        + (r.truncated ? '　<span style="color:#c62828;font-weight:700;">⚠ 已截斷'
+            + (r.rawLen ? '（原始 ' + r.rawLen + ' 字元）' : '') + '</span>' : '') + '</summary>'
         + '<pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;background:#fafbfc;padding:8px;border-radius:4px;margin:8px 0 0;">'
         + escapeHtml(r.diag || '') + '</pre></details>';
     });
@@ -2942,7 +2947,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.183';
+window.SITE_VERSION_HINT = '6.184';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

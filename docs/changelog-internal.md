@@ -1,3 +1,181 @@
+# v6.184 診斷回報不再被靜默切掉（clientdiag 2KB → 8KB ＋ 截斷留痕）
+
+**玩家零可見變化 ⇒ 首頁 changelog 不放。** 純診斷管線修正。
+
+## 真因
+
+`oracle-admin/server_admin_patch.js` 的 `/api/tournament/clientdiag` 從 v0.77 起就是
+`JSON.stringify(req.body).slice(0, 2048)`。v6.171 加了 `svelteWarn.first`（最多 3 筆 ×
+700 字元的 stack）、v6.179 又把 `perf.res.seg` 拆成四段之後，payload 撐破了那個上限。
+
+2026-08-13 的 dump（`tournament-dumps/monitor_20260813_201351.json`，7 天 993 筆）實測：
+
+| 項目 | 數字 |
+|---|---|
+| 明細總筆數 / 玩家數 | 993 筆 / 142 人 |
+| diag 長度 p50 / p90 / max | 674 / 1330 / **2048（＝剛好卡在上限）** |
+| 被截斷筆數 | **16 筆，全部集中在 v6.179 / 6.180 / 6.182** |
+| 被截斷的人 | vice910504（4 筆）、s3360389（3 筆）、love6525022（3 筆）、t12211908763（3 筆）、ueishun（3 筆） |
+
+payload 的 key 順序是 `reason → room → ts → ver → state → render → poll → perf →
+svelteWarn → env`，所以切掉的**一定是尾端的 perf / svelteWarn / env.ua**，而且
+**切過的字串不再是合法 JSON**。`/api/tournament/admin/clientdiag` 建 slowRtt 那張表時
+對 `JSON.parse` 失敗的列是「直接略過」⇒ 那 16 列**不會出現在 RTT 表上**，
+而且 perf 四段內容已經毀掉、任何工具都算不回來。
+上一輪「wire 是兇手」的結論因此是靠其他 11 人外推的 —— 尾巴最重那位（vice910504）
+的四段資料整組不見。
+
+⚠ **措辭更正（Fable 5 審查提出、已自行查證）**：不是「在 📡 分頁上完全看不到」。
+`byReason` 統計 group 的是**獨立的 `reason` 欄位**（`server_admin_patch.js` 的 aggregate），
+「最近 120 筆明細」也是原樣吐 `diag` 字串（`admin.html:2921` `escapeHtml(r.diag)`）
+⇒ **那兩處看得到**。真正看不到的是 **slowRtt 那張 RTT 表**，以及那筆 payload 裡
+真正有價值的 `perf` / `env` 內容。原始回報的描述偏重，這裡照實修正。
+
+⚠ 真兇不是 `perf.res.seg`（結構上界只有 ~1.8KB，實測最長的完整列 1757 字元），
+是 **`svelteWarn.first`**：3 筆 × 700 字元的 stack ≈ 2.3KB，單它一項就大於整個 2048 上限。
+
+## 改了什麼
+
+### ① 上限 2048 → 8192，並收斂成 `_cdiagPack()`
+
+```
+function _cdiagPack(body) → { s, truncated, rawLen }
+```
+
+- `LIMIT = 8192`。結構上界 ≈ 1.8KB（非 svelteWarn）＋ 2.3KB（svelteWarn）≈ **4.1KB**，
+  8KB 留 2 倍餘裕。
+- ⚠ **完全不影響頻寬**：client 本來就把完整 payload 送上來，上限只決定「存多少」。
+- 循環參照 / `JSON.stringify(undefined)` 一律退回 `'{}'`，絕不 throw（診斷不可以影響對戰）。
+- ⚠ **surrogate pair 不會被切一半**（Fable 5 審查提出）：`slice` 切的是 UTF-16 code unit，
+  emoji 可能被切成兩半。實測前提查證：`JSON.stringify` 從 ES2019 起是 well-formed
+  （孤兒 surrogate 會被跳脫成 `\ud83d` 六個字元）⇒ 孤兒**只可能**由這一刀製造、
+  而且只會在最後一個 code unit。實測 `Buffer.from('ab\uD83D','utf8')` → `61 62 ef bf bd`
+  （替換成 U+FFFD，**不會 throw**）⇒ 就算留著也不會讓 `insertOne` 爆掉，
+  而且這個切法在 v6.184 之前的 `slice(0, 2048)` 也一樣存在、不是新引入的。
+  但既然一個判斷就能完全避免，就避免：尾端是高位 surrogate 時退一格。
+
+### ② 截斷不再靜默 —— doc 上一律寫 `truncated` / `rawLen`
+
+`TCDIAG.insertOne({ …, diag: _p.s, truncated: _p.truncated, rawLen: _p.rawLen })`。
+
+⚠ **一律寫入，不是只有被切時才寫**：欄位缺席只能代表「這是 v6.184 之前的舊列」，
+不可以被讀成「這列沒被切」。`rawLen` 是「截斷前有多長」—— 它逼近 8192 就代表該再放大，
+不必再等到有人的資料整組不見才發現。
+
+### ②-b 讀出端也看得見（Fable 5 審查抓到的殘餘缺口）
+
+寫入端留了痕跡，但 `/api/tournament/admin/clientdiag` 的 `rows.map` 原本只挑
+`ts/email/room/reason/diag` ⇒ 未來真的有 >8KB 的 payload 時，它在 📡 分頁上仍然只是
+「一串壞掉的 JSON」而沒有任何標示。
+
+- API 的 `rows` 多帶 `truncated`（**正規化成布林**，`undefined` 會被 `JSON.stringify`
+  整個吃掉，畫面就分不出「舊列」與「這列沒被切」）與 `rawLen`（缺席回 `null`）。
+- `admin.html` 的明細列標題加一個紅色 `⚠ 已截斷（原始 N 字元）`。舊列一律 falsy，不會誤標。
+
+### ③ `dump-client-monitor.cjs`：兩層合判 ＋ 報出來
+
+- 新增 `DIAG_CAP` / `classifyTrunc()` / `truncSummary()`：
+  `srvFlag`（伺服器旗標，**紀錄**）、`parseFail`（JSON.parse 失敗，舊列唯一線索）、
+  `legacy`（parse 失敗但沒旗標 ⇒ 舊列）三者分開算。
+- 既有的「用文字比對盡量救回 ver / ua / poll.rtt」邏輯**原樣保留且仍相容**（守衛有實跑驗）。
+- 摘要 ⑥ 現在會印：截斷總數 / 伺服器明確標記幾筆 / 只能推論幾筆 /
+  **頂到目前上限 8192 幾筆** / **卡在舊上限 2048 幾筆** /
+  **截斷前最長一筆用掉上限的百分之幾**。JSON `totals` 多出
+  `truncatedFlaggedByServer`、`truncatedLegacyGuess`、`rowsAtCap`、`rowsAtLegacyCap`、
+  `legacyDiagCap`、`maxRawLen`、`diagCap`。
+  ⚠ 兩個上限**一定要分開數**（Fable 5 抓到）：舊列卡的是 2048，永遠不可能 `>= 8192`，
+  只數「頂到目前上限」的話會出現「舊列 16 筆、卡在上限 0 筆」這種自相矛盾的報表。
+  實跑（拿 `monitor_20260813_201351.json` 當假 mongo 餵進去）現在會印
+  `頂到目前上限 8192：0 筆 / 卡在舊上限 2048：16 筆 / 截斷前最長 3282 字元（用掉 40%）`。
+- `loadMongo()` 由頂層搬進 `main()`，並加 `if (require.main === module)` ＋ `module.exports`
+  ⇒ 守衛可以 `require` 進來**實跑**判定邏輯而不需要資料庫；VM 上直接執行的行為完全不變。
+
+## 儲存成本（7 天 TTL，有上界）
+
+以上面那份實測 dump 為基準（~142 筆／日、7 天 993 筆、diag 合計 **744 KB**）：
+
+| 情境 | 7 天總量 |
+|---|---|
+| 現況（2048 上限） | 744 KB |
+| 放大到 8192 後（只有那 1.6% 會變長） | **≈ 780 KB（+4~5%）** |
+| 理論最壞（每一筆都塞滿 8192） | 993 × 8192 ＝ **8.1 MB** |
+| 新增的 `truncated` + `rawLen` 兩欄 | ≈ 20 B × 993 ＝ **20 KB** |
+
+TTL 是 `expireAfterSeconds: 604800`（7 天，既有），所以總量恆有上界，不會累積。
+單筆 doc 就算 8192 字元全是中文（3 bytes/字元）也只有 ~24 KB ≪ **16 MB 的 BSON 上限**；
+`diag` 不在任何索引裡（唯一的索引是 `{ts:1}` 的 TTL）⇒ 沒有索引鍵長度問題。
+
+⚠ **`/admin/clientdiag` 的回應會變大**（我一開始漏算，Fable 5 補上）：
+該端點 `rows` 是 `.limit(120)`。實測最近 120 筆 `diag` 合計 **129,941 字元**，
+16 筆卡頂列全都落在這 120 筆內 ⇒ 放大後約 **+37 KB ≈ 167 KB**。
+理論最壞 120 × 8192 ＝ **983 KB** 未壓縮，但這條路由**有 gzip**（v6.178 的 hoist，
+filter 只排除 SSE 與 `/stream`）⇒ 線上約 150 KB。單一管理員、手動載入，不構成風險。
+
+⚠ 「完全不影響頻寬」這句要加註腳：**client → server 成立**（client 一直都送完整 payload），
+但 **server → admin** 的回應確實會微幅變大（就是上面那 +37 KB）。
+
+## 其他大小限制（查過，都不會擋）
+
+- **express.json()**：掛在 VM 的 `server.js`（不在本 repo），預設上限 **100 KB** ≫ 8 KB。
+  而且 client 送的 body 大小**本來就沒變**（一直都是完整 payload），這一版只改「存多少」。
+- **nginx**：本站沒有 nginx，前面是 **Cloudflare Tunnel（cloudflared）**，
+  免費方案 body 上限 100 MB。repo 內 `oracle_admin_install.sh` / `oracle_admin_update.sh`
+  沒有任何 body/limit 設定。
+
+## client 端：這一輪**不動**（理由）
+
+- `res`（v6.170 加的連線資訊）**沒有**存整包 entries —— `_resTimingStats()` 回的每一欄都是
+  `_sampleStats()` 的 `{n,p50,p95,max}` 聚合，加上 `proto`（協定→次數的小 map）與幾個計數器。
+  實測完整 `perf` 區塊只有 855 字元。**沒有冗餘可瘦。**
+- 真正的大戶是 `svelteWarn.first`（3 × 700 字元），而那正是 `derived_inert` 追查的原始素材，
+  砍掉＝犧牲診斷價值。三筆 stack 內容高度重複（同一條 stack、只有 `+NNNms` 不同），
+  技術上可以「同 stack 只留一筆 + 記次數」省下 ~1.4KB，
+  但那會改變「是不是玩家點出來的」這個判讀依據 ⇒ **留給站長決定，本輪不動**（低風險優先）。
+
+## 守衛
+
+`scripts/test-v6184-clientdiag-cap.mjs`。
+⚠ 不是只驗字串（v6.154 的教訓）：
+
+1. 從原始碼抽出 `_cdiagPack` **真的執行** —— 正常大小原文照存、超大切到 8192、
+   邊界剛好 8192 不算截斷、循環參照 / undefined 不 throw。
+2. 整支 `/clientdiag` handler 抽出來**真的執行**（注入假 `tournIdentity` / 節流 Map /
+   假 collection），斷言到**寫進 DB 的那份 doc** 上有 `truncated: true` 與 `rawLen`。
+   ⚠ `_cdiagPack` 不存在時**也照跑**（注入絕不標旗標的替身）⇒ 舊版走 inline slice
+   會在這裡直接 FAIL，而不是整段被跳過（跳過＝假綠）。
+3. 正對照：正常大小的 payload 一個字元都沒少、`truncated` 為 `false`；
+   既有的 per-(uid, reason) 60 秒節流沒被改壞。
+3b. surrogate：先斷言前提（`JSON.stringify` 是 well-formed），再用四種對齊逐一實跑
+   6000 個 emoji 的 payload，確認尾端不會留下孤兒高位 surrogate、且長度不超過上限。
+3c. 讀出端：把 `/admin/clientdiag` 的 `rows.map` 回呼抽出來**實跑**，
+   斷言舊列（沒有欄位）回 `truncated:false / rawLen:null`（不是 `undefined`）。
+4. `require` dump 腳本**實跑** `truncSummary` / `classifyTrunc`，
+   斷言四種列（新列被切 / 新列正常 / 舊列被切 / 舊列正常）分別數對。
+5. 掃描器自我驗證四條：停在 2048 的樣本會被判不合格；只靠 parse 失敗的舊做法數不出
+   伺服器旗標；`stripComments` 剝得掉註解、又不會誤剝字串
+   （⚠ 否定型斷言「2048 已消失」必須先剝註解 —— 註解裡本來就會提到舊值）。
+
+守衛數：**58 條全綠**；對 BASE（`2b3a860d`）重跑 **21 條 HEAD-FAIL**。
+
+## ⚠ 部署
+
+`server_admin_patch.js` 與 `dump-client-monitor.cjs` **不在 GitHub Pages 的部署範圍**，
+push 綠燈不代表已生效：
+
+- **`oracle-admin/update-admin-full.bat`** —— SCP `admin.html` ＋ `server_admin_patch.js`
+  ＋ `oracle_admin_update.sh` 上 VM 並重啟 pm2。
+  **8KB 上限、`truncated`/`rawLen` 的寫入與讀出、admin 明細的「⚠ 已截斷」標示，
+  全部要跑這一支才生效。**
+- **`oracle-admin/redeploy-oracle.bat`** —— 站台本體（`/game` 的 bundle），本版只有 `VERSION`
+  字串變動，站長要不要順手跑自行決定。
+- `oracle-admin/dump-monitor.bat` 每次執行時**自己**把 `dump-client-monitor.cjs` SCP 到
+  `/tmp/` 再跑（`node /tmp/dump-client-monitor.cjs`），**不必另外部署**；
+  `require.main === module` 在這條路徑下成立，行為與以前完全相同。
+
+⚠ 本版**沒有**動 `server-engine.cjs` 的任何 export ⇒ 不需要跑 `update-tournament.bat`。
+
+---
+
 # v6.183 全站換上新識別（屬性色環 logo）
 
 站長已驗收通過方案 4「屬性色環」：**8 段屬性色環（草火水雷超鬥惡鋼，⚠無妖）＋中央金框深藍卡＋白色四芒星**。
