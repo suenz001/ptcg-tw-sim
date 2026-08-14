@@ -1,3 +1,66 @@
+# v6.186 手機直式 setup/playing 戰鬥位卡面尺寸收斂（真因：div vs button 的 UA box-sizing）
+
+## 症狀
+
+手機直式開局 setup 階段，**對手戰鬥場的卡背**比正式開打後的卡圖大一圈，
+雙方準備完成切到 playing 時版面會「縮一下」。
+
+## 真因（不是刻意放大，是 UA 預設值差異）
+
+`MobilePortraitBattle.svelte` 裡：
+
+| 階段 | 對手戰鬥位外框 | 卡面元素 |
+|---|---|---|
+| setup | `<div class="mp-active">` | `<div class="mp-card-back mp-active-card-back">` |
+| playing | `<button class="mp-active">` | `<img>` |
+
+`<button>` 的 **UA 預設 `box-sizing` 是 `border-box`**，`<div>` 是 `content-box`，
+而專案**沒有全域 `* { box-sizing: border-box }`**。
+於是同一句 `height: 100%`：
+
+* button 版：內容高 = 160 − padding 8 − border 4 = **148**
+* div 版：內容高 = **160**（外框反而撐成 172，比 row 還高）
+
+裡面 `height:100%` 的卡面就跟著差 12px。真實 Chrome 量測（390px 寬、row 內容高 160）：
+
+| | setup 卡背 | playing 卡圖 | 差 |
+|---|---|---|---|
+| 寬 x 高 | **118.53 x 164** | **105.98 x 148** | +12.55 x +12（面積 +24%）|
+
+同一族還有：對手備戰位 `.mp-slot`（92x112 vs 90x110）、
+觀戰/回放手牌卡背 `.mp-hand-card`（66x88 vs 64x86）、`.mp-chip`（span vs button）。
+
+## 修法（單一來源，不是把數字改成一樣）
+
+1. `.mp` 宣告 `--mp-card-ar: 63 / 88`（實體卡尺寸）作為**唯一的比例來源**。
+2. 卡面幾何收斂成**同一條規則區塊**：
+
+   ```css
+   .mp-active img,
+   .mp-active .mp-active-card-back { height:100%; width:auto;
+     aspect-ratio: var(--mp-card-ar, 63 / 88); max-width:120px; flex-shrink:0; }
+   ```
+
+   舊的 `.mp-card-back.mp-active-card-back { height:100%; aspect-ratio:63/88; }` 刪除。
+3. `.mp-active` / `.mp-slot` / `.mp-hand-card` / `.mp-chip` / `.mp-card-back`
+   **明寫 `box-sizing: border-box`** —— 讓 div 版與 button 版解出同一個盒。
+
+修正後 Chrome 實測兩階段皆為 **105.95 x 148**、備戰位皆 90x110、手牌卡背皆 64x86。
+
+## 守衛 `scripts/test-v6186-mobile-card-size-single-source.mjs`
+
+* 內建 **box-model 求值器**（實際算出 w/h，不是比字串）。
+* ⭐ 求值器**自我驗證**：餵 v6.185 舊 CSS fixture 必須重現 Chrome 實測 118.55x164 / 105.99x148，
+  否則直接 FAIL（IRON_RULES Rule 25：掃描器自己要先被驗）。
+* 釘住：兩階段 w/h 相等、`height` 與 `aspect-ratio` 來自**同一條規則區塊**、
+  比例讀 `--mp-card-ar`。
+* 家族守衛：markup 中**同時用在 `<button>` 與非 button** 且有幾何宣告的 class，
+  一律要求明寫 `box-sizing`（這次的真因通則化）。
+* 桌機正對照：`+page.svelte` 完全沒有這些 class。
+* 禁 `@media` 當手機開關（先剝 CSS 註解，剝除器亦自我驗證）。
+
+HEAD-FAIL：在 v6.185 原檔上 11 條 FAIL。
+
 # v6.185 ①牌組公布欄「最新留言」排序 ②對戰通知收斂成「不需要操作 → 需要操作」單一述詞
 
 ## ① 最新留言排序

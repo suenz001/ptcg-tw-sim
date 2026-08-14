@@ -1353,6 +1353,9 @@
     /* v2.287：iPhone 動態島 / 瀏海 / home indicator 安全區
        padding 算進 100dvh 內（border-box 預設）；safe-area 兩端各退一些避免被遮 */
     box-sizing: border-box;
+    /* v6.186 全站手機直式「卡面長寬比」單一來源 — 戰鬥位卡圖與卡背都讀這個變數，
+       不再各自寫死數字（實體卡 63mm x 88mm）。 */
+    --mp-card-ar: 63 / 88;
     padding-top: env(safe-area-inset-top, 0);
     padding-bottom: env(safe-area-inset-bottom, 0);
     padding-left: env(safe-area-inset-left, 0);
@@ -1466,6 +1469,10 @@
   .mp-opp-bench { background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(60,20,20,0.3)); }
   .mp-my-bench { background: linear-gradient(0deg, rgba(30,40,80,0.5), rgba(20,30,40,0.3)); }
   .mp-slot {
+    /* v6.186 ⚠ 必須明寫 border-box：同一個 .mp-slot 在 setup 是 <div>(卡背)、
+       在 playing 是 <button>(卡圖)，而 <button> 的 UA 預設就是 border-box、<div> 是
+       content-box → 同樣 height:100% 會解出差 2px 的盒高，造成兩階段版面跳動。 */
+    box-sizing: border-box;
     flex: 1 1 0; min-width: 52px; max-width: 90px; height: 100%;
     background: rgba(0,0,0,0.4);
     border: 1px solid #3a5a3a; border-radius: 4px;
@@ -1521,6 +1528,8 @@
   .mp-opp-chips { background: rgba(80,30,30,0.3); border-bottom: 1px solid rgba(255,255,255,0.05); }
   .mp-my-chips { background: rgba(30,40,80,0.3); border-top: 1px solid rgba(255,255,255,0.05); }
   .mp-chip {
+    /* v6.186 同理：.mp-chip 同時用在 <span> 與 <button> 上 */
+    box-sizing: border-box;
     flex-shrink: 0;
     background: rgba(0,0,0,0.4);
     border: 1px solid rgba(255,255,255,0.1);
@@ -1556,6 +1565,11 @@
   }
   .mp-turn-order.mp-turn-now { color: #1a1a1a; background: rgba(224,176,48,0.92); border-color: #e0b030; }
   .mp-active {
+    /* v6.186 ⚠ 必須明寫 border-box（真因）：setup 的對手戰鬥位是 <div class="mp-active">，
+       playing 是 <button class="mp-active">。<button> UA 預設 border-box、<div> content-box，
+       同樣 height:100% 讓 div 版的內容盒多出 padding 8px + border 4px = 12px，
+       裡面 height:100% 的卡背就跟著大一圈（實測 118.53x164 vs 卡圖 105.98x148）。 */
+    box-sizing: border-box;
     display: flex; gap: 8px; align-items: center;
     background: rgba(0,0,0,0.5);
     border: 2px solid #3a3a3a;
@@ -1571,15 +1585,25 @@
   .mp-active.mp-active-opp { border-color: #5a3a3a; background: linear-gradient(180deg, rgba(80,30,30,0.5), rgba(40,20,20,0.4)); }
   .mp-active.mp-active-mine { border-color: #3a6a3a; background: linear-gradient(0deg, rgba(30,60,30,0.5), rgba(20,40,20,0.4)); }
   .mp-active.mp-actionable { border-color: #e0b030; box-shadow: 0 0 12px rgba(255,212,74,0.4); }
-  .mp-active img {
+  /* v6.186 ⭐ 戰鬥位「卡面尺寸單一來源」：
+     setup 的卡背（.mp-active-card-back）與 playing 的卡圖（img）共用同一組幾何宣告，
+     不是各寫各的數字 —— 以後只要改這一處，兩個階段一定同步。 */
+  .mp-active img,
+  .mp-active .mp-active-card-back {
     height: 100%; width: auto;
+    aspect-ratio: var(--mp-card-ar, 63 / 88);
     max-width: 120px;
-    object-fit: contain; border-radius: 4px;
     flex-shrink: 0;
+  }
+  .mp-active img {
+    object-fit: contain; border-radius: 4px;
     pointer-events: none;
   }
   /* v5.955 卡背改用桌機版同款仿真卡背(紅白同心圓),手機/桌機視覺一致 */
   .mp-card-back {
+    /* v6.186 border-box：卡背有 2px 邊框，若用 content-box，aspect-ratio 會算在內容盒上，
+       外框再加 4px → 比同高的卡圖寬。 */
+    box-sizing: border-box;
     background: radial-gradient(circle at 50% 50%, #f0f4ff 0 12%, #ffffff 12% 14%, #1a1a1a 14% 18%, #c0392b 18% 50%, #922b21 50% 100%);
     border: 2px solid #1a1a1a;
     border-radius: 6px;
@@ -1592,7 +1616,6 @@
   .mp-hand-card.mp-hand-replay { cursor: zoom-in; }  /* v5.954 回放手牌明牌:點擊放大 */
   .mp-card-back.mp-hand-back-fill { width: 100%; height: 100%; }
   .mp-slot.mp-card-back { padding: 0; width: auto; height: 100%; }
-  .mp-card-back.mp-active-card-back { height: 100%; aspect-ratio: 63/88; flex-shrink: 0; }
 
   .mp-active-info {
     flex: 1; min-width: 0;
@@ -1751,6 +1774,8 @@
     font-size: 0.72rem;
   }
   .mp-hand-card {
+    /* v6.186 同理：觀戰/回放的卡背用 <div class="mp-hand-card">，一般手牌是 <button> */
+    box-sizing: border-box;
     flex-shrink: 0;
     width: 64px; height: 86px;
     border: 1px solid #3a5a3a;
