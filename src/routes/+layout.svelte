@@ -133,6 +133,32 @@
     background: #f4f4f6;
   }
 
+  /* ⭐⭐⭐ v6.187 全站「安全區」單一來源 —— iPhone 動態島 / 瀏海 / home indicator。
+     背景：app.html 的 viewport meta 帶 viewport-fit=cover，且 apple-mobile-web-app-capable=yes
+       + status-bar-style=black-translucent ⇒ 玩家「加到主畫面」以 PWA 開啟時，網頁內容會
+       延伸到動態島底下。任何 position:fixed 貼齊螢幕邊緣的元素若不自己讓開，就會被動態島
+       蓋住而**點不到**（v6.187 修的正是「宣告對手棄權獲勝」紅鈕整條被壓在動態島下）。
+     ⚠ 這是**唯一來源**：所有貼邊浮動元素一律讀 var(--safe-top / --safe-bottom /
+       --safe-left / --safe-right)，不要再各自寫 env(safe-area-inset-*)。
+     ⚠ fallback：先無條件宣告 0px；只有在瀏覽器**確實支援 env()** 時（@supports 為真）
+       才覆寫成真值。不支援 env() 的瀏覽器整段 @supports 被跳過 → 變數維持字面 0px，
+       所有 calc() 仍可求值，非 iPhone 版面完全不會多出空白（正對照見
+       scripts/test-v6187-safe-area-single-source.mjs）。 */
+  :global(:root) {
+    --safe-top: 0px;
+    --safe-bottom: 0px;
+    --safe-left: 0px;
+    --safe-right: 0px;
+  }
+  @supports (padding-top: env(safe-area-inset-top)) {
+    :global(:root) {
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+    }
+  }
+
   /* v5.034：BETA 標記 banner — 黃色細條，github.io 才顯示，不可 dismiss */
   /* v5.070：padding-top 加 env(safe-area-inset-top) — 避開 iOS 動態島 / 瀏海。
      非 iOS 裝置 inset=0 → padding 維持 4px；iPad/iPhone 自動補上動態島高度。

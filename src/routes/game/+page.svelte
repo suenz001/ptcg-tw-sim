@@ -13033,7 +13033,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-field .deck-select, .tourn-field .name-input { display: block; width: 100%; margin-top: 6px; padding: 10px; border-radius: 8px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; font-size: 1rem; box-sizing: border-box; }
   .tourn-join { margin-top: 8px; }
   .tourn-wait { color: #ffd35a; font-size: 1.05rem; margin: 22px 0; line-height: 1.6; }
-  .tourn-toast { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
+  .tourn-toast { position: fixed; top: calc(8px + var(--safe-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 9999; background: #7a1f1f; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); max-width: 90vw; }
   .tourn-gate { color: #ffd35a; max-width: 360px; margin: 8px auto 4px; line-height: 1.5; }
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
   /* v5.691 三分頁切換 */
@@ -13127,9 +13127,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tctime { color: #667; font-size: 11px; margin-right: 5px; font-variant-numeric: tabular-nums; }
   .tcname { color: #7fc7ff; font-weight: 600; }
   .tcadmin .tcname { color: #ff7a3d; font-weight: 800; text-shadow: 0 0 6px rgba(255,122,61,0.5); }
-  .tourn-idle-warn { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(40,30,10,0.95); color: #ffd35a; border: 1px solid #a80; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  .tourn-idle-warn { position: fixed; top: calc(8px + var(--safe-top, 0px)); left: 50%; transform: translateX(-50%); z-index: 200; background: rgba(40,30,10,0.95); color: #ffd35a; border: 1px solid #a80; border-radius: 8px; padding: 6px 14px; font-size: 13px; font-weight: 700; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
   /* v6.156「我還在」確認框：置中偏下，避開頂部的 tourn-idle-warn 與底部手牌列 */
-  .tourn-still-here { position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 9998; width: min(92vw, 360px); background: rgba(40,18,18,0.97); color: #ffe0e0; border: 2px solid #e05a5a; border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); text-align: center; }
+  .tourn-still-here { position: fixed; left: 50%; bottom: calc(92px + var(--safe-bottom, 0px)); transform: translateX(-50%); z-index: 9998; width: min(92vw, 360px); background: rgba(40,18,18,0.97); color: #ffe0e0; border: 2px solid #e05a5a; border-radius: 12px; padding: 12px 14px; box-shadow: 0 6px 24px rgba(0,0,0,0.6); text-align: center; }
   .tourn-still-here .tsh-title { font-size: 15px; font-weight: 800; color: #ff9a9a; margin-bottom: 4px; }
   .tourn-still-here .tsh-body { font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
   .tourn-still-here .tsh-body strong { color: #ffd35a; font-size: 17px; }
@@ -13223,7 +13223,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .treplay-mob {
     position: fixed; top: 0; left: 0; right: 0; z-index: 80;
     display: flex; align-items: stretch; gap: 4px;
-    padding: calc(env(safe-area-inset-top, 0px) + 4px) max(env(safe-area-inset-right, 0px), 6px) 4px max(env(safe-area-inset-left, 0px), 6px);
+    padding: calc(var(--safe-top, 0px) + 4px) max(var(--safe-right, 0px), 6px) 4px max(var(--safe-left, 0px), 6px);
     background: #0f1730; border-bottom: 2px solid #3a5a8a; box-shadow: 0 3px 12px rgba(0,0,0,.5);
   }
   .treplay-mob-btn {
@@ -13240,19 +13240,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
     display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 2px;
   }
-  .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 9999; }
+  .tourn-return-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(18px + var(--safe-bottom, 0px)); z-index: 9999; }
   .tourn-return-bar button { box-shadow: 0 4px 14px #000a; }
   .tourn-auth-btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
   /* v5.225 對手掛機警告 banner */
+  /* ⭐⭐⭐ v6.187：這條 banner 貼齊螢幕最上緣(top:0)，在 iPhone PWA(viewport-fit=cover)下
+       整條(高度僅約 41px)都落在動態島的 59px 安全區裡 → 玩家**按不到**「宣告對手棄權獲勝」，
+       等於無法宣告獲勝。改成 padding-top 讓開 var(--safe-top)（單一來源見 +layout.svelte）。
+     ⚠ z-index 由 1000 提到 100000：同樣貼 top:0 的 .admin-broadcast-bar(99999) 與
+       .tourn-alert-banner(99990) 會蓋在它上面；這顆鈕影響勝負，必須在最上層。 */
   .opp-inactive-banner {
     position: fixed;
     top: 0; left: 0; right: 0;
-    z-index: 1000;
+    z-index: 100000;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 16px;
-    padding: 10px 20px;
+    padding: calc(10px + var(--safe-top, 0px)) max(20px, var(--safe-right, 0px)) 10px max(20px, var(--safe-left, 0px));
     background: #fbbf24;
     color: #1f1f1f;
     font-weight: 600;
@@ -13260,7 +13265,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   .opp-inactive-text { font-size: 15px; }
   .opp-inactive-btn {
-    padding: 6px 14px;
+    /* v6.187：原本 6px padding + 15px 字 ≈ 33px 高，小於 Apple HIG 建議的 44px 最小觸控目標 */
+    padding: 8px 16px;
+    min-height: 44px;
+    touch-action: manipulation;
     background: #dc2626;
     color: #fff;
     border: none;
@@ -13349,7 +13357,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-alert-banner {
     position: fixed; top: 0; left: 0; right: 0; z-index: 99990;
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
-    padding: 10px 14px calc(10px + env(safe-area-inset-top, 0));
+    /* ⚠ v6.187 修：原本寫成 `padding: 10px 14px calc(10px + env(safe-area-inset-top,0))`
+         —— 三值 padding 的第三個是**下**邊，safe-area 加錯邊，橫幅內容照樣被動態島蓋住。 */
+    padding: calc(10px + var(--safe-top, 0px)) max(14px, var(--safe-right, 0px)) 10px max(14px, var(--safe-left, 0px));
     background: linear-gradient(135deg, #b8341a, #e8801a); color: #fff;
     box-shadow: 0 3px 14px rgba(0,0,0,.5); font-weight: 700;
     animation: tournAlertPulse 1.2s ease-in-out infinite;
@@ -14294,7 +14304,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* v3.97 對戰中聊天室 ─────────────────────────────────────────────────── */
   .chat-fab {
-    position: fixed; right: 18px; bottom: 18px; z-index: 9000;
+    position: fixed; right: calc(18px + var(--safe-right, 0px)); bottom: calc(18px + var(--safe-bottom, 0px)); z-index: 9000;
     width: 54px; height: 54px; border-radius: 50%; border: 2px solid #d97a2a;
     background: #2a3a5a; color: #ffdd88; font-size: 1.6rem; cursor: grab;
     box-shadow: 0 4px 12px rgba(0,0,0,.4);
@@ -14315,7 +14325,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   /* v5.055：對手回合動作 panel — 仿 .chat-panel 樣式 */
   .opp-turn-toggle-btn {
-    position: fixed; right: 18px; bottom: 80px; z-index: 8990;
+    position: fixed; right: calc(18px + var(--safe-right, 0px)); bottom: calc(80px + var(--safe-bottom, 0px)); z-index: 8990;
     width: 48px; height: 48px; border-radius: 50%;
     background: #3a3a5a; color: #ffcc66;
     border: 2px solid #5a5a7a;
@@ -14331,7 +14341,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .opp-turn-toggle-btn:active { transform: translateY(0); }
 
   .opp-turn-panel {
-    position: fixed; right: 18px; bottom: 80px; z-index: 9001;
+    position: fixed; right: calc(18px + var(--safe-right, 0px)); bottom: calc(80px + var(--safe-bottom, 0px)); z-index: 9001;
     width: 360px; max-height: 460px;
     background: #1a1a24; border: 2px solid #5a4a7a; border-radius: 10px;
     display: flex; flex-direction: column;
@@ -14430,7 +14440,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
        讓 panel 自然依內容大小；保留 transform 讓玩家可拖移到不擋視線的位置。 */
   @media (max-width: 600px) {
     .opp-turn-toggle-btn {
-      right: 2.5vw; bottom: max(env(safe-area-inset-bottom, 12px) + 60px, 70px);
+      right: 2.5vw; bottom: max(var(--safe-bottom, 0px) + 60px, 70px);
     }
     .opp-turn-panel {
       /* 自然大小，依內容自適應；上限 92vw / 75vh 避免超出螢幕 */
@@ -14444,7 +14454,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   .chat-panel {
-    position: fixed; right: 18px; bottom: 18px; z-index: 9000;
+    position: fixed; right: calc(18px + var(--safe-right, 0px)); bottom: calc(18px + var(--safe-bottom, 0px)); z-index: 9000;
     width: 350px; height: 450px;
     background: #1a1a24; border: 2px solid #4a4a6a; border-radius: 10px;
     display: flex; flex-direction: column;
@@ -14494,7 +14504,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       /* v5.626 改 left/top + 固定尺寸(不再 left+right/top+bottom stretch)→ 讓 margin 位移可乾淨拖曳；
          仍 transform:none(避免 iOS position:fixed+transform 破壞內部捲動)。 */
       left: 2.5vw; right: auto;
-      top: max(env(safe-area-inset-top, 20px), 40px); bottom: auto;
+      top: max(var(--safe-top, 0px), 40px); bottom: auto;
       width: 95vw; height: 55vh; max-height: 55vh;
       border-radius: 12px;
       border: 2px solid #4a4a6a;
@@ -14617,7 +14627,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* v5.478 系統管理員廣播跑馬燈 */
   .admin-broadcast-bar{
     position:fixed; top:0; left:0; right:0; z-index:99999;
-    height:34px; display:flex; align-items:center; overflow:hidden;
+    /* v6.187：貼 top:0 → 讓開動態島（box-sizing 讓 padding 算進 height 內） */
+    box-sizing:border-box; padding-top:var(--safe-top, 0px);
+    height:calc(34px + var(--safe-top, 0px)); display:flex; align-items:center; overflow:hidden;
     background:linear-gradient(90deg,#7a1fa2,#c2185b);
     color:#fff; font-weight:700; font-size:.95rem;
     box-shadow:0 2px 10px rgba(0,0,0,.45);
@@ -15132,12 +15144,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .restart-btn-accept:hover { background:#34d399; }
   .restart-btn-reject { background:#ef4444; color:#fff; }
   .restart-btn-reject:hover { background:#f87171; }
-  .restart-waiting-strip { position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:9998; background:rgba(245,158,11,.95); color:#000; padding:8px 18px; border-radius:20px; display:flex; align-items:center; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; font-size:.92em; }
+  .restart-waiting-strip { position:fixed; top:calc(60px + var(--safe-top, 0px)); left:50%; transform:translateX(-50%); z-index:9998; background:rgba(245,158,11,.95); color:#000; padding:8px 18px; border-radius:20px; display:flex; align-items:center; gap:12px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; font-size:.92em; }
   .restart-cancel-btn { background:#000; color:#fbbf24; border:none; padding:4px 12px; border-radius:12px; font-size:.85em; cursor:pointer; font-weight:600; }
   .restart-cancel-btn:hover { background:#222; }
-  .restart-rejected-toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%); z-index:9998; background:rgba(239,68,68,.95); color:#fff; padding:12px 24px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; animation:rejectedToastFade 4s ease; }
+  .restart-rejected-toast { position:fixed; bottom:calc(80px + var(--safe-bottom, 0px)); left:50%; transform:translateX(-50%); z-index:9998; background:rgba(239,68,68,.95); color:#fff; padding:12px 24px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,.4); font-weight:600; animation:rejectedToastFade 4s ease; }
   @keyframes rejectedToastFade { 0% { opacity:0; transform:translate(-50%, 20px); } 10% { opacity:1; transform:translate(-50%, 0); } 85% { opacity:1; transform:translate(-50%, 0); } 100% { opacity:0; transform:translate(-50%, -10px); } }
-  @media (max-width: 768px) { .restart-proposal-modal { padding:18px 20px; min-width:260px; } .restart-waiting-strip { top:50px; font-size:.85em; padding:6px 14px; } .restart-rejected-toast { font-size:.9em; padding:10px 18px; } }
+  @media (max-width: 768px) { .restart-proposal-modal { padding:18px 20px; min-width:260px; } .restart-waiting-strip { top:calc(50px + var(--safe-top, 0px)); font-size:.85em; padding:6px 14px; } .restart-rejected-toast { font-size:.9em; padding:10px 18px; } }
   .settings-chip { background: #2a3a2a; border-color: #5a5a5a; cursor: pointer; }
   .settings-chip:hover { background: #3a4a3a; }
 
@@ -15992,7 +16004,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .mulligan-footer{ justify-content:center; }
   /* v4.926 Admin 隱身觀戰提示 banner */
   .admin-spy-banner{
-    position:fixed; top:8px; left:50%; transform:translateX(-50%);
+    position:fixed; top:calc(8px + var(--safe-top, 0px)); left:50%; transform:translateX(-50%);
     background:linear-gradient(90deg,#5a1818,#742222);
     color:#ffcfa0; padding:6px 14px; border-radius:6px;
     z-index:99999; font-weight:bold; font-size:0.85rem;

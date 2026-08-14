@@ -6439,3 +6439,87 @@ v6.170 的冪等只保證「同一個 actId 只套用一次」，**不保證順�
 ## 部署
 `update-admin-full.bat` / `redeploy-oracle.bat` / `update-tournament.bat`
 （本版沒有動 engine 與伺服器邏輯，但 admin.html 的版本提示有改）。
+
+
+---
+
+# v6.187 — iPhone 動態島把「宣告對手棄權獲勝」紅鈕整條吃掉
+
+## 玩家回報
+手機（iPhone）上方的動態島「按不到」`⚠️ 對手長時間無回應【宣告對手棄權獲勝】`那顆紅色按鈕
+=> 對手掛機時**無法宣告獲勝**，直接影響勝負。
+
+## 真因（求值，不是猜）
+`src/routes/game/+page.svelte` 的 `.opp-inactive-banner`：
+
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    padding: 10px 20px;      /* <= 完全沒有 safe-area */
+
+`src/app.html` 的 viewport meta 帶 `viewport-fit=cover`，且
+`apple-mobile-web-app-capable=yes` + `apple-mobile-web-app-status-bar-style=black-translucent`
+=> 玩家「加到主畫面」以 PWA 全螢幕開啟時，網頁內容會延伸到動態島底下。
+iPhone 14/15/16 Pro 直式的 `env(safe-area-inset-top)` 約 **59px**，
+而這條橫幅的總高度只有 `10 + 21(15px 字的行高) + 10 ≈ 41px`
+=> **整條橫幅（含那顆紅鈕）都在 59px 的安全區內**，被動態島的硬體遮蔽壓住，一格都按不到。
+（不是「按鈕偏上一點」，是整顆都在裡面 —— 所以玩家形容成「按不到」而不是「難按」。）
+
+⚠ 一般 Safari 分頁（沒有加到主畫面）`env(safe-area-inset-top)` 是 0，
+   所以在瀏覽器裡試通常**重現不出來**；要用 PWA 模式才會發生。
+
+## 順帶掃出來的同型問題
+以「`position:fixed` 且貼齊螢幕上/下緣」為口徑掃 `game/+page.svelte`：
+
+| 元件 | 原本 | 問題 |
+|---|---|---|
+| `.opp-inactive-banner` | `top:0`，無 safe-area | ⭐ 本次回報（勝負） |
+| `.tourn-alert-banner` | `padding: 10px 14px calc(10px + env(...top))` | safe-area **寫錯邊**（三值 padding 的第三值是**下**邊），「⚔️ 前往入場」連結照樣被蓋 |
+| `.admin-broadcast-bar` | `top:0; height:34px`，無 safe-area | 廣播文字整條在動態島下 |
+| `.tourn-toast` / `.tourn-idle-warn` / `.admin-spy-banner` | `top:8px` | 8px < 59px，全在安全區內 |
+| `.restart-waiting-strip` | `top:60px`（`@media<=768px` 再壓成 `top:50px`） | 手機那條 50px < 59px |
+| `.tourn-return-bar` / `.tourn-still-here` / `.restart-rejected-toast` / `.chat-fab` / `.chat-panel` / `.opp-turn-toggle-btn` / `.opp-turn-panel` | `bottom:18~92px` | 壓在 home indicator 上 |
+
+## 收斂：單一來源 `--safe-*`
+`src/routes/+layout.svelte` 的 `:global(:root)`：
+
+    :global(:root){ --safe-top:0px; --safe-bottom:0px; --safe-left:0px; --safe-right:0px; }
+    @supports (padding-top: env(safe-area-inset-top)) {
+      :global(:root){ --safe-top: env(safe-area-inset-top, 0px); ... }
+    }
+
+⚠ **fallback 為什麼要用 `@supports` 而不是「同一條規則寫兩次」**：
+custom property 的值是寬鬆 token stream，不支援 `env()` 的瀏覽器**照樣會接受**
+`--safe-top: env(...)`，等到 `var()` 代入時才變成 *invalid at computed-value time*，
+整條 `padding` 直接掉回初始值（10px 也一起沒了）。用 `@supports` 包起來，
+不支援的瀏覽器根本不會看到那段，變數維持字面 `0px`，所有 `calc()` 照常求值
+=> **非 iPhone 版面 0 位移**（守衛②是這件事的正對照）。
+消費端一律寫 `var(--safe-top, 0px)`，多一層保險。
+
+⚠ 沒有新增任何 `@media` 當手機開關（守衛④把 `@media` 出現次數釘死：
+`game/+page.svelte` 19 個、`MobilePortraitBattle.svelte` 0 個）。
+手機直式與桌機仍是兩套獨立分支，本版只改樣式數值來源，不動任何分支條件。
+
+## 遮擋因素（第 4 點：不只看位置）
+同樣貼 `top:0` 的 `.admin-broadcast-bar`（z-index **99999**）與
+`.tourn-alert-banner`（z-index **99990**）都比 `.opp-inactive-banner` 的
+z-index **1000** 高 => 這兩者只要出現就會蓋掉整顆鈕。
+本版把 `.opp-inactive-banner` 提到 **100000**（全檔最高），並確認：
+`.opp-inactive-banner` / `.opp-inactive-btn` 都沒有 `pointer-events:none`；
+`MobilePortraitBattle` 的 `.mp` 是 `position:fixed`（自成堆疊脈絡）且 `z-index:auto`，
+其內部最大 `z-index:9000` 被夾在 `.mp` 這一層之內，蓋不到 banner。
+
+## 守衛 `scripts/test-v6187-safe-area-single-source.mjs`
+① **求值**（不是比字串）：內建 CSS 解析 + box-model 求值器，代入 `--safe-top=59px`
+   算出紅鈕可點區的視窗座標上緣，必須 `>= 59`；且用 v6.186 的舊 CSS fixture
+   自我驗證，舊值必須算出 `10 < 59`（HEAD-FAIL 內建正對照，IRON_RULES Rule 25）。
+② **正對照**：`--safe-top=0` 時上緣必須**剛好等於 10px**（＝ v6.186 的值）
+   => 非 iPhone 版面一格都不動；並檢查 `:root` 先宣告 `0px`、`env()` 覆寫在 `@supports` 內。
+③ 貼上緣（`top` <= 64px）與貼下緣（`bottom` <= 100px）的 `position:fixed` 規則
+   逐條檢查有無 `var(--safe-*)`，並禁止這些規則再出現裸 `env(safe-area-inset-*)`。
+④ `@media` 次數釘死；`.opp-inactive-banner` 的 z-index 必須 >= 所有其他貼上緣元件。
+
+## 部署
+`update-admin-full.bat`（admin.html 版本提示有改）。
+engine / 伺服器邏輯本版**沒有動**。
+⚠ **需要真機驗證**：`env(safe-area-inset-top)` 與 `@supports (padding-top: env(...))`
+   在 iOS Safari PWA 模式下的實際值，沙盒無法測；請站長用 iPhone
+   「加到主畫面」開啟、製造對手掛機情境，確認紅鈕在動態島下方且可按。

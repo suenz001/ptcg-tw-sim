@@ -1356,10 +1356,12 @@
     /* v6.186 全站手機直式「卡面長寬比」單一來源 — 戰鬥位卡圖與卡背都讀這個變數，
        不再各自寫死數字（實體卡 63mm x 88mm）。 */
     --mp-card-ar: 63 / 88;
-    padding-top: env(safe-area-inset-top, 0);
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    padding-left: env(safe-area-inset-left, 0);
-    padding-right: env(safe-area-inset-right, 0);
+    /* v6.187：改讀全站唯一來源 --safe-* （定義在 src/routes/+layout.svelte 的 :root）。
+       數值與行為與 env(safe-area-inset-*) 完全相同，只是不再各自寫一份。 */
+    padding-top: var(--safe-top, 0px);
+    padding-bottom: var(--safe-bottom, 0px);
+    padding-left: var(--safe-left, 0px);
+    padding-right: var(--safe-right, 0px);
   }
   /* v4.24 對戰計時器細條 — mp-top 下方 ~20px，4 欄資訊 */
   .mp-timer-strip {
