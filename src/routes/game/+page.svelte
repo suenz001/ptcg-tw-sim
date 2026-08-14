@@ -420,6 +420,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ⚠ 只存在於這一次頁面生命週期；重載後可以再提示一次，這正是我們要的（重載＝版本可能已更新）。
   const _tVerPrompted = new Set<string>();
   let tRegFormEventId = $state('');  // 目前展開報名表單的賽事 id（點某場「報名」才展開）
+  // ⭐⭐⭐v6.188 棄賽確認框。站長裁定：棄賽**不可逆**、不開放玩家自助反悔 ⇒ 唯一的保護就是這個確認框，
+  //   所以「按鈕」與「真的送出」一定要是兩個不同的動作（tDropRequest 只開框、tDropCommit 才打 API）。
+  let tDropConfirmEventId = $state('');
   // v5.629 玩家發起社群賽
   let tProposeOpen = $state(false);
   let tProposeName = $state('');
@@ -5145,6 +5148,40 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; else { saveCoinPref(eventId, tCoinPref); tRegFormEventId = ''; } await tournLoadEvent(); } // v5.724 存先後攻偏好供報名卡顯示
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
+  // ⭐⭐⭐v6.188 補報名＋直接報到（站長核准，網站賽與社群賽都開放）。
+  //   報到階段才發現忘了報名的人，過去只看得到「未報名者無法參加」乾等下一場。
+  //   ⚠ 前置驗證與 tournEnroll **逐條相同**（後端也是複用 /register 那一套），這裡只是換一支端點；
+  //     任何一邊放寬條件都會讓另一邊變成假訊息，改動請兩邊一起改。
+  async function tLateJoin(eventId: string) {
+    const nick = (tNickname || '').trim();
+    if (!nick) { tError = '請先填寫錦標賽暱稱'; tCheckinErrId = eventId; return; }
+    const deck = allDecks.find(d => d.id === tDeckId);
+    if (!deck) { tError = '請先選擇牌組'; tCheckinErrId = eventId; return; }
+    const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
+    if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; tCheckinErrId = eventId; return; }
+    tError = ''; tCheckinErrId = ''; tBusy = true;
+    try {
+      const r = await tApi('/register-and-checkin', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref, ver: VERSION });
+      if (r?.error) { tError = r.error; tCheckinErrId = eventId; }
+      else { saveCoinPref(eventId, tCoinPref); tRegFormEventId = ''; }
+      await tournLoadEvent();
+    } catch (e: any) { tError = '補報名失敗：' + String(e?.message ?? e); tCheckinErrId = eventId; }
+    finally { tBusy = false; }
+  }
+  // ⭐⭐⭐v6.188 中途棄賽。⚠⚠ 這支**只開確認框、絕不送出**——棄賽不可逆，誤按沒有救。
+  function tDropRequest(eventId: string) { tError = ''; tDropConfirmEventId = eventId; }
+  // 確認框上的「確定棄賽」才會真的打 API。
+  async function tDropCommit() {
+    const eventId = tDropConfirmEventId;
+    if (!eventId) return;
+    tDropConfirmEventId = ''; tBusy = true; tError = '';
+    try {
+      const r = await tApi('/drop', { eventId });
+      if (r?.error) tError = r.error;
+      await tournLoadEvent(); tBracketLoad();
+    } catch (e: any) { tError = '棄賽失敗：' + String(e?.message ?? e); }
+    finally { tBusy = false; }
+  }
   // v5.629 玩家發起社群賽
   async function tPropose() {
     const nick = (tNickname || '').trim();
@@ -8582,6 +8619,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 
+<!-- ⭐⭐⭐v6.188 棄賽確認框。站長裁定①：**棄賽不可逆、不開放玩家自助反悔**，
+     所以按下去之前這一框是唯一的保護。它必須跟上面的版本閘視窗一樣放在**所有版面分支之外** ——
+     v6.167 的教訓：跨版面的視窗寫進某個分支，就等於在另一個分支永遠畫不出來，
+     而「畫不出來的確認框」＝ 按鈕按了沒反應，或更糟：某天有人為了「修好」它而把確認拿掉。 -->
+{#if isTournament && !isTournSpectator && tDropConfirmEventId}
+  <div class="tourn-vergate-mask" role="alertdialog" aria-modal="true" aria-labelledby="tdrop-title">
+    <div class="tourn-vergate">
+      <div class="tvg-title" id="tdrop-title">🏳 確定要棄賽嗎？</div>
+      <div class="tvg-body">
+        確定要棄賽嗎？棄賽後<b>無法復原</b>，你將不再被排入後續對戰。
+        <br><span class="tvg-note">若目前這一場尚未結束，會直接判對手獲勝；已完成的戰績會保留在排名表上。誤按請聯絡站長。</span>
+      </div>
+      <button class="tvg-btn tvg-primary" disabled={tBusy} onclick={tDropCommit}>🏳 確定棄賽</button>
+      <button class="tvg-btn tvg-ghost" disabled={tBusy} onclick={() => (tDropConfirmEventId = '')}>取消，我要繼續比賽</button>
+    </div>
+  </div>
+{/if}
+
 {#if isTournament && tStep !== 'playing'}
   <main class="lobby tourn-lobby">
     <div class="tourn-topbar"><a class="tourn-home-btn" href="{base}/">← 回到首頁</a></div>
@@ -8682,6 +8737,39 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         {/if}
       {/if}
+      <!-- ⭐⭐v6.188 報名表單抽成 snippet：報名階段與「報到階段補報名」**共用同一份**。
+           兩份各自維護必然漂移（改了一邊忘了另一邊 ＝ 其中一條路徑的驗證條件與後端對不上）。
+           lateJoin=true ⇒ 送 /register-and-checkin（報名＋報到單筆一次到位）；否則走原本的 /register。 -->
+      {#snippet regForm(ev, lateJoin)}
+              <div class="tourn-reg-form">
+                <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
+                  <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
+                </label>
+                <label class="tourn-field">選擇牌組（需 60 張）
+                  <select class="deck-select" bind:value={tDeckId}>
+                    <option value="" disabled>— 請選擇牌組 —</option>
+                    {#if decks.length > 0}
+                      <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                    {/if}
+                    {#if PRESET_DECKS.length > 0}
+                      <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
+                    {/if}
+                  </select>
+                </label>
+                <label class="tourn-field">硬幣勝出時，你要：
+                  <select class="deck-select" bind:value={tCoinPref}>
+                    <option value="random">隨機（不指定）</option>
+                    <option value="first">先攻</option>
+                    <option value="second">後攻</option>
+                  </select>
+                  <span class="tourn-coin-hint">（贏得開場擲幣時，依此自動安排；輸的話由對手決定）</span>
+                </label>
+                <div class="tourn-reg-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                  <button class="btn-primary tourn-join" onclick={() => (lateJoin ? tLateJoin(ev._id) : tournEnroll(ev._id))} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? (lateJoin ? '補報名中…' : '報名中…') : (lateJoin ? '✅ 確認補報名並直接報到' : '✅ 確認報名（鎖定暱稱與牌組）')}</button>
+                  <button class="btn-secondary small" onclick={() => { tRegFormEventId = ''; tError = ''; }} disabled={tBusy}>取消</button>
+                </div>
+              </div>
+      {/snippet}
       {#snippet eventCard(ev)}
         <div class="tourn-event">
           <h3>🏆 {ev.name}</h3>
@@ -8709,7 +8797,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <div class="tourn-cdbox urgent">
               <div class="tourn-cdbox-label">📋 報到階段{#if _ciMs > 0} ｜ 剩 {fmtCountdown(_ciMs)}{/if}</div>
               {#if !ev.registered}
-                <div class="muted small">未報名者無法參加；報到結束後依「已報到者」產生賽程。</div>
+                <!-- ⭐⭐⭐v6.188 補報名＋直接報到：報到階段對「未報名者」直接開報名表單（重用同一份）。
+                     後端是**單筆 insertOne**（checkedIn:true + lateJoin:true），沒有「報了名卻沒報到」的中間態。 -->
+                <div class="muted small">你尚未報名這一場 —— 現在補報名可以<b>直接完成報到</b>（報到結束後依「已報到者」產生賽程）。</div>
+                {#if tRegFormEventId === ev._id}
+                  {@render regForm(ev, true)}
+                {:else}
+                  <button class="tourn-enter-btn" onclick={() => { tRegFormEventId = ev._id; tError = ''; }} disabled={tBusy}>📝 補報名並報到</button>
+                {/if}
+                {#if tCheckinErrId === ev._id && tError}<p class="warn small" style="margin-top:4px;">{tError}</p>{/if}
               {:else if ev.checkedIn}
                 <div class="reg-ok">✅ 你已報到，等待開賽…</div>
               {:else}
@@ -8720,40 +8816,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {/if}
             </div>
           {/if}
+          {#if ev.status === 'running' && ev.registered && ev.checkedIn}
+            <!-- ⭐⭐⭐v6.188 中途棄賽鈕（單淘汰賽語意＝投降）。⚠ 只開確認框，**不會直接送出**。 -->
+            {#if ev.dropped}
+              <p class="warn small" style="margin:6px 0;">🏳 你已棄賽，不會再被排入後續對戰（已完成的戰績仍保留在排名表上）。</p>
+            {:else}
+              <button class="btn-secondary small" style="border-color:#a4434a;color:#ff9b9b;margin-top:6px;" onclick={() => tDropRequest(ev._id)} disabled={tBusy}>🏳 棄賽（退出本賽事）</button>
+            {/if}
+          {/if}
           {#if ev.registered}
             <p class="reg-ok">✅ 你已報名 ｜ 暱稱：<b>{ev.myName}</b> ｜ 鎖定牌組：<b>{ev.myDeckName ?? '（已選定）'}</b> ｜ 先後攻：<b>{coinPrefLabel(ev.myCoinPref ?? readCoinPref(ev._id))}</b></p>
             {#if ev.status === 'registration'}<button class="btn-secondary small" onclick={() => tournUnregister(ev._id)} disabled={tBusy}>退賽</button>{/if}
             {#if ev.isProposer && ev.createdByPlayer && ev.status === 'registration' && (ev.regCount ?? 0) < (ev.minPlayers ?? 4)}<button class="btn-secondary small" style="border-color:#a4434a;color:#ff9b9b;margin-left:6px;" onclick={() => tCancelProposal(ev._id)} disabled={tBusy}>🚫 取消比賽</button>{/if}
           {:else if ev.status === 'registration'}
             {#if tRegFormEventId === ev._id}
-              <div class="tourn-reg-form">
-                <label class="tourn-field">錦標賽暱稱（對戰／聊天室／賽程表都以此顯示）
-                  <input class="name-input" maxlength="16" bind:value={tNickname} placeholder="輸入暱稱（最多 16 字）" />
-                </label>
-                <label class="tourn-field">選擇牌組（需 60 張）
-                  <select class="deck-select" bind:value={tDeckId}>
-                    <option value="" disabled>— 請選擇牌組 —</option>
-                    {#if decks.length > 0}
-                      <optgroup label="📁 我的牌組">{#each decks as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-                    {/if}
-                    {#if PRESET_DECKS.length > 0}
-                      <optgroup label="🎴 內建預組">{#each PRESET_DECKS as d}<option value={d.id}>{d.name}</option>{/each}</optgroup>
-                    {/if}
-                  </select>
-                </label>
-                <label class="tourn-field">硬幣勝出時，你要：
-                  <select class="deck-select" bind:value={tCoinPref}>
-                    <option value="random">隨機（不指定）</option>
-                    <option value="first">先攻</option>
-                    <option value="second">後攻</option>
-                  </select>
-                  <span class="tourn-coin-hint">（贏得開場擲幣時，依此自動安排；輸的話由對手決定）</span>
-                </label>
-                <div class="tourn-reg-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                  <button class="btn-primary tourn-join" onclick={() => tournEnroll(ev._id)} disabled={tBusy || !tDeckId || !tNickname.trim()}>{tBusy ? '報名中…' : '✅ 確認報名（鎖定暱稱與牌組）'}</button>
-                  <button class="btn-secondary small" onclick={() => { tRegFormEventId = ''; tError = ''; }} disabled={tBusy}>取消</button>
-                </div>
-              </div>
+              {@render regForm(ev, false)}
             {:else}
               <button class="btn-primary tourn-join" onclick={() => { tRegFormEventId = ev._id; tError = ''; }} disabled={tBusy}>{ev.createdByPlayer ? '✋ 我要響應（報名）' : '📝 報名這一場'}</button>
             {/if}

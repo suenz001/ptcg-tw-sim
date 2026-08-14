@@ -1,3 +1,94 @@
+# v6.188 錦標賽：報到階段補報名＋直接報到／瑞士制中途棄賽
+
+兩件事同版出，因為它們動到**同一份 TREGS 報名紀錄**，分開做必然衝突。
+
+## 功能 A：`POST /api/tournament/register-and-checkin`
+
+- gate `status === 'checkin'`，走 `resolveEventFromReq`（`TEVENTS.findOne` 新鮮讀），
+  **不吃 `/event` 那份 3 秒共用快取** —— 會寫入的端點絕不用 3 秒前的狀態做決策。
+- 驗證**完全複用** `/register` 那一套：60 張牌組、暱稱 16 字、coinPref 白名單、maxPlayers 上限。
+- **單筆 `insertOne`** 一次寫到位（`checkedIn:true` + `lateJoin:true` + `checkedInAt` + `clientVer`），
+  **不做兩段**：兩段之間掉線 ＝ 報了名沒報到，比不給補報還糟。
+
+### TOCTOU 怎麼關死（兩道，缺一不可）
+
+1. 整段臨界區跑在 **`runInSeedChain`（原 `_seedChain` seed 序列鎖）** 內，
+   與 `_seedEventBracketImpl` 讀 `TREGS` 互斥。
+2. 臨界區內 **insertOne 之後再讀一次 `status`**，已非 `checkin` 就 `deleteOne` 自己並回 409。
+
+只有第 2 道是不夠的：若 seed 已經把 `regs` 讀進記憶體，我們刪掉 reg 它照樣把人排進賽程，
+結果是**最惡劣的孤兒**（`TREGS` 沒這個人、`TMATCH` 有）。第 1 道就是為了排除這個交錯。
+
+反過來只有第 1 道也不夠：CAS（`checkin → bracket_ready`）**發生在鎖外**，
+所以「我拿到鎖時 CAS 已經過了」是可能的，此時必須靠第 2 道把自己收回去。
+
+兩道合起來，結局只有兩種：**要嘛被收進賽程、要嘛明確被拒**。
+
+- 窗口關閉點沿用既有那次 `checkin → bracket_ready` 的 CAS，**沒有新增任何關閉邏輯**。
+- 三條分支：既有報名者 → 409（導去既有 `/checkin`，且**絕不覆蓋**他鎖定的暱稱／牌組）；
+  `autoRemovedConflict` 者 → 409（不給他從補報這道側門回來）；`maxPlayers` 已滿 → 409。
+
+## 功能 B：`POST /api/tournament/drop`
+
+### ⭐ 真因：大部分早就寫好了，只是沒接線
+
+`src/lib/tournament/swiss.ts` 的檔頭註解就寫著「Wilson 拍板：棄賽者後續不再配對」，
+`dropped` 欄位（L17）、`pairSwissRound` 的 `players.filter((p) => !p.dropped)`（L94）、
+`buildSwissPlayersFromMatches` 收 `dropped` 參數（L155-158）**全部都在**。
+唯一缺的是伺服器 `advanceSwiss` 那一行 —— 它把 `regs` 餵進去時只給了 `uid` 與 `name`，
+`dropped` 從來沒被傳過去。這一版就是把那條線接上。
+
+### 為什麼是方案 B（移出配對池），不是「照排然後自動判勝」
+
+照排會有三個副作用：①棄賽者勝率被打到 0.25 地板；②**拖累所有前對手的 OWP**；
+③每輪隨機一人白拿 3 分。移出配對池才是官方 Play! Pokémon 的做法。
+
+### 站長裁定
+
+1. **不做「取消棄賽」**：本檔刻意沒有任何取消端點，誤按由站長在後台處理。
+   玩家端唯一保護是按下去前的確認框（按鈕只開框、確認鈕才送出，守衛實跑驗證）。
+2. 棄賽者**從 Top Cut 資格剔除**：`computeStandings(全部人)` 之後才 `filter(!dropped)` ——
+   **順序不能反**，OWP/OOWP 要靠棄賽者的戰績才算得對。
+3. **只剩 1 位未棄賽 ⇒ 直接判該人冠軍完賽**（兩個時機各一份檢查，見下）。
+4. 「對手先被判勝、我方才棄賽 ⇒ 勝場保留」——接受（本版不回溯改動任何已完成輪次）。
+5. **單淘汰賽也加棄賽鈕**（語意＝投降）：`checkRoundAdvance` 收集 winners 後濾掉 dropped，
+   否則棄賽者會一路輪空到決賽。
+
+### 邊界
+
+- **對戰中棄賽**：沿用既有 forfeit 收場（對手勝 + 房間盤面推成 game-over）。
+  `pending`（還沒進場）的場一起收 —— 不收本輪永遠打不完。
+- **兩人都棄賽**：`status:'done', winnerUid:null` + **新旗標 `doubleDrop`**。
+  ⚠⚠ **絕不重用 `doubleNoShow`**（v6.156 明確教訓）：那旗標語意是「兩人都沒出現」，
+  混用會讓事後對帳分不出「掛機」與「棄賽」。計分邏輯 swiss.ts 現成
+  （`done` 且無 winner ⇒ 雙方各記一敗、都不得分）。
+- 賽事已 `finished` 後才按 ⇒ 409；連點第二次 ⇒ 409（`dropped: { $ne: true }` 條件式搶占）。
+- admin `match/restart`（重賽）遇到 dropped 玩家 ⇒ 409，且 `$unset` 一併清 `doubleDrop`/`dropForfeit`。
+- 歸檔 `recordTournamentArchive` 的 `players` 補 `dropped/droppedAt/lateJoin`、
+  `matches` 補 `doubleDrop/dropForfeit`，否則事後對帳看到「某人第 3 輪起憑空消失」完全解釋不了。
+
+## ⚠⚠ 順手修的既有 bug：存活 <= 1 時賽事永久卡死
+
+`TENG.seedTopCut(standings, K)` 在存活 <= 1 時回 `[]`，
+而 mongodb 的 **`insertMany([])` 會 throw**（`Invalid BulkOperation, Batch cannot be empty`）
+⇒ `advanceSwiss` 整支拋例外 ⇒ 賽事永遠停在最後一輪，沒有任何路徑救得回來
+（`checkRoundAdvance` 每次被呼叫都會再炸一次）。
+
+修法配合裁定 3：
+- `advanceSwiss` 開頭算 `alive = players.filter(!dropped)`，`alive.length <= 1` 直接
+  `finishSwissWithSurvivor` 判冠軍完賽。
+- 兩個 `insertMany` 前各加一道空陣列守衛（就算未來有別的路徑產生空配對也不會炸）。
+- 另加 `finishIfLastSurvivor(eventId)`：**「棄賽當下」**的即時檢查。
+  兩個時機都要有 —— 在輪次之間棄賽時沒有任何一輪會結束，只靠 `advanceSwiss` 那份會卡住。
+
+## 已知限制（誠實記錄）
+
+- `pairSwissRound` 內部第 2 輪起用的是 `computeStandings(active)`（只含未棄賽者），
+  所以**配對排序**用到的 OWP 不含棄賽對手。這只影響配對順序，
+  對外顯示（`/bracket` standings）與 Top Cut 種子都是 `computeStandings(全部人)`，不受影響。
+- `/checkin`（既有報名者報到）**沒有**放進 seed 序列鎖，維持 v0.46 的行為不動。
+  它本來就有 CAS 先翻 status 再讀 regs 的保護，殘窗與本版之前完全相同。
+
 # v6.186 手機直式 setup/playing 戰鬥位卡面尺寸收斂（真因：div vs button 的 UA box-sizing）
 
 ## 症狀
