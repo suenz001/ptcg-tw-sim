@@ -1,3 +1,142 @@
+# v6.189 收尾批次：棄賽公告文案／`/checkin` 收進 seed 鎖／admin 對帳按鈕／lint 的 CRLF 誤報
+
+四件累積下來的小問題一次清掉。**首頁 changelog 不放** —— 一件是罕見系統公告的措辭更正
+（玩家沒有任何要做的事、也沒有規則差異），其餘三件是後端／後台／本機工具。
+
+## ① 棄賽情境的完賽公告不再說謊（`checkRoundAdvance`）
+
+`winners` 被濾成 0 時，公告一律播「最後一場雙方皆未進場，無冠軍」。
+**v6.188 之後同一個出口有四種成因**，只有第一種是對的：
+
+| 成因 | 資料上的痕跡 | 舊文案 |
+|---|---|---|
+| 雙方皆未出賽 | `doubleNoShow` | ✅ 對 |
+| **兩人都棄賽** | `doubleDrop`（v6.188 新增） | ❌ 說成未進場 |
+| 時限到而平手 | `draw` / `timeLimit` | ❌ 說成未進場 |
+| **本輪勝方全部棄賽** | `winners` 被 `dropped` 濾光 | ❌ 說成未進場 |
+
+⇒ 新增純字串 helper `noChampionReason(ms, droppedWinners)`，依實際旗標措辭。
+新增的 `_droppedWinners` **只是計數**，不參與任何判定；判定邏輯、旗標、寫入一個字都沒動。
+
+⚠ 刻意**不**分辨「未進場」與「雙方閒置逾時」—— 這兩條路徑在資料上共用同一個
+`doubleNoShow` 旗標（v6.156 只把「系統死角」拆成 `deadlockDraw` 出去），
+**沒有旗標可判就不硬猜**，措辭改成同時涵蓋兩者（「雙方皆未出賽（未進場或閒置逾時）」）。
+想真的分開，得先在雙方閒置那條路徑上加一個新旗標，而那就不是「只改文案」了。
+
+## ② `/checkin` 收進 seed 序列鎖（同一類臨界區只留一套做法）
+
+v6.188 把新的 `register-and-checkin` 收進 `runInSeedChain`，但**既有的 `/checkin` 沒有**，
+還停在 v0.46 的做法。v0.46 的註解說「搶占瞬間報到窗口即關閉（checkin 端點要求
+`status === 'checkin'`）」—— 但那是一次**讀**，不是原子寫，擋不住這個交錯：
+
+```
+t0  /checkin  讀 ev.status === 'checkin'        ← 通過
+t1  排程器    CAS checkin → bracket_ready
+t2  排程器    seed 進鎖，讀 TREGS               ← 這個人還沒 checkedIn，被排除
+t3  /checkin  寫 checkedIn: true，回 200        ← 太遲了
+```
+
+⇒ 玩家看到報到成功，卻沒有出現在賽程上。收進同一條鎖之後只剩兩種結局：
+報到先拿到鎖 ⇒ 寫入必定早於 seed 讀 `TREGS` ⇒ **一定在賽程裡**；
+seed 先拿到鎖 ⇒ 報到拿到鎖時重讀已是 `bracket_ready` ⇒ **明確 409**。
+
+### 為什麼判斷「該收」（併發與死鎖都查過才收）
+
+- **鎖內只有 3 個本機 mongo 操作**：重讀 `status`／讀 reg／寫 `checkedIn`。
+- ⚠⚠ **`tournIdentity`（會打 Firebase 驗權杖，是這支端點最慢的一段）與 `resolveEventFromReq`
+  一律留在鎖外**。收進去等於讓每個人排隊等別人的網路往返 —— 那才是會把報到卡住的做法。
+- **不可重入**：鎖內完全不呼叫 `seedEventBracket` / `runInSeedChain`，不會自己等自己。
+- `runInSeedChain` 對 rejection 有 `.then(() => {}, () => {})` 兜底，
+  單一報到丟例外不會把整條鏈卡住（守衛 ②-d 實測）。
+- 尖峰試算：報到 30~50 人同時按，排隊的是毫秒級 DB 操作。守衛 ②-c 用 20 人併發實跑，
+  全部在 8 秒內完成、且 seed 之後仍拿得到鎖。
+
+⚠ 行為差異（刻意）：窗口在讀完之後才關上的那批人，從「回 200 但沒得玩」變成
+「回 409 報到已截止」。這是修正，不是回歸。
+
+## ③ admin：牌組公布欄「數字對帳」按鈕
+
+`POST /api/admin/deck-posts/recount` 從 v6.182 就存在，但**一直沒有任何 UI** ——
+站長不是工程師，沒有按鈕的端點等於不存在。
+加在【總覽】分頁 Firestore Audit 底下，沿用 `btn btn-primary` 樣式與 `confirm` 流程，
+結果寫進 `#dp-recount-result`（⚠ v6.154 教訓：沒有內容容器＝按了沒反應）。
+
+⚠ `api()` **從不 reject**（非 2xx 回 `{ error }`）⇒ 一律看 `error` 欄，
+用 `try/catch` 判斷是死碼。⚠ POST 一定要帶 `Content-Type: application/json`（v1.02 事故）。
+
+## ④ `anti-pattern-lint.mjs` 的 CRLF 誤報（站長本機 `npm test` 第一步就紅）
+
+**根因**：JS 的 `.` **不吃 `\r`**（`\r` 是 line terminator），而不帶 `m` 旗標的 `$` 只認字串結尾。
+於是 `line.replace(/\/\/.*$/, '')` 這種「剝行內註解」的寫法在 CRLF 下
+**整條匹配失敗、註解一個字都沒被剝掉** ⇒ 註解裡提到的字樣被當成真程式碼。
+Check W 因此在 `m6_wave14.ts` 誤報 2 筆 —— 而那兩行正是在**講解這個反模式**的註解。
+Windows（CRLF checkout）紅、CI（LF）0 違規，同一份程式碼兩種結論。
+
+**修法**：不逐條 regex 補 `\r?`（一定會漏；全檔有 6 個同型的剝註解點）。
+改在**讀檔的唯一入口**正規化 —— 把 `readFileSync` 改名 import 成 `_readFileSyncRaw`，
+再定義一個同名的 wrapper 做 `.replace(/\r\n?/g, '\n')`。
+32 個既有呼叫點與所有未來新增的 check 自動涵蓋。
+
+**順手修**：`rel()` 寫成 `f.slice(ROOT.length + 1)`，但 `ROOT` 是 `new URL('..')` 推出來的、
+**結尾本來就有分隔符** ⇒ 多吃掉一個字元，所有違規訊息的路徑都少了開頭那個 `s`
+（印出 `rc/lib/game/...`，複製貼上開不了檔）。收斂成 Check W 用的那種正確寫法。
+
+## 守衛
+
+`scripts/test-v6189-finishing-batch.mjs`（17 條）
+- ①：把 `checkRoundAdvance` + `noChampionReason` 接上假 mongo 真的跑，
+  **讀聊天室裡真的被貼出來的那句話**（不是比字串）。四種成因各一條 + 混合 + 有冠軍的回歸保護。
+- ②：核心不變式「回 200 ⇒ 一定在第 1 輪賽程裡」。用一個 gate 把報到卡在
+  「已確認可以報到、還沒寫入」的瞬間，再把 CAS + seed 插進去跑。
+  另有 20 人併發不卡死、例外不卡鏈、`tournIdentity` 在鎖外三條。
+- ③：把 admin 的 handler 抽出來接上假 `api()` 跑，斷言**打到哪個 URL、用什麼方法**。
+
+`scripts/test-lint-crlf-neutral.mjs`（7 條）
+- 把 lint **原封不動搬進臨時工作區**（改 `import.meta.url` 推出來的 ROOT），
+  用 LF / CRLF 各真跑一次，比對 exit code 與違規清單。
+- ⚠ **正對照**：只驗「兩邊都乾淨」可以靠「把 Check W 刪掉」作弊 ⇒
+  另外注入一個真的 Check W 違規，斷言兩種換行都抓得到、而且抓到同一批。
+
+### HEAD-FAIL（都用**行為端**證明，不是靠函式不存在）
+
+- ①：只把公告那一行換回舊字串（helper 仍在）⇒ ①-a~e 五條 FAIL。
+- ②：只把 `/checkin` 端點換回 v6.188 版（其餘全新）⇒ ②-b FAIL，
+  訊息是 `code=200 inBracket=false` —— 競態真的重現得出來。
+- ③：對 v6.188 的 `admin.html` ⇒ ③-a~d FAIL。
+- ④：對 v6.188 的 lint ⇒ CRLF 多出 2 筆 `[W]`、LF 是 0，前兩條 FAIL。
+
+## Fable 5 審查採納 / 未採納（每一項我都自己 grep 查證過）
+
+**採納（中）① 收進全域序列鎖之後，一個「掛住不 settle」的 mongo 操作會凍結所有人的報到。**
+mongo driver 預設 `socketTimeoutMS=0`（無限），TCP 半開時就是這型態；
+`runInSeedChain` 的 `.then(() => {}, () => {})` 只兜得住 **rejection**，兜不住「永不 settle」。
+v6.189 之前被凍結的只有低頻的 seed，現在玩家面向的 `/checkin` 也在同一條鏈上。
+⇒ 臨界區自帶 15 秒上限（`CHECKIN_LOCK_CAP_MS`），逾時就 reject、讓鏈往下走。
+⚠ 計時寫在 `fn` **內部**（拿到鎖之後才起算），不會把「排隊等 seed」算進來誤殺。
+⚠ 逾時不取消底層寫入 ⇒ 可能「看到錯誤但其實已報到」，再按一次拿到 200；
+反過來的「回 200 卻沒進賽程」才是不能接受的，這裡沒製造那種情況。
+守衛 ②-g 用「第一筆 `updateOne` 永不 settle」實跑（只把上限數字換成 150ms）。
+
+**採納（可忽略）② lint wrapper 改判「回傳值是不是字串」**，不是判「第二參數等於 `'utf8'`」——
+將來有人寫 `readFileSync(p, { encoding: 'utf8' })` 時後者比不中、會靜默回未正規化的字串。
+
+**查證後未採納 / 只記錄**
+- 「`test-source-encoding` 的位元組檢查會不會被正規化改壞」⇒ **不會**：它是獨立腳本，
+  自己 import `readFileSync` 且用 **Buffer 形式（無 encoding）**，完全不經這個 wrapper。實際 grep 確認。
+- 「lint 有沒有 check 靠 `\r` 或原始位元組判斷」⇒ **沒有**：全檔 30+ 個呼叫點的第二參數都是字面 `'utf8'`。
+- 🔨 **`/drop` 的 `dropped` 寫入（L5658）與它的消費點都在鎖外** —— 棄賽回 200 之後，
+  若對手那場剛好觸發建下一輪（`checkRoundAdvance` 讀完 `dropped` 名單、`insertMany` 之前），
+  棄賽者仍會被排進下一輪、之後被未進場判負，與 v6.188「移出配對池」的承諾不符。
+  **這是 v6.188 遺留的缺口，不是這一版引入的**，修它要動到配對／建輪那段 ⇒ **另案，待站長裁定**。
+- 混合成因時 `droppedWinners > 0` 無條件優先，同輪其他無勝方場次的成因不會被提到（文案取捨，賽程表標記仍正確）。
+
+## 部署
+
+改到 `oracle-admin/` 兩個檔 ⇒ 站長要跑 `update-admin-full.bat` 與 `redeploy-oracle.bat`。
+沒有動 engine / 卡效果 / `static/cards`，**不需要** `update-tournament.bat`。
+
+---
+
 # v6.188 錦標賽：報到階段補報名＋直接報到／瑞士制中途棄賽
 
 兩件事同版出，因為它們動到**同一份 TREGS 報名紀錄**，分開做必然衝突。

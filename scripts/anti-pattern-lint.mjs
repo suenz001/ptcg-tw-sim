@@ -12,16 +12,31 @@
  * Run: node scripts/anti-pattern-lint.mjs  (exit 0=乾淨 / 1=有違規)
  * 見長期記憶 feedback-basic-energy-pokemontype-null / reference-discard-prize-log。
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync as _readFileSyncRaw, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// ⭐⭐v6.189 CRLF 免疫（在**讀檔的唯一入口**做，不是逐條 regex 補 \r?）：
+//   Windows 是 CRLF checkout，行尾會多一個 \r。JS 的 `.` **不吃 \r**（\r 是 line terminator），
+//   而不帶 m 旗標的 `$` 只認字串結尾 ⇒ `line.replace(/\/\/.*$/, '')` 這種「剝行內註解」的寫法
+//   在 CRLF 下**整條匹配失敗、註解一個字都沒被剝掉** ⇒ 註解裡提到的字樣被當成真程式碼。
+//   實際後果：Check W 在 m6_wave14.ts 誤報 2 筆（那兩行是在講解這個反模式的註解），
+//   站長在 Windows 本機跑 npm test 第一步就紅，CI（LF）卻是 0 違規 —— 同一份程式碼兩種結論。
+//   ⇒ 一律在讀進來的當下正規化成 LF，讓 CRLF 與 LF 兩種輸入走**完全相同**的位元組路徑。
+//   ⚠ 這只影響換行，不會放過任何真違規（LF 才是 CI 的基準，正規化後 CRLF 等同 LF）。
+//   ⚠ 判「回傳值是不是字串」而不是「第二參數等於 'utf8'」（Fable 5 審查）：
+//   將來有人寫成 readFileSync(p, { encoding: 'utf8' }) 時，後者比不中、會靜默回未正規化的字串。
+const readFileSync = (p, enc) => { const r = _readFileSyncRaw(p, enc); return typeof r === 'string' ? r.replace(/\r\n?/g, '\n') : r; };
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SRC = join(ROOT, 'src/lib/game');
 function walk(dir){const o=[];for(const e of readdirSync(dir)){const p=join(dir,e);if(statSync(p).isDirectory())o.push(...walk(p));else if(e.endsWith('.ts'))o.push(p);}return o;}
 const files = walk(SRC);
 const sepChar = join('a','b').includes('\\') ? '\\' : '/';
-const rel = (f) => f.slice(ROOT.length + 1);
+// ⭐v6.189 順手修：ROOT 由 `new URL('..')` 推出來，**結尾本來就有分隔符** ⇒
+//   `+ 1` 會多吃掉一個字元，所有用 rel() 的違規訊息路徑都少了開頭那個 s
+//   （實際印出 `rc/lib/game/...`，複製貼上開不了檔）。Check W 用的 `f.slice(ROOT.length)`
+//   才是對的，這裡收斂成同一種寫法（順便統一成 / 分隔，Windows 上才貼得動）。
+const rel = (f) => f.slice(ROOT.length).split(sepChar).join('/');
 const violations = [];
 
 // ── Check A：_X 參數但 body 引用 X ───────────────────────────────

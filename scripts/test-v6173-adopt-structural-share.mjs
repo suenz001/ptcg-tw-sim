@@ -164,14 +164,23 @@ const DECK = [
 /** 模擬伺服器：每一發都是全新的 JSON（identity 全換）—— 這正是 tAdopt 現況吃到的東西 */
 const wire = (s) => JSON.parse(JSON.stringify(s));
 
+// ⚠⚠v6.189：自對局是**無種子的隨機**（開局洗牌、mulligan、AI 決策都吃 Math.random），
+//   單次執行的盤面數會跳動 —— 實測這支守衛在**未修改的 v6.188 樹上**也會
+//   隨機掉到 n=7 / 10 / 11 而變紅（CI 的 build job 因此偶發失敗，且跟改動無關）。
+//   ⇒ 最多重試 12 次，取最長的那一局。
+//   ⚠ 每一次重試都是**全新一局**（推進 _run），絕不把兩局的盤面點在一起 ——
+//     下面的斷言比的是「相鄰兩個盤面」的結構共享，接起來就全錯了。
+//   ⚠ 斷言本身（>=12 個連續盤面）**一個字都沒放寬**，自對局走法也沒改。
 let states = [];
+for (let _attempt = 0; _attempt < 12 && states.length < 12; _attempt++) {
+let _run = [];
 try {
   const allInPool = DECK.every(e => pool.has(String(e.cardId)));
   if (!allInPool) throw new Error('fixture 牌組有卡不在卡庫');
   let g = createGame({ name: 'P1', entries: DECK }, { name: 'P2', entries: DECK }, pool,
     { firstPlayerOverride: 0, forceLegacyOpening: true });
-  states.push(wire(g));
-  for (let step = 0; step < 600 && states.length < 60; step++) {
+  _run.push(wire(g));
+  for (let step = 0; step < 600 && _run.length < 60; step++) {
     if (g.phase === 'game-over') break;
     // ⚠ actor 的挑法與 scripts/sim-ai-battle.mjs 一致（setup / pendingSelection / 待補位 三種例外）
     let actor;
@@ -191,10 +200,13 @@ try {
     if (!nx) break;
     if (JSON.stringify(nx) === JSON.stringify(g)) { g = nx; continue; }   // 引擎拒絕 → 不當成一步
     g = nx;
-    states.push(wire(g));
+    _run.push(wire(g));
   }
 } catch (err) {
   console.log('    ⚠ 自對局 fixture 產生失敗：' + err.message);
+  break;   // fixture 真的壞了（牌組有卡不在卡庫等）就不要重試 12 次
+}
+if (_run.length > states.length) states = _run;
 }
 chk('自對局至少產出 12 個連續盤面（否則下面的行為斷言是空的）', states.length >= 12, 'n=' + states.length);
 

@@ -1903,8 +1903,29 @@ async function loadOverview() {
     <div class="stat-section-label" style="margin-top:1.5rem">🔍 Firestore 寫入 Audit（定位寫入暴量元兇）</div>
     <button class="btn btn-primary" onclick="runFirestoreAudit()" style="margin-bottom:0.5rem">執行 Audit（讀 ~30 個 aggregate query）</button>
     <div id="write-audit-result" class="small" style="color:#888">點按鈕後列出各 collection 過去 1 小時 / 24 小時的寫入分佈。</div>
+
+    <div class="stat-section-label" style="margin-top:1.5rem">🧰 牌組公布欄・數字對帳</div>
+    <button class="btn btn-primary" onclick="runDeckPostRecount(this)" style="margin-bottom:0.5rem">🔢 重算按讚／下載／留言數</button>
+    <div id="dp-recount-result" class="small" style="color:#888">每篇投稿上的按讚數、下載數、留言數是快照（真正的依據是明細）。留言送出或刪除時如果剛好斷線，數字就會對不上。按這顆會用明細重算並修正，不會刪除任何資料。</div>
   `;
 }
+
+// ⭐v6.189：/api/admin/deck-posts/recount 從 v6.182 就存在，但一直沒有任何按鈕 ——
+//   站長不是工程師，沒有 UI 的端點等於不存在（唯一的修法是自己打 API）。
+//   沿用 runFirestoreAudit 的版面與 tevChampRestore 的 confirm 流程。
+// ⚠ api() **從不 reject**（非 2xx 會回 { error: text }）⇒ 一律看 error 欄，用 try/catch 判斷是死碼。
+window.runDeckPostRecount = async function (btn) {
+  if (!confirm('用按讚／下載／留言的明細重算牌組公布欄每篇的數字？只會修正對不上的欄位，不會刪除任何資料。')) return;
+  const el = document.getElementById('dp-recount-result');
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '對帳中…'; }
+  if (el) el.innerHTML = '<div class="empty">對帳中…</div>';
+  const d = await api('/api/admin/deck-posts/recount', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  if (btn) { btn.disabled = false; btn.textContent = _t0; }
+  if (!d || d.error) { if (el) el.innerHTML = '<div class="empty">對帳失敗：' + escapeHtml((d && d.error) || 'unknown') + '</div>'; return; }
+  const fixed = d.fixed || 0;
+  if (el) el.innerHTML = '對帳完成：檢查 ' + (d.checked || 0) + ' 篇，修正 ' + fixed + ' 篇。' + (fixed === 0 ? '（本來就都對得上 👍）' : '');
+};
 
 // v0.92: Firestore 寫入 audit — 列各 collection 過去 1h / 24h 新增/更新 doc 數
 window.runFirestoreAudit = async function() {
@@ -2947,7 +2968,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.188';
+window.SITE_VERSION_HINT = '6.189';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
