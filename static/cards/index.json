@@ -135,16 +135,16 @@
   "code": "SV8a",
   "name": "太晶慶典ex",
   "regulationMark": "H",
-  "cardCount": 334,
+  "cardCount": 335,
   "supertypeCounts": {
    "Pokemon": 237,
-   "Trainer": 93,
+   "Trainer": 94,
    "Energy": 4
   },
   "coverImageUrl": "covers/SV8a.png",
   "scrapedAt": "2026-04-16T08:01:07.033Z",
   "releaseDate": "2024-12-20",
-  "count": 334
+  "count": 335
  },
  {
   "code": "M1L",
@@ -356,31 +356,31 @@
   "code": "M-P-I",
   "name": "M-P特典卡(I)",
   "regulationMark": "I",
-  "cardCount": 58,
+  "cardCount": 59,
   "supertypeCounts": {
    "Pokemon": 35,
-   "Trainer": 14,
+   "Trainer": 15,
    "Energy": 9
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 58
+  "count": 59
  },
  {
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 89,
+  "cardCount": 92,
   "supertypeCounts": {
-   "Pokemon": 74,
-   "Trainer": 6,
+   "Pokemon": 75,
+   "Trainer": 8,
    "Energy": 9
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 89
+  "count": 92
  },
  {
   "code": "M3",

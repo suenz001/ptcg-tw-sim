@@ -30,6 +30,8 @@ import { getPlaybook, benchScoreOf } from './ai-playbook';
 // v6.039 批次4c：場面評估（引擎試打）。方向嚴格單向 ai.ts → ai-eval.ts → engine，
 //   ai-eval 不得反向 import ai.ts（會造成 module-init 循環，見 v5.985 TDZ 事故）。
 import { estimateIfPromoted, evaluateAttack, PRIZE_SCORE_UNIT } from './ai-eval';
+// v6.191：Gust 系支援者卡名的單一來源（葉子模組，零 import ⇒ 不觸發 effects 註冊、無循環風險）。
+import { GUST_SUPPORTER_NAMES } from './gust-supporters';
 
 // ── 主要入口 ──────────────────────────────────────────────────────────────────
 
@@ -795,10 +797,17 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
 
     // 備戰選擇（自己）
     case 'bench-choose': {
+      // ⭐ v6.191：補上 `params.includeActive`（UI 的 fieldPickerBaseCandidates 與 engine 的
+      //   sanitizeSelectedIids 早就都吃這個旗標，只有 AI 這端沒有 —— opp-bench-choose
+      //   v5.874 已修過同一條，自己這側漏了）。後果：卡面允許選戰鬥位（能量硬幣／
+      //   能量貼紙／女服務生 等 15 個 picker）時，AI 備戰區空就送 [] 回去 ⇒ 卡白打。
       const validIids = sel.params?.validIids as string[] | undefined;
-      let bench = validIids
-        ? actorPlayer.bench.filter(c => validIids.includes(c.iid))
+      const baseBench = (sel.params?.includeActive === true && actorPlayer.active)
+        ? [actorPlayer.active, ...actorPlayer.bench]
         : actorPlayer.bench;
+      let bench = validIids
+        ? baseBench.filter(c => validIids.includes(c.iid))
+        : baseBench;
       if (bench.length === 0) return { type: 'RESOLVE_SELECTION', selectedIids: [] };
       // v2.147 — 多選時（如零之大空洞失效棄置）：依照「價值低」排序選 minCount 隻丟棄
       //   價值低 = 受傷越多 + HP 上限越低 + 不是 ex/超級進化
@@ -1322,9 +1331,14 @@ function _canDragapultPhantomStrike(state: GameState, myIdx: 0 | 1, pool: Map<st
   });
 }
 
-// v3.71：手上是否有「老大的指令」
+// v3.71：手上是否有 Gust 系支援者
+// v6.191：卡名清單收斂到 supporters_gust.ts 的 GUST_SUPPORTER_NAMES —— 官方在 M-P 發了
+//   冠名版「老大的指令（烏羽）」，寫死單一卡名會讓 AI 對新印刷視而不見。
 function _hasGustInHand(player: PlayerState, pool: Map<string, Card>): boolean {
-  return player.hand.some(c => pool.get(c.cardId)?.name === '老大的指令');
+  return player.hand.some(c => {
+    const n = pool.get(c.cardId)?.name;
+    return !!n && GUST_SUPPORTER_NAMES.includes(n);
+  });
 }
 
 /** 魔靈多龍 — 能量分配特化：

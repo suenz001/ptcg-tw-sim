@@ -16,6 +16,8 @@
 
 import type { Card } from '$lib/cards/types';
 import { CLEAR_ON_EXIT_FLAGS } from '../instance-flags';
+// v6.191 玳蘿：「超級進化寶可夢【ex】」中央述詞（selection-filter 只 import types，無循環）
+import { isMegaExCard } from '../selection-filter';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
   SpecialCondition,
@@ -961,6 +963,10 @@ export function recordOppKO(
   // v5.928 阿響家族 — 給「阿響的凱羅斯|一力反攻」用(卡面只計「阿響的」KO)
   const isAxiang = victimCard?.supertype === 'Pokemon'
     && (victimCard.name?.startsWith('阿響的') ?? false);
+  // v6.191 玳蘿 — 卡面只計自己的「超級進化寶可夢【ex】」昏厥。
+  //   ⚠ 一律走中央述詞 isMegaExCard（selection-filter.ts），禁在這裡重寫
+  //   「卡名以超級開頭 + subtype==='ex'」那條判準（全站共 4 個消費點）。
+  const isMegaEx = isMegaExCard(victimCard);
   const fieldKey: keyof GameState = cause === 'attack'
     ? 'oppAttackKOdMeThisTurn'
     : 'oppAbilityKOdMeThisTurn';
@@ -970,6 +976,9 @@ export function recordOppKO(
   const hopKey: keyof GameState = cause === 'attack'
     ? 'oppAttackKOdMyHopThisTurn'
     : 'oppAbilityKOdMyHopThisTurn';
+  const megaExKey: keyof GameState = cause === 'attack'
+    ? 'oppAttackKOdMyMegaExThisTurn'
+    : 'oppAbilityKOdMyMegaExThisTurn';
   const cur = ((state[fieldKey] as [number, number] | undefined) ?? [0, 0]);
   const next: [number, number] = [cur[0], cur[1]];
   next[victimIdx]++;
@@ -985,6 +994,12 @@ export function recordOppKO(
     const nextH: [number, number] = [curH[0], curH[1]];
     nextH[victimIdx]++;
     s = { ...s, [hopKey]: nextH };
+  }
+  if (isMegaEx) {
+    const curM = ((s[megaExKey] as [number, number] | undefined) ?? [0, 0]);
+    const nextM: [number, number] = [curM[0], curM[1]];
+    nextM[victimIdx]++;
+    s = { ...s, [megaExKey]: nextM };
   }
   // v5.926 傷害KO專屬計數（復仇刀鋒等「因招式的傷害而昏厥」用）— 只在 cause=attack 且 byDamage 時 ++
   if (cause === 'attack' && byDamage) {

@@ -1206,6 +1206,34 @@
     "regulationMark": "I"
   },
   {
+    "id": "14445",
+    "name": "勝利之證",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "M-P-I",
+    "collectorNumber": "M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014445.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14445/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "regulationMark": "I",
+    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "5ban Graphics"
+  },
+  {
+    "id": "14446",
+    "name": "勝利之證",
+    "supertype": "Trainer",
+    "subtype": "Item",
+    "setCode": "M-P-I",
+    "collectorNumber": "M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014446.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14446/",
+    "scrapedAt": "2026-07-08T01:19:51.000Z",
+    "regulationMark": "I",
+    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
+    "illustrator": "5ban Graphics"
+  },
+  {
     "id": "14447",
     "name": "勝利之證",
     "supertype": "Trainer",
@@ -1598,34 +1626,6 @@
     "illustrator": "Iori Suzuki"
   },
   {
-    "id": "14445",
-    "name": "勝利之證",
-    "supertype": "Trainer",
-    "subtype": "Item",
-    "setCode": "M-P-I",
-    "collectorNumber": "M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014445.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14445/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
-    "regulationMark": "I",
-    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "5ban Graphics"
-  },
-  {
-    "id": "14446",
-    "name": "勝利之證",
-    "supertype": "Trainer",
-    "subtype": "Item",
-    "setCode": "M-P-I",
-    "collectorNumber": "M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014446.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14446/",
-    "scrapedAt": "2026-07-08T01:19:51.000Z",
-    "regulationMark": "I",
-    "rulesText": "擲1次硬幣若為正面，則從自己的牌庫選擇1張寶可夢卡，在給對手看過後加入手牌。並且重洗牌庫。",
-    "illustrator": "5ban Graphics"
-  },
-  {
     "id": "18559",
     "name": "謝米",
     "supertype": "Pokemon",
@@ -1760,5 +1760,19 @@
     "illustrator": "Teeziro",
     "regulationMark": "I",
     "stage": "Basic"
+  },
+  {
+    "id": "19630",
+    "name": "老大的指令（烏羽）",
+    "supertype": "Trainer",
+    "subtype": "Supporter",
+    "setCode": "M-P-I",
+    "collectorNumber": "215/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019630.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19630/",
+    "scrapedAt": "2026-08-15T10:19:00.481Z",
+    "regulationMark": "I",
+    "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
+    "illustrator": "akagi"
   }
 ]

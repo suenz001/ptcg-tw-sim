@@ -4,8 +4,11 @@
  * v2.24 (Session 38bd)：從 effects.ts 抽離，模組化第 6 波。
  *
  * 「Gust 類」支援者：選擇對手備戰寶可夢 → 與對手戰鬥寶可夢互換位置。
- * 目前只有「老大的指令」一張，保留獨立模組未來擴充（例如：Boss's Orders 變體、
- * 新版呼叫類支援者等）。
+ *
+ * v6.191：官方在 M-P 215/M-P 發了「老大的指令（烏羽）」（I 標），rulesText 與
+ * 「老大的指令」逐字相同（「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。」）。
+ * ⚠ reg key 是**卡名**逐字比對，冠名不同 = 兩個 key，不會自動生效 ⇒ 收斂成
+ * registerGustSupporter() factory 各登錄一次，**禁複製第二份 gate/effect**。
  *
  * 注意：同機制的物品卡「頂尖捕捉器」放在 items_misc.ts（item vs supporter 分開分類）。
  */
@@ -22,47 +25,53 @@ import { isImmuneToOppTrainer as _isImmuneOppTrainer_unused } from './v3060_defe
 void _isImmuneOppTrainer_unused;
 // v3.08 對手 supporter 免疫綜合 helper（含廣域堡壘 — 超甲狂犀戰鬥場時整體免疫）
 import { isImmuneToOppSupporter } from './v3080_deferred_wave_c';
+// v6.191 Gust 系卡名單一來源（葉子模組，零 import，ai.ts 也讀同一份）
+import { GUST_SUPPORTER_NAMES } from '../../gust-supporters';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 老大的指令 — 選 1 隻對手備戰寶可夢與其戰鬥寶可夢互換
 // ══════════════════════════════════════════════════════════════════════════════
 
-regG('老大的指令', (st, idx, pool) => {
+/**
+ * Gust 系支援者的中央登錄 factory（gate ＋ effect ＋ log 全部同一份）。
+ * ⚠ 新的冠名版本一律加進 GUST_SUPPORTER_NAMES，禁另寫一份 regG/reg。
+ */
+function gustValidOppBenchIids(
+  st: import('../../types').GameState, idx: 0 | 1, pool: Map<string, import('$lib/cards/types').Card>,
+): string[] {
   const oppIdx = (1 - idx) as 0 | 1;
   // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
   // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
   // v3.08 廣域堡壘 — 超甲狂犀戰鬥場時，整個自方場上對 supporter 免疫
-  const validBench = st.players[oppIdx].bench.filter(b => {
-    const card = pool.get(b.cardId);
-    if (b.fossilOnField && card?.name === '陳舊的鰭之化石') return false;
-    if (isImmuneToOppSupporter(st, oppIdx, b, pool)) return false;
-    return true;
-  });
-  return validBench.length > 0;
-});
-reg('老大的指令', (st, idx, pool) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
-  // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
-  // v3.08 廣域堡壘 — 超甲狂犀戰鬥場時，整個自方場上對 supporter 免疫
-  const validIids = st.players[oppIdx].bench.filter(b => {
+  return st.players[oppIdx].bench.filter(b => {
     const card = pool.get(b.cardId);
     if (b.fossilOnField && card?.name === '陳舊的鰭之化石') return false;
     if (isImmuneToOppSupporter(st, oppIdx, b, pool)) return false;
     return true;
   }).map(b => b.iid);
-  if (validIids.length === 0) {
-    return addLog(st, '老大的指令：對手備戰區沒有可呼叫的寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）', idx);
-  }
-  st = addLog(st, '老大的指令：選擇要呼叫的對手備戰寶可夢', idx);
-  return withPending(st, {
-    type: 'opp-bench-choose',
-    actorIdx: idx, sourcePlayerIdx: oppIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'gust-opp',
-    params: { validIids },
+}
+
+function registerGustSupporter(cardName: string): void {
+  regG(cardName, (st, idx, pool) => gustValidOppBenchIids(st, idx, pool).length > 0);
+  reg(cardName, (st, idx, pool) => {
+    const oppIdx = (1 - idx) as 0 | 1;
+    const validIids = gustValidOppBenchIids(st, idx, pool);
+    if (validIids.length === 0) {
+      return addLog(st, `${cardName}：對手備戰區沒有可呼叫的寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）`, idx);
+    }
+    st = addLog(st, `${cardName}：選擇要呼叫的對手備戰寶可夢`, idx);
+    return withPending(st, {
+      type: 'opp-bench-choose',
+      actorIdx: idx, sourcePlayerIdx: oppIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'gust-opp',
+      params: { validIids },
+    });
   });
-});
+}
+
+// 卡名清單來自葉子模組 gust-supporters.ts（ai.ts 也讀同一份 —— 禁在這裡再抄一份）。
+for (const _n of GUST_SUPPORTER_NAMES) registerGustSupporter(_n);
 
 // ⭐ v6.174：原本是「**先** addLog 宣告已經換好 → **後**才 findIndex，找不到就靜默 return p」，
 //   目標解析失敗時 log 會騙玩家（實戰已出現 `呼叫 ? 到對手戰鬥場`）。收斂到中央

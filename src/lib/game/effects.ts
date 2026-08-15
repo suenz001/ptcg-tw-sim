@@ -19008,3 +19008,4 @@ import './effects/cards/m6_wave10'; // v6.072 M6 訓練家實裝 批次10
 import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8
 import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）
+import './effects/cards/v6191_new_printings'; // v6.191 官方完整性補收（玳蘿）

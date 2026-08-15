@@ -987,6 +987,17 @@ export interface GameState {
   oppAbilityKOdMeInLastOppTurn?: [number, number];
   oppAttackKOdMyRocketInLastOppTurn?: [number, number];
   oppAbilityKOdMyRocketInLastOppTurn?: [number, number];
+  /**
+   * v6.191 玳蘿（M-P 214/M-P）——「上個對手的回合自己的『超級進化寶可夢【ex】』昏厥了」。
+   * 與火箭隊／赫普／阿響家族同 pattern：thisTurn 累積 → END_TURN 換手時快照成 InLastOppTurn。
+   * 判準與整個家族一致：只計對手主回合中的招式 KO ＋ 主動特性 KO，
+   * 不含寶可夢檢查階段（中毒／灼傷／冰冷之帳）—— 檢查階段不屬於任何一方的回合。
+   * 「超級進化寶可夢【ex】」的判定走中央述詞 isMegaExCard（selection-filter.ts）。
+   */
+  oppAttackKOdMyMegaExThisTurn?: [number, number];
+  oppAbilityKOdMyMegaExThisTurn?: [number, number];
+  oppAttackKOdMyMegaExInLastOppTurn?: [number, number];
+  oppAbilityKOdMyMegaExInLastOppTurn?: [number, number];
   // v5.274 赫普家族 snapshot
   oppAttackKOdMyHopInLastOppTurn?: [number, number];
   oppAbilityKOdMyHopInLastOppTurn?: [number, number];

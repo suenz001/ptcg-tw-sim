@@ -1,3 +1,150 @@
+# v6.191 官方卡牌檢索完整性補收（M-P 4 張 ＋ SV8a 1 張）＋ 可重複執行的缺口檢查
+
+站長回報：「asia.pokemon-card.com/tw 的 M-P 有新卡沒收錄，例如【玳蘿】。請實裝，
+並做整體 audit 確認有沒有類似的問題。」
+
+## 官方資料怎麼取得的（成功）
+
+- **list 頁是 server-rendered**：`web_fetch` / `curl` 直接拿得到 HTML（含 `搜尋結果 N 個` 與
+  每張卡的 `/tw/card-search/detail/<id>/` 連結），不需要瀏覽器。
+- **detail 頁這次也拿得到**：既有的 `scripts/scrape/parse-card.js` 直接吃 HTML 就解得出
+  卡名／supertype／subtype／rulesText／regulationMark／collectorNumber。
+  （ptcg-push skill 裡「detail 頁 client-rendered、web_fetch 回空」那條**現在已不成立**，
+  沙盒 `curl` + cheerio 全程可用。）
+- 古代／未來／ACE SPEC tag 一樣只能從 list 的 `trainersTag` filter 回填 —— 沿用既有
+  `scripts/scrape/tag-filters.js`，確認 11697 探險家的嚮導帶「古代」、其餘 4 張無 tag。
+
+## 缺口盤點（逐包官方 vs live，不憑印象）
+
+38 個官方 expansionCode（M-P-H/I/J 與 SV-P-H/I/J 對應官方的 M-P / SV-P）共 5114 個 id，
+與我方**全站**所有 id（4930 張，B-3：不能只跟同名 set 檔比）比對：
+
+| 官方包 | 官方 | 我方 | 缺 | 其中 H/I/J |
+|---|---|---|---|---|
+| SV-P | 238 | 104 | 134 | **0**（全是 A~G 標） |
+| SV8a | 381 | 334 | 47 | **1**（11697 探險家的嚮導 H） |
+| SV11B | 254 | 253 | 1 | 0（G） |
+| M-P | 163 | 158 | 4+ | **4** |
+| 其餘 34 包 | — | — | 0 | 0 |
+
+⇒ **全站 H/I/J 只缺 5 張**，本版一次補完。其餘 181 張全是 G 標以下（站規不維護），
+已逐張抓 detail 確認 regulationMark 後列進豁免表。
+
+補進來的 5 張：
+
+| id | 卡 | 編號 | 標 | 檔 |
+|---|---|---|---|---|
+| 19627 | 探探鼠 | 212/M-P | J | M-P-J |
+| 19628 | 特殊紅牌 | 213/M-P | J | M-P-J |
+| 19629 | **玳蘿** | 214/M-P | J | M-P-J |
+| 19630 | **老大的指令（烏羽）** | 215/M-P | I | M-P-I |
+| 11697 | 探險家的嚮導 | 172/187 | H | SV8a |
+
+- 19624/19625/19626（傳說的海溝／山頂／熔岩洞）官方同時掛在 M-P 與 M6 底下，
+  我方已收在 M6 ⇒ **不是缺卡**（正是 B-3 說的「只比同名 set 檔會誤判」）。
+- 11697 與已收的 12449 是同一個 collectorNumber 的兩個官方 id —— SV8a 本來就有
+  11xxx/12xxx 兩套 id（97 組），補它是既有慣例，不是製造重複。
+- index.json 用**手術式更新**（只改 M-P-I / M-P-J / SV8a 三包的 cardCount/count/
+  supertypeCounts），並在 build script 內對「沒動到的卡包」做 HEAD 逐欄斷言。
+  **沒有跑 build-sets-index.js**（B-4）。
+- JSON 序列化用 `dump_like()`：先以**原始物件**重跑一次、必須逐字還原原檔
+  （M-P-I 是 indent=2、M-P-J/SV8a/index 是 indent=1、card-set-map 是單行）
+  —— 否則整份檔會被重排，diff 爆炸、review 看不出實際改了什麼。
+
+## 玳蘿（M-P 214/M-P，J）
+
+卡面（台灣官方 rulesText 逐字）：
+
+> 這張卡必須在上個對手的回合自己的「超級進化寶可夢【ex】」【昏厥】了才可使用。
+>
+> 從自己的牌庫選擇最多2張基本能量卡，附於自己的1隻「超級進化寶可夢【ex】」身上。並且重洗牌庫。
+
+**gate**（判準①：訓練家卡效果完全無法執行 ⇒「不可以使用」）：
+
+1. `oppAttackKOdMyMegaExInLastOppTurn + oppAbilityKOdMyMegaExInLastOppTurn > 0`
+2. `deck.length > 0` —— 官方 L821 電氣發生器（牌庫 0 張）「不可以」
+3. 場上（含戰鬥位）有「超級進化寶可夢【ex】」—— 官方 L805 電氣發生器（備戰無【雷】寶可夢）「不可以」
+
+⚠「牌庫裡有沒有基本能量卡」是**隱藏資訊**，不進 gate；由 picker 的 fail-to-find 處理。
+
+**KO 計數**：中央 `recordOppKO`（`effects/_shared.ts`）加一組 Mega ex 計數，
+判準沿用整個家族（火箭隊／赫普／阿響）：只計對手主回合的招式 KO ＋ 主動特性 KO，
+不含寶可夢檢查階段（檢查不屬於任何一方的回合），自 KO 不計。
+「超級進化寶可夢【ex】」一律走中央述詞 `isMegaExCard`（`selection-filter.ts`，
+與 prizesForKO 給 3 張獎賞／deck-search `'MegaEx'` filter 同一條）。
+⚠ `_shared.ts` → `selection-filter.ts` 是單向（後者只 import types），無循環 import。
+
+**效果**：`deck-search` filter `'BasicEnergy'`、`minCount 0`（判準②：**帶條件**的牌庫搜尋
+可宣告找不到）、`maxCount 2`、`params.allowSkipZero: true`（v6.125 逐卡表態規約）。
+resolver 直接交給中央 `startEnergyChain(..., { source:'deck', scope:'any-own',
+targetIids: <場上 Mega ex>, singleTarget: true })` —— 卡面是「附於自己的**1隻**」，
+不是「以任意方式」，走 v6.105 的 singleTarget 分支（全部附同一隻，禁分散）。
+能量搬移／重洗牌庫／0 張分支／場上無合法目標的 leftover log 全部沿用中央，**沒有手刻附能**。
+
+## 老大的指令（烏羽）（M-P 215/M-P，I）
+
+rulesText 與「老大的指令」**逐字相同**（守衛有斷言）。但 reg key 是**卡名**逐字比對，
+冠名不同 ＝ 兩個 key ⇒ 不會自動生效。
+`supporters_gust.ts` 原本是兩段硬寫的 `regG`/`reg`，這版抽成 `registerGustSupporter(name)`
+factory（gate 與 effect 共用 `gustValidOppBenchIids`：化石／緊張感／融合為雪／廣域堡壘
+免疫過濾一份），卡名清單放在**零 import 的葉子模組** `src/lib/game/gust-supporters.ts`。
+
+⚠ 為什麼要葉子模組：`ai.ts` 的 `_hasGustInHand` 也要這份清單，但 `ai.ts` 直接 import 卡檔會
+① 讓「載入 AI」觸發 effects 註冊副作用 ② 有循環 import 風險（循環下模組層級 const 會 TDZ）。
+
+## 同維度連帶找到的真 bug：ai.ts 的 `bench-choose` 漏 `includeActive`
+
+`opp-bench-choose` 在 v5.874 就修過「要尊重 `params.validIids` ＋ `includeActive`」，
+**自己這側的 `bench-choose` 一直沒修**：它只讀 `actorPlayer.bench`。
+UI 的 `fieldPickerBaseCandidates` 與 engine 的 `sanitizeSelectedIids` 兩端早就都吃這個旗標。
+
+後果：卡面允許選戰鬥位的 15 個 picker（`energy-coin-attach`／`energy-sticker-attach`／
+`waitress-attach`／`sturdy-might-tree-pick-base`／`flame-dance-attach-*` …），
+AI 在備戰區為空時會送 `[]` 回去 ⇒ **卡整張白打**。這版補齊，行為端有回歸測試。
+
+## 可重複執行的缺口檢查（站長要的「一勞永逸」）
+
+| 檔 | 何時跑 | 做什麼 |
+|---|---|---|
+| `scripts/data/official-set-manifest.json` | — | 官方卡包→卡片 id 的**離線快照**（38 包 / 5114 id）＋ `knownNonHIJ` 豁免表（181 張，附實際 regulationMark） |
+| `scripts/test-official-set-completeness.mjs` | **每次 npm test / CI** | 離線：快照裡每個 id 要嘛在卡庫、要嘛在豁免表；豁免表不得藏 H/I/J、不得有腐爛項；live 每包都要被快照涵蓋 |
+| `scripts/refresh-official-set-manifest.mjs` | 手動（需要網路） | 重抓官方 list 分頁 → 對 diff 出來的每張抓 detail 判 regulationMark → **直接印出「該補哪幾張」** |
+
+- CI 不爬官網（不禮貌 ＋ flaky ＝ 假紅燈）；離線守衛擋的是「快照更新了但卡沒補」與「卡被誤刪」。
+- 掃描器自驗（v6.124~126 教訓）：下限斷言（≥30 包 / ≥4500 id / 我方 ≥4500 張）＋ 兩條正對照。
+- refresh 腳本**先過參數閘**（B-1 教訓）：`--help` 只印用法、未知參數 exit 1、**沒有 `--write` 什麼都不寫**。
+
+## ⭐⭐⭐ Fable 5 審查抓到、我自行查證屬實：一份「早就寫好、正好會覆蓋掉新版」的舊註冊
+
+`src/lib/game/effects/cards/v168_supporters.ts` L185-210 **在 BASE 就有**一份
+`regG('老大的指令（烏羽）')` + `reg('老大的指令（烏羽）')`（檔頭註解還寫著 `(18351)`
+—— 那個 id 在卡庫裡是「老大的指令」，不是冠名版，所以這份長期是**死碼**）。
+
+`effects.ts` 的 import 順序是 `supporters_gust`（L570）→ `v168_supporters`（L598），
+`reg()` 是裸 `Map.set` ⇒ **卡一補進來，實際生效的會是舊那份**，factory 版被靜默覆蓋。
+
+- 兩份行為其實等價：陳舊的鰭之化石免疫在 v3.21 就整併進 `isImmuneToOppSupporter` 首行
+  （我讀了 `v3080_deferred_wave_c.ts` 該函式確認），舊版只是 fail log 少「化石/」三字。
+- 但這正是「grep 到兩份 reg、不知哪份生效」的坑 ⇒ **刪掉舊那份**，只留 factory。
+- 守衛用**行為端**驗（v6.154 教訓：只驗字串存在擋不住接線沒接上）：
+  跑 `TRAINER_EFFECTS.get(name)` 看 fail log 有沒有「化石/」，兩個卡名都驗。
+
+⚠ **`test-no-new-duplicate-registrations.mjs` 對這個案例是假綠**：它的 regex 只抓
+字面量 key，factory 的 `regG(cardName, …)` 掃不到。（v6.124~126「掃描器盲點」再一次。）
+待辦：那支守衛應該補上「變數 key 的 factory 呼叫」的解析，或改成 runtime 端比對註冊表。
+
+## 需要站長裁定 / 待辦（沒有自作主張）
+
+1. **「老大的指令」與「老大的指令（烏羽）」算不算同名卡？** 牌組 4 張上限目前依
+   `validation.ts` 的**逐字卡名**分組 ⇒ 現行行為是「兩種名字、各 4 張」。
+   `PTCG RULES/PTCG_RULES.md` L2686 只裁定了「達摩狒狒」vs「N的達摩狒狒」是不同名稱，
+   **沒有**括號冠名的判例。這版**沒有改任何 deck validation**，維持現狀待裁定。
+2. **M-P-J 有兩張官方查無此 id 的卡**：`18965`（超級妖火紅狐ex 103/M-P）與
+   `18969`（古歷 107/M-P）—— detail 頁 404 導回列表，且它們與 `18560` / `18564`
+   **collectorNumber 完全重複**。疑似 v6.116 大量 clone 時多產的。
+   沒有動它們（刪掉會讓已存的牌組讀不到卡）；等站長決定要不要清。
+   ⚠ 它們不在官方快照裡，所以完整性守衛的「豁免表腐爛項」那條不會誤報。
+
 # v6.190 對戰回放：獎賞卡檢視視窗（手機直式 + 桌機共用）
 
 玩家回報「錦標賽回放時，手機版看不到獎賞卡內容」，站長建議「回放時點 🎁 圖示查看獎賞卡」。

@@ -2334,6 +2334,9 @@ export function createGame(
     // v5.274 赫普家族
     oppAttackKOdMyHopThisTurn: [0, 0],
     oppAbilityKOdMyHopThisTurn: [0, 0],
+    // v6.191 玳蘿家族（Mega ex 被 KO）
+    oppAttackKOdMyMegaExThisTurn: [0, 0],
+    oppAbilityKOdMyMegaExThisTurn: [0, 0],
     oppDamageKOdMeThisTurn: [0, 0],
     oppDamageKOdMyHopThisTurn: [0, 0],
     oppDamageKOdMyAxiangThisTurn: [0, 0],
@@ -2346,6 +2349,9 @@ export function createGame(
     // v5.274 赫普家族 snapshot
     oppAttackKOdMyHopInLastOppTurn: [0, 0],
     oppAbilityKOdMyHopInLastOppTurn: [0, 0],
+    // v6.191 玳蘿家族 snapshot
+    oppAttackKOdMyMegaExInLastOppTurn: [0, 0],
+    oppAbilityKOdMyMegaExInLastOppTurn: [0, 0],
     oppDamageKOdMeInLastOppTurn: [0, 0],
     oppDamageKOdMyHopInLastOppTurn: [0, 0],
     oppDamageKOdMyAxiangInLastOppTurn: [0, 0],
@@ -6793,6 +6799,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v5.274 赫普家族 snapshot
         oppAttackKOdMyHopInLastOppTurn: state.oppAttackKOdMyHopThisTurn ?? [0, 0],
         oppAbilityKOdMyHopInLastOppTurn: state.oppAbilityKOdMyHopThisTurn ?? [0, 0],
+        // v6.191 玳蘿家族 snapshot（Mega ex 被 KO）
+        oppAttackKOdMyMegaExInLastOppTurn: state.oppAttackKOdMyMegaExThisTurn ?? [0, 0],
+        oppAbilityKOdMyMegaExInLastOppTurn: state.oppAbilityKOdMyMegaExThisTurn ?? [0, 0],
         oppDamageKOdMeInLastOppTurn: state.oppDamageKOdMeThisTurn ?? [0, 0],
         oppDamageKOdMyHopInLastOppTurn: state.oppDamageKOdMyHopThisTurn ?? [0, 0],
         oppDamageKOdMyAxiangInLastOppTurn: state.oppDamageKOdMyAxiangThisTurn ?? [0, 0],
@@ -6802,6 +6811,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         oppAbilityKOdMyRocketThisTurn: [0, 0],
         oppAttackKOdMyHopThisTurn: [0, 0],
         oppAbilityKOdMyHopThisTurn: [0, 0],
+        // v6.191 玳蘿家族 reset
+        oppAttackKOdMyMegaExThisTurn: [0, 0],
+        oppAbilityKOdMyMegaExThisTurn: [0, 0],
         oppDamageKOdMeThisTurn: [0, 0],
         oppDamageKOdMyHopThisTurn: [0, 0],
         oppDamageKOdMyAxiangThisTurn: [0, 0],

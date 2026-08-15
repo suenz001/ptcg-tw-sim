@@ -11,7 +11,7 @@
  *   - 寶可夢中心的姐姐 (12573)：選 1 隻寶可夢 +60 HP + 解全狀態
  *   - 由紫 (18053)：選 1 隻【超】寶可夢 +150 HP
  *   - 派帕 (11165)：牌庫選 1 物品 + 1 道具加手牌
- *   - 老大的指令（烏羽）(18351)：對手備戰換戰鬥（同「老大的指令」）
+ *   - （老大的指令（烏羽）已於 v6.191 移出本檔 → supporters_gust.ts 的 factory）
  *
  * 跳過收錄於 SKIPPED_CARDS.md：機制更複雜或需新引擎旗標的卡。
  */
@@ -182,33 +182,11 @@ regR('piper-tool-pick', (st, idx, iids, _params, pool) => {
   });
 });
 
-// ── 老大的指令（烏羽）— 等同於「老大的指令」 ──────────────────────────────
-// 卡面：選擇 1 隻對手的備戰寶可夢，與戰鬥寶可夢互換。
-// 重用既有的 'gust-opp' resolver。
-// v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
-regG('老大的指令（烏羽）', (st, idx, pool) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  // v3.06 + v3.08：緊張感 / 融合為雪 / 廣域堡壘 — 對手 supporter 免疫過濾
-  const valid = st.players[oppIdx].bench.filter(b => !_v3080IsImmuneOppSupp(st, oppIdx, b, pool));
-  return valid.length > 0;
-});
-reg('老大的指令（烏羽）', (st, idx, pool) => {
-  const oppIdx = (1 - idx) as 0 | 1;
-  // v3.06 + v3.08：緊張感 / 融合為雪 / 廣域堡壘 — 對手 supporter 免疫過濾
-  const validIids = st.players[oppIdx].bench
-    .filter(b => !_v3080IsImmuneOppSupp(st, oppIdx, b, pool))
-    .map(b => b.iid);
-  if (validIids.length === 0) {
-    return addLog(st, '老大的指令（烏羽）：對手備戰區沒有可呼叫的寶可夢（緊張感/融合為雪/廣域堡壘 免疫）', idx);
-  }
-  st = addLog(st, '老大的指令（烏羽）：選擇要呼叫的對手備戰寶可夢', idx);
-  return withPending(st, {
-    type: 'opp-bench-choose',
-    actorIdx: idx, sourcePlayerIdx: oppIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'gust-opp',  // 重用 supporters_gust.ts 的 resolver
-    params: { validIids },
-  });
-});
+// ── 老大的指令（烏羽）───────────────────────────────────────────────────
+// v6.191：這裡原本有一份 regG/reg（寫在卡還沒進卡庫的時候，長期是死碼）。
+// 卡片補進來（M-P 215/M-P，I 標，id 19630）後，effects.ts 的 import 順序會讓這份
+// **覆蓋掉** supporters_gust.ts 的 factory 版 ⇒ 「grep 到兩份、不知哪份生效」。
+// 已移除；登錄一律走 supporters_gust.ts 的 registerGustSupporter()（卡名清單在
+// src/lib/game/gust-supporters.ts）。resolver 仍是共用的 'gust-opp'。
 
 void healResolver;  // import 為了確保 heal-150 被註冊（side-effect 已綁好 effectKey）
