@@ -1016,10 +1016,10 @@
   main {
     max-width: 900px;
     margin: 0 auto;
-    padding: calc(12px + env(safe-area-inset-top, 0px))
-             max(16px, env(safe-area-inset-right, 0px))
+    padding: calc(12px + var(--safe-top, 0px))
+             max(16px, var(--safe-right, 0px))
              48px
-             max(16px, env(safe-area-inset-left, 0px));
+             max(16px, var(--safe-left, 0px));
   }
   .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .page-head h1 { font-size: 1.35rem; margin: 0; }
@@ -1065,14 +1065,14 @@
     position: fixed; inset: 0; background: rgba(0,0,0,.55);
     display: flex; align-items: center; justify-content: center;
     padding: 16px;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    padding-top: calc(var(--safe-top, 0px) + 16px);
+    padding-bottom: calc(var(--safe-bottom, 0px) + 16px);
     z-index: 60;
   }
   .modal {
     background: var(--bg, #fff); color: inherit; border-radius: 12px;
     max-width: 720px; width: 100%;
-    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 32px);
+    max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 32px);
     overflow-y: auto; padding: 16px 18px 18px;
   }
   :global(html.dark) .modal { background: #1c1f24; }
@@ -1166,10 +1166,10 @@
     /* ⚠ 這裡只縮小基礎邊距，env() 那一項**必須保留** —— 直接寫 `padding: 10px 12px 40px`
        會把上面的 safe-area 整條覆蓋掉，動態島機種就又會按不到「← 首頁」。 */
     main {
-      padding: calc(10px + env(safe-area-inset-top, 0px))
-               max(12px, env(safe-area-inset-right, 0px))
+      padding: calc(10px + var(--safe-top, 0px))
+               max(12px, var(--safe-right, 0px))
                40px
-               max(12px, env(safe-area-inset-left, 0px));
+               max(12px, var(--safe-left, 0px));
     }
     .to-decks { margin-left: 0; }
   }

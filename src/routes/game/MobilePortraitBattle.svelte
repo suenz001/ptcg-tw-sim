@@ -1839,13 +1839,17 @@
     from { opacity: 0; }
     to { opacity: 1; }
   }
+  /* ⭐⭐ v6.195：.mp-sheet-overlay 是 `inset:0; align-items:flex-end` ⇒ 這張 sheet 貼齊
+     螢幕**下緣**，但原本 padding-bottom 只有 1.2rem(19.2px) < iPhone home indicator 的
+     34px ⇒ 最後一顆鈕（「取消」）下半部會壓在 home indicator 上，難按且容易誤觸系統手勢。
+     沿用 v6.187 的單一來源；--safe-bottom:0px（Android／電腦）時仍是 1.2rem，版面 0 位移。 */
   .mp-sheet {
     width: 100%;
     background: #1a2e2a;
     border-top-left-radius: 16px; border-top-right-radius: 16px;
     border: 1px solid #4a6a4a;
     border-bottom: none;
-    padding: 0.8rem 1rem 1.2rem;
+    padding: 0.8rem 1rem calc(1.2rem + var(--safe-bottom, 0px));
     display: flex; flex-direction: column; gap: 0.5rem;
     max-height: 70vh;
     overflow-y: auto;

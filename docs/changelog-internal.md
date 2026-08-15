@@ -1,3 +1,173 @@
+# v6.195 跑馬燈的 ✕ 被動態島吃掉 —— v6.187 只修了「容器」，沒修「容器裡的按鈕」
+
+## 站長回報
+
+> 「手機版的跑馬燈，似乎在 v6.187 改版後，跑馬燈的 ✕ 就按不到了（受 iPhone 動態島的影響）。」
+
+「跑馬燈」= `.admin-broadcast-bar`（`src/routes/game/+page.svelte`）。
+站內只有這一個會跑動、有 ✕、貼在畫面最上方的元件：管理員系統廣播（紫粉底）與
+玩家社群賽募集（`.community` 綠底）共用同一條 bar，桌機與手機直式也共用同一段
+template（在 `.battle-root` 內、`MobilePortraitBattle` 的 `{#if}` **之前**），
+所以一處修好兩邊都好。`marquee` 這個字全 repo 只出現在這個元件的
+`marqueeDur()` / `broadcastMarquee`，交叉驗證無其他候選。
+
+## 真因（求值，不是猜）
+
+v6.187 把 bar 本身改成：
+
+```
+box-sizing:border-box; padding-top:var(--safe-top, 0px);
+height:calc(34px + var(--safe-top, 0px));
+```
+
+**整條 bar 讓開了動態島**，所以跑馬燈文字從「看不到」變成「看得到」。
+但同一版**沒有動裡面那顆 ✕**：
+
+```
+.admin-broadcast-close{ position:absolute; right:6px; top:50%; transform:translateY(-50%); 22x22 }
+```
+
+絕對定位的 `top:50%` 是相對 **containing block 的 padding box**，
+而 padding box 已經被 v6.187 撐成 `34 + 59 = 93px` ⇒
+圓心 `93 x 50% = 46.5px`、整顆佔 `35.5px ~ 57.5px`，**完全落在 iPhone 15 Pro 的
+59px 安全區裡** ⇒ 按不到。新守衛的內建 fixture 用 v6.194 的舊 CSS 算出的就是這組數字。
+
+### ⚠ 誠實對照：v6.187 **之前**也按不到
+
+v6.187 之前 `.admin-broadcast-bar` 是 `height:34px`、沒有任何 safe-area，
+整條 bar（含 ✕）都在 59px 動態島底下 ⇒ ✕ 一樣按不到，只是連文字都看不到。
+所以**嚴格說「✕ 按不到」不是 v6.187 造成的新回歸**；v6.187 是「把容器修好、
+把裡面的按鈕留在原地」，讓這個一直存在的問題從「整條看不見」變成
+「看得見卻按不掉」，因此才在 v6.187 之後被察覺。實作上仍算 v6.187 的**未竟修正**。
+
+## 修法（沿用 v6.187 的同一個單一來源，不另寫一份）
+
+`.admin-broadcast-bar`：內容列高度改成 `34px + min(10px, var(--safe-top, 0px))`
+
+- `--safe-top: 0px`（電腦／Android／非瀏海機）→ `min(10px, 0px) = 0` ⇒ 內容列 34px、
+  bar 高 34px，**與 v6.194 逐像素相同**（正對照守衛②實際求值比對）。
+- `--safe-top: 59px`（動態島）→ 內容列 44px、bar 高 `59 + 44 = 103px`。
+
+`.admin-broadcast-close`：
+
+- `top:var(--safe-top, 0px)`（不再用 `50%`，因為 50% 會把 padding-top 一起算進去）
+- `height: 34px + min(10px, var(--safe-top, 0px))`、`width: 44px`
+  ⇒ iPhone 上可點區 = `y 59~103`、`44 x 44`，**完全在安全區之外**，
+  且下緣剛好等於 bar 的 padding box 下緣（bar 是 `overflow:hidden`，超出會被裁掉點不到，
+  守衛有釘住這一條）。
+- `right: var(--safe-right, 0px)`（橫放時右側瀏海也讓開）。
+- 可見的 22px 圓圈改由 `::before` 畫；`::before` 的 `top:50%` 相對的是**按鈕自己**的
+  內容列，所以 `--safe-top:0` 時圓心仍在 17px、距右緣仍 6px、直徑仍 22px。
+  按鈕本體 `font-size:0` 以免文字節點與 `::before` 畫出兩個 ✕；`aria-label` 保留。
+- bar 另加 `padding-left:var(--safe-left, 0px)`（橫放左瀏海），`--safe-left:0` 時無影響。
+
+⚠ 觸控區在 `--safe-top:0` 時是 **44x34**（bar 只有 34px 高，且 `overflow:hidden` 會裁）。
+要在桌機也做到 44x44 就得把 bar 加高，那會動到非 iPhone 版面 ⇒ 不做。
+**44x44 只保證在真正需要的動態島情境成立。**
+
+## z-index 現況（沒有改，但要記著）
+
+v6.187 把 `.opp-inactive-banner` 從 1000 提到 100000，**高於** `.admin-broadcast-bar`(99999)。
+兩者同時出現時（對手掛機 + 剛好在播廣播），紅鈕橫幅會蓋住跑馬燈整條、連 ✕ 一起。
+這是 v6.187 的**刻意取捨**（紅鈕影響勝負，必須在最上層），本版維持不動。
+
+## 順手收乾淨：全站零裸 `env(safe-area-inset-*)`
+
+v6.187 的守衛③只掃 `game/+page.svelte` 與 `MobilePortraitBattle.svelte`，
+而且只看「有明確 `top`/`bottom` 的 fixed 元素」。實跑枚舉全站 11 個 `.svelte` 後：
+
+- **貼上/下緣的 bar 共 19 條，v6.187 全部都已經讀 `var(--safe-*)`** ——
+  這一類**沒有漏網**（`.admin-broadcast-bar` / `.admin-spy-banner` / `.tourn-alert-banner` /
+  `.tourn-toast` / `.tourn-idle-warn` / `.opp-inactive-banner` / `.restart-waiting-strip` /
+  `.treplay-mob` / `.chat-fab` / `.chat-panel` / `.opp-turn-panel` / `.opp-turn-toggle-btn` /
+  `.restart-rejected-toast` / `.tourn-return-bar` / `.tourn-still-here` / `.mp` …）。
+- 真正漏的是 **31 處還各自寫 `env(safe-area-inset-*)`** 的地方
+  （`src/routes/+page.svelte` 1、`cards` 4、`decks` 4、`deck-posts` 10、`game/+page.svelte` 15、
+  `+layout.svelte` 自己 2），
+  以及其中 4 個 **`inset:0` 全螢幕遮罩且 `align-items:flex-start`**（內容靠上，
+  最上面那排會被動態島吃掉）：`game` 的 `.zoom-overlay` / `.lightbox-overlay` / `.pv-overlay`、
+  `decks` 的 `.pv-overlay`、`cards` 的 `.modal`。
+  全部改讀 `var(--safe-*, 0px)`。⚠ 對**支援 env() 的瀏覽器**（= 所有 iOS/Chrome/Safari）
+  數值完全相同；只有「不支援 env()」的老瀏覽器從 `2rem` 變成 `0`，而那些規則本來就
+  另有一行不含 env 的 fallback 宣告（例如 `.lightbox-close{ top:4rem; top:calc(env(...)+1.5rem) }`）。
+  `env(safe-area-inset-top, 0)`（無單位 0，在 `calc()` 內其實是 invalid）也一併修正成 `0px`。
+
+## 守衛 `scripts/test-v6195-marquee-close-tap-target.mjs`（81 條）
+
+HEAD-FAIL 實證：對 v6.194 樹跑 ⇒ **17 條紅**（含 ✕ 可點區上緣算出 35.5 < 59、
+觸控區只有 22x22、6 個檔案仍有裸 env、4 個靠上遮罩沒讓開、`.mp-sheet` 下緣沒讓開、
+④b2 算出 `.admin-broadcast-close` 上緣 35.5）。對本版跑 ⇒ 81 綠。
+
+1. **自我先驗**：剝註解器、CSS 長度求值器（`calc`/`min`/`max`/`var`/`%`/`translateY`）、
+   規則解析器（含 `::before`）、`<style>` 切點（必須切在標籤**之後**，否則會靜默漏掉第一條規則）。
+2. **內建 HEAD-FAIL fixture**：把 v6.194 的舊 CSS 直接餵進版面模型，
+   必須算出 `hitTop=35.5 / hitBottom=57.5 / 22x22` —— 證明偵測器真的偵測得到。
+3. **①核心（求值）**：`--safe-top:59px` ⇒ ✕ 可點區上緣 ≥ 59、尺寸 ≥ 44x44、
+   下緣 ≤ bar padding box（不被 `overflow:hidden` 裁）、可見圓圈上緣也 ≥ 59。
+4. **②正對照**：`--safe-top:0px` ⇒ bar 高 34px、圓心 17px、距右 6px、直徑 22px
+   —— 與 v6.194 逐像素相同（非 iPhone 版面 0 位移）。
+5. **③template 端**：✕ 還在、`onclick` 仍會把 `broadcastMarquee` 清成 `''`、`aria-label` 還在
+   （按鈕本體 `font-size:0` 之後，輔助技術只剩 aria-label）。
+6. **④枚舉守衛（防未來漏網）**：走訪 `src/` 全部 `.svelte`，
+   （a）除 `+layout.svelte` 外**不得**再出現 `env(safe-area-inset-*)`；
+   （b）每一條 `position:fixed` 且貼上/下緣的規則逐條求值，必須讀對應的 `var(--safe-*)`
+   （只看 top/padding-top/height/inset，不是整條規則亂找）；四邊釘死的全螢幕遮罩豁免，
+   但 `align-items:flex-start`（內容靠上）／`flex-end`（內容靠下）者不豁免。
+   （b2）貼上緣容器內的 `position:absolute` 子元素，代入 59px 求出的上緣必須 ≥ 59。
+   另有「枚舉真的掃到 ≥15 條」「④b2 真的掃到 ≥1 個」的反空轉斷言 —— 掃不到跟全綠長得一樣。
+7. **⑤沒有新增 `@media` 當手機開關**：`game` ≤ 19、`MobilePortraitBattle` 維持 0。
+
+## 審查子代理（opus）抓到的、以及我逐條查證的結果
+
+1. 🔴 **真漏網：`MobilePortraitBattle.svelte` 的 `.mp-sheet`（手機直式底部動作面板）**。
+   實查 `.mp-sheet-overlay{ position:fixed; inset:0; align-items:flex-end }`（:1831）⇒ sheet 貼齊
+   螢幕**下緣**，而 `.mp-sheet{ padding: 0.8rem 1rem 1.2rem }`（:1846）的下緣只留 19.2px
+   < home indicator 的 34px ⇒ 最後一顆「取消」鈕（`.mp-sheet-cancel`，高約 34px）下半部壓在
+   home indicator 上。**與本版完全同型**（容器貼邊、裡面的鈕沒讓開）。
+   ⇒ 改成 `padding: 0.8rem 1rem calc(1.2rem + var(--safe-bottom, 0px))`；`--safe-bottom:0` 時仍是 1.2rem。
+   ⇒ 守衛 ④b 新增「`inset:0` + `align-items:flex-end` 的遮罩，其 sheet 的 padding-bottom 必須讀
+     `var(--safe-bottom)`」，對 v6.194 樹跑會紅。
+2. ✅ **其他貼邊 bar 實查乾淨**：自寫掃描器枚舉全站 `.svelte`，
+   `.tourn-alert-banner` / `.opp-inactive-banner` / `.treplay-mob` / `.tourn-toast` /
+   `.admin-spy-banner` / `.tourn-idle-warn` / `.restart-waiting-strip` / `.mp`
+   的子元素**全都是 flex item、沒有任何 `position:absolute`**
+   （實跑 `/tmp/w/kids.mjs`：全站只有 `.admin-broadcast-*` 這一族有 absolute 子元素）。
+3. 🔴 **守衛假綠 (a)**：④b 原本把整條規則 `JSON.stringify` 後找 `var(--safe-top`，
+   結果 `max-height:calc(100vh - var(--safe-top))` 這種與位置無關的宣告也算過。
+   實測注入 `.zz-probe-a{ position:fixed; top:0; max-height:calc(100vh - var(--safe-top,0px)) }` ⇒ 舊版全綠。
+   ⇒ 改成只看 `top` / `padding` / `padding-top` / `height` / `inset`（下緣同理），注入後實測轉紅。
+4. 🔴 **守衛假綠 (b)（最重要）**：本版的 bug 型態**沒有被通則化** ——
+   ④b 只掃 `position:fixed`，完全不看貼邊容器裡的 `position:absolute` 子元素；
+   `.admin-broadcast-close` 只靠 ①/② 硬寫選擇器保護，換個類名就掉出保護網。
+   ⇒ 新增 **④b2**：Svelte 的 CSS 是扁平 class 選擇器，所以依專案命名慣例把
+   `.admin-broadcast-bar` 推導成前綴 `.admin-broadcast`，找同族的 `position:absolute` 規則，
+   代入 `--safe-top:59px` 求出上緣（含 `translateY` 位移）必須 ≥ 59。
+   ⚠ 偽元素 `::before`/`::after` 跳過（containing block 是宿主，不是這條 bar）。
+   ⚠ 前綴至少要含一個 `-`（避免 `.tourn-toast` → `.tourn` 這種過寬前綴誤傷）。
+   實測注入 `.zz-probe-b-bar` + `.zz-probe-b-x{ absolute; top:50%; translateY(-50%) }` ⇒ 轉紅，
+   訊息直接印出「算出 35.5（bar 高 93）」。另加「④b2 掃到 0 個就紅」的反空轉斷言。
+5. 🔴 **④a 原本整檔豁免 `+layout.svelte`** ⇒ 同檔案的 `.beta-banner`(:169) 與
+   `.migration-banner`(:200) 兩條真的還在寫裸 `env()` 卻永遠掃不到。
+   ⇒ 兩條改讀 `var(--safe-top, 0px)`；守衛改成**只豁免那一段 `@supports`**，
+   並加「切掉的字元數 > 0 且切完真的沒有 `--safe-top: env(`」的自我驗證。
+6. ✅ **`::before` 的 `font-size:.78rem` 是 rem 不是 em** ⇒ 不受按鈕 `font-size:0` 影響（查證屬實）。
+   `background:none` 只是把原本畫在按鈕本體的底色搬到 `::before`，外觀不變。
+   Svelte 沒有把 `::before` 當 unused selector 剪掉：base 與 work 的 compile warning 數
+   **完全相同（game 98 / 98，MPB 0 / 0，layout 0 / 0）**。
+7. ⚠ **沒改、但記著**：`.treplay-bar`（`+page.svelte:13349`）是 `position:sticky; top:0` 且沒讀
+   `--safe-top`（桌機回放列，手機走 `.treplay-mob`）；首頁 `.modal-overlay` 沒讀
+   `--safe-left/--safe-right`（橫向瀏海）。兩者都不是本版 `position:fixed` 貼邊的守備範圍，
+   風險低，本版不動以免擴大改動面。
+
+## 沒能驗證的
+
+- **真機**：沒有 iPhone 動態島實機可測，全部結論來自 CSS 版面模型求值
+  （`env(safe-area-inset-top)` 在 iPhone 15 Pro PWA 直式 = 59px 為已知值）。
+- `::before` 的觸控命中：桌面瀏覽器行為明確（偽元素屬於按鈕的命中區），
+  但本版的可點區本來就是**按鈕本體** 44x44，`::before` 只負責畫圓圈，不依賴偽元素命中。
+
+---
+
 # v6.194 站長改判：港版重複卡「資料留著、玩家選不到」＋ 基本能量 metadata 對齊官方
 
 ## 為什麼要改 v6.193

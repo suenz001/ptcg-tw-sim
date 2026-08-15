@@ -802,7 +802,7 @@
 
   header {
     max-width: 1200px;
-    margin: calc(1rem + env(safe-area-inset-top, 0)) auto 0.5rem;
+    margin: calc(1rem + var(--safe-top, 0px)) auto 0.5rem;
     padding: 0 1rem;
     font-family: system-ui, 'Microsoft JhengHei', sans-serif;
   }
@@ -1196,7 +1196,7 @@
     align-items: flex-start;
     justify-content: center;
     padding: 1rem;
-    padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem);
+    padding-top: calc(var(--safe-top, 0px) + 1rem);
     z-index: 100;
   }
   .modalInner {
@@ -1204,7 +1204,7 @@
     border-radius: 12px;
     max-width: 1170px;
     width: 100%;
-    max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
+    max-height: calc(100vh - var(--safe-top, 0px) - 3rem);
     margin: auto;
     overflow-y: auto;
     overflow-x: hidden; /* v4.999: 明確阻擋水平 scrollbar — modal-nav transform 在某些瀏覽器仍算進 overflow extent */
@@ -1356,7 +1356,7 @@
   .lightboxClose {
     position: absolute;
     top: 4rem;
-    top: calc(env(safe-area-inset-top, 2rem) + 1.5rem);
+    top: calc(var(--safe-top, 0px) + 1.5rem);
     right: 1.5rem;
     background: rgba(255, 255, 255, 0.15);
     border: none;

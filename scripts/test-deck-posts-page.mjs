@@ -225,27 +225,31 @@ T('⭐⭐ 需要登入的兩支查詢只在拿到非匿名使用者後才發（v
 
 console.log('\n④-3 iOS 動態島安全區（玩家回報：按不到「← 首頁」）');
 
-T('⭐⭐ 頁面頂部必須留 safe-area-inset-top（全站標準，/cards /decks 首頁都有）', () => {
-  ok(/env\(safe-area-inset-top/.test(RAW),
-    '沒有 safe-area-inset-top —— 有動態島的 iPhone 上「← 首頁」會被系統 UI 蓋住按不到');
+// ⚠ v6.195：安全區改走**全站單一來源** var(--safe-top)（定義在 src/routes/+layout.svelte 的
+//   :root，先無條件 0px、再用 @supports 覆寫成 env(safe-area-inset-top)）。各頁不再各自寫
+//   裸 env()，所以這三條斷言的比對字串一併改成 var(--safe-top)；
+//   「不得再出現裸 env()」由 scripts/test-v6195-marquee-close-tap-target.mjs ④a 負責。
+T('⭐⭐ 頁面頂部必須留安全區（全站單一來源 var(--safe-top)；/cards /decks 首頁都有）', () => {
+  ok(/var\(--safe-top/.test(RAW),
+    '沒有 var(--safe-top) —— 有動態島的 iPhone 上「← 首頁」會被系統 UI 蓋住按不到');
   const mainBlock = /\bmain\s*\{[^}]*\}/.exec(RAW);
-  ok(mainBlock && /env\(safe-area-inset-top/.test(mainBlock[0]), 'main 的 padding 沒有帶 safe-area-inset-top');
+  ok(mainBlock && /var\(--safe-top/.test(mainBlock[0]), 'main 的 padding 沒有帶 var(--safe-top)');
 });
 
 T('⭐⭐ 手機斷點不得把 safe-area 整條覆蓋掉（改窄邊距時最容易犯）', () => {
   const mq = /@media \(max-width: 600px\)\s*\{[\s\S]*?\n  \}/.exec(RAW);
   ok(mq, '找不到手機斷點');
-  // 斷點內若有重新宣告 main 的 padding，就必須一併帶 env()
+  // 斷點內若有重新宣告 main 的 padding，就必須一併帶 var(--safe-*)
   const mainInMq = /\bmain\s*\{[^}]*padding[^}]*\}/.exec(mq[0]);
   if (mainInMq) {
-    ok(/env\(safe-area-inset-top/.test(mainInMq[0]),
-      '手機斷點重新宣告了 main 的 padding 卻沒帶 env() —— 會整條蓋掉桌機版的 safe-area');
+    ok(/var\(--safe-top/.test(mainInMq[0]),
+      '手機斷點重新宣告了 main 的 padding 卻沒帶 var(--safe-top) —— 會整條蓋掉桌機版的 safe-area');
   }
 });
 
 T('⭐ modal 也要避開動態島（貼齊上緣時關閉鈕會被蓋住）', () => {
   const bd = /\.modal-backdrop\s*\{[^}]*\}/.exec(RAW);
-  ok(bd && /env\(safe-area-inset-top/.test(bd[0]), 'modal backdrop 沒有 safe-area-inset-top');
+  ok(bd && /var\(--safe-top/.test(bd[0]), 'modal backdrop 沒有 var(--safe-top)');
 });
 
 console.log('\n④-4 改顯示名稱（v6.143）');

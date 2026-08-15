@@ -13487,7 +13487,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* ════ Lobby / Setup ════ */
   /* v4.491：margin top 改為 calc(1rem + env(safe-area-inset-top, 0)) 比照 cards 標準，避開 iOS 動態島／瀏海。
      Desktop 上 env() = 0 不影響；iOS 上自動補上動態島高度（~47px）。 */
-  .lobby,.setup-screen{ max-width:700px; margin: calc(1rem + env(safe-area-inset-top, 0)) auto 2rem; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
+  .lobby,.setup-screen{ max-width:700px; margin: calc(1rem + var(--safe-top, 0px)) auto 2rem; padding:1.5rem; font-family:system-ui,'Microsoft JhengHei',sans-serif; color:#f0f0f0; }
   /* v5.576：錦標賽頁回到首頁鈕；padding-top 再加 safe-area，iOS 動態島／瀏海不會擋到、好按 */
   /* v5.585 跨房入場提醒橫幅 */
   .tourn-alert-banner {
@@ -13518,7 +13518,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-cdbox.urgent { border-color: #ff6a4d; background: rgba(255,80,50,.14); animation: tournCdPulse 1s ease-in-out infinite; }
   .tourn-cdbox.urgent .tourn-cdbox-time { color: #ff8c6e; }
   @keyframes tournCdPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,90,60,.4); } 50% { box-shadow: 0 0 14px 3px rgba(255,90,60,0); } }
-  .tourn-topbar { margin: 0 0 14px; padding-top: env(safe-area-inset-top, 0); text-align: left; }
+  .tourn-topbar { margin: 0 0 14px; padding-top: var(--safe-top, 0px); text-align: left; }
   .tourn-home-btn { display: inline-block; padding: 10px 18px; background: #2a3a4a; color: #cfe0f8; border: 1px solid #4a6a8a; border-radius: 9px; text-decoration: none; font-size: 14px; font-weight: 600; }
   .tourn-home-btn:active, .tourn-home-btn:hover { background: #36495d; }
   .lobby h1{ font-size:1.8rem; margin-bottom:1rem; }
@@ -14722,7 +14722,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
        避免 modal 上緣壓到 iOS 動態島 / 瀏海，下緣壓到 home indicator。 */
     .gameover-modal {
       width: 92vw;
-      max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+      max-height: calc(100vh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 24px);
     }
     .gameover-modal-body { padding: 1rem 1.2rem 1.4rem; }
     .gameover-modal-body .gameover-icon { font-size: 2.8rem; }
@@ -14764,8 +14764,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .admin-broadcast-bar{
     position:fixed; top:0; left:0; right:0; z-index:99999;
     /* v6.187：貼 top:0 → 讓開動態島（box-sizing 讓 padding 算進 height 內） */
-    box-sizing:border-box; padding-top:var(--safe-top, 0px);
-    height:calc(34px + var(--safe-top, 0px)); display:flex; align-items:center; overflow:hidden;
+    /* ⭐⭐⭐ v6.195：v6.187 只把「整條 bar」讓開動態島，裡面那顆 ✕ 沒動。
+       ✕ 是 position:absolute; top:50%，而 50% 是相對**整個 padding box**
+       （=34px + 安全區 59px = 93px）→ 中心落在 46.5px、整顆(22px)都在
+       iPhone 動態島的 59px 安全區裡 ⇒ 玩家**按不到跑馬燈的 ✕**。
+       改法：內容列高度 = 34px + min(10px, var(--safe-top))：
+         • --safe-top:0px（非 iPhone）→ 34px，與 v6.194 完全相同（版面 0 位移）
+         • --safe-top:59px（動態島）→ 44px，剛好讓 ✕ 的 44×44 觸控區
+           完整落在安全區**下方**（Apple HIG 最小觸控目標）。
+       ⚠ 高度寫成字面運算（不用 CSS 自訂屬性），守衛才能直接求值。 */
+    box-sizing:border-box; padding-top:var(--safe-top, 0px); padding-left:var(--safe-left, 0px);
+    height:calc(34px + min(10px, var(--safe-top, 0px)) + var(--safe-top, 0px)); display:flex; align-items:center; overflow:hidden;
     background:linear-gradient(90deg,#7a1fa2,#c2185b);
     color:#fff; font-weight:700; font-size:.95rem;
     box-shadow:0 2px 10px rgba(0,0,0,.45);
@@ -14778,9 +14787,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
     padding-right:3rem;
   }
   @keyframes bc-scroll{ from{ transform:translateX(100vw); } to{ transform:translateX(-100%); } }
+  /* ⭐⭐⭐ v6.195：✕ 的**可點區**改成「44px 寬 × 內容列高」並整塊釘在
+     var(--safe-top) 之下（top 不再用 50%，因為 50% 會把 padding-top 一起算進去）。
+     可見的 22px 圓圈改由 ::before 畫：::before 的 top:50% 是相對**按鈕自己**的
+     內容列，--safe-top:0px 時圓心位置與 v6.194 逐像素相同（right:6px、垂直中心 17px）。
+     ⚠ 按鈕本體 font-size:0，避免原本的文字節點與 ::before 重複畫出兩個 ✕；
+       aria-label / title 仍在 template 上，輔助技術不受影響。 */
   .admin-broadcast-close{
+    position:absolute; right:var(--safe-right, 0px); top:var(--safe-top, 0px);
+    width:44px; height:calc(34px + min(10px, var(--safe-top, 0px)));
+    border:none; background:none; padding:0; margin:0; cursor:pointer;
+    font-size:0; color:transparent; line-height:0; -webkit-tap-highlight-color:transparent;
+  }
+  .admin-broadcast-close::before{
+    content:'✕';
     position:absolute; right:6px; top:50%; transform:translateY(-50%);
-    width:22px; height:22px; border:none; border-radius:50%; cursor:pointer;
+    width:22px; height:22px; border-radius:50%;
     background:rgba(0,0,0,.3); color:#fff; font-size:.78rem; line-height:1;
     display:flex; align-items:center; justify-content:center;
   }
@@ -14796,7 +14818,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
      正式站 (.com) 沒有上方 banner，battle-header 是第一個元素直接觸頂；
      iOS Safari / iPad 在橫向時動態島 / status bar 會蓋住最上排 chip（v、設定、全螢幕）。
      viewport-fit=cover 已在 app.html 啟用，env() 才有值。 */
-  .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:calc(0.35rem + env(safe-area-inset-top, 0px)) 0.75rem 0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
+  .battle-header{ display:flex; align-items:center; gap:0.6rem; background:#0a180a; padding:calc(0.35rem + var(--safe-top, 0px)) 0.75rem 0.35rem 0.75rem; border-bottom:1px solid #2a4a2a; flex-shrink:0; flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden; }
   .battle-header > *{ flex-shrink:0; }
   .small-back{ color:#88ccff; text-decoration:none; font-size:0.82rem; background:none; border:none; cursor:pointer; padding:0; }
   .small-back:hover{ text-decoration:underline; }
@@ -16196,10 +16218,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .dmg-ko-tag{ display:inline-block; margin-left:.3rem; background:#ff2040; color:#fff; font-weight:800; padding:.05rem .35rem; border-radius:3px; font-size:.7rem; letter-spacing:.05em; }
 
 
-  .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:flex-start; justify-content:center; padding:1rem; padding-top:calc(env(safe-area-inset-top, 2rem) + 1rem); font-family:system-ui,'Microsoft JhengHei',sans-serif; }
+  .zoom-overlay{ position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.88); display:flex; align-items:flex-start; justify-content:center; padding:1rem; padding-top:calc(var(--safe-top, 0px) + 1rem); font-family:system-ui,'Microsoft JhengHei',sans-serif; }
   /* v2.69：卡牌詳細 modal 整體等比放大 20%（Leon 反饋） */
   /* v3.884：.zoom-modal 不再是 scroll 容器（iOS Safari flex+overflow bug），改靠內層 .zoom-scroll */
-  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow:hidden; position:relative; }
+  .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - var(--safe-top, 0px) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow:hidden; position:relative; }
   /* v3.884：scrollable wrapper inside .zoom-modal — 真正的 scroll 容器（非 flex）*/
   .zoom-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain; width:100%; }
   .zoom-close{ position:absolute; top:1rem; right:1rem; width:2.2rem; height:2.2rem; background:rgba(0,0,0,0.6); border-radius:50%; border:none; color:#eee; font-size:1.44rem; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
@@ -16398,9 +16420,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .zoom-img-btn:hover .zoom-img-hint{ opacity:1; }
 
   /* ── v2.129：全螢幕 lightbox（鏡射 /cards 樣式，但 z-index 比 zoom-overlay 高） ── */
-  .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.92); display:flex; align-items:flex-start; justify-content:center; z-index:9999; cursor:zoom-out; padding:1rem; padding-top:calc(env(safe-area-inset-top, 2rem) + 1rem); }
-  .lightbox-img{ margin:auto; max-width:min(600px,95vw); max-height:calc(100vh - env(safe-area-inset-top, 2rem) - 3rem); object-fit:contain; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,0.6); cursor:default; }
-  .lightbox-close{ position:absolute; top:4rem; top:calc(env(safe-area-inset-top, 2rem) + 1.5rem); right:1.5rem; background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:2rem; line-height:1; width:2.5rem; height:2.5rem; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .lightbox-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.92); display:flex; align-items:flex-start; justify-content:center; z-index:9999; cursor:zoom-out; padding:1rem; padding-top:calc(var(--safe-top, 0px) + 1rem); }
+  .lightbox-img{ margin:auto; max-width:min(600px,95vw); max-height:calc(100vh - var(--safe-top, 0px) - 3rem); object-fit:contain; border-radius:12px; box-shadow:0 8px 40px rgba(0,0,0,0.6); cursor:default; }
+  .lightbox-close{ position:absolute; top:4rem; top:calc(var(--safe-top, 0px) + 1.5rem); right:1.5rem; background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:2rem; line-height:1; width:2.5rem; height:2.5rem; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .lightbox-close:hover{ background:rgba(255,255,255,0.3); }
 
   /* ════════════════════════════════════════════════════════════════════════
@@ -16502,8 +16524,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       background: rgba(0, 0, 0, 0.4);
       pointer-events: none;
       align-items: flex-start;
-      padding-top: calc(env(safe-area-inset-top, 0px) + 0.4rem);
-      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-top: calc(var(--safe-top, 0px) + 0.4rem);
+      padding-bottom: var(--safe-bottom, 0px);
     }
     .selection-overlay .selection-modal {
       pointer-events: auto;
@@ -16616,7 +16638,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .treplay-bar .treplay-btn{ padding:3px 7px; font-size:.7rem; }
     .treplay-bar .treplay-step{ font-size:.7rem; }
     /* v5.070：mobile portrait — padding-top 同樣加 env(safe-area-inset-top) */
-    .battle-header{ flex:0 0 auto; max-height:7vh; padding:calc(0.1rem + env(safe-area-inset-top, 0px)) 0.4rem 0.1rem 0.4rem; gap:0.2rem; font-size:0.66rem;
+    .battle-header{ flex:0 0 auto; max-height:7vh; padding:calc(0.1rem + var(--safe-top, 0px)) 0.4rem 0.1rem 0.4rem; gap:0.2rem; font-size:0.66rem;
                     overflow-x:auto; overflow-y:hidden; flex-wrap:nowrap; white-space:nowrap; }
     .battle-header > *{ flex-shrink:0; }
     .field-row{ flex:0 0 30vh; max-height:30vh; min-height:0; overflow:hidden;
@@ -17022,7 +17044,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     align-items: flex-start;
     justify-content: center;
     padding: 1rem;
-    padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem);
+    padding-top: calc(var(--safe-top, 0px) + 1rem);
     cursor: zoom-out;
   }
   .pv-inner {
@@ -17031,7 +17053,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     border-radius: 12px;
     max-width: 1170px;
     width: 100%;
-    max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
+    max-height: calc(100vh - var(--safe-top, 0px) - 3rem);
     margin: auto;
     overflow-y: auto;
     position: relative;

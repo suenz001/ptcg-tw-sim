@@ -489,7 +489,7 @@
   .version { font-size: 0.75rem; font-weight: 400; color: #888; font-family: monospace; vertical-align: middle; margin-left: 0.3rem; background: #e8e4ee; padding: 0.1rem 0.4rem; border-radius: 3px; }
   main {
     max-width: 680px;
-    margin: calc(2rem + env(safe-area-inset-top, 0)) auto 2rem;
+    margin: calc(2rem + var(--safe-top, 0px)) auto 2rem;
     padding: 0 1.25rem 3rem;
     font-family: system-ui, -apple-system, 'Microsoft JhengHei', sans-serif;
     line-height: 1.6;

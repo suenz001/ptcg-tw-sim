@@ -2355,7 +2355,7 @@
 
   main {
     max-width: 1200px;
-    margin: calc(1.5rem + env(safe-area-inset-top, 0)) auto 1.5rem;
+    margin: calc(1.5rem + var(--safe-top, 0px)) auto 1.5rem;
     padding: 0 1rem 3rem;
     font-family: system-ui, -apple-system, 'Microsoft JhengHei', sans-serif;
     color: #1a1a1a;
@@ -3132,7 +3132,7 @@
     align-items: flex-start;
     justify-content: center;
     padding: 1rem;
-    padding-top: calc(env(safe-area-inset-top, 2rem) + 1rem);
+    padding-top: calc(var(--safe-top, 0px) + 1rem);
     cursor: zoom-out;
   }
   .pv-inner {
@@ -3140,7 +3140,7 @@
     border-radius: 12px;
     max-width: 1170px;
     width: 100%;
-    max-height: calc(100vh - env(safe-area-inset-top, 2rem) - 3rem);
+    max-height: calc(100vh - var(--safe-top, 0px) - 3rem);
     margin: auto;
     overflow-y: auto;
     overflow-x: hidden; /* v4.999: 同 cards modalInner — 強制阻擋水平 scrollbar */
@@ -3669,7 +3669,7 @@
   .lightboxClose {
     position: absolute;
     top: 4rem;
-    top: calc(env(safe-area-inset-top, 2rem) + 1.5rem);
+    top: calc(var(--safe-top, 0px) + 1.5rem);
     right: 1.5rem;
     background: rgba(255, 255, 255, 0.15);
     border: none;
