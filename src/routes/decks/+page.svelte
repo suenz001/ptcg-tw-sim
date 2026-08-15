@@ -15,7 +15,7 @@
   } from '$lib/decks/storage';
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
-  import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
+  import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, sameNameKey, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
   import { splitTwoCardStadiumEntries, mergeTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';
   //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
   //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
@@ -313,8 +313,10 @@
   );
 
   // v5.381：去藝術版本後綴（例：「老大的指令（赤日）」→「老大的指令」）。
-  const stripArtSuffix = (s: string | undefined | null): string =>
-    (s ?? '').replace(/[（(][^（()）]*[）)]\s*$/, '').trim();
+  // ⚠ v6.192 收斂：這條規則**同時**是牌組「同名 4 張」的分組 key（站長裁定
+  //   「老大的指令」與「老大的指令（烏羽）」算同名卡）。這裡**不可以再寫一份正則**
+  //   —— 兩份「去括號」邏輯必然漂移。唯一來源是 `$lib/decks/validation` 的 sameNameKey。
+  const stripArtSuffix = (s: string | undefined | null): string => sameNameKey(s);
   // v5.382：官網改名對照（舊官方名 → 本站現用名）。官網代碼匯入舊版牌組時，名稱對應前先套用。
   const CARD_NAME_ALIASES: Record<string, string> = {
     '寶可齒輪3.0': '寶可裝置3.0', // 官方改名：寶可齒輪3.0 → 寶可裝置3.0
@@ -758,7 +760,9 @@
         alert('一副牌最多只能放 1 張 ACE SPEC 卡。');
       } else if (!isBasicEnergy(card)) {
         const total = sameNameTotal(active, card.name, poolById);
-        alert(`同名卡片「${card.name}」已達 4 張上限（目前 ${total} 張，跨版本/招式累計）`);
+        // v6.192：括號冠名的藝術版本與本名共用額度 ⇒ 訊息用 sameNameKey 顯示的本名，
+        //   玩家才看得懂「我明明只放了 1 張（烏羽）為什麼滿了」。
+        alert(`同名卡片「${sameNameKey(card.name)}」已達 4 張上限（目前 ${total} 張，跨版本/招式/藝術版本累計）`);
       }
       return;
     }

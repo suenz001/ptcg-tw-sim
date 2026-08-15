@@ -1,3 +1,75 @@
+# v6.192 「括號冠名 ＝ 同名卡」收斂成單一分組 key（站長裁定）
+
+站長 2026-08-15 裁定：**「老大的指令」和「老大的指令（烏羽）」算同名卡**
+⇒ 牌組「同名卡最多 4 張」必須共用同一份額度（合計 4 張，不是各 4 張）。
+
+## 先查證：現行行為到底是什麼（沒有只讀碼推論）
+
+| 查證項 | 結果 |
+|---|---|
+| 兩張卡的 `name` 實際字串 | `老大的指令`（13 個印刷）／ `老大的指令（烏羽）`（1 個，`static/cards/M-P-I.json` id 19630、215/M-P、I 標）。括號是**全形** `（）`，就寫在 `name` 欄裡，不是另一個欄位。 |
+| `validation.ts` 的分組 key | BASE L213 `byName.set(card.name, …)` —— **逐字 `card.name`**，沒有任何正規化／別名。 |
+| **行為端實跑** `validateDeck` | 老大的指令×4 ＋（烏羽）×4 ＋ 1 基礎寶可夢 ＋ 51 基本能量 = 60 張 ⇒ **`legal=true`、`issues=[]`**。`sameNameTotal(deck,'老大的指令')` 回 4（不是 8）、`remainingCapacity(deck,（烏羽）)` 回 4。**確認是漏洞，8 張真的過。** |
+| 全站括號卡名枚舉 | live 卡包（`index.json` 42 包 / 4935 張 / 1506 個卡名）裡帶括號的卡名**只有這一個**。 |
+
+## 為什麼敢一般化（而不是為「老大的指令」寫死特例）
+
+1. **站內早就有同一條規則**：`src/routes/decks/+page.svelte` L316 的 `stripArtSuffix()`
+   （v5.381）就是 `/[（(][^（()）]*[）)]\s*$/`，註解寫著「去藝術版本後綴（例：
+   「老大的指令（赤日）」→「老大的指令」）」。⇒ 一般化不是我發明的，是把既有規則收斂。
+2. 卡庫零反例（上表）。
+3. ⚠ 但「今天沒有反例」≠「永遠不會有」⇒ 留 `SAME_NAME_PAREN_EXCEPTIONS`（今天空的）
+   ＋ **枚舉守衛**：`test-v6192` 第 ⑦ 條掃出卡庫裡**每一個**帶括號的卡名，
+   比對一份「已人工判讀」的 `REVIEWED` 表；官方發新括號卡名 ⇒ **CI 直接紅**，
+   逼下一個人決定「併額度」還是「進例外表」，一般化規則不會靜默套上去。
+
+## ⚠⚠ 正對照：**前綴**冠名是完全不同的一件事
+
+`PTCG RULES/PTCG_RULES.md` L2686 官方裁定：
+「**達摩狒狒」和「N的達摩狒狒」視為兩種不同名稱的寶可夢**。
+`N的◯◯` / `赫普的◯◯` / `竹蘭的◯◯` 是**卡名本身的一部分**，各自獨立算 4 張。
+本版只動**結尾的括號段**，前綴沒有括號 ⇒ 原樣回傳。守衛第 ④ 條實跑
+「達摩狒狒×4 ＋ N的達摩狒狒×4 ＝ 8 張 ⇒ **仍然合法**」，而且這條在 **BASE 就是綠的**
+（＝不是被我改綠的，是真的沒被改壞）。
+
+## 改了什麼（中央收斂：只有一份述詞）
+
+- `src/lib/decks/validation.ts` 新增 `sameNameKey(name)` ＋ `SAME_NAME_PAREN_EXCEPTIONS`。
+  消費點全部改走它：`sameNameTotal()`（兩端都正規化 ⇒ 呼叫端**不必**改簽名）、
+  `validateDeck()` 的 `byName` 分組、`isStandardReprintLegal()`。
+  `remainingCapacity()` 因為呼叫 `sameNameTotal` 自動跟上（UI 的「＋」按鈕）。
+- `src/routes/decks/+page.svelte`：`stripArtSuffix` 改成 `(s) => sameNameKey(s)`，
+  **刪掉那份本地正則**（守衛第 ⑧ 條鎖住「不得再出現第二份去括號正則」）。
+  同名上限的 alert 訊息改顯示 `sameNameKey(card.name)`（本名），否則玩家會看到
+  「同名卡片『老大的指令（烏羽）』已達 4 張上限」但畫面上明明只有 1 張。
+- `isStandardReprintLegal` 這條**只會放寬不會收緊**（原本合法的卡名一張都不會變不合法）。
+
+## 消費點盤點（為什麼不用再改別的地方）
+
+- **牌組頁 UI**（`decks/+page.svelte` L755/L760/L1936/L1937）走 `remainingCapacity`/`sameNameTotal` ⇒ 自動生效。
+- **對戰入場**（`game/+page.svelte` L877/L882/L7259/L9657）、**牌組公布欄**
+  （`deck-posts/+page.svelte` L317/L439）走 `validateDeck` ⇒ 自動生效。
+- **伺服器端**（`oracle-admin/server_admin_patch.js` L6014 `dpValidateDeck`）走
+  **引擎 bundle 匯出的同一支 `validateDeck`**（`scripts/build-server-engine.mjs` L28 有 export）
+  ⇒ ⚠ **要跑 `update-tournament.bat` 重建 bundle 才會生效**；沒跑之前它是 fail-open
+  （只驗 60 張），不會爆，只是新規則暫時沒套到投稿驗證上。
+- admin 的**牌組原型統計**是「這副牌像哪個原型」，不是 4 張額度，刻意不動。
+
+## 既有牌組會不會被影響
+
+- **不會被刪、也不會讀不到**：牌組存的是 `cardId`，`validateDeck` 只回 `issues`。
+- 唯一影響：若真有人在 v6.191 之後組出「合計 ≥5 張」的牌組，那副牌會被標成不合法
+  ⇒ 對戰入場（`deckIsLegal`）擋、公布欄投稿擋；牌組頁照常開啟、照常編輯，改完就能用。
+- **賽事歸檔牌組的投稿路徑不受影響**（`dpInsert` 對 `tournament` 路徑本來就只做結構檢查）。
+- 56 副 `PRESET_DECKS` 實跑 `validateDeck` ⇒ **0 副不合法**（改前改後都是 0）。
+
+## 守衛（HEAD-FAIL 已證明）
+
+`scripts/test-v6192-same-name-art-variant.mjs`（進 `npm test` 第 510 步）：
+**BASE 跑 27 過 / 13 紅**，套上修正後 **40 過 / 0 紅**。
+紅的那 13 條全部是①②③⑦⑧（新行為），④⑤⑥（前綴冠名 / ex 非 ex / 兩張合一場地 /
+Reprint exception 的正對照）在 BASE 就是綠的 —— 這才證明沒有修過頭。
+
 # v6.191 官方卡牌檢索完整性補收（M-P 4 張 ＋ SV8a 1 張）＋ 可重複執行的缺口檢查
 
 站長回報：「asia.pokemon-card.com/tw 的 M-P 有新卡沒收錄，例如【玳蘿】。請實裝，

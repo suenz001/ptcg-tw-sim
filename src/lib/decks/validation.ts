@@ -17,11 +17,62 @@
 // with identical zh-TW names are one entry. ex / 非 ex / 超級進化 ex 因為
 // JSON 的 name 不同（如「甲賀忍蛙」/「甲賀忍蛙ex」/「超級甲賀忍蛙ex」），
 // 各自獨立計算 4 張上限。
+//
+// v6.192：分組 key 不再是 Card.name 的逐字字串，而是 `sameNameKey(card.name)`
+//   —— 唯一的差別是「結尾的括號冠名」（藝術版本）會併回本名，見下方 sameNameKey。
 
 import type { Card } from '$lib/cards/types';
 import type { Deck, DeckValidationResult } from './types';
 
 const STANDARD_MARKS = new Set(['H', 'I', 'J']);
+
+/**
+ * v6.192「括號冠名 ＝ 同一張卡的藝術版本」——**站長 2026-08-15 裁定**：
+ *   「老大的指令 和『老大的指令（烏羽）』算同名卡」
+ *
+ * 台灣官方在 M-P 215/M-P 發了「老大的指令（烏羽）」（I 標，id 19630）：
+ * `rulesText` 與「老大的指令」**逐字相同**，括號內是卡圖上的角色。
+ * ⇒ 牌組「同名卡最多 4 張」必須**共用同一份額度**（合計 4 張，不是各 4 張）。
+ *
+ * ⚠⚠ 這與「**前綴**冠名」是完全不同的兩件事，**絕不可混為一談**：
+ *   官方裁定（`PTCG RULES/PTCG_RULES.md` L2686）明文
+ *   ——「達摩狒狒」和「N的達摩狒狒」**視為兩種不同名稱的寶可夢**。
+ *   `N的◯◯` / `赫普的◯◯` / `竹蘭的◯◯` 這種前綴**是卡名本身的一部分**，
+ *   各自獨立算 4 張。本函式**只**動「結尾的括號段」，前綴冠名沒有括號 ⇒ 原樣回傳。
+ *   （同理 ex / 非 ex / 超級進化 ex 因為卡名不同，仍各自獨立計算。）
+ *
+ * 為什麼敢一般化（而不是為「老大的指令」寫死一個特例）：
+ *   1. 站內 v5.381 起，官網代碼匯入的 `stripArtSuffix()` 就已經用**同一條規則**
+ *      把「老大的指令（赤日）」對應回「老大的指令」——本版把那份收斂進來，
+ *      不再有第二份「去括號」邏輯（兩份必然漂移）。
+ *   2. 全站卡庫 1506 個卡名裡，帶括號的**只有這一個**（見下方守衛），沒有反例。
+ * ⚠ 但「沒有反例」不等於「永遠不會有」⇒ 例外表 + 枚舉守衛（見 EXCEPTIONS 註解）。
+ */
+const ART_SUFFIX_RE = /[（(][^（()）]*[）)]\s*$/;
+
+/**
+ * 「括號內不是插畫角色、而是真的另一張卡」的完整卡名 —— 放進來就原樣回傳、不併額度。
+ *
+ * ⚠ 今天是空的（卡庫裡找不到任何一張這種卡）。
+ *   `scripts/test-v6192-same-name-art-variant.mjs` 會**枚舉卡庫裡每一個帶括號的卡名**，
+ *   逐一比對一份「已人工判讀過」的清單 ——
+ *   官方哪天發了新的括號卡名，那支守衛會直接紅燈，逼下一個人做決定，
+ *   **不會**讓一般化規則靜默套用到一張其實不該併額度的卡上。
+ */
+export const SAME_NAME_PAREN_EXCEPTIONS: ReadonlySet<string> = new Set<string>([]);
+
+/**
+ * 牌組「同名卡最多 4 張」的**唯一**分組 key（v6.192 中央收斂）。
+ * 牌組驗證 / UI 的 + 按鈕上限 / 官網代碼匯入的同名對應，全部走這一支。
+ */
+export function sameNameKey(name: string | undefined | null): string {
+  const s = (name ?? '').trim();
+  if (!s) return '';
+  if (SAME_NAME_PAREN_EXCEPTIONS.has(s)) return s;
+  const stripped = s.replace(ART_SUFFIX_RE, '').trim();
+  // ⚠ 整個卡名就是一個括號段時不可回空字串（會讓所有這種卡併成同一組）。
+  return stripped || s;
+}
 
 /**
  * v6.082「兩張合一」競技場（M6 傳說的海溝／山頂／熔岩洞）。
@@ -111,7 +162,10 @@ const STANDARD_REPRINT_LEGAL_NAMES = new Set<string>([
 ]);
 
 export function isStandardReprintLegal(card: Card): boolean {
-  return STANDARD_REPRINT_LEGAL_NAMES.has(card.name);
+  // v6.192：藝術版本冠名（「老大的指令（烏羽）」）與本名是同一張卡 ⇒ 重印例外一併適用。
+  //   這條**只會放寬、不會收緊**（原本合法的卡名一個都不會變成不合法）。
+  return STANDARD_REPRINT_LEGAL_NAMES.has(card.name)
+      || STANDARD_REPRINT_LEGAL_NAMES.has(sameNameKey(card.name));
 }
 
 export function isBasicEnergy(card: Card): boolean {
@@ -147,10 +201,13 @@ export function sameNameTotal(
   name: string,
   cardsById: Map<string, Card>,
 ): number {
+  // v6.192：兩端都過 sameNameKey ⇒ 「老大的指令」與「老大的指令（烏羽）」共用同一份額度。
+  //   參數仍收原始卡名（呼叫端不必改），正規化在這裡做，避免呼叫端各自去括號。
+  const key = sameNameKey(name);
   let n = 0;
   for (const e of deck.entries) {
     const c = cardsById.get(e.cardId);
-    if (c && !isBasicEnergy(c) && c.name === name) n += e.count;
+    if (c && !isBasicEnergy(c) && sameNameKey(c.name) === key) n += e.count;
   }
   return n;
 }
@@ -210,7 +267,9 @@ export function validateDeck(
     }
 
     if (!isBasicEnergy(card)) {
-      byName.set(card.name, (byName.get(card.name) ?? 0) + entry.count);
+      // v6.192：分組 key ＝ sameNameKey（括號冠名的藝術版本併回本名，共用 4 張額度）。
+      const nameKey = sameNameKey(card.name);
+      byName.set(nameKey, (byName.get(nameKey) ?? 0) + entry.count);
     }
     if (isBasicPokemon(card)) basicPokemonCount += entry.count;
 
@@ -233,7 +292,9 @@ export function validateDeck(
   }
 
   for (const [name, n] of byName) {
-    if (n > 4) issues.push(`${name} 不得超過 4 張（目前 ${n}，跨版本/招式/語言累計）`);
+    // v6.192：`name` 已經是 sameNameKey（本名）⇒ 文案要講明「藝術版本」也一起算，
+    //   否則玩家看到「老大的指令 不得超過 4 張（目前 8）」但編輯器裡本名只數得到 4 張。
+    if (n > 4) issues.push(`${name} 不得超過 4 張（目前 ${n}，跨版本/招式/語言/藝術版本累計）`);
   }
 
   if (basicPokemonCount === 0) {
