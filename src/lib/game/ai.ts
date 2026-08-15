@@ -1332,8 +1332,8 @@ function _canDragapultPhantomStrike(state: GameState, myIdx: 0 | 1, pool: Map<st
 }
 
 // v3.71：手上是否有 Gust 系支援者
-// v6.191：卡名清單收斂到 supporters_gust.ts 的 GUST_SUPPORTER_NAMES —— 官方在 M-P 發了
-//   冠名版「老大的指令（烏羽）」，寫死單一卡名會讓 AI 對新印刷視而不見。
+// v6.191：卡名清單收斂到 src/lib/game/gust-supporters.ts 的 GUST_SUPPORTER_NAMES ——
+//   寫死單一卡名會讓 AI 對「卡面相同、卡名多了冠名」的新印刷視而不見。
 function _hasGustInHand(player: PlayerState, pool: Map<string, Card>): boolean {
   return player.hand.some(c => {
     const n = pool.get(c.cardId)?.name;

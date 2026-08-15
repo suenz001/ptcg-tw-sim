@@ -5,10 +5,11 @@
  *
  * 「Gust 類」支援者：選擇對手備戰寶可夢 → 與對手戰鬥寶可夢互換位置。
  *
- * v6.191：官方在 M-P 215/M-P 發了「老大的指令（烏羽）」（I 標），rulesText 與
- * 「老大的指令」逐字相同（「選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。」）。
- * ⚠ reg key 是**卡名**逐字比對，冠名不同 = 兩個 key，不會自動生效 ⇒ 收斂成
- * registerGustSupporter() factory 各登錄一次，**禁複製第二份 gate/effect**。
+ * v6.191：⚠ reg key 是**卡名**逐字比對，卡名不同 = 兩個 key、不會自動生效 ⇒ 收斂成
+ * registerGustSupporter() factory 逐名登錄，**禁複製第二份 gate/effect**。
+ * 卡名清單的唯一來源是 src/lib/game/gust-supporters.ts（ai.ts 讀同一份）。
+ * v6.193：M-P 215/M-P（id 19630）站長裁定改名為「老大的指令」後，那張印刷就是吃
+ * 這裡「老大的指令」這一份註冊（清單裡的括號冠名條目已刪，不留零產出的死條目）。
  *
  * 注意：同機制的物品卡「頂尖捕捉器」放在 items_misc.ts（item vs supporter 分開分類）。
  */

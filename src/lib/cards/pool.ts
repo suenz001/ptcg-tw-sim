@@ -10,6 +10,9 @@ import { base } from '$app/paths';
 import type { Card, SetSummary } from './types';
 // v4.956：fetch URL 帶版本參數，繞過 Cloudflare 邊緣 cache（每次版本 bump 觸發 cache miss）
 import { VERSION } from '$lib/version';
+// v6.193：已下架的重複卡 id 要先對照回保留版，否則對照表查不到 → 卡包永遠載不進來。
+//   ⚠ cardIdMigration 是零 runtime 相依的葉子模組（只 import type），不會造成循環。
+import { migrateCardId } from '$lib/decks/cardIdMigration';
 
 const setCache = new Map<string, Card[]>();
 let indexCache: SetSummary[] | null = null;
@@ -112,7 +115,10 @@ export function deckEntriesAllInPool(
   pool: Map<string, unknown>
 ): boolean {
   if (!entries || entries.length === 0) return false;
-  for (const e of entries) if (!pool.has(String(e.cardId))) return false;
+  // v6.193：舊牌組可能還帶著已下架的重複卡 id（例：港版 18965）。這個 gate 是線上房
+  //   建局的前置條件（game/+page.svelte checkAndStartOnlineGame），不 migrate 的話那張卡
+  //   **永遠**補不進 pool ⇒ 重試 6 次後直接「建局卡住」，房間開不了局。
+  for (const e of entries) if (!pool.has(migrateCardId(String(e.cardId)))) return false;
   return true;
 }
 
@@ -124,7 +130,7 @@ export async function loadDeckSets(
   const neededSets = new Set<string>();
   const missingIds: string[] = [];
   for (const id of cardIds) {
-    const code = map[String(id)];
+    const code = map[migrateCardId(String(id))];   // v6.193：已下架重複卡 → 保留版所在卡包
     if (code) neededSets.add(code);
     else missingIds.push(String(id));
   }

@@ -91,16 +91,53 @@ export const M5_JP_TO_TW_ID: Record<string, string> = {
   "50300": "19225"
 };
 
-/** 對單一 cardId 查 migration (jp→tw); 不在 table 原樣回傳 */
+/**
+ * v6.193 **港版重複卡下架 → 對照回台版**（站長 2026-08-15 裁定「刪掉港版，只留台版」）。
+ *
+ * `static/cards/M-P-J.json` 裡曾有兩筆來源是 HK 官網（圖檔 `…/hk/card-img/hk000*.png`）
+ * 的卡，與台版**同名、同編號、逐欄位相同**（v6.116 大量 clone 時多產的）：
+ *   18965 超級妖火紅狐ex 103/M-P → 台版 18560
+ *   18969 古歷 107/M-P           → 台版 18564
+ *
+ * ⚠⚠ 為什麼一定要留這張對照表，而不是讓它變成「查無此卡」：
+ *   `engine.ts` 的 `getCard()` 找不到卡會直接 **throw**。實測（本版守衛有行為端斷言）：
+ *   牌組帶著已刪的 id 進對戰、那張卡上到戰鬥位後**一攻擊就 `Card not found` 整局卡死**
+ *   —— 與 v5.336 的事故完全同一條路徑。既然兩者是同一張卡的不同來源圖，對照回台版 id
+ *   是最無感的降級：玩家牌組張數不變、對戰照打。
+ */
+export const RETIRED_DUP_TO_TW_ID: Record<string, string> = {
+  '18965': '18560',   // 超級妖火紅狐ex 103/M-P（港版重複收錄，v6.193 下架）
+  '18969': '18564',   // 古歷 107/M-P（港版重複收錄，v6.193 下架）
+};
+
+/** 對單一 cardId 查 migration (jp→tw / 已下架重複卡→保留版); 不在 table 原樣回傳 */
 export function migrateCardId(cardId: string): string {
-  return M5_JP_TO_TW_ID[cardId] ?? cardId;
+  return M5_JP_TO_TW_ID[cardId] ?? RETIRED_DUP_TO_TW_ID[cardId] ?? cardId;
 }
 
 
 /** v5.301: 統一 migrateDeck helper (storage.ts + cloud.ts 共用) — load deck 時自動 map jp→tw cardId */
 import type { Deck, DeckEntry } from './types';
 export function migrateDeck(d: Deck): Deck {
-  return splitTwoCardStadiumEntries({ ...d, entries: d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })) });
+  const mapped = mergeDuplicateEntries(d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })));
+  return splitTwoCardStadiumEntries({ ...d, entries: mapped });
+}
+
+/**
+ * v6.193：migrate 之後**同一個 cardId 可能出現兩筆**（例如牌組同時放了台版 18560 與
+ * 港版 18965，後者被對照成前者）。必須合併，否則牌組編輯器的
+ * `{#each … (card.id)}` 會因為重複 key 直接 runtime error（整頁打不開）。
+ * ⚠ 冪等：沒有重複時原樣回傳同樣的內容。
+ */
+export function mergeDuplicateEntries(entries: DeckEntry[]): DeckEntry[] {
+  const out: DeckEntry[] = [];
+  const at = new Map<string, number>();
+  for (const e of entries) {
+    const i = at.get(e.cardId);
+    if (i === undefined) { at.set(e.cardId, out.length); out.push({ ...e }); }
+    else out[i] = { ...out[i], count: out[i].count + e.count };
+  }
+  return out;
 }
 
 /**

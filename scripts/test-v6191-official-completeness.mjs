@@ -5,7 +5,8 @@
 //
 // HEAD-FAIL 依據：
 //   ・BASE 的 static/cards 沒有 19627/19628/19629/19630/11697 → 卡片存在斷言 FAIL
-//   ・BASE 沒有 TRAINER_EFFECTS('玳蘿')／('老大的指令（烏羽）') → 註冊斷言 FAIL
+//   ・BASE 沒有 TRAINER_EFFECTS('玳蘿') → 註冊斷言 FAIL
+// v6.193：19630 站長裁定改名為「老大的指令」（原「老大的指令（烏羽）」）⇒ 本檔斷言同步。
 //   ・BASE 的 recordOppKO 沒有 Mega ex 計數 → 玳蘿 gate 永遠 false → gate 斷言 FAIL
 //   ・BASE 的 ai.ts bench-choose 忽略 includeActive → AI 斷言 FAIL
 import { build } from 'esbuild';
@@ -64,7 +65,7 @@ const mkState = (p0, p1, extra = {}) => ({
 const ID_TANTAN = '19627';        // 探探鼠 M-P 212/M-P（J）
 const ID_REDCARD = '19628';       // 特殊紅牌 M-P 213/M-P（J）
 const ID_DAITARO = '19629';       // 玳蘿 M-P 214/M-P（J）
-const ID_BOSS_UBA = '19630';      // 老大的指令（烏羽）M-P 215/M-P（I）
+const ID_BOSS_UBA = '19630';      // 老大的指令 M-P 215/M-P（I）— v6.193 改名前叫「老大的指令（烏羽）」
 const ID_GUIDE = '11697';         // 探險家的嚮導 SV8a 172/187（H）
 const NEW_IDS = [ID_TANTAN, ID_REDCARD, ID_DAITARO, ID_BOSS_UBA, ID_GUIDE];
 
@@ -75,7 +76,7 @@ T('⭐⭐⭐ 5 張新印刷都在 live 卡庫，且卡名／編號／標逐字�
     [ID_TANTAN]:   ['探探鼠', '212/M-P', 'J', 'M-P-J', 'Pokemon'],
     [ID_REDCARD]:  ['特殊紅牌', '213/M-P', 'J', 'M-P-J', 'Trainer'],
     [ID_DAITARO]:  ['玳蘿', '214/M-P', 'J', 'M-P-J', 'Trainer'],
-    [ID_BOSS_UBA]: ['老大的指令（烏羽）', '215/M-P', 'I', 'M-P-I', 'Trainer'],
+    [ID_BOSS_UBA]: ['老大的指令', '215/M-P', 'I', 'M-P-I', 'Trainer'],
     [ID_GUIDE]:    ['探險家的嚮導', '172/187', 'H', 'SV8a', 'Trainer'],
   };
   for (const [id, [name, num, mark, setCode, supertype]] of Object.entries(want)) {
@@ -99,9 +100,9 @@ T('⭐ 玳蘿 rulesText 逐字（台灣官方卡面）', () => {
     '玳蘿的效果文字對不上官方卡面：' + JSON.stringify(c.rulesText));
 });
 
-T('⭐ 老大的指令（烏羽）與「老大的指令」卡面逐字相同（所以走同一條中央管線）', () => {
+T('⭐ 19630 與其他「老大的指令」印刷卡面逐字相同（所以走同一條中央管線）', () => {
   const a = pool.get(ID_BOSS_UBA);
-  const b = [...pool.values()].find((c) => c.name === '老大的指令');
+  const b = [...pool.values()].find((c) => c.name === '老大的指令' && String(c.id) !== ID_BOSS_UBA);
   ok(a && b, '找不到兩張卡');
   ok((a.rulesText || '').replace(/\s+/g, '') === (b.rulesText || '').replace(/\s+/g, ''),
     '卡面不同 —— 不可以共用 factory，請重讀卡面：' + JSON.stringify(a.rulesText));
@@ -120,17 +121,18 @@ T('⭐ index.json 的張數已同步（禁 build-sets-index.js 重生）', () =>
 
 console.log('② 玳蘿：gate 與效果（走中央 startEnergyChain singleTarget）');
 
-T('⭐⭐⭐ 玳蘿／老大的指令（烏羽）都已註冊 effect + gate', () => {
-  for (const n of ['玳蘿', '老大的指令（烏羽）', '老大的指令']) {
+T('⭐⭐⭐ 玳蘿／老大的指令都已註冊 effect + gate', () => {
+  for (const n of ['玳蘿', '老大的指令']) {
     ok(mod.TRAINER_EFFECTS.has(n), '沒有註冊 TRAINER_EFFECTS：' + n);
     ok(mod.TRAINER_GUARDS.has(n), '沒有註冊 TRAINER_GUARDS（gate）：' + n);
   }
   ok(mod.RESOLVERS.has('v6191-daitaro-pick'), '玳蘿的 resolver 沒註冊 —— picker 會卡死');
 });
 
-T('⭐ Gust 系卡名單一來源涵蓋兩張（禁兩處各抄一份）', () => {
+T('⭐ Gust 系卡名單一來源（禁兩處各抄一份；v6.193 改名後不留死條目）', () => {
   ok(mod.GUST_SUPPORTER_NAMES.includes('老大的指令'), '清單缺 老大的指令');
-  ok(mod.GUST_SUPPORTER_NAMES.includes('老大的指令（烏羽）'), '清單缺 老大的指令（烏羽）');
+  ok(!mod.GUST_SUPPORTER_NAMES.includes('老大的指令（烏羽）'),
+    '19630 已改名為「老大的指令」⇒ 清單裡的括號冠名條目是零產出的死條目，必須刪');
 });
 
 const MEGA_EX_ID = '17975';           // 超級艾路雷朵ex M-P-J 059/M-P
@@ -149,7 +151,7 @@ T('⭐ isMegaExCard 認得超級艾路雷朵ex、不認菊草葉（測試盤面�
 //     這裡用**行為端**驗「現在生效的是哪一份」：factory 版的 fail log 含「化石/」，舊版沒有。
 T('⭐⭐⭐ 行為端：實際生效的必須是 factory 版（不是被別的檔覆蓋掉的舊註冊）', () => {
   const empty = mkState({ active: inst(NON_MEGA_ID) }, { active: inst(NON_MEGA_ID), bench: [] });
-  for (const n of ['老大的指令', '老大的指令（烏羽）']) {
+  for (const n of ['老大的指令']) {
     const out = mod.TRAINER_EFFECTS.get(n)(empty, 0, pool);
     const last = out.log[out.log.length - 1];
     const msg = typeof last === 'string' ? last : (last?.message ?? '');
@@ -159,11 +161,15 @@ T('⭐⭐⭐ 行為端：實際生效的必須是 factory 版（不是被別的�
   }
 });
 
-T('⭐ 靜態對照：v168_supporters.ts 不得再自己註冊「老大的指令（烏羽）」', () => {
+T('⭐ 靜態對照：v168_supporters.ts 不得再自己註冊任何「老大的指令」', () => {
   const src = readFileSync(join(ROOT, 'src/lib/game/effects/cards/v168_supporters.ts'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  ok(!/reg[GR]?\(\s*'老大的指令（烏羽）'/.test(src),
-    'v168_supporters.ts 又出現「老大的指令（烏羽）」的註冊 —— 會覆蓋掉 supporters_gust 的 factory');
+  // v6.193：改名後「（烏羽）」那個字面量已不存在 ⇒ 只掃它等於永遠綠燈的安慰劑。
+  //   改掃**任何**以「老大的指令」開頭的字面量 key 註冊（含未來的冠名版本）。
+  ok(!/reg[GR]?\(\s*'老大的指令/.test(src),
+    'v168_supporters.ts 又出現「老大的指令…」的字面量註冊 —— 會覆蓋掉 supporters_gust 的 factory');
+  // 正對照：判準真的抓得到違規樣本（否則「永遠 PASS」跟「乾淨」長得一樣）
+  ok(/reg[GR]?\(\s*'老大的指令/.test("regG('老大的指令（赤日）', () => true);"), '正對照失效');
 });
 
 // 場面：自方 active = 超級艾路雷朵ex（Mega ex），牌庫有基本能量

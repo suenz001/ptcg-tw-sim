@@ -65,11 +65,21 @@ function mkDeck(parts) {
 const legalOf = (parts) => validateDeck(mkDeck(parts), byId);
 
 // ══════════ ① 核心：老大的指令 ×4 ＋（烏羽）×4 ⇒ 不合法 ══════════
+// ⚠⚠ v6.193：站長裁定把 M-P 215/M-P（id 19630）直接改名為「老大的指令」
+//   ⇒ **卡庫裡已經一張括號冠名的卡都沒有**。但 sameNameKey 這條通則守衛要**保留**
+//   （官方下次再發括號卡名時要立刻擋得住）⇒ 這裡改用**合成卡**（真卡複製一份、只換
+//   name/id）來驗機制。合成卡只存在於本測試的 byId 副本，不會寫回卡庫。
 const BOSS = '老大的指令', BOSS_U = '老大的指令（烏羽）';
 const boss = pick(BOSS, c => ['H','I','J'].includes(c.regulationMark));
-const bossU = pick(BOSS_U);
 chk(`卡庫有「${BOSS}」（H/I/J 印刷）`, !!boss, boss && boss.id);
-chk(`卡庫有「${BOSS_U}」（v6.191 補收，M-P 215）`, !!bossU, bossU && bossU.id);
+const SYNTH_ID = '__synthetic_paren__';
+const bossU = boss ? { ...boss, id: SYNTH_ID, name: BOSS_U } : null;
+if (bossU) byId.set(SYNTH_ID, bossU);
+chk('合成卡自驗：只有 name 與 id 不同（其餘欄位逐字沿用真卡）',
+    !!bossU && Object.keys(boss).every(k => k === 'id' || k === 'name' || JSON.stringify(boss[k]) === JSON.stringify(bossU[k])));
+chk('自驗：卡庫本身已無任何括號冠名卡（v6.193 改名後）',
+    [...liveNames].filter(n => /[（()）]/.test(n)).length === 0,
+    [...liveNames].filter(n => /[（()）]/.test(n)).join(' / '));
 
 if (boss && bossU) {
   {
@@ -173,12 +183,20 @@ if (boss && bossU) {
 {
   const REVIEWED = new Map([
     // 完整卡名 → 判讀結論（'merge' ＝ 藝術版本、與本名共用額度；'distinct' ＝ 另一張卡，要進 EXCEPTIONS）
-    ['老大的指令（烏羽）', 'merge'],   // M-P 215/M-P I 標 id 19630；rulesText 與「老大的指令」逐字相同；站長 2026-08-15 裁定同名
+    // v6.193：唯一一筆（「老大的指令（烏羽）」，M-P 215/M-P id 19630）已被站長裁定改名為
+    //   「老大的指令」⇒ 卡庫沒有括號卡名了，清單清空（留著會被下面的「腐爛項」那條抓紅）。
   ]);
   // ⚠ 這裡刻意掃「**含任何括號字元**」而不是只掃「結尾括號」——
   //   守衛的網不可以比中央規則窄：括號在中間、巢狀、只有半邊，全部都要被人看到。
   const found = [...liveNames].filter(n => /[（()）]/.test(n)).sort();
   const unreviewed = found.filter(n => !REVIEWED.has(n));
+  // ⚠ 正對照（v6.193 清單清空後尤其重要）：清單空 + 卡庫沒括號卡名時，⑦ 會變成
+  //   「永遠 PASS」的安慰劑 ⇒ 用**同一條判準**（括號正則 ＋ REVIEWED 查表）餵樣本，
+  //   證明它抓得到括號卡名、也證明它不會把沒括號的誤抓。
+  const parenRe = (n) => /[（()）]/.test(n);
+  const wouldFlag = (n) => parenRe(n) && !REVIEWED.has(n);
+  chk('⑦ 正對照：假的括號卡名必須被判為「未判讀」', wouldFlag('老大的指令（赤日）') === true);
+  chk('⑦ 反對照：沒有括號的卡名不得被誤抓', wouldFlag('老大的指令') === false && wouldFlag('') === false);
   chk('⑦ 沒有「未判讀」的括號卡名（有新卡就到這支守衛裡登記結論）',
       unreviewed.length === 0, unreviewed.join(' / '));
   const rotten = [...REVIEWED.keys()].filter(n => !liveNames.has(n));

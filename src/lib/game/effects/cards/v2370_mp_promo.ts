@@ -1,9 +1,10 @@
 /**
  * v4.952 — M-P 特典卡 (J 標) 實裝：古歷 + 超級妖火紅狐ex
  *
- * 來源（依鐵律 7c）：HK 官網（TW 官網未發布）
- *   - 古歷 (id=18969, Supporter)
- *   - 超級妖火紅狐ex (id=18965, Pokemon/Stage2/ex)
+ * 來源（依鐵律 7c）：當時 TW 官網未發布，先依 HK 官網實裝。
+ * v6.193：台版卡面補齊後，站長裁定刪掉港版重複收錄的兩筆（18965／18969），
+ *   保留台版 —— 古歷 (id=18564, Supporter)／超級妖火紅狐ex (id=18560, Pokemon/Stage2/ex)。
+ *   ⚠ 這裡的註冊是**卡名**為 key，與 id 無關，刪 id 不影響本檔任何一行程式。
  */
 
 import type { CardInstance, GameState, PlayerState } from '../../types';

@@ -140,8 +140,6 @@ T('⭐ 卡名／招式名／特性名不得含零寬字元', () => {
 
 /** live 卡片的 imageUrl 幾乎都可由 id 合成；例外必須列在這裡（v6.116 掃出僅 5 張）。 */
 const IMG_EXCEPTIONS = {
-  '18965': 'https://asia.pokemon-card.com/hk/card-img/hk00018965.png',
-  '18969': 'https://asia.pokemon-card.com/hk/card-img/hk00018969.png',
   '19624': 'https://asia.pokemon-card.com/tw/card-img/tw00019621.png',
   '19625': 'https://asia.pokemon-card.com/tw/card-img/tw00019622.png',
   '19626': 'https://asia.pokemon-card.com/tw/card-img/tw00019623.png',

@@ -14,7 +14,7 @@
   import { base } from '$app/paths';
   import type { Card } from '$lib/cards/types';
   import { loadDeckSets, buildCardIndex } from '$lib/cards/pool';
-  import { migrateDeck } from '$lib/decks/cardIdMigration';
+  import { migrateDeck, migrateCardId } from '$lib/decks/cardIdMigration';
   import { newDeck, upsertDeck, loadDecks } from '$lib/decks/storage';
   import { syncDeckToCloud } from '$lib/decks/cloud';
   import { validateDeck } from '$lib/decks/validation';
@@ -272,7 +272,9 @@
     if (!p) return [] as { group: string; items: { name: string; count: number; sub: string }[] }[];
     const groups = new Map<string, { name: string; count: number; sub: string }[]>();
     for (const e of p.entries) {
-      const c = detailCards.get(e.cardId);
+      // v6.193：舊投稿可能引用已下架的重複卡 id（港版）⇒ 退而查對照後的保留版，
+      //   查得到就照常顯示卡名（查不到才顯示「本站沒有這張卡」，維持既有降級）。
+      const c = detailCards.get(e.cardId) ?? detailCards.get(migrateCardId(e.cardId));
       const g = !c ? '未知卡片' : c.supertype === 'Pokemon' ? '寶可夢' : c.supertype === 'Trainer' ? '訓練家' : '能量';
       if (!groups.has(g)) groups.set(g, []);
       groups.get(g)!.push({

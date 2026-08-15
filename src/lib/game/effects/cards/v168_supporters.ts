@@ -182,11 +182,12 @@ regR('piper-tool-pick', (st, idx, iids, _params, pool) => {
   });
 });
 
-// ── 老大的指令（烏羽）───────────────────────────────────────────────────
-// v6.191：這裡原本有一份 regG/reg（寫在卡還沒進卡庫的時候，長期是死碼）。
-// 卡片補進來（M-P 215/M-P，I 標，id 19630）後，effects.ts 的 import 順序會讓這份
-// **覆蓋掉** supporters_gust.ts 的 factory 版 ⇒ 「grep 到兩份、不知哪份生效」。
-// 已移除；登錄一律走 supporters_gust.ts 的 registerGustSupporter()（卡名清單在
+// ── 老大的指令（Gust 系）────────────────────────────────────────────────
+// v6.191：這裡原本有一份「老大的指令（烏羽）」的 regG/reg（寫在卡還沒進卡庫的時候，
+// 長期是死碼）。卡片補進來後，effects.ts 的 import 順序會讓這份**覆蓋掉**
+// supporters_gust.ts 的 factory 版 ⇒ 「grep 到兩份、不知哪份生效」。已移除。
+// v6.193：那張卡（M-P 215/M-P，id 19630）已改名為「老大的指令」，更不可以在這裡補
+// 任何一份 —— 登錄一律走 supporters_gust.ts 的 registerGustSupporter()（卡名清單在
 // src/lib/game/gust-supporters.ts）。resolver 仍是共用的 'gust-opp'。
 
 void healResolver;  // import 為了確保 heal-150 被註冊（side-effect 已綁好 effectKey）

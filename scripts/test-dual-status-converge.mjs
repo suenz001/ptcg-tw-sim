@@ -45,7 +45,8 @@ const both = (da, a, b) => { const s = slots(da); assert.ok(s.includes(a), `應�
 T('★九尾|奇異燈火 → 灼傷+混亂 (HEAD 只灼傷 FAIL)', () => both(runAttack('10258', 0), 'burned', 'confused'));
 T('★叉字蝠|毒音波 → 中毒+混亂 (HEAD 只中毒 FAIL)', () => both(runAttack('18504', 0), 'poisoned', 'confused'));
 T('★霸王花|花粉炸彈 → 中毒+睡眠 (HEAD 只中毒 FAIL)', () => both(runAttack('14321', 0), 'poisoned', 'asleep'));
-T('超級妖火紅狐ex|奇異燈火 → 灼傷+混亂 (收斂後仍正確)', () => both(runAttack('18965', 1), 'burned', 'confused'));
+// v6.193：原本指向港版重複卡 18965（已下架）；台版 18560 是逐欄位相同的同一張卡。
+T('超級妖火紅狐ex|奇異燈火 → 灼傷+混亂 (收斂後仍正確)', () => both(runAttack('18560', 1), 'burned', 'confused'));
 
 console.log('\n雙重狀態收斂:PASS ' + pass + ' / FAIL ' + fail);
 process.exit(fail ? 1 : 0);

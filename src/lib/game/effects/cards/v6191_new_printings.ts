@@ -4,13 +4,14 @@
 //   ・M-P 212/M-P 探探鼠（J）        ← 既有卡名的另一印刷（M4 068/083 已實裝）
 //   ・M-P 213/M-P 特殊紅牌（J）      ← 既有卡名的另一印刷（M4 072/083 已實裝）
 //   ・M-P 214/M-P 玳蘿（J）          ← ⭐ 全新卡名 ＋ 全新 gate 維度
-//   ・M-P 215/M-P 老大的指令（烏羽）（I） ← ⭐ 全新卡名，效果與「老大的指令」逐字相同
+//   ・M-P 215/M-P 老大的指令（I）    ← 既有卡名的另一印刷（v6.191 補收時站內先收成
+//                                       「老大的指令（烏羽）」，v6.193 站長裁定改回本名）
 //   ・SV8a 172/187 探險家的嚮導（H）  ← 既有卡名的另一印刷（SV5K/SV8a/MC 已實裝）
 //
 // ⚠ reg key 是**卡名**，所以「另一印刷」只要卡片進 DB 就自動生效，這裡不必再登錄。
 // ⚠ 卡面逐字取自 static/cards（台灣官方中文 rulesText），未經簡化。
-// ⚠「老大的指令（烏羽）」不在本檔登錄 —— 它與「老大的指令」是同一條中央管線，
-//    收斂在 supporters_gust.ts 的 registerGustSupporter() factory（禁再抄一份）。
+// ⚠「老大的指令」不在本檔登錄 —— 它走的是同一條中央管線，收斂在 supporters_gust.ts
+//    的 registerGustSupporter() factory（禁再抄一份）。
 
 import type { CardInstance } from '../../types';
 import type { GameState } from '../../types';

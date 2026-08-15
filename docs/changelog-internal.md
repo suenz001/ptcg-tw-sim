@@ -1,3 +1,91 @@
+# v6.193 港版重複卡下架 ＋「老大的指令（烏羽）」改名（站長兩個裁定）
+
+站長 2026-08-15 兩個裁定：
+1. `M-P-J.json` 裡兩筆**香港版重複卡**刪掉，只留台版
+   —— 18965 超級妖火紅狐ex 103/M-P（台版 18560）、18969 古歷 107/M-P（台版 18564）。
+   > 「就算影響玩家的牌組也沒關係，那張牌本來就少人用。」
+2. `M-P-I.json` id 19630（215/M-P，I 標）`name` 從「老大的指令（烏羽）」改成「老大的指令」。
+
+這兩筆早在 v6.191 的內部紀錄就被列為待裁定（「官方查無此 id、與 18560/18564 編號完全重複，
+疑似 v6.116 大量 clone 時多產的；沒有動它們，等站長決定」）。
+
+## 刪卡前先查證「兩張是不是真的同一張卡」
+
+逐欄位比對（排除 `id` / `imageUrl` / `sourceUrl` / `scrapedAt`）：**18560 vs 18965 完全相同、
+18564 vs 18969 完全相同**。差別只有圖床（`…/hk/card-img/hk000*.png` vs `…/tw/…/tw000*.png`）。
+
+連帶處理：`index.json` M-P-J 92→90（含 supertypeCounts Pokemon 75→74 / Trainer 8→7，
+手術式改那一個物件，**沒有用 build-sets-index.js 重生**）、`card-set-map.json` 4935→4933、
+`test-card-db-integrity.mjs` 的 `IMG_EXCEPTIONS` 移除那兩筆（否則「例外表腐爛項」會紅）、
+`test-dual-status-converge.mjs` 的測試卡 id 18965→18560。
+
+## ⭐⭐⭐ 這一版真正的重點：刪卡的優雅降級（比刪卡本身重要）
+
+**行為端實測**（不是讀碼推論）：把那兩個 id 從 pool 拿掉、牌組仍引用它 ⇒
+`engine.ts` 的 `getCard()` 找不到卡**直接 throw**，那張卡一上戰鬥位攻擊就
+`Card not found in pool: 18965` —— **整局卡死**。這與 v5.336 的事故是同一條路徑
+（當時的註解就寫著「UI 顯示『？/HP 0/0』，且一旦行動立即 throw → 整局卡死」）。
+
+⇒ 修法沿用站內既有的中央機制（`migrateCardId` 的對照表），新增
+`RETIRED_DUP_TO_TW_ID`（18965→18560、18969→18564）。既然兩者是同一張卡，
+對照回台版是最無感的降級：**玩家牌組張數不變、對戰照打**，不是「顯示缺卡」。
+
+三個連帶的洞（審查子代理抓到、我逐條查證屬實）：
+
+| 入口 | 不修會怎樣 | 修法 |
+|---|---|---|
+| `migrateDeck()` | 牌組同時有 18560 與 18965 ⇒ 對照後**兩筆同 cardId**，牌組編輯器 `{#each …(card.id)}` 重複 key = 整頁 runtime error | 新增 `mergeDuplicateEntries()`，merge 排在 two-card-stadium split **之前** |
+| `deckEntriesAllInPool()`（`cards/pool.ts`） | 線上房建局 gate 用**未 migrate** 的 `seat.deckEntries`，那張卡永遠補不進 pool ⇒ 重試 6 次後「建局卡住：缺少卡片 id：18965」，**房間開不了局**（不崩潰但玩不了） | gate 內先 `migrateCardId` |
+| `loadDeckSets()`（同檔） | `card-set-map` 查不到 18965 ⇒ 進 `missingIds`、卡包永遠載不到；牌組公布欄舊投稿那列顯示「本站沒有這張卡」 | 查表前先 `migrateCardId`；`deck-posts` 顯示端加一層 fallback |
+
+⚠ `deckEntriesAllInPool` / `loadDeckSets` 是**不經 `createGame`** 的 cardId 入口 ——
+`createGame` 的 migrate（v5.336 加的）擋不到它們。教訓：**加對照表時要問「還有哪些入口
+不經過那個咽喉點」**，不能只修咽喉點就宣告安全。
+
+## 改名：reg key 是卡名，所以改名＝換一把鑰匙
+
+v6.191 為「老大的指令（烏羽）」在 `gust-supporters.ts` 的 `GUST_SUPPORTER_NAMES` 加了一項，
+由 `registerGustSupporter()` factory 逐名登錄。改名後那一項變成**零產出的死條目**
+（清單裡的卡名在卡庫已不存在）⇒ 刪掉，只留「老大的指令」；19630 自動吃到既有那份註冊。
+
+**行為端驗證**（不是驗字串）：用 `pool.get('19630').name` 當 key 實跑
+→ gate ＝ true → 開 `opp-bench-choose` picker（`effectKey: 'gust-opp'`、minCount/maxCount 1、
+validIids ＝ 對手備戰 2 隻）→ `RESOLVE_SELECTION` → 對手備戰真的換上戰鬥位、原 active 回備戰。
+另驗 fail log 含「化石/」指紋，證明生效的是 `supporters_gust.ts` 的 factory 版
+（不是被別的檔重複註冊覆蓋掉的舊版）。
+
+`v6191_official-completeness` 的靜態守衛原本只掃 `'老大的指令（烏羽）'` 這個字面量 ——
+改名後它會變成**永遠綠燈的安慰劑** ⇒ 放寬成掃任何 `reg…('老大的指令` 開頭，並補正對照。
+
+## v6.192 的 `sameNameKey()`：保留不動，但守衛要改寫
+
+站長指示保留（通則守衛，官方再發括號卡名時要擋得住）。但改名後**卡庫一個括號卡名都沒有**了：
+- `test-v6192-same-name-art-variant.mjs` 的 ①②③ 原本拿真卡跑 ⇒ 改用**合成卡**
+  （真卡複製一份、只換 name/id，只存在於測試的 byId 副本）驗機制。
+  以 mutation 驗過保護力沒退化：把 `ART_SUFFIX_RE` 停用後該守衛 10 條紅。
+- ⑦「已判讀括號卡名」清單清空（留著會被它自己的「腐爛項」那條抓紅）。清單一空，⑦ 就變成
+  **永遠 PASS 的安慰劑** ⇒ 補了用同一條判準（括號正則 ＋ 查表）的正／反對照。
+  ⚠ 第一版的正對照寫成 `['…（赤日）'].filter(n => !REVIEWED.has(n)).length === 1`，
+  清單空時對**任何字串**都成立（連空字串都過）—— 是審查子代理抓到的，這種套套邏輯要特別警覺。
+
+## 官方完整性守衛沒有受影響
+
+`scripts/data/official-set-manifest.json` 的 M-P 快照（163 個 id）**本來就沒有 18965/18969**
+（官方 detail 頁 404），也不在 `knownNonHIJ` 豁免表 ⇒ 刪卡後
+`test-official-set-completeness` 仍 8 PASS，**不必動快照、不必加豁免**。
+「豁免表腐爛項」那條也不會誤報（本來就沒列管）。
+
+## 只回報、沒有動的（等站長裁定）
+
+- admin 三份「去括號」副本（`server_admin_patch.js` 的 `normCardName`、
+  `admin.html` L526/L564 的 `computeCanonicalKey`/`displayName`）：三份都是**先 strip 括號再比對**，
+  所以改名前後 canonical key 相同，**缺口自動消失、行為零差異**。
+- `server_admin_patch.js` 的 `deckToSets` / `deckMatchesRule` 用的是**未正規化**的原始卡名 ⇒
+  改名讓比對**變準**（原本只放 19630 的牌組會漏命中 `includes:['老大的指令']` 的原型規則）。
+  ⚠ 唯一殘餘風險：Mongo `deckRules` 若有人手寫過「老大的指令（烏羽）」，那條規則從此永不命中。
+- 全庫仍有約 500 組 `(卡名|編號|卡包)` 完全相同的重複 id（M2a / MC / SV8a / SV11B / SV11W 等）。
+  本版的判據是「hk 圖床」（現為 0 張），沒有一併處理那些。
+
 # v6.192 「括號冠名 ＝ 同名卡」收斂成單一分組 key（站長裁定）
 
 站長 2026-08-15 裁定：**「老大的指令」和「老大的指令（烏羽）」算同名卡**
