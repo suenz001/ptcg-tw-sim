@@ -1,3 +1,101 @@
+# v6.194 站長改判：港版重複卡「資料留著、玩家選不到」＋ 基本能量 metadata 對齊官方
+
+## 為什麼要改 v6.193
+
+v6.193 依站長當時的裁定把 18965／18969 **從 `static/cards/M-P-J.json` 刪掉**，
+並用 `RETIRED_DUP_TO_TW_ID` 把牌組裡的舊 id 對照回台版。站長本輪改判（原文照抄）：
+
+> 「那 2 組港版就先存在資料裡面就好，但請從卡牌資料庫和牌組編輯器裡面把連結移除，
+>   讓之後的玩家不會再誤選到。」
+
+**改判是對的，而且 v6.193 有一個當時沒被涵蓋的破口**：`RETIRED_DUP_TO_TW_ID` 只在
+`migrateDeck` / `createGame` / `deckEntriesAllInPool` / `loadDeckSets` 這幾個
+「以 **牌組 entry** 為單位」的入口生效，但**對戰回放不是**。
+`tournament-dumps` 的 dump\_20260720\_094446.json 裡有玩家真的用過這張卡的場次，
+回放快照長這樣（原文照抄）：
+
+```
+{"iid":"tp8phnwl","cardId":"18965","damage":630,"energyAttached":[...]}
+```
+
+`tReplayGoto()` 是把快照**直接**塞回 `game`，中間沒有任何 migrate 機會；
+卡池裡沒有 18965 時，engine 的 `getCard()` 會 throw（v5.336 同一條路徑）。
+新守衛 ④ 用行為端實跑釘住這一條，並附「真的查無的 id 必須 throw」的正對照 ——
+否則「沒有 throw」跟「這條斷言根本沒跑到」長得一樣。
+
+⇒ **下架 ≠ 刪除**。資料留在卡庫（因此也留在 `tournament-pool.json`），
+只是不出現在任何「玩家挑得到」的清單裡。
+
+## 中央收斂：全站只有一份「這張卡要不要對玩家開放」
+
+新檔 `src/lib/cards/visibility.ts`（零 import 的葉子模組，不會造成循環相依／TDZ）：
+
+- `HIDDEN_FROM_PLAYERS`：`{ id → { replacementId, reason } }` ——**唯一**的排除清單。
+- `isHiddenFromPlayers(id)` / `resolvePlayerFacingCardId(id)` / `filterPlayerSelectable(cards)`。
+
+`src/lib/decks/cardIdMigration.ts` 的 `RETIRED_DUP_TO_TW_ID` 改成**由它推導**
+（`Object.fromEntries(...)`），不再是第二份字面量清單。守衛用剝註解後的枚舉掃 `src/` 全樹，
+除了 `visibility.ts` 之外任何檔案出現 `'18965'` / `'18969'` 字面量就紅（含正對照與剝註解自驗）。
+
+### 接上的消費點
+
+| 消費點 | 檔案 | 做法 |
+|---|---|---|
+| 卡牌資料庫 `/cards`（ALL 與單一卡包兩條路徑） | `src/routes/cards/+page.ts` | `filterPlayerSelectable()` |
+| 牌組編輯器的候選／搜尋 | `src/routes/decks/+page.svelte` | `pool = filterPlayerSelectable(allCards)` |
+| SEO 卡片頁預渲染 + sitemap | `src/lib/server/cardIndex.ts` | `getStdCardIds()` 跳過 |
+| 貼卡表匯入 `{count} {name} #{id}` | `src/routes/decks/+page.svelte` | `resolvePlayerFacingCardId()` |
+| 官網代碼匯入 | 同上 | 同上（冪等） |
+| 既有牌組載入 | `cardIdMigration.migrateDeck` | 沿用 v6.193 的對照 |
+
+⭐ **分界在 `pool` 與 `poolById`**：
+`pool`（陣列）＝可挑選／可搜尋，**濾**；`poolById`（Map）＝畫得出來的卡，**不濾**。
+`filteredPool` / `poolBySetNum` / `poolByName` / `sameNameVariants` / `previewChain` /
+`chainNames` 全部由 `pool` 衍生 ⇒ 濾一處、所有候選一起消失；
+而 `activeEntries` / `validateDeck` / `deckStats` 走 `poolById` ⇒ 已存牌組**不會變成缺卡**。
+若把 `poolById` 也濾掉，那張卡的 entry 會直接從畫面消失、張數少 N —— 守衛把這兩行都釘住了。
+
+## 基本能量 metadata（16 張）
+
+取值方式：`curl` 台灣官方
+`asia.pokemon-card.com/tw/card-search/detail/{id}/`，
+解 `span.pageHeader`（卡名）／`span.alpha`（賽制標）／`span.collectorNumber`（卡號）三個欄位，
+16 張逐頁實測（**沒有憑印象、沒有查外文 Wiki**）。
+
+- `7815~7822`：`collectorNumber` 由 `257~264/SV-P` 改成官方的
+  `GRA` / `FIR` / `WAT` / `LIG` / `PSY` / `FIG` / `DAR` / `MET`。標本來就是 J，正確。
+- `13128~13135`：`regulationMark` 由 `I` 改成官方的 `J`。
+
+### 搬檔（做了，理由如下）
+
+拆檔規則來源 `scripts/split-mp-v116.mjs`：M-P / SV-P 的 promo 依**卡片的** `regulationMark`
+分檔，`setCode = \`SV-P-${mark}\``。實測 BASE 的 6 個 promo 檔（M-P-H/I/J、SV-P-H/I/J）
+**每一張卡的標都與檔名相符，零例外**；只改標不搬檔，就會由我親手打破這條不變式。
+另有 `test-card-db-integrity.mjs` 的「setCode 必須等於所在檔名」硬性守衛。
+⇒ 13128~13135 從 `SV-P-I.json` 搬到 `SV-P-J.json`（`setCode` 同步改）。
+
+搬運校驗和：搬過去的 8 張逐欄位 diff，**變動欄位集合恰為 `{setCode, regulationMark}`**；
+全庫逐張 sha256 比對，內容有變的剛好 16 張（8 張改號 + 8 張搬檔），其餘 4919 張雜湊不變。
+`index.json` 手術式更新（**沒有跑 build-sets-index.js**）：
+`M-P-J` 90→92、`SV-P-I` 30→22（Energy 8→0，該鍵移除）、`SV-P-J` 13→21（Energy 8→16）；
+`card-set-map.json` 4933→4935。live 總張數 4935 = index.json 宣告值。
+
+⚠ 副作用：舊的文字牌表若寫成 `4 基本【草】能量 SV-P-J 257/SV-P` 會對不上 (setCode, 卡號)。
+⇒ 匯入的 Format A 加了「對不上就退回卡名精確比對」的 fallback（與既有 Format E 同一手法，
+會列進歧義提示），免得玩家手上存的牌表整份匯不進來。
+
+⚠ **卡名刻意不動**：官網對 GRA/FIR/… 那批印刷顯示的是「基本草能量」（無【】），
+但 `getBasicEnergyType()` 是**讀卡名**推屬性，全庫 80 張基本能量一律用「基本【X】能量」；
+只改這 8 張會讓屬性推不出來。守衛把「不要順手改」也釘住了。
+
+## 守衛
+
+新增 `scripts/test-v6194-hidden-cards-and-energy-metadata.mjs`（20 PASS）進 test 鏈。
+在 BASE 上跑：不補 `visibility.ts` 直接 build 失敗；補上讓它 build 得起來後 **FAIL 13 條**。
+既有守衛同步：`test-v6193-hk-dup-and-boss-rename.mjs` 的 ①（原本斷言「必須從卡庫消失」）
+反轉成「必須還在卡庫」並改註解說明改判緣由；`test-card-db-integrity.mjs` 的
+`IMG_EXCEPTIONS` 把兩筆 hk 圖床網址放回來。
+
 # v6.193 港版重複卡下架 ＋「老大的指令（烏羽）」改名（站長兩個裁定）
 
 站長 2026-08-15 兩個裁定：

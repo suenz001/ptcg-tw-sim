@@ -371,16 +371,16 @@
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 90,
+  "cardCount": 92,
   "supertypeCounts": {
-   "Pokemon": 74,
-   "Trainer": 7,
+   "Pokemon": 75,
+   "Trainer": 8,
    "Energy": 9
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 90
+  "count": 92
  },
  {
   "code": "M3",
@@ -565,30 +565,29 @@
   "code": "SV-P-I",
   "name": "SV-P特典卡(I)",
   "regulationMark": "I",
-  "cardCount": 30,
+  "cardCount": 22,
   "supertypeCounts": {
    "Pokemon": 10,
-   "Trainer": 12,
-   "Energy": 8
+   "Trainer": 12
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00012567.png",
   "scrapedAt": "2026-04-25T17:32:23.798013Z",
   "releaseDate": null,
-  "count": 30
+  "count": 22
  },
  {
   "code": "SV-P-J",
   "name": "SV-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 13,
+  "cardCount": 21,
   "supertypeCounts": {
    "Trainer": 5,
-   "Energy": 8
+   "Energy": 16
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00007812.png",
   "scrapedAt": "2026-08-04T08:05:52.335336Z",
   "releaseDate": null,
-  "count": 13
+  "count": 21
  },
  {
   "code": "M5",

@@ -140,6 +140,10 @@ T('⭐ 卡名／招式名／特性名不得含零寬字元', () => {
 
 /** live 卡片的 imageUrl 幾乎都可由 id 合成；例外必須列在這裡（v6.116 掃出僅 5 張）。 */
 const IMG_EXCEPTIONS = {
+  // v6.194：這兩張是「資料留著、玩家選不到」的下架卡（$lib/cards/visibility），
+  //   來源是香港官網，圖檔前綴 hk 而非 tw ⇒ 合成不出來，必須列在例外表。
+  '18965': 'https://asia.pokemon-card.com/hk/card-img/hk00018965.png',
+  '18969': 'https://asia.pokemon-card.com/hk/card-img/hk00018969.png',
   '19624': 'https://asia.pokemon-card.com/tw/card-img/tw00019621.png',
   '19625': 'https://asia.pokemon-card.com/tw/card-img/tw00019622.png',
   '19626': 'https://asia.pokemon-card.com/tw/card-img/tw00019623.png',

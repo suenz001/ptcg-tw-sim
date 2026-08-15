@@ -6,6 +6,9 @@
  * 對應依 collectorNumber match (M5 卡序號 jp/tw 完全一致).
  * 81 卡完整對應.
  */
+// v6.194：下架卡清單的**唯一**來源（葉子模組，零 runtime 相依，不會造成循環 import）。
+import { HIDDEN_FROM_PLAYERS } from '$lib/cards/visibility';
+
 export const M5_JP_TO_TW_ID: Record<string, string> = {
 
   "50220": "19145",
@@ -92,23 +95,22 @@ export const M5_JP_TO_TW_ID: Record<string, string> = {
 };
 
 /**
- * v6.193 **港版重複卡下架 → 對照回台版**（站長 2026-08-15 裁定「刪掉港版，只留台版」）。
+ * **港版重複卡下架 → 對照回台版**。
  *
- * `static/cards/M-P-J.json` 裡曾有兩筆來源是 HK 官網（圖檔 `…/hk/card-img/hk000*.png`）
- * 的卡，與台版**同名、同編號、逐欄位相同**（v6.116 大量 clone 時多產的）：
- *   18965 超級妖火紅狐ex 103/M-P → 台版 18560
- *   18969 古歷 107/M-P           → 台版 18564
+ * v6.193 的做法是把那兩張從 `static/cards/M-P-J.json` **刪掉**；
+ * v6.194 依站長 2026-08-15 的第二次裁定改為「資料留著、只是玩家選不到」，
+ * 清單因此收斂到 `$lib/cards/visibility` 的 `HIDDEN_FROM_PLAYERS`
+ * ——**全站只有那一份**排除清單，這裡只是推導出「id → 保留版 id」的對照。
  *
- * ⚠⚠ 為什麼一定要留這張對照表，而不是讓它變成「查無此卡」：
- *   `engine.ts` 的 `getCard()` 找不到卡會直接 **throw**。實測（本版守衛有行為端斷言）：
- *   牌組帶著已刪的 id 進對戰、那張卡上到戰鬥位後**一攻擊就 `Card not found` 整局卡死**
- *   —— 與 v5.336 的事故完全同一條路徑。既然兩者是同一張卡的不同來源圖，對照回台版 id
- *   是最無感的降級：玩家牌組張數不變、對戰照打。
+ * ⚠ 為什麼即使卡片已經回到卡池、這張對照表仍然要留著：
+ *   它讓「舊牌組裡的港版 id」在載入時就換成台版那張，玩家牌組張數不變、
+ *   對戰照打，而且下次存檔之後就再也不帶著下架 id ——
+ *   等於把 v6.193 那條「不可再新增」的規則也套用到既有牌組上。
+ *   （即使把這張表拿掉也不會崩潰，因為卡片本身已經回到卡池了。）
  */
-export const RETIRED_DUP_TO_TW_ID: Record<string, string> = {
-  '18965': '18560',   // 超級妖火紅狐ex 103/M-P（港版重複收錄，v6.193 下架）
-  '18969': '18564',   // 古歷 107/M-P（港版重複收錄，v6.193 下架）
-};
+export const RETIRED_DUP_TO_TW_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(HIDDEN_FROM_PLAYERS).map(([id, info]) => [id, info.replacementId]),
+);
 
 /** 對單一 cardId 查 migration (jp→tw / 已下架重複卡→保留版); 不在 table 原樣回傳 */
 export function migrateCardId(cardId: string): string {

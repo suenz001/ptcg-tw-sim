@@ -63,19 +63,27 @@ T('自驗：live 卡庫載得到（≥4000 張）、19630 與 18560/18564 都在
   for (const id of ['19630', '18560', '18564']) ok(pool.get(id), '卡庫沒有 id ' + id);
 });
 
-console.log('① 港版重複卡必須從卡庫消失（台版保留、逐欄位相同）');
+console.log('① 港版重複卡：v6.193 刪除 → v6.194 改判為「下架但資料留著」');
 
+// v6.194 起語義是「下架（hidden）」不是「刪除」：id 仍在卡庫，只是玩家選不到。
 const DELETED = { '18965': '18560', '18969': '18564' };
 
-T('⭐⭐⭐ 18965／18969 不存在於 live 卡庫（含 card-set-map）', () => {
-  for (const id of Object.keys(DELETED)) {
-    ok(!pool.get(id), '卡庫還有已裁定刪除的港版重複卡 id ' + id);
-  }
+// ⚠⚠⚠ v6.194 站長改判：「那 2 組港版就**先存在資料裡面就好**，但請從卡牌資料庫和
+//   牌組編輯器裡面把連結移除。」⇒ 本版把 v6.193 的「刪掉」改成「下架（資料留著）」。
+//   真因：已歸檔的比賽紀錄與**對戰回放**快照裡直接寫著 cardId 18965，回放不經
+//   migrateDeck／createGame，卡池沒有那個 id 就會 getCard() throw。
+//   ⇒ 這一條的斷言在 v6.194 反向：卡必須「還在卡庫裡」，可選性交給
+//   scripts/test-v6194-hidden-cards-and-energy-metadata.mjs 的行為端斷言。
+T('⭐⭐⭐ 18965／18969 仍在 live 卡庫與 card-set-map（v6.194 改判：下架≠刪除）', () => {
   const csm = JSON.parse(readFileSync(join(ROOT, 'static/card-set-map.json'), 'utf8'));
-  for (const id of Object.keys(DELETED)) ok(!(id in csm), 'card-set-map.json 還有 ' + id);
-  // 全站沒有任何一張卡的 imageUrl 還指向 hk 圖床
+  for (const id of Object.keys(DELETED)) {
+    ok(pool.get(id), '卡庫沒有 ' + id + ' —— 回放／比賽紀錄會 getCard() throw');
+    ok(csm[id] === 'M-P-J', 'card-set-map.json 的 ' + id + ' 不是 M-P-J：' + csm[id]);
+  }
+  // 全站唯二的 hk 圖床卡就是這兩張（多出第三張＝又有人從港版來源抓卡）
   const hk = [...pool.values()].filter((c) => (c.imageUrl || '').includes('/hk/card-img/'));
-  ok(hk.length === 0, '還有 ' + hk.length + ' 張卡用香港圖床：' + hk.slice(0, 3).map((c) => c.id + ' ' + c.name).join(', '));
+  ok(hk.length === 2 && hk.every((c) => c.id in DELETED),
+    '香港圖床卡應該剛好是那 2 張，實際 ' + hk.length + ' 張：' + hk.slice(0, 3).map((c) => c.id + ' ' + c.name).join(', '));
 });
 
 T('⭐⭐ 保留的台版與被刪的港版是同一張卡（卡名／編號／卡面逐字相同）', () => {
@@ -90,13 +98,13 @@ T('⭐⭐ 保留的台版與被刪的港版是同一張卡（卡名／編號／�
   ok(pool.get('18564').rulesText === '將雙方的所有寶可夢各恢復「50」HP。', '古歷 rulesText 對不上卡面');
 });
 
-T('⭐⭐ 卡包張數同步（M-P-J 92 → 90；index.json 禁重生）', () => {
+T('⭐⭐ 卡包張數同步（M-P-J = 92；index.json 禁重生）', () => {
   const e = INDEX.find((x) => x.code === 'M-P-J');
   const arr = JSON.parse(readFileSync(join(dir, 'M-P-J.json'), 'utf8'));
-  ok(arr.length === 90, 'M-P-J.json 應剩 90 張，實際 ' + arr.length);
-  ok(e.cardCount === 90 && e.count === 90, 'index.json M-P-J 張數沒同步：' + e.cardCount + '/' + e.count);
+  ok(arr.length === 92, 'M-P-J.json 應為 92 張（v6.194 把下架的 2 張放回來），實際 ' + arr.length);
+  ok(e.cardCount === 92 && e.count === 92, 'index.json M-P-J 張數沒同步：' + e.cardCount + '/' + e.count);
   const sc = e.supertypeCounts;
-  ok(sc.Pokemon + sc.Trainer + sc.Energy === 90, 'supertypeCounts 加總 ≠ 90：' + JSON.stringify(sc));
+  ok(sc.Pokemon + sc.Trainer + sc.Energy === 92, 'supertypeCounts 加總 ≠ 92：' + JSON.stringify(sc));
   ok(e.name === 'M-P特典卡(J)' && e.regulationMark === 'J', 'index.json 的手工欄位被重生洗掉了');
 });
 
@@ -276,7 +284,8 @@ T('⭐⭐ 行為端：loadDeckSets 用已刪 id 也解得出卡包（不會誤�
   ok(_lds.missingIds.length === 0, '已刪的港版 id 被當成「對照表查不到」：' + JSON.stringify(_lds.missingIds));
   const ids = new Set(_lds.cards.map((c) => String(c.id)));
   ok(ids.has('18560') && ids.has('18564'), '沒有把保留版所在的卡包載進來');
-  ok(!ids.has('18965') && !ids.has('18969'), '卡包裡竟然還載得到已刪的 id');
+  ok(ids.has('18965') && ids.has('18969'),
+    'v6.194 起下架卡仍留在同一個卡包（M-P-J）裡 —— 載不到就代表資料又被刪了');
   ok(_ldsMissProbe.missingIds.length === 1, '正對照失效：真的查無的 id 應該進 missingIds');
 });
 

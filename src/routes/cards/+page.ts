@@ -2,6 +2,8 @@ import { base } from '$app/paths';
 import type { Card, SetSummary } from '$lib/cards/types';
 // v4.956：fetch URL 帶版本參數，繞過 Cloudflare 邊緣 cache
 import { VERSION } from '$lib/version';
+// v6.194：已對玩家下架的卡不得出現在卡牌資料庫（唯一述詞，見 $lib/cards/visibility）。
+import { filterPlayerSelectable, applyHiddenCountsToSets } from '$lib/cards/visibility';
 
 /**
  * Loads either:
@@ -18,7 +20,8 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   if (!setCode) {
     const res = await fetch(`${base}/cards/index.json?v=${VERSION}`);
     if (!res.ok) throw new Error(`Failed to load sets index: HTTP ${res.status}`);
-    const sets: SetSummary[] = await res.json();
+    // v6.194：卡包磚的張數要扣掉下架卡，否則「92 張」點進去只有 90 張。
+    const sets: SetSummary[] = applyHiddenCountsToSets(await res.json());
     return { mode: 'index' as const, sets };
   }
 
@@ -28,7 +31,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
   if (setCode === 'ALL') {
     const indexRes = await fetch(`${base}/cards/index.json?v=${VERSION}`);
     if (!indexRes.ok) throw new Error(`Failed to load sets index: HTTP ${indexRes.status}`);
-    const sets: SetSummary[] = await indexRes.json();
+    const sets: SetSummary[] = applyHiddenCountsToSets(await indexRes.json());
 
     // Fetch every set's cards in parallel. Individual set failures are
     // tolerated — one broken file shouldn't bomb the whole ALL view.
@@ -45,7 +48,8 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
         }
       })
     );
-    const cards: Card[] = results.flat();
+    // v6.194：下架卡不列入（資料仍在、對戰／回放照常，只是玩家瀏覽不到）。
+    const cards: Card[] = filterPlayerSelectable(results.flat());
 
     return {
       mode: 'set' as const,
@@ -69,12 +73,13 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
     fetch(`${base}/cards/index.json?v=${VERSION}`)
   ]);
   if (!cardsRes.ok) throw new Error(`Set ${setCode} not found (HTTP ${cardsRes.status})`);
-  const cards: Card[] = await cardsRes.json();
+  // v6.194：單一卡包檢視同樣濾掉下架卡（與 ALL 檢視共用同一份述詞）。
+  const cards: Card[] = filterPlayerSelectable((await cardsRes.json()) as Card[]);
 
   let setName: string | undefined;
   let sets: SetSummary[] = [];
   if (indexRes.ok) {
-    sets = await indexRes.json();
+    sets = applyHiddenCountsToSets(await indexRes.json());
     setName = sets.find((s) => s.code === setCode)?.name;
   }
   // v2.184：sets 也回傳，給 modal foot 顯示「出自於卡包【XXX】」用

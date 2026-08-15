@@ -3,6 +3,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Card } from '$lib/cards/types';
+// v6.194：下架卡不產生卡片頁、也不進 sitemap（唯一述詞）。
+import { isHiddenFromPlayers } from '$lib/cards/visibility';
 
 const DIR = join(process.cwd(), 'static', 'cards');
 const STD_MARKS = new Set(['H', 'I', 'J']);  // SEO B-2 Phase 1 範圍：標準環境 H/I/J
@@ -25,6 +27,7 @@ export function getCardMap(): Map<string, Card> {
 export function getStdCardIds(): string[] {
   const ids: string[] = [];
   for (const [id, c] of getCardMap()) {
+    if (isHiddenFromPlayers(id)) continue;   // v6.194：已對玩家下架
     if (STD_MARKS.has((c.regulationMark ?? '') as string)) ids.push(id);
   }
   return ids;

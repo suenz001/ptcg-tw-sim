@@ -6,6 +6,9 @@
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
+  // ⭐ v6.194 下架卡：全站唯一述詞。牌池(pool)＝玩家「可以挑的卡」，
+  //   poolById＝「畫得出來的卡」——**兩者刻意不同**，見下方 onMount 的註解。
+  import { filterPlayerSelectable, resolvePlayerFacingCardId } from '$lib/cards/visibility';
   import {
     loadDecks,
     upsertDeck,
@@ -631,7 +634,14 @@
   onMount(() => {
     // ① Load card pool (independent of auth)
     loadAllSets().then((allCards) => {
-      pool = allCards;
+      // ⭐⭐⭐ v6.194 站長裁定「資料留著、但玩家選不到」——分界就在這兩行：
+      //   ・`pool`（陣列）＝**可挑選／可搜尋**的牌池：濾掉下架卡。
+      //     filteredPool（列表）、poolBySetNum／poolByName（匯入對應）、sameNameVariants、
+      //     previewChain、chainNames 全部由它衍生 ⇒ 一處濾掉，所有候選一起消失。
+      //   ・`poolById`（Map）＝**畫得出來**的卡：**不濾**。
+      //     已存牌組若還帶著下架卡的 id，activeEntries／validateDeck／deckStats 都靠它，
+      //     濾掉會讓那張卡變成「缺卡」（entry 直接消失、張數少 N）——正是站長要求避免的。
+      pool = filterPlayerSelectable(allCards);
       poolById = buildCardIndex(allCards);
       poolReady = true;
     }).catch((e) => { poolError = e instanceof Error ? e.message : String(e); });
@@ -1058,7 +1068,8 @@
       const substitutedList: string[] = [];  // v5.381：被「同名合法版」自動替換的卡（透明回報）
       for (const e of data.entries) {
         // v4.971 hotfix: pool 是 Card[] 沒 .get；用 poolById Map
-        let card = poolById.get(e.cardId);
+        // v6.194：官網理論上不會回港版 id，但這條也走同一份述詞（冪等，不在表上原樣回傳）。
+        let card = poolById.get(resolvePlayerFacingCardId(e.cardId));
         if (!card && e.setCode && e.collectorNumber) {
           card = poolBySetNum.get(`${e.setCode}-${e.collectorNumber}`);
         }
@@ -1254,10 +1265,13 @@
 
       if (mId) {
         countStr = mId[1];
-        const cardId = mId[3];
+        // v6.194：貼卡表指到已下架的 id（例：港版 18965）→ 換成開放的台版那張。
+        //   下架卡仍在 poolById 裡（已存牌組要畫得出來），所以**不能**直接 get，
+        //   否則匯入等於幫玩家新增了一張選不到的卡。
+        const cardId = resolvePlayerFacingCardId(mId[3]);
         const name = mId[2].trim();
         card = poolById.get(cardId);
-        label = `${name} (id=${cardId})`;
+        label = `${name} (id=${mId[3]})`;
         // Fallback：cardId 找不到（可能是標外卡或更早 set），改用同名卡替代
         if (!card) {
           const fallback = pool.find(c => c.name === name);
@@ -1276,6 +1290,22 @@
         const collectorNumber = mFull[4];
         card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
         label = `${setCode} ${collectorNumber}`;
+        // v6.194：卡包代號／卡號會因為官方 metadata 更正而改變（本版就把 8 張基本能量的
+        //   卡號改成官方的 GRA/FIR/… 字母編號、並把另外 8 張搬到 SV-P-J）。舊的文字牌表
+        //   會因此對不上 (setCode, 卡號) ⇒ 退回卡名精確比對（與下方 Format E 同一手法），
+        //   免得玩家手上存的牌表整份匯不進來。
+        if (!card) {
+          const nm = mFull[2].trim();
+          const exact = pool.filter(c => c.name === nm);
+          if (exact.length >= 1) {
+            card = exact[0];
+            ambiguities.push({
+              name: nm,
+              used: `${card.setCode} · ${card.collectorNumber}（自動替代，原 ${setCode} ${collectorNumber} 不在牌池）`,
+              alternatives: exact.slice(1).map(c => `${c.setCode} · ${c.collectorNumber}`),
+            });
+          }
+        }
       } else if (mSimple) {
         countStr = mSimple[1];
         const name = mSimple[2].trim();
@@ -1312,6 +1342,11 @@
         const collectorNumber = mNoCount[3];
         card = poolBySetNum.get(`${setCode}-${collectorNumber}`);
         label = `${setCode} ${collectorNumber}`;
+        // v6.194：同 Format A —— 官方 metadata 更正後舊牌表的 (setCode, 卡號) 會對不上，退回卡名比對。
+        if (!card) {
+          const exact = pool.filter(c => c.name === name);
+          if (exact.length >= 1) card = exact[0];
+        }
         if (card) {
           ambiguities.push({
             name,
