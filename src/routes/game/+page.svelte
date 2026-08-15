@@ -1419,6 +1419,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 為何不用 number input：Leon 規則「戰鬥畫面只用滑鼠」（記憶 feedback_mouse_only_battle.md）
   let selectionStepperValue = $state<number>(0);
   let zoomCard = $state<Card | null>(null);
+  // ⭐⭐⭐v6.190 回放限定：獎賞卡檢視視窗。
+  //   ⚠⚠ 獎賞卡在正式對戰中是「蓋著的機密資訊」（只有 faceUp 的那幾張才可以看）。
+  //   這個視窗**只准在對戰回放（isTReplay）裡開**：回放讀的是已結束對局的歸檔快照，
+  //   攤牌是刻意的（v5.940 手牌攤開、v6.135 獎賞正面都是同一個決定）。
+  //   ⚠ 觀戰（isTournSpectator）**不是**回放：觀戰看的是進行中的對局，
+  //     伺服器的 _redactStateForSeat 對觀戰端永遠遮，但玩家端遮蔽是灰度旗標（v6.153 預設關），
+  //     也就是說「對戰中的 client 手上就有對手獎賞的 cardId」⇒ 這道 client 端的閘是唯一防線。
+  //   ⇒ 三道閘：① openPrizeView 早退 ② 觸發按鈕包在 isTReplay 內 ③ 視窗本體 {#if isTReplay ...}。
+  let prizeViewOpen = $state(false);
+  function openPrizeView() {
+    if (!isTReplay) { prizeViewOpen = false; return; }   // ⚠ 非回放一律拒絕（不是只有不顯示）
+    prizeViewOpen = true;
+  }
+  function closePrizeView() { prizeViewOpen = false; }
   // v2.129：全螢幕卡牌放大 lightbox（鏡射 /cards 樣式）— 從任何 zoom-img 或 cards 點擊觸發
   let lightboxUrl = $state<string | null>(null);
   function openLightboxImg(url: string) { lightboxUrl = url; }
@@ -5065,6 +5079,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (data.error) { tError = data.error; return; }
       if ((!data.snapshots || data.snapshots.length === 0) && !data.finalState) { tError = '這場沒有可回放的資料（可能是部署回放功能之前的舊對戰）'; return; }
       tReplay = data;
+      // ⚠⚠v6.190 先把上一份盤面清掉再開回放旗標：isTReplay 一旦為 true，桌機獎賞縮圖就會
+      //   翻正面（(_pz.faceUp || isTReplay)），而底下還有一個 await 才會把 game 換成回放快照。
+      //   進入點同時歸零獎賞卡檢視視窗（離開回放有 7 條路徑，在進入點歸零才是單一來源）。
+      game = null; prizeViewOpen = false;
       isTReplay = true; isTournSpectator = true; mySeatIdx = 2; myPlayerIndex = null; mode = 'online'; battleLogOpen = true; spectatorView = 'auto';  // v5.942 開log面板+視角自動跟當前出牌方(本機雙人;可手動看P1/P2 override)
       const steps = tReplaySteps();
       try { await Promise.all(steps.map((s: any) => ensurePoolForStateIds(s.state))); } catch { /* best-effort */ }
@@ -9891,6 +9909,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
       onOpenZoom={openZoom}
+      onOpenPrizes={openPrizeView}
       onOpenSettings={() => showSettingsModal = true}
       onLeave={() => {
         // v5.566：手機直式離開鈕也要走投降確認(原直接 leaveOnlineGame 漏了確認視窗)
@@ -10240,7 +10259,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:legend-half-r={twoCardStadiumHalfIndex(oppPlayer?.prizes, _pz?.iid ?? '', pool) === 1}/>{/if}</div>{/each}
           </div>
         {/key}
-        <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
+        {#if isTReplay}
+          <button class="zone-label-sm prize-view-btn" onclick={openPrizeView} title="查看雙方獎賞卡（回放限定）">🎁 獎賞 {oppPlayer?.prizes.length??0}張 🔍</button>
+        {:else}
+          <div class="zone-label-sm">獎賞 {oppPlayer?.prizes.length??0}張</div>
+        {/if}
       </div>
     </div>
 
@@ -10441,7 +10464,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {/if}
       <div class="zone-prizes">
-        <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
+        {#if isTReplay}
+          <button class="zone-label-sm prize-view-btn" onclick={openPrizeView} title="查看雙方獎賞卡（回放限定）">🎁 獎賞 {myPlayer?.prizes.length??0}張 🔍</button>
+        {:else}
+          <div class="zone-label-sm">獎賞 {myPlayer?.prizes.length??0}張</div>
+        {/if}
         <div class="prize-grid">
           {#key prizeAnimKey[myIdx]}
             {#each Array(6) as _, i (i)}{@const _pz = myPlayer?.prizes[i]}{@const _pc = _pz && (_pz.faceUp || isTReplay) ? getCard(_pz.cardId) : null}<div class="prize-card my-prize prize-anim" class:prize-gone={i>=(myPlayer?.prizes.length??0)} class:prize-faceup={!!_pz && (!!_pz.faceUp || isTReplay)} style="animation-delay:{i*90}ms" title={_pc?.name??''}>{#if _pc?.imageUrl}<img use:retryImg={_pc.imageUrl} class="prize-face-img" src={_pc.imageUrl} alt={_pc.name}
@@ -12715,6 +12742,38 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if returnRoomRejectedToast}
     <div class="restart-rejected-toast">
       ❌ 對方拒絕了返回房間的提議
+    </div>
+  {/if}
+
+  <!-- ⭐⭐⭐v6.190 獎賞卡檢視（回放限定） —— 位置刻意放在
+       `{#if isPortraitMobile && game}` … `{:else}` … `{/if}` 這組版面分支**之外**，
+       手機直式與桌機共用同一個視窗（v6.167：畫在錯的分支＝有一種版面永遠顯示不出來）。
+       ⚠⚠ 第一個條件永遠是 isTReplay：正式對戰／觀戰時這段 DOM 根本不存在。 -->
+  {#if isTReplay && prizeViewOpen && game}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="zoom-overlay" onclick={closePrizeView}>
+      <div class="zoom-modal discard-modal prize-view-modal" onclick={(e)=>e.stopPropagation()}>
+        <button class="zoom-close" onclick={closePrizeView} aria-label="關閉">✕</button>
+        <h3 class="discard-title">🎁 獎賞卡（回放限定）</h3>
+        {#each [myPlayer, oppPlayer] as _pvp, _pvi (_pvi)}
+          <div class="prize-view-side">
+            <div class="prize-view-side-title">{_pvp?.name ?? (_pvi === 0 ? '下方玩家' : '上方玩家')}　剩 {_pvp?.prizes.length??0} 張</div>
+            <div class="sel-grid">
+              {#each dedupeByIid(_pvp?.prizes) as _pvc (_pvc.iid)}{@const _pvcard = getCard(_pvc.cardId)}
+                {#if _pvcard}
+                  <button class="sel-card" onclick={() => openZoom(_pvc.cardId, _pvc)}>
+                    <img use:retryImg={_pvcard.imageUrl} src={_pvcard.imageUrl} alt={_pvcard.name} loading="lazy"
+                      class:legend-half-l={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 0}
+                      class:legend-half-r={twoCardStadiumHalfIndex(_pvp?.prizes, _pvc.iid, pool) === 1}/><span class="sel-name">{_pvcard.name}</span>
+                  </button>
+                {/if}
+              {/each}
+              {#if (_pvp?.prizes.length??0) === 0}<p class="sel-empty">（獎賞卡已全部取完）</p>{/if}
+            </div>
+          </div>
+        {/each}
+      </div>
     </div>
   {/if}
 
@@ -16231,6 +16290,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .discard-modal .sel-card img{ width:108px; }
   .discard-modal .sel-name{ font-size:.74rem; }
   .discard-modal .sel-hp{ font-size:.68rem; }
+
+  /* ⭐v6.190 獎賞卡檢視（回放限定）。手機/桌機共用同一份樣式 —— 差異只靠尺寸自適應，
+     ⚠ 不用 @media 當「手機開關」（手機直式與桌機是兩套獨立分支，開關是 isPortraitMobile）。
+     ⚠ 安全區一律讀單一來源 --safe-top / --safe-bottom（v6.187，宣告在 +layout.svelte）。 */
+  .prize-view-modal{ max-width:760px; overflow-y:auto;
+    padding-bottom:calc(1.44rem + var(--safe-bottom, 0px));
+    max-height:calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 2rem); }
+  .prize-view-modal .sel-grid{ max-height:none; overflow:visible; }
+  .prize-view-side{ margin-bottom:.5rem; }
+  .prize-view-side-title{ margin:.15rem 0 .35rem; color:#ffd23f; font-size:.9rem; font-weight:700; }
+  .prize-view-btn{ background:rgba(255,210,63,.14); border:1px solid #a8842a; border-radius:6px; color:#ffd23f; cursor:pointer; font:inherit; padding:1px 7px; }
+  .prize-view-btn:hover{ background:rgba(255,210,63,.28); }
 
   /* ── Tool + Stadium ── */
   /* v3.9996：玩家回報自己戰鬥場道具標示看不清楚 — 字太小 + 對比低 */

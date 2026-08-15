@@ -1,3 +1,92 @@
+# v6.190 對戰回放：獎賞卡檢視視窗（手機直式 + 桌機共用）
+
+玩家回報「錦標賽回放時，手機版看不到獎賞卡內容」，站長建議「回放時點 🎁 圖示查看獎賞卡」。
+
+## ⚠⚠ 這一版最重要的不是新功能，是那道閘
+
+獎賞卡在正式對戰中是蓋著的機密資訊（`prizes[].faceUp`，只有特定卡效果會翻開）。
+**伺服器端的玩家盤面遮蔽 `_redactStateForSeat` 是預設關閉的灰度旗標**
+（v6.150 加入、v6.153 站長裁定改預設關：本站是練習站，防作弊優先度低）。
+⇒ **對戰中的 client 手上本來就有對手獎賞的 `cardId`**，
+   client 端這道 `isTReplay` 閘就是唯一防線，破了就是直接洩漏。
+
+三道獨立的閘，任何一道單獨都足以擋住：
+1. `openPrizeView()` 早退 —— `if (!isTReplay) { prizeViewOpen = false; return; }`
+   （不是「不開」，是**強制關閉**：避免任何殘留狀態被帶進非回放情境）
+2. 觸發按鈕包在 `{#if isTReplay}` 內（桌機）／`{#if isTReplay && onOpenPrizes}`（手機）
+3. 視窗本體 `{#if isTReplay && prizeViewOpen && game}` —— 非回放時這段 DOM **根本不存在**
+
+## 現況查證（行號以 v6.189 為準）
+
+- `isTReplay` 宣告在 `src/routes/game/+page.svelte:474`，**只有** `tStartReplay()`（L5068）
+  會設成 `true`。`tSpectate()`（L5085~）只設 `isTournSpectator = true`。
+  ⇒ **回放與觀戰是兩個獨立旗標**，回放蘊含觀戰、觀戰不蘊含回放。誤放行的風險在
+  「拿 `isTournSpectator` 當回放判據」，本版完全沒有用到那個旗標。
+- 桌機回放**本來就看得到**獎賞卡正面（L10238 / L10447 的 `(_pz.faceUp || isTReplay)`），
+  但那是 32×45px 的縮圖、而且是 `<div>` 不能點開 ⇒ 桌機其實也不好看，一併處理。
+- 手機直式（`MobilePortraitBattle.svelte` L913 / L1075）的獎賞區**只有一個 `🎁 N` 的
+  數字 chip，從頭到尾沒有渲染過任何卡片內容**。不是空間不夠、不是被蓋住 ——
+  是根本沒畫。這就是玩家看不到的原因。
+
+## 實作
+
+- 視窗本體畫在 `+page.svelte` 的 **modal 區**（`.battle-root` 內、
+  `{#if isPortraitMobile && game} … {:else} … {/if}` 這組版面分支**之外**，
+  與 `zoom-modal` 同一層）。⚠ v6.167 教訓：畫在錯的分支＝有一種版面永遠顯示不出來。
+  同一位置旁邊就有 v6.107 留下的同型警語。
+- 手機直式只負責觸發：新 prop `onOpenPrizes`，父層以 `onOpenPrizes={openPrizeView}` 傳入。
+  ⚠ 子元件的 prop 沒傳＝靜默失效，守衛 E4 直接斷言父層那個 tag 裡有這個屬性。
+- 樣式沿用站內既有的 `.zoom-overlay` / `.zoom-modal.discard-modal` / `.sel-grid` /
+  `.sel-card`（＝棄牌區檢視那一套），卡圖照規矩掛 `use:retryImg`，點卡片走既有 `openZoom`。
+- 安全區讀單一來源 `var(--safe-top/--safe-bottom)`（v6.187，宣告在 `+layout.svelte`）。
+- **沒有新增任何 `@media`**：手機/桌機是兩套獨立分支，開關是 `isPortraitMobile` 不是斷點。
+
+## 守衛 `scripts/test-v6190-replay-prize-view.mjs`（PASS 150）
+
+不是比字串：內建 Svelte 區塊樹解析器（含 `{:else if}` 的前分支否定）＋條件求值器，
+對「某段 DOM 在某情境下會不會被渲染」實際求值。解析器與剝註解器都先自我驗證
+（IRON_RULES Rule 25）。10 個情境：回放（桌機/手機）、正式對戰（自己回合/對手回合）、
+錦標賽觀戰（桌機/手機）、對戰結束但未進回放、setup 階段、錦標賽對戰中（桌機/手機）。
+
+`openPrizeView` 的函式本體是**真的被跑起來**的（`new Function` 包成 IIFE 後執行），
+不是看有沒有寫 `isTReplay`。
+
+**HEAD-FAIL 與突變測試（全部確認會紅）**：
+| 對照 | 結果 |
+|---|---|
+| v6.189 原始碼 | FAIL 12 |
+| 拿掉視窗的 `isTReplay` 閘 | FAIL 8 |
+| 拿掉 `openPrizeView` 早退 | FAIL 9 |
+| 父層不傳 `onOpenPrizes` | FAIL 1 |
+| 桌機按鈕不包 `{#if isTReplay}` | FAIL 6 |
+| 手機 chip 不包 `isTReplay` | FAIL 8 |
+| 手機自己去讀 `prizes[0].cardId` | FAIL 1 |
+| 把視窗搬進手機版面分支內 | FAIL 3 |
+
+## 順手確認：回放時手機版還有哪些區域看不到
+
+| 區域 | 手機直式 | 桌機 | 結論 |
+|---|---|---|---|
+| 獎賞卡 | ❌ 只有張數 | 縮圖（小） | **本版修掉** |
+| 棄牌區 | ✅ chip 可點開網格 | ✅ | 沒問題 |
+| 牌庫 | 只有張數 | 只有張數 | 兩邊一致，牌庫順序連回放也不攤（不動） |
+| 主視角手牌 | ✅ v5.954 已攤開 | ✅ v5.940 | 沒問題 |
+| **非行動方的手牌** | ❌ 看不到 | ⚠ 可用「看 P1／看 P2」切 | **手機缺視角切換鈕**，見下 |
+
+⚠ **未修（列給站長裁定）**：`spectatorView` 的「看 P1／看 P2／自動切換」三顆按鈕
+（`+page.svelte` L9969~9974）畫在**桌機分支內**，手機直式沒有對應 UI。
+手機回放只能看當前行動方的手牌，要看另一邊得等下一步換手。
+這是另一個獨立的 UI 缺口（要新增手機工具列按鈕 + 新 prop），與本版的洩漏風險無關，
+故不混在同一版動 —— 而且 `spectatorView` **同時被觀戰用到**，改動面比獎賞卡大。
+
+## 部署
+
+`update-admin-full.bat` / `redeploy-oracle.bat` / `update-tournament.bat` 三支都要跑
+（`oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 有改）。
+⚠ 本版**沒有動 engine / 卡效果 / 錦標賽伺服器邏輯**，但版本提示一致性靠守衛鎖著。
+
+---
+
 # v6.189 收尾批次：棄賽公告文案／`/checkin` 收進 seed 鎖／admin 對帳按鈕／lint 的 CRLF 誤報
 
 四件累積下來的小問題一次清掉。**首頁 changelog 不放** —— 一件是罕見系統公告的措辭更正

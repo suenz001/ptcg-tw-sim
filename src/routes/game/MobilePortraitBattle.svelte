@@ -85,6 +85,9 @@
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
     onOpenZoom: (cardId: string, inst: CardInstance | null) => void;
+    // ⭐v6.190 回放限定：開啟「雙方獎賞卡」檢視視窗。視窗本體畫在父層（版面分支之外），
+    //   這裡只負責觸發。⚠ 父層沒傳＝按鈕不出現（不會靜默變成點了沒反應）。
+    onOpenPrizes?: () => void;
     onOpenSettings: () => void;
     onLeave: () => void;
     // v5.194：手機版補悔棋按鈕（鏡射桌面版 performUndo）
@@ -107,6 +110,7 @@
     actionSending = false,  // v6.172
     actionQueued = 0,       // v6.172
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
+    onOpenPrizes,   // v6.190（回放限定）
     undoAvailable = false,
     onUndo,
     onResync,
@@ -910,7 +914,11 @@
 
   <!-- ─── 對手 chips: 獎賞/牌庫/棄牌（緊湊） ─── -->
   <div class="mp-chips mp-opp-chips">
-    <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
+    {#if isTReplay && onOpenPrizes}
+      <button class="mp-chip mp-clickable" onclick={onOpenPrizes} title="查看雙方獎賞卡（回放限定）">🎁 {oppPlayer.prizes.length} 🔍</button>
+    {:else}
+      <span class="mp-chip">🎁 {oppPlayer.prizes.length}</span>
+    {/if}
     <span class="mp-chip">📚 {oppPlayer.deck.length}</span>
     <button class="mp-chip mp-clickable" onclick={() => openDiscard(oppPlayer.discard, '對手')} disabled={oppPlayer.discard.length === 0}>🗑 {oppPlayer.discard.length}</button>
     <span class="mp-chip">✋ {oppPlayer.hand.length}</span>
@@ -1072,7 +1080,11 @@
 
   <!-- ─── 我方 chips: 獎賞/牌庫/棄牌 ─── -->
   <div class="mp-chips mp-my-chips">
-    <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
+    {#if isTReplay && onOpenPrizes}
+      <button class="mp-chip mp-clickable" onclick={onOpenPrizes} title="查看雙方獎賞卡（回放限定）">🎁 {myPlayer.prizes.length} 🔍</button>
+    {:else}
+      <span class="mp-chip">🎁 {myPlayer.prizes.length}</span>
+    {/if}
     <span class="mp-chip">📚 {myPlayer.deck.length}</span>
     <button class="mp-chip mp-clickable" onclick={() => openDiscard(myPlayer.discard, '我方')} disabled={myPlayer.discard.length === 0}>🗑 {myPlayer.discard.length}</button>
     <span class="mp-chip mp-mine">✋ {myPlayer.hand.length}</span>
