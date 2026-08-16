@@ -359,8 +359,9 @@ T('5j dump 摘要真的有把兩批分開列出來（否則站長會把數字加
 // ── 6) 版本 ────────────────────────────────────────────────────────────
 T('6a version.ts 與 admin.html 的版本提示同步', () => {
   const V = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8').match(/VERSION = '([\d.]+)'/)[1];
-  assert.equal(V, '6.198');
-  assert.ok(ADMIN.includes("window.SITE_VERSION_HINT = '6.198';"), 'admin 版本提示沒跟著 bump');
+  assert.ok(Number(V) >= 6.198, '版本不得倒退（本守衛自 v6.198 起生效）：' + V);
+  assert.ok(ADMIN.includes("window.SITE_VERSION_HINT = '" + V + "';"),
+    'admin.html 的 SITE_VERSION_HINT 沒跟著 version.ts bump（version.ts=' + V + '）');
 });
 
 console.log('\n通過 ' + pass + ' 項' + (fails.length ? '，失敗 ' + fails.length + ' 項' : ''));

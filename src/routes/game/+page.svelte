@@ -3,6 +3,7 @@
   import { retryImg } from '$lib/img-retry';
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
   import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
+  import { LB_TOP_OPTIONS, LB_TOP_MAX, lbTopRows, loadLbTop, saveLbTop } from '$lib/ui/leaderboard-top';
   import { resolveLogCard } from '$lib/game/log_zoom';
   import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
@@ -287,6 +288,11 @@
   let tTab = $state<'events' | 'leaderboard' | 'profile'>('events');
   let tLeaderboard = $state<any | null>(null);   // 排行榜聚合（後端 /leaderboard）
   let tLbLoading = $state(false);
+  // ⭐v6.199 排行榜顯示筆數（5 / 10 / 20，見 $lib/ui/leaderboard-top）。
+  //   伺服器一次送 LB_TOP_MAX 筆，切換筆數**只是本地 slice**：不重抓、不清空、不閃，
+  //   v6.177 的 stale-keep 那份好資料原封不動留在 tLeaderboard 裡。
+  let tLbTop = $state(loadLbTop());
+  function tLbSetTop(v: string | number): void { tLbTop = Number(v); saveLbTop(tLbTop); }
   let tProfile = $state<any | null>(null);        // 個人資料聚合（後端 /profile，本人）
   let tProfileLoading = $state(false);
   // v5.692 對戰戰報（名人堂賽程點某場看公開 log）
@@ -5012,7 +5018,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   async function tLeaderboardLoad() {
     if (tLbLoading) return; tLbLoading = true;
     // v6.177 抓失敗不再把排行榜指回 null（會讓整塊變成「排行榜尚未開放」的假空狀態）。
-    try { const _k = adoptOrKeep<any>(tLeaderboard, (await tApi('/leaderboard')) ?? null); tLeaderboard = _k.data; tLeaderboardStale = _k.stale; }
+    // v6.199 固定要上限那一份（伺服器沒帶 limit 仍是 5，舊 client 行為不變）；筆數切換在本地做。
+    try { const _k = adoptOrKeep<any>(tLeaderboard, (await tApi('/leaderboard?limit=' + LB_TOP_MAX)) ?? null); tLeaderboard = _k.data; tLeaderboardStale = _k.stale; }
     catch { tLeaderboardStale = true; }
     finally { tLbLoading = false; }
   }
@@ -9158,7 +9165,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#if !rows || rows.length === 0}
                   <div class="tourn-lb-empty">尚無資料</div>
                 {:else}
-                  {#each rows as r, i}
+                  {#each lbTopRows(rows, tLbTop) as r, i}
                     <div class="tourn-lb-row">
                       <span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span>
                       <span class="tourn-lb-name">{r.displayName}</span>
@@ -9168,6 +9175,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {/if}
               </div>
             {/snippet}
+            {#if typeof tLeaderboard.limit === 'number'}
+            <div class="tourn-lb-bar">
+              <label class="tourn-lb-toplbl" for="tourn-lb-top">顯示名次</label>
+              <select id="tourn-lb-top" class="tourn-lb-topsel" value={String(tLbTop)} onchange={(e) => tLbSetTop(e.currentTarget.value)}>
+                {#each LB_TOP_OPTIONS as _n}<option value={String(_n)}>前 {_n} 名</option>{/each}
+              </select>
+            </div>
+            {/if}
             <div class="tourn-lb-grid">
               <div class="tourn-lb-card tourn-lb-champ">
                 <div class="tourn-lb-title">🏆 冠軍榜</div>
@@ -9175,14 +9190,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   <div>
                     <div class="tourn-lb-sub">🏛️ 網站賽</div>
                     {#if !tLeaderboard.champions?.official?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
-                    {#each (tLeaderboard.champions?.official ?? []) as r, i}
+                    {#each lbTopRows(tLeaderboard.champions?.official, tLbTop) as r, i}
                       <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
                     {/each}
                   </div>
                   <div>
                     <div class="tourn-lb-sub">🎖️ 社群賽</div>
                     {#if !tLeaderboard.champions?.community?.length}<div class="tourn-lb-empty">尚無資料</div>{/if}
-                    {#each (tLeaderboard.champions?.community ?? []) as r, i}
+                    {#each lbTopRows(tLeaderboard.champions?.community, tLbTop) as r, i}
                       <div class="tourn-lb-row"><span class="tourn-lb-rank tourn-lb-rank-{i + 1}">{i + 1}</span><span class="tourn-lb-name">{r.displayName}</span><span class="tourn-lb-cnt">{r.count} 冠</span></div>
                     {/each}
                   </div>
@@ -13288,6 +13303,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-lb-rank-3 { background: linear-gradient(180deg,#e0a060,#a0682c); color: #2a1500; }
   .tourn-lb-name { flex: 1 1 auto; color: #eaffea; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tourn-lb-cnt { flex: 0 0 auto; color: #9fdca0; font-size: .82rem; font-weight: 600; }
+  /* v6.199 顯示筆數下拉：色票（#142414 底／#4a6a4a 框／#eaf5ea 字／8px 圓角）完全沿用
+     .tourn-field .deck-select，只把版型從「整列填滿」換成「靠右內嵌」，不另做一套外觀。
+     ⚠ 刻意不加任何 @media：這一列在窄螢幕靠 flex 自然收合，不需要手機分支。 */
+  .tourn-lb-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: 10px; }
+  .tourn-lb-toplbl { color: #cfe8cf; font-size: .82rem; font-weight: 600; }
+  .tourn-lb-topsel { padding: 5px 8px; border-radius: 8px; border: 1px solid #4a6a4a; background: #142414; color: #eaf5ea; font-size: .85rem; box-sizing: border-box; }
   /* 個人資料 */
   .tourn-pf-head { text-align: center; margin-bottom: 12px; }
   .tourn-pf-name { font-size: 1.25rem; font-weight: 700; color: #eaffea; }

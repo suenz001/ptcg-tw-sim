@@ -1,3 +1,90 @@
+# 內部改版紀錄（不打包進網站）
+
+## v6.199 錦標賽排行榜「顯示筆數」下拉（5 / 10 / 20）
+
+### 真因定位（先查再動手）
+站長回報「排行榜都只顯示前五名」。**截斷點不在前端**：
+`src/routes/game/+page.svelte` 的排行榜分頁是 `{#each rows}`，伺服器回幾筆就畫幾筆；
+真正的 `slice(0, 5)` 有**兩處**，都在 `oracle-admin/server_admin_patch.js`
+的 `GET /api/tournament/leaderboard`（`topN()` 與 `communityHost`）。
+⇒ 只在前端加下拉會完全沒有效果，必須前後端一起改。
+
+⚠ 不要改錯對象：站內另有「網站賽歷屆冠軍 / 社群自辦歷屆冠軍」（`/champions`，最近 100 位、
+預設收合），以及「瑞士制排名」（`/bracket` 的 standings，OWP/OOWP 那張表，**本來就沒有截斷**）。
+這一版兩者都沒有動到，守衛 6a/6b 有正面斷言釘住。
+
+### 做法
+- 伺服器：`?limit=`（1~20）。**沒帶 limit 仍回 5** —— 線上還有被 Service Worker 卡住舊 bundle
+  的 client，它們照單全收伺服器回的筆數，預設放大會讓那些人的版面無聲變長。
+- 快取只存「上限 20 筆」那一份，回應時才 `_lbSliceResult()` 切片 ⇒ 不管同時有幾種 limit，
+  60 秒內都只掃一次 TARCHIVE（per-limit 快取會讓全表聚合次數乘上筆數種類）。
+- 前端固定要 `?limit=20`，**切換筆數只做本地 slice、不發任何請求** ⇒ 不重抓、不清空、不閃，
+  v6.177 的 stale-keep 那份好資料原封不動留在 `tLeaderboard`。
+- ⭐**回應帶 `limit` 欄位，前端據此決定畫不畫那顆下拉**：舊伺服器（還沒跑 `redeploy-oracle.bat`）
+  會忽略未知的 query 參數、照回 5 筆而且不會有 `limit` 欄位 ⇒ 新前端就不畫下拉，
+  版面與 v6.198 完全相同。沒有這道閘的話會出現本專案最討厭的那種 bug：
+  **控制項畫得出來、按了完全沒反應，而且查不出原因**。
+- `_lbSliceResult` 是「先 `...full` 再覆寫要切的欄位」，不是白名單投影 ——
+  將來端點多加第六個榜卻忘了同步這支 helper，那個榜會「原樣送出（只是沒切片）」，
+  而不是被靜默丟掉；「多送幾筆」看得見，「整個榜消失」看不見。
+- 中央單一來源 `src/lib/ui/leaderboard-top.ts`（選項／預設／上限／localStorage 讀寫／切片），
+  純計算 + localStorage 兩件事、不碰 UI ⇒ 守衛可以**真的跑起來求值**。
+- localStorage 一律 try/catch（Safari 無痕 `setItem` 會 throw；停用儲存時 `getItem` 同樣可能 throw）。
+- 下拉沿用站內既有寫法：`value={...} onchange={...}`（同 `#bgm-select`），
+  色票沿用 `.tourn-field .deck-select`（#142414 底／#4a6a4a 框／#eaf5ea 字／8px 圓角），
+  只把版型從「整列填滿」換成「靠右內嵌」。
+
+### 版面（求值算出來的，不是「看 CSS 覺得沒問題」）
+`.tourn-lb-row` 的高度由 `.tourn-lb-rank` 的固定 `height:22px` 決定
+（`.tourn-lb-name` .9rem、`.tourn-lb-cnt` .82rem 的行框即使用 line-height 1.5 也只有
+21.6 / 19.7px，撐不高列）⇒ 每列 22 + 5 + 5 + 1(border) = **33px**，與筆數、字體度量都無關。
+- 桌機（viewport 1280）：`.lobby.tourn-lobby` content box 640px；
+  `repeat(auto-fit, minmax(230px,1fr))` + 12px gap ⇒ **2 欄、每欄 314px**（3 欄需 714px，放不下）。
+- 手機直式（viewport 390，`@media (max-width:600px) and (orientation: portrait)` 把 `.lobby` padding 壓到 0.8rem）：
+  content 364.4px ⇒ **1 欄 364.4px**；`@media (max-width:560px)` 讓冠軍榜兩欄也變單欄。
+  新增的下拉列實測寬約 168px，遠小於 364px，不會擠爆。
+- **橫向不爆**：`.tourn-lb-name` 有 `overflow:hidden` ⇒ flex 的 auto 最小尺寸變成 0，
+  長暱稱會被 ellipsis 切掉而不是把列撐開；`.tourn-lb-rank` 是 `flex:0 0 22px` 固定寬，
+  兩位數名次（.78rem，兩字元約 15px）仍在 22px 圈內。
+- 實際高度見守衛 3f/3g 的輸出（每次跑都會印出來，不寫死在文件裡）。
+
+### 取捨：手機不做內部捲動
+20 筆在手機是四千多 px（約 5 個螢幕）。**刻意不加 `max-height + overflow-y`**：
+① 頁面本來就是捲動的，內部再套一層捲動在觸控上是已知的操作陷阱（捲不動／捲錯層）；
+② 站內既有的「歷屆冠軍」一次列 100 筆，也是走頁面捲動；
+③ 預設維持 5 筆 ⇒ 沒動過選單的人版面一格都不會變，長度只發生在明確要求的人身上。
+若站長實機看過後覺得太長，再回頭加「每個榜獨立收合」比加內部捲軸安全。
+
+### 沒有新增任何 @media
+既有的兩條（`max-width:600px` 的 `.lobby` 緊縮、`max-width:560px` 的冠軍榜單欄）原封不動；
+新的 `.tourn-lb-bar` 用 flex 自然收合，不需要手機分支。守衛 4a 釘住 `@media` 總數 = 16
+（以本守衛的剝註解器計；原文含註解內的是 21），4b 是正對照（真的多加一條會被抓到）。
+
+### 子代理審查抓到的三個假綠（已補）
+① **`$state` 被拿掉也全綠**：實測把 `let tLbTop = $state(loadLbTop())` 改成
+   `let tLbTop = loadLbTop()`，48 條守衛原本全部照過 —— 但瀏覽器裡下拉會完全沒反應
+   （Svelte 5 只給 `non_reactive_update` **警告**，build 照樣綠）。純函式求值的 2c 驗不到
+   響應式接線 ⇒ 新增 2i／2i-2 把宣告本身釘死並附正對照。
+② **3f 的「橫向不爆」是恆真式**：`colW*cols+gap <= container` 就是 `auto-fit` 的定義，
+   `X <= X` 永遠成立。改成驗「這個欄數真的塞得下」＋「再多一欄就塞不下」＋
+   「一列的最小內容（22px 名次 + 兩個 gap + 次數欄）塞得進欄寬」，並補 320px 實機寬度。
+③ **2g 只切到函式第一行**：改用大括號配對切整支函式（`sliceBlock`），並加正對照
+   （把重抓寫在第 2 行必須被抓到）。另補 3e-2（`boardHeights` 與手算 fixture 對照）、
+   3h（3f/3g 依賴的兩條既有 @media 前提必須還在）、2b-2（區塊內不得有繞過 `lbTopRows` 的 each）、
+   5d-2/5d-3（回應帶 limit、未來新榜不被吃掉）。
+
+### 已知但接受的限制
+- 列高 33px 的推導假設 `line-height: normal ≈ 1.2~1.5em`（實測字體約 1.33~1.46em，
+  上界 1.5 只剩 0.4px 餘裕）。若哪天加了全域 `line-height: 1.6`，列高會變 34px 而守衛抓不到。
+- 守衛印出的「整塊高」只含 `.tourn-lb-grid`，不含新的下拉列（約 40px）與底部說明行。
+- 冠軍榜兩欄（網站賽／社群賽）共用同一個筆數；若一邊只有 2~3 人，選 20 時另一邊會留白。
+  這一版先不處理，等站長實機看過再決定要不要兩欄各自截斷。
+
+### 部署
+`update-admin-full.bat`（admin.html 版本提示）、`redeploy-oracle.bat`（**必跑**，端點改在
+server_admin_patch.js）、`update-tournament.bat`。⚠ 沒跑 oracle 那支的話，前端要 `?limit=20`
+但伺服器不認識這個參數 ⇒ 仍然只回 5 筆，下拉會看起來「選了沒反應」。
+
 # v6.198 收緊 `stale-version` 的送出判準（純診斷，玩家零可見變化）
 
 ## 為什麼要動
