@@ -21,6 +21,28 @@ const UID_KEY = 'ptcg_oracle_uid';
 let _token: string | null = null;
 let _uid: string | null = null;
 
+// ⭐⭐⭐v6.197 身分變動通知。
+//   401（JWT 過期/失效）時 oracleApi 會 oracleSignOut() + 重新匿名登入，而伺服器發的是
+//   **一個全新的 uid**（v5.628 只想修「卡在 401 建不了房」，沒有人通知畫面端）。
+//   畫面端（game/+page.svelte 的 myUid）只在 onMount 取過一次 ⇒ 換 uid 之後
+//   `findMySeatIdx(room.seats, myUid)` 永遠回 -1 ⇒ 玩家與觀戰者都變成「認不出座位」，
+//   而 v6.197 之前的觀戰判定是 fail-open 的（見 viewer-role.ts）⇒ 觀戰者被當成玩家。
+//   ⚠ 這裡只負責「說出去」，要不要相信由呼叫端決定；listener 丟例外不可以打死 API 呼叫。
+type OracleUidListener = (uid: string) => void;
+const _uidListeners = new Set<OracleUidListener>();
+export function onOracleUidChange(cb: OracleUidListener): () => void {
+  _uidListeners.add(cb);
+  return () => { _uidListeners.delete(cb); };
+}
+function _setUid(uid: string): void {
+  const changed = _uid !== uid;
+  _uid = uid;
+  if (!changed) return;
+  for (const cb of _uidListeners) {
+    try { cb(uid); } catch (e) { console.warn('[oracle uid listener]', e); }
+  }
+}
+
 /** 匿名登入 — 取得 JWT token + uid（cache 在 localStorage） */
 export async function oracleAuth(): Promise<{ uid: string; token: string }> {
   if (_token && _uid) return { uid: _uid, token: _token };
@@ -31,7 +53,7 @@ export async function oracleAuth(): Promise<{ uid: string; token: string }> {
     const cachedUid = localStorage.getItem(UID_KEY);
     if (cachedToken && cachedUid) {
       _token = cachedToken;
-      _uid = cachedUid;
+      _setUid(cachedUid);   // v6.197：走中央 setter，身分一有變動就通知
       return { uid: cachedUid, token: cachedToken };
     }
   }
@@ -44,7 +66,7 @@ export async function oracleAuth(): Promise<{ uid: string; token: string }> {
   });
   if (!res.ok) throw new Error(`oracleAuth failed: ${res.status} ${await res.text()}`);
   const { uid, token } = await res.json();
-  _token = token; _uid = uid;
+  _token = token; _setUid(uid);   // v6.197：新簽發的匿名身分要通知出去
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(UID_KEY, uid);
@@ -224,6 +246,11 @@ export function oraclePollRoom(
       const room = lastVersion >= 0
         ? await oracleGetRoom(code, lastVersion)
         : await oracleGetRoom(code);
+      // ⭐⭐⭐v6.197 await 之後一定要再問一次 alive：unsubscribe() 只擋得住「還沒排出去的
+      //   下一發」，擋不住「已經在路上的這一發」。少了這一行，玩家按「離開」之後最後一發
+      //   回應仍會 callback ⇒ handleRoomUpdate 把 roomData/game/mySeatIdx 全部填回去
+      //   ⇒ 人已經離開了卻被彈回對戰頁（而且身分欄位是半清狀態）。
+      if (!alive) return;
       if (room === ROOM_UNCHANGED) {
         // 版本未變，什麼都不做（等同舊版收到同版本時忽略）
       } else if (room) {

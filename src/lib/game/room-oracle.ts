@@ -346,7 +346,26 @@ export async function leaveRoom(roomCode: string): Promise<void> {
       });
       return;
     }
-    if (data.status !== 'lobby') return;
+    // ⭐⭐⭐v6.197 觀戰者離開房間要真的把觀戰位還回去。
+    //   舊碼在這裡是 `if (data.status !== 'lobby') return;` —— 對戰中（playing）的觀戰者
+    //   按下「離開」之後，伺服器上他還坐在那個觀戰位：觀戰位只有 8 個，殘留會把後面的人
+    //   擋在「觀戰位已滿」外面，memberUids 也一直帶著他。
+    //   ⚠ 只放行觀戰位（>= 2）：P1/P2 在 playing 的離場語義是上面那段「棄賽判對手勝」，
+    //     這裡一個字都不可以碰到他們。
+    //   ⚠ 交易內要**重新**找一次自己的座位（上面讀到的 data 可能已經過期）。
+    if (data.status !== 'lobby') {
+      if (myIdx < 2) return;
+      await oracleTx(code, (cur) => {
+        const seats = cur.seats ?? [];
+        const i = findMySeatIdx(seats, uid);
+        if (i < 2) return cur;
+        const ns = seats.map((s, k) =>
+          k === i ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+        );
+        return { ...cur, seats: ns, memberUids: computeMemberUids(ns) };
+      });
+      return;
+    }
     const newSeats = data.seats.map((s, i) =>
       i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
     );

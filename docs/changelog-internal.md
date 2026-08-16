@@ -1,3 +1,77 @@
+# v6.197 觀戰者長出操作按鈕 —— 真因是「觀戰判定」是 fail-open 的
+
+## 玩家回報
+> 「現在進去一般對戰的觀戰，按離開的時候會出現投降的按鈕，甚至有的時候可以按攻擊、結束回合的按鈕，很奇怪，以前似乎不會這樣。」
+
+## 真因（實跑求值，不是讀碼推論）
+`src/routes/game/+page.svelte` 的舊述詞：
+
+    isSpectator = isTournSpectator || (mode === 'online' && (mySeatIdx >= 2 || isAdminMode))
+
+它要求「拿得出觀戰位的證據（座位 >= 2）」才算觀戰者 ⇒「認不出自己的座位」(mySeatIdx === -1)
+這個**不確定**狀態被歸成「玩家」。把 BASE 的這行運算式切出來實跑：
+
+    休閒觀戰 seat 2   ⇒ isSpectator=true  ｜桌機投降鈕=false｜手機 isMyTurn=false
+    ⭐認不出座位 -1   ⇒ isSpectator=false ｜桌機投降鈕=true ｜手機 isMyTurn=true
+
+- 桌機頂欄 `{#if mode === 'online' && !isSpectator}` ⇒ 冒出「🏳 投降離開」。
+- 手機直式 `isMyTurn = !isSpectator && game.activePlayerIndex === myIdx`，觀戰時父層的
+  `myIdx` 會退回 `myPlayerIndex ?? 0` ⇒ **有一半的回合**會長出「⏭ 結束回合」與招式鈕
+  （＝玩家說的「有的時候」）。
+- 更嚴重：`dispatch` 的唯一擋線就是 `isSpectator`，它一旦為 false，動作是**真的會被套用**的。
+
+## mySeatIdx 為什麼會變成 -1
+`oracle-client.ts` 的 401 自動重登（v5.628）會 `oracleSignOut()` + 重新匿名登入，
+伺服器發的是**全新的 uid**；而 `+page.svelte` 的 `myUid` 只在 onMount 取過一次、
+從此不再更新 ⇒ `findMySeatIdx(room.seats, myUid)` 一路回 -1。玩家與觀戰者都會中。
+
+## 修法（中央收斂 + fail-closed）
+1. 新檔 `src/lib/game/viewer-role.ts`：`isViewerSpectator` / `canViewerAct` /
+   `isSeatUnknownOnline` —— 線上模式下**只有明確認得出自己是 P1/P2**（且 mySeatIdx
+   與 myPlayerIndex 一致）才算玩家，其餘一律唯讀。本機雙人／AI 不受影響。
+2. `+page.svelte`：`isSpectator`/`canAct` 都由中央述詞產生；`dispatch`、`initiateAttack`、
+   `surrenderLeave` 全部改問 `canAct`；認不出座位時頂欄顯示「⚠ 認不出你的座位（唯讀）」。
+3. `leaveOnlineGame`：**先把 game/roomData/mySeatIdx 清乾淨，再 await leaveRoom**
+   （舊順序在那一次 HTTP 往返期間畫面還是整個對戰盤、身分卻半清）。
+4. `oraclePollRoom`：`await` 之後補 `if (!alive) return;` —— unsubscribe 擋不住在途那一發，
+   少了它玩家離開後會被彈回對戰頁。
+5. `leaveRoom`（room-oracle.ts + room.ts 兩份同步）：對戰中的**觀戰位**離開要真的釋放
+   （舊碼 `if (data.status !== 'lobby') return;` 讓 8 個觀戰位會被殘留佔滿）。
+   ⚠ P1/P2 在 playing 的離場語義（棄賽判對手勝）一個字都沒動。
+6. `oracle-client.ts`：新增 `onOracleUidChange`，兩條取得 uid 的路徑都走 `_setUid`；
+   `+page.svelte` 訂閱後同步 `myUid`（真因修）。
+
+## 伺服器端防線
+- 錦標賽 `/api/tournament/action` 早就有：`const seat = doc.seats.indexOf(pid); if (seat < 0) → 403`
+  （server_admin_patch.js），`/match/forfeit` 也只查得到呼叫者自己的對戰 ⇒ 觀戰者送動作打不進去。
+- ⚠ **休閒房的 `/api/rooms` CRUD 不在本 repo**（在 VM 的主 server），本版沒辦法補；
+  休閒房的 `PUT /api/rooms/:code` 目前只驗 JWT、不驗座位 ⇒ 這條縱深防線仍缺，待站長在 VM 端補。
+
+## 審查抓到的兩件事（已修，並各自補守衛）
+- ⚠⚠ **第一版的「真因修」修過頭了**：我原本讓 `myUid` 跟著 `onOracleUidChange` 無條件更新。
+  但**座位裡存的是加入當下那個舊 uid**（room-oracle.ts:163），401 重登換到新 uid 之後把
+  `myUid` 換成新的，等於親手把**對戰中的真 P1/P2** 打成「認不出座位」——而 fail-closed
+  之後那就是直接鎖成唯讀（BASE 反而不會，因為 BASE 的 myUid 永遠不更新、一直對得上舊座位）。
+  ⇒ 改成**只補空白**：`if (!myUid) myUid = uid;`。這樣只救得到「onMount 的 oracleAuth() 失敗、
+  myUid 永遠停在 null」那條真實路徑，不會動到一個還在用的身分。守衛 9b 用實跑求值釘住。
+- **桌機的休閒觀戰根本走不到 leaveRoom**：桌機頂欄對觀戰者只有一條 `← 首頁` 的 `<a>`，
+  整頁換掉、不呼叫任何離開流程 ⇒ 上面第 5 點的觀戰位釋放在桌機是死碼。補上專屬
+  `← 離開觀戰` 鈕（錦標賽觀戰早就有 tourn-return-bar，休閒這邊補齊）。守衛 3b。
+- 另修：`onOracleUidChange` 的解除函式原本被丟掉、onDestroy 也沒解除 ⇒ 每次重進 /game 疊一個
+  listener。守衛 9b2。
+
+## 已知、本版沒有處理的
+- **休閒觀戰仍看得到雙方手牌／牌庫／獎賞**：休閒房的 `/api/rooms` 直接回完整 gameState，
+  觀戰端沒有 redact（錦標賽的 `/spectate/state` 才有 `_stateForSeat(-1)` 全遮）。這是既有設計，
+  本版一個字都沒動；要改是伺服器端的事。
+- **休閒房 `PUT /api/rooms/:code` 只驗 JWT、不驗座位**（伺服器不在本 repo），縱深防線仍缺。
+
+## 守衛
+`scripts/test-v6197-spectator-readonly.mjs`：PASS 39 / HEAD-FAIL 19。
+行為端求值（不是只驗字串）：桌機頂欄條件、手機直式 isMyTurn、onLeave 分流、surrenderLeave、
+leaveOnlineGame 的清除順序、oraclePollRoom 的在途回應、leaveRoom 的觀戰位釋放，
+每一項都有「真玩家不受影響」的正對照。
+
 # v6.196 【傳說的熔岩洞】沒有消除【護城龍｜太古防壁】—— v6.145 的翻版：中央述詞寫好 ≠ 消費點有接
 
 ## 玩家回報

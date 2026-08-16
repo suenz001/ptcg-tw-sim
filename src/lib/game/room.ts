@@ -625,7 +625,20 @@ export async function leaveRoom(roomCode: string): Promise<void> {
     return;
   }
 
-  if (data.status !== 'lobby') return;
+  // ⭐⭐⭐v6.197 與 room-oracle.ts 逐行同步：觀戰者離開要真的把觀戰位還回去
+  //   （P1/P2 在 playing 的離場語義是上面的棄賽分支，不可碰）。
+  if (data.status !== 'lobby') {
+    if (myIdx < 2) return;
+    const specSeats = data.seats.map((s, i) =>
+      i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+    );
+    await updateDoc(ref, {
+      seats: specSeats,
+      memberUids: computeMemberUids(specSeats),
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
   const newSeats = data.seats.map((s, i) =>
     i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
   );

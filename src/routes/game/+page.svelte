@@ -59,7 +59,9 @@
     type User,
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
-  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes } from '$lib/game/oracle-client';
+  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange } from '$lib/game/oracle-client';
+  // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
+  import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import {
     createRoom, joinRoom, subscribeRoom, pushGameState, pushUndoRollback, subscribeOpenRooms,
     takeSeat, setSeatDeck, setSeatReady, setSeatFirstChoice, startGame, leaveRoom, claimOpponentForfeit,
@@ -894,6 +896,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   // ── 線上模式狀態（v2.269 座位制重構） ──────────────────────────────────
   let myUid       = $state<string | null>(null);
+  /** ⭐v6.197 Oracle 身分變動訂閱的解除函式（不解除 ⇒ 每次重進 /game 就多疊一個 listener） */
+  let _unsubOracleUid: (() => void) | null = null;
   // v4.913 port 牌組編輯器的登入 dashboard 到模式選擇畫面
   let firebaseUser = $state<User | null>(null);
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
@@ -3066,8 +3070,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
 
-  // v2.276：觀戰者判定（線上模式且坐在 spectator 位）
-  const isSpectator = $derived(isTournSpectator || (mode === 'online' && (mySeatIdx >= 2 || isAdminMode)));  // v4.926 admin 偷看也走觀戰渲染路徑
+  // ⭐⭐⭐v6.197 觀戰者判定收斂成**單一中央述詞**，而且方向由 fail-open 改成 fail-closed。
+  //   舊寫法 `mySeatIdx >= 2` 要求「拿得出觀戰位的證據」才算觀戰者 ⇒「認不出座位」
+  //   （mySeatIdx === -1，401 自動重登換了 uid 之後就會這樣）被歸成「玩家」：
+  //   桌機頂欄長出「🏳 投降離開」、手機直式的 isMyTurn 退回 myIdx=0 而長出
+  //   「⏭ 結束回合」與招式鈕，而 dispatch 的唯一擋線就是這個旗標 ⇒ 動作是真的會被套用的。
+  //   ⚠ 新述詞在 src/lib/game/viewer-role.ts，桌機與手機直式共用同一份（手機直式吃 isSpectator prop）。
+  const isSpectator = $derived(isViewerSpectator({ mode, mySeatIdx, myPlayerIndex, isTournSpectator, isTReplay, isAdminMode }));
+  /** ⭐v6.197 所有「會送出動作」的按鈕／拖曳／dispatch 一律問這一支（= !isSpectator，但只有一個來源） */
+  const canAct = $derived(canViewerAct({ mode, mySeatIdx, myPlayerIndex, isTournSpectator, isTReplay, isAdminMode }));
+  /** ⭐v6.197 線上但認不出座位 —— 要顯性告訴玩家，不可以只是靜靜把按鈕收掉 */
+  const seatUnknown = $derived(isSeatUnknownOnline({ mode, mySeatIdx, myPlayerIndex, isTournSpectator, isTReplay, isAdminMode }));
   // v4.927：admin spy 若在 poolReady 之前觸發，這個 $effect 會在 pool 載完後補訂閱
   let _adminSpySubscribed = $state(false);
   $effect(() => {
@@ -4310,6 +4323,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   callback 內 sign-in 已 cover 所有情境（first visit / 登出後 / admin spy gate）。
     // Oracle build 額外初始化 — 取 Oracle JWT 給房間 API
     if (ORACLE_MODE) {
+      // ⭐⭐⭐v6.197 myUid 舊寫法只在這裡取一次：如果這一發 oracleAuth() 失敗（網路/儲存空間
+      //   被擋），myUid 會**永遠停在 null**，而稍後 joinRoom 內部的 oracleAuth() 卻會成功並用
+      //   新 uid 佔位 ⇒ findMySeatIdx(room.seats, null) 一路回 -1 ⇒ 認不出座位。
+      //   ⚠⚠ 訂閱只**補空白**、絕不取代一個已經在用的身分：401 自動重登（v5.628）會換到一個
+      //   全新的 uid，但**座位裡存的是加入當下那個舊 uid**；把 myUid 換成新的等於親手把
+      //   對戰中的 P1/P2 打成「認不出座位」（fail-closed 之後就是直接鎖成唯讀）。
+      //   ⇒ 只有「本來就沒有身分」時才填。
+      _unsubOracleUid = onOracleUidChange((uid) => { if (!myUid) myUid = uid; });
       try {
         const { uid } = await oracleAuth();
         myUid = uid;
@@ -4340,6 +4361,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (tPollTimer) { clearInterval(tPollTimer); tPollTimer = null; tPollGen++; }
     unsubRoom?.();
     unsubOpenRooms?.();
+    _unsubOracleUid?.(); _unsubOracleUid = null;   // ⭐v6.197 不解除就會每次重進 /game 疊一個
     // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
     unsubMessages?.(); unsubMessages = null;
     if (aiTimer !== null) clearTimeout(aiTimer);
@@ -6389,7 +6411,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   ) {
     if (!game || !poolReady) return;
     // v2.276 Phase 3：觀戰者所有 action 都被擋（read-only）
-    if (isSpectator) {
+    // ⭐v6.197 改問中央述詞 canAct（fail-closed：認不出座位一律當觀戰者）
+    if (!canAct) {
       console.log('[Spectator] action blocked:', action.type);
       return;
     }
@@ -6523,6 +6546,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   - tool 招式的 effectKey 用 tool 名做 key（與 engine 一致）
   function initiateAttack(attackIndex: number) {
     if (!game || !activePlayer?.active) return;
+    if (!canAct) return;   // ⭐v6.197 觀戰／認不出座位：連本地的 copy-attack 選單都不開
     const eff = getEffectiveAttacks(game, activePlayer.active, pool);
     const entry = eff[attackIndex];
     if (!entry) return;
@@ -8009,6 +8033,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   // v5.560：對戰中「投降離開」前先確認，減少順手中離影響對手體驗
   function surrenderLeave() {
+    // ⭐⭐⭐v6.197 投降是「玩家專屬」的動作：不能操作的人連確認視窗都不該看到。
+    //   玩家回報「觀戰按離開卻冒出投降」就是走到這裡；上層 onLeave 已分流，這裡是第二道。
+    if (!canAct) { if (mode === 'online' && isTournSpectator) tLeaveSpectate(); else leaveOnlineGame(); return; }
     if (!confirm('中離是不好的行為，訓練家應盡力完成對戰，確定要投降/離開嗎？？？')) return;
     // v5.568：錦標賽模式投降 → 伺服器即時判對手勝+晉級，再返回賽事大廳(不走一般 leaveOnlineGame)
     if (isTournament) { tForfeitAndLeave(); return; }
@@ -8025,13 +8052,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     unsubRoom?.(); unsubRoom = null;
     unsubMessages?.(); unsubMessages = null;
     stopHeartbeat();
-    if (roomCode) {
-      try { await leaveRoom(roomCode); }
-      catch (e) { console.warn('[leaveRoom] failed:', e); }
-    }
+    // ⭐⭐⭐v6.197 順序改了：**先把「還停在對戰頁」的狀態清乾淨，再去打網路**。
+    //   舊順序是「先 await leaveRoom(一次 HTTP 往返)、回來才 game=null / mySeatIdx=-1」，
+    //   那段等待期間畫面還是整個對戰盤，而身分欄位又正處在半清狀態 ⇒ 玩家按了離開之後
+    //   還會看到（甚至按得到）不屬於他的按鈕。清乾淨是同步的，不需要等伺服器點頭。
+    //   ⚠ roomCode 先存進區域變數再清空 —— 清完才有東西可以送給 leaveRoom。
+    const _leavingRoomCode = roomCode;
     chatMessages = []; chatInput = '';
     game = null; roomCode = ''; roomData = null;
     onlineStep = 'join'; showCreateForm = false; onlineError = ''; myPlayerIndex = null; mySeatIdx = -1;
+    if (_leavingRoomCode) {
+      try { await leaveRoom(_leavingRoomCode); }
+      catch (e) { console.warn('[leaveRoom] failed:', e); }
+    }
     // v5.321: 不清空 roomNameInput, 從 localStorage 讀回上次值
     // (v5.311 onMount 讀過, 但 leaveRoom 後若清成空 → 下次建房又要重打字)
     try {
@@ -9948,6 +9981,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <header class="battle-header">
     {#if mode === 'online' && !isSpectator}
       <button class="small-back" onclick={surrenderLeave}>🏳 投降離開</button>
+    {:else if mode === 'online' && !isTournSpectator && !isTReplay && !isAdminMode}
+      <!-- ⭐⭐v6.197 桌機的休閒觀戰原本只有一條 `← 首頁` 的 <a>，整頁換掉、**不會呼叫
+           leaveRoom** ⇒ 伺服器上那個觀戰位一直被佔著（只有 8 個），後面的人會被「觀戰位已滿」
+           擋在外面。錦標賽觀戰早就有專屬離開鈕（tourn-return-bar），休閒這邊補齊。 -->
+      <button class="small-back" onclick={leaveOnlineGame}>← 離開觀戰</button>
     {:else}
       <a href="{base}/" class="small-back">← 首頁</a>
     {/if}
@@ -9980,6 +10018,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {#if isSyncing}<span class="chip syncing-chip">⏳ 同步中</span>{/if}
         {#if actionSending}<span class="chip syncing-chip">⏳ 送出中…</span>{/if}
         {#if !isMyTurn() && !isMyDefenderTurn()}<span class="chip wait-chip" title={isTournament ? '若遲遲沒換你，可能是畫面沒更新 → 點此重新同步（不必重整網頁）' : undefined} style={isTournament ? 'cursor:pointer;' : undefined} onclick={() => { if (isTournament) { _tSendClientDiag('manual-sync'); tForceResync(); } }}>等待對手行動{#if isTournament} 🔄{/if}</span>{/if}
+      {/if}
+      <!-- ⭐v6.197 線上但認不出自己的座位：顯性提示（此時所有操作已被中央述詞收掉） -->
+      {#if seatUnknown}
+        <span class="chip wait-chip" title="伺服器上認不出你的座位（多半是連線期間身分被重新簽發）。這個分頁已切成唯讀，請重新整理後再進房。">⚠ 認不出你的座位（唯讀）</span>
       {/if}
       <!-- v2.276 Phase 3：觀戰模式 — 視角切換 -->
       {#if isSpectator}
