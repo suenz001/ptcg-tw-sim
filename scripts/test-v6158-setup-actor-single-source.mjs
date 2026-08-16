@@ -178,7 +178,9 @@ T('⭐⭐⭐全螢幕遮罩不得蓋住「規則上輪到我」的玩家（開�
 T('⭐⭐stale-version 門檻要與 setup 指紋齊平（36 秒會把「對手長考」全報進來）', () => {
   const i = P.indexOf("_tSendClientDiag('stale-version')");
   assert.ok(i > 0, '找不到 stale-version 送出點');
-  const seg = P.slice(Math.max(0, i - 400), i);
+  // ⚠ v6.198：送出點與四道前置條件之間多了「判準三取一」那一段（stripComments 是等長替換，
+  //   被剝掉的註解仍佔位置）⇒ 視窗由 400 放寬到 900。斷言內容一個字都沒放寬。
+  const seg = P.slice(Math.max(0, i - 900), i);
   assert.ok(/_tLastStateChangeAt\) > 60000/.test(seg),
     'stale-version 沒有 60 秒的盤面凍結門檻 —— 舊判準（連續觸發 3 次）只等於 36 秒');
   assert.ok(/_freshWatchdogFires >= 3/.test(seg), '原本的連續觸發判準不該被拿掉，只是再加一層門檻');
@@ -207,7 +209,9 @@ T('⭐v6.151／v6.156 的倒數方向錨點必須完整保留', () => {
 T('⭐admin 監控說明要跟著改（否則站長會照舊判準再誤讀一次）', () => {
   const i = ADMIN.indexOf("'stale-version': [");
   assert.ok(i > 0, '找不到 stale-version 說明');
-  const seg = ADMIN.slice(i, i + 700);
+  // ⚠ v6.198：這段說明被改寫成「新判準／舊判準怎麼分」，長度是原本的三倍多
+  //   ⇒ 視窗由 700 放寬到 2500。三條斷言的內容一個字都沒放寬。
+  const seg = ADMIN.slice(i, i + 2500);
   assert.ok(/60 秒/.test(seg), '說明沒提到新門檻');
   assert.ok(/長考/.test(seg), '說明沒講「對手長考也會報」這個判讀重點');
   assert.ok(/sinceLastAction/.test(seg), '說明沒指向判讀欄位');

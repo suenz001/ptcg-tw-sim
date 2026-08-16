@@ -35,6 +35,7 @@
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt } from '$lib/game/sync-guards';
+  import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
@@ -351,6 +352,10 @@
   //   （與 v6.155 把 manual-sync 移出配額時點名的是同一型缺陷）。
   //   ⇒ 記住「已回報過的那個卡住版本」，版本一前進就自動失效、可以再報。
   let _staleDiagVersion = -1;
+  // ⭐⭐⭐v6.198 上一次送出時是哪一條判準成立（'a'／'b'／'c'，可能多條）。
+  //   會原樣寫進 payload 的 `poll.staleWhy` —— 站長／dump 摘要靠它分辨
+  //   「這筆是新判準送的」與「這筆來自 v6.197 以前的舊 bundle」。
+  let _staleDiagWhy: string | null = null;
   // ⭐⭐v6.158：`/action` 在正式賽房會對未驗證身分回 403（server_admin_patch.js
   //   `doc.matchId && !_id.verified`），而盤面遮蔽關閉時 `/state` **完全不驗身分**、永遠 200
   //   ⇒ 會出現「輪詢正常、畫面正常、輪到我，但每一發動作都被拒」而版本永遠不前進。
@@ -652,9 +657,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     對手長考 40 秒本來就超過它，而且雙方的 client 會各報一次。2026-08-10 賽事 75 次/33 人
   //     就是這個量級。門檻拉齊 v6.155 的 setup 指紋（60 秒），並在 payload 補上
   //     `sinceLastAction` / `srvActor`，下一場才分得出「對手在長考」與「真的卡住」。
+          // ⭐⭐⭐v6.198 再加一道**送出**判準（見 $lib/tournament/stale-diag）。
+          //   用 2026-08-16 的 7 天 dump 逐筆回放：舊判準 407 筆／93 人裡約 89% 是
+          //   「對手在長考」「自己在長考」這種正常等待 —— 站長要判讀的真訊號被淹掉。
+          //   新判準三取一（前景卻輪詢不通／伺服器動過我沒跟上／誰該動作雙方認知分岔），
+          //   同一份 dump 回放後剩 43 筆／25 人。
+          // ⚠⚠ 收緊的**只有送不送診斷**：下面兩行自癒（強制重抓 ＋ 重建輪詢）刻意留在
+          //   這個 if 之外、無條件執行 —— 判準再嚴都不會讓任何一台卡住的畫面失去自救。
           if (_freshWatchdogFires >= 3 && game && game.phase === 'playing' && tVersion === _freshWatchdogVersionAt
               && (Date.now() - _tLastStateChangeAt) > 60000
-              && _staleDiagVersion !== tVersion) { _staleDiagVersion = tVersion; _tSendClientDiag('stale-version'); }
+              && _staleDiagVersion !== tVersion) {
+            const _why = _staleVersionWhyNow();
+            // ⚠ 不成立時**不**設 _staleDiagVersion —— 條件 (a) 會隨時間累積，
+            //   同一個卡住的版本稍後若真的惡化成「輪詢不通」仍然報得出來。
+            if (_why) { _staleDiagVersion = tVersion; _staleDiagWhy = _why; _tSendClientDiag('stale-version'); }
+          }
           tForceResync();
           startTournamentPoll();
         }
@@ -4977,7 +4994,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     _adoptSamples = []; _paintSamples = []; _paintPending = false;
     _tResetResSeg();   // ⭐v6.179 同上：seg 是用來解釋每場清空的 `perf.api.net` 的，母體必須一致
     _setupDiagSent = false; _invisibleHandDiagSent = false;   // v6.155 診斷旗標同樣是每場一次，殘留會讓下一場漏報
-    _staleDiagVersion = -1; _actionAuthDiagSent = false; _tActionAuthErr = false; _tActionAuthErrAt = 0;   // v6.158 同上
+    _staleDiagVersion = -1; _staleDiagWhy = null; _actionAuthDiagSent = false; _tActionAuthErr = false; _tActionAuthErrAt = 0;   // v6.158 同上
     tLongPollReady = false; _tLongPollAt = 0;   // v6.152
     tStillHereBusy = false; tStillHereNote = ''; _stalledDiagSent = false;   // v6.156（Fable 5 審查：跨場殘留）
     tPollGen++; // v5.586 使在路上的 in-flight poll 回應失效，避免返回大廳後被彈回對戰
@@ -5731,6 +5748,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function _inertNodeCount(): number {
     try { return document.querySelectorAll('[inert]').length; } catch { return -1; }
   }
+  /**
+   * ⭐⭐⭐v6.198 `stale-version` 要不要送 —— 把「當下的狀態」餵進中央述詞。
+   * ⚠ 每一欄都與診斷 payload 裡同名欄位**逐字同一個算式**（含 `? ... : -1` 的缺值寫法），
+   *   站長拿 dump 回放才會得到與線上完全相同的答案（scripts/test-v6198-… 就是這樣驗的）。
+   */
+  function _staleVersionWhyNow(): string | null {
+    const now = Date.now();
+    return staleVersionDiagWhy({
+      vis: (typeof document !== 'undefined' ? document.visibilityState : null),
+      sincePollOk: _tLastPollOkAt ? now - _tLastPollOkAt : -1,
+      sinceStateChange: _tLastStateChangeAt ? now - _tLastStateChangeAt : -1,
+      sinceLastAction: tLastActionAt ? now - tLastActionAt : -1,
+      srvActor: (tServerActorSeat === undefined ? null : tServerActorSeat),
+      localActor: (() => { try { return tCurrentActorSeat(game); } catch { return null; } })(),
+    });
+  }
   function _tSendClientDiag(reason: string) {
     try {
       const now0 = Date.now();
@@ -5795,6 +5828,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
           srvActor: (tServerActorSeat === undefined ? 'n/a' : tServerActorSeat),
           sinceLastAction: tLastActionAt ? now - tLastActionAt : -1,
           longPoll: tLongPollReady,
+          // ⭐⭐⭐v6.198 這筆 stale-version 是**哪一條**判準送出來的（見 $lib/tournament/stale-diag）。
+          //   ⚠ 判讀：這一欄**缺席**只代表「那是 v6.197 以前的 bundle 用舊判準送的」，
+          //     絕不可以讀成「新判準沒有理由」。其他 reason 一律是 null（欄位在、值為空）。
+          staleWhy: (reason === 'stale-version' ? _staleDiagWhy : null),
+          // ⭐⭐⭐v6.198 伺服器說「對手已經幾秒沒有向伺服器要盤面」（0 ＝對手正常在輪詢）。
+          //   ⚠⚠ **誠實標示這一欄的極限**：它是**順帶**的判讀欄，不是「對手掉線指紋」。
+          //     「我正常、對手斷線」這個情境下判準三條都不成立（盤面與伺服器 lastActionAt
+          //     一起停在對手最後一步）⇒ **不會有任何回報被送出**，這一欄自然也看不到。
+          //     它真正的用途是：**任何一筆送出來的回報**都能一眼看出「其實是對面掉線」，
+          //     不必再靠「在線那一方也跟著報 stale-version」去反推（那正是鏡像重複的來源）。
+          //     要系統性地統計對手掉線，得另開指紋或在伺服器端統計（本版刻意不做）。
+          //   ⚠ 舊 client 沒有這一欄；欄位缺席＝不知道，**不是** 0（對手正常）。
+          oppQuiet: tOppQuietSec,
         },
         // ⭐⭐⭐v6.159 「網路慢」vs「主執行緒慢」的判別資料（本版只量測，不做任何修正）。
         //   判讀規則（寫給站長，admin 監控分頁上也有同一段）：

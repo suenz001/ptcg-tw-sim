@@ -2630,10 +2630,23 @@ const MON_REASON_INFO = {
     '玩家送出動作到伺服器回應的時間。伺服器端指標不含隧道排隊與玩家自己的網路，這個數字才對得上「很卡」的體感。'
     + '若多位玩家同時出現 → 隧道／VM 端；只有少數幾位 → 他們自己的網路。'],
   'stale-version': ['畫面版本卡住（對戰中盤面不再更新）',
-    '輪詢還活著、但盤面版本一直沒前進。⚠ v6.158 起門檻由 36 秒拉到 60 秒 —— 舊門檻連「對手長考 40 秒」都會報，'
-    + '而且雙方的畫面會各報一次（2026-08-10 賽事 75 次／33 人多半是這種）。'
-    + '判讀請看明細的 poll.sinceLastAction（伺服器上真的有人動作到現在多久）與 poll.srvActor（伺服器認定該誰動作）：'
-    + 'sinceLastAction 與凍結時間差不多、srvActor 是對方 → 對手在長考，不是 bug。'],
+    '輪詢還活著、但盤面版本一直沒前進。⚠⚠ <b>v6.198 起送出判準收緊，新舊 client 會混在同一張表裡</b>：'
+    + '每一列標題後面會標【新判準 a/b/c】或【舊判準】，<b>兩者不可以放在一起數</b>。'
+    + '<br>・<b>【新判準】</b>（v6.198 以後的畫面）＝三取一才送：'
+    + '<b>a</b> 頁面在前景卻 15 秒沒收到任何輪詢回應（那台裝置真的連不上）／'
+    + '<b>b</b> 伺服器上最後一次有人動作，比我的盤面最後一次變動晚了 15 秒以上（真漏接）／'
+    + '<b>c</b> 伺服器認定的「該誰動作」與那台畫面算出來的不一致。'
+    + '<br>・<b>【舊判準】</b>（v6.197 以前的畫面，已發布的 bundle 改不了）＝只要「盤面 60 秒沒動」就送。'
+    + '2026-08-16 的 7 天資料逐筆回放：舊判準 407 筆／93 人裡，<b>長考類就佔 58%</b>'
+    + '（對手在想 38.6%、自己在想 19.4%），舊 client 20.1%，而且將近一半是同一間房雙方各報一次的鏡像重複；'
+    + '真漏接只有 4 筆（1%）。<b>所以【舊判準】那幾列絕大多數不必追</b>，要看的是【新判準】。'
+    + '（新判準把 407 筆收到 43 筆，降幅 89% —— <b>89% 講的是降幅，不是假陽性率</b>，別把兩個數字混用。）'
+    + '<br>判讀明細：poll.staleWhy＝觸發的是哪一條（缺這一欄就是舊 client，不是「沒有理由」）；'
+    + 'poll.sinceLastAction＝伺服器上真的有人動作到現在多久；poll.srvActor＝伺服器認定該誰動作；'
+    + '<b>poll.oppQuiet</b>＝伺服器說對手已經幾秒沒來要盤面（>0 就是<b>對手那邊斷線</b>，不是這位玩家的問題）。'
+    + '⚠ 這一欄是<b>順帶</b>的判讀欄，不是「對手掉線指紋」：'
+    + '「我正常、對手斷線」時新判準三條都不成立 ⇒ <b>根本不會有回報被送出</b>。'
+    + '它的用途是讓<b>已經送出來</b>的每一筆都能一眼看出「其實是對面掉線」，不必再靠鏡像回報去反推。'],
   'stale-board-drop': ['擋下了會讓盤面倒退的舊資料（v6.180 起）',
     '這台裝置在同一場對戰裡，累積 3 次收到「比畫面上還舊」的盤面（重新同步／輪詢停擺救援與主輪詢是並行的，'
     + '慢網路時舊的那一發會晚到）。v6.180 之前這些會直接把畫面拉回上一個動作 ⇒ 玩家說的「一直跳回上一步」。'
@@ -2734,6 +2747,33 @@ function monPerfCells(r) {
     + '<td style="' + td + '">' + monMs(monStat(pf.paint, 'p95')) + '</td>'
     + '<td style="' + td + 'white-space:nowrap;">' + ltTxt + '</td>'
     + '<td style="' + td + 'white-space:nowrap;">' + dev + '</td>';
+}
+// ⭐⭐⭐v6.198 stale-version 的「新判準／舊判準」徽章。
+//   ⚠⚠ 這是本版**唯一**能避免站長把兩套判準的數字加在一起的地方：v6.197 以前的 bundle
+//     已經發布出去、改不了，它們會**永遠**繼續用「盤面 60 秒沒動」這個寬鬆判準送。
+//   判定依據刻意**不是**版本號字串（截斷列的 ver 可能抽不到、玩家也可能裝了測試站的 build），
+//   而是 payload 裡有沒有 `poll.staleWhy` 這個欄位 —— 有欄位＝那份 bundle 跑的是新判準。
+//   ⚠ 欄位存在但值為 null／空字串 ⇒ 仍然是新 bundle（只是沒記到條件字母），標「新判準·未記條件」。
+//     （其他 reason 在函式開頭就早退了，走不到這裡。）
+//   ⚠ 整包 parse 不起來（被截斷的列）一律回「判準不明」，**不可以**當成舊判準去數。
+function monStaleBadge(r) {
+  if (!r || r.reason !== 'stale-version') return '';
+  var o = null;
+  try { o = JSON.parse(r.diag || ''); } catch (e) { o = null; }
+  if (!o || typeof o !== 'object') return '\u3000<span style="color:#c50;">(判準不明·資料殘缺)</span>';
+  var poll = (o.poll && typeof o.poll === 'object') ? o.poll : null;
+  if (!poll || !Object.prototype.hasOwnProperty.call(poll, 'staleWhy')) {
+    return '\u3000<span style="background:#eceff4;color:#667;padding:1px 6px;border-radius:9px;">舊判準·多為長考</span>';
+  }
+  var w = poll.staleWhy;
+  // ⚠ 有 staleWhy 這個 key 但值是空的 ⇒ 仍然是**新 bundle**（欄位存在就是新判準），
+  //   只是沒記到條件字母。這裡必須與 dump-client-monitor.cjs 的 staleGateOf() 同調
+  //   （那邊把它算成 'new'）—— 兩邊分類不一致，站長對帳時兩張表會兜不起來。
+  if (typeof w !== 'string' || !w) {
+    return '\u3000<span style="background:#ffe9e9;color:#c62828;padding:1px 6px;border-radius:9px;">新判準·未記條件</span>';
+  }
+  return '\u3000<span style="background:#ffe9e9;color:#c62828;font-weight:700;padding:1px 6px;border-radius:9px;">新判準 '
+    + escapeHtml(w) + '</span>';
 }
 // ⚠ 不可以直接 MON_REASON_INFO[reason] —— reason 若是 'constructor'/'__proto__' 這類
 //   原型鏈上的 key 會拿到 truthy 的非陣列，標題就變成空字串。
@@ -2936,7 +2976,7 @@ async function loadMonitor() {
       const info = monReasonInfo(r.reason);
       html += '<details style="margin-bottom:6px;border:1px solid #eef1f5;border-radius:6px;padding:8px;">'
         + '<summary style="cursor:pointer;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW'))
-        + '　<b>' + escapeHtml(info[0]) + '</b>　' + escapeHtml(r.email || '(未知)')
+        + '　<b>' + escapeHtml(info[0]) + '</b>' + monStaleBadge(r) + '　' + escapeHtml(r.email || '(未知)')
         + (r.room ? '　<span class="small muted">' + escapeHtml(r.room) + '</span>' : '')
         // ⭐v6.184：伺服器寫入時就標記過的截斷列，這裡直接標出來 —— 這一列的 perf/env 是**殘缺**的，
         //   不標的話展開只會看到一串被切一半的 JSON，看起來像「client 送了壞資料」。
@@ -2968,7 +3008,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.197';
+window.SITE_VERSION_HINT = '6.198';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

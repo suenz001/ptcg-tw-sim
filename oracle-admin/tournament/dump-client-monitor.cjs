@@ -193,6 +193,34 @@ function truncSummary(rawRows) {
   return { total: total, srv: srv, legacy: legacy, maxRawLen: maxRawLen, capped: capped, legacyCapped: legacyCapped };
 }
 
+// ── ⭐⭐⭐v6.198 stale-version 的「新判準／舊判準」分類 ─────────────────
+//   v6.198 把送出判準從「盤面 60 秒沒動」收緊成三取一（見 src/lib/tournament/stale-diag.ts）。
+//   ⚠⚠ 但**已經發布出去的 bundle 改不了** —— 停在 v6.197 以前的玩家會永遠繼續用舊判準送，
+//     所以同一份 dump 裡一定會新舊混雜。把兩邊的次數加在一起看是**沒有意義**的：
+//     舊判準那批用 2026-08-16 的資料回放約 89% 是「有人在長考」的正常等待。
+//   判定依據刻意**不是**版本號字串：截斷列抽不到 ver、玩家也可能裝到測試站的 build。
+//   唯一可靠的訊號是 payload 裡**有沒有 `poll.staleWhy` 這個欄位**（v6.198 起一律寫入，
+//   其他 reason 寫 null）。⚠ 欄位缺席只能代表「舊 bundle」，不可以讀成「新判準沒有理由」。
+//   三種結果必須分得出來，不可以合併：
+//     'new'     ＝新判準送的（why 帶 a/b/c，可能多條）
+//     'legacy'  ＝v6.197 以前的舊 bundle
+//     'unknown' ＝整包 parse 不起來（被截斷）⇒ **不知道**，不可以塞進 legacy 去數
+function staleGateOf(reason, diagObj, parsed) {
+  if (reason !== 'stale-version') return null;
+  if (!parsed || !diagObj || typeof diagObj !== 'object') return { gate: 'unknown', why: null };
+  const poll = (diagObj.poll && typeof diagObj.poll === 'object') ? diagObj.poll : null;
+  if (!poll || !Object.prototype.hasOwnProperty.call(poll, 'staleWhy')) return { gate: 'legacy', why: null };
+  const w = poll.staleWhy;
+  return { gate: 'new', why: (typeof w === 'string' && w) ? w : null };
+}
+// 伺服器回報的「對手已經幾秒沒來要盤面」。>0 ＝**對手那邊**斷線（不是這位玩家的問題）。
+//   ⚠ v6.197 以前的 payload 沒有這一欄 ⇒ 回 null（「不知道」），**不是** 0（「對手正常」）。
+function oppQuietOf(diagObj) {
+  const poll = (diagObj && typeof diagObj === 'object' && diagObj.poll && typeof diagObj.poll === 'object') ? diagObj.poll : null;
+  if (!poll || !Object.prototype.hasOwnProperty.call(poll, 'oppQuiet')) return null;
+  return (typeof poll.oppQuiet === 'number' && isFinite(poll.oppQuiet)) ? poll.oppQuiet : null;
+}
+
 // ── 小工具 ──────────────────────────────────────────────────────────────
 function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
 function pct(a, b) { return b > 0 ? (a * 100 / b).toFixed(1) + '%' : '—'; }
@@ -316,6 +344,9 @@ async function main() {
   const trunc = truncSummary(raw);
   const devMap = new Map();          // 'hc核/dmGB' -> count
   const uaMap = new Map();           // 平台 -> { n, uids:Set }
+  // ⭐v6.198 stale-version 的新／舊判準分帳（合併數字沒有意義，見 staleGateOf 的註解）。
+  const staleTally = { total: 0, new: 0, legacy: 0, unknown: 0, why: new Map(), uidsNew: new Set(), uidsLegacy: new Set() };
+  let oppQuietRows = 0, oppQuietHit = 0, oppQuietMax = 0;
 
   for (const r of raw) {
     const d = parseDiag(r.diag || '');
@@ -355,9 +386,22 @@ async function main() {
       devMap.set(k, (devMap.get(k) || 0) + 1);
     }
 
+    const sg = staleGateOf(r.reason || '', d.obj, d.parsed);
+    if (sg) {
+      staleTally.total++;
+      staleTally[sg.gate]++;
+      if (sg.gate === 'new' && r.uid) staleTally.uidsNew.add(r.uid);
+      if (sg.gate === 'legacy' && r.uid) staleTally.uidsLegacy.add(r.uid);
+      if (sg.why) staleTally.why.set(sg.why, (staleTally.why.get(sg.why) || 0) + 1);
+    }
+    const oq = oppQuietOf(d.obj);
+    if (oq !== null) { oppQuietRows++; if (oq > 0) { oppQuietHit++; if (oq > oppQuietMax) oppQuietMax = oq; } }
+
     rows.push({
       ts: r.ts, tsLocal: tw(r.ts), uid: r.uid || null, email: r.email || null,
       room: r.room || '', reason: r.reason || '', reasonLabel: reasonLabel(r.reason),
+      // ⭐v6.198：null ＝不是 stale-version；'unknown' ＝資料殘缺（**不是**舊判準）。
+      staleGate: sg ? sg.gate : null, staleWhy: sg ? sg.why : null, oppQuiet: oq,
       ver: d.ver || null, ua: d.ua || null, hc: d.hc, dm: d.dm,
       diagLen: (r.diag || '').length,
       // ⭐v6.184：`truncated` 是「伺服器旗標 or parse 失敗」的合判；另外兩欄讓人分得出來源。
@@ -429,6 +473,24 @@ async function main() {
       latestClientVersion: latestVer,
     },
     byReason: byReason,
+    // ⭐⭐⭐v6.198 stale-version 分帳。⚠ new / legacy / unknown 三者**不可以加總後當一個數字看**。
+    staleVersion: {
+      total: staleTally.total,
+      newGate: staleTally.new, newPlayers: staleTally.uidsNew.size,
+      legacyGate: staleTally.legacy, legacyPlayers: staleTally.uidsLegacy.size,
+      unknownGate: staleTally.unknown,
+      byWhy: [...staleTally.why.entries()].map(function (e) { return { why: e[0], n: e[1] }; })
+        .sort(function (a, b) { return b.n - a.n; }),
+      note: 'total ＝這段期間 stale-version 的總列數（＝三類之和），只是「有幾列」，不是「有幾個問題」。'
+        + 'newGate ＝v6.198 以後的畫面用新判準（三取一）送的；legacyGate ＝v6.197 以前的 bundle '
+        + '用舊判準（只要盤面 60 秒沒動）送的 —— 那批用 2026-08-16 的資料回放，長考類就佔 58%、'
+        + '舊 client 20%、真漏接只有 1%，絕大多數不必追。unknownGate ＝payload 被截斷、判不出來，'
+        + '**不可以**併進 legacy。⚠「89%」是收緊後的降幅（407→43），不是假陽性率，兩個數字別混用。',
+    },
+    // ⭐v6.198 對手掉線（伺服器權威）。⚠ rows ＝有這一欄的回報數（舊 client 沒有這一欄）。
+    //   ⚠⚠ 這是**順帶**的判讀欄，不是「對手掉線指紋」：「我正常、對手斷線」時新判準三條都不成立
+    //     ⇒ 那個情境根本不會有回報被送出。hits 只涵蓋「因為別的理由送出來、而當下對手剛好也掉線」。
+    oppQuiet: { rows: oppQuietRows, hits: oppQuietHit, maxSec: oppQuietMax || null },
     byVersion: byVersion,
     byPlatform: byPlatform,
     deviceMix: [...devMap.entries()].map(function (e) { return { device: e[0], n: e[1] }; }).sort(function (a, b) { return b.n - a.n; }),
@@ -465,6 +527,41 @@ async function main() {
     }
     L.push('  ── 合計 ' + rows.length + ' 筆回報，來自 ' + uidSet.size + ' 位玩家。');
     L.push('  （人數比次數重要：同一個人重複觸發，不代表全站有問題。）');
+  }
+  if (staleTally.total) {
+    L.push('');
+    L.push('【②-b ⭐「畫面版本卡住」要分兩批看（v6.198 起）】');
+    L.push('  ⚠⚠ 這兩批的數字**不可以加在一起**：判準完全不同。');
+    L.push('  ・新判準（v6.198 以後的畫面）：' + staleTally.new + ' 筆 / ' + staleTally.uidsNew.size + ' 人　←要追的是這一批');
+    L.push('    三取一才送：a=前景卻 15 秒收不到輪詢回應／b=伺服器動過而我沒跟上 15 秒以上／');
+    L.push('    c=伺服器與那台畫面對「該誰動作」認知不一致。');
+    if (staleTally.why.size) {
+      const _ws = [...staleTally.why.entries()].sort(function (a, b) { return b[1] - a[1]; });
+      L.push('    觸發條件分佈：' + _ws.map(function (e) { return e[0] + ' ' + e[1] + ' 筆'; }).join('、'));
+    } else if (staleTally.new) {
+      L.push('    ⚠ 有新判準的列但一筆都沒帶條件字母 —— 不正常，回頭查 client 的 staleWhy 有沒有接上。');
+    }
+    L.push('  ・舊判準（v6.197 以前的畫面）：' + staleTally.legacy + ' 筆 / ' + staleTally.uidsLegacy.size + ' 人　←絕大多數不必追');
+    L.push('    那批只要「盤面 60 秒沒動」就送。拿 2026-08-16 的 7 天資料逐筆回放：長考類就佔 58%');
+    L.push('    （對手在想 38.6%、自己在想 19.4%）、舊 client 20%、真漏接只有 4 筆（1%），');
+    L.push('    而且將近一半是同一間房雙方各報一次的鏡像重複。');
+    L.push('    ⚠「新判準把 407 筆收成 43 筆、降幅 89%」—— 那個 89% 是**降幅**，不是假陽性率，別混用。');
+    L.push('    ⚠ 已發布的 bundle 改不了 ⇒ 這一批會一直存在，直到那些人更新畫面為止。');
+    if (staleTally.unknown) {
+      L.push('  ・判不出來（payload 被截斷）：' + staleTally.unknown + ' 筆　←這是「不知道」，不是舊判準');
+    }
+  }
+  if (oppQuietRows) {
+    L.push('');
+    L.push('【②-c 📶 對手掉線（伺服器權威，v6.198 起才有這一欄）】');
+    L.push('  有這一欄的回報 ' + oppQuietRows + ' 筆，其中 ' + oppQuietHit + ' 筆回報時**對手正處於掉線狀態**'
+      + (oppQuietMax ? '（最久 ' + oppQuietMax + ' 秒）' : '') + '。');
+    L.push('  ⚠⚠ 這是**順帶**的判讀欄，不是「對手掉線指紋」：「我這邊正常、只有對手斷線」的情境');
+    L.push('    新判準三條都不成立 ⇒ 那個情境**根本不會有回報被送出**，這裡也就看不到。');
+    L.push('    它真正的用途是：**已經送出來**的每一筆，都能一眼看出「其實是對面掉線」，');
+    L.push('    不必再靠「在線那一方也跟著報 stale-version」去反推（那正是鏡像重複的來源）。');
+    L.push('    要系統性地統計對手掉線，得另開指紋或在伺服器端統計 —— 本版刻意沒做。');
+    L.push('  ⚠ 舊 client 沒有這一欄，所以分母不是全部回報數。');
   }
   L.push('');
   L.push('【③ ⭐ client 版本分佈】←「還有多少人停在舊版」看這裡');
@@ -583,7 +680,7 @@ async function main() {
 
 // ⭐v6.184 只有被**直接執行**時才跑（`node /tmp/dump-client-monitor.cjs 7d` 與以前完全相同）；
 //   被 require 進來時只匯出純函式，讓守衛可以實跑判定邏輯而不需要任何資料庫。
-module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp };
+module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp, staleGateOf: staleGateOf, oppQuietOf: oppQuietOf };
 if (require.main === module) {
   main().catch(function (e) { console.error('ERROR:', e && e.message); process.exit(1); });
 }
