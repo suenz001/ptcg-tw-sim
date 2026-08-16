@@ -928,7 +928,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
-import { canApplyEffectToTarget, taikoBariBlocksAttackDamage } from './defense';
+import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst } from './defense';  // v6.196 中央述詞
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId, splitTwoCardStadiumDeckEntries } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡 / v6.094 建局入口 fail-safe
 import { twoCardStadiumHalfIndex, twoCardStadiumSide } from './effects/_shared'; // v6.086 手牌裁半（左/右）／v6.095 依 cardId 判左右
@@ -5810,12 +5810,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v5.986 平穩境地：被回手的是「被KO方自己」場上的寶可夢 → 其對手側有平穩境地則擋(正常丟棄,獎賞照常)。
     //   (由官方 Q&A②潛者捕捉「不行」類推;無直接 Q&A,已記錄待 Wilson 知悉)
     const _isBlockedByCalmGround = _calmGroundBlocksReturn(newState, dIdx, pool);
-    if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影') && _isBlockedByCalmGround) {
+    // ⭐ v6.196：耿鬼 stage=Stage2 進化 ⇒ 熔岩洞應消除無限之影（原本無 gate）。
+    const _v6196InfShadow = hasEffectiveAbilityByInst(newState, dIdx, newState.players[dIdx].active, pool, '無限之影');
+    if (!preventedKO && wouldBeKO && _v6196InfShadow && _isBlockedByCalmGround) {
       newState = addLog(newState,
         `無限之影：對手場上有【平穩境地】，${defenderCard.name} 無法放回手牌 → 正常進棄牌堆（獎賞照常）`,
         dIdx);
     }
-    if (!preventedKO && wouldBeKO && defenderCard.abilities?.some(a => a.name === '無限之影') && !_isBlockedByCalmGround) {
+    if (!preventedKO && wouldBeKO && _v6196InfShadow && !_isBlockedByCalmGround) {
       infiniteShadowReturnsToHand = true;
       newState = addLog(newState,
         `無限之影：${defenderCard.name} 因招式傷害昏厥 → 整條進化鏈放回手牌（附加能量/道具仍丟棄），對手仍取得獎賞`,
@@ -5906,7 +5908,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const atkCardGG = atkActiveGG ? pool.get(atkActiveGG.cardId) : null;
       // v5.483：原 subtype==='Basic' 對「基礎 ex」(如喵喵ex subtype='ex')失效 → 只給 base 2 不 +1。
       //   改 isBasicPokemonCard（涵蓋基礎 ex / 火箭隊基礎等）。卡面：對手【基礎】被本招式傷害 KO → +1。
-      if (atkCardGG?.abilities?.some(a => a.name === '貪婪食客')
+      // ⭐ v6.196：三首惡龍ex stage=Stage2 進化＋ex 規則寶可夢 ⇒ 熔岩洞／初始化 應消除貪婪食客。
+      if (hasEffectiveAbilityByInst(newState, aIdx, atkActiveGG, pool, '貪婪食客')
           && isBasicPokemonCard(defenderCard)) {
         greedyGourmetBonus = 1;
       }
@@ -5990,7 +5993,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       newState = recordOppKO(newState, dIdx, defenderCard, 'attack');
       // v2.992 PASSIVE_KO_RETALIATION（沙鈴仙人掌 炸裂針）— KO 時對攻擊者放 N 個指示物
       // v4.56：補光之翼 check — attackerCard 是當前 attacker
-      const _v456KoMagicalShine = attackerCard?.abilities?.some(a => a.name === '光之翼') ?? false;
+      // ⭐ v6.196：改走中央述詞 — 超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，
+      //   【傳說的熔岩洞】／【鐵荊棘ex｜初始化】在場時光之翼應被消除（原只比對特性名）。
+      const _v456KoMagicalShine = hasEffectiveAbilityByInst(newState, aIdx, newState.players[aIdx].active, pool, '光之翼');
       if (defenderCard.abilities && !_v456KoMagicalShine) {
         for (const ab of defenderCard.abilities) {
           if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
@@ -6502,7 +6507,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     // v5.113 KO 重複觸發修：v5.081 已在 KO branch (L4989) 補跑 PASSIVE_RETALIATION，
     //   共用版只在「沒走 KO branch」時跑（即 !wouldBeKO || preventedKO），
     //   否則甲殼刺/毒刺/灼熱之軀等會在 KO 時觸發 2 次（玩家回報）。
-    const attackerHasMagicalShine = attackerCard?.abilities?.some(a => a.name === '光之翼') ?? false;
+    // ⭐ v6.196：改走中央述詞（熔岩洞/初始化 等消除來源）— 原只比對特性名。
+    const attackerHasMagicalShine = hasEffectiveAbilityByInst(newState, aIdx, newState.players[aIdx].active, pool, '光之翼');
     const _v5113RanInKoBranch = wouldBeKO && !preventedKO;
     if (!_v5113RanInKoBranch && baseDamage > 0 && defenderCard.abilities && !attackerHasMagicalShine) {
       for (const ab of defenderCard.abilities) {
@@ -7054,9 +7060,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       };
       // v2.387：超級皮可西ex｜光之翼 — 不受對手寶可夢特性效果影響，
       //   冰冷之帳對其無效（不放指示物）。
-      const hasMagicalShine = (card: Card | undefined): boolean => {
-        return card?.abilities?.some(a => a.name === '光之翼') ?? false;
-      };
+      // ⭐ v6.196：改走中央述詞（同 v6.049 對 hasAnyEffectiveAbility 的處理）——
+      //   超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，熔岩洞／初始化 在場時光之翼應被消除。
+      const hasMagicalShine = (c: CardInstance, ownerIdx: 0 | 1): boolean =>
+        hasEffectiveAbilityByInst(state, ownerIdx, c, pool, '光之翼');
       // ⭐v6.049：卡面是「**擁有特性的**所有寶可夢」。原本只看卡片印刷有沒有特性，
       //   完全不管特性有沒有被消除 → 火箭隊的監視塔（「雙方場上所有【無】寶可夢的特性
       //   全部消除」）在場時，【無】寶可夢已經沒有特性了，卻仍被放指示物（玩家回報）。
@@ -7065,7 +7072,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         const card = pool.get(c.cardId);
         if (!hasAnyEffectiveAbility(state, c, card, ownerIdx, loc, pool)) return false;
         if (isFrosmothName(card)) return false;
-        if (hasMagicalShine(card)) return false;  // 光之翼免疫
+        if (hasMagicalShine(c, ownerIdx)) return false;  // 光之翼免疫
         return true;
       };
       // v5.083：化隱（斯魔茶 / 來悲粗茶 / 怨影娃娃 / 詛咒娃娃）— 卡面：
@@ -8323,10 +8330,9 @@ export function applyDefenderReductionsBlockA(
         ...(defender.active ? [defender.active] : []),
         ...defender.bench,
       ];
-      const hasGarbageMountain = defAll.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.name === '灰塵山' && card?.abilities?.some(a => a.name === '垃圾洩氣');
-      });
+      // ⭐ v6.196：灰塵山 Stage1 進化 ⇒ 熔岩洞應消除垃圾洩氣（原本無 gate）。
+      const hasGarbageMountain = defAll.some(c =>
+        pool.get(c.cardId)?.name === '灰塵山' && hasEffectiveAbilityByInst(state, dIdx, c, pool, '垃圾洩氣'));
       if (hasGarbageMountain && attacker.active && getAllAttachedTools(attacker.active).length > 0) {
         // v3.20 多重轉接：只要附了任一張寶可夢道具就觸發
         const allTools = getAllAttachedTools(attacker.active);
@@ -8350,10 +8356,9 @@ export function applyDefenderReductionsBlockA(
         ...(defender.active ? [defender.active] : []),
         ...defender.bench,
       ];
-      const hasFrozenFortress = defAll2.some(c => {
-        const card = pool.get(c.cardId);
-        return card?.name === '冰雪巨龍' && card?.abilities?.some(a => a.name === '凍原堡壘');
-      });
+      // ⭐ v6.196：冰雪巨龍 Stage2 進化 ⇒ 熔岩洞應消除凍原堡壘（原本無 gate）。
+      const hasFrozenFortress = defAll2.some(c =>
+        pool.get(c.cardId)?.name === '冰雪巨龍' && hasEffectiveAbilityByInst(state, dIdx, c, pool, '凍原堡壘'));
       if (hasFrozenFortress && defender.active) {
         const hasWater = defender.active.energyAttached.some(e => {
           const ec = pool.get(e.cardId);

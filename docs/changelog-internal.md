@@ -1,3 +1,94 @@
+# v6.196 【傳說的熔岩洞】沒有消除【護城龍｜太古防壁】—— v6.145 的翻版：中央述詞寫好 ≠ 消費點有接
+
+## 玩家回報
+
+> 「傳說的熔岩洞 沒有消除掉 護城龍 的【特性】太古防壁。」
+
+## 卡面查證（只採 `static/cards` 台灣官方卡面）
+
+| 卡 | 欄位 | 逐字 |
+|---|---|---|
+| 傳說的熔岩洞 (M6 075/076 id=19623、076/076 id=19626，兩張 `rulesText` 完全相同) | `rulesText` | 「雙方場上所有進化寶可夢的特性全部消除。」 |
+| 護城龍 (M5 19204 / 19256、M-P-J 19237) | `stage` / `subtype` / `evolvesFrom` | `Stage2` / `Stage2` / `盾甲龍` ⇒ **進化寶可夢** |
+| 護城龍｜太古防壁 | `abilities[].effect` | 「只要這隻寶可夢在備戰區，自己的所有寶可夢不會受到對手身上附加的能量為2個以下的寶可夢招式的傷害。」 |
+
+⇒ **卡面判定：熔岩洞應消除太古防壁。玩家回報成立。**（與 v6.145 的化石案相反方向：
+化石在場上是【基礎】寶可夢所以**不該**被消除，護城龍是 Stage2 所以**該**被消除。）
+
+## 真因（指到行號，行號為 BASE 62d437cd 的座標）
+
+中央述詞 `isAbilityHolderEffective`（`v3001_g3_wave3.ts:208`）判得**完全正確** ——
+行為端實測有熔岩洞時對護城龍｜太古防壁回 `false`。壞的是**消費點**：
+
+| 消費點 | 位置（BASE） | 原本寫法 |
+|---|---|---|
+| 太古防壁 | `defense.ts:129` `taikoBariBlocksAttackDamage` | `c?.abilities?.some(a => a.name === '太古防壁')` |
+| 光之翼 | `defense.ts:174` / `effects.ts:7819`、`7996` / `engine.ts:5993`、`6505`、`7058` | 同上，只比對特性名 |
+| 球形盾牌／潛者捕捉／奇跡之吻／熔岩波動 | `v3000_g3_wave2.ts:73` local `hasAbilityOnSide` + `:89` local `hasAbilityOnActive` | 同上 |
+| 爆大身軀／瞪眼效用／海之詛咒／熔岩地域／漩渦言靈／凹洞／黑暗脈衝 | `v3001_g3_wave3.ts:61` local `hasAbilityOnSide`；`:88` `hasAbilityOnActive`（只接了「暗夜羽擊」一個消除來源） | 同上 |
+
+**全部都沒問「這個特性此刻有沒有被消除」。** 而這一族的持有者查下來幾乎全是**進化寶可夢**：
+蟲甲聖 Stage1／獵斑魚 Stage1／波克基斯 Stage2／鴨嘴炎獸 Stage1／大王銅象 Stage1／
+火箭隊的阿柏怪 Stage1／胖嘟嘟ex Stage1／熔岩蝸牛 Stage1／夢妖魔ex Stage1／
+火箭隊的三地鼠 Stage1／火箭隊的電龍 Stage2／超級皮可西ex Stage1／護城龍 Stage2
+⇒ **13 個同型 outlier，不是只有太古防壁一張。**
+
+## 跨卡 audit 維度：「場地卡／特性消除特性」的消費點涵蓋度
+
+H/I/J live 卡面枚舉「消除特性」的來源共 6 種：
+傳說的熔岩洞（進化）／火箭隊的監視塔（【無】）／鐵荊棘ex｜初始化（規則寶可夢，未來除外）／
+振翼髮｜暗夜羽擊（對手戰鬥位）／海兔獸｜黏著束縛（備戰【2階進化】）／可達鴨・哥達鴨｜濕氣（將自己昏厥的特性）。
+
+逐一檢查每個「防禦型／field-passive 型」特性的消費點：
+
+| 特性 | 持有者 | 消費點狀態 |
+|---|---|---|
+| 花之帷幔 | 謝米 Basic | ✅ 已 gate（`effects.ts:298`） |
+| 抵抗之幕 | 火箭隊的急凍鳥 Basic | ✅ 已 gate（`effects.ts:326`） |
+| 化隱 | 斯魔茶／來悲粗茶／怨影娃娃／詛咒娃娃 Basic | ✅ 已 gate（`defense.ts:189`） |
+| 守護之鐘／齒輪塗層 | 青銅鐘／齒輪怪 | ✅ 已 gate（`v2999:234`／`:278`） |
+| **太古防壁** | 護城龍 Stage2 | ❌ **無 gate → 本次修正** |
+| **光之翼** | 超級皮可西ex Stage1+ex | ❌ **無 gate → 本次修正**（熔岩洞＋初始化 兩個來源都應消除） |
+| **球形盾牌** 等 v3000 家族 4 個 | 全 Stage1/Stage2 | ❌ **無 gate → 本次修正** |
+| **爆大身軀** 等 v3001 家族 7 個 | 全 Stage1/Stage2 | ❌ **只接了暗夜羽擊 → 本次修正** |
+| 藏隱／深度下潛 | 斯魔茶 Basic(Grass)／小霞的鯉魚王 Basic(Water) | ⚠ 無 gate，但**目前無任何 live 消除來源打得到**（非進化、非【無】、非規則、非備戰2階；而暗夜羽擊只作用 active、這兩個特性 bench-only）→ 本輪不動，記錄在案 |
+
+## 收斂做法
+
+新增中央述詞 `hasEffectiveAbilityByInst(state, ownerIdx, inst, pool, abilityName)`，
+`location` 由 inst 是否等於該玩家 active **自動判定**（呼叫端自己算就會漂）。
+
+⚠ 放在 `defense.ts` 而非 v3001 卡檔：`anti-pattern-lint` **Check O**（底層模組反向 import 卡檔的
+symbol 白名單「只准縮不准擴」）。`defense.ts` 早已合法持有 `isAbilityHolderEffective`，
+`engine.ts` / `effects.ts` 也早已 `import … from './defense'` ⇒ 不新增任何反向 edge。
+（第一版把它寫在 v3001 並讓 defense/effects import，lint 直接紅。）
+
+- `defense.ts`：`taikoBariBlocksAttackDamage` 與光之翼分支改走新述詞。
+- `engine.ts` ×3、`effects.ts` ×2：光之翼全部改走新述詞。
+- `v3001_g3_wave3.ts`：`hasAbilityOnSide` 加 gate 並 export；`hasAbilityOnActive` 的
+  `isOppActiveAbilityNullifiedByMoonsenne` 升級為 `isAbilityHolderEffective(...,'active')`
+  （嚴格擴充：中央述詞 step1/step2 已含原本那兩個來源）。
+- `v3000_g3_wave2.ts`：**整份刪掉 local `hasAbilityOnSide`/`hasAbilityOnActive`**，改 import
+  v3001 中央帶 gate 版 —— 杜絕 local helper 遮蔽中央版。
+
+⚠ **遞迴分析**（改前就先做，否則會炸）：`isAbilityHolderEffective` 的 sticky(黏著束縛) 分支
+只在 `location === 'bench'` 觸發，且它偵測持有者走的是 `hasAbilityOnBench`（**未加 gate 的版本**）；
+暗夜羽擊分支對 `abilityName === '暗夜羽擊'` 早退 ⇒ 兩條可能的自我遞迴路徑都不成立。
+**`hasAbilityOnBench` 刻意不加 gate**，加了就是無窮遞迴。
+
+## 守衛
+
+`scripts/test-v6196-legend-cave-passive-gate.mjs`（13 步）進 test chain。
+HEAD-FAIL 證明：把 5 個改過的檔還原成 BASE blob 重跑 → **8 FAIL / 5 PASS**；修後 13 PASS。
+含：卡面逐字錨（rulesText／stage／effect 變了要紅）、掃描器下限斷言（抓不到卡＝紅，不是安慰劑綠）、
+完整 `applyAction ATTACK` 流程（不是只手動戳 helper）、v6.145 化石豁免回歸、
+否定型守衛「v3000 不得再有 local helper」**配正對照**（餵違規樣本確認判準抓得到）。
+
+## 沒有改的
+
+`static/cards` 卡面資料、AI、UI、錦標賽伺服器邏輯皆未動。
+`oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 已同步 bump 到 6.196。
+
 # v6.195 跑馬燈的 ✕ 被動態島吃掉 —— v6.187 只修了「容器」，沒修「容器裡的按鈕」
 
 ## 站長回報

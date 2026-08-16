@@ -58,6 +58,12 @@
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { regR, updatePlayer, addLog } from '../_shared';  // v5.464：潛者捕捉確認選單 resolver
+// ⭐ v6.196：特性生效性中央述詞（取代本檔原本的 local hasAbilityOnSide/hasAbilityOnActive）
+import {
+  hasAbilityOnSide,
+  hasAbilityOnActive,
+  countEffectiveAbilityOnSide,
+} from './v3001_g3_wave3';
 
 // 導出 sentinel 防止 unused import warnings（與 v2999 同模式）
 export type _v3000G3W2Sentinel = GameState | Card | CardInstance;
@@ -67,37 +73,14 @@ export type _v3000G3W2Sentinel = GameState | Card | CardInstance;
 // ════════════════════════════════════════════════════════════════════════════
 
 /**
- * 是否「玩家 idx 場上（active+bench）」有任何寶可夢具有指定 ability 名稱。
- * 用於團體 buff/debuff 的「場上有 1+」型條件判斷。
+ * ⭐ v6.196【中央收斂】原本本檔各自持有一份 local `hasAbilityOnSide` / `hasAbilityOnActive`，
+ *   **只比對特性名、完全沒問特性此刻有沒有被消除** —— 於是【傳說的熔岩洞】
+ *   「雙方場上所有進化寶可夢的特性全部消除。」在場時，本檔的
+ *   球形盾牌(蟲甲聖 Stage1)／潛者捕捉(獵斑魚 Stage1)／奇跡之吻(波克基斯 Stage2)／
+ *   熔岩波動(鴨嘴炎獸 Stage1) 仍照常生效（同 v6.145「中央述詞寫好≠消費點有接」那一族）。
+ *   local 版整份刪除，改 re-bind 到 v3001_g3_wave3 的中央帶 gate 版本，
+ *   杜絕 local helper 遮蔽中央版。
  */
-function hasAbilityOnSide(
-  state: GameState | undefined,
-  ownerIdx: 0 | 1 | undefined,
-  pool: Map<string, Card> | undefined,
-  abilityName: string,
-): boolean {
-  if (!state || ownerIdx == null || !pool) return false;
-  const owner = state.players[ownerIdx];
-  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
-  return all.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.abilities?.some(a => a.name === abilityName);
-  });
-}
-
-/** 玩家 idx 戰鬥場上是否為指定 ability 名稱的持有者。 */
-function hasAbilityOnActive(
-  state: GameState | undefined,
-  ownerIdx: 0 | 1 | undefined,
-  pool: Map<string, Card> | undefined,
-  abilityName: string,
-): boolean {
-  if (!state || ownerIdx == null || !pool) return false;
-  const a = state.players[ownerIdx].active;
-  if (!a) return false;
-  const card = pool.get(a.cardId);
-  return !!card?.abilities?.some(ab => ab.name === abilityName);
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // A1. 蟲甲聖｜球形盾牌
@@ -145,15 +128,9 @@ export function magmarFlowingBurnBonus(
   oppIdx: 0 | 1 | undefined,  // 灼傷加害方（鴨嘴炎獸的擁有者）
   pool: Map<string, Card> | undefined,
 ): number {
-  if (!state || oppIdx == null || !pool) return 0;
-  const owner = state.players[oppIdx];
-  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
-  let count = 0;
-  for (const c of all) {
-    const card = pool.get(c.cardId);
-    if (card?.abilities?.some(a => a.name === '熔岩波動')) count++;
-  }
-  return count * 30;
+  // ⭐ v6.196：原本自己跑 inline 計數迴圈、沒經過 hasAbilityOnSide，也就沒問特性是否被消除
+  //   （鴨嘴炎獸 stage=Stage1 進化 ⇒【傳說的熔岩洞】應消除熔岩波動）。改走中央計數述詞。
+  return countEffectiveAbilityOnSide(state, oppIdx, pool, '熔岩波動') * 30;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

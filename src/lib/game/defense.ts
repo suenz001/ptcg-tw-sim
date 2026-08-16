@@ -115,6 +115,35 @@ export type DefenseCheckResult = { blocked: true; reason: string } | { blocked: 
  * @param options.isBench caller 已知 target 在 bench 時傳 true（用於決定是否走 resolveBenchGuard）；
  *   不傳則由 helper 內部判斷
  */
+/**
+ * ⭐ v6.196 中央述詞：「這個**場上實體** inst 身上的特性 abilityName 此刻是否生效？」
+ *
+ * 供所有「self-ability / field-passive 型 passive」的消費點使用（光之翼／太古防壁…）——
+ * 它們原本一律手刻 `card.abilities?.some(a => a.name === 'X')`，**沒有問特性是否被消除**
+ * （v6.145 的教訓：中央述詞寫好 ≠ 消費點有接）。玩家回報「【傳說的熔岩洞】沒有消除掉
+ * 【護城龍｜太古防壁】」就是這一族：護城龍 stage=Stage2 是進化寶可夢，熔岩洞卡面
+ * 「雙方場上所有進化寶可夢的特性全部消除。」⇒ 應消除。
+ *
+ * location 由 inst 是否等於該玩家 active 自動判定 —— 呼叫端自己算就會漂（active/bench
+ * 判錯會讓黏著束縛/暗夜羽擊的範圍失準）。
+ * ⚠ 放在 defense.ts 而非 v3001 卡檔：Check O（反向 import 白名單只准縮不准擴）——
+ *   defense.ts 早已合法持有 isAbilityHolderEffective，engine/effects 也早已 import defense。
+ */
+export function hasEffectiveAbilityByInst(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null | undefined,
+  pool: Map<string, Card> | undefined,
+  abilityName: string,
+): boolean {
+  if (!state || ownerIdx == null || !inst || !pool) return false;
+  const card = pool.get(inst.cardId);
+  if (!card?.abilities?.some(a => a.name === abilityName)) return false;
+  const act = state.players[ownerIdx]?.active;
+  const loc: 'active' | 'bench' = (act && act.iid === inst.iid) ? 'active' : 'bench';
+  return isAbilityHolderEffective(state, inst, card, ownerIdx, abilityName, loc, pool);
+}
+
 // v5.832：護城龍｜太古防壁 中央述詞 — 防守方(1-attackerIdx)備戰有護城龍 且 攻擊方能量單位≤2
 //   → 該攻擊對防守方所有寶可夢(active+bench)不造成招式傷害。能量依攻擊宣告時 host-aware 快照
 //   (_attackTimeAttackerEnergyUnits,含火箭隊/繁茂/燃火等 multi-unit;缺席退回 Infinity=不擋)。
@@ -124,10 +153,13 @@ export function taikoBariBlocksAttackDamage(
   state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>,
 ): boolean {
   const defIdx = (1 - attackerIdx) as 0 | 1;
-  const hasTaikoBari = state.players[defIdx].bench.some(b => {
-    const c = pool.get(b.cardId);
-    return c?.abilities?.some(a => a.name === '太古防壁');
-  });
+  // ⭐ v6.196：原本只比對特性名，**沒問特性此刻有沒有被消除** → 玩家回報
+  //   「【傳說的熔岩洞】沒有消除掉【護城龍】的太古防壁」。護城龍 stage=Stage2（進化寶可夢），
+  //   熔岩洞卡面「雙方場上所有進化寶可夢的特性全部消除。」⇒ 應消除；
+  //   海兔獸｜黏著束縛（備戰區【2階進化】特性全消）同樣應消除它。改走中央述詞。
+  const hasTaikoBari = state.players[defIdx].bench.some(
+    b => hasEffectiveAbilityByInst(state, defIdx, b, pool, '太古防壁'),
+  );
   if (!hasTaikoBari) return false;
   return (state._attackTimeAttackerEnergyUnits ?? Infinity) <= 2;
 }
@@ -171,7 +203,11 @@ export function canApplyEffectToTarget(
   //    範圍：self only (擁有此特性的寶可夢自身), kind = ability-effect ONLY
   //    v4.5：原本散在 cursed-bomb / 冰冷之帳 / etc. 5+ 處 inline，統一到此
   if (kind === 'ability-effect') {
-    if (targetCard?.abilities?.some(a => a.name === '光之翼')) {
+    // ⭐ v6.196：光之翼持有者是【超級皮可西ex】(stage=Stage1 進化 + ex 規則寶可夢)
+    //   → 【傳說的熔岩洞】(進化全消) 與【鐵荊棘ex｜初始化】(規則寶可夢全消) 都應消除它。
+    //   原本只比對特性名 ⇒ 同 太古防壁 的漏 gate。改走中央述詞（location 自動判定）。
+    const _msIdx = (1 - actorIdx) as 0 | 1;
+    if (hasEffectiveAbilityByInst(state, _msIdx, target, pool, '光之翼')) {
       return { blocked: true, reason: '光之翼 免疫對手特性效果' };
     }
   }

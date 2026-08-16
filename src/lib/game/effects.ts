@@ -268,7 +268,7 @@ export function countAncientOnField(
  * 類似於基本能量 vs 特殊能量當初的拆分原則。
  */
 // v4.51 Phase 2：統一 defense helper
-import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage } from './defense';
+import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst as _v6196HasEffAbilByInst } from './defense';  // v6.196 中央述詞
 import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, type FormulaTerm } from './engine'; 
 import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
@@ -1052,10 +1052,9 @@ function _applyBenchAbilityReduce(
       ...(defender.active ? [defender.active] : []),
       ...defender.bench,
     ];
-    const hasFrost = defAll.some(c => {
-      const card = pool.get(c.cardId);
-      return card?.name === '冰雪巨龍' && card?.abilities?.some(a => a.name === '凍原堡壘');
-    });
+    // ⭐ v6.196：冰雪巨龍 stage=Stage2 進化 ⇒ 熔岩洞應消除凍原堡壘（原本無 gate）。
+    const hasFrost = defAll.some(c =>
+      pool.get(c.cardId)?.name === '冰雪巨龍' && _v6196HasEffAbilByInst(state, defenderIdx, c, pool, '凍原堡壘'));
     if (hasFrost) {
       const hasWaterE = victim.energyAttached.some(e => {
         const ec = pool.get(e.cardId);
@@ -1090,10 +1089,9 @@ function _applyBenchAbilityReduce(
   //   也套到備戰。block A(active)已處理;bench 先前漏(非 victim 自身特性，PASSIVE map 抓不到)。
   if (dmg > 0) {
     const _dp = state.players[defenderIdx];
-    const _hasGarbage = [...(_dp.active ? [_dp.active] : []), ..._dp.bench].some(cc => {
-      const cd = pool.get(cc.cardId);
-      return cd?.name === '灰塵山' && (cd?.abilities?.some(a => a.name === '垃圾洩氣') ?? false);
-    });
+    // ⭐ v6.196：灰塵山 stage=Stage1 進化 ⇒ 熔岩洞應消除垃圾洩氣（原本無 gate）。
+    const _hasGarbage = [...(_dp.active ? [_dp.active] : []), ..._dp.bench].some(cc =>
+      pool.get(cc.cardId)?.name === '灰塵山' && _v6196HasEffAbilByInst(state, defenderIdx, cc, pool, '垃圾洩氣'));
     const _atkAct = state.players[attackerIdx].active;
     if (_hasGarbage && _atkAct) {
       const _atkTools = getAllAttachedTools(_atkAct);
@@ -7816,7 +7814,9 @@ export function fireDefenderOnDamaged(
   const atkCard0 = st.players[aIdx].active ? pool.get(st.players[aIdx].active!.cardId) : null;
   const stadiumCard = st.activeStadium ? pool.get(st.activeStadium.cardId) : null;
   const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
-  const attackerHasMagicalShine = atkCard0?.abilities?.some(a => a.name === '光之翼') ?? false;
+  // ⭐ v6.196：改走中央述詞 — 超級皮可西ex 是 Stage1 進化 + ex 規則寶可夢，
+  //   【傳說的熔岩洞】(進化全消)／【鐵荊棘ex｜初始化】(規則全消) 在場時光之翼應被消除。
+  const attackerHasMagicalShine = _v6196HasEffAbilByInst(st, aIdx, st.players[aIdx].active, pool, '光之翼');
   let s = st;
   const atkDamageBefore = s.players[aIdx].active?.damage ?? 0;
   // 1. TOOL_ON_DAMAGED（阻礙之塔失效）
@@ -7992,8 +7992,8 @@ export function fireDefenderOnKO(
   }
   if (koByAttackDamage) {
     const koCard = pool.get(koInst.cardId);
-    const attackerHasMagicalShine = s.players[aIdx].active
-      ? (pool.get(s.players[aIdx].active!.cardId)?.abilities?.some(a => a.name === '光之翼') ?? false) : false;
+    // ⭐ v6.196：改走中央述詞（熔岩洞/初始化 等消除來源）— 原只比對特性名。
+    const attackerHasMagicalShine = _v6196HasEffAbilByInst(s, aIdx, s.players[aIdx].active, pool, '光之翼');
     // ② PASSIVE_KO_RETALIATION（炸裂針）→ 對攻擊方放指示物（光之翼擋；初始化/暗夜羽擊等消除 holder 特性則跳過）
     if (koCard?.abilities && !attackerHasMagicalShine) {
       for (const ab of koCard.abilities) {
@@ -11436,8 +11436,11 @@ function resolveLanzhushi(
 //   原僅 engine 招式傷害 KO 主管線觸發,效果 KO(放指示物/koTargetByAttackEffect)漏 → 抽共用 helper。
 export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 | 1, pool: Map<string, Card>): GameState {
   const owner = state.players[attackerIdx];
+  // ⭐ v6.196：原本沒 gate，而同一張卡的招式-KO 路徑(canTogekissMiracleKissTrigger)有 gate
+  //   → 熔岩洞在場時「誰把對手 KO 的」會得到不同答案（split-brain，直接影響獎賞卡數）。
+  //   波克基斯 stage=Stage2 進化 ⇒ 熔岩洞應消除奇跡之吻。兩條路徑收斂到同一判準。
   const has = [...(owner.active ? [owner.active] : []), ...owner.bench]
-    .some(c => pool.get(c.cardId)?.abilities?.some(a => a.name === '奇跡之吻'));
+    .some(c => _v6196HasEffAbilByInst(state, attackerIdx, c, pool, '奇跡之吻'));
   if (!has) return state;
   const r = flipCoinsWithLog(state, 1, '波克基斯｜奇跡之吻', attackerIdx);
   let s = r.state;

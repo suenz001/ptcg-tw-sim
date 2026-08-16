@@ -57,8 +57,19 @@ export type _v3001G3W3Sentinel = PlayerState | GameState | Card | CardInstance;
 // 共用 helper：場上 ability holder 偵測
 // ════════════════════════════════════════════════════════════════════════════
 
-/** 玩家 idx 場上（active+bench）任一寶可夢具有指定 ability 名稱。 */
-function hasAbilityOnSide(
+/**
+ * 玩家 idx 場上（active+bench）任一寶可夢**擁有且此刻生效**的指定 ability。
+ *
+ * ⭐ v6.196：原本只比對特性名，**完全沒問「這個特性此刻有沒有被消除」** ——
+ *   本檔與 v3000 wave2 的所有 field-passive（球形盾牌／熔岩地域／凹洞／黑暗脈衝／
+ *   潛者捕捉／奇跡之吻／熔岩波動…）持有者絕大多數是**進化寶可夢**，
+ *   【傳說的熔岩洞】「雙方場上所有進化寶可夢的特性全部消除。」在場時仍照樣生效。
+ *   統一接上中央述詞 isAbilityHolderEffective（涵蓋 初始化／火箭隊的監視塔／
+ *   傳說的熔岩洞／招式版暗夜羽擊／振翼髮 passive／黏著束縛 全部消除來源）。
+ * ⚠ 不遞迴：location='bench' 才會走 sticky(黏著束縛)，而 sticky 自身的偵測走
+ *   hasAbilityOnBench（本函式的無 gate 版），不會回頭呼叫本函式。
+ */
+export function hasAbilityOnSide(
   state: GameState | undefined,
   ownerIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
@@ -66,11 +77,37 @@ function hasAbilityOnSide(
 ): boolean {
   if (!state || ownerIdx == null || !pool) return false;
   const owner = state.players[ownerIdx];
+  const actIid = owner.active?.iid;
   const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
   return all.some(c => {
     const card = pool.get(c.cardId);
-    return card?.abilities?.some(a => a.name === abilityName);
+    if (!card?.abilities?.some(a => a.name === abilityName)) return false;
+    const loc: 'active' | 'bench' = (actIid != null && c.iid === actIid) ? 'active' : 'bench';
+    return isAbilityHolderEffective(state, c, card, ownerIdx, abilityName, loc, pool);
   });
+}
+
+/**
+ * ⭐ v6.196：場上「擁有且此刻生效」指定 ability 的**隻數**（疊加型 passive 用）。
+ * 卡面寫「只要『這隻』寶可夢在場上…」代表每隻獨立計算，被消除的那幾隻不得計入。
+ */
+export function countEffectiveAbilityOnSide(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+  abilityName: string,
+): number {
+  if (!state || ownerIdx == null || !pool) return 0;
+  const owner = state.players[ownerIdx];
+  const actIid = owner.active?.iid;
+  let n = 0;
+  for (const c of [...(owner.active ? [owner.active] : []), ...owner.bench]) {
+    const card = pool.get(c.cardId);
+    if (!card?.abilities?.some(a => a.name === abilityName)) continue;
+    const loc: 'active' | 'bench' = (actIid != null && c.iid === actIid) ? 'active' : 'bench';
+    if (isAbilityHolderEffective(state, c, card, ownerIdx, abilityName, loc, pool)) n++;
+  }
+  return n;
 }
 
 /**
@@ -101,7 +138,12 @@ export function hasAbilityOnActive(
   // v5.221 (Rule 7c)：passive 振翼髮｜暗夜羽擊 — 對手戰鬥位特性被消除時，
   //   isOppStadiumPlayBlocked (爆大身軀) / isOppEvilEyeBlocking (瞪眼效用) /
   //   isOppItemPlayBlocked (海之詛咒) 全部應視為無效。修 1 處 cover 3 個 helper。
-  if (isOppActiveAbilityNullifiedByMoonsenne(state, ownerIdx, card, abilityName, pool)) return false;
+  // ⭐ v6.196：原本只接了「暗夜羽擊」一個來源，漏掉 鐵荊棘ex｜初始化／火箭隊的監視塔／
+  //   【傳說的熔岩洞】（爆大身軀=大王銅象 Stage1、瞪眼效用=火箭隊的阿柏怪 Stage1、
+  //   海之詛咒=胖嘟嘟ex Stage1+規則、漩渦言靈=夢妖魔ex Stage1+規則 全是進化寶可夢）。
+  //   改接中央 isAbilityHolderEffective（它 step1/step2 已含 abilityNullifiedThisTurn +
+  //   暗夜羽擊，故行為是嚴格擴充；location='active' 不走 sticky ⇒ 不遞迴）。
+  if (!isAbilityHolderEffective(state, a, card, ownerIdx, abilityName, 'active', pool)) return false;
   return true;
 }
 
@@ -561,10 +603,12 @@ export function hasRocketTyranitarSandstorm(
   if (!state || ownerIdx == null || !pool) return false;
   const active = state.players[ownerIdx].active;
   if (!active) return false;
-  if (active.abilityNullifiedThisTurn) return false;
   const card = pool.get(active.cardId);
   if (card?.name !== '火箭隊的班基拉斯') return false;
-  return !!card.abilities?.some(a => a.name === '揚沙');
+  // ⭐ v6.196：原本只擋 abilityNullifiedThisTurn（招式版暗夜羽擊），漏掉
+  //   【傳說的熔岩洞】(火箭隊的班基拉斯 stage=Stage2 進化)／火箭隊的監視塔／初始化／
+  //   振翼髮 passive。改走已帶中央 gate 的 hasAbilityOnActive。
+  return hasAbilityOnActive(state, ownerIdx, pool, '揚沙');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -630,16 +674,9 @@ export function getOppRetreatTriggers(
   // 卡面：「在那隻寶可夢身上放置 2 個傷害指示物」=「回到備戰的那隻」
   if (hasAbilityOnSide(state, oppIdx, pool, '凹洞')) {
     // 多隻凹洞會疊加（卡面未寫不重複）→ 計數
-    let n = 0;
-    const owner = state.players[oppIdx];
-    if (owner.active) {
-      const c = pool.get(owner.active.cardId);
-      if (c?.abilities?.some(a => a.name === '凹洞')) n += 1;
-    }
-    for (const b of owner.bench) {
-      const c = pool.get(b.cardId);
-      if (c?.abilities?.some(a => a.name === '凹洞')) n += 1;
-    }
+    // ⭐ v6.196：外層 hasAbilityOnSide 已帶 gate，但內層逐隻計數原本沒有 →
+    //   被消除的三地鼠仍會被算進去（熔岩洞在場卻放 4 個）。改走中央計數。
+    const n = countEffectiveAbilityOnSide(state, oppIdx, pool, '凹洞');
     result.countersOnRetreater = n * 2;  // 每隻三地鼠 +2 指示物
     if (n > 0) result.triggerNames.push('凹洞');
   }
