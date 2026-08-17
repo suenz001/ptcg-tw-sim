@@ -435,6 +435,9 @@ for (const f of files) {
   "effects.ts→v2999_g3_wave1": [
     "bronzongShelterReduce",
     "curlWallReduce",
+    // v6.206 陳舊的盾甲化石｜盾之守護 —— 與 bronzongShelterReduce 完全同型（function 宣告、
+    //   只在傷害管線內被呼叫、不在模組初始化期執行）⇒ 同一條既有反向 edge，TDZ 安全。
+    "shieldFossilGuardReduce",
     "gearCoatingReduce",
     "hasIronTracksDualCore",
     "registerV2999G3W1Passives",
@@ -487,6 +490,8 @@ for (const f of files) {
     "bronzongShelterReduce",
     "curlWallReduce",
     "gearCoatingReduce",
+    // v6.206：同上，與 bronzongShelterReduce 同型的 function 宣告。
+    "shieldFossilGuardReduce",
     "steelixPalaceReduce"
   ],
   "engine.ts→v3000_g3_wave2": [

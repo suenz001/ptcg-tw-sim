@@ -258,6 +258,48 @@ export function bronzongShelterReduce(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// ⭐⭐ v6.206 陳舊的盾甲化石｜盾之守護（M5 19216，J）—— v6.205 查出是全站最後一張
+//   「卡面有效果但完全沒實裝」的 H/I/J 卡，本版補實裝。
+//
+// 卡面逐字（static/cards/M5.json 19216，特性讀 abilities[].effect）：
+//   特性 盾之守護：「只要這隻寶可夢在戰鬥場上，自己的所有寶可夢受到對手的寶可夢招式的傷害
+//                  「-10」點。」
+//   rulesText：「這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入
+//                特殊狀態，無法撤退。\n 若在自己的回合中，則可將場上的這張卡丟棄。」
+//
+// ⚠ 條件是「在**戰鬥場**上」——**不是**青銅鐘｜守護之鐘 的「在場上」（v6.205 已明確指出
+//   兩者條件不同、不可沿用）。⇒ 只有 owner.active 是這張化石時才生效；備戰的化石不生效。
+// ⚠ 受惠對象是「自己的**所有**寶可夢」（含備戰）⇒ engine 戰鬥位管線與 effects 備戰管線
+//   兩條都要接（與守護之鐘同位置）。
+// ⚠ 疊加：卡面未寫「不重複」，但條件限「在戰鬥場上」⇒ 場上至多 1 隻 ⇒ 恆為 -10，
+//   不存在疊加問題（刻意不寫 count×10，避免給人「可以疊」的錯誤暗示）。
+// ⚠ 特性消除閘：化石放到場上是【基礎】【無】（rulesText 明文，inst.fossilOnField，v6.145）。
+//   沿用 v6.196/v6.204 的中央閘 isAbilityHolderEffective，逐一查證後可達來源如下：
+//     ✅ 火箭隊的監視塔（消【無】）—— 中央閘的 isNullifiedByRocketWatchtower 已讀 fossilOnField
+//     ✅ 招式版暗夜羽擊（abilityNullifiedThisTurn，location='active'）
+//     ✅ passive 振翼髮｜暗夜羽擊（對手戰鬥場，location='active'）
+//     ❌ 傳說的熔岩洞（只消進化）—— fossilOnField ⇒ 中央閘判為【基礎】，打不到
+//     ❌ 鐵荊棘ex｜初始化（只消「擁有規則的寶可夢」）—— 化石卡是 Trainer/Item，非規則寶可夢
+//     ❌ 海兔獸｜黏著束縛（只消**備戰**【2階進化】）—— 本特性本來就只在戰鬥場生效
+// ════════════════════════════════════════════════════════════════════════════
+export function shieldFossilGuardReduce(
+  state: GameState | undefined,
+  defenderIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+): number {
+  if (!state || defenderIdx == null || !pool) return 0;
+  const act = state.players[defenderIdx]?.active;
+  if (!act) return 0;
+  // 卡面「在戰鬥場上」＝ 持有者必須是自己的戰鬥寶可夢；且必須是**放在場上的化石**
+  //   （手牌裡的同一張卡是 Item，不會走到這裡，但顯式判 fossilOnField 才不依賴呼叫端）。
+  if (!act.fossilOnField) return 0;
+  const card = pool.get(act.cardId);
+  if (!card?.abilities?.some(a => a.name === '盾之守護')) return 0;
+  if (!isAbilityHolderEffective(state, act, card, defenderIdx, '盾之守護', 'active', pool)) return 0;
+  return 10;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // D10. 齒輪怪｜齒輪塗層
 //
 // 卡面：「只要這隻寶可夢在場上，自己的所有身上附有【鋼】能量卡的寶可夢，

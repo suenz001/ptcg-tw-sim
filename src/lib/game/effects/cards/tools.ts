@@ -37,7 +37,7 @@ import {
 } from '../_shared';
 // v3.66：規則寶可夢統一判定 helper
 import { isRulePokemon, computeRetreatCostForKOedActive } from '../../engine';  // v6.136 沉重接力棒判有效撤退費
-import { applyStatusToOppActive } from '../../effects';
+import { applyStatusToOppActive, getEffectivePokemonTypes } from '../../effects';  // v6.206 中央有效屬性述詞
 // v5.070：沉重接力棒分配能量改用 startEnergyChain — UI 顯示能量類型 + 同屬性 +/- counter
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -363,8 +363,15 @@ registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
   const dCard = pool.get(dp.active.cardId);
   const aCard = pool.get(ap.active.cardId);
   if (!dCard || !aCard) return state;
+  // ⭐ v6.206：「對手戰鬥寶可夢的**屬性**」＝有效屬性，原本手刻 `aCard.pokemonType`（印刷屬性），
+  //   小碎鑽｜雙重屬性（【鬥】＋【超】）／狠辣椒ex｜雙重屬性（【草】＋【火】）／
+  //   鐵轍跡｜二重核心（【鬥】＋【鋼】）三張全部漏判。改走中央 getEffectivePokemonTypes
+  //   （內含特性消除閘：對手的雙屬性特性被消掉時就退回印刷屬性）。
+  //   ⚠ 只換「攻擊方屬性」這一側。holder 這側的「弱點屬性」維持卡面印刷值 —— 妖精領域／
+  //     掌握弱點／弱點失效 這類「改寫弱點」的效果要不要算進來，卡面沒有寫，列給站長裁定。
   const weakness = dCard.weakness?.type;
-  if (!weakness || weakness !== aCard.pokemonType) return state;
+  if (!weakness) return state;
+  if (!getEffectivePokemonTypes(state, aIdx, ap.active, aCard, pool).includes(weakness)) return state;
   return updatePlayer(addLog(state, '逆境保險：弱點屬性匹配 → 抽 3 張', dIdx), dIdx, p => {
     const taken = p.deck.slice(0, 3);
     return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };

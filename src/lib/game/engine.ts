@@ -50,6 +50,7 @@ import {
   hasFairyZoneField,
   getEffectiveWeaknessType,
   getAttackerEffectiveTypes,
+  getEffectivePokemonTypes,   // v6.206 中央「場上有效屬性」述詞
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
   getOctopusTentacleEffectiveCost,
@@ -80,6 +81,7 @@ import {
   bronzongShelterReduce,
   gearCoatingReduce,
   curlWallReduce,
+  shieldFossilGuardReduce,   // v6.206 陳舊的盾甲化石｜盾之守護
 } from './effects/cards/v2999_g3_wave1';
 // v3.0 Group 3 Wave 2 helpers
 import {
@@ -1082,6 +1084,22 @@ export function getEffectiveHP(
 ): number {
   if (!inst) return 0;
   const card = pool.get(inst.cardId);
+  // ⭐ v6.206：特殊能量的「附於【X】寶可夢」gate 要問**有效**屬性（狠辣椒ex 在場上是【草】＋【火】）。
+  //   ⇒ 先把場上脈絡算好，化石分支與一般分支共用同一份 ctx。
+  //   state 缺席（少數 UI 路徑）⇒ ownerIdx undefined ⇒ 中央述詞回印刷屬性＝維持舊行為。
+  const _v6206OwnerIdx = ((): 0 | 1 | undefined => {
+    if (!state) return undefined;
+    for (let k = 0 as 0 | 1; k <= 1; k = (k + 1) as 0 | 1) {
+      const p = state.players[k];
+      if (p?.active && p.active.iid === inst.iid) return k;
+      if (p?.bench?.some(b => b.iid === inst.iid)) return k;
+    }
+    return undefined;
+  })();
+  const _v6206EnergyCtx = {
+    state, ownerIdx: _v6206OwnerIdx, inst, pool,
+    effectiveTypes: getEffectivePokemonTypes(state, _v6206OwnerIdx, inst, card, pool),
+  };
   // ⭐⭐ v6.112（玩家回報「英雄斗篷附在化石上沒作用」，Wilson 裁定：依現行卡面，加成生效）
   //   舊寫法是 `if (inst.fossilOnField) return 60;`（v2.187「化石不吃任何 Tool/能量/Stadium 加減」）。
   //   **那條限制我們自己加的，現行卡面與官方規則都沒有**：
@@ -1111,7 +1129,7 @@ export function getEffectiveHP(
     for (const e of inst.energyAttached) {
       const ec = pool.get(e.cardId);
       const fn = ec ? SPECIAL_ENERGY_HP_BONUS.get(ec.name) : undefined;
-      if (fn && card) fhp += fn(card);
+      if (fn && card) fhp += fn(card, _v6206EnergyCtx);
     }
     // 場地：只有「以【基礎】寶可夢為條件」的那條會命中（走中央述詞，不手刻）。
     const stName = state?.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
@@ -1150,7 +1168,7 @@ export function getEffectiveHP(
     const ec = pool.get(e.cardId);
     if (!ec) continue;
     const fn = SPECIAL_ENERGY_HP_BONUS.get(ec.name);
-    if (fn) hp += fn(card);
+    if (fn) hp += fn(card, _v6206EnergyCtx);
   }
   // v2.92：引力山岳（Stadium）— 雙方場上所有【2階進化】寶可夢最大 HP -30
   const stadiumNameHP = state?.activeStadium ? pool.get(state.activeStadium.cardId)?.name : undefined;
@@ -8345,6 +8363,17 @@ export function applyDefenderReductionsBlockA(
         workingState = addLog(workingState,
           `「守護之鐘」：${defenderCard.name} 受傷害 -${bronzongReduce}（${before} → ${baseDamage}）`, dIdx);
         formula.push({ sign: '-', value: before - baseDamage, label: '守護之鐘' });
+      }
+      // ⭐ v6.206 陳舊的盾甲化石｜盾之守護 — 自己**戰鬥場**有這張化石時，自方所有寶可夢受傷害 -10
+      //   卡面：「只要這隻寶可夢在戰鬥場上，自己的所有寶可夢受到對手的寶可夢招式的傷害「-10」點。」
+      //   （條件是「在戰鬥場上」，與守護之鐘的「在場上」不同 ⇒ helper 內只認 active。）
+      const shieldFossilReduce = shieldFossilGuardReduce(workingState, dIdx, pool);
+      if (shieldFossilReduce > 0) {
+        const before = baseDamage;
+        baseDamage = Math.max(0, baseDamage - shieldFossilReduce);
+        workingState = addLog(workingState,
+          `「盾之守護」：${defenderCard.name} 受傷害 -${shieldFossilReduce}（${before} → ${baseDamage}）`, dIdx);
+        formula.push({ sign: '-', value: before - baseDamage, label: '盾之守護' });
       }
       // 齒輪怪｜齒輪塗層 — 自方附【鋼】能量寶可夢受傷害 -20
       const gearReduce = gearCoatingReduce(workingState, dIdx, defender.active, pool);

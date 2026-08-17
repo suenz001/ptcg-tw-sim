@@ -109,7 +109,7 @@ export {
 // 引擎側 hook 集合（道具無效 / 【無】寶可夢特性無效）。
 import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS } from './effects/cards/stadiums';
 // v5.293: import field-wide damage-reduce helpers for bench damage path
-import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce } from './effects/cards/v2999_g3_wave1';
+import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce, shieldFossilGuardReduce } from './effects/cards/v2999_g3_wave1';
 import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887 神奇糖果進化也要過瞪眼效用 gate
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 // v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
@@ -404,8 +404,60 @@ export function getEffectiveWeaknessType(
   return { type: t, disabled: !!defenderActive?.weaknessDisabledThisTurn };
 }
 /**
+ * ⭐⭐⭐ v6.206 中央述詞：「**在場上**的這隻寶可夢，此刻的有效屬性是哪幾種」。
+ *
+ * 卡面逐字（static/cards 台灣官方，特性讀 abilities[].effect）：
+ *   小碎鑽｜雙重屬性  「只要這隻寶可夢**在場上**，改為【鬥】與【超】2種屬性。」
+ *   狠辣椒ex｜雙重屬性「只要這隻寶可夢**在場上**，改為【草】與【火】2種屬性。」
+ *   鐵轍跡｜二重核心  「只要這隻寶可夢身上附有「驅勁能量 未來」，這隻寶可夢改為【鬥】與【鋼】2種屬性。」
+ *
+ * ⚠ v6.205 只把狠辣椒ex 接在 **攻擊路徑**（弱點/抵抗力）那一維，但卡面說的是「在場上」——
+ *   備戰、以及所有「數場上【X】寶可夢」「附於【X】寶可夢」的消費點都還在讀印刷屬性。
+ *   本版收斂成這一支述詞，location 由 `hasEffectiveAbilityByInst` 自己從 state 推
+ *   ⇒ **戰鬥場與備戰一體適用**。
+ * ⚠ 三張卡的 dual 都**包含**自己的印刷屬性（鬥+超⊃鬥、草+火⊃火、鬥+鋼⊃鋼）
+ *   ⇒ 本述詞相對印刷屬性是**純新增**，沒有任何寶可夢會因此「失去」原本的屬性。
+ * ⚠ 缺場上脈絡（state / ownerIdx / inst 任一缺席）⇒ 回印刷屬性＝維持舊行為，不會更糟。
+ * ⚠ **本述詞不處理「化石在場上是【無】屬性」**（rulesText 那句）—— 現行消費點都不需要，
+ *   而且加進來會直接改變 逆境保險／森林行進 對化石的判定 ⇒ 列給站長裁定，本版不動。
+ */
+export function getEffectivePokemonTypes(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null | undefined,
+  card: Card | undefined,
+  pool: Map<string, Card>,
+): string[] {
+  return getAttackerEffectiveTypes(state, ownerIdx, inst, card, pool);
+}
+
+/**
+ * v6.206：「這隻場上寶可夢此刻**是不是**【type】屬性」。
+ * ⚠ **本版只接了三個消費點**（土台龜ex｜森林行進、增強【草】能量、逆境保險）——
+ *   全站還有約 70 處「場上寶可夢屬性比對」仍直讀 `pokemonType`，清單在
+ *   docs/changelog-internal.md 的 v6.206 ⑦ 段。**別以為這個維度已經掃完了。**
+ *   目前就有行為差異的（比對到三張雙屬性卡會多出來的那幾種屬性）：
+ *   【超】v168_supporters.ts / items_misc.ts / engine.ts 神秘花園；
+ *   【草】engine.ts forestBypassBase；
+ *   【鬥】six_decks.ts 岩石武裝 / effects.ts 力之鹽・硬岩【鬥】能量 / engine.ts damageBoostFighting；
+ *   以及屬性條件型防禦道具（effects.ts / engine.ts 的 defense.types / holderTypes）。
+ */
+export function hasEffectivePokemonType(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null | undefined,
+  card: Card | undefined,
+  pool: Map<string, Card>,
+  type: string,
+): boolean {
+  return getEffectivePokemonTypes(state, ownerIdx, inst, card, pool).includes(type);
+}
+
+/**
  * v5.562 收斂：攻擊方戰鬥位的「有效屬性清單」(弱點/抵抗比對用)。
  *   小碎鑽|雙重屬性→【鬥】+【超】；鐵轍跡|二重核心(附驅勁能量 未來)→【鬥】+【鋼】；否則單一 pokemonType。
+ * ⚠ v6.206：本函式已升格為「場上任一位置」通用（getEffectivePokemonTypes 是它的別名），
+ *   參數名保留 attacker* 只是為了不動 v6.204/v6.205 兩份守衛的字串錨點。
  */
 export function getAttackerEffectiveTypes(
   /** ⭐ v6.204：新增 state/attackerIdx —— 雙重屬性／二重核心都是 passive 特性，會被消除。 */
@@ -1054,6 +1106,18 @@ function _applyBenchAbilityReduce(
       const before = dmg;
       dmg = Math.max(0, dmg - r);
       if (before > dmg) logs.push(`守護之鐘 -${before - dmg}`);
+    }
+  }
+  // === field-wide: 陳舊的盾甲化石|盾之守護（v6.206 新實裝）===
+  //   卡面：「只要這隻寶可夢在**戰鬥場上**，自己的所有寶可夢受到對手的寶可夢招式的傷害「-10」點。」
+  //   ⚠ 條件是「在戰鬥場上」（不是青銅鐘｜守護之鐘 的「在場上」）⇒ helper 只認 active。
+  //     但受惠對象是「自己的**所有**寶可夢」⇒ 備戰這條管線也要接。
+  if (dmg > 0) {
+    const r = shieldFossilGuardReduce(state, defenderIdx, pool);
+    if (r > 0) {
+      const before = dmg;
+      dmg = Math.max(0, dmg - r);
+      if (before > dmg) logs.push(`盾之守護 -${before - dmg}`);
     }
   }
   // === field-wide: 齒輪怪|齒輪塗層 ===
@@ -5563,11 +5627,14 @@ function oppAllCounters(state: GameState, aIdx: 0 | 1): number {
   return sum;
 }
 /** 計算自己場上符合 filterFn 的寶可夢數（active + bench） */
-function countOwnPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, filterFn: (c: Card) => boolean): number {
+// ⭐ v6.206：filterFn 多收一個「場上實體」——「場上【X】寶可夢」要問**有效**屬性
+//   （狠辣椒ex｜雙重屬性 在場上是【草】＋【火】），只有卡片本身答不出來。
+//   既有 caller 用 `c => …` 一個參數，TS 相容不受影響。
+function countOwnPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, filterFn: (c: Card, inst: CardInstance) => boolean): number {
   const p = state.players[aIdx];
   let n = 0;
-  if (p.active) { const c = pool.get(p.active.cardId); if (c && filterFn(c)) n++; }
-  for (const b of p.bench) if (b) { const c = pool.get(b.cardId); if (c && filterFn(c)) n++; }
+  if (p.active) { const c = pool.get(p.active.cardId); if (c && filterFn(c, p.active)) n++; }
+  for (const b of p.bench) if (b) { const c = pool.get(b.cardId); if (c && filterFn(c, b)) n++; }
   return n;
 }
 /** 計算對手場上符合 filterFn 的寶可夢數 */
@@ -5691,8 +5758,12 @@ regPre('猛惡菇|爆毆', (state, aIdx, _pool) => {
 // ── C. 自己場上寶可夢計數（3 張） ──────────────────────────────────────────
 
 // 土台龜ex｜森林行進 — 自己場上【草】寶可夢數 × 30
+//   卡面：「造成自己的場上【草】寶可夢的數量×30點傷害。」
+//   ⭐ v6.206：「場上【草】寶可夢」＝**有效**屬性。原本手刻 `c.pokemonType === 'Grass'`，
+//     狠辣椒ex（卡面「只要這隻寶可夢在場上，改為【草】與【火】2種屬性。」）**不論在戰鬥場
+//     還是備戰**都算不進來。改走中央 hasEffectivePokemonType（內含特性消除閘）。
 regPre('土台龜ex|森林行進', (state, aIdx, pool) => {
-  const n = countOwnPokemon(state, aIdx, pool, c => c.pokemonType === 'Grass');
+  const n = countOwnPokemon(state, aIdx, pool, (c, inst) => hasEffectivePokemonType(state, aIdx, inst, c, pool, 'Grass'));
   return { state, damage: n * 30 };
 });
 

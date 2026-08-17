@@ -307,11 +307,12 @@ const ADJUDICATED_IMPLEMENTED=new Map(Object.entries({
   '陳舊的顎之化石|威嚇之顎':'engine.ts 按卡名「陳舊的顎之化石」傷害 -30（v2.190）',
   '陳舊的鰭之化石|鰭之守護':'v3080_deferred_wave_c.ts isImmuneToOppSupporter 按卡名（v3.21）',
 }));
-const KNOWN_UNIMPLEMENTED=new Map(Object.entries({
-  '陳舊的盾甲化石|盾之守護':'M5 19216（J）：卡面「只要這隻寶可夢在戰鬥場上，自己的所有寶可夢受到對手的寶可夢招式的傷害「-10」點。」'
-    +' 全站零實作 —— 卡名只出現在 FOSSIL_ITEM_NAMES / FOSSIL_NAMES_LOCAL 兩張「可放置成寶可夢」的名單裡。'
-    +' 青銅鐘｜守護之鐘 是同數值但條件為「在場上」，條件不同不能沿用 ⇒ 待站長決定是否補。',
-}));
+// ⭐⭐ v6.206：**陳舊的盾甲化石｜盾之守護 已補實裝**（M5 19216，J）——
+//   shieldFossilGuardReduce（v2999_g3_wave1.ts）＋ engine 戰鬥位管線 ＋ effects 備戰管線。
+//   ⇒ 從本表移除（7e 的死條目守衛會逼人做這件事）。本表現在是空的：
+//   「全站沒有任何一張 H/I/J 卡是『卡面有效果但完全沒實裝』」是**現行不變式**，
+//   新卡帶進新的未實裝會在 7d 紅。
+const KNOWN_UNIMPLEMENTED=new Map(Object.entries({}));
 const stripC=s=>s.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' ')).replace(/\/\/.*$/gm,'').replace(/[\u200b-\u200d\ufeff]/g,'');
 function walkTs(d,out=[]){for(const e of readdirSync(d,{withFileTypes:true})){const p=join(d,e.name);
   if(e.isDirectory())walkTs(p,out); else if(e.name.endsWith('.ts')||e.name.endsWith('.svelte'))out.push(p);}return out;}
@@ -371,60 +372,27 @@ T('7e. 兩張判讀表都不得有死條目（判準改動或補了實作就要�
   assert.equal(dead.length,0,'死條目：'+dead.join(', '));
 });
 
-console.log('⑧ tag 尺 (c)：同一隻寶可夢的所有卡，「古代」「未來」必須一致（物種固有屬性）');
-// ⚠ 只用於【古代/未來】＋ supertype=Pokemon：這兩個是**物種**屬性（同一隻寶可夢的每張卡都有）。
-//   「太晶」「ACE SPEC」「訓練家冠名」**不適用**（同名寶可夢可以只有某些印刷是太晶）。
+// ⭐⭐⭐ v6.206 —— ⑧ tag 尺 (c)「同名平權」**已整段移除**（站長 2026-08-18 裁定）
 //
-// ⚠⚠ 為什麼需要這第三把尺：實測官方 tag filter（尺 a）**只涵蓋 16 個 live 卡包**，
-//   M 系列（M1L/M1S/M2/M2a/M3/M4/M5/M6/MJ/M-P-*）與 SV9~SV11/SVM/SVOD… 共 26 個卡包
-//   **完全沒有任何 id 出現在官方 tag 清單裡** ⇒ 對那些卡包，「官方沒列」完全沒有資訊量。
-//   尺 (b) 印刷平權也抓不到（那些是不同 HP／不同招式的**另一張卡**，指紋本來就不同）。
-const NAME_TAG_GAPS=new Map(Object.entries({
-  // ⚠ 現況缺口凍結表 —— **不是**「這樣是對的」，是「本輪無法取得官方依據，交站長裁定」。
-  //   補下去會有規則層面的副作用：鐵荊棘ex｜初始化 的卡面是「擁有規則的寶可夢（『未來』寶可夢除外）」，
-  //   替 密勒頓ex／故勒頓ex 這種 ex 補上 tag ＝ 直接改變「初始化消不消得掉它」。⇒ 不擅自補。
-  '密勒頓|未來':'19235(M-P-J 138/M-P) 19171(M5 027/081) 16754(MC 283/742) 18373(MJ 014/022)',
-  '密勒頓ex|未來':'16755 / 18259（MC 284/742，J，目前只標「太晶」）⚠ 是 ex ⇒ 補 tag 會改變初始化判定',
-  '故勒頓|古代':'19189(M5 045/081)',
-  '故勒頓ex|古代':'16896 / 18272（MC 425/742，J，只標「太晶」）、12142(SVM 072/175) ⚠ 同上',
-  '鐵脖頸|未來':'12419(SV8a 135/187) —— G 標，站規不維護',
-}));
-function checkNameParity(poolLike){
-  const g=new Map();
-  for(const c of poolLike.values()){
-    if(c.supertype!=='Pokemon') continue;
-    if(!g.has(c.name)) g.set(c.name,[]); g.get(c.name).push(c);
-  }
-  const out=[];
-  for(const [nm,lst] of g) for(const tag of ['古代','未來']){
-    const has=lst.filter(c=>(c.tags??[]).includes(tag));
-    const no =lst.filter(c=>!(c.tags??[]).includes(tag));
-    if(has.length&&no.length) out.push({key:nm+'|'+tag,missing:no.map(c=>String(c.id))});
-  }
-  return out;
-}
-const nameGaps=checkNameParity(pool);
-T('8a. 掃描器下限＋正對照（mutation）：判準真的抓得到新缺口',()=>{
-  assert.ok(pool.size>=4500,'卡池只有 '+pool.size+' 張');
-  const donor=[...pool.values()].find(c=>c.supertype==='Pokemon'&&(c.tags??[]).includes('古代')
-    && [...pool.values()].filter(x=>x.name===c.name&&x.supertype==='Pokemon').every(x=>(x.tags??[]).includes('古代')));
-  assert.ok(donor,'找不到「所有印刷都有古代」的樣本');
-  const mutated=new Map(pool);
-  mutated.set(String(donor.id),{...donor,tags:(donor.tags??[]).filter(t=>t!=='古代')});
-  const after=checkNameParity(mutated);
-  assert.equal(after.length,nameGaps.length+1,'mutation 沒被抓到 ⇒ 這把尺是恆真式');
-  assert.ok(after.some(x=>x.key===donor.name+'|古代'));
-});
-T('8b.⭐ 不得出現新的「同名寶可夢 古代/未來 不一致」（新卡漏 tag 會在這裡紅）',()=>{
-  const extra=nameGaps.filter(x=>!NAME_TAG_GAPS.has(x.key));
-  assert.equal(extra.length,0,'新缺口：\n      '
-    +extra.map(x=>x.key+' → '+x.missing.join(',')).join('\n      '));
-});
-T('8c. 缺口凍結表不得有死條目（補好了就要刪掉）',()=>{
-  const keys=new Set(nameGaps.map(x=>x.key));
-  const dead=[...NAME_TAG_GAPS.keys()].filter(k=>!keys.has(k));
-  assert.equal(dead.length,0,'已補齊、請從 NAME_TAG_GAPS 刪除：'+dead.join(', '));
-});
-
-console.log(`\nv6.205: ${pass} passed, ${fail} failed`);
+// 原本這裡有第三把尺：「同一隻寶可夢（supertype=Pokemon＋同 name）的所有卡，
+// 『古代／未來』必須一致（物種固有屬性）」，並凍結了 5 組／11 筆「缺口」。
+//
+// **站長裁定（逐字）**：「我判定，不用補標籤，這些卡片的卡圖上面都沒有古代和未來的標籤，
+//   所以都是正確的，你如果改了反而是錯的。」
+//
+// ⇒ 這把尺的前提「同名 ⇒ 同物種 ⇒ tag 必一致」在**資料上就被否證**（v6.206 逐張核對）：
+//   ・密勒頓 有兩種完全不同的卡 —— 【龍】110HP（SV5M 9893／SV8a 11648／MC 17023／SV-P-H 10102，
+//     有「未來」、官方 filter 也列出）與【雷】120HP（MC 16754／MJ 18373／M5 19171／M-P-J 19235，
+//     招式各不相同、卡圖沒有標籤）。同名，但根本不是同一張卡。
+//   ・故勒頓ex 亦然：svhk 10061【龍】230「古代」 vs MC 16896／18272【鬥】230「太晶」，招式完全不同。
+//   ⇒ 保留這把尺 ＝ 每一輪都在叫人去修**正確**的資料（站長明言「改了反而是錯的」）。
+//
+// ⚠ 另外兩把尺 v6.206 已逐一查證**沒有**同樣的問題，故保留（守衛在
+//   scripts/test-v6206-effective-type-central-and-shield-fossil.mjs ⑧ 段有永久回歸測試）：
+//   ・尺 (a) 官方快照：方向是單向的「官方說有 ⇒ 我方必須有」。11 筆被裁定為正確的卡，
+//     **官方 filter 一筆都沒有列**；而且其中 4 筆（16754/16755/16896/18272）就在官方
+//     filter **有涵蓋**的 MC 卡包裡 ⇒ 官方資料本身與站長裁定一致。
+//   ・尺 (b) 印刷平權：指紋含 HP／屬性／特性／招式／rulesText，密勒頓/故勒頓那些「同名不同卡」
+//     的指紋本來就不同 ⇒ 不會誤報。實測 31 組「跨世代（SV↔MC）同指紋且含古代/未來」全部一致。
+console.log(`\nv6.205（v6.206 起：尺 (c) 已移除、盾之守護已實裝）: ${pass} passed, ${fail} failed`);
 process.exit(fail?1:0);

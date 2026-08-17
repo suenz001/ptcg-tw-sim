@@ -88,8 +88,12 @@ SPECIAL_ENERGY_ATTACH.set('火箭隊能量', (st, idx, _targetIid, pool) => disc
 // ── 增強【草】能量（Special Energy） ──────────────────────────────────────────
 // 卡面：提供 1 個【草】能量。附於【草】寶可夢時，HP 上限 +20。
 // Hook：SPECIAL_ENERGY_HP_BONUS（engine getEffectiveHP 與 effects.ts effectiveHPInline）。
-SPECIAL_ENERGY_HP_BONUS.set('增強【草】能量', (holder) => {
-  return holder.pokemonType === 'Grass' ? 20 : 0;
+// ⭐ v6.206：「附有這張卡的【草】寶可夢」＝**有效**屬性。原本讀 holder.pokemonType（印刷屬性），
+//   狠辣椒ex（卡面「只要這隻寶可夢在場上，改為【草】與【火】2種屬性。」）拿不到這 +20。
+//   ctx.effectiveTypes 由 engine getEffectiveHP 用中央 getEffectivePokemonTypes 算好傳進來
+//   （含特性消除閘：熔岩洞／初始化／暗夜羽擊 生效時會退回印刷的【火】⇒ 不再 +20）。
+SPECIAL_ENERGY_HP_BONUS.set('增強【草】能量', (_holder, ctx) => {
+  return ctx.effectiveTypes.includes('Grass') ? 20 : 0;
 });
 
 // ── 磁鐵【鋼】能量（Special Energy） ──────────────────────────────────────────

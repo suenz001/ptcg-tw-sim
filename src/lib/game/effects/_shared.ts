@@ -549,7 +549,11 @@ export function discardIllegalRocketEnergy(
  *
  * 觸發點：
  *   1. SPECIAL_ENERGY_HP_BONUS — holder 有效 HP +N（影響 KO 判定 + UI 顯示）。
- *      fn(holderCard) => N；如要排除「holder 必須是某屬性」，fn 內檢查 holderCard.pokemonType 後回 0。
+ *      fn(holderCard, ctx) => N。
+ *      ⭐ v6.206：ctx 是**必填**的 —— 「附於【X】寶可夢」這種 gate 一律問 ctx.effectiveTypes
+ *        （＝中央 getEffectivePokemonTypes 的結果，含雙重屬性／二重核心與特性消除閘），
+ *        **禁止**再讀 holderCard.pokemonType（那是印刷屬性，狠辣椒ex 在場上是【草】＋【火】）。
+ *        必填 ⇒ TS 會逼新的呼叫端回去讀卡面，不會靜默 fail-open。
  *   2. SPECIAL_ENERGY_RETREAT_MOD — holder 撤退成本修正（同 TOOL_RETREAT_MOD shape）。
  *      fn(holderCard, holderInst) => { reduceBy?, zero? }。
  *   3. SPECIAL_ENERGY_STATUS_IMMUNE — holder 對哪些特殊狀態免疫（被施加時忽略）。
@@ -560,7 +564,16 @@ export function discardIllegalRocketEnergy(
  * Engine 檢索方式：iterate energyAttached，pool.get(name) 比對 map key。
  * （不像 TOOL_* 一張寶可夢只附 1 個道具，能量可附多張，所以要 iterate）
  */
-export const SPECIAL_ENERGY_HP_BONUS = new Map<string, (holder: Card) => number>();
+/** v6.206：特殊能量 holder gate 的場上脈絡（effectiveTypes ＝中央有效屬性述詞的結果）。 */
+export type SpecialEnergyHolderCtx = {
+  state: GameState | undefined;
+  ownerIdx: 0 | 1 | undefined;
+  inst: CardInstance;
+  pool: Map<string, Card>;
+  /** ⭐ 中央 getEffectivePokemonTypes(state, ownerIdx, inst, holderCard, pool) 的結果。 */
+  effectiveTypes: string[];
+};
+export const SPECIAL_ENERGY_HP_BONUS = new Map<string, (holder: Card, ctx: SpecialEnergyHolderCtx) => number>();
 export const SPECIAL_ENERGY_RETREAT_MOD = new Map<string, (
   holder: Card, inst: CardInstance,
 ) => { reduceBy?: number; zero?: boolean }>();
