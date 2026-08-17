@@ -130,17 +130,19 @@ T('0b. 卡面錨：每個持有者的 stage / pokemonType / subtype 逐一釘住
   assert.equal(PIN.length,16);
 });
 T('0c. 卡面錨：鐵轍跡是 Basic 非規則寶可夢（⇒ 初始化打不到它，二重核心只能靠暗夜羽擊）',()=>{
-  // ⚠ 這裡**不能**用「tags 含『未來』」當理由：「未來」tag 只印在 SV5M 9892，
-  //   SV8a 11641／12405 兩張現役印刷**完全沒有 tags 欄位**（卡庫資料缺口，已另列給站長）。
-  //   真正讓初始化打不到它的是「它不是擁有規則的寶可夢」——這一點三張印刷都成立。
+  // ⚠ 這裡**不能**用「tags 含『未來』」當理由：真正讓初始化打不到它的是
+  //   「它不是擁有規則的寶可夢」（isInitializeNullified 第一道就擋掉）——三張印刷都成立。
+  //   ⭐ v6.205：原本的資料缺口（SV8a 11641／12405 沒有 tags 欄位）已補齊，
+  //     所以下面那條從「至少一張缺 tag」反轉成「三張都要有」——**理由不變**，
+  //     tag 只在「擁有規則的寶可夢」那一支上才影響裁定。
   const all=[...pool.values()].filter(c=>c.name==='鐵轍跡'&&c.abilities?.some(a=>a.name==='二重核心'));
   assert.ok(all.length>=3,'鐵轍跡（二重核心）印刷數下限，實得 '+all.length);
   for(const c of all){
     assert.equal(c.stage,'Basic'); assert.equal(c.subtype,'Basic'); assert.equal(c.pokemonType,'Metal');
     assert.ok(['H','I','J'].includes(c.regulationMark));
   }
-  assert.ok(all.some(c=>!(c.tags??[]).includes('未來')),
-    '若哪天所有印刷都補上「未來」tag，這條註解要回來重寫（現況是有缺口）');
+  assert.ok(all.every(c=>(c.tags??[]).includes('未來')),
+    '鐵轍跡三張印刷都應有「未來」tag（v6.205 補齊）：'+all.map(c=>c.id+'='+JSON.stringify(c.tags??[])).join(' / '));
 });
 T('0d. 卡面錨：五個消除來源的 rulesText / effect 逐字',()=>{
   assert.equal(pool.get(CAVE).rulesText,'雙方場上所有進化寶可夢的特性全部消除。');

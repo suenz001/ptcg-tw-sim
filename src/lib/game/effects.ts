@@ -420,6 +420,16 @@ export function getAttackerEffectiveTypes(
   //   走中央述詞 hasEffectiveAbilityByInst（它自己從 state 推 location）。
   if (attackerCard?.name === '小碎鑽'
       && _v6196HasEffAbilByInst(state, attackerIdx, attackerActive, pool, '雙重屬性')) return ['Fighting', 'Psychic'];
+  // ⭐⭐ v6.205：狠辣椒ex｜雙重屬性 —— 卡面「只要這隻寶可夢在場上，改為【草】與【火】2種屬性。」
+  //   v6.204 之前**完全沒實裝**（本函式只認小碎鑽那張），弱點/抵抗力一律照印刷的【火】算，
+  //   對手若弱點【草】不會 ×2 —— 靜靜地不生效，不會報錯。
+  //   ⚠ 狠辣椒ex = Stage1（進化）/【火】/ **ex（擁有規則的寶可夢）** ⇒ 消除來源比小碎鑽多：
+  //     【傳說的熔岩洞】（消進化）與 鐵荊棘ex｜初始化（消「擁有規則的寶可夢」）都打得到它，
+  //     招式版暗夜羽擊 / passive 振翼髮｜暗夜羽擊（戰鬥場）亦然；
+  //     【火箭隊的監視塔】只消【無】、海兔獸｜黏著束縛只消備戰【2階進化】⇒ 打不到。
+  //   ⇒ 沿用 v6.204 收斂好的同一份中央述詞（不新建第五份），它自己從 state 推 location。
+  if (attackerCard?.name === '狠辣椒ex'
+      && _v6196HasEffAbilByInst(state, attackerIdx, attackerActive, pool, '雙重屬性')) return ['Grass', 'Fire'];
   if (attackerActive && attackerCard
       && hasIronTracksDualCore(state, attackerIdx, attackerActive, attackerCard, pool)) return ['Fighting', 'Metal'];
   return attackerCard?.pokemonType ? [attackerCard.pokemonType] : [];
