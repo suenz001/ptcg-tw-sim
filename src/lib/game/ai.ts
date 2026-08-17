@@ -18,7 +18,7 @@ import {
   getUsableAbilities, canRetreat, isBasicPokemonCard,
   canBeInitialActiveCard, isRulePokemon,
   getEffectiveHP, canAffordAttack, isBasicEnergyOfType, getBasicEnergyType,
-  totalEnergyUnits, computeActiveRetreatCostFor,
+  totalEnergyUnits, computeActiveRetreatCostFor, canEvolveOnto,
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
@@ -611,9 +611,8 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'EvilAwakening:EvolveFrom') {
           if (card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
           const baseName = (sel.params?.baseName as string | undefined) ?? '';
-          if (card.evolvesFrom === baseName) return true;
-          const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
-          return stripEx(card.evolvesFrom) === stripEx(baseName);
+          // v6.203：與 resolver 端 canEvolveOnto 對齊（原本 stripEx 會多列出違規候選）
+          return canEvolveOnto(card.evolvesFrom, baseName);
         }
         // v4.45 小箭雀｜鳥笛：抵抗力為【鬥】屬性的寶可夢
         if (f === 'Resistance:Fighting') {

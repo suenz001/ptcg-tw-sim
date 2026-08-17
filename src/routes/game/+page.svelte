@@ -21,7 +21,7 @@
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
-    countEnergy, getEvolvableTargets,
+    countEnergy, getEvolvableTargets, canEvolveOnto,   // v6.203 進化來源逐字比對中央述詞
     canRetreat, getRetreatBlockReason,
     computeActiveRetreatCostFor,
     getUsableAbilities, isBasicPokemonCard, isRulePokemon, getEffectiveHP, getBasicEnergyType,
@@ -3488,10 +3488,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           return src.deck.filter(c => {
             const card = pool.get(c.cardId);
             if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-            // sameEvoName 等價匹配（ex 與非 ex 通用）
-            if (card.evolvesFrom === baseName) return true;
-            const stripEx = (s: string) => (s.endsWith('ex') ? s.slice(0, -2) : s);
-            return stripEx(card.evolvesFrom) === stripEx(baseName);
+            // v6.203：進化來源逐字比對（中央述詞 canEvolveOnto）——
+            //   顯示端(filter) 必須 === 能勾端(resolver 的 validEvoIids)，原 stripEx 會多列違規候選。
+            return canEvolveOnto(card.evolvesFrom, baseName);
           });
         }
         // v4.45 小箭雀｜鳥笛：牌庫中抵抗力為【鬥】屬性的寶可夢

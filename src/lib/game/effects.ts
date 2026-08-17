@@ -55,7 +55,7 @@ import {
   discardActiveStadium,
   recordOppKO,
   healResolver,
-  sameEvoName, getAllAttachedTools, toBareCard, resolveInfiniteShadowKo,
+  sameEvoName, canEvolveOnto, getAllAttachedTools, toBareCard, resolveInfiniteShadowKo,
   bareCardsForReturn,
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
@@ -1812,7 +1812,8 @@ regG('神奇糖果', (st, idx, pool) => {
     if (!basicName) return false;
     return fieldPokes.some(pk => {
       const bc = pool.get(pk.cardId);
-      return !!bc && sameEvoName(bc.name, basicName) && !pk.justPlaced && !pk.evolvedThisTurn;
+      // v6.203：能不能把 Stage2 放上這隻 = 進化來源比對 ⇒ 逐字（中央述詞）
+      return !!bc && canEvolveOnto(basicName, bc.name) && !pk.justPlaced && !pk.evolvedThisTurn;
     });
   });
 });
@@ -1842,7 +1843,7 @@ reg('神奇糖果', (st, idx, pool) => {
     return rcFieldPokes.some(pk => {
       if (pk.justPlaced || pk.evolvedThisTurn) return false;
       const bc = pool.get(pk.cardId);
-      return !!bc && sameEvoName(bc.name, basicName!);
+      return !!bc && canEvolveOnto(basicName!, bc.name);  // v6.203 逐字比對
     });
   };
   const validIids = p.hand
@@ -1885,7 +1886,7 @@ regR('rare-candy-choose-target', (st, idx, picked, _params, pool) => {
     .filter(pk => {
       if (pk.justPlaced || pk.evolvedThisTurn) return false;
       const c = pool.get(pk.cardId);
-      return !!c && sameEvoName(c.name, basicName);
+      return !!c && canEvolveOnto(basicName, c.name);  // v6.203 逐字比對
     })
     .map(pk => pk.iid);
 
@@ -3444,7 +3445,7 @@ function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetI
   });
 
   if (p.active && p.active.iid === targetIid) {
-    if (pool.get(p.active.cardId)?.name !== evoCard.evolvesFrom) {
+    if (!canEvolveOnto(evoCard.evolvesFrom, pool.get(p.active.cardId)?.name)) {  // v6.203 中央述詞
       return addLog(state, '賽吉：目標非對應底寶可夢', aIdx);
     }
     p.active = doEvolve(p.active);
@@ -3452,7 +3453,7 @@ function _sageEvolveApply(state: GameState, aIdx: 0 | 1, evoIid: string, targetI
     const benchIdx = p.bench.findIndex(b => b.iid === targetIid);
     if (benchIdx < 0) return addLog(state, '賽吉：找不到進化目標', aIdx);
     const bTarget = p.bench[benchIdx];
-    if (pool.get(bTarget.cardId)?.name !== evoCard.evolvesFrom) {
+    if (!canEvolveOnto(evoCard.evolvesFrom, pool.get(bTarget.cardId)?.name)) {  // v6.203 中央述詞
       return addLog(state, '賽吉：目標非對應底寶可夢', aIdx);
     }
     const newBench = [...p.bench];
@@ -3480,11 +3481,11 @@ regR('sage-evolve', (state, aIdx, iids, _params, pool) => {
   //   舊版 hardcode active 優先 → 多隻同名時玩家無法選 bench (Wilson 報告：多龍奇)
   //   新版：1 目標自動 / ≥ 2 目標開第二層 bench-choose picker
   const targetIids: string[] = [];
-  if (p.active && pool.get(p.active.cardId)?.name === evoCard.evolvesFrom) {
+  if (p.active && canEvolveOnto(evoCard.evolvesFrom, pool.get(p.active.cardId)?.name)) {  // v6.203 中央述詞
     targetIids.push(p.active.iid);
   }
   p.bench.forEach(b => {
-    if (pool.get(b.cardId)?.name === evoCard.evolvesFrom) {
+    if (canEvolveOnto(evoCard.evolvesFrom, pool.get(b.cardId)?.name)) {  // v6.203 中央述詞
       targetIids.push(b.iid);
     }
   });
@@ -18772,7 +18773,7 @@ export function registerDirectEvolveAwaken(
       );
     }
     const validIids = player.deck
-      .filter(c => pool.get(c.cardId)?.evolvesFrom === baseName)
+      .filter(c => canEvolveOnto(pool.get(c.cardId)?.evolvesFrom, baseName))  // v6.203 中央述詞
       .map(c => c.iid);
     const s = addLog(state,
       validIids.length > 0
@@ -18799,7 +18800,7 @@ export function registerDirectEvolveAwaken(
     if (evoIdx < 0) return addLog(state, `${label}：找不到所選進化卡，僅重洗牌庫`, aIdx);
     const evoInst = player.deck[evoIdx];
     const evoCard = pool.get(evoInst.cardId);
-    if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== baseN) {
+    if (!canEvolveOnto(evoCard?.evolvesFrom, baseN)) {  // v6.203 中央述詞
       return addLog(state, `${label}：所選非從「${baseN}」進化的卡，僅重洗牌庫`, aIdx);
     }
     const activeCard = pool.get(player.active.cardId);

@@ -499,7 +499,7 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/effects/cards/v2999_g3_wave1.ts|岩石宮殿':'大吾的小碎鑽 Basic/Psychic/非規則，卡面要求持有者「在備戰區」⇒ 現行 6 個消除來源沒有一個打得到（熔岩洞只打進化、監視塔只打【無】、初始化只打規則、暗夜羽擊只打 active、黏著束縛只打備戰 Stage2）',
   'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|藏隱':'斯魔茶 Basic/Grass/非規則，卡面「只要這隻寶可夢在備戰區」⇒ 同岩石宮殿，6 個來源都打不到',
   'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|深度下潛':'小霞的鯉魚王 Basic/Water/非規則，卡面同樣限備戰區 ⇒ 結構上不可達',
-  'src/lib/game/engine.ts|虹色DNA':'prismaticDNAException 只在 !sameEvoName(evo.evolvesFrom, 伊布ex) 時才有意義，而 sameEvoName 會 strip 掉 "ex" ⇒ 標準路徑一定先命中，例外分支為死碼（sameEvoName 過度正規化本身是另一個待裁定議題，見 changelog-internal v6.202 D 段）',
+  // v6.203：虹色DNA 已改走 hasEffectiveAbilityByInst（canEvolveFromHandOnto），不再是字面量消費點 ⇒ 豁免條目刪除
   // ── 需要改函式簽名 ＋ 全部呼叫端（站長裁定後再做，v6.202 不動）────────────
   'src/lib/game/effects.ts|憨憨臉':'TODO：isConfusionImmune(inst,pool) 簽名沒有 state（6 呼叫端）',
   'src/lib/game/effects.ts|不眠':'TODO：isSleepImmune(inst,pool) 簽名沒有 state（5 呼叫端）',

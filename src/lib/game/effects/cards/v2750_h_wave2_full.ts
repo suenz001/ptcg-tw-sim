@@ -14,6 +14,7 @@ import {
   findOwnFieldPokemon, attachEnergyToOwnPokemonByIid, // v6.165 互換後仍要附給本體 → 一律 iid 追蹤
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { canEvolveOnto } from '../_shared'; // v6.203 進化來源逐字比對中央述詞
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
@@ -1896,7 +1897,7 @@ regPost('蛋蛋|早熟進化', (state, aIdx, pool) => {
       aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
   const validIids = player.deck
-    .filter(c => pool.get(c.cardId)?.evolvesFrom === '蛋蛋')
+    .filter(c => canEvolveOnto(pool.get(c.cardId)?.evolvesFrom, '蛋蛋'))  // v6.203 中央述詞
     .map(c => c.iid);
   const s = addLog(state,
     validIids.length > 0
@@ -1922,7 +1923,7 @@ regR('exeggcute-precoition-evolve', (state, aIdx, iids, _params, pool) => {
   if (evoIdx < 0) return addLog(state, '早熟進化：找不到所選進化卡，僅重洗牌庫', aIdx);
   const evoInst = player.deck[evoIdx];
   const evoCard = pool.get(evoInst.cardId);
-  if (!evoCard?.evolvesFrom || evoCard.evolvesFrom !== '蛋蛋') {
+  if (!canEvolveOnto(evoCard?.evolvesFrom, '蛋蛋')) {  // v6.203 中央述詞
     return addLog(state, '早熟進化：所選非從蛋蛋進化的卡，僅重洗牌庫', aIdx);
   }
   const activeCard = pool.get(player.active.cardId);

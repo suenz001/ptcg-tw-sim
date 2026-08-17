@@ -936,6 +936,34 @@ export function sameEvoName(a: string | undefined, b: string | undefined): boole
 }
 
 /**
+ * ⭐⭐⭐ v6.203 中央述詞：「手牌／牌庫的這張進化卡，能不能重疊到場上的那隻寶可夢身上」。
+ *
+ * 官方規則（`PTCG RULES/PTCG_RULES.md` §6）：
+ *   L305「將進化卡重合至與左上方記載的進化前寶可夢**相同名稱**的寶可夢身上完成進化後，即可放置於場上。」
+ *   L307/L315「自己的場上有名為『●●』的寶可夢，手牌中有記載了『從●●進化』的…」
+ * ⇒ 進化來源比對必須**逐字相同**。
+ * 官方另有明文（§17.45.I）：「『達摩狒狒』和『N的達摩狒狒』視為兩種不同名稱的寶可夢」
+ * ⇒ 卡名前後綴不同就是不同名稱；「伊布」與「伊布ex」同理是兩張不同名稱的卡。
+ *
+ * ⚠⚠ **絕不可**改用 `sameEvoName()`。那支 helper 做的是「同進化階變體的同名判定」
+ *   （超級XXXex / XXXex / XXX 視為同一階，v5.307 站長規則），用途是 **stage 分類**
+ *   （isStage2PokemonCard / 神奇糖果的 Stage2→Stage1→Basic 鏈結推導），**不是進化合法性**。
+ *   v2.35 當初把它同時當成進化 gate（註解寫「ex 和非 ex 同名卡是同一進化階級」——
+ *   那句是錯的），造成「伊布ex 可以直接進化成葉伊布」等 5 組違規進化（v6.203 修）。
+ *
+ * ⚠ 唯一例外是**卡面自己開的洞**：伊布ex【虹色DNA】。它必須寫在 engine 的
+ *   `canEvolveFromHandOnto()` 裡（因為要判「該特性此刻有沒有被消除」），
+ *   **不可**回頭放寬本述詞 —— 沒有【虹色DNA】的伊布ex（例：M-P-J 172/M-P）不能進化。
+ */
+export function canEvolveOnto(
+  evolvesFromName: string | undefined | null,
+  baseCardName: string | undefined | null,
+): boolean {
+  if (!evolvesFromName || !baseCardName) return false;
+  return evolvesFromName === baseCardName;
+}
+
+/**
  * v2.246 完整 KO cause tracking — 統一 KO 記錄入口。
  *
  * 在每個 KO 發生點呼叫此 helper，會更新對應的 thisTurn counter

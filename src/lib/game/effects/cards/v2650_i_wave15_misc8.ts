@@ -13,7 +13,7 @@
  *   - 雜 (1 張)
  */
 
-import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, sameEvoName, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
+import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, canEvolveOnto, ATTACK_PRE_DISCARD_CHOICE } from '../_shared';
 import { getAllAttachedTools } from '../_shared'; // v5.835 道具數含多重轉接
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { openDeckViewReshuffle } from '../_shared';
@@ -188,7 +188,8 @@ regPost('雙卵細胞球|細胞進化', (state, aIdx, pool) => {
       if (!card) return false;
       return p.deck.some(d => {
         const dc = pool.get(d.cardId);
-        return dc?.evolvesFrom && sameEvoName(dc.evolvesFrom, card.name);
+        // v6.203：進化來源逐字比對（中央述詞）；牌庫來源不吃虹色DNA 例外（卡面寫「從手牌」）
+        return !!dc?.evolvesFrom && canEvolveOnto(dc.evolvesFrom, card.name);
       });
     })
     .map(c => c.iid);
@@ -235,7 +236,7 @@ regR('twin-cell-evolve-pick-base', (st, aIdx, iids, _params, pool) => {
   const validEvoIids = p.deck.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-    return sameEvoName(card.evolvesFrom, baseCard.name);
+    return canEvolveOnto(card.evolvesFrom, baseCard.name);  // v6.203 逐字比對
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
     return openDeckViewReshuffle(st, aIdx, '細胞進化'); // v5.496：仍開檢視 picker（內含重洗）
@@ -311,7 +312,7 @@ export function cellAwakeningStep(
   const validEvoIids = p.deck.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-    return sameEvoName(card.evolvesFrom, baseCard.name);
+    return canEvolveOnto(card.evolvesFrom, baseCard.name);  // v6.203 逐字比對
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
     s = addLog(s, `${label}：牌庫中無「${baseCard.name}」的進化卡（跳過）`, aIdx);
@@ -469,7 +470,7 @@ regR('evil-awakening-pick-base', (st, aIdx, iids, params, pool) => {
   const validEvoIids = p.deck.filter(c => {
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-    return sameEvoName(card.evolvesFrom, baseCard.name);
+    return canEvolveOnto(card.evolvesFrom, baseCard.name);  // v6.203 逐字比對
   }).map(c => c.iid);
   if (validEvoIids.length === 0) {
     let s = addLog(st, `惡之覺醒：牌庫中無「${baseCard.name}」的進化卡`, aIdx);

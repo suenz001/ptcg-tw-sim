@@ -1,5 +1,100 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.203 進化來源比對被過度放寬（sameEvoName 被誤用成進化 gate）
+
+**回報**：玩家可以把伊布ex 直接進化成葉伊布 —— 連**沒有**特性【虹色DNA】的
+「伊布ex（M-P-J · 172/M-P · J 標）」也可以。
+
+**站長裁定（2026-08-17，逐字）**：
+> 「伊布ex 如果特性有【虹色DNA】是可以進化為葉伊布的，但如果沒有這個特性就不能進化，
+>  例如 伊布ex M-P-J · 172/M-P · J 這張就不能進化。」
+
+### 真因
+`_shared.ts` 的 `sameEvoName()` 會把卡名尾端的 `ex`、開頭的「超級」strip 掉：
+- `stripEx` 是 **v2.35（f69808f7）** 由前一位 AI 引入的，註解寫
+  「PTCG 規則：ex 和非 ex 同名卡是同一進化階級。例：伊布 / 伊布ex 都是 Basic，
+   兩個都可進化為 火伊布ex」—— **那句規則是錯的**（若成立，【虹色DNA】這個特性就沒有存在意義）。
+- `超級` prefix strip 是 **v5.307（bb02b985）** 加的；那個 commit 真正的修正其實是**資料**
+  （M5.json：超級龍頭地鼠ex.evolvesFrom 龍頭地鼠ex → 螺釘地鼠），
+  prefix strip 是為了「超級XXXex / XXXex / XXX 同階」這條**stage 分類**規則。
+
+engine.ts EVOLVE handler 用 `sameEvoName(evoCard.evolvesFrom, baseCard.name)` 當進化 gate ⇒
+`sameEvoName('伊布','伊布ex') === true` ⇒ 標準路徑一定先命中，
+卡面【虹色DNA】的例外分支（`prismaticDNAException`）**永遠走不到**
+（v6.202 曾把它記成死碼並寫進豁免表 —— 它其實本來就寫對了，只是被上游蓋掉）。
+
+### 官方依據
+- `PTCG RULES/PTCG_RULES.md` §6 L305/L307/L315：
+  「將進化卡重合至與左上方記載的進化前寶可夢**相同名稱**的寶可夢身上完成進化後，即可放置於場上。」
+- 同檔 §17.45.I：「『達摩狒狒』和『N的達摩狒狒』視為兩種不同名稱的寶可夢。」
+⇒ 進化來源比對必須**逐字**。
+
+### 修法（分界判準）
+**超級進化該放行、一般進化不該放行 的分界不在字串正規化，而在卡面資料本身。**
+枚舉全 live H/I/J：每一張進化卡（含 47 張「超級XXXex」）的 `evolvesFrom` 都**逐字**對得到
+一張實際存在的前階卡名（超級呆殼獸ex→呆呆獸、超級龍頭地鼠ex→螺釘地鼠、超級大竺葵ex→月桂葉…；
+唯 9 筆化石指向 Item 卡名，同樣逐字命中）。
+⇒ **逐字比對足以支撐全部合法進化，包含超級進化**；正規化只會多放行卡面不允許的組合。
+
+- 新增中央述詞 `canEvolveOnto(evolvesFromName, baseCardName)`（`_shared.ts`，逐字）。
+- 手牌路徑再包一層 `canEvolveFromHandOnto(state, ownerIdx, baseInst, baseCard, evoCard, pool)`
+  （`engine.ts`，**唯一** 例外＝虹色DNA）。EVOLVE handler 與 `getEvolvableTargets`（黃框/AI）共用。
+- 虹色DNA 例外三條件：`evolvesFrom === '伊布'` ＋ `evoCard.subtype === 'ex'`
+  ＋ **`hasEffectiveAbilityByInst(...,'虹色DNA')`**（伊布ex 是【無】屬性，
+  火箭隊的監視塔／暗夜羽擊打得到它 —— 特性被消除就不該還能進化）。
+- ⚠ `sameEvoName` **原封不動**（stage 分類 / 神奇糖果鏈結推導仍靠它；動它會打壞超級進化同階判定）。
+
+### 跨卡 audit（維度＝「進化來源比對被過度放寬」）
+data-driven 枚舉全 live H/I/J：`evolvesFrom` 與場上卡名「逐字不同、正規化後相同」的組合共 **5 組**：
+
+| 場上（舊 gate 誤放行） | 進化卡 |
+|---|---|
+| 伊布ex | 葉伊布/葉伊布ex/火伊布ex/水伊布ex/雷伊布ex/冰伊布(ex)/仙子伊布(ex)/太陽伊布ex/月亮伊布ex（11 個卡名） |
+| 喵喵ex | 貓老大 |
+| 新葉喵ex | 蒂蕾喵 |
+| 皮卡丘ex | 雷丘 |
+| 超級花葉蒂ex | 花潔夫人 |
+
+同一份誤用散在 8 個檔 12 個消費點，全部收斂：
+engine.ts EVOLVE / getEvolvableTargets、v2650（雙卵細胞球｜細胞進化 ×2、細胞覺醒、
+火箭隊的尼多娜｜惡之覺醒）、v2360（小木靈｜怨恨進化 ×2）、v172（壯偉碩木 ×2）、
+effects.ts（神奇糖果 regG / reg / resolver 的「場上基礎目標」比對 ×3）、
+ai.ts ＋ +page.svelte（`EvilAwakening:EvolveFrom` filter 的 inline stripEx —— 顯示端必須 === 能勾端）。
+
+**反向（該放行卻被擋）＝ 0**：守衛 3b 逐一實跑全站 **300+ 條** evolvesFrom 進化線
+（含 4b 的 47 張超級進化 ×24 組），全部仍 `ui && engine` 為真。
+唯一排除項是【海豚俠ex｜全能靈魂】（v5.342 卡面「只能由『全能變身』放上場」，本來就不可一般進化）。
+
+### 守衛
+`scripts/test-v6203-evolve-source-exact.mjs`（27 步）；HEAD（c9700bb）跑 **12 FAIL**，修後 0 FAIL。
+含：卡面逐字錨、有/無虹色DNA、ex/非ex、特性被消除、全站進化線正對照、超級進化正對照、
+違規組合 data-driven 枚舉、神奇糖果／細胞進化 牌庫路徑、
+以及靜態守衛「`sameEvoName` 呼叫點第一參數必須是 `X.name`（＝stage 分類用途）」＋掃描器正對照。
+v6.202 的豁免表死條目（engine.ts|虹色DNA）同步刪除（20e 會抓）。
+
+### 審查子代理（opus）抓到、已修的兩點
+1. **守衛 5b 的「應放行」正對照是死碼**：`nameToIds.get('伊布ex')[0]` 取到 **19383（沒有虹色DNA 那張）**，
+   ⇒ 51 筆 violations 裡 `dnaOk===true` 命中 **0** 筆，5b 實質只剩否定分支。
+   已改成枚舉**同名的每一張印刷**，並新增 `5a2` 斷言「兩支分支都要真的跑到」（allow≥4 / deny≥20）。
+2. **另有 5 處 evolve-source 比對行為已逐字、但沒收斂到中央述詞**（7b 只凍結 `sameEvoName`，管不到它們）：
+   `effects.ts` 賽吉 ×4 ＋ 自我進化 deck-search factory ×2、`v2750_h_wave2_full.ts`（蛋蛋）×2、
+   `engine.ts:9863`（怨恨進化的 promptPlayAbilities gate，與 v2360 的 regA resolver 是兩份）。全部改 `canEvolveOnto`。
+
+另自查抓到一個**測試鏈抓不到**的坑：`+page.svelte` 用了 `canEvolveOnto` 卻沒加進
+`import … from '$lib/game/engine'` —— 這種只有 vite build 才會炸（v6.095 事故同型）。
+已補 import，並加守衛 `7d2`（拿掉 import 實測會 FAIL）。
+
+### 驗證
+完整 `npm test` 521 步全綠（沙盒分 12+ 批跑）；`npx tsc -p` 新 TS2304 = 0；`test-ts2304-scan` 綠；
+四張免疫網（damage 25 / attack-effect 19 / selection-ui 35 / selection-candidates 8）全綠；
+`+page.svelte` svelte compile warning 數與 HEAD 相同（98 → 98）；`build-server-engine` 產出成功。
+
+### ⚠ 待站長裁定
+站長那句「可以進化為**葉伊布**」與卡面逐字「從「伊布」進化而來的『寶可夢**【ex】**』」不一致。
+本版**依卡面**實作：有虹色DNA 的伊布ex 只能進化成**【ex】**（葉伊布ex 可、葉伊布不可）。
+若站長的意思是非 ex 也可以，改 `engine.ts canEvolveFromHandOnto` 內
+`if (evoCard.subtype !== 'ex') return false;` 一行即可（守衛 2e 需同步改）。
+
 ## v6.202 passive 特性消費點沒接「特性消除」中央閘 —— 清掉「不必改簽名」的那組（14 個特性／20 個消費點）
 
 v6.201 C 段掃出 38 處沒接閘的消費點並列了待辦清單。本版只做**不必改函式簽名**的那組。

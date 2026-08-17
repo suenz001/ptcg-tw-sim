@@ -942,7 +942,7 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
-import { sameEvoName, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard } from './effects/_shared'; // v5.842 跨三槽狀態讀取
+import { sameEvoName, canEvolveOnto, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
 import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst } from './defense';  // v6.196 中央述詞
@@ -956,7 +956,41 @@ export { twoCardStadiumHalfIndex, twoCardStadiumSide, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
 // v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
 import { isTrainerPendingImplementation } from './effects';
-export { sameEvoName };
+export { sameEvoName, canEvolveOnto };
+
+/**
+ * ⭐⭐⭐ v6.203 中央述詞（**進化合法性只有這一份**）：
+ * 「aIdx 玩家**從手牌**使出的進化卡 evoCard，能不能重疊到場上的 baseInst 身上完成進化」。
+ *
+ * 兩個消費點必須同時走這裡，缺一就會變成「黃框亮著但點了沒反應」或反過來：
+ *   1) EVOLVE handler（實際執行）
+ *   2) getEvolvableTargets（手牌黃框 / 場上標的 / AI 決策的唯一來源）
+ *
+ * 規則：逐字比對（canEvolveOnto，見 _shared.ts 的官方出處），**唯一例外**是
+ * 伊布ex【虹色DNA】：
+ *   「這隻寶可夢可從手牌使出從「伊布」進化而來的「寶可夢【ex】」，放置於這隻寶可夢身上完成進化。」
+ * ⇒ 三個條件缺一不可：(a) 進化卡 evolvesFrom 逐字 = 「伊布」 (b) 進化卡是【ex】
+ *   (c) **base 這一隻此刻真的擁有生效中的【虹色DNA】**。
+ * ⚠ (c) 走 hasEffectiveAbilityByInst —— 伊布ex 是【無】屬性，
+ *   【火箭隊的監視塔】/【暗夜羽擊】等消除來源打得到它，特性被消除時就不該還能進化。
+ * ⚠ 牌庫來源的進化（細胞進化 / 惡之覺醒 / 壯偉碩木 / 賽吉）**不適用**本例外
+ *   —— 卡面逐字寫的是「可從**手牌**使出」。
+ */
+export function canEvolveFromHandOnto(
+  state: GameState,
+  ownerIdx: 0 | 1,
+  baseInst: CardInstance,
+  baseCard: Card | undefined,
+  evoCard: Card | undefined,
+  pool: Map<string, Card>,
+): boolean {
+  if (!evoCard || !baseCard) return false;
+  if (canEvolveOnto(evoCard.evolvesFrom, baseCard.name)) return true;
+  // 虹色DNA 例外（伊布ex SV8a 126 / 12304 / 12305）
+  if (evoCard.evolvesFrom !== '伊布') return false;
+  if (evoCard.subtype !== 'ex') return false;
+  return hasEffectiveAbilityByInst(state, ownerIdx, baseInst, pool, '虹色DNA');
+}
 // v3.01 Group 3 Wave 3 helpers — 對手不能使出 X / 對手特性消除 / 寶可夢檢查 / 撤退觸發 / 進化觸發
 import {
   isOppStadiumPlayBlocked,
@@ -3540,13 +3574,11 @@ function handlePlaying(
     // — 改寫 line 1658 的 gate 較危險；採用「在 line 1674 的 justPlaced gate 加 bypass」
     //   並讓 line 1658 的 isFirstTurn gate 額外考量本特性。
     if ((basePoke.justPlaced || basePoke.evolvedThisTurn) && !vigorousForestException && !hasPushEvolveAbility && !hasFightingHowl && !hasShellinkBypass) return state;
-    // v2.149 虹色DNA（伊布ex SV8a 126）：從伊布進化的 ex 可放此寶可夢身上完成進化
-    //   標準 sameEvoName 檢查失敗時，若 base 卡有此特性 + evoCard.evolvesFrom='伊布' + evoCard 是 ex → 放行
-    const hasPrismaticDNA = baseCard.abilities?.some(a => a.name === '虹色DNA');
-    const prismaticDNAException = hasPrismaticDNA &&
-      sameEvoName(evoCard.evolvesFrom, '伊布') &&
-      evoCard.subtype === 'ex';
-    if (!sameEvoName(evoCard.evolvesFrom, baseCard.name) && !prismaticDNAException) return state;
+    // ⭐⭐⭐ v6.203：進化來源比對收斂到中央述詞 canEvolveFromHandOnto。
+    //   舊碼用 sameEvoName（會把「伊布ex」正規化成「伊布」）⇒ 任何伊布ex 都能直接進化成
+    //   葉伊布/葉伊布ex，連沒有【虹色DNA】的伊布ex（M-P-J 172/M-P）也能 —— 站長裁定：
+    //   有【虹色DNA】才可以，沒有就不行。虹色DNA 的例外現在真的生效（且會判特性是否被消除）。
+    if (!canEvolveFromHandOnto(state, aIdx, basePoke, baseCard, evoCard, pool)) return state;
 
     // 進化：繼承傷害、能量、寶可夢道具；進化鏈堆疊保留被進化掉的 CardInstance（裸殼，附加物轉給頂層）
     // v2.260 Bug #2 修：PDF §I-A-05「進化後特殊狀態全部消除」 — 不再繼承 basePoke.status。
@@ -9217,17 +9249,12 @@ export function getEvolvableTargets(
     // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 / 提升進化 / 刺激進化 / 鬥志戰吼 exception 四者都能豁免
     const baseBlocked = fp.justPlaced || fp.evolvedThisTurn;
     if (baseBlocked && !forestBypassBase && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass) continue;
-    // v2.149 虹色DNA（伊布ex SV8a 126）：base 有此特性 → 從伊布進化的 ex 可從此 base 進化
-    const hasPrismaticDNA = fpCard.abilities?.some(a => a.name === '虹色DNA');
     const validEvos = handEvos.filter(evo => {
       const ec = pool.get(evo.cardId);
       if (!ec) return false;
-      // 標準路徑：sameEvoName 比對；虹色DNA 例外：evolvesFrom=伊布 + ex
-      const stdMatch = sameEvoName(ec.evolvesFrom, fpCard.name);
-      const dnaMatch = hasPrismaticDNA &&
-        sameEvoName(ec.evolvesFrom, '伊布') &&
-        ec.subtype === 'ex';
-      if (!stdMatch && !dnaMatch) return false;
+      // ⭐⭐⭐ v6.203：與 EVOLVE handler 共用同一份述詞（含虹色DNA 例外）。
+      //   兩端必須同 commit，只改一端 = 黃框與實際行為分岔（v6.088 教訓）。
+      if (!canEvolveFromHandOnto(state, state.activePlayerIndex as 0 | 1, fp, fpCard, ec, pool)) return false;
       // 若 base 被擋但進到這裡 → 代表 forest / 提升進化 / 刺激進化 / 鬥志戰吼 bypass 成立
       // v3.56：補 !hasFightingHowlBypass — 之前外層 5802 有鬥志戰吼 bypass，但內層 filter
       //        重新檢查 baseBlocked 時漏掉這個例外，導致勒克貓（evolvedThisTurn=true）外層
@@ -9832,8 +9859,8 @@ export function getUsableAbilities(
         if (!thisCard) return;
         const hasEvo = player.hand.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Pokemon' && cc.evolvesFrom != null
-            && cc.evolvesFrom === thisCard.name;
+          // v6.203：與 v2360 的 regA resolver 同一份述詞（兩端分岔＝按鈕亮著卻沒得選）
+          return cc?.supertype === 'Pokemon' && canEvolveOnto(cc.evolvesFrom, thisCard.name);
         });
         if (!hasEvo) return;
       }

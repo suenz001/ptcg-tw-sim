@@ -19,7 +19,7 @@
 import {
   reg, regR, regG, regA,
   addLog, addPrivateLog, updatePlayer, withPending, shuffle, clearActiveEffects, drawCards,
-  sameEvoName,
+  canEvolveOnto,
   addPendingPrize, getOwnBenchLimit, revealTopCardsLog} from '../_shared';
 import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741/v5.742 進化狀態+建構中央
 import { joinCardNames } from '../_shared';
@@ -918,7 +918,7 @@ regR('sturdy-might-tree-step1', (st, idx, iids, _params, pool) => {
   const matchedBases = fieldPokemon.filter(fp => {
     if (fp.justPlaced || fp.evolvedThisTurn) return false;
     const fpCard = pool.get(fp.cardId);
-    return !!(fpCard && sameEvoName(evolvesFromName, fpCard.name));
+    return !!(fpCard && canEvolveOnto(evolvesFromName, fpCard.name));  // v6.203 逐字比對
   });
   if (matchedBases.length === 0) {
     return addLog(st, '壯偉碩木：場上無對應的基礎寶可夢可進化', idx);
@@ -986,7 +986,7 @@ regR('sturdy-might-tree-step2', (st, idx, iids, params, pool) => {
       idx, x => ({ ...x, deck: shuffle(x.deck) }));
   }
   const evoCard = pool.get(evoInst.cardId);
-  if (!evoCard || !evoCard.evolvesFrom || !sameEvoName(evoCard.evolvesFrom, stage1Name)) {
+  if (!evoCard || !evoCard.evolvesFrom || !canEvolveOnto(evoCard.evolvesFrom, stage1Name)) {  // v6.203 逐字比對
     return updatePlayer(addLog(st, `壯偉碩木：選擇的卡無法從 ${stage1Name} 進化`, idx),
       idx, x => ({ ...x, deck: shuffle(x.deck) }));
   }

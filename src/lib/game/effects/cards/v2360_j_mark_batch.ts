@@ -26,7 +26,7 @@ import {
   regPost,
   regPre,
   regR,
-  sameEvoName,
+  canEvolveOnto,
   updatePlayer,
   withPending,
   triggerOakeyeMillIfApplicable, isOwnFirstTurn, rejectAbilityUse } from '../_shared';
@@ -183,7 +183,7 @@ regA('小木靈', 0, (state, aIdx, pool, inst) => {
       return (
         card?.supertype === 'Pokemon' &&
         card.evolvesFrom != null &&
-        sameEvoName(card.evolvesFrom, thisCard.name)
+        canEvolveOnto(card.evolvesFrom, thisCard.name)  // v6.203 逐字比對
       );
     })
     .map(c => c.iid);
@@ -233,7 +233,7 @@ regR('phantump-grudge-evolve', (state, aIdx, iids, params, pool) => {
     ? allPokes.find(c => c.iid === targetIid)
     : allPokes.find(c => {
         const card = pool.get(c.cardId);
-        return card != null && sameEvoName(evoCard.evolvesFrom!, card.name);
+        return card != null && canEvolveOnto(evoCard.evolvesFrom, card.name);  // v6.203 逐字比對
       });
 
   if (!base) {
