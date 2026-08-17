@@ -345,9 +345,13 @@ try {
   const body = line.trim().slice('onpointerdown={'.length, -1);
   const mk = () => {
     const calls = { drag: 0, say: [] };
-    const fn = new Function('leaveHandCard', 'dragKind', 'actionBusy', 'startDrag', 'tActSay',
+    // ⭐v6.200：handler 改問中央述詞 handCardDraggable(ops)（拖曳與點擊同源）。
+    //   這裡餵語義等價的 stub（集合非空＝可拖）；那支述詞本身的正確性由
+    //   scripts/test-v6200-hand-drag-click-parity.mjs 行為端把關，本節只驗 actionBusy gate。
+    const fn = new Function('leaveHandCard', 'handCardDraggable', 'ops', 'actionBusy', 'startDrag', 'tActSay',
       'TACT_BLOCKED_MSG', 'inst', 'c', 'return (' + body + ');');
-    return { calls, run: (busy) => fn(() => {}, 'energy', busy, () => { calls.drag++; },
+    return { calls, run: (busy) => fn(() => {}, (o) => !!o && o.size > 0, new Set(['energy']), busy,
+      () => { calls.drag++; },
       (msg) => calls.say.push(msg), '⚠ 佇列已滿：這一下沒有生效', {}, {})({}) };
   };
   const a = mk(); a.run(false);

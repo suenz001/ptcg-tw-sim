@@ -125,7 +125,9 @@ export function isToolsJammed(state: GameState, pool: Map<string, Card>): boolea
 
 // v2.322：蓋諾賽克特｜ACE消弭 — 若對手場上有蓋諾賽克特且附有寶可夢道具，
 //   則當前玩家不能從手牌使出 ACE SPEC 卡。
-function isAceCancelActive(state: GameState, playerIdx: 0 | 1, pool: Map<string, Card>): boolean {
+// ⭐v6.200：改 export —— 手牌可用操作的中央述詞（hand-card-ops.ts）要用同一份，
+//   避免 UI 端再鏡射一份 aceCancelActiveLocal（那是第二份，會漂移）。
+export function isAceCancelActive(state: GameState, playerIdx: 0 | 1, pool: Map<string, Card>): boolean {
   const oppIdx = (1 - playerIdx) as 0 | 1;
   const opp = state.players[oppIdx];
   const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];

@@ -1,5 +1,67 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.200 手牌卡「拖曳」與「點擊」收斂成單一可用性述詞（烈箭鷹ex｜激動俯衝 桌機拖不動）
+
+### 玩家回報
+桌機（Windows）：烈箭鷹ex 的特性【激動俯衝】條件成立時，手牌卡**點擊可以**放到備戰區，
+**拖曳完全拉不動**，連拖曳動畫都不會出現。
+
+### 卡面逐字（static/cards/M6.json id=19612，特性讀 abilities[].effect）
+> 在自己的回合，若手牌有這張卡，且自己的場上有【無】屬性的「超級進化寶可夢【ex】」，
+> 則可使用1次。將這張卡放置於備戰區。
+
+### 真因（v6.199 `src/routes/game/+page.svelte`）
+手牌卡有**兩份互不相干**的可用性判定：
+
+| 路徑 | 判定 | 位置(v6.199) |
+|---|---|---|
+| 拖曳 | `dragKind = canEnergy ? … : canBasic ? … : canFossil ? … : canEvolve ? … : canTrainer ? … : null` | L10845~10852 |
+| 點擊 | `canHandActivate = handActivateAbilities.has(inst.iid)` | L10858 |
+
+`dragKind` 那串**完全沒有** `canHandActivate` ⇒ `.draggable` 不加、`onpointerdown` 也不會呼叫
+`startDrag`，所以「拖不動、連動畫都沒有」。而 `class:can-actionable={isActionable || canHandActivate}`
+讓黃框照亮 ⇒ 玩家看得到「可用」卻拖不動。
+v6.080 把**判定**收斂進 engine `getHandActivatableAbilities` 時只接上了點擊那一半
+（與 v6.098 手機版漏按鈕、v6.131 特性 gate vs regA、v6.109 filter vs validIids 同族）。
+
+### 跨卡 audit（維度：手牌卡「點擊做得到但拖曳做不到」）
+桌機手牌能觸發的全部路徑共 9 種（附能 / 放基礎(playing) / 放基礎(setup) / 放戰鬥場(setup) /
+化石 / 道具 / 訓練家 / 進化 / 手牌特性）。逐一比對後**只有「手牌特性」這一種**被拖曳端漏掉；
+其餘 8 種拖曳端都有。受影響的卡＝`ON_HAND_ACTIVATE_ABILITIES` 全部 **2 張**：
+**烈箭鷹ex｜激動俯衝**（M6/J）與**齒輪怪｜緊急迴轉**（SV7/H）—— 兩張都拖不動，一起修好。
+反向（拖得到但點不到）的 basic/fossil/trainer/tool 是桌機的既有操作設計（需要選釋放目標），
+不是 bug；進化另有場上寶可夢的「進化」按鈕作為點擊入口。
+
+### 修法（中央收斂）
+新增 `src/lib/game/hand-card-ops.ts`：
+- `getHandCardOps(state, myIdx, pool, { isMyTurn })` → `Map<iid, Set<HandCardOp>>`，
+  **這是手牌卡可用性的唯一述詞**；黃框、`.draggable`、`onpointerdown`、`onclick`、
+  提示文字、drop-zone 高亮全部只讀它。
+- `handCardDraggable()` / `handCardDragKind()` / `handOpForDropTarget()` +
+  `HAND_OP_DROP_TARGET`（op → 釋放區的唯一對照表）。釋放結算改成
+  「先問這個釋放區、問不到再退回整張桌墊」，保住 v1.03 起「支援者蓋在寶可夢上放開也算使用」。
+- `engine.ts` 的 `isAceCancelActive` 改 export；UI 端自己鏡射的 `aceCancelActiveLocal`
+  以及 `playableTrainerIids / playableBasicIids / playableFossilIids / playableEvoIids`
+  四份 derived 一併刪除（都是第二份判定的溫床）。
+- ⚠ 沒有硬編任何卡名／特性名，v6.098／v6.125「UI 端禁硬編手牌特性」的守衛仍然綠。
+  新增同型卡一律只改 engine 的 `HAND_ACTIVATE_GATES`。
+
+### 三種版面
+- 桌機 **classic** 與 **fable**（v5.956）共用**同一份 markup**（fable 只是 `.playmat` 上多一個
+  `layout-fable` class 的純 CSS 版面）⇒ 一次修好兩種，守衛有斷言釘住「可操作手牌卡 template 只有一份」。
+- **手機直式** `MobilePortraitBattle.svelte` 沒有卡片拖曳（走 sheet 選單），
+  入口本來就讀中央 `getHandActivatableAbilities`，行為不變；守衛斷言它沒有 `startDrag`／`DragKind`。
+
+### 守衛 `scripts/test-v6200-hand-drag-click-parity.mjs`（73 條，HEAD-FAIL 17 條）
+① 卡面逐字；② 行為端逐張枚舉 `ON_HAND_ACTIVATE_ABILITIES`（含完備性斷言：登錄卡沒有 fixture 就亮紅）
+—— 可用時拖曳與點擊兩條路徑都要能上備戰且最終盤面一致，不可用／非我方回合時兩條路徑都不行；
+③ 結構＋三版面；④ 否定型判準的正對照自我驗證；
+⑤ **行為端求值**：把 template 的 `dragKind` / `isActionable` / `onpointerdown` handler
+**真的執行一次**，斷言「只有手牌特性可用時 `startDrag` 真的被呼叫」——
+HEAD 跑同一段會得到 `dragKind=null`、`startDrag` 呼叫 0 次，正是玩家回報的症狀。
+⚠ 連帶更新 `test-v6147`（拖曳 gate 的 regex）與 `test-v6172`（handler 求值的注入名），
+兩者驗的都是 `actionBusy`，語義不變。
+
 ## v6.199 錦標賽排行榜「顯示筆數」下拉（5 / 10 / 20）
 
 ### 真因定位（先查再動手）

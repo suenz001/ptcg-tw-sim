@@ -168,7 +168,8 @@ T('⭐⭐所有會送出動作的關鍵按鈕都要綁 actionBusy（v6.137 的�
     ['補位確認(防守方)', /disabled=\{actionBusy\|\|!_pickOkD\}/],
     ['補位確認(自KO)', /disabled=\{actionBusy\|\|!_pickOkS\}/],
     // ⭐v6.172 這四處由「靜默 return」改成「講出來再 return」（tActSay），gate 本身還在。
-    ['手牌拖曳 gate', /if\(dragKind\)\{ if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);\} else startDrag/],
+    // ⭐v6.200：可拖與否改問中央述詞 handCardDraggable(ops)（拖曳與點擊同源），gate 本身不變。
+    ['手牌拖曳 gate', /if\(handCardDraggable\(ops\)\)\{ if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);\} else startDrag/],
     // ⭐ Fable 5 審查抓到的缺口：拖曳派已擋，但**點擊派**（點手牌能量→點目標）整條沒查，
     //   而附能是最高頻動作。函式端與 onclick 端都要 gate。
     ['點擊派附能', /function onAttachEnergy\(targetIid: string\) \{\s*if \(!selectedEnergyIid\) return;[\s\S]{0,600}?if \(actionBusy\) \{ tActSay\(TACT_BLOCKED_MSG, 5000\); return; \}/],

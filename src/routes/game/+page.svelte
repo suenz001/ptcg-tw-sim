@@ -22,9 +22,9 @@
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
     countEnergy, getEvolvableTargets,
-    canRetreat, getRetreatBlockReason, getPlayableTrainers, getPlayableBasics, getPlayableFossils,
+    canRetreat, getRetreatBlockReason,
     computeActiveRetreatCostFor,
-    getUsableAbilities, isBasicPokemonCard, isFossilItemCard, isRulePokemon, getEffectiveHP, getBasicEnergyType,
+    getUsableAbilities, isBasicPokemonCard, isRulePokemon, getEffectiveHP, getBasicEnergyType,
     totalEnergyUnits, getBenchLimit, canBeInitialActiveCard,
     tryAdvanceToPlaying,
     tryPromoteToMainForFestival,
@@ -33,6 +33,13 @@
     isTwoCardStadiumName,         // v6.091 棄牌區兩張合一不聚合判準
     twoCardStadiumSide,           // v6.095 依 cardId 直接判左右半（重抽回顧只有 cardId 沒有 iid）
   } from '$lib/game/engine';
+  // ⭐⭐⭐v6.200「這張手牌卡現在能做哪個操作」的**唯一述詞** —— 拖曳與點擊共用同一份。
+  //   （v6.199 以前拖曳看 dragKind、點擊看 canHandActivate，兩份漂移 →
+  //     烈箭鷹ex｜激動俯衝 只能點、不能拖。）
+  import {
+    getHandCardOps, handCardDragKind, handCardDraggable, handOpForDropTarget,
+    type HandCardOp, type HandDragKind, type HandDropTarget,
+  } from '$lib/game/hand-card-ops';
   import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt } from '$lib/game/sync-guards';
@@ -2275,9 +2282,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
 
   // ── 拖曳交互（v1.03 擴增 trainer 類） ─────────────────────────────────────
-  type DragKind = 'energy' | 'basic' | 'fossil' | 'tool' | 'evolve' | 'trainer';
+  // ⭐v6.200：DragKind 不再在這裡自己列舉一份 —— 與「可用操作」同源（hand-card-ops.ts）。
+  //   ⚠ 少列一種（v6.080 新增手牌特性時就是這樣）＝ 那種操作永遠拖不動。
+  type DragKind = HandDragKind;
   let dragging = $state<null | {
     iid: string; kind: DragKind; cardId: string; cardName: string;
+    /** ⭐v6.200 拖曳當下的可用操作集合快照；釋放時只查它（handOpForDropTarget），禁再寫一份 kind 對照 */
+    ops: HandCardOp[];
     imageUrl: string;
     x: number; y: number;        // 當前滑鼠位置
     startX: number; startY: number;
@@ -2288,8 +2299,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let dropActiveEmpty = $state(false);             // Setup 階段 hover 空戰鬥場
   const DRAG_THRESHOLD = 6; // px
 
-  function startDrag(e: PointerEvent, inst: CardInstance, kind: DragKind, card: Card) {
+  // ⭐v6.200：startDrag 只收「可用操作集合」，kind 由中央 handCardDragKind 推導 ——
+  //   呼叫端沒辦法自己決定「哪些卡可以拖」，杜絕第二份判定。
+  function startDrag(e: PointerEvent, inst: CardInstance, ops: ReadonlySet<HandCardOp>, card: Card) {
     if (e.button !== 0) return;
+    const kind = handCardDragKind(ops);
+    if (!kind) return;
     // 若 pointerdown 落在 button / 連結等互動元件，不啟動 drag —
     // 讓按鈕的 click 事件正常觸發（否則 pointer capture 會吃掉 click）
     const target = e.target as HTMLElement;
@@ -2297,7 +2312,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     hoverHandIid = null; hoverHandAnchor = null;
     try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
     dragging = {
-      iid: inst.iid, kind, cardId: inst.cardId, cardName: card.name,
+      iid: inst.iid, kind, ops: [...ops], cardId: inst.cardId, cardName: card.name,
       imageUrl: card.imageUrl,
       x: e.clientX, y: e.clientY,
       startX: e.clientX, startY: e.clientY,
@@ -2341,7 +2356,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         dropBenchEmpty = false;
         dropActiveEmpty = false;
         // Debug：拖曳 basic 但沒碰到 drop target 時印出 hit 元素幫 debug
-        if (dragging.kind === 'basic' && hit) {
+        if (dragging.ops.includes('basic') && hit) {
           const hitInfo = hit.tagName + (hit.className ? '.' + String(hit.className).split(' ')[0] : '') + (hit.id ? '#' + hit.id : '');
           const benches = document.querySelectorAll('[data-drop-type="bench-empty"]');
           if ((window as any).__ptcgDragLog !== hitInfo) {
@@ -2367,31 +2382,43 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!d.moved) return; // 單純 click — onclick handler 會處理
     if (!isMyTurn() || pendingSelection) return;
 
-    if (d.kind === 'energy' && tIid) {
+    // ⭐⭐⭐v6.200：「釋放在哪 → 結算成哪個操作」一律查中央 handOpForDropTarget。
+    //   這裡**禁止**再寫一份 `if (kind === 'xxx')` 的可用性判斷 —— 那正是
+    //   v6.199 之前 dragKind 漏掉手牌特性（烈箭鷹ex｜激動俯衝拖不動）的成因。
+    //   落在寶可夢/備戰格/戰鬥場上時先問該釋放區；問不到再退回「整張桌墊」
+    //   （支援者/物品/競技場沒有專屬釋放區，蓋在寶可夢上放開也算使用 — 保持 v1.03 行為）。
+    const dOps = new Set<HandCardOp>(d.ops);
+    const dropZone: HandDropTarget | null =
+      tIid ? 'poke' : benchEmpty ? 'bench-empty' : activeEmpty ? 'active-empty' : null;
+    const op = (dropZone ? handOpForDropTarget(dOps, dropZone) : null)
+      ?? handOpForDropTarget(dOps, 'playmat');
+    if (!op) return;
+
+    if (op === 'energy' && tIid) {
       await dispatch(GameActions.attachEnergy(d.iid, tIid));
-    } else if (d.kind === 'basic') {
-      // Setup 階段：無 active 拖到 active-empty → PLACE_ACTIVE；已有 active 拖到 bench-empty → BENCH_POKEMON
-      // Playing 階段：只能拖到 bench-empty → PLAY_BASIC
-      if (game?.phase === 'setup') {
-        if (activeEmpty && !myPlayer?.active) {
-          await dispatch(GameActions.placeActive(d.iid, myIdx));
-        } else if (benchEmpty && myPlayer?.active) {
-          await dispatch(GameActions.benchPokemon(d.iid, myIdx));
-        }
-      } else if (benchEmpty) {
-        await dispatch(GameActions.playBasic(d.iid));
-      }
-    } else if (d.kind === 'fossil') {
+    } else if (op === 'setup-active' && activeEmpty && !myPlayer?.active) {
+      await dispatch(GameActions.placeActive(d.iid, myIdx));
+    } else if (op === 'basic-setup' && benchEmpty && myPlayer?.active) {
+      await dispatch(GameActions.benchPokemon(d.iid, myIdx));
+    } else if (op === 'basic' && benchEmpty) {
+      await dispatch(GameActions.playBasic(d.iid));
+    } else if (op === 'fossil') {
       // v2.189 化石 Item 拖到備戰格：作為 HP60【無】基礎寶可夢上場
       if (benchEmpty) {
         await dispatch(GameActions.playFossil(d.iid));
       }
-    } else if (d.kind === 'evolve' && tIid) {
+    } else if (op === 'hand-ability' && benchEmpty) {
+      // ⭐v6.200 玩家回報：烈箭鷹ex｜激動俯衝（M6）條件成立時桌機拖不動（只能點）。
+      //   手牌特性一律「把這張卡放到備戰區」→ 釋放區＝空備戰格，與基礎寶可夢同一格。
+      //   abilityIndex 由中央 gate 提供（同名多特性卡不能硬編 0）。
+      const meta = handActivateAbilities.get(d.iid);
+      if (meta) await dispatch(GameActions.useHandAbility(d.iid, meta.abilityIndex));
+    } else if (op === 'evolve' && tIid) {
       // 確認目標在合法進化清單裡
       if (evolveTargetsFor(d.iid).includes(tIid)) {
         await dispatch(GameActions.evolve(tIid, d.iid));
       }
-    } else if (d.kind === 'trainer') {
+    } else if (op === 'trainer') {
       // 支援者/物品/競技場 — 只有釋放點落在 .playmat（綠色虛線釋放區）內才算使用；
       // 拖回手牌 / 拖到非釋放區 / 拖到視窗外 → 一律視為取消，不 dispatch。
       // 其他 kind（basic/evolve/tool）靠 tIid / benchEmpty / activeEmpty 自然具備 cancel 行為，
@@ -2403,7 +2430,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         await dispatch(GameActions.playTrainer(d.iid));
       }
       // else: 取消使用（手牌保留）
-    } else if (d.kind === 'tool' && tIid) {
+    } else if (op === 'tool' && tIid) {
       // 檢查目標是否已有道具（一隻只能附加一個，除非有特性）
       const allMy = [...(myPlayer?.active ? [myPlayer.active] : []), ...(myPlayer?.bench ?? [])];
       const target = allMy.find(p => p.iid === tIid);
@@ -3012,41 +3039,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
   const evolvableTargets = $derived(game && poolReady ? getEvolvableTargets(game, pool) : []);
   const canRetreatNow    = $derived(game && poolReady ? canRetreat(game, pool) : false);
-  const playableTrainerIids = $derived(
-    game && poolReady ? new Set(getPlayableTrainers(game, pool)) : new Set<string>()
-  );
-  const playableBasicIids = $derived(
-    game && poolReady ? new Set(getPlayableBasics(game, pool)) : new Set<string>()
-  );
-  // v2.189：化石 Item 可作為基礎寶可夢上場（走 PLAY_FOSSIL action）
-  const playableFossilIids = $derived(
-    game && poolReady ? new Set(getPlayableFossils(game, pool)) : new Set<string>()
-  );
-  // 手牌中「可進化」的卡（其場上有合法基底）
-  const playableEvoIids = $derived(
-    new Set<string>(evolvableTargets.flatMap(e => e.toIids))
-  );
-  // v5.089: 鏡射 engine.ts L122 isAceCancelActive — 對手場上是否有「附道具的蓋諾賽克特 + ACE消弭」
-  //   給手牌渲染 canEnergy gate 用（鏡射 engine ATTACH_ENERGY L3487 已擋的邏輯）
-  //   v5.079 已修 engine 端，但 UI 手牌仍顯示黃邊框 → 玩家誤以為可用結果按了無反應
-  const aceCancelActiveLocal = $derived.by(() => {
-    if (!game || !poolReady) return false;
-    const oppIdxLocal = (1 - myIdx) as 0 | 1;
-    const opp = game.players[oppIdxLocal];
-    if (!opp) return false;
-    const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
-    return allOpp.some(pk => {
-      const c = getCard(pk.cardId);
-      if (!c) return false;
-      if (c.name !== '蓋諾賽克特') return false;
-      if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
-      const allTools = [
-        ...(pk.toolAttached ? [pk.toolAttached] : []),
-        ...(pk.extraTools ?? []),
-      ];
-      return allTools.length > 0;
-    });
-  });
+  // ⭐v6.200：playableTrainerIids / playableBasicIids / playableFossilIids / playableEvoIids
+  //   四份手牌可用清單已收斂進 `getHandCardOps()`（它自己呼叫同一批 engine helper）。
+  //   ⚠ 不要在本檔重新拉出這些 Set 再自行組條件 —— 那就是「第二份判定」的起點。
+  // v5.089 的 aceCancelActiveLocal（UI 自己鏡射一份 engine isAceCancelActive）已於 ⭐v6.200 移除 ——
+  //   手牌可用性統一由 `getHandCardOps()` 計算，它直接呼叫 engine 匯出的 `isAceCancelActive`。
+  //   ⚠ 不要再把它加回來：兩份鏡射就是這一族 bug（v6.098／v6.131／v6.109）的固定成因。
   // v2.981：任一方有待領獎賞時，鎖住所有 main-phase 動作（除了取獎賞按鈕）
   // 確保獎賞流程順序：取完才能攻擊、使用競技場、特性、撤退、附能量等
   const anyPendingPrize = $derived(
@@ -3082,6 +3080,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     return out;
   });
+
+  // ⭐⭐⭐v6.200 手牌卡「現在能做哪些操作」的**唯一述詞**（拖曳／點擊／黃框／提示文字全讀它）。
+  //   ⚠ 玩家回報：烈箭鷹ex｜激動俯衝 可用時桌機**拖不動**（只能點）。
+  //     真因＝拖曳的 `dragKind` 與點擊的 `canHandActivate` 是**兩份互不相干的條件**，
+  //     v6.080 新增手牌特性時只補了點擊那一份。收斂後兩條路徑不可能再分岔。
+  //   ⚠ 本檔（桌機 classic + fable 共用同一份 markup）與手機直式都禁止再自行判斷可用性。
+  const handCardOps = $derived.by<Map<string, Set<HandCardOp>>>(() => {
+    if (!game || !poolReady) return new Map<string, Set<HandCardOp>>();
+    return getHandCardOps(game, myIdx as 0 | 1, pool, { isMyTurn: isMyTurn() });
+  });
+  const EMPTY_HAND_OPS: ReadonlySet<HandCardOp> = new Set<HandCardOp>();
+  /** 拖曳中的那張卡，放到某種釋放區會結算成哪個操作（給 drop-zone 高亮用，與實際結算同一支） */
+  function dragOpFor(target: HandDropTarget): HandCardOp | null {
+    if (!dragging) return null;
+    return handOpForDropTarget(new Set<HandCardOp>(dragging.ops), target);
+  }
 
   // dispatch helpers — 用 onclick 呼叫
   function triggerHandActivateAbility(handIid: string): void {
@@ -10174,7 +10188,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 
-<div class="playmat" class:trainer-drop-zone={dragging?.kind==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:layout-fable={battleLayout === 'fable'} class:log-collapsed={battleLayout !== 'classic' && !battleLogOpen} style="--card-scale:{fableCardScale}">
+<div class="playmat" class:trainer-drop-zone={dragOpFor('playmat')==='trainer'} class:has-stadium-bg={!!stadiumCard} class:layout-tabletop={battleLayout === 'tabletop'} class:layout-fable={battleLayout === 'fable'} class:log-collapsed={battleLayout !== 'classic' && !battleLogOpen} style="--card-scale:{fableCardScale}">
     <!-- v5.012：桌墊版專用 battle log toggle 按鈕（漂在右邊） -->
     {#if battleLayout !== 'classic'}
       <button class="log-toggle-btn" onclick={toggleBattleLog}
@@ -10604,7 +10618,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
           <div class="active-card mine-active"
             class:energy-clickable={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
-            class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
+            class:drop-zone={isMyTurn() && !!dragging && ((dragOpFor('poke')==='energy'||dragOpFor('poke')==='tool') || (dragOpFor('poke')==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
             class:drop-hover={dropTargetIid===myPlayer.active.iid}
             class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
             class:attack-shake={attackFx && attackFx.attackerIid === myPlayer.active.iid}
@@ -10693,8 +10707,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         {:else}
           <div class="active-card active-empty"
-            class:drop-zone={dragging?.kind==='basic'&&game?.phase==='setup'&&isMyTurn()}
-            class:drop-hover={dropActiveEmpty&&dragging?.kind==='basic'}
+            class:drop-zone={dragOpFor('active-empty')!==null&&game?.phase==='setup'&&isMyTurn()}
+            class:drop-hover={dropActiveEmpty&&dragOpFor('active-empty')!==null}
             data-drop-type="active-empty">
             {#if game?.phase==='setup'}🃏 拖曳基礎寶可夢到這裡{:else}（無出場）{/if}
           </div>
@@ -10707,7 +10721,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {@const b=myPlayer.bench[i]}{@const bc=getCard(b.cardId)}{@const evoOptsB=evoOptionsFor(b.iid)}
             <div class="bench-slot"
               class:energy-target={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
-              class:drop-zone={isMyTurn() && ((dragging?.kind==='energy'||dragging?.kind==='tool') || (dragging?.kind==='evolve'&&evolveTargetsFor(dragging.iid).includes(b.iid)))}
+              class:drop-zone={isMyTurn() && !!dragging && ((dragOpFor('poke')==='energy'||dragOpFor('poke')==='tool') || (dragOpFor('poke')==='evolve'&&evolveTargetsFor(dragging.iid).includes(b.iid)))}
               class:drop-hover={dropTargetIid===b.iid}
               class:energy-pulse={energyAttachPulse===b.iid}
               data-drop-type="poke"
@@ -10776,9 +10790,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {/if}
             </div>
           {:else}
+            <!-- ⭐v6.200：空備戰格的高亮改問中央 dragOpFor('bench-empty')（與實際結算同一支）——
+                 原本硬列 basic/fossil 兩種 kind，手牌特性（放備戰）拖過去時格子不會亮。 -->
             <div class="bench-slot bench-empty"
-              class:drop-zone={(dragging?.kind==='basic'||dragging?.kind==='fossil')&&isMyTurn()&&(myPlayer?.bench.length??0)<myBenchLimit&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
-              class:drop-hover={dropBenchEmpty&&(dragging?.kind==='basic'||dragging?.kind==='fossil')}
+              class:drop-zone={dragOpFor('bench-empty')!==null&&isMyTurn()&&(myPlayer?.bench.length??0)<myBenchLimit&&(game?.phase==='playing'||(game?.phase==='setup'&&!!myPlayer?.active))}
+              class:drop-hover={dropBenchEmpty&&dragOpFor('bench-empty')!==null}
               data-drop-type="bench-empty"></div>
           {/if}
         {/each}
@@ -10826,36 +10842,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {@const rot=n>1?(i-mid)*step:0}
         {@const liftY=Math.abs(i-mid)*(step*0.6)}
         {#if c}
-          {@const isEnergyCard=c.supertype==='Energy'}
-          {@const isBasicCard=isBasicPokemonCard(c)}
-          {@const isFossilCard=isFossilItemCard(c)}
-          {@const isTrainerCard=c.supertype==='Trainer'}
+          <!-- ⭐⭐⭐v6.200：手牌卡的可用性**只有一份來源** handCardOps（見 $lib/game/hand-card-ops）。
+               v6.199 以前這裡是「拖曳一份 dragKind ／ 點擊一份 canHandActivate」的兩份條件，
+               v6.080 新增手牌特性時只補了點擊那份 → 烈箭鷹ex｜激動俯衝 桌機拖不動（玩家回報）。
+               ⚠ 禁止在這個 block 內再自行計算任何「能不能做某操作」的條件；
+                 新增操作種類請加到 hand-card-ops.ts 的 HandCardOp。 -->
+          {@const ops = handCardOps.get(inst.iid) ?? EMPTY_HAND_OPS}
           {@const isToolCard=c.supertype === 'Trainer' && c.subtype === 'PokemonTool'}
-          {@const isEvolutionCard=c.supertype==='Pokemon'&&!!c.evolvesFrom}
-          {@const canEnergy=isEnergyCard&&game?.phase==='playing'&&game?.turnPhase==='main'&&!myPlayer?.energyAttachedThisTurn&&!pendingSelection&&isMyTurn()&&!(c.tags?.includes('ACE SPEC')&&aceCancelActiveLocal)&&!(game?.festivalDancePendingSecondAttack && game.festivalDancePendingSecondAttack.idx===myIdx)}
-          {@const canBasicPlay=isBasicCard&&playableBasicIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
-          <!-- v5.138：mulligan 補抽後也允許加備戰（限基礎，與 setup 一致；engine BENCH_POKEMON gate 把關） -->
-          {@const canBasicSetup=isBasicCard&&game?.phase==='setup'&&isMyTurn()&&(!game?.setupDone[myIdx] || !!game?.mulliganPostBenchOpen?.[myIdx])}
-          <!-- v2.42 閃焰王牌｜瞬間爆發力 — 起手 setup 可放戰鬥場（不限基礎） -->
-          {@const canSetupActiveSpecial=!isBasicCard&&canBeInitialActiveCard(c)&&game?.phase==='setup'&&!game?.setupDone[myIdx]&&isMyTurn()&&!myPlayer?.active}
-          {@const canBasic=canBasicPlay||canBasicSetup||canSetupActiveSpecial}
-          {@const canFossil=isFossilCard&&playableFossilIids.has(inst.iid)&&isMyTurn()&&game?.phase==='playing'}
-          {@const canTrainer=(isTrainerCard||isToolCard)&&!isFossilCard&&game?.phase==='playing'&&playableTrainerIids.has(inst.iid)&&isMyTurn()}
-          {@const canEvolve=isEvolutionCard&&game?.phase==='playing'&&playableEvoIids.has(inst.iid)&&isMyTurn()&&!pendingSelection}
-          {@const dragKind =
-            canEnergy ? 'energy'
-            : canBasic ? 'basic'
-            : canFossil ? 'fossil'
-            : canEvolve ? 'evolve'
-            : (canTrainer && isToolCard) ? 'tool'
-            : canTrainer ? 'trainer'
-            : null}
-          {@const isActionable = canEnergy || canBasic || canFossil || canTrainer || canEvolve}
-          <!-- v5.511 緊急迴轉(齒輪怪) — 滿足條件直接黃框可用、點卡發動，不另顯示按鈕標示 -->
-          {@const canHandActivate = handActivateAbilities.has(inst.iid)}
+          {@const canEnergy=ops.has('energy')}
+          {@const canBasic=ops.has('basic')||ops.has('basic-setup')||ops.has('setup-active')}
+          {@const canFossil=ops.has('fossil')}
+          {@const canTrainer=ops.has('trainer')||ops.has('tool')}
+          {@const canEvolve=ops.has('evolve')}
+          <!-- v5.511 緊急迴轉(齒輪怪) / v6.080 激動俯衝(烈箭鷹ex) — 黃框可用、點卡發動或拖到備戰格 -->
+          {@const canHandActivate = ops.has('hand-ability')}
+          {@const dragKind = handCardDragKind(ops)}
+          {@const isActionable = handCardDraggable(ops)}
           <div class="hand-card" class:action-busy={actionBusy}
             class:selected={selectedEnergyIid===inst.iid}
-            class:can-actionable={isActionable || canHandActivate}
+            class:can-actionable={isActionable}
             class:dragging={dragging?.iid===inst.iid}
             class:draggable={dragKind!==null}
             class:hover-peek={hoverHandIid===inst.iid}
@@ -10866,9 +10871,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
             out:fly={{ y: -220, duration: 220, easing: cubicOut }}
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
-            onpointerdown={(e)=>{leaveHandCard(); if(dragKind){ if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);} else startDrag(e, inst, dragKind, c); }}}
+            onpointerdown={(e)=>{leaveHandCard(); if(handCardDraggable(ops)){ if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);} else startDrag(e, inst, ops, c); }}}
             onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;} if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
-            title={canHandActivate?`點擊使用特性（放備戰） · ${c.name}`:(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
+            title={canHandActivate?(canEvolve?`拖到空備戰格發動特性、拖到進化目標進化 · ${c.name}`:`點擊或拖到備戰格使用特性 · ${c.name}`):(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
             <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
                  預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。
                  改法：onclick 不再呼叫 openZoom，僅 stopPropagation 防觸發外層 startDrag/click。
@@ -10890,7 +10895,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <span class="hand-name">{c.name}</span>
             <!-- v6.099：機制 A 的手牌觸發按鈕已移除（死碼，見上方說明） -->
             <!-- v5.511：緊急迴轉 改為「黃框可用 + 點卡發動」（見 .hand-card onclick / canHandActivate），不再顯示按鈕標示 -->
-            {#if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
+            {#if canHandActivate && canEvolve}<span class="hand-hint hl">⚡ 特性放備戰／🔺 拖到進化目標</span>
+            {:else if canHandActivate}<span class="hand-hint hl">⚡ 特性放備戰</span>
+            {:else if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
             {:else if canFossil}<span class="hand-hint hl">🦴 化石放到備戰</span>
             {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
@@ -11606,10 +11613,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if dragging && dragging.moved}
     <div class="drag-preview" style="left:{dragging.x / gameZoom}px;top:{dragging.y / gameZoom}px;" aria-hidden="true">
       <img use:retryImg={dragging.imageUrl} src={dragging.imageUrl} alt=""/>
+      <!-- ⚠ 這裡的 dragging.kind 只是**拖曳中的文字標籤**（外觀），它本身由中央
+           handCardDragKind(ops) 產生。可用性、釋放區判斷一律不准用 kind —— 用
+           dragOpFor()/handOpForDropTarget()。守衛 test-v6200 只放行這個 drag-preview 區塊。 -->
       <div class="drag-hint">
         {#if dragging.kind==='energy'}⚡ 拖到寶可夢附加
         {:else if dragging.kind==='basic'}📥 拖到備戰空格
         {:else if dragging.kind==='tool'}🔧 拖到寶可夢附加
+        {:else if dragging.kind==='hand-ability'}⚡ 拖到備戰空格發動特性
         {/if}
       </div>
     </div>
