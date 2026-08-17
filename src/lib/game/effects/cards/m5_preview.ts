@@ -1363,7 +1363,7 @@ reg('暗黑鈴', (st, idx, pool) => {
       continue;
     }
     // v4.965: 對齊 statusPost 的混亂 immune checks
-    if (isConfusionImmune(player.active, pool)) {
+    if (isConfusionImmune(s, side, player.active, pool)) {
       s = addLog(s, `暗黑鈴：${name}｜憨憨臉：免疫【混亂】`, idx);
       continue;
     }

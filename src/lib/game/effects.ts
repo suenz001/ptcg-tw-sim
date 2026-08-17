@@ -31,7 +31,7 @@ import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
-import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, abilityUsedAfterSwap } from './effects/_shared';
+import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, setAbilityHolderEffectiveAtFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -408,12 +408,20 @@ export function getEffectiveWeaknessType(
  *   小碎鑽|雙重屬性→【鬥】+【超】；鐵轍跡|二重核心(附驅勁能量 未來)→【鬥】+【鋼】；否則單一 pokemonType。
  */
 export function getAttackerEffectiveTypes(
+  /** ⭐ v6.204：新增 state/attackerIdx —— 雙重屬性／二重核心都是 passive 特性，會被消除。 */
+  state: GameState | undefined,
+  attackerIdx: 0 | 1 | undefined,
   attackerActive: CardInstance | null | undefined,
   attackerCard: Card | undefined,
   pool: Map<string, Card>,
 ): string[] {
-  if (attackerCard?.name === '小碎鑽' && attackerCard.abilities?.some(a => a.name === '雙重屬性')) return ['Fighting', 'Psychic'];
-  if (attackerActive && attackerCard && hasIronTracksDualCore(attackerActive, attackerCard, pool)) return ['Fighting', 'Metal'];
+  // ⭐ v6.204：小碎鑽 = Basic /【鬥】/ 非規則寶可夢 ⇒ 熔岩洞・監視塔・初始化都打不到；
+  //   打得到的是招式版暗夜羽擊與 passive 振翼髮｜暗夜羽擊（攻擊者必在戰鬥場）。
+  //   走中央述詞 hasEffectiveAbilityByInst（它自己從 state 推 location）。
+  if (attackerCard?.name === '小碎鑽'
+      && _v6196HasEffAbilByInst(state, attackerIdx, attackerActive, pool, '雙重屬性')) return ['Fighting', 'Psychic'];
+  if (attackerActive && attackerCard
+      && hasIronTracksDualCore(state, attackerIdx, attackerActive, attackerCard, pool)) return ['Fighting', 'Metal'];
   return attackerCard?.pokemonType ? [attackerCard.pokemonType] : [];
 }
 
@@ -429,7 +437,7 @@ export function applyWeakRes(
 ): number {
   const atk = state.players[actorIdx].active;
   const atkCard = atk ? pool.get(atk.cardId) : undefined;
-  const atkTypes = getAttackerEffectiveTypes(atk, atkCard, pool);
+  const atkTypes = getAttackerEffectiveTypes(state, actorIdx, atk, atkCard, pool);
   let d = dmg;
   const w = getEffectiveWeaknessType(state, actorIdx, target, targetCard, pool);
   if (!w.disabled && w.type && atkTypes.includes(w.type)) d *= 2;
@@ -466,8 +474,12 @@ export function resolveBenchGuard(
   actorIdx: 0 | 1,
   targetCard: Card | undefined,
   kind: DamageKind,
-  /** v6.028：counterPlacement=false 代表「此效果不是放置傷害指示物」→ 對戰圓形不擋（見下）。 */
-  opts?: { counterPlacement?: boolean },
+  /**
+   * ⭐ v6.204：`targetInst` 改成**必填** —— 底下的 `passiveImmunityDamageBlock` 要問中央述詞
+   * 「這隻身上的這個特性此刻還在不在」，沒有場上實體就問不出來（見該函式的 v6.204 註解）。
+   * v6.028：counterPlacement=false 代表「此效果不是放置傷害指示物」→ 對戰圓形不擋（見下）。
+   */
+  opts: { targetInst: CardInstance; counterPlacement?: boolean },
 ): { blocked: true; reason: string } | { blocked: false } {
   // v5.503：護城龍|太古防壁 — defender 備戰有護城龍 + 攻擊方能量單位 ≤2 → 擋對「備戰」的招式傷害。
   //   原僅 canApplyEffectToTarget(defense.ts) 檢查；但 bench-hit-N resolver(噴射打擊等「對備戰N傷害」)
@@ -549,7 +561,7 @@ export function resolveBenchGuard(
   // v5.367：條件式完全免疫特性（神秘石居 等）也適用於備戰目標 — 狙擊/分配傷害類招式
   //   走 resolveBenchGuard 時一併擋（原只在 engine 主傷害管線消費）。
   if (kind === 'attack-damage') {
-    const piBench = passiveImmunityDamageBlock(state, actorIdx, targetCard, pool);
+    const piBench = passiveImmunityDamageBlock(state, actorIdx, opts.targetInst, targetCard, pool);
     if (piBench.blocked) return piBench;
   }
   // v5.852 陳舊的羽毛化石（I）備戰免疫：卡面只寫「不會受到對手的寶可夢招式的傷害」=僅 attack-damage。
@@ -1233,9 +1245,9 @@ function hitBenchAll(
     // v5.367/v5.368：hitBenchAll 走 inline guard（不經 resolveBenchGuard）— 補條件式完全免疫
     //   (神秘石居等 boolean) + 擲幣型(順滑大衣)。僅對手對我方時生效。
     if (attackerIdx !== targetIdx) {
-      const pbH = passiveImmunityDamageBlock(coinWS, attackerIdx, card, pool);
+      const pbH = passiveImmunityDamageBlock(coinWS, attackerIdx, c, card, pool);
       if (pbH.blocked) { teraImmunNames.push(`${card?.name ?? '?'}（${pbH.reason}）`); newBench.push(c); continue; }
-      const coinH = passiveCoinImmunity(coinWS, attackerIdx, card, pool);
+      const coinH = passiveCoinImmunity(coinWS, attackerIdx, c, card, pool);
       coinWS = coinH.state;
       if (coinH.immune) { teraImmunNames.push(`${card?.name ?? '?'}（擲幣免疫正面）`); newBench.push(c); continue; }
     }
@@ -1259,7 +1271,7 @@ function hitBenchAll(
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
       // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷 targetIdx===attackerIdx 不觸發)
-      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx && !_calmGroundBlocks(state, targetIdx, pool));
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx && !_calmGroundBlocks(state, targetIdx, pool), coinWS, targetIdx, 'bench');
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
       for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
@@ -1433,7 +1445,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     // v3.888：resolveBenchGuard 檢查 — 花之帷幔 / 抵抗之幕 / 藏隱 / 球形盾牌 等
     //   targetIdx !== actorIdx 才檢查（自己自殘類不擋）
     if (targetIdx !== actorIdx) {
-      const g = resolveBenchGuard(st, pool, actorIdx, card, 'attack-damage');
+      const g = resolveBenchGuard(st, pool, actorIdx, card, 'attack-damage', { targetInst: c });
       if (g.blocked) {
         guardBlockedLog.push(`${card?.name ?? '?'}：${g.reason}`);
         newBench.push(c);
@@ -1442,7 +1454,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     }
     // v5.368：順滑大衣等擲幣型免疫 — 備戰也適用，真結算擲幣
     if (targetIdx !== actorIdx) {
-      const coinBH = passiveCoinImmunity(st, actorIdx, card, pool);
+      const coinBH = passiveCoinImmunity(st, actorIdx, c, card, pool);
       st = coinBH.state;
       if (coinBH.immune) { guardBlockedLog.push(`${card?.name ?? '?'}：擲幣免疫（正面）`); newBench.push(c); continue; }
     }
@@ -1468,7 +1480,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
       // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷不觸發)
-      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx && !_calmGroundBlocks(st, targetIdx, pool));
+      const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx && !_calmGroundBlocks(st, targetIdx, pool), st, targetIdx, 'bench');
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
       for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
@@ -2305,13 +2317,13 @@ reg('精靈球', (st, idx, pool) => {
 
 // 寶可夢捕捉器 — 擲硬幣，正面則選對手備戰與戰鬥寶可夢互換（物品）
 // v5.700：物品卡強制換位 → 過濾「緊張感/融合為雪」(卡面「物品卡或支援者卡不受影響」)免疫的對手備戰。
-regG('寶可夢捕捉器', (st, idx, pool) => st.players[(1 - idx) as 0 | 1].bench.some(b => !_gustImmuneTrainer(b, pool)));
+regG('寶可夢捕捉器', (st, idx, pool) => st.players[(1 - idx) as 0 | 1].bench.some(b => !_gustImmuneTrainer(st, (1 - idx) as 0 | 1, b, pool)));
 reg('寶可夢捕捉器', (st, idx, pool) => {
   const r = flipCoinsWithLog(st, 1, '寶可夢捕捉器', idx);
   if (!r.heads) return addLog(r.state, '寶可夢捕捉器：反面 → 什麼都沒發生', idx);
   const oppIdx = (1 - idx) as 0 | 1;
   st = r.state;
-  const validIids = st.players[oppIdx].bench.filter(b => !_gustImmuneTrainer(b, pool)).map(b => b.iid);
+  const validIids = st.players[oppIdx].bench.filter(b => !_gustImmuneTrainer(st, oppIdx, b, pool)).map(b => b.iid);
   if (validIids.length === 0) return addLog(st, '寶可夢捕捉器：正面，但對手備戰沒有可呼叫的寶可夢（緊張感/融合為雪 免疫）', idx);
   st = addLog(st, '寶可夢捕捉器：正面 → 選對手備戰與戰鬥寶可夢互換', idx);
   return withPending(st, {
@@ -2328,10 +2340,18 @@ reg('寶可夢捕捉器', (st, idx, pool) => {
  * v2.91：檢查指定 CardInstance 是否對「混亂」免疫。
  * 目前只有 呆呆獸｜憨憨臉（卡面：「這隻寶可夢不會【混亂】」）。
  */
-export function isConfusionImmune(inst: CardInstance | null, pool: Map<string, Card>): boolean {
+export function isConfusionImmune(
+  /** ⭐ v6.204：新增 state/ownerIdx —— 憨憨臉是 passive 特性，被消除時就不再免疫【混亂】。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null,
+  pool: Map<string, Card>,
+): boolean {
   if (!inst) return false;
-  const card = pool.get(inst.cardId);
-  return !!card?.abilities?.some(a => a.name === '憨憨臉');
+  // ⭐ v6.204：呆呆獸（J）= Basic /【超】/ 非規則寶可夢 ⇒ 熔岩洞・監視塔・初始化・黏著束縛
+  //   都打不到它；打得到的是招式版暗夜羽擊與 passive 振翼髮｜暗夜羽擊。
+  //   全部 5 個呼叫端傳的都是某一方的**戰鬥位**實體，location 交給中央述詞自己推。
+  return _v6196HasEffAbilByInst(state, ownerIdx, inst, pool, '憨憨臉');
 }
 
 /**
@@ -2786,11 +2806,11 @@ export function statusPost(status: 'poisoned' | 'burned' | 'asleep' | 'confused'
     if (!def.active) return state;
     const defName = pool.get(def.active.cardId)?.name ?? '?';
     // v2.91：憨憨臉免疫混亂
-    if (status === 'confused' && isConfusionImmune(def.active, pool)) {
+    if (status === 'confused' && isConfusionImmune(state, dIdx, def.active, pool)) {
       return addLog(state, `${defName}｜憨憨臉：免疫【混亂】`, aIdx);
     }
     // v2.992：不眠（咕咕）— 免疫睡眠
-    if (status === 'asleep' && isSleepImmune(def.active, pool)) {
+    if (status === 'asleep' && isSleepImmune(state, dIdx, def.active, pool)) {
       return addLog(state, `${defName}｜不眠：免疫【睡眠】`, aIdx);
     }
     // v2.91：統一走 attack-effect immunity helper — 涵蓋薄霧能量 / 硬岩【鬥】能量 /
@@ -2869,11 +2889,11 @@ export function applyStatusToOppActive(
     poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
   };
   // 1. 憨憨臉 — 混亂免疫
-  if (status === 'confused' && isConfusionImmune(def.active, pool)) {
+  if (status === 'confused' && isConfusionImmune(state, dIdx, def.active, pool)) {
     return addLog(state, `${prefix}${defName}｜憨憨臉：免疫【混亂】`, srcIdx);
   }
   // 2. 不眠 — 睡眠免疫
-  if (status === 'asleep' && isSleepImmune(def.active, pool)) {
+  if (status === 'asleep' && isSleepImmune(state, dIdx, def.active, pool)) {
     return addLog(state, `${prefix}${defName}｜不眠：免疫【睡眠】`, srcIdx);
   }
   // 3. 統一免疫關卡（化隱 / 純樸 / 薄霧 / 皇帝之勢 / 抵抗之幕 / 對戰圓形 …）
@@ -2923,11 +2943,11 @@ export function applyStatusToSelfActive(
     poisoned: '中毒', burned: '灼傷', asleep: '睡眠', confused: '混亂', paralyzed: '麻痺',
   };
   // 憨憨臉 — 混亂免疫
-  if (status === 'confused' && isConfusionImmune(me.active, pool)) {
+  if (status === 'confused' && isConfusionImmune(state, idx, me.active, pool)) {
     return addLog(state, `${prefix}${myName}｜憨憨臉：免疫【混亂】`, idx);
   }
   // 不眠 — 睡眠免疫
-  if (status === 'asleep' && isSleepImmune(me.active, pool)) {
+  if (status === 'asleep' && isSleepImmune(state, idx, me.active, pool)) {
     return addLog(state, `${prefix}${myName}｜不眠：免疫【睡眠】`, idx);
   }
   // 泡沫【水】等特殊能量狀態免疫
@@ -3686,12 +3706,12 @@ export function coinStatusPost(status: 'poisoned'|'burned'|'asleep'|'confused'|'
     const def = { ...players[dIdx] };
     if (!def.active) return state;
     // v2.91：憨憨臉免疫混亂
-    if (status === 'confused' && isConfusionImmune(def.active, pool)) {
+    if (status === 'confused' && isConfusionImmune(state, dIdx, def.active, pool)) {
       const name = pool.get(def.active.cardId)?.name ?? '?';
       return addLog(state, `正面！但 ${name}｜憨憨臉：免疫【混亂】`, aIdx);
     }
     // v2.992：不眠（咕咕）— 免疫睡眠
-    if (status === 'asleep' && isSleepImmune(def.active, pool)) {
+    if (status === 'asleep' && isSleepImmune(state, dIdx, def.active, pool)) {
       const name = pool.get(def.active.cardId)?.name ?? '?';
       return addLog(state, `正面！但 ${name}｜不眠：免疫【睡眠】`, aIdx);
     }
@@ -4209,22 +4229,28 @@ export const DAMAGE_AMOUNT_DEPENDENT_IMMUNITY = new Set<string>([
 export function passiveImmunityDamageBlock(
   state: GameState,
   actorIdx: 0 | 1,
+  /** ⭐ v6.204：防守方的**場上實體**（必填，見下方註解）。 */
+  targetInst: CardInstance,
   targetCard: Card | undefined,
   pool: Map<string, Card>,
 ): { blocked: true; reason: string } | { blocked: false } {
   if (!targetCard?.abilities) return { blocked: false };
-  // v5.471：鐵荊棘ex 初始化消除規則寶可夢(未來除外)特性 → 此免疫特性失效
-  if (isInitializeNullified(state, targetCard, pool)) return { blocked: false };
-  // 監視塔對【無】寶可夢特性壓制（鏡射 engine.ts isColorlessAbilityBlocked）
-  if (targetCard.pokemonType === 'Colorless') {
-    const sd = state.activeStadium;
-    const sdCard = sd ? pool.get(sd.cardId) : undefined;
-    if (sdCard && ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name)) return { blocked: false };
-  }
+  const _defIdx = (1 - actorIdx) as 0 | 1;
   const atkInst = state.players[actorIdx].active;
   const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
   if (!atkCard) return { blocked: false };
+  // ⭐⭐⭐ v6.204【兩份免疫實作的漂移收斂】
+  //   engine.ts 主傷害管線（戰鬥位）早就逐個特性過 `isAbilityHolderEffective`，
+  //   而這一份（resolveBenchGuard／狙擊／多目標／UI 預覽共用）只手刻了「初始化」與
+  //   「火箭隊的監視塔」兩個來源 ⇒ 同一張卡在兩條路徑上對「特性還在不在」給出不同答案。
+  //   實際打得到的漏網（卡面 static/cards 逐字查證）：
+  //     ・岩殿居蟹｜神秘石居（Stage1）／美納斯ex｜璀璨鱗片（Stage1+ex）／
+  //       奇麒麟ex｜尾甲（Stage1+ex）／仙子伊布｜神秘守護（Stage1）→【傳說的熔岩洞】
+  //     ・肋骨海龜｜全能硬殼（**Stage2**）→ 熔岩洞 ＋ 海兔獸｜黏著束縛（備戰2階特性全消）
+  //     ・全部 → 招式版暗夜羽擊（abilityNullifiedThisTurn）／passive 振翼髮｜暗夜羽擊
+  //   改走 v6.196 中央述詞（location 由它自己從 state 推，呼叫端不必也不可自己算）。
   for (const ab of targetCard.abilities) {
+    if (!_v6196HasEffAbilByInst(state, _defIdx, targetInst, pool, ab.name)) continue;
     if (ab.name === '順滑大衣') continue; // 擲幣型，有副作用，不在無狀態/預覽 guard 內呼叫
     // v6.165：依「傷害量」判定的述詞（鐵壁硬殼）不能用假值 1 探測 —— 交給
     //   passiveImmunityByDamageAmount 在最終傷害算完後判。**行為等價**：
@@ -4294,22 +4320,24 @@ export function passiveImmunityByDamageAmount(
 export function passiveCoinImmunity(
   state: GameState,
   actorIdx: 0 | 1,
+  /** ⭐ v6.204：防守方的**場上實體**（必填，同 passiveImmunityDamageBlock）。 */
+  targetInst: CardInstance,
   targetCard: Card | undefined,
   pool: Map<string, Card>,
 ): { immune: boolean; state: GameState } {
   let s = state;
   if (!targetCard?.abilities) return { immune: false, state: s };
-  if (targetCard.pokemonType === 'Colorless') {
-    const sd = s.activeStadium;
-    const sdCard = sd ? pool.get(sd.cardId) : undefined;
-    if (sdCard && ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name)) return { immune: false, state: s };
-  }
+  const _defIdx = (1 - actorIdx) as 0 | 1;
   const atkInst = s.players[actorIdx].active;
   const atkCard = atkInst ? pool.get(atkInst.cardId) : undefined;
   if (!atkCard) return { immune: false, state: s };
   for (const ab of targetCard.abilities) {
     const immune = PASSIVE_IMMUNITY.get(ab.name);
     if (!immune) continue;
+    // ⭐⭐⭐ v6.204：同上收斂。這一份原本連「初始化」都沒查（只查了監視塔）——
+    //   順滑大衣的持有者奇諾栗鼠ex 是 **Stage1 ＋ ex ＋【無】**，
+    //   熔岩洞／監視塔／初始化／暗夜羽擊兩型**四種來源全部打得到**。
+    if (!_v6196HasEffAbilByInst(s, _defIdx, targetInst, pool, ab.name)) continue;
     const result = immune(atkCard, 1, s, actorIdx, pool, targetCard.name);
     if (typeof result !== 'boolean') {
       s = result.newState;
@@ -4395,7 +4423,7 @@ export function resolveMultiTargetDamageGuard(
     //    ⚠ 備戰側 resolveBenchGuard 早在 v5.367 就含這層，**戰鬥位側從來沒有**——
     //      漏的就是這裡（v6.164 玩家回報：酋雷姆｜三重冰霜 打得到戰鬥場的
     //      厄鬼椪 礎石面具ex，而它的特性「礎石之勢」寫明不受擁有特性的寶可夢招式傷害）。
-    const pi = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
+    const pi = passiveImmunityDamageBlock(s, actorIdx, target, targetCard, pool);
     if (pi.blocked) return { state: s, blocked: true, reason: pi.reason };
   }
 
@@ -4412,7 +4440,7 @@ export function resolveMultiTargetDamageGuard(
   //   ⚠ 這是 PASSIVE_IMMUNITY 的擲幣型 entry（順滑大衣）；與 PASSIVE_COIN_AVOID
   //     （躲藏高手／腎上腺費洛蒙，走 applyDefenderCoinAvoid）是**兩張不同的表**，不重複。
   if (isDamage && !opts.skipCoin) {
-    const coin = passiveCoinImmunity(s, actorIdx, targetCard, pool);
+    const coin = passiveCoinImmunity(s, actorIdx, target, targetCard, pool);
     s = coin.state;
     if (coin.immune) return { state: s, blocked: true, reason: '擲幣免疫（正面）' };
   }
@@ -4423,6 +4451,8 @@ export function resolveMultiTargetDamageGuard(
 export function manualDamageImmunity(
   state: GameState,
   actorIdx: 0 | 1,
+  /** ⭐ v6.204：與 passiveImmunityDamageBlock 同步（本函式目前全 src 零呼叫端）。 */
+  targetInst: CardInstance,
   targetCard: Card | undefined,
   pool: Map<string, Card>,
   isBench: boolean,
@@ -4434,13 +4464,13 @@ export function manualDamageImmunity(
     return { blocked: true, reason: '中立中心競技場 效果', state: s };
   }
   if (isBench) {
-    const g = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage');
+    const g = resolveBenchGuard(s, pool, actorIdx, targetCard, 'attack-damage', { targetInst });
     if (g.blocked) return { blocked: true, reason: g.reason, state: s };
   } else {
-    const pb = passiveImmunityDamageBlock(s, actorIdx, targetCard, pool);
+    const pb = passiveImmunityDamageBlock(s, actorIdx, targetInst, targetCard, pool);
     if (pb.blocked) return { blocked: true, reason: pb.reason, state: s };
   }
-  const coin = passiveCoinImmunity(s, actorIdx, targetCard, pool);
+  const coin = passiveCoinImmunity(s, actorIdx, targetInst, targetCard, pool);
   s = coin.state;
   if (coin.immune) return { blocked: true, reason: '擲幣免疫（正面）', state: s };
   return { blocked: false, state: s };
@@ -4931,11 +4961,11 @@ reg('奇跡耳麥', (st, idx) => {
 // v5.700：物品卡強制換位 → 過濾「緊張感/融合為雪」免疫的對手備戰。
 regG('反擊捕捉器', (st, idx, pool) =>
   st.players[idx].prizes.length > st.players[(1-idx) as 0|1].prizes.length &&
-  st.players[(1-idx) as 0|1].bench.some(b => !_gustImmuneTrainer(b, pool))
+  st.players[(1-idx) as 0|1].bench.some(b => !_gustImmuneTrainer(st, (1-idx) as 0|1, b, pool))
 );
 reg('反擊捕捉器', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  const validIids = st.players[oppIdx].bench.filter(b => !_gustImmuneTrainer(b, pool)).map(b => b.iid);
+  const validIids = st.players[oppIdx].bench.filter(b => !_gustImmuneTrainer(st, oppIdx, b, pool)).map(b => b.iid);
   if (validIids.length === 0) return addLog(st, '反擊捕捉器：對手備戰沒有可呼叫的寶可夢（緊張感/融合為雪 免疫）', idx);
   st = addLog(st, '反擊捕捉器：選對手備戰與戰鬥寶可夢互換', idx);
   return withPending(st, {
@@ -7119,14 +7149,14 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
   //   實務上 snipe-60-ex 僅能選對手的 ex/EX，花之帷幔不保護 ex，故通常 pass；
   //   仍呼叫 resolveBenchGuard 以保持判定一致性。
   {
-    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage');
+    const g = resolveBenchGuard(st, pool, actorIdx, targetCard, 'attack-damage', { targetInst: target });
     if (g.blocked) {
       const name = targetCard?.name ?? '?';
       return addLog(st, `精刺奇襲：${name} 因${g.reason}不受傷害`, actorIdx);
     }
   }
   {
-    const coinS = passiveCoinImmunity(st, actorIdx, targetCard, pool);
+    const coinS = passiveCoinImmunity(st, actorIdx, target, targetCard, pool);
     st = coinS.state;
     if (coinS.immune) return addLog(st, `精刺奇襲：${targetCard?.name ?? '?'} 擲幣免疫（正面）不受傷害`, actorIdx);
   }
@@ -7591,6 +7621,9 @@ setBloomEffectiveFn(hasBloomOnField);
 //   黏著束縛判定被漏掉；v6.202 新接上的 hasOakEye / hasMultiToolRelay 也都是全場（active+bench）。
 //   改走 v6.196 的 hasEffectiveAbilityByInst —— 它自己從 state 推 location，
 //   呼叫端不再有算錯的機會（v6.196 建立此 wrapper 的理由）。
+// v6.204：帶 location 的注入（KO 當下實體已離場時不可自推 location）——同一個中央述詞
+setAbilityHolderEffectiveAtFn((state, inst, card, ownerIdx, abilityName, location, pool) =>
+  isAbilityHolderEffective(state, inst, card, ownerIdx, abilityName, location, pool));
 setAbilityHolderEffectiveFn((state, inst, _card, ownerIdx, abilityName, pool) =>
   _v6196HasEffAbilByInst(state, ownerIdx, inst, pool, abilityName));
 
@@ -7966,7 +7999,13 @@ export function fireDefenderOnKO(
   let s0 = state;
   if (koByAttackDamage) {
     const _dcCard = pool.get(koInst.cardId);
-    const _dcSelfDiver = _dcCard?.abilities?.some(a => a.name === '潛者捕捉') ?? false;
+    // ⭐ v6.204：獵斑魚 = **Stage1**/【水】/非規則 ⇒【傳說的熔岩洞】（進化寶可夢特性全消）打得到它；
+    //   在戰鬥場被 KO 時另有暗夜羽擊兩型。三者都是持續性效果 ⇒ 這一擊命中前特性就已經消除，
+    //   「昏厥當下還算不算在場上」不影響判定。⚠ 呼叫端此時已把該隻移出場 ⇒ **不可**讓中央述詞
+    //   自推 location，改用 fireDefenderOnKO 已知的 isActive。
+    //   （另一條 canRelicanthDiverCatchTrigger＝場上還有別隻獵斑魚，早就走 hasAbilityOnSide 有閘。）
+    const _dcSelfDiver = (_dcCard?.abilities?.some(a => a.name === '潛者捕捉') ?? false)
+      && isAbilityHolderEffective(s0, koInst, _dcCard, dIdx, '潛者捕捉', isActive ? 'active' : 'bench', pool);
     if (_dcCard?.pokemonType === 'Water' && (_dcSelfDiver || canRelicanthDiverCatchTrigger(s0, dIdx, _dcCard, pool))) {
       const _dcIds = new Set(koInst.energyAttached.filter(e => isBasicWaterEnergy(e.cardId, pool)).map(e => e.iid));
       if (_dcIds.size > 0) {
@@ -8306,9 +8345,9 @@ export function dealAttackDamageToTarget(
   //   故戰鬥位的條件免疫會漏（回歸測試矩陣抓到：神秘石居在戰鬥位被 ex 狙擊仍受傷）。
   //   只在【傷害】語境套（放指示物 attack-effect 不套）。bench 由 canApplyEffectToTarget→resolveBenchGuard 已含。
   if (isActive && kind === 'attack-damage') {
-    const _pb = passiveImmunityDamageBlock(st, actorIdx, targetCard, pool);
+    const _pb = passiveImmunityDamageBlock(st, actorIdx, target, targetCard, pool);
     if (_pb.blocked) return addLog(st, `${label}：${targetCard?.name ?? '?'} ${_pb.reason}（免疫此招式傷害）`, actorIdx);
-    const _coin = passiveCoinImmunity(st, actorIdx, targetCard, pool);
+    const _coin = passiveCoinImmunity(st, actorIdx, target, targetCard, pool);
     st = _coin.state;
     if (_coin.immune) return addLog(st, `${label}：${targetCard?.name ?? '?'} 擲幣免疫（正面）不受傷害`, actorIdx);
   }
@@ -8438,7 +8477,7 @@ export function dealAttackDamageToTarget(
       if (_pk.prevented) return _pk.state;
     }
     // v5.934 無限之影中央收斂：受【對手】招式【傷害】KO(kind==='attack-damage' && dIdx!==actorIdx) → 本體+進化鏈回手;放指示物(attack-effect)/自傷不觸發
-    const _isk = resolveInfiniteShadowKo({ ...targetNow, damage: newDmg }, pool, kind === 'attack-damage' && dIdx !== actorIdx && !_calmGroundBlocks(st, dIdx, pool));
+    const _isk = resolveInfiniteShadowKo({ ...targetNow, damage: newDmg }, pool, kind === 'attack-damage' && dIdx !== actorIdx && !_calmGroundBlocks(st, dIdx, pool), st, dIdx, isActive ? 'active' : 'bench');
     const ko: CardInstance[] = _isk.toDiscard;
     const _ko = koPrizesAdjusted(st, targetNow, targetCard, actorIdx, dIdx, pool, kind === 'attack-damage');
     st = _ko.state;
@@ -16152,13 +16191,19 @@ export function isLazyTraitBlockingAttack(
  */
 export function hasShellinkEvolveBypass(
   baseCard: Card,
+  /** ⭐ v6.204：新增 base 的**場上實體** —— 原簽名有 state 卻沒有 holder inst，問不到中央閘。 */
+  baseInst: CardInstance | null | undefined,
   state: GameState,
   ownerIdx: 0 | 1,
   pool: Map<string, Card>,
 ): boolean {
   // base 必須是小嘴蝸 或 蓋蓋蟲，且有「刺激進化」特性
   if (baseCard.name !== '小嘴蝸' && baseCard.name !== '蓋蓋蟲') return false;
-  if (!baseCard.abilities?.some(a => a.name === '刺激進化')) return false;
+  // ⭐ v6.204：小嘴蝸／蓋蓋蟲 = Basic /【草】/ 非規則 ⇒ 熔岩洞・監視塔・初始化・黏著束縛都
+  //   打不到；打得到的是招式版暗夜羽擊與 passive 振翼髮｜暗夜羽擊（僅戰鬥位）。
+  //   ⚠ 卡面條件「若自己的場上有『蓋蓋蟲』」的**partner 不需要有特性**（卡面只寫「場上有 X」），
+  //     所以 partner 那一段**不加** gate —— 只有「這隻寶可夢」（＝特性持有者 base）要問。
+  if (!_v6196HasEffAbilByInst(state, ownerIdx, baseInst, pool, '刺激進化')) return false;
   // partner = 另一張（小嘴蝸 → 蓋蓋蟲；蓋蓋蟲 → 小嘴蝸）
   const partnerName = baseCard.name === '小嘴蝸' ? '蓋蓋蟲' : '小嘴蝸';
   const me = state.players[ownerIdx];
@@ -16452,10 +16497,16 @@ export const PASSIVE_ATTACKER_BUFF = new Map<string, { skipDefEffects?: boolean 
 // ============================================================================
 // v2.992 Group 1 — 狀態免疫 helper：isSleepImmune (咕咕 | 不眠)
 // ============================================================================
-function isSleepImmune(inst: CardInstance | null, pool: Map<string, Card>): boolean {
+function isSleepImmune(
+  /** ⭐ v6.204：新增 state/ownerIdx —— 不眠是 passive 特性，被消除時就不再免疫【睡眠】。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null,
+  pool: Map<string, Card>,
+): boolean {
   if (!inst) return false;
-  const card = pool.get(inst.cardId);
-  return !!card?.abilities?.some(a => a.name === '不眠');
+  // ⭐ v6.204：咕咕（H）= Basic /【無】⇒ **火箭隊的監視塔**打得到它，另有暗夜羽擊兩型。
+  return _v6196HasEffAbilByInst(state, ownerIdx, inst, pool, '不眠');
 }
 
 

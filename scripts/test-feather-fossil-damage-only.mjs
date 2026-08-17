@@ -25,12 +25,13 @@ const st={ ...s, phase:'playing', turnPhase:'main', activePlayerIndex:0, players
   { ...s.players[1], active:inst('14086'), bench:[inst(FEATHER,{fossilOnField:true})] },
 ]};
 const featherCard=pool.get(FEATHER);
+const featherInst=st.players[1].bench[0];  // v6.204：resolveBenchGuard 需要 target 的場上實體
 T('羽毛化石(備戰) attack-damage → 擋(免傷,卡面「不會受到招式的傷害」)', ()=>{
-  const r=resolveBenchGuard(st,pool,0,featherCard,'attack-damage');
+  const r=resolveBenchGuard(st,pool,0,featherCard,'attack-damage',{targetInst:featherInst});
   assert.equal(r.blocked,true,'attack-damage 應被擋');
 });
 T('羽毛化石(備戰) attack-effect(放指示物/狀態) → 不擋(卡面只寫傷害) [HEAD FAIL:HEAD擋]', ()=>{
-  const r=resolveBenchGuard(st,pool,0,featherCard,'attack-effect');
+  const r=resolveBenchGuard(st,pool,0,featherCard,'attack-effect',{targetInst:featherInst});
   assert.equal(r.blocked,false,'attack-effect 不應被擋(來悲粗茶抹茶旋濺放指示物應生效)');
 });
 console.log(`\n=== ${pass} PASS / ${fail} FAIL ===`); process.exit(fail?1:0);

@@ -440,14 +440,14 @@ regR('miracle-codec-attach', (st, idx, iids, params, pool) => {
 // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
 regG('頂尖捕捉器', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
-  const valid = st.players[oppIdx].bench.filter(b => !_v3060IsImmuneOppTrainer(b, pool));
+  const valid = st.players[oppIdx].bench.filter(b => !_v3060IsImmuneOppTrainer(st, oppIdx, b, pool));
   return valid.length > 0;
 });
 reg('頂尖捕捉器', (st, idx, pool) => {
   const oppIdx = (1 - idx) as 0 | 1;
   // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
   const validIids = st.players[oppIdx].bench
-    .filter(b => !_v3060IsImmuneOppTrainer(b, pool))
+    .filter(b => !_v3060IsImmuneOppTrainer(st, oppIdx, b, pool))
     .map(b => b.iid);
   if (validIids.length === 0) {
     return addLog(st, '頂尖捕捉器：對手備戰區沒有可呼叫的寶可夢（緊張感/融合為雪 免疫）', idx);
@@ -1411,14 +1411,14 @@ regG('除蟲噴霧', (st, idx, pool) => {
   const dp = st.players[(1 - idx) as 0 | 1];
   if (!dp.active || dp.bench.length < 1) return false;
   // v5.995 audit：C-04 目標=對手戰鬥寶可夢 → 緊張感/融合為雪(不受對手物品)active 擋(HEAD 漏 gate)
-  return !_v3060IsImmuneOppTrainer(dp.active, pool);
+  return !_v3060IsImmuneOppTrainer(st, (1 - idx) as 0 | 1, dp.active, pool);
 });
 reg('除蟲噴霧', (st, idx, _pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (!dp.active || dp.bench.length === 0) return st;
   // v5.995 audit：緊張感/融合為雪 active 不受對手物品效果 → 不被強制換位
-  if (_v3060IsImmuneOppTrainer(dp.active, _pool)) {
+  if (_v3060IsImmuneOppTrainer(st, dIdx, dp.active, _pool)) {
     return addLog(st, '除蟲噴霧：對手的戰鬥寶可夢不受對手物品卡效果影響，無法互換', idx);
   }
   st = addLog(st, '除蟲噴霧：對手必須將戰鬥寶可夢與備戰寶可夢互換（由對手選擇）', idx);

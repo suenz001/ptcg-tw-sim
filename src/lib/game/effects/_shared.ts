@@ -322,6 +322,16 @@ let _abilityHolderEffectiveFn: ((state: GameState, inst: CardInstance, card: Car
 export function setAbilityHolderEffectiveFn(fn: (state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, pool: Map<string, Card>) => boolean): void {
   _abilityHolderEffectiveFn = fn;
 }
+/**
+ * ⭐ v6.204：**指定 location** 版的注入點。上面那支會自己從 state 推 location，
+ * 但「被 KO 當下」的實體可能已經被呼叫端移出場（resolveInfiniteShadowKo / fireDefenderOnKO），
+ * 那時自推會一律得到 'bench' ⇒ 黏著束縛/暗夜羽擊的判定會錯。這支由呼叫端給 location。
+ * 兩支都轉接到同一個中央述詞 isAbilityHolderEffective（不是第五份實作）。
+ */
+let _abilityHolderEffectiveFnLoc: ((state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, location: 'active' | 'bench', pool: Map<string, Card>) => boolean) | null = null;
+export function setAbilityHolderEffectiveAtFn(fn: (state: GameState, inst: CardInstance, card: Card, ownerIdx: 0 | 1, abilityName: string, location: 'active' | 'bench', pool: Map<string, Card>) => boolean): void {
+  _abilityHolderEffectiveFnLoc = fn;
+}
 
 /**
  * v5.998：「選擇N個能量丟棄」型招式(registerSelfDiscardMultiply/ATTACK_PRE_DISCARD_CHOICE)在可丟能量
@@ -2151,12 +2161,27 @@ export function getAllAttachedTools(inst: CardInstance | null | undefined): Card
 export function resolveInfiniteShadowKo(
   koInst: CardInstance,
   pool: Map<string, Card>,
-  eligible: boolean = true,
+  eligible: boolean,
+  /** ⭐ v6.204：KO 當下的盤面 ＋ 被 KO 方 idx ＋ 被 KO 者位置（判「無限之影是否已被消除」）。 */
+  state: GameState,
+  ownerIdx: 0 | 1,
+  location: 'active' | 'bench',
 ): { toHand: CardInstance[]; toDiscard: CardInstance[] } {
   const card = pool.get(koInst.cardId);
   const tools = getAllAttachedTools(koInst);
   const stack = koInst.evolvedFromStack ?? [];
-  if (eligible && card?.abilities?.some((a) => a.name === '無限之影')) {
+  // ⭐ v6.204：耿鬼｜無限之影 = **Stage2**/【惡】/J ⇒【傳說的熔岩洞】（進化寶可夢特性全消）與
+  //   **海兔獸｜黏著束縛**（備戰區【2階進化】特性全消）都打得到；在戰鬥場時另有暗夜羽擊兩型。
+  //   三者都是**持續性**場上效果 —— 在這一擊命中之前特性就已經被消除，所以「KO 當下持有者
+  //   還算不算在場上」不影響判定。engine.ts 主傷害管線（5884 行）v6.196 起就已經先問過中央閘，
+  //   但備戰狙擊／hitBenchAll／dealAttackDamageToTarget 三條路徑沒問 ⇒ 本版收斂到這裡。
+  //   _shared.ts 不能 import v3001／defense（Check O）⇒ 走既有注入點 _abilityHolderEffectiveFn，
+  //   ⚠ 它自己會從 state 推 location，而 KO 當下實體可能已被呼叫端移出場 ⇒ 這裡改用
+  //   caller 給的 location（正確且不依賴 state 是否還留著那隻）。
+  const _infShadowEffective = !!card
+    && (!_abilityHolderEffectiveFnLoc
+        || _abilityHolderEffectiveFnLoc(state, koInst, card, ownerIdx, '無限之影', location, pool));
+  if (eligible && _infShadowEffective && card?.abilities?.some((a) => a.name === '無限之影')) {
     // v6.097：改走中央 splitPokemonReturnToHand（與火箭隊的叉字蝠ex｜刺殺迴旋 同一來源）。
     //   原本此處手刻黑名單 clean（`...cc` 保留其餘欄位）→ 會外洩 abilityUsedThisTurn /
     //   immune*ThisTurn 等回合旗標；改用 toBareCard 白名單（見 v5.993 通則）後一併收乾淨。

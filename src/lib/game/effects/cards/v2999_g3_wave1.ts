@@ -125,13 +125,26 @@ function hasAbilityOnSide(
 // 條件：身上 energyAttached 中有任意 cardId 對應卡名 === '驅勁能量 未來'。
 // ════════════════════════════════════════════════════════════════════════════
 export function hasIronTracksDualCore(
+  /** ⭐ v6.204：新增 state/ownerIdx —— 「二重核心」也是 passive 特性，會被消除。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
   inst: CardInstance | null | undefined,
   card: Card | null | undefined,
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!inst || !card || !pool) return false;
   if (card.name !== '鐵轍跡') return false;
+  // ⭐ v6.204：鐵轍跡 = Basic /【鋼】/ **非規則寶可夢** ⇒ 熔岩洞（只消進化）、監視塔（只消【無】）、
+  //   初始化（只消「擁有規則的寶可夢」）、黏著束縛（只消備戰【2階進化】）**全部打不到**；
+  //   打得到的只有**招式版暗夜羽擊**與 **passive 振翼髮｜暗夜羽擊**（都只作用於戰鬥場）。
+  //   ⚠「未來」tag 只印在 SV5M 9892，SV8a 11641／12405 **沒有** tags 欄位 —— 所以「初始化除外」
+  //     不能當成理由，真正的理由是它不是規則寶可夢（isInitializeNullified 第一道就擋掉）。
+  //   location 由 inst 與該玩家 active 比對推得（與小碎鑽那條對稱，不硬寫 'active'）。
+  // ⚠ 這兩行必須**緊貼**下面的特性名字面量：v6.202 枚舉守衛的視窗是 ±8 行，拉遠了會被判成沒接閘。
+  const _act = state?.players?.[ownerIdx ?? 0]?.active;
+  const _loc: 'active' | 'bench' = (_act && _act.iid === inst.iid) ? 'active' : 'bench';
   if (!card.abilities?.some(a => a.name === '二重核心')) return false;
+  if (!isAbilityHolderEffective(state, inst, card, ownerIdx, '二重核心', _loc, pool)) return false;
   // 檢查身上是否附有「驅勁能量 未來」
   return inst.energyAttached.some(e => {
     const ec = pool.get(e.cardId);

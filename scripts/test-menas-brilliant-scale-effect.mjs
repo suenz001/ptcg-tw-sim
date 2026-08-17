@@ -30,7 +30,7 @@ T('太晶攻擊者 → 招式效果 被璀璨鱗片免疫 [HEAD FAIL:HEAD漏效�
   assert.equal(r.blocked,true,'太晶攻擊者招式效果應被擋');
 });
 T('太晶攻擊者 → 招式傷害 被璀璨鱗片免疫(傷害側 passiveImmunityDamageBlock,原本就對)', ()=>{
-  const s=st(TERA); const r=passiveImmunityDamageBlock(s,0,tc,pool);
+  const s=st(TERA); const r=passiveImmunityDamageBlock(s,0,s.players[1].active,tc,pool);
   assert.equal(r.blocked,true,'太晶攻擊者招式傷害應被擋');
 });
 T('控制:非太晶攻擊者 → 招式效果 不免疫(卡面只免疫太晶)', ()=>{
@@ -38,7 +38,7 @@ T('控制:非太晶攻擊者 → 招式效果 不免疫(卡面只免疫太晶)',
   assert.equal(r.blocked,false,'非太晶攻擊者不應被擋');
 });
 T('控制:非太晶攻擊者 → 招式傷害 不免疫', ()=>{
-  const s=st(NONTERA); const r=passiveImmunityDamageBlock(s,0,tc,pool);
+  const s=st(NONTERA); const r=passiveImmunityDamageBlock(s,0,s.players[1].active,tc,pool);
   assert.equal(r.blocked,false,'非太晶攻擊者傷害不應被擋');
 });
 console.log(`\n=== ${pass} PASS / ${fail} FAIL ===`); process.exit(fail?1:0);

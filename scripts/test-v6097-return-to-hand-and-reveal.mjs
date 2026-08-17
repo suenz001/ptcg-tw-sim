@@ -136,7 +136,9 @@ T('①-6 無限之影仍然把進化來源帶回手牌（中央化零行為變�
   const GENGAR = byName('耿鬼', c => (c.abilities ?? []).some(a => a.name === '無限之影'));
   assert.ok(GENGAR, '現役卡池必須找得到「無限之影」耿鬼（找不到＝卡池載入異常，不是可跳過的情況）');
   const ko = inst(GENGAR, { damage: 200, energyAttached: [inst(BASIC_ENERGY)], evolvedFromStack: [inst(ZUBAT)] });
-  const r = mod.resolveInfiniteShadowKo(ko, pool, true);
+  // v6.204：新增 state/ownerIdx/location（判「無限之影是否已被消除」）；乾淨盤面 ⇒ 仍生效
+  const stKo = mkState({ active: ko });
+  const r = mod.resolveInfiniteShadowKo(ko, pool, true, stKo, 0, 'active');
   assert.strictEqual(r.toHand.length, 2, '本體＋進化來源共 2 張回手，實際 ' + r.toHand.length);
   assert.strictEqual(r.toDiscard.length, 1, '能量進棄牌區');
 });

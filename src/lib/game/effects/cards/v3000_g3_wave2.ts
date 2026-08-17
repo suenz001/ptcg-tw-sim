@@ -247,15 +247,15 @@ export const FIRST_TURN_USABLE_ATTACKS = new Set<string>([
 ]);
 
 export function hasMeloettaExDebut(
-  inst: CardInstance | null | undefined,
+  /** ⭐ v6.204：改吃 state/ownerIdx —— 出道演出是 passive 特性，會被消除。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
 ): boolean {
-  if (!inst || !pool) return false;
-  const card = pool.get(inst.cardId);
-  if (!card) return false;
-  // 卡面「這隻寶可夢」= 美洛耶塔ex 自己（其他 attacker 不適用）
-  if (!card.abilities?.some(a => a.name === '出道演出')) return false;
-  return true;
+  // ⭐ v6.204：美洛耶塔ex = Basic /【超】/ **ex** ⇒【鐵荊棘ex｜初始化】（規則寶可夢特性全消）
+  //   打得到它；持有者必在戰鬥場才用得到招式 ⇒ 招式版暗夜羽擊與 passive 振翼髮｜暗夜羽擊亦然。
+  //   兩個呼叫端傳的都是「該玩家的戰鬥位」⇒ 直接走中央 hasAbilityOnActive（已含全部消除來源）。
+  return hasAbilityOnActive(state, ownerIdx, pool, '出道演出');
 }
 
 // ════════════════════════════════════════════════════════════════════════════

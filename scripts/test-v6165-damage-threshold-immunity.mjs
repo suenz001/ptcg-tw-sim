@@ -146,17 +146,17 @@ T('【傳說的熔岩洞】在場 → 暴噬龜（Stage1 進化）特性被消�
 // ── C. UI 預覽端行為釘住：v6.165 前後必須完全一致（零回歸） ──────────────
 T('UI 預覽端 resolveBenchGuard(暴噬龜, attack-damage) → 不 blocked（行為不變）', () => {
   const { state } = board(PLAIN, PLAIN, [KAJIRIGAME]);
-  const g = mod.resolveBenchGuard(state, pool, 0, kg, 'attack-damage');
+  const g = mod.resolveBenchGuard(state, pool, 0, kg, 'attack-damage', { targetInst: state.players[1].bench[0] });
   ok(!g.blocked, 'resolveBenchGuard 拿不到傷害量 ⇒ 不得在預覽端擅自擋（否則 UI 會顯示假免疫）');
 });
 T('passiveImmunityDamageBlock(暴噬龜) → 不 blocked（跳過依傷害量述詞，行為等價）', () => {
   const { state } = board(PLAIN, KAJIRIGAME);
-  const r = mod.passiveImmunityDamageBlock(state, 0, kg, pool);
+  const r = mod.passiveImmunityDamageBlock(state, 0, state.players[1].active, kg, pool);
   ok(!r.blocked, '不帶傷害量的探測不得判成免疫');
 });
 T('對照：無特性的一般卡在預覽端也不 blocked（判準沒有一刀切）', () => {
   const { state } = board(PLAIN, PLAIN, [PLAIN]);
-  const g = mod.resolveBenchGuard(state, pool, 0, pool.get(PLAIN), 'attack-damage');
+  const g = mod.resolveBenchGuard(state, pool, 0, pool.get(PLAIN), 'attack-damage', { targetInst: state.players[1].bench[0] });
   ok(!g.blocked, '一般卡不該被擋');
 });
 

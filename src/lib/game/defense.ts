@@ -352,7 +352,7 @@ export function canApplyEffectToTarget(
     }
   }
   if (effectiveIsBench !== false) {
-    const r = resolveBenchGuard(state, pool, actorIdx, targetCard, kind, { counterPlacement: options?.counterPlacement });
+    const r = resolveBenchGuard(state, pool, actorIdx, targetCard, kind, { targetInst: target, counterPlacement: options?.counterPlacement });
     if (r.blocked) {
       // v5.279: skipStadium=true 時跳過「對戰圓形」(stadium-level), 其他個別寶可夢級防護維持
       const isStadiumReason = r.reason === '對戰圓形競技場效果' || r.reason === '中立中心競技場 效果';

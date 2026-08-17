@@ -3546,7 +3546,7 @@ function handlePlaying(
     const hasPushEvolveAbility = isActive
       && hasEffectiveAbilityByInst(state, aIdx, basePoke, pool, '提升進化');
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化也 bypass isFirstTurn gate（卡面：「最初回合或剛使出的回合也可進化」）
-    const hasShellinkBypassFirst = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
+    const hasShellinkBypassFirst = hasShellinkEvolveBypass(baseCard, basePoke, state, aIdx, pool);
     // 鬥志戰吼（勒克貓 Stage1 特性）：若對手戰鬥場是【ex】寶可夢，
     //   場上的勒克貓即使「最初回合 / 剛使出 / evolvedThisTurn」都可進化（成倫琴貓）。
     //   進化鏈：小貓怪 (Basic) → 勒克貓 (Stage1, 鬥志戰吼) → 倫琴貓 (Stage2)
@@ -3569,7 +3569,7 @@ function handlePlaying(
       state.turn > 1;
     const hasFightingHowl = hasFightingHowlEarly;
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — 自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn
-    const hasShellinkBypass = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
+    const hasShellinkBypass = hasShellinkEvolveBypass(baseCard, basePoke, state, aIdx, pool);
     // v2.997 isFirstTurn gate 也補入 bypass（line 1658 上方已 return state，此處重新補放行）
     // — 改寫 line 1658 的 gate 較危險；採用「在 line 1674 的 justPlaced gate 加 bypass」
     //   並讓 line 1658 的 isFirstTurn gate 額外考量本特性。
@@ -4898,7 +4898,7 @@ function handlePlaying(
     }
     // v3.0 美洛耶塔ex｜出道演出 — 此寶可夢可在先手第 1 回合使用招式（解除限制）
     const meloettaBypassFirstTurn = state.isFirstTurn && aIdx === state.firstPlayerIdx
-      && hasMeloettaExDebut(attacker.active, pool);
+      && hasMeloettaExDebut(state, aIdx, pool);
     // v5.214 Bug 3：招式自身標記「在先攻玩家的最初回合也可使用」（信使鳥|急速之禮 / 卡璞・鳴鳴|急速飛行）
     let attackBypassFirstTurn = false;
     if (state.isFirstTurn && aIdx === state.firstPlayerIdx && attacker.active) {
@@ -5444,7 +5444,7 @@ function handlePlaying(
     const _wk = getEffectiveWeaknessType(workingState, aIdx, defender.active, defenderCard, pool);
     const effectiveWeaknessType = _wk.type;
     const weaknessDisabled = _wk.disabled;
-    const attackerEffectiveTypes = getAttackerEffectiveTypes(attacker.active, attackerCard, pool);
+    const attackerEffectiveTypes = getAttackerEffectiveTypes(workingState, aIdx, attacker.active, attackerCard, pool);
     // v4.495：弱點 gate 同時 check skipWeakRes (跳兩個) 與 skipWeakness (只跳弱點)
     if (!skipWeakRes && !skipWeakness && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
@@ -5929,7 +5929,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         // v5.934 中央收斂：無限之影 KO 去向改走 resolveInfiniteShadowKo（與備戰狙擊/擴散/延後傷害 KO 共用單一來源）。
         //   本體+進化來源實體卡(evolvedFromStack；神奇糖果情形只含實際疊著的卡→不生出場上沒有的中間進化)
         //   逐張清乾淨放回手牌；附加能量/道具丟棄。此處 defender 必為對手主傷害 KO，故 eligible=true。
-        const _isk = resolveInfiniteShadowKo(updatedActive, pool, true);
+        const _isk = resolveInfiniteShadowKo(updatedActive, pool, true, newState, dIdx, 'active');
         defenderState.discard = [...defenderState.discard, ..._isk.toDiscard];
         defenderState.hand = [...defenderState.hand, ..._isk.toHand];
       } else {
@@ -8912,8 +8912,7 @@ export function getEffectiveAttacks(
     ownerIdx = 1;
   }
   if (ownerIdx != null) {
-    const ownerPlayer = state.players[ownerIdx];
-    if (hasArchaeoglobinDiveMemory(ownerPlayer, pool)) {
+    if (hasArchaeoglobinDiveMemory(state, ownerIdx, pool)) {
       const lowerAttacks = getAttacksFromEvolvedFromStack(inst, pool);
       for (const { atk, sourceCardName } of lowerAttacks) {
         result.push({ atk, sourceCardName, isFromTool: false });
@@ -9123,7 +9122,7 @@ export function getAvailableAttacks(
   // v5.214 Bug 3：招式名稱白名單（信使鳥|急速之禮 / 卡璞・鳴鳴|急速飛行）也能用
   if (state.isFirstTurn && state.activePlayerIndex === state.firstPlayerIdx) {
     const player0 = state.players[state.activePlayerIndex];
-    if (!hasMeloettaExDebut(player0.active, pool)) {
+    if (!hasMeloettaExDebut(state, state.activePlayerIndex as 0 | 1, pool)) {
       // 非美洛耶塔 — 只允許白名單招式 indices
       if (!player0.active) return [];
       const atks_uft = getEffectiveAttacks(state, player0.active, pool);
@@ -9239,7 +9238,7 @@ export function getEvolvableTargets(
     const hasPushEvolveAbility = isFpActive
       && hasEffectiveAbilityByInst(state, state.activePlayerIndex as 0 | 1, fp, pool, '提升進化');
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — bypass isFirstTurn + justPlaced + evolvedThisTurn
-    const hasShellinkBypassUI = hasShellinkEvolveBypass(fpCard, state, state.activePlayerIndex, pool);
+    const hasShellinkBypassUI = hasShellinkEvolveBypass(fpCard, fp, state, state.activePlayerIndex as 0 | 1, pool);
     // 鬥志戰吼 bypass（base 勒克貓 + 對手 ex）
     const hasFightingHowlBypass = fpCard.name === '勒克貓' && oppIsExUI;
     // isFirstTurn gate（除了提升進化 / 刺激進化 / 鬥志戰吼 bypass）

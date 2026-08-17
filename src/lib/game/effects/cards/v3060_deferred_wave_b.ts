@@ -68,6 +68,8 @@ import {
   ATTACK_EFFECT_IMMUNITY,
   type ImmunityCheck,
 } from '../../effects';
+// v6.204：passive 特性生效性中央述詞（v3060 → v3001 是既有合法 import 方向）
+import { isAbilityHolderEffective } from './v3001_g3_wave3';
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3060Sentinel = GameState | Card | CardInstance;
@@ -130,25 +132,45 @@ export function getBenchImmunityAbilityName(
 //   候選實作，符合卡面文義。
 // ════════════════════════════════════════════════════════════════════════════
 export function isImmuneToOppTrainer(
+  /** ⭐ v6.204：新增 state/ownerIdx —— 緊張感／融合為雪都是 passive 特性，會被消除。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
   targetInst: CardInstance | undefined,
   pool: Map<string, Card>,
 ): boolean {
   if (!targetInst) return false;
   const card = pool.get(targetInst.cardId);
   if (!card?.abilities) return false;
-  return card.abilities.some(a => a.name === '緊張感' || a.name === '融合為雪');
+  // ⭐ v6.204：斧牙龍｜緊張感 = **Stage1**（⇒【傳說的熔岩洞】打得到）；
+  //   浩大鯨ex｜融合為雪 = **Stage1 ＋ ex**（⇒ 熔岩洞 ＋ 鐵荊棘ex｜初始化）；
+  //   兩者在戰鬥場時另有暗夜羽擊兩型。呼叫端有備戰（頂尖捕捉器/寶可夢捕捉器/反擊捕捉器）
+  //   也有戰鬥位（除蟲噴霧）⇒ location 由 inst 與該玩家 active 比對而得。
+  if (!state || ownerIdx == null) return false;
+  const _act = state.players[ownerIdx]?.active;
+  const _loc: 'active' | 'bench' = (_act && _act.iid === targetInst.iid) ? 'active' : 'bench';
+  return card.abilities.some(a =>
+    (a.name === '緊張感' || a.name === '融合為雪')
+    && isAbilityHolderEffective(state, targetInst, card, ownerIdx, a.name, _loc, pool));
 }
 
 /** 取得擁有「對手 trainer 免疫」特性的名稱（log 文案用） */
 export function getOppTrainerImmunityAbilityName(
+  /** ⭐ v6.204：與 isImmuneToOppTrainer 同步（本函式目前全 src 零呼叫端）。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
   targetInst: CardInstance | undefined,
   pool: Map<string, Card>,
 ): string | null {
-  if (!targetInst) return null;
+  if (!targetInst || !state || ownerIdx == null) return null;
   const card = pool.get(targetInst.cardId);
   if (!card?.abilities) return null;
+  const _act = state.players[ownerIdx]?.active;
+  const _loc: 'active' | 'bench' = (_act && _act.iid === targetInst.iid) ? 'active' : 'bench';
   for (const a of card.abilities) {
-    if (a.name === '緊張感' || a.name === '融合為雪') return a.name;
+    if (a.name === '緊張感' || a.name === '融合為雪') {
+      if (!isAbilityHolderEffective(state, targetInst, card, ownerIdx, a.name, _loc, pool)) continue;
+      return a.name;
+    }
   }
   return null;
 }

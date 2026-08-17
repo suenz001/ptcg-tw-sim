@@ -1,5 +1,165 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.204 passive 特性消費點沒接「特性消除」中央閘 —— **要改函式簽名**的那一組（v6.202 的 C 段整段做完）
+
+BASE = `201cdec92dcfdd28d3f0a4fe153e06acdc663abd`（v6.203）。
+用的是 v6.196 既有中央 helper（`isAbilityHolderEffective` / `hasEffectiveAbilityByInst` /
+`hasAbilityOnSide` / `hasAbilityOnActive`），**沒有新建第五份述詞**。
+
+### ⭐⭐⭐ A. 最優先：兩份免疫實作的漂移收斂（直接影響傷害結算與勝負）
+
+`engine.ts` 主傷害管線（戰鬥位，5634/5662 行）從 v5.471 起就**逐個特性**過
+`isAbilityHolderEffective`；而 `effects.ts` 的 `passiveImmunityDamageBlock` /
+`passiveCoinImmunity`（`resolveBenchGuard`／狙擊／多目標／UI 預覽共用）只**手刻**了
+「初始化」＋「火箭隊的監視塔」兩個來源，擲幣那份**連初始化都沒有** ⇒ 同一張卡在兩條路徑上
+對「特性還在不在」給出不同答案。
+
+| 特性（持有者，static/cards 逐字） | stage / type / subtype | 漏掉的消除來源 |
+|---|---|---|
+| 神秘石居（岩殿居蟹） | Stage1 /【草】 | **熔岩洞**、暗夜羽擊兩型 |
+| 全能硬殼（肋骨海龜） | **Stage2** /【水】 | **熔岩洞**、**黏著束縛**、暗夜羽擊兩型 |
+| 璀璨鱗片（美納斯ex） | Stage1 /【水】/ ex | **熔岩洞**、暗夜羽擊兩型 |
+| 尾甲（奇麒麟ex） | Stage1 /【惡】/ ex | 同上 |
+| 神秘守護（仙子伊布） | Stage1 /【超】 | 同上 |
+| 礎石之勢（厄鬼椪 礎石面具ex） | Basic /【鬥】/ ex | 暗夜羽擊兩型 |
+| 順滑大衣（奇諾栗鼠ex，擲幣型） | Stage1 /【無】/ ex | **熔岩洞、初始化**、暗夜羽擊兩型（監視塔本來就有） |
+
+⚠ **子代理審查在這張表上判錯過一次，記下來免得下次重犯**：它說「`PASSIVE_IMMUNITY` 的
+Map 字面量裡沒有全能硬殼 ⇒ 這一列是錯的」。實際上**全能硬殼是在 `registerV3060DeferredWaveBPassives()`
+裡用 `PASSIVE_IMMUNITY.set('全能硬殼', …)` 掛進去的**（Iron Rule 12：對 effects.ts 的 Map 做 set
+一律包進 register fn 以避 TDZ）—— 只讀字面量會看不到。守衛 `1c/1d/1f` 是行為端實跑，
+`1d` 正對照拿到的 reason 就是「全能硬殼（不受對手該寶可夢招式的傷害）」。
+⚠ `PASSIVE_IMMUNITY` 另有「神秘之盾」（堅盾劍怪），但它只印在 **G 標** SV8a 12400
+（M3 18034 那張 J 標的堅盾劍怪**沒有特性**）⇒ 不在 H/I/J 維護範圍，刻意不列。
+
+修法：兩支的簽名各插入一個**必填**的 `targetInst: CardInstance`，內部刪掉 inline 的
+初始化／監視塔手刻，改逐個特性問 `_v6196HasEffAbilByInst`（＝`defense.hasEffectiveAbilityByInst`，
+location 由它自己從 state 推 —— 呼叫端自己算 location 正是 v6.202 抓到的另一個 bug 源頭）。
+`resolveBenchGuard` 的 `opts` 一併改成**必填**並帶 `targetInst`（TS 逼所有呼叫端回來補），
+4 個呼叫端（`defense.ts:355` / `effects.ts:1440` bench-hit-N / `effects.ts:4451` 死碼
+`manualDamageImmunity` / `effects.ts:7136` 精刺奇襲）逐一確認都握有場上實體。
+`manualDamageImmunity` 全 `src/` **零呼叫端＝死碼**，簽名一併收斂（行為零變化）。
+
+### B. 雙重屬性／二重核心（弱點・抵抗力比對）
+
+`getAttackerEffectiveTypes` 加 `state / attackerIdx`（2 個呼叫端：`effects.ts applyWeakRes`、
+`engine.ts:5447`，兩處都握有 state 與 actorIdx）；`hasIronTracksDualCore` 加 `state / ownerIdx`
+（唯一呼叫端就是前者）。
+
+- 小碎鑽 = Basic /【鬥】/ 非規則 ⇒ 熔岩洞・監視塔・初始化・黏著束縛都打不到，只有暗夜羽擊兩型。
+- 鐵轍跡 = Basic /【鋼】/ **非規則寶可夢** ⇒ 熔岩洞・監視塔・初始化・黏著束縛全部打不到，
+  同樣只有暗夜羽擊兩型。（守衛 3f 是這條的**正對照**：初始化在場時仍必須是【鬥】＋【鋼】，
+  而且**逐印刷**各跑一次。）
+  ⚠ **不可**拿「tags 含『未來』」當理由 —— 子代理審查抓到：「未來」tag 只印在 SV5M 9892，
+  **SV8a 11641／12405 兩張現役 H 標印刷完全沒有 tags 欄位**（卡庫資料缺口，另列給站長）。
+  ⚠ 另：`hasIronTracksDualCore` 的 location 原本硬寫 `'active'`，本版改成從 state 推
+  （與小碎鑽那條對稱），避免日後呼叫端變動時兩條給出不同答案。
+
+⚠ **順手發現、本版沒動**：`getAttackerEffectiveTypes` 只實作了**小碎鑽**的雙重屬性，
+**狠辣椒ex｜雙重屬性**（卡面「只要這隻寶可夢在場上，改為【草】與【火】2種屬性。」SV /H）
+**完全沒有實裝** —— 那是「漏實作」而不是「漏 gate」，屬另一個維度，列給站長裁定。
+
+### C. 其餘 8 項（全部完成）
+
+| helper | 新簽名 | 呼叫端 | 可達的消除來源 |
+|---|---|---|---|
+| `isConfusionImmune` | `(state, ownerIdx, inst, pool)` | 5（`statusPost`／`applyStatusToOppActive`／`applyStatusToSelfActive`／`coinStatusPost`／`m5_preview` 暗黑鈴） | 呆呆獸 Basic/【超】⇒ 只有暗夜羽擊兩型 |
+| `isSleepImmune` | 同上 | 4 | 咕咕 Basic/**【無】** ⇒ ＋**監視塔** |
+| `isImmuneToOppTrainer` | `(state, ownerIdx, targetInst, pool)` | 9（v3080 `isImmuneToOppSupporter`／items_misc ×4／effects ×4） | 斧牙龍 Stage1 ⇒ **熔岩洞**；浩大鯨ex Stage1+ex ⇒ ＋**初始化** |
+| `getOppTrainerImmunityAbilityName` | 同上 | 0（死碼，順手同步以免復活時漏 gate） | 同上 |
+| `hasArchaeoglobinDiveMemory` | `(state, ownerIdx, pool)`（原本收 `PlayerState`） | 1（`engine.ts:8915`，該處已算出 ownerIdx） | 古空棘魚 Basic/【鬥】⇒ 暗夜羽擊兩型（原碼只手刻了 `abilityNullifiedThisTurn`，**漏 passive 振翼髮**）。改走中央 `hasAbilityOnSide` |
+| `hasMeloettaExDebut` | `(state, ownerIdx, pool)` | 2（`engine.ts:4901 ATTACK` ／ `9126 getAvailableAttacks`，兩處都是該玩家 active） | 美洛耶塔ex Basic/【超】/**ex** ⇒ **初始化** ＋ 暗夜羽擊兩型。改走中央 `hasAbilityOnActive` |
+| `resolveInfiniteShadowKo` | `(koInst, pool, eligible, state, ownerIdx, location)` | 4（`engine.ts:5932` 主管線／`effects.ts` hitBenchAll・bench-hit-N・`dealAttackDamageToTarget`） | 耿鬼 **Stage2**/【惡】⇒ **熔岩洞**、**黏著束縛**（備戰）、暗夜羽擊兩型（戰鬥場） |
+| `hasShellinkEvolveBypass` | `(baseCard, baseInst, state, ownerIdx, pool)` | 3（全在 engine.ts：`EVOLVE` ×2 ＋ `getEvolvableTargets` UI） | 小嘴蝸／蓋蓋蟲 Basic/【草】⇒ 只有暗夜羽擊兩型 |
+| `_dcSelfDiver`（`fireDefenderOnKO` 內） | 就地加 gate（用該函式既有的 `isActive` 當 location） | 1 | 獵斑魚 **Stage1**/【水】⇒ **熔岩洞** ＋ 暗夜羽擊兩型 |
+
+**兩個 v6.202 說「需先裁定」的，本版查證後認為沒有歧義**：
+`resolveInfiniteShadowKo` 與 `_dcSelfDiver` 的疑慮是「KO 當下持有者是否還算在場上」，
+但**這三個可達來源（熔岩洞／黏著束縛／暗夜羽擊）全是持續性場上效果** ——
+在這一擊命中**之前**特性就已經被消除，時序問題根本不成立。
+⚠ 兩處的持有者在呼叫時可能**已被呼叫端移出場**，所以**不可**讓中央述詞自推 location：
+`_shared.ts` 新增一個**指定 location** 的注入點 `setAbilityHolderEffectiveAtFn`
+（Check O：`_shared.ts` 不能 import `v3001`／`defense`），與既有 `setAbilityHolderEffectiveFn`
+一樣轉接到同一支 `isAbilityHolderEffective`，**不是第五份實作**；
+`_dcSelfDiver` 在 `effects.ts` 內，直接用 `isAbilityHolderEffective` ＋ `isActive`。
+
+`hasShellinkEvolveBypass` 的 **partner 那一段刻意不加 gate** —— 卡面只寫「若自己的場上有
+『蓋蓋蟲』」，沒有要求 partner 也持有特性 ⇒ 只有「這隻寶可夢」（＝base 持有者）要問中央閘。
+
+### D. 結構上不可達／刻意不改（沿用 v6.202 的判定，本版未動）
+
+`岩石宮殿`（大吾的小碎鑽，卡面限備戰區）、`藏隱`／`深度下潛`（同型）、
+`engine.ts` 冰冷之帳的化隱、`m6_wave8` 大洋增輝／深海抽出（上游 `getUsableAbilities` 已過閘）、
+`hasEffectShield`（皇帝之勢，死碼）、`hasAbilityOnBench`（**黏著束縛偵測本體，加 gate 會無窮遞迴**）。
+
+### 守衛 `scripts/test-v6204-passive-ability-gate-signatures.mjs`（63 檢查）
+
+①卡面逐字錨：16 個持有者的 `stage`/`pokemonType`/`subtype` 逐一釘死（那正是「哪些來源打得到它」
+的唯一依據）＋ 5 個消除來源的 `rulesText`/`effect` 逐字 ＋ 14 條特性 `effect` 逐字
+＋ 28 張依賴卡的下限斷言（抓不到就紅，不做安慰劑綠燈）。
+②行為端逐項：**消除 ⇒ 失效** 與 **正常 ⇒ 仍生效** 成對出現（含「監視塔只消【無】、
+黏著束縛只消備戰 2 階、初始化不消『未來』」三條**方向性正對照**，防改過頭）。
+③差分實跑：舊述詞逐字轉錄自 BASE。`passiveImmunityDamageBlock` **3168 組**盤面
+（11 個防守者 × 6 個攻擊者 × 3 種競技場 × 攻方特殊能量 × `abilityNullifiedThisTurn` ×
+海兔獸在不在 × active/bench）—— **沒有任何消除來源在場的 mismatch = 0**，
+帶來源的 mismatch = 460（分佈逐項印出，每一筆都對應到至少一個消除來源）；
+`getAttackerEffectiveTypes` 48 組，乾淨 mismatch = 0、帶來源 12。
+④`hasAbilityOnBench` 例外：行為端證明黏著束縛仍生效且不爆堆疊，靜態端斷言它**維持沒有 gate**
+（並附正對照證明判準抓得到違規）。
+⑤靜態：兩支免疫實作**必須**呼叫中央述詞且**不得再出現** `ROCKET_WATCHTOWER_STADIUMS` /
+`isInitializeNullified` 的 inline 手刻（附違規樣本正對照）；所有呼叫端不得傳 `undefined/null`；
+`_shared.ts` 不得反向 import `defense`／`v3001`。
+
+**HEAD-FAIL（逐項破壞測試，腳本 `/tmp/destroy2.py`）**：把 **13 個 gate ＋ 6 個「接線」逐一**
+改回錯的寫法重跑 v6204＋v6202 兩支守衛：
+
+| 破壞項 | 亮紅數 | 破壞項 | 亮紅數 |
+|---|---|---|---|
+| A 免疫傷害閘 | 7 | G 無限之影閘 | 5 |
+| A2 免疫擲幣閘 | 6 | G2 **注入點沒接上** | 4 |
+| B 雙重屬性閘 | 3 | H 刺激進化閘 | 2 |
+| B2 二重核心閘 | 3 | I 潛者捕捉閘 | 3 |
+| C 憨憨臉閘 | 3 | W1 defense 傳錯 targetInst | 1 |
+| C2 不眠閘 | 2 | W3 緊張感 location 硬寫 active | 1 |
+| D 緊張感／融合為雪閘 | 6 | W4 潛者捕捉 location 硬寫 bench | 1 |
+| E 潛入記憶閘 | 2 | W6 除蟲噴霧 regG 傳錯 idx | 1 |
+| F 出道演出閘 | 3 | | |
+
+全部正對照維持綠、還原後 0 紅 ⇒ 證明它們不是恆真式。
+
+**兩輪 opus 子代理審查抓到的（已全部處理）**：
+1. ⚠ **假綠**：`1g` 原本把鐵荊棘ex 放成**攻擊方**，但璀璨鱗片要求攻擊方是**太晶**
+   ⇒ 兩邊都回 false、斷言恆真。已改成「攻擊方維持太晶、鐵荊棘ex 放防守方戰鬥場、
+   美納斯ex 放防守方備戰」，還原 gate 後才會紅。
+2. ⚠ **接線零覆蓋**（第二輪抓到，本檔已補 `5e`/`5f`/`5g`/`5h`/`10d` 五條）：
+   `defense.ts` 的 `targetInst`、`items_misc` regG 的 ownerIdx、`isImmuneToOppTrainer`
+   與 `_dcSelfDiver` 的 location 推導，原本改壞了**一條測試都不會紅**。
+   `5e`/`5h` 改成真的從 `TRAINER_GUARDS` 取出 regG 來跑（原本只是自己重寫 filter，
+   還留了一行 `assert.ok(g===undefined||true)` 的恆真死碼）。
+3. ⚠ **`hasIronTracksDualCore` 的 gate 被註解推離特性名字面量 9 行**
+   ⇒ v6.202 枚舉守衛（±8 行視窗）判成沒接閘、20d 亮紅。已把 gate 上移緊貼字面量；
+   隨之「驅勁能量 未來」那行又落回 ±6 行 abilities 視窗 ⇒ 豁免條目照 BASE 補回（**非**特性名）。
+4. **兩個破壞後仍 0 紅、查證後判定為結構上測不出來，刻意不硬湊測試**：
+   ・`W2` 頂尖捕捉器/寶可夢捕捉器/反擊捕捉器 regG 的 ownerIdx —— 目標永遠在**備戰**，
+     而 緊張感／融合為雪 可達的來源（熔岩洞・初始化）都與持有者屬於哪一方無關，
+     且備戰 inst 永遠推不出 `'active'` ⇒ 傳錯也做不出行為差異。已改用**戰鬥場**目標的
+     除蟲噴霧（`5h`/`W6`）覆蓋同一支述詞的 ownerIdx 接線。
+   ・`W5` `hasIronTracksDualCore` 的 location —— 唯一呼叫端 `getAttackerEffectiveTypes`
+     拿到的一定是該玩家的 active。仍改成推導而非硬寫，只是測不出差異。
+5. 第一輪的兩條指正經自行查證後**不成立**，已寫進上面 A 段的警語（`PASSIVE_IMMUNITY` 的
+   全能硬殼是用 register fn `.set()` 掛進去的、神秘之盾只印在 G 標），另外三條（鐵轍跡
+   「未來」tag 缺口、location 不對稱、狠辣椒ex 未實裝）已採納或列給站長。
+
+### v6.202 枚舉守衛同步更新
+GATE_RE 加入 `_abilityHolderEffectiveFnLoc`；**豁免表刪掉 17 個死條目**（C 段整段做完）；
+`20c` 的標題與斷言對齊（≥63）；`20b` 的 pattern1 下限 55 → 50（本版把 6 支 helper 的字面量整段換成中央述詞呼叫，
+是消費點消失、不是掃描器變瞎；20f~20k 六條掃描器自我驗證仍釘住掃得到違規樣本），
+`20c`「已接閘」下限 55 → 63。
+
+### 部署
+`update-tournament.bat`（卡效果／引擎改動）、`update-admin-full.bat`（admin.html 版本提示）。
+`redeploy-oracle.bat` 本版**不需要**（沒動 `server_admin_patch.js`）。
+
 ## v6.203 進化來源比對被過度放寬（sameEvoName 被誤用成進化 gate）
 
 **回報**：玩家可以把伊布ex 直接進化成葉伊布 —— 連**沒有**特性【虹色DNA】的

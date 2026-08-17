@@ -470,7 +470,7 @@ T('19b. 大晴天：傳說的熔岩洞（裙兒小姐 Stage1）⇒ +20 失效（
 //         —— 藏青浪濤 / prevent-KO / 侵蝕詛咒 就是這樣溜過去的。補 pattern 2。
 //  ⚠ 判準也放寬了一個**假陽性**：gate 用變數傳特性名（`gate(..., ab.name, ...)`）是合法寫法
 //    （engine.ts selfAttackPreconditionBlock 就是），不得被判成沒接閘。
-const GATE_RE=/(isAbilityHolderEffective|hasEffectiveAbilityByInst|_v6196HasEffAbilByInst|_abilityHolderEffectiveFn|isAbilityNullifiedByPassive|hasAbilityOnSide|hasAbilityOnActive|countEffectiveAbilityOnSide|hpAbilityEffective|abilityEffective)\s*\(/;
+const GATE_RE=/(isAbilityHolderEffective|hasEffectiveAbilityByInst|_v6196HasEffAbilByInst|_abilityHolderEffectiveFnLoc|_abilityHolderEffectiveFn|isAbilityNullifiedByPassive|hasAbilityOnSide|hasAbilityOnActive|countEffectiveAbilityOnSide|hpAbilityEffective|abilityEffective)\s*\(/;
 //  pattern 2 只收「key 是特性名」的 registry（tool/stadium/energy 的 map 不算）。
 const ABILITY_REGISTRY_RE=/\b(PASSIVE_[A-Z0-9_]+|OPP_ENERGY_ATTACH_PASSIVE|DAMAGE_AMOUNT_DEPENDENT_IMMUNITY|ABILITY_COLORLESS_COST_ZERO|ABILITY_RETREAT_MOD|FREE_RETREAT_BASIC_ABILITY_NAMES)\s*\.\s*(?:get|has)\s*\(\s*([A-Za-z_$][\w$]*)\.name\s*\)/g;
 const EXEMPT=new Map(Object.entries({
@@ -481,8 +481,7 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/engine.ts|激動俯衝':'ON_HAND_ACTIVATE：判的是**手牌**裡的卡',
   'src/lib/game/effects/cards/m5_preview.ts|化隱':'數的是自己**棄牌區**的卡（抹茶旋濺/魂之末/悔念錨），特性消除只作用於「雙方場上」',
   // ── 根本不是特性名（同一行/鄰近行剛好有 abilities 而被掃到）──────────────
-  'src/lib/game/effects/cards/v2999_g3_wave1.ts|驅勁能量 未來':'比對的是**能量卡名**（二重核心的條件），不是特性名',
-  'src/lib/game/effects.ts|小嘴蝸':'比對的是**卡名**（刺激進化的 partner 條件），與同函式的「刺激進化」同一條待辦',
+  'src/lib/game/effects/cards/v2999_g3_wave1.ts|驅勁能量 未來':'比對的是**能量卡名**（二重核心的發動條件），不是特性名；v6.204 把 gate 上移緊貼特性名字面量後，這一行又落回掃描器的 ±6 行 abilities 視窗內',
   'src/lib/game/engine.ts|PASSIVE_KO_RETALIATION':'只用來組 log 文案（光之翼擋下時列出被無效的特性名），不驅動任何效果',
   // ── 消除來源本身 ────────────────────────────────────────────────────────
   'src/lib/game/effects/cards/v3001_g3_wave3.ts|初始化':'消除來源本身（鐵荊棘ex），加 gate 會自我遞迴',
@@ -500,22 +499,7 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|藏隱':'斯魔茶 Basic/Grass/非規則，卡面「只要這隻寶可夢在備戰區」⇒ 同岩石宮殿，6 個來源都打不到',
   'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|深度下潛':'小霞的鯉魚王 Basic/Water/非規則，卡面同樣限備戰區 ⇒ 結構上不可達',
   // v6.203：虹色DNA 已改走 hasEffectiveAbilityByInst（canEvolveFromHandOnto），不再是字面量消費點 ⇒ 豁免條目刪除
-  // ── 需要改函式簽名 ＋ 全部呼叫端（站長裁定後再做，v6.202 不動）────────────
-  'src/lib/game/effects.ts|憨憨臉':'TODO：isConfusionImmune(inst,pool) 簽名沒有 state（6 呼叫端）',
-  'src/lib/game/effects.ts|不眠':'TODO：isSleepImmune(inst,pool) 簽名沒有 state（5 呼叫端）',
-  'src/lib/game/effects.ts|雙重屬性':'TODO：getAttackerEffectiveTypes(inst,card,pool) 簽名沒有 state（只 2 呼叫端）',
-  'src/lib/game/effects.ts|小碎鑽':'同上（同一行的卡名比對）',
-  'src/lib/game/effects/cards/v2999_g3_wave1.ts|二重核心':'TODO：hasIronTracksDualCore(inst,card,pool) 簽名沒有 state；與雙重屬性同一個呼叫端',
-  'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|緊張感':'TODO：isImmuneToOppTrainer(targetInst,pool) 簽名沒有 state',
-  'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|融合為雪':'同上',
-  'src/lib/game/effects/cards/v3080_deferred_wave_c.ts|潛入記憶':'TODO：hasArchaeoglobinDiveMemory(player,pool) 收 PlayerState、沒有 state/ownerIdx',
-  'src/lib/game/effects/cards/v3000_g3_wave2.ts|出道演出':'TODO：hasMeloettaExDebut(inst,pool) 簽名沒有 state',
-  'src/lib/game/effects/_shared.ts|無限之影':'TODO：resolveInfiniteShadowKo(koInst,pool,eligible) 簽名沒有 state；且 KO 當下持有者是否仍在場需先裁定',
-  'src/lib/game/effects.ts|潛者捕捉':'TODO：_dcSelfDiver 判的是「剛被 KO 的那一隻」，此刻已離場、算不出 location，需站長裁定',
-  'src/lib/game/effects.ts|刺激進化':'TODO：hasShellinkEvolveBypass 有 state 但缺 holder inst（3 呼叫端全在 engine.ts，成本低）',
-  'src/lib/game/effects.ts|PASSIVE_IMMUNITY':'TODO：passiveImmunityDamageBlock / passiveCoinImmunity 只收 targetCard（無 inst/ownerIdx）；已 inline 擋初始化＋監視塔，仍漏熔岩洞／暗夜羽擊兩型／黏著束縛。engine 主管線那份有接、這份（中央/狙擊/UI 預覽）沒接 ⇒ 兩份會漂',
-  'src/lib/game/effects.ts|DAMAGE_AMOUNT_DEPENDENT_IMMUNITY':'同上，同一支 passiveImmunityDamageBlock',
-  'src/lib/game/effects.ts|順滑大衣':'同上：passiveImmunityDamageBlock 內的擲幣型 skip，與 PASSIVE_IMMUNITY 同一條待辦',
+  // v6.204：C 段（需要改函式簽名 ＋ 全部呼叫端）**整段做完**，上述 17 個豁免條目全數刪除。
 }));
 const walk=(d,out=[])=>{for(const f of readdirSync(d)){const p=join(d,f);const s=statSync(p);
   if(s.isDirectory())walk(p,out); else if(f.endsWith('.ts'))out.push(p);} return out;};
@@ -559,11 +543,13 @@ T('20a. 掃描器下限：全站 passive 消費點掃到 ≥90 個（掃不到�
 });
 T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那一族又隱形了）',()=>{
   const lit=sites.filter(s=>s.kind==='lit').length, reg=sites.filter(s=>s.kind==='reg').length;
-  assert.ok(lit>=55,'pattern1 只 '+lit); assert.ok(reg>=30,'pattern2(registry 查表) 只 '+reg);
+  // v6.204：pattern1 從 55 降到 50 —— 本版把 6 支 helper 的『.name === 特性名』字面量整段換成
+  //   中央述詞呼叫（消費點消失，不是掃描器變瞎）；20f/20g/20h 三條自我驗證仍釘住掃得到違規樣本。
+  assert.ok(lit>=50,'pattern1 只 '+lit); assert.ok(reg>=30,'pattern2(registry 查表) 只 '+reg);
 });
-T('20c. 掃描器下限：其中「已接中央閘」的 ≥55 個',()=>{
+T('20c. 掃描器下限：其中「已接中央閘」的 ≥63 個（v6.204 把 C 段整段接上後的新底線）',()=>{
   const g=sites.filter(s=>s.gated).length;
-  assert.ok(g>=55,'只有 '+g+' 個接了閘');
+  assert.ok(g>=63,'只有 '+g+' 個接了閘');
 });
 T('20d. 枚舉守衛：每個沒接閘的消費點都必須在豁免表內並附理由',()=>{
   const bad=sites.filter(s=>!s.gated && !EXEMPT.has(`${s.rel}|${s.ability}`))

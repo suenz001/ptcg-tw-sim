@@ -94,6 +94,8 @@ import type { Attack, Card } from '$lib/cards/types';
 import { isAbilityHolderEffective } from './v3001_g3_wave3'; // v5.985 特性生效性中央述詞
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { isImmuneToOppTrainer } from './v3060_deferred_wave_b';
+// v6.204：場上「擁有且此刻生效」中央述詞（潛入記憶）
+import { hasAbilityOnSide } from './v3001_g3_wave3';
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3080Sentinel = PlayerState | GameState | Card | CardInstance | Attack;
@@ -160,7 +162,7 @@ export function isImmuneToOppSupporter(
     if (fossilCard?.name === '陳舊的鰭之化石') return true;
   }
   // 條件 1：v3.06 個別免疫特性
-  if (isImmuneToOppTrainer(targetInst, pool)) return true;
+  if (isImmuneToOppTrainer(state, defenderIdx, targetInst, pool)) return true;
   // 條件 2：v3.08 廣域堡壘整體免疫
   if (hasBroadFortressOnActive(state, defenderIdx, pool)) return true;
   return false;
@@ -207,18 +209,15 @@ export { hasEffectiveCalmGroundOnSide, isReturnToHandBlockedByCalmGround } from 
  * @param pool   卡池
  */
 export function hasArchaeoglobinDiveMemory(
-  player: PlayerState | undefined,
+  /** ⭐ v6.204：改吃 state/ownerIdx —— 原簽名只有 PlayerState，問不到「特性此刻生效嗎」。 */
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
 ): boolean {
-  if (!player || !pool) return false;
-  const all: CardInstance[] = [...(player.active ? [player.active] : []), ...player.bench];
-  return all.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card?.abilities) return false;
-    // v2.362：abilityNullifiedThisTurn 旗標 → 暫時被消除，視為無此特性
-    if (c.abilityNullifiedThisTurn) return false;
-    return card.abilities.some(ab => ab.name === '潛入記憶');
-  });
+  // ⭐ v6.204：古空棘魚 = Basic /【鬥】/ 非規則 ⇒ 熔岩洞・監視塔・初始化・黏著束縛都打不到；
+  //   打得到的是招式版暗夜羽擊（原碼只手刻了這一個）與 **passive 振翼髮｜暗夜羽擊**（原碼漏）。
+  //   走中央 hasAbilityOnSide（逐隻推 location + 過 isAbilityHolderEffective）。
+  return hasAbilityOnSide(state, ownerIdx, pool, '潛入記憶');
 }
 
 /**
