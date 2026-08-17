@@ -1,5 +1,135 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.202 passive 特性消費點沒接「特性消除」中央閘 —— 清掉「不必改簽名」的那組（14 個特性／20 個消費點）
+
+v6.201 C 段掃出 38 處沒接閘的消費點並列了待辦清單。本版只做**不必改函式簽名**的那組。
+用的是 v6.196 的既有中央 helper（`hasEffectiveAbilityByInst` / `isAbilityHolderEffective`），
+**沒有新建第四份述詞**。
+
+### A. 本版修好的消費點（8 個特性 / 13 處）
+
+| 消費點（BASE 24cc81b） | 特性（持有者） | 打得到它的消除來源 |
+|---|---|---|
+| `engine.ts:2026 hasFestivalDanceActive` | 祭典樂舞（裹蜜蟲 Stage1／角金魚 Basic／金魚王 Stage1／綿綿泡芙 Basic） | 招式版暗夜羽擊、passive 振翼髮 |
+| `engine.ts:2042 _isFestivalDanceFirstAttack` | 同上 | 同上 |
+| `effects.ts:8045 _isFestivalDanceFirstAttackLocal` | 同上（effects 不能 import engine 的本地複製） | 同上 |
+| `engine.ts:10156` 衝衝鼓 gate | 祭典樂舞（**跨隻**讀戰鬥位） | 上述 ＋ 監視塔／熔岩洞（partial → full） |
+| `lopunny…:111` 衝衝鼓 regA | 同上 | 同上 |
+| `engine.ts:3501` EVOLVE handler | 提升進化（伊布 Basic **Colorless**） | **火箭隊的監視塔**、暗夜羽擊兩型 |
+| `engine.ts:9182` getEvolvableTargets | 提升進化（UI 鏡射，與上一列同 commit） | 同上 |
+| `engine.ts:8404` | 同步脈衝（電龍 **Stage2**） | **傳說的熔岩洞**、暗夜羽擊兩型 |
+| `_shared.ts:623 hasOakEye` | 監視之眼（探探鼠 Basic Colorless） | 暗夜羽擊兩型（監視塔原本已 inline，改走中央） |
+| `ai.ts:1308` | 監視之眼（AI 的**第二份**判定，整段刪掉改呼叫中央述詞） | 同上 |
+| `_shared.ts:2219 hasMultiToolRelay` | 多重轉接（洛托姆ex Basic **ex**） | **初始化**、暗夜羽擊兩型（原本**完全沒有** gate） |
+| `v2999…:171 curlWallReduce` | 捲牆（爆炸頭水牛 Basic Colorless） | 暗夜羽擊兩型 |
+| `v3080…:127 hasBroadFortressOnActive` | 廣域堡壘（超甲狂犀 **Stage2**） | **傳說的熔岩洞**、passive 振翼髮（原本只擋 abilityNullifiedThisTurn） |
+
+⚠ **祭典樂舞打不到熔岩洞**：祭典樂舞的成立條件是場上有「祭典會場」，兩張都是競技場卡、
+`state.activeStadium` 只有一格 ⇒ 不可能同時在場。它的可達來源只有暗夜羽擊兩型（持有者必在戰鬥場）。
+
+### A-2. 子代理審查補抓的第二批（掃描器**結構上看不到**的兩類措辭）
+
+我第一版的掃描器只認「`abilities` 與 `.name === '…'` 在**同一行**」，於是
+**多行 for-of**（`for (const a of card.abilities) { if (a.name === 'X') … }`）與
+**registry 查表**（`PASSIVE_XXX.get(ab.name)`，根本沒有 `.name ===`）兩大類完全隱形。
+子代理用別的措辭變體重掃 + harness 實跑，抓出下面 6 處（全部同樣不必改簽名，本版一併修）：
+
+| 位置 | 特性（持有者） | 打得到它的消除來源 |
+|---|---|---|
+| `engine.ts:5143 PASSIVE_ATTACKER_BUFF` ＋ `effects.ts:16597` 的 regPre wrapper | 藏青浪濤（波盪水ex，Basic ＋ **ex**） | 初始化、暗夜羽擊兩型 |
+| `engine.ts:5811 PASSIVE_PREVENT_KO`（主傷害管線） | 結實（岩殿居蟹 **Stage1**）／勤奮之心（皮卡丘ex）／堅忍之軀（超級摔角鷹人ex）／不朽之軀（棄世猴） | **熔岩洞**、初始化、暗夜羽擊兩型 |
+| `effects.ts:8240 applyPreventKOToVictim`（狙擊／延後傷害的第二份） | 同上 | 同上（＋備戰 Stage2 的黏著束縛） |
+| `effects.ts:364 hasFairyZoneField` | 妖精領域（莉莉艾的皮皮ex，Basic ＋ **ex**） | 初始化、暗夜羽擊兩型 |
+| `_shared.ts:830 OPP_ENERGY_ATTACH_PASSIVE` | 侵蝕詛咒（耿鬼ex，**Stage2 ＋ ex**） | **熔岩洞**、初始化、暗夜羽擊兩型、黏著束縛 |
+| `mega_decks.ts:595 PASSIVE_ATTACK_BONUS` | 大晴天（裙兒小姐 **Stage1**）等 | **熔岩洞**（effects.ts:8149 的同一段早就有閘，這份漂了） |
+
+⚠ **藏青浪濤有兩份實作**：`PASSIVE_ATTACKER_BUFF` entry ＋ `regPre('波盪水ex|宣洩吼嘯')` 的
+wrapper 直接硬寫 `skipDefEffects: true`。**只修 registry 那份會被 wrapper 蓋回去**
+（波盪水ex 只有這一招 ⇒ wrapper 才是實際生效的路徑）——兩份都接了才有行為差異，
+守衛 15b 驗的就是 wrapper 那條；registry 那份的覆蓋來自枚舉守衛（20d）。
+
+⚠ **順手修好的一個 bug（子代理實跑證明）**：`effects.ts` 對 `_shared.setAbilityHolderEffectiveFn`
+的注入原本把 `location` **寫死 `'active'`**，但 `_shared.tryPromptPromoteActive` 有一條餵的是
+**備戰**持有者（`ON_ACTIVE_PROMOTE_BENCH_WATCHER`：超級拉帝亞斯ex 上場、holder 拉帝歐斯在備戰）
+⇒ 拉帝歐斯明明在備戰，卻被「對手戰鬥場振翼髮消除我方 **active** 特性」誤壓，潔淨支援發不動。
+改成呼叫 `hasEffectiveAbilityByInst`（自己從 state 推 location）後修好；
+`ON_PROMOTE_TO_ACTIVE_ABILITIES` 那一圈的持有者本來就是 active，推出來仍是 `'active'`，**行為零變化**。
+
+⚠ **`_shared.ts` 不能 import v3001／defense**（anti-pattern-lint Check O：底層模組反向 import 白名單
+只准縮不准擴）⇒ hasOakEye／hasMultiToolRelay 走**既有注入點** `_abilityHolderEffectiveFn`。
+順手把 `effects.ts` 的注入從「寫死 location='active'」改成呼叫 `hasEffectiveAbilityByInst`
+（由它自己從 state 推 location）—— 原本 `tryPromptPromoteActive` 的**備戰持有者**那一條
+（潔淨支援：拉帝歐斯在備戰）餵的是 bench 實體卻被當成 active 判，黏著束縛判定漏掉。
+
+### B. 查證後「結構上不可達」，**不硬改**（改了做不出行為差異 ⇒ 沒有辦法證明它是對的）
+
+| 消費點 | 理由 |
+|---|---|
+| `v2999…:204 steelixPalaceReduce`（岩石宮殿） | 大吾的小碎鑽 = Basic／Psychic／非規則，且卡面要求持有者**在備戰區**。現行 6 個消除來源：熔岩洞只打進化、監視塔只打【無】、初始化只打規則、招式版暗夜羽擊與 passive 振翼髮只打 active、黏著束縛只打備戰 **Stage2** ⇒ 沒有一個打得到。harness 實測：加 `abilityNullifiedThisTurn` ＋ 熔岩洞在場，`hasEffectiveAbilityByInst` 仍回 `true`。 |
+| `engine.ts:3533 / 9195`（虹色DNA） | `prismaticDNAException` 只在 `!sameEvoName(evo.evolvesFrom, baseCard.name)` 時才有作用，而 `sameEvoName` 會 strip 掉 `ex` 後綴（v5.307 為超級進化寶可夢加的），`sameEvoName('伊布','伊布ex') === true` ⇒ **標準路徑一定先命中，例外分支是死碼**。實測 `伊布ex → 葉伊布ex` 在把 gate 加上去後行為完全不變。 |
+| `m6_wave8.ts:33 / 56 / 57`（大洋增輝／深海抽出） | regA handler 內對**同一隻**的自我複核（同名卡陷阱防護）。`USE_ABILITY` 在 dispatch 前先跑 `getUsableAbilities`（engine.ts:9693 已過 `isAbilityHolderEffective`）⇒ 特性被消除時根本進不到 handler。⚠ 對照組：衝衝鼓那兩處讀的是**戰鬥位另一隻**的特性，上游那道閘蓋不到 ⇒ 必須修。 |
+| `effects.ts:2350`（皇帝之勢，`hasEffectShield`） | `hasEffectShield` **全 `src/` 零呼叫端＝死碼**（只剩兩處註解提到它）。live 路徑是 `ATTACK_EFFECT_IMMUNITY` 的 `self-ability`，effects.ts:2531 早就過了 `isAbilityHolderEffective`。 |
+| `engine.ts` 冰冷之帳區塊（化隱） | v6.201 已查證，本版原封不動。 |
+
+### C. 需要**改函式簽名 ＋ 全部呼叫端**，留給站長裁定（本版不動）
+
+| helper（簽名沒有 state） | 特性（持有者） | 可達的消除來源 | 呼叫端數 |
+|---|---|---|---|
+| `isConfusionImmune(inst, pool)` | 憨憨臉（呆呆獸 Basic/Psychic/J） | 暗夜羽擊兩型 | 6 |
+| `isSleepImmune(inst, pool)` | 不眠（咕咕 Basic/**Colorless**/H） | 監視塔、暗夜羽擊兩型 | 5 |
+| `getAttackerEffectiveTypes(inst, card, pool)` ＋ `hasIronTracksDualCore(inst, card, pool)` | 雙重屬性（小碎鑽 Basic/Fighting/J）、二重核心（鐵轍跡） | 暗夜羽擊兩型（攻擊者必在戰鬥場） | **只有 2 個**（`effects.ts:426` 在 `applyWeakRes` 內、`engine.ts:5399`），兩處都握有 state/actorIdx ⇒ **成本其實很低** |
+| `isImmuneToOppTrainer(targetInst, pool)`（＋`getOppTrainerImmunityAbilityName`） | 緊張感（斧牙龍 **Stage1**）／融合為雪（浩大鯨ex **Stage1 + ex**） | **熔岩洞**、**初始化**、暗夜羽擊 | 經 `isImmuneToOppSupporter` 等多處 |
+| `hasArchaeoglobinDiveMemory(player, pool)` | 潛入記憶（古空棘魚 Basic/Fighting） | 暗夜羽擊兩型 | 參數是 `PlayerState`、連 ownerIdx 都沒有 |
+| `hasMeloettaExDebut(inst, pool)` | 出道演出（美洛耶塔ex Basic/Psychic/**ex**） | **初始化**、暗夜羽擊兩型 | engine 2 處 |
+| `resolveInfiniteShadowKo(koInst, pool, eligible)` | 無限之影（耿鬼 **Stage2**/J） | **熔岩洞**、**黏著束縛**（備戰 Stage2） | ⚠ 另需先裁定「KO 當下持有者是否還算在場上」 |
+| `hasShellinkEvolveBypass(baseCard, state, ownerIdx, pool)` | 刺激進化（小嘴蝸／蓋蓋蟲 Basic/Grass） | 暗夜羽擊兩型（僅 active） | 有 state 但**缺 holder inst**；3 個呼叫端全在 engine.ts ⇒ 成本低 |
+| `effects.ts:7957 _dcSelfDiver` | 潛者捕捉（獵斑魚自身昏厥那條） | — | ⚠ KO 當下該隻已離場、算不出 location，需站長裁定 |
+| `passiveImmunityDamageBlock` / `passiveCoinImmunity`（`effects.ts:4208 / 4293`） | PASSIVE_IMMUNITY 全族（神秘石居＝岩殿居蟹 Stage1、璀璨鱗片＝美納斯ex Stage1+ex、順滑大衣…） | **熔岩洞**、暗夜羽擊兩型、黏著束縛（已 inline 擋了初始化＋監視塔） | 簽名只收 `targetCard`，沒有 inst／ownerIdx。⚠ engine 主管線那份（`engine.ts:5596`）**有**接中央閘，這份（中央／狙擊／UI 預覽）沒接 ⇒ 兩份已經在漂 |
+
+### D. 順手發現、**本版沒動**的另一個議題（請站長裁定）
+
+`sameEvoName` 會把 `伊布ex` 正規化成 `伊布`（v5.307 為「超級XXXex／XXXex／XXX 視為同一階變體」加的），
+於是 **伊布ex 可以直接進化成非 ex 的葉伊布**（harness 實測 `true`）。
+而【伊布ex】的卡面「虹色DNA」只寫「可從手牌使出從『伊布』進化而來的『寶可夢【ex】』」——
+沒有這條特性的話，伊布ex 本來就不該當成「伊布」被進化。這是另一個維度（進化同名判定），
+牽動所有超級進化寶可夢，**不宜順手改**。
+
+### 守衛 `scripts/test-v6202-passive-ability-gate.mjs`（53 檢查）
+
+①卡面逐字錨 ＋ 下限斷言（抓不到卡就紅，不做安慰劑綠燈）；每張卡的 `stage`/`pokemonType`
+逐一釘住 —— 那正是「哪些消除來源打得到它」的依據。
+②行為端逐張：**特性被消除 ⇒ 效果失效**，且每一條都配**正對照**（特性正常 ⇒ 仍生效）。
+祭典樂舞走完整 `applyAction ATTACK`；衝衝鼓判定端（`getUsableAbilities`）與動作端
+（`USE_ABILITY`）各驗一次；提升進化同時驗 `getEvolvableTargets`（UI 黃框）與 `EVOLVE`；
+多重轉接驗「卡面寫的丟棄多附道具」真的發生；監視之眼另用願增猿｜腎上腺腦力跑真流程。
+捲牆多一條**回歸**（備戰那隻仍有效時照樣 -60）防修過頭。
+③`hasAbilityOnBench` 的**刻意無 gate 例外**：行為端證明黏著束縛仍生效且不爆堆疊，
+靜態端斷言該函式維持沒有 gate（配正對照證明判準抓得到違規）。
+④**枚舉守衛**（20a~20k）：剝註解 ＋ 剝零寬字元後掃 `src/lib/game/**/*.ts`，
+**兩種 pattern**（① `X.name === '特性名'`，含**多行 for-of** ② `PASSIVE_*` 等
+**registry 查表** `MAP.get(ab.name)`）。每個消費點必須「±8 行內有中央閘呼叫，
+且那一行帶著同一個特性名字面量**或**同一個 `ab.name` 變數」，否則就得出現在本檔的
+`EXEMPT` 表並寫明理由。
+⚠ 這裡刻意**不用**「±16 行內出現任何 gate 名稱」那種窗口判準 —— v6.201 就吃過虧
+（`engine.ts` 冰冷之帳的化隱被同區塊的 `hasAnyEffectiveAbility` 蓋掉而漏報）；
+本版修完 `engine.ts:9182` 之後，`9195` 也會因為同一個窗口污染而假綠。
+⚠ 「帶著同一個特性名」不能只認字面量：`engine.ts selfAttackPreconditionBlock` 是
+`gate(..., ab.name, ...)` 的合法寫法，只認字面量會誤報（20i 是這條的正對照）。
+另有：豁免表**不得有死條目**（修好了就要從表裡刪掉）、掃描器下限斷言（≥90 個消費點／
+兩種 pattern 各有下限／≥55 個已接閘）、六條掃描器自我驗證
+（違規樣本必須被抓到／多行 for-of 不得再隱形／registry 查表不得再隱形／
+gate 用變數傳特性名不得誤報／註解裡的假樣本不算／零寬字元要剝掉）。
+
+**HEAD-FAIL**：把 8 個改動檔還原成 BASE blob 重跑 → **20 條紅**
+（1b/2b/3b/4b/5b/6b/6c/7b/8b/9b/12b/13b/14b/15b/16b/17b/18b/19b/20c/20d），
+所有正對照維持綠 ⇒ 證明它們不是恆真式。
+另做**逐 hunk 反轉**：只還原 `ai.ts` 那個 hunk（AI 的第二份監視之眼判定，屬啟發式、無行為斷言）
+⇒ 20d 亮紅 ⇒ 它確實被枚舉守衛守住。
+
+### 部署
+`update-tournament.bat`（卡效果／引擎改動）、`update-admin-full.bat`（admin.html 版本提示）。
+`redeploy-oracle.bat` 本版**不需要**（沒動 `server_admin_patch.js`）。
+
 ## v6.201 手機直式手牌述詞收斂 ＋ ACE消弭／濕氣 補上「特性是否生效」中央閘
 
 ### A. 手機直式收斂到 `getHandCardOps()`（玩家零可見變化以外的部分見下）

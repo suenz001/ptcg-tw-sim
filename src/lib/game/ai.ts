@@ -22,6 +22,9 @@ import {
 } from './engine';
 // v4.949 Phase 2a：能量分配 role-aware
 import { findMainAttackers } from './ai-roles';
+// v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196 建立於 defense.ts）。
+//   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
+import { hasEffectiveAbilityByInst } from './defense';
 import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
@@ -1303,13 +1306,10 @@ function _hasOppCounterImmunity(
   const opp = state.players[dIdx];
   const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
   for (const c of allOpp) {
-    const card = pool.get(c.cardId);
-    // v4.921 火箭隊的監視塔 gate：探探鼠 Colorless 在此 stadium 下特性失效
-    if (card?.abilities?.some(a => a.name === '監視之眼')) {
-      const sCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
-      const blocked = sCard?.name === '火箭隊的監視塔' && card.pokemonType === 'Colorless';
-      if (!blocked) return true;
-    }
+    // ⭐ v6.202：原本只 inline 擋「火箭隊的監視塔」一種消除來源（招式版暗夜羽擊／
+    //   passive 振翼髮｜暗夜羽擊 全漏），而且是 _shared.hasOakEye 之外的**第二份**判定。
+    //   改走 v6.196 中央述詞：AI 與引擎對「監視之眼還在不在」的看法從此不會分岔。
+    if (hasEffectiveAbilityByInst(state, dIdx, c, pool, '監視之眼')) return true;
   }
   return false;
 }

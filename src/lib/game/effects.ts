@@ -372,7 +372,13 @@ export function hasFairyZoneField(
     const card = pool.get(c.cardId);
     if (!card?.abilities) continue;
     for (const a of card.abilities) {
-      if (a.name === '妖精領域') return true;
+      if (a.name !== '妖精領域') continue;
+      // ⭐ v6.202：原本**完全沒有** gate。莉莉艾的皮皮ex 是「擁有規則的寶可夢」⇒
+      //   鐵荊棘ex｜初始化 會消除它；在戰鬥場時暗夜羽擊兩型亦然。
+      //   （上面那條註解仍然成立：皮皮ex 是【超】不是【無】，火箭隊的監視塔打不到它——
+      //     中央述詞比對的正是 pokemonType==='Colorless'，行為不變。）
+      if (!_v6196HasEffAbilByInst(state, ownerIdx, c, pool, '妖精領域')) continue;
+      return true;
     }
   }
   return false;
@@ -7579,8 +7585,13 @@ export function hasBloomOnField(state: GameState, ownerIdx: 0 | 1, pool: Map<str
 // v5.601：把 nullification-aware 的繁茂判定注入 _shared（getEnergyDiscardUnits 等 units/cost 路徑共用單一來源）。
 setBloomEffectiveFn(hasBloomOnField);
 // v5.753：注入「active 位特性是否有效」給 _shared.tryPromptPromoteActive(上場時特性 gate 暗夜羽擊等)。
-setAbilityHolderEffectiveFn((state, inst, card, ownerIdx, abilityName, pool) =>
-  isAbilityHolderEffective(state, inst, card, ownerIdx, abilityName, 'active', pool));
+// ⭐ v6.202：原本把 location 寫死 'active'，但呼叫端 tryPromptPromoteActive 有一條餵的是
+//   **備戰**持有者（潔淨支援：超級拉帝亞斯ex 上場、holder 拉帝歐斯在備戰）→ 那條的
+//   黏著束縛判定被漏掉；v6.202 新接上的 hasOakEye / hasMultiToolRelay 也都是全場（active+bench）。
+//   改走 v6.196 的 hasEffectiveAbilityByInst —— 它自己從 state 推 location，
+//   呼叫端不再有算錯的機會（v6.196 建立此 wrapper 的理由）。
+setAbilityHolderEffectiveFn((state, inst, _card, ownerIdx, abilityName, pool) =>
+  _v6196HasEffAbilByInst(state, ownerIdx, inst, pool, abilityName));
 
 // host 身上某屬性能量數（host-aware 特殊能量 + 繁茂基本草×2）。依能量數算傷害/指示物用此。
 export function countEnergyTypeBloomAware(
@@ -8042,7 +8053,10 @@ function _isFestivalDanceFirstAttackLocal(state: GameState, aIdx: 0 | 1, pool: M
   const a = state.players[aIdx].active;
   if (!a) return false;
   const card = pool.get(a.cardId);
+  // ⭐ v6.202：effects.ts 這份是 engine `_isFestivalDanceFirstAttack` 的本地複製
+  //   （effects.ts 不能 import engine），同樣要問「特性此刻有沒有被消除」，否則兩份會分岔。
   if (!card?.abilities?.some(ab => ab.name === '祭典樂舞')) return false;
+  if (!_v6196HasEffAbilByInst(state, aIdx, a, pool, '祭典樂舞')) return false;
   const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
   if (sd?.name !== '祭典會場') return false;
   if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
@@ -8232,6 +8246,9 @@ function applyPreventKOToVictim(
   if (victimCard.abilities) {
     for (const ab of victimCard.abilities) {
       const fn = PASSIVE_PREVENT_KO.get(ab.name); if (!fn) continue;
+      // ⭐ v6.202：與 engine 主管線那份同 commit（兩份獨立實作會漂，v6.202 前兩份都沒 gate）。
+      //   這條路徑目標可能在備戰 ⇒ location 依 isActive 判（備戰 Stage2 還會吃到黏著束縛）。
+      if (!isAbilityHolderEffective(state, inPlay, victimCard, defenderIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
       const r = fn(inPlay, victimCard, baseDamage);
       if (!r.prevent) continue;
       // v5.596 擲幣型(堅忍之軀/不朽身軀)走 flipCoinsWithLog；反面則不防(保留擲幣 log)，繼續查其他特性
@@ -16579,6 +16596,13 @@ regR('swiftcursor-energy-pick', (st, idx, pickedIids, params, pool) => {
   if (oldPre) {
     regPre('波盪水ex|宣洩吼嘯', (state, aIdx, pool, action) => {
       const r = oldPre(state, aIdx, pool, action);
+      // ⭐ v6.202：藏青浪濤有**兩份**實作（PASSIVE_ATTACKER_BUFF entry ＋ 本 wrapper），
+      //   兩份原本都沒問「特性此刻有沒有被消除」。只修 registry 那份會被本 wrapper 蓋回去
+      //   （波盪水ex 只有這一招 ⇒ 本 wrapper 是實際生效的那條路徑）。
+      //   波盪水ex 是「擁有規則的寶可夢」⇒ 鐵荊棘ex｜初始化 會消除它；
+      //   攻擊者依定義在戰鬥場 ⇒ 招式版暗夜羽擊與 passive 振翼髮 亦然。
+      const _atk = state.players[aIdx].active;
+      if (!_v6196HasEffAbilByInst(state, aIdx, _atk, pool, '藏青浪濤')) return r;
       return { ...r, skipDefEffects: true };
     });
   }

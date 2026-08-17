@@ -2023,7 +2023,13 @@ function addLog(
 function hasFestivalDanceActive(state: GameState, idx: 0 | 1, pool: Map<string, Card>): boolean {
   const active = state.players[idx].active;
   const card = active ? pool.get(active.cardId) : null;
-  return card?.abilities?.some(a => a.name === '祭典樂舞') ?? false;
+  if (!card?.abilities?.some(a => a.name === '祭典樂舞')) return false;
+  // ⭐ v6.202：原本只比對特性名，**沒問特性此刻有沒有被消除**（v6.196 那一族的漏網）。
+  //   祭典樂舞持有者一定在戰鬥場（是使用招式的那隻）⇒ 招式版暗夜羽擊（abilityNullifiedThisTurn）
+  //   與 passive 振翼髮｜暗夜羽擊 都打得到它。改走 v6.196 中央述詞（不另建第四份）。
+  //   ⚠ 傳說的熔岩洞打不到本特性：祭典樂舞的成立條件是場上有「祭典會場」，
+  //     兩張都是競技場卡、不可能同時在場（唯一場地槽 state.activeStadium）。
+  return hasEffectiveAbilityByInst(state, idx, active, pool, '祭典樂舞');
 }
 
 /**
@@ -2039,7 +2045,8 @@ function _isFestivalDanceFirstAttack(
   const attacker = state.players[aIdx].active;
   if (!attacker) return false;
   const card = pool.get(attacker.cardId);
-  if (!card?.abilities?.some(a => a.name === '祭典樂舞')) return false;
+  // ⭐ v6.202：同 hasFestivalDanceActive —— 原本只比對特性名，沒問特性是否被消除。
+  if (!hasEffectiveAbilityByInst(state, aIdx, attacker, pool, '祭典樂舞')) return false;
   const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
   if (stadiumCard?.name !== '祭典會場') return false;
   if (state.festivalDanceUsedThisTurn?.[aIdx]) return false;
@@ -2164,7 +2171,9 @@ export function tryPromoteToMainForFestival(
   }
   // v5.447：祭典樂舞被對手特性消除（振翼髮｜暗夜羽擊「對手戰鬥寶可夢的特性全部消除」）
   //   → 不能使用第 2 次。第一拳擊倒對手後對手推出振翼髮，攻擊方祭典樂舞即被壓制。
-  //   hasFestivalDanceActive 只看特性是否「存在」，這裡補查是否被 passive 消除。
+  // ⭐ v6.202 更正：上一行的 hasFestivalDanceActive **已經**走中央述詞
+  //   hasEffectiveAbilityByInst（涵蓋本段的暗夜羽擊在內全部 6 種消除來源），
+  //   本段因此變成冗餘的縱深防禦，保留但不再是唯一防線（原註解「只看特性是否存在」已過期）。
   {
     const fdCard = pool.get(player.active.cardId);
     if (isAbilityNullifiedByPassive(state, pending.idx, player.active, fdCard, '祭典樂舞', 'active', pool)) {
@@ -3498,7 +3507,10 @@ function handlePlaying(
     if (!baseCard) return state;
     // v2.149 提升進化（伊布 SV8a 125）：戰鬥場上時可第 1 回合或剛使出時進化
     //   只有 base 在戰鬥場 + base 卡擁有此特性時 bypass isFirstTurn / justPlaced gate
-    const hasPushEvolveAbility = isActive && baseCard.abilities?.some(a => a.name === '提升進化');
+    // ⭐ v6.202：原本只比對特性名。伊布 pokemonType='Colorless' ⇒【火箭隊的監視塔】
+    //   「雙方場上所有【無】寶可夢的特性全部消除」打得到它；base 在戰鬥場 ⇒ 暗夜羽擊兩型亦然。
+    const hasPushEvolveAbility = isActive
+      && hasEffectiveAbilityByInst(state, aIdx, basePoke, pool, '提升進化');
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化也 bypass isFirstTurn gate（卡面：「最初回合或剛使出的回合也可進化」）
     const hasShellinkBypassFirst = hasShellinkEvolveBypass(baseCard, state, aIdx, pool);
     // 鬥志戰吼（勒克貓 Stage1 特性）：若對手戰鬥場是【ex】寶可夢，
@@ -5133,7 +5145,11 @@ function handlePlaying(
     if (attackerCard?.abilities) {
       for (const ab of attackerCard.abilities) {
         const buf = PASSIVE_ATTACKER_BUFF.get(ab.name);
-        if (buf?.skipDefEffects) skipDefEffects = true;
+        if (!buf?.skipDefEffects) continue;
+        // ⭐ v6.202：原本**完全沒有** gate。波盪水ex 是「擁有規則的寶可夢」⇒
+        //   鐵荊棘ex｜初始化 會消除它；攻擊者依定義在戰鬥場 ⇒ 暗夜羽擊兩型亦然。
+        if (!isAbilityHolderEffective(workingState, attacker.active, attackerCard, aIdx, ab.name, 'active', pool)) continue;
+        skipDefEffects = true;
       }
     }
     // v3.892：attack-time snapshot — 紀錄宣告當時對手場上是否有花之帷幔（謝米）。
@@ -5802,6 +5818,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       for (const ab of defenderCard.abilities) {
         const fn = PASSIVE_PREVENT_KO.get(ab.name);
         if (!fn) continue;
+        // ⭐ v6.202：原本**完全沒有** gate（同區塊的 PASSIVE_IMMUNITY／PASSIVE_ON_KO／
+        //   PASSIVE_KO_RETALIATION 都有，只有 prevent-KO 漏掉）。岩殿居蟹｜結實 是 Stage1
+        //   ⇒【傳說的熔岩洞】打得到；皮卡丘ex｜勤奮之心、超級摔角鷹人ex｜堅忍之軀 是規則
+        //   寶可夢 ⇒ 初始化打得到；此處恆為防守方**戰鬥位** ⇒ 暗夜羽擊兩型亦然。
+        if (!isAbilityHolderEffective(newState, defenderState.active, defenderCard, dIdx, ab.name, 'active', pool)) continue;
         const result = fn(defenderState.active, defenderCard, baseDamage);
         if (result.prevent) {
           // v5.596 擲幣型 prevent-KO(堅忍之軀/不朽身軀)走 flipCoinsWithLog；反面則照常昏厥
@@ -8400,8 +8421,10 @@ export function applyDefenderReductionsBlockA(
     // v2.217 電龍（J）｜同步脈衝 — 自己手牌與對手手牌張數相同 → 招式傷害 +80
     // 卡面：「若自己的手牌與對手的手牌張數相同，則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害「+80」點。」
     // gate：only triggers when attacker is 電龍 自己（attacker.active.cardName === 電龍）
+    // ⭐ v6.202：原本只比對特性名。電龍 stage='Stage2' ⇒【傳說的熔岩洞】
+    //   「雙方場上所有進化寶可夢的特性全部消除」打得到它（攻擊者必在戰鬥場 ⇒ 暗夜羽擊亦然）。
     if (baseDamage > 0 && attackerCard.name === '電龍'
-        && attackerCard.abilities?.some(a => a.name === '同步脈衝')) {
+        && hasEffectiveAbilityByInst(workingState, aIdx, attacker.active, pool, '同步脈衝')) {
       const myHand = attacker.hand.length;
       const oppHand = defender.hand.length;
       if (myHand === oppHand) {
@@ -9179,7 +9202,10 @@ export function getEvolvableTargets(
     if (!fpCard) continue;
     // v2.149 提升進化（伊布 SV8a 125）：base 在戰鬥場 + 卡有此特性 → bypass isFirstTurn + justPlaced
     const isFpActive = player.active?.iid === fp.iid;
-    const hasPushEvolveAbility = isFpActive && fpCard.abilities?.some(a => a.name === '提升進化');
+    // ⭐ v6.202：與 EVOLVE handler 同一個中央述詞 —— 兩端必須同 commit，
+    //   只改一端會變成「黃框亮著但點了沒反應」或反過來（v6.088 教訓）。
+    const hasPushEvolveAbility = isFpActive
+      && hasEffectiveAbilityByInst(state, state.activePlayerIndex as 0 | 1, fp, pool, '提升進化');
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — bypass isFirstTurn + justPlaced + evolvedThisTurn
     const hasShellinkBypassUI = hasShellinkEvolveBypass(fpCard, state, state.activePlayerIndex, pool);
     // 鬥志戰吼 bypass（base 勒克貓 + 對手 ex）
@@ -10155,8 +10181,11 @@ export function getUsableAbilities(
         const activeCard = pool.get(player.active.cardId);
         const isFestival = activeCard?.abilities?.some(a => a.name === '祭典樂舞');
         if (!isFestival) return;
-        // v5.456 暗夜羽擊：戰鬥位「祭典樂舞」被對手 passive 消除 → 衝衝鼓不可用
-        if (isAbilityNullifiedByPassive(state, state.activePlayerIndex, player.active, activeCard, '祭典樂舞', 'active', pool)) return;
+        // ⭐ v6.202：原本只接 isAbilityNullifiedByPassive（初始化／振翼髮 passive／黏著束縛），
+        //   漏掉招式版暗夜羽擊（abilityNullifiedThisTurn）、火箭隊的監視塔、傳說的熔岩洞。
+        //   ⚠ 這裡讀的是**戰鬥位另一隻**的特性（啪咚猴在備戰），上游 getUsableAbilities 那道
+        //     isAbilityHolderEffective 只驗「啪咚猴自己的衝衝鼓」，蓋不到這一條 ⇒ 必須自己問。
+        if (!hasEffectiveAbilityByInst(state, state.activePlayerIndex as 0 | 1, player.active, pool, '祭典樂舞')) return;
         if (player.deck.length === 0) return;
       }
       // v2.229 貓頭夜鷹｜搜尋寶石：evolvedThisTurn + 場上太晶寶可夢 + 牌庫不空

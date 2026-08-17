@@ -30,6 +30,9 @@ import {
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
+// v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196／v5.224）。
+//   本檔的 PASSIVE_ATTACK_BONUS 迴圈是 effects.ts:8149 那份的第二份實作，必須接同一個閘。
+import { isAbilityHolderEffective } from './v3001_g3_wave3';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 奧利瓦ex ｜ 芳香射擊（160 + 自身清特殊狀態）
@@ -597,9 +600,14 @@ function computeOliveOilBuff(
     if (!c?.abilities) continue;
     // 監視塔擋【無】寶可夢被動特性
     if (watchtowerActive && c.pokemonType === 'Colorless') continue;
+    const _loc: 'active' | 'bench' = attacker.active?.iid === inst.iid ? 'active' : 'bench';
     for (const ab of c.abilities) {
       const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
       if (!fn) continue;
+      // ⭐ v6.202：上面那行只擋掉「火箭隊的監視塔」一種來源 —— effects.ts:8149 的同一段
+      //   早就過了 isAbilityHolderEffective，這份（超級進化 multi-target 路徑）漏掉，
+      //   兩份實作漂了。接上同一個中央述詞。
+      if (!isAbilityHolderEffective(st, inst, c, actorIdx, ab.name, _loc, pool)) continue;
       if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStack.has(ab.name)) continue;
       const b = fn(attackerCard, defenderCard, st, actorIdx, pool);
       if (b > 0) {

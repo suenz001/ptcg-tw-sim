@@ -166,9 +166,15 @@ export function curlWallReduce(
   const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
   if (sd && ROCKET_WATCHTOWER_STADIUMS.has(sd.name)) return 0;
   // 至少一隻「有捲牆特性」的爆炸頭水牛在場
+  // ⭐ v6.202：原本只比對特性名（上面那行的監視塔 early-return 是唯一的消除來源判定），
+  //   招式版暗夜羽擊（abilityNullifiedThisTurn）與 passive 振翼髮｜暗夜羽擊 都打得到
+  //   位於戰鬥場的爆炸頭水牛 ⇒ 逐隻過中央述詞 isAbilityHolderEffective（v6.196 家族）。
+  const _actIid = me.active?.iid;
   const hasWall = all.some(c => {
     const card = pool.get(c.cardId);
-    return card?.name === '爆炸頭水牛' && !!card.abilities?.some(a => a.name === '捲牆');
+    if (card?.name !== '爆炸頭水牛' || !card.abilities?.some(a => a.name === '捲牆')) return false;
+    const loc: 'active' | 'bench' = (_actIid != null && c.iid === _actIid) ? 'active' : 'bench';
+    return isAbilityHolderEffective(state, c, card, defenderIdx, '捲牆', loc, pool);
   });
   return hasWall ? 60 : 0;
 }

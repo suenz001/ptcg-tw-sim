@@ -121,10 +121,11 @@ export function hasBroadFortressOnActive(
   const a = state.players[defenderIdx]?.active;
   if (!a) return false;
   const card = pool.get(a.cardId);
-  if (!card?.abilities) return false;
-  // v2.362：abilityNullifiedThisTurn 旗標 → 暫時被消除，視為無此特性
-  if (a.abilityNullifiedThisTurn) return false;
-  return card.abilities.some(ab => ab.name === '廣域堡壘');
+  if (!card?.abilities?.some(ab => ab.name === '廣域堡壘')) return false;
+  // ⭐ v6.202：原本只擋 abilityNullifiedThisTurn **一種**來源。超甲狂犀 stage='Stage2'
+  //   ⇒【傳說的熔岩洞】「雙方場上所有進化寶可夢的特性全部消除」打得到它；
+  //   持有者依卡面必在戰鬥場 ⇒ passive 振翼髮｜暗夜羽擊 亦然。改走 v6.196 中央述詞。
+  return isAbilityHolderEffective(state, a, card, defenderIdx, '廣域堡壘', 'active', pool);
 }
 
 /**

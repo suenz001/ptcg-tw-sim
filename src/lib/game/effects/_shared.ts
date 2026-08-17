@@ -616,13 +616,20 @@ export function hasOakEye(state: GameState, pool: Map<string, Card>): boolean {
   // 造成循環依賴（stadiums.ts 已 import 自 _shared.ts）。
   const stadiumCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
   const rocketWatchtower = stadiumCard?.name === '火箭隊的監視塔';
-  for (const p of state.players) {
+  for (const ownerIdx of [0, 1] as const) {
+    const p = state.players[ownerIdx];
     const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
     for (const pk of all) {
       const card = pool.get(pk.cardId);
       if (!card?.abilities?.some(a => a.name === '監視之眼')) continue;
       // 火箭隊的監視塔：Colorless 寶可夢特性失效，跳過此持有者
       if (rocketWatchtower && card.pokemonType === 'Colorless') continue;
+      // ⭐ v6.202：上面那行只擋掉「監視塔」**一種**消除來源 —— 招式版暗夜羽擊
+      //   （abilityNullifiedThisTurn）與 passive 振翼髮｜暗夜羽擊 都漏掉。
+      //   _shared.ts 是底層模組、不能 import v3001／defense（anti-pattern-lint Check O）
+      //   ⇒ 走既有注入點 _abilityHolderEffectiveFn（effects.ts 載入時注入
+      //   hasEffectiveAbilityByInst，見 v6.202 的注入處），不另建第四份述詞。
+      if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, pk, card, ownerIdx, '監視之眼', pool)) continue;
       return true;
     }
   }
@@ -824,6 +831,12 @@ export function fireOnHandEnergyAttached(
       if (firedOnThisInst.has(ab.name)) continue;
       const fn = OPP_ENERGY_ATTACH_PASSIVE.get(ab.name);
       if (!fn) continue;
+      // ⭐ v6.202：原本**完全沒有** gate。耿鬼ex stage='Stage2' 且是規則寶可夢 ⇒
+      //   【傳說的熔岩洞】與 鐵荊棘ex｜初始化 都打得到；在戰鬥場時暗夜羽擊兩型亦然，
+      //   在備戰時黏著束縛（備戰 Stage2）也打得到。_shared 不能 import v3001/defense
+      //   （Check O）⇒ 走既有注入點 _abilityHolderEffectiveFn（location 由它自己推）。
+      if (_abilityHolderEffectiveFn
+          && !_abilityHolderEffectiveFn(s, inst, card, (1 - attacherIdx) as 0 | 1, ab.name, pool)) continue;
       firedOnThisInst.add(ab.name);
       s = fn(s, (1 - attacherIdx) as 0 | 1, attacherIdx, targetIid, pool);
     }
@@ -2217,6 +2230,12 @@ export function hasMultiToolRelay(
     if (!c) continue;
     if (c.name !== '洛托姆ex') continue;
     if (!c.abilities?.some(a => a.name === '多重轉接')) continue;
+    // ⭐ v6.202：原本**完全沒有** gate。洛托姆ex 是「擁有規則的寶可夢」⇒
+    //   鐵荊棘ex｜初始化 會消除它；在戰鬥場時暗夜羽擊兩型亦然。
+    //   卡面自己就寫「（這個特性消除時，將身上多附的『寶可夢道具』卡丟棄。）」
+    //   ⇒ 消除後 reconcileMultiToolRelay 必須真的把多附的道具丟掉。
+    //   同 hasOakEye：_shared 不能 import v3001／defense（Check O）⇒ 走注入點。
+    if (_abilityHolderEffectiveFn && !_abilityHolderEffectiveFn(state, inst, c, ownerIdx, '多重轉接', pool)) continue;
     return true;
   }
   return false;

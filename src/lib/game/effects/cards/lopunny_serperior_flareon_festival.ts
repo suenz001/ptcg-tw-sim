@@ -27,7 +27,7 @@ import {
 import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import { isBasicEnergyOfType } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
-import { isAbilityNullifiedByPassive } from './v3001_g3_wave3';
+import { isAbilityHolderEffective } from './v3001_g3_wave3';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 蜜集大蛇ex｜熟成充能（特性）
@@ -108,8 +108,11 @@ regA('啪咚猴', 0, (st, idx, pool) => {
   const active = st.players[idx].active;
   if (!active) return st;
   const card = pool.get(active.cardId);
+  // ⭐ v6.202：原本只接 isAbilityNullifiedByPassive（初始化／振翼髮 passive／黏著束縛），
+  //   漏掉招式版暗夜羽擊、火箭隊的監視塔、傳說的熔岩洞。與 engine getUsableAbilities 的
+  //   '衝衝鼓' gate 同一條件、必須同 commit（判定端 vs 動作端）。
   if (!card?.abilities?.some(a => a.name === '祭典樂舞')
-      || isAbilityNullifiedByPassive(st, idx, active, card, '祭典樂舞', 'active', pool)) {
+      || !isAbilityHolderEffective(st, active, card, idx, '祭典樂舞', 'active', pool)) {
     // v5.456 暗夜羽擊：戰鬥位「祭典樂舞」被對手 passive 消除亦視為條件不成立
     return addLog(st, '衝衝鼓：戰鬥位不是有效的祭典樂舞寶可夢（或已被對手特性消除）', idx);
   }
