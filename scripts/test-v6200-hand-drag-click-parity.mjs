@@ -342,10 +342,15 @@ chk('③版面：battleLayout 三選一（classic / tabletop / fable）',
 // 手機直式：沒有卡片拖曳；入口讀中央 gate；不硬編卡名
 chk('③手機直式：沒有手牌卡拖曳（走 sheet 選單）',
     !/startDrag\(/.test(mob) && !/type DragKind/.test(mob));
-chk('③手機直式：手牌特性入口讀中央 getHandActivatableAbilities',
+chk('③手機直式：手牌特性入口讀中央 getHandActivatableAbilities（取 abilityName/abilityIndex）',
     /for \(const a of getHandActivatableAbilities\(game, myIdx as 0 \| 1, pool\)\)/.test(mob));
-chk('③手機直式：黃框也讀同一支中央 gate',
-    /handAbilityActivatableIids[\s\S]{0,400}getHandActivatableAbilities/.test(mob));
+// ⭐v6.201：手機的 handAbilityActivatableIids（第三份判定）已刪除，
+//   黃框與 sheet 動作一律讀中央 getHandCardOps()（守衛細節見 test-v6201）。
+chk('③手機直式：黃框與動作清單都讀中央 getHandCardOps（不再自帶第三份判定）',
+    /getHandCardOps\(game, myIdx as 0 \| 1, pool,/.test(mob)
+    && /\{@const playable = _ops\.size > 0\}/.test(mob)
+    && !/handAbilityActivatableIids/.test(mob),
+    JSON.stringify({ ops: /getHandCardOps\(/.test(mob), playable: /_ops\.size > 0/.test(mob) }));
 
 // v6.125/v6.098 既有鐵律：UI 端禁硬編手牌特性卡名／特性名
 const HARDCODED = ['激動俯衝', '緊急迴轉', '烈箭鷹', '齒輪怪'];

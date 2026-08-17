@@ -19,9 +19,15 @@
 // ⚠ 桌機 classic 與 fable 兩種版面共用**同一份 markup**（fable 只是 `.playmat` 上多一個
 //   `layout-fable` class 的純 CSS 版面），所以修這裡兩種版面同時生效；
 //   手機直式（`MobilePortraitBattle.svelte`）**沒有卡片拖曳**（點卡片開 sheet 選單，
-//   每個操作各一顆按鈕），所以不存在「拖曳/點擊不一致」這個缺口，本版**沒有改動它**。
-//   ⚠ 它目前仍自帶一份 playable*Iids / aceCancelActiveLocal —— 那是「第三份判定」，
-//     日後若手機端要加拖曳或再出現漂移，應該改成呼叫本檔的 getHandCardOps()。
+//   每個操作各一顆按鈕），所以不存在「拖曳/點擊不一致」這個缺口。
+// ⭐v6.201：手機直式原本自帶的**第三份**判定（playable{Basic,Fossil,Trainer,Evo}Iids
+//   ＋ aceCancelActiveLocal ＋ handAbilityActivatableIids）已全部刪除，改讀本檔。
+//   ⚠ 手機與桌機仍是**兩套獨立版面分支**（禁用 @media 當手機開關）——
+//     收斂的只有「這張手牌現在能做什麼」這個述詞，版面/互動 paradigm 各自維持。
+//   ⚠ 手機的「我的回合」與桌機不同源：手機 `isMyTurn = !isSpectator &&
+//     activePlayerIndex === myIdx`，但 setup 階段雙方同時擺場（activePlayerIndex
+//     只有一個），所以手機另外傳 `ctx.isMySetupTurn`（見 HandCardOpsCtx）。
+//     沒傳＝沿用 isMyTurn ⇒ 桌機行為完全不變。
 
 import type { Card } from '$lib/cards/types';
 import type { GameState } from './types';
@@ -35,6 +41,7 @@ import {
   isFossilItemCard,
   canBeInitialActiveCard,
   isAceCancelActive,
+  getBenchLimit,
 } from './engine';
 
 /**
@@ -123,6 +130,15 @@ export function handOpForDropTarget(
 export interface HandCardOpsCtx {
   /** UI 端 isMyTurn()：線上看 myPlayerIndex、AI 模式看人類座位、本機雙人隨 actor 翻轉 */
   isMyTurn: boolean;
+  /**
+   * ⭐v6.201 setup 階段專用的「我現在可以擺場嗎」。
+   * setup 是**雙方同時**擺場，`activePlayerIndex` 只指得到一個人 —— 手機直式的
+   * `isMyTurn` 正是 `activePlayerIndex === myIdx`，拿它當 setup 的閘會把另一方鎖死
+   * （手機端 v2.287 就是為了這個而在 setup 條件裡刻意不寫 isMyTurn）。
+   * 桌機的 `isMyTurn()` 本身已含 setup 分支（見 +page.svelte setupActorSide），
+   * 所以**不傳**＝沿用 isMyTurn，桌機行為不變。
+   */
+  isMySetupTurn?: boolean;
 }
 
 /**
@@ -168,9 +184,14 @@ export function getHandCardOps(
   //   canBasicSetup      = 基礎卡 && setup && 我的回合 && (未 setupDone || mulligan 補抽後加備戰)
   //   canSetupActiveSpecial = 非基礎但可當初始戰鬥寶可夢（閃焰王牌｜瞬間爆發力）
   //                        && setup && **!setupDone**（沒有 mulligan 分支）&& 我的回合 && 沒有戰鬥寶可夢
-  const setupOpen = setup && isMyTurn
+  //   ⭐v6.201 setup 用 isMySetupTurn（未傳→退回 isMyTurn，桌機行為不變）
+  const setupTurn = ctx.isMySetupTurn === undefined ? isMyTurn : !!ctx.isMySetupTurn;
+  const setupOpen = setup && setupTurn
     && (!state.setupDone?.[myIdx] || !!state.mulliganPostBenchOpen?.[myIdx]);
-  const setupFresh = setup && isMyTurn && !state.setupDone?.[myIdx];
+  const setupFresh = setup && setupTurn && !state.setupDone?.[myIdx];
+  // ⭐v6.201 備戰位已滿就不能再放（engine handleSetup 的 BENCH_POKEMON 同一道 gate）——
+  //   原本只有 playing 路徑的 getPlayableBasics 有這層，setup 路徑漏了。
+  const benchFull = (me.bench?.length ?? 0) >= getBenchLimit(state, myIdx, pool);
 
   for (const inst of me.hand ?? []) {
     const c = pool.get(inst.cardId);
@@ -191,7 +212,7 @@ export function getHandCardOps(
       ops.add('energy');
     }
     if (isBasicCard && basics.has(inst.iid)) ops.add('basic');
-    if (isBasicCard && setupOpen && !!me.active) ops.add('basic-setup');
+    if (isBasicCard && setupOpen && !!me.active && !benchFull) ops.add('basic-setup');
     if (!me.active && (isBasicCard ? setupOpen : (setupFresh && canBeInitialActiveCard(c)))) ops.add('setup-active');
     if (isFossilCard && fossils.has(inst.iid)) ops.add('fossil');
     if (!isFossilCard && isTrainerCard && trainers.has(inst.iid)) {

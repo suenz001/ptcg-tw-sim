@@ -1,5 +1,118 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.201 手機直式手牌述詞收斂 ＋ ACE消弭／濕氣 補上「特性是否生效」中央閘
+
+### A. 手機直式收斂到 `getHandCardOps()`（玩家零可見變化以外的部分見下）
+
+v6.200 建了 `src/lib/game/hand-card-ops.ts` 當桌機（classic＋fable 共用 markup）的唯一述詞，
+但 `src/routes/game/MobilePortraitBattle.svelte` 仍自帶**第三份**：
+
+| 刪掉的 | 位置(BASE 4f3c7c2) |
+|---|---|
+| `playableTrainerIids / playableBasicIids / playableFossilIids / playableEvoIids` | L284~287 |
+| `handAbilityActivatableIids` | L291~296 |
+| `aceCancelActiveLocal`（鏡射 engine `isAceCancelActive`） | L454~471 |
+| `isAceSpecEnergyCard` | L472~474 |
+| `isEnergy / isTrainer / isToolCard / isEvoMon`（只為了組可用性條件而存在） | L447~452 |
+
+手機沒有拖曳 ⇒ 當下沒有 v6.200 那種「點得動拖不動」，但三份判定遲早漂移
+（烈箭鷹ex 三度出包 v6.080 / v6.098 / v6.200 全同源）。
+
+**prop 怎麼傳**：手機是子元件，但這次**不需要新 prop** —— `game / pool / myIdx / isSpectator`
+都是既有的 props，`getHandCardOps` 在子元件內自己算。真正的接線風險在另一處：
+手機的 `isMyTurn = !isSpectator && game.activePlayerIndex === myIdx`，而 **setup 是雙方同時擺場**
+（`activePlayerIndex` 只指得到一個人），所以 v2.287 起手機的 setup 條件**刻意不寫 isMyTurn**。
+直接把手機的 `isMyTurn` 餵進中央述詞會把另一方在 setup 完全鎖死。
+⇒ `HandCardOpsCtx` 新增 **選填** `isMySetupTurn`；桌機不傳＝退回 `isMyTurn`（`isMyTurn()` 本身
+已含 setup 分支 `setupActorSide`）⇒ **這一項對桌機零影響**。手機傳 `!isSpectator`。
+
+另外把 engine `handleSetup` 的 `BENCH_POKEMON` 備戰上限 gate 補進中央述詞
+（`basic-setup` 加 `!benchFull`）。
+⚠ **這一項桌機也吃得到**（`+page.svelte` 一行沒改，但它讀同一支述詞）：
+setup 階段備戰已滿時，基礎卡不再亮黃框／不再可拖。`basic-setup` 的釋放區是 `bench-empty`，
+滿位時本來就沒有空格可放 ⇒ 移除的是死動作，不是功能。**本版對桌機的唯一行為差異就是這個。**
+
+**差分實跑**（`scripts/test-v6201-*.mjs` ⑥）：老述詞逐字轉錄自 BASE，4000 個隨機盤面 /
+**9963 張手牌狀態**比對，mismatch **490** 筆，全部落在兩類、**行為退步 0**：
+
+| 類別 | 筆數 | 說明 |
+|---|---|---|
+| 死按鈕（applyAction 實跑證明盤面不變） | 352 | 見下表 |
+| 觀戰唯讀（v6.197 fail-closed） | 96 | setup 階段觀戰者原本仍亮黃框、sheet 仍給按鈕 |
+
+死按鈕的 5 個成因（舊版給了、引擎一律 `return state`）：
+1. `setup && setupDone[我] && !mulliganPostBenchOpen` → 仍給「放到備戰區／放到戰鬥場」
+2. `setup && 沒有戰鬥寶可夢` → 仍給「放到備戰區」（`BENCH_POKEMON` 要求先有 active）
+3. `playing && active===null` → 仍給「放到戰鬥場」（`PLACE_ACTIVE` 只在 setup 生效）
+4. `setup && setupDone` 的閃焰王牌｜瞬間爆發力 → 仍給「放到戰鬥場（瞬間爆發力）」
+5. `pendingSelection` 期間 → 仍給「進化」（`getEvolvableTargets` 自己沒擋 pending）
+
+反向唯一的「新增」是**黃框**：`setup && setupDone && mulliganPostBenchOpen` 時舊版黃框不亮
+但按鈕在（自相矛盾），新版兩者一致亮起 —— 那個動作引擎本來就允許（v5.138 例外）。
+
+### B. ACE消弭／濕氣：passive 特性消費點沒過中央 gate（v6.196 那一族的漏網）
+
+| 位置 | 特性 | 卡面（`static/cards`） |
+|---|---|---|
+| `engine.ts isAceCancelActive` | 蓋諾賽克特｜ACE消弭（SV6a 040/064，H，**Basic**，Metal） | 「若這隻寶可夢附有『寶可夢道具』卡，則對手無法從手牌使出『【ACE SPEC】』卡。」 |
+| `engine.ts isSelfKOEffectBlocked` | 可達鴨／哥達鴨｜濕氣（哥達鴨 **Stage1**） | 「只要這隻寶可夢在場上，雙方所有寶可夢的將自己【昏厥】的效果的特性，全部消除。」 |
+
+兩處原本都只比對 `card.abilities.some(a => a.name === 'X')`，**沒問特性此刻有沒有被消除**。
+harness 行為端重現（BASE 4f3c7c2）：
+
+- ACE消弭：對手戰鬥場蓋諾賽克特＋道具，我方戰鬥場放 **振翼髮｜暗夜羽擊**（或給它
+  `abilityNullifiedThisTurn`＝招式版暗夜羽擊）⇒ `isAceCancelActive` 仍回 `true`，
+  `getPlayableTrainers` 不列、`PLAY_TRAINER` 與 `ATTACH_ENERGY` 都被擋。
+- 濕氣：對手戰鬥場哥達鴨，我方戰鬥場振翼髮 ⇒ `isSelfKOEffectBlocked` 仍回 `true`，
+  彷徨夜靈｜咒詛炸彈 被「被可達鴨的濕氣消除」擋下。
+
+⚠ 子代理當初舉的例子「傳說的熔岩洞」對**蓋諾賽克特不成立**（stage=Basic，熔岩洞只消除
+進化寶可夢；火箭隊的監視塔只消除【無】，它是 Metal）。真正踩得到的是暗夜羽擊那兩條路徑。
+**哥達鴨 Stage1** 則確實會被熔岩洞消除。
+
+修法：兩處都改走 v6.196 的中央 helper `hasEffectiveAbilityByInst`（defense.ts），**不另建第四份**。
+另外刪掉 `effects/_shared.ts canPlayTrainer` 裡 v2.113 的**第三份** ACE 判定
+（只比對卡名＋`toolAttached`，沒查特性名、漏 `extraTools`、也沒有 gate）——
+它的兩個呼叫端 `PLAY_TRAINER` handler 與 `getPlayableTrainers` **都已經先問過** `isAceCancelActive`，
+留著只會把本版的修正在 `PLAY_TRAINER` 這條路上擋回去。
+
+### C. 重跑 v6.196 維度（passive 特性消費點有沒有問中央 gate）
+
+剝註解 + 剝零寬字元後掃 `src/lib/game/**/*.ts` 裡 `abilities … .name === '…'` 共 **58 處**，
+上下 ±16 行沒有任何 gate 呼叫的 **38 處**。逐一讀 handler body 後分類：
+
+- **豁免**：手牌／牌庫／棄牌區的卡（瞬間爆發力 setup 判定、緊急迴轉、激動俯衝、全能靈魂）、
+  消除來源本身（初始化、黏著束縛 ← **v6.196 的 `hasAbilityOnBench` 例外，本版原封不動**）、
+  已在下游 gate（懶怠個性 → `selfAttackPreconditionBlock`）。
+- **本版修掉**：ACE消弭、濕氣（`isSelfKOEffectBlocked`）。
+- **仍待裁定／下一輪**（皆為場上 passive、目前無 gate，列給站長排序）：
+  小碎鑽｜雙重屬性（弱點比對）、呆呆獸｜憨憨臉（混亂免疫）、帝王拿波ex｜皇帝之勢、
+  咕咕｜不眠、電龍｜同步脈衝(+80)、伊布｜提升進化、伊布ex｜虹色DNA、
+  小嘴蝸/蓋蓋蟲｜刺激進化、祭典樂舞（4 處）、探探鼠｜監視之眼（`_shared.ts` 與 ai.ts 各一份）、
+  無限之影、多重轉接、廣域堡壘、潛入記憶、化隱(m5_preview)、二重核心、捲牆、岩石宮殿、
+  出道演出、緊張感／融合為雪、大洋增輝、深海抽出。
+  ⚠ 其中 `isConfusionImmune` / `hasEffectShield` / `isSleepImmune` 的簽名**沒有 state**，
+  要加 gate 得改所有呼叫端 —— 風險不小，不併進本版。
+  ⚠ `_shared.ts` 的繁茂 fallback（L368）是 `_bloomEffectiveFn` 沒注入時的退路，
+  正常執行一定走 effects.ts 注入的**有 gate** 版本，不算 live 漏網。
+  ⚠ 子代理審查補抓到一處我的掃描器漏報：`engine.ts` 冰冷之帳區塊的 `hasHuayinAbility`
+  （化隱）沒過 gate —— 我的 ±16 行視窗被同區塊的 `hasAnyEffectiveAbility` 蓋掉了
+  （典型的 window-grep 假陰性）。實際上同一支 `isFrosmothCheckupTarget` 會先過
+  `hasAnyEffectiveAbility`，而現行所有特性消除來源都是「整隻的特性全消」，
+  所以「化隱被消除但這隻仍有其他有效特性」的盤面**構造不出來** ⇒ 結構上不可達，
+  列入待裁定清單，本版不動。
+
+### 守衛
+
+`scripts/test-v6201-mobile-hand-ops-and-ability-gate.mjs`（52 檢查）：
+①卡面逐字錨 ②ACE消弭 四個消費點 × 三種特性狀態（含正對照）③濕氣 ④`hasAbilityOnBench`
+例外正對照（黏著束縛仍生效且不遞迴）⑤手機枚舉守衛＋自我驗證 ⑥差分實跑。
+**HEAD-FAIL**：把四個改動檔還原成 BASE blob → **20 條紅**（含 ⑥ 差分那條，證明它不是恆真式）。
+⚠ 子代理審查指出 ⑥ 原本對「動作集合相同、只有黃框不同」的 mismatch 完全不斷言（死角）——
+已補上結構不變式（新版黃框 ⟺ 有可用操作）與方向斷言（78 筆全是「舊不亮→新亮」）。
+`test-v6200` 的手機那條斷言同步改成「讀 getHandCardOps」（80 PASS）。
+
+
 ## v6.200 手牌卡「拖曳」與「點擊」收斂成單一可用性述詞（烈箭鷹ex｜激動俯衝 桌機拖不動）
 
 ### 玩家回報

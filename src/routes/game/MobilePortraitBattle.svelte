@@ -38,15 +38,19 @@
   import { retryImg } from '$lib/img-retry';
   import type { Card } from '$lib/cards/types';
   import {
-    getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getPlayableTrainers,
-    getPlayableBasics, getPlayableFossils, getUsableAbilities,
+    getEffectiveAttacks, getAvailableAttacks, getEvolvableTargets, getUsableAbilities,
     canRetreat as engineCanRetreat, getRetreatCost, getBenchLimit,
     getEffectiveHP,
-    canBeInitialActiveCard,
-    getHandActivatableAbilities,  // v6.080 手牌特性中央 gate
+    getHandActivatableAbilities,  // v6.080 手牌特性中央 gate（這裡只拿 abilityName/abilityIndex 當標籤用）
     twoCardStadiumHalfIndex,      // v6.086 兩張合一競技場手牌裁半
     isTwoCardStadiumName          // v6.091 棄牌區兩張合一不聚合判準
   } from '$lib/game/engine';
+  // ⭐⭐⭐v6.201：手牌「這張卡現在能做什麼」的唯一述詞（桌機 v6.200 已改讀它）。
+  //   本檔原本自帶第三份 playable*Iids / aceCancelActiveLocal / handAbilityActivatableIids，
+  //   雖然手機沒有拖曳（不會出現 v6.200 那種「點得動拖不動」），但三份判定遲早漂移
+  //   —— 烈箭鷹ex 三度出包（v6.080 / v6.098 / v6.200）全是同一個成因。
+  //   ⚠ 手機與桌機仍是兩套獨立版面分支；收斂的**只有述詞**，互動 paradigm（點卡開 sheet）不變。
+  import { getHandCardOps, type HandCardOp } from '$lib/game/hand-card-ops';
   import { GameActions } from '$lib/game/actions';
   // v3.02：log 著色 + 卡名可點連結
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
@@ -281,19 +285,17 @@
   let canRetreatNow = $derived(isPlaying && isMyTurn && isMainPhase && engineCanRetreat(game, pool));
   let evolvableTargets = $derived(isPlaying && isMyTurn && isMainPhase ? getEvolvableTargets(game, pool) : []);
   let usableAbilities = $derived(isPlaying && isMyTurn && isMainPhase && !pendingSelection ? getUsableAbilities(game, pool) : []);
-  let playableTrainerIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableTrainers(game, pool)) : new Set<string>());
-  let playableBasicIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableBasics(game, pool)) : new Set<string>());
-  let playableFossilIids = $derived(isPlaying && isMyTurn && isMainPhase ? new Set(getPlayableFossils(game, pool)) : new Set<string>());
-  let playableEvoIids = $derived(new Set<string>(evolvableTargets.flatMap(e => e.toIids)));
-  // v5.511：手牌特性可用時讓手牌卡顯示黃框（點卡→sheet 發動；與桌機「點卡發動」一致）
-  // v6.080：判斷收斂到 engine getHandActivatableAbilities（原本本檔自寫一份，且硬編
-  //   `bench.length >= myBenchLimit` 之外的條件與桌機／引擎三份漂移）。
-  let handAbilityActivatableIids = $derived.by<Set<string>>(() => {
-    const out = new Set<string>();
-    if (!(isPlaying && isMyTurn && isMainPhase && !pendingSelection)) return out;
-    for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) out.add(a.iid);
-    return out;
-  });
+  // ⭐⭐⭐v6.201 手牌可用操作：唯一來源 getHandCardOps（sheet 動作清單與黃框都只讀它）。
+  //   ⚠ setup 階段雙方同時擺場，本檔的 isMyTurn（= activePlayerIndex === myIdx）在 setup
+  //     只會對其中一方成立 —— 所以 setup 用 isMySetupTurn（只看觀戰唯讀），
+  //     對齊 v2.287「setup 階段基礎寶可夢可放（不分先後手）」的既有行為。
+  let handCardOps = $derived(
+    getHandCardOps(game, myIdx as 0 | 1, pool, { isMyTurn, isMySetupTurn: !isSpectator })
+  );
+  const EMPTY_HAND_OPS: ReadonlySet<HandCardOp> = new Set<HandCardOp>();
+  function opsOf(iid: string): ReadonlySet<HandCardOp> {
+    return handCardOps.get(iid) ?? EMPTY_HAND_OPS;
+  }
 
   // 招式有效列表（含工具來源）
   let effectiveAttacks = $derived(
@@ -443,35 +445,15 @@
     sheet = { type: 'hand', inst };
   }
 
-  function isEnergy(c: Card | null): boolean { return !!c && c.supertype === 'Energy'; }
-  function isTrainer(c: Card | null): boolean { return !!c && c.supertype === 'Trainer' && c.subtype !== 'PokemonTool'; }
-  function isToolCard(c: Card | null): boolean { return !!c && c.supertype === 'Trainer' && c.subtype === 'PokemonTool'; }
+  // ⭐v6.201：isEnergy / isTrainer / isToolCard / isEvoMon 已刪除 —— 這些「這張卡屬於哪一類」
+  //   的判斷過去是用來自組可用性條件的，現在一律問 getHandCardOps()。
+  //   isBasicMon 保留：只用來挑「放到戰鬥場」按鈕的**文案**（基礎 vs 瞬間爆發力），不參與判定。
   function isBasicMon(c: Card | null): boolean { return !!c && c.supertype === 'Pokemon' && !c.evolvesFrom; }
-  function isEvoMon(c: Card | null): boolean { return !!c && c.supertype === 'Pokemon' && !!c.evolvesFrom; }
 
-  // v5.089: 鏡射 engine.ts L122 isAceCancelActive — 對手場上是否有「附道具的蓋諾賽克特 + ACE消弭」
-  //   給手牌 sheet 動作 + playable highlight gate（鏡射 engine ATTACH_ENERGY L3487 已擋的邏輯）
-  const aceCancelActiveLocal = $derived.by(() => {
-    if (!game) return false;
-    const opp = oppPlayer;
-    if (!opp) return false;
-    const allOpp = [...(opp.active ? [opp.active] : []), ...opp.bench];
-    return allOpp.some(pk => {
-      const c = pool.get(pk.cardId);
-      if (!c) return false;
-      if (c.name !== '蓋諾賽克特') return false;
-      if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
-      const allTools = [
-        ...(pk.toolAttached ? [pk.toolAttached] : []),
-        ...(pk.extraTools ?? []),
-      ];
-      return allTools.length > 0;
-    });
-  });
-  // ACE SPEC 能量 helper：手牌某張卡是否為 ACE SPEC 能量
-  function isAceSpecEnergyCard(c: Card | null): boolean {
-    return !!c && c.supertype === 'Energy' && !!c.tags?.includes('ACE SPEC');
-  }
+  // ⭐v6.201：v5.089 的 aceCancelActiveLocal（本檔自己鏡射一份 engine isAceCancelActive）
+  //   與 isAceSpecEnergyCard 已移除 —— ACE消弭 對能量的封鎖由 getHandCardOps 內部
+  //   直接呼叫 engine 的 isAceCancelActive 判定（同時修好「持有者特性被消除時仍生效」）。
+  //   ⚠ 不要再把鏡射版加回來。
 
   // 手牌動作 dispatch
   async function playBasicToActive(iid: string) {
@@ -517,29 +499,27 @@
     if (!c) return [];
     const out: Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean }> = [];
     const iid = inst.iid;
+    // ⭐⭐⭐v6.201：每個動作能不能出現，一律問中央 ops —— 禁止在這裡自行組條件。
+    const ops = opsOf(iid);
 
-    // 基礎寶可夢
-    if (isBasicMon(c)) {
-      const canPlayBasic = playableBasicIids.has(iid) || (isSetup && !myPlayer.active);
-      // v3.64：用 myBenchLimit（已 derive 自 getBenchLimit）取代 hardcoded 5
-      const canPlayBench = (isSetup && myPlayer.bench.length < myBenchLimit) || playableBasicIids.has(iid);
-      if (canPlayBasic && !myPlayer.active) {
-        out.push({ label: '🃏 放到戰鬥場', action: () => playBasicToActive(iid), primary: true });
-      }
-      if (canPlayBench && myPlayer.bench.length < myBenchLimit) {
-        out.push({ label: '📥 放到備戰區', action: () => playBasicToBench(iid) });
-      }
-    } else if (isSetup && !myPlayer.active && c && canBeInitialActiveCard(c)) {
+    // 基礎寶可夢 / 起手可當戰鬥寶可夢的卡
+    if (ops.has('setup-active')) {
       // v5.031 閃焰王牌｜瞬間爆發力 — 起手 setup 階段無 active 時，非基礎也可放戰鬥場（卡面特性）
       //   官方 Q&A：手牌只有閃焰王牌時，可因「瞬間爆發力」放於戰鬥場開始對戰
-      out.push({ label: '🃏 放到戰鬥場（瞬間爆發力）', action: () => playBasicToActive(iid), primary: true });
+      out.push({
+        label: isBasicMon(c) ? '🃏 放到戰鬥場' : '🃏 放到戰鬥場（瞬間爆發力）',
+        action: () => playBasicToActive(iid), primary: true,
+      });
+    }
+    if (ops.has('basic') || ops.has('basic-setup')) {
+      out.push({ label: '📥 放到備戰區', action: () => playBasicToBench(iid) });
     }
     // 化石 Item
-    if (playableFossilIids.has(iid)) {
+    if (ops.has('fossil')) {
       out.push({ label: '🦴 放化石到備戰', action: () => playFossil(iid), primary: true });
     }
     // 進化卡
-    if (isEvoMon(c) && playableEvoIids.has(iid)) {
+    if (ops.has('evolve')) {
       const targets = evolvableTargets.filter(e => e.toIids.includes(iid)).map(e => e.fromIid);
       if (targets.length === 1) {
         out.push({ label: `🔺 進化（${nameOfIid(targets[0])}）`, action: () => evolveTo(targets[0], iid), primary: true });
@@ -548,7 +528,7 @@
       }
     }
     // 訓練家（含工具、競技場）— v2.289：依 subtype 顯示清楚標籤
-    if (playableTrainerIids.has(iid) && (isTrainer(c) || isToolCard(c))) {
+    if (ops.has('trainer') || ops.has('tool')) {
       const sub = c?.subtype ?? '';
       const tLabel = sub === 'Stadium' ? '🏟 放置競技場'
                    : sub === 'PokemonTool' ? '🔧 附加道具到寶可夢'
@@ -557,19 +537,12 @@
       out.push({ label: tLabel, action: () => playTrainer(iid), primary: true });
     }
     // 能量卡
-    if (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection && !(isAceSpecEnergyCard(c) && aceCancelActiveLocal)) {
+    if (ops.has('energy')) {
       out.push({ label: '⚡ 附加能量到…', action: () => { sheet = { type: 'pick-energy-target', energyIid: iid }; }, primary: true });
     }
     // v3.07 Deferred Wave D — 手牌觸發特性（誘導之尾 / 熱浪鱗粉 / 緊急迴轉）
     // 機制 A: ON_DISCARD_FROM_HAND — 棄此卡觸發場上 trigger holder 特性
-    if (isPlaying && isMyTurn && isMainPhase && !pendingSelection && c) {
-      const me = myPlayer;
-      const opp = oppPlayer;
-      const usedNames = me.abilityNamesUsedThisTurn ?? [];
-      const hasOnField = (name: string): boolean => {
-        const all = [...(me.active ? [me.active] : []), ...me.bench];
-        return all.some(p => pool.get(p.cardId)?.name === name);
-      };
+    if (ops.has('hand-ability')) {
       // ⚠⚠ v6.099 移除死按鈕：這裡原本硬編兩個「棄此卡 → 觸發 超能妙喵｜誘導之尾 /
       //   火神蛾｜熱浪鱗粉」的按鈕，但 **v5.510 起 `ON_DISCARD_FROM_HAND_ABILITIES` 已清空**
       //   （兩張都改成寶可夢身上的 regA 特性按鈕，避免同一個效果有兩個按鈕）。
@@ -590,6 +563,8 @@
       //   **動作入口這一半漏了**（同型教訓：中央述詞寫好 ≠ 每個消費點都接上）。
       //   ⇒ 改為逐項讀中央 gate 產生按鈕，label 與桌機版逐字一致。
       //   ⚠ 新增同型卡只改 engine 的 HAND_ACTIVATE_GATES；**禁止**再往這裡塞 if 判卡名。
+      //   ⭐v6.201「能不能用」已由上方 ops.has('hand-ability') 決定（中央述詞）；
+      //     這裡只是把 abilityName / abilityIndex 取出來當按鈕標籤與參數。
       for (const a of getHandActivatableAbilities(game, myIdx as 0 | 1, pool)) {
         if (a.iid !== iid) continue;
         out.push({
@@ -1158,18 +1133,11 @@
     {:else}
       {#each dedupeByIid(myPlayer.hand) as inst (inst.iid)}
         {@const c = cardOf(inst)}
-        {@const playable = (
-          playableBasicIids.has(inst.iid) || playableEvoIids.has(inst.iid) ||
-          playableTrainerIids.has(inst.iid) || playableFossilIids.has(inst.iid) ||
-          (isEnergy(c) && isPlaying && isMyTurn && isMainPhase && !myPlayer.energyAttachedThisTurn && !pendingSelection && !(isAceSpecEnergyCard(c) && aceCancelActiveLocal)) ||
-          /* v2.287 修：setup 階段基礎寶可夢可放（不分先後手） */
-          (isSetup && !game.setupDone[myIdx] && isBasicMon(c) && (!myPlayer.active || myPlayer.bench.length < myBenchLimit)) ||
-          /* v5.031：setup 階段「瞬間爆發力」類非基礎卡（閃焰王牌）— 無 active 時可放戰鬥場 */
-          (isSetup && !game.setupDone[myIdx] && !myPlayer.active && !!c && canBeInitialActiveCard(c) && !isBasicMon(c)) ||
-          /* v5.511：緊急迴轉(齒輪怪) 可用 → 黃框 */
-          handAbilityActivatableIids.has(inst.iid)
-        )}
-        {@const isPlayableTrainer = playableTrainerIids.has(inst.iid) && !!c && (c.supertype === 'Trainer')}
+        <!-- ⭐⭐⭐v6.201：黃框＝「中央述詞說這張卡有任何一種可用操作」，與 sheet 的按鈕同源。
+             禁止在這裡再組任何條件（那就是第二份判定的起點）。 -->
+        {@const _ops = opsOf(inst.iid)}
+        {@const playable = _ops.size > 0}
+        {@const isPlayableTrainer = (_ops.has('trainer') || _ops.has('tool')) && !!c && (c.supertype === 'Trainer')}
         <!-- v6.086「兩張合一」競技場：手牌顯示成兩張直立的卡（同一張合併橫圖裁左半／右半） -->
         {@const _half = twoCardStadiumHalfIndex(myPlayer.hand, inst.iid, pool)}
         <button class="mp-hand-card" class:mp-playable={playable} disabled={actionBusy} onclick={() => tapHand(inst)} title={c?.name}>

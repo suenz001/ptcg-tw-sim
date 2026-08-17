@@ -125,8 +125,17 @@ export function isToolsJammed(state: GameState, pool: Map<string, Card>): boolea
 
 // v2.322：蓋諾賽克特｜ACE消弭 — 若對手場上有蓋諾賽克特且附有寶可夢道具，
 //   則當前玩家不能從手牌使出 ACE SPEC 卡。
+// 卡面（SV6a 040/064 蓋諾賽克特，H 標）：「若這隻寶可夢附有『寶可夢道具』卡，
+//   則對手無法從手牌使出『【ACE SPEC】』卡。」
 // ⭐v6.200：改 export —— 手牌可用操作的中央述詞（hand-card-ops.ts）要用同一份，
 //   避免 UI 端再鏡射一份 aceCancelActiveLocal（那是第二份，會漂移）。
+// ⭐⭐⭐v6.201：**這是持有者自己的 passive 特性**，原本只比對特性名，
+//   從來沒問過「這個特性此刻有沒有被消除」（v6.196 那一族的漏網）。
+//   已用 harness 重現：對手戰鬥場的蓋諾賽克特被 招式版「暗夜羽擊」(abilityNullifiedThisTurn)
+//   或 振翼髮｜暗夜羽擊 passive 消除特性後，ACE SPEC 仍然打不出來。
+//   ⇒ 改走 v6.196 建立的中央 helper hasEffectiveAbilityByInst（不另建第四份）。
+//   ⚠ 蓋諾賽克特 stage=Basic、pokemonType=Metal ⇒ 傳說的熔岩洞（只消除進化寶可夢）
+//     與 火箭隊的監視塔（只消除【無】）本來就不適用；真正會踩到的是暗夜羽擊那兩條路徑。
 export function isAceCancelActive(state: GameState, playerIdx: 0 | 1, pool: Map<string, Card>): boolean {
   const oppIdx = (1 - playerIdx) as 0 | 1;
   const opp = state.players[oppIdx];
@@ -134,9 +143,9 @@ export function isAceCancelActive(state: GameState, playerIdx: 0 | 1, pool: Map<
   return allOpp.some(pk => {
     const c = pool.get(pk.cardId);
     if (!c) return false;
-    // 必須是蓋諾賽克特（非 ex 版本）且有 ACE消弭 特性
+    // 必須是蓋諾賽克特（非 ex 版本）且有**此刻生效的** ACE消弭 特性
     if (c.name !== '蓋諾賽克特') return false;
-    if (!c.abilities?.some(a => a.name === 'ACE消弭')) return false;
+    if (!hasEffectiveAbilityByInst(state, oppIdx, pk, pool, 'ACE消弭')) return false;
     // 必須附有寶可夢道具（且道具未被阻礙之塔無效化 → 阻礙之塔只無效道具效果，不影響特性判定）
     return !!pk.toolAttached || !!(pk.extraTools && pk.extraTools.length > 0);
   });
@@ -576,18 +585,24 @@ export const UNLIMITED_USE_ABILITY_NAMES = new Set<string>([
 // 73 個「[特性]XXX」entry 從 attacks[] 搬到 abilities[]（v2.95 同 commit），
 // 引擎層不再需要名稱檢查。彷徨夜靈 / 黑夜魔靈 / 三合一磁怪 的自爆特性
 // 改走 regA 正統 ability 路徑（ABILITY_EFFECTS key 為 '卡名|0'）。
+// ⭐⭐⭐v6.201：可達鴨／哥達鴨｜濕氣（卡面：「只要這隻寶可夢在場上，雙方所有寶可夢的
+//   將自己【昏厥】的效果的特性，全部消除。」）也是 passive 特性 —— 這裡原本只比對特性名，
+//   **沒問特性此刻有沒有被消除**。同檔 effects.ts 的姊妹版 hasPsyduckDamp 早在 v5.220
+//   就補上了 gate，兩份因此不一致（v6.196 那一族的漏網；harness 已重現：
+//   我方戰鬥場放 振翼髮｜暗夜羽擊、對手戰鬥場放 哥達鴨，咒詛炸彈仍被擋）。
+//   哥達鴨 stage=Stage1 ⇒ 傳說的熔岩洞也會消除它。改走中央 hasEffectiveAbilityByInst。
 export function isSelfKOEffectBlocked(
   state: GameState,
   pool: Map<string, Card>
 ): boolean {
-  for (const p of state.players) {
+  for (const ownerIdx of [0, 1] as const) {
+    const p = state.players[ownerIdx];
     const allPokes: CardInstance[] = [
       ...(p.active ? [p.active] : []),
       ...p.bench,
     ];
     for (const pk of allPokes) {
-      const card = pool.get(pk.cardId);
-      if (card?.abilities?.some(a => a.name === '濕氣')) return true;
+      if (hasEffectiveAbilityByInst(state, ownerIdx, pk, pool, '濕氣')) return true;
     }
   }
   return false;

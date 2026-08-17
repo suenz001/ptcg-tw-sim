@@ -850,23 +850,14 @@ export function canPlayTrainer(
   actorIdx: 0 | 1,
   pool: Map<string, Card>
 ): boolean {
-  // v2.113 蓋諾賽克特｜ACE消弭 — 對手場上若有蓋諾賽克特且附有寶可夢道具，
-  //   則「本方」無法從手牌使出 ACE SPEC 卡。
-  const myCard = pool.get(
-    state.players[actorIdx].hand.find(c => pool.get(c.cardId)?.name === cardName)?.cardId ?? ''
-  );
-  if (myCard && (myCard.tags ?? []).includes('ACE SPEC')) {
-    const dIdx = (1 - actorIdx) as 0 | 1;
-    const oppAll = [
-      ...(state.players[dIdx].active ? [state.players[dIdx].active!] : []),
-      ...state.players[dIdx].bench,
-    ];
-    const aceBlocked = oppAll.some(p => {
-      const c = pool.get(p.cardId);
-      return c?.name === '蓋諾賽克特' && !!p.toolAttached;
-    });
-    if (aceBlocked) return false;
-  }
+  // ⭐⭐⭐v6.201：v2.113 的蓋諾賽克特｜ACE消弭 判定**已從這裡移除**。
+  //   它是這個述詞的第三份鏡射，而且是三份裡最糟的一份：只比對卡名 + `p.toolAttached`
+  //   （沒查特性名、漏 extraTools、也沒問特性有沒有被消除）。
+  //   canPlayTrainer 的兩個呼叫端**都已經先問過** engine 的 isAceCancelActive：
+  //     ・engine.ts PLAY_TRAINER handler（`trainerCard.tags?.includes('ACE SPEC') && isAceCancelActive(...)`）
+  //     ・engine.ts getPlayableTrainers（同一行條件）
+  //   留著這一份只會讓 v6.201 對 isAceCancelActive 的「特性被消除就失效」修正在
+  //   PLAY_TRAINER 這條路上**被它擋回去**。⚠ 不要再加回來。
   const guard = TRAINER_GUARDS.get(cardName);
   return guard ? guard(state, actorIdx, pool) : true;
 }
