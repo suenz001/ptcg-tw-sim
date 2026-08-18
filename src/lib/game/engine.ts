@@ -8361,12 +8361,15 @@ export function applyDefenderReductionsBlockA(
     }
 
     // v2.999 Group 3 Wave 1 ：團體 -N 受傷減免（大吾的小碎鑽 / 青銅鐘 / 齒輪怪）
-    //   skipDefEffects 跳過；baseDamage>0 才算；同樣遵 火箭隊的監視塔 閘門
-    //   （青銅鐘 / 齒輪怪是【鋼】 / 大吾的小碎鑽是【闘】，都非【無】→ 監視塔
-    //    對其無效；這列 helper 木木會逐個當成 ability holder 個別閘門）
+    //   skipDefEffects 跳過；baseDamage>0 才算。
+    //   ⚠ v6.209 更正：原註解寫「大吾的小碎鑽是【闘】」是**錯的**（那是另一張卡「小碎鑽」，
+    //     Fighting/J 標）；大吾的小碎鑽（SVOD 12583）是【超】Psychic。結論（都非【無】→
+    //     監視塔對其無效）碰巧不變，但理由寫錯過。
+    //   ⚠ v6.209 起這三支 helper **各自在內部**過中央閘 isAbilityHolderEffective
+    //     （監視塔／熔岩洞／初始化／暗夜羽擊／黏著束縛 全含），呼叫端不需要、也不應該再自己判。
     if (!skipDefEffects && baseDamage > 0) {
       // 大吾的小碎鑽｜岩石宮殿 — 備戰區時，自方「大吾的」寶可夢受招式傷害 -30
-      //   （多隻不重複；大吾的小碎鑽是【闘】…監視塔擋不到，略監視塔閘門）
+      //   （卡面明文多隻不重複。特性消除閘在 steelixPalaceReduce 內部，見該函式上方定論註解。）
       const palaceReduce = steelixPalaceReduce(workingState, dIdx, defenderCard, pool);
       if (palaceReduce > 0) {
         const before = baseDamage;

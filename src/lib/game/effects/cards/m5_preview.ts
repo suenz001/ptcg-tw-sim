@@ -101,7 +101,7 @@ import {
   discardOppActiveEnergyPost, // v5.974：丟對手能量收斂中央(picker+免疫gate)
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
-import { totalEnergyUnits, computeActiveRetreatCostFor } from '../../engine'; // v5.862：host-aware 能量單位數
+import { totalEnergyUnits, computeActiveRetreatCostFor, isFossilItemCard } from '../../engine'; // v5.862：host-aware 能量單位數／v6.209 化石中央述詞
 import { RULE_BOX_SUBTYPES } from '../../types';
 import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
 import type { Card } from '$lib/cards/types';  // v5.204 hotfix: Card 從 cards/types 而非 game/types
@@ -2198,16 +2198,20 @@ regR('m5-fossil-excavation', (state, aIdx, iids, _params, pool) => {
   }
   const p = state.players[aIdx];
   const chosen = p.deck.filter(c => iids.includes(c.iid));
-  // double-check：必須為 Item 且名稱含「陳舊的」（防 picker filter 異常）
-  const validChosen = chosen.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Trainer'
-      && card?.subtype === 'Item'
-      && (card?.name?.includes('陳舊的') ?? false);
-  });
+  // ⭐ v6.209 double-check 改走中央述詞 isFossilItemCard（engine.ts / FOSSIL_ITEM_NAMES）。
+  //   ⚠ 兩層條件**語義不同，刻意不合併**：
+  //     ・picker 的 `filter: 'NameContains:陳舊的'` = 卡面**逐字**判準
+  //       （M5 19223 rulesText：「選擇最多2張**名稱中有「陳舊的」的物品卡**」）——維持卡名比對。
+  //     ・本處 double-check 判的是「**放置於備戰區**」這個動作的前提：只有化石 Item 有
+  //       「可作為 HP60【無】【基礎】寶可夢放置於場上」的 rulesText，才能轉成 fossilOnField 實例。
+  //   原寫法 `name.includes('陳舊的')` 拿卡名當「是不是化石」的代理，未來若出現名字帶
+  //   「陳舊的」卻**不能上場**的物品卡，會被轉成非法的備戰實例（HP60 幽靈）。
+  //   現行 7 張化石名稱全部含「陳舊的」⇒ 換判準對現有卡**零行為差異**
+  //   （scripts/test-fossil-excavation-central-predicate.mjs 逐張差分實跑證明）。
+  const validChosen = chosen.filter(c => isFossilItemCard(pool.get(c.cardId)));
   if (validChosen.length === 0) {
     return updatePlayer(
-      addLog(state, '化石採掘場：選中的卡不符合條件（非「陳舊的」物品卡），重洗牌庫', aIdx),
+      addLog(state, '化石採掘場：選中的卡不符合條件（非化石物品卡），重洗牌庫', aIdx),
       aIdx,
       pl => ({ ...pl, deck: shuffle(pl.deck) }),
     );

@@ -1,5 +1,85 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.209 化石採掘場改走中央述詞 ＋ 岩石宮殿特性消除閘定論（結束 v6.202/v6.208 判讀衝突）
+
+BASE = `997eebf3b6517f879bbcaffe9975c54743b8af4e`（v6.208）。
+兩件都是**防脆化 ＋ 註記**，玩家幾乎無感 ⇒ 首頁 changelog 不放。
+
+### ① 化石採掘場：「能不能放上備戰」的 double-check 改用 `isFossilItemCard`
+
+`m5_preview.ts` 的 `regR('m5-fossil-excavation')` 原本用
+`card.supertype==='Trainer' && card.subtype==='Item' && card.name.includes('陳舊的')`
+判斷選中的卡「是不是化石」，然後直接轉成 `fossilOnField` 的備戰實例。
+
+⚠ 這裡有**兩層語義不同**的條件，本版刻意只改第二層：
+
+| 層 | 位置 | 判準 | 本版 |
+|---|---|---|---|
+| picker 候選 | `engine.ts` `filter:'NameContains:陳舊的'` | **卡面逐字**（M5 19223 rulesText：「選擇最多2張**名稱中有「陳舊的」的物品卡**」） | **不動** |
+| 放置前 double-check | `m5_preview.ts` resolver | 「可作為 HP60【無】【基礎】寶可夢放置於場上」＝化石 | **改 `isFossilItemCard`** |
+
+`isFossilItemCard`（`engine.ts:925`）＝ `supertype==='Trainer' && subtype==='Item' &&
+FOSSIL_ITEM_NAMES.has(name)`，白名單 7 張（陳舊的 根狀／背蓋／羽毛／顎之／鰭之／頭蓋／盾甲 化石）。
+全站的 `PLAY_FOSSIL`（`engine.ts:3448`）、手牌操作（`hand-card-ops.ts:203`）本來就走它，
+本版讓化石採掘場加入同一份判準 —— 新化石只要登錄一次 `FOSSIL_ITEM_NAMES` 就三處同時生效。
+
+**差分實跑：現有 7 張化石行為 0 mismatch**（放上備戰／`fossilOnField=true`／牌庫 −1／
+無「不符合條件」log，換判準前後逐張比對一致）。
+守衛 `scripts/test-fossil-excavation-central-predicate.mjs`（42 斷言，HEAD 紅 4 條）：
+合成一張「陳舊的地圖」（名字含「陳舊的」的普通物品卡）→ 舊碼會把它變成非法的 HP60 備戰幽靈，
+新碼拒絕；並附**絆線**：凡現役 H/I/J 中名稱含「陳舊的」的 Item 都必須被 `isFossilItemCard`
+認得，出新化石卻忘了登錄 → 這條變紅。
+
+### ② 岩石宮殿：**定論 = 六種消除來源今天確實都打不到，但仍接上中央閘**
+
+v6.202 判「結構上不可達 ⇒ 刻意不加閘」，v6.208 又把它列為舊帳 —— 兩輪相反。本版重新查證：
+
+持有者 **大吾的小碎鑽**（`static/cards/SVOD.json` id 12583，I 標）：
+`supertype=Pokemon` / `stage=subtype='Basic'` / `pokemonType='Psychic'` / hp 80 /
+`tags=['訓練家冠名']` ⇒ **非規則寶可夢**；卡面「只要這隻寶可夢**在備戰區**」⇒ location 恆 `'bench'`。
+
+六種來源**行為端逐一實跑**（完整 `ATTACK`，量測「備戰有無小碎鑽」的傷害差，每項附**正對照**
+證明該來源在同一盤面確實會消除它打得到的卡）：
+
+| 來源 | 條件 | 打得到？ | 正對照 |
+|---|---|---|---|
+| 鐵荊棘ex｜初始化 | 只消「擁有規則的寶可夢」 | ❌ | 超級甲賀忍蛙ex 被消 |
+| 火箭隊的監視塔 | 只消【無】（或 `fossilOnField`） | ❌ | 探探鼠（Colorless）被消 |
+| 傳說的熔岩洞 | 只消**進化** | ❌ | 大竺葵（Stage2）被消 |
+| 招式版暗夜羽擊 | 中央閘限 `location==='active'` | ❌ | active 帶旗標者被消 |
+| passive 振翼髮｜暗夜羽擊 | 限對手**戰鬥場** | ❌ | 探探鼠（active）被消 |
+| 海兔獸｜黏著束縛 | 只消備戰的【2階進化】 | ❌ | 大竺葵被消 |
+
+⇒ **v6.202 的事實判斷是對的**。但「不可達」是一條依賴其他六張卡條件的**脆弱不變式**，
+中央閘則是**自我維護**的 ⇒ 本版仍接上 `isAbilityHolderEffective(..., 'bench', ...)`
+（沿用既有那份，與同檔的 捲牆／守護之鐘／齒輪塗層／盾之守護 一致），今天是**保證的 no-op**。
+定論與六項查證結果**寫進 `v2999_g3_wave1.ts` 函式上方註解**，標明「後續 audit 看到即可跳過」。
+
+守衛 `scripts/test-steelix-palace-ability-nullify-gate.mjs`（33 斷言，HEAD 紅 4 條）：
+- A 段：六來源 × delta 必須仍是 30 ＋ 每項正對照（**修前修後都綠 ⇒ 這就是 0 行為差異的證明**）。
+- B 段（**絆線**）：合成持有者（把小碎鑽改成【無】／2 階／規則寶可夢）＋ 對應來源 → delta 必須變 0。
+  這一段反向證明新加那行閘**真的會擋**，不是永遠 true 的死碼；HEAD 無閘時 4 條全紅。
+- C 段（**反安慰劑**）：同樣的合成持有者、**不放**消除來源 → 必須仍 −30，
+  排除「B 段的 0 只是合成卡本身壞掉」。
+- ⚠ 合成 2 階必須 `evolvesFrom` 一張真的 Stage1 —— `isStage2` 的判準是「上一階自己也有
+  `evolvesFrom`」，不是直接讀 `stage` 欄位（第一版測試就是這樣假紅的）。
+
+### ③ 同型掃描：全站「用卡名字串判卡片類別／族群」清單與判讀（本版只列，不亂改）
+
+| 樣態 | 代表位置 | 判讀 |
+|---|---|---|
+| 冠名前綴 `startsWith('大吾的'/'瑪俐的'/'莉佳的'/'阿響的'/'火箭隊的'/'奇樹的'/'小霞的'/'N的'/'赫普的'/'莉莉艾的'/'派帕的')` | `v2999_g3_wave1.ts:218`、`tools.ts:152/298/354`、`six_decks.ts:634` 等 14 處 | ✅ **正確，別動**。卡面逐字用卡名前綴，`tags` 只有籠統的 `'訓練家冠名'` 分不出是誰。⚠ 其中 `火箭隊的/N的/小霞的/赫普的/莉莉艾的/派帕的/阿響的` **有同前綴的訓練家卡**，但這些站點的定義域全是「場上寶可夢」或已顯式 `supertype==='Pokemon'`（如 `v172_hij_batch.ts:52` 火箭隊的超級球）⇒ 逐一查證後無誤判 |
+| `includes('瓦斯彈')/('雙彈瓦斯')` `v2660:178` | 一併爆炸 | ✅ 卡面逐字「名稱中有「瓦斯彈」或者「雙彈瓦斯」的寶可夢」 |
+| `includes('招式學習器')` `items_misc.ts:1191` | 招式學習器機 | ✅ 卡面逐字，且已配 `subtype==='PokemonTool'` |
+| `includes('陳舊的')` `m5_preview.ts` resolver | 化石採掘場 | ❌ **本版已改**（見 ①） |
+| `endsWith('ex'/'EX')` ~20 處 | ex 判定 | ⚪ 現役 H/I/J 4693 張**雙向零錯配**（`name.endsWith('ex') ⟺ subtype==='ex'`）⇒ 今天不是 bug，只是 `isRulePokemon` 的冗餘複本。中央述詞 `isRulePokemon` 本身也保留這條 fallback |
+| `startsWith('超級')` ~15 處 | Mega ex 判定 | ⚠ **單獨用會誤判**：現役有 `超級信號`(Item)、`超級烈空坐帽子`(PokemonTool)。逐一查證後**全部**都另外配了 `subtype==='ex'` 或 `endsWith('ex')` ⇒ 今天無誤判。中央述詞 `isMegaExCard`(`selection-filter.ts:59`) 已存在，**建議下一輪收斂**（不在本版授權內） |
+| `Energy && Basic && name.includes('【X】')` ~14 處（`engine.ts:4181/4425/4601/4720/9929/10039/10162`、`items_misc.ts:1470/1485/1495`、`v3050:190/226`、`slowking_lucario_deck:280/319`、`v169_supporters:258`、`effects.ts:17722`） | 基本能量屬性 | ⚠ 這是中央 `isBasicEnergyOfType`(`selection-filter.ts:46`) 的**逐字複本**（現役基本能量 `pokemonType` 恆 `undefined`，只能靠卡名【X】推）。`subtype==='Basic'` 的護欄都在 ⇒ 今天行為一致、**不是 bug**，但是 14 份可漂移的複本。**建議下一輪整批收斂**（不在本版授權內） |
+
+### 部署提醒
+卡效果／引擎有改（`m5_preview.ts` / `v2999_g3_wave1.ts`）⇒ **請站長跑 `update-tournament.bat`**，
+另外兩支 bat 照舊流程。
+
 ## v6.208 威嚇之牙「只在戰鬥場」收斂成中央宣告 ＋ 手牌特性禁止點擊發動 ＋ 化石在場上是【無】屬性
 
 BASE = `a10ed839de1c4e041b496bf2c5121ee10e57e016`（v6.207）。站長裁定四件（2026-08-18）。
