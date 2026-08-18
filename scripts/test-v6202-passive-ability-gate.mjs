@@ -499,8 +499,11 @@ const EXEMPT=new Map(Object.entries({
   //   但「不可達」是一條依賴其他 6 張卡條件的脆弱不變式，改成直接接上中央閘（保證的 no-op，
   //   差分實跑 0 mismatch）。見 scripts/test-steelix-palace-ability-nullify-gate.mjs 與
   //   v2999_g3_wave1.ts steelixPalaceReduce 上方的定論註解。
-  'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|藏隱':'斯魔茶 Basic/Grass/非規則，卡面「只要這隻寶可夢在備戰區」⇒ 現行 6 個消除來源沒有一個打得到（熔岩洞只打進化、監視塔只打【無】、初始化只打規則、暗夜羽擊只打 active、黏著束縛只打備戰 Stage2）。⚠ v6.209 已把同型的岩石宮殿改成直接接閘；本條與「深度下潛」是同一批剩下的，下一輪可比照收斂',
-  'src/lib/game/effects/cards/v3060_deferred_wave_b.ts|深度下潛':'小霞的鯉魚王 Basic/Water/非規則，卡面同樣限備戰區 ⇒ 結構上不可達',
+  // ⭐ v6.210：藏隱（斯魔茶）／深度下潛（小霞的鯉魚王）的豁免條目**已刪除** —— 比照 v6.209
+  //   岩石宮殿：七種消除來源（含 ability-scoped 的濕氣）逐一行為端實跑確認今天都打不到，
+  //   但「不可達」是脆弱不變式 ⇒ 改成直接接上中央閘（保證的 no-op，差分實跑 0 mismatch）。
+  //   見 scripts/test-v6210-bench-immunity-ability-nullify-gate.mjs 與
+  //   v3060_deferred_wave_b.ts getBenchImmunityAbilityName 上方的定論註解。
   // v6.203：虹色DNA 已改走 hasEffectiveAbilityByInst（canEvolveFromHandOnto），不再是字面量消費點 ⇒ 豁免條目刪除
   // v6.204：C 段（需要改函式簽名 ＋ 全部呼叫端）**整段做完**，上述 17 個豁免條目全數刪除。
 }));

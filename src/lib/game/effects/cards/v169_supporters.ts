@@ -20,6 +20,7 @@ import {
   deckWithCardsToBottom,
 } from '../_shared';
 import type { CardInstance, PlayerState } from '../../types';
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ── 辛俐 — top4 → 選 2 加手 + 剩餘洗回 ─────────────────────────────────────
 regG('辛俐', (st, idx) => st.players[idx].deck.length > 0);
@@ -255,7 +256,7 @@ reg('吹火人', (st, idx, pool) => {
   const candCount = st.players[idx].deck
     .filter(c => {
       const card = pool.get(c.cardId);
-      return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【火】');
+      return isBasicEnergyOfType(card, 'Fire');
     }).length;
   st = addLog(st, `吹火人：從牌庫選最多 7 張基本【火】能量加手`, idx);
   return withPending(st, {

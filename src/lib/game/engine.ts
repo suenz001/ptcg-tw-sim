@@ -16,7 +16,7 @@ import type {
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
-import { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
+import { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
 // v6.176：場上目標型 picker 的候選述詞（UI 與中央消毒閘共用同一份，見 selection-candidates.ts）
 import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES } from './selection-candidates';
 export { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType };
@@ -1933,9 +1933,9 @@ export function canAffordAttack(
 /** 判斷一張 ex 卡（name 含 'ex' 後綴）對應獎賞卡數 */
 export function prizesForKO(card: Card): number {
   const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
-  // 超級進化寶可夢ex（Mega ex）：name 以「超級」開頭且為 ex → 3 張獎賞
+  // 超級進化寶可夢ex（Mega ex）：中央述詞 isMegaExCard（subtype==='ex' 且卡名以「超級」開頭）→ 3 張獎賞
   // 例：超級噴火龍Xex / 超級妙蛙花ex / 超級拉帝亞斯ex
-  if (isEx && card.name.startsWith('超級')) return 3;
+  if (isMegaExCard(card)) return 3;
   // 一般 ex / V-STAR 等擊倒獲得 2 張
   if (isEx) return 2;
   return 1;
@@ -4178,7 +4178,7 @@ function handlePlaying(
       const p = newState.players[aIdx];
       const energyInHand = p.hand.filter(inst => {
         const c = pool.get(inst.cardId);
-        return c?.supertype === 'Energy' && c?.subtype === 'Basic' && !!c?.name?.includes('【超】');
+        return isBasicEnergyOfType(c, 'Psychic');
       });
       if (energyInHand.length === 0) {
         const revert: [boolean, boolean] = [used[0], used[1]];
@@ -4421,8 +4421,7 @@ function handlePlaying(
       const validIids = newState.players[aIdx].discard
         .filter(c => {
           const card = pool.get(c.cardId);
-          return card?.supertype === 'Energy' && card.subtype === 'Basic'
-            && (card.name?.includes('【雷】') ?? false);
+          return isBasicEnergyOfType(card, 'Lightning');
         })
         .map(c => c.iid);
       if (validIids.length === 0) {
@@ -4597,8 +4596,7 @@ function handlePlaying(
       if (!hasSunstone) return state;
       const hasFightEnergy = attacker.hand.some(c => {
         const cc = pool.get(c.cardId);
-        return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
-          && (cc.name?.includes('【鬥】') ?? false);
+        return isBasicEnergyOfType(cc, 'Fighting');
       });
       if (!hasFightEnergy) return state;
     }
@@ -4716,8 +4714,7 @@ function handlePlaying(
       if (discardCard.name !== '悠哉尾草棒') return state;
       if (!defender.active || defender.bench.length === 0) return state;
     } else if (triggerName === '火神蛾') {
-      if (discardCard.supertype !== 'Energy' || discardCard.subtype !== 'Basic') return state;
-      if (!(discardCard.name?.includes('【火】') ?? false)) return state;
+      if (!isBasicEnergyOfType(discardCard, 'Fire')) return state;
       if (!defender.active) return state;
       if (hasStatusInAnySlot(defender.active, 'burned')) return state; // v5.842 跨三槽:已灼傷(任一槽)則不重複
     }
@@ -6168,8 +6165,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (!toolsJammed && baseDamage >= 240 && onKOToolNames.some(c => c.name === '豪邁炸彈')) {
         const lbAtk = newState.players[aIdx].active;
         const lbAtkCard = lbAtk ? pool.get(lbAtk.cardId) : null;
-        const lbAtkIsMega = !!lbAtkCard && lbAtkCard.name.endsWith('ex') && lbAtkCard.name.startsWith('超級');
-        const lbDefIsMega = !!defenderCard && defenderCard.name.endsWith('ex') && defenderCard.name.startsWith('超級');
+        const lbAtkIsMega = isMegaExCard(lbAtkCard ?? undefined);
+        const lbDefIsMega = isMegaExCard(defenderCard ?? undefined);
         if (lbAtk && lbAtkIsMega && !lbDefIsMega) {
           const lbPlayers = [...newState.players] as [PlayerState, PlayerState];
           const lbAtkP = { ...lbPlayers[aIdx] };
@@ -9079,7 +9076,7 @@ const HAND_ACTIVATE_GATES: Record<string, (s: GameState, idx: 0 | 1, pool: Map<s
     const field = [...(me.active ? [me.active] : []), ...me.bench];
     return field.some(inst => {
       const c = pool.get(inst.cardId);
-      return !!c && c.name.startsWith('超級') && c.name.endsWith('ex') && c.pokemonType === 'Colorless';
+      return isMegaExCard(c) && c.pokemonType === 'Colorless';
     });
   },
 };
@@ -9871,8 +9868,7 @@ export function getUsableAbilities(
       if (ab.name === '電氣發電機') {
         const hasBasicLight = player.discard.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
-            && (cc.pokemonType === 'Lightning' || cc.name.includes('【雷】'));
+          return isBasicEnergyOfType(cc, 'Lightning');
         });
         if (!hasBasicLight) return;
         if (player.bench.length === 0) return;
@@ -9882,7 +9878,7 @@ export function getUsableAbilities(
         const hasFireE = player.hand.some(c => {
           const cc = pool.get(c.cardId);
           return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
-            && (cc.pokemonType === 'Fire' || cc.name.includes('【火】'));
+            && isBasicEnergyOfType(cc, 'Fire');
         });
         if (!hasFireE) return;
         const hasAyanoBench = player.bench.some(c => (pool.get(c.cardId)?.name ?? '').startsWith('阿響的'));
@@ -9892,8 +9888,7 @@ export function getUsableAbilities(
       if (ab.name === '閃焰魔法') {
         const hasFireE = player.hand.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
-            && (cc.pokemonType === 'Fire' || cc.name.includes('【火】'));
+          return isBasicEnergyOfType(cc, 'Fire');
         });
         if (!hasFireE) return;
       }
@@ -9928,8 +9923,7 @@ export function getUsableAbilities(
       if (ab.name === '閃光抽出') {
         const hasLightOnSelf = pk.energyAttached.some(e => {
           const ec = pool.get(e.cardId);
-          return ec?.supertype === 'Energy' && ec.subtype === 'Basic'
-            && (ec.pokemonType === 'Lightning' || (ec?.name?.includes('【雷】') ?? false));
+          return isBasicEnergyOfType(ec, 'Lightning');
         });
         if (!hasLightOnSelf) return;
       }
@@ -10039,7 +10033,7 @@ export function getUsableAbilities(
       if (ab.name === '熱浪鱗粉') {
         const hasFire = player.hand.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.name?.includes('【火】') ?? false);
+          return isBasicEnergyOfType(cc, 'Fire');
         });
         const oppA = state.players[(1 - state.activePlayerIndex) as 0 | 1].active;
         if (!hasFire || !oppA || hasStatusInAnySlot(oppA, 'burned')) return; // v5.842 跨三槽:對手已灼傷(任一槽)則隱藏
@@ -10053,8 +10047,7 @@ export function getUsableAbilities(
       if (ab.name === '碧綠之舞') {
         const hasGrassEnergy = player.hand.some(c => {
           const cc = pool.get(c.cardId);
-          if (cc?.supertype !== 'Energy' || cc.subtype !== 'Basic') return false;
-          return cc.pokemonType === 'Grass' || cc.name.includes('【草】');
+          return isBasicEnergyOfType(cc, 'Grass');
         });
         if (!hasGrassEnergy) return;
       }
@@ -10130,13 +10123,12 @@ export function getUsableAbilities(
         const field = [...(player.active ? [player.active] : []), ...player.bench];
         const hasFireMegaEx = field.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.name?.startsWith('超級') && cc?.name?.endsWith('ex') && cc?.pokemonType === 'Fire';
+          return isMegaExCard(cc) && cc?.pokemonType === 'Fire';
         });
         if (!hasFireMegaEx) return;
         const hasFireEnergy = player.hand.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic' &&
-            (cc.pokemonType === 'Fire' || cc.name.includes('【火】'));
+          return isBasicEnergyOfType(cc, 'Fire');
         });
         if (!hasFireEnergy) return;
         const hasFireBench = player.bench.some(c => pool.get(c.cardId)?.pokemonType === 'Fire');
@@ -10161,8 +10153,7 @@ export function getUsableAbilities(
         if (!hasSunstone) return;
         const hasFightEnergy = player.hand.some(c => {
           const cc = pool.get(c.cardId);
-          return cc?.supertype === 'Energy' && cc.subtype === 'Basic'
-            && (cc.name?.includes('【鬥】') ?? false);
+          return isBasicEnergyOfType(cc, 'Fighting');
         });
         if (!hasFightEnergy) return;
       }
@@ -10369,7 +10360,7 @@ export function getUsableAbilities(
         const allFs = [player.active, ...player.bench];
         const hasMegaEx = allFs.some(c => {
           const cc = pool.get(c.cardId);
-          return !!cc && cc.name.startsWith('超級') && (cc.subtype === 'ex' || cc.name.endsWith('ex'));
+          return isMegaExCard(cc);
         });
         if (!hasMegaEx) return;
       }
@@ -10384,7 +10375,7 @@ export function getUsableAbilities(
         const allFs = [...(player.active ? [player.active] : []), ...player.bench];
         const hasGrassMega = allFs.some(c => {
           const cc = pool.get(c.cardId);
-          return !!cc && cc.name.startsWith('超級') && (cc.subtype === 'ex' || cc.name.endsWith('ex')) && cc.pokemonType === 'Grass';
+          return isMegaExCard(cc) && cc.pokemonType === 'Grass';
         });
         if (!hasGrassMega) return;
       }

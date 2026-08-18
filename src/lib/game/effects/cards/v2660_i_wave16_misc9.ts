@@ -34,6 +34,7 @@ import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSel
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -652,7 +653,7 @@ regPost('赤面龍|龍之猛暴', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const fireBasics = p.discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
+    return isBasicEnergyOfType(card, 'Fire');
   });
   if (fireBasics.length === 0) return addLog(state, '龍之猛暴：棄牌區無基本火能量', aIdx);
   // v5.848：卡面「附於自己的【龍】寶可夢」→ 多隻龍時玩家選(原簡化只附戰鬥場)。基本火能量互換,取第一張(合法)。
@@ -699,7 +700,7 @@ regPre('蜜集大蛇|大蛇吐息', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const grassBasics = p.hand.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
+    return isBasicEnergyOfType(card, 'Grass');
   });
   if (grassBasics.length < 6) {
     return { state: addLog(state, `大蛇吐息：手牌基本草能量 ${grassBasics.length} 張 < 6 → 招式失敗`, aIdx), damage: 0 };

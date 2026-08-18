@@ -26,7 +26,7 @@ import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirr
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
-import { isBasicPokemonCard, getBasicEnergyType } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
+import { isBasicPokemonCard, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
@@ -594,10 +594,14 @@ export function resolveBenchGuard(
   //   「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
   //   resolveBenchGuard caller 已保證 target 在備戰區，故此處直接判定 targetCard
   //   自身是否擁有此特性。
+  // ⭐ v6.210：改問中央特性消除閘（定論註解在 v3060_deferred_wave_b.ts 該函式上方）。
+  //   持有者是**防守方**的備戰寶可夢 ⇒ ownerIdx = 1 - actorIdx（與本函式內
+  //   球形盾牌／抵抗之幕／花之帷幔 各段取 defenderIdx 的方式一致）。
   if (kind === 'attack-damage' || kind === 'attack-effect') {
-    if (_v3060BenchImmAbil(targetCard)) {
-      const abName = _v3060GetBenchImmName(targetCard) ?? '備戰免疫';
-      return { blocked: true, reason: `${targetCard?.name ?? '?'} ${abName} 效果` };
+    const _benchImmOwner = (1 - actorIdx) as 0 | 1;
+    const _benchImmName = _v3060GetBenchImmName(state, _benchImmOwner, opts.targetInst, targetCard, pool);
+    if (_benchImmName) {
+      return { blocked: true, reason: `${targetCard?.name ?? '?'} ${_benchImmName} 效果` };
     }
   }
   if (kind === 'attack-effect') {
@@ -760,7 +764,6 @@ import { hasBugAegislashShield, canRelicanthDiverCatchTrigger, isBasicWaterEnerg
 export { hasBugAegislashShield };
 // v3.06 Deferred Wave B helper — 在備戰時免疫對手招式（藏隱 / 深度下潛）
 import {
-  hasBenchAttackImmunityAbility as _v3060BenchImmAbil,
   getBenchImmunityAbilityName as _v3060GetBenchImmName,
   attackerHasSpecialEnergy as _v3060AttackerHasSE,
 } from './effects/cards/v3060_deferred_wave_b';
@@ -825,7 +828,7 @@ import { isImmuneToOppSupporter as _gustImmuneSupporter } from './effects/cards/
 /** 計算 KO 獎賞張數（與 engine.prizesForKO 對齊；inline 以免 effects→engine 反向依賴） */
 export function koPrizeCount(card: Card): number {
   const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
-  if (isEx && card.name.startsWith('超級')) return 3; // Mega ex
+  if (isMegaExCard(card)) return 3; // Mega ex
   return isEx ? 2 : 1;
 }
 
@@ -1301,8 +1304,19 @@ function hitBenchAll(
     //   「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
     //   只在 attackerIdx !== targetIdx（對手對自己施招）時生效；自爆 / 自殘類 self-bench
     //   傷害不擋。
-    if (attackerIdx !== targetIdx && _v3060BenchImmAbil(card)) {
-      teraImmunNames.push(`${card?.name ?? '?'}（${_v3060GetBenchImmName(card) ?? '備戰免疫'}）`);
+    // ⭐ v6.210：改問中央特性消除閘（持有者＝ targetIdx 側的備戰寶可夢）。
+    // ⚠⚠ **誠實標註（v6.210 第二輪 opus 破壞測試實測）**：這一段其實是**行為上偵測不到**的
+    //   縱深防禦 —— 同一輪迴圈約 30 行後的 v6.141 `resolveMultiTargetDamageGuard(…isBench:true…)`
+    //   會走 `canApplyEffectToTarget → resolveBenchGuard`，那裡有同一份（已過閘的）判準。
+    //   把本段整個刪掉，真走 hitBenchAll 的招式（電飛鼠｜天空波）行為 **0 差異**。
+    //   保留的理由是「兩份判準不得漂移」：本段若留著舊的無閘版本，日後只要有人調動兩者的
+    //   先後順序，未過閘的那份就會變成生效版。⇒ 不要因為「測不出來」就把它改回去或放著不管；
+    //   守衛只能用**靜態接線斷言**釘住它（見 test-v6210-bench-immunity-ability-nullify-gate.mjs F 段）。
+    const _hbaImmName = attackerIdx !== targetIdx
+      ? _v3060GetBenchImmName(state, targetIdx, c, card, pool)
+      : null;
+    if (_hbaImmName) {
+      teraImmunNames.push(`${card?.name ?? '?'}（${_hbaImmName}）`);
       newBench.push(c);
       continue;
     }
@@ -4243,7 +4257,7 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
     for (const inst of all) {
       const c = pool.get(inst.cardId);
       if (!c) continue;
-      if (c.subtype === 'ex' && c.name.startsWith('超級') && c.pokemonType === 'Darkness') {
+      if (isMegaExCard(c) && c.pokemonType === 'Darkness') {
         return 120;
       }
     }
@@ -6746,7 +6760,7 @@ export function prizesForKOLocal(c: Card | undefined): number {
   if (!c) return 1;
   if (!isExCard(c)) return 1;
   // 超級進化寶可夢 ex（Mega ex）取 3 張獎賞（與 engine.prizesForKO 同步）
-  if (c.name.startsWith('超級')) return 3;
+  if (isMegaExCard(c)) return 3;
   return 2;
 }
 function isEvolvedCard(c: Card | undefined): boolean {
@@ -10527,7 +10541,7 @@ regPre('狙射樹梟|強力射擊', (state, aIdx, pool) => {
   const p = state.players[aIdx];
   const hasGrassEnergy = p.hand.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
+    return isBasicEnergyOfType(card, 'Grass');
   });
   if (!hasGrassEnergy) {
     return { state: addLog(state, '強力射擊：手牌無基本草能量，招式失敗', aIdx), damage: 0 };
@@ -10536,10 +10550,7 @@ regPre('狙射樹梟|強力射擊', (state, aIdx, pool) => {
 });
 regPost('狙射樹梟|強力射擊', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  const gidx = p.hand.findIndex(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Grass' || card.name.includes('【草】'));
-  });
+  const gidx = p.hand.findIndex(c => isBasicEnergyOfType(pool.get(c.cardId), 'Grass'));
   if (gidx < 0) return state;
   const energy = p.hand[gidx];
   const s = addLog(state, '強力射擊：丟棄手牌 1 張基本草能量', aIdx);
@@ -10747,7 +10758,7 @@ regPost('噗隆隆|金屬塗層', (state, aIdx, pool) => {
   if (!p.active) return addLog(state, '金屬塗層：場上無戰鬥寶可夢', aIdx);
   const idx = p.discard.findIndex(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Metal' || card.name.includes('【鋼】'));
+    return isBasicEnergyOfType(card, 'Metal');
   });
   if (idx < 0) return addLog(state, '金屬塗層：棄牌區沒有基本鋼能量', aIdx);
   const energy = p.discard[idx];
@@ -11126,7 +11137,7 @@ regPost('莫魯貝可|能量車輪', (state, aIdx, pool) => {
   const darkIids = p.active.energyAttached
     .filter(e => {
       const card = pool.get(e.cardId);
-      return card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Darkness' || card.name.includes('【惡】'));
+      return isBasicEnergyOfType(card, 'Darkness');
     })
     .map(e => e.iid);
   if (darkIids.length < 2) {
@@ -15044,9 +15055,7 @@ regA('厄鬼椪 碧草面具ex', 0, (st, idx, pool, cardInst) => {
   if (src.cantAttachEnergyThisTurn) return addLog(st, '碧綠之舞：受詛咒根影響，本回合無法從手牌附加能量', idx);
   // 手牌需有基本草能量
   const grassEnergyInst = p.hand.find(c => {
-    const card = pool.get(c.cardId);
-    if (card?.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-    return card.pokemonType === 'Grass' || card.name.includes('【草】');
+    return isBasicEnergyOfType(pool.get(c.cardId), 'Grass');
   });
   if (!grassEnergyInst) return rejectAbilityUse(st, '碧綠之舞：手牌中沒有基本草能量', idx);
   const eName = pool.get(grassEnergyInst.cardId)?.name ?? '基本草能量';
@@ -17719,7 +17728,7 @@ regA('火神蛾', 0, (st, idx, pool) => {
   const p = st.players[idx];
   const fire = p.hand.find(c => {
     const cc = pool.get(c.cardId);
-    return cc?.supertype === 'Energy' && cc.subtype === 'Basic' && (cc.name?.includes('【火】') ?? false);
+    return isBasicEnergyOfType(cc, 'Fire');
   });
   if (!fire) return rejectAbilityUse(st, '熱浪鱗粉：手牌中沒有基本【火】能量', idx);
   let s = updatePlayer(st, idx, pl => ({ ...pl, hand: pl.hand.filter(c => c.iid !== fire.iid), discard: [...pl.discard, fire] }));

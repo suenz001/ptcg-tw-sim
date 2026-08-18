@@ -33,6 +33,7 @@ import { addPendingPrize } from '../_shared';
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196／v5.224）。
 //   本檔的 PASSIVE_ATTACK_BONUS 迴圈是 effects.ts:8149 那份的第二份實作，必須接同一個閘。
 import { isAbilityHolderEffective } from './v3001_g3_wave3';
+import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 奧利瓦ex ｜ 芳香射擊（160 + 自身清特殊狀態）
@@ -281,14 +282,14 @@ regG('滿充的體貼', (st, idx, pool) => {
   return [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
     .some(c => {
       const card = pool.get(c.cardId);
-      return card?.subtype === 'ex' && card.name.startsWith('超級') && c.damage > 0;
+      return isMegaExCard(card) && c.damage > 0;
     });
 });
 reg('滿充的體貼', (st, idx, pool) => {
   const megaExs = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench]
     .filter(c => {
       const card = pool.get(c.cardId);
-      return card?.subtype === 'ex' && card.name.startsWith('超級') && c.damage > 0;  // v5.426：只列受傷 ex
+      return isMegaExCard(card) && c.damage > 0;  // v5.426：只列受傷 ex
     });
   if (megaExs.length === 0) return addLog(st, '滿充的體貼：場上無超級進化寶可夢ex', idx);
   const validIids = megaExs.map(c => c.iid);

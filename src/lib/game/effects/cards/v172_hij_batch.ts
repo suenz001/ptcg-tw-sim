@@ -31,6 +31,7 @@ import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 import { openLureOutOppTopN, resolveLureOutOppTopN } from '../../effects'; // v6.078 對手牌庫頂 N 張選基礎放對手備戰
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
+import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
 // ── 釀光市（Stadium / I）─ 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手
 // 注意：Stadium 由 engine USE_STADIUM 處理。這裡只放 resolver。
@@ -379,23 +380,13 @@ regG('捷朵', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  return all.some(c => {
-    const card = pool.get(c.cardId);
-    if (!card) return false;
-    const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
-    return isEx && card.name.startsWith('超級');
-  });
+  return all.some(c => isMegaExCard(pool.get(c.cardId)));
 });
 reg('捷朵', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   const all = [...(dp.active ? [dp.active] : []), ...dp.bench];
-  const megaCount = all.filter(c => {
-    const card = pool.get(c.cardId);
-    if (!card) return false;
-    const isEx = card.name.endsWith('ex') || card.name.endsWith('EX');
-    return isEx && card.name.startsWith('超級');
-  }).length;
+  const megaCount = all.filter(c => isMegaExCard(pool.get(c.cardId))).length;
   st = addLog(st, `捷朵：對手場上有 ${megaCount} 隻超級進化ex → 抽 ${megaCount} 張`, idx);
   if (megaCount === 0) return st;
   return updatePlayer(st, idx, p => {

@@ -64,6 +64,7 @@ import {
   hasAbilityOnActive,
   countEffectiveAbilityOnSide,
 } from './v3001_g3_wave3';
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // 導出 sentinel 防止 unused import warnings（與 v2999 同模式）
 export type _v3000G3W2Sentinel = GameState | Card | CardInstance;
@@ -156,12 +157,9 @@ export function magmarFlowingBurnBonus(
 export function isBasicWaterEnergy(cardId: string, pool: Map<string, Card>): boolean {
   const c = pool.get(cardId);
   if (!c) return false;
-  if (c.supertype !== 'Energy') return false;
-  if (c.subtype !== 'Basic') return false;
-  // v5.464 修：基本能量 pokemonType 為 null（屬性在卡名【水】），原 pokemonType==='Water' 永遠 false
-  //   → 潛者捕捉從不觸發。改用 pokemonType fallback + 卡名【水】判定（對齊 isBasicEnergyOfType 慣例）。
-  if (c.pokemonType === 'Water') return true;
-  return (c.name ?? '').includes('【水】');
+  // ⭐ v6.210：本函式原本是中央 isBasicEnergyOfType 的逐字複本（v5.464 註解已自承「對齊
+  //   isBasicEnergyOfType 慣例」）⇒ 直接呼叫中央述詞，只保留「用 cardId 查 pool」這層外殼。
+  return isBasicEnergyOfType(c, 'Water');
 }
 
 // v5.464：潛者捕捉確認選單 resolver — 由 engine KO 路徑設 modal-choice(effectKey='diver-catch-confirm')。

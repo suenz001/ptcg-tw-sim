@@ -40,7 +40,8 @@
     getHandCardOps, handCardDragKind, handCardDraggable, handOpForDropTarget,
     type HandCardOp, type HandDragKind, type HandDropTarget,
   } from '$lib/game/hand-card-ops';
-  import { evaluateSelectionFilter, isKnownSelectionFilter } from '$lib/game/selection-filter';
+  import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard,
+           isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
@@ -3506,10 +3507,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             if (!card) return false;
             // Bug fix (#20): 捕蟲組合卡面寫「【草】寶可夢卡」= 任何階段，移除 !evolvesFrom 限制
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Grass') return true;
-              if (card.name.includes('【草】')) return true;
-            }
+            if (isBasicEnergyOfType(card, 'Grass')) return true;
             return false;
           });
         }
@@ -3597,7 +3595,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             return !pickedTypes.has(myType);
           }
           if (f === 'ex')         return card.supertype === 'Pokemon' && card.subtype === 'ex';
-          if (f === 'MegaEx')     return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+          if (f === 'MegaEx')     return isMegaExCard(card);
           if (f === 'TeraPokemon') return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
           if (f === 'Item')       return card.supertype === 'Trainer' && card.subtype === 'Item';
           if (f === 'Supporter')  return card.supertype === 'Trainer' && card.subtype === 'Supporter';
@@ -3620,10 +3618,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
             // 基本【鬥】寶可夢：pokemonType === 'Fighting' 且為基礎
             if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
             // 基本【鬥】能量：pokemonType 有時缺漏（MC 集能量卡），所以名字含【鬥】/【格】也算
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Fighting') return true;
-              if (card.name.includes('【鬥】') || card.name.includes('【格】')) return true;
-            }
+            //   ⭐ v6.210：中央 isBasicEnergyOfType 的 ZH_ENERGY_TYPE 同時收 '鬥' 與 '格' ⇒ 語義相同
+            if (isBasicEnergyOfType(card, 'Fighting')) return true;
             return false;
           }
           if (f === 'PokemonNonRule') {
@@ -3643,42 +3639,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
           if (f === 'GrassBasicOrGrassEnergy') {
             // Bug fix (#20): 捕蟲組合「【草】寶可夢卡」= 任何階段（非限基本），移除 !evolvesFrom
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Grass') return true;
-              if (card.name.includes('【草】')) return true;
-            }
+            if (isBasicEnergyOfType(card, 'Grass')) return true;
             return false;
           }
           if (f === 'BasicEnergy:Grass+Lightning') {
             // v2.155 電電充能：基本【草】或基本【雷】能量
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Grass' || card.pokemonType === 'Lightning') return true;
-              if (card.name.includes('【草】') || card.name.includes('【雷】')) return true;
-            }
-            return false;
+            return isBasicEnergyOfType(card, 'Grass') || isBasicEnergyOfType(card, 'Lightning');
           }
           if (f === 'BasicEnergy:Grass') {
             // v2.305 電電充能第一段：基本【草】能量
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Grass') return true;
-              if (card.name.includes('【草】')) return true;
-            }
-            return false;
+            return isBasicEnergyOfType(card, 'Grass');
           }
           if (f === 'BasicEnergy:Lightning') {
             // v2.305 電電充能第二段：基本【雷】能量
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Lightning') return true;
-              if (card.name.includes('【雷】')) return true;
-            }
-            return false;
+            return isBasicEnergyOfType(card, 'Lightning');
           }
           // v2.135：阿響的冒險
           if (f === 'RakiPokemonOrFireEnergy') {
             if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Fire' || card.name.includes('【火】')) return true;
-            }
+            if (isBasicEnergyOfType(card, 'Fire')) return true;
             return false;
           }
           // v2.135：洛拍棒
@@ -3741,10 +3720,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
           if (f === 'EvolutionPokemon') return card.supertype === 'Pokemon' && !!card.evolvesFrom;
           if (f === 'PokemonTool') return card.supertype === 'Trainer' && card.subtype === 'PokemonTool';
           if (f === 'BasicPsychicEnergy') {
-            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+            return isBasicEnergyOfType(card, 'Psychic');
           }
           if (f === 'BasicFightingEnergy') {
-            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
+            return isBasicEnergyOfType(card, 'Fighting');
           }
           if (f === 'GrassPokemonOrStadium') {
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Grass') return true;
@@ -3753,10 +3732,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           }
           if (f === 'FirePokemonOrBasicFireEnergy') {
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Fire') return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-              if (card.pokemonType === 'Fire') return true;
-              if (card.name.includes('【火】')) return true;
-            }
+            if (isBasicEnergyOfType(card, 'Fire')) return true;
             return false;
           }
           if (f.startsWith('Pokemon:')) {
@@ -3830,15 +3806,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           return card?.supertype === 'Energy' && card.subtype === 'Basic';
         });
         // v2.40 月光丘陵：只基本【超】能量（排除感應【超】等 Special Energy）
-        if (f2 === 'BasicPsychicEnergy') return pool0.filter(c => {
-          const card = pool.get(c.cardId);
-          return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
-        });
+        if (f2 === 'BasicPsychicEnergy') return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Psychic'));
         // v2.89 波動突刺：只基本【鬥】能量（排除硬岩【鬥】等 Special Energy）
-        if (f2 === 'BasicFightingEnergy') return pool0.filter(c => {
-          const card = pool.get(c.cardId);
-          return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
-        });
+        if (f2 === 'BasicFightingEnergy') return pool0.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Fighting'));
         // v3.58：generic 基本能量 + 屬性 filter（妖火紅狐｜閃焰魔法 用 BasicEnergy:Fire）
         //   原本 UI 只認 BasicEnergy:Grass / Lightning（v2.305 加的兩個具名 case），
         //   fallthrough 到 `return pool0;` 讓玩家可棄任何手牌 — 這是 bug。
@@ -3897,8 +3867,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           if (f === 'WaterPokemonOrBasicWaterEnergy') {
             // 豐收漁網：【水】寶可夢 + 基本【水】能量（基本能量 pokemonType 常 null，用卡名【水】fallback）
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Water') return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic'
-                && (card.pokemonType === 'Water' || card.name.includes('【水】'))) return true;
+            if (isBasicEnergyOfType(card, 'Water')) return true;
             return false;
           }
           // v2.40 修正：原本這裡寫 supertype === 'Energy'（= 所有能量）是 bug，
@@ -3907,34 +3876,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
           if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
           if (f === 'BasicPsychicEnergy') {
             // 奇跡修正檔 / 月光丘陵：只基本【超】能量。排除富裕能量/感應【超】等 Special Energy。
-            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+            return isBasicEnergyOfType(card, 'Psychic');
           }
           if (f === 'BasicFightingEnergy') {
             // v2.89 波動突刺：只基本【鬥】能量。排除硬岩【鬥】等 Special Energy。
-            return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
+            return isBasicEnergyOfType(card, 'Fighting');
           }
           // v5.022：discard-search 補 BasicEnergy:<Type> generic case（mirror deck-search line ~2262）
           //   bug 根因：玩家回報麻麻鰻｜電氣發電機 從棄牌區挑出「伏特【雷】能量」（Special）— 違反卡面「只能基本【雷】能量」。
           //   discard-search filter chain 漏 'BasicEnergy:Lightning' handler → 落到 `return true;` → 任意能量都過。
           //   修：與 deck-search 對稱，加 generic case；pokemonType/name pattern 雙重識別基本能量。
           if (f.startsWith('BasicEnergy:')) {
-            if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-            const t = f.slice('BasicEnergy:'.length);
-            const zhMap: Record<string, string> = {
-              Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
-              Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
-              Dragon: '龍', Colorless: '無',
-            };
-            const zh = zhMap[t];
-            if (!zh) return false;
-            if (card.pokemonType === t) return true;
-            if (card.name.includes(`【${zh}】`)) return true;
-            return false;
+            // ⭐ v6.210：原本自帶一份 zhMap（ZH_ENERGY_TYPE 的第三份複本）⇒ 收斂中央述詞。
+            return isBasicEnergyOfType(card, f.slice('BasicEnergy:'.length) as EnergyType);
           }
           if (f === 'FightingPokemonOrBasicFightingEnergy') {
             // v2.117 塔拉剛：【鬥】寶可夢 或 基本【鬥】能量
             if (card.supertype === 'Pokemon' && card.pokemonType === 'Fighting') return true;
-            if (card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】')) return true;
+            if (isBasicEnergyOfType(card, 'Fighting')) return true;
             return false;
           }
           if (f === 'Pokemon')         return card.supertype === 'Pokemon';
@@ -8345,19 +8304,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   });
   // v2.121：判斷一張卡是否為指定屬性的基本能量。
   // 很多基本能量卡 JSON 的 pokemonType 欄位為 undefined（scraper 沒填），只能從卡名【X】解析。
-  // 統一 helper 供所有 filter 'Energy:<Type>' 用。
-  // v3.35：EnergyType 包含 'Fairy'（妖精），補對應中文字 '妖'，避免 Record<EnergyType,string> 缺 key 警告
-  const ZH_BY_TYPE: Record<EnergyType, string> = {
-    Grass: '草', Fire: '火', Water: '水', Lightning: '雷',
-    Psychic: '超', Fighting: '鬥', Darkness: '惡', Metal: '鋼',
-    Fairy: '妖', Dragon: '龍', Colorless: '無',
-  };
+  // ⭐ v6.210：本地那份（含自帶的 ZH_BY_TYPE 對照表）是中央 `isBasicEnergyOfType`
+  //   （selection-filter.ts，內含同一份 ZH_ENERGY_TYPE）的**逐字複本** —— UI／AI 兩份漂移
+  //   正是 v6.008／v6.129 兩次玩家回報的根因 ⇒ 改成薄殼委派中央述詞，7 個既有呼叫點不動。
   function isBasicEnergyOfType(card: Card | undefined, type: EnergyType): boolean {
-    if (!card) return false;
-    if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-    if (card.pokemonType === type) return true;
-    const zh = ZH_BY_TYPE[type];
-    return zh ? card.name.includes(`【${zh}】`) : false;
+    return isBasicEnergyOfTypeCentral(card as never, type);
   }
 
   function selectionTitle(type: string): string {

@@ -24,6 +24,7 @@ import {
   regR,
   updatePlayer,
   withPending, rejectAbilityUse } from '../_shared';
+import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
 function cardName(pool: Map<string, Card>, inst: CardInstance | null | undefined): string {
   return inst ? (pool.get(inst.cardId)?.name ?? '?') : '?';
@@ -54,7 +55,7 @@ function selfField(p: PlayerState): CardInstance[] {
 function hasOwnFireMegaEx(st: GameState, idx: 0 | 1, pool: Map<string, Card>): boolean {
   return selfField(st.players[idx]).some(inst => {
     const c = pool.get(inst.cardId);
-    return !!c && c.name.startsWith('超級') && c.name.endsWith('ex') && c.pokemonType === 'Fire';
+    return isMegaExCard(c) && c.pokemonType === 'Fire';
   });
 }
 

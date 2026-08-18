@@ -17,6 +17,7 @@ import {
 } from '../_shared';
 import { dealAttackDamageToTarget } from '../../effects'; // v5.386：幻影碎放指示物改走中央函式（補招式效果免疫 guard）
 import { flipCoinsWithLog } from '../../effects';
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 呆呆獸 M-P 18072｜憨憨臉（特性 — 卡面：「這隻寶可夢不會【混亂】」）
@@ -276,8 +277,7 @@ regA('月石', 0, (st, idx, pool) => {
   const p = st.players[idx];
   const energyInst = p.hand.find(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic'
-      && (card.name?.includes('【鬥】') ?? false);
+    return isBasicEnergyOfType(card, 'Fighting');
   });
   if (!energyInst) return addLog(st, '月光循環：手牌無基本【鬥】能量', idx);
   let s = updatePlayer(st, idx, pl => ({
@@ -315,8 +315,7 @@ regPost('超級路卡利歐ex|波動突刺', (state, aIdx, pool) => {
   }
   const cand = p.discard.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic'
-      && (card.name?.includes('【鬥】') ?? false);
+    return isBasicEnergyOfType(card, 'Fighting');
   });
   if (cand.length === 0) {
     return dealNow(addLog(state, '波動突刺：棄牌區沒有基本【鬥】能量', aIdx));

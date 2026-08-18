@@ -42,6 +42,7 @@ import type { Card } from '$lib/cards/types';
 import {
   regA, regAByName, regR,
   addLog, updatePlayer, withPending, rejectAbilityUse } from '../_shared';
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
 function isEnergyOfType(ec: any, type: string): boolean {
@@ -446,8 +447,7 @@ regA('麻麻鰻', 0, (st, idx, pool) => {
   // gate: 棄牌區至少 1 張基本【雷】能量
   const hasBasicLight = player.discard.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic'
-      && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
+    return isBasicEnergyOfType(card, 'Lightning');
   });
   if (!hasBasicLight) {
     return addLog(st, '電氣發電機：棄牌區無基本【雷】能量', idx);

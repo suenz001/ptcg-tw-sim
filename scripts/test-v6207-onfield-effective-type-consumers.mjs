@@ -733,7 +733,9 @@ const FROZEN_PRINTED_READS = {
     "return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';",      // 牌庫/棄牌區搜尋條件 ⇒ 印刷屬性才對
     "return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';",
     "if (card.supertype === 'Pokemon' && card.pokemonType === 'Water') return true;",
-    "&& (card.pokemonType === 'Water' || card.name?.includes('【水】'))) return true;",
+    // ⭐ v6.210：原本這裡還有一條「豐收漁網 validIids 的基本【水】能量」
+    //   （`card.pokemonType === 'Water' || card.name?.includes('【水】')`），已收斂進中央
+    //   `isBasicEnergyOfType` ⇒ 從凍結清單刪除（清單過期，不是新技術債）。
   ],
   'src/lib/game/effects/cards/energy_cards.ts': [
     "return cc?.supertype === 'Pokemon' && !cc.evolvesFrom && cc.pokemonType === 'Psychic';", // 卡面「從自己的**牌庫**選擇…」⇒ 印刷屬性

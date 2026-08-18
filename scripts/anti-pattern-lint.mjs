@@ -465,7 +465,6 @@ for (const f of files) {
   "effects.ts→v3060_deferred_wave_b": [
     "attackerHasSpecialEnergy",
     "getBenchImmunityAbilityName",
-    "hasBenchAttackImmunityAbility",
     "isImmuneToOppTrainer",
     "registerV3060DeferredWaveBPassives"
   ],

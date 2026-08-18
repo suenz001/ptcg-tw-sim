@@ -416,11 +416,11 @@ TOOL_ON_DAMAGED.set('豪邁炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
   if (!dPlayer.active || !aPlayer.active) return state;
   // Gate 2: 攻擊方為 超級進化ex
   const aCard = pool.get(aPlayer.active.cardId);
-  const isAttackerMegaEx = !!aCard && aCard.name.endsWith('ex') && aCard.name.startsWith('超級');
+  const isAttackerMegaEx = isMegaExCard(aCard);
   if (!isAttackerMegaEx) return state;
   // Gate 3: 防守方非 超級進化ex
   const dCard = pool.get(dPlayer.active.cardId);
-  const isDefenderMegaEx = !!dCard && dCard.name.endsWith('ex') && dCard.name.startsWith('超級');
+  const isDefenderMegaEx = isMegaExCard(dCard);
   if (isDefenderMegaEx) return state;
   // 找出 defender 身上對應的「豪邁炸彈」instance（含 toolAttached + extraTools）
   const allTools: CardInstance[] = [];

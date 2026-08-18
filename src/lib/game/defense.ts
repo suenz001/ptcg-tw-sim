@@ -552,7 +552,7 @@ export const DEFENSE_RULES_DOC = [
     type: 'self-ability (斯魔茶)',
     blocks: ['attack-damage', 'attack-effect'],
     scope: 'bench (持有者自身)',
-    via: 'resolveBenchGuard / _v3060BenchImmAbil',
+    via: 'resolveBenchGuard / hitBenchAll → getBenchImmunityAbilityName（v6.210 起過特性消除中央閘）',
     note: '卡面：在備戰區時不受對手寶可夢招式的傷害與效果',
   },
   {
@@ -560,7 +560,7 @@ export const DEFENSE_RULES_DOC = [
     type: 'self-ability (小霞的鯉魚王)',
     blocks: ['attack-damage', 'attack-effect'],
     scope: 'bench (持有者自身)',
-    via: 'resolveBenchGuard / _v3060BenchImmAbil',
+    via: 'resolveBenchGuard / hitBenchAll → getBenchImmunityAbilityName（v6.210 起過特性消除中央閘）',
     note: '同藏隱',
   },
 

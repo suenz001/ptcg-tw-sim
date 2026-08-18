@@ -32,6 +32,7 @@ import {
   regA, regR,
   addLog, updatePlayer, withPending, shuffle, rejectAbilityUse } from '../_shared';
 import type { Card } from '$lib/cards/types';
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3050Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -186,8 +187,7 @@ regA('鋼炮臂蝦', 0, (st, idx, pool, cardInst) => {
   const waterEnergies = p.hand.filter(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;
-    if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-    return (card.name?.includes('【水】') ?? false);
+    return isBasicEnergyOfType(card, 'Water');
   });
   if (waterEnergies.length === 0) {
     return rejectAbilityUse(st, '返回重載：手牌中沒有「基本【水】能量」可附加', idx);
@@ -222,8 +222,7 @@ regR('clamperl-bombard-attach', (st, idx, iids, params, pool) => {
     if (!inst) continue;
     const card = pool.get(inst.cardId);
     if (!card) continue;
-    if (card.supertype !== 'Energy' || card.subtype !== 'Basic') continue;
-    if (!(card.name?.includes('【水】') ?? false)) continue;
+    if (!isBasicEnergyOfType(card, 'Water')) continue;
     validInsts.push(inst);
   }
   if (validInsts.length === 0) {

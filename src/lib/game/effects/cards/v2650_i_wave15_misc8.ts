@@ -22,6 +22,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper
@@ -762,7 +763,7 @@ regPre('巨炭山|瀝青加農炮', (state, aIdx, pool) => {
   let fightEnergyCount = 0;
   for (const c of p.discard) {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fighting' || card.name.includes('【鬥】'))) fightEnergyCount++;
+    if (isBasicEnergyOfType(card, 'Fighting')) fightEnergyCount++;
   }
   if (fightEnergyCount < 10) {
     return { state: addLog(state, `瀝青加農炮：棄牌區基本鬥能量僅 ${fightEnergyCount} 張 < 10 → 招式失敗`, aIdx), damage: 0 };
@@ -774,7 +775,7 @@ regPost('巨炭山|瀝青加農炮', (state, aIdx, pool) => {
   let fightEnergyCount = 0;
   for (const c of p.discard) {
     const card = pool.get(c.cardId);
-    if (card?.supertype === 'Energy' && card.subtype === 'Basic' && (card.pokemonType === 'Fighting' || card.name.includes('【鬥】'))) fightEnergyCount++;
+    if (isBasicEnergyOfType(card, 'Fighting')) fightEnergyCount++;
   }
   if (fightEnergyCount < 10) return state;
   // 選對手 1 隻寶可夢（含戰鬥場）

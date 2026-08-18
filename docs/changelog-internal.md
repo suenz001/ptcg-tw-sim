@@ -1,5 +1,168 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.210 藏隱／深度下潛接特性消除中央閘 ＋「基本能量屬性」「Mega ex」兩族卡名判斷整批收斂
+
+BASE = `665af67543a3930acbe70e24ab4fd0c4b55cf19b`（v6.209）。
+玩家幾乎無感（純收斂＋防脆化）⇒ 首頁 changelog **不放**。
+⚠ 唯一的行為改變是 ③ 的 AI bug（AI 端，非規則判定）。
+
+### ① 斯魔茶｜藏隱 ／ 小霞的鯉魚王｜深度下潛 —— 比照 v6.209 岩石宮殿收尾
+
+卡面（`abilities[].effect` 逐字）：「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
+持有者 6 個現役印刷：斯魔茶 SV5a 10255/10701、SV8a 11542/12332（H，Grass/Basic/hp30）；
+小霞的鯉魚王 MC 16628、SV9a 12683（I，Water/Basic/hp30，tags=['訓練家冠名']）
+⇒ 兩張都是**非規則的【基礎】寶可夢**，卡面把持有者鎖在備戰區。
+
+**七種消除來源逐一行為端實跑**（完整 `ATTACK` → `RESOLVE_SELECTION`，每項附正對照）：
+
+| 來源 | 打得到？ | 理由 |
+|---|---|---|
+| 鐵荊棘ex｜初始化 | ❌ | 只消「擁有規則的寶可夢」 |
+| 火箭隊的監視塔 | ❌ | 只消【無】（或 `fossilOnField`）；這兩張是【草】/【水】 |
+| 傳說的熔岩洞 | ❌ | 只消**進化**；兩張 `stage='Basic'` |
+| 招式版暗夜羽擊 | ❌ | 中央閘限 `location==='active'`；持有者恆在備戰 |
+| passive 振翼髮｜暗夜羽擊 | ❌ | 同上，限對手戰鬥場 |
+| 海兔獸｜黏著束縛 | ❌ | 只消備戰的【2階進化】 |
+| **可達鴨／哥達鴨｜濕氣（第七種）** | ❌ | 卡面只消「**將自己【昏厥】的效果的特性**」，ability-scoped、走 `isSelfKOEffectBlocked` 獨立那條；藏隱／深度下潛不是那一類 |
+
+⇒ 事實判斷成立，但「不可達」是依賴其他卡條件的脆弱不變式 ⇒ **仍接上中央閘**
+（`isAbilityHolderEffective(..., 'bench', ...)`），今天是保證的 no-op。
+
+修法：`v3060_deferred_wave_b.ts` 的 `getBenchImmunityAbilityName` 改成
+`(state, ownerIdx, targetInst, targetCard, pool)` 並在特性名字面量旁邊過閘；
+只回 boolean 的 `hasBenchAttackImmunityAbility` 因此**零呼叫端 ⇒ 整支刪除**（v6.098/6.099 死入口教訓），
+`anti-pattern-lint` Check O 白名單同步縮一格。兩個消費點
+（`effects.ts` `resolveBenchGuard` L598／`hitBenchAll` L1304）都改問同一份判準。
+定論與七項查證結果寫進該函式上方註解；**test-v6202 的兩條豁免表條目已刪除**。
+
+**差分實跑：0 行為變更** —— 守衛在 HEAD 樹上 84 PASS，在新樹上 99 PASS，
+差的 15 條全部落在「絆線（B 段）＋ 新簽名（E 段）」，A/C/D 段（真卡 × 七來源 × 三條消費路徑）
+兩邊逐條相同。
+守衛 `scripts/test-v6210-bench-immunity-ability-nullify-gate.mjs`（99 斷言，HEAD 紅 15，其中絆線 8 條）：
+A 段七來源 × {snipe(resolveBenchGuard) / benchAll(hitBenchAll) / counter(attack-effect)} ×
+兩張卡 ＋ 每組**反安慰劑**（同盤面無免疫的對照組必須照樣挨打）；
+B 段用合成持有者（斯魔茶改成【無】／2 階／規則寶可夢）反向證明那行閘真的會擋；
+C 段同樣合成持有者但不放來源 → 必須仍免疫；E 段釘住 6 個印刷都被同一份判準涵蓋。
+
+### ② 「基本能量屬性」49 處逐字複本 → 中央 `isBasicEnergyOfType`
+
+現役 68 張基本能量的 `pokemonType` **恆 `undefined`**，屬性只能從卡名【X】推（v6.008 事故），
+所以全站散著 `supertype==='Energy' && subtype==='Basic' && name.includes('【X】')` 這個三段式。
+本版把它**全部**換成中央述詞（`selection-filter.ts`）：
+
+| 檔 | 處數 |
+|---|---|
+| `selection-filter.ts`（中央檔內部自己的複本） | 9 |
+| `engine.ts` | 12 |
+| `effects.ts` | 6 |
+| `ai.ts` | 8 |
+| 卡檔（items_misc 4／slowking 2／v2650 2／v3050 2／v2660 2／v2930 2／v169／v2306／v2380／v3000 各 1） | 19 |
+| `src/routes/game/+page.svelte`（含**本地重複定義**的 `isBasicEnergyOfType` ＋ 自帶 `ZH_BY_TYPE`／`zhMap`） | 14＋1 |
+
+**不換（逐處判讀）**：
+- `m2_dragon_charizard_batch.ts:40`／`m5_preview.ts:257` `providesFireEnergy`、
+  `v2660:235` `_isLightningEnergy` —— **沒有** `subtype==='Basic'` 護欄，語義是「這張能量提不提供【火】/【雷】」
+  （含燃料【火】能量等特殊能量），與 `isBasicEnergyOfType` **不同問題**。
+- `ai.ts:1326/1361-1373`（計算場上附加能量的屬性分佈）—— 同樣沒有 Basic 護欄，涵蓋特殊能量。
+- `ai.ts:202`（AI 附能時偏好同屬性）—— 那行的 `【${targetType}】` 也是英文型別名（與 ③ 同型的 latent bug），
+  但它只影響 AI 偏好、不影響規則，改了**會**變 AI 行為 ⇒ 本版不動，列進待辦。
+- `v158_energy_chain.ts` 的「卡名 → 屬性」對照 ＋ `+page.svelte`/`MobilePortraitBattle.svelte`
+  能量計數用的 `zhMap` —— 那是中央 `getBasicEnergyType` 的複本，屬**第三族**，不在本輪授權內。
+
+**差分實跑：0 mismatch** —— 把被換掉的歷史表達式凍結成 lambda，與中央述詞在**全現役 4,935 張卡**
+逐張比對，98,700 個比對點 0 mismatch（`isBasicEnergyOfType` 的 `ZH_ENERGY_TYPE` 同時收「鬥」與「格」，
+比舊碼寬，但現役沒有任何「基本【格】能量」印刷 ⇒ 外延相同）。
+
+### ③ ⚠ 收斂過程順帶抓到一個**真 bug**（AI 端）：`ai.ts` 的 `Energy:<T>` 牌庫搜尋永遠選 0 張
+
+```
+if (f.startsWith('Energy:')) {  // ← HEAD
+  if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
+  const t = f.slice(7);                       // t = 'Fire' / 'Psychic' …（英文）
+  return card.pokemonType === t || card.name.includes(`【${t}】`);   // 「【Fire】」永遠對不上
+}
+```
+基本能量 `pokemonType` 恆 null ⇒ 前半永遠 false；卡名是「基本【火】能量」⇒ 後半拼出「【Fire】」也永遠 false。
+`Energy:<T>` 在 **deck-search** 這一區**沒有**被中央 evaluator 收錄（`evaluateSelectionFilter` 回 `null` 走 inline）
+⇒ 這條是**活的**，不是死碼。全站有 18+ 張卡用 `filter: 'Energy:<T>'` 牌庫搜尋。
+**行為端實測**（`getAIAction`，牌庫放 2 張基本【火】能量）：HEAD 回 `selectedIids: []`，修後回 `['i1']`。
+UI（`+page.svelte`）早就用 `isBasicEnergyOfType` ⇒ 這是典型的 UI/AI 漂移（同 v6.008／v6.129 家族）。
+⇒ 本版一併修（改呼叫中央述詞）。**這是本版唯一的行為改變**，且只影響 AI 的候選挑選。
+
+### ④ 「`startsWith('超級')` 判 Mega ex」24 處 → 中央 `isMegaExCard`
+
+`isMegaExCard`（`selection-filter.ts:59`）＝ `supertype 是 Pokemon && subtype==='ex' && name.startsWith('超級')`。
+現役有「超級信號」(Item)、「超級烈空坐帽子」(PokemonTool) ⇒ 單看前綴會誤判；
+HEAD 各站點都另配了 `subtype==='ex'` 或 `endsWith('ex')` 擋住 ⇒ 今天沒 bug，但是七種不同寫法的漂移溫床。
+換掉的 24 處：`engine.ts` 7（含 `prizesForKO`）／`effects.ts` 3（含 `koPrizeCount`、`prizesForKOLocal`）／
+`ai.ts` 2／卡檔 9（tools 2／mega_decks 2／v2995 2／v172 2／m2 1／pokemon_search 1）／svelte 3
+（對戰頁 MegaEx filter、卡庫頁與牌組頁的「超級進化」tag filter）。
+
+**不換**：`selection-filter.ts:62`（中央定義本身）、`cards/evolutionChain.ts:22` 與
+`effects/_shared.ts:984`（那兩處是把「超級」前綴**切掉**求同源卡名 `slice(2)`，不是在問「是不是 Mega ex」）。
+
+**差分實跑：0 mismatch** —— 七種歷史寫法（`endsWith('ex')`／`endsWith('EX')`／`includes('ex')`／
+`/ex|ＥＸ/i`／`subtype==='ex'` 各種組合）與 `isMegaExCard` 在全卡池雙向比對全部相等；
+`endsWith('ex') ⟺ subtype==='ex'` 也仍是雙向零錯配（v6.209 的觀察在 v6.210 仍成立）⇒ 本輪順手一併吃掉。
+
+### ⑤ 枚舉守衛（防這一族復發）
+
+`scripts/test-v6210-central-card-predicate-convergence.mjs`（47 斷言，**HEAD 紅 6 條**：B1/B2/C1/C2/C4/D1）：
+- **A 段等價鎖**：把被換掉的 20 條歷史表達式凍結，與中央述詞在全卡池逐張比對（≥60,000 比對點）——
+  中央述詞日後若漂走（例如有人拿掉卡名 fallback）**這裡先紅**，而不是等玩家回報。
+- **B 段禁複本掃描**（否定型）：`src/lib` ＋ `src/routes` 所有 `.ts`/`.svelte`，
+  ①「Energy＋Basic＋`name.includes('【X】')`」一律 0；②`startsWith('超級')` 只准出現在 3 個豁免檔（附理由，且**不得有死條目**）。
+  ⚠ 配 7 條**掃描器自我驗證**：單行違規／跨行（先 `!==` 早退再 includes）違規／合規寫法不得誤報／
+  剝註解／剝零寬字元（v6.117 事故）／`超級` 違規樣本／`超級` 合規樣本。
+- **C 段消費端覆蓋**：`isBasicEnergyOfType` 呼叫點 ≥45（實測 106）、`isMegaExCard` ≥22（實測 31）——
+  沒有這段，「把中央述詞全部改回手刻」會讓 B 段**照樣全綠**（去中央化零偵測）。
+- **D 段行為端接線**：AI 的 `Energy:Fire` 牌庫搜尋必須真的選到那張基本【火】能量（③ 的回歸鎖），
+  配 `BasicEnergy:Fire` 正對照與 `Energy:Water`（牌庫沒有）反安慰劑。
+
+### ⑥ 兩輪 opus 自我審查抓到的事（**都已修進本版**）
+
+**第一輪（審正確性）**
+- 🔴 `scripts/test-v6207-onfield-effective-type-consumers.mjs` 的 8b 凍結清單過期（`npm test` 會紅）——
+  ② 把「豐收漁網 validIids 的基本【水】能量」收斂掉之後，那一行從清單消失。已刪該條目（清單過期，不是新技術債）。
+- 🟡 ② 的收斂**不完整**：全站另有 **44 處同語義的「正則形」**（`/【X】/.test(name)`），
+  `.includes('【X】')` 的判準看不到它們。本輪授權範圍只到 v6.209 列的 `.includes` 那一族，
+  且其中至少 `ai.ts` 波動突刺那處**沒有** Basic 護欄（語義是「這張能量提不提供【鬥】」，不能一律換）
+  ⇒ 逐處判讀留待下一輪，本版在守衛加 **B4c 棘輪**（正則形數量只准降不准升，凍結 44）＋
+  **B4b 下限斷言**（掃得到 ≥30，掃到 0＝棘輪是死的）＋ **B12 正對照**。
+  ⚠ 沒有這條，B1 就是一個有系統性假陰性的安慰劑。
+- 🟢 逐 hunk 覆核 21 個檔、①的 ownerIdx／fail-open／七來源卡面、`Check O` leaf 純度
+  （`selection-filter` 單獨 bundle = 856 bytes / 2 modules，卡庫頁不會被拖進引擎）、
+  `test-ts2304-scan` 兩樹皆 0 —— 均無問題。
+
+**第二輪（專審守衛假綠，含 12 項破壞測試逐項還原）**
+- 🔴 **`hitBenchAll` 那個消費點是零覆蓋**：把 v6.210 新加的 inline 閘整段刪掉，守衛仍 99 PASS。
+  真因 —— 測試用的雷吉艾斯｜暴風雪走 `v2750 allOppBenchAddDamagePost → dealAttackDamageToTarget
+  → resolveBenchGuard`，**根本不經 hitBenchAll**；而真走 hitBenchAll 的電飛鼠｜天空波，
+  刪掉那段後行為也 **0 差異** —— 因為同一輪迴圈約 30 行後的 v6.141
+  `resolveMultiTargetDamageGuard(…isBench:true…)` 會走同一條 `resolveBenchGuard` 擋掉同一件事。
+  ⇒ 那段是**行為上不可觀測**的縱深防禦。處置：**不假裝有兩個消費點** ——
+  （a）測試檔頭與路徑標籤改成誠實版；（b）`effects.ts` 該段補「誠實標註」註解說明它被遮蔽、
+  以及為什麼仍要保留（兩份判準不得漂移，日後有人調順序時未過閘的那份會變成生效版）；
+  （c）新增 **F 段靜態接線斷言**（必須仍呼叫 `getBenchImmunityAbilityName` 且**五個參數**全傳），
+  配 F4/F5 正對照。破壞驗證：整段刪除 → F2/F3 紅；改回 `(card)` 單參數無閘版 → F3 紅。
+- 🟡 `prev.count` 是**死表達式**：`pendingSelection` 沒有 `count` 欄位
+  （實際欄位 type/actorIdx/sourcePlayerIdx/minCount/maxCount/effectKey/params/token）⇒ 已改讀 `minCount`。
+  （所幸不是假綠：resolver 會再開第二個 picker，2 個指示物仍有放滿，對照組實測 20。）
+- 🟡 `C1/C2` 門檻太鬆（45/22 vs 實測 106/31）⇒ 改成**棘輪** ≥100 / ≥30
+  （破壞測試 D6/D9 把呼叫點打掉時，舊門檻照樣綠）。
+- 🟡 `C3` 是安慰劑（掃整個檔）⇒ 改成只看 `isBasicEnergyOfType` **函式本體**，並加 C3b 正對照。
+  破壞驗證：拿掉卡名 fallback → 由 17 紅變 18 紅（C3 也紅了）。
+- 🟢 已證實有效的絆線（破壞 → 紅幾條）：拿掉中央閘那行 → 守衛1 紅 8；改 `if (false && …)` → 紅 8；
+  `resolveBenchGuard` 消費點改 fail-open → 紅 8；拿掉中央述詞卡名 fallback → 守衛2 紅 18；
+  月光丘陵改回手刻 → B1 紅；`isMegaExCard` 拿掉 subtype → A 段紅 7；
+  `ai.ts` `Energy:` 改回 HEAD → 紅 2；UI 去中央化 → C4 紅；`stripComments` 改成 `s=>s` → B8 紅；
+  `runPath` 恆回 0 → 守衛1 紅 24（反安慰劑組擋住）；對 `test-v6202` 做同樣破壞 → 20d 紅並指名該檔。
+  破壞腳本全程未崩潰／未無限迴圈，跑完印出 `DESTRUCT_ALL_DONE`，`diff -rq` 與 baseline 逐行相同。
+
+### 部署提醒
+卡效果／引擎有改（`effects.ts` / `engine.ts` / 多個卡檔）⇒ **請站長跑 `update-tournament.bat`**，
+另外兩支 bat 照舊流程。
+
 ## v6.209 化石採掘場改走中央述詞 ＋ 岩石宮殿特性消除閘定論（結束 v6.202/v6.208 判讀衝突）
 
 BASE = `997eebf3b6517f879bbcaffe9975c54743b8af4e`（v6.208）。

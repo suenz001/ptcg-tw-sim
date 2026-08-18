@@ -43,6 +43,7 @@ import { flipCoinsWithLog } from '../../effects';
 import { applyOppActiveReturnedToBenchTriggers } from '../../engine'; // v5.831
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types'; // v5.861 重新啟動箱逐張分配 chain 型別
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 切換
@@ -368,7 +369,7 @@ regR('discard-to-hand', (st, idx, iids, _params, pool) => {
 regG('奇跡修正檔', (st, idx, pool) => {
   const hasBasicPsy = st.players[idx].discard.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+    return isBasicEnergyOfType(card, 'Psychic');
   });
   // ⭐ v6.207：「附於備戰區的【超】寶可夢身上」＝場上有效屬性（小碎鑽）。gate 與 validIids 同時改。
   const hasPsychicBench = st.players[idx].bench.some(b => hasEffectivePokemonType(st, idx, b, pool.get(b.cardId), pool, 'Psychic'));
@@ -1465,10 +1466,7 @@ regG('豐收漁網', (st, idx, pool) => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
   });
-  const hasBasicWater = p.discard.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
-  });
+  const hasBasicWater = p.discard.some(c => isBasicEnergyOfType(pool.get(c.cardId), 'Water'));
   return hasWaterPoke || hasBasicWater;
 });
 // v5.487：改單一合併 picker（參考 水蓮的照顧/小剛的發掘）— 同 modal 顯示【水】寶可夢 + 基本【水】能量，
@@ -1480,10 +1478,7 @@ reg('豐收漁網', (st, idx, pool) => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
   }).length;
-  const waterEnergy = p.discard.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name?.includes('【水】');
-  }).length;
+  const waterEnergy = p.discard.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Water')).length;
   const maxCount = Math.min(3, waterPoke) + Math.min(3, waterEnergy);
   // v5.488：除 filter 字串外，再用 validIids 硬列合法卡 iid（棄牌區【水】寶可夢 + 基本【水】能量），
   //   確保 picker modal 絕不顯示其他卡（如支援者）—— discard-search 的 validIids 為硬性白名單。
@@ -1491,8 +1486,7 @@ reg('豐收漁網', (st, idx, pool) => {
     const card = pool.get(co.cardId);
     if (!card) return false;
     if (card.supertype === 'Pokemon' && card.pokemonType === 'Water') return true;
-    if (card.supertype === 'Energy' && card.subtype === 'Basic'
-        && (card.pokemonType === 'Water' || card.name?.includes('【水】'))) return true;
+    if (isBasicEnergyOfType(card, 'Water')) return true;
     return false;
   }).map(co => co.iid);
   st = addLog(st, '豐收漁網：從棄牌區選【水】寶可夢與基本【水】能量（各最多 3 張）放回牌庫並重洗', idx);

@@ -20,6 +20,7 @@ import {
   applyBenchPlaceSideEffects,
   getOwnBenchLimit,
 } from '../_shared';
+import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 搜尋牌庫（放備戰區）
@@ -390,7 +391,7 @@ reg('超級信號', (st, idx, pool) => {
   // v2.993：卡面寫「選 1 張」mandatory；牌庫無超級進化 ex 時允許 Pass
   const hasMegaEx = st.players[idx].deck.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && (card.name?.startsWith('超級') ?? false) && (card.name?.includes('ex') ?? false);
+    return isMegaExCard(card);
   });
   return withPending(st, {
     type: 'deck-search',

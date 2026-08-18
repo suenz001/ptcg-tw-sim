@@ -25,7 +25,7 @@ import { findMainAttackers } from './ai-roles';
 // v6.202：「這隻場上寶可夢的這個特性此刻是否生效」中央述詞（v6.196 建立於 defense.ts）。
 //   ai.ts 已經 import engine（engine 也 import defense）⇒ 不是新的相依方向、無循環風險。
 import { hasEffectiveAbilityByInst } from './defense';
-import { evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
+import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard } from './selection-filter'; // v6.013/6.016 P1-1:deck-search/hand-discard/discard-search filter 中央求值器
 // v6.038 批次4b：AI 打法表（離線由高勝率對局整理出的策略表）。載入與適用判定都在 ai-playbook.ts，
 //   這裡只做**同步查詢**——getAIAction 是同步的，不能在決策路徑做 fetch。
 //   ⚠沒有表時所有查詢一律回 0/false，決策與接線前**完全等價**（有守衛以自對局逐步比對證明）。
@@ -623,10 +623,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const top7 = new Set<string>((sel.params?.top7Iids as string[]) ?? []);
           if (!top7.has(c.iid)) return false;
           if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
-          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-            if (card.pokemonType === 'Grass') return true;
-            if (card.name.includes('【草】')) return true;
-          }
+          if (isBasicEnergyOfType(card, 'Grass')) return true;
           return false;
         }
         if (f === 'Basic')           return isBasicPokemonCard(card);
@@ -650,7 +647,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         if (f === 'Energy')          return card.supertype === 'Energy';
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'ex')              return card.supertype === 'Pokemon' && card.subtype === 'ex';
-        if (f === 'MegaEx')          return card.supertype === 'Pokemon' && card.subtype === 'ex' && card.name.startsWith('超級');
+        if (f === 'MegaEx')          return isMegaExCard(card);
         if (f === 'TeraPokemon')     return card.supertype === 'Pokemon' && !!card.tags?.includes('太晶');
         if (f === 'Item')            return card.supertype === 'Trainer' && card.subtype === 'Item';
         if (f === 'Supporter')       return card.supertype === 'Trainer' && card.subtype === 'Supporter';
@@ -667,10 +664,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         if (f === 'FightingBasicOrFightingEnergy') {
           if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Fighting') return true;
-          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-            if (card.pokemonType === 'Fighting') return true;
-            if (card.name.includes('【鬥】') || card.name.includes('【格】')) return true;
-          }
+          if (isBasicEnergyOfType(card, 'Fighting')) return true;
           return false;
         }
         if (f === 'PokemonNonRule') {
@@ -689,18 +683,13 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         }
         if (f === 'GrassBasicOrGrassEnergy') {
           if (card.supertype === 'Pokemon' && !card.evolvesFrom && card.pokemonType === 'Grass') return true;
-          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-            if (card.pokemonType === 'Grass') return true;
-            if (card.name.includes('【草】')) return true;
-          }
+          if (isBasicEnergyOfType(card, 'Grass')) return true;
           return false;
         }
         // v2.135：阿響牌組
         if (f === 'RakiPokemonOrFireEnergy') {
           if (card.supertype === 'Pokemon' && card.name.startsWith('阿響的')) return true;
-          if (card.supertype === 'Energy' && card.subtype === 'Basic') {
-            if (card.pokemonType === 'Fire' || card.name.includes('【火】')) return true;
-          }
+          if (isBasicEnergyOfType(card, 'Fire')) return true;
           return false;
         }
         // v2.135：洛拍棒（牌庫頂 4 張中的支援者）
@@ -722,10 +711,15 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           const t = f.slice(8);
           return card.supertype === 'Pokemon' && card.pokemonType === t;
         }
+        // ⭐⭐ v6.210【真 bug 修正，非純收斂】原本這裡是 `card.name.includes(\`【${t}】\`)`，
+        //   但 t 是**英文** EnergyType（'Fire'/'Psychic'…）⇒ 拼出來的是「【Fire】」，
+        //   台灣官方卡名是「基本【火】能量」⇒ 永遠 false；而基本能量的 pokemonType 恒 null
+        //   （v6.008）⇒ 前半也永遠 false。結果：**AI 對所有 `Energy:<T>` 牌庫搜尋一律選 0 張**
+        //   （行為端實測：牌庫有 2 張基本【火】能量，AI 仍回 selectedIids: []）。
+        //   deck-search 這一區的 `Energy:` prefix **沒有**被中央 evaluator 收錄（回 null 走 inline），
+        //   所以這條是活的、不是死碼；UI(+page.svelte) 早就用 isBasicEnergyOfType ⇒ 這是 UI/AI 漂移。
         if (f.startsWith('Energy:')) {
-          if (card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-          const t = f.slice(7);
-          return card.pokemonType === t || card.name.includes(`【${t}】`);
+          return isBasicEnergyOfType(card, f.slice(7) as EnergyType);
         }
         if (f.startsWith('Basic:NamePrefix=')) {
           const prefix = f.slice('Basic:NamePrefix='.length);
@@ -835,7 +829,7 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
           if (!card) return 0;
           let s = 0;
           // 超級進化 ex (Mega ex) — 卡名通常含「超級」開頭 + 'ex' 結尾
-          const isMegaEx = (card.name?.startsWith('超級') ?? false) && /ex|ＥＸ/i.test(card.name ?? '');
+          const isMegaEx = isMegaExCard(card);
           if (isMegaEx) s += 1000;
           else if (/ex|ＥＸ/i.test(card.name ?? '')) s += 500; // 一般 ex
           // 「主攻擊招式 cost 還缺鬥能量」— 算現有鬥能量 vs 招式 cost 內鬥需求
@@ -936,15 +930,9 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         return card?.supertype === 'Energy' && card.subtype === 'Basic';
       });
       // v2.40 月光丘陵：只基本【超】能量
-      else if (f === 'BasicPsychicEnergy') hand = hand.filter(c => {
-        const card = pool.get(c.cardId);
-        return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
-      });
+      else if (f === 'BasicPsychicEnergy') hand = hand.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Psychic'));
       // v2.89 波動突刺：只基本【鬥】能量
-      else if (f === 'BasicFightingEnergy') hand = hand.filter(c => {
-        const card = pool.get(c.cardId);
-        return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
-      });
+      else if (f === 'BasicFightingEnergy') hand = hand.filter(c => isBasicEnergyOfType(pool.get(c.cardId), 'Fighting'));
       else if (f === 'Item') hand = hand.filter(c => {
         const card = pool.get(c.cardId);
         return card?.supertype === 'Trainer' && card.subtype === 'Item';
@@ -1056,11 +1044,11 @@ function autoResolveSelection(state: GameState, pool: Map<string, Card>): GameAc
         // v2.40 修正：原本 supertype === 'Energy' 是 bug（= 所有能量，會選到 Special Energy）
         if (f === 'BasicEnergy')     return card.supertype === 'Energy' && card.subtype === 'Basic';
         if (f === 'BasicPsychicEnergy') {
-          return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
+          return isBasicEnergyOfType(card, 'Psychic');
         }
         // v2.89 波動突刺：只基本【鬥】能量
         if (f === 'BasicFightingEnergy') {
-          return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【鬥】');
+          return isBasicEnergyOfType(card, 'Fighting');
         }
         // v2.135：聖灰
         if (f === 'Pokemon') return card.supertype === 'Pokemon';

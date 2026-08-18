@@ -4,6 +4,7 @@
   import type { Card, EnergyType } from '$lib/cards/types';
   import { retryImg } from '$lib/img-retry';
   import { getEvolutionChainNames, getEvolutionChainGrouped } from '$lib/cards/evolutionChain';
+  import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import { loadAllSets, loadIndex, buildCardIndex } from '$lib/cards/pool';
   // ⭐ v6.194 下架卡：全站唯一述詞。牌池(pool)＝玩家「可以挑的卡」，
@@ -180,9 +181,8 @@
   const TAG_ORDER: TagKey[] = ['ACE SPEC', '古代', '未來', '太晶', '超級進化', '訓練家冠名'];
   let selectedTags = $state<Set<TagKey>>(new Set());
 
-  function isMegaEx(c: Card): boolean {
-    return c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.startsWith('超級');
-  }
+  // v6.210：收斂中央述詞 isMegaExCard（selection-filter.ts）—— 與對戰端／AI 同一份判準
+  const isMegaEx = (c: Card): boolean => isMegaExCard(c);
   function hasTag(c: Card, tag: TagKey): boolean {
     if (tag === '超級進化') return isMegaEx(c);
     return (c.tags ?? []).includes(tag);

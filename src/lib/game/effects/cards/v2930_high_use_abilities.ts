@@ -20,6 +20,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending,
   drawCards, rejectAbilityUse } from '../_shared';
 import type { Card } from '$lib/cards/types';
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // 導出 sentinel 防止 unused import warnings
 export type _v2930Sentinel = PlayerState | GameState | Card;
@@ -48,8 +49,7 @@ regA('奇樹的大電海燕', 0, (st, idx, pool, cardInst) => {
   // gate: 必須有基本【雷】能量在身上
   const lightningEnergyIdx = src.energyAttached.findIndex(e => {
     const card = pool.get(e.cardId);
-    return card?.supertype === 'Energy' && card.subtype === 'Basic'
-      && (card.pokemonType === 'Lightning' || card.name.includes('【雷】'));
+    return isBasicEnergyOfType(card, 'Lightning');
   });
   if (lightningEnergyIdx < 0) {
     return addLog(st, '閃光抽出：身上無基本【雷】能量可棄', idx);
@@ -113,8 +113,7 @@ regA('阿響的鳳王ex', 0, (st, idx, pool, _cardInst) => {
   // gate: 手牌至少 1 張基本【火】能量
   const fireEnergies = p.hand.filter(c => {
     const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Energy' || card.subtype !== 'Basic') return false;
-    return card.pokemonType === 'Fire' || card.name.includes('【火】');
+    return isBasicEnergyOfType(card, 'Fire');
   });
   if (fireEnergies.length === 0) {
     return rejectAbilityUse(st, '金色火焰：手牌沒有基本【火】能量', idx);

@@ -6,6 +6,7 @@
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   // v6.045 卡包排序（越新越靠左上、特典卡墊底）抽成模組才測得到，見 set-order.ts
   import { orderSetsForPicker } from '$lib/cards/set-order';
+  import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
    *  archive art) or a relative path like "covers/SV5a.jpg" (self-hosted). */
@@ -196,9 +197,8 @@
     return c.evolvesFrom ? 'Stage1' : 'Basic';
   }
 
-  function isMegaEx(c: Card): boolean {
-    return c.supertype === 'Pokemon' && c.subtype === 'ex' && c.name.startsWith('超級');
-  }
+  // v6.210：收斂中央述詞 isMegaExCard（selection-filter.ts）—— 與對戰端／AI 同一份判準
+  const isMegaEx = (c: Card): boolean => isMegaExCard(c);
   function hasTag(c: Card, tag: TagKey): boolean {
     if (tag === '超級進化') return isMegaEx(c);
     return (c.tags ?? []).includes(tag);

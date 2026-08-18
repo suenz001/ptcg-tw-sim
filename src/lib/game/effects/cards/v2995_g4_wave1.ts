@@ -42,6 +42,7 @@ import {
   healResolver, rejectAbilityUse } from '../_shared';
 import { flipCoinsWithLog, applyStatusToOppActive, energyProvidesType } from '../../effects'; // v5.702 host-aware 草能量述詞
 import type { Card } from '$lib/cards/types';
+import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
 
 // 導出 sentinel 防止 unused import warnings
 export type _v2995Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -59,8 +60,7 @@ function hasMegaExOfType(
   return all.some(c => {
     const card = pool.get(c.cardId);
     if (!card) return false;
-    const isMega = card.name.startsWith('超級') && (card.subtype === 'ex' || card.name.endsWith('ex'));
-    return isMega && card.pokemonType === type;
+    return isMegaExCard(card) && card.pokemonType === type;
   });
 }
 
@@ -379,8 +379,7 @@ regA('直衝熊', 0, (st, idx, pool, cardInst) => {
   const all: CardInstance[] = [p.active, ...p.bench];
   const hasMegaEx = all.some(c => {
     const card = pool.get(c.cardId);
-    return card?.name?.startsWith('超級')
-      && (card?.subtype === 'ex' || (card?.name?.endsWith('ex') ?? false));
+    return isMegaExCard(card);
   });
   if (!hasMegaEx) return rejectAbilityUse(st, '激動衝刺：場上沒有超級進化【ex】', idx);
 

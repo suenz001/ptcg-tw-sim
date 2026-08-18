@@ -132,7 +132,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   //   基本能量屬性走名稱【X】(基本能量 pokemonType 恒 null,v6.008)。ai.ts 兩處殘留 !evolvesFrom(草)+死碼→本收斂修正。
   'GrassBasicOrGrassEnergy': (c) => {
     if (c.supertype === 'Pokemon' && c.pokemonType === 'Grass') return true;
-    if (c.supertype === 'Energy' && c.subtype === 'Basic') return c.pokemonType === 'Grass' || c.name.includes('【草】');
+    if (c.supertype === 'Energy') return isBasicEnergyOfType(c, 'Grass');
     return false;
   },
   // ══ v6.129：AI 端漂移修補 ══════════════════════════════════════════════════
@@ -158,10 +158,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
   // 熔蟻獸｜舔舔捕捉(I)「【火】寶可夢卡與『基本【火】能量』卡合計最多3張」
   'FirePokemonOrBasicFireEnergy': (c) => {
     if (c.supertype === 'Pokemon' && c.pokemonType === 'Fire') return true;
-    if (c.supertype === 'Energy' && c.subtype === 'Basic') {
-      if (c.pokemonType === 'Fire') return true;
-      if (c.name.includes('【火】')) return true;
-    }
+    if (isBasicEnergyOfType(c, 'Fire')) return true;
     return false;
   },
 
@@ -191,7 +188,7 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
 
   'FightingBasicOrFightingEnergy': (c) => {
     if (c.supertype === 'Pokemon' && !c.evolvesFrom && c.pokemonType === 'Fighting') return true;
-    if (c.supertype === 'Energy' && c.subtype === 'Basic') return c.pokemonType === 'Fighting' || c.name.includes('【鬥】') || c.name.includes('【格】');
+    if (c.supertype === 'Energy') return isBasicEnergyOfType(c, 'Fighting');
     return false;
   },
 };
@@ -205,8 +202,8 @@ const DECK_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCt
 const HAND_DISCARD_PREDICATES: Record<string, (card: Card, ctx: SelectionFilterCtx) => boolean> = {
   'Energy':              (c) => c.supertype === 'Energy',
   'BasicEnergy':         (c) => c.supertype === 'Energy' && c.subtype === 'Basic',
-  'BasicPsychicEnergy':  (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【超】'),
-  'BasicFightingEnergy': (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【鬥】'),
+  'BasicPsychicEnergy':  (c) => isBasicEnergyOfType(c, 'Psychic'),
+  'BasicFightingEnergy': (c) => isBasicEnergyOfType(c, 'Fighting'),
   'Item':                (c) => c.supertype === 'Trainer' && c.subtype === 'Item',
 };
 
@@ -222,17 +219,17 @@ const DISCARD_SEARCH_PREDICATES: Record<string, (card: Card, ctx: SelectionFilte
   'PokemonNonExOrBasicEnergy': (c) => (c.supertype === 'Pokemon' && c.subtype !== 'ex') || (c.supertype === 'Energy' && c.subtype === 'Basic'),
   'WaterPokemonOrBasicWaterEnergy': (c) => {
     if (c.supertype === 'Pokemon' && c.pokemonType === 'Water') return true;
-    if (c.supertype === 'Energy' && c.subtype === 'Basic' && (c.pokemonType === 'Water' || c.name.includes('【水】'))) return true;
+    if (isBasicEnergyOfType(c, 'Water')) return true;
     return false;
   },
   'FightingPokemonOrBasicFightingEnergy': (c) => {
     if (c.supertype === 'Pokemon' && c.pokemonType === 'Fighting') return true;
-    if (c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【鬥】')) return true;
+    if (isBasicEnergyOfType(c, 'Fighting')) return true;
     return false;
   },
   'BasicEnergy':          (c) => c.supertype === 'Energy' && c.subtype === 'Basic',
-  'BasicPsychicEnergy':   (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【超】'),
-  'BasicFightingEnergy':  (c) => c.supertype === 'Energy' && c.subtype === 'Basic' && c.name.includes('【鬥】'),
+  'BasicPsychicEnergy':   (c) => isBasicEnergyOfType(c, 'Psychic'),
+  'BasicFightingEnergy':  (c) => isBasicEnergyOfType(c, 'Fighting'),
   'Energy':               (c) => c.supertype === 'Energy',
   'Pokemon':              (c) => c.supertype === 'Pokemon',
   'Basic':                (c) => isBasicPokemonCard(c),

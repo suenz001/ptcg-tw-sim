@@ -18,6 +18,7 @@ import { joinCardNames } from '../_shared';
 //   有翻版風險、picker 版又有取消後 abilityUsedThisTurn 卡住的隱患，故清除。萬葉陣雨 招式保留於下。
 import { regPre, regPost, shuffle, countAttachedEnergyAsUnits } from '../_shared';
 import { startEnergyChain } from './v158_energy_chain'; // v6.021 能量舞步「以任意方式附能」中央 chain
+import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
 // v5.671：萬葉陣雨重複註冊清理 — 統一由 effects.ts bothActiveEnergyMultiplyPre(host-aware,火箭隊=2/燃火=3)實作;此 card-file 版被覆蓋(死碼)移除。
 
@@ -102,7 +103,7 @@ regA('妖火紅狐', 0, (state, aIdx, pool, inst) => {
   const p = state.players[aIdx];
   const hasFire = p.hand.some(c => {
     const card = pool.get(c.cardId);
-    return card?.supertype === 'Energy' && card?.subtype === 'Basic' && (card.pokemonType === 'Fire' || card.name.includes('【火】'));
+    return isBasicEnergyOfType(card, 'Fire');
   });
   if (!hasFire) return rejectAbilityUse(state, '閃焰魔法：手牌沒有基本【火】能量，無法使用', aIdx);
   const instInPlay = p.active?.iid === inst.iid ? p.active : p.bench.find(c => c.iid === inst.iid);
