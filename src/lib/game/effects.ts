@@ -1206,9 +1206,15 @@ function _applyBenchAbilityReduce(
         const defTool = pool.get(t.cardId);
         if (!defTool) continue;
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
-        if (defense && _atkCardT.pokemonType && defense.types.includes(_atkCardT.pokemonType) && dmg > 0) {
-          const holderOk = !defense.holderTypes
-            || (victimCard.pokemonType && defense.holderTypes.includes(victimCard.pokemonType));
+        // ⭐ v6.207：「受到對手的【超】寶可夢招式的傷害」＝攻擊方**有效**屬性（小碎鑽等雙屬性）；
+        //   holderTypes（渾厚鱗片「附有這張卡的【龍】寶可夢」）同樣是場上有效屬性。走中央述詞。
+        if (defense && dmg > 0
+            && getEffectivePokemonTypes(state, attackerIdx, _atkInst, _atkCardT, pool)
+                 .some(t => defense.types.includes(t as EnergyType))) {
+          const _holderTypes = defense.holderTypes;
+          const holderOk = !_holderTypes
+            || getEffectivePokemonTypes(state, defenderIdx, victim, victimCard, pool)
+                 .some(t => _holderTypes.includes(t as EnergyType));
           if (holderOk) {
             const _b = dmg; dmg = Math.max(0, dmg - defense.amount);
             if (_b > dmg) logs.push(`${defTool.name} -${_b - dmg}`);
@@ -1823,7 +1829,8 @@ regR('cresselia-attach-energy', (st, idx, iids, _params, pool) => {
 // 治癒旋律 — 選備戰超寶可夢，回復 120 HP（POST；無傷害）
 regPost('美洛耶塔|治癒旋律', (state, aIdx, pool) => {
   const bench = state.players[aIdx].bench;
-  const psychicBench = bench.filter(c => (pool.get(c.cardId)?.pokemonType) === 'Psychic');
+  // ⭐ v6.207：「自己的備戰區的1隻【超】寶可夢」＝場上有效屬性（小碎鑽在備戰也算【超】）。
+  const psychicBench = bench.filter(c => hasEffectivePokemonType(state, aIdx, c, pool.get(c.cardId), pool, 'Psychic'));
   if (psychicBench.length === 0) {
     return addLog(state, '治癒旋律：備戰區沒有超屬性寶可夢', aIdx);
   }
@@ -6757,8 +6764,11 @@ regPre('銅鏡怪|鏡面攻擊', (state, aIdx, pool) => {
   const def = state.players[dIdx].active;
   const defCard = def ? pool.get(def.cardId) : undefined;
   const selfActive = state.players[aIdx].active;
+  // ⚠ selfType 是「這一版銅鏡怪卡面寫的那個屬性」的代理（M5=【鋼】/ SV5K=【超】），
+  //   銅鏡怪自己沒有屬性變更特性 ⇒ 這一側維持印刷屬性才對。
+  // ⭐ v6.207：卡面「若**對手的戰鬥寶可夢**為【X】寶可夢」＝場上有效屬性（小碎鑽等雙屬性）。
   const selfType = selfActive ? pool.get(selfActive.cardId)?.pokemonType : undefined;
-  if (selfType && defCard?.pokemonType === selfType) {
+  if (selfType && hasEffectivePokemonType(state, dIdx, def, defCard, pool, selfType)) {
     return { state: addLog(state, '鏡面攻擊：對手與本身同屬性 → +30', aIdx), damage: 40 };
   }
   return { state, damage: 10 };
@@ -6950,16 +6960,16 @@ regPost('轟鳴月ex|災厄風暴', (state, aIdx, _pool, action) => {
 regPre('眷戀雲|愛之同感', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const a = state.players[aIdx], d = state.players[dIdx];
+  // ⭐ v6.207：卡面「若自己的**場上**有與對手的**場上**寶可夢相同屬性的寶可夢」——
+  //   兩側主詞都是場上實體 ⇒ 兩側都走中央有效屬性述詞（小碎鑽在場上是【鬥】＋【超】）。
   const oppTypes = new Set<string>();
   for (const c of [d.active, ...d.bench]) {
     if (!c) continue;
-    const t = pool.get(c.cardId)?.pokemonType;
-    if (t) oppTypes.add(t);
+    for (const t of getEffectivePokemonTypes(state, dIdx, c, pool.get(c.cardId), pool)) oppTypes.add(t);
   }
   const match = [a.active, ...a.bench].some(c => {
     if (!c) return false;
-    const t = pool.get(c.cardId)?.pokemonType;
-    return t ? oppTypes.has(t) : false;
+    return getEffectivePokemonTypes(state, aIdx, c, pool.get(c.cardId), pool).some(t => oppTypes.has(t));
   });
   if (match) {
     return { state: addLog(state, '愛之同感：同屬性在場 → +120', aIdx), damage: 200 };

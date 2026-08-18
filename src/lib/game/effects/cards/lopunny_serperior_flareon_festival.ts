@@ -28,6 +28,7 @@ import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
 import { isBasicEnergyOfType } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
 import { isAbilityHolderEffective } from './v3001_g3_wave3';
+import { getEffectivePokemonTypes } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 蜜集大蛇ex｜熟成充能（特性）
@@ -225,10 +226,14 @@ regA('大吾的巨金怪ex', 0, (st, idx, pool) => {
   const p = st.players[idx];
   if (p.deck.length === 0) return rejectAbilityUse(st, 'X啟動：牌庫為空', idx);
   // 場上必須有 超 或 鋼 寶可夢
+  // ⭐ v6.207：「附於自己的【超】或者【鋼】寶可夢身上」＝場上有效屬性。
+  //   ⚠ 必須與 v158_energy_chain 的 pokemonMatchesType 同時改——只改 gate 會變成
+  //     「特性按得下去但鏈上找不到目標」（能量白白留在棄牌區）。
   const hasTarget = [p.active, ...p.bench].some(c => {
     if (!c) return false;
     const card = pool.get(c.cardId);
-    return card?.pokemonType === 'Psychic' || card?.pokemonType === 'Metal';
+    const t = getEffectivePokemonTypes(st, idx, c, card, pool);
+    return t.includes('Psychic') || t.includes('Metal');
   });
   if (!hasTarget) return addLog(st, 'X啟動：場上無【超】或【鋼】寶可夢', idx);
   

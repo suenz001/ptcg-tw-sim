@@ -38,6 +38,7 @@ import {
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
+import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import type { Card } from '$lib/cards/types';
@@ -192,7 +193,8 @@ regA('風妖精', 0, (st, idx, pool, _cardInst) => {
   const p = st.players[idx];
   if (!p.active) return rejectAbilityUse(st, '柔柔治癒：戰鬥場無寶可夢', idx);
   const card = pool.get(p.active.cardId);
-  if (card?.pokemonType !== 'Grass') {
+  // ⭐ v6.207：「自己的戰鬥場的【草】寶可夢」＝場上有效屬性（狠辣椒ex 在場上是【草】＋【火】）。
+  if (!card || !hasEffectivePokemonType(st, idx, p.active, card, pool, 'Grass')) {
     return addLog(st, `柔柔治癒：戰鬥場 ${card?.name ?? '?'} 不是【草】寶可夢`, idx);
   }
   const healed = p.active.damage;

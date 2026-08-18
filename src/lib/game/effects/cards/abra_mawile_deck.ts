@@ -34,6 +34,7 @@ import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
   canApplyAttackEffectToTarget, koTargetByAttackEffect,
 } from '../../effects';
+import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 import { isBasicEnergyOfType, isRulePokemon, getEffectiveHP } from '../../engine';
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
 import { addPendingPrize } from '../_shared';
@@ -160,9 +161,12 @@ export function deckEnergyAttachBenchPost(targetType: EnergyType | null, label: 
   //   (能量被限基本該屬性、目標未限屬性)。
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
+    // ⭐ v6.207：卡面「附於**備戰區的【草】寶可夢**身上」＝場上有效屬性
+    //   （狠辣椒ex 在場上是【草】＋【火】，舊碼讀印刷【火】⇒ 整招白打）。
+    //   ⚠ 露力麗｜蹦蹦充能 傳 targetType=null（卡面無屬性限制）⇒ 不受影響。
     const benchTargets = p.bench.filter(b => {
       if (!targetType) return true;
-      return pool.get(b.cardId)?.pokemonType === targetType;
+      return hasEffectivePokemonType(state, aIdx, b, pool.get(b.cardId), pool, targetType);
     }).map(b => b.iid);
     if (benchTargets.length === 0) return addLog(state, `${label}：備戰區沒有可附加能量的寶可夢`, aIdx);
     // 任意能量卡(含特殊能量)；即使 cand=0 也仍開 picker 讓玩家查看牌庫(Iron Rule 14)

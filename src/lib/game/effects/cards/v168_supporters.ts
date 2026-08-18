@@ -22,6 +22,7 @@ import {
   drawCards, healResolver,
 } from '../_shared';
 // v3.06 對手 trainer 免疫 helper（斧牙龍｜緊張感 / 浩大鯨ex｜融合為雪）
+import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 import { isImmuneToOppTrainer as _v3060IsImmuneOppTrainer } from './v3060_deferred_wave_b';
 void _v3060IsImmuneOppTrainer;
 // v3.08 對手 supporter 免疫綜合 helper（含廣域堡壘）
@@ -103,9 +104,11 @@ reg('短褲小子', (st, idx) => {
 // ── 由紫 — 選 1【超】寶可夢 +150 HP ────────────────────────────────────────
 regG('由紫', (st, idx, pool) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
+  // ⭐ v6.207：「自己的1隻【超】寶可夢」＝場上有效屬性。小碎鑽在場上是【鬥】＋【超】，
+  //   舊碼直讀印刷屬性 ⇒ 由紫**選不到它**（picker 開不出來）。gate 與 validIids 同時改。
   return all.some(c => {
     const card = pool.get(c.cardId);
-    return card?.pokemonType === 'Psychic' && c.damage > 0;
+    return hasEffectivePokemonType(st, idx, c, card, pool, 'Psychic') && c.damage > 0;
   });
 });
 reg('由紫', (st, idx, pool) => {
@@ -113,7 +116,7 @@ reg('由紫', (st, idx, pool) => {
   const all = [...(st.players[idx].active ? [st.players[idx].active!] : []), ...st.players[idx].bench];
   const validIids = all.filter(c => {
     const card = pool.get(c.cardId);
-    return card?.pokemonType === 'Psychic' && c.damage > 0;
+    return hasEffectivePokemonType(st, idx, c, card, pool, 'Psychic') && c.damage > 0;
   }).map(c => c.iid);
   st = addLog(st, '由紫：選 1 隻【超】寶可夢回 150 HP', idx);
   return withPending(st, {

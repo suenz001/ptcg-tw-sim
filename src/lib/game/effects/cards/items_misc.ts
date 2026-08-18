@@ -28,6 +28,7 @@ import {
   healResolver,
   getOwnBenchLimit,
 } from '../_shared';
+import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈)
 import { tryPromptPromoteActive } from '../_shared';
 import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
@@ -369,7 +370,8 @@ regG('奇跡修正檔', (st, idx, pool) => {
     const card = pool.get(c.cardId);
     return card?.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【超】');
   });
-  const hasPsychicBench = st.players[idx].bench.some(b => pool.get(b.cardId)?.pokemonType === 'Psychic');
+  // ⭐ v6.207：「附於備戰區的【超】寶可夢身上」＝場上有效屬性（小碎鑽）。gate 與 validIids 同時改。
+  const hasPsychicBench = st.players[idx].bench.some(b => hasEffectivePokemonType(st, idx, b, pool.get(b.cardId), pool, 'Psychic'));
   return hasBasicPsy && hasPsychicBench;
 });
 reg('奇跡修正檔', (st, idx, pool) => {
@@ -392,7 +394,7 @@ regR('miracle-codec-energy', (st, idx, iids, _params, pool) => {
   const energyInst = player.discard.find(c => c.iid === energyIid);
   const energyName = energyInst ? (pool.get(energyInst.cardId)?.name ?? '超能量') : '超能量';
   // 只有【超】屬性備戰寶可夢才能成為目標
-  const psychicBench = player.bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Psychic');
+  const psychicBench = player.bench.filter(b => hasEffectivePokemonType(st, idx, b, pool.get(b.cardId), pool, 'Psychic'));
   if (psychicBench.length === 0) {
     // 備戰區沒有【超】寶可夢（正常流程不應到此，因為 regG 已攔截；防禦性 return）
     return st;
@@ -1734,11 +1736,15 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
 //      - evolvedFromStack 切到 stack.slice(0, len - N)
 //      - 設 evolvedThisTurn=true（達成「那個回合無法進化」）
 // v6.020：改回傳 iid 清單（gate 與 picker 同 predicate，杜絕漂移，v5.996 教訓）— 自己場上「進化的【超】寶可夢」
-function psychicEvoIids(insts: import('../../types').CardInstance[],
+// ⭐ v6.207：「自己的進化的【超】寶可夢」＝場上有效屬性（小碎鑽在場上是【鬥】＋【超】）。
+//   簽名多收 st/idx 是**必填**——強迫呼叫端提供場上脈絡，不會靜默退回印刷屬性。
+function psychicEvoIids(st: import('../../types').GameState, idx: 0 | 1,
+                       insts: import('../../types').CardInstance[],
                        pool: Map<string, import('$lib/cards/types').Card>): string[] {
   return insts.filter(c => {
     const card = pool.get(c.cardId);
-    if (!card || card.supertype !== 'Pokemon' || card.pokemonType !== 'Psychic') return false;
+    if (!card || card.supertype !== 'Pokemon'
+        || !hasEffectivePokemonType(st, idx, c, card, pool, 'Psychic')) return false;
     return card.subtype === 'Stage1' || card.subtype === 'Stage2'
       || card.stage === 'Stage1' || card.stage === 'Stage2';
   }).map(c => c.iid);
@@ -1746,12 +1752,12 @@ function psychicEvoIids(insts: import('../../types').CardInstance[],
 regG('奇異時鐘', (st, idx, pool) => {
   const p = st.players[idx];
   const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
-  return psychicEvoIids(fieldInsts, pool).length > 0;
+  return psychicEvoIids(st, idx, fieldInsts, pool).length > 0;
 });
 reg('奇異時鐘', (st, idx, pool) => {
   const p = st.players[idx];
   const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
-  const validIids = psychicEvoIids(fieldInsts, pool);
+  const validIids = psychicEvoIids(st, idx, fieldInsts, pool);
   st = addLog(st, '奇異時鐘：選擇 1 隻自己的進化【超】寶可夢退化', idx);
   return withPending(st, {
     type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
@@ -1769,7 +1775,7 @@ regR('odd-clock-step1', (st, idx, iids, _params, pool) => {
   if (!target) return addLog(st, '奇異時鐘：場上找不到所選目標', idx);
 
   const tCard = pool.get(target.cardId);
-  if (!tCard || tCard.pokemonType !== 'Psychic') {
+  if (!tCard || !hasEffectivePokemonType(st, idx, target, tCard, pool, 'Psychic')) {
     return addLog(st, '奇異時鐘：所選目標非【超】寶可夢，取消', idx);
   }
   const stage = tCard.subtype === 'Stage2' || tCard.stage === 'Stage2' ? 'Stage2'

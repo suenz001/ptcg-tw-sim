@@ -21,6 +21,7 @@ import {
   addLog, drawCards, updatePlayer, withPending,
   discardIllegalRocketEnergy,
 } from '../_shared';
+import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ── 富裕能量（ACE SPEC Special Energy） ─────────────────────────────────────
 // 卡面：提供 1 個【無】能量。從手牌附加到你的任 1 隻寶可夢時，抽 4 張卡。
@@ -41,7 +42,9 @@ SPECIAL_ENERGY_ATTACH.set('感應【超】能量', (st, idx, targetIid, pool) =>
     : p.bench.find(c => c.iid === targetIid) ?? null;
   if (!target) return st;
   const targetCard = pool.get(target.cardId);
-  if (targetCard?.pokemonType !== 'Psychic') {
+  // ⭐ v6.207：「從手牌將這張卡附於【超】寶可夢身上時」＝場上有效屬性（小碎鑽）。
+  //   ⚠ 下面 deck 端的「【超】屬性的【基礎】寶可夢卡」仍是**牌庫裡的卡**⇒維持印刷屬性。
+  if (!hasEffectivePokemonType(st, idx, target, targetCard, pool, 'Psychic')) {
     // 附加到非【超】寶可夢時不觸發搜索效果
     return st;
   }

@@ -50,6 +50,7 @@ import {
 //   瑪機雅娜會回 0，統一呼叫是安全的。
 //   ⚠ v3000_g3_wave2 只 import ../_shared，不 import 本檔 ⇒ 無循環 import／TDZ 疑慮。
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
+import { getEffectivePokemonTypes } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ══════════════════════════════════════════════════════════════════════════════
 // pokemonType helpers — 判斷寶可夢屬性是否符合 filter
@@ -59,11 +60,19 @@ type SingleType = 'Grass' | 'Lightning' | 'Metal' | 'Psychic'
   | 'Fire' | 'Water' | 'Fighting' | 'Darkness' | 'Dragon' | 'Colorless';
 type EnergyTypeFilter = SingleType | 'Any' | SingleType[];
 
-function pokemonMatchesType(card: Card | undefined, filter: EnergyTypeFilter): boolean {
+// ⭐⭐ v6.207：卡面一律寫「附於自己的【X】寶可夢身上」＝**場上**那隻此刻的屬性。
+//   舊版直讀印刷 pokemonType ⇒ 小碎鑽（在場上是【鬥】＋【超】）/ 狠辣椒ex（【草】＋【火】）
+//   在能量鏈裡選不到。簽名多收 st/idx/inst 是**必填**，強迫呼叫端提供場上脈絡
+//   （缺席會 TS 報錯，不會靜默 fail-open 退回印刷屬性）。
+function pokemonMatchesType(
+  st: GameState, idx: 0 | 1, inst: CardInstance | null | undefined,
+  card: Card | undefined, pool: Map<string, Card>, filter: EnergyTypeFilter,
+): boolean {
   if (!card) return false;
   if (filter === 'Any') return true;
-  if (Array.isArray(filter)) return filter.includes(card.pokemonType as SingleType);
-  return card.pokemonType === filter;
+  const eff = getEffectivePokemonTypes(st, idx, inst, card, pool);
+  if (Array.isArray(filter)) return eff.some(t => filter.includes(t as SingleType));
+  return eff.includes(filter);
 }
 
 // v2.87 中文屬性顯示名（給 UI 標頭用）
@@ -286,7 +295,7 @@ export function startEnergyChain(
   // v5.184：詛咒根擋手牌附能 — source='hand' 時排除受詛咒根影響的目標
   //   （詛咒根只擋「從手牌附能」；deck/discard source 不受影響）
   const validTargets = candidates.filter(c => {
-    if (!pokemonMatchesType(pool.get(c.cardId), filterType)) return false;
+    if (!pokemonMatchesType(st, aIdx, c, pool.get(c.cardId), pool, filterType)) return false;
     if (source === 'hand' && c.cantAttachEnergyThisTurn) return false;
     if (targetIids && !targetIids.includes(c.iid)) return false; // v5.823 標籤型目標限定
     return true;
@@ -536,7 +545,7 @@ regR('v357-multi-type-distribute-wave', (st, aIdx, selectedIids, params, pool) =
   }
   for (const b of st.players[aIdx].bench) candidates.push(b);
   const nextValid = candidates
-    .filter(c => pokemonMatchesType(pool.get(c.cardId), filterType) && (!targetIids || targetIids.includes(c.iid)))
+    .filter(c => pokemonMatchesType(st, aIdx, c, pool.get(c.cardId), pool, filterType) && (!targetIids || targetIids.includes(c.iid)))
     .map(c => c.iid);
   if (nextValid.length === 0) {
     const totalLeft = remainingWaves.reduce((n, w) => n + w.energyIids.length, 0);
@@ -660,7 +669,7 @@ regR('v158-energy-chain-attach', (st, aIdx, iids, params, pool) => {
 
   // 檢查 filter（玩家不應選不合法的目標，但仍校驗）
   const tcard = pool.get(target.cardId);
-  if (!pokemonMatchesType(tcard, filterType)) {
+  if (!pokemonMatchesType(st, aIdx, target, tcard, pool, filterType)) {
     return addLog(st, `${label}：${tcard?.name ?? '?'} 不符屬性 filter，略過此張`, aIdx);
   }
 
@@ -688,7 +697,7 @@ regR('v158-energy-chain-attach', (st, aIdx, iids, params, pool) => {
     if (st.players[aIdx].active) candidates.push(st.players[aIdx].active!);
   }
   for (const b of st.players[aIdx].bench) candidates.push(b);
-  const validTargets = candidates.filter(c => pokemonMatchesType(pool.get(c.cardId), filterType));
+  const validTargets = candidates.filter(c => pokemonMatchesType(st, aIdx, c, pool.get(c.cardId), pool, filterType));
 
   if (validTargets.length === 0) {
     return addLog(st, `${label}：場上已無合法目標，剩 ${remainingEnergies.length} 張能量留在棄牌區`, aIdx);

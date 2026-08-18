@@ -38,6 +38,7 @@ import {
 // v3.66：規則寶可夢統一判定 helper
 import { isRulePokemon, computeRetreatCostForKOedActive } from '../../engine';  // v6.136 沉重接力棒判有效撤退費
 import { applyStatusToOppActive, getEffectivePokemonTypes } from '../../effects';  // v6.206 中央有效屬性述詞
+import { getEffectiveWeaknessType } from '../../effects';  // v6.207 與傷害引擎共用的「當下實際弱點」述詞
 // v5.070：沉重接力棒分配能量改用 startEnergyChain — UI 顯示能量類型 + 同屬性 +/- counter
 import { startEnergyChain } from './v158_energy_chain';
 
@@ -367,9 +368,16 @@ registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
   //   小碎鑽｜雙重屬性（【鬥】＋【超】）／狠辣椒ex｜雙重屬性（【草】＋【火】）／
   //   鐵轍跡｜二重核心（【鬥】＋【鋼】）三張全部漏判。改走中央 getEffectivePokemonTypes
   //   （內含特性消除閘：對手的雙屬性特性被消掉時就退回印刷屬性）。
-  //   ⚠ 只換「攻擊方屬性」這一側。holder 這側的「弱點屬性」維持卡面印刷值 —— 妖精領域／
-  //     掌握弱點／弱點失效 這類「改寫弱點」的效果要不要算進來，卡面沒有寫，列給站長裁定。
-  const weakness = dCard.weakness?.type;
+  // ⭐⭐⭐ v6.207 站長裁定：holder 側的「弱點屬性」也要吃**改寫**。原本讀印刷 weakness ⇒
+  //   同一盤面傷害引擎已照新弱點 ×2（火恐龍打 超級噴火龍Xex，掌握弱點把弱點改成【火】⇒ 40→80），
+  //   逆境保險卻不觸發＝兩邊對「弱點是什麼」認知不一致。改共用傷害引擎用的**同一份**述詞
+  //   getEffectiveWeaknessType（妖精領域【龍】→【超】／掌握弱點覆寫／金屬防禦強化 disabled）。
+  //   ⚠ actorIdx = 攻擊方 aIdx（妖精領域以攻擊方為持有方視角）；holder 是被攻擊的 dp.active。
+  //   ⚠ disabled（鋁鋼橋龍ex｜金屬防禦強化「這隻寶可夢的弱點全部消除」）⇒ 此刻沒有弱點
+  //     ⇒ 不可能匹配，與傷害引擎 `!w.disabled && …` 同判準。
+  const _wk = getEffectiveWeaknessType(state, aIdx, dp.active, dCard, pool);
+  if (_wk.disabled) return state;
+  const weakness = _wk.type;
   if (!weakness) return state;
   if (!getEffectivePokemonTypes(state, aIdx, ap.active, aCard, pool).includes(weakness)) return state;
   return updatePlayer(addLog(state, '逆境保險：弱點屬性匹配 → 抽 3 張', dIdx), dIdx, p => {

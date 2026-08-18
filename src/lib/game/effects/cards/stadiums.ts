@@ -20,6 +20,7 @@ import { regR, updatePlayer, shuffle, addLog, clearActiveEffects, getOwnBenchLim
 } from '../_shared';
 import { joinCardNames, addPrivateLog } from '../_shared';
 import { tryPromptPromoteActive } from '../_shared';
+import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 
 // ── 神秘花園（Stadium）──────────────────────────────────────────────────────
 // 丟 1 張超能量 → 抽到手牌數 = 己方場上超屬寶可夢數量
@@ -34,9 +35,12 @@ regR('miracle-garden-draw', (st, idx, picked, _params, pool) => {
 
     // Count Psychic Pokémon in play
     const allField = [...(p.active ? [p.active] : []), ...p.bench];
+    // ⭐ v6.207：「自己場上【超】寶可夢的數量」＝場上有效屬性（小碎鑽｜雙重屬性）。
+    //   與 engine.ts 的 USE_STADIUM gate 同一份述詞——只改 gate 會讓「可不可以用」
+    //   與「實際抽幾張」分岔。此處 active/bench 未被本 resolver 改動 ⇒ 用 st 推 location 安全。
     const psychicCount = allField.filter(pk => {
       const c = pool.get(pk.cardId);
-      return c?.pokemonType === 'Psychic';
+      return hasEffectivePokemonType(st, idx, pk, c, pool, 'Psychic');
     }).length;
 
     // Draw until hand.length === psychicCount

@@ -51,6 +51,7 @@ import {
   getEffectiveWeaknessType,
   getAttackerEffectiveTypes,
   getEffectivePokemonTypes,   // v6.206 中央「場上有效屬性」述詞
+  hasEffectivePokemonType,    // v6.207 同上（單一屬性版）
   applyBenchPlaceSideEffects,
   getKyuremElectroplasmaEffectiveCost,
   getOctopusTentacleEffectiveCost,
@@ -3582,8 +3583,11 @@ function handlePlaying(
     //   原本只依賴 state.isFirstTurn gate（只擋先攻方第 1 動作回合）— 後攻方第 1 動作回合 isFirstTurn=false，
     //   bypass 仍會啟動。改加 state.turn > 1 才正確實現「雙方各自最初回合除外」。
     const stadiumName = state.activeStadium ? pool.get(state.activeStadium.cardId)?.name : null;
+    // ⭐ v6.207：「雙方的所有【草】寶可夢…也可進化成【草】寶可夢」——
+    //   base 是**場上**那隻 ⇒ 走中央有效屬性述詞（狠辣椒ex 在場上是【草】＋【火】）；
+    //   evoCard 還在**手牌** ⇒ 維持印刷屬性（雙重屬性卡面寫「只要這隻寶可夢在場上」）。
     const vigorousForestException = stadiumName === '活力森林' &&
-      baseCard.pokemonType === 'Grass' && evoCard.pokemonType === 'Grass' &&
+      hasEffectivePokemonType(state, aIdx, basePoke, baseCard, pool, 'Grass') && evoCard.pokemonType === 'Grass' &&
       state.turn > 1;
     const hasFightingHowl = hasFightingHowlEarly;
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — 自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn
@@ -4283,7 +4287,9 @@ function handlePlaying(
       //       要 ≥1 即 psychicCount ≥ hand（hand 含待丟那張能量）。手牌已 ≥【超】數 → 抽 0 → 不可用(#2)。
       //     - 場上無【超】寶可夢 → psychicCount=0 < hand → 同式擋下(#3)。牌庫沒有卡 → 不可用(#4)。
       const allFieldMG = [...(player.active ? [player.active] : []), ...player.bench];
-      const psychicCountMG = allFieldMG.filter(pk => pool.get(pk.cardId)?.pokemonType === 'Psychic').length;
+      // ⭐ v6.207：「自己場上【超】寶可夢的數量」＝場上有效屬性（小碎鑽）。與 stadiums.ts
+      //   'miracle-garden-draw' resolver 同一份述詞——只改一端會讓 gate 與實際抽牌數分岔。
+      const psychicCountMG = allFieldMG.filter(pk => hasEffectivePokemonType(state, aIdx, pk, pool.get(pk.cardId), pool, 'Psychic')).length;
       if (player.deck.length === 0 || psychicCountMG < player.hand.length) {
         const revert: [boolean, boolean] = [used[0], used[1]];
         return addLog(
@@ -8283,9 +8289,16 @@ export function applyDefenderReductionsBlockA(
 
     // v2.190 陳舊的顎之化石（戰鬥場）— 對手戰鬥寶可夢使用招式的傷害「-30」
     // defender.active 是 fossilOnField + cardId 對應 陳舊的顎之化石 → 傷害 -30
+    // ⭐⭐⭐ v6.207 站長裁定：原本按卡名手刻、**沒有接特性消除閘** —— 化石在場上是
+    //   【基礎】【無】（rulesText），火箭隊的監視塔（消【無】）應該消得掉「威嚇之顎」，
+    //   招式版暗夜羽擊 / passive 振翼髮（location='active'）亦然；傳說的熔岩洞（消進化）、
+    //   鐵荊棘ex｜初始化（消規則寶可夢）、海兔獸｜黏著束縛（消備戰2階）打不到。
+    //   沿用中央 isAbilityHolderEffective（與隔壁 盾之守護 shieldFossilGuardReduce 同一份閘）。
     if (baseDamage > 0
         && defender.active.fossilOnField
-        && defenderCard.name === '陳舊的顎之化石') {
+        && defenderCard.name === '陳舊的顎之化石'
+        && defenderCard.abilities?.some(a => a.name === '威嚇之顎')
+        && isAbilityHolderEffective(workingState, defender.active, defenderCard, dIdx, '威嚇之顎', 'active', pool)) {
       const reduced = Math.max(0, baseDamage - 30);
       workingState = addLog(workingState,
         `陳舊的顎之化石：受到的傷害 -30（${baseDamage} → ${reduced}）`, dIdx);
@@ -8509,10 +8522,14 @@ export function applyDefenderReductionsBlockA(
         const defTool = pool.get(t.cardId);
         if (!defTool) continue;
         const defense = TOOL_DEFENSE_REDUCE_BY_TYPE.get(defTool.name);
-        if (defense && attackerCard.pokemonType && defense.types.includes(attackerCard.pokemonType) && baseDamage > 0) {
-          const holderOk = !defense.holderTypes
-            || (defenderCardForTool?.pokemonType
-                && defense.holderTypes.includes(defenderCardForTool.pokemonType));
+        // ⭐ v6.207：攻擊方屬性與 holder 屬性都改走中央有效屬性述詞（與 effects.ts 備戰管線同步）。
+        if (defense && baseDamage > 0
+            && getEffectivePokemonTypes(workingState, aIdx, attacker.active, attackerCard, pool)
+                 .some(t => defense.types.includes(t as EnergyType))) {
+          const _holderTypes = defense.holderTypes;
+          const holderOk = !_holderTypes
+            || getEffectivePokemonTypes(workingState, dIdx, defender.active, defenderCardForTool, pool)
+                 .some(t => _holderTypes.includes(t as EnergyType));
           if (holderOk) {
             // v5.899：補 addLog + formula.push,揭示屬性防禦道具(渾厚鱗片/福祿果等)的減傷,
             //   否則傷害公式漏此項 → 玩家看到「100(基礎)+30(猛攻手鐲)=80」誤以為數學錯(缺 -50)。
@@ -9273,7 +9290,8 @@ export function getEvolvableTargets(
     // isFirstTurn gate（除了提升進化 / 刺激進化 / 鬥志戰吼 bypass）
     if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass) continue;
     // 活力森林 bypass 對 base 的要求：base 是草寶可夢
-    const forestBypassBase = isForest && fpCard.pokemonType === 'Grass';
+    // ⭐ v6.207：與 EVOLVE handler 的 vigorousForestException 同一份述詞（兩端必須同 commit）。
+    const forestBypassBase = isForest && hasEffectivePokemonType(state, state.activePlayerIndex as 0 | 1, fp, fpCard, pool, 'Grass');
     // 原本的 gate：justPlaced OR evolvedThisTurn 擋。活力森林 / 提升進化 / 刺激進化 / 鬥志戰吼 exception 四者都能豁免
     const baseBlocked = fp.justPlaced || fp.evolvedThisTurn;
     if (baseBlocked && !forestBypassBase && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass) continue;

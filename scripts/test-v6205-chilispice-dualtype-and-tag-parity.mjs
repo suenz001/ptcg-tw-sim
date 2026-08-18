@@ -304,7 +304,10 @@ const ADJUDICATED_IMPLEMENTED=new Map(Object.entries({
   '陳舊的羽毛化石|羽毛守護':'defense.ts / effects.ts 按卡名「陳舊的羽毛化石」做備戰免疫（v5.852）',
   '陳舊的背蓋化石|背蓋守護':'engine.ts / defense.ts 按卡名做「不受招式效果影響」',
   '陳舊的頭蓋化石|頭蓋尖刺':'effects.ts 受傷反擊表 [\'陳舊的頭蓋化石\', 3]（v5.494，按卡名）',
-  '陳舊的顎之化石|威嚇之顎':'engine.ts 按卡名「陳舊的顎之化石」傷害 -30（v2.190）',
+  // ⭐ v6.207 移除：威嚇之顎接上特性消除閘後，engine.ts 那段同時出現
+  //   `defenderCard.name === '陳舊的顎之化石'` 與 `a.name === '威嚇之顎'`
+  //   ⇒ 候選判準（「特性名的出現點有沒有綁到自己的卡名」）不再把它列為候選，
+  //   留在表裡就是 7e 的死條目。這正是 7e 想逼出來的同步清理。
   '陳舊的鰭之化石|鰭之守護':'v3080_deferred_wave_c.ts isImmuneToOppSupporter 按卡名（v3.21）',
 }));
 // ⭐⭐ v6.206：**陳舊的盾甲化石｜盾之守護 已補實裝**（M5 19216，J）——
