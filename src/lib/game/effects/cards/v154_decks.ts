@@ -15,6 +15,7 @@
 
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
+import { hasEffectivePokemonType } from '../../effects';  // v6.208 中央「場上有效屬性」述詞（化石在場上是【無】）
 import {
   reg, regR, regG, regA,
   addLog, updatePlayer, withPending,
@@ -228,14 +229,15 @@ reg('超大冰淇淋', (st, idx, pool) => {
 // 卡面：「這張卡只有在自己的場上有『太晶』寶可夢時才可使用。
 //   選擇最多 2 隻自己的備戰區的【無】寶可夢，從棄牌區附給那些寶可夢各 1 張基本能量卡。」
 //
-// v2.158：升級為玩家自選分配 — 用 v158-energy-chain（source='discard', scope='bench-only',
-//   filterType='Colorless'）— 玩家逐張選備戰【無】寶可夢分配。
+// v2.158：升級為玩家自選分配 — 玩家逐張選備戰【無】寶可夢分配（v5.228 起走本檔的專屬 resolver，
+//   ⚠ v6.208 更正：舊註解寫「用 v158-energy-chain filterType='Colorless'」，全站早已沒有這個用法）。
+// ⭐ v6.208：卡面「自己的**備戰區的【無】寶可夢**」＝場上有效屬性 ⇒ 化石（在場上是【無】）也算。
 regG('玻璃喇叭', (st, idx, pool) => {
   const all = [st.players[idx].active, ...st.players[idx].bench].filter((c): c is CardInstance => !!c);
   const hasTera = all.some(c => pool.get(c.cardId)?.tags?.includes('太晶'));
   if (!hasTera) return false;
   // 至少 1 隻【無】備戰
-  const colorlessBench = st.players[idx].bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Colorless');
+  const colorlessBench = st.players[idx].bench.filter(b => hasEffectivePokemonType(st, idx, b, pool.get(b.cardId), pool, 'Colorless'));
   if (colorlessBench.length === 0) return false;
   // 棄牌區至少 1 張基本能量
   const basicEnergyDiscard = st.players[idx].discard.some(c => {
@@ -245,7 +247,7 @@ regG('玻璃喇叭', (st, idx, pool) => {
   return basicEnergyDiscard;
 });
 reg('玻璃喇叭', (st, idx, pool) => {
-  const colorlessBench = st.players[idx].bench.filter(b => pool.get(b.cardId)?.pokemonType === 'Colorless');
+  const colorlessBench = st.players[idx].bench.filter(b => hasEffectivePokemonType(st, idx, b, pool.get(b.cardId), pool, 'Colorless'));
   if (colorlessBench.length === 0) return addLog(st, '玻璃喇叭：備戰無【無】寶可夢', idx);
   const max = Math.min(2, colorlessBench.length);
   const energyCount = st.players[idx].discard.filter(c => {
@@ -314,7 +316,7 @@ function openGlassTrumpetPicker(
   // 候選備戰 = 【無】屬性 + 不在 usedTargetIids 內
   const candidates = st.players[idx].bench.filter(b => {
     if (usedTargetIids.includes(b.iid)) return false;
-    return pool.get(b.cardId)?.pokemonType === 'Colorless';
+    return hasEffectivePokemonType(st, idx, b, pool.get(b.cardId), pool, 'Colorless');
   });
   if (candidates.length === 0) {
     return addLog(st,

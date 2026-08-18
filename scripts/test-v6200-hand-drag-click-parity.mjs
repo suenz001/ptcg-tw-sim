@@ -98,9 +98,27 @@ function braceBody(src, header) {
   }
   return null;
 }
+// ⭐⭐⭐v6.208 站長裁定：手牌特性**只能拖曳**，點擊比照其他手牌卡「什麼都不做」。
+//   ⇒ 這裡從「兩條路徑送出相同動作」改成「拖曳送出動作、點擊一個動作都不送」。
+//   點擊那一側直接執行 template 真正的 onclick body（不是自己重寫一份判斷）。
+function handOnClickBody(src) {
+  const key = 'onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;}';
+  const i = src.indexOf(key);
+  if (i < 0) return null;
+  const j = src.indexOf('{', i + 'onclick='.length - 1);
+  let depth = 0, k = j;
+  while (k < src.length) {
+    if (src[k] === '{') depth++;
+    else if (src[k] === '}') { depth--; if (depth === 0) break; }
+    k++;
+  }
+  const expr = src.slice(j + 1, k);
+  const b = expr.indexOf('{');
+  return b < 0 ? null : expr.slice(b + 1, expr.lastIndexOf('}'));
+}
 function runBothUiPaths(handIid, metaList) {
   const dragBody = braceBody(DESK_SRC, "} else if (op === 'hand-ability' && benchEmpty) {");
-  const clickBody = braceBody(DESK_SRC, 'function triggerHandActivateAbility(handIid: string): void {');
+  const clickBody = handOnClickBody(DESK_SRC);
   if (!dragBody || !clickBody) return null;
   const map = new Map(metaList.map(a => [a.iid, { abilityName: a.abilityName, abilityIndex: a.abilityIndex }]));
   const GA = { useHandAbility: (iid, idx) => ({ type: 'USE_HAND_ABILITY', cardIid: iid, abilityIndex: idx }) };
@@ -110,9 +128,13 @@ function runBothUiPaths(handIid, metaList) {
     '(async () => {' + dragBody + '})();');
   dragFn({ iid: handIid }, map, (a) => { dragAct = a; }, GA);
   // eslint-disable-next-line no-new-func
-  const clickFn = new Function('handIid', 'actionBusy', 'tActSay', 'TACT_BLOCKED_MSG',
-    'handActivateAbilities', 'dispatch', 'GameActions', clickBody);
-  clickFn(handIid, false, () => {}, 'blocked', map, (a) => { clickAct = a; }, GA);
+  //  ⚠ `triggerHandActivateAbility` 一定要當參數傳進去，而且要**忠實鏡射**舊版的行為
+  //    （它會 dispatch useHandAbility）。不傳＝BASE 跑到那行直接 ReferenceError 讓測試「當掉」；
+  //    傳一個什麼都不做的空函式＝BASE 也拿到 clickAct===null ⇒ **假綠**。
+  const clickFn = new Function('actionBusy', 'tActSay', 'TACT_BLOCKED_MSG', 'canHandActivate', 'canEnergy',
+    'dragging', 'selectedEnergyIid', 'inst', 'dispatch', 'GameActions', 'triggerHandActivateAbility', clickBody);
+  clickFn(false, () => {}, 'blocked', true, false, null, null, { iid: handIid }, (a) => { clickAct = a; }, GA,
+    (iid) => { clickAct = GA.useHandAbility(iid, map.get(iid)?.abilityIndex ?? 0); });
   return { drag: dragAct, click: clickAct };
 }
 
@@ -210,9 +232,8 @@ if (M) {
     // ⭐ 真正的 parity：把 UI **兩段不同的原始碼**各執行一次，比對送出的 action。
     //   （上一條只是同一支 applyAction 跑兩次，證明不了「兩條路徑」——子代理審查抓到的 placebo。）
     const uiActions = runBothUiPaths(handIid, metaList);
-    chk(`②[${name}] UI 拖曳分支與點擊函式送出**完全相同**的動作`,
-        !!uiActions && uiActions.drag && uiActions.click
-        && JSON.stringify(uiActions.drag) === JSON.stringify(uiActions.click),
+    chk(`②[${name}] UI 拖曳分支送出 useHandAbility；⭐v6.208 點擊 onclick **一個動作都不送**`,
+        !!uiActions && !!uiActions.drag && uiActions.click === null,
         JSON.stringify(uiActions));
     chk(`②[${name}] 送出的 abilityIndex 來自中央 gate（不是硬編 0）`,
         uiActions?.drag?.abilityIndex === (meta?.abilityIndex ?? -1),
@@ -297,9 +318,10 @@ chk('③桌機：可拖與否問中央 handCardDraggable(ops)',
     !!blk && /onpointerdown=\{\(e\)=>\{leaveHandCard\(\);\s*if\(handCardDraggable\(ops\)\)/.test(blk));
 chk('③桌機：startDrag 收到的是 ops（不是自算的 kind）',
     !!blk && /startDrag\(e,\s*inst,\s*ops,\s*c\)/.test(blk));
-chk('③桌機：點擊路徑讀 canHandActivate（= ops.has(hand-ability)）',
-    !!blk && /\{@const canHandActivate\s*=\s*ops\.has\('hand-ability'\)\}/.test(blk)
-          && /if\(canHandActivate\s*&&\s*!dragging\)\{triggerHandActivateAbility/.test(blk));
+chk('③桌機：canHandActivate 仍由中央 ops 推導（提示文字/title 讀它）',
+    !!blk && /\{@const canHandActivate\s*=\s*ops\.has\('hand-ability'\)\}/.test(blk));
+chk('⭐v6.208 站長裁定：點擊**不會**發動手牌特性（onclick 不得再呼叫 triggerHandActivateAbility）',
+    !!blk && !/triggerHandActivateAbility/.test(blk));
 chk('③桌機：draggable class 也讀同一支（dragKind = handCardDragKind(ops)）',
     !!blk && /\{@const dragKind = handCardDragKind\(ops\)\}/.test(blk)
           && /class:draggable=\{dragKind!==null\}/.test(blk));

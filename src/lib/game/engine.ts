@@ -23,7 +23,7 @@ export { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyT
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
-  PASSIVE_DAMAGE_REDUCE_COND,
+  PASSIVE_DAMAGE_REDUCE_COND, passiveReduceAppliesAtLocation,
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
@@ -5766,7 +5766,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       // v6.077 M6 傳說的山頂 —「雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，
       //   被獲得的獎賞卡減少1張。」與影藏同段可疊加；總式已有 Math.max(0,…) 下限。
       //   ⚠ 這裡已在「baseDamage > 0 且 newDamage >= defenderHP」的招式傷害 KO 分支內。
-      prizeAdjust += legendPeakPrizeReduction(state, defenderCard, pool, true);
+      prizeAdjust += legendPeakPrizeReduction(state, defenderState.active, defenderCard, dIdx, pool, true);
     }
 
     // v2.160：把實際造成傷害寫入 state.lastDealtDamage，供 POST 讀取
@@ -8298,6 +8298,10 @@ export function applyDefenderReductionsBlockA(
         && defender.active.fossilOnField
         && defenderCard.name === '陳舊的顎之化石'
         && defenderCard.abilities?.some(a => a.name === '威嚇之顎')
+        // ⭐ v6.208：位置限制（卡面「只要這隻寶可夢在戰鬥場上」）走中央宣告 —— 與 火炎獅｜威嚇之牙
+        //   共用同一份 `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`（兩張卡面逐字相同，禁各寫一份）。
+        //   本段的防守方必為戰鬥位，故此處恆真；真正被它擋下的是 effects.ts 的備戰管線。
+        && passiveReduceAppliesAtLocation('威嚇之顎', 'active')
         && isAbilityHolderEffective(workingState, defender.active, defenderCard, dIdx, '威嚇之顎', 'active', pool)) {
       const reduced = Math.max(0, baseDamage - 30);
       workingState = addLog(workingState,
@@ -8324,6 +8328,9 @@ export function applyDefenderReductionsBlockA(
         && !isColorlessAbilityBlocked(state, defenderCard, pool)) {
       for (const ab of defenderCard.abilities) {
         if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.name, 'active', pool)) continue; // v5.471 初始化/暗夜羽擊/監視塔等消除 holder 特性
+        // ⭐ v6.208：與 effects.ts 備戰管線共用同一份位置宣告（本段防守方必為戰鬥位 ⇒ 恆真，
+        //   寫出來是為了「位置規則只有一份」，日後有人把這段拿去給備戰用時不會漏）。
+        if (!passiveReduceAppliesAtLocation(ab.name, 'active')) continue;
         const reduce = PASSIVE_DAMAGE_REDUCE.get(ab.name);
         if (reduce) {
           const before = baseDamage;

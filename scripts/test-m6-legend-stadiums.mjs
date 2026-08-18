@@ -89,8 +89,23 @@ function mk(stadiumId, o={}){
   const colorless=all.find(c=>c.supertype==='Pokemon'&&c.pokemonType==='Colorless'&&!/ex$/.test(c.name));
   const nonColorless=all.find(c=>c.supertype==='Pokemon'&&c.pokemonType==='Fire'&&!/ex$/.test(c.name));
   chk('harness 前置：找得到【無】與非【無】寶可夢', !!colorless&&!!nonColorless);
-  const red=(stadiumId, card, byAtk)=>M.legendPeakPrizeReduction(mk(stadiumId), card, pool, byAtk);
+  // ⭐v6.208 簽名變更：多收「被 KO 的**場上實體** koInst」與「koOwnerIdx」——
+  //   化石在場上是【無】屬性的【基礎】寶可夢，只有實體上的 fossilOnField 看得出來。
+  const red=(stadiumId, card, byAtk)=>M.legendPeakPrizeReduction(mk(stadiumId), inst(card?.id), card, 0, pool, byAtk);
   chk('山頂：【無】被招式傷害 KO → −1', red(PEAK?.id, colorless, true)===-1);
+  // ⭐v6.208：化石在場上是【無】⇒ 山頂也要減（原本讀印刷 pokemonType，化石是 null 而漏掉）
+  {
+    const fossil=all.find(c=>c.supertype==='Trainer'&&c.subtype==='Item'
+      &&/可作為HP60的【無】屬性的【基礎】寶可夢放置於場上/.test(c.rulesText||''));
+    chk('harness 前置：找得到化石卡', !!fossil);
+    if(fossil){
+      const fi={...inst(fossil.id), fossilOnField:true};
+      chk('⭐v6.208 山頂：化石（在場上是【無】）被招式傷害 KO → −1',
+          M.legendPeakPrizeReduction(mk(PEAK?.id), fi, fossil, 0, pool, true)===-1);
+      chk('否定對照：同一張化石卡但**不在場上**（沒有 fossilOnField）→ 不減',
+          M.legendPeakPrizeReduction(mk(PEAK?.id), inst(fossil.id), fossil, 0, pool, true)===0);
+    }
+  }
   // ⭐否定對照 ×3
   chk('否定對照：非【無】寶可夢 → 不減', red(PEAK?.id, nonColorless, true)===0);
   chk('否定對照：效果KO（非招式傷害）→ 不減', red(PEAK?.id, colorless, false)===0);

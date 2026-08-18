@@ -334,6 +334,28 @@ export function setAbilityHolderEffectiveAtFn(fn: (state: GameState, inst: CardI
 }
 
 /**
+ * ⭐⭐⭐ v6.208 中央「場上有效屬性」述詞（`effects.ts getEffectivePokemonTypes`）的注入點。
+ * `_shared.ts` 是底層、**不能** import `effects.ts`（循環相依，Check O）⇒ 沿用本檔既有的注入
+ * 模式（同 `setBloomEffectiveFn` / `setAbilityHolderEffectiveAtFn`），轉接到**同一支**述詞，
+ * **不是第二份實作**。
+ * ⚠ 沒接上時 fallback 成印刷屬性＝維持舊行為（fail-open）；守衛 `2i` 會實跑釘住它一定接得上
+ *   （v6.204 的 G2 教訓：注入點沒接上，所有測試照樣全綠）。
+ */
+let _effectiveTypesFn: ((state: GameState, ownerIdx: 0 | 1, inst: CardInstance | null | undefined, card: Card | undefined, pool: Map<string, Card>) => string[]) | null = null;
+export function setEffectivePokemonTypesFn(fn: (state: GameState, ownerIdx: 0 | 1, inst: CardInstance | null | undefined, card: Card | undefined, pool: Map<string, Card>) => string[]): void {
+  _effectiveTypesFn = fn;
+}
+/** 給 `_shared.ts` 內部用的「場上有效屬性」讀取口（轉接注入的中央述詞）。 */
+export function effectivePokemonTypesShared(
+  state: GameState | undefined, ownerIdx: 0 | 1 | undefined,
+  inst: CardInstance | null | undefined, card: Card | undefined,
+  pool: Map<string, Card> | undefined,
+): string[] {
+  if (_effectiveTypesFn && state && ownerIdx != null && pool) return _effectiveTypesFn(state, ownerIdx, inst, card, pool);
+  return card?.pokemonType ? [card.pokemonType] : [];
+}
+
+/**
  * v5.998：「選擇N個能量丟棄」型招式(registerSelfDiscardMultiply/ATTACK_PRE_DISCARD_CHOICE)在可丟能量
  *   單位數 availableUnits < spec.min 時的有效最小丟棄數 = min(spec.min, availableUnits)。依官方 Q&A
  *   (黃玉伏特:附璀璨結晶減費/被扮晶晶酒複製,身上不足N能量→丟光現有、無條件傷害照給),丟棄是「招式效果」
@@ -714,12 +736,19 @@ export function hasLegendStadiumInPlay(
  */
 export function legendPeakPrizeReduction(
   state: GameState | undefined,
+  /** ⭐ v6.208：被 KO 的**場上實體**（必填）—— 化石在場上是【無】，只有實體上的 fossilOnField 看得出來。 */
+  koInst: CardInstance | null | undefined,
   koCard: Card | null | undefined,
+  /** ⭐ v6.208：被 KO 者的擁有者（必填）—— 中央有效屬性述詞要問「這個特性此刻還在不在」。 */
+  koOwnerIdx: 0 | 1 | undefined,
   pool: Map<string, Card> | undefined,
   koByAttackDamage: boolean,
 ): number {
   if (!koByAttackDamage) return 0;
-  if (koCard?.pokemonType !== 'Colorless') return 0;
+  // ⭐⭐⭐ v6.208 站長裁定：化石在場上是「HP60 的【無】屬性的【基礎】寶可夢」（rulesText 逐字）。
+  //   原本這裡讀印刷 `koCard.pokemonType`，而化石卡是 Trainer/Item、pokemonType 為 null
+  //   ⇒ 化石被招式 KO 時山頂**不減獎賞**（實測 1 張，卡面應為 0 張）。改走中央有效屬性述詞。
+  if (!effectivePokemonTypesShared(state, koOwnerIdx, koInst, koCard ?? undefined, pool).includes('Colorless')) return 0;
   return isStadiumActive(state, pool, '傳說的山頂') ? -1 : 0;
 }
 
@@ -2009,8 +2038,12 @@ export function hasAnyPendingPrize(state: GameState): boolean {
  * 附加卡（能量/道具/進化棧的卡）進手牌/牌庫前也應各自 toBareCard。
  */
 export function toBareCard(inst: CardInstance): CardInstance {
-  // ⚠ v6.090：stadiumHalf 與 fossilOnField 同屬「持久性定義屬性」而非回合旗標，必須保留 —
+  // ⚠ v6.090：stadiumHalf 屬「持久性定義屬性」而非回合旗標，必須保留 —
   //   否則傳說場地卡被洗回牌庫／進棄牌區再回到手上就失去左右身分（顯示與可打出判定都會壞）。
+  // ⚠⚠ v6.208 更正：本註解原本寫「stadiumHalf 與 fossilOnField 同屬…必須保留」，
+  //   但白名單裡**從來沒有** fossilOnField —— 回手牌/牌庫的化石會被清掉旗標（這是對的，
+  //   它已經不在場上了）。⚠ 但「被 KO 進棄牌區」不走本函式 ⇒ 棄牌區的化石**仍帶著**
+  //   fossilOnField；傳說的山頂正是靠這一點才判得出「被 KO 的那隻是【無】」。
   return {
     iid: inst.iid, cardId: inst.cardId, damage: 0, energyAttached: [],
     ...(inst.stadiumHalf === 0 || inst.stadiumHalf === 1 ? { stadiumHalf: inst.stadiumHalf } : {}),

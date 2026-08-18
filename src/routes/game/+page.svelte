@@ -3097,14 +3097,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     return handOpForDropTarget(new Set<HandCardOp>(dragging.ops), target);
   }
 
-  // dispatch helpers — 用 onclick 呼叫
-  function triggerHandActivateAbility(handIid: string): void {
-    if (actionBusy) { tActSay(TACT_BLOCKED_MSG, 5000); return; }   // v6.147 同上：手牌特性也走 hand-card 的 onclick，不是拖曳
-    const meta = handActivateAbilities.get(handIid);
-    if (!meta) return;
-    // v6.080：abilityIndex 由中央 gate 給（原本硬編 0，同名多特性卡會指錯）
-    dispatch(GameActions.useHandAbility(handIid, meta.abilityIndex));
-  }
+  // ⭐v6.208：原本這裡有一支 `triggerHandActivateAbility` 函式（手牌特性的**點擊**入口）。
+  //   站長裁定手牌特性只能拖曳發動 ⇒ 該函式零呼叫端＝死碼，一併刪除，
+  //   避免「函式還在＝入口還在」的錯覺（v6.098／v6.099 死入口的教訓）。
+  //   拖曳結算仍走 onWindowPointerUp 的 `op === 'hand-ability'` 分支（讀同一份 handActivateAbilities）。
 
 
   // ⭐⭐⭐v6.197 觀戰者判定收斂成**單一中央述詞**，而且方向由 fail-open 改成 fail-closed。
@@ -10853,7 +10849,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {@const canFossil=ops.has('fossil')}
           {@const canTrainer=ops.has('trainer')||ops.has('tool')}
           {@const canEvolve=ops.has('evolve')}
-          <!-- v5.511 緊急迴轉(齒輪怪) / v6.080 激動俯衝(烈箭鷹ex) — 黃框可用、點卡發動或拖到備戰格 -->
+          <!-- v5.511 緊急迴轉(齒輪怪) / v6.080 激動俯衝(烈箭鷹ex) — 黃框可用、**拖**到空備戰格發動。
+               ⭐⭐⭐v6.208 站長裁定：手牌特性**不可以點一下就發動**（玩家回報「碰一下就放到場上」）。
+               v6.200 之前這裡是「拖不動、只能點」，v6.200 把拖曳補起來之後，
+               點擊那條就從「唯一入口」變成純粹的誤觸來源。
+               桌機其他手牌卡點一下的**實際**行為（逐條查證本檔 v6.207 的 onclick）：
+                 ・能量卡 → 只切換 selectedEnergyIid（選取／取消選取），不會附上去
+                 ・基礎／化石／訓練家／道具／進化 → onclick **沒有對應分支＝什麼都不做**（一律拖曳）
+               ⇒ 手牌特性比照「什麼都不做」；桌機唯一入口＝拖到空備戰格（HAND_OP_DROP_TARGET）。
+               ⚠ 手機直式（MobilePortraitBattle.svelte）**不走這個 onclick**：點卡片是開 sheet 選單，
+                 再按「⚡ 該特性名 (放備戰)」才發動 ⇒ 手機可用性完全不受本次改動影響。 -->
           {@const canHandActivate = ops.has('hand-ability')}
           {@const dragKind = handCardDragKind(ops)}
           {@const isActionable = handCardDraggable(ops)}
@@ -10871,8 +10876,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
             onpointerenter={(e)=>enterHandCard(e, inst.iid)}
             onpointerleave={leaveHandCard}
             onpointerdown={(e)=>{leaveHandCard(); if(handCardDraggable(ops)){ if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);} else startDrag(e, inst, ops, c); }}}
-            onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;} if(canHandActivate && !dragging){triggerHandActivateAbility(inst.iid);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
-            title={canHandActivate?(canEvolve?`拖到空備戰格發動特性、拖到進化目標進化 · ${c.name}`:`點擊或拖到備戰格使用特性 · ${c.name}`):(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
+            onclick={()=>{if(actionBusy){tActSay(TACT_BLOCKED_MSG,5000);return;} if(canEnergy && !dragging)selectedEnergyIid=selectedEnergyIid===inst.iid?null:inst.iid;}}
+            title={canHandActivate?(canEvolve?`拖到空備戰格發動特性、拖到進化目標進化 · ${c.name}`:`拖到備戰格使用特性 · ${c.name}`):(dragKind?`拖曳使用 · ${c.name}`:c.name)}>
             <!-- v4.27 修：iPad / 觸控裝置 tap 此鈕本來會「同時」觸發 parent 的 hover-peek 大圖
                  預覽 + 自己的 openZoom modal（兩種視覺都出現很多餘）。玩家要求只保留 hover-peek。
                  改法：onclick 不再呼叫 openZoom，僅 stopPropagation 防觸發外層 startDrag/click。
@@ -10893,9 +10898,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
               class:legend-half-r={twoCardStadiumHalfIndex(myPlayer?.hand, inst.iid, pool) === 1}/>
             <span class="hand-name">{c.name}</span>
             <!-- v6.099：機制 A 的手牌觸發按鈕已移除（死碼，見上方說明） -->
-            <!-- v5.511：緊急迴轉 改為「黃框可用 + 點卡發動」（見 .hand-card onclick / canHandActivate），不再顯示按鈕標示 -->
-            {#if canHandActivate && canEvolve}<span class="hand-hint hl">⚡ 特性放備戰／🔺 拖到進化目標</span>
-            {:else if canHandActivate}<span class="hand-hint hl">⚡ 特性放備戰</span>
+            <!-- v5.511：緊急迴轉 改為「黃框可用 + 拖到空備戰格發動」（⭐v6.208 站長裁定：點卡不再發動），不再顯示按鈕標示 -->
+            {#if canHandActivate && canEvolve}<span class="hand-hint hl">⚡ 拖到備戰發動特性／🔺 拖到進化目標</span>
+            {:else if canHandActivate}<span class="hand-hint hl">⚡ 拖到備戰發動特性</span>
             {:else if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
             {:else if canFossil}<span class="hand-hint hl">🦴 化石放到備戰</span>

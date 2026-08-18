@@ -173,8 +173,11 @@ T('⭐⭐所有會送出動作的關鍵按鈕都要綁 actionBusy（v6.137 的�
     // ⭐ Fable 5 審查抓到的缺口：拖曳派已擋，但**點擊派**（點手牌能量→點目標）整條沒查，
     //   而附能是最高頻動作。函式端與 onclick 端都要 gate。
     ['點擊派附能', /function onAttachEnergy\(targetIid: string\) \{\s*if \(!selectedEnergyIid\) return;[\s\S]{0,600}?if \(actionBusy\) \{ tActSay\(TACT_BLOCKED_MSG, 5000\); return; \}/],
-    ['手牌特性(點擊)', /function triggerHandActivateAbility\(handIid: string\): void \{\s*if \(actionBusy\) \{ tActSay\(TACT_BLOCKED_MSG, 5000\); return; \}/],
-    ['手牌 onclick', /onclick=\{\(\)=>\{if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);return;\}/],
+    // ⭐v6.208：手牌特性的**點擊**入口已依站長裁定移除（只能拖曳）⇒ 這個送出點不存在了。
+    //   它的 actionBusy gate 由下面兩條接手：'手牌拖曳 gate'（拖曳）＋'手牌 onclick'（點擊仍先擋 busy）。
+    // ⭐v6.208：限縮到「手牌卡 div」那一段（原本是全檔搜尋 —— 別處出現同樣前綴的 onclick
+    //   就會讓手牌那份被拆掉也不會紅）。
+    ['手牌 onclick', /class="hand-card"[\s\S]{0,2500}?onclick=\{\(\)=>\{if\(actionBusy\)\{tActSay\(TACT_BLOCKED_MSG,5000\);return;\}/],
     // setup / mulligan 是 CAS 衝突歷史事故最密集的區段
     ['準備完成', /disabled=\{actionBusy\|\|!myPlayer\?\.active\}/],
     ['完成補抽', /disabled=\{actionBusy\}\s*\n\s*onclick=\{\(\)=>dispatch\(GameActions\.finishMulliganPostBench/],

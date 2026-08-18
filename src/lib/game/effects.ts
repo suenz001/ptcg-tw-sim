@@ -31,7 +31,7 @@ import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
-import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, setAbilityHolderEffectiveAtFn, abilityUsedAfterSwap } from './effects/_shared';
+import { openDeckViewReshuffle, setBloomEffectiveFn, setAbilityHolderEffectiveFn, setAbilityHolderEffectiveAtFn, setEffectivePokemonTypesFn, abilityUsedAfterSwap } from './effects/_shared';
 import {
   // Maps
   TRAINER_EFFECTS, RESOLVERS, TRAINER_GUARDS,
@@ -467,6 +467,16 @@ export function getAttackerEffectiveTypes(
   attackerCard: Card | undefined,
   pool: Map<string, Card>,
 ): string[] {
+  // ⭐⭐⭐ v6.208【站長裁定 2026-08-18】化石卡放到場上是「HP60 的【無】屬性的【基礎】寶可夢」
+  //   （卡面 rulesText 逐字，例：陳舊的顎之化石「這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。」）。
+  //   但**卡片本身**是 Trainer/Item、`pokemonType === null` ⇒ 本述詞原本回 `[]`（＝完全沒有屬性），
+  //   所有「場上這隻現在是什麼屬性」的比對對化石一律不成立：逆境保險比不到弱點、
+  //   森林行進／柔柔治癒 數不到它、屬性條件型防禦道具（福祿果那一族）也認不出它。
+  //   ⚠ 判準**只認 `inst.fossilOnField`**（v6.145 的教訓：化石的「在場上身分」不能從卡片欄位推，
+  //     卡片欄位 stage 是 undefined、subtype 是 'Item'）。
+  //   ⚠ 放在最前面短路是安全的：化石卡沒有 abilities『雙重屬性』／『二重核心』，
+  //     下面三條分支對化石本來就恆為 false（守衛 4e 有正對照釘住）。
+  if (attackerActive?.fossilOnField) return ['Colorless'];
   // ⭐ v6.204：小碎鑽 = Basic /【鬥】/ 非規則寶可夢 ⇒ 熔岩洞・監視塔・初始化都打不到；
   //   打得到的是招式版暗夜羽擊與 passive 振翼髮｜暗夜羽擊（攻擊者必在戰鬥場）。
   //   走中央述詞 hasEffectiveAbilityByInst（它自己從 state 推 location）。
@@ -883,7 +893,7 @@ export function koPrizesAdjusted(
     // v6.077 M6 傳說的山頂 —【無】寶可夢被對手招式傷害 KO → 獎賞 −1。與影藏同型、可疊加。
     //   ⭐ 接在本中央函式＝一次涵蓋註解自述的 18+ 條 KO 路徑（狙擊／指示物／手動 KO…）。
     //   ⚠ 已在 koByAttackDamage gate 內 → 效果KO／checkup KO 自動不觸發，符合卡面。
-    adjust += legendPeakPrizeReduction(s, koCard, pool, true);
+    adjust += legendPeakPrizeReduction(s, koInst, koCard, defenderIdx, pool, true);
     if (isExAttacker && koCard.pokemonType === 'Darkness' && hasEffectiveKageHide(s, defenderIdx, pool)) {
       adjust -= 1;
     }
@@ -962,8 +972,11 @@ export function markFaintByEffect(
  *     - 全金屬實驗室 (-30 對【鋼】)
  *     - 石之洞窟 (-30 對「大吾的」)
  *
- * 不涵蓋 (戰鬥位 only, 卡面明確):
- *   - 火炎獅|威嚇之牙 / 灰塵山|垃圾洩氣
+ * 位置限定 (卡面「只要這隻寶可夢在戰鬥場上」):
+ *   - 火炎獅|威嚇之牙 —— ⚠ v6.207 以前這行註解寫「不涵蓋」，**但程式其實有涵蓋**
+ *     （備戰被狙擊照樣 -30，實測 100→70）。v6.208 改由中央
+ *     `passiveReduceAppliesAtLocation` 擋掉，註解與程式現在一致。
+ *   - 灰塵山|垃圾洩氣 —— 是 field-wide 區塊（下方 dustyMountainReduce）自己判位置，不走本迴圈。
  */
 // v5.599 受招式傷害「擲幣免傷」中央收斂（變隱龍 躲藏高手 / 吉雉雞 腎上腺費洛蒙 PASSIVE_COIN_AVOID）。
 //   原本只在 engine.ts 主管線(active 一般攻擊,~4604)消費 → 走中央 dealAttackDamageToTarget / snipe-multi /
@@ -1063,6 +1076,10 @@ function _applyBenchAbilityReduce(
     for (const ab of victimCard.abilities) {
       // v5.471：holder 特性被鐵荊棘ex 初始化/暗夜羽擊/黏著束縛等消除 → 跳過此減傷特性
       if (!isAbilityHolderEffective(state, victim, victimCard, defenderIdx, ab.name, _vloc, pool)) continue;
+      // ⭐⭐⭐ v6.208：卡面「只要這隻寶可夢**在戰鬥場上**」型的被動減傷（火炎獅｜威嚇之牙）
+      //   在備戰被狙擊時**不該**減傷。走中央 passiveReduceAppliesAtLocation（與 engine 戰鬥位
+      //   管線、化石那份手刻 -30 同一份宣告），禁止在這裡自寫 location 判斷。
+      if (!passiveReduceAppliesAtLocation(ab.name, _vloc)) continue;
       const reduceN = PASSIVE_DAMAGE_REDUCE.get(ab.name);
       if (reduceN) {
         const before = dmg;
@@ -4099,6 +4116,43 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
   ['毛皮大衣', 20],     // 多麗米亞(H) — 受招式傷害 -20
   ['爆炸頭防守', 30],   // 爆炸頭水牛ex(I) — 受招式傷害 -30
 ]);
+
+/**
+ * ⭐⭐⭐ v6.208【中央宣告 + 中央述詞】被動減傷特性中，卡面寫「只要這隻寶可夢**在戰鬥場上**」的那一類。
+ *
+ * 站長裁定（2026-08-18）：火炎獅｜威嚇之牙 與 陳舊的顎之化石｜威嚇之顎 的卡面**逐字相同**
+ *   「只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-30」點。」
+ * ⇒ 位置限制**只能有一份宣告**，不可以兩張各寫一份 location 判斷。
+ *
+ * 真 bug（v6.208 行為端實測）：`PASSIVE_DAMAGE_REDUCE` 有兩個消費點 ——
+ *   ・`engine.ts applyDefenderReductionsBlockA`（防守方一定是戰鬥位）
+ *   ・`effects.ts _applyBenchAbilityReduce`（狙擊／多目標／hitBenchAll 打**備戰**）
+ * 後者不分位置地掃 `victimCard.abilities`，所以 威嚇之牙 在**備戰被狙擊時也 -30**
+ *   （實測：備戰火炎獅受 100 → 只吃到 70）。`PASSIVE_DAMAGE_REDUCE` 上方的區塊註解
+ *   寫著「不涵蓋（戰鬥位 only，卡面明確）：火炎獅|威嚇之牙」—— **註解在說謊，程式有涵蓋**。
+ *
+ * ⚠ 這張表**不是白名單**：守衛 `test-v6208` 會掃全卡池 H/I/J，凡是
+ *   「被動減傷路徑會消費到、且 `abilities[].effect` 以『只要這隻寶可夢在戰鬥場上』開頭」的特性
+ *   一律必須出現在這裡，漏一個就亮紅（新卡自動抓得到）。
+ */
+export const ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set<string>([
+  '威嚇之牙',  // 火炎獅（M1S/I，Stage1）— PASSIVE_DAMAGE_REDUCE -30
+  '威嚇之顎',  // 陳舊的顎之化石（J，化石 Item）— engine.ts 內按卡名手刻的 -30（v6.207 才接上消除閘）
+]);
+
+/**
+ * ⭐ 這個被動減傷特性在 `location` 這個位置生效嗎？（`ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES` 的唯一述詞）
+ *
+ * 兩個消費點（engine 戰鬥位管線 / effects 備戰管線）＋ 化石那份手刻 -30 一律問這一支，
+ * **禁止再各寫一份 `location === 'active'`**。
+ */
+export function passiveReduceAppliesAtLocation(
+  abilityName: string,
+  location: 'active' | 'bench',
+): boolean {
+  if (!ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES.has(abilityName)) return true;
+  return location === 'active';
+}
 
 /**
  * Wave 42：攻擊方場上的被動特性「+N 攻擊傷害」查表。
@@ -7713,6 +7767,9 @@ setBloomEffectiveFn(hasBloomOnField);
 //   改走 v6.196 的 hasEffectiveAbilityByInst —— 它自己從 state 推 location，
 //   呼叫端不再有算錯的機會（v6.196 建立此 wrapper 的理由）。
 // v6.204：帶 location 的注入（KO 當下實體已離場時不可自推 location）——同一個中央述詞
+// ⭐ v6.208：把中央「場上有效屬性」述詞注入 _shared（傳說的山頂要用它才看得到化石是【無】）。
+setEffectivePokemonTypesFn((state, ownerIdx, inst, card, pool) =>
+  getEffectivePokemonTypes(state, ownerIdx, inst, card, pool));
 setAbilityHolderEffectiveAtFn((state, inst, card, ownerIdx, abilityName, location, pool) =>
   isAbilityHolderEffective(state, inst, card, ownerIdx, abilityName, location, pool));
 setAbilityHolderEffectiveFn((state, inst, _card, ownerIdx, abilityName, pool) =>

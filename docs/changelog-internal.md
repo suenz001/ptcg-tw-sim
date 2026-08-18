@@ -1,5 +1,231 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.208 威嚇之牙「只在戰鬥場」收斂成中央宣告 ＋ 手牌特性禁止點擊發動 ＋ 化石在場上是【無】屬性
+
+BASE = `a10ed839de1c4e041b496bf2c5121ee10e57e016`（v6.207）。站長裁定四件（2026-08-18）。
+
+### ① ⚠ 玩家回報「熔岩洞沒消掉【神秘石居】」—— **本版在引擎端測不出來**，需站長補資訊
+
+回報：「場上有【傳說的熔岩洞】，用【烈箭鷹ex】的【鉤爪搜尋】仍然無法對【岩殿居蟹】造成傷害。」
+
+先釐清路徑（這點回報是對的、值得記下來）：**鉤爪搜尋不走引擎主傷害管線**。
+`registerDamageThenOptionalDeckSearchToHand` 讓 `regPre` 回 `damage:0`，真正的 150 點在
+`regR('damage-after-deck-search-to-hand')`（`effects.ts:15540`）裡由 `dealAttackDamageToTarget`
+補打 —— 也就是 v6.204 修的那一條（`passiveImmunityDamageBlock`）而不是 v5.471 修的那一條。
+
+**但這條路徑在 BASE 樹上是通的**，逐項行為端重現（全部 `applyAction ATTACK` → `RESOLVE_SELECTION` 完整流程）：
+
+| 重現面向 | 組數 | 結果 |
+|---|---|---|
+| 熔岩洞兩個印刷（19623/19626）× 座位 0/1 × 場地擁有者 0/1 | 8 | **全部打得動（150 → 岩殿居蟹 150HP 被擊倒）** |
+| 從手牌用 `PLAY_TRAINER` 真的打出兩張合一競技場再攻擊 | 1 | 同上（partner 也正確就位） |
+| 岩殿居蟹 6 個印刷 | 6 | 有熔岩洞全 KO、沒熔岩洞全免疫 |
+| 進化來的（帶 `evolvedFromStack`）岩殿居蟹 | 1 | 同上 |
+| **全卡池 715 張寶可夢【ex】× 每一招** × 岩殿居蟹在戰鬥場 | 1,000+ | 沒有任何一招「有熔岩洞卻仍被神秘石居擋下」 |
+| 同上 × 岩殿居蟹在**備戰** | 1,000+ | 0 筆 |
+| `passiveImmunityDamageBlock` / `resolveBenchGuard` 直接驅動 × {active,bench} × {有/無熔岩洞} | 4 | 有熔岩洞一律 `blocked:false` |
+
+`神秘石居` 全 repo **只有一份實作**（`effects.ts:4270` 的 `PASSIVE_IMMUNITY` entry），
+沒有第二／第三份；消費它的三條路徑（engine 主管線 5657／`passiveImmunityDamageBlock`／
+`passiveImmunityByDamageAmount`）**都有**中央消除閘。
+
+⇒ 本版**不改任何東西**，改成把上述矩陣寫成**回歸鎖**（守衛 ⑤ 段，8+6+4 組）。
+**要請站長補的資訊**（列進回報，不擅自歸咎環境）：
+1. 這一局是**休閒／單機**還是**錦標賽**？錦標賽是伺服器權威，引擎是
+   `oracle-admin/tournament/server-engine.cjs`，只有跑 `update-tournament.bat` 才會重建 ——
+   v6.204 的部署清單有列這支，若當時沒跑，錦標賽伺服器上的引擎還停在 v6.203。
+2. 當下**場上的競技場真的是熔岩洞**嗎（有沒有被對手覆蓋掉）？
+3. 對手那隻**確定是「神秘石居」版本**嗎（岩殿居蟹另有 SV11B「結實」版，那是避免昏厥、不是免疫）？
+
+### ② 手牌特性「點一下就放到場上」（站長裁定：比照其他手牌卡）
+
+**先查證比照對象的實際行為**（`+page.svelte` v6.207 的 `.hand-card` onclick）：
+
+| 手牌卡種類 | 點一下的實際行為 |
+|---|---|
+| 能量卡 | 只切換 `selectedEnergyIid`（選取／取消選取），**不會**附上去 |
+| 基礎／化石／訓練家／道具／進化 | onclick **沒有對應分支＝什麼都不做**，一律拖曳 |
+| **手牌特性** | `triggerHandActivateAbility()` → **直接 dispatch，卡片當場上備戰** |
+
+⇒ 手牌特性比照「什麼都不做」。改動：
+- onclick 刪掉 `if(canHandActivate && !dragging){triggerHandActivateAbility(...);return;}`；
+- `triggerHandActivateAbility` 隨之零呼叫端 ⇒ **整支刪掉**（v6.098／v6.099 死入口的教訓：
+  函式還在會讓人以為入口還在）；
+- `title` 從「點擊或拖到備戰格使用特性」改成「拖到備戰格使用特性」，手牌提示改「⚡ 拖到備戰發動特性」
+  （UI 不可以說跟行為不同的話）。
+
+⚠ **手機直式保住**：`MobilePortraitBattle.svelte` **不走這個 onclick** ——
+手機點卡片是開 sheet 選單，再按「⚡ ⟨特性名⟩ (放備戰)」才發動，可用性同樣讀中央
+`ops.has('hand-ability')`。守衛 `4g` 正對照釘住它沒被一起關掉。
+
+⚠ 這其實**不是 v6.200 新增的**：點擊入口是 v5.511（緊急迴轉）就有的，v6.200 只是把
+「拖不動」補起來 —— 在那之前點擊是唯一入口，補上拖曳之後它才變成純誤觸來源。回報的因果
+（「v6.200 讓點擊也直接觸發」）與程式史不符，但**站長要的結果一樣**，照做。
+
+連帶更新兩支既有守衛：
+- `test-v6200`：`runBothUiPaths` 的點擊側改成執行 template **真正的 onclick body**，
+  斷言從「兩條路徑送出相同動作」改成「拖曳送出、點擊一個都不送」。
+  ⚠ `triggerHandActivateAbility` 必須當**參數**傳進去而且忠實鏡射舊行為（會 dispatch）——
+  不傳 ⇒ BASE 直接 ReferenceError 讓測試「當掉」而不是「亮紅」；傳空函式 ⇒ BASE 也拿到
+  `clickAct===null` ⇒ **假綠**。兩個坑都踩過才寫成現在這樣。
+- `test-v6147`：送出點清單刪掉「手牌特性(點擊)」（那個入口不存在了），
+  busy gate 由「手牌拖曳 gate」＋「手牌 onclick」兩條接手。
+
+### ③ 火炎獅｜威嚇之牙 限定戰鬥場（站長裁定）＋ 與威嚇之顎共用同一份宣告
+
+卡面逐字（`abilities[].effect`）與 陳舊的顎之化石｜威嚇之顎 **完全相同**：
+> 只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-30」點。
+
+`PASSIVE_DAMAGE_REDUCE` 有**兩個**消費點：
+`engine.ts applyDefenderReductionsBlockA`（防守方必為戰鬥位，天然正確）與
+`effects.ts _applyBenchAbilityReduce`（狙擊／多目標／hitBenchAll 打**備戰**）——
+後者不分位置地掃 `victimCard.abilities` ⇒ **威嚇之牙在備戰被狙擊也 -30**。
+行為端實測：備戰火炎獅受 100 點 → 只吃到 **70**。
+
+⚠ `_applyBenchAbilityReduce` 上方的區塊註解白紙黑字寫著
+「不涵蓋 (戰鬥位 only, 卡面明確): 火炎獅|威嚇之牙」—— **註解在說謊，程式其實有涵蓋**
+（audit 必看實際碼、不可信註解）。註解已改成誠實版。
+
+修法（**一份宣告、三個消費點**，禁各寫一份 `location === 'active'`）：
+`effects.ts` 新增 `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`（威嚇之牙／威嚇之顎）＋
+中央述詞 `passiveReduceAppliesAtLocation(abilityName, location)`；
+`_applyBenchAbilityReduce`、`engine.ts` 戰鬥位 `PASSIVE_DAMAGE_REDUCE` 迴圈、
+`engine.ts` 化石那份手刻 -30 三處都問它。
+
+⚠ 這**不是白名單**：守衛 `2g` 掃全卡池 H/I/J，凡是「被動減傷路徑會消費到
+（`PASSIVE_DAMAGE_REDUCE` ∪ `_COND` ∪ `_BY_ATTACKER` ∪ 化石手刻）且卡面以
+『只要這隻寶可夢在戰鬥場上』開頭」的特性一律必須在清單裡（新卡自動抓得到），
+且清單不得有零消費點的死條目。`2h` 拿偽造樣本自我驗證掃描器（含「G 標不列入」）。
+
+### ④ 化石在場上是【無】屬性（站長裁定）
+
+卡面 rulesText 逐字：「這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。」
+但卡片本身 `supertype='Trainer'`／`subtype='Item'`／`pokemonType=null`
+⇒ v6.206 建的中央述詞 `getEffectivePokemonTypes` 對化石回 **`[]`（完全沒有屬性）**。
+
+修法：述詞最前面加 `if (attackerActive?.fossilOnField) return ['Colorless'];`
+⚠ 判準**只認 `inst.fossilOnField`**（v6.145 教訓：化石的「在場上身分」不能從卡片欄位推，
+`stage` 是 undefined、`subtype` 是 'Item'）。破壞測試 E5 就是拿「改讀卡片欄位」當反例。
+
+### ⑤ 差分實跑（**離線 BASE vs HEAD 同盤面對跑**，`scripts/_dump.mjs` 暫存腳本，未進 repo）
+
+| 家族 | 比對點 | 組數 | 差異 | 逐筆解釋 |
+|---|---|---|---|---|
+| 中央有效屬性述詞（全卡池 × {戰鬥場,備戰}） | `getEffectivePokemonTypes` | 9,870 | **22** | 11 個化石印刷 × 2 個位置，`[]`→`["Colorless"]`，**只有化石** |
+| 眷戀雲｜愛之同感（全流程 ATTACK，化石當對手戰鬥位 × 我方備戰化石/一般） | 加不加 120 | 24 | **22** | 全部 `no`→`MATCH`（化石是【無】、我方也有【無】⇒ 卡面成立）。其中顎之化石那組 `80-30=50` → `200-30=170` KO |
+| 逆境保險（化石當對手戰鬥位 × 60 個持有者 × 4 種化石） | 抽不抽 3 張 | 240 | **0** | 全卡池**沒有任何一張的弱點是【無】**（守衛 3g 釘住，日後出了會紅） |
+| 神秘花園（【超】計數，備戰放 2 隻化石） | 抽牌 log | 22 | **0** | 化石是【無】不是【超】 |
+| 被動減傷：全卡池逐一當**備戰**被狙擊 100 | 實際受傷 | 3,942 | **1** | 火炎獅 `70`→`100`（＝③ 的預期效果） |
+| 被動減傷：全卡池逐一當**戰鬥場**被打 100 | 實際受傷 | 3,942 | **0** | 「應該不變」的正對照組 |
+| **合計** | | **18,040** | **45** | 逐筆都落在上表，無非預期差異 |
+
+⚠ 差分模型踩過的坑（寫在此以免重犯）：
+1. 第一版沒釘隨機源 ⇒ 擲幣型免疫（變隱龍｜躲藏高手 ×2、奇諾栗鼠ex｜順滑大衣）
+   誤報 3 筆。改固定種子 LCG（**不可**用恆正面，flip-until-tails 會無窮迴圈把腳本掛住）。
+2. 第一版的「乾淨對照寶可夢」條件寫 `hp>=200` ⇒ 全卡池挑不到、`PLAIN=null` ⇒
+   `attackerCard` undefined ⇒ `applyDefenderReductionsBlockA` 整段被 `if (_atkCardR && targetCard)`
+   跳過，**戰鬥場的火炎獅看起來「沒有減傷」**，差一點就誤判成另一個 bug。fixture 一定要斷言抓得到。
+3. 眷戀雲第一版用 `attackIndex:0`（愛心標誌）＋【無】能量付不起【超】費 ⇒ 22 組全 0 差異的假綠。
+
+### ⑤-b ④ 的連鎖：兩個「卡面寫【無】卻讀不到化石」的消費點（**兩輪審查抓到，本版一併修**）
+
+站長裁定「化石在場上是【無】」之後，全站掃「卡面寫【無】寶可夢」的 H/I/J 卡共 5 張，
+其中兩張**沒有**走中央述詞：
+
+| 卡 | 卡面 | 舊行為（實跑） | 新行為（實跑） |
+|---|---|---|---|
+| **傳說的山頂**（M6 19622/19625） | 「雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少1張。」 | 化石被 KO **仍給 1 張獎賞** | **0 張**（印刷【無】的對照不變、非【無】的對照仍 1 張） |
+| **玻璃喇叭**（SV7 10984 等） | 「選擇最多2隻自己的**備戰區的【無】寶可夢**…」 | 備戰只有化石時 regG **回 false**（用不出來） | **true**（印刷【無】對照仍 true、【火】對照仍 false） |
+
+`legendPeakPrizeReduction` 原本簽名只收 `Card`，**結構上看不到 `inst.fossilOnField`** ⇒ 加**必填**的
+`koInst` 與 `koOwnerIdx`（TS 逼兩個呼叫端 `effects.ts:896` / `engine.ts:5769` 回來補），
+並改走中央述詞。⚠ `_shared.ts` 不能 import `effects.ts`（循環相依，Check O）⇒ 沿用本檔既有的
+注入模式新增 `setEffectivePokemonTypesFn`／`effectivePokemonTypesShared`，轉接**同一支**
+`getEffectivePokemonTypes`（**不是第二份實作**）；守衛 `6f` 行為端釘住「注入點真的接上了」
+（v6.204 的 G2 教訓：注入點沒接上時所有測試照樣全綠）。
+
+⚠ 順帶查證到、寫進註解免得再被誤導：**被 KO 進棄牌區的化石仍保有 `fossilOnField`**
+（`toBareCard` 只服務「回手牌／牌庫」那條路徑），傳說的山頂正是靠這一點才判得出來；
+`_shared.ts` 的 `toBareCard` 註解原本寫「stadiumHalf 與 fossilOnField…必須保留」——
+白名單裡從來沒有 `fossilOnField`，**註解在說謊**，已改成誠實版。
+
+### ⑥ 守衛 `scripts/test-v6208-active-only-passive-reduce-and-fossil-colorless.mjs`（40 檢查，全行為端）
+
+①卡面逐字錨（兩張卡面逐字相同／11 個化石 rulesText／神秘石居・熔岩洞・鉤爪搜尋）；
+②③ 威嚇之牙 位置限定（備戰 100、戰鬥場 70）＋ 顎之化石正反對照 ＋ 三張無位置限制的減傷仍生效
+＋ 枚舉守衛與掃描器自我驗證 ＋ `2g2` field-wide 兩張（盾之守護限戰鬥場／岩石宮殿限備戰）的行為端；
+③④ 化石【無】（述詞、只認 fossilOnField、全卡池**精確集合**不變式、眷戀雲／傳說的山頂／玻璃喇叭
+三個行為端消費點、四組正對照）；④② 點擊回歸（**真的執行 template 的 onclick body**）；
+⑤① 神秘石居回歸鎖；⑥ 位置限定 passive 全站下限＋中央宣告逐字＋去中央化偵測＋注入點行為端。
+
+**HEAD-FAIL（逐項還原、逐項確認會紅、腳本跑得完 `/tmp/destroy.py` 印出 SCRIPT-END）**：
+
+| 破壞 | 腳本跑得完？ | v6208 | v6200 | m6-legend |
+|---|---|---|---|---|
+| 5 個 src 檔**全部**還原 BASE | ✅ | **15 FAIL** | 3 FAIL | 1 FAIL |
+| 只還原 `+page.svelte`（②） | ✅ | 3 FAIL | 3 FAIL | 0 |
+| E1 `passiveReduceAppliesAtLocation` 恆真（**接線在、行為不在**） | ✅ | 2 FAIL | 0 | 0 |
+| E2 備戰消費點拆掉接線 | ✅ | 2 FAIL | 0 | 0 |
+| E3 中央清單漏掉「威嚇之顎」 | ✅ | 3 FAIL（含枚舉守衛 2g） | 0 | 0 |
+| E4 化石【無】短路拿掉 | ✅ | 6 FAIL | 0 | 1 FAIL |
+| E5 化石判準改讀卡片欄位（v6.145 的錯法） | ✅ | 6 FAIL | 0 | 1 FAIL |
+| E6 **去中央化**（本地硬編特性名，行為對、接線沒了） | ✅ | 1 FAIL（6c） | 0 | 0 |
+| E7 中央有效屬性**注入點沒接上** | ✅ | 2 FAIL（3h/6f） | 0 | 0 |
+| E8 傳說的山頂退回印刷屬性 | ✅ | 2 FAIL（3h/6f） | 0 | 1 FAIL |
+| E9 玻璃喇叭退回印刷屬性 | ✅ | 1 FAIL（3i） | 0 | 0 |
+| E10 engine 兩處中央呼叫刪掉 | ✅ | 1 FAIL（6e） | 0 | 0 |
+| E11 盾之守護 位置抄成備戰 | ✅ | 1 FAIL（2g2） | 0 | 0 |
+| 全部還原後複驗 | ✅ | 0 FAIL | 0 FAIL | 0 FAIL |
+
+⚠ `effects.ts` **單獨**還原會讓 `engine.ts` import 不到新符號而 build 失敗（同 v6.206），
+所以改用「全部還原」＋ E1~E11 定點破壞，全部跑得完。
+
+### ⑥-b 兩輪 opus 自我審查抓到、且已修的假綠／缺口
+
+| 項目 | 判定 | 修法（都配了破壞複驗） |
+|---|---|---|
+| `3f` 神秘花園正對照 | **雙重恆真**：`hand: []` 讓 engine 第一道閘「手牌沒有能量卡」就 early-return，**根本沒跑到【超】計數**；而且成功路徑是開 `hand-discard` picker、當下不抽牌 ⇒ 拿 `hand.length===0` 當判準毫無鑑別力 | 手牌放 1 張基本【超】能量，改看 `pendingSelection` 與 log；補「真【超】⇒ 會開丟棄視窗」的正對照 |
+| `4b` 核心條目 | **anchor 失效時恆真**：`handOnClickBody` 抓不到回 `null`，`new Function('null' + ';return …')` 是**合法 JS** ⇒ 三條斷言全過 | `4b/4c/4d` 各補 `assert.ok(HAND_ONCLICK)`；破壞複驗：改壞 anchor ⇒ 4b 也紅 |
+| `3c` 不變式 | **單邊、無下界**：只擋「多改」；把既有兩族雙屬性實作整個刪掉 `changed` 變 0 仍全綠 | 改成**精確卡名集合**斷言（多改少改都紅） |
+| `2g` 枚舉守衛 | **自稱的覆蓋範圍不成立**：`consumed` 只含三張 map ＋ 威嚇之顎，但 field-wide 型的 **盾之守護** 也符合「卡面只要…在戰鬥場上＋減傷」卻不被要求入列 | 加 `FIELD_WIDE` 白名單 ＋ 新增 `2g2` **行為端**驗證那兩張的位置判斷是真的（E11 破壞複驗會紅） |
+| `2h` 掃描器自我驗證 | **盲點**：只餵自造 Map ⇒「對真 pool 作弊、對假 pool 誠實」的實作也全綠 | 補「複製真 pool、把一張真卡的 effect 前綴改成位置限定 ⇒ 必須抓得到」 |
+| `6b` | `size >= 2` 而字面量正好 2 ⇒ 零資訊量 | 改成逐字集合斷言 |
+| 中央宣告可被**去中央化** | 把 `_applyBenchAbilityReduce` 的中央呼叫換成本地硬編 `ab.name === '威嚇之牙' && _vloc !== 'active'`，行為完全正確、**33 條一條都不紅** | 新增 `6c/6d`：只掃該函式 body（全檔掃會把 engine 那句合法的「這張卡有沒有這個特性」誤判成違規 —— 第一版就假紅過），配四條自我驗證（含「strip 不得動字串內容」「字串裡的 `//` 不是註解」） |
+| engine 兩處中央呼叫是恆真接線 | 兩行全刪 ⇒ **0 紅**（設計上就是「未來用」，本身回傳恆真） | 新增靜態守衛 `6e`（呼叫次數 == 2）＋ 註解寫明「此處恆真、寫出來是為了位置規則只有一份」 |
+| `test-v6147` 的「手牌 onclick」 | 全檔搜尋、沒綁定手牌卡元素 | 限縮到 `class="hand-card"` 後 2500 字元內 |
+| 兩個真 bug（傳說的山頂／玻璃喇叭） | 見 ⑤-b | 已修並各配行為端守衛 `3h`/`3i` |
+| 過時／說謊的註解 3 處 | `_shared.ts` toBareCard（說保留 fossilOnField，其實沒有）／`v154_decks.ts`（說走 `filterType='Colorless'`，全站早已無此用法）／`+page.svelte`（說「點卡發動」） | 全部改成誠實版 |
+
+⚠ **審查提出但查證後判定不修的**：
+1. `4g`（手機直式）與 `4e`（死碼清除）是純 regex、沒有執行手機路徑 —— 手機的行為由
+   `test-v6201-mobile-hand-ops-and-ability-gate` 負責，這裡只做「入口沒被一起關掉」的接線確認，維持現狀。
+2. `m5_preview.ts:2216` 化石採掘場的 gate（`name.includes('陳舊的')`）比 `isFossilItemCard` 鬆 ——
+   實掃全 live 卡池：H/I/J 內名稱含「陳舊的」的 Trainer/Item **只有那 7 張化石**，今天不會誤設；
+   收緊屬於另一個維度，**列給站長**。
+3. `steelixPalaceReduce`（岩石宮殿）沒接特性消除閘 —— 舊帳、非本版範圍，**列給站長**。
+
+### ⑦ 整體 audit：「位置限定的 passive」與「特性消除閘漏路徑」
+
+**A. 位置限定 passive**：掃全卡池 H/I/J，`abilities[].effect` 以
+「只要這隻寶可夢在戰鬥場上／在備戰區」開頭的共 **23 個特性名**（另有 12 個
+「這隻寶可夢**在戰鬥場**受到…時」的受傷反擊型）。逐維檢查結果：
+
+| 維度 | 位置閘在哪 | 結論 |
+|---|---|---|
+| 被動減傷（`PASSIVE_DAMAGE_REDUCE` 家族） | 本版新建 `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES` | ⚠ **本版修掉 1 個（威嚇之牙）** |
+| 受傷反擊（毒刺／灼熱之軀／反擊針／尖刺盔甲／甲殼刺／警備濁霧／頭蓋尖刺／自動用武…） | `fireDefenderOnDamaged` **只在 active 觸發**；卡面沒寫「在戰鬥場」的例外走 `ANYWHERE_RETALIATION`（v5.980 已建） | 已收斂，無新缺口 |
+| 主動特性（「若這隻寶可夢在戰鬥場上／備戰區，則在自己的回合可使用1次」） | `getUsableAbilities`（v6.181 整批修過） | 已收斂 |
+| 備戰限定免疫（羽毛守護／藏隱／深度下潛／太古防壁／岩石宮殿／森林秘道） | `resolveBenchGuard`／各自 helper 自帶 bench gate | 已收斂 |
+| 戰鬥場限定 field-wide（初始化／暗夜羽擊／爆大身軀／海之詛咒／瞪眼效用／廣域堡壘／揚沙／劇毒支配／自動治癒／漩渦言靈／盾之守護／原始根） | 各自 helper 已判 active | 已收斂（盾之守護 v6.206、威嚇之顎 v6.207 才補上） |
+
+**B. 特性消除閘的路徑覆蓋**：以 `神秘石居` 當探針做全路徑掃描（見 ① 段），
+主攻擊／狙擊／多目標／hitBenchAll／延後型 resolver 五條路徑答案一致，**沒有掃出漏接**。
+
+### ⑧ 部署
+`update-tournament.bat`（卡效果／引擎改動）、`update-admin-full.bat`（admin.html 版本提示）。
+`redeploy-oracle.bat` 本版**不需要**（沒動 `server_admin_patch.js`）。
+⚠ 另請站長確認 v6.204 之後**有沒有跑過** `update-tournament.bat` —— 見 ① 段第 1 點。
+
 ## v6.207 v6.206 ⑦ 段那份「直讀印刷 pokemonType 的場上消費點」清單落實 ＋ 逆境保險吃弱點改寫 ＋ 威嚇之顎接消除閘
 
 BASE = `90a3de9ff34fc862b69156c4d7ec8bcba6e11ec6`（v6.206）。站長裁定三件（2026-08-18）。
