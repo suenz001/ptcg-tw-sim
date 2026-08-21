@@ -30,6 +30,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { EffectFn } from '../_shared';
 import {
   TRAINER_EFFECTS,
+  PENDING_REFRESH_ON_POP,   // v6.215 佇列取出時重算 picker params
   reg, regR, regG, regPost,
   TRAINER_GUARDS,  // v6.072 自動 Tool guard：已自訂 guard 的道具不覆蓋
   addLog, updatePlayer, withPending, shuffle,
@@ -96,11 +97,15 @@ export const TOOL_PREVENT_KO = new Map<string, (
 //   起源：吼鯨王ex 附沉重接力棒被 KO 時，舊邏輯「discard 倒序遇非基本能量就 break」
 //   會在第一張（沉重接力棒自己）就 break → 抓不到能量 → 反擊效果不觸發（玩家回報）。
 export const TOOL_ON_KO = new Map<string, (
-  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>, koInst: CardInstance
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, pool: Map<string, Card>, koInst: CardInstance,
+  // v6.215：使用招式的寶可夢在**攻擊當下**的 iid 快照（延後觸發的道具用它定位攻擊方，
+  //   因為「自身與備戰互換」型招式解完後 players[aIdx].active 已經不是攻擊者了）。
+  attackerIid?: string
 ) => GameState>();
 export const TOOL_PRIZE_BONUS = new Map<string, (holderCard: Card) => number>();
 export const TOOL_ON_DAMAGED = new Map<string, (
-  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>
+  state: GameState, dIdx: 0 | 1, aIdx: 0 | 1, damage: number, pool: Map<string, Card>,
+  attackerIid?: string   // v6.215 見 TOOL_ON_KO 註解
 ) => GameState>();
 export const TOOL_RETREAT_MOD = new Map<string, (
   holderCard: Card, holderInst: CardInstance, effHP?: number
@@ -322,12 +327,60 @@ TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
  */
 export const TOOL_ON_KO_MIRRORED_FROM_DAMAGED = new Set<string>();
 
+/**
+ * ⭐⭐⭐ v6.215：官方處理順序是 **招式效果先於「受到傷害時」道具效果**。
+ *
+ * `PTCG RULES/PTCG_RULES.md` §17.22.A L1530-1531 逐字：
+ *   Q:「幸運頭盔」抽卡 與 招式「脅迫獠牙」丟手牌，何者先執行？
+ *   A: 先因招式「脅迫獠牙」的效果將自己的手牌丟棄。／
+ *      之後，因寶可夢道具卡「幸運頭盔」的效果從牌庫抽卡。
+ * L2916 另證：「會在招式造成傷害後才執行寶可夢道具卡『幸運頭盔』的效果處理」。
+ * 同方向的跨個案判例：§17.2.A L606-607（學習裝置：先丟棄能量）、
+ * §17.2.A L604-605（特性反擊針：先恢復30點HP）、§16.1 L549（先處理發動方的招式效果）。
+ *
+ * 但 engine 的 ATTACK 主流程是 `TOOL_ON_DAMAGED / TOOL_ON_KO` 先跑、`ATTACK_POST`（招式效果）
+ * 後跑 —— 與官方**相反**（v4.933 起的既有行為）。名單內的道具會被 engine 延後到
+ * ATTACK_POST 之後才觸發，藉此對齊官方序。
+ *
+ * ⚠ 名單只放「不會對攻擊方造成傷害、不牽動昏厥判定」的道具。反傷型
+ * （凸凸頭盔／奢華炸彈／豪邁炸彈／龐克頭盔）與 火箭隊的催眠裝置 **刻意不放** ——
+ * 它們會牽動昏厥判定／獎賞卡／補位／雙 KO，風險遠大於收益（站長 2026-08-22 裁定暫緩）。
+ *
+ * ⚠ 只影響 engine 主管線。中央傷害 helper（狙擊／多目標／延後傷害）的
+ * `fireDefenderOnDamaged` 本身就是**從 ATTACK_POST 內**被呼叫的，已經在招式效果之後。
+ */
+export const TOOL_FIRE_AFTER_ATTACK_EFFECT = new Set<string>([
+  '幸運頭盔',      // 純抽牌，不碰攻擊方
+  '逆境保險',      // 純抽牌，不碰攻擊方
+  '手持循環扇',    // 搬攻擊方能量（目標用攻擊當下 iid 快照）
+]);
+
+/**
+ * v6.215：用「攻擊當下的 iid 快照」找出使用招式的寶可夢。
+ * 延後觸發的道具不可以再讀 `players[aIdx].active` —— `selfSwapPost` 家族（自身與備戰互換）
+ * 在 ATTACK_POST 開 `do-switch` picker，會**先於**延後的道具解完，此刻 active 已經換人。
+ *
+ * ⚠⚠ **fail-closed**：沒帶快照就回 `null`（效果不發動），**不退回讀 active**。
+ *   理由（長期記憶「新旗標未傳＝fail-closed」）：退回讀 active 會讓「呼叫端忘了傳」
+ *   變成一個**測不出來**的錯誤 —— 表面照常運作、只有在自身互換那種場合才悄悄打錯人。
+ *   目前 4 個呼叫端（engine 的 KO / 非 KO 分支、effects.ts 的 fireDefenderOnDamaged /
+ *   fireDefenderOnKO）全部都傳。舊版留下的 pending 由 resolver 端自己顯式補值。
+ */
+function findAttackerInstance(
+  state: import('../../types').GameState, aIdx: 0 | 1, attackerIid?: string,
+): CardInstance | null {
+  if (!attackerIid) return null;
+  const ap = state.players[aIdx];
+  if (ap.active?.iid === attackerIid) return ap.active;
+  return ap.bench.find(b => b.iid === attackerIid) ?? null;   // 已離場 ⇒ null ⇒ 效果不發動
+}
+
 function registerToolOnDamagedAndKO(
   name: string,
-  fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>) => import('../../types').GameState,
+  fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>, attackerIid?: string) => import('../../types').GameState,
 ): void {
   TOOL_ON_DAMAGED.set(name, fn);
-  TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, _koInst) => fn(state, dIdx, aIdx, 0, pool));
+  TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, _koInst, attackerIid) => fn(state, dIdx, aIdx, 0, pool, attackerIid));
   TOOL_ON_KO_MIRRORED_FROM_DAMAGED.add(name);
 }
 
@@ -458,19 +511,24 @@ TOOL_ON_DAMAGED.set('豪邁炸彈', (state, dIdx, aIdx, baseDamage, pool) => {
 // 兩段 pending：
 //   1. modal-choice：列出 attacker.active 的能量為 options
 //   2. opp-bench-choose：選 attacker 備戰寶可夢
-registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool) => {
+registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool, attackerIid) => {
   const ap = state.players[aIdx];
-  if (!ap.active || ap.active.energyAttached.length === 0) {
-    // 攻擊方戰鬥位無能量 → 無效果
+  // ⭐ v6.215：本道具已延後到 ATTACK_POST 之後才觸發（官方序：招式效果 → 道具）。
+  //   ⇒ 「使用招式的寶可夢」必須用攻擊當下的 iid 快照定位，禁讀 players[aIdx].active。
+  //   ⇒ 招式若先自丟能量（蒼炎刃鬼ex｜紫水晶激怒「將這隻寶可夢身上附加的能量卡全部丟棄」），
+  //      這裡就真的沒有能量可搬 —— 原本順序相反時反而幫攻擊方保住 1 顆能量。
+  const holder = findAttackerInstance(state, aIdx, attackerIid);
+  if (!holder || holder.energyAttached.length === 0) {
+    // 使用招式的寶可夢已離場、或身上無能量 → 無效果
     return state;
   }
   if (ap.bench.length === 0) {
     // 攻擊方無備戰寶可夢 → 沒地方放，無效果
     return state;
   }
-  // 列出能量選項
-  const energyOptions = ap.active.energyAttached.map((e, i) => ({
-    id: `${i}`,
+  // 列出能量選項（⭐ 用能量 iid 當 option id，不用陣列索引 —— 索引會因招式自丟能量而位移）
+  const energyOptions = holder.energyAttached.map((e) => ({
+    id: e.iid,
     text: `${pool.get(e.cardId)?.name ?? '能量'}`,
   }));
   state = addLog(state,
@@ -481,39 +539,78 @@ registerToolOnDamagedAndKO('手持循環扇', (state, dIdx, aIdx, _dmg, pool) =>
     actorIdx: dIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'cycle-fan-step1-pick-energy',
-    params: { label: '手持循環扇：選 1 個攻擊方戰鬥位能量', options: energyOptions },
+    params: { label: '手持循環扇：選 1 個攻擊方戰鬥位能量', options: energyOptions, attackerIid: holder.iid },
   });
 });
-// resolver step 1: 移除選中能量，開 step 2 選 attacker bench
-regR('cycle-fan-step1-pick-energy', (st, dIdx, iids, _params, _pool) => {
+/**
+ * ⭐ v6.215：手持循環扇的候選能量在「佇列取出時」重算。
+ *
+ * 官方序把招式效果排在道具之前，於是招式自己的 picker 會先解掉；若那個 resolver 動到
+ * 攻擊方身上的能量（土地雲｜螺旋關節「選擇1個這隻寶可夢身上附加的能量，放回手牌。」／
+ * 波爾凱尼恩｜逆火 等 returnSelfActiveEnergyPost 家族／自丟能量型），排隊當下算好的
+ * options 就過時了。這裡在 picker 真正浮上檯面前重算一次。
+ * 重算後若「使用招式的寶可夢」已離場、身上沒能量、或攻擊方沒有備戰 ⇒ 整筆取消。
+ */
+PENDING_REFRESH_ON_POP.set('cycle-fan-step1-pick-energy', (state, sel, pool) => {
+  const dIdx = sel.actorIdx as 0 | 1;
   const aIdx = (1 - dIdx) as 0 | 1;
-  const ap = st.players[aIdx];
-  const choiceIdx = parseInt(iids[0] ?? '-1', 10);
-  if (isNaN(choiceIdx) || choiceIdx < 0 || !ap.active || choiceIdx >= ap.active.energyAttached.length) {
+  // 舊版 pending 沒有 attackerIid ⇒ 顯式補當下 active（見 regR 的同一條相容註解）
+  const _sn = sel.params?.attackerIid as string | undefined;
+  const holder = findAttackerInstance(state, aIdx, _sn ?? state.players[aIdx].active?.iid);
+  const ap = state.players[aIdx];
+  if (!holder || holder.energyAttached.length === 0 || ap.bench.length === 0) {
+    return { state: addLog(state, '手持循環扇：已無可改附的能量或備戰寶可夢，效果取消', dIdx), sel: null };
+  }
+  const options = holder.energyAttached.map((en) => ({
+    id: en.iid,
+    text: `${pool.get(en.cardId)?.name ?? '能量'}`,
+  }));
+  // ⚠ 只換 params.options，其餘欄位（type / effectKey / min-maxCount / actorIdx / attackerIid）照抄。
+  //   不做「內容沒變就回傳原物件」的短路 —— engine 的 stampPendingToken 每次 pop 都會重新蓋章，
+  //   那條短路沒有任何可觀察效果，留著只會變成測不到的死分支。
+  return { state, sel: { ...sel, params: { ...sel.params, options } } };
+});
+
+// resolver step 1: 移除選中能量，開 step 2 選 attacker bench
+regR('cycle-fan-step1-pick-energy', (st, dIdx, iids, params, _pool) => {
+  const aIdx = (1 - dIdx) as 0 | 1;
+  const _snapIid = params?.attackerIid as string | undefined;
+  // v6.215 相容：v6.214 以前開的 pending 沒有 attackerIid（部署當下正在進行的對局可能還帶著）。
+  //   那時的順序是「道具先開 picker」⇒ 讀當下 active 就是正確的攻擊方。顯式補值，
+  //   讓 findAttackerInstance 本身維持 fail-closed。
+  const holder = findAttackerInstance(st, aIdx, _snapIid ?? st.players[aIdx].active?.iid);
+  const pick = iids[0];
+  let removed: CardInstance | null = holder?.energyAttached.find(e => e.iid === pick) ?? null;
+  // v6.215 相容：v6.214 以前的 option id 是**陣列索引**；部署當下仍在進行的對局可能還帶著
+  //   那種 pending（沒有 attackerIid）。只在「沒有快照」時才走索引解讀，避免索引漂移復辟。
+  if (!removed && holder && _snapIid === undefined && /^\d+$/.test(pick ?? '')) {
+    removed = holder.energyAttached[parseInt(pick, 10)] ?? null;
+  }
+  if (!holder || !removed) {
     return addLog(st, '手持循環扇：選擇無效，效果取消', dIdx);
   }
-  const removed = ap.active.energyAttached[choiceIdx];
-  // 從 attacker.active 移除能量
+  const _rmIid = removed.iid;
+  // 從「使用招式的寶可夢」身上移除能量（它可能已被自身互換型招式換到備戰區）
   st = updatePlayer(st, aIdx, p => {
-    if (!p.active) return p;
+    const strip = (c: CardInstance) => (c.iid === holder.iid
+      ? { ...c, energyAttached: c.energyAttached.filter(e => e.iid !== _rmIid) }
+      : c);
     return {
       ...p,
-      active: {
-        ...p.active,
-        energyAttached: [
-          ...p.active.energyAttached.slice(0, choiceIdx),
-          ...p.active.energyAttached.slice(choiceIdx + 1),
-        ],
-      },
+      active: p.active ? strip(p.active) : p.active,
+      bench: p.bench.map(strip),
     };
   });
   // 開 step 2：選 attacker 備戰；用 params 暫存被移除的能量 CardInstance
+  // ⭐ v6.215：補宣告 params.validIids（＝攻擊方備戰，與 fieldPickerBaseIids('opp-bench-choose')
+  //   同一份述詞、也與 UI 顯示同源）。原本沒宣告時只靠 v6.176 的兜底，
+  //   `test-v6175` F 段的棘輪把它算成「裸奔的場上目標型 picker」——這一版順手還掉。
   return withPending(st, {
     type: 'opp-bench-choose',
     actorIdx: dIdx, sourcePlayerIdx: aIdx,
     minCount: 1, maxCount: 1,
     effectKey: 'cycle-fan-step2-place-energy',
-    params: { energy: removed },
+    params: { energy: removed, validIids: st.players[aIdx].bench.map(b => b.iid) },
   });
 });
 // resolver step 2: 把暫存能量附到選中的 attacker 備戰

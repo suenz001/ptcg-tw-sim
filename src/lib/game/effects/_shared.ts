@@ -1586,17 +1586,19 @@ export function returnHandToDeck(state: GameState, idx: 0 | 1): GameState {
  *   把防守方【手持循環扇】在傷害結算當下開好的 picker 蓋掉。
  *   守衛：`scripts/test-v6211-pending-clobber-and-printing-gap.mjs`（C 段靜態掃描）。
  *
- * ⚠⚠ **已知與官方裁定相反、尚未處理的一件事（v6.211 查證，等站長裁定）**：
+ * ⭐⭐⭐ **v6.215 已修正一半（站長 2026-08-22 裁定）**：
  *   `PTCG RULES/PTCG_RULES.md` L1530-1531 §17.22.A 逐字：
  *     Q:「幸運頭盔」抽卡 與 招式「脅迫獠牙」丟手牌，何者先執行？
  *     A: 先因招式「脅迫獠牙」的效果將自己的手牌丟棄。／之後，因寶可夢道具卡「幸運頭盔」的效果從牌庫抽卡。
  *   （L2916 另證：「會在招式造成傷害後才執行寶可夢道具卡『幸運頭盔』的效果處理」。）
  *   ⇒ 正確順序是 **招式效果 → 道具「受到傷害時」效果**。
- *   但 engine 的 ATTACK 流程是 TOOL_ON_DAMAGED 先、ATTACK_POST 後，於是排隊順序**剛好相反**。
- *   這是 v4.933 起的既有行為（幻影奇襲 + 手持循環扇），v6.211 只是把 6 張漏網的卡納入同一條隊伍。
- *   要真的修正必須動 engine 的 hook 順序（凸凸頭盔反傷可能 KO 攻擊方 → 不能單純搬到 KO 結算之後），
- *   **不要**只把 ATTACK_POST 的 pending 插到隊首 —— 那會讓「有 picker 的效果」與「沒 picker 的效果」
- *   走兩種順序，比現在更難推理。
+ *   v4.933 ~ v6.214 的 engine ATTACK 流程是 TOOL_ON_DAMAGED 先、ATTACK_POST 後，排隊順序**剛好相反**。
+ *   v6.215 起，`TOOL_FIRE_AFTER_ATTACK_EFFECT`（幸運頭盔／逆境保險／手持循環扇）名單內的道具
+ *   由 engine 延後到 ATTACK_POST 之後才觸發 ⇒ 這三張的排隊順序已與官方一致。
+ *   ⚠ **反傷型道具（凸凸頭盔／奢華炸彈／豪邁炸彈／龐克頭盔）與 火箭隊的催眠裝置 仍是舊順序**
+ *   —— 它們會牽動昏厥判定／獎賞卡／補位／雙 KO，站長裁定暫緩。
+ *   ⚠ 修法是**搬移觸發點**，不是把 ATTACK_POST 的 pending 插到隊首 —— 後者會讓「有 picker 的效果」
+ *   與「沒 picker 的效果」走兩種順序，比原狀更難推理。
  */
 export function withPending(state: GameState, sel: PendingSelection): GameState {
   // v4.933：若已有 pending 待解（同一 engine action 內 TOOL_ON_DAMAGED + ATTACK_POST
@@ -1612,6 +1614,32 @@ export function withPending(state: GameState, sel: PendingSelection): GameState 
   }
   return { ...state, pendingSelection: sel };
 }
+
+/**
+ * ⭐⭐⭐ v6.215：**從 `pendingChainQueue` 取出時重算 picker 的 params**。
+ *
+ * 背景：`withPending` 在已經有 pending 時把新的一筆排到隊尾，但那一筆的 `params`
+ * （候選清單 / options / validIids）是**排隊當下**就算好的。只要排在它前面的
+ * picker 其 resolver 動到了同一批資源，後面這一筆浮上來時就是**過時的清單**
+ * ——玩家會看到已經不存在的選項，選下去只會得到「選擇無效」。
+ *
+ * v6.214 以前不會遇到：那時「受到傷害時」的道具永遠**第一個**開 picker。
+ * v6.215 把三張道具延後到 ATTACK_POST 之後，於是招式自己的 picker 反而排在前面
+ * （官方序），這個時間差才第一次出現。實例：
+ *   土地雲｜螺旋關節「選擇1個這隻寶可夢身上附加的能量，放回手牌。」
+ *   × 手持循環扇 —— 被放回手牌的那顆仍列在扇子的候選裡。
+ *
+ * 用法：key = `effectKey`；回傳 `sel: null` 代表「現在已經沒有可選對象」⇒ 整筆丟掉、
+ * 換下一筆（可順便在 `state` 上補一行 log 說明為什麼取消）。
+ * ⚠ 沒登記的 effectKey 完全不受影響（engine 端有 `if (!refresh)` 短路）。
+ * ⚠ refresher **只准改 `params` 裡的候選欄位**；`type` / `effectKey` / `minCount` / `maxCount` /
+ *   `actorIdx` / `sourcePlayerIdx` 一律照抄 —— 那些是「這是哪一個 picker」的身分。
+ *   （token 不必自己維護：`stampPendingToken` 在每次 pop 時本來就會重新蓋章。）
+ */
+export type PendingRefreshOnPopFn = (
+  state: GameState, sel: PendingSelection, pool: Map<string, Card>,
+) => { state: GameState; sel: PendingSelection | null };
+export const PENDING_REFRESH_ON_POP = new Map<string, PendingRefreshOnPopFn>();
 
 // v5.496：牌庫搜尋型「無符合卡」的統一處理 — 仍開 deck-search 檢視 picker 讓玩家看過整副牌庫 + 重洗。
 //   依 v5.424 規則：牌庫=未知資訊→可【不選】；只要牌庫非空就開 picker，不直接略過（符合「搜尋牌庫」

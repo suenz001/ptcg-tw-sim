@@ -19,6 +19,14 @@
 //   ——**直接覆寫**，繞過 `withPending` 的 `pendingChainQueue` 排隊機制。
 //   結果：道具的 log 已經印出去了，picker 卻消失、效果從未發生＝**假 log**。
 //
+// ⭐⭐ v6.215 更新：官方處理順序是「招式效果 → 受到傷害時的道具效果」
+//   （PTCG RULES §17.22.A L1530-1531 幸運頭盔 vs 脅迫獠牙）。engine 已把
+//   幸運頭盔／逆境保險／手持循環扇 延後到 ATTACK_POST 之後才觸發，
+//   於是 A 段的**排隊順序反過來**了：現在 pendingSelection = 招式自己的 picker、
+//   手持循環扇排在 pendingChainQueue。
+//   ⚠ 本守衛要防的東西沒變：**兩個 picker 都必須存在，且兩邊的效果都要真的發生**
+//   （v6.211 的 bug 是「道具 log 印了、picker 卻被蓋掉」＝假 log）。
+//
 // 三段：
 //   A) 行為端重現＋修復驗證（完整 ATTACK → RESOLVE_SELECTION 鏈，斷言到「盤面真的變了」，
 //      不是只斷言「有呼叫某函式」）。HEAD 時 A 段全紅。
@@ -99,11 +107,11 @@ T('⭐⭐⭐ 君主蛇ex｜青草命令：手持循環扇的 picker 必須還在
   const { st } = buildFanBoard(serp, 4);
   const s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
   ok(logsOf(s).some(m => m.includes('手持循環扇')), '手持循環扇連 log 都沒出現 —— 盤面沒佈對');
-  ok(s.pendingSelection?.effectKey === 'cycle-fan-step1-pick-energy',
-    'pendingSelection 被蓋掉了：現在是 ' + s.pendingSelection?.effectKey
-    + '（＝玩家看到 log 卻沒有 picker，效果從未發生）');
-  ok(qOf(s).includes('wave9-take-any-from-deck'),
-    '青草命令自己的 picker 沒有排進 pendingChainQueue：' + JSON.stringify(qOf(s)));
+  // v6.215 官方序：招式效果（青草命令）先、道具（手持循環扇）後。
+  ok(s.pendingSelection?.effectKey === 'wave9-take-any-from-deck',
+    'pendingSelection 應該是招式自己的 picker（官方序先跑），現在是 ' + s.pendingSelection?.effectKey);
+  ok(qOf(s).includes('cycle-fan-step1-pick-energy'),
+    '手持循環扇的 picker 沒有排進 pendingChainQueue（＝被蓋掉，只剩假 log）：' + JSON.stringify(qOf(s)));
 });
 
 T('⭐⭐⭐ 青草命令：兩個 picker 全解完後，**盤面真的變了**（能量移動 ＋ 手牌加卡）', () => {
@@ -111,7 +119,21 @@ T('⭐⭐⭐ 青草命令：兩個 picker 全解完後，**盤面真的變了**�
   const ai = serp.attacks.findIndex(x => x.name === '青草命令');
   const { st, myBench } = buildFanBoard(serp, 4);
   let s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
-  s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: ['0'], actorIdx: 1 }, POOL);
+  // v6.215 官方序：先解招式自己的 picker（青草命令加手牌），再解道具的。
+  ok(s.pendingSelection?.effectKey === 'wave9-take-any-from-deck',
+    '第一個 picker 應是青草命令：' + s.pendingSelection?.effectKey);
+  const before = s.players[0].hand.length;
+  const pick = s.players[0].deck.slice(0, 2).map(c => c.iid);
+  s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: pick, actorIdx: 0 }, POOL);
+  ok(s.players[0].hand.length === before + 2,
+    '青草命令加手牌沒發生：' + before + ' → ' + s.players[0].hand.length);
+  ok(s.pendingSelection?.effectKey === 'cycle-fan-step1-pick-energy',
+    '排隊中的手持循環扇 picker 沒有接上來：' + s.pendingSelection?.effectKey);
+  // v6.215：option id 改用「能量 iid」（原本是陣列索引，招式自丟能量時會位移）。
+  const fanOpt = s.pendingSelection.params.options[0].id;
+  ok(s.players[0].active.energyAttached.some(e => e.iid === fanOpt),
+    '手持循環扇的候選 id 不是攻擊方身上的能量 iid：' + fanOpt);
+  s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: [fanOpt], actorIdx: 1 }, POOL);
   ok(s.pendingSelection?.effectKey === 'cycle-fan-step2-place-energy',
     '手持循環扇第 2 段沒開：' + s.pendingSelection?.effectKey);
   s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: [myBench.iid], actorIdx: 1 }, POOL);
@@ -119,13 +141,6 @@ T('⭐⭐⭐ 青草命令：兩個 picker 全解完後，**盤面真的變了**�
     '攻擊方戰鬥位能量沒被拿走（' + s.players[0].active.energyAttached.length + '，期望 3）');
   ok(s.players[0].bench[0].energyAttached.length === 1,
     '能量沒改附到攻擊方備戰（' + s.players[0].bench[0].energyAttached.length + '，期望 1）＝效果沒發生');
-  ok(s.pendingSelection?.effectKey === 'wave9-take-any-from-deck',
-    '排隊中的青草命令 picker 沒有接上來：' + s.pendingSelection?.effectKey);
-  const before = s.players[0].hand.length;
-  const pick = s.players[0].deck.slice(0, 2).map(c => c.iid);
-  s = applyAction(s, { type: 'RESOLVE_SELECTION', selectedIids: pick, actorIdx: 0 }, POOL);
-  ok(s.players[0].hand.length === before + 2,
-    '青草命令加手牌沒發生：' + before + ' → ' + s.players[0].hand.length);
   ok(!s.pendingSelection, '流程結束後還留著 pending：' + s.pendingSelection?.effectKey);
 });
 
@@ -136,10 +151,11 @@ T('⭐⭐ 赫普的蒼響ex｜剎那斬（snipeOneBenchPost 共用 factory）：
   const { st } = buildFanBoard(zac, zac.attacks[ai].cost.length);
   const s = applyAction(st, { type: 'ATTACK', attackIndex: ai, actorIdx: 0 }, POOL);
   ok(logsOf(s).some(m => m.includes('手持循環扇')), '手持循環扇沒觸發 —— 盤面沒佈對');
-  ok(s.pendingSelection?.effectKey === 'cycle-fan-step1-pick-energy',
-    'pendingSelection 被剎那斬蓋掉了：' + s.pendingSelection?.effectKey);
-  ok(qOf(s).includes('wave3a-snipe-bench'),
-    '剎那斬的狙擊 picker 沒排進 queue：' + JSON.stringify(qOf(s)));
+  // v6.215 官方序：招式效果（剎那斬狙擊）先、道具後。
+  ok(s.pendingSelection?.effectKey === 'wave3a-snipe-bench',
+    'pendingSelection 應是剎那斬的狙擊 picker：' + s.pendingSelection?.effectKey);
+  ok(qOf(s).includes('cycle-fan-step1-pick-energy'),
+    '手持循環扇的 picker 被剎那斬蓋掉了（只剩假 log）：' + JSON.stringify(qOf(s)));
 });
 
 console.log('B) 正對照：沒有防守方道具時，原本的行為完全不變');

@@ -31,6 +31,8 @@ import {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
+  TOOL_FIRE_AFTER_ATTACK_EFFECT,   // v6.215 官方序：招式效果 → 道具（延後觸發名單）
+  PENDING_REFRESH_ON_POP,          // v6.215 佇列取出時重算 picker params
   hasFlowerVeil,
   // v5.186：抵抗之幕 attack-time snapshot 仿 v3.892 花之帷幔 pattern
   hasRocketVeil,
@@ -3315,11 +3317,26 @@ function handlePlaying(
     //   觸發 case：同一 ATTACK 內 TOOL_ON_DAMAGED + ATTACK_POST 各自開 pending，
     //   withPending 將後者排隊；玩家解完前者後接續處理後者。
     if (!newState.pendingSelection && newState.pendingChainQueue && newState.pendingChainQueue.length > 0) {
-      const [nextSel, ...restQueue] = newState.pendingChainQueue;
+      // ⭐ v6.215：排隊中的 picker，其 params（候選清單）是**排隊當下**算好的。
+      //   官方序把「受到傷害時」的道具排到招式效果之後，於是招式自己的 resolver 有機會
+      //   在道具的 picker 浮上檯面之前動到同一批資源（例：土地雲｜螺旋關節把能量放回手牌
+      //   × 手持循環扇）⇒ 取出時先重算一次。回傳 sel=null 代表已無對象 ⇒ 丟掉換下一筆。
+      //   ⚠ 沒登記 refresher 的 effectKey 走 `?? { state: newState, sel: cand }`，行為完全不變。
+      let _q = newState.pendingChainQueue;
+      let _picked: PendingSelection | null = null;
+      while (_q.length > 0) {
+        const [cand, ...rest] = _q;
+        _q = rest;
+        const _refresh = PENDING_REFRESH_ON_POP.get(cand.effectKey);
+        if (!_refresh) { _picked = cand; break; }
+        const _r = _refresh(newState, cand, pool);
+        newState = _r.state;
+        if (_r.sel) { _picked = _r.sel; break; }
+      }
       newState = {
         ...newState,
-        pendingSelection: nextSel,
-        pendingChainQueue: restQueue.length > 0 ? restQueue : undefined,
+        pendingSelection: _picked,
+        pendingChainQueue: _q.length > 0 ? _q : undefined,
       };
     }
     // v5.678：picker 收尾的招式自身丟能量 → 在 picker 鏈全部解完後補跑回力鏢/燃料火 revive（單一 helper）。
@@ -5841,6 +5858,22 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   閉包回傳：GameState=終局（直接回傳該 state）/ null=未終局。
     let wouldBeKO = false;
     let preventedKO = false;
+
+    // ⭐⭐⭐ v6.215 官方處理順序：**招式效果先於「受到傷害時」道具效果**。
+    //   PTCG RULES §17.22.A L1530-1531 逐字：
+    //     Q:「幸運頭盔」抽卡 與 招式「脅迫獠牙」丟手牌，何者先執行？
+    //     A: 先因招式「脅迫獠牙」的效果將自己的手牌丟棄。／
+    //        之後，因寶可夢道具卡「幸運頭盔」的效果從牌庫抽卡。
+    //   （L2916 另證：「會在招式造成傷害後才執行寶可夢道具卡『幸運頭盔』的效果處理」。）
+    //   本管線原本 TOOL_ON_DAMAGED / TOOL_ON_KO 一律先跑、ATTACK_POST 後跑 ⇒ 與官方相反。
+    //   ⇒ TOOL_FIRE_AFTER_ATTACK_EFFECT 名單內的道具改成先排進 _deferredToolFires，
+    //     在 ATTACK_POST（含免疫還原 sweep）跑完後才觸發。
+    //   ⚠ 名單刻意只收「不對攻擊方造成傷害、不牽動昏厥判定」的道具，故此處延後
+    //     不影響下方「反傷把攻擊方打死」的即時 KO 檢查。
+    const _deferredToolFires: Array<{ name: string; run: (s: GameState) => GameState }> = [];
+    //   使用招式的寶可夢在**攻擊當下**的 iid（自身互換型招式解完後 active 會換人）。
+    const _attackerIidSnapshot = attacker.active?.iid;
+
     const resolveKnockouts = (): GameState | null => {
     // 擊倒判定
     wouldBeKO = baseDamage > 0 && defenderHP > 0 && newDamage >= defenderHP;
@@ -6159,7 +6192,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       if (!toolsJammed) {
         for (const c of onKOToolNames) {
           const fn = TOOL_ON_KO.get(c.name);
-          if (fn) newState = fn(newState, dIdx, aIdx, pool, updatedActive);
+          if (!fn) continue;
+          // v6.215：官方序名單內的道具延後到 ATTACK_POST 之後才跑（KO 分支同樣要處理）。
+          if (TOOL_FIRE_AFTER_ATTACK_EFFECT.has(c.name)) {
+            _deferredToolFires.push({ name: c.name,
+              run: (s) => fn(s, dIdx, aIdx, pool, updatedActive, _attackerIidSnapshot) });
+            continue;
+          }
+          newState = fn(newState, dIdx, aIdx, pool, updatedActive, _attackerIidSnapshot);
         }
       }
 
@@ -6312,7 +6352,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           const tool = pool.get(t.cardId);
           if (!tool) continue;
           const fn = TOOL_ON_DAMAGED.get(tool.name);
-          if (fn) newState = fn(newState, dIdx, aIdx, baseDamage, pool);
+          if (!fn) continue;
+          // v6.215：官方序名單內的道具延後到 ATTACK_POST 之後才跑（非 KO 分支）。
+          if (TOOL_FIRE_AFTER_ATTACK_EFFECT.has(tool.name)) {
+            _deferredToolFires.push({ name: tool.name,
+              run: (s) => fn(s, dIdx, aIdx, baseDamage, pool, _attackerIidSnapshot) });
+            continue;
+          }
+          newState = fn(newState, dIdx, aIdx, baseDamage, pool, _attackerIidSnapshot);
         }
       }
       // v2.175 特殊能量 ON_DAMAGED（扣殺能量等）— iterate energyAttached
@@ -6530,6 +6577,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           }
         }
       }
+    }
+    // ⭐⭐⭐ v6.215：延後型「受到傷害時」道具在此觸發 —— 官方序 招式效果 → 道具。
+    //   位置：ATTACK_POST + 免疫還原 sweep 之後、turnPhase 收尾之前。
+    //   ⚠ KO 與非 KO 兩個分支都會把名單內的道具排進 _deferredToolFires，這裡統一跑。
+    //   ⚠ 若 ATTACK_POST 已經開了 pendingSelection，這裡的 withPending 會自動排到
+    //     pendingChainQueue 隊尾 —— 正是官方序（招式效果的 picker 先解、道具的後解）。
+    for (const _dt of _deferredToolFires) {
+      newState = _dt.run(newState);
     }
     // v4.991: ATTACK 流程結尾統一 set turnPhase='end' — 修玩家 case 1 卡死。
     //   之前 KO 分支跳過 turnPhase 設定（line 4751 只有「沒 KO」分支 set），

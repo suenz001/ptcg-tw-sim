@@ -94,6 +94,7 @@ import {
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_ON_KO_MIRRORED_FROM_DAMAGED,  // v6.120 防同一次傷害觸發兩次
+  TOOL_FIRE_AFTER_ATTACK_EFFECT,     // v6.215 官方序：招式效果 → 道具（engine 延後觸發名單）
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
 } from './effects/cards/tools';
@@ -101,6 +102,7 @@ export {
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
+  TOOL_FIRE_AFTER_ATTACK_EFFECT,     // v6.215
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
 };
@@ -116,6 +118,7 @@ import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 // v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
 export { PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/_shared';
+export { PENDING_REFRESH_ON_POP } from './effects/_shared';  // v6.215 佇列取出時重算 picker params
 
 // ══════════════════════════════════════════════════════════════════════════════
 // v6.066 未實裝訓練家卡 fail-closed（Wilson 裁定）
@@ -8022,7 +8025,10 @@ export function fireDefenderOnDamaged(
       const tool = pool.get(t.cardId);
       if (!tool) continue;
       const fn = TOOL_ON_DAMAGED.get(tool.name);
-      if (fn) s = fn(s, dIdx, aIdx, baseDamage, pool);
+      // v6.215：傳攻擊方 iid 快照（手持循環扇用它定位「使用招式的寶可夢」）。
+      //   本 helper 是從 ATTACK_POST 內被呼叫的（狙擊／多目標／延後傷害），
+      //   本來就已經在招式效果之後 ⇒ 不需要再延後，只需要目標定位正確。
+      if (fn) s = fn(s, dIdx, aIdx, baseDamage, pool, s.players[aIdx].active?.iid);
     }
   }
   // 2. SPECIAL_ENERGY_ON_DAMAGED（扣殺能量）
@@ -8190,7 +8196,7 @@ export function fireDefenderOnKO(
       //   （不跑 on-damaged）仍然要靠這條鏡射才會觸發。
       if (onDamagedAlreadyFired && TOOL_ON_KO_MIRRORED_FROM_DAMAGED.has(tool.name)) continue;
       const fn = TOOL_ON_KO.get(tool.name);
-      if (fn) s = fn(s, dIdx, aIdx, pool, koInst);
+      if (fn) s = fn(s, dIdx, aIdx, pool, koInst, s.players[aIdx].active?.iid);  // v6.215 攻擊方 iid 快照
     }
   }
   if (koByAttackDamage) {

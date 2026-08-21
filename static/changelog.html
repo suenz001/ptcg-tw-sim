@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.215</span> <b>招式效果現在會先於「受到傷害時」的道具結算</b><br>【幸運頭盔】【逆境保險】【手持循環扇】原本搶在招式效果之前發動，現改為招式效果處理完才觸發，抽到的牌與能搬的能量因此會不同。</summary>
+        <div class="log-body">依官方裁定，寶可夢道具「受到傷害時」的效果要在招式的效果之後才處理。例如對手使出丟棄牌庫上方卡片的招式時，【幸運頭盔】改為那些卡被丟棄之後才抽 2 張；對手使出會先丟棄自己全部能量的招式時，【手持循環扇】就沒有能量可以改附。若招式會讓使用者與備戰互換，可改附的能量仍然是使用招式的那一隻身上的，不會變成換上場的那一隻。反擊型道具（【凸凸頭盔】【奢華炸彈】【豪邁炸彈】【龐克頭盔】）與【火箭隊的催眠裝置】的時機維持不變。</div>
+      </details>
+      <details>
         <summary><span class="ver-badge">v6.214</span> <b>線上對戰不再突然跳回早就結束的對局；賽事未進場的等待縮短</b><br>回到大廳後偶爾會被拉進一場早就打完的對局，現已不再自動採用；重新整理想看剛結束那一局的結果仍然看得到。賽事未進場的等待也由 5 分鐘縮為 3 分鐘。</summary>
         <div class="log-body">休閒線上對戰在畫面上沒有任何對局時（剛進房間、剛回到大廳、或剛重新整理），原本會無條件採用房間裡留著的最後一份盤面——那份盤面可能是好幾天前就結束的對局，於是畫面突然跳進一場陌生的終局。這一版起，已經結束的對局不再被自動採用，畫面會留在大廳；正在進行中的對局不受影響，斷線、換裝置或重新整理後照樣接得回去，而剛打完那一局若是在同一個分頁重新整理，結果畫面也照樣看得到。賽事方面，本輪休息倒數結束後仍未進場的容許時間，由 5 分鐘縮短為 3 分鐘——最後一場沒有人來的時候，整輪可以早兩分鐘結束、下一輪早兩分鐘開打。大廳上「請於幾分幾秒內進場」的倒數與這個判定用的是同一個時間，不會出現畫面還在倒數卻已判負的情況；可進場時的推播通知也維持不變。</div>
       </details>
@@ -186,16 +190,7 @@
         <summary><span class="ver-badge">v6.148</span> <b>錦標賽對戰：雙方交手期間，對手的動作會更快出現在畫面上</b><br>等待對手行動且雙方正在交手期間，畫面更新頻率提高約三成，長考或掛機時自動降回原本的頻率。網路不順時也不會再重複堆疊請求。</summary>
         <div class="log-body">觀戰畫面同步適用。對戰結束後的更新頻率維持上一版的設定。</div>
       </details>
-      <details>
-        <summary><span class="ver-badge">v6.147</span> <b>錦標賽對戰：更多動作點下去立刻反應，送出中會顯示提示</b><br>放到備戰、撤退、放化石改為點下去立即更新畫面，伺服器確認後自動校正。動作送出期間按鈕會變灰並顯示「送出中」，不會再發生連點卻沒有任何回饋的情況。</summary>
-        <div class="log-body">進化與訓練家卡仍須等待伺服器回應。若送出失敗，畫面會自動還原並顯示提示。手機直式版面同步適用。</div>
-      </details>
-      <details>
-        <summary><span class="ver-badge">v6.145</span> <b>特性被消除時，減免招式能量的效果也會跟著失效</b><br>【狙射樹梟ex】「狙擊手之眼」等九個會改寫招式所需能量的特性，先前在特性被消除的狀態下仍然照常減費或加費，現已一併依特性是否有效判定。</summary>
-        <div class="log-body">【陳舊的根狀化石】「原始根」增加能量需求、以及【黏美龍】「黏滑失足」的撤退擲幣也一併修正。同時修正化石類卡片的判定：化石放到場上是【無】屬性的【基礎】寶可夢，因此【傳說的熔岩洞】不會消除化石的特性，【火箭隊的監視塔】則會消除。</div>
-      </details>
-
-      <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
+<p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →
         <a href="__BASE__/changelog-archive.html" target="_blank" rel="noopener" style="color:#2a5fa8;font-weight:600;">查看完整更新歷史</a>
       </p>

@@ -1,5 +1,116 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.215 官方序：招式效果先於「受到傷害時」的寶可夢道具效果（幸運頭盔／逆境保險／手持循環扇）
+
+BASE = `7144cbcf89b95d39b536b5e95b87277294fd73cb`（v6.214）。玩家有感（結算順序改變）⇒ 首頁 changelog 放一則。
+
+### 官方依據（`PTCG RULES/PTCG_RULES.md` 逐字）
+
+- **§17.22.A L1530-1531**：
+  Q:「若對手的阿柏怪ex對附有寶可夢道具卡『幸運頭盔』的自己的戰鬥寶可夢使出了招式『脅迫獠牙』，
+  那麼因寶可夢道具卡『幸運頭盔』的效果從牌庫抽卡，和因招式『脅迫獠牙』的效果將自己的手牌丟棄，何者先執行？」
+  A:「先因招式『脅迫獠牙』的效果將自己的手牌丟棄。／之後，因寶可夢道具卡『幸運頭盔』的效果從牌庫抽卡。」
+- **§18.D L2916**：「會在招式造成傷害後才執行寶可夢道具卡『幸運頭盔』的效果處理」。
+- 同方向的跨個案判例：§17.2.A L606-607（學習裝置：先丟棄能量）、
+  §17.2.A L604-605（特性反擊針：先恢復30點HP）、§16.1 L549（先處理發動方的招式效果）。
+- ⚠ 官方**沒有**寫成通則條文，上述是跨個案一致的方向；站長 2026-08-22 裁定接受為實作準則。
+
+### 引擎原狀
+
+`engine.ts` ATTACK 主流程行內硬編：KO 分支 `TOOL_ON_KO` → ／ 非 KO 分支 `TOOL_ON_DAMAGED`
+→ `SPECIAL_ENERGY_ON_DAMAGED` → 反傷 KO 攻擊方檢查 → 龐克頭盔 → **`ATTACK_POST`（招式效果）**
+→ `PASSIVE_RETALIATION` / `PASSIVE_ON_DAMAGED` → `sanityKOSweep`。
+⇒ 道具在招式效果**之前**（與官方相反），特性反擊卻在**之後**（符合官方）——引擎自己不一致。
+
+### 這一版做了什麼
+
+新增 `TOOL_FIRE_AFTER_ATTACK_EFFECT`（`effects/cards/tools.ts`）＝**延後觸發名單**：
+幸運頭盔／逆境保險／手持循環扇。engine 的 KO 與非 KO **兩個分支**都改成：名單內的道具
+不當場跑，改推進 `_deferredToolFires`，等 `ATTACK_POST` ＋ 免疫還原 sweep 跑完之後才統一觸發。
+
+- 幸運頭盔／逆境保險：純抽牌，不碰攻擊方、不開 picker ⇒ 不影響昏厥時序。
+- 手持循環扇：會開 picker、會動攻擊方的能量 ⇒ 見下方「自我互換」。
+- ⚠ **反傷型（凸凸頭盔／奢華炸彈／豪邁炸彈／龐克頭盔）與火箭隊的催眠裝置刻意不動** ——
+  它們牽動昏厥判定／獎賞卡／補位／雙 KO，站長裁定暫緩（原批 3）。
+
+### ⚠ 手持循環扇：目標必須用「攻擊當下的 iid 快照」
+
+`selfSwapPost`（自身與備戰互換）**不是同步互換**，它在 ATTACK_POST 開一個 `do-switch`
+picker。延後之後，扇子的 pending 會排在 `do-switch` 之後 ⇒ 玩家**先**解完互換，
+此刻 `players[aIdx].active` 已經是換上場的那一隻。原 resolver 讀 `ap.active` ⇒ 打錯人。
+
+修法：
+1. `TOOL_ON_DAMAGED` / `TOOL_ON_KO` 的簽名多收一個可選 `attackerIid`；engine 傳攻擊當下的 iid。
+2. 新增 `findAttackerInstance(state, aIdx, attackerIid)` —— 先找 active、再找 bench；找不到（已離場）就不發動。
+3. step1 的 option id 由**陣列索引**改成**能量 iid**（索引會因招式自丟能量而位移），
+   pending `params.attackerIid` 帶著快照；step2 不變。
+   保留一條窄相容：只有在 `params.attackerIid === undefined`（＝ v6.214 以前留下的 pending）
+   時才用索引解讀。
+4. `effects.ts` 的 `fireDefenderOnDamaged` / `fireDefenderOnKO`（狙擊／多目標／延後傷害路徑）
+   也一併把攻擊方 iid 傳下去。⚠ **那條路徑不需要延後** —— 它本來就是從 ATTACK_POST 內被呼叫的。
+
+### 實測差異（`scripts/test-v6215-tool-fire-after-attack-effect.mjs`）
+
+| 情境 | v6.214 | v6.215 |
+|---|---|---|
+| 三首惡龍ex｜粉碎頭（丟對手牌庫頂 3）× 幸運頭盔，牌庫 A~E | 抽 A,B；丟 C,D,E | 丟 A,B,C；抽 D,E |
+| 同上但一擊 KO（走 KO 分支） | 抽 A,B | 丟 A,B,C；抽 D,E |
+| 酷豹｜拍落（丟對手手牌 1 張）× 逆境保險，對手手牌 0 張 | 抽 3 → 被丟 1 ⇒ 剩 2 | 手牌空丟不到 → 抽 3 ⇒ 剩 3 |
+| 蒼炎刃鬼ex｜紫水晶激怒（自丟全部能量）× 手持循環扇 | 先開 picker 搬走 1 顆（等於幫攻擊方保住一顆） | 沒有能量可搬，不開 picker |
+| 鍬農炮蟲｜伏特替換（自我互換）× 手持循環扇 | 扇子先解、互換後解 | 互換先解、扇子後解（目標仍是使用招式的那一隻） |
+
+正對照：同一盤面**不帶這些道具**時，牌庫／手牌／棄牌／傷害／pending 全部與 v6.214 相同；
+凸凸頭盔（不在名單內）仍在招式效果**之前**反傷 20。
+
+### ⚠ Fable 5 審查抓到的連帶（已修）：排隊中的 picker 候選會過時
+
+`withPending` 排隊的那一筆，其 `params`（候選清單）是**排隊當下**算好的。
+v6.214 以前不會遇到，因為道具永遠第一個開 picker；v6.215 把道具排到招式效果之後，
+招式自己的 resolver 就有機會在道具的 picker 浮上檯面之前動到同一批資源。
+
+實證（我自己重跑確認）：土地雲｜螺旋關節「選擇1個這隻寶可夢身上附加的能量，放回手牌。」
+× 手持循環扇 —— 被放回手牌的那顆仍列在扇子的候選裡，選下去只得到「選擇無效，效果取消」。
+
+修法：新增中央 `PENDING_REFRESH_ON_POP`（`_shared.ts`）——
+engine 從 `pendingChainQueue` 取出 picker 前，若該 `effectKey` 有登記 refresher 就重算一次；
+回傳 `sel: null` 代表已無對象 ⇒ 整筆丟掉、換下一筆（並補一行取消 log）。
+沒登記的 effectKey 走 `if (!_refresh) { _picked = cand; break; }`，行為完全不變
+（`test-v6215` L 段是這條分支的正對照）。
+
+### ⚠ opus 審查抓到的假綠（已修）
+
+- `findAttackerInstance` 原本「沒帶快照就退回讀 active」＝ fail-open，呼叫端忘了傳會**測不出來**。
+  改成 **fail-closed**（沒快照就不發動）。4 個呼叫端（engine KO/非 KO、`fireDefenderOnDamaged`／
+  `fireDefenderOnKO`）現在**各自都有專屬的破壞測試會紅**。舊版留下的 pending 由 resolver／refresher
+  端顯式補當下 active（相容路徑寫在呼叫點，不藏在 helper 裡）。
+- 原本 refresher 有一條「內容沒變就回傳原物件（省一次換 token）」的短路 —— 實測
+  `stampPendingToken` 每次 pop 本來就會重新蓋章，那條短路**沒有任何可觀察效果**（＝測不到的死分支），
+  已移除。改為斷言「重算只准動 `params.options`，身分欄位逐欄不變」。
+- H 段的正對照原本是對自己造的 Set 做恆真斷言。改成把判準抽成 `judge()` 函式，
+  真名單與違規樣本走**同一份**判準；且不再用 `for (const n of set)` 跑斷言
+  （export 消失時斷言數會縮水＝分母污染）。
+- 順手還債：`cycle-fan-step2-place-energy`（`opp-bench-choose`, minCount 1）原本沒宣告
+  `params.validIids`，只靠 v6.176 兜底。補宣告後 `test-v6175` F 段棘輪維持 55。
+
+### 既有守衛的同步更新
+
+`scripts/test-v6211-pending-clobber-and-printing-gap.mjs` 的 A 段原本斷言
+「pendingSelection ＝ 手持循環扇、queue ＝ 招式自己的 picker」——那正是舊順序。
+已改成新順序（招式 picker 先、扇子排 queue），**要防的東西沒變**：兩個 picker 都要在、
+兩邊效果都要真的發生（v6.211 的 bug 是道具 log 印了但 picker 被蓋掉＝假 log）。
+第 2 案的 `selectedIids: ['0']` 也改成讀 `params.options[0].id`（現在是能量 iid）。
+
+### ⚠ 已知、本版**不處理**（列給站長）
+
+1. **逆境保險在 KO 分支從來不觸發**：KO 分支跑 `TOOL_ON_KO` 時 `defenderState.active` 早已設為
+   `null`（engine.ts KO 分支），而該卡的 fn 第一行就是 `if (!dp.active || !ap.active) return state`。
+   延後之後 active 仍是 null ⇒ **行為與 v6.214 完全相同**，本版沒有改動它。
+   依 PTCG「受到傷害時」含 KO 情境，這應是既有漏洞，但屬另一個題目。
+2. **手持循環扇在自我互換之後，攻擊方的備戰區包含「使用招式的那一隻」**。卡面只寫
+   「改附於對手的備戰寶可夢身上」，沒有寫「除這隻以外」⇒ 目前允許選它自己（等於原地不動）。
+3. **鍬農炮蟲｜伏特替換**卡面是「將這隻寶可夢與備戰區的【雷】寶可夢互換」，
+   實作走通用 `selfSwapPost`，**沒有【雷】屬性過濾**。與本版無關，但掃到了。
+
 ## v6.214 ①已結束的舊局不自動採納 ②未進場容許窗縮短（admin 可調）③建局時間改用伺服器時鐘（相容欄位）④診斷取樣率 1% → 10%
 
 BASE = `b0beb26dbfda4653ad3584dcd3d441e53df04852`（v6.213）。①②玩家有感 ⇒ 首頁 changelog 放一則；③④純內部。
