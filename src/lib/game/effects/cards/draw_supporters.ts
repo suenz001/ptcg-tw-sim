@@ -16,22 +16,22 @@ import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending,
   drawCards, discardHand, returnHandToDeck,
-  sameEvoName, shuffle,
+  shuffle,   // v6.213 sameEvoName 不再需要（2 階判定改走 stage2-index 的 per-pool 索引）
 } from '../_shared';
 import type { CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
+// ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
+import { isStage2ByEvoVariant } from '../../stage2-index';
 
 // 本地複製 engine.ts 的 isStage2PokemonCard 判定，避免 engine ↔ effects 循環 import。
 // 規則：evolvesFrom 存在，且該 evolvesFrom（Stage1）本身也有 evolvesFrom（指回 Basic）。
+// ⭐v6.213 改走 per-pool 索引（與 engine.ts 同一支 leaf helper）。判準逐字不變，只是不再
+//   對整個卡池線性掃描；「鳴依的勉勵」的 picker filter 會對每一張手牌各呼叫一次。
 function isStage2PokemonCardLocal(
   card: Card | undefined,
   pool: Map<string, Card>
 ): boolean {
-  if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-  for (const c of pool.values()) {
-    if (sameEvoName(c.name, card.evolvesFrom) && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
-  }
-  return false;
+  return isStage2ByEvoVariant(card, pool);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

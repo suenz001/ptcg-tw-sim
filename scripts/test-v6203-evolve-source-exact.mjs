@@ -272,8 +272,29 @@ const scanSameEvo=(files)=>{
 };
 const files=[...walk(join(ROOT,'src'))].map(p=>[relative(ROOT,p).split('\\').join('/'),readFileSync(p,'utf8')]);
 const evoSites=scanSameEvo(files);
-T('7a. 掃描器下限：sameEvoName 呼叫點掃到 ≥ 8 個（掃不到＝掃描器壞了）',()=>{
-  assert.ok(evoSites.length>=8,'只掃到 '+evoSites.length+' 個');
+const fileOf0=rel=>files.find(f=>f[0]===rel)?.[1]??'';
+// ⚠⚠ v6.213：呼叫點由 8 個變成 3 個 —— 那是**真的少了五個**，不是掃描器壞掉。
+//   engine.ts `isStage2PokemonCard`、draw_supporters.ts `isStage2PokemonCardLocal`、
+//   effects.ts ×3（勾魂眼｜動怒爪、神奇糖果的 regG 與 reg）原本各有一個
+//   `sameEvoName(X.name, Y.evolvesFrom)` 的**全卡池線性掃描**迴圈，v6.213 五支都改走
+//   `$lib/game/stage2-index` 的 per-pool 索引（判準逐字不變，有全卡池差分守衛）。
+//   ⚠⚠⚠ 調低這個下限本身是危險動作（「把門檻放寬到放行破壞」是最常見的假綠手法），
+//     所以底下釘一條 7a-2：那五處**必須**已經改走中央索引。若有人只是把 sameEvoName 的
+//     呼叫刪掉、卻沒接上索引，7a-2 會紅；而「線性掃描有沒有真的消失」另有
+//     scripts/test-v6213-stage2-index-memo.mjs 的全站掃描在管。
+T('7a. 掃描器下限：sameEvoName 呼叫點掃到 ≥ 3 個（掃不到＝掃描器壞了）',()=>{
+  assert.ok(evoSites.length>=3,'只掃到 '+evoSites.length+' 個');
+});
+T('7a-2. v6.213 少掉的那五個呼叫點是「改走中央索引」，不是被偷偷刪掉',()=>{
+  const eng=fileOf0('src/lib/game/engine.ts'), dsup=fileOf0('src/lib/game/effects/cards/draw_supporters.ts'),
+        eff=fileOf0('src/lib/game/effects.ts');
+  assert.ok(/isStage2ByEvoVariant\(card, pool\)/.test(eng),'engine 沒改走 stage2-index');
+  assert.ok(/from '\.\/stage2-index'/.test(eng),'engine 沒 import stage2-index');
+  assert.ok(/isStage2ByEvoVariant\(card, pool\)/.test(dsup),'draw_supporters 沒改走 stage2-index');
+  assert.ok(/from '\.\.\/\.\.\/stage2-index'/.test(dsup),'draw_supporters 沒 import stage2-index');
+  assert.ok(/from '\.\/stage2-index'/.test(eff),'effects.ts 沒 import stage2-index');
+  assert.strictEqual((eff.match(/isStage2ByEvoVariant\(/g)||[]).length,3,
+    'effects.ts 應有 3 處改走中央索引（勾魂眼＋神奇糖果 regG／reg）');
 });
 T('7b. ⭐sameEvoName 不得再被當「進化合法性」gate（第一參數必須是 X.name ＝ stage 分類用途）',()=>{
   const bad=evoSites.filter(s=>!s.ok).map(s=>`${s.rel} → sameEvoName(${s.first}, …)`);

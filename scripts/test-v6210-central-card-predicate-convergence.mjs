@@ -106,7 +106,11 @@ const scanEnergyDup = files => {
 const MEGA_EXEMPT = new Map(Object.entries({
   'src/lib/game/selection-filter.ts': '中央述詞 isMegaExCard 的定義本身',
   'src/lib/cards/evolutionChain.ts': '不是在判「是不是 Mega ex」，是把「超級」前綴**切掉**求進化鏈同源名（n.slice(2)）',
-  'src/lib/game/effects/_shared.ts': '同上：卡名去「超級」前綴（r.slice(2)），純字串處理',
+  // ⚠ v6.213：這一行原本掛在 src/lib/game/effects/_shared.ts。那支 normalize 是 `sameEvoName`
+  //   內的 local 函式，v6.213 把它**原封不動**搬到新的 leaf 檔 stage2-index.ts 成為單一來源
+  //   （2 階索引與 sameEvoName 必須用逐字相同的正規化才敢說「行為零變更」）。
+  //   ⇒ 檔名換了、理由一字未變；豁免仍然是 3 處（B4 的下限沒有被放寬）。
+  'src/lib/game/stage2-index.ts': '同上：卡名去「超級」前綴（r.slice(2)），純字串處理',
 }));
 const scanMegaDup = files => {
   const hits = [];

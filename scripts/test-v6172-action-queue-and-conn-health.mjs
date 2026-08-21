@@ -509,6 +509,11 @@ try {
       const T_API = 'https://x/api/tournament';
       const _pnow = () => Date.now();
       const _tRecordApiSegments = () => {};
+      // ⭐v6.213 tApi 多了一行「伺服器端處理時間」的量測呼叫（X-Srv-Ms）。
+      //   本節只驗連線健康錨點；srv 的行為由 test-v6213-perf-sample-and-srv-timing 守。
+      //   ⚠ 假的 fetch 回應沒有 headers ⇒ tApi 讀標頭那段會走進它自己的 try/catch，
+      //     這正好順便證明「拿不到標頭也不會影響對戰」。
+      const _tRecordSrvSample = () => {};
       // ⭐v6.179 tApi 多了「開一個 fetch 時間窗」的量測呼叫（回 null ＝ 這台機器不對齊）。
       //   本節只驗連線健康錨點，對齊行為由 test-v6179 守。
       const _tResWinOpen = () => null;

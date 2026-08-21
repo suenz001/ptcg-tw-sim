@@ -18,6 +18,8 @@ import type { Card } from '$lib/cards/types';
 import { CLEAR_ON_EXIT_FLAGS } from '../instance-flags';
 // v6.191 玳蘿：「超級進化寶可夢【ex】」中央述詞（selection-filter 只 import types，無循環）
 import { isMegaExCard } from '../selection-filter';
+// ⭐v6.213 sameEvoName 的名稱正規化唯一來源（stage2-index 是 leaf，只 import type，無循環）
+import { normalizeEvoVariantName } from '../stage2-index';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
   SpecialCondition,
@@ -978,13 +980,10 @@ export function sameEvoName(a: string | undefined, b: string | undefined): boole
   // v5.307: PTCG TW 規則 — 「超級XXXex」(Mega Evolution ex) 與對應「XXXex」/「XXX」 屬同一進化階變體,
   //   進化判定 + 同名比對應視為同名. 例: 「超級龍頭地鼠ex / 龍頭地鼠ex / 龍頭地鼠」都同 Stage1.
   //   strip 順序: 先 strip 'ex' suffix, 再 strip '超級' prefix.
-  const normalize = (s: string) => {
-    let r = s;
-    if (r.endsWith('ex')) r = r.slice(0, -2);
-    if (r.startsWith('超級')) r = r.slice(2);
-    return r;
-  };
-  return normalize(a) === normalize(b);
+  // ⭐v6.213 那支 local normalize 搬到 `$lib/game/stage2-index`（leaf，零 import）成為唯一來源 ——
+  //   2 階索引要用**逐字相同**的正規化才敢說「行為零變更」，兩份各寫一次就是漂移風險。
+  //   ⚠ 判定結果一字未變：normalize 本身就是冪等且對稱的，`a === b` 那條捷徑仍留著。
+  return normalizeEvoVariantName(a) === normalizeEvoVariantName(b);
 }
 
 /**

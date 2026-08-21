@@ -49,6 +49,8 @@
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import type { Card } from '$lib/cards/types';
+// ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
+import { isStage2ByPlainEx } from '../../stage2-index';
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3001G3W3Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -352,15 +354,14 @@ function hasAbilityOnBench(
 // ════════════════════════════════════════════════════════════════════════════
 
 /** 是否為 2 階進化寶可夢（evolvesFrom 指向的卡也有 evolvesFrom）。 */
+// ⭐⭐⭐v6.213 純效能：這一支是全站最熱的一點 —— 海兔獸｜黏著束縛的特性消除閘
+//   每個 action 平均呼叫 1.42 次，而原碼**對整個卡池（4935 張）線性掃描**，
+//   且兩行正規化（迴圈不變量 `a` 也在內）每一輪都重算 ⇒ 實測 634.6 µs/call、
+//   佔 engine+AI 總時間 52.7%。改走 per-pool 索引（$lib/game/stage2-index）。
+// ⚠ 判準**逐字不變**：`isStage2ByPlainEx` 用的就是原碼那套「只 strip 尾綴 ex 再 trim」，
+//   刻意**不**改用 engine 的 sameEvoName（那還會 strip「超級」前綴＝行為變更）。
 function isStage2(card: Card | undefined, pool: Map<string, Card>): boolean {
-  if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-  for (const c of pool.values()) {
-    // 簡化版 sameEvoName：直接比對名稱去 ex 後綴版（與 engine 同邏輯）
-    const a = (card.evolvesFrom ?? '').replace(/ex$/, '').trim();
-    const b = (c.name ?? '').replace(/ex$/, '').trim();
-    if (a === b && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
-  }
-  return false;
+  return isStage2ByPlainEx(card, pool);
 }
 
 // ════════════════════════════════════════════════════════════════════════════

@@ -183,12 +183,39 @@
   let _segDl: number[] = [];           // ③ res.text()：body 下載（**網路吞吐量**，不是主執行緒）
   let _segParse: number[] = [];        // ④ JSON.parse（**純主執行緒 CPU**）
   let _segTotal: number[] = [];        // ⑤ tApi 函式總耗時（①~④ + 等主執行緒空檔）
+  // ⭐⭐⭐v6.213【③ 伺服器端 per-request 處理時間】
+  //   `net`（送出 → 第一個位元組）把「隧道／CF 慢」與「Node 自己處理慢」**綁死**，分不開。
+  //   伺服器現在在每個 /api/tournament/* 回應帶 `X-Srv-Ms`（Express 進 handler → 送出 header
+  //   的純處理時間），這裡收下來 ⇒ `net - srv` 才是真正的「線路 + 隧道」。
+  //   ⚠ 舊伺服器沒有這個 header ⇒ 一筆都收不到 ⇒ `_sampleStats` 回 **null**，
+  //     絕不送一堆恆為 0 的欄位假裝有量到（與 longtask / seg 同一條紀律）。
+  let _segSrv: number[] = [];          // X-Srv-Ms（伺服器端處理時間，毫秒）
+  let _srvHdrN = 0;                    // 有帶 header 的成功往返數
+  let _srvHdrMiss = 0;                 // 沒帶 header 的成功往返數（＝伺服器還是舊版）
   let _adoptSamples: number[] = [];    // tAdopt 本身的同步執行時間
   let _paintSamples: number[] = [];    // tAdopt 開始 → 下一個 animation frame（重繪成本的代理指標）
   let _paintPending = false;           // 同時只掛一個 rAF —— 量測本身絕不可以變成新的主執行緒負擔
   let _visSeq = 0;                     // 頁籤可見性代次：背景時 rAF 完全不 fire，跨越可見性變動的樣本一律丟棄
   let _ltSamples: { t: number; d: number }[] = [];   // longtask（>50ms 的主執行緒任務）滾動窗
   let _ltSupported = false;            // ⚠ Safari/iOS 沒有 longtask ⇒ 一律回 null（不是 0），且絕不 throw
+  // ⭐⭐⭐v6.213【② 低頻無條件取樣】—— 把「健康對照組」放回遙測裡。
+  //   v6.198 把 stale-version 的判準收緊之後，**網路正常的人不再送任何回報** ⇒
+  //   `/clientdiag` 裡只剩下有問題的人，往後「這一版有沒有變慢」在原則上就答不出來
+  //   （分母只剩病人）。這裡補一條**與異常完全無關**的抽樣管道：
+  //     ・每一場對戰進場時擲一次骰子，機率 PERF_SAMPLE_RATE；
+  //     ・中了就在累積到 PERF_SAMPLE_MIN_CALLS 發成功往返之後送**一發**（每場最多 1 發）；
+  //     ・reason 用**新指紋** 'perf-sample'，與所有異常指紋分開（dump / admin 兩邊都分開統計）。
+  //   ⚠ 取樣本身極輕：一次 Math.random() + 每發往返一個布林比較，沒有新的計時器、沒有新的請求管道。
+  //   ⚠ 走既有的 /clientdiag 與既有節流，**不另開端點**。
+  //   ⚠ 不佔每頁 3 發的異常配額（見 _tSendClientDiag 的 _isExempt）——
+  //     取樣絕不可以把真異常指紋擠掉，那會是比「沒有對照組」更糟的事。
+  //   ⚠ 只涵蓋**錦標賽對戰者**：整套 perf 量測（_tRecordApiSegments）本來就只掛在這條路徑上，
+  //     休閒／本機對戰沒有 tApi 也沒有四段拆分，硬接等於另開一套（違反「沿用既有管線」）。
+  const PERF_SAMPLE_RATE = 0.01;       // 每場對戰 1%（站長指定）
+  const PERF_SAMPLE_MIN_CALLS = 20;    // 累積 20 發成功往返才送 —— 太早送等於只量到開局那幾發
+  let _perfSampleRoom = '';            // 上一次擲骰是為了哪一間房（房號一變＝新的一場）
+  let _perfSampleArmed = false;        // 這一場中籤了嗎（每場只擲一次）
+  let _perfSampleSent = false;         // 這一場已經送過了（每場最多 1 發）
   // ⭐⭐⭐v6.170【A：自動回報網路細節】—— 取代「請玩家按 F12」。
   //   v6.159 量到 `net`（fetch 送出 → response header）p50 289ms 但同一個人 max 14.8 秒，
   //   結論是**間歇性斷流**。但「那一發到底有沒有重新建連線」我們量不到 —— 而那正是
@@ -4755,6 +4782,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // ⭐v6.179 關窗。⚠ 逐出（abort/逾時）的那一發永遠不會走到這行 ⇒ `t2` 維持 0
       //   ⇒ 對齊時會被跳過（只排除，不靠它硬湊一發）—— 與 rtt/四段拆分同一條紀律：只記成功的往返。
       if (_rtWin) _rtWin.t2 = _segT2;
+      // ⭐v6.213【③】伺服器自報的處理時間（同源，不需要 Access-Control-Expose-Headers）。
+      //   ⚠ 只讀一個字串再轉數字：沒有 await、沒有分支改變控制流程（這一版仍是「只加量測」）。
+      let _srvMs: number | null = null;
+      try {
+        const _sh = res.headers.get('X-Srv-Ms');
+        if (_sh != null) { const _sv = Number(_sh); if (isFinite(_sv) && _sv >= 0) _srvMs = _sv; }
+      } catch { /* 量測絕不影響對戰 */ }
       if (!res.ok) {
         // v6.150：錦標賽 /state 對「認不出座位」回 401（不再回一份連自己都遮的盤面）。
         //   呼叫端必須分得出「身分失效」與「網路斷線」——兩者在畫面上的自救方式完全不同，
@@ -4772,6 +4806,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const _json = JSON.parse(_txt);
       // ⚠ 與 v6.151 的 rtt 同一條紀律：**只記成功的往返**。錯誤/逾時路徑（12 秒）記進去會扭曲統計。
       _tRecordApiSegments(path, _segT0, _segT1, _segT2, _segT3, _pnow());
+      _tRecordSrvSample(path, _srvMs);   // ⭐v6.213【③】＋【②】：與上一行同一個範圍守衛（母體一致）
       // ⭐⭐⭐v6.172 連線健康的**唯一**寫入點：任何一次成功的伺服器往返都算「連得上」。
       //   這就是為什麼 `POST /action` 全部成功之後不會再誤報失聯 —— 不必在每個呼叫端補一行，
       //   也不會有第二份判準漂移。
@@ -4977,6 +5012,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⭐v6.159 同一條「跨場殘留」紀律：新的四段/採納/重繪樣本混到上一場，
     //   會讓下一場的判讀掛在錯誤的場次上（longtask 是頁面級的，刻意不清）。
     _segTok = []; _segNet = []; _segDl = []; _segParse = []; _segTotal = [];
+    // ⭐v6.213 同一條「跨場殘留」紀律：srv 樣本與取樣旗標都是 per-match 的。
+    //   ⚠ 旗標不清會讓下一場沿用上一場的中籤結果（機率就不是 1% 了 ＝ 分母污染）。
+    _segSrv = []; _srvHdrN = 0; _srvHdrMiss = 0;
+    _perfSampleRoom = ''; _perfSampleArmed = false; _perfSampleSent = false;
     // ⚠ _paintPending 也要放掉：離場瞬間若有在途 rAF，它會把上一場尾端那一筆推進下一場
     //   的新陣列（Fable 5 審查）。
     _adoptSamples = []; _paintSamples = []; _paintPending = false;
@@ -5633,6 +5672,42 @@ function _setupSelfPending(g: any, seat: number): string | null {
     _pushSample(_segParse, t4 - t3);
     _pushSample(_segTotal, t4 - t0);
   }
+  // ⭐⭐⭐v6.213【③ 伺服器端處理時間】＋【② 低頻取樣】的記錄點。
+  //   ⚠ 刻意**不**寫進 `_tRecordApiSegments` —— 那支是 v6.159 的量測函式、有既有的行為守衛
+  //     在逐字驗它（scripts/test-v6159-…），塞新東西進去會讓那份契約失效。
+  //   ⚠⚠ 範圍守衛的三行**必須與 `_tRecordApiSegments` 逐字相同**（srv 與 net 的母體要一致，
+  //     否則 `net - srv` 這個減法沒有意義）。scripts/test-v6213-… 有一條守衛在比對這三行的文字，
+  //     任何一邊被改動都會紅。
+  function _tRecordSrvSample(path: string, srvMs: number | null): void {
+    if (!isTournament || isTournSpectator) return;
+    if (path.indexOf('wait=1') >= 0) return;
+    if (!(path.indexOf('/action') === 0 || path.indexOf('/state') === 0)) return;
+    // ⚠ 分母要分得出「舊伺服器沒帶這個標頭」與「帶了但是 0 ms」：
+    //   前者是**不知道**、後者是**真的很快**，混在一起看就會把「還沒部署」讀成「伺服器很快」。
+    if (typeof srvMs === 'number' && isFinite(srvMs) && srvMs >= 0) { _srvHdrN++; _pushSample(_segSrv, srvMs); }
+    else _srvHdrMiss++;
+    // ⭐【②】低頻無條件取樣。骰子**每場只擲一次**：以房號當鍵，房號一變才重擲。
+    //   ⚠⚠ 這一行是整個機率的定義。若改成「每發都擲」，實際機率就完全不是 1%
+    //     而且送出來的資料看起來一模一樣、沒有人會發現（分母污染）。
+    //   ⚠ 刻意寫在這裡而不是 tEnterMatch：擲骰與取樣的條件（只算對戰熱路徑）在同一個地方，
+    //     不會有「某一條進場路徑忘了擲」的漏接；房號一變就是新的一場，語義由 tActiveRoom 定義。
+    //   ⚠ 已知且可接受的偏差：同一場中途重新整理頁面會再擲一次
+    //     ⇒ 每場的期望值是 1% ×（1 + 重整次數）。重整很罕見，且那本來也算「新的一次連線」。
+    if (_perfSampleRoom !== tActiveRoom) {
+      _perfSampleRoom = tActiveRoom;
+      _perfSampleArmed = Math.random() < PERF_SAMPLE_RATE;
+      _perfSampleSent = false;
+    }
+    // ⚠ 這裡只有兩個布林比較與一個長度比較；沒中籤的人成本是**一次 `if` 就 return**。
+    _tMaybePerfSample();
+  }
+  /** ⭐v6.213【②】每場最多送一發的健康對照樣本。⚠ 這支自己不擲骰（骰子在進場時擲好） */
+  function _tMaybePerfSample(): void {
+    if (!_perfSampleArmed || _perfSampleSent) return;
+    if (_segTotal.length < PERF_SAMPLE_MIN_CALLS) return;
+    _perfSampleSent = true;
+    _tSendClientDiag('perf-sample');
+  }
   // ⭐v6.159 盤面採納耗時。Fable 5 的診斷假說：`game = state` 每次都指到一棵**全新的 JSON 樹**，
   //   物件同一性整批換掉 ⇒ Svelte 無法細粒度更新 ⇒ 每次版本變動＝整個盤面全量重繪。
   //   本機對戰因為引擎有結構共享沒這問題，**只有錦標賽路徑缺這優勢**。
@@ -5767,7 +5842,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const _isManual = reason === 'manual-sync';
       // ⭐v6.180 `stale-board-drop` 同理不佔配額：它每場最多送 1 發、且門檻是「亂序累積 3 次」，
       //   本來就稀少；佔掉 1/3 配額卻可能害真異常指紋（invisible-hand／stale-version）靜音。
-      const _isExempt = _isManual || reason === 'stale-board-drop';
+      // ⭐v6.213 'perf-sample'（低頻無條件取樣）同樣不佔配額：它每場最多 1 發、而且**與異常無關**，
+      //   若讓它扣掉 1/3 的配額，等於用對照組把真異常指紋擠靜音 —— 那比沒有對照組更糟。
+      const _isExempt = _isManual || reason === 'stale-board-drop' || reason === 'perf-sample';
       if (_isManual) {
         if (now0 - _lastManualDiagAt < 60000) return;
         _lastManualDiagAt = now0;
@@ -5844,6 +5921,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
           api: { tok: _sampleStats(_segTok), net: _sampleStats(_segNet), dl: _sampleStats(_segDl), parse: _sampleStats(_segParse), total: _sampleStats(_segTotal) },
           adopt: _sampleStats(_adoptSamples), paint: _sampleStats(_paintSamples),
           lt: _longTaskStats(),
+          // ⭐⭐⭐v6.213【③】伺服器自報的 per-request 處理時間（回應標頭 X-Srv-Ms）。判讀：
+          //   ・`srv` 小而 `api.net` 大 ⇒ Node 早就處理完了，時間全花在 **CF／隧道／線路**。
+          //   ・`srv` 也大 ⇒ 這次是**伺服器自己**慢（DB 查詢／序列化），修伺服器才有意義。
+          //   ⚠ `srv` 為 null ＝一筆都沒收到這個標頭。看 `srvHdr`：
+          //     `{n:0, miss:N}` ＝伺服器還沒部署 v6.213（**不是**「伺服器很快」）；
+          //     n 與 miss 同時 >0 ＝部署中／有舊 instance。
+          //   ⚠ 涵蓋範圍與 `api.*` 完全相同（動作＋短輪詢，排除 wait=1 長輪詢），可以直接相減。
+          srv: _sampleStats(_segSrv), srvHdr: { n: _srvHdrN, miss: _srvHdrMiss },
           // ⭐⭐⭐v6.170 連線層細節（PerformanceResourceTiming）。判讀規則：
           //   ・`res.freshPct` 高 ⇒ 這台裝置一直在**重新建連線**（無線斷訊／NAT 逾時的指紋），
           //     而每次重建都要付 DNS+TCP+TLS 一整套往返 —— 這是「間歇性斷流」最直接的證據。

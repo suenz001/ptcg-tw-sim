@@ -2410,7 +2410,16 @@
   }
   @media (max-width: 900px) {
     .layout {
-      grid-template-columns: 1fr;
+      /* ⭐⭐⭐v6.213 手機版「畫面可以左右滑動」的**結構性根因**就在這一行。
+         桌機那行（上面）早就寫了 `minmax(0, 1fr)`，手機這行卻只有 `1fr`。
+         CSS Grid 的 `1fr` 展開後是 `minmax(auto, 1fr)` —— **最小值是 auto ＝ 內容的
+         min-content**，所以只要欄位裡任何一個子元素的 min-content 比視窗寬，
+         這個軌道就會被撐大、連帶把 .layout / main 一起撐出視窗 ⇒ 整頁可以橫向捲。
+         （手機是單欄，扣掉 main 的左右 padding 各 1rem 之後可用寬度只剩 ~328px。）
+         改成 `minmax(0, 1fr)` ＝ 允許軌道縮到 0，內容自己去換行／收縮。
+         ⚠ 這正是卡牌資料庫 /cards 在 v6.044 用的同一招（`repeat(N, minmax(0, 1fr))`）。
+         ⚠ 桌機（>900px）完全走上面那條規則，一個像素都不受影響。 */
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
@@ -3686,5 +3695,51 @@
   }
   .lightboxClose:hover {
     background: rgba(255, 255, 255, 0.3);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⭐⭐⭐ v6.213 手機版牌組編輯器：①不再左右滑動 ②聚焦輸入框不再放大
+     ──────────────────────────────────────────────────────────────────────────
+     做法**比照卡牌資料庫 /cards**（v6.044 修過手機版面）：
+       ・軌道一律 `minmax(0, 1fr)`（見上面 .layout 的 @media 900px），
+       ・並排的控制項用 `flex-wrap: wrap` 讓它換行（/cards 的 .controls 本來就是），
+       ・會收縮的 flex 子項補 `min-width: 0`（否則 flex item 的自動最小尺寸是 min-content）。
+
+     ⚠ 這一整塊只在 ≤600px 生效 ⇒ **桌機一個像素都不會變**（正對照見
+       scripts/test-v6213-mobile-deck-editor.mjs：桌機分支的宣告逐字未動）。
+     ⚠ 放在樣式區塊最尾端是刻意的：`.pk-search`（:2743）、`.deck-title`（:2632）、
+       `.auth-form input`（:3502）、`.text-area`／`.bm-code`（:3594~）都在前面，
+       同權重時後出現者勝 —— 放在前面會被它們蓋掉而**靜默失效**。
+     ══════════════════════════════════════════════════════════════════════════ */
+  @media (max-width: 600px) {
+    /* ── ① 橫向溢出：搜尋列 ─────────────────────────────────────────────
+       `.pk-search-row` 是 `display:flex` 且**沒有** wrap；裡面是
+         ・`.pk-search`（input）—— flex 子項的自動最小尺寸是 min-content，
+           而 input 的 min-content 是它的內建尺寸（預設 size=20，約 150~180px）；
+         ・`.pk-mode-select`（select，`flex-shrink: 0`）—— 最長選項
+           「關鍵字（搜尋招式）」是 nowrap，約 120~140px。
+       兩者相加就已經逼近手機可用寬度，再加上 .picker 的 padding 與 main 的 padding
+       就一定超出 ⇒ 這是撐大 `1fr` 軌道的主要來源之一。 */
+    .pk-search-row { flex-wrap: wrap; }
+    .pk-search { min-width: 0; flex: 1 1 100%; }
+    /* 卡包下拉：桌機是 `max-width: 260px`，手機可用寬度可能比這還窄。 */
+    .pk-set-select { max-width: 100%; }
+    /* ── ② iOS 聚焦自動放大 ────────────────────────────────────────────
+       iOS Safari 在聚焦 font-size < 16px 的表單控制項時，會**自動把整個畫面放大**
+       （放大後畫面比視窗寬 ⇒ 又可以左右拖，兩個症狀會一起出現）。
+       ⚠ app.html 的 viewport 已經寫了 `user-scalable=no, maximum-scale=1`，
+         但 iOS 10 之後 Safari **不保證遵守**這兩個值（而且它們本身有無障礙代價），
+         所以**不能**靠它們，也刻意不去加碼。唯一可靠又不傷無障礙的做法就是
+         把手機上會被聚焦的控制項字級提到 16px。
+       ⚠ 用 `px` 不用 `rem`：門檻是瀏覽器寫死的 16 **CSS px**，使用者若把瀏覽器
+         根字級調小，`1rem` 就會 < 16px 而靜默失效。
+       ⚠ 只有這一塊（≤600px）改，桌機字級完全不動。 */
+    .pk-search,
+    .pk-mode-select,
+    .pk-set-select,
+    .deck-title,
+    .text-area,
+    .bm-code,
+    .auth-form input { font-size: 16px; }
   }
 </style>

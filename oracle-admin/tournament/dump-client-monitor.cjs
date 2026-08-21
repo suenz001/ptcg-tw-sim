@@ -124,7 +124,33 @@ const REASON_LABEL = {
   'setup-stalled-both-done': '死角：雙方都完成準備卻推不動',
   'action-forbidden': '動作被伺服器拒絕（身分不被接受）',
   'manual-sync': '玩家自己按了「重新同步」',
+  // ⭐⭐⭐v6.213 這一則**不是異常**，是健康對照組（見下面 isSampleReason 的說明）。
+  'perf-sample': '⚖️ 低頻取樣（健康對照組，不是異常）',
 };
+// ⭐⭐⭐ v6.213【② 低頻無條件取樣】的指紋清單 —— 與 server_admin_patch.js 的
+//   `SAMPLE_REASONS` 逐字相同（改一邊就要改另一邊，否則兩張表會兜不起來）。
+//
+// ⚠⚠⚠ 為什麼一定要分開統計（這一段是判讀的關鍵，不要跳過）：
+//   v6.198 把 stale-version 的送出判準收緊之後，**網路正常的人不再送任何回報**
+//   ⇒ tournamentClientDiag 裡只剩下「有問題的人」，母體只有病人。
+//   v6.213 補上一條與異常完全無關的抽樣管道（每場對戰 1%），把健康對照組放回來，
+//   這樣「這一版有沒有變慢」才答得出來。
+//   但**正因為它是健康的**，只要把它混進既有的任何一個統計，那個統計就會失真：
+//     ・byReason／合計筆數 ⇒ 憑空多出一種「指紋」，看起來像新出現的問題；
+//     ・RTT 分佈／最慢的玩家 ⇒ 健康樣本會把中位數往下拉，「大家都很順」是假的；
+//     ・版本／平台／裝置分佈 ⇒ 那是**回報者**的分佈，取樣者與異常回報者本來就不是同一群人；
+//     ・截斷率 ⇒ 分母變大，比率整個變小。
+//   ⇒ 本腳本的做法：**從第一步就把兩批資料拆開**（rawAnom / rawSample），
+//     既有的每一個統計都只吃 rawAnom（語義與 v6.212 逐字相同、可以跟舊 dump 對得起來），
+//     取樣走自己的一份 sampleSummary()。**兩邊的數字永遠不可以相加**。
+const SAMPLE_REASONS = ['perf-sample'];
+function isSampleReason(r) { return SAMPLE_REASONS.indexOf(String(r || '')) >= 0; }
+// 分流的**單一出口**（main() 只呼叫這一支，守衛也直接跑這一支 —— 兩邊跑的是同一段程式碼）。
+function splitDiagRows(rows) {
+  const sample = [], anomaly = [];
+  for (const r of (rows || [])) { (isSampleReason(r && r.reason) ? sample : anomaly).push(r); }
+  return { anomaly: anomaly, sample: sample };
+}
 // ⚠ 不可以直接 REASON_LABEL[reason] —— reason 若是 'constructor'/'__proto__' 會拿到
 //   原型鏈上的 truthy 非字串（admin.html 踩過同一顆地雷）。
 function reasonLabel(r) {
@@ -191,6 +217,70 @@ function truncSummary(rawRows) {
     if (_len === LEGACY_DIAG_CAP) legacyCapped++;   // 頂到**舊的** 2048 ⇒ v6.184 之前寫進去的
   }
   return { total: total, srv: srv, legacy: legacy, maxRawLen: maxRawLen, capped: capped, legacyCapped: legacyCapped };
+}
+
+// ── ⭐⭐⭐v6.213 取樣（健康對照組）的獨立彙總 ────────────────────────────
+//   ⚠ 這支**只吃 rawSample**，而且自己算自己的分母 —— 刻意與上面那些函式沒有任何共用
+//     的累加器，這樣「混進去」在結構上就不可能發生。
+//   ⚠ 每一欄都標明「這是取樣的」；報表上也絕不與異常的數字並排相加。
+function sampleSummary(rawSample) {
+  const out = {
+    rows: (rawSample || []).length,
+    players: 0,
+    parsed: 0, truncated: 0,
+    byVersion: [], byPlatform: [],
+    rtt: { p50: null, p95max: null, n: 0 },
+    perf: { net: [], dl: [], tok: [], parse: [], adopt: [], paint: [], srv: [] },
+    srvHdr: { withHeader: 0, without: 0 },
+    ltUnsupported: 0,
+    list: [],
+  };
+  const uids = {}, verMap = new Map(), uaMap = new Map();
+  const p95s = [];
+  for (const r of (rawSample || [])) {
+    const d = parseDiag((r && r.diag) || '');
+    if (r && r.uid) uids[r.uid] = 1;
+    if (d.parsed) out.parsed++; else out.truncated++;
+    const vk = d.ver || '(未知)';
+    verMap.set(vk, (verMap.get(vk) || 0) + 1);
+    const pk = uaShort(d.ua);
+    uaMap.set(pk, (uaMap.get(pk) || 0) + 1);
+    if (d.rtt && num(d.rtt.p95) !== null) { p95s.push(d.rtt.p95); out.rtt.n++; }
+    const perf = d.perf;
+    if (perf) {
+      const api = perf.api || {};
+      const g = function (o) { return o && num(o.p95) !== null ? o.p95 : null; };
+      const push = function (arr, v) { if (v !== null) arr.push(v); };
+      push(out.perf.net, g(api.net)); push(out.perf.dl, g(api.dl));
+      push(out.perf.tok, g(api.tok)); push(out.perf.parse, g(api.parse));
+      push(out.perf.adopt, g(perf.adopt)); push(out.perf.paint, g(perf.paint));
+      // ⭐v6.213【③】伺服器端 per-request 處理時間。
+      //   ⚠ `srv` 缺席有兩種完全不同的意思，一定要分開數：
+      //     `srvHdr.n === 0 && srvHdr.miss > 0` ＝伺服器還沒部署 v6.213（**不知道**）；
+      //     `srv` 有值但很小 ＝伺服器**真的**很快。混在一起看會把「還沒部署」讀成「很快」。
+      push(out.perf.srv, g(perf.srv));
+      const sh = perf.srvHdr;
+      if (sh && typeof sh === 'object') {
+        if (num(sh.n) !== null && sh.n > 0) out.srvHdr.withHeader++;
+        else out.srvHdr.without++;
+      }
+      if (!(perf.lt && num(perf.lt.n) !== null)) out.ltUnsupported++;
+    }
+    out.list.push({
+      ts: r.ts, tsLocal: tw(r.ts), uid: r.uid || null, email: r.email || null,
+      room: r.room || '', reason: r.reason || '', ver: d.ver || null, ua: d.ua || null,
+      hc: d.hc, dm: d.dm, rtt: d.rtt || null, perf: d.perf || null,
+      diagParsed: d.obj, diag: (r && r.diag) || '',
+    });
+  }
+  out.players = Object.keys(uids).length;
+  out.byVersion = [...verMap.entries()].map(function (e) { return { ver: e[0], n: e[1] }; })
+    .sort(function (a, b) { return verCmp(b.ver, a.ver); });
+  out.byPlatform = [...uaMap.entries()].map(function (e) { return { platform: e[0], n: e[1] }; })
+    .sort(function (a, b) { return b.n - a.n; });
+  out.rtt.p50 = quant(p95s, 0.5);
+  out.rtt.p95max = p95s.length ? Math.max.apply(null, p95s) : null;
+  return out;
 }
 
 // ── ⭐⭐⭐v6.198 stale-version 的「新判準／舊判準」分類 ─────────────────
@@ -321,16 +411,26 @@ async function main() {
 
   // ── ② 明細：整個時間窗、**不設 limit** ────────────────────────────────
   const since = Date.now() - range.hours * 3600000;
-  const raw = await TCDIAG.find({ ts: { $gte: since } }).sort({ ts: -1 }).toArray();
+  const rawAll = await TCDIAG.find({ ts: { $gte: since } }).sort({ ts: -1 }).toArray();
+  // ⭐⭐⭐v6.213 **第一步就拆**。底下所有既有統計一律只吃 `raw`（＝異常），
+  //   取樣列走 `rawSample`。⚠ 這一行是整份分帳的單一分流點：不要在下游再各自過濾一次。
+  const _split = splitDiagRows(rawAll);
+  const rawSample = _split.sample;
+  const raw = _split.anomaly;
 
   // ── ③ 指紋彙總（與 /admin/clientdiag 同一段 aggregate）────────────────
   const agg = await TCDIAG.aggregate([
     { $match: { ts: { $gte: since } } },
     { $group: { _id: '$reason', n: { $sum: 1 }, uids: { $addToSet: '$uid' } } },
   ]).toArray();
+  // ⭐v6.213 aggregate 是對整個時間窗算的，這裡同樣要把取樣列濾掉（否則 byReason 又混回去了）。
   const byReason = agg
+    .filter(function (a) { return !isSampleReason(a._id); })
     .map(function (a) { return { reason: a._id || '(未標)', label: reasonLabel(a._id), n: a.n, players: (a.uids || []).length }; })
     .sort(function (x, y) { return y.n - x.n; });
+  const sampleAgg = agg
+    .filter(function (a) { return isSampleReason(a._id); })
+    .map(function (a) { return { reason: a._id || '(未標)', label: reasonLabel(a._id), n: a.n, players: (a.uids || []).length }; });
 
   // ── ④ 逐列展開 ────────────────────────────────────────────────────────
   const rows = [];
@@ -411,6 +511,8 @@ async function main() {
     });
   }
   rtt.sort(function (a, b) { return (b.p95 || 0) - (a.p95 || 0); });
+  // ⭐v6.213 取樣（健康對照組）的獨立彙總。⚠ 它與上面每一個統計**沒有共用任何累加器**。
+  const sample = sampleSummary(rawSample);
 
   const byVersion = [...verMap.entries()]
     .map(function (e) { return { ver: e[0], n: e[1].n, players: e[1].uids.size }; })
@@ -457,8 +559,13 @@ async function main() {
         + '只能在 admin 📡 分頁看即時值，離線 dump 拿不到（賽後 dump 本來也會是 0）。',
     },
     totals: {
+      // ⚠⚠ v6.213 起 `rows` / `players` **只算異常回報**（取樣另計，見 sample 區塊）。
+      //   要跟 v6.212 以前的 dump 對帳時，這兩個數字的語義是**一樣的**（沒有被取樣稀釋）。
       rows: rows.length,
       players: uidSet.size,
+      sampleRows: sample.rows,
+      sampleNote: '取樣（perf-sample）與異常回報**分開統計**，rows / players / rtt / byVersion / '
+        + 'byPlatform / deviceMix / 截斷率**全部不含**取樣列。兩邊的數字永遠不可以相加。',
       truncatedRows: trunc.total,
       // ⭐v6.184 拆開報：伺服器明確標記 vs 只能從 parse 失敗推論的舊列 vs 剛好卡在上限的長度。
       truncatedFlaggedByServer: trunc.srv,
@@ -491,6 +598,13 @@ async function main() {
     //   ⚠⚠ 這是**順帶**的判讀欄，不是「對手掉線指紋」：「我正常、對手斷線」時新判準三條都不成立
     //     ⇒ 那個情境根本不會有回報被送出。hits 只涵蓋「因為別的理由送出來、而當下對手剛好也掉線」。
     oppQuiet: { rows: oppQuietRows, hits: oppQuietHit, maxSec: oppQuietMax || null },
+    // ⭐⭐⭐v6.213【② 低頻無條件取樣＝健康對照組】。
+    //   ⚠ 這一整塊與上面每一個統計**互斥**（同一列不可能同時出現在兩邊），
+    //     所以「異常 N 筆 ＋ 取樣 M 筆」只有在講「資料庫總列數」時才有意義，
+    //     拿來算比率一律是錯的（分母不同）。
+    //   ⚠ `rows: 0` 有兩種完全不同的可能：①這段期間沒有人中籤（1% × 場次數，本來就很少）
+    //     ②玩家的畫面還沒更新到 v6.213。看 byVersion（異常那份）就知道大家在哪個版本。
+    sample: sample,
     byVersion: byVersion,
     byPlatform: byPlatform,
     deviceMix: [...devMap.entries()].map(function (e) { return { device: e[0], n: e[1] }; }).sort(function (a, b) { return b.n - a.n; }),
@@ -509,6 +623,10 @@ async function main() {
   L.push('資料範圍：最近 ' + range.label + '（' + range.hours + ' 小時），自 ' + tw(since) + ' 起');
   L.push('⚠ 伺服器只保留 7 天，更早的資料已被自動刪除 —— 「7 天」就是全部。');
   L.push('資料來源：直接讀資料庫，沒有畫面上的 120 筆／20 筆截斷。');
+  L.push('⚠⚠ v6.213 起本報表把資料分成**兩批**：');
+  L.push('   ・【異常回報】玩家的畫面真的出問題才送 —— 下面②③④⑤⑥每一個數字都只算這一批。');
+  L.push('   ・【低頻取樣】每場對戰 1% 機率無條件抽一筆（健康對照組）—— 只在②-d 出現。');
+  L.push('   兩批的數字**永遠不可以相加**，也不可以互相比較「哪個比較慢」（母體不同）。');
   L.push('');
   L.push('【① 連線設定現況】');
   L.push('  🚀 長輪詢：' + (lpCfg.enabled ? '已啟用' : '關閉')
@@ -562,6 +680,51 @@ async function main() {
     L.push('    不必再靠「在線那一方也跟著報 stale-version」去反推（那正是鏡像重複的來源）。');
     L.push('    要系統性地統計對手掉線，得另開指紋或在伺服器端統計 —— 本版刻意沒做。');
     L.push('  ⚠ 舊 client 沒有這一欄，所以分母不是全部回報數。');
+  }
+  L.push('');
+  L.push('【②-d ⚖️ 低頻取樣（健康對照組，v6.213 起）】← 回答「這一版有沒有變慢」看這裡');
+  L.push('  ⚠⚠ 這一塊的數字**絕不可以**跟上面【②】的異常次數相加 —— 兩者的母體完全不同：');
+  L.push('    上面是「出問題才回報」，這裡是「不管有沒有問題，每場對戰 1% 機率抽一筆」。');
+  L.push('    v6.198 收緊判準之後，健康的人不再送任何回報 ⇒ 沒有這一塊就沒有對照組。');
+  if (!sample.rows) {
+    L.push('  這段期間沒有任何取樣。⚠ 這**不是**「大家都很順」——');
+    L.push('    可能是①中籤數本來就少（1% × 這段期間的對戰場次）②玩家的畫面還沒更新到 v6.213。');
+    L.push('    看【③ client 版本分佈】就知道大家停在哪一版。');
+  } else {
+    L.push('  取樣 ' + sample.rows + ' 筆 / ' + sample.players + ' 位玩家'
+      + '（其中 ' + sample.truncated + ' 筆的診斷內容被切斷）。');
+    if (sample.rtt.n) {
+      L.push('  這批**健康樣本**的動作往返 p95：中位數 ' + ms(sample.rtt.p50)
+        + '、最差 ' + ms(sample.rtt.p95max) + '（樣本 ' + sample.rtt.n + ' 筆）。');
+      L.push('  ⚠ 拿它跟上面【④】的 RTT 比是**錯的**（那一份只收「已經很慢」的人）。');
+      L.push('    這個數字要跟**上一版的同一個數字**比 —— 那才是「有沒有變慢」的答案。');
+    }
+    const _rowsOutS = [
+      ['伺服器處理（Node 在 Express 裡待多久）', sample.perf.srv, '伺服器'],
+      ['網路（送出→回第一個位元組）', sample.perf.net, '網路／隧道'],
+      ['下載（收下整份盤面）', sample.perf.dl, '網路／隧道'],
+      ['解析（JSON 轉物件）', sample.perf.parse, '那台裝置'],
+      ['採納（吃進畫面狀態）', sample.perf.adopt, '那台裝置'],
+      ['重繪（畫面真的更新）', sample.perf.paint, '那台裝置'],
+    ];
+    L.push('  ' + pad('項目', 38) + padL('中位數', 10) + padL('最大', 10) + '  歸屬');
+    for (const rr of _rowsOutS) {
+      const arr = rr[1];
+      L.push('  ' + pad(rr[0], 38) + padL(arr.length ? ms(quant(arr, 0.5)) : '—', 10)
+        + padL(arr.length ? ms(Math.max.apply(null, arr)) : '—', 10) + '  ' + rr[2]);
+    }
+    L.push('  ⭐ 判讀重點（v6.213 新增的「伺服器處理」那一欄）：');
+    L.push('    ・「網路」大而「伺服器處理」小 ⇒ Node 早就處理完了，時間全花在 Cloudflare／隧道／線路。');
+    L.push('    ・兩者都大 ⇒ 這次真的是伺服器自己慢（DB 查詢／序列化），修伺服器才有意義。');
+    L.push('    ・「伺服器處理」是「—」⇒ 帶標頭的回報 ' + sample.srvHdr.withHeader + ' 筆、'
+      + '沒帶的 ' + sample.srvHdr.without + ' 筆；沒帶＝伺服器還沒跑 redeploy-oracle.bat，'
+      + '**不是**「伺服器很快」。');
+    if (sample.byVersion.length) {
+      L.push('  取樣者的版本分佈：' + sample.byVersion.map(function (v) { return 'v' + v.ver + ' ' + v.n + ' 筆'; }).join('、'));
+    }
+    if (sample.byPlatform.length) {
+      L.push('  取樣者的平台分佈：' + sample.byPlatform.map(function (v) { return v.platform + ' ' + v.n + ' 筆'; }).join('、'));
+    }
   }
   L.push('');
   L.push('【③ ⭐ client 版本分佈】←「還有多少人停在舊版」看這裡');
@@ -665,6 +828,7 @@ async function main() {
   L.push('');
   L.push('【⑦ 接下來】');
   L.push('  完整資料在同一個資料夾、同名的 .json（每一筆 payload 的 poll.rtt / perf.* / env.ua 都在裡面）。');
+  L.push('  ⚠ JSON 裡異常在 rows / rtt，取樣在 sample.list —— **是兩個不同的陣列**，別合併起來算。');
   L.push('  把那個 .json 整包交給 AI，它才有辦法幫你定位「到底是誰卡、卡在哪一段」。');
   L.push('============================================================');
   // BOM：站長會直接用記事本／Excel 開，加了 BOM 才保證不會變亂碼。
@@ -673,14 +837,16 @@ async function main() {
   console.log('');
   console.log(L.join('\n').replace(/^﻿/, ''));
   console.log('');
-  console.log('完整資料已寫出: /tmp/ptcg_monitor_dump.json (' + rows.length + ' 筆明細 / ' + rtt.length + ' 筆 RTT)');
+  console.log('完整資料已寫出: /tmp/ptcg_monitor_dump.json (' + rows.length + ' 筆異常明細 / ' + rtt.length + ' 筆 RTT / ' + sample.rows + ' 筆取樣)');
   console.log('摘要已寫出:     /tmp/ptcg_monitor_summary.txt');
   await client.close();
 }
 
 // ⭐v6.184 只有被**直接執行**時才跑（`node /tmp/dump-client-monitor.cjs 7d` 與以前完全相同）；
 //   被 require 進來時只匯出純函式，讓守衛可以實跑判定邏輯而不需要任何資料庫。
-module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp, staleGateOf: staleGateOf, oppQuietOf: oppQuietOf };
+module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp, staleGateOf: staleGateOf, oppQuietOf: oppQuietOf,
+  // ⭐v6.213 守衛要**實跑**分帳邏輯（只驗字串存在擋不住「接線沒接上」）。
+  SAMPLE_REASONS: SAMPLE_REASONS, isSampleReason: isSampleReason, splitDiagRows: splitDiagRows, sampleSummary: sampleSummary };
 if (require.main === module) {
   main().catch(function (e) { console.error('ERROR:', e && e.message); process.exit(1); });
 }

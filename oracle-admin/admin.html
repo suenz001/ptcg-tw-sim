@@ -2665,6 +2665,13 @@ const MON_REASON_INFO = {
     + '出現這個指紋就代表那位玩家的憑證失效了（換過分頁登出／token 過期），不是掛機 —— 該場的閒置判負要人工複核。'],
   'manual-sync': ['玩家自己按了「重新同步」',
     '不一定是 bug，但次數變多代表玩家覺得畫面不對。'],
+  // ⭐⭐⭐v6.213 這一則**不是異常**。它不會出現在上面那張「異常」表裡（伺服器端就分流了），
+  //   只會出現在下面獨立的「⚖️ 低頻取樣」區塊與明細清單（reason=perf-sample）。
+  'perf-sample': ['⚖️ 低頻取樣（健康對照組，不是異常）',
+    'v6.198 把「畫面版本卡住」的判準收緊之後，<b>網路正常的人不再送任何回報</b> ⇒ '
+    + '資料庫裡只剩下有問題的人，「這一版有沒有變慢」在原則上就答不出來。'
+    + 'v6.213 起每一場對戰有 <b>1% 機率</b>無條件抽一筆效能快照 —— 這一則就是那個抽樣。'
+    + '<b>⚠ 它的數字絕不可以跟上面的異常次數相加</b>：兩者的母體完全不同。'],
 };
 // ⭐⭐v6.159 顯示端的**唯一**數字出口。舊版 client 回報的 payload 沒有 perf / hc / dm ⇒
 //   這些欄位一律可能是 null / undefined / 非數字。拿不到就顯示「—」，
@@ -2733,8 +2740,21 @@ function monPerfCells(r) {
   if (!hasSeg) swTxt = '—';
   else if (!sg.swN) swTxt = '<span style="color:#aab;">未經 SW</span>';
   else swTxt = monMs(monStat(sg.sw, 'p95')) + '<span style="color:#89a;"> (' + sg.swN + ')</span>';
+  // ⭐⭐⭐v6.213【③】伺服器自報的 per-request 處理時間（回應標頭 X-Srv-Ms）。
+  //   ⚠ 三種「沒有數字」必須分得出來（與 conn 同一條紀律）：
+  //     ・舊 client（整包沒有 perf）                 → 「—」
+  //     ・新 client 但**伺服器**還沒部署 v6.213       → 「未部署」（srvHdr.n===0 而 miss>0）
+  //     ・有量到                                     → 顯示 p95
+  //   絕不可以把「未部署」畫成 0ms —— 那會被讀成「伺服器超快」，正好是最誤導人的假訊號。
+  var srvTxt;
+  const _sh = pf.srvHdr;
+  if (!hasPerf) srvTxt = '—';
+  else if (_sh && typeof _sh === 'object' && !(typeof _sh.n === 'number' && _sh.n > 0)) srvTxt = '<span style="color:#c50;">未部署</span>';
+  else if (!pf.srv) srvTxt = '—';
+  else srvTxt = monMs(monStat(pf.srv, 'p95'));
   const td = 'padding:6px 8px;text-align:right;';
   return '<td style="' + td + 'white-space:nowrap;">' + connTxt + '</td>'
+    + '<td style="' + td + 'white-space:nowrap;">' + srvTxt + '</td>'
     + '<td style="' + td + '">' + monMs(monStat(pa.net, 'p95')) + '</td>'
     + '<td style="' + td + 'white-space:nowrap;">' + queueTxt + '</td>'
     + '<td style="' + td + '">' + wireTxt + '</td>'
@@ -2780,6 +2800,75 @@ function monStaleBadge(r) {
 function monReasonInfo(reason) {
   const has = Object.prototype.hasOwnProperty.call(MON_REASON_INFO, reason);
   return has ? MON_REASON_INFO[reason] : [String(reason || '(未標)'), ''];
+}
+// ⭐⭐⭐v6.213【② 低頻無條件取樣 ＝ 健康對照組】的獨立區塊。
+//   ⚠⚠ 這一塊**刻意**與上面的異常表分開畫、分開數：
+//     異常是「出問題才回報」，取樣是「不管有沒有問題都可能被抽到」——
+//     混在一起看，任何比率（人數/次數/RTT 中位數/截斷率）都會失真。
+//   ⚠ 伺服器端（/admin/clientdiag）已經在**查詢層**就把兩批拆開了，這裡不再自己過濾，
+//     只負責顯示；`dg.sample` 缺席 ＝ 伺服器還是舊版（**不是**「沒有取樣」）。
+//   ⚠ 抽成獨立函式是為了讓守衛能餵一份**沒有 sample 欄位的舊 payload** 實際跑它，
+//     斷言不 throw、而且會明講「伺服器還是舊版」（v6.154 的教訓：只驗字串存在擋不住接線沒接上）。
+function monSampleBlock(dg) {
+  const box = 'border-top:1px dashed #e3e8ef;padding-top:12px;margin-bottom:14px;';
+  if (!dg || !dg.sample || typeof dg.sample !== 'object') {
+    return '<div style="' + box + '"><div style="font-weight:700;margin-bottom:4px;">⚖️ 低頻取樣（健康對照組）</div>'
+      + '<p class="small muted" style="margin:2px 0;">伺服器還是舊版（需要 v6.213 以上，跑過 redeploy-oracle.bat）'
+      + '⇒ 這一塊沒有資料。<b>這不代表沒有取樣</b>，只代表這支端點還不會把它分出來。</p></div>';
+  }
+  const sp = dg.sample;
+  const n = (typeof sp.n === 'number') ? sp.n : 0;
+  const players = (typeof sp.players === 'number') ? sp.players : 0;
+  let h = '<div style="' + box + '">'
+    + '<div style="font-weight:700;margin-bottom:4px;">⚖️ 低頻取樣（健康對照組）　'
+    + '<span style="color:#2a4a7a;">' + n + ' 筆 / ' + players + ' 人</span></div>'
+    + '<p class="small muted" style="margin:2px 0 8px;">每一場對戰有 <b>1% 機率</b>無條件抽一筆效能快照，'
+    + '<b>與有沒有出問題完全無關</b>。v6.198 收緊判準之後健康的人不再送任何回報，'
+    + '沒有這一批就沒有對照組、「這一版有沒有變慢」也就答不出來。'
+    + '<br><b>⚠ 這裡的數字絕不可以跟上面的異常次數相加</b>（母體不同），'
+    + '也不要拿它跟下面的「動作往返時間」表相比 —— 那張表只收<b>已經很慢</b>的人。'
+    + '要比就跟<b>上一版的同一個數字</b>比。</p>';
+  const list = Array.isArray(sp.perf) ? sp.perf : [];
+  if (!n) {
+    h += '<p class="small" style="color:#8a6d00;margin:0;">這段期間沒有任何取樣。'
+      + '⚠ 這<b>不是</b>「大家都很順」—— 可能是①中籤數本來就少（1% × 這段期間的對戰場次）'
+      + '②玩家的畫面還沒更新到 v6.213。</p>';
+  } else if (!list.length) {
+    h += '<p class="small muted" style="margin:0;">有取樣列，但每一筆的內容都解析不出來（多半是被截斷）。</p>';
+  } else {
+    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:1360px;">'
+      + '<tr style="background:#f3f8f3;"><th style="text-align:left;padding:6px 8px;">時間</th>'
+      + '<th style="text-align:left;padding:6px 8px;">玩家</th>'
+      + '<th style="text-align:right;padding:6px 8px;">中位數</th><th style="text-align:right;padding:6px 8px;">p95</th>'
+      + '<th style="text-align:right;padding:6px 8px;">最大</th>'
+      + '<th style="text-align:right;padding:6px 8px;">連線</th>'
+      + '<th style="text-align:right;padding:6px 8px;">伺服器</th>'
+      + '<th style="text-align:right;padding:6px 8px;">網路</th>'
+      + '<th style="text-align:right;padding:6px 8px;">排隊</th>'
+      + '<th style="text-align:right;padding:6px 8px;">傳輸</th>'
+      + '<th style="text-align:right;padding:6px 8px;">SW</th>'
+      + '<th style="text-align:right;padding:6px 8px;">續行</th>'
+      + '<th style="text-align:right;padding:6px 8px;">下載</th>'
+      + '<th style="text-align:right;padding:6px 8px;">權杖</th>'
+      + '<th style="text-align:right;padding:6px 8px;">解析</th>'
+      + '<th style="text-align:right;padding:6px 8px;">採納</th>'
+      + '<th style="text-align:right;padding:6px 8px;">重繪</th>'
+      + '<th style="text-align:right;padding:6px 8px;">長任務／分</th>'
+      + '<th style="text-align:right;padding:6px 8px;">裝置</th></tr>';
+    list.slice(0, 20).forEach(function (r) {
+      h += '<tr style="border-top:1px solid #eef1f5;">'
+        + '<td style="padding:6px 8px;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW')) + '</td>'
+        + '<td style="padding:6px 8px;">' + escapeHtml(r.email || '(未知)') + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;">' + (r.p50 != null ? monMs(r.p50) : '—') + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;font-weight:700;">' + (r.p95 != null ? monMs(r.p95) : '—') + '</td>'
+        + '<td style="padding:6px 8px;text-align:right;">' + (r.max != null ? monMs(r.max) : '—') + '</td>'
+        + monPerfCells(r)
+        + '</tr>';
+    });
+    h += '</table></div>';
+    if (list.length > 20) h += '<p class="small muted" style="margin:6px 0 0;">…另有 ' + (list.length - 20) + ' 筆，完整資料請跑 dump-client-monitor.cjs。</p>';
+  }
+  return h + '</div>';
 }
 async function loadMonitor() {
   const el = document.getElementById('tab-monitor');
@@ -2874,7 +2963,10 @@ async function loadMonitor() {
   if (!dg) {
     html += '<p style="color:#c62828;">讀不到診斷 —— 伺服器還是舊版（需要 v6.154 以上）。</p>';
   } else if (!dg.byReason || !dg.byReason.length) {
+    // ⚠v6.213：沒有異常**不代表**沒有取樣。取樣區塊要照畫，否則「這一版有沒有變慢」
+    //   的答案會在最健康的那段期間剛好整塊消失（那正是最需要對照組的時候）。
     html += '<p style="color:#2e7d32;font-weight:600;">這段期間沒有任何異常回報 👍</p>';
+    html += monSampleBlock(dg);
   } else {
     html += '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">'
       + '<tr style="background:#f5f7fa;"><th style="text-align:left;padding:7px 8px;">指紋</th>'
@@ -2891,6 +2983,7 @@ async function loadMonitor() {
         + '</tr>';
     });
     html += '</table>';
+    html += monSampleBlock(dg);
     if (dg.slowRtt && dg.slowRtt.length) {
       html += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-bottom:12px;">'
         + '<div style="font-weight:700;margin-bottom:4px;">⏱️ 動作往返時間（每筆是該玩家當下 30 發的統計）</div>'
@@ -2899,6 +2992,10 @@ async function loadMonitor() {
         + '<div style="background:#fffdf3;border:1px solid #f0e3b0;border-radius:6px;padding:9px 11px;margin:0 0 10px;">'
         + '<b>怎麼讀右邊那幾欄（v6.159 新增）</b><br>'
         + '這幾欄把「玩家實際等待的時間」拆開，用來回答一個問題：<b>卡在網路，還是卡在那台裝置本身？</b><br>'
+        + '　・<b>伺服器</b>（v6.213 新增）：這一發請求<b>在 Node 裡待了多久</b>（伺服器自己報的）。'
+        + '「網路」大而這一欄小 ⇒ 伺服器早就處理完了，時間全花在 <b>Cloudflare／隧道／線路</b>；'
+        + '兩者都大才是伺服器自己慢。顯示「未部署」＝伺服器還沒跑 redeploy-oracle.bat，'
+        + '<b>不是</b>「伺服器很快」。<br>'
         + '<b>屬於網路的：</b>　・<b>網路</b>：送出到伺服器回應第一個位元組。'
         + '　・<b>下載</b>：把整份盤面資料收下來（手機訊號差時這欄會很大）。<br>'
         + '<b>屬於那台裝置的：</b>　・<b>權杖</b>：登入憑證換發（正常是 0）。'
@@ -2945,6 +3042,7 @@ async function loadMonitor() {
         + '<th style="text-align:right;padding:6px 8px;">中位數</th><th style="text-align:right;padding:6px 8px;">p95</th>'
         + '<th style="text-align:right;padding:6px 8px;">最大</th>'
         + '<th style="text-align:right;padding:6px 8px;">連線</th>'
+        + '<th style="text-align:right;padding:6px 8px;">伺服器</th>'
         + '<th style="text-align:right;padding:6px 8px;">網路</th>'
         + '<th style="text-align:right;padding:6px 8px;">排隊</th>'
         + '<th style="text-align:right;padding:6px 8px;">傳輸</th>'
@@ -3008,7 +3106,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.212';
+window.SITE_VERSION_HINT = '6.213';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

@@ -1,5 +1,209 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.213 ① isStage2 全卡池線性掃描 → per-pool 索引 ② 低頻無條件取樣（健康對照組） ③ 伺服器 per-request 處理時間 ④ 手機版牌組編輯器橫向溢出與 iOS 聚焦縮放
+
+BASE = `efd6979202da62748d4fb24154ebb8c16001dbd1`（v6.212）。①②③純內部；④玩家有感 ⇒ 首頁 changelog 放一則。
+
+### ① `isStage2` 全卡池線性掃描 → 記憶化（純效能，行為零變更）
+
+真因：三份逐字相同的實作，每呼叫一次就對**整個卡池（4935 張）線性掃描**，
+迴圈內每張卡再跑一次名稱正規化（v3001 那份連迴圈不變量 `a` 都每輪重算）：
+
+- `src/lib/game/effects/cards/v3001_g3_wave3.ts:355` `isStage2`（海兔獸｜黏著束縛的特性消除閘）
+  —— 站長實測 **634.6 µs/call、1.42 次/action、佔 engine+AI 總時間 52.7%**。
+- `src/lib/game/engine.ts:1043` `isStage2PokemonCard`（同型）
+- `src/lib/game/effects/cards/draw_supporters.ts:26` `isStage2PokemonCardLocal`（同型，鳴依的勉勵）
+
+修法：新增 **leaf** 模組 `src/lib/game/stage2-index.ts`（除 `import type` 外零 import
+⇒ 不可能參與循環 import，避開 v6.078 的 TDZ 坑），提供 per-pool 索引：
+
+- 快取鍵 ＝ **pool 物件本身**（`WeakMap<Map<string,Card>, Stage2Index>`）
+  ⇒ 錦標賽 bundle 的全卡池與對戰頁按牌組載的子集各有各的索引，**不可能互相污染**；
+  pool 被回收時索引一起走。
+- 同一個 Map 被塞進新卡（`ensurePoolForStateIds`）⇒ 索引記下建立當下的 `pool.size`，
+  對不上就整份重建（自癒）。
+- **兩種語義刻意不合併**：`isStage2ByEvoVariant` ＝ `sameEvoName` 語義（會 strip「超級」前綴），
+  `isStage2ByPlainEx` ＝ v3001 那份「只 strip 尾綴 ex + trim」的簡化版。
+  合併就是行為變更 —— 要不要統一是站長裁定，不是效能改動該做的事。
+- 順手收斂：`sameEvoName()` 內的 local `normalize` 搬進 stage2-index 成為單一來源
+  （`normalizeEvoVariantName`）—— 索引與 sameEvoName 必須用逐字相同的正規化。
+  `sameEvoName(a,b)` ⇔ `normalize(a)===normalize(b)`（`a===b` 那條捷徑蘊含於此），判定結果一字未變。
+
+實測（`scripts/test-v6213-stage2-index-memo.mjs` 的微基準，1000 次呼叫）：
+**286.9 µs/call → 0.190 µs/call，約 1500 倍**。
+差分：全卡池 **4935 張逐張**比對新舊實作，兩種語義都**逐字相同**；
+另比對 sameEvoName 本身（卡名 × evolvesFrom 共 10 萬組以上）也逐字相同。
+
+⚠ 守衛用**手寫的舊碼副本**當對照組（不是 import 新碼再跟自己比 —— 那是恆真式），
+並且用「最小 pool」正對照證明那兩份副本的判準**真的不同**。
+另有 `__stage2IndexBuildCount()`：同一個 pool 連問 500 次只重建 1 次（證明記憶化不是 placebo），
+每換一份新 pool 就 +1（證明計數器不是死的）。
+
+### ② 低頻無條件取樣 —— 把健康對照組放回遙測
+
+站長指出的副作用：**v6.198 收緊 stale-version 判準之後，網路正常的人不送任何回報**
+⇒ `tournamentClientDiag` 的母體只剩病人，「往後有沒有變慢」原則上答不出來。
+
+做法（一律沿用既有 `/clientdiag` 管線與既有節流，**不另開端點**）：
+
+- `+page.svelte`：`PERF_SAMPLE_RATE = 0.01`、`PERF_SAMPLE_MIN_CALLS = 20`。
+  骰子**以房號當鍵**（`_perfSampleRoom !== tActiveRoom` 才重擲）⇒ 每場對戰只擲一次；
+  中籤者在累積 20 發成功往返後送**一發** `reason='perf-sample'`。
+  ⚠ 擲骰寫在 `_tRecordSrvSample()` 內而不是 `tEnterMatch`：擲骰與「只算對戰熱路徑」的條件
+  在同一個地方，不會有「某條進場路徑忘了擲」的漏接。
+  ⚠ 已知可接受偏差：同一場中途重整頁面會再擲一次（期望值 1% ×（1＋重整次數））。
+- 取樣**不佔**每頁 3 發的異常配額（`_isExempt`）—— 用對照組把真異常指紋擠靜音，
+  會比「沒有對照組」更糟。
+- 涵蓋範圍：**只有錦標賽對戰者**。整套 perf 量測（`_tRecordApiSegments`）本來就只掛在這條路徑，
+  休閒／本機沒有 tApi 也沒有四段拆分，硬接等於另開一套。
+
+⚠⚠ **分帳（站長特別交代的那一點）**：取樣是健康樣本，混進任何既有統計都會讓那個統計失真
+（byReason／合計筆數／RTT 分佈／最慢的玩家／版本與平台分佈／截斷率，分母全部被稀釋）。
+所以三個消費端都**從查詢層就分開**：
+
+- `oracle-admin/server_admin_patch.js`：`SAMPLE_REASONS = ['perf-sample']` ＋ `isSampleReason()`；
+  `byReason` 濾掉取樣、`rows`（最近 120 筆明細）預設 `$nin` 取樣、取樣走**獨立**的 aggregate 與查詢，
+  回應新增 `sample: { reasons, n, players, perf, note }`。
+- `oracle-admin/tournament/dump-client-monitor.cjs`：新增 `splitDiagRows()` 當**單一分流出口**，
+  main() 第一步就把 `rawAll` 切成 `raw`（異常）／`rawSample`；既有每一個統計只吃 `raw`
+  ⇒ **語義與 v6.212 逐字相同、可以跟舊 dump 對帳**。取樣走獨立的 `sampleSummary()`，
+  TXT 摘要新增【②-d】區塊並明講「兩批永遠不可以相加」「取樣 0 筆不等於大家都很順」。
+- `oracle-admin/admin.html`：新增 `monSampleBlock()`，**獨立**一塊、獨立一張表；
+  有異常與零異常兩條路徑都會畫（零異常時最需要對照組）。
+
+⚠ **產能誠實話**：1% × 一場賽事約 150 場對戰 ＝ **每場賽事只會拿到 ~1.5 筆**。
+要看趨勢得累積好幾場，或把 `PERF_SAMPLE_RATE` 調高（見下方「待站長裁定」）。
+
+### ③ 伺服器端 per-request 處理時間
+
+`perf.api.net`（送出 → 第一個位元組）把「Cloudflare／隧道／線路慢」與「Node 處理慢」綁死。
+
+- `server_admin_patch.js`：`app.use('/api/tournament', _srvTimingMw)`，
+  在 `res.writeHead` 被呼叫時（**不是** `res.on('finish')` —— 那時 header 早就寫死了）
+  設回應標頭 `X-Srv-Ms`。整段 try/catch、先檢查 `headersSent`。
+  ⚠ 註冊位置在本 IIFE 所有 `/api/tournament` 路由**之前**（v1.11 gzip 掛在 stack 尾端
+  永遠輪不到的事故）；守衛用字元位置比對釘住。
+  ⚠ **只加量測**：整支中介層沒有 `await`、沒有 DB、沒有任何 `res.json/send/status`。
+  負擔實測 **0.8 µs/req**（守衛內 20 萬次；50 人對戰約 42 req/s）。
+- `+page.svelte`：`tApi` 讀 `res.headers.get('X-Srv-Ms')`（同源，不需要
+  `Access-Control-Expose-Headers`），交給**新的**函式 `_tRecordSrvSample()`。
+  ⚠ 刻意不寫進 `_tRecordApiSegments` —— 那支有 v6.159 的行為契約在逐字驗它。
+  ⚠ 兩支的三行範圍守衛**必須逐字相同**（守衛會比對文字）：母體不同的話 `net - srv` 沒有意義。
+- payload 新增 `perf.srv`（`_sampleStats`）與 `perf.srvHdr: { n, miss }`。
+  ⚠ 「舊伺服器沒帶標頭」與「帶了但是 0 ms」必須分得出來：前者是**不知道**、後者是**真的很快**。
+  admin 對前者顯示「未部署」而不是 0 ms。
+
+### ④ 手機版牌組編輯器：橫向滑動 ＋ iOS 聚焦縮放
+
+**(A) 左右滑動 ＝ CSS Grid blowout。** `src/routes/decks/+page.svelte`
+`.layout` 桌機那行早就是 `minmax(0, 1fr)`，但 `@media (max-width: 900px)` 的手機那行只有 `1fr`
+（＝`minmax(auto, 1fr)`，最小值是內容的 min-content）。
+
+Chromium 實測（把 `<style>` 與真實 DOM 結構搬進 headless 量測，320/360/375/390/412/1440）：
+
+| 視窗寬 | v6.212 scrollWidth | v6.213 |
+|---|---|---|
+| 320 | **401**（溢出 +81） | 320 |
+| 360 | **401**（+41） | 360 |
+| 375 | **401**（+26） | 375 |
+| 390 | **401**（+11） | 390 |
+| 412 | 412（OK） | 412 |
+| 1440 | 1440 | 1440（字級也逐項相同） |
+
+⇒ **412px 以上的機型看不出來**，這就是「有時可以左右滑動」的來源。
+min-content 歸因（360px 下實測）：`.picker` 385px ← `.pk-search-row` **351px**
+（`.pk-search` 197 ＋ `.pk-mode-select` 148 ＋ gap），而可用寬度只有 296px。
+修法比照 /cards（v6.044 的 `repeat(N, minmax(0,1fr))`）：軌道改 `minmax(0, 1fr)`、
+搜尋列 `flex-wrap: wrap`、輸入框 `min-width: 0`、卡包下拉 `max-width: 100%`。
+修完 `.pk-search-row` 的 min-content 降到 221px。
+
+**(B) 比例放大 ＝ iOS 對 font-size < 16px 的表單控制項在聚焦時自動放大整個畫面。**
+牌組編輯器 7 個可聚焦控制項全部 < 16px（`.pk-search` 0.88rem、`.pk-mode-select` 0.78rem、
+`.pk-set-select` 0.82rem、`.deck-title` 手機 1rem、`.text-area` 0.85rem、`.bm-code` 0.72rem、
+`.auth-form input` 0.95rem）。
+⚠ `app.html` 早就有 `user-scalable=no, maximum-scale=1`，但 iOS 10 之後 Safari 不保證遵守，
+且那兩個值本身有無障礙代價 ⇒ **不依賴、也不加碼**（viewport 一個字都沒動）。
+⇒ 只在 `@media (max-width: 600px)` 把那 7 個控制項的字級提到 **16px**（用 `px` 不用 `rem`：
+門檻是瀏覽器寫死的 16 CSS px，使用者調小根字級時 `1rem` 會靜默失效）。
+⚠ 新區塊放在樣式最尾端 —— 同權重後者勝，放前面會被 `.pk-search`（:2743）等舊規則蓋掉而**靜默失效**；
+守衛有一條專門釘位置順序。
+
+**正對照（不可影響桌機）**：本版對 /decks 的改動**全部在 @media 內**
+⇒ 把所有 @media 整段拿掉之後的 CSS 不含任何本版新增的宣告（守衛逐條比對），
+Chromium 1440px 實測 scrollWidth 與四個控制項的 computed font-size 與 v6.212 完全相同。
+
+### 第二輪審查（opus 專審「守衛有沒有假綠」）抓到的三個假綠，已全部修掉
+
+⚠ 這一段留著，因為它是本輪最有價值的產出：**三支新守衛第一版全綠，但其中兩條是假綠**。
+
+1. **④ 的「桌機逐字未動」正對照根本抓不到桌機改動**。原本只寫了四條
+   「桌機區不得出現本版新增宣告」的否定式 —— 實測把 `.picker` 改成
+   `background:#ff0000; width:3000px;`，守衛照樣 43 PASS / 0 FAIL。
+   ⇒ 改成 **sha256 指紋鎖**：`6ac52437ce962826`（bare.length = 25315）。
+   這個值是在 **v6.212 上算出來的**，v6.213 算出來一模一樣 —— 這才是逐字證明。
+   實測改一個顏色（`#fff` → `#fefefe`）就會紅。
+2. **① 的結構掃描把迴圈變數寫死成 `const c`、而且只掃 3 個檔**。
+   實測把 v3001 的 `isStage2` 還原成線性掃描、變數名改成 `zz`、import 留著 ⇒ 全綠。
+   ⇒ 改成掃 `src/lib/game/**` ＋ `src/routes/**`、變數名放寬成 `\w+`。
+   **這一改當場又掃出 4 份沒收斂的**（effects.ts ×3、v3070 ×1）——
+   也就是說第一版不只守衛假綠，收斂本身也沒做完。
+   ⚠ 一開始用「整檔豁免 effects.ts」（因為它另有三處**鏈結推導**的迴圈），
+   但破壞測試立刻證明整檔豁免太粗：把 effects.ts 的神奇糖果改回線性掃描仍然全綠。
+   ⇒ 改成**用 pattern 分辨**（2 階判定會 `return true`；鏈結推導是 `basicName = …; break;`），
+   豁免表因此可以清空。
+3. **① 的差分／微基準比的全是中央 helper，真正的消費端零覆蓋**。
+   v3001 的 `isStage2` 是 module-private，把它改回線性掃描不會有任何一條斷言紅。
+   ⇒ 新增第 7 節：把 `isAbilityNullifiedBySticky`（海兔獸｜黏著束縛的閘）真的 import 進來跑，
+   驗行為（2 階被消除／1 階不被消除）＋ 驗它**真的吃到記憶化**（2000 次呼叫索引重建 0 次、3.8ms）。
+
+另外幾個【弱】也一併修掉：
+- 機率實測原本是「守衛自己寫一個 LCG 擲 20 萬次」＝ `0.01 === 0.01` 的 placebo。
+  改成把 `_tRecordSrvSample` 裡**真正那一段擲骰程式碼**抽出來跑 20 萬「場」（每場換房號）。
+  ⚠ 第一次改完量到 1.18% —— 那是 LCG **低位元週期短**，不是程式碼的問題；
+  換成 xorshift32 取全 32 位元後是 0.985%，並補一條「亂數來源本身要均勻」的自我驗證。
+- tApi 讀 `X-Srv-Ms` 原本只有字串斷言（而 v6.172 的測試又把 `_tRecordSrvSample` stub 掉了）
+  ⇒ 全站沒有任何一條在驗這條線。新增行為端：抽那 6 行真碼跑，驗
+  有值／缺席／垃圾字串／負數／`"0"`／沒有 headers 六種輸入。
+- `_pushSample` 原本是**手抄**進 harness 的（漂移點）⇒ 改成 `grabFn` 抽真本。
+- 「沒有另開端點」的否定式改成 **tApi 端點字面量白名單**（換個名字就繞過的問題）。
+- `test-v6184` 的 `SRC.slice(i, i+N)` 魔術數字切窗改成**大括號配對**取端點本體，
+  並加一條自我驗證「沒有多切到下一支端點」。
+
+### 守衛
+
+- `scripts/test-v6213-stage2-index-memo.mjs`（27 條）—— 三種語義的全卡池差分、跨 pool 不污染、
+  size 自癒、非 placebo 的重建計數、微基準、全站結構掃描、**消費端實跑**。
+- `scripts/test-v6213-perf-sample-and-srv-timing.mjs`（97 條）—— 真碼機率實測 20 萬場、行為端把
+  client 取樣函式／tApi 讀標頭／伺服器中介層／dump 分帳函式／admin 區塊**全部實跑**。
+- `scripts/test-v6213-mobile-deck-editor.mjs`（46 條）—— CSS 解析器自我驗證、桌機 sha256 指紋鎖。
+
+破壞測試：**28 項全部如預期變紅、0 項逃脫**（腳本會印 `=== MUTATION-SCRIPT-END ===`）。
+其中 8 項是第二輪審查之後針對新守衛補的（改桌機一個顏色／之後加小斷點覆寫字級／
+effects.ts 改回線性掃描／v3070 改回線性掃描／exactName 偷加 supertype 檢查／
+消費端繞過索引／tApi 讀了標頭卻不傳／偷開新端點）。
+
+既有守衛的**契約更新**（都是「真的多了東西」，不是放寬）：
+`test-v6159` / `test-v6179` 的 `CELLS` 13 → 14（admin 表新增「伺服器」欄，並補三條新欄位的行為斷言）；
+`test-v6184` 的端點切窗由魔術數字 4200 改成**大括號配對**取端點本體（＋自我驗證沒多切）；
+`test-v6203` 的 `sameEvoName` 呼叫點下限 8 → 3（**真的少了五個**，另補 7a-2 釘住「那五處必須已改走中央索引、
+且 effects.ts 剛好 3 處」）；
+`test-v6210` 的「超級」前綴豁免表把 `_shared.ts` 換成 `stage2-index.ts`（normalize 搬家，豁免仍是 3 處）；
+`test-v6172` 的 tApi 測試 PRELUDE 補 `_tRecordSrvSample` stub。
+
+### 待站長裁定
+
+1. **取樣機率**：1% 依站長指示實作，但一場賽事只會產生 ~1.5 筆。若要能看趨勢，
+   建議把 `PERF_SAMPLE_RATE` 調到 0.1（一場約 15 筆；7 天總量從 ~993 筆增加約 3%，負擔可忽略）。
+2. **viewport 的 `user-scalable=no, maximum-scale=1`**：本版沒動它。它從 iOS 10 起就不保證被遵守、
+   對無障礙也有代價，是否整個拿掉（影響全站含 /game）請站長裁示。
+3. `/cards` 的搜尋框（`input[type=search]` 0.95rem）與模式下拉（0.85rem）也 < 16px，
+   同樣會在 iOS 聚焦時放大 —— 本版**沒有**動它（站長只交辦牌組編輯器）。
+4. `effects.ts` 還有**三處**「由 Stage1 名字回推 Basic 名字」的全卡池線性掃描（神奇糖果的鏈結推導，
+   `effects.ts:1927 / 1953 / 1989`）。那**不是** 2 階判定、語義不同，本版刻意沒動；
+   要不要一起做成索引（例如 name → card 的反查表）請站長裁示。
+5. 三種 2 階比對規則（`sameEvoName` 語義／只 strip 尾綴 ex／逐字相等且不看 supertype）
+   是原碼就存在的差異，本版原封保留。要不要統一成一種是**規則問題**，請站長裁定。
+
 ## v6.212 自癒方向反過來（本地領先先重推、不回捲）＋ 輪詢版本閘單調 ＋ 賽程 game-over 對帳
 
 BASE = `cae142da479aa539f45cac0b347571fcbae3078b`（v6.211）。玩家有感 ⇒ 首頁 changelog 放一則。

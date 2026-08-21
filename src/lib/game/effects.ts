@@ -17,6 +17,8 @@ import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; 
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
 import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
+// ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
+import { isStage2ByEvoVariant } from './stage2-index';
 
 // ── 基礎設施 → 從 effects/_shared.ts 匯入 ──────────────────────────────────
 //
@@ -1754,11 +1756,9 @@ regPre('勾魂眼|動怒爪', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     if (card?.pokemonType !== 'Darkness') return false;
     // Stage 2 判斷：evolvesFrom 存在且該 Stage1 也有 evolvesFrom（含 ex 類型的 Stage2）
-    if (!card.evolvesFrom) return false;
-    for (const p of pool.values()) {
-      if (sameEvoName(p.name, card.evolvesFrom) && p.supertype === 'Pokemon' && p.evolvesFrom) return true;
-    }
-    return false;
+    // ⭐v6.213 改走中央 per-pool 索引（$lib/game/stage2-index）。判準逐字不變，
+    //   只是不再對整個卡池（4935 張）線性掃描。
+    return isStage2ByEvoVariant(card, pool);
   });
   return { state, damage: 20 + (hasStage2Dark ? 70 : 0) };
 });
@@ -1910,13 +1910,9 @@ regG('神奇糖果', (st, idx, pool) => {
   const p = st.players[idx];
   // v5.007：青銅鐘｜進化妨礙者 / 其他 cantEvolve 機制 — 鎖手牌進化
   if (p.cantEvolveThisTurn) return false;
-  const isStage2 = (c?: Card) => {
-    if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
-    for (const x of pool.values()) {
-      if (sameEvoName(x.name, c.evolvesFrom) && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
-    }
-    return false;
-  };
+  // ⭐v6.213 改走中央 per-pool 索引。⚠ 這一支比海兔獸那支更熱：regG 是「這張手牌能不能打」，
+  //   每次盤面重繪與每次 AI 評估都會對每一張手牌各跑一次。
+  const isStage2 = (c?: Card) => isStage2ByEvoVariant(c, pool);
   const stage2sInHand = p.hand.filter(i => isStage2(pool.get(i.cardId)));
   if (stage2sInHand.length === 0) return false;
   const fieldPokes = [...(p.active ? [p.active] : []), ...p.bench];
@@ -1945,13 +1941,7 @@ regG('神奇糖果', (st, idx, pool) => {
 reg('神奇糖果', (st, idx, pool) => {
   const p = st.players[idx];
   // 只列出手牌中的「Stage2」寶可夢（含 Stage2 ex）
-  const isStage2 = (c?: Card) => {
-    if (!c || c.supertype !== 'Pokemon' || !c.evolvesFrom) return false;
-    for (const x of pool.values()) {
-      if (sameEvoName(x.name, c.evolvesFrom) && x.supertype === 'Pokemon' && x.evolvesFrom) return true;
-    }
-    return false;
-  };
+  const isStage2 = (c?: Card) => isStage2ByEvoVariant(c, pool);   // ⭐v6.213 同上：中央 per-pool 索引
   // v5.340：只列出「在場上有合法【基礎】目標」的 Stage2（鏡射 guard + rare-candy-choose-target
   //   的鏈結判定）。原本只 filter isStage2 → 手牌有多張 Stage2 時會把「場上沒有對應基礎」那張也
   //   列出，玩家選到它 → 神奇糖果已打出被棄、卻無法進化 → 卡白白消耗（依規則不該能這樣用）。

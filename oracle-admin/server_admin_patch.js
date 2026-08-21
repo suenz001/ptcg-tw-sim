@@ -3017,6 +3017,41 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     const TPOOL = new Map(Object.entries(poolObj));
     const TROOMS = db.collection('tournamentRooms');
+    // ⭐⭐⭐ v6.213【③ per-request 伺服器處理時間】—— **只加量測，不動任何業務邏輯**。
+    //   問題：client 量到的 `perf.api.net`（送出 → 第一個位元組）把「Cloudflare／隧道／線路慢」
+    //   與「Node 自己處理慢」**綁死**。伺服器端指標一直全綠，但那是 pm2/系統層的平均值，
+    //   對不上「某一發請求」；而 client 只看得到往返總和 ⇒ 兩邊永遠兜不起來（v6.134 的老問題）。
+    //   ⇒ 在回應標頭帶上這一發**在 Express 裡待了多久**（進中介層 → 準備送出 header）。
+    //     client 收下寫進診斷 payload 的 `perf.srv`，`net - srv` 就是純線路時間。
+    //   ⚠ 負擔：每個請求兩次 process.hrtime.bigint()、一次 setHeader、一個閉包。
+    //     以 50 人同時對戰、每人 ~1 發/1.2 秒估算約 42 req/s ⇒ 量級是**每秒數十微秒**。
+    //     沒有 I/O、沒有 await、沒有計時器、不碰 DB。
+    //   ⚠ 這支**只掛在 /api/tournament**（app.use 的路徑前綴），休閒對戰路由完全不經過。
+    //   ⚠ 註冊位置必須在本 IIFE 的所有 /api/tournament 路由**之前**（Express 依註冊順序走 layer；
+    //     v1.11 gzip 那次事故就是掛在 stack 尾端永遠輪不到）。這裡是本區塊第一行 app.use。
+    //   ⚠ 長輪詢 `/state?wait=1` 會 by design 掛起最多 25 秒 ⇒ 那一發的 X-Srv-Ms 也會是 ~25000。
+    //     client 端的 `_tRecordApiSegments` 本來就把 wait=1 整發排除（v6.159），`srv` 與 `net`
+    //     的母體因此**完全一致**、可以直接相減。
+    //   ⚠ 同源（頁面與 API 都在 www.ptcg-tw-sim.com）⇒ 不需要 Access-Control-Expose-Headers。
+    const SRV_MS_HEADER = 'X-Srv-Ms';
+    app.use('/api/tournament', function _srvTimingMw(req, res, next) {
+      try {
+        const _t0 = process.hrtime.bigint();
+        const _origWriteHead = res.writeHead;
+        // ⚠ 一定要包 writeHead 而不是掛 res.on('finish')：finish 是**送出之後**才觸發，
+        //   那時候 header 早就寫死了，setHeader 會拋 ERR_HTTP_HEADERS_SENT。
+        res.writeHead = function () {
+          try {
+            if (!res.headersSent) {
+              res.setHeader(SRV_MS_HEADER, (Number(process.hrtime.bigint() - _t0) / 1e6).toFixed(1));
+            }
+          } catch (e) { /* 量測絕不影響回應 */ }
+          return _origWriteHead.apply(this, arguments);
+        };
+      } catch (e) { /* 量測絕不影響回應 */ }
+      next();
+    });
+    console.log('[tournament] per-request timing header enabled (v6.213) header=' + SRV_MS_HEADER);
     // v0.71 降載：對戰 log 佔完整盤面約 73%(一場打久了累積數百行)。/state /action /spectate 回應只送最近
     //   TOURN_LOG_CAP 行 log(儲存於 TROOMS 的盤面 + onMatchGameOver 的 finalLog 快照仍保留完整)。前端動畫游標
     //   已改用 timestamp 偵測新事件(非 log 長度),故截尾對前端透明、動畫/音效不受影響。
@@ -3975,6 +4010,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //   (TTL 7天自動清)。tournIdentity 驗證擋匿名 + per-uid 60s 記憶體節流 + body 8KB cap(v6.184 由 2KB 放大) + fail-silent,絕不影響對戰路徑。
     const TCDIAG = db.collection('tournamentClientDiag');
     TCDIAG.createIndex({ ts: 1 }, { expireAfterSeconds: 604800 }).catch(() => { /* TTL index best-effort */ });
+    // ⭐⭐⭐ v6.213【② 低頻無條件取樣的指紋】——**唯一來源**，admin 端點與
+    //   oracle-admin/tournament/dump-client-monitor.cjs 都必須用同一份清單。
+    //   ⚠⚠ 這一類 reason 是「健康對照組」，**不是異常**。把它混進既有的
+    //     byReason／slowRtt／版本分佈裡看，會讓**所有既有數字失真**（分母突然多了一批
+    //     完全健康的樣本）—— v6.198 的教訓就是分母污染會讓人做出相反的結論。
+    //     ⇒ 從查詢層就分開，不是在畫面上再挑。
+    const SAMPLE_REASONS = ['perf-sample'];
+    function isSampleReason(r) { return SAMPLE_REASONS.indexOf(String(r || '')) >= 0; }
     // ⭐⭐v6.160 節流 key 由 uid 改成 **uid|reason**。
     //   原本 per-uid 不分 reason 會讓「後送的那一則」被前一則吃掉，而後送的往往才是真訊號：
     //     ・既有案例（v6.155 已在 client 端繞過）：剛按過手動同步 ⇒ 緊接著的 setup-watchdog-repeat 被丟掉。
@@ -4046,6 +4089,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const since = Date.now() - hours * 3600000;
         const q = { ts: { $gte: since } };
         if (req.query.reason) q.reason = String(req.query.reason);
+        else q.reason = { $nin: SAMPLE_REASONS };   // v6.213 見檔案下方 SAMPLE_REASONS 的說明
         const rows = await TCDIAG.find(q).sort({ ts: -1 }).limit(120).toArray();
         // ⚠ 統計要對**整個時間窗**算，不能只算上面那 120 筆（不然數字會被 limit 截斷而失真）
         const agg = await TCDIAG.aggregate([
@@ -4053,6 +4097,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           { $group: { _id: '$reason', n: { $sum: 1 }, uids: { $addToSet: '$uid' } } },
         ]).toArray();
         const byReason = agg
+          .filter(function (a) { return !isSampleReason(a._id); })   // v6.213 分帳：這一份只留**異常**
           .map(function (a) { return { reason: a._id || '(未標)', n: a.n, players: (a.uids || []).length }; })
           .sort(function (x, y) { return y.n - x.n; });
         // slow-rtt 的往返時間：diag 內的 poll.rtt（v6.151 起才有）
@@ -4075,8 +4120,45 @@ import('firebase-admin').then(async ({ default: admin }) => {
             });
           } catch (e) { /* 舊格式或壞掉的 payload 直接略過 */ }
         }
+        // ⭐⭐⭐v6.213 分帳：取樣列走**完全獨立**的一份 aggregate、一份查詢、一份陣列。
+        //   刻意不共用 byReason／p95s —— 共用就等於把健康樣本混進「異常次數」與「最慢的玩家」，
+        //   那兩張表的意義會整個變掉（分母污染，v6.198 的教訓）。⚠ 兩邊的數字永遠不可相加。
+        const sampleAgg = agg.filter(function (a) { return isSampleReason(a._id); });
+        const sampleTotals = sampleAgg.reduce(function (acc, a) {
+          acc.n += a.n; (a.uids || []).forEach(function (u) { acc.uidSet[u] = 1; }); return acc;
+        }, { n: 0, uidSet: {} });
+        const sampleRttRows = await TCDIAG.find({ ts: { $gte: since }, reason: { $in: SAMPLE_REASONS } }).sort({ ts: -1 }).limit(200).toArray();
+        const samplePerf = [];
+        const _extract = function (r, out) {
+          try {
+            const d = JSON.parse(r.diag || '{}');
+            const rt = d && d.poll && d.poll.rtt;
+            out.push({
+              ts: r.ts, email: r.email || null, reason: r.reason || '',
+              p50: (rt && typeof rt.p50 === 'number') ? rt.p50 : null,
+              p95: (rt && typeof rt.p95 === 'number') ? rt.p95 : null,
+              max: (rt && typeof rt.max === 'number') ? rt.max : null,
+              n: (rt && typeof rt.n === 'number') ? rt.n : null,
+              perf: (d && d.perf) || null,
+              hc: (d && d.env && typeof d.env.hc === 'number') ? d.env.hc : null,
+              dm: (d && d.env && typeof d.env.dm === 'number') ? d.env.dm : null,
+              ver: (d && typeof d.ver === 'string') ? d.ver : null,
+            });
+          } catch (e) { /* 被截斷／壞掉的 payload 直接略過 */ }
+        };
+        for (const r of sampleRttRows) _extract(r, samplePerf);
         res.json({
           hours: hours, byReason: byReason, slowRtt: p95s,
+          // ⭐⭐⭐v6.213 健康對照組（低頻無條件取樣）。⚠ **不可以**與 byReason／slowRtt 相加。
+          //   n=0 有兩種完全不同的可能：①這段期間真的沒有人中籤（1% × 場次數）
+          //   ②玩家的畫面還沒更新到 v6.213 —— 看 `rows` 裡的 ver 分佈才分得出來。
+          sample: {
+            reasons: SAMPLE_REASONS,
+            n: sampleTotals.n,
+            players: Object.keys(sampleTotals.uidSet).length,
+            perf: samplePerf,
+            note: '低頻無條件取樣（每場對戰 1%）＝健康對照組，與異常指紋分開統計，兩者不可加總。',
+          },
           rows: rows.map(function (r) {
             // ⭐v6.184：把伺服器寫入時記下的截斷痕跡一併回給畫面。
             //   ⚠ 舊列沒有這兩個欄位 ⇒ truncated 一律正規化成布林（undefined 會被

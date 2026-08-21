@@ -1032,6 +1032,8 @@ import {
   findFieldPokemonByName,
   oppHasStage2,
 } from './effects/cards/v3070_deferred_wave_d';
+// ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
+import { isStage2ByEvoVariant } from './stage2-index';
 
 /**
  * 判斷一張寶可夢卡是否為「2 階進化」。
@@ -1039,11 +1041,12 @@ import {
  * 正確：`evolvesFrom` 指向的 Stage1 自己也有 `evolvesFrom`（即進化鏈深度 = 3）。
  */
 export function isStage2PokemonCard(card: Card | undefined, pool: Map<string, Card>): boolean {
-  if (!card || card.supertype !== 'Pokemon' || !card.evolvesFrom) return false;
-  for (const c of pool.values()) {
-    if (sameEvoName(c.name, card.evolvesFrom) && c.supertype === 'Pokemon' && c.evolvesFrom) return true;
-  }
-  return false;
+  // ⭐⭐⭐v6.213 純效能：原本每呼叫一次就對**整個卡池**（4935 張）線性掃描並逐張跑名稱正規化。
+  //   改走 per-pool 索引（$lib/game/stage2-index，WeakMap 掛在 pool 物件上、以 pool.size 自癒）。
+  //   ⚠ 判準逐字不變：索引收的就是「supertype==='Pokemon' 且有 evolvesFrom 且 name 非空」那批的
+  //     `normalizeEvoVariantName(name)`，而 sameEvoName(a,b) ⇔ normalize(a)===normalize(b)。
+  //     守衛 scripts/test-v6213-stage2-index-memo.mjs 對全卡池每一張做逐字差分。
+  return isStage2ByEvoVariant(card, pool);
 }
 
 /** 從 pool 判斷是否為能量牌 */

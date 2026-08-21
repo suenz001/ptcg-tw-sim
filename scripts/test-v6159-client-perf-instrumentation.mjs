@@ -372,7 +372,9 @@ try {
     M.monStat(undefined, 'p95') === null && M.monStat(null, 'p95') === null && M.monStat({}, 'p95') === null
     && M.monStat({ p95: 12 }, 'p95') === 12);
 
-  const CELLS = 13;  // v6.179 再加「排隊／傳輸／SW／續行」四欄：
+  // ⭐v6.213 再加「伺服器」一欄（X-Srv-Ms，把「Node 處理慢」與「隧道慢」分開）⇒ 13 → 14。
+  //   ⚠ 這個數字**只能因為真的加了欄位而改**：它擋的是「表頭與資料列欄數不一致 ⇒ 整張表錯位」。
+  const CELLS = 14;  // v6.179 再加「排隊／傳輸／SW／續行」四欄：
   //   連線／網路／排隊／傳輸／SW／續行／下載／權杖／解析／採納／重繪／長任務／裝置
   // ★★ 舊 client（v6.158 以前）的 payload：完全沒有 perf / hc / dm
   const LEGACY = { ts: 1786512345678, email: 'a@b.c', p50: 1234, p95: 6789, max: 12345, n: 30 };
@@ -431,6 +433,15 @@ try {
     /overflow-x:auto;">'/.test(ADMIN) && /min-width:1360px;">'/.test(ADMIN)
     && ADMIN.includes("html += '</table></div></div>';"));
   ok('★資料列有接上 monPerfCells（有 helper 沒接＝白寫）', /\+ monPerfCells\(r\)/.test(ADMIN));
+  // ⭐v6.213 新欄位的**兩端**都要在（只加表頭 = 整張表往右錯一格；只加儲存格同理）。
+  ok('★★v6.213「伺服器」欄：表頭有',
+    /<th style="text-align:right;padding:6px 8px;">伺服器<\/th>/.test(ADMIN));
+  ok('★★v6.213「伺服器」欄：monPerfCells 真的吐得出數字（不是只有表頭）',
+    M.monPerfCells({ perf: { srvHdr: { n: 3, miss: 0 }, srv: { n: 3, p50: 4, p95: 7, max: 9 } } }).includes('7 ms'));
+  ok('★★v6.213「伺服器」欄：伺服器沒部署時顯示「未部署」而**不是** 0ms（0 會被讀成「超快」）',
+    M.monPerfCells({ perf: { srvHdr: { n: 0, miss: 12 } } }).includes('未部署'));
+  ok('★★v6.213「伺服器」欄：舊 client（整包沒 perf）顯示「—」而不是「未部署」',
+    !M.monPerfCells(LEGACY).includes('未部署'));
   ok('★有寫給站長的判讀規則（數字沒人看得懂等於沒量）',
     ADMIN.includes('卡在網路，還是卡在那台裝置本身') && ADMIN.includes('再怎麼修伺服器都不會有效果'));
   ok('★★判讀規則有警告「網路欄大也可能是裝置忙」（不可只看一欄下決定性結論）',

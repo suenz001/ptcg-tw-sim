@@ -376,7 +376,9 @@ try {
   ok('★admin 的 escapeHtml 抽得出來', !!esc);
   const M = new Function(esc + '\n' + grabFn(ADMIN, 'monMs') + '\n' + grabFn(ADMIN, 'monStat') + '\n'
     + grabFn(ADMIN, 'monPerfCells') + '\nreturn { monMs, monStat, monPerfCells };')();
-  const CELLS = 13;
+  // ⭐v6.213 新增「伺服器」欄（X-Srv-Ms）⇒ 13 → 14。
+  //   ⚠ 這個常數擋的是「表頭與資料列欄數不一致 ⇒ 整張表往右錯一格」，只能因為真的加了欄位而改。
+  const CELLS = 14;
   const LEGACY = { ts: 1786512345678, email: 'a@b.c', p50: 1234, p95: 6789, max: 30 };
   let out = null, threw = null;
   try { out = M.monPerfCells(LEGACY); } catch (e) { threw = e; }

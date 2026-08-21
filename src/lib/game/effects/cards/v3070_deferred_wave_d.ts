@@ -38,6 +38,8 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import type { Card } from '$lib/cards/types';
+// ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
+import { isStage2ByExactName } from '../../stage2-index';
 import {
   addLog, updatePlayer, withPending,
   ABILITY_EFFECTS as _ABILITY_EFFECTS_UNUSED,
@@ -266,12 +268,10 @@ export function oppHasStage2(opp: PlayerState, pool: Map<string, Card>): boolean
     // 回退判定：有 evolvesFrom 且該前進化卡也有 evolvesFrom（即兩階以上深度）
     if (card.evolvesFrom) {
       // 在 pool 中尋找一張名稱 = card.evolvesFrom 的卡，看其是否亦為進化（Stage 1）
-      // pool 是 cardId → Card；需用 name 反查。為效能（hot path），用 iterator 找。
-      for (const v of pool.values()) {
-        if (v.name === card.evolvesFrom && v.evolvesFrom) {
-          return true; // 此卡的前進化也有前進化 → 此卡為 Stage 2
-        }
-      }
+      // ⭐v6.213 原本是對整個卡池（4935 張）線性掃描（註解自己都寫著「hot path」）。
+      //   改走中央 per-pool 索引。⚠ 判準逐字不變：名稱**逐字**相等、且**不檢查 supertype**
+      //   （這一支與 engine / v3001 那兩種比對規則都不同，刻意不合併 —— 見 stage2-index 檔頭）。
+      if (isStage2ByExactName(card.evolvesFrom, pool)) return true;
     }
     return false;
   });

@@ -219,7 +219,23 @@ if (packFn) {
 //     未來真的有 >8KB 的 payload 時，它在 📡 分頁上仍然是「一串壞掉的 JSON」而沒有任何標示。
 {
   const i = SRC.indexOf("app.get('/api/tournament/admin/clientdiag'");
-  const seg = i > 0 ? SRC.slice(i, i + 4200) : '';
+  // ⚠⚠ v6.213：原本是 `SRC.slice(i, i + 4200)` 的**魔術數字切窗**。這支端點中間插進了
+  //   「取樣 vs 異常」的分帳，4200 字元已經切不到 `rows: rows.map` ⇒ 會變成假紅。
+  //   ⇒ 但**不改成更大的魔術數字**（那只是把假綠往後延：切窗一旦超過端點尾巴，
+  //     下一支端點的內容會被誤算成這一支的）。改成**大括號配對**取這支端點的本體，
+  //     切窗從此自動跟著程式碼長度走。
+  const seg = i > 0 ? (function () {
+    const open = SRC.indexOf('{', i);
+    let d = 0;
+    for (let k = open; k < SRC.length; k++) {
+      if (SRC[k] === '{') d++;
+      else if (SRC[k] === '}') { d--; if (d === 0) return SRC.slice(i, k + 1); }
+    }
+    return '';
+  })() : '';
+  ok('[自我驗證] 端點本體切得出來，而且沒有多切到下一支端點',
+    seg.length > 3000 && seg.length < 12000 && !seg.includes("app.get('/api/tournament/admin/longpoll")
+    && !/const TEVENTS = db\.collection/.test(seg), 'len=' + seg.length);
   ok('★★②讀出端 rows 帶出 truncated（且正規化成布林，不是 undefined）',
     /truncated: r\.truncated === true/.test(seg));
   ok('★★②讀出端 rows 帶出 rawLen（缺席時回 null 不是 undefined）',
