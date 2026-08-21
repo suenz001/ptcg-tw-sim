@@ -34,6 +34,7 @@ function mkGS(o = {}) {
   return {
     id: o.id ?? 'G1',
     createdAt: o.createdAt,
+    createdAtSrv: o.createdAtSrv,   // v6.214③ 伺服器時鐘（缺席＝走原本的 createdAt 比較）
     phase: o.phase ?? 'playing',
     log: Array.from({ length: o.logLen ?? 5 }, (_, i) => ({ msg: 'l' + i })),
     setupDone: o.setupDone ?? [false, false],
@@ -48,7 +49,7 @@ function mkGS(o = {}) {
     ],
   };
 }
-const ctx = (o = {}) => ({ myPlayerIndex: o.me ?? 0, roomLastUndoApplyAt: o.room ?? 0, lastSeenUndoApplyAt: o.seen ?? 0, roomRestartCount: o.rc ?? 0, lastAdoptedRestartCount: o.larc ?? 0 });
+const ctx = (o = {}) => ({ myPlayerIndex: o.me ?? 0, roomLastUndoApplyAt: o.room ?? 0, lastSeenUndoApplyAt: o.seen ?? 0, roomRestartCount: o.rc ?? 0, lastAdoptedRestartCount: o.larc ?? 0, activeGameId: o.active });
 
 let pass = 0; const fails = [];
 const ck = (n, ok, d = '') => { ok ? pass++ : fails.push(`${n}${d ? ' — ' + d : ''}`); };
@@ -240,6 +241,29 @@ ck('收: 回歸-不同id playing(較新) → adopt(非setup)',
 // 回歸：不同 id 較舊(stale) → 仍 reject stale-old-game(防護不影響既有)
 ck('收: 回歸-不同id setup較舊 → reject stale-old-game',
    resolveRoomUpdate(mkGS({ id:'A', phase:'playing', createdAt:200 }), mkGS({ id:'B', phase:'setup', createdAt:100 }), ctx({})).reason === 'stale-old-game');
+
+// ════ v6.214① 本地沒有局時，已結束的舊局不自動採納（＋三條正對照）════
+ck('收: v6.214① local=null × incoming game-over × 沒有記憶 → reject finished-old-game',
+   resolveRoomUpdate(null, mkGS({ id: 'OLD', phase: 'game-over' }), ctx({})).reason === 'finished-old-game');
+ck('收: v6.214①正對照 local=null × incoming playing → adopt（重新加入進行中的對局）',
+   resolveRoomUpdate(null, mkGS({ id: 'RUN', phase: 'playing' }), ctx({})).kind === 'adopt');
+ck('收: v6.214①正對照 local=null × incoming setup → adopt',
+   resolveRoomUpdate(null, mkGS({ id: 'S', phase: 'setup' }), ctx({})).kind === 'adopt');
+ck('收: v6.214①正對照 記得就是這一局（重整）→ adopt（終局盤看得到）',
+   resolveRoomUpdate(null, mkGS({ id: 'OLD', phase: 'game-over' }), ctx({ active: 'OLD' })).kind === 'adopt');
+ck('收: v6.214①正對照 本地 playing → 同局 game-over 照舊採用（勝負畫面不會被吃掉）',
+   resolveRoomUpdate(mkGS({ id: 'X', phase: 'playing', logLen: 3 }), mkGS({ id: 'X', phase: 'game-over', logLen: 9 }), ctx({})).kind === 'adopt');
+
+// ════ v6.214③ 跨局防舊：兩局都有 createdAtSrv 才用伺服器時鐘 ════
+ck('收: v6.214③ 兩局都有 createdAtSrv → 用它比（createdAt 講反話也不受騙）',
+   resolveRoomUpdate(mkGS({ id: 'A', phase: 'playing', createdAt: 1, createdAtSrv: 200 }),
+                     mkGS({ id: 'B', phase: 'playing', createdAt: 9e12, createdAtSrv: 100 }), ctx({})).reason === 'stale-old-game');
+ck('收: v6.214③正對照 只有一邊有 createdAtSrv → 逐字沿用 createdAt 比較',
+   resolveRoomUpdate(mkGS({ id: 'A', phase: 'playing', createdAt: 200 }),
+                     mkGS({ id: 'B', phase: 'playing', createdAt: 100, createdAtSrv: 999 }), ctx({})).reason === 'stale-old-game');
+ck('推: v6.214③ 推端同樣吃到伺服器時鐘',
+   shouldSkipStalePush(mkGS({ id: 'B', phase: 'playing', createdAt: 9e12, createdAtSrv: 100 }),
+                       mkGS({ id: 'A', phase: 'playing', createdAt: 1, createdAtSrv: 200 })) === true);
 
 console.log(`\n線上同步守衛測試網：PASS ${pass} / FAIL ${fails.length}`);
 for (const f of fails) console.log('  ❌', f);

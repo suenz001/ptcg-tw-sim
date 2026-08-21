@@ -15,6 +15,37 @@ import type { GameState } from './types';
 import { tryAdvanceToPlaying, effectiveOpeningDone, ensureOpeningFinalized } from './engine';
 
 /**
+ * ⭐⭐⭐v6.214【③】跨局「誰比較早建立」的**單一判準**（推端／收端共用）。
+ *
+ * ── 為什麼要有這支 ────────────────────────────────────────────────────────
+ * 原本兩處各自寫 `(a.createdAt ?? 0) < (b.createdAt ?? 0)`，而 `createdAt` 是
+ * **建局那一端瀏覽器**的 `Date.now()`。v6.198 實證線上玩家時鐘偏差有
+ * -11 秒 / -77 秒 / -4.9 小時 ⇒ 兩局由不同玩家建立時，比較結果可能整個反向。
+ *
+ * ── 相容路徑（這一版最重要的一件事）────────────────────────────────────────
+ * v6.214 起 `createGame` 會在**同步得到伺服器時鐘時**多寫一個 `createdAtSrv`。
+ *   ・**兩局都有** `createdAtSrv` ⇒ 用它比（同一顆伺服器時鐘，不受任何玩家時鐘影響）。
+ *   ・**任一邊缺席** ⇒ 逐字退回原本的 `createdAt` 比較。
+ * 缺席會發生在：舊版 client 建的局、本機/AI 對局、從沒同步到伺服器時戳的 client、
+ * 以及**所有 v6.214 之前就已經在進行中的對局**。
+ * ⇒ 混版期間與既有對局走的是**與 v6.213 逐字相同**的那一條，不可能被打斷。
+ *
+ * ⚠ 刻意**不**做「一邊有一邊沒有就拿 createdAtSrv 跟 createdAt 混著比」——
+ *   那等於拿伺服器時鐘去跟一顆偏差 4.9 小時的瀏覽器時鐘比，比原本更錯。
+ */
+export function isOlderGame(
+  incoming: Pick<GameState, 'createdAt' | 'createdAtSrv'> | null | undefined,
+  current: Pick<GameState, 'createdAt' | 'createdAtSrv'> | null | undefined,
+): boolean {
+  const a = incoming?.createdAtSrv;
+  const b = current?.createdAtSrv;
+  if (typeof a === 'number' && isFinite(a) && typeof b === 'number' && isFinite(b)) {
+    return a < b;                                   // 伺服器單一時鐘
+  }
+  return (incoming?.createdAt ?? 0) < (current?.createdAt ?? 0);   // v6.213 原式，逐字不變
+}
+
+/**
  * 推送端防舊（room-oracle.ts pushGameState，v5.346）。
  *   playing 期間，若我方要推的 gameState 比房間現有『嚴格較舊』（log 長度單調序）→ 跳過寫入，
  *   不 regress 房間。不擋等長（避免 v2.82 _syncSeq deadlock）。
@@ -40,7 +71,7 @@ export function shouldSkipStalePush(
     if (current.phase === 'playing' && incoming.phase === 'setup') {
       return true;
     }
-    return (incoming.createdAt ?? 0) < (current.createdAt ?? 0);
+    return isOlderGame(incoming, current);   // v6.214③ 收斂到單一判準（伺服器時鐘優先，缺席退回原式）
   }
   // v5.465：終態保護（推端）— 房間已 game-over（同局）時，不讓非 game-over 的 push 蓋掉。
   //   根因：一方取最後獎賞→game-over 的瞬間，輸方剛好補位(SEND_NEW_ACTIVE)的 'playing' push
@@ -102,6 +133,44 @@ export interface RoomUpdateCtx {
   //   殘留局）不會。adopt 端只在 roomRestartCount > lastAdoptedRestartCount 時放行 setup 覆蓋 playing。
   roomRestartCount?: number;         // room.restartProposalCount ?? 0
   lastAdoptedRestartCount?: number;  // 元件持有：上次 adopt restart 重建局時的 restartProposalCount
+  // ⭐⭐⭐v6.214【①】「本裝置目前正在看的那一局」的 id（＝重整前那一局）。
+  //   由 +page.svelte 以 sessionStorage 持有：採用任何盤面時寫入、回大廳（game=null）時清除、
+  //   逾 ACTIVE_GAME_TTL 視為沒有。**只用來分辨「重整想看終局盤」與「跳回舊局」**，
+  //   不參與任何其他決策；缺席（undefined/null）一律 fail-closed ＝ 不採納已結束的局。
+  activeGameId?: string | null;
+}
+
+/**
+ * ⭐⭐⭐v6.214【①】「已結束的舊局不要自動採納」（純函式；收端 + force-adopt 兩條路共用同一份判準）。
+ *
+ * ── 這在修什麼 ────────────────────────────────────────────────────────────
+ * `resolveRoomUpdate` 第 9 步是無條件 `adopt`，而它上面**每一條**守衛都寫著 `if (local && …)`
+ * ⇒ 本地 `game === null`（玩家正在大廳畫面／剛重整）時，那些守衛一條都不會執行，
+ *   房間裡殘留的、早就結束的舊局 snapshot 會被直接採納 ⇒ 玩家「突然跳回一局早就打完的對局」。
+ *
+ * ── 分界（站長要的判準）──────────────────────────────────────────────────
+ * 只看兩件事，兩件都很窄：
+ *   (a) **只在本地沒有局時才管**。本地已經有局 ⇒ 原本的第 4/5/6/9 條照舊，一個字都沒改
+ *       ⇒ 「剛結束、玩家還在該局頁面」的終局畫面**不可能**因為這條而消失（local 非 null）。
+ *   (b) **只擋 `phase === 'game-over'`**。`setup` / `playing` 的局一律照舊 adopt
+ *       ⇒ 「重新加入進行中的對局」（重整、換裝置、斷線回來）**完全不受影響**。
+ * 剩下唯一會被擋的，就是「本地沒有局 × incoming 是已結束的局」。而這一格裡還有一個合法情形：
+ * **玩家剛在那一局按下 F5**（他想看終局盤）。用 `ctx.activeGameId` 分辨 ——
+ * 那是本裝置寫在 sessionStorage 的「我剛剛在看的那一局」，重整會留著、回大廳會清掉、
+ * 逾時會過期。id 對得上就放行，對不上（或根本沒有）就拒收並留在大廳。
+ *
+ * ⚠ fail-closed：`activeGameId` 缺席一律拒收。這是刻意的 ——
+ *   拒收的代價是「玩家要自己點一次才看得到終局盤」，採納的代價是「被丟進一局陌生的舊對局」。
+ */
+export function isStaleFinishedGame(
+  local: GameState | null | undefined,
+  incoming: GameState | null | undefined,
+  activeGameId?: string | null,
+): boolean {
+  if (!incoming) return false;
+  if (local) return false;                      // (a) 本地有局 → 這條完全不介入
+  if (incoming.phase !== 'game-over') return false;  // (b) 只擋已結束的局
+  return !activeGameId || activeGameId !== incoming.id;
 }
 
 /**
@@ -127,10 +196,18 @@ export function resolveRoomUpdate(
 ): RoomUpdateDecision {
   if (!incoming) return { kind: 'ignore' };
 
+  // ⭐⭐⭐1.5（v6.214①）本地沒有局時，**已結束的舊局不自動採納** → 留在大廳畫面。
+  //   ⚠ 位置必須在第 2 條之前：第 2 條起每一條都是 `if (local && …)`，local 為 null 時
+  //     全部落空、一路掉到第 9 步無條件 adopt —— 那正是「突然跳回舊局」的來源。
+  //   判準與正對照見 isStaleFinishedGame 的說明（進行中的局／終局畫面都不受影響）。
+  if (isStaleFinishedGame(local, incoming, ctx.activeGameId)) {
+    return { kind: 'reject', reason: 'finished-old-game' };
+  }
+
   // 2. 不同局：createGame race 採較新/同齡局；但「較早建立的殘留舊局」(createdAt 較小) 拒收
   //    v5.457：避免再來一局後舊局殘留 snapshot 蓋掉新局（回到上一盤最後一手）。舊版無 createdAt 視為 0。
   if (local && local.id !== incoming.id) {
-    if ((incoming.createdAt ?? 0) < (local.createdAt ?? 0)) {
+    if (isOlderGame(incoming, local)) {   // v6.214③ 同上：單一判準
       return { kind: 'reject', reason: 'stale-old-game' };
     }
     // v5.716 phantom 防護：local 進行中(playing)，incoming 是「不同 id 的 setup 局」

@@ -43,7 +43,7 @@
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
-  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal } from '$lib/game/sync-guards';
+  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
@@ -211,7 +211,7 @@
   //     取樣絕不可以把真異常指紋擠掉，那會是比「沒有對照組」更糟的事。
   //   ⚠ 只涵蓋**錦標賽對戰者**：整套 perf 量測（_tRecordApiSegments）本來就只掛在這條路徑上，
   //     休閒／本機對戰沒有 tApi 也沒有四段拆分，硬接等於另開一套（違反「沿用既有管線」）。
-  const PERF_SAMPLE_RATE = 0.01;       // 每場對戰 1%（站長指定）
+  const PERF_SAMPLE_RATE = 0.1;        // v6.214④ 每場對戰 10%（站長裁定：1% 一場賽事只有 ~1.5 筆，看不出趨勢）
   const PERF_SAMPLE_MIN_CALLS = 20;    // 累積 20 發成功往返才送 —— 太早送等於只量到開局那幾發
   let _perfSampleRoom = '';            // 上一次擲骰是為了哪一間房（房號一變＝新的一場）
   let _perfSampleArmed = false;        // 這一場中籤了嗎（每場只擲一次）
@@ -805,6 +805,53 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   let game = $state<GameState | null>(null);
+
+  // ⭐⭐⭐v6.214【①】「我剛剛在看的那一局」——用來分辨「重整後想看終局盤」與「跳回舊局」。
+  //   站長回報：早就結束的對局會突然跳回去。真因是 sync-guards 第 9 步無條件 adopt
+  //   （上面每一條守衛都是 `if (local && …)`，本地 game===null 時全部落空）。
+  //   ⚠ 用 **sessionStorage** 而不是 localStorage：語義剛好就是我們要的分界 ——
+  //     同一個分頁重新整理會留著（＝玩家想看終局盤），關掉分頁／換分頁就沒有（＝不該跳回去）。
+  //   ⚠ 另外加一個時間上限：同一個分頁裡離開對戰頁再回來（SPA 導覽，元件重新掛載）時
+  //     sessionStorage 還在，只靠 id 會又被拉回終局盤。TTL 用的是**同一台裝置自己的**
+  //     Date.now() 差值 —— v6.198 實證的時鐘偏差是「跨玩家」比較才會出事，
+  //     同一顆時鐘算 elapsed 不受影響。
+  //   ⚠ 讀寫都包 try/catch：無痕模式／配額滿會 throw，那時退化成「不記得」＝更保守
+  //     （不會多採納任何一局），絕不讓它把對戰頁打掛。
+  const ACTIVE_GAME_KEY = 'ptcg:activeGameId';
+  const ACTIVE_GAME_TTL_MS = 5 * 60 * 1000;
+  function _readActiveGameId(): string | null {
+    try {
+      if (typeof sessionStorage === 'undefined') return null;
+      const raw = sessionStorage.getItem(ACTIVE_GAME_KEY);
+      if (!raw) return null;
+      const o = JSON.parse(raw);
+      if (!o || typeof o.id !== 'string' || typeof o.at !== 'number') return null;
+      if (!(Date.now() - o.at <= ACTIVE_GAME_TTL_MS)) return null;   // NaN 也會落到這裡＝視為沒有
+      return o.id;
+    } catch { return null; }
+  }
+  let _activeGameId: string | null = _readActiveGameId();
+  // ⚠⚠ 「元件剛掛載、還沒收到任何盤面」與「玩家真的回大廳了」必須分得出來：
+  //   前者 game 也是 null，但那時**不可以**清掉記憶（清了就等於重整後看不到終局盤）。
+  let _seenGameOnce = false;
+  function _noteActiveGame(g: GameState | null): void {
+    if (!g) {
+      if (!_seenGameOnce) return;      // 還沒有過盤面 → 保留重整前的記憶
+      _activeGameId = null;
+      try { if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(ACTIVE_GAME_KEY); } catch { /* 忽略 */ }
+      return;
+    }
+    _seenGameOnce = true;
+    _activeGameId = g.id;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(ACTIVE_GAME_KEY, JSON.stringify({ id: g.id, at: Date.now() }));
+      }
+    } catch { /* 忽略 */ }
+  }
+  // ⚠ 用 $effect 當**單一接線點**：game 在本檔有數十處賦值，逐一手動呼叫必定漏接
+  //   （而漏接的症狀就是「偶爾又跳回舊局」，跟原本的 bug 長得一模一樣、查不出來）。
+  $effect(() => { _noteActiveGame(game); });
 
   // v5.478 系統管理員廣播：開戰讀一次 config/broadcast；game.turn 命中設定回合 → 上方跑馬燈跑一輪。
   //   beta+正式站都讀同一份 Firestore；純前端顯示、不經同步層（兩端各自獨立顯示，無 desync 風險）。
@@ -7834,7 +7881,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   僅同一局(或本地無局)且非 setup(防 phase 倒退)才採用；game-over 本地時上層 isWaitingOnOpponent=false 不會走到這。
       if (_forceAdoptNext) {
         _forceAdoptNext = false;
-        if (incoming && incoming.phase !== 'setup' && (!game || game.id === incoming.id)) {
+        // ⭐v6.214①：這條路徑是**刻意繞過** resolveRoomUpdate 的，所以「已結束的舊局不採納」
+        //   必須在這裡再問一次同一個純述詞（單一判準，不是複製一份條件）。
+        //   `!game` 時原條件是放行的 ⇒ 不補這一道，自癒就會變成另一個「跳回舊局」的入口。
+        if (incoming && incoming.phase !== 'setup' && (!game || game.id === incoming.id)
+            && !isStaleFinishedGame(game, incoming, _activeGameId)) {
           console.warn('[Online] 強制自癒：採用伺服器最新狀態（繞過 stale 守衛，治本地領先型卡死）');
           game = incoming;
           return;
@@ -7869,6 +7920,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         lastSeenUndoApplyAt,
         roomRestartCount: (room.restartProposalCount as number | undefined) ?? 0,
         lastAdoptedRestartCount,
+        activeGameId: _activeGameId,   // v6.214①：分辨「重整想看終局盤」與「跳回舊局」
       });
       // reject / ignore 不會改變盤面 → 不發出任何聲音（這正是移到守衛之後的目的）
       if (decision.kind !== 'reject' && decision.kind !== 'ignore') _emitCasualSfx(decision.game);

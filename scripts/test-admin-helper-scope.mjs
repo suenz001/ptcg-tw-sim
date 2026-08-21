@@ -15,6 +15,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 
+import { createRequire } from 'node:module';
+const _require = createRequire(import.meta.url);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const src = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
 
@@ -182,6 +184,84 @@ T('⭐⭐通用鎖：IIFE 外的函式不可呼叫「只存在於某個 IIFE 內
   console.log(`   掃描 ${decls.length} 個函式宣告 / ${iifes.length} 個 IIFE，外層函式 ${outer.size} 個 → 無跨作用域引用`);
 });
 
+
+// ⭐⭐⭐v6.214 新增：**通用**作用域檢查（acorn 真的解析，不再靠 regex 猜 IIFE 邊界）。
+//
+// 為什麼上面那張網不夠：它只認得**具名** IIFE `(function name(){…})()`。
+// v6.214 第一版把 `noShowGraceMin` 放進 `import('firebase-admin').then(async (…) => {…})`
+// 這個**箭頭函式 callback** 內，而呼叫端在錦標賽的 `(async () => {…})()` 裡 —— 兩者是
+// 兄弟作用域，線上一呼叫就 ReferenceError（/event 直接 500、排程器整段 tick 從那一行之後全跳過）。
+// `node --check` 過、單元測試也全綠（守衛是把函式字串抽出來自己跑的），完全沒有人擋得住。
+// 這是 v0.94 / v1.01 的第三次重演，所以改用真的 AST。
+//
+// ⚠ 保守到「零誤判」為止（BASE 與 HEAD 實測都是 0 違規）：只檢查
+//   ①函式宣告 / 函式值的 const —— 也就是「helper」這一類
+//   ②該名字在**全檔只被宣告一次**（同名多處就靜態分不出來，一律略過）
+//   ③該名字不曾當過任何函式的參數或 catch 變數（同上）
+// 漏判比誤判好：這張網是拿來擋事故的，不是拿來當型別檢查器。
+T('⭐⭐⭐通用作用域：helper 的定義處必須看得到它的每一個使用處（acorn）', () => {
+  // ⚠ 這裡**一定要同步**：上面的 T() 是 `fn()` 不是 `await fn()`，
+  //   寫成 async 的話 assert 失敗會變成未處理的 rejection、測試照樣印 PASS ＝ 假綠。
+  //   所以用 createRequire 同步載入 acorn（CJS），不用 await import()。
+  const acorn = _require('acorn');
+  const ast = acorn.parse(src, { ecmaVersion: 2022, sourceType: 'module' });
+  const fns = []; const decls = new Map(); const allDecl = new Map(); const refs = [];
+  const paramNames = new Set(); const catchNames = new Set();
+  const push = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
+  const collectNames = (node, out) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Identifier') { out.add(node.name); return; }
+    for (const k of ['elements', 'properties', 'params']) for (const c of (node[k] || [])) collectNames(c, out);
+    for (const k of ['left', 'argument', 'value', 'key']) collectNames(node[k], out);
+  };
+  (function walk(n, parent) {
+    if (!n || typeof n !== 'object') return;
+    if (/Function/.test(n.type || '')) {
+      fns.push([n.start, n.end]);
+      for (const p of (n.params || [])) collectNames(p, paramNames);
+    }
+    if (n.type === 'CatchClause' && n.param) collectNames(n.param, catchNames);
+    if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier') push(allDecl, n.id.name, n.start);
+    if (n.type === 'ClassDeclaration' && n.id) push(allDecl, n.id.name, n.start);
+    if (n.type === 'FunctionDeclaration' && n.id) { push(allDecl, n.id.name, n.start); push(decls, n.id.name, n.start); }
+    if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier' && n.init
+        && /Function|ArrowFunctionExpression/.test(n.init.type)) push(decls, n.id.name, n.start);
+    if (n.type === 'Identifier' && parent) {
+      const skip = (parent.type === 'MemberExpression' && parent.property === n && !parent.computed)
+        || (parent.type === 'Property' && parent.key === n && !parent.computed)
+        || (parent.type === 'FunctionDeclaration' && parent.id === n)
+        || (parent.type === 'VariableDeclarator' && parent.id === n)
+        || (/Function/.test(parent.type) && (parent.params || []).includes(n));
+      if (!skip) refs.push([n.name, n.start]);
+    }
+    for (const k in n) {
+      const v = n[k];
+      if (Array.isArray(v)) v.forEach((c) => walk(c, n));
+      else if (v && typeof v === 'object' && v.type) walk(v, n);
+    }
+  })(ast, null);
+  const chain = (p) => fns.filter((f) => f[0] <= p && p < f[1]).sort((a2, b2) => a2[0] - b2[0]);
+  const lineOf = (p) => src.slice(0, p).split('\n').length;
+  const bad = [];
+  let checked = 0;
+  for (const [name, ps] of decls) {
+    if (ps.length !== 1) continue;
+    if (paramNames.has(name) || catchNames.has(name)) continue;
+    if ((allDecl.get(name) || []).length !== 1) continue;
+    checked++;
+    const dp = ps[0];
+    const outerChain = chain(dp).filter((r) => r[0] !== dp);
+    for (const [rn, rp] of refs) {
+      if (rn !== name || rp === dp) continue;
+      const c = chain(rp);
+      if (!outerChain.every((x, i) => c[i] && c[i][0] === x[0] && c[i][1] === x[1])) {
+        bad.push(`${name}：宣告在 L${lineOf(dp)}，但 L${lineOf(rp)} 的使用不在它的作用域內 → 執行到就 ReferenceError`);
+      }
+    }
+  }
+  assert.deepEqual([...new Set(bad)], [], '跨作用域引用（acorn）：\n  ' + [...new Set(bad)].join('\n  '));
+  console.log(`   acorn 掃描：可判定的 helper ${checked} 個 / 函式節點 ${fns.length} 個 → 無跨作用域引用`);
+});
 
 T('整份 patch 語法可解析（等同 node --check，順手鎖住）', () => {
   // 用 Function 建構子做語法檢查；patch 是 script 不是 module，可直接丟

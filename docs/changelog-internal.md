@@ -1,5 +1,241 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.214 ①已結束的舊局不自動採納 ②未進場容許窗縮短（admin 可調）③建局時間改用伺服器時鐘（相容欄位）④診斷取樣率 1% → 10%
+
+BASE = `b0beb26dbfda4653ad3584dcd3d441e53df04852`（v6.213）。①②玩家有感 ⇒ 首頁 changelog 放一則；③④純內部。
+
+### ① 「早就結束的對局會突然跳回去」
+
+真因是 v6.212 的 A-2 已經指出、但當時裁定不動的那一條：
+`sync-guards.ts:173` 第 9 步 `return { kind: 'adopt', game: incoming }`，
+而它上面**每一條**守衛都寫著 `if (local && …)` ⇒ 本地 `game === null`（大廳畫面／剛重整）時
+那些守衛一條都不會執行，房間裡殘留的、早就結束的舊局 snapshot 直接被採納。
+
+**判準（站長要的那條分界）** —— 新增純函式 `isStaleFinishedGame(local, incoming, activeGameId)`，
+作用範圍刻意開得很窄，只有兩個條件同時成立才介入：
+
+- **(a) 只在本地沒有局時才管**。本地已經有局 ⇒ 第 4/5/6/9 條一個字都沒改
+  ⇒ 「剛結束、玩家還在該局頁面」的終局畫面**不可能**因此消失（那時 local 非 null）。
+- **(b) 只擋 `phase === 'game-over'`**。`setup` / `playing` 一律照舊 adopt
+  ⇒ 「重新加入進行中的對局」（重整、換裝置、斷線回來）完全不受影響。
+
+剩下唯一會被擋的格子裡還有一個合法情形：**玩家剛在那一局按 F5，想看終局盤**。
+用 `ctx.activeGameId` 分辨 —— 那是本裝置寫在 **sessionStorage** 的「我剛剛在看的那一局」：
+
+| 情境 | sessionStorage | 結果 |
+|---|---|---|
+| 同一分頁按 F5 | 還在（`_seenGameOnce` 為 false 時**不清**） | adopt ⇒ 看得到終局盤 |
+| 玩家回大廳（`game` 由非 null 變 null） | 清掉 | reject ⇒ 不會被拉回去 |
+| 關掉分頁／新分頁／別台裝置 | 天生沒有 | reject |
+| 同一分頁離開再回來超過 5 分鐘 | TTL 過期 | reject |
+
+⚠ `activeGameId` 缺席一律 **fail-closed**（拒收）。拒收的代價是「玩家自己點一次才看得到終局盤」，
+採納的代價是「被丟進一局陌生的舊對局」——後者嚴重得多。
+⚠ TTL 用的是**同一台裝置自己的** `Date.now()` 差值：v6.198 實證的時鐘偏差是**跨玩家**比較才會出事，
+同一顆時鐘算 elapsed 不受影響。
+⚠ 接線用 `$effect(() => { _noteActiveGame(game); })` 當**單一接線點** —— `game` 在該檔有數十處賦值，
+逐一手動呼叫必定漏接，而漏接的症狀跟原本的 bug 長得一模一樣、查不出來。
+⚠ `_forceAdoptNext`（25 秒自癒，刻意繞過 resolveRoomUpdate 的那條）**也問同一個述詞**。
+不補這一道，自癒就是另一個「跳回舊局」的入口。
+
+**已知且刻意接受的行為**：同一分頁在 5 分鐘內離開對戰頁再回到同一個房間，仍會看到那一局的終局盤。
+以及**觀戰者**進到一個已結束的房間會停在大廳而不是看到終局盤（站長裁定的直接後果，若要放行請裁示）。
+
+### ② 未進場容許窗 5 分鐘 → 3 分鐘（**admin 可調**，預設開啟）
+
+**等待鏈的實際結構**（逐行複驗，BASE 版）：
+`enterOpenAt = roundStartedAt + roundCountdownMin(預設 3 分)`；玩家在那之前**按鈕根本不出現**
+（`+page.svelte:9117` `{#if _waitMs > 0}` 只畫倒數）⇒ 真正的「可進場容許窗」就是 `noShowMin`（預設 5 分）。
+判負在 `server_admin_patch.js:7257` `deadline = roundStartedAt + (cdMin + nsMin) * 60000`，
+scheduler tick 30 秒（`:7524`）。
+
+**建議值 3 分鐘的依據**（不是拍腦袋，也不是官方規則）：
+
+1. 站上既有的 `idleForfeitMin` 預設就是 **3 分鐘** —— 那是判「已經在對戰中、輪到你動作卻沒動作」的人。
+   未進場者手上的資訊**更明確**：有 Web Push（`⚔️ 第 N 輪可進場`，`requireInteraction`，`:7238`）
+   ＋大廳一直在跑的「⏰ 請於 X:XX 內進場，逾時判負離席」。用同一個 3 分鐘是**對稱**的，不比既有標準嚴格。
+2. 硬地板 `NOSHOW_FLOOR_MIN = 2`，admin 填 0.5 也不會生效。
+3. `Math.min(base, …)` ⇒ **只會縮短、永遠不會拉長**：某場賽事自己把 `noShowMin` 設成 2 分時，全域設定不會把它變回 3。
+4. 設定讀不到／值不合法 ⇒ 一律回 base（＝ v6.213 的 5 分鐘）＝**比較寬鬆**的方向，絕不會因為設定壞掉而提早判人輸。
+
+⚠⚠ **顯示端與判定端必須是同一支函式**。`/event` 回給玩家的 `noShowDeadline` 與排程器的 `deadline`
+現在都走 `noShowGraceMin(evNoShowMin, tune)`，守衛逐字釘住兩處。
+只改一邊的後果就是「畫面說還有 2 分鐘、伺服器已經判你輸」—— 那正是站長最在意的誤判。
+
+⚠ **這一版沒有做「只縮最後一場」**。原本的設計是「本輪只剩 1 場未完成時才縮」，
+但那需要 per-round 的未完成場數，而顯示端（`/event`，3 秒快取）與判定端（排程器，即時查）
+拿到的數字會有時間差 ⇒ 別場剛結束的瞬間，玩家的倒數會**從 5 分鐘瞬間跳到 3 分鐘、下一秒就被判負**。
+⇒ 改成整輪一致的固定值：玩家從輪次開始就知道自己有幾分鐘，數字**永遠不會中途變短**。
+（實務上效果一樣：整輪的結束時間由最慢的那一場決定。）
+
+⚠ **不動輪詢頻率**（v6.212 已確認不是元兇）、**不動 `roundCountdownMin`（休息倒數）**、
+**不動 `idleForfeitMin`** —— 後兩者本來就是 per-event 設定，請在 admin「賽事設定」裡改。
+30 秒的 scheduler tick 也沒動（它是全站排程的心跳，縮短它等於全面提高 DB 負載，換不到 30 秒以上的效益）。
+
+**admin**：`tournamentConfig.noShowTune = { enabled, minutes }`＋
+`GET/POST /api/tournament/admin/noshow`＋admin.html「📡 對戰連線監控」新增一塊。
+⚠ 與其他灰度旗標不同，**預設是開的** —— 站長裁定要縮短，預設關著等於這一版什麼都沒做。
+要退回 v6.213 的 5 分鐘按一下「關閉」即可。
+
+**順手補一個一直缺的東西**：`TMATCH.enteredAt`（進場時刻，**純遙測、不參與任何判定**）。
+站上到今天為止只存 `entered` 布林 ⇒ **完全沒有玩家實際進場時間的分佈可以佐證**，
+上面那個 3 分鐘只能用既有門檻推論。下一版起就有真實資料可以再調。
+守衛有一條專門釘住「未進場判負那一段裡不可以出現 enteredAt」（防止它哪天被拉進判定）。
+
+### ③ 建局時間改用伺服器時鐘 —— **相容欄位**，既有對局零影響
+
+`engine.ts:2386` `createdAt: Date.now()`（全檔唯一寫入處）跑在**建局那一端的瀏覽器**上，
+而跨局防舊（`sync-guards.ts:43` 推端、`:102` 收端）拿兩局的 `createdAt` 比大小。
+v6.198 實證玩家時鐘偏差有 **-11 秒 / -77 秒 / -4.9 小時** ⇒ 兩局由不同玩家建立時，判斷可能整個反向。
+
+**⚠⚠ 直接把 `createdAt` 換成伺服器時鐘是危險的**：一個時鐘快 4.9 小時的玩家，
+手上「舊格式的進行中對局」`createdAt` 在未來 4.9 小時，而新局用修正後的時間 ⇒ 新局反而被判成殘留舊局而拒收
+＝ **打斷玩家的對局**。所以本版採**並存欄位**：
+
+- 新增 `GameState.createdAtSrv?: number`（伺服器時鐘估計值）。`createGame` **只在同步得到伺服器時鐘時才寫**，
+  沒同步過（本機對戰／vs AI／單元測試／伺服器端 bundle）**整個欄位不寫** —— 「不知道」與「知道」必須分得出來。
+- 跨局比較收斂成 `sync-guards.isOlderGame(a, b)`：**兩局都有** `createdAtSrv` 才用它；
+  **任一邊缺席就逐字退回原本的 `createdAt` 比較**。
+  ⇒ 舊局、混版期間、本機對局走的都是**與 v6.213 逐字相同**的那一條，不可能被打斷。
+  ⇒ 刻意**不**做「一邊有一邊沒有就混著比」—— 那等於拿伺服器時鐘去跟偏差 4.9 小時的瀏覽器時鐘比，比原本更錯。
+- 偏移量來源：新增 **leaf** 模組 `src/lib/game/server-clock.ts`（除註解外**零 import**，比照 v6.213 的
+  stage2-index.ts，杜絕 v6.078 的循環 import／TDZ）。`oracleUpsertRoom` 寫入成功時，
+  伺服器蓋的 `room.updatedAt` 必定落在「我送出」與「我收到」之間 ⇒
+  `offset ≈ srvMs − (sentAt + recvAt)/2`，誤差上界 RTT/2（幾百毫秒），而要對抗的偏差是 11 秒～4.9 小時，
+  差三個數量級以上。只採信 `ok` 分支（`conflict` 回的是別人上一次寫入的時戳，會把偏移量估偏後）、
+  RTT > 10 秒的樣本丟棄、非 epoch 值丟棄、**只保留 RTT 最小的那一筆**（平均會被塞車樣本拉歪）。
+- 欄位缺席／格式不對 ⇒ `noteServerTime` 自己拒收 ⇒ 從沒同步過 ⇒ 不寫 `createdAtSrv` ⇒ 逐字現況（fail-open）。
+
+**差分實跑**（守衛內）：10 萬組隨機 `{createdAt?, createdAtSrv?}` 組合，只要任一邊缺 `createdAtSrv`，
+`isOlderGame` 與手抄的 v6.213 舊式**逐字相同**（0 組不同；且 fuzz 確實涵蓋到 4 萬組「兩邊都有」的樣本）。
+真的跑 `createGame`：沒同步過 ⇒ `'createdAtSrv' in state === false`；同步過（注入 +123456ms）⇒
+`createdAtSrv − createdAt === 123456`。
+
+**做了幾成**：休閒線上路徑做滿。**錦標賽路徑沒動也不需要動** ——
+`server_admin_patch.js:5695/5854` 的 `gs` 是伺服器端 `TENG.createGame` 產生的，
+`createdAt` **本來就是伺服器時鐘**，同一場賽事的兩局都來自同一顆時鐘，舊路徑的比較本來就正確。
+（代價是錦標賽的局不會有 `createdAtSrv` ⇒ 一律走舊路徑 ⇒ 行為零變更。）
+
+### ④ 診斷取樣率 1% → 10%
+
+`+page.svelte` `PERF_SAMPLE_RATE = 0.01` → `0.1`。**自行複算的總量**（守衛會把三種情境印出來）：
+
+| 每週賽事數 | 取樣筆數/週 | 比 1% 多 | 佔既有 993 筆 | 7 天常駐量（最壞：每列都塞滿 8192 字元） |
+|---|---|---|---|---|
+| 2 | 30 | +27 | +2.7% | 8.0 MB |
+| 5 | 75 | +68 | +6.8% | 8.3 MB |
+| 10 | 150 | +135 | +13.6% | 8.9 MB |
+
+- 母數 993 筆/週是 v6.184 的實測值；每場賽事約 150 場對戰、每場對戰最多 1 發（v6.213）。
+- **8192 是「每一列的字元上限」，不是列數上限** ⇒ 調高取樣率在結構上不可能「撐爆 8192」。
+  v6.184 已實測 payload 結構上界約 4.1KB，上表的 MB 數是把每列都當成塞滿 8KB 的最壞情況。
+- **不會擠掉真異常**：取樣走 `_isExempt`（不佔每頁 3 發的異常配額），而伺服器節流的 key 是
+  **per-(uid, reason)**（`server_admin_patch.js` `_thKey = uid + '|' + reason`，v6.160 起）
+  ⇒ `perf-sample` 有自己的 60 秒桶，不可能把別的指紋擋掉。反向也成立。
+- 取樣要累積 20 發成功往返（≈24 秒以上）才送，且每場對戰只擲一次骰 ⇒ 同一玩家兩發之間必定隔著一整場對戰。
+
+### ⚠⚠ 兩輪審查抓到的問題（這一段留著，它是本輪最有價值的產出）
+
+#### Fable：②的 helper 放進了**錯誤的作用域** —— v0.94 / v1.01 事故的第三次重演
+
+第一版把 `NOSHOW_FLOOR_MIN` 與 `noShowGraceMin` 放在 `buildCasualCleanFilter` 旁邊，
+我以為那是「最外層」。用 acorn 實際解析才發現：那裡是
+`import('firebase-admin').then(async (…) => {…})` 這個 **箭頭函式 callback**（字元範圍 24875–147533），
+而兩個呼叫端都在錦標賽的 `(async () => {…})()` 內（163356–442073）—— **兄弟作用域，互相看不見**。
+
+線上會發生什麼（逐條追過 try/catch）：
+
+- `/api/tournament/event`（每人每 3 秒的最高頻端點）在「有 running 賽事且我本輪有未完成對戰」時
+  丟 ReferenceError → 被 handler 最外層 catch → **回 500** ⇒ 開賽期間所有有對戰的玩家大廳整個壞掉。
+- 排程器 tick 在同一行丟例外 → 被 per-event catch 吃掉 ⇒ **那一行之後整段跳過**：
+  未進場判負、閒置判負、60 秒警告、對局時限、輪次推進全失效 ⇒ **整場賽事卡死**。
+
+⚠⚠ **既有防線全部漏接**：`node --check` 只驗語法；`npx tsc` 不掃這支 server JS；
+本版守衛是用 `new Function(抽出的函式文字)` 執行的，**完全繞過原始作用域**（84 條全綠）；
+`test-admin-helper-scope.mjs` 只認得**具名** IIFE `(function name(){…})()`，
+箭頭函式 callback 與匿名 async IIFE 它都看不到。
+
+⇒ 修法：把兩個符號搬進錦標賽 IIFE；並在 `test-admin-helper-scope.mjs` 新增一條
+**通用 acorn 作用域檢查**：凡「全檔只宣告一次、且名字沒當過任何參數／catch 變數」的 helper，
+其宣告處的函式鏈必須是**每一個使用處**函式鏈的前綴。
+BASE 與 HEAD 實測都是 **0 違規**（可判定的 helper 162 個 / 函式節點 560 個），
+把 helper 搬回錯誤位置則精準報出兩處使用點（破壞測試 M36）。
+⚠ 這條測試**刻意寫成同步的**：`T()` 是 `fn()` 不是 `await fn()`，寫成 async 的話
+assert 失敗會變成未處理的 rejection、照樣印 PASS ＝ 又一個假綠。所以用 `createRequire` 同步載入 acorn。
+
+#### opus（專審「守衛有沒有假綠」）：抓到 **6 個假綠**，全部修掉
+
+1. **③ 的 10 萬組差分把「兩局都有 `createdAtSrv`」那條分支 `continue` 跳過** ⇒
+   把 `a < b` 改成 `a <= b` 兩套守衛全綠。而 `<=` 是真 bug（守衛自己的註解寫「採較新／**同齡局**」，
+   `<=` 會把同齡局判成舊局而 reject）。⇒ 該分支改成與手抄的伺服器時鐘式做差分，並補「相等 ⇒ false」的手挑斷言。
+2. **③ 的 `isFinite` / `typeof === 'number'` 型別守門是零覆蓋死碼** ——
+   fuzz 只餵正整數，把兩道守門拿掉、或放寬成 `a != null && b != null`（字串會走字典序，`"9" < "10"` 為 false）
+   都全綠。而 `createdAtSrv` 是**從房間過網回來的外部資料**，髒值正是它們存在的理由。
+   ⇒ 輸入分佈補上 `NaN / Infinity / '123' / null / true / {} / 負數 / 0`，另加一批手挑斷言。
+3. **② 的「判定段不可出現 enteredAt」是恆真的空跑** ——
+   `SRV.slice(indexOf(A), indexOf(B))` 在錨點註解被改名時 `indexOf` 回 -1，
+   `slice(-1, …)` 長度為 0，`!/enteredAt/.test('')` 恆真。實測「錨點改名 ＋ 判定段塞進 `enteredAt`」全綠。
+   ⇒ 先斷言兩個錨點都找得到、順序正確、切出來的段落夠長。
+4. **① 的 force-adopt「正對照」只驗字串** —— 把述詞改寫成 `(true || isStaleFinishedGame(…))`
+   （＝自癒路徑永遠放行）照樣命中 regex。⇒ 改成用括號配對抽出**整個 `if` 條件式**、注入真的
+   `isStaleFinishedGame` **實際執行**，驗四種輸入的回傳值。
+5. **② 的兩個消費端只有文字比對、零行為斷言** —— 保留原字面不動、後面**再加一行覆寫**
+   `myMatch.noShowDeadline = …舊式…` 就全綠，而那正是這兩條宣稱要防的事。
+   ⇒ 補「該區塊內 `noShowDeadline` 只出現一次」「排程器那段 `deadline` 只被賦值一次」
+   （**先去註解再數** —— 註解裡提到不算用到），並把兩端的算式各自抽出來跑 27 組輸入證明結果相同。
+6. **④ 的「7 天常駐量 < 20 MB」是 placebo** —— 實測把 RATE 開到 **1.0**（每場都送）也只有 19.5 MB，
+   那條在任何 RATE 下都不會紅。⇒ 降級成計算輸出，改釘住「取樣率落在站長裁定的 0 < RATE ≤ 0.2」；
+   同節近乎恆真的 `/_cdiagPack/ && /truncated/` 改成把 `_cdiagPack` 真本抽出來跑
+   （短 payload 不切且 `truncated:false`／超長 payload 切到 ≤ 8192 字元且 `truncated:true`、`rawLen` 保留原長）。
+
+另外修掉一個**守衛會崩掉而不是變紅**的問題（型態③）：`grabFn` 是天真的大括號計數，
+函式裡放一個含 `}` 的字串就會抽出不合法的 JS ⇒ `new Function` SyntaxError ⇒
+腳本從第 3 節中止、後面約 40 條沒跑、也不印 `SCRIPT-END`。
+⇒ `grabFn` 改成會跳過字串／範本字串／行註解／區塊註解；所有 `new Function` 一律包 `safeFn`，
+抽壞就變**紅**（並附錯誤訊息），絕不讓腳本崩掉。
+
+⚠ 一開始想用「把新守衛丟到整棵 BASE 樹上跑」當 HEAD-FAIL 證明，但新模組在 BASE 不存在
+⇒ esbuild 直接 build 失敗 ⇒ 同樣是「崩掉」不是「變紅」，證明不了任何事。改成**逐項破壞**。
+
+### 守衛
+
+`scripts/test-v6214-stale-finished-and-server-clock.mjs`（111 條）：
+①的純函式路由 ＋ **三條正對照**（重新加入進行中／終局畫面不消失／重整看終局盤）
+＋ 把 `_readActiveGameId` / `_noteActiveGame` 的**真碼**抽出來跑（sessionStorage stub、TTL 邊界、
+壞資料、無痕模式 throw）；②把 `noShowGraceMin` 的**真碼**抽出來跑 ＋ 10 萬組差分（關閉時等於舊式）
+＋ 反證（開啟時結果**確實不同**，證明差分不是恆真式）＋ 兩個消費端逐字釘住；
+③server-clock 行為 ＋ `isOlderGame` 10 萬組差分 ＋ 真的跑 `createGame`；④取樣率 ＋ 總量複算。
+`scripts/test-online-sync-guards.mjs` 63 → **71** 條（①③的路由進入正式的同步守衛網）。
+`scripts/test-v6213-perf-sample-and-srv-timing.mjs` 契約更新：機率常數 0.01 → 0.1，
+自我驗證與中籤率的門檻改成由 `RATE` 算出的 ±5σ（不再寫死數字，下次再調不用手改）。
+
+`scripts/test-admin-helper-scope.mjs` 8 → **9** 條（新增通用 acorn 作用域檢查）。
+
+**破壞測試：37 項全部如預期變紅、0 項逃脫**（腳本印 `=== MUTATION-SCRIPT-END ===`；
+第一輪 28 項 ＋ 依 opus 審查補的 9 項）。
+其中 6 項是**正對照**方向的破壞（把①的作用範圍放寬到「本地有局也擋」／「非 playing 都擋」
+⇒ 終局畫面與重新加入的斷言必須紅；把 `isOlderGame` 改成「一邊有就混著比」⇒ 相容路徑差分必須紅；
+把 `createdAtSrv` 改成無條件寫 ⇒ 舊局格式的正對照必須紅）。
+補的 9 項全部是**「字面還在、行為沒了」**這一類：`<` 改 `<=`、型別守門拿掉、註解錨點改名、
+述詞短路成永遠放行、顯示端事後覆寫、函式裡塞含 `}` 的字串、helper 搬回錯誤作用域、取樣率偷開到 1.0。
+另外修掉一個**守衛自己會崩**的問題：把 `_readActiveGameId` 的 try/catch 拿掉之後，
+抽出來的真碼直接往上炸 ⇒ 腳本崩掉而不是變紅。已加 `safe()` 包裝。
+
+### 部署
+
+⚠⚠ **`update-admin-full.bat` 這一版一定要跑**：②整段（含 `/event` 與排程器）都在
+`oracle-admin/server_admin_patch.js` 裡，不重新部署的話 admin 端點不存在、判定窗也不會縮短。
+改到 `oracle-admin/server_admin_patch.js` ＋ `oracle-admin/admin.html` ⇒ 需 `update-admin-full.bat`；
+`src/lib/game/*`（含 engine.ts 新 import）有改 ⇒ 一併跑 `redeploy-oracle.bat` 與 `update-tournament.bat`。
+
+### 待站長裁定
+
+1. **②只省了 2 分鐘**（8 分 → 6 分）。另一半是 `roundCountdownMin`（休息倒數，預設 3 分），
+   它是 per-event 設定、隨時可改，但它是玩家的休息時間，要不要一起縮請站長決定。
+2. **①觀戰者**進到一個已結束的房間現在會停在大廳而不是看到終局盤。要不要對觀戰者放行？
+3. **③錦標賽路徑沒有 `createdAtSrv`**（不需要，見上）。若哪天錦標賽改成 client 建局，要記得補。
+4. `enteredAt` 累積一兩場賽事之後，可以用真實分佈回頭檢查 3 分鐘是不是太緊（或還可以更短）。
+
 ## v6.213 ① isStage2 全卡池線性掃描 → per-pool 索引 ② 低頻無條件取樣（健康對照組） ③ 伺服器 per-request 處理時間 ④ 手機版牌組編輯器橫向溢出與 iOS 聚焦縮放
 
 BASE = `efd6979202da62748d4fb24154ebb8c16001dbd1`（v6.212）。①②③純內部；④玩家有感 ⇒ 首頁 changelog 放一則。

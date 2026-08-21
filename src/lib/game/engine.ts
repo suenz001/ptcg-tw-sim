@@ -11,6 +11,8 @@
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
 // v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
 import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS } from './instance-flags';
+// ⭐v6.214③ 伺服器單一時鐘（leaf 模組，零 import ⇒ 不可能參與循環 import；沒同步過回 null）
+import { serverNowOrNull } from './server-clock';
 import type {
   GameState, GameAction, CardInstance,
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
@@ -2381,9 +2383,13 @@ export function createGame(
     }
   }
 
+  // ⭐⭐⭐v6.214③ 建局時刻的伺服器時鐘。**沒同步過就整個欄位不寫**（不是寫 0、也不是寫 Date.now()）——
+  //   「不知道」與「知道而且等於本機時鐘」必須分得出來，否則跨局比較會把兩種局混在一起比。
+  const _createdAtSrv = serverNowOrNull();
   const state: GameState = {
     id: uid(),
     createdAt: Date.now(),
+    ...(_createdAtSrv !== null ? { createdAtSrv: _createdAtSrv } : {}),
     phase: 'setup',
     turnPhase: 'main',
     activePlayerIndex: firstPlayerIdx,

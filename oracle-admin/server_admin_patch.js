@@ -3652,6 +3652,59 @@ import('firebase-admin').then(async ({ default: admin }) => {
       _mvCfg = cfg; _mvCfgAt = now;
       return cfg;
     }
+    // ⭐⭐⭐v6.214② 未進場判負的「容許窗」分鐘數 —— **判定端與顯示端的單一來源**。
+    //   ⚠⚠ 這支必須被**兩個地方**呼叫，而且只能有這一支：
+    //     ①排程器的未進場判負（真正會判人輸的那一段）
+    //     ②/event 回給玩家的 `noShowDeadline`（大廳上「請於 X:XX 內進場」那個倒數）
+    //   兩邊如果各算各的，玩家就會看到「還剩 2 分鐘」卻被判負 —— 那正是站長最在意的誤判。
+    //
+    //   語義（每一條都是為了「絕不誤判」而寫的）：
+    //     ・`tune.enabled !== true` ⇒ 直接回 base ⇒ **與 v6.213 逐字相同**（灰度可一鍵退回）。
+    //     ・`Math.min(base, …)` ⇒ 只會**縮短**，永遠不會把賽事設定的窗拉長
+    //       （站長把某場的 noShowMin 設成 2 分時，全域設定不可以把它變回 3 分）。
+    //     ・`Math.max(NOSHOW_FLOOR_MIN, …)` ⇒ **硬地板**，admin 誤填 0.1 也不會生效。
+    //     ・數值不合法（NaN／<=0）⇒ 回 base，不是回 0（回 0 等於「一開放進場就判負」）。
+    //   ⚠ 純函式、零外部相依 ⇒ 守衛可以把它整段抽出來真的跑。
+  //   ⚠⚠ **位置**：這支必須定義在錦標賽這個 IIFE **裡面**。第一版誤放在
+  //     `import('firebase-admin').then(...)` 那個 callback 內（就在 buildCasualCleanFilter 旁邊），
+  //     那是**兄弟作用域** —— `node --check` 過、單元測試也全綠（守衛是把函式字串抽出來自己跑的），
+  //     但線上一呼叫就 ReferenceError：/event 直接 500、排程器整段 tick 從這一行之後全部跳過
+  //     ⇒ 未進場/閒置/時限判負與輪次推進全失效。這是 v0.94 / v1.01 的第三次重演。
+  //     守衛已補一條 acorn 作用域斷言（定義的函式鏈必須是每個呼叫點的前綴）。
+    const NOSHOW_FLOOR_MIN = 2;
+    function noShowGraceMin(evNoShowMin, tune) {
+      const base = Number(evNoShowMin) > 0 ? Number(evNoShowMin) : 5;   // 逐字沿用既有 fallback
+      if (!tune || tune.enabled !== true) return base;
+      const want = Number(tune.minutes);
+      if (!isFinite(want) || want <= 0) return base;
+      return Math.min(base, Math.max(NOSHOW_FLOOR_MIN, want));
+    }
+
+    // ⭐⭐⭐v6.214② 未進場容許窗的全域設定（站長可在 admin「📡監控」分頁自行微調，不必出新版）。
+    //   ⚠ 與其他灰度旗標不同，這一支**預設就是開的** —— 站長裁定「縮短判定窗」，
+    //     預設關著等於這一版什麼都沒做。要退回 v6.213 的 5 分鐘只要把它關掉即可。
+    //   ⚠ 3 分鐘的依據（不是拍腦袋）：
+    //     ①站上既有的 `idleForfeitMin` 預設就是 **3 分鐘** —— 那是判「已經在對戰中、
+    //       輪到你動作卻沒動作」的人。未進場者手上的資訊更明確（有 Web Push
+    //       「⚔️ 第 N 輪可進場」requireInteraction ＋大廳一直在跑的「請於 X:XX 內進場」倒數），
+    //       用同一個 3 分鐘是對稱的、不會比既有標準嚴格。
+    //     ②硬地板 2 分鐘 ＋ 只會縮短不會拉長（見 noShowGraceMin）。
+    //   ⚠⚠ 我們**沒有**玩家實際進場時間的分佈可以佐證 —— TMATCH 只存 entered 布林。
+    //     本版順手補記 `enteredAt`（純遙測、不參與任何判定），下一版起就有真實分佈可以再調。
+    const TNS_DEFAULT = { enabled: true, minutes: 3 };
+    let _nsCfg = null, _nsCfgAt = 0;
+    async function noShowConfig() {
+      const now = Date.now();
+      if (_nsCfg && now - _nsCfgAt < 10000) return _nsCfg;
+      let doc = null;
+      try { doc = await TCONFIG.findOne({ _id: 'noShowTune' }); } catch (e) { /* 讀不到就用預設 */ }
+      const cfg = Object.assign({}, TNS_DEFAULT, doc || {});
+      cfg.enabled = cfg.enabled !== false;                       // 只有明確 false 才算關
+      const _m = Number(cfg.minutes);
+      cfg.minutes = (isFinite(_m) && _m > 0) ? Math.max(NOSHOW_FLOOR_MIN, Math.min(60, _m)) : TNS_DEFAULT.minutes;
+      _nsCfg = cfg; _nsCfgAt = now;
+      return cfg;
+    }
     const TLP_DEFAULT = { enabled: false, maxWaitMs: 25000, pollMs: 1500, maxHold: 200 };
     let _lpCfg = null, _lpCfgAt = 0;
     async function lpConfig() {
@@ -4352,6 +4405,10 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (ev) regCount = (shared.regCounts[ev._id] != null) ? shared.regCounts[ev._id] : await TREGS.countDocuments({ eventId: ev._id });
         // myMatch：跨所有 running 賽事，一次 $in 查詢我的未完成對戰（取代每 running event 各一次 findOne）
         let myMatch = null;
+        // ⭐v6.214②：讀一次設定給下面的 noShowDeadline 用。讀不到就傳 null ⇒ noShowGraceMin
+        //   回 base ⇒ 與 v6.213 逐字相同（fail-open：設定掛掉時只會變回比較寬鬆的舊值）。
+        let _nsTuneForEvent = null;
+        try { _nsTuneForEvent = await noShowConfig(); } catch (e) { /* 用 base */ }
         if (shared.runningEvents.length) {
           const _runIds = shared.runningEvents.map((e) => e._id);
           const _myMatches = await TMATCH.find({ eventId: { $in: _runIds }, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null }, $or: [{ p1uid: id.uid }, { p2uid: id.uid }] }).toArray();
@@ -4359,7 +4416,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
             const mm = _myMatches.find((m) => m.eventId === _e._id && m.round === _e.currentRound);
             if (mm) {
               const cdMin = (_e.roundCountdownMin != null ? _e.roundCountdownMin : 3);
-              const nsMin = (_e.noShowMin > 0 ? _e.noShowMin : 5);
+              // ⭐v6.214②：這裡算的是玩家**看到的**倒數，必須與排程器判負用的是同一支函式、
+              //   同一份設定，否則就會出現「畫面說還有 2 分鐘、伺服器已經判你輸」。
+              const nsMin = noShowGraceMin(_e.noShowMin, _nsTuneForEvent);
               const enterOpenAt = (_e.roundStartedAt || 0) + cdMin * 60000;
               const mySeat = (mm.p1uid === id.uid) ? 0 : 1;
               myMatch = { matchId: mm._id, eventId: _e._id, round: mm.round, oppName: (mm.p1uid === id.uid ? mm.p2name : mm.p1name), enterOpenAt, noShowDeadline: enterOpenAt + nsMin * 60000, entered: !!(mm.entered && mm.entered[mySeat]), roomId: mm.roomId || null };
@@ -4628,6 +4687,37 @@ import('firebase-admin').then(async ({ default: admin }) => {
         await TCONFIG.updateOne({ _id: 'longPoll' }, { $set }, { upsert: true });
         _lpCfgAt = 0;   // 立刻失效，不必等 10 秒快取
         res.json({ ok: true, config: await lpConfig() });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    // ⭐⭐⭐v6.214② 未進場容許窗（**預設開啟**；關掉就退回 v6.213 的行為）。
+    //   ⚠ 這支只調「未進場容許窗」，不動休息倒數 roundCountdownMin、也不動閒置判負 idleForfeitMin
+    //     ——那兩個是 per-event 設定，請在「賽事設定」裡改。
+    app.get('/api/tournament/admin/noshow', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        res.json({ config: await noShowConfig(), floorMin: NOSHOW_FLOOR_MIN, defaultMin: TNS_DEFAULT.minutes });
+      } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+    app.post('/api/tournament/admin/noshow', async (req, res) => {
+      try {
+        const id = await tournIdentity(req);
+        if (!isTournAdmin(id)) return res.status(403).json({ error: '只有管理員可操作' });
+        const b = req.body || {};
+        const $set = {};
+        if (typeof b.enabled === 'boolean') $set.enabled = b.enabled;
+        if (b.minutes != null && b.minutes !== '') {
+          const _m = Number(b.minutes);
+          // ⚠ 明確回 400 而不是靜默夾到地板：「站長想設 1 分鐘」與「系統只給 2 分鐘」必須分得出來。
+          if (!isFinite(_m) || _m < NOSHOW_FLOOR_MIN || _m > 60) {
+            return res.status(400).json({ error: '容許窗需為 ' + NOSHOW_FLOOR_MIN + ' ~ 60 分鐘（硬地板是為了不誤判正常玩家）' });
+          }
+          $set.minutes = _m;
+        }
+        if (Object.keys($set).length === 0) return res.status(400).json({ error: '沒有可更新的欄位（enabled / minutes）' });
+        await TCONFIG.updateOne({ _id: 'noShowTune' }, { $set }, { upsert: true });
+        _nsCfgAt = 0;   // 立刻失效，不必等 10 秒快取
+        res.json({ ok: true, config: await noShowConfig() });
       } catch (e) { res.status(500).json({ error: e.message }); }
     });
     // ⭐⭐⭐v6.160 報到版本閘（預設關閉的灰度旗標）。
@@ -5678,6 +5768,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
         const mySeat0 = (id.uid === m.p1uid) ? 0 : 1;
         await TMATCH.updateOne({ _id: m._id, entered: { $exists: false } }, { $set: { entered: [false, false] } });
         await TMATCH.updateOne({ _id: m._id }, { $set: { ['entered.' + mySeat0]: true } });
+        // ⭐v6.214② **純遙測**：第一次進場的時刻。目前站上完全沒有「玩家實際多久才進場」的資料
+        //   （TMATCH 只有 entered 布林），所以「容許窗要縮到幾分鐘」只能用既有門檻推論。
+        //   ⚠ 這個欄位**不參與任何判定**（未進場判負一律只看 entered），純粹是為了讓下一次
+        //     調整有真實分佈可以依據。只寫第一次（條件是那一格還是 null）。
+        try {
+          await TMATCH.updateOne({ _id: m._id, enteredAt: { $exists: false } }, { $set: { enteredAt: [null, null] } });
+          await TMATCH.updateOne({ _id: m._id, ['enteredAt.' + mySeat0]: null }, { $set: { ['enteredAt.' + mySeat0]: Date.now() } });
+        } catch (e) { /* 遙測失敗絕不可以擋住玩家進場 */ }
         let roomId = m.roomId;
         if (!roomId) {
           roomId = 'mr_' + m._id;
@@ -7255,7 +7353,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
         // 未進場判負：倒數(roundCountdownMin)+遲到容許(noShowMin) 過後，本輪未進場者判負
         if (ev.status === 'running' && ev.roundStartedAt) {
           const cdMin = (ev.roundCountdownMin != null ? ev.roundCountdownMin : 3);
-          const nsMin = (ev.noShowMin > 0 ? ev.noShowMin : 5);
+          // ⭐⭐⭐v6.214②：與 /event 回給玩家的倒數共用同一支 noShowGraceMin ＋ 同一份設定。
+          //   ⚠ 讀設定失敗 ⇒ 傳 null ⇒ 回 base（＝ v6.213 的 5 分鐘）＝**比較寬鬆**的方向，
+          //     絕不會因為設定讀不到而把人提早判負。
+          let _nsTune = null;
+          try { _nsTune = await noShowConfig(); } catch (e) { /* 用 base */ }
+          const nsMin = noShowGraceMin(ev.noShowMin, _nsTune);
           const deadline = ev.roundStartedAt + (cdMin + nsMin) * 60000;
           if (now > deadline) {
             const pend = await TMATCH.find({ eventId: ev._id, round: ev.currentRound, status: { $ne: 'done' }, p1uid: { $ne: null }, p2uid: { $ne: null } }).toArray();

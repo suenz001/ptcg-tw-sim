@@ -698,6 +698,20 @@ export interface GameState {
    */
   createdAt?: number;
   /**
+   * ⭐⭐⭐v6.214③ 建局時刻的**伺服器時鐘**估計值（epoch ms）。
+   *
+   * `createdAt` 用的是建局那一端瀏覽器的 `Date.now()`，而 v6.198 實證線上玩家的時鐘偏差
+   * 有 -11 秒 / -77 秒 / -4.9 小時 ⇒ 兩局由不同玩家建立時，跨局防舊的大小比較可能反向。
+   * 本欄位由 `server-clock.ts` 依伺服器回應的時戳推得（誤差上界 = RTT/2，實務上幾百毫秒）。
+   *
+   * ⚠⚠ **可能缺席**，而且缺席有兩種完全不同的意思，都必須當成「不知道」：
+   *   (a) 舊版 client 建的局（v6.213 以前完全沒有這個欄位）；
+   *   (b) 這一端從沒同步到伺服器時戳（本機對戰／vs AI／單元測試／伺服器端 bundle）。
+   * ⇒ 跨局比較一律走 `sync-guards.isOlderGame()`：**兩局都有**這個欄位才用它，
+   *   只要任一邊缺席就逐字退回原本的 `createdAt` 比較（既有進行中的對局零影響）。
+   */
+  createdAtSrv?: number;
+  /**
    * v4.898 重試徽章（M5）— 本次 ATTACK action 中是否呼叫過 flipCoinsWithLog。
    * Setter: flipCoinsWithLog 自動設 true；Resetter: ATTACK 開頭設 false。
    * 用於 ATTACK 末端決定是否開 retry-badge modal-choice picker。

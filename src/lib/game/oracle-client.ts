@@ -14,6 +14,9 @@
  *   VITE_ORACLE_API_URL='https://xxx.trycloudflare.com'
  */
 
+// ⭐v6.214③ 伺服器單一時鐘（leaf 模組，零 import ⇒ 不可能形成循環）
+import { noteServerTime, getServerClockOffsetMs } from './server-clock';
+
 const API_URL: string = ((import.meta as any).env?.VITE_ORACLE_API_URL as string) || '';
 const TOKEN_KEY = 'ptcg_oracle_token';
 const UID_KEY = 'ptcg_oracle_uid';
@@ -190,10 +193,36 @@ export async function oracleUpsertRoom(
 ): Promise<OracleUpsertResult> {
   const body: any = { data };
   if (expectedVersion !== undefined) body.expectedVersion = expectedVersion;
-  return await oracleApi<OracleUpsertResult>(`/api/rooms/${code.toUpperCase()}`, {
+  // ⭐⭐⭐v6.214③ 伺服器單一時鐘的取樣點。
+  //   寫入成功時伺服器會蓋 `updatedAt`（server 端自動 set，見 room-oracle.ts 檔頭），
+  //   而那一刻必定落在「我送出」與「我收到」之間 ⇒ 夾得出 client↔server 的偏移量。
+  //   ⚠ 只採信 `ok` 分支：`conflict` 回的 room 是**別人上一次寫入**的時戳（比現在舊），
+  //     拿它當「現在」會把偏移量估得偏後。
+  //   ⚠ 欄位缺席／格式不對 → noteServerTime 自己會拒收 ⇒ 從沒同步過 ⇒ createGame 不寫
+  //     createdAtSrv ⇒ 行為與 v6.213 逐字相同（fail-open）。
+  const _sentAt = Date.now();
+  const res = await oracleApi<OracleUpsertResult>(`/api/rooms/${code.toUpperCase()}`, {
     method: 'PUT',
     body,
   });
+  try {
+    if (res && 'ok' in res && res.ok && res.room) {
+      _noteRoomServerTime((res.room as any).updatedAt, _sentAt, Date.now());
+    }
+  } catch { /* 對時失敗絕不可以影響房間寫入 */ }
+  return res;
+}
+
+// ⭐v6.214③ 只在偏移量大到「守衛真的會被騙」時出一次聲（v6.198 實證有 -11 秒 / -77 秒 / -4.9 小時）。
+//   ⚠ 只印一次：這支每次房間寫入都會跑到，每次都印會把 console 洗掉。
+let _clockWarned = false;
+function _noteRoomServerTime(srvMs: unknown, sentAt: number, recvAt: number): void {
+  if (!noteServerTime(srvMs, sentAt, recvAt)) return;
+  if (_clockWarned) return;
+  const off = getServerClockOffsetMs();
+  if (off === null || Math.abs(off) < 5000) return;
+  _clockWarned = true;
+  console.warn(`[PTCG clock] 本機時鐘與伺服器相差 ${Math.round(off / 1000)} 秒；建局時間改用伺服器時鐘（v6.214③）`);
 }
 
 export async function oracleDeleteRoom(code: string): Promise<void> {

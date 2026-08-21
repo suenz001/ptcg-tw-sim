@@ -2881,8 +2881,9 @@ async function loadMonitor() {
     api('/api/tournament/admin/redact'),
     api('/api/tournament/admin/clientdiag?hours=' + window.monHours),
     api('/api/tournament/admin/minclientver'),
+    api('/api/tournament/admin/noshow'),
   ]);
-  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]);
+  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]);
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
@@ -2943,6 +2944,28 @@ async function loadMonitor() {
       + (mvWarn ? '<div style="color:#c62828;font-weight:700;margin:4px 0;">⚠ 門檻高於現行部署版本 —— 會提示<b>所有</b>玩家（不會鎖人，但多半是填錯了）。</div>' : '')
       + '<br><button style="' + btnS + '" onclick="monSetMinVer(true, this)">啟用版本閘</button> '
       + '<button style="' + btnW + '" onclick="monSetMinVer(false, this)">關閉</button>'
+      + '</div>';
+  }
+  // ⭐⭐⭐ v1.70 / v6.214② 未進場容許窗。⚠ 這是唯一會「判人輸」的設定，所以：
+  //   只會縮短不會拉長、有硬地板、關掉就完全退回 v6.213 的行為。
+  if (ns) {
+    var nc = ns.config || {};
+    var nsOn = nc.enabled === true;
+    var nsMin = Number(nc.minutes || 0);
+    var nsFloor = Number(ns.floorMin || 2);
+    html += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-top:12px;">'
+      + '<div style="font-weight:700;margin-bottom:4px;">⏰ 未進場容許窗　'
+      + (nsOn ? '<span style="color:#2e7d32;">已啟用（' + escapeHtml(String(nsMin)) + ' 分鐘）</span>' : '<span style="color:#888;">關閉（用賽事設定的值，預設 5 分鐘）</span>')
+      + '</div>'
+      + '<p class="small muted" style="margin:2px 0 8px;">本輪休息倒數結束（可進場）之後，還沒進場的人再過這麼久就判負。'
+      + '縮短它可以讓「最後一場沒人來」的那一輪早點結束，下一輪早點開打。'
+      + '<br>⚠ 只會<b>縮短</b>、不會拉長：某場賽事自己設得更短時以該場為準。最短 ' + escapeHtml(String(nsFloor)) + ' 分鐘（硬地板，防誤判）。'
+      + '<br>⚠ 玩家大廳上的「請於 X:XX 內進場」倒數與這裡是<b>同一個值</b>，不會出現「畫面說還有時間卻被判負」。'
+      + '<br>⚠ 休息倒數（roundCountdownMin）與閒置判負（idleForfeitMin）不在這裡，請到「賽事設定」改。</p>'
+      + '<label style="display:inline-block;margin:4px 12px 8px 0;">容許窗（分鐘）：'
+      + '<input id="mon-ns-min" value="' + escapeHtml(String(nsMin || 3)) + '" style="width:70px;padding:5px;"></label><br>'
+      + '<button style="' + btnS + '" onclick="monSetNoShow(true, this)">套用</button> '
+      + '<button style="' + btnW + '" onclick="monSetNoShow(false, this)">關閉（回到賽事設定值）</button>'
       + '</div>';
   }
   html += '</div>';
@@ -3106,7 +3129,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.213';
+window.SITE_VERSION_HINT = '6.214';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3129,6 +3152,19 @@ window.monSetMinVer = async function (enabled, btn) {
   const r = await api('/api/tournament/admin/minclientver', { method: 'POST',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   // 比照 v1.68：失敗路徑一定要還原按鈕文字，否則永遠停在「處理中…」
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
+  await loadMonitor();
+};
+// v6.214② 未進場容許窗。⚠ 失敗路徑一定要還原按鈕文字（v1.68 的教訓）。
+window.monSetNoShow = async function (enabled, btn) {
+  var el = document.getElementById('mon-ns-min');
+  var mins = el ? Number(el.value) : NaN;
+  if (enabled && !(mins >= 2 && mins <= 60)) { alert('容許窗請填 2~60 分鐘（2 分鐘是硬地板，防止誤判正常玩家）。'); return; }
+  var _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  var body = enabled ? { enabled: true, minutes: mins } : { enabled: false };
+  const r = await api('/api/tournament/admin/noshow', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
   await loadMonitor();
 };

@@ -72,8 +72,8 @@ ok('[前提] 三支 client 函式都抽得出來', !!fnRecSeg && !!fnRecSrv && !
 // 1. ② 取樣：機率、觸發點、跨場清乾淨
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n1) ② 低頻無條件取樣');
-ok('[HEAD-FAIL／核心②] 機率常數就是每場 1%（PERF_SAMPLE_RATE = 0.01）',
-  /const PERF_SAMPLE_RATE = 0\.01;/.test(PAGE));
+ok('[HEAD-FAIL／核心②] 機率常數就是每場 10%（PERF_SAMPLE_RATE = 0.1，v6.214④ 站長裁定由 1% 調高）',
+  /const PERF_SAMPLE_RATE = 0\.1;/.test(PAGE));
 ok('[核心②] 樣本門檻是常數而不是魔術數字（20 發成功往返才送）',
   /const PERF_SAMPLE_MIN_CALLS = 20;/.test(PAGE));
 ok('[HEAD-FAIL／核心②] 骰子以房號當鍵、每場只擲一次（不是每個動作／每次輪詢都擲）',
@@ -133,7 +133,7 @@ try {
     const Math = Object.create(globalThis.Math);
     Math.random = () => (__forceRnd === null ? globalThis.Math.random() : __forceRnd);
     const PERF_SAMPLE_MIN_CALLS = 20;
-    const PERF_SAMPLE_RATE = 0.01;
+    const PERF_SAMPLE_RATE = 0.1;    // v6.214④（0.99 仍 > 0.1、0.001 仍 < 0.1，下方兩條命中/不命中的固定骰不受影響）
     const __sent = [];
     function _tSendClientDiag(reason) { __sent.push(reason); }
     function _pushSample(arr, ms) { if (typeof ms !== 'number' || !isFinite(ms) || ms < 0) return; arr.push(ms); if (arr.length > 30) arr.shift(); }
@@ -226,7 +226,7 @@ console.log('\n1c) ② 機率實測：把**真的那一行**跑 200000 場');
   //   ⇒ 改成把 `_tRecordSrvSample` 裡**真正那一段擲骰程式碼**抽出來跑 20 萬「場」
   //     （每一場換一個房號），亂數由外面注入以便重現。
   const RATE = Number((/const PERF_SAMPLE_RATE = ([0-9.]+);/.exec(PAGE) || [])[1]);
-  ok('[核心②] 機率常數抓得出來且等於 0.01', RATE === 0.01, String(RATE));
+  ok('[核心②] 機率常數抓得出來且等於 0.1（v6.214④）', RATE === 0.1, String(RATE));
   const armSrc = /if \(_perfSampleRoom !== tActiveRoom\) \{[\s\S]*?\n    \}/.exec(fnRecSrv || '');
   ok('[前提] 抽得到真正的擲骰區塊（抽不到 ⇒ 下面那條沒有意義）', !!armSrc);
   if (armSrc) {
@@ -257,20 +257,22 @@ console.log('\n1c) ② 機率實測：把**真的那一行**跑 200000 場');
     {
       // 量測工具的自我驗證：這串亂數本身要夠均勻，否則上面那條斷言在驗的是亂數不是程式碼。
       let lo = 0;
-      for (const v of seq) if (v < 0.01) lo++;
+      for (const v of seq) if (v < RATE) lo++;
       const selfRate = lo / N;
-      ok('[自我驗證] 亂數來源本身是均勻的（< 0.01 的比例就是 1%）',
-        selfRate > 0.0095 && selfRate < 0.0105, (selfRate * 100).toFixed(4) + '%');
+      // ⚠ 門檻用 RATE 算出來（±5σ），不是寫死的數字 —— 寫死的話下次再調機率又要手改一次。
+      const _sig = Math.sqrt(RATE * (1 - RATE) / N);
+      ok('[自我驗證] 亂數來源本身是均勻的（< RATE 的比例就是 RATE）',
+        Math.abs(selfRate - RATE) < 5 * _sig, (selfRate * 100).toFixed(4) + '%');
     }
     const r = runner(RATE, seq);
     const obs = r.hit / r.n;
     console.log('  真碼實測中籤率 ' + (obs * 100).toFixed(3) + '%（' + r.hit + ' / ' + r.n + '），共擲 ' + r.rolls + ' 次骰');
-    ok('★★★[核心②] 用**真的那一行**跑 20 萬場，中籤率就是 1%（不是 0、不是 100%）',
-      obs > 0.0095 && obs < 0.0105, (obs * 100).toFixed(4) + '%');
+    ok('★★★[核心②] 用**真的那一行**跑 20 萬場，中籤率就是 RATE（不是 0、不是 100%）',
+      Math.abs(obs - RATE) < 5 * Math.sqrt(RATE * (1 - RATE) / r.n), (obs * 100).toFixed(4) + '%');
     ok('★★★[核心②／分母污染] 每場只擲**一次**骰子（同一場多問 5 次都不會重擲）',
       r.rolls === r.n, '擲了 ' + r.rolls + ' 次／' + r.n + ' 場');
     console.log('  ⇒ 產能估算（給站長看的誠實數字）：一場 30 人 × 5 輪 ≈ 150 場對戰，'
-      + '1% ⇒ 每場賽事只會拿到 ' + (150 * RATE).toFixed(1) + ' 筆取樣。');
+      + (RATE * 100).toFixed(0) + '% ⇒ 每場賽事約 ' + (150 * RATE).toFixed(1) + ' 筆取樣。');
   }
 }
 
