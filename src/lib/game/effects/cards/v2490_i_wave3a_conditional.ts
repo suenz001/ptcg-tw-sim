@@ -23,6 +23,7 @@ import type { CardInstance, PlayerState } from '../../types';
 import {
   regPre, regPost,
   addLog, updatePlayer,
+  withPending,  // v6.211：picker 一律走 withPending（已有 pending 時排隊，禁直接覆寫）
 } from '../_shared';
 import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
@@ -114,16 +115,20 @@ function snipeOneBenchPost(amount: number, label: string): AttackPostFn {
       return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
     }
     const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害（不計算弱點/抵抗力）`, aIdx);
-    return {
-      ...s,
-      pendingSelection: {
-        type: 'opp-bench-choose',
-        actorIdx: aIdx, sourcePlayerIdx: dIdx,
-        minCount: 1, maxCount: 1,
-        effectKey: 'wave3a-snipe-bench',
-        params: { amount, label },
-      },
-    };
+    // ⭐⭐⭐v6.211：與 君主蛇ex｜青草命令 同一個真因 —— 原本直接覆寫 pendingSelection，
+    //   會把防守方道具（手持循環扇等）在傷害結算當下已開好的 picker 蓋掉（log 有、效果沒發生）。
+    //   ⚠ 本 factory 掛在 SNIPE_ONE_BENCH 的 5 個 key 上，但**實際生效的只有 2 個**：
+    //   巨石丁｜岩石踢 / 長耳兔｜魯莽踢 / 雪暴馬｜冰之射擊 這 3 個 key 被
+    //   `v2640_i_wave14_misc7.ts` 用中央 `snipeOneOppBenchPost` 重新註冊（effects.ts 的
+    //   import 順序 730 > 717，regPost 是 Map.set 覆寫）⇒ 那 3 條是死碼。
+    //   真正走這裡的是 赫普的蒼響ex｜剎那斬 與 波皇子｜瞄準俯衝（行為端掃描實測確認）。
+    return withPending(s, {
+      type: 'opp-bench-choose',
+      actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'wave3a-snipe-bench',
+      params: { amount, label },
+    });
   };
 }
 

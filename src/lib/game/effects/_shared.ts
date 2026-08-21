@@ -1579,6 +1579,26 @@ export function returnHandToDeck(state: GameState, idx: 0 | 1): GameState {
   });
 }
 
+/**
+ * ⭐⭐⭐ 站內唯一開 picker 的入口。**禁止**在任何 hook 裡寫 `pendingSelection: {…}` 物件字面量
+ *   —— 那會把「同一個 engine action 內，別人已經開好的 picker」直接蓋掉：對方的 log 已經印出去、
+ *   picker 卻消失、效果從未發生（＝假 log）。v6.211 就是這樣壞掉的：
+ *   君主蛇ex｜青草命令 與 snipeOneBenchPost（5 張狙擊招式）在 ATTACK_POST 直接覆寫，
+ *   把防守方【手持循環扇】在傷害結算當下開好的 picker 蓋掉。
+ *   守衛：`scripts/test-v6211-pending-clobber-and-printing-gap.mjs`（C 段靜態掃描）。
+ *
+ * ⚠⚠ **已知與官方裁定相反、尚未處理的一件事（v6.211 查證，等站長裁定）**：
+ *   `PTCG RULES/PTCG_RULES.md` L1530-1531 §17.22.A 逐字：
+ *     Q:「幸運頭盔」抽卡 與 招式「脅迫獠牙」丟手牌，何者先執行？
+ *     A: 先因招式「脅迫獠牙」的效果將自己的手牌丟棄。／之後，因寶可夢道具卡「幸運頭盔」的效果從牌庫抽卡。
+ *   （L2916 另證：「會在招式造成傷害後才執行寶可夢道具卡『幸運頭盔』的效果處理」。）
+ *   ⇒ 正確順序是 **招式效果 → 道具「受到傷害時」效果**。
+ *   但 engine 的 ATTACK 流程是 TOOL_ON_DAMAGED 先、ATTACK_POST 後，於是排隊順序**剛好相反**。
+ *   這是 v4.933 起的既有行為（幻影奇襲 + 手持循環扇），v6.211 只是把 6 張漏網的卡納入同一條隊伍。
+ *   要真的修正必須動 engine 的 hook 順序（凸凸頭盔反傷可能 KO 攻擊方 → 不能單純搬到 KO 結算之後），
+ *   **不要**只把 ATTACK_POST 的 pending 插到隊首 —— 那會讓「有 picker 的效果」與「沒 picker 的效果」
+ *   走兩種順序，比現在更難推理。
+ */
 export function withPending(state: GameState, sel: PendingSelection): GameState {
   // v4.933：若已有 pending 待解（同一 engine action 內 TOOL_ON_DAMAGED + ATTACK_POST
   //   都會 withPending 的 case，例：手持循環扇 + 幻影奇襲），新的 pending push 到

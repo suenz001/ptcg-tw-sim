@@ -381,18 +381,22 @@ regPost('君主蛇ex|青草命令', (state, aIdx, pool, action) => {
   const s = addLog(state, `青草命令：從牌庫挑 0~${max} 張任意卡加手牌（重洗）`, aIdx);
   // 用既有 wave5-add-pokemon-to-hand resolver 但改用 'deck-search' filter='all' 不行
   // 直接 inline resolver: 用 deck-search 無 filter
-  return {
-    ...s,
-    pendingSelection: {
-      type: 'deck-search',
-      actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454/L1708/**L2333 君主蛇ex｜青草命令**/L1373）：
-      //   從牌庫「任意選擇」（無類別限定）**不可以 1 張都不選**，必須選 1 張以上。
-      //   ⚠ 卡面寫「若希望」也一樣（君主蛇ex 正是「若希望，任意選擇最多3張」卻被裁定必選）。
-      minCount: Math.min(1, max), maxCount: max,
-      effectKey: 'wave9-take-any-from-deck',
-    },
-  };
+  // ⭐⭐⭐v6.211 真因：這裡原本是 `return { ...s, pendingSelection: {…} }` —— **直接覆寫**
+  //   state.pendingSelection，繞過 withPending 的排隊機制。ATTACK 流程裡防守方的道具
+  //   （手持循環扇 / 幸運頭盔 …）在**傷害結算當下**就已經開好自己的 pending，ATTACK_POST 比它晚跑，
+  //   於是這一行把對方那個 picker 直接蓋掉 —— log 已經印了「手持循環扇：選 1 個攻擊方能量…」
+  //   但 picker 從未出現、效果從未發生（玩家回報：「log 會顯示，但實際上沒有產生效果」）。
+  //   ⚠ 通則：**任何 hook 內要開 picker 一律走 withPending**（已有 pending 時它會排進
+  //   pendingChainQueue，玩家依序解），禁止寫 `pendingSelection:` 物件字面量。
+  return withPending(s, {
+    type: 'deck-search',
+    actorIdx: aIdx, sourcePlayerIdx: aIdx,
+    // ⭐ v6.126 官方裁定（PTCG_RULES.md L1454/L1708/**L2333 君主蛇ex｜青草命令**/L1373）：
+    //   從牌庫「任意選擇」（無類別限定）**不可以 1 張都不選**，必須選 1 張以上。
+    //   ⚠ 卡面寫「若希望」也一樣（君主蛇ex 正是「若希望，任意選擇最多3張」卻被裁定必選）。
+    minCount: Math.min(1, max), maxCount: max,
+    effectKey: 'wave9-take-any-from-deck',
+  });
 };
   return _cb(state, aIdx, pool);
 });

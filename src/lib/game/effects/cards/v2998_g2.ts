@@ -41,6 +41,8 @@ import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../.
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
+// ⭐⭐⭐v6.211 resolver 的「再驗證」必須與 picker 的 filter **同一份述詞**（v6.109 同型教訓）。
+import { evaluateSelectionFilter } from '../../selection-filter';
 import type { Card } from '$lib/cards/types';
 
 // 導出 sentinel 防止 unused import warnings
@@ -624,6 +626,9 @@ regR('lycanroc-spike-bind-attach', (st, idx, iids, params, pool) => {
   }));
 });
 
+// ⭐v6.211 picker 的 filter 與 resolver 再驗證的**唯一來源**（禁止兩邊各寫一份字面量）。
+const FARFETCHD_TOOL_FILTER = 'Tool';
+
 // ══════════════════════════════════════════════════════════════════════════════
 // 13. 大蔥鴨｜臨場背負（SV6）
 // ──────────────────────────────────────────────────────────────────────────────
@@ -645,7 +650,7 @@ regA('大蔥鴨', 0, (st, idx, pool, cardInst) => {
   return withPending(s, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
-    filter: 'Tool', minCount: 0, maxCount: 1,
+    filter: FARFETCHD_TOOL_FILTER, minCount: 0, maxCount: 1,
     effectKey: 'farfetchd-on-spot-tool-attach',
     params: { hostIid: src.iid },
   });
@@ -663,8 +668,14 @@ regR('farfetchd-on-spot-tool-attach', (st, idx, iids, params, pool) => {
     return updatePlayer(st, idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }
   const toolCard = pool.get(toolInst.cardId);
-  // 卡面限定「寶可夢道具」(subtype === 'Tool')
-  if (toolCard?.subtype !== 'Tool') {
+  // ⭐⭐⭐v6.211 卡面限定「寶可夢道具」。
+  //   舊碼寫 `toolCard?.subtype !== 'Tool'` —— 'Tool' 是 **picker 的 filter key**，
+  //   卡庫裡真正的 subtype 是 'PokemonTool'，於是這條判斷**恆為真**：
+  //   玩家選了道具，resolver 一律走「所選非寶可夢道具，跳過並重洗」⇒ 道具永遠附不上、
+  //   而且還留在牌庫裡（玩家回報：臨場背負選的道具不會附上）。
+  //   修法＝**與 picker 同一份述詞**（同一個 filter 常數餵給中央 evaluateSelectionFilter），
+  //   不再手刻字面，讓「顯示什麼」與「驗證什麼」不可能再漂移。
+  if (evaluateSelectionFilter('deck-search', FARFETCHD_TOOL_FILTER, toolInst, toolCard) !== true) {
     const s = addLog(st, '臨場背負：所選非寶可夢道具，跳過並重洗', idx);
     return updatePlayer(s, idx, pl => ({ ...pl, deck: shuffle(pl.deck) }));
   }

@@ -1,5 +1,146 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.211 「hook 內直接覆寫 pendingSelection」＝假 log（青草命令蓋掉手持循環扇）＋ SV-P 四張特典卡漏收招式
+
+BASE = `2255c590a25216366b87a74b0ac99798a03cddf5`（v6.210）。玩家有感 ⇒ 首頁 changelog 放一則。
+
+### ① 玩家回報：君主蛇ex｜青草命令 不會觸發手持循環扇的丟能量 picker（log 有、效果沒發生）
+
+卡面逐字（`static/cards` 台灣官方）：
+- 君主蛇ex｜青草命令 `attacks[0]`：cost `[Grass,Colorless,Colorless,Colorless]`、damage `150`、
+  effect「若希望，從自己的牌庫任意選擇最多3張卡加入手牌。並且重洗牌庫。」（SV11B 12945/13764/13772、MC 16513，I 標）
+- 手持循環扇 `rulesText`（Trainer/PokemonTool，SV6 10509，H 標）：
+  「附有這張卡的寶可夢在戰鬥場受到對手的寶可夢招式的傷害時，選擇1個使用招式的寶可夢身上附加的能量，改附於對手的備戰寶可夢身上。」
+
+**真因**：`engine.ts:6305` 的 `TOOL_ON_DAMAGED` 在傷害結算當下就 `withPending(...)` 開好 picker；
+`engine.ts:6485` 的 `ATTACK_POST` 比它晚跑。而
+`src/lib/game/effects/cards/v2590_i_wave9_misc3.ts:384`（BASE 版）寫的是
+`return { ...s, pendingSelection: {…} }` —— **直接覆寫**，繞過 `withPending` 的 `pendingChainQueue`。
+⇒ 手持循環扇的 log 已印出、picker 被蓋掉、效果從未發生。
+
+**同族**：`v2490_i_wave3a_conditional.ts:117`（BASE 版）的 `snipeOneBenchPost` 是同樣寫法，
+5 張卡共用：巨石丁｜岩石踢、長耳兔｜魯莽踢、雪暴馬｜冰之射擊、赫普的蒼響ex｜剎那斬、波皇子｜瞄準俯衝。
+行為端實測 赫普的蒼響ex｜剎那斬 一樣把手持循環扇的 picker 蓋掉。
+
+**修法**：兩處改走 `withPending`（共 6 張卡）。`_shared.ts` 的 `withPending` 上方補完整說明。
+
+**掃描結果**：`src/lib/game/effects/**` 直接覆寫只剩 `_shared.ts` 的 `addPendingPrize`
+（它自帶 `!state.pendingSelection` 前置閘，是刻意的 v5.889 行為）。
+`engine.ts` 有 18 處，全部落在 `handlePlaying` 開頭那道
+「已有 pendingSelection 就只收 `RESOLVE_SELECTION`」的全域閘之後（`enforceBenchLimit` 另有自帶閘），
+結構上安全 ⇒ 守衛改成「處數凍結在 18 ＋ 全域閘必須還在」。
+
+### ⚠⚠ 待站長裁定：道具「受到傷害時」與招式效果的先後順序（本版**沒有**改）
+
+`PTCG RULES/PTCG_RULES.md` L1530-1531 §17.22.A 逐字：
+> **Q**: 若對手的阿柏怪ex對附有寶可夢道具卡「幸運頭盔」的自己的戰鬥寶可夢使出了招式「脅迫獠牙」，
+> 那麼因寶可夢道具卡「幸運頭盔」的效果從牌庫抽卡，和因招式「脅迫獠牙」的效果將自己的手牌丟棄，何者先執行？
+> **A**: 先因招式「脅迫獠牙」的效果將自己的手牌丟棄。／之後，因寶可夢道具卡「幸運頭盔」的效果從牌庫抽卡。
+
+L2916 另證：「會在招式造成傷害後才執行寶可夢道具卡『幸運頭盔』的效果處理」。
+⇒ 官方順序是 **招式效果 → 道具效果**；站內是 **道具 → 招式**（v4.933 起的既有行為，非本版引入）。
+差異看得到（例：青草命令會搜牌庫並重洗，幸運頭盔先抽/後抽會抽到不同卡）。
+要真的修正必須動 engine 的 hook 順序，且 凸凸頭盔 反傷可能 KO 攻擊方 ⇒ 不能單純搬到 KO 結算之後。
+**不要**只把 ATTACK_POST 的 pending 插到隊首 —— 那會讓「有 picker」與「沒 picker」的效果走兩種順序。
+
+### ② 玩家回報：猛雷鼓ex 只能用第一招 —— 真因是**卡片資料漏收**，不是手機端判定
+
+`static/cards/SV-P-H.json` 連號四張（scraper 同一批壞掉），除 `attacks` 外每個欄位都與正常印刷逐字相同：
+
+| promo | 原本 | 補齊後 | 對照來源 |
+|---|---|---|---|
+| 10100 鐵頭殼ex 078/SV-P | **0 招** | 雙刃劍 | MC 16832 |
+| 10101 故勒頓 079/SV-P | 撕裂 | 原生亂打、撕裂 | MC 17021 |
+| 10102 密勒頓 080/SV-P | 暴衝高點 | 暴衝高點、閃雷攻擊 | MC 17023 |
+| 10103 猛雷鼓ex 081/SV-P | 濺射咆哮 | 濺射咆哮、**極降駕** | MC 17025 |
+
+【極降駕】cost 逐字 = `["Lightning","Fighting"]`、damage `70×`、
+effect「將自己的場上寶可夢身上附加的任意數量的基本能量卡丟棄，造成其張數×70點傷害。」
+
+⚠ 順帶：故勒頓 10101 補回的「原生亂打」插在 `attackIndex 0`，把「撕裂」推到 1。
+`attackIndex` 是位置性的，但回放存的是盤面快照＋finalLog（不存 action），線上也只有出招方算完整包推送 ⇒ 無影響。
+
+### ③ 「手機端與引擎判定不一致」維度：本輪掃出 **0 處**
+
+`MobilePortraitBattle.svelte` 與 `+page.svelte` 五個「能不能做這個動作」全部同源（都讀 engine/中央述詞）：
+招式 `getAvailableAttacks`（mobile:307 / desktop:2969）、撤退 `canRetreat`（mobile:285 / desktop:3042）、
+特性 `getUsableAbilities`（mobile:287）、出牌 `getHandCardOps`（v6.201 收斂，mobile:293）、
+進化 `getEvolvableTargets`（mobile:286）。攻擊宣告的 `initiateAttack` 也是 desktop 那一份直接傳給 mobile
+（`+page.svelte:9964 onInitiateAttack={initiateAttack}`），`ATTACK_PRE_DISCARD_CHOICE` 的三個 modal
+都在 `{#if isPortraitMobile}…{:else}…{/if}`（9942–10870）**之外**，兩種版面共用。
+唯一小差異：desktop 的 derived 有 `poolReady` 前綴、mobile 沒有（pool 未載完時 mobile 招式全灰，不會誤放行）。
+
+### ④ 守衛 `scripts/test-v6211-pending-clobber-and-printing-gap.mjs`（15 條）
+
+A 行為端（青草命令／剎那斬 + 手持循環扇，斷言到盤面真的變了）、B 正對照（無道具時行為不變）、
+C 靜態接線（effects/** 禁字面量 ＋ engine 18 處凍結 ＋ 全域閘 ＋ 三條正對照 ＋ 掃描器下限）、
+D 卡庫重印完整性（含人工弄壞一張卡的正對照）。
+HEAD-FAIL 逐項證明：只還原 v2590 → 3 紅；只還原 v2490 → 2 紅；只還原 SV-P-H.json → 2 紅。
+
+
+### ③（本輪追加）大蔥鴨｜臨場背負 選的道具不會附上
+
+卡面逐字：大蔥鴨（SV6 083/101 · id 10497 · H）`abilities[0].effect`
+「在自己的回合，從手牌將這張卡放置於備戰區時，可使用1次。從自己的牌庫選擇1張「寶可夢道具」卡，附於這隻寶可夢身上。並且重洗牌庫。」
+
+**真因**：`v2998_g2.ts` 的 `regR('farfetchd-on-spot-tool-attach')` 再驗證寫
+`toolCard?.subtype !== 'Tool'`。`'Tool'` 是 **picker 的 filter key**
+（`selection-filter.ts:118` `'Tool': (c)=> c.supertype==='Trainer' && c.subtype==='PokemonTool'`），
+卡庫實際的 `subtype` 值只有 `Basic/Item/PokemonTool/Special/Stadium/Stage1/Stage2/Supporter/ex`
+⇒ 這條判斷**恆為真** ⇒ 100% 走「所選非寶可夢道具，跳過並重洗」，道具永遠附不上、還留在牌庫。
+（＝ v6.109「filter 顯示什麼必須 === 能勾什麼」的 resolver 版。）
+
+**修法**：picker 的 `filter` 與 resolver 的再驗證共用同一個常數 `FARFETCHD_TOOL_FILTER`，
+再驗證改呼叫中央 `evaluateSelectionFilter('deck-search', FARFETCHD_TOOL_FILTER, toolInst, toolCard)`。
+全站掃描（`.subtype/.supertype` 比對的字面量必須是卡庫真的存在的值）確認**只有這一處**。
+`'Other'`(8)/`'Pokémon'`(2)/`'None'`(1) 都在排除路徑（恆假只會更寬鬆），列 legacy 白名單。
+
+### 第二支守衛 `scripts/test-v6211-selected-but-no-effect.mjs`（17 條）
+
+§1 臨場背負完整三段行為（附「不選」與「送非道具」兩個正對照）；
+§2 subtype/supertype 字面量掃描（下限 ≥880、正對照 ×2，其中一個專門測 URL `https://` 不被誤砍）；
+§3 **行為端** clobber 掃描：每個 ATTACK_POST 餵一個既有 pending，跑完必須還在
+（下限①「零例外、零非 state、scanned ≥1100」、下限②「真的會開 picker 的 ≥300」＝真分母、正對照 ×1）；
+§4 桌機／手機六個動作判定同源（版面檔用 glob 取並凍結為 2 個；正對照 ×3 分別打
+「本地重寫」「改從本地檔 import」「只在字串裡出現」三條分支）。
+HEAD-FAIL：還原 `v2998_g2` → §1+§2 紅；還原 `v2590`+`v2490` → §3 紅。
+
+### 子代理審查抓到、我已查證並處理的
+
+1. **Fable**：`SNIPE_ONE_BENCH` 註冊 5 個 key，但 `巨石丁|岩石踢`／`長耳兔|魯莽踢`／`雪暴馬|冰之射擊`
+   被 `v2640_i_wave14_misc7.ts` 的中央 `snipeOneOppBenchPost` 重新註冊（`effects.ts` import 730 > 717，
+   `regPost` 是 `Map.set` 覆寫）⇒ v2490 那 3 條是死碼，真正走這裡的只有 剎那斬 與 瞄準俯衝。
+   我用行為端 clobber 掃描獨立驗證（只列出這 2 個 + 青草命令）⇒ **原註解「五張一次收斂」不實，已改**。
+2. **Fable**：波皇子｜瞄準俯衝 damage 為空（0），`TOOL_ON_DAMAGED` gate 是 `baseDamage > 0`
+   ⇒ 它與手持循環扇本來就不會同幀開 pending。改掉仍正確（防其他 pending 來源），但別誇大戰果。
+3. **opus**：舊版掃描器的 `scanned` 是**分母污染** —— 1185 個 ATTACK_POST 裡只有約 328 個
+   在測試盤面上真的會開 picker，其餘 857 個是恆真通過。新守衛改量 `openers` 並下限 ≥300。
+4. **opus**：`try{}catch{continue}` 與 `!('players' in st)` 是靜默豁免（今天都是 0）⇒ 改成收集並斷言為 0。
+5. **opus**：`stripComments` 的 `([^:])` 讓「檔案第一個字元就是 `//`」的那行砍不掉 ⇒ 改 `(^|[^:])/gm`，
+   並補一條 URL 正對照防止反向誤砍。
+6. **opus**：正對照要寫暫存檔會在 repo 留垃圾（`walkSrc` 自己會跳過點開頭檔名，連自己都偵測不到）
+   ⇒ 掃描器改吃 `[名稱, 原始碼]` 字串陣列，**零檔案 I/O**。
+7. **opus**：UI 同源守衛的檔案清單寫死 ⇒ 改 glob `src/routes/game/*.svelte` 並凍結為 2 個；
+   `imported` 改成只在「來自 `$lib/game/engine` / `$lib/game/hand-card-ops` 的 import 區塊」內比對
+   （原本掃全檔，字串字面量就能騙過）。
+8. **opus**：clobber 掃描的獎賞卡改設 `faceUp: true`（取獎 picker 只有在有正面朝上的獎賞時才開，
+   不設等於整條 `addPendingPrize` 路徑幾乎掃不到）。
+
+### ⚠⚠ 要請站長裁定的兩件事
+
+**(a) 促銷卡回填**：`static/cards/SV-P-H.json` 的 10100/10101/10102/10103 是用**同一張卡的正規印刷版**
+逐字補上招式的。台灣官方促銷頁（`.../detail/10103/` 等）的 `skillInformation` 區塊自己就少了那些招式，
+而四張與正規版在 name/hp/stage/evolvesFrom/illustrator/retreatCost/weakness/resistance/tags 全部逐字相同。
+Fable 另外抓了官方卡圖 `card-img/tw00010100~10103.png` 目視確認四張實印都有那些招式。
+若站長不同意「用他版補官方頁殘缺」，這 4 張的 JSON 改動可單獨回退。
+
+**(b) 招式效果 vs 道具「受到傷害時」效果的先後**：`PTCG RULES/PTCG_RULES.md` L1530-1531 §17.22.A 逐字：
+「先因招式『脅迫獠牙』的效果將自己的手牌丟棄。／之後，因寶可夢道具卡『幸運頭盔』的效果從牌庫抽卡。」
+（L2916 另證。）⇒ 官方是**招式效果先、道具後**；但 engine 的 hook 順序是 `TOOL_ON_DAMAGED` 先、
+`ATTACK_POST` 後，排隊出來剛好相反。這是 v4.933 起的既有行為，本版只是把漏網的卡納入同一條隊伍
+（本批 6 張兩效果互不相干，順序不影響結果）。要真正修正得動 engine hook 順序（凸凸頭盔反傷可能 KO
+攻擊方 ⇒ 不能單純搬到 KO 結算之後），風險不小，**這一版不動，等裁定**。
+
 ## v6.210 藏隱／深度下潛接特性消除中央閘 ＋「基本能量屬性」「Mega ex」兩族卡名判斷整批收斂
 
 BASE = `665af67543a3930acbe70e24ab4fd0c4b55cf19b`（v6.209）。

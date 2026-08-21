@@ -35,6 +35,18 @@
     "illustrator": "5ban Graphics",
     "tags": [
       "未來"
+    ],
+    "attacks": [
+      {
+        "name": "雙刃劍",
+        "cost": [
+          "Psychic",
+          "Colorless",
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "對手的2隻寶可夢各受到50點傷害。這個招式的傷害不計算弱點・抵抗力與受到傷害的寶可夢身上的附加效果。"
+      }
     ]
   },
   {
@@ -52,6 +64,15 @@
     "hp": 140,
     "pokemonType": "Dragon",
     "attacks": [
+      {
+        "name": "原生亂打",
+        "cost": [
+          "Fighting",
+          "Colorless"
+        ],
+        "damage": "30×",
+        "effect": "造成自己的場上的「古代」寶可夢的數量×30點傷害。"
+      },
       {
         "name": "撕裂",
         "cost": [
@@ -96,6 +117,16 @@
         ],
         "damage": "40",
         "effect": "從自己的牌庫選擇最多2張基本能量卡，以任意方式附於自己的「未來」寶可夢身上。並且重洗牌庫。"
+      },
+      {
+        "name": "閃雷攻擊",
+        "cost": [
+          "Lightning",
+          "Lightning",
+          "Psychic"
+        ],
+        "damage": "160",
+        "effect": ""
       }
     ],
     "retreatCost": [
@@ -131,6 +162,15 @@
         ],
         "damage": "",
         "effect": "將自己的手牌全部丟棄，從牌庫抽出6張卡。"
+      },
+      {
+        "name": "極降駕",
+        "cost": [
+          "Lightning",
+          "Fighting"
+        ],
+        "damage": "70×",
+        "effect": "將自己的場上寶可夢身上附加的任意數量的基本能量卡丟棄，造成其張數×70點傷害。"
       }
     ],
     "retreatCost": [
