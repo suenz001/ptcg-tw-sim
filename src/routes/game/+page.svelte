@@ -43,7 +43,7 @@
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
-  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt } from '$lib/game/sync-guards';
+  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
@@ -491,6 +491,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let tLeaderboardStale = $state(false);
   let tProfileStale = $state(false);
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
+  /**
+   * ⭐v6.212 賽程「回到對戰」按鈕的保險。
+   *   伺服器 /event 的 myMatch 已經濾掉 status==='done' 的場，正常情況打完就會消失；
+   *   但只要伺服器把該場結算掉的那一步出了錯（對戰紀錄卡在 playing），這個按鈕就會一直在，
+   *   玩家會以為還要回去打。賽程表本身已經標了勝負 ⇒ 用它當第二來源交叉檢查。
+   *   ⚠ 只在「賽程表確實載到、而且明確標成已完成」時才隱藏；賽程沒載到一律照畫
+   *     （進場按鈕消失會直接吃未進場判負，v5.937 已經踩過一次）。
+   */
+  function tMatchAlreadyDone(brk: any, mm: any): boolean {
+    if (!brk || !mm) return false;
+    const ms = brk.matches;
+    if (!Array.isArray(ms)) return false;
+    return ms.some((m: any) => m && m.mine === true && m.round === mm.round && m.status === 'done');
+  }
   let tMyBye = $state<any>(null);     // v5.935 我本輪輪空 { round, enterOpenAt }(輪空者也看倒數+可觀戰提示)
   let isTReplay = $state(false);         // v5.939 對戰回放模式
   let tReplay = $state<any>(null);       // { meta, finalLog, finalState, snapshots }
@@ -6550,8 +6564,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       })();
       if (canIPush) {
         isSyncing = true;
-        try { await pushGameState(roomCode, newState); }
-        catch (e) { console.error('[Online] push failed:', e); }
+        try { await pushWithRetry(roomCode, newState); }
         finally { isSyncing = false; }
       } else {
         console.warn('[Online] dispatch suppressed push (not my turn / actor mismatch):',
@@ -7440,6 +7453,31 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _lastActionAt = Date.now();
   let _lastResyncAt = 0;  // v5.360：上次自動重訂閱(自癒)時間
   let _forceAdoptNext = false;  // v5.587：下一個收到的同局 snapshot 強制採用(繞過 stale 守衛)＝程式幫忙重整
+  // ⭐⭐⭐v6.212 push 失敗要有限重試，失敗到底就把那份盤面記下來（＝本地領先伺服器的證據）。
+  //   舊版只 console.error 就算了 ⇒ 伺服器停在攻擊前、本地繼續等對手 ⇒ 25 秒後 force-adopt
+  //   把攻擊前那份拉回來，玩家看到的就是「回合結束了又跳回攻擊前」。
+  let _unpushedState: GameState | null = null;
+  let _repushAttempts = 0;
+  const PUSH_RETRY_MAX = 3;
+  async function pushWithRetry(code: string, st: GameState): Promise<boolean> {
+    for (let i = 0; i < PUSH_RETRY_MAX; i++) {
+      try {
+        await pushGameState(code, st);
+        _unpushedState = null;
+        _repushAttempts = 0;
+        return true;
+      } catch (e) {
+        console.warn('[Online] push failed (' + (i + 1) + '/' + PUSH_RETRY_MAX + '):', e);
+        if (i < PUSH_RETRY_MAX - 1) {
+          await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+        }
+      }
+    }
+    _unpushedState = st;
+    _repushAttempts = 0;   // ⭐v6.212 審查回饋：重推額度是「這一次卡住」的額度，新的失敗要重新給
+    console.error('[Online] push 連續失敗 —— 本地領先伺服器，改由自癒重推（不回捲）');
+    return false;
+  }
   let _prevLogLen = -1;
   let _prevGameId = '';  // v5.698：閒置倒數基準綁定的對局 id（換局重設，避免上一局倒數殘留）
   let _lastSyncAt = Date.now();  // v5.701：卡住自癒(resync/force-adopt)專用計時，與宣告倒數 _lastActionAt 解耦
@@ -7492,6 +7530,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       _lastActionAt = Date.now();
       _lastSyncAt = Date.now();
       oppInactivityWarn = false;
+      _unpushedState = null;               // v6.212：上一局的未推送殘留不可延用到新局
+      _repushAttempts = 0;
       return;
     }
     if (logLen !== _prevLogLen) {
@@ -7524,7 +7564,32 @@ function _setupSelfPending(g: any, seat: number): string | null {
         // v5.587：卡更久(>=25s 等對手都沒新動作)→ 強制採用伺服器最新狀態(繞過 stale 守衛)。
         //   治「本地 log 領先伺服器、重抓回來又被守衛拒收」型卡死。只在『正等對手』時走到這(上方已 gate)，
         //   我方沒有未推送的手，故不會丟手；不同局/game-over/setup 在 handleRoomUpdate 內另有保護。
-        if ((Date.now() - _lastSyncAt) >= 25000) _forceAdoptNext = true;
+        // ── ⭐v6.212 SELFHEAL DIRECTION BLOCK BEGIN ──────────────────────────────
+        //   v5.587 這裡無條件 force-adopt（繞過全部 stale 守衛）。當本地有推不上去的手時，
+        //   伺服器那份是**攻擊前**的盤面 ⇒ 強制採用＝把玩家的回合退回去。
+        //   ⇒ 先重推本地那份（冪等；推端 shouldSkipStalePush 會擋倒退），重推仍卡住才 adopt。
+        if ((Date.now() - _lastSyncAt) >= 25000) {
+          const _healAction = decideStuckSelfHeal({
+            hasUnpushedLocal: !!(_unpushedState && game && _unpushedState.id === game.id),
+            repushAttempts: _repushAttempts,
+          });
+          if (_healAction.kind === 'repush') {
+            _repushAttempts++;
+            const _st = _unpushedState;
+            console.warn('[Online] 自癒：本地領先伺服器 → 先重推本地盤面（不回捲），第 '
+              + _repushAttempts + ' 次');
+            if (_st) {
+              pushGameState(roomCode, _st)
+                .then(() => { _unpushedState = null; _repushAttempts = 0; })
+                .catch((e: unknown) => console.warn('[Online] 自癒重推失敗:', e));
+            }
+          } else {
+            // 放棄本地那份（重推額度用完 / 本來就沒有未推送的手）⇒ 照 v5.587 強制同步。
+            _unpushedState = null; _repushAttempts = 0;
+            _forceAdoptNext = true;
+          }
+        }
+        // ── ⭐v6.212 SELFHEAL DIRECTION BLOCK END ────────────────────────────────
         try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null); } catch { /* ignore */ }
       }
     }, 5000);
@@ -7730,6 +7795,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           // v5.390 悔棋 rollback：套用 + 清 undo/浮動選單 UI + bump 一次性 marker
           lastSeenUndoApplyAt = room.lastUndoApplyAt as number;
           game = decision.game;
+          // ⭐v6.212：悔棋之後，那份「悔棋前的未推送快照」已經作廢 —— 留著會被自癒重推回去
+          //   （它的 log 較長，shouldSkipStalePush 只擋嚴格較短的，擋不住）＝ 復活已悔掉的一手。
+          _unpushedState = null; _repushAttempts = 0;
           undoSnapshot = null; undoActionDesc = null;
           undoAwaitingResponse = false; undoDeniedThisSnapshot = false;
           floatingEvoMenu = null; floatingRetreatMenu = null; selectedEnergyIid = null;
@@ -8949,7 +9017,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         {#if brk.matches && brk.matches.length}
           <div class="tourn-bracket">
             <div class="tourn-bracket-head">📋 {brk.event?.name ?? ''} 賽程表{#if brk.event?.championName} ｜ 🏆 冠軍：<b>{brk.event.championName}</b>{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}</div>
-            {#if tMyMatch && tMyMatch.eventId === brk.event?._id}
+            {#if tMyMatch && tMyMatch.eventId === brk.event?._id && !tMatchAlreadyDone(brk, tMyMatch)}
               {@render myMatchBox()}
             {:else if tMyBye && tMyBye.eventId === brk.event?._id}
               {@render myByeBox()}

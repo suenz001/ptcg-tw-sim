@@ -261,7 +261,10 @@ await TA('6a leaveOnlineGame：打網路之前盤面/座位已經清乾淨', asy
 
 // ── 7) oraclePollRoom：unsubscribe 之後在路上的那一發不可以再 callback ─
 await TA('7a oraclePollRoom：unsub 後在途回應不得 callback', async () => {
-  const fn = slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom');
+  // v6.212：oraclePollRoom 現在會呼叫同檔的 shouldDeliverRoomPoll ⇒ 一起抽進來，
+  //   不要在測試裡重寫一份（重寫＝判準漂移，產品碼改了測試還會綠）。
+  const fn = slice(OC, 'export function shouldDeliverRoomPoll(', '\n}\n', 'shouldDeliverRoomPoll')
+    + '\n' + slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom');
   let release = null;
   const src = ts(fn).replace(/export\s+/g, '') + `
     ; return oraclePollRoom;`;
@@ -278,7 +281,10 @@ await TA('7a oraclePollRoom：unsub 後在途回應不得 callback', async () =>
   assert.equal(got.length, 0, '⭐unsub 之後在途回應仍把房間 callback 回去（會把人彈回對戰頁）');
 });
 await TA('7b 正對照：沒 unsub 時該 callback 還是要 callback', async () => {
-  const fn = slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom');
+  // v6.212：oraclePollRoom 現在會呼叫同檔的 shouldDeliverRoomPoll ⇒ 一起抽進來，
+  //   不要在測試裡重寫一份（重寫＝判準漂移，產品碼改了測試還會綠）。
+  const fn = slice(OC, 'export function shouldDeliverRoomPoll(', '\n}\n', 'shouldDeliverRoomPoll')
+    + '\n' + slice(OC, 'export function oraclePollRoom(', '\n}\n', 'oraclePollRoom');
   const src = ts(fn).replace(/export\s+/g, '') + '\n; return oraclePollRoom;';
   const ROOM_UNCHANGED = Symbol('u');
   const oracleGetRoom = async () => ({ _version: 3 });

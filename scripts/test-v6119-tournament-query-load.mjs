@@ -52,7 +52,7 @@ T('索引一律建在啟動時、且 best-effort（不得放進 request handler�
 console.log('② ⚠⚠ 閒置判負：完整讀取不得被加 projection（會把殘缺盤面寫回）');
 
 T('⭐⭐⭐ 判負路徑仍有一次「不帶 projection」的完整 TROOMS 讀取', () => {
-  const s = seg('const playingI = await TMATCH.find({ eventId: ev._id, status: \'playing\'', 3000);
+  const s = seg('const playingI = await TMATCH.find({ eventId: ev._id, status: \'playing\'', 5000);   // v6.212 對帳區塊插在輕量讀與完整讀之間
   ok(s, '找不到閒置判負迴圈（結構改了，請重新檢視本守衛）');
   ok(/const room = await TROOMS\.findOne\(\{ _id: m\.roomId \}\);/.test(s),
     '閒置判負的完整讀取不見了或被加上 projection。\n'
@@ -62,17 +62,17 @@ T('⭐⭐⭐ 判負路徑仍有一次「不帶 projection」的完整 TROOMS 讀
 });
 
 T('⭐⭐ 而且要有輕量讀先擋掉「還沒到門檻」的絕大多數情況', () => {
-  const s = seg('const playingI = await TMATCH.find({ eventId: ev._id, status: \'playing\'', 3000);
+  const s = seg('const playingI = await TMATCH.find({ eventId: ev._id, status: \'playing\'', 5000);   // v6.212 同上
   ok(s, '找不到迴圈');
-  ok(/TROOMS\.findOne\(\{ _id: m\.roomId \}, \{ projection: \{ lastActionAt: 1, updatedAt: 1 \} \}\)/.test(s),
+  ok(/TROOMS\.findOne\(\{ _id: m\.roomId \}, \{ projection: \{ lastActionAt: 1, updatedAt: 1(?:, '[A-Za-z_]+\.[A-Za-z_.]+': 1)* \} \}\)/.test(s),   // v6.212 只准多帶帶點的子路徑
     '缺輕量讀 —— 每 30 秒對每場 playing match 都整份盤面（log 佔約 73%）拉出來只為算 currentActorSeat');
-  const li = s.indexOf('projection: { lastActionAt: 1, updatedAt: 1 }');
+  const li = s.indexOf('projection: { lastActionAt: 1, updatedAt: 1');
   const fi = s.indexOf('const room = await TROOMS.findOne({ _id: m.roomId });');
   ok(li >= 0 && fi >= 0 && li < fi, '輕量讀必須排在完整讀之前');
 });
 
 T('⭐ 輕量讀的門檻判斷要用與完整路徑相同的 fallback 鏈（否則會改變判負時機）', () => {
-  const s = seg('const _light = await TROOMS.findOne', 600);
+  const s = seg('const _light = await TROOMS.findOne', 3500);   // v6.212 對帳區塊插在中間
   ok(s, '找不到輕量讀');
   ok(/_light\.lastActionAt \|\| _light\.updatedAt \|\| m\.gameStartedAt \|\| now/.test(s),
     '輕量讀的 fallback 鏈與完整路徑的 `last` 不一致');

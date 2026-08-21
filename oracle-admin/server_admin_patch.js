@@ -7215,7 +7215,39 @@ import('firebase-admin').then(async ({ default: admin }) => {
             //   判負與否的每一個決策仍由完整 doc 決定 ⇒ 零行為變更。
             //   門檻判斷用的 fallback 鏈與下面的 `last` 逐字相同；_light 為 null（房不見了）就
             //   直接落到完整讀，由原本的 `!gs → continue` 處理。
-            const _light = await TROOMS.findOne({ _id: m.roomId }, { projection: { lastActionAt: 1, updatedAt: 1 } });
+            const _light = await TROOMS.findOne({ _id: m.roomId }, { projection: { lastActionAt: 1, updatedAt: 1, 'gameState.phase': 1 } });
+            // ── ⭐⭐⭐v6.212 GAMEOVER RECONCILE BLOCK BEGIN（level-triggered 對帳）──────
+            //   /action 只在**那一次請求**裡呼叫 onMatchGameOver，而且外面包著 try/catch
+            //   只印一行 warn 就吞掉（edge-triggered）。它一旦拋錯，對戰紀錄就永遠停在
+            //   status:'playing' —— /event 的 myMatch 是用 status:{$ne:'done'} 濾的，
+            //   於是玩家明明贏了，大廳還是一直畫著「⚔️ 回到對戰」，而且沒有任何人會再試一次。
+            //   下一輪也不會排（checkRoundAdvance 要本輪全部 done）＝「新一輪等很久」。
+            //   ⇒ 比照 v6.157 的做法改成 level-triggered：每次掃描都拿「房間實際 phase」
+            //     跟「對戰紀錄 status」對帳，對不上就**補跑一次** onMatchGameOver（它本身
+            //     對 m.status==='done' 冪等，補跑不會重複結算）。
+            //   ⚠ 這裡的 projection 只是**純讀**（判 phase），不會被寫回；下面判負分支要整包
+            //     寫回的那個 findOne 仍然讀完整 doc（v6.119 的注意事項）。
+            //   ⚠ 房間已 game-over 卻沒有勝方（平手／系統死角）：那些路徑都會自己寫 TMATCH，
+            //     走到這裡代表資料不一致，**不自作主張判勝負**，只出聲讓站長看得到。
+            if (_light && _light.gameState && _light.gameState.phase === 'game-over') {
+              const _rcRoom = await TROOMS.findOne({ _id: m.roomId });
+              const _rcGs = _rcRoom && _rcRoom.gameState;
+              if (_rcGs && _rcGs.phase === 'game-over') {
+                if (_rcGs.winner === 0 || _rcGs.winner === 1) {
+                  try {
+                    await onMatchGameOver(_rcRoom, _rcGs);
+                    console.warn('[tournament] \u2699 對帳：房間已 game-over 但對戰仍是 playing → 補跑結算 match=' + m._id);
+                  } catch (_rcE) {
+                    console.warn('[tournament] \u26a0 對帳補跑結算失敗 match=' + m._id + ' :: ' + (_rcE && _rcE.message));
+                  }
+                } else if (!global.__ptcgReconcileNoWinnerWarned) {
+                  global.__ptcgReconcileNoWinnerWarned = true;
+                  console.warn('[tournament] \u26a0 房間已 game-over 且無勝方，但對戰仍是 playing（需人工確認）match=' + m._id);
+                }
+              }
+              continue;   // 已結束的房間本來就不進閒置判負（原本由下方 gs.phase==='game-over' 的 continue 處理）
+            }
+            // ── ⭐v6.212 GAMEOVER RECONCILE BLOCK END ──────────────────────────────
             if (_light) {
               const _lastLight = _light.lastActionAt || _light.updatedAt || m.gameStartedAt || now;
               await maybeIdleWarn60(m, idleMin, now, _lastLight);   // v6.151 判負前 60 秒警告（只在最後 60 秒才讀完整 doc）

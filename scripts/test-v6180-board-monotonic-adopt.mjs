@@ -373,7 +373,16 @@ console.log('\nF. 休閒線上（room-oracle）：結構上不會亂序 ＋ 收�
   const pc = stripComments(poll);
   ok('★★★休閒房輪詢是**序列化**的（回應處理完才排下一發）⇒ 不存在錦標賽那種同時多發並行的亂序',
     /timer = setTimeout\(tick, _d\)/.test(pc) && !/setInterval/.test(pc));
-  ok('★★休閒房只在版本真的變了才回呼', /room\._version !== lastVersion/.test(pc));
+  // ⭐v6.212：閘從「不等於」收緊成**單調**（較舊的 _version 不再遞送給收端）。
+  //   舊寫法讓舊 snapshot 有機會走到 handleRoomUpdate，而 v5.587 的強制自癒是刻意繞過
+  //   stale 守衛的 ⇒ 兩者疊起來就是玩家看到的「跳回上一手」。
+  ok('★★★休閒房只在版本**變新**時才回呼（v6.212 起單調）',
+     /shouldDeliverRoomPoll\(room, \{ version: lastVersion, createdAt: lastCreatedAt \}\)/.test(pc));
+  ok('★★★單調閘的判準是嚴格大於（不是不等於）',
+     /incoming\._version > last\.version/.test(stripComments(ORACLE))
+     && !/room\._version !== lastVersion/.test(pc));
+  ok('★【正對照】房間被刪後重建（_version 從 1 重來）不可被單調閘永遠擋掉',
+     /createdAt \?\? 0\) !== last\.createdAt/.test(stripComments(ORACLE)));
   // 收端 stale 守衛（log 長度單調）真的跑一次
   const g = (n, phase = 'playing') => ({
     id: 'g1', phase, log: new Array(n).fill('x'), createdAt: 1,

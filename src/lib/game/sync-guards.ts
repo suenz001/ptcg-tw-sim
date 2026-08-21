@@ -52,6 +52,37 @@ export function shouldSkipStalePush(
     && (incoming.log?.length ?? 0) < (current.log?.length ?? 0);
 }
 
+/**
+ * ⭐⭐⭐v6.212 卡住自癒的**方向**決策（純函式，行為守衛 scripts/test-v6212-selfheal-direction.mjs）。
+ *
+ * ── 這在修什麼 ──────────────────────────────────────────────────────────
+ * v5.587 的自癒是「卡 >=25 秒 → 強制採用伺服器盤面（繞過全部 stale 守衛）」，
+ * 它的註解假設是「我方沒有未推送的手」。**這個假設在 push 失敗／在途時不成立**：
+ *   push 拋錯（只 console.error、不重試）⇒ 伺服器停在攻擊前 ⇒ 本地一直在等對手
+ *   ⇒ 25 秒後強制採用伺服器那份 ⇒ **玩家看到回合被退回攻擊前**（回捲）。
+ *
+ * ⇒ 修法是把方向反過來：**本地領先時先重推**（pushGameState 對同一份盤面是冪等的，
+ *   推端另有 shouldSkipStalePush 擋倒退），重推之後仍舊卡住才 force-adopt。
+ *
+ * ⚠ 一定要有**上限**：本地領先也可能是「伺服器合法地拒收」（例如對手已用不同路徑
+ *   把盤面推進了），那時無限重推＝永遠不同步。達上限後照樣 force-adopt。
+ */
+export interface StuckSelfHealCtx {
+  /** 本地有「推不上去、伺服器沒有」的盤面（＝本地領先伺服器）。 */
+  hasUnpushedLocal: boolean;
+  /** 這一次卡住期間已經連續重推幾次。 */
+  repushAttempts: number;
+  /** 上限（預設 2）。達上限就讓 force-adopt 接手，避免永遠不同步。 */
+  maxRepushAttempts?: number;
+}
+export type StuckSelfHealAction = { kind: 'repush' } | { kind: 'force-adopt' };
+
+export function decideStuckSelfHeal(ctx: StuckSelfHealCtx): StuckSelfHealAction {
+  const max = ctx.maxRepushAttempts ?? 2;
+  if (ctx.hasUnpushedLocal && ctx.repushAttempts < max) return { kind: 'repush' };
+  return { kind: 'force-adopt' };
+}
+
 // ── 收端決策（handleRoomUpdate cascade）─────────────────────────────────────
 
 export type RoomUpdateDecision =

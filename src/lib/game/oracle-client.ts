@@ -225,6 +225,28 @@ export async function oracleRoomArchetypes(
 }
 
 /**
+ * ⭐⭐⭐v6.212 輪詢版本閘（純函式，守衛 scripts/test-v6212-selfheal-direction.mjs）。
+ *
+ * 舊寫法是 `room._version !== lastVersion` —— 只要「不一樣」就遞送，
+ * 所以**比較舊的版本照樣會被遞送給收端**（伺服器端多實例／重試／慢回應都做得出這件事），
+ * 收端再依 stale 守衛決定要不要收；但只要有任何一條路徑繞過守衛（v5.587 的強制自癒
+ * 就是刻意繞過的），舊盤面就會直接蓋掉新盤面 ＝ 玩家看到的「跳回上一手」。
+ * ⇒ 閘改成**單調**：同一個房間實體只遞送嚴格較新的版本。
+ *
+ * ⚠ 房間可能被刪掉後用同一個房號重建，那時伺服器的 _version 會從 1 重來
+ *   （server_admin_patch.js 建房時寫死 _version: 1）。若只比大小，重建後的房間
+ *   會被永遠擋掉、玩家再也收不到任何更新。⇒ 先用 createdAt 認「是不是同一個房間實體」，
+ *   不同實體一律遞送並重設版本基準。
+ */
+export function shouldDeliverRoomPoll(
+  incoming: { _version: number; createdAt?: number },
+  last: { version: number; createdAt: number },
+): boolean {
+  if ((incoming.createdAt ?? 0) !== last.createdAt) return true;   // 不同房間實體（含第一次）
+  return incoming._version > last.version;                          // 同一房間：只收嚴格較新的
+}
+
+/**
  * Polling subscribe（取代 firestore onSnapshot）。
  * 每 intervalMs 拉一次 GET /api/rooms/:code，_version 變了 callback。
  * 回傳 unsubscribe function。
@@ -235,6 +257,7 @@ export function oraclePollRoom(
   intervalMs: number | (() => number) = 800,
 ): () => void {
   let lastVersion = -1;
+  let lastCreatedAt = -1;   // v6.212：房間實體識別（同房號被重建時 _version 會從 1 重來）
   let lastExists = true;
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -254,14 +277,17 @@ export function oraclePollRoom(
       if (room === ROOM_UNCHANGED) {
         // 版本未變，什麼都不做（等同舊版收到同版本時忽略）
       } else if (room) {
-        if (room._version !== lastVersion) {
+        // ⭐v6.212 單調版本閘：較舊的 _version 不再遞送（見 shouldDeliverRoomPoll）。
+        if (shouldDeliverRoomPoll(room, { version: lastVersion, createdAt: lastCreatedAt })) {
           lastVersion = room._version;
+          lastCreatedAt = room.createdAt ?? 0;
           lastExists = true;
           callback(room);
         }
       } else if (lastExists) {
         lastExists = false;
         lastVersion = -1;
+        lastCreatedAt = -1;
         callback(null);
       }
     } catch (err) {

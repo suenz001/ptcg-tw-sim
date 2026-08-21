@@ -1,5 +1,93 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.212 自癒方向反過來（本地領先先重推、不回捲）＋ 輪詢版本閘單調 ＋ 賽程 game-over 對帳
+
+BASE = `cae142da479aa539f45cac0b347571fcbae3078b`（v6.211）。玩家有感 ⇒ 首頁 changelog 放一則。
+
+### A. 休閒線上「回合都結束了，過一下子又跳回攻擊前」
+
+真因鏈（每一段都複驗過行號，BASE 版）：
+
+1. `src/routes/game/+page.svelte:6552-6555` —— `pushGameState` 失敗只 `console.error`，
+   **完全不重試**。伺服器因此停在攻擊前那份盤面，而本地已經前進。
+2. 本地領先 ⇒ `isWaitingOnOpponent()`（同檔 `:7456`）判成「在等對手」⇒ log 不再增長
+   ⇒ `_lastSyncAt` 不再更新。
+3. 同檔 `:7527`：`if ((Date.now() - _lastSyncAt) >= 25000) _forceAdoptNext = true;`
+   —— **無條件**設定強制採納旗標。
+4. 同檔 `:7685-7694`：`_forceAdoptNext` 為真時**直接 `game = incoming; return;`**，
+   `resolveRoomUpdate` 的每一條 stale 守衛都被跳過 ⇒ 攻擊前的盤面覆蓋現況＝回捲。
+
+v5.587 當年的註解寫「只在『正等對手』時走到這（上方已 gate），**我方沒有未推送的手**，
+故不會丟手」。這個前提在 push 失敗／在途時**不成立**，而 (1) 保證了它一定會發生。
+時間量級 25~33 秒，與玩家「過一下子」的描述吻合。
+
+修法（三項）：
+
+- `sync-guards.ts` 新增純函式 `decideStuckSelfHeal({hasUnpushedLocal, repushAttempts, maxRepushAttempts=2})`。
+  本地領先且未達上限 ⇒ `repush`；否則 `force-adopt`。
+  ⚠ 上限是必要的：本地領先也可能是伺服器**合法**拒收（對手已用別的路徑推進），
+  無限重推＝永遠不同步。達上限交還給 force-adopt。
+- `+page.svelte` 新增 `pushWithRetry()`：3 次、400/800ms backoff；三次都失敗才把那份盤面
+  記進 `_unpushedState`（＝本地領先的證據）。成功一次就清空。換局（`gid !== _prevGameId`）
+  也清空，避免上一局殘留讓新局誤判。
+- 25 秒自癒改成先問 `decideStuckSelfHeal`，`repush` 分支**不設** `_forceAdoptNext`。
+
+### A-2（本輪**不動**，待站長裁定）
+
+`sync-guards.ts:173-174` 第 9 步 `return { kind: 'adopt', game: incoming }`，
+而它上面每一條守衛都寫著 `if (local && ...)` ⇒ **本地 `game === null` 時全部跳過、無條件 adopt**。
+症狀是「早就結束的舊局被採納」。要不要擋牽涉「重新加入想看終局盤」vs「防跳回」的取捨，
+本輪維持現狀。
+
+### A-3 `createdAt` 時鐘偏差假說 —— **成立**（但這一版沒有動它）
+
+`engine.ts:2383` `createdAt: Date.now()`，全檔只有這一處寫入，且 `createGame` 是在
+**建局那一端的瀏覽器**跑的 ⇒ `createdAt` 用的是該玩家的本機時鐘。
+跨局守衛（`sync-guards.ts:102` 與 `:43`）拿兩局的 `createdAt` 比大小來決定誰新誰舊。
+v6.198 已實證線上玩家時鐘有 -11 秒 / -77 秒 / -4.9 小時的偏差 ⇒ 兩局由**不同玩家**建立時
+（再來一局的建局者可能換人），比較結果可能反向 ⇒ 舊局騙過守衛、或新局被誤擋。
+⚠ 這一版刻意不改：要改就得換成伺服器單一時鐘（房間 `_version` 或伺服器 `createdAt`），
+牽涉推/收兩端與 `shouldSkipStalePush`，風險大於本輪範圍。列入待辦。
+
+### A-4 輪詢版本閘（`oracle-client.ts`）
+
+BASE `:257` 是 `if (room._version !== lastVersion)` —— **不等於**就遞送，
+所以比較舊的 `_version` 照樣會被交給 `handleRoomUpdate`。平常有 stale 守衛擋著，
+但 `_forceAdoptNext` 這條路徑是刻意繞過守衛的 ⇒ 兩者疊在一起就是回捲。
+改成單調 `shouldDeliverRoomPoll()`：同一個房間實體只收嚴格較新的版本。
+⚠ 房號可被刪後重建（建房寫死 `_version: 1`，見 `server_admin_patch.js:433`），
+只比大小會讓重建後的房間永遠被擋 ⇒ 先用 `createdAt` 認房間實體，不同實體一律遞送並重設基準。
+
+### B. 賽程：獲勝後仍出現「回到對戰」、新一輪等很久
+
+- `server_admin_patch.js:3914`：`onMatchGameOver` 包在 try/catch 裡，**拋錯只 warn 就吞掉**
+  （edge-triggered）。一旦拋錯，`TMATCH` 永遠停在 `status:'playing'`。
+- `:4275` `/event` 的 myMatch 用 `status: { $ne: 'done' }` 濾 ⇒ 那筆卡住的 match 一直被回傳
+  ⇒ 前端 `:8915` 只看 `tMyMatch.entered` ⇒ 一直畫「⚔️ 回到對戰」。
+- 同時 `checkRoundAdvance` 要本輪全部 done 才排下一輪 ⇒「新一輪等很久」。
+- `:7226` 的閒置掃描對 `phase==='game-over'` 的房間是 `continue`，也不會處理它。
+
+修法（level-triggered 對帳，比照 v6.157）：在閒置掃描既有的輕量讀上多帶一個
+`'gameState.phase': 1`（純讀、不寫回，符合 v6.119 的注意事項），
+房間 `game-over` 而對戰仍 `playing` ⇒ 讀完整 doc 後**補跑 `onMatchGameOver`**
+（它本身對 `m.status==='done'` 冪等）。無勝方（平手／系統死角）不自作主張，只 warn 一次。
+
+前端保險：`tMatchAlreadyDone(brk, mm)` —— 賽程表上該場已標 `status==='done'` 就不畫進場鈕。
+⚠ 只在賽程表確實載到時才隱藏；`:8999` 那個「賽程沒載到就頂層獨立渲染」的保底**一字未動**
+（v5.937 的教訓：進場鈕消失會直接吃未進場判負）。
+
+### B-2 「新賽程等很久」的真因不是輪詢頻率
+
+有 `tMyMatch` 時輪詢仍是 3 秒（`+page.svelte:6053`），差異偵測會立即 resume。
+真因是設計上的等待鏈：最後一場若無人進場要等 `noShowMin`（預設 5 分、v6.156 情境可到 8 分）
+＋ 30 秒 scheduler tick，之後還有 `roundCountdownMin`（預設 3 分）休息倒數。
+⇒ **本輪不動輪詢頻率、也不動 no-show 窗**（屬產品決策，請站長裁定）。
+
+### 部署
+
+改到 `oracle-admin/server_admin_patch.js` ⇒ 需 `update-admin-full.bat`；
+未動 engine/卡效果，但 `src/lib/game/*` 有改 ⇒ 一併跑 `redeploy-oracle.bat` 與 `update-tournament.bat`。
+
 ## v6.211 「hook 內直接覆寫 pendingSelection」＝假 log（青草命令蓋掉手持循環扇）＋ SV-P 四張特典卡漏收招式
 
 BASE = `2255c590a25216366b87a74b0ac99798a03cddf5`（v6.210）。玩家有感 ⇒ 首頁 changelog 放一則。
