@@ -1,5 +1,59 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.216 尖峰請求減量三件（8/17 起晚間尖峰 lag 的共享路徑瓶頸）
+
+BASE = `1eba3359ba531857c2657cf15f9820466868c6e5`（v6.215）。玩家有感（尖峰 lag 改善）⇒ 首頁一則。
+
+### 診斷前提（已定案，本版不重推）
+- 惡化自 8/17 晚間起、只在尖峰、跨玩家同步，2.5s 全落在 wire(TTFB) ⇒ 共享路徑；引擎無辜（事件迴圈使用率實測 2.4%）。
+- 尖峰 115 req/s 絕大多數是輪詢；v6.178 實測休閒對戰佔全站 94% 流量。
+- 候選：整機 CPU 尖峰飽和 或 cloudflared 隧道壅塞——減少請求量/回應量對兩者都有效。
+
+### ① gzip 壓縮等級 6→1（`oracle-admin/server_admin_patch.js` v1.16）
+- 原設定 `_compression({ threshold: 1024, filter })` 未指定 level ⇒ zlib 預設 6。改為 `level: 1`，
+  threshold 與 SSE filter 逐字保留。壓縮 CPU 約省 1/2~2/3，體積約 +15%。
+- v1.11 的 hoist（搬到第一個 route 前）不動 ⇒ 全域（含 /api/rooms/*）都吃到新等級。
+
+### ② 休閒聊天輪詢增量化（前後端）
+- 後端（同檔 v1.16）：新 middleware 攔 `GET /api/rooms/:code/messages?since=<ms>`，
+  `findOne+projection` 判「有沒有比 since 新的訊息」：沒有→204 零 body；有→`next()` 交既有端點回全量
+  （格式/排序/limit 逐字一致）。fail-open 三層（不帶 since／解析不了／任何錯誤→next() 全量），
+  舊 client 聊天絕不會壞。與 gzip 同手法 hoist；自己 parse query（route 前拿不到 req.query）；
+  路徑判斷用 originalUrl/url 禁 req.path。
+- 前端：`oracle-client.ts` 的 `oracleListMessages` 加 since overload（204→null，比照 oracleGetRoom）；
+  `room-oracle.ts` 的 `subscribeMessages` 記 lastTs、帶 since、null 不 callback。
+  ⚠ 輪詢節奏維持 1.5s 不變——砍體積不砍即時性。聊天絕大多數時間無新訊息 ⇒ 該路徑回應體積趨近歸零。
+
+### ③ 休閒盤面輪詢自適應（500ms → 等待自己輸入時 1000ms）
+- 查證結論：自己回合時對手仍可能寫盤面的路徑＝(a) 我方效果把選擇權交給對手（pendingSelection／
+  pendingChainQueue）——需要即時；(b) 對手投降／悔棋請求——低頻、晚半秒無感；(c) 心跳／聊天——不走
+  盤面 callback 或另有輪詢。⇒ 降頻條件取「有任何 pending 一律不降」（比逐項判 actorIdx 更保守），
+  且 setup（雙方並行）/game-over/觀戰/身分未明一律不降。
+- `room-oracle.ts` 新純函式 `computeCasualRoomPollMs(bg, spectator, waitingSelfInput)`：
+  觀戰 4000/6000、背景 2500、前景 waiting?1000:500——既有檔位全部不變，只新增 1000 檔。
+  `subscribeRoom` 加第 4 參數 `isWaitingSelfInput`（缺席/丟例外一律當 false=不降頻，fail-open）。
+- `game/+page.svelte` 新 `casualWaitingSelfInput()`，三處 subscribeRoom 呼叫全部接上。
+- 檔位取任務允許區間（1000~1500）的下界 1000ms＝最保守的降頻檔。
+
+### 預估減量（尖峰、以休閒對戰為主體）
+- ①：不減請求數，減每請求 CPU（壓縮段 ~50-70%）。
+- ②：聊天輪詢（1.5s/人）絕大多數時間改回 204 ⇒ 該路徑回應體積 ~-95%，伺服器端由全量查詢+序列化
+  改為單筆 findOne ⇒ CPU 亦降。
+- ③：對局中約一半時間處於「等待自己輸入」⇒ 盤面輪詢請求數約 -25%（500→1000 只覆蓋該半場）。
+
+### 守衛 `scripts/test-v6216-peak-request-reduction.mjs`（HEAD-FAIL 實證）
+- 全部斷言到行為層：抽出 gzip／chat-since 兩個 block 在模擬 Express stack + 模擬 db 上實跑
+  （204/next()/fail-open/hoist 位置）；抽出 subscribeMessages／subscribeRoom／
+  computeCasualRoomPollMs／casualWaitingSelfInput 以 esbuild 轉譯後實跑（帶 since、204 不
+  callback、節奏 1500 不變、檔位 500/1000/2500/4000、pending 時不降頻）。
+- 於 BASE（v6.215）實跑確認紅（HEAD-FAIL），修後全綠；各含正對照（舊 client 全量、有新訊息仍
+  全量、等對手時仍 500ms）。
+
+### 部署
+- 站長需跑：`redeploy-oracle.bat`（server_admin_patch.js）＋ `update-admin-full.bat`（前端）。
+  不需 `update-tournament.bat`（未動 engine/effects/server-engine）。
+- pm2 log 驗證行：`[rooms] chat since-204 middleware (v1.16) hoisted=true`。
+
 ## v6.215 官方序：招式效果先於「受到傷害時」的寶可夢道具效果（幸運頭盔／逆境保險／手持循環扇）
 
 BASE = `7144cbcf89b95d39b536b5e95b87277294fd73cb`（v6.214）。玩家有感（結算順序改變）⇒ 首頁 changelog 放一則。

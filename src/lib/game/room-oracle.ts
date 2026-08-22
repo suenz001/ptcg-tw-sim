@@ -645,7 +645,23 @@ export async function pushUndoRollback(roomCode: string, gameState: GameState): 
 
 // ── Subscribe (polling) ─────────────────────────────────────────────────────
 
-export function subscribeRoom(roomCode: string, callback: (room: Room | null) => void, isSpectator?: () => boolean): () => void {
+/**
+ * v6.216③:休閒對戰盤面輪詢的自適應檔位（純函式，守衛直接實跑）。
+ *   - 觀戰者:4000 / 6000(背景) — v5.777 既有行為不變。
+ *   - 對戰者背景分頁:2500 — v5.359 既有行為不變。
+ *   - 對戰者前景:等對手動作維持 500(快檔不變);「明確等待自己輸入」時降到 1000。
+ *   查證(v6.216):自己回合時對手仍可能寫盤面的路徑裡,唯一需要即時反映的是
+ *   「我方效果把選擇權交給對手」(pendingSelection / pendingChainQueue)——由 caller 的
+ *   waitingSelfInput 定義排除(盤面上有任何 pending 就不算等待自己輸入,比逐項判 actorIdx
+ *   更保守);其餘(對手投降/悔棋請求/心跳)皆低頻事件,晚半秒看到無感。
+ */
+export function computeCasualRoomPollMs(bg: boolean, spectator: boolean, waitingSelfInput: boolean): number {
+  if (spectator) return bg ? 6000 : 4000;
+  if (bg) return 2500;
+  return waitingSelfInput ? 1000 : 500;
+}
+
+export function subscribeRoom(roomCode: string, callback: (room: Room | null) => void, isSpectator?: () => boolean, isWaitingSelfInput?: () => boolean): () => void {
   const code = roomCode.toUpperCase();
   return oraclePollRoom(code, (room) => {
     if (!room) { callback(null); return; }
@@ -654,10 +670,12 @@ export function subscribeRoom(roomCode: string, callback: (room: Room | null) =>
     //   背景(document.hidden)時放慢以省手機電量/行動數據。
     //   只改 cadence，不動 callback/merge/push；callback 仍只在 _version 變化時觸發。
   }, () => {
-    // v5.777：觀戰者用較慢輪詢（可 lag，大幅降低 Oracle 請求率/CPU）；對戰雙方維持即時零延遲。
+    // v6.216③:檔位決策收斂到 computeCasualRoomPollMs;isWaitingSelfInput 缺席或丟例外
+    //   一律當 false ⇒ 行為退回 v5.777/v5.359 的 500/2500/4000/6000,絕不因新參數變慢。
     const bg = (typeof document !== 'undefined' && document.hidden);
-    if (isSpectator?.()) return bg ? 6000 : 4000;
-    return bg ? 2500 : 500; // v5.359 對戰者：前景 500ms 即時、背景 2500ms 省電
+    let waiting = false;
+    try { waiting = isWaitingSelfInput?.() === true; } catch { waiting = false; }
+    return computeCasualRoomPollMs(bg, isSpectator?.() === true, waiting);
   });
 }
 
@@ -803,18 +821,32 @@ export function subscribeMessages(roomCode: string, callback: (msgs: ChatMessage
   const code = roomCode.toUpperCase();
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  // v6.216②:增量輪詢——記住最後一則訊息的 createdAt,下一發帶 ?since=;伺服器沒有比 since
+  //   新的訊息時回 204(oracleListMessages 回 null)→ 這一發不 callback、畫面維持原樣。
+  //   有新訊息時伺服器仍回「全量最新 100 則」(格式與舊版逐字一致)⇒ 合併/顯示邏輯零改動。
+  //   ⚠ 輪詢節奏維持 1.5s 不變——這一版砍的是回應體積,不是即時性。
+  //   ⚠ 第一發不帶 since(lastTs=0)⇒ 進房仍載入完整聊天記錄;舊 client 不帶 since 時
+  //     伺服器 fail-open 回全量(向後相容)。
+  //   ⚠ 同一毫秒兩則訊息時 $gt 可能暫時漏掉後寫入的那則——下一則新訊息出現時的全量回應
+  //     會自動補回,且既有 oraclePollMessages 本就同樣以 > 判新,非本版新增的邊界。
+  let lastTs = 0;
   const tick = async () => {
     if (!alive) return;
     try {
-      const messages = await oracleListMessages(code, MESSAGES_LIMIT);
-      const msgs: ChatMessage[] = messages.map((m) => ({
-        id: m._id ?? (m.createdAt + '-' + m.uid),
-        uid: m.uid,
-        name: (m.kind?.startsWith('chat:') ? m.kind.slice(5) : null) ?? m.uid.slice(0, 8),
-        text: m.text,
-        createdAt: { seconds: Math.floor(m.createdAt / 1000) },
-      }));
-      callback(msgs);
+      const messages = lastTs > 0
+        ? await oracleListMessages(code, MESSAGES_LIMIT, lastTs)
+        : await oracleListMessages(code, MESSAGES_LIMIT);
+      if (messages !== null) {
+        for (const m of messages) { if (m.createdAt > lastTs) lastTs = m.createdAt; }
+        const msgs: ChatMessage[] = messages.map((m) => ({
+          id: m._id ?? (m.createdAt + '-' + m.uid),
+          uid: m.uid,
+          name: (m.kind?.startsWith('chat:') ? m.kind.slice(5) : null) ?? m.uid.slice(0, 8),
+          text: m.text,
+          createdAt: { seconds: Math.floor(m.createdAt / 1000) },
+        }));
+        callback(msgs);
+      }
     } catch (err) {
       console.warn('[subscribeMessages]', err);
     }

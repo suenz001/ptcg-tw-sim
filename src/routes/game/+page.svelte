@@ -7722,7 +7722,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           }
         }
         // ── ⭐v6.212 SELFHEAL DIRECTION BLOCK END ────────────────────────────────
-        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null); } catch { /* ignore */ }
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null, casualWaitingSelfInput); } catch { /* ignore */ }
       }
     }, 5000);
     return () => clearInterval(iv);
@@ -7746,7 +7746,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (granted === false) {
         _forceAdoptNext = true;
         _lastActionAt = Date.now();
-        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null); } catch { /* ignore */ }
+        try { unsubRoom?.(); unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null, casualWaitingSelfInput); } catch { /* ignore */ }
         alert('對手其實已經行動了，現在輪到你！畫面已為你重新同步。');
       }
     } catch (e) {
@@ -7774,9 +7774,35 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
   }
 
+  // ── v6.216③ 休閒對戰盤面輪詢自適應 ────────────────────────────────────────────
+  //   「明確等待自己輸入」= 線上模式、對局進行中(playing)、輪到我、且盤面上沒有任何
+  //   pendingSelection / pendingChainQueue。此時盤面輪詢由 500ms 降到 1000ms。
+  //   查證(v6.216)自己回合時對手仍可能寫盤面的所有路徑:
+  //   (a) 我方招式/效果把選擇權交給對手(pendingSelection.actorIdx=對手,或 pending 鏈中
+  //       還有對手的待選)→ 需要即時 ⇒ 底下「有任何 pending 一律回 false」——比逐項判
+  //       actorIdx 更保守,連「我自己在選」的期間也不降頻。
+  //   (b) 對手投降 / 悔棋請求(requestUndo 經房間 doc)→ 低頻事件,晚半秒看到無感。
+  //   (c) 心跳/聊天 → 心跳不影響玩家可見盤面;聊天走 subscribeMessages 另一條輪詢。
+  //   setup(雙方並行動作)/game-over/觀戰/身分未明(myPlayerIndex null)一律不降頻。
+  //   任何例外都回 false ⇒ 行為退回既有 500ms 快檔(fail-open 不降頻)。
+  function casualWaitingSelfInput(): boolean {
+    try {
+      if (mode !== 'online') return false;
+      const g = game;
+      if (!g || g.phase !== 'playing') return false;
+      if (myPlayerIndex === null) return false;
+      if (g.activePlayerIndex !== myPlayerIndex) return false;
+      if (g.pendingSelection) return false;
+      if (g.pendingChainQueue && g.pendingChainQueue.length > 0) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function startRoomSubscription() {
     unsubRoom?.();
-    unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null);
+    unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null, casualWaitingSelfInput);
     startHeartbeat();
     // v2.272：訂閱聊天訊息
     unsubMessages?.();

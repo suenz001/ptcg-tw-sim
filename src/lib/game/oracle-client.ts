@@ -359,11 +359,19 @@ export async function oracleSendMessage(
   return message;
 }
 
-export async function oracleListMessages(code: string, limit: number = 50): Promise<OracleMessage[]> {
-  const { messages } = await oracleApi<{ messages: OracleMessage[] }>(
-    `/api/rooms/${code.toUpperCase()}/messages?limit=${limit}`,
+// v6.216②:帶 since 的增量輪詢。伺服器對「沒有比 since 新的訊息」回 204(oracleApi 回
+//   undefined,與 v5.610 房間輪詢同一條路)→ 本函式回 null 表「沒有新訊息」。
+//   不帶 since 的呼叫端行為完全不變(伺服器 fail-open 一律回全量,絕不 204)——overload
+//   讓既有 caller 的回傳型別維持 OracleMessage[],比照 oracleGetRoom 的 since overload。
+export function oracleListMessages(code: string, limit?: number): Promise<OracleMessage[]>;
+export function oracleListMessages(code: string, limit: number, since: number): Promise<OracleMessage[] | null>;
+export async function oracleListMessages(code: string, limit: number = 50, since?: number): Promise<OracleMessage[] | null> {
+  const q = since !== undefined && since > 0 ? `&since=${since}` : '';
+  const res = await oracleApi<{ messages: OracleMessage[] } | undefined>(
+    `/api/rooms/${code.toUpperCase()}/messages?limit=${limit}${q}`,
   );
-  return messages;
+  if (res === undefined) return null; // 204 = 沒有新訊息（只有帶 since 時可能發生）
+  return res.messages;
 }
 
 /** Polling subscribe messages — 新訊息 callback */
