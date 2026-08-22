@@ -235,6 +235,31 @@ export async function oracleListRooms(status?: string): Promise<OracleRoom[]> {
   return rooms;
 }
 
+// ⭐v6.217①② 大廳列表「合併+增量」輪詢的三態哨兵。
+// - ROOMS_UNCHANGED:伺服器回 204(內容沒變)——caller 沿用上一包原始資料重跑過濾即可。
+// - ROOMS_COMBINED_UNSUPPORTED:伺服器不支援合併協定——**必須退回兩支舊輪詢**。
+//   ⚠ 這一態的判據是「200 但回應沒有 combined:true」:舊伺服器把 'lobby,playing' 當
+//   字面值查會回 {rooms:[]},若把它當真,大廳會永遠顯示「目前沒有公開房間」(v6.177 的
+//   「請求失敗偽裝成權威空資料」同型事故,只是這次是「協定不支援」偽裝成空資料)。
+export const ROOMS_UNCHANGED = Symbol('rooms-unchanged');
+export const ROOMS_COMBINED_UNSUPPORTED = Symbol('rooms-combined-unsupported');
+
+/**
+ * v6.217①② 一發拿完大廳需要的 lobby+playing 兩組房間(伺服器 middleware v1.17)。
+ * @param h 上一發伺服器給的內容 digest;內容沒變時伺服器回 204(零 body)。
+ * 回傳:{ rooms, h } | ROOMS_UNCHANGED(204) | ROOMS_COMBINED_UNSUPPORTED(舊伺服器)。
+ * ⚠ 網路錯誤一律往上拋(caller 依 v6.177 紀律保留畫面既有資料),不得在這裡吞掉。
+ */
+export async function oracleListRoomsCombined(
+  h: string | null,
+): Promise<{ rooms: OracleRoom[]; h: string } | typeof ROOMS_UNCHANGED | typeof ROOMS_COMBINED_UNSUPPORTED> {
+  const q = `?status=${encodeURIComponent('lobby,playing')}${h ? `&h=${encodeURIComponent(h)}` : ''}`;
+  const res = await oracleApi<{ rooms: OracleRoom[]; combined?: boolean; h?: string } | undefined>(`/api/rooms${q}`);
+  if (res === undefined) return ROOMS_UNCHANGED;                       // 204:內容沒變
+  if (!res || res.combined !== true) return ROOMS_COMBINED_UNSUPPORTED; // 舊伺服器/middleware 沒生效
+  return { rooms: Array.isArray(res.rooms) ? res.rooms : [], h: String(res.h ?? '') };
+}
+
 /**
  * v6.115 取得「對戰中房間」的牌組原型名稱（大廳標籤用）。
  *

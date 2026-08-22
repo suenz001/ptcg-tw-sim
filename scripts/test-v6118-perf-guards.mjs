@@ -60,10 +60,13 @@ T('⭐ 輪詢間隔沒有被偷偷調快（大廳 2 秒是刻意的下限）', (
   const ro = readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8');
   const i = ro.indexOf('export function subscribeOpenRooms');
   ok(i > 0, '找不到 subscribeOpenRooms');
-  const body = ro.slice(i, i + 1800);
-  const m = body.match(/setTimeout\(tick,\s*(\d+)\)/);
-  ok(m, '找不到輪詢間隔');
-  ok(Number(m[1]) >= 2000, '大廳輪詢間隔被調成 ' + m[1] + 'ms（< 2000），會放大伺服器負載');
+  // v6.217①②:subscribeOpenRooms 拆成合併協定 tick 與退回舊協定的 legacyTick 兩條路徑,
+  //   兩條的間隔都不得 < 2000(守衛範圍擴大到整個函式,兩個計時器都要抓到)。
+  const j = ro.indexOf('\n// ── Heartbeat', i);
+  const body = ro.slice(i, j > i ? j : i + 6000);
+  const ms = [...body.matchAll(/setTimeout\((?:tick|legacyTick),\s*(\d+)\)/g)];
+  ok(ms.length >= 2, '找不到輪詢間隔(tick/legacyTick 至少各一,實際 ' + ms.length + ' 個)');
+  for (const m of ms) ok(Number(m[1]) >= 2000, '大廳輪詢間隔被調成 ' + m[1] + 'ms（< 2000），會放大伺服器負載');
 });
 
 T('正對照：判準抓得到「沒有 gate」的樣本', () => {

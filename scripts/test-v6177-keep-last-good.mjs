@@ -213,13 +213,18 @@ T('⭐3a 否定型：tournLoadEvent 不得再用 `Array.isArray(r.events) ? r.ev
 });
 
 // ── 4) 同型：休閒大廳房間列表（room-oracle.ts）行為端實跑 ──────────────
-const FN_ROOMS = slice(ROOM, 'export function subscribeOpenRooms(', '\n// ── Heartbeat', 'subscribeOpenRooms');
+// v6.217①②:subscribeOpenRooms 拆出 filterAndSortOpenRooms 與合併協定;此 harness 讓合併端點回
+// UNSUPPORTED ⇒ 當發退回兩支舊輪詢 ⇒ 以下 4a~4e 測的正是「舊協定路徑的保留行為必須原封不動」。
+const FN_ROOMS = slice(ROOM, 'export function filterAndSortOpenRooms(', '\n// ── Heartbeat', 'subscribeOpenRooms');
 function makeRooms() {
   const st = { mode: 'ok', calls: 0, cbs: [], pending: [] };
   const body = `
     var SEAT_LAYOUT_VERSION = 1;
     function isLobbyHostDead() { return false; }
     function isLobbyTooOld() { return false; }
+    var ROOMS_UNCHANGED = Symbol('u');
+    var ROOMS_COMBINED_UNSUPPORTED = Symbol('n');
+    async function oracleListRoomsCombined() { return ROOMS_COMBINED_UNSUPPORTED; }
     async function oracleListRooms(kind) {
       st.calls++;
       if (st.mode === 'fail') throw new Error('boom');
@@ -230,7 +235,7 @@ function makeRooms() {
     // 由測試自己驅動下一發：把排程的 callback 收起來，不真的等 2 秒
     var setTimeout = function (fn) { st.pending.push(fn); return 0; };
     var clearTimeout = function () {};
-    ${ts(FN_ROOMS.replace('export function', 'function').replace(/^import .*$/gm, ''))}
+    ${ts(FN_ROOMS.replace(/export function/g, 'function').replace(/^import .*$/gm, ''))}
     return subscribeOpenRooms;
   `;
   const sub = new Function('st', 'adoptOrKeep', body)(st, KEEPMOD.adoptOrKeep);

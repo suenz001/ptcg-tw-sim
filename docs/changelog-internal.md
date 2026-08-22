@@ -1,5 +1,61 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.217 尖峰請求減量第二批（大廳合併+204、觀戰 4s、跨房提醒 60s）
+
+BASE = `3d5c3b8937b1275dd6b5a6fbbf574125b5e40a11`（v6.216）。玩家有感（尖峰 lag 改善）⇒ 首頁一則。
+
+### ① ② 休閒大廳列表：合併兩支輪詢＋內容未變回 204（前後端）
+- 後端（`oracle-admin/server_admin_patch.js` v1.17）：新 middleware 攔 `GET /api/rooms?status=lobby,playing`
+  （核心端點把 `'lobby,playing'` 當字面值查必回空 ⇒ 這個 query 形狀可安全當新協定哨兵）。
+  `$in` 一次查兩種狀態、與核心端點同一份 projection（剔 `seats.deckEntries`/`gameState`）/sort/limit(100)。
+  回應算「顯示內容 digest」（FNV-1a 雙 32bit，零依賴——ESM host 無 require('crypto')）：
+  client 帶 `?h=` 相同→204 零 body；不同→200 `{rooms, combined:true, h}`。
+  - ⭐ digest 方向性（fail-safe）：**全欄位都算**（鍵排序後 stringify），只剔已知噪音欄位
+    （updatedAt/_version/undoRequest/rematchReady/restartProposed*/returnRoomProposed*）。
+    ⚠ lobby 房 `heartbeats` 保留（`isLobbyHostDead` 靠它移死房）；playing 房剔（每 60s bump 一次純噪音）。
+    漏剔噪音＝多回 200（現狀）；絕不會 stale。
+  - ⚠ `combined:true` 是 client 分辨新舊伺服器的哨兵：舊伺服器回 `{rooms:[]}`，若當真＝v6.177
+    「請求失敗偽裝成權威空資料」同型事故。
+  - middleware 不自己驗 JWT 簽章，只擋沒有 `Bearer ` header 的裸請求（大廳列表本就對所有匿名登入者
+    開放；沒 header 者 next() 給核心 requireAuth 回 401）。hoist 同 v1.11/v1.16 手法。
+  - pm2 log 驗證行：`[rooms] combined-list middleware (v1.17) hoisted=true`。
+- 前端：`oracle-client.ts` 新增 `oracleListRoomsCombined(h)` 三態（`{rooms,h}` / `ROOMS_UNCHANGED`(204) /
+  `ROOMS_COMBINED_UNSUPPORTED`(200 無 combined 旗標)）；`room-oracle.ts` 的 `subscribeOpenRooms` 改為
+  先走合併協定，收到 UNSUPPORTED **這一發就**退回舊的兩支輪詢（該訂閱期內不再探測）。
+  - ⚠ 網路錯誤**不算**不支援（尖峰最容易網路錯誤，若因此退回舊協定，減量會在最需要時消失）。
+  - ⚠ 204 之後仍要 callback：過濾抽成 `filterAndSortOpenRooms` 純函式，**每 tick 重跑**——
+    `isLobbyHostDead`(3min)/`isLobbyTooOld`(10min) 是時間函數，資料不變時間也會走，
+    死房/殭屍房要靠重跑才會從列表消失。
+  - 輪詢節奏維持 2000ms 不變（站長方案③「2s→3s」刻意不做：大廳是配對頁面，新房間出現晚 1 秒
+    直接拖慢配對；①②已把該路徑請求砍半＋位元組砍到趨近零，再動節奏的邊際效益不值得體驗風險）。
+- 減量估算：大廳頁請求數 −50%（2 支→1 支）；命中 204 時回應體積由 ~11.8KB(gzip ~1.5KB)→0。
+  以 lobby 房心跳 60s/房估計，2 秒輪詢的 204 命中率 ~9 成。
+
+### ⑤ 觀戰輪詢 2000 → 4000（`+page.svelte` tPollDesiredMs）
+- 觀戰者不參與對局、無任何判定綁在這條輪詢上；`/spectate/state` 未命中版本比對時回全量 redact
+  盤面，是觀戰人數 × 每 2 秒的大宗。game-over 10000 檔位不動。base tick 400ms，4000 為整數倍。
+- 既有守衛 `test-v6161-lobby-poll-downshift.mjs` 原本釘「觀戰頻率完全不變(2000)」——該斷言為
+  當時的正對照而非產品需求，已同步更新為 4000 並註明版本。
+
+### ④ 跨房提醒 /event 輪詢 30s → 60s（`+page.svelte` tAlertPollTimer）
+- 這條是「人在一般對戰頁的登入者」全體都在打的備援輪詢；主通道是 Web Push（v0.85）＋
+  錦標賽頁自己的 3s 輪詢。最壞晚 60s 發現新對戰，vs 未進場容許窗硬地板 120s（NOSHOW_FLOOR_MIN）
+  且預設 3~5 分鐘 ⇒ 不會因此被判未進場。
+- 刻意不拉到 90~120s：120s 會貼死硬地板窗，Web Push 被瀏覽器擋掉的玩家只剩這條。
+
+### 沒做的項目（站長裁定用）
+- ③ 大廳輪詢 2s→3s：不做，理由見上。
+- ⑥ /bracket 只回當前輪：不做——賽程表的歷史輪次與瑞士排名是玩家會翻看的內容，只回當前輪＝
+  功能退化；且 /bracket 已有 gzip＋3s TTL 快取（~1.9KB/req），減量效益小、改動面大。
+- ⑦ nginx upstream keepalive：VM 設定非 repo，只提供操作單（見交付報告），不代跑。
+
+### 守衛
+- 新增 `scripts/test-v6217-lobby-combined-and-alert.mjs`（HEAD-FAIL 已於 BASE 驗證）：
+  後端 middleware 抽 `PTCG-ROOMS-COMBINED-BLOCK` 於模擬 Express stack 實跑（204/200/fail-open/hoist/
+  噪音欄位不觸發、lobby 心跳觸發）；前端 esbuild 轉譯後實跑 `subscribeOpenRooms`
+  （合併一發、204 重跑過濾、UNSUPPORTED 退回兩支、節奏 2000 不變）與 `oracleListRoomsCombined` 三態；
+  `+page.svelte` 觀戰 4000 由更新後的 v6161 守衛實跑釘住；tAlert 60000 斷言。
+
 ## v6.216 尖峰請求減量三件（8/17 起晚間尖峰 lag 的共享路徑瓶頸）
 
 BASE = `1eba3359ba531857c2657cf15f9820466868c6e5`（v6.215）。玩家有感（尖峰 lag 改善）⇒ 首頁一則。

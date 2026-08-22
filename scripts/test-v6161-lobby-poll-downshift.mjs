@@ -111,9 +111,10 @@ T('①正對照：對戰中的輪詢頻率完全不變（1200 / 800 快檔 / gam
   assert.equal(battleDesired({ ...base, game: { phase: 'game-over', winner: null } }, false), 6000);
   assert.equal(battleDesired({ ...base, game: null }, false), 1200);
 });
-T('①正對照：觀戰頻率完全不變（2000 / game-over 10000）', () => {
+T('①正對照：觀戰頻率（4000（v6.217⑤ 原 2000）/ game-over 10000）', () => {
   const base = { mySeatIdx: 0, _tLastStateChangeAt: 0 };
-  assert.equal(battleDesired({ ...base, game: { phase: 'playing', activePlayerIndex: 1 } }, true), 2000);
+  assert.equal(battleDesired({ ...base, game: { phase: 'playing', activePlayerIndex: 1 } }, true), 4000,
+    '觀戰輪詢應為 4000（v6.217⑤：觀戰不參與判定，2 秒→4 秒換掉尖峰一半的觀戰流量）');
   assert.equal(battleDesired({ ...base, game: { phase: 'game-over', winner: 1 } }, true), 10000);
 });
 T('①正對照：大廳輪詢的 base tick 仍是 3 秒（降的是送出頻率，不是把 timer 拉長）', () => {

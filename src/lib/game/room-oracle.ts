@@ -15,6 +15,7 @@
 import {
   oracleAuth, oracleApi, oracleGetRoom, oracleUpsertRoom, oracleDeleteRoom,
   oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid,
+  oracleListRoomsCombined, ROOMS_UNCHANGED, ROOMS_COMBINED_UNSUPPORTED,
   type OracleRoom,
 } from './oracle-client';
 // v4.961：oracle mode 也有 firebase auth（signInAnonymously / sign-in upgrade），
@@ -679,6 +680,34 @@ export function subscribeRoom(roomCode: string, callback: (room: Room | null) =>
   });
 }
 
+/**
+ * v6.217①② 大廳列表的「client 端顯示過濾+排序」(從 subscribeOpenRooms 抽出的純函式)。
+ * ⚠ 這一段**每個 tick 都要重跑**——即使伺服器回 204(內容沒變):
+ *   isLobbyHostDead(心跳 3 分鐘過期)與 isLobbyTooOld(開房超過 10 分鐘)都是「拿當下
+ *   時間跟房間欄位比」的判斷,資料不變、時間也會走,死房/殭屍房要靠重跑才會從列表消失。
+ */
+export function filterAndSortOpenRooms(all: OracleRoom[]): Room[] {
+  const rooms = all
+    .filter(r => {
+      if ((r.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return false;
+      if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
+      // v5.004：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
+      if (r.visible === false) return false;
+      // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆）
+      if (isLobbyHostDead(r as unknown as RoomData)) return false;
+      // v5.463：開房超過 10 分鐘的 lobby 房不列出（房主長掛分頁的殭屍練習房；用 createdAt 因 updatedAt 被心跳 bump）
+      if (isLobbyTooOld(r as unknown as RoomData)) return false;
+      return true;
+    })
+    .map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);
+  rooms.sort((a, b) => {
+    const ta = (a.createdAt as number) ?? 0;
+    const tb = (b.createdAt as number) ?? 0;
+    return tb - ta;
+  });
+  return rooms;
+}
+
 export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: (err: Error) => void): () => void {
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -692,7 +721,15 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
   //     整發放棄會讓休閒大廳完全凍結（新開的房永遠看不到）——Fable 5 審查點名。
   let _lastLobby: OracleRoom[] | null = null;
   let _lastPlaying: OracleRoom[] | null = null;
-  const tick = async () => {
+  // ⭐v6.217①② 合併+增量輪詢狀態機:
+  //   _combinedMode: null=還沒探測 / true=伺服器支援(一發拿兩組+204 增量) / false=退回兩支舊輪詢。
+  //   ⚠ 判定「不支援」只認 ROOMS_COMBINED_UNSUPPORTED 哨兵(=200 但沒有 combined:true 旗標);
+  //     網路錯誤**不算**不支援——尖峰時最容易網路錯誤,若因此永久退回兩支舊輪詢,
+  //     減量效果會在最需要它的時候消失。
+  let _combinedMode: boolean | null = null;
+  let _lastH: string | null = null;
+  let _lastAll: OracleRoom[] | null = null;
+  const legacyTick = async () => {
     if (!alive) return;
     try {
       const [lobbyRes, playingRes] = await Promise.all([
@@ -706,31 +743,45 @@ export function subscribeOpenRooms(callback: (rooms: Room[]) => void, onError?: 
       // 從來沒有成功過（兩邊都還是 null）⇒ 這一發沒有任何可顯示的資料，不 callback，
       //   讓畫面維持既有的「載入中／空狀態」，而不是被填成假的「目前沒有公開房間」。
       if (lobby === null && playing === null) {
-        if (alive) timer = setTimeout(tick, 2000);
+        if (alive) timer = setTimeout(legacyTick, 2000);
         return;
       }
-      const rooms = ([...(lobby ?? []), ...(playing ?? [])] as OracleRoom[])
-        .filter(r => {
-          if ((r.schemaVersion ?? 1) < SEAT_LAYOUT_VERSION) return false;
-          if (r.status === 'playing' && r.spectatorsAllowed === false) return false;
-          // v5.004：私密房 (visible === false) 不出現在大廳列表，只能透過房號加入
-          if (r.visible === false) return false;
-          // v5.393：房主(座位0)心跳過期 > 3min 的 lobby 死房不列出（可逆）
-          if (isLobbyHostDead(r as unknown as RoomData)) return false;
-          // v5.463：開房超過 10 分鐘的 lobby 房不列出（房主長掛分頁的殭屍練習房；用 createdAt 因 updatedAt 被心跳 bump）
-          if (isLobbyTooOld(r as unknown as RoomData)) return false;
-          return true;
-        })
-        .map(r => ({ ...(r as unknown as RoomData), roomId: r._id }) as Room);
-      rooms.sort((a, b) => {
-        const ta = (a.createdAt as number) ?? 0;
-        const tb = (b.createdAt as number) ?? 0;
-        return tb - ta;
-      });
-      callback(rooms);
+      callback(filterAndSortOpenRooms([...(lobby ?? []), ...(playing ?? [])] as OracleRoom[]));
     } catch (err) {
       console.warn('[subscribeOpenRooms]', err);
       onError?.(err as Error);
+    }
+    if (alive) timer = setTimeout(legacyTick, 2000);
+  };
+  const tick = async () => {
+    if (!alive) return;
+    if (_combinedMode === false) { void legacyTick(); return; }  // 防禦:切換後 tick 不該再被排到
+    try {
+      const r = await oracleListRoomsCombined(_lastH);
+      if (r === ROOMS_COMBINED_UNSUPPORTED) {
+        // 舊伺服器(或 middleware 沒 hoist 成功):**這一發就**改跑舊的兩支輪詢,不空等一輪;
+        // legacyTick 自己排程,本 tick 從此不再進場。
+        _combinedMode = false;
+        void legacyTick();
+        return;
+      }
+      _combinedMode = true;
+      if (r === ROOMS_UNCHANGED) {
+        // 204:內容沒變 ⇒ 沿用上一包原始資料**重跑過濾**(死房/殭屍房判定是時間函數,見
+        // filterAndSortOpenRooms 的說明)。理論上第一發不帶 h 不可能拿到 204;防禦性起見
+        // 沒有上一包就當作「這一發沒資料」,維持畫面既有狀態。
+        if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll));
+      } else {
+        _lastAll = r.rooms;
+        _lastH = r.h;
+        callback(filterAndSortOpenRooms(r.rooms));
+      }
+    } catch (err) {
+      // 網路失敗:不清空、不退回舊協定(v6.177 紀律+上方 _combinedMode 說明);
+      // 有上一包就重跑過濾讓列表維持可見。
+      console.warn('[subscribeOpenRooms]', err);
+      onError?.(err as Error);
+      if (_lastAll !== null) callback(filterAndSortOpenRooms(_lastAll));
     }
     if (alive) timer = setTimeout(tick, 2000);
   };

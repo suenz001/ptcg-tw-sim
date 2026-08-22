@@ -744,7 +744,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }, 1000);
     } else if (tTickTimer) { clearInterval(tTickTimer); tTickTimer = null; }
   });
-  // v5.585 跨房提醒輪詢：非錦標賽頁 + 已登入(非匿名) → 每 30 秒查一次我的錦標賽對戰，1 秒 tick 算倒數
+  // v5.585 跨房提醒輪詢：非錦標賽頁 + 已登入(非匿名) → 每 60 秒(v6.217④ 原 30 秒)查一次我的錦標賽對戰，1 秒 tick 算倒數
   $effect(() => {
     if (!isTournament && firebaseUser && !firebaseUser.isAnonymous) {
       if (!tAlertPollTimer) {
@@ -758,7 +758,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
           } catch { /* 未登入錦標賽 / 無賽事 / 網路 → 略過，不影響一般對戰 */ }
         };
         poll();
-        tAlertPollTimer = setInterval(poll, 30000);
+        // ⭐v6.217④ 30000 → 60000:這條是「人在一般對戰頁時的錦標賽進場提醒」備援輪詢,
+        //   主通道是 Web Push(v0.85「本輪可進場」)+進錦標賽頁的 /event 3 秒輪詢。
+        //   最壞多等 60 秒才發現新對戰,而未進場容許窗硬地板是 2 分鐘(v6.214 NOSHOW_FLOOR_MIN)
+        //   且預設 3~5 分鐘 ⇒ 不可能因此被判未進場。全站每位掛在一般頁的登入者少打一半 /event。
+        tAlertPollTimer = setInterval(poll, 60000);
         tAlertTickTimer = setInterval(() => {
           tAlertNow = Date.now() + tAlertOffset;
           notifyScan([], tAlertMatch, tAlertNow);   // v6.022 進場時間一到就通知（去重保證只發一次）
@@ -6205,7 +6209,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   ⚠ 遲到的代價：/event 是「我的下一場開始了」的輪詢通道，最壞多 6 秒才發現；
       //     而輪次推進後還有 roundCountdownMin（預設 3 分）休息倒數 ＋ noShowMin（預設 5 分）
       //     遲到容許，共 480 秒；6 秒佔 1.25%，不可能因此被判未進場。
-      //     （實作比對：一般對戰頁的跨房提醒 tAlertPollTimer 本來就是 30 秒一次。）
+      //     （實作比對：一般對戰頁的跨房提醒 tAlertPollTimer 本來就是 60 秒一次（v6.217④）。）
       if (_tTabHidden) return 21000;   // 背景分頁再保守一點（回前景會立即強制同步，見 onVis）
       return 9000;
     }
@@ -6214,7 +6218,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (spectate) return 10000;
       return (g.winner == null) ? 6000 : 12000;   // 平手待裁定要早點看到結果
     }
-    if (spectate) return 2000;
+    // ⭐v6.217⑤ 觀戰輪詢 2000 → 4000:觀戰者不參與對局,晚 2 秒看到對手動作不影響任何
+    //   判定;錦標賽尖峰時觀戰人數會放大這條輪詢的量(v0.80:每場都掛著數名觀戰者)。
+    //   ⚠ base tick 是 400ms,4000 是 400 的整數倍=實際會發生的間隔(v6.148 量化教訓)。
+    //   game-over 後的 10000 檔位不動(v6.146 既有行為)。
+    if (spectate) return 4000;
     // ⚠ 快檔三個條件缺一不可：
     //   ① 只在 playing —— setup 有自己的 3.5 秒看門狗，50 人同時開局全員進快檔會變成尖峰。
     //   ② 只在「等對手」—— 自己回合的動作走 dispatch，回應本身就即時，不需要快 poll；
