@@ -74,6 +74,17 @@
   //     一律排在有留言的之後、彼此依發布時間新→舊，名次穩定不亂跳。
   let sort = $state<'new' | 'likes' | 'downloads' | 'comments'>('new');
   let tournamentOnly = $state(false);
+  // ── v6.218 關鍵字搜尋 ──────────────────────────────────────────────
+  //   同一個輸入框：空白分隔多個關鍵字＝每個都要命中（AND）；單一關鍵字命中＝
+  //   牌組名∨作者∨說明∨留言 含該字，∨ 牌組裡有卡名含該字的卡（都是部分比對）。
+  //   ⚠ 搜尋是**伺服器端**的（?q=）——公布欄分頁載入，前端只篩得到當頁，
+  //     玩家會誤以為那個牌組不存在。卡名→cardId 的解析也在伺服器（那邊有完整卡池），
+  //     前端不必為了搜尋載卡片資料庫、也沒有 id 清單塞爆 URL 的問題。
+  let searchQ = $state('');
+  let searchTimer: ReturnType<typeof setTimeout> | null = null;
+  // 舊伺服器不認識 ?q=（回應沒有 q 哨兵欄位）⇒ 會靜默回「未過濾」的完整列表。
+  //   要明講，不能讓玩家以為搜尋有生效（v1.17 combined:true 哨兵的同一課）。
+  let searchUnsupported = $state(false);
   let loading = $state(true);
   let loadError = $state('');
   let apiUnavailable = $state(false);
@@ -157,7 +168,7 @@
       else { eligible = []; myPosts = []; }
     });
     void fetchList();
-    return un;
+    return () => { un(); if (searchTimer) clearTimeout(searchTimer); };
   });
 
   const canPost = $derived(!!firebaseUser && !firebaseUser.isAnonymous);
@@ -205,10 +216,14 @@
     try {
       const q = new URLSearchParams({ sort, page: String(page), pageSize: String(pageSize) });
       if (tournamentOnly) q.set('tournamentOnly', '1');
+      // v6.218：空白輸入＝不篩選（不送 q 參數，回到原本列表）。
+      const qs = searchQ.trim();
+      if (qs) q.set('q', qs);
       const r = await api('?' + q.toString());
       if (seq !== listSeq) return;              // 已經有更新的一發，這份結果作廢
       posts = r.posts || [];
       total = r.total || 0;
+      searchUnsupported = !!qs && typeof r.q === 'undefined';
     } catch (e: any) {
       if (seq !== listSeq) return;
       if (String(e?.message) !== 'unavailable') loadError = String(e?.message ?? e);
@@ -228,6 +243,16 @@
     const np = Math.max(1, Math.min(totalPages, p));
     if (np === page) return;
     page = np; void fetchList();
+  }
+  /** v6.218 搜尋輸入 debounce ~300ms：等玩家停手才發請求，不是每按一個鍵就打一發。 */
+  function onSearchInput() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { searchTimer = null; page = 1; void fetchList(); }, 300);
+  }
+  function clearSearch() {
+    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+    if (!searchQ) return;
+    searchQ = ''; searchUnsupported = false; page = 1; void fetchList();
   }
 
   async function openDetail(id: string) {
@@ -766,6 +791,17 @@
       {/if}
     {:else}
     <div class="toolbar">
+      <div class="search">
+        <input
+          type="search"
+          placeholder="搜尋：牌組名／作者／說明／留言／卡名（空白分隔＝都要有）"
+          bind:value={searchQ}
+          oninput={onSearchInput}
+        />
+        {#if searchQ}
+          <button class="search-clear" title="清除搜尋" onclick={clearSearch}>✕</button>
+        {/if}
+      </div>
       <div class="sorts">
         <button class:active={sort === 'new'} onclick={() => changeSort('new')}>最新</button>
         <button class:active={sort === 'likes'} onclick={() => changeSort('likes')}>最多讚</button>
@@ -778,6 +814,12 @@
       </label>
     </div>
 
+    {#if searchUnsupported}
+      <p class="warn">伺服器還不認識搜尋功能（可能尚未更新），目前顯示的是未過濾的完整列表。</p>
+    {/if}
+    {#if searchQ.trim() && !loading && !loadError && !searchUnsupported}
+      <p class="hint small-note">符合「{searchQ.trim()}」的投稿共 {total} 篇。</p>
+    {/if}
     {#if loadError}
       <p class="error">載入失敗：{loadError}</p>
     {/if}
@@ -787,7 +829,7 @@
       <p class="empty">載入中…</p>
     {:else if posts.length === 0}
       <p class="empty">
-        {#if tournamentOnly}目前還沒有賽事名次牌組。{:else}目前還沒有人投稿。{/if}
+        {#if searchQ.trim()}沒有符合「{searchQ.trim()}」的投稿。{:else if tournamentOnly}目前還沒有賽事名次牌組。{:else}目前還沒有人投稿。{/if}
       </p>
     {:else}
       <ul class="post-list">
@@ -1039,6 +1081,12 @@
   .sorts button { padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font-size: .85rem; }
   .sorts button.active { background: rgba(80,140,255,.18); border-color: rgba(80,140,255,.6); font-weight: 600; }
   .filter { font-size: .85rem; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  /* v6.218 搜尋框：flex-basis 100% 自成一列，手機上靠 toolbar 既有的 flex-wrap 自然全寬，
+     不用 @media 當手機開關（手機/桌機分支紀律）。 */
+  .search { position: relative; flex: 1 1 100%; display: flex; }
+  .search input { width: 100%; padding: 7px 32px 7px 12px; border-radius: 8px; border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; font-size: 16px; }
+  .search-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; cursor: pointer; font-size: .9rem; opacity: .6; padding: 4px 8px; color: inherit; }
+  .search-clear:hover { opacity: 1; }
 
   .post-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .post-card { width: 100%; text-align: left; background: rgba(128,128,128,.07); border: 1px solid rgba(128,128,128,.2); border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit; color: inherit; }

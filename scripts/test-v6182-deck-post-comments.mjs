@@ -562,9 +562,19 @@ await TA('⭐⭐⭐ 列表頁不做 N+1：dpPublic 是同步的、留言數直�
   ok(!JSON.stringify(leak).includes('SECRET') && !JSON.stringify(leak).includes('a@b.c'), 'dpPublic 外流了身分');
 });
 
-T('⭐⭐⭐ /api/deck-posts 列表 handler 完全沒有碰 deckPostComments（靜態把 N+1 釘死）', () => {
+T('⭐⭐⭐ /api/deck-posts 列表 handler 對留言表絕不 N+1（v6.218 起：只允許搜尋的 per-token distinct）', () => {
   const ep = section(DP, "app.get('/api/deck-posts',", "app.get('/api/deck-posts/:id'");
-  ok(!/DPCOMM/.test(ep), '列表端點去查了留言表 —— 每頁 20 筆就是 20 次查詢（v6.119 讀放大）');
+  // v6.218 關鍵字搜尋需要「先查留言表拿 postId 集合」：每個 token 一次 distinct、
+  //   上限 5 個 token，且只在帶 q 時執行 —— 這不是 per-post 的 N+1。
+  //   改釘死三件事：①DPCOMM 只以 distinct 出現 ②必在 qTokens.length 守門內
+  //   ③docs.map 之後（逐筆結果）絕不可碰留言表 —— 那才是 v6.119 的 N+1 形狀。
+  const uses = ep.match(/DPCOMM\.\w+/g) || [];
+  ok(uses.length > 0 && uses.every((u) => u === 'DPCOMM.distinct'), '列表端點對留言表用了 distinct 以外的查詢：' + uses.join(','));
+  ok((ep.match(/DPCOMM\.distinct/g) || []).length === 1, 'distinct 出現超過一處 —— 檢查是否混進逐筆查詢');
+  const gate = section(ep, 'if (qTokens.length) {', 'const [docs, total]');
+  ok(/DPCOMM\.distinct/.test(gate), 'DPCOMM.distinct 不在 qTokens.length 守門內 —— 沒搜尋也會查留言表');
+  const mapSeg = ep.slice(ep.indexOf('docs.map'));
+  ok(!/DPCOMM/.test(mapSeg), 'docs.map 之後出現 DPCOMM —— 每頁 20 筆就是 20 次查詢（v6.119）');
   ok(/projection:\s*\{[^}]*entries:\s*0/.test(ep), '列表 projection 被改壞了（正對照）');
 });
 

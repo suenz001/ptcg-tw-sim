@@ -1,5 +1,39 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.218 牌組公布欄關鍵字搜尋（伺服器端、涵蓋全部投稿）
+
+BASE = `99dc17559b2708e0301b6110a3d207195ac79abc`（v6.217）。玩家可見新功能 ⇒ 首頁一則。
+
+### 語意（站長拍板三條，全數落實）
+- 同一個輸入框自動判斷（不分文字／卡牌兩欄）；空白（含全形）分隔多 token 一律 **AND**；
+  全部**部分比對**（「路卡利歐」命中「超級路卡利歐ex」）。
+- 單 token 命中（OR）＝牌組名∨作者∨簡介∨**原型名**（合理延伸，超集不違反拍板）含該字，
+  ∨ 牌組裡有卡名含該字的卡，∨ 該篇留言含該字。空白輸入＝不篩選。
+
+### 後端（`oracle-admin/server_admin_patch.js` v1.18）
+- `GET /api/deck-posts` 新增 `?q=`。q 缺席時 tokens=[] ⇒ 查詢物件與舊版**完全相同**，列表零影響。
+- ⭐ 卡名→cardId 解析放**伺服器端**：TPOOL 就是完整卡池（含台灣官方 name），
+  client 不必為搜尋載 4.6MB 卡片 DB，也沒有 id 清單塞爆 URL 的問題（原設計傾向前端解析，改）。
+- 留言在另一張表（v6.182）：每 token 先 `deckPostComments.distinct('postId', text regex)`
+  再以 `_id $in` 併進主查詢的 $or —— 一次 distinct，不是每篇一查的 N+1。
+- 中文部分比對用 `$regex` 字串形式（mongo text index 中文分詞切不出詞）；
+  現量級 96 篇／26 則留言，regex 在 `{status:1,createdAt:-1}` 索引挑出的集合內過濾即可，
+  searchBlob／額外索引在此量級是過度工程，量級破萬再議。
+- ⚠ 快取鍵改 `[sort,page,pageSize,arche,tourn,tokens]`：RegExp 進 JSON.stringify 會變 `{}`，
+  沿用舊寫法（stringify 整個 q）不同搜尋會撞同一份快取。
+- 搜尋另設 60/min per-IP 限流（`dpRate('s:'+ip)`）；回應恆帶 `q` 欄位當**哨兵**。
+
+### 前端（`src/routes/deck-posts/+page.svelte`）
+- toolbar 加搜尋框（flex-basis 100% 自成一列，手機靠既有 flex-wrap 全寬，無 @media 開關；
+  input 字級 16px 防 iOS 聚焦自動縮放）。debounce 300ms；清除鈕；空結果顯示「沒有符合…」。
+- 哨兵：送了 q 但回應沒有 `q` 欄位（舊伺服器）⇒ 顯示「伺服器還不認識搜尋功能」，
+  絕不把未過濾列表偽裝成搜尋結果（v6.177／v1.17 同一課）。
+
+### 守衛
+- `scripts/test-v6218-deck-post-search.mjs`：抽出 dpSearchTokens／dpTokenOr／整支 GET handler
+  **實際執行**（mock DPOSTS/DPCOMM），斷言到行為層：AND 語意、部分比對、留言命中、
+  無 q 時查詢物件與舊版逐鍵相同、快取鍵不因 RegExp 而互撞。HEAD-FAIL 已驗證。
+
 ## v6.217 尖峰請求減量第二批（大廳合併+204、觀戰 4s、跨房提醒 60s）
 
 BASE = `3d5c3b8937b1275dd6b5a6fbbf574125b5e40a11`（v6.216）。玩家有感（尖峰 lag 改善）⇒ 首頁一則。
