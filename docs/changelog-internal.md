@@ -1,5 +1,49 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.219 admin 總覽 /api/admin/stats 提速（users 統計快取；純後台，玩家無感 ⇒ 首頁不寫）
+
+BASE = `fd708e93d93030a9f567265d2e9fa9d29da69abf`（v6.218）。
+
+### 症狀與判定（先判嚴重性，不假設）
+- nginx 計時 log（2026-08-22）全站最慢前三筆全是 `/api/admin/stats`：15.862／15.393／14.683 秒，
+  第三欄（等 node）≈ 第二欄 ⇒ 15 秒全部在 node 內。node 是 pm2 fork 單執行緒，
+  若是同步運算會卡住全站 ⇒ 必須先實測分辨。
+- ⭐ **實測判定：是 await 的網路 I/O，不是同步阻塞（不會卡玩家）**：
+  - handler 內唯一同步 JS 段（50k 使用者的 Set/filter/Date 聚合）沙盒實測中位數 ~51ms
+    （沙盒約 10 倍慢 ⇒ VM 約 5ms）；`res.json` 序列化 0.013ms／339 bytes
+    —— 與 15 秒差超過兩個數量級（量測腳本 `/tmp/bench1_sync_agg.mjs`）。
+  - 把 50 頁循序 await 的掃描迴圈原樣重演並掛事件迴圈監測：總耗時 1075ms 期間，
+    事件迴圈超額延遲 max 僅 1.7ms（p50 0.23／p95 0.85）⇒ 等待期間事件迴圈是空的
+    （量測腳本 `/tmp/bench2_eventloop.mjs`）。
+  - 線上旁證：同時段全站平均 5ms、其他慢請求的第三欄僅 0.005~0.069s
+    —— 若事件迴圈被卡 15 秒，不可能只有這一支慢。
+- 真因：users 統計用 `adminAuth.listUsers(1000, pageToken)` 逐頁抓全部使用者
+  （上限 sane safety 50,000 ⇒ 最多 50 頁），每頁一趟**循序** HTTPS 往返；
+  三筆樣本緊聚 14.7~15.9 秒 ⇔ 固定 ~50 頁 × ~300ms RTT（頁數固定所以耗時穩定）。
+  ⇒ **不是會卡全站的定時炸彈**；但 admin 每開一次總覽就白等 15 秒＋對 Firebase Auth 打 ~50 發循序請求。
+
+### 修法（`oracle-admin/server_admin_patch.js` v1.19）
+- 比照 v0.95 `/firebase/users-all` 既有先例：users 統計結果快取 **5 分鐘 TTL + single-flight +
+  過期先回舊值、背景刷新**。除進程重啟後的第一發外，admin 不再等掃描。
+- ⭐ 口徑一致：掃描與聚合程式碼一字未動（含 50,000 上限），只改「什麼時候算」；
+  回應多帶 `users.at`（計算時刻），admin 總覽的用戶統計區標示「資料時間 …（最多 5 分鐘更新一次）」。
+- oracle（mongo）／firebase rooms／feedback 統計**不快取**，維持即時（進行中／等待中要看即時數）。
+- 玩家端零改動：本端點僅 admin 白名單可打；快取只減少 Firebase Auth 呼叫，不增加任何負載。
+
+### 守衛（`scripts/test-v6219-admin-stats-users-cache.mjs`，已進 npm test）
+- **行為層**：把 patch 檔的快取 helpers 與整支 handler 抽出來真的跑（可計數 listUsers stub）：
+  ①正對照：冷啟動真的掃滿頁數且數字與 fixture 期望一致（口徑）②⭐第二發不重掃且耗時 < 冷啟一半
+  （HEAD-FAIL：BASE 上 5 紅；蓄意破壞快取後守衛也抓得到）③TTL 過期先回舊值、背景刷新後拿到新值
+  ④mongo／feedback 每發即時重查（不被快取波及）⑤admin.html 讀 `users.at` 標示資料時間。
+
+### 同型風險（把大量資料撈回 node 的 admin 端點；本版不動，僅列管）
+- `/api/admin/rooms`（mongo `.toArray()` 無 limit，v0.20 拿掉 300 上限）與
+  `/api/admin/firebase/rooms`（Firestore `.get()` 全撈無 limit）：房間數成長後會越來越慢（同為 I/O）。
+- `/api/admin/firebase/users-all`：已有 5 分快取＋single-flight，但 cache-miss 那發仍是全量掃（15 秒級）。
+- `/api/admin/firestore-write-audit`（listCollections × 5 個 count 逐一 await）、
+  牌組原型統計（matchRecords `limit(20000).toArray()`）：重 I/O，但一個是按鈕觸發、一個已有 60s TTL。
+
+
 ## v6.218 牌組公布欄關鍵字搜尋（伺服器端、涵蓋全部投稿）
 
 BASE = `99dc17559b2708e0301b6110a3d207195ac79abc`（v6.217）。玩家可見新功能 ⇒ 首頁一則。
