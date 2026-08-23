@@ -1667,7 +1667,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // v2.463：基準改為 1366×768（之前 1280×720 對 1024×576 zoom 0.8 仍切到右側，
       //   特別是 Mac Safari 瀏覽器 UI 額外吃高度）。
       //   1366×768 → 1.0；1280×720 → ~0.94；1024×576 → ~0.75
-      const targetW = 1366, targetH = 768;
+      // v6.223 各版面內容高度基準分開算：
+      //   桌墊版 grid（bench/active 四排 + 手牌 + header）在 zoom=1 需要約 886px 高，實測 1366×768 /
+      //   1867×831 / 1912×836 都會讓上下戰鬥場重疊、對手 bench 被推出畫面上緣 → targetH 用 900，
+      //   高度不足時整版自動縮放（battle-root 高度換算見 CSS 的 100dvh/zoom 規則）。
+      //   經典版在「非 tablet-layout」(h>850) 且 h<942 的縫隙會整頁捲動（實測 1440×900 scrollHeight=942）
+      //   → targetH 用 945；tablet-layout（h<=850）下經典版維持 768 基準，行為與過去完全相同。
+      const targetW = 1366;
+      const targetH = battleLayout === 'tabletop' ? 900 : (isTabletLayout ? 768 : 945);
       const ratio = Math.min(w / targetW, h / targetH, 1);
       gameZoom = ratio < 0.97 ? Math.max(0.55, +ratio.toFixed(3)) : 1;
     } else {
@@ -1739,6 +1746,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       const savedLayout = localStorage.getItem('ptcg_battle_layout');
       if (savedLayout === 'tabletop' || savedLayout === 'classic' || savedLayout === 'fable') battleLayout = savedLayout;
+      // v6.223 桌機預設版面改為 fable：只影響「從未選過」的玩家（上面 savedLayout 命中就依玩家上次選擇，絕不覆蓋）。
+      //   窄視窗（<1024，含 iPad 直式）維持 classic 預設 —— fable 完整 grid 是 >=1024 才啟用（見下方 CSS media 分界）。
+      //   ⚠ 這裡不寫 localStorage：預設值不算「玩家的選擇」，玩家實際切換才由 setBattleLayout 寫入。
+      //   ⚠ 手機直式不受影響：isPortraitMobile 走 MobilePortraitBattle 元件，該元件不讀 battleLayout。
+      else if (typeof window !== 'undefined' && window.innerWidth >= 1024) battleLayout = 'fable';
     } catch { /* SSR / quota / private mode：保持預設 classic */ }
     // v5.012：battle log side panel 開關狀態（桌墊版用）
     try {
@@ -14561,6 +14573,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .playmat.layout-tabletop .log-toggle-btn{ display:none; }
   }
 
+  /* v6.223【B】桌墊版高度自適應（實測 1366×768 / 1867×831 / 1912×836 上下 active 重疊、對手 bench 出上緣）：
+     1) tablet-layout(h<=850) 的 :global 3-row 壓縮規則寫在檔案較後面、把桌墊版 4-row grid 蓋掉
+        → 以更高 specificity 還原成 4 個 auto row；
+     2) zoom 縮放時，vh 定高的容器「不會」因 zoom 獲得更多 CSS px 空間（v2.463 經典版縮放後底部留黑
+        就是同一效應）→ battle-root 高度以 100dvh/zoom 換算，縮小後恰好填滿視窗、內容不再互擠。
+     ⚠ 兩條都以 :has(.playmat.layout-tabletop) gate —— 經典版 / fable / 手機直式（不渲染 .playmat）零影響。 */
+  :global(.battle-root.tablet-layout:has(.playmat.layout-tabletop) .playmat){ grid-template-rows:auto auto auto auto; }
+  :global(.battle-root.zoomed:has(.playmat.layout-tabletop)){ height:calc(100vh / var(--game-zoom, 1)); height:calc(100dvh / var(--game-zoom, 1)); min-height:0; overflow:hidden; }
+
   /* v5.008 統一大廳 — 名稱欄 + 建立房間 CTA + inline 表單 */
   .online-form.lobby-unified{ max-width:560px; }
   .lobby-unified .name-row{ flex-direction:row; align-items:center; gap:.6rem; background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.6rem .85rem; }
@@ -17626,6 +17647,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
     font-size:clamp(.6rem, calc(var(--card-w) * 0.11), .85rem);
   }
   .playmat.layout-fable .active-card.card-back-active{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+  /* v6.223【A】setup 卡背改吃 fable 同一尺寸源：容器(.active-card)已被上方規則鎖成 --active-w/--active-h，
+     但 .card-back-lg/-sm 是全域固定 px（105×140 / 96×128，另加 2px border）——視窗一縮正面卡跟著變小、
+     卡背卻不動 → 卡背比正面卡大且比例不符（站長截圖的病灶）。改讓卡背填滿容器（=與正面卡同源），
+     box-sizing 把 border 算進盒內避免 4px 溢出。bench 蓋牌槽同理。 */
+  .playmat.layout-fable .active-card.card-back-active .card-back{ width:100%; height:100%; box-sizing:border-box; border-radius:6px; }
+  .playmat.layout-fable .bench-slot.card-back-slot .card-back{ width:100%; height:100%; box-sizing:border-box; border-radius:4px; }
   .playmat.layout-fable .active-card > .att-card-stack{ position:absolute; top:4%; left:5%; width:100%; height:100%; overflow:visible !important; pointer-events:none; }
   .playmat.layout-fable .att-card{
     position:absolute; left:0; top:0; width:100%; height:auto;
@@ -17766,6 +17793,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .playmat.layout-fable .action-bar > .log-col{ width:auto; }
     .playmat.layout-fable .zone-bench{ display:flex !important; height:auto; min-height:0; max-height:none; }
     .playmat.layout-fable .log-toggle-btn{ display:none; }
+    /* v6.223【B】fallback 補洞（實測 820×1180）：fable 基礎規則把 bench 槽設 width:auto →
+       空槽在 fallback 的 flex 列塌成 ~8px 細條；log-col 浮在畫面中間蓋住場面。
+       這裡同 specificity、檔內較後 → 蓋回固定槽寬與滿寬紀錄列。 */
+    .playmat.layout-fable .zone-bench .bench-slot,
+    .playmat.layout-fable .zone-bench .bench-empty,
+    .playmat.layout-fable .zone-bench.bench-extended .bench-slot,
+    .playmat.layout-fable .zone-bench.bench-extended .bench-empty{ flex:0 0 var(--card-w); width:var(--card-w); height:calc(var(--card-h) + 6px); }
+    .playmat.layout-fable > .action-bar{ flex-wrap:wrap; }
+    .playmat.layout-fable .action-bar > .log-col{ flex:1 1 100%; width:auto; max-height:220px; position:static; }
   }
 
 

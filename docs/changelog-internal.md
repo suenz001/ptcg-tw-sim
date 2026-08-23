@@ -1,5 +1,51 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.223 版面三修：fable 卡背同源尺寸 / 桌墊版高度自適應 / 桌機預設版面改 fable
+
+BASE = `1dcb862e2a37503f32777dbd1287c48a4c2c980a`（v6.222）。全部結論來自 headless Chromium
+對測試站（github.io, v6.222）的真實渲染量測（本機 AI 對局），非純靜態推算。
+
+### 【A】fable setup 卡背過大（站長截圖）
+- 真因：`.card-back-lg{105×140}` / `.card-back-sm{96×128}`（+2px border）是全域固定 px；
+  fable 的 `.active-card` 被鎖成 `--active-w/--active-h`（隨視窗縮放），卡背不縮 →
+  1180×820 時正面卡 72px、卡背 109px（+51%），比例也不同。
+- 修法：fable scope 加 `.card-back-active .card-back` / `.card-back-slot .card-back`
+  `width/height:100% + box-sizing:border-box` → 與正面卡同尺寸源。
+- 量測：修後 back == front 完全相等（1912×836:100.8 / 1867×831:99.8 / 1366×768:83.6 /
+  1440×900:88.2 / 1024×768:72.2）。classic/tabletop 卡背走 gameZoom 同步縮放，本來就一致，不動。
+
+### 【B】超框系統掃描（3 版面 × 10 viewport，真實渲染）
+- 桌墊版（tabletop）＝最大災區：內容在 zoom=1 需 ~886px 高。h<=850 時 tablet-layout 的
+  `:global(.battle-root.tablet-layout .playmat){grid-template-rows:minmax(0,1fr) auto minmax(0,1fr)}`
+  寫在檔案較後面，把桌墊版 4-row grid 蓋掉 → row 被壓縮、固定高的 active 溢出軌道 →
+  上下戰鬥場重疊（1366×768 重疊 67px / 1867×831 55px / 1912×836 39px）＋對手 bench 出上緣。
+  修法：(1) recomputeZoom auto 模式 targetH：tabletop=900（classic 在非 tablet-layout=945、
+  tablet-layout 維持 768）；(2) `:global(.battle-root.tablet-layout:has(.playmat.layout-tabletop) .playmat)`
+  還原 4 auto row；(3) `:global(.battle-root.zoomed:has(.playmat.layout-tabletop))` 高度
+  `calc(100dvh / var(--game-zoom))` —— zoom 對 vh 定高容器不會增加 CSS px 空間（經典版
+  1024×768 縮放後底部留黑即同一效應），必須換算才能真的多出可用高度。
+- classic：1440×900（非 tablet-layout 縫隙 851~941px 高）整頁捲動 42px（scrollHeight=942）
+  → targetH 945 讓此區間自動 zoom（0.952），tablet-layout 行為不變。
+- fable：>=1024 全部視窗實測無超框（1024×768 ~ 1920×1080 共 8 種）。<1024 fallback 兩處補洞：
+  空 bench 槽塌成 ~8px 細條（基礎規則 width:auto 在 fallback flex 列的後果）、log-col 浮在
+  畫面中間 → 槽寬固定 var(--card-w)、log 滿寬限高 220px。
+- 已知未修：真 iPad 直式（coarse pointer 601~950 直向）有全螢幕 rotate-prompt 蓋台，
+  fallback 只影響桌機窄視窗；classic 內容高 942 是行為現況，僅以 zoom 吸收，未改版面。
+
+### 【C】桌機預設版面 classic → fable
+- 只動「從未選過」者：onMount 讀 `ptcg_battle_layout`，命中三值之一 → 沿用玩家選擇（不覆蓋）；
+  沒存過且 innerWidth>=1024 → fable；窄視窗維持 classic（fable 完整 grid 的 media 分界就是 1024）。
+- 預設值不寫 localStorage —— 玩家實際切換才由 setBattleLayout 寫入。
+- 手機直式零影響：MobilePortraitBattle.svelte 不讀 battleLayout（grep=0）；recomputeZoom 對
+  mobile 兩條路徑（fable 早退 / isPortraitMobile 早退）都回 1，值不變。
+
+### 守衛
+- scripts/test-v6223-layout-fixes.mjs：recomputeZoom 抽出來「實際執行」斷言 zoom 數值
+  （tabletop@1366×768→0.853、classic@1440×900→0.952、fable→1、mobile→1）；
+  【C】localStorage 分支抽出執行（已選 classic 不被覆蓋＝正對照）；CSS 修規則存在＋
+  cascade 順序（在被蓋規則之後）＋specificity 高於對手規則；手機分支純淨（MobilePortraitBattle
+  無 battleLayout）。BASE 上跑全紅（HEAD-FAIL），突變（900→768、100%→50%、fable→classic 預設）全紅。
+
 ## v6.222 根治「強制更新後又退回舊版」：SW 預快取 HTML 強制回源（cache:'reload'）
 
 BASE = `06da8d19e75275b314ea019e5cc834295f7cfa7e`（v6.221）。
