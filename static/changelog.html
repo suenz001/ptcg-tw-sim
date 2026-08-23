@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.224</span> <b>官網代碼匯入不再無限等待</b><br>牌組編輯的官網代碼匯入若遇到官方網站回應過慢，最多等待約 20 秒後會顯示「官網回應太慢，請稍後再試」，不再一直停在解析中；官網正常時的匯入流程完全不變。</summary>
+        <div class="log-body">以牌組代碼從台灣官方網站匯入牌組時，需要向官方網站取得牌組內容；先前若官方網站回應緩慢或沒有回應，按鈕會一直停在「解析中」且畫面沒有任何說明，實際發生過等待接近 12 秒的情況。這一版起，伺服器與頁面兩端都加上等待上限（約 20 秒與 25 秒），超過即顯示明確的提示訊息，稍後再試即可。代碼格式錯誤、代碼不存在、操作過於頻繁等其他情況的表現維持不變，匯入成功的結果也與先前完全相同。</div>
+      </details>
+<details>
         <summary><span class="ver-badge">v6.223</span> <b>對戰版面顯示修正＋桌機預設版面改為 Fable 版</b><br>Fable 版開局時對手蓋牌的卡背改為與正面卡相同大小；桌墊版在較矮的筆電螢幕自動縮放、不再上下重疊；桌機預設版面改為 Fable 版，已選過版面的玩家維持原設定。</summary>
         <div class="log-body">三種對戰版面在 15 吋筆電與 iPad 常見尺寸下逐一實測調整。一、Fable 版設置階段，對手尚未揭曉的卡背先前是固定大小，畫面越小越顯得突兀，現在與正面卡完全同尺寸、同比例，備戰區的蓋牌也一併修正。二、桌墊版原本在螢幕高度不足時，雙方戰鬥場會互相重疊、對手備戰區被推出畫面上緣，現在會依螢幕高度自動等比縮放，整個牌桌完整呈現。三、視窗較窄時 Fable 版的簡易排版修正了備戰格塌陷與戰鬥紀錄面板遮擋場面的問題。四、桌機第一次進入對戰的預設版面改為 Fable 版；曾在設定中選過版面的玩家完全不受影響，維持自己上次的選擇，隨時可在對戰畫面的設定中切換三種版面。</div>
       </details>
@@ -194,11 +198,7 @@
         <summary><span class="ver-badge">v6.160</span> <b>錦標賽報到：版本過舊時會提醒先更新</b><br>按下「我要報到」時，若瀏覽器載入的是較舊的版本，會跳出提示引導清除快取並重新載入。舊版可能缺少近期的對戰修正，連線也比較容易卡頓，並且會一起影響對手。</summary>
         <div class="log-body">提示視窗不會自動重新載入，也不會擋住報到——上面一定有「先不更新，直接報到」可以選；已經更新過一次仍顯示舊版本、或報到只剩不到 30 秒時，都會直接放行。首頁「🔄 強制更新版本（清快取）」按鈕的動作與這裡完全相同，牌組與帳號資料都會保留。</div>
       </details>
-      <details>
-        <summary><span class="ver-badge">v6.158</span> <b>錦標賽開局：等待對手時不再被視窗蓋住整個畫面</b><br>對手起手重抽時，「等待對手」視窗原本會蓋住整場開局；輪到自己放出場寶可夢時仍然蓋著，只能乾等到被判閒置。現改為只在確實輪到對手時才顯示，並標示對手正在進行的步驟。</summary>
-        <div class="log-body">依官方規則，起手重抽次數較多的一方要等對手先放好戰鬥場並按下準備完成，這段等待屬於正常流程。另外，若登入憑證失效造成動作送不出去，畫面上方會出現提示與「立即重新同步」按鈕，不再只是一閃而過的錯誤訊息。</div>
-      </details>
-      <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
+            <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →
         <a href="__BASE__/changelog-archive.html" target="_blank" rel="noopener" style="color:#2a5fa8;font-weight:600;">查看完整更新歷史</a>
       </p>

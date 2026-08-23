@@ -1,5 +1,30 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.224 官網代碼匯入逾時保護（後端 20s + 前端 25s）
+
+BASE = `a7dbc1549a63be48bfd80251c380c43658b921c4`（v6.223）。
+
+- 證據：nginx 計時 log 2026-08-23 一筆 `11.974s → 200 /api/decode-tw-deck/...`，第 3 欄＝等 node
+  ⇒ 全部耗在 `oracle-admin/server_admin_patch.js` registerTwDeckImport 對
+  `asia.pokemon-card.com` 的外部 fetch（await 外部 I/O，不阻塞事件迴圈、其他玩家不受影響，
+  但 Node 的 fetch 預設沒有時間上限 ⇒ 官網掛住時該玩家無限期乾等）。
+- 後端：`AbortController + setTimeout(20s)` ＋ `finally clearTimeout`；逾時回 504
+  「官網回應太慢，請稍後再試」（`err.name === 'AbortError' || 'TimeoutError'` 特判，不吐原文）。
+  20 秒依據：官網實測慢到 11.97 秒仍成功回 200，逾時設 10 秒會把「慢但能成功」切成失敗；
+  20 秒亦低於 nginx proxy 預設 60 秒，由本端先逾時、訊息才有意義。
+  相容性：VM 的 Node 版本無法在沙盒直接查證；handler 既有程式用全域 fetch ⇒ 必為 Node 18+
+  （AbortSignal.timeout 理論上可用），仍選相容性最保守的 AbortController + setTimeout。
+- 前端 `src/routes/decks/+page.svelte` importFromTwOfficialCode：同法 25 秒
+  （比後端稍長，讓後端先逾時回覆有意義訊息）；AbortError 特判 alert；
+  等待期間原本就有「⏳ 解析中…」＋按鈕停用，不另補 UI。
+- 順手查證皆正確：限流（5/min per IP）在昂貴 fetch 之前扣；400 格式驗證又在限流之前
+  （無效格式不白扣額度）；deckCache TTL 5 分鐘、命中不重打官網。
+- 守衛 `scripts/test-v6224-deck-import-timeout.mjs`：node:vm 實際執行 handler、fetch 替身
+  真掛住（僅在收到 abort 時 reject）。HEAD-FAIL＝BASE 上 7 紅（handler 永不回應，行為級）；
+  成功路徑與 400/404/422/429/500/快取各分支對 BASE 行為快照 deep-equal；
+  突變 M1 去 signal／M2 去 AbortError 特判／M3 去 clearTimeout／M4 逾時改 10s／
+  M5 前端逾時 ≤ 後端 → 全數被抓（exit=1）。
+
 ## v6.223 版面三修：fable 卡背同源尺寸 / 桌墊版高度自適應 / 桌機預設版面改 fable
 
 BASE = `1dcb862e2a37503f32777dbd1287c48a4c2c980a`（v6.222）。全部結論來自 headless Chromium

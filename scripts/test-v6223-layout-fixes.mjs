@@ -172,14 +172,18 @@ check(!mob.includes('v6.223'), 'MobilePortraitBattle 本版零改動');
 // ─────────────────────── 版本一致 ───────────────────────
 console.log('版本一致');
 const ver = fs.readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8');
-check(ver.includes("VERSION = '6.223'"), 'version.ts = 6.223');
+// v6.224：本節原寫死 '6.223'（把「當版快照」當不變量），下一版 bump 必紅。
+//   改斷真正的不變量：版本可解析且 ≥ 6.223，admin.html 的 SITE_VERSION_HINT 與 version.ts 一致，
+//   changelog 含「當前版本」條目。50 則上限與恰一則 open 維持原斷言。
+const verM = ver.match(/VERSION = '(\d+\.\d+)'/);
+check(!!verM && parseFloat(verM[1]) >= 6.223, 'version.ts 版本可解析且 ≥ 6.223');
 try {
   const adm = fs.readFileSync(path.join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-  check(adm.includes("SITE_VERSION_HINT = '6.223'"), 'admin.html SITE_VERSION_HINT = 6.223');
+  check(adm.includes("SITE_VERSION_HINT = '" + verM[1] + "'"), 'admin.html SITE_VERSION_HINT 與 version.ts 一致');
 } catch { console.log('  （admin.html 不在此樹，跳過）'); }
 try {
   const cl = fs.readFileSync(path.join(ROOT, 'static/changelog.html'), 'utf8');
-  check(cl.includes('v6.223'), 'changelog 有 v6.223 條目');
+  check(cl.includes('v' + verM[1]), 'changelog 有當前版本（v' + verM[1] + '）條目');
   check((cl.match(/<details/g) || []).length === 50, 'changelog 條目數 = 50');
   check((cl.match(/<details open>/g) || []).length === 1, 'changelog 恰一則 open');
 } catch { console.log('  （changelog 不在此樹，跳過）'); }

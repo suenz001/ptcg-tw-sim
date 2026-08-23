@@ -2750,6 +2750,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
       return res.json({ code, entries: cached.entries, cached: true });
     }
     // Fetch 官網
+    // v6.224：外部 fetch 加逾時保護 —— Node 的 fetch 預設沒有時間上限，官網掛住時
+    //   玩家會無限期乾等（nginx 計時 log 2026-08-23 實測有一筆 11.974 秒才回 200，
+    //   全部耗在等官網）。逾時取 20 秒而非 10 秒：既然官網慢到 12 秒仍能成功回應，
+    //   10 秒會把「慢但能成功」的匯入切成失敗；20 秒也仍低於 nginx proxy 預設 60 秒，
+    //   由本端先逾時、回覆對玩家有意義的訊息。用 AbortController + setTimeout
+    //   （相容所有支援全域 fetch 的 Node 版本），無論成敗都 clearTimeout 不留 handle。
+    const FETCH_TIMEOUT_MS = 20 * 1000;
+    const fetchAbort = new AbortController();
+    const fetchTimer = setTimeout(() => fetchAbort.abort(), FETCH_TIMEOUT_MS);
     try {
       const url = 'https://asia.pokemon-card.com/tw/deck-build/recipe/' + code + '/';
       const r = await fetch(url, {
@@ -2758,6 +2767,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         },
+        signal: fetchAbort.signal,
       });
       if (!r.ok) {
         return res.status(r.status === 404 ? 404 : 502).json({ error: '官網回應異常 (HTTP ' + r.status + ')' });
@@ -2772,8 +2782,16 @@ import('firebase-admin').then(async ({ default: admin }) => {
       console.log('[deck-import] ' + code + ' → ' + entries.length + ' 種卡 (' + totalCards + ' 張) from ' + ip);
       res.json({ code, entries, cached: false });
     } catch (err) {
+      // v6.224：逾時（AbortError／TimeoutError）給玩家看得懂的訊息 ——
+      //   AbortError 的原文（This operation was aborted）對玩家沒有意義。
+      if (err && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+        console.warn('[deck-import] fetch timeout ' + FETCH_TIMEOUT_MS + 'ms: ' + code);
+        return res.status(504).json({ error: '官網回應太慢，請稍後再試' });
+      }
       console.warn('[deck-import] fetch error:', err.message);
       res.status(500).json({ error: '無法連線到官網: ' + err.message });
+    } finally {
+      clearTimeout(fetchTimer);
     }
   });
 

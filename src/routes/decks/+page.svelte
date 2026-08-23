@@ -1050,8 +1050,12 @@
       return;
     }
     twCodeImportLoading = true;
+    // v6.224：前端逾時 25 秒 —— 比後端的 20 秒稍長，讓後端先逾時並回覆有意義的訊息；
+    //   這一層只是「連後端的訊息都到不了（連線本身掛住）」時的保險，避免玩家無限等待。
+    const twImportAbort = new AbortController();
+    const twImportTimer = setTimeout(() => twImportAbort.abort(), 25 * 1000);
     try {
-      const r = await fetch(`${apiUrl}/api/decode-tw-deck/${code}`);
+      const r = await fetch(`${apiUrl}/api/decode-tw-deck/${code}`, { signal: twImportAbort.signal });
       if (!r.ok) {
         const err = await r.json().catch(() => ({ error: r.statusText }));
         alert(`匯入失敗：${err.error || r.statusText}`);
@@ -1118,8 +1122,14 @@
         : '';
       alert(`✅ 從官網代碼 ${code} 匯入 ${mergedEntries.length} 種卡 / 共 ${totalCards} 張 ${cachedNote}${subNote}`);
     } catch (e) {
+      // v6.224：逾時被中止時給玩家看得懂的訊息，不顯示 AbortError 原文
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        alert('匯入失敗：官網回應太慢，請稍後再試');
+        return;
+      }
       alert(`匯入失敗：${e instanceof Error ? e.message : String(e)}`);
     } finally {
+      clearTimeout(twImportTimer);
       twCodeImportLoading = false;
     }
   }
