@@ -1,5 +1,72 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.220 休閒對戰減量【A】gameState.log 增量下發＋【B】seats[].email 不下發玩家端（隱私，首頁不寫）
+
+BASE = `62023cbca95f36d80d922c6231796367761c5e5f`（v6.219）。
+
+### 背景（v6.216 尖峰翻案的延續）
+- 真因鏈已實測定案：台灣玩家 → Cloudflare 美西 SJC（149ms）→ CF 內網 → 新加坡 VM；
+  VM 內部尖峰 nginx 5~7ms、CPU 19% ⇒ 機器清白，**省位元組/省往返才是投報率最高的方向**。
+- 休閒對戰佔全站 94% 流量（v6.178 實測）；`gameState.log` 佔房間 doc ~60%（第 9 回合
+  202 則 ≈ 29.2KB）且隨對局**線性成長** —— 每 0.5~1s 的盤面輪詢每次都整包重傳。
+
+### 【A】log 增量下發（三道防線，正確性 > 效能）
+- client（`oracle-client.ts` 的 `oraclePollRoom`）第二發起帶 `logSince=<已有則數>` 與
+  `logh=<前綴鏈雜湊>`；伺服器（`server_admin_patch.js` v1.20 的 PTCG-ROOMS-OUT 區塊，
+  hoist 到第一個 route 之前、包裝 `res.json`）對自己 log 的前 n 則算同款雜湊，
+  **逐字相同才**把 log 換成 `log.slice(n)` 並附 `logDelta{since,total,fh}`。
+- 雜湊 = FNV-1a 雙 32bit，對每則 log 的 `JSON.stringify` 逐字元累積＋每則分隔符；
+  兩端逐字元同演算法（JSON round-trip 保序保值，守衛用同一份資料實跑兩端比對）。
+  為什麼安全：①只比長度會漏「等長但內容不同」，前綴雜湊直接把內容納入判準；
+  ②`fh` 是伺服器對「完整 log」算的雜湊，client 重組後**必須複驗**，等於端到端
+  逐位元組等價檢查（擋中途突變、競態、兩端演算法漂移；雙 32bit 碰撞率 ~2^-64，
+  且碰撞後果只是「多沿用一發舊前綴」，下一發內容再變即自癒）；
+  ③複驗不過 → client 丟棄整包並**立刻改抓一次全量**（不帶增量參數）。
+- fail-open 全表（任一即回全量，行為與 v6.219 逐字相同）：舊 client 不帶參數／參數解析
+  不了／n>伺服器 log 長度（悔棋）／等長但前綴雜湊不同（重置/重開一局）／gameState 或
+  log 缺席（大廳房）／`res.json` 轉換中任何例外／middleware hoist 失敗（旗標整組停用）。
+- 觀戰者/重新整理/換裝置/重連：新輪詢閉包 lastLog=null ⇒ 第一發永遠全量。
+- 與既有機制逐一確認：`?since=ver` 204 不動（核心端點先回，包裝層根本沒 body 可轉）；
+  樂觀更新不受影響（重組鏈是輪詢層私有的「伺服器回應鏈」，本地樂觀 log 不進鏈）；
+  `stale-keep`／`decideBoardAdopt`／對手回合面板／回放全部吃到「重組後的完整 log」，
+  一行未改；`oracleTx` 讀改寫與 `pushGameState` 走 `oracleGetRoom`（永遠全量）；
+  錦標賽路徑（`/api/tournament/state`）不動 —— v0.71 起本來就只送最近 60 行 log，
+  wire 已有界，這次只做休閒。⚠ 儲存端完全不截（v6.178 v1.11 的教訓：回放靠房間
+  gameState.log 當 fallback）。
+- 實測（守衛 `scripts/test-v6220-log-delta-and-email-privacy.mjs` 內建量測，Rule 32）：
+  202 則 log 的房間、新到 1 則時：全量 raw 62.3KB/gzip1 4.04KB → 增量 raw 18.5KB/
+  gzip1 0.73KB ⇒ **raw −70%、gzip −82%**（合成 doc 的 log 佔比 71%；線上實 doc log 佔
+  60%，前一輪以真實房間 doc 估測為 wire −49~−52%，兩者相符）。
+
+### 【B】seats[].email 不再下發玩家端
+- 前端唯一消費點 = `game/+page.svelte` 的 `fireMatchRecord`（把雙方 email 送進
+  matchRecords 供 admin 以 email join）→ 改由**伺服器**在 `/api/match-result` 從房間
+  doc 補 email（舊 client 有送以送來的值優先）；前端零改動、admin 統計口徑不變。
+- 剝除點：GET `/api/rooms/:code`、GET `/api/rooms`、PUT 回應（同一個 res.json 包裝層），
+  v1.17 combined 大廳列表（該 mw 直接回應、自帶同款剝除）。`/api/admin/*` 不經此層。
+- ⚠ 關鍵配套：client 是「GET 整包→改→PUT 整包」，GET 剝掉後寫回會把 DB 的 email 洗光
+  ⇒ 新增 PUT 回填 middleware（incoming seat 有 uid、沒帶 email、DB 同座位同 uid 有
+  email → 回填；uid 不同＝換人/離座，一律不回填）。兩支 mw 有任一 hoist 失敗則整組
+  停用，避免「GET 已剝但 PUT 沒回填」的半套狀態。
+- admin 房間檢視本就走 `enrichSeats`（Firebase uid 反查 email，seat.email 只是 fallback）
+  ＋ admin 專用端點，不受影響。
+
+### 守衛（14 項，全行為層實跑）
+- `scripts/test-v6220-log-delta-and-email-privacy.mjs`：抽 server 區塊＋client 區塊實跑
+  整條「轉換→走線(JSON round-trip)→重組」管線，**逐則**比對；涵蓋多輪成長/空增量/悔棋/
+  等長不同內容/舊 client/空 log/大廳房/參數壞掉/`oraclePollRoom` 四發實跑（含壞 fh 時
+  立刻改抓全量）。突變測試兩件：client 前綴反轉（長度不變）→ fh 必攔；server 多切一則
+  → client 必拒。HEAD-FAIL 已於 BASE 實跑確認（抽不到區塊直接紅）。
+- 【B】守衛：三種 GET/PUT 回應 email 全剝、原 doc 不被改、PUT 回填三分支、
+  combined 列表剝除、match-result 補 email 四分支。
+
+### 部署注意
+- 需跑 `redeploy-oracle.bat`（或既有更新 VM patch 的流程）讓 server_admin_patch.js v1.20
+  生效；**不需要** update-tournament.bat（未動 engine/effects/卡 DB）。
+- 驗證行：pm2 log `[rooms] rooms-out transform middleware (v1.20) hoisted=true`。
+- 舊 client×新伺服器/新 client×舊伺服器 皆全量 fail-open，部署順序無要求。
+
+
 ## v6.219 admin 總覽 /api/admin/stats 提速（users 統計快取；純後台，玩家無感 ⇒ 首頁不寫）
 
 BASE = `fd708e93d93030a9f567265d2e9fa9d29da69abf`（v6.218）。

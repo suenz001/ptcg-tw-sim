@@ -167,6 +167,67 @@ export type OracleUpsertResult =
 // v5.610: 房間版本未變更哨兵（server 回 204 時用）
 export const ROOM_UNCHANGED = Symbol('room-unchanged');
 
+// ── v6.220 對戰紀錄（gameState.log）增量輪詢 ────────────────────────────────
+// >>> v6220-log-delta-client-core（守衛 test-v6220-log-delta-and-email-privacy.mjs 抽出實跑）
+//   背景：log 佔房間 doc ~60% 且隨對局線性成長（第 9 回合 202 則 ≈ 29.2KB），而輪詢
+//   絕大多數回應的 log 前綴與 client 已有的逐字相同。輪詢改帶 logSince=<已有則數> 與
+//   logh=<前綴鏈雜湊>，伺服器（server_admin_patch.js 的 PTCG-ROOMS-OUT 區塊）只在
+//   「前綴逐字相同」時回 log.slice(n) 並附 logDelta{since,total,fh}。
+//   ⭐ 正確性 > 效能 —— 三道防線，任何一道不過都退回全量：
+//     ① 伺服器端前綴雜湊比對：悔棋（log 變短）／等長但內容不同／參數缺席或解析不了
+//        → 伺服器直接回全量（連 logDelta 標記都沒有）。
+//     ② client 端重組複驗：logDelta.fh 是伺服器對「完整 log」算的鏈雜湊，重組結果必須
+//        重算出同一個值，否則整包作廢（擋掉任何中途突變／競態／兩端演算法漂移）。
+//     ③ 複驗不過 → oraclePollRoom 立刻改抓一次全量（不帶任何增量參數）。
+//   雜湊：FNV-1a 雙 32bit，對每則 log 的 JSON.stringify 逐字元累積、每則之後混入分隔符。
+//   與伺服器端逐字元同演算法；JSON round-trip 保序保值，兩端對同一份 log 必得同雜湊。
+export function logChainHash(log: readonly unknown[], n: number): string {
+  let h1 = 0x811c9dc5 >>> 0;
+  let h2 = 0xcbf29ce4 >>> 0;
+  for (let i = 0; i < n; i++) {
+    const s = JSON.stringify(log[i]) ?? 'null';
+    for (let j = 0; j < s.length; j++) {
+      const c = s.charCodeAt(j);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ ((c + 131) & 0xffff), 16777619) >>> 0;
+    }
+    h1 = Math.imul(h1 ^ 10, 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ 10, 16777619) >>> 0;
+  }
+  return h1.toString(16) + '-' + h2.toString(16) + '-' + n;
+}
+
+export interface RoomLogDelta { since: number; total: number; fh: string }
+
+/**
+ * 把「可能是增量」的輪詢回應重組成完整房間（純函式，不碰網路）。
+ * - 回應沒有 logDelta 標記（舊伺服器／第一發／伺服器判定不可增量）→ 原樣採納（全量）。
+ * - 有標記 → 以 prevLog 前 since 則＋本包 log 重組，並以 fh 端到端複驗；
+ *   驗不過回 { ok:false }，呼叫端必須改抓全量 —— 絕不把重組失敗的 log 交給 UI。
+ */
+export function mergePolledRoomLog(
+  prevLog: readonly unknown[] | null,
+  room: OracleRoom,
+  logDelta: RoomLogDelta | null | undefined,
+): { ok: true; room: OracleRoom; nextLog: unknown[] | null } | { ok: false } {
+  const gs = (room as { gameState?: { log?: unknown[] } | null }).gameState;
+  const lg = gs && Array.isArray(gs.log) ? gs.log : null;
+  if (!logDelta) {
+    // 全量：直接採納；鏈基準換成這一包的 log（複製一份，UI 之後對陣列的增刪不影響鏈）
+    return { ok: true, room, nextLog: lg ? lg.slice() : null };
+  }
+  if (!prevLog || !gs || lg === null) return { ok: false };
+  const n = logDelta.since;
+  if (!Number.isInteger(n) || n < 0 || n > prevLog.length) return { ok: false };
+  const full = prevLog.slice(0, n).concat(lg);
+  if (full.length !== logDelta.total) return { ok: false };
+  // ⭐ 端到端複驗：重組結果必須與伺服器手上的完整 log 雜湊一致，否則一律作廢
+  if (typeof logDelta.fh !== 'string' || logChainHash(full, full.length) !== logDelta.fh) return { ok: false };
+  const fullRoom = { ...room, gameState: { ...gs, log: full } } as OracleRoom;
+  return { ok: true, room: fullRoom, nextLog: full };
+}
+// <<< v6220-log-delta-client-core
+
 export function oracleGetRoom(code: string): Promise<OracleRoom | null>;
 export function oracleGetRoom(code: string, since: number): Promise<OracleRoom | null | typeof ROOM_UNCHANGED>;
 export async function oracleGetRoom(
@@ -182,6 +243,30 @@ export async function oracleGetRoom(
     return res.room;
   } catch (err: any) {
     if (String(err.message).includes('404')) return null;
+    throw err;
+  }
+}
+
+/**
+ * v6.220 輪詢專用：帶版本（?since= 的 204 機制）＋「已有 log」的前綴鏈雜湊（增量機制）。
+ * 其他呼叫端（oracleTx 讀改寫／加入房間／重新整理）一律走 oracleGetRoom —— 永遠全量。
+ * 舊伺服器會忽略未知參數而回全量（沒有 logDelta 標記），行為與 v6.219 相同。
+ */
+export async function oracleGetRoomDelta(
+  code: string,
+  since: number,
+  logKnown: { len: number; h: string } | null,
+): Promise<{ room: OracleRoom; logDelta?: RoomLogDelta } | null | typeof ROOM_UNCHANGED> {
+  try {
+    let q = `?since=${since}`;
+    if (logKnown && logKnown.len > 0) q += `&logSince=${logKnown.len}&logh=${encodeURIComponent(logKnown.h)}`;
+    const res = await oracleApi<{ room: OracleRoom; logDelta?: RoomLogDelta } | undefined>(
+      `/api/rooms/${code.toUpperCase()}${q}`,
+    );
+    if (res === undefined) return ROOM_UNCHANGED;
+    return res && res.room ? res : null;
+  } catch (err: unknown) {
+    if (String((err as Error)?.message ?? err).includes('404')) return null;
     throw err;
   }
 }
@@ -312,6 +397,11 @@ export function oraclePollRoom(
 ): () => void {
   let lastVersion = -1;
   let lastCreatedAt = -1;   // v6.212：房間實體識別（同房號被重建時 _version 會從 1 重來）
+  // v6.220：上一發伺服器回應的完整 log（增量重組鏈的基準）。⚠ 輪詢層私有狀態，與 UI／
+  //   引擎狀態無關 —— 樂觀更新在本地加的 log 不會進來，重組永遠以「伺服器回應鏈」為準。
+  //   雜湊每一發重算（不快取）：若有任何程式就地改了這些 entry，送出的雜湊會與伺服器
+  //   對不上 → 伺服器回全量 → 鏈重置，絕不會重組出錯的 log。
+  let lastLog: unknown[] | null = null;
   let lastExists = true;
   let alive = true;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -320,9 +410,34 @@ export function oraclePollRoom(
     if (!alive) return;
     try {
       // v5.610: 帶上已知版本；server 版本沒變回 204 → ROOM_UNCHANGED，直接略過省流量
-      const room = lastVersion >= 0
-        ? await oracleGetRoom(code, lastVersion)
-        : await oracleGetRoom(code);
+      // v6.220: 第二發起另帶「已有 log 的則數＋鏈雜湊」，伺服器只在前綴逐字相同時回增量；
+      //   重組驗不過（含端到端 fh 複驗）就立刻改抓一次全量 —— 任何不確定一律退回全量。
+      let room: OracleRoom | null | typeof ROOM_UNCHANGED;
+      if (lastVersion >= 0) {
+        const rd = await oracleGetRoomDelta(
+          code,
+          lastVersion,
+          lastLog && lastLog.length > 0 ? { len: lastLog.length, h: logChainHash(lastLog, lastLog.length) } : null,
+        );
+        if (rd === ROOM_UNCHANGED || rd === null) {
+          room = rd;
+        } else {
+          const merged = mergePolledRoomLog(lastLog, rd.room, rd.logDelta ?? null);
+          if (merged.ok) {
+            room = merged.room;
+            lastLog = merged.nextLog;
+          } else {
+            // 帶了增量標記卻重組不出可信結果（理論上只在極端競態出現）→ 立刻全量重抓
+            room = await oracleGetRoom(code);
+            const gs = room ? (room as { gameState?: { log?: unknown[] } | null }).gameState : null;
+            lastLog = gs && Array.isArray(gs.log) ? gs.log.slice() : null;
+          }
+        }
+      } else {
+        room = await oracleGetRoom(code);
+        const gs0 = room ? (room as { gameState?: { log?: unknown[] } | null }).gameState : null;
+        lastLog = gs0 && Array.isArray(gs0.log) ? gs0.log.slice() : null;
+      }
       // ⭐⭐⭐v6.197 await 之後一定要再問一次 alive：unsubscribe() 只擋得住「還沒排出去的
       //   下一發」，擋不住「已經在路上的這一發」。少了這一行，玩家按「離開」之後最後一發
       //   回應仍會 callback ⇒ handleRoomUpdate 把 roomData/game/mySeatIdx 全部填回去
@@ -342,6 +457,7 @@ export function oraclePollRoom(
         lastExists = false;
         lastVersion = -1;
         lastCreatedAt = -1;
+        lastLog = null;   // v6.220：房間不存在了 → 增量鏈重置
         callback(null);
       }
     } catch (err) {
