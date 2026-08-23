@@ -1,5 +1,52 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.222 根治「強制更新後又退回舊版」：SW 預快取 HTML 強制回源（cache:'reload'）
+
+BASE = `06da8d19e75275b314ea019e5cc834295f7cfa7e`（v6.221）。
+
+### 真因鏈（站長手機實測：強制更新→6.221→關 App 重開→退回 6.219）
+- 實測正式站回應標頭：`/` `/cards` `/decks` `/tournament` 等 HTML **完全沒有 Cache-Control**
+  （只有 last-modified、cf-cache-status: DYNAMIC）⇒ 瀏覽器套 RFC 9111 §4.2.2 啟發式新鮮度
+  （常見實作＝距 Last-Modified 時間的 10%）。
+- `cache.add(url)` 功能等同 `fetch(url)` 成功後 `cache.put`（MDN Cache.add），fetch 預設
+  cache 模式 `'default'` **會先查瀏覽器 HTTP 快取** ⇒ 新版 SW install 可能把 HTTP 快取裡的
+  **舊版 HTML** 存進新版 CACHE_NAME。
+- PWA start_url='.'＝`/`，`/` 在 PRECACHE、fetch handler 對 PRECACHE 是 cache-first ⇒
+  冷啟動吃到舊 HTML → 舊 chunk hash（immutable、HTTP 快取一年）→ 整個 app 退回舊版。
+- `hardRefreshNow()` 清 Cache API＋`?_v=` 重載當下有效，但**清不掉瀏覽器 HTTP 快取**（JS 做不到），
+  reload 後 SvelteKit 重新註冊 SW、install 又被同一份舊 HTML 下毒 ⇒「關閉再開又變舊」。
+  這也是監控中大量玩家停在 v6.210 的最合理解釋：**每次日常 SW 更新的 install 都可能被下毒**，
+  與強制更新無關。
+- 已排除的其他解釋：SW 腳本本身被 CDN 快取（v6.160 時 `/service-worker.js` 曾是 cf HIT
+  max-age=14400，現實測 DYNAMIC＋etag，且瀏覽器對 SW 主腳本預設繞過 HTTP 快取、上限 24h）；
+  install 失敗（v5.354 起 allSettled，單檔失敗不擋 install）；cachesToDelete 誤刪（保留現行版＋前一版）。
+
+### 修法（src/service-worker.ts）
+- `FRESH_HTML = prerendered − /card/* − *.xml`（實際＝`/` `/admin/feedbacks` `/cards` `/decks`
+  `/tournament`，合計約 51KB）在 install 改 `cache.add(new Request(absUrl, { cache: 'reload' }))`
+  —— MDN Request.cache 文件的標準 cache-busting 寫法：繞過 HTTP 快取直接回源。
+- build（hash 不可變 ~9MB）與 files（cards JSON 等，伺服器明示 max-age=86400）**維持原語義**：
+  強制回源只會白抓流量、拖慢 install。`/sitemap-cards.xml`（563KB，爬蟲用）同理排除。
+- try/catch：Request 建構子對 cache 選項丟例外的環境退回原寫法（寧可舊語義也不讓 install 掛）。
+- install 影響：多 5 個必回源的小請求（~51KB），對 ~9MB 的 install 可忽略。
+
+### 同型漏洞（本版不動，留待後續）
+- fetch handler 的 network-first 分支 `fetch(event.request)` 對**非 PRECACHE 頁**（`/game`、
+  `/card/*`）同樣可能從 HTTP 快取拿到啟發式「仍新鮮」的舊 HTML 並 cache.put —— 根治要靠伺服器
+  對 HTML 補 `Cache-Control: no-cache`（nginx）；SW 端強制 reload 會犧牲頻寬與離線語義，暫不做。
+- `/cards/*.json` `max-age=86400`＋CF HIT：新卡上線最多 24h（CF 邊緣另計）舊資料，屬既有取捨。
+
+### 建議的 nginx 設定（站長自行判斷後執行，本版未動 VM）
+- HTML 補 `Cache-Control: no-cache`（每次 revalidate，搭配既有 Last-Modified/ETag 走 304，
+  頻寬近乎零）；`/_app/immutable/` 維持 `max-age=31536000, immutable` 不可動。
+
+### 守衛
+- `scripts/test-v6222-sw-precache-fresh-html.mjs`（行為級）：esbuild 打包真 SW＋假 HTTP 快取層，
+  dispatch install，斷言 prerendered HTML 的 Request.cache==='reload'、舊版內容不入 precache、
+  build/files/sitemap 不強制回源、/card//covers/music 不預快取、單檔失敗不擋 install、
+  舊瀏覽器退路；**突變測試**（把 reload 改回 default）必須觀察到假 HTTP 快取層下毒。
+  BASE 上實跑 HEAD-FAIL：2 條核心斷言紅（'/' 存進 precache 的是 OLD_HTML_v6219）。
+
 ## v6.220 休閒對戰減量【A】gameState.log 增量下發＋【B】seats[].email 不下發玩家端（隱私，首頁不寫）
 
 BASE = `62023cbca95f36d80d922c6231796367761c5e5f`（v6.219）。

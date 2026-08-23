@@ -34,6 +34,33 @@ const HEAVY_MEDIA = (u: string) => u.includes('/covers/') || u.includes('/music/
 const IS_CARD_PAGE = (u: string) => u.includes('/card/');
 const PRECACHE: string[] = [...build, ...files.filter(f => !HEAVY_MEDIA(f)), ...prerendered.filter(p => !IS_CARD_PAGE(p))];
 
+// v6.222 根治「強制更新後又退回舊版」（站長手機實測：按強制更新→6.221→關 App 重開→退回 6.219）。
+//   真因鏈（實測 www.ptcg-tw-sim.com 回應標頭）：`/` 等 HTML **沒有 Cache-Control** ⇒ 瀏覽器套
+//   「啟發式新鮮度」（約為距 Last-Modified 時間的 10%，RFC 9111 §4.2.2）；而 `cache.add(url)`
+//   功能等同 `fetch(url)` 成功後 `cache.put`（MDN Cache.add），fetch 預設 cache 模式 'default'
+//   **會先查瀏覽器 HTTP 快取** ⇒ 新版 SW install 把 HTTP 快取裡的**舊版 HTML** 存進新版 cache ⇒
+//   冷啟動（PWA start_url='/'，在 PRECACHE 裡、cache-first）回舊 HTML → 舊 chunk hash → 版本退回。
+//   hardRefreshNow() 清得掉 Cache API，**清不掉瀏覽器 HTTP 快取**（JS 做不到），所以清完快取
+//   下一次 install 又被同一份舊 HTML 下毒 —— 這也是監控裡大量玩家長期停在舊版的來路。
+//   修法＝MDN Request.cache 文件的標準 cache-busting 寫法：`new Request(url, { cache: 'reload' })`
+//   —— 繞過 HTTP 快取直接回源，並順手更新 HTTP 快取。
+//   ⚠ **只對 prerendered HTML 做**（每版僅個位數的小檔，install 增加的流量 <0.2MB）：
+//     - build（/_app/immutable/ hash 命名不可變）強制回源＝每版白抓 ~9MB、拖慢 install，不做；
+//     - files（cards JSON 等，伺服器明示 max-age=86400）沿用既有語義，不多抓 ~4MB。
+//   ⚠ 用絕對 URL：相對路徑在部分執行環境（含 Node 測試 harness）的 Request 建構子會丟例外。
+//   ⚠ try/catch：萬一舊瀏覽器對 cache 選項丟例外，退回 v6.221 的預設語義 —— 寧可退回舊行為，
+//     也不可讓 install 掛掉（v5.354 教訓：install 失敗＝玩家釘死在舊版）。
+//   ⚠ /sitemap-cards.xml（~563KB，給搜尋引擎爬蟲）**不**強制回源：它不是 app 殼層、
+//     內容舊一點無害，強制回源只會讓每次 install 多抓 563KB（違反 install 輕量原則）。
+const FRESH_HTML = new Set(prerendered.filter((p) => !IS_CARD_PAGE(p) && !p.endsWith('.xml')));
+function freshRequest(url: string): Request | string {
+  try {
+    return new Request(new URL(url, sw.location.href).href, { cache: 'reload' });
+  } catch {
+    return url; // 退回預設語義，不阻斷 install
+  }
+}
+
 sw.addEventListener('install', (event) => {
   async function addAll() {
     const cache = await caches.open(CACHE_NAME);
@@ -43,7 +70,8 @@ sw.addEventListener('install', (event) => {
     //   http 觸發混合內容封鎖 → addAll reject → 站台釘死在舊版 v5.347）。
     //   改 Promise.allSettled + 個別 cache.add：個別檔失敗只略過該檔，不阻斷整體更新。
     //   app 本體（build/prerendered，皆 https）一定快取成功；卡牌等 runtime 仍走 network-first。
-    await Promise.allSettled(PRECACHE.map((url) => cache.add(url)));
+    //   v6.222：prerendered HTML 走 freshRequest（cache:'reload' 強制回源），其餘維持原語義。
+    await Promise.allSettled(PRECACHE.map((url) => cache.add(FRESH_HTML.has(url) ? freshRequest(url) : url)));
   }
   event.waitUntil(addAll());
   // skipWaiting：新版 SW install 完馬上 activate，不等舊版斷線
