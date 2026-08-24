@@ -26,7 +26,7 @@
 //
 // ── ⚠ diag 欄位的截斷（判讀關鍵）────────────────────────────────────────
 //   /api/tournament/clientdiag 寫入時會把 payload 截到上限（v6.184 起 8192 字元，之前是 2048）。
-//   client payload 的 key 順序是 reason → room → ts → ver → state → render → poll → perf
+//   client payload 的 key 順序是 reason → room → ts → ver → colo（v6.227 起）→ state → render → poll → perf
 //   → svelteWarn → env，所以一旦超過上限，被切掉的**一定是尾端的 perf / svelteWarn / env.ua**，
 //   而且整串不再是合法 JSON。伺服器那支 /admin/clientdiag 對 JSON.parse 失敗的列是「直接略過」
 //   ⇒ 這些列在畫面上連 slowRtt 表都不會出現。
@@ -311,6 +311,98 @@ function oppQuietOf(diagObj) {
   return (typeof poll.oppQuiet === 'number' && isFinite(poll.oppQuiet)) ? poll.oppQuiet : null;
 }
 
+// ── ⭐⭐⭐v6.227 Cloudflare 邊緣節點（colo）────────────────────────────────
+//   payload 的 colo 欄位（v6.227 起才有）：{ last, seen:{SJC:18,...}, miss }。
+//   三種結果必須分得出來、不可混：
+//     物件      ＝新 client 有資料（main ＝ seen 裡次數最多的那個；平手取先出現者）
+//     'none'    ＝新 client 但這筆沒收到任何 colo（colo:null 或 seen/last 全空）
+//               ——多半是 Service Worker 快取或不經 CF 的路徑
+//     null      ＝payload 沒有這一欄（v6.227 之前的舊 client，或被截斷 parse 不出來）
+//               ＝「不知道」，顯示「—」，**不是** 0、也不屬於任何 colo
+function coloOf(diagObj) {
+  if (!diagObj || typeof diagObj !== 'object' || !Object.prototype.hasOwnProperty.call(diagObj, 'colo')) return null;
+  const c = diagObj.colo;
+  if (!c || typeof c !== 'object') return 'none';
+  const seen = (c.seen && typeof c.seen === 'object') ? c.seen : {};
+  let best = null, bestN = -1;
+  for (const k of Object.keys(seen)) {
+    const n = Number(seen[k]);
+    if (isFinite(n) && n > bestN) { best = k; bestN = n; }
+  }
+  const last = (typeof c.last === 'string' && c.last) ? c.last : null;
+  const main = best || last;
+  if (!main) return 'none';
+  return {
+    main: main, last: last, seen: seen,
+    miss: (typeof c.miss === 'number' && isFinite(c.miss)) ? c.miss : null,
+    multi: Object.keys(seen).length >= 2,
+  };
+}
+// ⭐⭐⭐依 colo 分組統計。⚠ 呼叫端必須把**異常批**與**健康取樣批**分開餵——
+//   兩邊的母體不同（病人 vs 抽樣），數字永遠不可相加、也不可互比快慢（v6.213 同一條紀律）。
+//   判讀（這一組數字就是為了分辨兩個假說）：
+//     ・慢的人（slow-rtt 佔比高／net 尾巴大）**集中在特定 colo** ⇒ 那個邊緣節點（或它到
+//       隧道那一段）劣化——重啟 cloudflared 只是碰巧換了節點，治標不治本。
+//     ・慢的人**跨所有 colo** ⇒ 問題在更下游（cloudflared 本身／VM／共享路徑），與節點無關。
+function coloSummary(rawRows) {
+  const groups = new Map();
+  const out = { withColo: 0, noneColo: 0, unknown: 0, multiTotal: 0, groups: [] };
+  for (const r of (rawRows || [])) {
+    const d = parseDiag((r && r.diag) || '');
+    const c = coloOf(d.obj);
+    if (c === null) { out.unknown++; continue; }     // 舊 client／截斷列：「不知道」
+    if (c === 'none') { out.noneColo++; continue; }  // 新 client 但沒收到 cf-ray
+    out.withColo++;
+    const k = c.main;
+    if (!groups.has(k)) groups.set(k, { colo: k, n: 0, uids: {}, netP50s: [], netP95s: [], rttP95s: [], slowN: 0, multiN: 0, missN: 0 });
+    const g = groups.get(k);
+    g.n++;
+    if (r && r.uid) g.uids[r.uid] = 1;
+    if (c.multi) { g.multiN++; out.multiTotal++; }
+    if (c.miss) g.missN += c.miss;
+    if (String((r && r.reason) || '') === 'slow-rtt') g.slowN++;
+    const api = (d.perf && d.perf.api) || null;
+    const net = api && api.net && typeof api.net === 'object' ? api.net : null;
+    if (net && num(net.p50) !== null) g.netP50s.push(net.p50);
+    if (net && num(net.p95) !== null) g.netP95s.push(net.p95);
+    if (d.rtt && num(d.rtt.p95) !== null) g.rttP95s.push(d.rtt.p95);
+  }
+  out.groups = [...groups.values()].map(function (g) {
+    return {
+      colo: g.colo, n: g.n, players: Object.keys(g.uids).length,
+      // netTyp ＝各筆 net **p50** 的中位數（「到這個節點平常要多久」＝物理距離的指紋）；
+      // netTail ＝各筆 net **p95** 的中位數（「這個節點的尾巴有多重」＝劣化的指紋）。
+      netTypP50: quant(g.netP50s, 0.5), netTailP50: quant(g.netP95s, 0.5),
+      netN: g.netP95s.length,
+      rttP50: quant(g.rttP95s, 0.5), rttN: g.rttP95s.length,
+      slowN: g.slowN, slowPct: g.n > 0 ? Math.round(g.slowN * 1000 / g.n) / 10 : null,
+      multiN: g.multiN, missN: g.missN,
+    };
+  }).sort(function (a, b) { return b.n - a.n; });
+  return out;
+}
+// colo 分組的 TXT 表（異常批與取樣批各印一份；isSample 只影響 slow-rtt 欄要不要出現——
+//   取樣批的 reason 恆為 perf-sample，印一欄恆 0% 的 slow-rtt 只會誤導）。
+function coloTableLines(cs, isSample) {
+  const R = [];
+  if (!cs || (!cs.withColo && !cs.noneColo)) {
+    R.push('    這批沒有任何帶 colo 的回報（沒有這一欄的舊列 ' + (cs ? cs.unknown : 0) + ' 筆）。');
+    R.push('    等玩家更新到 v6.227 之後的畫面再跑一次。');
+    return R;
+  }
+  R.push('    ' + pad('colo', 8) + padL('筆數', 6) + padL('人數', 6) + padL('net典型', 11) + padL('net尾巴', 11)
+    + padL('RTT p95中位', 13) + (isSample ? '' : padL('slow-rtt佔比', 14)));
+  for (const g of cs.groups) {
+    R.push('    ' + pad(g.colo, 8) + padL(g.n, 6) + padL(g.players, 6)
+      + padL(ms(g.netTypP50), 11) + padL(ms(g.netTailP50), 11) + padL(ms(g.rttP50), 13)
+      + (isSample ? '' : padL(g.slowPct === null ? '—' : g.slowPct + '%', 14)));
+  }
+  if (cs.noneColo) R.push('    （無 cf-ray）' + padL(cs.noneColo, 4) + ' 筆　← 新 client 但回應沒有 cf-ray（SW 快取／不經 CF 的路徑）');
+  if (cs.unknown) R.push('    （無此欄）　' + padL(cs.unknown, 4) + ' 筆　← v6.227 之前的舊 client（或 payload 被截斷）＝「不知道」，顯示「—」不是 0');
+  if (cs.multiTotal) R.push('    ⚠ 其中 ' + cs.multiTotal + ' 筆在同一場看過 ≥2 個 colo（對局中換了節點；該筆歸在次數較多的那個）。');
+  return R;
+}
+
 // ── 小工具 ──────────────────────────────────────────────────────────────
 function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
 function pct(a, b) { return b > 0 ? (a * 100 / b).toFixed(1) + '%' : '—'; }
@@ -513,6 +605,10 @@ async function main() {
   rtt.sort(function (a, b) { return (b.p95 || 0) - (a.p95 || 0); });
   // ⭐v6.213 取樣（健康對照組）的獨立彙總。⚠ 它與上面每一個統計**沒有共用任何累加器**。
   const sample = sampleSummary(rawSample);
+  // ⭐⭐⭐v6.227 colo（Cloudflare 邊緣節點）分組：異常批與取樣批**分開餵、分開報**。
+  //   沒有取樣批那份，就答不了「慢的人是不是集中在某些 colo」（分母只有病人）。
+  const coloAnom = coloSummary(raw);
+  const coloSamp = coloSummary(rawSample);
 
   const byVersion = [...verMap.entries()]
     .map(function (e) { return { ver: e[0], n: e[1].n, players: e[1].uids.size }; })
@@ -598,6 +694,11 @@ async function main() {
     //   ⚠⚠ 這是**順帶**的判讀欄，不是「對手掉線指紋」：「我正常、對手斷線」時新判準三條都不成立
     //     ⇒ 那個情境根本不會有回報被送出。hits 只涵蓋「因為別的理由送出來、而當下對手剛好也掉線」。
     oppQuiet: { rows: oppQuietRows, hits: oppQuietHit, maxSec: oppQuietMax || null },
+    // ⭐⭐⭐v6.227 Cloudflare 邊緣節點（colo）分組。判準：慢的人集中在特定 colo ⇒ 該節點
+    //   （或它到隧道那段路）劣化，重啟 cloudflared 只是碰巧換節點；跨所有 colo 都慢 ⇒
+    //   問題在 cloudflared／VM／共享路徑。⚠ anomaly（異常批）與 sample（健康取樣批）
+    //   母體不同，不可相加。⚠ unknown ＝舊 client 沒這欄或 payload 被截斷 ＝「不知道」，不是 0。
+    colo: { anomaly: coloAnom, sample: coloSamp },
     // ⭐⭐⭐v6.213【② 低頻無條件取樣＝健康對照組】。
     //   ⚠ 這一整塊與上面每一個統計**互斥**（同一列不可能同時出現在兩邊），
     //     所以「異常 N 筆 ＋ 取樣 M 筆」只有在講「資料庫總列數」時才有意義，
@@ -727,6 +828,19 @@ async function main() {
     }
   }
   L.push('');
+  L.push('【②-e 🌐 Cloudflare 邊緣節點（colo）分佈（v6.227 起）】←「慢的人集不集中在特定節點」看這裡');
+  L.push('  v6.227 起玩家的回報帶「這場對戰經過哪個 CF 邊緣節點」（從既有回應的 cf-ray 標頭讀，零額外請求）。');
+  L.push('  ⭐ 這一欄就是為了分辨兩個假說：');
+  L.push('    ・慢的人（slow-rtt 佔比高／net 尾巴大）**集中在特定 colo** ⇒ 那個邊緣節點（或它到隧道');
+  L.push('      那一段）劣化——重啟 cloudflared 只是碰巧換了節點，治標不治本。');
+  L.push('    ・慢的人**跨所有 colo 都有** ⇒ 問題在更下游（cloudflared 本身／VM／共享路徑），與節點無關。');
+  L.push('  ⚠⚠ 下面兩張表母體不同（異常批 vs 健康取樣批），數字**不可相加、也不可互比快慢**。');
+  L.push('  ⚠ 「net典型」＝各筆 p50 的中位數（到節點的物理距離）；「net尾巴」＝各筆 p95 的中位數（劣化指紋）。');
+  L.push('  ・異常批（出了問題才回報的人）：');
+  for (const _cl of coloTableLines(coloAnom, false)) L.push(_cl);
+  L.push('  ・健康取樣批（每場 10% 無條件抽樣）：');
+  for (const _cl of coloTableLines(coloSamp, true)) L.push(_cl);
+  L.push('');
   L.push('【③ ⭐ client 版本分佈】←「還有多少人停在舊版」看這裡');
   if (!byVersion.length) {
     L.push('  沒有資料。');
@@ -846,7 +960,9 @@ async function main() {
 //   被 require 進來時只匯出純函式，讓守衛可以實跑判定邏輯而不需要任何資料庫。
 module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp, staleGateOf: staleGateOf, oppQuietOf: oppQuietOf,
   // ⭐v6.213 守衛要**實跑**分帳邏輯（只驗字串存在擋不住「接線沒接上」）。
-  SAMPLE_REASONS: SAMPLE_REASONS, isSampleReason: isSampleReason, splitDiagRows: splitDiagRows, sampleSummary: sampleSummary };
+  SAMPLE_REASONS: SAMPLE_REASONS, isSampleReason: isSampleReason, splitDiagRows: splitDiagRows, sampleSummary: sampleSummary,
+  // ⭐v6.227 守衛要實跑 colo 分組（只驗字串存在擋不住「接線沒接上」）。
+  coloOf: coloOf, coloSummary: coloSummary, coloTableLines: coloTableLines };
 if (require.main === module) {
   main().catch(function (e) { console.error('ERROR:', e && e.message); process.exit(1); });
 }

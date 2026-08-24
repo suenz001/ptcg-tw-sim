@@ -1,5 +1,37 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.227 診斷回報帶上 Cloudflare 邊緣節點（colo）——分辨「節點劣化」vs「cloudflared 劣化」
+
+BASE = `1a065938ade5dd9ac0675a3186525f8cac4b1c59`（v6.226）。純觀測遙測（玩家看不到），
+依站長裁定不上首頁 changelog。
+
+- 背景（已實測）：台灣 HiNet 出口被 Cloudflare 導去**美西 SJC**（8/8、`connect` 148~155ms
+  ＝台灣↔SJC 一趟，與玩家 `net` p50 138~151ms 吻合），隧道端在新加坡。「偶發 3~4 秒尾巴」
+  剩兩個競爭假說：(a) cloudflared 內部狀態隨 uptime 劣化（重啟可解）vs (b) 特定 CF 邊緣節點
+  劣化（重啟只是碰巧換節點）。目前沒有任何資料能區分 ⇒ 本版把 colo 記進既有診斷回報。
+  ⭐ 判準：慢的人**集中在特定 colo** ⇒ (b)；**跨所有 colo** ⇒ (a) 或更上游。
+- 做法（零額外請求）：`cf-ray` 是**回應標頭**（`a2fb6ea96b799913-SJC`，`-` 之後就是 colo），
+  同源 ⇒ 全部讀得到。沿用 `X-Srv-Ms` → `_srvMs` 同一條路，在 tApi 收回應時順手讀，
+  **不打** `/cdn-cgi/trace`、不加任何請求。守衛用 tApi 端點白名單＋剝註解後禁 cdn-cgi 雙重鎖住。
+- 收什麼：payload 新增頂層 `colo: { last, seen:{SJC:18,TPE:2}, miss } | null`。
+  `seen` ＝這場（熱路徑成功往返）看過的 colo 計數——單筆玩家可能在對局中換節點，記逐筆會
+  吃爆 8192 上限，記計數最壞情況（8 個相異 colo）實測 131 字元。`miss` ＝成功往返但沒有
+  cf-ray（SW 快取／不經 CF），本身就是有用的指紋。記錄函式 `_tRecordColoSample` 的三行
+  範圍守衛與 `_tRecordApiSegments`/`_tRecordSrvSample` 逐字相同（母體一致才能對照 net）；
+  離場（tLeaveMatch）清空（跨場殘留會把上一場的節點掛到下一場）。
+  ⚠ 欄位刻意放 payload 前段（ver 之後）：8192 截斷砍尾端，關鍵欄位不能陪葬。
+  ⚠ 異常批（slow-rtt 等）與健康取樣批（perf-sample）走同一個 payload builder ⇒ 兩批都有。
+- 伺服器端零改動：/clientdiag 原樣存 JSON（8192 cap／per-(uid,reason) 60 秒節流／截斷偵測
+  全部維持）。舊 client 沒這欄 ⇒ 欄位缺席＝「不知道」，報表顯示「—」不當成 0。
+- `dump-client-monitor.cjs` 新增 ②-e colo 分組表（異常批／取樣批分開；每 colo 的樣本數、
+  net典型＝各筆 p50 中位數、net尾巴＝各筆 p95 中位數、RTT p95 中位、slow-rtt 佔比、
+  換節點筆數；母體不可相加），JSON 輸出帶 `colo:{anomaly,sample}`；純函式
+  `coloOf`/`coloSummary`/`coloTableLines` 匯出供守衛實跑。
+- 守衛：`scripts/test-v6227-colo-telemetry.mjs`——餵假回應實跑 cf-ray 解析（含無標頭／
+  垃圾字串／headers.get throw 不爆）、記錄函式（範圍守衛／鍵數上限 8）、payload 算式、
+  端到端（假回應⇒解析⇒計數⇒payload）、dump 分組（含截斷列不爆）。HEAD-FAIL 已驗證
+  （v6.226 上 17 FAIL）；突變（拔接線／解析改壞／分組漏 slow-rtt）皆紅。
+
 ## v6.226（admin v1.73）報告圖文字：長名不必要截斷＋置中註腳左右被裁
 
 BASE = `23e199c70d1d17eeb50f27a1016257f24a663262`（v6.225）。純 admin 後台工具改動，

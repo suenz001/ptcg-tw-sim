@@ -192,6 +192,20 @@
   let _segSrv: number[] = [];          // X-Srv-Ms（伺服器端處理時間，毫秒）
   let _srvHdrN = 0;                    // 有帶 header 的成功往返數
   let _srvHdrMiss = 0;                 // 沒帶 header 的成功往返數（＝伺服器還是舊版）
+  // ⭐⭐⭐v6.227【玩家落在哪個 Cloudflare 邊緣節點（colo）】
+  //   實測：台灣 HiNet 出口被 CF 導去美西 SJC（8/8、connect 148~155ms ≒ 玩家 net p50 138~151ms），
+  //   隧道端在新加坡。「偶發 3~4 秒尾巴」剩兩個競爭假說：(a) cloudflared 隨 uptime 劣化（重啟可解）
+  //   vs (b) 特定邊緣節點劣化（重啟只是碰巧換節點）。判準＝慢的人集不集中在特定 colo，
+  //   而 payload 一直沒有 colo ⇒ 這裡補上。
+  //   ⭐ 來源是**既有回應**的 `cf-ray` 標頭（形如 a2fb6ea96b799913-SJC，'-' 之後就是 colo）。
+  //     同源 ⇒ 回應標頭全部讀得到，不需要 CORS 白名單；**零額外請求**——
+  //     絕不去打 /cdn-cgi/trace（那是多一發請求，違反「觀測不得加負擔」的紀律）。
+  //   ⚠ 記「這場看過哪些 colo 各幾次」而不是逐筆：玩家可能在對局中換節點，
+  //     但 payload 有 8192 字元上限 ⇒ 只存計數（相異 colo 鍵數上限 8，超過不再新增鍵）。
+  //   ⚠ 沒有 cf-ray 的成功回應（SW 快取、不經 CF 的路徑）記進 miss，絕不 throw。
+  let _coloCounts: Record<string, number> = {};  // colo（如 SJC/TPE/SIN）→ 這場看到的次數
+  let _coloLast: string | null = null;           // 最近一發成功往返落在哪個 colo
+  let _coloMiss = 0;                             // 成功往返但回應沒有 cf-ray 的次數
   let _adoptSamples: number[] = [];    // tAdopt 本身的同步執行時間
   let _paintSamples: number[] = [];    // tAdopt 開始 → 下一個 animation frame（重繪成本的代理指標）
   let _paintPending = false;           // 同時只掛一個 rAF —— 量測本身絕不可以變成新的主執行緒負擔
@@ -4852,6 +4866,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
         const _sh = res.headers.get('X-Srv-Ms');
         if (_sh != null) { const _sv = Number(_sh); if (isFinite(_sv) && _sv >= 0) _srvMs = _sv; }
       } catch { /* 量測絕不影響對戰 */ }
+      // ⭐v6.227 Cloudflare 邊緣節點：cf-ray 是**回應**標頭（同源 ⇒ 讀得到），'-' 之後就是 colo。
+      //   一樣只讀一個字串：沒有 await、沒有新請求、沒有任何分支改變控制流程（只加量測）。
+      let _colo: string | null = null;
+      try {
+        const _cray = res.headers.get('cf-ray');
+        if (_cray) {
+          const _ci = _cray.lastIndexOf('-');
+          const _cc = _ci >= 0 ? _cray.slice(_ci + 1).trim().toUpperCase() : '';
+          if (/^[A-Z0-9]{3,4}$/.test(_cc)) _colo = _cc;   // IATA 機場碼；格式不對一律當「沒有」
+        }
+      } catch { /* 量測絕不影響對戰 */ }
       if (!res.ok) {
         // v6.150：錦標賽 /state 對「認不出座位」回 401（不再回一份連自己都遮的盤面）。
         //   呼叫端必須分得出「身分失效」與「網路斷線」——兩者在畫面上的自救方式完全不同，
@@ -4870,6 +4895,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // ⚠ 與 v6.151 的 rtt 同一條紀律：**只記成功的往返**。錯誤/逾時路徑（12 秒）記進去會扭曲統計。
       _tRecordApiSegments(path, _segT0, _segT1, _segT2, _segT3, _pnow());
       _tRecordSrvSample(path, _srvMs);   // ⭐v6.213【③】＋【②】：與上一行同一個範圍守衛（母體一致）
+      _tRecordColoSample(path, _colo);   // ⭐v6.227：同一個範圍守衛（colo 的母體＝net/srv 的母體，才能對照）
       // ⭐⭐⭐v6.172 連線健康的**唯一**寫入點：任何一次成功的伺服器往返都算「連得上」。
       //   這就是為什麼 `POST /action` 全部成功之後不會再誤報失聯 —— 不必在每個呼叫端補一行，
       //   也不會有第二份判準漂移。
@@ -5079,6 +5105,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   ⚠ 旗標不清會讓下一場沿用上一場的中籤結果（機率就不是 1% 了 ＝ 分母污染）。
     _segSrv = []; _srvHdrN = 0; _srvHdrMiss = 0;
     _perfSampleRoom = ''; _perfSampleArmed = false; _perfSampleSent = false;
+    _coloCounts = {}; _coloLast = null; _coloMiss = 0;   // ⭐v6.227 colo 也是 per-match（殘留會把上一場的節點掛到下一場）
     // ⚠ _paintPending 也要放掉：離場瞬間若有在途 rAF，它會把上一場尾端那一筆推進下一場
     //   的新陣列（Fable 5 審查）。
     _adoptSamples = []; _paintSamples = []; _paintPending = false;
@@ -5764,6 +5791,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
     // ⚠ 這裡只有兩個布林比較與一個長度比較；沒中籤的人成本是**一次 `if` 就 return**。
     _tMaybePerfSample();
   }
+  // ⭐⭐⭐v6.227 colo 的記錄點。
+  //   ⚠ 範圍守衛的三行**必須與 `_tRecordApiSegments`／`_tRecordSrvSample` 逐字相同**
+  //     （colo 的母體要與 net/srv 一致，「這個 colo 的 net」這句話才有意義）。
+  //   ⚠ 相異 colo 鍵數上限 8：一場對局實際只會看到 1~2 個，上限只是防禦——
+  //     超過就不再新增鍵（既有鍵照數），絕不讓 payload 被灌爆。
+  function _tRecordColoSample(path: string, colo: string | null): void {
+    if (!isTournament || isTournSpectator) return;
+    if (path.indexOf('wait=1') >= 0) return;
+    if (!(path.indexOf('/action') === 0 || path.indexOf('/state') === 0)) return;
+    if (colo) {
+      _coloLast = colo;
+      if (Object.prototype.hasOwnProperty.call(_coloCounts, colo)) _coloCounts[colo]++;
+      else if (Object.keys(_coloCounts).length < 8) _coloCounts[colo] = 1;
+    } else { _coloMiss++; }
+  }
   /** ⭐v6.213【②】每場最多送一發的健康對照樣本。⚠ 這支自己不擲骰（骰子在進場時擲好） */
   function _tMaybePerfSample(): void {
     if (!_perfSampleArmed || _perfSampleSent) return;
@@ -5928,6 +5970,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const now = Date.now();
       const payload = {
         reason, room: tActiveRoom, ts: now, ver: VERSION,
+        // ⭐⭐⭐v6.227 這場落在哪個 Cloudflare 邊緣節點（見 _tRecordColoSample）。判讀：
+        //   ・seen ＝這場（對戰熱路徑的成功往返）看過的 colo 與各自次數；last ＝最近一發。
+        //   ・miss ＝成功往返但回應沒有 cf-ray（SW 快取、不經 CF 的路徑）。
+        //   ・null ＝一發熱路徑往返都還沒有。⚠ v6.227 之前的舊 client 根本沒這一欄——
+        //     欄位缺席＝「不知道」，讀的人不可以當成 0 或當成某個 colo。
+        //   ⚠ 刻意放在 payload 前段：8192 截斷砍的是尾端，而 colo 正是「慢的人集不集中在
+        //     特定節點」這個問題的關鍵欄位，不能排在 svelteWarn/env 之後陪葬。
+        colo: (_coloLast || _coloMiss > 0) ? { last: _coloLast, seen: { ..._coloCounts }, miss: _coloMiss } : null,
         state: {
           tVersion, gameId: g?.id ?? null, phase: g?.phase ?? null, setupDone: g?.setupDone ?? null,
           pendingMulliganDraw: g?.pendingMulliganDraw ?? null, mulliganRevealConfirmed: g?.mulliganRevealConfirmed ?? null,

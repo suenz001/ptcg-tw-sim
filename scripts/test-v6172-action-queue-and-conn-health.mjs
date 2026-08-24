@@ -514,6 +514,10 @@ try {
       //   ⚠ 假的 fetch 回應沒有 headers ⇒ tApi 讀標頭那段會走進它自己的 try/catch，
       //     這正好順便證明「拿不到標頭也不會影響對戰」。
       const _tRecordSrvSample = () => {};
+      // ⭐v6.227 tApi 又多了一行 colo 的量測呼叫（cf-ray）。本節只驗連線健康錨點；
+      //   colo 的行為由 test-v6227-colo-telemetry 守。假回應沒有 headers ⇒ 同上，
+      //   順便證明「拿不到 cf-ray 也不會影響對戰」。
+      const _tRecordColoSample = () => {};
       // ⭐v6.179 tApi 多了「開一個 fetch 時間窗」的量測呼叫（回 null ＝ 這台機器不對齊）。
       //   本節只驗連線健康錨點，對齊行為由 test-v6179 守。
       const _tResWinOpen = () => null;
