@@ -1,5 +1,42 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.225 手牌特性「每回合限 1 次」追蹤鍵改 per-instance（iid）
+
+BASE = `91007b6432ee0e02c43609c452e897abf4c4c297`（v6.224）。
+
+- 站長回報：戰鬥場超級袋獸ex＋手牌 2 張烈箭鷹ex（M6#19612，J，特性「激動俯衝」），
+  回合中只能放 1 隻到備戰區，第 2 隻按不出來。齒輪怪（SV7#10964，H，「緊急迴轉」）同型。
+- 真因：`engine.ts` 的 `getHandActivatableAbilities`（`usedNames.includes(ab.name)`）與
+  `USE_HAND_ABILITY` handler（寫入 `abilityNamesUsedThisTurn`）用**特性名**記在玩家層級
+  ⇒ 整個玩家側一回合只能用一次。卡面主詞是「若手牌有**這張卡**…則可使用 1 次」＝ per-instance。
+  與 v2.91→v2.93 土龍節節事故同型（場上路徑當年已用 `SHARED_ONCE_PER_TURN_ABILITY_NAMES`
+  白名單修正，手牌路徑漏修）。
+- 修法（中央收斂，單一判斷）：新增 `PlayerState.handAbilityUsedIidsThisTurn?: string[]`
+  （純 string[]，Firestore 安全；END_TURN 與 `abilityNamesUsedThisTurn` 一同清除），
+  engine.ts 新增成對中央函式 `isHandAbilityOncePerTurnUsed`（判定端，getHandActivatableAbilities 用）
+  ＋ `markHandAbilityUsed`（標記端，USE_HAND_ABILITY handler 用）：
+  `SHARED_ONCE_PER_TURN_ABILITY_NAMES` 內＝特性名共享（卡面明寫「使用了其他的『XX』的回合
+  無法使用」），名單外＝以 iid 各自計次。兩套 UI（桌機／手機直式）都走
+  `getHandActivatableAbilities`，零 UI 改動。
+- 【B】全站 audit「每回合限 1 次的追蹤鍵」：
+  - 場上主動特性 `USE_ABILITY`：per-instance `abilityUsedThisTurn` ＋ SHARED／UNLIMITED 白名單 ✓。
+  - `USE_HAND_DISCARD_ABILITY`：name-based，但 `ON_DISCARD_FROM_HAND_ABILITIES` 自 v5.510 起為
+    **空 Map**（誘導之尾／熱浪鱗粉已改走 regA per-instance）⇒ 死碼路徑，無玩家可見影響，不動。
+  - 觸發型（ON_PLAY／ON_EVOLVE／ON_RETREAT／ON_PROMOTE）：per-trigger 天然一次；
+    霸者咆哮 v6.083 已有正確對照註解 ✓。殺手鐧捕捉的 ad-hoc name 記錄＝卡面明寫 shared ✓。
+  - 重試徽章（player-level flag）：卡面主詞「這張卡」理論上 per-tool，但同回合第二次攻擊
+    只有祭典樂舞能造成，其持有者（裹蜜蟲草／角金魚水／金魚王水／綿綿泡芙超）皆非【無】屬性，
+    而徽章只對【無】寶可夢招式生效 ⇒ 現行卡池行為等價，不動（記錄備查）。
+  - 力之沙漏（戰鬥場限定、END_TURN 觸發一次）／stadiumUsedThisTurn（規則層）／
+    festivalDance*（雙攻窗機制）／attackUsedThisTurn（招式冷卻，另一維度已掃）✓ 乾淨。
+  - 白名單複驗（逐張對卡面）：SHARED 8 條全部卡面明寫（音速搜索／裝酷重抽為 G 標 live，留置無害）；
+    live H/I/J 全掃描含「使用了其他／已經使出」措辭的特性全部已在名單內，無「該在不在」。
+    UNLIMITED 7 條與 live 掃描出的 7 個「可不限次數使用」完全一致。
+- 守衛：`scripts/test-v6225-hand-ability-per-instance.mjs`（6 測；已加入 npm test 鏈）。
+  HEAD-FAIL：BASE 上 4 FAIL（重現站長情境）。突變：per-iid 改回 name→紅；
+  手牌 SHARED 分支旁路→紅；場上 SHARED gate 單層旁路→仍綠（v6.181 起 handler＋
+  getUsableAbilities 雙層防禦，第二層擋住）、兩層皆旁路→紅。
+
 ## v6.224 官網代碼匯入逾時保護（後端 20s + 前端 25s）
 
 BASE = `a7dbc1549a63be48bfd80251c380c43658b921c4`（v6.223）。

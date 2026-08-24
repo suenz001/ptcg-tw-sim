@@ -599,6 +599,15 @@ export interface PlayerState {
    * USE_ABILITY handler 於使用前檢查 includes，使用後 push name；END_TURN 清除。
    */
   abilityNamesUsedThisTurn?: string[];
+  /**
+   * v6.225 手牌特性（USE_HAND_ABILITY）「每回合限 1 次」的 per-instance 追蹤（以 iid 為鍵）。
+   * 卡面「在自己的回合，若手牌有這張卡…則可使用1次」主詞是「這張卡」——兩張同名
+   * 各可用一次（烈箭鷹ex｜激動俯衝、齒輪怪｜緊急迴轉）。原誤用 abilityNamesUsedThisTurn
+   * （特性名共享）導致第 2 張被誤擋。SHARED_ONCE_PER_TURN_ABILITY_NAMES 內的特性
+   * 仍走特性名共享（卡面明寫的跨實例限制）。END_TURN 與 abilityNamesUsedThisTurn 一同清除。
+   * ⚠ Firestore：純 string[]（非巢狀陣列），可安全序列化。
+   */
+  handAbilityUsedIidsThisTurn?: string[];
 }
 
 // ── 擁有規則的寶可夢（Pokémon with a Rule Box）判定 ─────────────────────────

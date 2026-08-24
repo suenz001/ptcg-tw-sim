@@ -4768,7 +4768,11 @@ function handlePlaying(
 
   // ── v3.07 Deferred Wave D — 手牌寶可夢自身為 trigger（USE_HAND_ABILITY） ─────
   //   - 齒輪怪｜緊急迴轉：手牌的這張卡為條件 + 對手場上有 Stage 2 → 放這張卡到備戰
-  //   每回合限 1 次（用 abilityNamesUsedThisTurn 追蹤該特性名）。
+  //   每回合限 1 次 —— v6.225 起以 **iid**（per-instance）追蹤：卡面「若手牌有
+  //   這張卡…則可使用1次」主詞是「這張卡」，兩張同名各可用一次（v2.91→v2.93
+  //   土龍節節同型教訓；本路徑當年漏修，害第 2 張烈箭鷹ex被誤擋）。
+  //   只有 SHARED_ONCE_PER_TURN_ABILITY_NAMES（卡面明寫「使用了其他的『XX』的
+  //   回合無法使用」）才共享特性名 —— 由中央 markHandAbilityUsed 分流。
   if (action.type === 'USE_HAND_ABILITY') {
     if (state.turnPhase !== 'main') return state;
     if (state.pendingSelection) return state;
@@ -4787,17 +4791,15 @@ function handlePlaying(
 
     // v6.080：gate 走中央 getHandActivatableAbilities（與兩套 UI 同一份判斷）。
     //   ⚠ 禁在這裡另寫卡名 if —— 三份漂移是既有事故來源（UI 硬編 bench<5 沒走 getBenchLimit）。
-    const usedNames = attacker.abilityNamesUsedThisTurn ?? [];
     const activatable = getHandActivatableAbilities(state, aIdx, pool);
     const hit = activatable.find(a => a.iid === handInst.iid && a.abilityIndex === action.abilityIndex);
     if (!hit) return state;
 
-    // 標記 abilityNamesUsedThisTurn → fn 處理 hand → bench
+    // v6.225 標記已使用 —— per-instance（iid）／SHARED 白名單（特性名）由中央
+    //   markHandAbilityUsed 分流（與 getHandActivatableAbilities 的
+    //   isHandAbilityOncePerTurnUsed 同一份判斷，禁在這裡另寫一份）。
     const newPlayers1: [PlayerState, PlayerState] = [...state.players] as [PlayerState, PlayerState];
-    newPlayers1[aIdx] = {
-      ...attacker,
-      abilityNamesUsedThisTurn: [...usedNames, abilityName],
-    };
+    newPlayers1[aIdx] = markHandAbilityUsed(attacker, abilityName, handInst.iid);
     const sLog = addLog(
       { ...state, players: newPlayers1 },
       `${attacker.name} 從手牌發動 ${handCard.name} 的特性「${abilityName}」！`,
@@ -7586,6 +7588,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     if (currentPlayer.abilityNamesUsedThisTurn) {
       delete currentPlayer.abilityNamesUsedThisTurn;
     }
+    // v6.225：清除手牌特性 per-instance 使用紀錄（激動俯衝 / 緊急迴轉 類）
+    if (currentPlayer.handAbilityUsedIidsThisTurn) {
+      delete currentPlayer.handAbilityUsedIidsThisTurn;
+    }
     // v2.149：清除祭典樂舞 second-attack flag（END_TURN 後重置該玩家側）
     // v2.381：同時清除 festivalDanceSecondAttackUsed（第 2 次招式 spent flag）
     if (state.festivalDanceUsedThisTurn?.[aIdx]) {
@@ -9146,6 +9152,48 @@ const HAND_ACTIVATE_GATES: Record<string, (s: GameState, idx: 0 | 1, pool: Map<s
 };
 
 /**
+ * ⭐ v6.225 手牌特性「每回合限 1 次」的追蹤鍵 —— 中央單一判斷（判定端＋標記端成對）。
+ *
+ * 卡面「在自己的回合，若手牌有**這張卡**…則可使用1次」主詞是「這張卡」
+ * ＝ **per-instance**（以 iid 為鍵；兩張同名各可用一次）。
+ * 只有 SHARED_ONCE_PER_TURN_ABILITY_NAMES（卡面明寫「在使用了其他的『XX』的
+ * 回合，這個特性無法使用」）才以特性名在玩家側共享 1 次。
+ * 原實作誤用 abilityNamesUsedThisTurn（name-based）——與場上特性 v2.91→v2.93
+ * 的土龍節節事故同型：第 2 張烈箭鷹ex｜激動俯衝／齒輪怪｜緊急迴轉被誤擋。
+ *
+ * ⚠ 引擎 USE_HAND_ABILITY handler 與 getHandActivatableAbilities 都必須走
+ *   這一對函式，禁各寫一份（三份漂移是 v6.080 之前的事故來源）。
+ */
+export function isHandAbilityOncePerTurnUsed(
+  player: PlayerState,
+  abilityName: string,
+  iid: string,
+): boolean {
+  if (SHARED_ONCE_PER_TURN_ABILITY_NAMES.has(abilityName)) {
+    return (player.abilityNamesUsedThisTurn ?? []).includes(abilityName);
+  }
+  return (player.handAbilityUsedIidsThisTurn ?? []).includes(iid);
+}
+
+/** v6.225：與 isHandAbilityOncePerTurnUsed 成對的標記端（回傳新 PlayerState）。 */
+export function markHandAbilityUsed(
+  player: PlayerState,
+  abilityName: string,
+  iid: string,
+): PlayerState {
+  if (SHARED_ONCE_PER_TURN_ABILITY_NAMES.has(abilityName)) {
+    return {
+      ...player,
+      abilityNamesUsedThisTurn: [...(player.abilityNamesUsedThisTurn ?? []), abilityName],
+    };
+  }
+  return {
+    ...player,
+    handAbilityUsedIidsThisTurn: [...(player.handAbilityUsedIidsThisTurn ?? []), iid],
+  };
+}
+
+/**
  * v6.080：列出「現在可以從手牌發動」的特性（USE_HAND_ABILITY 用）。
  * 兩套 UI 與引擎 handler 共用；回傳空陣列＝目前不能發動。
  */
@@ -9159,7 +9207,6 @@ export function getHandActivatableAbilities(
   if (state.pendingSelection) return out;
   const me = state.players[idx];
   if (!me) return out;
-  const usedNames = me.abilityNamesUsedThisTurn ?? [];
   if (me.bench.length >= getBenchLimit(state, idx, pool)) return out;  // 這批全是「放備戰」型
   for (const inst of me.hand) {
     const card = pool.get(inst.cardId);
@@ -9168,7 +9215,7 @@ export function getHandActivatableAbilities(
     card.abilities.forEach((ab, i) => {
       const gate = HAND_ACTIVATE_GATES[ab.name];
       if (!gate) return;
-      if (usedNames.includes(ab.name)) return;
+      if (isHandAbilityOncePerTurnUsed(me, ab.name, inst.iid)) return;
       if (!gate(state, idx, pool, card)) return;
       out.push({ iid: inst.iid, abilityIndex: i, abilityName: ab.name, cardName: card.name });
     });

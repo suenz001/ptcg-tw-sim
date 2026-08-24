@@ -296,8 +296,12 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
   //   server_admin_patch.js），漏了**第 5 處**——首頁 changelog 的 v6.160 條目。
   //   那一處是**玩家直接看得到的公告**，寫著 90 秒、實作卻是 30 秒 = 對玩家講錯規則。
   //   ⇒ 這條把玩家可見的那份也一起釘住。（門檻是站長裁定值，不是量測值，要改請先問站長。）
-  ok('★★首頁 changelog（玩家看得到的公告）也不得殘留 90 秒的說法',
-    CLOG.length > 0 && !/只剩不到 90 秒/.test(CLOG) && /只剩不到 30 秒/.test(CLOG));
+  // v6.225：v6.160 條目已隨 50 則上限滾進 changelog-archive.html（也是玩家可見頁）。
+  //   斷言改為合併兩份檢查——不放寬：錯的 90 秒說法在任一份都不得出現，
+  //   正確的 30 秒說法必須存在於合併文本。
+  const CLOGALL = CLOG + rd('static/changelog-archive.html');
+  ok('★★首頁 changelog＋完整歷史（玩家看得到的公告）也不得殘留 90 秒的說法',
+    CLOGALL.length > 0 && !/只剩不到 90 秒/.test(CLOGALL) && /只剩不到 30 秒/.test(CLOGALL));
 }
 
 
