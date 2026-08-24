@@ -183,7 +183,12 @@ try {
 } catch { console.log('  （admin.html 不在此樹，跳過）'); }
 try {
   const cl = fs.readFileSync(path.join(ROOT, 'static/changelog.html'), 'utf8');
-  check(cl.includes('v' + verM[1]), 'changelog 有當前版本（v' + verM[1] + '）條目');
+  // v6.226：admin 後台工具版（玩家看不到的改動）依既有政策不上首頁 changelog
+  //   （v6.209／v6.219／v6.221 同例），所以不變量從「含當前版本」放寬為
+  //   「最新條目版本可解析、不高於當前版本、且 >= 6.223」。
+  const clv = cl.match(/v(\d+\.\d+)/);
+  check(!!clv && parseFloat(clv[1]) <= parseFloat(verM[1]) && parseFloat(clv[1]) >= 6.223,
+    'changelog 最新條目版本（v' + (clv ? clv[1] : '?') + '）需 <= 當前版本 v' + verM[1] + ' 且 >= 6.223');
   check((cl.match(/<details/g) || []).length === 50, 'changelog 條目數 = 50');
   check((cl.match(/<details open>/g) || []).length === 1, 'changelog 恰一則 open');
 } catch { console.log('  （changelog 不在此樹，跳過）'); }

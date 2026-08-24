@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.72</title>
+<title>PTCG Oracle Admin v1.73</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.72</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.73</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -3129,7 +3129,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.225';
+window.SITE_VERSION_HINT = '6.226';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3277,6 +3277,24 @@ function miFit(ctx, s, maxW) {
   if (ctx.measureText(t).width <= maxW) return t;
   while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
   return t + '…';
+}
+/** 量測後換行（v1.73）：中文逐字可斷；英文單字／數字串（含 . % + - /）整塊不切。
+ *  miFit 的姊妹品：miFit 給「單行硬空間」（截斷）、miWrap 給「說明／註腳」（站長要完整內容）。 */
+function miWrap(ctx, s, maxW) {
+  const toks = String(s === null || s === undefined ? '' : s)
+    .match(/[A-Za-z0-9][A-Za-z0-9.%+\-\/]*|[\s\u3000]+|[\s\S]/g) || [];
+  const lines = [];
+  let cur = '';
+  for (const tk of toks) {
+    if (cur && ctx.measureText(cur + tk).width > maxW) {
+      lines.push(cur.replace(/[\s\u3000]+$/, ''));   // 行尾空白不留
+      cur = tk.replace(/^[\s\u3000]+/, '');          // 行首不以空白開頭
+    } else {
+      cur += tk;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines;
 }
 function miPct(v, d) { return (v === null || v === undefined) ? '—' : (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
 function miDate(ms) { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate(); }
@@ -3687,19 +3705,35 @@ async function miDraw(srcKey, cur, trend, days) {
   //    被裁切時至少留一個。──
   ctx.textAlign = 'center';
   const cx = MI.W / 2;
-  miFont(ctx, 30, true);
-  const uw = ctx.measureText(MI_URL).width;
-  if (logo) ctx.drawImage(logo, cx - uw / 2 - 44, 1268, 32, 32);
-  ctx.fillStyle = K.txt;
-  ctx.fillText(MI_URL, cx + (logo ? 18 : 0), 1284);
-  ctx.fillStyle = K.dim; miFont(ctx, 22, false);
   // ⚠給玩家看的圖，說明一律講人話 —— 不寫 pp / n= / 樣本數 這類統計術語。
   const foot = (trend && trend.ok)
     ? '▲▼ 是與上一期（' + miDate(trend.prevFrom) + '–' + miDate(trend.prevTo)
       + '）相比的使用率增減，變化不到 1.5% 視為持平　・　使用不到 10 次的牌組不顯示勝率'
     : '本期為單期成績，未與上期比較' + (trend && trend.reason ? '（' + trend.reason + '）' : '')
       + '　・　使用不到 10 次的牌組不顯示勝率';
-  ctx.fillText(foot, cx, 1322);
+  // ⭐ v1.73：註腳以前置中「單行」直畫、完全沒做寬度處理 —— 一旦比畫布寬，
+  //   置中繪製會讓**左右兩端同時**被裁掉（站長回報開頭「本」與結尾「率」都消失）。
+  //   站長要的是完整內容 ⇒ 不可用 miFit 截斷，改 miWrap 換行；
+  //   兩行時整個頁腳（logo＋網址＋註腳）上移，第二行仍收在畫布下緣 1350 之內。
+  miFont(ctx, 22, false);
+  let footPx = 22;
+  let footLines = miWrap(ctx, foot, MI.W - MI.PAD * 2);
+  if (footLines.length > 2) {          // 目前的文案組合到不了 3 行；真到了就縮一級再換行
+    footPx = 19; miFont(ctx, footPx, false);
+    footLines = miWrap(ctx, foot, MI.W - MI.PAD * 2);
+    // 縮到 19px 還超過 2 行＝空間硬性不足，尾行才退回 miFit 截斷（唯一允許截斷的情況）
+    if (footLines.length > 2) footLines = [footLines[0], miFit(ctx, footLines.slice(1).join(''), MI.W - MI.PAD * 2)];
+  }
+  const footTwo = footLines.length > 1;
+  const urlY = footTwo ? 1266 : 1284;  // 兩行時網址列上移 18px 騰出空間；單行時版面與 v1.72 完全一致
+  miFont(ctx, 30, true);
+  const uw = ctx.measureText(MI_URL).width;
+  if (logo) ctx.drawImage(logo, cx - uw / 2 - 44, urlY - 16, 32, 32);
+  ctx.fillStyle = K.txt;
+  ctx.fillText(MI_URL, cx + (logo ? 18 : 0), urlY);
+  ctx.fillStyle = K.dim; miFont(ctx, footPx, false);
+  let footY = footTwo ? 1301 : 1322;   // 兩行＝1301／1329：下緣≈1342 < 1350、上緣≈1290 不撞網址（其下緣≈1281）
+  for (const footLn of footLines) { ctx.fillText(footLn, cx, footY); footY += footPx + 6; }
   return cv;
 }
 
@@ -4306,20 +4340,37 @@ async function crDraw(d) {
     }
     if (rows.length > max) { miFont(ctx, 22); ctx.fillStyle = K.dim; ctx.fillText('…另有 ' + (rows.length - max) + ' 種牌組', PAD + 16, y + 8); y += 28; }
   };
-  /** 冠軍列（單場一列）。 */
+  /** 冠軍列（單場一列）。
+   *  ⭐ v1.73：玩家名／牌組名不再各吃寫死常數（260／IW−nameW−230）——
+   *  兩者**共享**第二行的實際可用寬（列右緣 − 起點 − 名字↔牌組名間距）。
+   *  分配策略＝「名字優先、牌組名保底」：名字放得下就完整顯示（站長回報長名被
+   *  不必要截斷、右邊卻一大片空白）；名字真的太長時只保證牌組名最少 DECK_MIN，
+   *  其餘全給名字 —— 這就是極端長名的硬上限，兩者都絕不撞右緣。 */
   const champRows = (list, max, accent) => {
     for (const c of list.slice(0, max)) {
       miRR(ctx, PAD, y, IW, 82, 10); ctx.fillStyle = K.row; ctx.fill();
       ctx.fillStyle = accent; ctx.fillRect(PAD, y + 8, 5, 66);
-      miFont(ctx, 24); ctx.fillStyle = K.dim;
-      ctx.fillText(miDate(c.finishedAt) + '　' + miFit(ctx, c.eventName, 300), PAD + 20, y + 22);
-      miFont(ctx, 34, true); ctx.fillStyle = K.txt;
-      const nameW = ctx.measureText(miFit(ctx, c.name, 260)).width;
-      ctx.fillText(miFit(ctx, c.name, 260), PAD + 20, y + 56);
+      const recTxt = c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負';
+      miFont(ctx, 24); const recW = ctx.measureText(recTxt).width;
+      const datePre = miDate(c.finishedAt) + '　';
+      // 第一行：賽事名可用寬 = 右欄成績起點 − 起點 − 日期寬 − 24px 間距（原本寫死 300）
+      const evMax = Math.max(120, (MI.W - PAD - 12) - recW - 24 - (PAD + 20) - ctx.measureText(datePre).width);
+      ctx.fillStyle = K.dim;
+      ctx.fillText(datePre + miFit(ctx, c.eventName, evMax), PAD + 20, y + 22);
+      // 第二行：名字＋牌組名共享（此行右側沒有其他元素，右緣取與成績欄同一內縮）
+      const NAME_X = PAD + 20, ND_GAP = 20, DECK_MIN = 300;
+      const avail = (MI.W - PAD - 12) - NAME_X - ND_GAP;
+      miFont(ctx, 32, true); const deckFull = ctx.measureText(String(c.deck === null || c.deck === undefined ? '' : c.deck)).width;
+      miFont(ctx, 34, true); const nameFull = ctx.measureText(String(c.name === null || c.name === undefined ? '' : c.name)).width;
+      const nameMax = nameFull + deckFull <= avail ? nameFull : Math.max(200, avail - Math.min(deckFull, DECK_MIN));
+      const nm = miFit(ctx, c.name, nameMax);
+      const nameW = ctx.measureText(nm).width;
+      ctx.fillStyle = K.txt;
+      ctx.fillText(nm, NAME_X, y + 56);
       miFont(ctx, 32, true); ctx.fillStyle = accent;
-      ctx.fillText(miFit(ctx, c.deck, IW - nameW - 230), PAD + 40 + nameW, y + 56);
+      ctx.fillText(miFit(ctx, c.deck, avail - nameW), NAME_X + ND_GAP + nameW, y + 56);
       miFont(ctx, 24); ctx.fillStyle = K.dim; ctx.textAlign = 'right';
-      ctx.fillText(c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負', MI.W - PAD - 12, y + 22);
+      ctx.fillText(recTxt, MI.W - PAD - 12, y + 22);
       ctx.textAlign = 'left';
       y += 92;
     }
@@ -4489,16 +4540,29 @@ async function mpDrawChampion(ctx, p) {
       ctx.textAlign = 'center'; ctx.fillStyle = K.dim; miFont(ctx, 34, true);
       ctx.fillText(String(n), PAD + 46, y + MP.ROW_CHAMP / 2);
       ctx.textAlign = 'left';
-      ctx.fillStyle = K.dim; miFont(ctx, 26, false);
-      ctx.fillText(miDate(c.finishedAt) + '　' + miFit(ctx, c.eventName, 420), PAD + 92, y + 34);
-      ctx.fillStyle = K.txt; miFont(ctx, 40, true);
-      const nm = miFit(ctx, c.name, 300);
+      // ⭐ v1.73：玩家名（原寫死 300）／牌組名（原寫死 760）改共享整列實際可用寬 ——
+      //   1920 版面第二行右緣之前全是空白，站長回報長名被截、右側卻一大片空。
+      //   策略同單頁版：名字優先完整顯示；名字過長時只保證牌組名 DECK_MIN，其餘給名字。
+      const recTxt = c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負';
+      miFont(ctx, 28, false); const recW = ctx.measureText(recTxt).width;
+      const datePre = miDate(c.finishedAt) + '　';
+      miFont(ctx, 26, false); ctx.fillStyle = K.dim;
+      // 第一行：賽事名可用寬 = 右欄成績起點 − 起點 − 日期寬 − 32px 間距（原本寫死 420）
+      const evMax = Math.max(160, (W - PAD - 20) - recW - 32 - (PAD + 92) - ctx.measureText(datePre).width);
+      ctx.fillText(datePre + miFit(ctx, c.eventName, evMax), PAD + 92, y + 34);
+      const NAME_X = PAD + 92, ND_GAP = 32, DECK_MIN = 380;
+      const avail = (W - PAD - 20) - NAME_X - ND_GAP;
+      miFont(ctx, 38, true); const deckFull = ctx.measureText(String(c.deck === null || c.deck === undefined ? '' : c.deck)).width;
+      miFont(ctx, 40, true); const nameFull = ctx.measureText(String(c.name === null || c.name === undefined ? '' : c.name)).width;
+      const nameMax = nameFull + deckFull <= avail ? nameFull : Math.max(240, avail - Math.min(deckFull, DECK_MIN));
+      const nm = miFit(ctx, c.name, nameMax);
       const nw = ctx.measureText(nm).width;
-      ctx.fillText(nm, PAD + 92, y + 80);
+      ctx.fillStyle = K.txt;
+      ctx.fillText(nm, NAME_X, y + 80);
       ctx.fillStyle = accent; miFont(ctx, 38, true);
-      ctx.fillText(miFit(ctx, c.deck, 760), PAD + 124 + nw, y + 80);
+      ctx.fillText(miFit(ctx, c.deck, avail - nw), NAME_X + ND_GAP + nw, y + 80);
       ctx.textAlign = 'right'; ctx.fillStyle = K.dim; miFont(ctx, 28, false);
-      ctx.fillText(c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負', W - PAD - 20, y + 34);
+      ctx.fillText(recTxt, W - PAD - 20, y + 34);
       ctx.textAlign = 'left';
     });
     return;
@@ -4515,7 +4579,8 @@ async function mpDrawChampion(ctx, p) {
     ctx.fillStyle = n <= 3 ? K.r1 : K.dim; miFont(ctx, 42, true);
     ctx.fillText(String(n), PAD + 44, mid);
     ctx.textAlign = 'left'; ctx.fillStyle = K.txt; miFont(ctx, 42, true);
-    ctx.fillText(miFit(ctx, r.name, 900), 168, mid);
+    // v1.73：可用寬其實到長條起點 1200（168 起、留 16px 間距）＝1016，原寫死 900 平白少 116px
+    ctx.fillText(miFit(ctx, r.name, 1016), 168, mid);
     // 長條 1200–1620（右側次數欄 50px 右對齊 1848，「99 次」約 138px、起點約 1710，還留 90px）
     const bw = Math.max(10, Math.round(420 * (r.n / peak)));
     ctx.fillStyle = K.ln; miRR(ctx, 1200, mid - 10, 420, 20, 10); ctx.fill();
