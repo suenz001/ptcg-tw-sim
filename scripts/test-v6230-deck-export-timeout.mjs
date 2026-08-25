@@ -5,7 +5,8 @@
 //   BASE(v6.229) 全部沒有逾時 —— 任一段掛住玩家無限期乾等，且三段接續風險更高。
 //   實測（nginx 計時 log 2026-08-25）成功案例三段合計 1.2~1.4 秒；同一官網主機在
 //   匯入端（v6.224）實測過 11.974 秒仍成功 → 單段逾時沿用 20 秒（Rule 37），
-//   另設總預算（低於 nginx 60 秒）避免最壞情況三段相加超過上游等待時間。
+//   另設 50 秒總預算：要守的排序是「後端總預算 50s < 前端逾時 55s < Cloudflare 邊緣 ~100s」
+//   （nginx /api/ 為 proxy_read_timeout 24h，不構成上限；v6.231 更正依據）。
 // 本守衛把 server_admin_patch.js 的 registerTwDeckExport IIFE 抽出來，在 node:vm
 //   沙盒內【實際執行】handler：
 //   A. 行為級逾時驗證 —— fetch 替身真的掛住（只有收到 abort 才 reject）：
@@ -20,7 +21,7 @@
 // 突變測試（外部以 V6230_SAP / V6230_DECKS 指向突變檔重跑，都必須紅）：
 //   M1 拿掉第二段的 signal、M2 拿掉 AbortError 特判、M3 拿掉 finally 的 clearTimeout、
 //   M4 單段逾時改 10 秒（會把實測 12 秒級的慢成功切成失敗）、
-//   M5 前端逾時 ≤ 後端總預算、M6 總預算改到 60 秒以上（超過 nginx）或 40 秒以下。
+//   M5 前端逾時 ≤ 後端總預算、M6 總預算改到 60 秒以上（超過前端逾時 55s）或 40 秒以下。
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -181,7 +182,7 @@ async function hangStep(n) {
   assert.ok(armed.length >= 1, '第 ' + n + ' 段掛住了，但 handler 沒註冊任何逾時 timer（fetch 沒有時間上限）');
   const t = armed[armed.length - 1];   // 目前 in-flight 的那段
   // 同官網主機實測過 11.974 秒慢成功（v6.224）：逾時 < 15s 會把「慢但能成功」切成失敗；
-  // nginx proxy 預設 60s：逾時 ≥ 60s 等於沒有保護。
+  // 前端逾時 55s／Cloudflare 邊緣 ~100s：單段逾時 ≥ 60s 等於玩家先被前端切斷。
   assert.ok(t.ms >= 15000 && t.ms < 60000, '逾時 ' + t.ms + 'ms 不在 [15s, 60s) 安全區間');
   const callsBefore = sb.box.fetchCalls.length;
   assert.strictEqual(callsBefore, n, '掛住前應恰好打了 ' + n + ' 段官網（實際 ' + callsBefore + '）');
@@ -233,7 +234,7 @@ await T('A5 總預算行為驗證：前兩段耗掉 38 秒後，第三段的逾�
   assert.ok(armed.length >= 3, '三段 timer 沒齊（' + armed.length + '）—— 沒有逐段各自計時？');
   const t3 = armed[armed.length - 1];
   // 單段值仍是 20s，但總預算（<60s）扣掉已耗的 38s 後剩不到 20s ⇒ 第三段必須被壓縮。
-  assert.ok(t3.ms < 20000, '第三段逾時 ' + t3.ms + 'ms 沒被總預算壓縮（三段各 20s 相加會超過 nginx 60s）');
+  assert.ok(t3.ms < 20000, '第三段逾時 ' + t3.ms + 'ms 沒被總預算壓縮（三段各 20s 相加會超過前端逾時 55s）');
   assert.ok(t3.ms >= 1, '剩餘預算計算錯誤（' + t3.ms + 'ms）');
   t3.fn();
   const out = await pending;
@@ -243,11 +244,11 @@ await T('A6 常數安全區間：單段 20s（Rule 37）、總預算 [40s, 60s)'
   const step = iife.match(/STEP_TIMEOUT_MS\s*=\s*(\d+)\s*\*\s*1000/);
   assert.ok(step, '找不到 STEP_TIMEOUT_MS = N * 1000');
   assert.ok(Number(step[1]) >= 15 && Number(step[1]) < 60,
-    '單段逾時 ' + step[1] + 's 不在 [15s, 60s)（實測過 12 秒級慢成功；nginx 上限 60s）');
+    '單段逾時 ' + step[1] + 's 不在 [15s, 60s)（實測過 12 秒級慢成功；且不得達前端逾時上限）');
   const total = iife.match(/TOTAL_BUDGET_MS\s*=\s*(\d+)\s*\*\s*1000/);
   assert.ok(total, '找不到 TOTAL_BUDGET_MS = N * 1000（沒有總預算）');
   assert.ok(Number(total[1]) >= 40 && Number(total[1]) < 60,
-    '總預算 ' + total[1] + 's 不在 [40s, 60s)：低於 40s 可能切掉「三段都慢但能成功」（3×12s=36s），達 60s 會被 nginx 搶先回 504');
+    '總預算 ' + total[1] + 's 不在 [40s, 60s)：低於 40s 可能切掉「三段都慢但能成功」（3×12s=36s），達 60s 會超過前端逾時 55 秒、玩家先被前端切斷');
   assert.ok(Number(total[1]) > Number(step[1]), '總預算必須大於單段逾時');
 });
 
