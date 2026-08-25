@@ -1,5 +1,45 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.229 admin「🎮 Oracle 對戰」牌組標籤改用牌組原型分類（與一般對戰大廳同一份結果）
+
+BASE = `a9ffd949cbd61ec4ee224a57264bf2ffe42a3d4f`（v6.228）。站長需求：admin 的
+🎮 Oracle 對戰分頁原本用「剔除訓練家／能量／手動標記支援型後推測主力打手」
+（admin.html `detectMainPokemon`）代表牌組——改成比照一般對戰大廳：用「牌組原型」
+規則庫（deckRules）分類。首頁 changelog 不寫（admin 後台功能，玩家看不到）。
+
+- 大廳實際樣式（查證 src/routes/game/+page.svelte L9890 一帶）：玩家名後接
+  `<span class="or-arch">【原型名】</span>`（金黃 #ffd97a 粗體）；回傳語義：
+  字串（含 '未分類'）＝已比對出結果、`null`／不在回應裡＝還不知道 → **不顯示任何標籤**。
+  兩種「沒有」靠這個分得出來，前端絕不可把 null 當成「未分類」。
+- **改在後端**（server_admin_patch.js v1.21）：registerDeckRules IIFE 內抽出中央
+  `archetypeNameOf(entries, nameMap, rules)`；/api/rooms-archetypes 的 `nameOf` 改為
+  薄轉呼叫（行為逐字不變，v6115 守衛照跑）；另掛 `app.locals._archetypeEnrichRooms`，
+  /api/admin/oracle/rooms 於 enrichSeats 後為每個 seat 補 `archetype` 欄位。
+  不在前端重算——classifyDeck 與規則庫都在後端，前端重算＝第二份實作必然漂移。
+- 不直接打 /api/rooms-archetypes 的原因：那支有 40-id 上限，且刻意只回
+  playing＋gameState.phase==='playing' 的房（防牌組狙擊）——admin 的等待中／已結束房
+  會永遠「還不知道」。admin 本來就有 🃏 牌組 modal 可看整副牌，沒有狙擊問題，
+  故 enrich 不套那兩條限制。
+- admin.html（v1.74）renderRoomRow：seat 有 archetype 欄位→【原型名】badge
+  （淺色主題用深金 #b8860b）；null→不顯示；欄位缺席（Firebase 分頁／舊伺服器）→
+  退回舊 ⚔️ 主力打手 badge ⇒ Firebase 分頁行為不變；admin.html 與 server patch 若
+  部署順序錯開也只是暫時顯示舊樣式，不會壞。搜尋：原型名可搜，主力打手搜尋**保留**
+  （保守：站長沒說要移除，兩者都能搜）；placeholder 改「牌組(原型/主力)」。
+- 效能：nameMap 全行程一次、rules 30s TTL（規則 CRUD 即 invalidateRulesCache）、
+  分類純記憶體 set 運算，整份列表一次 enrich；守衛 benchmark 見下（600 副/輪 毫秒級）。
+- **仍在用舊「主力打手」做法的地方（本版刻意不動，供站長日後決定）**：
+  ①Firebase 對戰分頁 badge／搜尋（退路共用）②賽事統計每人主力牌型（admin.html L1560）
+  ③名人堂冠軍牌型 champMain（L1727）④奪冠報告圖 `deckLabel` 的 fallback（L4191，
+  archetype 缺時退 detectMainPokemon）⑤對戰歷史 matchRecord 主力牌組（L5630）
+  ⑥統計「4. 主力寶可夢使用率」與 main/support 篩選（L1636／L6325／L6959）。
+  支援型寶可夢清單編輯器（openSupportPokemonEditor L3194）仍被「牌組原型統計」
+  未分類高頻卡使用——**不可刪**，只是 Oracle 對戰分頁不再依賴它。
+- 守衛：`scripts/test-v6229-admin-archetype-parity.mjs`——BASE 上 HEAD-FAIL；
+  三情境（命中規則／未分類／null）**兩端逐字相同（===）**用「同一副 deckEntries 餵
+  兩個端點實跑」斷言到行為層；UI 端 renderRoomRow 實跑驗 DOM 輸出（【名稱】／null
+  無標籤／undefined 退回 ⚔️）；突變測試四組（server null→'未分類'／拔 enrich／
+  UI 改回主力打手／UI 把 null 當未分類）全紅才算數；另附 enrich benchmark（Rule 32）。
+
 ## v6.228 瞪眼效用漏擋「手牌特性放備戰」路徑（USE_HAND_ABILITY）——中央收斂修正
 
 BASE = `754f117e5ed6e2a632747facdae9b0d5b6988908`（v6.227）。站長回報：對手戰鬥場有

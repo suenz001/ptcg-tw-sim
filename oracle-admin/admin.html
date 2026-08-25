@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PTCG Oracle Admin v1.73</title>
+<title>PTCG Oracle Admin v1.74</title>
 <!-- PWA / iOS Add to Home Screen — v5.002 大師球風格 icon + cache-busting query -->
 <meta name="theme-color" content="#6B3E9C">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -365,7 +365,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
 <!-- Main app -->
 <div id="app-section" style="display:none;">
   <header>
-    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.73</span></h1>
+    <h1>🛠️ PTCG Oracle Admin <span class="small">v1.74</span></h1>
     <div class="header-actions">
       <span class="my-email" id="my-email"></span>
       <span class="last-update" id="last-update"></span>
@@ -1984,7 +1984,7 @@ async function loadOracleRooms() {
   if (data.counts) oracleRoomsCounts = data.counts;  // 全量三狀態計數，toolbar 用
   renderRoomsTab(el, 'oracle', oracleRoomsCache);
   Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
-    if (currentTab === 'oracle-rooms') renderRoomsTab(el, 'oracle', oracleRoomsCache); // 補主力打手 ⚔️
+    if (currentTab === 'oracle-rooms') renderRoomsTab(el, 'oracle', oracleRoomsCache); // v1.74：補退路 ⚔️ badge 與主力打手搜尋索引（原型欄位缺席時才用）
   });
 }
 
@@ -2043,7 +2043,7 @@ function renderRoomsTab(el, source, rooms) {
       <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${counts.playing || 0})</span>
       <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${counts.lobby || 0})</span>
       <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
-      <input class="search-box" placeholder="搜尋 房號 / 玩家名 / Email / 牌組(主力)" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      <input class="search-box" placeholder="搜尋 房號 / 玩家名 / Email / 牌組(原型/主力)" oninput="filterRoomsBySearch(this.value, '${source}')" />
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
     </div>
@@ -2128,6 +2128,9 @@ window.filterRoomsBySearch = function(q, source) {
       //   依賴 cardInfoMap（卡片索引背景載入後才有；未載入時回空字串，不影響其他搜尋）。
       const mainP = detectMainPokemon(s);
       if (mainP && mainP.toLowerCase().includes(lc)) return true;
+      // v1.74（v6.229）：牌組原型搜尋 —— Oracle 分頁標籤已改顯示原型名，搜尋跟著能搜；
+      //   主力打手搜尋**保留**（保守：站長沒說要移除，兩者都能搜）。null＝還不知道，不參與搜尋。
+      if (s.archetype && String(s.archetype).toLowerCase().includes(lc)) return true;
       return false;
     });
   });
@@ -2180,10 +2183,23 @@ function renderRoomRow(r, source) {
   }
   const p1Name = seatLabel(p1);
   const p2Name = seatLabel(p2);
-  // v1.19 還原：玩家名下顯示「⚔️ 主力打手」（從牌組推測牌型，剔除功能牌）。
+  // v1.19 還原：「⚔️ 主力打手」badge —— v1.74 起只當退路（Firebase 分頁／舊伺服器）。
   const _mainBadge = (m) => m ? `<div class="small" style="color:#d98c3f;font-size:10px;font-weight:600">⚔️ ${escapeHtml(m)}</div>` : '';
-  const p1MainBadge = _mainBadge(detectMainPokemon(p1));
-  const p2MainBadge = _mainBadge(detectMainPokemon(p2));
+  // v1.74（v6.229）：Oracle 分頁的牌組標籤改用【牌組原型】分類 —— 與一般對戰大廳同一份
+  //   後端結果（/api/admin/oracle/rooms 為每個 seat enrich 的 seat.archetype），比照大廳
+  //   game/+page.svelte 的 .or-arch 呈現：【原型名】粗體（大廳金黃 #ffd97a 是深底；admin
+  //   淺色主題改深金 #b8860b，格式一致）。回傳語義（與大廳同，oracle-client.ts 註解同款）：
+  //   ・字串（含 '未分類'）＝已比對出結果 → 顯示【名稱】
+  //   ・null＝還不知道（規則庫沒載入／沒牌表）→ 不顯示任何標籤（大廳也是如此），
+  //     ⚠ 絕不可把 null 顯示成「未分類」
+  //   ・欄位不存在（undefined）＝Firebase 分頁或舊伺服器（端點沒 enrich）→ 退回舊
+  //     「⚔️ 主力打手」badge（該分頁本版不動）。
+  const _archBadge = (m) => m ? `<div class="small" style="color:#b8860b;font-size:10px;font-weight:600">【${escapeHtml(m)}】</div>` : '';
+  const _seatDeckBadge = (seat) => (seat && ('archetype' in seat))
+    ? _archBadge(seat.archetype)
+    : _mainBadge(detectMainPokemon(seat));
+  const p1MainBadge = _seatDeckBadge(p1);
+  const p2MainBadge = _seatDeckBadge(p2);
   const turn = (gs?.turn != null) ? gs.turn : '<span class="small">-</span>';
   // v0.90: Firebase rooms 也可刪
   const showDelete = true;
@@ -3129,7 +3145,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.228';
+window.SITE_VERSION_HINT = '6.229';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
