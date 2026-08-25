@@ -3416,14 +3416,18 @@ function handlePlaying(
     if (!isBasicPokemonCard(card)) return state;
     // v2.997 海豚俠ex｜全能靈魂 — 「這張卡只可依據海豚俠的特性『全能變身』放置於場上」
     //   block 從手牌正常 PLAY_BASIC（全能變身另路徑放上場時不會走此 handler）
-    if (isAllPowerSoulBlocked(card)) {
+    // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
+    //   （『火箭隊的』除外）不能從手牌放置於場上（PLAY_BASIC 路徑）
+    // ⭐ v6.228 收斂：兩個 gate 走中央述詞 getHandPlacementBlockReason —— 與 EVOLVE／
+    //   getHandActivatableAbilities／getPlayableBasics／getEvolvableTargets 同一份，
+    //   禁各寫一份（USE_HAND_ABILITY 路徑漏接瞪眼效用就是各寫一份造成的漂移）。
+    const _handPlaceBlock = getHandPlacementBlockReason(state, aIdx, card, pool);
+    if (_handPlaceBlock === '全能靈魂') {
       return addLog(state,
         `${attacker.name} 的 ${cardLink(inst.iid, card.name)} 因「全能靈魂」效果，無法從手牌放上場（只能由「全能變身」放置）`,
         aIdx);
     }
-    // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
-    //   （『火箭隊的』除外）不能從手牌放置於場上（PLAY_BASIC 路徑）
-    if (isOppEvilEyeBlocking(state, aIdx, card, pool)) {
+    if (_handPlaceBlock === '瞪眼效用') {
       return addLog(state,
         `${attacker.name} 的 ${cardLink(inst.iid, card.name)} 因對手「瞪眼效用」效果，無法從手牌放置於場上`, aIdx);
     }
@@ -3561,14 +3565,16 @@ function handlePlaying(
     if (!evoCard || evoCard.supertype !== 'Pokemon' || !evoCard.evolvesFrom) return state;
     // v5.341 海豚俠ex｜全能靈魂 — 「這張卡只可依據海豚俠的特性『全能變身』放置於場上」。
     //   EVOLVE 路徑也要擋（原本只 PLAY_BASIC 擋；海豚俠ex evolvesFrom=波普海豚 → 會被當一般進化目標）。
-    if (isAllPowerSoulBlocked(evoCard)) {
+    // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
+    //   （『火箭隊的』除外）不能從手牌進化放置於場上（EVOLVE 路徑）
+    // ⭐ v6.228 收斂：與 PLAY_BASIC 同一份中央述詞。
+    const _evoPlaceBlock = getHandPlacementBlockReason(state, aIdx, evoCard, pool);
+    if (_evoPlaceBlock === '全能靈魂') {
       return addLog(state,
         `${attacker.name} 的 ${evoCard.name} 因「全能靈魂」效果，無法以一般進化放上場（只能由「全能變身」放置）`, aIdx);
     }
 
-    // v3.01 Wave 3 — 火箭隊的阿柏怪｜瞪眼效用：對手戰鬥場有 → 我方擁有特性的寶可夢
-    //   （『火箭隊的』除外）不能從手牌進化放置於場上（EVOLVE 路徑）
-    if (isOppEvilEyeBlocking(state, aIdx, evoCard, pool)) {
+    if (_evoPlaceBlock === '瞪眼效用') {
       return addLog(state,
         `${attacker.name} 的 ${evoCard.name} 因對手「瞪眼效用」效果，無法從手牌放置於場上（進化）`, aIdx);
     }
@@ -9105,6 +9111,37 @@ const PLAYER_LEVEL_ATTACK_COOLDOWN = new Set<string>(['天仙石', '渾沌匍匐
 
 /** 列出目前行動玩家可使用的招式（已滿足能量需求 + 未被狀態/效果封鎖的） */
 // ══════════════════════════════════════════════════════════════════════════════
+/**
+ * ⭐ v6.228 中央述詞：「從自己的手牌把寶可夢放置到自己場上」的共通 gate。
+ *
+ * 回傳阻擋原因（null＝放行）：
+ *   - '全能靈魂'：海豚俠ex —— 卡面「這張卡只可依據『海豚俠』的特性『全能變身』的效果
+ *     放置於場上」。（全能變身是與**牌庫**互換上場、不經手牌 ⇒ 不走本述詞，
+ *     也不在瞪眼效用「從手牌」的射程內。）
+ *   - '瞪眼效用'：火箭隊的阿柏怪（SV10 057/098）—— 卡面「只要這隻寶可夢在戰鬥場上，
+ *     對手不可從手牌將擁有特性的寶可夢（「火箭隊的寶可夢」除外）放置於場上」。
+ *     特性被消除時（isOppEvilEyeBlocking → hasAbilityOnActive → isAbilityHolderEffective：
+ *     監視塔／初始化／暗夜羽擊兩型／黏著束縛／傳說的熔岩洞…）自動放行。
+ *
+ * 消費點（缺一即漂移）：PLAY_BASIC／EVOLVE／getHandActivatableAbilities（engine
+ * USE_HAND_ABILITY handler 與兩套 UI 都走它）／getPlayableBasics／getEvolvableTargets。
+ * 神奇糖果在 effects.ts（import 方向限制不可反向拉 engine），直接用同一個
+ * isOppEvilEyeBlocking 述詞（list ＋ resolver 兩端，v5.887）。
+ * ⚠ 新增「從手牌放置到場上」的新路徑必須接本述詞；新增同型阻擋效果只改這裡。
+ * ⚠ 化石（PLAY_FOSSIL）無 abilities ⇒ isOppEvilEyeBlocking 恆 false，毋須接。
+ */
+export function getHandPlacementBlockReason(
+  state: GameState,
+  aIdx: 0 | 1,
+  card: Card | null | undefined,
+  pool: Map<string, Card>,
+): '全能靈魂' | '瞪眼效用' | null {
+  if (!card) return null;
+  if (isAllPowerSoulBlocked(card)) return '全能靈魂';
+  if (isOppEvilEyeBlocking(state, aIdx, card, pool)) return '瞪眼效用';
+  return null;
+}
+
 // v6.080 手牌特性（USE_HAND_ABILITY）中央 gate — 引擎與兩套 UI 單一來源
 //
 // 收錄（卡面逐字）：
@@ -9212,6 +9249,12 @@ export function getHandActivatableAbilities(
     const card = pool.get(inst.cardId);
     if (!card?.abilities?.length) continue;
     if (!ON_HAND_ACTIVATE_ABILITIES.has(card.name)) continue;
+    // ⭐ v6.228：這批特性全是「將這張卡從手牌放置於備戰區」型 ⇒ 必須過與 PLAY_BASIC／
+    //   EVOLVE 同一份「從手牌放置到場上」中央 gate（瞪眼效用＋全能靈魂）。
+    //   站長回報：對手戰鬥場有 火箭隊的阿柏怪｜瞪眼效用 時，烈箭鷹ex｜激動俯衝 仍能
+    //   放上場 —— v6.080 本路徑新增時漏接。此處擋下＝兩套 UI 不亮按鈕，且 engine
+    //   USE_HAND_ABILITY handler 走同一份本函式 ⇒ 單點修、不會再漂移。
+    if (getHandPlacementBlockReason(state, idx, card, pool)) continue;
     card.abilities.forEach((ab, i) => {
       const gate = HAND_ACTIVATE_GATES[ab.name];
       if (!gate) return;
@@ -9425,8 +9468,9 @@ export function getEvolvableTargets(
       //        通過、內層卻把倫琴貓 evo 全濾掉，UI 不顯示進化選項。
       if (baseBlocked && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass && !(forestBypassBase && ec.pokemonType === 'Grass')) return false;
       // v3.821：對手戰鬥場有瞪眼效用 → 有特性且非「火箭隊的」的進化卡不可放置
-      //   與 engine EVOLVE handler line 1869 同條件 — 不擋 filter 會導致 AI 死迴圈
-      if (isOppEvilEyeBlocking(state, state.activePlayerIndex, ec, pool)) return false;
+      //   與 engine EVOLVE handler 同條件 — 不擋 filter 會導致 AI 死迴圈
+      // ⭐ v6.228 收斂：改走中央述詞（含全能靈魂，與 handEvos 外層 filter 一致）
+      if (getHandPlacementBlockReason(state, state.activePlayerIndex, ec, pool)) return false;
       return true;
     });
     if (validEvos.length > 0) {
@@ -9832,8 +9876,9 @@ export function getPlayableBasics(state: GameState, pool: Map<string, Card>): st
       const c = pool.get(inst.cardId);
       if (!isBasicPokemonCard(c)) return false;
       // v3.821：對手戰鬥場有瞪眼效用 → 有特性且非「火箭隊的」的基礎不可放置
-      //   與 engine PLAY_BASIC handler line 1751 同條件 — 不擋 filter 會導致 AI 死迴圈
-      if (isOppEvilEyeBlocking(state, state.activePlayerIndex, c, pool)) return false;
+      //   與 engine PLAY_BASIC handler 同條件 — 不擋 filter 會導致 AI 死迴圈
+      // ⭐ v6.228 收斂：改走中央述詞（含全能靈魂，對基礎卡屬防呆）
+      if (getHandPlacementBlockReason(state, state.activePlayerIndex, c, pool)) return false;
       return true;
     })
     .map(inst => inst.iid);

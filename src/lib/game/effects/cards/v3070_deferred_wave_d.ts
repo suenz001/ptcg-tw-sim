@@ -41,7 +41,7 @@ import type { Card } from '$lib/cards/types';
 // ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
 import { isStage2ByExactName } from '../../stage2-index';
 import {
-  addLog, updatePlayer, withPending,
+  addLog, updatePlayer, withPending, toBareCard,
   ABILITY_EFFECTS as _ABILITY_EFFECTS_UNUSED,
 } from '../_shared';
 import { applyStatusToOppActive } from '../../effects';
@@ -171,22 +171,10 @@ export function makeHandToBenchAbility(label: string): OnHandActivateFn {
     const handIdx = p.hand.findIndex(c => c.iid === handInst.iid);
     if (handIdx < 0) return addLog(st, `${label}：找不到此卡（手牌異常）`, idx);
     const cardName = pool.get(handInst.cardId)?.name ?? '?';
-    const placed: CardInstance = {
-      ...handInst,
-      energyAttached: handInst.energyAttached ?? [],
-      damage: 0,
-      status: undefined,
-      secondaryStatus: undefined,
-      tertiaryStatus: undefined,
-      toolAttached: undefined,
-      evolvedFromStack: undefined,
-      evolvedFromIid: undefined,
-      evolvedThisTurn: undefined,
-      abilityUsedThisTurn: undefined,
-      movedToActiveThisTurn: undefined,
-      playedFromHand: true,
-      justPlaced: true,
-    };
+    // ⭐ v6.228 收斂：改走中央 toBareCard 白名單裸化（與 PLAY_BASIC 逐字同型）。
+    //   原黑名單逐欄清會漂移（漏 extraTools／cantAttackThisTurn／healedThisTurn／
+    //   各 immune* 旗標 —— v5.993 transient 外洩事故同型），白名單新增旗標自動被清。
+    const placed: CardInstance = { ...toBareCard(handInst), justPlaced: true, playedFromHand: true };
     const s = addLog(st, `${label}：將 ${cardName} 從手牌放置於備戰區`, idx);
     return updatePlayer(s, idx, pl => ({
       ...pl,
@@ -199,39 +187,9 @@ export function makeHandToBenchAbility(label: string): OnHandActivateFn {
 /** v6.080 M6 烈箭鷹ex｜激動俯衝 —— 與緊急迴轉同型（條件在 engine HAND_ACTIVATE_GATES） */
 export const talonflameExAbility_ExcitingDive: OnHandActivateFn = makeHandToBenchAbility('激動俯衝');
 
-export const klingerAbility_EmergencyRotate: OnHandActivateFn = (st, idx, pool, handInst) => {
-  const p = st.players[idx];
-  // 從 hand 中取出此 inst（呼叫端已 gate；此處 fail-safe）
-  const handIdx = p.hand.findIndex(c => c.iid === handInst.iid);
-  if (handIdx < 0) {
-    return addLog(st, '緊急迴轉：找不到此卡（手牌異常）', idx);
-  }
-  const cardName = pool.get(handInst.cardId)?.name ?? '齒輪怪';
-  // 把 inst 從 hand 搬到 bench；保留 evolvedFromXXX 為空（直接上場非進化）。
-  // 設 playedFromHand=true 與 justPlaced=true（與 PLAY_BASIC 對齊）。
-  const placed: CardInstance = {
-    ...handInst,
-    energyAttached: handInst.energyAttached ?? [],
-    damage: 0,
-    status: undefined,
-    secondaryStatus: undefined,
-    tertiaryStatus: undefined,
-    toolAttached: undefined,
-    evolvedFromStack: undefined,
-    evolvedFromIid: undefined,
-    evolvedThisTurn: undefined,
-    abilityUsedThisTurn: undefined,
-    movedToActiveThisTurn: undefined,
-    playedFromHand: true,
-    justPlaced: true,
-  };
-  const s = addLog(st, `緊急迴轉：將 ${cardName} 從手牌放置於備戰區`, idx);
-  return updatePlayer(s, idx, pl => ({
-    ...pl,
-    hand: pl.hand.filter(c => c.iid !== handInst.iid),
-    bench: [...pl.bench, placed],
-  }));
-};
+// ⭐ v6.228 收斂：齒輪怪｜緊急迴轉 與 激動俯衝 同用 makeHandToBenchAbility ——
+//   原本各寫一份（黑名單裸化已與中央 toBareCard 漂移），行為與 log 逐字不變。
+export const klingerAbility_EmergencyRotate: OnHandActivateFn = makeHandToBenchAbility('緊急迴轉');
 
 // ════════════════════════════════════════════════════════════════════════════
 // 公開的 trigger holder 偵測 helpers（engine.ts gate / +page.svelte UI 用）

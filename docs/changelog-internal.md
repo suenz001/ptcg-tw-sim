@@ -1,5 +1,32 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.228 瞪眼效用漏擋「手牌特性放備戰」路徑（USE_HAND_ABILITY）——中央收斂修正
+
+BASE = `754f117e5ed6e2a632747facdae9b0d5b6988908`（v6.227）。站長回報：對手戰鬥場有
+火箭隊的阿柏怪（SV10#12807，I 標，瞪眼效用）時，仍可從手牌用 烈箭鷹ex｜激動俯衝（M6#19612）
+把自己放上備戰區。卡面：「只要這隻寶可夢在戰鬥場上，對手不可從手牌將擁有特性的寶可夢
+（「火箭隊的寶可夢」除外）放置於場上。」
+
+- 真因（站長判斷正確）：中央述詞 `isOppEvilEyeBlocking` 已接 PLAY_BASIC／EVOLVE／
+  getPlayableBasics／getEvolvableTargets／神奇糖果（v5.887），唯獨 v6.080 新增的手牌特性
+  路徑（`getHandActivatableAbilities`＋`USE_HAND_ABILITY` handler）漏接。
+- 修法（中央收斂）：engine.ts 新增中央述詞 `getHandPlacementBlockReason(state, aIdx, card,
+  pool)`（回傳 '全能靈魂'｜'瞪眼效用'｜null），PLAY_BASIC／EVOLVE／getHandActivatableAbilities／
+  getPlayableBasics／getEvolvableTargets 五個消費點全部改走同一份；engine handler 與兩套 UI
+  本就共用 getHandActivatableAbilities ⇒ 單點修，log 文案逐字不變。
+- 附帶收斂（「五件事」比對的第 4 項）：`makeHandToBenchAbility` 裸化改走 toBareCard 白名單
+  （原黑名單漏 extraTools／cantAttackThisTurn／healedThisTurn／immune* 旗標，v5.993 同型）；
+  `klingerAbility_EmergencyRotate` 改為 `makeHandToBenchAbility('緊急迴轉')`（消除重複實作）。
+- 不改的路徑（皆查證過卡面）：全能變身＝與**牌庫**互換上場，不在瞪眼「從手牌」射程；
+  化石（PLAY_FOSSIL）無 abilities ⇒ 述詞恆放行；神奇糖果維持 effects.ts 內同一
+  isOppEvilEyeBlocking（import 方向不可反向拉 engine）；BENCH_PLACE_TRIGGERS／
+  promptPlayAbilities 不接 USE_HAND_ABILITY 路徑（齒輪怪／烈箭鷹ex 均無 on-bench-place
+  註冊，接了是死碼，留待真的有卡需要時再接）。
+- 守衛：`scripts/test-v6228-evileye-hand-ability.mjs`——BASE 上 2 FAIL（HEAD-FAIL 證明：
+  激動俯衝／緊急迴轉都放得上）；修後 8 PASS。正對照四組：阿柏怪在備戰區不擋、
+  「火箭隊的急凍鳥」不擋、無特性不擋、特性被消除（abilityNullifiedThisTurn＋振翼髮 passive
+  兩種來源）不擋；另鎖 PLAY_BASIC 既有 gate 不因收斂鬆動。
+
 ## v6.227 診斷回報帶上 Cloudflare 邊緣節點（colo）——分辨「節點劣化」vs「cloudflared 劣化」
 
 BASE = `1a065938ade5dd9ac0675a3186525f8cac4b1c59`（v6.226）。純觀測遙測（玩家看不到），

@@ -310,8 +310,14 @@ if (typeof DUMP.coloSummary === 'function') {
 // 5. 版本與自我註冊
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n5) 版本／自我註冊');
-ok('[版本] version.ts 已 bump 到 6.227', /VERSION = '6\.227'/.test(VERS));
-ok('[版本] admin.html 的 SITE_VERSION_HINT 同步 6.227', /SITE_VERSION_HINT = '6\.227'/.test(ADMIN));
+// v6.228 修正：原本把版本號寫死成 6.227，下一次 bump 就會誤紅。改成
+//   「≥6.227（本守衛涵蓋的功能已存在）＋ version.ts 與 admin.html 兩處一致」——
+//   與 test-v6160/test-v6180 既有守衛同一種寫法。
+const _verNum = parseFloat((VERS.match(/VERSION = '([\d.]+)'/) || [])[1] || '0');
+const _hintNum = (ADMIN.match(/SITE_VERSION_HINT = '([\d.]+)'/) || [])[1];
+ok('[版本] version.ts 已 bump 到 ≥6.227', _verNum >= 6.227);
+ok('[版本] admin.html 的 SITE_VERSION_HINT 與 version.ts 一致',
+  !!_hintNum && VERS.includes(`VERSION = '${_hintNum}'`));
 ok('[版本] admin.html 維持 LF 行尾（CRLF 會讓部署流程炸）', !ADMIN.includes('\r'));
 ok('[自我註冊] 本守衛已掛進 npm test', PKG.includes('test-v6227-colo-telemetry.mjs'));
 
