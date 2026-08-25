@@ -2927,6 +2927,30 @@ import('firebase-admin').then(async ({ default: admin }) => {
     if (errMsg) {
       return res.status(400).json({ error: errMsg });
     }
+    // v6.230：三段外部 fetch 加逾時保護（比照 v6.224 的 /api/decode-tw-deck）——
+    //   Node 的 fetch 預設沒有時間上限，官網任一段掛住時玩家會無限期乾等，
+    //   而且三段接續、風險比單一 fetch 更高。單段逾時取 20 秒：本端點實測成功案例
+    //   三段合計僅 1.2~1.4 秒（nginx 計時 log 2026-08-25，樣本少且只記 >1 秒者），
+    //   但同一官網主機在匯入端實測過 11.974 秒仍成功回 200（v6.224），故保守沿用
+    //   20 秒，避免把「慢但能成功」的匯出切成失敗。三段「各自」計時（前段慢不會把
+    //   後段的時間吃光），另設 50 秒總預算：否則最壞情況是三段逾時值相加（60 秒），
+    //   會超過 nginx 等待上游的時間，玩家只會看到 nginx 的 504 而不是本端的訊息。
+    const STEP_TIMEOUT_MS = 20 * 1000;
+    const TOTAL_BUDGET_MS = 50 * 1000;
+    const exportDeadline = Date.now() + TOTAL_BUDGET_MS;
+    const stepTimers = [];
+    let timeoutStage = '';
+    let timeoutMsg = '官網回應太慢，請稍後再試';
+    // 每段 fetch 前呼叫：回傳該段專用的 abort signal；逾時值＝min(單段, 剩餘總預算)。
+    // 逾時訊息在 timer 真正觸發時才寫入 —— 只有實際逾時的那一段會決定回覆內容。
+    // timer 不逐段提前清（已完成段的 abort 是 no-op、訊息會被真正逾時的那段覆寫），
+    // 統一在外層 finally 清光，任何 return 路徑都不留 handle。
+    const armStep = (stage, msg) => {
+      const ac = new AbortController();
+      const ms = Math.max(1, Math.min(STEP_TIMEOUT_MS, exportDeadline - Date.now()));
+      stepTimers.push(setTimeout(() => { timeoutStage = stage; timeoutMsg = msg; ac.abort(); }, ms));
+      return ac.signal;
+    };
     try {
       // Step 1: GET /tw/deck-build/ → cookie + token
       const r1 = await fetch('https://asia.pokemon-card.com/tw/deck-build/', {
@@ -2935,6 +2959,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           'Accept': 'text/html,application/xhtml+xml',
           'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
         },
+        signal: armStep('step1-token-page', '官網回應太慢（官網頁面載入逾時），請稍後再試；牌組尚未發行'),
       });
       if (!r1.ok) {
         return res.status(502).json({ error: '官網拿 token 失敗 (HTTP ' + r1.status + ')' });
@@ -2966,6 +2991,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           'Cookie': cookieHeader,
         },
         body: checkBody.toString(),
+        signal: armStep('step2-beforecheck', '官網回應太慢（牌組驗證逾時），請稍後再試；牌組尚未發行'),
       });
       if (!r2.ok) {
         return res.status(502).json({ error: 'beforecheck/ HTTP ' + r2.status });
@@ -3000,6 +3026,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         },
         body: regBody.toString(),
         redirect: 'manual',
+        signal: armStep('step3-register', '官網回應太慢（牌組發行逾時）——牌組可能已在官網發行成功但未能取得代碼；若重試，官網會多產生一份新的牌組紀錄'),
       });
       if (r3.status !== 302) {
         return res.status(502).json({ error: 'register/ 預期 302 但拿到 HTTP ' + r3.status });
@@ -3014,8 +3041,18 @@ import('firebase-admin').then(async ({ default: admin }) => {
       console.log('[deck-export] ' + deckCode + ' ← ' + entries.length + ' 種卡 (' + totalCards + ' 張) from ' + ip);
       res.json({ deckCode, totalKinds: entries.length, totalCards });
     } catch (err) {
+      // v6.230：逾時（AbortError／TimeoutError）給玩家看得懂的訊息（比照 v6.224 匯入端）——
+      //   AbortError 原文（This operation was aborted）對玩家沒有意義；依逾時發生的
+      //   段落給不同提示（第三段 register/ 已對官網送出發行請求、結果不明，特別提醒）。
+      if (err && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+        console.warn('[deck-export] fetch timeout at ' + (timeoutStage || 'unknown') + ' from ' + ip);
+        return res.status(504).json({ error: timeoutMsg });
+      }
       console.warn('[deck-export] fetch error:', err.message);
       res.status(500).json({ error: '無法連線到官網: ' + err.message });
+    } finally {
+      // 無論成敗（含所有提前 return 分支）都清掉三段的逾時 timer，不留 handle
+      for (const t of stepTimers) clearTimeout(t);
     }
   });
 

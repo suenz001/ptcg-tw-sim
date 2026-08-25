@@ -1169,11 +1169,16 @@
       return;
     }
     twCodeExportLoading = true;
+    // v6.230：前端逾時 55 秒 —— 比後端的總預算（50 秒）稍長，讓後端先逾時並回覆
+    //   分段的友善訊息；這一層只是「連後端的訊息都到不了（連線本身掛住）」時的保險。
+    const twExportAbort = new AbortController();
+    const twExportTimer = setTimeout(() => twExportAbort.abort(), 55 * 1000);
     try {
       const r = await fetch(`${apiUrl}/api/encode-tw-deck`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entries }),
+        signal: twExportAbort.signal,
       });
       if (!r.ok) {
         const err = await r.json().catch(() => ({ error: r.statusText }));
@@ -1195,8 +1200,15 @@
       } catch { /* ignore — 玩家可手動點 modal 內「複製」按鈕 */ }
       showExportCodeModal = true;
     } catch (e) {
+      // v6.230：逾時被中止時給玩家看得懂的訊息，不顯示 AbortError 原文。
+      //   走到這裡代表連後端的分段訊息都沒收到；發行是否已在官網完成無法確認，一併提醒。
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        alert('匯出失敗：官網或伺服器回應太慢，請稍後再試。\n（若官網當時其實已完成發行，重試會多產生一份新的官網牌組紀錄）');
+        return;
+      }
       alert(`匯出失敗：${e instanceof Error ? e.message : String(e)}`);
     } finally {
+      clearTimeout(twExportTimer);
       twCodeExportLoading = false;
     }
   }

@@ -1,5 +1,42 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.230 /api/encode-tw-deck（匯出官網牌組代碼）三段外部 fetch 加逾時保護
+
+BASE = `503d1e06d2979156e390a5cef76b28d60a66880b`（v6.229）。v6.224 修了匯入端
+（/api/decode-tw-deck）的雙胞胎問題，本版比照同一套做法補匯出端，保持兩支端點一致。
+
+- 現況：handler（server_admin_patch.js registerTwDeckExport）內三個接續的 await fetch
+  打官網（① GET deck-build/ 拿 token ② POST beforecheck/ 驗證 ③ POST register/ 發行），
+  全部沒有逾時 —— 任一段掛住玩家無限期乾等，且三段接續、風險比單一 fetch 更高。
+- 取值（Rule 37）：nginx 計時 log 2026-08-25 實測三筆成功 1.198／1.397／1.399 秒
+  （三段合計；log 只記 >1 秒、樣本很少）；同一官網主機在匯入端實測過 11.974 秒仍成功
+  回 200 ⇒ 單段逾時保守沿用 20 秒（單看本端點樣本不足，以同主機最慢成功案例為準）。
+  三段各自計時（前段慢不會餓死後段），另設 50 秒總預算（每段實際逾時＝
+  min(20 秒, 剩餘預算)）：避免最壞情況三段相加 60 秒 ≥ nginx 等待上游的時間，
+  讓本端的友善訊息先到；50 秒也高於「三段都慢但仍成功」的極端外推（3×12＝36 秒）。
+- 逾時回 504、AbortError／TimeoutError 特判成人話，且分得出是哪一段（不洩內部實作）：
+  ①「官網頁面載入逾時」②「牌組驗證逾時」（皆註明牌組尚未發行）
+  ③「牌組發行逾時」—— register/ 已對官網送出、官網端可能已建立成功但代碼沒能傳回，
+  訊息提醒「可能已在官網發行成功；若重試，官網會多產生一份新的牌組紀錄」。
+  （發行是匿名的、代碼是唯一憑據 ⇒「請先去官網確認」對玩家不可行；多一份紀錄與
+  平常重複匯出等價，前端本來就警告每次匯出都會在官網永久留下紀錄。措辭是否要再調
+  → 需站長裁定。）
+- timer 統一在外層 finally 清光（任何 return 路徑不留 handle）；已完成段的殘留 timer
+  觸發只是 no-op abort，逾時訊息由「真正造成中止的那段」在觸發當下寫入。
+- 前端 exportToTwOfficialCode：原本有 loading 狀態但沒有逾時。加 AbortController
+  逾時 55 秒（> 後端總預算 50 秒，讓後端的分段訊息先到）、AbortError 特判、
+  finally clearTimeout。
+- 成功路徑與 400/422/429/502×4/500 各分支行為逐字不變（守衛 B2 以 BASE blob 在
+  node:vm 內實跑同一組輸入 deep-equal 對照）。
+- 守衛 scripts/test-v6230-deck-export-timeout.mjs：三段各自掛住的行為級測試
+  （fetch 替身只有收到 abort 才 reject；逾時後真的中止、回 504、不繼續打後面的段）、
+  總預算假時鐘驗證（前兩段耗 38 秒後第三段被壓縮到 12 秒）、成功路徑 timer 全清、
+  BASE 行為快照對照、前端靜態斷言。BASE 上 10 FAIL（HEAD-FAIL）；突變 M1~M6
+  （拿掉第二段 signal／拿掉 AbortError 特判／拿掉 finally clearTimeout／單段改 10 秒／
+  前端 ≤ 後端總預算／總預算出界）全紅。
+- 部署：伺服器端要生效需站長跑 redeploy-oracle.bat（server_admin_patch.js）；
+  前端頁面照常兩段式部署。
+
 ## v6.229 admin「🎮 Oracle 對戰」牌組標籤改用牌組原型分類（與一般對戰大廳同一份結果）
 
 BASE = `a9ffd949cbd61ec4ee224a57264bf2ffe42a3d4f`（v6.228）。站長需求：admin 的
