@@ -36,9 +36,15 @@
  * 預估在瀏覽器端跑、用的是玩家自己那一份 GameState —— 但那份盤面**含有玩家不該知道的
  * 東西**（雙方牌庫順序、獎賞卡、對手手牌）。若某一招的傷害取決於這些，把數字顯示出來
  * 就等於作弊（實例：呆呆王｜耀閃挑戰 的傷害取決於自己牌庫頂那一張）。
- * ⇒ 再跑一次「把隱藏區順序反轉」的乾跑，只要結果不同就一律降級成「依未知牌序而定」。
+ * ⇒ 再跑一次「換一種可能的隱藏牌況」的乾跑，只要結果不同就一律降級成「依看不到的牌而定」。
+ *
+ * ⚠⚠ v6.236：這一段原本**只反轉順序**，於是「傷害取決於隱藏區**內容**（而不是順序）」的招式
+ *   完全偵測不到 —— 實證兩張：`狩獵鳳蝶｜能量吸管`（對手手牌中能量卡張數×80）與
+ *   `風妖精ex｜奇跡棉花`（對手手牌中訓練家卡張數×50），出招前就把對手手牌的組成
+ *   直接換算成數字顯示出來。改成**在同一側的隱藏區之間重新分配**（各區張數不變），
+ *   順序與組成同時改變，兩張都已降級。
  */
-import type { GameState } from './types';
+import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 import { applyAction } from './engine';
 
@@ -50,7 +56,7 @@ export type DamageEstimate =
   | { kind: 'none' }
   /** 乾跑跑不出結論（引擎沒受理／深複製失敗） ⇒ 不顯示 */
   | { kind: 'unknown' }
-  /** 會先跳選擇視窗，或取決於玩家看不到的牌序 ⇒ 顯示文字，**絕不顯示成 0** */
+  /** 會先跳選擇視窗，或取決於玩家看不到的牌（牌序或組成） ⇒ 顯示文字，**絕不顯示成 0** */
   | { kind: 'depends'; why: 'selection' | 'hidden' }
   | { kind: 'exact'; value: number; formula: string; terms: EstimateTerm[] }
   /** 有隨機成分：下界＝全反面實跑值、上界＝全正面實跑值。`coin` 代表這個隨機來自擲硬幣 */
@@ -101,17 +107,35 @@ function bandedRandom(mode: CoinMode): () => number {
 }
 
 /**
- * 反轉「玩家不該知道內容／順序」的區域：雙方牌庫、雙方獎賞卡、**對手**手牌。
+ * 把「玩家不該知道內容／順序」的區域換成**另一種同樣可能的牌況**：
+ * 自己這一側＝牌庫＋獎賞卡；對手那一側＝牌庫＋獎賞卡＋手牌。
  * 自己的手牌與雙方場上是公開資訊，不動。
- * ⚠ 只動順序（不換卡），所以「牌庫裡還有幾張能量」這種**玩家推得出來**的資訊不會被誤判。
+ *
+ * 做法：把同一側的隱藏區**串成一串、反轉、再按原本各區的張數切回去**。
+ *   - 每一區的**張數不變** ⇒「對手手牌有幾張」「自己牌庫剩幾張」這種**公開**資訊不受影響，
+ *     不會把只看張數的招式（例：超級雪妖女ex｜怨言）誤判成偷看。
+ *   - 同一側的牌只是在隱藏區之間搬家 ⇒ 換出來的仍是一個**玩家無法排除的可能牌況**
+ *     （玩家本來就不知道自己哪幾張在獎賞卡、對手手上拿著什麼），沒有憑空生出卡。
+ *   - 順序**與組成**同時改變 ⇒ 依牌序（呆呆王｜耀閃挑戰）與依組成
+ *     （狩獵鳳蝶｜能量吸管、風妖精ex｜奇跡棉花）的招式都偵測得到。
+ * ⚠ 只在**丟棄用的深複製**上做，真實盤面一個位元組都不會動。
  */
 function permuteHiddenZones(s: GameState, viewerIdx: 0 | 1): void {
   for (let i = 0; i < 2; i++) {
     const p = s.players?.[i];
     if (!p) continue;
-    if (Array.isArray(p.deck)) p.deck.reverse();
-    if (Array.isArray(p.prizes)) p.prizes.reverse();
-    if (i !== viewerIdx && Array.isArray(p.hand)) p.hand.reverse();
+    const deck = Array.isArray(p.deck) ? p.deck : null;
+    const prizes = Array.isArray(p.prizes) ? p.prizes : null;
+    const hand = (i !== viewerIdx && Array.isArray(p.hand)) ? p.hand : null;
+    const pooled: CardInstance[] = [];
+    if (deck) pooled.push(...deck);
+    if (prizes) pooled.push(...prizes);
+    if (hand) pooled.push(...hand);
+    pooled.reverse();
+    let k = 0;
+    if (deck) { p.deck = pooled.slice(k, k + deck.length); k += deck.length; }
+    if (prizes) { p.prizes = pooled.slice(k, k + prizes.length); k += prizes.length; }
+    if (hand) { p.hand = pooled.slice(k, k + hand.length); k += hand.length; }
   }
 }
 
@@ -217,16 +241,20 @@ export function estimateAttackDamage(
   //      那種要照常顯示數字，所以這裡要同時看 dmg === 0。
   if ((t.pending && t.dmg === 0) || (h.pending && h.dmg === 0)) return { kind: 'depends', why: 'selection' };
 
-  // ③ 純效果、沒有傷害 ⇒ 不顯示
-  if (t.dmg === 0 && h.dmg === 0) return { kind: 'none' };
-
-  // ④ ⚠ 隱藏資訊防護：把隱藏區順序反轉再跑一次，結果變了就代表這個數字是「偷看」來的。
+  // ③ ⚠ 隱藏資訊防護：換一種可能的隱藏牌況再跑一次，結果變了就代表這個數字是「偷看」來的。
+  //    ⚠⚠ v6.236：這一段必須排在「沒有傷害 ⇒ 不顯示」**前面**。
+  //      否則依隱藏資訊的招式只要在**當下這個牌況**剛好打 0，就會走「不顯示」——
+  //      而「有沒有顯示提示」本身就是一個看得出來的訊號（玩家等於得知牌庫頂不是那一張）。
+  //      代價是純效果招式多跑兩次乾跑；實測 1174 個預估只有 2 個結論改變。
   const t2 = runOnce(base, attackIndex, pool, 'tails', viewerIdx, true);
   const h2 = runOnce(base, attackIndex, pool, 'heads', viewerIdx, true);
   if (!t2.ok || !h2.ok) return { kind: 'depends', why: 'hidden' };
   if (t2.dmg !== t.dmg || h2.dmg !== h.dmg || t2.flips !== t.flips || h2.flips !== h.flips) {
     return { kind: 'depends', why: 'hidden' };
   }
+
+  // ④ 純效果、沒有傷害 ⇒ 不顯示
+  if (t.dmg === 0 && h.dmg === 0) return { kind: 'none' };
 
   if (t.dmg === h.dmg) return { kind: 'exact', value: t.dmg, formula: t.formula, terms: t.terms };
   return {
@@ -295,7 +323,7 @@ export function estimateShortText(e: DamageEstimate | null | undefined): string 
         ? `預估 ${e.min} 起，傷害依擲幣次數而定`
         : '預估：傷害依擲幣次數而定';
     case 'depends':
-      return e.why === 'hidden' ? '預估：依未知的牌序而定' : '預估：依選擇而定';
+      return e.why === 'hidden' ? '預估：依看不到的牌而定' : '預估：依選擇而定';
     default:
       return '';
   }
