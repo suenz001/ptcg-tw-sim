@@ -274,7 +274,7 @@ export function countAncientOnField(
  */
 // v4.51 Phase 2：統一 defense helper
 import { canApplyEffectToTarget, isOppActiveImmuneToAttackEffect, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst as _v6196HasEffAbilByInst } from './defense';  // v6.196 中央述詞
-import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, type FormulaTerm } from './engine'; 
+import { applyDefenderReductionsBlockA, isToolsJammed, getEffectiveHP, computeActiveRetreatCostFor, energyTypeUnitsHostAware, energyProvidesType, composeAttackFormula, attackFormulaReconstructs, type FormulaTerm } from './engine'; 
 import { applyOppActiveReturnedToBenchTriggers } from './engine'; // v5.831 對手回備戰觸發統一入口 // v5.544 防守方減傷中央收斂；v5.677 getEffectiveHP 單一來源；v5.702 host-aware 能量述詞移至 engine 單一來源
 
 export type DamageKind = 'attack-damage' | 'attack-effect' | 'ability-effect';
@@ -511,16 +511,27 @@ export function applyWeakRes(
   state: GameState, actorIdx: 0 | 1,
   target: CardInstance | null | undefined, targetCard: Card | undefined,
   dmg: number, pool: Map<string, Card>,
+  /**
+   * ⭐v6.239 可選的 out-param：把「弱點 ×2」「抵抗力 -N」寫成公式項。
+   * ⚠ label 逐字沿用引擎主管線（engine.ts 的 `'弱點'` / `'抵抗力'`），
+   *   兩邊用不同字眼會讓同一件事在對戰紀錄裡長出兩種說法。
+   */
+  terms?: FormulaTerm[],
 ): number {
   const atk = state.players[actorIdx].active;
   const atkCard = atk ? pool.get(atk.cardId) : undefined;
   const atkTypes = getAttackerEffectiveTypes(state, actorIdx, atk, atkCard, pool);
   let d = dmg;
   const w = getEffectiveWeaknessType(state, actorIdx, target, targetCard, pool);
-  if (!w.disabled && w.type && atkTypes.includes(w.type)) d *= 2;
+  if (!w.disabled && w.type && atkTypes.includes(w.type)) { d *= 2; terms?.push({ sign: '×', value: 2, label: '弱點' }); }
   if (targetCard?.resistance?.type && atkTypes.includes(targetCard.resistance.type)) {
     const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
-    if (!isNaN(rv)) d = Math.max(0, d + rv);
+    if (!isNaN(rv)) {
+      const _before = d;
+      d = Math.max(0, d + rv);
+      // ⚠ 用實際變化量（Math.max(0,…) 可能夾住），公式才對得起最終數字。
+      if (_before !== d) terms?.push({ sign: '-', value: _before - d, label: '抵抗力' });
+    }
   }
   return d;
 }
@@ -8542,6 +8553,17 @@ export function dealAttackDamageToTarget(
   //   也不套（指示物為 flat）。鏡射多目標 snipe resolver 的 active 公式（v5.153）。
   //   玩家回報：閃焰王牌ex 石榴石截擊 打弱火的 蜜集大蛇ex 沒 ×2（180→應 360）。
   let effDmg = dmg;
+  /**
+   * ⭐⭐⭐v6.239 這一次傷害的公式項。
+   *
+   * 這條路徑（狙擊／「先跑效果、最後才造成傷害」的延後範本）過去**完全沒有公式**：
+   * 各個加減傷來源其實都已經算出「差多少」了（`applyAttackerActiveDamageBonuses` 甚至
+   * 已經回傳 `formula`），只是被丟掉。⇒ 這裡把它們收起來，最後用**引擎那一份**
+   * `composeAttackFormula` 組字串（同一支函式，不可能與主管線長不一樣）。
+   * ⚠ 只在「對手戰鬥位的招式傷害」語境收集 —— 備戰不計弱抗、放指示物不是傷害，
+   *   引擎主管線也從不為它們寫公式，這裡跟著一致。
+   */
+  const _formula: FormulaTerm[] = [{ sign: '=', value: dmg, label: '基礎' }];
   // v5.434：noWeakness — 卡面「這個招式的傷害不計算弱點・抵抗力」(整招 flat，如 重磅驟雨/橄欖石音波)。
   //   只略過弱點/抵抗/攻擊方道具加成；免疫(太晶/神秘石居/對戰圓形)與 KO 仍照走。
   // v5.517：收斂中央管線 — 戰鬥位招式傷害先套「攻擊方加成」(力量蛋白飲/烏栗/空手道王/
@@ -8551,10 +8573,12 @@ export function dealAttackDamageToTarget(
     const _ab = applyAttackerActiveDamageBonuses(st, actorIdx, effDmg, pool);
     effDmg = _ab.damage;
     st = _ab.state;
+    // ⭐v6.239 這些 + 項本來就算出來了（helper 一直有回傳 formula），只是過去被丟掉。
+    for (const t of _ab.formula) _formula.push(t as FormulaTerm);
   }
   if (isActive && kind === 'attack-damage' && !opts?.noWeakness) {
     // v5.673：弱點+抵抗力統一走中央 applyWeakRes(原抵抗力仍用 raw pokemonType→漏小碎鑽雙屬性,收斂)。
-    effDmg = applyWeakRes(st, actorIdx, target, targetCard, effDmg, pool);
+    effDmg = applyWeakRes(st, actorIdx, target, targetCard, effDmg, pool, _formula);
   }
   // v5.544：戰鬥位招式【傷害】套防守方減傷（中央 applyDefenderReductionsBlockA，與引擎主管線共用單一段）。
   //   修「狙擊/延後型招式(走中央函式)漏套鐵之防禦/全金屬實驗室/防護充能/果實道具等防守方減傷」。
@@ -8564,12 +8588,15 @@ export function dealAttackDamageToTarget(
     const _atkP = st.players[actorIdx];
     const _atkCardR = _atkP.active ? pool.get(_atkP.active.cardId) : undefined;
     if (_atkCardR && targetCard) {
+      // ⭐v6.239 `_fm` 從 v5.544 起就一直被建出來又丟掉 —— 防守方的每一項減傷
+      //   （鐵之防禦／守護之鐘／福祿果…）其實都在裡面。現在併進 `_formula`。
       const _fm: FormulaTerm[] = [];
       const _rr = applyDefenderReductionsBlockA(
         st, st, _defP, _atkP, targetCard, _atkCardR, effDmg, false,
         isToolsJammed(st, pool), dIdx, actorIdx, _fm, pool);
       st = _rr.workingState;
       effDmg = _rr.baseDamage;
+      for (const t of _fm) _formula.push(t);
       // 減傷果實道具丟棄（福祿果/巧可果等 discardOnTrigger）
       if (_rr.defenseReduceToolToDiscard) {
         const _tool = _rr.defenseReduceToolToDiscard;
@@ -8589,6 +8616,7 @@ export function dealAttackDamageToTarget(
         // v5.900：狙擊/延後型路徑補寫「下次被擊減傷」log(此路徑只顯示最終傷害、無公式，原本傷害少了卻無任何說明；鏡射主引擎 formula「下次被擊減傷」項)
         const _drAmt = _drBefore - effDmg;
         if (_drAmt > 0) st = addLog(st, `${targetCard.name}：下次被擊減傷 -${_drAmt}`, dIdx);
+        if (_drAmt > 0) _formula.push({ sign: '-', value: _drAmt, label: '下次被擊減傷' });  // ⭐v6.239 對齊 engine 的同名項
         if (!_isFestivalDanceFirstAttackLocal(st, actorIdx, pool)) {
           st = updatePlayer(st, dIdx, p => ({ ...p, active: p.active ? { ...p.active, damageReduceNextHit: undefined } : p.active }));
         }
@@ -8598,6 +8626,8 @@ export function dealAttackDamageToTarget(
       if (effDmg > 0 && _dAct886?.blockAttackDamageIfLTEThisTurn != null && effDmg <= _dAct886.blockAttackDamageIfLTEThisTurn) {
         // v5.900：狙擊/延後型路徑補寫「變硬」免傷 log(原本傷害歸 0 卻無任何說明；鏡射主引擎 engine.ts 4848)
         st = addLog(st, `${targetCard.name} 因變硬效果，不受「${_dAct886.blockAttackDamageIfLTEThisTurn}」以下招式的傷害`, dIdx);
+        // ⭐v6.239 對齊 engine 主管線的同名項
+        _formula.push({ sign: '-', value: effDmg, label: `變硬(≤${_dAct886.blockAttackDamageIfLTEThisTurn}免傷)` });
         effDmg = 0;
       }
     }
@@ -8637,6 +8667,19 @@ export function dealAttackDamageToTarget(
   if (kind === 'attack-damage' && isActive && effDmg > 0 && actorIdx === st.activePlayerIndex) {
     st = { ...st, attackDamageToDefActive: (st.attackDamageToDefActive ?? 0) + effDmg };
   }
+  /**
+   * ⭐⭐⭐v6.239 傷害公式字串。**不新增任何一行 log** —— 只是把 `【…】` 接在
+   * 這條路徑本來就會寫的那一行（未昏厥＝「造成 N 傷害」／昏厥＝「被擊倒！+N 張獎賞卡。」）後面，
+   * 格式與引擎主管線逐字相同（同一支 `composeAttackFormula`）。
+   *
+   * ⚠ `attackFormulaReconstructs` 是硬性關卡：這條路徑上有少數免傷來源
+   *   （擲幣免傷的特性、`passiveImmunityByDamageAmount`）沒有把自己寫成公式項，
+   *   少一項就會印出「[130(基礎)] ×2(弱點) = 0」這種自相矛盾的算式。
+   *   對不起來就**不印**（退回 v6.238 的樣子），絕不猜一個標籤把帳湊平。
+   */
+  const _formulaStr = (isActive && kind === 'attack-damage' && attackFormulaReconstructs(_formula, effDmg))
+    ? composeAttackFormula(_formula, effDmg) : '';
+  const _fSuffix = _formulaStr ? `【${_formulaStr}】` : '';
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
   //   龐克頭盔/還擊斧/反擊特性/警備濁霧）。共用 fireDefenderOnDamaged，與 snipe-multi 同一條。
   // v6.120：記下「這一次傷害有沒有跑過 on-damaged」，下方 fireDefenderOnKO 需要它
@@ -8683,7 +8726,7 @@ export function dealAttackDamageToTarget(
     if (isActive) newDefender.active = null;
     else newDefender.bench = defenderNow.bench.filter(c => c.iid !== targetIid);
     players[dIdx] = newDefender;
-    let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
+    let s = addLog({ ...st, players }, `${label}：${targetCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。${_fSuffix}`, null);
     if (_isk.toHand.length > 0) s = addLog(s, `無限之影：${targetCard?.name ?? '?'} 因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, dIdx);
     s = recordOppKO(s, dIdx, targetCard, 'attack', kind === 'attack-damage');
     // v5.495：被 KO 觸發附加道具 TOOL_ON_KO（沉重接力棒移能量 / 希望護身符抽牌）——
@@ -8707,7 +8750,7 @@ export function dealAttackDamageToTarget(
   if (isActive) newDefender.active = { ...targetNow, damage: newDmg, ..._accumTaken };
   else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg, ..._accumTaken } : c);
   players[dIdx] = newDefender;
-  return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
+  return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害${_fSuffix}`, actorIdx);
 }
 
 /**

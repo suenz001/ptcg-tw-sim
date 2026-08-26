@@ -77,6 +77,8 @@ async function bundle(overrides = {}) {
   writeFileSync(entry,
     "export * from './src/lib/game/damage-estimate';\n" +
     "export { applyAction, getEffectiveAttacks } from './src/lib/game/engine';\n" +
+    // ⚠ v6.239：③ 要問「這一招出招前會不會先問玩家」，判準就是這張表（與 UI 同一份來源）
+    "export { ATTACK_PRE_DISCARD_CHOICE } from './src/lib/game/effects/_shared';\n" +
     "import './src/lib/game/effects';");
   await build({ entryPoints: [entry], outfile: out, bundle: true, format: 'esm', platform: 'node',
     target: 'node20', alias, plugins, logLevel: 'error' });
@@ -249,8 +251,25 @@ for (const [cn, an] of DEFERRED_NOPICK) {
   if (!s) { chk(`找得到 ${cn}｜${an}`, false); continue; }
   const e = mod.estimateAttackDamage(s.state, s.idx, pool, 0);
   const r = realDamage(mod, s.state, s.idx, 'min');
-  chk(`${cn}｜${an}：預估 ${e.kind === 'exact' ? e.value : e.kind} === 實際 ${r.dmg}`,
-      e.kind === 'exact' && e.value === r.dmg);
+  // ⚠⚠ v6.239 起：卡面寫「若希望」的招式（弦月光芒＝若希望翻 1 張獎賞卡 ⇒ +80）
+  //   預估改成報「不發動～發動」的範圍並標 `optIn`。v6.238 這裡原本斷言 `exact === 實際`，
+  //   而「實際」是**不帶答覆**跑出來的（＝引擎對 AI／舊 state 的 fallback，一律當成「希望」），
+  //   所以它其實只釘住了範圍的**上界**。⇒ 這一版把兩端都釘死：
+  //     上界 === 選「是」的實際傷害、下界 === 選「否」的實際傷害。
+  const optIn = mod.ATTACK_PRE_DISCARD_CHOICE?.has?.(`${cn}|${an}`) ?? false;
+  if (optIn && e.kind === 'range') {
+    const dmgWith = (ans) => {
+      const o = mod.applyAction(structuredClone(s.state),
+        { type: 'ATTACK', attackIndex: s.idx, discardedEnergyIids: ans }, pool);
+      return Math.max(o.attackDamageToDefActive ?? 0, o.lastDealtDamage ?? 0);
+    };
+    chk(`${cn}｜${an}：預估範圍 ${e.min}～${e.max} === 實際的「否 / 是」`,
+        e.optIn === true && e.min === dmgWith([]) && e.max === dmgWith(['yes-token']),
+        `${e.min}/${dmgWith([])} ${e.max}/${dmgWith(['yes-token'])}`);
+  } else {
+    chk(`${cn}｜${an}：預估 ${e.kind === 'exact' ? e.value : e.kind} === 實際 ${r.dmg}`,
+        e.kind === 'exact' && e.value === r.dmg);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════

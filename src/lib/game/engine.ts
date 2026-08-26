@@ -5808,41 +5808,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   （朽木妖｜終極吸取 heal=實際傷害量 等招式依賴此值）
     // v3.02：附傷害公式 — 至少 2 個 term（基礎 + 至少 1 個 modifier）才顯示，
     //        否則只是「100 點傷害」公式為「100(基礎)=100」沒意義
-    const composeFormula = (terms: FormulaTerm[], finalValue: number): string => {
-      if (terms.length <= 1) return '';  // 只有基礎，無公式可言
-      // v3.03：在最後一個 × 之前的 base + 加法區用 [...] 包起，明示先算這段再 ×。
-      //   原因：算術優先級會讓讀者誤以為「100+30×2-30=130」，但 PTCG 是
-      //         (100+30)×2-30=230 — 加成先加，再 ×弱點，最後 -抵抗。
-      //   有 ≥1 個 + term 在 × 之前才加括號（單一 base 的純 ×N 不必要包覆）。
-      let lastMulIdx = -1;
-      for (let i = 0; i < terms.length; i++) {
-        if (terms[i].sign === '×') lastMulIdx = i;
-      }
-      const renderTerm = (t: FormulaTerm, isFirst: boolean): string => {
-        if (isFirst) return `${t.value}(${t.label})`;
-        if (t.sign === '×') return `×${t.value}(${t.label})`;
-        if (t.sign === '+') return `+${t.value}(${t.label})`;
-        if (t.sign === '-') return `-${t.value}(${t.label})`;
-        return '';
-      };
-      // 沒有 × → 線性串接
-      if (lastMulIdx < 0) {
-        const parts = terms.map((t, i) => renderTerm(t, i === 0));
-        return `${parts.join(' ')} = ${finalValue}`;
-      }
-      // 有 × → 把 0..lastMulIdx-1 包進 [...]，後面照接
-      const beforeParts: string[] = [];
-      for (let i = 0; i < lastMulIdx; i++) beforeParts.push(renderTerm(terms[i], i === 0));
-      const afterParts: string[] = [];
-      for (let i = lastMulIdx; i < terms.length; i++) afterParts.push(renderTerm(terms[i], false));
-      // 若 × 之前只有 base 一項（純 100×2 弱點型），不必加括號
-      if (beforeParts.length <= 1) {
-        const parts = terms.map((t, i) => renderTerm(t, i === 0));
-        return `${parts.join(' ')} = ${finalValue}`;
-      }
-      return `[${beforeParts.join(' ')}] ${afterParts.join(' ')} = ${finalValue}`;
-    };
-    const _formulaStr = composeFormula(formula, baseDamage);
+    // ⭐⭐⭐v6.239：公式字串的組裝抽成模組層級的 `composeAttackFormula`（見本檔下方），
+    //   讓 effects.ts 的中央 `dealAttackDamageToTarget`（狙擊／延後結算的招式走那條）
+    //   能用**同一份**產生器。原本它是這個 ATTACK handler 內的區域閉包，effects.ts 拿不到 ⇒
+    //   那條路徑一個字的公式都沒寫過（波動突刺打出 420 卻只留「造成 420 傷害」）。
+    //   ⚠ 兩邊各寫一份字串組裝必然漂移，所以是搬移、不是複製。
+    const _formulaStr = composeAttackFormula(formula, baseDamage);
     let newState: GameState = addLog(
       // ⭐v6.238 attackDamageToDefActive 用**指派**：這一行每次 ATTACK 只會跑一次、
       //   且早於任何 regPost／resolver ⇒ 同時具備「歸零」與「記下主管線傷害」兩個作用。
@@ -8318,6 +8289,79 @@ function scrubBenchStatus(state: GameState): GameState {
  */
 
 export type FormulaTerm = { sign: '=' | '+' | '-' | '×'; value: number; label: string };
+
+/**
+ * ⭐⭐⭐v6.239 傷害公式字串的**唯一**產生器。
+ *
+ * 原本它是 `ATTACK` handler 內的區域閉包（`composeFormula`），只有引擎主管線用得到；
+ * 走中央 `dealAttackDamageToTarget` 的招式（狙擊／「先跑效果、最後才造成傷害」的延後範本，
+ * 例：超級路卡利歐ex｜波動突刺、克雷色利亞｜弦月光芒）因此**完全沒有公式**——
+ * 對戰紀錄只寫「造成 420 傷害」，看不到弱點×2 或抵抗力 -30 是怎麼來的，
+ * 而「預估傷害」的算式又是從這行 log 解析出來的 ⇒ 那些招式的預估也只有一個數字。
+ *
+ * ⚠ 這是**搬移**不是複製：兩邊各寫一份字串組裝必然漂移，玩家會看到兩種格式。
+ * ⚠ 規則不變（逐字沿用原閉包）：
+ *   ・只有基礎一項 ⇒ 回空字串（「100(基礎)=100」沒有資訊量）。
+ *   ・最後一個 `×` 之前若有 ≥1 個加減項，用 `[...]` 包起來，明示 PTCG 的運算順序
+ *     （(100+30)×2-30 = 200，不是 100+30×2-30）。
+ */
+/**
+ * ⭐v6.239 `terms` 依序算下來是不是剛好等於 `finalValue`。
+ *
+ * 用途：`dealAttackDamageToTarget` 那條路徑上，有幾個減傷／免傷來源**沒有**把自己
+ * 寫進 formula（例如擲幣免傷的特性名，helper 沒回傳）。少一項就會印出
+ * 「[130(基礎)] ×2(弱點) = 0」這種自相矛盾的算式 —— 那比沒有算式更糟。
+ * ⇒ 呼叫端一律先問這一句，對不起來就**不印公式**（退回 v6.238 的行為），
+ *   絕不猜一個標籤把帳湊平。
+ */
+export function attackFormulaReconstructs(terms: FormulaTerm[], finalValue: number): boolean {
+  if (terms.length === 0) return false;
+  let v = terms[0].value;
+  for (let i = 1; i < terms.length; i++) {
+    const t = terms[i];
+    if (t.sign === '+') v += t.value;
+    else if (t.sign === '-') v -= t.value;
+    else if (t.sign === '×') v *= t.value;
+    else return false;   // '=' 只能出現在第一項
+  }
+  return v === finalValue;
+}
+
+export function composeAttackFormula(terms: FormulaTerm[], finalValue: number): string {
+  if (terms.length <= 1) return '';  // 只有基礎，無公式可言
+
+  // v3.03：在最後一個 × 之前的 base + 加法區用 [...] 包起，明示先算這段再 ×。
+  //   原因：算術優先級會讓讀者誤以為「100+30×2-30=130」，但 PTCG 是
+  //         (100+30)×2-30=230 — 加成先加，再 ×弱點，最後 -抵抗。
+  //   有 ≥1 個 + term 在 × 之前才加括號（單一 base 的純 ×N 不必要包覆）。
+  let lastMulIdx = -1;
+  for (let i = 0; i < terms.length; i++) {
+    if (terms[i].sign === '×') lastMulIdx = i;
+  }
+  const renderTerm = (t: FormulaTerm, isFirst: boolean): string => {
+    if (isFirst) return `${t.value}(${t.label})`;
+    if (t.sign === '×') return `×${t.value}(${t.label})`;
+    if (t.sign === '+') return `+${t.value}(${t.label})`;
+    if (t.sign === '-') return `-${t.value}(${t.label})`;
+    return '';
+  };
+  // 沒有 × → 線性串接
+  if (lastMulIdx < 0) {
+    const parts = terms.map((t, i) => renderTerm(t, i === 0));
+    return `${parts.join(' ')} = ${finalValue}`;
+  }
+  // 有 × → 把 0..lastMulIdx-1 包進 [...]，後面照接
+  const beforeParts: string[] = [];
+  for (let i = 0; i < lastMulIdx; i++) beforeParts.push(renderTerm(terms[i], i === 0));
+  const afterParts: string[] = [];
+  for (let i = lastMulIdx; i < terms.length; i++) afterParts.push(renderTerm(terms[i], false));
+  // 若 × 之前只有 base 一項（純 100×2 弱點型），不必加括號
+  if (beforeParts.length <= 1) {
+    const parts = terms.map((t, i) => renderTerm(t, i === 0));
+    return `${parts.join(' ')} = ${finalValue}`;
+  }
+  return `[${beforeParts.join(' ')}] ${afterParts.join(' ')} = ${finalValue}`;
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // v5.544 中央收斂：防守方「減傷算術」block A（metalShield/化石/takeExtra/PASSIVE_DAMAGE_REDUCE×3/

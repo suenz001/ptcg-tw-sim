@@ -52,6 +52,10 @@ import { applyAction } from './engine';
 //   本檔沒有自己再算一份」。合併成一行會讓那條守衛靜默失效。
 import { canAffordAttack, getEffectiveAttacks } from './engine';
 import { getBasicEnergyType, evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter';
+// ⭐v6.239【B】「若希望」型招式的宣告表（`ATTACK_PRE_DISCARD_CHOICE`）——
+//   用來知道「這一招在出招前會不會先問玩家要不要發動選用效果」。
+//   ⚠ 只**讀**這張表，不新增任何一筆；判準與 UI（+page.svelte 的 preAttackDiscard）同一份來源。
+import { ATTACK_PRE_DISCARD_CHOICE } from './effects/_shared';
 import type { SelectionFilterZone } from './selection-filter';
 
 /** 傷害公式中的一項。label 一律沿用**引擎自己寫的字串**（例：`弱點` / `抵抗力`），不另行翻譯。 */
@@ -66,7 +70,10 @@ type DamageEstimateCore =
   | { kind: 'depends'; why: 'selection' | 'hidden' }
   | { kind: 'exact'; value: number; formula: string; terms: EstimateTerm[] }
   /** 有隨機成分：下界＝全反面實跑值、上界＝全正面實跑值。`coin` 代表這個隨機來自擲硬幣 */
-  | { kind: 'range'; min: number; max: number; coin: boolean; formula: string; terms: EstimateTerm[] }
+  | { kind: 'range'; min: number; max: number; coin: boolean;
+      /** ⭐v6.239【B】這個範圍來自卡面的「若希望」（玩家出招時會被問要不要發動），不是隨機。 */
+      optIn?: boolean;
+      formula: string; terms: EstimateTerm[] }
   /** 「擲硬幣直到出現反面」型：只有下界，上界無上限 */
   | { kind: 'open'; min: number; formula: string; terms: EstimateTerm[] };
 
@@ -419,6 +426,13 @@ function drivePendingChain(
   return s.pendingSelection ? null : s;
 }
 
+/**
+ * ⭐v6.239 引擎寫的公式長什麼樣（`composeAttackFormula` 的輸出形狀）：
+ *   `100(基礎) ×2(弱點) = 200` 或 `[130(基礎) +50(極限腰帶)] ×2(弱點) = 360`
+ * ⚠ 這條 regex 是**唯一**判斷「這段【】是不是公式」的依據，不再靠「基礎」這兩個字。
+ */
+const FORMULA_SHAPE = /^\[?\d+\([^()]*\)(?: [×+\-]\d+\([^()]*\))*\]?(?: [×+\-]\d+\([^()]*\))* = \d+$/;
+
 /** 從新增的 log 取出最後一段引擎寫的傷害公式（`【100(基礎) ×2(弱點) = 200】`）。 */
 function pickFormula(messages: string[]): string {
   let out = '';
@@ -426,8 +440,14 @@ function pickFormula(messages: string[]): string {
     const hit = /【([^】]+)】/.exec(m);
     // ⚠⚠v6.238：【】在 log 裡不是公式專用 —— 卡名本身就有（「基本【鬥】能量」「寶可夢【ex】」）。
     //   v6.238 讓乾跑把選擇視窗跑到底之後，被掃到的 log 變多，波動突刺就抓到了「鬥」當公式
-    //   （畫面上會多出一行莫名其妙的「鬥」）。引擎寫的公式一定同時有 `(基礎)` 與 ` = `。
-    if (hit && hit[1].includes('(基礎)') && hit[1].includes(' = ')) out = hit[1];
+    //   （畫面上會多出一行莫名其妙的「鬥」）。
+    // ⚠⚠⚠v6.239：v6.238 是用「含 `(基礎)`」來認公式，但**基礎項的標籤不一定叫「基礎」**——
+    //   `AttackPreResult.breakdown` 的招式會把第一項改成自己的字（倫琴貓｜猛力進攻寫
+    //   `280(已取獎賞 4×70)`、故勒頓｜原生亂打寫 `90(古代寶可夢 3×30)`）。
+    //   那些招式明明有完整公式，卻因為沒有「基礎」兩個字被整段丟掉 ⇒ 預估只剩數字沒有理由。
+    //   ⇒ 改用**結構**認：`數字(標籤)` 開頭、中間是 `×/+/- 數字(標籤)`、以 ` = 數字` 結尾。
+    //   卡名裡的【…】完全不長這樣，一樣擋得掉。
+    if (hit && FORMULA_SHAPE.test(hit[1])) out = hit[1];
   }
   return out;
 }
@@ -453,6 +473,12 @@ function runOnce(
   permuteHidden: boolean,
   /** ⭐v6.237【D】null＝不補能量（付得出來）；數字＝補到剛好付得出來，再多附這麼多顆。 */
   topUpEnergyExtra: number | null,
+  /**
+   * ⭐v6.239【B】true＝這一次乾跑要回答卡面的「若希望」為**否**（送空陣列，
+   * 與玩家在 UI 按下「否」送出的 action 逐字相同）。false＝不帶答覆，
+   * 等同 v6.238 以前的行為（多數「若希望」招式的 regPost 把「沒帶答覆」視為「希望」）。
+   */
+  optOut: boolean = false,
 ): RunOut {
   let work: GameState;
   try {
@@ -480,7 +506,7 @@ function runOnce(
   let out: GameState;
   try {
     Math.random = bandedRandom(mode);
-    out = applyAction(work, { type: 'ATTACK', attackIndex }, pool);
+    out = applyAction(work, optOut ? { type: 'ATTACK', attackIndex, discardedEnergyIids: [] } : { type: 'ATTACK', attackIndex }, pool);
     // ⭐⭐⭐v6.238 這一招是「先開選擇視窗、最後才造成傷害」的話，ATTACK 這一個 action
     //   結束時傷害還沒發生。用真實引擎把選擇視窗跑到底 —— **而且要跑三種不同的合法答覆**：
     //     ・min-first ＝ 選最低張數、由前往後取
@@ -521,6 +547,25 @@ function runOnce(
     terms: parseFormulaTerms(formula),
     logAdded: added.length,
   };
+}
+
+/**
+ * ⭐v6.239【B】這一招在出招前會不會先問玩家「要不要發動選用效果」。
+ * ⚠ 判準與 `+page.svelte` 的 `initiateAttack` 完全相同：`getEffectiveAttacks` 取出
+ *   `sourceCardName|招式名`，再查 `ATTACK_PRE_DISCARD_CHOICE`（借招式也因此對得上）。
+ * ⚠ 查不出來一律回 `undefined`（＝維持 v6.238 行為），絕不猜。
+ */
+function preAttackChoiceSpecFor(base: GameState, attackIndex: number, pool: Map<string, Card>) {
+  try {
+    const act = base.players?.[base.activePlayerIndex]?.active;
+    if (!act) return undefined;
+    const entry = getEffectiveAttacks(base, act, pool)[attackIndex];
+    if (!entry) return undefined;
+    return ATTACK_PRE_DISCARD_CHOICE.get(`${entry.sourceCardName}|${entry.atk.name}`);
+  } catch (err) {
+    warnEstimateOnce('查「若希望」宣告時丟出例外', err);
+    return undefined;
+  }
 }
 
 /**
@@ -591,6 +636,31 @@ export function estimateAttackDamage(
 
   // ④ 純效果、沒有傷害 ⇒ 不顯示
   if (t.dmg === 0 && h.dmg === 0) return { kind: 'none' };
+
+  // ⭐⭐⭐v6.239【B】卡面「若希望」的招式：上面那兩次乾跑**沒有帶答覆**，
+  //   而站內這一族的 regPre／regPost 把「沒帶答覆」當成「希望」（見 slowking_lucario_deck.ts
+  //   的 v5.720 註解：AI／舊 state 的 fallback）⇒ 預估等於一律假設玩家會發動選用效果。
+  //   克雷色利亞｜弦月光芒（若希望翻 1 張獎賞 ⇒ +80）因此永遠只報 160，
+  //   看不到「不翻 = 80」；而發動是有代價的（獎賞被翻開／自傷／自己回牌庫…）。
+  //   ⇒ 再跑一次「否」（送空陣列，與玩家按下「否」時送出的 action 逐字相同），
+  //     兩邊不同就報範圍並標明來源是「若希望」。
+  //   ⚠ 只有在 UI 真的會問玩家時才這樣做（判準＝`ATTACK_PRE_DISCARD_CHOICE` 有這一筆，
+  //     與 +page.svelte 開 modal 的判準同一張表）。
+  //   ⚠ 能量 picker 型（激流水泵等）的「沒帶答覆」本來就等於「選 0 個」＝否 ⇒ 兩次一樣、
+  //     結論與 v6.238 逐字相同（不會為了湊上界去替玩家挑能量）。
+  const _optSpec = preAttackChoiceSpecFor(base, attackIndex, pool);
+  if (_optSpec) {
+    const tn = runOnce(base, attackIndex, pool, 'tails', viewerIdx, false, topUp, true);
+    const hn = runOnce(base, attackIndex, pool, 'heads', viewerIdx, false, topUp, true);
+    if (tn.ok && hn.ok && tn.flips === t.flips && hn.flips === h.flips) {
+      const lo = Math.min(t.dmg, h.dmg, tn.dmg, hn.dmg);
+      const hi = Math.max(t.dmg, h.dmg, tn.dmg, hn.dmg);
+      if (lo !== hi && lo > 0) {
+        return { ...note, kind: 'range', min: lo, max: hi, coin: h.flips > 0, optIn: h.flips === 0,
+                 formula: '', terms: h.terms };
+      }
+    }
+  }
 
   if (t.dmg === h.dmg) return { ...note, kind: 'exact', value: t.dmg, formula: t.formula, terms: t.terms };
   return {
@@ -663,7 +733,9 @@ function estimateCoreText(e: DamageEstimate): string {
     }
     case 'range': {
       const why = estimateReasonText(e);
-      const src = e.coin ? '擲幣' : '隨機';
+      // ⭐v6.239【B】來源是卡面的「若希望」時要講「若希望」——寫成「隨機」會讓玩家
+      //   以為自己決定不了，但那正是出招時會被問的那一題。
+      const src = e.optIn ? '若希望' : (e.coin ? '擲幣' : '隨機');
       return why ? `預估 ${e.min}～${e.max}（${src}；${why}）` : `預估 ${e.min}～${e.max}（${src}）`;
     }
     case 'open':
