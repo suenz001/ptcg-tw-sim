@@ -126,7 +126,7 @@
   import MobilePortraitBattle from './MobilePortraitBattle.svelte';
   // ⭐v6.233 預估傷害（只在休閒對戰）——計算全部收斂在 damage-estimate.ts，
   //   手機直式（MobilePortraitBattle）與桌機（本檔）兩套 UI 各自渲染，**但只有這一份計算**。
-  import { estimateAllAttacks, estimateShortText, hasEstimateToShow, type DamageEstimate } from '$lib/game/damage-estimate';
+  import { estimateAllAttacks, estimateShortText, hasEstimateToShow, warnEstimateOnce, type DamageEstimate } from '$lib/game/damage-estimate';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -3407,8 +3407,27 @@ function _setupSelfPending(g: any, seat: number): string | null {
     try {
       const _n = getEffectiveAttacks(game, _actor.active, pool).length;
       if (_n <= 0) return null;
-      return estimateAllAttacks(game, _n, pool, _ai);
-    } catch { return null; }   // fail-closed：算不出來就當沒這個功能，絕不拿錯數字騙玩家
+      // ⭐⭐⭐v6.237 真因就在這一行。
+      //   `game` 是 Svelte 5 的 `$state` 變數 ⇒ 執行期是一個 **Proxy**；
+      //   而 damage-estimate.ts 乾跑的第一件事是 `structuredClone(base)`，
+      //   `structuredClone` 對 Proxy 一律拋 `DataCloneError`（HTML 規格：帶有
+      //   [[ProxyHandler]] 內部欄位的物件不可序列化）⇒ 每一招都回 `unknown`
+      //   ⇒ **v6.233～v6.236 這個功能從來沒有在畫面上出現過**，而且兩層 catch
+      //   把錯誤吃得一乾二淨，連主控台都不留一行。
+      //   ⇒ 用 Svelte 官方的 `$state.snapshot()` 先取得**純物件**再交出去；
+      //     damage-estimate.ts 因此維持與框架無關（它也被 Node 守衛直接呼叫）。
+      //   ⚠ 為什麼 snapshot 與 structuredClone 在這裡等價：GameState 是 Firestore-safe
+      //     的純資料（沒有 Map／Set／Date／類別實體）—— 這件事由
+      //     `test-v6237-estimate-state-proxy.mjs` 的遞迴掃描逐欄釘住，不是靠註解保證。
+      //   ⚠ 複製次數：這裡多一次深拷貝，但乾跑本身每一招要 4~5 次；實測見那支守衛的量測段。
+      const _plain = $state.snapshot(game) as GameState;
+      return estimateAllAttacks(_plain, _n, pool, _ai);
+    } catch (err) {
+      // ⚠⚠v6.237【B】行為仍然 fail-closed（算不出來就不顯示，絕不拿錯數字騙玩家），
+      //   但**絕不再靜靜吞掉** —— 至少留一行可見診斷（同一種原因只噴一次）。
+      warnEstimateOnce('桌機 damageEstimates 計算失敗', err);
+      return null;
+    }
   });
   // 線上模式：我是否為防守方（被擊倒後需送出寶可夢）
   // ── v6.122 補位（派出新的戰鬥寶可夢）改「選取 → 確定」兩段式 ────────────────
@@ -10741,13 +10760,22 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {#each eff as { atk, sourceCardName, isFromTool }, i}
               {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
               {@const _est = damageEstimates ? (damageEstimates[i] ?? null) : null}
-              <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
-                disabled={actionBusy||!availableAttacks.includes(i)||!!pendingSelection}
-                title={(_shinyOn ? '璀璨結晶：可免除任一能量需求；剩餘 cost 仍需對應屬性能量（例如 1 顆草能無法付【火】或【超】）\n\n' : '') + (isFromTool ? `來自工具：${sourceCardName}` : '')}
-                onclick={()=>initiateAttack(i)}>
-                <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：免除其中 1 顆能量需求（任意屬性）；其餘 cost 仍需對應屬性能量">🔮-1</span>{/if}</span>
-                <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
-                <span class="atk-dmg">{atk.damage||'—'}</span>
+              <!-- ⭐v6.237【D】外層容器 .atk-slot：預估提示改掛在**沒有 disabled 的容器**上。
+                   原本掛在按鈕裡，靠 `.btn-act.atk:hover` 顯示 —— 但能量還沒附夠的招式按鈕是
+                   原生 `disabled`，disabled 表單元件本來就不派送滑鼠事件、各家瀏覽器對
+                   `:hover` 的處理也不一致 ⇒ **最需要預估的時候（還在規劃要不要附能量）看不到**。
+                   ⚠ 按鈕本身**維持原生 `disabled`**（沒有改成 aria-disabled）——
+                     絕不可讓玩家真的按得下去不能使用的招式。容器只負責接 hover。
+                   ⚠ 容器是 inline-flex、緊貼按鈕，`.action-btns` 的 flex 排版完全不變。 -->
+              <span class="atk-slot">
+                <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
+                  disabled={actionBusy||!availableAttacks.includes(i)||!!pendingSelection}
+                  title={(_shinyOn ? '璀璨結晶：可免除任一能量需求；剩餘 cost 仍需對應屬性能量（例如 1 顆草能無法付【火】或【超】）\n\n' : '') + (isFromTool ? `來自工具：${sourceCardName}` : '')}
+                  onclick={()=>initiateAttack(i)}>
+                  <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：免除其中 1 顆能量需求（任意屬性）；其餘 cost 仍需對應屬性能量">🔮-1</span>{/if}</span>
+                  <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
+                  <span class="atk-dmg">{atk.damage||'—'}</span>
+                </button>
                 {#if hasEstimateToShow(_est)}
                   <!-- ⭐v6.233 桌機：**滑鼠移上去才顯示**（絕對定位，不影響原本版面配置）。
                        內容在 damageEstimates 算好時就已經在 DOM 裡，:hover 只是 CSS 顯示、不做運算。 -->
@@ -10758,7 +10786,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     {/if}
                   </span>
                 {/if}
-              </button>
+              </span>
             {/each}
             <!-- v5.166：disabled 改為精確判定 — 只在「自己有 pending modal 顯示中」
                  才 disabled；對方 pending 不擋（理論上 isMyTurn() 已 gate，但雙保險）。
@@ -16036,15 +16064,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .btn-act.atk{ background:#1a2a3a; border:1px solid #3a5a7a; color:#ccd; opacity:.45; cursor:not-allowed; position:relative; }
   /* ⭐v6.233 預估傷害（桌機：hover 才顯示）—— position:absolute + display:none
      ⇒ 不佔任何版面空間，原本的按鈕排版完全不變。
-     ⚠ disabled 的招式按鈕不會觸發 :hover（瀏覽器會吐掉 pointer events），
-       所以這個提示只會出現在真的能使用的招式上。 */
+     ⭐v6.237【D】定位基準改成外層的 .atk-slot（不是按鈕本身）：
+       能量還沒附夠的招式按鈕是原生 disabled，disabled 元件不派送滑鼠事件、
+       各家瀏覽器對 :hover 的處理也不一致 ⇒ 掛在按鈕上就是「最需要的時候看不到」。
+       容器沒有 disabled，hover 一定成立；按鈕維持 disabled，玩家仍然按不下去。 */
+  .atk-slot{ position:relative; display:inline-flex; }
+  /* 容器被拉寬時（Fable 版面把它當成固定寬度的 grid 槽位）按鈕要跟著填滿，
+     版面才與 v6.236 一模一樣；一般 flex 版面下 basis:auto ＝ 原本的內容寬度。 */
+  .atk-slot > .btn-act.atk{ flex:1 1 auto; }
   .dmg-est{
     position:absolute; left:50%; bottom:calc(100% + 6px); transform:translateX(-50%);
     display:none; flex-direction:column; gap:2px; z-index:60; pointer-events:none;
     background:rgba(8,16,26,.97); border:1px solid #6a9aff; border-radius:6px;
     padding:.3rem .55rem; white-space:nowrap; box-shadow:0 2px 10px rgba(0,0,0,.6);
   }
-  .btn-act.atk:hover .dmg-est{ display:flex; }
+  .atk-slot:hover .dmg-est{ display:flex; }
   .dmg-est-main{ font-size:.8rem; font-weight:700; color:#ffd97a; }
   .dmg-est-formula{ font-size:.72rem; font-weight:500; color:#bcd; }
   .btn-act.atk.atk-ready{ opacity:1; cursor:pointer; border-color:#6a9aff; }
@@ -17839,9 +17873,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     display:grid; grid-template-rows:38px 38px 38px 34px 34px; grid-auto-rows:min-content;
     align-content:start; gap:3px; width:clamp(130px, 11vw, 168px); max-width:none;
   }
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk:nth-of-type(1){ grid-row:1; }
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk:nth-of-type(2){ grid-row:2; }
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk:nth-of-type(3){ grid-row:3; }
+  /* ⚠⚠v6.237：招式鈕外面多包了一層 .atk-slot（見上方預估傷害的說明）⇒ 固定槽位的
+     直接子選擇器必須跟著改到容器上，否則這三條會變成 unused，Fable 版面的招式鈕
+     就不再鎖在 1/2/3 列（桌機**預設**就是 Fable 版，會直接看得出來）。
+     ⚠ 這正是 svelte 編譯器的 unused-CSS 警告抓到的 —— 換 DOM 結構時務必回頭掃一次。 */
+  .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(1){ grid-row:1; }
+  .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(2){ grid-row:2; }
+  .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(3){ grid-row:3; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.secondary,
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.primary{ grid-row:4; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-retreat-mirror,

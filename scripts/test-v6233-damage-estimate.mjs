@@ -361,8 +361,12 @@ console.log('\n⑨ 接線（靜態）：只在休閒對戰、兩套 UI、一份�
       PAGE.includes('estimateShortText(') && MOB.includes('estimateShortText('));
 
   // ⭐ 桌機 hover：CSS 顯示，不是 JS 事件（hover 事件裡同步跑會卡頓）
-  chk('桌機是 CSS :hover 顯示（.btn-act.atk:hover .dmg-est）',
-      /\.btn-act\.atk:hover \.dmg-est\{/.test(PAGE));
+  // ⭐v6.237：hover 的目標從按鈕本身改成外層容器 .atk-slot ——
+  //   能量還沒附夠的招式按鈕是原生 disabled，disabled 元件不派送滑鼠事件、
+  //   各家瀏覽器對 :hover 的處理也不一致 ⇒ 掛在按鈕上等於「最需要時看不到」。
+  //   （按鈕仍維持原生 disabled，玩家按不下去；細節由 test-v6237 釘死。）
+  chk('桌機是 CSS :hover 顯示（v6.237 起目標是外層 .atk-slot:hover .dmg-est）',
+      /\.atk-slot:hover \.dmg-est\{/.test(PAGE) && !/\.btn-act\.atk:hover \.dmg-est\{/.test(PAGE));
   chk('桌機提示不影響版面（position:absolute + 平常 display:none）',
       /\.dmg-est\{[\s\S]{0,200}position:absolute;[\s\S]{0,200}display:none;/.test(PAGE));
   chk('沒有把預估掛在 hover 的 JS 事件上（onmouseenter/onmouseover 不碰 estimate）',

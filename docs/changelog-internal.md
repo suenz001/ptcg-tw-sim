@@ -1,5 +1,142 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.237 預估傷害「從來沒有顯示過」的真因：Svelte 5 的 `$state` 是 Proxy
+
+BASE = `da59a0552e53a7668181a45f1f224891c7f42104`（v6.236）。
+站長實測 beta 站 v6.236：**桌機 hover 沒有、手機直式也沒有**（手機不需要 hover，
+所以一開始就排除了 CSS/hover 的可能）。
+
+### 真因（已用真的 Svelte 代理實測復現）
+
+`src/routes/game/+page.svelte` L828：`let game = $state<GameState | null>(null);`
+⇒ Svelte 5 的 `$state` 變數在執行期是一個 **Proxy**（深層反應式代理；
+編譯後就是 `svelte/internal/client` 的 `proxy()`）。
+
+`src/lib/game/damage-estimate.ts` 的乾跑第一件事是 `structuredClone(base)`。
+依 HTML 規格，**帶有 `[[ProxyHandler]]` 內部欄位的物件不可結構化序列化** ⇒
+一律拋 `DataCloneError`。
+
+於是每一招都走 `runOnce → { ok: false } → { kind: 'unknown' }`
+⇒ `hasEstimateToShow` 永遠 false ⇒ **v6.233／v6.234／v6.236 三個版本什麼都沒顯示過**。
+
+而且 `runOnce` 的 `catch {}` 與 `+page.svelte` 的 `catch { return null; }`
+**兩層都是無聲的** —— 連 console 都不留一行，所以沒有任何人察覺。
+
+實測（Node，svelte 5.55.4，`svelte/internal/client` 的 `proxy()`）：
+
+| 傳進去的盤面 | `estimateAttackDamage` 回傳 |
+|---|---|
+| 普通物件 | `{ kind: 'exact', value: 40, formula: '20(基礎) ×2(弱點) = 40' }` |
+| 真的 Svelte 代理 | `{ kind: 'unknown' }` ← 就是線上的狀況 |
+| `$state.snapshot()` 之後 | `{ kind: 'exact', value: 40, … }`，與普通物件逐欄位相同 |
+
+### 【A】修法：在呼叫端 `$state.snapshot()`
+
+`+page.svelte` 的 `damageEstimates` 改成 `const _plain = $state.snapshot(game) as GameState;`
+再交給 `estimateAllAttacks`。
+
+- **為什麼修在呼叫端**：`damage-estimate.ts` 也被 Node 守衛直接呼叫，
+  讓它 import svelte 會綁死框架、也會被打包進錦標賽 server-engine。維持框架無關。
+- **`structuredClone` 不可以拿掉**：它是給非 Svelte 呼叫端（守衛／AI／伺服器端）的保險，
+  而且乾跑一招要 2~5 份互不干擾的複本，本來就不可能共用同一份。
+- **複製次數**：`$state.snapshot` 每次盤面變動**只做一次**；乾跑本身每一招 4 次
+  （全反面／全正面 ×（原牌況／換牌況）），能量不足時再多 1 次（見【D】）。
+  沙盒實測：`$state.snapshot` 一次 **0.54 ms**、`structuredClone` 一次 **0.067 ms**、
+  一招完整預估 **1.0~1.6 ms**（能量 0 時 1.2~2.4 ms）。
+  ⇒ 多出來的那一次深拷貝佔比極小，**不做「跳過重複複製」的最佳化**
+  （那會需要一個「傳進來的必須已是純物件」的隱形約定，風險大於收益）。
+  量測腳本＝`scripts/test-v6237-estimate-state-proxy.mjs` 第 ⑪ 節（Rule 32）。
+- **`$state.snapshot` 與 `structuredClone` 等價嗎**：對 GameState 這種資料等價。
+  ⚠ 已知差異：svelte 的 `snapshot`（`src/internal/shared/clone.js`）對 `Map`／`Set`
+  只做**淺**複製、對 `Date` 才轉呼叫 `structuredClone`。
+  ⇒ 只要 GameState 含 Map／Set 兩者就不等價 —— 所以守衛用**遞迴掃描**釘死
+  「`createGame` 的盤面／`applyAction` 之後的盤面裡沒有 Map／Set／Date／類別實體」
+  （GameState 本來就必須 Firestore-safe，見 Iron Rule 13）。
+
+### 【B】不可再靜靜吞掉錯誤
+
+新增 `warnEstimateOnce(tag, err)`：每一種失敗原因**只噴一次** `console.warn`
+（`$derived` 會在每次盤面變動時重算，每次都噴等於把主控台洗掉）。
+接的三處：深複製失敗、引擎在乾跑中丟例外、`+page.svelte` 的 derived catch。
+⚠ 行為維持 fail-closed：算不出來就不顯示，絕不拿錯數字騙玩家。
+
+其他仍然靜默吞錯的地方（本版**未改**，列在這裡備查）：
+`+page.svelte` 內 `catch {}` / `catch { }` 型態的空 catch 有數十處，多數是刻意的
+（sessionStorage 無痕模式會 throw、音效 autoplay 被擋、剪貼簿權限、
+`JSON.parse` 舊格式），**那些吞掉是對的**。真正值得再看的是同類的
+「功能整個不運作但完全無聲」型：`optimistic.ts` 的預測失敗、
+`sfx-events.ts` 的音效載入、`ai-eval.ts` 的評估失敗 —— 判準是
+**「這個 catch 一旦命中，玩家會不會什麼都看不到、又不知道為什麼」**。
+
+### 【C】補上能抓到「框架環境差異」的驗證
+
+`scripts/test-v6237-estimate-state-proxy.mjs`（62 條）。核心是第 ④ 節：
+把 `+page.svelte` 裡 `damageEstimates` 的 `$derived.by` **本體原樣抽出來執行**，
+`with` 綁一組 ctx（含 `$state = { snapshot }`），餵一個**真的 Svelte 代理**當 `game`，
+斷言它算得出可顯示的預估。
+⚠ 刻意**不是**「原始碼裡有沒有 `$state.snapshot` 字串」的檢查。
+配三組對照：負對照（snapshot 換成原樣回傳 ⇒ 全部顯示不出來）、
+正對照（餵普通物件 ⇒ 新舊都會過，這正是舊守衛結構性抓不到的原因）、
+突變（把 `$state.snapshot(game)` 改回 `game` ⇒ ④ 變紅）。
+HEAD-FAIL 那一節更直接把 **BASE 的 derived 本體**抽出來跑，證明它真的算不出東西。
+
+跑在 BASE(v6.236) 的原始碼上：**PASS 41 / FAIL 17**。
+
+⚠⚠ 另外第 ⑧b 節拿 **svelte 編譯器的 unused-CSS 警告當儀器** ——
+這是寫這一版時真的踩到的事故，見下面【D】。
+
+### 【D】能量還沒附夠也要顯示
+
+站長的原始需求正好是**出招前的規劃**：「有時候沒看到本來想說可以一拳打掉對手，
+結果發現對方抗屬性」。引擎的 ATTACK 在 `canAffordAttack` 那一關直接原樣 return
+⇒ 乾跑零 log ⇒ 舊版一律 `unknown`，**在最需要它的時候不顯示**。
+
+- `damage-estimate.ts` 新增 `topUpEnergyForCost()`：只在**丟棄用的複本**上，
+  依 cost 逐格補對應屬性的基本能量（【無】用攻擊方自己的屬性），
+  補到 `canAffordAttack` 成立為止，末尾多留 3 格給「鼓擊／夜間礦山」這類**加費**效果。
+  既有的能量一顆都不動（特殊能量的效果照樣算得到）。
+- 標記 `assumedEnergy` ⇒ 文案前綴「附滿能量後」，不假裝是現況。
+- **正確性**：傷害本身取決於附著能量數的招式（例：拉普拉斯ex｜水炮迴旋
+  ＝每顆能量 30），算出來的是「剛好附滿費用」那一種情形。
+  偵測是**行為端**的：多附 2 顆再跑一次，數字有變就標 `energyScaled`
+  ⇒ 文案再加「（傷害依附著的能量而定）」。實測
+  `附滿能量後預估 30（傷害依附著的能量而定）`。不靠卡名清單、不靠卡面 regex。
+- **桌機 hover**：提示原本掛在按鈕裡、靠 `.btn-act.atk:hover` 顯示，
+  但能量不足的按鈕是**原生 `disabled`** —— disabled 表單元件不派送滑鼠事件、
+  各家瀏覽器對 `:hover` 的處理也不一致。
+  ⇒ 改用外層容器 `.atk-slot`（沒有 disabled，hover 一定成立）承接 hover，
+  **按鈕本身維持原生 `disabled`**（沒有改成 `aria-disabled` 那種「看起來不能按、
+  其實按得到」的做法）—— 絕不可讓玩家真的按得下不能使用的招式。
+- **手機直式**：本來就把預估接在招式名後面，而且能量不足的招式是 `disabled` 而不是
+  不 render ⇒ 只要算得出數字就看得到，元件一行都不用改。
+
+⚠⚠ **包一層容器踩到的事故**：`.playmat.layout-fable .action-bar > .action-btns >
+`.btn-act.atk:nth-of-type(1..3)`（Fable 版面把招式鈕鎖在固定 grid 槽位的三條規則）
+用的是**直接子選擇器**，多包一層之後整組失聯 —— 而桌機**預設**就是 Fable 版。
+靜態字串比對抓不到；**svelte 編譯器的 unused-CSS 警告抓到了**。
+修法：那三條改成 `> .atk-slot:nth-of-type(N)`，另加 `.atk-slot > .btn-act.atk{ flex:1 1 auto; }`
+讓按鈕在被拉寬的槽位裡填滿。編譯前後的 unused 清單**逐條完全一致**（新增 0、消失 0）。
+守衛第 ⑧b 節把這件事釘死（附試紙自驗＋反向自驗）。
+
+### 首頁 changelog 的處理
+
+v6.233／v6.234 的條目描述的功能**從 v6.237 起才真的成立**。
+沒有回頭改寫那兩則（改寫等於在公告裡討論公告本身，屬於規範②要擋的 meta），
+改成在 v6.237 條目裡**明講**「預估傷害提示先前在畫面上一直沒有出現，已修正」——
+玩家看得懂、也不必知道為什麼。首頁滿 50 則，最舊的 v6.172 已搬進封存頁。
+
+### 驗證
+
+- 完整 `npm test` 557 步（分批）全綠；新守衛 62 條全綠、BASE 上 17 紅。
+- `tsc --noEmit` 與 BASE **逐行相同**（新增 0 條），TS2304 = 0。
+- `anti-pattern-lint` 無違規；免疫網三支（damage／attack-effect／opp-debuff）全綠。
+- `test-v6233`（62）／`test-v6234`（58）／`test-v6236`（28）全綠。
+  ⚠ `test-v6233` 的「桌機是 CSS :hover 顯示」那一條跟著改成斷言外層容器
+  （`.atk-slot:hover .dmg-est` 存在**且**舊的 `.btn-act.atk:hover .dmg-est` 已移除）。
+- `+page.svelte` 用 svelte 編譯器實編通過（模板沒有沒跳脫的特殊字元），
+  unused-CSS 清單與 BASE 完全一致。
+
+
 ## v6.236 預估傷害：隱藏資訊防護補上「組成」這一維（獨立審查發現）
 
 BASE = `ed3f03f3d2d231bd51a6a278a2fdec8ce3cf3ece`（v6.235）。**上線前的第二雙眼睛**在審查

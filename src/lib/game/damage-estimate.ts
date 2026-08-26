@@ -47,11 +47,16 @@
 import type { GameState, CardInstance } from './types';
 import type { Card } from '$lib/cards/types';
 import { applyAction } from './engine';
+// ⚠ 這一行故意**不與上面那行合併**：`test-v6233-damage-estimate.mjs` 逐字釘住
+//   `import { applyAction } from './engine'` 這個字串，用來證明「傷害只由真實引擎算出、
+//   本檔沒有自己再算一份」。合併成一行會讓那條守衛靜默失效。
+import { canAffordAttack, getEffectiveAttacks } from './engine';
+import { getBasicEnergyType } from './selection-filter';
 
 /** 傷害公式中的一項。label 一律沿用**引擎自己寫的字串**（例：`弱點` / `抵抗力`），不另行翻譯。 */
 export type EstimateTerm = { sign: string; value: number; label: string };
 
-export type DamageEstimate =
+type DamageEstimateCore =
   /** 這一招不造成傷害（純效果） ⇒ 不顯示 */
   | { kind: 'none' }
   /** 乾跑跑不出結論（引擎沒受理／深複製失敗） ⇒ 不顯示 */
@@ -63,6 +68,24 @@ export type DamageEstimate =
   | { kind: 'range'; min: number; max: number; coin: boolean; formula: string; terms: EstimateTerm[] }
   /** 「擲硬幣直到出現反面」型：只有下界，上界無上限 */
   | { kind: 'open'; min: number; formula: string; terms: EstimateTerm[] };
+
+/**
+ * ⭐v6.237【D】所有變體共用的附註 —— 只有「能量還沒附夠」時才會出現。
+ *
+ * 站長的原始需求是**出招前的規劃**：「有時候沒看到本來想說可以一拳打掉對手，
+ * 結果發現對方抗屬性」—— 想知道的是「如果我把能量附上去，這招打得死嗎」。
+ * v6.236 以前能量不足的招式一律不顯示（引擎的 ATTACK 在 `canAffordAttack` 那一關
+ * 直接原樣 return ⇒ 乾跑完全沒有 log ⇒ `unknown`），**在最需要它的時候不顯示**。
+ * ⇒ 改成照樣給數字，但那個數字是在**假設**之下算的，必須逐字講清楚。
+ */
+export type EstimateNote = {
+  /** 目前附著的能量還付不出這一招 ⇒ 數字是「假設剛好把費用附滿」跑出來的。 */
+  assumedEnergy?: boolean;
+  /** 傷害本身會隨附著的能量數改變 ⇒ 上面那個數字只是「剛好附滿」的那一種情形。 */
+  energyScaled?: boolean;
+};
+
+export type DamageEstimate = DamageEstimateCore & EstimateNote;
 
 type CoinMode = 'heads' | 'tails';
 
@@ -86,6 +109,121 @@ type RunOut =
  * 會吃掉 59 次抽樣 —— 256 足夠讓「洗好幾次牌 ＋ 擲滿上限」都還在預算內。
  */
 const COIN_BUDGET = 256;
+
+/**
+ * ⭐⭐⭐v6.237【B】**絕不再靜靜吞掉錯誤**。
+ *
+ * v6.233～v6.236 這支預估**從來沒有在畫面上出現過**，而三個版本、62 條守衛、
+ * 完整 npm test 全綠都沒抓到。真因是 `+page.svelte` 的 `game` 是 Svelte 5 的
+ * `$state` **Proxy**，`structuredClone` 對 Proxy 一律拋 `DataCloneError`
+ * （HTML 規格：帶有 [[ProxyHandler]] 內部欄位的物件不可序列化）——
+ * 而下面兩處的 `catch` 把它吃得一乾二淨，**連 console 都不留一行**。
+ *
+ * ⇒ 每一種失敗原因至少留一行 `console.warn`。
+ * ⚠ 但**每種只噴一次**：這支會被 `$derived` 在每次盤面變動時重算，
+ *   每次 render 都噴等於把主控台洗掉、反而更難查。
+ * ⚠ 行為維持 fail-closed：算不出來就不顯示，**絕不拿錯數字騙玩家**。
+ */
+const _warnedTags = new Set<string>();
+export function warnEstimateOnce(tag: string, err?: unknown): void {
+  if (_warnedTags.has(tag)) return;
+  _warnedTags.add(tag);
+  try {
+    console.warn('[預估傷害] 已停用（' + tag + '）：', err);
+  } catch {
+    // console 不可用（極少數環境）時什麼也不做 —— 診斷失敗不可以反過來影響對戰。
+  }
+}
+
+/** 只給守衛用：把「已經噴過」的記錄清掉，才能驗「同一種原因只噴一次」。 */
+export function resetEstimateWarnings(): void {
+  _warnedTags.clear();
+}
+
+/** 基本能量卡「屬性 → cardId」對照表（同一個 pool 只算一次）。 */
+const _basicEnergyCache = new WeakMap<Map<string, Card>, Map<string, string>>();
+function basicEnergyIdByType(pool: Map<string, Card>): Map<string, string> {
+  const hit = _basicEnergyCache.get(pool);
+  if (hit) return hit;
+  const m = new Map<string, string>();
+  for (const c of pool.values()) {
+    const t = getBasicEnergyType(c);
+    if (t && !m.has(t)) m.set(t, String(c.id));
+  }
+  _basicEnergyCache.set(pool, m);
+  return m;
+}
+
+/** 目前附著的能量付不付得出這一招。⚠ 判斷不了一律回 true（＝不啟用假設，維持 v6.236 的行為）。 */
+function canAffordNow(base: GameState, attackIndex: number, pool: Map<string, Card>): boolean {
+  try {
+    const aIdx = base.activePlayerIndex;
+    const act = base.players?.[aIdx]?.active;
+    if (!act) return true;
+    const entry = getEffectiveAttacks(base, act, pool)[attackIndex];
+    if (!entry) return true;
+    return canAffordAttack(act, entry.atk.cost ?? [], pool, base, aIdx, entry.atk.name);
+  } catch (err) {
+    warnEstimateOnce('判斷能量是否足夠時丟出例外', err);
+    return true;
+  }
+}
+
+/**
+ * ⭐v6.237【D】把「剛好付得出這一招」所缺的基本能量補到**丟棄用的複本**上。
+ *
+ * ⚠ **不動既有的能量**（特殊能量的效果照樣算得到），只補缺的部分：
+ *   依 cost 逐格補對應屬性的基本能量，【無】用攻擊方自己的屬性；
+ *   補到 `canAffordAttack` 成立為止，末尾多留 3 格給「鼓擊／夜間礦山」這類**加費**效果。
+ * ⚠ 只在丟棄用的複本上做，真實盤面一個位元組都不會動（由守衛的深比對釘死）。
+ *
+ * @param extra 付得出來之後再多附幾顆（用來偵測「傷害會不會隨附著的能量數變動」）。
+ * @returns 是否補到付得出來；補不出來就放棄這一次乾跑（不顯示，絕不硬掰）。
+ */
+function topUpEnergyForCost(
+  s: GameState,
+  attackIndex: number,
+  pool: Map<string, Card>,
+  extra: number,
+): boolean {
+  const aIdx = s.activePlayerIndex;
+  const act = s.players?.[aIdx]?.active;
+  if (!act) return false;
+  let entry;
+  try {
+    entry = getEffectiveAttacks(s, act, pool)[attackIndex];
+  } catch (err) {
+    warnEstimateOnce('補能量時取招式清單丟出例外', err);
+    return false;
+  }
+  if (!entry) return false;
+  const cost = entry.atk.cost ?? [];
+  const byType = basicEnergyIdByType(pool);
+  if (byType.size === 0) return false;
+  const ownType = String(pool.get(act.cardId)?.pokemonType ?? '');
+  const anyId = byType.values().next().value as string;
+  const pickId = (t: string): string => byType.get(t) ?? byType.get(ownType) ?? anyId;
+  const afford = (): boolean => canAffordAttack(act, cost, pool, s, aIdx, entry.atk.name);
+  let seq = 0;
+  const attach = (t: string): void => {
+    const e: CardInstance = {
+      iid: 'est-topup-' + (seq++),
+      cardId: pickId(t),
+      damage: 0,
+      energyAttached: [],
+      evolvedFromStack: [],
+    } as unknown as CardInstance;
+    act.energyAttached = [...(act.energyAttached ?? []), e];
+  };
+  const plan = [...cost.map(c => (c === 'Colorless' ? ownType : String(c))), ownType, ownType, ownType];
+  for (const t of plan) {
+    if (afford()) break;
+    attach(t);
+  }
+  if (!afford()) return false;
+  for (let i = 0; i < extra; i++) attach(ownType);
+  return true;
+}
 
 /**
  * 帶狀 PRNG（mulberry32 再映射到半區間）。
@@ -168,17 +306,27 @@ function runOnce(
   mode: CoinMode,
   viewerIdx: 0 | 1,
   permuteHidden: boolean,
+  /** ⭐v6.237【D】null＝不補能量（付得出來）；數字＝補到剛好付得出來，再多附這麼多顆。 */
+  topUpEnergyExtra: number | null,
 ): RunOut {
   let work: GameState;
   try {
     // ⚠⚠ 深複製是硬性要求（見檔頭）。structuredClone 失敗就放棄預估，絕不退回淺複製。
     work = structuredClone(base);
-  } catch {
+  } catch (err) {
+    // ⚠⚠v6.237：這個 catch 就是讓整個功能隱形三個版本的兇手 —— 一定要留下診斷。
+    //   最常見的原因：呼叫端把 Svelte 5 的 `$state` Proxy 直接丟進來
+    //   （Proxy 不可 structuredClone）⇒ 呼叫端要先做 `$state.snapshot()`。
+    warnEstimateOnce('盤面深複製失敗（可能是 Svelte $state Proxy，呼叫端需先 $state.snapshot）', err);
     return { ok: false };
   }
   // `lastDealtDamage` 不是每次 ATTACK 開頭清的（engine.ts 只在造成傷害時寫入），
   // 殘留的上一招數值會被誤讀成這一招的傷害 ⇒ 在**丟棄用的複本**上先歸零。
   work.lastDealtDamage = 0;
+  // ⭐v6.237【D】能量不足時，先在複本上把費用補滿（補不出來就放棄這一次乾跑）。
+  if (topUpEnergyExtra !== null && !topUpEnergyForCost(work, attackIndex, pool, topUpEnergyExtra)) {
+    return { ok: false };
+  }
   if (permuteHidden) permuteHiddenZones(work, viewerIdx);
 
   const beforeLogLen = (base.log ?? []).length;
@@ -187,7 +335,9 @@ function runOnce(
   try {
     Math.random = bandedRandom(mode);
     out = applyAction(work, { type: 'ATTACK', attackIndex }, pool);
-  } catch {
+  } catch (err) {
+    // ⚠v6.237：引擎在乾跑中丟例外也要留一行（例：卡池不完整）。行為仍 fail-closed。
+    warnEstimateOnce('引擎在乾跑中丟出例外', err);
     return { ok: false };
   } finally {
     Math.random = orig; // ⚠ 一定要還原，否則整場對局的隨機源被換掉且極難聯想
@@ -210,7 +360,12 @@ function runOnce(
 /**
  * 估一招的傷害。
  *
- * @param base        目前盤面（**不會被修改**）
+ * @param base        目前盤面（**不會被修改**）。
+ *                    ⚠⚠ **必須是純物件**（plain object graph）——本檔用 `structuredClone` 深複製，
+ *                    而 `structuredClone` 對 Proxy 一律拋 `DataCloneError`。Svelte 端請先
+ *                    `$state.snapshot(game)`（v6.233～v6.236 就是漏了這一步，整個功能三個版本
+ *                    從來沒顯示過）。丟 Proxy 進來不會壞事：fail-closed 回 `unknown` 並留一行診斷。
+ *                    ⇒ 本檔刻意**不 import svelte**，維持與框架無關（Node 守衛也直接呼叫它）
  * @param attackIndex `getEffectiveAttacks()` 的 index（與送出的 ATTACK action 同一套）
  * @param pool        卡池
  * @param viewerIdx   看畫面的人（＝出招方）；決定哪一份手牌算「隱藏」
@@ -224,40 +379,56 @@ export function estimateAttackDamage(
   if (!base || base.phase !== 'playing' || base.pendingSelection) return { kind: 'unknown' };
   if (!Number.isInteger(attackIndex) || attackIndex < 0) return { kind: 'unknown' };
 
-  const t = runOnce(base, attackIndex, pool, 'tails', viewerIdx, false);
-  const h = runOnce(base, attackIndex, pool, 'heads', viewerIdx, false);
+  // ⭐v6.237【D】目前付不出這一招 ⇒ 改用「剛好把費用附滿」的假設再估（見 topUpEnergyForCost）。
+  //   ⚠ 付得出來的招式：`topUp === null`，整條路徑與 v6.236 逐字相同（零行為變動）。
+  const assumedEnergy = !canAffordNow(base, attackIndex, pool);
+  const topUp: number | null = assumedEnergy ? 0 : null;
+
+  const t = runOnce(base, attackIndex, pool, 'tails', viewerIdx, false, topUp);
+  const h = runOnce(base, attackIndex, pool, 'heads', viewerIdx, false, topUp);
   if (!t.ok || !h.ok) return { kind: 'unknown' };
-  // 引擎完全沒受理這個 action（例：能量不足直接 return state）⇒ 不顯示，別假裝是 0
+  // 引擎完全沒受理這個 action（例：睡眠／本回合無法使用招式）⇒ 不顯示，別假裝是 0
   if (t.logAdded === 0 && h.logAdded === 0) return { kind: 'unknown' };
+
+  // ⭐v6.237【D】傷害會不會隨「附著的能量數」變動？**多附 2 顆再跑一次**就知道 ——
+  //   偵測是行為端的，不靠卡名清單也不靠卡面 regex（同檔頭「無上限」那一條的精神）。
+  //   會變 ⇒ 上面那個數字只是「剛好附滿」的那一種，文案要講明白。
+  let energyScaled = false;
+  if (assumedEnergy) {
+    const x = runOnce(base, attackIndex, pool, 'tails', viewerIdx, false, 2);
+    energyScaled = x.ok && x.dmg !== t.dmg;
+  }
+  const note: EstimateNote = assumedEnergy ? { assumedEnergy: true, energyScaled } : {};
 
   // ① 擲幣「次數」本身取決於擲幣結果 ⇒ 無上限（「擲硬幣直到出現反面」）。
   //    這一條必須排在最前面：這型的全正面值是連續 20~30 次正面的理論值，當成範圍上界會誤導。
   if (t.flips !== h.flips) {
-    return { kind: 'open', min: Math.min(t.dmg, h.dmg), formula: '', terms: h.terms };
+    return { ...note, kind: 'open', min: Math.min(t.dmg, h.dmg), formula: '', terms: h.terms };
   }
 
   // ② 會跳選擇視窗、而且此刻還沒造成傷害 ⇒ 依選擇而定（**不可顯示成 0**）。
   //    ⚠ 先造成傷害、之後才開 picker 的招式（例：拉普拉斯ex｜水炮迴旋）傷害已經定案，
   //      那種要照常顯示數字，所以這裡要同時看 dmg === 0。
-  if ((t.pending && t.dmg === 0) || (h.pending && h.dmg === 0)) return { kind: 'depends', why: 'selection' };
+  if ((t.pending && t.dmg === 0) || (h.pending && h.dmg === 0)) return { ...note, kind: 'depends', why: 'selection' };
 
   // ③ ⚠ 隱藏資訊防護：換一種可能的隱藏牌況再跑一次，結果變了就代表這個數字是「偷看」來的。
   //    ⚠⚠ v6.236：這一段必須排在「沒有傷害 ⇒ 不顯示」**前面**。
   //      否則依隱藏資訊的招式只要在**當下這個牌況**剛好打 0，就會走「不顯示」——
   //      而「有沒有顯示提示」本身就是一個看得出來的訊號（玩家等於得知牌庫頂不是那一張）。
   //      代價是純效果招式多跑兩次乾跑；實測 1174 個預估只有 2 個結論改變。
-  const t2 = runOnce(base, attackIndex, pool, 'tails', viewerIdx, true);
-  const h2 = runOnce(base, attackIndex, pool, 'heads', viewerIdx, true);
-  if (!t2.ok || !h2.ok) return { kind: 'depends', why: 'hidden' };
+  const t2 = runOnce(base, attackIndex, pool, 'tails', viewerIdx, true, topUp);
+  const h2 = runOnce(base, attackIndex, pool, 'heads', viewerIdx, true, topUp);
+  if (!t2.ok || !h2.ok) return { ...note, kind: 'depends', why: 'hidden' };
   if (t2.dmg !== t.dmg || h2.dmg !== h.dmg || t2.flips !== t.flips || h2.flips !== h.flips) {
-    return { kind: 'depends', why: 'hidden' };
+    return { ...note, kind: 'depends', why: 'hidden' };
   }
 
   // ④ 純效果、沒有傷害 ⇒ 不顯示
   if (t.dmg === 0 && h.dmg === 0) return { kind: 'none' };
 
-  if (t.dmg === h.dmg) return { kind: 'exact', value: t.dmg, formula: t.formula, terms: t.terms };
+  if (t.dmg === h.dmg) return { ...note, kind: 'exact', value: t.dmg, formula: t.formula, terms: t.terms };
   return {
+    ...note,
     kind: 'range',
     min: Math.min(t.dmg, h.dmg),
     max: Math.max(t.dmg, h.dmg),
@@ -304,6 +475,21 @@ export function estimateReasonText(e: DamageEstimate | null | undefined): string
  */
 export function estimateShortText(e: DamageEstimate | null | undefined): string {
   if (!e) return '';
+  const core = estimateCoreText(e);
+  if (!core) return '';
+  // ⭐v6.237【D】能量還沒附夠時，數字是「假設剛好把費用附滿」算出來的 —— 逐字講明白，
+  //   絕不讓玩家以為那是現況就打得出來的傷害。
+  //   ⚠ 前綴／後綴加在**外面**，主體文案一個字都沒動（v6.234 的突變測試逐字釘住那一段）。
+  return (e.assumedEnergy ? '附滿能量後' : '') + core + (e.energyScaled ? '（傷害依附著的能量而定）' : '');
+}
+
+/**
+ * 主體文案。
+ * ⚠ 這一段的字面量被 `test-v6234-resistance-label-and-coin-cap.mjs` 的突變測試逐字釘住，
+ *   改字之前先去看那支守衛。
+ * ⚠ 刻意**不 export**：全站唯一對外的文案入口只有 `estimateShortText`（守衛也釘死這件事）。
+ */
+function estimateCoreText(e: DamageEstimate): string {
   switch (e.kind) {
     case 'exact': {
       const why = estimateReasonText(e);
