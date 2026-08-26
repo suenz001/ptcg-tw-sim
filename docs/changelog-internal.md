@@ -60,13 +60,15 @@ BASE = `da59a0552e53a7668181a45f1f224891c7f42104`（v6.236）。
 接的三處：深複製失敗、引擎在乾跑中丟例外、`+page.svelte` 的 derived catch。
 ⚠ 行為維持 fail-closed：算不出來就不顯示，絕不拿錯數字騙玩家。
 
-其他仍然靜默吞錯的地方（本版**未改**，列在這裡備查）：
-`+page.svelte` 內 `catch {}` / `catch { }` 型態的空 catch 有數十處，多數是刻意的
-（sessionStorage 無痕模式會 throw、音效 autoplay 被擋、剪貼簿權限、
-`JSON.parse` 舊格式），**那些吞掉是對的**。真正值得再看的是同類的
-「功能整個不運作但完全無聲」型：`optimistic.ts` 的預測失敗、
-`sfx-events.ts` 的音效載入、`ai-eval.ts` 的評估失敗 —— 判準是
-**「這個 catch 一旦命中，玩家會不會什麼都看不到、又不知道為什麼」**。
+其他仍然靜默吞錯的地方（本版**未改**，列在這裡備查）。
+⚠ 以下是**實測數字**，不是印象：`src/routes/game/+page.svelte` 全檔有 **205** 個 `catch`，
+其中**完全空**的 7 個（`catch {}` 6 個、`catch (e) {}` 1 個）、`catch { return null; }` 5 個。
+絕大多數的吞掉**是對的**（sessionStorage 無痕模式會 throw、剪貼簿權限、`JSON.parse` 舊格式）。
+真正值得再看的是同一類「功能整個不運作、但完全無聲」型 ——
+`src/lib/game/optimistic.ts`（1 個 catch）與 `src/lib/game/ai-eval.ts`（5 個），
+以及 `src/lib/audio/sfx-events.ts`。判準只有一句：
+**「這個 catch 一旦命中，玩家會不會什麼都看不到、又完全不知道為什麼」**。
+本版只改預估這條路徑，其餘留待下一輪逐一判斷（不在沒查證前就宣稱它們有問題）。
 
 ### 【C】補上能抓到「框架環境差異」的驗證
 
