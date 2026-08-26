@@ -247,7 +247,12 @@ ok('★★★tApi 的 getIdToken 有逾時上限（否則 tBusy 會永久 true �
 });
 ok('★報到失敗的訊息會貼著報到鈕顯示（不是只印在大廳最底下）',
   PAGE.includes('tCheckinErrId === ev._id && tError') && PAGE.includes('tCheckinErrId = eventId'));
-ok('首頁 changelog 有 v6.167 這一則（玩家有感）', CLOG.includes('v6.167') && CLOG.includes('報到'));
+// ⚠v6.233：首頁 changelog 有「約 50 則」的上限（test-changelog-size-and-archive ①），
+//   舊條目會依序被搬進 static/changelog-archive.html。這條的意圖是「這件玩家有感的事
+//   確實有被公告過」，不是「必須永遠留在首頁」⇒ 兩份任一有就算數。
+const CLOG_ARCHIVE = rd('static/changelog-archive.html');
+ok('changelog（首頁或封存頁）有 v6.167 這一則（玩家有感）',
+   [CLOG, CLOG_ARCHIVE].some((s) => s.includes('v6.167') && s.includes('報到')));
 
 console.log(`\nv6.167 報到不被鎖住守衛：${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -52,6 +52,9 @@
   //   ⚠ 手機與桌機仍是兩套獨立版面分支；收斂的**只有述詞**，互動 paradigm（點卡開 sheet）不變。
   import { getHandCardOps, type HandCardOp } from '$lib/game/hand-card-ops';
   import { GameActions } from '$lib/game/actions';
+  // ⭐v6.233 預估傷害：**計算不在這裡做**。由父層 +page.svelte 算好後傳進來（手機/桌機共用同一份），
+  //   這裡只負責手機直式自己那一套 UI（顯示在招式右方）。
+  import { estimateShortText, hasEstimateToShow, type DamageEstimate } from '$lib/game/damage-estimate';
   // v3.02：log 著色 + 卡名可點連結
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { resolveLogCard } from '$lib/game/log_zoom';
@@ -85,6 +88,11 @@
     actionBusy?: boolean;
     actionSending?: boolean;
     actionQueued?: number;
+    /**
+     * ⭐v6.233 預估傷害（index 對齊 getEffectiveAttacks）。
+     * null = 不顯示（錦標賽 / 觀戰 / 不是自己的回合）—— gate 在父層，本檔不重寫一份。
+     */
+    attackEstimates?: DamageEstimate[] | null;
     // Callbacks
     onAction: (action: ReturnType<(typeof GameActions)[keyof typeof GameActions]>) => void | Promise<void>;
     onInitiateAttack: (attackIndex: number) => void;
@@ -113,6 +121,7 @@
     actionBusy = false,  // v6.147
     actionSending = false,  // v6.172
     actionQueued = 0,       // v6.172
+    attackEstimates = null, // v6.233
     onAction, onInitiateAttack, onOpenZoom, onOpenSettings, onLeave,
     onOpenPrizes,   // v6.190（回放限定）
     undoAvailable = false,
@@ -590,6 +599,16 @@
     return cardOf(inst)?.name ?? iid;
   }
 
+  /**
+   * ⭐v6.233 手機直式：預估直接接在招式名後面（站長裁定：顯示在招式右方），
+   * 例：「⚔️ 種子炸彈 · 30 · 預估 60（弱點 ×2）」。
+   * 文案一律由中央的 estimateShortText 產生，**不在這裡另寫一套措辭**。
+   */
+  function estLabelSuffix(i: number): string {
+    const est = attackEstimates ? (attackEstimates[i] ?? null) : null;
+    return hasEstimateToShow(est) ? ` · ${estimateShortText(est)}` : '';
+  }
+
   // 取「active 可選動作」list
   function activeActions(): Array<{ label: string; action: () => void; disabled?: boolean; primary?: boolean; zoomIid?: string }> {
     if (!myPlayer.active) return [];
@@ -611,7 +630,7 @@
       effectiveAttacks.forEach((eff, i) => {
         const ok = isPlaying && isMyTurn && isMainPhase && !pendingSelection && availableAttackIndices.includes(i);
         out.push({
-          label: `⚔️ ${eff.atk.name}${eff.atk.damage ? ' · ' + eff.atk.damage : ''}${eff.isFromTool ? ' 🔧' : ''}`,
+          label: `⚔️ ${eff.atk.name}${eff.atk.damage ? ' · ' + eff.atk.damage : ''}${eff.isFromTool ? ' 🔧' : ''}${estLabelSuffix(i)}`,
           action: () => { closeSheet(); onInitiateAttack(i); },
           disabled: !ok,
           primary: ok,

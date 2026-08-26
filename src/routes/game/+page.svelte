@@ -124,6 +124,9 @@
   } from '$lib/audio/settings';
   // v2.284 Phase 1：手機直式 layout 元件 — 用條件 render 切換
   import MobilePortraitBattle from './MobilePortraitBattle.svelte';
+  // ⭐v6.233 預估傷害（只在休閒對戰）——計算全部收斂在 damage-estimate.ts，
+  //   手機直式（MobilePortraitBattle）與桌機（本檔）兩套 UI 各自渲染，**但只有這一份計算**。
+  import { estimateAllAttacks, estimateShortText, hasEstimateToShow, type DamageEstimate } from '$lib/game/damage-estimate';
 
   // ── 卡池 ────────────────────────────────────────────────────────────────────
   let pool = $state<Map<string, Card>>(new Map());
@@ -3381,6 +3384,31 @@ function _setupSelfPending(g: any, seat: number): string | null {
       return game.activePlayerIndex === hIdx;
     }
     return true; // 本機雙人模式
+  });
+
+  // ── ⭐v6.233 預估傷害 ────────────────────────────────────
+  //   站長裁定：**只做休閒對戰**（錦標賽是比賽性質，玩家自己算）
+  //   ⇒ 用全檔既有的中央述詞 `isTournament` gate，**不另外新寫「是不是錦標賽」的判斷**。
+  //   ⚠ 效能：一招要 2~4 次乾跑。這裡用 `$derived.by` ⇒ **只有盤面（game）或視角變動時才重算**，
+  //     不是每次 render 都跑；桌機是 CSS `:hover` 才顯示，內容早就算好放在 DOM 裡，
+  //     **hover 事件本身不做任何運算**。
+  //   ⚠ 只在「招式按鈕真的能按」的情境才算，其餘一律回 null（＝不顯示、也不花這個成本）。
+  const damageEstimates = $derived.by<DamageEstimate[] | null>(() => {
+    if (isTournament) return null;                                 // 站長裁定：錦標賽不做
+    if (isSpectator || isTournSpectator || isTReplay) return null; // 觀戰/回放沒有「要不要出這招」的決策
+    if (!game || !poolReady) return null;
+    if (game.phase !== 'playing' || game.turnPhase !== 'main') return null;
+    if (game.pendingSelection) return null;
+    if (!isMyTurn()) return null;
+    const _ai = game.activePlayerIndex;
+    if (_ai !== 0 && _ai !== 1) return null;
+    const _actor = game.players[_ai];
+    if (!_actor?.active) return null;
+    try {
+      const _n = getEffectiveAttacks(game, _actor.active, pool).length;
+      if (_n <= 0) return null;
+      return estimateAllAttacks(game, _n, pool, _ai);
+    } catch { return null; }   // fail-closed：算不出來就當沒這個功能，絕不拿錯數字騙玩家
   });
   // 線上模式：我是否為防守方（被擊倒後需送出寶可夢）
   // ── v6.122 補位（派出新的戰鬥寶可夢）改「選取 → 確定」兩段式 ────────────────
@@ -10263,6 +10291,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       actionQueued={tActQueue.length}
       onAction={dispatch}
       onInitiateAttack={initiateAttack}
+      attackEstimates={damageEstimates}
       onOpenZoom={openZoom}
       onOpenPrizes={openPrizeView}
       onOpenSettings={() => showSettingsModal = true}
@@ -10711,6 +10740,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
             {#each eff as { atk, sourceCardName, isFromTool }, i}
               {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
+              {@const _est = damageEstimates ? (damageEstimates[i] ?? null) : null}
               <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
                 disabled={actionBusy||!availableAttacks.includes(i)||!!pendingSelection}
                 title={(_shinyOn ? '璀璨結晶：可免除任一能量需求；剩餘 cost 仍需對應屬性能量（例如 1 顆草能無法付【火】或【超】）\n\n' : '') + (isFromTool ? `來自工具：${sourceCardName}` : '')}
@@ -10718,6 +10748,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <span class="cost-row">{#each atk.cost as e}<span class="epip" style="background:{ENERGY_COLOR[e]}">{ENERGY_LABEL[e]}</span>{/each}{#if _shinyOn}<span class="shiny-crystal-badge" title="璀璨結晶：免除其中 1 顆能量需求（任意屬性）；其餘 cost 仍需對應屬性能量">🔮-1</span>{/if}</span>
                 <span class="atk-name">{atk.name}{isFromTool ? ' 🔧' : ''}</span>
                 <span class="atk-dmg">{atk.damage||'—'}</span>
+                {#if hasEstimateToShow(_est)}
+                  <!-- ⭐v6.233 桌機：**滑鼠移上去才顯示**（絕對定位，不影響原本版面配置）。
+                       內容在 damageEstimates 算好時就已經在 DOM 裡，:hover 只是 CSS 顯示、不做運算。 -->
+                  <span class="dmg-est">
+                    <span class="dmg-est-main">{estimateShortText(_est)}</span>
+                    {#if _est && _est.kind === 'exact' && _est.formula}
+                      <span class="dmg-est-formula">{_est.formula}</span>
+                    {/if}
+                  </span>
+                {/if}
               </button>
             {/each}
             <!-- v5.166：disabled 改為精確判定 — 只在「自己有 pending modal 顯示中」
@@ -15993,7 +16033,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .btn-act.primary:disabled{ opacity:.4; cursor:not-allowed; }
   .btn-act.secondary{ background:#2a3a5a; color:#ccddff; border:1px solid #4a5a8a; }
   .btn-act.secondary:disabled{ opacity:.4; cursor:not-allowed; }
-  .btn-act.atk{ background:#1a2a3a; border:1px solid #3a5a7a; color:#ccd; opacity:.45; cursor:not-allowed; }
+  .btn-act.atk{ background:#1a2a3a; border:1px solid #3a5a7a; color:#ccd; opacity:.45; cursor:not-allowed; position:relative; }
+  /* ⭐v6.233 預估傷害（桌機：hover 才顯示）—— position:absolute + display:none
+     ⇒ 不佔任何版面空間，原本的按鈕排版完全不變。
+     ⚠ disabled 的招式按鈕不會觸發 :hover（瀏覽器會吐掉 pointer events），
+       所以這個提示只會出現在真的能使用的招式上。 */
+  .dmg-est{
+    position:absolute; left:50%; bottom:calc(100% + 6px); transform:translateX(-50%);
+    display:none; flex-direction:column; gap:2px; z-index:60; pointer-events:none;
+    background:rgba(8,16,26,.97); border:1px solid #6a9aff; border-radius:6px;
+    padding:.3rem .55rem; white-space:nowrap; box-shadow:0 2px 10px rgba(0,0,0,.6);
+  }
+  .btn-act.atk:hover .dmg-est{ display:flex; }
+  .dmg-est-main{ font-size:.8rem; font-weight:700; color:#ffd97a; }
+  .dmg-est-formula{ font-size:.72rem; font-weight:500; color:#bcd; }
   .btn-act.atk.atk-ready{ opacity:1; cursor:pointer; border-color:#6a9aff; }
   .btn-act.atk.atk-ready:not(:disabled):hover{ background:#1a3a5a; }
   .cost-row{ display:flex; gap:.15rem; }
