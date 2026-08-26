@@ -8628,6 +8628,15 @@ export function dealAttackDamageToTarget(
     st = _ca.state;
     if (_ca.avoided) effDmg = 0;
   }
+  // ⭐⭐⭐v6.238 記下「這一次對**對手戰鬥位**造成的招式傷害」（見 types.ts 的欄位說明）。
+  //   位置：effDmg 已經是最終值（弱抗／減傷／免傷都套完），但還沒進 KO 判定 ⇒ 就算這一下
+  //   把對手打昏、傷害指示物隨著卡片一起離場，數字仍然留得下來。
+  //   ⚠ `actorIdx === st.activePlayerIndex` 這一關是必要的：本 helper 的「defender」是相對於
+  //     傳進來的 actorIdx，自傷型招式會用 `dealAttackDamageToTarget(s, dIdx, 自己的iid, …)`
+  //     反過來呼叫 —— 那時候 helper 眼中的「對手戰鬥位」其實是攻擊方自己，不可以計入。
+  if (kind === 'attack-damage' && isActive && effDmg > 0 && actorIdx === st.activePlayerIndex) {
+    st = { ...st, attackDamageToDefActive: (st.attackDamageToDefActive ?? 0) + effDmg };
+  }
   // v5.435：active 受招式傷害 → 觸發防守方 on-damaged 反擊（扣殺能量/奢華炸彈/凸凸頭盔/
   //   龐克頭盔/還擊斧/反擊特性/警備濁霧）。共用 fireDefenderOnDamaged，與 snipe-multi 同一條。
   // v6.120：記下「這一次傷害有沒有跑過 on-damaged」，下方 fireDefenderOnKO 需要它

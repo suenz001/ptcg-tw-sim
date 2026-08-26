@@ -5844,7 +5844,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     };
     const _formulaStr = composeFormula(formula, baseDamage);
     let newState: GameState = addLog(
-      { ...workingState, lastDealtDamage: baseDamage },
+      // ⭐v6.238 attackDamageToDefActive 用**指派**：這一行每次 ATTACK 只會跑一次、
+      //   且早於任何 regPost／resolver ⇒ 同時具備「歸零」與「記下主管線傷害」兩個作用。
+      { ...workingState, lastDealtDamage: baseDamage, attackDamageToDefActive: baseDamage },
       `${attacker.name} 的 ${attackerCard.name} 使出「${attack.name}」` +
         (isToolAttack ? `（工具：${sourceName}）` : '') +
         (baseDamage > 0 ? `，造成 ${baseDamage} 點傷害！` : '！') +

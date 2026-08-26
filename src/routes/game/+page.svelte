@@ -3429,6 +3429,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       return null;
     }
   });
+  /**
+   * ⭐⭐⭐v6.238【B】桌機「放大鏡」點開的是哪一招的預估。
+   *
+   * 站長回報：有玩家用 iPad 玩，**觸控裝置模擬不出「滑鼠停在上面」** ——
+   * 一碰就直接使出招式，v6.233 的 hover 提示等於看不到。
+   * ⇒ 招式鈕旁邊多一顆放大鏡，點它才顯示（再點一次收起）。
+   * ⚠ 連 `turn` 一起記：換回合自動失效，不必在各處手動清（少一個會忘記清的地方）。
+   */
+  let estOpen = $state<{ turn: number; i: number } | null>(null);
+
   // 線上模式：我是否為防守方（被擊倒後需送出寶可夢）
   // ── v6.122 補位（派出新的戰鬥寶可夢）改「選取 → 確定」兩段式 ────────────────
   //   玩家回報：昏厥後選備戰上場「只要點選就立即上場」，很容易按錯。
@@ -10767,7 +10777,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                    ⚠ 按鈕本身**維持原生 `disabled`**（沒有改成 aria-disabled）——
                      絕不可讓玩家真的按得下去不能使用的招式。容器只負責接 hover。
                    ⚠ 容器是 inline-flex、緊貼按鈕，`.action-btns` 的 flex 排版完全不變。 -->
-              <span class="atk-slot">
+              <span class="atk-slot" class:est-open={estOpen?.turn === game.turn && estOpen?.i === i}>
                 <button class="btn-act atk" class:atk-ready={availableAttacks.includes(i)} class:atk-from-tool={isFromTool}
                   disabled={actionBusy||!availableAttacks.includes(i)||!!pendingSelection}
                   title={(_shinyOn ? '璀璨結晶：可免除任一能量需求；剩餘 cost 仍需對應屬性能量（例如 1 顆草能無法付【火】或【超】）\n\n' : '') + (isFromTool ? `來自工具：${sourceCardName}` : '')}
@@ -10777,6 +10787,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   <span class="atk-dmg">{atk.damage||'—'}</span>
                 </button>
                 {#if hasEstimateToShow(_est)}
+                  <!-- ⭐⭐⭐v6.238【B】放大鏡：平板／觸控裝置沒有 hover，點它才顯示。
+                       ⚠⚠ **點放大鏡絕對不可以使出招式**。這裡用的是最硬的做法：
+                         ① 它是招式鈕的**兄弟節點**，不是子節點 —— DOM 上沒有祖先關係，
+                            click 事件根本沒有機會冒泡到招式鈕的 onclick（結構上就不可能）。
+                         ② `type="button"`：避免任何 form 情境下被當成 submit。
+                         ③ handler 仍呼叫 stopPropagation()／preventDefault() 當第三層保險。
+                       ⚠ hover **保留**：滑鼠玩家沿用 v6.233 的習慣，兩者顯示的是同一塊內容。 -->
+                  <button type="button" class="dmg-est-toggle"
+                    aria-expanded={estOpen?.turn === game.turn && estOpen?.i === i}
+                    aria-label="{atk.name}：顯示預估傷害"
+                    title="顯示預估傷害（平板／觸控可用）"
+                    onclick={(e)=>{ e.stopPropagation(); e.preventDefault();
+                      const _on = estOpen?.turn === game.turn && estOpen?.i === i;
+                      estOpen = _on ? null : { turn: game.turn, i }; }}>🔍</button>
                   <!-- ⭐v6.233 桌機：**滑鼠移上去才顯示**（絕對定位，不影響原本版面配置）。
                        內容在 damageEstimates 算好時就已經在 DOM 裡，:hover 只是 CSS 顯示、不做運算。 -->
                   <span class="dmg-est">
@@ -16079,6 +16103,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
     padding:.3rem .55rem; white-space:nowrap; box-shadow:0 2px 10px rgba(0,0,0,.6);
   }
   .atk-slot:hover .dmg-est{ display:flex; }
+  /* ⭐⭐⭐v6.238【B】放大鏡點開的狀態（與 hover 顯示同一塊內容、同一個位置）。 */
+  .atk-slot.est-open .dmg-est{ display:flex; }
+  .dmg-est-toggle{
+    flex:0 0 auto; position:relative; width:34px; height:34px; margin-left:.2rem; padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    background:#12202e; border:1px solid #3a5a7a; border-radius:6px; color:#ffd97a;
+    font:inherit; font-size:.95rem; line-height:1; cursor:pointer;
+  }
+  .dmg-est-toggle:hover{ background:#1a3a5a; border-color:#6a9aff; }
+  /* ⚠ 觸控目標：可視大小 34×34 要塞進 Fable 版面 38px 高的固定槽位，
+       所以改用不佔版面的 ::after 把**可點區**外擴 5px ⇒ 44×44（觸控建議值）。
+       ::after 是絕對定位 ⇒ 完全不影響三種桌機版面的按鈕排版。 */
+  .dmg-est-toggle::after{ content:''; position:absolute; top:-5px; right:-5px; bottom:-5px; left:-5px; }
   .dmg-est-main{ font-size:.8rem; font-weight:700; color:#ffd97a; }
   .dmg-est-formula{ font-size:.72rem; font-weight:500; color:#bcd; }
   .btn-act.atk.atk-ready{ opacity:1; cursor:pointer; border-color:#6a9aff; }

@@ -44,14 +44,15 @@
  *   直接換算成數字顯示出來。改成**在同一側的隱藏區之間重新分配**（各區張數不變），
  *   順序與組成同時改變，兩張都已降級。
  */
-import type { GameState, CardInstance } from './types';
+import type { GameState, CardInstance, PendingSelection } from './types';
 import type { Card } from '$lib/cards/types';
 import { applyAction } from './engine';
 // ⚠ 這一行故意**不與上面那行合併**：`test-v6233-damage-estimate.mjs` 逐字釘住
 //   `import { applyAction } from './engine'` 這個字串，用來證明「傷害只由真實引擎算出、
 //   本檔沒有自己再算一份」。合併成一行會讓那條守衛靜默失效。
 import { canAffordAttack, getEffectiveAttacks } from './engine';
-import { getBasicEnergyType } from './selection-filter';
+import { getBasicEnergyType, evaluateSelectionFilter, isKnownSelectionFilter } from './selection-filter';
+import type { SelectionFilterZone } from './selection-filter';
 
 /** 傷害公式中的一項。label 一律沿用**引擎自己寫的字串**（例：`弱點` / `抵抗力`），不另行翻譯。 */
 export type EstimateTerm = { sign: string; value: number; label: string };
@@ -277,12 +278,156 @@ function permuteHiddenZones(s: GameState, viewerIdx: 0 | 1): void {
   }
 }
 
+/**
+ * ⭐⭐⭐v6.238 讀「這一招對對手戰鬥位造成的傷害」。
+ *
+ * `lastDealtDamage` 只有 engine 的 ATTACK 主管線會寫，站內有一整族招式走的是
+ * 「regPre 傷害設 0 →（效果／選擇視窗）→ 最後才 dealAttackDamageToTarget」的延後範本，
+ * 那條路徑不經過主管線 ⇒ 只讀 `lastDealtDamage` 會得到 0，於是預估把「其實會打 420」
+ * 判成「純效果、沒有傷害 ⇒ 不顯示」。站長回報的「第一招完全沒有預估」就是這樣來的。
+ * ⇒ 改讀 v6.238 新增的 `attackDamageToDefActive`（兩條路徑都會寫）。
+ * ⚠ 取兩者的大值只是為了向下相容（例：錦標賽伺服器端還是舊版 server-engine 時），
+ *   兩欄講的是同一件事（對手戰鬥位吃到的招式傷害），不會互相污染。
+ */
+function readDealt(s: GameState): number {
+  return Math.max(s.attackDamageToDefActive ?? 0, s.lastDealtDamage ?? 0);
+}
+
+/**
+ * ⭐⭐⭐v6.238 乾跑時「把選擇視窗一路跑到底」的步數上限。
+ * 站內最長的 picker chain 是 3 段；6 足夠且保證任何情況都會停。
+ */
+const PENDING_STEP_BUDGET = 6;
+
+/** 這兩種 picker 的 payload 不是「iid 陣列」語意（選項字串／帶順序），乾跑不碰。 */
+const CHAIN_UNSUPPORTED_TYPES: ReadonlySet<string> = new Set(['modal-choice', 'reorder-deck-top']);
+
+/**
+ * 這個 picker 的候選 iid —— **只用於乾跑的「全選」對照組**。
+ * ⚠ 刻意用寬鬆的取法（有 `params.validIids` 就用它，否則整個來源區）：
+ *   它的用途是「換一種選擇再跑一次，看傷害會不會變」，寬一點只會讓結論更保守
+ *   （多判成「依選擇而定」），不會讓玩家看到錯的數字。
+ */
+function chainCandidates(s: GameState, p: PendingSelection, pool: Map<string, Card>): CardInstance[] | null {
+  if (CHAIN_UNSUPPORTED_TYPES.has(p.type)) return null;
+  const src = s.players?.[(p.sourcePlayerIdx ?? p.actorIdx) as 0 | 1];
+  if (!src) return null;
+  const arr = (x: unknown): CardInstance[] => (Array.isArray(x) ? (x as CardInstance[]).filter(c => c && typeof c.iid === 'string') : []);
+  const act = (): CardInstance[] => (src.active ? [src.active] : []);
+  let list: CardInstance[] | null;
+  switch (p.type) {
+    case 'deck-search': list = arr(src.deck); break;
+    case 'discard-search': list = arr(src.discard); break;
+    case 'hand-discard':
+    case 'hand-choose': list = arr(src.hand); break;
+    case 'bench-choose':
+    case 'opp-bench-choose':
+      list = [...arr(src.bench), ...(p.params?.includeActive === true ? act() : [])]; break;
+    case 'opp-poke-choose':
+    case 'heal-target': list = [...act(), ...arr(src.bench)]; break;
+    case 'active-energy-discard': list = arr(src.active?.energyAttached); break;
+    // 分配型：合法用「重複的 iid」編碼「分配幾個」⇒ 候選就是可分配的目標
+    case 'damage-distribute':
+    case 'energy-distribute': list = arr(src.bench); break;
+    default: list = null;
+  }
+  if (!list) return null;
+  // `params.validIids` 是「這個 picker 到底能勾什麼」的權威（消毒閘與 UI 都以它為準）。
+  const vi = p.params?.validIids;
+  if (Array.isArray(vi)) {
+    const allow = new Set((vi as unknown[]).filter((x): x is string => typeof x === 'string'));
+    list = list.filter(c => allow.has(c.iid));
+  }
+  // 卡面 filter（已收錄的才套；未收錄／查不到卡一律保留 —— 三態 fail-open，同消毒閘的作法）
+  const zone = p.type as SelectionFilterZone;
+  if (p.filter && (zone === 'deck-search' || zone === 'hand-discard' || zone === 'discard-search')
+      && isKnownSelectionFilter(zone, p.filter)) {
+    const f = p.filter;
+    list = list.filter(c => evaluateSelectionFilter(zone, f, { iid: c.iid }, pool.get(c.cardId),
+      { params: p.params as Record<string, unknown> | undefined }) !== false);
+  }
+  return list;
+}
+
+/**
+ * 乾跑要送出的答覆。回 `null` ＝「不能替玩家決定」，這一次乾跑放棄。
+ *
+ * 三種政策都是**玩家做得到的合法答覆**（張數在 min~max 之間）：
+ *   `min-first` 選最少張、由前往後取｜`max-first` 選最多張｜`min-last` 選最少張、由後往前取
+ * 三者算出來的傷害一致，才敢說「這一招的傷害與選擇無關」。
+ */
+function chainAnswer(
+  s: GameState,
+  p: PendingSelection,
+  pool: Map<string, Card>,
+  policy: 'min-first' | 'max-first' | 'min-last',
+): string[] | null {
+  const min = Math.max(0, p.minCount ?? 0);
+  const max = Math.max(min, p.maxCount ?? min);
+  if (min === 0 && policy !== 'max-first') return [];
+  const cands = chainCandidates(s, p, pool);
+  if (!cands) return null;
+  const ids = cands.map(c => c.iid);
+  if (ids.length === 0) return min === 0 ? [] : null;
+  const want = policy === 'max-first' ? Math.min(max, Math.max(min, ids.length)) : min;
+  const src = policy === 'min-last' ? [...ids].reverse() : ids;
+  const out = src.slice(0, want);
+  // 分配型的 minCount ＝「要分配幾個」，靠重複同一個 iid 表示 ⇒ 不足就補
+  while (out.length < want) out.push(src[out.length % src.length]);
+  return out;
+}
+
+/**
+ * ⭐⭐⭐v6.238 用**真實引擎**把選擇視窗一路回答到底，回傳最終盤面（跑不完回 `null`）。
+ *
+ * 為什麼需要：「先開選擇視窗、最後才造成傷害」的招式（波動突刺／弦月光芒／忍之利刃…）
+ * 在 ATTACK 這一個 action 結束時傷害根本還沒發生 ⇒ 只看那一刻就只能說「依選擇而定」。
+ * 引擎已經把後續流程寫好了，乾跑照著把 `RESOLVE_SELECTION` 送完就是了 —— 一樣是
+ * **零新計算邏輯**，跑的還是實戰那段程式碼。
+ * ⚠ 全程在丟棄用的深複製上進行；答不出來一律 `null`（fail-closed）。
+ */
+function drivePendingChain(
+  s0: GameState,
+  pool: Map<string, Card>,
+  policy: 'min-first' | 'max-first' | 'min-last',
+): GameState | null {
+  let s = s0;
+  for (let step = 0; step < PENDING_STEP_BUDGET; step++) {
+    const p = s.pendingSelection;
+    if (!p) return s;
+    if (s.phase !== 'playing') return s;
+    const ans = chainAnswer(s, p, pool, policy);
+    if (ans === null) return null;
+    const tokenBefore = p.token;
+    const keyBefore = p.effectKey;
+    let next: GameState;
+    try {
+      next = applyAction(
+        s,
+        { type: 'RESOLVE_SELECTION', selectedIids: ans, senderIdx: p.actorIdx, pendingToken: p.token },
+        pool,
+      );
+    } catch (err) {
+      warnEstimateOnce('乾跑把選擇視窗跑到底時丟出例外', err);
+      return null;
+    }
+    const np = next.pendingSelection;
+    // 同一個 picker 還在原地 ⇒ 引擎沒受理這個答覆（消毒閘擋下等）⇒ 放棄，別空轉
+    if (np && np.token === tokenBefore && np.effectKey === keyBefore) return null;
+    s = next;
+  }
+  return s.pendingSelection ? null : s;
+}
+
 /** 從新增的 log 取出最後一段引擎寫的傷害公式（`【100(基礎) ×2(弱點) = 200】`）。 */
 function pickFormula(messages: string[]): string {
   let out = '';
   for (const m of messages) {
     const hit = /【([^】]+)】/.exec(m);
-    if (hit) out = hit[1];
+    // ⚠⚠v6.238：【】在 log 裡不是公式專用 —— 卡名本身就有（「基本【鬥】能量」「寶可夢【ex】」）。
+    //   v6.238 讓乾跑把選擇視窗跑到底之後，被掃到的 log 變多，波動突刺就抓到了「鬥」當公式
+    //   （畫面上會多出一行莫名其妙的「鬥」）。引擎寫的公式一定同時有 `(基礎)` 與 ` = `。
+    if (hit && hit[1].includes('(基礎)') && hit[1].includes(' = ')) out = hit[1];
   }
   return out;
 }
@@ -323,6 +468,7 @@ function runOnce(
   // `lastDealtDamage` 不是每次 ATTACK 開頭清的（engine.ts 只在造成傷害時寫入），
   // 殘留的上一招數值會被誤讀成這一招的傷害 ⇒ 在**丟棄用的複本**上先歸零。
   work.lastDealtDamage = 0;
+  work.attackDamageToDefActive = 0;   // ⭐v6.238 同上（見 readDealt）
   // ⭐v6.237【D】能量不足時，先在複本上把費用補滿（補不出來就放棄這一次乾跑）。
   if (topUpEnergyExtra !== null && !topUpEnergyForCost(work, attackIndex, pool, topUpEnergyExtra)) {
     return { ok: false };
@@ -335,6 +481,26 @@ function runOnce(
   try {
     Math.random = bandedRandom(mode);
     out = applyAction(work, { type: 'ATTACK', attackIndex }, pool);
+    // ⭐⭐⭐v6.238 這一招是「先開選擇視窗、最後才造成傷害」的話，ATTACK 這一個 action
+    //   結束時傷害還沒發生。用真實引擎把選擇視窗跑到底 —— **而且要跑三種不同的合法答覆**：
+    //     ・min-first ＝ 選最低張數、由前往後取
+    //     ・max-first ＝ 選最高張數（張數會不會影響傷害）
+    //     ・min-last  ＝ 選最低張數、由後往前取（「選到哪一張」會不會影響傷害）
+    //   三種答覆算出來的傷害**一樣** ⇒ 這一招的傷害與選擇無關，可以放心報數字；
+    //   不一樣（或任一邊跑不完）⇒ 維持原本的「依選擇而定」，絕不拿其中一個數字騙玩家。
+    //   ⚠ 必須留在 Math.random 還被換掉的區間內，硬幣模式才跟主 action 一致。
+    if (out.pendingSelection) {
+      const cNone = drivePendingChain(out, pool, 'min-first');
+      const cAll = cNone ? drivePendingChain(out, pool, 'max-first') : null;
+      const cAlt = cAll ? drivePendingChain(out, pool, 'min-last') : null;
+      //   ⚠⚠ 還要求「跑到底之後傷害 > 0」：跑完仍是 0 的話，分不出「這招本來就不造成傷害」
+      //     與「傷害正是由這個選擇決定的」⇒ 一律維持 v6.237 的「依選擇而定」。
+      //     少了這一關，狩獵鳳蝶｜能量吸管／風妖精ex｜奇跡棉花（傷害取決於對手手牌組成）
+      //     會在「剛好算出 0」時從『依選擇而定』掉成『完全不顯示』——而「有沒有顯示」
+      //     本身就是玩家看得出來的訊號（v6.236 那一條的精神）。
+      if (cNone && cAll && cAlt && readDealt(cNone) === readDealt(cAll)
+          && readDealt(cNone) === readDealt(cAlt) && readDealt(cNone) > 0) out = cNone;
+    }
   } catch (err) {
     // ⚠v6.237：引擎在乾跑中丟例外也要留一行（例：卡池不完整）。行為仍 fail-closed。
     warnEstimateOnce('引擎在乾跑中丟出例外', err);
@@ -347,7 +513,7 @@ function runOnce(
   const formula = pickFormula(added);
   return {
     ok: true,
-    dmg: out.lastDealtDamage ?? 0,
+    dmg: readDealt(out),   // ⭐v6.238 延後造成的傷害也讀得到（見 readDealt）
     // flipCoinsWithLog 每擲一次就 append 一筆；ATTACK 開頭會清空 ⇒ 這就是「本招擲了幾次」。
     flips: (out._machineGunLastFlips ?? []).length,
     pending: !!out.pendingSelection,

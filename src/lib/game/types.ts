@@ -874,6 +874,22 @@ export interface GameState {
    * 每次 ATTACK 開始時重置，避免跨 attack 殘留。
    */
   lastDealtDamage?: number;
+  /**
+   * ⭐⭐⭐v6.238 這一次招式**總共**對「對手的戰鬥寶可夢」造成的傷害量。
+   *
+   * 為什麼不能沿用 `lastDealtDamage`：那一欄只在 engine 的 ATTACK 主管線寫入，
+   * 而站內有一整族招式走的是「regPre 傷害設 0 →（效果／選擇視窗）→ 最後才用中央
+   * `dealAttackDamageToTarget` 造傷害」的延後範本（超級路卡利歐ex｜波動突刺、
+   * 克雷色利亞｜弦月光芒、甲賀忍蛙ex｜忍之利刃…）。那條路徑一個字都沒寫進
+   * `lastDealtDamage` ⇒ 讀那一欄的人會以為「這一招不造成傷害」。
+   *
+   * 寫入點只有兩處，兩處都是**引擎自己算完之後**的最終值（含弱點／抵抗力／各種加減傷）：
+   *   ① engine ATTACK 主管線的傷害套用點（**指派**，等同於「每次攻擊開始時歸零」）
+   *   ② effects.ts 的中央 `dealAttackDamageToTarget`（**累加**，因為它可能在同一次
+   *      攻擊裡被呼叫多次，而且往往發生在 RESOLVE_SELECTION 之後的後續 action）
+   * ⚠ 只計「攻擊方 → 對手戰鬥位」的招式傷害：備戰狙擊、自傷、放置傷害指示物都不算。
+   */
+  attackDamageToDefActive?: number;
   /** 目前場上的競技場牌（Stadium） */
   activeStadium?: CardInstance;
   /**

@@ -383,7 +383,8 @@ console.log('\n⑦ 【D】盤面污染：補能量只發生在丟棄用的複本
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑧ 【D】桌機 hover：提示掛在容器上，但按鈕**仍然按不下去**');
 {
-  const i = PAGE.indexOf('<span class="atk-slot">');
+  // ⚠v6.238：這個容器多了 `class:est-open={…}`（放大鏡點開狀態）⇒ 錨點不能含結尾的 `>`。
+  const i = PAGE.indexOf('<span class="atk-slot"');
   chk('模板有 .atk-slot 容器', i > 0);
   const seg = i > 0 ? PAGE.slice(i, i + 2600) : '';
   const iBtnEnd = seg.indexOf('</button>');
