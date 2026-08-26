@@ -42,7 +42,7 @@ import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { applyAction } from './engine';
 
-/** 傷害公式中的一項。label 一律沿用**引擎自己寫的字串**（例：`弱點` / `屬性相剋`），不另行翻譯。 */
+/** 傷害公式中的一項。label 一律沿用**引擎自己寫的字串**（例：`弱點` / `抵抗力`），不另行翻譯。 */
 export type EstimateTerm = { sign: string; value: number; label: string };
 
 export type DamageEstimate =
@@ -67,10 +67,13 @@ type RunOut =
 /**
  * ⚠⚠ 固定結果的**預算**。超過就改回相反的那一面。
  *
- * 為什麼一定要有：`怪顎龍｜亂暴` 的實作是 `while (true) { 擲1次; if (反面) break; }`
- * **沒有次數上限**（同族的 flipUntilTails / coinUntilTailsMultiplyPre 都有 20~30 的上限，
- * 只有它沒有）。真實對局靠 `Math.random` 收斂，但乾跑把硬幣**固定成全正面**時
- * 這個迴圈永遠不會結束 —— 瀏覽器分頁會直接卡死。
+ * 為什麼一定要有：v6.233 當時 `怪顎龍｜亂暴`／`洛奇亞ex｜破壞潮旋` 的實作是
+ * `while (true) { 擲1次; if (反面) break; }` **沒有次數上限**，乾跑把硬幣固定成全正面時
+ * 迴圈永遠不會結束 —— 瀏覽器分頁會直接卡死。
+ * ⚠ v6.234 已把全站「擲到反面為止」收斂到 `flipCoinsUntilTails`，每一處都有明確上限
+ *   （10／20／30，逐卡宣告），所以那個特定的無窮迴圈已經不存在。
+ *   **但這道預算仍然保留**：它擋的是「任何一處未來又寫出無上限迴圈」的通例，
+ *   是這支乾跑自己的安全網，不依賴卡片實作端永遠做對（Rule 25 的精神）。
  * ⇒ 固定結果只維持前 `COIN_BUDGET` 次抽樣，之後翻面，保證任何迴圈都會終止。
  *
  * 256 的取法：合法的擲幣次數最多就是實作端的上限 30；Fisher-Yates 洗一副 60 張牌
@@ -284,7 +287,13 @@ export function estimateShortText(e: DamageEstimate | null | undefined): string 
       return why ? `預估 ${e.min}～${e.max}（${src}；${why}）` : `預估 ${e.min}～${e.max}（${src}）`;
     }
     case 'open':
-      return `預估 ${e.min}+（擲到反面為止，無上限）`;
+      // ⭐v6.234 站長裁定：舊文案「預估 0+（擲到反面為止，無上限）」的「0+」讀起來很怪。
+      //   ⇒ 一律改講「傷害依擲幣次數而定」；基礎傷害不為 0 的招式（例：超級袋獸ex｜機關槍合擊 200+）
+      //     先報起始值再講次數，才不會讓玩家以為那一招真的可能只打 0。
+      //   ⚠ 手機直式與桌機都是呼叫這一支，**只有這一份字串**（禁兩份文案）。
+      return e.min > 0
+        ? `預估 ${e.min} 起，傷害依擲幣次數而定`
+        : '預估：傷害依擲幣次數而定';
     case 'depends':
       return e.why === 'hidden' ? '預估：依未知的牌序而定' : '預估：依選擇而定';
     default:

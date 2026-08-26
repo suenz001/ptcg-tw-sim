@@ -35,7 +35,7 @@ import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../
 import { bareCardsForReturn, splitPokemonReturnToHand } from '../_shared'; // v5.781 bounce 到牌庫中央收斂 / v6.097 本體+進化棧回手、其餘丟棄
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { coinStatusPost, flipCoinsWithLog, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
+import { coinStatusPost, flipCoinsWithLog, flipCoinsUntilTails, statusPost, applyStatusToSelfActive, applyDamageToAllOpp } from '../../effects';
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
@@ -515,15 +515,10 @@ regPost('圖圖犬|能量寫生', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('賽富豪|抓到飽', (s) => ({ state: s, damage: 0 }));
 regPost('賽富豪|抓到飽', (state, aIdx, _pool) => {
-  let heads = 0;
-  let s = state;
-  while (true) {
-    const r = flipCoinsWithLog(s, 1, '抓到飽', aIdx);
-    s = r.state;
-    if (r.heads === 0) break;
-    heads++;
-    if (heads >= 20) break;  // 安全閥
-  }
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用原本的 20 次安全閥（行為不變）。
+  const rfa = flipCoinsUntilTails(state, aIdx, '抓到飽', 20);
+  const heads = rfa.heads;
+  let s = rfa.state;
   if (heads === 0) {
     return updatePlayer(addLog(s, '抓到飽：0 正面', aIdx), aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
   }
@@ -594,14 +589,11 @@ regPre('墓揚犬|恐怖啃咬', (s) => ({ state: s, damage: 30 }));
 //   出現的次數相同數量的卡，查看那些卡的正面後放回對手的牌庫並重洗」→ 玩家盲選，不是隨機。
 //   ⚠ 保留原本 10 次的安全上限（防無限迴圈）。
 regPost('墓揚犬|恐怖啃咬', (state, aIdx, pool) => {
-  let heads = 0;
-  let s = state;
-  while (heads < 10) {
-    const r = flipCoinsWithLog(s, 1, '恐怖啃咬', aIdx);
-    s = r.state;
-    if (r.heads === 0) break;
-    heads++;
-  }
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用原本的 10 次上限（⚠ 這一張就是 10，不是 20／30；
+  //   同族上限值本來就不一致，改成別的數字＝改掉這張卡的行為，所以逐卡宣告）。
+  const rfb = flipCoinsUntilTails(state, aIdx, '恐怖啃咬', 10);
+  const heads = rfb.heads;
+  const s = rfb.state;
   if (heads === 0) return addLog(s, '恐怖啃咬：第一次就反面 → 無效果', aIdx);
   return oppReturnChosenConcealedToDeckPost(heads, '恐怖啃咬')(s, aIdx, pool);
 });

@@ -9,7 +9,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
 import { joinCardNames, logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op
 import type { AttackPostFn, AttackPreFn } from '../_shared';
-import { flipCoinsWithLog, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
+import { flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // helpers
@@ -594,15 +594,10 @@ regPre('頭巾混混|無賴攻擊', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('火箭隊的地鼠|狂潛', (s) => ({ state: s, damage: 0 }));
 regPost('火箭隊的地鼠|狂潛', (state, aIdx, pool) => {
-  let heads = 0;
-  let s0 = state;
-  for (let i = 0; i < 20; i++) {
-    const r = flipCoinsWithLog(s0, 1, '狂潛', aIdx);
-    s0 = r.state;
-    if (r.heads === 1) heads++;
-    else break;
-  }
-  let s = addLog(s0, `狂潛：擲到反面為止 → ${heads} 次正面`, aIdx);
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用原本的 20 次上限（行為不變）。
+  const rf = flipCoinsUntilTails(state, aIdx, '狂潛', 20);
+  const heads = rf.heads;
+  let s = addLog(rf.state, `狂潛：擲到反面為止 → ${heads} 次正面`, aIdx);
   if (heads === 0) return s;
   const dIdx = (1 - aIdx) as 0 | 1;
   const discardCount = Math.min(heads, s.players[dIdx].deck.length);

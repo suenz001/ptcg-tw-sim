@@ -29,6 +29,7 @@ import {
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
 import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost, oppSwapDmgPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
+import { flipCoinsUntilTails } from '../../effects'; // v6.234 擲到反面為止中央 helper（上限逐處宣告）
 import { openPeekOppHandView } from '../../effects'; // v5.876 查看對手手牌 UI
 import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
 import type { GameState, CardInstance } from '../../types';
@@ -162,14 +163,9 @@ function coinReverseFailPre(base: number, label: string): AttackPreFn {
 
 function coinHeadsUntilTailsPre(perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let s = state, heads = 0;
-    while (true) {
-      const r = flipCoinsWithLog(s, 1, label, aIdx);
-      s = r.state;
-      if (r.heads === 0) break;
-      heads++;
-      if (heads >= 30) break;
-    }
+    // v6.234：收斂到中央 flipCoinsUntilTails，沿用本檔原本的 30 次上限（行為不變）。
+    const rf = flipCoinsUntilTails(state, aIdx, label, 30);
+    const s = rf.state, heads = rf.heads;
     const dmg = heads * perHead;
     return { state: addLog(s, `${label}：${heads} 正面 → ${heads}×${perHead} = ${dmg}`, aIdx), damage: dmg };
   };
@@ -177,14 +173,9 @@ function coinHeadsUntilTailsPre(perHead: number, label: string): AttackPreFn {
 
 function coinHeadsUntilTailsBonusPre(base: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let s = state, heads = 0;
-    while (true) {
-      const r = flipCoinsWithLog(s, 1, label, aIdx);
-      s = r.state;
-      if (r.heads === 0) break;
-      heads++;
-      if (heads >= 30) break;
-    }
+    // v6.234：收斂到中央 flipCoinsUntilTails，沿用本檔原本的 30 次上限（行為不變）。
+    const rf = flipCoinsUntilTails(state, aIdx, label, 30);
+    const s = rf.state, heads = rf.heads;
     const dmg = base + heads * perHead;
     return { state: addLog(s, `${label}：${heads} 正面 → ${base}+${heads}×${perHead} = ${dmg}`, aIdx), damage: dmg };
   };

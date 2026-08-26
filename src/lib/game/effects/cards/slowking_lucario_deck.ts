@@ -16,7 +16,7 @@ import {
   shuffle, updatePlayer, addLog, drawCards, withPending,
 } from '../_shared';
 import { dealAttackDamageToTarget } from '../../effects'; // v5.386：幻影碎放指示物改走中央函式（補招式效果免疫 guard）
-import { flipCoinsWithLog } from '../../effects';
+import { flipCoinsUntilTails } from '../../effects';
 import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -183,14 +183,10 @@ regPre('超級袋獸ex|機關槍合擊', (state, aIdx, _pool, action) => {
   //   不再 inline 維護 flips 陣列 / 自行讀 action._retryInjectedFlips —
   //   engine keep 路徑同時設 state queue，由 flipCoinsWithLog 統一消費。
   void action;
-  let s: GameState = state;
-  let heads = 0;
-  for (let i = 0; i < 20; i++) {
-    const r = flipCoinsWithLog(s, 1, '機關槍合擊', aIdx);
-    s = r.state;
-    if (r.heads === 1) heads++;
-    else break;
-  }
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用原本的 20 次上限（行為不變）。
+  const rf = flipCoinsUntilTails(state, aIdx, '機關槍合擊', 20);
+  let s: GameState = rf.state;
+  const heads = rf.heads;
   const dmg = 200 + heads * 50;
   s = addLog(s, `機關槍合擊：${heads} 次正面 → 基礎 200 + ${heads}×50 = ${dmg} 傷害`, aIdx);
   return { state: s, damage: dmg };

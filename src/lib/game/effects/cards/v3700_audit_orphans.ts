@@ -30,7 +30,7 @@ import { getOwnBenchLimit } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import type { PlayerState } from '../../types';
 import {
-  statusPost, coinHeadsMultiplyPre, selfHitPost, flipCoinsWithLog, snipeOneOppBenchPost,
+  statusPost, coinHeadsMultiplyPre, selfHitPost, flipCoinsWithLog, flipCoinsUntilTails, snipeOneOppBenchPost,
 } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 
@@ -251,14 +251,9 @@ regPost('皮卡丘ex|極限伏特', (state, aIdx, _pool) => {
 // 卡蒂狗｜連續火焰 — 擲硬幣直到出現反面，造成正面次數 ×30 點傷害
 // 不 import v2750 的 coinHeadsUntilTailsPre（避免跨檔依賴複雜化），inline 實作。
 regPre('卡蒂狗|連續火焰', (state, aIdx, _pool) => {
-  let s = state, heads = 0;
-  while (true) {
-    const r = flipCoinsWithLog(s, 1, '連續火焰', aIdx);
-    s = r.state;
-    if (r.heads === 0) break;
-    heads++;
-    if (heads >= 30) break;  // safety cap
-  }
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用原本的 30 次上限（行為不變）。
+  const rf = flipCoinsUntilTails(state, aIdx, '連續火焰', 30);
+  const s = rf.state, heads = rf.heads;
   const dmg = heads * 30;
   return { state: addLog(s, `連續火焰：${heads} 正面 → ${heads}×30 = ${dmg}`, aIdx), damage: dmg };
 });

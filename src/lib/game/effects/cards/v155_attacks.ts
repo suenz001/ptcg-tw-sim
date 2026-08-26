@@ -49,7 +49,7 @@ import {
 import {
   coinHeadsMultiplyPre,
   hitBenchPickPost,
-  flipCoinsWithLog,
+  flipCoinsUntilTails,
   hasBloomOnField,
   discardOppActiveEnergyPost,
 } from '../../effects';
@@ -567,14 +567,13 @@ regPre('帝牙盧卡|時間爆炸', (state, aIdx, pool, action) => {
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('洛奇亞ex|破壞潮旋', (state) => ({ state, damage: 140 }));
 regPost('洛奇亞ex|破壞潮旋', (state, aIdx, pool) => {
-  let heads = 0;
-  let s0: GameState = state;
-  while (true) {
-    const r = flipCoinsWithLog(s0, 1, '破壞潮旋', aIdx);
-    s0 = r.state;
-    if (r.heads === 0) break;
-    heads++;
-  }
+  // ⚠⚠ v6.234：原本是 `while (true)` **完全沒有次數上限** —— 真實對局靠 Math.random 必然收斂，
+  //   但只要擲幣被固定成全正面（預估傷害乾跑／AI 評估／測試）就會無窮迴圈。
+  //   改走中央 flipCoinsUntilTails 並宣告上限 30（＝同族既有上限的最大值，最貼近「無上限」）。
+  //   30 連正面的機率約 9.3e-10 ⇒ 實戰行為與先前等效。
+  const rf = flipCoinsUntilTails(state, aIdx, '破壞潮旋', 30);
+  const heads = rf.heads;
+  const s0: GameState = rf.state;
   if (heads === 0) {
     return addLog(s0, '破壞潮旋：第 1 次擲就反面 → 不丟能量', aIdx);
   }

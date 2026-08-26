@@ -13,7 +13,7 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { getOwnBenchLimit, joinCardNames } from '../_shared';
-import { flipCoinsWithLog, lockOppChosenAttackPost } from '../../effects';
+import { flipCoinsUntilTails, lockOppChosenAttackPost } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 import {
   addLog,
@@ -247,15 +247,13 @@ regPost('怪顎龍|亂暴', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
 
   // 擲幣到反面，累計正面次數（逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack）
-  let heads = 0;
-  let s0: GameState = state;
-  while (true) {
-    const r = flipCoinsWithLog(s0, 1, '亂暴', aIdx);
-    s0 = r.state;
-    if (r.heads === 0) break;
-    heads++;
-  }
-  state = s0;
+  // ⚠⚠ v6.234：原本是 `while (true)` **完全沒有次數上限** —— 真實對局靠 Math.random 必然收斂，
+  //   但只要擲幣被固定成全正面（預估傷害乾跑／AI 評估／測試）就會無窮迴圈。
+  //   改走中央 flipCoinsUntilTails 並宣告上限 30（＝同族既有上限的最大值，最貼近「無上限」）。
+  //   30 連正面的機率約 9.3e-10 ⇒ 實戰行為與先前等效。
+  const rf = flipCoinsUntilTails(state, aIdx, '亂暴', 30);
+  const heads = rf.heads;
+  state = rf.state;
 
   if (heads === 0) {
     return addLog(state, '亂暴：第 1 次擲幣就反面 → 不丟棄對手牌庫', aIdx);

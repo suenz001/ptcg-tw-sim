@@ -2,7 +2,7 @@ import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
 import { hasStatusInAnySlot } from '../_shared'; // v5.834 跨三槽狀態讀取
-import { flipCoinsWithLog, applyStatusToSelfActive } from '../../effects';
+import { flipCoinsWithLog, flipCoinsUntilTails, applyStatusToSelfActive } from '../../effects';
 import { computeActiveRetreatCostFor } from '../../engine'; // v5.711 有效撤退費(整隻咬)
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
@@ -19,15 +19,8 @@ function damageCounters(inst: CardInstance | null | undefined): number {
 }
 
 function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: number } {
-  let s = state;
-  let heads = 0;
-  for (let i = 1; i <= 20; i++) {
-    const r = flipCoinsWithLog(s, 1, label, aIdx);
-    s = r.state;
-    if (r.heads === 1) heads++;
-    else break;
-  }
-  return { state: s, heads };
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用本檔原本的 20 次上限（行為不變）。
+  return flipCoinsUntilTails(state, aIdx, label, 20);
 }
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {

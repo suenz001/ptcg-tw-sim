@@ -5,7 +5,7 @@
  */
 
 import type { CardInstance, PlayerState } from '../../types';
-import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
+import { statusPost, discardOppActiveEnergyPost, countOneEnergy, flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware } from '../../effects'; // v5.797 中央施狀態(gate 免疫)
 import { defNextAtkReducePost, selfDmgReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate) + v6.001 自身防護
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.690 有效撤退費
 import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, countAttachedEnergyAsUnits,
@@ -63,14 +63,10 @@ function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
 //   本檔的 斗笠菇/凍原熊/章魚桶/泥驢仔 用此版（base 先）。守衛見 test-coin-until-tails-formula。
 function coinUntilTailsMultiplyPre(base: number, perHead: number, label: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let heads = 0;
-    let s0 = state;
-    for (let i = 0; i < 20; i++) {
-      const r = flipCoinsWithLog(s0, 1, label, aIdx);
-      s0 = r.state;
-      if (r.heads === 1) heads++;
-      else break;
-    }
+    // v6.234：收斂到中央 flipCoinsUntilTails，沿用本檔原本的 20 次上限（行為不變）。
+    const rf = flipCoinsUntilTails(state, aIdx, label, 20);
+    const heads = rf.heads;
+    const s0 = rf.state;
     const dmg = base + heads * perHead;
     const s = addLog(s0, `${label}：擲到反面為止 → ${heads} 次正面 = ${base} + ${heads}×${perHead} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };

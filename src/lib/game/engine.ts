@@ -5531,7 +5531,11 @@ function handlePlaying(
       const resistDelta = parseInt(resistanceValue, 10);  // "-30" → -30
       if (!isNaN(resistDelta)) {
         baseDamage = Math.max(0, baseDamage + resistDelta);
-        formula.push({ sign: '-', value: Math.abs(resistDelta), label: '屬性相剋' });
+        // v6.234：label 改用**卡面官方用語**「抵抗力」（PTCG_RULES.md L138、卡面「不計算弱點・抵抗力」）。
+        //   ⚠ 只是顯示文字 —— 上一行的 baseDamage 算式一字未動，傷害數值完全不變。
+        //   ⚠ 已歸檔的舊對戰紀錄仍留著改版前的舊用語，那是歷史文字、不改也不該改；
+        //     全站沒有任何邏輯拿這個字串做判斷（只當顯示），新舊並存不影響回放。
+        formula.push({ sign: '-', value: Math.abs(resistDelta), label: '抵抗力' });
       }
     }
     // v2.101：鋁鋼橋龍｜塗層攻擊 / 超級雷電獸ex｜閃光射線

@@ -6050,6 +6050,39 @@ export function flipCoinsWithLog(
   return { state: s, heads };
 }
 
+/**
+ * ⭐v6.234 「擲硬幣直到出現反面」的**唯一**中央實作。
+ *
+ * 為什麼要收斂：全站原本有 12 處各自手寫這個迴圈，安全上限散落成 **10 / 20 / 30 / 完全沒有**
+ * 四種寫法（純粹是不同批次各寫各的，沒有任何卡面上的理由）。其中
+ * `怪顎龍｜亂暴`（v2355）與 `洛奇亞ex｜破壞潮旋`（v155）是 `while (true)` **沒有上限**：
+ * 真實對局靠 `Math.random` 必然收斂，所以那不是現行 bug；但只要有人把擲幣固定住
+ * （預估傷害的乾跑、AI 評估、測試），迴圈就永遠不會結束 —— 分頁直接卡死。
+ *
+ * ⚠⚠ `maxFlips` 是**必填**參數，不給預設值：各卡的既有上限不同，給預設值等於默默改掉
+ * 某些卡的行為（IRON_RULES Rule 28 —— 共用 factory 要強迫呼叫端回去讀自己那一張）。
+ *
+ * 語意：最多擲 `maxFlips` 次；擲出反面就停。回傳正面次數（≤ maxFlips）。
+ * 與原本各處的 `for (let i = 0; i < N; i++)` / `while (true) { …; if (heads >= N) break; }`
+ * **逐次等價**（兩種寫法都是「最多 N 次擲幣」），所以收斂不改變任何一張卡的實戰行為。
+ */
+export function flipCoinsUntilTails(
+  state: GameState,
+  aIdx: 0 | 1,
+  label: string,
+  maxFlips: number,
+): { state: GameState; heads: number } {
+  let s = state;
+  let heads = 0;
+  for (let i = 0; i < maxFlips; i++) {
+    const r = flipCoinsWithLog(s, 1, label, aIdx);
+    s = r.state;
+    if (r.heads === 1) heads++;
+    else break;
+  }
+  return { state: s, heads };
+}
+
 /** 簡易 coin flip +N helper：基礎傷害 + (正面 ? N : 0) */
 // v6.061：export 供 M6 批次2 卡檔復用（原為 local，行為完全未變）
 export function coinPlusPre(base: number, bonus: number, attackName: string): AttackPreFn {
@@ -6634,16 +6667,11 @@ regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼',
 //   守衛：scripts/test-coin-until-tails-formula.mjs 以卡面印刷傷害驗全部 flip-until-tails 招式。
 function coinUntilTailsMultiplyPre(perHead: number, base: number, attackName: string): AttackPreFn {
   return (state, aIdx, _pool) => {
-    let s = state;
-    let heads = 0;
-    // 安全上限 20 次防無限迴圈（理論概率近 0，但保護）
-    // v5.x：逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack（重試徽章）+ consume retry queue
-    for (let i = 0; i < 20; i++) {
-      const r = flipCoinsWithLog(s, 1, attackName, aIdx);
-      s = r.state;
-      if (r.heads === 1) heads++;
-      else break;
-    }
+    // v6.234：收斂到中央 flipCoinsUntilTails。**沿用原本的 20 次安全上限**，行為完全不變。
+    // （逐次走 flipCoinsWithLog → 設 coinFlippedThisAttack（重試徽章）+ consume retry queue）
+    const rf = flipCoinsUntilTails(state, aIdx, attackName, 20);
+    let s = rf.state;
+    const heads = rf.heads;
     const dmg = base + heads * perHead;
     s = addLog(s, `${attackName}：${heads} 次正面 → 基礎 ${base} + ${heads}×${perHead} = ${dmg} 傷害`, aIdx);
     return { state: s, damage: dmg };
@@ -11426,7 +11454,7 @@ regPost('大電海燕|風力充能', setSelfDamageBonusPendingPost(120, '風力�
 //   統一處理（見上方 map + NO_STACK），涵蓋電蜘蛛所有招式、在 weakness ×2 前套用，符合卡面
 //   「這隻寶可夢使用的招式」。base 麻麻羅網 regPre（含 +80 雷邏輯）在 L5517。
 //   v5.327：移除原本此處的 inline 複眼 +50 wrapper —— 它與 PASSIVE_ATTACK_BONUS['複眼'] 重複，
-//   兩個 +50 都在 weakness 前套用，屬性相剋時各被 ×2 → 多算 100（玩家回報 460，正解 360）。
+//   兩個 +50 都在 weakness 前套用，打到弱點時各被 ×2 → 多算 100（玩家回報 460，正解 360）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 38af v1.82 H 標第 27 波 — KO-check / self-damage / 條件 cantAttackPending

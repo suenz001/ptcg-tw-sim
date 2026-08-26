@@ -113,7 +113,7 @@ const CASES = [
   // [標題, 攻擊方, 招式, 防守方, 期望在公式裡看到的 label（沒有就 null）]
   ['固定傷害（無弱抗）', '菊草葉', '飛葉快刀', NEUTRAL?.name, null],
   ['弱點 ×2',            '菊草葉', '飛葉快刀', '狃拉', '弱點'],
-  ['抵抗力 −30',         '大岩蛇', '怪力',     '凱西', '屬性相剋'],
+  ['抵抗力 −30',         '大岩蛇', '怪力',     '凱西', '抵抗力'],   // v6.234：label 改用卡面官方用語
   ['+N 條件（對手為 ex）', '火焰鳥', '鬥志之翼', '超級拉帝亞斯ex', null],
   ['+N 條件（負對照：對手非 ex）', '火焰鳥', '鬥志之翼', '菊草葉', null],
   ['×N 依數量（自身能量數）', '拉普拉斯ex', '水炮迴旋', NEUTRAL?.name, null],
@@ -276,8 +276,9 @@ console.log('\n⑤ ⭐「擲硬幣直到出現反面」一律不給範圍（行�
 
   const s = setup('胖丁', '滾球', NEUTRAL?.name);
   const e = s && mod.estimateAttackDamage(s.state, s.idx, pool, 0);
-  chk('胖丁｜滾球 文案寫「無上限」而不是給假的上界：' + (e ? mod.estimateShortText(e) : '—'),
-      !!e && e.kind === 'open' && mod.estimateShortText(e).includes('無上限'));
+  // v6.234：文案改成「傷害依擲幣次數而定」（站長裁定；舊的「0+」讀起來很怪）。
+  chk('胖丁｜滾球 講「依擲幣次數而定」而不是給假的上界：' + (e ? mod.estimateShortText(e) : '—'),
+      !!e && e.kind === 'open' && mod.estimateShortText(e).includes('傷害依擲幣次數而定'));
 }
 
 // ══════════════════════════════════════════════════════════════════════════

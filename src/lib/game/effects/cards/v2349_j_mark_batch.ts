@@ -2,7 +2,7 @@ import type { CardInstance, GameState, PlayerState } from '../../types';
 import { canApplyEffectToTarget } from '../../defense';
 import { addLog, addPrivateLog, regPost, regPre, regR, shuffle, updatePlayer, withPending } from '../_shared';
 import { startEnergyChain } from './v158_energy_chain';
-import { canApplyAttackEffectToTarget, flipCoinsWithLog, dealAttackDamageToTarget } from '../../effects';
+import { canApplyAttackEffectToTarget, flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget } from '../../effects';
 
 function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number): { state: GameState; heads: number } {
   // v5.x: 改委派給 effects.ts 的中央 flipCoinsWithLog（同步設 coinFlippedThisAttack
@@ -12,15 +12,8 @@ function flipFixed(state: GameState, aIdx: 0 | 1, label: string, count: number):
 }
 
 function flipUntilTails(state: GameState, aIdx: 0 | 1, label: string): { state: GameState; heads: number } {
-  let s: GameState = state;
-  let heads = 0;
-  for (let i = 1; i <= 20; i++) {
-    const r = flipCoinsWithLog(s, 1, label, aIdx);
-    s = r.state;
-    if (r.heads === 1) heads++;
-    else break;
-  }
-  return { state: s, heads };
+  // v6.234：收斂到中央 flipCoinsUntilTails，沿用本檔原本的 20 次上限（行為不變）。
+  return flipCoinsUntilTails(state, aIdx, label, 20);
 }
 
 function setDefenderAttackFailure(
