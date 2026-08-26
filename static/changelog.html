@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.232</span> <b>特典卡資料修正：三張卡與官方卡面對齊、能量標記更新</b><br>M-P特典卡的菊草葉（155/M-P）、暖暖豬（158/M-P）、小鋸鱷（161/M-P）卡片資料先前與官方卡面不符，已逐欄更正；另有 9 張基本能量的賽制標記跟進官方改為 J。</summary>
+        <div class="log-body">這三張特典卡先前被誤植成同名舊卡的內容：菊草葉（155/M-P）的招式應為「叫聲」與「種子炸彈 30」，先前誤植為「飛葉快刀 20」；暖暖豬（158/M-P）應為 HP80、招式「吐火 20」、撤退 2，先前誤植為 HP70 的舊版內容；小鋸鱷（161/M-P）應為 HP80、招式「撞一下 40（自身也受 10 點傷害）」，先前誤植為 HP70「咬緊 10」。三張卡已逐欄與台灣官方卡面核對更正，牌組中已放入這幾張卡的玩家不需要做任何調整，對戰中會直接以正確卡面進行。另外 M-P特典卡的 9 張基本能量，官方卡片頁的賽制標記已更新為 J，本站一併跟進；基本能量在標準賽制本來就不受標記限制，牌組合法性與對戰行為完全不受影響。</div>
+      </details>
+<details>
         <summary><span class="ver-badge">v6.230</span> <b>匯出官網牌組代碼不再無限等待</b><br>牌組編輯的「匯出為官網代碼」若遇到官方網站回應過慢，會在最多約 50 秒內顯示明確提示，不再一直停在匯出中；官網正常時的匯出流程與結果完全不變。</summary>
         <div class="log-body">把牌組匯出成台灣官方網站的牌組代碼時，需要與官方網站往返三個步驟；先前只要其中任何一步沒有回應，按鈕就會永遠停在匯出中，畫面也沒有任何說明。這一版起每個步驟都加上等待上限（每步約 20 秒、全程約 50 秒），超過時會依發生的階段顯示對應提示：發生在前兩步時牌組尚未發行、稍後再試即可；發生在最後的發行步驟時，牌組有可能已在官網發行成功、只是代碼沒能傳回來，此時重試會在官網多留下一份牌組紀錄（與平常重複匯出的情況相同）。代碼格式、張數檢查、操作頻率限制等其他情況的表現維持不變，匯出成功的結果也與先前完全相同。</div>
       </details>
@@ -194,11 +198,7 @@
         <summary><span class="ver-badge">v6.167</span> <b>錦標賽報到：修正「按下報到沒有反應」</b><br>版本過舊時的更新提示視窗先前只在對戰畫面畫得出來，在賽事大廳按下「我要報到」時不會顯示，看起來就像按鈕失效。現已修正，並確保任何情況下最多再按一次就能完成報到。</summary>
         <div class="log-body">報到按鈕下方新增一行說明：按了沒反應請再按一次，如仍無法報到請至首頁更新版本。此情況只在主辦人啟用版本門檻時才會發生；報到時間、名額與登入狀態的判定都沒有變動。</div>
       </details>
-      <details>
-        <summary><span class="ver-badge">v6.166</span> <b>首頁新增「最新影片」</b><br>玩家社群 QR Code 下方會顯示本站 YouTube 頻道的最新影片。為了不增加進站的等待時間，預設只放一張預覽圖，按下播放鍵之後才會載入播放器。</summary>
-        <div class="log-body">沒有按下播放鍵，就不會連線到 YouTube，也不會下載播放器；預覽圖本身也是捲動到這一區才載入。影片若暫時取得不到，這一區會整個隱藏，首頁其他內容不受影響。</div>
-      </details>
-                  <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
+                        <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →
         <a href="__BASE__/changelog-archive.html" target="_blank" rel="noopener" style="color:#2a5fa8;font-weight:600;">查看完整更新歷史</a>
       </p>

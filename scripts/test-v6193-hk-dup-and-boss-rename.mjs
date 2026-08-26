@@ -98,13 +98,14 @@ T('⭐⭐ 保留的台版與被刪的港版是同一張卡（卡名／編號／�
   ok(pool.get('18564').rulesText === '將雙方的所有寶可夢各恢復「50」HP。', '古歷 rulesText 對不上卡面');
 });
 
-T('⭐⭐ 卡包張數同步（M-P-J = 92；index.json 禁重生）', () => {
+// ⚠ v6.232：9 張基本能量官方標 I→J 搬入 M-P-J（92→101）；本條數字同步。
+T('⭐⭐ 卡包張數同步（M-P-J = 101；index.json 禁重生）', () => {
   const e = INDEX.find((x) => x.code === 'M-P-J');
   const arr = JSON.parse(readFileSync(join(dir, 'M-P-J.json'), 'utf8'));
-  ok(arr.length === 92, 'M-P-J.json 應為 92 張（v6.194 把下架的 2 張放回來），實際 ' + arr.length);
-  ok(e.cardCount === 92 && e.count === 92, 'index.json M-P-J 張數沒同步：' + e.cardCount + '/' + e.count);
+  ok(arr.length === 101, 'M-P-J.json 應為 101 張（v6.194 放回 2 張、v6.232 收入 9 張能量），實際 ' + arr.length);
+  ok(e.cardCount === 101 && e.count === 101, 'index.json M-P-J 張數沒同步：' + e.cardCount + '/' + e.count);
   const sc = e.supertypeCounts;
-  ok(sc.Pokemon + sc.Trainer + sc.Energy === 92, 'supertypeCounts 加總 ≠ 92：' + JSON.stringify(sc));
+  ok(sc.Pokemon + sc.Trainer + sc.Energy === 101, 'supertypeCounts 加總 ≠ 101：' + JSON.stringify(sc));
   ok(e.name === 'M-P特典卡(J)' && e.regulationMark === 'J', 'index.json 的手工欄位被重生洗掉了');
 });
 

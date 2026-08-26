@@ -555,42 +555,6 @@
     ]
   },
   {
-    "id": "14102",
-    "name": "基本【草】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "GRA",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014102.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14102/",
-    "scrapedAt": "2026-04-22T00:59:48.876Z",
-    "regulationMark": "I"
-  },
-  {
-    "id": "14103",
-    "name": "基本【超】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "PSY",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014103.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14103/",
-    "scrapedAt": "2026-04-22T00:59:49.562Z",
-    "regulationMark": "I"
-  },
-  {
-    "id": "14104",
-    "name": "基本【鬥】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "FIG",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014104.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14104/",
-    "scrapedAt": "2026-04-22T00:59:50.288Z",
-    "regulationMark": "I"
-  },
-  {
     "id": "14416",
     "name": "小火龍",
     "supertype": "Pokemon",
@@ -1053,42 +1017,6 @@
     "stage": "Stage1"
   },
   {
-    "id": "14428",
-    "name": "基本【火】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "032/M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014428.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14428/",
-    "scrapedAt": "2026-04-22T01:00:00.462Z",
-    "regulationMark": "I"
-  },
-  {
-    "id": "14429",
-    "name": "基本【超】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "033/M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014429.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14429/",
-    "scrapedAt": "2026-04-22T01:00:01.141Z",
-    "regulationMark": "I"
-  },
-  {
-    "id": "14430",
-    "name": "基本【惡】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "034/M-P",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014430.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14430/",
-    "scrapedAt": "2026-04-22T01:00:01.887Z",
-    "regulationMark": "I"
-  },
-  {
     "id": "14431",
     "name": "蒼炎刃鬼",
     "supertype": "Pokemon",
@@ -1168,42 +1096,6 @@
     "evolvesFrom": "超音波幼蟲",
     "illustrator": "Oswaldo KATO",
     "stage": "Stage2"
-  },
-  {
-    "id": "14433",
-    "name": "基本【火】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "FIR",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014433.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14433/",
-    "scrapedAt": "2026-04-22T01:00:04.029Z",
-    "regulationMark": "I"
-  },
-  {
-    "id": "14434",
-    "name": "基本【鋼】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "MET",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014434.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14434/",
-    "scrapedAt": "2026-04-22T01:00:04.744Z",
-    "regulationMark": "I"
-  },
-  {
-    "id": "14435",
-    "name": "基本【惡】能量",
-    "supertype": "Energy",
-    "subtype": "Basic",
-    "setCode": "M-P-I",
-    "collectorNumber": "DAR",
-    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014435.png",
-    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14435/",
-    "scrapedAt": "2026-04-22T01:00:05.468Z",
-    "regulationMark": "I"
   },
   {
     "id": "14445",

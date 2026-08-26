@@ -50,6 +50,23 @@ const TOUCHSTONE_ID = '19536';
 const TOUCHSTONE_EXPECT = ['叫聲', '種子炸彈'];
 const TOUCHSTONE_WRONG = '飛葉快刀';
 
+// ⭐ 已知的「刻意偏離官方」白名單（站長裁定）—— 這些差異**不再**列為遊戲性差異。
+// ⚠ 每筆都要求 ours／official 兩側的值逐字匹配；任一側改變（官方又改名／我們的資料被動到）
+//    就不再匹配 ⇒ 自動回到差異報告（fail-open），不會靜默吞掉新的變化。
+const KNOWN_INTENTIONAL_DIVERGENCES = [
+  {
+    id: '19630', field: 'name',
+    ours: '老大的指令', official: '老大的指令（烏羽）',
+    reason: '站長 v6.193 裁定沿用「老大的指令」：引擎以卡名查效果實作，改名會連動一大串；'
+      + '守衛＝test-v6193-hk-dup-and-boss-rename.mjs'
+  },
+];
+// ⭐ 官方頁已下架、但本站已依站長裁定處理完畢的卡（v6.194 對玩家隱藏、資料保留供舊牌組／回放）。
+const KNOWN_PAGE_GONE_HIDDEN = {
+  '18965': '已於 v6.194 對玩家隱藏（HIDDEN_FROM_PLAYERS，台版為 18560），資料保留供舊牌組與回放',
+  '18969': '已於 v6.194 對玩家隱藏（HIDDEN_FROM_PLAYERS，台版為 18564），資料保留供舊牌組與回放',
+};
+
 // 遊戲性欄位（差異 = 真 bug，會影響對局）
 const GAME_FIELDS = [
   'name', 'supertype', 'subtype', 'stage', 'hp', 'pokemonType',
@@ -258,9 +275,10 @@ async function main() {
     generatedAt: new Date().toISOString(),
     touchstone,
     sets: {},
-    totals: { cards: 0, fetched: 0, fetchFailed: 0, gameDiffCards: 0, evoOnlyDiffCards: 0, pageGone: 0, infoOnlyDiffCards: 0 }
+    totals: { cards: 0, fetched: 0, fetchFailed: 0, gameDiffCards: 0, waivedCards: 0, evoOnlyDiffCards: 0, pageGone: 0, infoOnlyDiffCards: 0 }
   };
   const mdCards = []; // 各卡差異的 Markdown 區塊
+  const mdWaived = []; // 白名單（刻意偏離官方）
   const mdEvo = [];
   const mdInfoOnly = [];
 
@@ -279,7 +297,7 @@ async function main() {
     const cachePath = path.join(OUT_DIR, `official-cache-${setCode}.json`);
     const cache = (args.resume ? await loadJsonOrNull(cachePath) : null) || {};
 
-    const setResult = { cards: local.length, gameDiff: [], evoDiff: [], pageGone: [], infoOnlyDiff: [], fetchFailed: [] };
+    const setResult = { cards: local.length, gameDiff: [], waived: [], evoDiff: [], pageGone: [], infoOnlyDiff: [], fetchFailed: [] };
     let done = 0;
     for (const ours of local) {
       const id = String(ours.id);
@@ -303,7 +321,7 @@ async function main() {
         } catch (e) {
           if (e.pageGone) {
             report.totals.pageGone++;
-            setResult.pageGone.push({ id, name: ours.name, collectorNumber: ours.collectorNumber, error: e.message });
+            setResult.pageGone.push({ id, name: ours.name, collectorNumber: ours.collectorNumber, error: e.message, note: KNOWN_PAGE_GONE_HIDDEN[id] || null });
             console.error(`  [${++done}/${local.length}] ${id} ${ours.name} ⚠ 官方頁面不存在：${e.message}`);
           } else {
             report.totals.fetchFailed++;
@@ -316,11 +334,16 @@ async function main() {
       done++;
 
       const gameDiffs = [];
+      const waivedDiffs = [];
       const evoDiffs = [];
       const infoDiffs = [];
       for (const f of GAME_FIELDS) {
         const d = diffField(f, ours[f], official[f]);
         if (!d) continue;
+        // ⭐ 白名單：站長已裁定的刻意偏離 —— 兩側值都逐字匹配才豁免（fail-open）
+        const waiver = KNOWN_INTENTIONAL_DIVERGENCES.find((w) =>
+          w.id === id && w.field === f && normText(w.ours) === d.ours && normText(w.official) === d.official);
+        if (waiver) { d.note = waiver.reason; waivedDiffs.push(d); continue; }
         if (f === 'regulationMark' && official._regFallback) {
           // 官方頁沒有 alpha 標記，official 值是 fallback 補的 —— 降級為參考資訊
           d.note = '官方頁無標記，此值為 SET_REGULATION_MARK fallback 補值，多半是誤報';
@@ -342,6 +365,10 @@ async function main() {
         setResult.gameDiff.push({ id, name: ours.name, collectorNumber: ours.collectorNumber, gameDiffs, evoDiffs, infoDiffs });
         mdCards.push(renderCardDiff(ours, [...gameDiffs, ...evoDiffs], infoDiffs));
         console.error(`  [${done}/${local.length}] ${id} ${ours.name} ⚠ 遊戲性差異 ${gameDiffs.length} 欄（${gameDiffs.map((d) => d.field).join('、')}）`);
+      } else if (waivedDiffs.length) {
+        setResult.waived.push({ id, name: ours.name, collectorNumber: ours.collectorNumber, waivedDiffs, infoDiffs });
+        mdWaived.push(renderCardDiff(ours, waivedDiffs, []));
+        console.error(`  [${done}/${local.length}] ${id} ${ours.name} ⚪ 白名單：刻意偏離官方（${waivedDiffs.map((d) => d.field).join('、')}）`);
       } else if (evoDiffs.length) {
         setResult.evoDiff.push({ id, name: ours.name, collectorNumber: ours.collectorNumber, evoDiffs, infoDiffs });
         mdEvo.push(renderCardDiff(ours, evoDiffs, []));
@@ -353,6 +380,7 @@ async function main() {
     }
     await writeAtomic(cachePath, JSON.stringify(cache, null, 1));
     report.totals.gameDiffCards += setResult.gameDiff.length;
+    report.totals.waivedCards += setResult.waived.length;
     report.totals.evoOnlyDiffCards += setResult.evoDiff.length;
     report.totals.infoOnlyDiffCards += setResult.infoOnlyDiff.length;
     report.sets[setCode] = setResult;
@@ -380,6 +408,7 @@ async function main() {
   md.push(`| 本次實際抓取 | ${report.totals.fetched} |`);
   md.push(`| 抓取失敗 | ${report.totals.fetchFailed} |`);
   md.push(`| ⚠ **有遊戲性差異的卡** | **${report.totals.gameDiffCards}** |`);
+  md.push(`| 已知刻意偏離官方（白名單，站長已裁定） | ${report.totals.waivedCards} |`);
   md.push(`| evolvesFrom 疑義（scraper 已知限制，多為誤報） | ${report.totals.evoOnlyDiffCards} |`);
   md.push(`| ⚠ 官方頁面已不存在的卡 | ${report.totals.pageGone} |`);
   md.push(`| 僅非遊戲性差異的卡 | ${report.totals.infoOnlyDiffCards} |`);
@@ -400,13 +429,17 @@ async function main() {
   md.push('');
   md.push(mdCards.length ? mdCards.join('\n') : '（無 — 所有卡的遊戲性欄位都與官方一致）');
   md.push('');
+  md.push('## 已知的刻意偏離官方（站長已裁定的白名單 —— 不列為差異；兩側值任一改變會自動回到上面的差異區）');
+  md.push('');
+  md.push(mdWaived.length ? mdWaived.join('\n') : '（無）');
+  md.push('');
   md.push('## evolvesFrom 疑義（scraper 已知限制：Mega 進化鏈／分支進化常誤判，多半是我們手修過的值才正確，請個案判讀）');
   md.push('');
   md.push(mdEvo.length ? mdEvo.join('\n') : '（無）');
   md.push('');
   md.push('## ⚠ 官方頁面已不存在的卡（detail 頁被導回搜尋頁，官方可能已下架/合併，需人工確認）');
   md.push('');
-  const goneList = Object.entries(report.sets).flatMap(([s, r]) => (r.pageGone || []).map((g) => `- ${s} ${g.id} ${g.name}（${g.collectorNumber || '?'}）：${g.error}`));
+  const goneList = Object.entries(report.sets).flatMap(([s, r]) => (r.pageGone || []).map((g) => `- ${s} ${g.id} ${g.name}（${g.collectorNumber || '?'}）：${g.error}${g.note ? '（' + g.note + '）' : ''}`));
   md.push(goneList.length ? goneList.join('\n') : '（無）');
   md.push('');
   md.push('## 僅非遊戲性差異（illustrator / imageUrl / setCode / tags）');

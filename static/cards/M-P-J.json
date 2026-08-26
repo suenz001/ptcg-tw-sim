@@ -1,5 +1,113 @@
 [
  {
+  "id": "14102",
+  "name": "基本【草】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "GRA",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014102.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14102/",
+  "scrapedAt": "2026-04-22T00:59:48.876Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14103",
+  "name": "基本【超】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "PSY",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014103.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14103/",
+  "scrapedAt": "2026-04-22T00:59:49.562Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14104",
+  "name": "基本【鬥】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "FIG",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014104.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14104/",
+  "scrapedAt": "2026-04-22T00:59:50.288Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14428",
+  "name": "基本【火】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "032/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014428.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14428/",
+  "scrapedAt": "2026-04-22T01:00:00.462Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14429",
+  "name": "基本【超】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "033/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014429.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14429/",
+  "scrapedAt": "2026-04-22T01:00:01.141Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14430",
+  "name": "基本【惡】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "034/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014430.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14430/",
+  "scrapedAt": "2026-04-22T01:00:01.887Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14433",
+  "name": "基本【火】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "FIR",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014433.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14433/",
+  "scrapedAt": "2026-04-22T01:00:04.029Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14434",
+  "name": "基本【鋼】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "MET",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014434.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14434/",
+  "scrapedAt": "2026-04-22T01:00:04.744Z",
+  "regulationMark": "J"
+ },
+ {
+  "id": "14435",
+  "name": "基本【惡】能量",
+  "supertype": "Energy",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "DAR",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014435.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/14435/",
+  "scrapedAt": "2026-04-22T01:00:05.468Z",
+  "regulationMark": "J"
+ },
+ {
   "id": "17975",
   "name": "超級艾路雷朵ex",
   "supertype": "Pokemon",
@@ -2884,11 +2992,20 @@
   "pokemonType": "Grass",
   "attacks": [
    {
-    "name": "飛葉快刀",
+    "name": "叫聲",
     "cost": [
+     "Colorless"
+    ],
+    "damage": "",
+    "effect": "在下個對手的回合，受到這個招式的寶可夢使用招式的傷害「-20」點。"
+   },
+   {
+    "name": "種子炸彈",
+    "cost": [
+     "Grass",
      "Grass"
     ],
-    "damage": "20",
+    "damage": "30",
     "effect": ""
    }
   ],
@@ -2901,7 +3018,7 @@
   ],
   "pokedexNumber": 152,
   "species": "葉子寶可夢",
-  "illustrator": "Makura Tami",
+  "illustrator": "Kariya",
   "stage": "Basic"
  },
  {
@@ -2989,24 +3106,15 @@
   "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019539.png",
   "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19539/",
   "scrapedAt": "2026-08-04T08:01:24.202245Z",
-  "hp": 70,
+  "hp": 80,
   "pokemonType": "Fire",
   "attacks": [
    {
-    "name": "撞擊",
+    "name": "吐火",
     "cost": [
      "Fire"
     ],
-    "damage": "10",
-    "effect": ""
-   },
-   {
-    "name": "滾動",
-    "cost": [
-     "Fire",
-     "Fire"
-    ],
-    "damage": "30",
+    "damage": "20",
     "effect": ""
    }
   ],
@@ -3015,11 +3123,12 @@
    "value": "×2"
   },
   "retreatCost": [
+   "Colorless",
    "Colorless"
   ],
   "pokedexNumber": 498,
   "species": "火豬寶可夢",
-  "illustrator": "Teeziro",
+  "illustrator": "Uninori",
   "regulationMark": "J",
   "stage": "Basic"
  },
@@ -3112,16 +3221,17 @@
   "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019542.png",
   "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19542/",
   "scrapedAt": "2026-08-04T08:01:24.202245Z",
-  "hp": 70,
+  "hp": 80,
   "pokemonType": "Water",
   "attacks": [
    {
-    "name": "咬緊",
+    "name": "撞一下",
     "cost": [
+     "Water",
      "Water"
     ],
-    "damage": "10",
-    "effect": "在下個對手的回合，受到這個招式的寶可夢無法撤退。"
+    "damage": "40",
+    "effect": "這隻寶可夢也受到10點傷害。"
    }
   ],
   "weakness": {
@@ -3133,7 +3243,7 @@
   ],
   "pokedexNumber": 158,
   "species": "大顎寶可夢",
-  "illustrator": "MINAMINAMI Take",
+  "illustrator": "REND",
   "regulationMark": "J",
   "stage": "Basic"
  },

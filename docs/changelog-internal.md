@@ -1,5 +1,43 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.232 卡片資料稽核修正：三張 M-P-J 被 clone 汙染的卡＋9 張基本能量標記 I→J＋稽核白名單
+
+BASE = `82b6722d66c3fc0b061e89fd836aa677ad557b95`（稽核工具版）。資料來源＝
+2026-08-26 重跑 `scripts/audit-card-data-vs-official.mjs`（fresh、無快取；試金石 PASS）。
+
+【A】以官方卡面逐欄修正 `static/cards/M-P-J.json`（影響實戰的 clone 汙染）：
+- 19536 菊草葉 155/M-P：attacks「飛葉快刀 20【草】」→「叫聲【無】（下回合受招方招式 -20）＋
+  種子炸彈 30【草草】」；illustrator Makura Tami→Kariya。hp/弱點/撤退與官方一致不動。
+  引擎既有 `菊草葉|叫聲` 實作（regPre/regPost）本來就在，資料修正後自動接上。
+- 19539 暖暖豬 158/M-P：hp 70→80；attacks「撞擊 10／滾動 30」→「吐火 20【火】」；
+  retreatCost 1→2；illustrator Teeziro→Uninori。
+- 19542 小鋸鱷 161/M-P：hp 70→80；attacks「咬緊 10【水】（無法撤退）」→
+  「撞一下 40【水水】（自傷 10）」；illustrator MINAMINAMI Take→REND。
+  `小鋸鱷|撞一下`（selfHitPost(10)）與 `小鋸鱷|咬緊`（其餘印刷版本仍在用）都已有實作，零死 key。
+- 修正後重跑稽核：M-P-J 遊戲性差異 0 張。
+
+【B】18965／18969：**本來就已於 v6.194 進 `HIDDEN_FROM_PLAYERS`**（visibility.ts），
+本版零改動；行為守衛在 test-v6194-hidden-cards-and-energy-metadata.mjs（卡池仍載入、
+編輯器／卡庫不列出、回放不炸）。稽核報告的 pageGone 區改為註記「已處理」。
+
+【C】9 張基本能量（14102/14103/14104/14428/14429/14430/14433/14434/14435）
+regulationMark I→J（官方卡片頁 alpha 已印 J，實抓非 fallback）。查證結論：
+`validateDeck`（validation.ts L281-286）對基本能量**完全豁免**標記檢查，且 I／J 都在
+STANDARD_MARKS ⇒ 舊牌組不可能因此變不合法。依 v6.194 SV-P 搬檔前例與
+「檔名標＝卡片標」守衛（拆檔規則），整卡搬入 M-P-J.json 並同步 setCode、
+card-set-map.json、index.json 定點數字（M-P-I 59→50、M-P-J 92→101；總數 4935 不變、
+index.json **未重生**）。test-v6194 硬編數字同步（92→101、90→99）。
+
+【D】19630「老大的指令」**維持不改名**（站長 v6.193 裁定；effectKey 依卡名）。
+稽核工具新增 `KNOWN_INTENTIONAL_DIVERGENCES` 白名單：id＋欄位＋兩側值逐字匹配才豁免，
+任一側改變即自動回到差異報告（fail-open）。重跑稽核後 19630 列在白名單區、
+不再計入遊戲性差異。
+
+守衛：`scripts/test-v6232-card-data-official-fix.mjs`（HEAD-FAIL：BASE 資料上跑會紅；
+突變測試：把 19539 hp 改回 70 會紅）。行為端實跑 叫聲/種子炸彈/吐火/撞一下 四招。
+部署：站長需跑 `update-tournament.bat`（卡 DB 有動，tournament-pool.json 要重建）＋
+`update-admin-full.bat`（admin.html 版本提示）。server_admin_patch.js 未動。
+
 ## v6.231 更正 v6.230 逾時設計的依據說明（nginx 60 秒之說有誤；行為零變更）
 
 BASE = `46bed878da0452906ed7afda7b8bf73cfc4dcea6`（v6.230）。獨立審查 v6.230 時查證：
