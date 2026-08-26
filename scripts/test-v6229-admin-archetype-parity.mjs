@@ -83,7 +83,13 @@ function buildServer(patchSrc, { rules, nameMapEntries, docs }) {
         };
         // 深拷貝：兩個端點各自拿快照，互不污染（admin 端點會就地加 archetype 欄位）
         const arr = docs.filter(match).map((d) => JSON.parse(JSON.stringify(d)));
-        const cursor = { sort: () => cursor, toArray: async () => arr };
+        // v6.240：端點改成伺服器端分頁後會呼叫 skip/limit（沒帶 ?page= 的舊路徑也有 2000 筆上限），
+        //   假 cursor 要跟著支援，否則抽出來的 handler 會 TypeError ⇒ 這支守衛變成假紅。
+        //   ⚠ 只是把 stub 補齊，本守衛的判準（原型分類一致性）一字未改。
+        const cursor = { _skip: 0, _limit: Infinity, sort: () => cursor,
+          skip: (n) => { cursor._skip = n; return cursor; },
+          limit: (n) => { cursor._limit = n; return cursor; },
+          toArray: async () => arr.slice(cursor._skip, cursor._limit === Infinity ? undefined : cursor._skip + cursor._limit) };
         return cursor;
       },
       aggregate: () => ({ toArray: async () => [] }),
@@ -201,7 +207,10 @@ function buildSearch(htmlSrc, rooms) {
   const dm = sliceBetween(htmlSrc, 'function detectMainPokemon(seat) {', '\nlet statsLoading', 'detectMainPokemon');
   const rr = sliceBetween(htmlSrc, 'function renderRoomRow(r, source) {', '\nfunction escapeHtml(', 'renderRoomRow');
   const fs = sliceBetween(htmlSrc, 'window.filterRoomsBySearch = function(q, source) {', '\nfunction renderRoomRow', 'filterRoomsBySearch');
+  // v6.240：filterRoomsBySearch 多了「伺服器端分頁時把搜尋送到伺服器」的分支，
+  //   oracleRoomsSrv = null ＝ 舊伺服器／前端切頁模式，正是本守衛要驗的那條本機搜尋路徑。
   const prelude = 'let statusFilter = "all"; let oracleRoomsPage = 1; let firebaseRoomsPage = 1;\n'
+    + 'let oracleRoomsSrv = null; let oracleRoomsSearch = ""; let _oracleSearchFocus = false; let _oracleSearchTimer = null;\n'
     + 'const ROOMS_PAGE_SIZE = 50; const oracleRoomsCache = ROOMS; const firebaseRoomsCache = [];\n';
   const src = prelude + eh + '\n' + dm + '\n' + rr + '\n' + fs + '\nreturn window.filterRoomsBySearch;';
   const captured = {};

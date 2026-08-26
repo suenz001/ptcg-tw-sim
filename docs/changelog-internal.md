@@ -1,5 +1,88 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.240 — admin 兩支「撈太多」的端點改伺服器端分頁；賽事統計終於是全量
+
+> 站長回報兩件事，都是同一類毛病：**把整個 collection 撈回來再在記憶體裡切**。
+> 首頁 changelog **不寫**（純 admin 後台工具，玩家看不到 —— 站長已裁定）。
+
+### 【A】📈 賽事統計只顯示 500 筆 —— 資料**沒有**被刪，是讀取查詢的上限
+
+站長最在意的是「多餘的是被刪除了嗎」。逐項查證（`git grep` 全 repo，BASE `51758797`）：
+
+| 檢查項 | 結果 |
+|---|---|
+| `tournamentArchives` / `tournamentChampions` 有沒有 **TTL 索引** | **沒有**。全檔只有兩條 TTL：`tournamentClientDiag`（7 天，L4541）、`tournamentReplayTurns`（90 天，L5739） |
+| 有沒有 `deleteMany` / `drop` 動到它們 | **沒有**（全檔 `deleteMany` 共 11 處，對象是 rooms / messages / TREGS / TMATCH / TCHAT / TPUSH / TREPLAY） |
+| 有沒有排程／清理會動到它們 | **沒有**。`startZombieRoomCleanup` 只刪 `rooms`（ended > 90 天）；scheduler 只刪「已結束賽事底下沒打完的 TMATCH」 |
+| 刪賽事會不會連歸檔一起刪 | **不會** —— L5367 明文 `// 註：tournamentArchives 永久歸檔不刪` |
+| 唯一的刪除點 | admin「🗑️ 刪除」按鈕：`TARCHIVE.deleteOne` + `TCHAMPS.deleteOne`（站長自己按的） |
+
+⇒ **賽事歸檔一筆都沒有被自動刪過**。500 是 `/api/tournament/admin/stats` 的 `.limit(500)`。
+
+### 【A】哪些 limit 影響「統計正確性」、哪些只影響「顯示」
+
+⚠ 這一頁的**每一個數字**（完成賽事／累計報名人次／不重複玩家／對戰場數／平均人數／
+冠軍榜／玩家戰績排行／主力寶可夢使用率＋勝率／賽果分佈）都是 **admin.html 拿整包
+`archives` 在瀏覽器端算的**（`renderTournamentStats`）。所以：
+
+| 位置 | 性質 | 處理 |
+|---|---|---|
+| L7713 `TARCHIVE…limit(500)` | **影響統計正確性**（前端整包聚合） | 改伺服器端分頁 `skip/limit` + 回 `total`；前端 `fetchAllTournamentStats` **逐頁累積成全量**再聚合 |
+| L7714 `TCHAMPS…limit(500)` | 只影響顯示，而且 **admin.html 從未讀取這個欄位**（名人堂走 `/api/tournament/champions`） | 直接移除上限（每筆很小） |
+| L2448 `champion-report…limit(500)` | **影響統計正確性**（奪冠／四強牌組原型，伺服器端算） | 移除上限，並改 **cursor 逐筆聚合**，不把含 `deckEntries` 的全部歸檔一次讀進 node |
+| L528 / L633 `messages…limit(500)` | 單一房間的聊天訊息，與賽事統計無關 | **不動** |
+| L2217 / L2536 `tournamentArchives…limit(200)`（牌組原型統計） | 同樣是統計失真，但屬「牌組原型」分頁 | **本版不動**，待站長裁定（改了那一頁的數字會跟著變） |
+
+⭐ 為什麼不是「在 DB 端 aggregate 算完再回」：聚合邏輯（主力寶可夢偵測 `detectMainPokemon`
+依賴 `cardInfoMap` + `cardTagsCache`，兩份都是**瀏覽器端**才有的資料）搬到 mongo 會變成
+兩份口徑、必然漂移。分頁累積讓**聚合程式碼一字未動**，只換「資料怎麼來」。
+
+⚠ 向後相容：`/api/tournament/admin/stats` 沒帶 `?page=` ⇒ page 1 / pageSize 500 ⇒
+`archives` 與 v6.239 逐字相同（舊快取頁面不會壞）。
+
+### 【B】🎮 Oracle 對戰「已結束」8 萬多筆，點進去就當掉
+
+真因不是「前端沒分頁」（v5.276 就有每頁 50 筆了），是 **`/api/admin/oracle/rooms`
+`find(_filter).sort().toArray()` 完全沒有上限**，而且 projection 還帶著 `gameState.log`
+（v6.220 實測第 9 回合 202 則 ≈ 29.2KB，佔房間 doc 約 60%）。
+
+量測（守衛 ⑨ 內附的 benchmark，4,000 筆樣本線性外推到 82,031 筆；沙盒 CPU ≈ 正式 VM 的 10 倍慢）：
+
+| | mongo→node | 下行 JSON | node 序列化 | 瀏覽器 `JSON.parse` |
+|---|---|---|---|---|
+| 改前（整包撈） | **1,166 MB** | **111 MB** | ~1,826 ms | ~1,500 ms（還沒開始建 8 萬列 DOM） |
+| 改後（一頁 50 筆） | 0.7 MB | 0.1 MB | ~1.1 ms | ~0.9 ms |
+
+⚠⚠ 那 1.1 GB 是讀進**共用的 API 行程**（沙盒重現時直接被 OOM kill，exit 137）——
+這不只是 admin 自己的問題，有機會把玩家一起拖下水。
+
+**修法**
+1. **伺服器端分頁**：`?page=&pageSize=`（預設 50、上限 200），`countDocuments` 回 `total`／`totalPages`。
+2. **時間範圍**：`?range=7d|30d|90d|all`，條件用 `updatedAt`（與 sort 同欄位才走得到索引）。
+   admin UI 預設 **近 7 天**，可切 30／90／全部。`counts`（toolbar 的三狀態計數）套用同一個範圍。
+3. **搜尋改伺服器端**：分頁之後前端手上只有 50 筆，本機搜尋只搜得到那一頁。
+   比對房號／房間名／玩家名／email／**牌組卡名**（卡名→cardId 解析放伺服器端，
+   沿用 v6.218 牌組公布欄的做法，client 不必為了搜尋載 4.6MB 卡片DB）；debounce 350ms。
+4. **索引**：`rooms` 除了 `_id` 沒有任何索引。啟動時 best-effort 建 `{status:1, updatedAt:-1}`
+   （比照 TEVENTS/TREGS 先例，不放進 request handler）。
+5. **舊路徑（沒帶 `?page=`）**：保留，但加 `ROOMS_LEGACY_CAP = 2000` 硬上限 + `truncated` 哨兵。
+   理由見上面那 1.1 GB —— 讓「瀏覽器快取到舊 admin.html」也不可能再打爆共用行程（Rule 30）。
+6. 回應帶 **`paged` 哨兵**：舊伺服器不會有它 ⇒ 新前端自動退回 v6.239 的前端切頁，
+   而不是把「伺服器只回的一頁」誤當成全部（v6.218 教訓）。
+
+⚠ Firebase 對戰分頁**完全不動**（`renderRoomsTab` 只在 `srv` 非 null 時走新路徑）。
+
+### 守衛
+
+`scripts/test-v6240-admin-pagination.mjs`（18 條）——一律斷言到行為：把兩支 handler 從
+patch 檔抽出來，餵 **82,431 筆假房間 / 1,234 筆假歸檔真的跑**，用「這次查詢實際物化了幾筆」
+當儀器；前端的 `fetchAllTournamentStats` 也是**抽出來真的跑**（不是重寫一份）。
+含突變測試：把 `skip/limit` 拿掉、把 `limit(500)` 加回去 ⇒ 對應斷言必須翻紅。
+BASE(v6.239) 上 **15 FAIL / 2 PASS**（那 2 條是保護性斷言：版本一致 + 歸檔不得有 TTL/批次刪除）。
+
+⚠ `scripts/test-v6229-admin-archetype-parity.mjs` 只改 **harness stub**（假 cursor 補
+`skip/limit`、`filterRoomsBySearch` 的 prelude 補 `oracleRoomsSrv = null`），判準一字未改。
+
 ## v6.239 — 傷害公式收斂成單一來源；「若希望」招式的預估不再替玩家決定
 
 ### 【A】站長回報：「波動突刺 有列出數值了，但是不像超級勇氣那樣有列出完整的算式」

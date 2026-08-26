@@ -111,9 +111,14 @@ T('⭐ 匯出按鈕在「牌組原型」分頁、與環境報告圖並排（Wils
 
 T('⭐ 快取沒載過也要能產圖（按鈕換頁後 tournStatsCache 可能是 null）', () => {
   // v1.71：資料取得已收斂到 crLoadData（單頁版與完整版多頁共用同一份），本條改查那一段。
+  // v6.240：補載改走中央全量 helper fetchAllTournamentStats（賽事歸檔已改伺服器端分頁，
+  //   直接打 /api/tournament/admin/stats 只會拿到**第一頁**，報告圖的「全部資料」會少算）。
+  //   ⚠ 判準只是換了載體，意圖不變：快取為空時 crLoadData 必須自己把資料補載回來。
   const open = section(CRSEC, 'async function crLoadData', 'window.renderChampionReportModal');
-  ok(/api\('\/api\/tournament\/admin\/stats'\)/.test(open),
+  ok(/fetchAllTournamentStats\(/.test(open),
     '沒有在快取為空時自己補載 —— 使用者從沒開過「賽事統計」就會按不出圖');
+  ok(!/api\('\/api\/tournament\/admin\/stats'\)/.test(open),
+    'crLoadData 直接打未分頁端點 —— 只會拿到第一頁，報告圖會少算');
 });
 
 T('⭐ 也不做「較上期」趨勢（奪冠數的期間差幾乎全是噪音）', () => {

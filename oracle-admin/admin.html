@@ -1122,6 +1122,31 @@ window.tevDelete = async function (btn) {
 // ══════════════════════════════════════════════════════════════════════
 let tournStatsLoading = false;
 let tournStatsCache = null;
+// ══ v6.240 賽事歸檔取得：伺服器端分頁，前端**逐頁累積成全量**再交給聚合 ══
+//   ⚠ 為什麼一定要全量：這一頁的每一個數字（完成賽事／累計報名人次／不重複玩家／
+//     對戰場數／冠軍榜／玩家戰績／主力寶可夢使用率／賽果分佈）都是前端拿整包 archives
+//     算出來的。舊版伺服器的 limit(500) 不是「歷屆賽事表少列幾筆」，是**統計本身失真**。
+//   ⚠ 只有這一份取得口徑（賽事統計分頁 + 奪冠報告圖共用），抄第二份必然漂移。
+//   ⚠ 舊伺服器不認得 ?page= → 不會回 totalPages ⇒ 用它回的那一份收工（fail-open，
+//     絕不無限迴圈）；也不會謊稱是全量（paged 哨兵會是 falsy）。
+const TS_ARCHIVE_PAGE_SIZE = 200;
+async function fetchAllTournamentStats(onProgress) {
+  let page = 1, out = null;
+  for (;;) {
+    const d = await api('/api/tournament/admin/stats?page=' + page + '&pageSize=' + TS_ARCHIVE_PAGE_SIZE);
+    if (!d || d.error) return d || { error: '讀不到賽事歸檔' };
+    if (!out) out = { archives: [], champions: d.champions || [], total: d.total, totalPages: d.totalPages, paged: !!d.paged };
+    const got = d.archives || [];
+    out.archives = out.archives.concat(got);
+    if (onProgress) onProgress(out.archives.length, (d.total != null ? d.total : out.archives.length));
+    const tp = Number(d.totalPages);
+    if (!Number.isFinite(tp) || page >= tp) break;   // 舊伺服器 / 最後一頁
+    if (!got.length) break;                          // 保險：空頁一定停
+    page++;
+  }
+  if (out.total == null) out.total = out.archives.length;
+  return out;
+}
 // v1.38：賽事統計的函式要掛到 window，inline onclick 才找得到（script 是 type=module）
 window.loadTournamentStats = (...a) => loadTournamentStats(...a);
 
@@ -1264,7 +1289,11 @@ async function loadTournamentStats(reset = false) {
     el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">Loading…（彙整賽事歸檔 + 載入卡牌資料，約 3-8 秒）</div>';
     await ensureCardIndex();
     await ensureCardTags();
-    const data = await api('/api/tournament/admin/stats');
+    // v6.240：逐頁抓完**全部**歸檔（統計要算全量），載入中顯示進度讓站長知道規模。
+    const data = await fetchAllTournamentStats((n, total) => {
+      const box = el.querySelector('.empty');
+      if (box) box.textContent = '彙整賽事歸檔中…已載入 ' + n.toLocaleString() + ' / ' + Number(total).toLocaleString() + ' 場';
+    });
     if (data && data.error) { el.innerHTML = '<h2>📈 賽事統計</h2><div class="empty">Error: ' + escapeHtml(data.error) + '</div>'; return; }
     tournStatsCache = data || { archives: [], champions: [] };
     renderTournamentStats(el, tournStatsCache);
@@ -1638,7 +1667,10 @@ function renderTournamentStats(el, data) {
   html += '<div id="tv-mount-tsPkRank"></div></section>';
 
   // ── 5. 歷屆賽事 ──
-  html += '<section class="stats-section"><h3>📋 5. 歷屆賽事</h3>';
+  // v6.240：標出總場數，讓站長一眼看得出「有沒有被截斷」（舊版永遠停在 500）。
+  html += '<section class="stats-section"><h3>📋 5. 歷屆賽事 <span class="small muted">（歸檔共 '
+    + Number((data && data.total != null) ? data.total : allArchives.length).toLocaleString()
+    + ' 場，已全部載入；上方所有統計都是用全量算的）</span></h3>';
   html += '<div style="margin-bottom:8px;">' + tvSearchBox('tsArchives', '🔎 搜尋賽事名稱 / 冠軍…') + '</div>';
   html += '<div id="tv-mount-tsArchives"></div></section>';
 
@@ -1970,22 +2002,49 @@ window.runFirestoreAudit = async function() {
 };
 
 // ── Tab: Oracle Rooms ────────────────────────────────────────────
+// ══ v6.240 伺服器端分頁 ══════════════════════════════════════════════════
+//   已結束對戰已累積 8 萬多筆，舊版是「整包撈回來、前端 slice(0,50)」——
+//   當掉的地方就在「整包撈回來」。改成 skip/limit 由伺服器只回一頁，
+//   並預設只看近 7 天；要看更久按 30/90 天或「全部資料」（一樣走分頁，不會當）。
+let oracleRoomsRange = '7d';     // '7d' | '30d' | '90d' | 'all'
+let oracleRoomsSearch = '';      // 送到伺服器的關鍵字（分頁後本機搜尋只搜得到當前這頁）
+let oracleRoomsSrv = null;       // 伺服器回的 { total, page, pageSize, totalPages }；null＝舊伺服器
+let _oracleSearchTimer = null;
+let _oracleSearchFocus = false;  // 伺服器端搜尋是整塊重繪 → 要把游標接回搜尋框
 async function loadOracleRooms() {
   primeEmailMap();  // v0.5 不 await：背景預熱 email map
   const el = document.getElementById('tab-oracle-rooms');
   if (!oracleRoomsCache.length) el.innerHTML = '<h2>🎮 Oracle 對戰</h2><div class="empty">Loading…</div>';
   // v1.18: 只抓「當前 status 分頁」的房間（如停在「進行中」按 Refresh 不再撈全部已結束房 → 快很多）。
-  const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
+  // v6.240: 再加上 page/pageSize/range/q —— 伺服器端分頁，一次只回 50 筆。
+  const _p = new URLSearchParams();
+  if (statusFilter && statusFilter !== 'all') _p.set('status', statusFilter);
+  _p.set('range', oracleRoomsRange);
+  _p.set('page', String(oracleRoomsPage));
+  _p.set('pageSize', String(ROOMS_PAGE_SIZE));
+  if (oracleRoomsSearch) _p.set('q', oracleRoomsSearch);
   // v1.20: 只 await 房間（status 過濾，快）→ 立即渲染，恢復 v1.18 的快速 refresh。
   //   卡片索引/標籤改「背景載入」，好了再重畫補上主力打手 badge（已快取則 .then 立即跑、badge 同步出現）。
-  const data = await api('/api/admin/oracle/rooms' + qs);
+  const data = await api('/api/admin/oracle/rooms?' + _p.toString());
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   oracleRoomsCache = data.rooms;
-  if (data.counts) oracleRoomsCounts = data.counts;  // 全量三狀態計數，toolbar 用
+  if (data.counts) oracleRoomsCounts = data.counts;  // 三狀態計數，toolbar 用
+  // ⚠ paged 哨兵：舊伺服器不會回它 → 退回 v6.239 的前端切頁（行為不變），
+  //   而不是靜默把「伺服器只回的一頁」當成全部。
+  oracleRoomsSrv = data.paged ? { total: data.total, page: data.page, pageSize: data.pageSize, totalPages: data.totalPages } : null;
+  if (oracleRoomsSrv) oracleRoomsPage = oracleRoomsSrv.page;
   renderRoomsTab(el, 'oracle', oracleRoomsCache);
+  _restoreOracleSearchFocus();
   Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
-    if (currentTab === 'oracle-rooms') renderRoomsTab(el, 'oracle', oracleRoomsCache); // v1.74：補退路 ⚔️ badge 與主力打手搜尋索引（原型欄位缺席時才用）
+    if (currentTab === 'oracle-rooms') { renderRoomsTab(el, 'oracle', oracleRoomsCache); _restoreOracleSearchFocus(); } // v1.74：補退路 ⚔️ badge 與主力打手搜尋索引（原型欄位缺席時才用）
   });
+}
+function _restoreOracleSearchFocus() {
+  if (!_oracleSearchFocus) return;
+  const si = document.getElementById('rooms-search-oracle');
+  if (!si) return;
+  si.focus();
+  try { si.setSelectionRange(si.value.length, si.value.length); } catch (e) { /* number/未支援型別 */ }
 }
 
 async function loadFirebaseRooms() {
@@ -2013,22 +2072,44 @@ function renderRoomsTab(el, source, rooms) {
   if (_srvCounts) { counts = _srvCounts; }
   else { counts = { lobby: 0, playing: 0, ended: 0 }; for (const r of rooms) counts[r.status] = (counts[r.status] || 0) + 1; }
   const totalCount = (counts.lobby || 0) + (counts.playing || 0) + (counts.ended || 0);
-  const filtered = statusFilter === 'all' ? rooms : rooms.filter(r => r.status === statusFilter);
   const sourceLabel = source === 'oracle' ? '🎮 Oracle 對戰' : '🔥 Firebase 對戰';
   // v0.90: Firebase rooms 也可刪 — 解決 zombie ended 房無法清理問題
   const showDelete = true;
-  // v5.276: 翻頁 — 50 筆/頁
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ROOMS_PAGE_SIZE));
-  const curPage = source === 'oracle' ? oracleRoomsPage : firebaseRoomsPage;
-  const page = Math.min(Math.max(1, curPage), totalPages);
-  if (source === 'oracle') oracleRoomsPage = page; else firebaseRoomsPage = page;
-  const start = (page - 1) * ROOMS_PAGE_SIZE;
-  const pageRooms = filtered.slice(start, start + ROOMS_PAGE_SIZE);
+  // v6.240: Oracle 走伺服器端分頁（srv 非 null）——伺服器已經只回一頁，
+  //   這裡**絕不可以**再 filter/slice（那會把已經正確的一頁又切掉）。
+  //   Firebase 分頁與舊伺服器維持 v5.276 的前端切頁，行為逐字不變。
+  const srv = (source === 'oracle') ? oracleRoomsSrv : null;
+  let totalRows, totalPages, page, start, pageRooms;
+  if (srv) {
+    totalRows = srv.total; totalPages = Math.max(1, srv.totalPages);
+    page = Math.min(Math.max(1, srv.page), totalPages);
+    oracleRoomsPage = page;
+    start = (page - 1) * (srv.pageSize || ROOMS_PAGE_SIZE);
+    pageRooms = rooms;
+  } else {
+    const filtered = statusFilter === 'all' ? rooms : rooms.filter(r => r.status === statusFilter);
+    // v5.276: 翻頁 — 50 筆/頁
+    totalRows = filtered.length;
+    totalPages = Math.max(1, Math.ceil(filtered.length / ROOMS_PAGE_SIZE));
+    const curPage = source === 'oracle' ? oracleRoomsPage : firebaseRoomsPage;
+    page = Math.min(Math.max(1, curPage), totalPages);
+    if (source === 'oracle') oracleRoomsPage = page; else firebaseRoomsPage = page;
+    start = (page - 1) * ROOMS_PAGE_SIZE;
+    pageRooms = filtered.slice(start, start + ROOMS_PAGE_SIZE);
+  }
+  // v6.240 時間範圍切換（只有走伺服器端分頁的 Oracle 分頁才有意義）
+  const _rangeLabels = { '7d': '近 7 天', '30d': '近 30 天', '90d': '近 90 天', 'all': '全部資料' };
+  const rangeBarHtml = srv ? ('<div class="toolbar" style="margin:6px 0 10px;">'
+    + '<span class="small muted" style="margin-right:2px;">🕒 時間範圍：</span>'
+    + ['7d', '30d', '90d', 'all'].map(r => '<span class="filter-btn' + (oracleRoomsRange === r ? ' active' : '')
+        + '" onclick="setOracleRoomsRange(\'' + r + '\')">' + _rangeLabels[r] + '</span>').join('')
+    + '<span class="small muted" style="margin-left:auto;">預設近 7 天；每頁 ' + (srv.pageSize || ROOMS_PAGE_SIZE)
+    + ' 筆由伺服器切好再送（不再整包撈回瀏覽器），選「全部資料」也不會當。</span></div>') : '';
   const pagerHtml = totalPages > 1 ? `
     <div class="rooms-pager" style="display:flex;gap:0.4rem;align-items:center;justify-content:center;margin:0.6rem 0;flex-wrap:wrap">
       <button class="ghost" onclick="setRoomsPage(1, '${source}')" ${page === 1 ? 'disabled' : ''}>« 第一頁</button>
       <button class="ghost" onclick="setRoomsPage(${page - 1}, '${source}')" ${page === 1 ? 'disabled' : ''}>‹ 上一頁</button>
-      <span style="font-size:0.9rem;color:#9bbcef">第 ${page} / ${totalPages} 頁 (共 ${filtered.length} 筆)</span>
+      <span style="font-size:0.9rem;color:#9bbcef">第 ${page.toLocaleString()} / ${totalPages.toLocaleString()} 頁 (共 ${Number(totalRows).toLocaleString()} 筆)</span>
       <button class="ghost" onclick="setRoomsPage(${page + 1}, '${source}')" ${page === totalPages ? 'disabled' : ''}>下一頁 ›</button>
       <button class="ghost" onclick="setRoomsPage(${totalPages}, '${source}')" ${page === totalPages ? 'disabled' : ''}>最後一頁 »</button>
       <span style="margin-left:0.4rem;font-size:0.85rem;color:#bbb">跳至：</span>
@@ -2038,12 +2119,13 @@ function renderRoomsTab(el, source, rooms) {
   ` : '';
   el.innerHTML = `
     <h2>${sourceLabel} <span class="small">(共 ${totalCount})</span></h2>
+    ${rangeBarHtml}
     <div class="toolbar">
-      <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${totalCount})</span>
-      <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${counts.playing || 0})</span>
-      <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${counts.lobby || 0})</span>
-      <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${counts.ended || 0})</span>
-      <input class="search-box" placeholder="搜尋 房號 / 玩家名 / Email / 牌組(原型/主力)" oninput="filterRoomsBySearch(this.value, '${source}')" />
+      <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${totalCount.toLocaleString()})</span>
+      <span class="filter-btn ${statusFilter === 'playing' ? 'active' : ''}" onclick="setStatusFilter('playing', '${source}')">⚔️ 進行中 (${(counts.playing || 0).toLocaleString()})</span>
+      <span class="filter-btn ${statusFilter === 'lobby' ? 'active' : ''}" onclick="setStatusFilter('lobby', '${source}')">🏠 等待中 (${(counts.lobby || 0).toLocaleString()})</span>
+      <span class="filter-btn ${statusFilter === 'ended' ? 'active' : ''}" onclick="setStatusFilter('ended', '${source}')">✅ 已結束 (${(counts.ended || 0).toLocaleString()})</span>
+      <input class="search-box" id="rooms-search-${source}" value="${source === 'oracle' ? escapeHtml(oracleRoomsSearch) : ''}" placeholder="搜尋 房號 / 房間名 / 玩家名 / Email / 牌組卡名" oninput="filterRoomsBySearch(this.value, '${source}')" />
       <input class="search-box" id="diag-code-${source}" placeholder="🔍 房號卡死診斷 (如 E5D9)" style="text-transform:uppercase" onkeydown="if(event.key==='Enter')showRoomDiag((this.value||'').trim().toUpperCase(),'${source}')" />
       <button class="ghost" onclick="showRoomDiag((document.getElementById('diag-code-${source}').value||'').trim().toUpperCase(),'${source}')">🔍 診斷</button>
     </div>
@@ -2086,8 +2168,19 @@ let firebaseRoomsPage = 1;
 window.setRoomsPage = function(p, source) {
   if (source === 'oracle') oracleRoomsPage = Math.max(1, p);
   else firebaseRoomsPage = Math.max(1, p);
+  // v6.240 Oracle 走伺服器端分頁 ⇒ 翻頁必須**重新跟伺服器要那一頁**
+  //   （瀏覽器手上只有 50 筆，重繪自己是變不出第 2 頁的）。
+  if (source === 'oracle' && oracleRoomsSrv) { _oracleSearchFocus = false; loadOracleRooms(); return; }
   if (source === 'oracle') renderRoomsTab(document.getElementById('tab-oracle-rooms'), 'oracle', oracleRoomsCache);
   else renderRoomsTab(document.getElementById('tab-firebase-rooms'), 'firebase', firebaseRoomsCache);
+};
+// v6.240 時間範圍切換：換範圍 → 回第 1 頁 → 重新跟伺服器要
+window.setOracleRoomsRange = function(r) {
+  if (!['7d', '30d', '90d', 'all'].includes(r)) return;
+  oracleRoomsRange = r;
+  oracleRoomsPage = 1;
+  _oracleSearchFocus = false;
+  loadOracleRooms();
 };
 window.jumpRoomsPage = function(source) {
   const inp = document.getElementById('rooms-page-input-' + source);
@@ -2098,7 +2191,7 @@ window.jumpRoomsPage = function(source) {
 
 window.setStatusFilter = function(s, source) {
   statusFilter = s;
-  if (source === 'oracle') oracleRoomsPage = 1;  // v5.276: 切 filter 重置頁碼
+  if (source === 'oracle') { oracleRoomsPage = 1; _oracleSearchFocus = false; }  // v5.276: 切 filter 重置頁碼
   else firebaseRoomsPage = 1;
   // v1.18: 切換 status 分頁 → 重新抓「該 status」的房間（每頁各自載入，不再一次撈全部）。
   if (source === 'oracle') loadOracleRooms();
@@ -2109,6 +2202,15 @@ window.filterRoomsBySearch = function(q, source) {
   // v5.276: 搜尋也走翻頁 — 完整 re-render (含 pager) 而非只更新 tbody
   if (source === 'oracle') oracleRoomsPage = 1;
   else firebaseRoomsPage = 1;
+  // v6.240 Oracle 走伺服器端分頁 ⇒ 搜尋也必須在伺服器端做，否則只搜得到當前這 50 筆。
+  //   debounce 350ms（每敲一鍵打一次 API 會把 8 萬筆的 regex 掃描打爆）。
+  if (source === 'oracle' && oracleRoomsSrv) {
+    oracleRoomsSearch = q || '';
+    _oracleSearchFocus = true;
+    if (_oracleSearchTimer) clearTimeout(_oracleSearchTimer);
+    _oracleSearchTimer = setTimeout(() => { _oracleSearchTimer = null; loadOracleRooms(); }, 350);
+    return;
+  }
   const rooms = source === 'oracle' ? oracleRoomsCache : firebaseRoomsCache;
   // 過濾 cache 內 rooms 後重 render. statusFilter + search 都套用.
   const lc = q.toLowerCase();
@@ -3145,7 +3247,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.239';
+window.SITE_VERSION_HINT = '6.240';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -4450,7 +4552,9 @@ async function crLoadData() {
   //   自己補載一次（同一支端點，載完賽事統計分頁也受惠）。
   if (!tournStatsCache || !((tournStatsCache.archives || []).length)) {
     try {
-      const d0 = await api('/api/tournament/admin/stats');
+      // v6.240：與賽事統計分頁走**同一支** helper（全量逐頁累積）。
+      //   ⚠ 這裡若只抓第一頁，奪冠報告圖的「全部資料」就只會涵蓋最新 200 場。
+      const d0 = await fetchAllTournamentStats(null);
       if (d0 && !d0.error) tournStatsCache = d0;
     } catch (e) { /* 下面統一報錯 */ }
   }
