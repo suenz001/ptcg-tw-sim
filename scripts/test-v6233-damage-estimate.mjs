@@ -403,14 +403,23 @@ console.log('\n⑨ 接線（靜態）：只在休閒對戰、兩套 UI、一份�
 console.log('\n⑩ HEAD-FAIL：上一版（BASE v6.232）不可能通過這支守衛');
 {
   const BASE = '4ed788b19b1ba416b3bab1cda17cf57752d350cc';
-  const gone = (p) => {
-    try { execFileSync('git', ['-C', ROOT, 'cat-file', '-e', `${BASE}:${p}`], { stdio: 'ignore' }); return false; }
-    catch { return true; }
+  const git = (args) => {
+    try {
+      return { ok: true, out: execFileSync('git', ['-C', ROOT, ...args],
+        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8') };
+    } catch { return { ok: false, out: '' }; }
   };
-  chk('BASE 沒有 src/lib/game/damage-estimate.ts（新檔）', gone('src/lib/game/damage-estimate.ts'));
-  const basePage = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', `${BASE}:src/routes/game/+page.svelte`],
-                                { maxBuffer: 1 << 28 }).toString('utf8');
-  chk('BASE 的 +page.svelte 沒有 damageEstimates（⑨ 會全紅）', !basePage.includes('damageEstimates'));
+  // ⚠ CI（actions/checkout@v4）預設是 `fetch-depth: 1` 的**淺複製**，物件庫裡根本沒有 BASE 那顆
+  //   commit。那不是「守衛發現問題」，是「這台機器沒有可比對的舊版」——⇒ 明講跳過，
+  //   **絕不可以讓 git 的例外把整支測試炸掉**（第一次 push 就是這樣讓 CI 的 npm test 掛掉的）。
+  if (!git(['cat-file', '-e', BASE + '^{commit}']).ok) {
+    console.log('  SKIP 本機物件庫沒有 BASE 這顆 commit（淺複製 / CI）⇒ 這一節只在完整 clone 才跑');
+  } else {
+    chk('BASE 沒有 src/lib/game/damage-estimate.ts（新檔）',
+        !git(['cat-file', '-e', `${BASE}:src/lib/game/damage-estimate.ts`]).ok);
+    const r = git(['cat-file', '-p', `${BASE}:src/routes/game/+page.svelte`]);
+    chk('BASE 的 +page.svelte 沒有 damageEstimates（⑨ 會全紅）', r.ok && !r.out.includes('damageEstimates'));
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
