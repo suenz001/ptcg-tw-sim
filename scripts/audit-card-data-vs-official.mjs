@@ -60,6 +60,17 @@ const KNOWN_INTENTIONAL_DIVERGENCES = [
     reason: '站長 v6.193 裁定沿用「老大的指令」：引擎以卡名查效果實作，改名會連動一大串；'
       + '守衛＝test-v6193-hk-dup-and-boss-rename.mjs'
   },
+  {
+    id: '13145', field: 'attacks',
+    ours: '[{"name":"麻麻關節","cost":"Colorless","damage":"20","effect":"擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。"},{"name":"強力伏特","cost":"Colorless+Lightning+Lightning","damage":"120","effect":"選擇1個這隻寶可夢身上附加的能量，將其丟棄。"}]',
+    official: '[{"name":"麻麻關節","cost":"Colorless","damage":"20","effect":"擲1次硬幣若為正面，則可將對手的戰鬥寶可夢【麻痺】。"},{"name":"強力伏特","cost":"Colorless+Lightning+Lightning","damage":"120","effect":"選擇1個這隻寶可夢身上附加的能量，將其丟棄。"}]',
+    reason: '站長 v6.241 裁定：**官方頁面自身的文字有誤** —— SVQP 捷拉奧拉｜麻麻關節寫成'
+      + '「則【可】將對手的戰鬥寶可夢【麻痺】」，多一個「可」字（讀起來像「可以選擇要不要麻痺」）。'
+      + '同名同招式的另外兩個印刷（MC 16737、SV5M 9870）以及站內同型的擲幣附加狀態招式一律是「則將」，'
+      + '實作端本來就是「正面＝必定麻痺」⇒ 我方以正確卡面為準，不跟著官方頁面的錯字。'
+      + '⚠ 這筆豁免是 fail-open：只要官方哪天把錯字修掉（或我們的資料被改動），兩側值就不再逐字匹配，'
+      + '這張卡會自動回到差異報告。守衛＝test-v6241-zeraora-text-and-archetype-fullscan.mjs'
+  },
 ];
 // ⭐ 官方頁已下架、但本站已依站長裁定處理完畢的卡（v6.194 對玩家隱藏、資料保留供舊牌組／回放）。
 const KNOWN_PAGE_GONE_HIDDEN = {
