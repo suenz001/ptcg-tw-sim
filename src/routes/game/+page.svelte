@@ -45,7 +45,8 @@
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
-  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame } from '$lib/game/sync-guards';
+  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
+           casualResyncGapMs } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
@@ -72,7 +73,7 @@
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
   import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange, isOracleTimeout,
-           ORACLE_API_TIMEOUT_MAX_MS } from '$lib/game/oracle-client';
+           ORACLE_API_TIMEOUT_MAX_MS, ORACLE_TX_MAX_TOTAL_MS } from '$lib/game/oracle-client';
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import {
@@ -7714,12 +7715,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let showForfeitConfirm = $state(false);
   let _lastActionAt = Date.now();
   let _lastResyncAt = 0;  // v5.360：上次自動重訂閱(自癒)時間
+  // ⭐v6.248：這一次「連續卡住」期間已經重訂閱過幾次（用來退避；同步一有進展就歸零）。
+  let _resyncStreak = 0;
   let _forceAdoptNext = false;  // v5.587：下一個收到的同局 snapshot 強制採用(繞過 stale 守衛)＝程式幫忙重整
   // ⭐⭐⭐v6.212 push 失敗要有限重試，失敗到底就把那份盤面記下來（＝本地領先伺服器的證據）。
   //   舊版只 console.error 就算了 ⇒ 伺服器停在攻擊前、本地繼續等對手 ⇒ 25 秒後 force-adopt
   //   把攻擊前那份拉回來，玩家看到的就是「回合結束了又跳回攻擊前」。
   let _unpushedState: GameState | null = null;
   let _repushAttempts = 0;
+  // ⚠ scripts/test-v6245-oracle-api-timeout.mjs 的 pushWithRetry 抽取視窗**從下一行開始**，
+  //   視窗內的模組層級 const 會在沙盒裡被求值 ⇒ 需要外部識別字的宣告一律放在這一行**之前**。
+  type PushMark = { at: number };
+  /** ⭐v6.248 在途保護的上限＝一發 push 的真實最壞總時長（推導見 oracle-client.ts）。 */
+  const PUSH_INFLIGHT_FAILSAFE_MS = Math.max(ORACLE_TX_MAX_TOTAL_MS, ORACLE_API_TIMEOUT_MAX_MS);
   const PUSH_RETRY_MAX = 3;
   // ⭐⭐⭐v6.247 「這一發推送還在途中」的旗標。
   //   v6.212 拿 `_unpushedState` 當「本地領先伺服器」的證據，但它只在 push
@@ -7733,16 +7741,59 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   （不 force-adopt、也不重推），等它落地再說。不新增任何請求、不改跳動頻率。
   // ⚠ 上限＝單發推送的預算上限 ORACLE_API_TIMEOUT_MAX_MS。旗標萬一沒被還原，
   //   最多只延後這麼久就恢復原行為 ⇒ fail-safe，不是 fail-open（不會變成新的卡死）。
-  let _pushInFlight = 0;
-  let _pushInFlightSince = 0;
+  //   ⭐⭐⭐v6.248 獨立審查者複驗 v6.247 後修掉的三件事（每一件都有實測，見守衛）：
+  //   【問題2】上限用 ORACLE_API_TIMEOUT_MAX_MS（120 秒）是**假陰性**。120 秒是單一發 HTTP
+  //     請求的預算，而一發 pushGameState 走 room-oracle 的 oracleTx（最多 5 輪 GET＋PUT，
+  //     每一發還可能因 401 再重登重送一次）⇒ 真實最壞總時長是 ORACLE_TX_MAX_TOTAL_MS。
+  //     實測（虛擬時鐘、pushMs=150s）舊上限的結果是 `t=120s 11→10、t=150s 10→11`
+  //     —— 回捲＋翻覆原封不動，守衛對 >120 秒的在途**零覆蓋**。
+  //   【問題3】`_pushInFlightSince` 只在 0→1 時更新 ⇒ 兩發推送重疊時時間戳被凍結在最舊那一發，
+  //     保護會**靜默過期**（實測 `_pushInFlight=3` 但 since 已 200 秒 ⇒ 保護等於沒有）。
+  //     ⇒ 改成**每一發各自記自己的起始時刻**，判定＝「有任何一發還在自己的預算內」。
+  //   【問題4】全站的盤面推送有 5 個呼叫點，v6.247 只標記了 2 個。
+  //     ⇒ 收斂到 pushTracked() / pushUndoTracked()，呼叫端一律走它，不再逐處手動加旗標。
+  let _pushInFlightMarks: PushMark[] = [];
+  function _beginPushTrack(): PushMark {
+    const m: PushMark = { at: Date.now() };
+    _pushInFlightMarks.push(m);
+    return m;
+  }
+  function _endPushTrack(m: PushMark): void {
+    const i = _pushInFlightMarks.indexOf(m);
+    if (i >= 0) _pushInFlightMarks.splice(i, 1);
+  }
+  /** 有沒有「還在自己預算內」的推送在途 ⇒ 這一輪不做方向決策。 */
+  function hasFreshPushInFlight(): boolean {
+    const now = Date.now();
+    return _pushInFlightMarks.some((m) => (now - m.at) < PUSH_INFLIGHT_FAILSAFE_MS);
+  }
+  /** 診斷用：最舊那一發已經飛了多久（沒有在途時回 0）。 */
+  function oldestPushInFlightAgeMs(): number {
+    if (_pushInFlightMarks.length === 0) return 0;
+    const now = Date.now();
+    return Math.max(..._pushInFlightMarks.map((m) => now - m.at));
+  }
+  /** 換局時清乾淨：上一局的在途不可以壓住新局（見換局 $effect）。 */
+  function _resetPushTracking(): void { _pushInFlightMarks = []; }
+  /**
+   * ⭐⭐⭐v6.248 中央收斂：**全站每一個盤面推送都要走這裡**。
+   *   漏掉任何一處＝那一段時間的保護有洞（v6.247 就漏了 3 處）。
+   *   ⚠ 還原一律寫在 finally：拋錯也一定還原，標記不可能永久留著。
+   */
+  async function pushTracked(code: string, st: GameState): Promise<void> {
+    const m = _beginPushTrack();
+    try { await pushGameState(code, st); } finally { _endPushTrack(m); }
+  }
+  /** 悔棋 rollback 的推送（同樣要標記在途；它也是一整包盤面）。 */
+  async function pushUndoTracked(code: string, st: GameState): Promise<void> {
+    const m = _beginPushTrack();
+    try { await pushUndoRollback(code, st); } finally { _endPushTrack(m); }
+  }
   async function pushWithRetry(code: string, st: GameState): Promise<boolean> {
     for (let i = 0; i < PUSH_RETRY_MAX; i++) {
       try {
-        // ⭐⭐⭐v6.247 標記「這一發還在途中」（見 _pushInFlight 的註解）。
-        //   ⚠ 遞減寫在**內層 finally**：拋錯也一定還原，旗標不可能永久卡住。
-        _pushInFlight++;
-        if (_pushInFlight === 1) _pushInFlightSince = Date.now();
-        try { await pushGameState(code, st); } finally { _pushInFlight--; }
+        // ⭐⭐⭐v6.247 標記「這一發還在途中」（見上方註解）；v6.248 改走中央的 pushTracked()。
+        await pushTracked(code, st);
         _unpushedState = null;
         _repushAttempts = 0;
         return true;
@@ -7767,8 +7818,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //       v6.246 把 48KB 的預算放到 120 秒之後，這個「在途窗口」變得更長、也更常發生
         //       （以前 30 秒就被砍掉，現在它真的會送到）。⇒ 見 _pushInFlight。
         //   ⚠ 「中途推失敗 ⇒ 伺服器停在舊盤面 ⇒ 對手可能宣告棄權而且伺服器端會核准」
-        //     這條**實測成立**，但根治它要動到棄權判定本身，不在本版範圍；
-        //     證據與方案記在 docs/changelog-internal.md。
+        //     這條**實測成立**，但站長已裁定「塞住的是他，也有責任」⇒ **維持原判**，
+        //     棄權三處（oppInactivityWarn／棄權按鈕／claimOpponentForfeit）一個字都不動。
+        //   ⭐⭐⭐v6.248 有人問過好幾次「那要不要把自癒從這個 gate 底下拆出來」，
+        //     這一版把它量完，結論是**不拆**（腳本：scripts/perf-v6248-split-tradeoff.mjs）：
+        //     ① 真正會傷害玩家的是「攻擊完、結束回合」那一手，而結束回合之後
+        //        activePlayerIndex 已經是對手 ⇒ isWaitingOnOpponent 為 true
+        //        ⇒ **那一格 gate 本來就是開的**，自癒照跑，拆不拆都一樣。
+        //     ② 回合中途推失敗時，下一個動作的推送送的是**更新**的盤面，一發成功就自然覆蓋
+        //        （實測：第一發失敗 server=10/local=11，第二發成功後兩邊都 12）。
+        //     ③ 真的把 gate 拆掉（force-adopt 另外自己判 isWaitingOnOpponent，符合硬約束），
+        //        300 秒內的實測是：伺服器盤面**仍然沒有追上**（重推同樣被塞住的上行砍掉），
+        //        代價卻是 +30 次全量房間 GET（約 1.4MB 下行）與 +2 發 48KB 重送
+        //        —— 全部壓在**已經塞住的那條線**上。零收益、負成本 ⇒ 違反「絕不可讓玩家端變慢」。
+        //     ⇒ 保持現狀，並由守衛把「force-adopt 絕不在我方回合中途觸發」鎖成硬約束。
         if (isOracleTimeout(e)) break;
         if (i < PUSH_RETRY_MAX - 1) {
           await new Promise((r) => setTimeout(r, 400 * (i + 1)));
@@ -7834,6 +7897,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
       oppInactivityWarn = false;
       _unpushedState = null;               // v6.212：上一局的未推送殘留不可延用到新局
       _repushAttempts = 0;
+      // ⭐⭐⭐v6.248【問題5】換局也要清在途追蹤與重訂閱退避 ——
+      //   少了這兩行，上一局還沒落地的推送會**壓住新局的自癒**最久 ORACLE_TX_MAX_TOTAL_MS，
+      //   而舊局遺留的 streak 會讓新局第一次卡住時的重訂閱被延後。
+      //   ⚠ 清空是安全的：真的還在飛的那一發，它的 finally 會呼叫 _endPushTrack()，
+      //     indexOf 找不到就是 no-op（不會把計數弄成負數，也不會誤刪新局的標記）。
+      _resetPushTracking();
+      _resyncStreak = 0;
       return;
     }
     if (logLen !== _prevLogLen) {
@@ -7854,6 +7924,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   $effect(() => {
     const iv = setInterval(() => {
       if (!roomCode) { oppInactivityWarn = false; return; }
+      // ⭐v6.248 同步一有進展就把重訂閱退避歸零。放在棄權 gate**之前**：我方回合中途也會歸零
+      //   ⇒ 下一次真的卡住時，第一發重訂閱仍是 v5.360 的 8 秒，逐字不變。
+      //   ⚠ 這一行不讀也不寫 oppInactivityWarn，棄權語意一個字都沒有動到。
+      if ((Date.now() - _lastSyncAt) < 8000) _resyncStreak = 0;
       if (!isWaitingOnOpponent(game, mySeatIdx)) { oppInactivityWarn = false; return; }
       // v5.329：門檻改讀房間設定（房主可調 1:00~5:00，預設 3:00）；clamp 防呆
       const thresholdMs = Math.min(300, Math.max(60, roomData?.idleTimeoutSec ?? 180)) * 1000;
@@ -7861,8 +7935,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // v5.360：卡住自癒 — 等對手 >8s 都沒有任何新動作（含對手 KO 我方/我方 KO 對手後對手沒收到），
       //   自動重建房間訂閱（＝玩家手動「重新整理 / 回房按觀戰」的修復：重置輪詢 lastVersion → 重新
       //   抓房間最新狀態走正常 merge 收斂）。只重讀、不改 merge 邏輯，安全。免玩家手動脫困。
-      if (roomCode && (Date.now() - _lastSyncAt) >= 8000 && (Date.now() - _lastResyncAt) >= 8000) {
+      // ⭐⭐⭐v6.248【問題7】重訂閱退避：每一次重訂閱都讓 oraclePollRoom 把 lastVersion 歸 -1
+      //   ＝多一次**全量**房間 GET。v6.247 之後卡住的玩家不再被回捲，`_lastSyncAt` 也就不再
+      //   被回捲順手更新 ⇒ 300 秒內從 24 次變 30 次（實測）。
+      //   ⚠⚠ 重訂閱是卡住的玩家唯一的脫困手段，**不可以為了數字好看關掉**
+      //   ⇒ 前 3 次維持 8 秒（真正有救援效果的窗口逐字不變），之後才退避到上限 60 秒。
+      const _resyncGapMs = casualResyncGapMs(_resyncStreak);
+      if (roomCode && (Date.now() - _lastSyncAt) >= 8000 && (Date.now() - _lastResyncAt) >= _resyncGapMs) {
         _lastResyncAt = Date.now();
+        _resyncStreak++;
         // v5.587：卡更久(>=25s 等對手都沒新動作)→ 強制採用伺服器最新狀態(繞過 stale 守衛)。
         //   治「本地 log 領先伺服器、重抓回來又被守衛拒收」型卡死。只在『正等對手』時走到這(上方已 gate)，
         //   我方沒有未推送的手，故不會丟手；不同局/game-over/setup 在 handleRoomUpdate 內另有保護。
@@ -7872,11 +7953,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //   ⇒ 先重推本地那份（冪等；推端 shouldSkipStalePush 會擋倒退），重推仍卡住才 adopt。
         // ⭐⭐⭐v6.247 推送還在途中 ⇒ 這一輪不做方向決策（見 _pushInFlight 的註解）。
         //   ⚠ 這一行只會讓 force-adopt／重推**變少**，不會變多；8 秒重訂閱在這個 if 之外，一字未動。
-        const _pushStillInFlight = _pushInFlight > 0
-          && (Date.now() - _pushInFlightSince) < ORACLE_API_TIMEOUT_MAX_MS;
+        // ⭐⭐⭐v6.248 改用 hasFreshPushInFlight()：逐發計時（不再被重疊推送凍結時間戳），
+        //   上限也換成 oracleTx 的真實最壞總時長（不再是單發請求的 120 秒）。
+        const _pushStillInFlight = hasFreshPushInFlight();
         if ((Date.now() - _lastSyncAt) >= 25000 && _pushStillInFlight) {
-          console.warn('[Online] 自癒：推送仍在途中（已 '
-            + Math.round((Date.now() - _pushInFlightSince) / 1000)
+          console.warn('[Online] 自癒：推送仍在途中（最舊那一發已 '
+            + Math.round(oldestPushInFlightAgeMs() / 1000)
             + ' 秒）→ 這一輪不 force-adopt、也不重推，等它落地');
         }
         if ((Date.now() - _lastSyncAt) >= 25000 && !_pushStillInFlight) {
@@ -7893,12 +7975,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
               // ⭐v6.247 重推也算「在途」：沒這一段的話，下一輪（約 10 秒後）會在前一發
               //   還沒落地時再送一份同樣大小的盤面 —— 上行塞死時那正是 v6.245 要避免的事。
               //   重推總次數仍由 _repushAttempts 控制（上限 2），只是改成**串行**。
-              _pushInFlight++;
-              if (_pushInFlight === 1) _pushInFlightSince = Date.now();
-              pushGameState(roomCode, _st)
+              // ⭐v6.248 改走中央的 pushTracked()：在途標記與還原由它一手包辦。
+              pushTracked(roomCode, _st)
                 .then(() => { _unpushedState = null; _repushAttempts = 0; })
-                .catch((e: unknown) => console.warn('[Online] 自癒重推失敗:', e))
-                .finally(() => { _pushInFlight--; });
+                .catch((e: unknown) => console.warn('[Online] 自癒重推失敗:', e));
             }
           } else {
             // 放棄本地那份（重推額度用完 / 本來就沒有未推送的手）⇒ 照 v5.587 強制同步。
@@ -8156,7 +8236,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
         case 'merge-setup':
           // v4.494：開局單調 merge 後若湊齊雙方完成 → 已是 playing，推給對方同步（idempotent）
           if (decision.advanced && roomCode) {
-            pushGameState(roomCode, decision.game).catch((e: unknown) => console.warn('[pushGameState advance] failed:', e));
+            // ⭐v6.248【問題4】這一處 v6.247 漏標在途 —— 改走中央的 pushTracked()。
+            pushTracked(roomCode, decision.game).catch((e: unknown) => console.warn('[pushGameState advance] failed:', e));
           }
           game = decision.game;
           return;
@@ -8181,7 +8262,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
             const _festPromoted = tryPromoteToMainForFestival(game, pool);
             if (_festPromoted !== game) {
               game = _festPromoted;
-              if (roomCode) pushGameState(roomCode, _festPromoted).catch((e: unknown) => console.warn('[festival promote push] failed:', e));
+              // ⭐v6.248【問題4】這一處 v6.247 也漏標在途。
+              if (roomCode) pushTracked(roomCode, _festPromoted).catch((e: unknown) => console.warn('[festival promote push] failed:', e));
             }
           }
           return;
@@ -8999,7 +9081,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         try {
           game = snap;
           // v5.390：atomic 寫 rollback + 清 undoRequest + bump marker（繞過 push/收端 stale guard）
-          await pushUndoRollback(roomCode, snap);
+          // ⭐v6.248【問題4】悔棋 rollback 也是一整包盤面的推送，同樣要標記在途
+          //   （審查者只點名兩處，全站 git grep 指定 rev 枚舉後發現的第三處）。
+          await pushUndoTracked(roomCode, snap);
           console.log('[undo] 對手同意，已 sync 上一手 state');
         } catch (e) {
           console.warn('[undo agreed] push failed:', e);

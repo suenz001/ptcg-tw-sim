@@ -114,6 +114,32 @@ export function decideStuckSelfHeal(ctx: StuckSelfHealCtx): StuckSelfHealAction 
   return { kind: 'force-adopt' };
 }
 
+// ── ⭐⭐⭐v6.248 卡住期間「重建房間訂閱」的間隔（純函式，守衛直接實跑）────────────────
+/**
+ * v5.360 的自癒是「等對手 >=8 秒沒有任何新動作 → 重建房間訂閱」，固定每 8 秒一次。
+ * 而 `oraclePollRoom` 每次重訂閱都把 `lastVersion` 歸 -1 ＝ 多發一次**全量**房間 GET。
+ *
+ * ⚠ v6.247 之後這件事變多了（實測，虛擬時鐘實跑真原始碼）：
+ *   推送 87 秒才送達的情境，300 秒內重訂閱 v6.246 是 24 次、v6.247 是 30 次。
+ *   原因不是新增了呼叫，而是 v6.247 讓玩家**不再被回捲** ——
+ *   以前那次 force-adopt 會把盤面換掉、順手更新 `_lastSyncAt`，等於幫忙壓下了幾次重訂閱。
+ *
+ * ⚠⚠ 但重訂閱是卡住的玩家**唯一的脫困手段**，不可以為了數字好看關掉。
+ * ⇒ 折衷：前 `RESYNC_FULL_RATE_ROUNDS` 次維持 8 秒（真正有救援效果的窗口逐字不變），
+ *   之後才指數退避，夾在 `RESYNC_MAX_MS` 以內。呼叫端在「同步有進展」時把 streak 歸零。
+ *
+ * @param streak 這一次連續卡住期間已經重訂閱過幾次（0 = 還沒重訂閱過）。
+ */
+export const RESYNC_BASE_MS = 8000;
+export const RESYNC_FULL_RATE_ROUNDS = 3;
+export const RESYNC_MAX_MS = 60000;
+export function casualResyncGapMs(streak: number): number {
+  // ⚠ 非有限值一律當 0：這是安全網，絕不能自己算出 NaN 讓比較永遠為 false（＝再也不重訂閱）。
+  const s = Number.isFinite(streak) ? Math.max(0, Math.floor(streak)) : 0;
+  if (s < RESYNC_FULL_RATE_ROUNDS) return RESYNC_BASE_MS;
+  return Math.min(RESYNC_MAX_MS, RESYNC_BASE_MS * Math.pow(2, s - RESYNC_FULL_RATE_ROUNDS + 1));
+}
+
 // ── 收端決策（handleRoomUpdate cascade）─────────────────────────────────────
 
 export type RoomUpdateDecision =

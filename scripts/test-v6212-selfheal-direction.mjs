@@ -325,7 +325,9 @@ T('[HEAD-FAIL④d] repush 分支內**不得**設 _forceAdoptNext（設了就等�
   assert.ok(b > a, '切不出 repush 分支區塊');
   const branch = G.slice(a, b);
   assert.ok(!/_forceAdoptNext\s*=\s*true/.test(branch), 'repush 分支裡竟然還設了 _forceAdoptNext');
-  assert.ok(/pushGameState\(/.test(branch), 'repush 分支沒有真的重推');
+  // ⭐v6.248：重推改走中央的 pushTracked()（在途標記收斂），語意不變 ——
+  //   這裡要驗的是「分支裡真的有重推那個動作」，兩種寫法都算。
+  assert.ok(/(?:pushGameState|pushTracked)\(/.test(branch), 'repush 分支沒有真的重推');
   assert.ok(/_repushAttempts\+\+/.test(branch), 'repush 沒有計次 ⇒ 上限形同虛設、會無限重推');
 });
 T('[HEAD-FAIL④e] 25 秒之後的 _forceAdoptNext 只剩「決策說 force-adopt」那一條路徑', () => {

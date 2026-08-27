@@ -72,6 +72,34 @@ export const ORACLE_UPLOAD_FREE_BYTES = 4096;
 //   ⚠ 上界＝**保證上限**：500 B/s 時 120 秒最多只送得完約 60KB，更大的封包仍會失敗（誠實寫出來）。
 export const ORACLE_API_TIMEOUT_MAX_MS = 120000;
 
+// ── ⭐⭐⭐v6.248 一發 `pushGameState` 到底可以「還在途中」多久（獨立審查者【問題2】）──────
+//   v6.247 用 ORACLE_API_TIMEOUT_MAX_MS（120 秒）當「在途保護」的上限，那是**假陰性**：
+//   120 秒是**單一發 HTTP 請求**的預算，而一發 pushGameState 走的是 room-oracle 的 `oracleTx`，
+//   它是一個「讀→改→寫」的重試迴圈。逐項拆開（每一項都可在原始碼裡指到）：
+//     ① `for (let attempt = 0; attempt < 5; attempt++)` ⇒ 最多 5 輪。
+//     ② 每一輪 = `oracleGetRoom`（GET、body 0 ⇒ 預算 ORACLE_API_TIMEOUT_MS）
+//              + `oracleUpsertRoom`（PUT、48KB ⇒ 預算最高 ORACLE_API_TIMEOUT_MAX_MS）。
+//     ③ ⚠ 每一發請求裡面還藏著一次重試：`oracleApi` 收到 401 會**遞迴一次**
+//        （`_retry` 由 true 變 false），而重試那一發有**自己全新的**計時器與預算
+//        ⇒ 單發請求的最壞時間是預算的 (1 + ORACLE_API_MAX_AUTH_RETRIES) 倍。
+//        （這一項是 v6.247 與審查者雙方都漏掉的；只算 GET+PUT 會少算一半。）
+//     ④ 409 conflict 的退避 `50 * (attempt + 1)`，五輪合計 50+100+150+200+250 = 750 ms。
+//   ⚠ 逾時重試（TX_TIMEOUT_RETRY_MAX）不會把總時間拉更長：它只在**基底預算**（30 秒）的
+//     逾時才走，那一輪的 PUT 反而只花 30 秒，換來 1000 ms 退避 ⇒ 總量嚴格小於全 409 的路徑。
+//   ⚠ 為什麼不設成無限大：旗標萬一沒被還原，自癒就永遠不會動。這裡是**推導出來的有限值**，
+//     而且比它更久的卡住一定早就被 3 分鐘的棄權門檻接手了（＝對局不可能真的永遠卡著）。
+//   ⚠ 這三個常數是 room-oracle.ts `oracleTx` 與 oracleApi 的鏡射，
+//     由 scripts/test-v6248-selfheal-followups.mjs 直接讀那兩支的原始碼比對，改了會紅。
+export const ORACLE_TX_MAX_ATTEMPTS = 5;
+export const ORACLE_TX_CONFLICT_BACKOFF_TOTAL_MS = 750;   // 50+100+150+200+250
+export const ORACLE_API_MAX_AUTH_RETRIES = 1;             // oracleApi 的 401 重新登入重試
+/** 一發 `pushGameState` / `pushUndoRollback` 在最壞情況下的總時長（毫秒）。 */
+export const ORACLE_TX_MAX_TOTAL_MS =
+  ORACLE_TX_MAX_ATTEMPTS
+    * (ORACLE_API_TIMEOUT_MS + ORACLE_API_TIMEOUT_MAX_MS)
+    * (1 + ORACLE_API_MAX_AUTH_RETRIES)
+  + ORACLE_TX_CONFLICT_BACKOFF_TOTAL_MS;
+
 /**
  * ⭐⭐⭐v6.246 這一發的逾時預算（純函式，守衛直接實跑）。
  * @param uploadBytes 要上傳的 body 位元組數（估計值即可，**寧可高估**：高估只是多給時間，不會誤殺）。

@@ -19,6 +19,14 @@
  *   [正對照]    健康對局：這段 interval 一發請求都不送、盤面一次都不動。
  *   [突變]      故意把修法／既有守衛拿掉，斷言**紅在指定的那一條**（不是無差別 try/catch）。
  *
+ * ⭐⭐⭐v6.248 更新說明：在途標記的實作已收斂到中央的 pushTracked()／pushUndoTracked()，
+ *   並改成「每一發各記自己的起始時刻」＋上限換成 oracleTx 的真實最壞總時長。
+ *   ⇒ 這支守衛裡**只有「字面」斷言與模擬狀態的欄位名**跟著搬家（下方標 v6.248 的那幾條），
+ *     行為端斷言（HEAD-FAIL①②③、硬約束、正對照）的情境與期望值一個字都沒有改。
+ *     ⚠ 對 v6.246 的原始碼跑：抽取器在「找不到中央 helper」時**直接丟例外中止**（exit 1，
+ *       不是靜默 SKIP）——這是刻意的 fail-closed，見 Rule 25。
+ *     新增的問題另見 scripts/test-v6248-selfheal-followups.mjs。
+ *
  * Run: node scripts/test-v6247-selfheal-inflight.mjs
  */
 import { readFileSync } from 'node:fs';
@@ -63,6 +71,17 @@ const IV_BODY = GP.slice(ivOpen + 1, ivClose - 1);
 const PWR_SRC = fnSrc(GP, 'async function pushWithRetry(');
 const IWO_SRC = fnSrc(GP, 'function isWaitingOnOpponent(');
 const WOO_SRC = fnSrc(RO, 'function _waitingOnOpp(');
+// ⭐v6.248 在途標記已收斂到這幾支中央 helper（原本散在 pushWithRetry / 自癒重推裡）
+const HELPER_ANCHORS = [
+  'function _beginPushTrack(', 'function _endPushTrack(', 'function hasFreshPushInFlight(',
+  'function oldestPushInFlightAgeMs(', 'function _resetPushTracking(',
+  'async function pushTracked(', 'async function pushUndoTracked(',
+];
+const HELPERS_SRC = HELPER_ANCHORS.map((a) => fnSrc(GP, a)).join('\n');
+const SG_SRC = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
+const CRG_SRC = ['RESYNC_BASE_MS', 'RESYNC_FULL_RATE_ROUNDS', 'RESYNC_MAX_MS']
+  .map((k) => new RegExp('export const ' + k + ' = \\d+;').exec(SG_SRC)[0].replace(/^export /, '')).join('\n')
+  + '\n' + fnSrc(SG_SRC, 'export function casualResyncGapMs(').replace(/^export /, '');
 
 T('[自我驗證] 抽取器真的抽到東西（抽爆／抽半截就不可以放行）', () => {
   assert.ok(IV_BODY.length > 1500, 'interval body 只有 ' + IV_BODY.length + ' 字元');
@@ -73,6 +92,8 @@ T('[自我驗證] 抽取器真的抽到東西（抽爆／抽半截就不可以�
   assert.ok(IV_BODY.includes('decideStuckSelfHeal({'), 'interval body 裡沒有自癒決策');
   assert.ok(IV_BODY.includes('oppInactivityWarn ='), 'interval body 裡沒有閒置 banner');
   assert.ok(PWR_SRC.includes('_unpushedState = st;'), 'pushWithRetry 抽到的不是那一支');
+  assert.ok(HELPERS_SRC.length > 600, 'v6.248 的中央 helper 只抽到 ' + HELPERS_SRC.length + ' 字元');
+  assert.ok(CRG_SRC.includes('RESYNC_FULL_RATE_ROUNDS'), 'casualResyncGapMs 抽到的不是那一支');
 });
 T('[自我驗證/反對照] 抽取器抓錯錨點時會丟例外（不是靜默回空字串）', () => {
   assert.throws(() => fnSrc(GP, 'function 這個函式不存在('), /找不到錨點/);
@@ -81,15 +102,20 @@ T('[自我驗證/反對照] 抽取器抓錯錨點時會丟例外（不是靜默�
 const ts = async (c) => (await transform(c, { loader: 'ts', format: 'cjs', target: 'node20' })).code;
 function loadFn(cjs) { const m = { exports: {} }; new Function('module', 'exports', cjs)(m, m.exports); return m.exports._f; }
 const isWaitingOnOpponent = loadFn(await ts('export const _f = (' + IWO_SRC.replace(/^function\s+\w+/, 'function') + ');'));
+const casualResyncGapMs = loadFn(await ts('export const _f = (() => {\n' + CRG_SRC + '\nreturn casualResyncGapMs; })();'));
 const waitingOnOppServer = loadFn(await ts('export const _f = (' + WOO_SRC.replace(/^function\s+\w+/, 'function') + ');'));
 
 /** 把 interval / pushWithRetry 的原始碼編成可實跑的函式。mutate() 可先改原始碼（突變測試用）。 */
 async function buildRunners(mutate) {
   const ivSrc = mutate ? mutate(IV_BODY, 'interval') : IV_BODY;
   const pwrSrc = mutate ? mutate(PWR_SRC, 'push') : PWR_SRC;
+  const helperSrc = mutate ? mutate(HELPERS_SRC, 'helpers') : HELPERS_SRC;
   return {
     runInterval: new Function('S', 'with (S) {\n' + (await ts(ivSrc)) + '\n}'),
     mkPushWithRetry: new Function('S', 'with (S) {\n' + (await ts(pwrSrc)) + '\nreturn pushWithRetry; }'),
+    // ⭐v6.248 推送的在途標記已收斂到中央 helper，模擬世界也要用**真的那幾支**
+    mkHelpers: new Function('S', 'with (S) {\n' + (await ts(helperSrc))
+      + '\nreturn { pushTracked, pushUndoTracked, hasFreshPushInFlight, oldestPushInFlightAgeMs, _resetPushTracking }; }'),
   };
 }
 const REAL = await buildRunners(null);
@@ -159,7 +185,9 @@ function mkClient(W, seat, o = {}, runners = REAL) {
     mySeatIdx: seat, myPlayerIndex: seat, roomData: { idleTimeoutSec: o.idleTimeoutSec ?? 180 },
     oppInactivityWarn: false, _lastActionAt: clk.now, _lastSyncAt: clk.now, _lastResyncAt: 0,
     _forceAdoptNext: false, _unpushedState: null, _repushAttempts: 0,
-    _pushInFlight: 0, _pushInFlightSince: 0,
+    // ⭐v6.248：逐發計時的標記陣列（取代 v6.247 的 _pushInFlight / _pushInFlightSince）
+    _pushInFlightMarks: [], _resyncStreak: 0,
+    PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? 1500750, casualResyncGapMs,
     ORACLE_API_TIMEOUT_MAX_MS: 120000,
     unsubRoom: null, casualWaitingSelfInput: () => false, PUSH_RETRY_MAX: 3,
     Date: clk.Date, setTimeout: (f, ms) => clk.setTimeout(f, ms), Math,
@@ -170,10 +198,12 @@ function mkClient(W, seat, o = {}, runners = REAL) {
       return (ctx.hasUnpushedLocal && ctx.repushAttempts < max) ? { kind: 'repush' } : { kind: 'force-adopt' };
     },
     pushGameState: (c, st) => W.pushGameState(c, st),
+    pushUndoRollback: (c, st) => W.pushGameState(c, st),
     isOracleTimeout: (e) => !!(e && e.oracleTimeout === true),
     subscribeRoom: () => { S._resubs++; return () => {}; },
     handleRoomUpdate: () => {}, _resubs: 0, _adopts: 0,
   };
+  Object.assign(S, runners.mkHelpers(S));
   S.pushWithRetry = runners.mkPushWithRetry(S);
   S.setGame = (g) => {                                  // $effect(1) 的等價
     const prev = S.game?.log?.length ?? -1; S.game = g; const n = g?.log?.length ?? 0;
@@ -199,9 +229,9 @@ function mkClient(W, seat, o = {}, runners = REAL) {
  * 場景：我攻擊（本地回合結束）→ 推送很慢 → 觀察本地盤面有沒有被退回。
  * @returns { rolledBack, timeline, adopts, pushCalls, resubs, finalLocal, serverLen }
  */
-async function runSlowPush({ pushOutcome, pushMs, endTurn = true, runners = REAL, totalMs = 200000 }) {
+async function runSlowPush({ pushOutcome, pushMs, endTurn = true, runners = REAL, totalMs = 200000, failsafeMs }) {
   const W = mkWorld({ pushOutcome, pushMs });
-  const me = mkClient(W, 0, {}, runners);
+  const me = mkClient(W, 0, { failsafeMs }, runners);
   const g = clone(me.game); g.log.push({ msg: 'attack' });
   if (endTurn) g.activePlayerIndex = 1;
   me.setGame(g); me.pushWithRetry('ROOM1', g);
@@ -314,24 +344,29 @@ await TA('[HEAD-FAIL④b] 三個新識別字真的在**模組層級**有繫結�
     if (n.type === 'VariableDeclaration') for (const d of n.declarations) if (d.id.type === 'Identifier') top.add(d.id.name);
     if ((n.type === 'FunctionDeclaration' || n.type === 'ClassDeclaration') && n.id) top.add(n.id.name);
   }
-  for (const id of ['ORACLE_API_TIMEOUT_MAX_MS', '_pushInFlight', '_pushInFlightSince']) {
+  // ⭐v6.248 改名：_pushInFlight/_pushInFlightSince → _pushInFlightMarks（逐發計時）
+  for (const id of ['ORACLE_API_TIMEOUT_MAX_MS', '_pushInFlightMarks', 'pushTracked']) {
     assert.ok(top.has(id), id + ' 在模組層級沒有繫結 ⇒ 執行時會 ReferenceError（tsc -p 掃不到 .svelte）');
   }
   // 正對照：這個掃描抓得到「不存在的名字」，不是恆真
   assert.equal(top.has('這個名字絕對不存在'), false, '正對照失效');
 });
-T('[HEAD-FAIL⑤] pushWithRetry 的 _pushInFlight 遞減寫在 finally（否則拋錯就永久卡住旗標）', () => {
-  assert.ok(/try \{ await pushGameState\(code, st\); \} finally \{ _pushInFlight--; \}/.test(PWR_SRC),
-    'pushWithRetry 沒有用 finally 還原 _pushInFlight');
-  assert.ok(/_pushInFlight\+\+;/.test(PWR_SRC), 'pushWithRetry 沒有標記在途');
+T('[HEAD-FAIL⑤/v6.248 搬家] 中央 pushTracked 的標記還原寫在 finally（否則拋錯就永久留著）', () => {
+  assert.ok(/try \{ await pushGameState\(code, st\); \} finally \{ _endPushTrack\(m\); \}/.test(HELPERS_SRC),
+    'pushTracked 沒有用 finally 還原在途標記');
+  assert.ok(/await pushTracked\(code, st\);/.test(PWR_SRC), 'pushWithRetry 沒有走中央 pushTracked');
 });
-T('[HEAD-FAIL⑥] 自癒重推也標記在途，且用 .finally 還原（否則會併發送兩份 48KB）', () => {
-  assert.ok(/_pushInFlight\+\+;[\s\S]{0,400}?pushGameState\(roomCode, _st\)[\s\S]{0,400}?\.finally\(\(\) => \{ _pushInFlight--; \}\)/.test(IV_BODY),
-    '重推分支沒有把 _pushInFlight 標記／還原接上');
+T('[HEAD-FAIL⑥/v6.248 搬家] 自癒重推也走中央 pushTracked（否則會併發送兩份 48KB）', () => {
+  assert.ok(/pushTracked\(roomCode, _st\)/.test(IV_BODY), '重推分支沒有走中央 pushTracked');
+  assert.ok(!/(?<![\w.])pushGameState\s*\(/.test(IV_BODY), 'interval 裡還有裸的 pushGameState 呼叫（漏標在途）');
 });
-T('[HEAD-FAIL⑦] 在途判定有上限（fail-safe）：不可寫成無條件延後', () => {
-  assert.ok(/_pushInFlight > 0\s*\n?\s*&& \(Date\.now\(\) - _pushInFlightSince\) < ORACLE_API_TIMEOUT_MAX_MS/.test(IV_BODY),
-    '在途判定沒有帶時間上限 ⇒ 旗標一旦沒還原就永遠不自癒（fail-open）');
+T('[HEAD-FAIL⑦/v6.248 搬家] 在途判定有上限（fail-safe）：不可寫成無條件延後', () => {
+  assert.ok(/const _pushStillInFlight = hasFreshPushInFlight\(\);/.test(IV_BODY),
+    '在途判定不是走中央述詞 hasFreshPushInFlight()');
+  const h = fnSrc(GP, 'function hasFreshPushInFlight(');
+  assert.ok(/\(now - m\.at\) < PUSH_INFLIGHT_FAILSAFE_MS/.test(h),
+    '在途判定沒有帶時間上限 ⇒ 標記一旦沒還原就永遠不自癒（fail-open）');
+  assert.ok(!/Infinity|Number\.MAX/.test(h), '上限不可以是無限大');
 });
 T('[回歸] v6.212 的既有不變量沒被動到', () => {
   const B0 = GP.indexOf('v6.212 SELFHEAL DIRECTION BLOCK BEGIN');
@@ -391,33 +426,39 @@ await TA('[突變2] 拿掉 isWaitingOnOpponent 這道 gate ⇒ [硬約束①] �
   assert.equal(a.passed, false, 'gate 被拿掉，我方回合中途卻還是不會 force-adopt ⇒ 硬約束守衛是假的');
   assert.ok(/中途 force-adopt/.test(a.why), '紅的不是預期那一條：' + a.why);
 });
-await TA('[突變3] 把 pushWithRetry 的 finally 遞減拿掉（旗標洩漏）⇒ 上限仍讓自癒恢復，不可變成永不同步', async () => {
-  const m = mutOnce('try { await pushGameState(code, st); } finally { _pushInFlight--; }',
-                    'await pushGameState(code, st);');
-  const a = await mutantCheck(m, probeStillAdoptsEventually);
+await TA('[突變3/v6.248 搬家] 把 pushTracked 的 finally 還原拿掉（標記洩漏）⇒ 上限仍讓自癒恢復', async () => {
+  const m = (src, kind) => (kind === 'helpers'
+    ? src.replace('try { await pushGameState(code, st); } finally { _endPushTrack(m); }', 'await pushGameState(code, st);')
+    : src);
+  // ⚠ v6.248 起真實上限是 ORACLE_TX_MAX_TOTAL_MS（約 25 分鐘，＝ oracleTx 的真實最壞總時長），
+  //   遠大於這個 300 秒的模擬窗口 ⇒ 這裡把模擬的上限縮成 40 秒，驗的是**機制**（上限一到就恢復自癒），
+  //   上限「是有限值而且大於單發預算」另有字面斷言（HEAD-FAIL⑦）與 v6.248 守衛把關。
+  const a = await mutantCheck(m, async (runners) => {
+    const r = await runSlowPush({ pushOutcome: 'timeout', pushMs: 30000, totalMs: 300000, runners, failsafeMs: 40000 });
+    assert.ok(r.adopts >= 1, 'adopts=' + r.adopts);
+  });
   assert.equal(a.passed, true,
-    '旗標洩漏後就永遠不自癒了 ⇒ 上限沒有發揮 fail-safe 作用：' + a.why);
-  // 而且旗標洩漏**確實**會延後自癒（證明這個突變真的生效，不是沒改到）
+    '標記洩漏後就永遠不自癒了 ⇒ 上限沒有發揮 fail-safe 作用：' + a.why);
+  // 而且標記洩漏**確實**發生了（證明這個突變真的生效，不是沒改到）
   const b = await mutantCheck(m, async (runners) => {
     const r = await runSlowPush({ pushOutcome: 'timeout', pushMs: 30000, totalMs: 300000, runners });
-    assert.ok(r.me._pushInFlight === 0, '_pushInFlight=' + r.me._pushInFlight);
+    assert.equal(r.me._pushInFlightMarks.length, 0, 'marks=' + r.me._pushInFlightMarks.length);
   });
-  assert.equal(b.passed, false, '突變3 根本沒改到程式碼（旗標居然還是 0）');
+  assert.equal(b.passed, false, '突變3 根本沒改到程式碼（標記居然還是清乾淨的）');
 });
-await TA('[突變4] 把在途判定的時間上限改成無條件 ⇒ 「最終仍會 force-adopt」必須翻紅（證明上限不是裝飾）', async () => {
-  const m = (src, kind) => {
-    if (kind !== 'interval') return src;
-    return src.replace('&& (Date.now() - _pushInFlightSince) < ORACLE_API_TIMEOUT_MAX_MS', '&& true');
-  };
-  // 這個突變要配「旗標會洩漏」才看得出差別 ⇒ 兩個突變一起上
+await TA('[突變4/v6.248 搬家] 把在途判定的時間上限改成無條件 ⇒ 「最終仍會 force-adopt」必須翻紅', async () => {
+  // 這個突變要配「標記會洩漏」才看得出差別 ⇒ 兩個突變一起上
   const m2 = (src, kind) => {
-    let s = m(src, kind);
-    if (kind === 'push') s = s.replace('try { await pushGameState(code, st); } finally { _pushInFlight--; }',
-                                       'await pushGameState(code, st);');
-    return s;
+    if (kind !== 'helpers') return src;
+    return src
+      .replace('(now - m.at) < PUSH_INFLIGHT_FAILSAFE_MS', 'true')
+      .replace('try { await pushGameState(code, st); } finally { _endPushTrack(m); }', 'await pushGameState(code, st);');
   };
-  const a = await mutantCheck(m2, probeStillAdoptsEventually);
-  assert.equal(a.passed, false, '拿掉上限＋旗標洩漏之後竟然還會自癒 ⇒ 上限那一段根本沒接上');
+  const a = await mutantCheck(m2, async (runners) => {
+    const r = await runSlowPush({ pushOutcome: 'timeout', pushMs: 30000, totalMs: 300000, runners, failsafeMs: 40000 });
+    assert.ok(r.adopts >= 1, 'adopts=' + r.adopts);
+  });
+  assert.equal(a.passed, false, '拿掉上限＋標記洩漏之後竟然還會自癒 ⇒ 上限那一段根本沒接上');
   assert.ok(/adopts=0/.test(a.why), '紅的不是預期那一條：' + a.why);
 });
 
