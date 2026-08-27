@@ -97,6 +97,35 @@ mongosh --quiet ptcg --eval 'db.tournamentArchives.countDocuments({startedAt:{$i
 - **資料保全**：斷言本版沒有新增任何 `deleteMany`／`updateMany`／`$unset` 到
   `tournamentChampions`／`tournamentArchives` 的路徑。
 
+順手修好的三支既有守衛（**只補測試腳手架，出貨碼沒被將就**）：
+`test-v6111` / `test-v6168` / `test-v6169` / `test-v6226` 會把 `admin.html` 的繪圖區段
+切出來在沙箱裡跑，而新的日期 helper 定義在切片範圍之外 ⇒ 一律注入**真的那一份**
+（不是 stub —— stub 會讓「日期基準被改錯」在那幾支守衛裡完全看不出來）。
+
+### 【F】部署
+
+`oracle-admin/server_admin_patch.js` 與 `oracle-admin/admin.html` 都有改
+⇒ **`update-admin-full.bat`**（scp 兩支 + pm2 restart；端點要回 `startedAt`、admin 前端才顯示得出來）。
+`src/lib/version.ts` 有改 ⇒ **`redeploy-oracle.bat`**（讓 www.ptcg-tw-sim.com 的版本號跟著走）。
+沒有動 `src/lib/tournament/swiss.ts`、沒有新增 `server-engine.cjs` 的 export、`static/cards/` 沒動
+⇒ **不需要** `update-tournament.bat`。
+
+⚠ 兩支的先後：先 `update-admin-full.bat`。在它跑完之前，玩家端拿到的 `champions` 回應還沒有
+`startedAt`，新前端會走 fail-open 退回 `finishedAt` ⇒ 行為與 v6.243 相同（不會壞、也不會空白），
+只是日期還沒修好。
+
+### 【G】要不要回填？（**站長裁定，本版沒有動手**）
+
+不回填也完全正確 —— 讀取端會補。若希望連那一發補欄查詢都不要有，可以擇一：
+
+| 方案 | 做法 | 風險 |
+|---|---|---|
+| A（建議）| **什麼都不做** | 0。每次開名人堂多一發 `_id` 索引查詢（≤200 個 id、3 個小欄位） |
+| B | 一次性 `updateMany`：對 `startedAt` 缺席的 champ，用同 eventId 的歸檔補 | 要寫一支只 `$set` 新欄位的腳本；⚠ 絕不可碰既有欄位 |
+
+⚠ **不能**用 admin 現有的「♻️ 從歸檔還原名人堂」代替 B —— 那支是 `$setOnInsert`，
+對**已存在**的紀錄不補欄位（這是刻意的：不覆蓋站長手動改過的冠軍名／牌組名）。
+
 
 ## v6.243 — `recentLimit` 查證：它是**顯示**上限，不是統計上限 ⇒ 聚合與顯示都不動
 
