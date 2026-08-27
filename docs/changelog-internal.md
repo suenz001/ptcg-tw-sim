@@ -1,5 +1,162 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.249 — 獨立審查者複驗 v6.248：退避參數過猛、streak 語意誤述、25 分鐘 fail-safe、兩處守衛安慰劑
+
+v6.248 上線後由**獨立對抗性審查者**複驗：正確性沒有回歸（34 條全綠、突變全捕捉），
+但**不同意兩個參數**，並抓到**兩處守衛安慰劑**。這一版逐條處理，每一條都先自己複驗過才動手。
+
+⚠ 首頁 changelog **沒有寫**：這一版是參數微調＋守衛修正，玩家在正常對局裡看不到差異。
+
+### 【1】`RESYNC_MAX_MS` 60 秒 → **20000**（審查者的數字我全部複驗成立）
+
+量測腳本 `scripts/perf-v6249-resync-backoff-forfeit.mjs`（虛擬時鐘、5 秒 interval、
+抽 `+page.svelte` 真的 interval body 與 `sync-guards.ts` 真的純函式；三個對照組都是
+**對同一份原始碼做字串突變**，不是另外手寫模型）。t=0 是最後一次 `game.log` 變動：
+
+| 版本 | 重訂閱時刻（秒） | 300 秒次數 | 180 秒窗內 | 最壞脫困延遲 | **致命區間** |
+|---|---|---|---|---|---|
+| v6.247 固定 8 秒 | 10,20,…,300 | 30 | 18 | —（基準） | 0 s |
+| v6.248 上限 60 秒 | 10,20,30,50,85,145,205,265 | 8 | 6 | **55 s**（R=86s：base 90 → head 145） | **35 s**（R=146~180） |
+| 候選 上限 20 秒 | 10,20,30,50,70,90,…,290 | 16 | 10 | 10 s | 10 s（R=171~180） |
+| **v6.249 出貨** | 10,20,30,50,70,90,110,130,150,**160,170,180**,200,…,300 | 18 | 12 | 10 s | **0 s** |
+
+- 實作者宣稱的「慢 0~30 秒」是錯的；審查者的 55 s / 18→6 / 35 s 三個數字**逐一複驗成立**。
+- 站長已裁定「卡住方判負」⇒ 那 35 秒寬的區間等於「從被救回變成輸掉」。
+- ⚠ 只調成 20 秒**還不夠**：仍留下 R∈(170,180] 這 10 秒寬的淨退步（v6.247 救得到、它救不到）。
+  ⇒ 再加一道【最後救援窗】（見下），逐秒掃 R=1..300 之後致命區間 **10 s → 0 s**。
+
+### 【最後救援窗】`casualResyncInLastChance(sinceLastActionMs, forfeitThresholdMs)`
+
+距離棄權門檻只剩 `RESYNC_LAST_CHANCE_MS = 30000` 以內時，退避讓路、回到 8 秒全速。
+
+- ⚠⚠ 只**讀** `thresholdMs` 與 `_lastActionAt`（棄權倒數用的同一個時鐘），不寫 `oppInactivityWarn`、
+  不改門檻算式、不碰 `claimOpponentForfeit` ⇒ **棄權三處逐字不變**（守衛有字面＋行為兩層）。
+- ⚠ 上界用**閉區間 `<=`**：過了門檻仍全速的話，300 秒會回到 24~30 次，退避等於白做
+  （突變測試 3 專門證明這一點）。
+- ⚠ 關閉這道窗做對照時**必須把常數設 -1，不可設 0** —— 閉區間在 `since === threshold`
+  那一格仍然成立，會憑空多一次 t=180s 的重訂閱，把對照組的致命區間洗成 0（我第一版就被騙過）。
+- 代價：每次卡住多 2~4 趟全量房間 GET，只發生在「已經卡住而且即將輸掉」那條線上；
+  300 秒總量仍是 30 → **18**（比 v6.247 少四成）。健康路徑請求數 **0 次，逐字不變**。
+
+### 【2】審查者說「下一次卡住第一發仍是 8 秒不成立」——**成立**；但他建議的修法**無效**
+
+- ⭐ 他是對的：`_resyncStreak` 只在「`game.log` 有變動」時歸零，而**對手長考本身就沒有 log 變動**
+  ⇒ 對手想超過 30 秒 streak 就已經 ≥3。v6.248 寫在 `+page.svelte` 的那段註解是錯的，已更正。
+  實跑（守衛 `[HEAD-FAIL④]`）：對手長考 100 秒後斷線 ⇒ 第一次救援 v6.247 是 110s、
+  **v6.248 是 145s**、v6.249 是 110s。
+- ⚠⚠ 但他建議的「只在**真的做了重訂閱卻沒有換來進展**時才累加」**改不掉這件事**，而且我把它
+  實際換上去跑過：時間軸**逐格相同**（量測腳本第 ③ 段、守衛 `[HEAD-FAIL⑤]`）。
+  真正的原因是：對客戶端而言「對手在長考」與「我收不到了」是**同一個可觀測狀態**
+  （房間版本一樣、重訂閱一樣抓不到新東西、對手心跳一樣新鮮），
+  「重訂閱沒換來進展」在**兩種情況下都成立** ⇒ 那個條件恆為真。
+  ⇒ 正確處理是「承認起跑點可能已經很高」，把上限壓低＋加最後救援窗，**不是**改累加規則。
+- 新增守衛：**從 streak≥3 起跑**（L=40/100/140/170 秒的長考尾聲斷線）——
+  現有的「短暫卡 30 秒」正對照是從 streak=0 起跑的，蓋不到這個情境。
+
+### 【3】在途 fail-safe：1,500,750 ms（25.01 分鐘）→ **240,000 ms（4 分鐘）**
+
+`ORACLE_TX_MAX_TOTAL_MS` 是「五輪全 409 × 每發 401 重登 × 每發用滿預算」的**數學最壞值**，
+比 3 分鐘棄權門檻大 **8 倍** ⇒ 有 bug 時玩家先輸掉、fail-safe 才動＝等於沒有 fail-safe。
+（佐證：v6.247/6.248 的突變測試必須把上限偷換成 40 秒才驗得動這個機制。）
+
+取值依據（Rule 37：必須大於實測過的最慢**成功**案例）：
+① nginx log 實測最慢的成功推送是 **86.954 秒**（48KB PUT）；
+② `oracleTx` 允許 409 重試 ⇒ 實務最壞 ≈ 2 輪 ×（GET 幾秒 + PUT 87 秒）≈ **184 秒**；
+③ 取 **2 × `ORACLE_API_TIMEOUT_MAX_MS` = 240,000 ms** ＝「容得下連續兩輪的大 PUT」，
+   對 ① 有 2.76 倍餘裕、對 ② 有 1.30 倍，且只有棄權門檻的 **1.33 倍**（不是 8 倍）。
+
+⚠⚠ **誠實記錄取捨**：超過 240 秒才送達的推送，保護會到期，那一手可能被 force-adopt 退回攻擊前
+（實測時間軸 `t=250s 11→10 , t=300s 10→11`）。守衛 `[取捨邊界/v6.249]` 把它**明寫成一條測試**，
+並斷言「盤面最後仍收斂回玩家打完的那一手」（不會永久遺失）。線上從來沒觀測過 >120 秒的成功推送。
+⚠ 常數搬到 `oracle-client.ts`（見【5】）；`ORACLE_TX_MAX_TOTAL_MS` 保留，作為註解與守衛的推導依據。
+⚠ 突變測試 6 **不再需要偷換上限**（改成用真常數 + 拉長觀測窗到 3 個上限週期）。
+
+### 【4】兩處守衛安慰劑（審查者抓到，實測成立，這是最傷的）
+
+`scripts/test-v6248-selfheal-followups.mjs`：
+
+1. **L146** `/…/.source ? A : null` 是**恆真三元**（`.source` 永遠是非空字串）＝死碼。
+2. 那一整條 `[HEAD-FAIL①]` **從頭到尾沒有求值過 `ORACLE_TX_MAX_TOTAL_MS`**，
+   只比對三個分量常數，最後一條斷言在前兩條成立後是恆真的。
+   **實測：把 `* (1 + ORACLE_API_MAX_AUTH_RETRIES)` 從運算式刪掉，34 條照樣全綠。**
+3. harness 第 245 行 `PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? 1500750` 把上限寫死
+   ⇒ 出貨碼改了值，模擬世界也照舊。
+
+修法：新增 `evalConsts(src, names)` —— 把 `export const NAME = <運算式>;` 從原始碼取出來
+**實際求值**，再拿執行結果比對。harness 改讀真常數。
+**突變複驗：刪掉那個乘數 ⇒ `FAIL … ORACLE_TX_MAX_TOTAL_MS 求值 = 750750，但推導 = 1500750`。**
+
+### 【5】隱性耦合：`PUSH_INFLIGHT_FAILSAFE_MS` 的宣告位置
+
+它必須留在 `const PUSH_RETRY_MAX = 3;` **之前**，否則會落進 `test-v6245:509` 的
+pushWithRetry 抽取視窗、在沙盒裡被求值。**實測**把它移到後面：v6245 由 30 PASS 變
+**28 PASS / 2 FAIL**，訊息是 `ORACLE_TX_MAX_TOTAL_MS is not defined`（完全指不到真因），
+而 v6.248 的 34 條**全部照綠**。
+
+修法有兩層：
+- 結構上根除：常數搬到 `oracle-client.ts`（它本來就是那邊推導出來的協定常數），
+  視窗內再也沒有「需要外部識別字的模組層級 const」。
+- 補守衛 `[HEAD-FAIL⑧]`：**實跑**那個抽取視窗（同一組錨點），求值失敗時的訊息直接說出真因
+  與修法；另有正對照 `[HEAD-FAIL⑧b]`（塞一個壞 const 進去必須翻紅）。
+
+### 【6】枚舉邊界寫成**明示例外**
+
+掃 `room-oracle.ts` 裡每一個寫入**非 null** `gameState` 的 export function，共 **6 處**，
+每一處都要在守衛的 `DISPOSITION` 表裡有處置：
+
+| 函式 | 處置 | 理由 |
+|---|---|---|
+| `pushGameState` / `pushUndoRollback` | **tracked** | 走 `pushTracked()` / `pushUndoTracked()` |
+| `startGame` | 明示排除 | `createGame` 產的是 `phase==='setup'` 的新局，`setupDone=[false,false]` 時 `isWaitingOnOpponent` 回 false ⇒ 那一輪走不到自癒；force-adopt 的採用端也明文拒收 `setup`；另有 v5.492 canonical 保護與 v6.055 看門狗 |
+| `checkAndAcceptRestart` | 明示排除 | 同上；而且換局的 `$effect` 會 `_resetPushTracking()`，追蹤它**反而**會壓住新局的自癒 |
+| `claimOpponentForfeit` / `leaveRoom` | 明示排除 | 寫的是終局盤面 + `status:'ended'`，屬於站長裁定「一行都不准動」的棄權語意；終局後沒有回捲可言 |
+
+⚠ 掃描器**不可**寫成 `/gameState:\s*(?!null)/` —— `\s*` 會回溯到零長度，`gameState: null`
+照樣命中（實測：`createRoom` / `checkAndAcceptRematch` / `checkAndAcceptReturnToRoom`
+三個「清盤面」的函式全被誤收）。改成逐處抓出後面接的是什麼再判，並有兩條反對照。
+另有 `[HEAD-FAIL⑨b]`：**排除的前提**要真的成立（行為端驗 `isWaitingOnOpponent(setup 新局)===false`、
+原始碼驗 force-adopt 採用端仍判 `phase === 'setup'`）。
+
+### 【7】HEAD-FAIL 的形態
+
+v6.248 的守衛對 v6.247 那棵樹跑會**頂層 throw**（`找不到錨點：function _beginPushTrack(`，L82）
+⇒ 整支中止，單一 crash **證明不了「六項各有覆蓋」**。
+修法：抽不到錨點時換成「一被使用就丟例外」的**同步**毒藥值（⚠ 不可用 async function，
+它的 throw 會變成 unhandled rejection 而炸到 try/catch 之外，我第一版就踩到），
+再加一條專門列出所有抽取失敗的自我驗證項。
+
+實測（同一支守衛跑三棵樹）：
+
+| 守衛 | 對 v6.249（HEAD） | 對 v6.248 | 對 v6.247 |
+|---|---|---|---|
+| `test-v6248-selfheal-followups.mjs` | 37 PASS / 0 FAIL | — | **9 PASS / 28 FAIL（各項各自紅，無 crash）** |
+| `test-v6249-resync-backoff-and-failsafe.mjs` | 25 PASS / 0 FAIL | **8 PASS / 17 FAIL（各項各自紅）** | — |
+
+⚠ 順帶補了一條 Rule 25 的下限斷言：R-sweep 在兩邊都是空陣列時「致命區間 = 0」是**空真**
+（對 v6.248 那棵樹跑時真的假綠過一次），現在先斷言 `SHIP.at.length >= 10 && V247.at.length >= 20`。
+
+### 動到的檔案
+
+- `src/lib/game/sync-guards.ts`：`RESYNC_MAX_MS` 60000→20000；新增 `RESYNC_LAST_CHANCE_MS`
+  與 `casualResyncInLastChance()`；更正 streak 語意的註解（【B】段）。
+- `src/lib/game/oracle-client.ts`：新增 `PUSH_INFLIGHT_FAILSAFE_MS = 2 * ORACLE_API_TIMEOUT_MAX_MS`。
+- `src/routes/game/+page.svelte`：改 import；拿掉模組層級的 `PUSH_INFLIGHT_FAILSAFE_MS`；
+  `_resyncGapMs` 接上最後救援窗；更正兩段錯誤／過期註解。
+- `scripts/test-v6248-selfheal-followups.mjs`：修兩處安慰劑＋毒藥化＋參數同步（37 條）。
+- `scripts/test-v6247-selfheal-inflight.mjs`：注入新述詞、常數改求值、接線斷言跟著搬家（22 條）。
+- `scripts/test-v6249-resync-backoff-and-failsafe.mjs`（新，25 條）。
+- `scripts/perf-v6249-resync-backoff-forfeit.mjs`（新，量測腳本）。
+- `package.json` / `src/lib/version.ts` / `oracle-admin/admin.html`。
+
+### 站長要跑的 bat
+
+- 測試站綠燈後：`redeploy-oracle.bat`（前端；主站是 VM 的 nginx，不是 Pages）。
+- `update-admin-full.bat`（可離峰再跑）：只為了讓 admin 的 `SITE_VERSION_HINT` 對上 6.249，
+  不跑不影響玩家。⚠ 它會 `pm2 restart`，請避開比賽時段。
+- 這一版**沒有動**伺服器邏輯（`oracle-admin/server_admin_patch.js` 一個字都沒改），
+  不需要 `update-tournament.bat`。
+
+
 ## v6.248 — 獨立審查者複驗 v6.247 的六個問題（在途上限假陰性／逐發計時／中央收斂／重訂閱退避）
 
 v6.247 上線後由**獨立對抗性審查者**複驗，找到 6 個實作者沒提到的問題。這一版逐條處理，

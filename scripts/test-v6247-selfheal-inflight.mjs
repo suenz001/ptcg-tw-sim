@@ -79,9 +79,15 @@ const HELPER_ANCHORS = [
 ];
 const HELPERS_SRC = HELPER_ANCHORS.map((a) => fnSrc(GP, a)).join('\n');
 const SG_SRC = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
-const CRG_SRC = ['RESYNC_BASE_MS', 'RESYNC_FULL_RATE_ROUNDS', 'RESYNC_MAX_MS']
-  .map((k) => new RegExp('export const ' + k + ' = \\d+;').exec(SG_SRC)[0].replace(/^export /, '')).join('\n')
-  + '\n' + fnSrc(SG_SRC, 'export function casualResyncGapMs(').replace(/^export /, '');
+// ⭐v6.249 interval 多用了「最後救援窗」，模擬世界要一起注入，否則會 ReferenceError。
+const CRG_SRC = ['RESYNC_BASE_MS', 'RESYNC_FULL_RATE_ROUNDS', 'RESYNC_MAX_MS', 'RESYNC_LAST_CHANCE_MS']
+  .map((k) => {
+    const m = new RegExp('export const ' + k + ' = -?\\d+;').exec(SG_SRC);
+    if (!m) throw new Error('抽不到常數 ' + k + ' —— 守衛不可 fail-open');
+    return m[0].replace(/^export /, '');
+  }).join('\n')
+  + '\n' + fnSrc(SG_SRC, 'export function casualResyncGapMs(').replace(/^export /, '')
+  + '\n' + fnSrc(SG_SRC, 'export function casualResyncInLastChance(').replace(/^export /, '');
 
 T('[自我驗證] 抽取器真的抽到東西（抽爆／抽半截就不可以放行）', () => {
   assert.ok(IV_BODY.length > 1500, 'interval body 只有 ' + IV_BODY.length + ' 字元');
@@ -99,10 +105,24 @@ T('[自我驗證/反對照] 抽取器抓錯錨點時會丟例外（不是靜默�
   assert.throws(() => fnSrc(GP, 'function 這個函式不存在('), /找不到錨點/);
 });
 
+// ⭐v6.249 從 oracle-client.ts **求值**真常數，不再寫死（寫死＝出貨碼改了模擬世界也照舊）。
+const OC_SRC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
+const V249_FAILSAFE_MS = (() => {
+  const names = ['ORACLE_API_TIMEOUT_MAX_MS', 'PUSH_INFLIGHT_FAILSAFE_MS'];
+  const lines = names.map((n) => {
+    const i = OC_SRC.indexOf('export const ' + n + ' =');
+    if (i < 0) throw new Error('抽不到常數 ' + n + ' —— 守衛不可 fail-open');
+    return OC_SRC.slice(i, OC_SRC.indexOf(';', i) + 1).replace(/^export /, '');
+  });
+  return new Function(lines.join('\n') + '\nreturn PUSH_INFLIGHT_FAILSAFE_MS;')();
+})();
+
 const ts = async (c) => (await transform(c, { loader: 'ts', format: 'cjs', target: 'node20' })).code;
 function loadFn(cjs) { const m = { exports: {} }; new Function('module', 'exports', cjs)(m, m.exports); return m.exports._f; }
 const isWaitingOnOpponent = loadFn(await ts('export const _f = (' + IWO_SRC.replace(/^function\s+\w+/, 'function') + ');'));
-const casualResyncGapMs = loadFn(await ts('export const _f = (() => {\n' + CRG_SRC + '\nreturn casualResyncGapMs; })();'));
+const SGX = loadFn(await ts('export const _f = (() => {\n' + CRG_SRC
+  + '\nreturn { casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS }; })();'));
+const casualResyncGapMs = SGX.casualResyncGapMs;
 const waitingOnOppServer = loadFn(await ts('export const _f = (' + WOO_SRC.replace(/^function\s+\w+/, 'function') + ');'));
 
 /** 把 interval / pushWithRetry 的原始碼編成可實跑的函式。mutate() 可先改原始碼（突變測試用）。 */
@@ -187,7 +207,9 @@ function mkClient(W, seat, o = {}, runners = REAL) {
     _forceAdoptNext: false, _unpushedState: null, _repushAttempts: 0,
     // ⭐v6.248：逐發計時的標記陣列（取代 v6.247 的 _pushInFlight / _pushInFlightSince）
     _pushInFlightMarks: [], _resyncStreak: 0,
-    PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? 1500750, casualResyncGapMs,
+    // ⭐v6.249 上限改由 oracle-client.ts 中央宣告（2 × 單發預算上限 = 240000）。
+    PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? V249_FAILSAFE_MS, casualResyncGapMs,
+    casualResyncInLastChance: SGX.casualResyncInLastChance, RESYNC_BASE_MS: SGX.RESYNC_BASE_MS,
     ORACLE_API_TIMEOUT_MAX_MS: 120000,
     unsubRoom: null, casualWaitingSelfInput: () => false, PUSH_RETRY_MAX: 3,
     Date: clk.Date, setTimeout: (f, ms) => clk.setTimeout(f, ms), Math,
@@ -326,10 +348,13 @@ T('[正對照] 25 秒門檻／8 秒重訂閱／棄權門檻讀房間設定，三
 // ══════════════════════════════════════════════════════════════════════════
 // 5. 接線（有寫 ≠ 接上了）
 // ══════════════════════════════════════════════════════════════════════════
-T('[HEAD-FAIL④] ORACLE_API_TIMEOUT_MAX_MS 真的 import 了（漏 import ＝ runtime ReferenceError）', () => {
-  assert.ok(/import\s*\{[^}]*\bORACLE_API_TIMEOUT_MAX_MS\b[^}]*\}\s*from\s*'\$lib\/game\/oracle-client'/.test(GP),
-    '沒有從 oracle-client import ORACLE_API_TIMEOUT_MAX_MS');
-  assert.ok(/export const ORACLE_API_TIMEOUT_MAX_MS\s*=/.test(OC), 'oracle-client 沒有匯出這個常數');
+T('[HEAD-FAIL④] 在途上限常數真的 import 了（漏 import ＝ runtime ReferenceError）', () => {
+  // ⭐v6.249：常數從 +page.svelte 搬到 oracle-client.ts（同時根除 v6245 抽取視窗的順序耦合）
+  //   ⇒ 這裡改驗 PUSH_INFLIGHT_FAILSAFE_MS 的 import；ORACLE_API_TIMEOUT_MAX_MS 已不再被 +page 引用。
+  assert.ok(/import\s*\{[\s\S]*?\bPUSH_INFLIGHT_FAILSAFE_MS\b[\s\S]*?\}\s*from\s*'\$lib\/game\/oracle-client'/.test(GP),
+    '沒有從 oracle-client import PUSH_INFLIGHT_FAILSAFE_MS');
+  assert.ok(/export const PUSH_INFLIGHT_FAILSAFE_MS\s*=/.test(OC), 'oracle-client 沒有匯出在途上限常數');
+  assert.ok(/export const ORACLE_API_TIMEOUT_MAX_MS\s*=/.test(OC), 'oracle-client 沒有匯出單發預算上限');
 });
 await TA('[HEAD-FAIL④b] 三個新識別字真的在**模組層級**有繫結（acorn 掃 scope，不是字串比對）', async () => {
   const acorn = await import('acorn');
@@ -345,7 +370,9 @@ await TA('[HEAD-FAIL④b] 三個新識別字真的在**模組層級**有繫結�
     if ((n.type === 'FunctionDeclaration' || n.type === 'ClassDeclaration') && n.id) top.add(n.id.name);
   }
   // ⭐v6.248 改名：_pushInFlight/_pushInFlightSince → _pushInFlightMarks（逐發計時）
-  for (const id of ['ORACLE_API_TIMEOUT_MAX_MS', '_pushInFlightMarks', 'pushTracked']) {
+  // ⭐v6.249 改名：在途上限由 oracle-client.ts import 進來（PUSH_INFLIGHT_FAILSAFE_MS）
+  for (const id of ['PUSH_INFLIGHT_FAILSAFE_MS', '_pushInFlightMarks', 'pushTracked',
+                    'casualResyncInLastChance', 'RESYNC_BASE_MS']) {
     assert.ok(top.has(id), id + ' 在模組層級沒有繫結 ⇒ 執行時會 ReferenceError（tsc -p 掃不到 .svelte）');
   }
   // 正對照：這個掃描抓得到「不存在的名字」，不是恆真

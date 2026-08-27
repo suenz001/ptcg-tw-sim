@@ -128,16 +128,69 @@ export function decideStuckSelfHeal(ctx: StuckSelfHealCtx): StuckSelfHealAction 
  * ⇒ 折衷：前 `RESYNC_FULL_RATE_ROUNDS` 次維持 8 秒（真正有救援效果的窗口逐字不變），
  *   之後才指數退避，夾在 `RESYNC_MAX_MS` 以內。呼叫端在「同步有進展」時把 streak 歸零。
  *
+ * ── ⭐⭐⭐v6.249 獨立審查者複驗 v6.248 後的兩項更正（量測腳本：
+ *    `scripts/perf-v6249-resync-backoff-forfeit.mjs`，虛擬時鐘、5 秒 interval、真原始碼）──
+ *
+ * 【A】`RESYNC_MAX_MS = 60000` **太猛**。實測重訂閱時刻（秒，t=0 是最後一次 log 變動）：
+ *      v6.247 固定 8 秒 ⇒ 10,20,…,300（30 次）
+ *      v6.248 上限 60 秒 ⇒ 10,20,30,50,85,145,205,265（8 次）
+ *    ⇒ 脫困延遲最壞 **55 秒**（問題在 t=86 秒解除時：舊版 t=90 就救回，v6.248 要等到 t=145），
+ *      180 秒棄權窗內的脫困機會 **18 → 6**，而且 **R∈(145,180] 這 35 秒寬的區間**
+ *      舊版來得及在棄權門檻前脫困、v6.248 來不及 ⇒ 那一段從「被救回」變成「輸掉」。
+ *    ⇒ 上限改 **20000**：最壞慢 10 秒、180 秒窗剩 10 次、300 秒仍從 30 降到 16（churn 省一半）。
+ *
+ * 【B】⚠⚠ v6.248 在 `+page.svelte` 寫的「streak 會歸零，所以下一次真的卡住時第一發仍是
+ *    8 秒」——**是錯的**。streak 只在「`game.log` 有變動」時歸零，而**對手長考本身就沒有
+ *    log 變動** ⇒ 對手想 30 秒 streak 就已經 ≥3；連線在長考尾聲斷掉時，第一發救援不是
+ *    8 秒而是最多 `RESYNC_MAX_MS` 之後。（這正是【A】那 35 秒致命區間的成因。）
+ *    ⚠ 這個語意**改不掉**，不是偷懶：對客戶端而言「對手在長考」與「我收不到了」是
+ *      **同一個可觀測狀態**（房間版本一樣、重訂閱一樣抓不到新東西、對手心跳一樣新鮮），
+ *      審查者建議的「只在『重訂閱卻沒換來進展』時才累加」在兩種情況下都成立
+ *      ⇒ 換上去之後時間軸**逐格相同**（量測腳本的 `streak-semantics` 段落有實跑對照）。
+ *    ⇒ 正確的處理是「**承認 streak 起跑點可能已經很高**」，把上限壓到最壞情況也能接受，
+ *      再加一道【最後救援窗】（見 `casualResyncInLastChance`）保證不會比 v6.247 更糟。
+ *
  * @param streak 這一次連續卡住期間已經重訂閱過幾次（0 = 還沒重訂閱過）。
+ *   ⚠ 它同時被「對手長考」推高 —— 不要再寫「下次卡住一定從 8 秒起跑」這種註解。
  */
 export const RESYNC_BASE_MS = 8000;
 export const RESYNC_FULL_RATE_ROUNDS = 3;
-export const RESYNC_MAX_MS = 60000;
+export const RESYNC_MAX_MS = 20000;
 export function casualResyncGapMs(streak: number): number {
   // ⚠ 非有限值一律當 0：這是安全網，絕不能自己算出 NaN 讓比較永遠為 false（＝再也不重訂閱）。
   const s = Number.isFinite(streak) ? Math.max(0, Math.floor(streak)) : 0;
   if (s < RESYNC_FULL_RATE_ROUNDS) return RESYNC_BASE_MS;
   return Math.min(RESYNC_MAX_MS, RESYNC_BASE_MS * Math.pow(2, s - RESYNC_FULL_RATE_ROUNDS + 1));
+}
+
+/**
+ * ⭐⭐⭐v6.249【最後救援窗】距離棄權門檻只剩 `RESYNC_LAST_CHANCE_MS` 以內時，
+ * 退避一律讓路、回到 `RESYNC_BASE_MS` 全速。
+ *
+ * 為什麼要有它（不是為了好看）：站長已裁定「卡住方判負」，所以**沒能在棄權門檻前脫困
+ * ＝直接輸掉一局**。只調 `RESYNC_MAX_MS`（20 秒）之後仍留下一段 **10 秒寬**的區間
+ * （R∈(170,180]）：v6.247 來得及救、v6.249 來不及 —— 那是對玩家的**淨退步**，
+ * 違反「絕不可讓玩家端變慢」。加上這道窗之後，實測致命區間 **10 秒 → 0 秒**
+ * （量測腳本掃 R=1..300 秒逐秒對照：v6.249 不存在「v6.247 救得到而它救不到」的 R）。
+ *
+ * 代價：每一次卡住最多多打 **2~4 次**全量房間 GET（只發生在「已經卡住、而且即將輸掉」
+ * 的那條線上）；300 秒總量仍是 **30 → 18**（比 v6.247 少四成）。
+ *
+ * ⚠⚠ 它**只讀**棄權門檻與 `_lastActionAt`，一個字都沒有改棄權語意：
+ *   不寫 `oppInactivityWarn`、不動門檻算式、不碰 `claimOpponentForfeit`。
+ * ⚠ 上界用 `<=` 而不是無上界：過了門檻之後如果繼續全速，退避就等於沒做
+ *   （300 秒會回到 24~30 次）。門檻之後回到退避，脫困仍由重訂閱負責。
+ *
+ * @param sinceLastActionMs   距離最後一個「log 增長」的毫秒數（＝棄權倒數用的同一個時鐘）。
+ * @param forfeitThresholdMs  這個房間目前的棄權門檻（房主可調 60~300 秒）。
+ */
+export const RESYNC_LAST_CHANCE_MS = 30000;
+export function casualResyncInLastChance(sinceLastActionMs: number, forfeitThresholdMs: number): boolean {
+  // ⚠ 非有限值一律回 false：這是「加碼救援」的旁路，壞掉時必須退回原本的退避，不可以自己亂開。
+  if (!Number.isFinite(sinceLastActionMs) || !Number.isFinite(forfeitThresholdMs)) return false;
+  if (!(forfeitThresholdMs > 0)) return false;
+  return sinceLastActionMs >= forfeitThresholdMs - RESYNC_LAST_CHANCE_MS
+      && sinceLastActionMs <= forfeitThresholdMs;
 }
 
 // ── 收端決策（handleRoomUpdate cascade）─────────────────────────────────────

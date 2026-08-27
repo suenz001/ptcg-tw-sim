@@ -67,33 +67,59 @@ function fnSrc(src, anchor) {
   const [, b] = blockAfter(src, i + anchor.length - 1);
   return src.slice(i, b);
 }
+// ⭐⭐⭐v6.249【問題7：HEAD-FAIL 的形態】v6.248 把所有抽取都放在模組層級，
+//   對 v6.247 那棵樹跑會在 L82 直接**頂層 throw**（`找不到錨點：function _beginPushTrack(`）
+//   ⇒ 整支中止、只看得到一個 crash，**證明不了「六項各有覆蓋」**。
+//   ⇒ 改成：抽不到就換成「一被使用就丟例外」的毒藥值（fail-closed，不是 fail-open），
+//     由各項的 try/catch 各自報 FAIL；另外加一條專門列出所有抽取失敗的自我驗證項。
+const ANCHOR_ERRS = [];
+function safeEx(fn, poison, what) {
+  try { return fn(); } catch (e) { ANCHOR_ERRS.push(what + '：' + e.message); return poison; }
+}
+const THROW = (w) => 'throw new Error(' + JSON.stringify('[抽取失敗] ' + w) + ');';
 const IV_ANCHOR = 'const iv = setInterval(() => {';
-const ivStart = GP.indexOf(IV_ANCHOR);
-if (ivStart < 0) throw new Error('抽不到 5 秒 interval —— 守衛不可 fail-open，直接中止');
-const [ivOpen, ivClose] = blockAfter(GP, ivStart + IV_ANCHOR.length - 1);
-const IV_BODY = GP.slice(ivOpen + 1, ivClose - 1);
-const PWR_SRC = fnSrc(GP, 'async function pushWithRetry(');
-const IWO_SRC = fnSrc(GP, 'function isWaitingOnOpponent(');
+const IV_BODY = safeEx(() => {
+  const ivStart = GP.indexOf(IV_ANCHOR);
+  if (ivStart < 0) throw new Error('找不到錨點：' + IV_ANCHOR);
+  const [o, c] = blockAfter(GP, ivStart + IV_ANCHOR.length - 1);
+  return GP.slice(o + 1, c - 1);
+}, THROW('5 秒 interval'), '5 秒 interval');
+// ⚠ 毒藥一律用**同步** function（不可 async）：async 的 throw 會變成 unhandled rejection，
+//   在沒有 await 的呼叫點（runSlowPush / 重疊推送情境）會炸出 try/catch 之外 ⇒ 又變成整支中止。
+const PWR_SRC = safeEx(() => fnSrc(GP, 'async function pushWithRetry('),
+  'function pushWithRetry() { ' + THROW('pushWithRetry') + ' }', 'pushWithRetry');
+const IWO_SRC = safeEx(() => fnSrc(GP, 'function isWaitingOnOpponent('),
+  'function isWaitingOnOpponent() { ' + THROW('isWaitingOnOpponent') + ' }', 'isWaitingOnOpponent');
 const HELPER_ANCHORS = [
   'function _beginPushTrack(', 'function _endPushTrack(', 'function hasFreshPushInFlight(',
   'function oldestPushInFlightAgeMs(', 'function _resetPushTracking(',
   'async function pushTracked(', 'async function pushUndoTracked(',
 ];
-const HELPERS_SRC = HELPER_ANCHORS.map((a) => fnSrc(GP, a)).join('\n');
-const DSH_SRC = fnSrc(SG, 'export function decideStuckSelfHeal(').replace(/^export /, '');
-const CRG_CONSTS = ['RESYNC_BASE_MS', 'RESYNC_FULL_RATE_ROUNDS', 'RESYNC_MAX_MS'].map((k) => {
-  const m = new RegExp('export const ' + k + ' = \\d+;').exec(SG);
-  if (!m) throw new Error('抽不到常數 ' + k + ' —— 守衛不可 fail-open');
-  return m[0].replace(/^export /, '');
-}).join('\n');
-const CRG_SRC = CRG_CONSTS + '\n' + fnSrc(SG, 'export function casualResyncGapMs(').replace(/^export /, '');
+const HELPERS_SRC = HELPER_ANCHORS.map((a) => safeEx(
+  () => fnSrc(GP, a),
+  a.replace(/^async\s+/, '').replace(/\($/, '') + '() { ' + THROW(a) + ' }',
+  a)).join('\n');
+const DSH_SRC = safeEx(() => fnSrc(SG, 'export function decideStuckSelfHeal(').replace(/^export /, ''),
+  'function decideStuckSelfHeal() { ' + THROW('decideStuckSelfHeal') + ' }', 'decideStuckSelfHeal');
+const CRG_SRC = safeEx(() => {
+  const consts = ['RESYNC_BASE_MS', 'RESYNC_FULL_RATE_ROUNDS', 'RESYNC_MAX_MS'].map((k) => {
+    const m = new RegExp('export const ' + k + ' = \\d+;').exec(SG);
+    if (!m) throw new Error('找不到錨點：export const ' + k);
+    return m[0].replace(/^export /, '');
+  }).join('\n');
+  return consts + '\n' + fnSrc(SG, 'export function casualResyncGapMs(').replace(/^export /, '');
+}, 'function casualResyncGapMs() { ' + THROW('casualResyncGapMs') + ' }', 'casualResyncGapMs');
 // 換局 $effect 裡「重設基準」那一段（【5】）
-const NEWGAME_SEG = (() => {
+const NEWGAME_SEG = safeEx(() => {
   const i = GP.indexOf('if (gid !== _prevGameId) {');
-  if (i < 0) throw new Error('抽不到換局重設區塊');
+  if (i < 0) throw new Error('找不到錨點：if (gid !== _prevGameId) {');
   const [o, c] = blockAfter(GP, i + 'if (gid !== _prevGameId)'.length);
   return GP.slice(o, c);
-})();
+}, '/* [抽取失敗] 換局重設區塊 */', '換局重設區塊');
+
+T('[自我驗證/【7】] 所有錨點都抽得到（抽不到就在這裡列出來，其餘各項也會各自紅）', () => {
+  assert.deepEqual(ANCHOR_ERRS, [], '抽取失敗：\n  - ' + ANCHOR_ERRS.join('\n  - '));
+});
 
 T('[自我驗證] 抽取器真的抽到東西（抽爆／抽半截就不可以放行）', () => {
   assert.ok(IV_BODY.length > 2000, 'interval body 只有 ' + IV_BODY.length + ' 字元');
@@ -118,6 +144,20 @@ const isWaitingOnOpponent = loadFn(await ts('export const _f = (' + IWO_SRC.repl
 const decideStuckSelfHeal = loadFn(await ts('export const _f = (' + DSH_SRC.replace(/^function\s+\w+/, 'function') + ');'));
 const wrapGap = (src) => 'export const _f = (() => {\n' + src + '\nreturn casualResyncGapMs; })();';
 const casualResyncGapMs = loadFn(await ts(wrapGap(CRG_SRC)));
+// ⭐v6.249 最後救援窗（真原始碼）。抽不到一樣毒藥化，讓相關項各自紅而不是整支中止。
+const LC_SRC = safeEx(() => {
+  const m = /export const RESYNC_LAST_CHANCE_MS = \d+;/.exec(SG);
+  if (!m) throw new Error('找不到錨點：export const RESYNC_LAST_CHANCE_MS');
+  return m[0].replace(/^export /, '') + '\n'
+    + fnSrc(SG, 'export function casualResyncInLastChance(').replace(/^export /, '');
+}, 'function casualResyncInLastChance() { ' + THROW('casualResyncInLastChance') + ' }', 'casualResyncInLastChance');
+const RESYNC_BASE_MS = safeEx(() => {
+  const m = /export const RESYNC_BASE_MS = (\d+);/.exec(SG);
+  if (!m) throw new Error('找不到錨點：export const RESYNC_BASE_MS');
+  return Number(m[1]);
+}, NaN, 'RESYNC_BASE_MS');
+const casualResyncInLastChance = loadFn(await ts(
+  'export const _f = (() => {\n' + LC_SRC + '\nreturn casualResyncInLastChance; })();'));
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1. 【2】上限的推導（掃 oracleTx / oracleApi 的真原始碼，改了就紅）
@@ -127,6 +167,29 @@ function num(src, re, what) {
   assert.ok(m, '抽不到「' + what + '」—— 掃描器壞了或原始碼改寫了，不可 fail-open');
   return Number(m[1]);
 }
+/**
+ * ⭐v6.249 把 `export const NAME = <運算式>;` 從原始碼取出來**實際求值**。
+ * ⚠ 這是【問題4】的解法：只比對分量常數的守衛擋不住「運算式本身被改掉」。
+ * ⚠ names 要照原始碼的宣告順序給（後面的會用到前面的）。
+ */
+function evalConsts(src, names) {
+  const lines = names.map((n) => {
+    const i = src.indexOf('export const ' + n + ' =');
+    assert.ok(i >= 0, '抽不到常數 ' + n + ' —— 掃描器壞了，不可 fail-open');
+    const j = src.indexOf(';', i);
+    assert.ok(j > i, '常數 ' + n + ' 沒有結尾分號');
+    return src.slice(i, j + 1).replace(/^export /, '');
+  });
+  return new Function(lines.join('\n') + '\nreturn { ' + names.join(', ') + ' };')();
+}
+const C_NAMES = ['ORACLE_API_TIMEOUT_MS', 'ORACLE_API_TIMEOUT_MAX_MS', 'ORACLE_TX_MAX_ATTEMPTS',
+  'ORACLE_TX_CONFLICT_BACKOFF_TOTAL_MS', 'ORACLE_API_MAX_AUTH_RETRIES',
+  'ORACLE_TX_MAX_TOTAL_MS', 'PUSH_INFLIGHT_FAILSAFE_MS'];
+const C = safeEx(() => evalConsts(OC, C_NAMES), {}, 'oracle-client 常數求值');
+T('[自我驗證/【4】] 常數求值器自己要先驗（抽不到要丟例外，不是靜默回 0）', () => {
+  assert.throws(() => evalConsts(OC, ['這個常數不存在']), /抽不到常數/);
+  for (const n of C_NAMES) assert.ok(Number.isFinite(C[n]) && C[n] > 0, n + ' 求值失敗：' + C[n]);
+});
 T('[HEAD-FAIL①/掃描器] ORACLE_TX_MAX_TOTAL_MS 必須等於 oracleTx 真原始碼推導出來的最壞總時長', () => {
   // ① oracleTx 的輪數
   const attempts = num(RO, /for \(let attempt = 0; attempt < (\d+); attempt\+\+\)/, 'oracleTx 的迴圈上限');
@@ -143,23 +206,31 @@ T('[HEAD-FAIL①/掃描器] ORACLE_TX_MAX_TOTAL_MS 必須等於 oracleTx 真原�
   const base = num(OC, /export const ORACLE_API_TIMEOUT_MS = (\d+);/, '基底預算');
   const max = num(OC, /export const ORACLE_API_TIMEOUT_MAX_MS = (\d+);/, '上限預算');
   const expect = attempts * (base + max) * (1 + authRetries) + backoff;
-  const declared = num(OC, /export const ORACLE_TX_MAX_TOTAL_MS[\s\S]{0,400}?/.source
-    ? /export const ORACLE_TX_MAX_ATTEMPTS = (\d+);/ : null, 'ORACLE_TX_MAX_ATTEMPTS');
+  // ⭐⭐⭐v6.249【問題4：安慰劑】v6.248 這裡有兩個假斷言：
+  //   (a) `/…/.source ? A : null` 是**恆真三元**（`.source` 永遠是非空字串）＝死碼；
+  //   (b) 它從頭到尾**沒有求值過 `ORACLE_TX_MAX_TOTAL_MS`**，只比對三個分量常數，
+  //       最後那條 `attempts*(base+max)*(1+declAuth)+declBackoff === expect` 在
+  //       前兩條 assert 成立後是**恆真**的。
+  //   ⇒ 實測：把 `* (1 + ORACLE_API_MAX_AUTH_RETRIES)` 從運算式刪掉，34 條照樣全綠。
+  //   ⇒ 改成**真的把原始碼裡那幾行 const 取出來執行**，拿執行結果來比。
+  const declared = evalConsts(OC, ['ORACLE_TX_MAX_ATTEMPTS']).ORACLE_TX_MAX_ATTEMPTS;
   assert.equal(declared, attempts, 'ORACLE_TX_MAX_ATTEMPTS 與 oracleTx 的迴圈上限不一致');
-  const declBackoff = num(OC, /export const ORACLE_TX_CONFLICT_BACKOFF_TOTAL_MS = (\d+);/, '退避總和');
-  assert.equal(declBackoff, backoff, '宣告的退避總和 ' + declBackoff + ' ≠ 實際 ' + backoff);
-  const declAuth = num(OC, /export const ORACLE_API_MAX_AUTH_RETRIES = (\d+);/, '401 重試次數');
-  assert.equal(declAuth, authRetries);
-  assert.equal(attempts * (base + max) * (1 + declAuth) + declBackoff, expect);
+  assert.equal(C.ORACLE_TX_CONFLICT_BACKOFF_TOTAL_MS, backoff,
+    '宣告的退避總和 ' + C.ORACLE_TX_CONFLICT_BACKOFF_TOTAL_MS + ' ≠ 實際 ' + backoff);
+  assert.equal(C.ORACLE_API_MAX_AUTH_RETRIES, authRetries);
+  assert.equal(C.ORACLE_TX_MAX_TOTAL_MS, expect,
+    'ORACLE_TX_MAX_TOTAL_MS 求值 = ' + C.ORACLE_TX_MAX_TOTAL_MS + '，但由 oracleTx 原始碼推導 = '
+    + expect + '（少了 401 重登那個乘數就會落在這裡）');
   assert.ok(expect > max, '推導出來的上限竟然沒有比單發預算大 ⇒ 又退回 v6.247 的假陰性');
   console.log('   推導：' + attempts + ' 輪 ×（GET ' + base + ' + PUT ' + max + '）×（1+' + authRetries
     + ' 次 401 重登）+ 退避 ' + backoff + ' = ' + expect + ' ms（' + (expect / 60000).toFixed(2) + ' 分鐘）');
 });
-T('[HEAD-FAIL②] +page.svelte 的在途上限接到新常數，而且是「有限值」（fail-safe，不可無限大）', () => {
-  assert.ok(/import\s*\{[^}]*\bORACLE_TX_MAX_TOTAL_MS\b[^}]*\}\s*from\s*'\$lib\/game\/oracle-client'/.test(GP),
-    '沒有從 oracle-client import ORACLE_TX_MAX_TOTAL_MS');
-  assert.ok(/const PUSH_INFLIGHT_FAILSAFE_MS = Math\.max\(ORACLE_TX_MAX_TOTAL_MS, ORACLE_API_TIMEOUT_MAX_MS\);/.test(GP),
-    '在途上限不是由 ORACLE_TX_MAX_TOTAL_MS 推出來的');
+T('[HEAD-FAIL②] +page.svelte 的在途上限接到中央常數，而且是「有限值」（fail-safe，不可無限大）', () => {
+  // ⭐v6.249：常數搬去 oracle-client.ts（同時根除【問題5】的宣告順序耦合），這裡改驗 import。
+  assert.ok(/import\s*\{[\s\S]*?\bPUSH_INFLIGHT_FAILSAFE_MS\b[\s\S]*?\}\s*from\s*'\$lib\/game\/oracle-client'/.test(GP),
+    '沒有從 oracle-client import PUSH_INFLIGHT_FAILSAFE_MS');
+  assert.ok(!/const PUSH_INFLIGHT_FAILSAFE_MS\s*=/.test(stripComments(GP)),
+    '+page.svelte 又自己宣告了一份在途上限（會與中央常數分岔，也可能落進 v6245 的抽取視窗）');
   const h = fnSrc(GP, 'function hasFreshPushInFlight(');
   assert.ok(/\(now - m\.at\) < PUSH_INFLIGHT_FAILSAFE_MS/.test(h),
     '在途判定沒有帶時間上限 ⇒ 標記一旦沒還原就永遠不自癒（fail-open）');
@@ -242,11 +313,13 @@ function mkClient(W, seat, o = {}, runners = REAL) {
     oppInactivityWarn: false, _lastActionAt: clk.now, _lastSyncAt: clk.now, _lastResyncAt: 0,
     _resyncStreak: 0, _forceAdoptNext: false, _unpushedState: null, _repushAttempts: 0,
     _pushInFlightMarks: [],
-    PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? 1500750,
+    // ⭐v6.249【問題4】原本寫死 1500750 ⇒ 就算出貨碼改了值，模擬世界也照舊 ⇒ 改讀真常數。
+    PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? C.PUSH_INFLIGHT_FAILSAFE_MS,
     unsubRoom: null, casualWaitingSelfInput: () => false, PUSH_RETRY_MAX: 3,
     Date: clk.Date, setTimeout: (f, ms) => clk.setTimeout(f, ms), Math,
     console: { warn: (...a) => W.log.push('WARN ' + a.join(' ')), error: (...a) => W.log.push('ERR ' + a.join(' ')), log: () => {} },
     isWaitingOnOpponent, decideStuckSelfHeal, casualResyncGapMs: runners.gapFn,
+    casualResyncInLastChance, RESYNC_BASE_MS,
     pushGameState: (c, st) => W.pushGameState(c, st),
     pushUndoRollback: (c, st) => W.pushUndoRollback(c, st),
     isOracleTimeout: (e) => !!(e && e.oracleTimeout === true),
@@ -296,8 +369,12 @@ async function runSlowPush({ pushOutcome, pushMs, endTurn = true, runners = REAL
 // ══════════════════════════════════════════════════════════════════════════
 // 3. 【2】⭐核心：>120 秒的在途，盤面也不得被退回（v6.247 對這一段零覆蓋）
 // ══════════════════════════════════════════════════════════════════════════
-for (const sec of [150, 200, 300]) {
-  await TA('[HEAD-FAIL③] 推送 ' + sec + ' 秒才送達（>120 秒）⇒ 本地盤面全程不退回', async () => {
+// ⚠⚠ v6.249 把在途上限從 1,500,750 ms（數學最壞值）降到 240,000 ms（實用值，見 oracle-client.ts）
+//   ⇒ 覆蓋範圍改成「上限**以內**的都不得退回」，而 250 秒那筆改成**明示的取捨邊界**。
+for (const sec of [150, 200, 230]) {
+  await TA('[HEAD-FAIL③] 推送 ' + sec + ' 秒才送達（>120 秒、仍在在途上限內）⇒ 本地盤面全程不退回', async () => {
+    assert.ok(sec * 1000 < C.PUSH_INFLIGHT_FAILSAFE_MS,
+      sec + ' 秒已經超過在途上限 ' + C.PUSH_INFLIGHT_FAILSAFE_MS + ' ms —— 這個案例的前提不成立了');
     const r = await runSlowPush({ pushOutcome: 'ok', pushMs: sec * 1000, totalMs: sec * 1000 + 60000 });
     assert.equal(r.rolledBack, false,
       '盤面被退回了（' + r.low + '<' + r.peak + '），時間軸：' + (r.timeline.join(' , ') || '(無)'));
@@ -305,6 +382,14 @@ for (const sec of [150, 200, 300]) {
     assert.equal(r.serverLen, r.peak, '推送最後沒有送達伺服器');
   });
 }
+await TA('[取捨邊界/v6.249] 推送 300 秒（**超過**在途上限）⇒ 保護會到期，但盤面最後仍收斂回正確值', async () => {
+  const r = await runSlowPush({ pushOutcome: 'ok', pushMs: 300000, totalMs: 380000 });
+  assert.ok(300000 > C.PUSH_INFLIGHT_FAILSAFE_MS, '前提不成立：300 秒沒有超過在途上限');
+  assert.equal(r.finalLocal, r.peak,
+    '超過上限的推送最後沒有收斂回玩家打完的那一手（＝真的把一手弄丟了）：' + r.timeline.join(' , '));
+  assert.equal(r.serverLen, r.peak, '推送最後沒有送達伺服器');
+  console.log('   取捨（誠實記錄）：pushMs=300s 時間軸 ' + (r.timeline.join(' , ') || '(無變動)'));
+});
 await TA('[回歸] v6.247 已治好的 87 秒案例仍然不退回（金絲雀：base 抓錯會在這裡先亮）', async () => {
   const r = await runSlowPush({ pushOutcome: 'ok', pushMs: 87000 });
   assert.equal(r.rolledBack, false, '時間軸：' + (r.timeline.join(' , ') || '(無)'));
@@ -400,19 +485,19 @@ await TA('[HEAD-FAIL⑦b/行為] 上一局的在途推送不得壓住新局的�
 // ══════════════════════════════════════════════════════════════════════════
 // 7. 【7】重訂閱退避：省得到，但**不可以**削弱脫困能力
 // ══════════════════════════════════════════════════════════════════════════
-T('[純函式] casualResyncGapMs：前 3 次維持 8 秒，之後退避且夾在 60 秒以內', () => {
+T('[純函式] casualResyncGapMs：前 3 次維持 8 秒，之後退避且夾在 20 秒以內（v6.249 由 60 秒下修）', () => {
   assert.deepEqual([0, 1, 2].map(casualResyncGapMs), [8000, 8000, 8000], '前 3 次不再是 8 秒 ⇒ 救援窗口被改掉了');
   assert.equal(casualResyncGapMs(3), 16000);
-  assert.equal(casualResyncGapMs(4), 32000);
-  assert.equal(casualResyncGapMs(5), 60000);
-  assert.equal(casualResyncGapMs(50), 60000, '沒有夾在上限內');
+  assert.equal(casualResyncGapMs(4), 20000);
+  assert.equal(casualResyncGapMs(5), 20000);
+  assert.equal(casualResyncGapMs(50), 20000, '沒有夾在上限內');
   assert.equal(casualResyncGapMs(NaN), 8000, 'NaN 沒有退回基底 ⇒ 比較永遠 false ⇒ 再也不重訂閱');
   assert.equal(casualResyncGapMs(-5), 8000);
 });
 await TA('[HEAD-FAIL⑧] 卡住 300 秒的重訂閱次數要明顯下降，但**前三次的時刻逐字不變**', async () => {
   const r = await runSlowPush({ pushOutcome: 'ok', pushMs: 87000, totalMs: 300000 });
   const rel = r.resubAt.map((t) => (t - (r.resubAt[0] - 10000)) / 1000);
-  assert.ok(r.resubs <= 12, '300 秒內仍重訂閱 ' + r.resubs + ' 次（v6.247 是 30 次）');
+  assert.ok(r.resubs <= 20, '300 秒內仍重訂閱 ' + r.resubs + ' 次（v6.247 是 30 次）');
   assert.ok(r.resubs >= 3, '重訂閱只有 ' + r.resubs + ' 次 ⇒ 脫困能力被砍掉了');
   assert.deepEqual(rel.slice(0, 3), [10, 20, 30],
     '前三次重訂閱的時刻變了（v5.360 的救援窗口必須逐字不變）：' + rel.slice(0, 3).join(','));
@@ -592,7 +677,7 @@ await TA('[突變4] 拿掉 isWaitingOnOpponent 這道 gate ⇒ 硬約束必須�
   assert.equal(a.passed, false, 'gate 被拿掉，我方回合中途卻還是不會 force-adopt ⇒ 硬約束守衛是假的');
   assert.ok(/中途 force-adopt/.test(a.why), '紅的不是預期那一條：' + a.why);
 });
-await TA('[突變5] 讓退避從第一次就生效（60 秒）⇒ 「前三次逐字不變」必須翻紅', async () => {
+await TA('[突變5] 拿掉「前 3 次維持 8 秒」⇒ 「前三次逐字不變」必須翻紅', async () => {
   const m = (s, kind) => (kind === 'gap' ? s.replace('if (s < RESYNC_FULL_RATE_ROUNDS) return RESYNC_BASE_MS;', '') : s);
   const a = await mutantCheck(m, probeFirstThreeResyncs);
   assert.equal(a.passed, false, '退避提前生效卻沒被抓到 ⇒ 脫困能力可能被悄悄砍掉');
@@ -604,8 +689,12 @@ await TA('[突變6] 把 pushTracked 的 finally 還原拿掉（標記洩漏）�
   const m = (s, kind) => (kind === 'helpers'
     ? s.replace('try { await pushGameState(code, st); } finally { _endPushTrack(m); }', 'await pushGameState(code, st);') : s);
   const a = await mutantCheck(m, async (runners) => {
-    const r = await runSlowPush({ pushOutcome: 'timeout', pushMs: 30000, totalMs: 300000, runners, failsafeMs: 40000 });
-    assert.ok(r.adopts >= 1, 'adopts=' + r.adopts);
+    // ⭐v6.249【問題3】上限從 25.01 分鐘降到 4 分鐘之後，這裡**不再需要偷換 failsafeMs**
+    //   —— 用出貨碼真正的上限就驗得動這個機制（「要偷換參數才測得到」＝還沒被真的驗過）。
+    // ⚠ 觀測窗要夠長：標記洩漏時每一次「重推」都會再洩一個標記 ⇒ 需要 repush 上限(2)+1 個上限週期。
+    const r = await runSlowPush({ pushOutcome: 'timeout', pushMs: 30000, runners,
+      totalMs: 3 * C.PUSH_INFLIGHT_FAILSAFE_MS + 60000 });
+    assert.ok(r.adopts >= 1, 'adopts=' + r.adopts + '（上限 ' + C.PUSH_INFLIGHT_FAILSAFE_MS + ' ms）');
   });
   assert.equal(a.passed, true, '標記洩漏後就永遠不自癒了 ⇒ 上限沒有發揮 fail-safe 作用：' + a.why);
   const b = await mutantCheck(m, async (runners) => {

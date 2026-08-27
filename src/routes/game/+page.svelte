@@ -46,7 +46,7 @@
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
-           casualResyncGapMs } from '$lib/game/sync-guards';
+           casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
@@ -72,8 +72,11 @@
     type User,
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
+  // ⚠ v6.249：`ORACLE_API_TIMEOUT_MAX_MS` / `ORACLE_TX_MAX_TOTAL_MS` 原本只被
+  //   `PUSH_INFLIGHT_FAILSAFE_MS` 的 Math.max 用到；常數搬去 oracle-client.ts 後這裡不再引用
+  //   （留著會變成未使用的 import）。它們的推導與守衛都留在 oracle-client.ts。
   import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange, isOracleTimeout,
-           ORACLE_API_TIMEOUT_MAX_MS, ORACLE_TX_MAX_TOTAL_MS } from '$lib/game/oracle-client';
+           PUSH_INFLIGHT_FAILSAFE_MS } from '$lib/game/oracle-client';
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import {
@@ -7726,8 +7729,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // ⚠ scripts/test-v6245-oracle-api-timeout.mjs 的 pushWithRetry 抽取視窗**從下一行開始**，
   //   視窗內的模組層級 const 會在沙盒裡被求值 ⇒ 需要外部識別字的宣告一律放在這一行**之前**。
   type PushMark = { at: number };
-  /** ⭐v6.248 在途保護的上限＝一發 push 的真實最壞總時長（推導見 oracle-client.ts）。 */
-  const PUSH_INFLIGHT_FAILSAFE_MS = Math.max(ORACLE_TX_MAX_TOTAL_MS, ORACLE_API_TIMEOUT_MAX_MS);
+  // ⭐⭐⭐v6.249【問題5：隱性耦合】v6.248 把 `PUSH_INFLIGHT_FAILSAFE_MS` 宣告在這裡，
+  //   而它**必須**留在下一行 `const PUSH_RETRY_MAX = 3;` 之前 —— 否則會落進
+  //   `scripts/test-v6245-oracle-api-timeout.mjs` 的 pushWithRetry 抽取視窗，
+  //   在沙盒裡被求值而丟 `ORACLE_TX_MAX_TOTAL_MS is not defined`（實測：v6245 由 30 PASS
+  //   變 28 PASS / 2 FAIL，而且錯誤訊息完全指不到真因）。當時沒有任何一條守衛在守這個順序。
+  //   ⇒ 直接把常數搬去 `oracle-client.ts`（它本來就是那邊推導出來的協定常數），
+  //     視窗內就再也沒有「需要外部識別字的模組層級 const」，耦合從結構上消失。
+  //   ⇒ 另有守衛 `[HEAD-FAIL/耦合]` 直接**實跑**那個抽取視窗，任何人再放一個進來就會紅，
+  //     而且失敗訊息直接說出真因。
   const PUSH_RETRY_MAX = 3;
   // ⭐⭐⭐v6.247 「這一發推送還在途中」的旗標。
   //   v6.212 拿 `_unpushedState` 當「本地領先伺服器」的證據，但它只在 push
@@ -7924,9 +7934,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   $effect(() => {
     const iv = setInterval(() => {
       if (!roomCode) { oppInactivityWarn = false; return; }
-      // ⭐v6.248 同步一有進展就把重訂閱退避歸零。放在棄權 gate**之前**：我方回合中途也會歸零
-      //   ⇒ 下一次真的卡住時，第一發重訂閱仍是 v5.360 的 8 秒，逐字不變。
-      //   ⚠ 這一行不讀也不寫 oppInactivityWarn，棄權語意一個字都沒有動到。
+      // ⭐v6.248 同步一有進展就把重訂閱退避歸零。放在棄權 gate**之前**：我方回合中途也會歸零。
+      // ⚠⚠⚠ v6.249 更正 v6.248 寫在這裡的錯誤結論：它原本寫「⇒ 下一次真的卡住時，第一發
+      //   重訂閱仍是 v5.360 的 8 秒，逐字不變」——**不成立**。歸零的條件是「`game.log` 有變動」，
+      //   而**對手長考本身就沒有 log 變動** ⇒ 對手想超過 30 秒，streak 就已經被推到 ≥3；
+      //   連線在長考尾聲斷掉時，第一發救援不是 8 秒，而是最多 RESYNC_MAX_MS 之後。
+      //   （這個語意改不掉：對客戶端而言「對手長考」與「我收不到了」是同一個可觀測狀態。
+      //     詳見 sync-guards.ts `casualResyncGapMs` 上方【B】，以及從 streak≥3 起跑的守衛。）
+      //   ⇒ 因應方式是把上限壓到 20 秒＋加一道最後救援窗，不是假裝 streak 會歸零。
+      // ⚠ 這一行不讀也不寫 oppInactivityWarn，棄權語意一個字都沒有動到。
       if ((Date.now() - _lastSyncAt) < 8000) _resyncStreak = 0;
       if (!isWaitingOnOpponent(game, mySeatIdx)) { oppInactivityWarn = false; return; }
       // v5.329：門檻改讀房間設定（房主可調 1:00~5:00，預設 3:00）；clamp 防呆
@@ -7939,8 +7955,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   ＝多一次**全量**房間 GET。v6.247 之後卡住的玩家不再被回捲，`_lastSyncAt` 也就不再
       //   被回捲順手更新 ⇒ 300 秒內從 24 次變 30 次（實測）。
       //   ⚠⚠ 重訂閱是卡住的玩家唯一的脫困手段，**不可以為了數字好看關掉**
-      //   ⇒ 前 3 次維持 8 秒（真正有救援效果的窗口逐字不變），之後才退避到上限 60 秒。
-      const _resyncGapMs = casualResyncGapMs(_resyncStreak);
+      //   ⇒ 前 3 次維持 8 秒（真正有救援效果的窗口逐字不變），之後才退避到上限
+      //     RESYNC_MAX_MS（v6.248 是 60 秒，⭐v6.249 實測後下修為 **20 秒**）。
+      // ⭐⭐⭐v6.249【最後救援窗】距離棄權門檻只剩 30 秒以內 ⇒ 退避讓路，回到 8 秒全速。
+      //   為什麼：站長已裁定「卡住方判負」⇒ 沒能在門檻前脫困＝**直接輸掉一局**。
+      //   只把上限調成 20 秒之後，仍留下 R∈(170,180] 這 10 秒寬的區間是「v6.247 救得到、
+      //   v6.249 救不到」的淨退步；加上這道窗之後，逐秒掃 R=1..300 秒實測致命區間 = 0。
+      //   ⚠⚠ 只**讀** thresholdMs 與 _lastActionAt（棄權倒數用的同一個時鐘），
+      //     不寫 oppInactivityWarn、不改門檻算式、不碰 claimOpponentForfeit ⇒ 棄權語意零改動。
+      //   ⚠ 健康路徑完全走不到這裡：下一行的 `>= 8000` 在健康對局恆為 false，
+      //     請求數與跳動頻率逐字不變（守衛有正對照）。
+      const _resyncGapMs = casualResyncInLastChance(Date.now() - _lastActionAt, thresholdMs)
+        ? RESYNC_BASE_MS
+        : casualResyncGapMs(_resyncStreak);
       if (roomCode && (Date.now() - _lastSyncAt) >= 8000 && (Date.now() - _lastResyncAt) >= _resyncGapMs) {
         _lastResyncAt = Date.now();
         _resyncStreak++;
