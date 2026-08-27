@@ -1,5 +1,96 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.243 — `recentLimit` 查證：它是**顯示**上限，不是統計上限 ⇒ 聚合與顯示都不動
+
+> 站長交辦：把 `/api/admin/stats/players/:email` 的 `recentLimit` 一起修，讓「常用卡」與
+> 「勝率走勢」吃全量。**查證結果是前提不成立** —— 那兩個統計本來就是全量，而且這一頁
+> 根本沒有「勝率走勢」。站長交辦裡也已經先寫了「先查證」「若確認不會失真就不要動」。
+> 首頁 changelog **不寫**（純 admin 後台）。
+
+### 【A】`recentLimit` 到底控制什麼
+
+`server_admin_patch.js` 這支 handler 裡，`recentLimit` 在**程式碼**中只出現兩次
+（第三次是註解「summary（全部對戰，不限 recentLimit）」，剝註解後不算）：
+
+| 產物 | 資料怎麼來 | 受 `recentLimit` 影響？ |
+|---|---|---|
+| `recentMatches`（畫面「最近 N 場對戰」表格） | `find({$or:[p1.email,p2.email]}).sort({endedAt:-1}).limit(recentLimit)` | **是**（這就是顯示上限） |
+| `summary`（總場次／勝／負／平／勝率） | `aggregate([$match(email) … $group])` | 否，**生涯全量** |
+| `topCards`（常用卡 Top 20） | `aggregate([$match(email) … $unwind … $group … $sort … $limit 50])` | 否，**生涯全量**（那個 `$limit 50` 限的是**卡種數**，在 `$group` 之後，不是母體） |
+
+⇒ 上一輪【F】表的判斷是錯的。錯的來源是**出貨碼自己的註解**：
+`// 2.2 個人戰績頁 — 最近 N 場 + 常用卡 Top 20 + 勝率走勢`。
+`admin.html` 的 `showPlayerDetail` 只畫「總覽卡片＋最近 N 場表格＋常用卡 Top 20＋儲存的牌組」，
+**沒有勝率走勢**（站台唯一的 trend 是 2.5 `/api/admin/stats/trends`，那是全站對戰量，與玩家無關）。
+⇒ 這一版把那句註解與內部文件一起更正 —— 不改掉的話，下一輪還會再誤判一次。
+
+### 【B】⚠ 這一版**刻意不做**的事，以及為什麼
+
+若照原本的交辦「把統計放大到全量」去做，唯一還能動的地方其實只剩 `recentMatches`，
+而那正是站長同一份交辦裡點名**不可以**做的：把顯示列表改成全量。
+守衛的**突變 B** 實測了這個代價（137 場的假玩家）：
+
+| | 回應體積 | node 端物化筆數 |
+|---|---|---|
+| 現況（顯示 30 筆） | **6,579 bytes** | 33 筆（30 顯示 + 1 summary 列 + 2 卡列） |
+| 若改成全量 | **30,650 bytes（4.7 倍）** | 140 筆 |
+
+matchRecord 每筆都帶雙方的 `cardCounts`（各 ~60 張），所以體積幾乎與場次成正比；
+真實老玩家的場次遠多於 137，倍率只會更高。而這支端點是「admin 點一下玩家 email 就會打」。
+
+### 【C】事件迴圈：這一支**沒有**地方掛 `adminScanYield`
+
+v6.241／v6.242 需要讓路，是因為那兩支在 **node 端有 `for await (const m of cursor)` 的逐筆迴圈**。
+這一支不同：統計在 **mongod 行程**裡算完才回 node，node 端只物化
+「30 筆顯示 + 1 筆 summary + ≤50 筆卡列」。沒有逐筆迴圈 ⇒ 沒有東西可以讓路，
+硬加一個 `setImmediate` 只是多一輪事件迴圈、沒有任何收益。
+
+⚠ Rule 33（否定型斷言要配正對照）：守衛⑦除了斷言「這一支測不到 cursor 迴圈」，
+還**同時**去抽 v6.242 的 `/api/admin/deck-archetype-detail`，要求那一支**必須**被偵測到
+有 `for await` 迴圈與 `adminScanYield` —— 否則「偵測不到」與「偵測器壞了」長得一模一樣。
+
+實測（沙盒；⚠ 假 driver 把聚合放在 node 端算，正式站沒有這段成本）：
+只餵該玩家的 137 筆時，handler 端到端 **8ms**、並行探針最大延遲 **0.0ms**。
+（全站 25,000 筆餵進迷你直譯器是 301ms／133.7ms，那是**測試自己的**成本，不是線上行為。）
+
+### 【D】`/api/admin/player-profile` 的 `tournamentArchives` `.limit(200)`：**判定不會失真，不動**
+
+站長 2026-08-27 在 VM 實測的量級：`tournamentArchives` 全站 **875 筆**。
+該查詢是 `ARCH.find({ 'players.email': email }, {projection…}).sort({finishedAt:-1}).limit(200)`
+—— **有 email 過濾**，所以單一玩家的筆數上界就是「他參加過的賽事數」，而那又 ≤ 全站 875。
+要撞到 200，必須有人參加過全站 **23%** 的賽事。⇒ 現況不失真，**不動**（別為了改而改）。
+
+⚠ 但它是「靜默截斷」型，所以改用守衛鎖住三件事，而不是靠記憶：
+上限**不得被改小**、`players.email` 過濾**不得消失**、projection **不得把 `deckEntries` 讀回來**
+（那是 v6.240 讀放大事故的主因）。
+⚠ 重新評估的觸發點：等 `tournamentArchives` 逼近 **870 × 幾倍**，或站長看到某位玩家的
+「錦標賽參賽」數字剛好卡在 200，就要回來處理。
+
+### 【E】守衛
+
+`scripts/test-v6243-player-detail-scope.mjs`（14 條）—— 一律斷言到**行為**：
+把 handler 從出貨檔抽出來，配一個**迷你 mongo aggregate 直譯器**真的跑
+（只實作這兩條 pipeline 用到的 stage／運算子，遇到沒實作的一律 throw，
+**不靜默略過** —— 否則「聚合被改壞」會長得跟「測試沒測到」一樣）。
+
+fixture：全站 25,000 筆，目標玩家 **137 場**散落其中、輪流當 p1／p2；
+只在「第 31 場以後」的舊場才有 `old_only` 這張卡，對手側另有 `c_opp`、其他玩家另有 `c_other`。
+⇒ 一組 fixture 同時驗四件事：統計吃到全部 137（`old_only` 必須進得了 Top 20）、
+顯示只回最新 30、`$cond` 取的是自己那一側（`c_opp` 不得出現）、email 過濾有效（`c_other` 不得出現）。
+
+儀器：①`aggregate` 的 `$match` 之後／第一個 `$group` 之前**不得有任何** `$limit`／`$skip`／`$sample`
+②`find` 實際命中幾筆 vs 實際物化幾筆 ③回應體積 bytes。
+
+⚠ **沒有 HEAD-FAIL 的功能性缺陷**（出貨碼本來就是對的），所以正對照改用**突變測試**：
+- 突變 A：在 `$match` 後插 `{ $limit: 30 }` ⇒ ①②③ 必須翻紅（實測 `summary.matches` 137→30、`old_only` 消失）
+- 突變 B：把 `recentMatches` 換成全量 ⇒ ④⑤ 必須翻紅（實測體積 4.7 倍）
+
+真正的 HEAD-FAIL 有兩條：⑧（本文件與出貨碼註解已更正那句錯誤描述）與⑪（版本 ≥ 6.243）。
+BASE（v6.242）上實測 **12 PASS / 2 FAIL**。
+
+⚠⚠ 本版**沒有任何刪除資料的路徑**，也沒有動到任何玩家端程式碼
+（只改 `oracle-admin/` 的註解、`docs/`、`version.ts`／`SITE_VERSION_HINT`、新增一支測試）。
+
 ## v6.242 — 休閒側 `matchRecords` 的 `.limit(20000)` 也拿掉；⭐ 順便修掉一個既有的事件迴圈阻塞
 
 > 站長裁定：v6.240／v6.241 收掉的統計上限，休閒側這一支「一起處理」。
@@ -81,7 +172,7 @@ game-over 時上報，**線上房＋本機雙人＋對 AI 都會寫**（淨化 f
 
 | 位置 | 是「統計失真」還是「顯示上限」 | 建議 |
 |---|---|---|
-| L1577 `/api/admin/stats/players/:email` `matchRecords…limit(recentLimit)`（預設 30、上限 200） | **兩者之間**：頁面標題就寫「最近 N 場」，但同一份資料同時餵了「常用卡 Top 20 ＋ 勝率走勢」 | 若站長希望個人戰績是生涯全量，這支要比照處理 |
+| L1577 `/api/admin/stats/players/:email` `matchRecords…limit(recentLimit)`（預設 30、上限 200） | ~~**兩者之間**~~ ⇒ **v6.243 查證後更正：純顯示**。它只套在 `recentMatches`；`summary` 與「常用卡 Top 20」走另外兩支 aggregate、本來就是全量，而且這一頁**沒有「勝率走勢」區塊** | **不動**（理由見 v6.243） |
 | L1911 `/api/admin/player-profile` `tournamentArchives…limit(200)` | **統計失真候選**（跨賽事戰績摘要）；但一筆＝一場賽事，200 場賽事還很遠 | 暫不動 |
 | L2163 `/api/admin/deck-rules/preview` `limit(20~1000)` | **顯示／試算**：卡面就寫「對最近 N 場試算」，本來就不是統計 | 不動 |
 | L6547/6548 `/api/tournament/champions` `limit(100)`×2 | **顯示上限**（名人堂列表） | 不動 |
