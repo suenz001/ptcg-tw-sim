@@ -52,6 +52,43 @@ export const ORACLE_API_TIMEOUT_MS = 30000;
 //     慢網路不該被誤殺（沿用 v6.179 tApi 的 opts.timeoutMs 設計）。
 export const ORACLE_SIDEEFFECT_TIMEOUT_MS = 60000;
 
+//   ── ⭐⭐⭐v6.246 逾時預算改成「跟著要上傳的位元組走」（獨立審查者【問題3】：修後不可比修前差）──
+//   v6.245 給所有請求同一個 30 秒。但 nginx 那筆實測是
+//     `86.954 0.007 409 /api/rooms/XTCT PUT request_length=48285`
+//   ⇒ 上行 ≈ 555 B/s，48KB 要 **87 秒**才送得完；30 秒只送得出 34% ⇒ 兩發都被砍
+//   ⇒ 那位玩家的動作**永遠送不到伺服器**，最後被 force-adopt 回捲。
+//   ⚠⚠ 而 v6.244（沒有逾時）那 87 秒是**送達**的（nginx 沒砍它，upstream_response_time=0.007）
+//     ⇒ 對他而言 v6.245 是**倒退**，違反「絕不可讓玩家端變差」。
+//   ⚠ 同樣 40~48KB 的 startGame 早就給了 60 秒，pushGameState / pushUndoRollback 卻只有 30 秒
+//     —— 這個不對稱本身就是 bug。
+//   ⚠ 為什麼不是「一律改 60 秒」：60 秒只送得出 33KB（69%），**那位玩家還是送不到**。
+//     時間預算的物理量是「位元組 ÷ 上行速率」，所以預算必須跟著位元組走。
+export const ORACLE_MIN_UPLINK_BPS = 500;
+//   小封包不加預算：500 B/s 下 4KB 只要 8 秒，30 秒基底綽綽有餘。
+//   ⚠ 這一條同時保住「行為不變」——nginx log 裡那 45 筆真黑洞（`60.001 - 408 … PUT 1091`）
+//     body 只有 1091 B ⇒ 預算仍是 30 秒，**黑洞情境的等待時間一秒都沒有變長**。
+export const ORACLE_UPLOAD_FREE_BYTES = 4096;
+//   上界（Rule 37：必須大於實測過的最慢**成功**案例 86.954 秒，取約 38% 餘裕）。
+//   ⚠ 上界＝**保證上限**：500 B/s 時 120 秒最多只送得完約 60KB，更大的封包仍會失敗（誠實寫出來）。
+export const ORACLE_API_TIMEOUT_MAX_MS = 120000;
+
+/**
+ * ⭐⭐⭐v6.246 這一發的逾時預算（純函式，守衛直接實跑）。
+ * @param uploadBytes 要上傳的 body 位元組數（估計值即可，**寧可高估**：高估只是多給時間，不會誤殺）。
+ * - 0（GET／無 body）與 ≤4KB 的小封包 ⇒ 回 ORACLE_API_TIMEOUT_MS，與 v6.245 逐字相同。
+ * - 超出的部分以 ORACLE_MIN_UPLINK_BPS 換算成時間加上去，並夾在 ORACLE_API_TIMEOUT_MAX_MS 以內。
+ */
+export function oracleTimeoutBudgetMs(uploadBytes: number): number {
+  // ⚠ 非有限值（NaN/Infinity）一律退回基底：預算是安全網，絕不能自己算出 NaN 把 setTimeout 弄成 0。
+  const bytes = Number.isFinite(uploadBytes) ? Math.floor(uploadBytes) : 0;
+  const extra = Math.max(0, bytes - ORACLE_UPLOAD_FREE_BYTES);
+  if (!(extra > 0)) return ORACLE_API_TIMEOUT_MS;
+  return Math.min(
+    ORACLE_API_TIMEOUT_MS + Math.ceil((extra * 1000) / ORACLE_MIN_UPLINK_BPS),
+    ORACLE_API_TIMEOUT_MAX_MS,
+  );
+}
+
 /** 這個錯誤是不是「我這顆計時器造成的逾時」（呼叫端據此決定要不要重新同步）。 */
 export function isOracleTimeout(err: unknown): boolean {
   return !!(err && typeof err === 'object'
@@ -62,10 +99,36 @@ function _isAbortError(e: unknown): boolean {
   return !!(e && typeof e === 'object'
     && ((e as { name?: string }).name === 'AbortError' || String(e).includes('AbortError')));
 }
-function _oracleTimeoutError(path: string, ms: number): Error {
+/**
+ * ⭐⭐⭐v6.246 這個逾時是不是「因為 body 大而放寬過預算」的那種。
+ *  這種逾時**重試沒有意義**（同樣大小的 body 對新盤面再送一次，在上行塞死時只是把 UI 再鎖同樣久），
+ *  所以 room-oracle 的 oracleTx 不讓它吃掉重試額度。基底預算的逾時仍照 v6.245 吃 1 次重試。
+ */
+export function isOracleUploadBudgetTimeout(err: unknown): boolean {
+  return !!(err && typeof err === 'object'
+    && (err as { oracleUploadBudget?: boolean }).oracleUploadBudget === true);
+}
+/**
+ * ⭐⭐⭐v6.246 HTTP 狀態碼的**單一可靠來源**（獨立審查者【問題2】）。
+ *  v6.245 之前 oracleGetRoom / oracleGetRoomDelta 用 `String(err).includes('404')` 判「房間不存在」。
+ *  而逾時訊息長這樣：`連線逾時（30 秒沒有回應）：/api/rooms/XXXX?since=404&logSince=…&logh=4042ab…`
+ *  —— URL 裡只要出現字串 `404`（logh 是雜湊、since/logSince 是數字）逾時就被誤判成「房間不存在」
+ *  ⇒ 回 null ⇒ oraclePollRoom 走 callback(null) ⇒ handleRoomUpdate 顯示「房間不存在或連線中斷」
+ *  並停止同步 —— 明明只是慢，卻把玩家踢出對局。
+ *  ⚠ v6.244 只有 5xx 訊息才踩得到；v6.245 把觸發源換成「網路事件期間**大量**逾時」⇒ 機率放大好幾個數量級。
+ *  ⇒ 改由 oracleApi 在丟錯時把 `res.status` **結構化**掛上去，判斷一律走這支，全站不再比對字串。
+ */
+export function oracleErrorStatus(err: unknown): number | null {
+  const s = (err as { status?: unknown } | null | undefined)?.status;
+  return typeof s === 'number' && Number.isFinite(s) ? s : null;
+}
+function _oracleTimeoutError(path: string, ms: number, uploadBudget: boolean): Error {
   // AbortError 的原文對玩家沒有意義（Rule 37）⇒ 特判成人話。
-  const err = new Error(`連線逾時（${Math.round(ms / 1000)} 秒沒有回應）：${path}`) as Error & { oracleTimeout?: boolean };
+  type TimeoutErr = Error & { oracleTimeout?: boolean; oracleTimeoutMs?: number; oracleUploadBudget?: boolean };
+  const err = new Error(`連線逾時（${Math.round(ms / 1000)} 秒沒有回應）：${path}`) as TimeoutErr;
   err.oracleTimeout = true;
+  err.oracleTimeoutMs = ms;
+  err.oracleUploadBudget = uploadBudget;
   return err;
 }
 // <<< v6245-oracle-timeout-core
@@ -115,11 +178,37 @@ export async function oracleAuth(signal?: AbortSignal): Promise<{ uid: string; t
 
   // 沒 cache → 跟 server 拿
   if (!API_URL) throw new Error('VITE_ORACLE_API_URL not set');
-  const res = await fetch(`${API_URL}/api/auth/anonymous`, {
-    method: 'POST',
-    cache: 'no-store',
-    signal,
-  });
+  // ⭐⭐⭐v6.246 沒有外部 signal 時，這一發也要有自己的時間上限（獨立審查者【問題1】的順帶項）。
+  //   v6.245 只保護了 oracleApi 內部那一條路；**裸呼叫**的四個點完全沒有上限：
+  //     room-oracle.ts getMyUid()／auth-facade.ts ensureSignedIn()、onUidChange()／
+  //     game/+page.svelte onMount。
+  //   冷快取（第一次進站／清過瀏覽資料／換裝置）的玩家碰上 auth 端點黑洞就會**永遠**卡住；
+  //   onMount 那一發還是 `await`，會把後面的卡包載入整串堵死。
+  //   ⚠ 有外部 signal（＝ oracleApi 傳進來的）時**不另外開計時器**，行為與 v6.245 逐字相同。
+  //   ⚠ 快取命中的路徑在上面就 return 了 ⇒ 熱路徑一顆計時器都不會建（零成本）。
+  let _ac: AbortController | null = null;
+  let _to: ReturnType<typeof setTimeout> | undefined;
+  let _timedOut = false;
+  let _sig = signal;
+  if (!_sig) {
+    _ac = new AbortController();
+    _sig = _ac.signal;
+    _to = setTimeout(() => { _timedOut = true; try { _ac?.abort(); } catch { /* ignore */ } }, ORACLE_API_TIMEOUT_MS);
+  }
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/api/auth/anonymous`, {
+      method: 'POST',
+      cache: 'no-store',
+      signal: _sig,
+    });
+  } catch (e) {
+    if (_timedOut && _isAbortError(e)) throw _oracleTimeoutError('/api/auth/anonymous', ORACLE_API_TIMEOUT_MS, false);
+    throw e;
+  } finally {
+    // ⚠ 一定要在 finally：少了它，每一發成功的匿名登入都留一顆計時器（洩漏）。
+    if (_to !== undefined) clearTimeout(_to);
+  }
   if (!res.ok) throw new Error(`oracleAuth failed: ${res.status} ${await res.text()}`);
   const { uid, token } = await res.json();
   _token = token; _setUid(uid);   // v6.197：新簽發的匿名身分要通知出去
@@ -168,7 +257,16 @@ export async function oracleApi<T = any>(
   _retry = true,  // v5.628 內部用：401(token 過期/失效) 時自動重新登入並重試一次
 ): Promise<T> {
   if (!API_URL) throw new Error('VITE_ORACLE_API_URL not set');
-  const _toMs = options.timeoutMs ?? ORACLE_API_TIMEOUT_MS;
+  // ⭐⭐⭐v6.246 body 先序列化（本來就要做的事，只是提前），才知道這一發要上傳多少位元組。
+  //   ⚠ 位元組數用 `length * 2` 估：實測以中文為主的盤面 JSON 是 1.646 倍，取 2 倍留餘裕。
+  //     成本 0.02µs／發，TextEncoder 精算要 216µs（量測腳本：
+  //     scripts/perf-v6246-oracle-timeout-overhead.mjs）。高估只會多給預算，不會誤殺。
+  let body: string | undefined;
+  if (options.body !== undefined) body = JSON.stringify(options.body);
+  const _budgetMs = oracleTimeoutBudgetMs(body === undefined ? 0 : body.length * 2);
+  // ⚠ opts.timeoutMs（建房／進場／入座／開局的 60 秒逃生口）與大小預算取**大**的那個：
+  //   逃生口的用意是「放寬」，不該反過來把大封包（例如 startGame 的整包盤面）砍回 60 秒。
+  const _toMs = Math.max(options.timeoutMs ?? ORACLE_API_TIMEOUT_MS, _budgetMs);
   const _ac = new AbortController();
   // ⚠ 只認「這顆計時器造成的 abort」——不把別的來源丟出來的 AbortError 誤判成逾時（v6.179 同款）。
   let _timedOut = false;
@@ -182,11 +280,7 @@ export async function oracleApi<T = any>(
       'Cache-Control': 'no-cache',
       ...(options.headers ?? {}),
     };
-    let body: string | undefined;
-    if (options.body !== undefined) {
-      body = JSON.stringify(options.body);
-      headers['Content-Type'] = 'application/json';
-    }
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
     const res = await fetch(`${API_URL}${path}`, {
       method: options.method ?? 'GET',
       headers,
@@ -212,7 +306,13 @@ export async function oracleApi<T = any>(
       clearTimeout(_to);
       _timedOut = false;
       oracleSignOut();
-      await oracleAuth();
+      // ⭐⭐⭐v6.246 這裡原本還有一發 `await oracleAuth();` —— 它**不帶任何 signal、沒有上限**，
+      //   auth 端點黑洞時整支 oracleApi 就永遠不 settle（實跑推進 10 分鐘仍未 settle），
+      //   「按了沒反應」在 401 這條路上原封不動存活。
+      //   ⚠ 它同時是**多餘**的：oracleSignOut() 已經把 _token/_uid/localStorage 都清掉，
+      //     底下遞迴那發 oracleApi 開頭就會 `await oracleAuth(_ac.signal)`（受保護的新 signal）
+      //     重新跟伺服器要 token —— 絕不可能沿用舊 token。
+      //   ⚠ 終止條件仍在：遞迴帶 `_retry = false` ⇒ 再收到 401 也不會再遞迴（不可能無窮遞迴）。
       return oracleApi<T>(path, options, false);
     }
     if (!res.ok) {
@@ -220,11 +320,16 @@ export async function oracleApi<T = any>(
       if (res.status === 409) {
         return (await res.json()) as T;
       }
-      throw new Error(`oracleApi ${path} → ${res.status}: ${await res.text()}`);
+      // ⭐⭐⭐v6.246 訊息**逐字不變**（UI 有在顯示、內部診斷也在讀），只額外把狀態碼結構化掛上去，
+      //   讓「房間不存在」的判斷不必再比對字串（見 oracleErrorStatus 的說明）。
+      const _err = new Error(`oracleApi ${path} → ${res.status}: ${await res.text()}`) as Error & { status?: number };
+      _err.status = res.status;
+      throw _err;
     }
     return (await res.json()) as T;
   } catch (e) {
-    if (_timedOut && _isAbortError(e)) throw _oracleTimeoutError(path, _toMs);
+    // ⚠ 第三個引數：這一發的預算是不是被 body 大小放寬過（oracleTx 據此決定要不要重試）。
+    if (_timedOut && _isAbortError(e)) throw _oracleTimeoutError(path, _toMs, _budgetMs > ORACLE_API_TIMEOUT_MS);
     throw e;
   } finally {
     // ⚠ 一定要在 finally：少了它，每一發成功的請求都留一顆計時器（洩漏）。
@@ -322,8 +427,12 @@ export async function oracleGetRoom(
     // 204：server 告知版本未變 → 回哨兵讓 caller 略過（不觸發任何 callback）
     if (res === undefined) return ROOM_UNCHANGED;
     return res.room;
-  } catch (err: any) {
-    if (String(err.message).includes('404')) return null;
+  } catch (err: unknown) {
+    // ⭐⭐⭐v6.246 只有**真的 404** 才算「房間不存在」。逾時（包括 URL 裡剛好出現 404 的那種）
+    //   必須原樣往上拋 —— 回 null 會讓 oraclePollRoom 走 callback(null)，畫面誤報
+    //   「房間不存在或連線中斷」並停止同步。
+    if (isOracleTimeout(err)) throw err;
+    if (oracleErrorStatus(err) === 404) return null;
     throw err;
   }
 }
@@ -347,7 +456,10 @@ export async function oracleGetRoomDelta(
     if (res === undefined) return ROOM_UNCHANGED;
     return res && res.room ? res : null;
   } catch (err: unknown) {
-    if (String((err as Error)?.message ?? err).includes('404')) return null;
+    // ⭐⭐⭐v6.246 同 oracleGetRoom：這裡的 URL 帶 `logh=<雜湊>`／`logSince=<數字>`／`since=<版本>`，
+    //   字串比對 404 的誤判率被 v6.245 的逾時放大了好幾個數量級。
+    if (isOracleTimeout(err)) throw err;
+    if (oracleErrorStatus(err) === 404) return null;
     throw err;
   }
 }

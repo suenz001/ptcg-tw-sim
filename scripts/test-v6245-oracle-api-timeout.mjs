@@ -185,13 +185,40 @@ await T('⭐ 逾時常數：預設 30 秒、副作用型 60 秒（Rule 37：> �
   ok(/export const ORACLE_API_TIMEOUT_MS = 30000;/.test(OC), '預設逾時不是 30000');
   ok(/export const ORACLE_SIDEEFFECT_TIMEOUT_MS = 60000;/.test(OC), '副作用型逾時不是 60000');
 });
-await T('⭐⭐ 「失敗有狀態副作用」的四個呼叫點都帶了 60 秒逃生口（建房／進場／入座／開局）', () => {
+// ⭐⭐⭐v6.246 弱點修正（獨立審查者【問題5】之二）：原本 takeSeat 與 startGame 共用同一個
+//   錨點字串 `}, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });`，**分不出是誰缺**，只靠 n >= 5
+//   的計數兜底 —— 拿掉其中一個、另一個多寫一次，守衛照樣全綠。
+//   ⇒ 改成「先切出每個函式的 body，再逐一斷言」，並保留下限斷言當第二道（Rule 25）。
+function fnBody(src, decl, label) {
+  const i = src.indexOf(decl);
+  assert.ok(i >= 0, '抽不到 ' + label + ' 的宣告（錨點：' + decl + '）');
+  // 函式結尾＝下一個「行首就是 }」的位置（頂層函式一律頂格收尾）
+  const j = src.indexOf('\n}\n', i);
+  assert.ok(j > i, '抽不到 ' + label + ' 的結尾');
+  const out = src.slice(i, j + 3);
+  assert.ok(out.length >= 120, label + ' 只抽到 ' + out.length + ' 字元 —— 抽取器壞了？');
+  return out;
+}
+await T('⭐⭐ 「失敗有狀態副作用」的四個呼叫點**逐一**都帶了 60 秒逃生口（建房／進場／入座／開局）', () => {
   const b = stripComments(RO);
-  for (const [fnName, anchor] of [['createRoom', 'const result = await oracleUpsertRoom(code, data, undefined,'],
-                                  ['joinRoom', '}, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS }).then(updated'],
-                                  ['takeSeat/startGame', '}, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });']]) {
-    ok(b.includes(anchor), fnName + ' 沒有 60 秒逃生口（錨點：' + anchor.slice(0, 50) + '）');
+  // 正對照：抽取器真的分得出四個不同的 body（長度互異、彼此不包含）
+  const bodies = {};
+  for (const [fnName, decl] of [['createRoom', 'export async function createRoom('],
+                                ['joinRoom', 'export async function joinRoom('],
+                                ['takeSeat', 'export async function takeSeat('],
+                                ['startGame', 'export async function startGame(']]) {
+    bodies[fnName] = fnBody(b, decl, fnName);
   }
+  ok(!bodies.takeSeat.includes('export async function startGame('),
+    '抽取器把 takeSeat 與 startGame 切在一起了 —— 又變回「分不出誰缺」');
+  ok(!bodies.startGame.includes('export async function takeSeat('), '同上（反向）');
+  for (const fnName of Object.keys(bodies)) {
+    ok(bodies[fnName].includes('ORACLE_SIDEEFFECT_TIMEOUT_MS'),
+      fnName + ' 的函式本體裡沒有 60 秒逃生口');
+  }
+  // ⭐ 負對照：把 takeSeat body 內的逃生口抽掉，這條斷言必須翻紅（證明它不是安慰劑）
+  ok(!bodies.takeSeat.replace(/ORACLE_SIDEEFFECT_TIMEOUT_MS/g, 'X').includes('ORACLE_SIDEEFFECT_TIMEOUT_MS'),
+    '負對照本身壞了');
   const n = (b.match(/ORACLE_SIDEEFFECT_TIMEOUT_MS/g) || []).length;
   ok(n >= 5, '只有 ' + n + ' 處用到 ORACLE_SIDEEFFECT_TIMEOUT_MS（1 import + 4 呼叫點）');
 });
@@ -400,12 +427,15 @@ function loadTx(roSrc, clock) {
     oracleGetRoom: async (code) => { gets.push({ code, v: state.room._version }); return JSON.parse(JSON.stringify(state.room)); },
     oracleUpsertRoom: null, // 由情境注入
     isOracleTimeout: (e) => !!(e && e.oracleTimeout === true),
+    // ⭐v6.246 新增：oracleTx 用它判「這個逾時是因為 body 大而放寬過預算的那種」
+    isOracleUploadBudgetTimeout: (e) => !!(e && e.oracleUploadBudget === true),
   };
   const make = (upsert) => {
     ctx.oracleUpsertRoom = async (code, data, ver, opts) => { puts.push({ code, data, ver, opts }); return upsert(puts.length, data, ver, opts); };
-    return new Function('oracleGetRoom', 'oracleUpsertRoom', 'isOracleTimeout', 'setTimeout',
+    return new Function('oracleGetRoom', 'oracleUpsertRoom', 'isOracleTimeout', 'isOracleUploadBudgetTimeout', 'setTimeout',
       js + '\n;return oracleTx;')(
-      (c) => ctx.oracleGetRoom(c), (a, b, c, d) => ctx.oracleUpsertRoom(a, b, c, d), ctx.isOracleTimeout, clock.vSetTimeout);
+      (c) => ctx.oracleGetRoom(c), (a, b, c, d) => ctx.oracleUpsertRoom(a, b, c, d), ctx.isOracleTimeout,
+      ctx.isOracleUploadBudgetTimeout, clock.vSetTimeout);
   };
   return { make, gets, puts, state };
 }
@@ -532,12 +562,35 @@ await T('⭐⭐ 逾時後靠**既有**自癒收斂：decideStuckSelfHeal 在額�
 // ══════════════════════════════════════════════════════════════════════════
 console.log('⑧ [突變測試] 逾時值改 0 / 拿掉 clearTimeout / 拿掉 _timedOut 判別 / 拿掉 signal');
 // ══════════════════════════════════════════════════════════════════════════
-async function mutantMustBreak(label, mutate, probe) {
+// ⭐⭐⭐v6.246 弱點修正（獨立審查者【問題5】之一）：原本這裡是**無差別 try/catch**，
+//   任何例外都被算成「突變被抓到」。實測：把 esbuild 換成平台不符的版本（沙盒裡就會發生），
+//   M1~M4 **全部假 OK** —— 突變測試無聲變成安慰劑（IRON_RULES Rule 25 同型）。
+//   ⇒ 兩道修正：
+//     (1) **基準線必須先綠**：同一個 probe 先跑**未突變**的原始碼，它必須通過。
+//         工具鏈壞掉（esbuild 平台不符 / 抽取器壞掉 / 少注入相依）時基準線會先紅，
+//         而不是讓突變測試假 OK。
+//     (2) **紅在預期的那一條**：突變後丟出來的訊息必須符合 expectRe，
+//         不可以是「隨便一個例外」（例如 `X is not defined`、`Transform failed`）。
+const TOOLCHAIN_RE = /Transform failed|esbuild|is not defined|is not a function|Cannot read|ENOENT|另一個平台|another platform/i;
+async function mutantMustBreak(label, mutate, probe, expectRe) {
+  ok(expectRe instanceof RegExp, '突變 ' + label + ' 沒有給「預期紅在哪一條」的樣式');
   const src = mutate(OC);
   ok(src !== OC, '突變 ' + label + ' 沒有真的改到原始碼 —— 突變測試在測空氣');
+  // (1) 基準線：未突變的原始碼跑同一個 probe 必須通過
+  try {
+    await probe(OC);
+  } catch (e) {
+    throw new Error('突變「' + label + '」的**基準線**就紅了（' + e.message
+      + '）—— 這代表工具鏈或 probe 壞掉，突變測試在測空氣，不是在測突變');
+  }
+  // (2) 突變後必須紅，且紅在預期的那一條
   let broke = false, why = '';
   try { await probe(src); } catch (e) { broke = true; why = e.message; }
   ok(broke, '突變「' + label + '」竟然通過了 —— 對應的守衛是安慰劑');
+  ok(!TOOLCHAIN_RE.test(why),
+    '突變「' + label + '」紅的是**工具鏈錯誤**而不是被測行為：' + why);
+  ok(expectRe.test(why),
+    '突變「' + label + '」紅在別條斷言上（預期 ' + expectRe + '）：' + why);
   return why;
 }
 await T('⭐⭐⭐ M1 逾時值改成 0 ⇒ 正對照（200ms 正常回應）必須翻紅', async () => {
@@ -548,7 +601,7 @@ await T('⭐⭐⭐ M1 逾時值改成 0 ⇒ 正對照（200ms 正常回應）必
     const st = watch(m.oracleApi('/api/rooms/AAAA'));
     await clock.advance(1000);
     ok(st.done && !st.err, '正常 200ms 的請求被砍了：' + (st.err && st.err.message));
-  });
+  }, /正常 200ms 的請求被砍了/);
 });
 await T('⭐⭐⭐ M2 拿掉 finally 的 clearTimeout ⇒ 「計時器洩漏」斷言必須翻紅', async () => {
   await mutantMustBreak('remove clearTimeout(_to) in finally',
@@ -561,10 +614,12 @@ await T('⭐⭐⭐ M2 拿掉 finally 的 clearTimeout ⇒ 「計時器洩漏」�
       await clock.advance(500);
       ok(st.done && !st.err, '沒完成');
       ok(clock.timers.size === 0, '成功回來之後還留著 ' + clock.timers.size + ' 顆計時器 —— clearTimeout 沒放在 finally');
-    });
+    }, /顆計時器/);
 });
 await T('⭐⭐⭐ M3 拿掉 _timedOut 判別 ⇒ 「別人的 AbortError 被誤判成逾時」必須翻紅', async () => {
-  await mutantMustBreak('drop _timedOut guard', (s) => s.replace('if (_timedOut && _isAbortError(e))', 'if (_isAbortError(e))'), async (src) => {
+  // ⚠v6.246：這一行在 oracleAuth 與 oracleApi **各有一份**，字串版 replace 只會換掉第一個
+  //   （＝ oracleAuth），probe 測的卻是 oracleApi ⇒ 突變會「存活」。改用全域替換。
+  await mutantMustBreak('drop _timedOut guard', (s) => s.replaceAll('if (_timedOut && _isAbortError(e))', 'if (_isAbortError(e))'), async (src) => {
     const clock = makeClock();
     const calls = [];
     const f2 = (url) => new Promise((_r, rej) => { calls.push(url); clock.vSetTimeout(() => { const e = new Error('someone else'); e.name = 'AbortError'; rej(e); }, 1000); });
@@ -572,7 +627,7 @@ await T('⭐⭐⭐ M3 拿掉 _timedOut 判別 ⇒ 「別人的 AbortError 被誤
     const st = watch(m.oracleApi('/api/rooms/AAAA'));
     await clock.advance(2000);
     ok(m.isOracleTimeout(st.err) === false, '別人的 AbortError 被誤判成逾時');
-  });
+  }, /被誤判成逾時/);
 });
 await T('⭐⭐⭐ M4 fetch 不帶 signal ⇒ HEAD-FAIL（黑洞掛住）必須翻紅', async () => {
   await mutantMustBreak('drop signal from fetch', (s) => s.replace('\n      cache: \'no-store\',\n      signal: _ac.signal,', '\n      cache: \'no-store\','), async (src) => {
@@ -582,7 +637,7 @@ await T('⭐⭐⭐ M4 fetch 不帶 signal ⇒ HEAD-FAIL（黑洞掛住）必須�
     const st = watch(m.oracleApi('/api/rooms/AAAA'));
     await clock.advance(60000);
     ok(st.done && st.err && m.isOracleTimeout(st.err), '黑洞沒有被逾時砍掉');
-  });
+  }, /黑洞沒有被逾時砍掉/);
 });
 await T('⭐⭐ M5 oracleTx 的逾時重試上限改成 5 ⇒ 「PUT 恰好 2 次」必須翻紅', async () => {
   const src = RO.replace('const TX_TIMEOUT_RETRY_MAX = 1;', 'const TX_TIMEOUT_RETRY_MAX = 5;');

@@ -293,7 +293,13 @@ T('[HEAD-FAIL④b] dispatch 的 push 路徑改走 pushWithRetry，且舊的「�
 });
 T('[正對照] pushWithRetry 真的會重試（有迴圈 + 上限 + 失敗到底才記錄未推送盤面）', () => {
   const i = G.indexOf('async function pushWithRetry(');
-  const body = G.slice(i, i + 1200);
+  assert.ok(i >= 0, '抽不到 pushWithRetry');
+  // ⚠v6.246 修抽取器：原本是固定 1200 字視窗，函式裡多寫幾行註解就會切不到尾巴
+  //   （Rule 25「不要用長度／往後數」的同型）。改以函式真正的結尾當錨點，並加下限斷言。
+  const end = G.indexOf('\n    return false;\n  }', i);
+  assert.ok(end > i, '抽不到 pushWithRetry 的結尾錨點');
+  const body = G.slice(i, end + 24);
+  assert.ok(body.length >= 500, 'pushWithRetry 只抽到 ' + body.length + ' 字元 —— 抽取器壞了？');
   assert.ok(/for\s*\(let i = 0; i < PUSH_RETRY_MAX; i\+\+\)/.test(body), '沒有重試迴圈');
   assert.ok(/const PUSH_RETRY_MAX = \d+;/.test(G), '沒有重試上限常數');
   assert.ok(/_unpushedState = st;/.test(body), '失敗到底沒有記下「本地領先」的證據');

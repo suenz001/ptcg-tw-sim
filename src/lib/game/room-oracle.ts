@@ -18,6 +18,8 @@ import {
   oracleListRoomsCombined, ROOMS_UNCHANGED, ROOMS_COMBINED_UNSUPPORTED,
   // ⭐⭐⭐v6.245 逾時判別與「失敗有狀態副作用」的放寬值
   isOracleTimeout, ORACLE_SIDEEFFECT_TIMEOUT_MS,
+  // ⭐⭐⭐v6.246 「因為 body 大而放寬過預算」的逾時不吃重試額度（見下方 oracleTx）
+  isOracleUploadBudgetTimeout,
   type OracleRoom, type OracleUpsertResult,
 } from './oracle-client';
 // v4.961：oracle mode 也有 firebase auth（signInAnonymously / sign-in upgrade），
@@ -93,7 +95,12 @@ async function oracleTx(
     try {
       result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);
     } catch (err) {
-      if (!isOracleTimeout(err) || timeoutRetries >= TX_TIMEOUT_RETRY_MAX) throw err;
+      // ⭐⭐⭐v6.246 「因為封包大而放寬過預算」的逾時**不吃重試額度**：重試是把同樣大小的 body
+      //   對新盤面再送一次，在上行塞死時只會把 UI 再鎖同樣長的一段（48KB＋120 秒預算 ⇒ 玩家要等
+      //   241 秒）。直接把錯誤丟給呼叫端＝提早解鎖 UI，剩下的交給 v6.212 的自癒。
+      //   ⚠ 基底預算的逾時（輪詢 GET／小型寫入／60 秒逃生口）行為**完全不變**，仍吃 1 次重試。
+      if (!isOracleTimeout(err) || isOracleUploadBudgetTimeout(err)
+          || timeoutRetries >= TX_TIMEOUT_RETRY_MAX) throw err;
       timeoutRetries++;
       await new Promise(r => setTimeout(r, 1000 * timeoutRetries));
       continue;   // ← 下一輪必定先重新同步（迴圈開頭的 oracleGetRoom），再對新盤面重做

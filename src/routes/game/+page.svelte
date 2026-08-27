@@ -7732,8 +7732,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
         // ⭐⭐⭐v6.245 逾時（預設 30 秒沒回應）⇒ **立刻停止重試**，不把同一包 40~48KB 原樣重送。
         //   上行塞住時原樣重送只是再被砍一次（實測有玩家上行僅 4.4 kbps，48KB 要 87 秒），
         //   連砍三次還會多吃 90 秒才放手 ⇒ 玩家的 UI 鎖（isSyncing）更久解不開。
-        //   ⇒ 交給既有的卡住自癒：8 秒重建訂閱＝重新同步、上限 2 次重推、之後 force-adopt
-        //     拉伺服器最新盤面讓玩家重做（decideStuckSelfHeal，v6.212）。不新增任何狀態機。
+        //   ⚠⚠⚠v6.246 更正 v6.245 寫在這裡的錯誤說明（獨立審查者查出）：那段「卡住自癒」整段被
+        //     下方 interval 的 `if (!isWaitingOnOpponent(game, mySeatIdx)) ... return;` 擋著，
+        //     **回合中途自己的動作推失敗時，那條復原路徑根本不會執行** —— 只有在「正等對手」
+        //     的狀態下才會啟動。
+        //   ⇒ 目前實際的收斂路徑是：這裡把盤面記進 _unpushedState（本地領先伺服器的證據）並回 false，
+        //     等到下一次真的進入「等對手」時，才由 decideStuckSelfHeal 走重推／force-adopt。
+        //   ⚠ 這個缺口是**既有**問題（v6.212 起就在），爆炸半徑大，v6.246 刻意不動它；
+        //     待辦與完整分析記在 docs/changelog-internal.md。
         if (isOracleTimeout(e)) break;
         if (i < PUSH_RETRY_MAX - 1) {
           await new Promise((r) => setTimeout(r, 400 * (i + 1)));
