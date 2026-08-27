@@ -109,6 +109,17 @@ game-over 時上報，**線上房＋本機雙人＋對 AI 都會寫**（淨化 f
 ⚠⚠ 全程**沒有任何刪除資料的路徑**：`matchRecords` 沒有 TTL 索引、沒有 `deleteMany`／`drop`，
 唯一的刪除點是 admin 手按的 `DELETE /api/admin/match-records/:matchId`（`deleteOne`，1 處）。
 
+### 部署
+
+`oracle-admin/server_admin_patch.js` ＋ `oracle-admin/admin.html` 有改
+⇒ **`update-admin-full.bat`**（scp 兩支 + pm2 restart，端點與 admin 前端都要新的才對得上）。
+`src/lib/version.ts` 有改 ⇒ **`redeploy-oracle.bat`**（讓 www.ptcg-tw-sim.com 的版本號跟著走）。
+`static/cards/` 與 `engine`／`effects`／`server-engine` **一個字都沒動**
+⇒ **不需要** `update-tournament.bat`。
+
+⚠ 兩支 bat 的先後不影響正確性（admin 前端在新舊伺服器上都不會壞：`scanned` 欄位新舊皆有，
+`MI_SCAN_CAP` 只是把閘放寬），但建議先 `update-admin-full.bat`。
+
 ## v6.241 — 捷拉奧拉「麻麻關節」卡面文字更正（官方頁面自己打錯）；牌組原型統計改全量
 
 > 站長的兩項裁定。【A】玩家看得到（卡面文字）⇒ 首頁 changelog 寫一則；
