@@ -71,7 +71,8 @@
     type User,
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
-  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange, isOracleTimeout } from '$lib/game/oracle-client';
+  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange, isOracleTimeout,
+           ORACLE_API_TIMEOUT_MAX_MS } from '$lib/game/oracle-client';
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import {
@@ -7720,10 +7721,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _unpushedState: GameState | null = null;
   let _repushAttempts = 0;
   const PUSH_RETRY_MAX = 3;
+  // ⭐⭐⭐v6.247 「這一發推送還在途中」的旗標。
+  //   v6.212 拿 `_unpushedState` 當「本地領先伺服器」的證據，但它只在 push
+  //   **確定失敗之後**才被設定。push 還在飛的那段時間它仍是 null
+  //   ⇒ 25 秒的 decideStuckSelfHeal 收到 hasUnpushedLocal:false ⇒ 直接 force-adopt
+  //   ⇒ 把玩家剛打完的那一手退回攻擊前。
+  //   實測（虛擬時鐘＋scripts/test-v6247-selfheal-inflight.mjs）：48KB 的推送花
+  //   87 秒才送達（v6.245 的實測案例）時，玩家會看到 t=30s 盤面退回攻擊前、
+  //   t=90s 又跳回攻擊後 —— 正是 v6.212 宣稱修掉的那個症狀。
+  //   ⇒ 這一版只做一件事：**推送在途時，那一輪的方向決策整段跳過**
+  //   （不 force-adopt、也不重推），等它落地再說。不新增任何請求、不改跳動頻率。
+  // ⚠ 上限＝單發推送的預算上限 ORACLE_API_TIMEOUT_MAX_MS。旗標萬一沒被還原，
+  //   最多只延後這麼久就恢復原行為 ⇒ fail-safe，不是 fail-open（不會變成新的卡死）。
+  let _pushInFlight = 0;
+  let _pushInFlightSince = 0;
   async function pushWithRetry(code: string, st: GameState): Promise<boolean> {
     for (let i = 0; i < PUSH_RETRY_MAX; i++) {
       try {
-        await pushGameState(code, st);
+        // ⭐⭐⭐v6.247 標記「這一發還在途中」（見 _pushInFlight 的註解）。
+        //   ⚠ 遞減寫在**內層 finally**：拋錯也一定還原，旗標不可能永久卡住。
+        _pushInFlight++;
+        if (_pushInFlight === 1) _pushInFlightSince = Date.now();
+        try { await pushGameState(code, st); } finally { _pushInFlight--; }
         _unpushedState = null;
         _repushAttempts = 0;
         return true;
@@ -7738,8 +7757,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //     的狀態下才會啟動。
         //   ⇒ 目前實際的收斂路徑是：這裡把盤面記進 _unpushedState（本地領先伺服器的證據）並回 false，
         //     等到下一次真的進入「等對手」時，才由 decideStuckSelfHeal 走重推／force-adopt。
-        //   ⚠ 這個缺口是**既有**問題（v6.212 起就在），爆炸半徑大，v6.246 刻意不動它；
-        //     待辦與完整分析記在 docs/changelog-internal.md。
+        //   ⭐⭐⭐v6.247 實測補完這段說明（虛擬時鐘實跑真程式碼，見守衛）：
+        //     ① 上面那個「中途不會執行」在字面上成立，但**不是主要傷害**：中途動作不結束回合，
+        //       下一發推成功就自然覆蓋；而且重推額度只有 2 次、集中在 t≈30~40s，
+        //       就算拆出 gate 也只多覆蓋十幾秒的窗口（實測：不足以阻止棄權誤判）。
+        //     ② 真正會讓玩家看到壞結果的是**推送還在途中時 25 秒就 force-adopt**：
+        //       這裡還沒拋錯，_unpushedState 就還是 null，hasUnpushedLocal 判 false
+        //       ⇒ v6.212 的保護完全沒有發動 ⇒ 盤面退回攻擊前。
+        //       v6.246 把 48KB 的預算放到 120 秒之後，這個「在途窗口」變得更長、也更常發生
+        //       （以前 30 秒就被砍掉，現在它真的會送到）。⇒ 見 _pushInFlight。
+        //   ⚠ 「中途推失敗 ⇒ 伺服器停在舊盤面 ⇒ 對手可能宣告棄權而且伺服器端會核准」
+        //     這條**實測成立**，但根治它要動到棄權判定本身，不在本版範圍；
+        //     證據與方案記在 docs/changelog-internal.md。
         if (isOracleTimeout(e)) break;
         if (i < PUSH_RETRY_MAX - 1) {
           await new Promise((r) => setTimeout(r, 400 * (i + 1)));
@@ -7841,7 +7870,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
         //   v5.587 這裡無條件 force-adopt（繞過全部 stale 守衛）。當本地有推不上去的手時，
         //   伺服器那份是**攻擊前**的盤面 ⇒ 強制採用＝把玩家的回合退回去。
         //   ⇒ 先重推本地那份（冪等；推端 shouldSkipStalePush 會擋倒退），重推仍卡住才 adopt。
-        if ((Date.now() - _lastSyncAt) >= 25000) {
+        // ⭐⭐⭐v6.247 推送還在途中 ⇒ 這一輪不做方向決策（見 _pushInFlight 的註解）。
+        //   ⚠ 這一行只會讓 force-adopt／重推**變少**，不會變多；8 秒重訂閱在這個 if 之外，一字未動。
+        const _pushStillInFlight = _pushInFlight > 0
+          && (Date.now() - _pushInFlightSince) < ORACLE_API_TIMEOUT_MAX_MS;
+        if ((Date.now() - _lastSyncAt) >= 25000 && _pushStillInFlight) {
+          console.warn('[Online] 自癒：推送仍在途中（已 '
+            + Math.round((Date.now() - _pushInFlightSince) / 1000)
+            + ' 秒）→ 這一輪不 force-adopt、也不重推，等它落地');
+        }
+        if ((Date.now() - _lastSyncAt) >= 25000 && !_pushStillInFlight) {
           const _healAction = decideStuckSelfHeal({
             hasUnpushedLocal: !!(_unpushedState && game && _unpushedState.id === game.id),
             repushAttempts: _repushAttempts,
@@ -7852,9 +7890,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
             console.warn('[Online] 自癒：本地領先伺服器 → 先重推本地盤面（不回捲），第 '
               + _repushAttempts + ' 次');
             if (_st) {
+              // ⭐v6.247 重推也算「在途」：沒這一段的話，下一輪（約 10 秒後）會在前一發
+              //   還沒落地時再送一份同樣大小的盤面 —— 上行塞死時那正是 v6.245 要避免的事。
+              //   重推總次數仍由 _repushAttempts 控制（上限 2），只是改成**串行**。
+              _pushInFlight++;
+              if (_pushInFlight === 1) _pushInFlightSince = Date.now();
               pushGameState(roomCode, _st)
                 .then(() => { _unpushedState = null; _repushAttempts = 0; })
-                .catch((e: unknown) => console.warn('[Online] 自癒重推失敗:', e));
+                .catch((e: unknown) => console.warn('[Online] 自癒重推失敗:', e))
+                .finally(() => { _pushInFlight--; });
             }
           } else {
             // 放棄本地那份（重推額度用完 / 本來就沒有未推送的手）⇒ 照 v5.587 強制同步。

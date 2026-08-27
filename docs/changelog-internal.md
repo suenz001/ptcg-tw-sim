@@ -1,5 +1,75 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.247 — 休閒線上：推送還在途中就 force-adopt ⇒ 盤面退回攻擊前
+
+**這一輪的任務是查證，不是急著改。** 獨立審查者在複驗 v6.245 時指出：
+`pushWithRetry` 失敗後的復原路徑整段被 5 秒 interval 開頭的
+`if (!isWaitingOnOpponent(game, mySeatIdx)) ... return;` 擋著，
+「回合中途自己的動作推失敗時，那條復原路徑根本不會執行」。
+
+### 查證方法
+把 `src/routes/game/+page.svelte` 的 **5 秒 interval callback、`pushWithRetry`、
+`isWaitingOnOpponent`**，以及 `room-oracle.ts` 的 `_waitingOnOpp`，
+用括號配對**原樣抽出來**、esbuild 轉譯後以 `with(state)` 綁上模擬狀態，
+配**虛擬時鐘**實跑（不是重寫一份模擬）。守衛 `scripts/test-v6247-selfheal-inflight.mjs`
+就是這支工具，對 v6.246 的檔案跑 **12 PASS / 9 FAIL**，修後 **21 PASS / 0 FAIL**。
+
+### 七條查證的結果
+1. **對手誤拿棄權勝：成立（真傷害）。** 我方上行塞死、回合中途連做 8 個動作（本地 log 10→18）
+   期間伺服器停在 10；對手端 `oppInactivityWarn` 在 **181 秒**跳出，
+   按下宣告後 `claimOpponentForfeit` 的伺服器端再驗證（`_waitingOnOpp` 讀的是**伺服器**盤面）
+   回 `true` ⇒ **核准**。房主可把門檻調到 60 秒，那時 61 秒就成立。
+   ⚠ 但把重推從 gate 拆出來**救不了它**：`_repushAttempts` 上限 2、集中在 t≈30~40s，
+   實測（對照組）仍然 `granted:true`。要根治得動棄權判定本身 ⇒ **本版不動，留給站長裁定**。
+2. **本地盤面被輪詢拉回：不會。** `resolveRoomUpdate` 對「log 嚴格較短」的 snapshot 判
+   `stale-snapshot` 拒收；而且伺服器 `_version` 沒動，`shouldDeliverRoomPoll` 根本不遞送。
+3. **`pendingSelection.actorIdx === opp` 時 gate 變 true：實測會走重推、不會 force-adopt 到回捲**
+   （重推的是我自己剛做完的那份，冪等；推端 `shouldSkipStalePush` 擋倒退）。
+4. **回合結束那一刻自癒補跑：會，但實測會被下面第 6 條擋掉。**
+5. **邊界**：`game===null` / `phase!=='playing'` / `game-over` / 觀戰座位 gate 皆為 false；
+   `setup` 階段有 v5.697 的專門分支。實測沒有「因為 gate 回 false 而真的卡死」的路徑。
+6. ⭐⭐⭐ **真正的缺口在別處，而且 v6.246 把它放大了。**
+   `_unpushedState` 只在 push **確定失敗之後**才被設定；push 還在飛的期間它是 `null`
+   ⇒ 25 秒的 `decideStuckSelfHeal` 拿到 `hasUnpushedLocal:false` ⇒ 直接 `_forceAdoptNext`
+   ⇒ 繞過全部 stale 守衛採用伺服器（＝攻擊前）那份。
+   實測時間軸（48KB、87 秒才送達，v6.245 記錄的真實案例）：
+   `t=30s 本地 11->10（退回攻擊前）, t=90s 10->11（又跳回來）`。
+   v6.246 把 48KB 的預算放寬到 120 秒之後，這個「在途窗口」從 30 秒變成最長 120 秒，
+   而且那些推送**真的會送到**（以前 30 秒就被砍掉）⇒ 這個回捲比 v6.245 之前更常發生。
+   ⇒ v6.212 宣稱修掉的症狀，對「逾時型」失敗其實從來沒有生效過。
+7. **`tournament-dumps/` 找不到能對上的玩家回報 —— 因為根本沒有儀器。**
+   `_tSendClientDiag` 開頭就是 `if (!isTournament || ...) return;`，
+   所以 `stale-version` / `setup-watchdog-repeat` / `manual-sync` / `stale-board-drop`
+   **全部只有錦標賽會送**。休閒對戰佔全站 94% 流量，卻一個指紋都沒有。
+   （最新一份 `monitor_20260827_104828`：stale-version 53 次/31 人、
+   setup-watchdog-repeat 12/10、manual-sync 5/4、stale-board-drop 3/3 —— 全是錦標賽路徑。）
+   ⇒ 「dump 裡沒有」不可以讀成「沒發生」。**待辦：休閒端要有自己的指紋。**
+
+### 這一版改了什麼（只改一件事）
+新增 `_pushInFlight` / `_pushInFlightSince`：`pushWithRetry` 與自癒重推在送出前 `++`、
+用 `finally` / `.finally` 還原；25 秒的方向決策加一個條件 `&& !_pushStillInFlight`。
+- **不新增任何請求**、interval 仍是 5 秒、8 秒重訂閱那一段一字未動。
+- 只會讓 force-adopt／重推**變少**：自癒重推從「併發送兩份 48KB」改成串行，
+  總次數仍由 `_repushAttempts`（上限 2）控制。
+- **不動 `isWaitingOnOpponent`**（它服務的是棄權判定，v5.328/5.697/5.698 逐步修出來的，
+  爆炸半徑大），也不動 `decideStuckSelfHeal`、`_forceAdoptNext`、`oppInactivityWarn`、
+  `claimOpponentForfeit`。錦標賽走 `tournamentDispatch`，完全不經過這段程式。
+- **fail-safe 不是 fail-open**：在途判定帶 `< ORACLE_API_TIMEOUT_MAX_MS`（120 秒）上限，
+  旗標萬一沒還原，最多延後 120 秒就恢復原行為，不會變成新的卡死。突變測試有驗這一條。
+
+### 守衛 scripts/test-v6247-selfheal-inflight.mjs（21 條）
+抽取器自我驗證 2、核心 HEAD-FAIL 4、force-adopt 硬約束 2、正對照 4、接線 4、
+v6.212 回歸 1、突變測試 4（含「同一個突變不可以把不相干的斷言也弄紅」的定位檢查）、
+現況鎖 1（把「棄權誤判仍在」寫成斷言，將來修掉時會提醒更新）。
+⚠ 突變測試只捕捉 `assert.AssertionError`，其它例外照樣往上丟 —— 不用無差別 try/catch。
+
+### 未修、留給站長裁定
+- **棄權誤判**（查證第 1 條）：中途推送失敗期間，對手宣告棄權會被伺服器核准。
+  可能的方向：房間另存一個「玩家最後一次動作的本地時間」由客戶端心跳更新，
+  棄權再驗證時一併看；或宣告前先要求對方端確認。兩者都會動到棄權語意，需要決定。
+- **休閒端沒有任何診斷指紋**（查證第 7 條）：現在無法用資料判斷上面這些情境的真實頻率。
+
+
 ## v6.246 — 獨立審查者對 v6.245 的複驗：三項修正 ＋ 兩個守衛弱點 ＋ 一筆待辦
 
 > BASE（寫死）= `3937a1e5e141c13977b03b38897f4e569a264905`（v6.245）

@@ -743,8 +743,14 @@ await T('⭐⭐⭐ 首頁公告的四個數字都是實跑量到的（30／61／
 });
 await T('⭐⭐ 首頁公告逐字檢查：不得再宣稱「最多等三十秒」，且必須是 50 則、無裸大括號', () => {
   const html = readFileSync(join(ROOT, 'static/changelog.html'), 'utf8');
-  const head = html.slice(0, html.indexOf('</details>') + 10);
-  ok(/v6\.246/.test(head), '首頁第一則不是 v6.246');
+  // ⚠v6.247 修這支守衛自己的缺陷：原本寫死「首頁第一則必須是 v6.246」，
+  //   下一版公告一發布就必紅，而那不是行為壞掉。改成「找到 v6.246 那一則再逐字檢查」，
+  //   檢查的內容一字未變，只是不再綁在最上面。
+  const _i246 = html.indexOf('<span class="ver-badge">v6.246</span>');
+  ok(_i246 > 0, '首頁找不到 v6.246 那一則（那則公告的逐字檢查就失去對象了）');
+  const _b246 = html.lastIndexOf('<details', _i246);
+  ok(_b246 >= 0, 'v6.246 那則的 <details> 起點找不到');
+  const head = html.slice(_b246, html.indexOf('</details>', _i246) + 10);
   // ⚠ 只擋 v6.245 那句**宣稱**（「現在最多等三十秒」）；新公告在回顧舊行為時仍會提到三十秒，
   //   所以不能用「三十秒」當關鍵字（否則會誤殺正確的敘述）。
   ok(!/現在最多等三十秒/.test(html), 'v6.245 那句過度宣稱還在首頁');
