@@ -71,7 +71,7 @@
     type User,
   } from 'firebase/auth';
   // v4.65 Phase 3d: Oracle backend mode 支援（VITE_BACKEND_MODE=oracle 時用）
-  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange } from '$lib/game/oracle-client';
+  import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange, isOracleTimeout } from '$lib/game/oracle-client';
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import {
@@ -7729,6 +7729,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
         return true;
       } catch (e) {
         console.warn('[Online] push failed (' + (i + 1) + '/' + PUSH_RETRY_MAX + '):', e);
+        // ⭐⭐⭐v6.245 逾時（預設 30 秒沒回應）⇒ **立刻停止重試**，不把同一包 40~48KB 原樣重送。
+        //   上行塞住時原樣重送只是再被砍一次（實測有玩家上行僅 4.4 kbps，48KB 要 87 秒），
+        //   連砍三次還會多吃 90 秒才放手 ⇒ 玩家的 UI 鎖（isSyncing）更久解不開。
+        //   ⇒ 交給既有的卡住自癒：8 秒重建訂閱＝重新同步、上限 2 次重推、之後 force-adopt
+        //     拉伺服器最新盤面讓玩家重做（decideStuckSelfHeal，v6.212）。不新增任何狀態機。
+        if (isOracleTimeout(e)) break;
         if (i < PUSH_RETRY_MAX - 1) {
           await new Promise((r) => setTimeout(r, 400 * (i + 1)));
         }

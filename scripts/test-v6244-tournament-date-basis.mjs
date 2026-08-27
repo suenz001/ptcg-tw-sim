@@ -314,17 +314,23 @@ await T('⑫ ⚠ 本版沒有新增任何刪除／改寫既有名人堂或歸檔
 });
 
 // ══ ⑬ 版本／文件 ══════════════════════════════════════════════════════════
-await T('⑬ 版本一致：version.ts = 6.244、admin.html SITE_VERSION_HINT 同步、admin.html 維持 LF', () => {
+await T('⑬ 版本一致：version.ts ≥ 6.244、admin.html SITE_VERSION_HINT 同步、admin.html 維持 LF', () => {
+  // ⚠v6.245：原本寫死 '6.244'，**每一次** bump 都會假 FAIL（v6.171 對 v6.170 守衛修過同一個病）。
+  //   要釘的本來就是「這一版之後版本沒有倒退」與「admin 對照值沒忘記跟上」這兩件事。
   const v = rd('src/lib/version.ts').match(/VERSION = '([\d.]+)'/)[1];
-  assert.strictEqual(v, '6.244');
-  assert.ok(ADMIN.includes("window.SITE_VERSION_HINT = '6.244';"), 'SITE_VERSION_HINT 沒同步');
+  assert.ok(parseFloat(v) >= 6.244, 'version.ts 版本倒退了：' + v);
+  assert.ok(ADMIN.includes("window.SITE_VERSION_HINT = '" + v + "';"),
+    'SITE_VERSION_HINT 沒同步（version.ts=' + v + '）');
   assert.ok(!readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'latin1').includes('\r\n'),
     'admin.html 必須維持 LF 行尾');
   assert.ok(PAT.startsWith('// === ORACLE ADMIN ENDPOINTS === v1.26 '), 'server patch 檔頭版本要 bump 到 v1.26');
 });
 await T('⑭ 文件：首頁 changelog 有這一則、內部文件寫了枚舉與回填裁定', () => {
-  assert.ok(CHANGELOG.includes('v6.244'), '首頁 changelog 少了 v6.244（這是玩家看得到的顯示錯誤，要寫）');
-  assert.ok(/開賽/.test(CHANGELOG.slice(0, 900)), '首頁那一則要講清楚改以開賽日為準');
+  const _i244 = CHANGELOG.indexOf('v6.244');
+  assert.ok(_i244 >= 0, '首頁 changelog 少了 v6.244（這是玩家看得到的顯示錯誤，要寫）');
+  // ⚠v6.245：原本用 slice(0,900) 假設 v6.244 永遠是第一則 —— 之後每加一則就會往後推。
+  //   改成從 v6.244 那一則自己的位置往後找。
+  assert.ok(/開賽/.test(CHANGELOG.slice(_i244, _i244 + 900)), '首頁那一則要講清楚改以開賽日為準');
   assert.ok(INTERNAL.includes('## v6.244'), 'docs/changelog-internal.md 少了 v6.244');
   assert.ok(INTERNAL.includes('startedAt') && INTERNAL.includes('零資料遷移'),
     '內部文件要寫明欄位與「不需要回填」的裁定');

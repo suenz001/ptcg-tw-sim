@@ -1,4 +1,8 @@
 <details open>
+        <summary><span class="ver-badge">v6.245</span> <b>連線卡住時不再無限等待，畫面會自行恢復</b><br>休閒對戰在網路塞住時先前會一直等下去，畫面停在同步中、按了沒反應；現在最多等三十秒，逾時就自動取回最新盤面讓對局繼續。</summary>
+        <div class="log-body">先前休閒對戰每一次與伺服器的往返都沒有時間上限，遇到網路阻塞或連線中斷卻沒有回應時，瀏覽器可能等上好幾分鐘才放棄。在這段期間畫面既不會更新、也看不到任何錯誤訊息，玩家只會覺得「按了沒反應」，或是對手明明動了卻遲遲看不到。這一版起改為最多等待三十秒，超過就停止等待，改成重新取回伺服器上的最新盤面，接著就能繼續操作，不會再卡在「同步中」。建立房間、加入房間、移動座位與開始對戰這四種動作若中途中斷有可能留下半途的狀態，等待上限放寬為六十秒，網路較慢的玩家不會被誤判。實測連線正常時一次往返約 0.27 秒，離三十秒還有一百倍以上的距離，一般情況完全不受影響。</div>
+      </details>
+<details>
         <summary><span class="ver-badge">v6.244</span> <b>歷屆冠軍的日期改以開賽日為準</b><br>網站賽的決賽常打過午夜，先前會把賽事記成隔天；現改以開賽當天為準，並固定以台灣時間計算。</summary>
         <div class="log-body">名人堂的歷屆冠軍、個人參賽紀錄與奪冠報告圖上的日期，先前取的是冠軍誕生的那一刻。晚上九點開打的比賽，決賽經常打到午夜之後才結束，於是 8/26 舉辦的網站賽會被記成 8/27。這一版起一律改用該場比賽開打的時間，過去所有紀錄也一併改正，不需要重新整理資料。日期改為固定以台灣時間換算，不再受裝置時區影響。</div>
       </details>
@@ -194,11 +198,7 @@
         <summary><span class="ver-badge">v6.180</span> <b>錦標賽對戰：修正盤面偶爾跳回上一步</b><br>連線不穩時，較舊的盤面資料若比較晚回到瀏覽器，畫面會被拉回上一個動作，過一下又跳回來。現在一律只採用比目前更新的盤面，過期的資料直接忽略。</summary>
         <div class="log-body">動作最終送不出去時，畫面上原本還留著那個其實沒有生效的動作，要等下一次同步才突然消失；現在會即時還原，若伺服器其實已經接受了該動作則維持不變，不會誤刪。離開對戰或換到下一場之後才回來的舊資料，也不會再把畫面帶回已經結束的那一場。觀戰畫面套用同一套判斷。</div>
       </details>
-      <details>
-        <summary><span class="ver-badge">v6.177</span> <b>錦標賽大廳：修正賽程表與排名整區突然消失</b><br>連線短暫不穩時，賽程表與瑞士制排名原本會整區消失、要等下一次更新才回來。現在改為保留上一次成功取得的內容並在標題標示「更新中」，同時立即重新取得，畫面不再空白。</summary>
-        <div class="log-body">休閒大廳的房間列表、排行榜與個人資料也套用同一做法：取得失敗時保留已顯示的內容，不會再誤顯示成「目前沒有公開房間」或「尚無資料」。賽程表的輪次號碼一律以伺服器最新的輪次為準，即使畫面顯示的是上一次取得的賽程，也不會停在舊的輪次；排名表在名次變動時不再整張重畫。首次載入時仍會顯示「賽程載入中…」。</div>
-      </details>
-            <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
+                  <p class="changelog-archive-link" style="margin:0.9rem 0 0.2rem;padding:0.7rem 0.9rem;border:1px dashed #c8d8f0;border-radius:6px;background:#f7fbff;font-size:0.92rem;line-height:1.6;color:#334;">
         📚 這裡顯示<b>最近的更新內容</b>。更早的紀錄完整保留在 →
         <a href="__BASE__/changelog-archive.html" target="_blank" rel="noopener" style="color:#2a5fa8;font-weight:600;">查看完整更新歷史</a>
       </p>

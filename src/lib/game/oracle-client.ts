@@ -24,6 +24,53 @@ const UID_KEY = 'ptcg_oracle_uid';
 let _token: string | null = null;
 let _uid: string | null = null;
 
+// ── ⭐⭐⭐v6.245 休閒對戰網路逾時（守衛 scripts/test-v6245-oracle-api-timeout.mjs）──────
+// >>> v6245-oracle-timeout-core
+//   ── 這在修什麼 ──────────────────────────────────────────────────────────
+//   nginx 慢請求 log（2026-08-26/27 實測，不是推測）：
+//     `60.001 - 408 /api/rooms/W6JC PUT`（upstream_response_time = "-" ⇒ 請求**從來沒送到
+//        node**；408 ＝ nginx 等 client 送完 body 等滿 60 秒沒等到）—— 同一間房 10 分鐘內 45 筆。
+//     `86.954 0.007 409 /api/rooms/XTCT PUT request_length=48285` ⇒ 上行約 4.4 kbps，
+//        48KB 要傳 87 秒；等它傳到盤面早就變了 → 409 → 前端重抓重做。
+//   而 `oracleApi` ——休閒對戰**所有**請求的唯一出口——完全沒有 AbortController、沒有任何
+//   時間上限，`await fetch` 在隧道排隊／黑洞時既不 resolve 也不 reject。後果不是「慢」，是
+//   **永久停擺**：oraclePollRoom / oraclePollMessages / subscribeOpenRooms 三個 tick 迴圈都是
+//   「await 完才排下一發」，掛住那一發永遠不會排下一發 ⇒ 玩家再也收不到對手的動作、大廳
+//   再也不更新，畫面上卻沒有任何錯誤訊息（＝「按了沒反應」）。
+//   錦標賽的 `tApi` 在 v6.135/v6.179 已經治過同一個病（12s/8s），休閒版從來沒治過，
+//   而休閒佔全站 94% 流量。
+//
+//   ── 逾時值怎麼定的（Rule 37：必須大於實測過的最慢**成功**案例）──────────────
+//   健康取樣批的 net 中位數 **273 ms**，30 秒是它的 100 倍以上；4.4 kbps 那位玩家連
+//   一包 48KB 都傳不完（87 秒），砍掉他也只是讓他不做白工（反正到了也是 409）。
+//   ⚠ 但「砍掉」**不可以**變成「每 30 秒砍一次、永遠傳不完」⇒ 逾時後一律走
+//     room-oracle.ts `oracleTx` 的既有 409 重試路徑（先重新拉最新盤面，再對新盤面重做），
+//     且有次數上限與退避；詳見那裡的註解。
+export const ORACLE_API_TIMEOUT_MS = 30000;
+//   ⚠ 建房／進場／入座／開局這類「失敗有狀態副作用」的呼叫（可能伺服器其實成功了、
+//     client 卻以為失敗而再建一間 ⇒ 大廳出現孤兒房）放寬到 60 秒 ——
+//     慢網路不該被誤殺（沿用 v6.179 tApi 的 opts.timeoutMs 設計）。
+export const ORACLE_SIDEEFFECT_TIMEOUT_MS = 60000;
+
+/** 這個錯誤是不是「我這顆計時器造成的逾時」（呼叫端據此決定要不要重新同步）。 */
+export function isOracleTimeout(err: unknown): boolean {
+  return !!(err && typeof err === 'object'
+    && (err as { oracleTimeout?: boolean }).oracleTimeout === true);
+}
+/** ⚠ 只認 name==='AbortError'；**別人**丟的 AbortError 不可以被當成逾時（見 _timedOut 旗標）。 */
+function _isAbortError(e: unknown): boolean {
+  return !!(e && typeof e === 'object'
+    && ((e as { name?: string }).name === 'AbortError' || String(e).includes('AbortError')));
+}
+function _oracleTimeoutError(path: string, ms: number): Error {
+  // AbortError 的原文對玩家沒有意義（Rule 37）⇒ 特判成人話。
+  const err = new Error(`連線逾時（${Math.round(ms / 1000)} 秒沒有回應）：${path}`) as Error & { oracleTimeout?: boolean };
+  err.oracleTimeout = true;
+  return err;
+}
+// <<< v6245-oracle-timeout-core
+
+
 // ⭐⭐⭐v6.197 身分變動通知。
 //   401（JWT 過期/失效）時 oracleApi 會 oracleSignOut() + 重新匿名登入，而伺服器發的是
 //   **一個全新的 uid**（v5.628 只想修「卡在 401 建不了房」，沒有人通知畫面端）。
@@ -46,8 +93,13 @@ function _setUid(uid: string): void {
   }
 }
 
-/** 匿名登入 — 取得 JWT token + uid（cache 在 localStorage） */
-export async function oracleAuth(): Promise<{ uid: string; token: string }> {
+/**
+ * 匿名登入 — 取得 JWT token + uid（cache 在 localStorage）
+ * ⭐v6.245 `signal`：由 oracleApi 傳它自己的 AbortSignal 進來。
+ *   這一發（快取沒命中時才會發）若掛住，整支 oracleApi 就跟著掛住 —— 逾時保護必須連它一起蓋。
+ *   ⚠ 其他呼叫端不傳 ⇒ 行為與 v6.244 逐字相同。
+ */
+export async function oracleAuth(signal?: AbortSignal): Promise<{ uid: string; token: string }> {
   if (_token && _uid) return { uid: _uid, token: _token };
 
   // 先試 localStorage cache
@@ -66,6 +118,7 @@ export async function oracleAuth(): Promise<{ uid: string; token: string }> {
   const res = await fetch(`${API_URL}/api/auth/anonymous`, {
     method: 'POST',
     cache: 'no-store',
+    signal,
   });
   if (!res.ok) throw new Error(`oracleAuth failed: ${res.status} ${await res.text()}`);
   const { uid, token } = await res.json();
@@ -95,60 +148,88 @@ export function oracleSignOut(): void {
   }
 }
 
-/** 通用 fetch wrapper — 自動帶 token + JSON encode body */
+/**
+ * 通用 fetch wrapper — 自動帶 token + JSON encode body。
+ *
+ * ⭐⭐⭐v6.245 逾時保護（見檔頭 v6245-oracle-timeout-core 區塊的完整說明）。
+ *   ⚠ 正常路徑**沒有多任何一次 await、沒有多發任何請求**：只多了一個 AbortController
+ *     與一顆 setTimeout（成功回來就在 finally 清掉）。
+ *   ⚠ 204 / 304 / 409 / 401 四條既有路徑的回傳值逐字不變。
+ */
 export async function oracleApi<T = any>(
   path: string,
   options: {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     body?: any;
     headers?: Record<string, string>;
+    /** ⭐v6.245 逃生口（比照 v6.179 tournamentDispatch 的 opts.timeoutMs）。 */
+    timeoutMs?: number;
   } = {},
   _retry = true,  // v5.628 內部用：401(token 過期/失效) 時自動重新登入並重試一次
 ): Promise<T> {
   if (!API_URL) throw new Error('VITE_ORACLE_API_URL not set');
-  const { token } = await oracleAuth();
-  // v4.68: 加 Cache-Control 阻止 Chrome 自動發 If-None-Match → server 回 304 → body 空
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${token}`,
-    'Cache-Control': 'no-cache',
-    ...(options.headers ?? {}),
-  };
-  let body: string | undefined;
-  if (options.body !== undefined) {
-    body = JSON.stringify(options.body);
-    headers['Content-Type'] = 'application/json';
-  }
-  const res = await fetch(`${API_URL}${path}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body,
-    // v4.68: cache:'no-store' 不讓 fetch 介入瀏覽器 HTTP cache（不會 If-None-Match）
-    cache: 'no-store',
-  });
-  // v4.68: 即便 no-store 失效，server 仍可能回 304（理論上不該）—safety net
-  if (res.status === 304) {
-    // 沒 body，當作 caller 自己重試；但其實 caller 走 polling 自動會再試
-    throw new Error('oracleApi 304 (unexpected with cache:no-store)');
-  }
-  // v5.610: server 對「房間版本未變」回 204（無 body）→ 回傳 undefined 讓 caller 略過
-  if (res.status === 204) {
-    return undefined as unknown as T;
-  }
-  // v5.628：401(jwt expired / invalid token)= 快取的 token 過期或失效。
-  //   oracleAuth 只會回快取 token、不檢查到期 → 清掉重新匿名登入,以新 token 重試一次,避免卡在 401 建不了房。
-  if (res.status === 401 && _retry) {
-    oracleSignOut();
-    await oracleAuth();
-    return oracleApi<T>(path, options, false);
-  }
-  if (!res.ok) {
-    // 409 conflict 也算 ok response, caller 要處理
-    if (res.status === 409) {
-      return (await res.json()) as T;
+  const _toMs = options.timeoutMs ?? ORACLE_API_TIMEOUT_MS;
+  const _ac = new AbortController();
+  // ⚠ 只認「這顆計時器造成的 abort」——不把別的來源丟出來的 AbortError 誤判成逾時（v6.179 同款）。
+  let _timedOut = false;
+  const _to = setTimeout(() => { _timedOut = true; try { _ac.abort(); } catch { /* ignore */ } }, _toMs);
+  try {
+    // ⚠ oracleAuth 也吃這顆 signal：快取沒命中時它會自己發一支 fetch，那一支掛住同樣會卡死整支。
+    const { token } = await oracleAuth(_ac.signal);
+    // v4.68: 加 Cache-Control 阻止 Chrome 自動發 If-None-Match → server 回 304 → body 空
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+      'Cache-Control': 'no-cache',
+      ...(options.headers ?? {}),
+    };
+    let body: string | undefined;
+    if (options.body !== undefined) {
+      body = JSON.stringify(options.body);
+      headers['Content-Type'] = 'application/json';
     }
-    throw new Error(`oracleApi ${path} → ${res.status}: ${await res.text()}`);
+    const res = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body,
+      // v4.68: cache:'no-store' 不讓 fetch 介入瀏覽器 HTTP cache（不會 If-None-Match）
+      cache: 'no-store',
+      signal: _ac.signal,
+    });
+    // v4.68: 即便 no-store 失效，server 仍可能回 304（理論上不該）—safety net
+    if (res.status === 304) {
+      // 沒 body，當作 caller 自己重試；但其實 caller 走 polling 自動會再試
+      throw new Error('oracleApi 304 (unexpected with cache:no-store)');
+    }
+    // v5.610: server 對「房間版本未變」回 204（無 body）→ 回傳 undefined 讓 caller 略過
+    if (res.status === 204) {
+      return undefined as unknown as T;
+    }
+    // v5.628：401(jwt expired / invalid token)= 快取的 token 過期或失效。
+    //   oracleAuth 只會回快取 token、不檢查到期 → 清掉重新匿名登入,以新 token 重試一次,避免卡在 401 建不了房。
+    if (res.status === 401 && _retry) {
+      // ⚠⭐v6.245 重試那一發必須有**自己的新 AbortController**：先把這一發的計時器拆掉，
+      //   否則它會在重試進行中誤觸，並讓 `_timedOut` 把重試的錯誤誤標成逾時。
+      clearTimeout(_to);
+      _timedOut = false;
+      oracleSignOut();
+      await oracleAuth();
+      return oracleApi<T>(path, options, false);
+    }
+    if (!res.ok) {
+      // 409 conflict 也算 ok response, caller 要處理
+      if (res.status === 409) {
+        return (await res.json()) as T;
+      }
+      throw new Error(`oracleApi ${path} → ${res.status}: ${await res.text()}`);
+    }
+    return (await res.json()) as T;
+  } catch (e) {
+    if (_timedOut && _isAbortError(e)) throw _oracleTimeoutError(path, _toMs);
+    throw e;
+  } finally {
+    // ⚠ 一定要在 finally：少了它，每一發成功的請求都留一顆計時器（洩漏）。
+    clearTimeout(_to);
   }
-  return (await res.json()) as T;
 }
 
 // ── Rooms ─────────────────────────────────────────────────────────────
@@ -275,6 +356,8 @@ export async function oracleUpsertRoom(
   code: string,
   data: Record<string, any>,
   expectedVersion?: number,
+  /** ⭐v6.245 逃生口：建房／進場／入座／開局這類「失敗有狀態副作用」的寫入放寬逾時。 */
+  opts?: { timeoutMs?: number },
 ): Promise<OracleUpsertResult> {
   const body: any = { data };
   if (expectedVersion !== undefined) body.expectedVersion = expectedVersion;
@@ -289,6 +372,8 @@ export async function oracleUpsertRoom(
   const res = await oracleApi<OracleUpsertResult>(`/api/rooms/${code.toUpperCase()}`, {
     method: 'PUT',
     body,
+    // ⚠ 缺席時是 undefined ⇒ oracleApi 內的 `?? ORACLE_API_TIMEOUT_MS` 取預設 30 秒。
+    timeoutMs: opts?.timeoutMs,
   });
   try {
     if (res && 'ok' in res && res.ok && res.room) {

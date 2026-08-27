@@ -16,7 +16,9 @@ import {
   oracleAuth, oracleApi, oracleGetRoom, oracleUpsertRoom, oracleDeleteRoom,
   oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid,
   oracleListRoomsCombined, ROOMS_UNCHANGED, ROOMS_COMBINED_UNSUPPORTED,
-  type OracleRoom,
+  // ⭐⭐⭐v6.245 逾時判別與「失敗有狀態副作用」的放寬值
+  isOracleTimeout, ORACLE_SIDEEFFECT_TIMEOUT_MS,
+  type OracleRoom, type OracleUpsertResult,
 } from './oracle-client';
 // v4.961：oracle mode 也有 firebase auth（signInAnonymously / sign-in upgrade），
 // 拿 email 寫進 seat 給 admin 追蹤玩家身份。
@@ -63,15 +65,39 @@ function emptySeats(): Seat[] {
   return seats;
 }
 
-/** Optimistic lock retry — 取代 firestore runTransaction */
-async function oracleTx(roomCode: string, fn: (data: RoomData) => RoomData | Promise<RoomData>): Promise<RoomData> {
+/**
+ * Optimistic lock retry — 取代 firestore runTransaction。
+ *
+ * ⭐⭐⭐v6.245 逾時**不當成硬失敗**，直接走這裡**既有的 409 重試路徑**：
+ *   迴圈的每一輪都是「先 `oracleGetRoom` 重新拉最新盤面 → 對**新**盤面重跑 `fn` → 再寫」，
+ *   所以重試本身就是「重新同步再重做」，**不是把同一包 40~48KB 原樣重送**。
+ *   （原樣重送對 4.4 kbps 的玩家＝每 30 秒砍一次、永遠傳不完，比不加逾時更糟。）
+ * ⚠ 上限：逾時最多只吃掉 **1 次**重試（與 409 的 5 次分開計數），並用比 409 更長的退避，
+ *   避免自我重呼叫失控（上行真的塞死時，最多 2×timeout 就會把錯誤丟給呼叫端＝解鎖 UI）。
+ * ⚠ 重新拉盤面那一發是 GET（body 幾乎為 0）—— 塞住的是**上行**，所以它拉得回來。
+ */
+const TX_TIMEOUT_RETRY_MAX = 1;
+async function oracleTx(
+  roomCode: string,
+  fn: (data: RoomData) => RoomData | Promise<RoomData>,
+  opts?: { timeoutMs?: number },
+): Promise<RoomData> {
+  let timeoutRetries = 0;
   for (let attempt = 0; attempt < 5; attempt++) {
     const room = await oracleGetRoom(roomCode);
     if (!room) throw new Error('room not found');
     const data = room as unknown as RoomData;
     const ver = (room as OracleRoom)._version;
     const newData = await fn(data);
-    const result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver);
+    let result: OracleUpsertResult;
+    try {
+      result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);
+    } catch (err) {
+      if (!isOracleTimeout(err) || timeoutRetries >= TX_TIMEOUT_RETRY_MAX) throw err;
+      timeoutRetries++;
+      await new Promise(r => setTimeout(r, 1000 * timeoutRetries));
+      continue;   // ← 下一輪必定先重新同步（迴圈開頭的 oracleGetRoom），再對新盤面重做
+    }
     if ('ok' in result) return result.room as unknown as RoomData;
     // conflict → retry after small backoff
     await new Promise(r => setTimeout(r, 50 * (attempt + 1)));
@@ -113,7 +139,9 @@ export async function createRoom(
       ...(visible === false ? { visible: false } : {}),
     };
     // upsert with no expectedVersion → creates if missing
-    const result = await oracleUpsertRoom(code, data);
+    // ⚠v6.245 建房失敗**有狀態副作用**（伺服器其實建好了、client 卻以為失敗 → 換房號再建一間
+    //   ⇒ 大廳出現孤兒房）⇒ 逾時放寬到 60 秒，慢網路不該被誤殺。房間初始 doc 很小（沒有盤面）。
+    const result = await oracleUpsertRoom(code, data, undefined, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });
     if ('ok' in result && result.room._version === 1) return code;
     // hit existing room code → retry with new code
   }
@@ -164,7 +192,8 @@ export async function joinRoom(roomCode: string, guestName: string): Promise<Roo
       return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
     });
     return { ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) };
-  }).then(updated => ({ ...updated, roomId: code }));
+    // ⚠v6.245 進場＝「失敗有狀態副作用」⇒ 逾時放寬到 60 秒（慢網路不該被誤殺）。
+  }, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS }).then(updated => ({ ...updated, roomId: code }));
 }
 
 export async function takeSeat(roomCode: string, targetIdx: number): Promise<void> {
@@ -189,7 +218,8 @@ export async function takeSeat(roomCode: string, targetIdx: number): Promise<voi
       return s;
     });
     return { ...data, seats: newSeats, memberUids: computeMemberUids(newSeats) };
-  });
+    // ⚠v6.245 入座＝「失敗有狀態副作用」⇒ 逾時放寬到 60 秒。
+  }, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });
 }
 
 export async function setSeatDeck(roomCode: string, deckEntries: DeckEntry[]): Promise<void> {
@@ -597,7 +627,8 @@ export async function startGame(roomCode: string, gameState: GameState): Promise
         gameState: JSON.parse(JSON.stringify(gameState)),
         status: 'playing',
       };
-    });
+      // ⚠v6.245 開局＝封包最大（整包盤面）且「失敗有狀態副作用」⇒ 逾時放寬到 60 秒。
+    }, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });
     return started;
   } catch (err) {
     // v6.055 診斷：同 room.ts —— 留一份錯誤給 UI 顯示，否則建局失敗完全無聲。

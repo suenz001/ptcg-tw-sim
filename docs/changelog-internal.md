@@ -1,5 +1,132 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.245 — 休閒對戰 `oracleApi()` 加逾時（AbortController，預設 30 秒）
+
+> 站長裁定（2026-08-27）：照 nginx 慢請求 log 的證據修，做法固定，不換方案。
+
+### 【A】證據（nginx 慢請求 log，實測，非推測）
+
+格式：`時間 $request_time $upstream_response_time $status $uri $method $request_length`
+
+```
+2026-08-26T15:45:05+00:00 60.001 -     408 /api/rooms/W6JC PUT 1091   ← 這種 45 筆，10 分鐘內同一間房
+2026-08-25T18:19:44+00:00 86.954 0.007 409 /api/rooms/XTCT PUT 48285
+```
+
+- 第一種：`upstream_response_time = "-"` ⇒ 請求**從來沒送到 node**；`408` ＝ nginx 等 client
+  送完 body 等滿 60 秒沒等到 ⇒ 伺服器／node／隧道全部洗清，卡的是**玩家的上行**。
+  同一秒多筆重複 ⇒ 前端在重送。
+- 第二種：`request_time 86.9 秒`、node 只花 `0.007 秒`、`request_length=48285`（48KB）
+  ⇒ 上行約 **4.4 kbps**；等它傳到盤面早就變了 → 409 → 前端重抓重做。
+
+### 【B】病因（已於 BASE=v6.244 逐行查證）
+
+`src/lib/game/oracle-client.ts` 的 `oracleApi()` ——休閒對戰所有請求的**唯一出口**——
+BASE:99-152 完全沒有 AbortController、沒有任何 timeout。
+
+⚠ 後果不是「慢」，是**永久停擺**。三個 tick 迴圈都是「await 完才排下一發」：
+
+| 迴圈 | BASE 位置 | 掛住的後果 |
+|---|---|---|
+| `oraclePollRoom.tick` | `oracle-client.ts` BASE:409-471（`timer = setTimeout(tick,_d)` 在 await 之後） | 對戰盤面再也不更新 |
+| `oraclePollMessages.tick` | `oracle-client.ts` BASE:528-542 | 聊天再也不更新 |
+| `subscribeOpenRooms.tick / legacyTick` | `room-oracle.ts` BASE:732-787 | **大廳再也打不開**（長期待辦「線上休閒大廳偶發打不開」的其中一條路徑） |
+
+錦標賽的 `tApi`（`src/routes/game/+page.svelte` BASE:4899-4969）在 v6.135/v6.179 已經治過
+同一個病（12s/8s）；註解把後果寫得很清楚（`tBusy` 永久 true、按鈕不會變灰）。
+**休閒版從來沒治過，而休閒佔全站 94% 流量。**
+
+### 【C】呼叫點枚舉 → 逾時值 → 理由
+
+全站 `git grep -n oracleApi <BASE>` 只有兩個檔案有呼叫點（`decks/+page.svelte` 與
+`game/+page.svelte` 都**沒有**）。
+
+| # | 呼叫點（BASE 行號） | 端點 | 逾時 | 理由 |
+|---|---|---|---|---|
+| 1 | `oracle-client.ts:66` `oracleAuth` | POST `/api/auth/anonymous` | 隨呼叫端（signal 傳入） | 它掛住＝整支 `oracleApi` 掛住，而那時計時器還沒武裝 ⇒ 必須一起蓋 |
+| 2 | `oracle-client.ts:240` `oracleGetRoom` | GET `/api/rooms/:code` | 30s | body 幾乎為 0，上行塞住也拉得回來 |
+| 3 | `oracle-client.ts:263` `oracleGetRoomDelta` | GET（盤面輪詢） | 30s | 休閒側**沒有**長輪詢，伺服器不會故意掛起 |
+| 4 | `oracle-client.ts:289` `oracleUpsertRoom` | PUT `/api/rooms/:code` | 30s（可覆寫） | 40~48KB 上行，正是病灶 |
+| 5 | `oracle-client.ts:314` `oracleDeleteRoom` | DELETE | 30s | 小請求 |
+| 6 | `oracle-client.ts:319` `oracleListRooms` | GET `/api/rooms` | 30s | 大廳（舊協定） |
+| 7 | `oracle-client.ts:342` `oracleListRoomsCombined` | GET `/api/rooms` | 30s | 大廳（v6.217 合併協定） |
+| 8 | `oracle-client.ts:360` `oracleRoomArchetypes` | GET | 30s | 大廳標籤 |
+| 9 | `oracle-client.ts:496` `oracleSendMessage` | POST messages | 30s | 小請求 |
+| 10 | `oracle-client.ts:511` `oracleListMessages` | GET messages | 30s | 聊天輪詢 |
+| 11 | `room-oracle.ts:865` `sendMessage` | POST messages | 30s | 小請求 |
+| **A** | `room-oracle.ts:116` `createRoom` | PUT（建房） | **60s** | 失敗**有狀態副作用**：伺服器其實建好了、client 以為失敗 → 換房號再建一間 ⇒ 大廳孤兒房 |
+| **B** | `room-oracle.ts:137` `joinRoom` | PUT（進場） | **60s** | 同上（座位可能已寫入） |
+| **C** | `room-oracle.ts:173` `takeSeat` | PUT（入座） | **60s** | 同上 |
+| **D** | `room-oracle.ts:591` `startGame` | PUT（開局） | **60s** | 封包最大（整包盤面）且失敗有狀態副作用 |
+
+**明確查證過的豁免（它們根本不走 `oracleApi`，所以本版動不到）：**
+
+| 對象 | 走哪裡 | 查證方式 |
+|---|---|---|
+| **長輪詢**（伺服器故意掛起 25 秒） | 錦標賽 `tApi`，`game/+page.svelte:6391-6392` 帶 `&wait=1` 與 `{ timeoutMs: T_LP_CLIENT_TIMEOUT_MS }`(30s) | `git grep -n "wait=1" <BASE>`；`oracle-client.ts` 全檔沒有 `wait=`／`longPoll` |
+| **`/api/decode-tw-deck`** | `decks/+page.svelte:1058` 裸 `fetch` + 自己的 `twImportAbort` | `git grep -n "tw-deck" <BASE>` |
+| **`/api/encode-tw-deck`** | `decks/+page.svelte:1177` 裸 `fetch` | 同上（v6.230/6.231 的三段 20s＋總預算 50s 完全不受影響） |
+| 錦標賽報名／進場／`/state`／`/action` | 全部走 `tApi`（另一套 12s/8s） | `tApi(` 與 `oracleApi(` 是兩個獨立出口 |
+
+### 【D】逾時之後做什麼（站長裁定：不當硬失敗、走既有 409 路徑、不新增狀態機／旗標）
+
+1. `oracleApi` reject 一個帶 `oracleTimeout: true` 標記的 Error（`isOracleTimeout()` 判別）。
+   **reject 本身就是「解鎖 UI」**：呼叫端的 `finally`（例如 `isSyncing = false`）才跑得到。
+2. `room-oracle.ts` 的 `oracleTx` 迴圈**本來**每一輪就是
+   「`oracleGetRoom` 重新拉最新盤面 → 對**新**盤面重跑 `fn` → 再寫」。逾時直接 `continue`
+   進入這條既有路徑 ⇒ **重新同步再重做**，不是把同一包 48KB 原樣重送。
+   ⚠ 上限：逾時只吃掉 **1 次**重試（`TX_TIMEOUT_RETRY_MAX = 1`，與 409 的 5 次分開計數），
+   退避 1 秒（比 409 的 50ms 長）。
+3. `pushWithRetry`（`game/+page.svelte`）逾時 ⇒ **立刻 break，不重送**。
+   （原本 3 次重試 × 30 秒 ＝ 再多鎖 90 秒，對 4.4 kbps 的玩家是純粹的傷害。）
+   之後交給**既有**的卡住自癒（v5.360 / v5.587 / v6.212）：
+   8 秒重建訂閱＝重新同步 → `decideStuckSelfHeal` 上限 2 次重推 → `force-adopt` 拉伺服器
+   最新盤面讓玩家重做。**沒有新增任何狀態機或旗標。**
+
+### 【E】4.4 kbps／48KB 玩家在修後會經歷什麼（逐步）
+
+1. 出招 → 樂觀更新，本地盤面立刻變（與現在相同）。
+2. `pushGameState` → `oracleTx` 第 1 輪：GET 最新盤面（body ~0，拉得回來）→ PUT 48KB。
+3. 30 秒後 abort（`408` 那批玩家原本要等滿 60 秒才被 nginx 砍）。
+4. 退避 1 秒 → 第 2 輪：**重新 GET 最新盤面**（若對手已經動了，`shouldSkipStalePush` 會
+   讓這一輪變成 no-op ⇒ 不會用舊盤面蓋掉新的）→ 再 PUT 一次。
+5. 第 2 次也逾時 ⇒ 丟出逾時錯誤 ⇒ `pushWithRetry` **不再重送** ⇒ `finally` 解開 `isSyncing`
+   ⇒ 「⏳ 同步中」消失、畫面可以操作。總計約 61 秒（BASE 是**無限**）。
+6. `_unpushedState` 記下那一手 → 8 秒後自癒重建訂閱（GET，拉得回來）→ 最多 2 次重推 →
+   仍失敗就 `force-adopt` 伺服器盤面，玩家在最新盤面上重做。
+7. ⚠ 誠實說：他的網路本來就打不了這個遊戲（48KB 要 87 秒）。這一版讓他**知道**、
+   而且不會把 UI 鎖死，不是讓他變得能玩。
+
+### 【F】守衛
+
+`scripts/test-v6245-oracle-api-timeout.mjs` — **30 條，全部斷言到行為層**（虛擬時鐘實跑，
+不是 grep 字串）。BASE=v6.244 實跑 **8 PASS / 22 FAIL**；本版 **30 PASS / 0 FAIL**。
+
+- HEAD-FAIL：永不 resolve 的 fetch stub ⇒ BASE 推進 10 分鐘仍未 settle；本版 30 秒 abort。
+- 正對照：200ms 回應 ⇒ BASE 與本版的回傳值／fetch 次數／完成時刻**完全相同**，
+  且成功之後虛擬時鐘上 0 顆殘留計時器（＝`clearTimeout` 真的在 `finally`）。
+- 豁免對照：40 秒才回的 stub ⇒ 預設 30s 被砍、`timeoutMs: 60000` 不可被砍。
+- 401 對照：第一發 401、第二發 200 ⇒ 成功，且斷言 `signal[0] !== signal[1]` 且第二顆未 abort。
+- 204／304／409 回傳值逐字對照。
+- 「別人的 AbortError 不可被誤判成逾時」（`_timedOut` 旗標）。
+- 突變測試 M1~M5：逾時值改 0／拿掉 `clearTimeout`／拿掉 `_timedOut` 判別／`fetch` 不帶
+  `signal`／`TX_TIMEOUT_RETRY_MAX` 改 5 ⇒ 全部必須翻紅（每一條都實測翻紅）。
+
+⚠ CI 是 `fetch-depth: 1`，拿不到 BASE blob ⇒ 守衛自動改用「把逾時機制拿掉」的突變版當
+等價 BASE（不 fail-open 成假綠）。
+
+### 【G】已知風險 / 沒查到的
+
+- ⚠ Rule 37 說「逾時值必須大於實測過的最慢**成功**案例」。我們手上**沒有**休閒 PUT
+  「慢但成功」的樣本 —— nginx log 裡的慢筆全是 408／409（失敗）。30 秒是拿健康批的
+  net 中位數 273ms 反推的（100 倍餘裕），不是拿慢成功案例反推的。
+  ⇒ 若日後出現「30 秒內原本會成功」的筆數，`ORACLE_API_TIMEOUT_MS` 要往上調。
+- ⚠ 30 秒只保護「上行送不出去」。若是**下行**慢（拉盤面拉不回來），重新同步一樣會逾時，
+  最後就是 force-adopt 拿不到新盤面、維持原樣 —— 行為不會比 BASE 差，但也治不好。
+- ⚠ `oracleAuth` 現在吃 `oracleApi` 的 signal；被 abort 時 `_token` 維持 null，
+  下一次呼叫會重新登入（既有行為）。
+
+
 ## v6.244 — 賽事日期的時間基準：**開賽時間**取代「冠軍產生時間」
 
 > 站長 2026-08-27 回報：網站賽-95【21:00 瑞士制】在台灣時間 **8/26 21:00** 開打，
