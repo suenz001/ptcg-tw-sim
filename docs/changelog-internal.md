@@ -1,5 +1,103 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.244 — 賽事日期的時間基準：**開賽時間**取代「冠軍產生時間」
+
+> 站長 2026-08-27 回報：網站賽-95【21:00 瑞士制】在台灣時間 **8/26 21:00** 開打，
+> 胡說樹-史小寶奪冠顯示為 **2026/08/27**。原因是名人堂拿「冠軍誕生那一刻」當賽事日期，
+> 而決賽經常打過台灣的午夜。⇒ 全站改以**開賽時間**為賽事日期。
+> 首頁 changelog **要寫**（這是玩家看得到的顯示錯誤）。
+
+### 【A】枚舉：全站有哪些地方在顯示／寫入「賽事日期」
+
+| # | 檔案 | 位置 | 改版前用什麼 | 本版 |
+|---|---|---|---|---|
+| 1 | `src/routes/game/+page.svelte` | 網站賽歷屆冠軍列 | `new Date(c.finishedAt).toLocaleDateString('zh-TW')` | `tournamentDateTW(c)` |
+| 2 | `src/routes/game/+page.svelte` | 社群自辦歷屆冠軍列 | 同上 | 同上 |
+| 3 | `src/routes/game/+page.svelte` | 個人資料頁「參賽紀錄」 | `new Date(ev.date).toLocaleDateString('zh-TW')` | `formatDateTW(ev.date)`（`date` 改為開賽時間） |
+| 4 | `oracle-admin/admin.html` | 名人堂管理列 | `new Date(c.finishedAt).toLocaleDateString('zh-TW')` | `tournDateTW(c)` |
+| 5 | `oracle-admin/admin.html` | 奪冠報告圖（單頁版＋完整版） | `miDate(c.finishedAt)` | `miDate(c.startedAt)` |
+| 6 | `oracle-admin/admin.html` | 玩家總覽的錦標賽列表「日期」欄 | `fmtD(e.finishedAt)` | `twDateStr(tournStartMs(e))` |
+| 7 | `oracle-admin/admin.html` | 賽事歸檔列表「**完賽時間**」欄 | `_tsFmtDateTime(a.finishedAt)` | **語義本來就對，只釘死時區**（欄名就叫完賽時間） |
+| 8 | `oracle-admin/server_admin_patch.js` | `recordChampion` 寫入 | 只有 `finishedAt` | **新增** `startedAt` |
+| 9 | `oracle-admin/server_admin_patch.js` | `/api/tournament/champions` | 只回 `finishedAt` | 多回 `startedAt`（缺欄者讀取時補） |
+| 10 | `oracle-admin/server_admin_patch.js` | `_aggregateArchives` 的 `date` | `a.finishedAt` | `a.startedAt || a.createdAt || finishedAt` |
+| 11 | `oracle-admin/server_admin_patch.js` | `/api/admin/player-profile` | 只回 `finishedAt` | 多回 `startedAt` |
+| 12 | `oracle-admin/server_admin_patch.js` | `champions/restore-from-archive` | `$setOnInsert` 無 `startedAt` | 補上 |
+
+⚠ 刻意**不動**的：`_aggregateArchives` 的 `winsAt` / `champOfficialAt` / `champCommunityAt` /
+`lastFinishedAt`。它們不是顯示欄位，是排行榜同分時「誰比較近期」的 tie-break；
+改成開賽時間會靜默動到榜單順序，而那不在這次的回報範圍內。
+
+### 【B】「開賽時間」這個資料**存不存在**（最關鍵的一步）
+
+存在，而且在**歸檔**裡已經存了很久：
+
+- `recordTournamentArchive()` 一直寫 `startedAt: ev.startedAt || ev.createdAt || null`
+  （`oracle-admin/server_admin_patch.js`）。這行是 commit `ee9239d9`（2026-06-12，admin v1.39）
+  加的，而錦標賽功能本身是 2026-06-11 才上線（`1307784e` 名人堂／`88e603f0` 歸檔）
+  ⇒ **幾乎所有歷史賽事都有這個欄位**。
+- `ev.startedAt` 的寫入點只有一個：`_seedEventBracketImpl` 的
+  `{ status:'running', currentRound:1, rounds, roundStartedAt, startedAt: Date.now() }`
+  —— 也就是「報到結束、賽程產生、第 1 輪開打」那一刻。**型別是毫秒數（`Date.now()`）**，
+  不是 Date 物件、不是字串。
+- **`tournamentChampions` 沒有任何開賽時間欄位**（`recordChampion` 只寫 `finishedAt: Date.now()`）。
+  這就是站長看到的那個 bug 的直接來源。
+- 賽事名稱裡的「21:00」只有時分、沒有日期，**單獨定不了日**，本版完全沒有去解析它。
+
+⚠ 沙盒連不到正式站 MongoDB，以上全部是從程式碼推導的。**不確定的只有一件事**：
+極早期（2026-06-11～12，`ee9239d9` 之前）歸檔的那幾場有沒有 `startedAt`。
+沒有的話會退到 `createdAt`，再沒有才退回 `finishedAt`（＝與 v6.243 相同，不會變空白）。
+站長可在 VM 上跑這一行確認（一次一行）：
+
+```
+mongosh --quiet ptcg --eval 'db.tournamentArchives.countDocuments({startedAt:{$in:[null,0]}})'
+```
+
+預期輸出：`0`（或個位數＝最早那幾場）。
+
+### 【C】修法：**純顯示層**，零資料遷移
+
+874 筆既有 `tournamentChampions` **一個欄位都沒有被改寫**。
+
+- `recordChampion` 從本版起**多寫**一個 `startedAt`（新欄位，`$set` 不影響其他欄位）。
+- `/api/tournament/champions` 讀取時：`cs.filter(c => !c.startedAt)` 才去 `tournamentArchives`
+  以 `_id: {$in: ['arch_'+eventId, …]}` 補（projection 只取 `eventId/startedAt/createdAt`，
+  **不碰 `players`／`matches` 這兩個大欄位**）。`_needIds` 為空時**完全不發這一發查詢**，
+  所以等舊紀錄自然補完後，這條路徑會自己消失。
+- 排行榜／個人戰績本來就是直接讀 `tournamentArchives`（`startedAt` 已在），改一個欄位名即可。
+
+⇒ **不需要任何 backfill**。若站長仍希望把 874 筆補齊欄位（讓上面那一發查詢永遠不發生），
+可以按一次 admin 名人堂的「♻️ 從歸檔還原名人堂」—— 但**那支只 `$setOnInsert`**、
+對已存在的紀錄不會補欄位，所以真的要補得另外寫一次 `updateMany`。
+**本版沒有做，也沒有留任何會改寫既有資料的路徑**，等站長裁定。
+
+### 【D】時區：原本吃的是「執行環境」
+
+`toLocaleDateString('zh-TW')` **不帶 `timeZone` 選項時吃的是執行環境時區**：
+
+- 伺服器在新加坡（UTC+8）── 剛好與台灣相同，所以伺服器端看不出問題。
+- 玩家的瀏覽器 ── 只要不在 +8（出國、裝置時區設錯），看到的日期就會再偏一天。
+
+⇒ 新的中央 helper `src/lib/tournament/event-date.ts` 固定 `+8` 並用 `getUTC*`，
+**連 `Intl` 的時區資料都不依賴**。`admin.html` 是單檔 `<script type="module">`、載不了 ESM，
+所以同語義各留一份（`twOffsetMs()`／`twDateStr()`／`tournStartMs()`／`tournDateTW()`）。
+⚠ 偏移寫成**函式**不是模組層級 `var` —— 模組層級變數在賦值前被呼叫會拿到 `undefined`（NaN 日期）。
+
+### 【E】守衛 `scripts/test-v6244-tournament-date-basis.mjs`
+
+斷言全部到**輸出字串**，不是「字串存在」：
+
+- **HEAD-FAIL**：fixture ＝ 開賽 8/26 21:00 TW（`Date.UTC(2026,7,26,13,0)`）、
+  冠軍產生 8/27 00:30 TW（`Date.UTC(2026,7,26,16,30)`）⇒ BASE 顯示 `2026/8/27`（紅），
+  修後 `2026/08/26`（綠）。
+- **正對照**：開賽 8/26 14:00、冠軍產生 8/26 16:00（沒跨午夜）⇒ 修前修後都是 8/26，
+  證明不是把全部日期往前推一天。
+- **時區突變**：整支測試在 `TZ=UTC` 與 `TZ=America/Los_Angeles` 下各跑一次，結果必須一模一樣。
+- **突變測試**：把中央 helper 改回吃 `finishedAt` ⇒ 必須翻紅。
+- **資料保全**：斷言本版沒有新增任何 `deleteMany`／`updateMany`／`$unset` 到
+  `tournamentChampions`／`tournamentArchives` 的路徑。
+
+
 ## v6.243 — `recentLimit` 查證：它是**顯示**上限，不是統計上限 ⇒ 聚合與顯示都不動
 
 > 站長交辦：把 `/api/admin/stats/players/:email` 的 `recentLimit` 一起修，讓「常用卡」與

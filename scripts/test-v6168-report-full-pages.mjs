@@ -33,6 +33,10 @@ function slice(src, a, b) {
   return src.slice(i, j > 0 ? j : src.length);
 }
 
+// ⭐v6.244：報告圖的日期改吃 admin.html 的中央日期 helper（賽事日期＝開賽時間、固定 UTC+8）。
+//   ⚠ 抽**真的那一份**而不是 stub —— stub 會讓「日期基準被改錯」在這支守衛裡完全看不出來。
+const DATE_HELPERS = slice(ADM, 'function twOffsetMs()', 'function _tsFmtDate(ms) {');
+
 // ── 抽出兩個可獨立執行的區塊 ────────────────────────────────────────────────
 // ⚠ 抽不出來時不要 throw 到 top-level：那樣對 HEAD 跑會變成一行 stack trace，
 //   看不出「少了哪些保護」。改成讓後續每一條各自 FAIL。
@@ -53,7 +57,7 @@ try {
   const src = slice(ADM, "const MI_URL = 'www.ptcg-tw-sim.com';", 'window.loadArchetypeStats = async function');
   if (src.length > 5000 && src.includes('mpDrawMeta')) {
     RENDER = new Function('window', 'document', 'alert', 'detectMainPokemon',
-      src + '\nmiLogo = async function () { return null; };'
+      DATE_HELPERS + '\n' + src + '\nmiLogo = async function () { return null; };'
           + '\nreturn { MI, MP, mpDrawMeta, mpDrawChampion, mpMetaNotes, crNotes, crBuild, miDraw };')(
       {}, { createElement() { throw new Error('不該建立 DOM'); } }, () => {}, () => null);
   }

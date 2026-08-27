@@ -34,6 +34,10 @@ function slice(src, a, b) {
   return src.slice(i, j > 0 ? j : src.length);
 }
 
+// ⭐v6.244：報告圖的日期改吃 admin.html 的中央日期 helper（賽事日期＝開賽時間、固定 UTC+8）。
+//   ⚠ 抽**真的那一份**而不是 stub —— stub 會讓「日期基準被改錯」在這支守衛裡完全看不出來。
+const DATE_HELPERS = slice(ADM, 'function twOffsetMs()', 'function _tsFmtDate(ms) {');
+
 // ── 把「報告圖」整段（常數＋純函式＋繪圖＋勾選 UI）抽成一個可重複實例化的工廠 ──
 // ⚠ 每呼叫一次就是一份全新的模組作用域（_crFullSel 也是新的）⇒ 各條測試互不汙染。
 // ⚠ localStorage 用參數餵進去：在瀏覽器裡這個識別字解析到全域，在這裡解析到我們的 stub，
@@ -51,7 +55,7 @@ try {
                  'renderChampFullPicker', 'champFullToggle', 'champFullMove',
                  'runChampionReportFullExport'];
     FACTORY = new Function('window', 'document', 'alert', 'detectMainPokemon', 'localStorage',
-      src
+      DATE_HELPERS + '\n' + src
       + '\nmiLogo = async function () { return null; };'
       + '\nreturn { MI, MP, mpPaginate, mpPlanMeta, mpPlanChampion, miComputeRows,'
       + ' mpDrawMeta, mpDrawChampion, mpMetaNotes, crNotes, crDraw,'

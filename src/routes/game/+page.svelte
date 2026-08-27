@@ -4,6 +4,8 @@
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
   import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
   import { LB_TOP_OPTIONS, LB_TOP_MAX, lbTopRows, loadLbTop, saveLbTop } from '$lib/ui/leaderboard-top';
+  // ⭐v6.244 賽事日期的中央 helper：一律以**開賽時間**為基準、固定 UTC+8（見 event-date.ts 的說明）。
+  import { tournamentStartMs, tournamentDateTW, formatDateTW } from '$lib/tournament/event-date';
   import { resolveLogCard } from '$lib/game/log_zoom';
   import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { fly, scale, fade } from 'svelte/transition';
@@ -9386,7 +9388,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
               <span class="tourn-hof-trophy">🏆</span>
               <span class="tourn-hof-name">{c.championName}</span>
-              <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
+              <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if tournamentStartMs(c)} ｜ {tournamentDateTW(c)}{/if}</span>
               {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
           {/each}
@@ -9403,7 +9405,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <div class="tourn-hof-row tourn-hof-clickable" role="button" tabindex="0" onclick={() => tHofOpen(c)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tHofOpen(c)}>
               <span class="tourn-hof-trophy">🎖️</span>
               <span class="tourn-hof-name" style="color:#8fdcc0;">{c.championName} <span style="font-size:.6rem;background:#2a6a55;color:#dff;border-radius:4px;padding:1px 5px;vertical-align:middle;">社群</span></span>
-              <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if c.finishedAt} ｜ {new Date(c.finishedAt).toLocaleDateString('zh-TW')}{/if}</span>
+              <span class="tourn-hof-meta">{c.eventName}{#if c.deckName} ｜ {c.deckName}{/if}{#if c.playerCount} ｜ {c.playerCount} 人{/if}{#if tournamentStartMs(c)} ｜ {tournamentDateTW(c)}{/if}</span>
               {#if c.eventId}<span class="tourn-hof-go">賽程 ▸</span>{/if}
             </div>
           {/each}
@@ -9617,7 +9619,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               {#each (tProfile.events ?? []) as ev}
                 <div class="tourn-pf-evrow">
                   <span class="tourn-pf-evname">{ev.communityEvent ? '🎖️' : '🏛️'} {ev.eventName}</span>
-                  <span class="tourn-pf-evmeta">{ev.date ? new Date(ev.date).toLocaleDateString('zh-TW') : ''} ｜ {ev.wins ?? 0} 勝 {ev.losses ?? 0} 敗{#if ev.result} ｜ {ev.result}{/if}</span>
+                  <span class="tourn-pf-evmeta">{formatDateTW(ev.date)} ｜ {ev.wins ?? 0} 勝 {ev.losses ?? 0} 敗{#if ev.result} ｜ {ev.result}{/if}</span>
                 </div>
               {/each}
             </div>

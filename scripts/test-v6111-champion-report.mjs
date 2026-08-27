@@ -183,6 +183,9 @@ function extractFn(src, sig) {
 }
 const crBuildSrc = extractFn(ADM, 'function crBuild(');
 const crConst = section(ADM, 'const CR = {', '};') + '};';
+// v6.244：crBuild 現在會呼叫中央的 tournStartMs（賽事日期＝開賽時間）。
+//   ⚠ 這裡刻意抽**真的那一份**而不是 stub —— stub 會讓「日期基準改錯」在這支守衛裡看不出來。
+const tournStartMsSrc = extractFn(ADM, 'function tournStartMs(');
 
 T('⭐ crBuild 抽得出來且能跑（純函式，無 DOM 依賴）', () => {
   ok(crBuildSrc && crBuildSrc.length > 500, '抓不到 crBuild');
@@ -194,7 +197,7 @@ T('⭐ crBuild 抽得出來且能跑（純函式，無 DOM 依賴）', () => {
 //   給一個會讓後續每條都失敗的 stub，讓失敗以正常的 ✗ 呈現。
 let crBuild = () => { throw new Error('crBuild 抽取失敗（區段不存在或結構改變）'); };
 try {
-  crBuild = new Function(crConst + '\n' + crBuildSrc
+  crBuild = new Function(crConst + '\n' + tournStartMsSrc + '\n' + crBuildSrc
     + '\nfunction detectMainPokemon(){ return null; }\nreturn crBuild;')();
 } catch (e) { /* 保持上面的 stub */ }
 

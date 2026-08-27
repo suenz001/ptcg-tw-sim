@@ -973,7 +973,8 @@ async function loadTournamentAdmin() {
   else {
     var ipS = 'padding:4px 6px;background:#ffffff;color:#1a2332;border:1px solid #d6dbe3;border-radius:4px;';
     champData.champions.forEach(function (c, i) {
-      var dateStr = c.finishedAt ? new Date(c.finishedAt).toLocaleDateString('zh-TW') : '';
+      // v6.244：這一欄是「賽事日期」＝開賽日，不是冠軍產生時間。
+      var dateStr = tournDateTW(c);
       html += '<div style="border-top:1px solid #e3e8ef;padding:8px 0;">'
         + '<div style="color:#9a8d6a;font-size:.8rem;margin-bottom:4px;">' + escapeHtml(dateStr) + ' ｜ ' + (c.playerCount || 0) + ' 人</div>'
         + '冠軍 <input id="cf-name-' + i + '" value="' + escapeHtml(c.championName || '') + '" style="' + ipS + 'width:130px;"> '
@@ -1321,14 +1322,39 @@ async function tevDeleteArchive(eidEnc, btn) {
     if (btn) { btn.disabled = false; btn.textContent = orig; }
   }
 }
+// ⭐v6.244 賽事日期的中央 helper（與 src/lib/tournament/event-date.ts 同語義，admin 是獨立
+//   的單檔頁面、載不了 ESM 模組，所以在這裡各留一份；改動時兩邊必須同步）。
+//  ⚠⚠ 名詞：startedAt＝**開賽時間**（＝賽事日期）；finishedAt＝**冠軍產生時間**。
+//    網站賽 21:00（台灣時間）開打、決賽常跨午夜 ⇒ 用 finishedAt 會把 8/26 的賽事記成 8/27。
+//  ⚠ 固定 UTC+8 並用 getUTC*：不吃執行環境時區、也不依賴 ICU 時區資料。
+//  ⚠ 寫成**函式**而不是模組層級的 var/const —— 本檔是 <script type="module">，
+//    模組層級變數在賦值那一行執行到之前被呼叫會拿到 undefined（NaN 日期）；
+//    函式宣告整份 hoist，任何時間點呼叫都取得到。
+function twOffsetMs() { return 8 * 60 * 60 * 1000; }
+/** 這場賽事「是哪一天辦的」；退路 startedAt → createdAt → finishedAt（最後一階是 fail-open）。 */
+function tournStartMs(rec) {
+  if (!rec) return 0;
+  return Number(rec.startedAt) || Number(rec.createdAt) || Number(rec.finishedAt) || 0;
+}
+/** 台灣時間（UTC+8）的 YYYY/MM/DD；0／缺席回空字串。 */
+function twDateStr(ms) {
+  var n = Number(ms);
+  if (!isFinite(n) || n <= 0) return '';
+  var d = new Date(n + twOffsetMs());
+  var mm = String(d.getUTCMonth() + 1); if (mm.length < 2) mm = '0' + mm;
+  var dd = String(d.getUTCDate()); if (dd.length < 2) dd = '0' + dd;
+  return d.getUTCFullYear() + '/' + mm + '/' + dd;
+}
+/** 賽事日期（台灣時間、以開賽時間為基準）。 */
+function tournDateTW(rec) { return twDateStr(tournStartMs(rec)); }
 function _tsFmtDate(ms) {
   if (!ms) return '—';
-  try { return new Date(ms).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+  try { return new Date(ms).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }); }
   catch (e) { return '—'; }
 }
 function _tsFmtDateTime(ms) {
   if (!ms) return '—';
-  try { return new Date(ms).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }); }
+  try { return new Date(ms).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }); }
   catch (e) { return '—'; }
 }
 function _tsFmtDuration(ms) {
@@ -3247,7 +3273,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.243';
+window.SITE_VERSION_HINT = '6.244';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3422,7 +3448,8 @@ function miWrap(ctx, s, maxW) {
   return lines;
 }
 function miPct(v, d) { return (v === null || v === undefined) ? '—' : (v * 100).toFixed(d === undefined ? 1 : d) + '%'; }
-function miDate(ms) { const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate(); }
+// v6.244：報告圖的日期同樣固定台灣時間（UTC+8），且傳進來的一律是**開賽時間**。
+function miDate(ms) { const d = new Date(Number(ms) + twOffsetMs()); return (d.getUTCMonth() + 1) + '/' + d.getUTCDate(); }
 function miStamp(ms) {
   const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
   return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
@@ -4336,7 +4363,9 @@ function crBuild(allArchives, reportMap, days) {
     let rounds = 0;
     for (const m of (a.matches || [])) if ((m.round || 1) > rounds) rounds = m.round || 1;
     return {
-      eventId: a.eventId, eventName: a.eventName || '賽事', finishedAt: a.finishedAt || 0,
+      eventId: a.eventId, eventName: a.eventName || '賽事',
+      // v6.244：圖上印的是**開賽日**；finishedAt（冠軍產生時間）保留在資料裡但不拿來當日期。
+      startedAt: tournStartMs(a), finishedAt: a.finishedAt || 0,
       name: (p && p.name) || a.championName || '—',
       deck: deckLabel(a, uid, rep.championArchetype), players: a.playerCount || 0, w: w, l: l, rounds: rounds,
     };
@@ -4478,7 +4507,7 @@ async function crDraw(d) {
       ctx.fillStyle = accent; ctx.fillRect(PAD, y + 8, 5, 66);
       const recTxt = c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負';
       miFont(ctx, 24); const recW = ctx.measureText(recTxt).width;
-      const datePre = miDate(c.finishedAt) + '　';
+      const datePre = miDate(c.startedAt || c.finishedAt) + '　';
       // 第一行：賽事名可用寬 = 右欄成績起點 − 起點 − 日期寬 − 24px 間距（原本寫死 300）
       const evMax = Math.max(120, (MI.W - PAD - 12) - recW - 24 - (PAD + 20) - ctx.measureText(datePre).width);
       ctx.fillStyle = K.dim;
@@ -4673,7 +4702,7 @@ async function mpDrawChampion(ctx, p) {
       //   策略同單頁版：名字優先完整顯示；名字過長時只保證牌組名 DECK_MIN，其餘給名字。
       const recTxt = c.players + ' 人・' + c.w + ' 勝 ' + c.l + ' 負';
       miFont(ctx, 28, false); const recW = ctx.measureText(recTxt).width;
-      const datePre = miDate(c.finishedAt) + '　';
+      const datePre = miDate(c.startedAt || c.finishedAt) + '　';
       miFont(ctx, 26, false); ctx.fillStyle = K.dim;
       // 第一行：賽事名可用寬 = 右欄成績起點 − 起點 − 日期寬 − 32px 間距（原本寫死 420）
       const evMax = Math.max(160, (W - PAD - 20) - recW - 32 - (PAD + 92) - ctx.measureText(datePre).width);
@@ -6762,7 +6791,7 @@ window.showPlayerDetail = async function(email) {
         + '｜<span class="mono small">' + escapeHtml(acc.uid) + '</span>'
       : '<span class="muted">此 email 沒有對應的 Firebase 帳號（可能只在本機對戰用過）</span>';
     const tournRows = (t.list || []).slice(0, 20).map((e) =>
-      '<tr><td>' + fmtD(e.finishedAt) + '</td>'
+      '<tr><td>' + (twDateStr(tournStartMs(e)) || '-') + '</td>'   // v6.244：日期＝開賽日
       + '<td>' + (e.champion ? '🏆 ' : '') + eventLink(e.eventId, e.eventName || e.eventId) + (e.communityEvent ? ' <span class="small muted">(社群)</span>' : '') + '</td>'
       + '<td>' + escapeHtml(e.deckName || '-') + '</td>'
       + '<td>' + e.wins + ' - ' + e.losses + '</td>'
