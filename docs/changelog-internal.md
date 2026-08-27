@@ -128,6 +128,26 @@ v6.245 寫「最多等三十秒」，但實跑量到的 UI 鎖住時間是：
    `if (_timedOut && _isAbortError(e))` 在 `oracleAuth` 與 `oracleApi` **各有一份**
    ⇒ 突變只改到 `oracleAuth`、probe 測的是 `oracleApi` ⇒ 突變存活。已改 `replaceAll`。
 
+### 【問題5 後記】「弄壞工具鏈」的手法**本身**也會說謊（v6.246 第一顆 commit 讓 CI 紅了）
+
+第一版的 ⑤ 用 `ESBUILD_BINARY_PATH=<不存在的路徑>` 去弄壞子行程的 esbuild。
+沙盒裡這招有效（沙盒裝的是 win32 的 esbuild，本來就得靠這個環境變數指到 linux 執行檔），
+**但 GitHub Actions 上 esbuild 能原生解析 `@esbuild/linux-x64`，它會忽略那個壞路徑照樣跑起來**
+⇒ 子行程全綠 ⇒「M1~M5 必須全部 FAIL」這條反而自己翻紅 ⇒ `npm test` 失敗、deploy 被 skip。
+
+⚠ 諷刺但重要：**這正是它自己要防的東西的同型** —— 我用一個「在我的環境下才成立」的手段
+去證明「守衛在別的環境不會假綠」。教訓：
+
+- **弄壞被測系統的手段，要先證明它真的把系統弄壞了**（Rule 33 正對照）。
+  新版第一條斷言就是 `ok(/another platform/.test(out))` ＋ `ok(status !== 0)`。
+- **不要用環境變數當破壞手段**：同一個變數在不同環境的語意不同。
+  改成把 test-v6245 原封不動複製一份、只把 `esbuild` 換成「transformSync 一定丟平台不符錯誤」
+  的替身（其餘逐字不動，測的還是出貨的守衛碼），副本放 `os.tmpdir()` 執行，不污染 repo。
+- 這次靠「**step 耗時**」定位：BASE 的測試步驟 338 秒成功、失敗那次 326 秒
+  ⇒ 幾乎跑到最後才炸 ⇒ 鎖定新加在鏈尾的 test-v6246（拿不到 CI log 時這招很有用）。
+- 之後**用三種環境對跑守衛**才算過：完整 clone＋外部 esbuild／淺複製／
+  「原生 esbuild ＋ 沒有 `ESBUILD_BINARY_PATH` ＋ 沒有 `.git`」（＝最接近 CI 的那一種）。
+
 ---
 
 ## 🔨 待辦（v6.246 刻意不動，但站長要知道）

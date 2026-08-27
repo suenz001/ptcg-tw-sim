@@ -24,7 +24,8 @@
 //
 // ⚠ 時間全部走**虛擬時鐘**（注入的 setTimeout/clearTimeout），所以「87 秒」是瞬間的。
 // Run: node scripts/test-v6246-oracle-timeout-followups.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -573,12 +574,38 @@ await T('⭐⭐⭐ 正對照：**基底預算**的逾時（輪詢/小型寫入/�
 console.log('⑤ 【問題5】守衛自身：工具鏈壞掉時突變測試必須報錯，不可假 OK');
 // ══════════════════════════════════════════════════════════════════════════
 await T('⭐⭐⭐ 故意讓 esbuild 壞掉 ⇒ test-v6245 的 M1~M5 必須全部 FAIL（不可出現假 OK）', () => {
-  const r = spawnSync(process.execPath, [join(ROOT, 'scripts/test-v6245-oracle-api-timeout.mjs')], {
-    cwd: ROOT, encoding: 'utf8', timeout: 120000,
-    env: { ...process.env, ESBUILD_BINARY_PATH: join(ROOT, 'scripts', '__no_such_esbuild__') },
-  });
-  ok(r.error === undefined || r.error === null, '子行程起不來：' + (r.error && r.error.message));
-  const out = String(r.stdout || '') + String(r.stderr || '');
+  // ⚠⚠ v6.246 第一版用 `ESBUILD_BINARY_PATH=<不存在的路徑>` 來弄壞工具鏈 —— **那個手法不可靠**：
+  //   在 esbuild 能原生解析平台套件的環境（GitHub Actions 就是）它會忽略壞路徑照樣跑起來，
+  //   於是「M1~M5 必須全部 FAIL」這條反而自己翻紅（實測：CI 紅、沙盒綠）。
+  //   ⇒ 改成**確定性**做法：把 test-v6245 原封不動複製一份，只把它的 esbuild 換成
+  //     「transformSync 一定丟平台不符錯誤」的替身，其餘逐字不動（測的還是出貨的守衛碼）。
+  //     替身讓副本完全不需要解析 esbuild 模組 ⇒ 可以放在 os.tmpdir() 執行，不污染 repo。
+  const v6245Path = join(ROOT, 'scripts/test-v6245-oracle-api-timeout.mjs');
+  const orig = readFileSync(v6245Path, 'utf8');
+  const IMPORT_LINE = "const esbuild = await import('esbuild');";
+  const ROOT_LINE = "const ROOT = fileURLToPath(new URL('..', import.meta.url));";
+  ok(orig.includes(IMPORT_LINE), 'test-v6245 的 esbuild import 那一行變了 —— 這個模擬器壞了');
+  ok(orig.includes(ROOT_LINE), 'test-v6245 的 ROOT 那一行變了 —— 這個模擬器壞了');
+  const broken = orig
+    .replace(IMPORT_LINE,
+      "const esbuild = { transformSync() { throw new Error('You installed esbuild for another platform than the one you\\'re currently using.'); } };")
+    .replace(ROOT_LINE, 'const ROOT = ' + JSON.stringify(ROOT) + ';');
+  ok(broken !== orig, '替身沒有真的換進去 —— 這條在測空氣');
+  const tmpFile = join(tmpdir(), 'ptcg-v6246-toolchain-broken-' + process.pid + '.mjs');
+  let out = '';
+  let status = null;
+  try {
+    writeFileSync(tmpFile, broken, 'utf8');
+    const r = spawnSync(process.execPath, [tmpFile], { cwd: ROOT, encoding: 'utf8', timeout: 120000 });
+    ok(r.error === undefined || r.error === null, '子行程起不來：' + (r.error && r.error.message));
+    out = String(r.stdout || '') + String(r.stderr || '');
+    status = r.status;
+  } finally {
+    try { unlinkSync(tmpFile); } catch { /* ignore */ }
+  }
+  // 先證明「工具鏈真的壞了」（否則下面的斷言會變成空談 —— Rule 33 的正對照）
+  ok(/another platform/.test(out), '替身沒有真的讓 esbuild 壞掉 —— 這條在測空氣：' + out.slice(-400));
+  ok(status !== 0, '工具鏈壞掉時 test-v6245 竟然回 0 —— 整支守衛是安慰劑');
   const lines = out.split('\n').filter((l) => / M[1-5] /.test(l));
   ok(lines.length >= 5, '只抓到 ' + lines.length + ' 行突變測試結果 —— 掃描器壞了？輸出：' + out.slice(-600));
   const fakeOk = lines.filter((l) => l.trim().startsWith('OK'));
