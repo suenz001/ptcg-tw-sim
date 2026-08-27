@@ -115,6 +115,19 @@ BASE:99-152 完全沒有 AbortController、沒有任何 timeout。
 ⚠ CI 是 `fetch-depth: 1`，拿不到 BASE blob ⇒ 守衛自動改用「把逾時機制拿掉」的突變版當
 等價 BASE（不 fail-open 成假綠）。
 
+### 【F2】部署（站長要跑哪幾支 bat）
+
+| bat | 這一版要不要跑 | 理由 |
+|---|---|---|
+| **`redeploy-oracle.bat`** | **要（本版的重點）** | 修的是**前端** `src/lib/game/oracle-client.ts` / `room-oracle.ts` / `routes/game/+page.svelte`。不跑這一支，正式站 `www.ptcg-tw-sim.com` 的 `/game` bundle 仍是 v6.244（＝逾時保護沒生效），只有測試站（GitHub Pages）有 |
+| **`update-admin-full.bat`** | 要（可離峰再跑） | `oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 跟著 bump 到 6.245；不跑只會讓 admin 的版本紅字提示對不上，不影響玩家。⚠ 它會 `pm2 restart`，請避開比賽時段 |
+| `update-tournament.bat` | **不用** | 沒有動 `src/lib/game/engine.ts` / `effects.ts` / `server-engine.cjs` 的任何 export，也沒有動 `static/cards/` |
+
+⚠ `oracle-admin/server_admin_patch.js` 這一版**完全沒動** —— 逾時純粹是 client 端的事，
+伺服器不需要任何配合（nginx 也不用改）。
+
+---
+
 ### 【G】已知風險 / 沒查到的
 
 - ⚠ Rule 37 說「逾時值必須大於實測過的最慢**成功**案例」。我們手上**沒有**休閒 PUT
