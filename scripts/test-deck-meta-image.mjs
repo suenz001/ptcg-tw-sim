@@ -27,11 +27,21 @@ let pass = 0, fail = 0;
 const T = (n, fn) => { try { fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
 
 // ── 先把 miTrend 抽出來真的跑，不只做字串比對 ──────────────────────────────
-function loadMiTrend() {
+function loadMiTrend(capMutation) {
   const a = adm.indexOf('const MI_SCAN_CAP');
   const b = adm.indexOf('/** 產生一張報告圖');
   assert.ok(a > 0 && b > a, '找不到 MI_SCAN_CAP … miTrend 這一段');
-  return new Function(adm.slice(a, b) + '\nreturn miTrend;')();
+  let src = adm.slice(a, b);
+  // v6.242：兩個資料源都已是 cursor 全量掃描 ⇒ MI_SCAN_CAP 兩側都是 Infinity，
+  //   「撞到上限」用真資料再也觸發不了。⚠ 但「否定型驗證必須配正對照」（Rule 33）——
+  //   不能因為觸發不了就把那條保護刪掉／改成永遠綠。改成**突變**：把上限塞回一個有限數字，
+  //   證明那道閘還按得動；同時另立一條斷言「出貨值 Infinity 時 20000 筆不該被誤判成撞上限」。
+  if (capMutation) {
+    const before = src;
+    src = src.replace("casual: ['casualMatches', Infinity]", "casual: ['casualMatches', " + capMutation + "]");
+    assert.notStrictEqual(src, before, 'MI_SCAN_CAP 突變錨點對不上（寫法改了？）');
+  }
+  return new Function(src + '\nreturn miTrend;')();
 }
 // ⚠不要在 top-level 直接呼叫並讓它 throw：那樣對 HEAD 跑會變成一行 stack trace，
 //   看不出「少了哪些保護」。改成記成一條 FAIL，其餘各項照常各自報。
@@ -76,11 +86,23 @@ T('⭐新原型標 NEW 而非算出假暴漲（新彈發售週前期本來就接
 });
 
 T('⭐⭐撞到伺服器查詢上限時整張圖不顯示趨勢（否則會憑空生出一片下降）', () => {
+  // ⚠ 正對照（Rule 33）：把上限突變回 20000，證明那道閘**真的按得動**。
+  //   v6.242 之後出貨值是 Infinity，用真資料永遠觸發不了 —— 若改成「跳過這條」，
+  //   那就會變成一個永遠綠的安慰劑，哪天有人把 limit 加回去也沒人知道。
+  const mut = loadMiTrend(20000);
   const { cur, wide } = mk(100, 200, [{ ruleId: 'a', usage: 20 }], [{ ruleId: 'a', usage: 30 }]);
-  wide.scanned.casualMatches = 20000;        // 後端 limit(20000)
-  const t = needTrend()(30, cur, wide, 'casual');
+  wide.scanned.casualMatches = 20000;
+  const t = mut(30, cur, wide, 'casual');
   assert.equal(t.ok, false, '應停用趨勢');
   assert.ok(/上限/.test(t.reason), '理由要說得出是查詢上限，實得：' + t.reason);
+});
+
+T('⭐v6.242：休閒側已無查詢上限 ⇒ 掃到 20000 筆不可以再被誤判成「撞到上限」而關掉趨勢', () => {
+  const { cur, wide } = mk(100, 200, [{ ruleId: 'a', usage: 20 }], [{ ruleId: 'a', usage: 30 }]);
+  wide.scanned.casualMatches = 20000;        // 全量掃描剛好掃到 2 萬場（不是被截斷）
+  const t = needTrend()(30, cur, wide, 'casual');
+  assert.equal(t.ok, true, '出貨的 MI_SCAN_CAP.casual 應為 Infinity，實際卻停用了趨勢：' + t.reason);
+  assert.ok(Math.abs(t.by.get('a').dPP - 10) < 1e-9, '趨勢數字算錯：' + t.by.get('a').dPP);
 });
 
 T('⭐前期樣本遠少於本期時不顯示趨勢（資料還沒累積滿兩期，會全面假上升）', () => {

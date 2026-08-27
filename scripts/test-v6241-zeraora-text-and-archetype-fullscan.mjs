@@ -377,9 +377,11 @@ await T('【B】④ 突變測試：把 limit(200).toArray() 加回去 ⇒ ①②
 });
 
 await T('【B】⑤ admin.html：MI_SCAN_CAP.tourn 不得再寫 200（否則超過 200 場永遠誤報「已達查詢上限」）', () => {
-  const m = /const MI_SCAN_CAP = \{ casual: \['casualMatches', (\d+)\], tourn: \['tournEvents', ([^\]]+)\] \};/.exec(adm);
+  // ⚠ v6.242 更新：休閒側（matchRecords）也已改成 cursor 全量掃描（站長裁定「一起處理」）
+  //   ⇒ 原本這裡斷言 casual 必須維持 20000（「不在本次裁定範圍」）已經過期，
+  //   而且 regex 的 (\d+) 也吃不下 Infinity。本條只守原始意圖：tourn 不可以被改回 200。
+  const m = /const MI_SCAN_CAP = \{ casual: \['casualMatches', ([^\]]+)\], tourn: \['tournEvents', ([^\]]+)\] \};/.exec(adm);
   assert.ok(m, '找不到 MI_SCAN_CAP（寫法改了？）');
-  assert.strictEqual(m[1], '20000', '休閒側的上限不該被動到（不在本次裁定範圍）');
   assert.strictEqual(m[2].trim(), 'Infinity', '錦標賽側仍寫 ' + m[2] + ' —— 已經沒有查詢上限了');
 });
 
@@ -393,9 +395,11 @@ await T('【B】⑥ ⚠ 資料保全：這一版沒有新增任何刪除歸檔�
   for (const c of ttl) assert.ok(c !== 'TARCHIVE' && c !== 'TCHAMPS', c + ' 竟然有 TTL 索引');
 });
 
-await T('版本一致：version.ts = 6.241 且 admin.html SITE_VERSION_HINT 同步', () => {
+await T('版本一致：version.ts ≥ 6.241 且 admin.html SITE_VERSION_HINT 同步', () => {
   const V = /VERSION = '([\d.]+)'/.exec(verTs)[1];
-  assert.strictEqual(V, '6.241', 'version.ts 沒有 bump（實為 ' + V + '）');
+  // ⚠ v6.242 更新：原本寫死 '6.241'，下一版一 bump 就必紅 —— 守衛因為「不是 bug 的原因」
+  //   變紅，接著就會有人去 skip 它。改斷「不得倒退」這個真正的不變量。
+  assert.ok(parseFloat(V) >= 6.241, 'version.ts 倒退了（實為 ' + V + '）');
   const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(adm)[1];
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
   assert.ok(!adm.includes('\r'), 'admin.html 出現 CRLF');

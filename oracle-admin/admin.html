@@ -3247,7 +3247,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.241';
+window.SITE_VERSION_HINT = '6.242';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3377,7 +3377,12 @@ const MI = {
 // 後端的查詢上限（依時間新到舊取）。撞到上限＝2N 窗的舊資料根本沒被掃到。
 // v6.241：錦標賽歸檔已改 cursor 全量掃描（移除 limit(200)）⇒ 不再有查詢上限；
 //   若留著 200 這個數字，歸檔一超過 200 場就會永遠誤報「已達伺服器查詢上限」。
-const MI_SCAN_CAP = { casual: ['casualMatches', 20000], tourn: ['tournEvents', Infinity] };
+// v6.242：休閒側（matchRecords）同樣改成 cursor 全量掃描（移除 limit(20000)）⇒ 也沒有上限了。
+//   ⚠ 這個數字寫死在前端，後端一改就會靜默失準：留著 20000 的話，等 matchRecords 超過
+//     2 萬筆，明明已經是全量掃描，趨勢箭頭卻會被永遠關掉並謊稱「已達伺服器查詢上限」。
+//   ⚠ 機制本身**刻意保留**（不是死碼）：只要哪天有人把 limit 加回去，把這裡的數字換回
+//     那個上限，整張報告圖的趨勢就會自動停用。守衛用突變測試證明它還按得動（Rule 33 正對照）。
+const MI_SCAN_CAP = { casual: ['casualMatches', Infinity], tourn: ['tournEvents', Infinity] };
 
 /** 圓角矩形。⚠不用 ctx.roundRect —— VM 端的瀏覽器版本不確定，自己畫 8 行最保險。 */
 function miRR(ctx, x, y, w, h, r) {
@@ -3654,8 +3659,9 @@ function miTrend(days, cur, wide, srcKey) {
   if (!wide) return off('前期資料讀取失敗');
   const c = cur[srcKey], w = wide[srcKey];
   if (!c || !w) return off('前期資料缺這個資料源');
-  // ⚠伺服器查詢有上限（休閒最多最近 20000 場、錦標賽最多最近 200 場賽事，皆新到舊）。
-  //   撞到上限代表寬窗的舊資料根本沒被掃到，相減會憑空生出一整片「下降」。
+  // ⚠若伺服器查詢有上限（依時間新到舊取），撞到上限代表寬窗的舊資料根本沒被掃到，
+  //   相減會憑空生出一整片「下降」。v6.241／v6.242 之後兩個資料源都已是 cursor 全量掃描
+  //   ⇒ MI_SCAN_CAP 兩側都是 Infinity，這道閘實務上不會觸發；它留著是為了「上限被加回去」的那天。
   const cap = MI_SCAN_CAP[srcKey];
   if ((wide.scanned && wide.scanned[cap[0]] || 0) >= cap[1]) return off('資料量已達伺服器查詢上限，前期不完整');
   const dk = miDeckKey(srcKey);

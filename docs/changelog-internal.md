@@ -1,5 +1,114 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.242 — 休閒側 `matchRecords` 的 `.limit(20000)` 也拿掉；⭐ 順便修掉一個既有的事件迴圈阻塞
+
+> 站長裁定：v6.240／v6.241 收掉的統計上限，休閒側這一支「一起處理」。
+> 首頁 changelog **不寫**（純 admin 後台工具，玩家看不到）。
+
+### 【A】改了什麼
+
+`/api/admin/deck-archetype-stats`（總表）與 `/api/admin/deck-archetype-detail`（明細）的
+**休閒來源**原本是：
+
+```js
+.find(q, { projection: { 'p1.cardCounts': 1, 'p2.cardCounts': 1, winner: 1 } })
+.sort({ endedAt: -1 }).limit(20000).toArray();
+```
+
+與 v6.240／v6.241 同一類毛病：這兩支是**統計聚合**（原型使用次數／勝率、原型內每張卡的
+採用率與條件勝率差），限制筆數不是「少顯示幾列」，而是讓**統計數字本身失真**
+（只算最新 20000 場）。⇒ 改 cursor 逐筆餵給**既有聚合程式碼（一字未動）**。
+
+### 【B】⭐⭐ 但這一支跟前兩支有一個關鍵差異：**cursor 解決記憶體，不解決時間**
+
+v6.241 的結論「改 cursor 就好」在**這一支不成立**，因為量級差一個數量級。實測（守衛 ⑤ 內附
+量測腳本，沙盒；⚠ 沙盒 CPU 約為正式 VM 的 10 倍慢）：fixture 60,000 筆、mongo 一批 8,000 筆
+（16MB ÷ 每筆約 443B），並行探針模擬「玩家的請求每 5ms 要被服務一次」：
+
+| | 進入統計 | handler 耗時 | ⭐ 玩家被連續擋住 |
+|---|---|---|---|
+| **改前** `limit(20000).toArray()` | 20,000（失真） | 431 ms | **max 431 ms**（一發同步阻塞） |
+| 改後・只有 cursor、不讓路 | 60,000 | 1,304 ms | **max 176 ms**（每批一次） |
+| **改後・出貨碼**（每 200 筆 `setImmediate`） | 60,000 | 1,354 ms | **max 6~7 ms／p99 ~6 ms** |
+
+**為什麼純 cursor 不夠**：mongo 是一批一批送的，一批進到 node 之後，批內每一次
+`cursor.next()` 都是「**已解決**的 promise」⇒ `await` 只排空 **microtask**，事件迴圈
+**不會**回頭去跑玩家的 socket 回呼。⇒ 新增中央 `adminScanYield(n)`：每 200 筆回一個
+`setImmediate` 的 Promise（**macrotask**，check 階段，pending I/O 會先跑），
+不到節拍回 `null`（連 microtask 都不排）。額外成本：總耗時 +約 4%。
+
+⭐ **這一版同時修掉一個既有的風險**：`limit(20000).toArray()` 本來就是一發 431ms（沙盒）
+／約 43ms（VM 換算）的**連續同步阻塞**。所以「全量掃描比較危險」這個直覺是反的 ——
+改後每一段阻塞都比改前短兩個數量級。
+
+### 【C】上限／時間範圍：**不加新上限，沿用既有的 `?since`**
+
+- `?since` **早就有**，逐字查證（BASE `887a4c08`）：`deck-archetype-stats` 與
+  `deck-archetype-detail` 都讀 `req.query.since`（缺席＝`0`＝不限），往下傳給
+  `buildCasualCleanFilter({ excludeAI, since })` → `endedAt: { $gte: since }`（L957）。
+  admin UI 的下拉 `#arch-since` 是「**全部時間**（預設）／7／30／90 天」，
+  由 `currentArchSince()` 換算成 epoch 毫秒（`admin.html` L2668、L4857）。
+  ⚠ 更正一個容易混淆的點：站長印象中的「v0.26、24h／7d／不限」是**2.3 卡牌勝率**那組
+  （`winrateRange`，`/api/admin/stats/cards/winrate`），跟這一支是**兩套不同的下拉**。
+  ⇒ **不另起爐灶**：要縮範圍站長自己選，要全量就選「全部時間」並自行承擔耗時。
+- **不保留硬上限**。理由：①有上限就有「數字是錯的但看不出來」的風險（這正是站長要修的事）
+  ②端點是 admin 專用 + 60 秒 TTL 快取 ③讓路之後最長阻塞已在毫秒級，`Rule 30` 的紅線守得住。
+- `scanned.casualMatches` / `scannedSrc` 誠實回報實際掃了幾筆（總表在畫面上就有一行
+  「掃描 N 場對戰、M 副牌組」）。
+
+### 【D】`MI_SCAN_CAP.casual` 的示警：從「準確」變成「會說謊」⇒ 必須改
+
+`admin.html` 的報告圖趨勢推導在「寬窗掃描筆數 ≥ 上限」時會停用趨勢箭頭。
+上限是**寫死在前端**的數字，後端一改就靜默失準 —— 留著 `20000` 的話，等 `matchRecords`
+超過 2 萬筆，明明已經是全量掃描，趨勢卻會被永遠關掉並謊稱「已達伺服器查詢上限」。
+⇒ `casual` 由 `20000` 改 `Infinity`（與 v6.241 對 `tourn` 的處理一致）。
+
+⚠ **機制本身刻意保留、不刪**：只要哪天有人把 limit 加回去，把數字換回去趨勢就會自動停用。
+為了不讓它變成「永遠綠的安慰劑」，`test-deck-meta-image.mjs` 改用**突變**做正對照
+（把上限塞回 20000 ⇒ 那道閘必須真的按得動），並新增一條「出貨值 Infinity 時掃到 20000 筆
+不可以被誤判成撞上限」。
+
+### 【E】⚠ `matchRecords` 到底有幾筆 —— **量不到，只能給下界**
+
+沙盒**連不到正式站的 MongoDB**（admin 端點要 Firebase admin token，沙盒也沒有 mongo URI）。
+可觀測的下界：v6.240 實測 Oracle 房間「已結束」**82,031 筆**；`matchRecords` 由 client 在
+game-over 時上報，**線上房＋本機雙人＋對 AI 都會寫**（淨化 filter 只在統計時排除無房號的）
+⇒ 量級**至少 10⁴、上看 10⁵**。設計是照 20 萬筆的上界做的（沙盒 4.7 秒／VM 換算約 0.5 秒，
+且期間最長阻塞在毫秒級）。⚠ 站長若能在 VM 上跑一次
+`db.matchRecords.countDocuments({})`，可以把這個數字釘死。
+
+### 【F】順手掃過的其他 `.limit(N)`（**本版不動**，列出來給站長裁定）
+
+| 位置 | 是「統計失真」還是「顯示上限」 | 建議 |
+|---|---|---|
+| L1577 `/api/admin/stats/players/:email` `matchRecords…limit(recentLimit)`（預設 30、上限 200） | **兩者之間**：頁面標題就寫「最近 N 場」，但同一份資料同時餵了「常用卡 Top 20 ＋ 勝率走勢」 | 若站長希望個人戰績是生涯全量，這支要比照處理 |
+| L1911 `/api/admin/player-profile` `tournamentArchives…limit(200)` | **統計失真候選**（跨賽事戰績摘要）；但一筆＝一場賽事，200 場賽事還很遠 | 暫不動 |
+| L2163 `/api/admin/deck-rules/preview` `limit(20~1000)` | **顯示／試算**：卡面就寫「對最近 N 場試算」，本來就不是統計 | 不動 |
+| L6547/6548 `/api/tournament/champions` `limit(100)`×2 | **顯示上限**（名人堂列表） | 不動 |
+| L7329 `dpEligibility` `limit(20)` | **顯示**（我最近可投稿的賽事） | 不動 |
+| L593/618/698/5543/5549/7192… 聊天／留言／訂閱／掃描批次 | 全是**營運用**，與統計無關 | 不動 |
+| 2.3 卡牌勝率 `/api/admin/stats/cards/winrate` | ⭐ **本來就沒有上限**（走 mongo `aggregate`，伺服器端算完才回） | 無事 |
+
+### 守衛
+
+`scripts/test-v6242-casual-fullscan-eventloop.mjs`（11 條）——一律斷言到行為：
+把兩支 handler 從 patch 檔抽出來，餵 **25,000 筆假 matchRecords 真的跑**，
+用「這次查詢實際物化幾筆／有沒有走 `toArray`／projection 有沒有被動過」當儀器；
+⑤ 用**並行探針**量事件迴圈（⚠ `monitorEventLoopDelay` 在完全同步的區段量不到東西，
+「沒東西」與「儀器壞了」長得一樣 —— Rule 33），並含兩組正對照（拿掉讓路／還原成
+`limit(20000).toArray()` 都必須量得到 >40ms 的連續阻塞）。含突變測試：把
+`limit(20000).toArray()` 加回去 ⇒ ①③ 必須翻紅。BASE(v6.241) 上 **2 PASS / 9 FAIL**
+（那 2 條是保護性斷言：淨化規則未被繞過 + 資料保全）。
+
+⚠ 一併更新兩支既有守衛（**判準沒有放寬，只是把過期的常數換成不變量**）：
+- `test-v6241-…` 的「`MI_SCAN_CAP.casual` 必須維持 20000」已隨本次裁定過期（且 regex 的
+  `(\d+)` 吃不下 `Infinity`）⇒ 只守原始意圖「`tourn` 不可被改回 200」；
+  版本斷言由寫死 `'6.241'` 改成 `≥ 6.241`（寫死會讓下一版無故翻紅，接著就會有人去 skip 它）。
+- `test-deck-meta-image.mjs` 見【D】。
+
+⚠⚠ 全程**沒有任何刪除資料的路徑**：`matchRecords` 沒有 TTL 索引、沒有 `deleteMany`／`drop`，
+唯一的刪除點是 admin 手按的 `DELETE /api/admin/match-records/:matchId`（`deleteOne`，1 處）。
+
 ## v6.241 — 捷拉奧拉「麻麻關節」卡面文字更正（官方頁面自己打錯）；牌組原型統計改全量
 
 > 站長的兩項裁定。【A】玩家看得到（卡面文字）⇒ 首頁 changelog 寫一則；
