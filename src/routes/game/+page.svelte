@@ -240,6 +240,38 @@
   let _perfSampleRoom = '';            // 上一次擲骰是為了哪一間房（房號一變＝新的一場）
   let _perfSampleArmed = false;        // 這一場中籤了嗎（每場只擲一次）
   let _perfSampleSent = false;         // 這一場已經送過了（每場最多 1 發）
+  // ⭐⭐⭐v6.261【休閒對戰的診斷指紋】—— 在此之前，`_tSendClientDiag` 開頭就是
+  //   `if (!isTournament || isTournSpectator || !tActiveRoom) return;`（見該函式）⇒
+  //   dump 裡的每一個數字（含 v6.213 的健康對照組）**都只涵蓋錦標賽路徑**，
+  //   而休閒對戰佔全站 94% 流量 ⇒「dump 裡沒有」不等於「沒發生」。
+  //   ⚠⚠ 這一批是**另一個母體**：休閒是 client-authoritative、每個動作上傳整包盤面（實測 40~48KB），
+  //     與錦標賽的 `/action` 完全不是同一件事 ⇒ 兩批數字**永遠不可以相加**。
+  //     分帳的判準是 reason 的 `casual-` 前綴（伺服器 isCasualReason／dump splitDiagRows 各自實跑同一條）。
+  //   ⚠ 玩家端零額外負擔的四道保證：
+  //     ①量測只掛在**既有**的 pushTracked()／pushUndoTracked() 出口 —— 沒有新請求、沒有新計時器、
+  //       沒有新的 await，`ms` 是既有 PushMark 的時間差；
+  //     ②每一種指紋都是「每場一次」，每個頁面實例再壓一道硬上限 CASUAL_DIAG_MAX_PER_PAGE；
+  //     ③沒有 Firebase 身分（匿名／未登入）**連送都不送** —— 伺服器 tournIdentity 一定丟棄，
+  //       送出去只是白付一發請求；
+  //     ④走既有的 /clientdiag 端點與既有節流，**不另開管線、不另開端點**（同 v6.213 的紀律）。
+  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim'];
+  const CASUAL_DIAG_MAX_PER_PAGE = 6;   // 每個頁面實例的硬上限（＝三種指紋 × 兩場；三種各自還有「每場一次」旗標）
+  // ⚠ 門檻的取值依據（Rule 37：要大於實測過的**成功**案例，否則會把正常人整批報進來）：
+  //   一發 pushGameState ＝ oracleTx 的 GET＋PUT，PUT 的 body 實測 40~48KB。
+  //   p95 ≥ 5 秒 ⇒ 有效上行低於約 10KB/s，比正常慢一個量級；而線上實測最慢的**成功**推送是
+  //   86.954 秒／48285 bytes（見 oracle-client.ts 的 PUSH_INFLIGHT_FAILSAFE_MS 註解）⇒ 5 秒遠低於它，
+  //   所以連「中等程度的塞住」也抓得到，不是只抓得到那種已經爆掉的極端值。
+  const CASUAL_SLOW_PUSH_P95_MS = 5000;
+  const CASUAL_PUSH_MIN_CALLS = 10;     // 至少 10 發成功推送才判（太早判＝只量到開局那幾發，同 PERF_SAMPLE_MIN_CALLS 的理由）
+  let _casualPushSamples: number[] = [];   // 盤面推送耗時滾動窗（沿用 _pushSample 的 30 筆上限）
+  let _casualPushFail = 0;                 // 失敗／逾時的推送次數（**不進**統計，但要單獨報出來）
+  let _casualDiagSent = 0;                 // 本頁已送幾發（硬上限 CASUAL_DIAG_MAX_PER_PAGE，換局刻意不清）
+  let _casualSlowSent = false;             // casual-slow-push 每場一次
+  let _casualClaimSent = false;            // casual-forfeit-claim 每場一次
+  let _casualSampleRoom = '';              // 上一次擲骰是為了哪一間房（房號一變＝新的一場）
+  let _casualSampleArmed = false;          // 這一場中籤了嗎（⚠ 每場只擲一次，理由與 _perfSampleArmed 逐字相同）
+  let _casualSampleSent = false;           // 這一場已經送過健康取樣了
+  let _casualClaimGranted: boolean | null = null;   // 最近一次「宣告對手棄權」伺服器認不認（null＝還沒宣告過）
   // ⭐⭐⭐v6.170【A：自動回報網路細節】—— 取代「請玩家按 F12」。
   //   v6.159 量到 `net`（fetch 送出 → response header）p50 289ms 但同一個人 max 14.8 秒，
   //   結論是**間歇性斷流**。但「那一發到底有沒有重新建連線」我們量不到 —— 而那正是
@@ -6081,6 +6113,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function _tSendClientDiag(reason: string) {
     try {
       const now0 = Date.now();
+      if (_casualDiagSend(reason, now0)) return;   // ⭐v6.261 休閒批（另一個母體，見該函式）
       if (!isTournament || isTournSpectator || !tActiveRoom) return;
       // ⭐⭐v6.155（Fable 5 審查）：`manual-sync` 不佔每頁 3 發的配額，且自帶 60 秒節流。
       //   兩條真實的漏報路徑：
@@ -6232,8 +6265,101 @@ function _setupSelfPending(g: any, seat: number): string | null {
           dm: (typeof navigator !== 'undefined' && typeof (navigator as any).deviceMemory === 'number' ? (navigator as any).deviceMemory : null),
         },
       };
-      void tApi('/clientdiag', payload).catch(() => { /* fire-and-forget,診斷絕不影響對戰 */ });
+      _tPostClientDiag(payload);
     } catch { /* 診斷絕不影響對戰 */ }
+  }
+  /** ⭐v6.261 診斷回傳的**唯一**送出點（錦標賽與休閒共用同一條管線、同一個端點、同一張表）。 */
+  function _tPostClientDiag(payload: any): void {
+    void tApi('/clientdiag', payload).catch(() => { /* fire-and-forget,診斷絕不影響對戰 */ });
+  }
+  /**
+   * ⭐⭐⭐v6.261 休閒批的閘＋送出。回傳 true ＝「這一則已經由我處理掉了」。
+   * ⚠⚠ 白名單內的 reason **一律** return true —— 絕不可以讓它掉回錦標賽那條路：
+   *   那條路的 payload 全是錦標賽專屬的 $state（tVersion／tPollGen／srvActor…），
+   *   休閒送出去會是一整包 null，比沒有資料更糟（看起來像「錦標賽也壞了」）。
+   * ⚠ 錦標賽的 reason 一個字都不會經過這裡（兩份清單互斥，守衛有實跑驗證）。
+   */
+  function _casualDiagSend(reason: string, now: number): boolean {
+    if (CASUAL_DIAG_REASONS.indexOf(reason) < 0) return false;
+    if (isTournament || isTournSpectator) return true;
+    if (mode !== 'online' || !roomCode) return true;
+    // ⚠ 伺服器的 tournIdentity 只認 Firebase 的 email 帳號（匿名帳號被明文拒絕）
+    //   ⇒ 沒有身分的人送出去必定被丟棄，只是白付一發請求。玩家端零額外負擔的第三道保證。
+    if (!firebaseUser || firebaseUser.isAnonymous) return true;
+    if (_casualDiagSent >= CASUAL_DIAG_MAX_PER_PAGE) return true;
+    _casualDiagSent++;
+    _tPostClientDiag(_casualDiagPayload(reason, now));
+    return true;
+  }
+  /**
+   * ⭐v6.261 休閒批的 payload。刻意**不**沿用錦標賽那一份：那 30 幾個欄位全是
+   *   `/action` 路徑的專屬狀態，硬套過來只會產生一整包誤導人的 null。
+   * ⚠ 隱私：這裡不放任何玩家可辨識資料（沒有 email／暱稱／牌組／卡名）。
+   *   uid 與 email 是**伺服器**寫進 doc 的，而讀取端 /api/tournament/admin/clientdiag 要管理員權限。
+   */
+  function _casualDiagPayload(reason: string, now: number): any {
+    const g: any = game;
+    const st = _sampleStats(_casualPushSamples);
+    return {
+      reason, mode: 'casual', room: roomCode, ts: now, ver: VERSION,
+      // ⭐⭐⭐ 盤面推送＝休閒對戰的「上行」。v6.245／v6.246 定案「慢的是玩家上行」用的是
+      //   nginx 的 408／`upstream=-`（伺服器端），玩家端一直**沒有任何實測**。這一欄就是那個分母。
+      //   ⚠ `fail` 是**沒有**進 n/p50/p95 的那些（逾時／拋錯）——「只記成功的往返」是 v6.151 起的紀律，
+      //     把 120 秒的逾時記進 p95 會讓分佈整個失真；但失敗次數本身是訊號，所以單獨報。
+      //   ⚠ `n` 是滾動窗（上限 30 筆）內的數量，不是這一場的總推送數。
+      push: {
+        n: st ? st.n : 0, p50: st ? st.p50 : -1, p95: st ? st.p95 : -1, max: st ? st.max : -1,
+        fail: _casualPushFail, inflight: oldestPushInFlightAgeMs(),
+      },
+      board: {
+        phase: g?.phase ?? null, turn: g?.turn ?? null,
+        logLen: (g?.log?.length ?? -1), seat: mySeatIdx, spectator: myPlayerIndex === null,
+      },
+      // ⭐ 只有 casual-forfeit-claim 帶得出來。granted=false ＝**我的畫面是舊的**（對手其實動過了），
+      //   granted=true ＝伺服器同意判對手棄權 —— 這兩件事的成因完全不同，一定要分得出來。
+      claim: (reason === 'casual-forfeit-claim'
+        ? { granted: _casualClaimGranted, idleSec: (roomData?.idleTimeoutSec ?? null) } : null),
+      env: {
+        vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
+        w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
+        ua: (typeof navigator !== 'undefined' ? (navigator.userAgent || '').slice(0, 80) : ''),
+        hc: (typeof navigator !== 'undefined' && typeof (navigator as any).hardwareConcurrency === 'number' ? (navigator as any).hardwareConcurrency : null),
+        dm: (typeof navigator !== 'undefined' && typeof (navigator as any).deviceMemory === 'number' ? (navigator as any).deviceMemory : null),
+      },
+    };
+  }
+  /**
+   * ⭐⭐⭐v6.261 休閒對戰「上行」的**唯一**量測點 —— 掛在既有的 pushTracked()／pushUndoTracked() 出口。
+   * ⚠ 這支自己**沒有新請求、沒有新計時器、沒有新的 await**：`ms` 是既有 PushMark 的時間差，
+   *   其餘全是數字比較。沒中籤又不慢的人，一發推送的成本就是一次 array push。
+   * ⚠ 骰子**每場只擲一次**（房號一變才重擲）—— 若改成每發都擲，實際機率就完全不是
+   *   PERF_SAMPLE_RATE，而且送上來的資料看起來一模一樣、沒有人會發現（v6.213 的分母污染教訓）。
+   */
+  function _casualRecordPush(ms: number, ok: boolean): void {
+    try {
+      if (isTournament || isTournSpectator) return;
+      if (mode !== 'online' || !roomCode || myPlayerIndex === null) return;
+      if (_casualSampleRoom !== roomCode) {
+        _casualSampleRoom = roomCode;
+        _casualSampleArmed = Math.random() < PERF_SAMPLE_RATE;
+        _casualSampleSent = false; _casualSlowSent = false; _casualClaimSent = false;
+        _casualPushSamples = []; _casualPushFail = 0;
+      }
+      if (!ok) { _casualPushFail++; return; }   // ⚠ 只記成功的往返（同 v6.151 的 rtt）
+      _pushSample(_casualPushSamples, ms);
+      if (_casualPushSamples.length < CASUAL_PUSH_MIN_CALLS) return;
+      if (!_casualSlowSent) {
+        const st = _sampleStats(_casualPushSamples);
+        if (st && st.p95 >= CASUAL_SLOW_PUSH_P95_MS) { _casualSlowSent = true; _tSendClientDiag('casual-slow-push'); }
+      }
+      if (_casualSampleArmed && !_casualSampleSent) { _casualSampleSent = true; _tSendClientDiag('casual-perf-sample'); }
+    } catch { /* 診斷絕不影響對戰 */ }
+  }
+  /** 換局時清乾淨：上一局的樣本不可以揹到新局。⚠ per-page 的 _casualDiagSent **刻意不清**（那是硬上限）。 */
+  function _casualDiagReset(): void {
+    _casualPushSamples = []; _casualPushFail = 0; _casualSampleRoom = '';
+    _casualSampleArmed = false; _casualSampleSent = false;
+    _casualSlowSent = false; _casualClaimSent = false; _casualClaimGranted = null;
   }
   // v5.618：手動/自動「重新同步」— 強制 v=-1 抓伺服器權威最新盤面（版本不同才採用，避免擾動我方 picker）。
   //   答玩家「輪到自己時系統會幫忙確認/不必 F5」：對戰中盤面卡住即可由看門狗自動或玩家點「🔄 同步」恢復。
@@ -7809,6 +7935,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _repushAttempts = 0;
   // ⚠ scripts/test-v6245-oracle-api-timeout.mjs 的 pushWithRetry 抽取視窗**從下一行開始**，
   //   視窗內的模組層級 const 會在沙盒裡被求值 ⇒ 需要外部識別字的宣告一律放在這一行**之前**。
+  // ⚠⚠ v6.261 補記：這個視窗**也包含 pushTracked／pushUndoTracked 的函式本體**。
+  //   在它們裡面新增任何「視窗外的識別字」（例如 v6.261 的 `_casualRecordPush`），
+  //   test-v6245 / test-v6246 / test-v6247 / test-v6248 四支守衛的 harness 都要一起注入替身；
+  //   漏掉的話 ReferenceError 會被 pushWithRetry 的 catch 吞掉，症狀長得像
+  //   「逾時之後竟然重送了 3 次」——**完全指不到真因**（v6.261 實際踩過一次）。
   type PushMark = { at: number };
   // ⭐⭐⭐v6.249【問題5：隱性耦合】v6.248 把 `PUSH_INFLIGHT_FAILSAFE_MS` 宣告在這裡，
   //   而它**必須**留在下一行 `const PUSH_RETRY_MAX = 3;` 之前 —— 否則會落進
@@ -7873,12 +8004,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
    */
   async function pushTracked(code: string, st: GameState): Promise<void> {
     const m = _beginPushTrack();
-    try { await pushGameState(code, st); } finally { _endPushTrack(m); }
+    // ⭐v6.261 `_ok` 只是一個布林：逾時／拋錯的那一發不可以進 p95（v6.151 的紀律）。
+    let _ok = false;
+    try { await pushGameState(code, st); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }
   }
   /** 悔棋 rollback 的推送（同樣要標記在途；它也是一整包盤面）。 */
   async function pushUndoTracked(code: string, st: GameState): Promise<void> {
     const m = _beginPushTrack();
-    try { await pushUndoRollback(code, st); } finally { _endPushTrack(m); }
+    let _ok = false;
+    try { await pushUndoRollback(code, st); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }
   }
   async function pushWithRetry(code: string, st: GameState): Promise<boolean> {
     for (let i = 0; i < PUSH_RETRY_MAX; i++) {
@@ -7994,6 +8128,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   ⚠ 清空是安全的：真的還在飛的那一發，它的 finally 會呼叫 _endPushTrack()，
       //     indexOf 找不到就是 no-op（不會把計數弄成負數，也不會誤刪新局的標記）。
       _resetPushTracking();
+      _casualDiagReset();   // ⭐v6.261 上一局的推送樣本／每場一次旗標不可以揹到新局
       _resyncStreak = 0;
       return;
     }
@@ -8116,6 +8251,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // v5.605：宣告前由 room lib 以「最新伺服器盤面」再驗證。回傳 false = 對手其實已行動
       //   (我方畫面 stale)→ 不判，強制重新同步盤面 + 提示「輪到你了」，避免畫面沒同步而誤判勝負。
       const granted = await claimOpponentForfeit(roomCode, mySeatIdx as 0 | 1);
+      // ⭐⭐⭐v6.261 「對手誤拿棄權勝」在此之前**完全量不到頻率**（休閒側零指紋）。
+      //   ⚠ granted===false ＝對手其實動過了、是我的畫面舊 —— 與「真的掛機」是兩種完全
+      //     不同的成因，payload 的 claim.granted 就是要把這兩批分開。
+      if (!_casualClaimSent) { _casualClaimSent = true; _casualClaimGranted = (granted !== false); _tSendClientDiag('casual-forfeit-claim'); }
       if (granted === false) {
         _forceAdoptNext = true;
         _lastActionAt = Date.now();

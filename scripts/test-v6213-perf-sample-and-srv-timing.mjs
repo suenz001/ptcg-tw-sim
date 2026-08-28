@@ -413,9 +413,21 @@ console.log('\n3) ② dump 腳本：取樣與異常分開統計');
 ok('[HEAD-FAIL] dump 匯出了分帳用的述詞與函式（守衛要實跑，不是只驗字串）',
   typeof DUMP.isSampleReason === 'function' && typeof DUMP.splitDiagRows === 'function'
   && typeof DUMP.sampleSummary === 'function' && Array.isArray(DUMP.SAMPLE_REASONS));
-ok('[核心②] 指紋清單與 server_admin_patch.js 逐字相同（改一邊沒改另一邊 ⇒ 兩張表兜不起來）',
-  JSON.stringify(DUMP.SAMPLE_REASONS) === JSON.stringify(['perf-sample'])
-  && /const SAMPLE_REASONS = \['perf-sample'\];/.test(SRV));
+{
+  // ⭐v6.261 原本兩邊都寫死 `['perf-sample']`。休閒批加入 'casual-perf-sample' 之後那個寫死值過期，
+  //   ⚠ **判準沒有放寬**：改成「把伺服器那份清單真的解析出來，跟 dump 的逐項比對」——
+  //   比原本的寫死更強（原本只要有人同時改兩邊成錯的值也照樣綠）。
+  const m = /const SAMPLE_REASONS = (\[[^\]]*\]);/.exec(SRV);
+  ok('[前提] 從 server_admin_patch.js 解析得出 SAMPLE_REASONS 字面量', !!m, m ? m[1] : '(抓不到)');
+  const srvList = m ? JSON.parse(m[1].replace(/'/g, '"')) : null;
+  ok('[核心②] 指紋清單與 server_admin_patch.js 逐字相同（改一邊沒改另一邊 ⇒ 兩張表兜不起來）',
+    !!srvList && JSON.stringify(DUMP.SAMPLE_REASONS) === JSON.stringify(srvList),
+    JSON.stringify([DUMP.SAMPLE_REASONS, srvList]));
+  ok('[核心②] 錦標賽的健康對照組指紋 perf-sample 仍在清單內（不可被休閒批換掉）',
+    !!srvList && srvList.indexOf('perf-sample') >= 0);
+  ok('★v6.261 休閒批的健康對照組也必須是「取樣」（否則會被算進休閒的異常次數）',
+    !!srvList && srvList.indexOf('casual-perf-sample') >= 0);
+}
 {
   const P = DUMP.isSampleReason;
   ok('★行為②：述詞認得取樣、不會把異常誤判成取樣',

@@ -323,7 +323,12 @@ await T('⑬ 版本一致：version.ts ≥ 6.244、admin.html SITE_VERSION_HINT 
     'SITE_VERSION_HINT 沒同步（version.ts=' + v + '）');
   assert.ok(!readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'latin1').includes('\r\n'),
     'admin.html 必須維持 LF 行尾');
-  assert.ok(PAT.startsWith('// === ORACLE ADMIN ENDPOINTS === v1.26 '), 'server patch 檔頭版本要 bump 到 v1.26');
+  // ⭐v6.261 原本寫死 'v1.26' ⇒ 每 bump 一次就會無故翻紅（接著就會有人去 skip 它）。
+  //   判準沒有放寬：仍要求「有版本號」而且「不得倒退到 v1.26 以下」（v6.244 的那一版）。
+  const _pv = /^\/\/ === ORACLE ADMIN ENDPOINTS === v(\d+)\.(\d+) /.exec(PAT);
+  assert.ok(_pv, 'server patch 檔頭抓不到版本號');
+  assert.ok(Number(_pv[1]) * 1000 + Number(_pv[2]) >= 1026,
+    'server patch 檔頭版本倒退了（' + _pv[0].trim() + '，v6.244 當時是 v1.26）');
 });
 await T('⑭ 文件：首頁 changelog 有這一則、內部文件寫了枚舉與回填裁定', () => {
   const _i244 = CHANGELOG.indexOf('v6.244');

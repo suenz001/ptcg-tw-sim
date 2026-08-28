@@ -313,6 +313,10 @@ function mkClient(W, seat, o = {}, runners = REAL) {
     oppInactivityWarn: false, _lastActionAt: clk.now, _lastSyncAt: clk.now, _lastResyncAt: 0,
     _resyncStreak: 0, _forceAdoptNext: false, _unpushedState: null, _repushAttempts: 0,
     _pushInFlightMarks: [],
+    // ⭐v6.261 pushTracked／pushUndoTracked 的 finally 多掛了一行休閒遙測（純數字統計，
+    //   沒有新請求／新計時器／新 await）。這裡放一個 no-op stub：本檔要驗的是「在途保護」，
+    //   遙測本身由 scripts/test-v6261-casual-clientdiag.mjs 實跑驗證。
+    _casualRecordPush: () => {},
     // ⭐v6.249【問題4】原本寫死 1500750 ⇒ 就算出貨碼改了值，模擬世界也照舊 ⇒ 改讀真常數。
     PUSH_INFLIGHT_FAILSAFE_MS: o.failsafeMs ?? C.PUSH_INFLIGHT_FAILSAFE_MS,
     unsubRoom: null, casualWaitingSelfInput: () => false, PUSH_RETRY_MAX: 3,
@@ -446,9 +450,12 @@ T('[HEAD-FAIL⑥] +page.svelte 只剩兩個裸呼叫，且都在中央 helper �
     + sites.map((s) => s.name + '@L' + s.line).join('、'));
   const pt = fnSrc(GP, 'async function pushTracked(');
   const pu = fnSrc(GP, 'async function pushUndoTracked(');
-  assert.ok(/try \{ await pushGameState\(code, st\); \} finally \{ _endPushTrack\(m\); \}/.test(pt),
+  // ⭐v6.261 `finally` 裡多了一行休閒遙測 ⇒ 不再是「finally 只有一個敘述」。
+  //   ⚠ 判準沒有放寬：仍要求 (a) push 在 try 裡、(b) finally **第一件事**就是還原標記
+  //   （還原排在遙測前面 ⇒ 遙測就算炸了也不可能把標記留著；遙測自己另有 try/catch）。
+  assert.ok(/try \{ await pushGameState\(code, st\);[^}]*\} finally \{ _endPushTrack\(m\);/.test(pt),
     'pushTracked 沒有用 finally 還原標記（拋錯就永久留著）');
-  assert.ok(/try \{ await pushUndoRollback\(code, st\); \} finally \{ _endPushTrack\(m\); \}/.test(pu),
+  assert.ok(/try \{ await pushUndoRollback\(code, st\);[^}]*\} finally \{ _endPushTrack\(m\);/.test(pu),
     'pushUndoTracked 沒有用 finally 還原標記');
   // 四個呼叫端都必須走中央 helper
   for (const need of [
@@ -711,8 +718,10 @@ await TA('[突變5] 拿掉「前 3 次維持 8 秒」⇒ 「前三次逐字不�
   assert.equal(b.passed, true, '突變5 連不相干的斷言也弄紅了 ⇒ 定位不準：' + b.why);
 });
 await TA('[突變6] 把 pushTracked 的 finally 還原拿掉（標記洩漏）⇒ 上限仍讓自癒恢復（fail-safe 不是裝飾）', async () => {
+  // ⭐v6.261 出貨碼的 finally 多了一行休閒遙測 ⇒ 突變字串跟著更新
+  //   （不更新的話突變根本改不到程式碼，這條就會變成恆綠的安慰劑 —— 下面的 b.passed===false 正是在防這件事）。
   const m = (s, kind) => (kind === 'helpers'
-    ? s.replace('try { await pushGameState(code, st); } finally { _endPushTrack(m); }', 'await pushGameState(code, st);') : s);
+    ? s.replace('try { await pushGameState(code, st); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }', 'await pushGameState(code, st);') : s);
   const a = await mutantCheck(m, async (runners) => {
     // ⭐v6.249【問題3】上限從 25.01 分鐘降到 4 分鐘之後，這裡**不再需要偷換 failsafeMs**
     //   —— 用出貨碼真正的上限就驗得動這個機制（「要偷換參數才測得到」＝還沒被真的驗過）。

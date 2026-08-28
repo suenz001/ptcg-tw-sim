@@ -513,12 +513,17 @@ function loadPushWithRetry(gpSrc, clock) {
   const pushes = [];
   const make = (impl) => {
     const box = { _unpushedState: null, _repushAttempts: 0 };
-    const fn = new Function('pushGameState', 'isOracleTimeout', 'console', 'setTimeout', 'box',
+    // ⭐v6.261 抽取視窗（PUSH_RETRY_MAX → pushWithRetry 結尾）含 pushTracked／pushUndoTracked，
+    //   而它們的 finally 多了一行休閒遙測 `_casualRecordPush()`。這裡注入 no-op：
+    //   ⚠ 少了它會是**最會誤導人的失敗**——ReferenceError 被 pushWithRetry 的 catch 吞掉，
+    //     看起來像「逾時後竟然重送了 3 次」（實測本版就先踩過一次）。
+    //   遙測本身由 scripts/test-v6261-casual-clientdiag.mjs 實跑驗證，這裡只要它不擋路。
+    const fn = new Function('pushGameState', 'isOracleTimeout', 'console', 'setTimeout', 'box', '_casualRecordPush',
       'let _unpushedState = null, _repushAttempts = 0;\n' + js +
       '\n;return { fn: pushWithRetry, get u() { return _unpushedState; }, get r() { return _repushAttempts; } };')(
       async (c, s) => { pushes.push({ c, s }); return impl(pushes.length); },
       (e) => !!(e && e.oracleTimeout === true),
-      { warn() {}, error() {} }, clock.vSetTimeout, box);
+      { warn() {}, error() {} }, clock.vSetTimeout, box, () => {});
     return fn;
   };
   return { make, pushes };

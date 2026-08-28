@@ -1,5 +1,150 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.261 — 休閒對戰終於有診斷指紋（沿用既有 /clientdiag 管線，加 mode 維度）
+
+BASE `28339fa46aea6d88b5df7ea7befa31358a57dd59`（v6.260）。
+
+### 問題（複驗過的事實，不是轉述）
+
+- `_tSendClientDiag`（`src/routes/game/+page.svelte`）**函式在 L6081、閘在 L6084**
+  （交辦單寫「約 L5998」，位置差了 83 行；閘的內容則完全正確）：
+  `if (!isTournament || isTournSpectator || !tActiveRoom) return;`
+- ⇒ `tournamentClientDiag` 裡的**每一個數字**（`stale-version`／`setup-watchdog-repeat`／
+  `manual-sync`／`stale-board-drop`／`slow-rtt`，以及 v6.213 的健康對照組 `perf-sample`
+  與 v6.227 的 colo 分佈）**都只涵蓋錦標賽路徑**。
+- 連量測本身也是：`_tRecordApiSegments` / `_tRecordSrvSample` / `_tRecordColoSample` /
+  `_tRecordRtt` / `_tRecordAdopt` 開頭一律 `if (!isTournament ...) return;`，
+  而休閒根本不走 `tApi`（走 `oracle-client.ts` 的 `oracleApi`）。
+- ⇒ 休閒佔全站 94% 流量卻零指紋：「對手誤拿棄權勝」量不到頻率、v6.245~v6.249 的休閒
+  同步修正沒有任何線上資料可驗成效、「線上休閒大廳偶發打不開」沒有分母。
+
+### 設計：**共用同一條管線**，用 reason 前綴分帳（不另開第二套）
+
+| | 錦標賽（v6.260 起未變） | 休閒（本版新增） |
+|---|---|---|
+| 觸發 | slow-rtt(p95≥3s)／stale-version／invisible-hand／setup-*／manual-sync／stale-board-drop | `casual-slow-push`（盤面推送 p95≥5s）／`casual-forfeit-claim`（按下「對手棄權」） |
+| 取樣 | `perf-sample`：每場 10%（`PERF_SAMPLE_RATE`）、滿 20 發往返送 1 發 | `casual-perf-sample`：**共用同一個 `PERF_SAMPLE_RATE`**、滿 10 發推送送 1 發 |
+| 上限 | 每頁 3 發（manual-sync／stale-board-drop／perf-sample 豁免） | 每場每種 1 發、**每頁硬上限 6 發** |
+| payload | ~1.8KB（+svelteWarn 最多 2.3KB） | **實測 407 bytes**（守衛實跑量測） |
+| 時機 | 異常當下／滿 N 發往返後 | 既有 `pushTracked()` 出口（fire-and-forget） |
+| 端點 | `POST /api/tournament/clientdiag` | **同一支** |
+| collection | `tournamentClientDiag`（TTL 7 天） | **同一張、同一個 TTL、不加索引** |
+
+- **為什麼不是把錦標賽的 payload 直接套過來**：那 30 幾個欄位（`tVersion`／`tPollGen`／
+  `srvActor`／`perf.api.*`）全是 `/action` 路徑的專屬狀態，休閒送出去會是一整包 null
+  —— 比沒有資料更糟（看起來像「錦標賽也壞了」）。所以是**同一條管線、兩種 payload**。
+- **送出點收斂**：新增 `_tPostClientDiag()`，`tApi('/clientdiag')` 全站仍然只有 2 處
+  （v6.179 守衛釘的就是這個數字）。
+
+### ⚠ 最高紅線：玩家端零額外負擔（實測，`scripts/test-v6261-perf.mjs`）
+
+- **一般玩家（沒中籤、網路正常）：新增請求 0 發、新增上行 0 bytes** —— 修前修後逐字相同。
+- 最壞情況（同時中籤＋每發推送都超過門檻＋還按了棄權宣告）：**一場 3 發、1,287 bytes**
+  ＝該場總上行的 0.014%（長局）～0.071%（短局，1.7MB）。
+- 同一個頁面連打 20 場（1,600 發推送）：**6 發、2,560 bytes**（per-page 硬上限擋住）。
+- 熱路徑 CPU：`_casualRecordPush` 每發 **2.99 µs**（沙盒；正式 VM 更快），
+  對照一發盤面推送本身 180~1000 ms ⇒ 佔 **0.0017%**。
+- 量測對象＝**出貨碼本身**（從 `+page.svelte` 抽出來實跑），不是守衛另寫的等價實作（Rule 32）。
+
+### 為什麼掛在 `pushTracked()`
+
+v6.248 已經把**全站 5 個盤面推送呼叫點**收斂到 `pushTracked()` / `pushUndoTracked()`，
+而且它們已經有 `PushMark.at` 這個時間戳 ⇒ 量測只是 `Date.now() - m.at` 一個減法：
+**沒有新請求、沒有新計時器、沒有新的 await**。`finally` 裡還原標記仍排在遙測**前面**
+（遙測自己另有 try/catch）⇒ v6.249 的在途保護一個字都沒動（守衛實跑驗過）。
+
+### 指紋的判讀（寫給站長，admin 與 dump 兩邊同一段文字）
+
+- `casual-slow-push`：休閒每個動作要 PUT 整包盤面（實測 40~48KB）。門檻 p95 ≥ **5 秒**
+  ⇒ 有效上行低於約 10KB/s。取值依據（Rule 37）：線上實測最慢的**成功**推送是
+  86.954 秒／48285 bytes ⇒ 5 秒遠低於它，中等程度的塞住也抓得到。
+  這是 v6.245／v6.246「慢的是玩家上行」的**玩家端**實測值（在此之前只有 nginx 的
+  408 與 `upstream=-` 這種伺服器端旁證）。
+- `casual-forfeit-claim`：`claim.granted=false` ＝伺服器擋下來，代表**宣告者自己的畫面是舊的**、
+  對手其實動過了。⚠⚠ 這是「對手誤拿棄權勝」的**頻率下界不是上界**：被誤判掉的那一方
+  本來就卡住、送不出任何回報 ⇒ 永遠只看得到宣告者那一側。
+- `casual-perf-sample`：健康對照組，回答「這一版有沒有讓休閒變慢」。
+
+### ⚠⚠ 兩批數字**永遠不可以相加**（母體不同）
+
+錦標賽走 `/action`（伺服器權威推進，一次往返＝一個動作）；休閒是 client-authoritative
+（一個動作＝PUT 整包盤面，`oracleTx` 最多 5 輪 GET+PUT）——「一次往返」根本不是同一件事。
+
+- 伺服器：`insertOne` 多寫 `mode`（由 reason 前綴推導，**不採信 client 送的欄位**）；
+  `/api/tournament/admin/clientdiag` 預設 `q.mode = { $ne: 'casual' }`
+  ——⭐ 用 `$ne` 而不是 `mode:'tournament'`，因為 **v6.260 以前的舊列根本沒有這個欄位**，
+  `$ne` 才會把它們收進錦標賽批 ⇒ **既有的每一個數字逐字不變、可以跟舊 dump 對帳**。
+  要看休閒批得明確帶 `?mode=casual`。`byReason` / `sampleAgg` 兩行 filter 一個字沒動
+  （改的是它們的來源 `agg = _aggAll.filter(!isCasualReason)`）。
+  `sampleRttRows` 補 `mode:{$ne:'casual'}`（`SAMPLE_REASONS` 新增了 `casual-perf-sample`，
+  不補就會污染健康對照組）。
+- dump：`splitDiagRows` 改**三分流**（⚠ 先判 casual 再判 sample，否則
+  `casual-perf-sample` 會落進錦標賽的對照組）＋獨立的 `casualSummary()`；
+  摘要新增【②-e 🎮 休閒對戰批】並明文寫「絕不可以跟【②】【②-d】相加」。
+- admin：三則新指紋補上白話說明；⚠ 它們**預設不會顯示在 📡 分頁**（母體不同），
+  說明文字裡直接寫明要用 dump 或 `?mode=casual`。
+
+### 隱私
+
+- payload **不含**任何玩家可辨識資料（無 email／暱稱／牌組／卡名；守衛用字串掃描把關）。
+- `uid` / `email` 是**伺服器**自己寫進 doc 的（既有行為），讀取端 `/admin/clientdiag`
+  有 `isTournAdmin` gate ⇒ admin only。玩家端沒有新增任何看得到的欄位。
+- ⚠ 母體有一層自我限制：`tournIdentity` 只認 Firebase 的 email 帳號（匿名被明文拒絕）
+  ⇒ **未登入的休閒玩家連送都不送**（送了也會被丟棄，那是白付一發請求）。
+  判讀時要記得這一批的母體是「已登入的休閒玩家」，不是全部休閒玩家。
+
+### 容量（⚠ 推估，不是實測 —— 沙盒連不到正式站 mongo）
+
+以 v6.240 實測的 82,031 筆已結束 Oracle 房間推估每日 100~400 場：
+每日約 30~120 筆、7 天 TTL 內約 210~840 筆（約 100~410KB）。
+既有 `tournamentClientDiag` 約 5 千筆同量級 ⇒ **不加新索引**（`{ts:1}` 的 TTL 索引
+已經覆蓋範圍掃描，量級是毫秒；加索引只換來寫入放大）。真的爆量就把
+`CASUAL_SLOW_PUSH_P95_MS` 調高即可（單一常數，守衛會跟著讀）。
+
+### 分階段（第一階段刻意只做這三種）
+
+刻意**不做**的：休閒側的 colo／四段拆分／Resource Timing／longtask ——
+那些量測全掛在 `tApi` 上，接到 `oracleApi` 等於動 v6.245~v6.249 剛修完的檔案。
+第一階段先用「零接觸熱路徑」的方式拿到**分母**（每日幾場、上行 p95 分佈、棄權宣告頻率），
+下一階段再依第一週的實際數字決定要不要往 `oracle-client.ts` 加量測。
+
+### 驗證
+
+- `scripts/test-v6261-casual-clientdiag.mjs`（50 條）＋ `scripts/test-v6261-perf.mjs`（19 條），
+  兩支都進 `package.json` 的 test chain。
+- **HEAD-FAIL**：對 BASE(v6.260) 的 `git archive` 樹實跑 ⇒ **43 FAIL / 7 PASS**，
+  各項各自紅；那 7 條 PASS 全部是**正對照／保護性不變量**
+  （錦標賽 payload 逐字未變、沒有新端點、沒有新 collection、沒有新索引、admin gate）。
+- **正對照（錦標賽逐字不變）**：把 `const payload = {` 到送出點的整段抽出來，
+  ①與 BASE blob **逐字元比對** ②比對 sha256 `6e5e7aff…`（CI 是 fetch-depth:1，
+  兩條互為備援，**兩條都拿不到就直接紅**，不 fail-open）。
+- 突變 7 個，全部紅在預期那一條：①休閒 reason 掉回錦標賽路徑 ②骰子改成每發都擲
+  ③拿掉 per-page 上限 ④匿名也送 ⑤逾時也記進 p95 ⑥slow-push 每場送多發
+  ⑦dump 三分流順序顛倒。**沒有任何一個 0 紅**。
+- Svelte 編譯 warning：**98 vs BASE 98**（逐項相同：a11y 89／css_unused 7／其他 2）。
+- `tsc --noEmit`：TS2304 **0 個**；其餘錯誤與 BASE 同一批（只動了 `version.ts` 的字串）。
+
+### 一併更新的既有守衛（判準沒有放寬）
+
+- `test-v6213`：`SAMPLE_REASONS` 的「兩邊逐字相同」原本寫死 `['perf-sample']`；
+  改成**把伺服器那份字面量解析出來跟 dump 逐項比對**（比寫死更強），
+  另加兩條：`perf-sample` 不可被換掉、`casual-perf-sample` 必須在清單內。
+- `test-v6248`：`pushTracked` 的 `finally` 多了一行遙測 ⇒ 正規表示式改成
+  「finally 的**第一件事**仍是 `_endPushTrack(m)`」；harness 補一個 `_casualRecordPush` no-op stub；
+  ⚠ **突變6 的突變字串同步更新** —— 不更新的話那條突變根本改不到程式碼，會變成恆綠的安慰劑
+  （原本的 `b.passed === false` 反向斷言正好把它抓出來了）。
+
+### 部署
+
+- `src/routes/game/+page.svelte` / `src/lib/version.ts` 有改 ⇒ **`redeploy-oracle.bat`**
+- `oracle-admin/server_admin_patch.js` / `oracle-admin/admin.html` 有改 ⇒ **`update-admin-full.bat`**
+  （⚠ 沒有動 `server-engine.cjs` 的 export，不需要 `update-tournament.bat`）
+- `oracle-admin/tournament/dump-client-monitor.cjs`：站長要用時再 `scp` 到 VM 的 `/tmp`。
+- ⚠ **首頁 changelog 沒有寫**：這是玩家看不到的內部遙測（玩家端行為零改變、
+  一般玩家連一發額外請求都沒有），依規格不放首頁。
+
+---
+
 ## v6.260 — 備戰 KO 的 on-KO／防 KO 缺口修補：isActive gate 下沉 ＋ 四條路徑接中央
 
 BASE `e9157fe275d3a522c6547c097f2fead5a10d1e1f`（v6.259）。

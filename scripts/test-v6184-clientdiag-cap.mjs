@@ -176,8 +176,14 @@ if (packFn) {
     let inserted = null;
     const TCDIAG = { insertOne: async (doc) => { inserted = doc; return { acknowledged: true }; } };
     const tournIdentity = async () => ({ uid: 'u1', email: 'a@b.c', verified: true });
-    const handler = new Function('tournIdentity', '_cdiagThrottle', 'TCDIAG', '_cdiagPack',
-      'return (' + handlerSrc + ');')(tournIdentity, new Map(), TCDIAG, packForHandler);
+    // ⭐v6.261 handler 多引用一個 `isCasualReason`（寫 mode 欄位用）。
+    //   ⚠ 注入的是**出貨碼那一份**（從 server_admin_patch.js 解析出前綴），不是守衛自己另寫一份 ——
+    //     注入替身會讓「mode 到底寫對沒有」變成安慰劑。抓不到就直接紅。
+    const _pfx = /const CASUAL_REASON_PREFIX = '([^']+)';/.exec(SRC);
+    ok('★v6.261 抓得到出貨碼的 CASUAL_REASON_PREFIX（handler 需要它才跑得起來）', !!_pfx, String(_pfx && _pfx[1]));
+    const isCasualReason = (r) => String(r || '').indexOf(_pfx ? _pfx[1] : '\u0000never') === 0;
+    const handler = new Function('tournIdentity', '_cdiagThrottle', 'TCDIAG', '_cdiagPack', 'isCasualReason',
+      'return (' + handlerSrc + ');')(tournIdentity, new Map(), TCDIAG, packForHandler, isCasualReason);
     const mkRes = () => { const o = { body: null }; o.json = (b) => { o.body = b; return o; }; o.status = () => o; return o; };
 
     // (a) 正常大小 ⇒ 原文照存、truncated 為 false
@@ -205,8 +211,8 @@ if (packFn) {
     const th = new Map();
     let n = 0;
     const TC2 = { insertOne: async () => { n++; } };
-    const h2 = new Function('tournIdentity', '_cdiagThrottle', 'TCDIAG', '_cdiagPack',
-      'return (' + handlerSrc + ');')(tournIdentity, th, TC2, packForHandler);
+    const h2 = new Function('tournIdentity', '_cdiagThrottle', 'TCDIAG', '_cdiagPack', 'isCasualReason',
+      'return (' + handlerSrc + ');')(tournIdentity, th, TC2, packForHandler, isCasualReason);
     await h2({ body: { reason: 'dup' } }, mkRes());
     await h2({ body: { reason: 'dup' } }, mkRes());
     await h2({ body: { reason: 'other' } }, mkRes());

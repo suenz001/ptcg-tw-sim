@@ -126,6 +126,11 @@ const REASON_LABEL = {
   'manual-sync': '玩家自己按了「重新同步」',
   // ⭐⭐⭐v6.213 這一則**不是異常**，是健康對照組（見下面 isSampleReason 的說明）。
   'perf-sample': '⚖️ 低頻取樣（健康對照組，不是異常）',
+  // ⭐⭐⭐v6.261 休閒批（reason 一律 `casual-` 前綴）。⚠⚠ 這三則與上面每一則**母體不同**，
+  //   數字永遠不可以相加（休閒是 client-authoritative、每動作上傳整包盤面 40~48KB）。
+  'casual-slow-push': '［休閒］盤面上傳太慢（p95 ≥ 5 秒）',
+  'casual-perf-sample': '［休閒］⚖️ 低頻取樣（健康對照組，不是異常）',
+  'casual-forfeit-claim': '［休閒］玩家宣告「對手棄權」',
 };
 // ⭐⭐⭐ v6.213【② 低頻無條件取樣】的指紋清單 —— 與 server_admin_patch.js 的
 //   `SAMPLE_REASONS` 逐字相同（改一邊就要改另一邊，否則兩張表會兜不起來）。
@@ -143,13 +148,89 @@ const REASON_LABEL = {
 //   ⇒ 本腳本的做法：**從第一步就把兩批資料拆開**（rawAnom / rawSample），
 //     既有的每一個統計都只吃 rawAnom（語義與 v6.212 逐字相同、可以跟舊 dump 對得起來），
 //     取樣走自己的一份 sampleSummary()。**兩邊的數字永遠不可以相加**。
-const SAMPLE_REASONS = ['perf-sample'];
+//   ⭐v6.261 休閒批也有自己的健康對照組（casual-perf-sample），同樣不是異常。
+const SAMPLE_REASONS = ['perf-sample', 'casual-perf-sample'];
 function isSampleReason(r) { return SAMPLE_REASONS.indexOf(String(r || '')) >= 0; }
+// ⭐⭐⭐v6.261 休閒批的判準 —— 與 server_admin_patch.js 的 isCasualReason 逐字相同。
+//
+// ⚠⚠⚠ 為什麼一定要「第三批」而不是併進上面兩批（判讀關鍵，不要跳過）：
+//   v6.260 以前 client 端的 `_tSendClientDiag` 開頭就是
+//   `if (!isTournament || isTournSpectator || !tActiveRoom) return;`
+//   ⇒ 這張表裡的**每一個數字**（含 v6.213 的健康對照組）都只涵蓋錦標賽路徑，
+//   而休閒對戰佔全站 94% 流量 ⇒「dump 裡沒有」從來就不等於「沒發生」。
+//   v6.261 把休閒接上同一條管線，但兩者是**兩個母體**：
+//     ・錦標賽：走 /action，伺服器權威推進，一次往返＝一個動作；
+//     ・休閒：client-authoritative，一個動作＝把整包盤面（實測 40~48KB）PUT 上去，
+//       而且 oracleTx 一發最多 5 輪 GET＋PUT。
+//   ⇒ 「錦標賽 slow-rtt 12 筆 ＋ 休閒 slow-push 30 筆 ＝ 42 筆」這句話**沒有意義**。
+//   ⇒ 本腳本一律三分流：rawAnom（錦標賽異常）／rawSample（錦標賽取樣）／rawCasual（休閒全部）。
+const CASUAL_REASON_PREFIX = 'casual-';
+function isCasualReason(r) { return String(r || '').indexOf(CASUAL_REASON_PREFIX) === 0; }
 // 分流的**單一出口**（main() 只呼叫這一支，守衛也直接跑這一支 —— 兩邊跑的是同一段程式碼）。
 function splitDiagRows(rows) {
-  const sample = [], anomaly = [];
-  for (const r of (rows || [])) { (isSampleReason(r && r.reason) ? sample : anomaly).push(r); }
-  return { anomaly: anomaly, sample: sample };
+  const sample = [], anomaly = [], casual = [];
+  for (const r of (rows || [])) {
+    // ⚠ 順序不可以顛倒：casual-perf-sample 同時滿足 isSampleReason 與 isCasualReason，
+    //   先判 casual 才不會把休閒的健康樣本混進錦標賽的健康對照組。
+    if (isCasualReason(r && r.reason)) { casual.push(r); continue; }
+    (isSampleReason(r && r.reason) ? sample : anomaly).push(r);
+  }
+  return { anomaly: anomaly, sample: sample, casual: casual };
+}
+/**
+ * ⭐⭐⭐v6.261 休閒批的彙總（**完全獨立**的一份，與 sampleSummary／既有統計零共用）。
+ * ⚠⚠ 回傳的每一個數字都只算休閒列，**永遠不可以**跟錦標賽那幾塊相加。
+ */
+function casualSummary(rawCasual) {
+  const out = {
+    rows: (rawCasual || []).length, players: 0, parsed: 0, truncated: 0,
+    byReason: [], byVersion: [], byPlatform: [],
+    // 盤面推送（＝休閒對戰的「上行」）的 p50/p95/max 分佈與失敗次數
+    push: { p50: [], p95: [], max: [], fail: 0, rowsWithPush: 0 },
+    // 「宣告對手棄權」：granted=false ＝宣告者的畫面是舊的（對手其實動過了）
+    forfeitClaim: { total: 0, granted: 0, rejected: 0, unknown: 0 },
+    list: [],
+  };
+  const uids = {}, rMap = new Map(), verMap = new Map(), uaMap = new Map();
+  for (const r of (rawCasual || [])) {
+    const d = parseDiag((r && r.diag) || '');
+    if (r && r.uid) uids[r.uid] = 1;
+    if (d.parsed) out.parsed++; else out.truncated++;
+    const rk = (r && r.reason) || '(未標)';
+    rMap.set(rk, (rMap.get(rk) || 0) + 1);
+    verMap.set(d.ver || '(未知)', (verMap.get(d.ver || '(未知)') || 0) + 1);
+    uaMap.set(uaShort(d.ua), (uaMap.get(uaShort(d.ua)) || 0) + 1);
+    const o = d.obj;
+    const ph = o && o.push && typeof o.push === 'object' ? o.push : null;
+    if (ph) {
+      out.push.rowsWithPush++;
+      if (num(ph.p50) !== null && ph.p50 >= 0) out.push.p50.push(ph.p50);
+      if (num(ph.p95) !== null && ph.p95 >= 0) out.push.p95.push(ph.p95);
+      if (num(ph.max) !== null && ph.max >= 0) out.push.max.push(ph.max);
+      if (num(ph.fail) !== null) out.push.fail += ph.fail;
+    }
+    if (rk === 'casual-forfeit-claim') {
+      out.forfeitClaim.total++;
+      const c = o && o.claim && typeof o.claim === 'object' ? o.claim : null;
+      if (!c || typeof c.granted !== 'boolean') out.forfeitClaim.unknown++;
+      else if (c.granted) out.forfeitClaim.granted++;
+      else out.forfeitClaim.rejected++;
+    }
+    out.list.push({
+      ts: r && r.ts, tsLocal: tw(r && r.ts), email: (r && r.email) || null, uid: (r && r.uid) || null,
+      room: (r && r.room) || '', reason: rk, label: reasonLabel(rk), ver: d.ver || null,
+      push: ph, board: (o && o.board) || null, claim: (o && o.claim) || null,
+      ua: d.ua || null, hc: d.hc, dm: d.dm, truncated: !d.parsed,
+    });
+  }
+  out.players = Object.keys(uids).length;
+  out.byReason = [...rMap.entries()].map(function (e) { return { reason: e[0], label: reasonLabel(e[0]), n: e[1] }; })
+    .sort(function (a, b) { return b.n - a.n; });
+  out.byVersion = [...verMap.entries()].map(function (e) { return { ver: e[0], n: e[1] }; })
+    .sort(function (a, b) { return b.n - a.n; });
+  out.byPlatform = [...uaMap.entries()].map(function (e) { return { platform: e[0], n: e[1] }; })
+    .sort(function (a, b) { return b.n - a.n; });
+  return out;
 }
 // ⚠ 不可以直接 REASON_LABEL[reason] —— reason 若是 'constructor'/'__proto__' 會拿到
 //   原型鏈上的 truthy 非字串（admin.html 踩過同一顆地雷）。
@@ -509,6 +590,9 @@ async function main() {
   const _split = splitDiagRows(rawAll);
   const rawSample = _split.sample;
   const raw = _split.anomaly;
+  // ⭐⭐⭐v6.261 第三批：休閒對戰。⚠ 底下既有的每一個統計都**不吃**這一批
+  //   （語義與 v6.260 逐字相同、可以跟舊 dump 對帳），它只走自己的 casualSummary()。
+  const rawCasual = _split.casual;
 
   // ── ③ 指紋彙總（與 /admin/clientdiag 同一段 aggregate）────────────────
   const agg = await TCDIAG.aggregate([
@@ -605,6 +689,7 @@ async function main() {
   rtt.sort(function (a, b) { return (b.p95 || 0) - (a.p95 || 0); });
   // ⭐v6.213 取樣（健康對照組）的獨立彙總。⚠ 它與上面每一個統計**沒有共用任何累加器**。
   const sample = sampleSummary(rawSample);
+  const casual = casualSummary(rawCasual);   // ⭐v6.261 休閒批（獨立母體）
   // ⭐⭐⭐v6.227 colo（Cloudflare 邊緣節點）分組：異常批與取樣批**分開餵、分開報**。
   //   沒有取樣批那份，就答不了「慢的人是不是集中在某些 colo」（分母只有病人）。
   const coloAnom = coloSummary(raw);
@@ -706,6 +791,16 @@ async function main() {
     //   ⚠ `rows: 0` 有兩種完全不同的可能：①這段期間沒有人中籤（1% × 場次數，本來就很少）
     //     ②玩家的畫面還沒更新到 v6.213。看 byVersion（異常那份）就知道大家在哪個版本。
     sample: sample,
+    // ⭐⭐⭐v6.261【休閒對戰批】。⚠⚠ 這一整塊與上面每一個統計**互斥且母體不同**：
+    //   ・上面全部是錦標賽（/action，伺服器權威推進）；
+    //   ・這裡是休閒（client-authoritative，一個動作＝PUT 整包盤面 40~48KB，oracleTx 最多 5 輪）。
+    //   ⇒ 「錦標賽 N 筆 ＋ 休閒 M 筆」除了「資料庫總列數」以外沒有任何意義，
+    //     算比率、比快慢、比版本分佈一律是錯的。
+    //   ⚠ `rows: 0` 有三種完全不同的可能：①玩家的畫面還沒更新到 v6.261；
+    //     ②真的沒有人中籤／沒有人慢（休閒取樣是每場 10%、slow-push 門檻是 p95≥5 秒）；
+    //     ③**沒有 Firebase email 帳號的玩家一律不送**（伺服器 tournIdentity 會丟棄匿名身分）
+    //     —— 所以這一批的母體是「已登入的休閒玩家」，不是全部休閒玩家。
+    casual: casual,
     byVersion: byVersion,
     byPlatform: byPlatform,
     deviceMix: [...devMap.entries()].map(function (e) { return { device: e[0], n: e[1] }; }).sort(function (a, b) { return b.n - a.n; }),
@@ -940,9 +1035,51 @@ async function main() {
     L.push('  ⚠ 沒有任何一筆帶 rawLen ⇒ 這批全是 v6.184 之前寫進去的舊列（那時候還沒有這個欄位）。');
   }
   L.push('');
+  L.push('【②-e 🎮 休閒對戰批（v6.261 起才有）】← 佔全站 94% 流量，在此之前完全沒有指紋');
+  L.push('  ⚠⚠⚠ 這一塊的數字**絕不可以**跟上面【②】【②-d】的任何數字相加或互相比較：');
+  L.push('    錦標賽走 /action（伺服器權威，一次往返＝一個動作）；');
+  L.push('    休閒是 client-authoritative（一個動作＝把整包盤面 40~48KB PUT 上去，最多 5 輪 GET+PUT）。');
+  L.push('    「一次往返」在兩邊根本不是同一件事 ⇒ 母體不同，只能各看各的趨勢。');
+  L.push('  ⚠ 母體再縮一層：**只有已登入 email 帳號的休閒玩家會送**（伺服器不收匿名身分）。');
+  if (!casual.rows) {
+    L.push('  這段期間沒有任何休閒回報。⚠ 這**不是**「休閒都很順」，有三種可能：');
+    L.push('    ①玩家的畫面還沒更新到 v6.261（看上面【④】的版本分佈）；');
+    L.push('    ②真的沒有人中籤也沒有人慢（取樣是每場 10%、slow-push 門檻是 p95 ≥ 5 秒）；');
+    L.push('    ③那段期間的休閒玩家都沒有登入 email 帳號。');
+  } else {
+    L.push('  合計 ' + casual.rows + ' 筆 / ' + casual.players + ' 人（其中 ' + casual.truncated + ' 筆 payload 被截斷）。');
+    for (const r of casual.byReason) {
+      L.push('  ・' + pad(r.label, 32) + padL(r.n, 6) + ' 次   [' + r.reason + ']');
+    }
+    if (casual.push.rowsWithPush) {
+      L.push('  ── 盤面上傳（＝玩家上行）耗時，' + casual.push.rowsWithPush + ' 筆有這一欄：');
+      L.push('     p50 中位數 ' + ms(quant(casual.push.p50, 0.5)) + '　p95 中位數 ' + ms(quant(casual.push.p95, 0.5))
+        + '　p95 最差 ' + ms(casual.push.p95.length ? Math.max.apply(null, casual.push.p95) : null)
+        + '　單發最久 ' + ms(casual.push.max.length ? Math.max.apply(null, casual.push.max) : null));
+      L.push('     推送失敗／逾時累計 ' + casual.push.fail + ' 次（⚠ 失敗那幾發**沒有**算進上面的 p50/p95）。');
+      L.push('     ⚠ 這是 v6.245／v6.246「慢的是玩家上行」這個結論的**玩家端**實測值 ——');
+      L.push('       在此之前只有 nginx 的 408／upstream=- 這種伺服器端的旁證。');
+    }
+    if (casual.forfeitClaim.total) {
+      L.push('  ── 🏳 玩家宣告「對手棄權」' + casual.forfeitClaim.total + ' 次：');
+      L.push('     伺服器同意 ' + casual.forfeitClaim.granted + ' 次（對手真的沒動作）／');
+      L.push('     伺服器擋下 ' + casual.forfeitClaim.rejected + ' 次（**宣告者的畫面是舊的**，對手其實動過了）'
+        + (casual.forfeitClaim.unknown ? '／判不出來 ' + casual.forfeitClaim.unknown + ' 次' : ''));
+      L.push('     ⚠ 這是「對手誤拿棄權勝」的**頻率下界**，不是上界：被誤判掉的那一方本來就卡住、');
+      L.push('       他的畫面送不出任何回報 ⇒ 這裡永遠只看得到宣告者那一側。');
+    }
+    if (casual.byVersion.length) {
+      L.push('  ── 休閒回報者的版本分佈：' + casual.byVersion.slice(0, 6).map(function (v) { return v.ver + ' ' + v.n; }).join('、'));
+    }
+    if (casual.byPlatform.length) {
+      L.push('  ── 休閒回報者的平台分佈：' + casual.byPlatform.slice(0, 6).map(function (v) { return v.platform + ' ' + v.n; }).join('、'));
+    }
+  }
+  L.push('');
   L.push('【⑦ 接下來】');
   L.push('  完整資料在同一個資料夾、同名的 .json（每一筆 payload 的 poll.rtt / perf.* / env.ua 都在裡面）。');
-  L.push('  ⚠ JSON 裡異常在 rows / rtt，取樣在 sample.list —— **是兩個不同的陣列**，別合併起來算。');
+  L.push('  ⚠ JSON 裡異常在 rows / rtt，取樣在 sample.list，休閒在 casual.list —— **是三個不同的陣列**，');
+  L.push('    三者母體都不同，別合併起來算（相加只有在講「資料庫總列數」時才有意義）。');
   L.push('  把那個 .json 整包交給 AI，它才有辦法幫你定位「到底是誰卡、卡在哪一段」。');
   L.push('============================================================');
   // BOM：站長會直接用記事本／Excel 開，加了 BOM 才保證不會變亂碼。
@@ -951,7 +1088,7 @@ async function main() {
   console.log('');
   console.log(L.join('\n').replace(/^﻿/, ''));
   console.log('');
-  console.log('完整資料已寫出: /tmp/ptcg_monitor_dump.json (' + rows.length + ' 筆異常明細 / ' + rtt.length + ' 筆 RTT / ' + sample.rows + ' 筆取樣)');
+  console.log('完整資料已寫出: /tmp/ptcg_monitor_dump.json (' + rows.length + ' 筆異常明細 / ' + rtt.length + ' 筆 RTT / ' + sample.rows + ' 筆取樣 / ' + casual.rows + ' 筆休閒 ⚠ 四個數字母體不同，不可相加)');
   console.log('摘要已寫出:     /tmp/ptcg_monitor_summary.txt');
   await client.close();
 }
@@ -961,6 +1098,8 @@ async function main() {
 module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp, staleGateOf: staleGateOf, oppQuietOf: oppQuietOf,
   // ⭐v6.213 守衛要**實跑**分帳邏輯（只驗字串存在擋不住「接線沒接上」）。
   SAMPLE_REASONS: SAMPLE_REASONS, isSampleReason: isSampleReason, splitDiagRows: splitDiagRows, sampleSummary: sampleSummary,
+  // ⭐v6.261 休閒批的分帳述詞與彙總（守衛要**實跑**，只驗字串存在擋不住「接線沒接上」）。
+  CASUAL_REASON_PREFIX: CASUAL_REASON_PREFIX, isCasualReason: isCasualReason, casualSummary: casualSummary,
   // ⭐v6.227 守衛要實跑 colo 分組（只驗字串存在擋不住「接線沒接上」）。
   coloOf: coloOf, coloSummary: coloSummary, coloTableLines: coloTableLines };
 if (require.main === module) {
