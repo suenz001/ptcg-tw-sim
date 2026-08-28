@@ -341,7 +341,10 @@ T('C6 ⭐⭐行為端：重裝角擊讀到的是實際扣到的（防 KO 後 100
 });
 
 T('C7 lint：本欄位的讀取點枚舉（下限斷言 ＋ 正對照）', () => {
+  // ⭐v6.256：寫入點已收斂到 effects/_shared.ts 的 withAttackDamageTaken ⇒ 掃描清單補上它，
+  //   否則這條下限斷言會因為「engine/effects 不再直接提及本欄位」而誤判成掃描器壞掉。
   const files = ['src/lib/game/engine.ts', 'src/lib/game/effects.ts', 'src/lib/game/types.ts',
+                 'src/lib/game/effects/_shared.ts',
                  'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'];
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
   let readSites = 0, total = 0;
@@ -368,8 +371,14 @@ T('C8 lint：engine 主管線必須用「實際扣到的」而不是 baseDamage�
   const src = strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
   const BAD = /const accumDmgTaken = \(defenderState\.active!\.damageTakenLastOppTurn \?\? 0\) \+ \(baseDamage > 0 \? baseDamage : 0\);/;
   assert.ok(!BAD.test(src), 'engine.ts 又回到「記全額 baseDamage」的寫法');
-  assert.ok(/const _actualDamageTaken = Math\.max\(0, _survivedDamage - _damageBeforeThisAttack\);/.test(src),
-    '「實際扣到的」算式不見了');
+  // ⭐v6.256：算式下沉到 effects/_shared.ts 的 withAttackDamageTaken（全站唯一寫入點）。
+  //   這裡改成「engine 必須走那支中央 helper」＋「中央 helper 必須是 newDamage − prevDamage」，
+  //   兩條合起來仍然涵蓋 v6.255 的原意（防 KO 時記實際扣到的），且順便擋住「又拉回 engine 內寫死」。
+  assert.ok(/withAttackDamageTaken\(defenderState\.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage'\)/.test(src),
+    'engine 主管線沒有走中央寫入點 withAttackDamageTaken');
+  const sharedSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'));
+  assert.ok(/const actual = Math\.max\(0, newDamage - prevDamage\);/.test(sharedSrc),
+    '「實際扣到的」算式不見了（現居 effects/_shared.ts 的 withAttackDamageTaken）');
   assert.ok(BAD.test(strip('const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + (baseDamage > 0 ? baseDamage : 0);')),
     'C8 樣式抓不到已知違規樣本＝安慰劑');
 });

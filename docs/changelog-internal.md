@@ -1,5 +1,128 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.256 —「這隻寶可夢受到的招式的傷害」中央收斂（6 條傷害管線漏記）
+
+BASE `20d4d6dfecb9101b07b9420a16968c19640367f4`（v6.255）。
+
+### 1. 問題：只有 2 條管線有記，其餘 6 條漏記
+
+`CardInstance.damageTakenLastOppTurn` 的**全 src 唯一讀取點**是
+`src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts:23`
+（超級赫拉克羅斯ex｜重裝角擊，M2 `14322`/`18578`，I 標，HP280）。
+卡面逐字：「增加與在上個對手的回合這隻寶可夢受到的招式的傷害相同數值的傷害。」
+
+對 BASE blob 跑完整 `applyAction` 流程（探針腳本邏輯已收進
+`scripts/test-v6256-damage-taken-central.mjs` 的 B 區），實測結果：
+
+| # | 管線 | 位置（BASE 行號） | 一般情況 | 防 KO | 該不該寫 |
+|---|---|---|---|---|---|
+| 1 | engine.ts ATTACK 主管線（active 主傷害） | `engine.ts:6349-6352` | ✅ 全額 | ✅ 實際扣到（v6.255） | 要 |
+| 2 | `dealAttackDamageToTarget`（狙擊／延後型中央 helper） | `effects.ts:8748-8751` | ✅ | ❌ `L8715` 提早 `return _pk.state` | 要 |
+| 3 | `snipe-multi`（鐵頭殼ex｜雙刃劍、月亮伊布｜出奇一擊、三重冰霜…） | `effects.ts:11054-11055` / 防KO `11030` | ❌ | ❌ | 要（`params.kind` 為 attack-effect 時不寫） |
+| 4 | `clone-strike-multi-hit`（甲賀忍蛙ex｜分身連打、吼叫尾｜大吼大叫、三色炮） | `effects.ts:15895-15896` / 防KO `15866` | ❌ | ❌ | 要 |
+| 5 | `hitBenchAll`（古鼎鹿｜大地斷裂、穿山王｜地震、焚焰蚣｜燃燒熱浪、電飛鼠｜天空波） | `effects.ts:1414` | ❌ | 無此分支 | 要 |
+| 6 | `hitBenchPickPost`（三首惡龍ex｜黑曜石、奇麒麟ex｜惡劣光束、摩托蜥ex｜突圍、冰伊布ex｜冰霜子彈、古簡蝸｜貪婪危害） | `effects.ts:1623` | ❌ | 無此分支 | 要 |
+| 7 | `snipe-60-ex`（謝米｜精刺奇襲） | `effects.ts:7374` | ❌ | 無此分支 | 要 |
+| — | 放置傷害指示物族（`placeCountersBenchPickPost`、dragapult-snipe、咒詛炸彈、噬沙堡爺ex｜重晶石之獄…） | 各處 | 不寫 | — | **不該寫**（卡面是「放置傷害指示物」＝招式效果，不是「受到傷害」） |
+
+⚠ 轉述的三個位置（`8714` / `11030` / `15866`）**全部屬實**，但**少報了 3 條**：
+`hitBenchAll`、`hitBenchPickPost`、`snipe-60-ex` 連一般情況都沒寫。
+
+玩家實際會遇到：備戰區的超級赫拉克羅斯ex 被上述招式打到（或被防 KO 擋下），
+下個自己回合用「重裝角擊」只會打出基礎的 100。實測：`大地斷裂` 打 30 之後上場，
+BASE 打 100、修後打 130。
+
+### 2. 修法：單一寫入點 `withAttackDamageTaken`
+
+`src/lib/game/effects/_shared.ts` 新增（`_shared.ts` 是 leaf，engine 與 effects 都已經
+import 它，無新循環）：
+
+```ts
+export function withAttackDamageTaken(
+  inst: CardInstance, prevDamage: number, newDamage: number,
+  kind: 'attack-damage' | 'attack-effect' | 'ability-effect',
+): CardInstance
+```
+
+- `actual = Math.max(0, newDamage - prevDamage)` ⇒ **防 KO 時自然就是「實際扣到的」**
+  （v6.255 站長裁定＋官方 `PTCG RULES/PTCG_RULES.md` L1933-1934：勤奮之心留 HP10 ⇒
+  指示物 22 個＝有效 HP−10），**一般情況自然就是全額**。呼叫端不必再判防 KO。
+- `kind !== 'attack-damage' || actual <= 0` ⇒ 只寫 `damage`，不碰 `damageTakenLastOppTurn`。
+- 防 KO 的三條路徑由 `applyPreventKOToVictim` 一支涵蓋，並把 `kind` 改成**必填參數**
+  （Rule 28：共用 factory 加必填參數往下傳，強迫新呼叫端回去讀卡面）。
+
+engine 主管線也改走同一支：
+`withAttackDamageTaken(defenderState.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage')`。
+
+⚠ **與 v6.255 的唯一位元差異**：baseDamage 為 0（0 傷害招式）且防守方存活時，
+BASE 會寫 `damageTakenLastOppTurn: 0`，現在維持 `undefined`。唯一讀取點用 `?? 0` 取值、
+END_TURN 的清除本來就跳過 `undefined` ⇒ 行為完全相同。
+
+### 3. 累計語意（本版**不**改變）
+
+卡面「受到的招式的傷害」＝上個對手回合內的**總和**（v6.253 B9、v6.255 C5 已經是此語意
+且有守衛）；多目標招式時**各自記各自的**（per-instance，天然由 iid 分開）。
+自傷型招式（`dealAttackDamageToTarget(s, dIdx, 自己的iid, …)`）與打自己備戰的
+`hitBenchAll` 仍照記，但那是在**自己回合**發生、於自己 `END_TURN` 就被清掉，讀不到。
+
+### 4. 守衛
+
+`scripts/test-v6256-damage-taken-central.mjs`（17 條）：
+- A 區 2 條：卡面前提（重裝角擊恰好 2 張印刷／六條管線代表卡的卡面逐字）。
+- B 區 12 條行為端：B1/B2/B3 正對照（engine 一般＋engine 防 KO＋dealAttackDamageToTarget
+  一般，逐位元不變）；B4~B9 六條管線各一條；B10 端到端（重裝角擊 100→130）；
+  B11 負對照（attack-effect 不計）；B12 中央 helper 單元語意。
+- C 區 3 條 lint：C1 全 src 只有 `_shared.ts` 能寫此欄位（正對照＋下限斷言）；
+  C2 中央算式與 ≥10 個消費端；C3 `applyPreventKOToVictim` 三個呼叫端都必須帶 `kind`
+  且宣告端必填（正對照餵 6 參數樣本）。
+
+**HEAD-FAIL（對真 BASE blob）**：B4~B10 **各自紅**（7 條）；C1/C2/C3 各自紅（3 條）。
+
+**突變 7 個，全部紅在預期那一條**：
+① 拿掉 helper 的 kind gate → B11/B12/C2 紅；
+② 拿掉 `Math.max(0,…)` → 只有 C2 紅（**行為端沒紅是正確的**：`actual <= 0` 的早退
+   已經涵蓋負值 ⇒ 這是真正的行為等價突變，不是守衛沒測到）；
+③ `hitBenchAll` 退回直接 spread → B7/B10 紅；
+④ `applyPreventKOToVictim` 被動分支退回直接 spread → B4 紅；
+⑤ engine 退回自己寫（繞過中央）→ C1/C2 紅；
+⑥ helper 改覆寫不累計 → B12 紅 ＋ **test-v6255 C5 紅**；
+⑦ `snipe-multi` 把 kind 寫死 `'attack-effect'` → B5 紅。
+
+**改到既有守衛**：`test-v6255-…` 的 C7/C8 原本斷言「算式寫在 engine.ts 裡」，
+算式搬家後會假紅。C7 把 `_shared.ts` 補進掃描清單（維持下限斷言的意義）；
+C8 改成「engine 必須走 `withAttackDamageTaken`」＋「中央 helper 必須是
+`newDamage - prevDamage`」——**比原本更強**（同時擋住「又拉回 engine 內寫死」），
+且對 BASE 原始碼仍然紅（已實測）。
+
+### 5. 效能（Rule 32：附量測腳本 `scripts/test-v6256-perf.mjs`）
+
+微基準（沙盒，N=2,000,000，7 輪取最小）：
+
+| 寫法 | ns/call |
+|---|---|
+| BASE 的 `{ ...inst, damage, damageTakenLastOppTurn }` | 34.84 |
+| v6.256 `withAttackDamageTaken` | 45.10 |
+| **差值** | **+10.26 ns／每一隻被打到的寶可夢** |
+
+量級檢核：多目標招式一次最多 6 隻 ⇒ 每個 action 最多 +62 ns，而
+`applyAction(ATTACK)` 本身約 **215,000 ns**（同一台沙盒）⇒ 占比 **0.03%**，差三個數量級。
+
+`applyAction` A/B（各跑 4 次程序、每次 5 輪取最小，µs/action）：
+
+| 情境 | BASE 最小 | v6.256 最小 |
+|---|---|---|
+| engine 主管線 單體攻擊（防守方存活） | 215.55 | 213.91 |
+| 多目標 黑曜石（1 主傷害 ＋ 2 備戰＝3 次寫入） | 295.81 | 303.71 |
+
+⇒ 動作層級**量不出差異**（逐輪互有高低，落在雜訊帶內）。
+⚠ 沙盒 CPU 約為正式 VM 的 1/10 量級，上表只可比相對值。
+
+### 6. tsc
+
+自訂 `tsconfig`（strict、只含 `src/lib/game/**`）BASE 88 個既有錯誤、修後 **88 個**，
+錯誤碼分佈逐項相同，**TS2304 兩邊皆 0**。
+
+
 ## v6.255 — 化隱一起豁免特性消除 ＋「受到的傷害」改記實際扣到的 ＋ 兩個守衛/註解更正
 
 站長裁定（2026-08-28，逐字）：①「一起豁免」 ②「改成實際扣到的」。

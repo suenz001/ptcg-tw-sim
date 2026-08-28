@@ -2678,3 +2678,44 @@ export const PENDING_STADIUMS = new Set<string>([
 export function isStadiumPendingImplementation(name: string | undefined | null): boolean {
   return !!name && PENDING_STADIUMS.has(name);
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐ v6.256【中央收斂】「這隻寶可夢受到的招式的傷害」的**唯一寫入點**
+// ══════════════════════════════════════════════════════════════════════════════
+/**
+ * 把「受到招式傷害」寫進 CardInstance —— 回傳同時帶好 `damage` 與（必要時）
+ * `damageTakenLastOppTurn` 的新實例。**全站唯一允許寫 `damageTakenLastOppTurn` 的地方**
+ * （lint 守衛 `scripts/test-v6256-damage-taken-central.mjs` 會擋掉其他檔案的直接寫入）。
+ *
+ * 讀取點只有一個：超級赫拉克羅斯ex｜重裝角擊（M2 `14322` / `18578`，I 標），卡面逐字
+ * 「增加與在上個對手的回合這隻寶可夢受到的招式的傷害相同數值的傷害。」
+ *
+ * ⚠ 記法沿用 v6.255 站長裁定（2026-08-28 逐字：「改成實際扣到的」）＋官方
+ *   `PTCG RULES/PTCG_RULES.md` L1933-1934（勤奮之心防 KO ⇒ 身上指示物是「22 個」
+ *   ＝ 有效 HP−10，不是招式的全額傷害）：本函式一律取 `newDamage − prevDamage`
+ *   ⇒ **防 KO 時自然就是「實際扣到的」，一般情況自然就是全額**，呼叫端不必再判防 KO。
+ *
+ * ⚠ v6.256 之前這件事分散在 engine 主管線與 effects.ts 的 6 條傷害管線上，其中
+ *   **5 條從來沒寫**、dealAttackDamageToTarget 的防 KO 分支則提早 return 而漏記
+ *   ⇒ 玩家被狙擊／多目標招式打到後，下回合重裝角擊少算。收斂成這一支後，
+ *   新增傷害管線時只要沒經過這裡，lint 守衛會紅。
+ *
+ * @param prevDamage 受這一下**之前**的傷害指示物。⚠ 必須由呼叫端給，不可用 `inst.damage`
+ *                   代替 —— engine 主管線的防 KO 分支在呼叫前就已經把 `inst.damage`
+ *                   改成「剩餘 HP = leaveHP」的值了。
+ * @param newDamage  這一下之後的傷害指示物（防 KO 時＝防 KO 後的值）。
+ * @param kind 只有 `'attack-damage'` 才是「受到的招式的傷害」；放置傷害指示物
+ *             （`'attack-effect'`）與特性效果（`'ability-effect'`）**不是傷害**，不計。
+ */
+export function withAttackDamageTaken(
+  inst: CardInstance,
+  prevDamage: number,
+  newDamage: number,
+  kind: 'attack-damage' | 'attack-effect' | 'ability-effect',
+): CardInstance {
+  // Math.max(0, …)：防 KO 的 leaveHP 若高於受招前的剩餘 HP（等同被治療）不算「受到傷害」。
+  const actual = Math.max(0, newDamage - prevDamage);
+  if (kind !== 'attack-damage' || actual <= 0) return { ...inst, damage: newDamage };
+  return { ...inst, damage: newDamage, damageTakenLastOppTurn: (inst.damageTakenLastOppTurn ?? 0) + actual };
+}

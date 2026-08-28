@@ -955,7 +955,8 @@ export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string,
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。
 import { sameEvoName, canEvolveOnto, recordOppKO, isAbilityBlockedByOakEye, getAllAttachedTools, reconcileMultiToolRelay , cardLink, addPrivateLog, addToolDiscardLog, hasStatusInAnySlot, resolveInfiniteShadowKo, toBareCard } from './effects/_shared'; // v5.842 跨三槽狀態讀取
 import { migrateCardId } from '../decks/cardIdMigration'; // v5.336：對戰咽喉點再 migrate 舊 M5 jp id
-import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared'; // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
+import { addPendingPrize, getPendingPrize, hasAnyPendingPrize, getAbilityFn, hasAbilityFn, discardIllegalRocketEnergy, updatePlayer } from './effects/_shared';
+import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點 // v6.020：updatePlayer 修 flushDiverCatchQueue TS2304 runtime 炸彈
 import { canApplyEffectToTarget, taikoBariBlocksAttackDamage, hasEffectiveAbilityByInst } from './defense';  // v6.196 中央述詞
 // v6.059：M6 傳說競技場（兩張合一機制未實作）→ fail-closed 禁止打出。述詞放 _shared(leaf) 避免底層反向 import 卡檔。
 import { isStadiumPendingImplementation, isTwoCardStadiumName, canPlayTwoCardStadium, assignTwoCardStadiumHalves, twoCardStadiumPartnerCardId, splitTwoCardStadiumDeckEntries } from './effects/_shared'; // v6.084 兩張合一競技場 / v6.090 左右身分 / v6.093 左右拆成兩張卡 / v6.094 建局入口 fail-safe
@@ -6346,10 +6347,13 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //   ⚠ 非防 KO 的一般情況：_survivedDamage === newDamage === 受招前 damage + baseDamage
       //     ⇒ 本式必然等於 baseDamage，**行為與 BASE 逐位元相同**（有正對照守衛）。
       //   ⚠ Math.max(0, …)：防 KO 的 leaveHP 若高於受招前的剩餘 HP（等同被治療）不算「受到傷害」。
+      //   ⭐⭐⭐ v6.256：這條算式已下沉到 `effects/_shared.ts` 的 withAttackDamageTaken
+      //     —— 它是全站唯一寫 `damageTakenLastOppTurn` 的地方（v6.255 時 effects.ts 還有
+      //     另外 6 條傷害管線各寫各的／根本沒寫）。行為與 v6.255 逐位元相同，唯一差別是
+      //     「這一下實際扣到 0」時不再寫入 `damageTakenLastOppTurn: 0`（唯一讀取點用
+      //     `?? 0` 取值 ⇒ 讀到的仍是 0，且 END_TURN 的清除本來就跳過 undefined）。
       const _damageBeforeThisAttack = newDamage - baseDamage;
-      const _actualDamageTaken = Math.max(0, _survivedDamage - _damageBeforeThisAttack);
-      const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + _actualDamageTaken;
-      defenderState.active = { ...defenderState.active!, damage: _survivedDamage, damageTakenLastOppTurn: accumDmgTaken };
+      defenderState.active = withAttackDamageTaken(defenderState.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage');
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
 

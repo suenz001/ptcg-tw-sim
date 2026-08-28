@@ -11,6 +11,7 @@
 import type { Card, EnergyType } from '$lib/cards/types';
 import { ENERGY_LABEL } from '$lib/cards/energy'; // v5.801 屬性→CJK 標籤(丟對手【X】能量 log)
 import { hasOakEye } from './effects/_shared'; // v5.789 監視之眼 gate
+import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到的招式的傷害」唯一中央寫入點
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
@@ -1411,7 +1412,9 @@ function hitBenchAll(
       koCards.push(card);
     } else {
       // v5.818：防具道具(果實)觸發後丟棄(KO 已隨 getAllAttachedTools 進棄牌)
-      let _kept = { ...c, damage: newDmg };
+      // ⭐v6.256：本管線（地震/燃燒熱浪/天空波/大地斷裂）是**招式傷害**（卡面「受到N點傷害」），
+      //   過去完全沒寫 damageTakenLastOppTurn ⇒ 備戰的超級赫拉克羅斯ex 被打到後重裝角擊少算。
+      let _kept = withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage');
       if (_btd) { _kept = _stripBenchTool(_kept, _btd.iid); koDiscards.push(_btd); }
       newBench.push(_kept);
     }
@@ -1620,7 +1623,8 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
       koCards.push(card);
     } else {
       // v5.818：防具道具(果實)觸發後丟棄(KO 已隨 getAllAttachedTools 進棄牌)
-      let _kept = { ...c, damage: newDmg };
+      // ⭐v6.256：同 hitBenchAll —— bench-hit-N 全是卡面「受到N點傷害」的招式傷害。
+      let _kept = withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage');
       if (_btd2) { _kept = _stripBenchTool(_kept, _btd2.iid); koDiscards.push(_btd2); }
       newBench.push(_kept);
       hitNames.push(card?.name ?? '?');
@@ -7371,7 +7375,8 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
     return addPendingPrize(s, actorIdx, prizes, pool);
   }
   const players = [...st.players] as [PlayerState, PlayerState];
-  players[dIdx] = { ...defender, bench: defender.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg } : c) };
+  // ⭐v6.256：卡面「受到60點傷害」＝招式傷害 ⇒ 走中央寫入點（過去這條路徑完全沒記）
+  players[dIdx] = { ...defender, bench: defender.bench.map(c => c.iid === targetIid ? withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage') : c) };
   return addLog({ ...st, players }, `精刺奇襲：對 ${targetCard?.name ?? '?'} 造成 60 傷害！`, actorIdx);
 });
 
@@ -8453,6 +8458,14 @@ function applyPreventKOToVictim(
   defenderIdx: 0 | 1,
   baseDamage: number,
   pool: Map<string, Card>,
+  /**
+   * ⭐⭐⭐ v6.256【必填】這一下是不是「招式的傷害」。
+   * 防 KO 成功時本函式會把 damage 改寫成「剩餘 HP = leaveHP」，那個差額就是
+   * 「這隻寶可夢受到的招式的傷害」（官方 PTCG_RULES.md L1933-1934）。
+   * 做成必填參數是為了強迫新的呼叫端回去讀卡面（Rule 28）—— v6.256 之前這三條
+   * 呼叫端在防 KO 成功時全部提早 return，damageTakenLastOppTurn 一律漏記。
+   */
+  kind: DamageKind,
 ): { prevented: boolean; state: GameState } {
   if (baseDamage <= 0 || !victimCard) return { prevented: false, state };
   const defender = state.players[defenderIdx];
@@ -8468,7 +8481,8 @@ function applyPreventKOToVictim(
       const r = fn(inPlay, victimCard, baseDamage);
       if (!r.prevent) continue;
       const targetDamage = Math.max(0, hp - r.leaveHP);
-      let newInst: CardInstance = { ...inPlay, damage: targetDamage };
+      // ⭐v6.256：走中央寫入點 ⇒ 防 KO 成功時記「實際扣到的」（targetDamage − 受招前 damage）
+      let newInst: CardInstance = withAttackDamageTaken(inPlay, inPlay.damage, targetDamage, kind);
       if (newInst.toolAttached?.iid === t.iid) newInst = { ...newInst, toolAttached: undefined };
       else if (newInst.extraTools) newInst = { ...newInst, extraTools: newInst.extraTools.filter(x => x.iid !== t.iid) };
       let s = updatePlayer(state, defenderIdx, p => isActive
@@ -8495,7 +8509,8 @@ function applyPreventKOToVictim(
         if (cf.heads === 0) continue;
       }
       const targetDamage = Math.max(0, hp - r.leaveHP);
-      const newInst: CardInstance = { ...inPlay, damage: targetDamage };
+      // ⭐v6.256：同上，被動型防 KO（結實/勤奮之心/堅忍之軀/不朽身軀）也走中央寫入點
+      const newInst: CardInstance = withAttackDamageTaken(inPlay, inPlay.damage, targetDamage, kind);
       let s = updatePlayer(workState, defenderIdx, p => isActive
         ? { ...p, active: newInst }
         : { ...p, bench: p.bench.map(c => c.iid === victim.iid ? newInst : c) });
@@ -8711,7 +8726,7 @@ export function dealAttackDamageToTarget(
   if (hp > 0 && newDmg >= hp) {
     // v5.594 受招式傷害昏厥前查 prevent-KO（堅忍之軀/倖存鍛鍊器等）；命中則留 HP 不昏厥
     if (kind === 'attack-damage') {
-      const _pk = applyPreventKOToVictim(st, targetNow, targetCard, dIdx, effDmg, pool);
+      const _pk = applyPreventKOToVictim(st, targetNow, targetCard, dIdx, effDmg, pool, kind);
       if (_pk.prevented) return _pk.state;
     }
     // v5.934 無限之影中央收斂：受【對手】招式【傷害】KO(kind==='attack-damage' && dIdx!==actorIdx) → 本體+進化鏈回手;放指示物(attack-effect)/自傷不觸發
@@ -8745,10 +8760,9 @@ export function dealAttackDamageToTarget(
   // v5.780：累計「受到的招式傷害」(超級赫拉克羅斯ex|重裝角擊)。引擎主管線僅 active 主傷害記錄,
   //   狙擊/多目標傷害(走此中央 helper,含【備戰】)過去漏記 → §17.44.E 案2「備戰受傷後上場」誤算。
   //   只記攻擊傷害(attack-damage),放傷害指示物(attack-effect)非「受到傷害」不計;END_TURN 已含 bench reset。
-  const _accumTaken = kind === 'attack-damage' && effDmg > 0
-    ? { damageTakenLastOppTurn: (targetNow.damageTakenLastOppTurn ?? 0) + effDmg } : {};
-  if (isActive) newDefender.active = { ...targetNow, damage: newDmg, ..._accumTaken };
-  else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? { ...c, damage: newDmg, ..._accumTaken } : c);
+  // ⭐v6.256：改走 withAttackDamageTaken（newDmg − targetNow.damage === effDmg ⇒ 逐位元同 v6.255）。
+  if (isActive) newDefender.active = withAttackDamageTaken(targetNow, targetNow.damage, newDmg, kind);
+  else newDefender.bench = defenderNow.bench.map(c => c.iid === targetIid ? withAttackDamageTaken(c, c.damage, newDmg, kind) : c);
   players[dIdx] = newDefender;
   return addLog({ ...st, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害${_fSuffix}`, actorIdx);
 }
@@ -11027,7 +11041,7 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     const hp = effectiveHPInline(targetNow, pool, st);  // v5.091
     if (hp > 0 && newDmg >= hp) {
       // v5.594 prevent-KO（堅忍之軀/倖存鍛鍊器等）：命中則留 HP 不昏厥
-      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, effDmg, pool);
+      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, effDmg, pool, kind);
       if (_pk.prevented) { s = _pk.state; continue; }
       const ko: CardInstance[] = [
         { ...targetNow, damage: newDmg },
@@ -11051,8 +11065,10 @@ regR('snipe-multi', (st, actorIdx, selectedIids, params, pool) => {
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDefender = { ...defenderNow };
-      if (isActive) newDefender.active = { ...targetNow, damage: newDmg };
-      else newDefender.bench = defenderNow.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      // ⭐v6.256：snipe-multi 過去完全沒寫 damageTakenLastOppTurn ⇒ 走中央寫入點。
+      //   kind 由 params 帶進來：'attack-effect'（放指示物型卡面）不算「受到的傷害」。
+      if (isActive) newDefender.active = withAttackDamageTaken(targetNow, targetNow.damage, newDmg, kind);
+      else newDefender.bench = defenderNow.bench.map(c => c.iid === iid ? withAttackDamageTaken(c, c.damage, newDmg, kind) : c);
       players[dIdx] = newDefender;
       s = addLog({ ...s, players }, `${label}：對 ${targetCard?.name ?? '?'} 造成 ${effDmg} 傷害`, actorIdx);
     }
@@ -15863,7 +15879,7 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
     const players = [...s.players] as [PlayerState, PlayerState];
     if (hp > 0 && newDmg >= hp) {
       // v5.594 prevent-KO（堅忍之軀/倖存鍛鍊器等）：命中則留 HP 不昏厥
-      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, dmg, pool);
+      const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, dmg, pool, 'attack-damage');
       if (_pk.prevented) { s = _pk.state; continue; }
       // KO：棄牌遷移 + 累計獎賞 + 移除位置
       const ko: CardInstance[] = [
@@ -15892,8 +15908,9 @@ regR('clone-strike-multi-hit', (st, actorIdx, selectedIids, params, pool) => {
       }
     } else {
       const newDef = { ...defenderNow };
-      if (isActive) newDef.active = { ...targetNow, damage: newDmg };
-      else newDef.bench = defenderNow.bench.map(c => c.iid === iid ? { ...c, damage: newDmg } : c);
+      // ⭐v6.256：分身連打/大吼大叫/三色炮 卡面皆為「造成傷害」⇒ 固定 'attack-damage'（見 L15796 註解）。
+      if (isActive) newDef.active = withAttackDamageTaken(targetNow, targetNow.damage, newDmg, 'attack-damage');
+      else newDef.bench = defenderNow.bench.map(c => c.iid === iid ? withAttackDamageTaken(c, c.damage, newDmg, 'attack-damage') : c);
       players[dIdx] = newDef;
       s = { ...s, players };
       s = addLog(s, `${label}：對 ${targetCard?.name ?? '?'}（${isActive ? '戰鬥場' : '備戰位'}）造成 ${dmg} 點傷害`, actorIdx);
