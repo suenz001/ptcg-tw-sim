@@ -25,6 +25,8 @@ import {
   wouldNeutralCenterBlock,
   koPrizesAdjusted,
   fireDefenderOnDamaged,
+  fireDefenderOnKO,        // ⭐v6.260 油之機關槍 KO 補中央 on-KO（原漏：接力棒/護身符/最後鎖鏈/潛者捕捉）
+  applyPreventKOToVictim,  // ⭐v6.260 油之機關槍 KO 補防 KO（倖存鍛鍊器/勤奮之心等）
   resolveMultiTargetDamageGuard,   // v6.141 多目標傷害免疫中央閘
   passiveImmunityByDamageAmount,   // v6.165 依傷害量判定的被動免疫（鐵壁硬殼）
 } from '../../effects';
@@ -688,10 +690,17 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
     const tHp = getEffectiveHP(targetNow, pool, st);  // v5.091
 
     if (tHp > 0 && newDmg >= tHp) {
+      // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心/結實/堅忍之軀/不朽身軀 —— 卡面皆無「在戰鬥場」，
+      //   active/bench 都適用）。本 resolver 原本完全沒接（中央 dealAttackDamageToTarget v5.594 起就有）。
+      {
+        const _pk = applyPreventKOToVictim(s, targetNow, targetCard, dIdx, finalDmg, pool, 'attack-damage');
+        if (_pk.prevented) { s = _pk.state; continue; }
+      }
       // KO
+      const _wasActiveTgt = defenderNow.active?.iid === iid;  // ⭐v6.260 KO 前位置快照
       const ko: CardInstance[] = [
         { ...targetNow, damage: newDmg }, ...targetNow.energyAttached,
-        ...(targetNow.toolAttached ? [targetNow.toolAttached] : []),
+        ...getAllAttachedTools(targetNow),   // ⭐v6.260 原漏 extraTools（v5.067/v6.136 同型教訓）
         ...(targetNow.evolvedFromStack ?? []),
       ];
       // v5.468：改走 koPrizesAdjusted（原 raw ex?2:1 漏古舊能量-1/莉莉艾珍珠/影藏/脆弱蛻殼）。玩家回報古舊能量沒-1。
@@ -701,7 +710,7 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       morePrizes += prizes;
       koNames.push(targetCard?.name ?? '?');
       const players = [...s.players] as [PlayerState, PlayerState];
-      if (defenderNow.active?.iid === iid) {
+      if (_wasActiveTgt) {
         players[dIdx] = { ...defenderNow, active: null, discard: [...defenderNow.discard, ...ko] };
       } else {
         players[dIdx] = {
@@ -713,6 +722,11 @@ regR('olive-oil-distribute', (st, actorIdx, selectedIids, params, pool) => {
       s = { ...s, players };
       // v2.246：油之機關槍 = 招式 KO
       s = recordOppKO(s, dIdx, targetCard, 'attack');
+      // ⭐⭐⭐ v6.260：中央 on-KO（沉重接力棒/希望護身符/最後鎖鏈/潛者捕捉…）——本 resolver 原本
+      //   完全沒呼叫（連戰鬥位 KO 都漏）。onDamagedAlreadyFired：上方僅 active 目標跑過
+      //   fireDefenderOnDamaged（finalDmg>0），鏡射道具據此防雙觸發（v6.120）。
+      s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...targetNow, damage: newDmg },
+        _wasActiveTgt, true, _wasActiveTgt && finalDmg > 0);
     } else {
       const players = [...s.players] as [PlayerState, PlayerState];
       const newDef = { ...defenderNow };

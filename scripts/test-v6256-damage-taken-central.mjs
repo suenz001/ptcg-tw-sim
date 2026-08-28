@@ -313,10 +313,17 @@ T('C2 ⭐⭐中央 helper 的算式與所有消費端（＋下限斷言＋正對
 T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正對照）', () => {
   // 抽取所有 applyPreventKOToVictim(...) 的實參（單行寫法，anchor 為右括號）
   const re = /applyPreventKOToVictim\(([^;]*?)\)\s*;/g;
+  // ⭐v6.260：備戰 KO 路徑補防 KO（hitBenchAll／bench-hit-N／snipe-60-ex）＋ mega_decks 的
+  //   olive-oil-distribute ⇒ effects.ts 6 個、mega_decks.ts 1 個。每個都必須宣告 kind（下方檢查）。
+  const megaSrc = readFileSync(join(ROOT, 'src/lib/game/effects/cards/mega_decks.ts'), 'utf8');
   const sites = [...SRC.effects.matchAll(re)].map(m => m[1]);
-  assert.equal(sites.length, 3,
-    `applyPreventKOToVictim 呼叫端應恰好 3 個（dealAttackDamageToTarget／snipe-multi／clone-strike-multi-hit），` +
-    `實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
+  const megaSites = [...megaSrc.matchAll(re)].map(m => m[1]);
+  assert.equal(sites.length, 6,
+    `applyPreventKOToVictim effects.ts 呼叫端應恰好 6 個（dealAttackDamageToTarget／snipe-multi／clone-strike-multi-hit／` +
+    `hitBenchAll／bench-hit-N／snipe-60-ex），實得 ${sites.length} ⇒ 新增了管線就必須回來讀卡面決定 kind`);
+  assert.equal(megaSites.length, 1,
+    `applyPreventKOToVictim mega_decks.ts 呼叫端應恰好 1 個（olive-oil-distribute），實得 ${megaSites.length}`);
+  sites.push(...megaSites);
   for (const args of sites) {
     const n = args.split(',').length;
     assert.equal(n, 7, `applyPreventKOToVictim 呼叫端只有 ${n} 個參數（缺 kind）：${args.trim()}`);

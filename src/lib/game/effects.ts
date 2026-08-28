@@ -95,6 +95,7 @@ import {
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
   TOOL_ON_KO_MIRRORED_FROM_DAMAGED,  // v6.120 防同一次傷害觸發兩次
+  TOOL_ON_KO_BENCH_ALSO,             // v6.260 卡面無「在戰鬥場」的 on-KO 道具（備戰也觸發）
   TOOL_FIRE_AFTER_ATTACK_EFFECT,     // v6.215 官方序：招式效果 → 道具（engine 延後觸發名單）
   TOOL_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS,
   TOOL_ATTACH_GATE, TOOL_END_TURN_DISCARD,
@@ -885,7 +886,10 @@ export function koPrizesAdjusted(
   if (koByAttackDamage) {
     // 脆弱蛻殼（脫殼忍者）等 PASSIVE_PREVENT_PRIZE → 0 張
     for (const ab of (koCard.abilities ?? [])) {
-      if (!isAbilityHolderEffective(s, koInst, koCard, (1 - attackerIdx) as 0 | 1, ab.name, 'active', pool)) continue; // v5.655 被KO者特性被暗夜羽擊/初始化等壓制→脆弱蛻殼失效
+      // ⭐v6.260：位置依實際（備戰被狙擊 KO 時傳 'bench'，黏著束縛等 bench 限定消除才判得準）；
+      //   純粹是「特性此刻是否被消除」的判定位置，不是卡面發動條件（脆弱蛻殼卡面無「在戰鬥場」）。
+      const _ppLoc: 'active' | 'bench' = s.players[defenderIdx].bench.some(x => x.iid === koInst.iid) ? 'bench' : 'active';
+      if (!isAbilityHolderEffective(s, koInst, koCard, (1 - attackerIdx) as 0 | 1, ab.name, _ppLoc, pool)) continue; // v5.655 被KO者特性被暗夜羽擊/初始化等壓制→脆弱蛻殼失效
       const fnPP = PASSIVE_PREVENT_PRIZE.get(ab.name);
       if (fnPP && atkCard && fnPP(atkCard)) return { prizes: 0, state: s };
     }
@@ -1307,6 +1311,7 @@ function hitBenchAll(
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
+  const koSnaps: CardInstance[] = [];   // ⭐v6.260 每隻被KO者的KO前快照(含能量/道具)→中央on-KO
   const koToHand: CardInstance[] = [];  // v5.934 無限之影:備戰受對手招式傷害KO本體+進化鏈回手
   const koNames: string[] = [];
   const koCards: (Card | undefined)[] = [];  // v2.246 KO cause tracking
@@ -1403,8 +1408,19 @@ function hitBenchAll(
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, state);
     if (hp > 0 && newDmg >= hp) {
+      // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心/結實/堅忍之軀/不朽身軀 —— 卡面皆無「在戰鬥場」，
+      //   備戰同樣適用）。僅對手招式（自傷路徑維持既有行為，卡面歧義待站長裁定）。
+      if (attackerIdx !== targetIdx) {
+        const _pk = applyPreventKOToVictim(coinWS, c, card, targetIdx, perAmt, pool, 'attack-damage');
+        if (_pk.prevented) {
+          coinWS = _pk.state;
+          const _keptPk = coinWS.players[targetIdx].bench.find(x => x.iid === c.iid);
+          if (_keptPk) { newBench.push(_keptPk); continue; }
+        }
+      }
       // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷 targetIdx===attackerIdx 不觸發)
       const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, attackerIdx !== targetIdx && !_calmGroundBlocks(state, targetIdx, pool), coinWS, targetIdx, 'bench');
+      koSnaps.push({ ...c, damage: newDmg });  // ⭐v6.260 KO 前快照
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
       for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
@@ -1426,11 +1442,13 @@ function hitBenchAll(
   }
 
   const players = [...coinWS.players] as [PlayerState, PlayerState];
+  // ⭐v6.260：防 KO helper（倖存鍛鍊器）可能已把道具丟進 discard ⇒ 以最新 player 為基底
+  const _tgtNow = coinWS.players[targetIdx];
   players[targetIdx] = {
-    ...target,
+    ..._tgtNow,
     bench: newBench,
-    discard: [...target.discard, ...koDiscards],
-    hand: koToHand.length > 0 ? [...target.hand, ...koToHand] : target.hand,  // v5.934 無限之影
+    discard: [..._tgtNow.discard, ...koDiscards],
+    hand: koToHand.length > 0 ? [..._tgtNow.hand, ...koToHand] : _tgtNow.hand,  // v5.934 無限之影
   };
 
   const who = targetIdx === attackerIdx ? '自己' : '對手';
@@ -1451,6 +1469,14 @@ function hitBenchAll(
     // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');
+    }
+    // ⭐⭐⭐ v6.260：備戰被【對手】招式傷害 KO → 中央 on-KO 觸發（本路徑原本完全沒呼叫）。
+    //   isActive=false ⇒ 只觸發卡面沒有「在戰鬥場」的效果（希望護身符/最後鎖鏈/潛者捕捉）；
+    //   多隻同時 KO 的多個 picker 由既有 pendingChainQueue 依序排隊（v4.933/v6.175 token）。
+    if (attackerIdx !== targetIdx) {
+      for (const _snap of koSnaps) {
+        s = fireDefenderOnKO(s, targetIdx, attackerIdx, pool, _snap, false, true, false);
+      }
     }
   }
   return s;
@@ -1556,6 +1582,7 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   let morePrizes = 0;
   const newBench: CardInstance[] = [];
   const koDiscards: CardInstance[] = [];
+  const koSnaps: CardInstance[] = [];   // ⭐v6.260 每隻被KO者的KO前快照(含能量/道具)→中央on-KO
   const koToHand: CardInstance[] = [];  // v5.934 無限之影:備戰受對手招式傷害KO本體+進化鏈回手
   const hitNames: string[] = [];
   const koNames: string[] = [];
@@ -1614,8 +1641,18 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     const newDmg = c.damage + perAmt;
     const hp = effectiveHPInline(c, pool, st);
     if (hp > 0 && newDmg >= hp) {
+      // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心等 —— 卡面皆無「在戰鬥場」，備戰同樣適用）。
+      if (actorIdx !== targetIdx) {
+        const _pk = applyPreventKOToVictim(st, c, card, targetIdx, perAmt, pool, 'attack-damage');
+        if (_pk.prevented) {
+          st = _pk.state;
+          const _keptPk = st.players[targetIdx].bench.find(x => x.iid === c.iid);
+          if (_keptPk) { newBench.push(_keptPk); continue; }
+        }
+      }
       // v5.934 無限之影中央收斂：備戰耿鬼受【對手】招式傷害 KO → 本體+進化鏈實體卡回手(自傷不觸發)
       const _isk = resolveInfiniteShadowKo({ ...c, damage: newDmg }, pool, actorIdx !== targetIdx && !_calmGroundBlocks(st, targetIdx, pool), st, targetIdx, 'bench');
+      koSnaps.push({ ...c, damage: newDmg });  // ⭐v6.260 KO 前快照
       for (const _d of _isk.toDiscard) koDiscards.push(_d);
       for (const _h of _isk.toHand) koToHand.push(_h);
       if (card) {
@@ -1637,7 +1674,9 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
   }
 
   const players = [...st.players] as [PlayerState, PlayerState];
-  players[targetIdx] = { ...target, bench: newBench, discard: [...target.discard, ...koDiscards], hand: koToHand.length > 0 ? [...target.hand, ...koToHand] : target.hand };  // v5.934 無限之影
+  // ⭐v6.260：防 KO helper 可能已動 discard ⇒ 以最新 player 為基底
+  const _tgtNowB = st.players[targetIdx];
+  players[targetIdx] = { ..._tgtNowB, bench: newBench, discard: [..._tgtNowB.discard, ...koDiscards], hand: koToHand.length > 0 ? [..._tgtNowB.hand, ...koToHand] : _tgtNowB.hand };  // v5.934 無限之影
 
   let s: GameState = { ...st, players };
   if (koToHand.length > 0) s = addLog(s, `無限之影：備戰的寶可夢因對手招式的傷害【昏厥】→ 本體與進化來源卡放回手牌（附加能量/道具丟棄）`, targetIdx);
@@ -1662,6 +1701,12 @@ regR('bench-hit-N', (st, actorIdx, selectedIids, params, pool) => {
     // v2.246 KO cause tracking — 每隻 KO 都登錄為招式 KO（self-KO 由 recordOppKO 內部 skip）
     for (const card of koCards) {
       s = recordOppKO(s, targetIdx, card, 'attack');
+    }
+    // ⭐⭐⭐ v6.260：備戰被【對手】招式傷害 KO → 中央 on-KO 觸發（本路徑原本完全沒呼叫）。
+    if (actorIdx !== targetIdx) {
+      for (const _snap of koSnaps) {
+        s = fireDefenderOnKO(s, targetIdx, actorIdx, pool, _snap, false, true, false);
+      }
     }
   }
   return s;
@@ -7461,6 +7506,11 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
   const newDmg = target.damage + 60;
   const targetHP = effectiveHPInline(target, pool, st);  // v5.091
   if (targetHP > 0 && newDmg >= targetHP) {
+    // ⭐v6.260 防 KO（倖存鍛鍊器/勤奮之心等 —— 卡面皆無「在戰鬥場」，備戰同樣適用）。
+    {
+      const _pk = applyPreventKOToVictim(st, target, targetCard, dIdx, 60, pool, 'attack-damage');
+      if (_pk.prevented) return _pk.state;
+    }
     const koDiscard: CardInstance[] = [
       { ...target, damage: newDmg },
       ...target.energyAttached,
@@ -7475,6 +7525,8 @@ regR('snipe-60-ex', (st, actorIdx, selectedIids, _params, pool) => {
       discard: [...defender.discard, ...koDiscard] };
     let s = addLog({ ...st, players }, `精刺奇襲：${targetCard?.name ?? '?'} 被擊倒！${st.players[actorIdx].name} 取得 ${prizes} 張獎賞卡。`, null);
     s = recordOppKO(s, dIdx, targetCard, 'attack');
+    // ⭐v6.260：備戰被對手招式傷害 KO → 中央 on-KO（本路徑原漏；isActive=false）
+    s = fireDefenderOnKO(s, dIdx, actorIdx, pool, { ...target, damage: newDmg }, false, true, false);
     return addPendingPrize(s, actorIdx, prizes, pool);
   }
   const players = [...st.players] as [PlayerState, PlayerState];
@@ -7656,14 +7708,19 @@ export function applyDamageToAllOpp(
         ...getAllAttachedTools(defender.active),
         ...(defender.active.evolvedFromStack ?? []),
       ];
-      const _ko = koPrizesAdjusted(s, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool);
+      // ⭐v6.260：本 helper 全部呼叫者（痛楚記憶/侵蝕之風/覆雪）皆「放置傷害指示物」＝效果 KO
+      //   ⇒ koByAttackDamage=false（獎賞修正 豪華斗篷/珍珠/影藏/鬆口氣… 卡面皆「受到…傷害而
+      //   昏厥」，效果 KO 不套用；BASE bug：痛楚記憶 KO 願增猿ex 時「鬆口氣」誤 -1 獎賞）。
+      const _ko = koPrizesAdjusted(s, defender.active, defCard, (1 - dIdx) as 0 | 1, dIdx, pool, false);
       s = _ko.state;
       const p = _ko.prizes;
       prizesTotal += p;
       defender = { ...defender, active: null, discard: [...defender.discard, ...koDiscard] };
       s = addLog(s, `${label}：${defCard?.name ?? '?'} 被擊倒！+${p} 張獎賞卡。`, null);
       s = recordOppKO(s, dIdx, defCard, 'attack', false);
-      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, true);
+      // ⭐v6.260：效果 KO ⇒ koByAttackDamage=false（TOOL_ON_KO/PASSIVE_ON_KO/潛者捕捉卡面
+      //   皆要求「傷害而昏厥」；BASE bug：帶希望護身符被痛楚記憶 KO 誤開 picker）。
+      s = fireDefenderOnKO(s, dIdx, (1 - dIdx) as 0 | 1, pool, koDiscard[0], true, false);
     } else {
       defender = { ...defender, active: { ...defender.active, damage: newDmg } };
     }
@@ -7694,7 +7751,8 @@ export function applyDamageToAllOpp(
         ...getAllAttachedTools(b),
         ...(b.evolvedFromStack ?? []),
       ];
-      const _ko = koPrizesAdjusted(s, b, card, (1 - dIdx) as 0 | 1, dIdx, pool);
+      // ⭐v6.260：效果 KO（放指示物）⇒ koByAttackDamage=false（同上 active 段）。
+      const _ko = koPrizesAdjusted(s, b, card, (1 - dIdx) as 0 | 1, dIdx, pool, false);
       s = _ko.state;
       const p = _ko.prizes;
       prizesTotal += p;
@@ -8327,12 +8385,19 @@ export function fireDefenderOnKO(
       }
     }
   }
-  if (!isActive) return s0;
+  // ⭐⭐⭐ v6.260：移除「!isActive 一刀切早退」——卡面沒有「在戰鬥場」的 on-KO 效果
+  //   （希望護身符／桃歹郎｜最後鎖鏈）備戰被對手招式傷害 KO 也要觸發。改為逐效果宣告
+  //   （TOOL_ON_KO_BENCH_ALSO / PASSIVE_ON_KO_BENCH_ALSO，fail-closed：未宣告=只在戰鬥場，
+  //   與舊行為一致，新卡不會突然過度觸發）。picker 併發由既有 pendingChainQueue 排隊
+  //   （v4.933；token 對應見 v6.175 stampPendingToken）。
   let s = s0;
   const stadiumCard = s.activeStadium ? pool.get(s.activeStadium.cardId) : null;
   const toolsJammed = !!stadiumCard && JAMMING_TOWER_STADIUMS.has(stadiumCard.name);
-  // ① TOOL_ON_KO（維持原行為：isActive + 阻礙之塔失效）
-  if (!toolsJammed) {
+  // ① TOOL_ON_KO（阻礙之塔失效）
+  //   ⭐ v6.260 補 koByAttackDamage gate：希望護身符／沉重接力棒卡面皆「受到…傷害而【昏厥】時」，
+  //   鏡射道具卡面皆「受到…傷害時」⇒ 效果 KO（放指示物：痛楚記憶／幻影奇襲等）一律不觸發
+  //   （BASE bug：dealAttackDamageToTarget kind='attack-effect' KO 帶希望護身符仍誤開 picker）。
+  if (!toolsJammed && koByAttackDamage) {
     for (const t of getAllAttachedTools(koInst)) {
       const tool = pool.get(t.cardId);
       if (!tool) continue;
@@ -8342,6 +8407,8 @@ export function fireDefenderOnKO(
       //   ⚠ 用 continue 而非把它們從 TOOL_ON_KO 拿掉 —— 引擎主管線的 KO 分支
       //   （不跑 on-damaged）仍然要靠這條鏡射才會觸發。
       if (onDamagedAlreadyFired && TOOL_ON_KO_MIRRORED_FROM_DAMAGED.has(tool.name)) continue;
+      // ⭐ v6.260：備戰被 KO 時只觸發卡面沒有「在戰鬥場」的道具（目前僅希望護身符）。
+      if (!isActive && !TOOL_ON_KO_BENCH_ALSO.has(tool.name)) continue;
       const fn = TOOL_ON_KO.get(tool.name);
       if (fn) s = fn(s, dIdx, aIdx, pool, koInst, s.players[aIdx].active?.iid);  // v6.215 攻擊方 iid 快照
     }
@@ -8353,7 +8420,9 @@ export function fireDefenderOnKO(
     // ② PASSIVE_KO_RETALIATION（炸裂針）→ 對攻擊方放指示物（光之翼擋；初始化/暗夜羽擊等消除 holder 特性則跳過）
     if (koCard?.abilities && !attackerHasMagicalShine) {
       for (const ab of koCard.abilities) {
-        if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, 'active', pool)) continue;
+        // ⭐ v6.260：炸裂針卡面「在戰鬥場上…」⇒ 備戰不觸發（目前無 anywhere 型 on-KO 反擊）。
+        if (!isActive && !PASSIVE_ON_KO_BENCH_ALSO.has(ab.name)) continue;
+        if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
         const ret = PASSIVE_KO_RETALIATION.get(ab.name);
         if (!ret) continue;
         const refPlayers = [...s.players] as [PlayerState, PlayerState];
@@ -8369,7 +8438,10 @@ export function fireDefenderOnKO(
     //   holder 特性被暗夜羽擊/初始化/監視塔/黏著束縛等消除時,被KO觸發特性失效(fireDefenderOnKO 開頭已 gate isActive→傳 'active')。
     if (koCard?.abilities) {
       for (const ab of koCard.abilities) {
-        if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, 'active', pool)) continue;
+        // ⭐ v6.260：只有卡面沒有「在戰鬥場」的才在備戰觸發（最後鎖鏈）；
+        //   沙之羽擊／光子纜線卡面「在戰鬥場上受到…」⇒ 備戰維持不觸發。
+        if (!isActive && !PASSIVE_ON_KO_BENCH_ALSO.has(ab.name)) continue;
+        if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
         const fnKO = PASSIVE_ON_KO.get(ab.name);
         if (fnKO) s = fnKO(s, dIdx, aIdx, pool, koCard, koInst);
       }
@@ -8540,7 +8612,7 @@ export function applyAttackerActiveDamageBonuses(
 //   (堅忍之軀/不朽身軀/勤奮之心/結實)。命中 → 該寶可夢留 leaveHP 不昏厥(道具型丟棄道具)，回傳新 state。
 //   位置無關(active/bench 皆可，snipe 可 KO 備戰)；與引擎主管線(engine.ts wouldBeKO)inline 同邏輯，
 //   分屬不同 KO 路徑(中央 helper / snipe-multi / clone-strike)不雙觸發。只在「招式傷害」昏厥語境呼叫。
-function applyPreventKOToVictim(
+export function applyPreventKOToVictim(   // ⭐v6.260 export：mega_decks olive-oil-distribute 用
   state: GameState,
   victim: CardInstance,
   victimCard: Card | undefined,
@@ -16692,6 +16764,18 @@ export type PassiveOnKoFn = (
   defenderCard: Card,
   defenderInst?: CardInstance,
 ) => GameState;
+/**
+ * ⭐⭐⭐ v6.260：卡面**沒有**「在戰鬥場」的 on-KO 特性（備戰被對手招式傷害 KO 也觸發）。
+ * 供 fireDefenderOnKO ②③ 段共用（fail-closed：未宣告 = 只在戰鬥場觸發）。
+ * 卡面逐字（static/cards 台灣官方）：
+ *   桃歹郎｜最後鎖鏈（M2a 14775/16421/16422，I 標）
+ *   「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，從自己的牌庫任意選擇1張卡加入手牌。並且重洗牌庫。」
+ *     —— 沒有「在戰鬥場」⇒ 備戰也觸發。
+ *   對照（卡面有「在戰鬥場」，不列入）：沙之羽擊（M-P-I 14432）／光子纜線（M-P-J 19235）／
+ *   炸裂針（SV9 12468）。鬆口氣（獎賞修正）已走 PASSIVE_KO_PRIZE_ADJUST（v6.259，
+ *   koVictimAbilityPrizeAdjust 不做位置 gate，備戰本來就涵蓋）。
+ */
+export const PASSIVE_ON_KO_BENCH_ALSO = new Set<string>(['最後鎖鏈']);
 export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // 桃歹郎(I) | 最後鎖鏈 — 從牌庫任選 1 張加手 + 重洗
   ['最後鎖鏈', (state, dIdx, _aIdx, _pool, _defCard) => {

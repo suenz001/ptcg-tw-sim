@@ -328,6 +328,18 @@ TOOL_PRIZE_BONUS.set('莉莉艾的珍珠', (card) => {
 export const TOOL_ON_KO_MIRRORED_FROM_DAMAGED = new Set<string>();
 
 /**
+ * ⭐⭐⭐ v6.260：卡面**沒有**「在戰鬥場」的 TOOL_ON_KO 道具（備戰被對手招式傷害 KO 也觸發）。
+ * 逐卡宣告制（Rule 28）＋ fail-closed：沒列在這裡 = 只在戰鬥場觸發（既有行為）。
+ * 卡面逐字（static/cards 台灣官方）：
+ *   希望護身符（SV8 11278）「附有這張卡的寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，…」
+ *     —— 沒有「在戰鬥場」⇒ 備戰也觸發。
+ *   對照：沉重接力棒（SV5M 9907）「…在戰鬥場上受到…」⇒ 只在戰鬥場（不列入）。
+ *   鏡射道具（幸運頭盔/凸凸頭盔/火箭隊的催眠裝置/逆境保險/奢華炸彈/手持循環扇）
+ *     卡面全部有「在戰鬥場」⇒ 不列入。
+ */
+export const TOOL_ON_KO_BENCH_ALSO = new Set<string>(['希望護身符']);
+
+/**
  * ⭐⭐⭐ v6.215：官方處理順序是 **招式效果先於「受到傷害時」道具效果**。
  *
  * `PTCG RULES/PTCG_RULES.md` §17.22.A L1530-1531 逐字：

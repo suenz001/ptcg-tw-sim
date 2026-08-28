@@ -1,5 +1,69 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.260 — 備戰 KO 的 on-KO／防 KO 缺口修補：isActive gate 下沉 ＋ 四條路徑接中央
+
+BASE `e9157fe275d3a522c6547c097f2fead5a10d1e1f`（v6.259）。
+
+### 複驗結論（對轉述的修正）
+
+1. ✅ `fireDefenderOnKO` 開頭確有 `if (!isActive) return s0;`（潛者捕捉段之後）。
+2. ✅ 最後鎖鏈（M2a 14775）／希望護身符（SV8 11278）卡面無「在戰鬥場」；
+   沙之羽擊／光子纜線／炸裂針／沉重接力棒卡面皆有 ⇒ 對照組維持 active-only。
+3. ⚠ **轉述的「5 條路徑」清單有誤**：
+   - `dragapult-snipe`（放指示物）與 `applyDamageToAllOpp`（痛楚記憶/侵蝕之風/覆雪，
+     全部「放置傷害指示物」）是**效果 KO**，卡面「受到…傷害而昏厥」不成立 ⇒ 本來就
+     **不該**觸發，不必補呼叫。反而 `applyDamageToAllOpp` 以 koByAttackDamage=true 結算
+     是**過度觸發 bug**（鬆口氣/豪華斗篷/珍珠在效果 KO 誤調獎賞、護身符誤開 picker）→ 已修。
+   - 轉述漏了第 6 條真正的漏網：`olive-oil-distribute`（mega_decks.ts）連**戰鬥位** KO
+     都沒呼叫 fireDefenderOnKO/preventKO。
+4. ⚠⚠ **「需要 pending 佇列化」的前提不成立**：`pendingChainQueue`（v4.933）＋
+   `stampPendingToken`（v6.175，token 對不上一律拒絕、發號機只前進）＋
+   `PENDING_REFRESH_ON_POP`（v6.215，pop 時重算候選）早已在生產環境跑多年——
+   「戰鬥場 KO 帶希望護身符的桃歹郎」本來就會連開 2 個 picker 排隊（實測 R9）。
+   本版**零新增佇列機制**，只是多幾個呼叫端把 picker 排進既有佇列。
+
+### 修法
+
+- `fireDefenderOnKO`：移除 isActive 一刀切，改逐效果宣告（fail-closed）：
+  `TOOL_ON_KO_BENCH_ALSO = {希望護身符}`（tools.ts）、
+  `PASSIVE_ON_KO_BENCH_ALSO = {最後鎖鏈}`（effects.ts）；②③段 loc 改傳實際位置。
+  ①段補 `koByAttackDamage` gate（效果 KO 不觸發道具）。
+- `hitBenchAll`／`bench-hit-N`／`snipe-60-ex`／`olive-oil-distribute` 四條傷害 KO 路徑
+  補 `applyPreventKOToVictim`（KO 判定前）＋ `fireDefenderOnKO`（sweep 後逐隻，快照
+  `{...c, damage:newDmg}` 含能量/道具）。hitBenchAll/bench-hit-N 僅對手招式時觸發
+  （自傷維持現狀）；寫回段改以最新 player 為基底（倖存鍛鍊器丟道具進 discard）。
+- `applyDamageToAllOpp`：koPrizesAdjusted ×2 與 fireDefenderOnKO 改傳 koByAttackDamage=false。
+- `koPrizesAdjusted` PASSIVE_PREVENT_PRIZE 的 loc 由硬寫 'active' 改實際位置偵測。
+- olive-oil 的 KO 棄牌改 `getAllAttachedTools`（原漏 extraTools，v5.067/v6.136 同型）。
+
+### 驗證
+
+- `scripts/test-v6260-bench-ko-onko.mjs`（28 條，進 npm test chain）：HEAD-FAIL 15 條各自紅
+  （A1~A10/B6/C2~C4/D4）、正對照 13 條 BASE 也綠；含端到端 applyAction token 流程、
+  「恰好 1 次」log 計數、一次 KO 多隻、阻礙之塔、自傷、效果 KO 負對照、
+  D1/D2/D3 宣告集合⟺卡面「在戰鬥場」雙向掃描（含下限與正對照）、
+  D4 靜態「傷害 KO 路徑必接 fireDefenderOnKO」（括號配對抽取、下限 ≥10、D5 正對照）。
+- 突變 7 個全部紅在預期（M1 gate 回捲/M2 沙之羽擊誤入/M3 刪 fire/M4 效果KO回捲/
+  M5 刪 preventKO/M6 接力棒誤入/M7 ①段 gate 移除），0 個漏網。
+- 逐位元正對照：BASE vs v6.260 於「戰鬥場 KO ×2、無 KO ×2」四場景 state 完全一致（剝 timestamp）。
+- 效能（Rule 32，腳本 /tmp/f5v6260/perf.mjs＋scripts/test-v6260-perf.mjs）：
+  hitBenchAll 無 KO 0.0715→0.0554ms（雜訊）、雙 KO 0.0104→0.0106ms、
+  中央狙擊備戰 KO 0.0375→0.0427ms —— 皆微秒級，未 KO 路徑增量 0（全在 KO 分支內）。
+- test-v6256 C3 守衛更新：applyPreventKOToVictim 呼叫端 3→7（effects 6＋mega_decks 1），
+  每端 kind 必填檢查照舊。
+- ai.ts／手機 UI 零改動：全部復用既有 effectKey（search-to-hand-reshuffle 等），AI 按
+  pendingSelection.type 通用處理，戰鬥場 KO 同場景早已在跑。
+
+### 待辦（本輪不做，留站長裁定）
+
+- 快掃拳返（拖拖蚓ex，「受到傷害時」無「在戰鬥場」）：hitBenchAll／bench-hit-N／
+  olive-oil 的**備戰受傷（未 KO）**未觸發 on-damaged（v5.980 只接了 dealAttackDamageToTarget）。
+  屬 on-damaged 維度，改動點在迴圈內每隻受傷處，本輪不擴。
+- 防 KO 家族之「自傷」：勤奮之心等卡面「受到招式的傷害」無「對手的」字樣，理論上
+  自家地震打死自家滿血持有者也該防；本版僅對手招式觸發（維持既有），歧義請站長裁定。
+- `applyDamageToAllOpp` 的 active KO 原本傳 recordOppKO(…,'attack',false) 正確，
+  但 `_miracleActiveKO` 旗標宣告後永遠是 false（死碼，未動）。
+
 ## v6.259 — 「被 KO 時修改獎賞張數」中央收斂：`PASSIVE_KO_PRIZE_ADJUST`
 
 BASE `f116910a7050e7fa660220f4f3bced7920203e95`（v6.258）。
