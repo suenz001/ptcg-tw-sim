@@ -28,7 +28,7 @@ import { isStage2ByEvoVariant } from './stage2-index';
 // effects.ts 仍保留所有尚未被搬遷的卡牌 reg 呼叫。
 
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
-import { isBasicPokemonCard, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
+import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
@@ -5854,11 +5854,11 @@ regPre('奇麒麟|中級轟鳴', (state, aIdx, pool) => {
 
 // 投擲猴｜聯合投擲 — 自己場上【基礎】寶可夢數 × 20
 regPre('投擲猴|聯合投擲', (state, aIdx, pool) => {
-  // v3.46：PTCG 基礎寶可夢判定（含 ex 等）
-  const n = countOwnPokemon(state, aIdx, pool, c => {
-    if (c.subtype === 'Stage1' || c.subtype === 'Stage2' || c.subtype === 'Other') return false;
-    return !c.evolvesFrom;
-  });
+  // ⭐ v6.251：卡面「自己的**場上**的【基礎】寶可夢的數量」＝場上視角 ⇒ 中央述詞。
+  //   原寫法是否定式（`!c.evolvesFrom`），而 countOwnPokemon 不濾 supertype ⇒ 場上化石
+  //   （Trainer 卡、沒有 evolvesFrom）**意外地**被算進去，結果剛好正確。
+  //   「意外正確」下一個人改判準就會壞掉，改成明確走中央述詞（計數結果完全相同）。
+  const n = countOwnPokemon(state, aIdx, pool, (c, i) => isBasicPokemonOnField(i, c));
   return { state, damage: n * 20 };
 });
 
@@ -11546,13 +11546,11 @@ function defCantAttackIfSubtypePost(
     if (!def) return state;
     const card = pool.get(def.cardId);
     if (!card) return state;
-    // v3.46：PTCG 基礎判定含 ex 等變體
-    const isPtcgBasic = card.supertype === 'Pokemon'
-      && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && card.subtype !== 'Other'
-      && !card.evolvesFrom;
+    // ⭐ v6.251：cond==='basic' 問的是「對手**場上**那隻是不是【基礎】」＝場上視角 ⇒ 中央述詞。
+    //   （化石沒有招式，所以對局結果零差異；但原本會對化石印出「對手不符合條件」的錯誤 log。）
     const matches =
       cond === 'basic'
-        ? isPtcgBasic
+        ? isBasicPokemonOnField(def, card)
         : isEvolutionCard(card);
     if (!matches) {
       return addLog(state, `${label}：對手不符合條件（${cond === 'basic' ? '基礎' : '進化'}寶可夢），無附加效果`, aIdx);

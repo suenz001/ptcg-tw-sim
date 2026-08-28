@@ -12,6 +12,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, coun
   getOwnBenchLimit,
 } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
+import { isBasicPokemonOnField } from '../../selection-filter'; // v6.251 場上【基礎】中央述詞（leaf，無循環）
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -244,25 +245,23 @@ regPost('赫普的稚山雀|恐怖視線', defNextAtkReducePost(20, '恐怖視�
 // 13. 自方所有基礎寶可夢回 100 HP（1 張）— 保母蟲|治癒襁褓
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('保母蟲|治癒襁褓', (s) => ({ state: s, damage: 0 }));
+// ⭐⭐⭐ v6.251：卡面「將自己的**所有**【基礎】寶可夢各恢復『100』HP」＝**場上視角**。
+//   官方裁定 PTCG_RULES.json id 783 逐字：「使用保母蟲的招式『治癒襁褓』，可以恢復作為
+//   [基礎]寶可夢放置於場上的物品卡『陳舊的羽毛化石』的HP嗎？」→「可以。」
+//   原本這裡手刻 `c.supertype === 'Pokemon' && !c.evolvesFrom`，化石的卡是 Trainer
+//   ⇒ 場上化石被整個跳過（實測：damage 50 的化石打完仍是 50）。改走中央述詞。
 regPost('保母蟲|治癒襁褓', (state, aIdx, pool) => {
+  const healed = (c: CardInstance): CardInstance =>
+    isBasicPokemonOnField(c, pool.get(c.cardId))
+      ? { ...c, damage: Math.max(0, (c.damage ?? 0) - 100) }
+      : c;
   return updatePlayer(
     addLog(state, '治癒襁褓：自方所有基礎寶可夢各回 100 HP', aIdx),
-    aIdx, p => {
-      const isBasic = (cardId: string): boolean => {
-        const c = pool.get(cardId);
-        return !!c && c.supertype === 'Pokemon' && !c.evolvesFrom
-          && c.subtype !== 'Stage1' && c.subtype !== 'Stage2';
-      };
-      return {
-        ...p,
-        active: p.active && isBasic(p.active.cardId)
-          ? { ...p.active, damage: Math.max(0, (p.active.damage ?? 0) - 100) }
-          : p.active,
-        bench: p.bench.map(b => isBasic(b.cardId)
-          ? { ...b, damage: Math.max(0, (b.damage ?? 0) - 100) }
-          : b),
-      };
-    },
+    aIdx, p => ({
+      ...p,
+      active: p.active ? healed(p.active) : p.active,
+      bench: p.bench.map(healed),
+    }),
   );
 });
 

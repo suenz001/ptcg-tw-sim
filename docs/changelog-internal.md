@@ -1,5 +1,154 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.251 — v6.250 的三個漏網：保母蟲｜治癒襁褓、變化之書、琉琪亞的展示（＋ lint 擴充）
+
+獨立審查者複驗 v6.250 後找到的。v6.250 把「場上視角的【基礎】寶可夢」收斂到中央述詞
+`isBasicPokemonOnField`（`src/lib/game/selection-filter.ts`），並附了一條 lint ——
+**但那條 lint 只掃 `.stage === 'Basic'`**，而這三個漏網全部躲在
+`supertype === 'Pokemon' && !evolvesFrom` 這個**等價樣式**底下，一個都沒被抓到。
+
+### 二分法紀律（官方 `PTCG RULES/PTCG_RULES.json` 的 `qa[].id`）
+
+- 手牌／牌庫／棄牌區視角 → `isBasicPokemonCard`（id 789／795／572：化石在這些區域是**物品**卡）
+- 場上 instance 視角 → `isBasicPokemonOnField`（id 783／787：化石放到場上就是【基礎】寶可夢）
+
+### 漏網① 保母蟲｜治癒襁褓（`effects/cards/v2620_i_wave12_misc5.ts`）
+
+卡面：「將自己的所有【基礎】寶可夢各恢復『100』HP。」——純場上視角。
+原本手刻 `c.supertype === 'Pokemon' && !c.evolvesFrom`，化石那張卡是 `Trainer` ⇒ 直接跳過。
+實測（BASE blob）：自己備戰的化石 `damage 50` → 打完仍是 `50`。
+這**直接違反官方 id 783**（「使用保母蟲的招式『治癒襁褓』，可以恢復作為[基礎]寶可夢放置於場上的
+物品卡『陳舊的羽毛化石』的HP嗎？」→「可以。」）—— 而 id 783 正是 v6.250 自己寫進中央註解當依據的那一則。
+
+### 漏網② 變化之書（`effects/cards/items_misc.ts`）
+
+這張卡**一張卡跨兩個視角**：
+- 「從自己的**棄牌區**選擇1張【基礎】寶可夢**卡**」→ 卡片視角（官方 id 795）→ 維持 `isBasicPokemonCard`
+- 「與自己的**場上**的1隻【基礎】寶可夢互換」→ 場上視角 → 改走 `isBasicPokemonOnField`
+
+原本場上那半有一份本地 helper `isBasicOnField`（同檔案內），
+**只因為名字和中央述詞不同（`isBasicOnField` vs `isBasicPokemonOnField`）就躲過 lint** ——
+這正是長期記憶裡「本地版遮蔽中央版」的溫床。已刪除，改成
+`changingBookFieldTargetIids(st, idx, pool)` 直接呼叫中央述詞。
+
+順帶抓到兩件事：
+
+1. **`filterBasic: true` 是死參數**。step1 的 pending 傳了它，但**全站沒有任何消費點讀這個欄位**
+   （`bench-choose` 的候選＝`fieldPickerBaseCandidates` ∩ `params.validIids`，UI／AI／engine 消毒閘三端皆同）
+   ⇒ picker 會列出場上**所有**寶可夢，玩家選到進化寶可夢時只會被 step2 的防呆靜默取消。
+   改成宣告 `validIids`（v6.109「看得到 === 勾得動」）。
+2. ⚠⚠ **`fossilOnField` 會外洩**。互換是 `{ ...fieldTarget, cardId: 新的 }`，
+   場上目標一旦可以是化石，換上去的真寶可夢就會繼承 `fossilOnField: true`
+   ⇒ 變成一隻「HP 恆 60、不能撤退、不會中特殊狀態」的假化石（v5.993 transient 旗標再入場外洩同型）。
+   已顯式 `fossilOnField: undefined`。**這是修 A 之後才生出來的 B，如果只照審查者的清單改就會踩到。**
+
+### 漏網③ 琉琪亞的展示（`effects/cards/v172_hij_batch.ts`）
+
+卡面：「選擇1隻對手的**備戰區**的【基礎】寶可夢，與戰鬥寶可夢互換。」——場上視角。
+gate 與 picker 兩處都用了 `isBasicPokemonCard`。
+
+同段兩行 `if (c.fossilOnField && …'陳舊的鰭之化石') return false;` 是**永遠到不了的死碼**
+（`isBasicPokemonCard` 對化石那張 Trainer 卡先回 `false` 就 return 了）——
+反過來說也證明原作者本來就以為化石選得到。改判準後那兩行只是
+`isImmuneToOppSupporter` 的重複（該 helper 首行 v3.21 起就在判鰭之化石），故一併刪除；
+守衛用行為端斷言「鰭之化石仍被排除」鎖住這件事不會因為刪除而破功。
+
+連帶把 `import { isBasicPokemonCard } from '../../engine';` 刪掉（該檔已無其他用途），
+少一條 `cards/* → engine` 的循環邊；改從 leaf 的 `selection-filter` 取 `isBasicPokemonOnField`。
+
+### 重新枚舉：沒有第 4、第 5 個漏網
+
+以 `git archive f3c2008d`（＝遠端 main）的樹重新枚舉 live H/I/J 卡面出現「【基礎】寶可夢」的
+招式 `effect`／特性 `effect`／訓練家與能量 `rulesText`，共 **78 組**，逐張 diff。
+場上視角的全部確認過，另外**特別複驗**了審查者清單上沒有的兩張：
+
+- **神奇糖果**「放置於自己的場上的**可進化成那隻寶可夢的**【基礎】寶可夢身上」—— 實作走
+  `canEvolveOnto(basicName, 場上那張的 name)` 的**逐字卡名比對**，不是【基礎】判定。
+  資料面查證：`陳舊的顎之化石 → 寶寶暴龍 → 怪顎龍` 等 8 條化石進化線都在 live 卡池裡，
+  所以這是真的會發生的情境，而實作**本來就正確**（官方 id 744 亦明示化石可被進化）。
+- **壯偉碩木**「從自己的場上的1隻【基礎】寶可夢進化而來的【1階進化】寶可夢卡」—— `baseNames`
+  取場上所有寶可夢的卡名（含化石），filter 要求 Stage1 的 `evolvesFrom ∈ baseNames`，
+  同樣是卡名比對 ⇒ **本來就正確**。
+
+另外查證了審查者已排除的那幾張，結論一致：
+投擲猴｜聯合投擲（`countOwnPokemon` 不濾 `supertype`，否定式寫法**意外正確**）、
+稜鏡能量（`hostIsEvolution` 否定式，意外正確）、激動競技場（早已中央）、
+6 張「不受【基礎】寶可夢招式的傷害」與尾甲／原始根／障礙踩踏（化石沒有招式）、
+天空徑線／棉花搬運（化石無法撤退）、抵抗之幕／火箭隊的蘭斯（要求卡名含「火箭隊的」）、
+皇冠蛋白石、奧密之眼（問的是「進化」，化石 `stage=null` 正確地不算）。
+
+⚠ 但「意外正確」＝下一個人改判準就會壞掉，所以還是把兩處改成明確走中央述詞（結果完全相同）：
+
+- `effects.ts` 投擲猴｜聯合投擲 → `countOwnPokemon(state, aIdx, pool, (c, i) => isBasicPokemonOnField(i, c))`
+- `effects.ts` `defCantAttackIfSubtypePost('basic')`（帕底亞 肯泰羅｜障礙踩踏）→ `isBasicPokemonOnField(def, card)`
+  （化石沒有招式 ⇒ 對局結果零差異，但原本會對化石印出「對手不符合條件」的錯誤 log。）
+
+### lint 擴充（`scripts/test-v6251-basic-on-field-followups.mjs`）
+
+v6.250 的 lint 只掃 `.stage === 'Basic'`。新增兩種樣式：
+
+- **樣式 A**：`!x.evolvesFrom`（用「有沒有進化來源」判【基礎】）。
+  `(?<!!)` lookbehind 排除 `!!x.evolvesFrom`（那是「是不是進化」，不是本維度）。
+  現況 27 筆全部列入白名單並逐筆寫理由（牌庫／手牌／棄牌區視角、進化判定、
+  或雖是場上視角但已查證對化石無行為差異）。
+- **樣式 B**：**名稱含 `Basic` 的本地述詞定義**（就是 `isBasicOnField` 那種同義本地版）。
+  19 筆白名單，多數是「基本**能量**」的 helper。
+
+兩條都配：**下限斷言**（`.ts` 檔數 > 100、掃描行數 > 70000、樣式 A 命中 ≥ 25、樣式 B 命中 ≥ 15）、
+**白名單死條目檢查**、**正對照**（把三個漏網在 BASE 上的原始碼片段餵進去，必須被抓到；
+並確認不會誤抓中央述詞用法與 `!!x.evolvesFrom`）。
+
+⚠ 誠實記錄：樣式 A **抓不到**變化之書 step2 那種「**肯定式**」寫法
+（`if (fieldCard.evolvesFrom) 拒絕`）。守衛裡把這件事寫成一條明示的紀錄，
+並靠樣式 B 與行為端測試補上 —— 單一靜態樣式一定有洞。
+
+### 【5】嗡嗡榍石守衛的安慰劑
+
+`scripts/test-v6250-basic-on-field-central.mjs` 原本那條只斷言
+「log 裡沒有出現『對手戰鬥場非基礎』」—— **硬幣反面時它恆真**（反面走的是備戰那一支，
+本來就不會印那句話）。實測：把 `嗡嗡榍石` 改回卡片視角後跑 6 次，舊斷言只紅 1 次。
+修法：覆寫 `Math.random` 固定正面 + 斷言化石**真的被昏厥**，並加一條 Stage2 的正對照。
+同樣的突變下新斷言 **6/6 紅**；未突變時連跑 10 次 **10/10 綠**。
+
+### 【7】時間炸彈
+
+`scripts/test-v6248-selfheal-followups.mjs` 原本寫死「v6.248／v6.181 必須在首頁／封存」，
+再過 50 版一定會紅。改成不綁版本的等價條件：首頁 50 則版本號嚴格遞減，
+且封存頁必須存在比首頁最舊那一則更舊的紀錄（＝「搬進封存」而不是「被刪掉」仍然被鎖住）。
+
+### 【8】巢穴球的死變數
+
+`items_misc.ts` 巢穴球算了一個 `hasBasic` 卻沒有任何人讀，而且用的是
+`subtype === 'Basic'`（會被 `ex` 覆蓋、漏掉所有基礎 ex）。死變數＋錯判準留著遲早被抄走，刪掉。
+
+### ⚠ 對【6】的更正（審查者這一條說錯了）
+
+審查者說「v6.250 那則 changelog 只講險惡廢墟」。實際去讀 `static/changelog.html`：
+v6.250 的 `log-body` **已經**逐張列出了貪婪食客／嗡嗡榍石／揚沙／斧擊衝撞，
+也明說「依官方裁定，化石放到場上時就是一隻【無】屬性的【基礎】寶可夢…上述四個效果也照樣對化石生效」。
+所以那一則沒有問題，不去改它（封存規範也是舊條目維持原始敘述）。
+v6.251 另開一則講這一版新修的三張卡。
+
+### ⚠ 本輪發現但**不動**的東西（留待後續，避免混入本維度）
+
+1. **「陳舊的鰭之化石不受對手支援者卡影響」在現行台灣卡面上不存在。**
+   `static/cards/M3` id 18046 的 `rulesText` 只有「不會陷入特殊狀態，無法撤退」。
+   站內從 v2.388 起就給它這個被動（`engine.ts` L921 名單、`supporters_gust.ts`、
+   `v3080_deferred_wave_c.ts` 的 `isImmuneToOppSupporter` 首行），出處疑似舊版／日文預覽卡面
+   （同 v6.112 的化石 HP 事故）。這牽涉多個檔案與玩家可見行為，**本輪不動**，
+   守衛裡放了一條卡面斷言，官方哪天真的加回來時會紅。
+2. **`applyStatusToOppActive` 沒有化石狀態免疫的 early-return**。
+   琉琪亞的展示把化石換上場後仍會 log「陷入【混亂】」，只是
+   `engine.ts` 的 `applyAction` 出口 sweep 會把狀態清掉 ⇒ 盤面正確、**log 誤導**。
+   屬「狀態施加」維度，本輪不動（守衛已斷言盤面正確）。
+3. **爆炸頭水牛｜捲牆對化石不生效**，卡住的是「【無】屬性」那半（化石 `pokemonType=null`）
+   ⇒ 屬 v6.206／v6.208 的屬性維度待辦。
+
+### 部署提醒
+
+改到卡片效果與 `effects.ts`／`engine.ts` 無關檔案以外的部分 ⇒
+Wilson 需要跑 `update-tournament.bat` ＋ `redeploy-oracle.bat`（＋ `update-admin-full.bat`）。
+
 ## v6.250 — 「場上視角的【基礎】寶可夢」收斂到中央述詞 isBasicPokemonOnField（5 個 outlier）
 
 站長回報：場上有**險惡廢墟**時，把**烈箭鷹ex**（Stage2 進化）用特性「激動俯衝」放到備戰區，

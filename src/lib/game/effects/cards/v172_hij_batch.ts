@@ -26,12 +26,11 @@ import { joinCardNames } from '../_shared';
 import { getAllAttachedTools } from '../_shared';
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線 // v5.995 可怕的哥哥:數/丟道具含 extraTools(多重轉接)
 import { isImmuneToOppSupporter } from './v3080_deferred_wave_c'; // v5.995 支援者效果目標免疫過濾
-import { isBasicPokemonCard } from '../../engine';
 import { flipCoinsWithLog, applyStatusToOppActive } from '../../effects';
 import { openLureOutOppTopN, resolveLureOutOppTopN } from '../../effects'; // v6.078 對手牌庫頂 N 張選基礎放對手備戰
 import type { CardInstance, PlayerState, GameState } from '../../types';
 import type { Card } from '$lib/cards/types';
-import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
+import { isMegaExCard, isBasicPokemonOnField } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）／v6.251 場上【基礎】中央述詞
 
 // ── 釀光市（Stadium / I）─ 雙方每回合 1 次：棄牌搜 ≤2 基本【雷】能量加手
 // 注意：Stadium 由 engine USE_STADIUM 處理。這裡只放 resolver。
@@ -195,17 +194,24 @@ regR('sari-search', (st, idx, iids, _params, pool) => {
 });
 
 // ── 琉琪亞的展示（Supporter / H）── 對手戰↔備戰換 + 新上場混亂
-// v5.073：改用 isBasicPokemonCard helper — 原本 subtype === 'Basic' 會把基礎 ex
-//   寶可夢全部漏掉（基礎 ex 的 subtype='ex'，不是 'Basic'；資料源 319 張）。
-//   卡面寫「【基礎】寶可夢」未排除 ex，正確判定 = supertype Pokemon + !evolvesFrom + 非 Stage1/2。
+// v5.073：改用中央述詞 — 原本 subtype === 'Basic' 會把基礎 ex 寶可夢全部漏掉
+//   （基礎 ex 的 subtype='ex'，不是 'Basic'）。
+// ⭐⭐⭐ v6.251：卡面「選擇1隻對手的**備戰區**的【基礎】寶可夢」＝**場上視角**
+//   ⇒ 必須用 isBasicPokemonOnField，不是 isBasicPokemonCard。
+//   官方 PTCG_RULES.json id 783/787：化石作為【基礎】寶可夢放置於場上後就是【基礎】寶可夢
+//   （id 789/795 那種「不可以」講的是**手牌／棄牌區**裡的化石，是另一個視角）。
+// ⚠ 原本 gate 與 picker 兩處在中央述詞之後各自還手刻了一行
+//   `if (c.fossilOnField && …'陳舊的鰭之化石') return false;` —— 那是**永遠到不了的死碼**
+//   （isBasicPokemonCard 對化石那張 Trainer 卡先回 false 就 return 了），
+//   反過來說也證明原作者本來就以為化石選得到。改判準後那一行只是
+//   isImmuneToOppSupporter 的重複（該 helper 首行就在判鰭之化石，v3.21 已整合），故一併刪除。
 regG('琉琪亞的展示', (st, idx, pool) => {
   const dIdx = (1 - idx) as 0 | 1;
-  // 對手必須有戰鬥場 + 至少 1 隻基礎備戰（含基礎 ex）
+  // 對手必須有戰鬥場 + 至少 1 隻【基礎】備戰（含基礎 ex、含場上化石）
   if (!st.players[dIdx].active) return false;
   // v5.995：與 reg 同步 — supporter 免疫者不算合法目標
   return st.players[dIdx].bench.some(c => {
-    if (!isBasicPokemonCard(pool.get(c.cardId))) return false;
-    if (c.fossilOnField && pool.get(c.cardId)?.name === '陳舊的鰭之化石') return false;
+    if (!isBasicPokemonOnField(c, pool.get(c.cardId))) return false;
     if (isImmuneToOppSupporter(st, dIdx, c, pool)) return false;
     return true;
   });
@@ -216,8 +222,7 @@ reg('琉琪亞的展示', (st, idx, pool) => {
   // v5.995：加 supporter 免疫過濾（緊張感/融合為雪/廣域堡壘/陳舊的鰭之化石）— 對齊老大的指令
   const validIids = dp.bench
     .filter(c => {
-      if (!isBasicPokemonCard(pool.get(c.cardId))) return false;
-      if (c.fossilOnField && pool.get(c.cardId)?.name === '陳舊的鰭之化石') return false;
+      if (!isBasicPokemonOnField(c, pool.get(c.cardId))) return false;
       if (isImmuneToOppSupporter(st, dIdx, c, pool)) return false;
       return true;
     })

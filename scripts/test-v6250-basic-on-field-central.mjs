@@ -325,7 +325,16 @@ T('貪婪食客正對照：KO 對手的 Stage2 → 只有 2 張（沒有 +1）',
   ok(took === 1, `Stage2 非 ex 且非【基礎】⇒ 只有 1 張，實得 ${took}\n` + out.log.map(logText).slice(-3).join('\n'));
 });
 
-T('★ 阿羅拉 椰蛋樹ex｜嗡嗡榍石：對手戰鬥場是化石時，判定為【基礎】（不得回「非基礎，無效」）', () => {
+// ⚠⚠ v6.251：原本這一條只斷言「log 沒有出現『非基礎』」——**硬幣反面時它恆真**
+//   （反面走的是備戰那一支，本來就不會印那句話）⇒ 約 50% 的執行是安慰劑，
+//   實測 M1 突變下跑 6 次只紅 4 次。改成：**固定硬幣為正面**，並斷言化石**真的被昏厥**。
+function withCoin(heads, fn) {
+  const orig = Math.random;
+  Math.random = () => (heads ? 0.0 : 0.99);   // <0.5 = 正面（flipCoinsWithLog 的判準）
+  try { return fn(); } finally { Math.random = orig; }
+}
+
+T('★ 阿羅拉 椰蛋樹ex｜嗡嗡榍石（固定正面）：對手戰鬥場的化石應被【昏厥】', () => {
   const AE = [...pool.values()].find(x => x.name === '阿羅拉 椰蛋樹ex');
   const idx = AE.attacks.findIndex(x => x.name === '嗡嗡榍石');
   const a = inst(AE.id);
@@ -333,9 +342,30 @@ T('★ 阿羅拉 椰蛋樹ex｜嗡嗡榍石：對手戰鬥場是化石時，判�
   const fossil = inst(FOSSIL, { fossilOnField: true });
   const st = mk({ stadium: false, active: a });
   st.players[1] = { ...st.players[1], active: fossil, bench: [inst(BASIC)] };
-  const out = applyAction(st, { type: 'ATTACK', attackIndex: idx, actorIdx: 0 }, pool);
+  const out = withCoin(true, () => applyAction(st, { type: 'ATTACK', attackIndex: idx, actorIdx: 0 }, pool));
   const txt = out.log.map(logText).join('\n');
+  // ⚠ 先驗「硬幣真的固定住了」（用 flipCoinsWithLog 自己印的那一行，不受後續分支影響），
+  //   再驗判準，最後驗盤面 —— 順序錯了會給出誤導的失敗訊息。
+  ok(/嗡嗡榍石：擲硬幣 — 正面/.test(txt), '硬幣沒有被固定成正面（覆寫 Math.random 失效）：\n'
+    + txt.split('\n').slice(-4).join('\n'));
   ok(!/嗡嗡榍石：對手戰鬥場非基礎/.test(txt), '把場上化石判成「非基礎」了：\n' + txt.split('\n').slice(-4).join('\n'));
+  ok(out.players[1].active?.iid !== fossil.iid, '化石應被昏厥（只看 log 沒有那句話是不夠的）：\n'
+    + txt.split('\n').slice(-4).join('\n'));
+});
+
+T('嗡嗡榍石正對照（固定正面）：對手戰鬥場是 Stage2 → 不昏厥且寫「非基礎」', () => {
+  const AE = [...pool.values()].find(x => x.name === '阿羅拉 椰蛋樹ex');
+  const idx = AE.attacks.findIndex(x => x.name === '嗡嗡榍石');
+  const a = inst(AE.id);
+  a.energyAttached = (AE.attacks[idx].cost || []).map(t => inst(ENERGY_ID[t] ?? ENERGY_ID.Grass));
+  const victim = inst(STAGE2);
+  const st = mk({ stadium: false, active: a });
+  st.players[1] = { ...st.players[1], active: victim, bench: [inst(BASIC)] };
+  const out = withCoin(true, () => applyAction(st, { type: 'ATTACK', attackIndex: idx, actorIdx: 0 }, pool));
+  const txt = out.log.map(logText).join('\n');
+  ok(/嗡嗡榍石：擲硬幣 — 正面/.test(txt), '硬幣沒有被固定成正面：\n' + txt.split('\n').slice(-4).join('\n'));
+  ok(/嗡嗡榍石：對手戰鬥場非基礎/.test(txt), 'Stage2 應被判成非基礎：\n' + txt.split('\n').slice(-4).join('\n'));
+  ok(out.players[1].active?.iid === victim.iid, 'Stage2 不該被嗡嗡榍石昏厥');
 });
 
 T('★ 火箭隊的班基拉斯｜揚沙：對手備戰的化石也要吃 2 個指示物', () => {

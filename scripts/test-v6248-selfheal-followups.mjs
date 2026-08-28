@@ -595,17 +595,38 @@ T('[HEAD-FAIL⑨] v6.247 那則不可以再宣稱問題是「上一版起」才�
   assert.ok(!/上一版起，資料量較大的盤面/.test(m[0]), '錯誤的歸因（「上一版起」）還在');
   assert.ok(/並不是上一版才出現/.test(m[0]) && /早就存在/.test(m[0]), '沒有把「這個現象一直都在」講清楚');
 });
-T('[HEAD-FAIL⑩] 首頁維持 50 則、最新那一則是展開的、v6.248 仍在、最舊那一則已進封存', () => {
-  assert.equal((CL.match(/class="ver-badge"/g) || []).length, 50, '首頁則數不是 50');
-  // ⚠ v6.250：原本綁死「v6.248 必須在最上面」，任何新版都會讓它變紅（版本綁死的斷言）。
-  //   改成不綁版本的等價條件：最上面那一則必須是展開的 <details open>，
-  //   且 v6.248 那一則仍留在首頁（沒有被新版本擠掉時誤刪）。
+T('[HEAD-FAIL⑩] 首頁維持 50 則、最新那一則是展開的、被擠掉的那些都進了封存（不綁特定版本）', () => {
+  const nums = (s) => (s.match(/ver-badge">v(\d+)\.(\d+)</g) || [])
+    .map((m) => /v(\d+)\.(\d+)</.exec(m)).map((m) => Number(m[1]) * 1000 + Number(m[2]));
+  const clNums = nums(CL), arNums = nums(AR);
+  assert.equal(clNums.length, 50, '首頁則數不是 50');
   assert.ok(/^<details open>\s*<summary><span class="ver-badge">v6\.\d+<\/span>/.test(CL.trim()),
     '首頁最上面那一則不是展開的 <details open>');
-  assert.equal((CL.match(/ver-badge">v6\.248</g) || []).length, 1, 'v6.248 那一則不在首頁了');
+  // ⚠⚠ v6.251：原本這裡寫死「v6.248／v6.181 必須在首頁／封存」——再過 50 版一定會紅
+  //   （v6.248 會被新版擠進封存），是顆時間炸彈。改成不綁版本的**等價**條件：
+  //   ① 首頁是嚴格遞減的最新 50 則；② 首頁最舊那一則的**前一則**（＝剛被擠掉的那一版）
+  //      必須出現在封存頁 ⇒ 「搬進封存」而不是「被刪掉」這件事仍然被鎖住。
+  for (let i = 1; i < clNums.length; i++) {
+    assert.ok(clNums[i] < clNums[i - 1], '首頁條目不是由新到舊嚴格遞減（第 ' + i + ' 則）');
+  }
+  const oldestOnHome = clNums[clNums.length - 1];
+  const archivedBelow = arNums.filter((n) => n < oldestOnHome);
+  assert.ok(archivedBelow.length >= 200, '封存頁裡比首頁最舊那一則更舊的紀錄只有 '
+    + archivedBelow.length + ' 則 ⇒ 舊紀錄被刪掉了');
+  const archiveTop = Math.max(...archivedBelow);
+  // ⭐ 真正要鎖的事：**剛被擠出首頁的那一版必須落在封存頁的最上面**（＝搬進去，不是刪掉）。
+  //   版本號偶爾跳號是正常的，所以留 5 的容差；但差太多就代表中間有幾則憑空消失。
+  assert.ok(archiveTop >= oldestOnHome - 5,
+    '封存頁最新的一則(' + archiveTop + ') 與首頁最舊的一則(' + oldestOnHome + ') 之間有缺口'
+    + ' —— 中間那幾則沒有進封存頁（＝紀錄被刪掉了）');
+  assert.ok(!clNums.includes(archiveTop), '同一則同時出現在首頁與封存頁');
+  // ⭐ 正對照（Rule 33）：這個「等價條件」必須真的抓得到「刪掉而不是搬進封存」。
+  //   把封存頁最上面 6 則挖掉再跑同一段判準，必須不成立。
+  const holed = archivedBelow.slice().sort((a, b) => b - a).slice(6);
+  assert.ok(holed.length >= 200, '正對照樣本被挖太多，測不出東西');
+  assert.ok(!(Math.max(...holed) >= oldestOnHome - 5),
+    '把封存頁最上面 6 則挖掉之後判準還是成立 ⇒ 換上來的是一顆安慰劑');
   assert.equal((CL.match(/<details/g) || []).length, (CL.match(/<\/details>/g) || []).length, 'details 開合不符');
-  assert.equal((CL.match(/ver-badge">v6\.181</g) || []).length, 0, 'v6.181 還留在首頁');
-  assert.equal((AR.match(/ver-badge">v6\.181</g) || []).length, 1, 'v6.181 沒有進封存頁（＝紀錄被刪掉了）');
   assert.ok(CL.includes('__BASE__/changelog-archive.html'), '封存連結不見了');
   // 規格：Svelte 模板裡的裸 < > { } 會讓 build 失敗
   const entries = CL.slice(0, CL.indexOf('changelog-archive-link'));

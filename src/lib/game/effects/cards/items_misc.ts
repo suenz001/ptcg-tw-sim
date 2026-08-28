@@ -43,7 +43,7 @@ import { flipCoinsWithLog } from '../../effects';
 import { applyOppActiveReturnedToBenchTriggers } from '../../engine'; // v5.831
 import type { CardInstance, GameState } from '../../types';
 import type { Card } from '$lib/cards/types'; // v5.861 重新啟動箱逐張分配 chain 型別
-import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
+import { isBasicEnergyOfType, isBasicPokemonCard, isBasicPokemonOnField } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）／v6.251 場上【基礎】與卡片【基礎】兩個視角的中央述詞
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 物品卡 — 切換
@@ -812,11 +812,10 @@ regG('巢穴球', (st, idx, pool) => {
 });
 reg('巢穴球', (st, idx, pool) => {
   st = addLog(st, '巢穴球：從牌庫選 1 張基礎寶可夢放備戰', idx);
-  // v2.993：卡面寫「選 1 張」mandatory；牌庫無基礎寶可夢時允許 Pass
-  const hasBasic = st.players[idx].deck.some(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card?.subtype === 'Basic';
-  });
+  // v2.993：卡面寫「選 1 張」mandatory；牌庫無基礎寶可夢時允許 Pass（minCount:0）。
+  // ⚠ v6.251：這裡原本算了一個 `hasBasic` 卻從來沒有人讀 —— 而且它用的是
+  //   `subtype === 'Basic'`（會被 ex 覆蓋、漏掉所有基礎 ex）。死變數＋錯判準留著遲早被抄走，直接刪掉。
+  //   真正的候選過濾走 filter:'Basic'（selection-filter 的 isBasicPokemonCard，牌庫＝卡片視角）。
   return withPending(st, {
     type: 'deck-search',
     actorIdx: idx, sourcePlayerIdx: idx,
@@ -1615,27 +1614,33 @@ regR('oni-mask-step2', (st, idx, iids, params, pool) => {
 //   1. discard-search filter='Basic' min=1 max=1 → 'changing-book-step1'
 //   2. step1 → bench-choose w/ includeActive，filter Basic Pokemon → 'changing-book-step2'
 //   3. step2 swap：保留 energy/tool/damage/status/evolvedFromStack
-function isBasicOnField(insts: import('../../types').CardInstance[],
-                       pool: Map<string, import('$lib/cards/types').Card>): boolean {
-  return insts.some(c => {
-    const card = pool.get(c.cardId);
-    return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom
-      && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && card.subtype !== 'Other';
-  });
+/**
+ * ⭐⭐⭐ v6.251：變化之書是**一張卡跨兩個視角**，兩半不可混用同一個述詞。
+ *   ・「從自己的**棄牌區**選擇1張【基礎】寶可夢**卡**」＝**卡片視角**
+ *       → isBasicPokemonCard（官方 PTCG_RULES.json id 795：化石在棄牌區時視為「物品」卡）
+ *   ・「與自己的**場上**的1隻【基礎】寶可夢互換」＝**場上視角**
+ *       → isBasicPokemonOnField（官方 id 783/787：化石放到場上就是【基礎】寶可夢）
+ * ⚠ 原本這裡有一份本地 `isBasicOnField`（手刻 supertype==='Pokemon' && !evolvesFrom），
+ *   把場上化石整個排除掉；而且**只因為名字和中央述詞不同**（isBasicOnField vs
+ *   isBasicPokemonOnField）就躲過了 v6.250 的 lint —— 本地版遮蔽中央版的典型溫床。
+ */
+function changingBookFieldTargetIids(
+  st: import('../../types').GameState, idx: 0 | 1,
+  pool: Map<string, import('$lib/cards/types').Card>,
+): string[] {
+  const p = st.players[idx];
+  return [...(p.active ? [p.active] : []), ...p.bench]
+    .filter(c => isBasicPokemonOnField(c, pool.get(c.cardId)))
+    .map(c => c.iid);
 }
 regG('變化之書', (st, idx, pool) => {
   const p = st.players[idx];
   // 必須手牌 ≥2 張同名（一張正在打出 = 還在 hand，另一張要棄）
   const handBookCount = p.hand.filter(c => pool.get(c.cardId)?.name === '變化之書').length;
   if (handBookCount < 2) return false;
-  const fieldInsts = [...(p.active ? [p.active] : []), ...p.bench];
-  // 棄牌中有基礎寶可夢
-  const hasBasicInDiscard = p.discard.some(c => {
-    const card = pool.get(c.cardId);
-    return !!card && card.supertype === 'Pokemon' && !card.evolvesFrom
-      && card.subtype !== 'Stage1' && card.subtype !== 'Stage2' && card.subtype !== 'Other';
-  });
-  return hasBasicInDiscard && isBasicOnField(fieldInsts, pool);
+  // 棄牌中有【基礎】寶可夢**卡**（棄牌區視角，官方 id 795；與 pending 的 filter:'Basic' 同一個述詞）
+  const hasBasicInDiscard = p.discard.some(c => isBasicPokemonCard(pool.get(c.cardId)));
+  return hasBasicInDiscard && changingBookFieldTargetIids(st, idx, pool).length > 0;
 });
 reg('變化之書', (st, idx, pool) => {
   // 棄掉第二張變化之書（PLAY_TRAINER 已棄掉第一張）
@@ -1656,16 +1661,24 @@ reg('變化之書', (st, idx, pool) => {
     effectKey: 'changing-book-step1',
   });
 });
-regR('changing-book-step1', (st, idx, iids, _params, _pool) => {
+regR('changing-book-step1', (st, idx, iids, _params, pool) => {
   if (iids.length !== 1) {
     return addLog(st, '變化之書：取消（未選擇）', idx);
+  }
+  // ⭐⭐ v6.251：原本這裡傳的是 `filterBasic: true`，但**全站沒有任何地方讀這個欄位**
+  //   （bench-choose 的候選 = fieldPickerBaseCandidates ∩ params.validIids，UI／AI／engine
+  //    消毒閘三端皆同）⇒ picker 會列出場上**所有**寶可夢，玩家選到進化寶可夢時只會被
+  //   step2 的防呆靜默取消。改成宣告 validIids：「看得到的」===「勾得動的」。
+  const targetIids = changingBookFieldTargetIids(st, idx, pool);
+  if (targetIids.length === 0) {
+    return addLog(st, '變化之書：場上沒有【基礎】寶可夢可互換，取消', idx);
   }
   st = addLog(st, '變化之書：再選擇場上的【基礎】寶可夢與其互換', idx);
   return withPending(st, {
     type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'changing-book-step2',
-    params: { includeActive: true, fromDiscardIid: iids[0], filterBasic: true },
+    params: { includeActive: true, fromDiscardIid: iids[0], validIids: targetIids },
   });
 });
 regR('changing-book-step2', (st, idx, iids, params, pool) => {
@@ -1681,10 +1694,9 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
     : p.bench.find(c => c.iid === targetIid);
   if (!fieldTarget) return addLog(st, '變化之書：場上找不到所選目標，取消', idx);
 
-  // 確認場上目標是基礎寶可夢（防呆）
+  // 確認場上目標是【基礎】寶可夢（防呆）— v6.251 改走場上視角中央述詞（含場上化石）
   const fieldCard = pool.get(fieldTarget.cardId);
-  if (!fieldCard || fieldCard.supertype !== 'Pokemon' || fieldCard.evolvesFrom
-      || fieldCard.subtype === 'Stage1' || fieldCard.subtype === 'Stage2') {
+  if (!fieldCard || !isBasicPokemonOnField(fieldTarget, fieldCard)) {
     return addLog(st, '變化之書：場上目標非【基礎】寶可夢，取消', idx);
   }
 
@@ -1703,6 +1715,11 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
     cardId: discardPick.cardId,
     // v5.625 官方QA：特性「已使用」以名稱保留——換上不同名特性可用、同名沿用已用(不再整包帶 true 誤擋)
     abilityUsedThisTurn: abilityUsedAfterSwap(fieldTarget, fieldCard, pool.get(discardPick.cardId)),
+    // ⚠⚠ v6.251：場上目標現在可能是**化石**（官方 id 783/787）。fossilOnField 是「這個位置上
+    //   是一張化石」的持久旗標（HP 恒 60／不會陷入特殊狀態／無法撤退全靠它）——換成真的寶可夢後
+    //   必須清掉，否則會生出一隻「HP 60、不能撤退」的假化石（v5.993 transient 旗標再入場外洩同型）。
+    //   反向不必處理：棄牌區的化石是**物品**卡（官方 id 795），本來就選不到。
+    fossilOnField: undefined,
   };
 
   st = addLog(st, `變化之書：${oldCardName} ↔ ${newCardName}（保留所有附加）；換下的 ${oldCardName} 丟棄`, idx);
