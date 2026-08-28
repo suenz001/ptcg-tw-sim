@@ -595,10 +595,14 @@ T('[HEAD-FAIL⑨] v6.247 那則不可以再宣稱問題是「上一版起」才�
   assert.ok(!/上一版起，資料量較大的盤面/.test(m[0]), '錯誤的歸因（「上一版起」）還在');
   assert.ok(/並不是上一版才出現/.test(m[0]) && /早就存在/.test(m[0]), '沒有把「這個現象一直都在」講清楚');
 });
-T('[HEAD-FAIL⑩] 首頁維持 50 則、v6.248 在最上面、最舊那一則已進封存', () => {
+T('[HEAD-FAIL⑩] 首頁維持 50 則、最新那一則是展開的、v6.248 仍在、最舊那一則已進封存', () => {
   assert.equal((CL.match(/class="ver-badge"/g) || []).length, 50, '首頁則數不是 50');
-  assert.ok(/^<details open>\s*<summary><span class="ver-badge">v6\.248<\/span>/.test(CL.trim()),
-    'v6.248 不在最上面／不是展開的那一則');
+  // ⚠ v6.250：原本綁死「v6.248 必須在最上面」，任何新版都會讓它變紅（版本綁死的斷言）。
+  //   改成不綁版本的等價條件：最上面那一則必須是展開的 <details open>，
+  //   且 v6.248 那一則仍留在首頁（沒有被新版本擠掉時誤刪）。
+  assert.ok(/^<details open>\s*<summary><span class="ver-badge">v6\.\d+<\/span>/.test(CL.trim()),
+    '首頁最上面那一則不是展開的 <details open>');
+  assert.equal((CL.match(/ver-badge">v6\.248</g) || []).length, 1, 'v6.248 那一則不在首頁了');
   assert.equal((CL.match(/<details/g) || []).length, (CL.match(/<\/details>/g) || []).length, 'details 開合不符');
   assert.equal((CL.match(/ver-badge">v6\.181</g) || []).length, 0, 'v6.181 還留在首頁');
   assert.equal((AR.match(/ver-badge">v6\.181</g) || []).length, 1, 'v6.181 沒有進封存頁（＝紀錄被刪掉了）');

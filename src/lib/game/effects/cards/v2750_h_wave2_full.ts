@@ -21,6 +21,7 @@ import { evolvedStatusAfter, buildEvolvedInstance } from '../_shared'; // v5.741
 import { openDeckViewReshuffle, revealTopCardsLog } from '../_shared';
 import { joinCardNames } from '../_shared';
 import { getBasicEnergyType } from '../../engine'; // v6.009 resolver 端 re-validate 基本能量屬性(防作弊)
+import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
 import { cellAwakeningStep } from './v2650_i_wave15_misc8'; // v5.983 收斂「進化全備戰」chain(與人造細胞卵|細胞覺醒共用)
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2'; // v6.165 從手牌附能→自方瑪機雅娜｜自動治癒
 import {
@@ -2519,11 +2520,12 @@ regPost('阿羅拉 椰蛋樹ex|嗡嗡榍石', (state, aIdx, pool) => {
     const da = r.state.players[dIdx].active;
     if (!da) return r.state;
     const card = pool.get(da.cardId);
-    if (card?.stage !== 'Basic') return addLog(r.state, '嗡嗡榍石：對手戰鬥場非基礎，無效', aIdx);
+    // ⭐ v6.250 場上視角【基礎】走中央述詞（化石在場上是【基礎】寶可夢，官方 id 783/787）
+    if (!isBasicPokemonOnField(da, card)) return addLog(r.state, '嗡嗡榍石：對手戰鬥場非基礎，無效', aIdx);
     return koTargetByAttackEffect(addLog(r.state, '嗡嗡榍石：正面 → 對手戰鬥場(基礎)KO', aIdx), aIdx, da, true, pool, '嗡嗡榍石');
   }
   // 反 → 對手選 1 備戰「基礎」KO。⚠v5.996：opp-bench-choose 只認 validIids、忽略 filter 欄 → 用 validIids 限基礎。
-  const _benchBasic = r.state.players[dIdx].bench.filter(b => pool.get(b.cardId)?.stage === 'Basic').map(b => b.iid);
+  const _benchBasic = r.state.players[dIdx].bench.filter(b => isBasicPokemonOnField(b, pool.get(b.cardId))).map(b => b.iid); // v6.250 場上視角中央述詞
   if (_benchBasic.length === 0) return addLog(r.state, '嗡嗡榍石：反面 → 對手備戰無基礎寶可夢，無效', aIdx);
   return withPending(addLog(r.state, '嗡嗡榍石：反面 → 選 1 對手備戰(基礎)KO', aIdx), {
     type: 'opp-bench-choose',

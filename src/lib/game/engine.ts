@@ -18,10 +18,10 @@ import type {
   PlayerState, PendingSelection, LogEntry, TurnPhase, GamePhase, ActionRecord, TurnActionLog} from './types';
 import { RULE_BOX_SUBTYPES } from './types';
 // v6.018 批5：4 卡片述詞 helper + ZH_ENERGY_TYPE 下沉 selection-filter.ts（解循環）；engine re-export 給既有 importer
-import { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
+import { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType, isMegaExCard, ZH_ENERGY_TYPE, evaluateSelectionFilter, isKnownSelectionFilter, sanitizeSelectionSet } from './selection-filter';
 // v6.176：場上目標型 picker 的候選述詞（UI 與中央消毒閘共用同一份，見 selection-candidates.ts）
 import { fieldPickerBaseIids, FIELD_TARGET_PICKER_TYPES } from './selection-candidates';
-export { isBasicPokemonCard, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType };
+export { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isBasicEnergyOfType, getBasicEnergyType };
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
@@ -1064,22 +1064,10 @@ function isEnergy(cardId: string, pool: Map<string, Card>): boolean {
  */
 export const FOSSIL_BASE_HP = 60;
 
-/**
- * ⭐ v6.112「這張卡在**場上**是不是【基礎】寶可夢」的中央述詞。
- *
- * 化石卡的 `pool.get(cardId)` 是 **Trainer**（`stage:null`／`hp:null`／`pokemonType:null`），
- * 所以任何寫成 `card.stage === 'Basic'` 的判斷都**不會**命中化石 —— 但卡面明寫它
- * 「可作為…【基礎】寶可夢放置於場上」。以「【基礎】寶可夢」為條件的場上效果
- * （例：激動競技場「雙方場上所有【基礎】寶可夢最大HP各+30」）必須用這個述詞，
- * 不要各自手刻 `card.stage === 'Basic' || inst.fossilOnField`。
- */
-export function isBasicPokemonOnField(
-  inst: CardInstance | null | undefined,
-  card: Card | undefined,
-): boolean {
-  if (inst?.fossilOnField) return true;
-  return card?.stage === 'Basic';
-}
+// isBasicPokemonOnField（v6.112 的「場上【基礎】」中央述詞）：
+//   v6.250 已下沉到 selection-filter.ts（純 leaf，effects/_shared.ts 與 cards/*.ts 都能直接取用），
+//   本檔上方以 re-export 對外提供同一份實作。二分法紀律（手牌/牌庫/棄牌區用 isBasicPokemonCard、
+//   場上 instance 用 isBasicPokemonOnField，含官方裁定 id）寫在 selection-filter.ts 的函式註解。
 
 /**
  * 計算寶可夢的「有效 HP」— 基礎 HP + 附加道具的 HP 加成。
@@ -6025,10 +6013,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       const atkActiveGG = newState.players[aIdx].active;
       const atkCardGG = atkActiveGG ? pool.get(atkActiveGG.cardId) : null;
       // v5.483：原 subtype==='Basic' 對「基礎 ex」(如喵喵ex subtype='ex')失效 → 只給 base 2 不 +1。
-      //   改 isBasicPokemonCard（涵蓋基礎 ex / 火箭隊基礎等）。卡面：對手【基礎】被本招式傷害 KO → +1。
+      // ⭐ v6.250：改走**場上視角**的中央述詞 isBasicPokemonOnField —— 被 KO 的是**場上**那隻，
+      //   化石在場上就是【基礎】寶可夢（官方 PTCG_RULES.json id 783/787），原本 isBasicPokemonCard
+      //   會把化石判成 Trainer 而漏掉 +1。updatedActive 是加完傷害的被 KO instance（帶 fossilOnField）。
       // ⭐ v6.196：三首惡龍ex stage=Stage2 進化＋ex 規則寶可夢 ⇒ 熔岩洞／初始化 應消除貪婪食客。
       if (hasEffectiveAbilityByInst(newState, aIdx, atkActiveGG, pool, '貪婪食客')
-          && isBasicPokemonCard(defenderCard)) {
+          && isBasicPokemonOnField(updatedActive, defenderCard)) {
         greedyGourmetBonus = 1;
       }
       // v2.103 古舊能量（ACE SPEC）— 附有此能量的寶可夢被 KO 時，對方獎賞 -1
@@ -7332,13 +7322,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         let sandstormPrizes = 0;
         let sandstormActiveDied = false;
 
-        const isBasicPokemonInst = (inst: CardInstance): boolean => {
-          const c = pool.get(inst.cardId);
-          if (!c || c.supertype !== 'Pokemon') return false;
-          if (c.evolvesFrom) return false;
-          if (c.stage && c.stage !== 'Basic') return false;
-          return true;
-        };
+        // ⭐ v6.250：原本手刻（`supertype !== 'Pokemon'` 直接 false）會把場上化石漏掉。
+        //   卡面「對手的所有【基礎】寶可夢」是**場上視角** ⇒ 走中央述詞 isBasicPokemonOnField。
+        const isBasicPokemonInst = (inst: CardInstance): boolean =>
+          isBasicPokemonOnField(inst, pool.get(inst.cardId));
 
         if (opp.active && isBasicPokemonInst(opp.active)) {
           // v4.51 Phase 2：active 也加 canApplyEffectToTarget（光之翼會擋 active）
@@ -8763,7 +8750,14 @@ export function applyOppActiveReturnedToBenchTriggers(
 // v5.866 險惡廢墟中央偵測：任何動作後,本回合方新放到自己備戰的寶可夢(iid 不在動作前
 //   自己場上=新放置,排除互換/進化保留 iid)統一觸發險惡廢墟(2 指示物)。收斂原散在 6 處
 //   (PLAY_BASIC/PLAY_FOSSIL/各搜牌庫放備戰 resolver,多處漏呼叫)的 applyBenchPlaceSideEffects。
-//   helper 內部已 no-op(非險惡廢墟在場)+ 濾惡屬性,故僅在該場地生效。
+//   helper 內部已 no-op(非險惡廢墟在場)+ 判【基礎】(v6.250 中央述詞) + 濾惡屬性,故僅在該場地生效。
+//
+// ⚠⚠ 現況鎖（站長 v6.250 裁定，維持既有行為，翻案前必須先改守衛）：
+//   卡面「雙方玩家每次在**自己的回合**將【基礎】寶可夢…放置於**備戰區**時」——
+//   本站採用的解讀是「**自己的回合、自己的備戰區**」，所以只掃 before.activePlayerIndex
+//   那一側；把【基礎】放到**對手**備戰區的 5 張卡（勾魂眼／莉莉艾的蝶結萌虻／禿鷹娜／
+//   大舌頭／配樂之笛）**不觸發**險惡廢墟。
+//   守衛：scripts/test-v6250-basic-on-field-central.mjs 的「現況鎖」三條（行為＋靜態＋枚舉）。
 function applyRuggedRuinsBenchPlace(before: GameState, after: GameState, pool: Map<string, Card>): GameState {
   const idx = before.activePlayerIndex;
   if (idx !== 0 && idx !== 1) return after;

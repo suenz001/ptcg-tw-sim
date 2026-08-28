@@ -28,6 +28,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
+import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
@@ -541,7 +542,11 @@ regPost('雙斧戰龍|斧擊衝撞', (state, aIdx, pool) => {
   const da = state.players[dIdx].active;
   if (!da) return state;
   const card = pool.get(da.cardId);
-  if (card?.stage !== 'Basic' && card?.subtype !== 'Basic') {
+  // ⭐⭐ v6.250：官方 PTCG_RULES.json id 787 直接就是這張卡的裁定 ——
+  //   「使用雙斧戰龍的招式『斧擊衝撞』，可以將作為[基礎]寶可夢放置於對手戰鬥場上的
+  //     物品卡『陳舊的羽毛化石』[昏厥]嗎？ → 可以。」
+  //   原本手刻 stage/subtype 會把化石（Trainer，stage=null）判成「非基礎」而放過它。
+  if (!isBasicPokemonOnField(da, card)) {
     return addLog(state, '斧擊衝撞：對手戰鬥場非基礎，效果無效', aIdx);
   }
   return koTargetByAttackEffect(

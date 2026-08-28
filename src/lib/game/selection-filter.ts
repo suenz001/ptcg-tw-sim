@@ -14,7 +14,7 @@
  *   evaluator 時會形成循環，屆時把 isBasicPokemonCard/isRulePokemon/isBasicEnergyOfType/getBasicEnergyType
  *   下沉搬進本檔、engine 改 re-export（Check O 純度）。批1 先不動 engine。
  */
-import type { Card } from './types';
+import type { Card, CardInstance } from './types';
 import type { EnergyType } from '$lib/cards/types';
 import { RULE_BOX_SUBTYPES } from './types';
 
@@ -31,6 +31,39 @@ export function isBasicPokemonCard(card: Card | undefined): card is Card {
   if (card.subtype === 'Other') return false; // 道具卡
   if (card.subtype === 'Stage1' || card.subtype === 'Stage2') return false; // v2.62 加固
   return !card.evolvesFrom;
+}
+/**
+ * ⭐⭐⭐ v6.250「這張卡在**場上**是不是【基礎】寶可夢」的中央述詞。
+ * （v6.112 建立於 engine.ts；v6.250 下沉到本檔這個純 leaf 模組，engine 改 re-export，
+ *   讓 effects/_shared.ts 與各 cards/*.ts 都能在零循環風險下取用。）
+ *
+ * ⭐⭐⭐ 二分法紀律（官方裁定，出處＝`PTCG RULES/PTCG_RULES.json` 的 `qa[].id`）：
+ *
+ *   ・**手牌／牌庫／棄牌區**視角 → `isBasicPokemonCard`（化石在這些區域是**物品**卡）
+ *       id 789 禿鷹娜｜瞄準獵物 選對手手牌的「陳舊的背蓋化石」→ 不可以
+ *                （「物品卡『陳舊的背蓋化石』在手牌中時視為『物品』卡」）
+ *       id 795 保母曼波｜溫柔鰭 從棄牌區拿化石 → 不可以（「在棄牌區時視為『物品』卡」）
+ *       id 572 配樂之笛 翻對手牌庫頂看到化石 → 不可以
+ *
+ *   ・**場上 instance** 視角 → `isBasicPokemonOnField`（化石在場上就是【基礎】寶可夢）
+ *       id 783 保母蟲｜治癒襁褓 可以恢復場上化石的 HP
+ *       id 787 雙斧戰龍｜斧擊衝撞 可以把對手戰鬥場的化石【昏厥】
+ *
+ * ⚠ 化石卡的 `pool.get(cardId)` 是 **Trainer**（`stage:null`／`hp:null`／`pokemonType:null`），
+ *   所以任何寫成 `card.stage === 'Basic'` 的判斷都**不會**命中化石。
+ * ⚠⚠ **禁用 `subtype === 'Basic'` 判【基礎】**：`subtype` 會被 `ex` 覆蓋 ——
+ *   現役 live H/I/J 有 338 張「基礎 ex」(`stage=Basic`/`subtype=ex`) 會被漏掉，
+ *   另有 150 張「2 階 ex」(`stage=Stage2`/`subtype=ex`) 會被誤放（v6.250 烈箭鷹ex 正是這類）。
+ * ⚠ 以【基礎】寶可夢為條件的**場上**效果一律用這個述詞，不要各自手刻
+ *   `card.stage === 'Basic' || inst.fossilOnField`。
+ *   守衛：`scripts/test-v6250-basic-on-field-central.mjs`（含全站手刻樣式 lint）。
+ */
+export function isBasicPokemonOnField(
+  inst: Pick<CardInstance, 'fossilOnField'> | null | undefined,
+  card: Card | undefined,
+): boolean {
+  if (inst?.fossilOnField) return true;
+  return card?.stage === 'Basic';
 }
 export function isRulePokemon(card: Card | undefined): boolean {
   if (!card) return false;

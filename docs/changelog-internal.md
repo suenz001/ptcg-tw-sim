@@ -1,5 +1,105 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.250 — 「場上視角的【基礎】寶可夢」收斂到中央述詞 isBasicPokemonOnField（5 個 outlier）
+
+站長回報：場上有**險惡廢墟**時，把**烈箭鷹ex**（Stage2 進化）用特性「激動俯衝」放到備戰區，
+被放了 2 個傷害指示物。
+
+### 真因
+
+`effects/_shared.ts` 的 `applyBenchPlaceSideEffects` **只濾【惡】屬性、完全沒判【基礎】**
+（`if (!card || card.pokemonType === 'Darkness') return c;`）。
+v5.866 起的中央管線（`engine.ts` `applyRuggedRuinsBenchPlace`，由 `applyAction` 出口以
+before/after 新 iid 差分偵測）本身是好的 —— **壞的是它呼叫的述詞**。
+
+### 修法：中央述詞下沉 + 5 個消費點全部改接
+
+`isBasicPokemonOnField(inst, card)`（v6.112 建立於 `engine.ts`）**下沉到
+`src/lib/game/selection-filter.ts`**（純 leaf，只 import types；`effects/_shared.ts` 早就
+從它 import `isMegaExCard` ⇒ 零循環風險），`engine.ts` 改 re-export。
+比照 v6.018 `isBasicPokemonCard` 下沉的先例。
+⚠ 下沉後跑了 **5 種 module 評估順序**的實跑 TDZ 探針（`_shared` 先 / `effects` 先 /
+`engine` 先 / `selection-filter` 先 / 卡片子檔先），5 種都成功載入且
+`TRAINER_EFFECTS=237`、`ATTACK_POST=1185`（模組初始化沒有中斷）。
+
+| # | 卡／效果 | 舊寫法 | 症狀 |
+|---|---|---|---|
+| 1 | 險惡廢墟 | 只判 `pokemonType === 'Darkness'` | **任何**寶可夢放到自己備戰都吃 20 |
+| 2 | 三首惡龍ex｜貪婪食客 | `isBasicPokemonCard(defenderCard)` | KO 對手的**化石**不給 +1 獎賞 |
+| 3 | 阿羅拉 椰蛋樹ex｜嗡嗡榍石 | `card?.stage !== 'Basic'` ×2 | 對手場上化石被判「非基礎，無效」 |
+| 4 | 火箭隊的班基拉斯｜揚沙 | `supertype !== 'Pokemon'` 直接 false | 對手場上化石不吃 2 個指示物 |
+| 5 | **雙斧戰龍｜斧擊衝撞** | `stage !== 'Basic' && subtype !== 'Basic'` | 對手戰鬥場化石被判「非基礎」 |
+
+⚠ 第 5 條是這一版**自己掃出來的**（前置調查沒有列），而且
+`PTCG RULES/PTCG_RULES.json` 的 **id 787 就是這張卡的官方裁定**：
+「使用雙斧戰龍的招式『斧擊衝撞』，可以將作為[基礎]寶可夢放置於對手戰鬥場上的物品卡
+『陳舊的羽毛化石』[昏厥]嗎？ → **可以**。」原實作直接違反它。
+
+### ⭐⭐⭐ 二分法紀律（寫在 `selection-filter.ts` 的函式註解裡）
+
+| 視角 | 述詞 | 化石算不算【基礎】寶可夢 | 官方裁定（`PTCG_RULES.json` 的 `qa[].id`） |
+|---|---|---|---|
+| 手牌／牌庫／棄牌區 | `isBasicPokemonCard` | **不算**（是物品卡） | 789 禿鷹娜／795 保母曼波溫柔鰭／572 配樂之笛 |
+| 場上 instance | `isBasicPokemonOnField` | **算** | 783 治癒襁褓可恢復化石 HP／787 斧擊衝撞可 KO 化石 |
+
+⚠⚠ 修險惡廢墟時若圖方便寫成 `isBasicPokemonCard(card)`，會把**化石一起關掉** ——
+與 v6.145「中央閘把化石判成進化」是同型陷阱。守衛的矩陣第 (5) 條就是釘這個。
+⚠⚠ **禁用 `subtype === 'Basic'` 判【基礎】**：`subtype` 會被 `ex` 覆蓋。實測 live H/I/J：
+`Basic|ex` 338 張（會被漏掉）、`Stage2|ex` 150 張（會被誤放，烈箭鷹ex 正是這類）。
+另實測 `stage === 'Basic'` ⟺ `!evolvesFrom` 在 live H/I/J **零歧異**（2226 = 2226）。
+
+### ⚠ 現況鎖：放到「對手」備戰區不觸發險惡廢墟
+
+站長裁定**維持現行行為**（卡面「每次在**自己的回合**將…放置於備戰區時」，本站解讀為
+「自己的回合、自己的備戰區」）。`applyRuggedRuinsBenchPlace` 只掃 `before.activePlayerIndex`
+一側的邏輯**沒有動**，但補上了明示註解，並在守衛裡加三條鎖：
+行為（配樂之笛把基礎放到對手備戰 → 對手那隻 damage=0）、
+靜態（不得改成雙側掃描、註解必須寫明裁定）、
+枚舉（卡面「放置於對手的備戰區」的 H/I/J 卡**剛好 5 張**：勾魂眼／莉莉艾的蝶結萌虻／
+禿鷹娜／大舌頭／配樂之笛，上下限都斷言）。
+
+### 守衛 `scripts/test-v6250-basic-on-field-central.mjs`（30 條，已進 npm test）
+
+- ① 4+1 張卡的**卡面逐字**複驗（全部讀 `static/cards`）＋資料面斷言（stage 恆有值、
+  `stage==='Basic'` ⟺ 無 `evolvesFrom`、`subtype` 被 ex 覆蓋 > 100 筆）。
+- ③ 險惡廢墟 **7 項矩陣**：Stage2 ex 不放／Stage2 不放／Basic 放 20／Basic+subtype=ex 放 20／
+  化石放 20／【惡】不放／鬼之假面互換（保留 iid）不放。
+- ⑤ 另外 4 個 outlier 的行為端，**每一條都配正對照**（Stage2 不得被誤判成【基礎】）。
+- ⑥ **lint**：全站 `src/lib/game/**` 剝註解後掃 `.stage === 'Basic'`；
+  非場上視角的 10 筆走**逐行內容比對**的白名單（每筆註明視角與官方裁定），
+  其餘必須為 0。配三道防安慰劑：下限斷言（檔案 > 100、行數 > 70000、命中數 ≥ 白名單筆數）、
+  **白名單死條目檢查**（寫法一改就紅，防止白名單變成隱形通道）、
+  正對照（餵 3 個違規樣本必須被抓到、2 個中央述詞用法不得誤抓、
+  註解裡的舊寫法不得誤報、剝註解不得把程式也吃掉）。
+
+### 驗證
+
+- **HEAD-FAIL**（對 BASE `4bd11bb2` 的乾淨 tree 跑）：`PASS 19 / FAIL 11`，
+  5 個 outlier **各自各一條紅**（不是單一 crash）。修後 `PASS 30 / FAIL 0`。
+- **突變測試** 4 組，各自只紅在預期那一條：
+  ① 險惡廢墟改用 `isBasicPokemonCard` ⇒ 只有矩陣第 (5) 條「化石放 20」紅（化石陷阱被抓到）；
+  ② 揚沙回到手刻 ⇒ 揚沙紅＋lint 紅 1 處；
+  ③ 險惡廢墟拿掉【基礎】判定 ⇒ 矩陣 (1)(2) 紅；
+  ④ 斧擊衝撞回到手刻 ⇒ 斧擊衝撞紅＋lint 紅 1 處。
+- 免疫網：`test-damage-immunity-matrix` 25/0、`test-attack-effect-immunity-matrix` 19/0。
+- 回歸：`test-rugged-ruins-bench-place-central` 4/0、`test-v6112-fossil-hp-bonuses` 15/0、
+  `test-selection-ui` 35/0、`test-ts2304-scan` 無、`test-m6-wave13` 15/0、
+  `test-v6098-hand-ability-ui-central` 18/0。
+- `tsc --noEmit -p .`：與 BASE **完全同一組 91 筆基線錯誤**（只有行號位移），新增 0 筆、**TS2304 = 0**。
+- 效能：述詞是兩行純函式（`inst?.fossilOnField` 早退 + 一次欄位比較），
+  險惡廢墟那條只在該場地在場時才會走到（helper 開頭就 no-op 早退）⇒ 玩家端零額外成本。
+
+### ⚠ 沒有動的東西
+
+- 「放到對手備戰不觸發」的單側掃描邏輯（現況鎖）。
+- 進化（保留 iid）、鬼之假面互換（`effects.ts` 保留 iid）—— 守衛第 (7) 條實測沒有誤觸發。
+- 手牌／牌庫／棄牌區視角的卡（溫柔鰭／配樂之笛／禿鷹娜／大舌頭／莉莉艾的蝶結萌虻／
+  鳳王復生火焰／哲爾尼亞斯大地之門）—— 全部維持 `isBasicPokemonCard` 語意，並進了 lint 白名單。
+- **超能豔鴕｜奧密之眼**：前置調查把它歸為「棄牌區／手牌視角」，實際上是**場上視角**，
+  但它問的是「**是不是進化**寶可夢」（`card.stage && card.stage !== 'Basic'`），
+  化石 `stage` 為 null ⇒ 正確地不算進化 ⇒ **現行行為正確，這一版不動**，只進白名單並註明理由。
+- v6.245~v6.249 的休閒同步改動：零接觸。
+
 ## v6.249 — 獨立審查者複驗 v6.248：退避參數過猛、streak 語意誤述、25 分鐘 fail-safe、兩處守衛安慰劑
 
 v6.248 上線後由**獨立對抗性審查者**複驗：正確性沒有回歸（34 條全綠、突變全捕捉），

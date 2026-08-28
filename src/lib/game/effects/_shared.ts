@@ -17,7 +17,8 @@
 import type { Card } from '$lib/cards/types';
 import { CLEAR_ON_EXIT_FLAGS } from '../instance-flags';
 // v6.191 玳蘿：「超級進化寶可夢【ex】」中央述詞（selection-filter 只 import types，無循環）
-import { isMegaExCard } from '../selection-filter';
+// v6.250 險惡廢墟：「場上【基礎】寶可夢」中央述詞同樣來自 selection-filter（同一個 leaf）
+import { isMegaExCard, isBasicPokemonOnField } from '../selection-filter';
 // ⭐v6.213 sameEvoName 的名稱正規化唯一來源（stage2-index 是 leaf，只 import type，無循環）
 import { normalizeEvoVariantName } from '../stage2-index';
 import type {
@@ -1859,6 +1860,10 @@ export function promoteOppBenchToActive(
  * 目前處理：
  *   - 險惡廢墟（Stadium）— 雙方玩家將【基礎】寶可夢（【惡】寶可夢除外）放到備戰區時，
  *     該寶可夢放置 2 個傷害指示物（20 傷）。
+ *     ⭐⭐ v6.250：原本**只濾【惡】、完全沒判【基礎】** ⇒ 玩家把烈箭鷹ex（2 階進化）用特性
+ *        「激動俯衝」放到備戰時被誤扣 20 點。改走場上視角中央述詞 isBasicPokemonOnField
+ *        （化石在場上是【基礎】寶可夢，官方 PTCG_RULES.json id 783/787 ⇒ 化石照樣吃 2 個指示物；
+ *        用 isBasicPokemonCard 會把化石一起關掉，那是錯的）。
  *
  * 不處理（刻意保留獨立）：
  *   - BENCH_PLACE_TRIGGERS（如喵喵ex｜殺手鐧捕捉）— 這個觸發目前只走 PLAY_BASIC 路徑；
@@ -1883,7 +1888,11 @@ export function applyBenchPlaceSideEffects(
   const newBench = p.bench.map(c => {
     if (!placedIids.includes(c.iid)) return c;
     const card = pool.get(c.cardId);
-    if (!card || card.pokemonType === 'Darkness') return c;
+    if (!card) return c;
+    // ⭐⭐⭐ v6.250 卡面逐字：「將【基礎】寶可夢（【惡】寶可夢除外）放置於備戰區時」
+    //   —— 兩個條件缺一不可。【基礎】走場上視角中央述詞（含化石），【惡】看印刷屬性。
+    if (!isBasicPokemonOnField(c, card)) return c;
+    if (card.pokemonType === 'Darkness') return c;
     affected.push(card.name);
     return { ...c, damage: c.damage + 20 };
   });
