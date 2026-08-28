@@ -6330,12 +6330,25 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         };
       }
     } else if (defenderSurvivedAttack) {
-      // v2.69 重裝角擊追蹤 — 累計 defender 受到的招式傷害（在 defender 自己 END_TURN 時 reset）
-      const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + (baseDamage > 0 ? baseDamage : 0);
       // ⭐⭐⭐ v6.253：防 KO 生效時，上方已把 damage 寫成「剩餘 HP = leaveHP」
       //   （倖存鍛鍊器並已把自己丟進棄牌區）⇒ 這裡**絕不可**再蓋回致死值 newDamage，
       //   否則就等於把剛救回來的寶可夢再打死一次。
       const _survivedDamage = preventedKO ? defenderState.active!.damage : newDamage;
+      // v2.69 重裝角擊追蹤 — 累計 defender 受到的招式傷害（在 defender 自己 END_TURN 時 reset）
+      // ⭐⭐⭐ v6.255 站長裁定（2026-08-28，逐字：「改成實際扣到的」）：
+      //   本欄位唯一的讀取點是 超級赫拉克羅斯ex｜重裝角擊（M2 14322 / 18578，I 標），
+      //   卡面逐字：「增加與在上個對手的回合這隻寶可夢受到的招式的傷害相同數值的傷害。」
+      //   官方 `PTCG RULES/PTCG_RULES.md` L1933-1934：激動競技場在場、請假王ex 對滿血
+      //   皮卡丘ex 使出「偉大橫掃」，因「勤奮之心」以剩餘 HP 10 留在場上時，
+      //   皮卡丘ex 身上放置的傷害指示物是「22 個」＝ 有效 HP−10，**不是招式的全額傷害**。
+      //   ⇒ 防 KO 成功時「受到的傷害」＝ 實際扣到的（防 KO 後的 damage − 受招前的 damage），
+      //     v6.253~v6.254 記全額 baseDamage 會讓重裝角擊多打一大截。
+      //   ⚠ 非防 KO 的一般情況：_survivedDamage === newDamage === 受招前 damage + baseDamage
+      //     ⇒ 本式必然等於 baseDamage，**行為與 BASE 逐位元相同**（有正對照守衛）。
+      //   ⚠ Math.max(0, …)：防 KO 的 leaveHP 若高於受招前的剩餘 HP（等同被治療）不算「受到傷害」。
+      const _damageBeforeThisAttack = newDamage - baseDamage;
+      const _actualDamageTaken = Math.max(0, _survivedDamage - _damageBeforeThisAttack);
+      const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + _actualDamageTaken;
       defenderState.active = { ...defenderState.active!, damage: _survivedDamage, damageTakenLastOppTurn: accumDmgTaken };
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };

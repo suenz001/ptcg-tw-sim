@@ -1,5 +1,140 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.255 — 化隱一起豁免特性消除 ＋「受到的傷害」改記實際扣到的 ＋ 兩個守衛/註解更正
+
+站長裁定（2026-08-28，逐字）：①「一起豁免」 ②「改成實際扣到的」。
+
+### 1. 化隱一起進 OPP_ABILITY_EFFECT_IMMUNE_ABILITIES
+
+**卡面枚舉（BASE fa30fb59，只用 static/cards，live index.json 的 42 個卡包、4935 張）**
+掃描條件＝`abilities[].effect` 同時含「不會受到」與「特性」⇒ 13 筆，特性名只有 3 種：
+
+| 特性 | 印刷 | 標 | effect 逐字 |
+|---|---|---|---|
+| 化隱 | 19149 斯魔茶 / 19150 來悲粗茶 / 19175 怨影娃娃 / 19176 詛咒娃娃（**共 4 張**，皆 M5） | J | 這隻寶可夢不會受到對手的招式與特性的效果的影響。 |
+| 光之翼 | 18007 / 18399 / 18415 超級皮可西ex（M3） | J | 這隻寶可夢不會受到對手的寶可夢特性效果的影響。 |
+| 礎石之勢 | 厄鬼椪 礎石面具ex ×6 | H | 這隻寶可夢不會受到對手的擁有特性的寶可夢**招式的傷害**。（主詞是招式傷害 ⇒ 不收） |
+
+⚠ **官方 `PTCG RULES/PTCG_RULES.md` 對「化隱 × 特性消除」零裁定**（全文逐字搜尋 化隱／
+藏隱／暗夜羽擊 的 Q&A，沒有任何一條）。本條是**站長裁定**、依卡面字面推論，日後可翻案：
+改 `OPP_ABILITY_EFFECT_IMMUNE_ABILITIES` 一個名字即可。
+
+**收斂點（沒有新增平行實作）**
+化隱在站內有兩個免疫消費點：`defense.ts canApplyEffectToTarget` step 1b（unified）與
+`effects.ts canApplyAttackEffectToTarget`（@deprecated legacy）。**兩者都是先問
+`isAbilityHolderEffective(...,'化隱',...)`**，而 v6.254 的豁免鉤子就掛在那支中央述詞裡
+（`isInitializeNullified` / `isOppActiveAbilityNullifiedByMoonsenne` / `isAbilityNullifiedBySticky`）。
+⇒ 只改名單一行，兩個消費點自動同步（守衛 B2 用兩支各問一次，分歧就紅）。
+
+**行為差異逐項（harness 實測 BASE vs HEAD，四張各驗）**
+
+| 消除源 | BASE | HEAD | 說明 |
+|---|---|---|---|
+| 振翼髮｜暗夜羽擊（passive，對手戰鬥位） | 化隱失效 | **化隱維持有效** | ⭐**本版唯一的實質行為改變** |
+| 鐵荊棘ex｜初始化 | 不影響 | 不影響 | 化隱四張都不是「擁有規則的寶可夢」⇒ 本來就打不到（no-op） |
+| 海兔獸｜黏著束縛 | 不影響 | 不影響 | 卡面限【2階進化】，化隱四張是 Basic/Stage1（no-op） |
+| 傳說的熔岩洞（競技場卡） | 來悲粗茶/詛咒娃娃(Stage1) 失效 | **相同** | 競技場卡不豁免 |
+| 火箭隊的監視塔（競技場卡） | 不影響 | 不影響 | 卡面限【無】，化隱四張是草/超（no-op） |
+| `abilityNullifiedThisTurn`（招式旗標） | 化隱失效 | **相同** | 見下 |
+
+### 2. 「招式版特性消除該不該被化隱擋」— 推論與依據
+
+化隱卡面**有寫「招式」**，所以答案是「應該擋」。但**擋的位置不是評估點**：
+
+1. 全站唯一會設 `abilityNullifiedNextTurn` 的是 `regPost('振翼髮|暗夜羽擊')`
+   （`v2362_new_decks_batch.ts` L55），而它走中央 `applyOppActiveDebuffPost`
+   —— 那支自帶 attack-effect 免疫閘 ⇒ **化隱有效時旗標根本寫不上去**（守衛 B7 行為端驗證，
+   並配正對照：化隱被熔岩洞消除時旗標設得上去）。「化隱擋招式版特性消除」已經成立。
+2. 若在評估點（`hasEffectiveOppAbilityImmunity` / `isAbilityHolderEffective` step 1）也豁免，
+   會變成「旗標當初**合法**寫上去（寫入當下化隱正被熔岩洞消除），事後熔岩洞被換掉，
+   化隱無聲復活」—— 那是回頭改寫已結算的過去，卡面沒這樣講。
+3. 補充事實：現役 H/I/J **沒有任何招式**會消除特性
+   （掃 `attacks[].effect` 同時含「特性」與「無效|消除」⇒ 0 張），
+   `振翼髮|暗夜羽擊` 那支 reg 無對應卡（現役振翼髮招式是 飛來橫禍／蠱惑挪移／月亮之力）。
+⇒ **維持不豁免**，並用 B7 把「施加點有擋」鎖住。
+
+### 3. damageTakenLastOppTurn ＝ 實際扣到的（engine.ts）
+
+**讀取點枚舉（BASE，`git grep` 指定 rev，src 全域）：只有 1 個**
+`v2690_i_wave19_engine_hooks.ts` L23 `const dmgTaken = a?.damageTakenLastOppTurn ?? 0;`
+（超級赫拉克羅斯ex｜重裝角擊，M2 14322/18578，I 標，HP280，attacks[0] 100+）
+卡面逐字：「增加與在上個對手的回合這隻寶可夢受到的招式的傷害相同數值的傷害。」
+
+**寫入點 3 個**：engine.ts L6334-6339（主管線，本版改）、effects.ts L8749
+（`dealAttackDamageToTarget` 非 KO 分支）、engine.ts L7676 END_TURN 清除。
+
+**官方依據**：`PTCG_RULES.md` L1933-1934 ——「激動競技場在場、請假王ex 對滿血皮卡丘ex
+使出偉大橫掃，因勤奮之心以剩餘HP『10』留在場上時，皮卡丘ex 身上放置的傷害指示物為多少個？
+→ 為22個。」＝ 有效 HP−10，不是招式全額。
+
+**改法**：`_actualDamageTaken = Math.max(0, _survivedDamage - (newDamage - baseDamage))`。
+非防 KO 時 `_survivedDamage === newDamage` ⇒ 恆等於 `baseDamage`，**行為與 BASE 完全相同**
+（守衛 C4/C5 是正對照）。
+
+| 情境 | BASE | HEAD |
+|---|---|---|
+| 岩殿居蟹(HP150)｜結實 被 160 打 | damageTaken=160 | **140** |
+| 超級摔角鷹人ex(HP250) 帶 100 傷、堅忍之軀正面、被 160 打 | 160 | **140** |
+| 倖存鍛鍊器 擋下 | 160 | **140** |
+| 重裝角擊：滿血赫拉(HP280) 被 300 打、倖存鍛鍊器擋下 | 100+300=400 | **100+270=370** |
+| 一般受傷未昏厥（皮卡丘ex HP200 被 160 打） | 160 | 160（不變） |
+
+⚠ **未處理、已回報站長的相鄰缺口**（本版**刻意不動**，屬另一個維度）：
+`effects.ts` 的狙擊/多目標傷害管線在**防 KO 成功時提早 return**（L8714 `applyPreventKOToVictim`），
+`damageTakenLastOppTurn` **完全沒累計**（記 0）；另外兩條多目標路徑（L11030、L15866 附近）
+即使**沒有**防 KO 也從來不寫這個欄位。這是「漏記」不是「記全額」，與站長這次的裁定不同型。
+
+### 4. C5 守衛安慰劑（Fable 5 抓到）
+
+`scripts/test-v6253-nullifier-and-survive.mjs` 舊 C5 把【傳說的熔岩洞】放在場上，
+但三合一磁怪自己也是【1階進化】⇒ 過度放電先被熔岩洞消除 ⇒ `listed` 恆 false ⇒
+`!(listed && blocked)` 恆真、**不可能紅**。改成兩個方向都到得了的正對照對
+（無消除源 ⇒ 不列出且擋下；我方振翼髮消掉哥達鴨的濕氣 ⇒ 列出且不擋），
+斷言 `listed === !blocked` ＋ 兩個方向各自的絕對值。
+**突變證明**：把 `hasPsyduckDamp` 的 v6.253 gate 拿掉 ⇒ 新 C5-B 紅、
+**舊 C5 在同一個突變下仍然綠**（實測印出 `listed=false blocked=false`）⇒ 安慰劑確認。
+
+### 5. 效能註解更正（Rule 32，只改敘述不改邏輯）
+
+`v3001_g3_wave3.ts` `isInitializeNullified` 原註解「不用 `[0,1]` 陣列…實測有感」
+會讓人以為這條路徑仍便宜，方向與實測相反。獨立複驗（`scripts/perf-v6253.mjs`，
+各 3 輪取最小、N=60000、同一台沙盒）getUsableAbilities µs/call：
+
+| 情境 | v6.252 fe0dcb0d | v6.253 312ec9a9 | v6.254 fa30fb59 | v6.255 |
+|---|---|---|---|---|
+| worst | 3.682 | 9.461 | 10.110 | 9.832 |
+| typical | 5.191 | 6.036 | 5.911 | 5.839 |
+
+⇒ Fable 5 回報的「worst 3.8→9.5µs（約 2.5 倍）」成立。v6.255 相對 v6.254 持平。
+本版新增量測腳本 `scripts/test-v6255-perf.mjs`（BASE vs HEAD 同 workload）：
+canApplyEffectToTarget 一般盤面 63.5→63.9 ns、對手化隱 200.6→195.9 ns（持平）、
+isAbilityHolderEffective 化隱×暗夜羽擊 256.3→327.3 ns（+28%，多問兩張競技場卡，刻意）；
+完整 applyAction(ATTACK) 248.07→245.34 µs / 239.19→237.55 µs（動作層級量不出差異）。
+
+### 6. defense.ts 零行為差異收斂（前一版代理提出、站長同意）
+
+`canApplyEffectToTarget` step 1（光之翼）/ step 1b（化隱）原本只用 `1 - actorIdx` 推 owner。
+新增 `isInstOnSide` + `isTargetOnActorOwnSide`（先問對面 ⇒ 對手戰鬥位 1 次比對就早退），
+**排在 hasEffectiveAbilityByInst / isAbilityHolderEffective 之後** ⇒ 一般盤面 0 次呼叫。
+**fail-closed**：兩側都找不到（KO 前快照）維持 BASE 的照擋。
+
+⭐ **「目前沒有會踩到的真卡」已獨立複驗**：把探針插進 `canApplyEffectToTarget`
+（記錄每一次 target 不在 `1-actorIdx` 那一側的呼叫 + 呼叫堆疊），
+對 BASE fa30fb59 跑**完整 575 支 npm test**，只有 1 筆命中且是合成呼叫
+（`test-protect-code-any-ex-bench.mjs`，kind=attack-damage、鐵臂膀、無特性、兩側都找不到）
+⇒ **零行為差異**，不是修現存 bug。
+
+### 守衛
+
+`scripts/test-v6255-hidden-immunity-and-damage-taken.mjs`（35 條）＋
+`scripts/test-v6255-perf.mjs`（3 條上限斷言）。
+HEAD-FAIL 對 BASE fa30fb59：三個原始碼檔全還原 ⇒ 14 PASS / 19 FAIL，且**逐檔還原**時
+紅的條目剛好落在對應區塊（v3001→A4/B1×4/B2×4/B4/B7；engine→C1/C2/C3/C6/C8；
+defense→D1/D2/D5；test-v6253→E1）。
+突變測試 7 個（化隱豁免擴大到競技場卡 / 擴大到招式旗標 / 名單拿掉光之翼 /
+消除源有效性失效 / engine 記回全額 / defense 拿掉 owner 驗證 / 濕氣 gate 拿掉）
+全部紅在預期條目，且只捕捉 `assert.AssertionError`。
+
 ## v6.254 — 超級皮可西ex｜光之翼：豁免「對手的寶可夢特性」型特性消除
 
 站長裁定（2026-08-28，逐字）：「不該消。要修」。

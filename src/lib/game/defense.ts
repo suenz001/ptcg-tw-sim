@@ -164,6 +164,56 @@ export function taikoBariBlocksAttackDamage(
   return (state._attackTimeAttackerEnergyUnits ?? Infinity) <= 2;
 }
 
+/**
+ * ⭐⭐ v6.255 零行為差異收斂：`target` 這個實體此刻是不是在 `sideIdx` 這一側的場上
+ * （戰鬥位或備戰區）？
+ *
+ * 為什麼需要它：canApplyEffectToTarget 的 step 1（光之翼）與 step 1b（化隱）原本直接用
+ * `1 - actorIdx` 推定 target 的持有者，**沒有驗證 target 真的在對面**。這兩張卡的卡面
+ * 都寫「不會受到**對手的**…影響」⇒ 如果哪天有 resolver 拿 `ability-effect` 對
+ * **自己這一側**的光之翼／化隱持有者施放（例如自己的特性在自己場上放指示物），
+ * 就會被誤擋成「免疫」。
+ *
+ * ⚠ 現況查證（2026-08-28，對 BASE fa30fb59 全量測）：把探針插進本函式，跑完整 npm test
+ *   575 支，**沒有任何一次**是「target 在 actorIdx 自己這一側且印著光之翼／化隱」——
+ *   唯一一筆非對面目標是 test-protect-code-any-ex-bench.mjs 的合成呼叫
+ *   （kind='attack-damage'、鐵臂膀、無特性）⇒ **本版是零行為差異的預防性收斂**，
+ *   不是修現存的 bug。
+ *
+ * ⚠⚠ 刻意寫成 **fail-closed**：只有「**明確找到** target 在施放方自己這一側」才放行；
+ *   找不到（例如 KO 前的快照實體、已離場的實體）一律維持 BASE 的舊行為（照擋）。
+ *   ⇒ 上述那筆合成呼叫（兩側都找不到）行為完全不變。
+ *
+ * ⚠ 效能（Rule 32）：呼叫點刻意排在 `hasEffectiveAbilityByInst(...)` **之後**，
+ *   亦即只有「target 真的印著且此刻真的有效」時才會跑到，一般盤面 0 次呼叫、0 配置。
+ *   量測腳本：scripts/test-v6255-perf.mjs。
+ */
+function isInstOnSide(state: GameState, sideIdx: 0 | 1, target: CardInstance): boolean {
+  const p = state.players[sideIdx];
+  if (!p) return false;
+  if (p.active?.iid === target.iid) return true;
+  const b = p.bench;
+  if (b) {
+    for (let i = 0; i < b.length; i++) {
+      if (b[i].iid === target.iid) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * target 是否**明確**在施放方（actorIdx）自己這一側？
+ *
+ * ⚠ 效能：先問對面 —— 絕大多數呼叫的 target 就是**對手的戰鬥位**，那只需要 1 次 iid 比對
+ *   就能早退，不必掃自己那一側的 6 個位置。實測（scripts/test-v6255-perf.mjs，5 輪取最小）：
+ *   「對手化隱」情境從 310 ns 掉回 ~200 ns（與 BASE 193 ns 同級）。
+ * ⚠ fail-closed：兩側都找不到（KO 前快照等）一律回 false ＝ 維持 BASE 的照擋行為。
+ */
+function isTargetOnActorOwnSide(state: GameState, actorIdx: 0 | 1, target: CardInstance): boolean {
+  if (isInstOnSide(state, (1 - actorIdx) as 0 | 1, target)) return false;
+  return isInstOnSide(state, actorIdx, target);
+}
+
 export function canApplyEffectToTarget(
   state: GameState,
   actorIdx: 0 | 1,
@@ -207,7 +257,9 @@ export function canApplyEffectToTarget(
     //   → 【傳說的熔岩洞】(進化全消) 與【鐵荊棘ex｜初始化】(規則寶可夢全消) 都應消除它。
     //   原本只比對特性名 ⇒ 同 太古防壁 的漏 gate。改走中央述詞（location 自動判定）。
     const _msIdx = (1 - actorIdx) as 0 | 1;
-    if (hasEffectiveAbilityByInst(state, _msIdx, target, pool, '光之翼')) {
+    // ⭐v6.255：卡面「**對手的**寶可夢特性效果」⇒ 施放方是持有者自己時不該擋（見 isInstOnSide）。
+    if (hasEffectiveAbilityByInst(state, _msIdx, target, pool, '光之翼')
+        && !isTargetOnActorOwnSide(state, actorIdx, target)) {
       return { blocked: true, reason: '光之翼 免疫對手特性效果' };
     }
   }
@@ -222,7 +274,9 @@ export function canApplyEffectToTarget(
       const dIdxHy = (1 - actorIdx) as 0 | 1;
       const defActHy = state.players[dIdxHy].active;
       const locHy: 'active' | 'bench' = (defActHy && defActHy.iid === target.iid) ? 'active' : 'bench';
-      if (isAbilityHolderEffective(state, target, targetCard, dIdxHy, '化隱', locHy, pool)) {
+      // ⭐v6.255：卡面「**對手的**招式與特性」⇒ 施放方是持有者自己時不該擋（見 isInstOnSide）。
+      if (isAbilityHolderEffective(state, target, targetCard, dIdxHy, '化隱', locHy, pool)
+          && !isTargetOnActorOwnSide(state, actorIdx, target)) {
         return { blocked: true, reason: '化隱 免疫對手招式效果與特性效果' };
       }
     }

@@ -217,8 +217,13 @@ T('B8 正對照：一般「受傷但沒死」（沒有任何防 KO）行為不�
   assert.ok(!logHas(r, '勤奮之心'), '沒到致命線就不該叫防 KO');
 });
 T('B9 正對照：防 KO 後 damageTakenLastOppTurn 有累計（重裝角擊追蹤）', () => {
+  // ⭐v6.255 站長裁定「改成實際扣到的」：岩殿居蟹 HP150 被 160 打、結實留 HP10
+  //   ⇒ 身上指示物 = 140（官方 PTCG_RULES.md L1933-1934 同型：HP−10，不是招式全額）。
+  //   v6.253/6.254 這裡記 160（全額 baseDamage）⇒ 重裝角擊會多打 20。
   const r = runAttack(inst(ID.CRAB, [], { damage: 0, toolAttached: inst(ID.FAN) }), atkDialga(), 1);
-  assert.equal(r.players[1].active?.damageTakenLastOppTurn, 160);
+  assert.equal(r.players[1].active?.damage, 140, '結實留 HP10 ⇒ 指示物 140');
+  assert.equal(r.players[1].active?.damageTakenLastOppTurn, 140,
+    '防 KO 時「受到的傷害」＝實際扣到的 140，不是招式全額 160');
 });
 
 // ══════════════════════════════════════════════════════════════════════
@@ -272,16 +277,41 @@ T('C4-正對照：C4 的樣式在缺 gate 的樣本上會失敗', () => {
   const fake = "if (ac?.abilities?.some(ab => ab.name === '初始化')) return true;";
   assert.ok(!new RegExp("isNullifierAbilityEffective\\([^)]*'初始化'").test(fake), 'C4 樣式恆真＝安慰劑');
 });
-T('C5 濕氣：engine 可用清單與 USE_ABILITY 派發必須同一答案（兩份實作不得再分歧）', () => {
-  // 熔岩洞在場 ⇒ 哥達鴨（1階進化）的濕氣被消除。
-  const s = mkS(mkP('P0', inst(ID.LATI), [inst(ID.MAGNE, [en(ID.eLight)])]),
-                mkP('P1', inst(ID.UBO), [inst(ID.GOLD)]), ID.CAVE);
-  const usable = getUsableAbilities(s, pool);
+// ⭐⭐⭐ v6.255 換掉舊 C5（Fable 5 抓到的**恆真安慰劑**）：
+//   舊場景把【傳說的熔岩洞】放在場上，但 三合一磁怪 自己也是【1階進化】
+//   ⇒ 過度放電 先被熔岩洞消除 ⇒ listed 恆為 false ⇒ `!(listed && blocked)` 恆真、
+//   **不管實作怎麼壞都不可能紅**（Fable 實測 listed=false）。
+//   新版改成「同一組卡、兩個方向都真的到得了」的正對照對：
+//     ・無消除源 ⇒ 濕氣有效 ⇒ 不列出 **且** 擋下
+//     ・我方戰鬥場放振翼髮（暗夜羽擊消除對手戰鬥位特性）⇒ 濕氣失效 ⇒ 列出 **且** 不擋
+//   斷言改成 `listed === !blocked`（同一答案）＋兩個方向各自的絕對值，
+//   任何一邊壞掉都會紅（突變測試：見 docs/changelog-internal.md v6.255）。
+const c5Scene = (moonInPlay) => mkS(
+  // P0 戰鬥位：振翼髮（消除源的消除源）或 無特性的拉帝亞斯
+  // P0 備戰：三合一磁怪（過度放電；棄牌區要有基本能量才有東西可附）
+  mkP('P0', inst(moonInPlay ? ID.MOON : ID.LATI), [inst(ID.MAGNE, [en(ID.eLight)])]),
+  // P1 戰鬥位：哥達鴨（濕氣 — 消除「將自己【昏厥】的效果的特性」，過度放電正是這種）
+  mkP('P1', inst(ID.GOLD), []));
+const c5Run = (moonInPlay) => {
+  const s = c5Scene(moonInPlay);
+  s.players[0].discard = [en(ID.eP), en(ID.eP)];
   const magne = s.players[0].bench[0];
-  const listed = usable.some(u => u.iid === magne.iid && u.abilityName === '過度放電');
+  const listed = getUsableAbilities(s, pool)
+    .some(u => u.iid === magne.iid && u.abilityName === '過度放電');
   const r = applyAction(s, { type: 'USE_ABILITY', iid: magne.iid, abilityIndex: 0 }, pool);
-  const blocked = logHas(r, '被可達鴨的濕氣消除');
-  assert.ok(!(listed && blocked), '按鈕列出了卻被濕氣擋 ⇒ 兩份實作分歧');
+  return { listed, blocked: logHas(r, '濕氣') };
+};
+T('C5 濕氣（正對照 A）：消除源有效 ⇒ 按鈕不列出 **且** 派發被擋', () => {
+  const { listed, blocked } = c5Run(false);
+  assert.equal(blocked, true, '哥達鴨的濕氣有效時，過度放電必須被擋（這條紅＝正對照觸發不了）');
+  assert.equal(listed, false, '被濕氣消除卻仍列在可用清單 ⇒ 兩份實作分歧');
+  assert.equal(listed, !blocked, 'UI 清單與 USE_ABILITY 派發答案不一致');
+});
+T('C5 濕氣（正對照 B）：消除源自己被暗夜羽擊消除 ⇒ 按鈕列出 **且** 派發不擋', () => {
+  const { listed, blocked } = c5Run(true);
+  assert.equal(blocked, false, '哥達鴨的濕氣已被暗夜羽擊消除，過度放電不該再被擋（v6.253 的修正）');
+  assert.equal(listed, true, '濕氣已失效卻沒把過度放電列回可用清單');
+  assert.equal(listed, !blocked, 'UI 清單與 USE_ABILITY 派發答案不一致');
 });
 
 console.log(`\n=== v6.253 消除源有效性 ＋ 存活受傷觸發：PASS ${pass} / FAIL ${fail} ===`);
