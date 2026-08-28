@@ -1,5 +1,108 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.253 — 特性消除源自身有效性 ＋「防 KO 成功＝未昏厥」兩個中央述詞
+
+站長回報兩件事（逐字）：①「振翼髮 [特性] 暗夜羽擊 在場上時，對方場上是 鐵荊棘ex，照理說，
+鐵荊棘ex的 [特性] 初始化 應該要被消除，但似乎沒有…拉帝亞斯 特性 天空徑線，但仍然無法直接撤退」
+②「岩殿居蟹 [特性] 結實 發動後，無法觸發身上裝備的寶可夢道具 手持循環扇」。
+
+⚠ 站長口中的「拉帝亞斯」實際是 **拉帝亞斯ex**（M2a 14735 / MC 16783 / SV7a 11049 等，subtype=ex），
+不是無特性的普通拉帝亞斯（MC 16782）。「規則寶可夢」在資料上＝`subtype ∈ RULE_BOX_SUBTYPES`
+（ex/EX/V/VMAX/VSTAR/GX/MegaEvolution）或 `tags` 含同名項；「未來」是 `tags` 含 `'未來'`。
+
+### Bug 1 根因：消除源自身的有效性沒有人問
+
+`v3001_g3_wave3.ts isInitializeNullified` 的迴圈只做
+`ac?.abilities?.some(ab => ab.name === '初始化')` —— **只問「場上有沒有印著初始化的卡」**。
+振翼髮 passive 那一支（`isOppActiveAbilityNullifiedByMoonsenne` → `hasAbilityOnActive`）
+早在 v6.196 就接上了中央閘，`isInitializeNullified` 與 `isAbilityNullifiedBySticky`
+（走刻意無閘的 `hasAbilityOnBench`）被漏掉。v6.202 的枚舉守衛甚至把這兩處寫進豁免表，
+理由是「加 gate 會自我遞迴」—— 那個理由是可以解的，代價卻是真 bug。
+
+修法：新增中央述詞 `isNullifierAbilityEffective(state, holderInst, holderCard, ownerIdx,
+nullifierName, location, pool)`，內部轉呼叫 `isAbilityHolderEffective`，並用 module-level
+`_nullifierVisiting: Set<string>` 擋住「同一個消除源名稱」的自我遞迴（遞迴時回 true＝
+fail-open＝維持 v6.252 行為，最壞不會比現在差）。引擎全程同步 ⇒ 集合不會跨請求交錯。
+
+三個消費點接上：
+1. `isInitializeNullified`（鐵荊棘ex｜初始化）— **有行為差異，就是站長回報的那一條**。
+2. `isAbilityNullifiedBySticky`（海兔獸｜黏著束縛）— 述詞層修正。⚠ 當前卡池 **0 行為差異**：
+   唯一打得到海兔獸（Stage1）的來源是【傳說的熔岩洞】，而它同時也消除所有備戰【2階進化】
+   受害者的特性 ⇒ 淨效果相同。等同 v6.209 岩石宮殿的處理（保證的 no-op，接閘防未來漂移）。
+3. `effects.ts hasPsyduckDamp`（可達鴨／哥達鴨｜濕氣）— 原本用的
+   `isAbilityNullifiedByPassive` **比中央閘窄**（只有 初始化／暗夜羽擊／黏著束縛，
+   漏掉監視塔與熔岩洞），而 `engine.ts isSelfKOEffectBlocked`（v6.201）早就走中央閘
+   ⇒ 同一張卡兩支實作會給不同答案。⚠ 同樣 **0 行為差異**：哥達鴨是 Stage1，能打到它的
+   熔岩洞同時也打得到唯一 live 的自 KO 特性持有者三合一磁怪（Stage1）；
+   `cursedBombAttackPost` / `overvoltAttackPost` 兩個 factory 全 src **零註冊端＝死碼**。
+
+### Bug 2 根因：`preventedKO` 掉進「無人分支」
+
+`engine.ts` ATTACK 主管線寫成
+`if (!preventedKO && wouldBeKO) { …KO… } else if (!preventedKO) { …未 KO… }`
+⇒ **防 KO 成功時兩個分支都不跑**。於是非 KO 分支裡的
+`TOOL_ON_DAMAGED`（幸運頭盔／凸凸頭盔／奢華炸彈／火箭隊的催眠裝置／逆境保險／手持循環扇／
+豪邁炸彈，共 7 支）與 `SPECIAL_ENERGY_ON_DAMAGED`（扣殺能量）整批靜默漏掉，
+連 `damageTakenLastOppTurn`（重裝角擊追蹤）也沒累計。
+而共用尾段的 `PASSIVE_RETALIATION` / `PASSIVE_ON_DAMAGED` 是用
+`_v5113RanInKoBranch = wouldBeKO && !preventedKO` 判的，**照樣會跑**
+⇒ 同一次傷害「特性有反應、道具沒反應」，本來就自相矛盾。
+
+修法：中央述詞 `const defenderSurvivedAttack = !wouldBeKO || preventedKO;`
+（語意＝這一擊之後防守方仍留在場上＝PTCG 規則的「受到了傷害但沒有昏厥」），
+`else if (!preventedKO)` 改成 `else if (defenderSurvivedAttack)`；並在分支開頭用
+`const _survivedDamage = preventedKO ? defenderState.active!.damage : newDamage;`
+保住防 KO 已寫入的「剩餘 HP = leaveHP」，否則會把剛救回來的寶可夢再打死一次。
+
+官方依據（`PTCG RULES/PTCG_RULES.md`）：
+- L1899／L1901（§17.29.A 勤奮之心）、L2650（§17.45.A 堅忍之軀）：
+  「以剩餘HP為『10』的狀態留在場上」⇒ 昏厥時效果（雷之大地／古舊能量）不生效 ⇒ 沒有昏厥。
+- L1933（§17.29.D）：勤奮之心留場時身上是 22 個傷害指示物 ⇒ 傷害確實有結算。
+- L1935／L2733／L2818：官方一律寫「特性『初始化』**處於生效狀態**的鐵荊棘ex」；
+  L1594／L2505 同樣寫「特性『暗夜羽擊』**處於有效狀態**的振翼髮」
+  ⇒ 消除源自身必須有效，正是本版的判準。
+
+### 中央傷害 helper 路徑不受影響
+
+`dealAttackDamageToTarget`（狙擊／多目標／延後傷害）本來就是「先 `fireDefenderOnDamaged`、
+KO 時再 `fireDefenderOnKO`」，prevent-KO 時扇子本來就會觸發 ⇒ 這次只動引擎主管線，
+且 `TOOL_ON_KO_MIRRORED_FROM_DAMAGED` 的跳過條件（v6.120）不受影響，不會變成觸發兩次。
+
+### 效能（Rule 31/32：附量測腳本 `scripts/perf-v6253.mjs`，沙盒 N=60000 × 3 輪）
+
+| 情境 | getRetreatCost | getUsableAbilities |
+|---|---|---|
+| typical（場上無任何消除源） | 2.44 → 2.62 µs | 5.26 → 5.76 µs |
+| worst（振翼髮 vs 鐵荊棘ex ＋ 熔岩洞 ＋ 雙方滿場規則寶可夢） | 2.97 → 3.75 µs | 3.76 → 9.51 µs |
+
+worst 的 +5.75 µs ÷ 一個 frame 的 16,667 µs ＝ **0.03%**，差三個數量級 ⇒ 玩家零感受；
+且沙盒 CPU 比正式環境慢，線上只會更低。
+⚠ 這兩支都是**前端**述詞，不經過伺服器。
+⚠ 實作時特地避開 `for (const i of [0,1] as const)`（每次呼叫配置新陣列，實測有感），
+改用計數迴圈。
+
+### 守衛
+
+`scripts/test-v6253-nullifier-and-survive.mjs`（27 條）：
+A 段 11 條（消除源有效性，含正對照「沒有振翼髮時初始化照常壓制」「鐵荊棘ex 是未來不得自消」
+與遞迴防護實跑）、B 段 9 條（5 個防 KO 來源 × 受傷道具／特殊能量全部行為端實跑，
+含「恰好抽 2 張不得變 4 張」的重複觸發檢查）、C 段 7 條（卡面枚舉下限、登錄數下限、
+兩條靜態 lint 各配「抓得到違規樣本」的正對照、濕氣兩份實作一致性）。
+HEAD-FAIL：對 BASE `fe0dcb0d` 跑 → 13 PASS / 14 FAIL，正對照全綠（不是無差別紅）。
+突變測試 4 個全部紅在預期條目。
+`scripts/test-v6202-passive-ability-gate.mjs`：GATE_RE 加入 `isNullifierAbilityEffective`，
+並刪掉「初始化」「黏著束縛」兩個已不成立的豁免條目（20e 會擋住死條目）。
+
+### 已查證、留待站長裁定的一條（本版**未**動）
+
+官方 L2733／L2818：「對手戰鬥場上有特性『初始化』處於生效狀態的鐵荊棘ex 時，自己的
+超級皮可西ex 的特性『光之翼』會消除嗎？→ **不會消除／會生效**」。
+原因是光之翼卡面＝「這隻寶可夢不會受到對手的寶可夢**特性效果**的影響」，
+而初始化正是對手的寶可夢特性效果 ⇒ 它免疫初始化本身。
+站內 `isAbilityHolderEffective` 目前**沒有**這個豁免 ⇒ 超級皮可西ex（M3 18007，J 標）
+的光之翼會被初始化誤消除。修它要動到所有 `isAbilityHolderEffective` 消費點，
+爆炸半徑大且會碰到既有免疫語意，依「一版一修法」留到下一輪，並先問站長是否同意判準。
+
 ## v6.252 — 錦標賽賽事區塊摺疊 ＋ 大廳聊天【聊天】/【系統】篩選
 
 站長逐字需求：①「網站賽和社群賽同時舉行…賽事頁面會被拉的很長，希望能增加摺疊功能」

@@ -170,6 +170,45 @@ export function hasAbilityOnActive(
  * @returns true → 特性實際生效；false → 特性被消除應跳過
  */
 // ════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐ v6.253 中央述詞：「特性消除源」的持有者，其該特性此刻是否仍然有效？
+//
+// 卡面上的特性消除是**持續性效果** ⇒ 來源自己的特性被別人消除掉時，它就不再消除別人。
+// 官方 Q&A 的措辭一律是「特性『初始化』**處於生效狀態**的鐵荊棘ex」／
+// 「特性『暗夜羽擊』**處於有效狀態**的振翼髮」——
+// 見 `PTCG RULES/PTCG_RULES.md` L1935、L2733、L2818（初始化）與 L1594、L2505（暗夜羽擊）。
+//
+// 站長回報（v6.253）：我方戰鬥場的振翼髮｜暗夜羽擊 已經消除了對手戰鬥場鐵荊棘ex 的
+// 全部特性，但我方備戰的拉帝亞斯ex｜天空徑線 仍被「初始化」壓著、無法 0 能量撤退。
+// 根因：isInitializeNullified 只問「場上有沒有印著『初始化』的卡」，
+//       **沒問那張卡的初始化此刻還算不算數**。海兔獸｜黏著束縛（走無閘的
+//       hasAbilityOnBench）完全同型。振翼髮 passive 那一支早在 v6.196 就接上了中央閘，
+//       這兩支被漏掉 ⇒ 本版收斂成同一支述詞。
+//
+// ⚠ 遞迴防護：本述詞會回頭呼叫 isAbilityHolderEffective，而後者 step 0/3 又會回來問
+//   消除源。用 re-entrancy 集合擋住「同一個消除源名稱」的自我遞迴，遞迴時回 true
+//   （＝視為有效，等同 v6.252 既有行為）⇒ 最壞情況不會比現在差，也不會無窮迴圈。
+//   引擎全程同步執行（無 async），module-level 集合不會跨請求交錯。
+// ════════════════════════════════════════════════════════════════════════════
+const _nullifierVisiting = new Set<string>();
+export function isNullifierAbilityEffective(
+  state: GameState | undefined,
+  holderInst: CardInstance | null | undefined,
+  holderCard: Card | null | undefined,
+  holderOwnerIdx: 0 | 1 | undefined,
+  nullifierName: string,
+  location: 'active' | 'bench',
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (_nullifierVisiting.has(nullifierName)) return true;   // 遞迴 → fail-open（維持 v6.252 行為）
+  _nullifierVisiting.add(nullifierName);
+  try {
+    return isAbilityHolderEffective(state, holderInst, holderCard, holderOwnerIdx, nullifierName, location, pool);
+  } finally {
+    _nullifierVisiting.delete(nullifierName);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // 鐵荊棘ex｜初始化（passive 特性消除 — 規則寶可夢）
 //   卡面：「只要這隻寶可夢在戰鬥場上，雙方場上『擁有規則的寶可夢』（『未來』寶可夢除外）
 //          的特性全部消除。」
@@ -189,10 +228,17 @@ export function isInitializeNullified(
   // 「未來」寶可夢不受影響（含鐵荊棘ex 自己）
   if ((holderCard.tags ?? []).includes('未來')) return false;
   // 任一方「戰鬥場」有「初始化」(鐵荊棘ex) 持有者
-  for (const player of state.players) {
-    if (!player.active) continue;
-    const ac = pool.get(player.active.cardId);
-    if (ac?.abilities?.some(ab => ab.name === '初始化')) return true;
+  // ⭐⭐⭐ v6.253：持有者的「初始化」**自己也必須處於生效狀態**（官方 Q&A 逐字如此描述）。
+  //   最常見情境：對手戰鬥場的振翼髮｜暗夜羽擊 把鐵荊棘ex 的全部特性消除掉。
+  // ⚠ 效能：這一支是 isAbilityHolderEffective 的 step 0，全站最熱的路徑之一 ⇒
+  //   **不用 `for (const i of [0,1] as const)`**（那會每次呼叫都配置一個新陣列，實測有感）。
+  for (let pIdx = 0 as 0 | 1; pIdx <= 1; pIdx = (pIdx + 1) as 0 | 1) {
+    const active = state.players[pIdx].active;
+    if (!active) continue;
+    const ac = pool.get(active.cardId);
+    if (!ac?.abilities?.some(ab => ab.name === '初始化')) continue;   // 便宜早退：卡上沒印就不必問
+    if (!isNullifierAbilityEffective(state, active, ac, pIdx, '初始化', 'active', pool)) continue;
+    return true;
   }
   return false;
 }
@@ -525,15 +571,20 @@ export function isAbilityNullifiedBySticky(
   if (!isStage2(card, pool)) return false;
   // 任一方備戰區有海兔獸 + 黏著束縛
   for (const i of [0, 1] as const) {
-    if (hasAbilityOnBench(state, i, pool, '黏著束縛')) {
-      // 進一步確認該備戰位是「海兔獸」（避免同名特性卡片汙染）
-      const benchHas = state.players[i].bench.some(b => {
-        const bCard = pool.get(b.cardId);
-        return bCard?.name === '海兔獸'
-          && bCard.abilities?.some(a => a.name === '黏著束縛');
-      });
-      if (benchHas) return true;
-    }
+    // 便宜早退（無閘版：只看卡上有沒有印這個特性）——維持原本的效能特性
+    if (!hasAbilityOnBench(state, i, pool, '黏著束縛')) continue;
+    // 進一步確認該備戰位是「海兔獸」（避免同名特性卡片汙染）
+    // ⭐⭐⭐ v6.253：並且該隻海兔獸的「黏著束縛」**自己也必須仍然有效**。
+    //   海兔獸是【1階進化】⇒【傳說的熔岩洞】（雙方場上所有進化寶可夢的特性全部消除）
+    //   在場時它的黏著束縛已被消除，不該再壓制雙方備戰的【2階進化】。
+    //   原本走的 hasAbilityOnBench 是刻意的「無閘版」＝完全沒問這件事。
+    const benchHas = state.players[i].bench.some(b => {
+      const bCard = pool.get(b.cardId);
+      if (bCard?.name !== '海兔獸') return false;
+      if (!bCard.abilities?.some(a => a.name === '黏著束縛')) return false;
+      return isNullifierAbilityEffective(state, b, bCard, i, '黏著束縛', 'bench', pool);
+    });
+    if (benchHas) return true;
   }
   return false;
 }

@@ -470,7 +470,7 @@ T('19b. 大晴天：傳說的熔岩洞（裙兒小姐 Stage1）⇒ +20 失效（
 //         —— 藏青浪濤 / prevent-KO / 侵蝕詛咒 就是這樣溜過去的。補 pattern 2。
 //  ⚠ 判準也放寬了一個**假陽性**：gate 用變數傳特性名（`gate(..., ab.name, ...)`）是合法寫法
 //    （engine.ts selfAttackPreconditionBlock 就是），不得被判成沒接閘。
-const GATE_RE=/(isAbilityHolderEffective|hasEffectiveAbilityByInst|_v6196HasEffAbilByInst|_abilityHolderEffectiveFnLoc|_abilityHolderEffectiveFn|isAbilityNullifiedByPassive|hasAbilityOnSide|hasAbilityOnActive|countEffectiveAbilityOnSide|hpAbilityEffective|abilityEffective)\s*\(/;
+const GATE_RE=/(isAbilityHolderEffective|isNullifierAbilityEffective|hasEffectiveAbilityByInst|_v6196HasEffAbilByInst|_abilityHolderEffectiveFnLoc|_abilityHolderEffectiveFn|isAbilityNullifiedByPassive|hasAbilityOnSide|hasAbilityOnActive|countEffectiveAbilityOnSide|hpAbilityEffective|abilityEffective)\s*\(/;
 //  pattern 2 只收「key 是特性名」的 registry（tool/stadium/energy 的 map 不算）。
 const ABILITY_REGISTRY_RE=/\b(PASSIVE_[A-Z0-9_]+|OPP_ENERGY_ATTACH_PASSIVE|DAMAGE_AMOUNT_DEPENDENT_IMMUNITY|ABILITY_COLORLESS_COST_ZERO|ABILITY_RETREAT_MOD|FREE_RETREAT_BASIC_ABILITY_NAMES)\s*\.\s*(?:get|has)\s*\(\s*([A-Za-z_$][\w$]*)\.name\s*\)/g;
 const EXEMPT=new Map(Object.entries({
@@ -484,8 +484,10 @@ const EXEMPT=new Map(Object.entries({
   'src/lib/game/effects/cards/v2999_g3_wave1.ts|驅勁能量 未來':'比對的是**能量卡名**（二重核心的發動條件），不是特性名；v6.204 把 gate 上移緊貼特性名字面量後，這一行又落回掃描器的 ±6 行 abilities 視窗內',
   'src/lib/game/engine.ts|PASSIVE_KO_RETALIATION':'只用來組 log 文案（光之翼擋下時列出被無效的特性名），不驅動任何效果',
   // ── 消除來源本身 ────────────────────────────────────────────────────────
-  'src/lib/game/effects/cards/v3001_g3_wave3.ts|初始化':'消除來源本身（鐵荊棘ex），加 gate 會自我遞迴',
-  'src/lib/game/effects/cards/v3001_g3_wave3.ts|黏著束縛':'消除來源本身；hasAbilityOnBench 刻意無 gate（v6.196 例外，加了會無窮遞迴）',
+  // ⭐⭐⭐ v6.253：初始化／黏著束縛兩條豁免**已刪除**。原本的理由是「加 gate 會自我遞迴」，
+  //   但那是可以解的（isNullifierAbilityEffective 用 re-entrancy 集合擋住自我遞迴），
+  //   而豁免的代價是真 bug：站長回報「振翼髮消掉鐵荊棘ex 的初始化後，天空徑線仍沒恢復」。
+  //   兩支現在都接上了中央閘 ⇒ 條目變成死條目，依 20e 必須刪除。
   // ── 已在上游／下游過閘 ──────────────────────────────────────────────────
   'src/lib/game/effects/cards/m6_wave8.ts|大洋增輝':'regA 內對**同一隻**的自我複核（同名卡陷阱防護）；USE_ABILITY 先過 getUsableAbilities → isAbilityHolderEffective',
   'src/lib/game/effects/cards/m6_wave8.ts|深海抽出':'同上：regA 對同一隻的自我複核，上游 getUsableAbilities 已過中央閘',

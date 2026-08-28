@@ -14004,6 +14004,13 @@ regR('cursed-bomb', (st, actorIdx, selectedIids, params, pool) => {
  *     (2) isAbilityNullifiedByPassive — passive 振翼髮｜暗夜羽擊 (v3.01) /
  *         海兔獸｜黏著束縛 (v3.01) 等同類「對手特性消除」passive
  *   被消除的 濕氣 跳過不算，繼續找下一隻；全部都被消除才回 false (放行自爆)。
+ *
+ * ⭐⭐⭐ v6.253：(2) 原本用的 isAbilityNullifiedByPassive **比中央閘窄** —— 它只涵蓋
+ *   初始化／振翼髮暗夜羽擊／黏著束縛，漏掉【火箭隊的監視塔】與【傳說的熔岩洞】。
+ *   哥達鴨（M2a 14693／16289／16290、SV-P-I 12850）是【1階進化】⇒ 熔岩洞打得到它的
+ *   「濕氣」。而 engine.ts 的 isSelfKOEffectBlocked（v6.201）早就走中央閘
+ *   isAbilityHolderEffective ⇒ 同一張卡在兩支實作裡會得到**不同答案**。
+ *   本版把這一支也收斂到中央閘，兩份判定重新對齊。
  */
 function hasPsyduckDamp(state: GameState, pool: Map<string, Card>): boolean {
   for (const ownerIdx of [0, 1] as const) {
@@ -14016,7 +14023,8 @@ function hasPsyduckDamp(state: GameState, pool: Map<string, Card>): boolean {
       if (!card?.abilities?.some(a => a.name === '濕氣')) continue;
       // v5.220 Bug 2: 濕氣被消除時不算這隻
       if (inst.abilityNullifiedThisTurn) continue;
-      if (isAbilityNullifiedByPassive(state, ownerIdx, inst, card, '濕氣', loc, pool)) continue;
+      // ⭐⭐⭐ v6.253：改走中央述詞（見上方 JSDoc）。
+      if (!isAbilityHolderEffective(state, inst, card, ownerIdx, '濕氣', loc, pool)) continue;
       return true;
     }
   }
@@ -18520,7 +18528,7 @@ registerV3000G3W2Passives();
 // 同 lazy register pattern：本波無對 effects.ts 內 Map 的 .set() 需要做，
 //   但保留模板以利未來擴充。helpers 全部由 engine.ts 直接 import 使用。
 // 對手不能使出 X / 對手特性消除 / 寶可夢檢查指示物 / 撤退觸發 / 進化觸發 等 hook 全部 inline 在 engine.ts。
-import { registerV3001G3W3Passives, isAbilityNullifiedByPassive, isAbilityHolderEffective, isInitializeNullified, hasEffectiveKageHide, hasAnyEffectiveAbility } from './effects/cards/v3001_g3_wave3';
+import { registerV3001G3W3Passives, isAbilityHolderEffective, isInitializeNullified, hasEffectiveKageHide, hasAnyEffectiveAbility } from './effects/cards/v3001_g3_wave3';
 registerV3001G3W3Passives();
 
 // v3.05 Deferred Wave A — 5 張需新 hook 特性卡（Phase 1 兩張本波實裝）

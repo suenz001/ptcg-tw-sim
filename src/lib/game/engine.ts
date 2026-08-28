@@ -5929,6 +5929,18 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         `無限之影：${defenderCard.name} 因招式傷害昏厥 → 整條進化鏈放回手牌（附加能量/道具仍丟棄），對手仍取得獎賞`,
         dIdx);
     }
+    // ⭐⭐⭐ v6.253 中央述詞：這一擊之後防守方「仍留在場上」＝ PTCG 規則上的
+    //   「受到了傷害，但沒有昏厥」。防 KO（岩殿居蟹｜結實／皮卡丘ex｜勤奮之心／
+    //   超級摔角鷹人ex｜堅忍之軀／棄世猴｜不朽身軀／倖存鍛鍊器）成功時語意就是「沒有昏厥」——
+    //   官方 `PTCG RULES/PTCG_RULES.md` L1899/L1901（勤奮之心）與 L2650（堅忍之軀）
+    //   逐字寫「若…以剩餘HP為『10』的狀態留在場上，則〔昏厥時效果〕將不會生效」。
+    //   ⚠ 但本管線原本寫成 `if (!preventedKO && wouldBeKO) {…} else if (!preventedKO) {…}`
+    //     ⇒ preventedKO 時**兩個分支都不跑**，於是「受到傷害時」的道具
+    //     （手持循環扇／幸運頭盔／凸凸頭盔／奢華炸彈／逆境保險／火箭隊的催眠裝置／豪邁炸彈）
+    //     與特殊能量（扣殺能量）整批靜默漏掉（站長回報：結實擋下後手持循環扇沒發動）。
+    //     被動型（PASSIVE_RETALIATION／PASSIVE_ON_DAMAGED）反而有跑（走下方共用尾段）
+    //     ⇒ 同一次傷害，特性有反應、道具沒反應，本來就自相矛盾。
+    const defenderSurvivedAttack = !wouldBeKO || preventedKO;
     if (!preventedKO && wouldBeKO) {
       // 道具：被 KO 時獎賞加成（豪華斗篷 +1 / 莉莉艾的珍珠 -1 等）— 阻礙之塔時失效
       let prizeTool = 0;
@@ -6310,10 +6322,14 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           ],
         };
       }
-    } else if (!preventedKO) {
+    } else if (defenderSurvivedAttack) {
       // v2.69 重裝角擊追蹤 — 累計 defender 受到的招式傷害（在 defender 自己 END_TURN 時 reset）
       const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + (baseDamage > 0 ? baseDamage : 0);
-      defenderState.active = { ...defenderState.active!, damage: newDamage, damageTakenLastOppTurn: accumDmgTaken };
+      // ⭐⭐⭐ v6.253：防 KO 生效時，上方已把 damage 寫成「剩餘 HP = leaveHP」
+      //   （倖存鍛鍊器並已把自己丟進棄牌區）⇒ 這裡**絕不可**再蓋回致死值 newDamage，
+      //   否則就等於把剛救回來的寶可夢再打死一次。
+      const _survivedDamage = preventedKO ? defenderState.active!.damage : newDamage;
+      defenderState.active = { ...defenderState.active!, damage: _survivedDamage, damageTakenLastOppTurn: accumDmgTaken };
       defPlayers[dIdx] = defenderState;
       newState = { ...newState, players: defPlayers, turnPhase: 'end' };
 
