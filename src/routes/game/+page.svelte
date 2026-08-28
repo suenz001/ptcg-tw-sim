@@ -529,6 +529,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let tChatInput = $state('');
   let tChatLastTs = $state(0);
   let tChatHasMore = $state(false);  // v5.752 是否還有更舊訊息可載(往上滑續載)
+  // ⭐⭐v6.252 大廳聊天篩選【聊天】／【系統】（站長需求②）。判準就是伺服器下發的 m.sys：
+  //   系統訊息的唯一寫入點帶 sys:true；玩家與**網站管理員**的發言都不帶 sys（管理員另外標 admin:true）
+  //   ⇒ 管理員訊息歸【聊天】，與站長指定一致。⚠ 純前端，伺服器一個欄位都沒改。
+  //   ⚠ 大廳聊天與對戰中的浮動面板是同一份 tChat，兩處畫面共用這一組狀態。
+  let tChatShowChat = $state(true);
+  let tChatShowSys = $state(true);
+  //   ⚠ 效能：兩個都勾（預設）時直接回傳原陣列 —— 不配置新陣列、不走訪任何一則。
+  const tChatFiltered = $derived(
+    (tChatShowChat && tChatShowSys) ? tChat
+      : (!tChatShowChat && !tChatShowSys) ? []
+      : tChat.filter((m: any) => (m && m.sys) ? tChatShowSys : tChatShowChat)
+  );
   let _tChatLoadingOlder = false;   // v5.752 載更舊並發防護
   // ── Phase1-D 賽程（單敗淘汰）──
   let tBrackets = $state<any[]>([]);   // v5.937 所有進行中賽事的賽程(官方+社群並行);每個 { event, matches(含roomId), standings }
@@ -557,6 +569,61 @@ function _setupSelfPending(g: any, seat: number): string | null {
     return ms.some((m: any) => m && m.mine === true && m.round === mm.round && m.status === 'done');
   }
   let tMyBye = $state<any>(null);     // v5.935 我本輪輪空 { round, enterOpenAt }(輪空者也看倒數+可觀戰提示)
+  // ⭐⭐⭐v6.252 賽事區塊摺疊（站長：網站賽與社群賽同時開瑞士制時，賽事頁被排名表拉得很長）。
+  //   粒度＝以 **eventId** 為單位：賽事卡（eventCard）與同一場的排名表／賽程表（bracketBlock）**同時**摺疊。
+  //   預設（站長裁定）：有報名且未棄賽 → 展開；其餘 → 摺疊。
+  //   ⚠⚠ 硬約束：tMyMatch / tMyBye 命中該賽事時**強制展開**，使用者手動摺也無效 ——
+  //      進場鈕（myMatchBox）就畫在 bracketBlock 內，摺掉＝玩家吃未進場判負（v5.937 註解已警告過）。
+  //   localStorage 只記「使用者**手動**改過」的那幾場，沒記錄的一律回退預設規則
+  //   ⇒ 新賽事出現時行為可預期，不會被別場的偏好帶著走。
+  const T_EVFOLD_KEY = 'ptcg_tourn_evfold_v1';
+  function tLoadEvFold(): Record<string, boolean> {
+    try {
+      const raw = localStorage.getItem(T_EVFOLD_KEY);
+      if (!raw) return {};
+      const o = JSON.parse(raw);
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return {};
+      const out: Record<string, boolean> = {};
+      for (const k of Object.keys(o)) if (typeof o[k] === 'boolean') out[k] = o[k];
+      return out;
+    } catch { return {}; }   // 隱私模式 / JSON 壞掉 / 沒有 localStorage 一律當「沒有偏好」
+  }
+  let tEvFold = $state<Record<string, boolean>>(tLoadEvFold());
+  /**
+   * 單一賽事該不該展開（純函式，守衛可以直接抽出來實跑）。
+   * 優先序：①強制展開（輪到我進場／我本輪輪空）→ ②使用者手動偏好 → ③預設規則。
+   */
+  function tEvOpenBy(eventId: string, registered: boolean, dropped: boolean,
+                     pref: Record<string, boolean> | null, myMatchEventId: any, myByeEventId: any): boolean {
+    if (!eventId) return true;                                                 // 認不出賽事一律展開（fail-open）
+    if (eventId === myMatchEventId || eventId === myByeEventId) return true;   // ⚠⚠ 硬約束：進場鈕不可被摺掉
+    const p = pref ? pref[eventId] : undefined;
+    if (typeof p === 'boolean') return p;                                      // 使用者手動改過的那幾場
+    return !!registered && !dropped;                                           // 預設：有報名（且未棄賽）就展開
+  }
+  // 一次算好整張表；template 只做 O(1) 查表，不在每次 render 重算。
+  const tEvOpen = $derived.by(() => {
+    const pref = tEvFold;
+    const mm = tMyMatch ? tMyMatch.eventId : null;
+    const mb = tMyBye ? tMyBye.eventId : null;
+    const out: Record<string, boolean> = {};
+    for (const e of tEvents) if (e && e._id) out[e._id] = tEvOpenBy(e._id, !!e.registered, !!e.dropped, pref, mm, mb);
+    return out;
+  });
+  /** 被強制展開（＝摺不起來）的賽事，只用來在標題列標一個鎖，免得玩家點了沒反應以為壞掉。 */
+  const tEvForced = $derived.by(() => {
+    const s = new Set<string>();
+    if (tMyMatch && tMyMatch.eventId) s.add(tMyMatch.eventId);
+    if (tMyBye && tMyBye.eventId) s.add(tMyBye.eventId);
+    return s;
+  });
+  /** 使用者手動摺疊／展開。⚠ 被強制展開的場即使記成 false，tEvOpenBy 仍會蓋回 true。 */
+  function tToggleEv(eventId: string): void {
+    if (!eventId) return;
+    const cur = tEvOpen[eventId] !== false;
+    tEvFold = { ...tEvFold, [eventId]: !cur };
+    try { localStorage.setItem(T_EVFOLD_KEY, JSON.stringify(tEvFold)); } catch { /* 隱私模式會 throw */ }
+  }
   let isTReplay = $state(false);         // v5.939 對戰回放模式
   let tReplay = $state<any>(null);       // { meta, finalLog, finalState, snapshots }
   let tReplayStep = $state(0);
@@ -1463,6 +1530,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
       setTimeout(() => { if (chatPanelScrollEl && chatPanelPinned) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight; }, 50);
     }
   });
+  // ⚠v6.252 切換聊天篩選時浮動面板也要重捲到底。上面那個 $effect 的條件是
+  //   `tChat.length > tLastSeenChat`（有未讀才捲），切換篩選時不成立 ⇒ 面板會停在半空。
+  //   ⚠ 這個 effect **只**依賴兩個篩選旗標，收訊息時不會多跑一次；
+  //     也刻意完全不碰 tLastSeenChat —— chatFabUnread 的未讀計數必須維持用未篩選的 tChat.length，
+  //     否則被篩掉的訊息會永遠標不掉已讀。
+  $effect(() => {
+    const _f = tChatShowChat, _g = tChatShowSys;
+    setTimeout(() => {
+      if (chatPanelScrollEl && chatPanelPinned) chatPanelScrollEl.scrollTop = chatPanelScrollEl.scrollHeight;
+    }, 30);
+  });
   let roomCode    = $state('');          // 建立或加入後得到的房號
   let joinInput   = $state('');          // 輸入框裡打的房號
   let amIHost     = $state(false);       // 是否為房主（用來顯示「關房」等按鈕）
@@ -1547,7 +1625,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (el.scrollTop < 60 && tChatHasMore && !_tChatLoadingOlder) tChatLoadOlder(el); // v5.752 滑到頂→載更舊
   }
   $effect(() => {
-    const _n = tChat.length;  // 依賴：訊息變動 / 首次載入時觸發
+    // ⚠v6.252 依賴改成「篩選後」的長度＋兩個篩選旗標：原本只看 tChat.length，
+    //   切換【聊天】/【系統】時原始長度沒變 ⇒ 不重捲 ⇒ 畫面會停在半空。
+    const _n = tChatFiltered.length;  // 依賴：訊息變動 / 首次載入 / 切換篩選
+    const _f = tChatShowChat, _g = tChatShowSys;
     if (!tLobbyChatEl || !tLobbyChatPinned) return;
     setTimeout(() => { if (tLobbyChatEl) tLobbyChatEl.scrollTop = tLobbyChatEl.scrollHeight; }, 30);
   });
@@ -9268,10 +9349,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
       {#if tTab === 'events'}
       <div class="tourn-chat">
-        <div class="tourn-chat-head">💬 大廳聊天室</div>
+        <div class="tourn-chat-head">
+          <span>💬 大廳聊天室</span>
+          <!-- v6.252 篩選勾選框放在標題右邊（站長指定，省版面）；與浮動面板共用同一組狀態 -->
+          <span class="tchat-filter">
+            <label><input type="checkbox" bind:checked={tChatShowChat} /> 聊天</label>
+            <label><input type="checkbox" bind:checked={tChatShowSys} /> 系統</label>
+          </span>
+        </div>
         <div class="tourn-chat-msgs" bind:this={tLobbyChatEl} onscroll={onLobbyChatScroll}>
-          {#if tChat.length === 0}<div class="tcmsg muted">還沒有人發言，來說聲哈囉吧～</div>{/if}
-          {#each tChat as m (m.id)}
+          {#if tChatFiltered.length === 0}<div class="tcmsg muted">{tChat.length === 0 ? '還沒有人發言，來說聲哈囉吧～' : '目前的篩選把所有訊息都藏起來了 —— 請勾選【聊天】或【系統】。'}</div>{/if}
+          {#each tChatFiltered as m (m.id)}
             <div class="tcmsg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>{#if m.ts}<span class="tctime">{tFmtMsgTime(m.ts)}</span>{/if}<span class="tcname">{#if m.admin}🛡️ {/if}{m.name}</span>：{m.text}</div>
           {/each}
         </div>
@@ -9362,8 +9450,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
               </div>
       {/snippet}
       {#snippet eventCard(ev)}
+        {@const _evOpen = tEvOpen[ev._id] !== false}
+        {@const _evLock = tEvForced.has(ev._id)}
         <div class="tourn-event">
-          <h3>🏆 {ev.name}</h3>
+          <div class="tourn-ev-head tourn-fold-toggle" role="button" tabindex="0" aria-expanded={_evOpen} onclick={() => tToggleEv(ev._id)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tToggleEv(ev._id)}>
+            <span class="tourn-fold-arrow">{_evOpen ? '▾' : '▸'}</span>
+            <h3>🏆 {ev.name}</h3>
+            {#if _evLock}<span class="tourn-fold-lock" title="這一場輪到進場了，不會被摺疊">🔒</span>{/if}
+          </div>
+          {#if !_evOpen}
+            <p class="tourn-evstat tourn-ev-fold">{tEventStatusLabel(ev.status)} ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : ''} 人{#if ev.createdByPlayer} ｜ 📣 社群賽{/if}{#if ev.registered} ｜ ✅ 已報名{/if} ｜ 點此展開</p>
+          {:else}
           {#if ev.createdByPlayer}<p class="muted small" style="margin:2px 0;color:#8fdcc0;">📣 玩家社群賽{#if ev.proposerName}（{ev.proposerName} 發起）{/if}{#if ev.minPlayers} ｜ 響應 {ev.regCount ?? 0}/{ev.minPlayers} 人{/if}</p>{/if}
           <p class="tourn-evstat">狀態：<b>{tEventStatusLabel(ev.status)}</b> ｜ 報名 {ev.regCount ?? 0}{ev.maxPlayers ? ' / ' + ev.maxPlayers : '（不限）'} 人 ｜ {ev.format === 'swiss-then-cut' ? '瑞士制 + Top Cut Bo1' : '單敗淘汰 Bo1'} ｜ 每場 {ev.roundLimitMin} 分</p>
           {#if ev.status === 'draft' && ev.registrationOpenAt}<p class="muted small">⏳ 報名將於 {new Date(ev.registrationOpenAt).toLocaleString()} 開放</p>{/if}
@@ -9426,6 +9523,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <button class="btn-primary tourn-join" onclick={() => { tRegFormEventId = ev._id; tError = ''; }} disabled={tBusy}>{ev.createdByPlayer ? '✋ 我要響應（報名）' : '📝 報名這一場'}</button>
             {/if}
           {/if}
+          {/if}
         </div>
       {/snippet}
       <!-- v5.620：進行中／即將開始的賽事優先（其賽程表、觀戰選單排在「下一場報名」視窗之上）-->
@@ -9458,9 +9556,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
       {/snippet}
       {#snippet bracketBlock(brk)}
+        {@const _bkId = brk.event?._id ?? ''}
+        {@const _bkOpen = tEvOpen[_bkId] !== false}
+        {@const _bkLock = tEvForced.has(_bkId)}
         {#if brk.standings && brk.standings.length}
           <div class="tourn-bracket">
-            <div class="tourn-bracket-head">📊 {brk.event?.name ?? ''} 瑞士制排名{#if brk.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if brk.event?.swissRounds} ｜ 第 {liveRoundOf(brk)}/{brk.event.swissRounds} 輪{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}</div>
+            <div class="tourn-bracket-head tourn-fold-toggle" role="button" tabindex="0" aria-expanded={_bkOpen} onclick={() => tToggleEv(_bkId)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tToggleEv(_bkId)}><span class="tourn-fold-arrow">{_bkOpen ? '▾' : '▸'}</span>📊 {brk.event?.name ?? ''} 瑞士制排名{#if brk.event?.phase === 'cut'} ｜ 已進入 Top Cut{:else if brk.event?.swissRounds} ｜ 第 {liveRoundOf(brk)}/{brk.event.swissRounds} 輪{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}{#if _bkLock}<span class="tourn-fold-lock" title="這一場輪到進場了，不會被摺疊">🔒</span>{/if}</div>
+            {#if _bkOpen}
             <div style="display:grid;grid-template-columns:34px 1fr 60px 48px 60px;gap:3px 8px;font-size:13px;align-items:center;padding:4px 2px;">
               <div style="font-weight:700;color:#9ab;text-align:center;">#</div><div style="font-weight:700;color:#9ab;">玩家</div><div style="font-weight:700;color:#9ab;text-align:center;">戰績</div><div style="font-weight:700;color:#9ab;text-align:center;">OWP</div><div style="font-weight:700;color:#9ab;text-align:center;">OOWP</div>
               {#each standingsKeyed(brk.standings) as s (s._k)}
@@ -9471,11 +9573,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div style="text-align:center;color:#9ab;">{s.oowp}%</div>
               {/each}
             </div>
+            {/if}
           </div>
         {/if}
         {#if brk.matches && brk.matches.length}
           <div class="tourn-bracket">
-            <div class="tourn-bracket-head">📋 {brk.event?.name ?? ''} 賽程表{#if brk.event?.championName} ｜ 🏆 冠軍：<b>{brk.event.championName}</b>{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}</div>
+            <div class="tourn-bracket-head tourn-fold-toggle" role="button" tabindex="0" aria-expanded={_bkOpen} onclick={() => tToggleEv(_bkId)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tToggleEv(_bkId)}><span class="tourn-fold-arrow">{_bkOpen ? '▾' : '▸'}</span>📋 {brk.event?.name ?? ''} 賽程表{#if brk.event?.championName} ｜ 🏆 冠軍：<b>{brk.event.championName}</b>{/if}{#if tBracketsStale}<span class="tourn-stale" title="連線不穩，畫面顯示的是上一次成功取得的賽程，正在重新取得">· 更新中</span>{/if}{#if _bkLock}<span class="tourn-fold-lock" title="這一場輪到進場了，不會被摺疊">🔒</span>{/if}</div>
+            {#if _bkOpen}
             {#if tMyMatch && tMyMatch.eventId === brk.event?._id && !tMatchAlreadyDone(brk, tMyMatch)}
               {@render myMatchBox()}
             {:else if tMyBye && tMyBye.eventId === brk.event?._id}
@@ -9518,6 +9622,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   </div>
                 {/each}
               </div>
+            {/if}
             {/if}
           </div>
         {/if}
@@ -12905,6 +13010,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
           onpointerup={onChatHeaderUp}
           title="拖曳此處移動聊天視窗（手機版固定全螢幕）">
           <span>{isTournament ? '💬 大廳聊天室' : '💬 聊天室'}</span>
+          {#if isTournament}
+            <!-- ⚠v6.252 .chat-panel-header 綁了拖曳 pointer 事件、且 touch-action:none ⇒
+                 勾選框必須比照關閉鈕擋掉 pointerdown，否則手機上一按就變成在拖視窗、勾不動。 -->
+            <span class="tchat-filter" role="group" aria-label="聊天訊息篩選" onpointerdown={(e) => e.stopPropagation()}>
+              <label><input type="checkbox" bind:checked={tChatShowChat} /> 聊天</label>
+              <label><input type="checkbox" bind:checked={tChatShowSys} /> 系統</label>
+            </span>
+          {/if}
           <button class="chat-panel-close"
             onpointerdown={(e) => e.stopPropagation()}
             onclick={toggleChatPanel}
@@ -12912,10 +13025,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </div>
         <div class="chat-panel-messages" bind:this={chatPanelScrollEl} onscroll={onChatPanelScroll}>
           {#if isTournament}
-            {#if tChat.length === 0}
-              <p class="muted small chat-empty">大廳聊天室目前沒有訊息～</p>
+            {#if tChatFiltered.length === 0}
+              <p class="muted small chat-empty">{tChat.length === 0 ? '大廳聊天室目前沒有訊息～' : '目前的篩選把所有訊息都藏起來了 —— 請勾選【聊天】或【系統】。'}</p>
             {:else}
-              {#each tChat as m (m.id)}
+              {#each tChatFiltered as m (m.id)}
                 <div class="chat-msg {m.sys ? tSysClass(m.text) : ''}" class:tcsys={m.sys} class:tcadmin={m.admin}>
                   <span class="chat-name">{#if m.admin}🛡️ {/if}{m.name}</span>
                   {#if m.ts}<span class="chat-time">{tFmtMsgTime(m.ts)}</span>{/if}
@@ -13883,7 +13996,19 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-evstat { color: #cfe8cf; font-size: 0.88rem; }
   .reg-ok { color: #7CFC9A; font-weight: 600; }
   .tourn-chat { max-width: 100%; margin: 10px auto; border: 1px solid #3a5a3a; border-radius: 10px; background: #0f1c0f; overflow: hidden; text-align: left; }
-  .tourn-chat-head { background: #1a2e1a; padding: 6px 12px; font-weight: 600; color: #cfe8cf; }
+  .tourn-chat-head { background: #1a2e1a; padding: 6px 12px; font-weight: 600; color: #cfe8cf; display: flex; justify-content: space-between; align-items: center; gap: 8px; }  /* v6.252 標題右邊放篩選勾選框 */
+  /* v6.252 聊天篩選勾選框：大廳標題右側與對戰中浮動面板標題右側共用同一份樣式 */
+  .tchat-filter { display: inline-flex; align-items: center; gap: 10px; font-weight: 400; font-size: 12px; white-space: nowrap; }
+  .tchat-filter label { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+  .tchat-filter input { margin: 0; cursor: pointer; }
+  .chat-panel-header .tchat-filter { margin-right: auto; font-size: .72rem; }
+  /* v6.252 賽事摺疊標題列（賽事卡／排名表／賽程表都指向同一個 eventId） */
+  .tourn-fold-toggle { cursor: pointer; user-select: none; }
+  .tourn-fold-arrow { display: inline-block; width: 1em; }
+  .tourn-fold-lock { margin-left: 6px; font-size: 12px; }
+  .tourn-ev-head { display: flex; align-items: baseline; gap: 4px; }
+  .tourn-ev-head h3 { margin: 0; }
+  .tourn-ev-fold { margin: 4px 0 0; }
   .tourn-chat-msgs { height: 200px; overflow-y: auto; padding: 8px 12px; font-size: 0.88rem; line-height: 1.5; display: flex; flex-direction: column; }
   .tcmsg { color: #e8f0e8; word-break: break-word; }
   .tcmsg.muted { color: #888; }

@@ -1,5 +1,139 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.252 — 錦標賽賽事區塊摺疊 ＋ 大廳聊天【聊天】/【系統】篩選
+
+站長逐字需求：①「網站賽和社群賽同時舉行…賽事頁面會被拉的很長，希望能增加摺疊功能」
+②「聊天室希望增加篩選【聊天】和【系統】…網站管理員的訊息是屬於【聊天】…打勾的位置設在
+💬 大廳聊天室 標題的右邊」。站長另裁定三件事：摺疊預設＝有報名就展開、進場鈕安全＝輪到我時
+**強制展開**（不是把按鈕移出摺疊區）、聊天篩選只做大廳聊天。
+
+### 需求A：摺疊
+
+**版面真正被拉長的是 `bracketBlock`**，不是賽事卡 —— 瑞士排名表
+（`{#each standingsKeyed(brk.standings)}`，BASE L9466）是全員 30~40 列、沒有上限；
+賽事卡本身只有十幾行。所以摺疊必須同時涵蓋 `eventCard` 與 `bracketBlock`，
+粒度以 **eventId** 為單位（`ev._id` 對 `brk.event?._id`）。
+
+判定全部集中在一個純述詞 `tEvOpenBy(eventId, registered, dropped, pref, myMatchEventId, myByeEventId)`，
+優先序：
+1. **強制展開**：`eventId === myMatchEventId || eventId === myByeEventId` → `true`
+2. 使用者手動偏好（`pref[eventId]` 是 boolean）→ 依使用者
+3. 預設：`!!registered && !dropped`
+
+`tEvOpen` 是 `$derived.by`，一次算出整張 `eventId → boolean` 表；模板只做 O(1) 查表
+（`tEvOpen[ev._id] !== false`），沒有在 render 裡重算，也沒有 per-render 的陣列配置。
+`tEvOpen[未知 id]` 是 `undefined`，`!== false` ⇒ **fail-open 展開**：
+賽程載到了但 `/event` 還沒回、或 `brk.event` 缺席時，寧可多畫也絕不把整場藏起來。
+
+#### ⚠⚠ 為什麼「強制展開」是硬約束
+
+`{@render myMatchBox()}`（進場按鈕）就畫在 `bracketBlock` 的賽程表區塊內
+（BASE L9479-9483），BASE 自己的註解已經寫著「v5.937 進場鈕保底(判負攸關)」。
+摺疊掉那一段＝進場鈕消失＝玩家吃 noShow 判負。站長裁定不移動按鈕、改用強制展開，
+所以 `tEvOpenBy` 的第 1 條優先序是不可退讓的；守衛用突變測試（拿掉那一行）證明它抓得到。
+
+BASE L9526-9530 的頂層保底（`tMyMatch` 對不到任何已載入 bracket 時獨立渲染）**一字未動**。
+
+#### localStorage
+
+`ptcg_tourn_evfold_v1`，只寫「使用者**手動**點過的那幾場」的 boolean。
+沒有紀錄的賽事一律回退預設規則 ⇒ 新賽事出現時行為可預期，不會被別場的偏好帶著走。
+讀（`tLoadEvFold`）與寫（`tToggleEv`）都包 try/catch（隱私模式 `setItem` 會 throw；
+`getItem` 的 ReferenceError 也一併吃掉）。讀進來還會逐 key 檢查型別，壞掉的內容一律當「沒有偏好」。
+
+#### 摺疊後留下的資訊
+
+標題列（`.tourn-ev-head`）永遠可見：▾/▸ 箭頭 ＋ 🏆 賽事名 ＋（被強制展開時）🔒。
+摺疊時多一行摘要：狀態（`tEventStatusLabel(ev.status)`）｜報名人數｜📣 社群賽｜✅ 已報名｜點此展開。
+**摘要內刻意不放進場鈕** —— 強制展開已經處理了，再放一顆等於兩個真相來源。
+賽程表／排名表摺疊後保留原本的標題（含賽事名、第幾輪、冠軍、「· 更新中」）。
+
+無障礙沿用名人堂 `.tourn-hof-toggle` 的 pattern：`role="button"` + `tabindex="0"` +
+`onclick` + `onkeydown`（Enter/Space）+ `aria-expanded`。**class 另取名 `.tourn-fold-toggle`**，
+不與名人堂共用，`tHofOfficialOpen` / `tHofCommunityOpen` 兩個狀態一字未動。
+
+### 需求B：聊天篩選
+
+判準就是伺服器已經在下發的 `m.sys`。查證（`oracle-admin/server_admin_patch.js`，BASE）：
+
+- L5595 出口：`sys: !!m.sys, admin: !!m.admin` ⇒ **每一則都一定有 boolean 的 sys**，不需要回填舊資料。
+- L5920 是系統訊息的**唯一**寫入點：`{ uid:'system', name:'系統', …, sys: true }`。
+- L5629 是玩家／管理員的發言：`{ …, admin: isAdm || undefined }`，**不寫 sys**。
+
+⇒ 管理員訊息（`admin:true`、`sys` 缺席）現在就已經歸在【聊天】，站長那句是確認不是修正。
+**純前端，`server_admin_patch.js` 一個字都沒改。**
+
+另外大廳聊天在 `tournamentChat`，伺服器每 ~5 分鐘只保留最近 800 則、前端最多 600
+⇒ 沒有「舊訊息缺欄位」的問題。（那 137,861 筆 `messages` 是休閒房內聊天，與本需求無關。）
+
+```
+let tChatShowChat = $state(true);
+let tChatShowSys  = $state(true);
+const tChatFiltered = $derived(
+  (tChatShowChat && tChatShowSys) ? tChat
+    : (!tChatShowChat && !tChatShowSys) ? []
+    : tChat.filter((m) => (m && m.sys) ? tChatShowSys : tChatShowChat)
+);
+```
+
+⚠ 效能：預設（都勾）**直接回傳原陣列**，不配置新陣列、不走訪任何一則
+⇒ 對絕大多數玩家的成本是零。守衛用 `assert.strictEqual(out, MSGS)` 鎖住這條快路徑。
+
+兩處畫面（大廳 `.tourn-chat` 與對戰中浮動面板 `.chat-panel`）共用同一組狀態與同一個 derived，
+`{#each}` 的 key 維持 `m.id`。都不勾時兩處都給提示文字，不會變成一片空白。
+
+#### 兩個容易漏掉的接線
+
+1. **自動捲的依賴**：BASE L1549 的 `$effect` 只依賴 `tChat.length`。切換篩選時原始長度不變
+   ⇒ 不重捲 ⇒ 畫面停在半空。改成依賴 `tChatFiltered.length` ＋ 兩個旗標。
+   浮動面板那邊（BASE L1454-1465）的條件是 `tChat.length > tLastSeenChat`（有未讀才捲），
+   切換篩選同樣不成立 ⇒ 另加一個**只依賴兩個旗標**的 `$effect`（收訊息時不會多跑）。
+2. **未讀計數不能動**：`chatFabUnread`（BASE L1301）維持用未篩選的 `tChat.length`，
+   否則被篩掉的訊息會永遠標不掉已讀。守衛用逐字比對鎖住那一行。
+
+#### ⚠ 浮動面板的拖曳
+
+`.chat-panel-header` 綁了 `onpointerdown/move/up` 且 CSS `touch-action: none`。
+勾選框比照既有的關閉鈕加 `onpointerdown={(e) => e.stopPropagation()}`，否則手機上一按
+就變成在拖視窗、勾不動。另外那個 `<span>` 必須帶 `role="group"` ——
+`pointerdown` 在 svelte 的 `a11y_no_static_element_interactions` 名單內，不加會多一個 warning。
+
+### 驗證
+
+`scripts/test-v6252-tourn-fold-and-chat-filter.mjs`：27 項 ＋ 6 個突變。
+刻意**完全不做字串存在性檢查**（v6.154 的教訓：22 條守衛全綠、分頁根本打不開）：
+
+- 用 `svelte/compiler` 的 `parse()` 取真 AST；
+- 把真的 `tEvOpenBy` / `tEvOpen`（`$derived.by`）/ `tChatFiltered`（`$derived`）
+  用 `typescript` 轉出 JS 後 **實跑**；
+- 把模板的 `{@const _evOpen}` / `{@const _bkId}` / `{@const _bkOpen}` 表達式原文抽出來
+  **實跑**（這才驗得到「接線有沒有接上」）；
+- 用 AST 斷言 `{@render myMatchBox()}` 真的落在 `{#if _bkOpen}` 的 true 分支內，
+  再把上面算出來的值餵進去 ⇒ 端到端證明「輪到我進場＋手動摺疊」時進場鈕仍畫得出來。
+
+⚠ 寫守衛時自己踩到一個坑：**Svelte 5 的 `Fragment` 節點沒有 `start`/`end`**，
+`src.slice(undefined, undefined)` 會回**整個檔案**，`includes()` 於是永遠成立 ⇒ 兩項假 PASS。
+改用 `nodeRange()`（走訪子節點取 min/max）之後才抓到真的內容。
+
+HEAD-FAIL（對 BASE blob `000a886c` 跑）：**24 FAIL / 3 PASS**，而且是各項各自紅、不是單一 crash
+（extraction 一律延遲建構）。那 3 項 PASS 是刻意設計的「不可破壞」鎖：
+名人堂摺疊未動、`chatFabUnread` 逐字未變、休閒房內聊天未動 —— 它們在 BASE 上本來就該綠。
+
+突變 6 個，各自紅在指定那一條：
+拿掉強制展開→A③；預設規則反向→A①；模板 `_bkOpen` 改 fail-closed→A⑧；
+篩選判準改看 `m.admin`→B③；`{#each}` 改回 `tChat`→B⑥；進場鈕搬出摺疊分支→A⑨。
+
+`svelte/compiler` 對 `game/+page.svelte` 編譯成功，**warning 98 個，與 BASE 完全相同**
+（含 `css_unused_selector` 7 個未增加 ⇒ 新加的 CSS 選擇器全部有對上，
+`.chat-panel-header .tchat-filter` 這種跨 `{#if}` 的後代選擇器也有對上）。
+
+### 部署
+
+只動前端（`src/routes/game/+page.svelte`）＋ 版本號 ＋ changelog。
+**沒有動 `static/cards`、沒有動引擎、沒有動 `oracle-admin/server_admin_patch.js`**
+⇒ `update-tournament.bat` 這一版不需要跑；`redeploy-oracle.bat` 需要（主站前端在 VM 的 nginx）；
+`update-admin-full.bat` 因為 `oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 有同步而需要跑。
+
 ## v6.251 — v6.250 的三個漏網：保母蟲｜治癒襁褓、變化之書、琉琪亞的展示（＋ lint 擴充）
 
 獨立審查者複驗 v6.250 後找到的。v6.250 把「場上視角的【基礎】寶可夢」收斂到中央述詞
