@@ -767,6 +767,35 @@ export function isAbilityBlockedByOakEye(
 }
 
 /**
+ * ⭐⭐⭐ v6.257 中央述詞：「這張**卡（印刷）** 真的印著這個特性嗎？」
+ *
+ * 為什麼需要它（站長 2026-08-28 回報 → 全站 audit 出的第二個同型 bug）：
+ * 同一個卡名在不同卡包會有**內容完全不同**的印刷，實作用卡名當 key 就全混在一起：
+ *   ・堅果啞鈴【M4 061/083・J】abilities=[{ name:'整人擊落', … }]
+ *   ・堅果啞鈴【SV11W 064/086・I】abilities=null（只有招式「強力鞭打」「金屬爪」）
+ *   ・堅果啞鈴【SV11W 145/086・I】abilities=null
+ * `triggerOakeyeMillIfApplicable` 舊碼只問 `card.name === '堅果啞鈴'` ⇒ 後兩張從牌庫
+ * 被丟棄時也會把對手牌庫頂 8 張丟掉。
+ *
+ * ⚠ 為什麼不能一律用 `hasEffectiveAbilityByInst`（v6.196 的場上版中央閘）：
+ *   那一支需要 owner + **場上** location 才問得出「特性此刻有沒有被消除」。
+ *   整人擊落的卡面寫的是「這張卡因…效果而**從牌庫**被丟棄時」——
+ *   卡此刻在牌庫／棄牌區，不在場上，場上版問不到。
+ *   ⇒ 兩支分工：**場上**用 `hasEffectiveAbilityByInst`（含消除判定），
+ *     **非場上**（牌庫／棄牌區／手牌）用本述詞（純卡面，不談消除）。
+ *
+ * ⚠ 效能（Rule 32）：無配置、無 regex、無 closure；`abilities` 為 null/空時第一行就退。
+ *   與 `hasEffectiveAbilityByInst` 內部的比對規則**逐字相同**（嚴格 ===），
+ *   零寬字元由卡庫守衛 test-card-db-integrity 負責（v6.117 教訓）。
+ */
+export function cardPrintsAbility(card: Card | null | undefined, abilityName: string): boolean {
+  const abs = card?.abilities;
+  if (!abs || abs.length === 0 || !abilityName) return false;
+  for (const a of abs) if (a?.name === abilityName) return true;
+  return false;
+}
+
+/**
  * v2.388 — 堅果啞鈴｜整人擊落 trigger 檢查
  * ─────────────────────────────────────────────────────────────────────────────
  * 卡面（M4 18481）：「在對手的回合，這張卡因對手的招式・特性・物品卡・支援者卡的
@@ -796,8 +825,12 @@ export function triggerOakeyeMillIfApplicable(
   milledCards: CardInstance[],
   pool: Map<string, Card>,
 ): GameState {
-  // 條件 1：milled 含堅果啞鈴
-  const hasOakNail = milledCards.some(c => pool.get(c.cardId)?.name === '堅果啞鈴');
+  // 條件 1：milled 含**印著「整人擊落」的**堅果啞鈴
+  // ⭐⭐⭐ v6.257：原本只比對卡名 `name === '堅果啞鈴'` ⇒ 同名但**沒有這個特性**的
+  //   【SV11W 064/086・I】/【SV11W 145/086・I】（abilities=null，只有招式）從牌庫被
+  //   丟棄時也會誤觸發「丟對手牌庫頂 8 張」。改走中央述詞 cardPrintsAbility。
+  //   ⚠ 卡此刻在牌庫→棄牌區（非場上）⇒ 用卡面版述詞，不是場上版 hasEffectiveAbilityByInst。
+  const hasOakNail = milledCards.some(c => cardPrintsAbility(pool.get(c.cardId), '整人擊落'));
   if (!hasOakNail) return state;
   // 條件 2：是「對手的回合」（victim 不是當前 active 玩家）
   const oppIdx = (1 - victimIdx) as 0 | 1;

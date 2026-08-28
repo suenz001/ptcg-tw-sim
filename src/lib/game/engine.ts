@@ -3583,22 +3583,17 @@ function handlePlaying(
     if (!basePoke) return state;
     const baseCard = pool.get(basePoke.cardId);
     if (!baseCard) return state;
-    // v2.149 提升進化（伊布 SV8a 125）：戰鬥場上時可第 1 回合或剛使出時進化
-    //   只有 base 在戰鬥場 + base 卡擁有此特性時 bypass isFirstTurn / justPlaced gate
-    // ⭐ v6.202：原本只比對特性名。伊布 pokemonType='Colorless' ⇒【火箭隊的監視塔】
-    //   「雙方場上所有【無】寶可夢的特性全部消除」打得到它；base 在戰鬥場 ⇒ 暗夜羽擊兩型亦然。
-    const hasPushEvolveAbility = isActive
-      && hasEffectiveAbilityByInst(state, aIdx, basePoke, pool, '提升進化');
-    // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化也 bypass isFirstTurn gate（卡面：「最初回合或剛使出的回合也可進化」）
-    const hasShellinkBypassFirst = hasShellinkEvolveBypass(baseCard, basePoke, state, aIdx, pool);
-    // 鬥志戰吼（勒克貓 Stage1 特性）：若對手戰鬥場是【ex】寶可夢，
-    //   場上的勒克貓即使「最初回合 / 剛使出 / evolvedThisTurn」都可進化（成倫琴貓）。
-    //   進化鏈：小貓怪 (Basic) → 勒克貓 (Stage1, 鬥志戰吼) → 倫琴貓 (Stage2)
-    //   判定：baseCard 是勒克貓（場上要進化的）+ 對手戰鬥場是 ex。
+    // ⭐⭐⭐ v6.257 收斂：三種「特性型」進化時序豁免（提升進化 / 刺激進化 / 鬥志戰吼）
+    //   全部由中央閘 getEvolveTimingBypass 產生，UI 端 getEvolvableTargets 用同一支。
+    //   舊碼在這裡手刻 `baseCard.name === '勒克貓'` ⇒ 沒有特性的【MC 245/742】
+    //   與【SV6 040/101】也拿到鬥志戰吼（站長回報的 bug）。
     const _oppActiveEarly = state.players[1 - aIdx as 0 | 1]?.active;
     const _oppActiveCardEarly = _oppActiveEarly ? pool.get(_oppActiveEarly.cardId) : undefined;
     const _oppIsExEarly = _oppActiveCardEarly?.subtype === 'ex' || (_oppActiveCardEarly?.name?.endsWith('ex') ?? false);
-    const hasFightingHowlEarly = baseCard.name === '勒克貓' && _oppIsExEarly;
+    const _evoBypass = getEvolveTimingBypass(state, aIdx, basePoke, baseCard, isActive, _oppIsExEarly, pool);
+    const hasPushEvolveAbility = _evoBypass.push;
+    const hasShellinkBypassFirst = _evoBypass.shellink;
+    const hasFightingHowlEarly = _evoBypass.fightingHowl;
     if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassFirst && !hasFightingHowlEarly) return state; // 第一回合不能進化
     // v2.102 活力森林（Stadium）— 雙方的所有【草】寶可夢就算在剛使出的回合也可進化成【草】寶可夢。
     //   自己最初回合例外。
@@ -3616,7 +3611,9 @@ function handlePlaying(
       state.turn > 1;
     const hasFightingHowl = hasFightingHowlEarly;
     // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — 自方場上有 partner 時 bypass isFirstTurn + justPlaced + evolvedThisTurn
-    const hasShellinkBypass = hasShellinkEvolveBypass(baseCard, basePoke, state, aIdx, pool);
+    // ⭐ v6.257：原本在這裡**第二次**呼叫 hasShellinkEvolveBypass（同 state 同參數、同值），
+    //   收斂成重用上方 getEvolveTimingBypass 的結果 ⇒ 行為不變、每次 EVOLVE 少一次掃場。
+    const hasShellinkBypass = hasShellinkBypassFirst;
     // v2.997 isFirstTurn gate 也補入 bypass（line 1658 上方已 return state，此處重新補放行）
     // — 改寫 line 1658 的 gate 較危險；採用「在 line 1674 的 justPlaced gate 加 bypass」
     //   並讓 line 1658 的 isFirstTurn gate 額外考量本特性。
@@ -9522,16 +9519,15 @@ export function getEvolvableTargets(
   for (const fp of fieldPokemon) {
     const fpCard = pool.get(fp.cardId);
     if (!fpCard) continue;
-    // v2.149 提升進化（伊布 SV8a 125）：base 在戰鬥場 + 卡有此特性 → bypass isFirstTurn + justPlaced
     const isFpActive = player.active?.iid === fp.iid;
-    // ⭐ v6.202：與 EVOLVE handler 同一個中央述詞 —— 兩端必須同 commit，
-    //   只改一端會變成「黃框亮著但點了沒反應」或反過來（v6.088 教訓）。
-    const hasPushEvolveAbility = isFpActive
-      && hasEffectiveAbilityByInst(state, state.activePlayerIndex as 0 | 1, fp, pool, '提升進化');
-    // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化 — bypass isFirstTurn + justPlaced + evolvedThisTurn
-    const hasShellinkBypassUI = hasShellinkEvolveBypass(fpCard, fp, state, state.activePlayerIndex as 0 | 1, pool);
-    // 鬥志戰吼 bypass（base 勒克貓 + 對手 ex）
-    const hasFightingHowlBypass = fpCard.name === '勒克貓' && oppIsExUI;
+    // ⭐⭐⭐ v6.257：與 EVOLVE handler **同一支** producer getEvolveTimingBypass
+    //   （提升進化 / 刺激進化 / 鬥志戰吼三項）—— 兩端只改一端會變成
+    //   「黃框亮著但點了沒反應」或反過來（v6.088 教訓），改成單一 producer 後不可能分岔。
+    const _uiBypass = getEvolveTimingBypass(
+      state, state.activePlayerIndex as 0 | 1, fp, fpCard, isFpActive, oppIsExUI, pool);
+    const hasPushEvolveAbility = _uiBypass.push;
+    const hasShellinkBypassUI = _uiBypass.shellink;
+    const hasFightingHowlBypass = _uiBypass.fightingHowl;
     // isFirstTurn gate（除了提升進化 / 刺激進化 / 鬥志戰吼 bypass）
     if (state.isFirstTurn && !hasPushEvolveAbility && !hasShellinkBypassUI && !hasFightingHowlBypass) continue;
     // 活力森林 bypass 對 base 的要求：base 是草寶可夢
@@ -9562,6 +9558,53 @@ export function getEvolvableTargets(
     }
   }
   return result;
+}
+
+/**
+ * ⭐⭐⭐ v6.257 中央閘：「這隻**場上實體**此刻能不能豁免『進化時序 gate』？」
+ *
+ * 為什麼需要它：站長回報「勒克貓【MC 245/742】也能在剛使出的回合馬上進化」。
+ * 查證（static/cards 台灣官方卡面）：
+ *   ・勒克貓 id=18003【M3 026/080・J】abilities=[{ name:'鬥志戰吼', … }]  ← 只有這張印著特性
+ *   ・勒克貓 id=16716【MC 245/742・H】abilities=null，只有招式「咬緊」
+ *   ・勒克貓 id=10454【SV6 040/101・H】abilities=null，只有招式「咬緊」
+ * 舊碼兩處都寫 `card.name === '勒克貓'`（engine.ts EVOLVE handler + getEvolvableTargets），
+ * **完全沒有問這張印刷有沒有那個特性** ⇒ 三張同名卡全部拿到鬥志戰吼。
+ *
+ * 收斂設計（不是「在勒克貓那裡加個 if」）：
+ *   1) 三種「特性型」進化時序豁免（提升進化 / 刺激進化 / 鬥志戰吼）全部走這一支，
+ *      呼叫端只拿結果、不再各自手刻條件 —— 註解已經三次寫「兩端必須同 commit」
+ *      （v6.088 / v6.202 / v6.207 教訓），改成單一 producer 才是真的治本。
+ *   2) 每一項都必須經過 v6.196 的中央閘 `hasEffectiveAbilityByInst`，它會
+ *      (a) 驗這張**卡**真的印著該特性、(b) 問此刻特性有沒有被消除
+ *      （勒克貓 stage=Stage1 ⇒【傳說的熔岩洞】等消除來源打得到它）。
+ *
+ * ⚠ 效能（Rule 32）：`oppActiveIsEx` 由呼叫端預先算好並放在 `&&` 左邊短路；
+ *   `hasEffectiveAbilityByInst` 本身第一件事就是 `card.abilities?.some(...)`，
+ *   對「沒有特性的卡」直接 return false、0 配置。EVOLVE handler 原本呼叫
+ *   `hasShellinkEvolveBypass` **兩次**（isFirstTurn gate 一次、justPlaced gate 一次），
+ *   收斂後只算一次 ⇒ 淨變化為負。量測腳本：scripts/test-v6257-perf.mjs。
+ *
+ * ⚠ 零行為差異保證（除了勒克貓那一項）：push / shellink 兩項逐字沿用原本兩端的條件。
+ */
+export function getEvolveTimingBypass(
+  state: GameState,
+  ownerIdx: 0 | 1,
+  inst: CardInstance,
+  card: Card,
+  isActive: boolean,
+  oppActiveIsEx: boolean,
+  pool: Map<string, Card>,
+): { push: boolean; shellink: boolean; fightingHowl: boolean } {
+  // v2.149 提升進化（伊布 SV8a 125）：只有 base 在**戰鬥場**時才 bypass。
+  const push = isActive && hasEffectiveAbilityByInst(state, ownerIdx, inst, pool, '提升進化');
+  // v2.997 小嘴蝸 / 蓋蓋蟲｜刺激進化（helper 內部 v6.204 已走中央閘）。
+  const shellink = hasShellinkEvolveBypass(card, inst, state, ownerIdx, pool);
+  // ⭐ v6.257 勒克貓｜鬥志戰吼：卡面「若對手的戰鬥寶可夢為『寶可夢【ex】』，則這隻寶可夢
+  //   就算在自己的最初回合或者剛使出的回合，也可進化。」（卡面無位置限制 ⇒ 備戰也算）
+  const fightingHowl = oppActiveIsEx
+    && hasEffectiveAbilityByInst(state, ownerIdx, inst, pool, '鬥志戰吼');
+  return { push, shellink, fightingHowl };
 }
 
 /**

@@ -300,7 +300,10 @@ console.log('⑦ 維度 A 凍結表：「卡面有效果但完全沒實裝」的
 //   (ii) 特性名的每個出現點都硬綁到**別的卡名** —— 狠辣椒ex 被「小碎鑽」壟斷正是這型。
 const ADJUDICATED_IMPLEMENTED=new Map(Object.entries({
   '伊布ex|虹色DNA':'engine.ts canEvolveFromHandOnto → hasEffectiveAbilityByInst(…,\'虹色DNA\')（v6.203 逐字化）',
-  '勒克貓|鬥志戰吼':'engine.ts EVOLVE gate hasFightingHowlEarly（按卡名「勒克貓」+ 對手 active 是 ex）',
+  // ⭐ v6.257 移除：鬥志戰吼改走中央閘 getEvolveTimingBypass →
+  //   hasEffectiveAbilityByInst(…,'鬥志戰吼')，engine.ts 那段同時出現特性名與
+  //   **不再**綁死卡名 ⇒ 候選判準不再把它列為候選，留在表裡就是 7e 的死條目。
+  //   （站長回報：勒克貓【MC 245/742】沒有這個特性卻也能剛使出就進化。）
   '陳舊的羽毛化石|羽毛守護':'defense.ts / effects.ts 按卡名「陳舊的羽毛化石」做備戰免疫（v5.852）',
   '陳舊的背蓋化石|背蓋守護':'engine.ts / defense.ts 按卡名做「不受招式效果影響」',
   '陳舊的頭蓋化石|頭蓋尖刺':'effects.ts 受傷反擊表 [\'陳舊的頭蓋化石\', 3]（v5.494，按卡名）',

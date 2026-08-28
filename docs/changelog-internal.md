@@ -1,5 +1,177 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.257 — 「同名不同印刷、卡面內容不同」維度：dispatch 必須確認這張印刷真的印著
+
+BASE `de2113dfd360f58cad3a26bd82484369d2cfa7ff`（v6.256）。
+
+### 0. 站長回報（逐字）
+
+> 勒克貓 版本為 MC · 245/742 似乎有跟 M3 · 026/080 · J 版本一樣的特性 鬥志戰吼，
+> 可以在登場的回合馬上進化，請你確認，是不是弄錯了？？
+> 依據 MC · 245/742 版本的卡片內容，並沒有特性，只有招式為「咬緊」。
+
+**回報成立。** `static/cards` 查證（live H/I/J，特性讀 `abilities[].effect`）：
+
+| id | 檔案 | 卡號 | 標 | stage | abilities | attacks |
+|---|---|---|---|---|---|---|
+| 18003 | M3.json | 026/080 | J | Stage1 | `[{name:'鬥志戰吼', effect:'若對手的戰鬥寶可夢為「寶可夢【ex】」，則這隻寶可夢就算在自己的最初回合或者剛使出的回合，也可進化。'}]` | 劈哩啪啦 |
+| 16716 | MC.json | 245/742 | H | Stage1 | `null` | 咬緊 |
+| 10454 | SV6.json | 040/101 | H | Stage1 | `null` | 咬緊 |
+
+三張都 `evolvesFrom='小貓怪'`、HP90、【雷】。倫琴貓只有 M3 `18004` 一版。
+
+### 1. 根因（實際碼，不是註解）
+
+`src/lib/game/engine.ts` 兩處，都只比對**卡名**、完全沒問 `abilities`：
+
+- EVOLVE handler：`const hasFightingHowlEarly = baseCard.name === '勒克貓' && _oppIsExEarly;`
+- UI 鏡射 `getEvolvableTargets`：`const hasFightingHowlBypass = fpCard.name === '勒克貓' && oppIsExUI;`
+
+實測重現（BASE blob，完整 `applyAction`）：
+
+```
+MC 245/742 (無特性): UI可進化=[{"fromIid":"a1","toIids":["h1"]}] 實際進化=true
+SV6 040/101 (無特性): UI可進化=[{"fromIid":"a1","toIids":["h1"]}] 實際進化=true
+M3 026/080 (有鬥志戰吼): UI可進化=[{...}] 實際進化=true
+```
+
+同一族的另外兩項**早就修好了**：提升進化（v6.202）與刺激進化（v6.204）都已走
+`hasEffectiveAbilityByInst`。鬥志戰吼是最後一個漏網。
+
+### 2. 全站 audit：「同名不同印刷但卡面內容不同」兩個方向都掃
+
+live H/I/J 共 4693 張、同名多印刷 1127 組。以**正規化空白＋剝零寬**後比對：
+
+| 分類 | 組數 | 判定 |
+|---|---|---|
+| (甲) `abilities` **名稱集合**不一致 | 100 | 需逐一查 dispatch 是否用卡名 |
+| (甲) `attacks` 名稱集合不一致 | 412 | dispatch key 含招式名 ⇒ 天然隔離 |
+| (乙) 同名特性 `effect` 逐字不同 | 4 | **全是「ex」vs「【ex】」排版差異，語意相同 ⇒ 非 bug** |
+| (乙) 同名招式 cost/damage/effect 不同 | 1 | 葉伊布｜嫩葉之恩「那張卡」vs「這些卡」措辭修訂 ⇒ 非 bug |
+| (乙) 訓練家 `rulesText` 不同 | 3 | 泰姆（支援者通用規則文有無印）／滿充的體貼・超級信號（「超級進化【ex】」vs「超級進化寶可夢【ex】」）⇒ 非 bug |
+
+⇒ **(乙)「給錯」方向：0 個真 bug。**
+
+(甲) 方向再拆三條路徑逐一驗：
+
+1. **主動特性 registry**（`getAbilityFn` 先查 `卡名|特性名`，miss 才 fallback `卡名|abIdx`）——
+   行為端掃描：同名多印刷且**同一 index 特性名不同**的 (卡名,index) 共 **11 組**
+   （叉字蝠／鴨嘴炎獸／樂天河童／白海獅／怖納噬草／岩殿居蟹／桃歹郎／斯魔茶／棄世猴／齒輪怪／肋骨海龜），
+   **全部 `ABILITY_EFFECTS.has('卡名|index') === false`** ⇒ by-index fallback 撞不到 ⇒ 0 bug。
+2. **PASSIVE_\* 系列**（`PASSIVE_ATTACK_BONUS` 等）key 是**特性名**，engine 迭代場上卡的
+   `abilities` 才 dispatch ⇒ 沒印該特性的印刷根本不會呼叫到 ⇒ 0 bug。
+3. **手刻 `card.name === 'X'` 的 passive / gate** —— 這條才是出事的地方。靜態掃描
+   （100 個高風險卡名 × 全 src 的 `name === / !==` 相等比對）共 84 個命中，逐條讀實際碼後
+   只有 **2 處**沒有伴隨「這張印刷真的印著該特性」的驗證：
+
+| # | 位置 | 卡 | 症狀 |
+|---|---|---|---|
+| 甲-1 | `engine.ts` EVOLVE handler ＋ `getEvolvableTargets` | 勒克貓｜鬥志戰吼 | MC 245/742、SV6 040/101（無特性）也能剛使出／剛進化就再進化 |
+| 甲-2 | `effects/_shared.ts` `triggerOakeyeMillIfApplicable` | 堅果啞鈴｜整人擊落 | SV11W 064/086、SV11W 145/086（`abilities=null`）從牌庫被丟棄時也丟對手牌庫頂 8 張 |
+
+甲-2 是**靜態 lint 抓出來的**（站長只回報了甲-1）。堅果啞鈴印刷：
+`18481` M4 061/083 J 有「整人擊落」；`13421` SV11W 064/086 I 與 `13837` SV11W 145/086 I
+`abilities=null`（只有招式「強力鞭打」「金屬爪」）。
+
+### 3. 中央收斂（不是「在勒克貓那裡加 if」）
+
+**兩支中央述詞，依「卡在不在場上」分工：**
+
+| 位置 | 述詞 | 檔案 | 會不會問「特性此刻被消除了嗎」 |
+|---|---|---|---|
+| 場上（戰鬥位／備戰） | `hasEffectiveAbilityByInst`（v6.196 既有） | `defense.ts:132` | 會 |
+| 非場上（牌庫／棄牌區／手牌） | `cardPrintsAbility`（**v6.257 新增**） | `effects/_shared.ts` | 不會（卡不在場上，特性消除談不上） |
+
+`cardPrintsAbility` 刻意寫成無配置、無 regex、與 `hasEffectiveAbilityByInst` 內部**逐字相同**的
+嚴格 `===` 比對；零寬字元交給 `test-card-db-integrity` 負責（v6.117 教訓）。
+
+**進化時序豁免收斂成單一 producer**：`engine.ts getEvolveTimingBypass(state, ownerIdx, inst,
+card, isActive, oppActiveIsEx, pool) → { push, shellink, fightingHowl }`。
+EVOLVE handler 與 `getEvolvableTargets` 兩端**都只呼叫它**。動機：那三處註解已經三次寫過
+「兩端必須同 commit」（v6.088／v6.202／v6.207 教訓）—— 改成單一 producer 之後不可能再分岔。
+副作用（好的）：EVOLVE handler 原本呼叫 `hasShellinkEvolveBypass` **兩次**（同 state 同參數同值），
+收斂後只算一次。
+
+**順帶修好的正確性**：鬥志戰吼現在也會被特性消除來源打到。勒克貓 `stage='Stage1'`
+＝進化寶可夢 ⇒【傳說的熔岩洞】「雙方場上所有進化寶可夢的特性全部消除」應該消掉它；
+舊碼只比對卡名，消除完全打不到（守衛 A8）。
+
+### 4. 守衛 `scripts/test-v6257-samename-printing-dispatch.mjs`（24 條）
+
+- A1–A9 勒克貓行為端（完整 `applyAction` EVOLVE ＋ `getEvolvableTargets` 兩端）
+  ・A5/A6/A7 是 M3 的正對照；A8 熔岩洞；**A9 誤殺防線：三張勒克貓在一般時序都照常進化**
+- B1–B5 提升進化／刺激進化的同名不同印刷正對照（**行為必須完全不變**）＋ 伊布在備戰不生效
+- C1–C3 堅果啞鈴（完整 ATTACK 流程：花岩怪｜崩山 mill 受害方牌庫頂 1 張）
+- D1 全站 registry by-index 碰撞掃描（下限斷言：同名同 index 異特性 ≥8 組）
+- E1–E3 靜態 lint：E1 **正對照**（合成違規樣本必須被抓到、加了述詞必須不再違規）、
+  E2 全站掃描（下限斷言：原始檔 ≥100、高風險卡名 ≥50、卡名比對命中 ≥20）、
+  E3 白名單死條目
+- F1–F3 單一 producer（F3 是行為端交叉驗證，不是字串比對）
+
+**白名單 5 條**（逐條查證過，以原始碼片段比對，程式一改就失效）：
+電氣球對「皮卡丘ex」（卡面就是卡名）／大力鱷 trigger-source fallback（按鈕由 abilities 決定）／
+`PASSIVE_ATTACK_BONUS` 的棄世猴・仆斬將軍（key 是特性名）／願增猿ex｜鬆口氣判「桃歹郎ex」
+（卡面「若自己的場上有『桃歹郎ex』」）／爆炸頭水牛｜捲牆的 partner 計數
+（卡面「只要這隻寶可夢**與自己的其他「爆炸頭水牛」**在場上」⇒ partner 不需要帶特性，
+SV8 087/106 `abilities=null` 確實算數量）。
+
+### 5. HEAD-FAIL（對真 BASE blob，**各項各自紅**）
+
+`engine.ts` ＋ `_shared.ts` 同時還原成 BASE blob：**13 PASS / 10 FAIL**。
+紅的是 A1、A2、A3、A4、A8、C2、C3、E2、F1、F2；
+**正對照 A5/A6/A7/A9/B1–B5/C1/D1/E1/E3/F3 維持全綠 ⇒ 沒有誤殺。**
+
+### 6. 突變測試（7 個）
+
+| 突變 | 紅在 |
+|---|---|
+| M1 鬥志戰吼改回 `card.name === '勒克貓'` | A1 A2 A3 A4 A8 F1 F2 |
+| M2 `cardPrintsAbility` 尾端改 `return true` | C3 |
+| M3 `cardPrintsAbility` 開頭 early `return false` | C1 C3 |
+| M4 `push` 拿掉 `isActive` gate | B5 |
+| M5 `fightingHowl` 拿掉 `oppActiveIsEx` | A7 |
+| M6 UI 端繞過中央 producer（改回手刻） | A2 A4 F1 F2 F3 |
+| M7 堅果啞鈴改回卡名比對 | C2 ＋ E2 |
+
+⚠ **M7 第一次只紅 C2、沒紅 E2 —— 這是守衛的真缺陷，不是「守衛夠好」**：
+lint 的 ±8 行視窗原本用**含註解**的行，只要註解裡提到 `hasEffectiveAbilityByInst` /
+`cardPrintsAbility`，違規碼就會被誤判成「有伴隨驗證」⇒ 註解就能讓整條 lint 失效。
+修法：視窗改用剝掉註解後的碼。修完 M7 與 M1 都會紅 E2。
+收緊後又冒出一個新命中（爆炸頭水牛 partner 計數），逐字查卡面後判定合規 ⇒ 進白名單。
+
+⚠ M2 沒紅 C2 的原因已查明、**不是守衛沒測到**：SV11W 堅果啞鈴 `abilities=null`，
+`cardPrintsAbility` 第一行 `if (!abs ...) return false` 就退了，M2 的突變改不到那條路徑；
+真正把邏輯改回卡名的 M7 會紅 C2。
+⚠ M1 沒紅 E2：突變後那行落在 `getEvolveTimingBypass` 內，±8 行視窗仍看得到
+`hasEffectiveAbilityByInst` ⇒ 視窗判準的固有邊界；A1–A4/A8/F1/F2 共 7 條已足以擋下。
+
+### 7. 效能（Rule 32；量測腳本 `scripts/test-v6257-perf.mjs`）
+
+典型滿場盤面（雙方 active + 5 備戰、手牌 7 張含 3 張進化卡）：
+
+| | `getEvolvableTargets`（UI 熱路徑，20000 次） | `applyAction` EVOLVE（5000 次） |
+|---|---|---|
+| BASE r1 / r2 / r3 | 0.00400 / 0.00369 / 0.00430 ms | 0.11375 / 0.11141 / 0.11914 ms |
+| v6.257 r1 / r2 / r3 | 0.00374 / 0.00381 / 0.00371 ms | 0.11382 / 0.11034 / 0.10999 ms |
+
+三輪皆無退化（EVOLVE 少算一次 `hasShellinkEvolveBypass`，UI 端 `oppActiveIsEx` 先短路、
+`hasEffectiveAbilityByInst` 對沒有 `abilities` 的卡第一行就退）。
+
+### 8. 連帶清理
+
+`scripts/test-v6205-…` 的 `ADJUDICATED_IMPLEMENTED` 有一條
+`'勒克貓|鬥志戰吼':'…（按卡名「勒克貓」…）'`。改走特性名之後該候選判準不再列它為候選
+⇒ 依 7e「兩張判讀表都不得有死條目」移除（與 v6.207 移除威嚇之顎同一個機制）。
+
+### 9. 待辦 / 已知邊界
+
+- 靜態 lint 的 ±8 行視窗是啟發式：違規碼若剛好緊鄰另一段合法的特性驗證會被放行（M1 的情形）。
+  行為端守衛（A/B/C/F）是主要防線，lint 只是補網。
+- `_oppIsExEarly` 判 ex 用 `subtype === 'ex' || name.endsWith('ex')`，本版未動。
+- 卡面 `effect` 內含零寬字元的兩張（爆炸頭水牛 SV-P-H 147／SV7 081 的「‌爆炸頭水牛」）
+  只影響 effect 文字、不影響 `name` 比對，本版未處理。
+
+
 ## v6.256 —「這隻寶可夢受到的招式的傷害」中央收斂（6 條傷害管線漏記）
 
 BASE `20d4d6dfecb9101b07b9420a16968c19640367f4`（v6.255）。
