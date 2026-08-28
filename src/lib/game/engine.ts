@@ -111,12 +111,16 @@ import {
 function isInitializeBlocking(
   state: GameState,
   targetPoke: CardInstance,
-  pool: Map<string, Card>
+  pool: Map<string, Card>,
+  // ⭐v6.254：光之翼（超級皮可西ex）豁免「對手的寶可夢特性」型消除源所需的 holder 脈絡。
+  //   選填 —— 不給就退回 v6.253 行為（不豁免），舊 caller byte-identical。
+  holderOwnerIdx?: 0 | 1,
+  holderLocation?: 'active' | 'bench',
 ): boolean {
   // v5.528：收斂至中央 isInitializeNullified（v3001）— rule-box + 「未來」除外 + 任一方戰鬥場有「初始化」
   //   的判定只維護在一處，避免各發動點散裝重複（USE_ABILITY / BENCH_PLACE / promptPlayAbilities /
   //   getUsableAbilities / 被動套用點 全部走同一函式）。保留本 wrapper 名稱與 caller 的清楚 log。
-  return isInitializeNullified(state, pool.get(targetPoke.cardId), pool);
+  return isInitializeNullified(state, pool.get(targetPoke.cardId), pool, targetPoke, holderOwnerIdx, holderLocation);
 }
 
 // ── 阻礙之塔（阻礙道具發動）── 輔助判定 ──────────────────────────────────────
@@ -3441,7 +3445,7 @@ function handlePlaying(
     //   其他「特性被消除」來源（暗夜羽擊、黏著束縛、傳說的熔岩洞…）完全看不到，屬與 v6.088 同型的漏接。
     const _placeAbName = card.abilities?.[0]?.name;
     const _placeEff = !_placeAbName || isAbilityHolderEffective(afterPlace, placed, card, aIdx, _placeAbName, 'bench', pool);
-    if (placeFn && _placeEff && !isColorlessAbilityBlocked(afterPlace, card, pool) && !isInitializeBlocking(afterPlace, placed, pool)) {
+    if (placeFn && _placeEff && !isColorlessAbilityBlocked(afterPlace, card, pool) && !isInitializeBlocking(afterPlace, placed, pool, aIdx, 'bench')) {
       afterPlace = placeFn(afterPlace, aIdx, pool);
     }
     // v5.866：險惡廢墟改走 applyAction 出口中央偵測(applyRuggedRuinsBenchPlace),此處不再呼叫
@@ -4585,7 +4589,10 @@ function handlePlaying(
     if (isColorlessAbilityBlocked(state, pokeCard, pool)) return state;
 
     // 初始化（鐵荊棘ex）：遮蔽 rule box 寶可夢的特性
-    if (isInitializeBlocking(state, targetPoke, pool)) {
+    // ⭐v6.254：接上 holder 脈絡 —— 上面那條中央閘 isAbilityHolderEffective 已經放行光之翼持有者，
+    //   這條歷史硬編若不同步就會在同一個 handler 裡給出相反答案。
+    if (isInitializeBlocking(state, targetPoke, pool, aIdx,
+        attacker.active?.iid === targetPoke.iid ? 'active' : 'bench')) {
       return addLog(state, `${pokeCard!.name} 的特性「${ability.name}」被初始化消除`, aIdx);
     }
 

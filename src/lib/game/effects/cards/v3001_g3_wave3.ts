@@ -189,6 +189,79 @@ export function hasAbilityOnActive(
 //   （＝視為有效，等同 v6.252 既有行為）⇒ 最壞情況不會比現在差，也不會無窮迴圈。
 //   引擎全程同步執行（無 async），module-level 集合不會跨請求交錯。
 // ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐ v6.254 中央述詞：「不會受到對手的寶可夢特性效果的影響」的豁免
+//
+// 卡面（超級皮可西ex｜光之翼，M3 18007，J 標，static/cards/M3.json 逐字）：
+//   「這隻寶可夢不會受到對手的寶可夢特性效果的影響。」
+//
+// 官方裁定（`PTCG RULES/PTCG_RULES.md`）：
+//   L2818「對手的戰鬥場上有特性『初始化』處於生效狀態的鐵荊棘ex時，自己的超級皮可西ex的
+//         特性『光之翼』會消除嗎？」→「不會消除。」
+//   L2733「…若從手牌抽出超級皮可西ex重疊在自己場上的皮皮身上讓其進化，特性『光之翼』
+//         會生效嗎？」→「會生效。」
+//   ⇒ 官方把「光之翼」擺在初始化**之前**結算：初始化根本碰不到它，因此不存在
+//     「先被消除 ⇒ 不再豁免」的邏輯循環。
+//
+// ⚠⚠ 豁免範圍**逐字**限定，禁用「kind 一刀切」：
+//   ✅ 豁免：來源是**對手的寶可夢特性**（鐵荊棘ex｜初始化／振翼髮｜暗夜羽擊(passive)／
+//            對手側海兔獸｜黏著束縛）
+//   ❌ 不豁免：**競技場卡**（火箭隊的監視塔／傳說的熔岩洞）—— 那不是「寶可夢的特性」，
+//            卡面沒有涵蓋（官方無 光之翼 × 競技場卡 的裁定；站長 2026-08-28 裁定照卡面）
+//   ❌ 不豁免：**招式**效果（招式版暗夜羽擊 = inst.abilityNullifiedThisTurn）—— 招式不是特性
+//   ❌ 不豁免：**自己這一側**的寶可夢特性（卡面寫「**對手的**寶可夢特性」）
+//
+// ⚠ 效能（Rule 32）：本述詞只在「場上真的存在某個特性型消除源」時才會被呼叫
+//   （三個來源各自都有『卡上有沒有印這個特性』的便宜早退在前），
+//   ⇒ 一般盤面新增成本為 0 次呼叫。量測腳本：scripts/test-v6254-magical-shine-perf.mjs。
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 逐字對齊卡面的豁免特性名單。**新增前必須回 static/cards 讀 effect 原文**：
+ * 只有寫「不會受到對手的…特性…的影響」而且沒有其他限定語的才可以進來。
+ * ⚠ 化隱（斯魔茶／來悲粗茶／怨影娃娃／詛咒娃娃）卡面是「不會受到對手的招式與特性的效果的
+ *   影響」，字面上是本表的超集，但官方 Q&A 沒有任何一條講到它與特性消除的互動，
+ *   且會改動既有 化隱 × 暗夜羽擊 行為 ⇒ v6.254 **不擅自擴大**，待站長裁定。
+ */
+const OPP_ABILITY_EFFECT_IMMUNE_ABILITIES: ReadonlySet<string> = new Set<string>(['光之翼']);
+
+/**
+ * 這隻場上寶可夢此刻是否擁有「不受對手寶可夢特性效果影響」的**有效**豁免？
+ *
+ * ⚠ 不遞迴、也不呼叫 isAbilityHolderEffective：它只問「非寶可夢特性」的三個消除來源
+ *   （監視塔／熔岩洞／招式旗標），因為只有那三個能消除掉豁免特性本身。
+ *   ⇒ 結構上不可能與 v6.253 的 _nullifierVisiting 打架（本函式完全不進那條路徑）。
+ */
+/**
+ * ⚠⚠ 便宜早退：這張**卡片**有沒有印豁免特性？（只讀卡面，不看場況、不配置任何物件）
+ * 三個消除源的呼叫點都必須先過這一關再呼叫 hasEffectiveOppAbilityImmunity ——
+ * 實測（scripts/test-v6254-magical-shine-perf.mjs）少了它，「對手初始化在場 × 一般規則
+ * 寶可夢」會多付一次跨函式呼叫，量到 +15~18%。
+ */
+function printsOppAbilityImmunity(holderCard: Card | null | undefined): boolean {
+  const abs = holderCard?.abilities;
+  if (abs == null) return false;
+  for (let i = 0; i < abs.length; i++) {
+    if (OPP_ABILITY_EFFECT_IMMUNE_ABILITIES.has(abs[i].name)) return true;
+  }
+  return false;
+}
+
+export function hasEffectiveOppAbilityImmunity(
+  state: GameState | undefined,
+  holderInst: CardInstance | null | undefined,
+  holderCard: Card | null | undefined,
+  location: 'active' | 'bench',
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!printsOppAbilityImmunity(holderCard)) return false;
+  // 豁免特性自己被「非寶可夢特性」來源消除掉時 ⇒ 沒有豁免可言
+  if (isNullifiedByRocketWatchtower(state, holderInst, holderCard, pool)) return false;   // 競技場卡
+  if (isNullifiedByLegendCave(state, holderInst, holderCard, pool)) return false;         // 競技場卡
+  if (location === 'active' && holderInst?.abilityNullifiedThisTurn) return false;        // 招式效果
+  return true;
+}
+
 const _nullifierVisiting = new Set<string>();
 export function isNullifierAbilityEffective(
   state: GameState | undefined,
@@ -219,6 +292,11 @@ export function isInitializeNullified(
   state: GameState | undefined,
   holderCard: Card | null | undefined,
   pool: Map<string, Card> | undefined,
+  // ⭐v6.254 光之翼豁免所需的 holder 脈絡。**選填**：不給就退回 v6.253 行為（不豁免＝fail-closed），
+  //   舊 caller / 既有測試（3 參數）行為 byte-identical 不變。
+  holderInst?: CardInstance | null,
+  holderOwnerIdx?: 0 | 1,
+  holderLocation?: 'active' | 'bench',
 ): boolean {
   if (!state || !holderCard || !pool) return false;
   // holder 必須是「擁有規則的寶可夢」(rule box)
@@ -237,6 +315,11 @@ export function isInitializeNullified(
     if (!active) continue;
     const ac = pool.get(active.cardId);
     if (!ac?.abilities?.some(ab => ab.name === '初始化')) continue;   // 便宜早退：卡上沒印就不必問
+    // ⭐⭐⭐v6.254 光之翼：這個「初始化」若是**對手的**寶可夢特性 ⇒ 對本隻無效（官方 L2818）。
+    //   放在 isNullifierAbilityEffective 之前＝更便宜（豁免時直接跳過遞迴那一支）。
+    if (holderOwnerIdx != null && holderLocation != null && pIdx !== holderOwnerIdx
+        && printsOppAbilityImmunity(holderCard)
+        && hasEffectiveOppAbilityImmunity(state, holderInst, holderCard, holderLocation, pool)) continue;
     if (!isNullifierAbilityEffective(state, active, ac, pIdx, '初始化', 'active', pool)) continue;
     return true;
   }
@@ -305,21 +388,29 @@ export function isAbilityHolderEffective(
   pool: Map<string, Card> | undefined,
 ): boolean {
   if (!state || !holderInst || !holderCard || holderOwnerIdx == null || !abilityName || !pool) return false;
-  // 0. 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除
-  if (isInitializeNullified(state, holderCard, pool)) return false;
-  // 0b. v6.049 火箭隊的監視塔 —【無】寶可夢特性全部消除
+  // ⚠⚠ v6.254 實測（scripts/test-v6254-magical-shine-perf.mjs）：這裡的**步驟順序不可調動**。
+  //   曾試著把兩張競技場卡提到 step 0 之前（純可讀性重排，結果不變），
+  //   在「對手初始化在場 × 一般規則寶可夢」情境量到 423.7 → 516.3 ns/call（+21.9%），
+  //   因為原本 step 0 早退就不必再跑那兩個 stadium 檢查。⇒ 維持 v6.253 的原順序。
+  //   光之翼的豁免**不依賴呼叫順序**：hasEffectiveOppAbilityImmunity 自己會再問一次
+  //   競技場卡與招式旗標（見該函式 JSDoc）。
+  // 0. 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除（寶可夢特性 ⇒ 對手側者被光之翼豁免）
+  if (isInitializeNullified(state, holderCard, pool, holderInst, holderOwnerIdx, location)) return false;
+  // 0b. v6.049 火箭隊的監視塔 —【無】寶可夢特性全部消除（競技場卡 ⇒ 光之翼**不**豁免）
   if (isNullifiedByRocketWatchtower(state, holderInst, holderCard, pool)) return false;
-  // 0c. v6.077 傳說的熔岩洞 — 雙方場上所有**進化**寶可夢特性全部消除
+  // 0c. v6.077 傳說的熔岩洞 — 雙方場上所有**進化**寶可夢特性全部消除（競技場卡 ⇒ 光之翼**不**豁免）
   if (isNullifiedByLegendCave(state, holderInst, holderCard, pool)) return false;
-  // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標
+  // 1. 招式版暗夜羽擊 — 只 active 位置才有此旗標（**招式**效果 ⇒ 光之翼**不**豁免）
   if (location === 'active' && holderInst.abilityNullifiedThisTurn) return false;
   // 2. passive 振翼髮｜暗夜羽擊 — 對手戰鬥場有振翼髮 → active 位置的特性失效
+  //    （寶可夢特性，持有者必為對手 ⇒ 被光之翼豁免）
   if (location === 'active'
-      && isOppActiveAbilityNullifiedByMoonsenne(state, holderOwnerIdx, holderCard, abilityName, pool)) {
+      && isOppActiveAbilityNullifiedByMoonsenne(state, holderOwnerIdx, holderCard, abilityName, pool, holderInst)) {
     return false;
   }
-  // 3. 海兔獸｜黏著束縛 — bench 2 階特性失效
-  if (location === 'bench' && isAbilityNullifiedBySticky(state, holderInst, holderCard, true, pool)) {
+  // 3. 海兔獸｜黏著束縛 — bench 2 階特性失效（寶可夢特性 ⇒ 對手側者被光之翼豁免）
+  if (location === 'bench'
+      && isAbilityNullifiedBySticky(state, holderInst, holderCard, true, pool, holderOwnerIdx)) {
     return false;
   }
   return true;
@@ -515,6 +606,8 @@ export function isOppActiveAbilityNullifiedByMoonsenne(
   defenderCard: Card | null | undefined,
   abilityName: string | undefined,
   pool: Map<string, Card> | undefined,
+  // ⭐v6.254 光之翼豁免所需的 holder 實體（選填；不給＝不豁免，維持 v6.253 行為）
+  defenderInst?: CardInstance | null,
 ): boolean {
   if (!state || defenderIdx == null || !defenderCard || !abilityName || !pool) return false;
   // 「暗夜羽擊」自身豁免（卡面明文 except）
@@ -527,6 +620,10 @@ export function isOppActiveAbilityNullifiedByMoonsenne(
   if (!att) return false;
   const attCard = pool.get(att.cardId);
   if (attCard?.name !== '振翼髮') return false;
+  // ⭐⭐⭐v6.254 光之翼：暗夜羽擊(passive) 是**對手的寶可夢特性**（卡面只影響「對手的」戰鬥
+  //   寶可夢 ⇒ 持有者必然在對面）⇒ 擁有有效豁免的目標不受影響。
+  if (printsOppAbilityImmunity(defenderCard)
+      && hasEffectiveOppAbilityImmunity(state, defenderInst, defenderCard, 'active', pool)) return false;
   return true;
 }
 
@@ -565,6 +662,8 @@ export function isAbilityNullifiedBySticky(
   card: Card | null | undefined,
   isOnBench: boolean,
   pool: Map<string, Card> | undefined,
+  // ⭐v6.254 光之翼豁免所需的 holder 所屬玩家（選填；不給＝不豁免，維持 v6.253 行為）
+  holderOwnerIdx?: 0 | 1,
 ): boolean {
   if (!state || !inst || !card || !pool) return false;
   if (!isOnBench) return false; // 卡面：「備戰區的」2 階進化才被消除
@@ -573,6 +672,9 @@ export function isAbilityNullifiedBySticky(
   for (const i of [0, 1] as const) {
     // 便宜早退（無閘版：只看卡上有沒有印這個特性）——維持原本的效能特性
     if (!hasAbilityOnBench(state, i, pool, '黏著束縛')) continue;
+    // ⭐⭐⭐v6.254 光之翼：只豁免「**對手的**寶可夢特性」——自己這一側的海兔獸照樣消除。
+    if (holderOwnerIdx != null && i !== holderOwnerIdx && printsOppAbilityImmunity(card)
+        && hasEffectiveOppAbilityImmunity(state, inst, card, 'bench', pool)) continue;
     // 進一步確認該備戰位是「海兔獸」（避免同名特性卡片汙染）
     // ⭐⭐⭐ v6.253：並且該隻海兔獸的「黏著束縛」**自己也必須仍然有效**。
     //   海兔獸是【1階進化】⇒【傳說的熔岩洞】（雙方場上所有進化寶可夢的特性全部消除）
@@ -611,16 +713,18 @@ export function isAbilityNullifiedByPassive(
 ): boolean {
   if (!state || ownerIdx == null || !inst || !card || !abilityName || !pool) return false;
   // 鐵荊棘ex｜初始化 — 規則寶可夢(未來除外)特性消除（含被動，UI/被動套用點一律 respect）
-  if (isInitializeNullified(state, card, pool)) return true;
+  // ⭐v6.254：三個來源全部接上 holder 脈絡，否則本函式（UI gate + USE_ABILITY dispatch）
+  //   會與中央閘 isAbilityHolderEffective 對同一張卡給出**相反**答案。
+  if (isInitializeNullified(state, card, pool, inst, ownerIdx, location)) return true;
   // 振翼髮｜暗夜羽擊 — 對手戰鬥位特性消除
   if (location === 'active') {
-    if (isOppActiveAbilityNullifiedByMoonsenne(state, ownerIdx, card, abilityName, pool)) {
+    if (isOppActiveAbilityNullifiedByMoonsenne(state, ownerIdx, card, abilityName, pool, inst)) {
       return true;
     }
   }
   // 海兔獸｜黏著束縛 — 雙方備戰 Stage 2 特性消除
   if (location === 'bench') {
-    if (isAbilityNullifiedBySticky(state, inst, card, true, pool)) return true;
+    if (isAbilityNullifiedBySticky(state, inst, card, true, pool, ownerIdx)) return true;
   }
   return false;
 }

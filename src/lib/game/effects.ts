@@ -17942,7 +17942,10 @@ export function promptPlayAbilities(
   //   USE_ABILITY/被動套用點同一判定；rule-box + 「未來」除外 + 場上有初始化 的規則只維護在 v3001 一處）。
   //   涵蓋「剛上場/進化即確認是否發動」型(喵喵ex 殺手鐧捕捉等 on-play/on-evolve)。鐵斑葉ex|迅速游標
   //   為「未來」寶可夢→卡面明示不受初始化影響(正確不擋)。
-  if (isInitializeNullified(state, card, pool)) return state;
+  // ⭐v6.254：接上 holder 脈絡 —— 光之翼（超級皮可西ex）不受**對手的**寶可夢特性效果影響
+  //   （官方 L2818/L2733），初始化不得消除它；競技場卡與招式版暗夜羽擊仍照消除。
+  if (isInitializeNullified(state, card, pool, inst, aIdx,
+      state.players[aIdx].active?.iid === inst.iid ? 'active' : 'bench')) return state;
 
   for (let i = 0; i < card.abilities.length; i++) {
     const ab = card.abilities[i];

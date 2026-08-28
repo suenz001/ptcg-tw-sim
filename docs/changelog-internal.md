@@ -1,5 +1,76 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.254 — 超級皮可西ex｜光之翼：豁免「對手的寶可夢特性」型特性消除
+
+站長裁定（2026-08-28，逐字）：「不該消。要修」。
+
+**卡面（static/cards/M3.json id 18007，J 標，subtype=ex，stage=Stage1，pokemonType=Psychic）**
+`abilities[0].effect` = 「這隻寶可夢不會受到對手的寶可夢特性效果的影響。」
+
+**官方裁定（PTCG RULES/PTCG_RULES.md，逐字）**
+- L2818「對手的戰鬥場上有特性「初始化」處於生效狀態的鐵荊棘ex時，自己的超級皮可西ex的
+  特性「光之翼」會消除嗎？」／L2819「不會消除。」
+- L2733「對手的戰鬥場上有特性「初始化」處於生效狀態的鐵荊棘ex時，若從手牌抽出超級皮可西ex
+  重疊在自己場上的皮皮身上讓其進化，特性「光之翼」會生效嗎？」／L2734「會生效。」
+- L2722/2723（咒詛炸彈可以選它、但效果不生效）、L2828/2829（冰冷之帳不能放指示物）、
+  L2830/2831（大力捕捉器可以選、但不能互換）。
+- ⚠ **官方沒有任何一條講到 光之翼 × 競技場卡**（`grep 光之翼` 全檔 13 條，逐條看過）。
+  ⇒ 競技場卡是否豁免採站長裁定「不豁免」（卡面寫的是「寶可夢特性」，競技場卡不是）。
+
+**BASE 行為（312ec9a9，harness 實測）**
+`isAbilityHolderEffective(對手初始化在場, 皮可西, '光之翼') = false`，
+`canApplyEffectToTarget(..., 'ability-effect') = {blocked:false}` ⇒ 免疫整個消失。
+
+**修法（中央收斂，全部在 v3001_g3_wave3.ts）**
+- 新增 `OPP_ABILITY_EFFECT_IMMUNE_ABILITIES`（逐字對齊卡面的名單，目前只有『光之翼』）
+  ＋ `printsOppAbilityImmunity`（便宜早退）＋ `hasEffectiveOppAbilityImmunity`（中央述詞）。
+- 三個「寶可夢特性」型消除源各自接上 holder 脈絡並豁免**對手側**來源：
+  `isInitializeNullified`（+3 個選填參數）／`isOppActiveAbilityNullifiedByMoonsenne`（+defenderInst）／
+  `isAbilityNullifiedBySticky`（+holderOwnerIdx）。
+- `isAbilityHolderEffective` 與 `isAbilityNullifiedByPassive` 兩支都接上（否則 UI gate／
+  USE_ABILITY dispatch 會與中央閘對同一張卡給相反答案）。
+- engine.ts `isInitializeBlocking`（+2 個選填參數，兩個 caller 都傳）與
+  effects.ts `promptPlayAbilities` 的 `isInitializeNullified` 也一併接上。
+
+**為什麼沒有「光之翼先被消除⇒不再豁免」的邏輯循環**
+`hasEffectiveOppAbilityImmunity` **只**查三個「非寶可夢特性」的來源
+（火箭隊的監視塔／傳說的熔岩洞／`abilityNullifiedThisTurn`），不回頭呼叫 `isAbilityHolderEffective`
+⇒ 結構上不可能遞迴，也不會與 v6.253 的 `_nullifierVisiting` 打架。
+官方 L2733/L2818 的語氣就是「光之翼先生效」，與這個實作順序一致。
+
+**消除源重新枚舉（live H/I/J 卡面掃描，非 grep 程式碼）**
+寶可夢特性型 4：鐵荊棘ex｜初始化、振翼髮｜暗夜羽擊(passive)、海兔獸｜黏著束縛、
+可達鴨/哥達鴨｜濕氣（只消除「將自己【昏厥】的效果的特性」⇒ 與光之翼零交集，不需改）。
+競技場卡型 2：火箭隊的監視塔、傳說的熔岩洞。招式型 1：招式版暗夜羽擊（`abilityNullifiedThisTurn`）。
+⇒ **沒有第 7、第 8 個**（洛托姆ex｜多重轉接只是提到「這個特性消除時」，不是消除源）。
+
+**同型卡枚舉（live H/I/J，`effect` ＋ `rulesText` 全載體）**
+「不會受到對手的…特性…影響」只有兩族：
+- 光之翼（超級皮可西ex，本版處理）
+- 化隱（斯魔茶／怨影娃娃／來悲粗茶／詛咒娃娃）：「這隻寶可夢不會受到對手的招式與特性的
+  效果的影響。」字面上是光之翼的**超集**，但官方 Q&A 對它與特性消除的互動零裁定，
+  且會改動既有「化隱 × 暗夜羽擊」的行為 ⇒ **本版不擅自擴大**，待站長裁定。
+（「礎石之勢」「精神防護」只講「招式的傷害」，與特性消除無關。）
+
+**效能（IRON_RULES Rule 32；量測腳本 scripts/test-v6254-magical-shine-perf.mjs）**
+A/B（BASE vs 修後，9 輪取最小、N=200k）：一般盤面 218.8→210.9 ns/call（-3.6%）；
+一般盤面×一般卡 210.4→203.4（-3.3%）；對手初始化在場×光之翼持有者 447.1→291.5（-34.8%，
+豁免先短路變快）；對手初始化在場×一般規則寶可夢 422.9→463.5（+9.6%）。
+換算到完整 `applyAction(ATTACK)`（7 輪取最小、N=3000）：有鐵荊棘ex 42.28→42.03 µs（-0.6%）、
+一般盤面 41.75→41.35 µs（-0.9%）⇒ 動作層級量不出差異。
+⚠ 開發途中曾把兩張競技場卡的檢查提前到 step 0 之前（純可讀性重排），
+量到 +21.9%（423.7→516.3 ns）⇒ **已還原成 v6.253 的原順序**，並在原始碼寫下這段量測。
+
+**測試**
+- `scripts/test-v6254-magical-shine-immunity.mjs`（28 條）：A 卡面/官方逐字、B 豁免生效（HEAD 全紅）、
+  C 正對照（競技場卡／招式旗標／自己這一側／無光之翼的卡 行為與 BASE 相同）、
+  D 行為端 E2E（黑夜魔靈｜咒詛炸彈 × 超級皮可西ex，對照官方 L2722/2723）、E 結構守衛（含偽造正對照）。
+- HEAD-FAIL：對 BASE blob 跑 → 11 PASS / 14 FAIL，每一條各自紅（不是單一 crash）。
+- 突變 6 個全紅在預期那一條：擴大到熔岩洞／監視塔／招式旗標／自己這一側、名單清空、
+  `isAbilityNullifiedByPassive` 不傳脈絡。
+- 免疫網：damage-immunity 25、attack-effect-immunity 19、selection-ui 35、v6253 27、
+  v6202 53、initialize-nullify 8、has-effective-ability 11、v6196-legend-cave 18 全綠。
+
 ## v6.253 — 特性消除源自身有效性 ＋「防 KO 成功＝未昏厥」兩個中央述詞
 
 站長回報兩件事（逐字）：①「振翼髮 [特性] 暗夜羽擊 在場上時，對方場上是 鐵荊棘ex，照理說，
