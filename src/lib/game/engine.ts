@@ -28,6 +28,7 @@ import {
   collectPassiveAttackBonuses,   // v6.258 攻擊方被動加成唯一 dispatch
   PASSIVE_DAMAGE_REDUCE_COND, passiveReduceAppliesAtLocation,
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
+  koVictimAbilityPrizeAdjust,  // ⭐v6.259 被 KO 者自身特性的獎賞張數修正（願增猿ex｜鬆口氣）
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
@@ -6059,10 +6060,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           newState = addLog(newState, `「奇跡之吻」啟動：硬幣反面 → 不增加獎賞卡`, aIdx);
         }
       }
+      // ⭐⭐⭐ v6.259：被 KO 者自身特性的獎賞修正（願增猿ex｜鬆口氣）—— 跟 effects.ts
+      //   `koPrizesAdjusted` 呼叫**同一支**中央述詞，兩條管線從此不可能分岔。
+      //   ※ 這裡是「招式傷害 KO 對手戰鬥位」分支 ⇒ koByAttackDamage = true。
+      //   ※ koInst = state.players[dIdx].active（KO 前快照）；newState 此刻防守方還在場上。
+      const _v6259Victim = koVictimAbilityPrizeAdjust(newState, koInst, defenderCard, dIdx, pool, true);
       // 獎賞卡下限 0（影藏等特性可將獎賞減到 0 張；實務上對手 KO 一隻 1 獎賞的惡寶可夢時效果才會觸發歸零）
       const basePrizes = prizesForKO(defenderCard);
       const prizes = preventPrizeAll ? 0
-        : Math.max(0, basePrizes + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus);
+        : Math.max(0, basePrizes + prizeAdjust + prizeTool + deferredBonus + whiteLilyBonus + bagonElenaBonus + greedyGourmetBonus + ancientEnergyAdjust + togekissBonus + _v6259Victim.adjust);
+      if (!preventPrizeAll) for (const _line of _v6259Victim.logs) newState = addLog(newState, _line, dIdx);
       // v3.76：揭示 prize 調整來源（讓玩家了解為何獎賞數與預期不同）
       // - prizeTool: 莉莉艾的珍珠 -1 / 豪華斗篷 +1
       // - prizeAdjust: 影藏（惡寶可夢被 ex KO 時 -1）

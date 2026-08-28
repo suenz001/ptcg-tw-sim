@@ -1,5 +1,110 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.259 — 「被 KO 時修改獎賞張數」中央收斂：`PASSIVE_KO_PRIZE_ADJUST`
+
+BASE `f116910a7050e7fa660220f4f3bced7920203e95`（v6.258）。
+站長回報：超級路卡利歐ex｜波動突刺 KO 願增猿ex 時「鬆口氣」沒有發動。
+
+### 0. 複驗：轉述的診斷不成立，真因是「順序」
+
+轉述說「走中央 `dealAttackDamageToTarget` 的 KO 不觸發 `PASSIVE_ON_KO`」——
+**這句話是錯的**。`fireDefenderOnKO`（effects.ts:8279）第 ③ 段（8363~8371）本來就會
+dispatch `PASSIVE_ON_KO`，`dealAttackDamageToTarget` 也確實在 8833 呼叫它。
+
+真因是**兩條管線相對於 `addPendingPrize` 的順序相反**：
+
+| 管線 | 順序 |
+|---|---|
+| `engine.ts` 主 ATTACK | `addPendingPrize`(6094) → `PASSIVE_ON_KO`(6137) |
+| `effects.ts dealAttackDamageToTarget` | `fireDefenderOnKO`(8833) → `addPendingPrize`(8840) |
+
+而「鬆口氣」舊實作（effects.ts:16714~16732）是 **claw-back**：
+「從攻擊方**手牌最後一張**把剛拿的獎賞卡拿回來」——註解自己寫著
+「PASSIVE_ON_KO 緊接 addPendingPrize 之後執行」。
+
+BASE 實測（`scripts/repro_v6259.mjs`，完整 `applyAction` ATTACK→RESOLVE）：
+
+| 情境 | BASE 結果 |
+|---|---|
+| 波動突刺（中央 helper）＋攻擊方手牌 3 張 | log 有出現，但**偷走一張真手牌**塞進獎賞堆（獎賞張數剛好對） |
+| 波動突刺（中央 helper）＋攻擊方手牌 0 張 | **完全不發動**，獎賞 6→4（＝站長看到的症狀） |
+| 超級勇氣（引擎主管線） | 正確：獎賞 6→5 |
+| 備戰區的願增猿ex 被狙擊 KO | **不發動**（`fireDefenderOnKO` 開頭 `if (!isActive) return`） |
+
+⚠ 「偷手牌」那條比「不發動」更嚴重：那張手牌變成獎賞卡，而且攻擊方已經在私訊 log
+看過它 —— 等於多看了一張獎賞卡的內容。公平性問題，故首頁 changelog 只寫症狀不寫細節。
+
+### 1. 卡面逐字（`static/cards`，只用台灣官方卡面）
+
+| 註冊項 | 卡面 | 位置限定 | 原因限定 |
+|---|---|---|---|
+| 願增猿ex｜鬆口氣（SV6a 10619 / SV8a 11628） | 「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，若自己的場上有「桃歹郎【ex】」，則被獲得的獎賞卡減少1張。」 | **無**「在戰鬥場」⇒ 備戰也算 | 招式傷害 |
+| 桃歹郎｜最後鎖鏈（M2a 14775） | 「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，從自己的牌庫任意選擇1張卡加入手牌。」 | **無**「在戰鬥場」 | 招式傷害 |
+| 沙漠蜻蜓｜沙之羽擊（M-P-I 14432） | 「…與這隻寶可夢**在戰鬥場上**受到對手的招式的傷害而【昏厥】時…」 | 戰鬥場 | 招式傷害 |
+| 密勒頓｜光子纜線（M5 19171 / M-P-J 19235） | 「這隻寶可夢**在戰鬥場上**受到對手的寶可夢招式的傷害而【昏厥】時…」 | 戰鬥場 | 招式傷害 |
+| 沙鈴仙人掌｜炸裂針（SV9 12468，`PASSIVE_KO_RETALIATION`） | 「這隻寶可夢**在戰鬥場上**受到…而【昏厥】時…」 | 戰鬥場 | 招式傷害 |
+| 沉重接力棒（SV5M 9907，`TOOL_ON_KO`） | 「…**在戰鬥場上**受到對手的寶可夢招式的傷害而【昏厥】時…」 | 戰鬥場 | 招式傷害 |
+| 希望護身符（SV8 11278，`TOOL_ON_KO`） | 「附有這張卡的寶可夢受到對手的寶可夢招式的傷害而【昏厥】時…」 | **無**「在戰鬥場」 | 招式傷害 |
+
+### 2. 修法：改成「獎賞張數修正子」（順序依賴從設計上消失）
+
+- 新增 `PASSIVE_KO_PRIZE_ADJUST`（宣告式表）＋ `koVictimAbilityPrizeAdjust()`（單一入口）。
+- 「鬆口氣」**移出** `PASSIVE_ON_KO`，改註冊到新表。
+- 兩條「算獎賞張數」的管線各呼叫**一次**：
+  - `effects.ts koPrizesAdjusted`（涵蓋 effects.ts 側 18 個 KO 路徑；在 `koByAttackDamage` gate 內）
+  - `engine.ts` 主 ATTACK 的 inline 獎賞計算（`prizes` 加總）
+- ⭐ **「恰好 1 次」是結構保證**：修正子只在「算張數」那一刻被讀一次，
+  不像 hook 會被兩條路徑各跑一遍（對比 v6.120 的雙觸發事故）。
+
+行為差異（相對 BASE）：
+
+| 情境 | BASE | v6.259 |
+|---|---|---|
+| 主管線 KO 願增猿ex | 拿 2 張再退 1 張（**且退回去的那張已被看過、順序被打亂**） | 直接只拿 1 張 |
+| 中央 helper KO（手牌 3） | 偷一張真手牌 | 只拿 1 張，手牌不動 |
+| 中央 helper KO（手牌 0） | 不發動，拿 2 張 | 只拿 1 張 |
+| 備戰的願增猿ex 被狙擊 KO | 不發動 | 依卡面發動 |
+| 效果 KO／指示物 KO／中毒灼傷檢查 KO／沒有桃歹郎ex／特性被消除 | 不發動 | 不發動（不變） |
+
+### 3. 未處理（下一輪；已查證但本版刻意不動）
+
+`fireDefenderOnKO` 開頭有 `if (!isActive) return s0;`（effects.ts:8325），
+而**桃歹郎｜最後鎖鏈**與**希望護身符**的卡面**沒有**「在戰鬥場」⇒ 備戰被狙擊 KO 時
+依卡面應該發動，目前不會。另有 5 條備戰 KO 路徑（`hitBenchAll`／`bench-hit-N`／
+`snipe-60-ex`／`applyDamageToAllOpp` 的 bench 段／`dragapult-snipe`）**根本沒呼叫**
+`fireDefenderOnKO`。
+⚠ 本版不動的理由：那兩個效果都會 `withPending` 開 picker，而 `hitBenchAll` 這類
+一次 KO 多隻的路徑會連開多個 picker（互相覆蓋），屬於另一個維度的工程風險，
+需要 pending 佇列化才安全。**要請站長裁示要不要開這一輪。**
+
+### 4. 守衛
+
+`scripts/test-v6259-ko-prize-adjust-central.mjs`（19 項，BASE 11 FAIL 且**各自紅**）：
+- A1~A5 行為端：主管線／中央 helper／手牌 0 張／備戰 KO／一次 KO 兩隻，
+  每條都斷言「鬆口氣 log **恰好** N 次」＋獎賞張數。
+- B1~B7 依卡面**不該**觸發：效果 KO／放指示物／中毒檢查／無桃歹郎ex／特性被消除，
+  ＋中央述詞單元測（`koByAttackDamage=false` ⇒ 0），＋一般寶可夢正對照。
+- C1 兩張表名稱不得相交（防同一效果掛兩個 hook ⇒ v6.120 型雙觸發）。
+- C2 下限斷言（表被清空就紅）。C3 每個 key 都要有 `static/cards` 卡面佐證且逐字含
+  「獎賞卡」「昏厥」「傷害」。
+- C4 **跨管線等價**：`PASSIVE_ON_KO` ∪ 新表的每個成員，兩條管線 KO 後攻擊方
+  獎賞／手牌張數必須相同（＝這次 bug 的通用防線），且至少驗到 3 個成員。
+- C5 源碼掃描：`PASSIVE_ON_KO` 區塊內不得出現 `prizes:` 寫入（附正對照）。
+- C6 兩條管線都要呼叫中央述詞，engine 端恰好 1 次。
+
+`scripts/test-v6259-perf.mjs`：KO 路徑 `applyAction` 中位數
+**BASE 0.19860 → v6.259 0.19526 ms/attack**（同機同 fixture，N=3000×3）；
+中央述詞命中 0.000666 ms/call、無特性早退 0.000165 ms/call。
+
+突變測試 6 個，全部紅在預期那一條：
+M1 engine 不加修正 → A1/C4；M2 `koPrizesAdjusted` 不加 → A2~A5/C4；
+M3 拿掉 `koByAttackDamage` gate → B7；M4 拿掉特性有效性 gate → B5；
+M5 拿掉桃歹郎ex 條件 → B4；M6 鬆口氣重複註冊進 `PASSIVE_ON_KO` → C1。
+⚠ M3 第一次跑 **0 紅**（原本的 B1/B2 走的是呼叫端的外層 gate，測不到函式內層），
+依紀律補了 B7 直呼中央述詞的單元測才測得到。
+
+⚠ 動到 effects.ts / engine.ts ⇒ `update-tournament.bat` ＋ `redeploy-oracle.bat` 都要跑。
+
 ## v6.258 — `PASSIVE_ATTACK_BONUS`「主詞」維度：自指型被動必須 holder === attacker
 
 BASE `e0c80a56cdd172a988a984ab93f79010123d6e46`（v6.257）。

@@ -914,6 +914,11 @@ export function koPrizesAdjusted(
     //   ⭐ 接在本中央函式＝一次涵蓋註解自述的 18+ 條 KO 路徑（狙擊／指示物／手動 KO…）。
     //   ⚠ 已在 koByAttackDamage gate 內 → 效果KO／checkup KO 自動不觸發，符合卡面。
     adjust += legendPeakPrizeReduction(s, koInst, koCard, defenderIdx, pool, true);
+    // ⭐⭐⭐ v6.259 中央收斂：「被 KO 時**修改獎賞卡張數**」的被 KO 者自身特性
+    //   （願增猿ex｜鬆口氣）—— 見 PASSIVE_KO_PRIZE_ADJUST 的註解。
+    const _v6259 = koVictimAbilityPrizeAdjust(s, koInst, koCard, defenderIdx, pool, true);
+    adjust += _v6259.adjust;
+    for (const _line of _v6259.logs) s = addLog(s, _line, defenderIdx);
     if (isExAttacker && koCard.pokemonType === 'Darkness' && hasEffectiveKageHide(s, defenderIdx, pool)) {
       adjust -= 1;
     }
@@ -16710,26 +16715,14 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
       params: { privateReveal: true },
     });
   }],
-  // 願增猿ex(H) | 鬆口氣 — 場上有桃歹郎ex 則對手 pendingPrize -1
-  ['鬆口氣', (state, dIdx, aIdx, pool, _defCard) => {
-    const me = state.players[dIdx];
-    const all = [...(me.active ? [me.active] : []), ...me.bench];
-    const hasMomotaroEx = all.some(inst => {
-      const c = pool.get(inst.cardId);
-      return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');
-    });
-    if (!hasMomotaroEx) return state;
-    // v5.466 自動給獎賞後 pendingPrizes 恆 0；改為 claw-back：從攻擊方手牌取回剛自動拿的 1 張獎賞卡
-    //   放回攻擊方獎賞堆（= 對手獲得的獎賞 -1）。PASSIVE_ON_KO 緊接 addPendingPrize 之後執行，
-    //   故攻擊方手牌最後 1 張即剛拿的獎賞卡。攻擊方手牌空（理論不會，KO 必先發獎賞）則不動。
-    const atk = state.players[aIdx];
-    if (atk.hand.length === 0) return state;
-    const clawed = atk.hand[atk.hand.length - 1];
-    const players2 = [...state.players] as [PlayerState, PlayerState];
-    players2[aIdx] = { ...atk, hand: atk.hand.slice(0, -1), prizes: [...atk.prizes, clawed] };
-    return addLog({ ...state, players: players2 },
-      '「鬆口氣」啟動：場上有桃歹郎ex → 對手獲得的獎賞卡 -1（取回剛拿的 1 張）', dIdx);
-  }],
+  // ⭐⭐⭐ v6.259：願增猿ex｜鬆口氣已**移出 PASSIVE_ON_KO**，改接 PASSIVE_KO_PRIZE_ADJUST。
+  //   原因：它的舊實作是「從攻擊方手牌把剛拿的獎賞卡拿回來」（claw-back），
+  //   而 claw-back **依賴 addPendingPrize 已經跑過**。兩條管線順序相反：
+  //     ・engine.ts 主 ATTACK：addPendingPrize → PASSIVE_ON_KO（恰好可行）
+  //     ・effects.ts dealAttackDamageToTarget：fireDefenderOnKO → addPendingPrize（順序相反）
+  //   → 走中央 helper 的招式（超級路卡利歐ex｜波動突刺等）手牌空時完全不發動，
+  //     手牌非空時更糟：把攻擊方一張**真的手牌**塞進獎賞堆（且那張多抽的獎賞已經被看過）。
+  //   → 改成「獎賞張數修正子」後，根本不存在順序依賴。
   // v2.998 沙漠蜻蜓｜沙之羽擊 — 在戰鬥場被招式 KO 時，將對手牌庫上方 2 張卡丟棄
   // 卡面：「進化時 + 被招式 KO 時，各可使用 1 次」— 此處為 KO 端，進化端走 regA。
   // PASSIVE_ON_KO 只在「被招式 KO」時觸發（engine 篩選），不會誤觸特性 KO。
@@ -16783,6 +16776,86 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
     );
   }],
 ]);
+
+/**
+ * ⭐⭐⭐ v6.259 中央收斂：「被 KO 時直接改變對手獲得的獎賞卡張數」的防守方特性。
+ *
+ * 為什麼不能繼續放在 PASSIVE_ON_KO：
+ *   PASSIVE_ON_KO 在兩條 KO 管線中的執行點**相對於 addPendingPrize 是相反的**：
+ *     ・engine.ts 主 ATTACK 管線：addPendingPrize → PASSIVE_ON_KO
+ *     ・effects.ts dealAttackDamageToTarget / snipe-multi / clone-strike：
+ *       fireDefenderOnKO（→PASSIVE_ON_KO） → addPendingPrize
+ *   任何「要動獎賞」的 on-KO 特性寫在 PASSIVE_ON_KO 裡都會兩邊不一致。
+ *   → 改成**獎賞張數的修正子**，在「算獎賞張數」的那一刻就算進去，
+ *     順序依賴從設計上消失（跟 影藏 / 古舊能量 / 傳說的山頂 同一類）。
+ *
+ * ⭐ 卡面逐字（static/cards 台灣官方）：
+ *   願增猿ex｜鬆口氣（SV6a 10619 / SV8a 11628）
+ *   「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，
+ *     若自己的場上有「桃歹郎【ex】」，則被獲得的獎賞卡減少1張。」
+ *   ⇒ ① 只限「受到對手招式的**傷害**而昏厥」（koByAttackDamage），
+ *        效果 KO（嗡嗡榍石/斧擊衝撞）、放指示物 KO（咒詛炸彈）、
+ *        中毒/灼傷檢查階段 KO、自傷 KO **都不觸發**；
+ *      ② 卡面**沒有**「在戰鬥場」—— 備戰區被狙擊 KO 也算（對比：光子纜線/沙之羽擊/
+ *        炸裂針/沉重接力棒 都寫了「在戰鬥場」）。
+ */
+export type KoPrizeAdjustFn = (
+  state: GameState,
+  koInst: CardInstance,
+  koCard: Card,
+  /** 被 KO 那一方（特性持有者的擁有者） */
+  dIdx: 0 | 1,
+  pool: Map<string, Card>,
+) => { adjust: number; log?: string };
+export const PASSIVE_KO_PRIZE_ADJUST = new Map<string, KoPrizeAdjustFn>([
+  ['鬆口氣', (state, _koInst, _koCard, dIdx, pool) => {
+    const me = state.players[dIdx];
+    const all = [...(me.active ? [me.active] : []), ...me.bench];
+    const hasMomotaroEx = all.some(inst => {
+      const c = pool.get(inst.cardId);
+      return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');
+    });
+    if (!hasMomotaroEx) return { adjust: 0 };
+    return { adjust: -1, log: '「鬆口氣」啟動：場上有桃歹郎ex → 對手獲得的獎賞卡減少 1 張' };
+  }],
+]);
+
+/**
+ * ⭐⭐⭐ v6.259 唯一入口：算「被 KO 者自身特性」對獎賞張數的修正。
+ * 兩條算獎賞的管線都只能呼叫這一支：
+ *   ・effects.ts `koPrizesAdjusted`（涵蓋 effects.ts 側全部 KO 路徑）
+ *   ・engine.ts 主 ATTACK 管線的 inline 獎賞計算
+ * ⭐ 因為只在「算張數」那一刻呼叫一次，**結構上不可能觸發兩次**。
+ * @param koByAttackDamage 是否「受對手招式的傷害而昏厥」（效果/指示物/檢查階段 KO = false）
+ */
+export function koVictimAbilityPrizeAdjust(
+  state: GameState,
+  koInst: CardInstance | null | undefined,
+  koCard: Card | null | undefined,
+  dIdx: 0 | 1,
+  pool: Map<string, Card>,
+  koByAttackDamage: boolean,
+): { adjust: number; logs: string[] } {
+  if (!koByAttackDamage || !koInst || !koCard?.abilities) return { adjust: 0, logs: [] };
+  // ⭐ 位置：純粹是為了問「這個特性此刻還算不算數」（熔岩洞/初始化/監視塔…），
+  //   不是卡面的發動條件 —— 鬆口氣卡面沒有「在戰鬥場」。
+  //   呼叫點都在「被 KO 者還在場上」時，找不到就退回 'active'（主管線的情形）。
+  const _p = state.players[dIdx];
+  const _loc: 'active' | 'bench' =
+    _p.bench.some(b => b.iid === koInst.iid) ? 'bench' : 'active';
+  let adjust = 0;
+  const logs: string[] = [];
+  for (const ab of koCard.abilities) {
+    const fn = PASSIVE_KO_PRIZE_ADJUST.get(ab.name);
+    if (!fn) continue;
+    if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, _loc, pool)) continue;
+    const r = fn(state, koInst, koCard, dIdx, pool);
+    if (r.adjust === 0) continue;
+    adjust += r.adjust;
+    if (r.log) logs.push(r.log);
+  }
+  return { adjust, logs };
+}
 
 /** 受招式傷害時的廣義 hook(造成 ≥1 傷害即觸發，不需 KO) */
 export type PassiveOnDamagedFn = (
