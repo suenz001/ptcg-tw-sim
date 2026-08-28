@@ -19,6 +19,7 @@ import {
   passiveImmunityDamageBlock,
   passiveCoinImmunity,
   TOOL_ATTACK_BONUS, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
+  collectPassiveAttackBonuses,   // v6.258 攻擊方被動加成唯一 dispatch
   JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS,
   // v5.190：中立中心對非規則寶可夢免疫招式傷害（玩家回報奧利瓦ex 油之機關槍）
   wouldNeutralCenterBlock,
@@ -590,32 +591,12 @@ function computeOliveOilBuff(
       if (b > 0) bonus += b;
     }
   }
-  // 2. PASSIVE_ATTACK_BONUS — iterate attacker 場上所有寶可夢的 abilities
-  const processedNoStack = new Set<string>();
-  const attAll: CardInstance[] = [
-    ...(attacker.active ? [attacker.active] : []),
-    ...attacker.bench,
-  ];
-  for (const inst of attAll) {
-    const c = pool.get(inst.cardId);
-    if (!c?.abilities) continue;
-    // 監視塔擋【無】寶可夢被動特性
-    if (watchtowerActive && c.pokemonType === 'Colorless') continue;
-    const _loc: 'active' | 'bench' = attacker.active?.iid === inst.iid ? 'active' : 'bench';
-    for (const ab of c.abilities) {
-      const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
-      if (!fn) continue;
-      // ⭐ v6.202：上面那行只擋掉「火箭隊的監視塔」一種來源 —— effects.ts:8149 的同一段
-      //   早就過了 isAbilityHolderEffective，這份（超級進化 multi-target 路徑）漏掉，
-      //   兩份實作漂了。接上同一個中央述詞。
-      if (!isAbilityHolderEffective(st, inst, c, actorIdx, ab.name, _loc, pool)) continue;
-      if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStack.has(ab.name)) continue;
-      const b = fn(attackerCard, defenderCard, st, actorIdx, pool);
-      if (b > 0) {
-        if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) processedNoStack.add(ab.name);
-        bonus += b;
-      }
-    }
+  // 2. PASSIVE_ATTACK_BONUS — ⭐ v6.258 改接中央 dispatch（原本這裡是第三份手抄迴圈）
+  //   v6.202 曾因為這份漏接特性消除閘而與 effects.ts 那份漂移；v6.258 直接收斂成同一個函式，
+  //   主詞閘（自指型必須 holder === attacker）也一併吃到。
+  for (const { bonus: b } of collectPassiveAttackBonuses(
+    st, attacker, actorIdx, attacker.active, attackerCard, defenderCard, pool)) {
+    bonus += b;
   }
   return bonus;
 }

@@ -25,6 +25,7 @@ export { isBasicPokemonCard, isBasicPokemonOnField, isRulePokemon, isBasicEnergy
 import {
   TRAINER_EFFECTS, RESOLVERS, ATTACK_PRE, ATTACK_POST, ABILITY_EFFECTS, canPlayTrainer,
   PASSIVE_DAMAGE_REDUCE, PASSIVE_IMMUNITY, PASSIVE_RETALIATION, PASSIVE_ATTACK_BONUS, PASSIVE_ATTACK_NO_STACK,
+  collectPassiveAttackBonuses,   // v6.258 攻擊方被動加成唯一 dispatch
   PASSIVE_DAMAGE_REDUCE_COND, passiveReduceAppliesAtLocation,
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
@@ -5390,39 +5391,16 @@ function handlePlaying(
     }
 
     // Wave 42：被動特性 +N 攻擊傷害（攻擊方場上）— 例如 竹蘭的羅絲雷朵｜輝煌聲援 對「竹蘭的」寶可夢 +30
-    // P2-3 fix：「大方」等特性，明文「不重複」，需 dedup by ability name。
-    // P2-4 fix：火箭隊的監視塔在場時，【無】寶可夢的被動特性應被消除。
+    // ⭐ v6.258：原本這裡自己寫一份迴圈（全站共三份）。收斂到中央 dispatch
+    //   collectPassiveAttackBonuses —— 監視塔壓制【無】／特性消除閘／
+    //   PASSIVE_ATTACK_NO_STACK dedup／⭐主詞閘（自指型必須 holder === attacker）
+    //   全部只有一份實作。這裡只負責加總與寫 log／formula。
     if (baseDamage > 0) {
-      const attAll: CardInstance[] = [
-        ...(attacker.active ? [attacker.active] : []),
-        ...attacker.bench,
-      ];
-      // v2.42 Bug 修正：原本所有 PASSIVE_ATTACK_BONUS 都 dedup by ability name（一張只算 1 次），
-      //   但卡面語意只有「大方」等明確規定不疊加。其他如「輝煌聲援」應隨場上同名張數疊加
-      //   （e.g. 2 隻竹蘭的羅絲雷朵 → +60）。改成只 dedup PASSIVE_ATTACK_NO_STACK 中的特性。
-      const processedNoStackNames = new Set<string>();
-      for (const inst of attAll) {
-        const c = pool.get(inst.cardId);
-        if (!c?.abilities) continue;
-        // P2-4: 監視塔壓制【無】寶可夢的被動特性
-        if (isColorlessAbilityBlocked(state, c, pool)) continue;
-        for (const ab of c.abilities) {
-          const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
-          if (!fn) continue;
-          if (!isAbilityHolderEffective(state, inst, c, aIdx, ab.name, attacker.active?.iid === inst.iid ? 'active' : 'bench', pool)) continue; // v5.471 holder 特性消除
-          // 卡面明文「不重複」的特性 dedup by name；其他特性每隻場上寶可夢都獨立加成
-          if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStackNames.has(ab.name)) continue;
-          // v2.133：簽名擴充 — 把 defenderCard 也傳進去（複眼 等需要看對手卡）
-          // v2.278：再擴 state / aIdx / pool — 讓「大將（依對手獎賞數）」「激動力量
-          //         （場上有 Darkness Mega ex）」這類依場上局勢的特性能拿到資訊
-          const bonus = fn(attackerCard, defenderCard, workingState, aIdx, pool);
-          if (bonus > 0) {
-            if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) processedNoStackNames.add(ab.name);
-            baseDamage += bonus;
-            workingState = addLog(workingState, `「${ab.name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
-            formula.push({ sign: '+', value: bonus, label: ab.name });
-          }
-        }
+      for (const { name, bonus } of collectPassiveAttackBonuses(
+        workingState, attacker, aIdx, attacker.active, attackerCard, defenderCard, pool)) {
+        baseDamage += bonus;
+        workingState = addLog(workingState, `「${name}」啟動：${attackerCard.name} 招式傷害 +${bonus}`, aIdx);
+        formula.push({ sign: '+', value: bonus, label: name });
       }
     }
 

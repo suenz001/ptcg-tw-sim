@@ -546,8 +546,11 @@ const scanSites=(files)=>{
 };
 const realFiles=walk(join(ROOT,'src/lib/game')).map(p=>[relative(ROOT,p).split('\\').join('/'),readFileSync(p,'utf8')]);
 const sites=scanSites(realFiles);
-T('20a. 掃描器下限：全站 passive 消費點掃到 ≥90 個（掃不到＝掃描器壞了）',()=>{
-  assert.ok(sites.length>=90,'只掃到 '+sites.length+' 個');
+// ⚠ v6.258：下限 90 → 85。PASSIVE_ATTACK_BONUS 的三份手抄 dispatch 迴圈
+//   （engine.ts／effects.ts／mega_decks.ts）收斂成單一 collectPassiveAttackBonuses，
+//   消費點淨減 2（3 → 1），實測 90 → 88。下限仍高於現值以保留「掃描器壞掉」的偵測力。
+T('20a. 掃描器下限：全站 passive 消費點掃到 ≥85 個（掃不到＝掃描器壞了）',()=>{
+  assert.ok(sites.length>=85,'只掃到 '+sites.length+' 個');
 });
 T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那一族又隱形了）',()=>{
   const lit=sites.filter(s=>s.kind==='lit').length, reg=sites.filter(s=>s.kind==='reg').length;

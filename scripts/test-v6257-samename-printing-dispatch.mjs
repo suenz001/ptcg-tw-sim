@@ -329,20 +329,22 @@ const RISKY = new Set();
 //   以 **原始碼片段**（不是行號）比對，程式一改動就失效 ⇒ 不會變成永久免死金牌。
 const ALLOW = [
   // 電氣球（Tool）卡面：「附有這張卡的『皮卡丘ex』…」— 條件本來就是卡名，與特性無關。
-  "if (attCard.name !== '皮卡丘ex') return 0;",
+  "if (attCard.name !== '皮卡丘ex') return 0;",   // ⭐ 行為端證明：test-v6258 W1
   // regA('大力鱷',0) 內的 trigger-source fallback；按鈕是否出現已由 card.abilities 決定。
-  ": allPokes.find(c => pool.get(c.cardId)?.name === '大力鱷');",
-  // PASSIVE_ATTACK_BONUS 的 key 是**特性名**（'憤怒穴' / '大將'），engine 迭代
-  // 場上卡的 abilities 才 dispatch ⇒ 沒印該特性的印刷根本不會呼叫到；卡名 gate 是額外保險。
-  "if (att.name !== '棄世猴') return 0;",
-  "if (att.name !== '仆斬將軍') return 0;",
+  ": allPokes.find(c => pool.get(c.cardId)?.name === '大力鱷');",   // ⭐ 行為端證明：test-v6258 W2
+  // ⚠⚠ v6.258 移除：這兩條原本的理由是「沒印該特性的印刷根本不會呼叫到」——**推論錯了**。
+  //   dispatch 迴圈掃的是整個己方場找持有者，加成卻套在 attackerCard 身上，
+  //   「沒印該特性的同名印刷當攻擊者 ＋ 有印的在備戰」照樣加成（實測 40→100、100→220）。
+  //   v6.258 已改成中央主詞閘（PASSIVE_ATTACK_SELF_SUBJECT），那兩個卡名 gate 也一併移除，
+  //   本白名單條目因此變成死條目 ⇒ 依 E3 必須刪掉。
+  //   ⭐ 剩餘每一條白名單的**行為端**證明見 scripts/test-v6258-passive-attack-subject.mjs 的 W1~W4。
   // 願增猿ex｜鬆口氣 卡面：「若自己的場上有『桃歹郎ex』」— 條件是卡名。
-  "return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');",
+  "return c?.name === '桃歹郎ex' || (c?.name === '桃歹郎' && c?.subtype === 'ex');",   // ⭐ 行為端證明：test-v6258 W3
   // 爆炸頭水牛｜捲牆 卡面：「只要這隻寶可夢**與自己的其他「爆炸頭水牛」**在場上…」——
   //   partner 的條件是**卡名**（卡面沒有要求 partner 也帶特性），所以
   //   SV8 087/106（abilities=null）確實算數量。持有者那一端的 gate 在同函式下方
   //   （`card.abilities?.some(a => a.name === '捲牆')` + isAbilityHolderEffective）。
-  "const buffaloByName = all.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;",
+  "const buffaloByName = all.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;",   // ⭐ 行為端證明：test-v6258 W4
 ];
 check('E1【正對照】掃描器餵違規樣本必須抓得到（否則它只是安慰劑）', () => {
   const victim = [...RISKY][0];
@@ -376,7 +378,9 @@ check('E2 全站掃描：沒有「用卡名決定特性行為卻不驗證印刷�
       viols.push(`${relative(ROOT, p).replace(/\\/g, '/')}:${v.line} [${v.name}] ${v.src.slice(0, 120)}`);
     }
   }
-  assert.ok(totalHits >= 20, `掃描器下限失敗：只掃到 ${totalHits} 個卡名相等比對（預期 ≥20）`);
+  // ⚠ v6.258：下限自 20 調為 15 —— 收斂主詞閘時移除了 3 個「假裝自指」的卡名 gate
+  //   （棄世猴／仆斬將軍／電蜘蛛），實測命中數 20 → 17。下限仍高於現值以保留掃描器壞掉的偵測力。
+  assert.ok(totalHits >= 15, `掃描器下限失敗：只掃到 ${totalHits} 個卡名相等比對（預期 ≥15）`);
   assert.deepStrictEqual(viols, [], `\n  ${viols.join('\n  ')}\n`);
 });
 check('E3 白名單不得有死條目（程式改過就要回來重判）', () => {

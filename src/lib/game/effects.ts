@@ -4191,14 +4191,22 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
   state?: GameState,
   aIdx?: 0 | 1,
   pool?: Map<string, Card>,
+  // ⭐ v6.258：特性**持有者**的實體。自指型（卡面「這隻寶可夢使用的招式」）條目需要它
+  //   才能讀持有者自己的狀態（如 憤怒穴 的傷害指示物數）。由中央 dispatch
+  //   collectPassiveAttackBonuses 一律傳入；未列入 PASSIVE_ATTACK_SELF_SUBJECT 的
+  //   全場型條目可以忽略。
+  holderInst?: CardInstance,
 ) => number>([
   // 竹蘭的羅絲雷朵｜輝煌聲援 — 只要這隻在場上，自己「竹蘭的」寶可夢招式傷害 +30
   ['輝煌聲援', (att) => att.name.includes('竹蘭的') ? 30 : 0],
-  // v2.133 電蜘蛛｜複眼 — 自己的「電蜘蛛」攻擊時，對「擁有特性」的對手戰鬥場 +50
-  //   只在 attacker 真的是電蜘蛛時觸發（避免另一隻電蜘蛛在備戰也疊加）
+  // 電蜘蛛｜複眼 — 卡面逐字：「**這隻寶可夢**使用的招式，對對手的戰鬥場的擁有特性的
+  //   寶可夢造成的傷害「+50」點。」⇒ 主詞＝持有者本人（自指型）。
   // v6.049：「擁有特性的」要看**當下有效的**特性（監視塔/初始化/暗夜羽擊/黏著束縛消除後就不算）
-  ['複眼', (att, def, state, aIdx, pool) => {
-    if (att.name !== '電蜘蛛') return 0;
+  // ⭐ v6.258：原本靠 `att.name !== '電蜘蛛'` 假裝自指 —— att 是**攻擊者**的卡，
+  //   dispatch 掃的卻是整個己方場找持有者 ⇒ 沒印「複眼」的 電蜘蛛（SV11W 三張）當攻擊者、
+  //   有印的（SV6a/MC）在備戰時會誤加成（實測 放電 50 → 100）。
+  //   改由中央 PASSIVE_ATTACK_SELF_SUBJECT 主詞閘保證 holder === attacker。
+  ['複眼', (_att, def, state, aIdx, pool) => {
     if (!def) return 0;
     if (!state || aIdx == null || !pool) return (def.abilities?.length ?? 0) > 0 ? 50 : 0;
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -4230,18 +4238,17 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
 
   // v2.278 Wave 4：「自身招式」+ 對局狀態判定 ─────────────────────────
   //
-  // 仆斬將軍｜大將（M2a/MC Stage2 170HP）—
-  //   「這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害，
-  //    依對手已經獲得的獎賞卡每 1 張『+30』點。」
-  //   - att.name === '仆斬將軍' gate：只有仆斬將軍自己攻擊時才生效
-  //     （PASSIVE_ATTACK_BONUS engine 對攻擊方場上每張卡都會 invoke 此 fn，
-  //     但 attackerCard 永遠是攻擊發動者本人，所以這個 gate 等價於「只在
-  //     仆斬將軍自己攻擊時加成」）。
+  // 仆斬將軍｜大將（M2a Stage2 170HP）— 卡面逐字：
+  //   「**這隻寶可夢**使用的招式，對對手的戰鬥寶可夢造成的傷害，
+  //    依對手已經獲得的獎賞卡每1張「+30」點。」⇒ 主詞＝持有者本人（自指型）。
   //   - 對手「已獲得獎賞」= 6 - opp.prizes.length（剩餘的相反）。
-  //   - 場上有多隻仆斬將軍時，PASSIVE 會疊加 — 但 PTCG 規則 Stage2 同名最多 4 張、
-  //     場上很難有 2 隻活著的仆斬將軍同時當 attacker 與 helper；不做 dedup。
-  ['大將', (att, _def, state, aIdx) => {
-    if (att.name !== '仆斬將軍') return 0;
+  // ⭐ v6.258：原本 `att.name !== '仆斬將軍'` 的註解寫「attackerCard 永遠是攻擊發動者本人，
+  //   所以這個 gate 等價於只在仆斬將軍自己攻擊時加成」—— **推論錯了**：dispatch 迴圈掃的是
+  //   整個己方場找持有者，attacker 是誰跟 holder 是誰是兩件事。仆斬將軍【MC 473/742・H】
+  //   這張印刷沒有「大將」，它當攻擊者時只要備戰有一隻 M2a 版就會誤加成
+  //   （實測 肘擊 40 → 100）。改由中央 PASSIVE_ATTACK_SELF_SUBJECT 主詞閘保證
+  //   holder === attacker（順帶治好「兩隻都有特性時備戰疊加」）。
+  ['大將', (_att, _def, state, aIdx) => {
     if (!state || aIdx == null) return 0;
     const dIdx = (1 - aIdx) as 0 | 1;
     const taken = 6 - state.players[dIdx].prizes.length;
@@ -4251,11 +4258,12 @@ export const PASSIVE_ATTACK_BONUS = new Map<string, (
   // 飯匙蛇｜激動力量（M2 Basic 120HP）—
   //   「若自己的場上有【惡】屬性的『超級進化寶可夢【ex】』，
   //    則這隻寶可夢使用的招式，對對手的戰鬥寶可夢造成的傷害『+120』點。」
-  //   - att.name === '飯匙蛇' gate：只有飯匙蛇自己攻擊時才生效。
+  //   ⭐ v6.258：主詞是「**這隻寶可夢**使用的招式」⇒ 自指型，列入
+  //     PASSIVE_ATTACK_SELF_SUBJECT，由中央閘保證 holder === attacker
+  //     （飯匙蛇目前只有 M2 一種印刷，但主詞判定不該依賴「剛好只有一張」）。
   //   - 條件：自方場上 active 或 bench 任一張為 Darkness 屬 + subtype='ex' + name 開頭「超級」
   //     （Mega ex 識別模式：與專案其他地方一致，見 prizesForKO / pokemon_search.ts 等）。
-  ['激動力量', (att, _def, state, aIdx, pool) => {
-    if (att.name !== '飯匙蛇') return 0;
+  ['激動力量', (_att, _def, state, aIdx, pool) => {
     if (!state || aIdx == null || !pool) return 0;
     const me = state.players[aIdx];
     const all = [
@@ -4297,6 +4305,96 @@ export const PASSIVE_ATTACK_NO_STACK: ReadonlySet<string> = new Set([
   '大將',      // (B) 仆斬將軍 — 「這隻寶可夢使用的招式」依對手獎賞數
   '複眼',      // (B) 電蜘蛛 — 「自己的『電蜘蛛』攻擊時」對擁有特性的對手 +50
 ]);
+
+/**
+ * ⭐⭐⭐ v6.258 中央述詞：這個被動加成的「主詞」是不是**特性持有者本人**？
+ *
+ * 卡面逐字（`static/cards`，abilities[].effect）：
+ *   ・仆斬將軍｜大將    「**這隻寶可夢**使用的招式，對對手的戰鬥寶可夢造成的傷害，依對手已經獲得的獎賞卡每1張「+30」點。」
+ *   ・電蜘蛛｜複眼      「**這隻寶可夢**使用的招式，對對手的戰鬥場的擁有特性的寶可夢造成的傷害「+50」點。」
+ *   ・棄世猴｜憤怒穴    「若**這隻寶可夢**身上放置有2個以上的傷害指示物，則**這隻寶可夢**使用的招式，對對手的戰鬥寶可夢造成的傷害「+120」點。」
+ *   ・飯匙蛇｜激動力量  「若自己的場上有【惡】屬性的「超級進化寶可夢【ex】」，則**這隻寶可夢**使用的招式，對對手的戰鬥寶可夢造成的傷害「+120」點。」
+ *   ⇒ 主詞是「這隻寶可夢」＝**持有者本人** ⇒ 持有者必須就是現在這個攻擊者。
+ *
+ * 其餘條目主詞是「只要這隻寶可夢在場上，**自己的**〈某類〉寶可夢使用的招式…」＝**全場型**
+ *   （輝煌聲援／力之鹽／皇家聲援／鈷藍指令／大方／原始心得／大晴天／勝利聲援）：
+ *   持有者只要在場上就對符合條件的友方攻擊者生效，持有者本人不必是攻擊者
+ *   ⇒ **絕不可**列入本 Set（列入會把這 8 個特性整組關掉）。
+ *
+ * ⚠ 為什麼需要這個閘：dispatch 迴圈掃的是**整個己方場**找「印著這個特性的卡」，
+ *   而加成卻套在 `attackerCard` 身上。自指型若只用 `att.name === '卡名'` 當 gate，
+ *   遇到「**同名不同印刷、其中一版沒印這個特性**」就會誤加成 —— v6.257 實測：
+ *   仆斬將軍【MC】肘擊 40→100、棄世猴【M5】幽靈打擊 100→220（直接 KO）、
+ *   電蜘蛛【SV11W】放電 50→100。
+ *
+ * ⚠ 與「同名被動特性應疊加」（v5.725）不衝突：自指型天生只有一個持有者能通過本閘，
+ *   全場型不受本閘影響、仍照舊 per-holder 疊加（唯 PASSIVE_ATTACK_NO_STACK 例外）。
+ */
+export const PASSIVE_ATTACK_SELF_SUBJECT: ReadonlySet<string> = new Set([
+  '大將',      // 仆斬將軍 — 「這隻寶可夢使用的招式…依對手已經獲得的獎賞卡每1張+30」
+  '複眼',      // 電蜘蛛   — 「這隻寶可夢使用的招式…對擁有特性的對手戰鬥寶可夢+50」
+  '憤怒穴',    // 棄世猴   — 「若這隻寶可夢身上…2個以上傷害指示物，則這隻寶可夢使用的招式+120」
+  '激動力量',  // 飯匙蛇   — 「…則這隻寶可夢使用的招式…+120」
+]);
+
+/**
+ * ⭐⭐⭐ v6.258：攻擊方場上被動特性 +N 的**唯一 dispatch 入口**。
+ *
+ * 三個消費點共用這一份（呼叫端只負責寫 log／formula／加總）：
+ *   1. engine.ts     ATTACK 主管線
+ *   2. effects.ts    applyAttackerActiveDamageBonuses（狙擊／延後傷害中央 helper）
+ *   3. mega_decks.ts computeOliveOilBuff（超級進化 multi-target 路徑）
+ * 之前是三份各寫一次迴圈，v6.202 已經因為其中一份漏接特性消除閘吃過一次虧。
+ * 守衛 `scripts/test-v6258-passive-attack-subject.mjs` Check L2 斷言
+ * `PASSIVE_ATTACK_BONUS.get(` 只出現在本函式內。
+ *
+ * gate 順序（全部是 continue，順序不影響結果，只影響早退成本）：
+ *   ① 火箭隊的監視塔壓制【無】屬性持有者
+ *   ② ⭐ 主詞閘：自指型必須 holder === attacker
+ *   ③ 特性此刻是否被消除（isAbilityHolderEffective：初始化／暗夜羽擊／黏著束縛／熔岩洞…）
+ *   ④ PASSIVE_ATTACK_NO_STACK 卡面明文「不重複」者 dedup by 特性名
+ */
+export function collectPassiveAttackBonuses(
+  state: GameState,
+  attackerState: PlayerState,
+  aIdx: 0 | 1,
+  attackerInst: CardInstance,
+  attackerCard: Card,
+  defenderCard: Card | undefined,
+  pool: Map<string, Card>,
+): { name: string; bonus: number }[] {
+  const out: { name: string; bonus: number }[] = [];
+  const attAll: CardInstance[] = [
+    ...(attackerState.active ? [attackerState.active] : []),
+    ...attackerState.bench,
+  ];
+  // ① 火箭隊的監視塔：雙方【無】寶可夢特性失效
+  const sdCard = state.activeStadium ? pool.get(state.activeStadium.cardId) : undefined;
+  const watchtowerBlocks = !!sdCard && ROCKET_WATCHTOWER_STADIUMS.has(sdCard.name);
+  const processedNoStack = new Set<string>();
+  for (const inst of attAll) {
+    const c = pool.get(inst.cardId);
+    if (!c?.abilities) continue;
+    if (watchtowerBlocks && c.pokemonType === 'Colorless') continue;
+    const loc: 'active' | 'bench' = attackerState.active?.iid === inst.iid ? 'active' : 'bench';
+    for (const ab of c.abilities) {
+      const fn = PASSIVE_ATTACK_BONUS.get(ab.name);
+      if (!fn) continue;
+      // ② ⭐ 主詞閘（v6.258）
+      if (PASSIVE_ATTACK_SELF_SUBJECT.has(ab.name) && inst.iid !== attackerInst.iid) continue;
+      // ③ 特性此刻有沒有被消除
+      if (!isAbilityHolderEffective(state, inst, c, aIdx, ab.name, loc, pool)) continue;
+      // ④ 卡面明文「不重複」
+      if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && processedNoStack.has(ab.name)) continue;
+      const bonus = fn(attackerCard, defenderCard, state, aIdx, pool, inst);
+      if (bonus > 0) {
+        if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) processedNoStack.add(ab.name);
+        out.push({ name: ab.name, bonus });
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * 特性名 → 判斷是否完全免疫此攻擊。
@@ -8385,26 +8483,12 @@ export function applyAttackerActiveDamageBonuses(
       }
     }
   }
-  // ── 被動特性 +N（攻擊方場上每張卡；PASSIVE_ATTACK_NO_STACK dedup；監視塔壓制【無】）─
-  {
-    const attAll = [aInst, ...attacker.bench];
-    const noStack = new Set<string>();
-    for (const inst of attAll) {
-      const c = pool.get(inst.cardId); if (!c?.abilities) continue;
-      if (_colorlessBlocked(c)) continue;
-      for (const ab of c.abilities) {
-        const fn = PASSIVE_ATTACK_BONUS.get(ab.name); if (!fn) continue;
-        if (!isAbilityHolderEffective(s, inst, c, aIdx, ab.name, aInst.iid === inst.iid ? 'active' : 'bench', pool)) continue;
-        if (PASSIVE_ATTACK_NO_STACK.has(ab.name) && noStack.has(ab.name)) continue;
-        const b = fn(aCard, dCard, s, aIdx, pool);
-        if (b > 0) {
-          if (PASSIVE_ATTACK_NO_STACK.has(ab.name)) noStack.add(ab.name);
-          d += b;
-          s = addLog(s, `「${ab.name}」啟動：${aCard.name} 招式傷害 +${b}`, aIdx);
-          formula.push({ sign: '+', value: b, label: ab.name });
-        }
-      }
-    }
+  // ── 被動特性 +N — ⭐ v6.258 改接中央 dispatch collectPassiveAttackBonuses ─────
+  //   （主詞閘／監視塔／特性消除／NO_STACK dedup 全在中央；這裡只寫 log 與加總）
+  for (const { name, bonus } of collectPassiveAttackBonuses(s, attacker, aIdx, aInst, aCard, dCard, pool)) {
+    d += bonus;
+    s = addLog(s, `「${name}」啟動：${aCard.name} 招式傷害 +${bonus}`, aIdx);
+    formula.push({ sign: '+', value: bonus, label: name });
   }
   // ── 力量蛋白飲（本回合自己【鬥】寶可夢對對手戰鬥位 +30，累加）─────────────
   if (aCard.pokemonType === 'Fighting' && attacker.damageBoostFightingThisTurn) {

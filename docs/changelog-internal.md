@@ -1,5 +1,145 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.258 — `PASSIVE_ATTACK_BONUS`「主詞」維度：自指型被動必須 holder === attacker
+
+BASE `e0c80a56cdd172a988a984ab93f79010123d6e46`（v6.257）。
+來源：Fable 5 對 v6.257 的獨立審查（第三個真 bug；v6.257 的 lint 把它判進白名單放行了）。
+
+### 0. 根因
+
+`PASSIVE_ATTACK_BONUS` 的 dispatch 迴圈掃的是**攻擊方整個場**找「印著這個特性的卡」，
+但加成套在 `attackerCard` 身上 —— **「誰是持有者」與「誰在攻擊」是兩件事**。
+四個卡面主詞為「這隻寶可夢使用的招式」的自指型條目卻只用 `att.name === '卡名'` 當 gate：
+
+| 位置（BASE 行號） | 特性 | 原 gate |
+|---|---|---|
+| `effects.ts:4200` | 複眼（電蜘蛛） | `att.name !== '電蜘蛛'` |
+| `effects.ts:4241` | 大將（仆斬將軍） | `att.name !== '仆斬將軍'` |
+| `effects.ts:4262` | 激動力量（飯匙蛇） | `att.name !== '飯匙蛇'` |
+| `v2999_g3_wave1.ts:405` | 憤怒穴（棄世猴） | `att.name !== '棄世猴'` |
+
+⇒ **同名不同印刷、其中一版沒印該特性**時，「沒特性的那版當攻擊者 ＋ 有特性的在備戰」照樣加成。
+
+**BASE 實測（`scripts/repro_v6258.mjs`）**：
+
+| 攻擊者（無該特性的印刷） | 備戰（有該特性） | BASE | 正確 |
+|---|---|---|---|
+| 仆斬將軍【MC 473/742・H】肘擊 40 | 仆斬將軍【M2a・I】大將 | **100** | 40 |
+| 棄世猴【M5 039/081・J】幽靈打擊 100 | 棄世猴【SV10・I】憤怒穴 | **220（直接 KO）** | 100 |
+| 電蜘蛛【SV11W・I】放電 50 | 電蜘蛛【SV6a・H】複眼 | **100** | 50 |
+
+順帶：`憤怒穴` **不在** `PASSIVE_ATTACK_NO_STACK` ⇒ 場上兩隻 SV10 棄世猴時 BASE 加 **+240**。
+
+⚠ v6.257 白名單的理由「沒印該特性的印刷根本不會呼叫到」是**錯的推論**：
+dispatch 由 holder 的 abilities 驅動，加成落在 attacker 身上。複眼那條甚至沒被 lint 掃到
+（視窗內剛好有 `abilities` 字樣，被 `VERIFY_TOKENS` 誤放行）。
+
+### 1. 卡面主詞全表（`static/cards` `abilities[].effect` 逐字）
+
+| 特性 | 卡 | 卡面主詞 | 分類 | 該不該疊加 |
+|---|---|---|---|---|
+| 大將 | 仆斬將軍 | 「**這隻寶可夢**使用的招式…」 | 自指 | 天然單一持有者 |
+| 複眼 | 電蜘蛛 | 「**這隻寶可夢**使用的招式…」 | 自指 | 同上 |
+| 憤怒穴 | 棄世猴 | 「若**這隻寶可夢**身上…則**這隻寶可夢**使用的招式…」 | 自指 | 同上 |
+| 激動力量 | 飯匙蛇 | 「若自己的場上有…則**這隻寶可夢**使用的招式…」 | 自指 | 同上 |
+| 輝煌聲援 | 竹蘭的羅絲雷朵 | 「只要這隻寶可夢在場上，**自己的**『竹蘭的寶可夢』…」 | 全場 | **疊加**（v5.725 通則） |
+| 力之鹽 | 鹽石巨靈 | 「…**自己的**【鬥】寶可夢…」 | 全場 | 疊加 |
+| 皇家聲援 | 君主蛇ex | 「…**自己的**寶可夢…」 | 全場 | 疊加 |
+| 鈷藍指令 | 鐵頭殼ex | 「…**自己的**「未來」寶可夢（鐵頭殼ex 除外）…」 | 全場 | 疊加 |
+| 原始心得 | 肋骨海龜 | 「…**自己的**寶可夢…對進化寶可夢…」 | 全場 | 疊加 |
+| 大晴天 | 裙兒小姐 | 「…**自己的**【草】或【火】寶可夢…」 | 全場 | 疊加 |
+| 勝利聲援 | 比克提尼 | 「…**自己的**【火】進化寶可夢…」 | 全場 | 疊加 |
+| 大方 | 赫普的卡比獸 | 「…**自己的**「赫普的寶可夢」…**無論有多少隻…也不會重複**」 | 全場 | **不疊加**（NO_STACK） |
+
+「該不該疊加」的分界＝**卡面主詞**：自指型天生只有一個持有者能過主詞閘（不存在疊加問題）；
+全場型預設 per-holder 疊加（v5.725 通則），**只有卡面明文「不重複」才進 `PASSIVE_ATTACK_NO_STACK`**。
+⇒ 與 `reference-passive-ability-stacking-per-holder` **不衝突**，兩件事正交。
+
+### 2. 其他 `PASSIVE_*` map 有沒有同型錯誤 → **沒有**
+
+`git grep '<MAP>.get(' e0c80a56` 逐一讀過每個 dispatch 迴圈的迭代對象：
+
+| map | 迭代對象 | 主詞風險 |
+|---|---|---|
+| `PASSIVE_ATTACK_BONUS` | **攻擊方整個場**（active + bench） | ⚠ 唯一有風險者 → 本版修 |
+| `PASSIVE_ATTACKER_BUFF` | `attackerCard.abilities`（攻擊者本人） | 無 |
+| `PASSIVE_IMMUNITY` / `PASSIVE_COIN_AVOID` / `PASSIVE_DAMAGE_REDUCE(_COND/_BY_ATTACKER)` | 防守方**那一隻**的 abilities | 無 |
+| `PASSIVE_PREVENT_KO` / `PASSIVE_PREVENT_PRIZE` / `PASSIVE_KO_RETALIATION` / `PASSIVE_ON_KO` | 被 KO／被打的**那一隻** | 無 |
+| `PASSIVE_RETALIATION` / `PASSIVE_ON_DAMAGED` | 受傷的**那一隻** | 無 |
+| `OPP_ENERGY_ATTACH_PASSIVE` | 對手整場，但**事件語意就是 per-holder**（v5.725 已治） | 無 |
+
+### 3. 修法：中央收斂（不是三處各補 if）
+
+`effects.ts`：
+- 新增 `PASSIVE_ATTACK_SELF_SUBJECT`（宣告式主詞表，4 個自指型）。
+- 新增 `collectPassiveAttackBonuses(state, attackerState, aIdx, attackerInst, attackerCard, defenderCard, pool)`
+  ＝**唯一 dispatch**：監視塔【無】壓制 → ⭐主詞閘 → `isAbilityHolderEffective` → `NO_STACK` dedup。
+- Map 型別加第 6 參數 `holderInst`；`憤怒穴` 改讀**持有者實體**的指示物（卡面主詞），
+  未傳入時 fail-closed 回 0。
+- 四個自指型條目移除 `att.name === '卡名'` 假 gate（改由中央閘保證）。
+
+三個消費點改接同一份（原本三份手抄迴圈，v6.202 已因其中一份漏接特性消除閘吃過一次虧）：
+`engine.ts` ATTACK 主管線 ／ `effects.ts applyAttackerActiveDamageBonuses` ／
+`mega_decks.ts computeOliveOilBuff`。
+
+⚠ 一併統一：engine 那份原本 gate 讀 `state`、fn 讀 `workingState`（兩份不同步），
+現在一律用呼叫端傳進來的**當下工作狀態**（effects.ts 那份本來就是這樣）。
+
+### 4. 守衛 `scripts/test-v6258-passive-attack-subject.mjs`（31 條）
+
+- A 卡面逐字（4 自指 + 3 全場 + 三組印刷差異存在）
+- B 誤加成必須消失（含「兩隻憤怒穴」與中央閘單元、holder≠state.active 的單元）
+- C **正對照**：有印該特性的自己攻擊仍加成／全場型仍 per-holder 疊加／
+  **裙兒小姐 SV11B（無大晴天）＋ 備戰 SVM ⇒ 仍 +20**（證明沒把全場型一起關掉）／大方仍不疊加
+- D 三個消費點的**行為端**接線證明（少接一個就紅）
+- L lint：主詞分類器（含正對照）／`PASSIVE_ATTACK_BONUS.get(` 全站唯一且在中央函式內／
+  三個呼叫端清單／SELF_SUBJECT 無死條目
+- W **v6.257 白名單每一條的行為端證明**（電氣球／大力鱷／鬆口氣／捲牆）
+
+**HEAD-FAIL（對 BASE 樹跑）**：21 PASS / **9 FAIL**（B1 B2 B3 B4 B5 L1 L1b L2 L3 各自紅），
+正對照 C/D/W 在 BASE 上全綠 ⇒ 不是「整片紅」。
+
+**突變測試 7 個，全部紅在預期那一條**：
+M1 拿掉主詞閘 → B1~B5；M2 誤把「大晴天」列入 SELF_SUBJECT → C6+L1+L1b；
+M3 拿掉「複眼」→ B3+L1+L1b；M4 engine 消費點不接中央 → C/D/L3 共 10 條；
+M5 憤怒穴改讀 `state.players[i].active` → B6；M6 mega_decks 再寫一份 `.get(` → L2；
+M7 NO_STACK 拿掉「大方」→ C7。
+（M5 第一輪 0 紅 ⇒ 依紀律**先假設守衛沒測到**，補了 B6 單元後才測得到。）
+
+### 5. 既有守衛的下限調整（都是因為這次收斂，不是放水）
+
+- `test-v6257` E2：`totalHits >= 20 → 15`（移除 3 個假自指卡名 gate，實測 20 → 17）。
+  同時**刪掉兩條判錯的白名單**（棄世猴／仆斬將軍），並在其餘 4 條旁註記行為端證明在 test-v6258 的哪一條。
+- `test-v6202` 20a：`sites.length >= 90 → 85`（三份 dispatch 收斂成一份，實測 90 → 88）。
+
+### 6. 效能（Rule 32）
+
+量測腳本 `scripts/perf_v6258_passive_dispatch.mjs`（可對任一棵樹重跑）＋
+CI 守衛 `scripts/test-v6258-perf.mjs`（絕對上限）。
+同機、同 fixture（攻擊方滿場 6 隻全帶被動加成特性）、N=4000×5 取中位數：
+
+| | run1 | run2 |
+|---|---|---|
+| BASE e0c80a56 | 0.1825 ms/attack | 0.1843 ms/attack |
+| v6.258 | **0.1771** | **0.1742** |
+
+主詞閘排在 `if (!fn) continue` 之後 ⇒ 一般卡增量 0 次（早退，Rule 31）。
+`collectPassiveAttackBonuses` 單獨計時 0.0033 ms/call。**無退化。**
+
+### 7. 順帶查證 / 待辦（本版未動）
+
+- **堅果啞鈴實為 4 筆**（v6.257 內部紀錄漏列 `13092`，同為 SV11W 064/086・I）。
+  v6.257 的修法是 per-card 述詞 `cardPrintsAbility` ⇒ 已被覆蓋，無實害，僅枚舉表補正。
+- `USE_HAND_DISCARD_ABILITY` 的 handler 是**死碼**（Map 自 v5.510 起是空的）—— 非 bug，待辦。
+- **爆炸頭水牛兩張的 `abilities[].effect` 夾零寬字元**：實測**無害** ——
+  站內對「捲牆」的判斷全部比對 `a.name`（`'捲牆'`，無零寬），沒有任何一處比對 `effect` 字串；
+  `test-v6202` 20k 的零寬掃描器也是掃**特性名**。⇒ 不動 `static/cards`（改卡資料要校驗和、
+  `index.json` 絕不可重生），列為資料清理待辦。
+- ⚠ **新發現（本版未修，需站長裁示）**：走中央 `dealAttackDamageToTarget` 的延後／狙擊型招式
+  （實測：超級路卡利歐ex｜波動突刺）造成的 KO **不會觸發 `PASSIVE_ON_KO`**
+  （願增猿ex｜鬆口氣 的獎賞 -1 沒發動；engine 主管線的同一個 KO 則正常）。
+  BASE 上就是這樣，**不是本版造成**。屬另一個維度（KO 觸發覆蓋），建議下一輪處理。
+
 ## v6.257 — 「同名不同印刷、卡面內容不同」維度：dispatch 必須確認這張印刷真的印著
 
 BASE `de2113dfd360f58cad3a26bd82484369d2cfa7ff`（v6.256）。

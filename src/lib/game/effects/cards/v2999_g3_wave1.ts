@@ -400,14 +400,18 @@ export function registerV2999G3W1Passives(): void {
   if (_v2999G3W1Registered) return; // idempotent
   _v2999G3W1Registered = true;
 
-  // 棄世猴｜憤怒穴 — 身上 ≥2 指示物時 +120
-  PASSIVE_ATTACK_BONUS.set('憤怒穴', (att, _def, state, aIdx, _pool) => {
-    if (att.name !== '棄世猴') return 0;
-    if (!state || aIdx == null) return 0;
-    const me = state.players[aIdx];
-    if (!me.active) return 0;
-    if (att.name !== '棄世猴') return 0;
-    const counters = Math.floor((me.active.damage ?? 0) / 10);
+  // 棄世猴｜憤怒穴 — 卡面逐字（static/cards/SV10.json id=12797）：
+  //   「若**這隻寶可夢**身上放置有2個以上的傷害指示物，則**這隻寶可夢**使用的招式，
+  //     對對手的戰鬥寶可夢造成的傷害「+120」點。」⇒ 主詞＝持有者本人（自指型）。
+  // ⭐ v6.258：原本 gate 是 `att.name !== '棄世猴'`，但 att 是**攻擊者**的卡，
+  //   dispatch 掃的是整個己方場找持有者 ⇒ 棄世猴【M5 039/081・J】（特性是「不朽身軀」，
+  //   沒有「憤怒穴」）當攻擊者、備戰放一隻 SV10 版，幽靈打擊 100 會變 220 直接 KO（實測）。
+  //   改由中央 PASSIVE_ATTACK_SELF_SUBJECT 主詞閘保證 holder === attacker；
+  //   傷害指示物數也直接讀**持有者實體**（卡面主詞），不再讀 me.active。
+  //   ⚠ holderInst 未傳入時 fail-closed 回 0（不多打），中央 dispatch 一定會傳。
+  PASSIVE_ATTACK_BONUS.set('憤怒穴', (_att, _def, _state, _aIdx, _pool, holderInst) => {
+    if (!holderInst) return 0;
+    const counters = Math.floor((holderInst.damage ?? 0) / 10);
     return counters >= 2 ? 120 : 0;
   });
 
