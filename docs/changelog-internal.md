@@ -1,5 +1,117 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.265 — 開局 CAS 競態：`startGame` 的 `won` 判定（練習模式「手牌無預警重洗」的真因）
+
+BASE `3fd89b566d729ccddebb3014cdcb9d3cd4bd8fd5`（v6.264）。
+
+### 0. 真因（Fable 5 診斷，本版**獨立複驗過**）
+
+`src/lib/game/room-oracle.ts` 的 `oracleTx` 是一個**重試迴圈**：409（CAS 輸掉）或逾時
+都會「重新 `oracleGetRoom` → 對**新**盤面重跑 closure → 再 PUT 一次」。
+而 `startGame`（BASE L625~647）的 `let started = false` 寫在 **`oracleTx` 外面**、
+且每個 attempt **不歸零**：
+
+```
+GET v5 null | PUT#1 → CONFLICT（房間已被寫成 game-B）| GET v6 game-B | PUT#2 → OK
+⇒ startGame 回傳 won = true，但房間 canonical 是 game-B
+```
+
+`+page.svelte:8669` 的 `if (won) { game = _pendingGame; … }` 於是採用**自己的 phantom 局**，
+幾秒後輪詢送來 canonical 局（不同 id）⇒ `resolveRoomUpdate` 第 2 條判 adopt
+⇒ **手牌整份被換掉＝玩家回報的「無預警重洗」**。
+
+⭐⭐⭐ **為什麼修很多次都沒好**：Firestore 版 `src/lib/game/room.ts:929` 用 `runTransaction`，
+回傳值取自**最終那一輪 closure**，語意本來就是對的 ⇒ github.io 測試站（Firebase 後端）
+**永遠重現不了**；只有 .com 正式站（`vite.config.js` 的 `oracleSwapPlugin` 換成 `room-oracle`）會發生。
+
+⚠ 觸發前提＝「P1 的第一發 PUT 沒能在 6 秒內 commit」（`shouldAttemptStartGame` 給 P2 的
+fallback grace），而那正是 v6.245 實錄過的族群（開局 48KB 上行實測 86.954 秒才送達）。
+
+### 1. 修法：兩層，而且**結構性那一層才是主角**
+
+新增中央 helper `oracleTxFlagged(roomCode, fn, opts)`（room-oracle.ts，緊接在 `oracleTx` 之後）：
+
+- closure 的**第一個語句**就是 `marked = false`（每個 attempt 重判）
+  ⇒ 回傳的 `marked` 恆等於「最後那一輪（＝真正寫進房間的那一輪）的結論」。
+- `startGame` 在它之上再加一層**結構性複驗**：拿 `oracleTx` 回傳的**最終房間**問
+  `room.gameState?.id === gameState.id`。
+  這一層涵蓋 409／逾時／**「PUT 其實送達了只是回應逾時」**等所有路徑，
+  不必逐條列舉失敗形狀 —— 逐條列舉正是這個 bug 反覆漏掉的原因。
+  ⭐ 它還順手救回一條 BASE 也答不對的：我方 PUT 已送達、只是回應逾時 ⇒ 房間就是我這一局
+  ⇒ `marked` 是 false，但結構性複驗判得出 `won = true`。
+- ⚠ **fail-safe**：伺服器的 PUT `ok` 回應若沒把 `gameState` 帶回來（舊伺服器／回應被裁切），
+  `finalId` 是 `undefined` ⇒ 退回 `marked`。**絕不可以**因為讀不到一個欄位就把建局整個關掉。
+  （`/api/rooms/:code` 的 PUT route 不在本 repo，所以「回應一定含 gameState」是**假設不得成立**的前提。）
+
+### 2. 同型缺口：全站枚舉結果 = **恰 4 處，全部收斂**
+
+`git grep` 全 rev 掃過：`oracleTx` 只被 `src/lib/game/room-oracle.ts` 使用（其餘命中都是守衛與文件）。
+以「closure 內賦值、但宣告在 closure 外」為判準掃 29 個呼叫點：
+
+| 位置（BASE 行號） | 旗標 | 消費端 | 害處 |
+|---|---|---|---|
+| `startGame` L627 | `started` | `+page.svelte:8669` 用它決定**要不要採用本地盤面** | ⭐⭐⭐ 手牌重洗 |
+| `checkAndAcceptRematch` L436 | `didReset` | 呼叫端 `.catch()` 之外**完全沒讀** | 低（潛在陷阱） |
+| `checkAndAcceptRestart` L513 | `didReset` | 同上 | 低 |
+| `checkAndAcceptReturnToRoom` L600 | `didReset` | 同上 | 低 |
+
+四處**一律改走同一支 `oracleTxFlagged`**（不是三處各寫一套）。
+守衛 `test-v6265` 的【C】把掃描器連同**正／反對照樣本**一起驗過：
+「closure 第一行歸零」是唯一合格樣式，BASE 上恰好抓到 4 處、本版 0 處。
+
+### 3. 新診斷指紋 `casual-phantom-adopt`（證偽工具）
+
+沿用 v6.261 的休閒管線（同端點 `/clientdiag`、同一張 `tournamentClientDiag`、同 7 天 TTL）。
+**伺服器端零改動**：分帳只看 reason 的 `casual-` 前綴（`server_admin_patch.js` 的 `isCasualReason`），
+守衛把那支函式抽出來實跑證明它認得新指紋 ⇒ **本版不需要 server 先上**。
+
+觸發條件（三條都要成立）：①本地已經有一局 ②採納的是**不同 id** 的局
+③**不是**雙方同意的重新開局（`restartProposalCount` 遞增）。
+帶 `won`（本頁 startGame 的判定）／`readyMs`（送出 startGame 時雙方就緒已多久）／兩局的 `createdAtSrv`。
+
+⚠⚠ **一般玩家 0 發／0 bytes** —— 實測（守衛【D】【G】，抽真函式跑）：
+同一局前進 200 次、盤面更新 1000 次、`_casualNotePhantomAdopt` 十萬次，**送出 0 發、0 bytes**，
+十萬次總耗時 3.65 ms（每次 0.037 µs，純字串比較，沒有計時器／網路／序列化）。
+
+⭐ 這是**證偽工具**：修對了的話它應該歸零。**沒歸零 ⇒ 還有第二條路徑。**
+
+### 4. 順帶修：重整後多走一次 apply-undo（`lastSeenUndoApplyAt`）
+
+`lastSeenUndoApplyAt` 原本**只在 apply-undo 分支**同步。重整後它是 0，而房間的
+`lastUndoApplyAt` 可能是先前某次悔棋留下的大時戳 ⇒ 採納第一份盤面之後的**下一發**輪詢
+會滿足 `resolveRoomUpdate` 第 3 條 ⇒ 走一次 apply-undo：繞過 stale 守衛，
+並且把 `_unpushedState` 清成 `null` ⇒ **v6.212 的「本地領先先重推」自癒在重整後的第一手失效**。
+（判斷是「玩家可見」才修：那正是保護慢連線玩家的機制。）
+
+修法：`if (!game) lastSeenUndoApplyAt = Math.max(lastSeenUndoApplyAt, room.lastUndoApplyAt ?? 0)`
+—— 語意上正確，因為 `pushUndoRollback` 是在**同一個 `oracleTx`** 裡寫 `gameState` 與
+`lastUndoApplyAt`，帶著該時戳的盤面本來就已經是悔棋**之後**的盤面。
+正對照（守衛 E3）：真正的悔棋（時戳再度變大）仍然走 apply-undo 並清掉作廢快照。
+⚠ 一個字都沒有動 `resolveRoomUpdate`。
+
+### 5. 不可破壞的事都用**實跑**證明（守衛 `scripts/test-v6265-phantom-start-race.mjs`，52 條）
+
+| 保證 | 怎麼證 |
+|---|---|
+| HEAD-FAIL 409 | 對真 BASE blob 實跑 ⇒ `won=true` / 本版 `won=false`（A1/A2） |
+| HEAD-FAIL 逾時 | 同上（A3/A4）；另加「伺服器沒回 gameState」的 fail-safe 路徑（A5） |
+| (a) 真贏家仍是 true | B1／B1b／B1c 三種情境 |
+| (b) Firestore 版不變 | `room.ts` 對 BASE **整份逐字元相同**（B2） |
+| (c) 一般對局逐位元不變 | 七支 API 的請求序列與 BASE `deepStrictEqual`（B3/B4、perf①） |
+| (d) 一般玩家 0 發／0 bytes | D1/D1b/D1c/D1d、G1（實跑計數） |
+| 錦標賽零接觸 | F1~F5：`server_admin_patch.js`／`sync-guards.ts`／`oracle-client.ts`／`engine.ts` 對 BASE **逐字相同** |
+| `resolveRoomUpdate` 未動 | F5（整份 `sync-guards.ts` 逐字比對） |
+| 接線真的接上 | 【E】把 `handleRoomUpdate` 的盤面區塊**抽出來真的跑**（v6.154 教訓） |
+| 突變 | 【I】10 個，**全部紅在指定那一條** |
+
+### 6. 順手：`test-v6264` 的【F】改成每一版都適用
+
+原本 F1/F2/F3 寫死 v6.263→v6.264 的一次性搬運（`e.ver === 'v6.264'`、封存頁恰 324 則、
+首頁必須降到六成以下）⇒ **出下一版就必紅**。
+改成版本無關的不變量：BASE 指向**上一版**、「首頁只多最新一則」「封存頁只多最舊一則」
+「bodies 只多一則少一則、其餘逐字不變」（新增 F2b）、「單版增量 ≤ 2KB」。
+⚠ 出新版時只要把 `BASE_SHA` 換成上一版的 sha。
+
 ## v6.264 — 首頁 changelog 的結構解：較舊條目的內文「展開才取得」
 
 BASE `ff7ef443a7dd38e48cf0659d8f5e52fe1acf3806`（v6.263）。

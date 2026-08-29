@@ -112,6 +112,49 @@ async function oracleTx(
   throw new Error('oracleTx: max retries exhausted');
 }
 
+/**
+ * ⭐⭐⭐v6.265「這一輪 attempt 到底有沒有做那件事」的**唯一**判準（旗標的中央收斂點）。
+ *
+ * ── 這在修什麼（玩家回報：練習模式對戰手牌無預警重洗）─────────────────────
+ * `oracleTx` 內部是**重試迴圈**：409（CAS 輸掉）與逾時都會「重新拉盤面 → 對**新**盤面
+ * 重跑 closure → 再寫一次」。但四支呼叫端的旗標（`started` / `didReset`）都宣告在
+ * `oracleTx` **外面**、而且每個 attempt **不歸零** —— 只要有任何一輪跑到那一行，
+ * 回傳值就永遠是 true，即使真正寫進房間的是**別人**的資料。
+ *
+ * `startGame` 的後果最嚴重：
+ *   attempt1 判定「我要建局」→ `started = true` → PUT 輸掉 CAS（對手先建好了）
+ *   → attempt2 讀到房間已有 gameState → closure 原樣寫回（不再建局）
+ *   → **但回傳值仍是 true** ⇒ 輸家也以為自己贏了 ⇒ 採用自己的 phantom 局
+ *   → 幾秒後輪詢送來 canonical 局（不同 id）⇒ `resolveRoomUpdate` 判 adopt
+ *   ⇒ **玩家的手牌整份被換掉＝「無預警重洗」**。
+ *
+ * ⚠ 為什麼修了很多次還在：Firestore 版（`room.ts` 的 `runTransaction`）回傳值取自
+ *   **最終那一輪 closure**，語意本來就是對的 ⇒ github.io 測試站（Firebase 後端）
+ *   **永遠重現不了**，只有 .com 正式站（vite 的 oracleSwapPlugin 換成 room-oracle）會發生。
+ *
+ * ⚠ 觸發前提是「第一發 PUT 沒能在 6 秒內 commit」（`shouldAttemptStartGame` 給 P2 的
+ *   fallback grace），而那正是 v6.245 實錄過的族群：開局那一包 48KB 上行實測 86.954 秒才送達。
+ *
+ * ── 這支做什麼 ────────────────────────────────────────────────────────────
+ * 把旗標搬進來，並在**每個 attempt 開頭歸零** ⇒ 回傳的 `marked` 恆等於
+ * 「最後那一輪（＝真正被寫進房間的那一輪）closure 的結論」。
+ * ⚠ 四支呼叫端一律走這裡、不再各寫一套 —— 同型缺口從此只有一個地方要修。
+ * ⚠ 刻意**不**把 `fn` 宣告成 async：維持「呼叫 → 直接回傳」的同一顆 microtask，
+ *   一般對局（沒有任何衝突）的行為逐位元不變。
+ */
+async function oracleTxFlagged(
+  roomCode: string,
+  fn: (data: RoomData, mark: () => void) => RoomData | Promise<RoomData>,
+  opts?: { timeoutMs?: number },
+): Promise<{ room: RoomData; marked: boolean }> {
+  let marked = false;
+  const room = await oracleTx(roomCode, (data) => {
+    marked = false;                          // ⭐ 每個 attempt 重判：旗標絕不可以跨輪殘留
+    return fn(data, () => { marked = true; });
+  }, opts);
+  return { room, marked };
+}
+
 async function getMyUid(): Promise<string> {
   const { uid } = await oracleAuth();
   return uid;
@@ -433,12 +476,12 @@ export async function setRematchReady(roomCode: string, ready: boolean): Promise
 
 export async function checkAndAcceptRematch(roomCode: string): Promise<boolean> {
   try {
-    let didReset = false;
-    await oracleTx(roomCode.toUpperCase(), (data) => {
+    // ⭐v6.265 同型缺口：旗標一律走 oracleTxFlagged（每個 attempt 重判）。
+    const { marked: didReset } = await oracleTxFlagged(roomCode.toUpperCase(), (data, mark) => {
       const ready = data.rematchReady ?? {};
       if (!ready[0] || !ready[1]) return data;
       const newSeats = data.seats.map(s => ({ ...s, ready: false }));
-      didReset = true;
+      mark();
       // delete field via null (前端 ?? 處理)
       return {
         ...data,
@@ -510,8 +553,8 @@ export async function cancelRestart(roomCode: string): Promise<void> {
 
 export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, Card>): Promise<boolean> {
   try {
-    let didReset = false;
-    await oracleTx(roomCode.toUpperCase(), (data) => {
+    // ⭐v6.265 同型缺口：旗標一律走 oracleTxFlagged（每個 attempt 重判）。
+    const { marked: didReset } = await oracleTxFlagged(roomCode.toUpperCase(), (data, mark) => {
       const p = data.restartProposed ?? {};
       if (!p[0] || !p[1]) return data;
       const p1 = data.seats[0];
@@ -528,7 +571,7 @@ export async function checkAndAcceptRestart(roomCode: string, pool: Map<string, 
         // v6.057：與建局端一致，放行互動式開局
         { firstChoicePreferences: prefs },
       );
-      didReset = true;
+      mark();
       return {
         ...data,
         gameState: JSON.parse(JSON.stringify(newGame)),
@@ -597,12 +640,12 @@ export async function cancelReturnToRoom(roomCode: string): Promise<void> {
 
 export async function checkAndAcceptReturnToRoom(roomCode: string): Promise<boolean> {
   try {
-    let didReset = false;
-    await oracleTx(roomCode.toUpperCase(), (data) => {
+    // ⭐v6.265 同型缺口：旗標一律走 oracleTxFlagged（每個 attempt 重判）。
+    const { marked: didReset } = await oracleTxFlagged(roomCode.toUpperCase(), (data, mark) => {
       const p = data.returnRoomProposed ?? {};
       if (!p[0] || !p[1]) return data;
       const newSeats = data.seats.map(s => ({ ...s, ready: false }));
-      didReset = true;
+      mark();
       return {
         ...data,
         // v5.183: status 'waiting' → 'lobby' (同 rematch path, onRoom L4187 偵測)
@@ -624,11 +667,10 @@ export async function checkAndAcceptReturnToRoom(roomCode: string): Promise<bool
 
 export async function startGame(roomCode: string, gameState: GameState): Promise<boolean> {
   try {
-    let started = false;
-    await oracleTx(roomCode.toUpperCase(), (data) => {
+    const { room, marked } = await oracleTxFlagged(roomCode.toUpperCase(), (data, mark) => {
       if (data.status !== 'lobby') return data;
       if (data.gameState) return data;
-      started = true;
+      mark();
       return {
         ...data,
         gameState: JSON.parse(JSON.stringify(gameState)),
@@ -636,7 +678,22 @@ export async function startGame(roomCode: string, gameState: GameState): Promise
       };
       // ⚠v6.245 開局＝封包最大（整包盤面）且「失敗有狀態副作用」⇒ 逾時放寬到 60 秒。
     }, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });
-    return started;
+    // ⭐⭐⭐v6.265【結構性複驗】以 `oracleTx` 回傳的**最終房間**為準：房間裡的那一局是不是我這一局。
+    //   為什麼要多這一層（而不是只把旗標歸零）：`marked` 只回答「最後一輪有沒有寫」，
+    //   而我們真正要問的是「房間現在採用的是誰的局」。這一條**結構上**涵蓋
+    //   409／逾時／「PUT 其實送達了只是回應逾時」等所有路徑，不必逐條列舉失敗形狀
+    //   —— 逐條列舉正是這個 bug 反覆漏掉的原因。
+    //   ⭐ 順帶救回一條原本會誤判的：我方 PUT 已送達、只是回應逾時 ⇒ 房間就是我這一局
+    //     ⇒ `marked` 會是 false（重試那一輪不再建局），但這裡判得出 won = true。
+    // ⚠ fail-safe：伺服器的 PUT 回應若沒把 `gameState` 帶回來（欄位缺席／舊伺服器／回應被裁切），
+    //   `finalId` 會是 undefined ⇒ 退回 `marked`（此時已是 per-attempt 的正確值）。
+    //   **絕不可以**因為讀不到一個欄位就把建局整個關掉（那會是比原 bug 更大的事故）。
+    const finalId = (room as unknown as { gameState?: { id?: unknown } | null } | null | undefined)
+      ?.gameState?.id;
+    if (typeof finalId === 'string' && typeof gameState.id === 'string') {
+      return finalId === gameState.id;
+    }
+    return marked;
   } catch (err) {
     // v6.055 診斷：同 room.ts —— 留一份錯誤給 UI 顯示，否則建局失敗完全無聲。
     (globalThis as unknown as { __ptcgStartGameError?: string }).__ptcgStartGameError =

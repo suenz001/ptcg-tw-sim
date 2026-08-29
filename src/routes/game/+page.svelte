@@ -254,7 +254,13 @@
   //     ③沒有 Firebase 身分（匿名／未登入）**連送都不送** —— 伺服器 tournIdentity 一定丟棄，
   //       送出去只是白付一發請求；
   //     ④走既有的 /clientdiag 端點與既有節流，**不另開管線、不另開端點**（同 v6.213 的紀律）。
-  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim'];
+  // ⭐⭐⭐v6.265 新增 'casual-phantom-adopt'：**證偽工具**。條件是「本地已經有一局、
+  //   卻採納了一局不同 id 的盤面，而且不是雙方同意的重新開局」—— 那正是玩家看到的
+  //   「手牌無預警重洗」。修對了的話這個指紋應該歸零；沒歸零就代表**還有第二條路徑**。
+  //   ⚠ 一般對局不可能成立（同一局的 id 從頭到尾不變），實測 0 發／0 bytes。
+  //   ⚠ 伺服器端**不必動**：分帳只看 reason 的 `casual-` 前綴（server_admin_patch.js 的 isCasualReason）。
+  // ⚠ 這一行**必須維持單行**：v6.261 守衛用 `^\s*const NAME = [^\n]*$` 把它抽出來實跑，換行會抽到半截。
+  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt'];
   const CASUAL_DIAG_MAX_PER_PAGE = 6;   // 每個頁面實例的硬上限（＝三種指紋 × 兩場；三種各自還有「每場一次」旗標）
   // ⚠ 門檻的取值依據（Rule 37：要大於實測過的**成功**案例，否則會把正常人整批報進來）：
   //   一發 pushGameState ＝ oracleTx 的 GET＋PUT，PUT 的 body 實測 40~48KB。
@@ -268,6 +274,9 @@
   let _casualDiagSent = 0;                 // 本頁已送幾發（硬上限 CASUAL_DIAG_MAX_PER_PAGE，換局刻意不清）
   let _casualSlowSent = false;             // casual-slow-push 每場一次
   let _casualClaimSent = false;            // casual-forfeit-claim 每場一次
+  let _casualPhantomSent = false;          // casual-phantom-adopt 每場一次（⭐v6.265）
+  let _casualPhantom: { localId: string; incomingId: string;
+    localSrv: number | null; incomingSrv: number | null } | null = null;   // 這一發要帶的證據
   let _casualSampleRoom = '';              // 上一次擲骰是為了哪一間房（房號一變＝新的一場）
   let _casualSampleArmed = false;          // 這一場中籤了嗎（⚠ 每場只擲一次，理由與 _perfSampleArmed 逐字相同）
   let _casualSampleSent = false;           // 這一場已經送過健康取樣了
@@ -1601,6 +1610,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /** v2.269：當前座位索引 (0..9)；觀戰位 ≥2 */
   let mySeatIdx = $state<number>(-1);
   let _onlineReadyAt = 0; // v5.749 決定性建局者 grace 計時(雙就緒+lobby+無局 起算)
+  // ⭐v6.265 診斷用（casual-phantom-adopt）：本頁最近一次 startGame 的判定與當下的 grace 已過多久。
+  //   ⚠ 純紀錄，**不參與任何決策** —— 只在指紋成立時被讀出來，一般對局連讀都不會讀。
+  let _startGameWon: boolean | null = null;
+  let _startGameReadyMs = -1;
   let unsubRoom:    (() => void) | null = null;
   // v2.73 殭屍房間心跳機制
   let heartbeatTimer: number | null = null;
@@ -6319,6 +6332,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   granted=true ＝伺服器同意判對手棄權 —— 這兩件事的成因完全不同，一定要分得出來。
       claim: (reason === 'casual-forfeit-claim'
         ? { granted: _casualClaimGranted, idleSec: (roomData?.idleTimeoutSec ?? null) } : null),
+      // ⭐⭐⭐v6.265 只有 casual-phantom-adopt 帶得出來。三個欄位各自回答一個問題：
+      //   `won`     ＝ 本頁的 startGame 說我贏了嗎（true＋本地局被換掉＝v6.265 修的那條）
+      //   `readyMs` ＝ 送出 startGame 時「雙方就緒」已經過多久（>6000 代表 P2 的 fallback 也動了）
+      //   `srv`     ＝ 兩局的伺服器時鐘建立時戳（判得出誰先建；缺席＝舊 client 建的局）
+      phantom: (reason === 'casual-phantom-adopt' && _casualPhantom
+        ? { won: _startGameWon, readyMs: _startGameReadyMs,
+            localSrv: _casualPhantom.localSrv, incomingSrv: _casualPhantom.incomingSrv }
+        : null),
       env: {
         vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
         w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
@@ -6343,6 +6364,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         _casualSampleRoom = roomCode;
         _casualSampleArmed = Math.random() < PERF_SAMPLE_RATE;
         _casualSampleSent = false; _casualSlowSent = false; _casualClaimSent = false;
+        _casualPhantomSent = false; _casualPhantom = null;   // ⭐v6.265 換房＝換一場
         _casualPushSamples = []; _casualPushFail = 0;
       }
       if (!ok) { _casualPushFail++; return; }   // ⚠ 只記成功的往返（同 v6.151 的 rtt）
@@ -6355,11 +6377,47 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (_casualSampleArmed && !_casualSampleSent) { _casualSampleSent = true; _tSendClientDiag('casual-perf-sample'); }
     } catch { /* 診斷絕不影響對戰 */ }
   }
+  /**
+   * ⭐⭐⭐v6.265 `casual-phantom-adopt` 的**唯一**判定點（純觀察，零決策）。
+   *
+   * 成立條件（三條**都要**成立，缺一不報）：
+   *   ① 本地已經有一局（`local` 非 null）—— 沒有局的時候採納任何盤面都是正常的進場；
+   *   ② 採納的是**不同 id** 的局 —— 這才是「手牌整份被換掉」；
+   *   ③ **不是**雙方同意的重新開局 —— 合法 restart 會讓 `restartProposalCount` 遞增，
+   *      而 `lastAdoptedRestartCount` 是本端上次採納 restart 時記下的值（v5.716 的既有判準，
+   *      這裡**沿用**同一組欄位，不另立一套）。
+   *
+   * ⚠ 這支不會拋（整段包在 try 裡）、不發新請求、不設計時器；送出走既有的
+   *   `_tSendClientDiag` → `_casualDiagSend` 閘（休閒／線上／有 Firebase 身分／每頁硬上限）。
+   */
+  function _casualNotePhantomAdopt(
+    kind: string,
+    local: GameState | null | undefined,
+    incoming: GameState | null | undefined,
+    roomRestartCount: number,
+  ): void {
+    try {
+      if (kind !== 'adopt') return;
+      if (!local || !incoming) return;
+      if (local.id === incoming.id) return;
+      // 合法「重新開局」：與 resolveRoomUpdate 的 phantom 防護讀同一組欄位
+      if (incoming.phase === 'setup' && roomRestartCount > (lastAdoptedRestartCount ?? 0)) return;
+      if (_casualPhantomSent) return;
+      _casualPhantomSent = true;
+      _casualPhantom = {
+        localId: local.id, incomingId: incoming.id,
+        localSrv: (typeof local.createdAtSrv === 'number' ? local.createdAtSrv : null),
+        incomingSrv: (typeof incoming.createdAtSrv === 'number' ? incoming.createdAtSrv : null),
+      };
+      _tSendClientDiag('casual-phantom-adopt');
+    } catch { /* 診斷絕不影響對戰 */ }
+  }
   /** 換局時清乾淨：上一局的樣本不可以揹到新局。⚠ per-page 的 _casualDiagSent **刻意不清**（那是硬上限）。 */
   function _casualDiagReset(): void {
     _casualPushSamples = []; _casualPushFail = 0; _casualSampleRoom = '';
     _casualSampleArmed = false; _casualSampleSent = false;
     _casualSlowSent = false; _casualClaimSent = false; _casualClaimGranted = null;
+    _casualPhantomSent = false; _casualPhantom = null;   // ⭐v6.265
   }
   // v5.618：手動/自動「重新同步」— 強制 v=-1 抓伺服器權威最新盤面（版本不同才採用，避免擾動我方 picker）。
   //   答玩家「輪到自己時系統會幫忙確認/不必 F5」：對戰中盤面卡住即可由看門狗自動或玩家點「🔄 同步」恢復。
@@ -8429,6 +8487,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
           return;
         }
       }
+      // ⭐⭐v6.265【重整後多走一次 apply-undo】本地還沒有局（剛重整／剛進場）時，
+      //   `lastSeenUndoApplyAt` 是 0，而房間的 `lastUndoApplyAt` 可能是先前某次悔棋留下的大時戳。
+      //   於是「採納第一份盤面」之後的**下一發**輪詢會滿足 resolveRoomUpdate 第 3 條
+      //   ⇒ 走一次 apply-undo：繞過 stale 守衛，並且把 `_unpushedState` 清成 null
+      //   ⇒ v6.212 的「本地領先先重推」自癒在重整後的第一手就失效（送不出去也不會被重推）。
+      //   修法：**採納第一份盤面的同時**把 marker 對齊房間 —— 語意上正確，因為
+      //   `pushUndoRollback` 是在**同一個 oracleTx** 裡寫 gameState 與 lastUndoApplyAt
+      //   （見 room-oracle.ts），所以帶著該時戳的那份盤面本來就已經是悔棋**之後**的盤面。
+      //   ⚠ 之後真正的悔棋仍會把房間的時戳推得更大 ⇒ 第 3 條照樣觸發（正對照在守衛裡）。
+      //   ⚠ 一個字都沒有動 resolveRoomUpdate。
+      if (!game) lastSeenUndoApplyAt = Math.max(lastSeenUndoApplyAt, (room.lastUndoApplyAt as number | undefined) ?? 0);
       // SFX（保留）：B 端首次收到 setup snapshot 播 ready-go + 起手發 7 張
       if (!game && incoming.phase === 'setup') {
         playSfx('ready-go');
@@ -8490,6 +8559,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
           return;
         case 'adopt':
         case 'merge-prize':
+          // ⭐⭐⭐v6.265【證偽指紋】本地已經有一局、卻要換成另一局 —— 那就是玩家看到的
+          //   「手牌無預警重洗」。合法的重新開局（雙方按了「重新開局」，restartProposalCount
+          //   遞增）不算，其餘一律記一筆。
+          //   ⚠ 只**觀察**，一個字都沒有改 resolveRoomUpdate 的收斂邏輯（那會造成死結）。
+          //   ⚠ 一般對局恆為 false：同一局的 id 從頭到尾不變 ⇒ 0 發／0 bytes。
+          _casualNotePhantomAdopt(decision.kind, _sfxPrevGame, incoming,
+            (room.restartProposalCount as number | undefined) ?? 0);
           game = decision.game;
           // v5.716：adopt 了 restart 重建的新 setup 局(已通過 phantom 防護=合法重新開局) →
           //   記下當前 restartProposalCount,讓後續同 count 的 phantom setup 局被擋(只放行「下一次」restart)。
@@ -8666,7 +8742,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   修法：只有 commit 成功(won=true)才採用本地 game + 播 ready-go/發牌；輸方保持 game=null，
     //   待 canonical snapshot 由 room update adopt（B 端首次收 setup snapshot 自有 deal 音效）。
     const _pendingGame = newGame;
+    _startGameReadyMs = Date.now() - _onlineReadyAt;
     startGame(roomCode, _pendingGame).then((won) => {
+      _startGameWon = won;   // ⭐v6.265 純診斷紀錄（休閒指紋 casual-phantom-adopt 會帶出來）
       if (won) {
         game = _pendingGame;
         playSfx('ready-go');
