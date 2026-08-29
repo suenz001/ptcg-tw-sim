@@ -26,6 +26,11 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '3fd89b566d729ccddebb3014cdcb9d3cd4bd8fd5';   // v6.264（本版的前一版）
+// ⚠⚠ v6.267 修正一個**一直沒有人發現的守衛過期**：`oracle-admin/server_admin_patch.js`
+//   在 **v6.266**（套牌戰績伺服器端）被合法改過，但下面 F4 仍拿 v6.264 的 blob 逐字比對
+//   ⇒ 只要物件庫拿得到歷史就必紅。CI 是 `fetch-depth: 1` 淺複製 ⇒ 一直靜默 shallowSkip、
+//   從 v6.266 起這一條其實**沒有在守**。⇒ 改成「每個檔各自釘在最後一次合法改動的那一版」。
+const BASE_SHA_V6266 = '63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8');
@@ -233,7 +238,13 @@ await T('B2 (b) Firestore 版 room.ts 的 startGame 與 BASE **逐字元相同**
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('B2 對 BASE 的逐字比對', '上面兩條結構斷言仍在守'); return; }
   const b = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/room.ts');
   ok(b.ok, '讀不到 BASE 的 room.ts');
-  assert.strictEqual(ROOM, b.out, 'src/lib/game/room.ts 整份被動過了（Firestore 版必須逐字不變）');
+  // ⚠ v6.267 收窄：原本比對**整份檔案**，但這一條要守的是「Firestore 版的 startGame 不可以被
+  //   改壞」；整份檔案的比對會讓「同一個檔案裡別的函式被合法改動」（v6.267 的 seats[].deckId）
+  //   誤紅。⇒ 改成只對 **startGame 這一段**做逐字比對 —— 範圍更準、強度不變。
+  const baseFn = (() => { const i = b.out.indexOf('export async function startGame(');
+    ok(i > 0, 'BASE 的 room.ts 抓不到 startGame'); const j = b.out.indexOf('\n}\n', i); return b.out.slice(i, j + 3); })();
+  ok(baseFn.length > 500, 'BASE 的 startGame 只抽到 ' + baseFn.length + ' 字元 —— 抽取器壞了？');
+  assert.strictEqual(cur, baseFn, 'src/lib/game/room.ts 的 startGame 被動過了（Firestore 版必須逐字不變）');
 });
 await T('B3 (c) 一般對局（沒有任何衝突）：請求序列與 BASE **逐字相同**、PUT 次數相同', async () => {
   const b = await runStart(BASE_RO, 'clean'), n = await runStart(RO, 'clean');
@@ -655,10 +666,15 @@ await T('F3 ⭐⭐⭐ 伺服器端**零改動**：分帳只看 `casual-` 前綴�
 await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本版只改 room-oracle.ts 與休閒區塊', () => {
   // 錦標賽走 tApi('/action')／tAdopt／decideBoardAdopt，與 room-oracle.ts 完全無關
   ok(!RO.includes('tournament') && !RO.includes('/action'), 'room-oracle.ts 出現錦標賽相關字樣');
-  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('F4 對 BASE 的逐字比對', '上一條結構斷言仍在守'); return; }
-  for (const p of ['oracle-admin/server_admin_patch.js', 'src/lib/game/sync-guards.ts',
-                   'src/lib/game/oracle-client.ts', 'src/lib/game/engine.ts']) {
-    const b = readBaseBlob(ROOT, BASE_SHA, p);
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, BASE_SHA_V6266)) {
+    shallowSkip('F4 對 BASE 的逐字比對', '上一條結構斷言仍在守'); return;
+  }
+  // ⚠ v6.267：每個檔各自釘在**最後一次合法改動的那一版**（見檔頭 BASE_SHA_V6266 的說明）。
+  for (const [p, sha] of [['oracle-admin/server_admin_patch.js', BASE_SHA_V6266],
+                          ['src/lib/game/sync-guards.ts', BASE_SHA],
+                          ['src/lib/game/oracle-client.ts', BASE_SHA],
+                          ['src/lib/game/engine.ts', BASE_SHA]]) {
+    const b = readBaseBlob(ROOT, sha, p);
     ok(b.ok, '讀不到 BASE 的 ' + p);
     assert.strictEqual(readFileSync(join(ROOT, p), 'utf8'), b.out, p + ' 被改動了（本版不該碰它）');
   }

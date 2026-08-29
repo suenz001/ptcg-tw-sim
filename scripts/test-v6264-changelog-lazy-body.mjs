@@ -31,7 +31,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 // ⭐v6.265 起【F】改成**每一版都適用**的搬運守衛（原本寫死 v6.263/v6.264，出下一版就必紅）：
 //   BASE 一律指向**上一版**，斷言改成「首頁只多了最新那一則、封存頁只多了最舊那一則」。
 //   ⚠ 出新版時只要把這個 sha 換成上一版的 sha 即可，其餘一律不動。
-const BASE_SHA = '3fd89b566d729ccddebb3014cdcb9d3cd4bd8fd5'; // v6.264（v6.265 的前一版）
+const BASE_SHA = '63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8'; // v6.266（v6.267 的前一版）
 const N_INLINE = 12;   // 首頁內嵌完整內文的則數（站長裁定的「最新 N 則」）
 
 let pass = 0, fail = 0;

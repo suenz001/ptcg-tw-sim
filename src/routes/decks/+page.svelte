@@ -24,6 +24,8 @@
   //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
   //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
+  // v6.267 套牌戰績：`/api/deck-stats` 的唯一出口（快取／防連點／哨兵判定都在裡面）
+  import { fetchDeckStats, deckStatsHidden, type DeckStats } from '$lib/decks/deck-stats';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
   import { VERSION } from '$lib/version';
@@ -750,6 +752,43 @@
     decks = deleteDeck(id);
     if (activeId === id) activeId = decks[0]?.id ?? null;
     dropDeck(id);
+  }
+
+  // ══ v6.267 套牌戰績（🔍，就在 ✕ 旁邊）══════════════════════════════════════
+  //   ⚠⚠ **頁面載入時一發請求都不打**：`deckStatsHidden()` 是純函式（只讀
+  //     `VITE_ORACLE_API_URL` 與模組層級的哨兵旗標），不碰網路。
+  //     ⇒ 放大鏡先顯示，玩家**點下去**才打；打不通就當場說明並記住不再顯示。
+  //   ⚠ 快取／防連點在 `$lib/decks/deck-stats` 內（60 秒、同一副牌同時只有一發）。
+  //   ⚠ 錦標賽勝率本版還沒有資料來源 ⇒ 顯示「累積中」，不顯示 0 勝 0 敗騙玩家。
+  let statsHidden = $state(deckStatsHidden());
+  let statsDeckId = $state<string | null>(null);   // 正在看哪一副（null＝視窗沒開）
+  let statsDeckName = $state('');
+  let statsLoading = $state(false);
+  let statsData = $state<DeckStats | null>(null);
+  let statsError = $state<string | null>(null);
+
+  async function openDeckStats(d: Deck) {
+    statsDeckId = d.id;
+    statsDeckName = d.name || '(未命名)';
+    statsData = null;
+    statsError = null;
+    statsLoading = true;
+    const r = await fetchDeckStats(d.id);
+    // ⚠ 玩家可能已經關掉視窗、或改看另一副 ⇒ 只有還在看同一副時才寫回畫面（防競態蓋錯）
+    if (statsDeckId !== d.id) return;
+    statsLoading = false;
+    if (r.ok) { statsData = r.data; return; }
+    statsError = r.message;
+    // ⭐⭐ 哨兵缺席（舊伺服器 404／端點自我停用回 503）⇒ 記住，之後整個藏起來，
+    //   而且 `fetchDeckStats` 自己也會擋掉後續呼叫，一發都不會再打。
+    if (r.unsupported) statsHidden = true;
+  }
+
+  function closeDeckStats() { statsDeckId = null; }
+
+  /** 勝率顯示。分母（勝＋敗）為 0 時伺服器回 null ⇒ 顯示破折號，不可顯示 0%。 */
+  function fmtWinRate(v: number | null): string {
+    return v === null ? '—' : (v * 100).toFixed(1) + '%';
   }
 
   function renameActive(name: string) {
@@ -1690,6 +1729,16 @@
                 {d.entries.reduce((n, e) => n + e.count, 0)} / 60
               </span>
             </button>
+            <!-- v6.267：戰績（🔍）就放在刪除（✕）旁邊。
+                 哨兵缺席／這個 build 沒有 Oracle API 時整顆藏起來，不顯示壞掉的 UI。 -->
+            {#if !statsHidden}
+              <button
+                class="icon deck-stats-btn"
+                onclick={() => openDeckStats(d)}
+                title="查看這副牌的戰績"
+                aria-label="查看牌組戰績"
+              >🔍</button>
+            {/if}
             <button
               class="icon"
               onclick={() => removeDeck(d.id)}
@@ -2283,6 +2332,68 @@
         <a class="small button-like" href={`https://asia.pokemon-card.com/tw/deck-build/code/?deckCode=${exportedDeckCode}`} target="_blank" rel="noopener">🔗 在官網查看</a>
         <button class="small" onclick={closeExportCodeModal}>關閉</button>
       </div>
+    </div>
+  </div>
+{/if}
+
+<!-- ── v6.267 套牌戰績 modal（🔍）─────────────────────────────────────────
+     ⚠ 點背景關閉用的是一顆**透明按鈕**（不是在 div 上掛 onclick）——
+       那樣既能點外面關閉，又不會多出 a11y 警告（警告數是版面沒被改壞的金絲雀）。 -->
+{#if statsDeckId}
+  <div class="pv-overlay">
+    <button class="ds-backdrop" onclick={closeDeckStats} aria-label="關閉戰績視窗"></button>
+    <div class="pv-inner deck-stats-modal">
+      <button class="pv-close" onclick={closeDeckStats} aria-label="關閉">×</button>
+      <h3 class="modal-title">🔍 牌組戰績</h3>
+      <p class="ds-deckname">{statsDeckName}</p>
+      {#if statsLoading}
+        <p class="ds-msg">統計中…</p>
+      {:else if statsError}
+        <p class="ds-msg ds-err">{statsError}</p>
+      {:else if statsData}
+        <div class="ds-cards">
+          <div class="ds-card">
+            <div class="ds-card-h">休閒對戰（線上）</div>
+            <div class="ds-rate">{fmtWinRate(statsData.casual.winRate)}</div>
+            <div class="ds-sub">{statsData.casual.games} 場：{statsData.casual.wins} 勝 {statsData.casual.losses} 敗{#if statsData.casual.draws > 0} {statsData.casual.draws} 平{/if}</div>
+          </div>
+          <div class="ds-card">
+            <div class="ds-card-h">錦標賽</div>
+            <div class="ds-rate ds-pending">累積中</div>
+            <div class="ds-sub">賽事的牌組紀錄尚未開始收集</div>
+          </div>
+        </div>
+        <h4 class="ds-h4">對各牌組原型的勝率</h4>
+        {#if statsData.vsArchetype.length === 0}
+          <p class="ds-msg">還沒有可以分類的對手牌組。累積幾場線上休閒對戰之後就會出現。</p>
+        {:else}
+          <div class="ds-table-wrap">
+            <table class="ds-table">
+              <thead>
+                <tr><th>對手的牌組原型</th><th>場次</th><th>勝敗</th><th>勝率</th></tr>
+              </thead>
+              <tbody>
+                {#each statsData.vsArchetype as row (row.name)}
+                  <tr>
+                    <td class="ds-name">{row.name}</td>
+                    <td>{row.games}</td>
+                    <td>{row.wins} 勝 {row.losses} 敗{#if row.draws > 0} {row.draws} 平{/if}</td>
+                    <td class:ds-good={row.winRate !== null && row.winRate >= 0.55} class:ds-bad={row.winRate !== null && row.winRate <= 0.45}>{fmtWinRate(row.winRate)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+        <ul class="ds-notes">
+          <li>這份統計<b>自 {statsData.since} 起計</b>，在那之前的對戰沒有紀錄、不會列入。</li>
+          <li>只計算線上休閒對戰；與電腦對戰、同一台裝置的雙人對戰都不列入。</li>
+          <li>紀錄跟著這副牌走：修改牌組內容不會歸零，按 × 刪除才會一起消失。</li>
+          {#if statsData.truncated}
+            <li>⚠ 這副牌的場次較多，目前只統計最近 {statsData.scanCap} 場。</li>
+          {/if}
+        </ul>
+      {/if}
     </div>
   </div>
 {/if}
@@ -3151,6 +3262,45 @@
   }
   .add-btn {
     flex-shrink: 0;
+  }
+
+  /* ── v6.267 套牌戰績 modal（🔍）──────────────────────────────────────── */
+  .ds-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    cursor: zoom-out;
+  }
+  .deck-stats-modal {
+    max-width: 620px;
+    position: relative;
+    z-index: 1;
+    text-align: left;
+  }
+  .ds-deckname { margin: 0.2rem 0 0.6rem; font-weight: 700; font-size: 1.02rem; }
+  .ds-msg { margin: 0.7rem 0; color: #555; font-size: 0.9rem; line-height: 1.6; }
+  .ds-err { color: #b00020; }
+  .ds-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
+  .ds-card { border: 1px solid #e0e0e0; border-radius: 10px; padding: 0.6rem 0.75rem; background: #fafafa; }
+  .ds-card-h { font-size: 0.8rem; color: #666; }
+  .ds-rate { font-size: 1.5rem; font-weight: 700; line-height: 1.35; }
+  .ds-pending { font-size: 1.05rem; color: #888; }
+  .ds-sub { font-size: 0.8rem; color: #555; }
+  .ds-h4 { margin: 1rem 0 0.35rem; font-size: 0.95rem; }
+  .ds-table-wrap { max-height: 38vh; overflow-y: auto; }
+  .ds-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .ds-table th, .ds-table td { padding: 0.3rem 0.5rem; border-bottom: 1px solid #eee; text-align: right; }
+  .ds-table th:first-child, .ds-table td.ds-name { text-align: left; }
+  .ds-table thead th { position: sticky; top: 0; background: #fff; color: #666; font-weight: 600; }
+  .ds-good { color: #12803a; font-weight: 700; }
+  .ds-bad { color: #b00020; font-weight: 700; }
+  .ds-notes { margin: 0.9rem 0 0; padding-left: 1.1em; font-size: 0.78rem; color: #666; line-height: 1.7; }
+  @media (max-width: 600px) {
+    .ds-cards { grid-template-columns: 1fr; }
+    .ds-table { font-size: 0.8rem; }
+    .ds-table th, .ds-table td { padding: 0.28rem 0.3rem; }
   }
 
   /* ── Preview modal ───────────────────────────────────────────────────── */

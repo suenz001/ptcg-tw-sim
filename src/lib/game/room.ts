@@ -51,6 +51,17 @@ export interface Seat {
   email?: string | null;
   name: string | null;
   deckEntries: DeckEntry[] | null;
+  /**
+   * v6.267 套牌戰績：這個座位目前選用的牌組 id（＝`Deck.id`，client 端的穩定 UUID）。
+   *   - undefined / null ＝ 沒有選牌組、或是 v6.267 之前建立的房間（舊房不回填）。
+   *   - 伺服器 `/api/match-result` 會從房間 seat 把它補進 matchRecords，
+   *     `GET /api/deck-stats?deckId=` 才查得到這副牌的勝率。
+   *   ⚠⚠ **只能寫入、不改變 `Deck.id` 的產生方式**（`crypto.randomUUID()`）——
+   *     「戰績跟著這副牌走」整個建立在那個 id 不會變之上。
+   *   ⚠ 座位被清空／換人坐時**必須一起清掉**，否則新玩家的對局會被記到前一位
+   *     玩家的牌組上（見下方所有 `deckEntries: null, deckId: null` 的地方）。
+   */
+  deckId?: string | null;
   ready: boolean;
   /** v3.75：本玩家在贏擲幣時希望先攻 / 後攻 / 隨機（對手看不到自己選什麼）。
    *  預設 'random' — 等同舊版行為。 */
@@ -159,11 +170,11 @@ export function generateRoomCode(): string {
 
 function emptySeats(): Seat[] {
   const seats: Seat[] = [
-    { role: 'p1', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
-    { role: 'p2', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
+    { role: 'p1', uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const },
+    { role: 'p2', uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const },
   ];
   for (let i = 0; i < SPECTATOR_SEATS; i++) {
-    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const });
+    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const });
   }
   return seats;
 }
@@ -221,7 +232,7 @@ export async function createRoom(
   // host 預設坐 P1
   // v4.961：寫入 sign-in email（若有），admin 用此欄位追蹤玩家
   const myEmail = auth.currentUser?.email ?? null;
-  seats[0] = { role: 'p1', uid, email: myEmail, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+  seats[0] = { role: 'p1', uid, email: myEmail, name: hostName, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
 
   const data: RoomData = {
     roomName: roomName.trim() || `${hostName} 的房間`,
@@ -299,7 +310,7 @@ export async function joinRoom(
   const myEmail = auth.currentUser?.email ?? null;
   const newSeats = seats.map((s, i) => {
     if (i !== targetIdx) return s;
-    return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+    return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
   });
 
   await updateDoc(ref, {
@@ -336,10 +347,10 @@ export async function takeSeat(
   const newSeats = seats.map((s, i) => {
     if (i === myIdx) {
       // 清空原座位
-      return { ...s, uid: null, email: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      return { ...s, uid: null, email: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
     }
     if (i === targetIdx) {
-      return { ...s, uid, email: myEmail, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      return { ...s, uid, email: myEmail, name: myName, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
     }
     return s;
   });
@@ -351,6 +362,8 @@ export async function takeSeat(
 export async function setSeatDeck(
   roomCode: string,
   deckEntries: DeckEntry[],
+  /** v6.267：這副牌的 `Deck.id`（套牌戰績用）。沒帶＝清成 null，與舊行為等價。 */
+  deckId?: string | null,
 ): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
@@ -365,7 +378,7 @@ export async function setSeatDeck(
   if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能設牌組');
 
   const newSeats = data.seats.map((s, i) =>
-    i === myIdx ? { ...s, deckEntries, ready: false } : s
+    i === myIdx ? { ...s, deckEntries, deckId: deckId ?? null, ready: false } : s
   );
   await updateDoc(ref, { seats: newSeats, memberUids: computeMemberUids(newSeats), updatedAt: serverTimestamp() });
 }
@@ -630,7 +643,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
   if (data.status !== 'lobby') {
     if (myIdx < 2) return;
     const specSeats = data.seats.map((s, i) =>
-      i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+      i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const } : s
     );
     await updateDoc(ref, {
       seats: specSeats,
@@ -640,7 +653,7 @@ export async function leaveRoom(roomCode: string): Promise<void> {
     return;
   }
   const newSeats = data.seats.map((s, i) =>
-    i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+    i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const } : s
   );
   // v2.275：檢查清完我之後是否全空
   const allEmpty = newSeats.every(s => s.uid === null);

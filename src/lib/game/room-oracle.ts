@@ -58,11 +58,11 @@ function computeMemberUids(seats: Seat[]): string[] {
 
 function emptySeats(): Seat[] {
   const seats: Seat[] = [
-    { role: 'p1', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
-    { role: 'p2', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const },
+    { role: 'p1', uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const },
+    { role: 'p2', uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const },
   ];
   for (let i = 0; i < SPECTATOR_SEATS; i++) {
-    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const });
+    seats.push({ role: 'spectator', uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const });
   }
   return seats;
 }
@@ -174,7 +174,7 @@ export async function createRoom(
     const seats = emptySeats();
     // v4.961：寫入 sign-in email（若有）— 從 firebase auth 拿（即使是 oracle mode）
     const myEmail = auth.currentUser?.email ?? null;
-    seats[0] = { role: 'p1', uid, email: myEmail, name: hostName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+    seats[0] = { role: 'p1', uid, email: myEmail, name: hostName, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
     const data: Record<string, unknown> = {
       roomName: roomName.trim() || (hostName + ' 的房間'),
       hostUid: uid,
@@ -239,7 +239,7 @@ export async function joinRoom(roomCode: string, guestName: string): Promise<Roo
     const myEmail = auth.currentUser?.email ?? null;
     const newSeats = seats.map((s, i) => {
       if (i !== targetIdx) return s;
-      return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+      return { ...s, uid, email: myEmail, name: guestName, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
     });
     return { ...cur, seats: newSeats, memberUids: computeMemberUids(newSeats) };
     // ⚠v6.245 進場＝「失敗有狀態副作用」⇒ 逾時放寬到 60 秒（慢網路不該被誤殺）。
@@ -260,10 +260,10 @@ export async function takeSeat(roomCode: string, targetIdx: number): Promise<voi
     const myEmail = auth.currentUser?.email ?? null;
     const newSeats = seats.map((s, i) => {
       if (i === myIdx) {
-        return { ...s, uid: null, email: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+        return { ...s, uid: null, email: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
       }
       if (i === targetIdx) {
-        return { ...s, uid, email: myEmail, name: myName, deckEntries: null, ready: false, firstChoicePreference: 'random' as const };
+        return { ...s, uid, email: myEmail, name: myName, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const };
       }
       return s;
     });
@@ -272,14 +272,20 @@ export async function takeSeat(roomCode: string, targetIdx: number): Promise<voi
   }, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });
 }
 
-export async function setSeatDeck(roomCode: string, deckEntries: DeckEntry[]): Promise<void> {
+/**
+ * v6.267：連同 `deckId` 一起寫進座位。
+ *   伺服器 v6.266 的 `/api/match-result` 會從房間 seat 把 deckId 補進 matchRecords
+ *   （**兩側都補得到**——payload 只有送出的那一側知道自己用哪一副）。
+ * ⚠ 沒帶 deckId 時寫 null（與 v6.266 的行為等價：欄位查不到就什麼都不記）。
+ */
+export async function setSeatDeck(roomCode: string, deckEntries: DeckEntry[], deckId?: string | null): Promise<void> {
   const uid = await getMyUid();
   await oracleTx(roomCode.toUpperCase(), (data) => {
     const myIdx = findMySeatIdx(data.seats, uid);
     if (myIdx < 0) throw new Error('你不在此房間');
     if (data.seats[myIdx].role === 'spectator') throw new Error('觀戰位不能設牌組');
     const newSeats = data.seats.map((s, i) =>
-      i === myIdx ? { ...s, deckEntries, ready: false } : s
+      i === myIdx ? { ...s, deckEntries, deckId: deckId ?? null, ready: false } : s
     );
     return { ...data, seats: newSeats, memberUids: computeMemberUids(newSeats) };
   });
@@ -441,14 +447,14 @@ export async function leaveRoom(roomCode: string): Promise<void> {
         const i = findMySeatIdx(seats, uid);
         if (i < 2) return cur;
         const ns = seats.map((s, k) =>
-          k === i ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+          k === i ? { ...s, uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const } : s
         );
         return { ...cur, seats: ns, memberUids: computeMemberUids(ns) };
       });
       return;
     }
     const newSeats = data.seats.map((s, i) =>
-      i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, ready: false, firstChoicePreference: 'random' as const } : s
+      i === myIdx ? { ...s, uid: null, name: null, deckEntries: null, deckId: null, ready: false, firstChoicePreference: 'random' as const } : s
     );
     const allEmpty = newSeats.every(s => s.uid === null);
     if (allEmpty) {

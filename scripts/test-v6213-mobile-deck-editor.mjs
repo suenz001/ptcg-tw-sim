@@ -319,10 +319,23 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   //     但任何**宣告的增刪改**都會紅。
   //   ⚠⚠ 這個值是**在 v6.212（BASE efd6979202da62748d4fb24154ebb8c16001dbd1）上算出來的**，
   //     v6.213 算出來一模一樣 —— 這就是「桌機一個宣告都沒動」的逐字證明，不是自己跟自己比。
-  const DESKTOP_SHA = '6ac52437ce962826';   // v6.212 ＝ v6.213（bare.length = 25315）
+  //   ⚠⚠ **v6.267 刻意更新了這個指紋**：`/decks` 新增了「套牌戰績」modal 的桌機樣式
+  //     （`.ds-backdrop` ~ `.ds-notes`）。為了讓這把鎖不因為更新而變弱，下面多加一條：
+  //     **把 v6.267 新增的那一段整組拿掉之後，必須逐字還原回 v6.212 的指紋**
+  //     ⇒ 「桌機只多了那一段、其餘一個宣告都沒動」仍然是逐字證明。
+  const DESKTOP_SHA_V6212 = '6ac52437ce962826';   // v6.212 ＝ v6.213 ＝ … ＝ v6.266（bare.length = 25315）
+  const DESKTOP_SHA = '4a2669f933bf118e';   // v6.267（bare.length = 26776）
   const bareSha = createHash('sha256').update(bare).digest('hex').slice(0, 16);
-  ok('★★★[正對照／逐字證明] 桌機（非 @media）CSS 的 sha256 指紋沒有變 —— 這一版一個宣告都沒動桌機',
-    bareSha === DESKTOP_SHA && bare.length === 25315, bareSha + ' / len=' + bare.length);
+  ok('★★★[正對照／逐字證明] 桌機（非 @media）CSS 的 sha256 指紋沒有變 —— 只有本版刻意新增的那一段',
+    bareSha === DESKTOP_SHA && bare.length === 26776, bareSha + ' / len=' + bare.length);
+  // ⭐⭐⭐ v6.267 新增：把套牌戰績那一段拿掉之後，必須逐字回到 v6.212 的指紋。
+  const V6267_BLOCK = /\.ds-backdrop \{[^]*?\.ds-notes \{[^}]*\}/;
+  ok('[前提] 抓得到 v6.267 新增的那一段桌機 CSS（抓不到 ⇒ 下一條會變成恆真）',
+    V6267_BLOCK.test(SP.withoutMedia));
+  const bare212 = SP.withoutMedia.replace(V6267_BLOCK, '').replace(/\s+/g, ' ').trim();
+  const sha212 = createHash('sha256').update(bare212).digest('hex').slice(0, 16);
+  ok('★★★[正對照／逐字證明] 拿掉 v6.267 那一段之後，桌機 CSS 逐字還原回 v6.212',
+    sha212 === DESKTOP_SHA_V6212 && bare212.length === 25315, sha212 + ' / len=' + bare212.length);
   // 逐條列出這一版**唯一**允許出現在非 @media 區的新字串（應為空）。
   ok('★★★[正對照] 桌機（非 @media）CSS 裡完全沒有本版新增的任何宣告',
     !bare.includes('flex-wrap: wrap; } .pk-search') && !/\.pk-search\s*\{[^}]*min-width:\s*0/.test(bare)

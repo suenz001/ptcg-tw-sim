@@ -1,5 +1,160 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.267 — 套牌戰績【client 端 P2】：`seats[].deckId` ＋ `/decks` 的 🔍
+
+BASE `63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8`（v6.266）。
+v6.266 已把**伺服器端**三件事上線（`makePlayerDoc` 白名單收 `deckId`、`/api/match-result`
+從房間 seat enrich、sparse 索引與 `GET /api/deck-stats`）。
+⚠⚠ 但房間 `seats[]` 當時**根本沒有 `deckId` 這個欄位** ⇒ 那段 enrich 一直是空轉的。
+這一版把它接上，並加上玩家看得到的放大鏡。
+
+### 0. v6.266 的複驗（我自己讀碼，不是轉述）
+
+| 交接說的 | 實測 | 判定 |
+|---|---|---|
+| 哨兵 `deckStatsApi: 1` | `server_admin_patch.js:2694` | ✅ |
+| `tournament.status: 'not-collected'` | `:2708` | ✅ |
+| `since: 'v6.266'`、`truncated` | `:2711` / `:2712` | ✅ |
+| makePlayerDoc 白名單收 deckId「在 :1119」 | 實際在 **`:1112-1113`** | ✅（行號差 6 行） |
+| enrich「在 :1160-1176」 | 實際在 **`:1165-1181`** | ✅（行號差 5 行） |
+| sparse 索引 `{'p1.deckId':1}` / `{'p2.deckId':1}` | `:1000-1001`，都帶 `sparse: true` | ✅ |
+| 房間 `seats[]` 沒有 `deckId` | `room-oracle.ts:275` 的 `setSeatDeck` 只寫 `deckEntries` | ✅ 確認空轉 |
+
+⇒ 轉述沒有說錯，只有兩處行號偏 5~6 行。
+
+### 1. `seats[].deckId` 怎麼寫
+
+- `Seat` 加 **optional** 欄位 `deckId?: string | null`（舊房間沒有這個欄位也要讀得動）。
+- `setSeatDeck(roomCode, deckEntries, deckId?)` —— **兩份 room 都改**
+  （`room.ts` = Firestore = 測試站；`room-oracle.ts` = 正式站）。
+  只改測試站測不到、只改正式站則測試站測不到，兩邊都要。
+- `game/+page.svelte:8829` 的 `handleSetDeck` 手上就有 `deck.id` ⇒ 一起送。
+- ⚠⚠ **座位被清空／換人坐時必須一起清掉 deckId**。這是這一版最危險的一條：
+  漏了的話，新玩家坐上前一位玩家離開的座位，那一局會被記到**別人的牌組**上。
+  兩份檔各 9 處「清空座位」的字面量全部補上 `deckId: null`（守衛 A3 用**實跑 takeSeat**
+  證明兩個座位都被清乾淨，A4 用枚舉＋剝註解證明沒有漏網）。
+
+⚠ **為什麼不在 `/api/match-result` 的 payload 裡也送一份**：
+`$setOnInsert` 只有先送到的那一發會落地，而每個 client 只知道**自己**用哪一副牌
+⇒ payload 路徑天生只能補一半；伺服器的房間 seat enrich 兩側都補得到。
+兩條路併存＝同一件事有兩個來源、會漂移，所以**只留房間 seat 這一條**。
+
+### 2. 本機雙人／vsAI：**不記**（結構性排除，不是靠過濾）
+
+本機模式根本沒有房間（`roomCode` 為空）⇒ `/api/match-result` 的 enrich 區塊
+`if (doc.roomCode && …)` 直接不進去 ⇒ 那些列連 `deckId` 欄位都不會有。
+這比「記了再讓 `buildCasualCleanFilter` 濾掉」好：sparse 索引**不會**被永遠不會被查的列撐大。
+
+### 3. Firestore 讀取次數：**零增加**（實測）
+
+`room.ts` 的 `setSeatDeck` 本來就是 `getDoc` 1 發 ＋ `updateDoc` 1 發；
+這一版只是在**已經要寫回去的** `newSeats` 物件裡多一個欄位。
+守衛【E】把該函式抽出來實跑並計數：`getDoc=1 / getDocs=0 / onSnapshot=0 / updateDoc=1`，
+並用 BASE blob 同法量測比對（正對照 b）。`updateDoc` 的**欄位集合**也逐字比對，
+確認沒有多寫第二個欄位。
+
+### 4. 放大鏡的哨兵 fail-open：怎麼做到「載入頁面不多打一發」
+
+⭐ 關鍵是把判斷拆成**純函式**與**請求**兩件事，放進新檔 `src/lib/decks/deck-stats.ts`：
+
+- `deckStatsHidden()` ——只讀 `VITE_ORACLE_API_URL` 與模組層級旗標，**不碰網路**。
+  元件用 `let statsHidden = $state(deckStatsHidden())` 初始化 ⇒ 放大鏡**先顯示**。
+- `fetchDeckStats(deckId)` ——只在玩家**點下去**時呼叫。
+  回應沒有 `typeof body.deckStatsApi === 'number'` ⇒ 記住 `apiSupported = false`、
+  當場在視窗裡說明，之後整顆放大鏡藏起來，而且 `fetchDeckStats` 自己也會擋掉後續呼叫。
+- ⚠⚠ **429 與網路錯誤不可以被判成「不支援」**：429 代表伺服器明明支援、只是這一刻太頻繁；
+  網路錯誤是玩家自己斷線。誤判會把功能永久藏掉（突變 H5 專門釘這一條）。
+- ⚠ 旗標放**模組層級**、刻意不用 localStorage：伺服器修好後玩家重整就會回來，
+  不必清快取；而路由切換（decks → 首頁 → decks）之間仍記得住。
+- ⚠ `VITE_ORACLE_API_URL` 為空的 build（＝GitHub Pages **測試站**）一律 hidden
+  ⇒ **測試站看不到這個功能**，站長只能在正式站驗收（誠實寫在這裡）。
+
+### 5. client 端快取／防連點
+
+- per-deckId 60 秒快取（**刻意與伺服器的 60s TTL 同值**，再短只是白打一發）。
+- in-flight map：同一副牌同時只會有一發在飛，連點 6 下只打 1 發（守衛 C8 實測）。
+
+### 6. `/decks` 載入請求數：與 BASE 相同（量測）
+
+守衛【D】把「載入區段」定義成 **onMount 整塊 ＋ 每一個 `$state(...)` 的初始化運算式**
+（這一頁 `$effect` 為 0，D0 釘住），在其中枚舉網路呼叫點：
+
+```
+BASE ：loadAllSets×1  loadDecksFromCloud×1  loadIndex×1  onAuthStateChanged×1  signInAnonymously×1  syncDeckToCloud×1
+修後 ：loadAllSets×1  loadDecksFromCloud×1  loadIndex×1  onAuthStateChanged×1  signInAnonymously×1  syncDeckToCloud×1
+```
+
+⇒ **逐字相同**。載入區段唯一的新增是 `deckStatsHidden()×1`，
+而 C10 用「一被呼叫就丟 AssertionError 的 fetch」呼叫它 200 次，證明它零請求。
+
+### 7. UI
+
+- 位置：`/decks` 左欄每一副牌的 ✕ **左邊**（同一個 `<li>`）。
+- ⭐ 複驗過 `/decks` 確實是**單一版面**（全檔 grep `isMobile` / `matchMedia` / `portrait` 皆 0，
+  只有 CSS `@media`）⇒ 不做手機／桌機兩套分支，一個 modal ＋ 響應式 CSS。
+- 內容：休閒（線上）勝率大字 ＋ 錦標賽欄顯示「累積中」＋ 對各原型的表格
+  （勝率 ≥55% 綠、≤45% 紅）＋ 三條說明（自 v6.266 起計／只算線上休閒／紀錄跟著這副牌走），
+  `truncated` 為真時多一條「目前只統計最近 N 場」。
+- ⚠ 點背景關閉用的是一顆**透明按鈕**（不是在 div 上掛 onclick）
+  ⇒ svelte compile 警告數與 BASE **完全相同**（decks 25→25、game 98→98），
+  警告數才能繼續當「版面沒被改壞」的金絲雀（v6.237 的教訓）。
+
+### 8. ⚠ 要請站長裁定的一件事（本版**沒有**處理）
+
+房間的 `seats[]` 是整包下發給**雙方**的（`deckEntries` 本來就是，對戰要用）。
+加上 `deckId` 之後，對手的瀏覽器也會拿到我的 `deckId`，理論上可以拿去查我這副牌的勝率。
+- 外洩的只有**數字與原型名稱**（端點不回 email／暱稱／房號／牌表）。
+- 對手本來就看得到我完整的 60 張牌。
+- 但這與 v6.220「seats[].email 不再下發玩家端」是同一類問題。
+⇒ 若站長認為要擋，做法是比照 v6.220：**伺服器端**在 rooms-out middleware 把
+`seats[].deckId` 剝掉，並在 PUT 回填（少了回填會被 client 的整包寫回洗掉）。
+那是伺服器改動，必須另開一版且 **server 先上**。
+
+### 9. 守衛
+
+`scripts/test-v6267-deck-stats-client.mjs`（**45 條**，已進 `package.json` 的 test chain）：
+【0】掃描器自我驗證（含 stripComments 的正對照 —— 我自己在 JSDoc 裡寫的範例真的害 A4 誤報過一次）
+【A】seats[].deckId 實跑　【B】handleSetDeck 實跑　【C】deck-stats 十條行為端
+【D】載入請求數量測　【E】Firestore 讀取次數量測　【F】既有 CRUD
+【G】HEAD-FAIL（對 BASE 9 條各自紅）＋ 正對照 (a)(b)(c)　【H】突變 9 條全紅。
+
+⚠ `test-v6264` 的 `BASE_SHA` 已同步換成 v6.266 的 sha（不換的話 F1 會因為「首頁多了兩則」而紅）。
+
+### 10. 順手修兩支既有守衛（跑完整 npm test 時被抓到）
+
+**① `test-v6213` 的桌機 CSS 指紋鎖**（它自己的檔頭就寫「要刻意改桌機時，把新指紋填進來並在
+commit 說明」）。這一版替 `/decks` 新增了套牌戰績 modal 的桌機樣式 ⇒ 指紋必然變。
+⭐ 為了不讓「更新指紋」把鎖變弱，多加一條：**把 `.ds-backdrop` ~ `.ds-notes` 那一段整組拿掉之後，
+必須逐字還原回 v6.212 的指紋**（`6ac52437ce962826` / 25315 字元）。
+⇒ 「桌機只多了那一段、其餘一個宣告都沒動」仍然是逐字證明。
+
+**② `test-v6265` 的兩處逐字比對已經過期，而且沒有人發現。**
+- `F4` 把 `oracle-admin/server_admin_patch.js` 釘在 v6.264 的 blob，但 **v6.266 合法改過它**
+  ⇒ 只要物件庫拿得到歷史就必紅。**CI 是 `fetch-depth: 1` 淺複製 ⇒ 一直靜默 `shallowSkip`**，
+  所以從 v6.266 起這一條其實**沒有在守**（正是 v6.263 記錄的那種毛病，只是換一個位置復發）。
+  ⇒ 改成「每個檔各自釘在**最後一次合法改動的那一版**」。
+- `B2` 把**整份** `room.ts` 釘在 v6.264，但它要守的其實是「Firestore 版的 `startGame` 不可以
+  被改壞」。整份比對會讓同一個檔案裡別的函式被合法改動（本版的 `seats[].deckId`）誤紅。
+  ⇒ 收窄成只對 **`startGame` 那一段**逐字比對：範圍更準、強度不變（並補了抽取器的下限斷言）。
+
+⚠ 這兩件事都不是「為了讓自己過關而放寬守衛」——①附了更嚴的還原對照，②把假綠改回真的在守。
+
+### 11. 驗證輸出（沙盒實測）
+
+- `test-v6267`：**45 PASS / 0 FAIL**（含 HEAD-FAIL 9 條各自紅、突變 9 條全紅）。
+- svelte compile 警告數 vs BASE：`decks/+page.svelte` **25 → 25**、`game/+page.svelte` **98 → 98**
+  （代碼分佈也逐項相同；`css_unused_selector` 維持 1／7）。
+  ⭐ 這是靠「背景關閉改用透明按鈕」換來的：照既有 modal 那樣在 div 上掛 onclick 會多 4 條 a11y 警告。
+- `tsc`：改前改後**同為 82 條既有錯誤**（全在 effects.ts／engine.ts，與本版無關），
+  新增檔 `deck-stats.ts` 0 錯，`TS2304` 兩邊都是 **0**。
+- 完整 `npm test`（597 步，分批跑）全綠；`anti-pattern-lint` 無違規。
+- ⚠ **`vite build` 在沙盒跑不完**（超過 178 秒的呼叫上限）。已完成的部分：
+  client 與 server 兩個 bundle 都已產出（＝兩份 `.svelte` 的 Svelte 編譯都過了），
+  只差最後的 prerender／adapter；而 `src/routes/+layout.ts` 是 `ssr = false`
+  ⇒ prerender 只輸出 HTML 殼、不會執行元件程式碼 ⇒ 那一步不可能因為本版的改動而失敗。
+  即便如此，**綠燈仍以 GitHub Actions 的 `conclusion` 為準**。
+
+
 ## v6.266 — 套牌戰績【伺服器端 P1】：`deckId` 收取 ＋ sparse 索引 ＋ `GET /api/deck-stats`
 
 BASE `cef06975e99502eb8eb20f26e07ac713267f41b3`（v6.265）。

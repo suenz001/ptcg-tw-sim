@@ -8826,7 +8826,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       return;
     }
     onlineError = '';
-    try { await setSeatDeck(roomCode, deck.entries); }
+    // v6.267 套牌戰績：連同 `deck.id` 一起寫進座位。
+    //   ⚠ 這是「client 送新欄位」——伺服器 v6.266 已經先上線收下了，順序正確。
+    //   ⚠ 本機雙人／vsAI 走不到這裡（沒有房間）⇒ 天然不記，與站長「只算線上」的裁定一致。
+    try { await setSeatDeck(roomCode, deck.entries, deck.id); }
     catch (e: any) { onlineError = e.message ?? '設定牌組失敗'; }
   }
   // v3.9993：偵測「🎲 隨機牌組」option（value="__random__"）並回傳隨機抽選的 deck id。
