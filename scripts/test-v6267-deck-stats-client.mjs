@@ -633,7 +633,16 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
 `,
     ];
     assert.strictEqual(stripNew(RT, RT_MARKS), bRT.out, 'room.ts 除了 deckId 之外還被動到別的地方');
-    const roStripped = stripNew(RO, []).replace(
+    // ⚠ v6.270 合法改動 room-oracle.ts（oracleTx 接上 delta-put；test-v6270 全面接管那一塊的守備）
+    //   ⇒ 比對前把那兩處**逐字剝回去**：字面對不上（＝有人再動）照樣紅。
+    const RO_V6270_IMPORT = "  // ⭐⭐⭐v6.270 休閒 PUT 上行增量：哨兵在＝送 patch；缺席／熔斷＝送全量（行為與 v6.269 逐字相同）\n  deltaPutBase, oracleUpsertRoomDelta,\n";
+    const RO_V6270_TX_NEW = "    // ⭐⭐⭐v6.270 差分基底必須在跑 `fn` **之前**快照（fn 可能就地改動 room 物件）。\n    //   哨兵缺席／熔斷時回 null ⇒ 下面走 oracleUpsertRoom，請求與 v6.269 逐字相同。\n    //   每一輪 attempt 都重新快照 ⇒ 409 後的下一輪自然是「重 GET 重 diff」。\n    //   ⚠ `typeof` 防衛：test-v6245/v6246 的 oracleTx 抽取 harness 只注入四個既有識別字、\n    //     test-v6265 的 CJS stub 也沒有這兩支 —— 識別字缺席時走全量（＝那些守衛驗的 BASE 行為）。\n    const dpBase = (typeof deltaPutBase === 'function') ? deltaPutBase(room as unknown as Record<string, unknown>) : null;\n    const newData = await fn(data);\n    let result: OracleUpsertResult;\n    try {\n      result = (dpBase !== null && typeof oracleUpsertRoomDelta === 'function')\n        ? await oracleUpsertRoomDelta(roomCode, newData as unknown as Record<string, unknown>, ver, dpBase, opts)\n        : await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);\n";
+    const RO_V6270_TX_OLD = "    const newData = await fn(data);\n    let result: OracleUpsertResult;\n    try {\n      result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);\n";
+    let roUndone = stripNew(RO, []);
+    assert.ok(roUndone.includes(RO_V6270_IMPORT) && roUndone.includes(RO_V6270_TX_NEW),
+      'room-oracle.ts 的 v6.270 區段字面對不上（被第三度改動？）——先更新這裡的剝除字串');
+    roUndone = roUndone.split(RO_V6270_IMPORT).join('').split(RO_V6270_TX_NEW).join(RO_V6270_TX_OLD);
+    const roStripped = roUndone.replace(
       /\/\*\*\n \* v6\.267：連同 `deckId` 一起寫進座位。[\s\S]*?\n \*\/\n(export async function setSeatDeck\(roomCode: string, deckEntries: DeckEntry\[\]), deckId\?: string \| null\)/,
       '$1)');
     assert.strictEqual(roStripped, bRO.out, 'room-oracle.ts 除了 deckId 之外還被動到別的地方');

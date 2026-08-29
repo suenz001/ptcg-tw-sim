@@ -473,6 +473,7 @@ export async function oracleGetRoom(
     const res = await oracleApi<{ room: OracleRoom } | undefined>(`/api/rooms/${code.toUpperCase()}${q}`);
     // 204：server 告知版本未變 → 回哨兵讓 caller 略過（不觸發任何 callback）
     if (res === undefined) return ROOM_UNCHANGED;
+    _noteDeltaPutSentinel(res);   // ⭐v6.270 delta-PUT 哨兵：以最近一次 GET 的 {room} 回應為準
     return res.room;
   } catch (err: unknown) {
     // ⭐⭐⭐v6.246 只有**真的 404** 才算「房間不存在」。逾時（包括 URL 裡剛好出現 404 的那種）
@@ -501,6 +502,7 @@ export async function oracleGetRoomDelta(
       `/api/rooms/${code.toUpperCase()}${q}`,
     );
     if (res === undefined) return ROOM_UNCHANGED;
+    _noteDeltaPutSentinel(res);   // ⭐v6.270 輪詢的 GET 也算「最近一次」（哨兵消失＝伺服器撤掉 kill switch）
     return res && res.room ? res : null;
   } catch (err: unknown) {
     // ⭐⭐⭐v6.246 同 oracleGetRoom：這裡的 URL 帶 `logh=<雜湊>`／`logSince=<數字>`／`since=<版本>`，
@@ -553,6 +555,325 @@ function _noteRoomServerTime(srvMs: unknown, sentAt: number, recvAt: number): vo
   _clockWarned = true;
   console.warn(`[PTCG clock] 本機時鐘與伺服器相差 ${Math.round(off / 1000)} 秒；建局時間改用伺服器時鐘（v6.214③）`);
 }
+
+// ── ⭐⭐⭐v6.270 休閒 PUT 上行增量【階段 2：client 端】──────────────────────────
+// >>> v6270-delta-put-client-core（守衛 test-v6270-delta-put-client.mjs 會把這一段抽出來實跑）
+//
+// 背景：休閒對戰是 client-authoritative —— 每個動作把整包房間 doc（實測 40~48KB）PUT 上去，
+//   而 v6.245/v6.246 已定案「慢的是玩家上行」。v6.268 在伺服器端上線 PTCG-DELTA-PUT middleware：
+//   PUT body 帶 `patchProto:1` 與 `patch:{set,del,logAppend}`＋`fullHash`＋`expectedVersion` 時，
+//   伺服器以「DB 現 doc 的 client 視角」（JSON round-trip＋v1.20 同款 email 剝除）為基底套 patch、
+//   canonical hash 複驗後改寫成與全量 PUT 同形的 body 交給既有核心 PUT
+//   ⇒ 落庫／CAS／回應完全不變，只有上行位元組數變小。
+//
+// 協定要點（守衛把 v6.268 的 middleware 抽出來與這裡端到端對跑＋fuzz）：
+//   ・哨兵：GET /api/rooms/:code 的 { room } 回應帶 `deltaPut:1`。**以最近一次 GET 為準**；
+//     哨兵缺席（舊伺服器／kill switch 撤掉）⇒ 一律送全量，且不為此多打任何請求。
+//   ・fullHash 對 `JSON.parse(JSON.stringify(newData))` 計算（與伺服器 JSON 視角一致）；
+//     演算法與伺服器 `_dpCanonHash` 逐字元同款（遞迴排序鍵＋FNV-1a 雙 32bit，免疫 BSON 鍵序）。
+//   ・三態：409（`deltaReason:'version'`，刻意不回 room）→ 原樣交回 oracleTx 的既有重試迴圈
+//     （下一輪重 GET 重 diff）；422 `deltaReject`／400（middleware 被整個撤掉時核心 PUT 的
+//     missing data）→ **當場改送全量**（同一 attempt、同一份 newData）；正常 → 核心 PUT 既有回應。
+//   ・⚠ 連 3 次 422/400 ⇒ 本 session 熔斷（之後全走全量）＋ `casual-delta-fuse` 診斷指紋
+//     （送出端在 game/+page.svelte 的 _casualNoteDeltaFuse，走既有 _casualDiagSend 閘）。
+//   ・上限（超過任何一道＝直接送全量，絕不賭伺服器收不收）：set/del ≤256、logAppend ≤512、
+//     hash 工作量伺服器 1M 字元（客端取 90 萬留餘裕）、路徑段禁 `__proto__`/`constructor`/`prototype`。
+//   ・⭐ patch 比全量 body 的 60% 還大 ⇒ 直接送全量（開局／重開局這種整包重寫的情境）。
+//
+// ⚠⚠ email：伺服器 GET 出口把 seats[].email 剝成 null（v1.20 PTCG-ROOMS-OUT），middleware 的
+//   基底也套同一條規則 ⇒ 兩端「client 視角」天生一致；成功路徑由伺服器把同 uid 的 email
+//   回填後才落庫（與全量路徑的 _roomsPutKeepEmailMw 同款規則）。
+// ⚠ 基底快照必須在 oracleTx 跑 `fn` **之前**取（fn 可能就地改動 room 物件）；
+//   快照本身就是一次 JSON round-trip ⇒ 與伺服器基底的 JSON 視角一致。
+// ⚠ 任何不確定（結構不對／超限／hash 算不出來）一律 fail-open 成**全量** ——
+//   全量是今天已在線上跑的路徑，絕不會比 BASE 更糟。
+// ⚠ 診斷 bodyBytes：實際送出的 PUT body 位元組數（UTF-8），patch 與 full 分開的滾動窗，
+//   由 game/+page.svelte 的休閒診斷 payload 讀出（deltaPutDiag）；哨兵缺席時**完全不量**
+//   （不多做任何序列化）⇒ 舊伺服器路徑的 CPU 成本與 BASE 相同。
+export const DELTA_PUT_MAX_SET = 256;
+export const DELTA_PUT_MAX_DEL = 256;
+export const DELTA_PUT_MAX_LOGAPPEND = 512;
+export const DELTA_PUT_MAX_HASH_CHARS = 900000;   // 伺服器上限 1M 字元的 9 折（超過直接送全量）
+export const DELTA_PUT_FULL_RATIO = 0.6;          // ⭐ patch > 全量的 60% ⇒ 送全量
+export const DELTA_PUT_FUSE_LIMIT = 3;            // ⚠ 連 3 次 deltaReject ⇒ 本 session 熔斷
+
+let _dpSentinel = false;        // 最近一次 GET 的 {room} 回應有沒有 deltaPut:1
+let _dpFused = false;           // 本 session 熔斷（之後全走全量；重整頁面才重置）
+let _dpRejectStreak = 0;        // 連續 422/400 計數（成功送出 patch 就歸零；409 不動它）
+let _dpRejects = 0;             // 累計 422/400 次數（診斷用）
+let _dpLastRejectReason: string | null = null;   // 最近一次拒收原因（'hash'/'bad-patch'/'http-400'…）
+const _DP_BYTES_WIN = 50;       // bodyBytes 滾動窗上限
+const _dpBytesPatch: number[] = [];
+const _dpBytesFull: number[] = [];
+let _dpEncoder: TextEncoder | null = null;
+
+/** UTF-8 位元組數（nginx 的 request_length 量的就是位元組，不是 UTF-16 字元數）。 */
+function _dpUtf8Len(s: string): number {
+  try {
+    if (typeof TextEncoder !== 'undefined') {
+      if (!_dpEncoder) _dpEncoder = new TextEncoder();
+      return _dpEncoder.encode(s).length;
+    }
+  } catch { /* fallthrough 到手算 */ }
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c < 0xdc00) { n += 4; i++; }   // surrogate pair
+    else n += 3;
+  }
+  return n;
+}
+function _dpNoteBytes(kind: 'patch' | 'full', bytes: number): void {
+  const a = kind === 'patch' ? _dpBytesPatch : _dpBytesFull;
+  a.push(bytes);
+  if (a.length > _DP_BYTES_WIN) a.shift();
+}
+function _dpStat(a: readonly number[]): { n: number; p50: number; p95: number; max: number } | null {
+  if (a.length === 0) return null;
+  const s = a.slice().sort((x, y) => x - y);
+  return { n: s.length, p50: s[Math.floor(s.length * 0.5)],
+    p95: s[Math.min(s.length - 1, Math.floor(s.length * 0.95))], max: s[s.length - 1] };
+}
+
+/** 哨兵記錄：只認「{room} 形狀」的回應（404／204／列表都不動旗標）。 */
+function _noteDeltaPutSentinel(body: unknown): void {
+  try {
+    const b = body as { room?: unknown; deltaPut?: unknown } | null | undefined;
+    if (b && typeof b === 'object' && b.room && typeof b.room === 'object') {
+      _dpSentinel = (b as { deltaPut?: unknown }).deltaPut === 1;
+    }
+  } catch { /* 判定失敗＝維持現值（下一次 GET 會再校正） */ }
+}
+
+/** 診斷讀出口（game/+page.svelte 的休閒 payload 用；純讀取，零副作用）。 */
+export function deltaPutDiag(): { fused: boolean; rejects: number; lastReason: string | null;
+  bytes: { patch: { n: number; p50: number; p95: number; max: number } | null;
+           full: { n: number; p50: number; p95: number; max: number } | null } | null } {
+  const p = _dpStat(_dpBytesPatch), f = _dpStat(_dpBytesFull);
+  return { fused: _dpFused, rejects: _dpRejects, lastReason: _dpLastRejectReason,
+    bytes: (p || f) ? { patch: p, full: f } : null };
+}
+/** 熔斷了嗎（casual-delta-fuse 指紋的判準；純讀取）。 */
+export function deltaPutFuseTripped(): boolean { return _dpFused; }
+
+/**
+ * 差分基底快照：哨兵在、且沒熔斷 ⇒ 回 room 的 JSON round-trip 深拷貝；否則回 null。
+ * ⚠ 回 null 時 oracleTx 走 oracleUpsertRoom ⇒ 請求與 BASE 逐字相同，也不多做任何序列化。
+ */
+export function deltaPutBase(room: Record<string, unknown>): Record<string, unknown> | null {
+  if (!_dpSentinel || _dpFused) return null;
+  try { return JSON.parse(JSON.stringify(room)) as Record<string, unknown>; } catch { return null; }
+}
+
+const _DP_BAD_SEG = (s: string): boolean => (typeof s !== 'string' || s === '' || s.length > 256
+  || s === '__proto__' || s === 'constructor' || s === 'prototype');
+
+/**
+ * canonical hash —— 與伺服器 `_dpCanonHash`（server_admin_patch.js v1.29）**逐字元同演算法**：
+ * 物件鍵遞迴排序後才餵進 FNV-1a 雙 32bit；陣列保序；undefined 欄位跳過（＝JSON 視角）。
+ * 超過工作量／深度上限 -> throw（呼叫端接住＝改送全量）。
+ */
+export function deltaPutCanonHash(v: unknown): string {
+  let h1 = 0x811c9dc5 >>> 0, h2 = 0xcbf29ce4 >>> 0, n = 0;
+  const mix = (s: string): void => {
+    n += s.length;
+    if (n > 1000000) throw new Error('dp-hash-too-big');
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ ((c + 131) & 0xffff), 16777619) >>> 0;
+    }
+  };
+  const ser = (x: unknown, d: number): void => {
+    if (d > 32) throw new Error('dp-hash-too-deep');
+    if (x === null || x === undefined) { mix('n'); return; }
+    const t = typeof x;
+    if (t === 'boolean') { mix(x ? 't' : 'f'); return; }
+    if (t === 'number') { mix(Number.isFinite(x as number) ? 'd' + String(x) : 'n'); return; }
+    if (t === 'string') { mix('s' + JSON.stringify(x)); return; }
+    if (Array.isArray(x)) { mix('['); for (const it of x) { ser(it, d + 1); mix(','); } mix(']'); return; }
+    if (t === 'object') {
+      const o = x as Record<string, unknown>;
+      const ks = Object.keys(o).sort();
+      mix('{');
+      for (const k of ks) {
+        if (o[k] === undefined) continue;   // JSON.stringify 會丟掉 undefined 欄位 => 兩端視角一致
+        mix(JSON.stringify(k) + ':'); ser(o[k], d + 1); mix(',');
+      }
+      mix('}');
+      return;
+    }
+    mix('n');   // function/symbol 等不該出現的型別 -> 當 null（JSON 視角）
+  };
+  ser(v, 0);
+  return h1.toString(16) + '-' + h2.toString(16);
+}
+
+const _dpIsPlainObj = (o: unknown): o is Record<string, unknown> =>
+  !!o && typeof o === 'object' && !Array.isArray(o);
+
+/** 深比較（兩邊都是 JSON round-trip 後的資料 ⇒ 沒有 undefined／函式；鍵序無關）。 */
+function _dpEq(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  const aa = Array.isArray(a), ab = Array.isArray(b);
+  if (aa !== ab) return false;
+  if (aa) {
+    const x = a as unknown[], y = b as unknown[];
+    if (x.length !== y.length) return false;
+    for (let i = 0; i < x.length; i++) { if (!_dpEq(x[i], y[i])) return false; }
+    return true;
+  }
+  const ka = Object.keys(a as object), kb = Object.keys(b as object);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!_dpEq((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false;
+  }
+  return true;
+}
+
+export type RoomPatch = { set: Record<string, unknown>; del: string[]; logAppend?: unknown[] };
+
+/**
+ * 差分：兩層欄位（top 或 gameState.sub）＋ gameState.log 前綴相同時只送 logAppend。
+ * 回 null ＝「不可增量」（鍵不合法／超限），呼叫端送全量。
+ * ⚠ 語義鏡射伺服器 `_dpApplyPatch`：del 先、set 後、logAppend 最後；
+ *   本函式產出的 patch 套回 base 必得 next（守衛以 fuzz 10,000 次對跑證明）。
+ */
+export function buildRoomPatch(base: unknown, next: unknown): RoomPatch | null {
+  if (!_dpIsPlainObj(base) || !_dpIsPlainObj(next)) return null;
+  const set: Record<string, unknown> = {};
+  const del: string[] = [];
+  let logAppend: unknown[] | null = null;
+  const keys = new Set([...Object.keys(base), ...Object.keys(next)]);
+  for (const k of keys) {
+    // 鍵名帶 '.' 會被伺服器 splitPath 切開、指到別的位置 ⇒ 一律退回全量（房 doc 正常不會有）
+    if (_DP_BAD_SEG(k) || k.indexOf('.') >= 0) return null;
+    if (!(k in next)) { if (k in base) del.push(k); continue; }
+    if (!(k in base)) { set[k] = next[k]; continue; }
+    if (k === 'gameState' && _dpIsPlainObj(base[k]) && _dpIsPlainObj(next[k])) {
+      const bs = base[k] as Record<string, unknown>, ns = next[k] as Record<string, unknown>;
+      const sub = new Set([...Object.keys(bs), ...Object.keys(ns)]);
+      for (const k2 of sub) {
+        if (_DP_BAD_SEG(k2) || k2.indexOf('.') >= 0) return null;
+        const p = 'gameState.' + k2;
+        if (!(k2 in ns)) { if (k2 in bs) del.push(p); continue; }
+        if (!(k2 in bs)) { set[p] = ns[k2]; continue; }
+        if (k2 === 'log' && Array.isArray(bs.log) && Array.isArray(ns.log)
+            && (ns.log as unknown[]).length >= (bs.log as unknown[]).length) {
+          const bl = bs.log as unknown[], nl = ns.log as unknown[];
+          let prefix = true;
+          for (let i = 0; i < bl.length; i++) { if (!_dpEq(bl[i], nl[i])) { prefix = false; break; } }
+          if (prefix) {
+            if (nl.length > bl.length) logAppend = nl.slice(bl.length);
+            continue;   // 等長且前綴同＝沒變；變長＝只送 append
+          }
+          // 前綴不同（悔棋型整包重寫）→ 掉到下面的整欄 set
+        }
+        if (!_dpEq(bs[k2], ns[k2])) set[p] = ns[k2];
+      }
+      continue;
+    }
+    if (!_dpEq(base[k], next[k])) set[k] = next[k];
+  }
+  if (Object.keys(set).length > DELTA_PUT_MAX_SET || del.length > DELTA_PUT_MAX_DEL) return null;
+  if (logAppend && logAppend.length > DELTA_PUT_MAX_LOGAPPEND) return null;
+  const patch: RoomPatch = { set, del };
+  if (logAppend && logAppend.length > 0) patch.logAppend = logAppend;
+  return patch;
+}
+
+/** 422/400 的拒收原因（從錯誤訊息裡撈伺服器的 deltaReason；撈不到記狀態碼）。 */
+function _dpRejectReasonOf(err: unknown, status: number): string {
+  try {
+    const m = /"deltaReason"\s*:\s*"([A-Za-z0-9_-]{1,32})"/.exec(String((err as Error | null)?.message || ''));
+    if (m) return m[1];
+  } catch { /* ignore */ }
+  return 'http-' + status;
+}
+
+/**
+ * ⭐⭐⭐ oracleTx 專用的房間寫入：基底在 ⇒ 試著送 patch；否則行為與 oracleUpsertRoom 逐字相同。
+ *
+ * 退全量的四條路（守衛逐條有正對照）：
+ *   ①`base` 為 null（哨兵缺席／熔斷）→ 直接 delegate，不多做任何序列化；
+ *   ②diff 不可增量／超限／hash 算不出來 → 全量；
+ *   ③patch body > 全量 body 的 60% → 全量（開局情境）；
+ *   ④送出後收到 422/400 → 當場改送全量（連 3 次熔斷）。
+ * 409（版本不符）不在此處理：原樣回給 oracleTx 的既有重試迴圈（下一輪重 GET 重 diff）。
+ */
+export async function oracleUpsertRoomDelta(
+  code: string,
+  data: Record<string, any>,
+  expectedVersion: number | undefined,
+  base: Record<string, unknown> | null,
+  opts?: { timeoutMs?: number },
+): Promise<OracleUpsertResult> {
+  // ①基底缺席／版本不明 ⇒ 與 BASE 逐字相同的全量路徑（伺服器 expectedVersion 要 ≥1 的整數）
+  if (!base || expectedVersion === undefined || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+    return oracleUpsertRoom(code, data, expectedVersion, opts);
+  }
+  let fullStr: string, next: Record<string, unknown>;
+  try {
+    fullStr = JSON.stringify(data);
+    next = JSON.parse(fullStr) as Record<string, unknown>;   // ⭐ fullHash 對 JSON round-trip 後的 newData 計算
+  } catch {
+    return oracleUpsertRoom(code, data, expectedVersion, opts);
+  }
+  // 全量 body ＝ `{"data":<fullStr>,"expectedVersion":<ev>}` ⇒ 長度可以直接算，不必再組一次字串
+  const fullBodyLen = fullStr.length + 28 + String(expectedVersion).length;
+  const fullBodyBytes = () => _dpUtf8Len(fullStr) + 28 + String(expectedVersion).length;   // 外層 wrapper 全 ASCII
+  let body: { patchProto: 1; patch: RoomPatch; fullHash: string; expectedVersion: number } | null = null;
+  let patchStr: string | null = null;
+  try {
+    if (fullStr.length <= DELTA_PUT_MAX_HASH_CHARS) {   // ②超過伺服器 hash 工作量 ⇒ 必被拒 ⇒ 不試
+      const patch = buildRoomPatch(base, next);
+      if (patch) {
+        body = { patchProto: 1, patch, fullHash: deltaPutCanonHash(next), expectedVersion };
+        patchStr = JSON.stringify(body);
+        // ③⭐ 60% 門檻：patch 沒省到夠多就直接送全量（省掉伺服器 rebuild+hash 的白工）
+        if (patchStr.length > fullBodyLen * DELTA_PUT_FULL_RATIO) { body = null; patchStr = null; }
+      }
+    }
+  } catch { body = null; patchStr = null; }
+  if (body === null || patchStr === null) {
+    _dpNoteBytes('full', fullBodyBytes());
+    return oracleUpsertRoom(code, data, expectedVersion, opts);
+  }
+  _dpNoteBytes('patch', _dpUtf8Len(patchStr));
+  const _sentAt = Date.now();
+  try {
+    const res = await oracleApi<OracleUpsertResult>(`/api/rooms/${code.toUpperCase()}`, {
+      method: 'PUT',
+      body,
+      timeoutMs: opts?.timeoutMs,   // 缺席 ⇒ oracleApi 取預設 30 秒（patch 很小，大小預算不會放寬）
+    });
+    if (res && 'ok' in res && res.ok) {
+      _dpRejectStreak = 0;   // 成功送達 ⇒ 連續拒收歸零（「連 3 次」是指連續）
+      try { if (res.room) _noteRoomServerTime((res.room as { updatedAt?: unknown }).updatedAt, _sentAt, Date.now()); }
+      catch { /* 對時失敗絕不可以影響房間寫入 */ }
+    }
+    // 409：{conflict, currentVersion, deltaReject, deltaReason:'version'}（沒有 room）——
+    //   oracleTx 只看 'ok' in result ⇒ 走既有 conflict 重試（下一輪重 GET 重 diff），不在這裡重送。
+    return res;
+  } catch (err) {
+    const st = oracleErrorStatus(err);
+    if (st === 422 || st === 400) {
+      // ④伺服器拒收（hash 不符／格式錯／停用／middleware 被撤掉）⇒ 當場改送全量（同一 attempt）
+      _dpRejects++;
+      _dpRejectStreak++;
+      _dpLastRejectReason = _dpRejectReasonOf(err, st);
+      if (_dpRejectStreak >= DELTA_PUT_FUSE_LIMIT) _dpFused = true;   // ⚠ 本 session 之後全走全量
+      _dpNoteBytes('full', fullBodyBytes());
+      return oracleUpsertRoom(code, data, expectedVersion, opts);
+    }
+    throw err;   // 逾時／網路錯誤 ⇒ 原樣拋回（oracleTx 的既有逾時語義一個字不變）
+  }
+}
+// <<< v6270-delta-put-client-core
 
 export async function oracleDeleteRoom(code: string): Promise<void> {
   await oracleApi(`/api/rooms/${code.toUpperCase()}`, { method: 'DELETE' });

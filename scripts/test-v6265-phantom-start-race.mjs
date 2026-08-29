@@ -31,6 +31,12 @@ const BASE_SHA = '3fd89b566d729ccddebb3014cdcb9d3cd4bd8fd5';   // v6.264（本�
 //   ⇒ 只要物件庫拿得到歷史就必紅。CI 是 `fetch-depth: 1` 淺複製 ⇒ 一直靜默 shallowSkip、
 //   從 v6.266 起這一條其實**沒有在守**。⇒ 改成「每個檔各自釘在最後一次合法改動的那一版」。
 const BASE_SHA_V6266 = '63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8';
+// ⚠ v6.270 發現：server_admin_patch.js 在 v6.268（delta-put middleware）與 v6.269（休閒監控子表）
+//   都被合法改過，但這條 F4 仍釘在 v6.266 —— 而 CI 淺複製、沙盒 git archive 都沒有歷史，
+//   這條從 v6.268 起**其實沒有在守**（守衛只在「有完整歷史的環境」才會生效的又一例）。
+//   ⇒ pin 前移到 v6.269（最後一次合法改動）；v6.270 本身不動 server_admin_patch.js，
+//     其整檔 sha 由 test-v6270 的 B3 以內嵌 sha256 錨定（history-free，CI 上真的在守）。
+const BASE_SHA_V6269 = 'd9f9b4351b5642095d59d7a2db9037064989855a';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8');
@@ -647,7 +653,8 @@ await T('F2 ⭐⭐ 兩份 reason 清單互斥（休閒的 4 個一律 casual- �
   const m = /const CASUAL_DIAG_REASONS = \[([\s\S]*?)\];/.exec(PAGE);
   ok(m, '抓不到 CASUAL_DIAG_REASONS');
   const list = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
-  assert.deepStrictEqual(list, ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt']);
+  // ⚠ v6.270 合法新增 'casual-delta-fuse'（PUT 上行增量的熔斷指紋；仍是 casual- 前綴）。
+  assert.deepStrictEqual(list, ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt', 'casual-delta-fuse']);
   for (const r of list) ok(r.startsWith('casual-'), r + ' 沒有 casual- 前綴 ⇒ 伺服器會把它算進錦標賽批');
   for (const t of ['slow-rtt', 'stale-version', 'invisible-hand', 'manual-sync', 'perf-sample', 'stale-board-drop'])
     ok(!list.includes(t), '錦標賽指紋 ' + t + ' 跑進休閒清單');
@@ -670,13 +677,27 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     shallowSkip('F4 對 BASE 的逐字比對', '上一條結構斷言仍在守'); return;
   }
   // ⚠ v6.267：每個檔各自釘在**最後一次合法改動的那一版**（見檔頭 BASE_SHA_V6266 的說明）。
-  for (const [p, sha] of [['oracle-admin/server_admin_patch.js', BASE_SHA_V6266],
+  // ⚠ v6.270：oracle-client.ts 合法新增了 delta-put 區塊與兩行哨兵記錄（test-v6270 全面接管
+  //   那一塊的守備）。這裡沿用 v6.267 對 F4 自己的修法：把已知的合法新增**剝掉**之後，
+  //   其餘仍必須逐字等於 v6.264 的 blob —— 動到別的地方照樣紅。
+  const stripV6270 = (src) => {
+    const a = src.indexOf('\n// ── ⭐⭐⭐v6.270 休閒 PUT 上行增量【階段 2：client 端】');
+    const eMark = '// <<< v6270-delta-put-client-core\n';
+    const e = src.indexOf(eMark);
+    let t = (a >= 0 && e > a) ? src.slice(0, a) + src.slice(e + eMark.length) : src;
+    t = t.split("    _noteDeltaPutSentinel(res);   // ⭐v6.270 delta-PUT 哨兵：以最近一次 GET 的 {room} 回應為準\n").join('');
+    t = t.split("    _noteDeltaPutSentinel(res);   // ⭐v6.270 輪詢的 GET 也算「最近一次」（哨兵消失＝伺服器撤掉 kill switch）\n").join('');
+    return t;
+  };
+  for (const [p, sha] of [['oracle-admin/server_admin_patch.js', BASE_SHA_V6269],
                           ['src/lib/game/sync-guards.ts', BASE_SHA],
                           ['src/lib/game/oracle-client.ts', BASE_SHA],
                           ['src/lib/game/engine.ts', BASE_SHA]]) {
     const b = readBaseBlob(ROOT, sha, p);
     ok(b.ok, '讀不到 BASE 的 ' + p);
-    assert.strictEqual(readFileSync(join(ROOT, p), 'utf8'), b.out, p + ' 被改動了（本版不該碰它）');
+    const cur = p === 'src/lib/game/oracle-client.ts'
+      ? stripV6270(readFileSync(join(ROOT, p), 'utf8')) : readFileSync(join(ROOT, p), 'utf8');
+    assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
 });
 await T('F5 ⭐⭐⭐ `resolveRoomUpdate` 的收斂邏輯逐字未動（長期記憶明訓：動它會造成死結）', () => {

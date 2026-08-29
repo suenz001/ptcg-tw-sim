@@ -20,6 +20,8 @@ import {
   isOracleTimeout, ORACLE_SIDEEFFECT_TIMEOUT_MS,
   // ⭐⭐⭐v6.246 「因為 body 大而放寬過預算」的逾時不吃重試額度（見下方 oracleTx）
   isOracleUploadBudgetTimeout,
+  // ⭐⭐⭐v6.270 休閒 PUT 上行增量：哨兵在＝送 patch；缺席／熔斷＝送全量（行為與 v6.269 逐字相同）
+  deltaPutBase, oracleUpsertRoomDelta,
   type OracleRoom, type OracleUpsertResult,
 } from './oracle-client';
 // v4.961：oracle mode 也有 firebase auth（signInAnonymously / sign-in upgrade），
@@ -90,10 +92,18 @@ async function oracleTx(
     if (!room) throw new Error('room not found');
     const data = room as unknown as RoomData;
     const ver = (room as OracleRoom)._version;
+    // ⭐⭐⭐v6.270 差分基底必須在跑 `fn` **之前**快照（fn 可能就地改動 room 物件）。
+    //   哨兵缺席／熔斷時回 null ⇒ 下面走 oracleUpsertRoom，請求與 v6.269 逐字相同。
+    //   每一輪 attempt 都重新快照 ⇒ 409 後的下一輪自然是「重 GET 重 diff」。
+    //   ⚠ `typeof` 防衛：test-v6245/v6246 的 oracleTx 抽取 harness 只注入四個既有識別字、
+    //     test-v6265 的 CJS stub 也沒有這兩支 —— 識別字缺席時走全量（＝那些守衛驗的 BASE 行為）。
+    const dpBase = (typeof deltaPutBase === 'function') ? deltaPutBase(room as unknown as Record<string, unknown>) : null;
     const newData = await fn(data);
     let result: OracleUpsertResult;
     try {
-      result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);
+      result = (dpBase !== null && typeof oracleUpsertRoomDelta === 'function')
+        ? await oracleUpsertRoomDelta(roomCode, newData as unknown as Record<string, unknown>, ver, dpBase, opts)
+        : await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);
     } catch (err) {
       // ⭐⭐⭐v6.246 「因為封包大而放寬過預算」的逾時**不吃重試額度**：重試是把同樣大小的 body
       //   對新盤面再送一次，在上行塞死時只會把 UI 再鎖同樣長的一段（48KB＋120 秒預算 ⇒ 玩家要等

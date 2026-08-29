@@ -76,7 +76,9 @@
   //   `PUSH_INFLIGHT_FAILSAFE_MS` 的 Math.max 用到；常數搬去 oracle-client.ts 後這裡不再引用
   //   （留著會變成未使用的 import）。它們的推導與守衛都留在 oracle-client.ts。
   import { ORACLE_MODE, oracleAuth, oracleRoomArchetypes, onOracleUidChange, isOracleTimeout,
-           PUSH_INFLIGHT_FAILSAFE_MS } from '$lib/game/oracle-client';
+           PUSH_INFLIGHT_FAILSAFE_MS,
+           // ⭐v6.270 休閒 PUT 上行增量的診斷（bodyBytes ＋ 熔斷指紋；量測本體在 oracle-client）
+           deltaPutFuseTripped, deltaPutDiag } from '$lib/game/oracle-client';
   // ⭐⭐⭐v6.197「這個人能不能操作」的唯一述詞（fail-closed）。見 src/lib/game/viewer-role.ts
   import { isViewerSpectator, canViewerAct, isSeatUnknownOnline } from '$lib/game/viewer-role';
   import {
@@ -260,7 +262,9 @@
   //   ⚠ 一般對局不可能成立（同一局的 id 從頭到尾不變），實測 0 發／0 bytes。
   //   ⚠ 伺服器端**不必動**：分帳只看 reason 的 `casual-` 前綴（server_admin_patch.js 的 isCasualReason）。
   // ⚠ 這一行**必須維持單行**：v6.261 守衛用 `^\s*const NAME = [^\n]*$` 把它抽出來實跑，換行會抽到半截。
-  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt'];
+  // ⭐v6.270 新增 'casual-delta-fuse'：PUT 上行增量連 3 次被伺服器 deltaReject 的熔斷指紋
+  //   （熔斷後本 session 全走全量 —— 對局不受影響，但要知道有多少人退回全量、為什麼）。
+  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt', 'casual-delta-fuse'];
   const CASUAL_DIAG_MAX_PER_PAGE = 6;   // 每個頁面實例的硬上限（＝三種指紋 × 兩場；三種各自還有「每場一次」旗標）
   // ⚠ 門檻的取值依據（Rule 37：要大於實測過的**成功**案例，否則會把正常人整批報進來）：
   //   一發 pushGameState ＝ oracleTx 的 GET＋PUT，PUT 的 body 實測 40~48KB。
@@ -6323,6 +6327,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       push: {
         n: st ? st.n : 0, p50: st ? st.p50 : -1, p95: st ? st.p95 : -1, max: st ? st.max : -1,
         fail: _casualPushFail, inflight: oldestPushInFlightAgeMs(),
+        // ⭐v6.270 實際送出的 PUT body 位元組數（UTF-8）：patch 與 full 分開統計、能分辨哪種。
+        //   8/30 的 dump 分析發現 push{} 完全沒有 body 大小 ⇒ 增量化上線後量不出實際成效。
+        //   舊伺服器（哨兵缺席）或熔斷時完全不量 ⇒ null。typeof 防衛見 _casualDeltaDiag 的說明。
+        bodyBytes: (typeof _casualDeltaDiag === 'function' ? ((_casualDeltaDiag() || { bytes: null }).bytes ?? null) : null),
       },
       board: {
         phase: g?.phase ?? null, turn: g?.turn ?? null,
@@ -6340,6 +6348,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         ? { won: _startGameWon, readyMs: _startGameReadyMs,
             localSrv: _casualPhantom.localSrv, incomingSrv: _casualPhantom.incomingSrv }
         : null),
+      // ⭐v6.270 只有 casual-delta-fuse 帶得出來：熔斷當下的拒收統計
+      //   （lastReason＝伺服器的 deltaReason：'hash'／'bad-patch'／'disabled'…或 'http-400'）。
+      delta: (reason === 'casual-delta-fuse' && typeof _casualDeltaDiag === 'function' ? _casualDeltaDiag() : null),
       env: {
         vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
         w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
@@ -6367,6 +6378,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         _casualPhantomSent = false; _casualPhantom = null;   // ⭐v6.265 換房＝換一場
         _casualPushSamples = []; _casualPushFail = 0;
       }
+      // ⭐v6.270 熔斷指紋：掛在既有量測點上（零新請求、零計時器、零 await）。
+      //   放在 !ok 早退之前 —— 熔斷常常正是由「patch 被拒 → 改送全量」那幾發前後發生的。
+      if (typeof _casualNoteDeltaFuse === 'function') _casualNoteDeltaFuse();
       if (!ok) { _casualPushFail++; return; }   // ⚠ 只記成功的往返（同 v6.151 的 rtt）
       _pushSample(_casualPushSamples, ms);
       if (_casualPushSamples.length < CASUAL_PUSH_MIN_CALLS) return;
@@ -6410,6 +6424,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
         incomingSrv: (typeof incoming.createdAtSrv === 'number' ? incoming.createdAtSrv : null),
       };
       _tSendClientDiag('casual-phantom-adopt');
+    } catch { /* 診斷絕不影響對戰 */ }
+  }
+  // ⭐⭐v6.270 休閒 PUT 上行增量的兩個診斷掛點（量測本體在 oracle-client.ts 的 v6270 區塊）：
+  //   ①`push.bodyBytes`：實際送出的上行 body 位元組數（patch／full 分開統計，能分辨哪種）；
+  //   ②`casual-delta-fuse`：連 3 次 deltaReject 熔斷（本 session 之後全走全量）的指紋。
+  //   ⚠⚠ 兩者都是「讀既有統計、零額外請求」：送出走既有 _casualDiagSend 閘
+  //     （休閒／線上／有 Firebase 身分／每頁硬上限）⇒ 一般玩家（匿名／未登入）維持 0 發／0 bytes。
+  //   ⚠ 呼叫端一律用 `typeof ... === 'function'` 防衛：test-v6261 守衛的抽取 harness
+  //     只重建六支既有函式、不注入這兩支 —— 防衛缺席時 bodyBytes 為 null、熔斷檢查跳過。
+  let _casualDeltaFuseSent = false;   // casual-delta-fuse 每頁一次（熔斷本來就是 per-session 一次性）
+  function _casualDeltaDiag(): ReturnType<typeof deltaPutDiag> | null {
+    try { return deltaPutDiag(); } catch { return null; }
+  }
+  function _casualNoteDeltaFuse(): void {
+    try {
+      if (_casualDeltaFuseSent) return;
+      if (!deltaPutFuseTripped()) return;
+      _casualDeltaFuseSent = true;
+      _tSendClientDiag('casual-delta-fuse');
     } catch { /* 診斷絕不影響對戰 */ }
   }
   /** 換局時清乾淨：上一局的樣本不可以揹到新局。⚠ per-page 的 _casualDiagSent **刻意不清**（那是硬上限）。 */

@@ -1,5 +1,88 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.270 — 休閒 PUT 上行增量【階段 2：client 端】＋ bodyBytes 診斷 ＋ dump 補 phantom 欄位
+
+BASE `d9f9b4351b5642095d59d7a2db9037064989855a`（v6.269，遠端 main）。
+伺服器端 v6.268 已上線並確認 `hoisted=true enabled=true`；本版只做 client。
+
+### 0. v6.268 協定的複驗（自己讀碼，不是轉述）
+- middleware 只攔 `PUT ^/api/rooms/[^/]+$` 且 body 帶 `patchProto`；`/api/tournament/*` 原樣通過 ✅
+- ⚠ **轉述誤差一處**：任務描述寫 `patch:{set,del}, logAppend`，實際 `logAppend` 在 **patch 裡面**
+  （`patch:{set,del,logAppend}`，`_dpApplyPatch` 讀 `patch.logAppend`）。
+- 三態、上限（set/del ≤256、logAppend ≤512、hash ≤1M 字元、深度 ≤32、路徑禁 `__proto__` 等）、
+  哨兵 `deltaPut:1`、409 不回 room、email 剝除／回填 —— 全部與轉述一致 ✅
+- 路徑**最多兩層**（top 或 `gameState.sub`）——這一點決定了實際省幅（見下）。
+
+### 1. client 端（`oracle-client.ts` 的 `v6270-delta-put-client-core` 區塊）
+- 哨兵：`oracleGetRoom`／`oracleGetRoomDelta` 在回應是 `{room}` 形狀時記下 `deltaPut === 1`
+  （**以最近一次 GET 為準**；404/204/列表不動旗標）。零額外請求。
+- `oracleTx` 語義逐字不變：每輪仍是「GET 最新 → fn → PUT」；只在 fn **之前**多一個
+  `deltaPutBase(room)` 快照（哨兵缺席／熔斷回 null 且**不做任何複製**），PUT 改走
+  `oracleUpsertRoomDelta`（base 為 null 時**直接 delegate 給 oracleUpsertRoom** ⇒ 與 BASE 逐字同請求）。
+  409 → 既有 conflict 重試 ⇒ 下一輪重 GET 重 diff。
+- diff：兩層欄位＋`gameState.log` 前綴相同只送 `logAppend`；deep-equal（鍵序無關）。
+- fullHash 對 `JSON.parse(JSON.stringify(newData))` 計算；canonical hash 與伺服器**逐字元同演算法**。
+- 退全量四條路：①哨兵缺席／熔斷 ②diff 不可增量／超限／hash 過大 ③**patch > 全量 body 的 60%**
+  ④送出後 422/400（當場改送全量、同一 attempt；**連續 3 次 ⇒ 本 session 熔斷**＋`casual-delta-fuse` 指紋；
+  成功送達 patch 就歸零——「連 3 次」是連續不是累計；409 不計）。
+- ⚠ oracleTx 內新識別字一律 `typeof === 'function'` 防衛：test-v6245/v6246 的抽取 harness 只注入
+  四個既有識別字、test-v6265 的 CJS stub 也沒有這兩支 ⇒ 舊守衛**零改動**照樣綠（它們驗的正是全量路徑）。
+
+### 2. ⭐ 實測省多少（`scripts/perf-v6270-delta-put-savings.mjs`，真引擎 AI 自對局 ＋ 真 middleware round-trip）
+4 個預組配對、379 發推送、**端到端逐位元比對 379/379 全過**：
+- BASE 上行：p50 32,852 / p90 54,325 / p99 63,009 bytes，合計 12.4MB
+- 修後上行：p50 12,734 / p90 13,955 / p99 16,813 bytes，合計 4.6MB ⇒ **省 62.7%**（patch 318 / 全量 61）
+- ⚠⚠ **誠實更正先前的估計**：階段 1 時預估「p50 30KB → 1.5KB、省 93~96%」**不成立**。
+  真因：協定路徑最多兩層，而 `gameState.players`（雙方完整盤面的 tuple）是**單一子鍵**，
+  幾乎每一步都變 ⇒ patch 的大宗就是整包 players（p50 約 12KB）。log 部分確實只剩 append。
+  要再往下（例如 `gameState.players.0` 三層路徑）需要**改伺服器協定**，屬下一階段提案，本版不碰。
+- client 端新增 CPU（快照＋round-trip＋diff＋hash＋序列化）：沙盒 p50 4.0ms / p99 8.0ms / max 11.8ms
+  （守衛【G】在 CI 釘 p99 < 40ms 沙盒上限）；哨兵缺席時新增 CPU 為 **0**（守衛 E4 用 Proxy 陷阱證明連讀都不讀）。
+
+### 3. bodyBytes 診斷（【2】）
+- 量測點在 oracle-client（`_dpNoteBytes`）：**實送 body 的 UTF-8 位元組**，patch／full 各自 50 筆滾動窗。
+  哨兵缺席（舊伺服器）時**完全不量**（不多做序列化）⇒ 舊路徑 CPU 與 BASE 相同、bodyBytes 為 null。
+- payload：`push.bodyBytes = { patch:{n,p50,p95,max}|null, full:{…}|null }`（兩者分辨得出）；
+  `delta`（拒收統計）只在 `casual-delta-fuse` 有值，其餘一律 null（沿用 claim/phantom 的「null 不是缺席」慣例）。
+- `+page.svelte` 只加兩支小函式（`_casualDeltaDiag`／`_casualNoteDeltaFuse`）＋
+  `_casualRecordPush` 內一行 typeof-防衛呼叫 ⇒ v6.261 守衛的六函式抽取 harness 零改動照常綠。
+- 一般玩家 0 發／0 bytes：實測（守衛 F4 ＋ test-v6261-perf ① 全綠）。
+- dump 端**零改動**接住 bodyBytes：casualSummary 的 list 本來就整包帶 `push` 物件。
+
+### 4. dump 補 phantom 欄位（【3】）
+`casualSummary()` 的 `out.list.push({...})` 原本把 client 有送、mongo 裡有的 `phantom` 整個丟掉
+⇒ 補 `phantom: (o && o.phantom) || null`（won/readyMs/localSrv/incomingSrv）。**只補欄位**，
+統計數字一個不動（守衛 H2 逐欄位驗）。第二條路徑的分析等下一份 dump 的資料到手再說。
+
+### 5. 既有守衛的調整（逐條，全部是「過期 pin 前移」或「有記錄的合法放寬」）
+- `test-v6154`：admin `MON_REASON_INFO` 補 `casual-delta-fuse` 白話說明（該守衛**強制**每個新指紋都要有）。
+- `test-v6261-perf`：紅線係數 0.03 → **0.035**（payload 多兩個 null 欄位，實測 1287→1422 bytes；
+  主紅線「佔該場總上行 < 0.1%」原封不動且實測最壞 0.079%）。
+- `test-v6265`：F2 清單補第 5 個 reason；F4 的 `server_admin_patch.js` pin 從 v6.266 前移到 v6.269
+  ——⚠ **發現該 pin 從 v6.268 起其實沒在守**（CI 淺複製、沙盒 git archive 都沒歷史，
+  只有「有完整歷史的環境」才會跑到；本次在 /tmp 建了 git 物件庫才炸出來）；
+  `oracle-client.ts` 改為「剝掉 v6.270 已知合法新增後仍須逐字等於 v6.264 blob」。
+- `test-v6267`：Gc 的 room-oracle 比對前把 v6.270 的兩處改動**逐字剝回**（字面對不上照樣紅）。
+- `test-v6264`：【F】的 BASE pin 前移到 v6.269（v6.267 已有一次同款前移；同樣只在有歷史的環境生效）。
+
+### 6. 守衛 `scripts/test-v6270-delta-put-client.mjs`（43 條，已進 package.json test chain）
+【A】行為端接線（真 room-oracle CJS 實跑 pushGameState 真的送出 patch）／【C】端到端 round-trip：
+固定案例＋**fuzz 10,000 次**（client diff → 真 middleware 套用 → canonical hash 一致）／
+【D】三態＋熔斷／【E】60%、上限、哨兵語義／【B】正對照 (a)~(e)（(a) 與 BASE 的**請求序列逐字比對**、
+(c)(d) 內嵌 sha256 錨定 server_admin_patch.js／room.ts／firebase.ts，VERSION-gated、停用時明講）／
+【F】bodyBytes＋指紋接線／【G】perf p99／【H】dump phantom／【I】突變 8 條**各自紅在預期斷言**／
+【J】HEAD-FAIL 5 條各自紅（淺複製時 shallowSkip 並明講）。
+⚠ 讀檔一律先把 CRLF 正規化成 LF（Windows checkout 的工作樹與 CI 的 LF 才不會互相假紅）。
+
+### 7. 部署
+- 伺服器端 v6.268 已上線 ⇒ 本版**沒有順序風險**；只動 client＋admin.html＋dump。
+- 站長要跑：`redeploy-oracle.bat`（前端主站，VM nginx）＋ `update-admin-full.bat`（admin.html）。
+  `dump-client-monitor.cjs` 照舊是 VM 上手動跑的腳本，不經 bat。
+- 上線後看什麼：①下一份 dump 的【②-e】休閒批 `push.bodyBytes`（patch 與 full 的 p50 應分別落在
+  約 13KB 與 30~48KB，patch 佔比越高越好）；②`casual-delta-fuse` 是否成批出現（偶發可忽略，
+  成批＝兩端協定漂移要回頭查）；③`casual-slow-push` 的 p95 趨勢是否下降（分母校正後看）。
+- kill switch：伺服器把 `_DELTA_PUT_ENABLED` 改 false 重佈 ⇒ 哨兵消失，全站 client 自動回全量（守衛 E3）。
+
 ## v6.269 — admin 📡 分頁加上「🎮 休閒對戰批」＋ dump 彙總段的重複計算修正
 
 BASE `1f3a7baa69207c6a88fe42d8ca18d1f906578b56`（v6.268）。

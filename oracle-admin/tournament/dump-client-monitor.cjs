@@ -245,6 +245,11 @@ function casualSummary(rawCasual) {
       ts: r && r.ts, tsLocal: tw(r && r.ts), email: (r && r.email) || null, uid: (r && r.uid) || null,
       room: (r && r.room) || '', reason: rk, label: reasonLabel(rk), ver: d.ver || null,
       push: ph, board: (o && o.board) || null, claim: (o && o.claim) || null,
+      // ⭐v6.270 補帶 v6.265 的 phantom{won,readyMs,localSrv,incomingSrv}——client 有送、mongo 裡有，
+      //   之前在這裡被整個丟掉 ⇒ 8/30 那筆 v6.267 的 casual-phantom-adopt（1/12）沒有這三個欄位，
+      //   「手牌重洗的第二條路徑」查不下去。⚠ 只補欄位，其餘統計一個字不動。
+      //   （v6.270 起 push 物件裡另有 client 端新送的 bodyBytes —— 走既有的 `push: ph` 整包帶出，零改動。）
+      phantom: (o && o.phantom) || null,
       ua: d.ua || null, hc: d.hc, dm: d.dm, truncated: !d.parsed,
     });
   }
