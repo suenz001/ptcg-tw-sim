@@ -1,5 +1,45 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.268 — 休閒 PUT 上行增量【階段 1：伺服器端先行】
+
+BASE `4ccfdff1c5ec485172397c9509200f12906e3646`（v6.267）。
+站長已裁定「server 先上、觀察後再出 client」⇒ 本版玩家完全無感（client 還不會送 patch）。
+
+### 查證（VM dump `put7743.txt`，server.js 行號）
+- 寫入語義：`PUT /api/rooms/:code` 是 `findOneAndUpdate` ＋ `$set:{...data,_version,updatedAt}`
+  （server.js:97-111）——**top-level 逐鍵覆寫**，不是 replaceOne；`data` 缺席的 top-level 鍵留在 DB。
+- CAS：filter `{_id, _version: expectedVersion}`；沒中 → 409 `{conflict, currentVersion, room}`（:111-121）。
+- 回應體：**PUT 有回 `room`（`returnDocument:'after'` 全量，含 gameState）**——v6.265 查不到的那一點這次釘住了。
+- 長輪詢：核心**沒有 EventEmitter**；SSE `/stream` 端點是 500ms 輪 DB（:166-210），
+  休閒 client 用 GET `?since=` → 204 輪詢 ⇒ 通知是 pull-based，middleware 零接觸。
+- `express@^4.21.0`（dump 檔尾 dependencies）；`express.json()` 的 limit **dump 裡沒有，查不出**
+  （不影響本版：delta body 必小於今日已能通過的全量 body）。
+
+### 做了什麼（只動 `oracle-admin/server_admin_patch.js`）
+- 新 `PTCG-DELTA-PUT-BLOCK`（v1.29），插在 `PTCG-ROOMS-OUT-BLOCK-END` 之後、錦標賽區塊之前；
+  用 v1.11/v1.16/v1.17/v1.20 的既有手法 hoist 到第一個 route layer 之前（先於核心 PUT）。
+- 收 `{patchProto:1, patch:{set,del,logAppend}, fullHash, expectedVersion}` →
+  基底＝DB 現 doc 的 **client 視角**（JSON round-trip ＋ v1.20 同款 email 剝除）→ 套 patch →
+  canonical hash（遞迴排序鍵＋FNV 雙 32bit，免疫 BSON 鍵序）複驗 → email 回填（同 uid 才回填）→
+  `req.body = {data, expectedVersion}` 交給既有核心 PUT。**落庫仍是全量、CAS／回應全不動。**
+- 三態：版本不符→409（不回 room，避開 email 外洩）；hash 不符／格式錯／停用／例外→422 `deltaReject`；
+  正常→核心 PUT 既有回應。舊 client（沒帶 patchProto）逐位元原樣 `next()`。
+- GET `/api/rooms/:code` 的 `{room}` 回應加哨兵 `deltaPut:1`＝kill switch：
+  把 `_DELTA_PUT_ENABLED` 改 `false` 重佈（update-tournament.bat）→ 哨兵消失，全站自動回全量。
+- 上限三道：set/del ≤256、logAppend ≤512、hash 工作量 ≤1M 字元、深度 ≤32；超限一律 deltaReject。
+  路徑段禁 `__proto__`/`constructor`/`prototype`（prototype pollution gate）。
+
+### 下一版（client 端 v6.269+）前置條件
+- 哨兵判定：以**最近一次 GET** 的 `deltaPut:1` 決定下一發 PUT 可否送 patch。
+- fullHash 必須對 `JSON.parse(JSON.stringify(newData))` 計算（與伺服器 JSON 視角一致）。
+- 收到 422 `deltaReject`、或 400（patch 區塊被整個撤掉時核心 PUT 的 missing data）→ 改送全量；
+  連 3 次 → 本 session 熔斷 ＋ `casual-` 前綴診斷指紋。409 帶 `deltaReason:'version'` → 重新 GET 再決定。
+
+### 守衛 `scripts/test-v6268-delta-put-server.mjs`（進 package.json test chain）
+正對照（舊 client body 逐位元不變／tournament 路徑原樣／落庫 doc 與全量路徑逐位元同形）、
+round-trip（固定案例＋隨機突變 fuzz）、三態、perf p99、9 個突變各自翻紅、
+錦標賽區塊內嵌 sha256（與 v6.265 逐位元相同）、HEAD-FAIL。
+
 ## v6.267 — 套牌戰績【client 端 P2】：`seats[].deckId` ＋ `/decks` 的 🔍
 
 BASE `63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8`（v6.266）。
