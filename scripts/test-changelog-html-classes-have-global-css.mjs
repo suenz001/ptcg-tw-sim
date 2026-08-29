@@ -32,7 +32,9 @@ ok(globalClasses.size >= 2, `首頁 :global() 只掃到 ${globalClasses.size} �
 // ⚠ 只掃 changelog.html —— 它是**片段**，被首頁 fetch + {@html} 注入，所以吃的是首頁的 CSS。
 //   `changelog-archive.html` 是 `<!DOCTYPE html>` 開頭的**獨立完整頁面**，有自己的 <style>，
 //   不走首頁的 :global，納進來只會產生假 FAIL（第一版就是這樣紅了 4 條）。
-const FILES = ['static/changelog.html'];
+// v6.264：changelog-bodies.html（較舊條目的內文，展開才抓）同樣是被注入首頁的**片段**，
+//   吃的也是首頁的 :global 樣式 ⇒ 必須一起掃（掃描面積只增不減）。
+const FILES = ['static/changelog.html', 'static/changelog-bodies.html'];
 let scannedClasses = 0;
 for (const f of FILES) {
   const p = join(ROOT, f);

@@ -19,15 +19,29 @@ const PAGE = join(ROOT, 'src/routes/+page.svelte');
 let pass = 0, fail = 0;
 const T = (n, f) => { try { f(); console.log('  OK', n); pass++; } catch (e) { console.log('  FAIL', n, '::', e.message); fail++; } };
 const cl = readFileSync(CL, 'utf8');
+// ⭐ v6.264：較舊條目的內文搬到 static/changelog-bodies.html（首頁展開才抓）。
+//   ⚠ ⑥⑬ 這種「黑名單掃全文」的檢查若還是只掃 changelog.html，就等於**被放寬**
+//     ——被搬走的那 30KB 內文從此沒人在看。改成兩份一起掃（掃描面積只增不減）。
+const BD = join(ROOT, 'static/changelog-bodies.html');
+const bodies = existsSync(BD) ? readFileSync(BD, 'utf8') : '';
+const clAll = cl + '\n' + bodies;
 const countEntries = (s) => (s.match(/class="ver-badge"/g) || []).length;
 
 T('① 首頁 changelog 則數 ≤ 50（Wilson 指定「約 50 則」）', () => {
   const n = countEntries(cl);
   assert.ok(n > 0 && n <= 50, '實際 ' + n + ' 則（超過就該把最舊的搬進 changelog-archive.html）');
 });
-T('② 首頁 changelog 檔案 < 60KB（原本 173KB 會拖慢進站）', () => {
+T('② 首頁 changelog 檔案 < 40KB（v6.264 收緊：原本 60KB 只差 4 bytes 就爆）', () => {
+  // ⚠ v6.100 的門檻是 60KB，到 v6.263 已經逼到 61,436 / 61,440 bytes（剩 4 bytes）。
+  //   v6.264 把「展開才看得到的內文」搬到 changelog-bodies.html 之後降到約 30KB，
+  //   門檻同步收緊到 40KB —— {x : x < 40KB} ⊂ {x : x < 60KB}，**嚴格更緊，不是放寬**。
   const kb = statSync(CL).size / 1024;
-  assert.ok(kb < 60, '實際 ' + kb.toFixed(1) + 'KB');
+  assert.ok(kb < 40, '實際 ' + kb.toFixed(1) + 'KB');
+});
+T('②b 搬出去的內文檔也要有上限（40KB），否則只是把成長換個地方繼續', () => {
+  assert.ok(existsSync(BD), 'static/changelog-bodies.html 必須存在（v6.264 起）');
+  const kb = statSync(BD).size / 1024;
+  assert.ok(kb < 40, 'changelog-bodies.html 實際 ' + kb.toFixed(1) + 'KB');
 });
 T('③ 底部有「完整更新歷史」連結，且用 __BASE__ 佔位（GitHub Pages 有子路徑前綴）', () => {
   assert.ok(cl.includes('__BASE__/changelog-archive.html'),
@@ -54,7 +68,7 @@ T('⑥ 首頁 changelog 不得再出現偏技術面的字眼（Wilson：只顯�
                'bundle', 'TS2304', 'helper', '程式碼', '重構',
                // v6.121：只有站長需要知道的內部題材，一律不上首頁（寫進 docs/changelog-internal.md）
                '降載', '資料庫查詢', '輪詢', '索引', 'projection', 'API'];
-  const hit = BAD.filter(w => cl.includes(w));
+  const hit = BAD.filter(w => clAll.includes(w));   // v6.264：含搬到 bodies 檔的內文
   assert.strictEqual(hit.length, 0,
     '出現技術用語：' + hit.join('、') + ' —— 更新記錄請只寫「玩家會看到什麼變化」');
 });
@@ -89,7 +103,7 @@ T('⑫ 首頁 changelog 不得出現第二人稱（公告語氣，不是對站�
 T('⑬ 首頁 changelog 不得出現「只有站長需要知道」的題材', () => {
   // 這些題材玩家沒有任何要做的事、也感受不到規則差異 → 應整則移除，只留在內部詳細版。
   const OWNER_ONLY = ['更新記錄再精簡', '首頁只顯示最近', '伺服器降載', '部署', 'bat 檔'];
-  const hit = OWNER_ONLY.filter((w) => cl.includes(w));
+  const hit = OWNER_ONLY.filter((w) => clAll.includes(w));   // v6.264：含搬到 bodies 檔的內文
   assert.strictEqual(hit.length, 0,
     '出現站長專屬題材：' + hit.join('、') + ' —— 這類改版整則都不要放上首頁');
 });

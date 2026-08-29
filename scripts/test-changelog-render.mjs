@@ -9,7 +9,7 @@
 //
 // 附帶鎖住第二個坑：changelog.html 是**以 {@html} 直接插入的 HTML**，
 //   寫 markdown 的 `**粗體**` 不會被渲染，會原樣顯示成星號（曾有 3 處中招）。
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
@@ -17,6 +17,10 @@ import assert from 'node:assert';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const page = readFileSync(join(ROOT, 'src/routes/+page.svelte'), 'utf8');
 const log = readFileSync(join(ROOT, 'static/changelog.html'), 'utf8');
+// ⭐ v6.264：較舊條目的內文搬到 static/changelog-bodies.html（展開才抓、同樣以 {@html} 注入）。
+//   ⚠ markdown 粗體檢查若只掃 changelog.html 就等於**被放寬** → 兩份一起掃。
+const bodiesPath = join(ROOT, 'static/changelog-bodies.html');
+const bodiesLog = existsSync(bodiesPath) ? readFileSync(bodiesPath, 'utf8') : '';
 
 let pass = 0, fail = 0;
 const T = (n, fn) => { try { fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
@@ -52,7 +56,7 @@ T('三角圖示與版本徽章要能排在文字句首（inline-block，不依�
 });
 
 T('⭐changelog.html 不可出現 markdown 的 **粗體**（以 HTML 插入，星號會原樣顯示出來）', () => {
-  const hits = [...log.matchAll(/\*\*([^*\n]{1,60})\*\*/g)].map((m) => m[1]);
+  const hits = [...(log + '\n' + bodiesLog).matchAll(/\*\*([^*\n]{1,60})\*\*/g)].map((m) => m[1]);
   assert.deepEqual(hits, [], '請改用 <b>…</b>；這些會顯示成字面的星號：' + hits.join('、'));
 });
 

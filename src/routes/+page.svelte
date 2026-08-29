@@ -8,6 +8,8 @@
   import type { Unsubscribe } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
   import { hardRefreshNow } from '$lib/hard-refresh';   // v6.160 清快取唯一實作（與錦標賽報到共用）
+  // v6.264 較舊 changelog 條目的補充說明「展開才取得」（純函式抽在 lib，守衛可直接執行）
+  import { CHANGELOG_BODIES_FILE, isValidChangelogVer, pickChangelogBody } from '$lib/changelog-lazy';
   import HomeVideo from '$lib/HomeVideo.svelte';    // v6.166 首頁最新影片（lazy facade，點擊前不建 iframe）
   import homeVideoData from '$lib/home-video.json';  // v6.166 建置時寫入的最新影片（見 scripts/fetch-latest-video.mjs）
 
@@ -37,6 +39,47 @@
   const homeVideoId = /^[A-Za-z0-9_-]{11}$/.test(homeVideoData.videoId) ? homeVideoData.videoId : '';
   const homeVideoTitle = homeVideoId ? homeVideoData.title : '';
 
+  // ─────────────────── v6.264 較舊條目的補充說明：展開時才取得 ───────────────────
+  //   static/changelog.html 只內嵌最新 12 則的內文；更舊的 38 則只留標題，details 上帶 data-ver。
+  //   玩家展開其中一則時才 fetch 一次 static/changelog-bodies.html（整份共用，之後不再抓）。
+  //   ⚠ toggle 事件**不會冒泡**，所以事件委派必須用**捕獲階段**（addEventListener 第三參數 true）；
+  //     掛在 <section> 上而不是 .changelog-list，是因為後者在 {#if} 裡、{@html} 重繪會換掉節點。
+  //   ⚠ 失敗時不把 Promise 留在快取（下次展開可重試），也不靜默留白（會顯示可重試的提示）。
+  let changelogSectionEl = $state<HTMLElement | null>(null);
+  let changelogBodiesPromise: Promise<string> | null = null;
+  function loadChangelogBodies(): Promise<string> {
+    if (!changelogBodiesPromise) {
+      changelogBodiesPromise = fetch(`${base}/${CHANGELOG_BODIES_FILE}?v=${VERSION}`)
+        .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .catch((e) => { changelogBodiesPromise = null; throw e; });
+    }
+    return changelogBodiesPromise;
+  }
+  async function onChangelogToggle(ev: Event) {
+    const d = ev.target as HTMLElement | null;
+    if (!d || d.tagName !== 'DETAILS') return;
+    const ver = d.getAttribute('data-ver') || '';
+    if (!isValidChangelogVer(ver)) return;               // 最新 12 則與外層折疊沒有 data-ver ⇒ 略過
+    if (!(d as HTMLDetailsElement).open) return;         // 收合不必做事
+    const st = d.getAttribute('data-body-state');
+    if (st === 'loading' || st === 'done') return;
+    d.setAttribute('data-body-state', 'loading');
+    for (const old of Array.from(d.querySelectorAll('.log-body'))) old.remove(); // 重試時不疊第二塊
+    const holder = document.createElement('div');
+    holder.className = 'log-body';
+    holder.textContent = '補充說明載入中…';
+    d.appendChild(holder);
+    try {
+      const inner = pickChangelogBody(await loadChangelogBodies(), ver);
+      if (inner === null) throw new Error('changelog body not found: ' + ver);
+      holder.innerHTML = inner;
+      d.setAttribute('data-body-state', 'done');
+    } catch {
+      holder.textContent = '補充說明載入失敗，收合後再展開一次即可重試。';
+      d.setAttribute('data-body-state', 'error');        // 不是 done ⇒ 下次展開會再試一次
+    }
+  }
+
   // v5.971：firebase 模組於 onMount 動態載入後填入;feedback 相關函式使用它們並以 guard 防未載入。
   let fbMod: typeof import('$lib/firebase') | null = null;
   let fsMod: typeof import('firebase/firestore') | null = null;
@@ -47,6 +90,10 @@
     //   ⚠ 該檔是靜態片段、用 {@html} 插入，裡面寫不了 svelte 的 {base}；因此連結先寫成
     //   `__BASE__/changelog-archive.html` 佔位，載入時在這裡換成實際 base（GitHub Pages 有子路徑前綴）。
     fetch(`${base}/changelog.html?v=${VERSION}`).then((r) => (r.ok ? r.text() : '')).then((t) => { if (t) changelogBuiltin = t.replaceAll('__BASE__', base); }).catch(() => { /* 載入失敗就顯示載入中 */ });
+
+    // v6.264：較舊 changelog 條目的補充說明用捕獲階段委派（toggle 不冒泡）。
+    const clSection = changelogSectionEl;
+    clSection?.addEventListener('toggle', onChangelogToggle, true);
 
     // v5.971：firebase 動態載入(首屏先畫、mount 後才連線)。onMount 不可宣告為 async(其回傳值不會被當 teardown)，
     //   故用內層 async IIFE + disposed/unsub 收尾模式，確保 onAuthStateChanged 的退訂在元件卸載時正確執行。
@@ -91,7 +138,7 @@
       );
       if (disposed) u(); else unsub = u;
     })();
-    return () => { disposed = true; unsub?.(); };
+    return () => { disposed = true; unsub?.(); clSection?.removeEventListener('toggle', onChangelogToggle, true); };
   });
 
   // 意見回饋相關狀態
@@ -360,7 +407,7 @@
        ⚠沒有影片設定時整個元件不渲染，這一段就完全不存在。 -->
   <HomeVideo videoId={homeVideoId} title={homeVideoTitle} />
 
-  <section class="changelog-section">
+  <section class="changelog-section" bind:this={changelogSectionEl}>
     <details class="changelog-outer">
     <summary><h2>📋 版本更新記錄</h2></summary>
     {#if changelogOverride}<div class="changelog-list">{@html changelogOverride}</div>

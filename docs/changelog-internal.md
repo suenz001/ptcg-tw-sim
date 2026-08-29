@@ -1,5 +1,109 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.264 — 首頁 changelog 的結構解：較舊條目的內文「展開才取得」
+
+BASE `ff7ef443a7dd38e48cf0659d8f5e52fe1acf3806`（v6.263）。
+
+### 0. 現況複驗（實測位元組，不是推論）
+
+| | BASE(v6.263) | v6.264 |
+|---|---|---|
+| `static/changelog.html` | **61,436 bytes**（守衛上限 60KB = 61,440 ⇒ **只剩 4 bytes**） | **31,206 bytes（-49.2%）** |
+| 其中 `log-body` 內文 | 40,729 bytes（66.3%） | 12 則 = 10,183 bytes |
+| `static/changelog-bodies.html`（新） | — | 31,665 bytes（**不預快取**，展開才抓） |
+| `static/changelog-archive.html` | 223,716 bytes / **324 則** | 224,817 bytes / **325 則** |
+
+⚠ 交接時被告知封存頁是「325 則」，**實測 BASE 是 324 則**；v6.264 把 v6.196 搬進去之後才是 325 則。
+
+### 1. 站長裁定與 N 的取法
+
+站長：「首頁只載最新 N 則，其餘展開才拓」。取 **N = 12**：
+
+- 位元組預算：`size(N) ≈ 19,264 + 843N`（50 則標題固定約 372B/則、內文平均 843B/則）。
+  取 N=12 ⇒ 約 30KB，**回到 v6.100 當初的設計點（約 33KB）**，離 60KB 上限有一倍餘裕。
+- ⭐**每版增量趨近 0**：出一版 = 進一則完整條目（約 +1,215B）－ 第 13 則的內文搬走（約 −843B）
+  － 最舊一則的標題搬進封存（約 −372B）⇒ 淨值約 0。這才是真正的「結構解」：
+  **不是把檔案改小一次，而是讓它不再單向長大**。
+- 出版節奏實測（`git log`）約每天 8 版 ⇒ 前 12 則涵蓋最近約 1.5 天；50 則的**標題全部照舊直接顯示**，
+  被延後的只有「展開才看得到的補充說明」。
+
+### 2. 舊條目的內文為什麼用 fetch，不是導到封存頁
+
+1. **封存頁裡根本沒有那 38 則**：封存頁依設計只放「已經被擠出首頁 50 則」的條目（BASE 最新是 v6.195），
+   要改成導頁就得把 38 則複製過去 ⇒ 兩份會漂移。
+2. **份量差 7 倍**：封存頁 224KB，專用的 bodies 片段 31KB。為了讀一段補充說明抓 224KB 不合理。
+3. 「展開」的語意是留在原地；導頁會開新分頁、失去閱讀位置。
+
+### 3. 檔案結構與**出版時的搬運順序（三步，順序不可亂）**
+
+- `static/changelog.html`：50 則。前 12 則含 `<div class="log-body">`；
+  第 13~50 則只留 `<summary>`，`<details>` 上帶 `data-ver="v6.xxx"`。
+- `static/changelog-bodies.html`：**片段**（不是完整頁面），38 個 `<div class="log-body" data-ver="v6.xxx">`。
+- 出新版時：
+  1. 新條目（標題＋內文）寫進 `changelog.html` 最上面，並把前一則的 `<details open>` 改回 `<details>`；
+  2. 把**第 13 則**的內文搬進 `changelog-bodies.html` 最上面，該則的 `<details>` 補上 `data-ver`；
+  3. 把**第 50 則之後被擠出去的那一則**（標題＋內文合起來）搬進 `changelog-archive.html` 最上面。
+- ⚠ 漏做任何一步，`test-v6264` 的 A4（雙向集合比對）會直接紅並印出差集與這三步。
+
+### 4. Service Worker（本項最大風險，行為級實測）
+
+`src/service-worker.ts` 的 `PRECACHE` 收 **`files` 全部**（static/ 底下）⇒
+新加的 `changelog-bodies.html` **預設會被預快取**，那就等於把省下來的位元組原封不動搬回每位訪客的
+install，白做一場。⇒ 加進 `HEAVY_MEDIA`（與 covers／music／changelog-archive 同一條路，「用到才快取」）。
+
+`test-v6264` 的【D】把 SW 打包後**真的 dispatch install / fetch**，實測三種情境：
+
+| 情境 | 結果 |
+|---|---|
+| 首次安裝 | install 不抓 `/changelog-bodies.html`；`/changelog.html` 仍照舊預快取（正對照） |
+| 版本更新（新版 CACHE_NAME） | 同樣不抓 bodies ⇒ 每天出版都不會多這 31KB |
+| 離線 | 抓過一次 ⇒ 走 `network-first` 已寫進 cache，離線讀得到；從未抓過 ⇒ 該請求失敗，由前端顯示可重試提示（不是白畫面） |
+
+⚠ v6.222 的 `cache:'reload'` 只對 **prerendered HTML** 生效，bodies 是 `files` ⇒ 語義不變，
+本版沒有動到那條路（D2 是正對照）。
+⚠ 前端請求帶 `?v=${VERSION}` ⇒ 出新版時 URL 改變，不會吃到舊版 bodies。
+
+### 5. 前端接線（`src/routes/+page.svelte` ＋ 新的 `src/lib/changelog-lazy.ts`）
+
+- ⚠⚠ **`toggle` 事件不會冒泡** ⇒ 事件委派必須用**捕獲階段**（`addEventListener(..., true)`）。
+  寫成 `false` 會完全沒有反應，而且不會有任何錯誤訊息。突變測試 E2 專門釘這一條。
+- 監聽掛在 `<section class="changelog-section">`（用 `bind:this`），**不是** `.changelog-list` ——
+  後者在 `{#if}` 裡，`{@html}` 重繪會換掉節點、監聽就掉了。
+- 整份 bodies **只抓一次**（memoized promise）；失敗時把 promise 清掉，讓玩家再展開一次可重試。
+- 已載入的那一則用 `data-body-state="done"` 早退：不重抓、不疊第二塊、**節點不換掉**
+  （否則已讀過的條目每次展開都會再閃一次「補充說明載入中…」）。突變測試 E4 釘這一條。
+- admin 後台 `changelogOverride` 的內容沒有 `data-ver` ⇒ 這套機制自動不生效，行為與 BASE 相同。
+
+### 6. 既有守衛的調整：**只收緊，沒有放寬**（逐條）
+
+| 守衛 | 改動 | 為什麼是收緊 |
+|---|---|---|
+| `test-changelog-size-and-archive` ② | `< 60KB` → **`< 40KB`** | `{x : x<40KB} ⊂ {x : x<60KB}`，舊門檻擋得下的新門檻一定也擋得下 |
+| 同上 ②b（新增） | bodies 檔也 `< 40KB` | 新增條款，防「把成長換個地方繼續」 |
+| 同上 ⑥⑬ | 黑名單改掃 `changelog.html + changelog-bodies.html` | 內文搬走後若只掃前者＝**被放寬**；改後掃描面積只增不減 |
+| `test-changelog-render` markdown 檢查 | 同上，兩份一起掃 | 同上 |
+| `test-changelog-html-classes-have-global-css` | `FILES` 加入 `changelog-bodies.html` | bodies 同樣是被 `{@html}` 注入的片段，吃首頁的 `:global` 樣式 |
+| `test-v6223`「條目數 = 50」「恰一則 open」 | **完全未改** | 新結構仍是 50 則、1 則 open |
+| `test-changelog-size-and-archive` ①⑦⑧⑨⑪⑫ | **完全未改** | 它們看的是 `<summary>` 的純文字，本版沒有動 summary |
+
+### 7. 新守衛 `scripts/test-v6264-changelog-lazy-body.mjs`（36 PASS）
+
+【0】掃描器自驗（⚠ 第一版踩到：V8 的 `String.split` 對「位置 0 的零寬比對」不會切出前導空字串，
+盲目 `shift()` 會少算一則）／【A】結構不變量（history-free）／【B】lib 純函式真的執行／
+【C】把 `+page.svelte` 的 handler 用 esbuild 轉成 JS **在自寫的最小 DOM 上真的跑**
+（DOM stub 自己先驗過會分辨捕獲／冒泡）／【D】SW 三情境／【E】六個突變／
+【F】對 BASE blob 逐字還原（淺複製時走 `shallowSkip` 大聲印出）。
+
+**HEAD-FAIL：對 BASE 樹跑 = 21 條各自紅（不是單一 crash）、exit 1；修後 36 PASS / 0 FAIL。**
+突變 6 個全部紅在指定的那一條。
+
+### 8. 量測（Rule 32：附腳本）
+
+`scripts/perf-v6264-changelog-bytes.mjs`：對同一棵樹量「首頁進站要下載的 changelog 位元組」
+（含 gzip 後大小），BASE 對 HEAD。
+⚠ Rule 36 提醒：**位元組減量不等於延遲減量**。這一版的主要價值是**結構性的**
+（守衛上限只剩 4 bytes、下一版必爆），位元組只是副產品；不要拿它當「玩家會變快多少」的宣稱。
+
 ## v6.263 — CI 的淺複製盲點：8 支守衛在 `fetch-depth: 1` 下 SKIP 或**靜默掏空**
 
 BASE `472ee5f97e7d5ca3e922bf9fa79cf04e4fa6b7fa`（v6.262）。

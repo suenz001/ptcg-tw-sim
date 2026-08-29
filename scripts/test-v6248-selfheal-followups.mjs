@@ -26,7 +26,7 @@
  *
  * Run: node scripts/test-v6248-selfheal-followups.mjs
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { transform } from 'esbuild';
@@ -39,6 +39,11 @@ const OC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
 const SG = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
 const CL = readFileSync(join(ROOT, 'static/changelog.html'), 'utf8');
 const AR = readFileSync(join(ROOT, 'static/changelog-archive.html'), 'utf8');
+// v6.264：首頁只內嵌最新 12 則的內文，更舊的搬到 static/changelog-bodies.html（展開才抓）。
+//   ⚠ 這一支有一條斷言在檢查 v6.247 那一則的**內文**用字，內文搬家之後若還是只掃
+//     changelog.html 就會落空 ⇒ 把三個可能的落點接起來看（掃描面積只增不減）。
+const BD = join(ROOT, 'static/changelog-bodies.html');
+const CLB = existsSync(BD) ? readFileSync(BD, 'utf8') : '';
 
 function stripComments(s) {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -597,10 +602,15 @@ T('[回歸] v6.212 的既有不變量沒被動到', () => {
 // 10. 【6】首頁 changelog 的歸因更正
 // ══════════════════════════════════════════════════════════════════════════
 T('[HEAD-FAIL⑨] v6.247 那則不可以再宣稱問題是「上一版起」才有的', () => {
-  const m = /<details[^>]*>\s*<summary><span class="ver-badge">v6\.247<\/span>[\s\S]*?<\/details>/.exec(CL);
+  const RE_ENTRY = /<details[^>]*>\s*<summary><span class="ver-badge">v6\.247<\/span>[\s\S]*?<\/details>/;
+  const m = RE_ENTRY.exec(CL) || RE_ENTRY.exec(AR);   // 日後這一則被擠進封存頁時仍找得到
   assert.ok(m, '找不到 v6.247 那一則');
-  assert.ok(!/上一版起，資料量較大的盤面/.test(m[0]), '錯誤的歸因（「上一版起」）還在');
-  assert.ok(/並不是上一版才出現/.test(m[0]) && /早就存在/.test(m[0]), '沒有把「這個現象一直都在」講清楚');
+  // v6.264：內文可能已經搬到 changelog-bodies.html（首頁展開才抓）⇒ 兩段接起來才是完整敘述。
+  const bodyM = /<div class="log-body" data-ver="v6\.247">[\s\S]*?<\/div>/.exec(CLB);
+  const full = m[0] + (bodyM ? bodyM[0] : '');
+  assert.ok(/log-body/.test(full), 'v6.247 的內文兩邊都找不到 —— 搬運時漏掉了');
+  assert.ok(!/上一版起，資料量較大的盤面/.test(full), '錯誤的歸因（「上一版起」）還在');
+  assert.ok(/並不是上一版才出現/.test(full) && /早就存在/.test(full), '沒有把「這個現象一直都在」講清楚');
 });
 T('[HEAD-FAIL⑩] 首頁維持 50 則、最新那一則是展開的、被擠掉的那些都進了封存（不綁特定版本）', () => {
   const nums = (s) => (s.match(/ver-badge">v(\d+)\.(\d+)</g) || [])
