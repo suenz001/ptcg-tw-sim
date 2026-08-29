@@ -18,6 +18,8 @@
 import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, revealTopCardsLog } from '../_shared';
 import { copyAttackPostDispatch } from '../_shared';
 import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
+// ⭐ v6.262 支援者效果來源（葉子模組）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
+import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import type { GameState, GameAction, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
@@ -154,7 +156,11 @@ regPost('九尾|靈怪變化', (state, aIdx, pool) => {
     const fn = TRAINER_EFFECTS.get(topCard.name ?? '');
     if (fn) {
       s = addLog(s, `靈怪變化：「${topCard.name}」是支援者卡 → 執行其效果`, aIdx);
-      s = fn(s, aIdx, pool);
+      // ⭐⭐⭐ v6.262：卡面「將那個效果**作為這個招式的效果**使用」＝**不是**「從手牌使出支援者卡」。
+      //   鰭之守護 / 緊張感 / 融合為雪 / 廣域堡壘 四個免疫的卡面前提都是「對手從手牌使出」，
+      //   v6.261 以前直接呼叫 TRAINER_EFFECTS 會把免疫一併繼承 → 化石被錯誤排除。
+      const _s0 = s;
+      s = runAsCopiedSupporterEffect(() => fn(_s0, aIdx, pool));
     } else {
       s = addLog(s, `靈怪變化：「${topCard.name}」支援者效果未實裝（跳過）`, aIdx);
     }

@@ -937,21 +937,12 @@ export function isFossilItemCard(card: Card | undefined): boolean {
     && FOSSIL_ITEM_NAMES.has(card.name);
 }
 
-/**
- * v2.191 陳舊的鰭之化石（J）— 「對手從手牌使出支援者卡時，這隻寶可夢不會
- * 受到那個效果的影響。」
- *
- * 在「對手出 supporter 時試圖目標這隻 fossil」的 effect resolver 中呼叫此 helper
- * 過濾掉鰭之化石。例：對手出某張 supporter 強迫指定對手某隻寶可夢做事 →
- * 該寶可夢若是鰭之化石，則該效果對它無效。
- *
- * 目前實際出戰場機會極低（PTCG 常見 supporter 多數不會直接針對對手單一寶可夢）。
- * 預留 helper 給未來 supporter target picker 用（檢查 picker 候選是否包含此化石）。
- */
-export function isFinFossilSupporterImmune(inst: CardInstance, pool: Map<string, Card>): boolean {
-  if (!inst.fossilOnField) return false;
-  return pool.get(inst.cardId)?.name === '陳舊的鰭之化石';
-}
+// ⚠ v6.262 刪除 `isFinFossilSupporterImmune`（v2.191 起就寫著「預留 helper」）——
+//   全 repo `git grep` 零呼叫端＝死碼，而且它的判準已經被
+//   `effects/cards/v3080_deferred_wave_c.ts` 的 `isImmuneToOppSupporter` 完整取代
+//   （v3.21 把化石整合進去，v6.262 再補上「從手牌使出」這個卡面前提）。
+//   留著兩份平行判準，總有一天會有人接到沒有 source 概念的這一份。
+//   ⇒ 陳舊的鰭之化石｜鰭之守護的免疫**只有一個入口**：isImmuneToOppSupporter。
 
 // v2.35：進化同名比對（PTCG 規則：ex 和非 ex 同名卡是同一進化階級）
 // helper 定義在 effects/_shared.ts；engine / effects 兩邊共用一份。

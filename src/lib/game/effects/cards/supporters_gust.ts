@@ -44,12 +44,14 @@ function gustValidOppBenchIids(
   // v2.388 陳舊的鰭之化石被動 — 不受對手支援者影響：filter 排除
   // v3.06 緊張感 / 融合為雪 — 對手 trainer 免疫：filter 排除
   // v3.08 廣域堡壘 — 超甲狂犀戰鬥場時，整個自方場上對 supporter 免疫
-  return st.players[oppIdx].bench.filter(b => {
-    const card = pool.get(b.cardId);
-    if (b.fossilOnField && card?.name === '陳舊的鰭之化石') return false;
-    if (isImmuneToOppSupporter(st, oppIdx, b, pool)) return false;
-    return true;
-  }).map(b => b.iid);
+  // ⚠ v6.262：原本這裡在中央述詞之前還手刻了一行
+  //   `if (b.fossilOnField && card?.name === '陳舊的鰭之化石') return false;` ——
+  //   那是 isImmuneToOppSupporter 首行的**重複**（v3.21 已整合），而且它繞過了
+  //   v6.262 新增的「來源必須是『從手牌使出』」前提 ⇒ 被招式複製的支援者仍會被它擋掉。
+  //   收斂成只留中央述詞一份。
+  return st.players[oppIdx].bench
+    .filter(b => !isImmuneToOppSupporter(st, oppIdx, b, pool))
+    .map(b => b.iid);
 }
 
 function registerGustSupporter(cardName: string): void {

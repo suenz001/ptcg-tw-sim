@@ -20,18 +20,36 @@ import {
 } from '../_shared';
 import { getOwnBenchLimit } from '../_shared';
 import { applyStatusToOppActive } from '../../effects';
+// ⭐⭐⭐ v6.262 古歷漏免疫：支援者效果目標免疫過濾（含陳舊的鰭之化石｜鰭之守護）
+import { isImmuneToOppSupporter } from './v3080_deferred_wave_c';
+import type { Card } from '$lib/cards/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 古歷（Supporter）— 將雙方的所有寶可夢各恢復「50」HP
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 雙方所有寶可夢（active + bench）各扣 amount damage（不低於 0）。 */
-function healAllOnField(state: GameState, amount: number): GameState {
-  const newPlayers = state.players.map(p => {
-    const healInst = (i: CardInstance): CardInstance => ({
-      ...i,
-      damage: Math.max(0, i.damage - amount),
-    });
+/**
+ * 雙方所有寶可夢（active + bench）各扣 amount damage（不低於 0）。
+ *
+ * ⭐⭐⭐ v6.262：**對手側**要過 supporter 免疫過濾。
+ *   古歷（18564，J）卡面：「將雙方的所有寶可夢各恢復「50」HP。」
+ *   陳舊的鰭之化石｜鰭之守護（⚠在 abilities[0].effect，不在 rulesText）：
+ *     「對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。」
+ *   ⇒ 站長裁定（依卡面全稱）：卡面沒有區分「有利／不利」，
+ *     「不會受到那個效果的影響」就是不受影響 ⇒ **對手的化石不回血**。
+ *   ⚠ 刻意**不**在實作裡加「有利／不利」判斷 —— 卡面沒有這個概念。
+ * ⚠ 只過濾對手側：「對手從手牌使出」是免疫的前提，自己使出時自己的化石不適用免疫，
+ *   照樣回血。
+ */
+function healAllOnField(
+  state: GameState, amount: number, aIdx: 0 | 1, pool: Map<string, Card>,
+): GameState {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const newPlayers = state.players.map((p, pi) => {
+    const healInst = (i: CardInstance): CardInstance => {
+      if (pi === dIdx && isImmuneToOppSupporter(state, dIdx, i, pool)) return i;
+      return { ...i, damage: Math.max(0, i.damage - amount) };
+    };
     return {
       ...p,
       active: p.active ? healInst(p.active) : null,
@@ -43,12 +61,21 @@ function healAllOnField(state: GameState, amount: number): GameState {
 
 // v6.089：卡面「將雙方的所有寶可夢各恢復50HP」→ 雙方全場皆滿血時恢復 0，完全沒效果。
 //   照傷藥等 20+ 張治療卡的既有守衛形態 gate（範圍含雙方）。
-regG('古歷', (st, idx) => {
-  const sides = [st.players[0], st.players[1]];
-  return sides.some(p => [...(p.active ? [p.active] : []), ...p.bench].some(c => c.damage > 0));
+// v6.262：gate 也要扣掉「對手側免疫者」—— 唯一有傷害的是對手的鰭之化石時，
+//   古歷完全沒有效果 ⇒ 依判準①（訓練家「效果完全無法執行就不能使用」，IRON_RULES Rule 26a）不能使用。
+regG('古歷', (st, idx, pool) => {
+  const dIdx = (1 - idx) as 0 | 1;
+  return ([0, 1] as const).some(pi => {
+    const p = st.players[pi];
+    return [...(p.active ? [p.active] : []), ...p.bench].some(c => {
+      if (c.damage <= 0) return false;
+      if (pi === dIdx && isImmuneToOppSupporter(st, dIdx, c, pool)) return false;
+      return true;
+    });
+  });
 });
-reg('古歷', (state, aIdx) => {
-  const s = healAllOnField(state, 50);
+reg('古歷', (state, aIdx, pool) => {
+  const s = healAllOnField(state, 50, aIdx, pool);
   return addLog(s, '古歷：雙方所有寶可夢各恢復 50 HP', aIdx);
 });
 

@@ -90,9 +90,36 @@ const C_GUARD = /canApplyEffectToTarget|canApplyAttackEffectToTarget|passiveImmu
 const C_ADD = /\.damage\s*\+=|damage:\s*[\w.]+\.damage\s*\+\s*[\w(]/;
 const C_FUNC_START = /^\s*(regR|regPost|regPre|regA|register[A-Za-z]+|export\s+(async\s+)?function|function\s|[\w$]+\.set\(|\[\s*['"][^'"]+['"]\s*,\s*\()/;
 const C_ATTACKER = new Set(['aIdx', 'idx', 'actorIdx', 'attackerIdx']);
+/**
+ * ⚠⚠ v6.262 掃描器盲點修正①（IRON_RULES Rule 25）：
+ *   `updatePlayer(addLog(state, '…', aIdx), dIdx, p => …)` —— 第一個參數是**巢狀呼叫**時，
+ *   舊的 `/updatePlayer\(\s*[\w.]+\s*,/` 比不中（`addLog` 後面接的是 `(` 不是 `,`），
+ *   `mutatedIdx` 回 null ⇒ Check H/C 直接 `continue`，整段**靜默不掃**。
+ *   v6.262 的鏽蝕組手下漏免疫就躲在這裡（它的寫法正是 `updatePlayer(addLog(…), dIdx, …)`）。
+ *   ⇒ 改成從 `updatePlayer(` 起做括號配對，跳過完整的第一參數再取第二參數。
+ */
+function updatePlayerSecondArg(line) {
+  const k = line.indexOf('updatePlayer(');
+  if (k < 0) return null;
+  let depth = 0, start = -1;
+  for (let c = k + 'updatePlayer('.length - 1; c < line.length; c++) {
+    const ch = line[c];
+    if (ch === '(') { depth++; if (depth === 1) start = c + 1; }
+    else if (ch === ')') { depth--; if (depth === 0) return null; }
+    else if (ch === ',' && depth === 1) {
+      const rest = line.slice(c + 1);
+      const m = rest.match(/^\s*([a-zA-Z0-9_ ()-]+?)\s*(?:,|$)/);
+      void start;
+      return m ? m[1].trim() : null;
+    }
+  }
+  return null;
+}
 function mutatedIdx(lines, i, lo) {
   for (let j = i; j >= Math.max(lo, i - 10); j--) {
     let m;
+    const up = updatePlayerSecondArg(lines[j]);
+    if (up) return up;
     if ((m = lines[j].match(/updatePlayer\(\s*[\w.]+\s*,\s*([a-zA-Z0-9_ ()-]+?)\s*,/))) return m[1].trim();
     if ((m = lines[j].match(/players\[\s*([a-zA-Z0-9_ ()-]+?)\s*\]\s*=/))) return m[1].trim();
     if ((m = lines[j].match(/\b(?:const|let)\s+\w+\s*=\s*\{\s*\.\.\.\s*(?:state\.)?players\[\s*([a-zA-Z0-9_ ()-]+?)\s*\]/))) return m[1].trim();
@@ -221,11 +248,90 @@ for (const f of files) {
 const H_MUT = [
   ['換位(active賦值)', /(?<![=!<>])\.active\s*=(?!=)/],
   ['對手備戰增減',     /\.bench\.(?:push|splice|unshift)\s*\(/],
-  ['丟能量',           /\.energyAttached\s*=(?!=)|\.energyAttached\.splice\s*\(/],
+  // ⚠⚠ v6.262 掃描器盲點修正②（IRON_RULES Rule 25）：舊 regex 只認**賦值**樣式
+  //   `x.energyAttached = …`，但站內絕大多數是**不可變更新的物件字面量**
+  //   `return { ...c, energyAttached: newAttached }` —— 那才是主流寫法，整批完全沒被掃到。
+  //   ⇒ 補上物件字面量樣式；排除「原封照抄」（`energyAttached: X.energyAttached`）與空陣列
+  //   （建新 instance / 裸化），那些不是「丟能量」。
+  ['丟能量',           /\.energyAttached\s*=(?!=)|\.energyAttached\.splice\s*\(|(?:^|[{,(\s])energyAttached\s*:\s*(?!\[\s*\]|[\w.]+\.energyAttached\b)/],
   ['丟道具',           /\.(?:toolAttached|extraTools)\s*=(?!=)/],
   ['施狀態',           /\.(?:status|secondaryStatus|tertiaryStatus)\s*=(?!=)/],
 ];
 const H_GUARD = /canApplyEffectToTarget|canApplyAttackEffectToTarget|oppPokemonImmuneToAttackEffect|forceOppSwap|oppSwapDmgPost|applyStatusToOppActive|applyDamageToAllOpp|dealAttackDamageToTarget|koTargetByAttackEffect|clearActiveEffects|toBareCard|isImmuneToOppSupporter|resolveBenchGuard|_gustImmune|opp-mut-ok/;
+/**
+ * ⭐⭐⭐ v6.262 Check H 強化：**兩段式 picker 的 stage-2 不該被無條件豁免，也不該被無條件開罰。**
+ *
+ * 站內大量「丟對手能量／道具」是兩段式：stage-1 的 `reg`／`regG` 算候選（免疫 gate 在那裡），
+ * stage-2 的 `regR` 只是把 stage-1 挑中的那一隻寫回盤面。stage-2 本身當然看不到 gate。
+ *
+ * ⚠ 過去的作法是人工標 `// opp-mut-ok: 理由` —— 那等於「作者說有 gate 就算有」，
+ *   正是 v6.257 白名單判錯放行 KO 級 bug 的同一種安慰劑。
+ * ⇒ 改成**結構化驗證**：從 stage-2 所屬的 `regR('<key>')` 反查「是誰 `withPending` 出這個
+ *   `effectKey`」，直接去**那個 producer 函式**裡找免疫 gate。
+ *   - producer 有 gate → 豁免（真的驗過了）
+ *   - producer 沒 gate → 照樣開罰（v6.262 的鏽蝕組手下就是這一條抓出來的：
+ *     `m5-trainer-rust-henchman-pick-energy` 的 producer `reg('鏽蝕組手下')` 當時完全沒有免疫過濾）
+ *   - **完全找不到 producer → 不豁免**（fail-closed，禁止「查不到就當它沒事」）
+ */
+const PRODUCERS = new Map();   // effectKey → [span, …]
+let _producerHits = 0;
+for (const f of files) {
+  const lines = readFileSync(f, 'utf8').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/effectKey:\s*['"]([^'"]+)['"]/);
+    if (!m) continue;
+    _producerHits++;
+    let fs = i;
+    for (let j = i; j >= Math.max(0, i - 200); j--) { if (C_FUNC_START.test(lines[j])) { fs = j; break; } }
+    const span = lines.slice(fs, Math.min(lines.length, i + 40)).join('\n');
+    if (!PRODUCERS.has(m[1])) PRODUCERS.set(m[1], []);
+    PRODUCERS.get(m[1]).push(span);       // ⚠ Rule 25.7：同一個 key 可能有多個 producer → 累積不覆蓋
+  }
+}
+/**
+ * 這一行所在的 resolver 是哪一個 effectKey。
+ * ⚠ Rule 25.6「抽取器不得假設程式只有一種寫法」：站內 resolver **有兩種**寫法 ——
+ *   `regR('key', …)` 與 `RESOLVERS.set('key', …)`。只認前者會讓後者整批靜默漏掃
+ *   （甲殼刺 spike-shell-discard 就是這樣躲過去的）。
+ */
+const RESOLVER_DECL = /(?:regR|RESOLVERS\.set)\(\s*['"]([^'"]+)['"]/;
+function enclosingResolverKey(lines, fs) {
+  for (let j = fs; j >= Math.max(0, fs - 5); j--) {
+    const m = lines[j].match(RESOLVER_DECL);
+    if (m) return m[1];
+  }
+  return null;
+}
+/** 往回找最近的具名函式／註冊，當成穩定 anchor（行號會漂，名字不會）。 */
+function enclosingFnName(lines, fs) {
+  const m = (lines[fs] ?? '').match(/(?:function\s+([\w$]+)|(?:reg[GRAP]?|RESOLVERS\.set)\(\s*['"]([^'"]+)['"]|const\s+([\w$]+)\s*=)/);
+  return (m && (m[1] || m[2] || m[3])) || `@${fs + 1}`;
+}
+/**
+ * ⚠⚠ v6.262 待審清單（**不是**「已驗過沒問題」）：
+ *   這些站點是新的物件字面量樣式第一次照到的**既有**程式碼，維度是
+ *   「物品卡／招式效果 動對手能量是否該過 canApplyEffectToTarget／isImmuneToOppTrainer」，
+ *   與 v6.262 的支援者免疫是**兩件事**。逐張裁定要另開一輪 audit（站長裁定後才動）。
+ * ⚠ 清單是**具名**的：新卡／改寫過的卡不會落在同一個 anchor 上 ⇒ 一樣會被開罰。
+ * ⚠ 下面有「死條目」斷言：修掉之後忘了從清單移除 → 直接紅。
+ */
+const H_OBJLIT_PENDING = new Set([
+  'src/lib/game/effects/cards/items_misc.ts::crush-hammer-discard',
+  'src/lib/game/effects/cards/items_misc.ts::lazy-tail-grass-pick-energy',
+  'src/lib/game/effects/cards/m5_preview.ts::m5-bastiodon-shatter',
+  'src/lib/game/effects/cards/m5_preview.ts::m5-warlord-destroy-headbutt',
+  'src/lib/game/effects/cards/v169_supporters.ts::fortu-script',
+  'src/lib/game/effects/cards/v169_supporters.ts::starlight-grunt-bounce',
+  'src/lib/game/effects/cards/v172_hij_batch.ts::creepyBroDiscardEnergy',
+  'src/lib/game/effects/cards/v2760_h_wave3_complex.ts::prank-paint-attach-one',
+  'src/lib/game/effects/cards/v2996_g4_wave2.ts::dustox-breeze-blow',
+  'src/lib/game/effects.ts::reform-hammer-energy-pick',
+  // ⚠ 甲殼刺是**防禦方的反擊型特性**（動的是攻擊方），與上面那批「攻擊方動防禦方」
+  //   方向相反，該不該過 gate 更需要站長裁定 —— 一併列待審。
+  'src/lib/game/effects.ts::spike-shell-discard',
+]);
+const H_OBJLIT_SEEN = new Set();
+let _hScanned = 0, _hProducerExempt = 0;
 for (const f of files) {
   const lines = readFileSync(f, 'utf8').split('\n');
   for (let i = 0; i < lines.length; i++) {
@@ -234,6 +340,7 @@ for (const f of files) {
     const code = lines[i].replace(/\/\/.*$/, '');                                  // 剝行內註解
     const hit = H_MUT.find(([, re]) => re.test(code));
     if (!hit) continue;
+    _hScanned++;
     if (/opp-mut-ok/.test(lines[i]) || /opp-mut-ok/.test(lines[i - 1] ?? '')) continue;
     let fs = i;
     for (let j = i; j >= Math.max(0, i - 100); j--) { if (C_FUNC_START.test(lines[j])) { fs = j; break; } }
@@ -244,8 +351,50 @@ for (const f of files) {
     if (!isDefender) continue;
     const span = lines.slice(fs, i + 2).join('\n');
     if (H_GUARD.test(span)) continue;
-    violations.push(`[H] ${rel(f)}:${i + 1} — 對手寶可夢${hit[0]}未見免疫 gate（改走 canApplyEffectToTarget/中央 gated helper,或標 // opp-mut-ok: 理由）`);
+    // v6.262：stage-2 resolver → 去 stage-1 producer 找 gate（fail-closed：查不到 producer 不豁免）
+    // ⚠ 多段 picker 會形成鏈：reg(gate 在這) → picker1 → regR → picker2 → regR(寫盤面)。
+    //   鏽蝕組手下正是三層（'m5-trainer-rust-henchman' → '…-pick-energy'）⇒ 必須**遞移**往上找。
+    const rk = enclosingResolverKey(lines, fs);
+    let found = false, any = false;
+    const seenKeys = new Set();
+    let frontier = rk ? [rk] : [];
+    for (let hop = 0; hop < 5 && frontier.length && !found; hop++) {
+      const next = [];
+      for (const k of frontier) {
+        if (seenKeys.has(k)) continue;
+        seenKeys.add(k);
+        const sp = PRODUCERS.get(k) ?? [];
+        if (sp.length) any = true;
+        for (const one of sp) {
+          if (H_GUARD.test(one)) { found = true; break; }
+          const m = one.match(RESOLVER_DECL);   // producer 自己也是 resolver → 再往上一層
+          if (m) next.push(m[1]);
+        }
+        if (found) break;
+      }
+      frontier = next;
+    }
+    if (found) { _hProducerExempt++; continue; }
+    void any;
+    // ⚠⚠ v6.262：新補的「物件字面量」樣式讓 Check H 第一次看見一批**既有**站點
+    //   （全部是物品卡／招式效果那條線，與本版的支援者免疫是不同維度）。
+    //   刻意**不**在這一版逐一改判 —— 那需要逐張讀卡面 + 行為端複驗 + 站長裁定。
+    //   ⇒ 列成**具名待審清單**（不是隱形豁免）：新卡不會被放行，清單有死條目就紅。
+    const anchor = `${rel(f)}::${rk ?? enclosingFnName(lines, fs)}`;
+    if (H_OBJLIT_PENDING.has(anchor)) { H_OBJLIT_SEEN.add(anchor); continue; }
+    violations.push(`[H] ${rel(f)}:${i + 1} — 對手寶可夢${hit[0]}未見免疫 gate`
+      + (rk ? `（stage-2 resolver '${rk}' 的 stage-1 producer 也沒有 gate）` : '')
+      + '（改走 canApplyEffectToTarget/中央 gated helper,或標 // opp-mut-ok: 理由）');
   }
+}
+// ⚠ Rule 28：待審清單不得有**死條目**（修好了卻沒移除 ⇒ 下一張同位置的卡被無聲放行）。
+for (const a of H_OBJLIT_PENDING) {
+  if (!H_OBJLIT_SEEN.has(a)) violations.push(`[H] ⚠ 待審清單死條目「${a}」——已經不會被觸發，請從 H_OBJLIT_PENDING 移除`);
+}
+// ⚠ Rule 25.1 下限斷言：掃描器壞掉時「全部通過」與「乾淨」長得一模一樣。
+if (files.length < 60 || _producerHits < 200 || _hScanned < 200 || PRODUCERS.size < 150) {
+  violations.push(`[H] ⚠ 掃描器自檢失敗：files=${files.length} producerHits=${_producerHits}`
+    + ` producerKeys=${PRODUCERS.size} hCandidates=${_hScanned} —— 數量遠低於預期，Check H 可能已失效`);
 }
 
 

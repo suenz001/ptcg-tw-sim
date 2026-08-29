@@ -18,6 +18,8 @@ import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPla
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { hasOakEye } from '../_shared'; // v5.789 監視之眼 gate
 import { clearActiveEffects } from '../_shared'; // v5.807 退化清附加效果(§II-C-13)
+// ⭐ v6.262 支援者效果來源（葉子模組，零 import）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
+import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
 
 import { copyAttackPostDispatch } from '../_shared';
 import { canApplyEffectToTarget } from '../../defense';
@@ -451,7 +453,11 @@ regR('mrmime-copycat-pick', (state, aIdx, iids, _params, pool) => {
     return addLog(state, `相仿秀：對手支援者「${card.name}」的效果未實裝（跳過）`, aIdx);
   }
   const s = addLog(state, `相仿秀：複製對手手牌支援者「${card.name}」的效果（該卡仍留在對手手牌）`, aIdx);
-  return fn(s, aIdx, pool);
+  // ⭐⭐⭐ v6.262：卡面「將那個效果**作為這個招式的效果**使用」＝**不是**「從手牌使出支援者卡」
+  //   （而且那張卡自始至終留在對手手牌，根本沒有被使出）。四個支援者免疫
+  //   （鰭之守護 / 緊張感 / 融合為雪 / 廣域堡壘）的卡面前提都是「對手從手牌使出」
+  //   ⇒ 這裡不該套用，見 supporter-effect-source.ts 的卡面逐字引用。
+  return runAsCopiedSupporterEffect(() => fn(s, aIdx, pool));
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

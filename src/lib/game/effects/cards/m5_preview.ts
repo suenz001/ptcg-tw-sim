@@ -106,6 +106,8 @@ import { RULE_BOX_SUBTYPES } from '../../types';
 import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
 import type { Card } from '$lib/cards/types';  // v5.204 hotfix: Card 從 cards/types 而非 game/types
 import { canApplyEffectToTarget } from '../../defense';
+// ⭐⭐⭐ v6.262 鏽蝕組手下漏免疫：支援者效果目標免疫過濾（含陳舊的鰭之化石｜鰭之守護）
+import { isImmuneToOppSupporter } from './v3080_deferred_wave_c';
 
 // ── M5 helper: 自傷（這隻寶可夢也受到 N 傷害）─────────────────────────
 // 引擎沒有現成的 selfDamagePost helper（v2380 之前用 inline pattern）
@@ -1388,13 +1390,25 @@ reg('暗黑鈴', (st, idx, pool) => {
 // v6.089：卡面「必須在上個對手的回合自己的寶可夢【昏厥】了才可使用」＝印刷使用條件；
 //   且效果為「丟棄對手場上寶可夢的能量」→ 對手全場無能量時打出完全沒效果。
 //   兩者皆為公開資訊，照八朔／不公印章／火箭隊的阿波羅的既有守衛形態 gate。
+// ⭐⭐⭐ v6.262 鏽蝕組手下候選述詞（gate 與 picker 共用同一份 —— 兩邊漂移就是 v6.109 那類 bug）。
+//   卡面（19221，J）：「選擇1個對手的場上寶可夢身上附加的能量，將其丟棄。」
+//   ＝對「那隻寶可夢」下的效果 ⇒ 必須過 supporter 免疫過濾，與同機制的
+//   「可怕的哥哥」（creepyBroIsCandidate）完全對齊。v6.261 以前這裡只判
+//   `energyAttached.length > 0`，於是陳舊的鰭之化石是唯一候選時仍被丟掉能量。
+function rustHenchmanIsCandidate(
+  st: GameState, dIdx: 0 | 1, pk: CardInstance, pool: Map<string, Card>,
+): boolean {
+  if (isImmuneToOppSupporter(st, dIdx, pk, pool)) return false;
+  return (pk.energyAttached?.length ?? 0) > 0;
+}
 regG('鏽蝕組手下', (st, idx, pool) => {
   const attackKO = st.oppAttackKOdMeInLastOppTurn?.[idx] ?? 0;
   const abilityKO = st.oppAbilityKOdMeInLastOppTurn?.[idx] ?? 0;
   if ((attackKO + abilityKO) <= 0) return false;
-  const opp = st.players[(1 - idx) as 0 | 1];
+  const dIdx = (1 - idx) as 0 | 1;
+  const opp = st.players[dIdx];
   const all = [...(opp.active ? [opp.active] : []), ...opp.bench];
-  return all.some(pk => (pk.energyAttached?.length ?? 0) > 0);
+  return all.some(pk => rustHenchmanIsCandidate(st, dIdx, pk, pool));
 });
 reg('鏽蝕組手下', (st, idx, pool) => {
   // v5.228 gate — 上個對手回合自己無寶可夢 KO → 不能用
@@ -1409,9 +1423,10 @@ reg('鏽蝕組手下', (st, idx, pool) => {
     ...(opp.active ? [opp.active] : []),
     ...opp.bench,
   ];
-  const candidates = allOpp.filter(c => c.energyAttached.length > 0);
+  // v6.262：與 regG 共用 rustHenchmanIsCandidate（含 supporter 免疫過濾）
+  const candidates = allOpp.filter(c => rustHenchmanIsCandidate(st, dIdx, c, pool));
   if (candidates.length === 0) {
-    return addLog(st, '鏽蝕組手下：對手場上無附能寶可夢', idx);
+    return addLog(st, '鏽蝕組手下：對手場上無可指定的附能寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）', idx);
   }
   const validIids = candidates.map(c => c.iid);
   return withPending(

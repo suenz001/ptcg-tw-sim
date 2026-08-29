@@ -135,11 +135,17 @@ T('化石卡面逐字：可作為【基礎】寶可夢放置於場上（且 pool
     ok(M.isBasicPokemonCard(c) === false, `${c.name} 的卡片述詞應為 false（手牌／棄牌區＝物品卡）`);
     ok(M.isBasicPokemonOnField({ fossilOnField: true }, c) === true, `${c.name} 場上述詞應為 true`);
   }
+  // ⚠⚠ v6.262 更正：這裡原本的註解寫「現行台灣卡面沒有那句／站內被動來自舊版卡面」——
+  //   **那是錯的結論，只讀了 rulesText**。陳舊的鰭之化石那句免疫在
+  //   `abilities[0]`＝特性「鰭之守護」的 `effect` 欄，逐字是
+  //   「對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。」
+  //   （長期記憶鐵律：特性讀 abilities[].effect，不是 .text，也不是 rulesText。）
   const fin = pool.get(FIN);
-  ok(!/支援者/.test(fin.rulesText),
-    '⚠ 現行台灣卡面「陳舊的鰭之化石」**沒有**「不受對手支援者影響」那句 —— '
-    + '站內的該被動來自舊版卡面，屬另一個維度的待辦（見 docs/changelog-internal.md）；'
-    + '若哪天官方卡面真的加回來，這條斷言會紅，屆時要一併重判。');
+  ok(!/支援者/.test(fin.rulesText), 'rulesText 這一段只講「作為基礎寶可夢放置／不陷入特殊狀態／無法撤退」');
+  const finAb = (fin.abilities || [])[0];
+  ok(finAb && finAb.label === '特性' && finAb.name === '鰭之守護', '找不到特性「鰭之守護」');
+  ok(finAb.effect === '對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。',
+    '鰭之守護 effect 逐字不符：' + finAb.effect);
 });
 
 console.log('② 漏網①：保母蟲｜治癒襁褓 —— 場上化石必須真的回血（官方 id 783）');
@@ -284,7 +290,7 @@ T('正對照：對手備戰只有 Stage2 → gate 為 false', () => {
   ok(M.TRAINER_GUARDS.get('琉琪亞的展示')(st, 0, pool) === false, 'Stage2 不是【基礎】，不該可用');
 });
 
-T('⭐ 現況鎖：陳舊的鰭之化石仍被排除（站內被動；刪掉的內聯檢查由中央免疫述詞接手）', () => {
+T('⭐ 現況鎖：陳舊的鰭之化石仍被排除（特性「鰭之守護」；由中央免疫述詞 isImmuneToOppSupporter 接手）', () => {
   const st = mk({ active: inst(BASIC), hand: [inst(LUCIA)] },
                 { active: inst(STAGE2), bench: [inst(FIN, { fossilOnField: true })] });
   ok(M.TRAINER_GUARDS.get('琉琪亞的展示')(st, 0, pool) === false,

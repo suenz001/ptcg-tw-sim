@@ -94,6 +94,8 @@ import type { Attack, Card } from '$lib/cards/types';
 import { isAbilityHolderEffective } from './v3001_g3_wave3'; // v5.985 特性生效性中央述詞
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { isImmuneToOppTrainer } from './v3060_deferred_wave_b';
+// ⭐ v6.262 支援者效果來源（葉子模組，零 import）—— 免疫的卡面前提是「對手從手牌使出」
+import { getSupporterEffectSource, type SupporterEffectSource } from '../../supporter-effect-source';
 // v6.204：場上「擁有且此刻生效」中央述詞（潛入記憶）
 import { hasAbilityOnSide } from './v3001_g3_wave3';
 
@@ -151,9 +153,18 @@ export function isImmuneToOppSupporter(
   defenderIdx: 0 | 1 | undefined,
   targetInst: CardInstance | undefined,
   pool: Map<string, Card> | undefined,
+  source?: SupporterEffectSource,
 ): boolean {
   if (!pool) return false;
-  // v3.21 條件 0：陳舊的鰭之化石（J）— 卡面「不會受到對手的支援者卡的影響」。
+  // ⭐⭐⭐ v6.262：四個免疫來源的卡面**全部**逐字寫「對手**從手牌使出**支援者卡時」
+  //   （鰭之守護 / 緊張感 / 融合為雪 / 廣域堡壘 —— 見 supporter-effect-source.ts 的逐字引用）。
+  //   ⇒「從手牌使出」是共同前提，不是修飾語。九尾｜靈怪變化與魔牆人偶｜相仿秀是
+  //   「將那個效果**作為這個招式的效果**使用」，並非從手牌使出支援者卡 ⇒ 這四個免疫都不適用。
+  // ⚠ 省略 source 時讀環境值，而環境值的預設是 'from-hand'（fail-closed）：
+  //   任何忘了宣告來源的新路徑，行為與 v6.261 完全相同（免疫照舊生效）。
+  if ((source ?? getSupporterEffectSource()) !== 'from-hand') return false;
+  // v3.21 條件 0：陳舊的鰭之化石（J）— 特性「鰭之守護」（⚠在 abilities[0].effect，不在 rulesText）：
+  //   「對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。」
   //   之前僅在 supporters_gust.ts 兩處內聯過濾，其他走 isImmuneToOppSupporter
   //   的 supporter resolver 沒涵蓋 → 整合到此 helper 首行。未來新增召叫類 supporter
   //   只要走此 helper 自動 cover 鰭之化石免疫。

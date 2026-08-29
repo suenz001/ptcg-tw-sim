@@ -790,6 +790,8 @@ import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './effect
 // v5.700 對手備戰強制換位(gust)免疫過濾：item 級(緊張感/融合為雪) / supporter 級(+化石/廣域堡壘)
 import { isImmuneToOppTrainer as _gustImmuneTrainer } from './effects/cards/v3060_deferred_wave_b';
 import { isImmuneToOppSupporter as _gustImmuneSupporter } from './effects/cards/v3080_deferred_wave_c';
+// ⭐ v6.262 支援者效果來源（葉子模組，零 import）
+import { getSupporterEffectSource } from './supporter-effect-source';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 即時支援者 / 互動支援者 — v2.12 搬到 effects/cards/draw_supporters.ts
@@ -15161,7 +15163,10 @@ reg('火箭隊的坂木', (st, idx, pool) => {
       actorIdx: idx, sourcePlayerIdx: idx,
       minCount: 1, maxCount: 1,
       effectKey: 'sakaki-self-swap',
-      params: { validIids: rocketBench.map(c => c.iid) },
+      // ⭐⭐⭐ v6.262：坂木是站內**唯一**在 resolver（跨一次 applyAction）才算免疫候選的消費點。
+      //   「支援者效果來源」是模組層級的環境值，等玩家回答第一段 picker 時早就還原了
+      //   ⇒ 必須在 pending 誕生的此刻把它蓋進 params，由 regR 讀回來明確傳下去。
+      params: { validIids: rocketBench.map(c => c.iid), __suppSrc: getSupporterEffectSource() },
     });
   }
   // 條件不符：直接對方換
@@ -15180,6 +15185,9 @@ reg('火箭隊的坂木', (st, idx, pool) => {
   }
 });
 regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
+  // v6.262：來源由 reg 端蓋在 params 上（跨 applyAction）。⚠ 舊 pending／缺欄位一律
+  //   fall back 成 'from-hand'（fail-closed：免疫照 v6.261 生效）。
+  const _suppSrc = _params?.__suppSrc === 'copied-effect' ? 'copied-effect' as const : 'from-hand' as const;
   const pickIid = iids[0];
   if (!pickIid) return st;
   const p = st.players[idx];
@@ -15204,7 +15212,7 @@ regR('sakaki-self-swap', (st, idx, iids, _params, pool) => {
   {
     // v5.700：supporter 強制換位 → 過濾化石/緊張感/融合為雪/廣域堡壘 免疫的對手備戰。
     const _oppIdx = (1 - idx) as 0 | 1;
-    const _valid = st.players[_oppIdx].bench.filter(b => !_gustImmuneSupporter(st, _oppIdx, b, pool)).map(b => b.iid);
+    const _valid = st.players[_oppIdx].bench.filter(b => !_gustImmuneSupporter(st, _oppIdx, b, pool, _suppSrc)).map(b => b.iid);
     if (_valid.length === 0) return addLog(st, '火箭隊的坂木：對手備戰沒有可呼叫的寶可夢（化石/緊張感/融合為雪/廣域堡壘 免疫）', idx);
     return withPending(st, {
       type: 'opp-bench-choose',

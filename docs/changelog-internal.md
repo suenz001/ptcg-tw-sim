@@ -1,5 +1,120 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.262 — 陳舊的鰭之化石｜鰭之守護：免疫**範圍**兩個方向都修（含 lint 兩個掃描器盲點）
+
+BASE `12162345e9be92b4e38fe144c64659f6b2eab588`（v6.261，遠端 main）。
+
+### 卡面逐字（唯一權威＝`static/cards`；⚠ 特性讀 `abilities[].effect`，不是 `rulesText`）
+
+- 陳舊的鰭之化石（M3 `069/080`，J，Trainer/Item，`id=18046`，live 印刷**只有 1 張**）
+  - `abilities[0]`＝特性「鰭之守護」的 `effect`：
+    「對手從手牌使出支援者卡時，這隻寶可夢不會受到那個效果的影響。」
+  - `rulesText`（另一段，**不含**「支援者」二字）：
+    「這張卡可作為HP60的【無】屬性的【基礎】寶可夢放置於場上。這張卡不會陷入特殊狀態，無法撤退。\n
+     若在自己的回合中，則可將場上的這張卡丟棄。」
+  - ⚠⚠ `scripts/test-v6251-basic-on-field-followups.mjs` 舊註解寫「現行台灣卡面**沒有**那句／
+    站內被動來自舊版卡面」——**那是錯的**，它只讀了 `rulesText`。本版已改成正面斷言特性逐字。
+
+- ⭐⭐⭐ 站內四個「對支援者免疫」的來源，卡面**全部**逐字寫「對手**從手牌使出**」：
+  鰭之守護／斧牙龍｜緊張感（10627）／浩大鯨ex｜融合為雪（12782）／超甲狂犀｜廣域堡壘（10947）。
+  ⇒「從手牌使出」是共同前提，不是修飾語 ⇒ `source` 前提放在 `isImmuneToOppSupporter` **最外層**，
+  不是只 gate 化石那一條。
+
+### 行為端枚舉（live H/I/J 支援者 83 張 × 化石在備戰／戰鬥 × 3 種 picker 優先序＝498 次完整 `applyAction`）
+
+修前動到化石的有 4 張，修後剩 2 張（皆為已裁定正確的 C-05 換位）：
+
+| 卡 | 標 | 修前 | 修後 |
+|---|---|---|---|
+| 鏽蝕組手下 | J | ❌ 化石是唯一候選時能量仍被丟 | ✅ gate=false、候選不含化石 |
+| 古歷 | J | ❌ 對手化石 `damage 30→0` | ✅ 不回血；自己的化石照回 |
+| 老大的指令 | I | 戰鬥場化石被換下（候選不含它） | 不變（正確） |
+| 琉琪亞的展示 | H | 同上 | 不變（正確） |
+
+⚠ 我的第一版探測器**漏掉鏽蝕組手下**：第二段 picker（`active-energy-discard`）沒有 `validIids`，
+若一律優先送「化石本體 iid」，能量永遠選不中 → 假 PASS。守衛因此改跑三種優先序取聯集（Rule 25）。
+
+### 改了什麼
+
+1. **新檔** `src/lib/game/supporter-effect-source.ts`（葉子模組，**零 import** 避免 TDZ）：
+   `SupporterEffectSource = 'from-hand' | 'copied-effect'`、`getSupporterEffectSource()`、
+   `runAsCopiedSupporterEffect(fn)`（`finally` 還原成**呼叫前**的值，支援巢狀）。
+   ⚠⚠ 預設 `'from-hand'` ＝ **fail-closed**：任何忘了宣告的新路徑行為與 v6.261 完全相同。
+   ⚠ 做成環境值而非必填參數，是因為消費點（候選過濾器）身處 resolver 深處、
+   **拿不到「是誰在執行我」**；改必填只會讓每個呼叫端硬填 `'from-hand'`＝等於沒修。
+2. `effects/cards/v3080_deferred_wave_c.ts` `isImmuneToOppSupporter` 加第 5 參 `source?`，
+   首行 `if ((source ?? getSupporterEffectSource()) !== 'from-hand') return false;`。
+3. 【1】`effects/cards/m5_preview.ts` 新增 `rustHenchmanIsCandidate`（比照 `creepyBroIsCandidate`），
+   `regG` 與 `reg` 共用同一份候選述詞（兩邊漂移就是 v6.109 那類 bug）。
+4. 【2】`effects/cards/v2370_mp_promo.ts` `healAllOnField` 加 `aIdx`/`pool`，**只**過濾對手側；
+   `regG('古歷')` 同步扣掉對手側免疫者（判準①/Rule 26a）。
+   ⚠ 依站長裁定**沒有**加「有利／不利」判斷（卡面沒有這個概念），守衛有反向斷言擋住。
+5. 【3】`v2680_i_wave18_copy_attacks.ts:靈怪變化` 與 `v2760_h_wave3_complex.ts:相仿秀`
+   的 `TRAINER_EFFECTS.get(...)(...)` 包進 `runAsCopiedSupporterEffect`。
+6. ⭐ `effects.ts` 火箭隊的坂木是站內**唯一**在 resolver（跨一次 `applyAction`）才算免疫候選的
+   消費點 —— 環境值那時早已還原 ⇒ `reg` 端把來源蓋進 `params.__suppSrc`，
+   `regR('sakaki-self-swap')` 讀回來明確傳給述詞（缺欄位 fall back `'from-hand'`）。
+   ⚠ 目前 live 走不到（兩張複製卡自己都不是「火箭隊的」寶可夢），是為將來的複製鏈先接好。
+7. 【4】清理：`engine.ts` 刪 `isFinFossilSupporterImmune`（`git grep` 全 repo 零呼叫端）；
+   `supporters_gust.ts` 刪內聯化石比對（它會**繞過**新的來源前提）；
+   `test-v6251` 的錯誤註解改成正面逐字斷言。
+
+### 【5】lint Check H — 修了**兩個**掃描器盲點，並把人工豁免換成結構化驗證
+
+- 盲點①（交辦單指出的）：`H_MUT` 的「丟能量」只認賦值 `x.energyAttached =`，
+  站內主流是不可變更新的**物件字面量** `{ ...c, energyAttached: newAttached }` ⇒ 整批沒被掃到。
+- 盲點②（我自己查到的）：`mutatedIdx` 的 `updatePlayer(...)` regex 遇到**巢狀第一參數**
+  `updatePlayer(addLog(state, '…', aIdx), dIdx, …)` 比不中 → 回 `null` → Check H/C 直接 `continue`。
+  **【1】的那一行正是這個寫法**，所以就算只修盲點①也照樣抓不到（Rule 25.6/25.8）。
+- 盲點③：resolver 有兩種寫法，`enclosingResolverKey` 只認 `regR(`，漏掉 `RESOLVERS.set(`。
+- ⭐ 取代人工 `// opp-mut-ok:`：新增 **producer-gate 遞移查詢** —— 從 stage-2 的 `regR('<key>')`
+  反查「誰 `withPending` 出這個 key」，去那個函式找 gate；producer 本身也是 resolver 就再往上一層
+  （最多 5 跳；鏽蝕組手下是 3 層鏈）。**查不到 producer ⇒ 不豁免（fail-closed）**。
+- ⚠⚠ 新樣式第一次照到 **11 個既有站點**（物品卡／招式效果那條線，與支援者免疫是**不同維度**）。
+  刻意不在這一版逐一改判 ⇒ 列成**具名待審清單** `H_OBJLIT_PENDING`（不是隱形豁免），
+  並配「死條目」斷言。**這 11 條需要站長另開一輪裁定**，見下方。
+- 正對照：把 `m5_preview.ts` 還原成 BASE blob → lint 紅在
+  `m5_preview.ts:1457 …'m5-trainer-rust-henchman-pick-energy' 的 stage-1 producer 也沒有 gate`；
+  修後乾淨。下限斷言：`files≥60 / producerHits≥200 / producerKeys≥150 / hCandidates≥200`。
+
+### 【6】永久守衛
+
+- `scripts/test-v6262-fin-fossil-supporter-immunity.mjs`（**36 條**，已進 `package.json` test chain）
+- `scripts/test-v6262-perf.mjs`（Rule 32；已進 test chain）
+- ⚠ 白名單（老大的指令／琉琪亞的展示）**每條都有行為端證明**，不是文字理由：
+  斷言 picker 的 `validIids` **不含**化石 iid（＝化石不是效果的目標、免疫確實生效），
+  而化石之所以離開戰鬥場，是因為玩家指定的是對手備戰的**另一隻**（C-05 換位語意，
+  `reference-c05-swap-target-immunity-v5995` ＋ `PTCG RULES/PTCG_RULES.md` §17.3.D）；
+  另配「化石在備戰且是唯一備戰時 gate 必為 false」的反面對照。
+
+### 驗證
+
+- HEAD-FAIL（逐項各自紅）：還原 `m5_preview`→4 紅；`v2370_mp_promo`→4 紅；
+  `v2680`+`v2760`→4 紅；`engine`+`supporters_gust`→7 紅；`v3080`→5 紅。全部還原後 36/36。
+- 突變 7 個全紅且**紅在預期那一條**、零 CRASH（守衛的 `ok()` 走 `node:assert`，
+  非 `AssertionError` 會標成 CRASH 以免把「程式炸了」誤當成「守衛抓到」）。
+- 免疫網：`test-damage-immunity-matrix` / `test-attack-effect-immunity-matrix` /
+  `test-selection-ui` / `test-gust-immunity` 全綠；
+  `test-v6112-fossil-hp-bonuses`、`test-fossil-onfield-placed-bench`、`test-v6251`、
+  `test-v6202`/`v6204`/`v6205`/`v6208`、`test-v6253`~`v6261`（含 `test-v6261-casual-clientdiag`
+  50 PASS ⇒ 一般玩家仍 0 發／0 bytes）全綠。
+- `test-ts2304-scan` 綠（掃 161 檔）；獨立 tsconfig 對 `src/lib` 跑 tsc：TS2304 = 0，
+  總錯誤數 60 ＝ BASE 的 60（零新增）。
+- 效能 BASE vs v6.262 並排（各 3 輪）：gate(含化石) 0.0058/0.0049/0.0067 → 0.0048/0.0066/0.0047 ms；
+  gate(無化石) 0.0030/0.0019/0.0029 → 0.0022/0.0023/0.0025 ms；
+  applyAction PLAY_TRAINER 0.0629/0.0730/0.0676 → 0.0630/0.0636/0.0603 ms ⇒ **無退化**
+  （含化石那條略快：`supporters_gust` 少一次內聯 `pool.get()` + 卡名比對）。
+
+### ⚠ 待站長裁定（本版**沒有**動，只是第一次被看見）
+
+`H_OBJLIT_PENDING` 的 11 條：粉碎之錘 / 悠哉尾草棒 / 改造之錘（Item）、
+盾甲龍與武士古蹟系的招式（`m5-bastiodon-shatter`、`m5-warlord-destroy-headbutt`）、
+皮拿（G 標，不維護）、天星隊手下（G 標）、阻礙之翼、惡作劇塗鴉、毒粉蝶的招式，
+以及**方向相反**的甲殼刺（防禦方反擊型特性，動的是攻擊方）。
+問題是「這些動對手能量的路徑該不該過 `canApplyEffectToTarget`／化隱免疫」——
+與本版的支援者免疫是兩件事，需要逐張讀卡面 + 行為端複驗後才改。
+
+
 ## v6.261 — 休閒對戰終於有診斷指紋（沿用既有 /clientdiag 管線，加 mode 維度）
 
 BASE `28339fa46aea6d88b5df7ea7befa31358a57dd59`（v6.260）。
