@@ -680,12 +680,22 @@ await T('K1 守衛在 package.json 的 test chain 裡(不是只放 CI)', () => {
   assert.ok(String(pkg.scripts.test).includes('node scripts/test-v6268-delta-put-server.mjs'),
     '本守衛沒進 npm test chain — CI 的 iron-rules-audit 是 continue-on-error,不算數');
 });
-await T('K2 版本字串一致(version.ts=6.268、admin.html hint=6.268、patch 檔頭 v1.29)', () => {
+// ⚠⚠ v6.269 改判準（斷言的**意圖**一個字沒變，只是不再寫死版本號）：
+//   原寫法把 `6.268` / `v1.29` 寫死 ⇒ **每一個未來版本都會紅**（v6.269 立刻踩到），
+//   逼下一棒去刪守衛 —— 那才是真正的災難。改成「三者互相一致 ＋ 舊紀錄不得被洗掉」，
+//   ⭐ 這樣它從此每一版都在守（原寫法只在 v6.268 那一天有意義）。
+await T('K2 版本字串一致(version.ts ＝ admin.html hint；patch 檔頭已 bump 且 v1.29 紀錄還在)', () => {
   const ver = readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8');
-  assert.ok(ver.includes("export const VERSION = '6.268';"), 'version.ts 沒 bump');
+  const mv = /export const VERSION = '([\d.]+)';/.exec(ver);
+  assert.ok(mv, 'version.ts 讀不到 VERSION');
   const adm = readFileSync(path.join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-  assert.ok(adm.includes("window.SITE_VERSION_HINT = '6.268';"), 'admin.html hint 沒同步');
-  assert.ok(PATCH.startsWith('// === ORACLE ADMIN ENDPOINTS === v1.29 ('), 'patch 檔頭沒 bump v1.29');
+  const ma = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(adm);
+  assert.ok(ma, 'admin.html 讀不到 SITE_VERSION_HINT');
+  assert.strictEqual(ma[1], mv[1], 'admin.html hint 沒跟著 version.ts 同步');
+  const mp = /^\/\/ === ORACLE ADMIN ENDPOINTS === v1\.(\d+) \(/.exec(PATCH);
+  assert.ok(mp, 'patch 檔頭格式不對');
+  assert.ok(Number(mp[1]) >= 29, 'patch 檔頭版本倒退了（' + mp[1] + ' < 29）');
+  assert.ok(PATCH.includes('v1.29 (v6.268 休閒 PUT 上行增量'), 'v1.29 的檔頭紀錄被洗掉了');
 });
 
 console.log('\n────────────────────────────────');

@@ -1,5 +1,101 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.269 — admin 📡 分頁加上「🎮 休閒對戰批」＋ dump 彙總段的重複計算修正
+
+BASE `1f3a7baa69207c6a88fe42d8ca18d1f906578b56`（v6.268）。
+站長交辦：「把休閒批加進 admin 的 📡 分頁」——v6.261 上線休閒診斷指紋時刻意沒做（怕動到既有
+數字口徑），只做在 dump 的【②-e】區塊，站長每次要看得跑 `dump-monitor.bat`。
+
+### 查證（本版第一件事：複驗「後端已備好 `?mode=casual`」這句話）
+**部分成立，但不足以做出子表。** `server_admin_patch.js`：
+- `const _wantCasual = String(req.query.mode || '') === 'casual';` 與
+  `q.mode = _wantCasual ? 'casual' : { $ne: 'casual' };` 確實存在 ⇒ 入口有。
+- ⚠ 但 `q` **只餵給 `rows`（`.limit(120)` 的明細）**。統計三塊全部寫死排除休閒：
+  `const agg = _aggAll.filter(a => !isCasualReason(a._id))`（byReason）、
+  `sampleRttRows` 的 `mode: { $ne: 'casual' }`、`rttRows` 的 `reason: 'slow-rtt'`。
+  ⇒ 帶 `?mode=casual` 拿得到的休閒資料**只有 120 筆明細，沒有任何統計數字**。
+⇒ 本版不是「換個 mode」，而是補一條**完全獨立**的伺服器路徑。
+
+### 做了什麼
+**① `oracle-admin/server_admin_patch.js`**
+- 新增 `_buildCasualDiagReport(coll, since, hours)`（＋`_casualUaShort` / `_casualQuant`，
+  兩支逐字對齊 dump 的 `uaShort` / `quant`，守衛會拿同一批 UA 對跑兩邊）。
+- `/api/tournament/admin/clientdiag` 在 `q.mode = …` 之後加**一行早退**：
+  `if (_wantCasual) return res.json(await _buildCasualDiagReport(TCDIAG, since, hours));`
+  ⇒ 錦標賽那一整段（byReason／slowRtt／sample／rows）**逐位元未動**，守衛以內嵌
+  sha256 `14011f93…50d2ec`（4848 字元）鎖住。
+- ⚠⚠ 絕不可拖累錦標賽（pm2 fork_mode 單 instance）⇒ 三道：
+  ①cursor 逐筆不 `toArray`；②每 200 筆走中央 `adminScanYield`（v6.242）；
+  ③硬上限 `CASUAL_DIAG_SCAN_CAP = 5000`，超過回 `capped:true`（**不靜默截斷**）。
+  實測（沙盒 5000 筆，正式 VM 約快 10 倍）：總耗時約 31 ms、讓路 25 次、
+  阻塞 p50 1.1 ms / p99 3.8 ms / max 3.8 ms；拿掉讓路的突變體：讓路 **0 次**、max 阻塞 29~33 ms。
+- 早退**排在 `isTournAdmin` gate 之後**（休閒明細含玩家 email，守衛斷言順序）。
+- 回應帶哨兵 `casualApi: 1` ⇒ 畫面分得出「伺服器舊版」與「這段期間真的 0 筆」。
+- ⚠ 沒有新端點、沒有新 collection、沒有新索引（沿用 `tournamentClientDiag` 與 7 天 TTL）。
+
+**② `oracle-admin/admin.html`（📡 監控分頁）**
+- `loadMonitor` 多打**第二發** `?mode=casual&hours=`（`_r[5]` → `cg = _ok(_r[5])`）。
+  刻意分兩發而不是併進同一個回應：兩批母體不同，合在一起回會誘導人相加，
+  而且錦標賽那份的內容必須逐位元不變。
+- 新 `monCasualBlock(cg)`：容器 `#mon-casual` / `#mon-casual-body`，內容比照 dump 的【②-e】：
+  合計筆數/人數/截斷、指紋次數表、上行 p50/p95 中位數與最差與單發最久與失敗累計、
+  棄權宣告 granted/rejected/unknown、版本與平台分佈、最近 120 筆明細。
+- ⚠⚠ **判讀警語印在畫面上**（不是只寫在註解）：①母體不同不可相加或比較
+  ②只有已登入 email 帳號的休閒玩家會送 ③倖存者偏差（要 10 發成功推送才送得出指紋 ⇒
+  上行完全爆掉的人看不見）④「對手棄權」是頻率下界不是上界。
+- ⭐ `monCasualBlock(cg)` **寫在 `if/else` 之外、無條件呼叫**，而且是 🩺 那一框的**兄弟**
+  不是巢狀 —— 塞進 `dg.byReason.length` 分支的話，錦標賽沒異常的那幾天休閒子表會整塊消失。
+- MON_REASON_INFO 開頭那段「這三則預設不會出現在本分頁」的註解已更新（本版起會出現）。
+
+**③ `oracle-admin/tournament/dump-client-monitor.cjs`（Fable 5 在 v6.262 發現的 bug）**
+- 真因：`byReason` 的彙總段只濾 `isSampleReason`、**沒濾 `isCasualReason`**
+  ⇒ `casual-slow-push` / `casual-forfeit-claim` / `casual-phantom-adopt` 同時落進
+  【② 玩家端異常指紋】（錦標賽）與【②-e 休閒對戰批】＝**重複計算**。
+- 修法：新增**單一出口** `splitAggRows(agg)`（三分流：anomaly / sample / casual，
+  順序與 `splitDiagRows` 一致 —— 先判 casual，否則 `casual-perf-sample` 會混進健康對照組），
+  `byReason` 與 `sampleAgg` 都改吃它，並 export 給守衛實跑。
+- **變化量**（以 2026-08-30 那份 dump 的實際數字）：【②】少 3 列 / 少 90 次
+  （`casual-slow-push` 50 ＋ `casual-forfeit-claim` 39 ＋ `casual-phantom-adopt` 1）。
+  ⭐ 這是**修正不是退步**：那 90 次本來就已經在【②-e】算過一次。
+  錦標賽那幾則的 `n` 與 `players` **逐項不變**（守衛用新舊兩份實作對跑證明）。
+  ⚠ 【②】的「合計 N 筆」原本就走 `rows.length`（`splitDiagRows`，本來是對的）
+  ⇒ v6.261~v6.268 那幾份 dump 的**逐列相加對不上合計**，只是沒有人會去加。
+- 順手加自我對帳：`_sumN !== rows.length` 就印「⚠⚠ 對帳失敗」。
+
+**④ `scripts/test-v6154-monitor-tab.mjs`**：抽取視窗 `2600 → 3400`
+（本版在同一支 handler 內多了一行早退，那條 `catch` 被推到 offset 2705）。
+⭐ 只放大視窗，**regex 與斷言一個字都沒改**；3400 仍遠小於整支 handler（約 5900 字元）。
+
+### 守衛 `scripts/test-v6269-casual-monitor-tab.mjs`（46 條，已進 `package.json` 的 test chain）
+- ⑤ 是 **DOM 層**（`cheerio`）：把 `loadMonitor` 抽出來實跑、斷言它寫進 `#tab-monitor`
+  （而 admin.html 真的有那個容器）、`#mon-casual` 存在、`#mon-casual-body` **有被填入**
+  且畫得出「合計 7 筆 / 6 人」「7.2 秒」「伺服器擋下 1 次」——
+  v6.154 的教訓（22 條守衛全綠但分頁根本打不開）就是靠這一節擋。
+- 突變 8 個，**全部紅在預期那一條**：M1 拿掉讓路（讓路 0 次）／M2 改成 `await null`／
+  M3 拿掉 `.limit(CAP)`（掃 5500 筆）／M4 把失敗算進 p95（p95max 變 120000）／
+  M5 用 `rows===0` 判舊伺服器／M6 把休閒子表搬進 else 分支（0 異常時整塊消失）／
+  M7 彙總段回退成 v6.261 舊寫法／M8 錦標賽區塊動一個字元（sha256 翻紅）。
+- HEAD-FAIL：對真 BASE blob 跑 **27 條各自紅**（PASS 19 / FAIL 27）。
+- ⚠ 淺複製：④⑦ 的「與 BASE blob 逐字元比對」走中央 `base-blob.mjs` 的 `shallowSkip`
+  （大聲宣告、不 fail-open）；同一件事另有**不需歷史**的判準在守
+  （④＝內嵌 sha256；⑦＝新符號不得出現在 `src/`／`static/`、且玩家端不引用 `oracle-admin/`）。
+  ⚠ ⑦ 的逐檔 blob 比對只在 `VERSION === '6.269'` 時生效（下一版一定會動 `src/`），
+  停用時會明講，不是靜默 return。
+- `test-v6263` 已把本守衛列管，並在**無 git 環境**實跑證明條數不變。
+
+### 玩家端零改動
+`src/` 只動 `version.ts`（守衛以 `git ls-tree` 逐檔 blob 雜湊比對證明）；
+`oracle-admin/` 不在玩家 bundle 的建置範圍內（守衛以 grep 證明 `src/`／`static/` 完全不引用它）。
+
+### 部署
+本版**沒有** client 新欄位／server 要認的相依（休閒指紋的送出端 v6.261 起就沒動），
+但 admin.html 與 server_admin_patch.js 都改了 ⇒ 站長要跑
+`update-admin-full.bat` ＋ `redeploy-oracle.bat`（`update-tournament.bat` 也涵蓋這兩個檔）。
+⚠ **先跑 `redeploy-oracle.bat`（server）再跑 `update-admin-full.bat`（admin 頁）** ——
+順序反了的話 admin 頁會打到還沒有 `casualApi` 的舊伺服器，畫面會顯示「伺服器還是舊版」
+（不會壞、也不會產生髒資料，只是白跑一趟）。
+`dump-client-monitor.cjs` 是站長本機／VM 上手動跑的腳本，不經 bat。
+
 ## v6.268 — 休閒 PUT 上行增量【階段 1：伺服器端先行】
 
 BASE `4ccfdff1c5ec485172397c9509200f12906e3646`（v6.267）。

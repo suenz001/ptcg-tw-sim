@@ -2756,9 +2756,11 @@ function renderDeckRules(el) {
 window.monHours = 24;
 const MON_REASON_INFO = {
   // ⭐⭐⭐v6.261 休閒對戰批（reason 一律 `casual-` 前綴）。
-  //   ⚠⚠ 這三則**預設不會出現在本分頁**：`/api/tournament/admin/clientdiag` 的預設查詢是
-  //     `mode: {$ne:'casual'}`，所以本分頁上每一個數字的語義與 v6.260 逐字相同（可以跟舊 dump 對帳）。
-  //     要看休閒批請用 `node /tmp/dump-client-monitor.cjs 7d`（【②-e】區塊），或直接打 `?mode=casual`。
+  //   ⚠⚠ 這幾則**不會出現在上面那張錦標賽的異常表**：`/api/tournament/admin/clientdiag`
+  //     的預設查詢是 `mode: {$ne:'casual'}`，所以那張表上每一個數字的語義與 v6.260 逐字相同
+  //     （可以跟舊 dump 對帳）。
+  //   ⭐v6.269 起休閒批有**自己的**區塊 `monCasualBlock()`（本頁最下面的「🎮 休閒對戰批」），
+  //     走的是同一支端點的 `?mode=casual`、**第二發獨立請求**。
   //   ⚠⚠⚠ **兩批的數字永遠不可以相加**：錦標賽走 /action（伺服器權威推進，一次往返＝一個動作），
   //     休閒是 client-authoritative（一個動作＝把整包盤面 40~48KB PUT 上去，最多 5 輪 GET+PUT）
   //     —— 「一次往返」在兩邊根本不是同一件事。
@@ -3044,6 +3046,133 @@ function monSampleBlock(dg) {
   }
   return h + '</div>';
 }
+// ⭐⭐⭐v6.269【🎮 休閒對戰批】的獨立區塊 —— 站長在 admin 找得到，不必每次跑 dump-monitor.bat。
+//   資料來自 `/api/tournament/admin/clientdiag?mode=casual`（v6.269 才真的算得出統計，
+//   v6.261 那個參數只換掉了 120 筆明細的來源）。
+//   ⚠⚠ 這一塊**刻意與上面每一張表分開畫、分開數**，而且判讀紀律直接印在畫面上
+//     （不是只寫在註解裡）——這幾條每一條都是「不寫出來就一定會被誤讀」的：
+//     ①休閒與錦標賽是**兩個母體**，數字絕不可以相加或互相比較；
+//     ②母體再縮一層：只有**已登入 email 帳號**的休閒玩家會送；
+//     ③**倖存者偏差**：要 10 發成功推送才可能送指紋 ⇒ 上行完全爆掉的人看不見；
+//     ④「對手棄權」是**頻率下界不是上界**（被誤判的那一方本來就卡住、送不出回報）。
+//   ⚠ 抽成獨立函式是為了讓守衛能餵①舊伺服器（沒有 casualApi 哨兵）②0 筆③有資料
+//     三種 payload 實際跑它，斷言不 throw、而且容器真的被填進東西
+//     （v6.154 的教訓：只驗字串存在的守衛擋不住「接線沒接上」）。
+function monCasualBlock(cg) {
+  const box = 'border:1px solid #e3e8ef;border-radius:8px;padding:14px;margin-top:18px;';
+  const head = '<div id="mon-casual" style="' + box + '">'
+    + '<h3 style="margin:0 0 6px;">🎮 休閒對戰批（v6.261 起才有）</h3>'
+    + '<div style="background:#fff5f5;border:1px solid #f0c9c9;border-radius:6px;padding:9px 11px;margin:0 0 10px;" class="small">'
+    + '<b>⚠⚠⚠ 這一塊的數字絕不可以跟上面錦標賽的任何數字相加或互相比較。</b><br>'
+    + '母體完全不同：錦標賽走 <code>/action</code>（伺服器權威推進，<b>一次往返＝一個動作</b>）；'
+    + '休閒是 client-authoritative（<b>一個動作＝把整包盤面 40~48KB PUT 上去</b>，最多 5 輪 GET＋PUT）。'
+    + '「一次往返」在兩邊根本不是同一件事，只能各看各的<b>趨勢</b>。<br>'
+    + '⚠ <b>母體再縮一層</b>：只有<b>已登入 email 帳號</b>的休閒玩家會送（伺服器不收匿名身分）。<br>'
+    + '⚠ <b>倖存者偏差</b>：client 要累積 <b>10 發成功推送</b>才可能送出指紋 ⇒ '
+    + '<b>上行完全爆掉的人在這裡看不見</b>（他們連指紋都送不出來）。這裡的分佈是「還撐得住的人」的分佈。<br>'
+    + '⚠ 「玩家宣告『對手棄權』」的次數是<b>頻率下界，不是上界</b>：被誤判掉的那一方本來就卡住、'
+    + '他的畫面送不出任何回報 ⇒ 這裡永遠只看得到<b>宣告者那一側</b>。'
+    + '</div>';
+  const tail = '</div>';
+  // ⚠ `casualApi` 是哨兵：舊伺服器（v6.268 以前）沒有這個欄位。**不可以**用「rows 是 0」
+  //   判斷舊版 —— 那會把「這段期間真的沒有休閒回報」講成「伺服器沒部署」，反過來也一樣。
+  if (!cg || typeof cg.casualApi !== 'number') {
+    return head + '<div id="mon-casual-body"><p class="small" style="color:#c62828;margin:0;">'
+      + '伺服器還是舊版（需要 v6.269 以上，跑過 <code>redeploy-oracle.bat</code>）⇒ 這一塊沒有資料。'
+      + '<b>這不代表沒有休閒回報</b>，只代表這支端點還算不出休閒的統計。'
+      + '暫時可以跑 <code>dump-monitor.bat</code> 看【②-e】區塊。</p></div>' + tail;
+  }
+  const n = (typeof cg.rows === 'number') ? cg.rows : 0;
+  const players = (typeof cg.players === 'number') ? cg.players : 0;
+  const trunc = (typeof cg.truncated === 'number') ? cg.truncated : 0;
+  let h = head + '<div id="mon-casual-body">';
+  h += '<div style="font-weight:700;margin-bottom:8px;">合計 <span style="color:#2a4a7a;">' + n + ' 筆 / '
+    + players + ' 人</span>　<span class="small muted">（其中 ' + trunc + ' 筆 payload 被截斷）</span></div>';
+  if (cg.capped) {
+    h += '<p class="small" style="color:#8a6d00;margin:0 0 8px;">⚠ 已達伺服器查詢上限 '
+      + (cg.scanCap || 0) + ' 筆 ⇒ 上面每一個數字都<b>只算了最近那批</b>，不是整個時間窗。</p>';
+  }
+  if (!n) {
+    h += '<p class="small" style="color:#8a6d00;margin:0;">這段期間沒有任何休閒回報。'
+      + '⚠ 這<b>不是</b>「休閒都很順」，有三種可能：①玩家的畫面還沒更新到 v6.261；'
+      + '②真的沒有人中籤也沒有人慢（取樣是每場 10%、上傳太慢的門檻是 p95 ≥ 5 秒）；'
+      + '③那段期間的休閒玩家都沒有登入 email 帳號。</p>';
+    return h + '</div>' + tail;
+  }
+  // ── 指紋次數 ──────────────────────────────────────────────────────────
+  h += '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;">'
+    + '<tr style="background:#f5f7fa;"><th style="text-align:left;padding:7px 8px;">指紋</th>'
+    + '<th style="text-align:right;padding:7px 8px;width:90px;">次數</th></tr>';
+  (cg.byReason || []).forEach(function (r) {
+    const info = monReasonInfo(r.reason);
+    h += '<tr style="border-top:1px solid #eef1f5;">'
+      + '<td style="padding:7px 8px;"><b>' + escapeHtml(info[0]) + '</b>'
+      + '<div class="small muted" style="margin-top:2px;color:#aab;">' + escapeHtml(r.reason) + '</div></td>'
+      + '<td style="padding:7px 8px;text-align:right;font-weight:700;">' + r.n + '</td></tr>';
+  });
+  h += '</table>';
+  // ── 盤面上傳（＝玩家上行）──────────────────────────────────────────────
+  const pu = cg.push || {};
+  if (pu.rowsWithPush) {
+    h += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-bottom:12px;">'
+      + '<div style="font-weight:700;margin-bottom:4px;">⬆️ 盤面上傳（＝玩家上行）耗時　'
+      + '<span class="small muted">' + pu.rowsWithPush + ' 筆有這一欄</span></div>'
+      + '<table style="border-collapse:collapse;margin:6px 0 8px;">'
+      + '<tr><td style="padding:4px 14px 4px 0;">p50 中位數</td><td style="padding:4px 0;font-weight:700;">' + monMs(pu.p50med) + '</td></tr>'
+      + '<tr><td style="padding:4px 14px 4px 0;">p95 中位數</td><td style="padding:4px 0;font-weight:700;">' + monMs(pu.p95med) + '</td></tr>'
+      + '<tr><td style="padding:4px 14px 4px 0;">p95 最差</td><td style="padding:4px 0;font-weight:700;color:#c62828;">' + monMs(pu.p95max) + '</td></tr>'
+      + '<tr><td style="padding:4px 14px 4px 0;">單發最久</td><td style="padding:4px 0;font-weight:700;color:#c62828;">' + monMs(pu.maxmax) + '</td></tr>'
+      + '<tr><td style="padding:4px 14px 4px 0;">推送失敗／逾時累計</td><td style="padding:4px 0;font-weight:700;">' + (pu.fail || 0) + ' 次</td></tr>'
+      + '</table>'
+      + '<p class="small muted" style="margin:0;">⚠ <b>失敗／逾時那幾發沒有算進上面的 p50/p95</b>'
+      + '（算進去會把分佈整個灌爆）⇒ 失敗次數要單獨看。<br>'
+      + '這是 v6.245／v6.246「慢的是<b>玩家上行</b>」這個結論的<b>玩家端</b>實測值 —— '
+      + '在此之前只有 nginx 的 408 與 <code>upstream=-</code> 這種伺服器端旁證。</p></div>';
+  }
+  // ── 棄權宣告 ──────────────────────────────────────────────────────────
+  const fc = cg.forfeitClaim || {};
+  if (fc.total) {
+    h += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-bottom:12px;">'
+      + '<div style="font-weight:700;margin-bottom:4px;">🏳 玩家宣告「對手棄權」　'
+      + '<span style="color:#2a4a7a;">' + fc.total + ' 次</span></div>'
+      + '<p class="small" style="margin:2px 0;">伺服器同意 <b>' + (fc.granted || 0) + '</b> 次（對手真的沒動作）／'
+      + '伺服器擋下 <b style="color:#c62828;">' + (fc.rejected || 0) + '</b> 次（<b>宣告者自己的畫面是舊的</b>，對手其實動過了）'
+      + ((fc.unknown || 0) ? '／判不出來 ' + fc.unknown + ' 次' : '') + '</p>'
+      + '<p class="small muted" style="margin:2px 0 0;">⚠⚠ 這是「對手誤拿棄權勝」的<b>頻率下界</b>，'
+      + '不是上界：被誤判掉的那一方本來就卡住、送不出任何回報。</p></div>';
+  }
+  // ── 版本／平台分佈 ────────────────────────────────────────────────────
+  const _dist = function (title, arr, key) {
+    if (!arr || !arr.length) return '';
+    return '<div style="margin-bottom:6px;"><b class="small">' + title + '</b>　<span class="small">'
+      + arr.slice(0, 6).map(function (v) { return escapeHtml(String(v[key])) + ' ' + v.n; }).join('、')
+      + '</span></div>';
+  };
+  h += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-bottom:12px;">'
+    + _dist('休閒回報者的版本分佈', cg.byVersion, 'ver')
+    + _dist('休閒回報者的平台分佈', cg.byPlatform, 'platform')
+    + '</div>';
+  // ── 明細 ──────────────────────────────────────────────────────────────
+  const list = Array.isArray(cg.list) ? cg.list : [];
+  if (list.length) {
+    h += '<details style="border-top:1px dashed #e3e8ef;padding-top:12px;">'
+      + '<summary style="cursor:pointer;color:#2a4a7a;font-weight:700;">📋 最近 ' + list.length + ' 筆休閒明細（含原始診斷內容）</summary>'
+      + '<div style="padding-top:10px;">';
+    list.forEach(function (r) {
+      const info = monReasonInfo(r.reason);
+      h += '<details style="margin-bottom:6px;border:1px solid #eef1f5;border-radius:6px;padding:8px;">'
+        + '<summary style="cursor:pointer;">' + escapeHtml(new Date(r.ts).toLocaleString('zh-TW'))
+        + '　<b>' + escapeHtml(info[0]) + '</b>　' + escapeHtml(r.email || '(未知)')
+        + (r.room ? '　<span class="small muted">' + escapeHtml(r.room) + '</span>' : '')
+        + (r.truncated ? '　<span style="color:#c62828;font-weight:700;">⚠ 已截斷'
+            + (r.rawLen ? '（原始 ' + r.rawLen + ' 字元）' : '') + '</span>' : '') + '</summary>'
+        + '<pre style="white-space:pre-wrap;word-break:break-all;font-size:11px;background:#fafbfc;padding:8px;border-radius:4px;margin:8px 0 0;">'
+        + escapeHtml(r.diag || '') + '</pre></details>';
+    });
+    h += '</div></details>';
+  }
+  return h + '</div>' + tail;
+}
 async function loadMonitor() {
   const el = document.getElementById('tab-monitor');
   if (el) el.innerHTML = '<div style="padding:24px;color:#888;">載入中…</div>';
@@ -3056,8 +3185,12 @@ async function loadMonitor() {
     api('/api/tournament/admin/clientdiag?hours=' + window.monHours),
     api('/api/tournament/admin/minclientver'),
     api('/api/tournament/admin/noshow'),
+    // ⭐v6.269 休閒批（**第二發**，走同一支端點的 `?mode=casual`）。
+    //   ⚠ 刻意分兩發而不是把休閒併進同一個回應：兩批母體不同，合在一起回會誘導人把數字相加，
+    //     而且錦標賽那份的回應內容必須逐位元不變（守衛以 sha256 鎖住）。
+    api('/api/tournament/admin/clientdiag?mode=casual&hours=' + window.monHours),
   ]);
-  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]);
+  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]);
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
@@ -3283,7 +3416,13 @@ async function loadMonitor() {
     });
     html += '</div></details>';
   }
-  html += '</div></div>';
+  html += '</div>';   // ⭐v6.269 先關掉 🩺 那一框，讓 🎮 休閒成為它的**兄弟**而不是巢狀在裡面
+  // ⭐⭐⭐v6.269 「🎮 休閒」子表 —— **刻意寫在上面那個 if/else 之外、無條件呼叫**：
+  //   最容易再犯的同型錯誤就是把它塞進 `dg.byReason.length` 那個分支裡 ——
+  //   錦標賽沒有異常的那幾天，休閒子表會整塊消失（而那正是最需要看休閒的時候）。
+  //   ⚠ `dg` 讀不到（舊伺服器／403）時同樣要畫，休閒與錦標賽是兩支獨立的請求。
+  html += monCasualBlock(cg);
+  html += '</div>';
   if (el) el.innerHTML = html;
 }
 window.monSetHours = function (h) { window.monHours = h; loadMonitor(); };
@@ -3303,7 +3442,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.268';
+window.SITE_VERSION_HINT = '6.269';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

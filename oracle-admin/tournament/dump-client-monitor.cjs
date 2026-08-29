@@ -178,6 +178,31 @@ function splitDiagRows(rows) {
   return { anomaly: anomaly, sample: sample, casual: casual };
 }
 /**
+ * ⭐⭐⭐v6.269 **彙總段**的三分流（與 splitDiagRows 對應，但作用在 mongo aggregate 的結果上）。
+ *
+ * ⚠⚠ v6.261 的漏洞（Fable 5 於 v6.262 審查時發現，v6.269 修）：
+ *   明細那一路（splitDiagRows）三分流做對了，但**彙總段沒有** —— `agg` 只濾了
+ *   `isSampleReason`，於是 `casual-slow-push` / `casual-forfeit-claim` 這種
+ *   「是休閒、但不是取樣」的 reason 會**同時**落進【② 玩家端異常指紋】（錦標賽區塊）
+ *   與【②-e 休閒對戰批】⇒ **同一批列被數了兩次**。
+ *   2026-08-30 的 dump 上看得到：【②】列了 casual-slow-push 50 次、casual-forfeit-claim 39 次，
+ *   而【②-e】又各列了一次。
+ *   ⚠ 更難察覺的是：【②】的「合計 N 筆」用的是 `rows.length`（走 splitDiagRows，本來就對），
+ *     所以**逐列相加對不上合計**，但沒有人會去加 ⇒ 這一版順手把對帳寫進摘要裡。
+ * ⚠ 順序不可以顛倒（同 splitDiagRows）：casual-perf-sample 同時滿足兩個述詞，
+ *   先把休閒整批拿掉才不會把休閒的健康樣本混進錦標賽的健康對照組。
+ * ⚠ 回傳的三批**互斥且窮盡**（守衛有斷言）；三批的數字永遠不可相加。
+ */
+function splitAggRows(agg) {
+  const all = agg || [];
+  const nonCasual = all.filter(function (a) { return !isCasualReason(a && a._id); });
+  return {
+    anomaly: nonCasual.filter(function (a) { return !isSampleReason(a._id); }),
+    sample: nonCasual.filter(function (a) { return isSampleReason(a._id); }),
+    casual: all.filter(function (a) { return isCasualReason(a && a._id); }),
+  };
+}
+/**
  * ⭐⭐⭐v6.261 休閒批的彙總（**完全獨立**的一份，與 sampleSummary／既有統計零共用）。
  * ⚠⚠ 回傳的每一個數字都只算休閒列，**永遠不可以**跟錦標賽那幾塊相加。
  */
@@ -600,13 +625,12 @@ async function main() {
     { $group: { _id: '$reason', n: { $sum: 1 }, uids: { $addToSet: '$uid' } } },
   ]).toArray();
   // ⭐v6.213 aggregate 是對整個時間窗算的，這裡同樣要把取樣列濾掉（否則 byReason 又混回去了）。
-  const byReason = agg
-    .filter(function (a) { return !isSampleReason(a._id); })
-    .map(function (a) { return { reason: a._id || '(未標)', label: reasonLabel(a._id), n: a.n, players: (a.uids || []).length }; })
-    .sort(function (x, y) { return y.n - x.n; });
-  const sampleAgg = agg
-    .filter(function (a) { return isSampleReason(a._id); })
-    .map(function (a) { return { reason: a._id || '(未標)', label: reasonLabel(a._id), n: a.n, players: (a.uids || []).length }; });
+  // ⭐⭐⭐v6.269 **而且要先把休閒批整批拿掉** —— 見 splitAggRows 的註解（v6.261 的重複計算）。
+  //   ⚠ 三分流只有一個出口（splitAggRows），不要在下游各自再濾一次。
+  const _aggSplit = splitAggRows(agg);
+  const _aggFmt = function (a) { return { reason: a._id || '(未標)', label: reasonLabel(a._id), n: a.n, players: (a.uids || []).length }; };
+  const byReason = _aggSplit.anomaly.map(_aggFmt).sort(function (x, y) { return y.n - x.n; });
+  const sampleAgg = _aggSplit.sample.map(_aggFmt);
 
   // ── ④ 逐列展開 ────────────────────────────────────────────────────────
   const rows = [];
@@ -841,6 +865,14 @@ async function main() {
     }
     L.push('  ── 合計 ' + rows.length + ' 筆回報，來自 ' + uidSet.size + ' 位玩家。');
     L.push('  （人數比次數重要：同一個人重複觸發，不代表全站有問題。）');
+    // ⭐⭐⭐v6.269 對帳：逐列相加必須等於合計。
+    //   v6.261~v6.268 這兩個數字是**對不起來的**（彙總段沒濾休閒，逐列比合計多出休閒那幾則），
+    //   但沒有人會去加 ⇒ 這一行就是讓下一次再犯時立刻看得見。
+    const _sumN = byReason.reduce(function (s, r) { return s + r.n; }, 0);
+    if (_sumN !== rows.length) {
+      L.push('  ⚠⚠ 對帳失敗：逐列相加 ' + _sumN + ' ≠ 合計 ' + rows.length
+        + ' —— 分帳有洞（有列被重複計算或漏掉），請回報。');
+    }
   }
   if (staleTally.total) {
     L.push('');
@@ -1098,6 +1130,8 @@ async function main() {
 module.exports = { DIAG_CAP: DIAG_CAP, LEGACY_DIAG_CAP: LEGACY_DIAG_CAP, parseDiag: parseDiag, classifyTrunc: classifyTrunc, truncSummary: truncSummary, reasonLabel: reasonLabel, parseRange: parseRange, verCmp: verCmp, staleGateOf: staleGateOf, oppQuietOf: oppQuietOf,
   // ⭐v6.213 守衛要**實跑**分帳邏輯（只驗字串存在擋不住「接線沒接上」）。
   SAMPLE_REASONS: SAMPLE_REASONS, isSampleReason: isSampleReason, splitDiagRows: splitDiagRows, sampleSummary: sampleSummary,
+  // ⭐v6.269 彙總段的三分流（守衛要**實跑**：只驗字串存在擋不住「接線沒接上」）。
+  splitAggRows: splitAggRows,
   // ⭐v6.261 休閒批的分帳述詞與彙總（守衛要**實跑**，只驗字串存在擋不住「接線沒接上」）。
   CASUAL_REASON_PREFIX: CASUAL_REASON_PREFIX, isCasualReason: isCasualReason, casualSummary: casualSummary,
   // ⭐v6.227 守衛要實跑 colo 分組（只驗字串存在擋不住「接線沒接上」）。

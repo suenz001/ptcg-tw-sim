@@ -29,7 +29,11 @@ const ok = (name, cond, extra = '') => {
 {
   const i = SRC.indexOf("app.get('/api/tournament/admin/clientdiag'");
   ok('clientdiag 讀取端點存在', i > 0);
-  const seg = SRC.slice(i, i + 2600);
+  // ⚠ v6.269：同一支 handler 內多了休閒批的早退分支（一行 ＋ 一行註解），
+  //   底下那條「壞掉的 payload 要略過」的 catch 被往後推到 offset 2705 ⇒ 視窗放大到 3400。
+  //   ⭐ 只放大視窗，**regex 與斷言一個字都沒改**；3400 仍遠小於整支 handler（約 5900 字元），
+  //     所以不會把別的 handler 的內容誤收進來（放大視窗最怕的就是那件事）。
+  const seg = SRC.slice(i, i + 3400);
   ok('有管理員 gate', /if \(!isTournAdmin\(id\)\) return res\.status\(403\)/.test(seg));
   ok('hours 有 clamp（不可拉出無上限的全表掃描）', /Math\.max\(1, Math\.min\(168, Number\(req\.query\.hours\) \|\| 24\)\)/.test(seg));
   // ★ 統計必須對整個時間窗算，不能只對「最近 N 筆明細」算 —— 那會被 limit 截斷而失真
