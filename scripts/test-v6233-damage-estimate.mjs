@@ -9,7 +9,7 @@
  * 沒有突變測試的話，這兩條可能只是恆真的安慰劑（IRON_RULES Rule 25/33）。
  */
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
@@ -408,21 +408,19 @@ console.log('\n⑨ 接線（靜態）：只在休閒對戰、兩套 UI、一份�
 console.log('\n⑩ HEAD-FAIL：上一版（BASE v6.232）不可能通過這支守衛');
 {
   const BASE = '4ed788b19b1ba416b3bab1cda17cf57752d350cc';
-  const git = (args) => {
-    try {
-      return { ok: true, out: execFileSync('git', ['-C', ROOT, ...args],
-        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8') };
-    } catch { return { ok: false, out: '' }; }
-  };
   // ⚠ CI（actions/checkout@v4）預設是 `fetch-depth: 1` 的**淺複製**，物件庫裡根本沒有 BASE 那顆
-  //   commit。那不是「守衛發現問題」，是「這台機器沒有可比對的舊版」——⇒ 明講跳過，
-  //   **絕不可以讓 git 的例外把整支測試炸掉**（第一次 push 就是這樣讓 CI 的 npm test 掛掉的）。
-  if (!git(['cat-file', '-e', BASE + '^{commit}']).ok) {
-    console.log('  SKIP 本機物件庫沒有 BASE 這顆 commit（淺複製 / CI）⇒ 這一節只在完整 clone 才跑');
+  //   commit。那不是「守衛發現問題」，是「這台機器沒有可比對的舊版」。
+  // ⚠ v6.263：這一節是**歷史性**的 HEAD-FAIL 證明（「上一版連這個檔都沒有」）。
+  //   把它換成內嵌常數只會變成恆真安慰劑（我們無法在沒有歷史時驗證歷史）⇒ 維持跳過，
+  //   但改走中央 helper，讓「這一段沒有在守」在 CI log 上大聲印出來。
+  //   ⭐ 守 HEAD 的責任在 ①~⑨（行為端），這一節從來不是唯一防線。
+  if (!hasBaseCommit(ROOT, BASE)) {
+    shallowSkip('v6.233 ⑩ HEAD-FAIL（BASE 連 damage-estimate.ts 都沒有）',
+                '歷史性斷言，無法內嵌；守 HEAD 的是 ①~⑨');
   } else {
     chk('BASE 沒有 src/lib/game/damage-estimate.ts（新檔）',
-        !git(['cat-file', '-e', `${BASE}:src/lib/game/damage-estimate.ts`]).ok);
-    const r = git(['cat-file', '-p', `${BASE}:src/routes/game/+page.svelte`]);
+        !readBaseBlob(ROOT, BASE, 'src/lib/game/damage-estimate.ts').ok);
+    const r = readBaseBlob(ROOT, BASE, 'src/routes/game/+page.svelte');
     chk('BASE 的 +page.svelte 沒有 damageEstimates（⑨ 會全紅）', r.ok && !r.out.includes('damageEstimates'));
   }
 }

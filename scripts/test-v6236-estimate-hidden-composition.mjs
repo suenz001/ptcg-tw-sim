@@ -14,19 +14,14 @@
  *   - 反向正對照：一般招式、以及只看「張數」（公開資訊）的招式仍然照常給數字
  */
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE = 'ed3f03f3d2d231bd51a6a278a2fdec8ce3cf3ece';   // v6.235
-function git(args) {
-  try { return { ok: true, out: execFileSync('git', ['-C', ROOT, ...args],
-    { encoding: 'utf8', maxBuffer: 1e9, stdio: ['ignore', 'pipe', 'ignore'] }) }; }
-  catch { return { ok: false, out: '' }; }
-}
-const HAS_BASE = git(['cat-file', '-e', BASE + '^{commit}']).ok;
+const HAS_BASE = hasBaseCommit(ROOT, BASE);
 
 const S = join(ROOT, '.hc-s.js'), E = join(ROOT, '.hc-e.ts'), O = join(ROOT, '.hc-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
@@ -218,16 +213,22 @@ console.log('\n⑥ 預估跑完後，原本的 GameState 逐位元組不變（�
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑦ HEAD-FAIL：BASE（v6.235）不可能通過這支守衛');
+// ⭐ v6.263：這條**純 HEAD 檢查**原本被綁在歷史 gate 裡面，淺複製下白白少守一條。
+//   它不需要任何歷史，移出來讓它永遠跑。
+{
+  const curEst = readFileSync(join(ROOT, 'src/lib/game/damage-estimate.ts'), 'utf8');
+  chk('HEAD 已不再是「只反轉順序」', !curEst.includes('p.deck.reverse()') && curEst.includes('pooled.reverse()'));
+}
 if (!HAS_BASE) {
-  console.log('  SKIP 本機物件庫沒有 BASE 這顆 commit（淺複製 / CI）⇒ 這一節只在完整 clone 才跑');
+  // ⚠ v6.263：剩下三條是**歷史性**斷言（BASE 的檔案內容長什麼樣），無法內嵌。
+  //   改走中央 helper 大聲宣告；守 HEAD 的是 ①~⑥ 的行為端與突變測試。
+  shallowSkip('v6.236 ⑦ HEAD-FAIL（BASE v6.235 的 damage-estimate.ts 逐字比對）', '歷史性斷言，無法內嵌');
 } else {
-  const b = git(['cat-file', '-p', `${BASE}:src/lib/game/damage-estimate.ts`]);
+  const b = readBaseBlob(ROOT, BASE, 'src/lib/game/damage-estimate.ts');
   chk('取得 BASE 的 damage-estimate.ts', b.ok && b.out.length > 3000);
   chk('HEAD-FAIL：BASE 只反轉順序（p.deck.reverse()）⇒ ③ 會紅', b.out.includes('p.deck.reverse()'));
   chk('HEAD-FAIL：BASE 的 none 分支排在 hidden 之前 ⇒ ⑤ 會紅',
       b.out.indexOf("return { kind: 'none' };") < b.out.indexOf("why: 'hidden' };"));
-  const cur = readFileSync(join(ROOT, 'src/lib/game/damage-estimate.ts'), 'utf8');
-  chk('HEAD 已不再是「只反轉順序」', !cur.includes('p.deck.reverse()') && cur.includes('pooled.reverse()'));
 }
 
 console.log(`\n[v6236-estimate-hidden-composition] PASS ${n - bad} / FAIL ${bad}`);

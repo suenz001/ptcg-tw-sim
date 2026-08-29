@@ -32,7 +32,6 @@
  *   C2 C1 的掃描器正對照（餵一張假的違規卡，必須被抓到）
  */
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -281,23 +280,28 @@ console.log('\n⑤ 【A】突變測試：composeAttackFormula 是**唯一**來�
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n⑥ 【A】HEAD-FAIL：BASE 的 effects.ts ⇒ 波動突刺 沒有公式');
+console.log('\n⑥ 【A】突變：拔掉中央 helper 那一行 composeAttackFormula ⇒ 公式必須整段消失');
+// ⚠⚠ v6.263：這一節原本是「把 BASE(v6.238) 的整份 effects.ts 疊回去再打包」。
+//   v6.239 之後 engine.ts 新增了 collectPassiveAttackBonuses / applyPreventKOToVictim /
+//   koVictimAbilityPrizeAdjust 等 export，**舊 effects.ts 與新 engine.ts 連結不起來**
+//   ⇒ 完整 clone 下 esbuild 直接丟例外、整支測試 crash（實測 exit 1，4 個 "No matching export"）；
+//   CI 的淺複製下則整節 SKIP。兩邊都沒有在守，且擋住了 `fetch-depth: 0`。
+//   ⇒ 改成**不需要歷史**的突變：把中央 helper 組公式的那一行拔掉，公式必須整段消失
+//   —— 測的是同一件事（「公式來自那一行」），而且淺複製下照樣跑。
 {
-  let baseEff = null;
-  try {
-    baseEff = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/lib/game/effects.ts'],
-      { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
-  } catch { baseEff = null; }
-  if (!baseEff) {
-    // ⚠ CI 的 checkout 是 fetch-depth:1 淺複製，取不到歷史 blob ⇒ SKIP（⑤ 的突變測試涵蓋同一件事）
-    console.log('  SKIP  取不到 BASE blob（淺複製）—— 由 ⑤ 的突變測試涵蓋');
-  } else {
-    const mB = await bundle({ 'lib/game/effects.ts': baseEff });
-    const st = mkState(LUC.card, LUC.idx, WEAK_F, { attacker: { toolAttached: inst(BELT.id) }, p1: { damageBoostFightingThisTurn: 30 } });
-    const oB = mB.applyAction(st, { type: 'ATTACK', attackIndex: LUC.idx }, pool);
-    chk('A7 BASE 的中央 helper 路徑一段公式都沒有（HEAD-FAIL）',
-        formulasIn(oB.log).length === 0, JSON.stringify(formulasIn(oB.log).map(x => x.text)));
-  }
+  const effSrc = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8');
+  const NEEDLE = "    ? composeAttackFormula(_formula, effDmg) : '';";
+  chk('A7 突變錨點唯一（中央 helper 組公式的那一行）', effSrc.split(NEEDLE).length === 2);
+  const mB = await bundle({ 'lib/game/effects.ts': effSrc.replace(NEEDLE, "    ? '' : '';") });
+  const st = mkState(LUC.card, LUC.idx, WEAK_F, { attacker: { toolAttached: inst(BELT.id) }, p1: { damageBoostFightingThisTurn: 30 } });
+  const oB = mB.applyAction(st, { type: 'ATTACK', attackIndex: LUC.idx }, pool);
+  chk('A7 拔掉那一行之後，中央 helper 路徑一段公式都沒有（＝v6.238 的樣子）',
+      formulasIn(oB.log).length === 0, JSON.stringify(formulasIn(oB.log).map(x => x.text)));
+  // ⚠ 正對照：同一個盤面在**未突變**的 HEAD 上確實印得出公式，否則上面那條是恆真安慰劑。
+  const stH = mkState(LUC.card, LUC.idx, WEAK_F, { attacker: { toolAttached: inst(BELT.id) }, p1: { damageBoostFightingThisTurn: 30 } });
+  const oH = mod.applyAction(stH, { type: 'ATTACK', attackIndex: LUC.idx }, pool);
+  chk('A7 正對照：未突變的 HEAD 在同一個盤面上有公式', formulasIn(oH.log).length >= 1,
+      JSON.stringify(formulasIn(oH.log).map(x => x.text)));
 }
 
 // ══════════════════════════════════════════════════════════════════════════

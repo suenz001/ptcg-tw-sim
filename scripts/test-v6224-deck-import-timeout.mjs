@@ -20,7 +20,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import assert from 'node:assert';
 import vm from 'node:vm';
 
@@ -193,18 +193,111 @@ await T('B1 成功路徑：解析出 2 種卡、count 正確、cached 旗標正�
   assert.strictEqual(cur.ok2.body.cached, true, '第二次同 code 應命中 5 分鐘快取');
   assert.strictEqual(cur.okFetchCalls, 1, '快取命中不應再打官網（實際 fetch ' + cur.okFetchCalls + ' 次）');
 });
+// ⚠⚠ v6.263：這裡原本是
+//     `catch { console.log('（拿不到 BASE blob，跳過對照）'); return; }`
+//   —— CI（actions/checkout@v4 預設 fetch-depth:1 的淺複製）拿不到 BASE blob，
+//   於是這一條**條數不變、無 SKIP 字樣、整體綠燈**，實際上從來沒有在守（實測確認）。
+//   改成【內嵌 BASE 行為快照】：淺複製下照樣逐分支比對，條數不變且真的在守。
+//   下面的 B2b 再負責證明「這份內嵌值不是憑空捏的」。
+const BASE_SNAPSHOT = {
+  "ok1": {
+    "status": 200,
+    "body": {
+      "code": "AAAA01-BBBBBB-CCCCCC",
+      "entries": [
+        {
+          "cardId": "12345",
+          "name": "皮卡丘ex",
+          "setCode": "M4",
+          "collectorNumber": "002/083",
+          "count": 4
+        },
+        {
+          "cardId": "67890",
+          "name": "基本雷能量",
+          "setCode": "SVE",
+          "collectorNumber": "004/008",
+          "count": 10
+        }
+      ],
+      "cached": false
+    }
+  },
+  "ok2": {
+    "status": 200,
+    "body": {
+      "code": "AAAA01-BBBBBB-CCCCCC",
+      "entries": [
+        {
+          "cardId": "12345",
+          "name": "皮卡丘ex",
+          "setCode": "M4",
+          "collectorNumber": "002/083",
+          "count": 4
+        },
+        {
+          "cardId": "67890",
+          "name": "基本雷能量",
+          "setCode": "SVE",
+          "collectorNumber": "004/008",
+          "count": 10
+        }
+      ],
+      "cached": true
+    }
+  },
+  "okFetchCalls": 1,
+  "badFormat": {
+    "status": 400,
+    "body": {
+      "error": "代碼格式錯誤（應為 XXXXXX-XXXXXX-XXXXXX）"
+    }
+  },
+  "badFormatFetchCalls": 0,
+  "http404": {
+    "status": 404,
+    "body": {
+      "error": "官網回應異常 (HTTP 404)"
+    }
+  },
+  "parse422": {
+    "status": 422,
+    "body": {
+      "error": "HTML 解析失敗（可能代碼無效或官網結構變動）"
+    }
+  },
+  "err500": {
+    "status": 500,
+    "body": {
+      "error": "無法連線到官網: connect ECONNREFUSED 1.2.3.4:443"
+    }
+  },
+  "rate6th": {
+    "status": 429,
+    "body": {
+      "error": "請求過於頻繁，請稍候再試（每分鐘最多 5 次）"
+    }
+  },
+  "rateFetchCalls": 5
+};
+const SNAP_KEYS = ['ok1', 'ok2', 'badFormat', 'http404', 'parse422', 'err500', 'rate6th'];
+const cmpSnap = (a, b, tag) => {
+  for (const k of SNAP_KEYS) assert.deepStrictEqual(a[k], b[k], tag + '：分支 ' + k + ' 的回應不一致');
+  assert.strictEqual(a.okFetchCalls, b.okFetchCalls, tag + '：快取行為改變');
+  assert.strictEqual(a.rateFetchCalls, b.rateFetchCalls, tag + '：限流消耗位置改變');
+};
 await T('B2 與 BASE(v6.223) 行為快照 deep-equal（400/404/422/429/500/快取全分支）', async () => {
-  let baseSrc;
-  try {
-    baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':oracle-admin/server_admin_patch.js'],
-      { maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
-  } catch { console.log('    （拿不到 BASE blob，跳過對照 — 沙盒外環境）'); return; }
-  const baseSnap = await behaviorSnapshot(extractIife(baseSrc));
-  for (const k of ['ok1', 'ok2', 'badFormat', 'http404', 'parse422', 'err500', 'rate6th']) {
-    assert.deepStrictEqual(cur[k], baseSnap[k], '分支 ' + k + ' 的回應與 BASE 不一致');
+  cmpSnap(cur, BASE_SNAPSHOT, '與 BASE 內嵌快照');
+});
+await T('B2b 內嵌快照的真實性：拿得到歷史時必須與現算的 BASE 逐欄相同', async () => {
+  const b = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
+  if (!b.ok) {
+    // ⚠ 只有「內嵌值 vs 現算值」這一層驗證會跳過；上面的 B2 仍然完整在守。
+    shallowSkip('v6.224 B2b：內嵌 BASE 快照的重算驗證', 'B2 已用內嵌快照完整比對，本條只驗內嵌值本身');
+    return;
   }
-  assert.strictEqual(cur.okFetchCalls, baseSnap.okFetchCalls, '快取行為改變');
-  assert.strictEqual(cur.rateFetchCalls, baseSnap.rateFetchCalls, '限流消耗位置改變');
+  const baseSnap = await behaviorSnapshot(extractIife(b.out));
+  cmpSnap(BASE_SNAPSHOT, baseSnap, '內嵌快照 vs 現算 BASE');
 });
 await T('C1 限流在昂貴 fetch 之前：第 6 次回 429 且官網只被打 5 次', async () => {
   assert.ok(cur.rate6th && cur.rate6th.status === 429, '第 6 次應 429，實際 ' + (cur.rate6th && cur.rate6th.status));

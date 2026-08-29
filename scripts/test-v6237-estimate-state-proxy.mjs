@@ -30,7 +30,7 @@
  * ⚠ 不要把 ①②④ 任何一條換成字串比對。BASE(v6.236) 必須在 ④ 變紅（見 ⑪ HEAD-FAIL）。
  */
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
@@ -496,18 +496,16 @@ console.log('\n⑨ 突變測試（沒有這一段，④ 可能只是恆真的安
 console.log('\n⑩ HEAD-FAIL：BASE（v6.236）不可能通過這支守衛');
 {
   const BASE = 'da59a0552e53a7668181a45f1f224891c7f42104';
-  const git = (args) => {
-    try {
-      return { ok: true, out: execFileSync('git', ['-C', ROOT, ...args],
-        { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8') };
-    } catch { return { ok: false, out: '' }; }
-  };
   // ⚠ CI 是 fetch-depth:1 的淺複製，物件庫裡沒有 BASE ⇒ 明講跳過，不可讓 git 例外炸掉整支測試。
-  if (!git(['cat-file', '-e', BASE + '^{commit}']).ok) {
-    console.log('  SKIP 本機物件庫沒有 BASE 這顆 commit（淺複製 / CI）⇒ 這一節只在完整 clone 才跑');
+  // ⚠ v6.263：本節六條全部是**歷史性**斷言（BASE 的 +page.svelte 長什麼樣、把 BASE 的
+  //   derived 本體抽出來跑）。+page.svelte 在 BASE 就有 900KB 級，內嵌不可能；
+  //   改走中央 helper 大聲宣告，守 HEAD 的是 ①~⑨（行為端＋突變）。
+  if (!hasBaseCommit(ROOT, BASE)) {
+    shallowSkip('v6.237 ⑩ HEAD-FAIL（BASE v6.236 的 +page.svelte／damage-estimate.ts）',
+                'BASE 對照物是 900KB 級的 +page.svelte，內嵌不可能');
   } else {
-    const bp = git(['cat-file', '-p', `${BASE}:src/routes/game/+page.svelte`]);
-    const be = git(['cat-file', '-p', `${BASE}:src/lib/game/damage-estimate.ts`]);
+    const bp = readBaseBlob(ROOT, BASE, 'src/routes/game/+page.svelte');
+    const be = readBaseBlob(ROOT, BASE, 'src/lib/game/damage-estimate.ts');
     chk('取得 BASE 的兩個檔', bp.ok && be.ok);
     chk('HEAD-FAIL：BASE 的 +page.svelte 把 $state 的 game 直接丟進預估（④⑨ 會紅）',
         bp.ok && !bp.out.includes('$state.snapshot(') && /return estimateAllAttacks\(game,/.test(bp.out));

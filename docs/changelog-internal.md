@@ -1,5 +1,107 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.263 — CI 的淺複製盲點：8 支守衛在 `fetch-depth: 1` 下 SKIP 或**靜默掏空**
+
+BASE `472ee5f97e7d5ca3e922bf9fa79cf04e4fa6b7fa`（v6.262）。
+⚠ 這一版**完全沒有玩家端改動**（`src/` 只動 `version.ts` 的版本字串），首頁 changelog 不寫。
+
+### 0. 現況（實測，不是推論）
+
+`.github/workflows/deploy.yml` 的 build job 用 `actions/checkout@v4` **沒有 `with:`**
+⇒ 走 action 預設 `fetch-depth: 1` 的淺複製。`iron-rules-audit.yml` 雖然 `fetch-depth: 2`，
+但它 `continue-on-error: true`，**從來不擋 deploy** ⇒ 真正的保護只有 build job 的 `npm test`。
+
+驗證方法：用 `git init` + `git fetch --depth=1 <BASE>` 造**真的**淺複製（不是「假裝拿不到 blob」
+的模擬），與 `git clone -s`（完整物件）各跑一次全鏈。
+
+| 守衛 | 淺複製行為 | 完整 clone | 淺複製 | 差 |
+|---|---|---|---|---|
+| `test-v6224-deck-import-timeout` | ⚠**靜默掏空**（:198 `catch { console.log(); return; }`） | 11 | 11 | **0（看不出來）** |
+| `test-v6230-deck-export-timeout` | ⚠**靜默掏空**（:264 同上） | 14 | 14 | **0（看不出來）** |
+| `test-v6233-damage-estimate` | 印 SKIP，整節不跑 | 62 | 60 | −2 |
+| `test-v6234-resistance-label-and-coin-cap` | 印 SKIP ⇒ **唯一的 FAIL 被吞掉** | 57 PASS **/ 1 FAIL** | 52 / 0 | −5 |
+| `test-v6236-estimate-hidden-composition` | 印 SKIP | 28 | 24 | −4 |
+| `test-v6237-estimate-state-proxy` | 印 SKIP | 62 | 56 | −6 |
+| `test-v6238-estimate-deferred-damage-and-magnifier` | 印 SKIP | 57 | 56 | −1 |
+| `test-v6239-central-attack-formula-and-optin-estimate` | 印 SKIP | ⚠**crash exit 1** | 33 | — |
+
+⭐ 第 9、10 支：`test-v6245` / `test-v6246` / `test-v6261` **也**讀歷史 sha，
+但它們用「內嵌等價突變版 / 內嵌 sha256」當退路 ⇒ 淺複製下條數不變且仍然在守（做對的參照組）。
+`test-bat-crlf` 讀的是 `ls-tree HEAD`，淺複製一樣拿得到。
+
+⭐ 完整 clone 跑全鏈 591 支：**只有 2 支紅**（`test-v6234`、`test-v6239`），其餘全綠。
+
+### 1. `test-v6234` 是真的紅 —— 但**是守衛過期，不是引擎壞掉**
+
+它第 448 行的斷言是「把 v6.234 新增的 label 段回推成舊的一行後，`engine.ts` 與 BASE(v6.233)
+**逐位元組相同**」＝ 凍結整份 `engine.ts`。v6.238 起 `composeAttackFormula` 搬成模組層級、
+又新增 `attackDamageToDefActive` 等等，`engine.ts` 已從 634,236 長到 643,796 bytes ⇒ 必定 false。
+
+複驗（自行重跑，不採信轉述）：把 v6.233 與 HEAD 的 `src/` 各自 esbuild 打包，
+對 **3,862 張卡的每個招式 × 2 種防守方＝11,454 個樣本**跑 `applyAction`，
+用同一顆確定性亂數種子比對「傷害數字／全場傷害指示物分佈／pendingSelection.effectKey」：
+
+```
+攻擊方卡數= 3862 樣本（卡×招式×2種防守方）= 11454
+防守方 A=超級拉帝亞斯ex B=願增猿
+相同 11454 / 不同 0（其中兩邊丟同樣例外 0）
+```
+
+正對照（Rule 33）：把 HEAD 的弱點 `×2` 改成 `×3` 後重跑同一支比對器 ⇒ **相同 10978 / 不同 476**。
+⇒ 比對器不是恆真的安慰劑，引擎確實沒壞。
+
+### 2. 修法
+
+| 檔 | 做法 |
+|---|---|
+| **新** `scripts/lib/base-blob.mjs` | 中央 helper：`hasBaseCommit` / `readBaseBlob` / `shallowSkip`。跳過時印 `⚠⚠ SHALLOW-SKIP`，process 結束再印一次總結 |
+| `test-v6224` / `test-v6230` | ⭐ **內嵌 BASE 行為快照**：B2 改成與內嵌快照逐分支 deep-equal（淺複製照跑）；新增 B2b 在拿得到歷史時重算驗證內嵌值。11→12、14→15，**兩種環境條數相同** |
+| `test-v6234` | 刪掉過期的逐位元組凍結，改成同版本內的突變對照：換掉 label 字串 ⇒ 傷害仍是 70；拿掉抵抗力算式 ⇒ 傷害變 100。history-free |
+| `test-v6236` | 把「HEAD 已不再是只反轉順序」這條**純 HEAD 檢查**移出歷史 gate（淺複製 24→25） |
+| `test-v6239` | ⚠ 原本疊 BASE 的整份 `effects.ts` ⇒ 與新 `engine.ts` 連結不起來、完整 clone 直接 crash。改成拔掉中央 helper 那一行 `composeAttackFormula` 的突變＋正對照（33→36，兩種環境相同） |
+| `test-v6233` / `test-v6237` / `test-v6238` | 純歷史性斷言（「BASE 當時長什麼樣」），內嵌只會變恆真安慰劑 ⇒ 維持跳過，但改走中央 helper 大聲印出來 |
+| **新** `test-v6263-shallow-clone-ci-guards` | meta 守衛，33 條 |
+| `test-v6175` | F 段掃描器的 `readdirSync` 加排序（棘輪數字不隨檔案系統浮動）。⚠ 在 BASE 實測 asc/desc/原生順序**都是 55**，無法重現先前「掛載磁碟 57」的說法 ⇒ 這次只是把它釘死，數字未變、門檻仍 `<= 55` |
+
+### 3. `test-v6263` 守什麼
+
+① 掃描器列管 test chain 裡所有「讀歷史」的腳本（下限斷言＋三條正／負對照）。
+② 這些腳本不是走中央 helper 就是在**白名單**裡；白名單每一項都要在 ④ 被實跑背書。
+③ 靜態偵測「catch 只印字就 return」的靜默掏空（附正／負對照）。
+④ ⭐ **行為端**：把 `git` 換成必定失敗的 PATH shim，`v6224/v6230/v6245/v6246/v6261`
+   的通過條數必須與真環境**完全相同**。
+⑤ ⭐ **突變**：同一個 shim 下把 `server_admin_patch.js` 的回應訊息改壞 ⇒ 必須紅。
+   （修前實測：淺複製＋同樣的突變 ⇒ `11 pass / 0 fail`，exit 0，**全綠**。）
+⑥ 把 `deploy.yml` 的 `fetch-depth` 現況釘住，讓改動變成刻意的動作。
+
+### 4. ⚠ 本版**不**改 `fetch-depth: 0` —— 分階段的理由
+
+量測（本機 `file://` 協定，同一台沙盒）：
+
+| | 物件庫 | fetch 時間 |
+|---|---|---|
+| `--depth=1` | 36 MB | 16.8 秒 |
+| 完整 | 55 MB+ | > 120 秒（沙盒逾時，未跑完） |
+
+`git count-objects -vH`：`size-pack 63.66 MiB`（GitHub 端是預打包，主要差在多下載約 20 MiB）。
+
+⇒ 順序：**這一版先把守衛修對**（完整 clone 下 591 支全綠已驗），
+**下一版**再加 `fetch-depth: 0`（那時才不會一開就擋 deploy），最後才談 fail-closed。
+若現在就改，`test-v6234` / `test-v6239` 這兩顆紅燈會立刻擋住 deploy。
+
+### 5. 待辦／要請站長裁示
+
+- ⚠⚠ **首頁 `static/changelog.html` 已 61,436 bytes = 59.996 KB，門檻 `< 60KB`** ——
+  下一則進去就爆。目前是 50 則、`<details>` 數量由 `test-v6223` 釘死 `=== 50`，
+  搬進封存是 1 進 1 出，而新條目（約 1,600~1,700 B）比被擠掉的舊條目（約 750~850 B）大
+  ⇒ 每版淨增約 800 B。三個選項：
+  (a) 把則數從 50 降到 46（需同時改 `test-v6223` 的 `=== 50`，是規格調整不是放寬安全判準），
+      約省 3.2 KB；
+  (b) 給 `<div class="log-body">` 加**每則位元組上限**並把現有最長的 8~10 則修短
+      （body 佔 40,729 B / 66%），約可省 5 KB；
+  (c) ⭐ 結構解：首頁只載最新 N 則、其餘展開時才 fetch —— 一次解除耦合。
+- `fetch-depth: 0`（見 §4）。
+
 ## v6.262 — 陳舊的鰭之化石｜鰭之守護：免疫**範圍**兩個方向都修（含 lint 兩個掃描器盲點）
 
 BASE `12162345e9be92b4e38fe144c64659f6b2eab588`（v6.261，遠端 main）。

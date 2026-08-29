@@ -16,7 +16,8 @@
  *   **絕不可以讓 git 的例外把整支測試炸掉**（v6.233 第一發就是這樣把 build 弄紅的）。
  */
 import { readFileSync, readdirSync, writeFileSync, existsSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -29,14 +30,8 @@ const CENTRAL = 'flipCoinsUntilTails';
 let n = 0, bad = 0;
 const chk = (label, cond) => { n++; console.log((cond ? '  PASS ' : '  FAIL ') + label); if (!cond) bad++; };
 
-// ── git 探測（淺複製就整段 SKIP）────────────────────────────────────────────
-const git = (args) => {
-  try {
-    return { ok: true, out: execFileSync('git', ['-C', ROOT, ...args],
-      { maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8') };
-  } catch { return { ok: false, out: '' }; }
-};
-const HAS_BASE = git(['cat-file', '-e', BASE + '^{commit}']).ok;
+// ── git 探測（淺複製就整段 SKIP；v6.263 起走中央 helper，跳過時會大聲印出來）──
+const HAS_BASE = hasBaseCommit(ROOT, BASE);
 
 // ── 把（可選擇性突變的）src 打包成可執行模組 ────────────────────────────────
 const TMPS = [];
@@ -425,28 +420,66 @@ console.log('\n⑧ ⭐ 突變測試（沒有這一段，④⑤⑥可能只是恆
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n⑨ HEAD-FAIL ＋「計算未變」的逐位元組證明（需要完整 clone；淺複製 SKIP）');
+console.log('\n⑨ HEAD-FAIL：BASE（v6.233）的三個檔逐字比對（歷史性斷言；淺複製跳過）');
 if (!HAS_BASE) {
-  console.log('  SKIP 本機物件庫沒有 BASE 這顆 commit（淺複製 / CI）⇒ 這一節只在完整 clone 才跑');
+  shallowSkip('v6.234 ⑨ HEAD-FAIL（BASE v6.233 的 engine／damage-estimate／v2355 逐字比對）',
+              '歷史性斷言，無法內嵌；守 HEAD 的是 ①~⑧ 與 ⑩');
 } else {
-  const baseEngine = git(['cat-file', '-p', `${BASE}:src/lib/game/engine.ts`]);
-  const baseEst = git(['cat-file', '-p', `${BASE}:src/lib/game/damage-estimate.ts`]);
-  const baseV2355 = git(['cat-file', '-p', `${BASE}:src/lib/game/effects/cards/v2355_j_mark_batch.ts`]);
+  const baseEngine = readBaseBlob(ROOT, BASE, 'src/lib/game/engine.ts');
+  const baseEst = readBaseBlob(ROOT, BASE, 'src/lib/game/damage-estimate.ts');
+  const baseV2355 = readBaseBlob(ROOT, BASE, 'src/lib/game/effects/cards/v2355_j_mark_batch.ts');
   chk('取得 BASE 的三個檔', baseEngine.ok && baseEst.ok && baseV2355.ok);
   // HEAD-FAIL：BASE 版本一定通不過②④⑤
   chk('HEAD-FAIL：BASE 的 engine.ts 用的是「屬性相剋」（②會紅）', baseEngine.out.includes("label: '屬性相剋'"));
   chk('HEAD-FAIL：BASE 的文案是「（擲到反面為止，無上限）」（④會紅）', baseEst.out.includes('擲到反面為止，無上限'));
   chk('HEAD-FAIL：BASE 的怪顎龍｜亂暴 是沒有上限的 while (true)（⑤⑥會紅）',
       /亂暴[\s\S]{0,400}while \(true\) \{/.test(baseV2355.out) && !baseV2355.out.includes(CENTRAL));
-  // ⭐⭐ 計算未變的最強證明：把新增的那段 label 註解與字串**原樣回推**，
-  //     必須與 BASE 的 engine.ts **逐位元組相同** ⇒ 這一版對 engine.ts 只動了顯示文字。
-  const NEWBLOCK = SRC.engine.slice(
-    SRC.engine.indexOf('        // v6.234：label 改用**卡面官方用語**'),
-    SRC.engine.indexOf("label: '抵抗力' });") + "label: '抵抗力' });".length);
-  const OLDLINE = "        formula.push({ sign: '-', value: Math.abs(resistDelta), label: '屬性相剋' });";
-  chk('回推定位成功（找得到 v6.234 新增的那一段）', NEWBLOCK.length > 100 && SRC.engine.split(NEWBLOCK).length === 2);
-  chk('⭐⭐ 把新 label 段回推成舊的一行後，engine.ts 與 BASE 逐位元組完全相同 ⇒ 計算行為不可能改變',
-      SRC.engine.replace(NEWBLOCK, OLDLINE) === baseEngine.out);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n⑩ ⭐⭐「label 只是顯示文字、不參與計算」（v6.263 改寫：不再依賴歷史）');
+// ⚠⚠ v6.263：這裡原本是一條**凍結整份 engine.ts** 的斷言 ——
+//     `SRC.engine.replace(NEWBLOCK, OLDLINE) === baseEngine.out`
+//   ＝「把新增的 label 段回推成舊的一行後，engine.ts 與 BASE v6.233 逐位元組相同」。
+//   那只在 v6.234 當下成立。v6.238 起 composeAttackFormula 搬成模組層級、又新增了
+//   attackDamageToDefActive 等等，engine.ts 已從 634,236 長到 643,796 bytes
+//   ⇒ 這條**必定為 false**（完整 clone 下實測：唯一的 FAIL 就是它）。
+//   但 CI 是 fetch-depth:1 的淺複製、整節 SKIP，所以這顆紅燈被藏了 28 個版本。
+//   ⚠ 複驗過「不是引擎壞掉」：以 v6.233 與 HEAD 的 src 各自打包，對 3,862 張卡的
+//     每個招式 × 2 種防守方（11,454 個樣本）比對傷害數字、指示物分佈與 pendingSelection
+//     ⇒ **相同 11,454 / 不同 0**；正對照（把弱點 ×2 改成 ×3）則報出 476 個差異。
+//   ⇒ 換成「同一版本內的突變對照」：改 label 字串、數值一位不變；改抵抗力算式、數值就變。
+//     證明的是「算的是算式、不是 label」，而且**不需要任何歷史、淺複製下照樣跑**。
+{
+  const R = RESIST_CASE;
+  const LABEL_LINE = "        formula.push({ sign: '-', value: Math.abs(resistDelta), label: '抵抗力' });";
+  const ARITH = '        baseDamage = Math.max(0, baseDamage + resistDelta);';
+  chk('⑩ 突變錨點唯一（engine.ts 的 label 那一行）', SRC.engine.split(LABEL_LINE).length === 2);
+  chk('⑩ 抵抗力算式錨點唯一（engine.ts）', SRC.engine.split(ARITH).length === 2);
+
+  // 突變 L：只改顯示文字 ⇒ 傷害數值必須一位不變
+  const mL = await bundleMutated('lbl', [['lib/game/engine.ts', LABEL_LINE,
+    LABEL_LINE.replace("label: '抵抗力'", "label: '§ZZ§'")]]);
+  if (mL.err) chk('⑩ 突變 L 定位：' + mL.err, false);
+  else {
+    const s = setup(R.att, R.atk, R.def);
+    const o = mL.mod.applyAction(s.state, { type: 'ATTACK', attackIndex: s.idx }, pool);
+    const e = mL.mod.estimateAttackDamage(setup(R.att, R.atk, R.def).state, s.idx, pool, 0);
+    chk(`⑩ ⭐⭐ 換掉 label 之後傷害仍是 ${R.expect}（label 不參與計算，實得 ${o.lastDealtDamage}）`,
+        (o.lastDealtDamage ?? -1) === R.expect);
+    chk('⑩ 正對照：突變真的生效（顯示端的 term label 跟著變了）',
+        (e.terms || []).some(t => t.label === '§ZZ§') && !(e.terms || []).some(t => t.label === '抵抗力'));
+  }
+  // 突變 A：改掉算式 ⇒ 傷害必須改變（證明這個對照靶真的走到抵抗力那一段，不是恆真）
+  const mA = await bundleMutated('arith', [['lib/game/engine.ts', ARITH,
+    '        baseDamage = Math.max(0, baseDamage);']]);
+  if (mA.err) chk('⑩ 突變 A 定位：' + mA.err, false);
+  else {
+    const s = setup(R.att, R.atk, R.def);
+    const o = mA.mod.applyAction(s.state, { type: 'ATTACK', attackIndex: s.idx }, pool);
+    chk(`⑩ 正對照：拿掉抵抗力算式 ⇒ 傷害從 ${R.expect} 變成 100（實得 ${o.lastDealtDamage}）`,
+        (o.lastDealtDamage ?? -1) === 100);
+  }
 }
 
 console.log(`\n[v6234-resistance-label-and-coin-cap] PASS ${n - bad} / FAIL ${bad}`);

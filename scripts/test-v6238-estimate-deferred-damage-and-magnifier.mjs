@@ -24,7 +24,7 @@
  *   B4 三種桌機版面：svelte 編譯器的 unused CSS 警告集合必須與基準完全相同
  */
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -346,14 +346,15 @@ console.log('\n⑥ ⭐⭐ 突變測試：把 v6.238 的兩個修正各自回退 
 
 console.log('\n⑦ HEAD-FAIL：同一組斷言在 BASE（v6.237）上必須是紅的');
 {
-  let baseEst = null;
-  try {
-    baseEst = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/lib/game/damage-estimate.ts'],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-  } catch { baseEst = null; }
+  const _b = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/damage-estimate.ts');
+  const baseEst = _b.ok ? _b.out : null;
   if (!baseEst) {
-    // ⚠ CI 的 checkout 是 fetch-depth:1 淺複製，取不到歷史 blob ⇒ SKIP（突變測試 ⑥ 已涵蓋同一件事）
-    console.log('  SKIP  取不到 BASE blob（淺複製）—— 由 ⑥ 的突變測試涵蓋');
+    // ⚠ CI 的 checkout 是 fetch-depth:1 淺複製，取不到歷史 blob。
+    // ⚠ v6.263：這一條與 ⑥ 的「突變 1（把 readDealt 改回只讀 lastDealtDamage）」
+    //   測的是**同一件事**，而突變 1 不需要歷史、淺複製下照樣跑
+    //   ⇒ 本條在淺複製下跳過不會少守任何東西，但仍大聲宣告。
+    shallowSkip('v6.238 ⑦ HEAD-FAIL（把 BASE v6.237 的 damage-estimate.ts 疊回去打包）',
+                '⑥ 的突變 1 是 history-free 的等價測試，已涵蓋同一件事');
   } else {
     const modB = await bundle({ 'lib/game/damage-estimate.ts': baseEst });
     const eB = LU ? modB.estimateAttackDamage(LU.state, 0, pool, 0) : null;

@@ -25,7 +25,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import assert from 'node:assert';
 import vm from 'node:vm';
 
@@ -259,18 +259,101 @@ await T('B1 成功路徑：三段都打、拿到 deckCode 與張數統計', asyn
   assert.deepStrictEqual(cur.ok.body, { deckCode: 'AbCdEf-GhIjKl-MnOpQr', totalKinds: 2, totalCards: 14 });
   assert.strictEqual(cur.okFetchCalls, 3, '成功路徑應恰好打官網 3 次（實際 ' + cur.okFetchCalls + '）');
 });
-await T('B2 與 BASE(v6.229) 行為快照 deep-equal（400/422/429/502×4/500 全分支）', async () => {
-  let baseSrc;
-  try {
-    baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':oracle-admin/server_admin_patch.js'],
-      { maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
-  } catch { console.log('    （拿不到 BASE blob，跳過對照 — 沙盒外環境）'); return; }
-  const baseSnap = await behaviorSnapshot(extractIife(baseSrc));
-  for (const k of ['ok', 'emptyDeck', 'badCardId', 'rate4th', 's1http', 's1noToken', 's2http', 's2reject', 's3not302', 's3noCode', 'err500']) {
-    assert.deepStrictEqual(cur[k], baseSnap[k], '分支 ' + k + ' 的回應與 BASE 不一致');
+// ⚠⚠ v6.263：同 v6.224 —— 原本 `catch { console.log(); return; }` 在 CI 的淺複製下
+//   讓這一條靜默掏空（條數不變、看不出來）。改成內嵌 BASE 行為快照。
+const BASE_SNAPSHOT = {
+  "ok": {
+    "status": 200,
+    "body": {
+      "deckCode": "AbCdEf-GhIjKl-MnOpQr",
+      "totalKinds": 2,
+      "totalCards": 14
+    }
+  },
+  "okFetchCalls": 3,
+  "emptyDeck": {
+    "status": 400,
+    "body": {
+      "error": "牌組空白"
+    }
+  },
+  "badCardId": {
+    "status": 400,
+    "body": {
+      "error": "cardId 須為純數字（收到 \"abc\"）"
+    }
+  },
+  "badFetchCalls": 0,
+  "rate4th": {
+    "status": 429,
+    "body": {
+      "error": "請求過於頻繁（每分鐘最多 3 次）"
+    }
+  },
+  "rateFetchCalls": 9,
+  "s1http": {
+    "status": 502,
+    "body": {
+      "error": "官網拿 token 失敗 (HTTP 500)"
+    }
+  },
+  "s1noToken": {
+    "status": 502,
+    "body": {
+      "error": "官網 token 抽取失敗（HTML 結構變動？）"
+    }
+  },
+  "s2http": {
+    "status": 502,
+    "body": {
+      "error": "beforecheck/ HTTP 503"
+    }
+  },
+  "s2reject": {
+    "status": 422,
+    "body": {
+      "error": "官網拒絕此牌組：卡牌張數不足60張。",
+      "officialErrors": [
+        "卡牌張數不足60張。"
+      ]
+    }
+  },
+  "s3not302": {
+    "status": 502,
+    "body": {
+      "error": "register/ 預期 302 但拿到 HTTP 200"
+    }
+  },
+  "s3noCode": {
+    "status": 502,
+    "body": {
+      "error": "register/ redirect 無 deckCode（location=/tw/deck-build/）"
+    }
+  },
+  "err500": {
+    "status": 500,
+    "body": {
+      "error": "無法連線到官網: connect ECONNREFUSED 1.2.3.4:443"
+    }
   }
-  assert.strictEqual(cur.okFetchCalls, baseSnap.okFetchCalls, '官網呼叫次數改變');
-  assert.strictEqual(cur.rateFetchCalls, baseSnap.rateFetchCalls, '限流消耗位置改變');
+};
+const SNAP_KEYS = ['ok', 'emptyDeck', 'badCardId', 'rate4th', 's1http', 's1noToken', 's2http', 's2reject', 's3not302', 's3noCode', 'err500'];
+const cmpSnap = (a, b, tag) => {
+  for (const k of SNAP_KEYS) assert.deepStrictEqual(a[k], b[k], tag + '：分支 ' + k + ' 的回應不一致');
+  assert.strictEqual(a.okFetchCalls, b.okFetchCalls, tag + '：官網呼叫次數改變');
+  assert.strictEqual(a.rateFetchCalls, b.rateFetchCalls, tag + '：限流消耗位置改變');
+};
+await T('B2 與 BASE(v6.229) 行為快照 deep-equal（400/422/429/502×4/500 全分支）', async () => {
+  cmpSnap(cur, BASE_SNAPSHOT, '與 BASE 內嵌快照');
+});
+await T('B2b 內嵌快照的真實性：拿得到歷史時必須與現算的 BASE 逐欄相同', async () => {
+  const b = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
+  if (!b.ok) {
+    shallowSkip('v6.230 B2b：內嵌 BASE 快照的重算驗證', 'B2 已用內嵌快照完整比對，本條只驗內嵌值本身');
+    return;
+  }
+  const baseSnap = await behaviorSnapshot(extractIife(b.out));
+  cmpSnap(BASE_SNAPSHOT, baseSnap, '內嵌快照 vs 現算 BASE');
 });
 await T('C1 限流在昂貴 fetch 之前：第 4 次回 429 且官網只被打 9 次（3 次成功 × 3 段）', async () => {
   assert.ok(cur.rate4th && cur.rate4th.status === 429, '第 4 次應 429，實際 ' + (cur.rate4th && cur.rate4th.status));

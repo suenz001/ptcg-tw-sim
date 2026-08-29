@@ -271,8 +271,13 @@ console.log('\n── F. 同維度枚舉（棘輪）：場上目標型 picker �
   const strip2 = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '')
     .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n')
     .replace(/[​-‍﻿]/g, '');
+  // ⚠ v6.263：readdirSync 的順序**依檔案系統而定**（ext4 / NTFS / 掛載磁碟各不同）。
+  //   下面用 seenKeys 去重，「哪一份檔先被掃到」會決定同名 effectKey 取哪一筆
+  //   ⇒ 棘輪的數字有可能隨環境浮動。排序一次，讓它與檔案系統無關。
+  //   （在 BASE 實測 asc / desc / 原生順序都是 55，本次改動不會動到數字，只是把它釘死。）
   const walk = (d, acc = []) => {
-    for (const e of readdirSync(d, { withFileTypes: true })) {
+    const _es = [...readdirSync(d, { withFileTypes: true })].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const e of _es) {
       const fp = join(d, e.name);
       if (e.isDirectory()) walk(fp, acc); else if (e.name.endsWith('.ts')) acc.push(fp);
     }
