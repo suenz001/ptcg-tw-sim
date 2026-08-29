@@ -1,5 +1,132 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.266 — 套牌戰績【伺服器端 P1】：`deckId` 收取 ＋ sparse 索引 ＋ `GET /api/deck-stats`
+
+BASE `cef06975e99502eb8eb20f26e07ac713267f41b3`（v6.265）。
+⭐ 這一版**玩家看不到任何東西**（純伺服器端）⇒ 刻意不寫首頁 changelog。
+
+### 0. 需求與硬約束
+
+玩家許願（站長轉述）：牌組列表的 ✕ 旁邊加一個 🔍，看該套牌的休閒勝率／錦標賽勝率／
+對不同牌組原型的勝率；而且「勝敗紀錄跟著套牌走，更新套牌仍維持原本勝率，按 ✕ 刪除才消失」。
+
+站長硬約束：①**必須記在 Oracle 主機，不能記在 Firebase** ②**絕不可以拖累已經穩定的錦標賽伺服**。
+站長裁定：休閒勝率口徑＝**只算線上對戰**（vsAI 與本機雙人不計入）；上線節奏＝**server 先上**。
+
+### 1. ⭐ 「跟著檔案走」天然成立 —— 零遷移、零覆寫
+
+`Deck.id` 早就是 client 端 `crypto.randomUUID()` 產的穩定 UUID（`src/lib/decks/storage.ts:65-80`），
+`upsertDeck` 依 id 就地更新（`:47-56`）⇒ **編輯不換 id**；複製／匯入走 `newDeck()`＝新 UUID
+⇒ 勝率天然不跟。既有牌組全部都已經有 id ⇒ **不需要任何遷移，也不會覆寫任何既有資料**。
+
+### 2. 本版做的三件事（全部在 `oracle-admin/server_admin_patch.js`）
+
+**① `makePlayerDoc` 白名單收 `deckId`**
+- ⚠⚠ **沒送就一個位元都不動**：`const _did = sanitizeDeckId(p && p.deckId); if (_did) doc.deckId = _did;`
+- ⚠ 絕不寫 `doc.deckId = null` —— 欄位**缺席**才是「舊列／本機對戰」的唯一表示法；
+  寫成 null 會被 sparse 索引收進去（sparse 只跳過缺席，不跳過 null）。
+- ⚠ `mrValidateRecord` **一個字都沒動**：新欄位格式壞掉絕不可以擋掉整場戰績。
+- 淨化出口 `sanitizeDeckId` 定義在**所有 IIFE 之外** —— 兩個消費端分屬不同 closure
+  （`makePlayerDoc` 在 `registerMatchRecords`、`/api/deck-stats` 在 `registerStatsEndpoints`），
+  放進任何一個都會讓另一邊 ReferenceError（v0.94／v1.01 兩次線上事故）。
+  字元集刻意涵蓋 `newDeck()` 的兩種 id：UUID 與 `randomUUID` 缺席時的 fallback `d_<b36>_<b36>`。
+
+**② 房間 seat enrich（併進既有那一發 `findOne`）**
+- ⚠⚠ **不能只靠 payload**：`/api/match-result` 是 `$setOnInsert` ⇒ 只有**先送到的那一發**會落地，
+  而每個 client 只知道「自己」用了哪一副牌（對手的 deckId 在對手瀏覽器的 localStorage）
+  ⇒ 只靠 payload，慢的那一側永遠缺 deckId、有一半的對局會是瘸的。
+- 成本＝**零額外查詢**：v6.220 起 `seats[].email` 已不下發玩家端 ⇒ 線上 client 送來的
+  `p1/p2.email` 一律是 null ⇒ 既有的 email 條件在線上路徑本來就恆真、那一發 `findOne`
+  本來每場就會發；deckId 只是讓同一發多帶兩個小欄位回來（projection 加 `'seats.deckId': 1`）。
+- ⚠ `seats[].deckId` 是 **client 下一版才會寫入**的欄位。本版補不到 ⇒ 什麼都不寫
+  （守衛 C4 有行為端斷言）。**server 必須先上**：白名單會丟掉 client 送來的新欄位，
+  順序反了 client 上了也收不到。
+
+**③ 新端點 `GET /api/deck-stats?deckId=`**
+- 免登入 ＋ per-IP 30/min 限流。理由：deckId 是猜不到的 UUID ＝ 它本身就是憑證；
+  而牌組存在玩家 localStorage，**伺服器根本沒有「這副牌屬於誰」的對照**，
+  要求登入也判斷不出誰有權看。
+- 回傳：休閒勝率（只算線上）＋ 對各原型的勝率 ＋ 場次數 ＋ `truncated`／`scanned`。
+- ⭐ 哨兵 `deckStatsApi: 1` —— 下一版 client 用 `typeof body.deckStatsApi === 'number'`
+  判斷伺服器支不支援，缺席就把放大鏡整個藏起來（不要顯示一張全 0 的表騙玩家）。
+- ⚠ 白名單建構：回應只有數字與**原型名稱字串**，對手的 email／暱稱／房號／牌表
+  一個位元都不出去（守衛 D11）。
+- ⚠ 放在 `registerStatsEndpoints` 這個 IIFE 內（＝註解裡的「registerDeckRules 區段」）：
+  分類要用 `deckToSets`／`classifyDeck`／`TRULES`／`getCardNameMap`，它們都在這個作用域。
+  抄第二份會讓同一副牌在 admin 統計與這裡被分到**不同原型**（`classifyDeck` 的註解已寫明）。
+
+### 3. ⚠⚠ 兩個踩了會靜默壞掉的坑（都寫進註解與守衛了）
+
+**(a) `buildCasualCleanFilter` 回傳的物件自己就帶一個 `$or`**（離開場那條規則）。
+把 deckId 的 `$or` 直接塞進同一層會把它**整條覆蓋掉** ⇒ 休閒淨化規則靜默失效。
+⇒ 一律用 `$and: [clean, { $or: [...] }]` 併。突變 M4 驗過。
+
+**(b) 對手原型：`cardCounts` 物件 *不可以* 直接丟給 `archetypeNameOf`。**
+它的第一行是 `if (!entries || !entries.length) return null` —— 那是為 `deckEntries` **陣列**寫的；
+`matchRecords` 存的是 `cardCounts` **物件**，`.length` 恆為 `undefined`
+⇒ **每一筆都回 null、整張表靜默全空**（不報錯、不 500，只是永遠沒有資料）。
+⭐ 修法是「**轉形狀**」不是「抄一份分類邏輯」：先把 `{cardId: 張數}` 轉成 `[{cardId,count}]`
+（`deckToSets` 兩種形狀都吃），再走 v6.229 的**中央** `archetypeNameOf`。突變 M5 驗過（vsArchetype 變 0 列）。
+
+⚠ 我第一版真的抄了一份（自己寫 `deckToSets`＋`classifyDeck`），結果被**既有守衛**
+`test-v6229-admin-archetype-parity.mjs` 的「突變 S1 單一錨點」當場抓到：
+`if (!nameMap.size || !rules.length) return null;` 在全檔出現了 2 次 ⇒ 那支守衛的突變測試失效。
+⇒ 教訓：新端點要用中央語義時，**呼叫它**，不要把它的條件式重打一遍。
+
+### 4. ⚠⚠ 「絕不可拖累錦標賽」的四道防線（pm2 是 fork_mode 單 instance ⇒ 同一個 node 行程）
+
+| # | 防線 | 為什麼 |
+|---|---|---|
+| a | 兩支 **sparse** 索引 `{p1.deckId:1}` `{p2.deckId:1}` | `matchRecords` 已 18.5 萬筆舊列**沒有**這個欄位；非 sparse 會把每一筆都以 null 鍵收進索引。sparse ⇒ **索引從 0 筆開始長** |
+| b | **端點自驗索引存在，否則自我停用**（503，且不帶哨兵） | 無索引 ＝ 對 18.5 萬筆 COLLSCAN ＝ 上百 MB 的連續阻塞，絕不可以上線 |
+| c | cursor 逐筆（不 `toArray`）＋ 每 200 筆走中央 `adminScanYield` | v6.242 的結論：**cursor 只解決記憶體、讓路才解決時間** |
+| d | 硬上限 5000 筆 ＋ per-deckId 60s 快取 ＋ per-IP 限流 | 最後一道保險 |
+
+索引比照 v6.240 的先例：**只在服務啟動時建一次**、不 `await`、`.catch()` 兜底；
+實際建構跑在 **mongod 行程**，node 這端只是送一發命令 ⇒ 事件迴圈零阻塞。
+`listIndexes` 成功結果快取 60s、失敗退避 10s（剛開機索引還在建時不要一次失敗就整天停用）。
+
+**實測（守衛 E1，20 萬筆假資料，沙盒 CPU 約為正式 VM 的 10 倍慢）**：見 `scripts/test-v6266-deck-stats-server.mjs`
+執行輸出（出貨碼 vs 突變 M1「拿掉讓路」的對照數字每次執行都會印出來）。
+
+### 5. ⚠ 本版**沒有**做、以及刻意不做的
+
+- **錦標賽勝率**：本版沒有資料來源。要收得到得先讓 `TREGS` 報名紀錄與 `tournamentArchives`
+  的 `players[]` 也帶 deckId —— 那會動到**錦標賽的寫入路徑**（站長最在意的區塊）⇒ 另開一版。
+  端點先回 `tournament.status = 'not-collected'`，讓 client 顯示「累積中」而不是 0 勝 0 敗。
+- **既有牌組不做歷史回填**：回填只能靠「email ＋ 60 張完全吻合」的近似比對，**會誤配到別人的牌組**。
+  ⇒ 誠實從上線起算，回應帶 `since: 'v6.266'`，UI 之後要明講「自 v6.266 起計」。
+- **client 端 UI（放大鏡）留到下一版**（站長同意 server 先上、觀察後再出 client）。
+
+### 6. 錦標賽零接觸的證明
+
+守衛【F】用**內嵌 sha256**（history-free ⇒ CI 淺複製下照樣在守）證明：
+從 `const TEVENTS = db.collection('tournamentEvents');` 到檔尾共 **218,193 個 UTF-16 code unit**
+（＝218,164 個 code point；差 29 是區塊內 emoji 的 surrogate pair），
+sha256 `54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196`，
+與 v6.265 **逐位元相同**（含 TEVENTS／TREGS／TMATCH／TCHAT／TARCHIVE／TCHAMPS／scheduler／
+`/state`／`/action`／判負／瑞士制全部在內）。
+F2 是掃描器自驗（改一個字元 sha 必須變），F3 證明本版所有改動都落在該區塊**之前**，
+F4 是行為端：把 deck-stats 跑起來，記錄它碰過哪些 collection ⇒ 只有 `matchRecords`。
+
+### 6b. ⚠ 本版被**既有守衛**抓到三次（全部是「新增的東西掉進別人的掃描視窗」）
+
+| # | 誰抓到 | 症狀 | 修法 |
+|---|---|---|---|
+| 1 | `test-v6229`（突變 S1 單一錨點） | 我抄了一份 `if (!nameMap.size \|\| !rules.length) return null;` ⇒ 全檔出現 2 次，那支守衛的突變測試失效 | 改成**呼叫**中央 `archetypeNameOf`（見 3(b)） |
+| 2 | `test-v6119`（① 索引 best-effort） | 它掃「含 `createIndex` 的**行**」並要求每行都有 `catch` —— 我的**註解**裡寫了 `createIndex` 卻沒有 `catch` | 註解改寫成不出現裸 `createIndex` |
+| 3 | `test-v6240`（前提＋⑥） | 它把「rooms 索引那一行 → `/api/admin/oracle/rooms` 註冊」之間整段當 pre 區段抽出來**執行**，並斷言「啟動時只建 1 條索引」；我把新索引插在那個視窗裡 ⇒ 長度爆掉、索引變 3 條 | 索引搬到 `matchRecords` 自己的區塊旁（`sanitizeDeckId` 上方），也更合理 |
+
+⭐ 通則：**在既有大檔裡新增東西時，要先問「我這幾行會不會落進某支守衛的抽取視窗」**。
+這三次都不是功能壞掉，但兩次會讓**別人的守衛靜默失效**（第 1、3 條），那比自己紅還危險。
+
+### 7. 守衛
+
+`scripts/test-v6266-deck-stats-server.mjs`（已進 `package.json` 的 test chain）。
+【A】結構／HEAD-FAIL 5 條・【B】正對照（舊 payload 逐位元）＋ 突變 M3・
+【C】seat enrich 行為 5 條（含 v6.220 既有 email 四案例）・【D】端點行為 12 條（含突變 M4/M5/M6/M7）・
+【E】事件迴圈實測 ＋ 突變 M1・【F】錦標賽零接觸 4 條（含掃描器自驗）・【G】資料保全／版本・【H】HEAD-FAIL。
+
 ## v6.265 — 開局 CAS 競態：`startGame` 的 `won` 判定（練習模式「手牌無預警重洗」的真因）
 
 BASE `3fd89b566d729ccddebb3014cdcb9d3cd4bd8fd5`（v6.264）。
