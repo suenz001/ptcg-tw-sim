@@ -287,9 +287,51 @@ function scanExternalFlags(src) {
   }
   return calls;
 }
-await T('C0 掃描器自我驗證：對 BASE 必須抓到**恰 4 處**（started ×1 + didReset ×3）', () => {
-  const found = scanExternalFlags(stripComments(BASE_RO)).filter((c) => c.ext.length);
-  ok(found.length === 4, '在 BASE(' + BASE_KIND + ') 上抓到 ' + found.length + ' 處（應為 4）：'
+// ⭐⭐ history-free 的內嵌樣本：v6.264 那四個呼叫點的**實際形狀**（含物件展開、型別斷言、多行 body）。
+//   淺複製的 CI 拿不到 BASE blob，但掃描器仍然必須被驗過 —— 所以判準放在這裡，不放在歷史上。
+const BASE_SHAPES = [
+  ['startGame', 'started', `    let started = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      if (data.status !== 'lobby') return data;
+      if (data.gameState) return data;
+      started = true;
+      return { ...data, gameState: JSON.parse(JSON.stringify(gameState)), status: 'playing' };
+    }, { timeoutMs: ORACLE_SIDEEFFECT_TIMEOUT_MS });`],
+  ['checkAndAcceptRematch', 'didReset', `    let didReset = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const ready = data.rematchReady ?? {};
+      if (!ready[0] || !ready[1]) return data;
+      const newSeats = data.seats.map(s => ({ ...s, ready: false }));
+      didReset = true;
+      return { ...data, gameState: null, seats: newSeats } as unknown as RoomData;
+    });`],
+  ['checkAndAcceptRestart', 'didReset', `    let didReset = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const p = data.restartProposed ?? {};
+      if (!p[0] || !p[1]) return data;
+      const newGame = createGame({ name: 'a', entries: [] }, { name: 'b', entries: [] }, pool, {});
+      didReset = true;
+      return { ...data, gameState: JSON.parse(JSON.stringify(newGame)) } as unknown as RoomData;
+    });`],
+  ['checkAndAcceptReturnToRoom', 'didReset', `    let didReset = false;
+    await oracleTx(roomCode.toUpperCase(), (data) => {
+      const p = data.returnRoomProposed ?? {};
+      if (!p[0] || !p[1]) return data;
+      didReset = true;
+      return { ...data, status: 'lobby', gameState: null } as unknown as RoomData;
+    });`],
+];
+await T('C0 ⭐⭐ 掃描器自我驗證（history-free）：v6.264 那四個形狀**每一個**都要被抓到', () => {
+  for (const [name, flag, sample] of BASE_SHAPES) {
+    const found = scanExternalFlags(stripComments(sample)).filter((c) => c.ext.length);
+    ok(found.length === 1, name + ' 的形狀抓到 ' + found.length + ' 處（應為 1）—— 掃描器漏看這一種寫法');
+    ok(found[0].ext.includes(flag), name + ' 抓到的旗標是 ' + found[0].ext + '（應為 ' + flag + '）');
+  }
+});
+await T('C0-blob ⭐ 對**真 BASE blob** 必須抓到恰 4 處（淺複製時大聲跳過，不 fail-open）', () => {
+  if (!baseRO) { shallowSkip('C0-blob 對真 BASE blob 的四處枚舉', 'C0 的內嵌樣本已覆蓋同樣四種形狀'); return; }
+  const found = scanExternalFlags(stripComments(baseRO)).filter((c) => c.ext.length);
+  ok(found.length === 4, '在真 BASE blob 上抓到 ' + found.length + ' 處（應為 4）：'
     + JSON.stringify(found.map((c) => 'L' + c.ln + ':' + c.ext)));
   const names = new Set(found.flatMap((c) => c.ext));
   ok(names.has('started') && names.has('didReset'), '抓到的不是那四個旗標：' + [...names]);
