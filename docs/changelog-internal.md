@@ -1,5 +1,76 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.278 — 休閒 PUT 上行增量【伺服器端 3a：深路徑 ＋ 陣列索引】
+
+BASE `54e7a3c68892f5d8ee7146181c7481549b26e177`（v6.277，遠端 main）。
+⚠⚠ **純伺服器端。client 這一版不會送深路徑 ⇒ 玩家完全無感**（站長裁定「server 先上」是硬約束）。
+⇒ **不寫首頁 changelog**（玩家看不到的東西不該出現在公告）。
+
+### 為什麼要做（實測診斷，三處都已 `git cat-file` 複驗）
+
+v6.268（server）＋ v6.270（client）上線後只省約 26~40%。真因**不是層數不夠，是深度不夠**：
+
+| 位置 | 事實 |
+|---|---|
+| `src/lib/game/oracle-client.ts` `buildRoomPatch()`（v6.277 blob L746~） | 只做兩層：top 與 `gameState.<子鍵>` |
+| `src/lib/game/types.ts` L766 | `players: [PlayerState, PlayerState]` —— **一個陣列，裝著雙方的完整盤面** |
+| `oracle-admin/server_admin_patch.js` v1.29 `_dpApplyPatch` 的 `splitPath` | `p.indexOf('.')` 只切**第一個點**、第二段還帶點就 `dp-bad-path`；而且 `set` 明確拒絕寫進陣列（`dp-set-into-nonobject`） |
+
+⇒ 任何一個動作都會 `set['gameState.players'] = 整包約 10KB`，delta 真正省到的只有 `log`。
+⇒ 而且**就算 client 想送深路徑也送不出去**（伺服器會拒）⇒ 這一版先把伺服器端的門打開。
+
+### 做了什麼（只有 `oracle-admin/server_admin_patch.js` 的 PTCG-DELTA-PUT 區塊）
+
+1. `splitPath` 由「最多兩段」改成 `p.split('.')`，段數上限 `_DP_MAX_PATH_SEGS = 8`
+   （另加 `_DP_MAX_PATH_LEN = 2100` 的**總長度**上限，先擋長度才 split）。
+2. 新增 `_dpArrIdx(s)`：只認**規範的**十進位非負整數字串（拒 `''` / `-1` / `+1` / `01` / `1.5` / `1e3` / `' 1'` / 超過 9 位數）。
+3. 新增 `_dpParentOf(root, segs)` 走訪器（只給 `segs >= 3` 用）。
+4. **哨兵**：`deltaPut` 維持 `1`，另掛 `deltaPutDeep: 1`。
+5. 啟動 log 附 `deepSegs=8`（前綴 `[rooms] delta-put middleware (v1.29) hoisted=… enabled=…` 逐字保留 —— test-v6268 A1 靠它定位）。
+
+### ⭐⭐ 六道防護（守衛 `scripts/test-v6278-delta-put-deep-path.mjs` 逐條行為端驗）
+
+| # | 風險 | 做法 | 條目 |
+|---|---|---|---|
+| ① | 陣列被寫成物件 `{0:…,1:…}` | 父是陣列時 segment 必須過 `_dpArrIdx` 且 `< length`，否則 `dp-bad-index` | D1 |
+| ② | sparse array | **對陣列 `del` 一律 throw**（`dp-del-into-array`）＋越界 set 一律拒 | D2 |
+| ③ | 陣列被擴張 | 索引必須 `< 既有長度`。長度真的要變（備戰加一隻）⇒ **client 改送整個陣列當一個值**（那是「對父物件的一次 set」，不是「寫進陣列」）| D3 |
+| ④ | 原型污染 | `_dpBadSeg` 擋 `__proto__` / `constructor` / `prototype`（三個都測）；中間節點一律 `hasOwnProperty`，不沿原型鏈走 | D4 / D4b |
+| ⑤ | 上限 | set/del ≤256、logAppend ≤512、hash 1M 字元、遞迴深度 32 **全部保留**，另加段數 8 與路徑長 2100 | D5 |
+| ⑥ | 中間節點不存在／是 null | **一律 deltaReject 退全量**，絕不自動建物件（自動建＝憑空生出盤面）| D6 |
+
+⭐ **最後防線 canonical hash 複驗維持有效**：套完 patch 重建全量、hash 與 client 的 `fullHash`
+不符一律 `deltaReject`（守衛 E2 用「路徑合法但值被偷改」的 patch 實測它擋得下來）。
+
+### ⚠⚠ 向後相容（逐位元）
+
+`segs <= 2` 的分支與 v1.29 **逐字相同** —— 連「父節點 undefined/null 就自動建物件」「父是陣列時 `del` 靜默略過」
+這種舊語義都原封不動。守衛把 **BASE 的 `_dpApplyPatch` 原始碼以 sha256 內嵌快照**進來實跑：
+固定 13 案例 ＋ fuzz 6,000 次，BASE 與修後的產出（含丟出的例外訊息）**零差異**。
+（B0 有正對照：嵌入的快照必須真的吃不下三段路徑，否則 B1/B2 是安慰劑。）
+
+### ⚠ 為什麼哨兵**不能**改成 `deltaPut: 2`
+
+v6.270 client 的判斷是 `_dpSentinel = b.deltaPut === 1;`（`src/lib/game/oracle-client.ts`，**嚴格比較**）。
+改成 2 會讓 v6.270~v6.277 全部靜默判成「伺服器不支援」⇒ 上行退回 30~48KB 全量 = **倒退**。
+⇒ `deltaPut` 維持 1、新協定另掛 `deltaPutDeep`。守衛 F2 把那段判斷式從 `oracle-client.ts` **抽出來實跑**
+（含反證：`deltaPut:2` 確實會讓它判 false），J8 的突變（把 1 改成 2）必須翻紅。
+
+### 上限重新評估
+
+- **set/del 256**：深路徑會讓筆數變多，但 client 端的 `buildRoomPatch` 超過就送全量 ⇒ 256 同時是雙方的自限。
+  實測（守衛 H1）256 條深路徑的一輪耗時與兩層同一量級（成本主體是 `JSON.parse(JSON.stringify(doc))` ＋ hash，
+  與路徑深度無關）。**不放寬**：真的需要 >256 筆，patch 也已經不小了，送全量更省事。
+  H2 反面對照：拿掉這道上限，1 萬條深路徑會連續阻塞約 49ms（沙盒）⇒ 上限確實在防事件迴圈。
+- **hash 1M 字元 / 遞迴深度 32**：hash 是對「重建後的全量 doc」算的，**與 patch 深度無關** ⇒ 不動。
+- **新增的段數 8**：`gameState.players.0.bench.2.tools.1` 是 7 段，8 有餘裕；再深收益遞減、筆數卻線性上升。
+
+### 部署
+
+⚠⚠ **只跑錦標賽伺服器的更新（server 先上）**；client 端深層 diff 是下一版。
+kill switch 不變：`_DELTA_PUT_ENABLED = false` 重佈 ⇒ 兩個哨兵一起消失、全站自動回全量。
+
+
 ## v6.277 — 套牌戰績【client 端 P3b】：🔍 的錦標賽欄改讀真資料
 
 BASE `9f500a55cf83daa8be3530ff01c8a163c6a60a23`（v6.276，遠端 main）。
