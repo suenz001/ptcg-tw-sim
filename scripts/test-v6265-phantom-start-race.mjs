@@ -46,7 +46,9 @@ const BASE_SHA_V6269 = 'd9f9b4351b5642095d59d7a2db9037064989855a';
 //       的內嵌 sha256（與 test-v6272/test-v6275 同值，history-free、CI 上真的在守，
 //       且 admin 區塊的合法演化不再需要每版回來改 pin）。
 const BASE_SHA_V6274 = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';
-const TOURN_TAIL_SHA256_V6275 = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
+// ⚠ v6.276 對錦標賽區塊做了 6 處**純 additive** 插入（報名/歸檔帶 deckId）⇒ 重釘；
+//   「只有那 6 處」由 test-v6276 的 revert-diff 證明（還原後 sha 回到 34a8448b…）。
+const TOURN_TAIL_SHA256_V6276 = '495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8');
@@ -705,7 +707,7 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const ti = srvCur.indexOf("app.get('/api/tournament");
     ok(ti > 0, 'server_admin_patch.js 找不到第一支 /api/tournament 端點');
     const hex = createHash('sha256').update(srvCur.slice(ti), 'utf8').digest('hex');
-    assert.strictEqual(hex, TOURN_TAIL_SHA256_V6275,
+    assert.strictEqual(hex, TOURN_TAIL_SHA256_V6276,
       'server_admin_patch.js 的錦標賽區塊被動到了（tail sha256 不符）');
   }
   for (const [p, sha] of [['src/lib/game/sync-guards.ts', BASE_SHA_V6274],

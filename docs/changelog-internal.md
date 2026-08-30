@@ -1,5 +1,72 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.276 — 套牌戰績【伺服器端 P3a】：錦標賽勝率上線（TREGS／歸檔帶 deckId）
+
+BASE `4ce276453c998058f70a35778a6ab262fa679921`（v6.275，遠端 main）。純伺服器端，
+玩家端零改動（`src/` 只動 `version.ts`，守衛【I1】逐檔 blob 雜湊證明）。
+站長已核准動 TREGS 報名寫入路徑（v6.266 當時裁定「先不做」的那一塊）。
+
+### 做了什麼（`server_admin_patch.js` v1.33）
+
+1. **報名端收 deckId**（client v6.277+ 才會送；本版 client 完全不送 ⇒ 玩家零感）：
+   `/register`、`/register-and-checkin`、`/propose` 三個 `TREGS.insertOne` 各加一個
+   **條件式** `...(_deckId ? { deckId: _deckId } : {})`。沒送／不合格／helper 取不到
+   ⇒ **欄位缺席**（絕不寫 null、絕不因 deckId 擋報名）。
+   ⚠⚠ 淨化走 `app.locals._sanitizeDeckId`：`sanitizeDeckId` 在 firebase-admin 的
+   then-callback 內、錦標賽是**另一個 IIFE**，直接呼叫會 ReferenceError
+   （v0.94／v1.01／v6.269 同型事故）；handler 執行時才取、取不到 fail-closed。
+2. **歸檔帶下去**：`recordTournamentArchive` 的 `players[]` 對「reg 有 deckId」的玩家
+   附加 deckId；其餘欄位（含 matches 映射）逐字不動。歸檔是唯一資料源頭（TREGS→歸檔
+   一條線，v0.35 起 `players` 一律從 `TREGS.find({eventId})` 複製 ⇒ 不會漏）。
+3. **`/api/deck-stats` 錦標賽段**：來源＝`tournamentArchives`（永久歸檔、自包含
+   `players[]`＋`matches[]`；`TMATCH` 會被 v0.58 排程清掃且無 deckId 對照，不能當來源）。
+   口徑與 `/api/admin/deck-archetype-stats` 錦標賽側一致：**非 bye 且有 winnerUid 才計**
+   （平手場無 winnerUid ⇒ 不計、draws 恆 0）。對手原型拿歸檔 `players[].deckEntries`
+   （本來就是陣列形狀）走 v6.229 **中央** `archetypeNameOf`，沒有第二份分類語義。
+
+### 「絕不拖累錦標賽」四道（pm2 fork_mode 單 instance）
+
+| # | 防線 |
+|---|---|
+| a | 新 **sparse** 索引 `{'players.deckId':1}`（multikey；舊 875 筆歸檔無此欄 ⇒ 索引從 0 筆長；啟動建一次、不 await、catch 兜底） |
+| b | **索引缺席 ⇒ 只把錦標賽段 fail-closed 回 not-collected、休閒段照常**（不像 matchRecords 整支 503；listIndexes 成功快取 60s、失敗退避 10s） |
+| c | cursor 逐筆＋ players／matches **逐元素**走中央 `adminScanYield` 每 200 讓路 |
+| d | 硬上限 `DECK_STATS_TARCH_CAP = 300` 場歸檔（超過 `truncated:true` 誠實回報）＋沿用既有 60s 快取與 per-IP 限流 |
+
+### 回應相容（舊 client v6.267 不會壞）
+
+- `tournament` 物件**前六個 key**（status/games/wins/losses/draws/winRate）順序與語義不變；
+  新 key（`since:'v6.276'`／`vsArchetype`／`events`／`scanned`／`truncated`／`scanCap`）一律附加在後。
+- 查無資料（含上線前的賽事）⇒ 維持 `status:'not-collected'`；v6.267 client 的錦標賽欄
+  **寫死顯示「累積中」**（`decks/+page.svelte` L2380）根本不讀數字 ⇒ 行為零改變（守衛 G1 把
+  v6.267 的 `normalize` 抽出來實跑證明）。頂層 `since` 維持 `'v6.266'`（休閒口徑）。
+- **不做歷史回填**（email＋牌表近似比對會誤配）⇒ 錦標賽勝率自 v6.276 起計。
+
+### 錦標賽行為逐位元不變的證明（本輪最高風險）
+
+- 守衛 `scripts/test-v6276-deck-tournament-stats.mjs`【B】**revert-diff**：把本版在錦標賽
+  區塊的 6 處**純 additive** 插入逐字還原後，區塊 sha256 回到 v6.265～v6.275 一路未動的
+  `54cd1226…`／`34a8448b…`（逐位元、含長度 218193）⇒ 證明「只有那 6 處改動」。
+- 【C】【D】【H2】行為端：同一份 fixture，BASE blob 與修後的 `/register`／
+  `/register-and-checkin`／`/propose`／`recordTournamentArchive` 實跑，TREGS doc／賽事 doc／
+  歸檔 doc `deepStrictEqual` ＋ `JSON.stringify` 逐位元相同（key 順序在內）。
+  配對／積分（OWP/OOWP）程式碼在 revert-diff 涵蓋範圍內逐位元未動 ⇒ 數學上同一函式。
+- 既有 5 支釘住錦標賽區塊 sha 的守衛（v6265/v6266/v6268/v6272/v6275）全部重釘到新值，
+  新值與 revert-diff 互相咬合（【B4】防釘錯）。
+
+### 突變測試（6 個，紅在預期那條）
+
+M1 拿掉讓路（F1 紅）／M2 拿掉 300 上限（E5 紅）／M3 報名一律寫 deckId（C4 紅）／
+M4 歸檔寫 deckId:null（D2 紅）／M5 拿掉索引自驗 gate（E4 紅）／M6 revert-diff 自驗（B3 紅）。
+
+### 部署（⚠ server 先上是下一版 client 的前置條件）
+
+- `update-admin-full.bat`（`server_admin_patch.js` v1.33 ＋ `admin.html` 版本提示）——**主要**。
+- `redeploy-oracle.bat`（前端只有 `version.ts` 版本字串）。
+- **不需要** `update-tournament.bat`（engine bundle 無新 export）。
+- 下一版（client 端 P3b）前置條件：本版 server 已上線（client 會開始在報名 payload 帶
+  deckId、並顯示錦標賽欄的真數字與「自 v6.276 起計」）。
+
 ## v6.275 — admin：`/api/admin/firebase/users-all` 的 15 秒同步等待收斂＋全站無上限讀取重枚舉
 
 BASE `4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54`（v6.274，遠端 main）。admin 專屬，玩家端零改動（只動 `version.ts`）。

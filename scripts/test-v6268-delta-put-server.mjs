@@ -533,21 +533,22 @@ await T('G1 delta PUT 一輪(findOne clone+apply+hash+回填)p99 上限', async 
 
 console.log('\n══ 【H】⭐⭐ 錦標賽零接觸(站長硬約束) ═══════════════════════════');
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA_V6265 = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
-const TOURN_LEN_V6265 = 218193;
+// ⚠ v6.276 起錦標賽區塊含 6 處 additive 的 deckId 插入（revert-diff 見 test-v6276）。
+const TOURN_SHA_V6276 = '93d29a7d68b1508c9201b660ef38f06418fc5760606bb87798f8bdd5f5ed9fdd';
+const TOURN_LEN_V6276 = 219484;
 await T('H1 錦標賽區塊與 v6.265 **逐位元相同**(內嵌 sha256,history-free)', () => {
   const i = PATCH.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');
   const blk = PATCH.slice(i);
-  assert.equal(blk.length, TOURN_LEN_V6265, '錦標賽區塊長度變了: ' + blk.length);
+  assert.equal(blk.length, TOURN_LEN_V6276, '錦標賽區塊長度變了: ' + blk.length);
   const sha = createHash('sha256').update(blk, 'utf8').digest('hex');
-  assert.equal(sha, TOURN_SHA_V6265, '⚠⚠ 錦標賽區塊被動到了! sha256=' + sha);
+  assert.equal(sha, TOURN_SHA_V6276, '⚠⚠ 錦標賽區塊被動到了! sha256=' + sha);
 });
 await T('H2 掃描器自驗:sha 比對抓得到一個字元的差異', () => {
   const i = PATCH.indexOf(TOURN_ANCHOR);
   const mutated = PATCH.slice(i).replace('tournamentEvents', 'tournamentEventsX');
   const sha = createHash('sha256').update(mutated, 'utf8').digest('hex');
-  assert.notEqual(sha, TOURN_SHA_V6265, 'sha 比對抓不到差異 — H1 是安慰劑');
+  assert.notEqual(sha, TOURN_SHA_V6276, 'sha 比對抓不到差異 — H1 是安慰劑');
 });
 await T('H3 位置證明:delta-put 區塊整段落在錦標賽區塊之前', () => {
   const tournAt = PATCH.indexOf(TOURN_ANCHOR);

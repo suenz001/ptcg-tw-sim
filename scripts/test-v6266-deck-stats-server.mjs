@@ -648,11 +648,13 @@ console.log('\n══ 【F】⭐⭐ 錦標賽零接觸（站長硬約束）═�
 //     不會像 v6.224/v6.230 那樣靜默掏空（v6.263 的教訓）。
 
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA_V6265 = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
+// ⚠ v6.276 起錦標賽區塊含 6 處 additive 的 deckId 插入（報名×3＋歸檔×1 等；
+//   「只有那 6 處、其餘逐位元同 v6.265」由 test-v6276 的 revert-diff 證明）。
+const TOURN_SHA_V6265 = '93d29a7d68b1508c9201b660ef38f06418fc5760606bb87798f8bdd5f5ed9fdd';
 // ⚠ 這是 **JS 字串長度（UTF-16 code units）**：區塊內有 emoji（surrogate pair 各算 2），
 //   所以它比 Python／code-point 的 218,164 多 29。判準是下面的 sha256（對 UTF-8 bytes 算），
 //   長度只是讓失敗訊息好讀；兩個值都是從 **BASE v6.265 的 blob** 算出來的，不是從出貨檔。
-const TOURN_LEN_V6265 = 218193;
+const TOURN_LEN_V6265 = 219484;
 
 await T('F1 ⭐⭐ 錦標賽區塊與 v6.265 **逐位元相同**（sha256 內嵌快照，不需要 git 歷史）', () => {
   const i = pat.indexOf(TOURN_ANCHOR);
@@ -690,7 +692,7 @@ await T('F3 本版的所有改動都落在錦標賽區塊**之前**（位置證�
   }
 });
 
-await T('F4 行為端：deck-stats 只碰 matchRecords，一次都沒有碰錦標賽的任何 collection', async () => {
+await T('F4 行為端：deck-stats 只碰 matchRecords＋tournamentArchives（v6.276 起錦標賽勝率讀歸檔），不碰 TROOMS/TMATCH/TEVENTS/TREGS', async () => {
   const touched = [];
   const spy = { toArray: 0, iter: 0, projection: null, filters: [], indexCalls: 0 };
   const coll = makeMatchRecordsColl(DOCS, spy, 8000, IDX_OK);
@@ -710,7 +712,9 @@ await T('F4 行為端：deck-stats 只碰 matchRecords，一次都沒有碰錦�
   new Function(...Object.keys(env), '"use strict";\n' + SEC + '\n')(...Object.values(env));
   await callDS(routes['/api/deck-stats'], { deckId: MY });
   assert.ok(touched.length > 0, '一個 collection 都沒碰（測試壞了？）');
-  const bad = touched.filter((n) => n !== 'matchRecords');
+  // ⭐v6.276：錦標賽勝率的資料來源＝tournamentArchives（唯讀、有 sparse 索引自驗）。
+  //   仍然絕不容許碰 TROOMS／TMATCH／TEVENTS／TREGS（那些才是對戰熱路徑）。
+  const bad = touched.filter((n) => n !== 'matchRecords' && n !== 'tournamentArchives');
   assert.strictEqual(bad.length, 0, 'deck-stats 竟然碰了：' + [...new Set(bad)].join(', '));
 });
 

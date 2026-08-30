@@ -542,7 +542,7 @@ await T('D3 fetchAllUsers 接線行為端：回應的 cachedAt/capped 真的寫�
 // ═════════════════════════════════════════════════════════════════════════════
 console.log('【E】錦標賽區塊 sha256 ＋【F】BASE 對照');
 
-const TOURN_TAIL_SHA256 = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';   // v6.271 起同值
+const TOURN_TAIL_SHA256 = '495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02' /* v6.276 重釘：報名/歸檔 6 處 additive 插入，revert-diff 見 test-v6276 */;   // v6.271 起同值
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
