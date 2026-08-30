@@ -1,5 +1,120 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.271 — 牌組編輯器左欄「我的牌組」太窄（桌機牌組名稱只看得到 2 個字）
+
+BASE `9254f2ac8ddc6dfc51706b13fb386374b0000185`（v6.270，遠端 main）。本版只動 `/decks` 的 CSS。
+
+### 0. 站長回報（逐字）
+> 「使用 windows 網頁版時，牌組編輯器最左側的【我的牌組】區塊，太窄了，牌組的文字只能顯示幾個字而已，
+> 這樣會使玩家根本無法從介面中直接看到牌組的名字，反而在手機版因為切成三個區塊，導致【我的牌組】的
+> 區塊內容顯示，比網頁版還多。」
+
+### 1. 量到的現況（不是估的：Chrome for Testing 152 headless，真的排版量出來）
+量測方式：把 `src/routes/decks/+page.svelte` 的 `<style>` 區塊**原樣**抽出來，配上與 markup
+逐一對應的 `<li>`（▲▼ 欄／`.deck-pick`／🔍／✕），用 `--window-size=W,900` 逐個寬度渲染，
+讀 `.deck-name` 的 `clientWidth`，再用「同字型的探針元素二分」量它到底放得下幾個中文字。
+腳本與 HTML 都在 `/tmp`（一次性），數字如下：
+
+| 版面 | 視窗寬 | 左欄寬 | `.deck-name` 寬 | 可完整顯示的中文字 |
+|---|---|---|---|---|
+| v6.270 | 1920 / 1600 / 1440 / 1280 / 1024 | **220px（都一樣）** | 44px | **2** |
+| v6.270 | 414 / 375 / 360（單欄） | 382 / 343 / 328 | 206 / 167 / 152 | 12 / 10 / 9 |
+| v6.271 | 1920 / 1600 / 1440 / 1280 / 1024 | 260px | 137px | **16**（8 字 × 2 行） |
+| v6.271 | 414 / 375 / 360 | 382 / 343 / 328 | 259 / 220 / 205 | 32 / 26 / 24 |
+
+⭐ **桌機四種寬度數字完全一樣**，因為 `main { max-width: 1200px }` ＋ 第一軌是**固定 220px**
+⇒ 視窗再寬，左欄一個像素都不會多拿。1920 下右邊有 720px 是空白。
+
+### 2. 為什麼只有 2 個字（逐項拆帳，`.rail` 內寬 194px）
+`.deck-list li` 是 `display:flex; gap:4px`，四個子項：
+
+| 子項 | 寬度 | 出處 |
+|---|---|---|
+| `.deck-reorder-col`（▲▼） | 18px | `.deck-reorder-btn { min-width: 18px }`（v5.320） |
+| `.deck-pick` | 剩下的 112.8px | `flex: 1` |
+| `.deck-stats-btn`（🔍） | 25.6px | `button.icon { width: 1.6rem }`（**v6.267 新增**） |
+| 刪除（✕） | 25.6px | 同上 |
+| gap × 3 | 12px | |
+
+`.deck-pick` 再扣自己的 `padding: 0.4rem 0.5rem`（8px×2）剩 96.8px，而它是**橫向** flex，
+裡面還有 `flex-shrink: 0` 的 `.deck-size`（「60 / 60」實測 45.0px）＋ `gap: 0.5rem`
+⇒ 名稱只剩 **43.8px**。`.deck-name` 是 `white-space: nowrap` 一行截斷，16px 字級 ⇒ **2 個字**。
+
+### 3. ⭐ 手機版為什麼反而顯示比較多
+`@media (max-width: 900px)` 把 `.layout` 改成單欄（`minmax(0, 1fr)`，v6.213 修的）
+⇒ 左欄拿到**整個頁寬**（375px 裝置上是 343px），同一套扣法之後名稱還有 166.8px ＝ 10 個字。
+**不是手機做了什麼，是桌機被 220px 綁死。** 全站只有這一份 CSS，`/decks` 沒有 `isMobile`／
+`matchMedia`／`portrait` 任何分支（本版複驗過：`git grep` 於 BASE 上為 0 命中）。
+
+### 4. ⭐⭐ 是不是 v6.267 的 🔍 造成的迴歸？——**是幫兇，不是元凶**
+把 🔍 那顆按鈕從 markup 拿掉（＝v6.266 的列結構）重量一次：名稱 **73px ＝ 4 個字**。
+⇒ v6.267 把 4 字砍成 2 字（少了 29px：按鈕 25.6 ＋ gap 4）。**確實是我們自己弄出來的一半**，
+但即使完全沒有 🔍，4 個字本來也不能用 ⇒ 結構性原因是「固定 220px 的左欄」＋
+「名稱和張數、三組按鈕全部擠在同一行」。⇒ 本版兩邊一起修，**不是把 🔍 拿掉**
+（站長明確要留著 v6.267 的功能）。
+
+### 5. 修法（四處 CSS，全部在 `src/routes/decks/+page.svelte` 的 `<style>`）
+| # | 選擇器 | v6.270 | v6.271 | 為什麼 |
+|---|---|---|---|---|
+| A | `.layout` | `220px minmax(0,1fr) minmax(0,1fr)` | `260px …` | 左欄加寬 40px |
+| B | `.deck-pick` | 橫向 flex、`gap:0.5rem`、`padding:0.4rem 0.5rem` | `flex-direction: column`／`align-items: stretch`／`gap:0.1rem`／`padding:0.35rem 0.5rem` | 名稱**獨佔一整列**，不再和「60 / 60」搶寬度 |
+| C | `.deck-name` | `white-space: nowrap` 一行截斷、`flex: 1` | `-webkit-box` ＋ `-webkit-box-orient: vertical` ＋ `-webkit-line-clamp: 2` ＋ `white-space: normal` ＋ `overflow-wrap: anywhere` ＋ `line-height: 1.25` ＋ `flex: none` | 兩行截斷 |
+| D | `.deck-size` | `0.8rem` | `0.75rem` ＋ `line-height: 1.15` | 移到第二列，縮字級補回列高 |
+
+⚠ C 的四條缺任何一條，`-webkit-line-clamp` 都會**靜默失效**退回一行（守衛逐條各自斷言）。
+⚠ B 若把 `align-items` 寫成 `flex-start`，名稱寬度會變成「內容寬」而不是「整個 pick 寬」，
+  兩行截斷等於沒做 —— 守衛也單獨鎖了這一條。
+
+**取捨（逐字說明）**：1200px 版面下中／右兩欄各從 458px → 438px，**各少 20px（4.4%）**。
+牌組內容區與卡牌搜尋區的內部元素都沒有寫死的最小寬度（`.picker-list li` 是
+`40px minmax(0,1fr) auto auto`、`.deck-header` 是 `1fr auto`），438px 下不會擠壞。
+列高從 36.8px → 短名稱 46.6px／長名稱 66.6px（多一列張數、名稱最多兩行）——
+這是「內容更完整」必然要付的縱向成本，站長要的正是這個。
+
+**刻意不做的**：把 `main { max-width: 1200px }` 放寬。1920 下確實有 720px 空白，
+放寬會一次改掉整頁的行長與卡片格線，超出本次回報範圍，風險不成比例。
+
+### 6. 守衛
+- 新增 `scripts/test-v6271-deck-rail-width.mjs`（40 條，已接進 `package.json` 的 test chain）。
+  - 第 3 節是**幾何預算模型**：所有輸入（軌道寬、rail padding／border、li gap、pick padding／gap、
+    ▲▼ 的 min-width、`button.icon` 的 width、line-clamp 行數）**都從當前 CSS 讀出來**，
+    不是驗字串存在。模型必須**逐一重現 Chrome 實測的 6 個數字**
+    （v6.270 桌機 2 字／375 10 字／414 12 字；v6.271 桌機 16／375 26／414 32），
+    v6.266 沒有 🔍 的 4 字也算得出來。對照組 v6.270 的四個宣告值用**內嵌快照**寫死
+    （歷史事實，不隨版本失效）⇒ 淺複製的 CI 照跑，不需要歷史 blob。
+  - 對「當前」只斷言門檻與倍數（≥12 字、≥3 倍、手機三個寬度都不得變差），
+    **不 pin 死 16 這個數字** —— 之後若有人再加寬，這支守衛不會誤紅（避開第九種安慰劑）。
+  - `★★[模型前提] 每一列恰好 5 顆 button` —— 之後若有人再往列裡塞按鈕，模型會高估，
+    這條會先紅並強迫重新推導。
+- 更新 `scripts/test-v6213-mobile-deck-editor.mjs` 的桌機 CSS 指紋
+  （`4a2669f933bf118e`／26776 → `26605e17e71776c4`／26937）。
+  ⚠⚠ **更新指紋沒有讓鎖變鬆**，反而更緊：新增一節把 v6.271 的**四處逐字宣告編輯做反向還原**，
+  還原後必須回到 v6.267 的指紋（26776）；原本的「拿掉 v6.267 那一段 → 回到 v6.212」那條鏈
+  改接在**還原後**的字串上，整條鏈仍然成立 ⇒「桌機除了登記的這四處，一個宣告都沒動」
+  仍然是逐字證明。且 `.layout` 那條從單一字串比對改成
+  「①仍是三欄且第二、三軌仍是 `minmax(0,1fr)` ②第一軌只准更寬不准更窄（≥220px）
+  ③本版等於 260px」三條 —— 比原本只比一個字串更嚴。
+
+### 7. 不變量（本版逐一確認）
+- Firestore 讀取次數**零變化**：本版沒有動 `<script>` 一個字元，
+  `$effect(0)／onMount(1)／setInterval(0)／setTimeout(9)／fetch(2)／getDocs(0)／getDoc(0)／
+  onSnapshot(0)／loadDecksFromCloud(3)／syncDeckToCloud(5)／removeDeckFromCloud(2)／
+  fetchDeckStats(3)` 逐項與 v6.270 相同（守衛第 4 節以**上界**斷言鎖住，只准變少）。
+- 玩家端效能：純 CSS，沒有新增節點、沒有新增監聽、沒有新增請求。
+- `svelte/compiler` 警告數與 BASE **完全相同**：25 條，`css_unused_selector` 仍然只有
+  原本就存在的 `.pk-mode-btn + .pk-mode-btn` 1 條（沒有多出選擇器對不上的情形）。
+- 🔍（`openDeckStats`）／✕（`removeDeck`）／▲▼（`moveDeckUp`／`moveDeckDown`）
+  markup 與 handler 逐字未動；🔍 仍然包在 `{#if !statsHidden}` 裡。
+
+### 8. 突變測試（4 個，各自紅在預期那一條）
+| # | 突變 | 預期紅的斷言 |
+|---|---|---|
+| M1 | 左欄改回 220px | v6271 第 1 節「比 220px 更寬」＋第 3 節門檻／倍數 ＋ v6213 指紋 |
+| M2 | 拿掉 `.deck-pick` 的 `flex-direction: column` | v6271「改成直向」＋幾何模型門檻 |
+| M3 | `.deck-name` 只拿掉 `-webkit-box-orient: vertical`（其餘三條都在） | v6271「`-webkit-box-orient: vertical`」單獨紅 |
+| M4 | `.deck-pick` 的 `align-items` 改成 `flex-start` | v6271「align-items 是 stretch」單獨紅 |
+| M5 | 在 `@media (max-width: 600px)` 補一條把 `.deck-name` 蓋回 `white-space: nowrap` | v6271「沒有任何 @media 蓋回去」 |
+
 ## v6.270 — 休閒 PUT 上行增量【階段 2：client 端】＋ bodyBytes 診斷 ＋ dump 補 phantom 欄位
 
 BASE `d9f9b4351b5642095d59d7a2db9037064989855a`（v6.269，遠端 main）。

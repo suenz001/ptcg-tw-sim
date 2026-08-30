@@ -197,8 +197,16 @@ console.log('\n1) ④-A 橫向捲動：grid 軌道');
   // 桌機那行是「本來就對」的參照組 —— 它必須維持原樣。
   const rd = rulesFor(SP.withoutMedia, '.layout');
   const vd = rd.length ? decl(rd[0].body, 'grid-template-columns') : null;
-  ok('[正對照] 桌機的 .layout 軌道**一字未改**（三欄，且本來就是 minmax(0,1fr)）',
-    vd === '220px minmax(0, 1fr) minmax(0, 1fr)', String(vd));
+  // ⚠ v6.271 刻意把第一軌從 220px 加寬到 260px（左欄「我的牌組」太窄，牌組名稱只看得到 2 個字）。
+  //   這裡不只比字串，還多鎖兩件事，讓這條**不會因為更新而變鬆**：
+  //     ① 第二、三軌仍然是 minmax(0, 1fr)（＝v6.213 修的橫向溢出沒有被順手改掉）；
+  //     ② 第一軌**只准更寬、不准更窄**（≥ 220px）—— 再被改窄回去就是回歸。
+  ok('[正對照] 桌機的 .layout 仍是三欄，且第二、三軌仍是 minmax(0, 1fr)',
+    /^\d+px minmax\(0, 1fr\) minmax\(0, 1fr\)$/.test(String(vd)), String(vd));
+  ok('★★[v6.271] 桌機第一軌（左欄「我的牌組」）不得比 v6.270 的 220px 更窄',
+    !!vd && parseInt(vd, 10) >= 220, String(vd));
+  ok('★★★[HEAD-FAIL／v6.271] 桌機第一軌已加寬（v6.270 是 220px）',
+    vd === '260px minmax(0, 1fr) minmax(0, 1fr)', String(vd));
 }
 {
   // /cards 的做法（本版就是照抄它）：v6.044 的 repeat(N, minmax(0, 1fr))
@@ -324,15 +332,42 @@ console.log('\n4) ★★★正對照：桌機 CSS 逐字未動');
   //     **把 v6.267 新增的那一段整組拿掉之後，必須逐字還原回 v6.212 的指紋**
   //     ⇒ 「桌機只多了那一段、其餘一個宣告都沒動」仍然是逐字證明。
   const DESKTOP_SHA_V6212 = '6ac52437ce962826';   // v6.212 ＝ v6.213 ＝ … ＝ v6.266（bare.length = 25315）
-  const DESKTOP_SHA = '4a2669f933bf118e';   // v6.267（bare.length = 26776）
+  const DESKTOP_SHA_V6267 = '4a2669f933bf118e';   // v6.267 ＝ … ＝ v6.270（bare.length = 26776）
+  const DESKTOP_SHA = '26605e17e71776c4';   // v6.271（bare.length = 26937）
   const bareSha = createHash('sha256').update(bare).digest('hex').slice(0, 16);
-  ok('★★★[正對照／逐字證明] 桌機（非 @media）CSS 的 sha256 指紋沒有變 —— 只有本版刻意新增的那一段',
-    bareSha === DESKTOP_SHA && bare.length === 26776, bareSha + ' / len=' + bare.length);
+  ok('★★★[正對照／逐字證明] 桌機（非 @media）CSS 的 sha256 指紋沒有變 —— 只有本版刻意做的那幾處',
+    bareSha === DESKTOP_SHA && bare.length === 26937, bareSha + ' / len=' + bare.length);
+  // ⭐⭐⭐ v6.271 刻意改桌機（左欄 220→260px、牌組名稱改兩行）。為了讓這把鎖**不因為更新而變鬆**，
+  //   這裡不是「換一個新指紋就算了」，而是把本版**逐字的四處宣告編輯**做**反向還原**，
+  //   還原後必須逐字回到 v6.267 的指紋 ⇒「桌機除了這四處，一個宣告都沒動」仍然是逐字證明。
+  //   ⚠ 若之後有人再改桌機而沒有登記在這張表裡，還原後的指紋就對不上 ⇒ 直接紅。
+  const V6271_REVERSALS = [
+    ['grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1fr);',
+     'grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);'],
+    ['.deck-pick { flex: 1; min-width: 0; text-align: left; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 0.1rem; background: transparent; border: none; padding: 0.35rem 0.5rem;',
+     '.deck-pick { flex: 1; min-width: 0; text-align: left; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; background: transparent; border: none; padding: 0.4rem 0.5rem;'],
+    ['.deck-name { font-weight: 500; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-overflow: ellipsis; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; min-width: 0; flex: none; }',
+     '.deck-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }'],
+    ['.deck-size { color: #888; font-size: 0.75rem; line-height: 1.15; flex-shrink: 0; white-space: nowrap; }',
+     '.deck-size { color: #888; font-size: 0.8rem; flex-shrink: 0; white-space: nowrap; }'],
+  ];
+  let REV_V6271 = bare, _allOne = true;
+  for (const [a, b] of V6271_REVERSALS) {
+    const n = REV_V6271.split(a).length - 1;
+    if (n !== 1) { _allOne = false; console.log('    這一處在桌機 CSS 裡出現 ' + n + ' 次（應為 1）：' + a.slice(0, 60)); }
+    REV_V6271 = REV_V6271.replace(a, b);
+  }
+  ok('[前提] v6.271 登記的四處桌機編輯，每一處在桌機 CSS 裡都恰好出現一次（抓不到 ⇒ 下一條會是假綠）', _allOne);
+  const revSha = createHash('sha256').update(REV_V6271).digest('hex').slice(0, 16);
+  ok('★★★[正對照／逐字證明] 把 v6.271 那四處還原之後，桌機 CSS 逐字回到 v6.267',
+    revSha === DESKTOP_SHA_V6267 && REV_V6271.length === 26776, revSha + ' / len=' + REV_V6271.length);
   // ⭐⭐⭐ v6.267 新增：把套牌戰績那一段拿掉之後，必須逐字回到 v6.212 的指紋。
   const V6267_BLOCK = /\.ds-backdrop \{[^]*?\.ds-notes \{[^}]*\}/;
   ok('[前提] 抓得到 v6.267 新增的那一段桌機 CSS（抓不到 ⇒ 下一條會變成恆真）',
     V6267_BLOCK.test(SP.withoutMedia));
-  const bare212 = SP.withoutMedia.replace(V6267_BLOCK, '').replace(/\s+/g, ' ').trim();
+  // ⚠ v6.271 起：這一條要接在「已經還原成 v6.267」的字串（REV_V6271）上，
+  //   否則還帶著 v6.271 的四處編輯，永遠對不上 v6.212 的指紋。
+  const bare212 = REV_V6271.replace(V6267_BLOCK, '').replace(/\s+/g, ' ').trim();
   const sha212 = createHash('sha256').update(bare212).digest('hex').slice(0, 16);
   ok('★★★[正對照／逐字證明] 拿掉 v6.267 那一段之後，桌機 CSS 逐字還原回 v6.212',
     sha212 === DESKTOP_SHA_V6212 && bare212.length === 25315, sha212 + ' / len=' + bare212.length);

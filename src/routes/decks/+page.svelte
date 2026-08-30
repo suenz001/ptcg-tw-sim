@@ -2538,7 +2538,7 @@
 
   .layout {
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1fr);
     gap: 1rem;
   }
   @media (max-width: 900px) {
@@ -2679,28 +2679,40 @@
     min-width: 0;  /* v4.982: 允許子元素 shrink → deck-name 才能 truncate */
     text-align: left;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.5rem;
+    /* v6.271: 改直向 —— 牌組名稱獨佔一整列，不再與「60 / 60」共用同一行。 */
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    gap: 0.1rem;
     background: transparent;
     border: none;
-    padding: 0.4rem 0.5rem;
+    padding: 0.35rem 0.5rem;
     cursor: pointer;
     font: inherit;
     color: inherit;
   }
   .deck-name {
     font-weight: 500;
-    /* v4.982: 長卡名（含預組「超級耿鬼ex（預組）」）truncate 防 wrap 兩行 */
+    /* v6.271: 由「一行 nowrap 截斷」改成「最多兩行截斷」。
+       ⚠ 這四條缺任何一條，line-clamp 都會靜默失效退回一行：
+         display: -webkit-box / -webkit-box-orient: vertical /
+         -webkit-line-clamp: 2 / white-space 不可以是 nowrap。 */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
     min-width: 0;
-    flex: 1;
+    flex: none;
   }
   .deck-size {
     color: #888;
-    font-size: 0.8rem;
+    /* v6.271: 移到牌組名稱下一列，字級縮小以補回多出來的列高。 */
+    font-size: 0.75rem;
+    line-height: 1.15;
     flex-shrink: 0;  /* v4.982: 數字 60/60 不被 shrink */
     white-space: nowrap;
   }
