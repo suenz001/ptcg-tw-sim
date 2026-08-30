@@ -450,6 +450,8 @@ let _emailMapPrimed = false;
 //   → 「先開房間分頁、再進玩家帳號」必定每個帳號出現兩次，而且抓了兩輪所以特別慢。
 //   根治：兩邊都改成 await 同一個 promise，重複與 race 從結構上消失。
 let _usersFetchPromise = null;
+// v6.275：users-all 回應的資料時間與截斷旗標（舊伺服器沒有這兩個欄位 → 視為無時間、未截斷）
+let _usersMeta = { cachedAt: null, capped: false };
 async function fetchAllUsers(force) {
   if (force) _usersFetchPromise = null;
   if (!_usersFetchPromise) {
@@ -458,6 +460,9 @@ async function fetchAllUsers(force) {
         if (!data || data.error || !Array.isArray(data.users)) {
           throw new Error((data && data.error) || '玩家帳號載入失敗');
         }
+        // v6.275：名單改走伺服器共用快取（過期回舊值＋背景刷新）⇒ 必須把「資料時間」與
+        //   「50,000 上限截斷」帶到畫面上（絕不靜默截斷 —— v6.240／v6.272 慣例）。
+        _usersMeta = { cachedAt: (typeof data.cachedAt === 'number') ? data.cachedAt : null, capped: !!data.capped };
         return data.users;
       })
       .catch((e) => { _usersFetchPromise = null; throw e; });   // 失敗不留下壞掉的 promise，下次可重試
@@ -3501,7 +3506,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.274';
+window.SITE_VERSION_HINT = '6.275';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -5571,11 +5576,19 @@ function renderUsers(el) {
   rebuildUidEmailMap();  // v0.5: users 載入完成 → 更新 email map
   // v1.60 改走中央 tv 管線：每頁 50 筆 + 排序後翻頁不會被打回原序。
   //   搜尋框放在 mount 容器外，否則每敲一鍵重繪就會失去輸入焦點。
+  // v6.275：50,000 掃描上限截斷警示（capped 才顯示）＋資料時間（伺服器 5 分鐘快取）
+  const cappedWarn = _usersMeta.capped
+    ? '<div id="users-capped-warn" style="background:#fdecea;border:1px solid #e57373;border-radius:6px;padding:8px 12px;margin:8px 0;color:#b71c1c;">⚠⚠ 名單已達伺服器 50,000 筆掃描上限，此列表<b>不是全部帳號</b>（上方總數統計同樣被截斷）。</div>'
+    : '';
+  const dataAt = _usersMeta.cachedAt
+    ? '｜<span id="users-data-at">資料時間 ' + new Date(_usersMeta.cachedAt).toLocaleTimeString('zh-TW') + '（每 5 分鐘背景更新；按 Refresh 立即重抓）</span>'
+    : '';
   el.innerHTML = `
     <h2>👤 玩家帳號（共 ${total} 個，註冊 ${named}，匿名 ${total - named}）</h2>
+    ${cappedWarn}
     <div class="toolbar">
       ${tvSearchBox('users', '🔎 搜尋 email / uid / displayName…')}
-      <span class="small" style="color:#9aa3b0;">點欄位標題可排序；每頁 50 筆</span>
+      <span class="small" style="color:#9aa3b0;">點欄位標題可排序；每頁 50 筆${dataAt}</span>
     </div>
     <div class="table-wrap"><div id="tv-mount-users"></div></div>
   `;

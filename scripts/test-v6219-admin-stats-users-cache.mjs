@@ -1,5 +1,10 @@
 // v6.219 守衛：/api/admin/stats 的 users 統計必須走快取（第二發不重掃）且口徑不變。
 //
+// ⚠ v6.275 適配：users 統計的掃描收斂為單一來源 getRawUsersCached()（與
+//   /api/admin/firebase/users-all 共用；見 server_admin_patch.js v1.32）。本檔的
+//   抽取錨點與 factory 回傳名單跟著新結構走，**所有行為斷言逐字保留**（single-flight／
+//   TTL 內不重掃／過期先回舊值／背景刷新／口徑期望值／handler 第二發不重掃）。
+//
 // 事故背景：nginx 計時 log（2026-08-22）全站最慢前三筆全是 /api/admin/stats
 //   （14.7~15.9 秒、全部耗在 node 內）。真因是 adminAuth.listUsers(1000) 逐頁「循序」
 //   掃全部使用者（上限 50 頁）—— 是 await 的網路 I/O（不卡事件迴圈、不卡玩家），
@@ -84,13 +89,13 @@ await T('v6.219 快取 helpers 存在且抽得出來（BASE 必紅）', () => {
   assert.ok(g.start > hStart, 'getUsersStatsCached 應在 TTL 常數之後');
   helpersSrc = pat.slice(hStart, g.end);
   // Rule 25：抽取器下限斷言（抽到空殼時要紅，不能安慰劑綠燈）
-  assert.ok(helpersSrc.length > 800 && helpersSrc.length < 8000, 'helpers 長度異常: ' + helpersSrc.length);
+  assert.ok(helpersSrc.length > 800 && helpersSrc.length < 12000, 'helpers 長度異常: ' + helpersSrc.length);
   assert.ok(helpersSrc.includes('listUsers(1000, pageToken)'), '掃描迴圈不在 helpers 內（口徑載體遺失）');
 });
 
 function buildHelpers(auth, DateImpl) {
   const factory = new Function('adminAuth', 'Date', 'console',
-    '"use strict";\n' + helpersSrc + '\nreturn { computeUsersStats, getUsersStatsCached, _usersStatsCache };');
+    '"use strict";\n' + helpersSrc + '\nreturn { getUsersStatsCached, getRawUsersCached, scanAllAuthUsers, aggregateUsersStats, _rawUsersCache };');
   return factory(auth, DateImpl, console);
 }
 

@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { transform, transformSync } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { createHash } from 'node:crypto';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '3fd89b566d729ccddebb3014cdcb9d3cd4bd8fd5';   // v6.264（本版的前一版）
@@ -37,6 +38,15 @@ const BASE_SHA_V6266 = '63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8';
 //   ⇒ pin 前移到 v6.269（最後一次合法改動）；v6.270 本身不動 server_admin_patch.js，
 //     其整檔 sha 由 test-v6270 的 B3 以內嵌 sha256 錨定（history-free，CI 上真的在守）。
 const BASE_SHA_V6269 = 'd9f9b4351b5642095d59d7a2db9037064989855a';
+// ⚠ v6.275 又一次發現同型過期（第三次）：server_admin_patch.js 在 v6.272／v6.275 被合法改過
+//   （admin 端 Firestore/Auth 讀取減量）、sync-guards.ts 在 v6.274 被合法改過
+//   （shouldResetStartGrace）—— F4/F5 的 pin 沒跟著前移，在有完整歷史的環境必紅。
+//   ⇒ ①sync-guards/F5 的 pin 前移到 v6.274（那版的改動由 test-v6274 全面接管守備）；
+//     ②server_admin_patch.js 改鎖**守護意圖本體**：錦標賽區塊（第一支 /api/tournament 起至檔尾）
+//       的內嵌 sha256（與 test-v6272/test-v6275 同值，history-free、CI 上真的在守，
+//       且 admin 區塊的合法演化不再需要每版回來改 pin）。
+const BASE_SHA_V6274 = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';
+const TOURN_TAIL_SHA256_V6275 = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8');
@@ -689,8 +699,16 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     t = t.split("    _noteDeltaPutSentinel(res);   // ⭐v6.270 輪詢的 GET 也算「最近一次」（哨兵消失＝伺服器撤掉 kill switch）\n").join('');
     return t;
   };
-  for (const [p, sha] of [['oracle-admin/server_admin_patch.js', BASE_SHA_V6269],
-                          ['src/lib/game/sync-guards.ts', BASE_SHA],
+  // ⭐ v6.275：server_admin_patch.js 改鎖錦標賽 tail 的 sha256（見檔頭說明）
+  {
+    const srvCur = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+    const ti = srvCur.indexOf("app.get('/api/tournament");
+    ok(ti > 0, 'server_admin_patch.js 找不到第一支 /api/tournament 端點');
+    const hex = createHash('sha256').update(srvCur.slice(ti), 'utf8').digest('hex');
+    assert.strictEqual(hex, TOURN_TAIL_SHA256_V6275,
+      'server_admin_patch.js 的錦標賽區塊被動到了（tail sha256 不符）');
+  }
+  for (const [p, sha] of [['src/lib/game/sync-guards.ts', BASE_SHA_V6274],
                           ['src/lib/game/oracle-client.ts', BASE_SHA],
                           ['src/lib/game/engine.ts', BASE_SHA]]) {
     const b = readBaseBlob(ROOT, sha, p);
@@ -703,8 +721,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
 await T('F5 ⭐⭐⭐ `resolveRoomUpdate` 的收斂邏輯逐字未動（長期記憶明訓：動它會造成死結）', () => {
   const cur = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
   ok(cur.includes('export function resolveRoomUpdate('), '抓不到 resolveRoomUpdate');
-  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('F5 對 BASE 的逐字比對', ''); return; }
-  const b = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/sync-guards.ts');
+  if (!hasBaseCommit(ROOT, BASE_SHA_V6274)) { shallowSkip('F5 對 BASE 的逐字比對', ''); return; }
+  const b = readBaseBlob(ROOT, BASE_SHA_V6274, 'src/lib/game/sync-guards.ts');
   assert.strictEqual(cur, b.out, 'sync-guards.ts 被動過了');
 });
 

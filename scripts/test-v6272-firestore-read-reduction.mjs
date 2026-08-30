@@ -659,17 +659,29 @@ T('★★[自我驗證] 上面那條不是恆真：多一個空白 sha256 就不
 // ⑩ 玩家端零改動 ＋ 版本一致 ＋ 行尾
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
-T('★★[玩家端零改動] src/ 與 static/ 只有 version.ts 與 v6.271 不同（拿得到歷史時才驗）', () => {
-  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
-  const ls = (rev) => execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', rev, '--', 'src', 'static'],
+// ⚠ v6.275 修正：原本比 BASE(v6.271) vs HEAD —— v6.273/v6.274 有正當的玩家端改動之後，
+//   這條在「有完整歷史」的環境就永遠紅（CI 淺複製 skip 才一直綠 ⇒ 第九種安慰劑：pin 死版本）。
+//   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
+//   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
+//   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
+const PREV_SHA = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';   // v6.274（v6.275 的上一版）
+const PREV_ALLOWED = ['src/lib/version.ts'];                    // v6.275 是 admin-only 版
+T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
+  if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
+  const ls = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', PREV_SHA, '--', 'src', 'static'],
     { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n');
-  const base = new Map(ls(BASE_SHA).map((l) => { const [m, p] = l.split('\t'); return [p, m]; }));
-  const head = new Map(ls('HEAD').map((l) => { const [m, p] = l.split('\t'); return [p, m]; }));
+  const base = new Map(ls.map((l) => { const [meta, p] = l.split('\t'); return [p, meta.split(' ')[2]]; }));
   assert.ok(base.size > 100, '掃描器壞了？只列到 ' + base.size + ' 個玩家端檔案');
   const diff = [];
-  for (const [p, m] of head) if (base.get(p) !== m) diff.push(p);
-  for (const p of base.keys()) if (!head.has(p)) diff.push(p + '(刪除)');
-  assert.deepStrictEqual(diff.sort(), ['src/lib/version.ts'], '玩家端被動到了：' + diff.join(', '));
+  for (const [p, sha] of base) {
+    let cur = null;
+    try {
+      const buf = readFileSync(join(ROOT, p));
+      cur = createHash('sha1').update('blob ' + buf.length + '\0').update(buf).digest('hex');
+    } catch { diff.push(p + '(刪除)'); continue; }
+    if (cur !== sha) diff.push(p);
+  }
+  assert.deepStrictEqual(diff.sort(), PREV_ALLOWED, '玩家端被動到了：' + diff.join(', '));
 });
 T('版本一致：version.ts = admin.html SITE_VERSION_HINT', () => {
   const V = /VERSION = '([\d.]+)'/.exec(VERTS)[1];

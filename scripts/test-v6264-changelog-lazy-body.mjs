@@ -34,7 +34,11 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 // ⚠ 出新版搬運 changelog 時，這個 pin 要跟著前移到「上一版」（v6.267 已這樣做過一次）。
 //   v6.270 補記：CI 淺複製與沙盒 git archive 都沒有歷史 ⇒ 這一節只在「有完整歷史的環境」
 //   才真的在守；結構不變量與突變測試（history-free）才是 CI 上的主守備面。
-const BASE_SHA = 'd9f9b4351b5642095d59d7a2db9037064989855a'; // v6.269（v6.270 的前一版）
+// ⚠ v6.275 補課：v6.271~v6.274 出版時都忘了前移這個 pin ⇒ 在有完整歷史的環境 F1 會誤紅
+//   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
+//   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
+//   的版本前移到上一版。
+const BASE_SHA = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54'; // v6.274（v6.275 的前一版）
 const N_INLINE = 12;   // 首頁內嵌完整內文的則數（站長裁定的「最新 N 則」）
 
 let pass = 0, fail = 0;
@@ -490,73 +494,86 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
   const baseHomeSplit = splitEntries(baseHome.out);
   const baseArcSplit = splitEntries(baseArc.out);
   const baseBodiesRaw = readBaseBlob(ROOT, BASE_SHA, 'static/changelog-bodies.html');
+  // ⭐ v6.275：admin-only 版（本版完全沒動 changelog）的合法情況 —— 三檔與 BASE 逐位元相同
+  //   ⇒ 「搬運無損」trivially 成立，直接 PASS；只要有任何一檔不同，就走完整的 F1~F3 斷言。
+  //   ⚠ 這不是弱化：位元組相同是**最強**的無損證明；「動了卻想混過」一定會落到 else 分支。
+  const _clUnchanged = baseHome.ok && baseArc.ok
+    && baseHome.out === HOME && baseArc.out === ARC
+    && (baseBodiesRaw.ok ? baseBodiesRaw.out === BODIES : BODIES === '');
   const baseBodyMap = new Map();
   if (baseBodiesRaw.ok) for (const m of baseBodiesRaw.out.matchAll(/<div class="log-body" data-ver="(v[\d.]+)">([\s\S]*?)<\/div>/g)) baseBodyMap.set(m[1], m[2]);
   const NEW_VER = home.entries[0].ver;
   const droppedVers = baseHomeSplit.entries.map((e) => e.ver).filter((v) => !home.entries.some((e) => e.ver === v));
 
-  T('F1 ⭐ 首頁：除了最新那一則以外，每一則都能逐位元組還原回 BASE（搬運沒有動到內文）', () => {
-    assert.ok(baseHome.ok, '讀不到 BASE 的 changelog.html');
-    const bm = new Map(baseHomeSplit.entries.map((e) => [e.ver, e.text]));
-    let checked = 0, movedOut = 0;
-    for (const e of home.entries) {
-      const orig = bm.get(e.ver);
-      // ⭐ 唯一可以是 BASE 沒有的，就是**最新那一則**（＝這一版新增的）
-      if (!orig) { assert.strictEqual(e.ver, NEW_VER, '首頁出現 BASE 沒有的條目：' + e.ver); continue; }
-      const origLazy = /^<details[^>]*\sdata-ver=/.test(orig);
-      let rebuilt = e.text;
-      if (e.dataVer && !origLazy) {
-        // 這一版被擠出內嵌區的那一則：把搬到 bodies 的內文放回去再比
-        movedOut++;
-        rebuilt = rebuilt.replace('<details data-ver="' + e.ver + '">', '<details>')
-          .replace('</summary>\n', '</summary>\n        <div class="log-body">' + bodyMap.get(e.ver) + '</div>\n');
+  if (_clUnchanged) {
+    T('F0 ⭐ 本版未動 changelog（admin-only 版）：首頁／封存頁／bodies 三檔與 BASE 逐位元相同', () => {
+      assert.strictEqual(HOME, baseHome.out); assert.strictEqual(ARC, baseArc.out);
+    });
+  } else {
+    T('F1 ⭐ 首頁：除了最新那一則以外，每一則都能逐位元組還原回 BASE（搬運沒有動到內文）', () => {
+      assert.ok(baseHome.ok, '讀不到 BASE 的 changelog.html');
+      const bm = new Map(baseHomeSplit.entries.map((e) => [e.ver, e.text]));
+      let checked = 0, movedOut = 0;
+      for (const e of home.entries) {
+        const orig = bm.get(e.ver);
+        // ⭐ 唯一可以是 BASE 沒有的，就是**最新那一則**（＝這一版新增的）
+        if (!orig) { assert.strictEqual(e.ver, NEW_VER, '首頁出現 BASE 沒有的條目：' + e.ver); continue; }
+        const origLazy = /^<details[^>]*\sdata-ver=/.test(orig);
+        let rebuilt = e.text;
+        if (e.dataVer && !origLazy) {
+          // 這一版被擠出內嵌區的那一則：把搬到 bodies 的內文放回去再比
+          movedOut++;
+          rebuilt = rebuilt.replace('<details data-ver="' + e.ver + '">', '<details>')
+            .replace('</summary>\n', '</summary>\n        <div class="log-body">' + bodyMap.get(e.ver) + '</div>\n');
+        }
+        assert.ok(!(origLazy && !e.dataVer), e.ver + ' 從懶載入變回內嵌 —— 搬運方向反了');
+        if (/^<details open>/.test(orig)) rebuilt = rebuilt.replace(/^<details(?: open)?>/, '<details open>');
+        assert.strictEqual(rebuilt, orig, e.ver + ' 還原後與 BASE 不同');
+        checked++;
       }
-      assert.ok(!(origLazy && !e.dataVer), e.ver + ' 從懶載入變回內嵌 —— 搬運方向反了');
-      if (/^<details open>/.test(orig)) rebuilt = rebuilt.replace(/^<details(?: open)?>/, '<details open>');
-      assert.strictEqual(rebuilt, orig, e.ver + ' 還原後與 BASE 不同');
-      checked++;
-    }
-    assert.strictEqual(checked, 49, '只比對到 ' + checked + ' 則（應為 49）');
-    assert.strictEqual(movedOut, 1, '這一版把 ' + movedOut + ' 則的內文搬出內嵌區（應恰好 1 則＝搬運步驟②）');
-    assert.strictEqual(home.entries.filter((e) => e.open).length, 1, '預設展開的不是恰好一則');
-    assert.strictEqual(home.entries[0].open, true, '預設展開的不是最新那一則（上一版的 open 沒有收起來）');
-  });
-  T('F2 ⭐ 封存頁：恰好多一則，就是掉出首頁的那一則，而且標題＋內文都逐字保留', () => {
-    assert.ok(baseArc.ok, '讀不到 BASE 的 changelog-archive.html');
-    assert.ok(baseArcSplit.entries.length >= 324, 'BASE 封存頁只有 ' + baseArcSplit.entries.length + ' 則');
-    assert.strictEqual(arc.entries.length, baseArcSplit.entries.length + 1, '封存頁應恰好多一則');
-    assert.deepStrictEqual(droppedVers, [arc.entries[0].ver], '掉出首頁的與新進封存頁的不是同一則');
-    assert.strictEqual(arc.entries.slice(1).map((e) => e.text).join(''), baseArcSplit.entries.map((e) => e.text).join(''),
-      '封存頁的舊條目被動到了 —— 歷史一則都不可以改');
-    // 新進封存頁的那一則 ＝ BASE 首頁的標題（脫掉 data-ver）＋ BASE bodies 的內文
-    const v = droppedVers[0];
-    const origTitle = baseHomeSplit.entries.find((e) => e.ver === v).text;
-    assert.ok(baseBodiesRaw.ok, '讀不到 BASE 的 changelog-bodies.html');
-    const origBody = baseBodyMap.get(v);
-    assert.ok(origBody, 'BASE 的 bodies 檔沒有 ' + v + ' 的內文');
-    const want = origTitle.replace('<details data-ver="' + v + '">', '<details>')
-      .replace('</summary>\n', '</summary>\n        <div class="log-body">' + origBody + '</div>\n');
-    assert.strictEqual(arc.entries[0].text, want, v + ' 搬進封存頁時標題或內文被改到了');
-  });
-  T('F2b ⭐ bodies 檔：只多了「這一版搬出來的那一則」、只少了「搬進封存頁的那一則」，其餘逐字不變', () => {
-    assert.ok(baseBodiesRaw.ok, '讀不到 BASE 的 changelog-bodies.html');
-    const added = [...bodyMap.keys()].filter((v) => !baseBodyMap.has(v));
-    const removed = [...baseBodyMap.keys()].filter((v) => !bodyMap.has(v));
-    assert.strictEqual(added.length, 1, 'bodies 檔多了 ' + added.length + ' 則：' + added);
-    assert.deepStrictEqual(removed, droppedVers, 'bodies 檔少掉的不是搬進封存頁的那一則');
-    for (const [v, b] of baseBodyMap) {
-      if (removed.includes(v)) continue;
-      assert.strictEqual(bodyMap.get(v), b, v + ' 的內文在搬運中被改到了');
-    }
-  });
-  T('F3 ⭐ 首頁位元組「每版增量 ≈ 0」（v6.264 的結構解要一直有效，不是只有那一版）', () => {
-    const before = Buffer.byteLength(baseHome.out, 'utf8'), after = Buffer.byteLength(HOME, 'utf8');
-    // ⚠ v6.264 那一版是 61,436 → 31,349（-49%）；從 v6.265 起 BASE 已經是新結構，
-    //   真正要守的是「一則進、一則的內文出、一則出封存」之後**不會單向長大**。
-    assert.ok(after <= before + 2048,
-      before + ' → ' + after + ' bytes（+' + (after - before) + '）—— 單版增量超過 2KB，搬運步驟②③是不是漏做了？');
-    console.log(`        首頁片段 ${before} → ${after} bytes（-${(100 - after / before * 100).toFixed(1)}%）；bodies ${Buffer.byteLength(BODIES, 'utf8')} bytes`);
-  });
+      assert.strictEqual(checked, 49, '只比對到 ' + checked + ' 則（應為 49）');
+      assert.strictEqual(movedOut, 1, '這一版把 ' + movedOut + ' 則的內文搬出內嵌區（應恰好 1 則＝搬運步驟②）');
+      assert.strictEqual(home.entries.filter((e) => e.open).length, 1, '預設展開的不是恰好一則');
+      assert.strictEqual(home.entries[0].open, true, '預設展開的不是最新那一則（上一版的 open 沒有收起來）');
+    });
+    T('F2 ⭐ 封存頁：恰好多一則，就是掉出首頁的那一則，而且標題＋內文都逐字保留', () => {
+      assert.ok(baseArc.ok, '讀不到 BASE 的 changelog-archive.html');
+      assert.ok(baseArcSplit.entries.length >= 324, 'BASE 封存頁只有 ' + baseArcSplit.entries.length + ' 則');
+      assert.strictEqual(arc.entries.length, baseArcSplit.entries.length + 1, '封存頁應恰好多一則');
+      assert.deepStrictEqual(droppedVers, [arc.entries[0].ver], '掉出首頁的與新進封存頁的不是同一則');
+      assert.strictEqual(arc.entries.slice(1).map((e) => e.text).join(''), baseArcSplit.entries.map((e) => e.text).join(''),
+        '封存頁的舊條目被動到了 —— 歷史一則都不可以改');
+      // 新進封存頁的那一則 ＝ BASE 首頁的標題（脫掉 data-ver）＋ BASE bodies 的內文
+      const v = droppedVers[0];
+      const origTitle = baseHomeSplit.entries.find((e) => e.ver === v).text;
+      assert.ok(baseBodiesRaw.ok, '讀不到 BASE 的 changelog-bodies.html');
+      const origBody = baseBodyMap.get(v);
+      assert.ok(origBody, 'BASE 的 bodies 檔沒有 ' + v + ' 的內文');
+      const want = origTitle.replace('<details data-ver="' + v + '">', '<details>')
+        .replace('</summary>\n', '</summary>\n        <div class="log-body">' + origBody + '</div>\n');
+      assert.strictEqual(arc.entries[0].text, want, v + ' 搬進封存頁時標題或內文被改到了');
+    });
+    T('F2b ⭐ bodies 檔：只多了「這一版搬出來的那一則」、只少了「搬進封存頁的那一則」，其餘逐字不變', () => {
+      assert.ok(baseBodiesRaw.ok, '讀不到 BASE 的 changelog-bodies.html');
+      const added = [...bodyMap.keys()].filter((v) => !baseBodyMap.has(v));
+      const removed = [...baseBodyMap.keys()].filter((v) => !bodyMap.has(v));
+      assert.strictEqual(added.length, 1, 'bodies 檔多了 ' + added.length + ' 則：' + added);
+      assert.deepStrictEqual(removed, droppedVers, 'bodies 檔少掉的不是搬進封存頁的那一則');
+      for (const [v, b] of baseBodyMap) {
+        if (removed.includes(v)) continue;
+        assert.strictEqual(bodyMap.get(v), b, v + ' 的內文在搬運中被改到了');
+      }
+    });
+    T('F3 ⭐ 首頁位元組「每版增量 ≈ 0」（v6.264 的結構解要一直有效，不是只有那一版）', () => {
+      const before = Buffer.byteLength(baseHome.out, 'utf8'), after = Buffer.byteLength(HOME, 'utf8');
+      // ⚠ v6.264 那一版是 61,436 → 31,349（-49%）；從 v6.265 起 BASE 已經是新結構，
+      //   真正要守的是「一則進、一則的內文出、一則出封存」之後**不會單向長大**。
+      assert.ok(after <= before + 2048,
+        before + ' → ' + after + ' bytes（+' + (after - before) + '）—— 單版增量超過 2KB，搬運步驟②③是不是漏做了？');
+      console.log(`        首頁片段 ${before} → ${after} bytes（-${(100 - after / before * 100).toFixed(1)}%）；bodies ${Buffer.byteLength(BODIES, 'utf8')} bytes`);
+    });
+
+  }
 }
 
 // ─────────────────── 【E】突變測試：每一條都必須紅在指定的地方 ───────────────────

@@ -1,5 +1,46 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.275 — admin：`/api/admin/firebase/users-all` 的 15 秒同步等待收斂＋全站無上限讀取重枚舉
+
+BASE `4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54`（v6.274，遠端 main）。admin 專屬，玩家端零改動（只動 `version.ts`）。
+
+### 背景：v6.272 的枚舉漏了一個
+
+v6.272 宣稱「全站無上限的就是那 5 個」，但站長 2026-08-30 dump 的 nginx 計時 log 抓到
+`/api/admin/firebase/users-all` 一發 **15.7 秒、回應 1.24MB**（`tournament-dumps/perf_latest.txt`）。
+它是 v0.95 加的 Firebase **Auth** `listUsers` 逐頁全量掃描 —— **不是 Firestore 讀取**（不消耗
+Firestore 讀取額度），v6.272 只掃 Firestore 字面所以漏掉。慢的真因：v0.95 的快取在 TTL 過期後
+的第一發要**同步等**整輪循序 HTTPS 掃描（沒有 v1.19 的「過期先回舊值」）；且它與
+`/api/admin/stats` 的 `computeUsersStats` **各自**維護一份互不相通的掃描 ⇒ admin 開頁要掃兩輪。
+⚠ v1.19 已實測這 15 秒幾乎全是 await 網路 I/O、事件迴圈不被佔住 ⇒ **不卡玩家**（本版守衛再次實測）。
+
+### 修法（`server_admin_patch.js` v1.32）
+
+- 掃描收斂單一來源 `getRawUsersCached()`：5 分 TTL＋single-flight＋過期先回舊值背景刷新；
+  `stats` 與 `users-all` 共用同一輪 ⇒ Auth 請求數減半、TTL 過期不再白等 15 秒。
+- 補 50,000 安全上限（v1.19 同值）；截斷回 `capped:true`，admin 玩家帳號分頁顯示紅色警示
+  ＋資料時間（絕不靜默截斷）。`?refresh=1` 仍同步等最新資料。
+- 映射迴圈每 200 筆走中央 `adminScanYield` 讓路（v6.242 手法）。
+- 聚合（`aggregateUsersStats`）與列表欄位映射程式碼逐字保留，口徑不變。
+- 錦標賽區塊（第一支 `/api/tournament` 起至檔尾）**逐位元未動**（sha256
+  `34a8448b…` 與 v6.271~v6.274 相同，守衛內嵌鎖住）。
+
+### 重枚舉結論（其餘讀取點的處置）
+
+- `users/:uid/decks`、`by-email/:email/decks`、player-profile 的 feedbacks/decks：無 `.limit()` 但
+  **scope 被單一 uid 錨定**（讀取量＝該玩家的牌組／回饋數，不隨全站成長）⇒ 不動，白名單附結構性證明。
+- `firestore-write-audit`：全走 `count()` aggregation（每 query 1 讀）＋ `listCollections`（不讀 doc）⇒ 不動。
+- `/api/admin/firebase/users`（單頁 100）：有上限 ⇒ 不動。
+- client 端（v6.273 已列管）與 v6.272 的五處：零接觸。
+
+### 守衛
+
+`scripts/test-v6275-usersall-scan-guard.mjs`（進 test chain）：全站無上限讀取掃描器（白名單制＋
+正對照＋下限斷言）、users-all／stats 行為端實跑（stub listUsers 計數）、事件迴圈讓路實測與突變、
+admin.html 渲染實跑（capped 警示 DOM）、錦標賽 tail sha256。同版順手修
+`test-v6264-changelog-lazy-body.mjs` 的過期 `BASE_SHA`（釘 v6.269 → v6.274，並容忍
+「本版不動 changelog」的 admin-only 版）；`test-v6219` 適配新結構（行為斷言全數保留）。
+
 ## v6.274 — 開局 grace 計時（`_onlineReadyAt`）的陳舊值：「再來一局」時 P2 的 6 秒 fallback 被擊穿
 
 BASE `65553fb6c68992f719c80d82620e9d68298b43ca`（v6.273，遠端 main）。
