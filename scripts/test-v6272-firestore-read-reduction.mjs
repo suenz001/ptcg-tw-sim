@@ -664,8 +664,18 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';   // v6.274（v6.275 的上一版）
-const PREV_ALLOWED = ['src/lib/version.ts'];                    // v6.275 是 admin-only 版
+const PREV_SHA = '9f500a55cf83daa8be3530ff01c8a163c6a60a23';   // v6.276（v6.277 的上一版）
+// ⭐v6.277 是**玩家端**版（套牌戰績 client 端 P3b）⇒ 這一版動過的玩家端檔案逐一列出。
+//   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
+const PREV_ALLOWED = [
+  'src/lib/decks/deck-stats.ts',      // 錦標賽欄的型別／正規化／三態判準
+  'src/lib/version.ts',
+  'src/routes/decks/+page.svelte',    // 🔍 的錦標賽欄改讀真資料
+  'src/routes/game/+page.svelte',     // 三個報名入口帶 deckId
+  'static/changelog-archive.html',    // changelog 三步搬運
+  'static/changelog-bodies.html',
+  'static/changelog.html',
+];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
   const ls = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', PREV_SHA, '--', 'src', 'static'],

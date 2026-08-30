@@ -5521,7 +5521,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const total = deck.entries.reduce((s: number, e: any) => s + (e.count || 0), 0);
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
-    try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref }); if (r.error) tError = r.error; else { saveCoinPref(eventId, tCoinPref); tRegFormEventId = ''; } await tournLoadEvent(); } // v5.724 存先後攻偏好供報名卡顯示
+    // ⭐⭐v6.277 套牌戰績（P3b）：報名時把這副牌的 `Deck.id` 一起送出（伺服器 v6.276 起收）。
+    //   ⚠⚠ 純 additive —— 請求體除了**多這一個 key** 之外逐位元不變（守衛 test-v6277 逐字證明），
+    //     伺服器端沒送／不合格一律**欄位缺席**，絕不因為它擋報名。
+    try { const r = await tApi('/register', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref, deckId: deck.id }); if (r.error) tError = r.error; else { saveCoinPref(eventId, tCoinPref); tRegFormEventId = ''; } await tournLoadEvent(); } // v5.724 存先後攻偏好供報名卡顯示
     catch (e: any) { tError = String(e?.message ?? e); } finally { tBusy = false; }
   }
   // ⭐⭐⭐v6.188 補報名＋直接報到（站長核准，網站賽與社群賽都開放）。
@@ -5537,7 +5540,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; tCheckinErrId = eventId; return; }
     tError = ''; tCheckinErrId = ''; tBusy = true;
     try {
-      const r = await tApi('/register-and-checkin', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref, ver: VERSION });
+      // ⭐⭐v6.277：補報到也要帶 deckId（三個報名入口一個都不能漏，否則那些場次永遠算不進戰績）。
+      const r = await tApi('/register-and-checkin', { eventId, name: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref, ver: VERSION, deckId: deck.id });
       if (r?.error) { tError = r.error; tCheckinErrId = eventId; }
       else { saveCoinPref(eventId, tCoinPref); tRegFormEventId = ''; }
       await tournLoadEvent();
@@ -5569,7 +5573,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (total !== 60) { tError = `所選牌組為 ${total} 張（需 60 張）`; return; }
     tError = ''; tBusy = true;
     try {
-      const r = await tApi('/propose', { format: tProposeFormat, rallyMin: tProposeRally, eventName: tProposeName.trim(), nickname: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref });
+      // ⭐⭐v6.277：發起社群賽＝發起者自動報名，同樣要帶 deckId（第三個入口）。
+      const r = await tApi('/propose', { format: tProposeFormat, rallyMin: tProposeRally, eventName: tProposeName.trim(), nickname: nick, deckName: deck.name, deckEntries: deck.entries, coinPref: tCoinPref, deckId: deck.id });
       if (r?.error) tError = r.error; else { tProposeOpen = false; tProposeName = ''; await tournLoadEvent(); }
     } catch (e: any) { tError = '發起失敗：' + String(e?.message ?? e); } finally { tBusy = false; }
   }

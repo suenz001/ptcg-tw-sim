@@ -676,8 +676,19 @@ await T('G1 v6.267 client 的錦標賽欄寫死「累積中」＝不讀新欄位
   // 查無資料時（status not-collected）舊 client 拿到的六個欄位與 BASE 一模一樣
   const oldShape = normalize({ deckStatsApi: 1, deckId: 'd', casual: {}, vsArchetype: [],
     tournament: { status: 'not-collected', games: 0, wins: 0, losses: 0, draws: 0, winRate: null, since: 'v6.276', vsArchetype: [], events: 0, scanned: 0, truncated: false, scanCap: 300 }, since: 'v6.266' });
-  assert.deepStrictEqual(oldShape.tournament, { status: 'not-collected', games: 0, wins: 0, losses: 0, draws: 0, winRate: null },
-    '舊 client normalize 後的 tournament 與 BASE 不同：' + JSON.stringify(oldShape.tournament));
+  // ⚠⚠ v6.277 起 client 會在 tournament 底下**附加**新欄位（since／vsArchetype／events…），
+  //   所以不可以再用「整包 deepStrictEqual」——那等於把斷言 pin 在某一版的 client 形狀上
+  //   （Rule E：pin 死版本的斷言不是保護，是路障）。改成**契約式**斷言，而且比原本更嚴：
+  //     ① 伺服器契約的六個欄位其值逐一相同；
+  //     ② 它們必須仍然排在**最前面**（新欄位只准附加在後 —— 這一條原本沒有在守）。
+  const SIX = ['status', 'games', 'wins', 'losses', 'draws', 'winRate'];
+  const six = {};
+  for (const k of SIX) six[k] = oldShape.tournament[k];
+  assert.deepStrictEqual(six, { status: 'not-collected', games: 0, wins: 0, losses: 0, draws: 0, winRate: null },
+    '舊 client normalize 後的 tournament 前六個欄位與 BASE 不同：' + JSON.stringify(oldShape.tournament));
+  assert.deepStrictEqual(Object.keys(oldShape.tournament).slice(0, 6), SIX,
+    'tournament 的前六個 key 不再是伺服器契約的那六個（新欄位一律附加在後）：'
+    + Object.keys(oldShape.tournament).join(','));
 });
 
 console.log('\n══ 【H】HEAD-FAIL（對真 BASE blob；淺複製時由【B】revert-diff 涵蓋同一件事）══');
@@ -732,11 +743,41 @@ await T('H2 ⭐⭐⭐ BASE 的 /register／歸檔函式跑同一份 fixture ⇒ 
   console.log('        BASE vs 修後：register／register-and-checkin／propose／歸檔 4 條路徑 deepStrictEqual ＋ JSON 逐位元相同');
 });
 
-console.log('\n══ 【I】玩家端零改動（src/ ＋ static/ 只准 version.ts 不同）═══════════════');
+console.log('\n══ 【I】伺服器契約的 client 端退路（不綁版本；原「零改動」快照已退役）═══════');
 
-await T('I1 git ls-tree 逐檔 blob 雜湊：src/ 與 static/ 與 BASE 相比只有 version.ts 不同', () => {
+await T('I1 ⭐ 伺服器 v6.276 契約的 client 端退路仍在（行為端；**不 pin 任何一版的 diff**）', () => {
+  // ⚠⚠ 這一條原本是「git ls-tree 逐檔比對：src/ 與 static/ 相對 BASE 只有 version.ts 不同」。
+  //   那是**對 v6.276 那一版 diff 的快照**：它宣告的是「本版是純伺服器端」這個**歷史事實**，
+  //   一旦有任何後續版本動到玩家端（v6.277 套牌戰績 client 端 P3b 就是）就必然紅，
+  //   而它擋下來的並不是任何真正的風險（Rule E：pin 死版本／pin 死 diff 的斷言是路障不是保護）。
+  // ⇒ 改成**不綁版本的行為端等價條件**：v6.276 的伺服器契約其實只依賴下面兩件事，
+  //   而這兩件事與「client 改了幾個檔」完全無關，可以一路守下去。
+  const dsTs = readFileSync(join(ROOT, 'src/lib/decks/deck-stats.ts'), 'utf8');
+  const i0 = dsTs.indexOf('function normalize(');
+  assert.ok(i0 > 0, '抽不到 deck-stats.ts 的 normalize（掃描器壞了？）');
+  const fnTxt = dsTs.slice(i0, braceEnd(dsTs, dsTs.indexOf('{', i0)))
+    .replace(/: Record<string, unknown>/g, '').replace(/: DeckStats/g, '')
+    .replace(/ as Record<string, unknown>\[\]/g, '').replace(/ as Record<string, unknown>/g, '');
+  assert.ok(fnTxt.length > 400, 'normalize 抽太短：' + fnTxt.length);
+  const helpers = 'const toInt=(v)=>{const n=Number(v);return Number.isFinite(n)?Math.trunc(n):0;};'
+    + 'const toRate=(v)=>{if(v===null||v===undefined)return null;const n=Number(v);return Number.isFinite(n)?n:null;};'
+    + "const toStr=(v,f)=>(typeof v==='string'&&v?v:f);";
+  const normalize = new Function(helpers + '\n' + fnTxt + '\nreturn normalize;')();
+  // ①【舊伺服器 fail-open】伺服器回應**完全沒有 tournament 這個 key** ⇒ 不可以丟例外，
+  //   而且必須落回 not-collected（畫面顯示「累積中」），絕不可以變成 0 勝 0 敗的假數字。
+  const noTourn = normalize({ deckStatsApi: 1, deckId: 'd', casual: {}, vsArchetype: [], since: 'v6.266' });
+  assert.strictEqual(noTourn.tournament.status, 'not-collected',
+    '伺服器沒回 tournament 時 client 沒有落回 not-collected（實得 ' + noTourn.tournament.status + '）');
+  assert.strictEqual(noTourn.tournament.games, 0);
+  assert.strictEqual(noTourn.tournament.winRate, null, 'winRate 被誤轉成 0 ⇒ 畫面會顯示 0.0% 騙玩家');
+  // ②【UI 退路】/decks 一定要留著「累積中」這個 fallback（三態的第二、三態都靠它）。
+  const page2 = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
+  assert.ok(page2.includes('<div class="ds-rate ds-pending">累積中</div>'),
+    '/decks 的「累積中」退路不見了 ⇒ 查無資料／舊伺服器時畫面會空掉或顯示假數字');
+  // ── 診斷（**不當判準**）：印出玩家端相對 BASE 有哪些檔不同，讓改動仍然看得見。
   if (!hasBaseCommit(ROOT, BASE_SHA)) {
-    shallowSkip('test-v6276 【I1】玩家端零改動（需要 BASE commit）', 'CI 淺複製拿不到 BASE 樹'); return;
+    shallowSkip('test-v6276 【I1】的 diff 診斷（需要 BASE commit）', '兩條行為端斷言不需要歷史，仍在守');
+    return;
   }
   const out = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', BASE_SHA, '--', 'src', 'static'],
     { maxBuffer: 1 << 26 }).toString('utf8');
@@ -757,10 +798,8 @@ await T('I1 git ls-tree 逐檔 blob 雜湊：src/ 與 static/ 與 BASE 相比只
     }
     checked++;
   }
-  assert.ok(checked > 200, '只掃到 ' + checked + ' 個檔（掃描器壞了？）');   // BASE 的 src+static 共 289 個 blob
-  assert.deepStrictEqual(diffs, ['src/lib/version.ts'],
-    '玩家端有 version.ts 以外的改動：' + JSON.stringify(diffs.slice(0, 10)));
-  console.log('        掃描 ' + checked + ' 檔，唯一差異＝src/lib/version.ts（版本字串）');
+  assert.ok(checked > 200, '只掃到 ' + checked + ' 個檔（掃描器壞了？）');
+  console.log('        [診斷] 掃描 ' + checked + ' 檔，相對 v6.275 的玩家端差異：' + JSON.stringify(diffs));
 });
 
 console.log('\n══ 【J】版本／文件 ═══════════════════════════════════════════════════════');

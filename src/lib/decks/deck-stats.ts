@@ -45,6 +45,31 @@ export interface DeckStatsTally {
   winRate: number | null;
 }
 
+/**
+ * ⭐v6.277 錦標賽戰績（伺服器 v6.276 起才有真數字）。
+ *
+ * ⚠⚠ `since` 是「這台伺服器收得到錦標賽資料了嗎」的**唯一**判準，而且它的值
+ *   **只從伺服器回應讀出來**（伺服器目前回 `'v6.276'`）—— client 端**絕不寫死版本號**
+ *   （第九種守衛安慰劑：pin 死版本號在那一版被取代的當下就靜默失效）。
+ *   舊伺服器（v6.275 以下）的 `tournament` 沒有這個欄位 ⇒ 正規化成空字串
+ *   ⇒ `deckStatsTournamentReady()` 回 false ⇒ UI **fail-open 退回「累積中」**。
+ */
+export interface DeckStatsTournament extends DeckStatsTally {
+  /** `'ok'` ＝有真數字；`'not-collected'` ＝查無（含索引未就緒、上線前的賽事）。 */
+  status: string;
+  /** 統計起算版本（伺服器給的字串）。⚠ 舊伺服器沒有這個欄位 ⇒ 空字串。 */
+  since: string;
+  /** 對各牌組原型的勝率（錦標賽側）。舊伺服器沒有 ⇒ 空陣列。 */
+  vsArchetype: DeckStatsArchetypeRow[];
+  /** 掃了幾場賽事（歸檔筆數）。 */
+  events: number;
+  /** 掃過幾個元素（伺服器的儀器欄位）。 */
+  scanned: number;
+  /** 超過 `scanCap` 場賽事就會截斷 ⇒ UI 必須告訴玩家「只統計最近 N 場」。 */
+  truncated: boolean;
+  scanCap: number;
+}
+
 export interface DeckStats {
   /** 哨兵。伺服器 v6.266 起恆為 1。 */
   deckStatsApi: number;
@@ -52,8 +77,11 @@ export interface DeckStats {
   /** `scope: 'online-only'` —— 站長裁定：vsAI 與本機雙人一律不計入。 */
   casual: DeckStatsTally & { scope: string };
   vsArchetype: DeckStatsArchetypeRow[];
-  /** 本版 `status: 'not-collected'`（還沒有資料來源）⇒ UI 顯示「累積中」。 */
-  tournament: DeckStatsTally & { status: string };
+  /**
+   * 錦標賽戰績。⭐v6.276 伺服器起有真數字；查無 ⇒ `status:'not-collected'`（UI 顯示「累積中」）。
+   * ⚠ 舊伺服器沒有 `since`／`vsArchetype` 等欄位 ⇒ 正規化補預設值並 fail-open 退回「累積中」。
+   */
+  tournament: DeckStatsTournament;
   /** `'v6.266'` —— 不做歷史回填，UI 必須明講「自這一版起計」。 */
   since: string;
   scanned: number;
@@ -94,6 +122,25 @@ export function deckStatsHidden(): boolean {
   return apiSupported === false;
 }
 
+/**
+ * ⭐⭐ 錦標賽欄要不要顯示**真數字** —— 三態的唯一判準（UI 與守衛共用同一個出口）。
+ *
+ *   ①「有資料」：`status:'ok'` ＋ `since` 有值 ＋ `games > 0` ⇒ `true`
+ *      ⇒ 顯示勝率／場次／對各牌組原型。
+ *   ②「查無」：`status:'not-collected'`（含上線前的賽事、伺服器索引未就緒）⇒ `false`
+ *      ⇒ 顯示「累積中」。
+ *   ③「舊伺服器」：`tournament` 缺席、或有 `tournament` 但**沒有 `since`** ⇒ `false`
+ *      ＝ **fail-open 退回「累積中」**：畫面絕不可以壞掉，也絕不顯示 0 勝 0 敗騙玩家。
+ *
+ * ⚠⚠ 判準只讀**伺服器回應本身**，不比對任何寫死的版本號字串。
+ */
+export function deckStatsTournamentReady(t: DeckStatsTournament | null | undefined): boolean {
+  if (!t) return false;
+  if (t.status !== 'ok') return false;
+  if (!t.since) return false;          // 舊伺服器（欄位缺席）⇒ fail-open 退回「累積中」
+  return t.games > 0;
+}
+
 function toInt(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
@@ -115,6 +162,15 @@ function normalize(body: Record<string, unknown>): DeckStats {
   const c = (body.casual ?? {}) as Record<string, unknown>;
   const t = (body.tournament ?? {}) as Record<string, unknown>;
   const rows = Array.isArray(body.vsArchetype) ? (body.vsArchetype as Record<string, unknown>[]) : [];
+  // ⭐v6.277 錦標賽側的對各原型列。⚠ 舊伺服器沒有這個欄位 ⇒ 空陣列（不是丟例外）。
+  const tRows = Array.isArray(t.vsArchetype) ? (t.vsArchetype as Record<string, unknown>[]) : [];
+  // ⚠ 刻意**不寫回傳型別註記**：v6.276 守衛 G1 的 TS 剝除器只認 `: Record<string, unknown>`，
+  //   多一種註記形狀會讓那支守衛直接 SyntaxError（Rule 25：抽取器不得假設只有一種寫法）。
+  const archRow = (r: Record<string, unknown>) => ({
+    name: toStr(r.name, '未分類'),
+    games: toInt(r.games), wins: toInt(r.wins), losses: toInt(r.losses), draws: toInt(r.draws),
+    winRate: toRate(r.winRate),
+  });
   return {
     deckStatsApi: toInt(body.deckStatsApi),
     deckId: toStr(body.deckId, ''),
@@ -123,15 +179,16 @@ function normalize(body: Record<string, unknown>): DeckStats {
       games: toInt(c.games), wins: toInt(c.wins), losses: toInt(c.losses), draws: toInt(c.draws),
       winRate: toRate(c.winRate),
     },
-    vsArchetype: rows.map((r) => ({
-      name: toStr(r.name, '未分類'),
-      games: toInt(r.games), wins: toInt(r.wins), losses: toInt(r.losses), draws: toInt(r.draws),
-      winRate: toRate(r.winRate),
-    })),
+    vsArchetype: rows.map(archRow),
     tournament: {
       status: toStr(t.status, 'not-collected'),
       games: toInt(t.games), wins: toInt(t.wins), losses: toInt(t.losses), draws: toInt(t.draws),
       winRate: toRate(t.winRate),
+      // ⚠⚠ **絕不寫死版本號**：缺席就是空字串（＝舊伺服器 ⇒ fail-open 退回「累積中」）。
+      since: toStr(t.since, ''),
+      vsArchetype: tRows.map(archRow),
+      events: toInt(t.events), scanned: toInt(t.scanned),
+      truncated: t.truncated === true, scanCap: toInt(t.scanCap),
     },
     since: toStr(body.since, 'v6.266'),
     scanned: toInt(body.scanned),

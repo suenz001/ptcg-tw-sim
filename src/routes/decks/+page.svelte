@@ -26,7 +26,7 @@
   import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud,
     cloudDecksUnchanged, recordCloudDecksRev, bumpCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
   // v6.267 套牌戰績：`/api/deck-stats` 的唯一出口（快取／防連點／哨兵判定都在裡面）
-  import { fetchDeckStats, deckStatsHidden, type DeckStats } from '$lib/decks/deck-stats';
+  import { fetchDeckStats, deckStatsHidden, deckStatsTournamentReady, type DeckStats } from '$lib/decks/deck-stats';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
   import { saveFavoritesToCloud, loadFavoritesFromCloud } from '$lib/decks/favoritesCloud';
   import { VERSION } from '$lib/version';
@@ -777,7 +777,10 @@
   //     `VITE_ORACLE_API_URL` 與模組層級的哨兵旗標），不碰網路。
   //     ⇒ 放大鏡先顯示，玩家**點下去**才打；打不通就當場說明並記住不再顯示。
   //   ⚠ 快取／防連點在 `$lib/decks/deck-stats` 內（60 秒、同一副牌同時只有一發）。
-  //   ⚠ 錦標賽勝率本版還沒有資料來源 ⇒ 顯示「累積中」，不顯示 0 勝 0 敗騙玩家。
+  //   ⭐⭐v6.277 錦標賽欄改讀真資料（伺服器 v6.276 起收得到）。三態：
+  //     `status:'ok'` ⇒ 勝率／場次／對各原型；`'not-collected'` ⇒「累積中」；
+  //     **舊伺服器**（回應裡沒有 `tournament.since`）⇒ **fail-open 退回「累積中」**。
+  //   ⚠⚠ 判準集中在 `deckStatsTournamentReady()`，只讀伺服器回應，**絕不寫死版本號**。
   let statsHidden = $state(deckStatsHidden());
   let statsDeckId = $state<string | null>(null);   // 正在看哪一副（null＝視窗沒開）
   let statsDeckName = $state('');
@@ -801,6 +804,9 @@
     //   而且 `fetchDeckStats` 自己也會擋掉後續呼叫，一發都不會再打。
     if (r.unsupported) statsHidden = true;
   }
+
+  // ⭐⭐v6.277 錦標賽欄要不要顯示真數字。⚠ 純衍生狀態，不發任何請求（載入請求數不變）。
+  const tournReady = $derived(statsData !== null && deckStatsTournamentReady(statsData.tournament));
 
   function closeDeckStats() { statsDeckId = null; }
 
@@ -2377,11 +2383,16 @@
           </div>
           <div class="ds-card">
             <div class="ds-card-h">錦標賽</div>
-            <div class="ds-rate ds-pending">累積中</div>
-            <div class="ds-sub">賽事的牌組紀錄尚未開始收集</div>
+            {#if tournReady}
+              <div class="ds-rate">{fmtWinRate(statsData.tournament.winRate)}</div>
+              <div class="ds-sub">{statsData.tournament.games} 場：{statsData.tournament.wins} 勝 {statsData.tournament.losses} 敗{#if statsData.tournament.draws > 0} {statsData.tournament.draws} 平{/if}</div>
+            {:else}
+              <div class="ds-rate ds-pending">累積中</div>
+              <div class="ds-sub">{statsData.tournament.since ? '自 ' + statsData.tournament.since + ' 起的賽事還沒有這副牌的紀錄' : '賽事的牌組紀錄尚未開始收集'}</div>
+            {/if}
           </div>
         </div>
-        <h4 class="ds-h4">對各牌組原型的勝率</h4>
+        <h4 class="ds-h4">對各牌組原型的勝率{#if tournReady}（休閒）{/if}</h4>
         {#if statsData.vsArchetype.length === 0}
           <p class="ds-msg">還沒有可以分類的對手牌組。累積幾場線上休閒對戰之後就會出現。</p>
         {:else}
@@ -2403,12 +2414,40 @@
             </table>
           </div>
         {/if}
+        {#if tournReady && statsData.tournament.vsArchetype.length > 0}
+          <h4 class="ds-h4">對各牌組原型的勝率（錦標賽）</h4>
+          <div class="ds-table-wrap">
+            <table class="ds-table">
+              <thead>
+                <tr><th>對手的牌組原型</th><th>場次</th><th>勝敗</th><th>勝率</th></tr>
+              </thead>
+              <tbody>
+                {#each statsData.tournament.vsArchetype as row (row.name)}
+                  <tr>
+                    <td class="ds-name">{row.name}</td>
+                    <td>{row.games}</td>
+                    <td>{row.wins} 勝 {row.losses} 敗{#if row.draws > 0} {row.draws} 平{/if}</td>
+                    <td class:ds-good={row.winRate !== null && row.winRate >= 0.55} class:ds-bad={row.winRate !== null && row.winRate <= 0.45}>{fmtWinRate(row.winRate)}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
         <ul class="ds-notes">
-          <li>這份統計<b>自 {statsData.since} 起計</b>，在那之前的對戰沒有紀錄、不會列入。</li>
-          <li>只計算線上休閒對戰；與電腦對戰、同一台裝置的雙人對戰都不列入。</li>
+          {#if tournReady}
+            <li>休閒的統計<b>自 {statsData.since} 起計</b>、錦標賽的統計<b>自 {statsData.tournament.since} 起計</b>，在那之前的對戰沒有紀錄、不會列入。</li>
+            <li>休閒只計算線上休閒對戰；與電腦對戰、同一台裝置的雙人對戰都不列入。錦標賽只計算已經結束的賽事。</li>
+          {:else}
+            <li>這份統計<b>自 {statsData.since} 起計</b>，在那之前的對戰沒有紀錄、不會列入。</li>
+            <li>只計算線上休閒對戰；與電腦對戰、同一台裝置的雙人對戰都不列入。</li>
+          {/if}
           <li>紀錄跟著這副牌走：修改牌組內容不會歸零，按 × 刪除才會一起消失。</li>
           {#if statsData.truncated}
             <li>⚠ 這副牌的場次較多，目前只統計最近 {statsData.scanCap} 場。</li>
+          {/if}
+          {#if tournReady && statsData.tournament.truncated}
+            <li>⚠ 這副牌參加過的賽事較多，錦標賽只統計最近 {statsData.tournament.scanCap} 場賽事。</li>
           {/if}
         </ul>
       {/if}

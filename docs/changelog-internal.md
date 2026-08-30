@@ -1,5 +1,68 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.277 — 套牌戰績【client 端 P3b】：🔍 的錦標賽欄改讀真資料
+
+BASE `9f500a55cf83daa8be3530ff01c8a163c6a60a23`（v6.276，遠端 main）。
+⚠⚠ **部署順序：v6.276（伺服器端）必須先上**，本版才送得出 `deckId`。
+反過來的話 client 送的欄位會被舊 server 的白名單丟掉（不會壞，但那段期間的賽事永遠算不進戰績）。
+
+### 做了什麼
+
+1. **三個報名入口都帶 `deck.id`**（`src/routes/game/+page.svelte`，全站枚舉後確認就是這三處）：
+   - `tournEnroll()` → `tApi('/register', …)`
+   - `tLateJoin()` → `tApi('/register-and-checkin', …)`
+   - `tPropose()` → `tApi('/propose', …)`
+   三支都已經有 `const deck = allDecks.find(d => d.id === tDeckId)` ⇒ **`deck.id` 一定拿得到**，
+   沒有「拿不到只好硬塞」的入口。`deckId` 一律**附加在請求體最後**，既有 key 與順序逐位元不變。
+2. **`src/lib/decks/deck-stats.ts`**：`tournament` 換成專屬介面 `DeckStatsTournament`
+   （多 `since` / `vsArchetype` / `events` / `scanned` / `truncated` / `scanCap`），
+   並新增**唯一判準出口** `deckStatsTournamentReady()`。
+3. **`/decks` 的 🔍 三態**：
+   - `status:'ok'` ＋ `since` 有值 ＋ `games>0` ⇒ 勝率／場次／對各原型（另一張表）
+   - `'not-collected'` ⇒「累積中」＋「自 {since} 起的賽事還沒有這副牌的紀錄」
+   - **舊伺服器**（回應沒有 `tournament.since`）⇒ **fail-open 退回「累積中」**，
+     且說明文字與 v6.267 **逐字相同**（畫面不會壞、也不顯示 0 勝 0 敗騙玩家）。
+
+### ⚠⚠ 絕不寫死版本號（第九種守衛安慰劑）
+
+畫面上的「自 v6.276 起計」**一律讀伺服器回的 `tournament.since`**，
+`deck-stats.ts` 與 `/decks` 都沒有任何 `v6.xxx` 字面量（守衛 C3／B4／突變 H4、H6 各自釘住）。
+
+### 效能紅線（實測，不是推論）
+
+- **`/decks` 載入請求數與 BASE 相同**：載入區段（`onMount` ＋ 全部 `$state(...)` 初始化）
+  的網路呼叫點集合逐字相同 —— `loadAllSets ×1 / loadDecksFromCloud ×1 / loadIndex ×1 /
+  onAuthStateChanged ×1 / signInAnonymously ×1 / syncDeckToCloud ×1`，`$effect` 兩版都是 0。
+  新增的 `tournReady` 是 `$derived`，只在**視窗已經開著**時算，且是純函式。
+- **Firestore 讀取次數不變**：三個改動檔的 Firestore 呼叫點逐字計數與 BASE 相同
+  （`/decks` 與 `deck-stats.ts` 的 `getDoc/getDocs/onSnapshot/setDoc` 全部是 0）。
+- `/api/deck-stats` 仍然**只在玩家點 🔍 時**才打（全檔 `fetchDeckStats(` 恰 1 次，在 `openDeckStats` 內）。
+- 報名路徑：請求體只多一個 key（實測 JSON 逐位元對照），沒有多一發請求、沒有多一次查詢。
+
+### 既有守衛的調整（Rule E：pin 死某一版 diff 的斷言是路障不是保護）
+
+`test-v6276` 有兩條斷言的內容是「**v6.276 那一版的 diff 長什麼樣**」，本版必然紅：
+
+| 條 | 原本 | 改成 | 為什麼不是放寬 |
+|---|---|---|---|
+| G1 尾 | `deepStrictEqual(tournament, {六個欄位})` | 只比**前六個欄位的值** ＋ 斷言它們仍排在**最前面** | 多了 key 順序這一條 ⇒ **更嚴** |
+| I1 | git ls-tree：`src/`＋`static/` 相對 BASE 只有 `version.ts` 不同 | 行為端兩條：①伺服器回應**完全沒有 `tournament`** 時 client 落回 `not-collected` 且 `winRate` 是 null；②`/decks` 仍留著「累積中」退路。原本的逐檔比對降為**診斷輸出**（會印出差異清單） | 原斷言是歷史事實的快照，會擋住之後**每一次** client 改動；替代品是不綁版本的行為端保護 |
+
+### 守衛 `scripts/test-v6277-deck-tournament-client.mjs`
+
+【0】掃描器自驗（含「harness 真的攔得到 payload」的正對照）／
+【A】三個入口**實跑**：`JSON.stringify(payload 去掉 deckId)` 與內嵌 BASE 快照**逐位元相同**，
+且 `deckId` 必須是最後一個 key ＋ 全站枚舉 ＋ client 產的 id 通過伺服器的 `DECK_ID_RE`／
+【B】`deck-stats.ts` 三態行為端（含「連 `tournament` 這個 key 都沒有」的極端）／
+【C】UI 三態 ＋ 模板內沒有寫死版本號／【D】載入請求數／【E】Firestore 呼叫點／
+【F】正對照（休閒兩欄逐字快照、v6.271 版面、`crypto.randomUUID()`）／
+【G】HEAD-FAIL 8 條**各自**紅 ＋ 5 條正對照（含「內嵌 BASE 快照沒抄錯」）／
+【H】9 個突變全部紅在指定位置／【I】自查在 test chain 裡。
+
+⚠ 相容性小陷阱（實際踩到）：`deck-stats.ts` 的 `normalize()` 被 `test-v6276` 的 G1 用
+**手寫 regex 剝 TS 註記**後 `new Function` 實跑 ⇒ 新增的箭頭函式**不可以帶回傳型別註記**
+（只認 `: Record<string, unknown>`），否則那支守衛直接 SyntaxError。已在該行寫明原因。
+
 ## v6.276 — 套牌戰績【伺服器端 P3a】：錦標賽勝率上線（TREGS／歸檔帶 deckId）
 
 BASE `4ce276453c998058f70a35778a6ab262fa679921`（v6.275，遠端 main）。純伺服器端，
