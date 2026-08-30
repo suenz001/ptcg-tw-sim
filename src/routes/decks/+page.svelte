@@ -23,7 +23,8 @@
   import { splitTwoCardStadiumEntries, mergeTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';
   //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
   //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
-  import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud } from '$lib/decks/cloud';
+  import { syncDeckToCloud, removeDeckFromCloud, loadDecksFromCloud,
+    cloudDecksUnchanged, recordCloudDecksRev, bumpCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
   // v6.267 套牌戰績：`/api/deck-stats` 的唯一出口（快取／防連點／哨兵判定都在裡面）
   import { fetchDeckStats, deckStatsHidden, type DeckStats } from '$lib/decks/deck-stats';
   import { loadFavorites, saveFavorites } from '$lib/decks/favorites';
@@ -109,9 +110,11 @@
     import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(renum));
     if (firebaseUser && !firebaseUser.isAnonymous) {
       const uid = firebaseUser.uid;
+      let orderPushed = false;  // v6.273
       renum.forEach((d, idx) => {
-        if (arr[idx]?.order !== idx) syncDeckToCloud(uid, d).catch(() => { /* best-effort */ });
+        if (arr[idx]?.order !== idx) { orderPushed = true; syncDeckToCloud(uid, d).catch(() => { /* best-effort */ }); }
       });
+      if (orderPushed) void bumpCloudDecksRev(uid);  // v6.273：order 補寫也是雲端寫入（整批一次）
     }
   }
   // v5.798：新增 / 複製 / 匯入產生的新牌組一律置於最頂（越新越頂）。
@@ -470,6 +473,7 @@
     syncStatus = 'syncing';
     try {
       await withTimeout(syncDeckToCloud(firebaseUser.uid, deck));
+      void bumpCloudDecksRev(firebaseUser.uid);  // v6.273：此路徑目前無人呼叫（v5.114 改手動存檔），防未來啟用時漏 bump
       syncStatus = 'synced';
     } catch (e) {
       syncStatus = 'error';
@@ -566,6 +570,7 @@
     syncStatus = 'syncing';
     try {
       await withTimeout(removeDeckFromCloud(firebaseUser.uid, deckId));
+      void bumpCloudDecksRev(firebaseUser.uid);  // v6.273：刪除也是雲端牌組寫入
       syncStatus = 'synced';
     } catch (e) {
       syncStatus = 'error';
@@ -582,6 +587,8 @@
       for (const d of dirtyList) {
         await withTimeout(syncDeckToCloud(firebaseUser.uid, d));
       }
+      // v6.273：有實際寫入才 bump 雲端牌組 rev（整批一次，不是每副一次）
+      if (dirtyList.length > 0) void bumpCloudDecksRev(firebaseUser.uid);
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
       dirtyDeckIds = new Set();  // 清空 dirty（紅點消失）
       // v5.330：常用卡牌一併存檔；v5.331 改 best-effort — 常用存檔失敗不影響牌組存檔結果
@@ -612,6 +619,7 @@
         import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
         activeId = decks[0]?.id ?? null;
         dirtyDeckIds = new Set();  // v5.114：cloud 已是 source of truth，清 dirty
+        void recordCloudDecksRev(firebaseUser.uid);  // v6.273：手動全拉後也記 rev（下次進頁可跳過）
       }
       // v5.330：常用卡牌一併讀取；v5.331 改 best-effort — 常用讀取失敗不影響牌組讀取結果
       let favMsg = '';
@@ -677,11 +685,20 @@
       // Then fetch cloud decks and merge
       try {
         syncStatus = 'syncing';
-        const cloud = await withTimeout(loadDecksFromCloud(user.uid));
+        // v6.273 Firestore 讀取減量：先用 1 讀（users/{uid}/meta/decks）判斷雲端牌組
+        //   自上次全拉後有沒有變；沒變且本地牌組非空 → 直接沿用上次 merge 存進
+        //   localStorage 的牌組，省掉整批 getDocs（每副牌 1 讀）。任何不確定（首次進站/
+        //   換裝置/換帳號/隱私模式/meta 不存在/讀取失敗）一律回 false，走原本的全拉＋merge。
+        const cloudUnchanged = await cloudDecksUnchanged(user.uid, local.length);
+        const cloud = cloudUnchanged ? [] : await withTimeout(loadDecksFromCloud(user.uid));
 
-        if (cloud.length === 0 && local.length > 0) {
+        if (cloudUnchanged) {
+          // 雲端沒變 → localStorage 裡就是上次 merge 的最新結果（此分支只讀不寫）
+          decks = sortDecks(local);
+        } else if (cloud.length === 0 && local.length > 0) {
           // First-time cloud: push existing local decks up
           for (const d of local) await syncDeckToCloud(user.uid, d);
+          void bumpCloudDecksRev(user.uid);  // v6.273：首次上傳完成 → 建 meta
           decks = local;
         } else if (cloud.length > 0) {
           // Merge by updatedAt: newer wins
@@ -693,6 +710,7 @@
           decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先
           // Persist merged result locally
           import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
+          void recordCloudDecksRev(user.uid);  // v6.273：全拉完成 → 記下當下雲端 rev
         } else {
           decks = local;
         }

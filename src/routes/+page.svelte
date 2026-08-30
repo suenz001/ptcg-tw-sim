@@ -10,6 +10,8 @@
   import { hardRefreshNow } from '$lib/hard-refresh';   // v6.160 清快取唯一實作（與錦標賽報到共用）
   // v6.264 較舊 changelog 條目的補充說明「展開才取得」（純函式抽在 lib，守衛可直接執行）
   import { CHANGELOG_BODIES_FILE, isValidChangelogVer, pickChangelogBody } from '$lib/changelog-lazy';
+  // v6.273 首頁 changelog override 的 localStorage TTL 快取（省最大宗 Firestore 讀取）
+  import { loadHomeChangelogOverride } from '$lib/home-changelog-cache';
   import HomeVideo from '$lib/HomeVideo.svelte';    // v6.166 首頁最新影片（lazy facade，點擊前不建 iframe）
   import homeVideoData from '$lib/home-video.json';  // v6.166 建置時寫入的最新影片（見 scripts/fetch-latest-video.mjs）
 
@@ -111,12 +113,21 @@
       const { signInAnonymously, onAuthStateChanged } = authMod;
       const { doc, getDoc } = firestore;
       // v5.755：首頁更新記錄可由 admin 後台編輯(Firebase config/homeChangelog,兩站共用);讀到才覆蓋程式內建。
-      getDoc(doc(db, 'config', 'homeChangelog')).then((snap) => {
-        if (snap.exists()) { const h = snap.data()?.html;
-          // v6.100：後台 override 的內容若也貼了 __BASE__ 佔位（例如複製了封存連結），一併換掉，
-          //   否則連結會變成字面 __BASE__/... 而 404。
-          if (typeof h === 'string' && h.trim()) changelogOverride = h.replaceAll('__BASE__', base); }
-      }).catch(() => { /* 沒設定 → 用程式內建 */ });
+      // v6.273：加 localStorage TTL 快取（6 小時）—— 這份 override 幾乎沒在用（多數時間文件
+      //   根本不存在），卻是全站最大宗的 Firestore 讀取（每次首頁載入 1 讀、不分匿名）。
+      //   TTL 內直接用快取（含「確認過不存在」的負結果，0 讀）；localStorage 不可用（隱私
+      //   模式）→ 照舊每次讀。admin 之後若改/新增 override：新訪客與快取過期者立即生效，
+      //   其餘最慢 6 小時。
+      loadHomeChangelogOverride(async () => {
+        const snap = await getDoc(doc(db, 'config', 'homeChangelog'));
+        if (!snap.exists()) return null;
+        const h = snap.data()?.html;
+        return typeof h === 'string' && h.trim() ? h : null;
+      }).then((h) => {
+        // v6.100：後台 override 的內容若也貼了 __BASE__ 佔位（例如複製了封存連結），一併換掉，
+        //   否則連結會變成字面 __BASE__/... 而 404。（快取存原始字串，替換一律在這裡做）
+        if (h) changelogOverride = h.replaceAll('__BASE__', base);
+      }).catch(() => { /* 沒設定/讀取失敗 → 用程式內建 */ });
       const u = onAuthStateChanged(
         auth,
         (usr) => {

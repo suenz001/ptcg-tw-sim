@@ -16,7 +16,7 @@
   import { getBroadcastConfig, type BroadcastConfig } from '$lib/game/broadcast';
   import { loadDecks, saveDecks, sortDecks } from '$lib/decks/storage';
   // v4.925：雲端 sync — 同帳號切換時 game 頁需重載牌組
-  import { loadDecksFromCloud } from '$lib/decks/cloud';
+  import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
   import { validateDeck } from '$lib/decks/validation';
@@ -4549,18 +4549,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (u && !u.isAnonymous) {
         try {
           const local = loadDecks();
-          const cloud = await loadDecksFromCloud(u.uid);
-          if (cloud.length > 0) {
-            const merged = new Map<string, Deck>();
-            for (const d of [...local, ...cloud]) {
-              const existing = merged.get(d.id);
-              if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
-            }
-            decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先（對戰選牌組與編輯器一致）
-            saveDecks(decks);
+          // v6.273 Firestore 讀取減量：1 讀 meta 判斷雲端牌組沒變 → 直接用 localStorage
+          //   （與 /decks 共用同一套 rev 記錄）；任何不確定一律回 false 走原本的全拉＋merge。
+          if (await cloudDecksUnchanged(u.uid, local.length)) {
+            decks = sortDecks(local);
           } else {
-            // cloud 空 → 用 local（保持原樣，不改動）
-            decks = local;
+            const cloud = await loadDecksFromCloud(u.uid);
+            if (cloud.length > 0) {
+              const merged = new Map<string, Deck>();
+              for (const d of [...local, ...cloud]) {
+                const existing = merged.get(d.id);
+                if (!existing || d.updatedAt > existing.updatedAt) merged.set(d.id, d);
+              }
+              decks = sortDecks([...merged.values()]); // v5.352：自訂順序優先（對戰選牌組與編輯器一致）
+              saveDecks(decks);
+              void recordCloudDecksRev(u.uid);  // v6.273：全拉完成 → 記下當下雲端 rev
+            } else {
+              // cloud 空 → 用 local（保持原樣，不改動）
+              decks = local;
+            }
           }
         } catch {
           // cloud 不可用 → fallback localStorage（不洗成空）

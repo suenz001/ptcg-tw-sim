@@ -1,5 +1,71 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.273 — Firestore 讀取減量【P2：client 端三大宗】（玩家零感，不寫首頁 changelog）
+
+BASE `d7761cce38ff2352b766763324ede99ba833067e`（v6.272，遠端 main）。
+站長：「每日讀取幾乎都是 45000 到 48000 左右」（免費額度 50,000/日，天天如此）。
+v6.272 已做 admin 端止血；本版處理 client 端三大宗（純前端，**不需要伺服器改動**）。
+
+### 1. `config/homeChangelog`（最大宗：每次首頁載入 1 讀、不分匿名 ≈ 1.2萬~2萬/日）
+- 實查（Firestore REST，2026-08-30）：**這份 admin override 文件根本不存在**（404 NOT_FOUND，
+  非 403 → 規則允許讀、文件不存在）。全站每天花上萬次讀取去「確認它不存在」。
+- 修法：`src/lib/home-changelog-cache.ts`（新檔）— localStorage TTL 快取 **6 小時**，
+  含「確認過不存在」的**負結果**。`+page.svelte` 接線改走 `loadHomeChangelogOverride()`。
+- 取捨：admin 之後若改/新增 override，新訪客與快取過期者立即生效，其餘最慢 6 小時。
+  override 從未被使用過（文件不存在），故玩家零感、不寫首頁 changelog。
+- 防呆：隱私模式（localStorage throw）→ 照舊每次讀；時鐘倒退（at 在未來）→ 視為過期
+  （v6.198 教訓）；fetch 失敗不寫快取。快取存原始字串，`__BASE__` 替換仍在使用端。
+
+### 2. `users/{uid}/decks` 整批 getDocs（第二大宗：每副牌 1 讀，30 副＝30 讀/次）
+- 用途查證：進 /decks（**含匿名**）與對戰頁（Google）都整批拉 → 與 localStorage merge
+  by updatedAt（跨裝置同步＋首次上雲 push＋localStorage 遺失復原）。**匿名玩家有雲端牌組**
+  （cloud 空且 local 有時會自動 push 上雲）⇒ 不能直接跳過匿名，改用 meta 方案一體涵蓋。
+- 修法：`users/{uid}/meta/decks` 單一文件記 `rev`（每次雲端牌組寫入後 bump）；client 把
+  「上次全拉時看到的 rev」記在 localStorage（`ptcg_decks_cloud_rev_v1`，含 uid 綁定）。
+  進頁時 1 讀 meta：rev 沒變（且本地牌組非空）→ 跳過整批 getDocs。
+- ⚠⚠ 牌組安全（本輪最高風險）：**所有邊界一律 fail-open 整批全拉** —— 無本地 rev（首次/
+  換裝置/隱私模式）、本地牌組空（快取損毀）、換帳號（uid 不符）、meta 不存在/讀取失敗。
+  跳過分支只沿用 localStorage、零雲端寫入。meta 放**獨立子集合** `meta/`（不是 `decks/`
+  底下）⇒ 舊版 client 的 getDocs 永遠看不到它，不會把 meta 誤當一副牌。
+- bump 佈點（decks/+page.svelte）：saveAllDecksToCloud（整批 1 次）、dropDeck、首次上雲、
+  persistDeckOrder（整批 1 次）、actualPushDeck（目前無人呼叫，防未來）。全拉後
+  `recordCloudDecksRev`：meta 已有→0 寫只記本地；meta 缺→一次性遷移建 meta（1 寫）；
+  **雲端空集合不建 meta**（純過路匿名訪客零額外讀寫）。
+- 已知取捨：舊 client（混用期）寫入不 bump meta → 其他裝置最慢到下次「rev 有變」才看到
+  （不會丟資料：進頁比對仍每次執行，任何 bump 都會觸發全拉）。
+
+### 3. `config/broadcast`（每場線上對局每端 1 讀 ≈ 0.3k~1k/日）
+- 實查：文件存在且站長**活躍使用中**（2026-08-30 當天才更新過「強制更新」公告）。
+- 修法：10 分鐘**記憶體**快取（不碰 localStorage）。F5/新分頁立即生效；已開著的分頁
+  最慢 10 分鐘後的下一場生效。讀取失敗不快取（v5.481 容錯語意不變）。
+
+### 4. 全站 client 端 Firestore 讀取點盤點（rev-pinned git grep）
+① `+page.svelte:114` homeChangelog（本版修）② `cloud.ts:38` decks getDocs（本版修）
+③ `broadcast.ts:19`（本版修）④ `favoritesCloud.ts:19` — 只在 /decks 手動「📥 從雲端讀取」
+按鈕內，量小不動 ⑤ `tracking.ts:82` — 僅 Google 會員且 24h throttle，量小不動
+⑥ `+page.svelte:207/246` feedback modal onSnapshot ×2 — 開 modal 才觸發，量小不動
+⑦ `room.ts` 多處 — 正式站 build 被 `oracleSwapPlugin`（vite.config.js）換成 room-oracle
+（走 Oracle fetch），dead path 不計 ⑧ `admin/feedbacks/+page.svelte` — admin 專用（v6.272 已管）。
+
+### 5. 量化（守衛 spy 實測，非推估；scripts/test-v6273-firestore-client-read-cache.mjs【G】）
+- 典型 session（首頁→/decks→對戰(1 場線上)→/decks、Google 30 副、快取暖）：
+  **修前 92 讀（1＋30＋31＋30）→ 修後 4 讀（0＋1＋2＋1），省 95.7%**。
+- 匿名 1 副同 session：4 讀 → 3 讀（對戰頁匿名本就 0 讀牌組，維持零讀取）。
+- 全站估算：homeChangelog ~1.2萬~2萬/日 → 快取暖後降 ~9 成（TTL 6h ⇒ 每裝置每日 ~1-2 讀）；
+  decks ~1萬~2.5萬/日 → 每次進頁 N 讀變 1 讀（多牌組玩家降 9 成以上）。
+  預估總量 45k~48k/日 → **約 8k~15k/日**（首次訪客/冷快取仍要讀，無法歸零）。
+- 寫入額度影響：bump ≈ 每次「存檔/刪除/順序調整」+1 寫（估 +0.5k~2k/日）＋ 老帳號一次性
+  遷移（每 uid 1 寫，攤在升版後首週）。相對免費額度 20,000/日安全；無變動 session 0 寫
+  （守衛 G1 斷言 writes=0）。
+
+### 6. 守衛
+`scripts/test-v6273-firestore-client-read-cache.mjs`（58 條，已入 package.json test chain）：
+【A】快取行為 8 條（命中/過期/損毀/隱私模式/時鐘倒退/失敗不快取/正對照）【B】首頁接線實跑
+【C】cloud helpers 12 條（五種 fail-open 邊界＋讀寫次數）【D】/decks 段實跑 8 條（含「跳過分支
+牌組不消失」「雲端掛掉不洗空」）【E】對戰頁 4 條（含匿名零讀取）【F】broadcast 5 條
+【G】session 量化（修後絕對值 history-free；BASE 對照淺複製時 SHALLOW-SKIP）【H】HEAD-FAIL
+6 條（BASE 上各自紅）【I】突變 6 條（含 I3「跳過分支洗空牌組」必須紅）。
+
 ## v6.272 — Firestore 讀取減量【P1：admin 端止血】（純伺服器端，玩家零改動）
 
 BASE `866c4dcf61d876dd06c45e1215a50f4a4ad4f910`（v6.271，遠端 main）。
