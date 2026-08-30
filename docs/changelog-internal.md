@@ -1,5 +1,153 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.272 — Firestore 讀取減量【P1：admin 端止血】（純伺服器端，玩家零改動）
+
+BASE `866c4dcf61d876dd06c45e1215a50f4a4ad4f910`（v6.271，遠端 main）。
+動到的檔案只有 `oracle-admin/server_admin_patch.js`（v1.30 → v1.31）、`oracle-admin/admin.html`、
+`src/lib/version.ts`、`package.json`、本檔、新守衛，以及 `scripts/test-v6219-admin-stats-users-cache.mjs`
+（見第 6 節）。**首頁 changelog 不寫**（玩家看不到 admin 後台）。
+
+### 0. 站長回報（逐字）
+> 「我的 firebase 資料量已經逼近免費額度的上限…減少對 firebase 的依賴，避免被收費」
+
+站長補充確認：**吃緊的是「讀取數」，不是儲存量**。
+
+### 1. ⭐⭐⭐ 先把官方計費規則查清楚（Rule 29 的精神：動之前先查文件）
+出處 <https://cloud.google.com/firestore/pricing>（2026-08-30 查證，逐字引用）：
+
+| 主題 | 官方原文 | 對我們的意義 |
+|---|---|---|
+| 免費額度 | 「Free tier … **Document reads 50,000 per day**」 | 每天 5 萬次，超過就收費 |
+| 每次查詢底價 | 「There is a **minimum charge of one document read** for each query that you perform」 | 空查詢也要 1 次 |
+| `count()` 計費 | 「For aggregation queries such as count(), sum(), and avg(), you are charged for index entries read … you are charged **one read operation for each batch of up to 1000 index entries**」；「count() operations that read between 0 and 1000 index entries are billed for **one document read**」 | 一間房訊息 < 1000 則 ⇒ **一次 count() 就是 1 次讀取** |
+| `offset()` | 「when you send a query that includes an offset, you are charged a read for **each skipped document**」 | ⚠⚠ **Firestore 絕不可以照 Mongo 那樣 skip 分頁**，那比全撈還貴 |
+
+⚠⚠ **Admin SDK 不豁免**。它繞過的是 **Firestore 安全規則（firestore.rules）**，
+**讀取照樣計費、照樣吃免費額度**。原本 `server_admin_patch.js` 的註解寫
+「admin SDK 不吃 client quota」——**那句話是錯的**，本版把它更正並附上官方出處。
+
+### 2. 掃出來的無上限 Firestore 讀取（全站，`git grep` 指定 rev 掃 BASE）
+
+| # | 位置（v6.271 行號） | 觸發時機 | 有無上限 | 估算讀取量 | 本版處置 |
+|---|---|---|---|---|---|
+| 1 | `server_admin_patch.js:637` | admin 點「🔥 Firebase 對戰」的 lobby/playing/**ended** | **無** | = 該 status 的房數 | ✅ 加上限 300 |
+| 2 | `:638` | 同上，「全部」 | **無** | = 整個 rooms collection | ✅ 加上限 300 |
+| 3 | `:656` | 同上，**逐房** `count()` messages | 無（跟著 1/2 的筆數） | **N 次** | ✅ 預設不算（`?msgCounts=1` 才算） |
+| 4 | `:340` `/api/admin/stats` | 每開一次「📊 總覽」 | **無** | = feedbacks 總數 | ✅ 改 5 分鐘快取 |
+| 5 | `:819` `/api/admin/firebase/feedback` | 每開一次「💬 意見回饋」 | **無** | = feedbacks 總數 | ✅ 同上快取（＋2000 筆安全上限） |
+| — | `:801` / `:2048` / `:2141`（單一玩家的 decks／feedbacks） | 查單一玩家 | 天然有界（單人） | 個位數～數十 | 不動 |
+| — | `:366` `/api/admin/firestore-write-audit` | 站長手動按「執行 Audit」 | 全部走 `count()` | 約 5 ×（collection 數 + 3） | 不動（本來就便宜） |
+| — | `:697` messages 列表 | 點某一房的 💬 | `limit(500)` | ≤ 500 | 不動 |
+| — 玩家端 | `src/lib/game/room.ts:1012/1035/1268`、`src/routes/admin/feedbacks/+page.svelte:66`、`src/lib/decks/cloud.ts:38` | 玩家操作 | `limit(50/80/100/MESSAGES_LIMIT)`／單一使用者 | 小 | **零改動** |
+
+⇒ **沒有第 6 個無上限的讀取點**。Fable 5 指認的 4 個位置（637/638/656/340）與第 5 個（819）
+**行號全部正確**，「admin SDK 不吃 client quota 是錯的」這一點也正確；
+唯一需要補正的是它自陳「未查官方文件」的 `count()` 計費規則 —— 本版已查證並逐字引用。
+
+### 3. 修法
+
+#### 3a. `/api/admin/firebase/rooms` 加上限（沿用 v1.22／v6.240 Oracle 分頁的做法）
+沿用的是 **「哨兵欄位 ＋ 全量真值 counts ＋ 常數寫在 handler 內」** 這三件事，不是重造一套：
+
+* `capped: true`（新伺服器才有；舊 `admin.html` 拿不到就照舊行為）
+* `truncated` / `matchedTotal`（**這個篩選底下的全量真值**，來自本來就在打的 3 發 `count()`）
+* `orderedBy`（`updatedAt` / `createdAt` / `__name__`）
+* 常數 `FB_ROOMS_CAP_DEFAULT` / `FB_ROOMS_CAP_MAX` **寫在 handler 內部**
+  （v6.229／v6.240 教訓：既有守衛把 `app.get(...)` 整段抽出來跑，依賴外層變數會抽出空殼）
+
+⚠ 與 Oracle 那支**唯一不同**：Firestore 不能 `offset` 分頁（見上表），所以這裡是**只用 limit
+的「最新 N 筆」**，不是真分頁；要看更多用 `?cap=`（硬上限 1000）。
+
+**上限 300 的依據**：`admin.html` 每頁 50 筆 ⇒ 300 = 6 頁；300（清單）+ 3（counts）≈ **303 次
+讀取／點一次**，佔每日 5 萬免費額度的 **0.6%**，站長一天點 100 次也只用掉 ~60%。
+（v0.20 之前本來就是 `limit 300`，是那次「admin SDK 不吃 quota」的誤解把它拿掉的。）
+
+⚠ 帶 `where('status')` 又要 `orderBy('updatedAt')` 需要複合索引 `{status,updatedAt}`，
+而 `firestore.indexes.json` 只宣告了 `{status,createdAt}` ⇒ **依序退階**
+`updatedAt → createdAt → 無排序`。退階**不會多花讀取**（缺索引是 `FAILED_PRECONDITION`，
+在讀到任何文件之前就被拒絕），而退到「無排序」等於**依房號取樣**，畫面上一定要講出來。
+
+#### 3b. 截斷怎麼標明（⭐ 行為端，不是字串存在）
+`admin.html` 的 `renderRoomsTab` 多畫一列 `#firebase-rooms-notice`（**只有 Firebase 分頁有**）：
+* 被截斷 → 「⚠ 只顯示最新 300 筆（此篩選共 4,992 筆），**這不是全部**。」
+* 沒截斷 → 「✅ 這個篩選底下的 N 筆已全部顯示。」（正對照，不當狼來了）
+* `orderedBy === '__name__'` → 「⚠ Firestore 缺複合索引，這 300 筆是**依房號取樣**、不是最新的那幾筆。」
+* 右側一顆開關：「💬 訊息數：關（點我計算，每房各 1 次讀取）」
+
+守衛用 **cheerio 對真的渲染出來的 HTML 做 DOM 斷言**（v6.154 教訓：22 條守衛全綠但分頁打不開）。
+
+#### 3c. 逐房 `count()` 改成預設不算
+`admin.html` 自 v0.3 起對 `messageCount === undefined` **本來就有退路**（畫成「💬 訊息」按鈕，
+點進去才真的讀那一房的訊息，那支有 `limit(500)`）⇒ 關掉它不會有壞掉的畫面。
+要看數字時按上面那顆開關，會重抓並帶 `?msgCounts=1`，而且**只對已經套過上限的那 ≤300 間房算**。
+
+#### 3d. feedbacks 改快取（沿用 v1.19 `getUsersStatsCached`）
+沿用的是 **「結果快取 ＋ single-flight ＋ 過期先回舊值背景刷新 ＋ 回應帶 `at` 讓畫面標資料時間」**
+這一整套，連 TTL 都取同一個值 **5 分鐘**（`USERS_STATS_TTL_MS` 的先例）。
+**查詢與欄位映射一字未動**，只是「什麼時候讀」改變。
+
+⚠ 與 users 統計不同的一點：feedbacks **admin 自己會改**。所以
+`PUT …/feedbacks/:id/reply` 與 `DELETE …/feedbacks/:id` 兩支都呼叫 `invalidateFeedbacksCache()`
+—— 站長寫完回覆／刪完必須立刻看到，不能等 TTL。
+⚠ `/api/admin/stats` 的 `total` / `new24h` **仍走 `count()`**（各 1 次讀取、永遠精確、算法一字未動），
+只有需要 client-side filter 的「未回覆數」是快取值，畫面上標了資料時間。
+
+### 4. ⭐⭐ 量化（spy 實測，不是推估；量測腳本＝新守衛的第 ⑪ 節，Rule 32）
+fixture：5,000 間 Firebase 房（其中 4,992 間 ended）、137 則 feedback。
+儀器依**官方計費規則**計數（查詢回幾份算幾次、最低 1；`count()` 每 1000 索引項 1 次、最低 1；
+缺索引的查詢 0 次）。
+
+| admin 動作（點一次） | 修前 | 修後 | 省下 |
+|---|---|---|---|
+| 🔥 Firebase 對戰「✅ 已結束」 | **9,991** | **307** | 96.9% |
+| 🔥 Firebase 對戰「全部」 | **9,991** | **307** | 96.9% |
+| 📊 總覽（feedback 段）第 1 次 | 139 | 139 | 0% |
+| 📊 總覽（feedback 段）第 2 次起（5 分鐘內） | 139 | **2** | 98.6% |
+| 💬 意見回饋 第 1 次 | 137 | 137 | 0% |
+| 💬 意見回饋 第 2 次起（5 分鐘內） | 137 | **0** | 100% |
+
+⚠ 修前那個 9,991 是 `2 × N`（N = 已結束房數），而 ended 房**永久保留** ⇒ 只會越長越大、無上界；
+修後有硬上界 303。⚠ 這個 fixture 的 N 是我設的，**線上真正的 N 我量不到**（沒有正式站的
+Firestore 存取）—— 但「無上界 vs 303」這個結論與 N 無關。
+
+### 5. 不可破壞（逐項證明）
+* **錦標賽逐位元未動**：從第一支 `/api/tournament` 端點到檔尾（241,958 字元）
+  `sha256 = 34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c`，
+  與 v6.271 相同（內嵌在守衛裡，淺複製下也在守；並附「多一個空白就不同」的自我驗證）。
+  v6.269 既有的 clientdiag 區塊 sha `14011f93…` 也維持不變。
+* **玩家端零改動**：`git ls-tree -r` 逐檔 blob 雜湊比對 `src/` + `static/`，
+  只有 `src/lib/version.ts` 不同（守衛第 ⑩ 節；淺複製時 `shallowSkip`）。
+* **不刪任何資料**：本版沒有新增任何 `delete` / `deleteMany` / TTL。
+* **admin 數字不變**：三狀態 counts 仍是全量真值（守衛用 4 種查詢各驗一次）；
+  未回覆數與修前算法逐一致（守衛自己算一遍當正對照）。
+
+### 6. 守衛
+`scripts/test-v6272-firestore-read-reduction.mjs`（**42 條**，已進 `package.json` 的 test chain）。
+對真 BASE blob（v6.271）跑：**34 紅 / 8 綠**，紅的各自紅；
+綠的那 8 條全部是「不變式」（counts 全量真值、錦標賽 sha256 ×2、玩家端零改動、版本、行尾、
+以及兩條量測基準 —— 它們本來就是在量 BASE 的行為）。
+突變測試 7 個（M1 拿掉 `.limit(_cap)`／M2 訊息數改成永遠算／M3 `truncated` 寫死 false／
+M4 `matchedTotal` 謊報成清單長度／M5 TTL 改 0／M6 把提示從 `innerHTML` 拿掉／
+M7 前端拿掉 `msgCounts` 參數），**全部紅在指定的那一條**，沒有 0 紅的。
+
+⚠ 順帶修一支既有守衛：`scripts/test-v6219-admin-stats-users-cache.mjs` 把 `/api/admin/stats`
+的 handler 抽出來實跑，而 handler 現在多依賴一個外層 helper `getFeedbacksCached`
+⇒ 沒注入的話會 `ReferenceError`、被 handler 自己的 `try/catch` 吞掉、`feedback` 變成 `{ error }`，
+`unreplied` 就成了 `undefined`（完整 `npm test` 第 542 步就是這樣抓到的）。
+本版把它注入，**資料仍只有 `mkFirestore` 那一份 fixture ⇒ `unreplied` 的判準一字未改**，
+並補一條新斷言：意見回饋的 `total` / `new24h` 每一發都要重打 `count()`（＝不可以連它們也被快取掉）。
+
+完整 `npm test`：**602 步全綠**（分批跑；`test-v6170` 單支 90 秒、`test-v6237/6238` 各約 100 秒）。
+`tsc --noEmit`：**TS2304 = 0**（只剩沙盒本來就有的兩個環境錯：缺 `.svelte-kit/tsconfig.json`、
+repo 根目錄的 `write_v2306.cjs` 未終止 template literal，兩者在 BASE 上也一樣）。
+
+### 7. 還沒做的（P2，留給下一版）
+* Firebase 的休閒對戰本身（`src/lib/game/room.ts` 的 `onSnapshot`）是玩家端讀取的大宗，
+  但**本版一個字都沒動**（Rule 30：不拿玩家做實驗）。要動之前得先量「玩家端一天到底幾次讀取」。
+* `firestore.indexes.json` 沒有 `{status,updatedAt}` 複合索引。加了可以讓 status 篩選走最精確的
+  排序，但那要站長跑 `firebase deploy --only firestore:indexes` ——
+  **本版不加**（未部署的索引宣告只會讓人以為有），改成退階＋畫面誠實標示。
+
 ## v6.271 — 牌組編輯器左欄「我的牌組」太窄（桌機牌組名稱只看得到 2 個字）
 
 BASE `9254f2ac8ddc6dfc51706b13fb386374b0000185`（v6.270，遠端 main）。本版只動 `/decks` 的 CSS。

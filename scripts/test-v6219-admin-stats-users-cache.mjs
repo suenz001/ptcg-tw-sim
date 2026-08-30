@@ -145,14 +145,24 @@ function mkRes() { const r = { body: null, code: 200 }; r.json = (o) => { r.body
 function mkMongo(counter) {
   return { collection: (name) => ({ countDocuments: async () => { counter.n++; return name === 'messages' ? 42 : 10; } }) };
 }
-function mkFirestore() {
+function mkFirestore(counter) {
   return { collection: (name) => {
     const o = {};
     o.where = () => o;
-    o.count = () => ({ get: async () => ({ data: () => ({ count: name === 'feedbacks' ? 9 : 7 }) }) });
+    o.count = () => ({ get: async () => { if (counter && name === 'feedbacks') counter.n++; return { data: () => ({ count: name === 'feedbacks' ? 9 : 7 }) }; } });
     o.get = async () => ({ docs: [{ data: () => ({}) }, { data: () => ({ reply: 'x' }) }, { data: () => ({ reply: null }) }] });
     return o;
   } };
+}
+// v6.272：/api/admin/stats 的「未回覆數」改走 getFeedbacksCached()（Firestore 讀取減量）。
+//   ⚠ handler 現在多依賴這一個外層 helper ⇒ 這裡要一起注入，否則抽出來的 handler 會 ReferenceError
+//   被自己的 try/catch 吞掉、feedback 變成 { error }（本檔 2026-08-30 就是這樣抓到的）。
+//   ⭐ 資料仍**只有 mkFirestore 這一份 fixture**，unreplied 的口徑判準因此完全沒有變。
+function mkFeedbacksCached(fs) {
+  return async () => {
+    const snap = await fs.collection('feedbacks').get();
+    return { items: snap.docs.map((d) => d.data()), truncated: false, at: Date.now() };
+  };
 }
 
 await T('①②④ handler 實跑：冷啟掃 5 頁口徑正確；第二發不重掃且快；mongo/feedback 每發即時（②在 BASE 必紅）', async () => {
@@ -160,10 +170,12 @@ await T('①②④ handler 實跑：冷啟掃 5 頁口徑正確；第二發不�
   const auth = makeAuthStub({ pages: 5, perPage: 100, pageDelay: 30, nowRef });
   const env = helpersSrc ? buildHelpers(auth, Date) : { getUsersStatsCached: undefined };
   const dbCalls = { n: 0 };
-  const mk = new Function('db', 'fbInitialized', 'admin', 'adminDb', 'adminAuth', 'getUsersStatsCached', 'console',
+  const fbCounts = { n: 0 };                    // v6.272: feedbacks 的 count() 發數（total / new24h）
+  const fs = mkFirestore(fbCounts);
+  const mk = new Function('db', 'fbInitialized', 'admin', 'adminDb', 'adminAuth', 'getUsersStatsCached', 'getFeedbacksCached', 'console',
     '"use strict"; return (' + handlerSrc + ');');
   const handler = mk(mkMongo(dbCalls), true, { firestore: { Timestamp: { fromMillis: (m) => m } } },
-    mkFirestore(), auth, env.getUsersStatsCached, console);
+    fs, auth, env.getUsersStatsCached, mkFeedbacksCached(fs), console);
 
   const res1 = mkRes();
   const t0 = Date.now();
@@ -192,6 +204,10 @@ await T('①②④ handler 實跑：冷啟掃 5 頁口徑正確；第二發不�
   }
   // ④ mongo/feedback 不被快取波及：第二發仍即時重查
   assert.strictEqual(dbCalls.n, 10, '第二發也要打滿 5 個 mongo count（對戰統計必須維持即時）');
+  // v6.272：意見回饋的 total / new24h **仍是即時的 count()**（只有「未回覆數」走快取）
+  //   ⇒ 第二發必須再打 2 發 count()。少了就是有人把整段 feedback 也快取掉了。
+  assert.strictEqual(fbCounts.n, 4, 'feedbacks 的 total/new24h 應每發都重打 2 個 count()（實得 ' + fbCounts.n + '）');
+  assert.strictEqual(res2.body.feedback.unreplied, 2, '第二發的未回覆數口徑不可變');
 });
 
 // ── ⑤ admin.html 契約 ──

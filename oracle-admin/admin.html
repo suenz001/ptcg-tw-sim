@@ -1949,7 +1949,7 @@ async function loadOverview() {
       ※ 拆分：Firebase ${fb.total ?? 0} 場 / Oracle ${o.total ?? 0} 場 · Oracle 累計訊息：${o.messages ?? 0}
     </div>
 
-    <div class="stat-section-label">💬 意見回饋</div>
+    <div class="stat-section-label">💬 意見回饋${fbk.unrepliedAt ? '<span style="font-weight:400;font-size:.78rem;color:#9aa3b0;margin-left:8px;">未回覆數資料時間 ' + new Date(fbk.unrepliedAt).toLocaleString('zh-TW') + '（最多 5 分鐘更新一次；意見總數／24h 新增仍為即時值）</span>' : ''}</div>
     ${fbk.enabled === false || fbk.error ? `<div class="empty">${fbk.error || 'Firebase feedbacks 未初始化'}</div>` : `
       <div class="stats-grid">
         <div class="stat-card"><div class="stat-label">意見總數</div><div class="stat-value">${fbk.total ?? '?'}</div></div>
@@ -2035,6 +2035,11 @@ window.runFirestoreAudit = async function() {
 let oracleRoomsRange = '7d';     // '7d' | '30d' | '90d' | 'all'
 let oracleRoomsSearch = '';      // 送到伺服器的關鍵字（分頁後本機搜尋只搜得到當前這頁）
 let oracleRoomsSrv = null;       // 伺服器回的 { total, page, pageSize, totalPages }；null＝舊伺服器
+// v6.272：Firebase 房間清單改成伺服器端**有上限**（Firestore 讀取要錢，見 server_admin_patch v1.31）。
+//   firebaseRoomsSrv = { cap, truncated, matchedTotal, orderedBy, msgCounts }；
+//   null ＝ 舊伺服器（沒有 capped 哨兵）⇒ 行為與 v6.271 逐字相同，也不會亂標「被截斷」。
+let firebaseRoomsSrv = null;
+let firebaseRoomsMsgCounts = false;   // 💬 訊息數要多花「每房 1 次」Firestore 讀取 ⇒ 預設關
 let _oracleSearchTimer = null;
 let _oracleSearchFocus = false;  // 伺服器端搜尋是整塊重繪 → 要把游標接回搜尋框
 async function loadOracleRooms() {
@@ -2078,12 +2083,22 @@ async function loadFirebaseRooms() {
   const el = document.getElementById('tab-firebase-rooms');
   if (!firebaseRoomsCache.length) el.innerHTML = '<h2>🔥 Firebase 對戰</h2><div class="empty">Loading…</div>';
   // v1.18: 只抓當前 status 分頁的房間（同 Oracle，加速）。
-  const qs = (statusFilter && statusFilter !== 'all') ? ('?status=' + statusFilter) : '';
+  // v6.272: 伺服器端已經有上限了；這裡把 msgCounts 開關送出去（預設不送＝不算訊息數）。
+  const _fp = new URLSearchParams();
+  if (statusFilter && statusFilter !== 'all') _fp.set('status', statusFilter);
+  if (firebaseRoomsMsgCounts) _fp.set('msgCounts', '1');
+  const qs = _fp.toString() ? ('?' + _fp.toString()) : '';
   // v1.20: 只 await 房間 → 立即渲染（快），卡片索引/標籤背景載入後補 badge。
   const data = await api('/api/admin/firebase/rooms' + qs);
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   firebaseRoomsCache = data.rooms;
   if (data.counts) firebaseRoomsCounts = data.counts;
+  // ⚠ capped 哨兵：舊伺服器不會有它 → 維持 null（不標示截斷，行為與 v6.271 相同）；
+  //   新伺服器一律標示「這不是全部」，絕不讓站長以為看到的是全量（v6.240 同一條紀律）。
+  firebaseRoomsSrv = data.capped ? {
+    cap: data.cap, truncated: !!data.truncated, matchedTotal: data.matchedTotal,
+    orderedBy: data.orderedBy, msgCounts: !!data.msgCounts,
+  } : null;
   renderRoomsTab(el, 'firebase', firebaseRoomsCache);
   Promise.all([ensureCardIndex(), ensureCardTags()]).then(() => {
     if (currentTab === 'firebase-rooms') renderRoomsTab(el, 'firebase', firebaseRoomsCache);
@@ -2123,6 +2138,34 @@ function renderRoomsTab(el, source, rooms) {
     start = (page - 1) * ROOMS_PAGE_SIZE;
     pageRooms = filtered.slice(start, start + ROOMS_PAGE_SIZE);
   }
+  // v6.272 Firebase 專屬提示列：伺服器端上限、排序依據、訊息數開關。
+  //   ⚠⚠ 這一塊存在的唯一理由是「絕不靜默截斷」—— 站長必須看得出來畫面上不是全部。
+  const fsrv = (source === 'firebase') ? firebaseRoomsSrv : null;
+  let fbNoticeHtml = '';
+  if (fsrv) {
+    const shown = rooms.length;
+    const parts = [];
+    if (fsrv.truncated) {
+      parts.push('<b style="color:#b45309">⚠ 只顯示最新 ' + Number(shown).toLocaleString() + ' 筆'
+        + (fsrv.matchedTotal != null ? ('（此篩選共 ' + Number(fsrv.matchedTotal).toLocaleString() + ' 筆）') : '')
+        + '，這不是全部。</b>');
+    } else {
+      parts.push('✅ 這個篩選底下的 ' + Number(shown).toLocaleString() + ' 筆已全部顯示。');
+    }
+    if (fsrv.orderedBy === '__name__') {
+      parts.push('<b style="color:#b45309">⚠ Firestore 缺複合索引，這 ' + Number(shown).toLocaleString()
+        + ' 筆是<u>依房號取樣</u>、不是最新的那幾筆。</b>');
+    } else if (fsrv.orderedBy === 'createdAt') {
+      parts.push('（依「建立時間」取最新 ' + Number(fsrv.cap).toLocaleString() + ' 筆，非「最後更新」）');
+    }
+    parts.push('Firebase 讀取要計費，上限 ' + Number(fsrv.cap).toLocaleString() + ' 筆／次。');
+    fbNoticeHtml = '<div id="firebase-rooms-notice" class="toolbar" style="margin:6px 0 10px;">'
+      + '<span class="small" style="color:#5b6472">' + parts.join(' ') + '</span>'
+      + '<span class="filter-btn' + (fsrv.msgCounts ? ' active' : '') + '" style="margin-left:auto;"'
+      + ' id="firebase-msgcount-toggle" onclick="toggleFirebaseMsgCounts()">'
+      + (fsrv.msgCounts ? '💬 訊息數：開（每房各 1 次讀取）' : '💬 訊息數：關（點我計算，每房各 1 次讀取）')
+      + '</span></div>';
+  }
   // v6.240 時間範圍切換（只有走伺服器端分頁的 Oracle 分頁才有意義）
   const _rangeLabels = { '7d': '近 7 天', '30d': '近 30 天', '90d': '近 90 天', 'all': '全部資料' };
   const rangeBarHtml = srv ? ('<div class="toolbar" style="margin:6px 0 10px;">'
@@ -2145,6 +2188,7 @@ function renderRoomsTab(el, source, rooms) {
   ` : '';
   el.innerHTML = `
     <h2>${sourceLabel} <span class="small">(共 ${totalCount})</span></h2>
+    ${fbNoticeHtml}
     ${rangeBarHtml}
     <div class="toolbar">
       <span class="filter-btn ${statusFilter === 'all' ? 'active' : ''}" onclick="setStatusFilter('all', '${source}')">全部 (${totalCount.toLocaleString()})</span>
@@ -2208,6 +2252,14 @@ window.setOracleRoomsRange = function(r) {
   _oracleSearchFocus = false;
   loadOracleRooms();
 };
+// v6.272：Firebase 的「每房訊息數」是 N 次額外 Firestore 讀取（官方：count() 每 1000
+//   索引項算 1 次讀取 ⇒ 一般房間就是 1 次／房）。預設關，站長要看時才按這顆重抓。
+window.toggleFirebaseMsgCounts = function() {
+  firebaseRoomsMsgCounts = !firebaseRoomsMsgCounts;
+  firebaseRoomsPage = 1;
+  loadFirebaseRooms();
+};
+
 window.jumpRoomsPage = function(source) {
   const inp = document.getElementById('rooms-page-input-' + source);
   if (!inp) return;
@@ -3449,7 +3501,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.271';
+window.SITE_VERSION_HINT = '6.272';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -5628,6 +5680,7 @@ window.viewUserDecks = async function(uid, label) {
 
 // ── Tab: Feedback (v0.4 with reply + delete) ─────────────────────
 let feedbackList = [];
+let feedbackSrv = null;   // v6.272: { at, truncated }；null＝舊伺服器（不標示，行為同 v6.271）
 // v1.13: 意見回饋分頁 — 一次只顯示最新 10 則 + 翻頁（歷史累積多 + email 反查時加速）
 let feedbackPage = 1;
 const FEEDBACK_PAGE_SIZE = 10;
@@ -5639,6 +5692,8 @@ async function loadFeedback(resetPage = true) {
   const data = await api('/api/admin/firebase/feedback');
   if (!data || data.error) { el.innerHTML = '<div class="empty">Error: ' + (data?.error || 'unknown') + '</div>'; return; }
   feedbackList = data.feedback || [];   // 端點已依 createdAt desc 排序（最新在前）
+  // v6.272：端點改走 5 分鐘快取（Firestore 讀取減量）⇒ 把資料時間與截斷狀態帶進畫面。
+  feedbackSrv = (data.at || data.cached) ? { at: data.at || null, truncated: !!data.truncated } : null;
   if (resetPage) feedbackPage = 1;
   // v1.15: 直接渲染；email 由 renderFeedback 觸發「只查當前頁 10 個 uid」批次查詢（免載全量 users）
   renderFeedback(el);
@@ -5655,8 +5710,14 @@ function renderFeedback(el) {
   const start = (feedbackPage - 1) * FEEDBACK_PAGE_SIZE;
   const pageItems = feedbackList.slice(start, start + FEEDBACK_PAGE_SIZE);  // 只渲染當前頁 10 則
   const pager = renderFeedbackPager(feedbackPage, totalPages, total);
+  // v6.272：資料時間與「有沒有被 2000 筆上限截斷」一定要看得見（絕不靜默截斷）。
+  const fbNote = feedbackSrv ? ('<div id="feedback-cache-note" class="small" style="color:#9aa3b0;margin-bottom:6px;">'
+    + (feedbackSrv.at ? ('🕒 資料時間 ' + new Date(feedbackSrv.at).toLocaleString('zh-TW') + '（最多 5 分鐘更新一次；你送出回覆／刪除後會立刻重新讀）') : '')
+    + (feedbackSrv.truncated ? ' <b style="color:#b45309">⚠ 已達 2000 筆上限，這不是全部。</b>' : '')
+    + '</div>') : '';
   el.innerHTML = `
     <h2>💬 意見回饋（${total}，未回覆 ${unreplied}）</h2>
+    ${fbNote}
     <div class="small" style="color:#9aa3b0; margin-bottom:12px;">
       💡 玩家在主站打開意見回饋視窗時，會看到自己提交過的歷史回饋與你在這裡寫的回覆。送出/編輯/刪除回覆會即時同步到玩家端。
     </div>
