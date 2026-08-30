@@ -599,6 +599,37 @@ export function shouldAttemptStartGame(opts: {
   return false;
 }
 
+/**
+ * ⭐⭐⭐v6.274：「P2 fallback grace 的起算點（`_onlineReadyAt`）什麼時候必須歸零」的**唯一**判準。
+ *
+ * ## 這一版在修什麼（線上實測，不是推論）
+ * `_onlineReadyAt` 只在 `game/+page.svelte` 的 `checkAndStartOnlineGame()` 裡被歸零，
+ * 但那支函式**只在「房間是 lobby ＋雙方就緒」時才會被 `handleRoomUpdate` 呼叫** ——
+ * 於是它裡面那三條歸零（非 lobby／已有盤面／未雙就緒）在真實流程裡**跑不到**；
+ * 而第四條早退 `haveLocalGame` 是在 `shouldAttemptStartGame` 內部擋的，呼叫端在它之前
+ * 就已經把 `_onlineReadyAt` 寫成「這一刻」⇒ 同樣不會歸零。
+ * 結果：第一局開打之後 `_onlineReadyAt` 就凍在「第一局雙方就緒的那一刻」，
+ * 「再來一局」時 `readyElapsedMs` ＝上一局的**整場時間**
+ * （8/30 線上指紋實測 169,596／397,304／597,965／1,164,572／1,300,430／1,314,882 ms），
+ * P2 的 6 秒 fallback grace 被瞬間擊穿 ⇒ **雙端同時 createGame ⇒ v5.749 想根治的開局重洗競態重生**。
+ *
+ * ## 判準＝`shouldAttemptStartGame` 四條早退的**完全補集**
+ * grace 計時的語意是「雙方就緒、房間還沒有局」已經持續多久。這個前提只要有任何一項不成立，
+ * 計時就必須重新起算 —— 否則下一次前提再度成立時會沿用陳舊的起點。
+ * 守衛 `test-v6274` 的【C】對全部 2×2×2×2 組合逐一斷言：
+ * 本函式回 true ⇒ `shouldAttemptStartGame` 對**任何** seat／**任何** elapsed 都必回 false。
+ *
+ * ⚠ 本函式**只決定計時歸零**，不決定建不建局 —— 建局判準仍然唯一在 `shouldAttemptStartGame`。
+ */
+export function shouldResetStartGrace(opts: {
+  roomStatus: string;
+  hasGameState: boolean;
+  bothReady: boolean;
+  haveLocalGame: boolean;
+}): boolean {
+  return opts.roomStatus !== 'lobby' || opts.hasGameState || !opts.bothReady || opts.haveLocalGame;
+}
+
 // ── 錦標賽盤面採納：單一中央閘（v6.180）───────────────────────────────────────
 
 /** `decideBoardAdopt` 的判決。`drop` = 這一發是亂序的舊盤面，採納它畫面就會倒退。 */

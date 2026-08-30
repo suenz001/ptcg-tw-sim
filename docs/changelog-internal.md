@@ -1,5 +1,127 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.274 — 開局 grace 計時（`_onlineReadyAt`）的陳舊值：「再來一局」時 P2 的 6 秒 fallback 被擊穿
+
+BASE `65553fb6c68992f719c80d82620e9d68298b43ca`（v6.273，遠端 main）。
+
+### 1. 真因（自行複驗，不是轉述）
+
+v5.749 的「決定性建局者」：seat 0 立刻 `createGame`，seat 1 只有在「雙方就緒＋房間是 lobby
+＋還沒有盤面」持續 **6 秒**（`sync-guards.ts` L598，v5.893 由 3000 改成 6000）之後才 fallback 建局。
+grace 的起算點是 `game/+page.svelte` 的 `_onlineReadyAt`（L1616 宣告）。
+
+BASE 的歸零只寫在 `checkAndStartOnlineGame()` 裡（L8723／L8725／L8726 三條），
+但那支函式**只在「房間是 lobby ＋雙方就緒」時才會被 `handleRoomUpdate` L8641 的守衛呼叫**：
+
+```
+if (room.status === 'lobby' && bothPlayersReady(room.seats) && (idx === 0 || idx === 1) && poolReady) {
+  checkAndStartOnlineGame();
+}
+```
+
+⇒ 「非 lobby」「已有盤面」「未雙就緒」這三條歸零**在真實流程裡跑不到**（另一個呼叫點是
+onMount L4664，那時 `_onlineReadyAt` 本來就是 0）。
+第四條早退 `haveLocalGame` 是在 `shouldAttemptStartGame`（sync-guards L594）**內部**擋的，
+而呼叫端在 L8729 就已經把 `_onlineReadyAt` 寫成「這一刻」⇒ **也不會歸零**。
+
+⇒ 第一局開打（`startGame` 把 `status` 寫成 `playing`）之後，`handleRoomUpdate` 的守衛不再放行，
+`_onlineReadyAt` 就**凍在「第一局雙就緒的那一刻」直到重新整理頁面**。
+`checkAndAcceptRematch`（room-oracle L493）把房間改回 `status:'lobby'`／`gameState:null`／
+`seats[].ready=false`，雙方再度按準備時 `readyElapsedMs = Date.now() - _onlineReadyAt`
+＝**上一局的整場時間** ⇒ seat 1 的 6 秒 grace 被瞬間擊穿 ⇒ 雙端同時 `createGame`
+⇒ v5.749 想根治的開局重洗競態原地重生。
+
+**線上證據**：8/30 dump 的 8 筆 `casual-phantom-adopt`，`phantom.readyMs` ＝
+169,596／397,304／597,965／1,164,572／1,300,430／1,314,882 ms（2.8 分鐘～22 分鐘），
+正常應該是幾秒。
+
+⚠ **轉述有一處要更正**：另有一筆 `readyMs = 4` 被說成「seat 1 的回報者沒等 6 秒就建局」——
+**程式上不可能**。`readyElapsedMs`（L8734）與 `_startGameReadyMs`（L8785）讀的是同一個
+`_onlineReadyAt`，而 8785 在 8734 之後同步執行 ⇒ `_startGameReadyMs >= readyElapsedMs`；
+seat 1 要通過 L598 的閘就必須 `readyElapsedMs >= 6000`，因此 seat 1 **永遠不可能**回報
+`readyMs = 4`。那一筆只可能是 **seat 0**（立即建局，readyMs≈0），而它同時報了 phantom-adopt
+⇒ 代表**對面那個 seat 1 也建了局** —— 這反而是本 bug 的直接證據，不是「seat 1 沒等 6 秒」。
+
+### 2. 修法（三個歸零點 ＋ 一個中央述詞）
+
+- `sync-guards.ts` 新增 **`shouldResetStartGrace()`** —— `shouldAttemptStartGame` 四條早退的
+  **完全補集**（守衛【C】對全部 24 組合逐一斷言「歸零 ⇒ 任何 seat／任何 elapsed 都不會建局」）。
+- `handleRoomUpdate`：**每一發房間更新**都判一次歸零（這是主修）。位置在「房間回到 lobby ⇒
+  `game = null`」之後、建局呼叫之前（守衛【D2】以索引順序斷言）。
+- `checkAndStartOnlineGame`：`haveLocalGame` 那條早退也歸零並提前 return
+  （涵蓋卡包自我重呼叫 `.then()` 期間盤面被採納的非同步路徑）。
+- `startRoomSubscription`：進入／換房時歸零 —— `_onlineReadyAt` 是 **per-page** 的、不跟著房間走，
+  離開房間再開一間新房也會沿用陳舊起點。
+
+⚠ `resolveRoomUpdate` 的收斂邏輯、`shouldSkipStalePush`、`shouldAttemptStartGame` 本體
+**一行未動**（守衛【E】以內嵌 sha256 錨定，淺複製下也真的在守）。
+
+### 3. 全站枚舉（`_onlineReadyAt` 與同型旗標）
+
+`git grep _onlineReadyAt <BASE>` 只有 7 處，全在 `game/+page.svelte`：
+宣告 L1616、三條跑不到的歸零 L8723/8725/8726、起算 L8729、`readyElapsedMs` L8734、
+`_startGameReadyMs` L8785。**該歸零而沒歸零的分支＝本版修的三處。**
+
+同型旗標的檢查結果：
+- `_lastActionAt` / `_lastSyncAt` / `_unpushedState` / `_repushAttempts` / `_resyncStreak`
+  / `_casualDiagReset()` —— 都由 L8211 的 `$effect`「`game.id` 一變就重設基準」涵蓋。
+  ⭐ 但那個 effect 是**以 `game.id` 為鍵**，而 `_onlineReadyAt` 恰恰只在 `game` 為 null
+  的空窗期才有意義 ⇒ 它結構上不可能被那個 effect 保護，這就是它被漏掉的原因。
+- `_lastResyncAt`（L8025）**沒有**在換局時重設。但它是「重訂閱節流」的下界，陳舊值只會讓
+  節流更早放行（偏向多做一次自癒）⇒ 方向安全，不修。
+- `lastAdoptedRestartCount`（L1121）只在採納 restart 時寫入，**換房間時沒有重設**。
+  它是 `resolveRoomUpdate` 的輸入之一 ⇒ 本版明訂零接觸，**列為待辦**（見第 5 節）。
+
+### 4. 【2】更正 v6.270 首頁 changelog 的未經證實數字
+
+v6.270 寫「傳輸量約省六成」「中位數約從三萬三千位元組降到一萬三千位元組」。
+那個 62.7% 是**沙盒 AI 自對局（含中後期盤面）**量到的；8/30 dump 的真實玩家 `bodyBytes`
+（滾動窗 50 筆、patch 1,451 發／full 1,021 發）是 **patch p50 10,184 vs full p50 13,779
+⇒ 只省 26.1%**。原因是 `casual-perf-sample` 在**第 10 發推送**就送出（`CASUAL_PUSH_MIN_CALLS = 10`）
+⇒ 取樣到的全是開局早期（full 才 13.8KB，沙盒量的是中後期 32.8KB）。
+⇒ 改寫成「節省幅度依盤面大小而異，盤面越大省得越多」，**不再宣稱任何百分比**。
+同時把內文的「單次約三萬多位元組」改成「單次可達數萬位元組」（可對應線上實測的 40~48KB），
+以及把 summary 的「等待明顯縮短」拿掉（Rule 36：位元組減量不等於延遲減少）。
+
+⚠ v6.270 那則當時仍在 `static/changelog.html` 的最新 12 則內文窗內（第 2 則），
+不必跨檔搬運；本版新增 v6.274 之後它變成第 3 則，仍在窗內。
+
+### 5. 【3】`bodyBytes` 能不能涵蓋整場？—— **不做，列為待辦**
+
+- 想涵蓋中後期只有兩條路：①把 `casual-perf-sample` 的觸發往後挪；②對局結束再送一發。
+  ②＝**新增一發請求**（本輪明訂不可）；①會改變既有健康取樣的**分母**
+  （只有「撐到第 N 發」的對局才進統計＝倖存者偏差），正是 v6.213／v6.198 記取的分母污染。
+- ⭐ **零成本的替代已經存在**：`push.bodyBytes` 寫在 `_casualDiagPayload` 的**共用**區塊
+  （L6334-6341），**五種休閒指紋全部都帶**。`casual-forfeit-claim`／`casual-slow-push`／
+  `casual-phantom-adopt`／`casual-delta-fuse` 的觸發時機本來就晚得多
+  ⇒ 下一份 dump 只要**按 `reason` 分層統計** `bodyBytes`，就看得到中後期樣本，
+  完全不必改任何程式。
+- 待辦：若站長要「整場總省量」這個數字，需要一個「對局結束時才送」的新指紋＝多一發請求，
+  必須先由站長裁定。
+
+### 6. 守衛
+
+`scripts/test-v6274-start-grace-reset.mjs`（**29 條，已進 `package.json` 的 test chain**）：
+- 【B】行為端：把 `+page.svelte` 的 `handleRoomUpdate` 尾段與 `checkAndStartOnlineGame()`
+  **原文抽出、esbuild 轉譯、真的執行**，用「開局→對戰 10 分鐘→再來一局」的房間更新序列驅動。
+  B1 主張、B2/B3/B4 正對照、B5「haveLocalGame 擋下後下一次計時是新鮮的」、B6 對戰中必為 0。
+- 【A】HEAD-FAIL 對**真 BASE blob**：A2 實際重現原 bug（seat 1 在再來一局那一刻建局、
+  readyMs ≥ 600,000），A3 重現 haveLocalGame 缺口。淺複製時 `shallowSkip`（不 fail-open）。
+- 【C】24 組合的補集斷言；【D】五條接線與**順序**；【E】四段 sha256 零接觸錨定；
+  【F】**7 個突變**全部紅在指定那一條；【G】test chain 自檢。
+
+⚠ 第一次寫抽取器時 `slice(start, end + 7)` 多吃了函式的收尾大括號，六條行為端斷言全紅、
+而五個突變也「如預期紅」—— **紅的原因卻是抽取器壞了**，正是第九種守衛安慰劑的變體。
+是因為 `mustBreak` 會把紅的訊息印出來才發現。⇒ **突變測試一定要印出紅在哪一句**。
+
+### 7. 要跑哪幾支 bat
+
+- `redeploy-oracle.bat`（前端，主要）
+- `update-admin-full.bat`（只為了 `oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 對上 6.274）
+- ⚠ 本版**沒有**動卡效果／引擎／錦標賽伺服器 ⇒ `update-tournament.bat` 非必要
+  （要跑也無害，它是超集）。
+- 本版是**純 client** 改動，沒有「client 送新欄位、server 要認」的相依 ⇒ 無部署順序要求。
+
 ## v6.273 — Firestore 讀取減量【P2：client 端三大宗】（玩家零感，不寫首頁 changelog）
 
 BASE `d7761cce38ff2352b766763324ede99ba833067e`（v6.272，遠端 main）。

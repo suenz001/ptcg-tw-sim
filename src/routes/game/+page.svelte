@@ -45,7 +45,7 @@
   import { evaluateSelectionFilter, isKnownSelectionFilter, isMegaExCard,
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
-  import { resolveRoomUpdate, shouldAttemptStartGame, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
+  import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
            casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
@@ -8411,6 +8411,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   function startRoomSubscription() {
+    // ⭐v6.274：進入／換一間房＝grace 計時必須從頭起算。`_onlineReadyAt` 是 per-page 的、
+    //   不跟著房間走；少了這一行，離開房間再開一間新房時會沿用上一間房的陳舊起點
+    //   （若新房的第一發更新就已經是「雙方就緒」，handleRoomUpdate 的歸零判斷會放行）。
+    _onlineReadyAt = 0;
     unsubRoom?.();
     unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null, casualWaitingSelfInput);
     startHeartbeat();
@@ -8635,6 +8639,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       }
     }
 
+    // ⭐⭐⭐v6.274：grace 計時的歸零必須在**每一發房間更新**上判，不能只寫在
+    //   `checkAndStartOnlineGame()` 裡 —— 那支只在「lobby ＋ 雙就緒」時才被下面那行呼叫，
+    //   所以它內部那三條歸零其實跑不到；第一局開打後 `_onlineReadyAt` 就再也不會歸零，
+    //   「再來一局」時 P2 的 6 秒 fallback grace 會被一個陳舊的大數字瞬間擊穿（雙端同時建局）。
+    // ⚠ 位置必須在上面「房間回到 lobby ⇒ game = null」之後、下面那行呼叫之前
+    //   （守衛【D】以索引順序斷言），否則歸零會發生在建局判斷之後、等於沒歸零。
+    if (shouldResetStartGrace({
+      roomStatus: room.status, hasGameState: !!room.gameState,
+      bothReady: bothPlayersReady(room.seats), haveLocalGame: !!game,
+    })) _onlineReadyAt = 0;
     // v2.72：雙方 P1/P2 都 ready → P1 或 P2 任一 client 都可觸發 startGame
     //   原本只 P1 觸發 → host 關瀏覽器後 P2 卡死；現改 idx >= 0（任一玩家），
     //   並由 startGame 內部 Firestore transaction 防 race（兩方同時寫只有一方 commit）。
@@ -8726,6 +8740,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!p1.ready || !p2.ready) { _onlineReadyAt = 0; return; }
     // v5.749：決定性建局者 — 消滅開局雙端 createGame race（開局重新洗牌根治）。
     //   只有 seat 0（P1）立即建；seat 1（P2）僅 P1 久未建（grace）才 fallback；本端已有 local game 不再建。
+    // ⭐⭐⭐v6.274：本端已有 local game ⇒ 這一輪一定不會建局（`shouldAttemptStartGame` 的
+    //   `haveLocalGame` 早退），而 grace 計時**必須歸零** —— 原本它在下一行被寫成「這一刻」，
+    //   之後就一直留著；等本地局被清掉、房間又回到 lobby 時就成了一個陳舊的大數字。
+    // ⚠ 這裡 return 是安全的：`shouldResetStartGrace` 回 true 的每一種情形，
+    //   `shouldAttemptStartGame` 對任何 seat／任何 elapsed 都必回 false（守衛【C】逐組合斷言）。
+    if (shouldResetStartGrace({ roomStatus: roomData.status, hasGameState: !!roomData.gameState,
+      bothReady: true, haveLocalGame: !!game })) { _onlineReadyAt = 0; return; }
     if (_onlineReadyAt === 0) _onlineReadyAt = Date.now();
     const _mySeat = roomData.seats.findIndex((s) => !!s.uid && s.uid === myUid);
     if (!shouldAttemptStartGame({
