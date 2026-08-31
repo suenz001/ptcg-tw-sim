@@ -597,6 +597,30 @@ export const DELTA_PUT_MAX_HASH_CHARS = 900000;   // 伺服器上限 1M 字元�
 export const DELTA_PUT_FULL_RATIO = 0.6;          // ⭐ patch > 全量的 60% ⇒ 送全量
 export const DELTA_PUT_FUSE_LIMIT = 3;            // ⚠ 連 3 次 deltaReject ⇒ 本 session 熔斷
 
+// ── ⭐⭐⭐v6.279【階段 3b】深層 diff 的規則常數 ──────────────────────────────
+// ⚠⚠ 這五個值**必須與伺服器 `server_admin_patch.js` 的 PTCG-DELTA-PUT 區塊逐值相同**
+//   （`_DP_MAX_PATH_SEGS` / `_DP_MAX_PATH_LEN` / `_dpBadSeg` 的長度上界 / `_dpArrIdx` 的位數上界）。
+//   兩端沒辦法共用同一份原始碼（client 是 vite bundle、伺服器是灌進 VM 的 patch 檔），
+//   所以改用**守衛證明兩端一致**：test-v6279 把伺服器區塊抽出來實跑，
+//   逐值比對這些常數，並對一大批段名／索引字串把兩邊的判定函式對拍。
+export const DELTA_PUT_MAX_PATH_SEGS = 8;     // ＝伺服器 _DP_MAX_PATH_SEGS
+export const DELTA_PUT_MAX_PATH_LEN = 2100;   // ＝伺服器 _DP_MAX_PATH_LEN
+export const DELTA_PUT_MAX_SEG_LEN = 256;     // ＝伺服器 _dpBadSeg 的 s.length > 256
+export const DELTA_PUT_ARR_IDX_DIGITS = 9;    // ＝伺服器 _dpArrIdx 的 s.length > 9
+// ⭐「別越切越大」：某節點的小孩超過 2/3 都變了且小孩數 ≥ 8 ⇒ 整包 set 比較小（牌庫洗牌情境）
+export const DELTA_PUT_SPLIT_NUM = 2, DELTA_PUT_SPLIT_DEN = 3, DELTA_PUT_SPLIT_MIN = 8;
+// ⭐⭐v6.279【2】自我調節的 CPU 保險（站長裁定「加」）：
+//   量自己的 diff 耗時，**連續**超過門檻就**本房退回兩層**（不是退全量）。
+//   ・門檻 50ms：站長逐字給的數字，且與量測相符 —— 沙盒（實測比正式裝置慢一個量級）
+//     48KB 房 doc 的深層 diff p99 遠低於它；真的連續踩到 50ms 的只會是極低階裝置。
+//   ・連續 3 次：一次超標可能只是 GC／背景分頁節流／別的分頁在忙（偶發，不代表裝置慢）；
+//     連 3 發都超標才是穩定的裝置能力問題。成功一次在門檻內就歸零。
+//   ・恢復：**換房**重新武裝（＝換一場對局重試一次），但整個頁面最多重試
+//     DELTA_PUT_DEEP_MAX_TRIPS 次 —— 避免慢裝置每一場都重新試、反覆抖動。
+export const DELTA_PUT_DEEP_SLOW_MS = 50;
+export const DELTA_PUT_DEEP_SLOW_STREAK = 3;
+export const DELTA_PUT_DEEP_MAX_TRIPS = 2;
+
 let _dpSentinel = false;        // 最近一次 GET 的 {room} 回應有沒有 deltaPut:1
 let _dpFused = false;           // 本 session 熔斷（之後全走全量；重整頁面才重置）
 let _dpRejectStreak = 0;        // 連續 422/400 計數（成功送出 patch 就歸零；409 不動它）
@@ -606,6 +630,23 @@ const _DP_BYTES_WIN = 50;       // bodyBytes 滾動窗上限
 const _dpBytesPatch: number[] = [];
 const _dpBytesFull: number[] = [];
 let _dpEncoder: TextEncoder | null = null;
+// ⭐v6.279 深層 diff 的狀態（全部是純記憶體旗標，零請求、零計時器、零 await）
+let _dpSentinelDeep = false;    // 最近一次 GET 的 {room} 有沒有 deltaPutDeep:1（伺服器支不支援深路徑）
+let _dpDeepOff = false;         // CPU 保險已觸發 ⇒ 本房退回兩層（⚠ 不是退全量）
+let _dpDeepSlowStreak = 0;      // 連續超過 DELTA_PUT_DEEP_SLOW_MS 的次數（成功一次在門檻內即歸零）
+let _dpDeepTrips = 0;           // 本頁累計觸發次數（達 DELTA_PUT_DEEP_MAX_TRIPS 後不再重新武裝）
+let _dpDeepRoom = '';           // 上一次寫入的房號（換房＝重新武裝的唯一觸發點，零新呼叫端）
+let _dpKind: 'deep' | 'two' = 'two';   // 這一發 patch 是深層還是兩層（給 _dpNoteBytes 分帳）
+const _dpBytesDeep: number[] = [];
+const _dpBytesTwo: number[] = [];
+const _dpDiffMs: number[] = [];
+// ⚠ 量測本身不可以變成成本：模組載入時就決定用哪一支，之後每次只是**兩次 performance.now() 相減**。
+const _dpNow: () => number = (typeof performance !== 'undefined' && performance
+  && typeof performance.now === 'function') ? () => performance.now() : () => Date.now();
+function _dpNoteDiffMs(ms: number): void {
+  _dpDiffMs.push(ms);
+  if (_dpDiffMs.length > _DP_BYTES_WIN) _dpDiffMs.shift();
+}
 
 /** UTF-8 位元組數（nginx 的 request_length 量的就是位元組，不是 UTF-16 字元數）。 */
 function _dpUtf8Len(s: string): number {
@@ -629,6 +670,14 @@ function _dpNoteBytes(kind: 'patch' | 'full', bytes: number): void {
   const a = kind === 'patch' ? _dpBytesPatch : _dpBytesFull;
   a.push(bytes);
   if (a.length > _DP_BYTES_WIN) a.shift();
+  // ⭐v6.279 三分類（深層 patch／兩層 patch／全量）。
+  // ⚠ `patch` 這一個窗**維持 v6.270 的語義不變**（＝所有 patch 的合併），
+  //   否則既有守衛與 dump 的判讀會靜默變意思；深/兩層只是**再細分**出去的兩個窗。
+  if (kind === 'patch') {
+    const c = _dpKind === 'deep' ? _dpBytesDeep : _dpBytesTwo;
+    c.push(bytes);
+    if (c.length > _DP_BYTES_WIN) c.shift();
+  }
 }
 function _dpStat(a: readonly number[]): { n: number; p50: number; p95: number; max: number } | null {
   if (a.length === 0) return null;
@@ -643,18 +692,34 @@ function _noteDeltaPutSentinel(body: unknown): void {
     const b = body as { room?: unknown; deltaPut?: unknown } | null | undefined;
     if (b && typeof b === 'object' && b.room && typeof b.room === 'object') {
       _dpSentinel = (b as { deltaPut?: unknown }).deltaPut === 1;
+      // ⭐⭐v6.279 深路徑是**另一個**哨兵：v6.268~v6.277 的伺服器只有 deltaPut，
+      //   對 3 段以上的路徑一律 dp-bad-path ⇒ 每發都 422 ⇒ 三發就熔斷＝上行倒退。
+      //   ⇒ 沒看到 deltaPutDeep:1 就**只送兩層**（＝ v6.270 已在線上跑的行為）。
+      _dpSentinelDeep = _dpSentinel && (b as { deltaPutDeep?: unknown }).deltaPutDeep === 1;
     }
   } catch { /* 判定失敗＝維持現值（下一次 GET 會再校正） */ }
 }
 
-/** 診斷讀出口（game/+page.svelte 的休閒 payload 用；純讀取，零副作用）。 */
+type _DpStat = { n: number; p50: number; p95: number; max: number } | null;
+/**
+ * 診斷讀出口（game/+page.svelte 的休閒 payload 用；純讀取，零副作用、零請求）。
+ * ⭐v6.279 `bytes` 由兩分類擴成**三分類**：`deep`（深層 patch）／`two`（兩層 patch）／`full`（全量）。
+ *   ⚠ `patch` 仍是 v6.270 的合併窗（deep＋two），語義一個字沒變 —— 舊判讀不會被靜默改意思。
+ * ⭐v6.279 `diffMs` ＝ diff＋hash＋序列化的耗時分佈（CPU 保險的分母）；`deep` ＝保險的狀態。
+ */
 export function deltaPutDiag(): { fused: boolean; rejects: number; lastReason: string | null;
-  bytes: { patch: { n: number; p50: number; p95: number; max: number } | null;
-           full: { n: number; p50: number; p95: number; max: number } | null } | null } {
+  bytes: { patch: _DpStat; full: _DpStat; deep: _DpStat; two: _DpStat } | null;
+  diffMs: _DpStat;
+  deep: { srv: boolean; off: boolean; trips: number; streak: number } } {
   const p = _dpStat(_dpBytesPatch), f = _dpStat(_dpBytesFull);
+  const d = _dpStat(_dpBytesDeep), t = _dpStat(_dpBytesTwo);
   return { fused: _dpFused, rejects: _dpRejects, lastReason: _dpLastRejectReason,
-    bytes: (p || f) ? { patch: p, full: f } : null };
+    bytes: (p || f) ? { patch: p, full: f, deep: d, two: t } : null,
+    diffMs: _dpStat(_dpDiffMs),
+    deep: { srv: _dpSentinelDeep, off: _dpDeepOff, trips: _dpDeepTrips, streak: _dpDeepSlowStreak } };
 }
+/** ⭐v6.279 這一發會不會走深層（純讀取；守衛與診斷用）。 */
+export function deltaPutDeepArmed(): boolean { return _dpSentinelDeep && !_dpDeepOff; }
 /** 熔斷了嗎（casual-delta-fuse 指紋的判準；純讀取）。 */
 export function deltaPutFuseTripped(): boolean { return _dpFused; }
 
@@ -737,14 +802,203 @@ function _dpEq(a: unknown, b: unknown): boolean {
 
 export type RoomPatch = { set: Record<string, unknown>; del: string[]; logAppend?: unknown[] };
 
+// ── ⭐⭐⭐v6.279【階段 3b】client 深層 diff ─────────────────────────────────
+// >>> v6279-delta-put-deep-core（守衛 test-v6279 會把這一段抽出來實跑）
+//
+// 為什麼要做：`GameState.players` 是一個**裝著雙方完整盤面的陣列**
+//   （src/lib/game/types.ts：`players: [PlayerState, PlayerState]`），
+//   而 v6.270 的 diff 最深只到 `gameState.<子鍵>` ⇒ 任何一個動作都會
+//   `set['gameState.players'] = 整包約 10KB`，真正省到的只有 log ⇒ 線上實測只省 26~40%。
+//   v6.278 已把伺服器端的門打開（最多 8 段路徑＋陣列索引），本版讓 client 真的送得出去。
+//
+// ⚠⚠⚠ 硬約束：**client 產生的每一條路徑，伺服器都必須吃得下** ——
+//   吃不下就是 422 ⇒ 退全量（省不到），連 3 次還會熔斷。伺服器 `_dpApplyPatch` 的規則逐條鏡射：
+//   ① 只在**兩邊都是純物件**時下鑽（型別不同／null／純量 ⇒ 對父節點整包 set）；
+//   ② 陣列**只在長度相同**時才鑽進索引（伺服器不允許擴張陣列）；長度變了 ⇒ 整包 set；
+//   ③ **不得對陣列 del**（伺服器 dp-del-into-array）⇒ 刪除只在物件節點上發生；
+//   ④ 段數 ≤ DELTA_PUT_MAX_PATH_SEGS(8)、整條路徑長度 ≤ DELTA_PUT_MAX_PATH_LEN(2100)；
+//   ⑤ 索引一律 `String(i)`（規範十進位、無前導 0）且 i < 陣列長度、位數 ≤ 9；
+//   ⑥ 段名禁 `__proto__`／`constructor`／`prototype`、禁含 `.`、長度 ≤ 256。
+//   ⇒ 兩端規則怎麼保證一致：常數集中在上面那組 export，**判定函式（deltaPutBadSeg／
+//     deltaPutArrIdx）與伺服器逐字同款並 export 出去**，守衛 test-v6279 把伺服器區塊抽出來
+//     實跑、逐值比常數、對一大批字串把兩邊判定對拍，再用 20,000 次端到端 fuzz 收尾（零 422）。
+//
+// ⭐ 產出的路徑集合**互不為前綴**：對一個節點要嘛整包 set、要嘛鑽進去，絕不兩者都做
+//   ⇒ 伺服器「先 del 後 set」的套用順序不可能互相踩到（守衛有前綴檢查）。
+// ⭐ 「別越切越大」：路徑本身也要位元組。節點的小孩**超過 2/3 都變了**且小孩數 ≥ 8 時，
+//   整包 set 反而比較小（典型：60 張牌的牌庫被洗牌）⇒ _dpTooManyChanges 退回整包。
+//   ⚠ 這條只在 **segs ≥ 2** 生效：段數 0/1 是 v6.270 已在線上跑的兩層，在那裡整包 set 會讓
+//     `gameState.log` 的 logAppend 優化失效 ⇒ 保持 v6.270 的行為當**地板**（絕不比它差）。
+
+const _dpHasOwn = (o: object, k: string): boolean => Object.prototype.hasOwnProperty.call(o, k);
+
+/** 段名合法性 —— 與伺服器 `_dpBadSeg` 逐字同款（守衛對拍）。 */
+export function deltaPutBadSeg(s: string): boolean {
+  return (typeof s !== 'string' || s === '' || s.length > DELTA_PUT_MAX_SEG_LEN
+    || s === '__proto__' || s === 'constructor' || s === 'prototype');
+}
+/** 陣列索引判定 —— 與伺服器 `_dpArrIdx` 逐字同款（-1 ＝不是合法索引；守衛對拍）。 */
+export function deltaPutArrIdx(s: string): number {
+  if (typeof s !== 'string' || s.length === 0 || s.length > DELTA_PUT_ARR_IDX_DIGITS) return -1;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if (c < 48 || c > 57) return -1; }
+  if (s.length > 1 && s.charCodeAt(0) === 48) return -1;   // '01' / '007' 一律拒（非規範形式）
+  return Number(s);
+}
+/** 這一層的小孩變太多 ⇒ 整包 set 比較小（路徑本身也要位元組）。 */
+function _dpTooManyChanges(changed: number, total: number): boolean {
+  return total >= DELTA_PUT_SPLIT_MIN && changed * DELTA_PUT_SPLIT_DEN >= total * DELTA_PUT_SPLIT_NUM;
+}
+
+type _DpCtx = { set: Record<string, unknown>; order: string[]; nSet: number; del: string[];
+  logAppend: unknown[] | null; abort: boolean };
+type _DpMark = { nSet: number; nDel: number; logAppend: unknown[] | null };
+
+function _dpPutSet(ctx: _DpCtx, path: string, v: unknown): boolean {
+  if (_dpHasOwn(ctx.set, path)) { ctx.abort = true; return false; }   // 不該發生：同一條路徑寫兩次
+  ctx.set[path] = v;
+  ctx.order.push(path);
+  ctx.nSet++;
+  if (ctx.nSet > DELTA_PUT_MAX_SET) { ctx.abort = true; return false; }
+  return true;
+}
+/**
+ * ⚠⚠ 下鑽到一半才發現「這一層不可細分」時，**必須把已經寫進去的操作整個回捲**。
+ * 不回捲會留下兩種殘骸：①已經寫過的子路徑＋父節點整包 set（多送位元組，不致命）；
+ * ②**`gameState.log` 已經被記成 logAppend，父節點又整包 set 了一次新 log
+ *   ⇒ 伺服器會先套整包再 append 一次 ⇒ 對戰紀錄重複、hash 對不上 ⇒ 422 退全量**。
+ * ⇒ 一律在 _dpDescend 進入前留記號、失敗時回捲，讓「整包 set」是乾淨的單一操作。
+ */
+function _dpMark(ctx: _DpCtx): _DpMark {
+  return { nSet: ctx.nSet, nDel: ctx.del.length, logAppend: ctx.logAppend };
+}
+function _dpRollback(ctx: _DpCtx, m: _DpMark): void {
+  while (ctx.order.length > m.nSet) { const p = ctx.order.pop() as string; delete ctx.set[p]; }
+  ctx.nSet = m.nSet;
+  ctx.del.length = m.nDel;
+  ctx.logAppend = m.logAppend;
+}
+function _dpPutDel(ctx: _DpCtx, path: string): boolean {
+  ctx.del.push(path);
+  if (ctx.del.length > DELTA_PUT_MAX_DEL) { ctx.abort = true; return false; }
+  return true;
+}
+/** 路徑段數與總長度（伺服器 splitPath 的兩道門）。 */
+function _dpPathFits(path: string, segs: number): boolean {
+  return segs <= DELTA_PUT_MAX_PATH_SEGS && path.length <= DELTA_PUT_MAX_PATH_LEN;
+}
+
+/**
+ * 對「同型容器」下鑽。回 false ＝鑽不下去，呼叫端必須把 nv 整包 set 到 path。
+ * @param segs `path` 的段數
+ */
+function _dpDescend(path: string, segs: number, bv: unknown, nv: unknown, ctx: _DpCtx): boolean {
+  if (segs + 1 > DELTA_PUT_MAX_PATH_SEGS) return false;   // 再鑽一層就超段數 ⇒ 不鑽
+  const isObj = _dpIsPlainObj(bv) && _dpIsPlainObj(nv);
+  // ⚠②陣列只在**長度相同**時才鑽（伺服器禁擴張、禁 sparse）
+  const isArr = !isObj && Array.isArray(bv) && Array.isArray(nv) && bv.length === nv.length;
+  // ①型別不同／null／純量 ⇒ 整包 set（＝伺服器「中間節點必須已存在且是物件」的鏡射）
+  if (!isObj && !isArr) return false;
+  const mark = _dpMark(ctx);
+  const ok = isObj
+    ? _dpDeepObj(path, segs, bv as Record<string, unknown>, nv as Record<string, unknown>, ctx)
+    : _dpDeepArr(path, segs, bv as unknown[], nv as unknown[], ctx);
+  if (!ok) _dpRollback(ctx, mark);   // ⚠⚠ 見 _dpRollback 的說明（log 重複 append 是真的會發生的）
+  return ok;
+}
+
+/** 純物件節點的細分 diff。回 false ＝這一層不可細分，呼叫端整包 set。 */
+function _dpDeepObj(prefix: string, segs: number, b: Record<string, unknown>,
+                    n: Record<string, unknown>, ctx: _DpCtx): boolean {
+  const bk = Object.keys(b), nk = Object.keys(n);
+  const todo: string[] = [];
+  let added = 0;
+  for (const k of bk) { if (!_dpHasOwn(n, k) || !_dpEq(b[k], n[k])) todo.push(k); }
+  for (const k of nk) { if (!_dpHasOwn(b, k)) { todo.push(k); added++; } }
+  if (todo.length === 0) return true;
+  // ⭐「別越切越大」只在 segs ≥ 2 生效（段數 0/1 保持 v6.270 行為當地板）
+  if (segs >= 2 && _dpTooManyChanges(todo.length, bk.length + added)) return false;
+  for (const k of todo) {
+    if (ctx.abort) return false;
+    // ⑥段名：伺服器 _dpBadSeg 會拒；含 '.' 會被 splitPath 切開指到別的位置 ⇒ 這一層整包 set
+    if (deltaPutBadSeg(k) || k.indexOf('.') >= 0) return false;
+    const path = segs === 0 ? k : prefix + '.' + k;
+    if (!_dpPathFits(path, segs + 1)) return false;   // ④段數／長度超限 ⇒ 這一層整包 set
+    if (!_dpHasOwn(n, k)) {
+      // ③del 只發生在物件節點（陣列元素永遠不 del）
+      if (!_dpPutDel(ctx, path)) return false;
+      continue;
+    }
+    if (!_dpHasOwn(b, k)) { if (!_dpPutSet(ctx, path, n[k])) return false; continue; }
+    // ⭐ gameState.log 的 append 優化（v6.270 的核心收益，逐條語義保留）
+    if (path === 'gameState.log' && ctx.logAppend === null
+        && Array.isArray(b[k]) && Array.isArray(n[k])
+        && (n[k] as unknown[]).length >= (b[k] as unknown[]).length) {
+      const ob = b[k] as unknown[], on = n[k] as unknown[];
+      let same = true;
+      for (let i = 0; i < ob.length; i++) { if (!_dpEq(ob[i], on[i])) { same = false; break; } }
+      if (same) {
+        if (on.length > ob.length) ctx.logAppend = on.slice(ob.length);
+        continue;   // 前綴相同：等長＝沒變、變長＝只送 append
+      }
+      // 前綴不同（悔棋型整包重寫）⇒ 掉到下面走一般路徑
+    }
+    if (_dpDescend(path, segs + 1, b[k], n[k], ctx)) continue;
+    if (!_dpPutSet(ctx, path, n[k])) return false;
+  }
+  return true;
+}
+
+/** 陣列節點（**長度必定相同**）的細分 diff。回 false ＝這一層不可細分。 */
+function _dpDeepArr(prefix: string, segs: number, b: unknown[], n: unknown[], ctx: _DpCtx): boolean {
+  const idx: number[] = [];
+  for (let i = 0; i < b.length; i++) { if (!_dpEq(b[i], n[i])) idx.push(i); }
+  if (idx.length === 0) return true;
+  if (segs >= 2 && _dpTooManyChanges(idx.length, b.length)) return false;
+  for (const i of idx) {
+    if (ctx.abort) return false;
+    // ⑤索引：String(i) 必為規範十進位；位數上界與 i < 長度由這裡與迴圈本身保證
+    if (i >= 1000000000) return false;
+    const path = prefix + '.' + i;
+    if (!_dpPathFits(path, segs + 1)) return false;
+    if (_dpDescend(path, segs + 1, b[i], n[i], ctx)) continue;
+    // ⚠⚠⚠ 伺服器對**剛好 2 段**的路徑走的是 v1.29 的**舊分支**（向後相容硬約束），
+    //   那個分支寫死「父節點必須是純物件」—— 父是陣列一律 throw dp-set-into-nonobject。
+    //   ⇒ 頂層陣列（seats／undoRequest…）的元素不可以用 `seats.0` 這種 2 段路徑直接 set，
+    //     只能再鑽一層變成 3 段（走深走訪器，那裡才支援陣列索引）；鑽不下去就整個陣列退回整包。
+    //   ⚠ 這條是 20,000 次 round-trip fuzz 抓出來的，不是推論。
+    if (segs + 1 <= 2) return false;
+    if (!_dpPutSet(ctx, path, n[i])) return false;
+  }
+  return true;
+}
+
+/** 深層 diff 的進入點。回 null ＝不可增量（呼叫端送全量）。 */
+function _dpBuildDeepPatch(base: Record<string, unknown>, next: Record<string, unknown>): RoomPatch | null {
+  const ctx: _DpCtx = { set: {}, order: [], nSet: 0, del: [], logAppend: null, abort: false };
+  if (!_dpDeepObj('', 0, base, next, ctx)) return null;   // 根節點不可細分 ⇒ 只能全量
+  if (ctx.abort) return null;
+  if (ctx.nSet > DELTA_PUT_MAX_SET || ctx.del.length > DELTA_PUT_MAX_DEL) return null;
+  if (ctx.logAppend && ctx.logAppend.length > DELTA_PUT_MAX_LOGAPPEND) return null;
+  const patch: RoomPatch = { set: ctx.set, del: ctx.del };
+  if (ctx.logAppend && ctx.logAppend.length > 0) patch.logAppend = ctx.logAppend;
+  return patch;
+}
+// <<< v6279-delta-put-deep-core
+
+
 /**
  * 差分：兩層欄位（top 或 gameState.sub）＋ gameState.log 前綴相同時只送 logAppend。
  * 回 null ＝「不可增量」（鍵不合法／超限），呼叫端送全量。
  * ⚠ 語義鏡射伺服器 `_dpApplyPatch`：del 先、set 後、logAppend 最後；
  *   本函式產出的 patch 套回 base 必得 next（守衛以 fuzz 10,000 次對跑證明）。
+ *
+ * @param deep ⭐v6.279 走深層走訪器（最多 8 段＋陣列索引）。
+ *   ⚠⚠ **預設 false ＝ v6.270 的兩層演算法逐字不動** —— 伺服器沒宣告 deltaPutDeep、
+ *   或 CPU 保險觸發時走的就是這一條，輸出必須與 v6.270 逐位元相同（守衛以 fuzz 對拍 BASE blob）。
  */
-export function buildRoomPatch(base: unknown, next: unknown): RoomPatch | null {
+export function buildRoomPatch(base: unknown, next: unknown, deep = false): RoomPatch | null {
   if (!_dpIsPlainObj(base) || !_dpIsPlainObj(next)) return null;
+  if (deep) return _dpBuildDeepPatch(base, next);
   const set: Record<string, unknown> = {};
   const del: string[] = [];
   let logAppend: unknown[] | null = null;
@@ -826,11 +1080,26 @@ export async function oracleUpsertRoomDelta(
   // 全量 body ＝ `{"data":<fullStr>,"expectedVersion":<ev>}` ⇒ 長度可以直接算，不必再組一次字串
   const fullBodyLen = fullStr.length + 28 + String(expectedVersion).length;
   const fullBodyBytes = () => _dpUtf8Len(fullStr) + 28 + String(expectedVersion).length;   // 外層 wrapper 全 ASCII
+  // ⭐⭐v6.279【2】CPU 保險的「重新武裝」：**換房**才重試（零新呼叫端、零新請求、零新 await）。
+  //   ⚠ 整個頁面最多重試 DELTA_PUT_DEEP_MAX_TRIPS 次 —— 慢裝置不會每一場都重新試而反覆抖動。
+  const _roomKey = code.toUpperCase();
+  if (_dpDeepRoom !== _roomKey) {
+    _dpDeepRoom = _roomKey;
+    _dpDeepSlowStreak = 0;
+    if (_dpDeepTrips < DELTA_PUT_DEEP_MAX_TRIPS) _dpDeepOff = false;
+  }
+  // ⭐ 深層只在「伺服器宣告 deltaPutDeep:1」且「CPU 保險沒觸發」時才走；否則一律兩層（不是全量）
+  const _deep = _dpSentinelDeep && !_dpDeepOff;
+  _dpKind = _deep ? 'deep' : 'two';
   let body: { patchProto: 1; patch: RoomPatch; fullHash: string; expectedVersion: number } | null = null;
   let patchStr: string | null = null;
+  // ⚠ 量測本身不可以變成成本：就是**兩次 performance.now() 相減**（不用 console.time 之類）。
+  //   量的是「diff＋canonical hash＋序列化」這一段 —— 也就是深層 diff 真正變貴、
+  //   而保險觸發後會被關掉的那一段（JSON round-trip 兩層深層都要做，不計入）。
+  const _t0 = _dpNow();
   try {
     if (fullStr.length <= DELTA_PUT_MAX_HASH_CHARS) {   // ②超過伺服器 hash 工作量 ⇒ 必被拒 ⇒ 不試
-      const patch = buildRoomPatch(base, next);
+      const patch = buildRoomPatch(base, next, _deep);
       if (patch) {
         body = { patchProto: 1, patch, fullHash: deltaPutCanonHash(next), expectedVersion };
         patchStr = JSON.stringify(body);
@@ -839,6 +1108,21 @@ export async function oracleUpsertRoomDelta(
       }
     }
   } catch { body = null; patchStr = null; }
+  // ⭐⭐v6.279【2】自我調節的 CPU 保險：連續 DELTA_PUT_DEEP_SLOW_STREAK 次超過
+  //   DELTA_PUT_DEEP_SLOW_MS ⇒ 本房退回**兩層**（⚠ 不是退全量、不是熔斷）。
+  //   高階裝置拿到全部好處，低階裝置自動保護，不用猜型號。
+  const _diffMs = _dpNow() - _t0;
+  _dpNoteDiffMs(_diffMs);
+  if (_deep) {
+    if (_diffMs >= DELTA_PUT_DEEP_SLOW_MS) {
+      _dpDeepSlowStreak++;
+      if (_dpDeepSlowStreak >= DELTA_PUT_DEEP_SLOW_STREAK && !_dpDeepOff) {
+        _dpDeepOff = true; _dpDeepTrips++; _dpDeepSlowStreak = 0;
+      }
+    } else {
+      _dpDeepSlowStreak = 0;   // 一次在門檻內就歸零 ——「連續」不是「累計」
+    }
+  }
   if (body === null || patchStr === null) {
     _dpNoteBytes('full', fullBodyBytes());
     return oracleUpsertRoom(code, data, expectedVersion, opts);

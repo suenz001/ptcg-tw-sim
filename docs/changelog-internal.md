@@ -1,5 +1,104 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.279 — 休閒 PUT 上行增量【client 端 3b：深層 diff ＋ CPU 保險 ＋ 三分類診斷】
+
+BASE `095ea93f4b85214ccd099d165b14ab608bcc568b`（v6.278，遠端 main）。
+⚠⚠ **純 client 端**：`oracle-admin/server_admin_patch.js` 一個位元都沒動（v6.278 已上線）。
+
+### 為什麼要做
+
+v6.268(server)＋v6.270(client) 上線後只省 26~40%。真因是 `GameState.players` 是一個
+**裝著雙方完整盤面的陣列**，而 v6.270 的 diff 最深只到 `gameState.<子鍵>`
+⇒ 每動一次就 `set['gameState.players'] = 整包約 10KB`，真正省到的只有 `log`。
+v6.278 已把伺服器端的門打開（最多 8 段路徑＋陣列索引＋哨兵 `deltaPutDeep:1`），本版讓 client 送得出去。
+
+### v6.278 協定的複驗（逐條 `git cat-file` 讀過，轉述有兩處需要更精確）
+
+| 交接時的說法 | 實際原文 | 判定 |
+|---|---|---|
+| `splitPath` 改 `p.split('.')`、`_DP_MAX_PATH_SEGS=8`、`_DP_MAX_PATH_LEN=2100` | 逐字相符（`server_admin_patch.js` v1.34 `splitPath`） | ✅ |
+| `_dpArrIdx` 只認規範十進位非負整數（拒 `''/-1/+1/01/1.5/1e3/' 1'`／>9 位） | 逐字相符 | ✅ |
+| 索引必須 `< 既有長度`；對陣列 `del` 一律拒 | 逐字相符（`dp-bad-index` / `dp-del-into-array`） | ✅ |
+| 「中間節點是 `null`／缺席／非物件 ⇒ **一律拒絕**（不自動建物件）」 | **只對 `segs >= 3` 成立**。`segs === 2` 走的是與 v1.29 **逐字相同**的舊分支，那裡 `o === undefined \|\| o === null` 時**仍然會自動建 `{}`**；兩層 `del` 的父節點不是純物件時也是**靜默略過**而不是 throw | ⚠ 需補充 |
+| `__proto__`／`constructor`／`prototype` 拒絕；`hasOwnProperty` 不沿原型鏈 | 逐字相符 | ✅ |
+| 新哨兵 `deltaPutDeep:1`、`deltaPut` 維持 1 | 逐字相符（`{ ...body, deltaPut: 1, deltaPutDeep: 1 }`） | ✅ |
+| 上限 set/del ≤256、`logAppend` ≤512、hash ≤1M 字元、遞迴深度 32 | 逐字相符 | ✅ |
+
+⚠⚠ **交接沒有提到、但這一版最關鍵的一條**：因為 `segs === 2` 走的是舊分支，
+而舊分支寫死「父節點必須是純物件」⇒ **父節點是陣列的 2 段路徑（例如 `seats.0`）會被 `dp-set-into-nonobject` 拒收**。
+這條是 20,000 次 round-trip fuzz 抓出來的（第 180 次 `undoRequest.0`），不是推論。
+
+### 做了什麼
+
+1. **`src/lib/game/oracle-client.ts`**（v6270 區塊內新增 `v6279-delta-put-deep-core` 子區塊）
+   - `buildRoomPatch(base, next, deep = false)` —— **預設 `false` 時走 v6.270 的原碼逐字不動**
+     （守衛 D1 以 6,000 對 fuzz 證明產出與 BASE blob **逐位元相同**）。
+   - 深層走訪器 `_dpDeepObj` / `_dpDeepArr` / `_dpDescend`，六條規則鏡射伺服器：
+     ①只在兩邊都是純物件時下鑽 ②陣列只在長度相同時鑽（長度變了 ⇒ 對父物件整包 set）
+     ③不得對陣列 `del` ④段數 ≤8、路徑長度 ≤2100 ⑤索引一律 `String(i)` 且 `< 長度`
+     ⑥段名禁三個危險 key、禁含 `.`、長度 ≤256。
+   - ⭐ **回捲**：下鑽到一半才判定「這一層不可細分」時，必須把已寫入的操作整個回捲。
+     不回捲會出現 `gameState.log` 已經記成 `logAppend`、父節點又整包 set 一次
+     ⇒ 伺服器先套整包再 append 第二次 ⇒ **對戰紀錄重複**（hash 會擋下，但那是白跑一趟）。
+   - ⭐ **別越切越大**：節點的小孩超過 2/3 都變了且小孩數 ≥8 ⇒ 整包 set（牌庫洗牌情境）。
+     ⚠ 只在 `segs >= 2` 生效 —— 段數 0/1 保持 v6.270 行為當**地板**，絕不比它差。
+   - ⭐ 新哨兵：`deltaPutDeep === 1` 才武裝深層；只有 `deltaPut` 的舊伺服器 ⇒ **維持兩層**
+     （不 gate 的話每一發都 422、三發就熔斷＝上行倒退）。
+   - ⭐⭐ **CPU 保險**：`performance.now()` 兩次相減量 diff＋hash＋序列化的耗時，
+     **連續 3 次 ≥ 50ms ⇒ 本房退回兩層**（不是退全量、不是熔斷）；換房重新武裝，
+     整頁最多重新武裝 2 次（不抖動）。
+   - ⭐ 診斷：`bodyBytes` 由兩分類擴成**三分類** `deep` / `two` / `full`
+     （`patch` 合併窗維持 v6.270 語義不變）；新增 `diffMs` 與 `deep{srv,off,trips,streak}`。
+2. **`src/routes/game/+page.svelte`**：`_casualDiagPayload` 的 `push` 多帶 `diffMs` 與 `deep`；
+   `_casualDeltaDiag()` 由呼叫三次收斂成一次。**零新請求、零新計時器、零新 await。**
+3. `src/lib/version.ts` / `oracle-admin/admin.html`（LF）/ 首頁 changelog 三步搬運。
+
+### 兩端規則怎麼保證一致（做不到跨端共用時的替代方案）
+
+client 是 vite bundle、伺服器是灌進 VM 的 patch 檔，**沒辦法共用同一份原始碼**。作法是三層：
+
+1. **常數集中 export**（`DELTA_PUT_MAX_PATH_SEGS` 等 4 個），守衛 B1 把**伺服器區塊抽出來實跑**取值逐值比對。
+2. **判定函式逐字同款並 export**（`deltaPutBadSeg` / `deltaPutArrIdx`），守衛 B2 對 36 個字串
+   （含 `''`/`01`/`-1`/`1e3`/`' 1'`/10 位數/零寬字元/256 與 257 字元/三個危險 key）**兩端逐一對拍**。
+3. **路徑集合的獨立複驗**（守衛 `auditPaths`）：不靠「middleware 回 200」，而是用**伺服器的規則**
+   重走一次每一條路徑（段數／長度／段名／中間節點必須存在且是物件／陣列索引 `< 長度`／
+   2 段路徑的父節點必須是純物件／禁 del 進陣列／路徑集合**互不為前綴**）。
+4. 最後用 **20,000 次端到端 fuzz**（真 v6.278 middleware）收尾：**零 422、逐位元相同**。
+
+### 實測（腳本：`scripts/measure-v6279-deep-diff.mjs`，跑真 AI vs AI 對局）
+
+（4 場 AI vs AI，n = **597 次 PUT**；`node scripts/measure-v6279-deep-diff.mjs 4`）
+
+| 上行 body bytes | p50 | p90 | p99 | 總量 |
+|---|---|---|---|---|
+| 全量（v6.267-） | 34,555 | 53,877 | 66,349 | 19.91MB |
+| 兩層（v6.270） | 12,645 | 14,372 | 18,290 | 7.18MB（省 63.9%） |
+| **深層（v6.279）** | **1,340** | **4,306** | **5,837** | **1.22MB（省 93.8%）** |
+
+⇒ 深層相對兩層**再省 82.9%**；597 次 PUT 有 596 次走深層，1 次被 60% 門檻退回全量（開局）。
+⚠ 這是**沙盒的 AI 自對局**，不是真實玩家資料 ⇒ **首頁 changelog 一個百分比都沒有寫**
+（只寫「節省幅度依盤面大小而異」）。
+
+client 端 diff＋hash＋序列化耗時（沙盒 CPU，比正式裝置慢約一個量級）：
+兩層 p50 3.31ms / p95 5.29ms / p99 5.87ms；深層 p50 3.31ms / p95 5.43ms / p99 **5.89ms**
+⇒ **深層幾乎沒有變貴**（沙盒的 p99 只有 CPU 保險門檻 50ms 的約 1/8 ⇒ 門檻不會誤傷正常裝置）。
+43.7KB 代表性房 doc 的守衛 H1：兩層 p99 4.72ms、深層 p99 4.63ms，body 19,615 → 211 bytes。
+
+### 守衛
+
+`scripts/test-v6279-delta-put-deep-client.mjs`（**43 條**，已進 `package.json` 的 test chain）。
+A 接線／B 兩端規則一致／C 20,000 次 fuzz＋回捲／D 與 BASE 兩層逐位元對拍／
+E 正對照 (a)~(f)／F CPU 保險行為端／G 三分類診斷＋一般玩家 0 發／H perf／I 突變 8 條／J HEAD-FAIL／K 自查。
+
+⚠ 既有守衛的維護：
+- `test-v6272` 的 `PREV_SHA` 前移到 v6.278、`PREV_ALLOWED` 列出本版動過的 6 個玩家端檔案。
+- `test-v6264` 的 `BASE_SHA` 前移到 v6.278（本版動了 changelog ⇒ 依該檔自己的規則前移）。
+- `test-v6278` 的 **I4 改成「commit vs commit」**：原本比的是「v6.277 blob vs **工作樹**」，
+  那守的是「v6.278 沒動玩家端」這件**歷史事實**，卻會在下一版合法動玩家端時誤紅。
+  改成 `ls-tree v6.277` vs `ls-tree v6.278` ⇒ 永久成立，不必再每版維護。**這是收緊不是放寬。**
+- `test-v6270` **一個字都沒改**，43 條仍全綠（`buildRoomPatch` 的預設參數與
+  `_dpNoteBytes('patch', …)` 的呼叫行都刻意逐字保留，M8 的突變錨點才不會失效）。
+
 ## v6.278 — 休閒 PUT 上行增量【伺服器端 3a：深路徑 ＋ 陣列索引】
 
 BASE `54e7a3c68892f5d8ee7146181c7481549b26e177`（v6.277，遠端 main）。

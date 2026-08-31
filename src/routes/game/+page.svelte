@@ -6329,6 +6329,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function _casualDiagPayload(reason: string, now: number): any {
     const g: any = game;
     const st = _sampleStats(_casualPushSamples);
+    // ⭐v6.279 一次取出就好：deltaPutDiag() 會排序四個滾動窗，呼叫三次是白工。
+    //   ⚠ typeof 防衛的理由見 _casualDeltaDiag 的說明（守衛 harness 可能不注入它）。
+    const dd: any = (typeof _casualDeltaDiag === 'function' ? _casualDeltaDiag() : null);
     return {
       reason, mode: 'casual', room: roomCode, ts: now, ver: VERSION,
       // ⭐⭐⭐ 盤面推送＝休閒對戰的「上行」。v6.245／v6.246 定案「慢的是玩家上行」用的是
@@ -6342,7 +6345,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
         // ⭐v6.270 實際送出的 PUT body 位元組數（UTF-8）：patch 與 full 分開統計、能分辨哪種。
         //   8/30 的 dump 分析發現 push{} 完全沒有 body 大小 ⇒ 增量化上線後量不出實際成效。
         //   舊伺服器（哨兵缺席）或熔斷時完全不量 ⇒ null。typeof 防衛見 _casualDeltaDiag 的說明。
-        bodyBytes: (typeof _casualDeltaDiag === 'function' ? ((_casualDeltaDiag() || { bytes: null }).bytes ?? null) : null),
+        //   ⭐v6.279 三分類：deep（深層 patch）／two（兩層 patch）／full（全量）；
+        //   patch 仍是 v6.270 的合併窗（deep＋two），語義沒變 ⇒ 舊 dump 判讀不會被靜默改意思。
+        bodyBytes: (dd ? (dd.bytes ?? null) : null),
+        // ⭐v6.279 diff＋hash＋序列化的耗時分佈（CPU 保險的分母）與保險狀態
+        //   （srv＝伺服器支不支援深路徑、off＝本房已退回兩層、trips＝本頁觸發過幾次）。
+        //   ⚠ 這兩欄是**既有 payload 的欄位**，沒有新請求、沒有新計時器。
+        diffMs: (dd ? (dd.diffMs ?? null) : null),
+        deep: (dd ? (dd.deep ?? null) : null),
       },
       board: {
         phase: g?.phase ?? null, turn: g?.turn ?? null,
@@ -6362,7 +6372,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         : null),
       // ⭐v6.270 只有 casual-delta-fuse 帶得出來：熔斷當下的拒收統計
       //   （lastReason＝伺服器的 deltaReason：'hash'／'bad-patch'／'disabled'…或 'http-400'）。
-      delta: (reason === 'casual-delta-fuse' && typeof _casualDeltaDiag === 'function' ? _casualDeltaDiag() : null),
+      delta: (reason === 'casual-delta-fuse' ? dd : null),
       env: {
         vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
         w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),

@@ -850,35 +850,28 @@ await T('I3 delta-put 區塊整段落在錦標賽區塊之前(位置證明)', ()
   const t = PATCH.indexOf(TOURN_ANCHOR), s = PATCH.indexOf(DP_S), e = PATCH.indexOf(DP_E);
   assert.ok(s > 0 && e > s && e < t, '區塊位置不對');
 });
-await T('I4 ⭐ 玩家端零改動:src/ + static/ 逐檔 blob 比對上一版,只准 version.ts 不同', () => {
-  if (!hasBaseCommit(ROOT, BASE_SHA)) {
+// ⭐ v6.278 自己的 commit sha(v6.279 補上)。
+//   ⚠⚠ 原本這一條比的是「BASE blob vs **工作樹**」—— 那在 v6.278 當下成立,
+//   但下一版只要合法動了玩家端就會誤紅(它守的是「v6.278 沒動玩家端」這件**歷史事實**,
+//   不是「工作樹永遠不准動玩家端」)。改成 commit vs commit ⇒ 是永久事實,不必再每版維護。
+const SELF_SHA = '095ea93f4b85214ccd099d165b14ab608bcc568b';   // v6.278
+await T('I4 ⭐ 玩家端零改動:v6.277 → v6.278 兩個 commit 的 src/ + static/ 逐檔比對,只有 version.ts 不同', () => {
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, SELF_SHA)) {
     shallowSkip('test-v6278 I4 玩家端逐檔 blob 比對', '需要歷史 commit;同一件事 test-v6272 ⑩ 也在守');
     return;
   }
-  const r = readBaseBlob(ROOT, BASE_SHA, 'package.json');
-  assert.ok(r.ok, '讀不到 BASE blob');
   const { execFileSync } = requireChildProcess();
-  const ls = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', BASE_SHA, '--', 'src', 'static'],
-    { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n');
-  const base = new Map(ls.map((l) => { const [meta, p] = l.split('\t'); return [p, meta.split(' ')[2]]; }));
+  const tree = (sha) => {
+    const ls = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', sha, '--', 'src', 'static'],
+      { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n');
+    return new Map(ls.map((l) => { const [meta, p] = l.split('\t'); return [p, meta.split(' ')[2]]; }));
+  };
+  const base = tree(BASE_SHA), self = tree(SELF_SHA);
   assert.ok(base.size > 100, '掃描器壞了?只列到 ' + base.size + ' 個玩家端檔案');
   const diff = [];
-  let crlf = 0;
-  for (const [p, sha] of base) {
-    let buf;
-    try { buf = readFileSync(path.join(ROOT, p)); } catch { diff.push(p + '(刪除)'); continue; }
-    const cur = createHash('sha1').update('blob ' + buf.length + '\0').update(buf).digest('hex');
-    if (cur === sha) continue;
-    // ⚠ Windows 工作樹(autocrlf)會讓每一個檔的 blob 都不同 ⇒ 那是**環境**不是改動。
-    //   把 CRLF 正規化後再比一次;仍不同才算真的被動到。
-    const lf = buf.toString('latin1').replace(/\r\n/g, '\n');
-    const cur2 = createHash('sha1').update('blob ' + Buffer.byteLength(lf, 'latin1') + '\0')
-      .update(Buffer.from(lf, 'latin1')).digest('hex');
-    if (cur2 === sha) { crlf++; continue; }
-    diff.push(p);
-  }
-  if (crlf > 0) console.log('        (工作樹有 ' + crlf + ' 個檔是 CRLF 行尾 —— 已正規化後比對;CI 是 LF)');
-  assert.deepStrictEqual(diff.sort(), ['src/lib/version.ts'], '玩家端被動到了: ' + diff.join(', '));
+  for (const [p, sha] of base) { if (self.get(p) !== sha) diff.push(p); }
+  for (const [p] of self) { if (!base.has(p)) diff.push(p + '(新增)'); }
+  assert.deepStrictEqual(diff.sort(), ['src/lib/version.ts'], 'v6.278 動到了玩家端: ' + diff.join(', '));
 });
 await T('I5 admin.html 維持 LF', () => {
   const raw = readFileSync(path.join(ROOT, 'oracle-admin/admin.html'));

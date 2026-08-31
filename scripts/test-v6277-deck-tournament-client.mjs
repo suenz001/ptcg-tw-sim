@@ -32,6 +32,13 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '9f500a55cf83daa8be3530ff01c8a163c6a60a23';   // v6.276
+// ⭐ v6.277 自己的 commit sha（v6.279 補上）。
+//   ⚠⚠ 下面【Ge】原本比的是「v6.276 blob vs **工作樹**」—— 它守的是
+//   「**v6.277** 除了三個 deckId 之外沒動 game/+page.svelte」這件**歷史事實**，
+//   卻會在之後任何一版合法改動該檔時誤紅（v6.279 第一次踩到）。
+//   改成 commit vs commit ⇒ 永久成立、不必每版維護；「現在的碼還有那三個 deckId」
+//   由本檔【A1~A3】對**工作樹**的斷言繼續守（兩件事分開，都沒有被放寬）。
+const SELF_SHA = '54e7a3c68892f5d8ee7146181c7481549b26e177';   // v6.277
 
 const P_GP = join(ROOT, 'src/routes/game/+page.svelte');
 const P_DS = join(ROOT, 'src/lib/decks/deck-stats.ts');
@@ -660,8 +667,14 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     assert.ok(bDK.out.includes(CASUAL_CARD), '休閒勝率卡的快照與 BASE 對不上 ⇒ F1 是在測不存在的形狀');
     assert.ok(bDK.out.includes(CASUAL_TABLE), '休閒對各原型表的快照與 BASE 對不上 ⇒ F2 是在測不存在的形狀');
   });
-  await T('Ge ⭐【正對照 e】game/+page.svelte 除了三個 deckId 之外逐字等於 BASE', () => {
-    let t = GP;
+  await T('Ge ⭐【正對照 e】v6.277 的 game/+page.svelte 除了三個 deckId 之外逐字等於 v6.276', () => {
+    if (!hasBaseCommit(ROOT, SELF_SHA)) {
+      shallowSkip('v6277-Ge revert-diff', '需要 v6.277 的 commit；A1~A3 對工作樹的斷言仍在守');
+      return;
+    }
+    const selfGP = readBaseBlob(ROOT, SELF_SHA, 'src/routes/game/+page.svelte');
+    assert.ok(selfGP.ok, '讀不到 v6.277 的 game/+page.svelte');
+    let t = selfGP.out;
     const undo = [
       ["    // ⭐⭐v6.277 套牌戰績（P3b）：報名時把這副牌的 `Deck.id` 一起送出（伺服器 v6.276 起收）。\n    //   ⚠⚠ 純 additive —— 請求體除了**多這一個 key** 之外逐位元不變（守衛 test-v6277 逐字證明），\n    //     伺服器端沒送／不合格一律**欄位缺席**，絕不因為它擋報名。\n", ''],
       ["      // ⭐⭐v6.277：補報到也要帶 deckId（三個報名入口一個都不能漏，否則那些場次永遠算不進戰績）。\n", ''],
