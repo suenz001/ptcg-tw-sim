@@ -99,6 +99,33 @@ E 正對照 (a)~(f)／F CPU 保險行為端／G 三分類診斷＋一般玩家 0
 - `test-v6270` **一個字都沒改**，43 條仍全綠（`buildRoomPatch` 的預設參數與
   `_dpNoteBytes('patch', …)` 的呼叫行都刻意逐字保留，M8 的突變錨點才不會失效）。
 
+### 部署（⚠ 前置條件：v6.278 的 server 必須已在 VM 上）
+
+- `redeploy-oracle.bat`（前端主站＝VM nginx）—— **主要**。
+- `update-admin-full.bat`（只為了 `oracle-admin/admin.html` 的 `SITE_VERSION_HINT` 對上 6.279）。
+- ⚠ 本版**沒有**動卡效果／引擎／錦標賽伺服器 ⇒ `update-tournament.bat` 非必要（要跑也無害，它是超集）。
+- ⚠⚠ **`server_admin_patch.js` v1.34（v6.278）必須先在 VM 上**，否則 GET 回應沒有 `deltaPutDeep:1`，
+  client 會**自動維持兩層**（不會壞、不會多打請求 —— 守衛 E-a 實跑證明），只是省不到深層的效益。
+  判斷方法：`pm2 log` 有 `[rooms] delta-put middleware (v1.29) hoisted=true enabled=true deepSegs=8`
+  這一行（`deepSegs=8` 就是深路徑已上線；前綴的 `(v1.29)` 是刻意保留的定位字串，不是版本倒退）。
+- kill switch 不變：VM 上把 `_DELTA_PUT_ENABLED` 改 `false` 重佈 ⇒ 兩個哨兵一起消失、全站自動回全量。
+
+### 上線後看什麼才知道有效
+
+admin →「📡 監控」→「🎮 休閒對戰批」，看 `push.bodyBytes`：
+
+| 欄位 | 意義 |
+|---|---|
+| `bodyBytes.deep` | 走深層送出的 body 位元組（**這一欄有數字＝深層真的上線了**） |
+| `bodyBytes.two` | 退回兩層送出的（伺服器沒宣告 deltaPutDeep／CPU 保險觸發） |
+| `bodyBytes.full` | 全量（60% 門檻／熔斷／哨兵缺席） |
+| `diffMs` | client 端整理變動的耗時分佈（CPU 保險的分母） |
+| `deep.trips` | CPU 保險觸發過幾次（>0 ＝真的有低階裝置被保護到） |
+| `casual-delta-fuse` 指紋 | 熔斷（連 3 次被伺服器拒收）——**出現就要查**，代表 hash 複驗一直不過 |
+
+⚠ 這批資料只有**已登入 email 帳號**的休閒玩家才送得出來（v6.261 的既有閘），
+且有 10% 取樣骰與「p95 ≥ 5 秒才報」的門檻 ⇒ 是**下界**，不是全體分佈。
+
 ## v6.278 — 休閒 PUT 上行增量【伺服器端 3a：深路徑 ＋ 陣列索引】
 
 BASE `54e7a3c68892f5d8ee7146181c7481549b26e177`（v6.277，遠端 main）。
