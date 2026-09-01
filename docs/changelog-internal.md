@@ -1,5 +1,75 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.281 — Firestore 免費額度定案輪：homeChangelog 負結果快取 6h→30 天＋綁站台版本；admin feedbacks 快取 5→30 分鐘
+
+BASE `3913d73a392ca0d5e791d126176124393cc6de39`（v6.280，遠端 main）。
+
+### 三份真實資料交叉定案（2026-09-02）
+
+1. **Firebase 用量與帳單**：讀取 2.8 萬／5 萬（56.6%），截圖時間台灣 9/2 02:48。
+   官方：配額 reset around midnight Pacific time（＝台灣 15:00）⇒ 該週期已跑 11h48m
+   ⇒ 全天推估 **4 萬多讀**。
+2. **Firestore 用量洞察（30 天）**：總讀取 **94,811**（每天約 3,160），其中 `/feedbacks`
+   **92,129（97.2%）**、全部 `users/*/decks` 加總僅約 1,100、`/rooms` 452。
+   實際每天 4 萬多 ⇒ 30 天應為 120 萬 ⇒ **儀表板只顯示 7.9%**。官方明文：
+   「Queries that return zero results incur a cost of one read operation.
+   This usage is billed but does not appear in the usage dashboard.」
+3. **admin 總覽**：意見總數 341 筆 ⇒ 92,129÷341 ≈ 269 次全撈（每天約 9 次）≈ 每天 3,070 讀
+   ⇒ 儀表板看得到的讀取幾乎全是 admin。
+
+⇒ **真兇＝`config/homeChangelog`（一份 404、根本不存在的文件）約 3.7 萬讀/天、佔免費額度 74%**。
+v6.273 的負結果快取沒效：TTL 只有 6 小時——玩家一天來一次，每次都過期＝零命中。
+
+### 【A】src/lib/home-changelog-cache.ts
+
+- 正結果（admin 真的設了 override）：TTL 維持 **6 小時**（admin 改公告最慢 6h 全站生效）。
+- 負結果（html=null）：TTL **6 小時 → 30 天**（站長裁定）。
+- ⭐ 加「站台版本綁定」：快取多存 `v`（＝寫入當下的 `VERSION`），讀取時 `o.v !== VERSION`
+  一律未命中 ⇒ 舊格式（v6.273~v6.280 寫入、無 v 欄位）自動全部失效、重讀一次；
+  之後**每人每版最多 1 讀**。30 天的唯一缺點（admin 日後真要啟用 override 時，
+  舊訪客最慢 30 天才看到）被抵銷——出一個新版就能讓全站負結果快取立即失效。
+- `VERSION` 以相對路徑 import 自 `./version`——查證：該檔是**零 import 的純 leaf module**
+  （整檔只有一個 export const），不可能與本檔形成循環 import（Rule 12 的模組層級 TDZ
+  只發生在循環依賴下）。刻意**不採**「呼叫端把版本當參數傳入」方案：那要改
+  `loadHomeChangelogOverride` 簽名與 +page.svelte 接線，test-v6273 的【B】接線抽取
+  runner 沒注入 VERSION 會直接 ReferenceError 炸整支守衛，且「呼叫端忘傳」是 fail-open。
+- 既有防護逐一保留：時鐘倒退視為過期、形狀損毀當未命中、隱私模式 fail-open 照舊讀、
+  fetch 失敗往上丟且不寫快取。CACHE_KEY 沿用 v1（舊條目靠 v 欄位缺席自動失效，不留垃圾鍵）。
+
+### 【B】oracle-admin/server_admin_patch.js（v1.35）
+
+- `FEEDBACKS_TTL_MS` 5 分鐘 → **30 分鐘**（站長裁定）。admin 掛著總覽/意見分頁的日子
+  由每天約 9 輪全撈（每輪 341 讀）降到約 1.5 輪，約省 2,500 讀/天。
+- `FEEDBACKS_CAP=2000` 刻意不動：意見總數 341 遠低於上限；動了可能讓「未回覆數」失真
+  且無實際收益。invalidateFeedbacksCache（admin 回覆/刪除後立刻看到）、single-flight、
+  「過期先回舊值背景刷新」、unrepliedAt/unrepliedTruncated 全部保留。
+- ⚠⚠ 錦標賽區塊逐位元未動（本版只改一個常數與檔頭註解；既有 sha256 守衛照跑）。
+
+### 【C】守衛 scripts/test-v6281-firestore-read-reduction.mjs（入 npm test chain）
+
+行為端實跑（時間流逝用「回撥快取 at 欄位」模擬，不 mock Date）：
+負結果 29 天命中/31 天未命中、6 小時後仍命中（＝與 v6.273 的行為差異點、HEAD-FAIL 主力）、
+正結果 5h 命中/7h 未命中、版本綁定（tamper v＋雙 bundle 注入不同版本字串互證）、
+舊格式未命中、時鐘倒退/形狀損毀/隱私模式不炸、fetch 失敗不寫快取；
+`FEEDBACKS_TTL_MS` 實際求值===30 分鐘、快取段實跑 invalidate 後立刻重讀；
+HEAD-FAIL 對 BASE blob 各自紅在指定斷言（expectRedAt 驗紅點）；突變 5 條各紅在指定斷言。
+
+既有守衛同步更新（沒有弱化任何斷言）：
+- test-v6272：TTL 求值 300000→1800000、M5 突變錨點、⑩ 每版宣告清單
+  （PREV_SHA→v6.280；PREV_ALLOWED＝本版三個玩家端檔）。
+- test-v6273：B2/B3/G 的暖快取 seed 改走 `writeCachedOverride` round-trip
+  （快取綁版本後，手工舊格式 seed 是未命中——改 round-trip 更行為端，「命中→0 讀」語意不變）；
+  I5 突變錨點加 `v: VERSION`。
+- oracle-admin/admin.html：SITE_VERSION_HINT 6.281（v6272 守衛的版本一致斷言要求）。
+
+### 預估效果
+
+homeChangelog：約 3.7 萬讀/天 →「每不重複訪客每版 1 讀」；以每 1~3 天出一版、
+日活數百人計約數百讀/天（降約 99%）。admin feedbacks：約 3,070 → 約 500 讀/天。
+合計全天讀取自 4 萬多降到數千，脫離免費額度警戒。
+
+（純效能/額度修正，玩家看不到任何行為變化 ⇒ 依規矩不寫首頁 changelog、static/ 零改動。）
+
 ## v6.280 — 幻影 setup 防護的門檻改成**跟著房間走**（換房不重設 ⇒ 玩家被自己的陳舊旗標判輸）
 
 BASE `8d366f9c880301091e4668fed8268d4dc22804a3`（v6.279，遠端 main。

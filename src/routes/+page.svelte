@@ -116,8 +116,10 @@
       // v6.273：加 localStorage TTL 快取（6 小時）—— 這份 override 幾乎沒在用（多數時間文件
       //   根本不存在），卻是全站最大宗的 Firestore 讀取（每次首頁載入 1 讀、不分匿名）。
       //   TTL 內直接用快取（含「確認過不存在」的負結果，0 讀）；localStorage 不可用（隱私
-      //   模式）→ 照舊每次讀。admin 之後若改/新增 override：新訪客與快取過期者立即生效，
-      //   其餘最慢 6 小時。
+      //   模式）→ 照舊每次讀。
+      // v6.281：負結果 TTL 6 小時 → 30 天，且快取綁站台版本（版本一變即失效）——
+      //   6 小時對「一天來一次」的玩家是零命中。正結果維持 6 小時；admin 之後若真的
+      //   要啟用 override：新訪客與正結果過期者最慢 6 小時看到，其餘出一個新版即全站生效。
       loadHomeChangelogOverride(async () => {
         const snap = await getDoc(doc(db, 'config', 'homeChangelog'));
         if (!snap.exists()) return null;

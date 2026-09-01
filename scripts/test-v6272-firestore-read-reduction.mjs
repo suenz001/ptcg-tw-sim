@@ -364,7 +364,7 @@ await TA('[前提] feedbacks 快取三件套抽得出來（BASE 上不存在 ⇒
   const f = buildFeedback();
   assert.strictEqual(typeof f.getFeedbacksCached, 'function');
   assert.strictEqual(typeof f.invalidateFeedbacksCache, 'function');
-  assert.strictEqual(f.FEEDBACKS_TTL_MS, 300000, 'TTL 應為 5 分鐘（與 USERS_STATS_TTL_MS 一致），實得 ' + f.FEEDBACKS_TTL_MS);
+  assert.strictEqual(f.FEEDBACKS_TTL_MS, 1800000, 'TTL 應為 30 分鐘（v6.281 站長裁定），實得 ' + f.FEEDBACKS_TTL_MS);
 });
 await TA('★★★[核心] 開總覽 ＋ 開意見回饋分頁 5 次 ⇒ feedbacks 只被讀一輪（BASE 是每次全撈）', async () => {
   const f = buildFeedback();
@@ -606,7 +606,7 @@ await TA('M4 把 matchedTotal 寫成清單長度（＝謊報全量）⇒「回�
   mutRooms('const _matchedTotal = (_sq && _sq !== \'all\')', 'const _matchedTotal = rooms.length; const _unused = (_sq && _sq !== \'all\')',
     (b) => b.matchedTotal === 300 && b.matchedTotal !== endedTotal, '謊報之後 matchedTotal 竟然還是全量'));
 await TA('M5 把 FEEDBACKS_TTL_MS 改成 0 ⇒「快取只讀一輪」必紅', async () => {
-  const patched = SRV.replace('const FEEDBACKS_TTL_MS = 5 * 60 * 1000;', 'const FEEDBACKS_TTL_MS = 0;');
+  const patched = SRV.replace('const FEEDBACKS_TTL_MS = 30 * 60 * 1000;', 'const FEEDBACKS_TTL_MS = 0;');
   assert.notStrictEqual(patched, SRV, '突變沒套用');
   const spy = mkSpy();
   const adminDb = makeFirestore(newStore(), spy, {});
@@ -664,18 +664,15 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '8d366f9c880301091e4668fed8268d4dc22804a3';   // v6.279（v6.280 的上一版）
-// ⭐v6.280 是**純 client 端**版（幻影 setup 防護的門檻改成跟著房間走＋休閒指紋補欄位），
-//   另外出了首頁 changelog（三個 static/changelog*.html 依 v6.264 的三步搬運）。
-//   ⚠ 伺服器端（oracle-admin/server_admin_patch.js）一個位元都沒動。
+const PREV_SHA = '3913d73a392ca0d5e791d126176124393cc6de39';   // v6.280（v6.281 的上一版）
+// ⭐v6.281 玩家端只動三個檔：home-changelog-cache.ts（負結果快取 6h→30 天＋綁站台版本，
+//   Firestore 讀取減量定案輪）、+page.svelte（只更新註解，接線一字不動）、version.ts。
+//   純效能/額度修正 ⇒ 依規矩不寫首頁 changelog（static/ 零改動）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/game/sync-guards.ts',
+  'src/lib/home-changelog-cache.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
-  'static/changelog-archive.html',
-  'static/changelog-bodies.html',
-  'static/changelog.html',
+  'src/routes/+page.svelte',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

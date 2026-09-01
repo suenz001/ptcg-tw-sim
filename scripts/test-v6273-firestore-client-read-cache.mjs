@@ -342,10 +342,13 @@ await T('A8 fetch 失敗 → 例外往上丟且不寫快取（下次載入再試
 // 【B】+page.svelte 接線段實跑
 // ══════════════════════════════════════════════════════════════════════════
 console.log('【B】首頁接線（快取空→1 讀＋override 套用；命中→0 讀）');
-async function homeWiringDeps(fsSeed, lsOpts) {
+async function homeWiringDeps(fsSeed, seedCachedHtml) {
   const mod = await loadHomeCacheMod(HC);
   const { api, spy } = makeFS(fsSeed);
-  globalThis.localStorage = makeLS(lsOpts);
+  globalThis.localStorage = makeLS();
+  // v6.281：快取已綁站台版本（沒有 v 欄位的手工 seed 一律視為未命中）⇒ 暖快取一律走
+  //   writeCachedOverride round-trip，命中語意由模組自己保證（更行為端，不弱化斷言）。
+  if (seedCachedHtml !== undefined) mod.writeCachedOverride(seedCachedHtml);
   return { deps: { loadHomeChangelogOverride: mod.loadHomeChangelogOverride, getDoc: api.getDoc, doc: api.doc, db: {}, base: '/b' }, spy };
 }
 await T('B1 快取空＋override 存在 → 恰 1 讀，且 changelogOverride 套上（__BASE__ 有替換）', async () => {
@@ -357,14 +360,14 @@ await T('B1 快取空＋override 存在 → 恰 1 讀，且 changelogOverride �
 });
 await T('B2 ⭐ 快取命中（負結果）→ 0 讀，且不覆蓋內建（changelogOverride 維持 null）', async () => {
   const run = buildHomeWiringRunner2(HP);
-  const { deps, spy } = await homeWiringDeps({}, { seed: [['ptcg_home_cl_cache_v1', JSON.stringify({ at: Date.now() - 1000, html: null })]] });
+  const { deps, spy } = await homeWiringDeps({}, null);
   const out = await run(deps)();
   assert.strictEqual(spy.reads, 0, '快取命中竟然還打了 Firestore（' + spy.reads + ' 讀）');
   assert.strictEqual(out.changelogOverride, null);
 });
 await T('B3 [正對照] 快取命中（有 override）→ 0 讀且 override 照樣套用（不會讓公告消失）', async () => {
   const run = buildHomeWiringRunner2(HP);
-  const { deps, spy } = await homeWiringDeps({}, { seed: [['ptcg_home_cl_cache_v1', JSON.stringify({ at: Date.now() - 1000, html: '<b>__BASE__/y</b>' })]] });
+  const { deps, spy } = await homeWiringDeps({}, '<b>__BASE__/y</b>');
   const out = await run(deps)();
   assert.strictEqual(spy.reads, 0);
   assert.strictEqual(out.changelogOverride, '<b>/b/y</b>', '快取命中時 override 沒套用 —— admin 公告會消失！');
@@ -843,10 +846,13 @@ async function runSession({ hpSrc, dkSrc, gpSrc, bcSrc, clSrc, hcSrc, warmCache,
   };
   const { api, spy } = makeFS(fsSeed);
   globalThis.__V6273_FS__ = api;
-  const lsSeed = warmCache
-    ? [['ptcg_home_cl_cache_v1', JSON.stringify({ at: Date.now() - 1000, html: null })], ...seedRev(uid, 'r1')]
-    : [];
+  const lsSeed = warmCache ? [...seedRev(uid, 'r1')] : [];
   globalThis.localStorage = makeLS({ seed: lsSeed });
+  // v6.281：暖快取走 writeCachedOverride round-trip（快取綁版本，手工舊格式=未命中）。
+  //   BASE 對照（hcSrc===null）不看 localStorage，不需要 seed。
+  if (warmCache && hcSrc !== null) {
+    (await bundleTs(hcSrc, join(ROOT, 'src/lib'))).writeCachedOverride(null);
+  }
   const localDecks = Array.from({ length: deckCount }, (_, i) => ({ id: 'd' + i, name: '牌組' + i, updatedAt: '2026-01-01' }));
   const cloudMod = await bundleTs(clSrc, join(ROOT, 'src/lib/decks'));
   const bcMod = await bundleTs(bcSrc, join(ROOT, 'src/lib/game'));
@@ -1018,7 +1024,7 @@ await T('I4 突變：broadcast 快取永不過期 → F3 紅', async () => {
   assert.ok(await expectRed(() => assertF3(m)), 'I4 突變沒被 F3 抓到（admin 改廣播會永不生效）');
 });
 await T('I5 突變：快取寫入變 no-op → A2 紅（「有沒有真的省到讀取」在守）', async () => {
-  const m = mutate(HC, "  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: now, html })); } catch { /* 隱私模式等 → 下次照舊讀 */ }",
+  const m = mutate(HC, "  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: now, html, v: VERSION })); } catch { /* 隱私模式等 → 下次照舊讀 */ }",
     '  // mutated no-op', 'I5');
   assert.ok(await expectRed(async () => assertA2(await bundleTs(m, join(ROOT, 'src/lib')))), 'I5 突變沒被 A2 抓到');
 });

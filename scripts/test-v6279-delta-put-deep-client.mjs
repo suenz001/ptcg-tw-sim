@@ -684,13 +684,24 @@ await T('E-d ⭐⭐ 錦標賽 tApi 逐位元不變＋零 delta 識別字（錦�
   } else {
     shallowSkip('v6279-E-d tApi 與 BASE blob 逐位元比對', 'history-free 判準（零 delta 識別字）仍在守');
   }
-  // 伺服器檔完全沒動（本版是純 client 版）
+  // 伺服器端 delta-put 區塊完全沒動（本版是純 client 版）
+  // ⚠ v6.281 更正：原本斷言「工作樹整檔 sha256 === v6.278 blob」＝pin 死上一版整檔，
+  //   後續任何合法的 server 改動（v6.281 只改 FEEDBACKS_TTL_MS）都會誤紅（第九種安慰劑
+  //   的鏡像：pin 死版本讓守衛在下一版變成誤報器）。這條真正要守的前向意圖是
+  //   「client 版不可偷動 delta-put 伺服器區塊」⇒ 改成只比對 PTCG-DELTA-PUT 區塊
+  //   與 v6.278 逐位元相同（區塊行為另有 test-v6278 抽出實跑；錦標賽區塊另有 sha256 鎖）。
   if (hasBaseCommit(ROOT, BASE_SHA)) {
     const b = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
     assert.ok(b.ok);
-    assert.equal(createHash('sha256').update(SRV, 'utf8').digest('hex'),
-      createHash('sha256').update(b.out.replace(/\r\n/g, '\n'), 'utf8').digest('hex'),
-      '⚠⚠ server_admin_patch.js 被動到了（本版只做 client）');
+    const dpOf = (s) => {
+      const a = s.indexOf('// >>> PTCG-DELTA-PUT-BLOCK-START');
+      const z = s.indexOf('// <<< PTCG-DELTA-PUT-BLOCK-END');
+      assert.ok(a > 0 && z > a, 'PTCG-DELTA-PUT 區塊抽不到 —— 哨兵被動了？');
+      return s.slice(a, z);
+    };
+    assert.equal(createHash('sha256').update(dpOf(SRV), 'utf8').digest('hex'),
+      createHash('sha256').update(dpOf(b.out.replace(/\r\n/g, '\n')), 'utf8').digest('hex'),
+      '⚠⚠ delta-put 伺服器區塊被動到了（v6.279 是純 client 版）');
   }
 });
 await T('E-e ⭐⭐ Firestore 讀取零增加：room.ts／firebase.ts 與 BASE 逐位元相同、零 delta 識別字', () => {
