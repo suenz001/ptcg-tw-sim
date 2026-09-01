@@ -1,5 +1,145 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.280 — 幻影 setup 防護的門檻改成**跟著房間走**（換房不重設 ⇒ 玩家被自己的陳舊旗標判輸）
+
+BASE `8d366f9c880301091e4668fed8268d4dc22804a3`（v6.279，遠端 main。
+⚠ 交辦寫的 BASE 是 `106554942b…`，但遠端 main 上還有一顆**純 docs** commit `8d366f9c`
+＝ v6.279 的 `docs/changelog-internal.md` 補充，diff 只有 `docs/changelog-internal.md +27`。
+以 `8d366f9c` 為 parent，否則會把那顆 docs commit 回捲掉）。
+⚠⚠ **純 client 端**：`oracle-admin/server_admin_patch.js` 一個位元都沒動。
+
+### 事故（2026-08-31 16:52，房 `PVK8`，兩位玩家的指紋互為直接證據）
+
+| 誰 | 指紋 | 內容 |
+|---|---|---|
+| 玩家 I（seat 0，v6.279） | `casual-phantom-adopt` | `phase=playing turn=4 logLen=101`、已成功推送 15 發、`won:true`、`readyMs:1`、Δ`createdAtSrv` ＝ **+332,516ms** |
+| 對手（seat 1，v6.279） | `casual-forfeit-claim`（早 687ms） | `board{phase:setup, turn:1, logLen:4}`、`claim{granted:true, idleSec:90}` |
+
+⇒ 同一秒鐘，兩人**在兩局不同的局裡**：一個凍在舊局的第 4 回合，一個已經在新的 setup 局裡等滿 90 秒。
+
+### 真因（逐行複驗過，不是推論）
+
+1. 對手在**對局中**發起「重新開局」→ `room-oracle.ts:570 checkAndAcceptRestart` 在 `status` 仍是
+   `playing` 的情況下，把房間 `gameState` 換成新的 setup 局（`restartProposalCount` 同時 +1）。
+2. 玩家 I 的 client 被 `sync-guards.ts:296-300` 的 `phantom-setup` 防護**反覆 reject**
+   （條件：`local.phase==='playing' && incoming.phase==='setup' && roomRestartCount <= lastAdoptedRestartCount`）
+   ⇒ 畫面凍在 turn 4。
+3. 對手在新局裡 `setupDone[1]=true / setupDone[0]=false`，滿足 `room-oracle.ts:362 _waitingOnOpp`
+   的 setup 分支 ⇒ 90 秒後 `claimOpponentForfeit` **granted** ⇒ 房間寫進 game-over。
+4. 玩家 I 這次收到的是「**不同 id ＋ `game-over`**」⇒ 第 2 條防護不適用（它只擋 `phase==='setup'`）
+   ⇒ 直接 adopt ⇒ **盤面被換掉、而且他已經輸了**。
+
+#### 必要條件：`lastAdoptedRestartCount` 是 per-page 的變數，卻承載 per-room 的語意
+
+`game/+page.svelte:1121` 宣告，**唯一寫入點**在 `:8632`（adopt 了一個 setup 局時記下當時的
+`restartProposalCount`）。`startRoomSubscription()`（`:8428-8432`）只歸零 `_onlineReadyAt`
+（v6.274 修的那一條），**沒有動它**；`leaveOnlineGame` 清了 `game`／`roomData`／`roomCode`，
+也**沒有動它**。
+
+⭐⭐ 而 `seat 0` 是 v5.749 的**指定建局者**（`sync-guards.ts shouldAttemptStartGame`：
+`mySeat === 0` 立刻 return true），建局 commit 成功後在 `:8823` **直接** `game = _pendingGame`
+—— **不經過 adopt** ⇒ 進到新房間永遠不會重新寫那個門檻。
+（seat 1 相反：`won=false` ⇒ 等 canonical snapshot ⇒ 走 adopt ⇒ 順手把門檻重設成新房的 count，
+所以**只有 seat 0 會中**。D 正是 seat 0。）
+
+⇒ 在 A 房經歷過一次重新開局（門檻被墊到 1）的 seat 0 玩家，換到 B 房之後，
+B 房的第一次重新開局（`restartProposalCount` 1）被 `1 <= 1` 擋掉。
+
+### 做了什麼
+
+1. **`src/lib/game/sync-guards.ts`**：新增純述詞 `nextRestartBaseline()`
+   （以哨兵 `// >>> v6280-restart-baseline-core` / `// <<< …` 包住，讓 test-v6265 的 F4/F5
+   逐字比對能把它剝掉、其餘照樣逐字釘住）。
+   ⚠⚠ **`resolveRoomUpdate` 與 `shouldSkipStalePush` 一個字都沒動**（sha256 錨在 test-v6280 E1/E2）。
+2. **`src/routes/game/+page.svelte`**
+   - 新增 `_restartBaselineRoom`（「目前的門檻是哪一間房的」）。
+   - `startRoomSubscription()` 把它標成 `null`（＝尚未對應到任何房間）。
+     ⚠⚠ **這裡不能直接讀 `roomData`** —— `leaveOnlineGame`（`:8985`）與 `dismissZombieRoom`（`:8392`）
+     離房時已經把 `roomData` 設成 `null`，而換房時新房的第一發更新也還沒到
+     ⇒ 交辦所寫的「在 `startRoomSubscription` 讀 `roomData.restartProposalCount`」
+     **在真實流程裡永遠讀不到值 ⇒ fail-closed 保留舊值 ⇒ 等於沒修**。
+   - 真正的重設放在 `handleRoomUpdate` 的 `roomData = room;` 之後、**`resolveRoomUpdate` 之前**：
+     `nextRestartBaseline({ baselineRoom, roomCode, roomRestartCount: room.restartProposalCount ?? 0, … })`。
+     那一刻拿得到的是**這一間房**的真值。
+   - **fail-closed 的三條**：房號未知（`roomCode` 空）／`roomRestartCount` 不是有限數／
+     `baselineRoom === roomCode`（同一間房）⇒ **原值一個字不動**。
+     ⚠ **絕不設 0** —— 設 0 是 fail-open：重整回到一間 `restartProposalCount` 已是 2 的房，
+     之後任何幻影 setup 局（2 > 0）都會被放行。
+3. **指紋補欄位**（`casual-phantom-adopt`，全部讀既有 state，零新請求／零新計時器）：
+   `localId8`／`incomingId8`（v6.265 其實已經存進 `_casualPhantom`，只是沒送出去）、
+   `incPhase`／`incTurn`／`incLogLen`／`incWinner`（⭐ 直接坐實「換進來的是 game-over」）、
+   `roomStatus`／`restartCount`／`lastAdopted`（⭐ `restartCount <= lastAdopted` ＝這一版修的那條）、
+   `rejPhantomSetup`（本場被幻影防護擋掉幾次，>0 ＝畫面曾經凍住）、
+   `startGameCalls`（本頁呼叫過幾次建局；Rule 30/31：**先量到再談要不要加重入旗標**）、
+   `vis`、`benign='spectator'`（⭐ **標記**不是排除 —— 排除會讓分母不誠實）。
+
+### 刻意**沒有**做的（交辦明列，我也同意）
+
+- **沒有**讓 phantom 防護也擋 `incoming.phase==='playing'/'game-over'` —— 那是動收斂邏輯，
+  長期記憶明訓會造成兩端互相拒收的死結。
+- **沒有**加 `startGame` 的 in-flight 再入旗標 —— 旗標沒在 catch／逾時清掉＝建局永久卡死，
+  比原 bug 嚴重；而且那只是中等強度假說，等 `startGameCalls` 指紋回來再說。
+- **沒有**動 `shouldSkipStalePush`（站長還沒裁定）、棄權判準、v6.279 的深層 diff。
+
+### 守衛 `scripts/test-v6280-restart-baseline.mjs`（44 條，已進 `package.json` 的 test chain）
+
+- 【B】**行為端**：把 `+page.svelte` 的 `startRoomSubscription` 重設段、`handleRoomUpdate`
+  的門檻重設段、`decision` switch、`_casualNotePhantomAdopt`、payload 的 `phantom` 欄位
+  **原文抽出來、esbuild 轉譯、真的執行**，用「A 房重新開局 → 換 B 房 → 對手在對局中 restart
+  → 對手宣告棄權」整串驅動。抽取器版本無關 ⇒ 【A】拿真 BASE blob 跑同一組 fixture 必紅。
+- 【B-正對照】P-a 真正的幻影 setup 局仍被 reject／P-a2 重整回同房（count 2）仍被擋（不是設 0）／
+  P-b 房號未知時 fail-closed／P-c 同房不重複重設／P-d 正常對局 40 發逐發不變且 0 發診斷。
+- 【C】純述詞六條（含兩條 fail-closed）。
+- 【D】**枚舉**：`lastAdoptedRestartCount` 的寫入點恰為 2（宣告 1）；重設必須走中央述詞；
+  順序必須在 `resolveRoomUpdate` **之前**；`startRoomSubscription` 不可直接設 0。
+- 【E】`resolveRoomUpdate` / `shouldSkipStalePush` 內嵌 sha256（history-free）＋ 防護條文逐字。
+- 【F】指紋八條（行為端逐欄）＋ 零額外請求（`_tPostClientDiag` 3／`_tSendClientDiag` 15／
+  `tApi` 37／`fetch` 3，與 BASE blob 實測**逐一相同**）。
+- 【G】七個突變，**每一個都紅**；【H】自己在 test chain 裡。
+
+BASE 上的實跑輸出：`拒收 3 次、與房間分歧 3 發、最後盤面 B-GAME-3/game-over winner=1`。
+
+### 順帶維護的既有守衛（都是「守衛在做事」，照它說的修）
+
+- `test-v6274` 的 harness 補 `_startGameCalls` stub；**E4 的 sha256 錨點縮到「判定條件」那一段**
+  （函式開頭 → `_casualPhantom = {` 之前，sha `a0109c4acdebed46` 與 BASE 相同），
+  證據物件整段另外釘一個值。理由：v6.280 是**刻意擴充證據物件**，而「什麼情況才算一次
+  phantom-adopt」一個字都不能動 —— 錨在判定條件才對得準。
+  ⚠ 為此 `_casualNotePhantomAdopt` 裡**刻意不宣告區域變數**（用 `(incoming as any)` 直接取），
+  多一行就會讓那條錨點誤報。
+- `test-v6265` 的 F4/F5：沿用 v6.267／v6.270 對它的既有修法，用哨兵把 v6.280 的合法新增
+  剝掉之後，`sync-guards.ts` 其餘仍必須逐字等於 BASE blob。harness 補兩個計數 stub。
+- `test-v6264` 的 `BASE_SHA`、`test-v6272` 的 `PREV_SHA`／`PREV_ALLOWED` 前移到 v6.279。
+  ⚠ 這兩個 pin 都是「每版手動維護」的既知技術債（見 ptcg-push skill 的紀律 E）。
+
+### 驗證
+
+- 完整 `npm test`（610 步，分批跑）全綠；`tsc` 新 TS2304 **0**；
+  acorn 驗 `.svelte` 模組層級繫結：`nextRestartBaseline`／`_restartBaselineRoom`／
+  `_rejPhantomSetup`／`_startGameCalls` 全部 DECLARED。
+- svelte compile warning 數：`game` **98**、首頁 **14**、`decks` **25** —— 與 BASE 相同。
+- 首頁 changelog 三步搬運：新增 v6.280、v6.258 的內文搬進 `changelog-bodies.html`、
+  v6.205 搬進 `changelog-archive.html`。首頁 **31,001 → 30,948 bytes（−53）**，
+  仍在「每版增量 ≈ 0」的穩態。
+
+### 部署
+
+**純 client 端，沒有 server-first 相依。** 但這一版動到 `oracle-admin/admin.html`
+（`SITE_VERSION_HINT`）⇒ 依 bat 表，**只叫站長跑 `update-tournament.bat`**（唯一會先
+`git fetch origin` ＋ `git reset --hard origin/main` 的那一支），再跑 `redeploy-oracle.bat`
+讓前端上線。⚠ `update-tournament.bat` 會 pm2 restart（斷線 2~5 秒）⇒ 挑離峰、沒有錦標賽進行中時跑。
+
+### 下一份 dump 要看什麼
+
+- `casual-phantom-adopt` 若還出現，看 **`restartCount` vs `lastAdopted`**：
+  若 `restartCount > lastAdopted` ⇒ 這一版修的那條已經不是成因，要往別處找。
+- 看 **`rejPhantomSetup`**：修後在正常玩家身上應該恆為 0；若 >0 且 `incPhase==='setup'`，
+  代表還有另一條讓門檻失準的路徑。
+- 看 **`incPhase`／`incWinner`**：`game-over` ＋ winner 不是自己 ＝ 又一次「什麼都沒做就輸了」。
+- 看 **`startGameCalls`**：這是「建局重入」那條中等強度假說的**分母**。
+  正常一場應是 1（seat 0）或 0（seat 1）；出現 ≥2 才輪到討論要不要加重入旗標。
+- 看 **`benign`**：`'spectator'` 的那幾發是良性的，判讀時要分開算，但**不要從分母裡拿掉**。
+
 ## v6.279 — 休閒 PUT 上行增量【client 端 3b：深層 diff ＋ CPU 保險 ＋ 三分類診斷】
 
 BASE `095ea93f4b85214ccd099d165b14ab608bcc568b`（v6.278，遠端 main）。

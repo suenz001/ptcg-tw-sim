@@ -46,7 +46,8 @@
            isBasicEnergyOfType as isBasicEnergyOfTypeCentral } from '$lib/game/selection-filter';
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
-           casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS } from '$lib/game/sync-guards';
+           casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS,
+           nextRestartBaseline } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
@@ -280,7 +281,15 @@
   let _casualClaimSent = false;            // casual-forfeit-claim 每場一次
   let _casualPhantomSent = false;          // casual-phantom-adopt 每場一次（⭐v6.265）
   let _casualPhantom: { localId: string; incomingId: string;
-    localSrv: number | null; incomingSrv: number | null } | null = null;   // 這一發要帶的證據
+    localSrv: number | null; incomingSrv: number | null;
+    // ⭐⭐⭐v6.280 全部從**既有 state** 讀（零新請求、零新計時器）。少了這幾欄，
+    //   v6.265 的指紋只能說「盤面被換掉了」，說不出「換成了什麼」——
+    //   而「換進來的是 setup 還是 game-over」正好是分辨兩種成因的關鍵。
+    incPhase: string | null; incTurn: number | null; incLogLen: number; incWinner: number | null;
+    roomStatus: string | null; restartCount: number; lastAdopted: number;
+    vis: string; benign: string | null } | null = null;   // 這一發要帶的證據
+  let _rejPhantomSetup = 0;                // ⭐v6.280 本場被 reject:'phantom-setup' 擋掉幾次
+  let _startGameCalls = 0;                 // ⭐v6.280 本頁呼叫 startGame 幾次（⚠ per-page，換場刻意不清）
   let _casualSampleRoom = '';              // 上一次擲骰是為了哪一間房（房號一變＝新的一場）
   let _casualSampleArmed = false;          // 這一場中籤了嗎（⚠ 每場只擲一次，理由與 _perfSampleArmed 逐字相同）
   let _casualSampleSent = false;           // 這一場已經送過健康取樣了
@@ -1119,6 +1128,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let undoDeniedThisSnapshot = $state(false);              // 對手拒絕後，這個 snapshot 的按鈕消失（直到下個 action）
   let lastSeenUndoApplyAt = 0;                            // v5.390 悔棋 rollback 一次性標記去重（>此值才套用 rollback）
   let lastAdoptedRestartCount = 0;                       // v5.716 phantom 防護：上次 adopt restart 重建 setup 局時的 restartProposalCount
+  // ⭐⭐⭐v6.280 上面那個門檻是 **per-room** 的語意，卻放在 **per-page** 的變數裡。
+  //   seat 0 是 v5.749 的指定建局者（建局成功直接 game = _pendingGame，不經過 adopt）
+  //   ⇒ 換一間房之後永遠不會重新寫它 ⇒ 帶著上一間房的舊門檻進新房，新房的第一次
+  //   「重新開局」會被 phantom 防護擋掉、畫面凍在舊局（真實事故：2026-08-31 房 PVK8）。
+  //   這一欄記「目前的門檻是哪一間房的」，判準在 sync-guards.nextRestartBaseline。
+  let _restartBaselineRoom: string | null = null;
   let undoAwaitingResponse = $state(false);                // 發起方等待對手回應中
   let roomAllowUndoInput = $state(false);                  // 開房表單 checkbox 狀態
   let roomPrivateInput = $state(false);                    // v5.003 私密房 checkbox 狀態（預設公開）
@@ -6366,9 +6381,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
       //   `won`     ＝ 本頁的 startGame 說我贏了嗎（true＋本地局被換掉＝v6.265 修的那條）
       //   `readyMs` ＝ 送出 startGame 時「雙方就緒」已經過多久（>6000 代表 P2 的 fallback 也動了）
       //   `srv`     ＝ 兩局的伺服器時鐘建立時戳（判得出誰先建；缺席＝舊 client 建的局）
+      //   ⭐⭐⭐v6.280 再加十二欄（全部來自既有 state，零新請求）：
+      //   `localId8`/`incomingId8` ＝兩局 id 的前 8 碼（v6.265 其實已經存進 `_casualPhantom`，
+      //     只是沒送出來 —— 沒有它就沒辦法跨兩位玩家的 dump 對到「是不是同一局」）。
+      //   `incPhase`/`incTurn`/`incLogLen`/`incWinner` ＝換進來的是什麼局。
+      //     ⭐ `incPhase==='game-over'` ＋ `incWinner` 不是自己 ＝「什麼都沒做就輸了」的直接證據。
+      //   `roomStatus`/`restartCount`/`lastAdopted` ＝房間側的三個數字；
+      //     ⭐ `restartCount <= lastAdopted` ＝這一版修的那條（門檻帶著上一間房的舊值）。
+      //   `rejPhantomSetup` ＝這一場被幻影防護擋掉幾次（＞0 ＝畫面曾經凍住）。
+      //   `startGameCalls` ＝本頁呼叫過幾次建局（用來**先證實再動**「重入」那條中等強度假說）。
       phantom: (reason === 'casual-phantom-adopt' && _casualPhantom
         ? { won: _startGameWon, readyMs: _startGameReadyMs,
-            localSrv: _casualPhantom.localSrv, incomingSrv: _casualPhantom.incomingSrv }
+            localSrv: _casualPhantom.localSrv, incomingSrv: _casualPhantom.incomingSrv,
+            localId8: _casualPhantom.localId.slice(0, 8), incomingId8: _casualPhantom.incomingId.slice(0, 8),
+            incPhase: _casualPhantom.incPhase, incTurn: _casualPhantom.incTurn,
+            incLogLen: _casualPhantom.incLogLen, incWinner: _casualPhantom.incWinner,
+            roomStatus: _casualPhantom.roomStatus, restartCount: _casualPhantom.restartCount,
+            lastAdopted: _casualPhantom.lastAdopted,
+            rejPhantomSetup: _rejPhantomSetup, startGameCalls: _startGameCalls,
+            vis: _casualPhantom.vis, benign: _casualPhantom.benign }
         : null),
       // ⭐v6.270 只有 casual-delta-fuse 帶得出來：熔斷當下的拒收統計
       //   （lastReason＝伺服器的 deltaReason：'hash'／'bad-patch'／'disabled'…或 'http-400'）。
@@ -6398,6 +6429,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         _casualSampleArmed = Math.random() < PERF_SAMPLE_RATE;
         _casualSampleSent = false; _casualSlowSent = false; _casualClaimSent = false;
         _casualPhantomSent = false; _casualPhantom = null;   // ⭐v6.265 換房＝換一場
+        _rejPhantomSetup = 0;                               // ⭐v6.280 同上（⚠ _startGameCalls 是 per-page，刻意不清）
         _casualPushSamples = []; _casualPushFail = 0;
       }
       // ⭐v6.270 熔斷指紋：掛在既有量測點上（零新請求、零計時器、零 await）。
@@ -6444,6 +6476,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
         localId: local.id, incomingId: incoming.id,
         localSrv: (typeof local.createdAtSrv === 'number' ? local.createdAtSrv : null),
         incomingSrv: (typeof incoming.createdAtSrv === 'number' ? incoming.createdAtSrv : null),
+        // ⭐⭐⭐v6.280 「換進來的是什麼」——全部讀既有物件的欄位，沒有任何新的取得成本。
+        //   ⚠ 刻意不另外宣告區域變數：`_casualNotePhantomAdopt` 的**判定條件**那一段
+        //     被 test-v6274 的 E4 以 sha256 錨定，多一行就會讓那條錨點誤報。
+        incPhase: (typeof (incoming as any).phase === 'string' ? (incoming as any).phase : null),
+        incTurn: (typeof (incoming as any).turn === 'number' ? (incoming as any).turn : null),
+        incLogLen: (Array.isArray((incoming as any).log) ? (incoming as any).log.length : -1),
+        incWinner: (typeof (incoming as any).winner === 'number' ? (incoming as any).winner : null),
+        // 房間側的三個數字：一起看才判得出「是不是被 phantom 防護擋在門外太久」。
+        roomStatus: (typeof roomData?.status === 'string' ? roomData.status : null),
+        restartCount: roomRestartCount,
+        lastAdopted: (lastAdoptedRestartCount ?? 0),
+        vis: (typeof document !== 'undefined' ? document.visibilityState : '?'),
+        // ⭐ 觀戰者採納別局是**正常**的 —— 但要**標記**、不是排除。
+        //   排除掉會讓分母不誠實（看起來像「這種事很少」）。
+        benign: (myPlayerIndex === null ? 'spectator' : null),
       };
       _tSendClientDiag('casual-phantom-adopt');
     } catch { /* 診斷絕不影響對戰 */ }
@@ -6473,6 +6520,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     _casualSampleArmed = false; _casualSampleSent = false;
     _casualSlowSent = false; _casualClaimSent = false; _casualClaimGranted = null;
     _casualPhantomSent = false; _casualPhantom = null;   // ⭐v6.265
+    _rejPhantomSetup = 0;                               // ⭐v6.280（⚠ _startGameCalls 是 per-page，刻意不清）
   }
   // v5.618：手動/自動「重新同步」— 強制 v=-1 抓伺服器權威最新盤面（版本不同才採用，避免擾動我方 picker）。
   //   答玩家「輪到自己時系統會幫忙確認/不必 F5」：對戰中盤面卡住即可由看門狗自動或玩家點「🔄 同步」恢復。
@@ -8430,6 +8478,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   不跟著房間走；少了這一行，離開房間再開一間新房時會沿用上一間房的陳舊起點
     //   （若新房的第一發更新就已經是「雙方就緒」，handleRoomUpdate 的歸零判斷會放行）。
     _onlineReadyAt = 0;
+    // ⭐⭐⭐v6.280 同一個道理，`lastAdoptedRestartCount`（幻影 setup 防護的門檻）也是
+    //   per-room 的語意 —— 進入／重新訂閱一間房，它就必須跟著這一間房重新起算。
+    //   ⚠ 這裡**不能**直接讀 `roomData`：離開房間時它已經被設成 null（見 leaveOnlineGame），
+    //     而換房時這一刻新房的第一發更新也還沒到 ⇒ 只把「基準屬於哪一間房」標成未知，
+    //     真正的重設由 handleRoomUpdate 拿到**這一間房**的 restartProposalCount 時才做。
+    //     在那之前一律 fail-closed 保留舊值（絕不設 0，那會放行任何幻影 setup 局）。
+    _restartBaselineRoom = null;
     unsubRoom?.();
     unsubRoom = subscribeRoom(roomCode, handleRoomUpdate, () => myPlayerIndex === null, casualWaitingSelfInput);
     startHeartbeat();
@@ -8453,6 +8508,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
   function handleRoomUpdate(room: Room | null) {
     if (!room) { onlineError = '房間不存在或連線中斷'; return; }
     roomData = room;
+    // ⭐⭐⭐v6.280 幻影 setup 防護的門檻跟著房間走（判準唯一在 sync-guards.nextRestartBaseline）。
+    //   ⚠ 位置必須在下面 resolveRoomUpdate 之前 —— 晚一步就等於這一發還是用舊門檻判。
+    //   ⚠ 同一間房只會重設一次（`_restartBaselineRoom === roomCode` 之後原值不動），
+    //     所以 adopt 路徑記下來的值不會被後續更新洗掉。
+    {
+      const _rb = nextRestartBaseline({
+        baselineRoom: _restartBaselineRoom,
+        roomCode,
+        roomRestartCount: (room.restartProposalCount as number | undefined) ?? 0,
+        lastAdoptedRestartCount,
+      });
+      _restartBaselineRoom = _rb.baselineRoom;
+      lastAdoptedRestartCount = _rb.lastAdoptedRestartCount;
+    }
     (globalThis as any).__ptcgLB = { kind: 'incoming', action: room?.gameState?.log?.length, t: Date.now() }; // v5.350 卡頓麵包屑
     // v5.361 診斷：每次輪詢遞送房間時印「房間版本/log 長度 vs 本地 log 長度」，協助抓同步分歧。
     //   房間較舊(inLen<myLen)→ 會被 reject-stale 擋；較新→ 會套用；等長→ 視 id/phase。
@@ -8592,6 +8661,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (decision.kind !== 'reject' && decision.kind !== 'ignore') _emitCasualSfx(decision.game);
       switch (decision.kind) {
         case 'reject':
+          // ⭐v6.280 純計數（休閒指紋 casual-phantom-adopt 會帶出來）：這一場被幻影 setup
+          //   防護擋掉幾次。⚠ 只是 `++` 一個數字，沒有新請求、沒有計時器、不影響決策。
+          if (decision.reason === 'phantom-setup') _rejPhantomSetup++;
           console.warn('[Online] reject snapshot:', decision.reason);
           return;
         case 'apply-undo':
@@ -8819,6 +8891,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   待 canonical snapshot 由 room update adopt（B 端首次收 setup snapshot 自有 deal 音效）。
     const _pendingGame = newGame;
     _startGameReadyMs = Date.now() - _onlineReadyAt;
+    _startGameCalls++;   // ⭐v6.280 純計數指紋（Rule 30/31：先量到再談要不要加重入旗標）
     startGame(roomCode, _pendingGame).then((won) => {
       _startGameWon = won;   // ⭐v6.265 純診斷紀錄（休閒指紋 casual-phantom-adopt 會帶出來）
       if (won) {

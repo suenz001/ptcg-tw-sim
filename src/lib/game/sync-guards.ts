@@ -268,6 +268,59 @@ export function isStaleFinishedGame(
  * 注意：undo 的 marker 推進（lastSeenUndoApplyAt = roomLastUndoApplyAt）與 merge-setup
  *   advanced 後的 pushGameState 同步，屬副作用，由呼叫端依 decision.kind 處理。
  */
+// >>> v6280-restart-baseline-core
+/**
+ * ⭐⭐⭐v6.280「幻影 setup 防護」的門檻（`lastAdoptedRestartCount`）**跟著房間走**的唯一判準。
+ *
+ * ## 這一版在修什麼（線上實測，不是推論）
+ * `resolveRoomUpdate` 第 2 條的 phantom 防護是這樣寫的：
+ *   `local.phase==='playing' && incoming.phase==='setup' && roomRestartCount <= lastAdoptedRestartCount`
+ *   → reject `'phantom-setup'`。
+ * 而 `lastAdoptedRestartCount` 在 `game/+page.svelte` 裡**只有一個寫入點**：
+ *   「adopt 了一個 setup 局」的時候記下當時的 `restartProposalCount`。
+ *
+ * ⚠⚠ 問題在於它是 **per-page** 的變數，卻承載 **per-room** 的語意：
+ *   ・`seat 0` 是 v5.749 的「指定建局者」—— 開局時它自己 `createGame` + `startGame` 成功後
+ *     **直接** `game = _pendingGame`，**不經過 adopt** ⇒ 進到新房間永遠不會重新寫這個值；
+ *   ・離開房間時 `roomData`／`game` 都清了，**唯獨這個值沒清**
+ *   ⇒ 在 A 房經歷過一次重新開局（值被墊到 1）的 seat 0 玩家，換到 B 房之後，
+ *     B 房的第一次重新開局（`restartProposalCount` 1）會被 `1 <= 1` **擋掉** ⇒ 畫面凍在舊局；
+ *     等對手在新局裡等滿閒置秒數宣告棄權，那份 **game-over** 盤面 id 不同、phase 也不是 setup
+ *     ⇒ 防護不適用 ⇒ 直接採納 ⇒ 玩家「什麼都沒做就輸了」。
+ *
+ * ## 判準
+ * 這個門檻只在**同一間房**裡有意義。所以：
+ *   ・`baselineRoom !== roomCode`（換房／重新訂閱同一間房）⇒ 用**那一間房伺服器端當下的**
+ *     `restartProposalCount` 當新基準。
+ *   ⚠⚠ **不是設 0** —— 設 0 是 fail-open：重整回到一間 `restartProposalCount` 已經是 2 的房，
+ *     之後任何幻影 setup 局（count 2 &gt; 0）都會被放行。
+ *   ・房號未知（`roomCode` 空）或 `roomRestartCount` 不是有限數 ⇒ **fail-closed：保留舊值**，
+ *     一個字都不改（寧可多擋一次，也不要在資訊不足時放寬防護）。
+ *   ・同一間房的後續每一發更新 ⇒ 原值不動（重設只發生一次，不會把 adopt 記下的值洗掉）。
+ *
+ * ⚠ 這支是**純函式**、沒有副作用；`resolveRoomUpdate` 一個字都沒有動。
+ */
+export function nextRestartBaseline(opts: {
+  /** 目前這個門檻值是「哪一間房」的（null＝換房後尚未對應到任何房間） */
+  baselineRoom: string | null;
+  /** 這一發房間更新屬於哪一間房 */
+  roomCode: string;
+  /** 這一間房伺服器端當下的 restartProposalCount */
+  roomRestartCount: number;
+  /** 目前的門檻值 */
+  lastAdoptedRestartCount: number;
+}): { baselineRoom: string | null; lastAdoptedRestartCount: number } {
+  const keep = {
+    baselineRoom: opts.baselineRoom,
+    lastAdoptedRestartCount: opts.lastAdoptedRestartCount,
+  };
+  if (!opts.roomCode) return keep;                       // fail-closed：房號都還不知道
+  if (opts.baselineRoom === opts.roomCode) return keep;  // 同一間房 → 不重設
+  if (!Number.isFinite(opts.roomRestartCount)) return keep;  // fail-closed：拿不到房間的計數
+  return { baselineRoom: opts.roomCode, lastAdoptedRestartCount: opts.roomRestartCount };
+}
+// <<< v6280-restart-baseline-core
+
 export function resolveRoomUpdate(
   local: GameState | null,
   incoming: GameState | null | undefined,

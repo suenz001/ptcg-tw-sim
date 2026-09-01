@@ -664,13 +664,13 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '095ea93f4b85214ccd099d165b14ab608bcc568b';   // v6.278（v6.279 的上一版）
-// ⭐v6.279 是**純 client 端**版（休閒 PUT 上行增量【3b：深層 diff】＋CPU 保險＋三分類診斷），
+const PREV_SHA = '8d366f9c880301091e4668fed8268d4dc22804a3';   // v6.279（v6.280 的上一版）
+// ⭐v6.280 是**純 client 端**版（幻影 setup 防護的門檻改成跟著房間走＋休閒指紋補欄位），
 //   另外出了首頁 changelog（三個 static/changelog*.html 依 v6.264 的三步搬運）。
-//   ⚠ 伺服器端（oracle-admin/server_admin_patch.js）一個位元都沒動 —— 由 test-v6279 E-d 守。
+//   ⚠ 伺服器端（oracle-admin/server_admin_patch.js）一個位元都沒動。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/game/oracle-client.ts',
+  'src/lib/game/sync-guards.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',

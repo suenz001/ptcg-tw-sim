@@ -135,6 +135,7 @@ function makeSim(src, sgMod, opts = {}) {
   const prologue = `
   let _onlineReadyAt = 0, game = null, roomData = null, mySeatIdx = -1;
   let _poolRetry = 0, onlineError = '', _startGameWon = null, _startGameReadyMs = -1;
+  let _startGameCalls = 0;   // v6.280 起 checkAndStartOnlineGame 會 ++ 這個純計數指紋（stub）
   const poolReady = true, roomCode = 'ROOM', forceLegacyOpeningParam = false;
   const myUid = env.myUid, pool = new Map();
   const { shouldAttemptStartGame, shouldResetStartGrace } = env.sg;
@@ -360,9 +361,16 @@ T('E3 shouldAttemptStartGame 本體零接觸（只在它後面新增述詞）', 
   const s = seg(SG, 'export function shouldAttemptStartGame(', '\n}\n', 'shouldAttemptStartGame');
   assert.strictEqual(sha(s), 'fa7cdb3f220d6738', 'shouldAttemptStartGame 被改動了：' + sha(s));
 });
-T('E4 casual-phantom-adopt 的判定條件零接觸', () => {
-  const s = seg(PAGE, '  function _casualNotePhantomAdopt(', '\n  }\n', '_casualNotePhantomAdopt');
-  assert.strictEqual(sha(s), '5749ce4e44cc67be', 'casual-phantom-adopt 判定被改動了：' + sha(s));
+T('E4 casual-phantom-adopt 的**判定條件**零接觸（三條早退＋每場一次旗標）', () => {
+  // ⚠ v6.280 起錨點縮到「判定條件」那一段（函式開頭 → `_casualPhantom = {` 之前）。
+  //   理由：v6.280 在**證據物件**裡補了指紋欄位（incPhase／incWinner／restartCount…），
+  //   那是刻意的擴充、由 test-v6280 的【F】以**行為端**逐欄斷言；
+  //   而「什麼情況才算一次 phantom-adopt」這件事一個字都不能動 —— 錨在這一段才對得準。
+  const cond = seg(PAGE, '  function _casualNotePhantomAdopt(', '      _casualPhantom = {', '_casualNotePhantomAdopt 判定條件');
+  assert.strictEqual(sha(cond), 'a0109c4acdebed46', 'casual-phantom-adopt 的判定條件被改動了：' + sha(cond));
+  // 證據物件整段仍然釘住（出版時若刻意擴充就更新這個值，並確認上面那條沒變）。
+  const all = seg(PAGE, '  function _casualNotePhantomAdopt(', '\n  }\n', '_casualNotePhantomAdopt');
+  assert.strictEqual(sha(all), 'adc54d125e0a3231', 'casual-phantom-adopt 的證據物件被改動了：' + sha(all));
 });
 
 console.log('\n【A】HEAD-FAIL：對真 BASE blob 跑同一組 fixture 必須紅');

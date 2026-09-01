@@ -449,6 +449,8 @@ function makeDiag(src, env) {
   let _startGameWon = env._startGameWon ?? null, _startGameReadyMs = env._startGameReadyMs ?? -1;
   let mySeatIdx = 0, myPlayerIndex = 0, battleLayout = 'classic';
   let lastAdoptedRestartCount = env.lastAdoptedRestartCount ?? 0;
+  // v6.280 起 payload 的 phantom 區塊會帶這兩個純計數指紋（stub；語義見 test-v6280）
+  let _rejPhantomSetup = env._rejPhantomSetup ?? 0, _startGameCalls = env._startGameCalls ?? 0;
   const VERSION = '6.265';
   const CASUAL_SLOW_PUSH_P95_MS = 5000, CASUAL_PUSH_MIN_CALLS = 10, PERF_SAMPLE_RATE = 0.1;
   const tApi = env.tApi;
@@ -701,6 +703,16 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     t = t.split("    _noteDeltaPutSentinel(res);   // ⭐v6.270 輪詢的 GET 也算「最近一次」（哨兵消失＝伺服器撤掉 kill switch）\n").join('');
     return t;
   };
+  // ⚠ v6.280：sync-guards.ts 合法新增了純述詞 `nextRestartBaseline`（幻影 setup 防護的門檻
+  //   改成跟著房間走；由 test-v6280 全面接管那一塊的守備，且 resolveRoomUpdate 一個字沒動）。
+  //   沿用 v6.267／v6.270 對 F4 的既有修法：把**已知的合法新增**用哨兵剝掉之後，
+  //   其餘仍必須逐字等於 BASE 的 blob —— 動到別的地方照樣紅。
+  const stripV6280 = (src) => {
+    const a = src.indexOf('// >>> v6280-restart-baseline-core\n');
+    const eMark = '// <<< v6280-restart-baseline-core\n\n';
+    const e = src.indexOf(eMark);
+    return (a >= 0 && e > a) ? src.slice(0, a) + src.slice(e + eMark.length) : src;
+  };
   // ⭐ v6.275：server_admin_patch.js 改鎖錦標賽 tail 的 sha256（見檔頭說明）
   {
     const srvCur = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
@@ -715,8 +727,9 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
                           ['src/lib/game/engine.ts', BASE_SHA]]) {
     const b = readBaseBlob(ROOT, sha, p);
     ok(b.ok, '讀不到 BASE 的 ' + p);
-    const cur = p === 'src/lib/game/oracle-client.ts'
-      ? stripV6270(readFileSync(join(ROOT, p), 'utf8')) : readFileSync(join(ROOT, p), 'utf8');
+    const raw = readFileSync(join(ROOT, p), 'utf8');
+    const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
+      : (p === 'src/lib/game/sync-guards.ts' ? stripV6280(raw) : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
 });
@@ -725,7 +738,12 @@ await T('F5 ⭐⭐⭐ `resolveRoomUpdate` 的收斂邏輯逐字未動（長期�
   ok(cur.includes('export function resolveRoomUpdate('), '抓不到 resolveRoomUpdate');
   if (!hasBaseCommit(ROOT, BASE_SHA_V6274)) { shallowSkip('F5 對 BASE 的逐字比對', ''); return; }
   const b = readBaseBlob(ROOT, BASE_SHA_V6274, 'src/lib/game/sync-guards.ts');
-  assert.strictEqual(cur, b.out, 'sync-guards.ts 被動過了');
+  // ⚠ v6.280 的合法新增（純述詞 nextRestartBaseline）以哨兵剝掉；其餘逐字必須相同。
+  const a0 = cur.indexOf('// >>> v6280-restart-baseline-core\n');
+  const eM = '// <<< v6280-restart-baseline-core\n\n';
+  const e0 = cur.indexOf(eM);
+  const stripped = (a0 >= 0 && e0 > a0) ? cur.slice(0, a0) + cur.slice(e0 + eM.length) : cur;
+  assert.strictEqual(stripped, b.out, 'sync-guards.ts 被動過了');
 });
 
 // ══════════════════════════════════════════════════════════════════════════
