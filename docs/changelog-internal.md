@@ -1,5 +1,35 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.289 — 解除封鎖（真刪分支）也一併刪私聊
+
+BASE `f8a9a5a2fc808facd435f768a00819de5759c233`（v6.288，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.39 → **v1.40**（只動 FRIENDS 區塊的 `unblock` 一條分支＋註解；DM 區塊只改註解；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動，自己算過）。玩家端只改 `/friends` 頁解除封鎖的二次確認文案一句（test-v6272 ⑩ PREV_ALLOWED：version.ts／friends/+page.svelte／首頁 changelog 三檔，其餘動到就紅）。守衛 `scripts/test-v6289-unblock-purge.mjs`（已進 test chain）。
+
+### 【1】站長裁定：unblock 也刪（與 v6.288 的 remove 同一條紀律）
+v6.288 查證：`unblock` 的語義是「關係歸零」—— **兩條路徑**：
+- 冷卻外：`c.deleteOne({ _id, status:'blocked', blockedBy: me })` **真刪那一列** ⇒ v1.40 起 `const del = …` 接住結果，`if (del && del.deletedCount > 0) await _frPurgeDm(fid, 'unblock')`。
+- 冷卻內（`rejectedAt` 在 24 小時內）：`updateOne` 還原成 `rejected`（列還在，只是回到「被拒絕過」）並 **提前 return** ⇒ **不刪**對話。刪除授權只綁「那一列真的刪掉」。
+  查證這條分支底下本來就不可能有私聊：`block` 只在 `cur.status === 'rejected'` 時帶 `rejectedAt`；而 `rejected` 只能從 `pending` 來（`reject` 只收 pending），`accepted` 列離開的路只有 remove（真刪＋purge）或 block（不帶 rejectedAt）⇒ 帶 `rejectedAt` 的 blocked 列在本列生命週期內從未 accepted 過、DM send 又 gate 在 `accepted` ⇒ 該分支底下零私聊，語義自洽（唯一例外是 v1.39 之前 remove 過又重邀被拒的舊資料，屬 v1.39 前的既有缺口，與本版無關）。
+- 沿用 `_frPurgeDm(fid, why)`：等值 `{ room: 'dm:' + fid }`、自己 try/catch、失敗只 log 回 -1、絕不 throw ⇒ purge 炸掉 unblock 仍 200。
+- ⚠ 修前現況：「封鎖 → 解除封鎖 → 重新加好友（同 fid）」90 天內舊對話會回來，與「解除好友就刪」不一致 —— 本版補齊。
+
+### 【2】既有守衛 test-v6288 的 B2b／B5 隨裁定改（不是放寬）
+B2b 原本斷言「unblock 兩條路徑都不刪」、B5 斷言「`_frPurgeDm` 恰 2 次、unblock handler 零 purge」—— 這正是 v6.288 把 unblock 留給站長裁定時鎖住的；本版依裁定改成「真刪分支刪（delOps 恰 1）、冷卻內不刪（delOps 0）」、「恰 3 次、unblock handler 必須接 purge、block／reject／accept 仍零」。
+
+### 【3】守衛 test-v6289（行為端實跑，19 條）
+B1 冷卻外 ⇒ dm:AB 40→0、**lobby 300 筆逐 id deepStrictEqual**、**A|C／B|C 對話逐 id deepStrictEqual**、只有一次 deleteMany 且 filter 等值；B2 冷卻內 ⇒ 列 rejected、dm 40 仍在、零刪除呼叫；B3 假 db 讓 friendships.deleteOne 回 deletedCount:0 ⇒ 不刪；B4 purge 內 deleteMany 丟例外 ⇒ 仍 200、log `purge dm failed (unblock`；B5 被封鎖方／陌生人／block 零刪除。突變 C1~C7：兩條分支都刪／`$regex '^dm:'`／不看 deletedCount／purge 改 throw／無過濾／拿掉呼叫／why 寫錯，各紅在預期那條。D1 靜態（冷卻內分支零 purge、3 次、批次刪除恰一處）＋ D1m 掃描器自驗；E1 client 文案逐字（含「對話」「無法復原」）＋ E1m 正對照；F1 chain／版本一致。HEAD-FAIL：server 還原 BASE ⇒ A0／B1／C6 紅（C6 的突變體與 BASE 等價 ⇒ 「沒紅」本身紅）／D1 紅；page 還原 BASE ⇒ E1 紅。
+
+### 【4】client 文案
+`/friends` 頁解除封鎖二次確認：「解除封鎖後關係會歸零，要重新邀請才會成為好友。」→「解除封鎖後關係會歸零，要重新邀請才會成為好友；和這位玩家的私聊對話也會一起刪除，無法復原。」（E1 逐字鎖住）。
+
+### 【5】changelog 決定
+v6.288 首頁那則只寫「解除好友時…對話會一起刪除」、且 body 明寫「封鎖不會刪除對話」，措辭涵蓋不住「解除封鎖也刪」（玩家會在封鎖→解除→重加後發現對話不見）⇒ 首頁補一則。三步搬運：新增 v6.289（open）、v6.267 內文搬進 bodies、v6.213 搬進封存頁。
+
+### 【6】bump 配套
+`version.ts` 6.289／`admin.html` `SITE_VERSION_HINT` 6.289／`test-v6272` ⑩ `PREV_SHA`→v6.288（f8a9a5a2）、`PREV_ALLOWED` 五檔／`test-v6264` `BASE_SHA`→v6.288（本版動了 changelog）。掃描：scripts 內沒有守衛 pin 死 6.288 或整檔 sha256（錦標賽區塊兩把 sha 是「區塊」不是整檔，本版未動）。
+
+### 【7】部署
+只動 `server_admin_patch.js`／`admin.html`／玩家端 ⇒ 站長跑 **`update-tournament.bat`**（唯一會先同步 git 的那支）＋ `redeploy-oracle.bat`；挑離峰、沒有錦標賽進行中時跑。client 沒送新欄位、server 不需先上，順序無關。
+
 ## v6.288 — 好友私聊【P1：玩家看得到的面板】＋ 解除好友連對話一起刪
 
 BASE `b503649d49d5ae76c2a0946894294d54139327a2`（v6.287，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.38 → **v1.39**（只動 FRIENDS 區塊的 `remove`＋新 helper `_frPurgeDm`；DM 區塊只改註解；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動，自己算過）。玩家端：`friends-api.ts`（dm 函式／204／私聊三態）、新檔 `dm-poller.ts`／`dm-session.ts`／`DmPanel.svelte`、`/friends` 頁（💬＋面板＋二次確認文案）。**`game/+page.svelte` 一行都沒動**（test-v6272 ⑩ PREV_ALLOWED 清單守；在有完整歷史的 clone 實跑 42 PASS）。守衛 `scripts/test-v6288-friends-dm-ui.mjs`（31 條，已進 test chain）。

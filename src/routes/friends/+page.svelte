@@ -20,6 +20,7 @@
   //   ・輪詢只在面板開著時（3 秒；分頁在背景 15 秒），關掉＝session.close() ⇒ 零請求；排程與狀態機在 $lib/friends/dm-*.ts，
   //     本檔仍然零 setTimeout／setInterval（v6.283 B1 守衛）。
   //   ・解除好友＝真刪除，且 v6.288 起**對話也一起刪**（站長裁定）⇒ 二次確認文案明講。
+  //   ・v6.289 起解除封鎖也一樣（伺服器在真刪那一列之後一併刪對話）⇒ 解除封鎖的二次確認文案也明講「對話」（守衛 test-v6289 鎖文案）。
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import { VERSION } from '$lib/version';
@@ -329,7 +330,7 @@
                 <span class="meta">{r.at ? fmtDate(r.at) : ''}</span>
                 <span class="spacer"></span>
                 {#if confirmFid === r.fid && confirmKind === 'unblock'}
-                  <span class="confirm">解除封鎖後關係會歸零，要重新邀請才會成為好友。</span>
+                  <span class="confirm">解除封鎖後關係會歸零，要重新邀請才會成為好友；和這位玩家的私聊對話也會一起刪除，無法復原。</span>
                   <button class="small danger" disabled={actBusy === r.fid} onclick={() => act('unblock', r.fid)}>確定解除封鎖</button>
                   <button class="small" disabled={actBusy === r.fid} onclick={cancelConfirm}>取消</button>
                 {:else}

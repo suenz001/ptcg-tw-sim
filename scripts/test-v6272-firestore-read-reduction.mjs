@@ -664,14 +664,12 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b503649d49d5ae76c2a0946894294d54139327a2';   // v6.287（v6.288 的上一版）
-// ⭐v6.288 好友私聊 P1（玩家面板）＋ 解除好友連對話一起刪：玩家端改動＝friends-api.ts（dm 函式／204／私聊三態）、
-//   新檔 dm-poller.ts／dm-session.ts／DmPanel.svelte（新檔不在上一版的 ls-tree 裡 ⇒ 不會出現在 diff）、/friends 頁（💬＋面板＋二次確認文案）、
-//   首頁 changelog 三檔、version.ts。⚠ game/+page.svelte **不在清單** ⇒ 動到就紅（本版對戰頁一行都不該動）。
-//   伺服器端 server_admin_patch.js（remove → _frPurgeDm）、scripts/ 不在 src/／static/ 底下（守衛 test-v6288）。
+const PREV_SHA = 'f8a9a5a2fc808facd435f768a00819de5759c233';   // v6.288（v6.289 的上一版）
+// ⭐v6.289 解除封鎖（真刪分支）也一併刪私聊：玩家端改動＝/friends 頁（解除封鎖二次確認文案明講「對話」）、首頁 changelog 三檔、version.ts。
+//   ⚠ friends-api.ts／dm-*.ts／DmPanel.svelte／game/+page.svelte **都不在清單** ⇒ 動到就紅（本版只改一句文案）。
+//   伺服器端 server_admin_patch.js（unblock 真刪分支 → _frPurgeDm）、scripts/ 不在 src/／static/ 底下（守衛 test-v6289）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/friends/friends-api.ts',
   'src/lib/version.ts',
   'src/routes/friends/+page.svelte',
   'static/changelog-archive.html',

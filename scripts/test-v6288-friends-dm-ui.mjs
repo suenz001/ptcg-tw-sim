@@ -92,7 +92,7 @@ await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256）；FRI
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-console.log('\n【B】伺服器：remove 刪 dm:<fid>；lobby 與別段對話一筆不少；block／unblock 不刪');
+console.log('\n【B】伺服器：remove 刪 dm:<fid>；lobby 與別段對話一筆不少；block 不刪；unblock 真刪分支刪（v6.289 裁定）、冷卻內不刪');
 const U = {
   A: { uid: 'fA', email: 'alice@example.com', name: '愛麗絲' },
   B: { uid: 'fB', email: 'bob@example.com', name: '鮑伯' },
@@ -165,19 +165,19 @@ await T('B2 ⭐ block 不刪：A 封鎖 B ⇒ dm:AB 40 仍在、lobby 不少、�
   const rm2 = await H.call('post', '/api/friends/remove', asUser(U.A), { fid: AB.fid });
   assert.strictEqual(rm2.code, 409); assert.strictEqual(rm2.body.code, 'friends-use-unblock'); assert.strictEqual(delOps(H.db).length, 0);
 });
-await T('B2b unblock（查證：冷卻外＝真刪那一列、冷卻內＝還原成 rejected）—— 兩條路徑都**不刪**對話（授權只給 remove；見 changelog-internal）', async () => {
+await T('B2b unblock（v6.289 站長裁定改：冷卻外＝真刪那一列 ⇒ **一併刪對話**；冷卻內＝還原成 rejected ⇒ **不刪**）—— 細部斷言與突變在 test-v6289', async () => {
   const H = buildFriends(SRC, { seed: seedAll([mkRow(U.A.email, U.B.email, 'blocked', { blockedBy: U.A.email }), AC, BC]) });
   const u = await H.call('post', '/api/friends/unblock', asUser(U.A), { fid: AB.fid });
   assert.strictEqual(u.code, 200, JSON.stringify(u.body)); assert.strictEqual(u.body.removed, true);
   assert.ok(!H.db.snapshot('friendships').some((d) => d._id === AB._id), 'unblock（冷卻外）應真刪那一列 —— 出貨碼語義變了？請同步更新 changelog-internal 的裁定說明');
-  assert.strictEqual(ids(H.db, (r) => r === 'dm:' + AB.fid).length, N_AB, 'unblock 刪到對話了（本版裁定不刪）');
-  assertOthersIntact(H, 'B2b'); assert.strictEqual(delOps(H.db).length, 0);
+  assert.strictEqual(ids(H.db, (r) => r === 'dm:' + AB.fid).length, 0, 'unblock（冷卻外）沒刪對話（v6.289 裁定：真刪分支要刪）');
+  assertOthersIntact(H, 'B2b'); assert.strictEqual(delOps(H.db).length, 1);
   const H2 = buildFriends(SRC, { seed: seedAll([mkRow(U.A.email, U.B.email, 'blocked', { blockedBy: U.A.email, rejectedAt: Date.now() - 1000 }), AC, BC]) });
   const u2 = await H2.call('post', '/api/friends/unblock', asUser(U.A), { fid: AB.fid });
   assert.strictEqual(u2.code, 200);
   const row = H2.db.snapshot('friendships').find((d) => d._id === AB._id);
   assert.ok(row && row.status === 'rejected', 'unblock（冷卻內）應還原成 rejected');
-  assert.strictEqual(ids(H2.db, (r) => r === 'dm:' + AB.fid).length, N_AB); assert.strictEqual(delOps(H2.db).length, 0);
+  assert.strictEqual(ids(H2.db, (r) => r === 'dm:' + AB.fid).length, N_AB, 'unblock（冷卻內）刪到對話了（列還在，不可刪）'); assert.strictEqual(delOps(H2.db).length, 0);
 });
 await T('B3 ⭐ 刪對話失敗（假 db 對 tournamentChat.deleteMany 丟例外）⇒ remove 仍 200 removed:true、friendships 那一列已刪、只 log 不炸', async () => {
   const db = makeFakeDb(seedAll(), { throwOn: (name, op) => name === 'tournamentChat' && op === 'deleteMany' });
@@ -212,7 +212,7 @@ await T('B4 越權與其他狀態：C 拿 AB 的 fid ⇒ 404 零刪除；pending
   const r3 = await H3.call('post', '/api/friends/remove', asUser(U.A), { fid: AB.fid });
   assert.strictEqual(r3.code, 409); assert.strictEqual(delOps(H3.db).length, 0);
 });
-await T('B5 靜態枚舉：兩區塊內對 tournamentChat 的批次刪除恰一處、字面 `{ room: \'dm:\' + fid }`；fid 先驗格式；purge 只接在 deletedCount>0 之後；block／unblock／reject／accept 零 purge；字面與 DM 區塊常數一致', () => {
+await T('B5 靜態枚舉：兩區塊內對 tournamentChat 的批次刪除恰一處、字面 `{ room: \'dm:\' + fid }`；fid 先驗格式；purge 只接在 deletedCount>0 之後（remove＋unblock 各一）；block／reject／accept 零 purge；字面與 DM 區塊常數一致', () => {
   const stripped = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
   const dels = [...stripped.matchAll(/\.(deleteMany|updateMany|drop|remove)\(([^)]*)\)/g)];
   assert.strictEqual(dels.length, 1, '兩區塊內的批次刪除呼叫數：' + dels.length + ' ⇒ ' + dels.map((m) => m[0]).join(' | '));
@@ -222,11 +222,13 @@ await T('B5 靜態枚舉：兩區塊內對 tournamentChat 的批次刪除恰一�
   assert.ok(purge.includes("db.collection('tournamentChat').deleteMany({ room: 'dm:' + fid })"), 'purge 的刪除呼叫形狀');
   assert.ok(!/\$regex|startsWith|RegExp/.test(purge), 'purge 不得用前綴／正則');
   assert.ok(FR.includes("        if (del && del.deletedCount > 0) await _frPurgeDm(cur.fid || _frFid(cur._id), 'remove');"), 'purge 必須只接在 deletedCount>0 之後');
+  assert.ok(FR.includes("        if (del && del.deletedCount > 0) await _frPurgeDm(cur.fid || _frFid(cur._id), 'unblock');"), 'unblock 的 purge 必須只接在 deletedCount>0 之後（v6.289）');
   const calls = [...stripped.matchAll(/_frPurgeDm\(/g)].length;
-  assert.strictEqual(calls, 2, '_frPurgeDm 出現次數（定義 1＋remove 呼叫 1）：' + calls);
+  assert.strictEqual(calls, 3, '_frPurgeDm 出現次數（定義 1＋remove 呼叫 1＋unblock 呼叫 1）：' + calls);
   const handler = (anchor) => { const i = FR.indexOf(anchor); assert.ok(i > 0, anchor); const j = FR.indexOf('\n    });', i); return FR.slice(i, j); };
-  for (const p of ["app.post('/api/friends/block'", "app.post('/api/friends/unblock'", "app.post('/api/friends/reject'", "app.post('/api/friends/accept'"]) assert.ok(!handler(p).includes('_frPurgeDm'), p + ' 不得刪對話');
+  for (const p of ["app.post('/api/friends/block'", "app.post('/api/friends/reject'", "app.post('/api/friends/accept'"]) assert.ok(!handler(p).includes('_frPurgeDm'), p + ' 不得刪對話');
   assert.ok(handler("app.post('/api/friends/remove'").includes('_frPurgeDm'), 'remove handler 沒接 purge');
+  assert.ok(handler("app.post('/api/friends/unblock'").includes('_frPurgeDm'), 'unblock handler 沒接 purge（v6.289 裁定）');
   assert.ok(DM.includes("const FR_DM_COLL = 'tournamentChat';") && DM.includes("const FR_DM_ROOM_PREFIX = 'dm:';"), 'DM 區塊常數變了 ⇒ purge 的字面要跟著改');
 });
 
