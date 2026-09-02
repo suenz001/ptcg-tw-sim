@@ -192,7 +192,8 @@ await T('A6 負向快取有 TTL：過期 ⇒ unknown ⇒ 入口重新出現；�
   const a = loadApi(API, { ls }).load(mkFetch(() => jsonRes(503, { code: 'friends-disabled', error: 'x' })));
   await a.fetchFriendsList(CTX);
   assert.strictEqual(a.friendsAvailability('FU'), 'disabled');
-  const later = Date.now() + a.FRIENDS_NEG_CACHE_TTL_MS + 1000;
+  // v6.290：負向快取 TTL 依快取值分流（disabled 5 分鐘／unsupported 1 小時）；這一組是 disabled ⇒ 用 disabled 的門檻
+  const later = Date.now() + a.FRIENDS_DISABLED_CACHE_TTL_MS + 1000;
   const b = loadApi(API, { ls }).load(mkFetch(() => jsonRes(200, listBody())));   // 新實例＝重新整理
   assert.strictEqual(b.friendsAvailability('FU'), 'disabled', '重新整理後負向快取應仍在（TTL 內）');
   assert.strictEqual(b.friendsAvailability('FU', later), 'unknown', 'TTL 過期應回 unknown');
@@ -387,13 +388,13 @@ await T('E6 突變：入口不看匿名 ⇒ A4 必紅', async () => {
   }, '匿名還顯示入口');
 });
 await T('E7 突變：負向快取沒有 TTL ⇒ A6 必紅', async () => {
-  const m = mut('&& typeof o.at === \'number\' && now - o.at < FRIENDS_NEG_CACHE_TTL_MS) return o.v;', ') return o.v;');
+  // v6.290：TTL 判斷收斂到 aliveAvail（session 記憶與 localStorage 共用）⇒ 突變體＝把「now - at < ttl」拿掉（兩邊一起失去 TTL）
+  const m = mut("if (ttl !== null && typeof at === 'number' && now - at < ttl) return v as FriendsAvailability;", 'if (ttl !== null) return v as FriendsAvailability;');
   await mutantMustBreak('no-ttl', async () => {
     const ls = makeLS();
     const a = loadApi(m, { ls }).load(mkFetch(() => jsonRes(503, { code: 'friends-disabled', error: 'x' })));
     await a.fetchFriendsList(CTX);
-    const later = Date.now() + a.FRIENDS_NEG_CACHE_TTL_MS + 1000;
-    assert.strictEqual(a.friendsAvailability('FU', later), 'disabled');   // session 記憶仍在
+    const later = Date.now() + a.FRIENDS_DISABLED_CACHE_TTL_MS + 1000;
     const b = loadApi(m, { ls }).load(mkFetch(() => jsonRes(200, listBody())));
     assert.strictEqual(b.friendsAvailability('FU', later), 'unknown', 'TTL 過期應回 unknown');
   }, 'TTL 過期應回 unknown');

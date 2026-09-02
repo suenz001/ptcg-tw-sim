@@ -664,17 +664,14 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'f8a9a5a2fc808facd435f768a00819de5759c233';   // v6.288（v6.289 的上一版）
-// ⭐v6.289 解除封鎖（真刪分支）也一併刪私聊：玩家端改動＝/friends 頁（解除封鎖二次確認文案明講「對話」）、首頁 changelog 三檔、version.ts。
-//   ⚠ friends-api.ts／dm-*.ts／DmPanel.svelte／game/+page.svelte **都不在清單** ⇒ 動到就紅（本版只改一句文案）。
-//   伺服器端 server_admin_patch.js（unblock 真刪分支 → _frPurgeDm）、scripts/ 不在 src/／static/ 底下（守衛 test-v6289）。
+const PREV_SHA = 'eed4b769e203cde2b315c590ac6230e249b7dd13';   // v6.289（v6.290 的上一版）
+// ⭐v6.290 好友負向快取 TTL 拆成兩種（disabled 5 分鐘／unsupported 1 小時）：玩家端改動＝friends-api.ts、version.ts。
+//   ⚠ 首頁 changelog 三檔**沒動**（只寫 docs/changelog-internal.md）、game/+page.svelte／friends/+page.svelte／dm-*.ts 都不在清單 ⇒ 動到就紅。
+//   守衛 scripts/test-v6290-neg-cache-ttl.mjs、test-v6283 A6/E7 跟著常數改（scripts/ 不在 src/／static/ 底下）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
+  'src/lib/friends/friends-api.ts',
   'src/lib/version.ts',
-  'src/routes/friends/+page.svelte',
-  'static/changelog-archive.html',
-  'static/changelog-bodies.html',
-  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

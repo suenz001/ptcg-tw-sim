@@ -1,5 +1,37 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.290 — 好友負向快取 TTL 拆成兩種（disabled 5 分鐘／unsupported 1 小時）
+
+BASE `eed4b769e203cde2b315c590ac6230e249b7dd13`（v6.289，遠端 main）。只動玩家端 `src/lib/friends/friends-api.ts`（＋ version.ts）；**不動** `server_admin_patch.js`、`game/+page.svelte`、`/friends` 頁。守衛 `scripts/test-v6290-neg-cache-ttl.mjs`（已進 test chain）；既有 `test-v6283` A6／E7 隨常數改名同步（守護意圖不變）。
+
+### 【1】線上實際發生的問題
+站長逐字：「在開放前我有去點選，但當時我忘了去 admin 開啟，等我真的開起以後，按鈕卻消失了」。查證：`FRIENDS_NEG_CACHE_TTL_MS = 60 * 60 * 1000`，`disabled`（503 friends-disabled）與 `unsupported`（404／非 JSON）**共用同一個 1 小時**，寫在 localStorage（`ptcg_friends_avail:<uid>`）。⇒ 開關關著時點過一次入口 ⇒ 1 小時內入口都不出現，畫面上也沒有重試的逃生口。每天數百名玩家在開放前進過站的都會被卡同樣久。
+
+### 【2】站長裁定：依語義分開
+| 快取值 | 語義 | TTL |
+|---|---|---|
+| `disabled` | 伺服器**有**端點、只是開關關著 ⇒ 站長隨時會切換 | **5 分鐘**（`FRIENDS_DISABLED_CACHE_TTL_MS`） |
+| `unsupported` | 伺服器**根本沒有**端點（還沒部署） ⇒ 不會突然變 | **1 小時**（`FRIENDS_UNSUPPORTED_CACHE_TTL_MS`） |
+
+實作：`negCacheTtlMs(v)` 是唯一的分流點；`aliveAvail(v, at, now)` 是唯一的「還算不算數」判斷，session 記憶與 localStorage 都走它。舊常數 `FRIENDS_NEG_CACHE_TTL_MS` **移除**（守衛 A0 斷言它不存在，避免有人再讀到一個「共用門檻」）。
+
+### 【3】⭐⭐ 舊條目自動修復 —— 查證成立
+`remember()` 寫入的形狀自 v6.283 起一直是 `{v, at}`，本版**未改形狀**；`readCache` 解析後以 `o.v` 選 TTL、以 `o.at` 算年齡 ⇒ v6.289 寫進玩家 localStorage 的 `{v:'disabled', at:<10 分鐘前>}` 換到新 client 後**立刻**用 5 分鐘門檻判定為過期（守衛 A3 用完全相同的形狀模擬；突變 B4「依寫入時間分流」與 B8「readCache 繞過分流」各自紅在這一條）。⇒ 不必 bump `LS_PREFIX`、玩家不必清快取。
+
+⚠ 但讀碼發現**第二個卡點**：`sessionAvail`（模組層級 Map，整頁重載才重置）原本**沒有 TTL** —— `friendsAvailability` 只要 session 有值就直接回傳。這代表 PWA／整天不重載的玩家，就算 localStorage 條目過期了，本次載入內入口仍永遠藏著 ⇒ 5 分鐘門檻只對「重新整理過」的人有效。本版把 session 記憶改成 `{v, at}` 並套同一個 `aliveAvail`（突變 B6「session 不套 TTL」紅在「同一次載入：disabled 6 分鐘」）。⚠ 這超出交辦「一個常數拆兩個」的字面範圍，但不做的話拆常數在最常見的使用情境是安慰劑，已在回報中明講。
+
+### 【4】「直接進 /friends 一律重新探測」—— 不必做，已經是這樣
+`/friends` 頁的 `load()` 直接呼叫 `fetchFriendsList`，**從未讀負向快取**（grep：`friendsAvailability` 只在 `game/+page.svelte` 的兩顆入口被引用）⇒ 只要玩家能到那一頁就必定重新探測一次。交辦說的「沒有逃生口」只成立在「入口按鈕被藏起來」這一層，而那正是 5 分鐘 TTL 修的。零改動、零風險。
+
+### 【5】守衛 test-v6290（17 條，全部行為端：esbuild 抽模組、假 localStorage、可控 now）
+A0 兩常數實際求值（5×60×1000／60×60×1000）＋ 舊共用常數不存在；A1 disabled 4 分鐘藏／6 分鐘重新探測（同一次載入＋重新整理後兩條路徑；入口與賽後鈕一起釘）；A2 unsupported 59／61 分鐘；A3 舊條目 `{v:'disabled', at:10 分鐘前}` 必過期＋正對照（10 分鐘前的 unsupported 仍藏、4 分鐘前的 disabled 仍藏、缺 at／壞 JSON ⇒ unknown、on 永不過期）；A4 私聊 60 秒常數＋行為（59／61 秒）不變且不碰好友快取；A5 零 setInterval／setTimeout。突變 B1~B9：互換／共用 1h／共用 5m／依寫入時間分流／5 分鐘寫成 5 秒／session 不套 TTL／整個 TTL 拿掉／readCache 繞過／私聊改用 5 分鐘，各紅在預期那條。HEAD-FAIL（有完整歷史的 clone 實跑）：friends-api.ts 還原 BASE ⇒ A0／A1／A2／A3 紅＋B 錨點全紅、test-v6283 E7 紅；package.json／version.ts／admin.html 各還原 ⇒ C1 紅；test-v6272 還原 ⇒ ⑩ 紅。
+
+### 【6】changelog 決定＋三配套
+首頁**不寫**：這一版部署上線時，受影響玩家的 1 小時早已過去（修的是「往後站長再切開關」的情境）；玩家可觀察到的只有「入口出現得比較快」，沒有任何要做的事、也沒有規則差異（規範②）。首頁三檔零改動 ⇒ test-v6264 的 pin 依 v6.275 規則不前移（F0 短路，有完整歷史的 clone 實跑 37 PASS）。三配套：`version.ts` 6.290／`admin.html` SITE_VERSION_HINT 6.290／`test-v6272` ⑩ `PREV_SHA`→v6.289（eed4b769）、`PREV_ALLOWED`＝friends-api.ts＋version.ts。掃描：scripts 內沒有守衛 pin 死 6.289 或 friends-api.ts 整檔 sha256（錦標賽區塊兩把 sha 是「區塊」，本版未動 server）。
+
+### 【7】部署
+只動玩家端 ⇒ 測試站綠燈後照兩段式流程由站長上正式站（`redeploy-oracle.bat`）；`admin.html` 只改版本提示字串，不急，下次跑 `update-tournament.bat` 時自然帶上（會 pm2 restart，挑離峰）。沒有 client 新欄位／server 相依，順序無關。
+
 ## v6.289 — 解除封鎖（真刪分支）也一併刪私聊
 
 BASE `f8a9a5a2fc808facd435f768a00819de5759c233`（v6.288，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.39 → **v1.40**（只動 FRIENDS 區塊的 `unblock` 一條分支＋註解；DM 區塊只改註解；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動，自己算過）。玩家端只改 `/friends` 頁解除封鎖的二次確認文案一句（test-v6272 ⑩ PREV_ALLOWED：version.ts／friends/+page.svelte／首頁 changelog 三檔，其餘動到就紅）。守衛 `scripts/test-v6289-unblock-purge.mjs`（已進 test chain）。

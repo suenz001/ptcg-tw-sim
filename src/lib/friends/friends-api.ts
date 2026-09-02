@@ -19,9 +19,9 @@
  *     ①「支援」：回應帶 `friendsApi`（成功回應），或錯誤碼以 `friends-` 開頭且不是
  *        `friends-disabled`（伺服器**認得**這支端點 ⇒ 已部署）⇒ 記正向快取（localStorage，綁 uid）。
  *     ②「尚未開放」：503 且 `code === 'friends-disabled'`（站長的開關還沒打開）⇒ 記負向快取
- *        （有 TTL；站長打開之後過期就會重新試）。
+ *        （⭐ v6.290 起 TTL **5 分鐘**；站長打開之後過期就會重新試）。
  *     ③「不支援」：404／回應不是 JSON（伺服器還沒部署到 v6.282、或 GitHub Pages 測試站的靜態
- *        404 頁）⇒ 記負向快取 ⇒ UI 全藏。
+ *        404 頁）⇒ 記負向快取（TTL 1 小時）⇒ UI 全藏。
  *   ⚠⚠ 下面幾種**一律不算**「不支援」（誤判會把功能誤殺，而且藏起來在本次載入是不可逆的）：
  *     ・401（`friends-auth-required`／token 過期）⇒ 「請先以 email 帳號登入」；
  *     ・429（`friends-rate-limited`／`friends-cooldown`）⇒ 只顯示訊息；
@@ -115,12 +115,21 @@ export const FRIENDS_DM_DISABLED_MSG = '好友私聊尚未開放，請之後再�
 export const FRIENDS_DM_UNSUPPORTED_MSG = '這個網站版本的伺服器還沒有提供私聊功能。';
 export const FRIENDS_DM_NOT_FRIENDS_MSG = '無法開啟與這位玩家的對話，請重新整理好友名單。';
 
-/** 負向快取的存活時間。站長打開開關／部署新版之後，最多這麼久入口就會重新出現。 */
-export const FRIENDS_NEG_CACHE_TTL_MS = 60 * 60 * 1000;
+/**
+ * 負向快取的存活時間 —— ⭐ v6.290 依快取值分成兩種（站長裁定；v6.289 以前兩種共用同一個 1 小時）：
+ *   ・`disabled`（503 friends-disabled）：伺服器**有**這支端點、只是開關關著 ⇒ 站長隨時會切換 ⇒ **5 分鐘**。
+ *     ⚠ 線上實際發生：開放前點過一次入口 ⇒ 開放後 1 小時內按鈕都不出現、畫面上也沒有重試的入口。
+ *   ・`unsupported`（404／非 JSON）：伺服器**根本沒有**這支端點（還沒部署）⇒ 不會突然變 ⇒ 維持 **1 小時**。
+ *   ⭐ 判定時依「快取值」分流（`negCacheTtlMs`），不看寫入時的版本 ⇒ 舊版 client 寫進 localStorage 的
+ *     `disabled` 條目（同樣的 `{v, at}` 形狀）換到新版後**立刻**改用 5 分鐘門檻判定，玩家不必手動清快取。
+ */
+export const FRIENDS_DISABLED_CACHE_TTL_MS = 5 * 60 * 1000;
+export const FRIENDS_UNSUPPORTED_CACHE_TTL_MS = 60 * 60 * 1000;
 const LS_PREFIX = 'ptcg_friends_avail:';
 
 // ── 模組層級狀態（跨路由切換保留；整頁重新載入才重置）────────────────────────
-const sessionAvail = new Map<string, FriendsAvailability>();
+/** ⭐ v6.290 起本次載入的記憶也帶時間戳、負向同樣套 TTL —— 否則 5 分鐘門檻只對「重新整理過」的人有效（PWA 玩家整天不重載）。 */
+const sessionAvail = new Map<string, { v: FriendsAvailability; at: number }>();
 /** v6.288 私聊自己的可用性（只記本次載入；負向有 TTL，站長開了子開關之後重開面板就會再試）。 */
 let dmAvail: { v: FriendsAvailability; at: number } = { v: 'unknown', at: 0 };
 export const FRIENDS_DM_NEG_CACHE_TTL_MS = 60 * 1000;
@@ -144,32 +153,46 @@ function lsSet(key: string, val: string): void {
   try { if (typeof localStorage !== 'undefined') localStorage.setItem(key, val); } catch { /* 隱私模式等 ⇒ 只靠 session 記憶 */ }
 }
 
+/** 負向快取值對應的 TTL；不是負向值（on／unknown／壞資料）⇒ null。⭐ 唯一的分流點：session 記憶與 localStorage 都走這裡。 */
+function negCacheTtlMs(v: unknown): number | null {
+  if (v === 'disabled') return FRIENDS_DISABLED_CACHE_TTL_MS;
+  if (v === 'unsupported') return FRIENDS_UNSUPPORTED_CACHE_TTL_MS;
+  return null;
+}
+/** 一筆 `{v, at}` 此刻還算不算數：`on` 永久；負向只在自己那種 TTL 內；其餘（含缺 `at`）⇒ null＝當作沒有。 */
+function aliveAvail(v: unknown, at: unknown, now: number): FriendsAvailability | null {
+  if (v === 'on') return 'on';
+  const ttl = negCacheTtlMs(v);
+  if (ttl !== null && typeof at === 'number' && now - at < ttl) return v as FriendsAvailability;
+  return null;
+}
+
 function readCache(uid: string, now: number): FriendsAvailability {
   const raw = lsGet(LS_PREFIX + uid);
   if (!raw) return 'unknown';
   try {
     const o = JSON.parse(raw) as { v?: unknown; at?: unknown };
-    if (o.v === 'on') return 'on';
-    if ((o.v === 'disabled' || o.v === 'unsupported') && typeof o.at === 'number' && now - o.at < FRIENDS_NEG_CACHE_TTL_MS) return o.v;
+    return aliveAvail(o.v, o.at, now) ?? 'unknown';
   } catch { /* 壞掉的快取當作沒有 */ }
   return 'unknown';
 }
 
 function remember(uid: string, v: FriendsAvailability): void {
   if (v === 'unknown') return;
-  sessionAvail.set(uid, v);
-  lsSet(LS_PREFIX + uid, JSON.stringify({ v, at: Date.now() }));
+  const at = Date.now();
+  sessionAvail.set(uid, { v, at });
+  lsSet(LS_PREFIX + uid, JSON.stringify({ v, at }));   // ⚠ 形狀與 v6.283 起相同（{v, at}），舊條目才能被新門檻直接判讀
 }
 
 /**
  * 這個帳號目前的可用性。**純函式，不發任何請求。**
- * 判讀順序：沒有 Oracle API 的 build ⇒ unsupported；本次載入問過 ⇒ 用問到的；否則讀 localStorage。
+ * 判讀順序：沒有 Oracle API 的 build ⇒ unsupported；本次載入問過（且負向仍在 TTL 內）⇒ 用問到的；否則讀 localStorage。
  */
 export function friendsAvailability(uid: string | null | undefined, now: number = Date.now()): FriendsAvailability {
   if (!apiBase()) return 'unsupported';
   if (!uid) return 'unknown';
   const s = sessionAvail.get(uid);
-  if (s) return s;
+  if (s) { const a = aliveAvail(s.v, s.at, now); if (a) return a; }
   return readCache(uid, now);
 }
 
