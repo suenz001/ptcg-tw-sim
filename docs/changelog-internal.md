@@ -1,5 +1,129 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.286 — 好友功能對抗性審查六修（全部在站長開啟 `friendsConfig.enabled` 之前修好）＋ 八條守衛補強
+
+BASE `e99f47367955a16bbd9c7f3199cd85eb20e94b38`（v6.285，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.36 → **v1.37**（只動 PTCG-FRIENDS 區塊與 PTCG-PLAYER-IDENTITY 區塊；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動）。
+`admin.html` 新增好友開關 UI。玩家端只動 `game/+page.svelte`（設定 modal 的 ✕）。守衛 `scripts/test-v6286-friends-hardening.mjs`（36 條，已進 test chain）。
+
+### 【1】admin 沒有好友開關的 UI（最急）
+BASE `grep -ci friends admin.html` ⇒ 0：端點 `GET/POST /api/friends/admin/config` 自 v6.282 就在，但沒有任何畫面 ⇒ 站長根本打不開。
+修：`loadMonitor()` 的 `Promise.all` 多一發 `api('/api/friends/admin/config')`（`_r[6]`，經 `_ok()`），在「⚙️ 連線設定」框內、「⏰ 未進場容許窗」之後畫 `#mon-friends`：
+狀態字（已啟用／關閉／讀不到）＋說明＋「啟用好友功能」「關閉」兩顆按鈕 → `window.monSetFriends(enabled, btn)`：
+`POST /api/friends/admin/config` body `{enabled}`；啟用前 `confirm`；失敗 alert 並還原按鈕文字（v1.68 教訓）；成功後 `loadMonitor()` 重讀。
+讀不到（舊伺服器）時區塊照畫、不畫按鈕、明講「請跑 update-tournament.bat」。
+證明會打對端點：守衛 1a／1b 把 `loadMonitor`／`monSetFriends` 抽出來用假 `api()` 實跑（斷言 URL、method、body），1c 再把 UI 送出的 (method, path, body) **原封餵進伺服器區塊的 routes 表**：開關 false → true（玩家端點 200）→ false（503），非 admin 403 且開關不動。
+
+### 【2】nick 可被冒名竄改 —— 修法 (a)＋停寫 playerIdentity.nick；uid 明講不可信
+查證 `/api/match-result`（:1467~1553）：**沒有任何身分驗證**（無 `tournIdentity`／`requireFirebaseAdmin`／Bearer；只有 `mrRateLimitCheck(ip)` 每分鐘 10 筆＋`mrValidateRecord` 形狀檢查）。
+`recordPlayerIdentity` 的三個輸入：`seats[].email`／`seats[].uid`（rooms doc，client 建房自報）、`names`（payload 的 p1/p2.name，client 自報）⇒ 三者全部不可信。
+攻擊比審查者寫的還簡單：不必偽造 seat，任何人 POST `/api/match-result` 帶**大廳列表上任一房號**＋任意 `p2.name` 就能改該房 seat email 對應玩家的 nick。
+選 (a)：`_frPublic.nick` 只用 `friendships.nickA/nickB` 快照（建立時＝seat.name／報名名／Auth displayName；accept 時被驗過 token 的 `_frMyNick` 覆寫 ⇒ accepted 關係雙方都是驗過的暱稱），
+`list` 的 playerIdentity 投影拿掉 `nick`；`{email}` 入口不再拿 `playerIdentity.nick`（對照表只當「帳號存在」的零網路判據，nick 留 null 等 accept 補），Auth displayName 走新 `_frAuthNick`（也擋 email 前綴）；
+`recordPlayerIdentity` **不再寫 nick**（`names` 參數保留不用，避免動 enrich 段那行 —— test-v6282 F1/F3 逐字鎖）。既有 playerIdentity 文件的 nick 欄位原樣保留（不刪不改），只是沒有消費點。
+不選 (b)：那條路徑上沒有可驗的身分，做不到「證明 email 屬於該 uid」。
+**代價**：暱稱不再跟著玩家改名更新（快照）；被邀方在 pending 期間看到的邀請者暱稱＝邀請者 seat.name（自己報自己的）。
+⚠⚠ **uid／uids 同樣不可信**（同一條路徑、同樣 client 自報）：攻擊者可在自己房間把 seat.email 填成受害者 ⇒ `playerIdentity[victim].uid` 變成攻擊者的 Oracle uid ⇒
+受害者的好友在大廳會把攻擊者的房標成「好友的房」（釣魚）。本版**保留**欄位（交辦：修 nick 不要砍 uid），但大廳標示只能當提示、不能當身分憑證 —— 守衛 2c 把這件事寫成斷言（攻擊後 uid 確實會變，欄位仍在）。
+根治方案（需 client 改動，**server 先上**）：client 在驗過 token 的 `GET /api/friends/list` 帶自己的 Oracle uid（localStorage `ptcg_oracle_uid`），伺服器以驗過的 email 為 key 寫入 playerIdentity；
+`recordPlayerIdentity` 停寫 uid。自報自己的 uid 最多只能讓「自己的好友」看錯房，無法劫持別人。
+⚠ 正式站 seats[].uid 是 Oracle 匿名 JWT 的 per-瀏覽器 uid，不是 Firebase uid ⇒ 不能用 tournIdentity 的 uid 直接對大廳。
+
+### 【3】24 小時冷卻可被兩步繞過（remove 與 block→unblock 兩條路都堵）
+- `remove` 對 `status === 'rejected'` 在**冷卻期內** 409 `friends-not-removable`（雙方都不能刪：那一列是冷卻的唯一依據）；冷卻已過才准真刪除（那時本來就可重送）。
+  ⚠ 第一版寫成「rejected 永遠 409」，被 push 前的對抗性審查抓到（文案說 24 小時內、實作卻永久）—— 已改。
+- 同型繞過（審查者沒提）：被拒方用 `block`（fid 或 roomCode/email 入口）把列覆寫成 blocked，再 `unblock` ＝ 真刪除 ⇒ 冷卻消失。
+  修：`block` 從 rejected 轉 blocked 時把 `rejectedAt` 帶著走；`unblock` 在冷卻期內只把列還原成 `rejected`（保留 `rejectedAt`／`requester`、`blockedBy:null`），冷卻已過才真刪除。
+守衛 3a／3b 用真流程（A 邀 → B 拒）跑兩步攻擊：remove→request 429；block(fid)→unblock→request 429；block(roomCode)→unblock→request 429；冷卻過期後 unblock 真刪除。
+
+### 【4】500 回原始 e.message（Mongo E11000 訊息帶 `_id: "a@x|b@y"` ⇒ 兩個 email 外洩）
+friends 區塊 10 處＋admin 2 處全部改走 `_frFail(res, e, where)`：固定文案「好友功能暫時無法使用，請稍後再試」＋ `code:'friends-error'`，原文只 `console.warn('[friends] <where> error:', e.message)`。
+守衛 4a 對七支端點注入 `Error(E11000 … _id: "alice@example.com|bob@example.com")` ⇒ 回應掃不到 `@`、掃不到 local-part、掃不到 E11000/dup key；log 有原文。4b 斷言區塊內 `res.status(500)` 只剩 `_frFail` 一處。
+**區塊外同型問題（只回報不改）**：全檔另有 **105 處** `res.status(500).json({ error: e.message })`（或 `'…' + e.message`），其中約 **57 處在 admin gate 後**（requireFirebaseAdmin／isTournAdmin）、
+約 **48 處在玩家可打的端點**：`/api/match-result`（:1553，`'寫入失敗: ' + e.message`）、`/api/deck-stats`、`/api/rooms-archetypes`、錦標賽玩家端點約 30 處（join／state／action／checkin／register／chat／push/*／spectate／match/enter／forfeit／drop／leaderboard／profile／replay…）、
+牌組公布欄約 13 處（`e && e.message`）。這些 collection 的 `_id` 多半不含 email（tournamentRegistrations 是 `eventId__uid`、matchRecords 是 matchId、deck-posts 是 ObjectId），實際 email 外洩機率低於 friends（friendships 的 _id 就是兩個 email），
+但仍是原始訊息（collection／索引名／查詢片段）外洩。錦標賽區塊被 sha256 凍結，要改需另案解凍；建議下一版統一收斂成一個 `apiFail(res, tag, e)`。
+
+### 【5】冷卻方向錯
+`request` 的冷卻判斷加 `cur.requester === me.email`：只擋被拒方（rejected 列的 requester）；拒絕方自己邀回去 ⇒ 建新 pending（requester 換成他），被拒方 accept 後成立。守衛 5a／5b。
+
+### 【6】設定 modal 捲到底 ✕ 被捲走（v6.285 引入）
+量測（BASE，`extractCss`＋`settingsMarkup` 全 section 展開，Playwright chromium-headless-shell）：捲到底後 ✕ y＝−1016（375×812）／−1149（375×667）／−1267（812×375 橫式）／−970（1366×768）… 全部出界。
+修法：`.zoom-close` 放進零高度的 **sticky dock** `<div class="settings-close-dock">`（只有設定 modal 的 markup 有）：
+`.zoom-modal.settings-modal > .settings-close-dock{ position:sticky; top:0; z-index:11; flex:0 0 auto; height:0; align-self:stretch; margin:0 -P -G }`、`… > .zoom-close{ top:calc(1rem - P) }`，
+P/G＝該 @media 下 .zoom-modal 實際生效的 padding／gap（桌機 1.44rem/.9rem；手機直式 `.settings-modal` 1rem／gap .55rem；手機橫式 .5rem/.4rem !important）⇒ 三個 @media 各一組（共 6 條規則）。
+負左右 margin 讓 dock 寬到 padding 邊 ⇒ ✕ 的 `right:1rem` 參考點不變；`margin-bottom:-G` 抵銷 dock 那一格 flex gap ⇒ 標題與各 section 零位移；`top:calc(1rem-P)` 抵銷 dock 起點在 content 邊 ⇒ scrollTop=0 時 ✕ 逐像素同 v6.285。
+不採 `position:fixed`（modal 位置隨 margin:auto 置中，fixed 定不到角落）；不用 `position:sticky` 直接套在 ✕（sticky 元素 in-flow 會佔 2.2rem 高，抵銷要動 gap）。
+⚠ sticky 貼頂的參考邊：Chromium 實測以 content 邊為準（top:0 ⇒ 貼在 padding 之下，與初始位置相同）；若某引擎以 padding 邊為準，✕ 最多再高一個 P：手機兩組（top 0／.5rem）仍不出界，桌機 Safari 會被切 7px（仍可點）。
+**七種尺寸量測（守衛 6b／6c 實跑輸出）**：
+
+| viewport | ✕ scrollTop=0（無 dock 版＝v6.285） | 捲到底 scrollTop | 捲到底 ✕（無 dock 版） | elementFromPoint |
+|---|---|---|---|---|
+| 375×812 手機直式 | 306.8,33,35.2,35.2（同） | 1049 | 306.8,33,35.2,35.2（−1016 出界） | zoom-close |
+| 375×667 手機直式 | 306.8,33（同） | 1182 | 306.8,33（−1149 出界） | zoom-close |
+| 812×375 手機橫式 | 743.8,33（同） | 1300 | 743.8,33（−1267 出界） | zoom-close |
+| 667×375 手機橫式 | 598.8,33（同） | 1300 | 598.8,33（−1267 出界） | zoom-close |
+| 1366×768 桌機 | 1086.8,33（同） | 1003 | 1086.8,33（−970 出界） | zoom-close |
+| 1536×864 桌機 | 1171.8,33（同） | 907 | 1171.8,33（−874 出界） | zoom-close |
+| 1920×1080 桌機 | 1363.8,33（同） | 691 | 1363.8,33（−658 出界） | zoom-close |
+
+標題與六個 section 的 rect 在七種尺寸下 dx=dy=dw=dh=0。其他三個 zoom modal（discard 53 元素／prize 34／zoom 18）× 七尺寸：完整 CSS vs 無 dock CSS 同一份 markup ⇒ 全部元素 rect／position／overflow-y **全等**，✕ rect 逐一相同
+（例：discard 375×812 ✕=306.81,97.3；prize 1920×1080 ✕=1311.84,80.06；zoom 1366×768 ✕=1086.84,121.34）。
+CI 沒有 Playwright ⇒ 6b/6c 醒目 SKIP，6a 的靜態級聯斷言（六條規則的形狀、selector 前綴、`.zoom-close` 原規則逐字、其他三 modal 的 ✕ 仍是直接子元素）必跑。
+
+### 【7】八條守衛補強（審查者 15 個突變有 8 個沒紅）
+| # | 突變 | 守衛 | 修後 | 突變體 |
+|---|---|---|---|---|
+| 1 | `_frFindMine` 拿掉 `$or a/b=me` | 7-1 外人拿別人 fid 打 accept/reject/remove/unblock/block ⇒ 404、零寫入 | PASS | 紅在「fid 越權」 |
+| 2 | 先 verifyIdToken 再查開關 | 7-2 開關關閉 ⇒ 七端點 503 且 tournIdentity 呼叫 0 次 | PASS | 紅在「gate 順序」 |
+| 3 | TTL 10s → 0 | 7-3 50 發 list 只讀 tournamentConfig 1 次 | PASS | 紅在「開關 TTL」 |
+| 4 | nick fallback `split('@')[0]` | 7-4 無快照 ⇒ 「玩家」；回應掃 local-part（不只完整 email） | PASS | 紅在「半個 email 外洩」 |
+| 5 | 刪 createIndex | 7-5 假 db 記錄到 createIndex({a,status})／({b,status}) | PASS | 紅在「createIndex」 |
+| 6 | 拿掉 list 迴圈 adminScanYield | 7-6 **500 筆** incoming（cap 250 ⇒ 兩迴圈各過 200）⇒ ticks 恰 2 | PASS | docs／ident 兩個突變各紅在「讓路節拍」 |
+| 7 | /friends 頁匿名也發 list | 7-7 兩道閘（onAuthStateChanged 的 `u && !u.isAnonymous`、`ctx()` 匿名回 null）各自釘住 | PASS | 兩個突變各紅在對應那道 |
+| 8 | game/+page.svelte `$effect` 內 fetch `/api/friends/list` | 7-8 零 `/api/friends` 字面；47 個 `$effect`／`onMount`／`$derived` 區塊（括號配對抽出）內零 `fetchFriendsList`／`requestFriendFromBattle`／`requestFriendByEmail`／`friendsAction`／`addOpponentAsFriend` | PASS | 五個突變（fetch 字面／三個函式／onMount）各紅 |
+
+### push 前對抗性審查（獨立子代理，16 個突變）
+- 翻紅 12；**沒翻紅 5 ⇒ 全部補上守衛後重跑確認翻紅**：
+  M8 `accept` 把驗過的暱稱寫到**錯的一邊**（`'nickA':'nickB'` 對調）⇒ 5a 加斷言（accept 後自己那一邊＝驗過的暱稱、另一邊不動、雙方 list 各看到對的名字）；
+  M9 `unblock` 還原時把 `requester` 改成解封者 ⇒ 3b 加 B（拒絕方）側 block→unblock 路徑（requester 仍是 A、rejectedAt 不變、A 仍 429）；
+  M13 橫式 ✕ `top:.5rem→2.5rem`／M14 直式 `top:0→−2rem`／M15 dock `overflow:hidden`／M16 dock 搬到 `<h3>` 之後 ⇒ 6a 加靜態斷言：✕ 校正規則恰三條且只動 top（0／.5rem／calc）、
+  dock 規則不得有 overflow／display:none、直式／橫式規則各落在對的 @media、dock 必須是設定 modal 的第一個子元素（CI 沒有 Playwright ⇒ 這幾條只能靠靜態釘）。
+- 審查者另指出（未改，記錄）：被封鎖偵測 oracle（remove 對被拒 409／被封鎖 200／無列 404）是 v6.282 既有「request 靜默 200 但沒有 fid」缺口的延伸，非本版新破口；
+  `_frFail` 不檢查 `res.headersSent`（與既有各端點同型）；nginx 是整段 `location /api/` 反代、admin 的 `api()` 走相對路徑，與 redact 同一機制 ⇒ 打得到。
+
+### 守衛 `scripts/test-v6286-friends-hardening.mjs` 斷言清單（36 條）
+A0 區塊抽取（HEAD-FAIL 主錨點 `_frFail`）；A1 錦標賽兩把 sha256＋位置＋掃描器自驗；
+1a loadMonitor 三態渲染＋GET；1b monSetFriends POST/body/confirm/失敗還原；1c 兩端接線；1d `_ok()` 包裝＋版本一致；
+2a 冒名攻擊實跑 nick 不變＋playerIdentity 不落地 nick；2b 正對照（回 BASE 寫法 ⇒ 必紅，history-free）；2c uid 仍回＋{email} 入口三種 nick 來源；2d match-result 路徑無身分驗證（如果哪天加了要一起改）；
+3a remove 兩步攻擊＋冷卻過期後 remove 放行；3b block→unblock 兩步攻擊（A 側 fid／roomCode、B 側 roomCode）＋冷卻過期真刪除；5a 冷卻方向＋accept 暱稱寫對邊；5b 冷卻完整性＋rejected 列 list 不回、accept/reject 409；
+4a 七端點 E11000 注入；4b admin 兩支＋區塊內 500 出口唯一；
+6a CSS 靜態；6b 七尺寸 DOM（有 Playwright）；6c 其他三 modal 全等（有 Playwright）；
+7-1～7-8 各一條＋各一條突變（共 16 條）；8a test chain。
+
+### 既有守衛更新（照守衛說的修，附行為端理由）
+- `test-v6282` C2：nick 改斷言取 friendships 快照「鮑伯」且**不得**是對照表的「鮑伯二號」（理由＝2a/2b 的冒名實證）；D6：{email} 入口 nickB 改為 null；F2：playerIdentity 不再有 nick；H4 突變錨點跟著【5】的新條件改。
+- `test-v6264` `BASE_SHA` → v6.285（e99f4736）；`test-v6272` ⑩ `PREV_SHA` → e99f4736、`PREV_ALLOWED` 五檔（version.ts／game/+page.svelte／changelog 三檔；friends-api.ts 本版未動）。
+
+### HEAD-FAIL 實跑（沙盒，各檔逐一還原成 BASE 再跑 test-v6286）
+還原 `server_admin_patch.js` ⇒ 10 FAIL（A0／2a／2b／2c／3a／3b／5a／4a／4b／7-4m）；還原 `admin.html` ⇒ 4 FAIL（1a／1b／1c／1d）；
+還原 `game/+page.svelte` ⇒ 3 FAIL（6a／6b／6c）；還原 `package.json`＋`version.ts` ⇒ 2 FAIL（1d／8a）；還原 `test-v6282` ⇒ 該守衛 4 FAIL（C2／D6／F2／H4）。
+全部修後版：test-v6286 36/0（有 Playwright）、34/0＋SKIP 1 段（CI 情境）；test-v6282 52/0。
+完整 npm test 616/616（分批，沙盒）；tsc 54 個既有錯誤、TS2304＝0；`game/+page.svelte` svelte compile OK（警告數 98＝BASE）。
+
+### 三配套
+`version.ts` 6.286／`admin.html` `SITE_VERSION_HINT` 6.286／`test-v6272` ⑩ `PREV_SHA`＋`PREV_ALLOWED`／`test-v6264` `BASE_SHA`。掃描：scripts 內沒有守衛 pin 死 6.285 或整檔 sha256（只有錦標賽區塊 tail 兩把，本版未動）。
+首頁 changelog 三步搬運：新增 v6.286（open，只寫【6】關閉鈕；【1】~【5】是尚未開放功能的內部修正，不上首頁）、v6.264 內文搬進 bodies、v6.211 搬進封存頁。
+
+### 部署（順序）
+① 站長跑 **`update-tournament.bat`**（唯一會先同步 git 的那支；本版動了 `server_admin_patch.js` 與 `admin.html`；挑離峰、沒有錦標賽進行中）；② `redeploy-oracle.bat`（玩家端的 ✕ 修正）。
+本版 client 沒有送新欄位 ⇒ 沒有 server/client 先後的資料相依，但 admin 開關 UI 需要 v1.37 的伺服器才會顯示「已啟用／關閉」（舊伺服器顯示「讀不到」）。
+
+### ⚠ 站長開啟開關前還剩的事
+1. 先跑 `update-tournament.bat` 讓 v1.37 上線，admin 📡 分頁確認「👥 好友功能」區塊顯示「關閉」（不是「讀不到」）再按「啟用」。
+2. uid 劫持（大廳「好友的房」標示可被釣魚）本版**未根治**（見【2】）—— 開啟前建議先做「client 帶自己的 Oracle uid 到驗過 token 的 list」那一版，或先接受「大廳標示只是提示」。
+3. 暱稱是快照、不會跟著改名更新（可在 accept／request 時順手刷新自己的 nickA/nickB，下一版）。
+4. 區塊外 105 處 500 回原始訊息（非好友功能範圍，另案）。
+
 ## v6.285 — 設定 modal 捲動修正（既有 bug，v3.884 起）／賽後「將對手加為好友」改「未知也顯示」／設定 modal 尾端的「👥 好友」section
 
 BASE `48911f4683bbf89cd7c9a8fcab5422f237f797cd`（v6.284，遠端 main）。後端＝v6.282 P0（本版 `oracle-admin/server_admin_patch.js` **未動**）。

@@ -217,13 +217,14 @@ await T('C1b 掃描器正對照：假資料裡真的有 email（否則 C1 是恆
   assert.ok(findEmails(raw).length >= 4, 'DB 假資料裡 email 太少：' + findEmails(raw).length);
   assert.deepStrictEqual(findEmails({ x: [{ nick: 'a', fid: 'alice@example.com' }] }), ['alice@example.com']);
 });
-await T('C2 list 的每一筆都是固定白名單形狀（key 集合逐字相等）；uid/uids 來自 playerIdentity；nick 優先取對照表的最新暱稱', async () => {
+await T('C2 list 的每一筆都是固定白名單形狀（key 集合逐字相等）；uid/uids 來自 playerIdentity；⚠ v6.286【2】nick 只取 friendships 自己的快照、**不得**取對照表（playerIdentity.nick 可被未驗證的 /api/match-result 冒名竄改；正對照見 test-v6286）', async () => {
   const { la } = await runFullFlow(FR);
   const rows = [...la.body.friends, ...la.body.incoming, ...la.body.outgoing, ...la.body.blocked];
   assert.ok(rows.length >= 1, 'A 的清單是空的');
   for (const r of rows) assert.deepStrictEqual(Object.keys(r).sort(), [...PUBLIC_KEYS].sort(), '白名單形狀不對：' + JSON.stringify(r));
-  const bob = la.body.friends.find((r) => r.nick === '鮑伯二號');
-  assert.ok(bob, 'bob 沒有出現在好友裡（或 nick 沒取對照表最新值）：' + JSON.stringify(la.body.friends));
+  const bob = la.body.friends.find((r) => r.nick === '鮑伯');
+  assert.ok(bob, 'bob 沒有出現在好友裡（或 nick 沒取 friendships 快照）：' + JSON.stringify(la.body.friends));
+  assert.ok(!la.body.friends.some((r) => r.nick === '鮑伯二號'), 'v6.286【2】：nick 不得取 playerIdentity.nick（可被冒名竄改）');
   assert.strictEqual(bob.uid, 'o-bob', 'uid 應來自 playerIdentity');
   assert.deepStrictEqual(bob.uids, ['o-bob-old', 'o-bob'], 'uids 應為去重後的最近清單');
   assert.deepStrictEqual(Object.keys(la.body).sort(), ['blocked', 'friends', 'friendsApi', 'incoming', 'limit', 'me', 'outgoing', 'truncated'].sort());
@@ -357,7 +358,7 @@ await T('D5b 限流器本體：每分鐘 3、每天 30（用假時鐘直接呼�
   assert.strictEqual(okCount, 30, '一天內放行次數應恰為 30，實得 ' + okCount);
   assert.strictEqual(check('u', t0 + 86400000 + 61000 * 40), true, '過一天應放行');
 });
-await T('D6 查無此帳號：playerIdentity 沒有 ＋ Firebase Auth 查不到 ⇒ 404 friends-no-such-account（明講，站長裁定）；Auth 查得到 ⇒ 建 pending；playerIdentity 有 ⇒ 不打 Auth', async () => {
+await T('D6 查無此帳號：playerIdentity 沒有 ＋ Firebase Auth 查不到 ⇒ 404 friends-no-such-account（明講，站長裁定）；Auth 查得到 ⇒ 建 pending；playerIdentity 有 ⇒ 不打 Auth（v6.286【2】：且 nick 不再取對照表 ⇒ nickB 留空，等對方 accept 時以驗過的暱稱補上）', async () => {
   const calls = [];
   const TADMIN = { apps: [1], auth: () => ({ getUserByEmail: async (e) => { calls.push(e); if (e === 'exists@example.com') return { uid: 'x', displayName: '存在的人' }; const err = new Error('no user'); err.code = 'auth/user-not-found'; throw err; } }) };
   const seed = seedBase(); seed.playerIdentity = [{ _id: 'known@example.com', uid: 'o-k', nick: '認識的人' }];
@@ -370,7 +371,7 @@ await T('D6 查無此帳號：playerIdentity 沒有 ＋ Firebase Auth 查不到 
   r = await H.call('post', '/api/friends/request', asUser(U.A), { email: 'known@example.com' });
   assert.strictEqual(r.code, 200); assert.strictEqual(calls.length, 2, '對照表有就不可打 Auth');
   const d = H.db.snapshot('friendships').find((x) => x.b === 'known@example.com');
-  assert.strictEqual(d.addedVia, 'email'); assert.strictEqual(d.nickB, '認識的人');
+  assert.strictEqual(d.addedVia, 'email'); assert.strictEqual(d.nickB, null, 'v6.286【2】：{email} 入口不得再拿 playerIdentity.nick 當快照');
   // Auth 結果快取：同一個 ghost 再查（另一個人查，避開 per-人限流）不打第二次
   await H.call('post', '/api/friends/request', asUser(U.B), { email: 'ghost@example.com' });
   assert.strictEqual(calls.length, 2, 'Auth 負結果沒有快取');
@@ -530,14 +531,14 @@ await T('F1b 沒有房號（本機對戰）⇒ 不查 DB 也不記對照表；he
   assert.strictEqual(doc.p2.email, 'bob@example.com');
 });
 const RPI = new Function('"use strict";\n' + IDB + '\nreturn recordPlayerIdentity;')();
-await T('F2 helper 行為：email 正規化為 _id、$set uid/uidAt/nick、$push uids $slice -5、upsert；匿名座位跳過；只記 p1/p2；回傳寫入筆數', async () => {
+await T('F2 helper 行為：email 正規化為 _id、$set uid/uidAt（v6.286【2】：**不再寫 nick** —— 來源是未驗證的 match-result payload）、$push uids $slice -5、upsert；匿名座位跳過；只記 p1/p2；回傳寫入筆數', async () => {
   const db = makeFakeDb({});
   const n = RPI(db, [{ uid: ' o-alice ', email: ' Alice@Example.com ' }, { uid: 'o-x', email: null }, { uid: 'o-spec', email: 'spec@example.com' }], ['愛麗絲', '匿名', '觀戰']);
   assert.strictEqual(n, 1);
   await new Promise((r) => setImmediate(r));
   const rows = db.snapshot('playerIdentity');
   assert.strictEqual(rows.length, 1, '應只寫 1 筆（匿名跳過、觀戰位不記）');
-  assert.strictEqual(rows[0]._id, 'alice@example.com'); assert.strictEqual(rows[0].uid, 'o-alice'); assert.strictEqual(rows[0].nick, '愛麗絲');
+  assert.strictEqual(rows[0]._id, 'alice@example.com'); assert.strictEqual(rows[0].uid, 'o-alice'); assert.strictEqual(rows[0].nick, undefined, 'v6.286【2】：playerIdentity 不得再落地 nick');
   assert.deepStrictEqual(rows[0].uids.map((u) => u.uid), ['o-alice']);
   const op = db._log.find((x) => x.op === 'updateOne');
   assert.strictEqual(op.opt.upsert, true); assert.strictEqual(op.upd.$push.uids.$slice, -5);
@@ -668,7 +669,7 @@ await T('H3 突變：跨 IIFE helper 取不到時 fail-open（用本地 fallback
   }, '應 503');
 });
 await T('H4 突變：拿掉冷卻判斷 ⇒ D2 紅', async () => {
-  const M = mutate("if (cur && cur.status === 'rejected' && typeof cur.rejectedAt === 'number' && now - cur.rejectedAt < FR_REJECT_COOLDOWN_MS) {", "if (false) {");
+  const M = mutate("if (cur && cur.status === 'rejected' && cur.requester === me.email && typeof cur.rejectedAt === 'number' && now - cur.rejectedAt < FR_REJECT_COOLDOWN_MS) {", "if (false) {");
   await mutantMustBreak('no cooldown', async () => {
     const seed = seedBase(); seed.friendships = [mkPending('alice@example.com', 'bob@example.com', 'alice@example.com', { status: 'rejected', rejectedAt: Date.now() - 1000 })];
     const H = buildFriends(M, { seed });

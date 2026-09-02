@@ -3253,8 +3253,11 @@ async function loadMonitor() {
     //   ⚠ 刻意分兩發而不是把休閒併進同一個回應：兩批母體不同，合在一起回會誘導人把數字相加，
     //     而且錦標賽那份的回應內容必須逐位元不變（守衛以 sha256 鎖住）。
     api('/api/tournament/admin/clientdiag?mode=casual&hours=' + window.monHours),
+    // ⭐v6.286 好友功能開關（端點 v6.282 起就在，但 admin 一直沒有畫面 ⇒ 站長根本打不開；對抗性審查【1】）。
+    //   ⚠ 掛在 /api/friends 字首、不是 /api/tournament（伺服器端的錦標賽區塊 sha256 鎖以第一支 /api/tournament 字面當錨點）。
+    api('/api/friends/admin/config'),
   ]);
-  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]);
+  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]), fc = _ok(_r[6]);
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
@@ -3339,6 +3342,24 @@ async function loadMonitor() {
       + '<button style="' + btnW + '" onclick="monSetNoShow(false, this)">關閉（回到賽事設定值）</button>'
       + '</div>';
   }
+  // ⭐⭐ v6.286 好友功能開關 —— 預設關閉；站長用遠端桌面、無法貼 curl ⇒ 一定要是畫面上的按鈕。
+  //   ⚠ 這個區塊「讀不到」時也要畫出來（照 🎮 休閒子表的教訓：不可因為一發 404 就整塊消失，否則站長看不出是舊伺服器）。
+  html += '<div id="mon-friends" style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-top:12px;">'
+    + '<div style="font-weight:700;margin-bottom:4px;">👥 好友功能　'
+    + (fc ? (fc.enabled === true ? '<span id="mon-friends-state" style="color:#2e7d32;">已啟用</span>' : '<span id="mon-friends-state" style="color:#888;">關閉</span>')
+          : '<span id="mon-friends-state" style="color:#c62828;">讀不到</span>')
+    + '</div>';
+  if (!fc) {
+    html += '<p style="color:#c62828;margin:0;">讀不到好友功能設定 —— 最常見是伺服器還是舊版（需要 v6.282 以上；請跑 update-tournament.bat，它會先同步 git 再重啟）；也可能是目前帳號不在錦標賽管理員名單、或伺服器暫時出錯（重新整理再試）。</p>';
+  } else {
+    html += '<p class="small muted" style="margin:2px 0 8px;">開啟後，以 email 帳號登入的玩家可以互加好友（線上大廳入口、賽後「將對手加為好友」、設定視窗的「好友」區）。'
+      + '關閉時所有好友端點回 503，玩家端會自動把入口藏起來（最多約 1 小時後才會重新出現，因為玩家端有負向快取）。'
+      + '<br>⚠ 開啟前請先確認 v6.286 已經部署到伺服器（本頁版本 v' + escapeHtml(String(window.SITE_VERSION_HINT || '')) + '）——v6.286 之前的伺服器有暱稱冒名、冷卻可繞過等問題。'
+      + '<br>好友上限 ' + escapeHtml(String(fc.maxFriends || 100)) + ' 人；改完立即生效（伺服器快取會立刻失效）。</p>'
+      + '<button style="' + btnS + '" onclick="monSetFriends(true, this)">啟用好友功能</button> '
+      + '<button style="' + btnW + '" onclick="monSetFriends(false, this)">關閉</button>';
+  }
+  html += '</div>';
   html += '</div>';
 
   // ── ② 玩家端異常指紋 ────────────────────────────────────────────────
@@ -3506,7 +3527,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.285';
+window.SITE_VERSION_HINT = '6.286';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3542,6 +3563,17 @@ window.monSetNoShow = async function (enabled, btn) {
   var body = enabled ? { enabled: true, minutes: mins } : { enabled: false };
   const r = await api('/api/tournament/admin/noshow', { method: 'POST',
     headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
+  await loadMonitor();
+};
+// ⭐v6.286 好友功能開關（守衛 test-v6286 實跑這支：斷言它打 POST /api/friends/admin/config 且 body 只有 {enabled}）。
+window.monSetFriends = async function (enabled, btn) {
+  if (enabled && !confirm('確定要開啟好友功能？開啟後玩家端的好友入口會陸續出現（已載入的頁面要重新整理）。')) return;
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  const r = await api('/api/friends/admin/config', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !!enabled }) });
+  // 失敗路徑一定要還原按鈕文字（v1.68 的教訓），否則永遠停在「處理中…」
   if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
   await loadMonitor();
 };

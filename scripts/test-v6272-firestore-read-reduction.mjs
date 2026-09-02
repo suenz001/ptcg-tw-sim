@@ -664,13 +664,12 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '48911f4683bbf89cd7c9a8fcab5422f237f797cd';   // v6.284（v6.285 的上一版）
-// ⭐v6.285 設定 modal 捲動修正（既有 bug）＋賽後鈕「未知也顯示」＋設定 modal 尾端好友 section（client 端）：
-//   friends-api.ts（friendsBattleEntryVisible 委派 friendsEntryVisible）；game/+page.svelte（一條 CSS ＋ 設定 modal 尾端 section ＋ 註解）；
-//   首頁 changelog 三檔（三步搬運）。伺服器端 server_admin_patch.js 本版**未動**。
+const PREV_SHA = 'e99f47367955a16bbd9c7f3199cd85eb20e94b38';   // v6.285（v6.286 的上一版）
+// ⭐v6.286 好友功能對抗性審查六修：玩家端只動 game/+page.svelte（設定 modal 的 ✕ 進 sticky dock：markup 一處＋ CSS 六條）
+//   ＋ version.ts ＋ 首頁 changelog 三檔（三步搬運）。伺服器端 server_admin_patch.js（friends 區塊）與 admin.html（好友開關 UI）
+//   不在 src/／static/ 底下，不在這條清單的比對範圍（各有自己的守衛 test-v6286）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/friends/friends-api.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',

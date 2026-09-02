@@ -13668,7 +13668,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {#if showSettingsModal}
     <div class="zoom-overlay" onclick={() => showSettingsModal = false}>
       <div class="zoom-modal settings-modal" onclick={(e)=>e.stopPropagation()}>
-        <button class="zoom-close" onclick={() => showSettingsModal = false}>✕</button>
+        <!-- ⭐ v6.286：✕ 放進零高度的 sticky dock（.settings-close-dock），捲動時釘在 modal 頂端。
+             v6.285 讓設定 modal 能捲之後，position:absolute 的 ✕ 會跟著內容被捲出畫面（375×667 捲到底 ✕ top=-148）；
+             手機橫式的 modal 蓋滿整個 overlay ⇒ 只能捲回頂端才關得掉。只有設定 modal 有這個 dock，
+             其他三個 zoom modal（棄牌區／獎賞卡檢視／卡牌放大）的 markup 與 CSS 原樣（守衛 test-v6286 DOM rect 全等）。 -->
+        <div class="settings-close-dock"><button class="zoom-close" onclick={() => showSettingsModal = false}>✕</button></div>
         <h3 class="settings-title">⚙️ 設定</h3>
         
         <details class="settings-section">
@@ -17489,6 +17493,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
        .prize-view-modal（v6.190）亦同型，都沒有捲不動的回報 ⇒ 沿用同一組宣告（overscroll-behavior:contain 與 .zoom-scroll 一致）。
      回退：刪掉這一條即回到 v6.284 的行為。 */
   .zoom-modal.settings-modal{ overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
+  /* ⭐ v6.286 設定 modal 的 ✕ 釘住：零高度 sticky dock。
+     ・dock 在 flow 裡的位置＝content 區頂端、左右負 margin＝padding ⇒ 寬到 padding 邊；sticky top:0 ⇒ 捲動時貼在捲動容器頂端
+       （Chromium 實測以 content 邊為準 ⇒ 與初始位置相同；若引擎以 padding 邊為準，最多只再高一個 padding，手機兩組 ✕ 仍不出界）。
+       ✕ 在 dock 內 absolute，top＝calc(1rem − padding)、right 1rem ⇒ scrollTop=0 時 ✕ 的 rect 與 v6.285 逐像素相同（零位移），
+       捲到底時 ✕ 仍在畫面內（守衛 test-v6286 用 Playwright 逐尺寸量 rect；CI 沒瀏覽器時退到 CSS 級聯斷言）。
+     ・margin-bottom＝−gap 抵銷 dock 自己那一格 flex gap ⇒ 標題與各 section 的位置不變。
+     ・三個 @media 的 padding／gap 各不相同（桌機 1.44rem/.9rem；手機直式 .settings-modal 1rem／.zoom-modal gap .55rem；
+       手機橫式 .zoom-modal .5rem/.4rem !important）⇒ 各寫一組；只匹配 .settings-modal 底下的 dock，其他 zoom modal 沒有這個節點。 */
+  .zoom-modal.settings-modal > .settings-close-dock{ position:sticky; top:0; z-index:11; flex:0 0 auto; height:0; align-self:stretch; margin:0 -1.44rem -.9rem; }
+  .zoom-modal.settings-modal > .settings-close-dock > .zoom-close{ top:calc(1rem - 1.44rem); }
   .zoom-close{ position:absolute; top:1rem; right:1rem; width:2.2rem; height:2.2rem; background:rgba(0,0,0,0.6); border-radius:50%; border:none; color:#eee; font-size:1.44rem; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
   .zoom-close:hover{ background:#fff; color:#000; }
   /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 2.2rem 寬，所以 back 從 right:4rem 開始留一些間距。 */
@@ -17855,6 +17869,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       max-width: 92vw;
       padding: 1rem;
     }
+    /* v6.286 ✕ dock（手機直式：padding 1rem／gap .55rem） */
+    .zoom-modal.settings-modal > .settings-close-dock{ margin:0 -1rem -.55rem; }
+    .zoom-modal.settings-modal > .settings-close-dock > .zoom-close{ top:0; }
 
     /* lightbox（全螢幕大圖） */
     .lightbox-img {
@@ -17971,6 +17988,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       border-radius:0 !important;
       margin:0 !important;
     }
+    /* v6.286 ✕ dock（手機橫式：padding .5rem／gap .4rem；modal 蓋滿 overlay ⇒ 沒有這個 dock 就只能捲回頂端才關得掉） */
+    .zoom-modal.settings-modal > .settings-close-dock{ margin:0 -0.5rem -0.4rem; }
+    .zoom-modal.settings-modal > .settings-close-dock > .zoom-close{ top:0.5rem; }
     /* v3.886：image + info 上下排（column stack），避免 flex row wrap 造成圖片不縮 */
     .zoom-body{
       display:flex !important;
