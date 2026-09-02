@@ -1,5 +1,123 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.282 — 好友功能【P0：純伺服器端】friendships／playerIdentity／六支 /api/friends 端點／預設關閉的開關（玩家完全無感）
+
+BASE `6468a2c510acee2318d63dc7a7f2f85769cca429`（v6.281，遠端 main）。
+計劃書 `docs/plan-friends-feature.md`（站長已核准）。本版 `src/` 只動 `version.ts`、不做任何 client UI；
+理由是鐵律：白名單會丟掉 client 送來的新欄位 ⇒ **server 必須先上**。
+⚠ 不寫首頁 changelog（玩家看不到任何改變）。
+
+### 站長已裁定（本版照做、不可更動）
+
+key＝email／在線狀態 B 級（好友的房間在大廳標示、零新輪詢）／解除＝真刪除／不做推播／上限 100／
+錦標賽入口本版只要端點支援／查無此帳號**明講**＋限流（每人每分鐘 3 次、每天 30 次）／
+**全部 Oracle MongoDB，零 Firebase 讀寫**。
+
+### 【A】`playerIdentity` 對照表的接點：查證過程
+
+- **為什麼需要**：大廳列表回應只有 `seats[].uid`（email 已被 v6.220 `_stripSeatEmails17` 剝成 null），
+  好友表以 email 為 key ⇒ 好友清單回應必須附上每個好友「目前的 uid」，client 才比對得出哪一間是好友的房。
+- **`makePlayerDoc` 不存 uid**（實際碼：`{ name, email, cardCounts }` ＋條件式 `deckId`；守衛 F5 實跑證明
+  `Object.keys(doc)` 就這三個）⇒ uid 只能從房間 `seats[]` 拿。
+- **選 `/api/match-result` 的 PTCG-MATCH-EMAIL-ENRICH 段**：那一發 `findOne` 本來就投影
+  `seats.uid`＋`seats.email`；v6.220 起線上 client 送來的 `p1/p2.email` 一律 null ⇒ `_needEmail` 恆真 ⇒
+  **每一場線上對局都會發** ⇒ 零額外查詢、不在熱路徑（每場一次、game-over 才發）、helper 內 fire-and-forget
+  （`Promise.resolve().then(updateOne).catch(noop)`；同步階段連 DB 都不碰，守衛 F2b 實測）。
+  暱稱取 payload 的 `p1/p2.name`（同索引對應 `seats[0]/[1]`），**刻意不動** enrich 段的 projection
+  （test-v6266 C2 用 deepStrictEqual 鎖住它）。呼叫寫成 `typeof recordPlayerIdentity === 'function' && …`：
+  test-v6220／test-v6266 只用 `db/doc/sanitizeDeckId` 把這一段抽出來跑，那裡沒有這支 helper。
+- **不選建房／加入房間路徑**：建房 POST 在核心 `server.js`（不在 repo）沒有掛點；PUT 的回填 middleware
+  `_roomsPutKeepEmailMw` 是**每個動作都走的熱路徑**（佔全站 94% 流量）；兩邊的 `seat.email` 同樣是
+  client 自報（`auth.currentUser?.email`），可信度相同，沒有選它的理由。
+- ⚠⚠ **查證時發現計劃書的一個假設不成立**：正式站的 `seats[].uid` 是 **Oracle 匿名 JWT 發的 per-瀏覽器 uid**
+  （`oracle-client.ts` 的 `/api/auth/anonymous` → localStorage `ptcg_oracle_uid`），**不是 Firebase uid**；
+  換裝置／清資料／401 續簽都會換。⇒ 對照表記的是「最近一次完成對局的瀏覽器」，並保留最近 5 個 `uids`
+  給 client 一起比對。P1 動工前要知道這件事（見末尾）。
+
+### 【B】schema 與索引
+
+- `friendships`：`_id`＝兩個正規化（trim＋小寫）email 排序後 `a|b`；`a`/`b`（a<b）、
+  `status`（`pending`|`accepted`|`blocked`|`rejected`）、`requester`、`blockedBy`、`nickA`/`nickB`、
+  `addedVia`（`battle`|`email`）、`fid`（對外用的不透明識別碼＝pair id 的 FNV 雜湊 24 hex）、
+  `createdAt`/`updatedAt`（＋`acceptedAt`/`rejectedAt`/`blockedAt`）。索引 `{a:1,status:1}`、`{b:1,status:1}`，
+  比照 v6.240／v6.266：只在啟動時 lazy `createIndex`、不 await、`.catch()` 兜底。
+  ⚠ 站長裁定之外、本版自己補的：**status 多一個 `rejected`** —— 被拒後 24 小時冷卻需要落地（記憶體會在重啟後消失）；
+  list 一律不回它。
+- `playerIdentity`：`_id`＝email、`uid`（最近）、`uidAt`、`uids`（最近 5 個 `{uid,at}`，`$push $each $slice:-5`）、
+  `nick`、`createdAt`/`updatedAt`。只走 `_id`，不另建索引。
+
+### 【C】端點（全部要求 Firebase ID token 驗過且有 email；匿名／playerId fallback 一律 401 `friends-auth-required`）
+
+| 端點 | request | response（成功） |
+|---|---|---|
+| `GET /api/friends/list` | — | `{friendsApi:1, me:{uid,nick}, friends[], incoming[], outgoing[], blocked[], limit:100, truncated}`；每筆＝`{fid,status,nick,uid,uids,requestedByMe,blockedByMe,via,at}` |
+| `POST /api/friends/request` | `{roomCode}`／`{matchId}`／`{email}` | `{ok, friendsApi:1, status:'pending'|'accepted', fid, already?}` |
+| `POST /api/friends/accept`／`reject` | `{fid}` | `{ok, friendsApi:1, status, fid}` |
+| `POST /api/friends/remove` | `{fid}` | `{ok, friendsApi:1, removed:true}`（**deleteOne**，只刪自己那一列） |
+| `POST /api/friends/block` | `{fid}`／`{roomCode}`／`{matchId}`／`{email}` | `{ok, friendsApi:1, status:'blocked', fid}` |
+| `POST /api/friends/unblock` | `{fid}` | `{ok, friendsApi:1, removed:true}`（真刪除那一列） |
+| `GET/POST /api/friends/admin/config` | `{enabled:boolean}` | `{enabled, friendsApi:1}`（isTournAdmin gate；不受開關 gate） |
+
+- `{roomCode}`：伺服器讀 `rooms.seats[0/1]`（projection 只取 uid/email/name），**要求者必須以驗過的 email 對上其中一位對戰位**
+  （不信 client 送的 uid；觀戰位不算）；對方匿名 ⇒ 409 `friends-opponent-anonymous`。
+- `{matchId}`：`tournamentMatches._id` → `p1uid/p2uid` 對上我的 Firebase uid → `tournamentRegistrations` `${eventId}__${oppUid}` 取 email；
+  TMATCH 被 v0.58 清掃時退到 `tournamentArchives` `arch_<eventId>`（matchId 形狀 `evId_r<round>_m<idx>`）。
+- `{email}`：限流在查詢前消耗；先查 `playerIdentity`（零網路），查不到才走 Firebase **Auth** `getUserByEmail`
+  （⚠ Auth 不是 Firestore，不吃讀取額度；正負結果都快取 10 分鐘）⇒ 404 `friends-no-such-account`。
+- ⚠ 交辦原本寫 admin 端點 `/api/tournament/admin/friendsconfig`：但 test-v6272 ⑨／test-v6265／test-v6275 三把 sha256 鎖以
+  **第一支 `/api/tournament` 的 `app.get` 字面**當錦標賽區塊起點（連註解裡的字面都算），掛在那個字首會把錨點往前挪、
+  三把鎖全紅；用 `app.route` 繞字面等於躲守衛 ⇒ 改掛 `/api/friends/admin/config`，gate 仍是 `isTournAdmin`。
+
+### 【D】隱私（最高優先）
+
+**所有回應一律不含 email**：回應建構走唯一白名單 `_frPublic()`；`fid` 不是憑證（handler 一律再用 `a/b＝我` 過濾）；
+暱稱禁用 `tournIdentity` 的 email 前綴 fallback（那是半個 email）。守衛 C1 用 seats／regs／playerIdentity／friendships
+全含 `@` 的假資料實跑七支端點 20 個回應，序列化後掃不到任何 email；C1b 正對照證明掃描器抓得到。
+
+### 【E】防濫用五項（實作位置都在 `/api/friends/request` 與各 handler）
+
+同一對 pending 只一筆（`_id` 唯一；對方已先邀我 ⇒ 直接成立）／被拒後 24h 冷卻（`rejected`+`rejectedAt`，冷卻期滿重用同一列）／
+上限 100 雙方各自 `countDocuments(limit:101)`（request 與 accept 兩端都查）／被封鎖方的所有請求靜默 200 且 DB 零寫入
+（remove／unblock 都不讓他刪掉封鎖列）／`{email}` 入口每人每分鐘 3、每天 30（記憶體 Map、lazy prune）。
+
+### 【F】開關／哨兵／503
+
+`tournamentConfig.friendsConfig.enabled` **預設 false**（只有布林 true 才開；10 秒快取；admin POST 立即失效快取）。
+關閉 ⇒ 七支端點 503 `friends-disabled` **不帶哨兵**；開啟 ⇒ 所有成功回應帶 `friendsApi:1`。
+gate 順序：開關（503）→ 身分（401）→ `app.locals._adminScanYield` 取不到（503 `friends-helper-missing`，fail-closed）。
+
+### 【G】絕不拖累錦標賽
+
+- 所有查詢走索引且有硬上限（list `limit(250)`；`playerIdentity` 走 `_id $in`）；唯一的逐筆迴圈仍掛中央 `adminScanYield`
+  每 200 筆讓路（好友 ≤100 ⇒ 實際不會觸發，但線是接上的）。
+- 跨 IIFE：`adminScanYield` 在 firebase-admin 的 then-callback 內，端點在錦標賽 IIFE ⇒ 本版新掛 `app.locals._adminScanYield`
+  （與 `_sanitizeDeckId` 同一行位置），handler 執行時才取、取不到 fail-closed 503。`tournIdentity`／`isTournAdmin`／`TADMIN`
+  與本區塊同一個 closure（test-admin-helper-scope 的 acorn 掃描 9 PASS）。
+- 錦標賽區塊逐位元未動：區塊插在第一支 `/api/tournament` 的 `app.get` 之前，test-v6272 ⑨（`495221f1…`）與
+  test-v6278 I1（`93d29a7d…`）兩把 sha256 鎖原封不動。
+- benchmark（`scripts/perf-v6282-friends-eventloop.mjs`，Rule 32）：100 好友＋30 待確認的 list × 200 發，假 db 每操作一次
+  setImmediate（模擬 I/O 邊界）：事件迴圈阻塞 **p50 0.016 / p99 0.086 / max 2.9 ms**（沙盒；VM 約 1/10）；
+  零 I/O 時每發同步 CPU 上界 3.0ms，扣掉假 db 自己的線性掃描 1.5ms ⇒ 出貨碼自己約 **1.5ms/發（沙盒）≈ 0.15ms（VM）**。
+
+### 守衛 `scripts/test-v6282-friends-p0.mjs`（52 條，全部行為端）＋ `scripts/lib/friends-harness-v6282.mjs`
+
+A 抽取器自驗／位置證明／錦標賽 sha256；B 開關／哨兵／匿名／跨 IIFE fail-closed；C 隱私；D 防濫用五項；
+E remove 真刪除只刪自己那列／accept-reject 流程／roomCode／matchId（含歸檔 fallback）；F playerIdentity 接點
+（enrich 段實跑證明 helper 被呼叫且 findOne 仍只有一發、projection 逐字不變；helper 行為；fire-and-forget；
+`app.locals._adminScanYield` 抽出來跑）；G benchmark（含量測器正反對照）；H 十條突變各紅在預期那一條；
+I HEAD-FAIL（BASE 沒有區塊 ⇒ A0 紅、exit 1）。
+
+### ⭐ P1（client UI）動工前要注意
+
+1. `seats[].uid` 是 per-瀏覽器的 Oracle 匿名 uid ⇒ 比對大廳時要拿 `uid` **和 `uids`** 一起比；玩家換裝置後要打完一場
+   線上對局對照表才會更新。若要更準，P1 可以考慮讓 `list` 直接回「好友目前開的房號」（`rooms` 走 `{status:1,updatedAt:-1}`
+   索引、尖峰 ≤ 30 間房），那就完全不依賴 uid —— 本版先照裁定回 uid。
+2. `seat.email` 是 client 自報：`{roomCode}` 入口只能保證「要求者確實坐在那間房」，不能保證對方座位的 email 真的是他
+   （攻擊面＝讓陌生人收到一筆 pending，隱私零外洩）。
+3. client 只有 `friendsApi === 1` 才顯示 UI；503 一律當「伺服器不支援／未開放」；錯誤碼全部以 `code` 字串判斷。
+4. 上線順序：`update-tournament.bat`（server 先）→ 開關由 admin POST `/api/friends/admin/config {enabled:true}` 打開 → 再出 client 版。
+5. `nick` 可能是 null（玩家沒 displayName 且沒對戰過）⇒ 顯示端要有 fallback。
+
 ## v6.281 — Firestore 免費額度定案輪：homeChangelog 負結果快取 6h→30 天＋綁站台版本；admin feedbacks 快取 5→30 分鐘
 
 BASE `3913d73a392ca0d5e791d126176124393cc6de39`（v6.280，遠端 main）。

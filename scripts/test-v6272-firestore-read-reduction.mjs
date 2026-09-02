@@ -664,15 +664,12 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '3913d73a392ca0d5e791d126176124393cc6de39';   // v6.280（v6.281 的上一版）
-// ⭐v6.281 玩家端只動三個檔：home-changelog-cache.ts（負結果快取 6h→30 天＋綁站台版本，
-//   Firestore 讀取減量定案輪）、+page.svelte（只更新註解，接線一字不動）、version.ts。
-//   純效能/額度修正 ⇒ 依規矩不寫首頁 changelog（static/ 零改動）。
+const PREV_SHA = '6468a2c510acee2318d63dc7a7f2f85769cca429';   // v6.281（v6.282 的上一版）
+// ⭐v6.282 好友功能 P0 是**純伺服器端**版（oracle-admin/server_admin_patch.js v1.36）：
+//   玩家端只動 version.ts；不做任何 client UI（鐵律：白名單會丟掉 client 送來的新欄位 ⇒ server 先上）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/home-changelog-cache.ts',
   'src/lib/version.ts',
-  'src/routes/+page.svelte',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
