@@ -3256,8 +3256,10 @@ async function loadMonitor() {
     // ⭐v6.286 好友功能開關（端點 v6.282 起就在，但 admin 一直沒有畫面 ⇒ 站長根本打不開；對抗性審查【1】）。
     //   ⚠ 掛在 /api/friends 字首、不是 /api/tournament（伺服器端的錦標賽區塊 sha256 鎖以第一支 /api/tournament 字面當錨點）。
     api('/api/friends/admin/config'),
+    // ⭐v6.287 好友私聊子開關（伺服器 v1.38 起才有；舊伺服器 404 ⇒ 經 _ok() 變 null ⇒ 畫「讀不到」，不當成關閉）。
+    api('/api/friends/admin/dm-config'),
   ]);
-  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]), fc = _ok(_r[6]);
+  const lp = _ok(_r[0]), rd = _ok(_r[1]), dg = _ok(_r[2]), mv = _ok(_r[3]), ns = _ok(_r[4]), cg = _ok(_r[5]), fc = _ok(_r[6]), fd = _ok(_r[7]);
   const btnS = 'padding:6px 14px;border:1px solid #a5d6a7;background:#eaf7ea;color:#2e7d32;border-radius:6px;cursor:pointer;font-weight:600;';
   const btnW = 'padding:6px 14px;border:1px solid #e0c56a;background:#fff8e1;color:#8a6d00;border-radius:6px;cursor:pointer;font-weight:600;';
   let html = '<div style="max-width:900px;padding:16px;"><h2 style="margin-top:0;">📡 對戰連線監控</h2>';
@@ -3358,6 +3360,29 @@ async function loadMonitor() {
       + '<br>好友上限 ' + escapeHtml(String(fc.maxFriends || 100)) + ' 人；改完立即生效（伺服器快取會立刻失效）。</p>'
       + '<button style="' + btnS + '" onclick="monSetFriends(true, this)">啟用好友功能</button> '
       + '<button style="' + btnW + '" onclick="monSetFriends(false, this)">關閉</button>';
+  }
+  html += '</div>';
+  // ⭐⭐ v6.287 好友私聊：子開關（預設關閉）＋ admin 檢視（站長裁定「完全看得到」，比照休閒房聊天）。
+  //   ⚠ 是 #mon-friends 的**兄弟**節點不是子節點（test-v6286 1a 斷言 #mon-friends 內恰有兩顆按鈕）。
+  //   ⚠ 讀不到時區塊照畫、不畫按鈕、明講要跑 update-tournament.bat（與 👥 好友功能同一條紀律）。
+  html += '<div id="mon-friends-dm" style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-top:12px;">'
+    + '<div style="font-weight:700;margin-bottom:4px;">💬 好友私聊　'
+    + (fd ? (fd.dm === true ? '<span id="mon-friends-dm-state" style="color:#2e7d32;">已啟用</span>' : '<span id="mon-friends-dm-state" style="color:#888;">關閉</span>')
+          : '<span id="mon-friends-dm-state" style="color:#c62828;">讀不到</span>')
+    + '</div>';
+  if (!fd) {
+    html += '<p style="color:#c62828;margin:0;">讀不到私聊設定 —— 伺服器需要 v6.287 以上（請跑 update-tournament.bat，它會先同步 git 再重啟）；也可能是目前帳號不在錦標賽管理員名單、或伺服器暫時出錯（重新整理再試）。</p>';
+  } else {
+    html += '<p class="small muted" style="margin:2px 0 8px;">開啟後，互為好友（已接受）的兩位玩家不必開房間就能私聊；訊息保留 ' + escapeHtml(String(fd.retentionDays || 90)) + ' 天後自動清除。'
+      + '每人 1.2 秒 1 則、每分鐘 20 則、每天 500 則、每則 200 字。'
+      + '<br>⚠ 這是「👥 好友功能」底下的子開關：好友功能總開關關著時，私聊也一律關閉（' + (fd.enabled === true ? '目前總開關<b>已啟用</b>' : '目前總開關<b>關閉</b>，私聊不會生效') + '）。'
+      + '關閉時私聊端點回 503，玩家端會把聊天入口藏起來。'
+      + '<br>管理員可用下方「檢視私聊對話」看全部內容（比照休閒房聊天）。</p>'
+      + '<button style="' + btnS + '" onclick="monSetFriendsDm(true, this)">啟用好友私聊</button> '
+      + '<button style="' + btnW + '" onclick="monSetFriendsDm(false, this)">關閉</button> '
+      + '<button style="padding:6px 14px;border:1px solid #c5cae9;background:#e8eaf6;color:#283593;border-radius:6px;cursor:pointer;font-weight:600;" onclick="monLoadDms(this)">📨 檢視私聊對話</button>'
+      + '<div id="mon-dm-list" style="margin-top:10px;"></div>'
+      + '<div id="mon-dm-thread" style="margin-top:10px;"></div>';
   }
   html += '</div>';
   html += '</div>';
@@ -3527,7 +3552,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.286';
+window.SITE_VERSION_HINT = '6.287';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。
@@ -3576,6 +3601,67 @@ window.monSetFriends = async function (enabled, btn) {
   // 失敗路徑一定要還原按鈕文字（v1.68 的教訓），否則永遠停在「處理中…」
   if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
   await loadMonitor();
+};
+// ⭐v6.287 好友私聊子開關（守衛 test-v6287 實跑：斷言它打 POST /api/friends/admin/dm-config 且 body 只有 {dm}）。
+window.monSetFriendsDm = async function (enabled, btn) {
+  if (enabled && !confirm('確定要開啟好友私聊？開啟後互為好友的玩家可以直接私聊（需要「好友功能」總開關也是啟用狀態；已載入的頁面要重新整理）。')) return;
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '處理中…'; }
+  const r = await api('/api/friends/admin/dm-config', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dm: !!enabled }) });
+  if (!r || r.error) { alert('設定失敗：' + ((r && r.error) || '?')); if (btn) { btn.disabled = false; btn.textContent = _t0; } return; }
+  await loadMonitor();
+};
+// ⭐v6.287 admin 檢視私聊：總覽（誰對誰、幾則、最後時間）→ 點「展開」看內容（守衛實跑：斷言打 GET /api/friends/admin/dm 與 ?fid=，
+//   且訊息文字**純文字渲染**——含 <img onerror> 的假訊息渲染後 DOM 裡不得出現 img 元素）。
+function _dmFmtTs(ms) { try { return ms ? new Date(ms).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false }) : '—'; } catch (e) { return '—'; } }
+window.monLoadDms = async function (btn) {
+  const box = document.getElementById('mon-dm-list');
+  if (!box) return;
+  const _t0 = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '載入中…'; }
+  box.innerHTML = '<div style="color:#888;">載入中…</div>';
+  const r = await api('/api/friends/admin/dm');
+  if (btn) { btn.disabled = false; btn.textContent = _t0; }
+  if (!r || r.error) { box.innerHTML = '<p style="color:#c62828;margin:0;">讀不到私聊列表：' + escapeHtml(String((r && r.error) || '?')) + '</p>'; return; }
+  const rows = Array.isArray(r.conversations) ? r.conversations : [];
+  let h = '<div class="small muted" style="margin-bottom:6px;">共 ' + rows.length + ' 段對話'
+    + (r.truncated ? '<b style="color:#c62828;">（已達伺服器上限 ' + escapeHtml(String(r.cap || '')) + ' 段，只顯示最近的；更舊的對話請用「展開」以 fid 查）</b>' : '')
+    + '；訊息保留 ' + escapeHtml(String(r.retentionDays || 90)) + ' 天。</div>';
+  if (!rows.length) { box.innerHTML = h + '<div style="color:#888;">目前沒有任何私聊。</div>'; return; }
+  h += '<table style="width:100%;border-collapse:collapse;font-size:.85rem;"><thead><tr style="background:#f5f7fa;">'
+    + '<th style="text-align:left;padding:4px 6px;">雙方</th><th style="text-align:left;padding:4px 6px;">好友狀態</th><th style="padding:4px 6px;">則數</th><th style="text-align:left;padding:4px 6px;">最後一則</th><th></th></tr></thead><tbody>';
+  for (const c of rows) {
+    const who = (c.a ? escapeHtml(c.a) + (c.nickA ? '（' + escapeHtml(c.nickA) + '）' : '') : '<i>（關係已不存在）</i>')
+      + ' ↔ ' + (c.b ? escapeHtml(c.b) + (c.nickB ? '（' + escapeHtml(c.nickB) + '）' : '') : '<i>（關係已不存在）</i>');
+    h += '<tr style="border-top:1px solid #eef1f5;"><td style="padding:4px 6px;">' + who + '</td>'
+      + '<td style="padding:4px 6px;">' + escapeHtml(String(c.status || '')) + '</td>'
+      + '<td style="padding:4px 6px;text-align:center;">' + escapeHtml(String(c.count || 0)) + '</td>'
+      + '<td style="padding:4px 6px;">' + escapeHtml(_dmFmtTs(c.last)) + '</td>'
+      + '<td style="padding:4px 6px;"><button style="padding:3px 10px;border:1px solid #c5cae9;background:#e8eaf6;color:#283593;border-radius:6px;cursor:pointer;" onclick="monLoadDmThread(\'' + escapeHtml(String(c.fid || '')) + '\', 0)">展開</button></td></tr>';
+  }
+  box.innerHTML = h + '</tbody></table>';
+};
+window.monLoadDmThread = async function (fid, before) {
+  const box = document.getElementById('mon-dm-thread');
+  if (!box) return;
+  if (!/^[0-9a-f]{8,32}$/.test(String(fid || ''))) { box.innerHTML = '<p style="color:#c62828;margin:0;">fid 格式不對</p>'; return; }
+  box.innerHTML = '<div style="color:#888;">載入中…</div>';
+  const r = await api('/api/friends/admin/dm?fid=' + encodeURIComponent(fid) + (before > 0 ? '&before=' + encodeURIComponent(String(before)) : ''));
+  if (!r || r.error) { box.innerHTML = '<p style="color:#c62828;margin:0;">讀不到私聊內容：' + escapeHtml(String((r && r.error) || '?')) + '</p>'; return; }
+  const p = r.pair || null;
+  const msgs = Array.isArray(r.messages) ? r.messages : [];
+  let h = '<div style="border:1px solid #e3e8ef;border-radius:8px;padding:10px;">'
+    + '<div style="font-weight:700;margin-bottom:6px;">💬 ' + (p ? escapeHtml(p.a) + (p.nickA ? '（' + escapeHtml(p.nickA) + '）' : '') + ' ↔ ' + escapeHtml(p.b) + (p.nickB ? '（' + escapeHtml(p.nickB) + '）' : '') + '　<span class="small muted">狀態 ' + escapeHtml(String(p.status || '')) + '</span>' : '<i>（關係已不存在，只剩訊息）</i>')
+    + '　<span class="small muted">fid ' + escapeHtml(String(fid)) + '</span></div>';
+  if (r.hasMore && msgs.length) h += '<button style="padding:3px 10px;border:1px solid #d6dbe3;background:#fff;border-radius:6px;cursor:pointer;margin-bottom:6px;" onclick="monLoadDmThread(\'' + escapeHtml(String(fid)) + '\', ' + Number(msgs[0].ts) + ')">載入更早的訊息…</button>';
+  if (!msgs.length) h += '<div style="color:#888;">（沒有訊息）</div>';
+  for (const m of msgs) {
+    // ⚠⚠ 純文字渲染：玩家輸入的 text 一律 escapeHtml，絕不當 HTML 塞進去
+    h += '<div style="padding:3px 0;border-top:1px solid #f1f3f6;"><span class="small muted">' + escapeHtml(_dmFmtTs(m.ts)) + '</span>　'
+      + '<b>' + escapeHtml(String(m.from || ('側 ' + (m.side || '?')))) + '</b>：' + escapeHtml(String(m.text || '')) + '</div>';
+  }
+  box.innerHTML = h + '</div>';
 };
 window.monSetRedact = async function (enabled, btn) {
   const _t0 = btn ? btn.textContent : '';

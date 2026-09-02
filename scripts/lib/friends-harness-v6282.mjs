@@ -31,6 +31,13 @@ function matchVal(docVal, cond) {
     for (const k of Object.keys(cond)) {
       if (k === '$in') { if (!cond.$in.includes(docVal)) return false; }
       else if (k === '$exists') { if ((docVal !== undefined) !== !!cond.$exists) return false; }
+      // ⭐v6.287 私聊守衛需要的範圍／正則／不等（出貨碼的 dm list 用 ts:{$gt}/{$lt}、admin 總覽用 room:{$regex:'^dm:'}）
+      else if (k === '$gt') { if (!(docVal > cond.$gt)) return false; }
+      else if (k === '$gte') { if (!(docVal >= cond.$gte)) return false; }
+      else if (k === '$lt') { if (!(docVal < cond.$lt)) return false; }
+      else if (k === '$lte') { if (!(docVal <= cond.$lte)) return false; }
+      else if (k === '$ne') { if (docVal === cond.$ne) return false; }
+      else if (k === '$regex') { const re = cond.$regex instanceof RegExp ? cond.$regex : new RegExp(cond.$regex, cond.$options || ''); if (typeof docVal !== 'string' || !re.test(docVal)) return false; }
       else throw new Error('fake-db: 不支援的運算子 ' + k);
     }
     return true;
@@ -82,6 +89,7 @@ export function makeFakeDb(seed, opts) {
   const o = opts || {};
   const store = new Map();          // name -> Map(_id -> doc)
   const log = [];                    // 每一次操作
+  let insCounter = 0;                // ⭐v6.287 insertOne 自動 _id
   const col = (name) => { if (!store.has(name)) store.set(name, new Map()); return store.get(name); };
   for (const [name, docs] of Object.entries(seed || {})) for (const d of docs) col(name).set(d._id, structuredClone(d));
   const maybeThrow = (name, op) => { if (o.throwOn && o.throwOn(name, op)) throw new Error('db down (' + name + '.' + op + ')'); };
@@ -97,11 +105,20 @@ export function makeFakeDb(seed, opts) {
           for (const d of c.values()) if (matchDoc(d, q)) return project(d, opt && opt.projection); return null; },
         find: (q, opt) => {
           log.push({ name, op: 'find', q, opt }); maybeThrow(name, 'find');
-          let lim = Infinity;
+          let lim = Infinity, skp = 0, srt = null;
           const cursor = {
             limit(n) { lim = n; return cursor; },
+            // ⭐v6.287：sort／skip（出貨碼的 dm list／pruneLobbyChat 用到）—— 穩定排序，與 Mongo 同款 {k:1|-1} 多鍵語義
+            sort(spec) { srt = spec; return cursor; },
+            skip(n) { skp = n; return cursor; },
             async toArray() { const out = []; for await (const d of cursor) out.push(d); return out; },
-            async *[Symbol.asyncIterator]() { let n = 0; for (const d of c.values()) { if (n >= lim) return; if (matchDoc(d, q)) { n++; await io(); yield project(d, opt && opt.projection); } } },
+            async *[Symbol.asyncIterator]() {
+              let rows = [...c.values()].filter((d) => matchDoc(d, q));
+              if (srt) { const ks = Object.keys(srt); rows = rows.map((d, i) => [d, i]).sort((x, y) => { for (const k of ks) { const a = x[0][k], b = y[0][k]; if (a === b) continue; return (a < b ? -1 : 1) * (srt[k] < 0 ? -1 : 1); } return x[1] - y[1]; }).map((p) => p[0]); }
+              rows = rows.slice(skp);
+              let n = 0;
+              for (const d of rows) { if (n >= lim) return; n++; await io(); yield project(d, opt && opt.projection); }
+            },
           };
           return cursor;
         },
@@ -116,6 +133,44 @@ export function makeFakeDb(seed, opts) {
           if (opt && opt.upsert) { c.set(doc._id, structuredClone(doc)); return { matchedCount: 0, upsertedCount: 1 }; } return { matchedCount: 0 }; },
         deleteOne: async (f) => { log.push({ name, op: 'deleteOne', f }); maybeThrow(name, 'deleteOne'); await io();
           for (const [k, d] of c) if (matchDoc(d, f)) { c.delete(k); return { deletedCount: 1 }; } return { deletedCount: 0 }; },
+        // ⭐v6.287：insertOne／deleteMany／aggregate（出貨碼的 dm send、pruneLobbyChat、admin chat/clear、admin dm 總覽用到）
+        insertOne: async (doc) => { log.push({ name, op: 'insertOne', doc: structuredClone(doc) }); maybeThrow(name, 'insertOne'); await io();
+          const d = structuredClone(doc); if (d._id === undefined) d._id = 'oid_' + name + '_' + (++insCounter); if (c.has(d._id)) throw new Error('E11000 duplicate key'); c.set(d._id, d); return { insertedId: d._id, acknowledged: true }; },
+        deleteMany: async (f) => { log.push({ name, op: 'deleteMany', f }); maybeThrow(name, 'deleteMany'); await io();
+          let n = 0; for (const [k, d] of c) if (matchDoc(d, f)) { c.delete(k); n++; } return { deletedCount: n }; },
+        aggregate: (pipeline) => {
+          log.push({ name, op: 'aggregate', pipeline: structuredClone(pipeline) }); maybeThrow(name, 'aggregate');
+          return { async toArray() {
+            await io();
+            let rows = [...c.values()].map((d) => structuredClone(d));
+            for (const st of pipeline) {
+              const k = Object.keys(st)[0];
+              if (k === '$match') rows = rows.filter((d) => matchDoc(d, st.$match));
+              else if (k === '$group') {
+                const g = st.$group; const idExpr = g._id; const out = new Map();
+                const val = (d, e) => (typeof e === 'string' && e.startsWith('$')) ? d[e.slice(1)] : e;
+                for (const d of rows) {
+                  const key = val(d, idExpr); const ks = JSON.stringify(key);
+                  if (!out.has(ks)) { const o = { _id: key }; for (const f of Object.keys(g)) if (f !== '_id') o[f] = undefined; out.set(ks, o); }
+                  const o = out.get(ks);
+                  for (const f of Object.keys(g)) {
+                    if (f === '_id') continue; const spec = g[f]; const op = Object.keys(spec)[0]; const v = val(d, spec[op]);
+                    if (op === '$sum') o[f] = (o[f] || 0) + (typeof v === 'number' ? v : 0);
+                    else if (op === '$min') o[f] = (o[f] === undefined || v < o[f]) ? v : o[f];
+                    else if (op === '$max') o[f] = (o[f] === undefined || v > o[f]) ? v : o[f];
+                    else if (op === '$first') { if (o[f] === undefined) o[f] = v; }
+                    else throw new Error('fake-db: 不支援的 $group 累積器 ' + op);
+                  }
+                }
+                rows = [...out.values()];
+              }
+              else if (k === '$sort') { const ks = Object.keys(st.$sort); rows = rows.map((d, i) => [d, i]).sort((x, y) => { for (const kk of ks) { const a = x[0][kk], b = y[0][kk]; if (a === b) continue; return (a < b ? -1 : 1) * (st.$sort[kk] < 0 ? -1 : 1); } return x[1] - y[1]; }).map((p) => p[0]); }
+              else if (k === '$limit') rows = rows.slice(0, st.$limit);
+              else throw new Error('fake-db: 不支援的 pipeline 階段 ' + k);
+            }
+            return rows;
+          } };
+        },
       };
     },
   };
@@ -138,6 +193,10 @@ export function mkRes() {
   r.status = (c) => { r.code = c; return r; };
   r.json = (b) => { r.body = b; return r; };
   r.setHeader = (k, v) => { r.headers[k] = v; };
+  // ⭐v6.287：204 零 body 走 res.status(204).end()（v6.216 手法）；ended=true 且 body 仍為 null 才算「零 body」
+  r.ended = false;
+  r.end = (b) => { if (b !== undefined && b !== null && b !== '') r.body = b; r.ended = true; return r; };
+  r.send = (b) => { r.body = b; r.ended = true; return r; };
   return r;
 }
 /** 身分：Authorization: 'Bearer <JSON>' ⇒ 直接當 tournIdentity 的回傳（模擬驗過的 Firebase token）；沒帶 ⇒ 401。 */

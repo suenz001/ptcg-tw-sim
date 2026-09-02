@@ -1,5 +1,64 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.287 — 好友私聊【P0：伺服器端＋admin 檢視】（玩家端零改動；不寫首頁 changelog）
+
+BASE `5271432d243b63dafad48ec41ac87433c94970f5`（v6.286，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.37 → **v1.38**（新增 PTCG-FRIENDS-DM 區塊，插在 FRIENDS 區塊之後、`/api/tournament/join` 之前；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動，自己算過）。
+`admin.html` 新增「💬 好友私聊」子開關＋檢視 UI。玩家端只動 `version.ts`。守衛 `scripts/test-v6287-friends-dm.mjs`（41 條，已進 test chain）；`scripts/lib/friends-harness-v6282.mjs` 假 Mongo 補 `insertOne／deleteMany／aggregate／sort／skip／$gt／$lt／$ne／$regex` 與 `res.end()`（純新增，v6.282～v6.286 四支守衛照跑全綠）。
+站長需求逐字：「好友要能在沒有開房間的狀況下，直接密語私聊」。站長裁定：admin 完全看得到／3 秒且只在聊天視窗開著時輪詢（204 零 body）／對戰中未讀提示本版不做／全部 Oracle MongoDB 零 Firebase。
+
+### 【1】訊息存哪：沿用 `tournamentChat`，room＝`'dm:' + fid`
+自己 grep 全 repo（`git grep -a tournamentChat 5271432d`）：只有 `server_admin_patch.js` 引用它（另一處是本檔 v6.216 那則的文字）。會刪／改它的地方**只有兩處**，都只過濾 `room:'lobby'`：
+- `pruneLobbyChat()`（scheduler 每 ~5 分鐘）：`countDocuments({room:'lobby'})` → `find({room:'lobby'}).sort({ts:-1}).skip(800).limit(1)` → `deleteMany({ room:'lobby', ts:{$lt:cut.ts} })`
+- `POST /api/tournament/admin/chat/clear`：`deleteMany({ room:'lobby' })`
+沒有 `updateMany`／`drop`／TTL 索引。`oracle-admin/*.bat`、`oracle-admin/tournament/*.cjs`、`ptcg-tw-sim-admin/` 零引用。⚠ VM 核心 `server.js` 不在 repo，查不到；但它連 `tournamentChat` 這個名字都是 patch 檔自己取的（v0.36 起），核心 server 沒有理由碰它。
+既有索引 `{room:1, ts:1}`（v0.57）正好是 `{room, ts:{$gt:since}}` 與 `{room, ts:{$lt:before}}` 要走的。
+守衛 C1／C2 把上述兩段**出貨碼抽出來實跑**（lobby 900＋dm 300 ⇒ lobby 修到 801（出貨碼語義：`skip(KEEP)` 取到第 801 則、`$lt` 不含它，不是本版的事）、dm 300 一筆不少；clear 後 lobby 0、dm 300），C2 附正對照（把 `room:'lobby'` 拿掉 ⇒ 抓得到）；C3 靜態枚舉所有刪除呼叫都帶 lobby（下限 ≥ 2）。
+**不開獨立 collection 的理由**：索引現成、修剪與清空已證明只碰 lobby、admin 用 aggregate 前綴 `$match` 也走同一支索引；開新表只是多一份索引與一份 TTL，換不到什麼。若日後 lobby 訊息量級改變讓 `{room,ts}` 索引膨脹，再拆不遲（room 前綴讓遷移是一發 `find({room:/^dm:/})`）。
+doc 形狀：`{ room, side:'a'|'b', text, ts:Date.now()(數字，與 lobby 一致、走同一支索引), expireAt:Date }`，**不存 email／uid／name**。
+
+### 【2】TTL：`expireAt: new Date(now + 90 天)` ＋ `createIndex({expireAt:1},{expireAfterSeconds:0})`
+⭐ **`tournamentClientDiag` 的 7 天 TTL 從未生效（讀碼判定）**：`TCDIAG.createIndex({ ts: 1 }, { expireAfterSeconds: 604800 })`，而 `TCDIAG.insertOne({ ts: now, … })` 的 `now = Date.now()` 是**數字**。MongoDB 官方：TTL monitor 只會刪「索引欄位是 BSON Date（或含 Date 的陣列）」的文件，其他型別一律不過期。⇒ 那張表只增不減（站長正在 VM 上實測；本版不修，另案）。守衛 B3 把這個現況釘住（若日後改成 Date 欄位，B3 會提醒同步更新註解）。
+私聊照 `tournamentReplayTurns` 的正確寫法。既有 lobby 訊息沒有 `expireAt` 欄位 ⇒ TTL monitor 不會碰它們（缺欄位＝不過期）。索引建構跑在 mongod 行程、不 await、`.catch()` 兜底（比照 v6.240／v6.266）。
+守衛 B1 用出貨碼 send 真的寫一筆、斷言 `expireAt instanceof Date` 且 `= now + 90d`；B1m 正對照改成 `now + FR_DM_TTL_MS` 數字 ⇒ 紅。B2 斷言 `createIndex` 真的被呼叫（安慰劑型態 12），B2m 拿掉那行 ⇒ 紅。
+
+### 【3】端點（全部 `/api/friends` 字首，沿用三把 sha256 鎖的錨點紀律）
+| 端點 | request | response（200） |
+|---|---|---|
+| `POST /api/friends/dm/send` | `{fid, text}` | `{ok:true, friendsDm:1, id, ts}` |
+| `GET /api/friends/dm/list?fid=&since=&before=` | since>0：增量 | `{friendsDm:1, fid, messages:[{id, mine, text, ts}], serverNow}`；**無新訊息 ⇒ 204 零 body**（`res.status(204).end()`） |
+| 同上 since=0 | before>0 往前翻 | `{…, messages(最新 50，升序), hasMore, serverNow}` |
+| `GET /api/friends/admin/dm` | isTournAdmin | `{friendsDm:1, enabled, dm, conversations:[{fid,a,b,nickA,nickB,status,count,first,last}], truncated, cap:500, retentionDays}` |
+| `GET /api/friends/admin/dm?fid=&before=` | isTournAdmin | `{friendsDm:1, fid, pair:{a,b,nickA,nickB,status}, messages:[{id,side,from,text,ts,expireAt}], hasMore, page:200}` |
+| `GET/POST /api/friends/admin/dm-config` | POST `{dm:boolean}` | `{enabled, dm, friendsDm:1, retentionDays}` |
+錯誤：401 `friends-auth-required`（匿名／playerId fallback，走既有 `_frGate`）、403 `friends-dm-not-friends`（關係不存在／pending／rejected／我封鎖對方）、400 `friends-dm-empty`、429 `friends-dm-rate-gap|minute|day`、503 `friends-disabled`／`friends-dm-disabled`／`friends-helper-missing`（皆不帶哨兵）、500 走 `_frFail` 固定文案。
+授權接在 `_frDmResolve(me, fid)`：每次 send／list 都先 `_frFindMine(c, me.email, fid)`（`{fid, $or:[{a:me},{b:me}]}` 走 a/b 索引）⇒ fid 由兩個 email 算得出來也沒用；再要求 `status==='accepted'`；被封鎖方 send 回 200 但零寫入、list 403（回應與「關係已解除」逐字相同，不洩漏封鎖）。守衛 E1（C 與陌生人拿 A|B 的 fid ⇒ 403、`tournamentChat` 零寫入）、E1m 正對照把 `_frFindMine` 改成只用 fid 查 ⇒ 紅（v6.286 那次突變沒紅過，這次守住）。
+玩家端白名單 `_frDmPublic(m, mySide)` 只回 `{id, mine, text, ts}`；守衛 D1 對 8 種回應（含 403／429／400）序列化掃 `@` 與 local-part（alice／bob／carol／example.com），D1m 正對照換成 admin 白名單 ⇒ 紅在 email。admin 白名單 `_frDmAdminRow` 含 `from`＝email，D2 反向斷言 admin 回應**必須**含 email（證明兩條沒混）。
+
+### 【4】防濫用
+`_frDmRateCheck(email, now)`：記憶體 Map `email → {last, m[], d[]}`；`now - last < 1200` ⇒ gap；分鐘窗 ≥ 20 ⇒ minute；日窗 ≥ 500 ⇒ day；Map > 5000 筆 lazy prune。順序：文字驗證（400 不吃額度）→ 限流（429 不打 DB）→ `_frFindMine` → insert。`_frDmText` 只收字串（數字／物件 ⇒ 400，避免 `'[object Object]'` 落地），`\s+` 折單空白、trim、截 200。守衛 F1／F2／F3 用 `Date.now` 假時鐘各自打紅三層，F3m 三個正對照各自紅在對應那條；F4 空白不吃額度／折空白／截 200。
+
+### 【5】開關
+`tournamentConfig.friendsConfig.dm`（同一份文件多一個欄位，`$set` upsert，不動 `enabled`），預設 false，10 秒快取，admin POST 後立刻失效。`_frDmGate`：總開關 → 子開關 → `_frGate`（身分＋讓路 helper），**兩個開關都關時連 Firebase token 都不驗**（守衛 G2 計數 tournIdentity 呼叫＝0；突變 M2 先驗身分 ⇒ 紅）。關閉 ⇒ 503 不帶哨兵（G1）。admin 切換 UI 在 📡 監控分頁「⚙️ 連線設定」框內、「👥 好友功能」之後的「💬 好友私聊」區（`#mon-friends-dm`，是 `#mon-friends` 的**兄弟**節點——test-v6286 1a 斷言 `#mon-friends` 內恰兩顆按鈕）。
+
+### 【6】admin 檢視 UI
+`loadMonitor` 多打 `GET /api/friends/admin/dm-config`（`_r[7]`，經 `_ok()`）；區塊三態（已啟用／關閉／讀不到＝舊伺服器，不畫按鈕、明講跑 `update-tournament.bat`）。按鈕：「啟用好友私聊」「關閉」→ `monSetFriendsDm(enabled)`（POST body 只有 `{dm}`，啟用前 confirm，失敗 alert＋還原按鈕）；「📨 檢視私聊對話」→ `monLoadDms()` 打 `GET /api/friends/admin/dm` 畫表（雙方 email＋暱稱／好友狀態／則數／最後一則／「展開」）；「展開」→ `monLoadDmThread(fid, before)` 打 `?fid=` 畫訊息（時間／發言者 email／文字），hasMore 時「載入更早的訊息…」帶 `before`。**純文字渲染**：所有玩家文字經 `escapeHtml`。
+證明會打對端點：守衛 J1／J2 抽出 `loadMonitor`／`monSetFriendsDm`／`monLoadDms`／`monLoadDmThread` 用假 `api()` 實跑斷言 URL／method／body；J3 把 UI 送出的 (method,path,body) **原封餵進伺服器 routes** ⇒ 子開關 false→true→false、玩家端 200→503；再把 UI 的 GET 轉交伺服器、伺服器回應交回 UI 渲染 ⇒ 表格 1 列、展開按鈕帶正確 fid、`?fid=` URL 正確；含 `<img src=x onerror>` 的假訊息渲染後 DOM 零 `img`、`<b>` 只有 from 那一個，J3m 正對照拿掉 escapeHtml ⇒ 紅。
+讓路：總覽 `aggregate([$match room 前綴, $group by room {count,first,last}, $sort last desc, $limit 501])` 在 mongod 分組，node 端對話迴圈＋friendships `{fid:{$in}}` 反查迴圈各掛 `app.locals._adminScanYield`（取不到 503）。守衛 I1 餵 **400 段對話**（> 200 才觸發）斷言 ticks **恰好 4**（2＋2），I1m 拿掉對話迴圈的讓路 ⇒ ticks 2 ⇒ 紅；I3 展開 250 則 ⇒ 200 則＋ticks 1。硬上限 500 段，501 段 ⇒ `truncated:true` 且截掉最舊（I2）；關係已解除的對話 `status:'gone'` 仍列出。`friendships` 補 `{fid:1}` 索引（admin 反查用；玩家端仍走 a/b）。
+
+### 突變（在 test 內 10 個正對照 ＋ 外部 16 個手動突變，全部紅在預期那條）
+外部：M1 錦標賽區塊多一空白→A1｜M2 先驗身分再看開關→G2｜M3 玩家白名單多回 side→D1｜M4 被封鎖方改 403→E3｜M5 since 拿掉 50 上限→H2｜M6 總覽不截斷→I2｜M7 admin 不回 email→D2（D1m 同時失去差異）｜M8 side 反向→B1/D2｜M9 限流先於文字驗證→F4｜M10 UI 送 {enabled}→J2/J3｜M11 fd 不經 _ok→J1/J4｜M12 mine 恆 true→H1｜M13 保留 7 天→B1｜M14 拿掉 {fid:1}→B2｜M15 限流 key 不分人→E1/E3/F1｜M16 admin 端點拿掉 isTournAdmin→D2。
+HEAD-FAIL：逐檔還原 BASE —— server_admin_patch.js ⇒ A0 紅並提前結束；admin.html ⇒ J1～J4 紅；harness ⇒ A0 紅（缺 v6.287 擴充）；version.ts ⇒ J4；package.json ⇒ K1。
+
+### 部署
+只動 `server_admin_patch.js`／`admin.html`／守衛 ⇒ 站長只跑 **`update-tournament.bat`**（唯一會先同步 git 的那支；pm2 restart 斷線 2～5 秒，挑離峰、沒有錦標賽進行中）。開啟順序：📡 分頁先開「👥 好友功能」再開「💬 好友私聊」；本版玩家端沒有聊天面板，開了也看不到（P1 才有）。
+
+### P1（client 聊天面板）動工前要注意
+- 純文字渲染禁 `{@html}`；每則 200 字；輪詢只在面板開著時 3 秒一發、關掉零請求；`since` 用「我已有的最後一則 ts」；204 沒有 body 也沒有哨兵（哨兵只在 200）。
+- 哨兵 `friendsDm:1` 只在 dm 端點回應上；要判「伺服器支不支援私聊」可打 `GET /api/friends/dm/list?fid=` 看 503 `friends-dm-disabled`（有 code）vs 404（舊伺服器）。
+- 移除好友再加回會用同一個 fid ⇒ 90 天內舊訊息會回來（fid 是 pair id 的雜湊，設計如此）。
+- 手機直式／桌機兩套分支、三種對戰版面都要驗（本版不動 client 正是為了不碰這條）。
+- 對戰中未讀提示（P2）若要搭便車，別加新輪詢；可考慮塞進既有大廳 3 秒輪詢的 204 判斷（但那條是 v6.217 的 digest 機制，動它要重驗 combined:true 契約）。
+
 ## v6.286 — 好友功能對抗性審查六修（全部在站長開啟 `friendsConfig.enabled` 之前修好）＋ 八條守衛補強
 
 BASE `e99f47367955a16bbd9c7f3199cd85eb20e94b38`（v6.285，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.36 → **v1.37**（只動 PTCG-FRIENDS 區塊與 PTCG-PLAYER-IDENTITY 區塊；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動）。
