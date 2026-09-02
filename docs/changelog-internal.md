@@ -1,5 +1,36 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.288 — 好友私聊【P1：玩家看得到的面板】＋ 解除好友連對話一起刪
+
+BASE `b503649d49d5ae76c2a0946894294d54139327a2`（v6.287，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.38 → **v1.39**（只動 FRIENDS 區塊的 `remove`＋新 helper `_frPurgeDm`；DM 區塊只改註解；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動，自己算過）。玩家端：`friends-api.ts`（dm 函式／204／私聊三態）、新檔 `dm-poller.ts`／`dm-session.ts`／`DmPanel.svelte`、`/friends` 頁（💬＋面板＋二次確認文案）。**`game/+page.svelte` 一行都沒動**（test-v6272 ⑩ PREV_ALLOWED 清單守；在有完整歷史的 clone 實跑 42 PASS）。守衛 `scripts/test-v6288-friends-dm-ui.mjs`（31 條，已進 test chain）。
+
+### 【1】解除好友就連對話一起刪（站長裁定）
+`remove`：`const del = await c.deleteOne(...)` 之後 `if (del && del.deletedCount > 0) await _frPurgeDm(fid, 'remove')`。`_frPurgeDm` 先驗 fid 格式，`db.collection('tournamentChat').deleteMany({ room: 'dm:' + fid })` —— room **等值**比對（不是前綴／$regex）⇒ `room:'lobby'` 與別段對話一筆都碰不到；自己 try/catch、失敗只 `console.warn('[friends] purge dm failed …')` 回 -1，**絕不 throw**（關係列已刪，不能讓 remove 變 500）。⚠ 用 `await`（在 try/catch 內）而不是真的不等待：守衛才能確定性斷言、也不會有 unhandled rejection；多的只是一發本機 deleteMany（走 `{room,ts}` 索引）。
+守衛 B1：lobby 300／dm:AB 40／dm:AC 30／dm:BC 25 假資料實跑 ⇒ dm:AB 0、**lobby 300 筆逐 id 相同**、AC／BC 不少、tournamentChat 恰一次 deleteMany 且 filter `{room:'dm:'+fid}`。B1m 三個正對照：filter 拿掉 ⇒ 紅在「lobby 被刪」；改 `$regex:'^dm:'` ⇒ 紅在「別段對話被刪」；拿掉 purge 呼叫 ⇒ 紅在「dm:AB 沒被刪」。B3：假 db 對 deleteMany 丟例外 ⇒ remove 仍 200、關係列已刪、有 log；B3m 拿掉 try/catch ⇒ 500 ⇒ 紅。
+既有守衛同步：test-v6282 E1 原本斷言「remove 零 deleteMany」⇒ 改成「對 **friendships** 零 deleteMany」（原意）；H7 突變錨點跟著 `const del =` 改。test-v6287 C3 原本「所有 tournamentChat 刪除都帶 lobby」⇒ 加唯一例外＝等值 `{ room: 'dm:' + fid }` 恰一處（下限 ≥3）。
+**block 不刪**（B2：封鎖後 dm:AB 40 仍在、零刪除呼叫；被封鎖方 remove 靜默 200 零刪除；封鎖方 remove 409）。
+**unblock 查證**：出貨碼語義是「關係歸零」—— 冷卻外 `deleteOne` 真刪那一列、冷卻內還原成 `rejected`（v1.37【3】防兩步繞過），UI 文案也早就寫「解除封鎖後關係會歸零，要重新邀請」。⇒ 站長「封鎖可以解除，解除後關係還在」這個前提**不成立**。本版裁定 unblock **不刪**對話：授權只給 remove 這一條、且 unblock 有一條非刪除路徑（還原 rejected）。後果：A 封鎖 B → 解除 → 之後重新加好友（同一對 email ⇒ 同一個 fid）⇒ 90 天內舊對話會回來（雙方都同意再成為好友、admin 本來就看得到）。若站長要「解除封鎖也刪」，在 unblock 的 deleteOne 分支接同一支 `_frPurgeDm` 即可（一行）。守衛 B2b 把這個裁定釘住（兩條路徑都不刪；出貨碼語義若變會提醒同步更新本節）。
+
+### 【2】client 面板
+- `friends-api.ts`：`fetchDmMessages(ctx, fid, {since|before})`／`sendDm(ctx, fid, text)`；`requestJson` 多一個 `opts.dm`：**204 ⇒ ok `{noNew:true}`**（正向：只有我們的 dm 端點會回 204）、503 `friends-dm-disabled` ⇒ kind `dm-disabled`（好友可用性仍 on）、404 ⇒ `unsupported` 但**只記私聊自己的負向**（`friendsDmAvailability()`，session 記憶＋60 秒 TTL），**不碰**好友的負向快取（否則舊伺服器上一按 💬 整個好友頁就被藏掉）。哨兵判斷同時認 `friendsDm`。仍零 timer、零 import（v6.283 B1／B5、v6.284 B1 照跑全綠）。
+- `dm-poller.ts`（零 import、timer 全注入）：`start()` 立刻跑一次 → 之後 `isHidden() ? 15000 : 3000` 串接 setTimeout（不是 setInterval ⇒ 在途只一發）；`stop()` 清 timer＋世代遞增（在途回應回來時世代不同 ⇒ 不再排）；`poke()` 立刻一發。`browserPollerDeps()` 是全站好友檔案裡唯一碰真 `setTimeout`／`document.hidden` 的地方。
+- `dm-session.ts`（狀態機，不含畫面）：`open(fid,nick)` ⇒ 第一發 since=0 ⇒ 之後 since=最後一則 ts（沒有訊息時 since=1，走伺服器增量分支 ⇒ 204）；`send` 成功後**不自己塞**、立刻 poke 一發 since（同時撈到對方這段時間的訊息，以 id 去重）；`close()` ⇒ poller.stop＋狀態 null；切換好友＝close 再 open（永遠只有一個 poller）；seq 世代防遲到回應（v6.175 教訓）。失敗分類：dm-disabled／unsupported／auth／`friends-dm-not-friends`（403：關係已不存在或被封鎖，不區分）⇒ 停輪詢＋整面板說明；429 ⇒ 只掛一行「發言太快，請稍候」（伺服器文案）、輪詢照常；輪詢中的 network／5xx ⇒ 掛一行、下一發自動重試。
+- `DmPanel.svelte`（純檢視）：`{m.text}` 走預設 escape、零 `{@html}`；each key＝伺服器 id；**零 @media**：`.dm-panel.desktop`（右下角 fixed 360×520）／`.dm-panel.mobile`（fixed inset:0 全螢幕）兩個 class 由 `/friends` 頁的 JS 決定 `isMobile = Math.min(window.innerWidth, window.innerHeight) <= 600`（與 game/+page.svelte 的 isPortraitMobile 同一條，守衛從出貨碼抽數字比對）。面板是 position:fixed ⇒ 既有好友列零位移（playwright 量測 8 個既有元素 dx=dy=dw=dh=0）。
+- `/friends` 頁：好友列每筆一顆「💬 私聊」（私聊不可用時整批藏掉並在好友區掛一行說明，記到 `dmNegMsg`，關面板不會再露出）；onMount 建一個 session、清理時 `closeDm()`；`visibilitychange` 回前景 ⇒ poke；對某位做了解除／封鎖／拒絕後若面板正開著同一位 ⇒ 關掉。二次確認文案逐字：「確定解除好友？雙方名單都會移除，和這位好友的私聊對話也會一起刪除，無法復原。」
+
+### 【3】驗證
+- 守衛 test-v6288（31 條）：B 伺服器實跑（上節）；C friends-api 三態（204／503 dm-disabled／404 各附正對照）；D **假 timer 逐 tick**：開面板恰一發、3 秒 since、hidden 15 秒、poke、**關掉後 200 個 tick 零請求**（含在途遲到、切換好友）、send／429／403、首發 503/404/401/無 token、loadMore；D4m 五個正對照（stop 不清 timer／close 不 stop／hidden 同 3 秒／since 恆 0／204 當不支援）各紅在預期那條；E 靜態（零 @html、each key、零 @media、JS 門檻＝對戰頁、文案、接線、svelte 編譯零警告）；F 對戰頁零私聊引用；G chain／版本。
+- **playwright 實跑真正的 `/friends` 頁**（`+page.svelte`＋`DmPanel.svelte`＋`$lib/friends/*` 用 svelte/compiler＋esbuild 打包、假 fetch 計數、`page.clock` 假時間；不在 test chain）：桌機 1366×768 與手機直式 375×812 兩套 —— 面板 class 各為 desktop（rect 988,230,362×522）／mobile（rect 0,0,375×812）；既有 8 個元素零位移；`<img onerror>` 假訊息渲染後 DOM 零 img 零 b、純文字原樣；開面板恰一發、3.1/6.1/9.1 秒累計 1/2/3 發 since=100；對方新訊息出現；送出後 send 1 發＋自己的訊息出現（「哈囉   世界」折成「哈囉 世界」）；429 提示；hidden 後 +3.1s/+14.1s/+18.2s＝1/1/2 發（15 秒一發）＋「已放慢更新」字樣；回前景立刻補一發；**關閉後 600 秒零請求**；切換 A→B 後 9.1 秒內 3 發全部 fid=B；503 dm-disabled ⇒ 面板說明＋💬 全藏＋好友名單仍在＋60 秒零請求；dm 404 ⇒ 說明＋好友名單仍在。
+- svelte-check（只掃 friends workspace；全專案在沙盒跑不完）：0 ERRORS 0 WARNINGS；正對照：故意塞一個型別錯 ⇒ 1 ERROR（不是安慰劑）。test-ts2304-scan 0。
+- HEAD-FAIL：逐檔還原 BASE —— server_admin_patch.js ⇒ A0 紅（無 _frPurgeDm）並提前結束；friends-api.ts ⇒ A0 紅（無 dm 函式）；刪 dm-poller.ts／dm-session.ts／DmPanel.svelte 任一 ⇒ A0 紅；+page.svelte ⇒ A0 紅（沒接 DmPanel）；package.json／version.ts ⇒ G1 紅。
+- 外部突變（在 test 內的 12 個正對照之外，另做 10 個，全部紅在預期那條）：見本版 push 回報。
+
+### 部署
+伺服器只動 `server_admin_patch.js`（remove）⇒ 站長跑 **`update-tournament.bat`**（唯一會先同步 git 的那支；pm2 restart 斷線 2～5 秒，挑離峰）；玩家端走 GitHub Actions 綠燈。⚠⚠ **server 先上**（client 的 remove 文案已寫「對話也會一起刪除」，若 client 先上、server 還是 v1.38，解除好友不會刪對話 ⇒ 文案說謊）。開啟順序：📡 分頁「👥 好友功能」→「💬 好友私聊」；沒開之前玩家按 💬 看到「好友私聊尚未開放」且 💬 整批藏掉（60 秒後重試）。
+
+### 好友功能還剩什麼（P2 之後，都要先問站長）
+大廳未讀紅點／對戰中未讀提示（不加新輪詢，要搭既有大廳 3 秒輪詢的 204 判斷）；60 秒心跳在線綠點＋一鍵邀請進房（P2）；`/api/match-result` 零身分驗證（v6.283 紀錄）仍未根治；`playerIdentity` 由未驗證通道寫入（v6.283【A】停手未做）；unblock 是否也刪對話待站長裁定；私聊訊息的檢舉／封鎖快捷鈕（面板內目前沒有）；好友上限 100 是否要調。
+
 ## v6.287 — 好友私聊【P0：伺服器端＋admin 檢視】（玩家端零改動；不寫首頁 changelog）
 
 BASE `5271432d243b63dafad48ec41ac87433c94970f5`（v6.286，遠端 main）。伺服器 `oracle-admin/server_admin_patch.js` v1.37 → **v1.38**（新增 PTCG-FRIENDS-DM 區塊，插在 FRIENDS 區塊之後、`/api/tournament/join` 之前；錦標賽區塊兩把 sha256 `495221f1…`／`93d29a7d…` 逐位元未動，自己算過）。

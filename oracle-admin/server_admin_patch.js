@@ -5169,6 +5169,12 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //         block→unblock 同型繞過：block 時保留 rejectedAt，unblock 在冷卻期內只把列還原成 rejected、不刪。
     //     【4】所有 500 路徑固定文案（Mongo E11000 訊息會帶 _id="a@x|b@y" ⇒ 原文只進伺服器 log）。
     //     【5】冷卻只擋**被拒的那一方**（requester）；拒絕方自己想邀回去 ⇒ 放行。
+    //   ══ v1.39（v6.288）站長裁定「解除好友就連對話一起刪」（守衛 scripts/test-v6288-friends-dm-ui.mjs 行為端實跑）══
+    //     ・remove 在 friendships 那一列**真的刪掉之後**（deletedCount > 0），一併 deleteMany({ room: 'dm:' + fid })。
+    //       ⚠⚠ 這是全站唯一被授權刪除既有資料的路徑，room 用**等值**比對（不是前綴／正則）⇒ 'lobby' 與別段對話一筆都碰不到。
+    //     ・刪對話失敗**不可**讓 remove 整支失敗（關係已經刪了）：_frPurgeDm 自己 try/catch、只 log。
+    //     ・block **不刪**（站長裁定：封鎖可以解除）。unblock 的實際語義是「關係歸零」（冷卻內還原成 rejected、否則真刪那一列），
+    //       與站長「解除後關係還在」的前提不同；授權只給 remove 這一條 ⇒ unblock **不刪**對話，留給站長裁定（見 docs/changelog-internal.md v6.288）。
     const FR_COLL = 'friendships';
     const FR_ID_COLL = 'playerIdentity';
     const FR_CFG_ID = 'friendsConfig';
@@ -5460,6 +5466,23 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ ok: true, friendsApi: 1, status: 'pending', fid: doc.fid });
       } catch (e) { _frFail(res, e, 'request'); }
     });
+    /**
+     * v1.39 刪掉一段關係的私聊（站長裁定：解除好友就連對話一起刪）。⚠⚠ 全站唯一被授權刪除既有資料的路徑。
+     *   ・room 一律 **等值** 'dm:' + fid（fid 先驗格式；絕不用前綴／$regex）⇒ room:'lobby' 與其他 fid 的對話一筆都碰不到。
+     *   ・失敗只 log、回 -1，**絕不 throw**（呼叫端的關係列已經刪掉，這裡失敗不能讓 remove 整支變 500）。
+     *   ・字面 'tournamentChat'／'dm:' 與 DM 區塊的 FR_DM_COLL／FR_DM_ROOM_PREFIX 相同（守衛比對）；不直接引用那兩個 const，
+     *     因為 DM 區塊在本區塊之後、且守衛會單獨抽本區塊實跑（引用會變 TDZ／ReferenceError）。
+     */
+    async function _frPurgeDm(fid, why) {
+      if (typeof fid !== 'string' || !/^[0-9a-f]{8,32}$/.test(fid)) return 0;
+      try {
+        const r = await db.collection('tournamentChat').deleteMany({ room: 'dm:' + fid });
+        return (r && typeof r.deletedCount === 'number') ? r.deletedCount : 0;
+      } catch (e) {
+        console.warn('[friends] purge dm failed (' + why + ', fid=' + fid + '): ' + (e && e.message));
+        return -1;
+      }
+    }
     /** 用 fid 在「我自己的列」裡找那一筆（a/b＝我 ⇒ 走索引；fid 只在這個小集合內過濾）。 */
     async function _frFindMine(c, me, fid) {
       if (typeof fid !== 'string' || !/^[0-9a-f]{8,32}$/.test(fid)) return null;
@@ -5498,7 +5521,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ ok: true, friendsApi: 1, status: 'rejected', fid: cur.fid });
       } catch (e) { _frFail(res, e, 'reject'); }
     });
-    // POST /api/friends/remove {fid}：⭐ 真刪除（deleteOne）—— 只刪 friendships 自己的那一列
+    // POST /api/friends/remove {fid}：⭐ 真刪除（deleteOne）friendships 那一列；v1.39 起成功後一併刪 room='dm:'+fid 的私聊（_frPurgeDm）
     app.post('/api/friends/remove', async (req, res) => {
       try {
         const me = await _frGate(req, res); if (!me) return;
@@ -5514,7 +5537,9 @@ import('firebase-admin').then(async ({ default: admin }) => {
         if (cur.status === 'rejected' && typeof cur.rejectedAt === 'number' && Date.now() - cur.rejectedAt < FR_REJECT_COOLDOWN_MS) {
           return res.status(409).json({ error: '這筆邀請已被拒絕，24 小時內無法移除或重送', code: 'friends-not-removable', friendsApi: 1 });
         }
-        await c.deleteOne({ _id: cur._id, $or: [{ a: me.email }, { b: me.email }] });
+        const del = await c.deleteOne({ _id: cur._id, $or: [{ a: me.email }, { b: me.email }] });
+        // v1.39 站長裁定：解除好友就連對話一起刪 —— 只在那一列**真的刪掉**之後才刪；失敗只 log（_frPurgeDm 不 throw）。
+        if (del && del.deletedCount > 0) await _frPurgeDm(cur.fid || _frFid(cur._id), 'remove');
         res.json({ ok: true, friendsApi: 1, removed: true });
       } catch (e) { _frFail(res, e, 'remove'); }
     });
@@ -5592,7 +5617,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
         res.json({ ok: true, enabled: await friendsEnabled(), friendsApi: 1 });
       } catch (e) { _frFail(res, e, 'admin-config'); }
     });
-    console.log('[friends] endpoints registered (v1.37) enabled-by-default=false');
+    console.log('[friends] endpoints registered (v1.39) enabled-by-default=false');
     // <<< PTCG-FRIENDS-BLOCK-END
 
     // >>> PTCG-FRIENDS-DM-BLOCK-START  (守衛 test-v6287-friends-dm.mjs 會把 FRIENDS 區塊＋這一段一起抽出來實跑)
@@ -5631,7 +5656,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //      走中央 adminScanYield（app.locals，取不到 fail-closed 503）；超過上限回 truncated:true（絕不靜默截斷）；
     //      friendships 補 {fid:1} 索引（admin 用 fid $in 反查 a/b；玩家端仍走 a/b 索引）。
     //   ⑦ 兩條白名單分開：玩家端 _frDmPublic() 永不含 email；admin 端 _frDmAdminRow() 可含 email（admin 本來就到處有 email）。
-    //   ⚠⚠ 全程沒有任何刪除或改寫既有資料的路徑（只 insertOne 進 tournamentChat、只 $set friendsConfig.dm）。
+    //   ⚠⚠ 本區塊沒有任何刪除或改寫既有資料的路徑（只 insertOne 進 tournamentChat、只 $set friendsConfig.dm）；
+    //      v1.39 起唯一的刪除在 FRIENDS 區塊的 remove → _frPurgeDm（等值 room:'dm:'+fid）。
     //   ⚠ P1（client 聊天面板）動工前要知道：純文字渲染禁 {@html}；輪詢只在面板開著時 3 秒一發、關掉零請求；
     //      since 用「我已有的最後一則 ts」；204 不帶哨兵是正常（哨兵只在 200 上）；移除好友再加回會用同一個 fid ⇒ 90 天內舊訊息會回來。
     const FR_DM_COLL = 'tournamentChat';                  // ⭐ 沿用（理由見 ①）

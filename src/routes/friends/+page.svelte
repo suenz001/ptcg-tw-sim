@@ -14,6 +14,12 @@
   //   ・每個 each 都用 fid 當穩定 key（清單會變動，reference-svelte-each-key-scroll）。
   //   ・所有欄位都走 Svelte 的預設 escape，全頁不得出現 {@html}（暱稱是玩家自由輸入）。
   //   ・⚠ 回應永遠不含 email（伺服器白名單）；畫面只顯示暱稱。
+  //   ・v6.288 私聊面板（DmPanel.svelte）：好友列每筆一顆「💬」；桌機＝右下角固定面板、手機＝全螢幕 overlay，
+  //     兩者由 **JS 量視窗**（Math.min(innerWidth, innerHeight) <= 600，與 game/+page.svelte 的 isPortraitMobile 同一條）決定，
+  //     ⚠⚠ 禁用 @media 當手機開關（手機／桌機兩套分支紀律）。面板是 position:fixed ⇒ 既有好友列零位移。
+  //   ・輪詢只在面板開著時（3 秒；分頁在背景 15 秒），關掉＝session.close() ⇒ 零請求；排程與狀態機在 $lib/friends/dm-*.ts，
+  //     本檔仍然零 setTimeout／setInterval（v6.283 B1 守衛）。
+  //   ・解除好友＝真刪除，且 v6.288 起**對話也一起刪**（站長裁定）⇒ 二次確認文案明講。
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import { VERSION } from '$lib/version';
@@ -24,6 +30,9 @@
     fetchFriendsList, requestFriendByEmail, friendsAction,
     type FriendsList, type FriendRow, type FriendsAction, type FriendsCtx, type FriendsFailKind,
   } from '$lib/friends/friends-api';
+  import { createDmSession, type DmSession, type DmSessionState } from '$lib/friends/dm-session';
+  import { browserPollerDeps } from '$lib/friends/dm-poller';
+  import DmPanel from './DmPanel.svelte';
 
   let firebaseUser = $state<User | null>(null);
   let authReady = $state(false);
@@ -49,6 +58,16 @@
   // ⚠ 亂序防護（與 deck-posts 的 listSeq 同一課）：只有「這一發仍是最新一發」才允許寫回狀態。
   let seq = 0;
 
+  // ── v6.288 私聊 ──
+  /** 手機直式／桌機兩套分支的開關：JS 量視窗（與 game/+page.svelte isPortraitMobile 同一條），⚠ 不用 @media。 */
+  let isMobile = $state(false);
+  let dm: DmSession | null = null;
+  /** 面板狀態；null＝面板沒開（DmPanel 不渲染、輪詢已停）。 */
+  let dmState = $state<DmSessionState | null>(null);
+  /** 私聊在這台伺服器不可用（尚未開放／舊伺服器）的說明；非空 ⇒ 藏掉所有 💬、在好友區掛一行（本次頁面停留期間記住，關面板不會再露出）。 */
+  let dmNegMsg = $state('');
+  const dmUnavailable = $derived(!!dmNegMsg);
+
   const canUse = $derived(!!firebaseUser && !firebaseUser.isAnonymous);
   const friendCount = $derived(list ? list.friends.length : 0);
   const limit = $derived(list ? list.limit : 100);
@@ -59,10 +78,37 @@
       firebaseUser = u;
       authReady = true;
       if (u && !u.isAnonymous) void load();
-      else { list = null; failKind = ''; failMsg = ''; }
+      else { list = null; failKind = ''; failMsg = ''; closeDm(); }
     });
-    return () => un();
+    // v6.288：手機／桌機分支（JS 量視窗；⚠ 不用 @media）
+    const onResize = () => { isMobile = Math.min(window.innerWidth, window.innerHeight) <= 600; };
+    onResize();
+    window.addEventListener('resize', onResize);
+    // 分頁回到前景 ⇒ 立刻補一發（背景時排程是 15 秒，不補會等很久）；進背景則由排程器下一發自己放慢
+    const onVis = () => { if (!document.hidden) dm?.poke(); };
+    document.addEventListener('visibilitychange', onVis);
+    // timer／document.hidden 只在 dm-poller.ts 的 browserPollerDeps 碰（本檔零 setTimeout，v6.283 B1）
+    dm = createDmSession({
+      getCtx: ctx,
+      onChange: (s) => { dmState = s; if (s && (s.status === 'dm-disabled' || s.status === 'unsupported')) dmNegMsg = s.blockMsg; },
+      ...browserPollerDeps(),
+    });
+    return () => {
+      un();
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVis);
+      // ⚠⚠ 離開頁面：關掉面板 ⇒ 輪詢停止（零請求）
+      closeDm();
+      dm = null;
+    };
   });
+
+  function openDm(r: FriendRow) {
+    if (!dm) return;
+    if (dmState && dmState.fid === r.fid) return;
+    dm.open(r.fid, r.nick);
+  }
+  function closeDm() { dm?.close(); }
 
   /** 取身分：拿不到 token 就傳 null（friends-api 會直接回 auth，不發請求）。 */
   async function ctx(): Promise<FriendsCtx | null> {
@@ -130,6 +176,8 @@
       if (!c) { actErr = '請先以 email 帳號登入。'; return; }
       const r = await friendsAction(c, action, fid);
       if (!r.ok) { actErr = r.message; if (r.kind === 'unsupported' || r.kind === 'disabled') { failKind = r.kind; failMsg = r.message; list = null; } return; }
+      // v6.288：對這位玩家做了解除／封鎖／拒絕之後，若私聊面板正開著同一位 ⇒ 關掉（對話已刪或已無權讀）
+      if (dmState && dmState.fid === fid) closeDm();
       cancelConfirm();
       await load();
     } finally {
@@ -202,6 +250,7 @@
       <!-- ── 區 1：好友 ── -->
       <section class="group">
         <h2>好友 <span class="count">{friendCount} / {limit}</span></h2>
+        {#if dmUnavailable}<p class="hint">{dmNegMsg}</p>{/if}
         {#if list.friends.length === 0}
           <p class="empty">還沒有好友。</p>
         {:else}
@@ -212,10 +261,12 @@
                 <span class="meta">{viaLabel(r)}{r.at ? '・' + fmtDate(r.at) : ''}</span>
                 <span class="spacer"></span>
                 {#if confirmFid === r.fid && confirmKind === 'remove'}
-                  <span class="confirm">確定解除好友？（雙方名單都會移除）</span>
+                  <!-- v6.288 站長裁定：解除好友就連對話一起刪 ⇒ 文案必須明講、且不可逆 -->
+                  <span class="confirm">確定解除好友？雙方名單都會移除，和這位好友的私聊對話也會一起刪除，無法復原。</span>
                   <button class="small danger" disabled={actBusy === r.fid} onclick={() => act('remove', r.fid)}>確定解除</button>
                   <button class="small" disabled={actBusy === r.fid} onclick={cancelConfirm}>取消</button>
                 {:else}
+                  {#if !dmUnavailable}<button class="small dm-open" disabled={dmState?.fid === r.fid} onclick={() => openDm(r)} title="私聊">💬 私聊</button>{/if}
                   <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'remove')}>解除好友</button>
                   <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
                 {/if}
@@ -290,6 +341,10 @@
         {/if}
       </section>
     {/if}
+  {/if}
+  <!-- v6.288 私聊面板：只在 dmState 非 null 時渲染；關掉＝session.close() ⇒ 輪詢停止。position:fixed ⇒ 既有版面零位移 -->
+  {#if dmState}
+    <DmPanel sess={dmState} mobile={isMobile} onclose={closeDm} onsend={(t) => { void dm?.send(t); }} onmore={() => { void dm?.loadMore(); }} onretry={() => dm?.retry()} />
   {/if}
 </main>
 

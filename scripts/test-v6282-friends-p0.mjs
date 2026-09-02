@@ -405,7 +405,9 @@ await T('E1 remove 真的 deleteOne，且只刪自己那一列（其他人的列
   const del = H.db._log.filter((x) => x.op === 'deleteOne');
   assert.strictEqual(del.length, 1, 'deleteOne 次數');
   assert.ok(Array.isArray(del[0].f.$or), 'deleteOne 條件必須帶 a/b＝我');
-  assert.ok(!H.db._log.some((x) => x.op === 'deleteMany'), '不可 deleteMany');
+  // v6.288：remove 成功後會對 tournamentChat deleteMany({room:'dm:'+fid})（站長裁定：解除好友連對話一起刪；守衛 test-v6288 B1）
+  //   ⇒ 這條改成只禁 friendships 的批次刪除（原意：好友列絕不可批次刪）。
+  assert.ok(!H.db._log.some((x) => x.op === 'deleteMany' && x.name === 'friendships'), '不可對 friendships deleteMany');
   // C 拿 A 的 fid 也刪不到（fid 不是憑證）
   const r2 = await H.call('post', '/api/friends/remove', asUser(U.C), { fid });
   assert.strictEqual(r2.code, 404);
@@ -697,7 +699,8 @@ await T('H6 突變：上限改 1000 ⇒ D3 紅（常數實際求值，不是比�
   }, '滿 100 應 409');
 });
 await T('H7 突變：remove 改成 deleteMany 全刪 ⇒ E1 紅', async () => {
-  const M = mutate("await c.deleteOne({ _id: cur._id, $or: [{ a: me.email }, { b: me.email }] });", "for (const d of await c.find({ $or: [{ a: me.email }, { b: me.email }] }).toArray()) await c.deleteOne({ _id: d._id });");
+  // v6.288：出貨碼改成 `const del = await c.deleteOne(...)`（要看 deletedCount 才刪對話）⇒ 突變體要保住 del 變數
+  const M = mutate("const del = await c.deleteOne({ _id: cur._id, $or: [{ a: me.email }, { b: me.email }] });", "const del = { deletedCount: 0 }; for (const d of await c.find({ $or: [{ a: me.email }, { b: me.email }] }).toArray()) await c.deleteOne({ _id: d._id });");
   await mutantMustBreak('delete all mine', async () => {
     const seed = seedBase();
     seed.friendships = [mkPending('alice@example.com', 'bob@example.com', 'alice@example.com', { status: 'accepted' }), mkPending('alice@example.com', 'carol@example.com', 'carol@example.com')];

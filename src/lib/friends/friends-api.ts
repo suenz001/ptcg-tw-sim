@@ -41,6 +41,15 @@
  *   ・與大廳入口不同：這顆**只在哨兵成功過（'on'）時**才渲染，匿名／未知一律整顆不出現（站長偏好：不做半死按鈕）。
  *   ・判定仍是純函式；按下才發唯一的一發 POST。
  *
+ * ── ⭐ v6.288 好友私聊（P1 玩家面板）的資料出口：`fetchDmMessages` ＋ `sendDm` ─────────────────
+ *   ・本模組**仍然零 timer**：3 秒／15 秒輪詢的排程在 `$lib/friends/dm-poller.ts`、狀態機在 `dm-session.ts`；
+ *     這裡只負責「發一發、分類回應」。
+ *   ・⚠⚠ `GET /api/friends/dm/list?since=` 沒有新訊息時伺服器回 **204 零 body 也零哨兵**（v6.216 手法）——
+ *     絕不可判成「不支援」（那會把整個好友功能誤殺）。`requestJson` 對 dm 路徑把 204 當成功（`noNew:true`）。
+ *   ・私聊有自己的可用性三態（`friendsDmAvailability`）：503 `friends-dm-disabled`（站長沒開子開關）⇒ `dm-disabled`；
+ *     404（伺服器還在 v6.286 以前，好友有、私聊沒有）⇒ `unsupported`。⚠⚠ 這兩種**只記在私聊自己的狀態**，
+ *     絕不寫進好友功能的負向快取（否則「私聊沒開」會把好友頁整個藏起來）。
+ *
  * ⚠ 這個 build 沒有 Oracle API（`VITE_ORACLE_API_URL` 為空＝GitHub Pages 測試站）時
  *   一律當「不支援」⇒ 入口不出現、`/friends` 頁顯示說明、零請求。
  */
@@ -78,7 +87,8 @@ export type FriendsFailKind =
   | 'busy'          // 429 ⇒ 太頻繁／冷卻中
   | 'network'       // fetch 本身失敗
   | 'transient'     // 5xx（helper 未掛載、db 未就緒、tunnel 掛了）
-  | 'rejected';     // 伺服器明確拒絕（查無此帳號、已達上限、不能加自己…），訊息直接給玩家看
+  | 'rejected'      // 伺服器明確拒絕（查無此帳號、已達上限、不能加自己…），訊息直接給玩家看
+  | 'dm-disabled';  // v6.288：503 friends-dm-disabled ⇒ 好友功能有開、但站長還沒開私聊子開關（只影響私聊面板）
 
 export type FriendsResult<T> =
   | { ok: true; data: T }
@@ -101,6 +111,9 @@ export const FRIENDS_AUTH_MSG = '請先以 email 帳號登入，才能使用好�
 export const FRIENDS_NETWORK_MSG = '連線失敗，請稍後再試一次。';
 export const FRIENDS_BUSY_MSG = '操作過於頻繁，請稍候再試一次。';
 export const FRIENDS_TRANSIENT_MSG = '伺服器暫時無法提供好友功能，請稍後再試。';
+export const FRIENDS_DM_DISABLED_MSG = '好友私聊尚未開放，請之後再來看看。';
+export const FRIENDS_DM_UNSUPPORTED_MSG = '這個網站版本的伺服器還沒有提供私聊功能。';
+export const FRIENDS_DM_NOT_FRIENDS_MSG = '無法開啟與這位玩家的對話，請重新整理好友名單。';
 
 /** 負向快取的存活時間。站長打開開關／部署新版之後，最多這麼久入口就會重新出現。 */
 export const FRIENDS_NEG_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -108,6 +121,17 @@ const LS_PREFIX = 'ptcg_friends_avail:';
 
 // ── 模組層級狀態（跨路由切換保留；整頁重新載入才重置）────────────────────────
 const sessionAvail = new Map<string, FriendsAvailability>();
+/** v6.288 私聊自己的可用性（只記本次載入；負向有 TTL，站長開了子開關之後重開面板就會再試）。 */
+let dmAvail: { v: FriendsAvailability; at: number } = { v: 'unknown', at: 0 };
+export const FRIENDS_DM_NEG_CACHE_TTL_MS = 60 * 1000;
+function rememberDm(v: FriendsAvailability, now: number): void { dmAvail = { v, at: now }; }
+/** 私聊可用性。**純函式，不發任何請求。** `on`＝dm 端點回過 2xx；負向只在 TTL 內有效。 */
+export function friendsDmAvailability(now: number = Date.now()): FriendsAvailability {
+  if (!apiBase()) return 'unsupported';
+  if (dmAvail.v === 'on') return 'on';
+  if ((dmAvail.v === 'disabled' || dmAvail.v === 'unsupported') && now - dmAvail.at < FRIENDS_DM_NEG_CACHE_TTL_MS) return dmAvail.v;
+  return 'unknown';
+}
 
 function apiBase(): string {
   return (((import.meta as unknown) as { env?: { VITE_ORACLE_API_URL?: string } }).env?.VITE_ORACLE_API_URL) || '';
@@ -176,9 +200,11 @@ function fail(kind: FriendsFailKind, message: string, code: string, status: numb
 /**
  * 發一發請求並依檔頭的三態規則分類。⚠ 唯一的 fetch 出口；所有分類邏輯都在這裡。
  */
-async function requestJson<T>(ctx: FriendsCtx, path: string, init: RequestInit): Promise<FriendsResult<T>> {
+/** v6.288：dm 路徑的特殊規則（見檔頭）。`dm:true` ⇒ 204 當成功（回 `{noNew:true}`）、負向只記私聊自己的狀態。 */
+interface RequestOpts { dm?: boolean }
+async function requestJson<T>(ctx: FriendsCtx, path: string, init: RequestInit, opts: RequestOpts = {}): Promise<FriendsResult<T>> {
   const base = apiBase();
-  if (!base) { return fail('unsupported', FRIENDS_UNSUPPORTED_MSG, 'no-api', 0); }
+  if (!base) { return fail('unsupported', opts.dm ? FRIENDS_DM_UNSUPPORTED_MSG : FRIENDS_UNSUPPORTED_MSG, 'no-api', 0); }
   if (!ctx.token) { return fail('auth', FRIENDS_AUTH_MSG, 'no-token', 0); }
   const f = ctx.fetchImpl ?? fetch;
   let res: Response;
@@ -192,6 +218,11 @@ async function requestJson<T>(ctx: FriendsCtx, path: string, init: RequestInit):
     return fail('network', FRIENDS_NETWORK_MSG, 'network', 0);
   }
   const status = res.status;
+  if (opts.dm && status === 204) {
+    // ⭐⭐ 204＝「沒有新訊息」：零 body、零哨兵，但只有我們的 dm 端點會回它 ⇒ 伺服器認得這支端點（正向）。
+    remember(ctx.uid, 'on'); rememberDm('on', Date.now());
+    return { ok: true, data: { noNew: true } as unknown as T };
+  }
   let body: Record<string, unknown> | null = null;
   const ct = (typeof res.headers?.get === 'function' ? res.headers.get('content-type') : '') || '';
   if (ct.includes('application/json')) {
@@ -202,15 +233,21 @@ async function requestJson<T>(ctx: FriendsCtx, path: string, init: RequestInit):
   }
   const code = body && typeof body.code === 'string' ? body.code : '';
   const serverMsg = body && typeof body.error === 'string' && body.error ? body.error : '';
-  const knowsEndpoint = !!body && (typeof body.friendsApi === 'number' || code.startsWith('friends-'));
+  const knowsEndpoint = !!body && (typeof body.friendsApi === 'number' || typeof body.friendsDm === 'number' || code.startsWith('friends-'));
 
   if (knowsEndpoint && code === 'friends-disabled') {
     remember(ctx.uid, 'disabled');
     return fail('disabled', FRIENDS_DISABLED_MSG, code, status);
   }
+  if (opts.dm && knowsEndpoint && code === 'friends-dm-disabled') {
+    // 好友功能有開（伺服器認得 friends- 端點）、私聊子開關沒開 ⇒ 只記私聊自己的負向；好友功能仍是 on。
+    remember(ctx.uid, 'on'); rememberDm('disabled', Date.now());
+    return fail('dm-disabled', FRIENDS_DM_DISABLED_MSG, code, status);
+  }
   if (knowsEndpoint) {
     // ⭐ 伺服器認得這支端點 ⇒ 已部署且開關已開（disabled 在上面先攔）⇒ 正向快取。
     remember(ctx.uid, 'on');
+    if (opts.dm && status >= 200 && status < 300 && body && typeof body.friendsDm === 'number') { rememberDm('on', Date.now()); return { ok: true, data: body as unknown as T }; }
     if (status >= 200 && status < 300 && body && typeof body.friendsApi === 'number') return { ok: true, data: body as unknown as T };
     if (status === 401 || code === 'friends-auth-required') return fail('auth', serverMsg || FRIENDS_AUTH_MSG, code, status);
     if (status === 429) return fail('busy', serverMsg || FRIENDS_BUSY_MSG, code, status);
@@ -225,6 +262,11 @@ async function requestJson<T>(ctx: FriendsCtx, path: string, init: RequestInit):
     return fail('transient', FRIENDS_TRANSIENT_MSG, 'http-' + status, status);
   }
   // 404（Express「Cannot GET」／GitHub Pages 靜態 404 頁）、或 2xx 卻不是 JSON ⇒ 不支援。
+  if (opts.dm) {
+    // ⚠⚠ dm 端點 404＝伺服器有好友、沒私聊（v6.286 以前）；只記私聊自己的負向，**不碰**好友功能的快取。
+    rememberDm('unsupported', Date.now());
+    return fail('unsupported', FRIENDS_DM_UNSUPPORTED_MSG, 'http-' + status, status);
+  }
   remember(ctx.uid, 'unsupported');
   return fail('unsupported', FRIENDS_UNSUPPORTED_MSG, 'http-' + status, status);
 }
@@ -327,7 +369,58 @@ export async function friendsAction(ctx: FriendsCtx, action: FriendsAction, fid:
   });
 }
 
+// ── v6.288 私聊 ───────────────────────────────────────────────────────────────
+/** 一則私聊（伺服器 `_frDmPublic()` 白名單；⚠ 永遠沒有 email／side／room）。 */
+export interface DmMessage { id: string; mine: boolean; text: string; ts: number }
+export interface DmPage {
+  messages: DmMessage[];
+  /** since=0 那一發才有意義：更早還有沒有。 */
+  hasMore: boolean;
+  serverNow: number;
+  /** 204 ⇒ true（沒有新訊息；messages 為空）。 */
+  noNew: boolean;
+}
+export const DM_MAX_LEN = 200;   // 與伺服器 FR_DM_MAX_LEN 一致（超過會被截斷，這裡先擋）
+
+function toMsg(r: Record<string, unknown>): DmMessage {
+  return { id: toStr(r.id, ''), mine: r.mine === true, text: typeof r.text === 'string' ? r.text : '', ts: typeof r.ts === 'number' ? r.ts : 0 };
+}
+
+/**
+ * GET /api/friends/dm/list?fid=&since=&before=
+ *   since>0：只回比 since 新的（伺服器無新訊息 ⇒ 204 ⇒ `noNew:true`）；since=0：最新一頁（before>0 ⇒ 更舊一頁）＋ hasMore。
+ * ⚠ fid 不合格式一律不發請求（伺服器也會 403，但不必浪費一發）。
+ */
+export async function fetchDmMessages(ctx: FriendsCtx, fid: string, q: { since?: number; before?: number } = {}): Promise<FriendsResult<DmPage>> {
+  if (!/^[0-9a-f]{8,32}$/.test(fid)) return fail('rejected', FRIENDS_DM_NOT_FRIENDS_MSG, 'bad-fid', 0);
+  const since = Math.max(0, Math.floor(q.since || 0)), before = Math.max(0, Math.floor(q.before || 0));
+  let path = '/api/friends/dm/list?fid=' + encodeURIComponent(fid);
+  if (since > 0) path += '&since=' + since;
+  else if (before > 0) path += '&before=' + before;
+  const r = await requestJson<Record<string, unknown>>(ctx, path, { method: 'GET' }, { dm: true });
+  if (!r.ok) return r;
+  const b = r.data;
+  if (b && b.noNew === true) return { ok: true, data: { messages: [], hasMore: false, serverNow: 0, noNew: true } };
+  const messages = Array.isArray(b.messages) ? b.messages.filter((x) => x && typeof x === 'object').map((x) => toMsg(x as Record<string, unknown>)) : [];
+  return { ok: true, data: { messages, hasMore: b.hasMore === true, serverNow: typeof b.serverNow === 'number' ? b.serverNow : 0, noNew: false } };
+}
+
+/** POST /api/friends/dm/send {fid, text}。空白不發請求（伺服器也會 400）；超過 200 字先截（伺服器同樣截）。 */
+export async function sendDm(ctx: FriendsCtx, fid: string, text: string): Promise<FriendsResult<{ id: string; ts: number }>> {
+  const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, DM_MAX_LEN);
+  if (!t) return fail('rejected', '訊息不可空白。', 'empty', 0);
+  if (!/^[0-9a-f]{8,32}$/.test(fid)) return fail('rejected', FRIENDS_DM_NOT_FRIENDS_MSG, 'bad-fid', 0);
+  const r = await requestJson<Record<string, unknown>>(ctx, '/api/friends/dm/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fid, text: t }),
+  }, { dm: true });
+  if (!r.ok) return r;
+  return { ok: true, data: { id: toStr(r.data.id, ''), ts: typeof r.data.ts === 'number' ? r.data.ts : 0 } };
+}
+
 /** ⚠ 只給守衛用：把模組層級狀態清乾淨，讓每一條斷言互不污染。 */
 export function __resetFriendsForTest(): void {
   sessionAvail.clear();
+  dmAvail = { v: 'unknown', at: 0 };
 }

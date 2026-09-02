@@ -217,11 +217,15 @@ await T('C2 ⭐⭐ POST /api/tournament/admin/chat/clear（出貨碼抽出來實
     assert.strictEqual(countRoom(bad.db, (r) => String(r).startsWith('dm:')), 300, '⚠⚠ admin 清空大廳刪到私聊了');
   }, '刪到私聊了');
 });
-await T('C3 靜態枚舉：本檔所有對 tournamentChat／TCHAT 的刪除呼叫都帶 room:\'lobby\'（掃描器下限 ≥ 2）；oracle-admin/ 其他檔零引用', () => {
+await T('C3 靜態枚舉：本檔所有對 tournamentChat／TCHAT 的刪除呼叫都帶 room:\'lobby\'，唯一例外＝v6.288 remove 的 _frPurgeDm 等值 `{ room: \'dm:\' + fid }`（掃描器下限 ≥ 3）；oracle-admin/ 其他檔零引用', () => {
   const stripped = PATCH.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
   const dels = [...stripped.matchAll(/(TCHAT|collection\(FR_DM_COLL\)|collection\('tournamentChat'\))\.(deleteMany|deleteOne|updateMany|drop|remove)\(([^)]*)\)/g)];
-  assert.ok(dels.length >= 2, '掃描器壞了？只掃到 ' + dels.length + ' 個刪除呼叫');
-  for (const m of dels) assert.ok(/room:\s*'lobby'/.test(m[3]), '這個刪除沒有限定 lobby：' + m[0].slice(0, 120));
+  assert.ok(dels.length >= 3, '掃描器壞了？只掃到 ' + dels.length + ' 個刪除呼叫');
+  // v6.288 站長裁定「解除好友連對話一起刪」：唯一被授權的例外是 remove → _frPurgeDm 的**等值** room（行為端在 test-v6288 B1：lobby 逐 id 不少、別段對話不少）
+  const PURGE_FILTER = "{ room: 'dm:' + fid }";
+  const purges = dels.filter((m) => m[3].trim() === PURGE_FILTER);
+  assert.strictEqual(purges.length, 1, 'dm 等值刪除必須恰一處（_frPurgeDm）：' + purges.length);
+  for (const m of dels) assert.ok(/room:\s*'lobby'/.test(m[3]) || m[3].trim() === PURGE_FILTER, '這個刪除沒有限定 lobby（也不是 v6.288 授權的等值 dm 刪除）：' + m[0].slice(0, 120));
   const others = readdirSync(join(ROOT, 'oracle-admin')).filter((f) => f !== 'server_admin_patch.js' && /\.(js|cjs|mjs|sh|bat)$/.test(f));
   for (const f of others) assert.ok(!readFileSync(join(ROOT, 'oracle-admin', f), 'utf8').includes('tournamentChat'), f + ' 也碰 tournamentChat（要逐一確認不會刪私聊）');
   const tdir = join(ROOT, 'oracle-admin/tournament');
