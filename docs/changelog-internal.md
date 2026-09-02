@@ -1,5 +1,97 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.283 — 好友功能【P1a：第一個玩家看得到的版本】/friends 頁＋線上大廳一顆入口（零侵入既有版面）
+
+BASE `5965ea49ff5c810479265528a4727215fcc2278d`（v6.282，遠端 main）。後端＝v6.282 P0（本版 `oracle-admin/server_admin_patch.js` **未動**）。
+站長最高約束（逐字）：「好友介面要同時符合現在的 windows 網頁版和手機版的框架，千萬不要造成現有框架的異常」。
+
+### 做了什麼
+
+- **新檔 `src/lib/friends/friends-api.ts`**：完全比照 `deck-stats.ts` 的形狀 —— 純函式＋模組層級狀態＋哨兵判定，
+  **不 import 任何模組**（Firebase ID token 由頁面取好傳進來），守衛才能用 esbuild 單獨載入實跑。
+- **新路由 `src/routes/friends/`**（`+page.svelte` ＋ `+page.ts` prerender/ssr=false，與 /decks 同一套）：
+  比照 `/deck-posts`（`authHeaders` 手法、非 JSON 回應分辨、safe-area padding）。四區＝好友／待我確認／我送出的邀請／已封鎖；
+  輸入 email 加好友（查無帳號明講、429 友善訊息）；解除好友與解除封鎖都是真刪除 ⇒ 二次確認；每個 `{#each}` 以 `fid` 當 key；
+  匿名玩家只顯示「請先以 email 帳號登入」，不做半死的按鈕。
+- **入口只有一處、一行 markup**：`src/routes/game/+page.svelte` 線上大廳那一份 `.auth-user` 內、「登出」之前，
+  `{#if friendsEntryOn}<button class="small" …>👥 好友</button>{/if}`。整檔 **+3 行、0 刪除**（import／`$derived`／markup），零新 CSS。
+  ⚠ 主選單與本機模式那兩份 `.auth-user` 刻意不放。
+
+### ⭐⭐ 哨兵三態（只讀伺服器回應，絕不比對寫死版本號）
+
+| 回應 | 判定 | UI | 快取 |
+|---|---|---|---|
+| 2xx 帶 `friendsApi` | 支援 | 顯示 | 正向（localStorage，綁 Firebase uid，無 TTL） |
+| 錯誤碼以 `friends-` 開頭且不是 disabled（含 404 `friends-no-such-account`、409、429 cooldown） | 支援（伺服器**認得**端點） | 顯示＋訊息 | 正向 |
+| 503 `friends-disabled` | 尚未開放 | 頁面明講、入口藏 | 負向，TTL 1 小時 |
+| 404／2xx 非 JSON（未部署／測試站靜態 404 頁） | 不支援 | 頁面明講、入口藏 | 負向，TTL 1 小時 |
+| 401／`friends-auth-required` | 請先登入 | 訊息 | **不寫** |
+| 429／網路錯／503 helper-missing／db-not-ready／500／非 JSON 5xx（tunnel 錯誤頁） | 暫時性 | 訊息＋重試 | **不寫** |
+
+⚠⚠ 401／429／暫時性一律**不得**判成「不支援」——藏起來在本次載入是不可逆的（守衛 A1 ⑤⑥ 與突變 E1/E2/E4/E5 釘住）。
+
+### ⚠ 與交辦不同的一個決定：入口在「未知」狀態也顯示
+
+交辦原文是「只在非匿名＋哨兵成功過才為 true」。但正向快取**只有進過 `/friends` 頁**才寫得進去，而 `/friends` 的唯一入口就是這顆按鈕
+⇒ 照字面做會變成**誰都看不到、永遠進不去**（雞生蛋）。本版採「未知 ⇒ 顯示；負向快取（不支援／尚未開放）⇒ 藏」：
+- 大廳載入仍然**零請求**（`friendsEntryVisible()` 純函式，守衛 A5 呼叫 200 次證明零 fetch）；
+- 多出來的只是「按了才知道尚未開放」這一種體驗，之後 1 小時內入口自動藏起來；
+- 站長把開關打開後，最多 1 小時入口就會重新出現。
+另一個做法是大廳載入時探一發 `/api/friends/list` —— 交辦明說本版**不新增請求**，所以沒採。
+
+### ⭐⭐ 框架安全性驗收（用正式站 v6.282 的真實 CSS 量測，`getBoundingClientRect` 前後比對）
+
+- **桌機 1366×768**：`back`／`sync-pill`／`auth-email`／`🔑更改密碼`／`h1`／`.online-form` 全部 **dx=dy=dw=dh=0**；
+  只有「登出」右移 **72.8px**（＝好友鈕 64.8px＋gap 8px），`.auth-user` 高度不變 ⇒ 完全符合預期。
+- **手機 375×812**：內容寬 349.4px，`.auth-user` 一列＝email（最寬 180px）＋8＋更改密碼 89.8＋8＋登出 44.6 ＝ 331px，
+  只剩 18px ⇒ **任何**新按鈕（連純圖示 36.7px 也一樣）都會讓「登出」折到第二列，`h1` 與下方表單**下移 32.4px**
+  （email ≥ 約 14 字元時；超短 email 如 `ab@x.io` 則整個 `.auth-user` 折到第二列，下移 28.8px）。
+  **沒有任何元素被遮蔽或重疊**。這與既有行為同型：`.auth-dashboard`／`.auth-user` 本來就是 `flex-wrap`，長 email 現況也會折行。
+  ⚠ 量過的替代位置（搬到 `.auth-dashboard` 內、sync-pill 之後、用 `.auth-btn` 樣式）在 375 仍有 6.3px（`.auth-btn` 比 pill 高）
+  或 35px（短 email）的位移，沒有任何位置能在 375 做到零垂直位移 ⇒ 維持交辦的位置，據實回報。
+- **對戰版面**：`game/+page.svelte` 的 `{#if isPortraitMobile && game}` … `{/if}<!-- /isPortraitMobile && playing -->`
+  區間（手機直式／桌機兩套分支，>20000 字元）與 `MobilePortraitBattle.svelte` **零 `friend` 字樣**（守衛 C1/C2，含塞字正對照）。
+
+### 守衛 `scripts/test-v6283-friends-p1a.mjs`（30 條，已加進 package.json test chain）
+
+【F】HEAD-FAIL 錨點（BASE 沒有新檔 ⇒ F0 必紅並中止）／【A】esbuild 實跑七組回應＋404-with-code／零請求／匿名／TTL／正規化不洩 email／
+【B】零 setInterval／setTimeout／rAF、each 都用 fid、零 `{@html}`、不 import／【C】對戰版面區間零 friend（＋正對照）、入口恰一處且在 lobby、
+`.auth-user` CSS 逐字未動／【D】錦標賽區塊 sha256（與 v6.278 I1 同一把）／【E】七個突變體各紅在預期那一條。
+HEAD-FAIL 實跑：全部還原 BASE ⇒ F0 紅；只還原 `game/+page.svelte` ⇒ C3/C4 紅；把入口搬到主選單那份 `.auth-user` ⇒ C3 紅。
+
+### ⚠ 交辦的【A】（`seat.email` 冒名的 `playerIdentity` 反查）本版**沒有做**，理由
+
+1. `playerIdentity` 的**唯一寫入點**就是同一條 client 自報的 `seats[].email`（`recordPlayerIdentity`，match-result enrich 段）
+   ⇒ 惡意玩家先用冒名 email 打完一場，對照表就寫成「victim ↔ 他的 uid」，反查必過 —— **擋不住有準備的人**，還把 victim 的對照表污染
+   （日後大廳標示好友的房會誤標）。
+2. **對正常玩家有假陽性**：uid 只在 game-over 才寫進對照表，而 Oracle uid 換裝置／清資料／401 續簽都會換 ⇒
+   「換了裝置、第一場還沒打完、對手就按加好友」會被 `friends-identity-mismatch` 擋下。
+3. 收益：這條路徑能做到的只是「讓 A 對 victim 送一封可拒絕的邀請」，而 `{email}` 入口本來就允許任何人這麼做（有限流）。
+⇒ 弱且會誤傷 ⇒ 停手回報，待裁定。`{matchId}` 入口查證：TREGS 的 `email` 來自 `tournIdentity` 驗過的 Firebase token（`:6478/:6536/:6600` 皆 `email: id.email`），
+歸檔 `players[].email` 亦由伺服器寫入 ⇒ 不需要反查。
+
+### 順帶發現（未動）
+
+`game/+page.svelte:7621` 的 `initNotifyNav((url) => { … goto(url) … })` —— 整檔**沒有 import `goto`**，被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效。屬既有問題，另版處理。
+
+### 三配套
+
+`version.ts` 6.283／`admin.html` `SITE_VERSION_HINT` 6.283／`test-v6272` ⑩ `PREV_SHA`→v6.282、`PREV_ALLOWED` 列五檔／
+`test-v6264` `BASE_SHA`→v6.282（本版動了 changelog）。首頁 changelog 三步搬運：新增 v6.283、v6.259 內文搬進 bodies、v6.206 搬進封存頁；
+首頁 30,948 → 30,912 bytes。
+
+### 部署
+
+純 client 端；伺服器 v6.282 已含端點。動到 `admin.html`（版本提示）⇒ 站長跑 **`update-tournament.bat`**（唯一會先同步 git 的那支，挑離峰）
+再跑 `redeploy-oracle.bat`。開關 `friendsConfig.enabled` 預設 false ⇒ 上線後玩家按入口只會看到「尚未開放」，站長用 admin
+`POST /api/friends/admin/config {enabled:true}` 打開。
+
+### 下一版（大廳標示好友的房／賽後「加好友」鈕）動工前要先問站長
+
+- 大廳房間卡上的好友標記要長什麼樣、放哪（會動到大廳版面）；
+- 「加好友」鈕放對戰中還是賽後結算畫面（三種對戰版面都要驗，且對戰畫面是站長最怕動的）；
+- 【A】的處置：接受現況（低嚴重度）、或在 `/api/friends/list` 順便登記「驗過 email 的 Oracle uid」（`vuids`）當反查依據。
+
 ## v6.282 — 好友功能【P0：純伺服器端】friendships／playerIdentity／六支 /api/friends 端點／預設關閉的開關（玩家完全無感）
 
 BASE `6468a2c510acee2318d63dc7a7f2f85769cca429`（v6.281，遠端 main）。

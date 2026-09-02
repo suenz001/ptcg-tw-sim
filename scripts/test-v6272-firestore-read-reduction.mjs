@@ -664,12 +664,17 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '6468a2c510acee2318d63dc7a7f2f85769cca429';   // v6.281（v6.282 的上一版）
-// ⭐v6.282 好友功能 P0 是**純伺服器端**版（oracle-admin/server_admin_patch.js v1.36）：
-//   玩家端只動 version.ts；不做任何 client UI（鐵律：白名單會丟掉 client 送來的新欄位 ⇒ server 先上）。
+const PREV_SHA = '5965ea49ff5c810479265528a4727215fcc2278d';   // v6.282（v6.283 的上一版）
+// ⭐v6.283 好友功能 P1a（client 端）：新檔 src/lib/friends/friends-api.ts 與 src/routes/friends/*（新檔不在
+//   上一版的 ls-tree 內 ⇒ 本斷言看不到，由 test-v6283 守）；既有檔只動 version.ts、game/+page.svelte（大廳入口三行）
+//   與首頁 changelog 三檔（三步搬運）。伺服器端 server_admin_patch.js 本版**未動**。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

@@ -20,6 +20,7 @@
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
   import { validateDeck } from '$lib/decks/validation';
+  import { friendsEntryVisible } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
@@ -1194,6 +1195,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let cpSuccess = $state(false);
   let cpLoading = $state(false);
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
+  const friendsEntryOn = $derived(friendsEntryVisible(firebaseUser?.uid ?? null, isAnonymous));   // v6.283 非匿名＋沒有負向快取才顯示
   // v5.476：先後攻偏好 + 對手閒置判定時間 的記憶（採上次設定，玩家不用每次調）
   function _readLastFirstPref(): 'random' | 'first' | 'second' | 'opponent' {
     try { const v = localStorage.getItem('ptcg-tw-sim:lastFirstPref'); return (v === 'first' || v === 'second' || v === 'opponent' || v === 'random') ? v : 'random'; } catch { return 'random'; }
@@ -10488,6 +10490,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="auth-user">
             <span class="auth-email">✉️ {firebaseUser.email}</span>
             <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
+            {#if friendsEntryOn}<button class="small" onclick={() => { location.href = base + '/friends'; }} title="好友名單">👥 好友</button>{/if}
             <button class="small danger" onclick={handleSignOut}>登出</button>
           </div>
         {/if}
