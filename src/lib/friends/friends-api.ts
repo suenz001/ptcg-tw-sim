@@ -160,14 +160,13 @@ export function friendsEntryVisible(uid: string | null | undefined, anonymous: b
 }
 
 /**
- * v6.284 對戰中／賽後「將對手加為好友」鈕要不要渲染。**純函式，不發任何請求。**
- * ⚠ 與 `friendsEntryVisible`（未知也顯示）不同：**只有 'on'**（這個帳號的哨兵成功過）才為真 ——
- *   匿名／未知／負向快取一律 false ⇒ 呼叫端整顆不渲染。
- *   代價：從沒進過 `/friends` 頁的玩家在賽後看不到這顆；大廳入口仍是發現路徑（見 docs/changelog-internal.md v6.284）。
+ * v6.284 對戰中／賽後／設定「將對手加為好友」鈕要不要渲染。**純函式，不發任何請求。**
+ * ⭐ v6.285 站長裁定：改成與大廳入口**同一條規則**（「未知也顯示」，只有確定不支援／已關閉的負向快取才藏；匿名整顆不渲染）
+ *   ⇒ 直接委派 `friendsEntryVisible`，不另寫一套判斷（兩處規則不會漂移）。
+ *   v6.284 原本只認 'on'，代價是從沒進過 `/friends` 頁的玩家賽後看不到這顆（見 docs/changelog-internal.md v6.285）。
  */
 export function friendsBattleEntryVisible(uid: string | null | undefined, anonymous: boolean, now: number = Date.now()): boolean {
-  if (anonymous || !uid) return false;
-  return friendsAvailability(uid, now) === 'on';
+  return friendsEntryVisible(uid, anonymous, now);
 }
 
 function fail(kind: FriendsFailKind, message: string, code: string, status: number): FriendsResult<never> {

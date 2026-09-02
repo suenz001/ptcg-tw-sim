@@ -3,7 +3,7 @@
 // 守什麼（能行為端就行為端；靜態只用在行為端測不到的地方）：
 //   【F】HEAD-FAIL 錨點：friends-api.ts 用 esbuild 轉 CJS 實跑，三個新 export（friendsBattleEntryVisible／
 //        requestFriendFromBattle／friendsRequestReplyText）BASE（v6.283）沒有 ⇒ F0 必紅並中止。
-//   【A】friends-api.ts 行為端：賽後鈕的顯示判定只認 'on'（匿名／未知／disabled 一律藏）；{roomCode}／{matchId} 各打對
+//   【A】friends-api.ts 行為端：賽後鈕的顯示判定（v6.285 起與大廳入口同一條：未知也顯示，匿名／disabled／unsupported 藏）；{roomCode}／{matchId} 各打對
 //        端點、body 只有那一個 key、永遠沒有 email；空目標零請求；403／409（帶 friends- 錯誤碼）⇒ rejected＋伺服器原話；
 //        {email} 入口重構後行為不變；回應文案四態。
 //   【B】靜態：friends-api.ts 零 setInterval／setTimeout／rAF、零 import（沿用 v6.283 B1/B5）。
@@ -13,7 +13,7 @@
 //        （把兩個條件抽出來**求值**：手機只渲染尾端那份、桌機只渲染 .auth-user 那份）；C4 `friendsBattleTarget` 的推導
 //        抽出來**實跑**（正式賽 mr_ 前綴 → matchId；測試房／觀戰／本機 ⇒ null；休閒 ⇒ roomCode）；C5 零新 CSS、
 //        `.auth-user` CSS 逐字未動；C6 三種桌機對戰版面沒有任何 selector 碰 .gameover-modal（三版面共用同一份）；
-//        C7 設定 modal 區塊零 `friend`（本版停手，見 docs/changelog-internal.md v6.284）。
+//        C7 設定 modal 區塊的 friend 全落在尾端好友 section 內（v6.285 接上；原「零 friend」停手條款已解除）。
 //   【D】goto：import 恰一行；⭐ 行為端＝把 initNotifyNav 的回呼從檔案抽出來實跑（有 goto 綁定 ⇒ 導頁；沒有 ⇒ 靜默不導頁
 //        ＝BASE 的症狀），並把 notify.ts bundle 起來走完整條「SW message → onNavigate → goto」。
 //   【E】錦標賽區塊 sha256 逐位元未動（與 v6.278 I1 同一把）。
@@ -82,19 +82,20 @@ async function assertBattleVisible(src) {
   const ls = makeLS();
   const box = loadApi(src, { ls });
   const mod = box.load(mkFetch(() => jsonRes(200, listBody())));
-  assert.strictEqual(mod.friendsBattleEntryVisible('FU', false), false, '未知（沒問過伺服器）就顯示賽後鈕 —— 站長要的是整顆不渲染');
+  // v6.285 站長裁定：賽後鈕改成與大廳入口一致（未知也顯示；只有確定不支援才藏）—— 反向斷言（disabled／unsupported 必須藏）在下面與 test-v6285 B1
+  assert.strictEqual(mod.friendsBattleEntryVisible('FU', false), true, '未知（沒問過伺服器）時賽後鈕沒顯示 —— v6.285 裁定「未知也顯示」（與大廳入口一致）');
   assert.strictEqual(mod.friendsEntryVisible('FU', false), true, '（對照）大廳入口在未知時應顯示');
   await mod.fetchFriendsList(CTX);
   assert.strictEqual(mod.friendsBattleEntryVisible('FU', false), true, '哨兵成功後賽後鈕應顯示');
   assert.strictEqual(mod.friendsBattleEntryVisible('FU', true), false, '匿名還顯示賽後鈕');
   assert.strictEqual(mod.friendsBattleEntryVisible(null, false), false, '沒 uid 還顯示賽後鈕');
-  assert.strictEqual(mod.friendsBattleEntryVisible('OTHER', false), false, '快取沒綁 uid');
+  assert.strictEqual(mod.friendsBattleEntryVisible('OTHER', false), true, '（別的 uid 是 unknown ⇒ v6.285 起未知也顯示）');
   const b = loadApi(src, { ls }).load(mkFetch(() => jsonRes(503, { code: 'friends-disabled', error: 'x' })));
   assert.strictEqual(b.friendsBattleEntryVisible('FU', false), true, '重新整理後正向快取應保留');
   await b.fetchFriendsList(CTX);
   assert.strictEqual(b.friendsBattleEntryVisible('FU', false), false, 'disabled 之後還顯示賽後鈕');
 }
-await T('A1 ⭐ 賽後鈕顯示判定只認 on：未知 false（對照：大廳入口 true）、哨兵成功 true、匿名／無 uid／別的 uid false、disabled false、正向快取跨實例', () => assertBattleVisible(API));
+await T('A1 ⭐ 賽後鈕顯示判定（v6.285 起與大廳入口同一條規則）：未知 true、哨兵成功 true、匿名／無 uid false、disabled false（反向：確定不支援必藏）、正向快取跨實例', () => assertBattleVisible(API));
 await T('A2 賽後鈕判定是純函式：呼叫 200 次零請求', async () => {
   const f = mkFetch(() => { throw new assert.AssertionError({ message: '判定發了請求' }); });
   const mod = loadApi(API).load(f);
@@ -203,13 +204,14 @@ function gameoverBlock(game) {
   assert.ok(s > 0 && e > s, '找不到勝負 modal 區塊錨點');
   return { s, e, text: game.slice(s, e) };
 }
-await T('C2 ⭐ 賽後鈕：恰一處、落在 `{/if}<!-- /isPortraitMobile && playing -->` 之後、勝負 modal 區塊內、且在既有按鈕分支 {/if} 之後（＝最後一個節點）', () => {
+await T('C2 ⭐ 賽後鈕：勝負 modal 內恰一處（v6.285 起全檔兩處：＋設定 modal）、落在 `{/if}<!-- /isPortraitMobile && playing -->` 之後、勝負 modal 區塊內、且在既有按鈕分支 {/if} 之後（＝最後一個節點）', () => {
   const MK = '{#if friendsBattleOn && friendsBattleTarget}';
-  assert.strictEqual(GAME.split(MK).length - 1, 1, '賽後鈕 markup 出現次數不是 1');
-  const mk = GAME.indexOf(MK);
+  assert.strictEqual(GAME.split(MK).length - 1, 2, '賽後鈕 markup 出現次數不是 2（v6.285 起：勝負 modal ＋ 設定 modal 好友 section，各恰一處）');
+  const go = gameoverBlock(GAME);
+  assert.strictEqual(go.text.split(MK).length - 1, 1, '勝負 modal 區塊內的賽後鈕不是恰一處');
+  const mk = GAME.indexOf(MK, go.s);
   const br = battleRegion(GAME);
   assert.ok(mk > br.e, '賽後鈕落在對戰版面分支之前／之內');
-  const go = gameoverBlock(GAME);
   assert.ok(mk > go.s && mk < go.e, '賽後鈕不在勝負 modal 區塊內');
   const body = go.text;
   const lastBranchEnd = body.lastIndexOf('{/if}', body.indexOf(MK));
@@ -290,13 +292,16 @@ await T('C6 三種桌機對戰版面共用同一份勝負 modal：CSS 內所有�
   const block = css.slice(css.indexOf('  .gameover-modal {'), css.indexOf('  .gameover-modal-header {'));
   assert.ok(/position: fixed;/.test(block) && /max-height: 88vh;/.test(block) && /overflow-y: auto;/.test(block), '.gameover-modal 的 fixed／max-height／overflow-y 變了');
 });
-await T('C7 設定 modal 區塊零 `friend`（本版停手：.zoom-modal overflow:hidden 蓋掉 .settings-modal，尾端 section 會被切掉；待站長裁定）', () => {
+await T('C7 設定 modal 區塊的 `friend` 全部落在尾端 {#if friendsEntryOn} 好友 section 內（v6.285 接上；捲動修正與位置細節由 test-v6285 釘住）', () => {
   const s = GAME.indexOf('<!-- Settings Modal (Audio & BGM) -->');
   const e = GAME.indexOf('<!-- v4.60 對方提議 modal -->', s);
   assert.ok(s > 0 && e > s, '找不到設定 modal 錨點');
-  const seg = GAME.slice(s, e);
+  const seg = GAME.slice(s, e).replace(/<!--[\s\S]*?-->/g, '');
   assert.ok(seg.includes('settings-section') && seg.length > 5000, '設定 modal 區塊抓錯');
-  assert.strictEqual((seg.match(/friend/gi) || []).length, 0, '設定 modal 區塊出現 friend（若是下一版接上，請一併更新本條與 docs 的裁定紀錄）');
+  const at = seg.lastIndexOf('{#if friendsEntryOn}');
+  assert.ok(at > 0, '設定 modal 內找不到 {#if friendsEntryOn} 好友 section');
+  assert.strictEqual((seg.slice(0, at).match(/friend/gi) || []).length, 0, '設定 modal 內有 friend 字樣落在好友 section 之前（會推動既有 section）');
+  assert.ok((seg.slice(at).match(/friend/gi) || []).length >= 4, '好友 section 內的 friend 字樣太少 —— 區塊抓錯？');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -362,17 +367,17 @@ await T('E1 ⚠⚠ 錦標賽區塊（錨點至檔尾）sha256 未變（本版不
 console.log('\n【M】突變測試（每一條只捕 AssertionError，且要紅在預期那一條）');
 const mutA = (a, b) => { assert.strictEqual(API.split(a).length - 1, 1, '突變錨點不唯一：' + a); return API.replace(a, b); };
 const mutG = (a, b) => { assert.strictEqual(GAME.split(a).length - 1, 1, '突變錨點不唯一：' + a.slice(0, 60)); return GAME.replace(a, b); };
-await T('M1 突變：賽後鈕判定改成跟大廳一樣（unknown 也顯示）⇒ A1 必紅', () =>
-  mutantMustBreak('battle=entry', () => assertBattleVisible(mutA("  return friendsAvailability(uid, now) === 'on';\n}", "  const a = friendsAvailability(uid, now); return a === 'on' || a === 'unknown';\n}")), '未知（沒問過伺服器）就顯示賽後鈕'));
+await T('M1 突變：賽後鈕判定改回只認 on（＝v6.284）⇒ A1 必紅在「未知」那條', () =>
+  mutantMustBreak('battle=on-only', () => assertBattleVisible(mutA("  return friendsEntryVisible(uid, anonymous, now);\n}", "  if (anonymous || !uid) return false;\n  return friendsAvailability(uid, now) === 'on';\n}")), '未知（沒問過伺服器）時賽後鈕沒顯示'));
 await T('M2 突變：賽後鈕判定不看匿名 ⇒ A1 必紅', () =>
-  mutantMustBreak('ignore-anon', () => assertBattleVisible(mutA("  if (anonymous || !uid) return false;\n  return friendsAvailability(uid, now) === 'on';", "  if (!uid) return false;\n  return friendsAvailability(uid, now) === 'on';")), '匿名還顯示賽後鈕'));
+  mutantMustBreak('ignore-anon', () => assertBattleVisible(mutA("  return friendsEntryVisible(uid, anonymous, now);\n}", "  return friendsEntryVisible(uid, false, now);\n}")), '匿名還顯示賽後鈕'));
 await T('M3 突變：休閒 body 多帶 email 欄位 ⇒ A3 必紅', () =>
   mutantMustBreak('body+email', () => assertBattleRequest(mutA("return postFriendRequest(ctx, { roomCode: code });", "return postFriendRequest(ctx, { roomCode: code, email: 'leak@x.com' });")), '出現 email'));
 await T('M4 突變：空 roomCode 也照發 ⇒ A3 必紅', () =>
   mutantMustBreak('empty-send', () => assertBattleRequest(mutA("  if (!code) return fail('rejected', '找不到這場對戰的房號。', 'no-target', 0);\n", '')), '空目標還發了請求'));
 await T('M5 突變：把賽後鈕搬進對戰版面分支（桌機 {:else} 之後）⇒ C1 必紅', () => {
   const MK = '        {#if friendsBattleOn && friendsBattleTarget}';
-  const s = GAME.indexOf(MK);
+  const s = GAME.indexOf(MK, gameoverBlock(GAME).s);   // v6.285 起設定 modal 也有一份（縮排不同），取勝負 modal 內那份
   const e = GAME.indexOf('        {/if}\n', s) + '        {/if}\n'.length;
   const block = GAME.slice(s, e);
   const removed = GAME.slice(0, s) + GAME.slice(e);
@@ -385,7 +390,7 @@ await T('M5 突變：把賽後鈕搬進對戰版面分支（桌機 {:else} 之�
 });
 await T('M6 突變：賽後鈕搬到匯出鈕之前（既有鈕會被推下去）⇒ C2 必紅', async () => {
   const MK = '        {#if friendsBattleOn && friendsBattleTarget}';
-  const s = GAME.indexOf(MK);
+  const s = GAME.indexOf(MK, gameoverBlock(GAME).s);   // 同 M5：取勝負 modal 內那份
   const e = GAME.indexOf('        {/if}\n', s) + '        {/if}\n'.length;
   const block = GAME.slice(s, e);
   const removed = GAME.slice(0, s) + GAME.slice(e);

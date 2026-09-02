@@ -1197,9 +1197,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let cpLoading = $state(false);
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
   const friendsEntryOn = $derived(friendsEntryVisible(firebaseUser?.uid ?? null, isAnonymous));   // v6.283 非匿名＋沒有負向快取才顯示
-  // ── v6.284 賽後「將對手加為好友」（賽後結算 modal；設定 modal 那份待站長裁定捲動修法後再接同一組狀態）──────
+  // ── v6.284 賽後「將對手加為好友」（賽後結算 modal）；v6.285 設定 modal 尾端的「👥 好友」section 接同一組狀態 ──────
   //   ⚠ 三個判定全是純函式／$derived（零請求）；按鈕按下才發唯一的一發 POST /api/friends/request。
-  //   ⚠ 匿名／哨兵未知／觀戰／本機對戰／錦標賽測試房 ⇒ 整顆不渲染（站長偏好：不做半死按鈕）。
+  //   ⚠ 匿名／確定不支援（負向快取）／觀戰／本機對戰／錦標賽測試房 ⇒ 整顆不渲染（站長偏好：不做半死按鈕）。
+  //   ⭐ v6.285 站長裁定：顯示條件改成與大廳入口一致（未知也顯示），friendsBattleEntryVisible 直接委派 friendsEntryVisible。
   //   ⚠⚠ 這組東西**不在** isPortraitMobile && game 那組對戰版面分支內（守衛 test-v6284 C1 釘住；⚠ 註解裡不要寫出那個 if 字面，test-v6107 的掃描器會把註解當錨點）。
   const friendsBattleOn = $derived(friendsBattleEntryVisible(firebaseUser?.uid ?? null, isAnonymous));
   const friendsBattleTarget = $derived.by((): FriendsBattleTarget | null => {
@@ -13842,6 +13843,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         </details>
         {/if}
+
+        <!-- ⭐ v6.285 好友（站長裁定：賽後＋設定兩處都放）。放在**最後一個** section ⇒ 既有 section 零位移；
+             設定 modal 的捲動修好（.zoom-modal.settings-modal）之後尾端才捲得到。手機直式／桌機三版面共用這一份 modal。
+             外層條件與大廳入口同一個（匿名／確定不支援 ⇒ 整段不渲染）；「將對手加為好友」與賽後那顆共用同一組狀態（同一場只送一次）。
+             好友名單用新分頁開，對戰中不會因為換頁而離開房間。零新 CSS（沿用 .setting-row／.toggle-btn／.setting-hint）。 -->
+        {#if friendsEntryOn}
+        <details class="settings-section">
+          <summary>👥 好友</summary>
+          <div class="setting-row">
+            <a class="toggle-btn" style="text-decoration:none" href="{base}/friends" target="_blank" rel="noopener" title="好友名單（新分頁）">📋 前往好友名單</a>
+          </div>
+          {#if friendsBattleOn && friendsBattleTarget}
+          <div class="setting-row">
+            <button class="toggle-btn" onclick={addOpponentAsFriend} disabled={friendReqState === 'busy' || friendReqState === 'done'} style={friendReqState === 'done' ? 'cursor:default' : undefined} aria-live="polite" title="送出好友邀請（雙方都送出才會成為好友）">
+              {#if friendReqState === 'idle'}👥 將對手加為好友{:else if friendReqState === 'busy'}⏳ 送出中…{:else}{friendReqMsg}{/if}
+            </button>
+          </div>
+          {/if}
+          <div class="setting-hint">
+            ・好友名單會在新分頁開啟，不會離開這場對戰
+            <br/>・雙方都送出邀請（或一方確認）才會成為好友
+          </div>
+        </details>
+        {/if}
       </div>
     </div>
   {/if}
@@ -16447,7 +16472,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   
-  /* Settings Modal CSS */
+  /* Settings Modal CSS
+     ⚠ v6.285 查證：這一條（v4.930）的四個屬性全部被後面的 .zoom-modal（同特異度、後者勝）蓋掉 ——
+       實際生效的是 .zoom-modal 的 max-width:864px／max-height:calc(100vh - safe-top - 3rem)／padding:1.44rem／overflow:hidden；
+       手機 @media 區的 .settings-modal{max-width:92vw;padding:1rem} 在 .zoom-modal 之後所以有效。
+       本版只把「捲動」修好（見下方 .zoom-modal.settings-modal），這裡**原樣不動**（尺寸維持玩家現在看到的樣子）。 */
   .settings-modal {
     max-width: 500px;
     max-height: 85vh;
@@ -17451,6 +17480,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .zoom-modal{ background:#1a2a1a; border:1px solid #4a7a4a; border-radius:14px; padding:1.44rem; max-width:864px; width:96vw; max-height:calc(100vh - var(--safe-top, 0px) - 3rem); margin:auto; display:flex; flex-direction:column; gap:.9rem; color:#f0f0f0; overflow:hidden; position:relative; }
   /* v3.884：scrollable wrapper inside .zoom-modal — 真正的 scroll 容器（非 flex）*/
   .zoom-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain; width:100%; }
+  /* ⭐ v6.285 設定 modal 的捲動（既有 bug，v3.884 起）：下面 .settings-modal{overflow-y:auto}（v4.930）與上面
+     .zoom-modal{overflow:hidden}（v3.884）同特異度、後者勝 ⇒ 設定 modal 到 max-height 後整段被切掉且不能捲
+     （375×812／375×667／1366×768／1536×864 都看不到最後一個選項，只有 1920×1080 放得下）。
+     這裡用 .zoom-modal.settings-modal（特異度 0,2,0）**只補 overflow-y**；selector 只匹配設定 modal，
+     其餘 zoom modal（棄牌區／獎賞卡檢視／卡牌放大）零影響（守衛 test-v6285：CSS 級聯求值＋DOM rect 對照）。
+     ⚠ v3.884 說的「iOS Safari flex+overflow」：手機 .selection-modal 自 v5.308 起就是 flex column＋overflow-y:auto、
+       .prize-view-modal（v6.190）亦同型，都沒有捲不動的回報 ⇒ 沿用同一組宣告（overscroll-behavior:contain 與 .zoom-scroll 一致）。
+     回退：刪掉這一條即回到 v6.284 的行為。 */
+  .zoom-modal.settings-modal{ overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }
   .zoom-close{ position:absolute; top:1rem; right:1rem; width:2.2rem; height:2.2rem; background:rgba(0,0,0,0.6); border-radius:50%; border:none; color:#eee; font-size:1.44rem; display:flex; align-items:center; justify-content:center; cursor:pointer; line-height:1; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,0.4); }
   .zoom-close:hover{ background:#fff; color:#000; }
   /* v2.32：放到 × 左邊（top-right），避免擋到卡牌圖。.zoom-close 大約 2.2rem 寬，所以 back 從 right:4rem 開始留一些間距。 */

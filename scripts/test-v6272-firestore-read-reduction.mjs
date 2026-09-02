@@ -664,9 +664,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '8ccf12552106b4eaebe31d7690c9bcc014be11e5';   // v6.283（v6.284 的上一版）
-// ⭐v6.284 好友功能 P1b（client 端）：friends-api.ts 多三個 export（賽後鈕判定／{roomCode}|{matchId} 送出／回應文案）；
-//   game/+page.svelte：goto import、手機直式大廳入口、賽後「將對手加為好友」鈕（設定 modal 那份本版停手）；
+const PREV_SHA = '48911f4683bbf89cd7c9a8fcab5422f237f797cd';   // v6.284（v6.285 的上一版）
+// ⭐v6.285 設定 modal 捲動修正（既有 bug）＋賽後鈕「未知也顯示」＋設定 modal 尾端好友 section（client 端）：
+//   friends-api.ts（friendsBattleEntryVisible 委派 friendsEntryVisible）；game/+page.svelte（一條 CSS ＋ 設定 modal 尾端 section ＋ 註解）；
 //   首頁 changelog 三檔（三步搬運）。伺服器端 server_admin_patch.js 本版**未動**。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [

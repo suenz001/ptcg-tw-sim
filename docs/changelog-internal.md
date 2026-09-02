@@ -1,5 +1,75 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.285 — 設定 modal 捲動修正（既有 bug，v3.884 起）／賽後「將對手加為好友」改「未知也顯示」／設定 modal 尾端的「👥 好友」section
+
+BASE `48911f4683bbf89cd7c9a8fcab5422f237f797cd`（v6.284，遠端 main）。後端＝v6.282 P0（本版 `oracle-admin/server_admin_patch.js` **未動**）。
+站長裁定：賽後鈕「未知也顯示」（與大廳入口一致，只有確定不支援才藏）；設定 modal 的捲動 bug 本版單獨修。
+站長最高約束（逐字）：「好友介面要同時符合現在的 windows 網頁版和手機版的框架，千萬不要造成現有框架的異常」。
+量測工具：`scripts/measure-v6285-settings-scroll.mjs`（Playwright headless；markup／CSS 抽取與守衛共用 `scripts/lib/zoom-modal-fixture.mjs`）。
+
+### 【1】設定 modal 的捲動 —— 根因、用到 `.zoom-modal` 的全部地方、修法、iOS 風險
+
+- **根因**：`.settings-modal { max-width:500px; max-height:85vh; padding:2rem; overflow-y:auto }`（v4.930，:16451）與後面的
+  `.zoom-modal { … overflow:hidden … }`（v3.884，:17451）同特異度、後者勝 ⇒ **這一條的四個屬性全部是死的**（實際生效的是 .zoom-modal 的
+  max-width:864px／max-height:calc(100vh - safe-top - 3rem)／padding:1.44rem／overflow:hidden）。v3.884 當時 `.settings-modal` 只有 `max-width:500px; padding:2rem`，
+  v4.930 加 overflow-y:auto 時沒有察覺被蓋掉。box-sizing 是 content-box（全站沒有 border-box reset）⇒ 1366×768 時 modal 的 border box 高 768.1、底邊超出畫面 16px（既有現象，本版未動）。
+- **用到 `.zoom-modal` 的全部地方（`git grep -n zoom-modal 48911f46 -- src`）**：markup 四處，全在 `game/+page.svelte`：
+  ① `:13646` `.zoom-modal.discard-modal`（棄牌區；靠內層 `.discard-modal .sel-grid{max-height:72vh}` 捲）
+  ② `:13669` `.zoom-modal.settings-modal`（設定；**本版修的**）
+  ③ `:13913` `.zoom-modal.discard-modal.prize-view-modal`（v6.190 獎賞卡檢視，回放限定；`.prize-view-modal{overflow-y:auto}` 在 .zoom-modal 之後 ⇒ 本來就可捲 —— **同型先例**）
+  ④ `:13940` `.zoom-modal`（卡牌放大；靠 v3.884 的 `.zoom-scroll` 內層捲）
+  CSS 規則：桌機 `.zoom-modal`（:17451）、手機直式 @media 區 `.zoom-modal`（:17805）、手機橫式 @media 區 `.zoom-modal{…!important}`（:17929）；
+  `MobilePortraitBattle.svelte:750` 只在 touchmove 白名單裡列了 `.zoom-overlay, .zoom-modal`（⇒ 設定 modal 內的觸控捲動不會被 preventDefault）。撤退選單／mulligan／選寶可夢走的是 `.selection-modal`，不是 zoom-modal。
+- **修法（第三種，比上一版列的兩案都窄）**：在 `.zoom-scroll` 規則之後加**一條** `.zoom-modal.settings-modal{ overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; }`
+  （特異度 0,2,0，selector 只匹配設定 modal；只補 overflow-y，尺寸屬性一律不動）。`.settings-modal` 原規則原樣保留、只加註解說明它被蓋掉。
+  不採 `.zoom-scroll` 包法（要改 markup、flex gap 消失 ⇒ section 間距 −14.4px）；不採 `scrollbar-width:none`（玩家看不出可捲）。
+- **iOS「flex+overflow」風險評估**：v3.884 的 commit 說「.zoom-modal 同時是 flex + scroll 容器 — iOS Safari momentum scroll 不啟動」。但**站內既有行為端證據**：
+  手機 `.selection-modal`（所有選卡 picker）自 v5.308（2026-05-30）起就是 `display:flex; flex-direction:column` ＋ `overflow-y:auto`，三個月沒有「捲不動」的回報；
+  `.prize-view-modal`（v6.190）同型。⇒ 沿用同一組宣告。**這裡沒有 iOS 裝置，測不到**；最壞情況＝iOS 上慣性捲動不順（v3.884 描述的是 momentum，不是不能捲），仍優於現況「完全不能捲」；
+  **回退＝刪掉那一條 CSS 即回 v6.284**。
+- **五種尺寸量測**（`measure-v6285-settings-scroll.mjs`，BASE vs 修後；「全展開」＝每個 section 都點開的最嚴狀態）：
+
+| viewport | BASE | 修後（舊 markup，全展開） | 修後（含好友 section，全展開） | 既有 section 位移（預設展開狀態） |
+|---|---|---|---|---|
+| 375×812 | overflow hidden，scrollH 805 > clientH 779 ⇒ **切掉 26px 不能捲** | auto，捲到底 scrollTop 813，最後 section bottom 764.2 ≤ 內容底 780 | scrollH 1828，捲到底 1049，「👥 好友」bottom 764.0、最後可操作元素 699.0 ≤ 780 ≤ 812 | 全部 dx=dy=dw=dh=0 |
+| 375×667 | 切掉 159px 不能捲 | 捲到底 946，bottom 631.2 ≤ 646.6 | 捲到底 1182，bottom 631.0／566.0 ≤ 646.6 ≤ 667 | 全部 0 |
+| 1366×768 | 切掉 48px 不能捲 | 捲到底 762，bottom 743.8 ≤ 760 | 捲到底 1003，bottom 744.2／679.2 ≤ 760 ≤ 768 | dy=0，**dw=−15**（Windows 捲軸寬；只在溢出時） |
+| 1536×864 | 預設狀態剛好放得下（全展開 1528 > 814 也放不下） | 捲到底 666，bottom 839.8 ≤ 856 | 捲到底 907，bottom 840.2／775.2 ≤ 856 ≤ 864 | dy=−8.1（modal 長高、margin:auto 置中），dw=−15 |
+| 1920×1080 | 放得下 | 捲到底 450，bottom 1055.8 ≤ 1072 | 捲到底 691，bottom 1056.2／991.2 ≤ 1072 ≤ 1080 | dy=−44.2（同上），dw=0（沒溢出、沒捲軸） |
+
+  ⚠ 捲軸寬 −15 是用 `ignoreDefaultArgs:['--hide-scrollbars']` 另量的（headless 預設藏捲軸）；手機是 overlay 捲軸 ⇒ 0。dy=−8.1／−44.2 是「好友 section 讓 modal 長高 ⇒ 置中上移一半」，
+  與 v6.284 賽後鈕接受的準則相同（既有元素彼此相對位置、尺寸不變）。`.zoom-close`（absolute）會隨內容捲走（捲到底後在畫面外），與 .prize-view-modal 同型；點 overlay 外側仍可關閉。
+- **其他三種 zoom modal rect 全等**（BASE CSS vs 修後 CSS，同一份 markup，五尺寸）：discard 53 個元素×5、prize 34×5、zoom 18×5 ⇒ **全部 rect／overflow-y／scrollHeight／clientHeight 全等**（0 差異）。
+
+### 【2】賽後鈕「未知也顯示」
+
+`friendsBattleEntryVisible()` 改成**直接委派** `friendsEntryVisible()`（不另寫一套 ⇒ 不會漂移）。守衛 `test-v6284` A1 改成「未知 true」＋反向斷言（disabled／unsupported 必藏）；
+`test-v6285` B1 四態：未知 ⇒ 顯示、404 HTML 負向快取（含重新整理後）⇒ 藏、disabled ⇒ 藏、匿名／沒 uid ⇒ 藏，且與大廳入口 4 態×匿名全等。
+
+### 【3】設定 modal 尾端的「👥 好友」section
+
+放在「🎮 對局控制」之後＝**最後一個** section；外層 `{#if friendsEntryOn}`（匿名／確定不支援 ⇒ 整段不渲染）；
+「📋 前往好友名單」是 `<a class="toggle-btn" target="_blank" rel="noopener">`（對戰中換頁＝離開房間，所以開新分頁）；
+「👥 將對手加為好友」條件 `friendsBattleOn && friendsBattleTarget`，與賽後那顆共用 `addOpponentAsFriend`／`friendReqState`／`friendReqMsg`（同一場只送一次）。
+零新 CSS（沿用 .setting-row／.toggle-btn／.setting-hint）；設定 modal 是兩套版面共用的一份 ⇒ 手機直式／桌機三版面都有。
+
+### 守衛 `scripts/test-v6285-settings-scroll.mjs`（23 條，已加進 test chain）＋ `test-v6283` C3／`test-v6284` A1、C2、C7、M1、M2、M5、M6 更新
+
+【S】迷你 CSS 級聯求值器（解析 <style> 含 @media，依 important／specificity／order 算每個屬性最終值；不需瀏覽器 ⇒ CI 必跑）：
+S1 五 viewport 設定 modal overflow-y=auto（BASE hidden ⇒ 紅）；S2 其他三種 modal 全部屬性與「拿掉新規則」全等、設定 modal 只差捲動三屬性；S3 新規則只有三個屬性、原規則原樣、位置在 .zoom-modal 之後；
+S0 掃描器下限；S4 正對照。【D】Playwright 可用時做 DOM 量測（D1 五尺寸捲到最後一個可操作元素、D2 其他 modal 全等）；沒有瀏覽器 ⇒ 醒目 SKIP（不算綠）。
+【B】friends-api 實跑三條。【C】好友 section 位置／條件／共用狀態／新分頁、對戰版面分支零 friend（＋塞字正對照）、style 區零 friend、零新 class。【M】9 個突變體各紅在預期那條。
+HEAD-FAIL 實跑：還原 `game/+page.svelte` ⇒ S1/S2/S3/S4/D1/D2/C1/M1/M2/M3/M8/M9 紅（11/12）；還原 `friends-api.ts` ⇒ B1/M4/M5/M6 紅（19/4）；修後版 23/0（沒有 Playwright 的 CI 情境 21/0 ＋ SKIP 1 段）。
+
+### 三配套
+
+`version.ts` 6.285／`admin.html` `SITE_VERSION_HINT` 6.285／`test-v6272` ⑩ `PREV_SHA`→v6.284（48911f46）、`PREV_ALLOWED` 六檔／`test-v6264` `BASE_SHA`→v6.284（本版動了 changelog）。
+首頁 changelog 三步搬運：新增 v6.285（open）、v6.262 內文搬進 bodies、v6.208 搬進封存頁。
+
+### 部署
+
+純 client 端；伺服器 v6.282 已含端點。動到 `admin.html`（版本提示）⇒ 站長跑 **`update-tournament.bat`**（唯一會先同步 git 的那支，挑離峰）再 `redeploy-oracle.bat`。
+
 ## v6.284 — 好友功能【P1b】手機直式大廳入口（零位移）／賽後「將對手加為好友」／`goto` 未 import 修正；⚠ 設定 modal 那份停手待裁定
 
 BASE `8ccf12552106b4eaebe31d7690c9bcc014be11e5`（v6.283，遠端 main）。後端＝v6.282 P0（本版 `oracle-admin/server_admin_patch.js` **未動**，錦標賽區塊 sha256 同一把）。

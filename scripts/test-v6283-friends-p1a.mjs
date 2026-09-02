@@ -11,7 +11,7 @@
 //        全頁零 `{@html}`；回應處理不讀 email 欄位。
 //   【C】⭐⭐ 框架安全：game/+page.svelte 的手機／桌機兩套對戰版面分支區間**零 `friend` 字樣**
 //        （⚠ 正對照：/friends 路由檔必有；桌機入口那一行必須落在「線上 Lobby」區塊、且只有一處；
-//        v6.284 起 friendsEntryOn 共 3 處：$derived／桌機入口／手機入口，各自釘住）；
+//        v6.284 起 friendsEntryOn 共 3 處：$derived／桌機入口／手機入口，各自釘住；v6.285 起 4 處：＋設定 modal 尾端的好友 section）；
 //        MobilePortraitBattle.svelte 零 `friend`；`.auth-user` 仍是三份、CSS 逐字未動。
 //   【D】錦標賽區塊 sha256 逐位元未動（與 test-v6278 I1／test-v6282 A2 同一把，凍結區塊不是版本 pin）。
 //   【E】突變測試：每一條只捕 AssertionError，且斷言紅在**預期那一條**。
@@ -306,9 +306,12 @@ await T('C2 MobilePortraitBattle.svelte 零 `friend`；正對照：/friends 路�
   assert.strictEqual((MPB.match(/friend/gi) || []).length, 0);
   assert.ok((PAGE.match(/friend/gi) || []).length > 10);
 });
-await T('C3 大廳入口：`friendsEntryOn` 恰出現 3 次（$derived ＋ 桌機 markup ＋ v6.284 手機 markup），桌機 markup 落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之前', () => {
-  // v6.284：2 → 3（手機直式那份入口）；每個位置各自釘住，多一個少一個都紅
-  assert.strictEqual((GAME.match(/friendsEntryOn/g) || []).length, 3, 'friendsEntryOn 出現次數不對');
+await T('C3 大廳入口：`friendsEntryOn` 恰出現 4 次（$derived ＋ 桌機 markup ＋ v6.284 手機 markup ＋ v6.285 設定 modal 好友 section），桌機 markup 落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之前', () => {
+  // v6.284：2 → 3（手機直式那份入口）；v6.285：3 → 4（設定 modal 尾端的 {#if friendsEntryOn} 好友 section，位置由 test-v6285 C1 釘住）；每個位置各自釘住，多一個少一個都紅
+  assert.strictEqual((GAME.match(/friendsEntryOn/g) || []).length, 4, 'friendsEntryOn 出現次數不對');
+  const sm = GAME.indexOf('<!-- Settings Modal (Audio & BGM) -->'), smEnd = GAME.indexOf('<!-- v4.60 對方提議 modal -->', sm);
+  assert.ok(sm > 0 && smEnd > sm, '找不到設定 modal 錨點');
+  assert.strictEqual((GAME.slice(sm, smEnd).match(/\{#if friendsEntryOn\}/g) || []).length, 1, '設定 modal 內的 {#if friendsEntryOn} 不是恰一處');
   assert.strictEqual((GAME.match(/\{#if friendsEntryOn && !isPortraitMobile\}/g) || []).length, 1, '桌機那份入口（&& !isPortraitMobile）不是恰一處');
   assert.strictEqual((GAME.match(/\{#if friendsEntryOn && isPortraitMobile\}/g) || []).length, 1, '手機那份入口（&& isPortraitMobile）不是恰一處');
   const lobby = GAME.indexOf('<!-- ─── 線上 Lobby ─── -->');
