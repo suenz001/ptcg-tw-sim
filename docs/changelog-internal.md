@@ -1,5 +1,81 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.291 — 🔒 錦標賽報名可被冒名（`/register`、`/register-and-checkin`、`/checkin` 未檢查 `verified`）
+
+BASE `bb3adda65b536a7e0be67b788bd1fd5934051bc7`（v6.290，遠端 main）。**純伺服器端**：只動 `oracle-admin/server_admin_patch.js`（v1.40 → v1.41）＋ `admin.html` 版本提示 ＋ 守衛；玩家端**只有 `src/lib/version.ts`** 變動（`test-v6272` ⑩ 逐檔 blob 比對在守）。⚠ 公平性／安全修正，依站長既有裁定**不寫首頁 changelog**。
+
+### 【1】漏洞
+`tournIdentity(req)` 在**沒有 Bearer token** 時退回 `req.body.playerId`／`req.query.playerId`，回 `{ uid: <playerId>, email: null, verified: false }`。那條 fallback 是給**測試房**用的（只有 `/still-here`、`/join`、`/action`、`/reset` 會送 playerId，而 `/join`、`/action`、`/still-here` 各自有 `doc.matchId && !verified ⇒ 403` 把正式賽房擋掉）。
+
+但 `/register`、`/register-and-checkin`、`/checkin` **從來沒有檢查 `id.verified`**，而玩家 uid 又由 `/api/tournament/bracket` **公開回傳**。
+
+⇒ 攻擊路徑：抄任一玩家的 uid → 用 `playerId=<受害者 uid>` 打 `/register` 並帶**攻擊者自己的 60 張牌** ⇒ 受害者被報名、牌組被鎖成攻擊者的 ⇒ 本人真的要報名時撞 `409 你已經報名了（牌組已鎖定，整賽不可更換）`＝**報不了名**；沒發現的話會被排進賽程，**用別人的牌組比賽**。
+
+### 【2】⚠⚠⚠ 先滿足站長更高的裁定：不可以擋到真玩家
+站長逐字（v6.160）：「本站是練習站，**可用性優先於版本一致性，寧可放一個舊 client 進來也不要把人擋在賽外**」。動手前逐一核對過所有呼叫點：
+
+| client 呼叫點 | 檔案行號（v6.290） | Authorization | body 有 playerId？ |
+|---|---|---|---|
+| `tournEnroll` → `/register` | `src/routes/game/+page.svelte:5580` | 走 `tApi`（有 token 就帶） | **沒有** |
+| `tLateJoin` → `/register-and-checkin` | `:5597` | 同上 | **沒有** |
+| `tCheckinCommit` → `/checkin` | `:5689` | 同上 | **沒有** |
+| （對照）`/still-here`／`/join`／`/action`／`/reset` | `:6657`／`:6696`／`:6972`／`:7107` | 同上 | **有**（`tPlayerId()`）⇒ 本版一個字不動 |
+
+證據三條：①`git log -G playerId -- src/routes/game/+page.svelte` 只有 9 顆 commit 動過 playerId 行，逐一檢查（v6.048／v6.156／v6.167／v6.170…）**這三支從來沒帶過 playerId**；②`tApi` 是所有錦標賽端點的共同入口，它**不注入** playerId；③沒 token 又沒 playerId 時 `tournIdentity` 早就回 `{ error: '需要登入', code: 401 }`，⇒ 真玩家在「取不到 token」時**本來就已經被擋**，本閘沒有讓任何人多被擋一次。
+
+⚠ 特別注意 `tApi`（v6.167）在 `getIdToken()` 逾時 6 秒後會**不帶 Authorization** 送出（站長裁定：可用性優先）。這正是本閘只能靠「playerId 缺席」成立的理由 —— 那種請求會落在 `需要登入` 的 401，而不是新的 403。
+
+### 【3】修法
+`oracle-admin/server_admin_patch.js` 新增 helper `tournRequireVerified(id, res, ep)`，**刻意放在 `tournIdentity` 正下方 ⇒ 在兩個區塊 sha256 錨點之前**（所以區塊裡只多 3 行）；三支端點在 `if (id.error) …` 之後各接**一行**：
+
+```
+if (tournRequireVerified(id, res, 'register')) return;
+```
+
+- HTTP **403**（不是 401）：同一區塊既有的三處相同判斷（`/join`、`/action`、`/still-here` 的 `doc.matchId && !verified`）就是回 403；而 401 在這支伺服器已經被 `tournIdentity` 用來表示「憑證無效／過期」，client 的輪詢路徑只把 401 認成 `tAuthLost`（v6.150）—— 兩個訊號分開比較好查。
+- 回應：`{ error: '請先用 email 帳號登入後再報名／報到；若剛才已經登入過，請重新整理頁面再試一次。', code: 'tourn-needs-verified' }`。⚠ client 的 `tApi` 對非 2xx 一律 throw `${status}: ${body}`，呼叫端會顯示在 `tError` ⇒ **不會有無訊息畫面**。
+- log：`console.warn('[tournament] verified-gate blocked ep=<端點> uid8=<uid 前 8 碼>')`。⚠ 只記前 8 碼，**不記完整 uid、不記 email**。
+
+### 【4】⭐ 站長部署後怎麼觀察有沒有誤擋
+```
+pm2 logs --lines 500 | grep 'verified-gate blocked'
+```
+- **完全沒有這行** ＝ 沒有人被擋（預期）。
+- 出現、而且同一個 `uid8` 只出現一兩次又沒人回報報不了名 ⇒ 多半是掃描器／好奇玩家。
+- **同一個 `uid8` 反覆出現、而且有玩家回報「報名按了說要登入」** ⇒ 那就是誤擋，立刻回報；緩解手段是把三行 gate 拿掉重推（區塊 revert-diff 已證明拿掉後逐位元回到 v6.290）。
+
+### 【5】其他同型缺口（**本版不動**，逐一列在這裡）
+| 端點 | 有沒有同型缺口 | 本版處置與理由 |
+|---|---|---|
+| `/unregister` | **有**（冒名可把別人的報名刪掉） | 不動。證據強度與這三支相同（body 只有 `{ eventId }`），**建議下一版立刻修** |
+| `/drop` | **有，而且不可逆**（冒名可讓別人棄賽，卡面寫明「棄賽無法復原」） | 不動。同上，**建議下一版列為最高優先** |
+| `/cancel-proposal` | 有，但已被 `ev.proposerUid !== id.uid` 大幅限縮（只能冒充發起者本人） | 不動 |
+| `/chat` | 有（可冒名發言、吃掉別人的 1.2 秒限流） | 不動 |
+| `/propose` | **沒有**：已被 `if (!id.email) return 403` 擋住（fallback 的 `email` 永遠是 null） | 不動 |
+| `/join`、`/action`、`/still-here` | **沒有**：已有 `doc.matchId && !verified ⇒ 403` | 不動（它們**需要** playerId fallback 跑測試房） |
+| `/reset` | 測試房用途；正式賽房另有 gate | 不動 |
+| `/clientdiag` | 未驗證身分**靜默丟棄**（`res.json({ ok:false })`），不寫入賽事狀態 | 不動 |
+| `/match/enter`、`/match/forfeit` | 以 `TMATCH` 的 `seats` 比對 uid，冒名者要先猜中對戰房 | 不動（值得下一輪 audit） |
+
+### 【6】區塊 sha256 鎖（14 把）
+本版是 v6.276 之後**第一個**再度動到錦標賽區塊內部的版本。做法比照 v6.276 的 revert-diff：
+
+```
+revert-diff → tail sha256 = 495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02（＝ BASE）
+revert-diff → tev  sha256 = 93d29a7d68b1508c9201b660ef38f06418fc5760606bb87798f8bdd5f5ed9fdd  len=219484（＝ BASE）
+```
+⇒ 逐字刪掉那 3 行後與 BASE **逐位元相同**，證明只有純 additive 插入。然後才把 14 把鎖重釘：
+- tail（`app.get('/api/tournament` 起）`495221f1…` → **`d43fe3e5…`**：`test-v6265`／`v6272`⑨／`v6275`／`v6276`／`v6286`／`v6287`／`v6288`／`v6289`
+- TEVENTS 錨點起 `93d29a7d…` → **`fc015380…`**（長度 219484 → 219837）：`test-v6266`／`v6268`／`v6276`／`v6278`／`v6282`／`v6283`／`v6284`／`v6286`／`v6287`／`v6288`／`v6289`
+- ⚠⚠ 一把都沒有被拿掉／改成不驗；`test-v6291` 的 B4／B5 反過來守「14 把都釘到新值、舊值零殘留、sha 比對式還在」。
+- `test-v6276` 的 revert-diff 改成**串接**：先 `revertV6291()` 再跑它原本的 `revertTail()`（共用 `scripts/lib/tourn-revert-v6291.mjs`），鏈起來仍是逐位元回到 v6.275。
+
+### 【7】守衛
+`scripts/test-v6291-tourn-verified-gate.mjs`（已進 test chain）：A 結構／B revert-diff＋14 把鎖／**C 行為端實跑**（抽出貨碼本尊的 `tournIdentity`＋helper＋三支 handler，接假 mongo 真的跑）／D 9 個突變／E client 端證據／F HEAD-FAIL。
+- C1：帶 playerId 無 Bearer ⇒ 三支各 403＋code，`TREGS` 寫入計數 **0**。
+- **C2（最重要）**：帶合法 Bearer ⇒ 三支**全部照常成功**，證明沒擋到真玩家。
+- F4 HEAD-FAIL：對真 BASE blob 跑同一組 ⇒ BASE 的 `/register` 讓冒名請求**成功寫入受害者 uid ＋ 攻擊者牌組**（漏洞真的存在）。
+
 ## v6.290 — 好友負向快取 TTL 拆成兩種（disabled 5 分鐘／unsupported 1 小時）
 
 BASE `eed4b769e203cde2b315c590ac6230e249b7dd13`（v6.289，遠端 main）。只動玩家端 `src/lib/friends/friends-api.ts`（＋ version.ts）；**不動** `server_admin_patch.js`、`game/+page.svelte`、`/friends` 頁。守衛 `scripts/test-v6290-neg-cache-ttl.mjs`（已進 test chain）；既有 `test-v6283` A6／E7 隨常數改名同步（守護意圖不變）。

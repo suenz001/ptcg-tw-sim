@@ -639,7 +639,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = '495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02' /* v6.276 重釘：報名/歸檔 6 處 additive 插入，revert-diff 見 test-v6276 */;
+const TOURN_TAIL_SHA256 = 'd43fe3e575456c4c885b8d84eb278d2a59e29b96fe94341d3a2bcf25e0097c99' /* v6.276 重釘：報名/歸檔 6 處 additive 插入，revert-diff 見 test-v6276 */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -664,13 +664,13 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'eed4b769e203cde2b315c590ac6230e249b7dd13';   // v6.289（v6.290 的上一版）
-// ⭐v6.290 好友負向快取 TTL 拆成兩種（disabled 5 分鐘／unsupported 1 小時）：玩家端改動＝friends-api.ts、version.ts。
-//   ⚠ 首頁 changelog 三檔**沒動**（只寫 docs/changelog-internal.md）、game/+page.svelte／friends/+page.svelte／dm-*.ts 都不在清單 ⇒ 動到就紅。
-//   守衛 scripts/test-v6290-neg-cache-ttl.mjs、test-v6283 A6/E7 跟著常數改（scripts/ 不在 src/／static/ 底下）。
+const PREV_SHA = 'bb3adda65b536a7e0be67b788bd1fd5934051bc7';   // v6.290（v6.291 的上一版）
+// ⭐⭐v6.291 錦標賽報名冒名封堵（純伺服器端）：玩家端**只有 version.ts** 會變。
+//   ⚠⚠ 這一條就是本版「零玩家端改動」的證明 —— 尤其 src/routes/game/+page.svelte 一個位元都不能動
+//     （前一位實作者曾在工作樹留下對它的改動；上一版的好友頁上色是下一版的事）。
+//   ⚠ 首頁 changelog 三檔**沒動**（公平性／安全修正依站長裁定只寫 docs/changelog-internal.md）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/friends/friends-api.ts',
   'src/lib/version.ts',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {

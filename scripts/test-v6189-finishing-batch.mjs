@@ -137,7 +137,7 @@ function makeServer(uid, srcPatch) {
         TCHAT = Col('chat'), TARCHIVE = Col('arch'), TCHAMPS = Col('champ');
   const handlers = {};
   const app = { post: (p, h) => { handlers[p] = h; }, get: () => {} };
-  let ident = { uid, email: uid + '@t', name: uid };
+  let ident = { uid, email: uid + '@t', name: uid, verified: true };   // ⭐v6.291 見下方 tournRequireVerified
   let identityCalls = 0;
   let identityGate = null;
   const env = {
@@ -167,6 +167,9 @@ function makeServer(uid, srcPatch) {
     fnSrc('advanceSwiss'),
     fnSrc('noChampionReason'),
     fnSrc('checkRoundAdvance'),
+    // ⭐v6.291：/checkin 多了一行 verified gate ⇒ 沙盒餵**真的** helper（不是 stub）；
+    //   身分一律 verified:true（模擬已登入的真玩家）⇒ 本檔同時是「gate 沒有誤擋真玩家」的金絲雀。
+    fnSrc('tournRequireVerified'),
     srcPatch ? srcPatch(epSrc('/api/tournament/checkin')) : epSrc('/api/tournament/checkin'),
     '\nreturn { checkRoundAdvance, noChampionReason, seedEventBracket, runInSeedChain, handlers };',
   ].join('\n');
@@ -179,7 +182,7 @@ function makeServer(uid, srcPatch) {
     return { code: code2, body: payload };
   };
   return { ...built, call, TEVENTS, TREGS, TMATCH, TROOMS, TCHAT, TARCHIVE, TCHAMPS,
-    setIdent: (o) => { ident = o; }, identity: () => identityCalls, setIdentityGate: (p) => { identityGate = p; } };
+    setIdent: (o) => { ident = { verified: true, ...o }; }, identity: () => identityCalls, setIdentityGate: (p) => { identityGate = p; } };
 }
 
 const lastChat = async (S) => { const rows = await S.TCHAT.find({}).toArray(); return rows.length ? rows[rows.length - 1].text : ''; };

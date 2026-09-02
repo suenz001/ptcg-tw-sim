@@ -153,7 +153,7 @@ function makeServer(uid, email) {
         TCHAT = Col('chat'), TARCHIVE = Col('arch'), TCHAMPS = Col('champ');
   const handlers = {};
   const app = { post: (p, h) => { handlers[p] = h; }, get: () => {} };
-  let ident = { uid, email, name: uid };
+  let ident = { uid, email, name: uid, verified: true };   // ⭐v6.291 見下方 tournRequireVerified
   const env = {
     app, handlers, TEVENTS, TREGS, TMATCH, TROOMS, TCHAT, TARCHIVE, TCHAMPS, TENG, console,
     TMINVER_RE: /^\d+(\.\d+)?$/,
@@ -180,6 +180,10 @@ function makeServer(uid, email) {
     fnSrc('finishIfLastSurvivor'),
     fnSrc('advanceSwiss'),
     fnSrc('checkRoundAdvance'),
+    // ⭐v6.291：/register-and-checkin 多了一行 verified gate ⇒ 沙盒必須餵**真的** helper
+    //   （不是 stub，否則這裡就變成「測一份不存在的碼」）。身分預設 verified:true —— 這些
+    //   測試模擬的是**已登入的真玩家**，順便讓本檔變成「gate 有沒有誤擋真玩家」的金絲雀。
+    fnSrc('tournRequireVerified'),
     epSrc('/api/tournament/register-and-checkin'),
     epSrc('/api/tournament/drop'),
     '\nreturn { advanceSwiss, checkRoundAdvance, finishIfLastSurvivor, seedEventBracket, runInSeedChain, handlers, pairingsToMatches };',
@@ -192,7 +196,7 @@ function makeServer(uid, email) {
     await built.handlers[route]({ body: body || {} }, res);
     return { code: code2, body: payload };
   };
-  return { ...built, call, TEVENTS, TREGS, TMATCH, TROOMS, TCHAT, TARCHIVE, TCHAMPS, setIdent: (o) => { ident = o; } };
+  return { ...built, call, TEVENTS, TREGS, TMATCH, TROOMS, TCHAT, TARCHIVE, TCHAMPS, setIdent: (o) => { ident = { verified: true, ...o }; } };
 }
 
 const deck60 = [{ cardId: '1', count: 60 }];

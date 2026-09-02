@@ -23,6 +23,11 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+// ⭐v6.291：本檔的 revert-diff 是「區塊 ＝ v6.275 ＋ v6.276 的 6 處插入」。v6.291 是 v6.276 之後
+//   **第一個**再度動到區塊內部的版本（三支報名/報到端點各插一行 verified gate）⇒ 不先把那 3 行還原掉，
+//   B1/B2 會直接翻紅。⚠ 站長明文禁止「把鎖拿掉／改成不驗／只比片段」⇒ 這裡改成**串接還原**：
+//   先 revertV6291() 再跑本檔原本的 revertTail()，鏈起來仍是逐位元回到 v6.275，一個位元都沒放水。
+import { revertV6291 } from './lib/tourn-revert-v6291.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '4ce276453c998058f70a35778a6ab262fa679921';   // v6.275
@@ -106,8 +111,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = '495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02';
-const NEW_TEV_SHA = '93d29a7d68b1508c9201b660ef38f06418fc5760606bb87798f8bdd5f5ed9fdd';
+const NEW_TAIL_SHA = 'd43fe3e575456c4c885b8d84eb278d2a59e29b96fe94341d3a2bcf25e0097c99';
+const NEW_TEV_SHA = 'fc015380210f69fd159ff859c047678d748930496bd3d474e4c3c41d42415138';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
@@ -163,7 +168,8 @@ await T('A5 app.locals._sanitizeDeckId 的掛載點在所有 IIFE 之外（跨 I
 console.log('\n══ 【B】⭐⭐⭐ revert-diff：錦標賽區塊＝v6.265 ＋ 恰好這 6 處插入 ═══════════');
 
 function revertTail(tail) {
-  let r = tail;
+  // ⭐v6.291 串接：先還原 v6.291 的 3 行 gate，再還原 v6.276 自己的 6 處插入。
+  let r = revertV6291(tail);
   const rem = (needle, tag) => {
     const n = r.split(needle).length - 1;
     assert.strictEqual(n, 1, 'revert-diff：' + tag + ' 出現 ' + n + ' 次（應恰 1）—— 區塊被動了不只宣告的那幾處');
@@ -231,12 +237,27 @@ const realSanitize = new Function(extractSanitizeDeckId(pat) + '\nreturn sanitiz
 const UUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const DECK60 = [{ cardId: 'c1', count: 60 }];
 
+// ⭐v6.291：/register、/register-and-checkin、/checkin 各多了一行 verified gate。
+//   沙盒要餵**真的** helper（不是 stub，否則就變成「測一份不存在的碼」），且身分標 verified:true
+//   —— 本檔測的是「已登入真玩家的報名 doc 逐位元不變」，正好也順便證明 gate 沒有誤擋真玩家。
+//   ⚠ 【H2】會拿 BASE 的端點原始碼跑同一個 env：BASE 不引用這個 helper，多給也無害。
+const realRequireVerified = (() => {
+  const head = '    function tournRequireVerified(id, res, ep) {';
+  const i = pat.indexOf(head);
+  assert.ok(i > 0, '抽不到 tournRequireVerified（v6.291 的 gate helper）');
+  const j = pat.indexOf('\n    }\n', i);
+  assert.ok(j > i, 'tournRequireVerified 結尾定位不到');
+  return new Function(pat.slice(i, j + 6) + '\nreturn tournRequireVerified;')();
+})();
+const IDENT_OK = { uid: 'u1', email: 'a@b.tw', verified: true };
+
 function runRegister(src, payload, opts) {
   const o = opts || {};
   const captured = [];
   const env = {
     app: { post: () => {}, locals: o.noHelper ? {} : { _sanitizeDeckId: realSanitize } },
-    tournIdentity: async () => ({ uid: 'u1', email: 'a@b.tw' }),
+    tournIdentity: async () => IDENT_OK,
+    tournRequireVerified: realRequireVerified,   // ⭐v6.291
     resolveEventFromReq: async () => ({ _id: 'EV', status: 'registration', maxPlayers: null }),
     deckCount: (d) => (Array.isArray(d) ? d.reduce((a, e) => a + (e.count || 0), 0) : 0),
     TREGS: { findOne: async () => null, countDocuments: async () => 0, insertOne: async (d) => { captured.push(d); }, deleteOne: async () => {} },
@@ -293,7 +314,8 @@ function runRac(src, payload, opts) {
   const captured = [];
   const env = {
     app: { post: () => {}, locals: { _sanitizeDeckId: realSanitize } },
-    tournIdentity: async () => ({ uid: 'u1', email: 'a@b.tw' }),
+    tournIdentity: async () => IDENT_OK,
+    tournRequireVerified: realRequireVerified,   // ⭐v6.291
     resolveEventFromReq: async () => ({ _id: 'EV', status: 'checkin', maxPlayers: null }),
     deckCount: (d) => (Array.isArray(d) ? d.reduce((a, e) => a + (e.count || 0), 0) : 0),
     TREGS: { findOne: async () => null, countDocuments: async () => 0, insertOne: async (d) => { captured.push(d); }, deleteOne: async () => {} },
@@ -326,7 +348,8 @@ function runPropose(src, payload) {
   const capReg = [], capEv = [];
   const env = {
     app: { post: () => {}, locals: { _sanitizeDeckId: realSanitize } },
-    tournIdentity: async () => ({ uid: 'u1', email: 'a@b.tw' }),
+    tournIdentity: async () => IDENT_OK,
+    tournRequireVerified: realRequireVerified,   // ⭐v6.291
     deckCount: (d) => (Array.isArray(d) ? d.reduce((a, e) => a + (e.count || 0), 0) : 0),
     TEVENTS: { findOne: async () => null, insertOne: async (d) => { capEv.push(d); } },
     TREGS: { insertOne: async (d) => { capReg.push(d); } },
