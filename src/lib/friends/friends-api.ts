@@ -36,6 +36,11 @@
  *     本版採「未知 ⇒ 顯示、負向快取 ⇒ 藏」：多出來的只是「按了才知道尚未開放」這一種體驗，
  *     而且大廳載入仍然零請求（判定純函式）。詳見 docs/changelog-internal.md v6.283。
  *
+ * ── ⭐ v6.284 對戰中／賽後「將對手加為好友」（`friendsBattleEntryVisible` ＋ `requestFriendFromBattle`）──
+ *   ・client 只送 `{roomCode}`（休閒）或 `{matchId}`（錦標賽），email 由伺服器代為配對（隱私：對手 email 永不落地）。
+ *   ・與大廳入口不同：這顆**只在哨兵成功過（'on'）時**才渲染，匿名／未知一律整顆不出現（站長偏好：不做半死按鈕）。
+ *   ・判定仍是純函式；按下才發唯一的一發 POST。
+ *
  * ⚠ 這個 build 沒有 Oracle API（`VITE_ORACLE_API_URL` 為空＝GitHub Pages 測試站）時
  *   一律當「不支援」⇒ 入口不出現、`/friends` 頁顯示說明、零請求。
  */
@@ -154,6 +159,17 @@ export function friendsEntryVisible(uid: string | null | undefined, anonymous: b
   return a === 'on' || a === 'unknown';
 }
 
+/**
+ * v6.284 對戰中／賽後「將對手加為好友」鈕要不要渲染。**純函式，不發任何請求。**
+ * ⚠ 與 `friendsEntryVisible`（未知也顯示）不同：**只有 'on'**（這個帳號的哨兵成功過）才為真 ——
+ *   匿名／未知／負向快取一律 false ⇒ 呼叫端整顆不渲染。
+ *   代價：從沒進過 `/friends` 頁的玩家在賽後看不到這顆；大廳入口仍是發現路徑（見 docs/changelog-internal.md v6.284）。
+ */
+export function friendsBattleEntryVisible(uid: string | null | undefined, anonymous: boolean, now: number = Date.now()): boolean {
+  if (anonymous || !uid) return false;
+  return friendsAvailability(uid, now) === 'on';
+}
+
 function fail(kind: FriendsFailKind, message: string, code: string, status: number): FriendsResult<never> {
   return { ok: false, kind, message, code, status };
 }
@@ -260,15 +276,45 @@ export async function fetchFriendsList(ctx: FriendsCtx): Promise<FriendsResult<F
 
 export interface FriendsRequestReply { status: string; fid: string; already: boolean }
 
-/** POST /api/friends/request {email} —— 站長裁定：查無此帳號**明講**（伺服器 404 `friends-no-such-account`）。 */
-export async function requestFriendByEmail(ctx: FriendsCtx, email: string): Promise<FriendsResult<FriendsRequestReply>> {
+/** `/api/friends/request` 三種入口共用的送出＋正規化（唯一的 POST 形狀）。 */
+async function postFriendRequest(ctx: FriendsCtx, body: Record<string, string>): Promise<FriendsResult<FriendsRequestReply>> {
   const r = await requestJson<Record<string, unknown>>(ctx, '/api/friends/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: String(email || '').trim() }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) return r;
   return { ok: true, data: { status: toStr(r.data.status, ''), fid: toStr(r.data.fid, ''), already: r.data.already === true } };
+}
+
+/** POST /api/friends/request {email} —— 站長裁定：查無此帳號**明講**（伺服器 404 `friends-no-such-account`）。 */
+export async function requestFriendByEmail(ctx: FriendsCtx, email: string): Promise<FriendsResult<FriendsRequestReply>> {
+  return postFriendRequest(ctx, { email: String(email || '').trim() });
+}
+
+/**
+ * v6.284 對戰中／賽後加好友的對象：休閒＝房號、錦標賽＝場次編號（`tournamentMatches._id`）。
+ * ⚠ client 只送這兩種識別，**不送也拿不到**對手 email；伺服器只認「要求者本人就在那一場」
+ *   （403 `friends-not-in-room`／`friends-not-in-match`），對手匿名 ⇒ 409 `friends-opponent-anonymous`（訊息直接給玩家看）。
+ */
+export type FriendsBattleTarget = { roomCode: string } | { matchId: string };
+
+/** POST /api/friends/request {roomCode} | {matchId}。空字串一律不發請求（回 rejected）。 */
+export async function requestFriendFromBattle(ctx: FriendsCtx, target: FriendsBattleTarget): Promise<FriendsResult<FriendsRequestReply>> {
+  if ('matchId' in target) {
+    const mid = String(target.matchId || '').trim();
+    if (!mid) return fail('rejected', '找不到這場對戰的編號。', 'no-target', 0);
+    return postFriendRequest(ctx, { matchId: mid });
+  }
+  const code = String(target.roomCode || '').trim().toUpperCase();
+  if (!code) return fail('rejected', '找不到這場對戰的房號。', 'no-target', 0);
+  return postFriendRequest(ctx, { roomCode: code });
+}
+
+/** v6.284 把 request 的成功回應翻成給玩家看的一句話（賽後鈕與設定 modal 共用；純函式）。 */
+export function friendsRequestReplyText(r: FriendsRequestReply): string {
+  if (r.status === 'accepted') return r.already ? '✅ 對方已經是好友' : '✅ 雙方已成為好友';
+  return r.already ? '⏳ 已邀請過，等待對方確認' : '✅ 邀請已送出，等待對方確認';
 }
 
 export type FriendsAction = 'accept' | 'reject' | 'remove' | 'block' | 'unblock';

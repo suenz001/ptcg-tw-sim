@@ -10,7 +10,8 @@
 //   【B】靜態：原始碼零 `setInterval`／零 `setTimeout`（零輪詢）；每個 `{#each}` 都用 fid 當 key；
 //        全頁零 `{@html}`；回應處理不讀 email 欄位。
 //   【C】⭐⭐ 框架安全：game/+page.svelte 的手機／桌機兩套對戰版面分支區間**零 `friend` 字樣**
-//        （⚠ 正對照：/friends 路由檔必有；入口那一行必須落在「線上 Lobby」區塊、且只有一處）；
+//        （⚠ 正對照：/friends 路由檔必有；桌機入口那一行必須落在「線上 Lobby」區塊、且只有一處；
+//        v6.284 起 friendsEntryOn 共 3 處：$derived／桌機入口／手機入口，各自釘住）；
 //        MobilePortraitBattle.svelte 零 `friend`；`.auth-user` 仍是三份、CSS 逐字未動。
 //   【D】錦標賽區塊 sha256 逐位元未動（與 test-v6278 I1／test-v6282 A2 同一把，凍結區塊不是版本 pin）。
 //   【E】突變測試：每一條只捕 AssertionError，且斷言紅在**預期那一條**。
@@ -305,27 +306,32 @@ await T('C2 MobilePortraitBattle.svelte 零 `friend`；正對照：/friends 路�
   assert.strictEqual((MPB.match(/friend/gi) || []).length, 0);
   assert.ok((PAGE.match(/friend/gi) || []).length > 10);
 });
-await T('C3 入口只有一處：`friendsEntryOn` 恰出現 2 次（$derived ＋ markup），markup 落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之前', () => {
-  assert.strictEqual((GAME.match(/friendsEntryOn/g) || []).length, 2, 'friendsEntryOn 出現次數不對');
+await T('C3 大廳入口：`friendsEntryOn` 恰出現 3 次（$derived ＋ 桌機 markup ＋ v6.284 手機 markup），桌機 markup 落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之前', () => {
+  // v6.284：2 → 3（手機直式那份入口）；每個位置各自釘住，多一個少一個都紅
+  assert.strictEqual((GAME.match(/friendsEntryOn/g) || []).length, 3, 'friendsEntryOn 出現次數不對');
+  assert.strictEqual((GAME.match(/\{#if friendsEntryOn && !isPortraitMobile\}/g) || []).length, 1, '桌機那份入口（&& !isPortraitMobile）不是恰一處');
+  assert.strictEqual((GAME.match(/\{#if friendsEntryOn && isPortraitMobile\}/g) || []).length, 1, '手機那份入口（&& isPortraitMobile）不是恰一處');
   const lobby = GAME.indexOf('<!-- ─── 線上 Lobby ─── -->');
   const h1 = GAME.indexOf('<h1>🌐 線上連線對戰</h1>');
-  const mk = GAME.indexOf('{#if friendsEntryOn}');
+  const mk = GAME.indexOf('{#if friendsEntryOn && !isPortraitMobile}');
   assert.ok(lobby > 0 && h1 > lobby && mk > lobby && mk < h1, '入口 markup 不在線上大廳的 .auth-user 內');
-  const before = GAME.slice(0, lobby);
-  // 主選單與本機模式那兩份 .auth-user 都在 lobby 錨點之前 ⇒ 那一段除了 $derived 那一行之外零 friend
-  const lines = before.split('\n');
+  // v6.284 起 script 區多了賽後／設定用的一組狀態與函式，所以「零 friend」改只掃 **markup**（</script> 之後到 lobby 錨點）：
+  //   主選單與本機模式那兩份 .auth-user 都在這一段 ⇒ 必須零 friend（那兩份刻意不放入口）。
+  const scriptEnd = GAME.indexOf('</script>');
+  assert.ok(scriptEnd > 0 && scriptEnd < lobby, '找不到 </script> 或它在 lobby 之後');
+  const lines = GAME.slice(0, scriptEnd).split('\n');
   const derivedLines = lines.filter((l) => /^  const friendsEntryOn = \$derived\(friendsEntryVisible\(/.test(l));
-  const importLines = lines.filter((l) => /^  import \{ friendsEntryVisible \} from '\$lib\/friends\/friends-api';/.test(l));
+  const importLines = lines.filter((l) => /^  import \{ friendsEntryVisible(, [^}]*)? \} from '\$lib\/friends\/friends-api';/.test(l));   // v6.284 起同一行多 import 幾個名字
   assert.strictEqual(derivedLines.length, 1, '$derived 行數不對'); assert.strictEqual(importLines.length, 1, 'import 行數不對');
-  // 扣掉那兩行與既有的 friendlyAuthError（v4.9xx 起就有的函式名）之後，lobby 之前必須零 friend
-  const rest = lines.filter((l) => !derivedLines.includes(l) && !importLines.includes(l)).join('\n').replace(/friendlyAuthError/g, '');
-  assert.strictEqual((rest.match(/friend/gi) || []).length, 0, 'lobby 之前多出不明的 friend 字樣');
+  const markupBefore = GAME.slice(scriptEnd, lobby);
+  assert.ok(markupBefore.includes('class="auth-user"'), '主選單／本機那兩份 .auth-user 不在 </script>～lobby 之間？錨點抓錯');
+  assert.strictEqual((markupBefore.match(/friend/gi) || []).length, 0, 'lobby 之前的 markup 多出不明的 friend 字樣（主選單／本機那兩份 .auth-user 不該有入口）');
   assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');
 });
-await T('C4 入口那一行的形狀：button.small（沿用既有樣式）、只在 friendsEntryOn 為真時渲染、導向 base+/friends', () => {
-  const line = GAME.split('\n').find((l) => l.includes('{#if friendsEntryOn}'));
+await T('C4 桌機入口那一行的形狀：button.small（沿用既有樣式）、只在 friendsEntryOn && !isPortraitMobile 為真時渲染（v6.284：手機直式改放大廳尾端）、導向 base+/friends', () => {
+  const line = GAME.split('\n').find((l) => l.includes('{#if friendsEntryOn && !isPortraitMobile}'));
   assert.ok(line, '找不到入口行');
-  assert.ok(/^\s*\{#if friendsEntryOn\}<button class="small" /.test(line), '入口沒有包在 {#if friendsEntryOn} 內或不是 button.small：' + line.trim());
+  assert.ok(/^\s*\{#if friendsEntryOn && !isPortraitMobile\}<button class="small" /.test(line), '入口沒有包在 {#if friendsEntryOn && !isPortraitMobile} 內或不是 button.small：' + line.trim());
   assert.ok(line.includes("base + '/friends'") && line.includes('{/if}'), line.trim());
   // 導頁在 onclick 內：不是頁面載入時就跑
   assert.ok(/onclick=\{\(\) => \{ location\.href = base \+ '\/friends'; \}\}/.test(line));
@@ -369,7 +375,8 @@ await T('E4 突變：暫時性 5xx 也記 unsupported ⇒ A1 ④ 必紅', () =>
 await T('E5 突變：網路錯也寫負向快取 ⇒ A1 ⑦ 必紅', () =>
   mutantMustBreak('network→cache', () => assertSeven(mut("return fail('network', FRIENDS_NETWORK_MSG, 'network', 0);", "remember(ctx.uid, 'unsupported'); return fail('network', FRIENDS_NETWORK_MSG, 'network', 0);")), '⑦'));
 await T('E6 突變：入口不看匿名 ⇒ A4 必紅', async () => {
-  const m = mut('if (anonymous || !uid) return false;', 'if (!uid) return false;');
+  // v6.284：friendsBattleEntryVisible 也有同一行 ⇒ 錨點連下一行（friendsAvailability 那行）才唯一
+  const m = mut('if (anonymous || !uid) return false;\n  const a = friendsAvailability(uid, now);', 'if (!uid) return false;\n  const a = friendsAvailability(uid, now);');
   await mutantMustBreak('ignore-anonymous', async () => {
     const ls = makeLS(); ls.setItem('ptcg_friends_avail:FU', JSON.stringify({ v: 'on', at: Date.now() }));
     const mod = loadApi(m, { ls }).load(mkFetch(() => jsonRes(200, listBody())));

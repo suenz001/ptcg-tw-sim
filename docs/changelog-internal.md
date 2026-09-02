@@ -1,5 +1,86 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.284 — 好友功能【P1b】手機直式大廳入口（零位移）／賽後「將對手加為好友」／`goto` 未 import 修正；⚠ 設定 modal 那份停手待裁定
+
+BASE `8ccf12552106b4eaebe31d7690c9bcc014be11e5`（v6.283，遠端 main）。後端＝v6.282 P0（本版 `oracle-admin/server_admin_patch.js` **未動**，錦標賽區塊 sha256 同一把）。
+站長最高約束（逐字）：「好友介面要同時符合現在的 windows 網頁版和手機版的框架，千萬不要造成現有框架的異常」。
+量測工具：`scripts/measure-v6284-friends-layout.mjs`（Playwright headless；把 `+page.svelte` 的 `<style>` 原樣灌進 fixture，量新增前後的 `getBoundingClientRect`）。
+
+### 【1】手機直式的「👥 好友」入口 —— 放在線上大廳 join 步驟的**最後一個節點**（`.lobby-unified` 表單之後）
+
+- 桌機那份維持 v6.283 的 `.auth-user`，條件改成 `{#if friendsEntryOn && !isPortraitMobile}`；手機那份 `{#if friendsEntryOn && isPortraitMobile}`
+  `<a class="back" href="{base}/friends" style="margin-top:.6rem">👥 好友名單</a>`，兩份以 `isPortraitMobile` 互斥、永遠只渲染一份（守衛 C3 把兩個條件抽出來求值）。
+- 為什麼選這裡：v6.283 實測 375px 的 `.auth-user` 只剩 18px，塞任何東西都折行、`h1` 與表單下移 32.4px；量過的替代位置（`.auth-dashboard` 內 pill 之後）
+  只在「長 email 已折行」時零位移，短 email（`ab@x.io`）會多折一列 ⇒ 不穩健；h1 內浮動／絕對定位則有遮蔽風險。表單之後是**本來就可捲動、下面沒有任何既有元素**的地方，
+  結構上不可能推到誰。沿用既有 `.back` 樣式，**零新 CSS**。
+- **零位移實測**（375×812 / 412×915 × 長短 email 四組，既有 15 個元素 `m-back/m-dash/m-pill/m-authuser/m-email/m-pw/m-out/m-h1/m-form/m-name/m-create/m-wait/m-room1/m-playing/m-manual`）：
+  **全部 dx=dy=dw=dh=0**（含 `.lobby-unified` 容器本身 349.4×502 → 349.4×502）；新節點落在 (12.8, 696.9, 69.2×21)，在 `.manual-code`（y 628.3+38）之下，不與任何元素重疊；scrollHeight 812 → 812。
+  桌機 1366×768 對照：本版不動桌機，`.auth-user` 內入口仍在 (684.5, 83.4, 55×26.4)。
+
+### 【2】賽後結算 `.gameover-modal` 的「👥 將對手加為好友」
+
+- 放在既有按鈕分支（tournament／online／local 三選一）的 `{/if}` **之後**＝`.gameover-modal-body` 的最後一個節點；這段在 `{#if isPortraitMobile && game}`…`{/if}` 之外 ⇒ 手機直式與桌機三版面共用同一份。
+  CSS 內沒有任何 `.tablet-layout`／`fable`／`tabletop`／`classic` selector 碰到 `.gameover-modal`（守衛 C6）⇒ 三種桌機版面的 modal 完全同一份。
+- 渲染條件 `friendsBattleOn && friendsBattleTarget`：`friendsBattleOn = friendsBattleEntryVisible(uid, isAnonymous)` **只認 'on'**（匿名／未知／負向快取整顆不渲染，站長偏好不做半死按鈕）；
+  `friendsBattleTarget`：`mode==='online' && !isSpectator`，錦標賽 ⇒ `tActiveRoom` 以 `mr_` 開頭才 `{ matchId: tActiveRoom.slice(3) }`，休閒 ⇒ `{ roomCode }`。
+- `matchId` 推導查證：伺服器建對戰房只有兩處，`/match/enter`（`:7800` `roomId = 'mr_' + m._id`）與管理員重賽（`:7970` `m.roomId || ('mr_' + m._id)`），
+  且 `/api/friends/request` 自己也用 `'mr_' + matchId` 反查房間（`:9200`）⇒ 前綴可靠。game-over 時 `tActiveRoom` 仍是該場房號（`tLeaveMatch` 才重設為 `T_ROOM`）；
+  `tMyMatch` 在 `tLeaveMatch` 後才重抓，但下一輪配對一出來就會換成新場次 ⇒ **不用它**。測試房 `TOURNAMENT-TEST` 沒有場次 ⇒ 不渲染。
+- 送出：`requestFriendFromBattle({uid, token}, target)` ⇒ POST `/api/friends/request` body **只有** `{roomCode}` 或 `{matchId}`（永遠沒有 email）；同一顆鈕三態
+  idle「👥 將對手加為好友」／busy「⏳ 送出中…」／done＝`friendsRequestReplyText()` 四種文案；fail 顯示伺服器原話、再按一次＝重試。換一場（房號／場次／`game.id` 任一變）自動回 idle。
+- **量測**（休閒／錦標賽 × 375×812／375×667／1366×768／1920×1080 八組）：既有元素全部 dw=dh=0、整體 **dy=-25.8**（modal 長高 51.6，fixed 置中 ⇒ 上移一半），
+  既有鈕彼此相對位移 `g-b1→g-b2/g-b3/g-b4/g-home` 全部 dx=dy=0；modal 在 375×812 為 (13, 176.5, 349×458.9)、375×667 為 (13, 104, 349×458.9) ⇒ **沒有超出畫面**
+  （`max-height: calc(100vh - safe - 24px)` + `overflow-y:auto` 仍成立）；新鈕 idle 高 42.0 ＝ 送出後 42.0（同高），送出後既有鈕列位移 0。
+
+### 【3】設定 modal 的「👥 好友」section —— ⚠ **本版停手**（交辦前提不成立）
+
+交辦寫「它本來就 `overflow-y:auto` ⇒ 零位移」。查證：`.settings-modal { overflow-y:auto }`（:16399）被**後面**的 `.zoom-modal { overflow:hidden }`（:17399，v3.884 為了 iOS Safari
+flex+overflow bug 改的）以同 specificity 蓋掉 —— 正式站 CSS `_page.r4IDf5p_.css` 也確認 zoom-modal 規則在後（offset 169656 > 120397）。
+用**從 svelte 檔忠實抽出**的設定 modal markup 量（對戰中、各開關開啟）：
+
+| viewport | BASE 已被切掉？ | 尾端加 section 後 |
+|---|---|---|
+| 375×812 | scrollH 805 > clientH 779 ⇒ 已切、**不能捲動** | 新 section bottom 872.6 > 內容底 780 ⇒ **被切掉、點不到** |
+| 375×667 | 805 > 646 已切 | 被切掉 |
+| 1366×768 | 814 > 766 已切 | 被切掉 |
+| 1536×864 | 剛好放得下 | 既有 section dy=-8.1，新 section 880.2 > 856 ⇒ **被切掉** |
+| 1920×1080 | 放得下 | 既有 section dy=-44.2，新 section 看得到 |
+
+⇒ 照交辦放在最後，最常見的手機與 1366×768 筆電都看不到也點不到；放前面則推動既有 section；把 `.settings-modal` 改回可捲動會動到既有框架（加捲軸 ⇒ 桌機內容寬度 -17px；
+用 `.zoom-scroll` 包法 ⇒ flex gap 消失、section 間距 -14.4px；`scrollbar-width:none` 零位移但 iOS flex+overflow 風險這裡測不到）。**待站長裁定**，選項見回報 ⑯。
+守衛 C7 釘住「設定 modal 區塊零 friend」，下一版接上時一併更新。
+
+### 【4】`goto` 未 import（玩家看得到的修正）
+
+`git grep -n goto 8ccf1255 -- src/routes/game/+page.svelte` 只有 `:7623` 一處呼叫、零 import（全 `src/` 也沒有任何 `$app/navigation` import）⇒ `ReferenceError` 被回呼自己的 try/catch 吞掉
+⇒ 推播通知點擊後 SW 送來 `ptcg-notify-nav` 卻不導頁。補 `import { goto } from '$app/navigation';`。
+行為端斷言（守衛 D1/D2）：把回呼原始碼從檔案抽出實跑 —— 有 goto 綁定 ⇒ 導頁、已在目標頁 ⇒ 不導、**沒綁定（＝BASE）⇒ 靜默不導（症狀重現）**；
+再把 `notify.ts` bundle 起來走完整條 SW message → `initNotifyNav` → 回呼 → goto。突變 M11（拿掉 import）／M12（拿掉呼叫）各紅在預期那條。
+
+### 守衛 `scripts/test-v6284-friends-p1b.mjs`（30 條，已加進 package.json test chain）＋ `test-v6283` 三處更新
+
+【F】HEAD-FAIL（BASE 沒有三個新 export ⇒ F0 紅並中止）／【A】esbuild 實跑：賽後鈕判定只認 on、純函式零請求、{roomCode}|{matchId} 各打對端點且 body 永遠沒有 email、
+空目標與沒 token 零請求、403/409 帶 friends- 碼 ⇒ rejected＋原話、文案四態、{email} 入口重構後不變／【B】零 setInterval／setTimeout／rAF、零 import／
+【C】對戰版面分支零 friend（＋正對照）、賽後鈕位置（之後／區塊內／最後節點／單一按鈕）、大廳兩份入口互斥（條件求值）、`friendsBattleTarget` 實跑九組、零新 CSS、
+三版面共用 modal、設定 modal 零 friend／【D】goto 行為端兩條／【E】錦標賽區塊 sha256／【M】12 個突變體各紅在預期那條。
+`test-v6283` 更新：C3（`friendsEntryOn` 2→3 處各自釘住；「lobby 之前零 friend」改只掃 markup）、C4（桌機入口條件多 `&& !isPortraitMobile`）、E6（突變錨點連下一行才唯一）。
+HEAD-FAIL 實跑：還原 `friends-api.ts` ⇒ F0 紅（0/1）；還原 `game/+page.svelte` ⇒ C1/C2/C3/C4/D1 ＋ M5/M7~M12 紅（18/12）；修後版 30/0。
+
+### 三配套
+
+`version.ts` 6.284／`admin.html` `SITE_VERSION_HINT` 6.284／`test-v6272` ⑩ `PREV_SHA`→v6.283（8ccf1255）、`PREV_ALLOWED` 六檔／`test-v6264` `BASE_SHA`→v6.283（本版動了 changelog）。
+首頁 changelog 三步搬運：新增 v6.284（open）、v6.260 內文搬進 bodies、v6.207 搬進封存頁；首頁 30,912 → 31,072 bytes。
+
+### 部署
+
+純 client 端；伺服器 v6.282 已含端點。動到 `admin.html`（版本提示）⇒ 站長跑 **`update-tournament.bat`**（唯一會先同步 git 的那支，挑離峰）再 `redeploy-oracle.bat`。
+
+### 下一版（大廳標示好友的房）動工前要先問站長
+
+- 設定 modal 的裁定（上表三選一：修捲動／改放標題列右側小鈕／不放）；
+- 大廳房間卡上的好友標記長什麼樣、放哪（`.or-main` 已是 flex-wrap，加標籤在 375px 會不會把「加入」鈕擠到第二列要先量）；
+- 賽後鈕「只認 on」的取捨：沒進過 /friends 的玩家賽後看不到這顆 —— 要不要改成跟大廳入口一樣「未知也顯示」。
+
 ## v6.283 — 好友功能【P1a：第一個玩家看得到的版本】/friends 頁＋線上大廳一顆入口（零侵入既有版面）
 
 BASE `5965ea49ff5c810479265528a4727215fcc2278d`（v6.282，遠端 main）。後端＝v6.282 P0（本版 `oracle-admin/server_admin_patch.js` **未動**）。

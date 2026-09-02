@@ -11,6 +11,7 @@
   import { fly, scale, fade } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
   import { base } from '$app/paths';
+  import { goto } from '$app/navigation';   // v6.284 修：initNotifyNav 的回呼一直呼叫 goto 卻沒 import（ReferenceError 被 try/catch 吞掉 ⇒ 通知點擊導頁靜默失效）
   import type { Card } from '$lib/cards/types';
   import { loadAllSets, buildCardIndex, loadDeckSets, deckEntriesAllInPool } from '$lib/cards/pool';
   import { getBroadcastConfig, type BroadcastConfig } from '$lib/game/broadcast';
@@ -20,7 +21,7 @@
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
   import { validateDeck } from '$lib/decks/validation';
-  import { friendsEntryVisible } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）
+  import { friendsEntryVisible, friendsBattleEntryVisible, requestFriendFromBattle, friendsRequestReplyText, type FriendsBattleTarget } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）；v6.284 賽後／設定「將對手加為好友」
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
@@ -1196,6 +1197,40 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let cpLoading = $state(false);
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
   const friendsEntryOn = $derived(friendsEntryVisible(firebaseUser?.uid ?? null, isAnonymous));   // v6.283 非匿名＋沒有負向快取才顯示
+  // ── v6.284 賽後「將對手加為好友」（賽後結算 modal；設定 modal 那份待站長裁定捲動修法後再接同一組狀態）──────
+  //   ⚠ 三個判定全是純函式／$derived（零請求）；按鈕按下才發唯一的一發 POST /api/friends/request。
+  //   ⚠ 匿名／哨兵未知／觀戰／本機對戰／錦標賽測試房 ⇒ 整顆不渲染（站長偏好：不做半死按鈕）。
+  //   ⚠⚠ 這組東西**不在** isPortraitMobile && game 那組對戰版面分支內（守衛 test-v6284 C1 釘住；⚠ 註解裡不要寫出那個 if 字面，test-v6107 的掃描器會把註解當錨點）。
+  const friendsBattleOn = $derived(friendsBattleEntryVisible(firebaseUser?.uid ?? null, isAnonymous));
+  const friendsBattleTarget = $derived.by((): FriendsBattleTarget | null => {
+    if (mode !== 'online' || isSpectator) return null;
+    if (isTournament) {
+      // 正式賽的對戰房號固定是 'mr_' + tournamentMatches._id（伺服器 /match/enter 與管理員重賽都只有這一種寫法；
+      // /api/friends/request 反過來也用 'mr_'+matchId 查房）。測試房 TOURNAMENT-TEST 沒有場次 ⇒ null。
+      // ⚠ 不用 tMyMatch：tLeaveMatch 才會重抓賽程，但下一輪配對一出來它就換成新場次，賽後畫面上不可靠。
+      const r = String(tActiveRoom || '');
+      return r.startsWith('mr_') && r.length > 3 ? { matchId: r.slice(3) } : null;
+    }
+    return roomCode ? { roomCode } : null;
+  });
+  let friendReqState = $state<'idle' | 'busy' | 'done' | 'fail'>('idle');
+  let friendReqMsg = $state('');
+  // 換一場（房號／場次／對局 id 任一變）就回到 idle：同一場只送一次；rematch 是新的對局 id ⇒ 可再送。
+  const friendsBattleKey = $derived((friendsBattleTarget ? JSON.stringify(friendsBattleTarget) : '') + '|' + (game?.id ?? ''));
+  let _friendReqKey = '';
+  $effect(() => { const k = friendsBattleKey; if (k !== _friendReqKey) { _friendReqKey = k; friendReqState = 'idle'; friendReqMsg = ''; } });
+  async function addOpponentAsFriend() {
+    const t = friendsBattleTarget;
+    if (!t || friendReqState === 'busy' || friendReqState === 'done') return;
+    const u = firebaseUser;
+    if (!u || u.isAnonymous) return;
+    friendReqState = 'busy';
+    let token: string | null = null;
+    try { token = await u.getIdToken(); } catch { token = null; }
+    const r = await requestFriendFromBattle({ uid: u.uid, token }, t);
+    if (r.ok) { friendReqState = 'done'; friendReqMsg = friendsRequestReplyText(r.data); }
+    else { friendReqState = 'fail'; friendReqMsg = '⚠️ ' + r.message; }   // fail ⇒ 同一顆鈕顯示原因，再按一次＝重試
+  }
   // v5.476：先後攻偏好 + 對手閒置判定時間 的記憶（採上次設定，玩家不用每次調）
   function _readLastFirstPref(): 'random' | 'first' | 'second' | 'opponent' {
     try { const v = localStorage.getItem('ptcg-tw-sim:lastFirstPref'); return (v === 'first' || v === 'second' || v === 'opponent' || v === 'random') ? v : 'random'; } catch { return 'random'; }
@@ -10490,7 +10525,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="auth-user">
             <span class="auth-email">✉️ {firebaseUser.email}</span>
             <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
-            {#if friendsEntryOn}<button class="small" onclick={() => { location.href = base + '/friends'; }} title="好友名單">👥 好友</button>{/if}
+            {#if friendsEntryOn && !isPortraitMobile}<button class="small" onclick={() => { location.href = base + '/friends'; }} title="好友名單">👥 好友</button>{/if}<!-- v6.284 手機直式改放大廳尾端（見下方） -->
             <button class="small danger" onclick={handleSignOut}>登出</button>
           </div>
         {/if}
@@ -10629,6 +10664,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
         {#if onlineError && !showCreateForm}<p class="warn">{onlineError}</p>{/if}
       </div>
+      <!-- v6.284 手機直式的「👥 好友」入口：右上 .auth-user 在 375px 只剩 18px，塞任何東西都會折行、h1 與表單下移 32px（v6.283 實測），
+           改放在大廳表單**之後**的最後一個節點（本來就是可捲動區、下面沒有任何既有元素）⇒ 所有既有元素（含 .lobby-unified 容器本身）rect 全等
+           （scripts/measure-v6284-friends-layout.mjs）。與桌機那份以 isPortraitMobile 互斥、永遠只渲染一份。沿用 .back 樣式，零新 CSS。 -->
+      {#if friendsEntryOn && isPortraitMobile}
+        <a class="back" href="{base}/friends" title="好友名單" style="margin-top:.6rem">👥 好友名單</a>
+      {/if}
 
     {:else if onlineStep === 'room'}
       <!-- 房間等待室（座位制） -->
@@ -14178,6 +14219,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="lobby-btns">
             <button class="btn-primary" onclick={() => { game = null; }}>再來一局</button>
             <a href="{base}/" class="btn-secondary">回首頁</a>
+          </div>
+        {/if}
+        <!-- v6.284 賽後「將對手加為好友」—— 放在既有按鈕**之後**：modal 是 fixed 置中＋max-height/overflow-y:auto，
+             長高只會讓整體上移、既有四顆鈕彼此的相對位置不變（量測見 docs/changelog-internal.md v6.284）。
+             這段與上面一樣在兩套對戰版面分支**之外** ⇒ 手機直式與桌機三版面共用同一份。
+             匿名／哨兵未知／觀戰／本機對戰／錦標賽測試房 ⇒ 整顆不渲染。送出後同一顆鈕換成狀態文字（同高，不二次位移）。 -->
+        {#if friendsBattleOn && friendsBattleTarget}
+          <div class="lobby-btns">
+            <button class="btn-secondary" onclick={addOpponentAsFriend} disabled={friendReqState === 'busy' || friendReqState === 'done'} style={friendReqState === 'done' ? 'cursor:default' : undefined} aria-live="polite" title="送出好友邀請（雙方都送出才會成為好友）">
+              {#if friendReqState === 'idle'}👥 將對手加為好友{:else if friendReqState === 'busy'}⏳ 送出中…{:else}{friendReqMsg}{/if}
+            </button>
           </div>
         {/if}
       </div>
