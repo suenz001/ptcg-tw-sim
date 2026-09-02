@@ -28,6 +28,9 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 //   B1/B2 會直接翻紅。⚠ 站長明文禁止「把鎖拿掉／改成不驗／只比片段」⇒ 這裡改成**串接還原**：
 //   先 revertV6291() 再跑本檔原本的 revertTail()，鏈起來仍是逐位元回到 v6.275，一個位元都沒放水。
 import { revertV6291 } from './lib/tourn-revert-v6291.mjs';
+// ⭐v6.292：同一道閘又補到 /drop、/unregister、/chat、/match/enter、/match/forfeit 五支 ⇒ 區塊再多 5 行。
+//   鏈再長一節：revertV6292() → revertV6291() → 本檔的 revertTail() ⇒ 仍是逐位元回到 v6.275。
+import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '4ce276453c998058f70a35778a6ab262fa679921';   // v6.275
@@ -111,8 +114,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = 'd43fe3e575456c4c885b8d84eb278d2a59e29b96fe94341d3a2bcf25e0097c99';
-const NEW_TEV_SHA = 'fc015380210f69fd159ff859c047678d748930496bd3d474e4c3c41d42415138';
+const NEW_TAIL_SHA = 'c0891b6f200ab4e3898c50aa77365458d2207870e828dc28bbfb44df81ddcda3';
+const NEW_TEV_SHA = 'e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
@@ -168,8 +171,9 @@ await T('A5 app.locals._sanitizeDeckId 的掛載點在所有 IIFE 之外（跨 I
 console.log('\n══ 【B】⭐⭐⭐ revert-diff：錦標賽區塊＝v6.265 ＋ 恰好這 6 處插入 ═══════════');
 
 function revertTail(tail) {
-  // ⭐v6.291 串接：先還原 v6.291 的 3 行 gate，再還原 v6.276 自己的 6 處插入。
-  let r = revertV6291(tail);
+  // ⭐v6.291／v6.292 串接：先還原 v6.292 的 5 行、再還原 v6.291 的 3 行 gate，
+  //   最後才還原 v6.276 自己的 6 處插入 ⇒ 鏈起來仍是逐位元回到 v6.275。
+  let r = revertV6291(revertV6292(tail));
   const rem = (needle, tag) => {
     const n = r.split(needle).length - 1;
     assert.strictEqual(n, 1, 'revert-diff：' + tag + ' 出現 ' + n + ' 次（應恰 1）—— 區塊被動了不只宣告的那幾處');

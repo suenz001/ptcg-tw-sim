@@ -1,5 +1,82 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.292 — 🔒 同一道 verified 閘補到另外六支端點（`/drop`、`/unregister`、`/cancel-proposal`、`/chat`、`/match/enter`、`/match/forfeit`）
+
+BASE `410e21158c5780eda3fafadf875d7f0f4bd6db2a`（v6.291，遠端 main）。**純伺服器端**：只動 `oracle-admin/server_admin_patch.js`（v1.41 → v1.42）＋ `admin.html` 版本提示 ＋ 守衛；玩家端**只有 `src/lib/version.ts`** 變動（`test-v6272` ⑩ 逐檔 blob 比對在守；`test-v6292` G5 另外用 blob sha 直接證明 `src/routes/game/+page.svelte` 一個位元都沒動）。⚠ 公平性／安全修正，依站長既有裁定**不寫首頁 changelog**。
+
+### 【1】漏洞（與 v6.291 完全同型）
+`tournIdentity(req)` 沒有 Bearer token 時退回 `req.body.playerId` 並回 `verified:false`；玩家 uid 由 `/api/tournament/bracket` **公開回傳**。v6.291 只補了報名／報到三支，同型的缺口還有：
+
+| 端點 | 冒名可以做什麼 | 嚴重度 |
+|---|---|---|
+| `/drop` | **讓別人棄賽**，而且 v6.188 明講「本檔刻意沒有任何取消棄賽端點，誤按由站長後台處理」＝**不可逆** | ⭐⭐⭐ |
+| `/unregister` | 刪掉別人的報名（`TREGS.deleteOne`） | ⭐⭐ |
+| `/cancel-proposal` | 取消別人發起的社群賽（`status → finished, cancelled:true`） | ⭐⭐ |
+| `/chat` | 冒名發言（暱稱取自**受害者的報名暱稱**），順便吃掉他 1.2 秒的限流 | ⭐ |
+| `/match/enter` | 替別人進場：建房、`status → playing`、寫 `gameStartedAt` ＝ 把別人的**對局時鐘提前轉開** | ⭐⭐ |
+| `/match/forfeit` | 替別人投降 ⇒ 即時判負 | ⭐⭐⭐ |
+
+⚠⚠ **更正 v6.291 內部紀錄的一處判錯**：那份表把 `/cancel-proposal` 記成「已被 `ev.proposerUid !== id.uid` 大幅限縮（只能冒充發起者本人）」。**冒充發起者本人正是這個漏洞的內容** —— playerId fallback 就是拿來把 `id.uid` 填成任何人的，那道檢查一點都擋不住。本版把它收進來，`test-v6292` 的 G4 用 BASE blob 實跑證明它會回 `{ ok: true }`。
+
+### 【2】⚠⚠⚠ 先滿足站長更高的裁定：不可以擋到真玩家
+站長逐字（v6.160）：「本站是練習站，**可用性優先於版本一致性，寧可放一個舊 client 進來也不要把人擋在賽外**」。
+
+⭐ **判準是「請求體有沒有帶 `playerId`」，不是「呼叫點一定帶得出 token」** —— `tApi`（v6.167）在 `getIdToken()` 逾時 6 秒時會刻意**不帶 Authorization** 送出，所以後者不成立。沒帶 playerId 時 `tournIdentity` 本來就回 `{ error: '需要登入', code: 401 }` ⇒ 加 gate **一個真玩家都沒多擋**。
+
+| 端點 | client 呼叫點（v6.291） | body 有 playerId？ | `git log -G` 歷史 |
+|---|---|---|---|
+| `/drop` | `src/routes/game/+page.svelte:5612`（`tDropCommit`） | **沒有** | 只有 1 顆 commit 動過（v6.188 `30005540`），一出生就是 `{ eventId }` |
+| `/unregister` | `:5733`（`tournUnregister`） | **沒有** | 3 顆（`9f4f11de` → `64cf20fa` → `48acde2c`），`{}` → `{ eventId: tSelEventId }` → `{ eventId }`，**從沒有 playerId** |
+| `/cancel-proposal` | `:5739`（`tCancelProposal`） | **沒有** | 1 顆（v5.635 `18157714`），一出生就是 `{ eventId }` |
+| `/chat` | `:5249`（`tChatSend`） | **沒有** | 1 顆（v5.553 `820e50c9`），一出生就是 `{ text: txt }` |
+| `/match/enter` | `:5332` | **沒有** | 2 顆（v5.554 `0548ce5e` 的 `{}`、v6.135 `44bc4ccc` 只加 `timeoutMs`） |
+| `/match/forfeit` | `:9079`（`tForfeit`） | **沒有** | 1 顆（v5.568 `5b27877e`），一出生就是 `{ room: tActiveRoom }` |
+| （對照）`/still-here`／`/join`／`/action`／`/reset` | `:6657`／`:6696`／`:6972`／`:7107` | **有**（`tPlayerId()`） | 本版一個字不動 |
+
+⚠ `oracle-admin/admin.html` 與 `static/` 完全沒有這六支的呼叫點（`git grep` 全樹確認）。
+
+### 【3】查證後**決定不修**的端點
+| 端點 | 為什麼不修 |
+|---|---|
+| `/propose` | 已被 `if (!id.email) return res.status(403)` 擋住 —— playerId fallback 的 `email` 恆為 `null` |
+| `/join`、`/action`、`/still-here` | 已有 `doc.matchId && !verified ⇒ 403`；而且它們**需要** playerId fallback 跑測試房，加 gate 會直接打死測試房 |
+| `/reset` | **根本沒有呼叫 `tournIdentity`**（重設固定名稱的測試房），沒有身分可以驗；client 送 playerId |
+| `/clientdiag` | 純遙測（`tournamentClientDiag`，7 天 TTL），冒名只會污染統計、不動任何賽事狀態；且 gate 沒有可行動的收益 |
+
+### 【4】修法
+沿用 v6.291 的 helper `tournRequireVerified(id, res, ep)`（**不重複定義**，仍在 `tournIdentity` 正下方 ⇒ 在兩個區塊 sha256 錨點之前），六支各在 `if (id.error) …` 之後接**一行**，一律在任何 DB 操作之前：
+
+```
+if (tournRequireVerified(id, res, 'drop')) return;
+```
+
+回應與 v6.291 逐字相同：`403` ＋ `{ error: '請先用 email 帳號登入後再報名／報到；若剛才已經登入過，請重新整理頁面再試一次。', code: 'tourn-needs-verified' }`，並記一行 `console.warn('[tournament] verified-gate blocked ep=<端點> uid8=<uid 前 8 碼>')`（不記完整 uid、不記 email）。
+
+⭐ 站長部署後怎麼觀察有沒有誤擋：`pm2 logs --lines 500 | grep 'verified-gate blocked'`。完全沒有這行＝沒人被擋（預期）；同一個 `uid8` 反覆出現＋有玩家回報「按了說要登入」⇒ 誤擋，緩解手段是把那幾行 gate 拿掉重推（revert-diff 已證明拿掉後逐位元回到 v6.291）。
+
+### 【5】區塊 sha256 鎖（14 把，一把都沒拿掉）
+```
+revert-diff(v6.292) → tail sha256 = d43fe3e575456c4c885b8d84eb278d2a59e29b96fe94341d3a2bcf25e0097c99（＝ BASE v6.291）
+revert-diff(v6.292) → tev  sha256 = fc015380210f69fd159ff859c047678d748930496bd3d474e4c3c41d42415138  len=219837（＝ BASE v6.291）
+revert-diff(→v6.290) → tail sha256 = 495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02
+revert-diff(→v6.290) → tev  sha256 = 93d29a7d68b1508c9201b660ef38f06418fc5760606bb87798f8bdd5f5ed9fdd  len=219484
+```
+⇒ 逐字刪掉那 6 行後與 v6.291 **逐位元相同**；再刪掉 v6.291 的 3 行後與 v6.290 **逐位元相同**。然後才重釘 14 把鎖：
+- tail（`app.get('/api/tournament` 起）`d43fe3e5…` → **`c0891b6f…`**：`test-v6265`／`v6272`⑨／`v6275`／`v6276`／`v6286`／`v6287`／`v6288`／`v6289`
+- TEVENTS 錨點起 `fc015380…` → **`e7c15148…`**（長度 219837 → 220560）：`test-v6266`／`v6268`／`v6276`／`v6278`／`v6282`／`v6283`／`v6284`／`v6286`／`v6287`／`v6288`／`v6289`
+- 還原鏈再長一節：新 `scripts/lib/tourn-revert-v6292.mjs`；`test-v6276` 的 `revertTail()` 改成 `revertV6291(revertV6292(tail))`；`test-v6291` 的 B1/B2 改成先 `revertV6292()`。⇒ 鏈仍然是 **v6.292 → v6.291 → v6.276 → v6.275** 的逐位元證明。
+- ⚠⚠ 一把都沒有被拿掉／改成不驗；`test-v6292` 的 B5／B6 反過來守「14 把都釘到新值、v6.290 與 v6.291 的舊值零殘留、sha 比對式與 `createHash('sha256')` 都還在」。
+
+### 【6】守衛
+`scripts/test-v6292-tourn-verified-gate2.mjs`（已進 test chain，37 條）：
+- **C1**：帶 playerId 無 Bearer ⇒ 六支各 403＋`code`，五個 mock collection 的**寫入計數與讀取計數都是 0**、副作用 hook 一個都沒跑。
+- **C2（最重要）**：帶合法 Bearer ⇒ 六支**全部照常成功**，而且每一支都確認「真的有寫入」，避免斷言退化成恆真式。
+- **C3（`/drop` 專驗）**：被擋時 `TREGS` 一次 `updateOne` 都沒有、`dropped` 欄位完全沒被設；並附**正對照**（真玩家的 `/drop` 確實會 `$set: { dropped: true }`），沒有正對照的話「沒設」可能只是這條路徑本來就不寫。
+- **D**：10 個突變，含「gate 移到寫入之後」「gate 只往後挪到 `findOne` 之後」「ep 字串抄錯害站長查錯 log」。
+- **F**：v6.291 三支的 gate 逐字仍在，且**行為端**仍然擋得住冒名、放得過真玩家（回歸保護）。
+- **G4 HEAD-FAIL**：對真 BASE blob 跑同一組 ⇒ BASE 的六支都不拒絕；`/drop` 對冒名請求真的下了 `{"$set":{"dropped":true,…}}`；`/cancel-proposal` 回 `{ ok: true }`（＝【1】那條更正的證據）。
+- **G5**：`src/routes/game/+page.svelte` 的 blob sha 與 BASE 逐位元相同。
+
 ## v6.291 — 🔒 錦標賽報名可被冒名（`/register`、`/register-and-checkin`、`/checkin` 未檢查 `verified`）
 
 BASE `bb3adda65b536a7e0be67b788bd1fd5934051bc7`（v6.290，遠端 main）。**純伺服器端**：只動 `oracle-admin/server_admin_patch.js`（v1.40 → v1.41）＋ `admin.html` 版本提示 ＋ 守衛；玩家端**只有 `src/lib/version.ts`** 變動（`test-v6272` ⑩ 逐檔 blob 比對在守）。⚠ 公平性／安全修正，依站長既有裁定**不寫首頁 changelog**。

@@ -534,8 +534,8 @@ await T('G1 delta PUT 一輪(findOne clone+apply+hash+回填)p99 上限', async 
 console.log('\n══ 【H】⭐⭐ 錦標賽零接觸(站長硬約束) ═══════════════════════════');
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 // ⚠ v6.276 起錦標賽區塊含 6 處 additive 的 deckId 插入（revert-diff 見 test-v6276）。
-const TOURN_SHA_V6276 = 'fc015380210f69fd159ff859c047678d748930496bd3d474e4c3c41d42415138';
-const TOURN_LEN_V6276 = 219837;
+const TOURN_SHA_V6276 = 'e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40';
+const TOURN_LEN_V6276 = 220560;
 await T('H1 錦標賽區塊與 v6.265 **逐位元相同**(內嵌 sha256,history-free)', () => {
   const i = PATCH.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');

@@ -36,6 +36,13 @@ import {
   V6291_ENDPOINTS, V6291_GATE_LINES, V6291_HELPER_HEAD, V6291_BLOCK_BEGIN, V6291_BLOCK_END,
   revertV6291,
 } from './lib/tourn-revert-v6291.mjs';
+// ⭐⭐v6.292：同一道閘補到六支端點
+//   ⇒ 區塊又多了 6 行。本檔的 revert-diff 從此是「先還原 v6.292 的 6 行、再還原 v6.291 的 3 行」，
+//   鏈起來仍然是逐位元回到 v6.290。⚠ 站長明文禁止把鎖拿掉／改成不驗 ⇒ 一律串接，不放水。
+import {
+  NEW_TAIL_SHA_V6292, NEW_TEV_SHA_V6292, NEW_TEV_LEN_V6292,
+  V6292_ENDPOINTS, revertV6292,
+} from './lib/tourn-revert-v6292.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'bb3adda65b536a7e0be67b788bd1fd5934051bc7';   // v6.290
@@ -126,16 +133,23 @@ await T('A3 三支端點各恰一行 gate、緊接在 `if (id.error) …` 之後
     assert.ok(dbAt < 0 || dbAt > gateAt, ep + '：gate 之前就碰了資料庫（檢查放在寫入之後＝沒用）');
     assert.ok(s.indexOf('await tournIdentity(req)') < gateAt, ep + '：gate 排在 tournIdentity 之前');
   }
-  assert.strictEqual(PATCH.split('tournRequireVerified(id, res, ').length - 1, 4,
-    'tournRequireVerified 的出現次數應為 4（1 個定義 ＋ 3 個呼叫）');
+  // ⭐v6.292：改成由兩版的宣告清單推導（1 個定義 ＋ v6.291 三支 ＋ v6.292 六支）——
+  //   寫死數字會在下一版靜默失效，推導式則會逼下一版回來把新端點列進宣告。
+  const _expectCalls = 1 + V6291_ENDPOINTS.length + V6292_ENDPOINTS.length;
+  assert.strictEqual(PATCH.split('tournRequireVerified(id, res, ').length - 1, _expectCalls,
+    'tournRequireVerified 的出現次數應為 ' + _expectCalls + '（1 定義 ＋ 兩版宣告的呼叫）—— 有未宣告的插入？');
 });
 
-await T('A4 ⚠ 未列管端點一個都沒被順手加 gate（本版只動宣告的三支；playerId 相容路徑一個字不動）', () => {
+await T('A4 ⚠ 兩版宣告之外的端點一個都沒被順手加 gate（playerId 相容路徑一個字不動）', () => {
+  // ⚠ v6.292 把 /drop /unregister /cancel-proposal /chat /match/enter /match/forfeit 收進宣告 ⇒ 它們從這張清單移出，
+  //   但**不是**放行：下面那一圈反過來斷言它們真的有 gate（少一支就紅）。
   for (const r of ['/api/tournament/join', '/api/tournament/still-here', '/api/tournament/action',
-    '/api/tournament/reset', '/api/tournament/clientdiag', '/api/tournament/propose',
-    '/api/tournament/unregister', '/api/tournament/drop', '/api/tournament/cancel-proposal',
-    '/api/tournament/chat', '/api/tournament/match/enter', '/api/tournament/match/forfeit']) {
-    assert.ok(!epSrc(PATCH, r).includes('tournRequireVerified'), r + ' 被加了 gate（不在本版宣告範圍）');
+    '/api/tournament/reset', '/api/tournament/clientdiag', '/api/tournament/propose']) {
+    assert.ok(!epSrc(PATCH, r).includes('tournRequireVerified'), r + ' 被加了 gate（不在兩版的宣告範圍）');
+  }
+  for (const ep of V6292_ENDPOINTS) {
+    assert.ok(epSrc(PATCH, ROUTE(ep)).includes('tournRequireVerified(id, res, '),
+      'HEAD-FAIL(v6.292)：' + ep + ' 的 gate 不見了');
   }
   // 測試房既有的「正式賽房才要求 verified」條件必須原封不動（v6.150／v6.156／v6.158）
   assert.ok(/if \(doc\.matchId && !_id\.verified\) return res\.status\(403\)/.test(epSrc(PATCH, '/api/tournament/join')), '/join 的既有 verified 條件不見了');
@@ -156,18 +170,22 @@ await T('A5 ⚠⚠ 本版零刪除：TREGS/TEVENTS 的刪除與改寫路徑數�
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n══ 【B】⭐⭐⭐ revert-diff：區塊 ＝ BASE ＋ 恰好這 3 行 ═════════════════');
 
-await T('B1 現行兩個區塊的指紋 ＝ 本版重釘的新值', () => {
+await T('B1 現行兩個區塊的指紋 ＝ v6.292 重釘的新值；只還原 v6.292 的 6 行 ⇒ 逐位元回到 v6.291 的值', () => {
   const tail = PATCH.slice(PATCH.indexOf(TAIL_ANCHOR));
   const tev = PATCH.slice(PATCH.indexOf(TEV_ANCHOR));
   assert.ok(tail.length > 200000 && tev.length > 200000, '區塊抽太短 ⇒ 比對會變恆真式');
-  assert.strictEqual(sha256(tail), NEW_TAIL_SHA_V6291, 'tail sha=' + sha256(tail));
-  assert.strictEqual(sha256(tev), NEW_TEV_SHA_V6291, 'tev sha=' + sha256(tev));
-  assert.strictEqual(tev.length, NEW_TEV_LEN_V6291, 'tev 長度=' + tev.length);
+  assert.strictEqual(sha256(tail), NEW_TAIL_SHA_V6292, 'tail sha=' + sha256(tail));
+  assert.strictEqual(sha256(tev), NEW_TEV_SHA_V6292, 'tev sha=' + sha256(tev));
+  assert.strictEqual(tev.length, NEW_TEV_LEN_V6292, 'tev 長度=' + tev.length);
+  // ⭐ 中繼站：本檔原本守的那一版指紋沒有被丟掉，只是往後退了一層。
+  assert.strictEqual(sha256(revertV6292(tail)), NEW_TAIL_SHA_V6291, '還原 v6.292 後 tail ≠ v6.291');
+  assert.strictEqual(sha256(revertV6292(tev)), NEW_TEV_SHA_V6291, '還原 v6.292 後 tev ≠ v6.291');
+  assert.strictEqual(revertV6292(tev).length, NEW_TEV_LEN_V6291, '還原 v6.292 後 tev 長度 ≠ v6.291');
 });
 
-await T('B2 ⭐⭐⭐ 逐字還原那 3 行後，兩個區塊 sha256 與 BASE(v6.290) **逐位元相同**', () => {
-  const tail = revertV6291(PATCH.slice(PATCH.indexOf(TAIL_ANCHOR)));
-  const tev = revertV6291(PATCH.slice(PATCH.indexOf(TEV_ANCHOR)));
+await T('B2 ⭐⭐⭐ 逐字還原 v6.292 的 6 行 ＋ v6.291 的 3 行後，兩個區塊 sha256 與 BASE(v6.290) **逐位元相同**', () => {
+  const tail = revertV6291(revertV6292(PATCH.slice(PATCH.indexOf(TAIL_ANCHOR))));
+  const tev = revertV6291(revertV6292(PATCH.slice(PATCH.indexOf(TEV_ANCHOR))));
   console.log('        revert-diff → tail sha256 = ' + sha256(tail) + '（BASE ' + OLD_TAIL_SHA_V6290 + '）');
   console.log('        revert-diff → tev  sha256 = ' + sha256(tev) + '  len=' + tev.length + '（BASE ' + OLD_TEV_SHA_V6290 + ' / ' + OLD_TEV_LEN_V6290 + '）');
   assert.strictEqual(sha256(tail), OLD_TAIL_SHA_V6290, '還原後 tail 與 BASE 不同 ⇒ 區塊有「宣告之外」的改動');
@@ -177,7 +195,7 @@ await T('B2 ⭐⭐⭐ 逐字還原那 3 行後，兩個區塊 sha256 與 BASE(v6
 
 await T('B3 掃描器自驗：revert-diff 不是恆真（區塊裡改一個字元 ⇒ B2 必翻紅）', () => {
   const mutated = PATCH.slice(PATCH.indexOf(TAIL_ANCHOR)).replace('tournamentEvents', 'tournamentEventsX');
-  assert.notStrictEqual(sha256(revertV6291(mutated)), OLD_TAIL_SHA_V6290, 'revert-diff 抓不到差異 ⇒ B2 是安慰劑');
+  assert.notStrictEqual(sha256(revertV6291(revertV6292(mutated))), OLD_TAIL_SHA_V6290, 'revert-diff 抓不到差異 ⇒ B2 是安慰劑');
 });
 
 const TAIL_LOCKS = [
@@ -198,19 +216,22 @@ const TEV_LOCKS = [
 await T('B4 ⭐⭐ 全站 14 把區塊鎖都重釘到新值，且**沒有一把被拿掉**（舊值零殘留）', () => {
   for (const f of TAIL_LOCKS) {
     const s = readFileSync(join(ROOT, f), 'utf8');
-    assert.ok(s.includes(NEW_TAIL_SHA_V6291), f + ' 沒重釘 tail sha（它現在守的是錯的值）');
-    assert.ok(!s.includes(OLD_TAIL_SHA_V6290), f + ' 還留著舊 tail sha');
+    assert.ok(s.includes(NEW_TAIL_SHA_V6292), f + ' 沒重釘 tail sha（它現在守的是錯的值）');
+    assert.ok(!s.includes(OLD_TAIL_SHA_V6290), f + ' 還留著 v6.290 的舊 tail sha');
+    assert.ok(!s.includes(NEW_TAIL_SHA_V6291), f + ' 還留著 v6.291 的舊 tail sha');
   }
   for (const f of TEV_LOCKS) {
     const s = readFileSync(join(ROOT, f), 'utf8');
-    assert.ok(s.includes(NEW_TEV_SHA_V6291), f + ' 沒重釘 TEVENTS sha');
-    assert.ok(!s.includes(OLD_TEV_SHA_V6290), f + ' 還留著舊 TEVENTS sha');
+    assert.ok(s.includes(NEW_TEV_SHA_V6292), f + ' 沒重釘 TEVENTS sha');
+    assert.ok(!s.includes(OLD_TEV_SHA_V6290), f + ' 還留著 v6.290 的舊 TEVENTS sha');
+    assert.ok(!s.includes(NEW_TEV_SHA_V6291), f + ' 還留著 v6.291 的舊 TEVENTS sha');
   }
-  // 長度常數（3 支有）：舊長度 219484 不得殘留
+  // 長度常數（3 支有）：v6.290 的 219484 與 v6.291 的 219837 都不得殘留
   for (const f of ['scripts/test-v6266-deck-stats-server.mjs', 'scripts/test-v6268-delta-put-server.mjs', 'scripts/test-v6278-delta-put-deep-path.mjs']) {
     const s = readFileSync(join(ROOT, f), 'utf8');
-    assert.ok(s.includes(String(NEW_TEV_LEN_V6291)), f + ' 的長度常數沒重釘');
-    assert.ok(!s.includes(String(OLD_TEV_LEN_V6290)), f + ' 還留著舊長度常數');
+    assert.ok(s.includes(String(NEW_TEV_LEN_V6292)), f + ' 的長度常數沒重釘');
+    assert.ok(!s.includes(String(OLD_TEV_LEN_V6290)), f + ' 還留著 v6.290 的舊長度常數');
+    assert.ok(!s.includes(String(NEW_TEV_LEN_V6291)), f + ' 還留著 v6.291 的舊長度常數');
   }
 });
 
@@ -228,6 +249,9 @@ await T('B5 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與 notStrictE
   const v76 = readFileSync(join(ROOT, 'scripts/test-v6276-deck-tournament-stats.mjs'), 'utf8');
   assert.ok(v76.includes("from './lib/tourn-revert-v6291.mjs'"), 'test-v6276 沒有串接 v6.291 的還原器（它的 revert-diff 會被停用）');
   assert.ok(v76.includes('revertV6291('), 'test-v6276 沒有實際呼叫 revertV6291');
+  // ⭐v6.292：鏈又長一節 —— v6.276 必須先還原 v6.292 的 6 行，否則它的 B1/B2 只能靠改基準值來「湊綠」。
+  assert.ok(v76.includes("from './lib/tourn-revert-v6292.mjs'"), 'test-v6276 沒有串接 v6.292 的還原器');
+  assert.ok(v76.includes('revertV6292('), 'test-v6276 沒有實際呼叫 revertV6292');
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -418,7 +442,7 @@ const MUT = [
   ['M7 區塊被多動一處（revert 後 sha 對不上）',
     (s) => s.replace("if (ev.status !== 'registration') return res.status(409)", "if (ev.status !== 'registration') return res.status(410)"),
     async (s) => {
-      assert.strictEqual(sha256(revertV6291(s.slice(s.indexOf(TAIL_ANCHOR)))), OLD_TAIL_SHA_V6290, 'B2');
+      assert.strictEqual(sha256(revertV6291(revertV6292(s.slice(s.indexOf(TAIL_ANCHOR))))), OLD_TAIL_SHA_V6290, 'B2');
     }],
   ['M8 helper 被搬進區塊內（區塊 sha 會多一大段 ⇒ revert 對不上、A1 位置證明也垮）',
     (s) => {
@@ -430,14 +454,14 @@ const MUT = [
     },
     async (s) => {
       assert.ok(s.indexOf(V6291_HELPER_HEAD) < s.indexOf(TAIL_ANCHOR), 'A1：helper 落進區塊');
-      assert.strictEqual(sha256(revertV6291(s.slice(s.indexOf(TAIL_ANCHOR)))), OLD_TAIL_SHA_V6290, 'B2');
+      assert.strictEqual(sha256(revertV6291(revertV6292(s.slice(s.indexOf(TAIL_ANCHOR))))), OLD_TAIL_SHA_V6290, 'B2');
     }],
   ['M9 鎖的基準值被亂改（把某一把鎖釘到別的值）',
     null,
     async () => {
       const f = 'scripts/test-v6287-friends-dm.mjs';
-      const s = readFileSync(join(ROOT, f), 'utf8').replace(NEW_TEV_SHA_V6291, '0'.repeat(64));
-      assert.ok(s.includes(NEW_TEV_SHA_V6291), 'B4：' + f + ' 沒重釘');
+      const s = readFileSync(join(ROOT, f), 'utf8').replace(NEW_TEV_SHA_V6292, '0'.repeat(64));
+      assert.ok(s.includes(NEW_TEV_SHA_V6292), 'B4：' + f + ' 沒重釘');
     }],
 ];
 for (const [name, mutate, check] of MUT) {
