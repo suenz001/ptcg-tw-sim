@@ -70,6 +70,14 @@ export interface FriendRow {
   /** 對方最近一次完成對局的瀏覽器 uid（可能為 null）。 */
   uid: string | null;
   uids: string[];
+  /**
+   * ⭐ v6.300 起伺服器多回的布林：這位好友是不是正在錦標賽對戰中。
+   * ⚠ 這是**快照**（伺服器端另有 5 秒快照），不是即時值；文案不可以寫成「即時」。
+   * ⚠⚠ 舊伺服器沒有這個欄位 ⇒ `toRow` 一律補 `false`。而且「沒有 inTournament」
+   *   **不等於可以放行加入** —— 能不能加入／觀戰一律以大廳的 `openRooms` 比對為準
+   *   （見 `$lib/friends/friend-rooms.ts`）。
+   */
+  inTournament?: boolean;
   requestedByMe: boolean;
   blockedByMe: boolean;
   via: string | null;
@@ -313,6 +321,9 @@ function toRow(r: Record<string, unknown>): FriendRow {
     alias: (typeof r.alias === 'string' && r.alias) ? r.alias : null,
     uid: typeof r.uid === 'string' ? r.uid : null,
     uids,
+    // ⚠ 舊伺服器沒有這個欄位 ⇒ 補 false（絕不可以因為缺欄位就當成「不在錦標賽 ⇒ 可以加入」——
+    //   可否加入是另一條路（openRooms 比對），這裡只影響要不要顯示「🏆 錦標賽對戰中」）。
+    inTournament: r.inTournament === true,
     requestedByMe: r.requestedByMe === true,
     blockedByMe: r.blockedByMe === true,
     via: typeof r.via === 'string' ? r.via : null,

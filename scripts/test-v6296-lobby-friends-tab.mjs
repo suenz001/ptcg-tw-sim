@@ -279,6 +279,8 @@ if (!chromium) {
       alias: {
         '$lib/firebase': join(dir, 'fb.js'), 'firebase/auth': join(dir, 'fbauth.js'),
         '$lib/friends/friends-api': P_API, '$lib/friends/auth-ctx': P_CTX, '$lib/ui/stale-keep': join(ROOT, 'src/lib/ui/stale-keep.ts'),
+        // v6.301：共用元件多 import 了「好友在哪一間房」的純函式模組（本節不傳 rooms ⇒ 整組按鈕不渲染，行為與本版無關）
+        '$lib/friends/friend-rooms': join(ROOT, 'src/lib/friends/friend-rooms.ts'),
       },
       nodePaths: [join(ROOT, 'node_modules')], loader: { '.ts': 'ts' },
       define: { 'import.meta.env': JSON.stringify({ VITE_ORACLE_API_URL: 'https://t.local' }) },

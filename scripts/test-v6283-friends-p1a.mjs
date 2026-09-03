@@ -242,9 +242,13 @@ await T('A9 正規化：伺服器少給欄位不炸、非陣列補空；回應�
   const body = { friendsApi: 1, friends: [{ fid: 'x', nick: 'n', email: 'leak@x.com', uids: 'oops' }], incoming: null, blocked: 'no' };
   const { r } = await scenario(API, () => jsonRes(200, body));
   assert.strictEqual(r.ok, true);
-  // v6.296：多了 alias（我給的備註名；伺服器不合併，UI 才能同時顯示原暱稱）。這一條的守護意圖是「email 絕不進到 FriendRow」⇒ 白名單逐字列
-  assert.deepStrictEqual(Object.keys(r.data.friends[0]).sort(), ['alias', 'at', 'blockedByMe', 'fid', 'nick', 'requestedByMe', 'status', 'uid', 'uids', 'via']);
+  // v6.296：多了 alias（我給的備註名；伺服器不合併，UI 才能同時顯示原暱稱）。
+  // v6.301：多了 inTournament（好友是否正在錦標賽對戰中）。⚠ 白名單只增不減 ——
+  //   這一條的守護意圖是「email 絕不進到 FriendRow」，逐字列的欄位表就是那道白名單。
+  assert.deepStrictEqual(Object.keys(r.data.friends[0]).sort(), ['alias', 'at', 'blockedByMe', 'fid', 'inTournament', 'nick', 'requestedByMe', 'status', 'uid', 'uids', 'via']);
   assert.strictEqual(r.data.friends[0].alias, null, '伺服器沒給 alias 時必須補 null');
+  assert.strictEqual(r.data.friends[0].inTournament, false,
+    '⚠ 舊伺服器沒給 inTournament 時必須補 false（不可以留 undefined 漏到畫面）');
   assert.deepStrictEqual(r.data.friends[0].uids, []);
   assert.deepStrictEqual(r.data.incoming, []); assert.deepStrictEqual(r.data.blocked, []);
   assert.strictEqual(r.data.limit, 100);

@@ -10796,7 +10796,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
            ⚠ v6.283／v6.284 的兩個舊入口（右上那顆與手機直式尾端那個連結）本版已由分頁列取代。 -->
       {#if lobbyTab === 'friends'}
         <div class="lobby-tab-panel">
-          <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot} />
+          <!-- ⭐⭐⭐ v6.301 只有**大廳**這個掛載點傳 rooms／onjoinroom ⇒ 好友列才會有「加入房間／觀戰」。
+               ⚠⚠ 錦標賽頁的好友分頁與 `/friends` 獨立頁**一律不傳**：它們沒有 openRooms，
+                 而且絕不可以為了這個功能新增輪詢（v6.118 效能事故）。
+               ⚠ openRooms 是大廳本來就在跑的訂閱（每 2 秒），這裡只是把同一份資料再用一次 ⇒ 零新請求。
+               ⚠ 加入／觀戰走的是既有的 handleJoinFromList（與房間列表上的按鈕同一條路）。 -->
+          <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot}
+            rooms={openRooms} onjoinroom={(rc) => { void handleJoinFromList(rc); }}
+            joinBlockedMsg={myName.trim() ? '' : '請先切回「🌐 線上連線對戰」分頁填寫玩家名稱，才能加入或觀戰好友的房間。'} />
         </div>
       {/if}
 

@@ -1,5 +1,172 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.301 — 好友列的【🚪 加入房間 / 👁 觀戰】按鈕（好友功能最後一塊）
+
+BASE `c2dbede1c99f0ee341d7144a449277530cb01446`（v6.300，遠端 main）。
+改動檔：新檔 `src/lib/friends/friend-rooms.ts`／`scripts/test-v6301-friend-join-room.mjs`／
+`scripts/measure-v6301-friend-room-layout.mjs`；改 `src/lib/friends/FriendsPanel.svelte`、
+`src/lib/friends/friends-api.ts`、`src/routes/game/+page.svelte`、`src/lib/version.ts`、
+`oracle-admin/admin.html`、`package.json`、`scripts/test-v6272-*`（⑩ PREV_SHA／PREV_ALLOWED）、
+`scripts/test-v6264-*`（BASE_SHA）、首頁 changelog 三檔；
+另外兩支既有守衛跟著新欄位／新 import 一起更新（**只增不減**）：
+`scripts/test-v6283-friends-p1a.mjs` A9 的 `FriendRow` 欄位白名單補 `inTournament`（並斷言舊伺服器時是 `false`）、
+`scripts/test-v6296-lobby-friends-tab.mjs` 的 esbuild alias 補 `$lib/friends/friend-rooms`。
+⚠ **`oracle-admin/server_admin_patch.js` 一個位元都沒動**（本版純 client）。
+
+### 【0】站長需求與裁定
+
+> 當好友剛好正在一般對戰房間時（錦標賽除外），可以直接點選按鈕進去該好友現在的房間，直接一鍵加入或觀戰
+> 好友的戰局。但是當朋友不在房間的時候，這個按鈕就不能按，甚至當好友在錦標賽對戰的時候，也能提示好友
+> 正在錦標賽對戰中
+
+裁定：錦標賽頁的好友分頁**不顯示**加入鈕；「正在錦標賽對戰中」要做（v6.300 已上線 `inTournament`）；
+點下去顯示房名＋房主名、走既有的加入／觀戰流程。
+
+### 【1】⭐⭐⭐ 零新請求（自己複驗過，不是照抄）
+
+`src/routes/game/+page.svelte` 大廳房間訂閱的閘：
+
+```
+if (!isTournament && mode === 'online' && onlineStep === 'join' && myUid) {
+```
+
+條件裡**沒有 `lobbyTab`** ⇒ 切到「👥 好友名單」分頁時 `onlineStep` 仍是 `'join'`（`lobbySwitchTab`
+只改 `lobbyTabRaw`），大廳輪詢照跑，`openRooms` 每 2 秒更新且**已含 `seats[].uid`**；
+好友清單回應已含每位好友的 `uid` 與最近 5 個 `uids`。⇒ **純瀏覽器端比對，零新請求。**
+
+守衛把這條做成兩層：靜態（閘裡不得出現 `lobbyTab`）＋**求值**（把條件抽出來以
+`lobbyTab='friends'` 代入必須為 true，並用 `onlineStep='room'`／`isTournament=true`／`myUid=''`
+三個正對照證明它不是恆真式）；行為端再用假 fetch 跑 **200 次房間更新**，斷言
+`/api/rooms`、`/api/friends` 零額外請求（實測總 fetch 次數 = 1，就是掛載時那一發 list）。
+
+### 【2】⭐⭐ 為什麼不可以新增輪詢（v6.118 事故）
+
+`!isTournament` 是 v6.118 的效能事故修正：`/tournament` 是同一個元件、`onlineStep` 初始值就是
+`'join'`，於是每個開著錦標賽頁的玩家整場每 2 秒打兩支 `/api/rooms`，30 人賽 ≈ 每秒 30 個純浪費的
+請求打進 Oracle 的單執行緒 —— 就是玩家回報的「人一多就很 lag」。
+⇒ **錦標賽頁的好友分頁與 `/friends` 獨立頁一律不傳 `rooms`，整組按鈕不渲染**（它們沒有 `openRooms`）。
+守衛 F1／F2 是行為端（真的不傳 prop 掛起來，DOM 裡 `.fr-join` / `.fr-room` 各 0 個）、F3 是靜態
+（兩個掛載點各自比對）、F4 釘住 `subscribeOpenRooms` 全站仍只有 1 個呼叫點。
+
+### 【3】prop 設計（`FriendsPanel.svelte`）
+
+| prop | 大廳分頁 | 錦標賽分頁 | `/friends` |
+|---|---|---|---|
+| `rooms` | `{openRooms}` | ✗ | ✗ |
+| `onjoinroom` | `(rc) => void handleJoinFromList(rc)` | ✗ | ✗ |
+| `joinBlockedMsg` | 玩家名稱沒填時給一句提示 | ✗ | ✗ |
+
+`const showRoomBtn = $derived(Array.isArray(rooms) && !!onjoinroom);`
+⚠ **兩個都要**：只給其中一個就渲染，等於做出一顆按了沒反應的按鈕（守衛 F2／突變 J9）。
+
+### 【4】四種狀態（`src/lib/friends/friend-rooms.ts`）
+
+| 狀態 | 條件 | 顯示 | 可點 |
+|---|---|---|---|
+| `join` | `openRooms` 比到、`status==='lobby'` | 🚪 加入房間 ＋ 房名（房主：X） | ✓ |
+| `spectate` | `openRooms` 比到、`status==='playing'` | 👁 觀戰 ＋ 房名（房主：X） | ✓ |
+| `tournament` | 比不到、`inTournament === true` | 🏆 錦標賽對戰中 | ✗ |
+| `none` | 其餘（含資料不足） | 🚪 加入房間（灰） | ✗ |
+
+⭐ 選「灰掉」而不是「不顯示」：站長的原話是「不在房間的時候，**這個按鈕就不能按**」，
+而且每一列固定一顆按鈕，列的版面不會因為好友上下線而跳動。
+
+⚠ **順序不可改**：`openRooms` 比對優先（2 秒一更新的實況），比不到才看 `inTournament`（5 秒快照）。
+⚠ `inTournament` 舊伺服器沒有 ⇒ `undefined`，`toRow` 補 `false`、`friendRoomState` 只認 `=== true`；
+  但**不因此放行加入** —— 可否加入一律以 `openRooms` 比對為準（守衛 B2 對 7 種假值逐一斷言）。
+⚠ 只看 **p1／p2 兩個座位**：好友坐在觀戰位不算「他在這間房」（守衛 B3 ＋ 突變 J3）。
+⚠ `status` 不是 `lobby`／`playing` 的房（例如 `ended`）不進索引（守衛 B4 ＋ 突變 J4）。
+
+### 【5】⭐ 複雜度：O(房間數 + 好友數)
+
+`buildFriendRoomIndex()` 每 tick 對 ≤100 間房各查 2 個座位建 `Map<uid, 房間>`；每位好友再做
+≤6 次 O(1) 查表（自己的 uid ＋ 最近 5 個 uids）。實測（沙盒，Rule 32 附腳本＝守衛【C】節）：
+
+| | 索引法 | 巢狀迴圈（正對照） |
+|---|---|---|
+| 100 房 × 100 好友 | **0.13 ms／次** | 1.48 ms／次（**11.4×**） |
+| 400 房 × 100 好友 | 0.14 ms／次（相對 100 房 1.09×，線性） | — |
+
+### 【6】⭐⭐ 安全（站長已知並接受）
+
+`uid`／`uids` 來自未驗證的 `playerIdentity`（站長裁定 `/api/match-result` 不修）⇒ 理論上有人能讓
+自己的房被標成好友的房。⇒ **一定要顯示房名＋房主名**（`🎮 房名（房主：X）` 獨立一行），讓玩家自己
+看得到再決定。守衛 A0 用**模板形狀的 regex**釘住（只比字串 `fr-room` 會被 CSS 規則餵飽 ＝ 安慰劑，
+突變 J8 專門證明這件事）。
+
+### 【7】⭐⭐ 框架安全：三尺寸量測 ＋ **新舊元素對齊**
+
+`scripts/measure-v6301-friend-room-layout.mjs`（不在 chain，需要瀏覽器）＋守衛【H】節，
+375×812／390×844／1366×768 各量「不傳 rooms」與「傳 rooms」兩次：
+
+| 尺寸 | 面板 left/right（BASE → NEW） | 列高（BASE → NEW） |
+|---|---|---|
+| 375×812 | 8/367 → **8/367** | 86 → 111（有房名）／**86**（沒房名） |
+| 390×844 | 8/382 → **8/382** | 86 → 111／**86** |
+| 1366×768 | 8/1358 → **8/1358** | 48 → 73／**48** |
+
+⭐⭐ **v6.298 的教訓**：除了「既有元素零位移」，還必須斷言「新元素與既有元素對齊」。
+這一列的按鈕群是**靠右**排的（`.spacer{flex:1}`），所以對齊要看**右緣**不是左緣
+（第一版守衛我寫成比左緣 ⇒ 假紅，方向本來就會左移一顆按鈕的寬度）：
+
+- 按鈕群最右緣與 BASE 完全相同，且等於「列的內容區右緣」（⚠ `.row` 有 1px 框線，
+  內容區 = 邊框盒 ∓（border + padding）—— 漏掉 border 會差 1px，第一版就踩到）；
+- 新按鈕與同一行的按鈕**等高**、相鄰**間距 = 列的 `column-gap`**；
+- 按鈕列的**行數（distinct top）與 BASE 相同** ⇒ 沒有多佔一行；
+- 房名那一行 `flex: 1 1 100%`（與既有 `.confirm`／`.alias-hint` 同一招）⇒ 左緣切齊暱稱、
+  右緣切齊列內容區右緣。⚠ 一開始把它夾在按鈕中間，窄畫面會把按鈕列拆成兩半。
+- 三種尺寸都沒有水平捲軸、按鈕彼此不重疊、按鈕完全落在列的內容區內。
+
+### 【8】守衛 `scripts/test-v6301-friend-join-room.mjs`（48 PASS / 0 FAIL）
+
+【A】HEAD-FAIL 錨點／【B】純函式實跑（esbuild 轉 CJS）／【C】複雜度量測＋正對照／
+【D】200 tick 零新請求／【E】四種狀態 DOM 實跑＋點擊真的走 `onjoinroom`／
+【F】沒傳 `rooms` 零按鈕（行為端 ×2 ＋ 靜態 ×1 ＋ `subscribeOpenRooms` 呼叫點 = 1）／
+【G】大廳輪詢在好友分頁照跑（求值 ＋ 三個正對照）／【H】三尺寸框架安全與對齊／
+【I】零 `{@html}`、四個 `each` 都用 `fid` 當 key、零 timer、零 pin 死版本／【J】9 個突變。
+
+**HEAD-FAIL**（實測，`exit=1`，每一條各自紅、不是單一 crash）：
+
+| 樹 | 結果 |
+|---|---|
+| 整棵 BASE 樹（v6.300）＋只加守衛 | **19 PASS / 26 FAIL** |
+| 只還原 `src/lib/friends/friend-rooms.ts`（＝刪檔） | 21 紅（A0／B0~B6／C1~C3／D1／E1~E5／F1／F2／H1~H4／J1~J4） |
+| 只還原 `src/lib/friends/FriendsPanel.svelte` | 12 紅（A0／E1／E2／E4／E5／D1／H2×3／I2／J8／J9） |
+| 只還原 `src/routes/game/+page.svelte` | 3 紅（A0／F3／J5） |
+| 只還原 `src/lib/friends/friends-api.ts` | 2 紅（A1／E1 —— 錦標賽那一列退回「加入房間（停用）」，**仍然不可點**） |
+| 全部到位 | **48 PASS / 0 FAIL** |
+
+⚠ 掃描器自己壞掉兩次（Rule 25，都記在這裡）：
+① `stripCmt` 只剝區塊註解，`//` 行註解裡的「setInterval」「{@html}」被掃成假紅 ⇒ 補 `stripAllCmt`；
+② BASE 樹沒有 `friend-rooms.ts` 時 esbuild 直接丟例外 ⇒ 整支 crash、後面的斷言一條都沒跑，
+   看起來像「只紅了兩條」。改成把打包失敗轉成**逐條紅**。
+
+### 【9】⚠⚠ 工作樹是 CRLF（不是被改壞）
+
+站長的 Windows 是 `core.autocrlf=true`，工作樹上幾乎每個檔案都是 CRLF（`.gitignore`／`IRON_RULES.md`／
+`src/**`／`static/cards/*.json` 全部）。直接在工作樹跑 `npm test`，`test-v6272 ⑩`（比「BASE blob vs
+工作樹位元組」）會對 230+ 個**根本沒動過**的檔案翻紅。
+⇒ 本版一律在 `git archive BASE` 解出來的 **LF 乾淨樹**上跑測試（`mk_v6301_tree.py`），
+  push 也是從 BASE 的 tree 出發、只換掉我真的改過的檔（in-memory LF），
+  **不會把 230 個 CRLF 檔案一起 commit 進去**。
+
+### 【10】首頁 changelog 三步搬運
+
+新增 v6.301（`open`，前一則 v6.299 的 `open` 拿掉）、第 13 則 **v6.280** 的內文搬進
+`changelog-bodies.html`、被擠出 50 則的 **v6.220** 搬進 `changelog-archive.html`。
+⚠ v6.300 實測首頁 summary 已 **4,962 / 5,000 字**（只剩 38 字）⇒ 先搬再寫。
+搬完 **4,952 字**（新條目 93 字、v6.220 的 103 字被搬走）；首頁 31,318 → **31,015 bytes**；
+bodies 38 則不變（35,418 bytes）；封存頁 344 → 345 則。
+
+### 【11】三配套
+
+(a) `oracle-admin/admin.html` `SITE_VERSION_HINT` → `6.301`
+(b) `scripts/test-v6272-*` ⑩ `PREV_SHA` → `c2dbede1`、`PREV_ALLOWED` 七項照實列；
+    `scripts/test-v6264-*` `BASE_SHA` → `c2dbede1`（本版動了 changelog ⇒ 前移）
+(c) 掃 pin 死版本／sha256：本版新增的兩支腳本與 `friend-rooms.ts` 都不含 40 碼 sha、
+    也不拿版本號當判斷（守衛 I3 自己釘住這一條）。
+
+
 ## v6.300 — 好友清單多回一個布林 `inTournament`（「這位好友此刻是否正在錦標賽對戰中」）
 
 BASE `e3d04359344edf1e52acbf109cefb5a8aa6b084a`（v6.299，遠端 main）。

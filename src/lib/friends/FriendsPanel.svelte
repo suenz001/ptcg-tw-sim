@@ -34,6 +34,11 @@
     fetchFriendsList, requestFriendByEmail, friendsAction, setFriendAlias, FRIENDS_ALIAS_MAX_LEN,
     type FriendsList, type FriendRow, type FriendsAction, type FriendsFailKind,
   } from '$lib/friends/friends-api';
+  // ⭐⭐ v6.301 好友列的「加入房間／觀戰」——純瀏覽器端比對，零新請求（見該檔開頭的效能紅線）。
+  import {
+    buildFriendRoomIndex, friendRoomState, friendRoomLabel, friendRoomClickable, friendRoomTitle,
+    type FriendRoomSource,
+  } from '$lib/friends/friend-rooms';
 
   let {
     /** true＝嵌在大廳分頁裡（不自己畫底色，讓大廳的底透出來）。 */
@@ -48,6 +53,17 @@
     dmMsg = '',
     /** 已經開著面板的那位好友（該列的「💬」停用）。 */
     dmActiveFid = '',
+    /**
+     * ⭐⭐⭐ v6.301 線上大廳每 2 秒更新一次的公開房間列表（`openRooms`，已含 `seats[].uid`）。
+     * ⚠⚠ **沒傳（undefined）⇒ 整組「加入房間／觀戰」按鈕不渲染**：錦標賽頁的好友分頁與
+     *   `/friends` 獨立頁沒有這份資料，而且**絕不可以為了這個功能新增輪詢**
+     *   （v6.118 效能事故：錦標賽頁每 2 秒兩支 /api/rooms，30 人賽 ≈ 每秒 30 個純浪費的請求）。
+     */
+    rooms,
+    /** 按下「加入房間／觀戰」要走的**既有**流程（大廳的 `handleJoinFromList`）。沒給就不渲染按鈕。 */
+    onjoinroom,
+    /** 非空 ⇒ 按鈕一律停用，並在好友區掛一行說明（例如玩家名稱還沒填）。 */
+    joinBlockedMsg = '',
     /** 對某位好友做完 accept／reject／remove／block／unblock 之後通知外面（例如關掉私聊面板）。 */
     onafteract,
   }: {
@@ -57,6 +73,9 @@
     ondm?: ((r: FriendRow) => void) | null;
     dmMsg?: string;
     dmActiveFid?: string;
+    rooms?: ReadonlyArray<FriendRoomSource | null | undefined> | null;
+    onjoinroom?: ((roomId: string) => void) | null;
+    joinBlockedMsg?: string;
     onafteract?: ((fid: string) => void) | null;
   } = $props();
 
@@ -97,6 +116,14 @@
   const dmUnavailable = $derived(!!dmMsg);
   /** 顯示「💬」的條件：外面有給 ondm，而且私聊沒有被判為不可用。 */
   const showDm = $derived(!!ondm && !dmUnavailable);
+  /**
+   * ⭐⭐⭐ v6.301 顯示「加入房間／觀戰」整組的條件：呼叫端**同時**給了 `rooms` 與 `onjoinroom`。
+   * ⚠ 兩個都要 —— 只給其中一個就渲染，等於做出一顆按了沒反應的按鈕。
+   * ⚠⚠ 錦標賽分頁與 `/friends` 兩個掛載點都不傳 ⇒ 整組不渲染（它們沒有 openRooms）。
+   */
+  const showRoomBtn = $derived(Array.isArray(rooms) && !!onjoinroom);
+  /** ⚠ 複雜度 O(房間數)：每 tick 對 ≤100 間房各查 2 個座位；每位好友再做 ≤6 次 O(1) 查表。 */
+  const roomIndex = $derived(showRoomBtn ? buildFriendRoomIndex(rooms) : null);
 
   onMount(() => {
     // ⚠ 登入狀態要等 Firebase 還原完才知道（v6.026 推播的教訓）；非匿名使用者才發那一發 list。
@@ -260,11 +287,14 @@
       <section class="group">
         <h2>好友 <span class="count">{friendCount} / {limit}</span></h2>
         {#if dmUnavailable}<p class="hint">{dmMsg}</p>{/if}
+        {#if showRoomBtn && joinBlockedMsg}<p class="hint">{joinBlockedMsg}</p>{/if}
         {#if list.friends.length === 0}
           <p class="empty">還沒有好友。</p>
         {:else}
           <ul class="rows">
             {#each list.friends as r (r.fid)}
+              <!-- ⭐⭐⭐ v6.301「加入房間／觀戰」的狀態：沒傳 rooms（showRoomBtn=false）⇒ null ⇒ 整組不渲染。 -->
+              {@const _rs = showRoomBtn ? friendRoomState(r, roomIndex) : null}
               <li class="row">
                 <!-- ⭐ v6.296 顯示優先序：有備註名就顯示備註名，並**另外用小字顯示原暱稱**；
                      沒有備註名就只顯示暱稱。⚠ 兩者都是玩家自由輸入 ⇒ 一律走 Svelte 預設 escape。 -->
@@ -287,10 +317,17 @@
                   </form>
                   {#if aliasErr}<span class="error alias-err">{aliasErr}</span>{/if}
                 {:else}
+                  <!-- ⭐⭐⭐ v6.301「加入房間／觀戰」。四種狀態：等待中的休閒房＝可加入、對戰中的休閒房＝可觀戰、
+                       錦標賽對戰中＝停用並明講、其餘（含資料不足）＝停用。
+                       ⚠ 點下去走的是大廳**既有**的 handleJoinFromList（加入與觀戰同一條路）。 -->
+                  {#if _rs}<button class="small fr-join" disabled={!friendRoomClickable(_rs) || !!joinBlockedMsg} title={friendRoomTitle(_rs)} onclick={() => { if (_rs.room) onjoinroom?.(_rs.room.roomId); }}>{friendRoomLabel(_rs)}</button>{/if}
                   {#if showDm}<button class="small dm-open" disabled={dmActiveFid === r.fid} onclick={() => ondm?.(r)} title="私聊">💬 私聊</button>{/if}
                   {#if canAlias(r)}<button class="small" disabled={!!actBusy} onclick={() => startAlias(r)} title="幫這位好友取一個只有自己看得到的名字">✏️ 備註名</button>{/if}
                   <button class="small" disabled={!!actBusy} onclick={() => askConfirm(r.fid, 'remove')}>解除好友</button>
                   <button class="small danger" disabled={!!actBusy} onclick={() => act('block', r.fid)}>封鎖</button>
+                  <!-- ⚠⚠ uid 來源是未驗證的 playerIdentity ⇒ **一定要把房名＋房主名顯示出來**，
+                       讓玩家自己看得到再決定要不要進去（站長已知並接受這個風險）。 -->
+                  {#if _rs?.room}<span class="fr-room">🎮 {_rs.room.roomName}（房主：{_rs.room.hostName}）</span>{/if}
                 {/if}
               </li>
             {/each}
@@ -436,6 +473,10 @@
   /* ⭐ v6.296 有備註名時，另外用小字顯示原本的暱稱（免得認不出是誰）。 */
   .orig-nick { font-size: .74rem; color: var(--fr-dim); overflow-wrap: anywhere; word-break: break-word; }
   .meta { font-size: .78rem; color: var(--fr-dim); }
+  /* ⭐ v6.301 配對到的房間：房名＋房主名一定要看得到（房名是玩家自由輸入 ⇒ 一樣要斷字）。
+     ⚠ `flex: 1 1 100%` ＝整列另起一行（與 .confirm／.alias-hint 同一招）：
+       夾在按鈕中間會在窄畫面把按鈕列拆成兩半，三種尺寸實測都會破版。 */
+  .fr-room { flex: 1 1 100%; font-size: .78rem; color: var(--fr-dim); overflow-wrap: anywhere; word-break: break-word; }
   .spacer { flex: 1; }
   .confirm { font-size: .8rem; color: var(--fr-gold); flex: 1 1 100%; }
   /* 備註名編輯列：整列另起一行（flex 100%），手機直式也不會把既有按鈕擠爆。 */
