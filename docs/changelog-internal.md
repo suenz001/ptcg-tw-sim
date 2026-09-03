@@ -1,5 +1,149 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.295 — 👥 好友「備註名」＋可信的「最新暱稱」（純伺服器端）
+
+BASE `eba051fca75a60927079afc39a06bde7ce80c5f8`（v6.294，遠端 main）。
+**玩家端零改動**（`src/` 只動 `version.ts`）—— 鐵律：client 送新欄位一律 server 先上，
+下一版 client 再靠新欄位／哨兵決定要不要顯示 UI。
+好友功能的總開關仍預設 **關**（`friendsConfig.enabled`，admin 📡 分頁可開）。
+**玩家看不到 ⇒ 首頁 changelog 不寫**（changelog 規範②）。
+
+### 【0】站長的需求（逐字）
+> admin 功能裡面可以看到玩家最後一次使用的暱稱（錦標賽的聊天室裡面也是類似的用法），
+> 所以當邀請好友或是成為好友以後，也應該顯示該玩家最後一次使用的暱稱才對
+>
+> 另外可以學 line 一樣，由玩家自己幫好友再取自己想要的暱稱，例如「路卡利歐超強玩家」之類的，
+> 避免在好友改暱稱之後忘了這個好友是做什麼的，畢竟我們的系統也沒有大頭照可以辨認
+
+### 【1】⭐⭐⭐【B】`TREGS.email` 到底可不可信 —— 自己重新查證的結果
+
+交辦的轉述是「`TREGS.email` 只有驗過 token 的報名才會非 null，但 v6.291 之前的舊資料可能是冒名的，
+⇒ 你判斷要不要加時間下限」。**查證後結論：舊資料同樣安全，不加時間下限。**
+
+1. **三支寫入點逐字讀**（`/register` L6845、`/register-and-checkin` L6903、社群賽 `/propose` 發起者自動報名 L6968）
+   —— 全部是 `email: id.email || null`，唯一來源是 `tournIdentity(req)`。
+2. **`tournIdentity` 的兩條分支**：
+   - Bearer token → `TADMIN.auth().verifyIdToken()` 成功 → `{ uid: dec.uid, email: dec.email || null, …, verified: true }`
+   - 沒 token 卻帶 `playerId` → `{ uid: String(pid), **email: null**, …, verified: false }`
+   ⇒ **冒名路徑寫進 TREGS 的列，`email` 必定是 `null`。**
+3. **歷史全掃**（不是憑印象）：`server_admin_patch.js` 共 179 個版本，
+   其中 161 個有 `tournIdentity` —— **161 個全部**都是
+   `if (pid) return { uid: String(pid), email: null, …`（`git cat-file` 逐版比對，mismatch = 0）；
+   另外 18 個版本連 `tournamentRegistrations` 都還不存在（也逐版確認過）。
+
+⇒ 用 **email 當鍵**去查 TREGS，**在物理上撈不到任何冒名列**（那些列的 email 是 null）。
+v6.291／v6.292 的 `verified` 閘保護的是「用別人的 **uid** 報名」，
+而我們這次不用 uid 當鍵 ⇒ **時間下限沒有防到任何東西，反而會把老玩家真正的最新暱稱砍掉**（違反 Rule 30 的體驗優先）。
+
+⚠ 已知限制（誠實記錄，守衛 D6 鎖住行為）：`TREGS.email` 直接來自 token、**沒有正規化**，
+本查詢走等值 `$in` ⇒ 大小寫不同就查無 ⇒ **退回快照**（fail-graceful，不會錯配到別人）。
+Firebase 的 email 實務上都是小寫，且錯了也只是「暱稱比較舊」，不值得為此加 collation 索引的複雜度。
+
+### 【2】⭐⭐【B】TREGS 的 email 索引：本來沒有 ⇒ lazy 建 ＋ 索引自驗（fail-closed）
+
+`TREGS` 只有 v6.119 建的 `{uid:1}` 與 `{eventId:1}` 兩個索引，**確實沒有 email 索引**。
+
+- 新建 **`{ email: 1, registeredAt: -1, name: 1 }`** —— ⭐ 刻意把 `name` 也放進索引：
+  這樣 `$match email` → `$sort` → `$group name` 整條 pipeline 的欄位都在索引裡，
+  **查詢被索引涵蓋、不必 FETCH**。這一點很重要：TREGS 每一列都帶 `deckEntries`（60 張牌表），
+  沒有涵蓋的話光是 FETCH 就會把幾 MB 的 doc 吃進 node（＝ v6.276 已經踩過的那個坑）。
+- 建法沿用 v6.240／v6.266 先例：只在服務啟動時 lazy 建一次、不 await、**同一行**帶 `.catch()`
+  （`test-v6119`／`test-v6240` 的既有斷言就是「每個含 `createIndex` 的行都要有 `catch`」）。
+- **索引自驗 `_frRegIndexReady()`**（比照 v6.266 `deckStatsIndexReady`）：
+  `collection.indexes()` 找不到那個 key ⇒ **整段跳過**，暱稱退回 friendships 快照，
+  並留一行 `console.warn` 讓站長查得到。成功結果快取 60 秒、失敗退避 10 秒
+  （剛開機索引可能還在建，不要一次失敗就整天停用，也不要每發都打 `indexes()`）。
+- 第二道保險：`aggregate` 帶 **`hint: FR_REG_IDX`** ⇒ 就算自驗被繞過，沒有索引也是直接錯誤而不是全表掃。
+
+### 【3】【A】備註名（LINE 那種）
+
+- 欄位：`friendships` **同一列**的 `aliasByA` / `aliasByB`（依既有 `a`/`b` 排序語義：`a` 那一側的人取的名字放 `aliasByA`）。
+- 端點 `POST /api/friends/alias {fid, alias}`：走既有 `_frGate` ＋ `_frFindMine`；
+  **只准 `status === 'accepted'`**（pending／rejected／我封鎖的 ⇒ 409 `friends-alias-not-friend`）；
+  被封鎖方一律**靜默 200 且零寫入**（與 accept／reject／remove 同一條紀律）。
+- 淨化 `_frAlias()`：控制字元（C0／DEL／C1）換空白 → **零寬字元**（U+200B~U+200F／U+2060／U+FEFF）刪除
+  → `\s+` 折成單空白 → trim → **上限 20 字**（`Array.from` 以碼位計，emoji 不會被切成半個）。
+  空字串／全空白／非字串 ⇒ **`$unset` 我自己那一側**（清除），絕不碰對方的欄位。
+- **⚠⚠⚠ 對方絕對看不到我給他取的備註名** —— 本版最重要的安全性質：
+  `_frPublic` 只回 `doc.a === me ? doc.aliasByA : doc.aliasByB`（對方那一側連讀都不讀）；
+  admin 端點（`_frDmAdminRow`／dm 總覽／dm 展開）用的是**逐欄 projection**，一律不含 alias。
+  守衛【C】兩側各填不同哨兵，以 A／B／admin 三種身分實跑 `list` ＋ `dm/list` ＋ admin 四支，
+  斷言「對方的哨兵零出現」「admin 兩個哨兵都零出現」，並附把 `_frPublic` 改成回對方那一側的正對照。
+
+### 【4】⚠⚠ 第一版就被自己的守衛抓到的真 bug：`list` 的逐欄 projection 沒加新欄位
+
+alias 端點寫得進 DB、`_frPublic` 也讀了，但 `list` 的 `find()` 有**逐欄 projection**，
+`aliasByA`/`aliasByB` 不在裡面 ⇒ **清單永遠讀不到、`alias` 恆為 `null`**。
+守衛 B1／C1／D1 三條同時紅才發現（＝典型的「接線沒接上」，只驗字串存在的守衛擋不住）。
+修法：projection 補 `aliasByA: 1, aliasByB: 1`；並新增守衛 **B0** 專門守這條接線
+（靜態驗 projection 欄位 ＋ **行為端正對照**：把兩個欄位從 projection 拿掉 ⇒ `alias` 就讀不到）。
+
+### 【5】顯示優先序與回傳形狀（⭐ alias 與原暱稱**分開**）
+
+`list` 的每一筆維持固定白名單形狀，只多一個 `alias`：
+
+| 欄位 | 內容 |
+|---|---|
+| `alias` | ① 我給這位好友取的備註名（沒有 ⇒ `null`）。**只有我看得到。** |
+| `nick` | ② TREGS 最新報名暱稱 → ③ `friendships` 的 `nickA`/`nickB` 快照 → ④「玩家」 |
+
+⚠ **伺服器不合併**（守衛 B1 直接斷言「設了 alias 之後 `nick` 仍是原暱稱」）——
+下一版 UI 才顯示得出「路卡利歐超強玩家（原暱稱：小明）」。
+
+⚠⚠ `nick` 仍然**絕不**吃 `playerIdentity.nick`（v6.286【2】的裁定：那張表由零身分驗證的
+`/api/match-result` 寫入，可被任意冒名竄改）。TREGS 取回的 `name` 另外過 `_frAuthNick()`
+＝ 不得等於自己 email 的前綴，維持全站「絕不用 email 前綴當顯示名」的紀律。
+
+### 【6】效能：絕不拖累（pm2 fork 單 instance，與錦標賽同一個 node 行程）
+- `list` 已有 `FR_LIST_CAP = 250` 硬上限。
+- TREGS 是 **一發** `aggregate`（`$in` 陣列），**絕不 per-friend 各查一次**。
+  守衛 D3：10 個好友 ⇒ 對 `tournamentRegistrations` 的查詢次數實測 **1**（含 `find` 型一起數也是 1），
+  而且斷言 `$in` 的內容**恰好等於這次的好友清單**（防「拿掉 `$match` 變成掃全表」那種突變）。
+- 逐筆迴圈掛中央 `adminScanYield`；守衛 D7：250 好友＋250 筆 TREGS ⇒ 讓路 ticks **恰 2**
+  （docs 迴圈 1 ＋ TREGS 迴圈 1），拿掉 TREGS 迴圈的讓路 ⇒ 必紅。
+- 索引缺席時整段跳過 ⇒ **最壞情況就是暱稱比較舊**，不會有任何全表掃。
+
+### 【7】跨 IIFE ／ 區塊隔離
+- `tournamentRegistrations` 用**字面**（`FR_REG_COLL`）而不是引用錦標賽區塊的 `TREGS` 常數 ——
+  那個常數宣告在本區塊**之後**，而守衛會單獨抽本區塊出來實跑（引用會 TDZ／ReferenceError）。
+  與 `_frPurgeDm` 直接用字面 `'tournamentChat'` 是同一條紀律。
+- `adminScanYield` 照舊走 `app.locals`、handler 執行時才取、取不到 fail-closed 503。
+
+### 【8】⚠ 錦標賽區塊逐位元未動
+好友區塊整段在第一支 `/api/tournament` 之前 ⇒ 兩把既有 sha256 鎖都不動，實測相同：
+- 第一支 `/api/tournament` 端點至檔尾：`c0891b6f200ab4e3898c50aa77365458d2207870e828dc28bbfb44df81ddcda3`
+- `const TEVENTS = db.collection('tournamentEvents');` 錨點至檔尾：`e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40`
+
+### 【9】⭐ 順手拆掉一顆安慰劑（Rule E）
+`test-v6289` 有一條 `assert.ok(PATCH.includes("… (v1.40)"), 'FRIENDS 區塊版號 log 沒 bump 到 v1.40')` ——
+**pin 死版本號**，本版把 log bump 到 v1.41 的當下它就會紅。
+照 Rule E 改成不綁版本的等價條件：①版號 log 存在且**不得退版**（≥ v1.40）；
+②那個版號在區塊開頭必須有對應的 `v1.NN（v6.XXX）` 變更條目（log 與文件不得脫節）。
+
+### 【10】守衛 `scripts/test-v6295-friends-alias-nick.mjs`（37 PASS，已進 `npm test` chain）
+【A】抽取器下限＋錦標賽 sha256＋500 出口只有 `_frFail`＋每個 `createIndex` 行都有 `catch`。
+【B】B0 projection 接線／B1 設定讀回且不合併／B2 淨化五種＋清除四種／B3 非 accepted 409 零寫入／
+B4 被封鎖方靜默零寫入／B5 `$unset` 只動自己那一側（逐欄比對其餘 11 個欄位不變）／B6 越權 404／
+B7 gate 503・401・helper-missing・500 不含 email。
+【C】C1 兩側哨兵互掃（list＋dm/list）／C2 admin 四支零哨兵（附「admin 本來就看得到內文與 email」的正對照）／
+C3 掃描器自驗／C3m 正對照突變／C4 DM 區塊零 alias 字樣。
+【D】D1 優先序四階／D2＋D2m 索引缺席 fail-closed／D3 N+1／D4 取最新一筆／D5 email 前綴不採用／
+D6 大小寫已知限制／D7＋D7m 讓路節拍／D8 createIndex 與 hint／自驗字串逐字一致。
+【E】完整 alias 流程回應零 email、零 local-part、且沒有退回吃 `playerIdentity.nick`。
+【F】十個突變（C3m／D2m／D7m ＋ F1~F7）各自紅在預期那一條。
+【G】test chain ／版本一致（不 pin 死數字）。
+
+**HEAD-FAIL**（逐檔還原 ⇒ 必紅在預期斷言）：
+`server_admin_patch.js` ⇒ A0「沒有 `_frAlias`」；`friends-harness-v6282.mjs` ⇒ A0「沒有 v6.295 的 `indexes()`」；
+`package.json` ⇒ G1；`version.ts`／`admin.html` ⇒ G2；
+`test-v6282` ⇒ 它自己的 C2「白名單形狀不對」；`test-v6289` ⇒ 它自己的 D1「版號 log 沒 bump 到 v1.40」。
+
+### 【11】部署
+動到 `oracle-admin/server_admin_patch.js` 與 `oracle-admin/admin.html`
+⇒ **只跑 `update-tournament.bat`**（唯一會先 `git fetch` ＋ `git reset --hard origin/main` 的那支；
+另兩支 admin bat 傳的是本機可能落後的檔）。⚠ 會 pm2 restart（斷線 2~5 秒）⇒ **挑離峰、沒有錦標賽進行中時跑**。
+本版沒有「client 送新欄位」的相依（玩家端零改動），所以沒有先後順序問題。
+
 ## v6.294 — 🔧 新增「VM 健康檢查」運維工具（`check-health.bat` ＋ `health-check.sh`）
 
 BASE `f087b0ba64065c51deacad650cf8563a1c1b25ce`（v6.293，遠端 main）。

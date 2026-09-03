@@ -74,6 +74,8 @@ function applyUpdate(doc, upd, isInsert) {
   for (const op of Object.keys(upd)) {
     if (op === '$set') Object.assign(doc, structuredClone(upd.$set));
     else if (op === '$setOnInsert') { if (isInsert) Object.assign(doc, structuredClone(upd.$setOnInsert)); }
+    // ⭐v6.295：$unset（出貨碼的 /api/friends/alias 清除備註名用）—— 只刪指定欄位，其餘一個字都不動
+    else if (op === '$unset') { for (const f of Object.keys(upd.$unset)) delete doc[f]; }
     else if (op === '$push') {
       for (const f of Object.keys(upd.$push)) {
         const spec = upd.$push[f];
@@ -88,6 +90,11 @@ function applyUpdate(doc, upd, isInsert) {
 export function makeFakeDb(seed, opts) {
   const o = opts || {};
   const store = new Map();          // name -> Map(_id -> doc)
+  // ⭐v6.295：索引清單（出貨碼的 _frRegIndexReady 會呼叫 collection.indexes() 做索引自驗）。
+  //   o.indexes ＝ 預先就存在的索引；o.noAutoIndex ＝ createIndex 只記 log **不**登錄（模擬「索引沒建起來」）。
+  const idxs = new Map();           // name -> [{ key }]
+  const idxOf = (n) => { if (!idxs.has(n)) idxs.set(n, [{ key: { _id: 1 } }]); return idxs.get(n); };
+  for (const [n, keys] of Object.entries((o && o.indexes) || {})) for (const k of keys) idxOf(n).push({ key: k });
   const log = [];                    // 每一次操作
   let insCounter = 0;                // ⭐v6.287 insertOne 自動 _id
   const col = (name) => { if (!store.has(name)) store.set(name, new Map()); return store.get(name); };
@@ -100,7 +107,8 @@ export function makeFakeDb(seed, opts) {
     collection(name) {
       const c = col(name);
       return {
-        createIndex: async (keys) => { log.push({ name, op: 'createIndex', keys }); return 'ok'; },
+        createIndex: async (keys) => { log.push({ name, op: 'createIndex', keys }); if (!o.noAutoIndex) idxOf(name).push({ key: structuredClone(keys) }); return 'ok'; },
+        indexes: async () => { log.push({ name, op: 'indexes' }); maybeThrow(name, 'indexes'); await io(); return idxOf(name).map((i) => structuredClone(i)); },
         findOne: async (q, opt) => { log.push({ name, op: 'findOne', q, opt }); maybeThrow(name, 'findOne'); await io();
           for (const d of c.values()) if (matchDoc(d, q)) return project(d, opt && opt.projection); return null; },
         find: (q, opt) => {

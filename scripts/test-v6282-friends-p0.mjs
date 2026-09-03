@@ -166,7 +166,8 @@ await T('B5 開關快取：admin POST 立刻生效（不必等 10 秒）；admin
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【C】⭐⭐ 隱私：回應永不含 email');
-const PUBLIC_KEYS = ['fid', 'status', 'nick', 'uid', 'uids', 'requestedByMe', 'blockedByMe', 'via', 'at'];
+// ⭐v6.295：新增 alias（我自己給這位好友取的備註名；**只回我這一側** —— 對方看不到，正對照見 test-v6295【A3】）
+const PUBLIC_KEYS = ['fid', 'status', 'nick', 'alias', 'uid', 'uids', 'requestedByMe', 'blockedByMe', 'via', 'at'];
 /** 跑完整的一輪流程，把每一個回應都收起來（含錯誤回應）。 */
 async function runFullFlow(blockSrc) {
   const seed = seedBase();

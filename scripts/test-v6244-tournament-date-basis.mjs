@@ -297,11 +297,18 @@ await T('⑫ ⚠ 本版沒有新增任何刪除／改寫既有名人堂或歸檔
   const hit = [];
   for (const re of DANGER) for (const m of PAT.matchAll(re)) hit.push(m[0]);
   assert.strictEqual(hit.length, 0, '出現危險寫入：' + hit.join('、'));
-  // $unset 全站只允許出現在 TMATCH（v6.188 的 rematch 清旗標），不得沾到名人堂／歸檔
+  // $unset 全站只允許出現在：① TMATCH（v6.188 的 rematch 清旗標）
+  //   ② ⭐v6.295 friendships 的備註名清除 —— **行為端證明**在 test-v6295 B5：
+  //      只 $unset 我自己那一側（aliasByA／aliasByB 依 a/b 決定），並逐欄斷言其餘 11 個欄位一個位元都沒動。
+  //   ⚠ 兩者都一律不得沾到名人堂／歸檔（下面多加一條直接禁 TCHAMPS／TARCHIVE，比原本更嚴）。
   for (const m of PAT.matchAll(/\$unset/g)) {
     const line = PAT.slice(PAT.lastIndexOf('\n', m.index) + 1, PAT.indexOf('\n', m.index));
-    assert.ok(/TMATCH\.updateOne/.test(line) || line.trim().startsWith('//'),
-      '$unset 出現在非 TMATCH 的地方：' + line.trim().slice(0, 120));
+    const t = line.trim();
+    const isComment = t.startsWith('//') || t.startsWith('*');
+    const isFriendsAlias = /\{ _id: cur\._id, status: 'accepted' \}, \{ \$unset: \{ \[field\]: '' \}/.test(line);
+    assert.ok(/TMATCH\.updateOne/.test(line) || isFriendsAlias || isComment,
+      '$unset 出現在非 TMATCH／非好友備註名的地方：' + t.slice(0, 120));
+    assert.ok(!/TCHAMPS|TARCHIVE/.test(line), '$unset 沾到名人堂／歸檔：' + t.slice(0, 120));
   }
   // 正對照：確認上面那個掃描真的走得到（BASE 就有兩處 $unset）
   assert.ok((PAT.match(/\$unset/g) || []).length >= 2, '掃描器壞了：連既有的 $unset 都找不到');

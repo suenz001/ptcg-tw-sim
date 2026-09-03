@@ -255,7 +255,13 @@ await T('D1 unblock handler：deleteOne 緊接 purge 行、purge 只在 deletedC
   assert.strictEqual(dels[0][2].trim(), "{ room: 'dm:' + fid }", 'filter 字面不對：' + dels[0][0]);
   const purge = FR.slice(FR.indexOf('async function _frPurgeDm('), FR.indexOf('async function _frFindMine('));
   assert.ok(!/\$regex|startsWith|RegExp/.test(purge), 'purge 不得用前綴／正則');
-  assert.ok(PATCH.includes("console.log('[friends] endpoints registered (v1.40)"), 'FRIENDS 區塊版號 log 沒 bump 到 v1.40');
+  // ⭐v6.295 拆 pin（Rule E：pin 死版本號的斷言在版本被取代的當下就靜默失效）——
+  //   改成不綁版本的等價條件：①版號 log 存在且**不得退版**（≥ 本守衛上線時的 v1.40）；
+  //   ②那個版號在區塊開頭必須有對應的 `v1.NN（v6.XXX）` 變更條目（log 與文件不得脫節）。
+  const _vm = /console\.log\('\[friends\] endpoints registered \(v(\d+)\.(\d+)\)/.exec(PATCH);
+  assert.ok(_vm, 'FRIENDS 區塊少了版號 log');
+  assert.ok(Number(_vm[1]) * 100 + Number(_vm[2]) >= 140, 'FRIENDS 區塊版號 log 退版了（本守衛上線時是 v1.40）：' + _vm[0]);
+  assert.ok(PATCH.includes('v' + _vm[1] + '.' + _vm[2] + '（v6.'), '版號 log v' + _vm[1] + '.' + _vm[2] + ' 在區塊開頭找不到對應的變更條目');
 });
 await T('D1m 掃描器自驗：把 purge 塞進冷卻內分支 ⇒ D1 紅在「冷卻內…不得刪對話」', async () => {
   const bad = mutate(FR, REJ_RESTORE, REJ_RESTORE.replace('          return res.json', "          await _frPurgeDm(cur.fid || _frFid(cur._id), 'unblock');\n          return res.json"));

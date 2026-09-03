@@ -664,9 +664,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'f087b0ba64065c51deacad650cf8563a1c1b25ce';   // v6.293（v6.294 的上一版）
-// ⭐⭐v6.294 是**純運維版**：只新增 oracle-admin/health-check.sh ＋ oracle-admin/check-health.bat
-//   ＋ scripts/test-v6294-health-check.mjs ＋ .gitattributes，玩家端只動 version.ts。
+const PREV_SHA = 'eba051fca75a60927079afc39a06bde7ce80c5f8';   // v6.294（v6.295 的上一版）
+// ⭐⭐v6.295 是**純伺服器端版**：只動 oracle-admin/server_admin_patch.js（好友備註名＋可信的最新暱稱）、
+//   oracle-admin/admin.html（只 bump SITE_VERSION_HINT）與 scripts/ 底下的守衛，玩家端只動 version.ts。
 //   ⚠ 這一節只掃 src/ 與 static/ 兩個目錄、而且是**從 BASE 的檔案清單出發**逐檔比 ——
 //     新增在 oracle-admin/ 與 scripts/ 底下的檔案不在掃描範圍，**不可以**列進來（列了會紅）。
 //   ⚠⚠ 這一條就是本版「其餘玩家端零改動」的證明 —— 尤其 src/routes/game/+page.svelte 一個位元都不能動
