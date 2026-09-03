@@ -1,5 +1,160 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.300 — 好友清單多回一個布林 `inTournament`（「這位好友此刻是否正在錦標賽對戰中」）
+
+BASE `e3d04359344edf1e52acbf109cefb5a8aa6b084a`（v6.299，遠端 main）。
+**玩家端零改動**：`src/` 只動 `version.ts`；首頁 changelog 一則都不寫（純伺服器欄位，玩家此刻看不到任何差異）。
+改動檔：`oracle-admin/server_admin_patch.js`（v1.43 → v1.44）／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`src/lib/version.ts`／`package.json`（test chain）＋新檔 `scripts/test-v6300-friends-intournament.mjs`、
+`scripts/perf-v6300-friends-intournament.mjs`。
+
+### 【0】站長需求（逐字）
+
+> 幫我確認好友功能是否可以在好友選單增加一個按鈕【加入房間】，就是當好友剛好正在一般對戰房間時
+> （錦標賽除外），可以直接點選按鈕進去該好友現在的房間，直接一鍵加入或觀戰好友的戰局。
+> 但是當朋友不在房間的時候，這個按鈕就不能按，甚至當好友在錦標賽對戰的時候，也能提示好友正在錦標賽對戰中
+
+站長裁定：錦標賽頁的好友分頁**不顯示**加入鈕（那裡沒有房間輪詢）；「正在錦標賽對戰中」的提示**要做**，
+搭好友清單那一發（打開時的快照即可，不要即時）；按鈕點下去顯示房名＋房主名並直接加入，**是 client 的事、本版不做**。
+
+⇒ **本版只做伺服器端一件事**：`GET /api/friends/list` 的每一筆好友多回布林 `inTournament`。
+
+### 【1】⭐⭐⭐ 索引現況（自己查證，不照抄轉述）
+
+`oracle-admin/server_admin_patch.js` 全檔 `createIndex` 掃描結果（相關的四張表）：
+
+| collection | 既有索引 | 誰建的 |
+|---|---|---|
+| `tournamentEvents` | `{status:1}` | 錦標賽區塊 |
+| `tournamentMatches` | `{eventId:1}`／`{eventId:1,status:1}`／`{eventId:1,round:1}` | 錦標賽區塊 |
+| `tournamentRegistrations` | `{eventId:1}`／`{uid:1}`／`{email:1,registeredAt:-1,name:1}` | 錦標賽區塊 ＋ v6.295 |
+| `friendships` | `{a:1,status:1}`／`{b:1,status:1}` | v6.282 |
+
+⚠ **`tournamentMatches` 沒有單獨的 `{status:1}` 索引** ⇒ 不可以用 `{status:'playing'}` 單條件查（那是 COLLSCAN）。
+必須先拿到 `eventId` 才走得進 `{eventId:1,status:1}`。
+
+### 【2】⭐⭐ 做法：**反方向**對照，因此一個索引都不必新增
+
+轉述裡的路線是「好友 email → TREGS 查 uid → TMATCH」。**我沒有採用**，理由：
+v6.295 建的 TREGS 索引是 `{email:1, registeredAt:-1, name:1}`，**不含 `uid`** ⇒ 用 email 查 uid 會 FETCH，
+而 TREGS 每一列都帶 60 張牌表、且是玩家的**全部歷史報名**（沒有上限，只會愈長愈多）。
+要避免 FETCH 就得改索引 —— 改了會讓 v6.295 `test-v6295` 的 D8（`createIndex` 逐字斷言）翻紅，
+而且要在一張永久累積的大表上重建索引。
+
+⭐ 改走**反方向**（從「進行中的賽事」出發），三發固定查詢：
+
+```js
+① db.collection('tournamentEvents')
+     .find({ status: 'running' }, { projection: { _id: 1 } }).limit(20)          // 索引 {status:1}
+② db.collection('tournamentMatches')
+     .find({ eventId: { $in: evIds }, status: 'playing' },
+           { projection: { p1uid: 1, p2uid: 1 } }).limit(500)                    // 索引 {eventId:1,status:1}
+③ db.collection('tournamentRegistrations')
+     .find({ eventId: { $in: evIds }, uid: { $in: [...uids] } },
+           { projection: { uid: 1, email: 1 } }).limit(2000)                     // 索引 {eventId:1}
+⇒ uid → email（過 _frNormEmail），得到「此刻正在錦標賽對戰中的 email 集合」
+⇒ list 的每一筆 accepted 好友：inTournament = 集合裡有沒有他
+```
+
+⭐ ③ 被 `{eventId:1}` 索引框住 ⇒ 只碰到**這幾場進行中賽事**的報名列（≈ 賽事人數，30 人賽就是 30 列），
+不是那個玩家的全部歷史報名。**所以本版零 `createIndex` 新增**（守衛 A2 斷言區塊內 `createIndex` 仍是 3 行）。
+
+⚠ 只認 `status: 'playing'`（已配到房間、真的在打）；`pending`＝已配對但還沒進場，不算「正在對戰中」。
+⚠ 只認 `status: 'running'` 的賽事 ⇒ 已結束賽事裡殘留的 `playing` 對戰不會誤判（那種殘留列真的存在，見 v0.58 清掃）。
+⚠ 報名列的 `email` 是 `null`（未驗證身分的 playerId fallback 寫的）⇒ 對不上 ⇒ `false`（fail-closed，不猜）。
+⚠ TREGS 的 `email` 沒有正規化 ⇒ 這裡一律過 `_frNormEmail`（trim＋小寫）再比對，大小寫不同也對得上。
+
+⭐ **為什麼不用 `playerIdentity`（那張表已經在 list 裡被讀出來、含 `uid`/`uids`，零成本）**：
+它由**零身分驗證**的 `/api/match-result` 寫入（v6.286【2】的既有裁定，區塊註解也寫了「只當大廳提示用」）。
+`inTournament` 是我們主動下的判斷、要拿來 gate 一顆按鈕，用可被冒名竄改的來源不合適。
+TREGS 的 `email` 只有 Firebase ID token 驗過的那條分支才會非 null（v6.295 已掃過本檔全部 179 個歷史版本），是可信的。
+
+### 【3】⚠⚠ 效能：絕不 N+1、絕不新增輪詢
+
+- **查詢次數與好友人數完全無關**：100 個好友仍是 `events 1 / matches 1 / registrations 1`（守衛 C1）；
+  10 人與 100 人的四個數字**逐一相同**（守衛 C2）。
+- **沒有賽事在進行 ⇒ ②③ 零查詢**（守衛 C3）—— 那是絕大多數時間的情況，只多一發 `tournamentEvents`。
+- **全站共用 5 秒快照 `FR_TOURN_TTL_MS` ＋ in-flight 合併**：連續三發 list 或三發**併發** list，
+  那三發查詢仍各只有 1 次（守衛 C4／C5）。同時段多少人開好友清單，都只打一輪。
+- **絕不新增輪詢**：只搭在既有的 `GET /api/friends/list` 那一發上。
+  （v6.118 的事故：`game/+page.svelte:4929` 的 `!isTournament` gate 就是「每個開著錦標賽頁的玩家
+  整場每 2 秒打兩支 `/api/rooms`，30 人賽 ≈ 每秒 30 個純浪費的請求」的修正。）
+- 逐筆迴圈（對戰列／報名列）都掛中央 `adminScanYield` 每 200 筆讓路；守衛 F1 用 250 筆實測 ticks 恰 4。
+- `FR_LIST_CAP`（250）維持不動。
+
+**事件迴圈阻塞量測**（`node scripts/perf-v6300-friends-intournament.mjs 400 100 40`，沙盒、node v22，跑三輪）：
+
+| 情境 | p50 阻塞 | p99 | 每發 |
+|---|---|---|---|
+| A 沒有賽事在進行（常態） | 0.016 ms | 1.46～2.05 ms | 4.73～5.45 ms |
+| B 有賽事、40 位好友在打 | 0.016 ms | 1.32～1.77 ms | 4.48～4.73 ms |
+| C 索引不存在 ⇒ 整段跳過 | 0.017 ms | 1.47 ms | 4.56 ms |
+| D 對照組（拿掉 inTournament ＝ v6.299 行為） | 0.017 ms | 1.35 ms | 4.53 ms |
+
+⇒ **B − D 的增量三輪分別是 −0.28 / −0.51 / +0.24 ms/發，跨越 0 ⇒ 落在雜訊內、量不出來**（Rule 36 的態度：
+先確認要動的那一段真的佔時間 —— 這裡佔不到）。p50 阻塞四種情境都是 0.016 ms，沒有變。
+正對照：量測器抓得到 30 ms 同步空轉（max 30.0 ms）。
+⚠ 沙盒 CPU 約為正式 VM 的 1/10（Rule 32）；「每發」含假 db 的線性掃描成本，是**上界**不是出貨碼自己的成本。
+
+### 【4】⚠⚠ 索引 fail-closed（絕不 COLLSCAN）
+
+比照 v6.266 `deckStatsIndexReady`／v6.295 `_frRegIndexReady`，新增 `_frTournIdxReady()`：
+逐一確認 `tournamentEvents {status:1}`、`tournamentMatches {eventId:1,status:1}`、
+`tournamentRegistrations {eventId:1}` 三支索引都在（成功快取 60 秒、失敗退避 10 秒）。
+**任一不在 ⇒ 整段跳過、`inTournament` 一律 `false`、對這三張表一次查詢都不發**，並留一行
+`[friends] 缺 … 索引 ⇒「正在錦標賽對戰中」這一段自我停用` 讓站長查得到。
+守衛 D1 對**三支索引各缺一次**都實跑；D2 是正對照（把自驗那一行拿掉 ⇒ 必須紅在「全表掃」）。
+
+掃描本身出例外（`indexes()` 失敗、查詢失敗）也一律 fail-closed 回 `null` ⇒ 全部 `false`。
+
+### 【5】⚠⚠ 隱私
+
+- `inTournament` **只是布林**。絕不回賽事名稱／對手／房號／`matchId`／任何 uid。
+  守衛 E1 在假資料裡塞四個哨兵（賽事名 `ZQXEVENTNAME`、房號 `ZQXROOMCODE`、`ZQXMATCHID`、對手 uid
+  `ZQXOPPONENTUID`）並斷言回應中**零出現**，同時做掃描器正對照（確認哨兵真的在 DB 裡）。
+- **回應仍然永不含 email**（既有性質）：守衛 E2 是回歸保護，連半個 email（local-part）都掃。
+  突變 G5 把 `inTournament` 改成回對方 email ⇒ E2 必紅。
+- **只有 `status === 'accepted'` 才帶這個欄位**；待我確認／我送出的／我封鎖的一律**連欄位都沒有**
+  （守衛 B5，突變 G3 正對照）。被封鎖方本來就看不到這一列（既有 `blockedBy` 過濾）。
+
+### 【6】守衛 `scripts/test-v6300-friends-intournament.mjs`（34 條，全部行為端實跑）
+
+`【A】` 抽取器下限＋錦標賽區塊兩把既有 sha256（`test-v6272` ⑨／`test-v6278` I1）＋「零 createIndex 新增」＋
+「不得引用錦標賽區塊常數（TDZ）」｜`【B】` 語義六條｜`【C】` N+1／零查詢／快照／in-flight 五條｜
+`【D】` 索引 fail-closed 三案例＋正對照＋key 字串防漂移｜`【E】` 隱私兩條｜`【F】` 讓路 ticks｜
+`【G】` 八個突變｜`【H】` test chain／版本一致／守衛自己不 pin 版本號。
+
+**HEAD-FAIL（四個改動檔各自還原成 BASE）**：
+`server_admin_patch.js` ⇒ A0 紅（0 PASS / 1 FAIL，提前結束）；`package.json` ⇒ H1 紅；
+`version.ts` ⇒ H2 紅（hint 6.300 ≠ 6.299）；`admin.html` ⇒ H2 紅（hint 6.299 ≠ 6.300）。
+全部還原後 ⇒ 34 PASS / 0 FAIL。
+
+**八個突變各自紅在預期那一條**：只認 `pending`（B1）／不篩 `running`（B2）／非 accepted 也帶（B5）／
+email 不正規化（B4）／回 email 不回布林（E2）／拿掉共用快照（C4）／拿掉報名迴圈讓路（F1）／
+沒有進行中賽事仍往下查（C3）。
+
+### 【7】部署
+
+動到 `oracle-admin/server_admin_patch.js` 與 `admin.html` ⇒ 請站長跑 **`update-tournament.bat`**
+（唯一會先 `git fetch origin` ＋ `git reset --hard origin/main` 的那一支），挑離峰、沒有錦標賽進行中時跑。
+
+### 【8】下一版（client UI）要注意的
+
+1. **判準要用兩個欄位**：`inTournament`（本版）擋「不能加入」＋提示；休閒房的「可加入」要靠既有的
+   `uid`/`uids` 去比對大廳 `/api/rooms` 的 seats —— ⚠ 那兩個欄位來自 `playerIdentity`（未驗證來源），
+   **只能當提示**，真正的加入仍由房間端點自己把關。
+2. **絕不為了這顆按鈕新增輪詢**（v6.118）。大廳頁已經有房間輪詢，直接用那一份結果；
+   錦標賽頁的好友分頁**不顯示**加入鈕（站長裁定，那裡沒有房間輪詢）。
+3. `inTournament` 是**打開清單當下的快照**（伺服器端還有 5 秒共用快照）⇒ UI 文案不要寫成即時狀態。
+4. 舊 client 收到多出來的欄位不受影響（一律忽略未知欄位）；新 client 要對 `inTournament === undefined`
+   （舊 server 尚未部署）做 fail-safe，當成 `false` 處理但**不要**因此就允許加入 —— 見第 1 點。
+
+### 【9】順手回報
+
+首頁 `static/changelog.html` 的 `<summary>` 合計目前 **4,962 字**（守衛上限 5,000，剩 38 字）、50 則、
+最長一則 123 字、檔案 31,318 bytes。**本版不寫首頁 changelog，所以沒有動到這個數字**，
+但下一版若要寫首頁條目，必須先把最舊一則搬進封存頁（三步搬運）才有空間。
+
 ## v6.299 — 🩹 錦標賽大廳的錯誤訊息永久掛在頁尾（既有 bug，v6.297 的第 4 個分頁讓它更容易被看到）
 
 BASE `3d88a55ad404c8e892ad6ef237fb8684c3fd5a22`（v6.298，遠端 main）。

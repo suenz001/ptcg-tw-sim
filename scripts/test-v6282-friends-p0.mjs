@@ -168,6 +168,9 @@ await T('B5 開關快取：admin POST 立刻生效（不必等 10 秒）；admin
 console.log('\n【C】⭐⭐ 隱私：回應永不含 email');
 // ⭐v6.295：新增 alias（我自己給這位好友取的備註名；**只回我這一側** —— 對方看不到，正對照見 test-v6295【A3】）
 const PUBLIC_KEYS = ['fid', 'status', 'nick', 'alias', 'uid', 'uids', 'requestedByMe', 'blockedByMe', 'via', 'at'];
+// ⭐v6.300：`inTournament`（布林）**只有 accepted 的那一筆才有**——待確認／送出中／被我封鎖一律連欄位都沒有。
+//   ⚠ 這裡故意分成兩份白名單而不是「可有可無」：多一個欄位、少一個欄位都要紅。
+const PUBLIC_KEYS_ACCEPTED = [...PUBLIC_KEYS, 'inTournament'];
 /** 跑完整的一輪流程，把每一個回應都收起來（含錯誤回應）。 */
 async function runFullFlow(blockSrc) {
   const seed = seedBase();
@@ -222,7 +225,9 @@ await T('C2 list 的每一筆都是固定白名單形狀（key 集合逐字相�
   const { la } = await runFullFlow(FR);
   const rows = [...la.body.friends, ...la.body.incoming, ...la.body.outgoing, ...la.body.blocked];
   assert.ok(rows.length >= 1, 'A 的清單是空的');
-  for (const r of rows) assert.deepStrictEqual(Object.keys(r).sort(), [...PUBLIC_KEYS].sort(), '白名單形狀不對：' + JSON.stringify(r));
+  for (const r of la.body.friends) assert.deepStrictEqual(Object.keys(r).sort(), [...PUBLIC_KEYS_ACCEPTED].sort(), 'accepted 的白名單形狀不對：' + JSON.stringify(r));
+  for (const r of [...la.body.incoming, ...la.body.outgoing, ...la.body.blocked]) assert.deepStrictEqual(Object.keys(r).sort(), [...PUBLIC_KEYS].sort(), '非 accepted 的白名單形狀不對（不該有 inTournament）：' + JSON.stringify(r));
+  assert.ok(la.body.friends.length >= 1 && la.body.friends.every((r) => typeof r.inTournament === 'boolean'), '⭐v6.300 accepted 一定要帶布林 inTournament');
   const bob = la.body.friends.find((r) => r.nick === '鮑伯');
   assert.ok(bob, 'bob 沒有出現在好友裡（或 nick 沒取 friendships 快照）：' + JSON.stringify(la.body.friends));
   assert.ok(!la.body.friends.some((r) => r.nick === '鮑伯二號'), 'v6.286【2】：nick 不得取 playerIdentity.nick（可被冒名竄改）');
