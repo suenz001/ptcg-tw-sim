@@ -664,14 +664,19 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '410e21158c5780eda3fafadf875d7f0f4bd6db2a';   // v6.291（v6.292 的上一版）
-// ⭐⭐v6.292 把同一道 verified 閘補到 /drop、/unregister、/chat、/match/enter、/match/forfeit
-//   （純伺服器端）：玩家端**只有 version.ts** 會變。
-//   ⚠⚠ 這一條就是本版「零玩家端改動」的證明 —— 尤其 src/routes/game/+page.svelte 一個位元都不能動。
-//   ⚠ 首頁 changelog 三檔**沒動**（公平性／安全修正依站長裁定只寫 docs/changelog-internal.md）。
+const PREV_SHA = '625119f6256a4b1111aa2f207e9e7ff6bf7ab227';   // v6.292（v6.293 的上一版）
+// ⭐⭐v6.293 只改 /friends 這一條獨立路由的**外觀**（墨綠配色 ＋ 頂端假分頁列）：
+//   玩家端動到的是 version.ts、/friends 的兩個元件、以及首頁 changelog 三檔（三步搬運）。
+//   ⚠⚠ 這一條就是本版「其餘玩家端零改動」的證明 —— 尤其 src/routes/game/+page.svelte 一個位元都不能動
+//   （test-v6293 的 E1 另外用 blob sha 直接證一次）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
   'src/lib/version.ts',
+  'src/routes/friends/+page.svelte',
+  'src/routes/friends/DmPanel.svelte',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

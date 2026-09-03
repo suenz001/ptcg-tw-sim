@@ -21,6 +21,9 @@
   //     本檔仍然零 setTimeout／setInterval（v6.283 B1 守衛）。
   //   ・解除好友＝真刪除，且 v6.288 起**對話也一起刪**（站長裁定）⇒ 二次確認文案明講。
   //   ・v6.289 起解除封鎖也一樣（伺服器在真刪那一列之後一併刪對話）⇒ 解除封鎖的二次確認文案也明講「對話」（守衛 test-v6289 鎖文案）。
+  //   ・⭐⭐ v6.293 配色改成與錦標賽／對戰演練同一套**墨綠**（站長：視覺一致性），並在頂端加一條假分頁列。
+  //     色碼**集中在 <style> 最上面那一段 --fr-* 變數**（單一來源），DmPanel.svelte 靠繼承吃同一份，兩檔其餘規則零色碼。
+  //     ⚠ 整頁底色只能由 <svelte:head> 注入的 <style> 覆寫（layout 的 :global(body) 白底 baseline 是全站唯一來源）。
   import { onMount } from 'svelte';
   import { base } from '$app/paths';
   import { VERSION } from '$lib/version';
@@ -200,14 +203,35 @@
 <svelte:head>
   <title>好友 · ptcg-tw-sim</title>
   <meta name="robots" content="noindex" />
+  <!-- ⭐⭐⭐ v6.293 整頁底色 → 墨綠 #162816（與錦標賽／對戰演練同一個底）。
+       手法比照 src/routes/game/+page.svelte 的 <svelte:head>：src/routes/+layout.svelte 的
+       :global(body) 的白底 baseline 是全站唯一的底色來源，只有「頁面自己在 <svelte:head>
+       注入一段 <style>」蓋得掉；而且離開這一頁時 Svelte 會把它從 <head> 移除 ⇒ 墨綠不會被帶到別的頁面。
+       ⚠ 寫在元件 <style> 裡的 :global(body) 做不到這件事：SvelteKit 的路由 CSS 不隨導航移除。
+       ⚠ 這裡刻意用一般的 <style> 元素而**不是** {@html}：本頁到處是玩家自由輸入的暱稱，
+         「整頁零 {@html}」是 test-v6283 B3／test-v6288 E1 在守的紅線，不為了換底色去鬆綁它
+         （Svelte 5 不會把 <svelte:head> 底下的 <style> 當成元件樣式，編譯輸出已驗）。 -->
+  <style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>
 </svelte:head>
 
 <main>
   <header class="page-head">
     <a href="{base}/" class="back">← 首頁</a>
     <h1>👥 好友 <span class="version-tag">v{VERSION}</span></h1>
-    <a href="{base}/game" class="to-game">線上對戰 →</a>
   </header>
+
+  <!-- ⭐⭐ v6.293 假分頁列：外觀與錦標賽的 .tourn-tabs／.tourn-tab 一致（站長：視覺一致性），
+       但這一版是**連結**不是真分頁（站長已同意分段做，真分頁是下一階段）⇒ 用 <a> 不是 <button>，
+       也不掛 role="tablist"／role="tab"（那會對輔助科技謊稱有分頁面板）。
+       ⚠ 「🌐 線上連線對戰」的 URL：/game 預設停在模式選擇畫面，`?mode=online` 是
+       game/+page.svelte onMount 內既有的分流參數（v4.935），會自動把 mode 設成 'online' 進線上大廳，
+       並把 query 從網址列清掉 ⇒ 這是回大廳的正確寫法（game/+page.svelte 一個位元都沒動）。
+       ⚠ 兩顆一律不折行（.fr-tab 有 white-space:nowrap，.fr-tabs 是預設的 flex nowrap），
+       375×812 與 1366×768 的 DOM 量測見 scripts/test-v6293-friends-theme.mjs 的【D】。 -->
+  <nav class="fr-tabs" aria-label="線上對戰與好友">
+    <a class="fr-tab" href="{base}/game?mode=online">🌐 線上連線對戰</a>
+    <a class="fr-tab active" href="{base}/friends" aria-current="page">👥 好友名單</a>
+  </nav>
 
   {#if !authReady}
     <p class="empty">載入中…</p>
@@ -350,10 +374,46 @@
 </main>
 
 <style>
-  /* iOS 動態島／瀏海：viewport-fit=cover 已在 app.html，env() 才有值（比照 /deck-posts）。 */
+  /* ⭐⭐⭐ v6.293 墨綠色票的**單一來源**：本頁與 DmPanel.svelte 的所有色碼只寫在這一段，
+     底下每一條規則一律 var(--fr-*)。要改配色（或日後抽成共用元件）只動這一段。
+     來源逐條抄自 src/routes/game/+page.svelte（＝錦標賽與對戰演練同一套）：
+       整頁底 #162816（該檔 <svelte:head> 注入的那一行，本檔也注入同一個值）
+       分頁鈕 .tourn-tab：底 #102010／框 #3a5a3a／字 #9fdca0；hover #18301a；
+              active 漸層 #2a5a3a→#1d4029 ＋ 字 #eaffea ＋ 框 #6ab87a ＋ 1px inset 光暈
+       卡片與輸入框 .tourn-lb-card／.tourn-field .name-input：底 #142414／框 #4a6a4a／字 #eaf5ea
+       標籤 #cfe8cf（.tourn-field）／淡字 #7a9a7a（.tourn-pf-email）／強調金 #ffd35a
+       成功綠 #7cfc9a（.reg-ok）／警示紅 #ff6f7d（.tcmsg.tcsys.sc-cancel —— 原本那個暗紅在墨綠底上讀不到）
+       訊息泡泡：對方 #1a2e1a（.tourn-chat-head）／自己 #2a5a3a（分頁 active 的起色）
+     ⚠ DmPanel.svelte 是 <main> 的子節點（position:fixed 不影響 DOM 繼承）⇒ 靠 CSS 自訂屬性
+       的繼承吃到同一份色票；守衛 test-v6293【D】用 getComputedStyle 實測，不是只比字串。
+     ⚠ iOS 動態島／瀏海：viewport-fit=cover 已在 app.html，env() 才有值（比照 /deck-posts）。 */
   main {
+    --fr-bg: #162816;
+    --fr-fg: #eaf5ea;
+    --fr-label: #cfe8cf;
+    --fr-dim: #7a9a7a;
+    --fr-card-bg: #142414;
+    --fr-card-bd: #4a6a4a;
+    --fr-tab-bg: #102010;
+    --fr-tab-bd: #3a5a3a;
+    --fr-tab-fg: #9fdca0;
+    --fr-tab-hover-bg: #18301a;
+    --fr-tab-on-from: #2a5a3a;
+    --fr-tab-on-to: #1d4029;
+    --fr-tab-on-fg: #eaffea;
+    --fr-tab-on-bd: #6ab87a;
+    --fr-gold: #ffd35a;
+    --fr-ok: #7cfc9a;
+    --fr-danger: #ff6f7d;
+    --fr-bubble-them: #1a2e1a;
+    --fr-bubble-me: #2a5a3a;
+
     max-width: 760px;
     margin: 0 auto;
+    color: var(--fr-fg);
+    /* ⚠ 底色的正主是 <svelte:head> 注入的那一行（蓋掉 layout 白底 baseline）；
+       這裡再鋪一次是保險：萬一那段沒生效，內容欄至少還是深底而不是白底黑字上的墨綠字。 */
+    background: var(--fr-bg);
     padding: calc(12px + var(--safe-top, 0px))
              max(16px, var(--safe-right, 0px))
              48px
@@ -361,36 +421,56 @@
   }
   .page-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .page-head h1 { font-size: 1.35rem; margin: 0; }
-  .version-tag { font-size: .7rem; opacity: .55; font-weight: 400; }
-  .back, .to-game { font-size: .85rem; text-decoration: none; opacity: .8; }
-  .to-game { margin-left: auto; }
-  .hint { font-size: .8rem; opacity: .65; line-height: 1.5; margin: 4px 0 8px; }
+  .version-tag { font-size: .7rem; color: var(--fr-dim); font-weight: 400; }
+  .back { font-size: .85rem; text-decoration: none; color: var(--fr-tab-fg); }
+  .back:hover { text-decoration: underline; }
+  .hint { font-size: .8rem; color: var(--fr-dim); line-height: 1.5; margin: 4px 0 8px; }
 
-  .notice { background: rgba(80,140,255,.12); border: 1px solid rgba(80,140,255,.4); border-radius: 8px; padding: 12px 14px; font-size: .9rem; line-height: 1.6; }
-  .error { color: #d33; font-size: .9rem; }
-  .ok { color: #1a8f4a; font-size: .9rem; }
-  .warn { color: #b26a00; font-size: .85rem; line-height: 1.5; }
-  .empty { opacity: .6; padding: 10px 0; }
+  /* ⭐⭐ v6.293 假分頁列：外觀比照 game/+page.svelte 的 .tourn-tabs／.tourn-tab（逐條對齊，含 active 的
+     inset 光暈），只是把 <button> 換成 <a>。⚠ white-space:nowrap ＋ .fr-tabs 的預設 flex nowrap
+     ＝ 兩顆永遠同一列、字永遠不折行（375px 也一樣，DOM 量測在守）。 */
+  .fr-tabs { display: flex; gap: 6px; max-width: 100%; margin: 6px auto 12px; }
+  .fr-tab {
+    flex: 1; min-width: 0; padding: 9px 6px;
+    border: 1px solid var(--fr-tab-bd); border-radius: 9px;
+    background: var(--fr-tab-bg); color: var(--fr-tab-fg);
+    font-size: .9rem; font-weight: 600; text-align: center; text-decoration: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    cursor: pointer; transition: .15s;
+  }
+  .fr-tab:hover { background: var(--fr-tab-hover-bg); }
+  .fr-tab.active {
+    background: linear-gradient(180deg, var(--fr-tab-on-from), var(--fr-tab-on-to));
+    color: var(--fr-tab-on-fg); border-color: var(--fr-tab-on-bd);
+    box-shadow: 0 0 0 1px var(--fr-tab-on-bd) inset;
+  }
 
-  .add { background: rgba(128,128,128,.07); border: 1px solid rgba(128,128,128,.2); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
-  .add h2, .group h2 { font-size: 1rem; margin: 0 0 4px; }
+  .notice { background: var(--fr-card-bg); border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 12px 14px; font-size: .9rem; line-height: 1.6; color: var(--fr-label); }
+  .notice a { color: var(--fr-gold); }
+  .error { color: var(--fr-danger); font-size: .9rem; }
+  .ok { color: var(--fr-ok); font-size: .9rem; }
+  .warn { color: var(--fr-gold); font-size: .85rem; line-height: 1.5; }
+  .empty { color: var(--fr-dim); padding: 10px 0; }
+
+  .add { background: var(--fr-card-bg); border: 1px solid var(--fr-card-bd); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+  .add h2, .group h2 { font-size: 1rem; margin: 0 0 4px; color: var(--fr-label); }
   /* 手機上靠 flex-wrap 自然換行，不用 @media 當手機開關（手機／桌機分支紀律）。 */
   .add-form { display: flex; gap: 8px; flex-wrap: wrap; }
-  .add-form input { flex: 1 1 220px; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; font-size: 16px; }
+  .add-form input { flex: 1 1 220px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--fr-card-bd); background: var(--fr-tab-bg); color: var(--fr-fg); font-size: 16px; }
 
   .group { margin-bottom: 16px; }
-  .count { font-size: .78rem; opacity: .6; font-weight: 400; margin-left: 6px; }
+  .count { font-size: .78rem; color: var(--fr-dim); font-weight: 400; margin-left: 6px; }
   .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(128,128,128,.07); border: 1px solid rgba(128,128,128,.2); border-radius: 8px; padding: 8px 10px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--fr-card-bg); border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 8px 10px; }
   /* ⚠ 暱稱是玩家自由輸入：一定要斷字，否則一長串英數字會把列撐爆（手機直式先爆）。 */
-  .nick { font-weight: 600; overflow-wrap: anywhere; word-break: break-word; }
-  .meta { font-size: .78rem; opacity: .65; }
+  .nick { font-weight: 600; color: var(--fr-fg); overflow-wrap: anywhere; word-break: break-word; }
+  .meta { font-size: .78rem; color: var(--fr-dim); }
   .spacer { flex: 1; }
-  .confirm { font-size: .8rem; color: #b26a00; flex: 1 1 100%; }
+  .confirm { font-size: .8rem; color: var(--fr-gold); flex: 1 1 100%; }
 
-  button.small, button.primary { padding: 5px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; cursor: pointer; font: inherit; font-size: .85rem; color: inherit; }
-  button.primary { background: rgba(80,140,255,.18); border-color: rgba(80,140,255,.6); font-weight: 600; }
-  button.danger { color: #d33; border-color: rgba(211,51,51,.45); }
+  button.small, button.primary { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--fr-tab-bd); background: var(--fr-tab-bg); cursor: pointer; font: inherit; font-size: .85rem; color: var(--fr-tab-fg); }
+  button.primary { background: linear-gradient(180deg, var(--fr-tab-on-from), var(--fr-tab-on-to)); border-color: var(--fr-tab-on-bd); color: var(--fr-tab-on-fg); font-weight: 600; }
+  button.danger { color: var(--fr-danger); border-color: var(--fr-danger); }
   button:disabled { opacity: .45; cursor: default; }
 
   @media (max-width: 600px) {
@@ -401,6 +481,5 @@
                40px
                max(12px, var(--safe-left, 0px));
     }
-    .to-game { margin-left: 0; }
   }
 </style>

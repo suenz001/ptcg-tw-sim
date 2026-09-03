@@ -7,6 +7,8 @@
   //       桌機＝右下角固定面板（position:fixed，不佔文件流 ⇒ 既有好友列零位移）；手機＝全螢幕 overlay（position:fixed; inset:0）。
   //   ・每個 {#each} 都用伺服器 id 當穩定 key（清單只增不減、會前插）。
   //   ・輪詢的生命週期不在這裡：面板被卸載（{#if} 關掉）時，/friends 頁會呼叫 session.close() ⇒ 零請求。
+  //   ・⭐⭐ v6.293 配色改墨綠：本檔**零色碼**，全部吃 /friends 頁 <main> 上那一段 --fr-* 變數（單一來源）。
+  //     面板雖然是 position:fixed，DOM 上仍是 <main> 的子節點 ⇒ CSS 自訂屬性照樣繼承得到（守衛用 computed style 實測）。
   import { type DmSessionState } from '$lib/friends/dm-session';
   import { DM_MAX_LEN } from '$lib/friends/friends-api';
 
@@ -99,10 +101,11 @@
     z-index: 60;
     display: flex;
     flex-direction: column;
-    background: #fff;   /* /friends 頁是白底（layout 的 body baseline #f4f4f6），面板要不透明 */
-    color: #1c1c1c;
-    border: 1px solid rgba(128,128,128,.35);
-    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+    /* v6.293：/friends 頁改墨綠底 ⇒ 面板跟著改（仍必須**不透明**，底下是好友列）。 */
+    background: var(--fr-card-bg);
+    color: var(--fr-fg);
+    border: 1px solid var(--fr-card-bd);
+    box-shadow: 0 8px 28px rgba(0,0,0,.55);
   }
   .dm-panel.desktop {
     right: 16px;
@@ -120,27 +123,27 @@
     padding-top: var(--safe-top, 0px);
     padding-bottom: var(--safe-bottom, 0px);
   }
-  .dm-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid rgba(128,128,128,.25); }
+  .dm-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--fr-card-bd); }
   .dm-title { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dm-nick { overflow-wrap: anywhere; }
-  .dm-slow { font-size: .72rem; opacity: .6; }
+  .dm-slow { font-size: .72rem; color: var(--fr-dim); }
   .dm-close { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; padding: 4px 8px; }
   .dm-list { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
   .dm-msg { display: flex; flex-direction: column; max-width: 85%; }
   .dm-msg.mine { align-self: flex-end; align-items: flex-end; }
   .dm-msg.theirs { align-self: flex-start; align-items: flex-start; }
   /* ⚠ 訊息是玩家自由輸入：一定要斷字，否則一長串英數字會把面板撐爆 */
-  .dm-bubble { padding: 6px 10px; border-radius: 10px; background: rgba(128,128,128,.18); overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; font-size: .92rem; line-height: 1.4; }
-  .dm-msg.mine .dm-bubble { background: rgba(80,140,255,.28); }
-  .dm-ts { font-size: .68rem; opacity: .55; margin-top: 2px; }
-  .dm-empty { opacity: .6; padding: 12px 10px; margin: 0; }
-  .dm-more { align-self: center; font: inherit; font-size: .8rem; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; cursor: pointer; }
+  .dm-bubble { padding: 6px 10px; border-radius: 10px; background: var(--fr-bubble-them); overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; font-size: .92rem; line-height: 1.4; }
+  .dm-msg.mine .dm-bubble { background: var(--fr-bubble-me); }
+  .dm-ts { font-size: .68rem; color: var(--fr-dim); margin-top: 2px; }
+  .dm-empty { color: var(--fr-dim); padding: 12px 10px; margin: 0; }
+  .dm-more { align-self: center; font: inherit; font-size: .8rem; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--fr-tab-bd); background: var(--fr-tab-bg); color: var(--fr-tab-fg); cursor: pointer; }
   .dm-more:disabled { opacity: .5; cursor: default; }
-  .dm-notice { color: #b26a00; font-size: .8rem; margin: 0; padding: 4px 10px; }
+  .dm-notice { color: var(--fr-gold); font-size: .8rem; margin: 0; padding: 4px 10px; }
   .dm-block { padding: 14px 12px; font-size: .9rem; line-height: 1.6; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .dm-block p { margin: 0; }
-  .dm-form { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid rgba(128,128,128,.25); }
-  .dm-form input { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(128,128,128,.35); background: transparent; color: inherit; font-size: 16px; }
-  .dm-send { font: inherit; font-size: .9rem; padding: 6px 14px; border-radius: 8px; border: 1px solid rgba(80,140,255,.6); background: rgba(80,140,255,.18); color: inherit; font-weight: 600; cursor: pointer; }
+  .dm-form { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--fr-card-bd); }
+  .dm-form input { flex: 1; min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--fr-card-bd); background: var(--fr-tab-bg); color: var(--fr-fg); font-size: 16px; }
+  .dm-send { font: inherit; font-size: .9rem; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--fr-tab-on-bd); background: linear-gradient(180deg, var(--fr-tab-on-from), var(--fr-tab-on-to)); color: var(--fr-tab-on-fg); font-weight: 600; cursor: pointer; }
   .dm-send:disabled { opacity: .45; cursor: default; }
 </style>

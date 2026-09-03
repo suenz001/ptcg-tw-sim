@@ -1,5 +1,87 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.293 — 🎨 /friends 改用錦標賽的墨綠配色 ＋ 頂端假分頁列
+
+BASE `625119f6256a4b1111aa2f207e9e7ff6bf7ab227`（v6.292，遠端 main）。動到的玩家端檔案只有
+`src/lib/version.ts`、`src/routes/friends/+page.svelte`、`src/routes/friends/DmPanel.svelte`
+與首頁 changelog 三檔（`test-v6272` ⑩ 的 `PREV_ALLOWED` 逐檔 blob 在守）。
+⚠⚠ `src/routes/game/+page.svelte` **一個位元都沒動**（`test-v6293` E1 用 blob sha 直接證）。
+
+### 【0】⚠ 交辦內容的三處更正（查證後）
+| 交辦說 | 實際 |
+|---|---|
+| `src/lib/friends/DmPanel.svelte:102` 寫死 `#fff` | 路徑是 **`src/routes/friends/DmPanel.svelte`**（`src/lib/friends/` 底下只有 `friends-api.ts`／`dm-session.ts`／`dm-poller.ts`）；行號 102、內容 `background: #fff;` 正確 |
+| 工作樹 `game/+page.svelte` blob `0ad22944`「既不等於 BASE 也不等於任何出貨版」 | 那只是 **CRLF**：把 `\r\n` 正規化後**與 BASE 逐位元相同**。整個工作樹相對 BASE 真正有內容差異的只有 `/friends` 的那兩個元件（前一位代理的殘留），其餘 1,000 個「差異」全是行尾 |
+| `.tourn-tab.active` 的色票 | 交辦列的四項都對，但**漏了 `box-shadow: 0 0 0 1px #6ab87a inset`**（1px 內光暈）—— 少抄這一條看起來會「不夠亮」，本版有補 |
+
+### 【1】為什麼底色只能靠 `<svelte:head>`
+`src/routes/+layout.svelte:131-134` 的 `:global(body){background:#f4f4f6}` 是全站唯一的底色 baseline；
+`/friends` 從來沒有覆寫過 ⇒ 白底。**元件 `<style>` 裡寫 `:global(body)` 不行**：SvelteKit 的路由 CSS
+在客戶端導航後**不會被移除**，墨綠會漏到別的頁面。`<svelte:head>` 的內容則會在元件卸載時從 `<head>` 移除。
+
+⭐ 但**沒有沿用 `game/+page.svelte` 的 `{@html '<style>…'}`**，改用一般的 `<style>` 元素：
+`/friends` 滿是玩家自由輸入的暱稱，「整頁零 `{@html}`」是 `test-v6283` B3 與 `test-v6288` E1 在守的紅線，
+不該為了換底色去鬆綁兩支既有守衛。已用 svelte 編譯器實證 **Svelte 5 不會把 `<svelte:head>` 底下的
+`<style>` 當成元件樣式**（client／server 兩種 generate 都零警告，`css.code` 裡只有 `main`），
+SSR 也照樣把它輸出到 head。
+
+### 【2】色碼單一來源
+所有色碼集中在 `+page.svelte` 的 `<style>` 開頭、宣告在 `main` 上的 **19 個 `--fr-*`**；
+`DmPanel.svelte` 的 `<style>` **一個色碼都沒有**（面板雖是 `position:fixed`，DOM 上仍是 `<main>`
+的子節點 ⇒ 自訂屬性照樣繼承）。`test-v6293` B2 把每一個 `--fr-*` 拿去和
+`game/+page.svelte` 的**同一條規則**逐字比對（`.tourn-tab`／`.tourn-tab:hover`／`.tourn-tab.active`／
+`.tourn-lb-card`／`.tourn-field`／`.tourn-pf-email`／`.tourn-chat-head`／`.reg-ok`／`.sc-cancel`／
+`.tcmsg.tcsys` ＋ 該檔 `<svelte:head>` 的底色）—— **不 pin 字面值**：錦標賽改色時這裡會紅，正是「視覺一致性」要的。
+
+深底上不能直接沿用的兩個色：`#d33`（錯誤）→ `--fr-danger #ff6f7d`（`.sc-cancel`）、
+`#1a8f4a`（成功）→ `--fr-ok #7cfc9a`（`.reg-ok`）、`#b26a00`（提醒）→ `--fr-gold #ffd35a`（`.tcmsg.tcsys`）。
+
+### 【3】分頁列
+`<nav class="fr-tabs">` ＋ 兩顆 `<a class="fr-tab">`，CSS 逐條對齊 `.tourn-tabs`／`.tourn-tab`（含 inset 光暈）。
+- 「🌐 線上連線對戰」→ `{base}/game?mode=online`。⭐ 這個 URL 不是猜的：`test-v6293` C2 把
+  `game/+page.svelte` onMount 內 **v4.935 的分流條件**（`new URLSearchParams(...).get('mode') === 'online'`）
+  用 regex 抽出來、拿分頁列的 href **實際求值**，並附兩個反例（`/game`、`?mode=local` 都必須為 false）。
+- 「👥 好友名單」→ `{base}/friends` ＋ `active` ＋ `aria-current="page"`。
+- ⚠ 這一版是**連結不是真分頁** ⇒ 刻意**不寫** `role="tablist"`／`role="tab"`（那會對輔助科技謊稱有分頁面板），守衛也在擋。
+- ⚠ 不可用 `{#each}` 產生：`test-v6288` E1 要求本頁每個 `{#each}` 都以 `(r.fid)` 為 key。
+- 標題右邊原本那顆「線上對戰 →」（`.to-game`，指向模式選擇畫面）與分頁列重複 ⇒ **移除**。
+
+### 【4】DOM 量測（Playwright，fixture = 真的 `<svelte:head>` ＋ 真的兩份 `<style>` ＋ 真的 `<nav>` 位元組）
+| 尺寸 | 分頁列 rect | 左顆 | 右顆 | 文字寬/可用寬 | 頁寬 |
+|---|---|---|---|---|---|
+| 375×812 手機直式 | x12 y53 **w351 h41** | x12 w172.5 | x190.5 w172.5 | **171/171** | 375/375（零水平捲動）|
+| 1366×768 桌機 | x303 y55 **w760 h41** | x303 w377 | x686 w377 | **375/375** | 1366/1366 |
+
+- **不折行**：兩顆 `y` 相同、容器高＝單顆高（41）、`flex-wrap` 與 `white-space` 都是 `nowrap`、`scrollWidth ≤ clientWidth`（文字沒被 ellipsis 截）。
+- **零遮蔽**：兩顆的中心點 `elementFromPoint` 都命中自己；分頁列與 `.page-head`／`.add`／`.group`／`.notice` 的矩形**零重疊**，且都沒超出畫面寬。
+- **底色正對照**：拿掉 `<svelte:head>` 那一段 ⇒ body 回到 `rgb(244,244,246)`；有它 ⇒ `rgb(22,40,22)`。**沒有這個正對照，D1 會是恆真式。**
+- **var() 真的解析**：分頁鈕／active 漸層與框色／卡片／輸入框／危險鈕／二次確認字，以及 `position:fixed` 的私聊面板與兩種泡泡，全部逐一比對 computed style。
+- **對比度**：正文 / 暱稱 / 「← 首頁」/ 兩顆分頁鈕 / 錯誤 / 成功 / 說明連結 / 私聊訊息 ≥ 4.5:1，次要資訊與時間戳 ≥ 3:1（「墨綠底配暗字」是這種改動最典型的真事故）。
+
+### 【5】守衛 `scripts/test-v6293-friends-theme.mjs`（已進 test chain，32 條）
+【A】注入存在且帶 `!important`、整頁仍零 `{@html}`／【B】色碼單一來源＋與錦標賽逐條對齊＋掃描器下限自驗／
+【C】分頁列結構、href、URL 求值＋兩個反例／【D】上表的 DOM 量測（無 Playwright 時印 `⚠⚠ SKIP` 不假綠）／
+【E】`game/+page.svelte` blob sha ＝ BASE ＋ hash-object 自驗／【F】回歸：`friends-api.ts` 零 `setInterval`、
+v6.291／v6.292 的 9 行 verified 閘仍在且兩支守衛仍在 chain／【G】chain＋版本一致／【H】8 個突變。
+
+**HEAD-FAIL**：只把 `+page.svelte` 還原成 BASE ⇒ A1/A2/B1/B2/B2b/C1/C2/C3/C4 共 9 條紅（A1 紅在
+「`<svelte:head>` 裡沒有 `<style>` 元素」、C1 紅在「找不到 `<nav class="fr-tabs">`」）；只把
+`DmPanel.svelte` 還原 ⇒ B1 紅在「DmPanel 仍有 #fff」、兩個尺寸的 D4 紅在「私聊面板底色不對」、
+D5 紅在「私聊訊息 對比度只有 4.32:1」。兩檔都改回修後版 ⇒ **32 PASS / 0 FAIL**。
+
+### 【6】三配套
+`admin.html` `SITE_VERSION_HINT` → 6.293；`test-v6272` ⑩ `PREV_SHA` → `625119f6`、`PREV_ALLOWED` 六個檔；
+`test-v6264` `BASE_SHA` → `625119f6`（本版動了 changelog ⇒ 依該檔既有規則前移）。
+掃過全樹：沒有任何守衛 pin 死 `/friends` 兩個元件的整檔 sha256（既有的 sha256 鎖全在
+`server_admin_patch.js` 的錦標賽區塊，本版沒動）。
+
+### 【7】首頁 changelog 三步搬運
+新增 v6.293（`open`，前一則 v6.289 的 `open` 拿掉）、第 13 則 **v6.270** 的內文搬進 `changelog-bodies.html`
+並補 `data-ver`、被擠出 50 則的 **v6.214**（標題＋內文合併）搬進 `changelog-archive.html`。
+首頁 **31,632 → 31,833 bytes**（上限 60KB）。
+⚠ 差點踩到的坑：切掉第 51 則時若用 `slice(0, start51)`，會**連檔尾那段「完整更新歷史」的
+`__BASE__/changelog-archive.html` 連結一起切掉** —— `test-changelog-size-and-archive` ③ 當場紅。
+
 ## v6.292 — 🔒 同一道 verified 閘補到另外六支端點（`/drop`、`/unregister`、`/cancel-proposal`、`/chat`、`/match/enter`、`/match/forfeit`）
 
 BASE `410e21158c5780eda3fafadf875d7f0f4bd6db2a`（v6.291，遠端 main）。**純伺服器端**：只動 `oracle-admin/server_admin_patch.js`（v1.41 → v1.42）＋ `admin.html` 版本提示 ＋ 守衛；玩家端**只有 `src/lib/version.ts`** 變動（`test-v6272` ⑩ 逐檔 blob 比對在守；`test-v6292` G5 另外用 blob sha 直接證明 `src/routes/game/+page.svelte` 一個位元都沒動）。⚠ 公平性／安全修正，依站長既有裁定**不寫首頁 changelog**。
