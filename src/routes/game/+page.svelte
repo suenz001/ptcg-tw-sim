@@ -15602,11 +15602,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* ⭐⭐ v6.296 大廳分頁列：外觀逐條沿用錦標賽的 .tourn-tabs／.tourn-tab（含 active 的 inset 光暈），
      只多了 min-width:0 / white-space:nowrap / text-overflow —— 375px 兩顆也不折行（DOM 量測在守）。
      ⚠ class 名一律 lobby- 前綴：既有守衛在斷言「樣式區不得出現好友功能的英文關鍵字」（避免版面規則散進對戰版面）。 */
-  .lobby-tabs{ display:flex; gap:6px; max-width:560px; margin:6px auto 12px; }
+  /* ⭐⭐⭐ v6.298 對齊修正：本列與下方分頁內容一律**靠左**、且外框寬＝ .online-form.lobby-unified 的外框寬。
+     v6.296 原本寫 max-width:560px + margin:6px auto 12px（置中、而且只算內容寬），但 .online-form.lobby-unified
+     是 content-box：560px 是它的**內容**寬，外框還要加 padding 1.25rem×2 ＋ border 1px×2 ＝ 602px，
+     而且它沒有 margin:auto（靠左）。兩邊一置中一靠左 ⇒ 桌機下分頁列比大廳內容右移 70px、右緣多出 28px。
+     ⚠ 既有大廳版面（靠左、602px）是不可動的紅線 ⇒ 修的是**新元素**：改成靠左並補足外框寬。
+     ⚠ 手機窄幅時 602px 上限不生效（三者都是滿版）⇒ 那裡本來就對齊，這一版零位移。
+     守衛：scripts/test-v6298-lobby-tab-align.mjs（盒模型求解器＋內建正對照）。 */
+  .lobby-tabs{ display:flex; gap:6px; max-width:calc(560px + 2.5rem + 2px); margin:6px 0 12px; }
   .lobby-tab{ flex:1; min-width:0; padding:9px 6px; border:1px solid #3a5a3a; border-radius:9px; background:#102010; color:#9fdca0; font-size:.9rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; transition:.15s; }
   .lobby-tab:hover{ background:#18301a; }
   .lobby-tab.active{ background:linear-gradient(180deg,#2a5a3a,#1d4029); color:#eaffea; border-color:#6ab87a; box-shadow:0 0 0 1px #6ab87a inset; }
-  .lobby-tab-panel{ max-width:560px; margin:0 auto; width:100%; text-align:left; }
+  .lobby-tab-panel{ max-width:calc(560px + 2.5rem + 2px); margin:0; width:100%; text-align:left; }
   .lobby-unified .name-row{ flex-direction:row; align-items:center; gap:.6rem; background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.6rem .85rem; }
   .lobby-unified .name-label{ font-size:.88rem; color:#aaffcc; font-weight:600; min-width:64px; }
   .lobby-unified .name-row .name-input{ flex:1; }

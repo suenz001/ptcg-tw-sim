@@ -1,5 +1,107 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.298 — 🩹 線上大廳分頁列沒有對齊（v6.296 的版面 bug）＋ 補一條「新元素必須與既有版面對齊」的守衛
+
+BASE `327c6fd2d158c71082d3d1e450cc2d95bc48a876`（v6.297，遠端 main）。
+玩家端只動 `src/routes/game/+page.svelte` 的**兩行 CSS**（＋`version.ts` 與首頁 changelog 三檔）。
+**完全沒有動** `oracle-admin/server_admin_patch.js`（blob sha 與 BASE 相同）。
+
+### 【0】站長回報（逐字）
+> 線上連線對戰的版面歪掉了，沒有對齊（好友名單分頁則是正常）
+
+### 【1】⭐⭐⭐ 複驗站長的診斷：方向對，**數字與修法不完整**
+
+站長診斷的方向完全正確 —— `.lobby-tabs`／`.lobby-tab-panel` 有 `margin:auto`（置中）、
+`.online-form.lobby-unified` 沒有（靠左），所以分頁列與大廳內容錯開。
+但有兩點與實測不符（用 chromium 真的量 `getBoundingClientRect()`，
+腳本 `scripts/measure-v6298-lobby-align.mjs`）：
+
+| 站長的說法 | 實測 |
+|---|---|
+| 大廳內容區寬 ＝ 700 − 48 ＝ **652px** | ⚠ **700px**。全站沒有 `box-sizing:border-box` 的通則 ⇒ `.lobby` 是 **content-box**，`max-width:700px` 限制的是**內容**寬，padding 1.5rem×2 是額外加上去的（外框 748px） |
+| 分頁列右移約 **46px** | ⚠ **70px**（(700−560)/2）；而且**右緣也差 28px** |
+| 兩行 `margin:auto → 0` 就能讓三者左右邊界一致 | ⚠ **不夠**。`.online-form.lobby-unified` 也是 content-box：`max-width:560px` 是它的**內容**寬，外框還要加 `padding:1.25rem`×2 ＋ `border:1px`×2 ＝ **602px**。只改 margin 的話左緣對齊了，**右緣仍差 42px**（560 vs 602） |
+
+⭐ 站長判斷「錦標賽沒事」是**對的**：`.tourn-tabs` 與 `.tourn-tab-panel` 都是 `max-width:100%`
+（＝容器內容寬），`auto` 邊距在寬度已經填滿時不產生位移，兩者實測完全重合。
+
+### 【2】修法（維持站長指定的方向：**動新元素，不動既有版面**）
+
+```
+.lobby-tabs      max-width:560px; margin:6px auto 12px   →  max-width:calc(560px + 2.5rem + 2px); margin:6px 0 12px
+.lobby-tab-panel max-width:560px; margin:0 auto          →  max-width:calc(560px + 2.5rem + 2px); margin:0
+```
+`calc(560px + 2.5rem + 2px)` 刻意不寫死 `602px`：它逐項對應 `.online-form.lobby-unified` 的
+`max-width:560px` ＋ `padding:1.25rem`×2 ＋ `border:1px`×2，改動那邊時看得出來要跟著改。
+
+### 【3】⭐⭐ 三種尺寸的實測（瀏覽器 `getBoundingClientRect()`）
+
+| 尺寸 | 修前 分頁列 | 修前 線上分頁 | 修前 好友分頁 | 修後（三者相同）|
+|---|---|---|---|---|
+| 375×812 | 12.8 – 362.2 | 12.8 – 362.2 | 12.8 – 362.2 | 12.8 – 362.2（零位移）|
+| 390×844 | 12.8 – 377.2 | 12.8 – 377.2 | 12.8 – 377.2 | 12.8 – 377.2（零位移）|
+| 1366×768 | **403 – 963** | **333 – 935** | **403 – 963** | **333 – 935** |
+
+⇒ 手機窄幅本來就對齊（560px／602px 兩個上限都不生效，三者滿版）；
+桌機下分頁列與好友分頁各往左移 70px、變寬 42px，**既有大廳表單一個像素都沒動**。
+錦標賽側修前修後都是 363 – 1003（分頁列＝分頁內容），未動任何一行 CSS。
+
+### 【4】⭐⭐⭐ 這次暴露的守衛盲點：**斷言了「沒有位移」，沒有斷言「有對齊」**
+
+`measure-v6296` 斷言的是「既有元素 dx=dy=dw=dh=0」、`measure-v6297` 同理。
+新元素**自己**跑到哪裡去，兩支都沒有問過 —— 於是分頁列整條右移 70px，
+`test-v6296`（26 條）／`test-v6297`（34 條）／兩支量測腳本**全綠**，
+最後是站長用眼睛看出來的。這是「守衛安慰劑」的一種新型態：
+**量了 A 的不變量，卻沒有量 A 與 B 的關係**。
+
+### 【5】新守衛 `scripts/test-v6298-lobby-tab-align.mjs`（已進 `package.json` test chain）
+
+CI 沒有瀏覽器（`devDependencies` 沒有 playwright）⇒ 不能用 DOM。
+守衛改成**把 `<style>` 區真的解析出來、用 CSS 2.1 §10.3.3 的區塊盒寬度公式算 left／right**：
+展開 `margin`／`padding`／`border` 縮寫、算特異性與來源順序的層疊、處理 `!important`、
+求值 `calc()`／`rem`／`%`、評估 `@media`（`max-width`／`min-width`／`orientation`／`hover`／`pointer`）、
+套用 `box-sizing` 與 `max-width`／`min-width`。
+⭐ 它不是「檢查字串裡有沒有 auto」那種安慰劑：換成 `margin-inline:auto`、
+`width:fit-content`、百分比邊距一樣算得出來。
+
+斷言（六種尺寸：320／375／390／768／1366／1920）：
+- 【B】`.lobby-tabs`／`.online-form.lobby-unified`／`.lobby-tab-panel` 三者的 left 與 right **完全相同**
+- 【C】`.tourn-tabs` 與 `.tourn-tab-panel` 的 left 與 right **完全相同**
+- 【A】求解器下限斷言：解析到的規則數 > 500、六個目標選擇器都找得到、三個元素都命中規則且寬度 > 0；
+  **A4 讀本檔自己的原始碼**，強制【D】正對照區存在且至少 4 條（有人把正對照刪掉就紅）
+- 【D】**內建正對照**：把 `margin:auto` 加回去／把錦標賽分頁內容改成置中窄版／
+  把既有表單右推 40px ⇒ 求解器**必須**算出不對齊（算不出來就是求解器瞎了）
+
+⭐⭐ 求解器本身的驗證（Rule 25）：`scripts/measure-v6298-lobby-align.mjs`（不在 chain）
+用真的 chromium 量 `getBoundingClientRect()`，與求解器逐項對照，
+三種尺寸 × 五個元素的 left／right **全部相符**（誤差 < 0.05px）。
+
+### 【6】HEAD-FAIL ＋ 突變
+
+- HEAD-FAIL：把唯一改到的 `src/routes/game/+page.svelte` 還原成 BASE ⇒ 守衛 FAIL，
+  紅在 `B 1366×768 分頁列與線上分頁**左邊界不一致**：tabs left=403 right=963 ／ online left=333 right=935`；
+  改回來 ⇒ 20 PASS。
+- 突變 7/7 各自紅在預期斷言：把 `margin:auto` 加回去（B 左邊界）／只修分頁列忘了修好友分頁（B 左邊界）／
+  改錯方向讓既有表單置中（B 左邊界）／**只改 margin 不改寬度**（B 右邊界，＝站長原本的兩行修法）／
+  把正對照整段拿掉（A4）／把求解器弄瞎讓 `auto` 當 0（D1）／錦標賽分頁內容改置中窄版（C）。
+
+### 【7】既有守衛
+`test-v6296`／`test-v6297`／`test-v6293`／`test-v6283`／`test-v6284` 全部**沒有紅**：
+它們 pin 的 CSS 逐字比對只涵蓋 `.tourn-tabs`／`.tourn-tab`／`.auth-user`（本版未動），
+`test-v6284 C5`（「分頁列 CSS 在且只碰 `.lobby-tab*`」）也照樣通過。
+⇒ 沒有任何守衛需要放寬，守護意圖零損失。
+
+### 【8】三配套（＋一個）
+`admin.html` `SITE_VERSION_HINT` → `6.298`；`test-v6272` ⑩ `PREV_SHA` → `327c6fd2`
+（`PREV_ALLOWED` 五檔照實列）；掃過 `scripts/` 沒有新的「pin 死版本號／整檔 sha256」條目
+（既有四把 sha256 鎖都在 `server_admin_patch.js`，本版未動 ⇒ 原樣通過）。
+⚠ 本版**動了 changelog** ⇒ `test-v6264` 的 `BASE_SHA` 也必須前移到上一版（`327c6fd2`），
+否則 F1／F2／F2b 在有完整歷史的環境會紅。
+
+### 【9】首頁 changelog 三步搬運
+新增 v6.298（open）、v6.277 內文搬進 `changelog-bodies.html`、v6.217 搬進封存頁；
+首頁 32,179 → 31,979 bytes。
+
 ## v6.297 — 🏆 錦標賽第 4 個分頁「👥 好友」＋ 💬 私聊內嵌（好友功能的最後一塊）
 
 BASE `c9bba2280289e324367f1a9a12850ea9900d6ea2`（v6.296，遠端 main）。

@@ -664,9 +664,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c9bba2280289e324367f1a9a12850ea9900d6ea2';   // v6.296（v6.297 的上一版）
-// ⭐⭐v6.297 是**玩家端版**：錦標賽大廳新增第 4 個分頁「👥 好友」、好友名單的「💬 私聊」改成就地開面板
-//   （私聊面板與狀態機走**動態 import()**，對戰頁主 chunk 不受影響）—— 全部落在 src/routes/game/+page.svelte 一個檔，
+const PREV_SHA = '327c6fd2d158c71082d3d1e450cc2d95bc48a876';   // v6.297（v6.298 的上一版）
+// ⭐⭐v6.298 是**玩家端版**：修正線上大廳分頁列與分頁內容沒有跟大廳內容對齊（.lobby-tabs／.lobby-tab-panel
+//   兩條 CSS 從「置中＋只算內容寬」改成「靠左＋外框寬」）—— 只落在 src/routes/game/+page.svelte 一個檔，
 //   加上 version.ts 與首頁 changelog 三檔。
 //   ⚠ 這一節只掃 src/ 與 static/ 兩個目錄、而且是**從 BASE 的檔案清單出發**逐檔比 ——
 //     scripts/ 與 oracle-admin/ 底下的改動（新守衛、量測腳本、SITE_VERSION_HINT）不在掃描範圍，**不可以**列進來。
