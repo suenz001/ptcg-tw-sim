@@ -160,7 +160,7 @@ await T('B4 ⭐⭐ 好友分頁的內容：`{:else if tTab === \'friends\'}` 恰
   assert.strictEqual(GAME.split(mk).length - 1, 1, '好友分頁分支不是恰一處');
   const pf = GAME.indexOf("{:else if tTab === 'profile'}");
   const fr = GAME.indexOf(mk);
-  const err = GAME.indexOf('{#if tError}<p class="warn">{tError}</p>{/if}');
+  const err = GAME.indexOf('{#if tError}<p class="warn">'/* ⭐ 只當位置錨點：那一行後來加了關閉鈕，改用前綴（斷言內容未變） */);
   assert.ok(pf > 0 && fr > pf && err > fr, '好友分支的位置不對：' + JSON.stringify({ pf, fr, err }));
   const panel = GAME.slice(fr, err);
   assert.ok(/<FriendsPanel embedded ondm=\{openDm\}/.test(panel), '錦標賽分頁沒有用共用元件／沒接 openDm：' + stripCmt(panel).slice(0, 300));
@@ -549,7 +549,7 @@ await T('G1 ⭐⭐ `/friends` 這條獨立路由與 DmPanel.svelte **逐位元�
 });
 await T('G2 新增的區塊零 {@html}；錦標賽好友分頁區間零 {#each}（沒有新的無 key 清單）；共用元件仍零 {@html}', () => {
   const fr = GAME.indexOf("{:else if tTab === 'friends'}");
-  const err = GAME.indexOf('{#if tError}<p class="warn">{tError}</p>{/if}');
+  const err = GAME.indexOf('{#if tError}<p class="warn">'/* ⭐ 只當位置錨點：那一行後來加了關閉鈕，改用前綴（斷言內容未變） */);
   const seg = GAME.slice(fr, err) + GAME.slice(GAME.indexOf('{#snippet dmFoot()}'), GAME.indexOf('{/snippet}', GAME.indexOf('{#snippet dmFoot()}')));
   assert.ok(seg.length > 300, '新增區塊只有 ' + seg.length + ' 字元 ⇒ 錨點抓錯');
   assert.ok(!seg.includes('{@html'), '⚠⚠ 新增區塊出現 {@html}');

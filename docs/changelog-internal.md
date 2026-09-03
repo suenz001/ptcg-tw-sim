@@ -1,5 +1,127 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.299 — 🩹 錦標賽大廳的錯誤訊息永久掛在頁尾（既有 bug，v6.297 的第 4 個分頁讓它更容易被看到）
+
+BASE `3d88a55ad404c8e892ad6ef237fb8684c3fd5a22`（v6.298，遠端 main）。
+玩家端只動 `src/routes/game/+page.svelte` 三處（＋`version.ts` 與首頁 changelog 三檔）。
+**完全沒有動** `oracle-admin/server_admin_patch.js`（blob sha 與 BASE 相同）。
+
+### 【0】站長回報（逐字）
+> 手機版錦標賽的頁面最下方 出現了 409: {"error":"目前不在報名階段"} 的 bug
+> （不管切換哪個分頁都會顯示這個 bug 在最下方）
+
+### 【1】⭐⭐⭐ 複驗站長的診斷：三條**全部成立**，沒有一條需要更正
+
+| 站長的診斷 | 複驗（BASE blob 行號） | 結論 |
+|---|---|---|
+| `:10403` 的 `{#if tError}<p class="warn">` 在所有分頁的 `{/if}` 之後、屬於 `<main>` 層級 ⇒ 每個分頁都看得到 | `:10402` 是分頁鏈的 `{/if}`、`:10403` 是那一則、`:10404` 才收掉 `{:else}`、`:10405` 是 `</main>` | ✅ 成立 |
+| `tSwitchTab()` 只做三件事，完全沒有清 `tError` | `:5477~5486` 只有 `tTabRaw = tab` ＋ 兩支載入 ＋ `refreshNotifyDiag()` | ✅ 成立 |
+| 409 來自 `:5659` `tournEnroll` 打 `/register` 的回應 | 伺服器 `server_admin_patch.js:6945` `if (ev.status !== 'registration') return res.status(409).json({ error: '目前不在報名階段' })`；`tApi` 的 `!res.ok` 分支組成 `` `${res.status}: ${body}` `` ⇒ **逐字就是站長看到的那一串** | ✅ 成立 |
+| 這是既有 bug，不是新分頁造成的 | 那一則 `<p class="warn">` 與 `tSwitchTab` 都不是 v6.297 新增的；v6.297 只是多了第四個分頁 | ✅ 成立 |
+
+⭐ 追加查證（站長沒提、但會影響修法）：**輪詢不會清掉它**。`tournLoadEvent()` 全程沒有寫過 `tError`
+（只在最外層 `catch { /* ignore */ }`）⇒ 訊息真的會一直掛著，直到玩家離開頁面。
+
+### 【2】修法（兩處，最小）
+
+```
+tSwitchTab 開頭            + tError = ''; tCheckinErrId = '';
+{#if tError}<p class="warn"> + <button class="warn-x" …>✕</button>
+.warn 後面                  + .warn-x / .warn-x:hover 兩條 CSS
+```
+
+⭐ **為什麼一起清 `tCheckinErrId`**：它只是「這則訊息要貼在哪一場的報到鈕旁邊」的指標（v6.167），
+沒有 `tError` 就沒有意義。留著的話，下一則**不相干**的錯誤（例如棄賽失敗）會被貼到舊賽事卡上
+—— 那是 BASE 就存在的小瑕疵，這一版順手縮小它的窗口（不另外處理，避免擴大範圍）。
+
+### 【3】⭐ 我判斷**不要**再加的清除時機，以及理由
+
+| 候選 | 判斷 | 理由 |
+|---|---|---|
+| `tournLoadEvent()` 成功後 | ❌ 不做 | `/event` 是輪詢（大廳每數秒一次）⇒ 訊息會「閃一下就不見」，等於把「看得到但關不掉」換成「根本看不到」。站長的直覺是對的。 |
+| 幾秒後自動消失 | ❌ 不做 | ① `tError` 是**同一個變數**同時餵三個位置（頁尾、報到鈕旁、對戰中的 toast），加全域計時器等於連對戰中的錯誤提示也會自己消失；② 本檔已經有一個**刻意**的自動消失（`:5594` 複製回放連結的 ✅ 訊息 2.5 秒），再加一層會互相打架；③ 站長要的是「知道為什麼按了沒反應」，訊息自己跑掉會讓人來不及讀。 |
+| 玩家開始新的操作時 | ✅ **本來就有了** | 逐一清點所有會設 `tError` 的入口：`tournEnroll` / `tLateJoin` / `tDropRequest` / `tDropCommit` / `tPropose` / `tCheckinCommit` / `tUnregister` / `tCancelProposal` / `tEnterMatch` / `tSpectate` / 回放 —— **每一支開頭都已經 `tError = ''`**；四顆展開表單的按鈕（`:9875` / `:9908` / `:9942` / `:10017`）也都有。⇒ 真正的缺口只有「不做任何操作」的兩種情況：切分頁、以及想直接關掉。這一版補的正是那兩個，**沒有第三個缺口**。 |
+
+### 【4】⭐ 關閉鈕的樣式與**零位移**的量測
+
+```css
+.warn-x{ appearance:none; -webkit-appearance:none; background:none; border:0; padding:0;
+         margin:0 0 0 8px; color:inherit; font:inherit; line-height:inherit;
+         vertical-align:baseline; cursor:pointer; opacity:0.75; }
+.warn-x:hover{ opacity:1; }
+```
+
+位置＝訊息文字**同一行的行尾**（inline，不是浮動、不是絕對定位）。
+零位移的原理：`font` / `line-height` 完全繼承、沒有 padding / border ⇒ 這顆 inline-block 的
+行框高度等於原本那一行文字，`<p class="warn">` 的盒子一個像素都不會變。
+
+`scripts/measure-v6299-warn-close.mjs`（chromium `getBoundingClientRect()`，**不在 test chain**）
+四種尺寸實測，訊息文字與關閉鈕都**從出貨碼實抽**（不手抄）：
+
+| 尺寸 | 分頁列以上元素 | `<p class="warn">` | 訊息文字 rects | 水平溢出 | 正對照（給關閉鈕 padding） |
+|---|---|---|---|---|---|
+| 375×812 | dx=dy=dw=dh=0（5 個元素） | dx=dy=dw=dh=0（349.406×24） | 全等，1 行 → 1 行 | 375 → 375 | dh=+22、文字被推動 ✓ |
+| 390×844 | 同上 | 0（364.406×24） | 全等 | 390 → 390 | dh=+22 ✓ |
+| 412×915 | 同上 | 0（386.406×24） | 全等 | 412 → 412 | dh=+22 ✓ |
+| 1366×768 | 同上 | 0（640×24） | 全等 | 1366 → 1366 | dh=+22 ✓ |
+
+關閉鈕本身 13.406×19，落在同一個行框內（`btn.top >= p.top && btn.bottom <= p.bottom`）。
+⭐ 誠實面：另外量了**本站最長的一則訊息**（會換行的那種），四種尺寸的 `<p>` 高度差都是 **0px**
+（行數 2 → 2；1366 是 1 → 1）—— 關閉鈕沒有多擠出一行。
+
+### 【5】不可破壞的既有行為，以及各自的證明
+
+| 既有行為 | 證明 |
+|---|---|
+| 對戰中的 `.tourn-toast` 不可被誤清 | ① 那一行與 `.tourn-toast` 的 CSS 規則**逐字未動**（守衛 D1，配 D1b 自我驗證）；② ⭐ 結構＋求值證明：大廳整個 `<main>` 包在 `{#if isTournament && tStep !== 'playing'}` 裡，該條件在對戰中求值為 `false`，而四個 `tSwitchTab(` 呼叫點**全部**落在那個 `<main>` 之內 ⇒ 對戰中根本呼叫不到（守衛 D3） |
+| v6.167 貼著報到鈕的兩則訊息 | 行為端：把 `tCheckinCommit` 的函式體抽出來（esbuild 剝 TS）配假 `tApi` 實跑錯誤路徑 ⇒ `tError` / `tCheckinErrId` 都被設、渲染條件 `tCheckinErrId === ev._id && tError` 求值為真；切分頁後才變假（守衛 E1、E2） |
+| `:5263` 離開對戰時的 `tError = ''` | 逐字未動（不在本版的三個 rep 錨點內） |
+| `tSwitchTab` 原本的載入行為 | 行為端：四個分頁各跑一次，`events`→[]、`leaderboard`→['lb']、`profile`→['pf','diag']、`friends`→[]，且已有資料且非 stale 時不重抓（守衛 B2） |
+
+### 【6】守衛 `scripts/test-v6299-warn-dismiss.mjs`（23 PASS / 0 FAIL）
+
+行為端優先：【B】把 `tSwitchTab` 函式體抽出來**真的跑**（四個分頁各一次）、【C】把關閉鈕的
+`onclick` 箭頭函式抽出來**真的跑**、【E】把 `tCheckinCommit` 抽出來**真的跑**。
+靜態只用在行為端測不到的地方（【D】toast 逐字未動、【F】CSS 宣告值）。
+
+HEAD-FAIL（每個改過的檔各自還原）：
+
+| 還原 | 結果 |
+|---|---|
+| `src/routes/game/+page.svelte` | ❌ A0 紅並中止（0 PASS / 1 FAIL） |
+| `package.json` | ❌ G2 紅（test chain 沒有本守衛） |
+| `src/lib/version.ts` | ❌ G1 紅（hint 6.299 ≠ version.ts 6.298） |
+| `oracle-admin/admin.html` | ❌ G1 紅（hint 6.298 ≠ version.ts 6.299） |
+| `scripts/measure-v6299-warn-close.mjs` | ❌ F3 紅（零位移沒有實測證據） |
+| `scripts/test-v6264-changelog-lazy-body.mjs` | ❌ 該檔自己的 F1 / F2 / F2b 三條紅 |
+| `scripts/test-v6272-…` 的 `PREV_SHA` | ⚠ **不會紅** —— v6.298 與 v6.299 剛好動到**同一組**五個玩家端檔案，比 v6.297 或比 v6.298 得到的差集相同。仍然要更新（那份清單是「這一版動了什麼」的宣告，不是判準），但這一版它沒有守到東西，如實記錄。 |
+
+突變（5 個，各自紅在預期那一條）：
+M1 只清「賽事」一個分頁 → B1「分頁之後 tError 還在」；
+M2 關閉鈕不清 state → C1「關閉鈕點下去之後 tError 還在」；
+M3 大廳條件放寬成只看 `isTournament`（對戰中也畫得出分頁列）→ D3「大廳 `<main>` 的渲染條件被改了」；
+M4 對戰中的 toast 也被塞一顆會清 `tError` 的關閉鈕 → D1「`.tourn-toast` 那一行被動到了」；
+M5 報到失敗不再記下賽事 id → E1「沒有記下賽事 id」。
+
+### 【7】三配套（bump 必做）
+
+- `oracle-admin/admin.html` `SITE_VERSION_HINT` → `6.299`
+- `scripts/test-v6272-…` ⑩ `PREV_SHA` → `3d88a55a`（v6.298）；`PREV_ALLOWED` 五個檔照實列
+- 掃 pin 死版本／sha：全 `scripts/` 掃過一遍，**沒有**任何 sha256 鎖住 `src/routes/game/+page.svelte`
+  （既有的整檔／區間 sha256 全部指向 `server_admin_patch.js`、`room.ts`、`firebase.ts`、
+  `room-oracle.ts`、`src/routes/friends/**`、`src/routes/decks/+page.svelte` 的桌機 CSS）。
+  其餘 40 位元 sha 常數都是「對自己那一版的 BASE 做歷史比對」，是固定的歷史事實、不是會過期的 pin。
+- ⚠ 本版動了 changelog ⇒ `test-v6264` 的 `BASE_SHA` 一併前移到 `3d88a55a`（有歷史時 F1/F2/F2b/F3 全綠）。
+
+### 【8】首頁 changelog 三步搬運
+
+新增 v6.299（open）、v6.279 內文搬進 `changelog-bodies.html`、v6.218 搬進封存頁。
+首頁 31,979 → **31,318 bytes**（仍 < 40KB）；bodies 38 則不變；封存頁 343 → 344 則。
+⚠ 首頁 summary 合計 **4,957 字**，守衛⑨的上限是 5,000 —— **下一版寫條目前要先確認會不會爆**
+（現有條目已經很精簡，真的爆了就把最舊那幾則的 summary 一起往封存頁搬）。
+
+---
+
 ## v6.298 — 🩹 線上大廳分頁列沒有對齊（v6.296 的版面 bug）＋ 補一條「新元素必須與既有版面對齊」的守衛
 
 BASE `327c6fd2d158c71082d3d1e450cc2d95bc48a876`（v6.297，遠端 main）。

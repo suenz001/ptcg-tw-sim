@@ -355,7 +355,7 @@ await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊�
   //   守護意圖不變（主選單／本機那兩份 .auth-user 不可以長出好友入口），並補一條正對照：
   //   錦標賽分頁區間**必須**有 friend 字樣，否則上面那條會退化成恆真式。
   const tTabsAt = GAME.indexOf('<div class="tourn-tabs" role="tablist">');
-  const tEndAt = GAME.indexOf('{#if tError}<p class="warn">{tError}</p>{/if}', tTabsAt);
+  const tEndAt = GAME.indexOf('{#if tError}<p class="warn">'/* ⭐ 只當位置錨點：那一行後來加了關閉鈕，改用前綴（斷言內容未變） */, tTabsAt);
   assert.ok(tTabsAt > scriptEnd && tEndAt > tTabsAt && tEndAt < lobby, '錦標賽分頁區間的錨點不對：' + JSON.stringify({ scriptEnd, tTabsAt, tEndAt, lobby }));
   assert.ok((GAME.slice(tTabsAt, tEndAt).match(/friend/gi) || []).length >= 3, '正對照：錦標賽分頁區間應該有好友字樣（第 4 顆分頁＋分頁內容）');
   const markupBefore = GAME.slice(scriptEnd, tTabsAt) + GAME.slice(tEndAt, lobby);

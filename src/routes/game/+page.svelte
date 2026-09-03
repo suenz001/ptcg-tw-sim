@@ -5475,6 +5475,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
     finally { tProfileLoading = false; }
   }
   function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile' | 'friends') {
+    // ⭐⭐⭐v6.299 切分頁先清掉錯誤訊息。
+    //   大廳的 `tError` 是印在 <main> 最底下的【分頁外】元素（見上方 v6.167 的註解），
+    //   不管切到哪一個分頁都看得到；而這支以前完全沒有清它，
+    //   於是 `/register` 回的 409（「目前不在報名階段」）會一直掛在頁尾，
+    //   站長回報的「不管切哪個分頁都顯示在最下方」就是這個。
+    //   ⚠ 一起清 tCheckinErrId：它只是「這則訊息要貼在哪一場的報到鈕旁邊」的指標，
+    //     沒有 tError 就沒有意義；留著會讓下一則不相干的錯誤被貼到舊賽事卡上。
+    //   ⚠⚠ 這支【只在大廳】被呼叫（分頁列整列寫在 tStep 非 waiting、且非對戰的分支內），
+    //     對戰中那條 fixed 的 .tourn-toast 走的是另一條路徑，不會被這裡誤清。
+    tError = ''; tCheckinErrId = '';
     tTabRaw = tab;
     // v6.177 保留舊資料後，失敗不再把它清成 null ⇒ 重試條件要改看 stale，否則切回分頁不會重抓。
     if (tab === 'leaderboard' && (!tLeaderboard || tLeaderboardStale)) tLeaderboardLoad();
@@ -10400,7 +10410,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot} />
         </div>
       {/if}
-      {#if tError}<p class="warn">{tError}</p>{/if}
+      <!-- ⭐⭐⭐v6.299 大廳的錯誤訊息。這個 <p> 在【所有分頁的條件式收尾之後】（＝ <main> 層級），
+           不管切到哪一個分頁都會顯示 —— 這正是站長回報「409 一直掛在頁面最下方」的位置。
+           ⚠ 「切分頁就消失」已由 tSwitchTab 負責；這裡再給一顆關閉鈕，讓【不切分頁的人】也關得掉。
+           ⚠⚠ 關閉鈕刻意是 inline、font / line-height 全部繼承、零 padding / border / background
+             ⇒ 行框高度跟原本那一行文字一樣，不會改變這個 <p> 的盒子、也不會推動任何既有元素
+             （chromium 實測：scripts/measure-v6299-warn-close.mjs）。 -->
+      {#if tError}<p class="warn">{tError}<button class="warn-x" type="button" aria-label="關閉這則訊息" title="關閉" onclick={() => { tError = ''; tCheckinErrId = ''; }}>✕</button></p>{/if}
     {/if}
   </main>
 {:else}
@@ -14870,6 +14886,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .back-btn:hover{ text-decoration:underline; }
   .muted{ color:#aaa; font-size:0.9rem; }
   .warn{ color:#f0b040; }
+  /* ⭐⭐v6.299 大廳錯誤訊息的關閉鈕。【零位移】是硬需求：
+       font / line-height 全部 inherit、padding / border 為 0、background 透明
+       ⇒ 這顆 inline-block 的行框高度等於原本那一行文字，<p class="warn"> 的高度不變，
+         它上方的每一個既有元素 rect 也完全不動（實測：scripts/measure-v6299-warn-close.mjs）。
+     ⚠ 只掛在大廳那一則訊息上；對戰中的 .tourn-toast 與報到鈕旁邊的 .warn.small 逐字未動。 */
+  .warn-x{ appearance:none; -webkit-appearance:none; background:none; border:0; padding:0; margin:0 0 0 8px; color:inherit; font:inherit; line-height:inherit; vertical-align:baseline; cursor:pointer; opacity:0.75; }
+  .warn-x:hover{ opacity:1; }
 
   /* 模式選擇卡片 */
   .mode-cards{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.5rem 0; }
