@@ -644,15 +644,33 @@ await T('G4 ⭐⭐ HEAD-FAIL：對真 BASE blob(v6.291) 跑同一組行為斷言
     '495221f1dbf51dea9020284147fcf9b271d2baeccdac8d3b4745110c409dca02', 'BASE 還原 v6.291 後沒回到 v6.290');
 });
 
-await T('G5 ⚠⚠ src/routes/game/+page.svelte 相對 BASE **一個位元都沒動**（blob sha 對比）', () => {
-  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6292 G5 +page.svelte blob 對比', 'test-v6272 ⑩ 的逐檔比對同守一件事'); return; }
-  const b = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte');
-  assert.ok(b.ok, '讀不到 BASE 的 +page.svelte');
-  const cur = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-  assert.strictEqual(sha256(cur), sha256(b.out),
-    '⚠⚠ +page.svelte 被動了：現行 ' + sha256(cur).slice(0, 16) + ' ≠ BASE ' + sha256(b.out).slice(0, 16));
+await T('G5 ⭐⭐ client 從來不對這六支端點送 playerId（＝加 verified 閘一個真玩家都沒多擋）—— 逐支端點掃呼叫點求證', () => {
+  // ⚠⚠ v6.296 改寫：原本這一條是「game/+page.svelte 整檔 blob sha ＝ BASE(v6.291)」——
+  //   那是**會過期的 pin**：v6.296 正當地動了那個檔（線上大廳新增好友分頁），這一條從此永遠紅，
+  //   而 CI 淺複製會 SHALLOW-SKIP 讓它看起來沒事（守衛安慰劑第九種）。
+  // ⭐ 改成**不綁版本**的等價條件：這一條原本要證的其實是「client 沒有跟著改」，
+  //   而 client 端真正要保住的性質是 —— **這六支端點的請求體不得帶 playerId**
+  //   （帶了就會走 tournIdentity 的 fallback，verified 閘就會把真玩家擋在外面）。
+  //   這個條件永遠不會過期，而且淺複製環境下照樣在守。
+  // client 一律走 tApi('/xxx', body)（tApi 自己補 /api/tournament 前綴）
+  const PATHS = ['/drop', '/unregister', '/cancel-proposal', '/chat', '/match/enter', '/match/forfeit'];
+  let scanned = 0;
+  for (const path of PATHS) {
+    const anchor = "tApi('" + path + "'";
+    let i = PAGE.indexOf(anchor);
+    assert.ok(i > 0, '找不到 ' + path + ' 的呼叫點（寫法變了？掃描器要修）');
+    while (i > 0) {
+      scanned++;
+      const seg = PAGE.slice(i, PAGE.indexOf('\n', i));   // 只看那一行的呼叫（body 都寫在同一行）
+      assert.ok(!/playerId/.test(seg), '⚠⚠ ' + path + ' 的請求體帶了 playerId ⇒ verified 閘會把真玩家擋在賽外：' + seg.slice(0, 200));
+      i = PAGE.indexOf(anchor, i + 1);
+    }
+  }
+  assert.ok(scanned >= PATHS.length, '掃描器下限：只掃到 ' + scanned + ' 個呼叫點');
+  // 正對照：有帶 playerId 的端點（/still-here）確實掃得出來 ⇒ 上面不是恆真式
+  const j = PAGE.indexOf("tApi('/still-here'");
+  assert.ok(j > 0 && /playerId/.test(PAGE.slice(j, PAGE.indexOf('\n', j))), '正對照失效：/still-here 應該是有帶 playerId 的那一組');
 });
-
 await T('G6 內部 changelog 有本版（公平性／安全修正 ⇒ 依站長既有裁定**不寫首頁 changelog**）', () => {
   const ic = readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8');
   assert.ok(/v6\.292/.test(ic), 'docs/changelog-internal.md 沒有 v6.292');

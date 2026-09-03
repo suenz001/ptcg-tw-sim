@@ -151,6 +151,8 @@ const BAT_BUF = bufOr(P_BAT);
 const SAP = readFileSync(P_SAP, 'utf8');
 const ADMIN = readFileSync(P_ADMIN, 'utf8');
 const PKG = readFileSync(P_PKG, 'utf8');
+// v6.296【E】改寫後要讀對戰頁（不再比 blob sha，改比「零引用」）
+const GAME = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
 
 console.log('\n【A】檔案／行尾／編碼');
 T('A0 掃描器下限：health-check.sh 抓得到內容且分節齊全（掃描器壞掉時這條先紅）', () => {
@@ -274,22 +276,31 @@ T('D4 ⭐ ssh 端先剝 CR 再跑（雙保險：萬一 .gitattributes 沒生效�
   assert.ok(BAT.includes("sed -i 's/\\r$//' /tmp/ptcg-health-check.sh"), 'bat 沒有先剝 CR');
 });
 
-console.log('\n【E】本版不該動到的檔案');
-const BASE_SHA = 'f087b0ba64065c51deacad650cf8563a1c1b25ce';   // v6.293（本版的 BASE）
-for (const rel of ['src/routes/game/+page.svelte', 'oracle-admin/server_admin_patch.js']) {
-  T('E1 ⭐⭐⭐ ' + rel + ' 的 blob sha 與 BASE 逐位元相同', () => {
-    if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6294 E1 ' + rel + ' blob 比對', '需要歷史 commit'); return; }
-    const want = execFileSync('git', ['-C', ROOT, 'rev-parse', BASE_SHA + ':' + rel]).toString().trim();
-    const got = execFileSync('git', ['-C', ROOT, 'hash-object', join(ROOT, rel)]).toString().trim();
-    assert.strictEqual(got, want, rel + ' 被動到了（本版只該新增運維檔＋bump）');
-  });
-}
-T('E2 掃描器自驗：hash-object 對「多一個空白」會算出不同 sha（E1 不是恆真式）', () => {
-  const a = execFileSync('git', ['-C', ROOT, 'hash-object', '--stdin'], { input: 'x' }).toString().trim();
-  const b = execFileSync('git', ['-C', ROOT, 'hash-object', '--stdin'], { input: 'x ' }).toString().trim();
-  assert.notStrictEqual(a, b);
+console.log('\n【E】這個工具是「純新增」：沒有把手伸進線上那兩個檔');
+// ⚠⚠⚠ v6.296 改寫：原本這一節是「兩個檔的 blob sha 必須等於 BASE(v6.293)」——
+//   **那是一個會過期的 pin**。v6.295 正當地改了 server_admin_patch.js（好友備註名），
+//   這條在有完整歷史的機器上從那一刻起就一直紅，只是 CI 淺複製會 SHALLOW-SKIP 所以看不出來
+//   （＝守衛安慰劑：第九種「pin 死版本／sha」）。v6.296 又正當地改了 game/+page.svelte（大廳分頁）。
+// ⭐ 改成**不綁版本**的等價條件：這支健康檢查工具的守護意圖是「它只是新增的運維腳本，
+//   不會把任何鉤子塞進線上的對戰頁或伺服器補丁」⇒ 直接斷言那兩個檔**零引用**這支工具的任何識別字，
+//   而且工具本身不得反過來要求對方配合。這條在淺複製環境下照樣在守，而且永遠不會過期。
+const TOOL_TOKENS = ['health-check.sh', 'check-health.bat', 'ptcg-health-check', 'ptcg-health-'];
+T('E1 ⭐⭐⭐ 線上那兩個檔（對戰頁／伺服器補丁）零引用這支運維工具的任何識別字（不綁版本、淺複製也在守）', () => {
+  for (const [rel, src] of [['src/routes/game/+page.svelte', GAME], ['oracle-admin/server_admin_patch.js', SAP]]) {
+    assert.ok(src.length > 10000, '掃描器下限：' + rel + ' 只讀到 ' + src.length + ' 字元');
+    for (const tk of TOOL_TOKENS) {
+      assert.strictEqual(src.split(tk).length - 1, 0, rel + ' 出現了運維工具的識別字「' + tk + '」⇒ 這支工具不再是「純新增」');
+    }
+  }
 });
-
+T('E1b 掃描器正對照：把識別字塞進去 ⇒ E1 必紅（不是恆真式）', () => {
+  const bad = GAME.slice(0, 200) + '\n// health-check.sh\n' + GAME.slice(200);
+  let err = null;
+  try {
+    for (const tk of TOOL_TOKENS) assert.strictEqual(bad.split(tk).length - 1, 0, '出現了運維工具的識別字「' + tk + '」');
+  } catch (e) { if (e instanceof assert.AssertionError) err = e; else throw e; }
+  assert.ok(err && /識別字/.test(err.message), '掃描器抓不到塞進去的識別字');
+});
 console.log('\n【F】test chain ／版本一致');
 T('F1 ⭐⭐ 本守衛進了 package.json 的 test chain（只加進 iron-rules-audit.sh 等於沒加）', () => {
   assert.ok(chainHas(PKG, 'scripts/test-v6294-health-check.mjs'), 'test chain 沒有 test-v6294-health-check.mjs');

@@ -21,7 +21,11 @@ import {
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_SRV = join(ROOT, 'oracle-admin/server_admin_patch.js');
-const P_PAGE = join(ROOT, 'src/routes/friends/+page.svelte');
+// ⭐⭐ v6.296：好友名單的二次確認文案隨著名單本體搬到共用元件（/friends 頁與大廳分頁共用同一份）。
+//   守護意圖不變（文案逐字、只在 confirm span 內），來源檔換成共用元件；
+//   ⭐ 並補一條「/friends 頁不得再自己留一份文案」——否則兩份會漂移。
+const P_PAGE = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
+const P_FRPAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const DM_START = '// >>> PTCG-FRIENDS-DM-BLOCK-START';
 const DM_END = '// <<< PTCG-FRIENDS-DM-BLOCK-END';
 const TOURN_TAIL_SHA256 = 'c0891b6f200ab4e3898c50aa77365458d2207870e828dc28bbfb44df81ddcda3';   // 與 test-v6272 ⑨／test-v6288 A1 同一把
@@ -55,6 +59,7 @@ const FR = extractBlock(PATCH, FR_START, FR_END, 15000);
 const DM = extractBlock(PATCH, DM_START, DM_END, 8000);
 const SRC = FR + '\n' + DM;
 const PAGE = readFileSync(P_PAGE, 'utf8');
+const FRPAGE = readFileSync(P_FRPAGE, 'utf8');
 await T('A1 ⚠⚠ 錦標賽區塊逐位元未動（兩把既有 sha256）；FRIENDS／DM 區塊都在第一支 /api/tournament 之前', () => {
   const first = PATCH.indexOf("app.get('/api/tournament");
   assert.ok(first > 0);
@@ -280,6 +285,8 @@ await T('E1 解除封鎖二次確認文案逐字（含「對話」「無法復�
   assert.ok(ub.includes('對話') && ub.includes('無法復原'), 'unblock 確認區塊沒提對話／無法復原');
   assert.ok(ub.includes('確定解除封鎖'), '確認鈕不見了');
   assert.ok(!/[{}<>]/.test(UNBLOCK_CONFIRM.replace(/<\/?span[^>]*>/g, '')), '文案含 Svelte 模板特殊字元');
+  // ⭐ v6.296：文案只准有一份 —— /friends 頁不得再自己留一份（會漂移）
+  assert.ok(!FRPAGE.includes('確定解除封鎖') && !FRPAGE.includes('確定解除好友'), '/friends 頁又留了一份二次確認文案（應只在共用元件裡）');
 });
 await T('E1m 正對照：文案拿掉「對話」那一句 ⇒ E1 紅', async () => {
   const bad = mutate(PAGE, UNBLOCK_CONFIRM, '<span class="confirm">解除封鎖後關係會歸零，要重新邀請才會成為好友。</span>');

@@ -227,33 +227,49 @@ await T('C2 ⭐ 賽後鈕：勝負 modal 內恰一處（v6.285 起全檔兩處�
 });
 /** 把 svelte 檔裡 `{#if COND}` 的 COND 抽出來，用指定的變數求值。 */
 function evalCond(cond, vars) { return new Function(...Object.keys(vars), 'return (' + cond + ');')(...Object.values(vars)); }
+/**
+ * ⭐⭐ v6.296：大廳的兩份舊入口（桌機 .auth-user 那顆、手機直式尾端那個連結）已由**真分頁列**取代。
+ * 這一條的守護意圖不變 —— 「大廳裡與好友有關的渲染點是可枚舉、位置固定、匿名玩家一個都不渲染」，
+ * 只是被守的對象從「兩份互斥入口」換成「分頁列 ＋ 分頁內容」。
+ */
 function lobbyEntryConds(game) {
   const lobby = game.indexOf('<!-- ─── 線上 Lobby ─── -->');
   const roomStep = game.indexOf("{:else if onlineStep === 'room'}", lobby);
   assert.ok(lobby > 0 && roomStep > lobby, '找不到線上大廳錨點');
   const seg = game.slice(lobby, roomStep);
-  const conds = [...seg.matchAll(/\{#if ([^}]*friendsEntryOn[^}]*)\}/g)].map((m) => ({ cond: m[1], idx: m.index }));
-  assert.strictEqual(conds.length, 2, '線上大廳（join 步驟）內 friendsEntryOn 的 {#if} 不是恰 2 個：' + JSON.stringify(conds.map((c) => c.cond)));
-  return { seg, conds, h1: seg.indexOf('<h1>🌐 線上連線對戰</h1>'), formEnd: seg.indexOf("{#if onlineError && !showCreateForm}<p class=\"warn\">{onlineError}</p>{/if}\n      </div>") };
+  const conds = [...seg.matchAll(/\{#if ([^}]*(?:friendsEntryOn|lobbyTab)[^}]*)\}/g)].map((m) => ({ cond: m[1], idx: m.index }));
+  assert.strictEqual(conds.length, 3, '線上大廳內與好友分頁有關的 {#if} 不是恰 3 個（分頁列／online 分頁／friends 分頁）：' + JSON.stringify(conds.map((c) => c.cond)));
+  return {
+    seg, conds,
+    h1: seg.indexOf('<h1>🌐 線上連線對戰</h1>'),
+    form: seg.indexOf('<div class="online-form lobby-unified">'),
+    formEnd: seg.indexOf("{#if onlineError && !showCreateForm}<p class=\"warn\">{onlineError}</p>{/if}\n      </div>"),
+  };
 }
 function assertLobbyMutex(game) {
-  const { seg, conds, h1, formEnd } = lobbyEntryConds(game);
-  for (const pm of [true, false]) {
-    const on = conds.filter((c) => evalCond(c.cond, { friendsEntryOn: true, isPortraitMobile: pm }));
-    assert.strictEqual(on.length, 1, 'isPortraitMobile=' + pm + ' 時渲染了 ' + on.length + ' 份入口（必須恰一份）');
-    const off = conds.filter((c) => evalCond(c.cond, { friendsEntryOn: false, isPortraitMobile: pm }));
-    assert.strictEqual(off.length, 0, 'friendsEntryOn=false 時還有入口');
-    if (pm) assert.ok(on[0].idx > formEnd && formEnd > 0, '手機那份入口沒有在 .lobby-unified 之後');
-    else assert.ok(on[0].idx < h1 && h1 > 0, '桌機那份入口不在 h1 之前（.auth-user 內）');
+  const { seg, conds, h1, form, formEnd } = lobbyEntryConds(game);
+  const V = (fe, tab, step) => ({ friendsEntryOn: fe, lobbyTab: tab, onlineStep: step, isPortraitMobile: false });
+  // ⭐⭐⭐ 匿名（friendsEntryOn=false，且 lobbyTab 被 $derived 鎖回 'online'）：分頁列與好友分頁**一個都不渲染**，
+  //   而且「既有大廳表單」那一個 {#if} 一定為真 ⇒ 匿名玩家看到的大廳與上一版相同。
+  const anon = conds.map((c) => evalCond(c.cond, V(false, 'online', 'join')));
+  assert.deepStrictEqual(anon, [false, true, false], '匿名玩家的大廳渲染集合不對（應為：分頁列不渲染／既有表單渲染／好友分頁不渲染）：' + JSON.stringify(conds.map((c) => c.cond)));
+  // 非匿名 × 兩個分頁：既有表單與好友分頁**互斥**，且分頁列都在
+  for (const [tab, wantForm, wantFriends] of [['online', true, false], ['friends', false, true]]) {
+    const on = conds.map((c) => evalCond(c.cond, V(true, tab, 'join')));
+    assert.deepStrictEqual(on, [true, wantForm, wantFriends], 'lobbyTab=' + tab + ' 的渲染集合不對：' + JSON.stringify(on));
   }
-  const mobileLine = seg.split('\n').find((l) => l.includes('{#if friendsEntryOn && isPortraitMobile}'));
-  assert.ok(mobileLine, '找不到手機入口行');
-  const next = seg.slice(seg.indexOf(mobileLine) + mobileLine.length);   // seg 在 {:else if onlineStep === 'room'} 之前截止
-  assert.ok(/^\s*<a class="back" href="\{base\}\/friends"/.test(next), '手機入口不是沿用 .back 樣式的 <a>：' + next.trim().slice(0, 80));
-  const restLines = next.split('\n').map((l) => l.trim()).filter(Boolean);
-  assert.deepStrictEqual(restLines.slice(1), ['{/if}'], '手機入口不是 join 步驟的最後一個節點（後面還有既有元素會被推下去）：' + JSON.stringify(restLines.slice(1, 4)));
+  // 進了等待室（room）：分頁列不得出現
+  assert.strictEqual(evalCond(conds[0].cond, V(true, 'online', 'room')), false, '⚠ onlineStep=room 時分頁列還在');
+  // 位置：h1 → 分頁列 → 既有大廳表單 →（表單收尾後）好友分頁
+  assert.ok(h1 > 0 && conds[0].idx > h1, '分頁列不在 h1 之後');
+  assert.ok(form > conds[0].idx, '分頁列不在既有大廳表單之前');
+  assert.ok(conds[2].idx > formEnd && formEnd > 0, '好友分頁不在 .lobby-unified 之後（會把既有元素推下去）');
+  // 好友分頁的內容：共用元件、embedded、且私聊是導頁（本檔不得出現私聊面板）
+  const tail = seg.slice(conds[2].idx);
+  assert.ok(/<FriendsPanel embedded /.test(tail), '好友分頁沒有用共用元件的 embedded 模式：' + tail.slice(0, 160));
+  assert.strictEqual((seg.match(/<FriendsPanel /g) || []).length, 1, '大廳裡的 FriendsPanel 不是恰一份');
 }
-await T('C3 ⭐ 大廳兩份入口以 isPortraitMobile 互斥（條件抽出求值：手機只渲染尾端那份、桌機只渲染 .auth-user 那份；手機那份是 join 步驟最後一個節點、沿用 .back）', () => assertLobbyMutex(GAME));
+await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代兩份舊入口）：三個 {#if} 條件抽出來**求值** —— 匿名一個都不渲染且既有表單照渲染；非匿名時兩個分頁互斥；room 步驟無分頁列；位置 h1 → 分頁列 → 表單 → 好友分頁', () => assertLobbyMutex(GAME));
 /** 把 `const friendsBattleTarget = $derived.by((): FriendsBattleTarget | null => { … });` 的函式本體抽出來實跑。 */
 function extractTargetFn(game) {
   const head = 'const friendsBattleTarget = $derived.by((): FriendsBattleTarget | null => {';
@@ -278,9 +294,13 @@ function assertTargetTable(game) {
   assert.strictEqual(fn({ ...base, mode: null }), null, '沒 mode ⇒ null');
 }
 await T('C4 ⭐ friendsBattleTarget 推導實跑：正式賽 mr_ 前綴 → matchId；測試房／只剩前綴／觀戰／本機／沒房號 ⇒ null；休閒 ⇒ roomCode', () => assertTargetTable(GAME));
-await T('C5 零新 CSS（style 區零 friend）；.auth-user 的 CSS 逐字未動；.auth-user 仍三份', () => {
+await T('C5 style 區零 friend（v6.296 的分頁列 CSS 一律 lobby- 前綴）；.auth-user 的 CSS 逐字未動；.auth-user 仍三份；⭐ 分頁列 CSS 在且只碰 .lobby-tab*', () => {
   const css = GAME.slice(GAME.lastIndexOf('<style'));
   assert.strictEqual((css.match(/friend/gi) || []).length, 0, 'style 區出現 friend');
+  // v6.296：分頁列確實有自己的 CSS，但只准碰 .lobby-tab／.lobby-tabs／.lobby-tab-panel（不得改到既有 selector）
+  const newRules = css.split('\n').filter((l) => /\.lobby-tab/.test(l));
+  assert.ok(newRules.length >= 4, '分頁列的 CSS 只有 ' + newRules.length + ' 行 —— 掃描器壞了？');
+  for (const l of newRules) assert.ok(/^\s*(\/\*|\*|\.lobby-tabs|\.lobby-tab\b|\.lobby-tab[.:]|\.lobby-tab-panel)/.test(l.replace(/\{[\s\S]*$/, '').length ? l : l), '分頁列 CSS 碰到別的 selector：' + l.trim().slice(0, 120));
   assert.ok(css.includes('  .auth-user {\n    display: flex;\n    align-items: center;\n    gap: 0.5rem;\n    flex-wrap: wrap;\n  }\n'), '.auth-user 的 CSS 變了');
   assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');
 });
@@ -403,15 +423,18 @@ await T('M6 突變：賽後鈕搬到匯出鈕之前（既有鈕會被推下去�
     assert.ok(lastExisting > 0 && lastBranchEnd > lastExisting && mk > lastBranchEnd, '賽後鈕沒有放在既有按鈕分支（tournament／online／local）的 {/if} 之後');
   }, '沒有放在既有按鈕分支');
 });
-await T('M7 突變：桌機那份入口拿掉 !isPortraitMobile（手機會渲染兩份）⇒ C3 必紅', () =>
-  mutantMustBreak('lobby-both', () => assertLobbyMutex(mutG('{#if friendsEntryOn && !isPortraitMobile}', '{#if friendsEntryOn}')), '渲染了 2 份入口'));
-await T('M8 突變：手機那份入口搬到 .lobby-unified 內（容器會長高）⇒ C3 必紅', async () => {
-  const line = '      {#if friendsEntryOn && isPortraitMobile}\n        <a class="back" href="{base}/friends" title="好友名單" style="margin-top:.6rem">👥 好友名單</a>\n      {/if}\n';
-  assert.strictEqual(GAME.split(line).length - 1, 1, '手機入口三行形狀變了');
+await T('M7 突變：分頁列忘了掛匿名閘（換成永遠為真的 lobbyTab 條件）⇒ C3 紅在「匿名玩家的大廳渲染集合不對」', () =>
+  mutantMustBreak('anon-sees-tabs', () => assertLobbyMutex(mutG("{#if friendsEntryOn && onlineStep !== 'room'}", "{#if lobbyTab !== '' && onlineStep !== 'room'}")), '匿名玩家的大廳渲染集合不對'));
+await T('M7b 突變：分頁列的 {#if} 整個換成與好友無關的條件（枚舉少一個）⇒ C3 紅在「不是恰 3 個」', () =>
+  mutantMustBreak('tabs-unlisted', () => assertLobbyMutex(mutG("{#if friendsEntryOn && onlineStep !== 'room'}", "{#if onlineStep !== 'room'}")), '不是恰 3 個'));
+await T('M8 突變：好友分頁搬到 .lobby-unified **裡面**（會把既有元素推下去）⇒ C3 必紅', async () => {
+  const blk = "      {#if lobbyTab === 'friends'}\n        <div class=\"lobby-tab-panel\">\n";
+  assert.strictEqual(GAME.split(blk).length - 1, 1, '好友分頁的區塊形狀變了');
+  const line = GAME.slice(GAME.indexOf(blk), GAME.indexOf('{/if}\n\n    {:else if', GAME.indexOf(blk)) + 6);
   const removed = GAME.replace(line, '');
   const at = removed.indexOf("{#if onlineError && !showCreateForm}<p class=\"warn\">{onlineError}</p>{/if}\n      </div>");
   const mutated = removed.slice(0, at) + line + removed.slice(at);
-  await mutantMustBreak('mobile-inside-form', () => assertLobbyMutex(mutated), '.lobby-unified 之後');
+  await mutantMustBreak('friends-inside-form', () => assertLobbyMutex(mutated), '.lobby-unified 之後');
 });
 await T('M9 突變：matchId 不剝 mr_ 前綴 ⇒ C4 必紅', () =>
   mutantMustBreak('keep-prefix', () => assertTargetTable(mutG("? { matchId: r.slice(3) } : null;", "? { matchId: r } : null;")), 'mr_ 前綴應剝掉'));

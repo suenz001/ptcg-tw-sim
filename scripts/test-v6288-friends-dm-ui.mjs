@@ -40,6 +40,9 @@ const P_API = join(ROOT, 'src/lib/friends/friends-api.ts');
 const P_POLL = join(ROOT, 'src/lib/friends/dm-poller.ts');
 const P_SESS = join(ROOT, 'src/lib/friends/dm-session.ts');
 const P_PANEL = join(ROOT, 'src/routes/friends/DmPanel.svelte');
+// ⭐⭐ v6.296：好友名單本體搬到共用元件（/friends 頁與線上大廳分頁共用同一份）。
+//   底下原本掃 `/friends` 頁的名單相關斷言改掃這一份；私聊面板本身（DmPanel）仍只掛在 /friends 頁。
+const P_FRP = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
 const P_PAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
 const P_MPB = join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte');
@@ -65,7 +68,7 @@ const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!-
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【A】HEAD-FAIL 錨點 ＋ 錦標賽區塊 sha256');
-let PATCH = '', FR = '', DM = '', SRC = '', API = '', POLL = '', SESS = '', PANEL = '', PAGE = '', GAME = '', MPB = '';
+let PATCH = '', FR = '', DM = '', SRC = '', API = '', POLL = '', SESS = '', PANEL = '', PAGE = '', GAME = '', MPB = '', FRP = '';
 await T('A0 HEAD-FAIL：dm-poller.ts／dm-session.ts／DmPanel.svelte 存在；FRIENDS 區塊有 _frPurgeDm（BASE v6.287 都沒有 ⇒ 這一條必紅）', () => {
   for (const p of [P_POLL, P_SESS, P_PANEL]) assert.ok(existsSync(p), '缺 ' + p);
   PATCH = readPatch(P_SRV);
@@ -75,6 +78,8 @@ await T('A0 HEAD-FAIL：dm-poller.ts／dm-session.ts／DmPanel.svelte 存在；F
   assert.ok(FR.includes('async function _frPurgeDm('), 'FRIENDS 區塊沒有 _frPurgeDm');
   API = readFileSync(P_API, 'utf8'); POLL = readFileSync(P_POLL, 'utf8'); SESS = readFileSync(P_SESS, 'utf8');
   PANEL = readFileSync(P_PANEL, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); GAME = readFileSync(P_GAME, 'utf8'); MPB = readFileSync(P_MPB, 'utf8');
+  assert.ok(existsSync(P_FRP), '缺 ' + P_FRP);
+  FRP = readFileSync(P_FRP, 'utf8');
   assert.ok(API.includes('export async function fetchDmMessages(') && API.includes('export async function sendDm('), 'friends-api.ts 沒有 dm 函式');
   assert.ok(PAGE.includes('DmPanel'), '/friends 頁沒接 DmPanel');
 });
@@ -566,9 +571,10 @@ await T('E1 DmPanel 與 /friends 頁零 {@html}；DmPanel 的每個 each 用 (m.
   const pe = stripComments(PANEL).match(/\{#each[^}]*\}/g) || [];
   assert.ok(pe.length >= 1, 'DmPanel 沒有 each？');
   for (const e of pe) assert.ok(/\(m\.id\)\}$/.test(e), 'DmPanel 的 each 沒用 id 當 key：' + e);
-  const ge = stripComments(PAGE).match(/\{#each[^}]*\}/g) || [];
-  assert.ok(ge.length >= 4, '/friends 頁 each 少於 4');
-  for (const e of ge) assert.ok(/\(r\.fid\)\}$/.test(e), '/friends 頁的 each 沒用 fid 當 key：' + e);
+  assert.ok(!stripComments(FRP).includes('{@html'), '好友名單共用元件出現 {@html}');
+  const ge = stripComments(FRP).match(/\{#each[^}]*\}/g) || [];
+  assert.ok(ge.length >= 4, '好友名單 each 少於 4');   // v6.296：名單本體在共用元件裡
+  for (const e of ge) assert.ok(/\(r\.fid\)\}$/.test(e), '好友名單的 each 沒用 fid 當 key：' + e);
   assert.ok(/\{m\.text\}/.test(PANEL), '訊息文字要走 Svelte 預設 escape（{m.text}）');
 });
 await T('E2 ⭐⭐ 手機／桌機是 JS 分支：DmPanel.svelte **零 @media**、.desktop／.mobile 兩條規則都在且 .dm-panel 是 fixed；/friends 頁用 Math.min(innerWidth, innerHeight) <= N 且 N 與 game/+page.svelte 的 isPortraitMobile 相同；mobile prop 接 isMobile；resize 有掛有拆', () => {
@@ -590,8 +596,8 @@ await T('E2 ⭐⭐ 手機／桌機是 JS 分支：DmPanel.svelte **零 @media**�
   for (const blk of medias) assert.ok(!/dm-|DmPanel/.test(blk), '/friends 頁的 @media 碰到私聊面板：' + blk.slice(0, 100));
 });
 await T('E3 ⭐ 二次確認文案明講「對話也會一起刪除」且在 remove 分支內；onMount 清理呼叫 closeDm；act() 對同一 fid 成功後關面板；DmPanel 只在 {#if dmState} 內；💬 依 dmUnavailable 藏；session 接 document.hidden＋visibilitychange', () => {
-  const i = PAGE.indexOf("confirmKind === 'remove'}"); assert.ok(i > 0);
-  const seg = PAGE.slice(i, PAGE.indexOf('{:else}', i));
+  const i = FRP.indexOf("confirmKind === 'remove'}"); assert.ok(i > 0);
+  const seg = FRP.slice(i, FRP.indexOf('{:else', i));
   assert.ok(seg.includes('對話也會一起刪除') && seg.includes('無法復原'), 'remove 二次確認沒明講對話會一起刪：' + seg.slice(0, 200));
   const om = PAGE.slice(PAGE.indexOf('onMount(() => {'), PAGE.indexOf('function openDm('));
   const ret = om.slice(om.lastIndexOf('return () => {'));
@@ -600,8 +606,15 @@ await T('E3 ⭐ 二次確認文案明講「對話也會一起刪除」且在 rem
   assert.ok(/\{#if dmState\}\s*<DmPanel /.test(PAGE), 'DmPanel 沒包在 {#if dmState} 內');
   assert.ok(/onclose=\{closeDm\}/.test(PAGE), 'DmPanel 的 onclose 沒接 closeDm');
   assert.ok(/function closeDm\(\) \{ dm\?\.close\(\); \}/.test(PAGE), 'closeDm 沒接 session.close');
-  assert.ok(/\{#if !dmUnavailable\}<button class="small dm-open"/.test(PAGE), '💬 按鈕沒依 dmUnavailable 藏');
-  assert.ok(/dm\.open\(r\.fid, r\.nick\)/.test(PAGE), 'openDm 沒接 session.open');
+  // v6.296：💬 的顯示條件抽成 showDm（外面有給 ondm ＋ 私聊沒被判為不可用）⇒ 求值，不比字面
+  const sd = /const showDm = \$derived\(([^;]*)\);/.exec(FRP);
+  assert.ok(sd, '好友名單沒有 showDm 的 $derived');
+  const evShow = (hasOndm, unavail) => new Function('ondm', 'dmUnavailable', 'return (' + sd[1] + ');')(hasOndm ? () => {} : null, unavail);
+  assert.strictEqual(evShow(true, false), true, '有 ondm 且私聊可用時 💬 必須出現');
+  assert.strictEqual(evShow(true, true), false, '私聊不可用時 💬 必須藏（沿用 v6.288）');
+  assert.strictEqual(evShow(false, false), false, '外面沒給 ondm（例如未接私聊的嵌入用法）時不得出現 💬');
+  assert.ok(/\{#if showDm\}<button class="small dm-open"/.test(FRP), '💬 按鈕沒依 showDm 藏');
+  assert.ok(/dm\.open\(r\.fid, r\.alias \|\| r\.nick\)/.test(PAGE), 'openDm 沒接 session.open（v6.296：標題優先用備註名）');
   const cs = PAGE.slice(PAGE.indexOf('dm = createDmSession({'), PAGE.indexOf('});', PAGE.indexOf('dm = createDmSession({')));
   assert.ok(/getCtx: ctx,/.test(cs) && /\.\.\.browserPollerDeps\(\),/.test(cs) && /onChange: \(s\) => \{ dmState = s;/.test(cs), 'session 沒接 getCtx／onChange／browserPollerDeps（真 timer／document.hidden）：' + cs);
   assert.ok(/if \(s && \(s\.status === 'dm-disabled' \|\| s\.status === 'unsupported'\)\) dmNegMsg = s\.blockMsg;/.test(cs), '私聊不可用的說明沒記到 dmNegMsg（關面板後 💬 會再露出）');

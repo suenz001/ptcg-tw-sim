@@ -29,6 +29,10 @@ const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_API = join(ROOT, 'src/lib/friends/friends-api.ts');
 const P_PAGE = join(ROOT, 'src/routes/friends/+page.svelte');
+// ⭐⭐ v6.296：好友名單的**本體**搬到共用元件（/friends 頁與線上大廳第二個分頁共用同一份）。
+//   底下原本掃 `/friends` 頁的結構斷言全部改掃這一份 —— 守護意圖不變（零 {@html}／each 穩定 key／
+//   四區都在／二次確認），只是「那份唯一的名單 UI」現在住在這裡；另加「/friends 路由仍掛得起它」的正對照。
+const P_PANEL = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
 const P_PAGE_TS = join(ROOT, 'src/routes/friends/+page.ts');
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
 const P_MPB = join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte');
@@ -51,11 +55,14 @@ const mutantMustBreak = async (name, run, expectFrag) => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】HEAD-FAIL 錨點');
-let API = '', PAGE = '', PAGE_TS = '', GAME = '', MPB = '', SRV = '';
+let API = '', PAGE = '', PAGE_TS = '', GAME = '', MPB = '', SRV = '', PANEL = '';
 await T('F0 HEAD-FAIL：friends-api.ts／routes/friends/+page.svelte／+page.ts 三個新檔都存在（BASE v6.282 沒有 ⇒ 這一條必紅）', () => {
   assert.ok(existsSync(P_API), '缺 ' + P_API);
   assert.ok(existsSync(P_PAGE), '缺 ' + P_PAGE);
   assert.ok(existsSync(P_PAGE_TS), '缺 ' + P_PAGE_TS);
+  assert.ok(existsSync(P_PANEL), '缺 ' + P_PANEL);
+  PANEL = readFileSync(P_PANEL, 'utf8');
+  assert.ok(PANEL.length > 3000, 'FriendsPanel.svelte 只有 ' + PANEL.length + ' 字元 —— 被掏空');
   API = readFileSync(P_API, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); PAGE_TS = readFileSync(P_PAGE_TS, 'utf8');
   GAME = readFileSync(P_GAME, 'utf8'); MPB = readFileSync(P_MPB, 'utf8'); SRV = readFileSync(P_SRV, 'utf8');
   assert.ok(API.length > 3000, 'friends-api.ts 只有 ' + API.length + ' 字元 —— 被掏空');
@@ -235,7 +242,9 @@ await T('A9 正規化：伺服器少給欄位不炸、非陣列補空；回應�
   const body = { friendsApi: 1, friends: [{ fid: 'x', nick: 'n', email: 'leak@x.com', uids: 'oops' }], incoming: null, blocked: 'no' };
   const { r } = await scenario(API, () => jsonRes(200, body));
   assert.strictEqual(r.ok, true);
-  assert.deepStrictEqual(Object.keys(r.data.friends[0]).sort(), ['at', 'blockedByMe', 'fid', 'nick', 'requestedByMe', 'status', 'uid', 'uids', 'via']);
+  // v6.296：多了 alias（我給的備註名；伺服器不合併，UI 才能同時顯示原暱稱）。這一條的守護意圖是「email 絕不進到 FriendRow」⇒ 白名單逐字列
+  assert.deepStrictEqual(Object.keys(r.data.friends[0]).sort(), ['alias', 'at', 'blockedByMe', 'fid', 'nick', 'requestedByMe', 'status', 'uid', 'uids', 'via']);
+  assert.strictEqual(r.data.friends[0].alias, null, '伺服器沒給 alias 時必須補 null');
   assert.deepStrictEqual(r.data.friends[0].uids, []);
   assert.deepStrictEqual(r.data.incoming, []); assert.deepStrictEqual(r.data.blocked, []);
   assert.strictEqual(r.data.limit, 100);
@@ -257,18 +266,22 @@ await T('B1 friends-api.ts 與 /friends 頁原始碼零 setInterval／零 setTim
     assert.strictEqual((c.match(/requestAnimationFrame\s*\(/g) || []).length, 0, n + ' 有 rAF 迴圈');
   }
 });
-await T('B2 /friends 頁每個 {#each} 都用 (r.fid) 當 key（掃描器下限：恰好四區 ⇒ ≥4 個 each）', () => {
-  const eaches = PAGE.match(/\{#each[^}]*\}/g) || [];
+await T('B2 好友名單（v6.296 起在共用元件內）每個 {#each} 都用 (r.fid) 當 key（掃描器下限：恰好四區 ⇒ ≥4 個 each）', () => {
+  const eaches = PANEL.match(/\{#each[^}]*\}/g) || [];
   assert.ok(eaches.length >= 4, '只找到 ' + eaches.length + ' 個 each —— 四區不見了？');
   for (const e of eaches) assert.ok(/\(r\.fid\)\}$/.test(e), 'each 沒有用 fid 當 key：' + e);
 });
-await T('B3 /friends 頁零 {@html}；四區標題都在；匿名說明在；unsupported／disabled 兩種說明在', () => {
-  assert.ok(!stripComments(PAGE).includes('{@html'), '出現 {@html}');
-  for (const h of ['<h2>好友 ', '<h2>待我確認 ', '<h2>我送出的邀請 ', '<h2>已封鎖 ']) assert.ok(PAGE.includes(h), '缺區塊標題 ' + h);
-  assert.ok(/failKind === 'unsupported'/.test(PAGE) && /failKind === 'disabled'/.test(PAGE), '缺不支援／尚未開放分支');
-  assert.ok(/\{:else if !canUse\}/.test(PAGE), '缺匿名分支');
-  assert.ok(/'remove'\)/.test(PAGE) && /askConfirm\(r\.fid, 'remove'\)/.test(PAGE), '解除好友沒有走二次確認');
-  assert.ok(/askConfirm\(r\.fid, 'unblock'\)/.test(PAGE), '解除封鎖沒有走二次確認');
+await T('B3 好友名單零 {@html}（含 /friends 頁）；四區標題都在；匿名說明在；unsupported／disabled 兩種說明在；⭐ /friends 路由仍然掛得起共用元件', () => {
+  assert.ok(!stripComments(PANEL).includes('{@html'), '共用元件出現 {@html}');
+  assert.ok(!stripComments(PAGE).includes('{@html'), '/friends 頁出現 {@html}');
+  for (const h of ['<h2>好友 ', '<h2>待我確認 ', '<h2>我送出的邀請 ', '<h2>已封鎖 ']) assert.ok(PANEL.includes(h), '缺區塊標題 ' + h);
+  assert.ok(/failKind === 'unsupported'/.test(PANEL) && /failKind === 'disabled'/.test(PANEL), '缺不支援／尚未開放分支');
+  assert.ok(/\{:else if !canUse\}/.test(PANEL), '缺匿名分支');
+  assert.ok(/'remove'\)/.test(PANEL) && /askConfirm\(r\.fid, 'remove'\)/.test(PANEL), '解除好友沒有走二次確認');
+  assert.ok(/askConfirm\(r\.fid, 'unblock'\)/.test(PANEL), '解除封鎖沒有走二次確認');
+  // ⭐ 正對照：元件抽出來之後，/friends 這條獨立路由**還是得掛得起來**（不然抽出來就等於把頁面弄壞了）
+  assert.ok(/import FriendsPanel from '\$lib\/friends\/FriendsPanel\.svelte';/.test(PAGE), '/friends 頁沒有 import 共用元件');
+  assert.ok(/<FriendsPanel /.test(PAGE), '/friends 頁沒有渲染共用元件');
 });
 await T('B4 +page.ts：prerender=true、ssr=false（與 /decks 同一套）', () => {
   assert.ok(/export const prerender = true;/.test(PAGE_TS) && /export const ssr = false;/.test(PAGE_TS));
@@ -307,38 +320,63 @@ await T('C2 MobilePortraitBattle.svelte 零 `friend`；正對照：/friends 路�
   assert.strictEqual((MPB.match(/friend/gi) || []).length, 0);
   assert.ok((PAGE.match(/friend/gi) || []).length > 10);
 });
-await T('C3 大廳入口：`friendsEntryOn` 恰出現 4 次（$derived ＋ 桌機 markup ＋ v6.284 手機 markup ＋ v6.285 設定 modal 好友 section），桌機 markup 落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之前', () => {
-  // v6.284：2 → 3（手機直式那份入口）；v6.285：3 → 4（設定 modal 尾端的 {#if friendsEntryOn} 好友 section，位置由 test-v6285 C1 釘住）；每個位置各自釘住，多一個少一個都紅
-  assert.strictEqual((GAME.match(/friendsEntryOn/g) || []).length, 4, 'friendsEntryOn 出現次數不對');
+await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊入口）：剝註解後 `friendsEntryOn` 恰 4 處（$derived ／ lobbyTab 的 $derived ／ 分頁列 ／ v6.285 設定 modal 好友 section）；分頁列落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之後、`.lobby-unified` 之前；兩個舊入口不得復活', () => {
+  // ⚠ 用剝過註解的原始碼計數：註解裡提到變數名不該影響「有幾個真正的使用點」（否則改一句註解就會紅＝安慰劑的反面）
+  const G = stripComments(GAME);
+  assert.strictEqual((G.match(/friendsEntryOn/g) || []).length, 4, 'friendsEntryOn 的實際使用點不是 4 處');
+  assert.strictEqual((G.match(/\{#if friendsEntryOn && !isPortraitMobile\}/g) || []).length, 0, 'v6.283 桌機那份舊入口復活了（本版改用分頁列）');
+  assert.strictEqual((G.match(/\{#if friendsEntryOn && isPortraitMobile\}/g) || []).length, 0, 'v6.284 手機那份舊入口復活了（本版改用分頁列）');
   const sm = GAME.indexOf('<!-- Settings Modal (Audio & BGM) -->'), smEnd = GAME.indexOf('<!-- v4.60 對方提議 modal -->', sm);
   assert.ok(sm > 0 && smEnd > sm, '找不到設定 modal 錨點');
   assert.strictEqual((GAME.slice(sm, smEnd).match(/\{#if friendsEntryOn\}/g) || []).length, 1, '設定 modal 內的 {#if friendsEntryOn} 不是恰一處');
-  assert.strictEqual((GAME.match(/\{#if friendsEntryOn && !isPortraitMobile\}/g) || []).length, 1, '桌機那份入口（&& !isPortraitMobile）不是恰一處');
-  assert.strictEqual((GAME.match(/\{#if friendsEntryOn && isPortraitMobile\}/g) || []).length, 1, '手機那份入口（&& isPortraitMobile）不是恰一處');
+  // 位置：線上 Lobby 區塊 → h1 → 分頁列 → 統一大廳表單
   const lobby = GAME.indexOf('<!-- ─── 線上 Lobby ─── -->');
   const h1 = GAME.indexOf('<h1>🌐 線上連線對戰</h1>');
-  const mk = GAME.indexOf('{#if friendsEntryOn && !isPortraitMobile}');
-  assert.ok(lobby > 0 && h1 > lobby && mk > lobby && mk < h1, '入口 markup 不在線上大廳的 .auth-user 內');
-  // v6.284 起 script 區多了賽後／設定用的一組狀態與函式，所以「零 friend」改只掃 **markup**（</script> 之後到 lobby 錨點）：
+  const tabs = GAME.indexOf("{#if friendsEntryOn && onlineStep !== 'room'}");
+  const form = GAME.indexOf('<div class="online-form lobby-unified">');
+  assert.ok(lobby > 0 && h1 > lobby, '找不到線上 Lobby／h1 錨點');
+  assert.ok(tabs > h1, '分頁列不在 h1 之後：' + [h1, tabs].join(','));
+  assert.ok(form > tabs, '分頁列不在統一大廳表單之前：' + [tabs, form].join(','));
+  // v6.284 起 script 區多了賽後／設定用的一組狀態與函式，所以「零 friend」只掃 **markup**（</script> 之後到 lobby 錨點）：
   //   主選單與本機模式那兩份 .auth-user 都在這一段 ⇒ 必須零 friend（那兩份刻意不放入口）。
   const scriptEnd = GAME.indexOf('</script>');
   assert.ok(scriptEnd > 0 && scriptEnd < lobby, '找不到 </script> 或它在 lobby 之後');
   const lines = GAME.slice(0, scriptEnd).split('\n');
   const derivedLines = lines.filter((l) => /^  const friendsEntryOn = \$derived\(friendsEntryVisible\(/.test(l));
-  const importLines = lines.filter((l) => /^  import \{ friendsEntryVisible(, [^}]*)? \} from '\$lib\/friends\/friends-api';/.test(l));   // v6.284 起同一行多 import 幾個名字
+  const importLines = lines.filter((l) => /^  import \{ friendsEntryVisible(, [^}]*)? \} from '\$lib\/friends\/friends-api';/.test(l));
   assert.strictEqual(derivedLines.length, 1, '$derived 行數不對'); assert.strictEqual(importLines.length, 1, 'import 行數不對');
   const markupBefore = GAME.slice(scriptEnd, lobby);
   assert.ok(markupBefore.includes('class="auth-user"'), '主選單／本機那兩份 .auth-user 不在 </script>～lobby 之間？錨點抓錯');
   assert.strictEqual((markupBefore.match(/friend/gi) || []).length, 0, 'lobby 之前的 markup 多出不明的 friend 字樣（主選單／本機那兩份 .auth-user 不該有入口）');
   assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');
 });
-await T('C4 桌機入口那一行的形狀：button.small（沿用既有樣式）、只在 friendsEntryOn && !isPortraitMobile 為真時渲染（v6.284：手機直式改放大廳尾端）、導向 base+/friends', () => {
-  const line = GAME.split('\n').find((l) => l.includes('{#if friendsEntryOn && !isPortraitMobile}'));
-  assert.ok(line, '找不到入口行');
-  assert.ok(/^\s*\{#if friendsEntryOn && !isPortraitMobile\}<button class="small" /.test(line), '入口沒有包在 {#if friendsEntryOn && !isPortraitMobile} 內或不是 button.small：' + line.trim());
-  assert.ok(line.includes("base + '/friends'") && line.includes('{/if}'), line.trim());
-  // 導頁在 onclick 內：不是頁面載入時就跑
-  assert.ok(/onclick=\{\(\) => \{ location\.href = base \+ '\/friends'; \}\}/.test(line));
+/** 把 `const lobbyTab = $derived(…);` 的運算式抽出來求值（不比字面）。 */
+function lobbyTabOf(game, friendsEntryOn, raw) {
+  const m = /const lobbyTab = \$derived\(([^;]*)\);/.exec(game);
+  assert.ok(m, '找不到 lobbyTab 的 $derived');
+  return new Function('friendsEntryOn', 'lobbyTabRaw', 'return (' + m[1] + ');')(friendsEntryOn, raw);
+}
+await T('C4 ⭐⭐⭐ 匿名玩家看不到分頁列，而且 lobbyTab 被 $derived **鎖回** online（求值，不比字面）：friendsEntryOn=false 時無論 lobbyTabRaw 是什麼都得到 online；分頁列的 {#if} 也含 friendsEntryOn ＋ onlineStep !== room', () => {
+  assert.strictEqual(lobbyTabOf(GAME, false, 'friends'), 'online', '⚠⚠ friendsEntryOn=false 時 lobbyTab 沒有被鎖回 online ⇒ 匿名玩家的大廳可能被換掉');
+  assert.strictEqual(lobbyTabOf(GAME, false, 'online'), 'online');
+  assert.strictEqual(lobbyTabOf(GAME, true, 'friends'), 'friends', '正對照：非匿名時切得過去（否則上一條是恆真式）');
+  assert.strictEqual(lobbyTabOf(GAME, true, 'online'), 'online');
+  const cond = /\{#if (friendsEntryOn[^}]*onlineStep[^}]*)\}/.exec(GAME);
+  assert.ok(cond, '找不到分頁列的 {#if}');
+  const ev = (fe, st) => new Function('friendsEntryOn', 'onlineStep', 'return (' + cond[1] + ');')(fe, st);
+  assert.strictEqual(ev(true, 'join'), true, '非匿名＋大廳 ⇒ 分頁列要顯示');
+  assert.strictEqual(ev(true, 'room'), false, '⚠ 進了等待室不該再有分頁列');
+  assert.strictEqual(ev(false, 'join'), false, '⚠⚠ 匿名玩家不該看到分頁列');
+  // 兩顆分頁鈕的形狀（role=tab、class:active 綁 lobbyTab、onclick 走 lobbySwitchTab）
+  // ⚠ 不能用 [^>]* 抓 ——「() =>」裡就有一個 `>`，會把屬性截斷（第一版就是這樣誤紅的）
+  const btns = GAME.match(/<button class="lobby-tab"[\s\S]*?<\/button>/g) || [];
+  assert.strictEqual(btns.length, 2, '分頁鈕不是恰兩顆：' + btns.length);
+  for (const b of btns) {
+    assert.ok(/role="tab"/.test(b) && /aria-selected=\{lobbyTab === '(online|friends)'\}/.test(b), '分頁鈕缺 role/aria-selected：' + b.slice(0, 120));
+    assert.ok(/class:active=\{lobbyTab === '(online|friends)'\}/.test(b), '分頁鈕的 active 沒有綁 lobbyTab：' + b.slice(0, 120));
+    assert.ok(/onclick=\{\(\) => lobbySwitchTab\('(online|friends)'\)\}/.test(b), '分頁鈕沒有走 lobbySwitchTab：' + b.slice(0, 120));
+  }
+  assert.ok(/<div class="lobby-tabs" role="tablist"/.test(GAME), '分頁列容器缺 role="tablist"');
 });
 await T('C5 .auth-user 的 CSS 逐字未動（新增節點只靠既有 flex-wrap 折行，沒有新 CSS）', () => {
   const css = GAME.slice(GAME.lastIndexOf('<style'));

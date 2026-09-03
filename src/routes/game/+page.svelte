@@ -22,6 +22,7 @@
   import { PRESET_DECKS } from '$lib/decks/presets';
   import { validateDeck } from '$lib/decks/validation';
   import { friendsEntryVisible, friendsBattleEntryVisible, requestFriendFromBattle, friendsRequestReplyText, type FriendsBattleTarget } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）；v6.284 賽後／設定「將對手加為好友」
+  import FriendsPanel from '$lib/friends/FriendsPanel.svelte';   // ⭐ v6.296 大廳第二個分頁「👥 好友名單」；與 /friends 頁**共用同一份**（不要兩份漂移）
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
@@ -1197,6 +1198,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let cpLoading = $state(false);
   const isAnonymous = $derived(firebaseUser?.isAnonymous ?? true);
   const friendsEntryOn = $derived(friendsEntryVisible(firebaseUser?.uid ?? null, isAnonymous));   // v6.283 非匿名＋沒有負向快取才顯示
+  // ⭐⭐ v6.296 線上大廳的**真分頁**（站長交辦：把「線上連線對戰」與「好友名單」做成兩個分頁；作法比照錦標賽的 tTab）。
+  //   ⚠⚠ 匿名玩家不顯示分頁列（站長已裁定）⇒ lobbyTab 用 $derived **強制鎖回 'online'**：
+  //     就算 lobbyTabRaw 被別的路徑改成 'friends'，只要 friendsEntryOn 是 false 就一定渲染既有的大廳版面
+  //     ⇒ 匿名玩家看到的大廳與上一版**逐字相同**（守衛 test-v6296 把條件求值後剪枝，再與 BASE 逐字比對）。
+  //   ⚠ 切分頁**完全不動 onlineStep**（房間列表訂閱／輪詢照常跑，在好友分頁時房間更新不會停）。
+  let lobbyTabRaw = $state<'online' | 'friends'>('online');
+  const lobbyTab = $derived(friendsEntryOn ? lobbyTabRaw : 'online');
+  function lobbySwitchTab(tab: 'online' | 'friends') { lobbyTabRaw = tab; }
   // ── v6.284 賽後「將對手加為好友」（賽後結算 modal）；v6.285 設定 modal 尾端的「👥 好友」section 接同一組狀態 ──────
   //   ⚠ 三個判定全是純函式／$derived（零請求）；按鈕按下才發唯一的一發 POST /api/friends/request。
   //   ⚠ 匿名／確定不支援（負向快取）／觀戰／本機對戰／錦標賽測試房 ⇒ 整顆不渲染（站長偏好：不做半死按鈕）。
@@ -10526,15 +10535,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
           <div class="auth-user">
             <span class="auth-email">✉️ {firebaseUser.email}</span>
             <button class="small" onclick={openChangePasswordModal} title="更改密碼">🔑 更改密碼</button>
-            {#if friendsEntryOn && !isPortraitMobile}<button class="small" onclick={() => { location.href = base + '/friends'; }} title="好友名單">👥 好友</button>{/if}<!-- v6.284 手機直式改放大廳尾端（見下方） -->
             <button class="small danger" onclick={handleSignOut}>登出</button>
           </div>
         {/if}
       </div>
     {/if}
     <h1>🌐 線上連線對戰</h1>
+    <!-- ⭐⭐ v6.296 大廳分頁列（外觀沿用錦標賽的 .tourn-tabs／.tourn-tab）。
+         ⚠ 只在 onlineStep !== 'room' 時顯示：進了等待室就不該再有分頁列。
+         ⚠⚠ friendsEntryOn 為 false（匿名／伺服器不支援／尚未開放）時整條不渲染，
+            而且 lobbyTab 會被 $derived 鎖回 'online' ⇒ 大廳與上一版逐字相同。 -->
+    {#if friendsEntryOn && onlineStep !== 'room'}
+      <div class="lobby-tabs" role="tablist" aria-label="線上對戰與好友">
+        <button class="lobby-tab" class:active={lobbyTab === 'online'} role="tab" aria-selected={lobbyTab === 'online'} onclick={() => lobbySwitchTab('online')}>🌐 線上連線對戰</button>
+        <button class="lobby-tab" class:active={lobbyTab === 'friends'} role="tab" aria-selected={lobbyTab === 'friends'} onclick={() => lobbySwitchTab('friends')}>👥 好友名單</button>
+      </div>
+    {/if}
 
     {#if onlineStep === 'join' || onlineStep === 'choose' || onlineStep === 'create'}
+      {#if lobbyTab === 'online'}
       <!-- v5.008：統一大廳頁面 — 建立 / 加入 / 房間列表 合併單頁顯示 -->
       <div class="online-form lobby-unified">
         <label class="name-row">
@@ -10665,11 +10684,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
         {#if onlineError && !showCreateForm}<p class="warn">{onlineError}</p>{/if}
       </div>
-      <!-- v6.284 手機直式的「👥 好友」入口：右上 .auth-user 在 375px 只剩 18px，塞任何東西都會折行、h1 與表單下移 32px（v6.283 實測），
-           改放在大廳表單**之後**的最後一個節點（本來就是可捲動區、下面沒有任何既有元素）⇒ 所有既有元素（含 .lobby-unified 容器本身）rect 全等
-           （scripts/measure-v6284-friends-layout.mjs）。與桌機那份以 isPortraitMobile 互斥、永遠只渲染一份。沿用 .back 樣式，零新 CSS。 -->
-      {#if friendsEntryOn && isPortraitMobile}
-        <a class="back" href="{base}/friends" title="好友名單" style="margin-top:.6rem">👥 好友名單</a>
+      {/if}
+      <!-- ⭐⭐ v6.296 第二個分頁的內容：好友名單。與 /friends 頁**共用同一份** $lib/friends/FriendsPanel.svelte。
+           ⚠ 只有切到這個分頁時才掛載 ⇒ 切之前對好友端點一發請求都沒有。
+           ⚠ 這一段的註解刻意不寫「斜線 api 斜線 friends 斜線 星號」那個字面 —— 它會被
+             守衛的區塊註解剝除器（test-v6146 等）當成 /＊ 的開頭，把後面幾百行一起吃掉。
+           ⚠ 私聊在這裡是**開新分頁到 /friends**（本檔完全不碰私聊面板，保住既有不變量）。
+           ⚠ v6.283／v6.284 的兩個舊入口（右上那顆與手機直式尾端那個連結）本版已由分頁列取代。 -->
+      {#if lobbyTab === 'friends'}
+        <div class="lobby-tab-panel">
+          <FriendsPanel embedded ondm={() => { const w = window.open(base + '/friends', '_blank', 'noopener'); if (!w) location.href = base + '/friends'; }} />
+        </div>
       {/if}
 
     {:else if onlineStep === 'room'}
@@ -15473,6 +15498,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* v5.008 統一大廳 — 名稱欄 + 建立房間 CTA + inline 表單 */
   .online-form.lobby-unified{ max-width:560px; }
+  /* ⭐⭐ v6.296 大廳分頁列：外觀逐條沿用錦標賽的 .tourn-tabs／.tourn-tab（含 active 的 inset 光暈），
+     只多了 min-width:0 / white-space:nowrap / text-overflow —— 375px 兩顆也不折行（DOM 量測在守）。
+     ⚠ class 名一律 lobby- 前綴：既有守衛在斷言「樣式區不得出現好友功能的英文關鍵字」（避免版面規則散進對戰版面）。 */
+  .lobby-tabs{ display:flex; gap:6px; max-width:560px; margin:6px auto 12px; }
+  .lobby-tab{ flex:1; min-width:0; padding:9px 6px; border:1px solid #3a5a3a; border-radius:9px; background:#102010; color:#9fdca0; font-size:.9rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; transition:.15s; }
+  .lobby-tab:hover{ background:#18301a; }
+  .lobby-tab.active{ background:linear-gradient(180deg,#2a5a3a,#1d4029); color:#eaffea; border-color:#6ab87a; box-shadow:0 0 0 1px #6ab87a inset; }
+  .lobby-tab-panel{ max-width:560px; margin:0 auto; width:100%; text-align:left; }
   .lobby-unified .name-row{ flex-direction:row; align-items:center; gap:.6rem; background:#162616; border:1px solid #2a4a2a; border-radius:8px; padding:.6rem .85rem; }
   .lobby-unified .name-label{ font-size:.88rem; color:#aaffcc; font-weight:600; min-width:64px; }
   .lobby-unified .name-row .name-input{ flex:1; }

@@ -38,6 +38,11 @@ const PATCH = readPatch(P_SRV);
 const ADMIN = readFileSync(P_ADMIN, 'utf8');
 const GAME = readFileSync(P_GAME, 'utf8').replace(/\r\n/g, '\n');
 const FRPAGE = readFileSync(P_FRPAGE, 'utf8').replace(/\r\n/g, '\n');
+// ⭐⭐ v6.296：名單本體搬到共用元件、取身分搬到共用 auth-ctx.ts（/friends 頁與大廳分頁共用）。
+//   兩道匿名閘的**守護意圖完全不變**，只是分別落在這兩個檔裡；閘②抽成單一來源之後，
+//   「只有一邊有閘」這種漂移在結構上就不可能發生了。
+const FRPANEL = readFileSync(join(ROOT, 'src/lib/friends/FriendsPanel.svelte'), 'utf8').replace(/\r\n/g, '\n');
+const FRCTX = readFileSync(join(ROOT, 'src/lib/friends/auth-ctx.ts'), 'utf8').replace(/\r\n/g, '\n');
 
 let pass = 0, fail = 0; const skipped = [];
 const T = async (name, fn) => {
@@ -578,19 +583,24 @@ await T('7-6m 突變：拿掉 docs 迴圈的 yield ⇒ 7-6 紅；拿掉 ident �
 });
 
 // 7-7 /friends 頁：匿名／未登入不得發 list（兩道閘：onAuthStateChanged 只在 !isAnonymous 才 load；ctx() 匿名回 null）
-function assertFriendsPageAnonGate(src) {
-  const s = stripJs(src.slice(src.indexOf('<script'), src.indexOf('</script>')));
+function assertFriendsPageAnonGate(panelSrc, ctxSrc = FRCTX) {
+  const s = stripJs(panelSrc.slice(panelSrc.indexOf('<script'), panelSrc.indexOf('</script>')));
   const cb = fnSrc(s, 'onAuthStateChanged(auth, (u) => {');
-  assert.ok(/if \(u && !u\.isAnonymous\) void load\(\);/.test(cb), '/friends 頁匿名閘①：onAuthStateChanged 內的 load() 沒有被「u && !u.isAnonymous」守住：' + cb.slice(0, 200));
-  const ctx = fnSrc(s, 'async function ctx()');
-  assert.ok(/if \(!u \|\| u\.isAnonymous\) return null;/.test(ctx), '/friends 頁匿名閘②：ctx() 沒有對匿名回 null');
+  assert.ok(/if \(u && !u\.isAnonymous\) void load\(\);/.test(cb), '好友名單匿名閘①：onAuthStateChanged 內的 load() 沒有被「u && !u.isAnonymous」守住：' + cb.slice(0, 200));
+  const ctx = fnSrc(stripJs(ctxSrc), 'export async function friendsCtxFromAuth()');
+  assert.ok(/if \(!u \|\| u\.isAnonymous\) return null;/.test(ctx), '好友名單匿名閘②：共用的 friendsCtxFromAuth() 沒有對匿名回 null');
   const loads = (s.match(/\bload\(\)/g) || []).length; assert.ok(loads >= 2, '掃描器下限：load() 呼叫太少');
   assert.ok(!/onMount\([\s\S]*?void load\(\)[\s\S]*?\}\);/.test(s.replace(cb, '')), 'onMount 裡在 auth callback 之外直接 load()');
+  // ⭐ 單一來源：兩邊都必須用共用出口，不准自己再寫一份 ctx()
+  for (const [n, src] of [['FriendsPanel.svelte', panelSrc], ['/friends 頁', FRPAGE]]) {
+    assert.ok(/friendsCtxFromAuth/.test(src), n + ' 沒有用共用的 friendsCtxFromAuth');
+    assert.strictEqual((stripJs(src).match(/async function ctx\(\)/g) || []).length, 0, n + ' 又自己寫了一份 ctx()（會漂移）');
+  }
 }
-await T('7-7 ⭐ /friends 頁：匿名不發 list 的兩道閘都在（onAuthStateChanged 守 isAnonymous；ctx() 匿名回 null）', () => assertFriendsPageAnonGate(FRPAGE));
+await T('7-7 ⭐ 好友名單：匿名不發 list 的兩道閘都在（onAuthStateChanged 守 isAnonymous；共用 friendsCtxFromAuth() 匿名回 null），且兩邊都走共用出口', () => assertFriendsPageAnonGate(FRPANEL));
 await T('7-7m 突變：拿掉 isAnonymous 判斷（任一道）⇒ 7-7 紅在對應那道', () => {
-  mutantMustBreak('閘①', () => assertFriendsPageAnonGate(mutate(FRPAGE, 'if (u && !u.isAnonymous) void load();', 'if (u) void load();')), '匿名閘①');
-  mutantMustBreak('閘②', () => assertFriendsPageAnonGate(mutate(FRPAGE, 'if (!u || u.isAnonymous) return null;', 'if (!u) return null;')), '匿名閘②');
+  mutantMustBreak('閘①', () => assertFriendsPageAnonGate(mutate(FRPANEL, 'if (u && !u.isAnonymous) void load();', 'if (u) void load();')), '匿名閘①');
+  mutantMustBreak('閘②', () => assertFriendsPageAnonGate(FRPANEL, mutate(FRCTX, 'if (!u || u.isAnonymous) return null;', 'if (!u) return null;')), '匿名閘②');
 });
 
 // 7-8 ⚠⚠ game/+page.svelte：任何自動觸發的區塊（$effect／$effect.pre／onMount／$derived）內不得發好友請求 —— 大廳每次載入多一發固定請求＝v6.272 Firestore 災難的型態

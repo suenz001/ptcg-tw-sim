@@ -58,7 +58,15 @@
 export interface FriendRow {
   fid: string;
   status: string;
+  /** 對方的暱稱（伺服器優先序：TREGS 最新報名暱稱 → friendships 快照 → 「玩家」）。 */
   nick: string;
+  /**
+   * ⭐ v6.296 我自己幫這位好友取的**備註名**（LINE 那種），沒設就是 null。
+   * ⚠⚠ 伺服器**不合併**：`alias` 與 `nick` 是分開的兩個欄位（v6.295 定案）
+   *   ⇒ UI 顯示 `alias || nick`，有 alias 時另外用小字顯示原暱稱。
+   * ⚠ 對方永遠看不到（伺服器只回我這一側的 aliasByA／aliasByB）。
+   */
+  alias: string | null;
   /** 對方最近一次完成對局的瀏覽器 uid（可能為 null）。 */
   uid: string | null;
   uids: string[];
@@ -301,6 +309,8 @@ function toRow(r: Record<string, unknown>): FriendRow {
     fid: toStr(r.fid, ''),
     status: toStr(r.status, ''),
     nick: toStr(r.nick, '玩家'),
+    // ⚠ 舊伺服器沒有這個欄位 ⇒ 一律補 null（前端不可以因為少一個欄位就整頁壞掉）
+    alias: (typeof r.alias === 'string' && r.alias) ? r.alias : null,
     uid: typeof r.uid === 'string' ? r.uid : null,
     uids,
     requestedByMe: r.requestedByMe === true,
@@ -390,6 +400,34 @@ export async function friendsAction(ctx: FriendsCtx, action: FriendsAction, fid:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fid }),
   });
+}
+
+/**
+ * ⭐ v6.296 備註名的長度上限（**碼位**計數，與伺服器 `FR_ALIAS_MAX_LEN` 一致）。
+ * ⚠ 用 Array.from 以碼位切，才不會把 emoji 從中間切成半個（伺服器 `_frAlias()` 同一套）。
+ */
+export const FRIENDS_ALIAS_MAX_LEN = 20;
+
+/** 送出前先把備註名整理成伺服器會接受的形狀（控制字元／零寬字元／連續空白／長度）。 */
+export function clampAlias(v: unknown): string {
+  if (typeof v !== 'string') return '';
+  const t = v.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').replace(/[\u200b-\u200f\u2060\ufeff]/g, '').replace(/\s+/g, ' ').trim();
+  return t ? Array.from(t).slice(0, FRIENDS_ALIAS_MAX_LEN).join('') : '';
+}
+
+/**
+ * POST /api/friends/alias {fid, alias} —— 設定／清除我給這位好友的備註名。
+ * ⚠ **空字串＝清除**（伺服器 $unset 我自己那一側）⇒ UI 的「儲存」在輸入框空著時不可以停用。
+ * ⚠ 只有 `status === 'accepted'` 的關係可以設（其餘伺服器一律 409）⇒ UI 的編輯入口也只在那些列出現。
+ */
+export async function setFriendAlias(ctx: FriendsCtx, fid: string, alias: string): Promise<FriendsResult<{ fid: string; alias: string | null }>> {
+  const r = await requestJson<Record<string, unknown>>(ctx, '/api/friends/alias', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fid, alias: clampAlias(alias) }),
+  });
+  if (!r.ok) return r;
+  return { ok: true, data: { fid: toStr(r.data.fid, fid), alias: (typeof r.data.alias === 'string' && r.data.alias) ? r.data.alias : null } };
 }
 
 // ── v6.288 私聊 ───────────────────────────────────────────────────────────────

@@ -25,16 +25,22 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_PAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const P_PANEL = join(ROOT, 'src/routes/friends/DmPanel.svelte');
+// ⭐⭐ v6.296：色票 --fr-* 的**單一來源**從 /friends 頁搬到共用元件（大廳分頁也吃同一份）。
+//   本守衛的意圖完全不變（單一來源 ＋ 與錦標賽逐條對齊 ＋ 繼承真的解析得出來），只是來源檔換了；
+//   而且掃描範圍從 2 個檔變成 3 個檔（多守一個），並新增「/friends 頁的 <style> 零色碼」。
+const P_FRP = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
 const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
 const P_API = join(ROOT, 'src/lib/friends/friends-api.ts');
 const P_PKG = join(ROOT, 'package.json');
 const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 const PAGE = rd(P_PAGE);
 const PANEL = rd(P_PANEL);
+const FRP = rd(P_FRP);
 const GAME = rd(P_GAME);
 const API = rd(P_API);
 const PKG = rd(P_PKG);
@@ -91,9 +97,9 @@ await T('A1 ⭐⭐ /friends 的 <svelte:head> 有一個一般 <style> 元素，�
   assert.ok(!stripAllCmt(PAGE).includes('{@html'), '/friends 頁出現 {@html}（暱稱是玩家自由輸入 ⇒ 這是紅線）');
   assert.ok(!stripAllCmt(PANEL).includes('{@html'), 'DmPanel 出現 {@html}');
 });
-await T('A2 掃描器下限：<style> 區夠長、--fr-* 變數 ≥ 15 條（抽不到就不是「沒問題」，是掃描器壞了）', () => {
-  const st = styleOf(PAGE);
-  assert.ok(st.length > 2000, '/friends 的 <style> 只有 ' + st.length + ' 字元 ⇒ 抽取器壞了');
+await T('A2 掃描器下限：共用元件的 <style> 區夠長、--fr-* 變數 ≥ 15 條（抽不到就不是「沒問題」，是掃描器壞了）', () => {
+  const st = styleOf(FRP);
+  assert.ok(st.length > 2000, '共用元件的 <style> 只有 ' + st.length + ' 字元 ⇒ 抽取器壞了');
   const vars = [...stripCssCmt(st).matchAll(/--fr-[a-z-]+:\s*[^;]+;/g)];
   assert.ok(vars.length >= 15, '--fr-* 只抽到 ' + vars.length + ' 條 ⇒ 色票單一來源沒建立或抽取器壞了');
 });
@@ -107,22 +113,29 @@ function frVars(pageSrc) {
   for (const m of st.matchAll(/^\s*(--fr-[a-z-]+):\s*(#[0-9a-fA-F]{6});\s*$/gm)) out.set(m[1], lc(m[2]));
   return out;
 }
-function assertSingleSource(pageSrc, panelSrc) {
+function assertSingleSource(pageSrc, panelSrc, frpSrc = FRP) {
   assert.ok(!/#fff\b/i.test(pageSrc) && !/#f4f4f6/i.test(pageSrc), '/friends 頁仍有 #fff／#f4f4f6');
   assert.ok(!/#fff\b/i.test(panelSrc) && !/#f4f4f6/i.test(panelSrc), 'DmPanel 仍有 #fff／#f4f4f6');
+  assert.ok(!/#fff\b/i.test(frpSrc) && !/#f4f4f6/i.test(frpSrc), '共用元件仍有 #fff／#f4f4f6');
+  // ⭐ v6.296：**兩個消費端**（DmPanel、/friends 頁）的 <style> 都必須零色碼，只准 var(--fr-*)
+  for (const [n, src] of [['DmPanel', panelSrc], ['/friends 頁', pageSrc]]) {
+    const st = stripCssCmt(styleOf(src));
+    const hex = st.match(HEX) || [];
+    assert.deepStrictEqual(hex, [], n + ' 的 <style> 出現硬寫色碼（色票必須單一來源）：' + hex.join(' '));
+  }
   const panelStyle = stripCssCmt(styleOf(panelSrc));
-  const panelHex = panelStyle.match(HEX) || [];
-  assert.deepStrictEqual(panelHex, [], 'DmPanel 的 <style> 出現硬寫色碼（色票必須單一來源）：' + panelHex.join(' '));
   assert.ok(/var\(--fr-card-bg\)/.test(panelStyle) && /var\(--fr-fg\)/.test(panelStyle), 'DmPanel 沒有吃 --fr-* 色票');
-  const pageStyle = stripCssCmt(styleOf(pageSrc));
-  for (const line of pageStyle.split('\n')) {
+  assert.ok(/var\(--fr-tab-fg\)/.test(stripCssCmt(styleOf(pageSrc))), '/friends 頁的頁首／分頁列沒有吃 --fr-* 色票');
+  // 唯一允許出現色碼的地方：共用元件 <style> 裡的 --fr-* 宣告行
+  const frpStyle = stripCssCmt(styleOf(frpSrc));
+  for (const line of frpStyle.split('\n')) {
     if (!HEX.test(line)) { HEX.lastIndex = 0; continue; }
     HEX.lastIndex = 0;
     assert.ok(/^\s*--fr-[a-z-]+:\s*#[0-9a-fA-F]{6};\s*$/.test(line),
-      '/friends 的 <style> 在變數宣告以外的地方硬寫色碼（色票必須單一來源）：' + line.trim());
+      '共用元件的 <style> 在變數宣告以外的地方硬寫色碼（色票必須單一來源）：' + line.trim());
   }
 }
-await T('B1 ⭐⭐ 兩個檔零 #fff／零 #f4f4f6；DmPanel 的 <style> 零色碼；/friends 的色碼只出現在 --fr-* 宣告行', () => assertSingleSource(PAGE, PANEL));
+await T('B1 ⭐⭐ 三個檔零 #fff／零 #f4f4f6；DmPanel 與 /friends 頁的 <style> 零色碼且都吃 --fr-*；色碼只出現在共用元件的 --fr-* 宣告行', () => assertSingleSource(PAGE, PANEL));
 
 /** 從 game/+page.svelte 抽某條規則的宣告 body（selector 需逐字給，含 `{`）。 */
 function gameRule(sel) {
@@ -137,7 +150,7 @@ const declOf = (body, prop) => {
   return m[1].trim();
 };
 await T('B2 ⭐⭐⭐ 每個 --fr-* 的值都與 src/routes/game/+page.svelte 的**同一條規則**逐字相同（錦標賽改色 ⇒ 這裡會紅）', () => {
-  const V = frVars(PAGE);
+  const V = frVars(FRP);
   const tab = gameRule('.tourn-tab {');
   const tabHover = gameRule('.tourn-tab:hover {');
   const tabOn = gameRule('.tourn-tab.active {');
@@ -178,10 +191,10 @@ await T('B2 ⭐⭐⭐ 每個 --fr-* 的值都與 src/routes/game/+page.svelte �
   };
   const got = {};
   for (const k of Object.keys(want)) got[k] = V.get(k);
-  assert.deepStrictEqual(got, want, '色票與錦標賽不一致（左＝/friends 實際，右＝game/+page.svelte 抽出來的）');
+  assert.deepStrictEqual(got, want, '色票與錦標賽不一致（左＝共用元件實際，右＝game/+page.svelte 抽出來的）');
 });
 await T('B2b 掃描器自驗：抽出來的錦標賽色票不是空的（≥ 12 個相異色碼），且不含 #ffffff', () => {
-  const V = frVars(PAGE);
+  const V = frVars(FRP);
   const uniq = new Set(V.values());
   assert.ok(uniq.size >= 12, '只抽到 ' + uniq.size + ' 個相異色碼 ⇒ 掃描器壞了');
   assert.ok(![...uniq].some((c) => c === '#ffffff'), '色票裡混進白色');
@@ -234,12 +247,28 @@ await T('C2 ⭐⭐⭐ 「回線上大廳」的 URL 用 game/+page.svelte **實�
 await T('C3 舊的重複入口「線上對戰 →」（.to-game）已移除，且它的 CSS 規則沒有留成死碼', () => {
   assert.ok(!PAGE.includes('to-game'), '/friends 頁還留著 .to-game（與分頁列重複，且它指向模式選擇畫面不是大廳）');
 });
-await T('C4 分頁列在 <main> 內、且排在 .page-head 之後、四個好友區塊之前（頂端）', () => {
+await T('C4 ⭐ v6.296 版面組法：頁首＋分頁列包在 `head` snippet 裡（順序：page-head → fr-tabs），共用元件把它 render 在 .fr-panel 的**最前面**、四個好友區塊之前；私聊面板在 `foot`，render 在最後面', () => {
   const src = stripHtmlCmt(PAGE);
-  const iMain = src.indexOf('<main>'), iHead = src.indexOf('<header class="page-head">');
-  const iNav = src.indexOf('<nav class="fr-tabs"'), iAdd = src.indexOf('<section class="add">');
-  assert.ok(iMain > 0 && iHead > iMain && iNav > iHead, '分頁列不在 .page-head 之後：' + [iMain, iHead, iNav].join(','));
-  assert.ok(iAdd > iNav, '分頁列排在好友區塊之後（不是頂端）');
+  const iSnip = src.indexOf('{#snippet head()}'), iSnipEnd = src.indexOf('{/snippet}', iSnip);
+  assert.ok(iSnip > 0 && iSnipEnd > iSnip, '/friends 頁沒有 head snippet');
+  const seg = src.slice(iSnip, iSnipEnd);
+  const iHead = seg.indexOf('<header class="page-head">'), iNav = seg.indexOf('<nav class="fr-tabs"');
+  assert.ok(iHead >= 0 && iNav > iHead, 'head snippet 內的順序不是「頁首 → 分頁列」：' + [iHead, iNav].join(','));
+  // 頁面把兩個 snippet 都接給共用元件
+  assert.ok(/<FriendsPanel \{head\} \{foot\}/.test(src), '/friends 頁沒有把 head／foot 接給共用元件');
+  assert.ok(/\{#snippet foot\(\)\}[\s\S]*<DmPanel /.test(src), '私聊面板不在 foot snippet 內');
+  // 共用元件：head 在最前、四區在中間、foot 在最後
+  const fp = stripHtmlCmt(FRP);
+  const iRoot = fp.indexOf('<div class="fr-panel"');
+  const iRenderHead = fp.indexOf('{@render head?.()}');
+  const iAdd = fp.indexOf('<section class="add">');
+  const iRenderFoot = fp.indexOf('{@render foot?.()}');
+  assert.ok(iRoot > 0 && iRenderHead > iRoot, 'head 沒有 render 在 .fr-panel 內');
+  assert.ok(iAdd > iRenderHead, 'head 不是 render 在四個好友區塊之前（分頁列會跑到名單下面）');
+  assert.ok(iRenderFoot > iAdd, 'foot 不是 render 在最後（私聊面板應在最後）');
+  // ⭐ 色票靠繼承：head／foot 一定要在 .fr-panel **裡面**（在外面就吃不到 --fr-*，D4 會實測）
+  const rootEnd = fp.lastIndexOf('</div>');
+  assert.ok(iRenderHead < rootEnd && iRenderFoot < rootEnd, 'head／foot 跑到 .fr-panel 外面了（吃不到色票）');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -247,8 +276,11 @@ console.log('\n【D】DOM 量測（375×812 手機直式 ／ 1366×768 桌機）
 /** fixture：layout 的白底 baseline ＋ 本頁 <svelte:head> 注入的那一段 ＋ 兩個檔的 <style>。 */
 const LAYOUT_BASELINE = 'body { margin: 0; background: #f4f4f6; }';   // ＝ src/routes/+layout.svelte 的 :global(body)
 const NAV_HTML = (pageSrc) => tabsOf(pageSrc).nav.replace(/\{base\}/g, '');
+// ⭐ v6.296：實際 DOM 結構是 main > .fr-panel > (head snippet / 四區 / foot snippet)
+//   —— fixture 照著擺，才量得到「色票靠繼承傳給頁首、分頁列與 position:fixed 的私聊面板」。
 const FIXTURE_BODY = (pageSrc) => `
 <main>
+ <div class="fr-panel">
   <header class="page-head" id="x-head">
     <a href="/" class="back" id="x-back">← 首頁</a>
     <h1 id="x-h1">👥 好友 <span class="version-tag">v6.293</span></h1>
@@ -278,12 +310,13 @@ const FIXTURE_BODY = (pageSrc) => `
     <p class="dm-notice" id="x-dmnotice">傳太快了，請稍候。</p>
     <form class="dm-form"><input type="text" id="x-dminput" placeholder="輸入訊息（最多 200 字）" /><button class="dm-send" id="x-dmsend">送出</button></form>
   </section>
+ </div>
 </main>`;
 const pageHtmlFor = (pageSrc, panelSrc, withHead) => `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8">`
   + `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`
   + `<style>:root{--safe-top:0px;--safe-bottom:0px;--safe-left:0px;--safe-right:0px}${LAYOUT_BASELINE}</style>`
   + (withHead ? `<style>${/<style>([^<]*)<\/style>/.exec(stripHtmlCmt(headOf(pageSrc)))[1]}</style>` : '')
-  + `<style>${styleOf(pageSrc)}\n${styleOf(panelSrc)}</style>`
+  + `<style>${styleOf(FRP)}\n${styleOf(pageSrc)}\n${styleOf(panelSrc)}</style>`
   + `</head><body>${FIXTURE_BODY(pageSrc)}</body></html>`;
 
 const VPS = [{ w: 375, h: 812, mobile: true, tag: '375×812 手機直式' }, { w: 1366, h: 768, mobile: false, tag: '1366×768 桌機' }];
@@ -311,7 +344,8 @@ if (!chromium) {
         const o = {
           bodyBg: cs(document.body).backgroundColor,
           htmlBg: cs(document.documentElement).backgroundColor,
-          mainColor: cs(document.querySelector('main')).color,
+          // v6.296：正文顏色的來源從 main 移到 .fr-panel（色票宣告在共用元件的根節點）
+          mainColor: cs(document.querySelector('.fr-panel')).color,
           navWrap: cs(nav).flexWrap, navRect: R(nav),
           tabs: tabs.map((t) => ({
             rect: R(t), wrap: cs(t).whiteSpace, bg: cs(t).backgroundColor, bgImg: cs(t).backgroundImage,
@@ -330,7 +364,7 @@ if (!chromium) {
         return o;
       });
     };
-    const V = frVars(PAGE);
+    const V = frVars(FRP);
     for (const vp of VPS) {
       const ctx = await browser.newContext({ viewport: { width: vp.w, height: vp.h }, isMobile: vp.mobile, hasTouch: vp.mobile });
       const pg = await ctx.newPage();
@@ -416,13 +450,50 @@ if (!chromium) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-console.log('\n【E】對戰頁一個位元都沒動');
-const BASE_SHA = '625119f6256a4b1111aa2f207e9e7ff6bf7ab227';   // v6.292（本版的 BASE）
-await T('E1 ⭐⭐⭐ src/routes/game/+page.svelte 的 blob sha 與 BASE 逐位元相同', () => {
-  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 game/+page.svelte blob 比對', '需要歷史 commit'); skipped.push('E1（淺複製）'); return; }
-  const want = execFileSync('git', ['-C', ROOT, 'rev-parse', BASE_SHA + ':src/routes/game/+page.svelte']).toString().trim();
-  const got = execFileSync('git', ['-C', ROOT, 'hash-object', join(ROOT, 'src/routes/game/+page.svelte')]).toString().trim();
-  assert.strictEqual(got, want, '對戰頁被動到了（站長最高紅線）：' + got + ' ≠ ' + want);
+console.log('\n【E】對戰頁：站長最高紅線 —— 對戰版面分支逐位元未變');
+// ⚠⚠⚠ v6.296 改寫：原本是「game/+page.svelte 整檔 blob sha 必須等於 BASE」。
+//   本版**正當地**動了那個檔（線上大廳新增「好友名單」分頁），所以整檔 sha 一定不同。
+//   ⭐ 但守護意圖不可以弄不見 —— 站長的紅線是「**不要造成現有框架的異常**」，
+//   而框架的核心就是那兩套對戰版面（手機直式 MobilePortraitBattle ／ 三種桌機版面）。
+//   ⇒ 改成等價但更精準的條件：**對戰版面分支區間**與 BASE **逐位元相同**（sha256 比對），
+//     並補一條「勝負 modal 區間也逐位元相同」。E1b 是正對照（改一個位元就必須紅）。
+//   ⚠ 這一條仍需要歷史 blob；淺複製時 SHALLOW-SKIP，但 E1c 是**不需要歷史**的結構斷言，永遠在守。
+const BASE_SHA = 'db414686d214dfff468dc3b7613368fae6971b21';   // v6.295（本版的 BASE）
+const BATTLE_START = '  {#if isPortraitMobile && game}\n';
+const BATTLE_END = '{/if}<!-- /isPortraitMobile && playing -->';
+function battleRegionOf(src) {
+  const a = src.indexOf(BATTLE_START);
+  const b = src.indexOf(BATTLE_END, a);
+  assert.ok(a > 0 && b > a, '找不到對戰版面分支的起訖錨點');
+  const region = src.slice(a, b + BATTLE_END.length);
+  assert.ok(region.length > 20000, '對戰版面區間只有 ' + region.length + ' 字元 ⇒ 錨點抓錯');
+  return region;
+}
+function gameoverRegionOf(src) {
+  const a = src.indexOf('<div class="gameover-modal"');
+  const b = src.indexOf('<!-- ── v4.913 Auth modal', a);
+  assert.ok(a > 0 && b > a, '找不到勝負 modal 區塊錨點');
+  return src.slice(a, b);
+}
+const sha256 = (t) => createHash('sha256').update(t, 'utf8').digest('hex');
+await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）與 BASE **逐位元相同**；勝負 modal 區間同樣逐位元相同', () => {
+  if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
+  const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
+  assert.strictEqual(sha256(battleRegionOf(GAME)), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(gameoverRegionOf(GAME)), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
+});
+await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
+  const r = battleRegionOf(GAME);
+  assert.notStrictEqual(sha256(r), sha256(r + ' '), 'sha256 自驗失敗');
+  const mutated = GAME.replace(BATTLE_START, BATTLE_START + '<!-- x -->');
+  assert.notStrictEqual(sha256(battleRegionOf(mutated)), sha256(r), '對戰版面區間的抽取器對「多一個註解」沒有反應 ⇒ E1 是恆真式');
+});
+await T('E1c ⭐⭐ 不需要歷史的等價條件：對戰版面分支區間零 `friend`／零 `lobby-tab`／零 `FriendsPanel`（本版新增的東西一個都不准滲進去）；且區間 >20000 字元、含兩套分支', () => {
+  const r = battleRegionOf(GAME);
+  assert.ok(r.includes('<MobilePortraitBattle') && r.includes('{:else}'), '區間內看不到手機／桌機兩套分支');
+  for (const tk of ['friend', 'lobby-tab', 'FriendsPanel', 'DmPanel']) {
+    assert.strictEqual((r.match(new RegExp(tk, 'gi')) || []).length, 0, '⚠⚠ 對戰版面分支出現「' + tk + '」');
+  }
 });
 await T('E2 掃描器自驗：同一支 hash-object 對「多一個空白的內容」會算出不同 sha（上一條不是恆真式）', () => {
   const a = execFileSync('git', ['-C', ROOT, 'hash-object', '--stdin'], { input: 'x' }).toString().trim();
@@ -430,7 +501,6 @@ await T('E2 掃描器自驗：同一支 hash-object 對「多一個空白的內�
   assert.notStrictEqual(a, b, 'hash-object 自驗失敗');
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】回歸保護（沿用既有守衛的判準，不重寫）');
 await T('F1 friends-api.ts 仍零 setInterval／零 setTimeout（零輪詢；剝註解後數）', () => {
   const s = API.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
@@ -459,9 +529,11 @@ await T('G1 本守衛在 package.json 的 test chain；version.ts 與 admin.html
 console.log('\n【H】突變（每個都必須紅在預期那一條）');
 await T('H1 突變：DmPanel 的面板底色改回 #fff ⇒ B1 紅在「仍有 #fff」', () =>
   mutantMustBreak('DmPanel #fff', () => assertSingleSource(PAGE, mutate(PANEL, 'background: var(--fr-card-bg);', 'background: #fff;')), '仍有 #fff'));
-await T('H2 突變：/friends 的 .row 直接硬寫色碼（不走變數）⇒ B1 紅在「變數宣告以外的地方硬寫色碼」', () =>
-  mutantMustBreak('硬寫色碼', () => assertSingleSource(mutate(PAGE, 'background: var(--fr-card-bg); border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 8px 10px; }',
-    'background: #142414; border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 8px 10px; }'), PANEL), '硬寫色碼'));
+await T('H2 突變：共用元件的 .row 直接硬寫色碼（不走變數）⇒ B1 紅在「變數宣告以外的地方硬寫色碼」', () =>
+  mutantMustBreak('硬寫色碼', () => assertSingleSource(PAGE, PANEL, mutate(FRP, 'background: var(--fr-card-bg); border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 8px 10px; }',
+    'background: #142414; border: 1px solid var(--fr-card-bd); border-radius: 8px; padding: 8px 10px; }')), '硬寫色碼'));
+await T('H2b 突變：/friends 頁的分頁列硬寫色碼（消費端不准有色碼）⇒ B1 紅在「出現硬寫色碼」', () =>
+  mutantMustBreak('消費端色碼', () => assertSingleSource(mutate(PAGE, 'background: var(--fr-tab-hover-bg); }', 'background: #18301a; }'), PANEL), '出現硬寫色碼'));
 await T('H3 突變：回大廳的 href 少了 ?mode=online ⇒ C1 紅在「回大廳的 href 不對」', () =>
   mutantMustBreak('href 少 query', () => assertTabs(mutate(PAGE, 'href="{base}/game?mode=online"', 'href="{base}/game"')), '回大廳的 href 不對'));
 await T('H4 突變：active 掛到「線上連線對戰」那一顆 ⇒ C1 紅在「不該有 active」', () =>
@@ -472,7 +544,7 @@ await T('H6 突變：分頁列改用 {#each} ⇒ C1 紅在「不可用 {#each}�
   mutantMustBreak('用 each', () => assertTabs(mutate(PAGE, '<nav class="fr-tabs" aria-label="線上對戰與好友">', '<nav class="fr-tabs" aria-label="線上對戰與好友">{#each t as x}')), '不可用 {#each}'));
 await T('H7 突變：--fr-tab-fg 抄錯一個字 ⇒ B2 紅在「色票與錦標賽不一致」', () =>
   mutantMustBreak('色票抄錯', () => {
-    const bad = mutate(PAGE, '--fr-tab-fg: #9fdca0;', '--fr-tab-fg: #9fdca1;');
+    const bad = mutate(FRP, '--fr-tab-fg: #9fdca0;', '--fr-tab-fg: #9fdca1;');
     const V = frVars(bad);
     assert.strictEqual(V.get('--fr-tab-fg'), lc(declOf(gameRule('.tourn-tab {'), 'color')), '色票與錦標賽不一致：--fr-tab-fg');
   }, '色票與錦標賽不一致'));

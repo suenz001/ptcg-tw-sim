@@ -1,5 +1,139 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.296 — 👥 好友名單變成線上大廳的第二個分頁 ＋ 備註名 UI
+
+BASE `db414686d214dfff468dc3b7613368fae6971b21`（v6.295，遠端 main）。
+⭐⭐ **這是第一次動 `src/routes/game/+page.svelte`（站長最在意的檔案）來加好友功能**，
+所以本版的重心不在功能量，而在「**證明現有框架沒被動到**」。
+
+### 【0】站長的需求（逐字）
+> 好友的按鈕，我建議你改在連線對戰的 🌐 線上連線對戰 旁邊，做成一個分頁，
+> 換句話說就是把 🌐 線上連線對戰 和 好友名單 做成 2 個分頁，
+> 你可以參考錦標賽的作法（錦標賽目前已有 賽事、排行榜、個人資料 合計 3 個分頁）
+
+最高約束（逐字）：
+> 好友介面要同時符合現在的 windows 網頁版和手機版的框架，千萬不要造成現有框架的異常
+
+### 【1】共用元件抽在哪、為什麼
+新增 **`src/lib/friends/FriendsPanel.svelte`**（好友名單本體）與
+**`src/lib/friends/auth-ctx.ts`**（取身分的中央出口）。
+
+放 `$lib/friends/` 而不是 `src/routes/friends/`：這一版起它被**兩條路由**共用
+（`/friends` 獨立頁 ＋ 線上大廳的第二個分頁），而 `$lib/friends/` 正是好友功能既有的共用層
+（`friends-api.ts`／`dm-session.ts`／`dm-poller.ts` 都在那裡）。
+路由目錄底下的檔案是「那條路由自己的東西」，跨路由 import 會變成 `../friends/...` 這種反向依賴。
+
+**怎麼證明沒有兩份**：`/friends/+page.svelte` 從 485 行縮到 158 行，四個區塊的 markup、
+`load()`／`act()`／`submitAdd()`／二次確認全部只剩共用元件那一份；
+`test-v6283 B2/B3`、`test-v6286 7-7`、`test-v6288 E1/E3` 這些原本掃 `/friends` 頁的斷言
+**全部改掃共用元件**，而且 `test-v6286 7-7` 另加一條「兩邊都不准自己再寫一份 `ctx()`」。
+
+**版面組法（關鍵設計）**：色票 `--fr-*` 的單一來源搬到共用元件的 `.fr-panel`；
+`/friends` 頁的頁首＋假分頁列用 `head` snippet、私聊面板用 `foot` snippet
+傳進元件**裡面**渲染 ⇒ 靠 CSS 自訂屬性的繼承吃到同一份色票（`test-v6293 D4` 用
+`getComputedStyle` 實測）。⭐ 這樣做的另一個好處：**共用元件不 import `DmPanel`**，
+`game/+page.svelte` 因此保得住 `test-v6288 F1`「主檔零 DmPanel」的不變量
+（本版私聊仍是「開新分頁到 `/friends`」，內嵌留給下一版）。
+
+### 【2】分頁列插在哪、顯示條件
+`src/routes/game/+page.svelte` 的 `<h1>🌐 線上連線對戰</h1>` **之後**、`.lobby-unified` **之前**：
+
+```
+{#if friendsEntryOn && onlineStep !== 'room'}
+  <div class="lobby-tabs" role="tablist" aria-label="線上對戰與好友"> …兩顆 .lobby-tab… </div>
+{/if}
+```
+
+・`friendsEntryOn` ＝ v6.283 就有的 `friendsEntryVisible(uid, isAnonymous)`
+　⇒ **匿名／伺服器不支援／尚未開放時整條不渲染**（站長已裁定匿名不顯示分頁列）。
+・`onlineStep !== 'room'` ⇒ 進了等待室就沒有分頁列。
+・`let lobbyTabRaw = $state(...)`；**`const lobbyTab = $derived(friendsEntryOn ? lobbyTabRaw : 'online')`**
+　—— 這一行是匿名安全的關鍵：就算 `lobbyTabRaw` 被別的路徑改成 `'friends'`，
+　只要 `friendsEntryOn` 是 false 就一定渲染既有的大廳版面。
+・既有的 `.lobby-unified` 整塊被包進 `{#if lobbyTab === 'online'}`／`{/if}`，
+　**區塊內容一個位元都沒動**（只在前後各加一行標記，縮排不變）。
+・v6.283 桌機那顆「👥 好友」與 v6.284 手機直式尾端那個連結**已移除**（由分頁列取代）。
+
+### 【3】⭐⭐⭐ 「匿名玩家的大廳與上一版逐字相同」怎麼證
+新增 **`scripts/lib/svelte-if-prune.mjs`**：把 markup 裡「條件只用到已知變數」的
+`{#if}`／`{:else if}`／`{:else}` 依**求值結果**剪枝（條件含未知識別字 ⇒ 整塊原樣保留，寧可少剪）；
+標記若獨佔一行就連整行移除。`test-v6296【D】` 拿它做：
+
+```
+normalizeMarkup(prune(NEW 的大廳區間,  {friendsEntryOn:false, lobbyTab:'online', onlineStep:'join', isPortraitMobile:false/true}))
+   ===
+normalizeMarkup(prune(BASE 的大廳區間, 同一組變數))
+```
+
+實測 **兩種 isPortraitMobile 都逐字相同（6,946 字元）**。
+`normalizeMarkup` 只去掉 HTML 註解、行尾空白與純空白行（都不產生元素）。
+⚠ 附兩個正對照：**D2** 改 `.lobby-unified` 一個位元 ⇒ 比對必紅；
+**D3** 非匿名時兩邊**必須不同**（否則代表分頁列根本沒接上）。
+
+### 【4】三種尺寸的 DOM 量測（`scripts/measure-v6296-lobby-tabs.mjs`）
+375×812 ／ 412×915 ／ 1366×768，各測長短兩種 email：
+
+| 量測項 | 結果 |
+|---|---|
+| 分頁列**以上**（返回鈕／登入列／h1，共 8 個節點）rect | **全等**（dx=dy=dw=dh=0） |
+| 分頁列**以下**（7 個節點）dy | **恆為 53px**（＝分頁列高 41 ＋ 下邊距 12；上邊距 6 與 h1 的 16 合併） |
+| 下方 dx／dw | 全部 0 |
+| 分頁列 × 任何既有元素重疊 | 0 |
+| 375px 兩顆分頁寬 | **171.7px／171.7px**（不折行、容器高＝單顆高、字沒被截、中心點命中自己） |
+| 412px／1366px 兩顆分頁寬 | 190.2px／277.0px |
+| 整頁水平溢出 | 無（scrollWidth ≤ clientWidth） |
+
+### 【5】備註名 UI（v6.295 的伺服器端已上線）
+・`friends-api.ts`：`FriendRow` 新增 `alias: string | null`（舊伺服器沒給 ⇒ 補 null）；
+　新增 `FRIENDS_ALIAS_MAX_LEN = 20`（與伺服器 `FR_ALIAS_MAX_LEN` 由守衛比對同一個數字）、
+　`clampAlias()`（碼位截斷、剝零寬／控制字元、合併空白）、`setFriendAlias()`。
+・顯示：`{r.alias || r.nick}`；**有 alias 時另外用小字顯示「原暱稱：{nick}」**（四個區塊都套）。
+・編輯入口「✏️ 備註名」**只在 `status === 'accepted'` 的列**（其餘伺服器一律 409）。
+・輸入框 `maxlength={FRIENDS_ALIAS_MAX_LEN}`；⭐ **空字串時「儲存」不得停用** —— 空字串＝清除。
+・⚠ 全部走 Svelte 預設 escape，零 `{@html}`（`test-v6283 B3`／`test-v6288 E1`／`test-v6296 C4/E8`）。
+
+### 【6】守衛
+新增 **`scripts/test-v6296-lobby-friends-tab.mjs`**（34 PASS；CI 無瀏覽器時 26 PASS ＋【E】SHALLOW-SKIP）。
+【E】是真的把共用元件用 `svelte/compiler` ＋ esbuild 打包起來、在 playwright 裡**掛起來跑**：
+掛載前 `/api/friends/*` 零請求、掛載後恰一發 list、備註名的顯示／編輯／清除全走 DOM 與假 fetch 驗證。
+
+**改到的既有守衛（每一條都保住守護意圖，沒有放寬）**：
+
+| 守衛 | 原本 | 改成 |
+|---|---|---|
+| `test-v6283 B2/B3` | 掃 `/friends` 頁 | 掃共用元件 ＋ 新增「/friends 路由仍掛得起它」的正對照 |
+| `test-v6283 C3/C4` | 兩份互斥入口的位置與形狀 | 分頁列的位置＋**求值**匿名鎖（`lobbyTab` 的 `$derived` 抽出來跑） |
+| `test-v6284 C3` | 兩份入口互斥 | 三個 `{#if}` 求值：匿名一個都不渲染且既有表單照渲染、兩分頁互斥、room 無分頁列 |
+| `test-v6284 C5` | 「零新 CSS」 | 分頁列 CSS 只准碰 `.lobby-tab*`；`.auth-user` CSS 仍逐字未動；style 區仍零 `friend` |
+| `test-v6286 7-7` | 兩道匿名閘都在 `/friends` 頁 | 閘①在共用元件、閘②在共用 `auth-ctx.ts`，並加「不准各寫一份 `ctx()`」 |
+| `test-v6288 E1/E3` | 掃 `/friends` 頁 | 掃共用元件；💬 的顯示條件改成**求值** `showDm` |
+| `test-v6293 B1/B2/D` | 色票單一來源在 `/friends` 頁 | 單一來源在共用元件；掃描範圍 2 檔 → **3 檔**（多守一個消費端） |
+| **`test-v6293 E1`** | `game/+page.svelte` **整檔 blob sha** ＝ BASE | ⭐ **對戰版面分支區間 ＋ 勝負 modal 區間的 sha256** ＝ BASE，另加 **E1b 正對照**（改一個位元必紅）與 **E1c**（不需要歷史：區間零 `friend`／`lobby-tab`／`FriendsPanel`／`DmPanel`） |
+| **`test-v6294 E1`** | 兩個檔的整檔 blob sha ＝ v6.293 | ⚠⚠ **那個 pin 從 v6.295 起就已經過期而且一直是紅的**（CI 淺複製 SHALLOW-SKIP 才看不出來）⇒ 改成不綁版本的等價條件：那兩個檔**零引用**健康檢查工具的識別字，附正對照 |
+| `test-v6264` | `BASE_SHA` 釘 v6.292 | 前移到 v6.295（本版動了 changelog，依該守衛自己的規則） |
+
+**HEAD-FAIL**（逐檔還原到 BASE 再跑 `test-v6296`）：
+删 `FriendsPanel.svelte` ⇒ A0 紅（缺共用元件）；删 `auth-ctx.ts` ⇒ A0 紅；
+還原 `friends-api.ts` ⇒ A0 紅（缺 `setFriendAlias`）；還原 `/friends/+page.svelte` ⇒ F3 紅；
+還原 `game/+page.svelte` ⇒ **D3／D4／F2／H6／H7／H8 六條紅**。全部還原回本版 ⇒ 34 PASS / 0 FAIL。
+
+**九個突變**（H1~H9）分別紅在：只看 nick ⇒ C1、原暱稱永遠顯示 ⇒ C1、`canAlias` 放行 ⇒ C2、
+空字串停用儲存 ⇒ C3、`maxlength` 硬寫 ⇒ C3、分頁列忘了匿名閘 ⇒ **D1**、
+`lobbyTab` 拿掉匿名鎖 ⇒ 求值斷言、切分頁動 `onlineStep` ⇒ D4、主檔出現 `DmPanel` ⇒ F1。
+
+### 【7】首頁 changelog 三步搬運
+新增 v6.296（`open`，前一則 v6.293 的 `open` 拿掉）、第 13 則 **v6.271** 的內文搬進
+`changelog-bodies.html` 並補 `data-ver`、被擠出 50 則的 **v6.215** 搬進 `changelog-archive.html`。
+首頁 **31,833 → 32,112 bytes**（上限 40KB）。
+
+### 【8】下一版要注意的
+・**錦標賽第 4 分頁**：`tTab` 是 `'events'|'leaderboard'|'profile'` 的字面聯集，
+　`tSwitchTab` 與 `:9752` 的三顆按鈕要一起改；⚠ 錦標賽區塊有 **sha256 凍結**
+　（`test-v6278 I1`／`test-v6282 A2`／`test-v6283 D`／`test-v6284 E`）—— 動之前先確認那幾把鎖的區間。
+・**私聊內嵌**：一旦把 `DmPanel` 接進共用元件，`test-v6288 F1`「主檔零 DmPanel」的
+　不變量就會需要重新定義（因為主檔會經由共用元件間接依賴它）。
+　建議改成「對戰版面分支零 DmPanel ＋ 私聊面板是動態 import」，而不是直接放寬。
+
 ## v6.295 — 👥 好友「備註名」＋可信的「最新暱稱」（純伺服器端）
 
 BASE `eba051fca75a60927079afc39a06bde7ce80c5f8`（v6.294，遠端 main）。
