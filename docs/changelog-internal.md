@@ -1,5 +1,116 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.297 — 🏆 錦標賽第 4 個分頁「👥 好友」＋ 💬 私聊內嵌（好友功能的最後一塊）
+
+BASE `c9bba2280289e324367f1a9a12850ea9900d6ea2`（v6.296，遠端 main）。
+玩家端只動 `src/routes/game/+page.svelte` 一個檔（＋`version.ts` 與首頁 changelog 三檔）。
+**完全沒有動** `oracle-admin/server_admin_patch.js`（blob sha `d6397568…` 與 BASE 相同）。
+
+### 【0】站長的需求（逐字）
+> 另外我希望在錦標賽也一樣能顯示好友名單分頁，因此錦標賽就會被做成 4 個分頁
+> （賽事、排行榜、個人資料、好友名單）
+>
+> 好友介面要同時符合現在的 windows 網頁版和手機版的框架，千萬不要造成現有框架的異常
+
+### 【1】⭐⭐ 四把 sha256 鎖：分頁按鈕**不在**鎖住的區間內（不需要 revert-diff）
+`test-v6278 I1`／`test-v6282 A2`／`test-v6283 D1`／`test-v6284 E1` 四把鎖，
+錨點都是 `oracle-admin/server_admin_patch.js` 裡的
+`const TEVENTS = db.collection('tournamentEvents');` **到檔尾**，
+sha 都是同一把 `e7c15148…`（220,560 字元）。
+而錦標賽分頁列的三顆按鈕在 **`src/routes/game/+page.svelte`**（client），
+兩者是不同的檔案 ⇒ **分頁按鈕完全不落在任何一把鎖的區間內**。
+本版對 `server_admin_patch.js` 一個位元都沒動（blob sha 與 BASE 相同），四把鎖原樣通過。
+
+### 【2】⭐⭐⭐ 手機寬度：兩個方案都實作、量測，選了方案 2
+量測腳本 `scripts/measure-v6297-tourn-tabs.mjs`（把 `<style>` 整段抽出灌進 fixture，
+用同樣的 class 結構擺出錦標賽大廳，逐元素 `getBoundingClientRect()` 相減）。
+「上一版」＝ 3 顆分頁；分頁列以下量的是聊天室與賽事區塊的 dy。
+
+| 尺寸（大廳內容寬） | 上一版 3 顆 | 方案 1（`flex-wrap:wrap` ＋ `flex:1 1 140px`） | 方案 2（短標籤「👥 好友」） |
+|---|---|---|---|
+| 375×812（349.4px） | 列高 41，每顆 112.47 | 列高 **88**（2×2），**dy＝+47** | 列高 **62**，**dy＝+21**，每顆 82.86 |
+| 390×844（364.4px） | 列高 41，每顆 117.47 | 列高 **88**（2×2），**dy＝+47** | 列高 **41**，**dy＝0**，每顆 86.61 |
+| 412×915（386.4px） | 列高 41，每顆 124.8 | 列高 **88**（2×2），**dy＝+47** | 列高 **41**，**dy＝0**，每顆 92.11 |
+| 1366×768（640px） | 列高 41，每顆 209.33 | 列高 41，dy＝0 | 列高 41，**dy＝0**，每顆 155.5 |
+
+⭐ **選方案 2**。理由三條：
+1. **位移一定不大於方案 1**：手機三種尺寸方案 1 一律 +47，方案 2 是 +21／0／0。
+2. 方案 1 的 `flex: 1 1 140px` 在 **412px 也還是折成 2×2**（4×140＋18＝578 &gt; 386）
+   ⇒ 「窄幅才折」其實是「所有手機都折」，而且 2×2 把一條分頁列變成一個方塊，
+   與大廳分頁列（兩顆一列）的外觀不一致。
+3. 方案 2 **一行 CSS 都不用改**（`.tourn-tabs`／`.tourn-tab`／`:hover`／`.active` 四條規則
+   與 BASE 逐字相同，`test-v6297 C1` 在守）⇒ 對「現有框架」的擾動最小。
+   ⚠ 而且好友入口沒開時只有 3 顆，畫面與上一版**完全一樣**。
+
+⚠ 方案 2 在 **375px 仍有 +21px**：那 21px 是「🪪 個人資料」在 82.86px 寬的按鈕裡折成兩行
+（可用文字寬 68.86px，該標籤約 79px）。整列變高、下面所有內容等距下移 21px，
+**無重疊、無水平溢出、文字沒有被截斷**。另外實測 320px 與 360px 也是 +21。
+⚠ 另外試過兩個變體並**放棄**：
+・`white-space:nowrap` ＋ `text-overflow:ellipsis`（dy＝0，但 375px 會把「🪪 個人資料」截成
+  「🪪 個人…」，320px 連「📊 排行榜」也截）；
+・`flex: 1 1 auto`（dy＝0 且不截字，但**桌機的四顆會變成不等寬** 145/159/173/145，
+  而且好友入口沒開時既有三顆也會跟著變 ⇒ 動到現有框架，不採用）。
+⚠ 全程**沒有用 `@media` 當手機開關**（站內紀律）。
+
+### 【3】匿名玩家：不需要額外處理（自己查證的結果）
+錦標賽分頁列整段寫在 `{#if isAnonymous}` 的 `{:else}` 分支裡
+（匿名看到的是「🔒 錦標賽需要 email 帳號（不開放匿名）」登入閘），
+所以**匿名玩家本來就看不到任何分頁**。第 4 顆只需要再擋一道 `friendsEntryOn`
+（伺服器不支援／開關關著就不出現）—— 與 v6.296 大廳分頁列的條件**完全一致**。
+另外 `tTab` 改成 `tTabRaw` ＋ `$derived` 鎖：`friendsEntryOn` 為 false 時一律鎖回 `'events'`，
+不會停在一個畫不出來的分頁（作法比照 v6.296 的 `lobbyTab`）。
+
+### 【4】⭐⭐⭐ 私聊內嵌：`test-v6288 F1` 怎麼改的（守護意圖沒弄丟）
+v6.296 的實作者預警「私聊一旦內嵌，主檔零 `DmPanel` 這條會因間接依賴而必然紅」，
+並建議「對戰版面分支零 `DmPanel` ＋ 私聊面板走動態 `import()`」。
+**這個建議合理，但只做到它還不夠**：字串比對擋不住「包一層 wrapper 再靜態 import」——
+那樣主檔看不到 `DmPanel` 這個字，`DmPanel` 卻照樣被打包進對戰頁。
+
+⇒ 改成守「**因**」而不是守「果」：
+`scripts/test-v6297-tourn-friends-tab.mjs`【D】從 `game/+page.svelte` 的**靜態 import**
+出發走遍 `src/` 的相依圖（`$lib/` 與相對路徑都解析，`import type` 不算），
+斷言走不到 `DmPanel.svelte`／`dm-session.ts`／`dm-poller.ts`。
+兩個正對照：**D1b** 直接靜態 import ⇒ 紅；**D1c** 包一層 wrapper 再靜態 import ⇒ **仍然紅**
+（這一條是字串比對做不到的）。另加 D2（對戰版面分支零 `friend`／`DmPanel`／`dmState`／`openDm`）
+與 D3（`MobilePortraitBattle.svelte` 原條文一字不動）。
+`test-v6288 F1` 與 `test-v6296 F1` 都改成同一組條件（各自附正對照），**沒有放寬**。
+
+實作：`openDm()` 用 `Promise.all([import('$lib/friends/dm-session'), import('$lib/friends/dm-poller'),
+import('../friends/DmPanel.svelte')])`，元件放進 `$state` 再由 `dmFoot` snippet 渲染。
+⚠ `DmPanel` 靠 `--fr-*` 自訂屬性繼承取色 ⇒ **必須**渲染在 `.fr-panel` 裡面
+（走 `FriendsPanel` 的 `foot` snippet），與 `/friends` 頁做法相同。
+⚠ 本版**沒有搬動** `src/routes/friends/DmPanel.svelte`，也沒有動 `/friends` 頁
+（`test-v6297 G1` 用 sha256 證明兩個檔逐位元未動）—— 少一個搬家就少一整批守衛要改。
+
+### 【5】⭐⭐⭐ 輪詢生命週期：新增「切走分頁」這個情境
+`friendsPaneOpen` 這個 `$derived` 逐條對齊兩邊的模板條件，
+`$effect(() => { if (!friendsPaneOpen) closeDm(); })` 是**唯一**的收斂點；
+另外 `onDestroy` 關掉（離開頁面），`visibilitychange` 回前景 `_dm?.poke()` 補一發。
+
+守衛【E】把**出貨碼裡那一段接線**抽出來（不是抄一份），配真的 `dm-session`／`dm-poller`
+＋假 fetch ＋假 timer 逐 tick 實跑，五種情境各驗一次：
+面板開著 3 秒／`document.hidden` 15 秒／關掉 200 tick 零請求／
+**切走分頁 200 tick 零請求**（錦標賽 3 種切法＋開打，大廳 4 種）／離開頁面 200 tick 零請求。
+
+### 【6】⭐ 這一版掃到的「pin 死版本」
+`test-v6264` 的 `BASE_SHA` 是**每一個動 changelog 的版本都要前移**的 pin
+（它自己的註解有寫，v6.271~v6.274 曾經連續四版忘了前移）。本版已前移到 v6.296。
+`test-v6272` ⑩ 的 `PREV_SHA`／`PREV_ALLOWED` 同理，已更新。
+其餘 `BASE_SHA` 都是「凍結在某一版的歷史錨點」（比對的是那一版當時的行為），不需要前移。
+⚠ `test-v6294 E1` 在 v6.296 已改成不綁版本的等價條件，本版複查仍然是綠的。
+
+### 【7】首頁 changelog 三步搬運
+新增 v6.297（`open`，前一則 v6.296 的 `open` 拿掉）、第 13 則 **v6.274** 的內文搬進
+`changelog-bodies.html` 並補 `data-ver`、被擠出 50 則的 **v6.216** 搬進 `changelog-archive.html`。
+首頁 **32,112 → 32,185 bytes**（上限 40KB）。
+
+### 【8】下一版要注意的
+・好友功能到這一版為止，站長交辦的 UI 都做完了；**總開關仍預設關**
+　（`friendsConfig.enabled`，admin 📡 分頁可開），私聊子開關另計。
+・⚠⚠ 仍未根治：`/api/match-result` 零身分驗證、uid 劫持（v6.282~v6.286 已記錄）。
+・`src/routes/friends/DmPanel.svelte` 現在同時被 `/friends` 與對戰頁（動態）使用，
+　若哪天要搬去 `$lib/friends/`，記得 `test-v6288`／`test-v6293`／`test-v6297 G1` 的路徑要一起改。
+
 ## v6.296 — 👥 好友名單變成線上大廳的第二個分頁 ＋ 備註名 UI
 
 BASE `db414686d214dfff468dc3b7613368fae6971b21`（v6.295，遠端 main）。

@@ -396,22 +396,29 @@ if (!chromium) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】回歸不變量');
-await T('F1 ⭐⭐ 主檔（game/+page.svelte）零 DmPanel／dm-session／dm-poller（v6.288 F1 的不變量；本版私聊仍導向 /friends）', () => {
-  for (const k of ['DmPanel', 'dm-session', 'dm-poller', 'createDmSession']) {
-    assert.strictEqual((GAME.match(new RegExp(k, 'g')) || []).length, 0, 'game/+page.svelte 出現 ' + k);
+// ⭐⭐⭐ v6.297 改寫（**不是放寬**）：私聊改成內嵌，主檔一定會出現 DmPanel 這個字串。
+//   守護意圖（私聊不可以被打包進對戰頁）改由「靜態 import 零私聊」＋「對戰版面分支零 Dm」接手，
+//   完整版（走整張靜態相依圖、擋得住 wrapper 繞道）在 scripts/test-v6297-tourn-friends-tab.mjs【D】。
+await T('F1 ⭐⭐ 私聊不進對戰頁主 chunk：主檔的靜態 import 零私聊模組（動態 import() 才是入口）；MobilePortraitBattle 零私聊；共用元件本身不 import 私聊面板', () => {
+  const importLines = stripCmt([...GAME.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n'))
+    .split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
+  assert.ok(importLines.length > 10, '掃描器下限：只抽到 ' + importLines.length + ' 行靜態 import');
+  for (const l of importLines) for (const k of ['DmPanel', 'dm-session', 'dm-poller'])
+    assert.ok(!l.includes(k), '⚠⚠ 主檔用靜態 import 引用了私聊模組：' + l.trim());
+  for (const k of ['DmPanel', 'dm-session', 'dm-poller', 'createDmSession'])
     assert.strictEqual((MPB.match(new RegExp(k, 'g')) || []).length, 0, 'MobilePortraitBattle.svelte 出現 ' + k);
-  }
-  // ⭐ 共用元件本身也不可以 import 私聊面板（不然它會被打包進對戰頁）
+  // ⭐ 共用元件本身也不可以 import 私聊面板（不然它會被靜態拉進對戰頁）
   assert.strictEqual((stripCmt(FRP).match(/DmPanel/g) || []).length, 0, '共用元件 import 了 DmPanel ⇒ 會被打包進對戰頁');
   // 正對照：/friends 頁必須有（否則上面幾條是恆真式）
   assert.ok((PAGE.match(/DmPanel/g) || []).length >= 2, '正對照失效：/friends 頁應該還是掛著私聊面板');
 });
-await T('F2 ⭐⭐ 大廳的私聊入口是**開新分頁到 /friends**（本版不內嵌）；且共用元件在大廳是 embedded', () => {
+await T('F2 ⭐⭐ 大廳的私聊入口改成**就地開面板**（v6.297；舊的開新分頁不得復活）；且共用元件在大廳仍是 embedded', () => {
   const i = GAME.indexOf('<FriendsPanel embedded ');
   assert.ok(i > 0, '大廳沒有用 embedded 模式掛共用元件');
   const line = GAME.slice(i, GAME.indexOf('\n', i));
-  assert.ok(/ondm=\{\(\) => \{[^\n]*window\.open\(base \+ '\/friends'/.test(line), '大廳的 ondm 不是開新分頁到 /friends：' + line.slice(0, 200));
-  assert.ok(/location\.href = base \+ '\/friends'/.test(line), '被瀏覽器擋掉新分頁時沒有退回同頁導向：' + line.slice(0, 200));
+  assert.ok(/ondm=\{openDm\}/.test(line), '大廳的 ondm 不是就地開面板：' + line.slice(0, 220));
+  assert.ok(/foot=\{dmFoot\}/.test(line), '大廳沒有把私聊面板接到 foot snippet（色票靠繼承）：' + line.slice(0, 220));
+  assert.strictEqual((GAME.match(/window\.open\(base \+ '\/friends'/g) || []).length, 0, '舊的「開新分頁到 /friends」復活了');
 });
 await T('F3 ⭐⭐ /friends 這條獨立路由仍然可用：import 共用元件、head／foot snippet 都接上、匿名閘走共用 friendsCtxFromAuth', () => {
   assert.ok(/import FriendsPanel from '\$lib\/friends\/FriendsPanel\.svelte';/.test(PAGE), '/friends 頁沒有 import 共用元件');
@@ -490,11 +497,14 @@ await T('H8 ⭐⭐ 突變：切分頁時順手把 onlineStep 改掉（房間輪�
     const after = run({ lobbyTabRaw: 'online', onlineStep: 'join' }, 'friends');
     assert.strictEqual(after.onlineStep, 'join', '⚠⚠ onlineStep 被改掉了');
   }, 'onlineStep 被改掉了'));
-await T('H9 突變：把私聊面板搬進主檔（會把 DM 打包進對戰頁）⇒ F1 紅在「game/+page.svelte 出現 DmPanel」', () =>
-  mutantMustBreak('主檔出現 DmPanel', () => {
-    const bad = GAME + '\n<!-- DmPanel -->\n';
-    assert.strictEqual((bad.match(/DmPanel/g) || []).length, 0, 'game/+page.svelte 出現 DmPanel');
-  }, 'game/+page.svelte 出現 DmPanel'));
+await T('H9 ⭐⭐ 突變：把私聊面板改成**靜態** import（會把 DM 打包進對戰頁）⇒ F1 紅在「主檔用靜態 import 引用了私聊模組」', () =>
+  mutantMustBreak('主檔靜態 import 私聊', () => {
+    const bad = mutate(GAME, '<script lang="ts">', '<script lang="ts">\n  import DmPanel from \'../friends/DmPanel.svelte\';');
+    const importLines = stripCmt([...bad.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n'))
+      .split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
+    for (const l of importLines) for (const k of ['DmPanel', 'dm-session', 'dm-poller'])
+      assert.ok(!l.includes(k), '⚠⚠ 主檔用靜態 import 引用了私聊模組：' + l.trim());
+  }, '主檔用靜態 import 引用了私聊模組'));
 
 // ═══════════════════════════════════════════════════════════════════════════
 if (skipped.length) console.log('\n⚠⚠ 本次 SKIP：' + skipped.join('；') + ' —— 這幾段在這台機器上沒有在守');

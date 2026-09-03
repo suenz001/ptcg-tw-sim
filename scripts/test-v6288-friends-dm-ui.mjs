@@ -639,11 +639,51 @@ await T('E4 svelte 編譯（client、runes）零錯誤零警告；DmPanel 與 /f
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【F】框架安全：對戰頁零私聊引用（逐位元未動由 test-v6272 ⑩ PREV_ALLOWED 守）');
-await T('F1 ⭐⭐ game/+page.svelte 與 MobilePortraitBattle.svelte 零 DmPanel／dm-session／dm-poller／friendsDm／fetchDmMessages／sendDm／createDmSession 引用', () => {
-  assert.ok(GAME.length > 500000, 'game/+page.svelte 太短，讀錯檔？');
-  for (const [n, s] of [['game/+page.svelte', GAME], ['MobilePortraitBattle.svelte', MPB]]) {
-    for (const k of ['DmPanel', 'dm-session', 'dm-poller', 'friendsDm', 'fetchDmMessages', 'sendDm', 'createDmSession']) assert.ok(!s.includes(k), n + ' 出現 ' + k + '（本版對戰頁一行都不該動）');
+// ⭐⭐⭐ v6.297 改寫（**不是放寬**）：私聊從這一版起**內嵌**在大廳／錦標賽的好友分頁裡，
+//   所以「game/+page.svelte 一個 DmPanel 字元都不能有」這條字串比對必然紅。
+//   ⚠⚠ 直接放寬＝把守護意圖丟掉。原本這條守的**因**是「私聊不可以被打包進對戰頁、對戰版面不可以被私聊污染」，
+//   ⇒ 改成三條等價（而且更強）的條件：
+//     ① MobilePortraitBattle.svelte **原條文一字不動**（它到現在都還沒碰過私聊）。
+//     ② game/+page.svelte 的**靜態** import 一行都不得引用私聊模組（`import type` 除外＝編譯後消失）；
+//        私聊只能經由動態 import() 進來 ⇒ 不會進對戰頁的主 chunk。
+//     ③ 對戰版面分支區間（手機直式 ／ 三種桌機版面）零 Dm／零 friend。
+//   ⭐ 更完整的版本在 scripts/test-v6297-tourn-friends-tab.mjs【D】：那裡是走**整張靜態相依圖**，
+//     連「包一層 wrapper 再靜態 import」這種字串比對擋不住的繞道也擋得住（附兩個正對照）。
+function staticImportLines(src) {
+  const code = [...src.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
+  return stripComments(code).split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
+}
+function assertNoStaticDmImport(src) {
+  const lines = staticImportLines(src);
+  assert.ok(lines.length > 10, '掃描器下限：只抽到 ' + lines.length + ' 行靜態 import ⇒ 抽取器壞了');
+  for (const l of lines) {
+    for (const k of ['DmPanel', 'dm-session', 'dm-poller']) {
+      assert.ok(!l.includes(k), '⚠⚠⚠ game/+page.svelte 用**靜態** import 引用了私聊模組（會被打包進對戰頁）：' + l.trim());
+    }
   }
+}
+await T('F1 ⭐⭐⭐ 私聊不得進對戰頁的主 chunk：game/+page.svelte 的靜態 import 零私聊模組（動態 import() 才是唯一入口）；MobilePortraitBattle.svelte 原條文一字不動；對戰版面分支零 Dm／friend', () => {
+  assert.ok(GAME.length > 500000, 'game/+page.svelte 太短，讀錯檔？');
+  // ① MobilePortraitBattle：原條文
+  for (const k of ['DmPanel', 'dm-session', 'dm-poller', 'friendsDm', 'fetchDmMessages', 'sendDm', 'createDmSession'])
+    assert.ok(!MPB.includes(k), 'MobilePortraitBattle.svelte 出現 ' + k + '（對戰版面一行都不該動）');
+  // ② 靜態 import 零私聊（正對照：塞一行進去必紅）
+  assertNoStaticDmImport(GAME);
+  const bad = GAME.replace('<script lang="ts">', "<script lang=\"ts\">\n  import DmPanel from '../friends/DmPanel.svelte';");
+  let err = null; try { assertNoStaticDmImport(bad); } catch (e) { if (e instanceof assert.AssertionError) err = e; else throw e; }
+  assert.ok(err && /靜態.*引用了私聊模組/.test(err.message), '掃描器抓不到塞進去的靜態 import：' + (err && err.message));
+  // ③ 對戰版面分支零 Dm／friend
+  const bs = '  {#if isPortraitMobile && game}\n', be = '{/if}<!-- /isPortraitMobile && playing -->';
+  const i = GAME.indexOf(bs), j = GAME.indexOf(be, i);
+  assert.ok(i > 0 && j > i, '找不到對戰版面分支錨點');
+  const region = GAME.slice(i, j + be.length);
+  assert.ok(region.length > 20000, '對戰版面區間只有 ' + region.length + ' 字元 ⇒ 錨點抓錯');
+  for (const re of [/DmPanel/g, /dmState/g, /openDm/g, /friend/gi]) {
+    assert.strictEqual((region.match(re) || []).length, 0, '⚠⚠ 對戰版面分支出現 ' + re.source);
+  }
+  // ④ 動態 import() 確實是唯一入口
+  for (const k of ["import('$lib/friends/dm-session')", "import('../friends/DmPanel.svelte')"])
+    assert.strictEqual(stripComments(GAME).split(k).length - 1, 1, '動態 import 不是恰一處：' + k);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

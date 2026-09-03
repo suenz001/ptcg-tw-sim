@@ -664,20 +664,16 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'db414686d214dfff468dc3b7613368fae6971b21';   // v6.295（v6.296 的上一版）
-// ⭐⭐v6.296 是**玩家端版**：好友名單抽成共用元件（新檔 src/lib/friends/FriendsPanel.svelte ＋ auth-ctx.ts，
-//   ⚠ 新檔不在 BASE 的清單裡 ⇒ 掃不到、**不可以**列進 PREV_ALLOWED），
-//   線上大廳新增「好友名單」分頁（src/routes/game/+page.svelte），好友備註名 UI（friends-api.ts），
-//   /friends 頁改成掛共用元件，加上 version.ts 與首頁 changelog 三檔。
+const PREV_SHA = 'c9bba2280289e324367f1a9a12850ea9900d6ea2';   // v6.296（v6.297 的上一版）
+// ⭐⭐v6.297 是**玩家端版**：錦標賽大廳新增第 4 個分頁「👥 好友」、好友名單的「💬 私聊」改成就地開面板
+//   （私聊面板與狀態機走**動態 import()**，對戰頁主 chunk 不受影響）—— 全部落在 src/routes/game/+page.svelte 一個檔，
+//   加上 version.ts 與首頁 changelog 三檔。
 //   ⚠ 這一節只掃 src/ 與 static/ 兩個目錄、而且是**從 BASE 的檔案清單出發**逐檔比 ——
-//     新增在 oracle-admin/ 與 scripts/ 底下的檔案不在掃描範圍，**不可以**列進來（列了會紅）。
-//   ⚠⚠ 對戰版面分支「一個位元都沒動」這件事改由 test-v6293【E】的區間 sha256 比對證明
-//     （整檔 blob sha 的 pin 在本版已過期，見那支守衛的說明）。
+//     scripts/ 與 oracle-admin/ 底下的改動（新守衛、量測腳本、SITE_VERSION_HINT）不在掃描範圍，**不可以**列進來。
+//   ⚠⚠ 本版**沒有動** src/routes/friends/**（/friends 路由與 DmPanel 逐位元未動，由 test-v6297 G1 的 sha256 直接證明）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/friends/friends-api.ts',
   'src/lib/version.ts',
-  'src/routes/friends/+page.svelte',
   'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',

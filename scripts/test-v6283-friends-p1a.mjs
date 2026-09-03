@@ -320,10 +320,16 @@ await T('C2 MobilePortraitBattle.svelte 零 `friend`；正對照：/friends 路�
   assert.strictEqual((MPB.match(/friend/gi) || []).length, 0);
   assert.ok((PAGE.match(/friend/gi) || []).length > 10);
 });
-await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊入口）：剝註解後 `friendsEntryOn` 恰 4 處（$derived ／ lobbyTab 的 $derived ／ 分頁列 ／ v6.285 設定 modal 好友 section）；分頁列落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之後、`.lobby-unified` 之前；兩個舊入口不得復活', () => {
+await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊入口）：剝註解後 `friendsEntryOn` 恰 8 處（$derived ／ lobbyTab 的 $derived ／ v6.297 tTab 的 $derived ／ friendsPaneOpen 兩個分支 ／ 大廳分頁列 ／ v6.297 錦標賽第 4 顆分頁 ／ v6.285 設定 modal 好友 section）；分頁列落在「線上 Lobby」區塊、`<h1>🌐 線上連線對戰` 之後、`.lobby-unified` 之前；兩個舊入口不得復活', () => {
   // ⚠ 用剝過註解的原始碼計數：註解裡提到變數名不該影響「有幾個真正的使用點」（否則改一句註解就會紅＝安慰劑的反面）
   const G = stripComments(GAME);
-  assert.strictEqual((G.match(/friendsEntryOn/g) || []).length, 4, 'friendsEntryOn 的實際使用點不是 4 處');
+  // ⭐ v6.297：錦標賽第 4 個分頁「👥 好友」上線 ⇒ 使用點從 4 變 8。逐一列管（少一個或多一個都要有人來看）：
+  //   ① const friendsEntryOn = $derived(…)　② lobbyTab 的鎖　③ tTab 的鎖　④⑤ friendsPaneOpen 的兩個分支
+  //   ⑥ 大廳分頁列的 {#if friendsEntryOn && onlineStep !== 'room'}　⑦ 錦標賽第 4 顆分頁的 {#if friendsEntryOn}
+  //   ⑧ 設定 modal 尾端的好友 section
+  assert.strictEqual((G.match(/friendsEntryOn/g) || []).length, 8, 'friendsEntryOn 的實際使用點不是 8 處');
+  assert.strictEqual((G.match(/const tTab = \$derived\(tTabRaw === 'friends' && !friendsEntryOn/g) || []).length, 1, 'v6.297 tTab 的鎖不見了');
+  assert.strictEqual((G.match(/const friendsPaneOpen = \$derived\(/g) || []).length, 1, 'v6.297 friendsPaneOpen 不見了');
   assert.strictEqual((G.match(/\{#if friendsEntryOn && !isPortraitMobile\}/g) || []).length, 0, 'v6.283 桌機那份舊入口復活了（本版改用分頁列）');
   assert.strictEqual((G.match(/\{#if friendsEntryOn && isPortraitMobile\}/g) || []).length, 0, 'v6.284 手機那份舊入口復活了（本版改用分頁列）');
   const sm = GAME.indexOf('<!-- Settings Modal (Audio & BGM) -->'), smEnd = GAME.indexOf('<!-- v4.60 對方提議 modal -->', sm);
@@ -345,7 +351,14 @@ await T('C3 ⭐⭐ 大廳分頁列（v6.296 取代 v6.283／v6.284 的兩個舊�
   const derivedLines = lines.filter((l) => /^  const friendsEntryOn = \$derived\(friendsEntryVisible\(/.test(l));
   const importLines = lines.filter((l) => /^  import \{ friendsEntryVisible(, [^}]*)? \} from '\$lib\/friends\/friends-api';/.test(l));
   assert.strictEqual(derivedLines.length, 1, '$derived 行數不對'); assert.strictEqual(importLines.length, 1, 'import 行數不對');
-  const markupBefore = GAME.slice(scriptEnd, lobby);
+  // ⭐ v6.297：錦標賽大廳（含第 4 個分頁）也落在 </script>～線上 Lobby 之間 ⇒ 把它整段扣掉再掃，
+  //   守護意圖不變（主選單／本機那兩份 .auth-user 不可以長出好友入口），並補一條正對照：
+  //   錦標賽分頁區間**必須**有 friend 字樣，否則上面那條會退化成恆真式。
+  const tTabsAt = GAME.indexOf('<div class="tourn-tabs" role="tablist">');
+  const tEndAt = GAME.indexOf('{#if tError}<p class="warn">{tError}</p>{/if}', tTabsAt);
+  assert.ok(tTabsAt > scriptEnd && tEndAt > tTabsAt && tEndAt < lobby, '錦標賽分頁區間的錨點不對：' + JSON.stringify({ scriptEnd, tTabsAt, tEndAt, lobby }));
+  assert.ok((GAME.slice(tTabsAt, tEndAt).match(/friend/gi) || []).length >= 3, '正對照：錦標賽分頁區間應該有好友字樣（第 4 顆分頁＋分頁內容）');
+  const markupBefore = GAME.slice(scriptEnd, tTabsAt) + GAME.slice(tEndAt, lobby);
   assert.ok(markupBefore.includes('class="auth-user"'), '主選單／本機那兩份 .auth-user 不在 </script>～lobby 之間？錨點抓錯');
   assert.strictEqual((markupBefore.match(/friend/gi) || []).length, 0, 'lobby 之前的 markup 多出不明的 friend 字樣（主選單／本機那兩份 .auth-user 不該有入口）');
   assert.strictEqual((GAME.match(/class="auth-user"/g) || []).length, 3, '.auth-user 份數變了');

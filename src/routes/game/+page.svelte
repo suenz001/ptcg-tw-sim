@@ -21,8 +21,12 @@
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
   import { validateDeck } from '$lib/decks/validation';
-  import { friendsEntryVisible, friendsBattleEntryVisible, requestFriendFromBattle, friendsRequestReplyText, type FriendsBattleTarget } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）；v6.284 賽後／設定「將對手加為好友」
+  import { friendsEntryVisible, friendsBattleEntryVisible, requestFriendFromBattle, friendsRequestReplyText, type FriendsBattleTarget, type FriendRow } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）；v6.284 賽後／設定「將對手加為好友」
   import FriendsPanel from '$lib/friends/FriendsPanel.svelte';   // ⭐ v6.296 大廳第二個分頁「👥 好友名單」；與 /friends 頁**共用同一份**（不要兩份漂移）
+  import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';   // ⭐ v6.297 私聊內嵌：取身分的中央出口（匿名回 null ⇒ 一發請求都不發）
+  // ⚠⚠ v6.297 私聊只引用**型別**（import type 編譯後完全消失）；實作（dm-session / dm-poller / DmPanel）一律走動態 import()，
+  //   對戰頁的主 chunk 一個位元組都不會多（守衛 test-v6297【D】用**靜態 import 相依圖**證明）。
+  import type { DmSession, DmSessionState } from '$lib/friends/dm-session';
   import {
     createGame, applyAction,
     getAvailableAttacks, getEffectiveAttacks, hasPendingActions,
@@ -401,7 +405,11 @@
   let tHofOfficialOpen = $state(false);      // v6.005 官方歷屆冠軍：預設收合（同社群，節省版面；點擊展開）
   let tHofCommunityOpen = $state(false);     // v5.652 社群自辦歷屆冠軍：預設收摺（社群賽數量多，點選才展開）
   // v5.691 錦標賽大廳三分頁：賽事 / 排行榜 / 個人資料
-  let tTab = $state<'events' | 'leaderboard' | 'profile'>('events');
+  // ⭐⭐ v6.297 錦標賽第 4 個分頁「👥 好友」。分頁狀態拆成 raw ＋ $derived 鎖（作法與 v6.296 大廳的 lobbyTab 相同）：
+  //   好友入口沒開（伺服器不支援／開關關著）時，就算 tTabRaw 被別的路徑設成 'friends'，
+  //   tTab 也一定被鎖回 'events' ⇒ 畫面永遠不會停在一個畫不出來的分頁。
+  //   ⚠ tTab 本體宣告在 friendsEntryOn 之後（見下方「v6.297 錦標賽分頁」那一段），這裡只放 raw。
+  let tTabRaw = $state<'events' | 'leaderboard' | 'profile' | 'friends'>('events');
   let tLeaderboard = $state<any | null>(null);   // 排行榜聚合（後端 /leaderboard）
   let tLbLoading = $state(false);
   // ⭐v6.199 排行榜顯示筆數（5 / 10 / 20，見 $lib/ui/leaderboard-top）。
@@ -1206,6 +1214,67 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let lobbyTabRaw = $state<'online' | 'friends'>('online');
   const lobbyTab = $derived(friendsEntryOn ? lobbyTabRaw : 'online');
   function lobbySwitchTab(tab: 'online' | 'friends') { lobbyTabRaw = tab; }
+  // ⭐⭐ v6.297 錦標賽分頁：tTab 的「未開放就鎖回賽事」鎖。
+  //   ⚠ 宣告必須在 friendsEntryOn 之後（同一個元件實例的 $derived 是懶求值，但寫在前面容易讓人誤以為可以直接讀）。
+  const tTab = $derived(tTabRaw === 'friends' && !friendsEntryOn ? 'events' : tTabRaw);
+
+  // ══ ⭐⭐⭐ v6.297 私聊內嵌（大廳「👥 好友名單」分頁 ＋ 錦標賽「👥 好友」分頁）═══════════
+  //
+  // ⚠⚠ 既有的不變量「對戰版面不得夾帶私聊」**沒有放寬**，只是換成更精準的說法：
+  //   ・私聊面板與狀態機一律走**動態 import()** ⇒ 只有玩家真的按下「💬 私聊」才下載，
+  //     對戰頁的主 chunk 一個位元組都沒有多。
+  //   ・對戰版面分支區間仍然零 friend／零 Dm（沿用 test-v6284 C1，另見 test-v6297【D】的相依圖斷言）。
+  //
+  // ⚠⚠⚠ 輪詢生命週期（站長紅線：關掉＝零請求）—— 本檔只有 closeDm() 一個出口：
+  //   ① 玩家按 ✕　② 對這位好友做了解除／封鎖／拒絕　③ **切走分頁**（賽事／排行榜／個人資料／線上大廳）
+  //   ④ 進了等待室或開打（好友面板不再顯示）　⑤ 離開整個頁面（onDestroy）
+  //   ③④ 統一由下面的 friendsPaneOpen 這個 $derived 收斂，不靠「每個切分頁的地方都記得關」。
+  let dmState = $state<DmSessionState | null>(null);
+  /** 私聊在這台伺服器不可用（尚未開放／舊伺服器）的說明；非空 ⇒ 藏掉所有 💬。 */
+  let dmNegMsg = $state('');
+  /** 動態載入的私聊面板元件（沒按過「💬 私聊」就永遠是 null，也永遠不會被下載）。 */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let DmPanelComp = $state<any>(null);
+  let _dm: DmSession | null = null;
+  let _dmLoading = false;
+
+  /** 開私聊：第一次才動態載入模組；之後只是換一個 fid（dm-session 內部會 close 再 open）。 */
+  async function openDm(r: FriendRow): Promise<void> {
+    const nick = r.alias || r.nick;
+    if (_dm) { _dm.open(r.fid, nick); return; }
+    if (_dmLoading) return;
+    _dmLoading = true;
+    try {
+      const [sess, poll, panel] = await Promise.all([
+        import('$lib/friends/dm-session'),
+        import('$lib/friends/dm-poller'),
+        import('../friends/DmPanel.svelte'),
+      ]);
+      DmPanelComp = panel.default;
+      _dm = sess.createDmSession({
+        getCtx: friendsCtxFromAuth,
+        onChange: (s) => { dmState = s; if (s && (s.status === 'dm-disabled' || s.status === 'unsupported')) dmNegMsg = s.blockMsg; },
+        ...poll.browserPollerDeps(),
+      });
+      _dm.open(r.fid, nick);
+    } finally { _dmLoading = false; }
+  }
+  /** 關私聊：poller.stop() ⇒ 之後零請求（面板也跟著不渲染，因為 dmState 會被清成 null）。 */
+  function closeDm(): void { _dm?.close(); }
+  /** 面板正開著這一位時，對方被解除／封鎖／拒絕 ⇒ 關掉（對話已刪或已無權讀）。 */
+  function dmAfterAct(fid: string): void { if (dmState && dmState.fid === fid) closeDm(); }
+  /**
+   * 好友面板此刻是不是真的在畫面上（逐條對齊兩邊的模板條件）。
+   * ⚠⚠ 這是「切走分頁 ⇒ 輪詢必須停」的**唯一**判準；新增任何進得去好友面板的路徑都要同步這一行。
+   */
+  const friendsPaneOpen = $derived(
+    isTournament
+      ? (tStep !== 'playing' && !isAnonymous && friendsEntryOn && tTab === 'friends')
+      : (!game && mode === 'online' && onlineStep !== 'room' && friendsEntryOn && lobbyTab === 'friends'),
+  );
+  $effect(() => { if (!friendsPaneOpen) closeDm(); });
+  // ⚠⚠ 離開整個頁面（導到別頁／關分頁）⇒ 輪詢也必須停。
+  onDestroy(() => { closeDm(); });
   // ── v6.284 賽後「將對手加為好友」（賽後結算 modal）；v6.285 設定 modal 尾端的「👥 好友」section 接同一組狀態 ──────
   //   ⚠ 三個判定全是純函式／$derived（零請求）；按鈕按下才發唯一的一發 POST /api/friends/request。
   //   ⚠ 匿名／確定不支援（負向快取）／觀戰／本機對戰／錦標賽測試房 ⇒ 整顆不渲染（站長偏好：不做半死按鈕）。
@@ -1917,6 +1986,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
       _visSeq++;   // v6.159 只是計數：背景頁籤的 rAF 根本不 fire，跨越可見性變動的重繪樣本必須丟棄
       _tTabHidden = (document.visibilityState !== 'visible');   // ⭐v6.161 大廳降頻讀這個旗標
       if (document.visibilityState !== 'visible') return;
+      _dm?.poke();   // ⭐ v6.297 回前景 ⇒ 私聊立刻補一發（背景時排程是 15 秒，不補會等很久）。沒開面板時是 no-op。
       // ⭐⭐⭐v6.161 回前景 ⇒ 大廳輪詢**立刻**恢復正常頻率並馬上再抓一次。
       //   ⚠⚠ 必須放在下面那行 `tStep !== 'playing'` 早退**之前** —— 大廳的人正好就是
       //   tStep !== 'playing'，寫在早退之後等於完全沒接上（本專案反覆踩過的「早退擺錯位置」）。
@@ -5404,8 +5474,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     catch { tProfileStale = true; }
     finally { tProfileLoading = false; }
   }
-  function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile') {
-    tTab = tab;
+  function tSwitchTab(tab: 'events' | 'leaderboard' | 'profile' | 'friends') {
+    tTabRaw = tab;
     // v6.177 保留舊資料後，失敗不再把它清成 null ⇒ 重試條件要改看 stale，否則切回分頁不會重抓。
     if (tab === 'leaderboard' && (!tLeaderboard || tLeaderboardStale)) tLeaderboardLoad();
     if (tab === 'profile') {
@@ -9762,6 +9832,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
         <button class="tourn-tab" class:active={tTab === 'events'} role="tab" aria-selected={tTab === 'events'} onclick={() => tSwitchTab('events')}>🏆 賽事</button>
         <button class="tourn-tab" class:active={tTab === 'leaderboard'} role="tab" aria-selected={tTab === 'leaderboard'} onclick={() => tSwitchTab('leaderboard')}>📊 排行榜</button>
         <button class="tourn-tab" class:active={tTab === 'profile'} role="tab" aria-selected={tTab === 'profile'} onclick={() => tSwitchTab('profile')}>🪪 個人資料</button>
+        <!-- ⭐⭐⭐ v6.297 第 4 顆：好友名單。
+             ⚠ 匿名玩家根本看不到這整列（整列在 {#if isAnonymous} 的 {:else} 裡，錦標賽本來就強制 email 登入），
+               所以這裡只需要再擋一道 friendsEntryOn（伺服器不支援／開關關著就不出現）—— 與大廳分頁列同一條件。
+             ⚠⚠ 標籤寫「👥 好友」而不是「👥 好友名單」：375px 下四顆各 82.86px，寫全名會把整列推高；
+               這個寫法**一行 CSS 都不用改**（.tourn-tabs／.tourn-tab 逐字未動），量測見 scripts/measure-v6297-tourn-tabs.mjs。 -->
+        {#if friendsEntryOn}
+          <button class="tourn-tab" class:active={tTab === 'friends'} role="tab" aria-selected={tTab === 'friends'} onclick={() => tSwitchTab('friends')}>👥 好友</button>
+        {/if}
       </div>
       {#if tTab === 'events'}
       <div class="tourn-chat">
@@ -10313,6 +10391,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
             </div>
           {/if}
         </div>
+      {:else if tTab === 'friends'}
+        <!-- ⭐⭐⭐ v6.297 錦標賽第 4 個分頁的內容：好友名單。
+             與大廳分頁、`/friends` 頁**共用同一份** $lib/friends/FriendsPanel.svelte。
+             ⚠ 只有切到這個分頁時才掛載 ⇒ 切之前對好友端點一發請求都沒有；切走就卸載。
+             ⚠ 私聊面板走 foot snippet 渲染在 .fr-panel **裡面** ⇒ 才吃得到 --fr-* 色票（繼承）。 -->
+        <div class="tourn-tab-panel">
+          <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot} />
+        </div>
       {/if}
       {#if tError}<p class="warn">{tError}</p>{/if}
     {/if}
@@ -10689,11 +10775,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
            ⚠ 只有切到這個分頁時才掛載 ⇒ 切之前對好友端點一發請求都沒有。
            ⚠ 這一段的註解刻意不寫「斜線 api 斜線 friends 斜線 星號」那個字面 —— 它會被
              守衛的區塊註解剝除器（test-v6146 等）當成 /＊ 的開頭，把後面幾百行一起吃掉。
-           ⚠ 私聊在這裡是**開新分頁到 /friends**（本檔完全不碰私聊面板，保住既有不變量）。
+           ⭐⭐⭐ v6.297 私聊改成**就地開面板**（不再開新分頁）：面板與狀態機走動態 import()，
+             切走分頁／進等待室／離開頁面一律關掉⇒零請求（見上方 friendsPaneOpen）。
            ⚠ v6.283／v6.284 的兩個舊入口（右上那顆與手機直式尾端那個連結）本版已由分頁列取代。 -->
       {#if lobbyTab === 'friends'}
         <div class="lobby-tab-panel">
-          <FriendsPanel embedded ondm={() => { const w = window.open(base + '/friends', '_blank', 'noopener'); if (!w) location.href = base + '/friends'; }} />
+          <FriendsPanel embedded ondm={openDm} dmMsg={dmNegMsg} dmActiveFid={dmState?.fid ?? ''} onafteract={dmAfterAct} foot={dmFoot} />
         </div>
       {/if}
 
@@ -14384,6 +14471,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
   </div>
 {/if}
 {/if}
+
+<!-- ⭐⭐⭐ v6.297 私聊面板：用 snippet 傳進 FriendsPanel 的 foot 位置，渲染在 .fr-panel **裡面**
+     ⇒ CSS 自訂屬性（--fr-*）靠 DOM 繼承吃得到，與 `/friends` 頁的做法逐條相同。
+     ⚠ DmPanelComp 是**動態載入**的元件：沒按過「💬 私聊」就是 null，這一段一定不渲染。
+     ⚠ mobile 走 isPortraitMobile（JS 量視窗，Math.min(innerWidth, innerHeight) <= 600）—— 禁 @media 當手機開關。 -->
+{#snippet dmFoot()}
+  {#if dmState && DmPanelComp}
+    <DmPanelComp sess={dmState} mobile={isPortraitMobile} onclose={closeDm} onsend={(t: string) => { void _dm?.send(t); }} onmore={() => { void _dm?.loadMore(); }} onretry={() => _dm?.retry()} />
+  {/if}
+{/snippet}
+
 <style>
   /* 錦標賽大廳/提示（v0.4 伺服器權威）*/
   .lobby.tourn-lobby { max-width: 640px; }  /* v5.634 提高 specificity 蓋過 .lobby 的 700；統一大廳寬度並置中 */
@@ -14396,6 +14494,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-who { color: #9fdca0; margin: 4px auto 10px; }
   /* v5.691 三分頁切換 */
   .tourn-tabs { display: flex; gap: 6px; max-width: 100%; margin: 6px auto 12px; }
+  /* ⭐ v6.297 錦標賽第 4 個分頁（好友名單）的容器：只做「靠左對齊 ＋ 不超出」，
+     **不碰任何既有選擇器**（.tourn-tabs／.tourn-tab 逐字未動，守衛 test-v6297 釘住）。 */
+  .tourn-tab-panel { text-align: left; max-width: 100%; }
   .tourn-tab { flex: 1; padding: 9px 6px; border: 1px solid #3a5a3a; border-radius: 9px; background: #102010; color: #9fdca0; font-size: .9rem; font-weight: 600; cursor: pointer; transition: .15s; }
   .tourn-tab:hover { background: #18301a; }
   .tourn-tab.active { background: linear-gradient(180deg,#2a5a3a,#1d4029); color: #eaffea; border-color: #6ab87a; box-shadow: 0 0 0 1px #6ab87a inset; }
