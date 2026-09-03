@@ -1,5 +1,65 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.294 — 🔧 新增「VM 健康檢查」運維工具（`check-health.bat` ＋ `health-check.sh`）
+
+BASE `f087b0ba64065c51deacad650cf8563a1c1b25ce`（v6.293，遠端 main）。
+純運維工具，**玩家看不到 ⇒ 首頁 changelog 不寫**（changelog 規範②）。
+玩家端動到的檔案只有 `src/lib/version.ts`（`test-v6272` ⑩ 的 `PREV_ALLOWED` 逐檔 blob 在守）。
+
+### 【0】起因
+站長部署完 v6.291／v6.292 的冒名閘之後問「要去哪個 bat 看 pm2 log」——
+既有 11 支 bat **沒有任何一支在看 log**。站長用遠端桌面、複製不出終端輸出，
+所以比照 `dump-perf.bat`：ssh 進去跑腳本 → 輸出存成檔案 → **自動用記事本打開**（可複製）。
+
+### 【1】⚠ 交辦內容的四處更正（查證後才動手）
+| 交辦說 | 實際 | 怎麼改 |
+|---|---|---|
+| `[1]` 讀 `/opt/ptcg/api/server_admin_patch.js` | **VM 上沒有這個檔**。`oracle_admin_update.sh` Step 3 是用 python 把 patch 的內容**注入 `/opt/ptcg/api/server.js`**；`update-tournament.bat` 只把 `server_admin_patch.js` scp 到 `/tmp/` 當素材 | 改讀 `/opt/ptcg/api/server.js` 的注入錨點 `=== ORACLE ADMIN ENDPOINTS === v1.x`（守衛 C5 鎖住） |
+| `[2]` 用 `grep -o "SITE_VERSION_HINT[^,;]*"` | 這個樣式在 `admin.html` 抓到 **3 處**，`head -1` 拿到的是**讀取**那一行（`SITE_VERSION_HINT \|\| ''`），版本永遠印不出來 | 改成 `grep -ao "SITE_VERSION_HINT = '[0-9][0-9.]*'"`；守衛 C3 **拿 repo 的 admin.html 實跑**確認剛好抓到 1 處、且就是版本那一行（C4 用寬鬆樣式當正對照） |
+| `[6][7]` 用 `mongosh` | 這台 VM 不保證裝了 mongosh；沒裝時腳本只會安靜印一行 `(mongosh not installed)` ＝ **看起來很正常的空結果**（守衛安慰劑） | 改用 `node` ＋ `/opt/ptcg/api/node_modules/mongodb`，URI 探測順序**逐字沿用** `oracle-admin/tournament/dump-client-monitor.cjs`（那一套在這台 VM 上已由 `dump-monitor.bat` 驗證可用）。只用 `estimatedDocumentCount()`（讀 metadata，O(1)）＋ `ts` 索引取最舊 1 筆，不對正式資料做全表掃描 |
+| `test-v6272` ⑩ 的 `PREV_ALLOWED` 要把兩個新檔列進去 | ⑩ 只掃 `src` 與 `static` 兩個目錄，而且是**從 BASE 的檔案清單出發**逐檔比 —— `oracle-admin/`、`scripts/` 底下的新檔根本不在掃描範圍，列進去會讓 `deepStrictEqual` 直接紅 | `PREV_ALLOWED` 只留 `src/lib/version.ts` |
+
+查證**對的**三條：`dump-perf.bat` 的金鑰 fallback／`cd /d "%~dp0"`／輸出到 `..\tournament-dumps\`（目錄存在，
+`dump-monitor.bat` 也寫這裡）；`admin.html` 的線上路徑 `/opt/ptcg/web/admin/index.html`（`update-admin-only.bat:27`）；
+pm2 app 名 `ptcg-api`（`oracle_admin_update.sh:171`）。
+
+### 【2】⭐ `verified-gate blocked` 逐字比對
+`server_admin_patch.js` 的 `tournRequireVerified()` 實際寫的是：
+`console.warn('[tournament] verified-gate blocked ep=' + ep + ' uid8=' + (_uid8 || '(none)'));`
+⇒ 交辦給的 grep 字串 `verified-gate blocked` **逐字相符**，不必改。
+但這正是最容易靜默失效的一條（字串一漂移，這支工具就永遠回報「攔截 0 次」），
+所以守衛 C1 從 `server_admin_patch.js` **抽出 console.warn 的字面量**，斷言 sh 裡兩處 grep 的字串
+去重後只剩一種、而且是那個字面量的子字串。
+
+### 【3】⚠⚠ 行尾：光把 blob 寫成 LF 是不夠的
+repo 內唯一被追蹤的 `.sh`（`scripts/iron-rules-audit.sh`）在**站長的工作樹上是 CRLF** ——
+他的 Windows 是 `core.autocrlf=true`。`check-health.bat` 會把 `health-check.sh` 原封不動 scp 上 VM，
+CRLF 的 shell script 在 Ubuntu 上會死在 `$'\r': command not found`，
+而站長複製不出終端輸出 ⇒ 最難查的那一種。兩道保險：
+1. 新增 `.gitattributes`（本 repo 之前沒有）只釘這兩個檔：`health-check.sh text eol=lf`、
+   `check-health.bat text eol=crlf`。**刻意不寫 `* text=auto`**，避免整包重新正規化。
+2. `check-health.bat` 在 ssh 端先 `sed -i 's/\r$//'` 再 `bash`。
+
+### 【4】唯讀紀律
+`health-check.sh` 全程唯讀：不 `sudo`、不寫檔、不重啟服務、不對 DB 做任何寫入。
+守衛【B】用兩支純函式掃：
+- `writeScan()`：`rm`／`mv`／`cp`／`mkdir`／`touch`／`tee`／`chmod`／`chown`／`sudo`／`sed -i`／
+  `pm2 restart|stop|delete|reload|kill|flush|…`／mongo 的 `insertOne|updateOne|deleteMany|createIndex|…`。
+- `redirectScan()`：**不能用「有沒有 `>`」一刀切**（內嵌的 node 有 `>=`、shell 有 `2>&1`）。
+  改成白名單 —— 每一個 `>` 都必須是 `=>`／`>=`／`>&1`・`>&2`／`>/dev/null` 四者之一，
+  於是 `> file`、`>> file`、`>& file` 全部會被抓到。
+兩支都附**正對照**（把 `rm -rf`／`pm2 restart`／`updateOne`／`> /tmp/x`／`>> /tmp/x` 塞進去必須翻紅）
+與**負對照**（`2>&1`／`>=`／`=>` 不可誤報）。
+
+### 【5】不會靜默回報「0 次攔截」
+`pm2 logs` 只呼叫一次（`--no-color` 失敗時退回無旗標版），並把**取到幾行**印在攔截次數上面 ——
+log 根本沒抓到時，`grep -c` 一樣會印 `0`，但上一行的「取到 1 行」會讓站長一眼看穿。守衛 C7 鎖這件事。
+
+### 【6】站長怎麼用
+`E:\ptcg-tw-sim\oracle-admin\check-health.bat` 點兩下 ⇒ 報告寫到
+`E:\ptcg-tw-sim\tournament-dumps\health_latest.txt` 並自動用記事本打開（輸出帶 UTF-8 BOM，中文不會變亂碼）。
+⚠ 新檔要先跑一次 `update-tournament.bat`（唯一會 `git reset --hard origin/main` 的那支）才會出現在他的工作樹。
+
 ## v6.293 — 🎨 /friends 改用錦標賽的墨綠配色 ＋ 頂端假分頁列
 
 BASE `625119f6256a4b1111aa2f207e9e7ff6bf7ab227`（v6.292，遠端 main）。動到的玩家端檔案只有

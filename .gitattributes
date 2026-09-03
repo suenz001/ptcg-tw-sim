@@ -1,0 +1,11 @@
+# v6.294：只釘住「行尾會決定成敗」的那兩個運維檔，其餘一律不管
+#（本 repo 在此之前沒有 .gitattributes，刻意不加 `* text=auto`，避免整包重新正規化）。
+#
+# ⚠⚠ 為什麼一定要釘：站長的 Windows 是 core.autocrlf=true —— 實測 repo 內唯一被追蹤的
+#   .sh（scripts/iron-rules-audit.sh）在他的工作樹就是 CRLF。check-health.bat 會把
+#   health-check.sh 原封不動 scp 上 VM，CRLF 的 shell script 在 Ubuntu 上會死在
+#   `$'\r': command not found` —— 而站長是用遠端桌面、複製不出終端輸出，最難查的那一種。
+#   （check-health.bat 另外還在 ssh 端補了一道 `sed -i 's/\r$//'` 當保險。）
+# ⚠ .bat 反過來：cmd.exe 必須吃 CRLF，否則會把行拆錯（IRON_RULES Rule 35）。
+oracle-admin/health-check.sh   text eol=lf
+oracle-admin/check-health.bat  text eol=crlf
