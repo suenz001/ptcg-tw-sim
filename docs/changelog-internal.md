@@ -102,7 +102,7 @@ import('../friends/DmPanel.svelte')])`，元件放進 `$state` 再由 `dmFoot` s
 ### 【7】首頁 changelog 三步搬運
 新增 v6.297（`open`，前一則 v6.296 的 `open` 拿掉）、第 13 則 **v6.274** 的內文搬進
 `changelog-bodies.html` 並補 `data-ver`、被擠出 50 則的 **v6.216** 搬進 `changelog-archive.html`。
-首頁 **32,112 → 32,185 bytes**（上限 40KB）。
+首頁 **32,112 → 32,179 bytes**（上限 40KB）。
 
 ### 【8】下一版要注意的
 ・好友功能到這一版為止，站長交辦的 UI 都做完了；**總開關仍預設關**
