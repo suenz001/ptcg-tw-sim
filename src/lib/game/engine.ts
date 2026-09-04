@@ -2438,7 +2438,14 @@ export function createGame(
     mulliganPostBenchOpen: [false, false],
   };
 
-  let st = addLog(state, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
+  // ⭐⭐⭐v6.309 根因 B：互動式開局但**雙方在建局當下就定案**（沒有人需要做 KEEP／MULLIGAN 的選擇，
+  //   例如一方起手全能量被自動重抽到有基礎）⇒ 沒有任何 OPENING_* handler 會來 finalizeOpening
+  //   ⇒ openingFinalized 恆 false、pendingMulliganDraw 恆 [0,0]，但下面的 log 照樣寫「可選擇多抽 N 張」。
+  //   本機／AI／錦標賽伺服器都沒有收端 merge 來補跑 ensureOpeningFinalized ⇒ 補抽靜默消失（公平性）。
+  //   修法：建局時就結算（與 OPENING_* handler 雙定案時的那一行完全相同；tryAdvanceToPlaying 另有 level-triggered 兜底）。
+  const stateSettled: GameState = (_interactiveOpening && _openKind[0] === 'done' && _openKind[1] === 'done')
+    ? finalizeOpening(state) : state;
+  let st = addLog(stateSettled, `遊戲開始！${spec1.name} vs ${spec2.name}`, null);
   // v3.824：簡化 log — 直接呈現「贏家 + 結果」，不再揭示「偏好」中間步驟。
   //   - 直接指定（AI / 本機）：「🎯 XX 先手」（沒擲幣，本來就簡短）
   //   - 擲幣：無論贏家偏好是 random 還是 first/second，最終 firstPlayerIdx 都已決定，
@@ -2513,8 +2520,13 @@ function dealOpeningHand(
 //   滿足才能進 playing phase。在多個 handler 結尾呼叫（FINISH_SETUP / MULLIGAN_DRAW_DECISION /
 //   CONFIRM_MULLIGAN_REVEAL）以避免重複條件 check 邏輯。
 // v4.494：export 給 +page.svelte 在線上 setup merge 後重新評估（修兩端同時 finish 卡死 bug）
-export function tryAdvanceToPlaying(state: GameState): GameState {
-  if (state.phase !== 'setup') return state;
+export function tryAdvanceToPlaying(input: GameState): GameState {
+  if (input.phase !== 'setup') return input;
+  // ⭐⭐⭐v6.309 level-triggered 結算：互動式開局若雙方都已定案卻還沒結算（建局當下就雙定案、
+  //   或版本 skew 讓 setupDone 先湊齊），在這裡冪等地補跑一次 —— 不論是誰、從哪條路徑呼叫進來。
+  //   ⚠ 沒推進時回傳的是**結算後**的盤面（不是原物件）：呼叫端一律 `next = tryAdvanceToPlaying(next)`，
+  //     結算結果（補抽 NET／揭示確認）才留得住；判「有沒有推進」一律看 phase（v6.148 gate⑤b 的教訓）。
+  const state = ensureOpeningFinalized(input);
   // v5.636：原本 setup 未完成時 console.warn(debug Bug 14)。但伺服器端引擎是「所有對局共用同一份模組」，
   //   去重旗標是模組層級全域 → 多局交錯時 reason 一直變、去重失效 → 大型錦標賽高流量下每個 setup 動作
   //   都狂寫 pm2 log，灌爆 error.log/吃 CPU/塞事件迴圈 → API 卡頓+crash-loop。改成 no-op(gate 行為不變,只是不印)。
@@ -2525,6 +2537,8 @@ export function tryAdvanceToPlaying(state: GameState): GameState {
   //   放行等於「該補抽的靜默消失、直接開打」＝公平性 bug（比卡死更難被發現）。
   //   ⚠判準必須與 isOpeningInProgress 同一個（effectiveOpeningDone），否則與逃生規則打架。
   if (isOpeningInProgress(state)) return auditFail('互動式開局尚未定案');
+  // ⭐v6.309 硬 gate：互動式且未結算 → 絕不推進（上面已 level-triggered 結算，走到這裡＝定案判定與結算判定打架，寧可卡住也不吃補抽）。
+  if (state.openingFlow === 'interactive' && !state.openingFinalized) return auditFail('互動式開局尚未結算');
   if (!state.setupDone[0] || !state.setupDone[1]) return auditFail(`setup 未完成: P1=${state.setupDone[0]}, P2=${state.setupDone[1]}`);
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return auditFail(`pendingMulliganDraw 未處理: [${state.pendingMulliganDraw[0]}, ${state.pendingMulliganDraw[1]}]`);
   if (!state.mulliganRevealConfirmed[0] || !state.mulliganRevealConfirmed[1]) return auditFail(`mulliganRevealConfirmed 未完成: [${state.mulliganRevealConfirmed[0]}, ${state.mulliganRevealConfirmed[1]}]`);

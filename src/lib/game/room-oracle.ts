@@ -30,7 +30,7 @@ import { auth } from '$lib/firebase';
 import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 import { createGame } from './engine';
-import { shouldSkipStalePush } from './sync-guards';
+import { shouldSkipStalePush, mergeForSetupPush } from './sync-guards';
 import { adoptOrKeep } from '$lib/ui/stale-keep';
 
 // ── re-export types & const from room.ts ────────────────────────────────────
@@ -719,7 +719,11 @@ export async function startGame(roomCode: string, gameState: GameState): Promise
   }
 }
 
-export async function pushGameState(roomCode: string, gameState: GameState): Promise<void> {
+export async function pushGameState(
+  roomCode: string,
+  gameState: GameState,
+  opts?: { mySeat?: 0 | 1 | null },
+): Promise<void> {
   await oracleTx(roomCode.toUpperCase(), (data) => {
     // v5.346：回退防護 — 防止「stale 本地 push 覆蓋房間更新的狀態」。
     //   根因：optimistic UI 讓玩家在前一個 push（如寶芬/搜尋的 pending 狀態）尚未 commit 前就點了
@@ -731,10 +735,17 @@ export async function pushGameState(roomCode: string, gameState: GameState): Pro
     if (shouldSkipStalePush(gameState, cur)) {
       return data; // 我方較舊 → 略過寫入，不 regress 房間（邏輯抽至 sync-guards.shouldSkipStalePush）
     }
+    // ⭐⭐⭐v6.309 setup 期間先與房間現況做「每座位同源、單調」合併再寫（sync-guards.mergeForSetupPush）：
+    //   我這一半恆用我的、對手那一半取房間與我之中較前進的 ⇒ 我的舊 push 再也蓋不掉對手較新的一半
+    //   （玩家回報：補抽到的牌被洗回牌庫）。零額外請求：用的就是這一輪 oracleTx 本來就讀到的 cur；
+    //   409 重試的每一輪都對新 cur 重算（純函式）。非 setup／不同局／不知座位 ⇒ 原樣（與 v6.308 逐字相同）。
+    //   ⚠ `typeof` 防衛：test-v6265/v6270/v6279 的 CJS stub 只給 sync-guards 一個 shouldSkipStalePush ——
+    //     識別字缺席時走原樣（＝那些守衛驗的 BASE 行為），同 v6.270 deltaPutBase 的寫法。
+    const toWrite = (typeof mergeForSetupPush === 'function') ? mergeForSetupPush(gameState, cur, opts?.mySeat) : gameState;
     return {
       ...data,
-      gameState: JSON.parse(JSON.stringify(gameState)),
-      status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+      gameState: JSON.parse(JSON.stringify(toWrite)),
+      status: toWrite.phase === 'game-over' ? 'ended' : 'playing',
     };
   });
 }

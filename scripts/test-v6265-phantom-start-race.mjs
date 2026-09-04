@@ -668,7 +668,8 @@ await T('F2 ⭐⭐ 兩份 reason 清單互斥（休閒的 4 個一律 casual- �
   ok(m, '抓不到 CASUAL_DIAG_REASONS');
   const list = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
   // ⚠ v6.270 合法新增 'casual-delta-fuse'（PUT 上行增量的熔斷指紋；仍是 casual- 前綴）。
-  assert.deepStrictEqual(list, ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt', 'casual-delta-fuse']);
+  // ⚠ v6.309 合法新增 'casual-setup-adopt-loss'（setup→playing 採納讓我方座位倒退＝補抽被洗回；仍是 casual- 前綴）。
+  assert.deepStrictEqual(list, ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt', 'casual-delta-fuse', 'casual-setup-adopt-loss']);
   for (const r of list) ok(r.startsWith('casual-'), r + ' 沒有 casual- 前綴 ⇒ 伺服器會把它算進錦標賽批');
   for (const t of ['slow-rtt', 'stale-version', 'invisible-hand', 'manual-sync', 'perf-sample', 'stale-board-drop'])
     ok(!list.includes(t), '錦標賽指紋 ' + t + ' 跑進休閒清單');

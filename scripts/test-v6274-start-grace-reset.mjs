@@ -351,11 +351,14 @@ function seg(src, a, b, what) {
 }
 T('E1 resolveRoomUpdate 的收斂邏輯零接觸', () => {
   const s = seg(SG, 'export function resolveRoomUpdate(', '\nexport function ', 'resolveRoomUpdate');
-  assert.strictEqual(sha(s), '01e66ee6c49ef9c4', 'resolveRoomUpdate 被改動了（本版明訂零接觸）：' + sha(s));
+  // ⭐v6.309：resolveRoomUpdate **本體**逐字未變；這一段的尾巴是緊接其後的 mergeSetupMonotonic 說明（v6.309 改寫成
+  //   setupSeatRank 的每座位同源合併），所以錨點前移到 v6.309 的值（新合併規則由 test-v6309-setup-merge-room-echo 全面守備）。
+  assert.strictEqual(sha(s), 'f1163bad2b7def7c', 'resolveRoomUpdate 被改動了（v6.309 之後明訂零接觸）：' + sha(s));
 });
 T('E2 shouldSkipStalePush 零接觸', () => {
   const s = seg(SG, 'export function shouldSkipStalePush(', '\nexport function ', 'shouldSkipStalePush');
-  assert.strictEqual(sha(s), '74a7d17953add946', 'shouldSkipStalePush 被改動了（本版明訂零接觸）：' + sha(s));
+  // ⭐v6.309：合法新增一條「同局 playing→setup 倒退 skip」（鏡射收端 rule 6；守衛 test-v6309 [F2] ＋ 突變⑦）⇒ 錨點前移。
+  assert.strictEqual(sha(s), '9df14aff91feb646', 'shouldSkipStalePush 被改動了（v6.309 之後明訂零接觸）：' + sha(s));
 });
 T('E3 shouldAttemptStartGame 本體零接觸（只在它後面新增述詞）', () => {
   const s = seg(SG, 'export function shouldAttemptStartGame(', '\n}\n', 'shouldAttemptStartGame');

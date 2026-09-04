@@ -453,13 +453,15 @@ function fnBody(src, sig, endSig) {
 }
 T('E1 resolveRoomUpdate 一個字都沒有動', () => {
   const body = fnBody(SG, 'export function resolveRoomUpdate(', '\nexport function mergeSetupMonotonic(');
-  assert.strictEqual(sha(body), '01e66ee6c49ef9c4',
-    'resolveRoomUpdate 被改了（本版明令零接觸）—— 實際 ' + sha(body));
+  // ⭐v6.309：resolveRoomUpdate 本體逐字未變；這段的尾巴（到 mergeSetupMonotonic 之前）多了 setupSeatRank 中央述詞 ⇒ 錨點前移。
+  assert.strictEqual(sha(body), '8c2d8b1e68d2e105',
+    'resolveRoomUpdate 被改了（v6.309 之後明令零接觸）—— 實際 ' + sha(body));
 });
 T('E2 shouldSkipStalePush 一個字都沒有動', () => {
   const body = fnBody(SG, 'export function shouldSkipStalePush(', '\n/**');
-  assert.strictEqual(sha(body), '6c9264e113f3e084',
-    'shouldSkipStalePush 被改了（站長還沒裁定）—— 實際 ' + sha(body));
+  // ⭐v6.309：合法新增「同局 playing→setup 倒退 skip」（守衛 test-v6309 [F2]＋突變⑦）⇒ 錨點前移。
+  assert.strictEqual(sha(body), 'adeba1311950ebf9',
+    'shouldSkipStalePush 被改了（v6.309 之後明令零接觸）—— 實際 ' + sha(body));
 });
 T('E3 phantom 防護的判準條文逐字未變（只擋 incoming.phase===setup）', () => {
   ok(SG.includes("if (local.phase === 'playing'\n        && incoming.phase === 'setup'\n"
@@ -549,7 +551,8 @@ T('F7 ⭐⭐⭐ 零額外請求：整份 +page.svelte 的診斷送出點數量�
     + ' —— 數字變了代表多（或少）了一個送出點，本版明令零額外請求');
   // 本版沒有新增任何 _tSendClientDiag 呼叫點（v6.279 有 9 個：定義 1 ＋ 呼叫 8）。
   const send = (PAGE.match(/_tSendClientDiag\(/g) || []).length;
-  assert.strictEqual(send, 15, '_tSendClientDiag 的出現次數變了（＝多了送出點），實際 ' + send);
+  // ⭐v6.309 合法新增 1 個呼叫點（casual-setup-adopt-loss；走 _casualDiagSend 閘、每頁一次，行為端見 test-v6309）⇒ 15 → 16。
+  assert.strictEqual(send, 16, '_tSendClientDiag 的出現次數變了（＝多了送出點），實際 ' + send);
   // 本版一行 tApi 都沒有新增（錦標賽零接觸）。
   const tapi = (PAGE.match(/\btApi\(/g) || []).length;
   assert.strictEqual(tapi, 37, 'tApi 的呼叫點數量變了（錦標賽必須零接觸），實際 ' + tapi);

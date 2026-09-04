@@ -34,7 +34,7 @@ import type { GameState } from './types';
 import type { Card } from '$lib/cards/types';
 // v4.60 checkAndAcceptRestart transaction calls createGame internally
 import { createGame } from './engine';
-import { shouldSkipStalePush } from './sync-guards';  // v5.465：pushGameState 終態/防舊守衛（鏡射 Oracle）
+import { shouldSkipStalePush, mergeForSetupPush } from './sync-guards';  // v5.465：pushGameState 終態/防舊守衛（鏡射 Oracle）；v6.309 setup 推送端合併（鏡射 Oracle）
 
 export type DeckEntry = { cardId: string; count: number };
 
@@ -1189,7 +1189,11 @@ export async function deleteRoom(roomCode: string): Promise<void> {
 }
 
 /** 推送最新 GameState 到 Firestore（遊戲中由 P1/P2 發起 action 後使用） */
-export async function pushGameState(roomCode: string, gameState: GameState): Promise<void> {
+export async function pushGameState(
+  roomCode: string,
+  gameState: GameState,
+  opts?: { mySeat?: 0 | 1 | null },
+): Promise<void> {
   // v5.465：改 runTransaction read-then-write + shouldSkipStalePush 守衛（鏡射 Oracle pushGameState）。
   //   防「輸方補位 push 蓋掉勝方 game-over 終態」與一般 stale 覆蓋。悔棋 rollback 走 pushUndoRollback 繞過。
   const ref = doc(db, 'rooms', roomCode);
@@ -1197,9 +1201,10 @@ export async function pushGameState(roomCode: string, gameState: GameState): Pro
     const snap = await tx.get(ref);
     const cur = snap.exists() ? (snap.data() as { gameState?: GameState | null }).gameState : null;
     if (shouldSkipStalePush(gameState, cur)) return; // 我方較舊／終態保護 → 略過寫入，不 regress 房間
+    const toWrite = mergeForSetupPush(gameState, cur, opts?.mySeat);   // ⭐v6.309 setup 推送端合併（鏡射 Oracle，說明見 room-oracle.ts）
     tx.update(ref, {
-      gameState: JSON.parse(JSON.stringify(gameState)),
-      status: gameState.phase === 'game-over' ? 'ended' : 'playing',
+      gameState: JSON.parse(JSON.stringify(toWrite)),
+      status: toWrite.phase === 'game-over' ? 'ended' : 'playing',
       updatedAt: serverTimestamp(),
     });
   });

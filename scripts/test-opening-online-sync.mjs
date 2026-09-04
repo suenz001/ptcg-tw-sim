@@ -265,7 +265,12 @@ T('重整後本地無局 → 直接採用，opening 欄位原封（選擇視窗�
 });
 
 // == 10：legacy 零 diff（最重要）==========================================
-T('**沒有這張卡的對局：新舊 merge 規則逐欄位 0 diff', () => {
+// ⭐v6.309 起 mergeSetupMonotonic 改成「每座位同源、單調」（setupSeatRank）。對 legacy 的承諾是：
+//   incoming **不是舊快照**時（同一座位的兩份快照必在同一條鏈上：己側本地 ≥ incoming、對手側 incoming ≥ 本地）
+//   結果與 v6.308 的 OR／MIN／per-player 規則**逐欄位相同**；incoming 在對手側**較舊**時才不同 —— 那正是要修的
+//   （v6.308 以前的矩陣把「對手 pending 0＋mpb 開」與「對手 pending 2＋mpb 關」這種現實中不存在的組合也拿來比，
+//   等於斷言「舊 echo 可以把對手的補抽洗回」）。
+T('**沒有這張卡的對局：incoming 不舊時新舊 merge 規則逐欄位 0 diff；對手側較舊時保住本地', () => {
   const g = withSeed(31337, () => createGame(deck(noBurst), deck(noBurst), pool));
   assert.equal(g.openingFlow, undefined, '前提：不走互動式');
   const legacyMerge = (local, incoming, me) => ({
@@ -284,25 +289,35 @@ T('**沒有這張卡的對局：新舊 merge 規則逐欄位 0 diff', () => {
       ? [local.mulliganPostBenchOpen?.[0] ?? false, incoming.mulliganPostBenchOpen?.[1] ?? false]
       : [incoming.mulliganPostBenchOpen?.[0] ?? false, local.mulliganPostBenchOpen?.[1] ?? false]),
   });
-  let n = 0;
-  for (const sdL of [[false, false], [true, false], [false, true], [true, true]]) {
-    for (const sdI of [[false, false], [true, false], [false, true], [true, true]]) {
-      for (const pmdL of [[0, 0], [2, 0], [0, 1]]) {
-        for (const mrcI of [[false, false], [true, false], [true, true]]) {
-          for (const me of [0, 1]) {
-            const L = Object.assign(clone(g), { setupDone: sdL, pendingMulliganDraw: pmdL,
-              mulliganPostBenchOpen: [true, false] });
-            const I = Object.assign(clone(g), { setupDone: sdI, pendingMulliganDraw: [0, 0],
-              mulliganRevealConfirmed: mrcI, mulliganPostBenchOpen: [false, true] });
-            assert.deepEqual(mergeSetupMonotonic(L, I, me), legacyMerge(L, I, me),
-              'me=' + me + ' sdL=' + sdL + ' sdI=' + sdI);
-            n++;
-          }
+  // 一個座位在 setup 的里程碑鏈（只增不減）：未準備 → 已準備 → 已確認揭示 → 補抽已領（post-bench 開）→ post-bench 關
+  const chain = [
+    { sd: false, mrc: false, pmd: 2, mpb: false }, { sd: true, mrc: false, pmd: 2, mpb: false },
+    { sd: true, mrc: true, pmd: 2, mpb: false }, { sd: true, mrc: true, pmd: 0, mpb: true }, { sd: true, mrc: true, pmd: 0, mpb: false },
+  ];
+  const set = (o, i, st) => { o.setupDone[i] = st.sd; o.mulliganRevealConfirmed[i] = st.mrc; o.pendingMulliganDraw[i] = st.pmd; o.mulliganPostBenchOpen[i] = st.mpb; };
+  const blank = () => Object.assign(clone(g), { setupDone: [false, false], mulliganRevealConfirmed: [false, false],
+    pendingMulliganDraw: [0, 0], mulliganPostBenchOpen: [false, false] });
+  let n = 0, stale = 0;
+  for (const me of [0, 1]) {
+    const opp = 1 - me;
+    for (let a = 0; a < chain.length; a++) for (let b = 0; b < chain.length; b++)
+      for (let c = 0; c < chain.length; c++) for (let d = 0; d <= c; d++) {
+        const L = blank(), I = blank();
+        set(L, opp, chain[a]); set(I, opp, chain[b]);   // 對手側：b ≥ a ＝ incoming 不舊；b < a ＝ incoming 較舊
+        set(L, me, chain[c]); set(I, me, chain[d]);     // 己側：本地恆 ≥ incoming
+        const m = mergeSetupMonotonic(L, I, me);
+        if (b >= a) { assert.deepEqual(m, legacyMerge(L, I, me), 'me=' + me + ' a=' + a + ' b=' + b + ' c=' + c + ' d=' + d); n++; }
+        else {
+          // 對手側較舊 ⇒ 對手那一半整組保住本地（同源）
+          assert.equal(m.setupDone[opp], L.setupDone[opp]); assert.equal(m.mulliganRevealConfirmed[opp], L.mulliganRevealConfirmed[opp]);
+          assert.equal(m.pendingMulliganDraw[opp], L.pendingMulliganDraw[opp]); assert.equal(m.mulliganPostBenchOpen[opp], L.mulliganPostBenchOpen[opp]);
+          assert.strictEqual(m.players[opp], L.players[opp], '對手較舊的 incoming 改寫了對手的盤面');
+          stale++;
         }
       }
-    }
   }
   assert.ok(n >= 200, '矩陣太小：' + n);
+  assert.ok(stale >= 100, '較舊組合太少：' + stale);
 });
 
 // == 11-12：其他分支不受干擾 ==============================================

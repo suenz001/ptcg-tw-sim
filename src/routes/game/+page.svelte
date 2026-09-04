@@ -54,7 +54,7 @@
   import { selfCheckAbilityRegistry } from '$lib/game/effects/_shared';
   import { resolveRoomUpdate, shouldAttemptStartGame, shouldResetStartGrace, decideBoardAdopt, decideStuckSelfHeal, isStaleFinishedGame,
            casualResyncGapMs, casualResyncInLastChance, RESYNC_BASE_MS,
-           nextRestartBaseline } from '$lib/game/sync-guards';
+           nextRestartBaseline, setupSeatRank } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
   import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
@@ -272,7 +272,7 @@
   // ⚠ 這一行**必須維持單行**：v6.261 守衛用 `^\s*const NAME = [^\n]*$` 把它抽出來實跑，換行會抽到半截。
   // ⭐v6.270 新增 'casual-delta-fuse'：PUT 上行增量連 3 次被伺服器 deltaReject 的熔斷指紋
   //   （熔斷後本 session 全走全量 —— 對局不受影響，但要知道有多少人退回全量、為什麼）。
-  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt', 'casual-delta-fuse'];
+  const CASUAL_DIAG_REASONS = ['casual-slow-push', 'casual-perf-sample', 'casual-forfeit-claim', 'casual-phantom-adopt', 'casual-delta-fuse', 'casual-setup-adopt-loss'];
   const CASUAL_DIAG_MAX_PER_PAGE = 6;   // 每個頁面實例的硬上限（＝三種指紋 × 兩場；三種各自還有「每場一次」旗標）
   // ⚠ 門檻的取值依據（Rule 37：要大於實測過的**成功**案例，否則會把正常人整批報進來）：
   //   一發 pushGameState ＝ oracleTx 的 GET＋PUT，PUT 的 body 實測 40~48KB。
@@ -6577,6 +6577,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // ⭐v6.270 只有 casual-delta-fuse 帶得出來：熔斷當下的拒收統計
       //   （lastReason＝伺服器的 deltaReason：'hash'／'bad-patch'／'disabled'…或 'http-400'）。
       delta: (reason === 'casual-delta-fuse' ? dd : null),
+      // ⭐v6.309 只有 casual-setup-adopt-loss 帶得出來：setup→playing 的 adopt 讓我方座位倒退了什麼
+      //   （rank／手牌／牌庫的本地 vs 採納值）。全部來自既有 state，零新請求。
+      setupLoss: (reason === 'casual-setup-adopt-loss' ? _casualSetupLoss : null),
       env: {
         vis: (typeof document !== 'undefined' ? document.visibilityState : '?'), layout: battleLayout,
         w: (typeof window !== 'undefined' ? window.innerWidth : 0), h: (typeof window !== 'undefined' ? window.innerHeight : 0),
@@ -6676,6 +6679,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ⚠ 呼叫端一律用 `typeof ... === 'function'` 防衛：test-v6261 守衛的抽取 harness
   //     只重建六支既有函式、不注入這兩支 —— 防衛缺席時 bodyBytes 為 null、熔斷檢查跳過。
   let _casualDeltaFuseSent = false;   // casual-delta-fuse 每頁一次（熔斷本來就是 per-session 一次性）
+  // ⭐v6.309 setup→playing 採納讓我方座位倒退（rank／手牌／牌庫）的指紋：純觀察、零決策、每頁一次。
+  let _casualSetupLossSent = false;
+  let _casualSetupLoss: { rankL: number; rankI: number; handL: number; handI: number; deckL: number; deckI: number } | null = null;
+  function _casualNoteSetupAdoptLoss(kind: string, local: GameState | null | undefined, incoming: GameState | null | undefined): void {
+    try {
+      if (kind !== 'adopt' || !local || !incoming) return;
+      if (myPlayerIndex === null) return;
+      if (local.id !== incoming.id || local.phase !== 'setup' || incoming.phase !== 'playing') return;
+      const me = myPlayerIndex;
+      const rankL = setupSeatRank(local, me);
+      // 採納的盤面已是 playing，但 setup 欄位（setupDone／補抽／揭示確認／post-bench）原樣留在盤面上，
+      //   階梯照讀；再拿手牌／牌庫張數判倒退：我方 setup 最後一份的手牌只可能被先手首抽 +1、牌庫只可能變少。
+      const rankI = setupSeatRank(incoming, me);
+      const handL = local.players[me]?.hand?.length ?? 0, handI = incoming.players[me]?.hand?.length ?? 0;
+      const deckL = local.players[me]?.deck?.length ?? 0, deckI = incoming.players[me]?.deck?.length ?? 0;
+      if (rankI >= rankL && handI >= handL && deckI <= deckL) return;   // 沒有倒退 ⇒ 0 發／0 bytes
+      if (_casualSetupLossSent) return;
+      _casualSetupLossSent = true;
+      _casualSetupLoss = { rankL, rankI, handL, handI, deckL, deckI };
+      _tSendClientDiag('casual-setup-adopt-loss');
+    } catch { /* 診斷絕不影響對戰 */ }
+  }
   function _casualDeltaDiag(): ReturnType<typeof deltaPutDiag> | null {
     try { return deltaPutDiag(); } catch { return null; }
   }
@@ -8340,7 +8365,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const m = _beginPushTrack();
     // ⭐v6.261 `_ok` 只是一個布林：逾時／拋錯的那一發不可以進 p95（v6.151 的紀律）。
     let _ok = false;
-    try { await pushGameState(code, st); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }
+    // ⭐v6.309 推送帶座位（推送端 setup 合併用）。`typeof` 防衛：test-v6245/v6246 的 pushWithRetry 抽取 harness
+    //   只注入既有識別字，直接引用 myPlayerIndex 會變成被 catch 吞掉的 ReferenceError（看起來像「逾時後重送了 0 次」）。
+    try { await pushGameState(code, st, { mySeat: (typeof myPlayerIndex === 'number' ? myPlayerIndex : null) }); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }
   }
   /** 悔棋 rollback 的推送（同樣要標記在途；它也是一整包盤面）。 */
   async function pushUndoTracked(code: string, st: GameState): Promise<void> {
@@ -8870,6 +8897,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
           //   ⚠ 一般對局恆為 false：同一局的 id 從頭到尾不變 ⇒ 0 發／0 bytes。
           _casualNotePhantomAdopt(decision.kind, _sfxPrevGame, incoming,
             (room.restartProposalCount as number | undefined) ?? 0);
+          // ⭐v6.309 setup→playing 的 adopt 若讓我方座位倒退（補抽被洗回）⇒ 指紋（純觀察，不改決策）。
+          if (typeof _casualNoteSetupAdoptLoss === 'function') _casualNoteSetupAdoptLoss(decision.kind, _sfxPrevGame, incoming);
           game = decision.game;
           // v5.716：adopt 了 restart 重建的新 setup 局(已通過 phantom 防護=合法重新開局) →
           //   記下當前 restartProposalCount,讓後續同 count 的 phantom setup 局被擋(只放行「下一次」restart)。

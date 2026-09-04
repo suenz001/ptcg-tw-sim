@@ -383,7 +383,8 @@ await TA('[HEAD-FAIL④b] 三個新識別字真的在**模組層級**有繫結�
 T('[HEAD-FAIL⑤/v6.248 搬家] 中央 pushTracked 的標記還原寫在 finally（否則拋錯就永久留著）', () => {
   // ⭐v6.261 finally 裡多了一行休閒遙測 ⇒ 判準沒有放寬，仍要求 finally 的**第一件事**是還原標記
   //   （還原排在遙測前面 ⇒ 遙測炸了也不可能把標記留著）。
-  assert.ok(/try \{ await pushGameState\(code, st\);[^}]*\} finally \{ _endPushTrack\(m\);/.test(HELPERS_SRC),
+  // ⭐v6.309 pushGameState 多帶座位（{ mySeat: myPlayerIndex }，推送端 setup 合併用）；判準不變：try 裡送、finally 第一件事還原標記
+  assert.ok(/try \{ await pushGameState\(code, st(?:, \{ mySeat: [^}]*\})?\); _ok = true; \} finally \{ _endPushTrack\(m\);/.test(HELPERS_SRC),
     'pushTracked 沒有用 finally 還原在途標記');
   assert.ok(/await pushTracked\(code, st\);/.test(PWR_SRC), 'pushWithRetry 沒有走中央 pushTracked');
 });
@@ -461,7 +462,7 @@ await TA('[突變3/v6.248 搬家] 把 pushTracked 的 finally 還原拿掉（標
   // ⭐v6.261 突變字串跟著出貨碼更新（不更新＝突變改不到程式碼＝恆綠安慰劑，
   //   下面的 `b.passed === false` 反向斷言正是在防這件事）。
   const m = (src, kind) => (kind === 'helpers'
-    ? src.replace('try { await pushGameState(code, st); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }', 'await pushGameState(code, st);')
+    ? src.replace("try { await pushGameState(code, st, { mySeat: (typeof myPlayerIndex === 'number' ? myPlayerIndex : null) }); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }", 'await pushGameState(code, st);')
     : src);
   // ⚠ v6.248 起真實上限是 ORACLE_TX_MAX_TOTAL_MS（約 25 分鐘，＝ oracleTx 的真實最壞總時長），
   //   遠大於這個 300 秒的模擬窗口 ⇒ 這裡把模擬的上限縮成 40 秒，驗的是**機制**（上限一到就恢復自癒），
@@ -485,7 +486,7 @@ await TA('[突變4/v6.248 搬家] 把在途判定的時間上限改成無條件 
     if (kind !== 'helpers') return src;
     return src
       .replace('(now - m.at) < PUSH_INFLIGHT_FAILSAFE_MS', 'true')
-      .replace('try { await pushGameState(code, st); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }', 'await pushGameState(code, st);');
+      .replace("try { await pushGameState(code, st, { mySeat: (typeof myPlayerIndex === 'number' ? myPlayerIndex : null) }); _ok = true; } finally { _endPushTrack(m); _casualRecordPush(Date.now() - m.at, _ok); }", 'await pushGameState(code, st);');
   };
   const a = await mutantCheck(m2, async (runners) => {
     const r = await runSlowPush({ pushOutcome: 'timeout', pushMs: 30000, totalMs: 300000, runners, failsafeMs: 40000 });

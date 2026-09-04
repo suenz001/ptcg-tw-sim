@@ -78,6 +78,11 @@ export function shouldSkipStalePush(
   //   會把房間 storage 從 game-over 洗回 playing → 輸方輪詢拿回 playing、永遠收不到勝利畫面而卡死。
   //   game-over 是終態，輸方任何後續操作都不該覆蓋（再來一局＝不同 id，已於上方放行）。
   if (current.phase === 'game-over' && incoming.phase !== 'game-over') return true;
+  // ⭐v6.309 同局 phase 倒退（房間已 playing、我還要推 setup）→ skip，鏡射收端 rule 6 的 phase-rollback。
+  //   場景：對手在收端合併後推進到 playing 並推送，我最後一筆 setup 動作的 push 晚一步落地
+  //   → 房間被洗回 setup；對手端 rule 6 拒收、我端只會 poll 到自己的 echo ⇒ 沒有人再推得動（開局死角）。
+  //   同一局的 setup→playing 是單向的（重新開局＝新 id、悔棋走 pushUndoRollback），所以這條沒有合法反例。
+  if (current.phase === 'playing' && incoming.phase === 'setup') return true;
   // 同局：playing×playing 且 log 嚴格較短 → skip
   return incoming.phase === 'playing' && current.phase === 'playing'
     && (incoming.log?.length ?? 0) < (current.log?.length ?? 0);
@@ -415,150 +420,194 @@ export function resolveRoomUpdate(
 }
 
 /**
- * 開局 setup per-player 單調合併（v3.39/v4.494/v5.159/v5.339/v5.346）。
- *   - players：自己側永遠保留本地最新；對手側採 incoming，但若本地已收到對手 setupDone=true
- *     卻來了 setupDone=false 的 stale incoming → 保留本地對手 players（防回退）。
- *   - setupDone / mulliganRevealConfirmed：OR（false→true 單調）。
- *   - pendingMulliganDraw：MIN（N→0 單調）。
- *   - mulliganPostBenchOpen：per-player（自己端用本地、對手端用 incoming）。
+ * ⭐⭐⭐v6.309 座位的 setup 進度階梯（**中央述詞**：收端合併／推端合併／守衛三處共用）。
+ *
+ * ── 這在修什麼（玩家回報：補抽到的牌被系統放回牌庫，下回合又依序抽回同兩張）──
+ * v6.308 以前 `mergeSetupMonotonic` 的 legacy 欄位是三套各自為政的規則：
+ *   ・`players[對手]`：只有「本地已收到對手 setupDone、incoming 卻 false」才保留本地，**否則一律採 incoming**
+ *     ⇒ 對手按過準備**之後**的進度（補抽、補抽後放備戰）完全沒有防回退。
+ *   ・`pendingMulliganDraw`：MIN ⇒ 0 一旦出現就黏住（分不出「還沒領」與「領完了」）。
+ *   ・`mulliganPostBenchOpen[對手]`：直接採 incoming ⇒ 舊 echo 帶 false 就把對手的補抽後視窗關掉。
+ * 三者疊加：收到**自己的舊 echo**（房間被自己較舊的 push 蓋回去）時，對手那一半整組退回
+ * 「補抽前」，而 pending 仍是 0、post-bench 也關了 ⇒ `tryAdvanceToPlaying` 全部 gate 通過
+ * ⇒ 進 playing 並推送 ⇒ 受害端 setup×playing 走 adopt ⇒ **領到的補抽被洗回牌庫頂**。
+ *
+ * ── 修法：把 v6.058 只做在互動式欄位上的「同源＋單調 pick」推廣到 legacy 的全部 setup 欄位 ──
+ * 每個座位只有**該座位的玩家**能推進自己的進度，而且每一個里程碑都是單調的：
+ *   setupDone false→true、揭示確認 false→true、補抽 N→0、post-bench（領過才會開）true→false。
+ * 因此「兩份快照裡同一座位誰比較前進」有偏序，取里程碑計數就是一個對該座位**單調不減**的分數：
+ *
+ *   0 互動式開局未定案（還在選 KEEP／MULLIGAN）
+ *   1 定案未結算（`openingFinalized` 還沒寫，補抽 NET 還沒算）
+ *   2 已結算／legacy 起點（尚未按準備）
+ *   3 已按準備（setupDone）          ┐ 這四個里程碑彼此順序不固定（揭示確認可以在按準備之前），
+ *   4 已確認揭示                     │ 所以用**計數**而不是固定階梯：同一座位的兩份快照必在同一條
+ *   5 補抽已決定（pending 0）且 post-bench 開著 │ 鏈上，鏈上每個里程碑都只增不減 ⇒ 計數＝鏈上的先後。
+ *   6 補抽已決定且 post-bench 關（＝該座位在 setup 已無任何可做的事） ┘
+ *
+ * ⚠ 未結算（0／1）時 legacy 欄位是 createGame 的佔位值（pending [0,0]），**不能**拿去跟結算後的
+ *   「真的 0（領完了）」比 ⇒ 階梯把它們壓在 2 以下，結算後才開始數里程碑。
+ * ⚠ 里程碑之外的差異（例如同階內放備戰）不影響分數；平手時對手側採 incoming（＝v6.308 以前
+ *   「對手側顯示採房間」的行為），而同階內 deck 張數不變，所以平手不可能吃掉補抽（守衛 I8 直接實跑驗證）。
+ */
+export const SETUP_SEAT_RANK_MAX = 6;
+export function setupSeatRank(s: GameState, i: 0 | 1): number {
+  if (s.openingFlow === 'interactive') {
+    if (!effectiveOpeningDone(s)[i]) return 0;
+    if (!s.openingFinalized) return 1;
+  }
+  const decided = (s.pendingMulliganDraw?.[i] ?? 0) === 0;
+  return 2
+    + (s.setupDone?.[i] ? 1 : 0)
+    + (s.mulliganRevealConfirmed?.[i] ? 1 : 0)
+    + (decided ? 1 : 0)
+    + (decided && !(s.mulliganPostBenchOpen?.[i] ?? false) ? 1 : 0);
+}
+
+/** 「這份快照的 legacy 欄位（補抽／揭示確認）已經是結算後的真值」——非互動式一律視為已結算。 */
+function setupFieldsSettled(s: GameState): boolean {
+  return s.openingFlow !== 'interactive' || !!s.openingFinalized;
+}
+
+/**
+ * 開局 setup **每座位同源、單調**合併（v3.39/v4.494/v5.159/v5.339/v5.346 → v6.053/v6.058 → ⭐v6.309 收斂成單一規則）。
+ *
+ *   ・己側（me）收端**恆用本地**：我的座位只有我在推進，本地永遠是最前進的一份（推端見 mergeSetupSeats）。
+ *   ・對手側**整組同源**：`players` / `setupDone` / `mulliganRevealConfirmed` / `pendingMulliganDraw` /
+ *     `mulliganPostBenchOpen` / `mulliganCounts` / `mulliganRevealedHands` / `openingDone` 一起取
+ *     `setupSeatRank` 較高的那份快照（未定案時再比重抽次數，同 v6.053 的 localAhead）。
+ *     ⚠**同源原則**：各欄位各取極值會做出現實中不存在的盤面（v6.053 的縫合怪教訓）。
+ *   ・互動式「恰一端已結算」時，`pendingMulliganDraw` / `mulliganRevealConfirmed` 整組採已結算那一端
+ *     （未結算那端的值只是 createGame 的佔位；v6.053 批3 的 finSrc 規則，語義不變）。
+ *   ・兩份快照先各自做冪等的 `ensureOpeningFinalized`（雙方都定案的快照立刻算出 NET），
+ *     merge 完由 resolveRoomUpdate 再跑一次（合併後才湊齊雙定案的情況）。
+ *
+ * ⭐ 非互動式且 incoming **不是舊快照**（對手側 rank ≥ 本地）時，結果與 v6.308 的 OR／MIN／per-player
+ *   規則**逐欄位相同**（scripts/test-opening-online-sync.mjs 第 10 條用矩陣實跑證明）；
+ *   只有 incoming 在對手側**較舊**時才不同 —— 那正是要修的那一類。
  */
 export function mergeSetupMonotonic(
   local: GameState,
   incoming: GameState,
   me: 0 | 1,
 ): GameState {
-  const base: GameState = {
-    ...incoming,
-    players: (me === 0
-      ? [local.players[0], (local.setupDone[1] && !incoming.setupDone[1]) ? local.players[1] : incoming.players[1]]
-      : [(local.setupDone[0] && !incoming.setupDone[0]) ? local.players[0] : incoming.players[0], local.players[1]]) as GameState['players'],
-    setupDone: [
-      local.setupDone[0] || incoming.setupDone[0],
-      local.setupDone[1] || incoming.setupDone[1],
-    ] as [boolean, boolean],
-    mulliganRevealConfirmed: [
-      local.mulliganRevealConfirmed[0] || incoming.mulliganRevealConfirmed[0],
-      local.mulliganRevealConfirmed[1] || incoming.mulliganRevealConfirmed[1],
-    ] as [boolean, boolean],
-    pendingMulliganDraw: [
-      Math.min(local.pendingMulliganDraw?.[0] ?? 0, incoming.pendingMulliganDraw?.[0] ?? 0),
-      Math.min(local.pendingMulliganDraw?.[1] ?? 0, incoming.pendingMulliganDraw?.[1] ?? 0),
-    ] as [number, number],
-    mulliganPostBenchOpen: (me === 0
-      ? [local.mulliganPostBenchOpen?.[0] ?? false, incoming.mulliganPostBenchOpen?.[1] ?? false]
-      : [incoming.mulliganPostBenchOpen?.[0] ?? false, local.mulliganPostBenchOpen?.[1] ?? false]) as [boolean, boolean],
-  };
-  // v6.053 批3：非互動式開局（全站絕大多數對局）到此為止 —— 逐欄位與 v6.052 以前完全相同。
-  if (local.openingFlow !== 'interactive' && incoming.openingFlow !== 'interactive') return base;
-  return mergeInteractiveOpening(local, incoming, base);
+  return mergeSetupSeats(local, incoming, me, 'receive');
+}
+
+/** 座位 i 兩份快照誰比較前進：rank 高者；同為未定案時重抽次數多者；平手回 null。 */
+function aheadSeat(L: GameState, I: GameState, i: 0 | 1): GameState | null {
+  const rL = setupSeatRank(L, i);
+  const rI = setupSeatRank(I, i);
+  if (rI !== rL) return rI > rL ? I : L;
+  if (rL === 0) {
+    // 未定案：重抽次數較多者較前進（重抽次數只增不減；同次數＝同一手牌）
+    const cL = L.mulliganCounts?.[i] ?? 0, cI = I.mulliganCounts?.[i] ?? 0;
+    if (cL !== cI) return cL > cI ? L : I;
+  }
+  return null;
 }
 
 /**
- * v6.053 批3：互動式開局（閃焰王牌｜瞬間爆發力）在 setup 合併時的額外規則。
- *
- * ⭐核心不變式：**一個座位的開局進度只有該座位的玩家能推進**，而且是單調的
- *   （`mulliganCounts` 只增、`openingDone` 只 false→true）。因此每個座位都可以獨立地
- *   「取較前進的那一份」，兩端最終必然收斂到同一結果，不需要誰等誰。
- *
- * ⚠**同源原則（避免縫合怪）**：`players[i]` / `mulliganCounts[i]` / `mulliganRevealedHands`
- *   的第 i 半必須來自**同一份 snapshot**。若各欄位各自取極值，會做出「重抽次數是新的、
- *   手牌卻是舊的」這種現實中不存在的盤面 —— 對手能多抽幾張就會算錯。
- *   本函式用單一述詞 `oppLocalAhead` 同時決定這三個欄位。
- *
- * ⚠`setupDone` / `mulliganPostBenchOpen` 沿用 base（legacy）。
- * ⚠`players[i]`：**只在該座位的開局尚未雙方定案時**才用 pick；一旦雙定案就回到 base
- *   （己側恆 local）—— 定案後玩家還要繼續擺場／領補抽，那段的權威規則必須是 legacy。
- *   v6.057 以前這裡整組用 pick，造成己側進度被對手的正常 push 洗掉（見 bothSettled 註解）。
+ * 收端／推端共用的本體。兩端只差「己側平手時採誰」：
+ *   ・receive（收端 resolveRoomUpdate）：己側**恆本地** —— 我的座位只有我在推進，本地永遠是最前進的一份
+ *     （incoming 對我這一半頂多與本地同階；rank 較高只可能是「對手端先算出了結算旗標」，卡片內容相同）。
+ *   ・push（推端 pushGameState）：己側也走 rank pick、平手採我這份 —— 我**自己的**兩發 push 可能亂序落地
+ *     （BENCH 的那發晚於 FINISH 的那發），較舊那發不可以把房間裡我自己較新的一階蓋回去；
+ *     平手採我這份＝v6.308 以前「推送＝整份覆蓋」在順序正常時的同一結果。
+ *   ・對手側兩端相同：rank 高者，平手採「對方那份」（收端＝incoming、推端＝房間現況）：
+ *     對手的權威資料本來就只會經由房間到我這裡，同階內張數不變（守衛 I8 實跑驗證）。
  */
-function mergeInteractiveOpening(
+function mergeSetupSeats(
   local: GameState,
   incoming: GameState,
-  base: GameState,
+  me: 0 | 1,
+  mode: 'receive' | 'push',
 ): GameState {
-  const lDone = effectiveOpeningDone(local);
-  const iDone = effectiveOpeningDone(incoming);
-  const lCnt = local.mulliganCounts ?? [0, 0];
-  const iCnt = incoming.mulliganCounts ?? [0, 0];
-  const lRev = local.mulliganRevealedHands ?? { p1: [], p2: [] };
-  const iRev = incoming.mulliganRevealedHands ?? { p1: [], p2: [] };
+  const opp = (1 - me) as 0 | 1;
+  const L = ensureOpeningFinalized(local);
+  const I = ensureOpeningFinalized(incoming);
 
-  /**
-   * 座位 i：本地是否比 incoming 更前進（→ 保留本地那一半，防 stale 回退）。
-   * 判準依序：已定案 > 重抽次數 > 已按準備。
-   * （三者都是單調量；同一座位的兩份 snapshot 必有偏序，不會互相矛盾 ——
-   *   定案之後不可能再重抽，所以不存在「done 較舊但 counts 較新」的組合。）
-   */
-  const localAhead = (i: 0 | 1): boolean =>
-    (lDone[i] && !iDone[i])
-    || (lCnt[i] > iCnt[i])
-    || (!!local.setupDone?.[i] && !incoming.setupDone?.[i]);
+  // ── 每個座位要採哪一份（單一述詞，決定該座位的全部欄位）──
+  const oppSrc: GameState = aheadSeat(L, I, opp) ?? I;
+  const mySrc: GameState = mode === 'receive' ? L : (aheadSeat(L, I, me) ?? L);
+  const src: [GameState, GameState] = me === 0 ? [mySrc, oppSrc] : [oppSrc, mySrc];
+  const seat = <T,>(get: (s: GameState) => readonly [T, T] | undefined, dflt: T): [T, T] =>
+    [get(src[0])?.[0] ?? dflt, get(src[1])?.[1] ?? dflt];
 
-  const ahead: [boolean, boolean] = [localAhead(0), localAhead(1)];
-  const pick = <T,>(i: 0 | 1, l: T, inc: T): T => (ahead[i] ? l : inc);
+  const players = [src[0].players[0], src[1].players[1]] as GameState['players'];
+  const setupDone = seat<boolean>((s) => s.setupDone, false);
+  const mulliganPostBenchOpen = seat<boolean>((s) => s.mulliganPostBenchOpen, false);
 
-  /**
-   * ⚠⚠v6.058：**開局定案之後，`players[i]` 必須回到 legacy 規則（己側恆 local）**。
-   *
-   * v6.057 以前整組走 pick，於是在「雙方都定案、重抽次數相等、setupDone 也相等」時
-   * `localAhead(me)` 三項全 false → 己側採 incoming ＝ 對手端最後看到的你（必然較舊）。
-   * 但開局定案後玩家還要繼續擺場、領補抽、按準備 —— 這些進度就會被對手的每一次
-   * 正常 push 洗掉。實測兩個後果：
-   *   R1 剛放上戰鬥場的寶可夢被洗回手牌（active → null）
-   *   R2 剛領到的補抽被洗回、而 `pendingMulliganDraw` 已歸 0 → **永久少抽**（公平性）
-   * ⚠這不是罕見時序：setup 階段雙方每個動作都會 push（dispatch 的 canIPush 對 setup 一律放行），
-   *   對手的 push 幾乎必然夾在你「動作 → push → 收回」的往返之間。
-   *
-   * 判準用 effective done（含版本 skew 逃生），與 `isOpeningInProgress` 同一套。
-   */
-  const bothSettled = (i: 0 | 1): boolean => lDone[i] && iDone[i];
-  const players = [
-    bothSettled(0) ? base.players[0] : pick(0, local.players[0], incoming.players[0]),
-    bothSettled(1) ? base.players[1] : pick(1, local.players[1], incoming.players[1]),
-  ] as GameState['players'];
-  const mulliganCounts = [
-    pick(0, lCnt[0], iCnt[0]),
-    pick(1, lCnt[1], iCnt[1]),
-  ] as [number, number];
-  const mulliganRevealedHands = {
-    p1: pick(0, lRev.p1 ?? [], iRev.p1 ?? []),
-    p2: pick(1, lRev.p2 ?? [], iRev.p2 ?? []),
+  // ── 結算後才有意義的兩個欄位：兩端結算狀態相同 → 每座位同源；恰一端結算 → 整組採該端 ──
+  const fL = setupFieldsSettled(L);
+  const fI = setupFieldsSettled(I);
+  const finSrc: GameState | null = fL === fI ? null : (fL ? L : I);
+  const pendingMulliganDraw = finSrc
+    ? [...(finSrc.pendingMulliganDraw ?? [0, 0])] as [number, number]
+    : seat<number>((s) => s.pendingMulliganDraw, 0);
+  const mulliganRevealConfirmed = finSrc
+    ? [...(finSrc.mulliganRevealConfirmed ?? [true, true])] as [boolean, boolean]
+    : seat<boolean>((s) => s.mulliganRevealConfirmed, true);
+
+  const base: GameState = {
+    ...I,
+    players,
+    setupDone,
+    mulliganRevealConfirmed,
+    pendingMulliganDraw,
+    mulliganPostBenchOpen,
   };
+  // 非互動式開局（全站絕大多數對局）到此為止：不新增任何互動式欄位。
+  if (L.openingFlow !== 'interactive' && I.openingFlow !== 'interactive') return base;
+
+  // ── 互動式：每座位同源（與上面同一個 src），`pending`／`done` 互補直接導出 ──
+  const mulliganCounts = seat<number>((s) => s.mulliganCounts, 0);
+  const mulliganRevealedHands = {
+    p1: [...(src[0].mulliganRevealedHands?.p1 ?? [])],
+    p2: [...(src[1].mulliganRevealedHands?.p2 ?? [])],
+  };
+  // `openingDone` 只會 false→true，而且不牽涉任何卡片 ⇒ 沿用 OR（版本 skew 的舊 client 不會寫這個欄位，
+  //   它那一份的 false 不是「撤銷」而是「不知道」；階梯本來就是用 effectiveOpeningDone 讀的）。
   const openingDone: [boolean, boolean] = [
-    !!((local.openingDone?.[0] ?? false) || (incoming.openingDone?.[0] ?? false)),
-    !!((local.openingDone?.[1] ?? false) || (incoming.openingDone?.[1] ?? false)),
+    !!((L.openingDone?.[0] ?? false) || (I.openingDone?.[0] ?? false)),
+    !!((L.openingDone?.[1] ?? false) || (I.openingDone?.[1] ?? false)),
   ];
-  // `pending` 與 `done` 在引擎裡恆為互補（createGame 與兩個 handler 三處都這樣寫），
-  // 直接導出即可，少一條合併規則就少一個洞。用 effective done（含 skew 逃生）。
-  const effDone: [boolean, boolean] = [
-    openingDone[0] || !!base.setupDone?.[0],
-    openingDone[1] || !!base.setupDone?.[1],
-  ];
-
-  // ⭐結算後才寫入的兩個欄位（pendingMulliganDraw / mulliganRevealConfirmed）不能用
-  //   legacy 的 MIN / OR：
-  //   ・MIN：一端結算出 [2,0]、另一端還是 [0,0] → MIN 把補抽整個吃掉（靜默少抽，公平性）
-  //   ・OR ：`mulliganRevealConfirmed` 在互動式下**不是單調的** —— createGame 先用「當下
-  //         次數」算過一次（雙方 0 次時是 [true,true]），finalizeOpening 再用「最終次數」
-  //         重算，可能 true→false。OR 會把 stale 的 true 復活 → 跳過對手的揭示確認。
-  //   修法：只有「兩端結算狀態相同」時才用 legacy 規則；恰一端結算過就整組採該端。
-  const lFin = !!local.openingFinalized;
-  const iFin = !!incoming.openingFinalized;
-  const finSrc = lFin === iFin ? null : (lFin ? local : incoming);
-
+  const effDone: [boolean, boolean] = [openingDone[0] || setupDone[0], openingDone[1] || setupDone[1]];
   return {
     ...base,
-    players,
     mulliganCounts,
     mulliganRevealedHands,
     openingDone,
     openingChoicePending: [!effDone[0], !effDone[1]] as [boolean, boolean],
-    openingFinalized: lFin || iFin,
+    openingFinalized: !!L.openingFinalized || !!I.openingFinalized,
     openingFlow: 'interactive',
-    ...(finSrc ? {
-      pendingMulliganDraw: [...(finSrc.pendingMulliganDraw ?? [0, 0])] as [number, number],
-      mulliganRevealConfirmed: [...(finSrc.mulliganRevealConfirmed ?? [true, true])] as [boolean, boolean],
-    } : {}),
   };
+}
+
+/**
+ * ⭐⭐⭐v6.309 推送端（room-oracle.ts / room.ts 的 pushGameState）在 setup 期間要寫進房間的盤面。
+ *
+ * ── 這在修什麼 ──
+ * v6.308 以前 setup 期間的 push 是「整份覆蓋」：`shouldSkipStalePush` 只擋 playing×playing 的
+ * log 倒退，setup×setup 一律放行 ⇒ 我的 PUT 若因 409 重試而**晚於**對手的 push 落地，
+ * 會把房間裡對手較新的那一半整份蓋回舊的 ⇒ 兩端接著都會 poll 到這份「我的舊 echo」。
+ * ⇒ 推送端也走**同一支** `mergeSetupMonotonic`（我這一半恆用我的，對手那一半取房間與我之中
+ *   較前進的），房間本身因此也是每座位單調的，舊 echo 再也蓋不掉對手較新的一半。
+ *
+ * ⚠ 零額外請求：這支在 oracleTx／runTransaction 的 closure 裡跑，用的就是那一輪本來就會讀到的房間現況；
+ *   每一輪 409 重試都會對新的房間現況重算（純函式、冪等），不會產生寫入迴圈
+ *   （merge 結果不會觸發新的 push —— 收端只在 action 或 setup→playing 推進時才推）。
+ * ⚠ 只在「同一局、兩邊都是 setup、而且知道自己的座位」時合併；其餘一律原樣（與 v6.308 逐字相同）。
+ */
+export function mergeForSetupPush(
+  mine: GameState,
+  cur: GameState | null | undefined,
+  mySeat: 0 | 1 | null | undefined,
+): GameState {
+  if (mySeat !== 0 && mySeat !== 1) return mine;
+  if (!cur || cur.id !== mine.id) return mine;
+  if (mine.phase !== 'setup' || cur.phase !== 'setup') return mine;
+  return mergeSetupSeats(mine, cur, mySeat, 'push');
 }
 
 /**

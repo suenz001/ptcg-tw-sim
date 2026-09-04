@@ -2852,6 +2852,12 @@ const MON_REASON_INFO = {
     + '判讀：<code>delta.lastReason</code>＝最後一次被拒的原因（hash＝兩端重建不一致、'
     + 'disabled＝伺服器 kill switch 已關、http-400＝middleware 被整個撤掉）。'
     + '⚠ 偶發 1~2 發可忽略；<b>成批出現</b>＝兩端協定漂移（例如伺服器改了 email 剝除規則），要回頭查。'],
+  'casual-setup-adopt-loss': ['［休閒］⭐ v6.309 開局補抽被洗回：setup→playing 的採納讓我方座位倒退',
+    '開局階段本地還在 setup、房間卻已是 playing 而直接採納時，我方座位的進度／手牌／牌庫<b>比本地倒退</b>'
+    + '（＝領到的補抽被洗回牌庫）。<b>每頁最多 1 發</b>。'
+    + '判讀：<code>setupLoss.handL / handI</code>＝本地 vs 採納的手牌數、<code>deckL / deckI</code>＝牌庫數、'
+    + '<code>rankL / rankI</code>＝開局進度階梯（0~6）。'
+    + '⚠⚠ 這是 v6.309 的<b>證偽工具</b>：修對了它應該歸零；沒有歸零＝還有第二條路徑（例如對手端是舊版），請把明細整筆貼給我。'],
   // ⭐v6.160 報到版本閘的四個大廳指紋（不是對戰中的，room 一律是空的）。
   'checkin-update-prompted': ['報到時被提示「版本太舊」',
     '玩家按了報到，但他載入的版本低於門檻，所以跳了更新提示視窗。'
@@ -3553,7 +3559,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.308';
+window.SITE_VERSION_HINT = '6.309';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

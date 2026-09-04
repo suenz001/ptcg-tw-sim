@@ -1,5 +1,95 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.309 開局補抽被合併洗回牌庫（收端／推端每座位同源單調合併 ＋ 引擎結算）
+
+BASE `827beae1cc9c6c6ff55895d3d1e5e422a8b4f052`（v6.308，遠端 main；`git ls-remote` 確認）。
+玩家回報（休閒對戰 v6.306 房 W8FB）：「補抽的牌他原本有抽到，又被系統放回去，然後下回合他抽到的牌的順序跟補抽抽到的牌是一樣的」
+＝ 領到之後被洗回牌庫頂。首頁 changelog 放一則（理由見【7】）。
+
+### 【0】診斷複驗（每一條都自己讀碼＋實跑；有兩處補充、一處推翻程度的修正）
+
+- ✓ 根因 A：`mergeSetupMonotonic`（sync-guards.ts）legacy 欄位三套各自為政 —— `players[對手]` 只在 `local.setupDone[opp] && !incoming.setupDone[opp]` 時保本地、
+  `pendingMulliganDraw` MIN、`mulliganPostBenchOpen[opp]` 直接採 incoming。六步序列用真引擎決定性重現（守衛「決定性重現」），逐步與截圖吻合。
+- ✓ 推送端：`pushGameState` setup×setup 不與房間合併、`shouldSkipStalePush` 不擋 setup ⇒ 我的舊 PUT 因 409 重試晚落地會整份蓋回房間。
+- ✓ 根因 B：`createGame` 互動式一律 `pendingMulliganDraw:[0,0]`，只有 OPENING_* handler 或收端 rule 7 的 `ensureOpeningFinalized` 會結算；
+  建局當下雙定案（一方起手全能量被自動重抽到有基礎）⇒ 本機／AI／錦標賽永遠不結算，log 卻寫「可選擇多抽 N 張」。
+  ⚠ 補充：**線上**這條被 rule 7 遮住（任何一次 setup merge 都會結算），所以線上 fuzz 對根因 B 是 0 紅；它只打本機／AI／錦標賽 —— 由 [F3] 直接單元測試證明。
+- ✓ 被推翻的三條維持推翻（tryAdvanceToPlaying 的兩個 gate 正確、準備順序不是問題、UI 視窗條件正確）。
+- ⚠ 診斷數字修正：調查階段的「legacy 30/300」是舊模型；本版守衛的共享房間模型在 BASE sync-guards 上是 **legacy 99/300、互動式 87/300**
+  （I8 洗回 164／113 次、另有 C2 開局死角 31／38 局 —— 死角是「我最後一筆 setup push 晚於對手的 playing push 落地」，BASE 沒有任何一端推得動）。
+- ⚠ 新發現一條（診斷沒寫）：**我自己的兩發 push 也可能亂序落地**（BENCH 的那發晚於 FINISH_MULLIGAN_POST_BENCH），推端若只保「對手那一半」，
+  我自己較新的一階會被自己的舊 push 蓋回 ⇒ 推端己側也走 rank pick（平手採我這份）。守衛「[F2] 自己兩發 push 亂序落地」＋突變③b。
+- 官方規則書 `PTCG RULES/PTCG_RULES.md` :170-171／:186-191 逐字再讀一次：NET 公式、可選 0~N、補抽後只可放備戰 —— 本版不改語義。
+
+### 【1】F1 中央述詞 `setupSeatRank(state, i)`（`src/lib/game/sync-guards.ts`）
+
+- 階梯 0 未定案 ＜ 1 定案未結算 ＜ 2 已結算起點 ＜ … ＜ 6（＝2 ＋ setupDone ＋ 揭示已確認 ＋ 補抽已決定 ＋ post-bench 關）。
+  ⚠ 2 以上用**里程碑計數**而非固定順序：揭示確認可以在按準備之前，四個里程碑順序不固定；同一座位的兩份快照必在同一條鏈上、
+  鏈上每個里程碑只增不減 ⇒ 計數＝鏈上先後。未結算時 legacy 欄位是 createGame 的佔位值 ⇒ 壓在 2 以下。
+- `mergeSetupMonotonic` → `mergeSetupSeats(local, incoming, me, 'receive')`：己側恆本地；對手側整組同源（players／setupDone／揭示確認／補抽／post-bench／
+  mulliganCounts／revealedHands）取 rank 高者，未定案再比重抽次數，平手採 incoming（＝v6.308 對手側顯示採房間；同階內張數不變）。
+  `openingDone` 沿用 OR（只會 false→true、不牽涉卡片；舊版 client 不寫這欄，它的 false 是「不知道」不是撤銷 —— fuzz C 抓到的）。
+  互動式「恰一端已結算」時 pending／confirmed 整組採該端（v6.053 finSrc 語義不變）；兩份快照先各自 `ensureOpeningFinalized`。
+- legacy 逐欄位對照：incoming 不舊（對手側 rank ≥ 本地、己側本地 ≥ incoming）時與 v6.308 的 OR／MIN／per-player **逐欄位相同**
+  （test-opening-online-sync 第 10 條矩陣 ≥200 組實跑；另 ≥100 組「對手側較舊」證明保住本地）。舊矩陣把「pending 0＋mpb 開」與「pending 2＋mpb 關」
+  這種現實中不存在的組合也拿來比 ⇒ 等於斷言「舊 echo 可以洗回補抽」，已改寫。
+
+### 【2】F2 推送端也走同一支（`room-oracle.ts` ＋ `room.ts` 鏡射；`+page.svelte` pushTracked 帶座位）
+
+- `pushGameState(roomCode, gameState, opts?: { mySeat })`：`shouldSkipStalePush` 之後 `mergeForSetupPush(gameState, cur, opts?.mySeat)`
+  （同局、兩邊都 setup、知道座位才合併；否則原樣＝v6.308 逐字）。推端走 `mergeSetupSeats(…, 'push')`：己側 rank pick 平手採我這份。
+- ⚠ 風險驗證：**零額外請求**（用的就是那一輪 oracleTx／runTransaction 本來讀到的 cur；409 重試每輪對新 cur 重算，純函式冪等）；
+  **無寫入迴圈**（merge 結果不觸發新 push —— 收端只在 action 或 setup→playing 推進時才推；fuzz 收斂階段 0 局卡住）；
+  **不與 CAS 打架**（合併在 closure 內，CAS 版本比對不變）；delta-put 的 diff 對象是 cur，合併後差異只會更小。
+- `shouldSkipStalePush` 多一條：同局 `current.phase==='playing' && incoming.phase==='setup'` ⇒ skip（鏡射收端 rule 6）。
+  沒有它：對手 merge-advance 推 playing，我最後一筆 setup push 晚落地把房間洗回 setup，對手 rule 6 拒收、我只 poll 到自己的 echo ⇒ 沒有人再推得動（fuzz C2 在 BASE 31/300）。
+- `+page.svelte`：`pushGameState(code, st, { mySeat: (typeof myPlayerIndex === 'number' ? myPlayerIndex : null) })`。`typeof` 防衛的理由：
+  test-v6245/v6246 的 pushWithRetry 抽取 harness 只注入既有識別字，直接引用會變成被 catch 吞掉的 ReferenceError（看起來像「逾時後重送了 0 次」，實測踩到）。
+  room-oracle 端同型：`typeof mergeForSetupPush === 'function'`（test-v6265/v6270/v6279 的 CJS stub 只給 shouldSkipStalePush）。
+
+### 【3】F3 引擎層結算（`engine.ts`；一次覆蓋本機／AI／錦標賽／線上）
+
+- `createGame`：互動式且 `_openKind` 雙 'done' ⇒ 直接 `finalizeOpening(state)` 再寫 log（與 handler 雙定案那行相同）。
+- `tryAdvanceToPlaying(input)`：開頭 `const state = ensureOpeningFinalized(input)`（level-triggered、冪等）；沒推進時回傳**結算後**的盤面
+  （呼叫端本來就 `next = tryAdvanceToPlaying(next)`；sap 的補推判 `phase`）。硬 gate `openingFlow==='interactive' && !openingFinalized ⇒ 不推進`
+  —— ⚠ 由構造它不可達（上一行已結算），只是防未來把兩個判準改分家；突變測試不涵蓋它（涵蓋的是 level-triggered 那行）。
+- 反向卡死檢查：未定案的互動式仍不推進（[F3] 正對照）；fuzz 互動式 300 局收斂 0 卡住。錦標賽 sap 零改動（走引擎），需 update-tournament.bat 重建 server-engine.cjs。
+
+### 【4】F4 診斷指紋 `casual-setup-adopt-loss`（`+page.svelte`；零新請求）
+
+- adopt 路徑（local setup × incoming playing、同局）若我方座位 rank／手牌／牌庫比本地倒退 ⇒ `_tSendClientDiag('casual-setup-adopt-loss')`，每頁一次，payload 帶 `setupLoss{rankL,rankI,handL,handI,deckL,deckI}`。
+- ⚠ 部署順序：**不需要 server 先上** —— 伺服器分帳只看 `casual-` 前綴（test-v6265 F3 已證），沒有欄位白名單。admin.html 補了白話說明（test-v6154 抓到）。
+
+### 【5】守衛 `scripts/test-v6309-setup-merge-room-echo.mjs`（PASS 24；進 test chain）
+
+- 共享房間 ＋ 自己的 echo ＋ 推送延遲（在途亂序落地、15% 拿到晚到的舊房間版本），legacy 與互動式各 300 局；Math.random 換種子 PRNG（決定性）。
+- 不變式 I8（merge 後每座位 rank 不減、deck 不增、場上＋手牌不減、己側不被改寫）／I9（進 playing 時每座位 deck≤本人本地、hand≥本人本地；adopt 路徑也納入）／
+  I10（互動式進 playing 必 openingFinalized）／I11（收斂後 deck ＝ 60−7−6−NET−先手首抽）／C1 兩端一致／C2 不卡死。
+- ⭐ 主證明（V6309_BASE=827beae1 對照 BASE sync-guards）：**legacy 99/300、互動式 87/300 出事 → 修後 0/300、0/300**。
+- HEAD-FAIL（五個檔各自還原 BASE blob）：sync-guards 18 紅（含 F1 匯出／決定性重現／兩個 fuzz）、engine 4 紅（根因 B／level-triggered）、room-oracle 1 紅、room.ts 1 紅、+page 2 紅（座位接線／F4）。
+- 突變 11 個各紅在預期斷言（①對手側恆採 incoming ②rank 常數 ③己側 rank pick 平手採 incoming ③b 推端己側不 pick ④未結算不壓底 ⑤拿掉 finSrc ⑥推端原樣 ⑦拿掉 phase 倒退 skip ⑧createGame 不結算 ⑨拿掉 level-triggered ⑩平手採本地）。
+- 既有守衛同步（都是「pin 了上一版的字面／sha／計數」，前移並附理由）：test-opening-online-sync 第 10 條矩陣改寫；test-v6247／v6248 的 pushTracked 正規式與突變字串；
+  test-v6274 E1/E2、test-v6280 E1/E2/F7（sha 錨點與 `_tSendClientDiag` 15→16）；test-v6265 F2 reason 清單；test-v6154 admin 白話說明。
+- 套件：只用 esbuild／node:*（既有直接依賴）。
+
+### 【6】驗證
+
+完整 `npm test` 分 8 批 **638/638** 全綠（含免疫網 damage／attack-effect／selection-ui、opening／sync 全部守衛）；`tsc --noEmit` 54 個既有錯誤與 BASE 逐條相同、TS2304 0；
+anti-pattern-lint 無違規；`vite build` rc=0；test-v6272 ⑩／test-v6264 F 用完整歷史實跑 PASS。
+
+### 【7】三配套與 changelog
+
+(a) `admin.html` SITE_VERSION_HINT → 6.309（LF）。(b) `test-v6272` ⑩ PREV_SHA → `827beae1`、PREV_ALLOWED 9 項照實列；`test-v6264` BASE_SHA → `827beae1`。
+(c) 本版新守衛不含 40 碼 sha 當唯一判準（HEAD-FAIL 節靠 `V6309_BASE` 環境變數，缺席時出聲略過）、不拿版本號判斷。
+首頁 changelog 三步：新增 v6.309（open）、第 13 則 **v6.289** 內文搬進 bodies、被擠出的 **v6.230** 搬進封存頁。
+⭐ 放首頁的理由：這是玩家**看得到、也真的少拿牌**的功能性 bug（不是「教人怎麼鑽」的作弊路徑 —— 觸發靠網路時序，玩家無法刻意製造），
+受害玩家會想知道已修；措辭不含任何可利用的細節。
+
+### 【8】部署順序
+
+引擎有改（錦標賽 server-engine 需重建）⇒ 站長跑 `update-tournament.bat`（離峰、無錦標賽進行中；它會先同步 git 並 pm2 restart）＋ `redeploy-oracle.bat`。
+client 端沒有「server 要認的新欄位」（指紋靠前綴分帳），兩支順序不拘；建議先 `update-tournament.bat`（引擎＋admin 說明）再 `redeploy-oracle.bat`。
+
 ## v6.308 修 v6.307 守衛在 CI 上的 MODULE_NOT_FOUND（acorn-walk）
 
 BASE `e08b6f4c1f358cb02fb066c84169a8131ef63c66`（v6.307 的空 commit 重觸發；樹同 `01f8386c`）。
