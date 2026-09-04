@@ -1,5 +1,19 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.308 修 v6.307 守衛在 CI 上的 MODULE_NOT_FOUND（acorn-walk）
+
+BASE `e08b6f4c1f358cb02fb066c84169a8131ef63c66`（v6.307 的空 commit 重觸發；樹同 `01f8386c`）。
+v6.307 兩輪 build 都紅在 `Run engine regression tests` 的最後一支：
+`Error: Cannot find module 'acorn-walk'`（`scripts/test-v6307-game-auth-unsub.mjs:29`）。
+
+- 根因：`acorn-walk` 在站長機器的 node_modules 有、沙盒又是掛同一份 node_modules 跑的，所以本機（含淺複製＋Node 20 的複驗）全綠；
+  但它**不是 package.json 的直接依賴**、CI 的 `npm ci` 沒裝它。
+- 修法：改成自寫 15 行 walker（`walkAst`），只保留 `acorn`（`test-admin-helper-scope` 已在 CI 上用，證明存在）。
+  沙盒用「移除 acorn-walk 的 node_modules」重跑：守衛 PASS 10、HEAD-FAIL 仍紅在同一條。
+- ⭐ 教訓（寫進 ptcg-push skill）：**守衛新引用任何套件前，先確認「是 package.json 直接依賴」或「CI 綠燈的既有守衛已在用」；
+  沙盒掛站長的 node_modules 驗過 ≠ CI 有這個套件。** 另：CI 的 log 可用站長已登入的 Chrome 分頁看（api 的 /logs 端點要 admin token）。
+- 三配套：SITE_VERSION_HINT 6.308；test-v6272 PREV_SHA → e08b6f4c、PREV_ALLOWED 只剩 version.ts；test-v6264 BASE_SHA → e08b6f4c。
+
 ## v6.307 /game 的 Firebase onAuthStateChanged 監聽器在元件銷毀時解除（Firestore 讀取放大器）
 
 BASE `aaf4c26e2099a09b7df165bdec014db3526f8b61`（v6.306，遠端 main）。

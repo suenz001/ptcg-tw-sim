@@ -25,9 +25,32 @@ import { createRequire } from 'node:module';
 import assert from 'node:assert';
 
 const _require = createRequire(import.meta.url);
+// ⚠⚠ v6.308 教訓：只用 `acorn`（test-admin-helper-scope 已在 CI 上用、證明存在）。
+//   第一版 require 了 `acorn-walk` —— 站長機器的 node_modules 有、沙盒也是掛同一份，所以本機全綠；
+//   但它不是 package.json 的直接依賴、CI 的 `npm ci` 沒裝 ⇒ build 紅在 MODULE_NOT_FOUND。
+//   守衛新引用任何套件前，先確認「是直接依賴」或「CI 綠燈的既有守衛已在用」。這裡自寫 walker。
 const acorn = _require('acorn');
-const walk = _require('acorn-walk');
 const esbuild = await import('esbuild');
+
+/** 極簡 AST 走訪（取代 acorn-walk）：對每個 ESTree 節點呼叫 cb(node, ancestors)；ancestors 不含自己。 */
+function walkAst(node, cb, ancestors = []) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) { for (const n of node) walkAst(n, cb, ancestors); return; }
+  if (typeof node.type !== 'string') return;
+  cb(node, ancestors);
+  const next = ancestors.concat(node);
+  for (const k of Object.keys(node)) {
+    if (k === 'type' || k === 'start' || k === 'end' || k === 'loc' || k === 'range') continue;
+    const v = node[k];
+    if (v && typeof v === 'object') walkAst(v, cb, next);
+  }
+}
+const walk = {
+  full: (ast, cb) => walkAst(ast, (n) => cb(n)),
+  /** cb(node, state, ancestorsIncludingSelf) —— 與 acorn-walk 的 fullAncestor 同約定（ancestors 最後一個是自己） */
+  fullAncestor: (ast, cb) => walkAst(ast, (n, anc) => cb(n, null, anc.concat(n))),
+  simple: (ast, visitors) => walkAst(ast, (n) => { if (visitors[n.type]) visitors[n.type](n); }),
+};
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_GAME = process.env.V6307_SRC || (ROOT + 'src/routes/game/+page.svelte');
