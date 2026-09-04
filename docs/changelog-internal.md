@@ -1,5 +1,87 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.302 好友清單多回 `roomId`（伺服器改用 **email** 比對好友所在的休閒房）
+
+**回報**：好友在一般休閒對戰中，好友名單的【🚪 加入房間】按鈕是暗的、按不下去。
+
+**複驗過的真因**（v6.301 是純瀏覽器端比對：`playerIdentity` 的 uid ↔ `openRooms[].seats[].uid`）：
+
+1. `recordPlayerIdentity` 的**唯一**接點是 `/api/match-result` 的 `PTCG-MATCH-EMAIL-ENRICH` 段
+   ⇒ 一個人的 uid **只有在「一場對局結束」時**才會被寫進對照表。
+2. 正式站的 `seats[].uid` 是 **Oracle 匿名 JWT 的 per-瀏覽器 uid**（`oracle-client.ts` 的
+   `/api/auth/anonymous` ＋ localStorage `ptcg_oracle_uid`）⇒ 換裝置／清資料／401 續簽都會換一個。
+3. `playerIdentity` 2026-09-02（v6.282）才上線，當時只累積了兩天資料。
+
+**修法（站長裁定）**：改由**伺服器用 email 比對**。`rooms.seats[].email` 一直都在 DB 裡
+（v1.20／v6.220 只是不再下發給瀏覽器），而好友關係本來就以 email 為 key。
+
+### 【server】`server_admin_patch.js` v1.45
+
+- `GET /api/friends/list` 每筆 **accepted** 的好友多回一個 `roomId`（不在房間 ⇒ `null`）。
+- 查詢＝**大廳列表端點（v1.17 `_roomsCombinedMw`）本來就在打的同一條**：
+  `rooms.find({status:{$in:['lobby','playing']}}).limit(100).sort({updatedAt:-1})`
+  ⇒ 走 v1.22／v6.240 在服務啟動時建的既有複合索引 `{status:1, updatedAt:-1}`
+  （status 是 `$in` 的前導欄位、updatedAt 正好是排序欄位 ⇒ 每個 status 值各掃一段索引範圍再合併排序，
+  既不 COLLSCAN 也不做記憶體排序）。**本版一支索引都沒有新增。**
+- projection 只取 `_id` 與 `seats.email`，**絕不撈 `gameState`**。
+- 只看 p1／p2 兩個座位（與 client 的 `FRIEND_SEAT_SLOTS` 一致）；同一個 email 出現在多間房時，
+  因為查詢已依 `updatedAt` 由新到舊排序，先到先得＝取最近有活動的那一間。
+- **固定一發**查詢（100 個好友仍然是 1 發）＋ 全站共用 5 秒快照 ＋ in-flight 合併（沿用 v6.300 的做法）。
+- 逐座位走中央 `adminScanYield`（100 房 × 2 座位 ＝ 200 ⇒ 滿載時正好讓路一次）。
+- **索引自驗**：`{status:1,updatedAt:-1}` 不在 ⇒ 整段跳過、**零查詢**，而且**連 `roomId` 這個 key 都不寫**。
+
+### ⭐⭐「欄位不存在」與「欄位是 null」語義不同
+
+| 回應 | 意思 | client 行為 |
+|---|---|---|
+| **沒有 `roomId` 這個 key** | 伺服器答不出來（舊伺服器／索引自驗沒過／查詢出錯） | 退回 v6.301 的 uid 比對（**相容退路，不是常態路徑**） |
+| `roomId: null` | 查過了，他此刻不在任何 lobby／playing 房 | 按鈕直接灰掉，**不再試 uid** |
+| `roomId: "ABCD12"` | 他在那間房 | 去 `openRooms` 找 ⇒ 拿到**現在的** status／房名／房主 |
+
+`friends-api.ts` 的 `toRow` 用 `Object.prototype.hasOwnProperty.call(r, 'roomId')` 保留這個差別
+（⚠ 寫成 `?? null` 就會把兩者壓成同一種值）。
+
+### 【client】
+
+- `friend-rooms.ts` 新增 `buildFriendRoomIdIndex()`（`Map<房號, 房間>`），`friendRoomState()` 多吃一個
+  房號索引，判斷順序改成「有 `roomId` 欄位 ⇒ 一律以它為準；欄位缺席才退回 uid」。
+- `FriendsPanel.svelte` 多建一份房號索引並傳下去。**零新請求**（守衛 200 tick 實測）。
+
+### ⚠⚠⚠ 安全性**沒有**變好（更正 v6.301 註解裡的說明）
+
+uid 那條路（零身分驗證的 `/api/match-result` 寫 `playerIdentity`）確實從此影響不到這個功能，
+但 `rooms.seats[].email` 同樣是 **client 自報**的（`src/lib/game/room-oracle.ts` 建房／入座時寫入；
+v1.20 的 `_roomsPutKeepEmailMw` 只在 incoming **沒帶** email 時才從 DB 回填 ⇒ 帶了就以 client 為準）
+⇒「有人把自己房間的座位填上別人的 email、讓那間房被標成好友的房」**仍然做得到**，而且 email 比
+不透明的 Oracle uid **更容易知道**。⇒ **房名與房主名一定要顯示出來**這條規定不放寬。
+
+### 效能
+
+`scripts/perf-v6302-friend-room-by-email.mjs`（Rule 32：附可重跑腳本）。
+沙盒、每一發都重建 harness（＝快照永遠不命中的最壞情況）、100 個好友：
+
+| 情境 | 事件迴圈阻塞 p50／p99 | 每發 | rooms 查詢 |
+|---|---|---|---|
+| A 沒有房間 | 0.016／0.63 ms | 3.63 ms | 1 |
+| B 30 間房（尖峰量級） | 0.016／0.19 ms | 5.98 ms | 1 |
+| C 100 間房（上限滿載） | 0.016／0.18 ms | 12.01 ms | 1 |
+| D 索引不存在 | 0.016／3.75 ms | 10.62 ms | **0** |
+| E 對照組（v6.301 行為，100 房） | 0.017／5.85 ms | 11.06 ms | 0 |
+
+⇒ 滿載增量（C − E，同為 100 房）＝ **每發 0.97 ms**（沙盒；正式 VM 約 1/10 ⇒ 約 0.1 ms）；
+尖峰增量（B − E30，同為 30 房）＝ 每發 0.53 ms。線上還有 5 秒共用快照 ⇒ **每 5 秒最多付一次**。
+⚠ 對照組必須用**同樣多的房間**：假 db 每次都 `structuredClone` 整包 seed，房間數不同的兩組相減
+得到的是「seed 大小的差」（第一次寫成 30 房減 100 房，跑出負數）。
+
+### 守衛
+
+`scripts/test-v6302-friend-room-by-email.mjs`（行為端實跑，53 條）：
+語義／N+1（100 好友 ⇒ rooms 恰 1 次）／併發三發仍 1 次／projection 不含 gameState／
+索引自驗零查詢且欄位缺席／回應零 email 零房名零房主／讓路節拍／client 四種 roomId 情境（含
+**null 不可退回 uid** 的正對照）／DOM 行為／200 tick 零請求／**10 個突變全部翻紅**。
+
+⚠ 錦標賽區塊逐位元未動（兩把既有 sha256 原封不動）。⚠ 全程零刪除、零改寫既有資料。
+
 ## v6.301 — 好友列的【🚪 加入房間 / 👁 觀戰】按鈕（好友功能最後一塊）
 
 BASE `c2dbede1c99f0ee341d7144a449277530cb01446`（v6.300，遠端 main）。

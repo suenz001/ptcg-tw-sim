@@ -78,6 +78,16 @@ export interface FriendRow {
    *   （見 `$lib/friends/friend-rooms.ts`）。
    */
   inTournament?: boolean;
+  /**
+   * ⭐⭐⭐ v6.302 伺服器用 **email** 比對出來的「這位好友此刻所在的休閒房房號」。
+   * ⚠⚠⚠ **「欄位不存在」與「欄位是 null」語義完全不同，`toRow` 刻意保留這個差別**：
+   *   ・`undefined`（伺服器根本沒回這個 key）＝ 伺服器答不出來（舊伺服器／索引自驗沒過）
+   *     ⇒ `friend-rooms.ts` 退回 v6.301 的 uid 比對；
+   *   ・`null`（伺服器有回這個 key、值是 null）＝ 查過了，他此刻不在任何 lobby／playing 房
+   *     ⇒ 按鈕直接灰掉，**不再試 uid**。
+   * ⚠ 伺服器只回房號字串，房名／房主一律由 client 從自己的 `openRooms` 取。
+   */
+  roomId?: string | null;
   requestedByMe: boolean;
   blockedByMe: boolean;
   via: string | null;
@@ -313,7 +323,7 @@ async function requestJson<T>(ctx: FriendsCtx, path: string, init: RequestInit, 
 function toStr(v: unknown, fb: string): string { return typeof v === 'string' && v ? v : fb; }
 function toRow(r: Record<string, unknown>): FriendRow {
   const uids = Array.isArray(r.uids) ? r.uids.filter((u): u is string => typeof u === 'string') : [];
-  return {
+  const row: FriendRow = {
     fid: toStr(r.fid, ''),
     status: toStr(r.status, ''),
     nick: toStr(r.nick, '玩家'),
@@ -329,6 +339,13 @@ function toRow(r: Record<string, unknown>): FriendRow {
     via: typeof r.via === 'string' ? r.via : null,
     at: typeof r.at === 'number' ? r.at : null,
   };
+  // ⭐⭐⭐ v6.302 ⚠⚠ 這裡**不可以**寫成 `roomId: ... ?? null` —— 那會把「伺服器沒回這個 key」
+  //   和「伺服器回了 null」壓成同一種值，退路與灰掉就永遠分不出來。
+  //   ⇒ 只有伺服器真的有這個 key 時才把它放進 row；否則整個屬性缺席。
+  if (Object.prototype.hasOwnProperty.call(r, 'roomId')) {
+    row.roomId = (typeof r.roomId === 'string' && r.roomId) ? r.roomId : null;
+  }
+  return row;
 }
 function toRows(v: unknown): FriendRow[] {
   return Array.isArray(v) ? v.filter((x) => x && typeof x === 'object').map((x) => toRow(x as Record<string, unknown>)) : [];

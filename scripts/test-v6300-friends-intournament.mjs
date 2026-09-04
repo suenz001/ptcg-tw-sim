@@ -358,13 +358,17 @@ await T('G2 突變：不篩 running（連已結束賽事都算）⇒ B2 紅', as
   }, '已結束賽事的殘留對戰');
 });
 await T('G3 突變：非 accepted 也帶 inTournament ⇒ B5 紅', async () => {
+  // ⚠ v6.302 把 accepted 分支從一行改成多行區塊（多了 roomId）⇒ 錨點跟著換成新形狀；斷言一個字都沒動。
   const bad = mutate(FR,
-    "          if (d.status === 'accepted') { p.inTournament = !!(tplay && tplay.has(_oe)); friends.push(p); }\n",
-    "          p.inTournament = !!(tplay && tplay.has(_oe));\n          if (d.status === 'accepted') { friends.push(p); }\n");
+    "            p.inTournament = !!(tplay && tplay.has(_oe));\n",
+    "");
+  const bad2 = mutate(bad,
+    "          const _oe = d.a === me.email ? d.b : d.a;\n",
+    "          const _oe = d.a === me.email ? d.b : d.a;\n          p.inTournament = !!(tplay && tplay.has(_oe));\n");
   await mutantMustBreak('非 accepted 也帶', async () => {
     const s = baseSeed();
     s.friendships = [mkRow(U.A.email, U.B.email, 'pending', { requester: U.B.email })];
-    const H = buildFriends(bad, { seed: s, dbOpts: { indexes: FULL_IDX } });
+    const H = buildFriends(bad2, { seed: s, dbOpts: { indexes: FULL_IDX } });
     const r = await list(H);
     for (const p of r.body.incoming) assert.ok(!('inTournament' in p), '⚠⚠ 非 accepted 的關係帶了 inTournament：' + JSON.stringify(p));
   }, '非 accepted 的關係帶了 inTournament');

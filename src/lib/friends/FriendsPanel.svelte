@@ -35,8 +35,10 @@
     type FriendsList, type FriendRow, type FriendsAction, type FriendsFailKind,
   } from '$lib/friends/friends-api';
   // ⭐⭐ v6.301 好友列的「加入房間／觀戰」——純瀏覽器端比對，零新請求（見該檔開頭的效能紅線）。
+  // ⭐⭐⭐ v6.302 起主路徑改成「伺服器用 email 比對出來的 roomId」⇒ 多建一份「房號 → 房間」對照表。
   import {
-    buildFriendRoomIndex, friendRoomState, friendRoomLabel, friendRoomClickable, friendRoomTitle,
+    buildFriendRoomIndex, buildFriendRoomIdIndex, friendRoomState, friendRoomLabel,
+    friendRoomClickable, friendRoomTitle,
     type FriendRoomSource,
   } from '$lib/friends/friend-rooms';
 
@@ -124,6 +126,11 @@
   const showRoomBtn = $derived(Array.isArray(rooms) && !!onjoinroom);
   /** ⚠ 複雜度 O(房間數)：每 tick 對 ≤100 間房各查 2 個座位；每位好友再做 ≤6 次 O(1) 查表。 */
   const roomIndex = $derived(showRoomBtn ? buildFriendRoomIndex(rooms) : null);
+  /**
+   * ⭐⭐⭐ v6.302 主路徑的索引：`Map<房號, 房間>`。同樣是 O(房間數)、零請求。
+   * ⚠ 兩份索引都要傳給 `friendRoomState` —— 少傳這一份，新伺服器的每一位好友都會被判成「沒配到房」。
+   */
+  const roomIdIndex = $derived(showRoomBtn ? buildFriendRoomIdIndex(rooms) : null);
 
   onMount(() => {
     // ⚠ 登入狀態要等 Firebase 還原完才知道（v6.026 推播的教訓）；非匿名使用者才發那一發 list。
@@ -294,7 +301,7 @@
           <ul class="rows">
             {#each list.friends as r (r.fid)}
               <!-- ⭐⭐⭐ v6.301「加入房間／觀戰」的狀態：沒傳 rooms（showRoomBtn=false）⇒ null ⇒ 整組不渲染。 -->
-              {@const _rs = showRoomBtn ? friendRoomState(r, roomIndex) : null}
+              {@const _rs = showRoomBtn ? friendRoomState(r, roomIndex, roomIdIndex) : null}
               <li class="row">
                 <!-- ⭐ v6.296 顯示優先序：有備註名就顯示備註名，並**另外用小字顯示原暱稱**；
                      沒有備註名就只顯示暱稱。⚠ 兩者都是玩家自由輸入 ⇒ 一律走 Svelte 預設 escape。 -->

@@ -664,18 +664,18 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c2dbede1c99f0ee341d7144a449277530cb01446';   // v6.300（v6.301 的上一版）
-// ⭐⭐v6.301：好友列多一組「加入房間／觀戰」按鈕（只在線上大廳的好友分頁）。
+const PREV_SHA = '1a70343b6798feca44a3a028e115931c5cc5f22c';   // v6.301（v6.302 的上一版）
+// ⭐⭐v6.302：好友清單改由伺服器用 email 比對回 roomId ⇒ client 端優先吃它。
 //   ⚠ 這一節只掃 src/ 與 static/ 兩個目錄、而且是**從 BASE 的檔案清單出發**逐檔比 ——
-//     scripts/ 與 oracle-admin/ 底下的改動（新守衛、量測腳本、SITE_VERSION_HINT）不在掃描範圍，**不可以**列進來。
-//   ⚠ 新增的檔案（src/lib/friends/friend-rooms.ts）不在 BASE 的清單裡 ⇒ 掃不到，同樣不可以列進來。
-//   ⚠⚠ 本版**沒有動** src/routes/friends/**（`/friends` 獨立頁不傳 rooms ⇒ 零按鈕）。
+//     scripts/ 與 oracle-admin/ 底下的改動（新守衛、量測腳本、server_admin_patch.js、SITE_VERSION_HINT）
+//     不在掃描範圍，**不可以**列進來。
+//   ⚠⚠ 本版**沒有動** src/routes/**（大廳的掛載點一個字都沒改；roomId 是從既有那一發 list 回應來的）。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
   'src/lib/friends/FriendsPanel.svelte',
+  'src/lib/friends/friend-rooms.ts',
   'src/lib/friends/friends-api.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
