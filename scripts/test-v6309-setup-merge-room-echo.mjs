@@ -29,302 +29,20 @@
  *       HEAD-FAIL（改過的每個檔各自還原 BASE blob）與 ≥8 個突變（各紅在預期斷言）。
  *
  * Run: node scripts/test-v6309-setup-merge-room-echo.mjs
+ *   ⚠ v6.310：模型本體在 scripts/lib/setup-room-model.mjs（可跑兩端不同版本）；推送端多了 log 合併（test-v6310）。
  */
-import { build } from 'esbuild';
-import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
-
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const S = join(ROOT, '.x-v6309-s.js');
-process.on('exit', () => { try { unlinkSync(S); } catch {} for (const f of readdirSync(ROOT)) if (/^\.x-v6309-.*\.mjs$/.test(f) || /^\.x-v6309-.*\.ts$/.test(f)) { try { unlinkSync(join(ROOT, f)); } catch {} } });
-writeFileSync(S, 'export const base="";export const assets="";');
-
-const SRC = {
-  guards: readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8'),
-  engine: readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'),
-  oracle: readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8'),
-  fire: readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8'),
-  page: readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'),
-};
-
-let bundleSeq = 0;
-/** 打包引擎＋守衛；`mut` 可對 sync-guards.ts／engine.ts 的內容做突變（esbuild onLoad 攔截）。 */
-async function bundle(mut) {
-  const id = ++bundleSeq;
-  const E = join(ROOT, `.x-v6309-e${id}.ts`), O = join(ROOT, `.x-v6309-o${id}.mjs`);
-  writeFileSync(E, "export { createGame, applyAction, tryAdvanceToPlaying, isOpeningInProgress, canBeInitialActiveCard, ensureOpeningFinalized } from './src/lib/game/engine';\n"
-    + "export * as G from './src/lib/game/sync-guards';\nimport './src/lib/game/effects';");
-  const plugin = {
-    name: 'v6309-mut',
-    setup(b) {
-      b.onLoad({ filter: /src[\\/]lib[\\/]game[\\/](sync-guards|engine)\.ts$/ }, (args) => {
-        const which = /sync-guards\.ts$/.test(args.path) ? 'guards' : 'engine';
-        let contents = SRC[which];
-        if (mut) contents = mut(contents, which);
-        return { contents, loader: 'ts' };
-      });
-    },
-  };
-  await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
-    alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error', plugins: [plugin] });
-  const m = await import(pathToFileURL(O).href + '?v=' + id);
-  return { ...m, ...m.G };
-}
-
-// ── 卡池 ──────────────────────────────────────────────────────────────────
-const dir = join(ROOT, 'static/cards');
-const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));
-const pool = new Map();
-for (const f of readdirSync(dir)) {
-  if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
-  for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
-}
-const BURST = '13974', BASIC = '19174', ENERGY = '14128';
-assert.ok(pool.get(BURST)?.abilities?.some((a) => a.name === '瞬間爆發力'), '前提：13974 有「瞬間爆發力」');
-assert.ok(pool.get(BASIC)?.subtype === 'Basic', '前提：19174 是基礎寶可夢');
-const LEGACY_THIN = [{ cardId: BASIC, count: 2 }, { cardId: ENERGY, count: 58 }];   // 常常重抽 ⇒ 常有補抽
-const LEGACY_FAT = [{ cardId: BASIC, count: 12 }, { cardId: ENERGY, count: 48 }];
-const MIXED = [{ cardId: BURST, count: 4 }, { cardId: BASIC, count: 2 }, { cardId: ENERGY, count: 54 }];
-const BURST_ONLY = [{ cardId: BURST, count: 4 }, { cardId: ENERGY, count: 56 }];
-
-// 整支守衛決定性：引擎的 shuffle 走 Math.random ⇒ 換成種子 PRNG（同 test-v6157 的 withSeed 寫法），CI 每次跑到同一批局。
-{ let a = 0x9E3779B9; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-let seed = 1;
-const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-const clone = (s) => JSON.parse(JSON.stringify(s));
-const CTX = (me) => ({ myPlayerIndex: me, roomRestartCount: 0, lastAdoptedRestartCount: 0, roomLastUndoApplyAt: 0, lastSeenUndoApplyAt: 0 });
-const board = (p) => (p.hand?.length ?? 0) + (p.bench?.length ?? 0) + (p.active ? 1 : 0);
-
-/** 參考實作（守衛自己的一份，不依賴出貨碼）：與 sync-guards.setupSeatRank 的定義逐字對照。 */
-function refRank(s, i) {
-  if (s.openingFlow === 'interactive') {
-    const done = !!((s.openingDone ?? [true, true])[i] || s.setupDone?.[i]);
-    if (!done) return 0;
-    if (!s.openingFinalized) return 1;
-  }
-  const decided = (s.pendingMulliganDraw?.[i] ?? 0) === 0;
-  return 2 + (s.setupDone?.[i] ? 1 : 0) + (s.mulliganRevealConfirmed?.[i] ? 1 : 0)
-    + (decided ? 1 : 0) + (decided && !(s.mulliganPostBenchOpen?.[i] ?? false) ? 1 : 0);
-}
+// ⭐v6.310 共享房間模型抽到 scripts/lib/setup-room-model.mjs（test-v6310 的混版模型共用同一支；每局重設引擎 PRNG）
+import {
+  ROOT, SRC, bundle, pool, LEGACY_THIN, LEGACY_FAT, MIXED, BURST_ONLY,
+  rnd, setSeed, clone, CTX, refRank, runMany, fmt, sixSteps,
+} from './lib/setup-room-model.mjs';
 
 let pass = 0, fail = 0;
 const T = async (n, f) => { try { await f(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
-
-// ═══════════════════════════════════════════════════════════════════════
-// 共享房間模型
-// ═══════════════════════════════════════════════════════════════════════
-/**
- * @param M 打包出來的模組
- * @param o { decks:[a,b], interactive:boolean, steps }
- * @returns { skipped } 或 { viol:{I8,I9,I10,I11,C2,C1}, clients }
- */
-function runRoom(M, o) {
-  const { createGame, applyAction, isOpeningInProgress, canBeInitialActiveCard, resolveRoomUpdate, shouldSkipStalePush } = M;
-  const mergeForSetupPush = typeof M.mergeForSetupPush === 'function' ? M.mergeForSetupPush : ((mine) => mine);   // BASE：整份覆蓋
-  const rank = typeof M.setupSeatRank === 'function' ? M.setupSeatRank : refRank;
-  const base = createGame({ name: 'P1', entries: o.decks[0] }, { name: 'P2', entries: o.decks[1] }, pool,
-    { firstChoicePreferences: ['random', 'random'] });
-  if (o.interactive && base.openingFlow !== 'interactive') return { skipped: true };
-  if (!o.interactive && base.openingFlow === 'interactive') return { skipped: true };
-  const viol = { I8: 0, I9: 0, I10: 0, I11: 0, C2: 0, C1: 0 };
-  const why = [];
-  const note = (k, msg) => { viol[k]++; if (why.length < 6) why.push(k + ' ' + msg); };
-  const room = { gs: clone(base), hist: [clone(base)] };
-  const cl = [{ local: clone(base) }, { local: clone(base) }];
-  const inflight = [];   // {seat, snap}
-  const pickPlaceable = (hand) => hand.find((c) => canBeInitialActiveCard(pool.get(c.cardId)));
-  const pickBasic = (hand) => hand.find((c) => pool.get(c.cardId)?.subtype === 'Basic' && pool.get(c.cardId)?.supertype === 'Pokemon');
-
-  const act = (i) => {
-    const s = cl[i].local;
-    if (s.phase !== 'setup') return false;
-    let n = s, ok = false;   // ok＝這個動作**真的**發生了（引擎被 gate 擋住時會回同一狀態或只多一行 log）
-    if (s.openingFlow === 'interactive' && s.openingChoicePending?.[i]) {
-      n = applyAction(s, { type: rnd() < 0.3 ? 'OPENING_MULLIGAN' : 'OPENING_KEEP', senderIdx: i }, pool);
-      ok = !n.openingChoicePending?.[i] || (n.mulliganCounts?.[i] ?? 0) > (s.mulliganCounts?.[i] ?? 0);
-    } else if (isOpeningInProgress(s)) {
-      return false;
-    } else if (!s.mulliganRevealConfirmed?.[i]) {
-      n = applyAction(s, { type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx: i }, pool); ok = !!n.mulliganRevealConfirmed?.[i];
-    } else if ((s.pendingMulliganDraw?.[i] ?? 0) > 0) {
-      n = applyAction(s, { type: 'MULLIGAN_DRAW_DECISION', count: s.pendingMulliganDraw[i], senderIdx: i }, pool);   // 一律全領（I11 才算得準）
-      ok = (n.pendingMulliganDraw?.[i] ?? 0) === 0;
-    } else if (!s.players[i].active) {
-      const c = pickPlaceable(s.players[i].hand);
-      if (c) { n = applyAction(s, { type: 'PLACE_ACTIVE', iid: c.iid, senderIdx: i }, pool); ok = !!n.players[i].active; }
-    } else if (!s.setupDone?.[i]) {
-      const b = pickBasic(s.players[i].hand);
-      if (b && rnd() < 0.4) { n = applyAction(s, { type: 'BENCH_POKEMON', iid: b.iid, senderIdx: i }, pool); ok = n.players[i].bench.length > s.players[i].bench.length; }
-      else { n = applyAction(s, { type: 'FINISH_SETUP', senderIdx: i }, pool); ok = !!n.setupDone?.[i]; }
-    } else if (s.mulliganPostBenchOpen?.[i]) {
-      const b = pickBasic(s.players[i].hand);
-      if (b && rnd() < 0.5) { n = applyAction(s, { type: 'BENCH_POKEMON', iid: b.iid, senderIdx: i }, pool); ok = n.players[i].bench.length > s.players[i].bench.length; }
-      else { n = applyAction(s, { type: 'FINISH_MULLIGAN_POST_BENCH', senderIdx: i }, pool); ok = !n.mulliganPostBenchOpen?.[i]; }
-    }
-    if (!ok) return false;
-    cl[i].local = n;
-    inflight.push({ seat: i, snap: clone(n) });
-    return true;
-  };
-  const land = (k) => {
-    const { seat, snap } = inflight.splice(k, 1)[0];
-    if (shouldSkipStalePush(snap, room.gs)) return;
-    room.gs = clone(mergeForSetupPush(snap, room.gs, seat));
-    room.hist.push(clone(room.gs));
-    if (room.hist.length > 4) room.hist.shift();
-  };
-  const checkEnterPlaying = (tag, g) => {
-    for (const i of [0, 1]) {
-      const truth = cl[i].local.players[i];   // 該座位本人當下的本地
-      const p = g.players[i];
-      if (p.deck.length > truth.deck.length || p.hand.length < truth.hand.length) {
-        note('I9', `${tag} 座位${i} 進 playing 時倒退：deck ${truth.deck.length}→${p.deck.length} hand ${truth.hand.length}→${p.hand.length}`);
-      }
-    }
-    if (g.openingFlow === 'interactive' && !g.openingFinalized) note('I10', `${tag} 互動式進 playing 但未結算`);
-  };
-  const poll = (i, incoming) => {
-    const before = cl[i].local;
-    const d = resolveRoomUpdate(before, clone(incoming), CTX(i));
-    if (!d.game) return;
-    if (d.kind === 'merge-setup') {
-      if (d.game.phase === 'setup') {
-        if (JSON.stringify(d.game.players[i]) !== JSON.stringify(before.players[i])) note('I8', `端${i} 己側盤面被合併改寫（v6.058 R1：放上場的寶可夢被洗回手牌）`);
-        for (const s of [0, 1]) {
-          const rb = rank(before, s), ra = rank(d.game, s);
-          const pb = before.players[s], pa = d.game.players[s];
-          if (ra < rb) note('I8', `座位${s} rank ${rb}→${ra}（端${i}）`);
-          if (pa.deck.length > pb.deck.length) note('I8', `座位${s} deck ${pb.deck.length}→${pa.deck.length}（端${i} 牌被洗回牌庫）`);
-          if (board(pa) < board(pb)) note('I8', `座位${s} 場上＋手牌 ${board(pb)}→${board(pa)}（端${i}）`);
-        }
-      } else {
-        checkEnterPlaying(`端${i} merge-advance`, d.game);
-        inflight.push({ seat: i, snap: clone(d.game) });
-      }
-      cl[i].local = d.game;
-    } else if (d.kind === 'adopt' || d.kind === 'merge-prize') {
-      if (before.phase === 'setup' && d.game.phase === 'playing') checkEnterPlaying(`端${i} adopt`, d.game);
-      cl[i].local = d.game;
-    }
-  };
-  for (let step = 0; step < o.steps; step++) {
-    const r = rnd();
-    if (r < 0.35) act(rnd() < 0.5 ? 0 : 1);
-    else if (r < 0.65) { if (inflight.length) land(Math.floor(rnd() * inflight.length)); }
-    else {
-      const i = rnd() < 0.5 ? 0 : 1;
-      const stale = rnd() < 0.15 && room.hist.length > 1;
-      poll(i, stale ? room.hist[Math.floor(rnd() * (room.hist.length - 1))] : room.gs);
-    }
-  }
-  // 收斂：把剩下的動作做完、在途全部落地、雙方輪詢到穩定
-  for (let r = 0; r < 60 && !(cl[0].local.phase === 'playing' && cl[1].local.phase === 'playing'); r++) {
-    for (const i of [0, 1]) while (act(i)) { /* 做到沒事可做 */ }
-    while (inflight.length) land(0);
-    for (const i of [0, 1]) poll(i, room.gs);
-    while (inflight.length) land(0);
-    for (const i of [0, 1]) poll(i, room.gs);
-  }
-  const [a, b] = [cl[0].local, cl[1].local];
-  if (a.phase !== 'playing' || b.phase !== 'playing') {
-    note('C2', `收斂後仍未進 playing：端0=${a.phase} 端1=${b.phase} room=${room.gs.phase} `
-      + JSON.stringify({ sd: [a.setupDone, b.setupDone], pmd: [a.pendingMulliganDraw, b.pendingMulliganDraw], mpb: [a.mulliganPostBenchOpen, b.mulliganPostBenchOpen] }));
-  } else {
-    // 兩端最後都 adopt／merge 到同一局；再同步一次讓 log 追平
-    for (const i of [0, 1]) poll(i, room.gs);
-    const fa = a.players.map((p) => p.hand.map((c) => c.iid).join(',') + '|' + p.deck.length).join('#');
-    const fb = b.players.map((p) => p.hand.map((c) => c.iid).join(',') + '|' + p.deck.length).join('#');
-    if (a.id !== b.id || fa !== fb) note('C1', `兩端盤面不一致 ${fa} vs ${fb}`);
-    const [m1, m2] = a.mulliganCounts;
-    const net = [Math.max(0, m2 - m1), Math.max(0, m1 - m2)];
-    for (const i of [0, 1]) {
-      const exp = 60 - 7 - a.players[i].prizes.length - net[i] - (i === a.firstPlayerIdx ? 1 : 0);
-      if (a.players[i].deck.length !== exp) note('I11', `座位${i} deck ${a.players[i].deck.length} ≠ 應為 ${exp}（NET ${net[i]}，重抽 ${m1}/${m2}）`);
-    }
-  }
-  return { viol, why, clients: cl, room };
-}
-
-function runMany(M, label, decks, interactive, n, steps = 70) {
-  const tot = { I8: 0, I9: 0, I10: 0, I11: 0, C2: 0, C1: 0 };
-  let ran = 0, bad = 0, firstWhy = null;
-  for (let k = 0; k < n; k++) {
-    seed = k * 7919 + 101;
-    const r = runRoom(M, { decks, interactive, steps });
-    if (r.skipped) continue;
-    ran++;
-    let any = false;
-    for (const key of Object.keys(tot)) { tot[key] += r.viol[key]; if (r.viol[key]) any = true; }
-    if (any) { bad++; if (!firstWhy) firstWhy = `#${k} ` + r.why.join(' ; '); }
-  }
-  return { ran, bad, tot, firstWhy, label };
-}
-const fmt = (r) => `${r.label}: ${r.bad}/${r.ran} 局出事 ` + JSON.stringify(r.tot) + (r.firstWhy ? '\n   例：' + r.firstWhy : '');
-
-// ═══════════════════════════════════════════════════════════════════════
-// 決定性六步重現（玩家回報序列；legacy）
-// ═══════════════════════════════════════════════════════════════════════
-/** 造一局 legacy、seat0（Vic）重抽 2 次 ⇒ seat1（哭啦）可補抽 2 張。 */
-function makeLegacyPending2(M) {
-  let g = null;
-  for (let k = 0; k < 400 && !g; k++) {
-    const c = M.createGame({ name: 'Vic', entries: LEGACY_THIN }, { name: '哭啦', entries: LEGACY_FAT }, pool, { firstChoicePreferences: ['random', 'random'] });
-    if (c.mulliganCounts[0] === 2 && c.mulliganCounts[1] === 0) g = c;
-  }
-  assert.ok(g, '前提：造得出「seat0 重抽 2 次、seat1 0 次」的 legacy 局');
-  assert.deepEqual(g.pendingMulliganDraw, [0, 2]);
-  assert.deepEqual(g.mulliganRevealConfirmed, [true, false]);
-  return g;
-}
-function sixSteps(M) {
-  const { applyAction, resolveRoomUpdate, shouldSkipStalePush, canBeInitialActiveCard } = M;
-  const mergeForSetupPush = typeof M.mergeForSetupPush === 'function' ? M.mergeForSetupPush : ((mine) => mine);
-  const g0 = makeLegacyPending2(M);
-  const place = (s, i) => { const c = s.players[i].hand.find((x) => canBeInitialActiveCard(pool.get(x.cardId))); return applyAction(s, { type: 'PLACE_ACTIVE', iid: c.iid, senderIdx: i }, pool); };
-  // 哭啦（seat1，較少重抽）先擺場＋確認揭示＋按準備；Vic 才能擺場
-  let k = applyAction(g0, { type: 'CONFIRM_MULLIGAN_REVEAL', senderIdx: 1 }, pool);
-  k = place(k, 1);
-  k = applyAction(k, { type: 'FINISH_SETUP', senderIdx: 1 }, pool);
-  assert.deepEqual(k.setupDone, [false, true]);
-  // 房間＝哭啦的快照；Vic 收到後擺場＋按準備 ⇒ S_v2
-  let room = clone(k);
-  let vic = resolveRoomUpdate(clone(g0), clone(room), CTX(0)).game;
-  vic = place(vic, 0);
-  vic = applyAction(vic, { type: 'FINISH_SETUP', senderIdx: 0 }, pool);
-  const S_v2 = clone(vic);
-  assert.equal(S_v2.phase, 'setup'); assert.deepEqual(S_v2.setupDone, [true, true]); assert.deepEqual(S_v2.pendingMulliganDraw, [0, 2]);
-  assert.equal(S_v2.players[1].hand.length, 6); assert.equal(S_v2.players[1].deck.length, 47);
-  // ② Vic 的 push 落地
-  room = clone(mergeForSetupPush(S_v2, room, 0));
-  // ③ 哭啦收到 S_v2，補抽 2 張 ⇒ S_k3；push 落地
-  let ku = resolveRoomUpdate(k, clone(room), CTX(1)).game;
-  ku = applyAction(ku, { type: 'MULLIGAN_DRAW_DECISION', count: 2, senderIdx: 1 }, pool);
-  const S_k3 = clone(ku);
-  assert.equal(S_k3.players[1].hand.length, 8); assert.equal(S_k3.players[1].deck.length, 45);
-  assert.deepEqual(S_k3.pendingMulliganDraw, [0, 0]); assert.deepEqual(S_k3.mulliganPostBenchOpen, [false, true]);
-  if (!shouldSkipStalePush(S_k3, room)) room = clone(mergeForSetupPush(S_k3, room, 1));
-  assert.equal(room.players[1].hand.length, 8, '③ 房間應有哭啦補抽後的 8 張');
-  // ④ Vic 收到哭啦補抽
-  const d4 = resolveRoomUpdate(vic, clone(room), CTX(0));
-  assert.equal(d4.kind, 'merge-setup'); vic = d4.game;
-  assert.equal(vic.players[1].hand.length, 8, '④ Vic 端應看到哭啦 8 張');
-  // ⑤ Vic 的【舊 echo】：S_v2 因 409 重試晚一步落地（推送端）；接著 Vic poll 到房間
-  const roomBefore5 = clone(room);
-  if (!shouldSkipStalePush(S_v2, room)) room = clone(mergeForSetupPush(S_v2, room, 0));
-  const d5 = resolveRoomUpdate(vic, clone(room), CTX(0));
-  const vicAfter5 = d5.game ?? vic;
-  // ⑤' 收端獨立驗證：晚到的舊房間版本（＝原封不動的 S_v2）直接送到 Vic 端（推送端合併救不到這條路）
-  const d5b = resolveRoomUpdate(vic, clone(S_v2), CTX(0));
-  const vicEcho = d5b.game ?? vic;
-  // ⑥ 哭啦 poll 到房間（或 Vic 推進後的 playing）
-  if (vicAfter5.phase === 'playing') room = clone(vicAfter5);   // Vic 推 playing（setup×playing 不會被 skip）
-  const d6 = resolveRoomUpdate(ku, clone(room), CTX(1));
-  const kuAfter6 = d6.game ?? ku;
-  return { S_v2, S_k3, roomBefore5, roomAfter5: room, vic: vicAfter5, vicEcho, ku: kuAfter6, d5, d6 };
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 // 主流程
@@ -334,7 +52,7 @@ const M = await bundle(null);
 await T('[F1] sync-guards 匯出 setupSeatRank，且與參考實作在 2000 個隨機盤面上逐一相同（含互動式 0/1 階）', () => {
   assert.equal(typeof M.setupSeatRank, 'function', 'sync-guards 沒有 export setupSeatRank');
   assert.equal(M.SETUP_SEAT_RANK_MAX, 6);
-  seed = 7;
+  setSeed(7);
   for (let k = 0; k < 2000; k++) {
     const inter = rnd() < 0.5;
     const s = {
@@ -599,7 +317,7 @@ await expectRed('④ 互動式未結算不壓在階梯底（佔位 [0,0] 被當�
 await expectRed('⑤ 拿掉「恰一端結算 ⇒ 整組採該端」（pending 各座位自取）⇒ 互動式 fuzz 紅', /I8|I9|I11|C1|C2/,
   mutG("  const finSrc: GameState | null = fL === fI ? null : (fL ? L : I);", "  const finSrc: GameState | null = null;"), runFuzzInter);
 await expectRed('⑥ 推送端 mergeForSetupPush 原樣回傳（＝v6.308 整份覆蓋）⇒ 決定性重現紅在推送端', /推送端/,
-  mutG("  return mergeSetupSeats(mine, cur, mySeat, 'push');", "  return mine;"), runSix);
+  mutG("  const out = mergeSetupSeats(mine, cur, mySeat, 'push');", "  return mine; const out = mine;"), runSix);
 await expectRed('⑦ 拿掉推送端 phase 倒退 skip ⇒ [F2] shouldSkipStalePush 紅', /倒退沒有被推送端擋住/,
   mutG("  if (current.phase === 'playing' && incoming.phase === 'setup') return true;\n  // 同局：playing×playing", "  // 同局：playing×playing"),
   (MM) => { const g = MM.createGame({ name: 'A', entries: LEGACY_FAT }, { name: 'B', entries: LEGACY_FAT }, pool); assert.equal(MM.shouldSkipStalePush(clone(g), Object.assign(clone(g), { phase: 'playing', log: [] })), true, '同局 playing→setup 倒退沒有被推送端擋住'); });
@@ -659,7 +377,10 @@ await expectRed('⑩ 平手改採本地（對手同階內的放備戰永遠看�
         console.log('   ' + fmt(r));
         const r2 = runMany(MB, 'interactive@BASE', [MIXED, BURST_ONLY], true, 300);
         console.log('   ' + fmt(r2));
-        assert.ok(r.bad > 0 && r2.bad > 0, 'BASE 竟然全綠 ⇒ fuzz 模型沒有重現得出來');
+        // ⚠ 區間而非等於：這個數字在 v6.309 之前不可重現（引擎洗牌走全域 Math.random、狀態跨局累積），
+        //   實作者自報的「99/300、87/300」與審查者跑出的「119/300、83/300」都只是當時的一次採樣。
+        //   v6.310 起每局重設 PRNG 才可重現，但守衛仍只斷言「BASE 明顯 > 0、HEAD == 0」。
+        assert.ok(r.bad > 20 && r2.bad > 20, 'BASE 竟然（幾乎）全綠 ⇒ fuzz 模型沒有重現得出來');
       });
     }
   }

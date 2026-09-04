@@ -1,5 +1,65 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.310 v6.309 的獨立審查：log 回歸修好、「混版新增卡局」推翻（不加逃生口）
+
+BASE `039625c870f5243548d54c20abb1139bc34acc53`（v6.309，遠端 main；`git ls-remote` 確認）。v6.309 **尚未部署**（正式站 v6.306），本版是部署前提。
+審查者兩條「必修」逐條複驗：⚠1 成立、⚠2 不成立；另外處理審查者列的小事。首頁 changelog 不新增條目（理由見【5】）。
+
+### 【1】⚠1 推送端把自己的 log 整段丟掉 —— 成立，修在 `mergeForSetupPush`
+
+- 複驗：`mergeSetupSeats` 的基底是 `{ ...I }`；push 模式 I＝房間現況 ⇒ 除了逐座位覆寫的六個欄位外一律採房間的值；setup 期間會變的只有 `log`。
+  真引擎六步實跑：哭啦補抽落地後房間 log 長度停在 createGame 的 3 行、沒有「選擇補抽 2 張」；收端再 `...incoming` ⇒ 兩端都消失。
+- 修：`mergeSetupLogs(mine.log, cur.log)`＝共同前綴 ＋ 房間的尾（先落地者在前）＋ 我的尾，我的尾用**多重集合差**去掉已落地的同一行
+  （setup 階段 log 沒時間戳，兩張同名卡放備戰是兩行相同文字，都是真的 —— 用集合會吃掉第二行）。
+  ⚠ 沒照審查者的「取較長者」：平長不同尾（我 [a,b,c,e]、房間 [a,b,c,d]）會把 e 永久丟掉；v6.308 的 last-writer-wins 也會丟，本版比兩者都好。
+- 順手：setup→playing 的那一筆（我這端剛推進）盤面照舊整份覆蓋（＝v6.308），只把房間 setup 尾段的 log 接上 —— 否則對手最後幾筆 setup 動作
+  （「完成補抽後備戰設置」）被這一筆洗掉（模型 300 局裡 98 局）。剩下 1~2% 流失來自「對手已 playing、我最後一筆 setup 被 F2b 正確 skip」，那是 skip 的既有語義（v6.308 同樣丟），不為 log 改 skip。
+- log 純顯示：`setupSeatRank` 不讀 log；setup 期間 `shouldSkipStalePush`／`resolveRoomUpdate` 不看 log ⇒ 對合併判定零影響。收端不改（`...incoming` 採房間，房間現在是完整的）。
+
+### 【2】⚠2 混版「新增卡局」—— 不成立；逃生口做了兩版又撤回
+
+- 審查者的判準是「同一個 k 的新×舊 vs 舊×舊」**逐局配對**。本版重跑（surrogate 舊 client ＝ 對 HEAD sync-guards 做三處突變；另用真 v6.308 blob 對跑，四臂數字逐一相同）：
+  那三局（#11／#37／#183）在「有逃生口」與「沒有逃生口」下**完全相同**；trace 顯示成因全是**舊 client 自己三筆亂序整份覆蓋、把房間從 playing 洗回 setup**
+  （舊×舊也有的型態；v6.309 F2b 就是修這個）。新 client 拒寫自己的舊 echo（正向）之後兩臂**軌跡分歧**，逐局配對從那一刻起就不是同一局 —— 「新增」是配對假象。
+  審查者「F2a off ⇒ 0 新增」是因為 F2a off 後新 client 推送＝v6.308，軌跡與舊×舊幾乎不分歧，配對數自然是 0，不代表 F2a 有害。
+- 判準改成**歸因**（守衛 C 節）：每一次落地若讓房間裡某座位 rank 退回／把 playing 洗回 setup，記下是誰推的。
+  結果（300 局 legacy，每局重設 PRNG）：舊×舊 123 出事／37 卡局；新×舊 53／15、舊×新 60／23、新×新 0／0；**新 client 造成的退回事件 0（含卡局的局）**，舊 client 359／362。
+  反面對照：把新 client 的推送端合併拿掉（＝v6.308 推送），新 client 的退回事件立刻 259／266 —— 量測不是安慰劑。v6.309 blob 跑同一節：綠（新 client 退回 0）。
+- 逃生口實作紀錄（都撤回了，避免下次重做）：`_setupMergeV:{p1,p2}` 協定旗標、對手座位有旗標才合併。第一版把己側保護一起關掉 ⇒ 新×新 300 局 5 局卡死
+  （seat1 自己兩筆亂序 ⇒ setupDone 退回 false ⇒ 重抽較多的 seat0 永遠等對手＝v6.308 既有卡局）；第二版加「己側舊 echo 不寫」⇒ 互動式 2 局卡死（重抽 3→4→KEEP 最舊那筆最後落地）；
+  第三版修好後跑混版：「新增卡局」與無逃生口**完全同三局** ⇒ 逃生口對它無效 ⇒ 整個撤回。⚠ 審查者假設「舊 client 會把旗標洗掉」也不成立：舊 client 收端是 `{...incoming}`，旗標會傳染回房間。
+- 逃生口若真要做，代價是混版下推送端對手側保護全關（混版卡局 15→18／23→25）；既然新 client 的退回事件是 0，沒有理由付這個代價。
+- ⚠ 混版仍有「兩邊都壞」的局（新×舊 53、舊×新 60 vs 舊×舊 123）：只有雙方都升到新版才真的修好 —— 首頁 changelog 寫了一句。
+
+### 【3】審查者列的小事
+
+- F3 硬 gate `interactive && !openingFinalized`：確認不可達（與 `ensureOpeningFinalized` 同一判準），**留著但註解明寫零保護力、只防未來改動**。
+- `[F2 接線]` 守衛改行為端：test-v6310 D1／D2 用 esbuild 把 room-oracle.ts／room.ts 轉 CJS、stub 外部相依但接**真的** sync-guards，實跑 `pushGameState`
+  斷言假伺服器收到的是合併結果（8 張）＋log；突變⑨把 import 拿掉 ⇒ typeof 防衛變靜默 no-op ⇒ D1 紅。typeof 防衛本身留著（CJS stub 相容）。
+- 數字：v6.309 的「legacy 99/300、互動式 87/300」不可重現（全域 Math.random 跨局累積）。模型抽到 `scripts/lib/setup-room-model.mjs`，**每局重設引擎 PRNG**，
+  現在可重現（BASE 123／81）；test-v6309 的主證明改成區間斷言（BASE > 20、HEAD == 0），不 pin 數字。「突變 11 個」實為 10 個＋2 個 HEAD-FAIL expectRed。
+- F4 措辭：「零新請求」→「健康路徑零新請求；出事時每頁最多 1 發」。
+
+### 【4】守衛 `scripts/test-v6310-setup-merge-escape-hatch.mjs`（PASS 17；沙盒帶 V6310_BASE／V6310_BASE_OLD 21）
+
+A1 log 單元（含「取較長者」反例）；B1 六步 log 行為端；B2 新×新 fuzz「選擇補抽」行零流失、總流失 ≤ 3%（v6.309 幾乎全丟）；
+C1 混版歸因（新 client 退回 0、卡局／違規總數 ≤ 舊×舊、新×新 0）；C2 反面對照；C3 真舊碼對照（surrogate 四臂數字逐一相同）；D1／D2／D3 接線行為端；
+突變 9 個（①log 不合併 ②取較長者 ③集合去重 ④只取我的 ⑤推送端不合併 ⑥己側不 pick ⑦拿掉 phase skip ⑧setup→playing 不接 log ⑨import 掉了）各紅在預期斷言；
+HEAD-FAIL（sync-guards.ts＝v6.309）B1／B2 紅、C1 綠（⚠2 不成立的直接證據）。CI 跑約 70 秒。套件：esbuild／node:*（既有直接依賴）。
+test-v6309 改用共用模型，27 PASS 不變。
+
+### 【5】三配套與 changelog
+
+(a) `admin.html` SITE_VERSION_HINT → 6.310（LF）。(b) `test-v6272` ⑩ PREV_SHA → `039625c8`、PREV_ALLOWED 4 項；`test-v6264` BASE_SHA → `039625c8`。
+(c) 新守衛不 pin 版本號／sha（HEAD-FAIL 靠環境變數，缺席出聲略過）。
+首頁 changelog：v6.309 那一則**從未上線**（站長沒部署）⇒ 直接改寫成 v6.310（內文 80 字、加「雙方都更新到最新版後才完全生效」），不新增條目、不搬運；
+理由：玩家看到的第一個含此修正的版本就是 v6.310，兩則會重複，摘要區也省 35 字。
+
+### 【6】驗證與部署
+
+完整 `npm test` 分批全綠、`tsc --noEmit` TS2304 0、anti-pattern-lint 無違規（見 push 回報）。
+引擎只改註解、sync-guards 改推送端 ⇒ 站長跑 `update-tournament.bat`（離峰、無錦標賽進行中；同步 git ＋ 重建 server-engine.cjs ＋ pm2 restart）＋ `redeploy-oracle.bat`。順序不拘（沒有 client 新欄位）。
+
 ## v6.309 開局補抽被合併洗回牌庫（收端／推端每座位同源單調合併 ＋ 引擎結算）
 
 BASE `827beae1cc9c6c6ff55895d3d1e5e422a8b4f052`（v6.308，遠端 main；`git ls-remote` 確認）。
@@ -15,7 +75,8 @@ BASE `827beae1cc9c6c6ff55895d3d1e5e422a8b4f052`（v6.308，遠端 main；`git ls
   建局當下雙定案（一方起手全能量被自動重抽到有基礎）⇒ 本機／AI／錦標賽永遠不結算，log 卻寫「可選擇多抽 N 張」。
   ⚠ 補充：**線上**這條被 rule 7 遮住（任何一次 setup merge 都會結算），所以線上 fuzz 對根因 B 是 0 紅；它只打本機／AI／錦標賽 —— 由 [F3] 直接單元測試證明。
 - ✓ 被推翻的三條維持推翻（tryAdvanceToPlaying 的兩個 gate 正確、準備順序不是問題、UI 視窗條件正確）。
-- ⚠ 診斷數字修正：調查階段的「legacy 30/300」是舊模型；本版守衛的共享房間模型在 BASE sync-guards 上是 **legacy 99/300、互動式 87/300**
+- ⚠ 診斷數字修正：調查階段的「legacy 30/300」是舊模型；本版守衛的共享房間模型在 BASE sync-guards 上是 legacy 99/300、互動式 87/300
+  （⚠ v6.310 更正：這兩個數字**不可重現** —— 引擎洗牌走全域 Math.random、狀態跨局累積；審查者跑出 119/83，v6.310 每局重設 PRNG 後是 **123/300、81/300**）
   （I8 洗回 164／113 次、另有 C2 開局死角 31／38 局 —— 死角是「我最後一筆 setup push 晚於對手的 playing push 落地」，BASE 沒有任何一端推得動）。
 - ⚠ 新發現一條（診斷沒寫）：**我自己的兩發 push 也可能亂序落地**（BENCH 的那發晚於 FINISH_MULLIGAN_POST_BENCH），推端若只保「對手那一半」，
   我自己較新的一階會被自己的舊 push 蓋回 ⇒ 推端己側也走 rank pick（平手採我這份）。守衛「[F2] 自己兩發 push 亂序落地」＋突變③b。
@@ -55,7 +116,7 @@ BASE `827beae1cc9c6c6ff55895d3d1e5e422a8b4f052`（v6.308，遠端 main；`git ls
   —— ⚠ 由構造它不可達（上一行已結算），只是防未來把兩個判準改分家；突變測試不涵蓋它（涵蓋的是 level-triggered 那行）。
 - 反向卡死檢查：未定案的互動式仍不推進（[F3] 正對照）；fuzz 互動式 300 局收斂 0 卡住。錦標賽 sap 零改動（走引擎），需 update-tournament.bat 重建 server-engine.cjs。
 
-### 【4】F4 診斷指紋 `casual-setup-adopt-loss`（`+page.svelte`；零新請求）
+### 【4】F4 診斷指紋 `casual-setup-adopt-loss`（`+page.svelte`；健康路徑零新請求、出事時每頁最多 1 發）
 
 - adopt 路徑（local setup × incoming playing、同局）若我方座位 rank／手牌／牌庫比本地倒退 ⇒ `_tSendClientDiag('casual-setup-adopt-loss')`，每頁一次，payload 帶 `setupLoss{rankL,rankI,handL,handI,deckL,deckI}`。
 - ⚠ 部署順序：**不需要 server 先上** —— 伺服器分帳只看 `casual-` 前綴（test-v6265 F3 已證），沒有欄位白名單。admin.html 補了白話說明（test-v6154 抓到）。
@@ -67,7 +128,7 @@ BASE `827beae1cc9c6c6ff55895d3d1e5e422a8b4f052`（v6.308，遠端 main；`git ls
   I10（互動式進 playing 必 openingFinalized）／I11（收斂後 deck ＝ 60−7−6−NET−先手首抽）／C1 兩端一致／C2 不卡死。
 - ⭐ 主證明（V6309_BASE=827beae1 對照 BASE sync-guards）：**legacy 99/300、互動式 87/300 出事 → 修後 0/300、0/300**。
 - HEAD-FAIL（五個檔各自還原 BASE blob）：sync-guards 18 紅（含 F1 匯出／決定性重現／兩個 fuzz）、engine 4 紅（根因 B／level-triggered）、room-oracle 1 紅、room.ts 1 紅、+page 2 紅（座位接線／F4）。
-- 突變 11 個各紅在預期斷言（①對手側恆採 incoming ②rank 常數 ③己側 rank pick 平手採 incoming ③b 推端己側不 pick ④未結算不壓底 ⑤拿掉 finSrc ⑥推端原樣 ⑦拿掉 phase 倒退 skip ⑧createGame 不結算 ⑨拿掉 level-triggered ⑩平手採本地）。
+- 突變 10 個各紅在預期斷言（另 2 個是 HEAD-FAIL 的 expectRed）（①對手側恆採 incoming ②rank 常數 ③己側 rank pick 平手採 incoming ③b 推端己側不 pick ④未結算不壓底 ⑤拿掉 finSrc ⑥推端原樣 ⑦拿掉 phase 倒退 skip ⑧createGame 不結算 ⑨拿掉 level-triggered ⑩平手採本地）。
 - 既有守衛同步（都是「pin 了上一版的字面／sha／計數」，前移並附理由）：test-opening-online-sync 第 10 條矩陣改寫；test-v6247／v6248 的 pushTracked 正規式與突變字串；
   test-v6274 E1/E2、test-v6280 E1/E2/F7（sha 錨點與 `_tSendClientDiag` 15→16）；test-v6265 F2 reason 清單；test-v6154 admin 白話說明。
 - 套件：只用 esbuild／node:*（既有直接依賴）。

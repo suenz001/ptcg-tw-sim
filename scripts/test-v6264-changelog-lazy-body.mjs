@@ -38,7 +38,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '827beae1cc9c6c6ff55895d3d1e5e422a8b4f052'; // v6.308（v6.309 的前一版；v6.309 動了 changelog ⇒ 前移）
+const BASE_SHA = '039625c870f5243548d54c20abb1139bc34acc53'; // v6.309（v6.310 的前一版；v6.310 只改寫首頁第一則 ⇒ 前移）
 const N_INLINE = 12;   // 首頁內嵌完整內文的則數（站長裁定的「最新 N 則」）
 
 let pass = 0, fail = 0;
@@ -505,9 +505,28 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
   const NEW_VER = home.entries[0].ver;
   const droppedVers = baseHomeSplit.entries.map((e) => e.ver).filter((v) => !home.entries.some((e) => e.ver === v));
 
+  // ⭐ v6.310：第三種合法情況 ——「上一版新增的那一則還沒上線就被改寫」：封存頁與 bodies 逐位元相同、首頁除第一則外逐位元相同、
+  //   則數不變、第一則版本號比 BASE 第一則新、而 BASE 第一則的版本號在本版三檔都不存在（它從未上線，是被改寫而不是被搬走）。
+  //   ⚠ 這不是弱化：除了第一則之外全部逐位元相同，比 F1 的「還原後相同」更強；多動一個位元組就落到 else 分支走完整 F1~F3。
+  const _baseTop = baseHomeSplit.entries[0]?.ver;
+  const _clTopRewrite = !_clUnchanged && baseHome.ok && baseArc.ok
+    && baseArc.out === ARC && (baseBodiesRaw.ok ? baseBodiesRaw.out === BODIES : BODIES === '')
+    && home.entries.length === baseHomeSplit.entries.length
+    && home.entries.slice(1).map((e) => e.text).join('') === baseHomeSplit.entries.slice(1).map((e) => e.text).join('')
+    && NEW_VER !== _baseTop
+    && !home.entries.some((e) => e.ver === _baseTop) && !arc.entries.some((e) => e.ver === _baseTop) && !bodyMap.has(_baseTop);
+
   if (_clUnchanged) {
     T('F0 ⭐ 本版未動 changelog（admin-only 版）：首頁／封存頁／bodies 三檔與 BASE 逐位元相同', () => {
       assert.strictEqual(HOME, baseHome.out); assert.strictEqual(ARC, baseArc.out);
+    });
+  } else if (_clTopRewrite) {
+    T('F0b ⭐ 本版只改寫首頁第一則（上一版新增、尚未上線的那一則）：其餘 49 則／封存頁／bodies 與 BASE 逐位元相同，版本號只前進', () => {
+      const num = (v) => parseFloat(String(v).replace(/^v/, ''));
+      assert.ok(num(NEW_VER) > num(_baseTop), `第一則版本 ${NEW_VER} 沒有比 BASE 的 ${_baseTop} 新`);
+      assert.strictEqual(home.entries.filter((e) => e.open).length, 1, '預設展開的不是恰好一則');
+      assert.strictEqual(home.entries[0].open, true, '預設展開的不是最新那一則');
+      assert.strictEqual(home.entries.length, 50);
     });
   } else {
     T('F1 ⭐ 首頁：除了最新那一則以外，每一則都能逐位元組還原回 BASE（搬運沒有動到內文）', () => {

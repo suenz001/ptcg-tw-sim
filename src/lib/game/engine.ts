@@ -2538,6 +2538,9 @@ export function tryAdvanceToPlaying(input: GameState): GameState {
   //   ⚠判準必須與 isOpeningInProgress 同一個（effectiveOpeningDone），否則與逃生規則打架。
   if (isOpeningInProgress(state)) return auditFail('互動式開局尚未定案');
   // ⭐v6.309 硬 gate：互動式且未結算 → 絕不推進（上面已 level-triggered 結算，走到這裡＝定案判定與結算判定打架，寧可卡住也不吃補抽）。
+  //   ⚠ v6.310 標註：**目前不可達（死碼）**—— 上一行 `isOpeningInProgress` 與 `ensureOpeningFinalized` 用的是同一個判準
+  //   （effectiveOpeningDone），雙定案一通過，`ensureOpeningFinalized` 必已寫下 openingFinalized。留著純粹是防**未來**有人把
+  //   兩邊的判準改成不同（或 finalizeOpening 不再寫旗標）：那時寧可卡住也不吃補抽。它現在**零保護力**，不要把它當成守備。
   if (state.openingFlow === 'interactive' && !state.openingFinalized) return auditFail('互動式開局尚未結算');
   if (!state.setupDone[0] || !state.setupDone[1]) return auditFail(`setup 未完成: P1=${state.setupDone[0]}, P2=${state.setupDone[1]}`);
   if (state.pendingMulliganDraw[0] !== 0 || state.pendingMulliganDraw[1] !== 0) return auditFail(`pendingMulliganDraw 未處理: [${state.pendingMulliganDraw[0]}, ${state.pendingMulliganDraw[1]}]`);

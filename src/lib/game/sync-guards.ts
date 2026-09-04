@@ -606,8 +606,38 @@ export function mergeForSetupPush(
 ): GameState {
   if (mySeat !== 0 && mySeat !== 1) return mine;
   if (!cur || cur.id !== mine.id) return mine;
+  // ⭐v6.310 setup→playing 的那一筆（我這端剛推進）：盤面照舊整份覆蓋（＝v6.308），只把房間 setup 尾段的 log 接上 ——
+  //   否則對手最後幾筆 setup 動作的紀錄（例如「完成補抽後備戰設置」）會被這一筆整份洗掉（模型：300 局裡 98 局流失）。
+  if (mine.phase === 'playing' && cur.phase === 'setup') return { ...mine, log: mergeSetupLogs(mine.log, cur.log) };
   if (mine.phase !== 'setup' || cur.phase !== 'setup') return mine;
-  return mergeSetupSeats(mine, cur, mySeat, 'push');
+  const out = mergeSetupSeats(mine, cur, mySeat, 'push');
+  // ⭐v6.310 log：mergeSetupSeats 的基底是房間現況（`...I`），單獨用它會把我這一筆的 log 整段丟掉
+  //   （v6.309 的回歸：整個 setup 階段的紀錄、含「選擇補抽 2 張」，對雙方都消失）⇒ 共同前綴 ＋ 房間的尾 ＋ 我的尾。
+  return { ...out, log: mergeSetupLogs(mine.log, cur.log) };
+}
+
+/**
+ * ⭐v6.310 setup 推送端的 log 合併：共同前綴 ＋ 房間的尾（先落地者在前）＋ 我的尾。
+ *   我的尾裡「已經在房間尾出現過的同一行」以多重集合差去掉（我上一筆已落地、本地卻還沒被輪詢覆蓋時會重複）；
+ *   ⚠ 用多重集合而不是集合：setup 階段的 log 沒有時間戳，兩張同名卡放備戰是兩行相同文字，都是真的。
+ *   ⚠ 不是「取較長者」：平長不同尾（我 [a,b,c,e]、房間 [a,b,c,d]）會把我的 e 永久丟掉（test-v6310 A2 正對照）。
+ *   純顯示用：`setupSeatRank` 不讀 log、setup 期間 `shouldSkipStalePush`／resolveRoomUpdate 也不看 log ⇒ 對合併判定零影響。
+ */
+export function mergeSetupLogs<T>(mine: readonly T[] | undefined, cur: readonly T[] | undefined): T[] {
+  const a = mine ?? [], b = cur ?? [];
+  const key = (e: T): string => JSON.stringify(e);
+  let k = 0;
+  while (k < a.length && k < b.length && key(a[k]) === key(b[k])) k++;
+  const seen = new Map<string, number>();
+  for (let i = k; i < b.length; i++) { const s = key(b[i]); seen.set(s, (seen.get(s) ?? 0) + 1); }
+  const out: T[] = b.slice(0);
+  for (let i = k; i < a.length; i++) {
+    const s = key(a[i]);
+    const n = seen.get(s) ?? 0;
+    if (n > 0) { seen.set(s, n - 1); continue; }
+    out.push(a[i]);
+  }
+  return out;
 }
 
 /**

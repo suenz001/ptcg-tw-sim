@@ -46,6 +46,10 @@ const BASE_SHA_V6269 = 'd9f9b4351b5642095d59d7a2db9037064989855a';
 //       的內嵌 sha256（與 test-v6272/test-v6275 同值，history-free、CI 上真的在守，
 //       且 admin 區塊的合法演化不再需要每版回來改 pin）。
 const BASE_SHA_V6274 = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';
+// ⭐ v6.310：v6.309 改了 sync-guards.ts（setupSeatRank 每座位同源合併）與 engine.ts（互動式建局結算），這兩個檔的整檔 pin 在那一版就過期了
+//   （沙盒不是 git repo ⇒ 沒發現）。改法：sync-guards 的守備交給 test-v6274 E1/E2（resolveRoomUpdate／shouldSkipStalePush 本體 seg sha，錨點已前移）
+//   ＋ 本檔 F5 改成「resolveRoomUpdate 本體與 v6.309 blob 的同一段逐字相同」（不 pin 整檔）；engine.ts 前移到 v6.309、剝掉 v6.310 的三行註解。
+const BASE_SHA_V6309 = '039625c870f5243548d54c20abb1139bc34acc53';
 // ⚠ v6.276 對錦標賽區塊做了 6 處**純 additive** 插入（報名/歸檔帶 deckId）⇒ 重釘；
 //   「只有那 6 處」由 test-v6276 的 revert-diff 證明（還原後 sha 回到 34a8448b…）。
 const TOURN_TAIL_SHA256_V6276 = 'c0891b6f200ab4e3898c50aa77365458d2207870e828dc28bbfb44df81ddcda3';
@@ -723,28 +727,32 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     assert.strictEqual(hex, TOURN_TAIL_SHA256_V6276,
       'server_admin_patch.js 的錦標賽區塊被動到了（tail sha256 不符）');
   }
-  for (const [p, sha] of [['src/lib/game/sync-guards.ts', BASE_SHA_V6274],
-                          ['src/lib/game/oracle-client.ts', BASE_SHA],
-                          ['src/lib/game/engine.ts', BASE_SHA]]) {
+  // ⭐ v6.310：engine.ts 的合法改動只有 tryAdvanceToPlaying 硬 gate 上方的三行註解（哨兵剝掉之後必須逐字等於 v6.309 blob）
+  const stripV6310Engine = (src) => src.replace(
+    "  //   ⚠ v6.310 標註：**目前不可達（死碼）**—— 上一行 `isOpeningInProgress` 與 `ensureOpeningFinalized` 用的是同一個判準\n"
+    + "  //   （effectiveOpeningDone），雙定案一通過，`ensureOpeningFinalized` 必已寫下 openingFinalized。留著純粹是防**未來**有人把\n"
+    + "  //   兩邊的判準改成不同（或 finalizeOpening 不再寫旗標）：那時寧可卡住也不吃補抽。它現在**零保護力**，不要把它當成守備。\n", '');
+  for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA],
+                          ['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
     const b = readBaseBlob(ROOT, sha, p);
     ok(b.ok, '讀不到 BASE 的 ' + p);
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
-      : (p === 'src/lib/game/sync-guards.ts' ? stripV6280(raw) : raw);
+      : (p === 'src/lib/game/engine.ts' ? (() => { const s = stripV6310Engine(raw); ok(s !== raw, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）'); return s; })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
+  // sync-guards.ts：整檔比對已由 test-v6274 E1/E2（本體 seg sha）接管；這裡只確認那兩支守衛還在 test chain 裡（不是靜默消失）
+  const pkg = readFileSync(join(ROOT, 'package.json'), 'utf8');
+  ok(pkg.includes('node scripts/test-v6274-start-grace-reset.mjs'), 'test-v6274 不在 test chain ⇒ sync-guards 的本體守備沒人接');
 });
 await T('F5 ⭐⭐⭐ `resolveRoomUpdate` 的收斂邏輯逐字未動（長期記憶明訓：動它會造成死結）', () => {
   const cur = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
   ok(cur.includes('export function resolveRoomUpdate('), '抓不到 resolveRoomUpdate');
-  if (!hasBaseCommit(ROOT, BASE_SHA_V6274)) { shallowSkip('F5 對 BASE 的逐字比對', ''); return; }
-  const b = readBaseBlob(ROOT, BASE_SHA_V6274, 'src/lib/game/sync-guards.ts');
-  // ⚠ v6.280 的合法新增（純述詞 nextRestartBaseline）以哨兵剝掉；其餘逐字必須相同。
-  const a0 = cur.indexOf('// >>> v6280-restart-baseline-core\n');
-  const eM = '// <<< v6280-restart-baseline-core\n\n';
-  const e0 = cur.indexOf(eM);
-  const stripped = (a0 >= 0 && e0 > a0) ? cur.slice(0, a0) + cur.slice(e0 + eM.length) : cur;
-  assert.strictEqual(stripped, b.out, 'sync-guards.ts 被動過了');
+  if (!hasBaseCommit(ROOT, BASE_SHA_V6309)) { shallowSkip('F5 對 BASE 的逐字比對', ''); return; }
+  const b = readBaseBlob(ROOT, BASE_SHA_V6309, 'src/lib/game/sync-guards.ts');
+  // ⭐ v6.310：只比 resolveRoomUpdate 本體（與 test-v6274 E1 同一種切法），不 pin 整檔 —— 整檔 pin 每改一次 sync-guards 就靜默失效。
+  const seg = (src) => { const a = src.indexOf('export function resolveRoomUpdate('); ok(a >= 0, '抓不到 resolveRoomUpdate'); const e = src.indexOf('\nexport function ', a + 1); return src.slice(a, e > a ? e : undefined); };
+  assert.strictEqual(seg(cur), seg(b.out), 'resolveRoomUpdate 本體被動過了');
 });
 
 // ══════════════════════════════════════════════════════════════════════════
