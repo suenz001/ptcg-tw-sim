@@ -47,6 +47,12 @@ const esbuild = await import('esbuild');
 
 const HOUR = 60 * 60 * 1000, DAY = 24 * HOUR;
 const CACHE_KEY = 'ptcg_home_cl_cache_v1';
+// v6.306：簽名改為 (gen, fetchOverride)、快取綁世代（欄位 g）而非站台版本。
+//   BASE（v6.280）仍是舊簽名 (fetchOverride) ⇒ 用 fn.length 分流，HEAD-FAIL 段才跑得動舊模組。
+const GEN = 1;
+const call = (mod, f, gen = GEN) => (mod.loadHomeChangelogOverride.length >= 2
+  ? mod.loadHomeChangelogOverride(gen, f)
+  : mod.loadHomeChangelogOverride(f));
 
 // ── 假 localStorage（與 test-v6273 同款）─────────────────────────────────
 function makeLS(opts = {}) {
@@ -102,58 +108,58 @@ function tamper(ls, fn) {
 async function assertNeg30d(mod) {
   const ls = makeLS(); globalThis.localStorage = ls;
   let calls = 0; const f = async () => { calls++; return null; };
-  await mod.loadHomeChangelogOverride(f);
+  await call(mod, f);
   assert.strictEqual(calls, 1, 'NEG-FIRST：第一次應恰 1 次 fetch');
   rewindAt(ls, 29 * DAY);
-  await mod.loadHomeChangelogOverride(f);
+  await call(mod, f);
   assert.strictEqual(calls, 1, 'NEG-29D：負結果 29 天內應命中（0 次 fetch）');
   rewindAt(ls, 2 * DAY);   // 累計 31 天
-  await mod.loadHomeChangelogOverride(f);
+  await call(mod, f);
   assert.strictEqual(calls, 2, 'NEG-31D：負結果 31 天應過期、重新 fetch');
 }
 async function assertNeg6h(mod) {   // 與 v6.273 的差異點（BASE 上必紅在這條）
   const ls = makeLS(); globalThis.localStorage = ls;
   let calls = 0; const f = async () => { calls++; return null; };
-  await mod.loadHomeChangelogOverride(f);
+  await call(mod, f);
   rewindAt(ls, 6 * HOUR + 60_000);
-  await mod.loadHomeChangelogOverride(f);
+  await call(mod, f);
   assert.strictEqual(calls, 1, 'NEG-6H：負結果 6 小時後應仍命中（v6.273 的 6h TTL 零命中正是本版要修的）');
 }
 async function assertPos6h(mod) {
   const ls = makeLS(); globalThis.localStorage = ls;
   let calls = 0; const f = async () => { calls++; return '<b>公告</b>'; };
-  const g1 = await mod.loadHomeChangelogOverride(f);
+  const g1 = await call(mod, f);
   assert.strictEqual(g1, '<b>公告</b>', 'POS-GET：第一次應拿到 override');
   rewindAt(ls, 5 * HOUR);
-  const g2 = await mod.loadHomeChangelogOverride(f);
+  const g2 = await call(mod, f);
   assert.strictEqual(calls, 1, 'POS-5H：正結果 5 小時內應命中（0 次 fetch）');
   assert.strictEqual(g2, '<b>公告</b>', 'POS-5H：命中拿到的內容不對');
   rewindAt(ls, 2 * HOUR);  // 累計 7 小時
-  await mod.loadHomeChangelogOverride(f);
+  await call(mod, f);
   assert.strictEqual(calls, 2, 'POS-7H：正結果 7 小時應過期（絕不可套負結果的 30 天——admin 改公告要 6h 內全站生效）');
 }
-async function assertVerBind(mod, modOther) {
+async function assertGenBind(mod) {   // v6.306：世代綁定（取代 v6.281 的站台版本綁定）
   const ls = makeLS(); globalThis.localStorage = ls;
   let calls = 0; const f = async () => { calls++; return null; };
-  await mod.loadHomeChangelogOverride(f);
-  await mod.loadHomeChangelogOverride(f);
-  assert.strictEqual(calls, 1, 'VER-SAME：同版本剛寫入應命中');
-  tamper(ls, (o) => { o.v = '0.000'; });   // at 全新、只有版本不同
-  await mod.loadHomeChangelogOverride(f);
-  assert.strictEqual(calls, 2, 'VER-DIFF：版本字串不同應未命中（不論快取多新）');
-  // 雙 bundle 互證：另一個版本的模組寫的快取，本版讀必須未命中
-  let callsOther = 0;
-  await modOther.loadHomeChangelogOverride(async () => { callsOther++; return null; });
-  assert.strictEqual(callsOther, 1, 'VER-CROSS-W：對照模組應 fetch 一次並寫入自己的版本');
+  await call(mod, f);
+  await call(mod, f);
+  assert.strictEqual(calls, 1, 'GEN-SAME：同世代剛寫入應命中');
+  tamper(ls, (o) => { o.g = 999; });   // at 全新、只有世代不同
+  await call(mod, f);
+  assert.strictEqual(calls, 2, 'GEN-DIFF：世代不同應未命中（不論快取多新）');
+  // 世代 +1（admin 改了 override 出一版）：舊世代寫的快取必須未命中
+  let calls2 = 0;
+  await call(mod, async () => { calls2++; return null; }, GEN + 1);
+  assert.strictEqual(calls2, 1, 'GEN-BUMP：世代 +1 後應重讀一次（admin 改 override 要立刻全站生效）');
   let calls3 = 0;
-  await mod.loadHomeChangelogOverride(async () => { calls3++; return null; });
-  assert.strictEqual(calls3, 1, 'VER-CROSS：別的站台版本寫的快取，本版應未命中（重讀一次）');
+  await call(mod, async () => { calls3++; return null; }, GEN + 1);
+  assert.strictEqual(calls3, 0, 'GEN-BUMP-HIT：新世代第二次應命中');
 }
 async function assertOldFormat(mod) {
   globalThis.localStorage = makeLS({ seed: [[CACHE_KEY, JSON.stringify({ at: Date.now() - 1000, html: null })]] });
   let calls = 0;
-  await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
-  assert.strictEqual(calls, 1, 'OLD-FMT：舊格式快取（無 v 欄位，v6.273~v6.280 寫入）必須視為未命中');
+  await call(mod, async () => { calls++; return null; });
+  assert.strictEqual(calls, 1, 'OLD-FMT：舊格式快取（無 g 欄位：v6.273~v6.280 的無版本格式、v6.281~v6.305 的 v 欄位格式）必須視為未命中');
 }
 function assertSrvTtl(srvSrc) {
   const m = srvSrc.match(/const FEEDBACKS_TTL_MS = ([^;]+?);/);
@@ -197,39 +203,38 @@ const MOD = await bundleHC(HC);
 await T('A1 ⭐ 負結果 29 天命中（0 fetch）／31 天未命中（重新 fetch）', () => assertNeg30d(MOD));
 await T('A2 ⭐ 負結果 6 小時後仍命中（v6.273 是零命中 —— 本版的核心差異）', () => assertNeg6h(MOD));
 await T('A3 正結果 TTL 維持 6h：5 小時命中／7 小時未命中', () => assertPos6h(MOD));
-await T('A4 ⭐ 版本綁定：tamper v／雙 bundle 不同版本互證，一律未命中', async () => {
-  await assertVerBind(MOD, await bundleHC(HC, '9.999-test'));
-});
+await T('A4 ⭐ 世代綁定：tamper g／世代 +1，一律未命中；新世代第二次命中', () => assertGenBind(MOD));
 await T('A5 舊格式（無 v 欄位）→ 未命中', () => assertOldFormat(MOD));
 await T('A6 時鐘倒退（at 在未來、版本正確）→ 未命中', async () => {
   const ls = makeLS(); globalThis.localStorage = ls;
   let calls = 0; const f = async () => { calls++; return null; };
-  await MOD.loadHomeChangelogOverride(f);
+  await call(MOD, f);
   tamper(ls, (o) => { o.at = Date.now() + HOUR; });
-  await MOD.loadHomeChangelogOverride(f);
+  await call(MOD, f);
   assert.strictEqual(calls, 2, 'CLOCK-BACK：未來時間戳的快取竟然被採信（v6.198 教訓）');
 });
 await T('A7 形狀損毀（html 非 null 非 string／爛 JSON）→ 未命中且不炸', async () => {
   const mod = MOD;
-  const goodV = JSON.parse((() => { const ls = makeLS(); globalThis.localStorage = ls; mod.writeCachedOverride(null); return ls.store.get(CACHE_KEY); })()).v;
-  for (const bad of ['{{{not json', JSON.stringify({ at: Date.now() - 1000, html: 123, v: goodV }), JSON.stringify({ at: 'x', html: null, v: goodV })]) {
+  const goodG = JSON.parse((() => { const ls = makeLS(); globalThis.localStorage = ls; mod.writeCachedOverride(null, GEN); return ls.store.get(CACHE_KEY); })()).g;
+  assert.strictEqual(goodG, GEN, 'writeCachedOverride 沒把世代寫進 g 欄位');
+  for (const bad of ['{{{not json', JSON.stringify({ at: Date.now() - 1000, html: 123, g: goodG }), JSON.stringify({ at: 'x', html: null, g: goodG })]) {
     globalThis.localStorage = makeLS({ seed: [[CACHE_KEY, bad]] });
     let calls = 0;
-    await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
+    await call(mod, async () => { calls++; return null; });
     assert.strictEqual(calls, 1, 'SHAPE：損毀快取（' + bad.slice(0, 24) + '）沒有 fallback 成照舊 fetch');
   }
 });
 await T('A8 隱私模式（localStorage 一律 throw）→ 每次照舊 fetch，不炸', async () => {
   globalThis.localStorage = makeLS({ throwOnAccess: true });
   let calls = 0; const f = async () => { calls++; return null; };
-  await MOD.loadHomeChangelogOverride(f);
-  await MOD.loadHomeChangelogOverride(f);
+  await call(MOD, f);
+  await call(MOD, f);
   assert.strictEqual(calls, 2, 'PRIVATE：隱私模式下應每次都 fetch（行為與修前相同）');
 });
 await T('A9 fetch 失敗 → 例外往上丟且不寫快取', async () => {
   const ls = makeLS(); globalThis.localStorage = ls;
   let threw = false;
-  await MOD.loadHomeChangelogOverride(async () => { throw new Error('net down'); }).catch(() => { threw = true; });
+  await call(MOD, async () => { throw new Error('net down'); }).catch(() => { threw = true; });
   ok(threw, 'FETCH-FAIL：失敗應往上丟給呼叫端 .catch');
   ok(!ls.store.has(CACHE_KEY), 'FETCH-FAIL：失敗竟然寫了快取（會把網路錯誤釘 30 天！）');
 });
@@ -305,9 +310,9 @@ await T('I1 突變：TTL 選擇恆用 6h → 紅在 NEG-29D（正對照：正結
   ok(r.red && r.hit, 'I1 突變沒被 NEG-29D 抓到：' + r.msg);
   await assertPos6h(mod);   // 正對照：這個突變不影響正結果路徑
 });
-await T('I2 突變：拿掉版本檢查 → 紅在 OLD-FMT（正對照：30 天 TTL 測試仍綠）', async () => {
-  const m = mutate(HC, "    if (o.v !== VERSION) return { hit: false, html: null };",
-    '    // mutated: no version check', 'I2');
+await T('I2 突變：拿掉世代檢查 → 紅在 OLD-FMT（正對照：30 天 TTL 測試仍綠）', async () => {
+  const m = mutate(HC, "    if (o.g !== gen) return { hit: false, html: null };",
+    '    // mutated: no generation check', 'I2');
   const mod = await bundleHC(m);
   const r = await expectRedAt(/OLD-FMT/, () => assertOldFormat(mod));
   ok(r.red && r.hit, 'I2 突變沒被 OLD-FMT 抓到：' + r.msg);
@@ -319,11 +324,11 @@ await T('I3 突變：負 TTL 常數改 1h → 紅在 NEG-29D', async () => {
   const r = await expectRedAt(/NEG-29D/, async () => assertNeg30d(await bundleHC(m)));
   ok(r.red && r.hit, 'I3 突變沒被 NEG-29D 抓到：' + r.msg);
 });
-await T('I4 突變：寫入端漏掉 v 欄位 → 紅在 NEG-29D（自己寫的自己讀不回）', async () => {
-  const m = mutate(HC, "JSON.stringify({ at: now, html, v: VERSION })",
+await T('I4 突變：寫入端漏掉 g 欄位 → 紅在 NEG-29D（自己寫的自己讀不回）', async () => {
+  const m = mutate(HC, "JSON.stringify({ at: now, html, g: gen })",
     'JSON.stringify({ at: now, html })', 'I4');
   const r = await expectRedAt(/NEG-29D/, async () => assertNeg30d(await bundleHC(m)));
-  ok(r.red && r.hit, 'I4 突變沒被抓到（漏寫 v ⇒ 每次都是未命中 ⇒ 讀取減量整個失效）：' + r.msg);
+  ok(r.red && r.hit, 'I4 突變沒被抓到（漏寫 g ⇒ 每次都是未命中 ⇒ 讀取減量整個失效）：' + r.msg);
 });
 await T('I5 突變：伺服器 TTL 改回 5 分鐘 → 紅在 SRV-TTL', async () => {
   const m = mutate(SRV, 'const FEEDBACKS_TTL_MS = 30 * 60 * 1000;',

@@ -30,6 +30,14 @@ service cloud.firestore {
         allow read: if isSelf(userId) || isAdmin();
         allow write: if isSelf(userId) || isAdmin();
       }
+      // v6.306：牌組 rev 標記 users/{uid}/meta/decks（src/lib/decks/cloud.ts，v6.273 起）。
+      //   ⚠ Firestore 規則不遞迴：上面 /users/{userId} 的 allow 不涵蓋子集合，
+      //   沒有這一段 ⇒ readCloudDecksRev() 一律 permission-denied → 回 null →
+      //   cloudDecksUnchanged 永遠 false ⇒ v6.273 的「牌組減量」從未生效（每次進頁整批全拉）。
+      match /meta/{docId} {
+        allow read: if isSelf(userId) || isAdmin();
+        allow write: if isSelf(userId) || isAdmin();
+      }
     }
 
     // ── 意見回饋（v2.53 / v2.7：read 改 own-or-admin，update 限 admin 加 reply）──

@@ -1,5 +1,125 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.306 首頁 homeChangelog「靜態檔閘門」（訊號 0 ⇒ 連 getDoc 都不發）＋ firestore.rules 補 users/{uid}/meta
+
+BASE `e3233caea4b4f3daab92b49b636bf9e6e0d03846`（v6.305，遠端 main）。
+Firestore 讀取 4.3 萬/5 萬（85.6%），v6.273（6h TTL）、v6.281（30 天＋綁版本）兩版減量都沒降。
+
+### 【0】另一位代理的診斷，逐條複驗（沒有被推翻）
+
+1. `src/routes/+page.svelte` onMount 先 `fetch(changelog.html)`，firebase 動態 import 後**無條件**
+   `getDoc(doc(db,'config','homeChangelog'))`（匿名也走、每次回 `/` 重新 mount）—— ✓ 讀碼確認。
+2. `home-changelog-cache.ts:50` 的 `if (o.v !== VERSION) return {hit:false}` 在 TTL 比較**之前** —— ✓。
+   58 小時 23 版 ⇒ 每個玩家每版至少 1 讀，等效 TTL ≈ 2.5h，比 v6.273 的 6h 還短。
+3. `firestore.rules` 只有 `/users/{userId}` ＋ `decks`／`favorites` 子集合，**沒有 `meta`**；Firestore 規則不遞迴
+   （父層 allow 不涵蓋子集合，除非用 `{document=**}`）—— ✓。
+   `cloud.ts:83 readCloudDecksRev()` 讀 `users/{uid}/meta/decks` ⇒ permission-denied → catch → null →
+   `cloudDecksUnchanged` 永遠 false。**而且** `bumpCloudDecksRev()` 的 setDoc 同樣被拒 → catch → `clearLocalDecksRev()`
+   ⇒ 本地 rev 也永遠是 null ⇒ v6.273 的「牌組減量」從未生效，每次進 `/game`／`/decks` 都整批全拉。
+   ⚠ 附註：被規則拒絕的請求官方**不計讀取**，所以這條缺口沒有「浪費讀取」，它的代價是「該省的沒省到」；
+   修好之後每次進頁會多 1 次真讀（meta），換掉 N 副牌的 N 讀。
+4. 更關鍵的判斷（同意）：任何 localStorage 策略只救得了回訪者。dump 只收 email 登入者，可證明的讀取
+   3,500~9,500/天 vs 站長觀測 43,000 ⇒ 缺口來自匿名／LINE・FB 內嵌瀏覽器／爬蟲，他們的 localStorage
+   很可能不持久 ⇒ 快取零命中。閘門的價值是「根本不發請求」，與 localStorage 是否持久無關。
+
+### 【1】閘門設計
+
+- `static/changelog.html` **最後一行**：`<!-- ptcg-override-gen:0 -->`（HTML 註解；`{@html}` 插入 DOM 無害；
+  `test-v6264` 的切割器丟棄最後一則之後的尾巴，不比對）。
+  ⚠ 第一版放在**首行**，被 `test-v6248` ⑩ 抓到（它用「檔案以 `<details open>` 開頭」判定最新一則展開）——
+  依紀律改自己的碼、不放寬守衛 ⇒ 移到檔尾；`parseOverrideGen` 是整檔 regex，位置無關。
+- `src/lib/home-changelog-cache.ts`（零 import，VERSION 不再需要）：
+  - `parseOverrideGen(html)`：`/<!--\s*ptcg-override-gen:(\d+)\s*-->/`；缺訊號／非字串／非正整數 ⇒ **0**（fail-closed）。
+  - `loadHomeChangelogOverride(gen, fetchOverride)`：`if (!isLiveGen(gen)) return null;` —— 訊號 0 ⇒ **fetchOverride 一次都不呼叫**。
+  - 快取欄位 `v`（站台版本）→ `g`（世代）；正結果 6h／負結果 30 天不變；舊格式（有 v 無 g）一律未命中。
+- `+page.svelte`：changelog fetch 改成回傳 `Promise<number>` 的 `changelogGen`（同一次 fetch 順便解析；載入失敗／HTTP 非 2xx ⇒ 0），
+  接線改成 `changelogGen.then((gen) => loadHomeChangelogOverride(gen, async () => { getDoc… }))`。
+  auth 流程不等它（沒有 await），首屏不受影響。
+- gen=0 的實際路徑：fetch changelog.html → parse 得 0 → `loadHomeChangelogOverride(0, …)` 第一行 return null → `.then((h) => { if (h) … })` 什麼都不做。
+  Firestore SDK 仍會被動態 import（其他功能要用），但 `getFirestore()` 本身不發請求；**getDoc 零次**。
+- admin 要啟用 override：在 admin 後台儲存內容 → 把訊號改成非 0（每改一次內容 +1）→ 出一版。
+  清空後把訊號改回 0。`oracle-admin/admin.html` 的編輯頁已加黃字提示、儲存成功文案也改了（原本寫「玩家重整首頁後生效」已不成立）。
+
+### 【2】驗證（全部行為端；本檔一條字串守衛都沒有）— `scripts/test-v6306-home-changelog-gate.mjs`
+
+沙盒實跑輸出（playwright-core 1.58.0 ＋ chromium_headless_shell-1234；真瀏覽器、真 localStorage、真 reload、真重建 bundle；
+`context.route('**/*')` 攔 `firestore.googleapis.com` 並計數、以 404 JSON 回應）：
+
+```
+閘門拿掉（突變版）：1 個 firestore 請求        ← 正對照：攔截器真的看得到請求
+(i) 全新 context：0 個｜(ii) reload：0 個｜(iii) 換版本字串重建 bundle：0 個｜gen=0/0/0｜builtin 15228 chars｜localStorage=null
+訊號 1 全新 context：1 個｜reload：0 個｜訊號 2 reload：1 個    ← 正對照：負快取＋世代綁定
+```
+
+node 端（getDoc spy，CI 也守）：訊號 0 ＋ localStorage 空／隱私模式 throw／舊 v 格式／過期 g 格式／爛 JSON／
+changelog.html reject／HTTP 500／空內容 ⇒ **全部 0 次 getDoc**；訊號 1 ⇒ 1、同世代再載 0、訊號 2 ⇒ 1、
+同世代換站台版本字串 ⇒ 0（v6.281 的版本綁定已被世代取代）。
+HEAD-FAIL：四個檔各自還原成 BASE blob，各自紅在指定斷言（GATE-0／WIRING／SIGNAL／RULES-META）。
+突變 8 條（M1 閘門拿掉、M2 缺訊號當 1、M3 不比世代、M4 漏寫 g、M5 接線不看訊號、M6 訊號行拿掉、
+M7 rules 拿掉 meta／write 放寬、M8 HTTP 失敗 fail-open）各紅在指定 `expectRe`。
+⚠ CI 沒有 playwright（不在 devDependencies）⇒【N】段 SKIP 並在結尾列出；沙盒用 `PLAYWRIGHT_MODULE=/tmp/pw/node_modules/playwright-core`
+`PW_EXECUTABLE=~/.cache/ms-playwright/chromium_headless_shell-1234/…/chrome-headless-shell`、缺 `libXdamage.so.1` 用
+`apt-get download libxdamage1` 解到 /tmp/libs ＋ `LD_LIBRARY_PATH` 補。
+
+既有守衛同步：`test-v6273`（抽取器錨點改為 `changelogGen.then((gen) => loadHomeChangelogOverride(gen, …`、deps 加 `changelogGen`、
+【A】【B】用 `HC_GEN=1`、G 段世代取自真 changelog.html ⇒ 首頁 0 讀、I5 錨點改 `g: gen`）58 pass；
+`test-v6281`（`call()` 依 `fn.length` 分流新舊簽名讓 HEAD-FAIL 段對 v6.280 舊模組仍跑得動；A4 版本綁定 → 世代綁定；
+I2／I4 錨點改 g）25 pass。
+
+### 【3】firestore.rules（本版只改 repo 檔案，**沒有 deploy**）
+
+```
+match /users/{userId} {
+  …
+  match /meta/{docId} {
+    allow read: if isSelf(userId) || isAdmin();
+    allow write: if isSelf(userId) || isAdmin();
+  }
+}
+```
+
+站長要跑：`firebase deploy --only firestore:rules`（repo 根目錄；`.firebaserc` 已有 project）。
+**事前確認**：repo 這份最後改動是 v5.478（2026-06-07）。先到 Firebase Console → Firestore → 規則，
+把線上那份與 repo 的 `firestore.rules`（BASE 版本）比對；若中間有人在 Console 直接改過，直接 deploy 會把那些改動蓋掉
+—— 先把差異合回 repo 再 deploy。
+**deploy 後驗證**（不必等一天）：登入帳號進 `/decks` 一次，DevTools Console 執行
+`localStorage.getItem('ptcg_decks_cloud_rev_v1')` —— rules 生效後第一次進頁 `bumpCloudDecksRev` 會成功並寫入 `{uid, rev}`；
+rules 沒生效時它永遠是 `null`（setDoc 被拒 → clearLocalDecksRev）。第二次進頁應只多 1 次 meta 讀、沒有整批 decks 讀。
+
+### 【4】刻意不動：`src/lib/game/broadcast.ts`（`config/broadcast`）
+
+每場對局 1 讀、只有 10 分鐘記憶體快取，**同型**。這一版不動：連續兩次「修了但沒降」之後，同一時間窗塞兩個變更
+會無法歸因。留到下一版（可沿用同一個靜態檔訊號機制：`config/broadcast` 也是 admin 才會改的設定）。
+
+### 【5】部署後怎麼量測有沒有真的降（不必等一整天）
+
+1. ⚠ Firebase Console 的 Firestore「用量」儀表板**不顯示零結果讀取**（官方明文）—— 之前看不到 homeChangelog 的 3.7 萬就是這個原因。
+   要看 **Google Cloud Console → API 與服務 → Cloud Firestore API → 配額**（「每日免費讀取」進度條），那個有計。
+   方法：記下部署時刻的配額用量與「PT 週期第幾小時」，2~3 小時後再看一次，算每小時增量；與前一天同時段的增量比。
+   預期：首頁那條約 3.7 萬/天 ≈ 1,500/小時 ⇒ 每小時增量應明顯掉一個量級。
+2. 線上直接驗閘門有沒有上：`curl -s https://www.ptcg-tw-sim.com/changelog.html | tail -1` 應是 `<!-- ptcg-override-gen:0 -->`；
+   首頁開 DevTools Network 篩 `firestore.googleapis.com`：首頁載入應 **0 個**（`identitytoolkit`／`securetoken` 是 auth，不算）。
+   ⚠ 若首頁 chunk 被 SW 快取住舊版，會看到 1 個 Listen channel —— 先「強制更新」再看。
+3. rules 是否生效：見【3】的 `ptcg_decks_cloud_rev_v1` 判準。
+
+### 【6】三配套與其他
+
+(a) `oracle-admin/admin.html` `SITE_VERSION_HINT` → `6.306`（LF 維持）＋ 首頁更新記錄編輯頁的提示文案。
+(b) `scripts/test-v6272-*` ⑩ `PREV_SHA` → `e3233cae`、`PREV_ALLOWED` 六項（home-changelog-cache.ts／version.ts／
+    routes/+page.svelte／changelog 三檔）；`scripts/test-v6264-*` `BASE_SHA` → `e3233cae`（本版動了 changelog ⇒ 前移）。
+(c) 掃 pin：與本版檔案相關的 sha256 全是 `server_admin_patch.js` 段落鎖或「version.ts ＝ SITE_VERSION_HINT 一致」檢查，
+    沒有整檔鎖；`test-v6306` 自身 P2 斷言不含 64 碼雜湊、不拿版本號當判準。
+(d) `tsc --noEmit` TS2304 = 0。
+(e) 首頁 changelog 三步：新增 v6.306（open；只寫 rules 修正那則——閘門對玩家不可見、純額度衛生，不上首頁）、
+    第 13 則 **v6.288** 內文搬進 bodies、被擠出的 **v6.228** 搬進封存頁。摘要區 4,944 → **4,937 字**；首頁 31,553 → 31,195 bytes。
+    ⚠ 那則寫「需等伺服器設定更新後生效」＝指 rules deploy。
+
+### 【7】沙盒備註
+
+mount 的 `node_modules/playwright` 是指向 `/tmp/pw/node_modules/playwright` 的懸空 symlink（前一個沙盒留的）；本次在
+`/tmp/pw` 裝 `playwright-core@1.58.0`。完整 npm test 在這台沙盒單核上 `test-v6167`／`v6170`／`v6171`／`v6172` 這類要編譯
+1.4MB 對戰頁的守衛每支 60~90 秒，必須小批次＋背景 runner。
+
 ## v6.305 卡面寫死目標隻數的多目標招式必須選滿（酋雷姆｜三重冰霜，站長回報）
 
 BASE `8738219949eacfaa271bdb425baa1021aa08a268`（v6.304，遠端 main）。

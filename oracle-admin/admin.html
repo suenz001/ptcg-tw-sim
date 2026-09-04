@@ -1850,6 +1850,7 @@ async function loadChangelogAdmin() {
     '<div style="max-width:900px;padding:16px;">' +
       '<h2 style="margin-top:0;">📋 首頁更新記錄編輯</h2>' +
       '<p style="color:#aaa;font-size:.9rem;line-height:1.6;">直接編輯首頁「版本更新記錄」要顯示的內容(HTML)。儲存後首頁(beta 站與正式站共用此設定)會改顯示這份；清空後恢復程式內建版本。<br>每筆格式：&lt;details open&gt;&lt;summary&gt;&lt;span class=&quot;ver-badge&quot;&gt;v X.X&lt;/span&gt; 標題&lt;/summary&gt;&lt;ul&gt;&lt;li&gt;內容&lt;/li&gt;&lt;/ul&gt;&lt;/details&gt;（可向 Claude 索取整段 HTML 再微調文字）。玩家重整首頁後生效。</p>' +
+      '<p style="color:#e9b949;font-size:.88rem;line-height:1.6;">⚠ v6.306 起首頁有「靜態檔閘門」：只有 static/changelog.html 最後一行的 &lt;!-- ptcg-override-gen:N --&gt; 為非 0 時，首頁才會來讀這份設定（N=0 是現況，首頁完全不讀、省最大宗 Firestore 讀取）。要啟用或改內容：儲存後把 N 改成非 0（每改一次內容就 +1）並出一版；清空後把 N 改回 0。</p>' +
       '<textarea id="cl-html" rows="22" style="width:100%;box-sizing:border-box;margin-top:4px;font-family:monospace;font-size:13px;line-height:1.5;" placeholder="貼上首頁更新記錄 HTML…（留空 = 用程式內建版本）">' + escapeHtml(html) + '</textarea>' +
       '<div style="margin-top:12px;">' +
         '<button id="cl-save" style="padding:9px 24px;background:#5b8def;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:1rem;">💾 儲存（套用到首頁）</button> ' +
@@ -1863,7 +1864,7 @@ async function loadChangelogAdmin() {
     st.textContent = '儲存中…'; st.style.color = '#aaa';
     try {
       await setDoc(doc(dbF, 'config', 'homeChangelog'), { html: val, updatedAt: Date.now() });
-      st.textContent = '✅ 已儲存（玩家重整首頁後生效）'; st.style.color = '#5c5';
+      st.textContent = '✅ 已儲存（⚠ 首頁要等 changelog.html 的 ptcg-override-gen 為非 0、且這次改動後有 +1 出版才會顯示）'; st.style.color = '#5c5';
     } catch(e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
   };
   document.getElementById('cl-clear').onclick = async () => {
@@ -3552,7 +3553,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.305';
+window.SITE_VERSION_HINT = '6.306';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

@@ -11,7 +11,8 @@
   // v6.264 較舊 changelog 條目的補充說明「展開才取得」（純函式抽在 lib，守衛可直接執行）
   import { CHANGELOG_BODIES_FILE, isValidChangelogVer, pickChangelogBody } from '$lib/changelog-lazy';
   // v6.273 首頁 changelog override 的 localStorage TTL 快取（省最大宗 Firestore 讀取）
-  import { loadHomeChangelogOverride } from '$lib/home-changelog-cache';
+  // v6.306 靜態檔閘門：changelog.html 檔尾的世代訊號 = 0 ⇒ 連 getDoc 都不發（parseOverrideGen）
+  import { loadHomeChangelogOverride, parseOverrideGen } from '$lib/home-changelog-cache';
   import HomeVideo from '$lib/HomeVideo.svelte';    // v6.166 首頁最新影片（lazy facade，點擊前不建 iframe）
   import homeVideoData from '$lib/home-video.json';  // v6.166 建置時寫入的最新影片（見 scripts/fetch-latest-video.mjs）
 
@@ -91,7 +92,12 @@
     // v6.100：changelog.html 只留最近 50 則(173KB→33KB)，更早的移到 static/changelog-archive.html。
     //   ⚠ 該檔是靜態片段、用 {@html} 插入，裡面寫不了 svelte 的 {base}；因此連結先寫成
     //   `__BASE__/changelog-archive.html` 佔位，載入時在這裡換成實際 base（GitHub Pages 有子路徑前綴）。
-    fetch(`${base}/changelog.html?v=${VERSION}`).then((r) => (r.ok ? r.text() : '')).then((t) => { if (t) changelogBuiltin = t.replaceAll('__BASE__', base); }).catch(() => { /* 載入失敗就顯示載入中 */ });
+    // v6.306：同一次 fetch 順便解析檔尾的世代訊號 <!-- ptcg-override-gen:N -->（缺訊號／載入失敗 ⇒ 0）。
+    //   這個 Promise 決定下面要不要讀 Firestore 的 config/homeChangelog：0 ⇒ 完全不發請求。
+    const changelogGen: Promise<number> = fetch(`${base}/changelog.html?v=${VERSION}`)
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((t) => { if (t) changelogBuiltin = t.replaceAll('__BASE__', base); return parseOverrideGen(t); })
+      .catch(() => 0);   /* 載入失敗就顯示載入中；訊號視為 0（不讀 Firestore） */
 
     // v6.264：較舊 changelog 條目的補充說明用捕獲階段委派（toggle 不冒泡）。
     const clSection = changelogSectionEl;
@@ -118,14 +124,17 @@
       //   TTL 內直接用快取（含「確認過不存在」的負結果，0 讀）；localStorage 不可用（隱私
       //   模式）→ 照舊每次讀。
       // v6.281：負結果 TTL 6 小時 → 30 天，且快取綁站台版本（版本一變即失效）——
-      //   6 小時對「一天來一次」的玩家是零命中。正結果維持 6 小時；admin 之後若真的
-      //   要啟用 override：新訪客與正結果過期者最慢 6 小時看到，其餘出一個新版即全站生效。
-      loadHomeChangelogOverride(async () => {
+      //   6 小時對「一天來一次」的玩家是零命中。
+      // v6.306 ⭐ 靜態檔閘門：改綁 changelog.html 檔尾的世代訊號（取代站台版本）。
+      //   訊號 0（現況）⇒ loadHomeChangelogOverride 直接回 null、getDoc 一次都不發——
+      //   首訪、匿名、內嵌瀏覽器、爬蟲全部 0 讀，不依賴 localStorage 是否持久。
+      //   admin 要啟用 override：把訊號改成非 0（每改一次 override 就 +1）並出一版即全站生效。
+      changelogGen.then((gen) => loadHomeChangelogOverride(gen, async () => {
         const snap = await getDoc(doc(db, 'config', 'homeChangelog'));
         if (!snap.exists()) return null;
         const h = snap.data()?.html;
         return typeof h === 'string' && h.trim() ? h : null;
-      }).then((h) => {
+      })).then((h) => {
         // v6.100：後台 override 的內容若也貼了 __BASE__ 佔位（例如複製了封存連結），一併換掉，
         //   否則連結會變成字面 __BASE__/... 而 404。（快取存原始字串，替換一律在這裡做）
         if (h) changelogOverride = h.replaceAll('__BASE__', base);

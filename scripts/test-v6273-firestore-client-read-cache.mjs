@@ -196,7 +196,8 @@ function buildGameSyncRunner(pageSrc, label) {
 }
 // ── 首頁 override 接線段（工作樹新版）：跑完後讀 holder ──
 function buildHomeWiringRunner2(pageSrc) {
-  const start = '      loadHomeChangelogOverride(async () => {';
+  // v6.306：接線改為「先等 changelog.html 的世代訊號，再決定要不要讀 Firestore」
+  const start = '      changelogGen.then((gen) => loadHomeChangelogOverride(gen, async () => {';
   const end = ".catch(() => { /* 沒設定/讀取失敗 → 用程式內建 */ });";
   const a = pageSrc.indexOf(start);
   if (a < 0) throw new assert.AssertionError({ message: '首頁找不到 loadHomeChangelogOverride 接線' });
@@ -205,10 +206,11 @@ function buildHomeWiringRunner2(pageSrc) {
   const seg = pageSrc.slice(a, b + end.length);
   const js = ts2js(seg);
   return new Function('__deps', `return (async () => {
-    const { loadHomeChangelogOverride, getDoc, doc, db, base } = __deps;
+    const { loadHomeChangelogOverride, getDoc, doc, db, base, changelogGen } = __deps;
     let changelogOverride = null;
     await (${'async () => { ' + js + ' }'})();
     await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));   // changelogGen.then(...) 多一層 microtask
     return { changelogOverride };
   })`);
 }
@@ -262,21 +264,24 @@ console.log('【A】home-changelog-cache（localStorage TTL 快取）');
 async function loadHomeCacheMod(srcText) {
   return bundleTs(srcText, join(ROOT, 'src/lib'));
 }
+// v6.306：簽名改為 (gen, fetchOverride)；gen=0 是「不讀 Firestore」的閘門（由 test-v6306 專門守），
+//   本檔【A】【B】一律用 HC_GEN=1（＝admin 啟用 override 時的快取行為），語意與 v6.273 相同。
+const HC_GEN = 1;
 // 供【I】突變重用的斷言函式 ─ A2：TTL 內第二次呼叫必須 0 次 fetch
 async function assertA2(mod) {
   globalThis.localStorage = makeLS();
   let calls = 0;
   const fetcher = async () => { calls++; return null; };
-  await mod.loadHomeChangelogOverride(fetcher);
+  await mod.loadHomeChangelogOverride(HC_GEN, fetcher);
   assert.strictEqual(calls, 1, '第一次應恰 1 次 fetch');
-  await mod.loadHomeChangelogOverride(fetcher);
+  await mod.loadHomeChangelogOverride(HC_GEN, fetcher);
   assert.strictEqual(calls, 1, 'TTL 內第二次應 0 次 fetch（快取沒生效）');
 }
 await T('A1 快取未命中 → 恰 1 次 fetch，並把負結果（null）寫進快取', async () => {
   const mod = await loadHomeCacheMod(HC);
   const ls = makeLS(); globalThis.localStorage = ls;
   let calls = 0;
-  const got = await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
+  const got = await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return null; });
   assert.strictEqual(calls, 1); assert.strictEqual(got, null);
   const raw = ls.store.get('ptcg_home_cl_cache_v1');
   assert.ok(raw, '快取沒寫進 localStorage');
@@ -292,7 +297,7 @@ await T('A3 TTL 過期（6h+1s 前寫的）→ 重新 fetch', async () => {
   const past = Date.now() - (mod.HOME_CL_TTL_MS + 1000);
   globalThis.localStorage = makeLS({ seed: [['ptcg_home_cl_cache_v1', JSON.stringify({ at: past, html: null })]] });
   let calls = 0;
-  await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
+  await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return null; });
   assert.strictEqual(calls, 1, 'TTL 過期竟然沒有重新 fetch');
 });
 await T('A4 快取損毀（爛 JSON / 形狀不對）→ 照舊 fetch，不炸', async () => {
@@ -300,7 +305,7 @@ await T('A4 快取損毀（爛 JSON / 形狀不對）→ 照舊 fetch，不炸',
   for (const bad of ['{{{not json', JSON.stringify({ at: 'x', html: null }), JSON.stringify({ at: Date.now(), html: 123 })]) {
     globalThis.localStorage = makeLS({ seed: [['ptcg_home_cl_cache_v1', bad]] });
     let calls = 0;
-    await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
+    await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return null; });
     assert.strictEqual(calls, 1, '損毀快取（' + bad.slice(0, 20) + '）沒有 fallback 成照舊 fetch');
   }
 });
@@ -308,15 +313,15 @@ await T('A5 隱私模式（localStorage 一律 throw）→ 每次照舊 fetch，
   const mod = await loadHomeCacheMod(HC);
   globalThis.localStorage = makeLS({ throwOnAccess: true });
   let calls = 0;
-  await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
-  await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
+  await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return null; });
+  await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return null; });
   assert.strictEqual(calls, 2, '隱私模式下應每次都 fetch（行為與修前相同）');
 });
 await T('A6 時鐘倒退（快取 at 在未來）→ 視為過期重新 fetch（v6.198 教訓）', async () => {
   const mod = await loadHomeCacheMod(HC);
   globalThis.localStorage = makeLS({ seed: [['ptcg_home_cl_cache_v1', JSON.stringify({ at: Date.now() + 3600_000, html: 'stale' })]] });
   let calls = 0;
-  const got = await mod.loadHomeChangelogOverride(async () => { calls++; return null; });
+  const got = await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return null; });
   assert.strictEqual(calls, 1, '未來時間戳的快取竟然被採信');
   assert.strictEqual(got, null);
 });
@@ -324,8 +329,8 @@ await T('A7 [正對照] override 有內容：第一次 fetch 拿到、TTL 內第
   const mod = await loadHomeCacheMod(HC);
   globalThis.localStorage = makeLS();
   let calls = 0;
-  const g1 = await mod.loadHomeChangelogOverride(async () => { calls++; return '<b>公告</b>'; });
-  const g2 = await mod.loadHomeChangelogOverride(async () => { calls++; return '<b>公告</b>'; });
+  const g1 = await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return '<b>公告</b>'; });
+  const g2 = await mod.loadHomeChangelogOverride(HC_GEN, async () => { calls++; return '<b>公告</b>'; });
   assert.strictEqual(g1, '<b>公告</b>'); assert.strictEqual(g2, '<b>公告</b>');
   assert.strictEqual(calls, 1, '第二次應來自快取');
 });
@@ -333,7 +338,7 @@ await T('A8 fetch 失敗 → 例外往上丟且不寫快取（下次載入再試
   const mod = await loadHomeCacheMod(HC);
   const ls = makeLS(); globalThis.localStorage = ls;
   let threw = false;
-  await mod.loadHomeChangelogOverride(async () => { throw new Error('net down'); }).catch(() => { threw = true; });
+  await mod.loadHomeChangelogOverride(HC_GEN, async () => { throw new Error('net down'); }).catch(() => { threw = true; });
   assert.ok(threw, '失敗應往上丟給呼叫端 .catch');
   assert.ok(!ls.store.has('ptcg_home_cl_cache_v1'), '失敗竟然寫了快取（會把網路錯誤釘 6 小時）');
 });
@@ -348,8 +353,8 @@ async function homeWiringDeps(fsSeed, seedCachedHtml) {
   globalThis.localStorage = makeLS();
   // v6.281：快取已綁站台版本（沒有 v 欄位的手工 seed 一律視為未命中）⇒ 暖快取一律走
   //   writeCachedOverride round-trip，命中語意由模組自己保證（更行為端，不弱化斷言）。
-  if (seedCachedHtml !== undefined) mod.writeCachedOverride(seedCachedHtml);
-  return { deps: { loadHomeChangelogOverride: mod.loadHomeChangelogOverride, getDoc: api.getDoc, doc: api.doc, db: {}, base: '/b' }, spy };
+  if (seedCachedHtml !== undefined) mod.writeCachedOverride(seedCachedHtml, HC_GEN);
+  return { deps: { loadHomeChangelogOverride: mod.loadHomeChangelogOverride, getDoc: api.getDoc, doc: api.doc, db: {}, base: '/b', changelogGen: Promise.resolve(HC_GEN) }, spy };
 }
 await T('B1 快取空＋override 存在 → 恰 1 讀，且 changelogOverride 套上（__BASE__ 有替換）', async () => {
   const run = buildHomeWiringRunner2(HP);
@@ -850,8 +855,10 @@ async function runSession({ hpSrc, dkSrc, gpSrc, bcSrc, clSrc, hcSrc, warmCache,
   globalThis.localStorage = makeLS({ seed: lsSeed });
   // v6.281：暖快取走 writeCachedOverride round-trip（快取綁版本，手工舊格式=未命中）。
   //   BASE 對照（hcSrc===null）不看 localStorage，不需要 seed。
+  // v6.306：世代訊號取自真的 static/changelog.html（＝線上實際行為；訊號 0 ⇒ 首頁 0 讀）
+  const homeGen = hcSrc === null ? 0 : (await bundleTs(hcSrc, join(ROOT, 'src/lib'))).parseOverrideGen(readFileSync(join(ROOT, 'static/changelog.html'), 'utf8'));
   if (warmCache && hcSrc !== null) {
-    (await bundleTs(hcSrc, join(ROOT, 'src/lib'))).writeCachedOverride(null);
+    (await bundleTs(hcSrc, join(ROOT, 'src/lib'))).writeCachedOverride(null, homeGen);
   }
   const localDecks = Array.from({ length: deckCount }, (_, i) => ({ id: 'd' + i, name: '牌組' + i, updatedAt: '2026-01-01' }));
   const cloudMod = await bundleTs(clSrc, join(ROOT, 'src/lib/decks'));
@@ -864,7 +871,7 @@ async function runSession({ hpSrc, dkSrc, gpSrc, bcSrc, clSrc, hcSrc, warmCache,
   if (hcSrc !== null) {   // 修後：走 loadHomeChangelogOverride 接線
     const hcMod = await bundleTs(hcSrc, join(ROOT, 'src/lib'));
     const run = buildHomeWiringRunner2(hpSrc);
-    await run({ loadHomeChangelogOverride: hcMod.loadHomeChangelogOverride, getDoc: api.getDoc, doc: api.doc, db: {}, base: '' })();
+    await run({ loadHomeChangelogOverride: hcMod.loadHomeChangelogOverride, getDoc: api.getDoc, doc: api.doc, db: {}, base: '', changelogGen: Promise.resolve(homeGen) })();
   } else {                // BASE：直接 getDoc 接線
     const run = buildHomeWiringRunnerBase(hpSrc);
     await run({ getDoc: api.getDoc, doc: api.doc, db: {}, base: '' })();
@@ -1024,7 +1031,7 @@ await T('I4 突變：broadcast 快取永不過期 → F3 紅', async () => {
   assert.ok(await expectRed(() => assertF3(m)), 'I4 突變沒被 F3 抓到（admin 改廣播會永不生效）');
 });
 await T('I5 突變：快取寫入變 no-op → A2 紅（「有沒有真的省到讀取」在守）', async () => {
-  const m = mutate(HC, "  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: now, html, v: VERSION })); } catch { /* 隱私模式等 → 下次照舊讀 */ }",
+  const m = mutate(HC, "  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: now, html, g: gen })); } catch { /* 隱私模式等 → 下次照舊讀 */ }",
     '  // mutated no-op', 'I5');
   assert.ok(await expectRed(async () => assertA2(await bundleTs(m, join(ROOT, 'src/lib')))), 'I5 突變沒被 A2 抓到');
 });
