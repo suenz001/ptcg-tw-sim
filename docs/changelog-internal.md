@@ -1,5 +1,52 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.311 守衛修正：test-v6277【Gc】把註解算成 Firestore 呼叫點（完整歷史下誤紅）＋ 剝註解中央 helper
+
+BASE `b0733ab229022c8d06c4c91e80edb5a7be1a800f`（v6.310，遠端 main；`git ls-remote` 確認）。純守衛修正、玩家端零改動（只有 version.ts）⇒ 首頁 changelog 不放。
+
+### 【1】根因（複驗成立）
+
+- `fsCounts()` 是純字串計數。BASE(9f500a55, v6.276) vs HEAD 三個檔 12 個 token 只差一個：`game/+page.svelte` 的 `loadDecksFromCloud` 2→3，
+  多的那個在 `:1228` 的 `//` 註解（v6.307 修 auth 監聽器洩漏時寫的說明）。真呼叫點仍是 `:4734` 一個。⇒ **假紅**，程式沒 bug。
+- CI 淺複製 `SHALLOW-SKIP` 看不到；一改 `fetch-depth: 0` 就會擋 deploy。在 `/tmp` 用 `git clone --shared` 建完整歷史樹**實跑重現**（Gc FAIL）。
+
+### 【2】修法：行級剝註解 ＋ 三道自驗 ＋ 已知答案表（不放寬期望值、不動 BASE_SHA、不拿掉 token）
+
+- 新 `scripts/lib/strip-comments.mjs`（零新依賴）：`stripCommentLines()` 只丟「trim 後以 `//`、`/*`、`*`、`<!--` 開頭的**整行**」，
+  **刻意不做跨行 block 狀態機** —— 1.4MB 的 svelte 檔裡滿是網址／正則／字串，block regex 出事的方向是**假綠**（吃掉太多 ⇒ 什麼都數不到 ⇒ 恆等）。
+  行級排除最多把行尾註解多算成程式碼（誤紅方向），絕不少算程式碼。
+- `stripCommentsChecked()` 三道護欄：① 長度 ≥ minRatio（預設 50%）② `mustKeep` 正對照（真呼叫點剝完必須還在）③ 空輸入即炸。全部丟 `AssertionError`。
+- test-v6277：`fsCounts(text, which)` 改走 helper；新增 **E0a/E0b/E0c**（剝除器正對照／第 13 種安慰劑反面對照／護欄自驗）、
+  **E3 已知答案表**（BASE 剝完後的確切數字手抄進斷言，history-free，淺複製也在守）；Gc 改成「BASE 剝完 == 表」＋「NOW == BASE」＋反面對照「不剝註解就對不上」。
+- 突變測試 H12～H18（各紅在指定 expectRe；helper 本身用 data: URL 匯入突變版，不落地暫存檔）：
+  真呼叫多一個⇒紅／多幾行註解⇒綠／剝除器吃整檔⇒紅在長度護欄／吃整檔＋拿掉護欄＋拿掉正對照⇒紅在已知答案表／
+  只吃 token 行⇒紅在正對照／同上拿掉正對照⇒紅在已知答案表／FS_TOKENS 少一個⇒紅在已知答案表／helper 沒突變⇒綠。
+
+### 【3】同型缺口掃描（運行時 hook 攔截每一次 `/\/\*[\s\S]*?\*\//g` 剝除，量它在真實輸入上吃掉多少非註解行）
+
+- 5 個 src 檔有「`//` 註解或字串裡的 `/*` 讓 block regex 誤開區塊」：
+  `game/+page.svelte :208`（`/api/tournament/*`，吃 176 行）；`server_admin_patch.js :1191/:3584/:4574/:9343/:9561`（吃 3/194/542/9/543 行，
+  含 **21 個 Mongo 路由註冊**）；`effects.ts :27/:7905`（`effects/cards/*`，吃 120/298 行，含 21 個 reg 登錄）；`_shared.ts :93/:2520`；`engine.ts :1066`；`dump-monitor.cjs :97`（98 行）。
+- 97 支用 block regex 的守衛實跑，**63 支**在運行時真的吃到程式碼。精準核對「它們數的 token 現在有沒有落在洞裡」：
+  v6288 D④／v6297 D1d（動態 import 恰一處）、v6297 G3（tTab 零賦值）、v6256 C1（零第二寫入點）、v6291/v6292（gate 呼叫數）、v6294（零識別字）、v6275（全量掃描）——
+  **現在都沒被騙**（洞裡沒有它們數的 token）。⇒ 全部是**潛伏**、方向假綠。
+- 本版只改三支：v6277（現行假紅）、**v6288 D④／v6297 D1d＋G3**（整檔 GAME 剝完數「恰一處／零」，洞就在同一檔，改一行走 helper）。
+  其餘 60 支列給站長分批遷移（清單在本節末），遷移驗收就用同一支 hook（`String.prototype.replace` 攔截 + 誤吃行數 = 0）。
+- ⚠ 另外兩支在完整歷史下也紅，**不是註解問題**而是第九種 pin 過期（v6.309 合法動了 room.ts／room-oracle.ts）：
+  `test-v6267 Gc`（room.ts 逐字等於 BASE v6.266）、`test-v6279 A3／E-e`（room-oracle.ts／room.ts 與 BASE v6.278 逐位元相同）、
+  `test-v6304 E4`（game/+page.svelte 逐行 diff 只准是 v6.304 那幾行，v6.307/v6.309 之後對不上）。三支在 pristine b0733ab2 樹上同樣紅（先於本版）；CI 淺複製全部 SHALLOW-SKIP。本版不動，留給下一版前移。
+- 63 支運行時吃到程式碼的守衛（本版已改 v6277／v6288／v6297 的整檔計數處；其餘待分批遷移，同一支可能吃多個檔）：
+  吃 game/+page.svelte 176 行（42）：v6098 v6130 v6146 v6147 v6148 v6149 v6155 v6158 v6159 v6175 v6176 v6177 v6179 v6180 v6187 v6190 v6193 v6194 v6195 v6197 v6198 v6199 v6200 v6203 v6205 v6210-central v6211-selected v6213-stage2 v6227 v6245 v6246 v6248 v6257 v6258 v6265-perf v6265-phantom v6283 v6284 v6286 v6288 v6296 v6297；
+  吃 server_admin_patch.js 1291 行（5）：admin-helper-scope v6188 v6197 v6275 v6287；
+  吃 effects.ts 418 行（23）：anti-pattern-lint multitarget-active-passive-immunity v6141 v6165 v6175 v6193 v6194 v6202 v6203 v6205 v6210-bench v6210-central v6211-pending v6211-selected v6213-stage2 v6255 v6256 v6257 v6258 v6260 v6262 v6297 v6305；
+  吃 _shared.ts 16 行／engine.ts 7 行：上面那批引擎守衛的子集（v6253 只吃 engine）；吃 dump-monitor.cjs 98 行（4）：v6213-perf v6227 v6261 v6269；
+  meta 守衛 v6263 剝**其他守衛的原始碼**時吃到 15 支（anti-pattern-lint 690 行、v6277 332 行等）⇒ 它的「誰在讀歷史」列管可能看不到洞裡的 `readBaseBlob`。
+
+### 【4】三配套
+
+- `admin.html SITE_VERSION_HINT`→6.311（LF）；test-v6272 `PREV_SHA`→b0733ab2、`PREV_ALLOWED`＝只有 version.ts；test-v6264 `BASE_SHA`→b0733ab2（不動 changelog ⇒ F0 短路）。
+- 掃過：沒有守衛 pin 本版動到的檔（test-v6277／scripts/lib）的 sha256 或版本號。
+
 ## v6.310 v6.309 的獨立審查：log 回歸修好、「混版新增卡局」推翻（不加逃生口）
 
 BASE `039625c870f5243548d54c20abb1139bc34acc53`（v6.309，遠端 main；`git ls-remote` 確認）。v6.309 **尚未部署**（正式站 v6.306），本版是部署前提。

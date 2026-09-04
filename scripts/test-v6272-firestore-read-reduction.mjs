@@ -664,7 +664,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '039625c870f5243548d54c20abb1139bc34acc53';   // v6.309（v6.310 的上一版）
+const PREV_SHA = 'b0733ab229022c8d06c4c91e80edb5a7be1a800f';   // v6.310（v6.311 的上一版）
+// ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
+//   玩家端零改動，只有 version.ts；不動首頁 changelog（玩家看不到的修正只寫 docs/changelog-internal.md）。
 // ⭐⭐v6.309：開局補抽被合併洗回（sync-guards 每座位同源單調合併＋推送端合併＋引擎結算＋診斷指紋）——
 //   玩家端動 sync-guards.ts／engine.ts／room-oracle.ts／room.ts／game/+page.svelte＋version.ts；首頁 changelog 三步搬運（三檔）。
 // ⭐⭐v6.307：/game 的 onAuthStateChanged 退訂（_unsubAuth 存回傳值、onDestroy 解除）——
@@ -678,10 +680,7 @@ const PREV_SHA = '039625c870f5243548d54c20abb1139bc34acc53';   // v6.309（v6.31
 //     scripts/ 與 oracle-admin/ 底下的改動（新守衛、SITE_VERSION_HINT）**不可以**列進來。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/game/engine.ts',
-  'src/lib/game/sync-guards.ts',
   'src/lib/version.ts',
-  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

@@ -16,6 +16,10 @@
 //  【C】⭐ `/decks` 的 UI 三態：真數字／累積中／舊伺服器；`since` **讀伺服器欄位、不寫死版本號**
 //  【D】⭐⭐ `/decks` 載入請求數與 BASE 相同（量測，會把兩邊的呼叫點集合印出來）
 //  【E】⭐⭐ Firestore 讀取次數不變（三個改動檔的 Firestore 呼叫點逐字計數）
+//       ⭐v6.311：計數前先用 scripts/lib/strip-comments.mjs **剝掉整行註解**（行級、不做區塊狀態機），
+//       並附三道自驗：剝除器正對照（真呼叫點還在）／長度護欄／**已知答案表**（E3，history-free）。
+//       起因：v6.307 在 game/+page.svelte 寫了一行**註解**提到 loadDecksFromCloud，【Gc】在完整歷史下誤紅
+//       （CI 淺複製 SHALLOW-SKIP 所以看不到；一改 fetch-depth:0 就會擋 deploy）。
 //  【F】正對照：休閒那兩欄逐字不變；v6.271 的版面不回退；`Deck.id` 仍是 crypto.randomUUID()
 //  【G】HEAD-FAIL：對真 BASE(v6.276) blob 跑，A~E 的每一條**各自**紅
 //  【H】突變測試（7 條），每一條都必須紅在指定的位置
@@ -29,6 +33,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import * as stripMod from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '9f500a55cf83daa8be3530ff01c8a163c6a60a23';   // v6.276
@@ -113,12 +118,37 @@ function netCallSites(text) {
   return out.sort();
 }
 // Firestore／雲端同步的呼叫點計數（【E】用）
+// ⭐v6.311：**先剝整行註解再數**（中央 helper scripts/lib/strip-comments.mjs；行級排除、不做區塊狀態機）。
+//   ⚠ 不可以把 loadDecksFromCloud 拿掉、不可以放寬期望值 —— 這條守的是「Firestore 呼叫點不准偷偷變多」。
 const FS_TOKENS = ['getDoc(', 'getDocs(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'onSnapshot(', 'addDoc(',
   'loadDecksFromCloud', 'syncDeckToCloud', 'removeDeckFromCloud', 'loadFavoritesFromCloud', 'saveFavoritesToCloud'];
-function fsCounts(text) {
-  const o = {};
-  for (const t of FS_TOKENS) o[t] = text.split(t).length - 1;
-  return o;
+// 每個檔的剝除器護欄：長度下限 ＋ 正對照（剝完之後「真呼叫點」必須還在；import 行沒有括號所以不算）
+const FS_STRIP = {
+  GP: { label: 'game/+page.svelte', minRatio: 0.5, mustKeep: ['loadDecksFromCloud('] },
+  DS: { label: 'deck-stats.ts', minRatio: 0.4, mustKeep: ['fetchDeckStats('] },   // 小檔、註解占四成，下限明寫低一點
+  DK: { label: 'decks/+page.svelte', minRatio: 0.5, mustKeep: ['loadDecksFromCloud(', 'syncDeckToCloud('] },
+};
+function fsCounts(text, which, { mod = stripMod, opt = FS_STRIP[which], tokens = FS_TOKENS } = {}) {
+  assert.ok(FS_STRIP[which], 'fsCounts：which 必須是 GP/DS/DK，實得 ' + which);
+  return mod.countTokensStripped(text, tokens, opt);
+}
+// ⭐ 已知答案表＝BASE(v6.276) 三個檔**剝註解後**的確切數字（history-free；【Gc】會拿真 BASE blob 核對這張表沒抄錯）。
+//   ⚠ 這不是「拿新碼算出來的期望值」—— 是從 9f500a55 的 blob 量出來、手抄進來的。
+const FS_BASE = {
+  GP: { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
+    loadDecksFromCloud: 2, syncDeckToCloud: 0, removeDeckFromCloud: 0, loadFavoritesFromCloud: 0, saveFavoritesToCloud: 0 },
+  DS: { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
+    loadDecksFromCloud: 0, syncDeckToCloud: 0, removeDeckFromCloud: 0, loadFavoritesFromCloud: 0, saveFavoritesToCloud: 0 },
+  DK: { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
+    loadDecksFromCloud: 3, syncDeckToCloud: 5, removeDeckFromCloud: 2, loadFavoritesFromCloud: 2, saveFavoritesToCloud: 2 },
+};
+// 【Gc／E3】共用的判準：三個檔的（剝註解後）計數必須等於已知答案表。可注入突變後的 helper 模組／原始碼。
+function assertFsMatchesTable({ gp = GP, ds = DS, dk = DK, mod = stripMod, tokens = FS_TOKENS, table = FS_BASE } = {}) {
+  const now = { DK: fsCounts(dk, 'DK', { mod, tokens }), GP: fsCounts(gp, 'GP', { mod, tokens }), DS: fsCounts(ds, 'DS', { mod, tokens }) };
+  assert.deepStrictEqual(now.DK, table.DK, '/decks 的 Firestore 呼叫點變了（與已知答案表不同）：' + JSON.stringify(now.DK));
+  assert.deepStrictEqual(now.GP, table.GP, '/game 的 Firestore 呼叫點變了（與已知答案表不同）：' + JSON.stringify(now.GP));
+  assert.deepStrictEqual(now.DS, table.DS, 'deck-stats.ts 的 Firestore 呼叫點變了（與已知答案表不同）：' + JSON.stringify(now.DS));
+  return now;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -518,11 +548,42 @@ await T('D2 ⭐ /api/deck-stats 只在 openDeckStats 內打，全檔恰 1 次', 
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n══ 【E】⭐⭐ Firestore 讀取次數（呼叫點逐字計數）══════════════════════════');
-const FS_NOW = { DK: fsCounts(DK), GP: fsCounts(GP), DS: fsCounts(DS) };
-console.log('        /decks   ：' + JSON.stringify(FS_NOW.DK));
-console.log('        /game    ：' + JSON.stringify(FS_NOW.GP));
-console.log('        deck-stats：' + JSON.stringify(FS_NOW.DS));
+console.log('\n══ 【E】⭐⭐ Firestore 讀取次數（剝整行註解後的呼叫點逐字計數）════════════');
+await T('E0a ⭐ 剝除器正對照：註解裡的 token 被剔掉、真呼叫點留著（含 //、/* */ 單行、* 續行、<!-- -->、行尾註解）', () => {
+  const probe = [
+    "import { loadDecksFromCloud } from '$lib/decks/cloud';",
+    '// 每一個殘留 callback 都各跑一次 loadDecksFromCloud（每副牌 1 次）',
+    '/* loadDecksFromCloud( 區塊單行 */',
+    ' * loadDecksFromCloud( 續行',
+    '<!-- loadDecksFromCloud( 模板註解 -->',
+    'const cloud = await loadDecksFromCloud(u.uid); // 行尾註解也提到 loadDecksFromCloud',
+  ].join('\n');
+  assert.strictEqual(probe.split('loadDecksFromCloud').length - 1, 7, '樣本自己就不對');
+  const c = stripMod.countTokensStripped(probe, ['loadDecksFromCloud', 'loadDecksFromCloud('], { label: 'probe', minRatio: 0.3, mustKeep: ['loadDecksFromCloud('] });
+  // import 行 ＋ 真呼叫行 ＋ 該行的行尾註解（整行保留＝保守方向）＝ 3；帶括號的只有真呼叫 ＝ 1
+  assert.deepStrictEqual(c, { loadDecksFromCloud: 3, 'loadDecksFromCloud(': 1 }, '剝除器計數不對：' + JSON.stringify(c));
+});
+await T('E0b ⭐⭐ 反面對照（第 13 種安慰劑）：// 註解裡的 /api/x/* 會讓 block regex 吃掉真呼叫點；行級剝除器不會', () => {
+  const trap = "// 伺服器在每個 /api/tournament/* 回應帶 X-Srv-Ms\nconst cloud = await loadDecksFromCloud(u.uid);\ntry { x(); } catch { /* ignore */ }\n";
+  const blockRe = (x) => x.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+  assert.strictEqual(blockRe(trap).split('loadDecksFromCloud(').length - 1, 0, '樣本沒有重現「一路吃掉」⇒ 這條反面對照是假的');
+  assert.strictEqual(stripMod.stripCommentLines(trap).split('loadDecksFromCloud(').length - 1, 1, '行級剝除器也把真呼叫點吃掉了');
+  // 真檔上的同一件事：game/+page.svelte 現在就有這種註解行（沒有的話這條反面對照就該重新找樣本）
+  assert.ok(/^\s*\/\/.*\/api\/[a-z-]+\/\*/m.test(GP), 'game/+page.svelte 裡已經沒有「// … /api/x/*」這種行 ⇒ 反面對照樣本要更新');
+});
+await T('E0c ⭐ 護欄自驗：長度護欄與正對照都會炸（AssertionError），不是恆真', () => {
+  assert.throws(() => stripMod.stripCommentsChecked('// a\n// b\n// c\nx = 1;', { label: 'p', minRatio: 0.5 }),
+    (e) => e instanceof assert.AssertionError && /只剩/.test(e.message), '長度護欄沒炸');
+  assert.throws(() => stripMod.stripCommentsChecked('const x = 1;', { label: 'p', mustKeep: ['loadDecksFromCloud('] }),
+    (e) => e instanceof assert.AssertionError && /正對照/.test(e.message), '正對照沒炸');
+  assert.throws(() => stripMod.stripCommentsChecked('', { label: 'p' }), assert.AssertionError, '空輸入沒炸');
+  assert.strictEqual(stripMod.stripCommentsChecked('const x = 1;', { label: 'p', mustKeep: ['x = 1'] }), 'const x = 1;');
+});
+const FS_NOW = { DK: fsCounts(DK, 'DK'), GP: fsCounts(GP, 'GP'), DS: fsCounts(DS, 'DS') };
+const ratioOf = (t, which) => (stripMod.stripCommentLines(t).length / t.length * 100).toFixed(1) + '%';
+console.log('        /decks   ：' + JSON.stringify(FS_NOW.DK) + '（剝註解後剩 ' + ratioOf(DK) + '）');
+console.log('        /game    ：' + JSON.stringify(FS_NOW.GP) + '（剝註解後剩 ' + ratioOf(GP) + '）');
+console.log('        deck-stats：' + JSON.stringify(FS_NOW.DS) + '（剝註解後剩 ' + ratioOf(DS) + '）');
 await T('E1 ⭐⭐ deck-stats.ts 完全沒有 Firestore／firebase 的呼叫點（史料無關的絕對值）', () => {
   for (const [k, v] of Object.entries(FS_NOW.DS)) assert.strictEqual(v, 0, 'deck-stats.ts 出現 ' + k + ' ×' + v);
   assert.ok(!/firebase|firestore/i.test(DS), 'deck-stats.ts 竟然引用了 firebase');
@@ -532,6 +593,11 @@ await T('E2 ⭐⭐ /decks 的 Firestore 呼叫點與內嵌快照相同（history
   const SNAP = { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
     loadDecksFromCloud: 3, syncDeckToCloud: 5, removeDeckFromCloud: 2, loadFavoritesFromCloud: 2, saveFavoritesToCloud: 2 };
   assert.deepStrictEqual(FS_NOW.DK, SNAP, '/decks 的 Firestore 呼叫點變了：' + JSON.stringify(FS_NOW.DK));
+});
+await T('E3 ⭐⭐⭐ 三個檔（剝註解後）的 Firestore 呼叫點等於已知答案表（history-free；淺複製也在守）', () => {
+  assertFsMatchesTable();
+  // 已知答案表自己的正對照：表裡至少有一個非零（不是掃了個空）
+  assert.ok(FS_BASE.GP.loadDecksFromCloud > 0 && FS_BASE.DK.syncDeckToCloud > 0, '已知答案表是空的？');
 });
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -656,12 +722,21 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     assert.strictEqual(lpNow.effects, lpBase.effects, '$effect 數量變了（' + lpBase.effects + ' → ' + lpNow.effects + '）');
     assert.strictEqual(lpNow.inits.length, lpBase.inits.length, '$state 數量變了');
   });
-  await T('Gc ⭐⭐⭐【正對照 c】三個改動檔的 Firestore 呼叫點與 BASE 逐字相同', () => {
-    assert.deepStrictEqual(FS_NOW.DK, fsCounts(bDK.out), '/decks 的 Firestore 呼叫點變了');
-    assert.deepStrictEqual(FS_NOW.GP, fsCounts(bGP.out), '/game 的 Firestore 呼叫點變了');
-    assert.deepStrictEqual(FS_NOW.DS, fsCounts(bDS.out), 'deck-stats.ts 的 Firestore 呼叫點變了');
-    console.log('        BASE /decks：' + JSON.stringify(fsCounts(bDK.out)));
-    console.log('        BASE /game ：' + JSON.stringify(fsCounts(bGP.out)));
+  await T('Gc ⭐⭐⭐【正對照 c】三個改動檔（剝註解後）的 Firestore 呼叫點與 BASE 逐字相同，且 BASE 等於已知答案表', () => {
+    const base = { DK: fsCounts(bDK.out, 'DK'), GP: fsCounts(bGP.out, 'GP'), DS: fsCounts(bDS.out, 'DS') };
+    // ① 已知答案表沒抄錯（拿真 BASE blob 核對）
+    assert.deepStrictEqual(base.DK, FS_BASE.DK, '已知答案表 DK 與真 BASE 對不上：' + JSON.stringify(base.DK));
+    assert.deepStrictEqual(base.GP, FS_BASE.GP, '已知答案表 GP 與真 BASE 對不上：' + JSON.stringify(base.GP));
+    assert.deepStrictEqual(base.DS, FS_BASE.DS, '已知答案表 DS 與真 BASE 對不上：' + JSON.stringify(base.DS));
+    // ② 現在的碼與 BASE 相同
+    assert.deepStrictEqual(FS_NOW.DK, base.DK, '/decks 的 Firestore 呼叫點變了');
+    assert.deepStrictEqual(FS_NOW.GP, base.GP, '/game 的 Firestore 呼叫點變了');
+    assert.deepStrictEqual(FS_NOW.DS, base.DS, 'deck-stats.ts 的 Firestore 呼叫點變了');
+    console.log('        BASE /decks：' + JSON.stringify(base.DK) + '（剝註解後剩 ' + ratioOf(bDK.out) + '）');
+    console.log('        BASE /game ：' + JSON.stringify(base.GP) + '（剝註解後剩 ' + ratioOf(bGP.out) + '）');
+    // ③ 反面對照：**不剝註解**的話，現在的 /game 與 BASE 就對不上（v6.307 那一行註解）—— 證明剝註解是必要的、不是裝飾
+    const raw = (t) => { const o = {}; for (const k of FS_TOKENS) o[k] = t.split(k).length - 1; return o; };
+    assert.notDeepStrictEqual(raw(GP), raw(bGP.out), '反面對照失效：不剝註解也對得上 ⇒ 那行註解已經不在了，這條反面對照要更新');
   });
   await T('Gd ⭐⭐【正對照 d】休閒兩欄的內嵌快照真的來自 BASE（逐字核對）', () => {
     assert.ok(bDK.out.includes(CASUAL_CARD), '休閒勝率卡的快照與 BASE 對不上 ⇒ F1 是在測不存在的形狀');
@@ -786,6 +861,68 @@ await mut('H11 ⭐⭐ tournReady 為真時仍然畫「累積中」（三態接�
     const html = norm(svelteRender(buildProbe(fragOf(out)), { props: { statsData: mkData(T_OK), tournReady: true } }).body);
     assert.ok(!html.includes('累積中'), 'ok 態竟然還顯示「累積中」');
   });
+
+// ── ⭐v6.311 剝註解計數的突變測試（每一條都要紅在**指定的那一條訊息**；只捕 AssertionError）──────
+//   突變 helper 本身：把 scripts/lib/strip-comments.mjs 的原始碼改壞，用 data: URL 匯入（不落地暫存檔，
+//   併行跑其他守衛也不會互相干擾）。
+const STRIP_SRC = readFileSync(join(ROOT, 'scripts/lib/strip-comments.mjs'), 'utf8');
+async function mutStripMod(pairs) {
+  let src = STRIP_SRC;
+  for (const [a, b] of pairs) {
+    assert.strictEqual(src.split(a).length - 1, 1, '突變錨點不唯一或不存在（helper 的形狀變了）：' + a.slice(0, 70));
+    src = src.replace(a, b);
+  }
+  assert.notStrictEqual(src, STRIP_SRC, '突變沒改到 helper');
+  return import('data:text/javascript;base64,' + Buffer.from(src, 'utf8').toString('base64'));
+}
+const EAT_ALL = ['.filter((l) => !COMMENT_LINE_RE.test(l))', '.filter(() => false)'];                 // 剝除器吃掉整檔
+const EAT_TOKEN_LINES = ['.filter((l) => !COMMENT_LINE_RE.test(l))', ".filter((l) => !COMMENT_LINE_RE.test(l) && !l.includes('loadDecksFromCloud'))"]; // 只吃掉含 token 的行（長度護欄過得了）
+const NO_RATIO_GUARD = ['  assert.ok(ratio >= minRatio,\n', '  assert.ok(true,\n'];
+const NO_MUSTKEEP = ['  for (const k of mustKeep) {\n', '  for (const k of []) {\n'];
+const mutRe = async (label, run, expectRe) => {
+  let err = null;
+  try { await run(); } catch (e) { if (e instanceof assert.AssertionError) err = e; else throw e; }
+  await T('H ' + label + ' ⇒ 必須紅在 ' + expectRe, () => {
+    assert.ok(err, '突變沒有翻紅 ⇒ 先假設守衛沒測到');
+    assert.ok(expectRe.test(err.message), '紅在別的地方：' + err.message.slice(0, 200));
+  });
+};
+const mutGreen = async (label, run) => {
+  let err = null;
+  try { await run(); } catch (e) { if (e instanceof assert.AssertionError) err = e; else throw e; }
+  await T('H ' + label + ' ⇒ 必須綠', () => assert.ok(!err, '不該紅卻紅了：' + (err && err.message.slice(0, 200))));
+};
+const GP_CALL = 'const cloud = await loadDecksFromCloud(u.uid);';
+assert.strictEqual(GP.split(GP_CALL).length - 1, 1, '突變錨點（真呼叫點）不唯一：' + GP_CALL);
+
+await mutRe('H12 ⭐⭐⭐ game/+page.svelte 多一個**真的** loadDecksFromCloud( 呼叫（守衛還在守）',
+  () => assertFsMatchesTable({ gp: GP.replace(GP_CALL, GP_CALL + '\n      const again = await loadDecksFromCloud(u.uid);') }),
+  /\/game 的 Firestore 呼叫點變了/);
+await mutGreen('H13 ⭐⭐⭐ game/+page.svelte 多幾行**註解**提到 loadDecksFromCloud（假紅已修好）',
+  () => assertFsMatchesTable({ gp: GP.replace(GP_CALL,
+    '// 以前這裡會對每個殘留 callback 各跑一次 loadDecksFromCloud(uid)\n' +
+    '      /* 區塊單行：loadDecksFromCloud(uid) */\n' +
+    '       * 續行：loadDecksFromCloud(uid)\n' +
+    GP_CALL) }));
+await mutRe('H14 ⭐⭐ 剝除器吃掉整檔（護欄還在）',
+  async () => assertFsMatchesTable({ mod: await mutStripMod([EAT_ALL]) }),
+  /剝註解後只剩/);
+await mutRe('H15 ⭐⭐ 剝除器吃掉整檔 ＋ 長度護欄被拿掉 ＋ 正對照被拿掉 ⇒ 已知答案表仍抓到（三層各自獨立）',
+  async () => assertFsMatchesTable({ mod: await mutStripMod([EAT_ALL, NO_RATIO_GUARD, NO_MUSTKEEP]) }),
+  /已知答案表不同/);
+await mutRe('H16 ⭐⭐ 剝除器只吃掉含 token 的行（長度過得了護欄）⇒ 正對照抓到',
+  async () => assertFsMatchesTable({ mod: await mutStripMod([EAT_TOKEN_LINES]) }),
+  /正對照「loadDecksFromCloud\(」不見了/);
+await mutRe('H16b 同上但正對照被拿掉 ⇒ 已知答案表抓到（BASE 與 NOW 同時歸零也不會恆等）',
+  async () => assertFsMatchesTable({ mod: await mutStripMod([EAT_TOKEN_LINES, NO_MUSTKEEP]) }),
+  /已知答案表不同/);
+await mutRe('H17 ⭐ 把 loadDecksFromCloud 從 FS_TOKENS 拿掉（守衛被閹割）',
+  () => assertFsMatchesTable({ tokens: FS_TOKENS.filter((t) => t !== 'loadDecksFromCloud') }),
+  /已知答案表不同/);
+await T('H18 ⭐ 反面對照：若 helper 沒被突變，同一條路徑是綠的（突變 harness 不是恆紅）', async () => {
+  const same = await import('data:text/javascript;base64,' + Buffer.from(STRIP_SRC, 'utf8').toString('base64'));
+  assertFsMatchesTable({ mod: same });
+});
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n══ 【I】自查 ═══════════════════════════════════════════════════════════');

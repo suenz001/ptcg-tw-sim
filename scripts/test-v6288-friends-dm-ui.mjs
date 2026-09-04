@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
 import {
   readPatch, extractBlock, FR_START, FR_END,
   buildFriends, makeFakeDb, asUser,
@@ -682,8 +683,12 @@ await T('F1 ⭐⭐⭐ 私聊不得進對戰頁的主 chunk：game/+page.svelte �
     assert.strictEqual((region.match(re) || []).length, 0, '⚠⚠ 對戰版面分支出現 ' + re.source);
   }
   // ④ 動態 import() 確實是唯一入口
+  //   ⭐v6.311：整檔計數改走中央 helper 的**行級**剝註解 —— 本檔的 stripComments 用 block regex，
+  //   game/+page.svelte :208 的 `// … /api/tournament/*` 會讓它一路吃掉 176 行真程式碼（第 13 種安慰劑），
+  //   「恰一處」在那個洞裡就數不到 ⇒ 假綠方向。helper 自帶長度護欄＋正對照。
+  const G4 = stripCommentsChecked(GAME, { label: 'game/+page.svelte', mustKeep: ["import('$lib/friends/dm-session')"] });
   for (const k of ["import('$lib/friends/dm-session')", "import('../friends/DmPanel.svelte')"])
-    assert.strictEqual(stripComments(GAME).split(k).length - 1, 1, '動態 import 不是恰一處：' + k);
+    assert.strictEqual(G4.split(k).length - 1, 1, '動態 import 不是恰一處：' + k);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

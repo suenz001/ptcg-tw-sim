@@ -36,6 +36,7 @@ import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -299,7 +300,10 @@ await T('D1c ⭐⭐⭐ 正對照②：包一層 wrapper 再靜態 import（字�
   assert.ok(err && /dm-session/.test(err.message), '⚠⚠ 掃描器只會做字串比對，擋不住「包一層 wrapper」的繞道：' + (err && err.message));
 });
 await T('D1d ⭐ 私聊確實是用動態 import() 進來的（三個 await import 各恰一處），而且型別引用是 `import type`（編譯後消失）', () => {
-  const G = stripCmt(GAME);
+  // ⭐v6.311：整檔計數改走中央 helper 的**行級**剝註解 —— 本檔的 stripCmt 用 block regex，
+  //   game/+page.svelte :208 的 `// … /api/tournament/*` 會讓它一路吃掉 176 行真程式碼（第 13 種安慰劑），
+  //   「恰一處」在那個洞裡就數不到 ⇒ 假綠方向。helper 自帶長度護欄＋正對照。
+  const G = stripCommentsChecked(GAME, { label: 'game/+page.svelte', mustKeep: ["import('$lib/friends/dm-session')"] });
   for (const s of ["import('$lib/friends/dm-session')", "import('$lib/friends/dm-poller')", "import('../friends/DmPanel.svelte')"])
     assert.strictEqual(G.split(s).length - 1, 1, '動態 import 不是恰一處：' + s);
   assert.ok(/^\s*import type \{ DmSession, DmSessionState \} from '\$lib\/friends\/dm-session';$/m.test(GAME), '型別引用不是 import type（會被打包進對戰頁）');
@@ -574,7 +578,8 @@ await T('G2 新增的區塊零 {@html}；錦標賽好友分頁區間零 {#each}�
   for (const e of stripCmt(FRP).match(/\{#each[^}]*\}/g) || []) assert.ok(/\(r\.fid\)\}$/.test(e), '共用元件的 each 沒用 fid 當 key：' + e);
 });
 await T('G3 ⭐ 全檔的 tTab 賦值只有 tTabRaw 一條路（舊的 `tTab = ` 直接賦值不得復活）', () => {
-  const G = stripCmt(GAME);
+  // ⭐v6.311：整檔「零賦值」計數同樣改走中央 helper 的行級剝註解（block regex 在 game 頁會吃掉 176 行 ⇒ 洞裡的賦值數不到）
+  const G = stripCommentsChecked(GAME, { label: 'game/+page.svelte', mustKeep: ['const tTab = $derived('] });
   const assigns = (G.match(/(?<![A-Za-z_$])tTab\s*=[^=>]/g) || []).length;
   const decl = (G.match(/const tTab = \$derived\(/g) || []).length;
   assert.strictEqual(decl, 1, 'const tTab = $derived(…) 不是恰一處：' + decl);
