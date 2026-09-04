@@ -616,6 +616,34 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let _tBracketFailStreak = 0;       // v6.177 連續失敗次數（只在 0→1 那一次拉回正常頻率）
   // v6.177 賽程曾經成功載入過至少一次 ⇒ 空狀態要說「更新中」而不是「尚未產生」。
   let tBracketsEverOk = $state(false);
+  // ⭐⭐⭐v6.304 站長交辦：把同一場賽事的「賽事卡」與「瑞士制積分表／賽程表」**排在一起**
+  //   （先前是所有賽事卡排一區、所有賽程表再排一區，站長形容「看起來很割裂」）。
+  //   ⚠⚠ 站長裁定：**保持現狀的收折，只把位置搬在一起** ⇒ tEvOpen／tEvOpenBy／tEvForced／
+  //     tToggleEv 一行都沒有動，三塊仍各自獨立收折（積分表與賽程表本來就共用 eventId 這個 key）。
+  //
+  // ⚠⚠ 兩個迴圈的**資料源不同**：賽事卡來自 /event（tEvents → tRunningEvents），
+  //   賽程表來自 /bracket（tBrackets）。配對時必然有三種情況，三種都必須畫得出來：
+  //     ① 有賽事卡也有賽程表 ⇒ 配成一組（本版的主要目標）
+  //     ② 有賽事卡沒有賽程表（賽程還沒 seed／這一發抓失敗而且從沒成功過）⇒ 只畫賽事卡
+  //     ③ ⭐⭐ 有賽程表卻沒有對應的賽事卡（孤兒）⇒ 補畫在所有配對成功的之後，**絕不能讓它消失**。
+  //        孤兒是真的會發生的：/event 每 3 秒、/bracket 是它的 3 倍慢，賽事從 tEvents 消失之後、
+  //        下一次 tBracketLoad 之前，tBrackets 還留著那一場；漏掉它就等於把 v6.177
+  //        「連線不穩時沿用上一份好資料」的保護在**渲染端**又打掉一次（整區憑空消失）。
+  /** 依賽事分組：每一場的賽事卡與它自己的賽程（沒有就是 null）。⚠ 順序完全沿用 tRunningEvents。 */
+  const tRunningGroups = $derived.by(() => {
+    const byEv = new Map<string, any>();
+    for (const b of tBrackets) {
+      const id = b && b.event && b.event._id;
+      if (id === undefined || id === null) continue;
+      if (!byEv.has(String(id))) byEv.set(String(id), b);
+    }
+    return tRunningEvents.map((ev: any) => ({ ev, brk: byEv.get(String(ev && ev._id)) ?? null }));
+  });
+  /** ⭐⭐ 孤兒賽程：tBrackets 有、tRunningEvents 卻找不到對應賽事卡的那幾場（順序沿用 tBrackets）。 */
+  const tOrphanBrackets = $derived.by(() => {
+    const evIds = new Set(tRunningEvents.map((e: any) => String(e && e._id)));
+    return tBrackets.filter((b: any) => !evIds.has(String(b && b.event && b.event._id)));
+  });
   let tLeaderboardStale = $state(false);
   let tProfileStale = $state(false);
   let tMyMatch = $state<any>(null);   // 我本輪可進行的對戰 { matchId, round, oppName }
@@ -10050,8 +10078,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {/if}
         </div>
       {/snippet}
-      <!-- v5.620：進行中／即將開始的賽事優先（其賽程表、觀戰選單排在「下一場報名」視窗之上）-->
-      {#each tRunningEvents as ev (ev._id)}{@render eventCard(ev)}{/each}
+      <!-- v5.620：進行中／即將開始的賽事優先（其賽程表、觀戰選單排在「下一場報名」視窗之上）
+           ⭐v6.304 進行中賽事的賽事卡迴圈已搬到 bracketBlock 定義之後（見下方 v6.304 分組迴圈），
+           好讓每一張賽事卡緊接著自己的積分表與賽程表；這裡刻意不留任何輸出。 -->
       <!-- v5.937 官方+社群賽並行:每個進行中賽事各顯示賽程表(含瑞士排名)+內嵌觀戰(觀戰按鈕併入每場VS,省版面) -->
       {#snippet myMatchBox()}
         {@const _waitMs = (tMyMatch.enterOpenAt ?? 0) - tNow}
@@ -10151,13 +10180,24 @@ function _setupSelfPending(g: any, seat: number): string | null {
           </div>
         {/if}
       {/snippet}
+      <!-- ⭐⭐⭐v6.304 依賽事分組渲染：一張賽事卡 → 緊接著同一場的 📊 瑞士制積分表 → 📋 賽程表。
+           ⚠ 摺疊照舊：賽事卡看 tEvOpen[ev._id]、積分表與賽程表看 tEvOpen[brk.event._id]，
+             三塊各自仍可獨立收折（本版一個摺疊函式、一個 $derived 都沒有動）。
+           ⚠ 情況②：沒有對應賽程的賽事只畫賽事卡，不留空位、不畫殼。 -->
+      {#each tRunningGroups as g (g.ev._id)}
+        {@render eventCard(g.ev)}
+        {#if g.brk}{@render bracketBlock(g.brk)}{/if}
+      {/each}
       <!-- v5.937 進場鈕保底(判負攸關):tMyMatch/tMyBye 存在但沒對應到已載入的 bracket → 頂層獨立渲染,避免進場鈕消失吃 noShow 判負 -->
       {#if tMyMatch && !tBrackets.some((b) => b.event?._id === tMyMatch.eventId)}
         <div class="tourn-bracket">{@render myMatchBox()}</div>
       {:else if tMyBye && !tBrackets.some((b) => b.event?._id === tMyBye.eventId)}
         <div class="tourn-bracket">{@render myByeBox()}</div>
       {/if}
-      {#each tBrackets as brk (brk.event._id)}
+      <!-- ⭐⭐v6.304 情況③孤兒賽程（tBrackets 有、找不到對應賽事卡）：一律補畫在所有配對成功的之後。
+           上面的分組迴圈只走賽事卡 ⇒ 少了這一段，孤兒那一場的積分表與賽程表會**憑空消失**，
+           那正是 v6.177 花了一整版根治的症狀（見 tBracketLoad 的 mergeKeyedOrKeep 註解）。 -->
+      {#each tOrphanBrackets as brk (brk.event._id)}
         {@render bracketBlock(brk)}
       {/each}
       <!-- ⭐v6.177 核心②：真的沒有資料可畫時仍要有合理的空狀態（舊版是什麼都不畫＝整區憑空消失）。 -->

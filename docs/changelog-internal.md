@@ -1,5 +1,70 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.304 錦標賽大廳：賽事卡與該場的積分表／賽程表**排在一起**（版面重構，站長交辦）
+
+**站長需求（逐字）**：「錦標賽現在是把賽事名稱（含報名人數等資訊）和賽程表分別顯示，
+會把不同的賽事名稱先放在一起，下面再把賽程表放在一起，這樣看起來很割裂，
+應該要改成把同一個賽事名稱和同一個賽程表放在一起。」
+**站長裁定**：**保持現狀的收折，只把位置搬在一起** ⇒ 摺疊邏輯一行都不准動。
+
+### 現況（複驗過）
+
+| 東西 | 位置（BASE `ae9737c5`） | 資料源 | 摺疊 key |
+|---|---|---|---|
+| 賽事卡 `eventCard` | `{#snippet eventCard(ev)}` :9969、迴圈在 :10054 | `/event` → `tEvents` → `tRunningEvents` | `tEvOpen[ev._id]` |
+| 📊 積分表／📋 賽程表 `bracketBlock` | `{#snippet bracketBlock(brk)}` :10082、迴圈在 :10160 | `/bracket` → `tBrackets` | `tEvOpen[brk.event._id]`（兩塊共用同一個 `_bkId`） |
+
+⇒ 兩個 `{#each}` 各自獨立，賽事卡全部在前、賽程表全部在後 ＝ 站長說的「割裂」。
+
+### 做法
+
+`src/routes/game/+page.svelte` 只動三處，**CSS 一個字都沒改**（`<style>` 與 BASE 逐位元相同）：
+
+1. 新增 `const tRunningGroups = $derived.by(...)`：以 `String(event._id)` 建 Map，
+   `tRunningEvents.map(ev => ({ ev, brk: byEv.get(...) ?? null }))`（順序沿用 `tRunningEvents`）。
+2. 新增 `const tOrphanBrackets = $derived.by(...)`：`tBrackets` 裡找不到對應賽事卡的那幾份。
+3. 模板：把 :10054 的賽事卡迴圈刪掉，改在 `bracketBlock` 定義之後放
+   `{#each tRunningGroups}`（賽事卡 → `{#if g.brk}` 賽程），
+   接著是原封不動的進場鈕保底區塊，最後 `{#each tOrphanBrackets}`。
+
+### ⚠⚠ 三種資料情況（兩個迴圈資料源不同，必然存在）
+
+| 情況 | 處理 | 守衛 |
+|---|---|---|
+| ① 有賽事卡也有賽程表 | 配成一組（本版目標） | B1 |
+| ② 有賽事卡沒賽程表（賽程未 seed／第一次就抓失敗） | 只畫賽事卡，不畫空殼 | B2／H5 |
+| ③ **有賽程表沒有賽事卡（孤兒）** | 補畫在所有「配對成功」的**之後**，順序沿用 `tBrackets` | B3／B3b／D3／H1～H3 |
+
+孤兒不是理論值：`/event` 每 3 秒、`/bracket` 是它的 3 倍慢（v6.161 降頻後更久），
+賽事從 `tEvents` 消失之後、下一次 `tBracketLoad` 之前，`tBrackets` 還留著那一份。
+漏掉孤兒 ＝ 在渲染端把 v6.177「連線不穩沿用上一份好資料」的保護又打掉一次。
+
+### `:5377` 那段既有保護是什麼
+
+`tBracketLoad()` 上方的註解：舊寫法 `tBrackets = rs.filter(...)` 是**清空型**的，
+任一支 `/bracket` 逾時／500 就把那一場濾掉、兩場都失敗就整個 `[]`，
+`{#each tBrackets}` 一筆都不畫 ⇒ 整區憑空消失，還要等下一次輪詢才回來。
+v6.177 改成 `mergeKeyedOrKeep`：成功的用新的、失敗的沿用上一份好的並標 `tBracketsStale`。
+本版**沒有動 `tBracketLoad` 一個位元**（守衛 D1 用 sha256 對 BASE 比），
+而且把它的保護在渲染端補齊（孤兒分支，守衛 D3 實跑）。
+
+### 摺疊逐位元未動的證明
+
+- 整段摺疊區（`T_EVFOLD_KEY`／`tLoadEvFold`／`tEvFold`／`tEvOpenBy`／`tEvOpen`／`tEvForced`／`tToggleEv`，
+  3,018 字元）sha256 = `6cecec52348f5a46ec49cf1797c28c4cf84a4c70349485b2fa659d0354bcf07f`，與 BASE **相同**。
+- 矩陣回歸：`tEvOpenBy` 抽出來實跑 **1,152 格**七參數笛卡兒矩陣，與獨立寫的預期表逐格全等；
+  再與 BASE 抽出來的同一支逐格比對，1,152 格全等。
+- 四個 snippet（`eventCard`／`bracketBlock`／`myMatchBox`／`myByeBox`）sha256 與 BASE 相同。
+
+### 守衛
+
+`scripts/test-v6304-tourn-group-layout.mjs`（37 PASS，9 個突變全部紅在預期那一條）。
+⭐ 順序斷言走**真的 render 出來的 DOM**：把出貨碼的兩個 `$derived` 與那段模板抽出來，
+用 `svelte/compiler` 編成 SSR 元件真的 `render()`，對元素序列下斷言（不是比字串位置）。
+`scripts/measure-v6304-tourn-group.mjs`（375×812／390×844／1366×768 三尺寸 DOM 量測，不在 chain）：
+每一塊寬高與舊版面全等、三塊 `left`／`right` 完全一致、無重疊、無水平溢出。
+HEAD-FAIL：`game/+page.svelte` 還原到 BASE ⇒ A0／A1 立刻紅並中止（0 PASS / 2 FAIL）。
+
 ## v6.303 站長交辦的三件 UI 改善（錦標賽分頁縮字／賽事狀態色條＋自動展開／卡牌箭頭透明化）
 
 ### 【A】錦標賽分頁縮成 2 字
