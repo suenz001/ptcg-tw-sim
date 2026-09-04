@@ -1223,6 +1223,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let myUid       = $state<string | null>(null);
   /** ⭐v6.197 Oracle 身分變動訂閱的解除函式（不解除 ⇒ 每次重進 /game 就多疊一個 listener） */
   let _unsubOracleUid: (() => void) | null = null;
+  // ⭐⭐v6.307 Firebase onAuthStateChanged 的退訂函式。SPA 每進出一次 /game 就 mount 一次，
+  //   以前回傳值沒存、onDestroy 也沒解除 ⇒ 監聽器一路疊加；auth 一變（登入／登出／匿名升級）
+  //   **每一個**殘留 callback 都各跑一次 loadDecksFromCloud（每副牌 1 次 Firestore 讀取）＋
+  //   signInAnonymously（N 個匿名登入互相蓋 ⇒ v4.984 那種 auth pill 閃爍）。同 _unsubOracleUid 的形狀。
+  let _unsubAuth: (() => void) | null = null;
   // v4.913 port 牌組編輯器的登入 dashboard 到模式選擇畫面
   let firebaseUser = $state<User | null>(null);
   let syncStatus = $state<'idle' | 'syncing' | 'synced' | 'error'>('idle');
@@ -4685,7 +4690,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     //   修法：Firebase auth 永遠初始化（給 dashboard 用 firebaseUser）；
     //   Oracle build 額外取 Oracle JWT（給房間 API 用）。myUid 在 ORACLE_MODE
     //   下仍走 Oracle JWT uid，避免房間 memberUid 比對失敗。
-    onAuthStateChanged(auth, async u => {
+    _unsubAuth = onAuthStateChanged(auth, async u => {   // ⭐v6.307 存退訂函式（onDestroy 解除）
       firebaseUser = u;
       // Oracle build 下 myUid 必須走 Oracle JWT uid（房間 API 簽 JWT 用），
       // 不能被 Firebase uid 蓋掉 → 加 gate 阻擋 callback 覆寫 myUid。
@@ -4844,6 +4849,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     unsubRoom?.();
     unsubOpenRooms?.();
     _unsubOracleUid?.(); _unsubOracleUid = null;   // ⭐v6.197 不解除就會每次重進 /game 疊一個
+    _unsubAuth?.(); _unsubAuth = null;             // ⭐⭐v6.307 同型缺口：auth 監聽器也會疊（見宣告處註解）
     // v4.40：補 chat messages listener leak（玩家硬改網址不走 leaveOnlineGame 時殘留）
     unsubMessages?.(); unsubMessages = null;
     if (aiTimer !== null) clearTimeout(aiTimer);

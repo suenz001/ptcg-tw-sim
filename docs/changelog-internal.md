@@ -1,5 +1,69 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.307 /game 的 Firebase onAuthStateChanged 監聽器在元件銷毀時解除（Firestore 讀取放大器）
+
+BASE `aaf4c26e2099a09b7df165bdec014db3526f8b61`（v6.306，遠端 main）。
+GCP Metrics Explorer 量到 Firestore 每日讀取 QUERY 46,895 / LOOKUP 1 / NOT_FOUND 1 ⇒ 幾乎全是集合查詢，
+主嫌是 `loadDecksFromCloud`（每副牌 1 讀）這條牌組全拉路徑；本版修的是同一條路徑上的**放大器**。
+⚠ 首頁不放（玩家看不到、無任何要做的事）。
+
+### 【0】診斷複驗（沒有被推翻）
+
+- `src/routes/game/+page.svelte:4688`（BASE 行號）`onAuthStateChanged(auth, async u => {...});` **回傳值沒存、
+  onDestroy（:4839）沒解除** —— ✓ 全檔 grep 無 `unsubAuth`；onDestroy 只解 `unsubRoom／unsubOpenRooms／_unsubOracleUid／unsubMessages`。
+- SvelteKit SPA：每進出一次 `/game` 就 mount 一次 ⇒ 監聽器累積。⚠ 新註冊的監聽器會立刻以「目前 user」觸發一次
+  （這是每次進頁重拉牌組的正常路徑）；**殘留的舊監聽器**只在 auth 變動時觸發，但一觸發就每個各跑一次
+  `cloudDecksUnchanged → loadDecksFromCloud`（v6.306 之前 `meta` 規則缺口 ⇒ `cloudDecksUnchanged` 永遠 false ⇒ 每個都整批全拉）。
+- 同型缺口 v6.197 已修過一次（`_unsubOracleUid`，註解原話「不解除就會每次重進 /game 疊一個」），這次補 auth 這支。
+- 附帶：登出時每個殘留 callback 都會 `signInAnonymously` ⇒ N 個匿名登入互相覆蓋（v4.984 修過的 auth pill 閃爍同型）。
+
+### 【1】改動（`src/routes/game/+page.svelte` 三行，HEAD-blob 確定性取代）
+
+- `:1225` 後新增 `let _unsubAuth: (() => void) | null = null;`（與 `_unsubOracleUid` 同型）。
+- `:4688` `onAuthStateChanged(auth, …)` → `_unsubAuth = onAuthStateChanged(auth, …)`。
+- `onDestroy`（:4839 那個）加 `_unsubAuth?.(); _unsubAuth = null;`，接在 `_unsubOracleUid` 之後。
+- 行為不變證明：註冊在 onMount 內**第一個 await 之前**（同步），onDestroy 必在其後 ⇒ 不會漏解；
+  重新進頁時重新註冊，SDK 會立即以目前 user 回呼一次 ⇒ firebaseUser／myUid gate／匿名重登／admin spy／?mode=online
+  全部照舊。callback 內 in-flight 的 `await signInAnonymously` 不受 unsub 影響（unsub 只停之後的通知）。
+  `onDestroy` 已在本檔用（runes 檔可用，:1317／:2644／:4839）。
+
+### 【2】同型缺口掃描（rev aaf4c26e，`onAuthStateChanged`／`onSnapshot(`）
+
+| 檔案 | 狀態 |
+|---|---|
+| `src/routes/decks/+page.svelte:668` | ✓ 正確範例：`const unsubAuth = onAuthStateChanged(...)`，onMount `return () => { unsubAuth(); … }` |
+| `src/lib/friends/FriendsPanel.svelte:137` | ✓ `const un = …; return () => { un(); }` |
+| `src/routes/deck-posts/+page.svelte:163` | ✓ 同上 |
+| `src/routes/admin/feedbacks/+page.svelte:46` | ✓ `onMount(() => onAuthStateChanged(...))` 直接回傳 unsub |
+| `src/routes/+page.svelte:142` | ✓ `disposed` 旗標＋`unsub?.()`（處理動態 import 後才註冊的競態） |
+| `src/lib/game/auth-facade.ts:66 onUidChange` | ✓ 回傳 unsub；且 src 內目前**沒有呼叫者** |
+| `src/lib/tracking.ts:55` | ⚠ 沒退訂，但只在 `+layout.svelte` onMount 呼叫一次（根 layout 整個 SPA 生命週期只 mount 一次）⇒ 不累積，**不動** |
+| `src/routes/+page.svelte:244/268 onSnapshot`（意見回饋 modal） | ⚠ 小缺口：modal 開／關由 `$effect` 訂閱／退訂，但 onMount cleanup（:163）沒呼叫 `unsubscribeFeedbacks()` ⇒ **開著回饋 modal 直接導航離開首頁**會殘留 1~2 個 onSnapshot。觸發條件窄、且是 listener 非查詢；**留給站長裁定，本版不動** |
+| `src/lib/game/room.ts:978/1037/1273 onSnapshot` | 回傳 unsub 給呼叫端；`/game` 的 `unsubRoom／unsubOpenRooms／unsubMessages` 已在 onDestroy 解除 |
+
+### 【3】守衛 `scripts/test-v6307-game-auth-unsub.mjs`（PASS 10；進 test chain）
+
+不是字串 grep，三層：
+- 【A】AST（esbuild 去型別 → acorn）：`onAuthStateChanged(...)` 呼叫**剛好 1 個**、在 onMount 內、回傳值賦給識別字 X、
+  X 在頂層宣告、某個 onDestroy 回呼（或 onMount 的 return 函式）裡有呼叫 X（`X()`／`X?.()`）。
+- 【B】行為：把「註冊敘述」與「onDestroy 回呼本體」的**真實原始碼**抽出來，用假的 `onAuthStateChanged`（spy，回傳會把自己從
+  存活集合移除的 unsub）在 `with(proxy)` 沙盒裡真的執行：mount 3 個實例 ⇒ 存活 3；銷毀 1 ⇒ 2；重複銷毀不多退（unsub 仍 1 次）；
+  全部銷毀 ⇒ 0；unsub 總次數 = 3。其他清理碼（stopHeartbeat／window.removeEventListener／clearInterval…）由萬用空值 Proxy 吞掉。
+- 【C】突變自測 8 個，各紅在預期那條（只捕 AssertionError）：M1 拿掉賦值（＝v6.306 原狀，等價 HEAD-FAIL，history-free）／
+  M2 onDestroy 整行拿掉／M3 只清空不呼叫／**M4 呼叫包在 if (false)**／**M5 先清空再呼叫**（M4、M5 AST 看得到呼叫，只有行為層擋得住）／
+  M6 存到別的變數名／M7 多一個裸註冊／M8 解除搬到 onMount。
+- HEAD-FAIL 實跑：`V6307_SRC=<BASE blob>` ⇒ FAIL 2，紅在「回傳值（unsubscribe 函式）沒有被賦值」。
+- 本檔不 pin 版本號、不整檔 sha256。
+
+### 【4】三配套
+
+`oracle-admin/admin.html` SITE_VERSION_HINT 6.307（LF）；`test-v6272` PREV_SHA → aaf4c26e、PREV_ALLOWED = version.ts ＋ game/+page.svelte；
+`test-v6264` BASE_SHA → aaf4c26e（本版沒動 changelog ⇒ F0 短路）；掃 `scripts/` 無 pin 死 6.306／整檔 sha256 鎖住 game/+page.svelte。
+
+### 【5】部署
+
+玩家端 SPA 改動 ⇒ `redeploy-oracle.bat`；`admin.html` 動到（版本提示）⇒ `update-tournament.bat`（離峰、無賽事進行中）。
+
 ## v6.306 首頁 homeChangelog「靜態檔閘門」（訊號 0 ⇒ 連 getDoc 都不發）＋ firestore.rules 補 users/{uid}/meta
 
 BASE `e3233caea4b4f3daab92b49b636bf9e6e0d03846`（v6.305，遠端 main）。

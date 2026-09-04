@@ -664,7 +664,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'e3233caea4b4f3daab92b49b636bf9e6e0d03846';   // v6.305（v6.306 的上一版）
+const PREV_SHA = 'aaf4c26e2099a09b7df165bdec014db3526f8b61';   // v6.306（v6.307 的上一版）
+// ⭐⭐v6.307：/game 的 onAuthStateChanged 退訂（_unsubAuth 存回傳值、onDestroy 解除）——
+//   純資源衛生，玩家端只動 game/+page.svelte 三行（宣告／賦值／onDestroy）＋ version.ts。
 // ⭐⭐v6.306：首頁 homeChangelog 靜態檔閘門（changelog.html 檔尾訊號 0 ⇒ 連 getDoc 都不發）——
 //   home-changelog-cache.ts 簽名改 (gen, fetchOverride)、+page.svelte 接線改「先等訊號」、
 //   static/changelog.html 檔尾加訊號；＋ changelog 三步搬運（rules 修正對玩家有感，放一則）。
@@ -674,12 +676,8 @@ const PREV_SHA = 'e3233caea4b4f3daab92b49b636bf9e6e0d03846';   // v6.305（v6.30
 //     scripts/ 與 oracle-admin/ 底下的改動（新守衛、SITE_VERSION_HINT）**不可以**列進來。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
-  'src/lib/home-changelog-cache.ts',
   'src/lib/version.ts',
-  'src/routes/+page.svelte',
-  'static/changelog-archive.html',
-  'static/changelog-bodies.html',
-  'static/changelog.html',
+  'src/routes/game/+page.svelte',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
