@@ -1223,21 +1223,26 @@
     /* ⚠v6.044 修配色 bug：.modalInner 是白底(#fff)，但這裡原本沿用對戰頁的深色主題
        配色（淺藍字 #cce0ff ＋ 近乎透明的白底），在白底上幾乎看不見，玩家找不到左右
        切換鈕。改用 decks 頁同功能已在用的淺色配色。 */
-    border: 1px solid #c9d2e0;
-    background: #fff;
+    /* ⭐⭐ v6.303 站長交辦：箭頭會擋住後面的文字／數值 ⇒ **照抄牌組編輯器 .pv-nav 那一套**
+       （decks/+page.svelte v5.798 就是為了同一個理由半透明化的）。
+       深藍字 #2a4a78 ＋ 白色光暈 text-shadow 在白底上仍然清楚，不會回到 v6.044 修掉的
+       「看不見」問題；hover 才加深底色給回饋。尺寸／位置逐字未動 ⇒ 零位移。 */
+    border: 1px solid rgba(201, 210, 224, 0.55);
+    background: rgba(255, 255, 255, 0.18);
     color: #2a4a78;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85), 0 0 3px rgba(255, 255, 255, 0.7);
     font-size: 1.6rem;
     font-weight: 700;
     cursor: pointer;
     z-index: 5;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     line-height: 1;
   }
-  .modal-nav:hover { background: #eef3fa; border-color: #9fb4d0; }
+  .modal-nav:hover { background: rgba(231, 238, 248, 0.6); }
   /* v5.000: button 完整放 modal 內側 16px，避免被 overflow-x: hidden 切掉 */
   .modal-nav-prev { left: 16px; transform: translateY(-50%); }
   .modal-nav-next { right: 16px; transform: translateY(-50%); }

@@ -1,5 +1,60 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.303 站長交辦的三件 UI 改善（錦標賽分頁縮字／賽事狀態色條＋自動展開／卡牌箭頭透明化）
+
+### 【A】錦標賽分頁縮成 2 字
+
+`src/routes/game/+page.svelte` 分頁列：`📊 排行榜`→`📊 排行`、`🪪 個人資料`→`🪪 個人`
+（`🏆 賽事`／`👥 好友` 本來就是 2 字，逐字未動）。設定視窗那一行指路文字同步改。
+
+⭐ **v6.297 的 +21px 位移歸零**（`scripts/measure-v6303-ui-batch.mjs`，四種尺寸）：
+
+| 尺寸 | 舊（4 顆長標籤）分頁列高 | 新（4 顆短標籤） | 下方內容 dy |
+|---|---|---|---|
+| 375×812 | 62px（`🪪 個人資料` 折兩行） | **41px** | **-21** |
+| 390×844 | 41px | 41px | 0 |
+| 412×915 | 41px | 41px | 0 |
+| 1366×768 | 41px | 41px | 0 |
+
+⇒ 375×812 正好把 v6.297 量到的 +21px 抵銷回去；四顆一律單行、字沒被截、中心點都命中自己。
+`.tourn-tabs`／`.tourn-tab`／`:hover`／`.active` 四條 CSS **一個字都沒改**。
+
+### 【B】賽事狀態左側色條 ＋ 已報名且報到中自動展開
+
+- **色條**：`.tourn-event.ev-open-reg`（`#6ab87a`，＝`.tourn-tab.active` 的既有邊框綠）／
+  `.tourn-event.ev-open-checkin`（`#ffd35a`，＝`.tcmsg.tcsys` 系統播報的既有強調金）。
+  掛在 `eventCard` 的 `class:ev-open-reg={ev.status === 'registration' && !ev.registered}` ／
+  `class:ev-open-checkin={ev.status === 'checkin' && !ev.registered}` —— **已報名一律無色條**。
+- ⚠⚠ **用 `box-shadow: inset 3px 0 0 0` 而不是 `border-left: 3px solid`**：`.tourn-event` 是
+  **content-box**（實測 `box-sizing=content-box`、`border-left=1px`、`padding-left=14px`），
+  加寬左邊框會把卡片整體撐大、內文字右移。inset 陰影不進盒模型 ⇒ 實測三種狀態的內文字 `left`
+  完全相同（375 下都是 27.8、1366 下都是 378），卡片寬高也完全相同。
+- **自動展開**：`tEvOpenBy` **多加一條**硬約束
+  `if (registered && !dropped && status === 'checkin') return true;`，
+  位置在既有兩條硬約束之後、使用者手動偏好之前（＝強制展開優先於手動摺疊，與既有一致）。
+  `status` 加在**參數列最後且可選** ⇒ 舊的六參數呼叫（test-v6252 全部都是）行為零改變。
+  `tEvForced` 同步把這些場列入 🔒，免得玩家點標題列沒反應以為壞掉。
+- ⭐ 「沒有改寫既有條件」是**跑出來的**：test-v6303 的 D1 把 BASE 與現在的 `tEvOpenBy` 都抽出來，
+  在六個舊參數的 **288 格笛卡兒矩陣**上逐格比對，全部相同。
+
+### 【C】卡牌資料庫左右箭頭透明化
+
+`src/routes/cards/+page.svelte` 的 `.modal-nav` 照抄 `src/routes/decks/+page.svelte` 的 `.pv-nav`
+（那一組是 v5.798 為了同一個理由半透明化的）：
+`border: 1px solid rgba(201, 210, 224, 0.55)` ／ `background: rgba(255, 255, 255, 0.18)` ／
+`text-shadow: 0 1px 2px rgba(255,255,255,.85), 0 0 3px rgba(255,255,255,.7)` ／
+`box-shadow: 0 1px 4px rgba(0,0,0,.1)` ／ `:hover { background: rgba(231, 238, 248, 0.6); }`。
+**幾何宣告（position/top/width/height/border-radius/font-size/padding/line-height/z-index…）
+一個字都沒動** ⇒ 零位移（DOM 實測 rect 全等、`elementFromPoint` 仍命中按鈕本身）。
+深藍字 `#2a4a78` ＋ 白色光暈在白底 `.modalInner` 上仍然清楚，不會回到 v6.044 修掉的「看不見」問題。
+
+### 守衛
+
+`scripts/test-v6303-ui-batch.mjs`（40 PASS，11 個突變全部紅在預期那一條）＋
+`scripts/measure-v6303-ui-batch.mjs`（四尺寸 DOM 量測，不在 chain）。
+HEAD-FAIL：`game/+page.svelte`／`cards/+page.svelte` 各自還原到 BASE ⇒ A0 立刻紅並中止。
+既有守衛 `test-v6297` 的 B3 同步更新成「改名表以外逐字未動」（守備範圍只縮不放）。
+
 ## v6.302 好友清單多回 `roomId`（伺服器改用 **email** 比對好友所在的休閒房）
 
 **回報**：好友在一般休閒對戰中，好友名單的【🚪 加入房間】按鈕是暗的、按不下去。

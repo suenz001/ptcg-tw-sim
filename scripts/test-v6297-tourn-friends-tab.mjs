@@ -4,7 +4,7 @@
 //   【A】HEAD-FAIL 錨點：tTabRaw／`const tTab = $derived`／friendsPaneOpen／openDm／dmFoot 都在
 //        （BASE v6.296 一個都沒有 ⇒ A0 必紅並中止）。
 //   【B】第 4 個分頁（條件一律**求值**，不比字面）：tTab 的「未開放就鎖回賽事」鎖、tSwitchTab 實跑只改 tTabRaw、
-//        四顆分頁鈕（前三顆逐字未動、第 4 顆包在 {#if friendsEntryOn} 裡）、分頁內容掛在 profile 之後、
+//        四顆分頁鈕（前三顆**除了 v6.303 明列的縮字改名以外**逐字未動、第 4 顆包在 {#if friendsEntryOn} 裡）、分頁內容掛在 profile 之後、
 //        匿名玩家根本看不到整列（整列在 {#if isAnonymous} 的 {:else} 內）。
 //   【C】⭐⭐ 框架安全（靜態）：.tourn-tabs／.tourn-tab／:hover／.active 四條 CSS 規則與 BASE **逐字相同**
 //        —— 本版採「方案 2：短標籤」，**一行 CSS 都沒改**（DOM 量測在 scripts/measure-v6297-tourn-tabs.mjs）。
@@ -140,13 +140,29 @@ await T('B3 ⭐⭐ 分頁列恰四顆；前三顆與 BASE **逐字相同**；第
   const blk = tabsBlock(GAME);
   const btns = tabButtons(blk);
   assert.strictEqual(btns.length, 4, '分頁鈕不是四顆：' + btns.length);
-  assert.deepStrictEqual(btns.map((b) => b.text), ['🏆 賽事', '📊 排行榜', '🪪 個人資料', '👥 好友'], '分頁文字不對：' + JSON.stringify(btns.map((b) => b.text)));
+  // ⭐v6.303 站長交辦「每個分頁都是 2 個字＋原有 icon」⇒ 期望文字跟著改（📊 排行榜→📊 排行、🪪 個人資料→🪪 個人）。
+  assert.deepStrictEqual(btns.map((b) => b.text), ['🏆 賽事', '📊 排行', '🪪 個人', '👥 好友'], '分頁文字不對：' + JSON.stringify(btns.map((b) => b.text)));
   const r = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte');
   if (!r.ok) { shallowSkip('v6297 B3 前三顆分頁鈕與 BASE 逐字比對', 'B3 的其餘結構斷言不需要歷史，仍在守'); skipped.push('B3 前三顆逐字（淺複製）'); }
   else {
     const base = tabButtons(tabsBlock(r.out.replace(/\r\n/g, '\n')));
     assert.strictEqual(base.length, 3, 'BASE 的分頁鈕不是三顆 ⇒ BASE 抓錯');
-    for (let k = 0; k < 3; k++) assert.strictEqual(btns[k].raw, base[k].raw, '⚠⚠ 第 ' + (k + 1) + ' 顆既有分頁鈕被動到了');
+    // ⭐⭐v6.303：前三顆的**文字**依下面這張明列的改名表改過，**其餘（class／role／aria-selected／
+    //   class:active／onclick）仍必須與 BASE 逐位元相同**。
+    //   ⚠ 這不是把守護意圖拿掉 —— 原本守「既有分頁鈕不得被動到」，現在守「除了這張表上的改名以外
+    //     一個字都不准動」，而且**多了一條**「BASE 的文字必須在表上」（有未申報的改名一樣會紅）。
+    //     守備範圍只縮不放；本檔 I2 突變（第 4 顆沒包 {#if}）與 v6.303 的 I8 突變（文字改回三字）都仍在守。
+    const RENAME_V6303 = { '🏆 賽事': '🏆 賽事', '📊 排行榜': '📊 排行', '🪪 個人資料': '🪪 個人' };
+    let renamed = 0;
+    for (let k = 0; k < 3; k++) {
+      const want = RENAME_V6303[base[k].text];
+      assert.ok(want !== undefined, '⚠⚠ 第 ' + (k + 1) + ' 顆在 BASE 的文字「' + base[k].text + '」不在改名表上 ⇒ 有未申報的改動');
+      const rebuilt = base[k].raw.replace('>' + base[k].text + '</button>', '>' + want + '</button>');
+      assert.strictEqual(btns[k].raw, rebuilt,
+        '⚠⚠ 第 ' + (k + 1) + ' 顆既有分頁鈕除了申報的改名以外還被動到了\n NEW : ' + btns[k].raw + '\n WANT: ' + rebuilt);
+      if (base[k].text !== want) renamed++;
+    }
+    assert.strictEqual(renamed, 2, '改名表宣告改兩顆，實際改了 ' + renamed + ' 顆');
   }
   const fourth = btns[3].raw;
   assert.ok(/class:active=\{tTab === 'friends'\}/.test(fourth) && /aria-selected=\{tTab === 'friends'\}/.test(fourth) && /role="tab"/.test(fourth), '第 4 顆的 role／aria-selected／active 不齊：' + fourth);

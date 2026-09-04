@@ -656,12 +656,21 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let tEvFold = $state<Record<string, boolean>>(tLoadEvFold());
   /**
    * 單一賽事該不該展開（純函式，守衛可以直接抽出來實跑）。
-   * 優先序：①強制展開（輪到我進場／我本輪輪空）→ ②使用者手動偏好 → ③預設規則。
+   * 優先序：①強制展開（輪到我進場／我本輪輪空／⭐v6.303 已報名且正在報到中）
+   *        → ②使用者手動偏好 → ③預設規則。
+   * ⭐⭐v6.303 站長交辦「避免忘記報到」：報到鈕畫在展開後的內容裡，摺起來就看不到，
+   *   逾時未報到會被踢出賽程 —— 與 myMatch 的進場鈕同一種傷害，所以同樣列為**硬約束**。
+   * ⚠ 這是「**多加一條**」不是改寫：既有的 fail-open、myMatch／myBye、手動偏好、預設規則
+   *   四段逐字未動，順序也沒有動（新條件插在硬約束區、手動偏好之**前**，與既有硬約束一致）。
+   * ⚠ `status` 一律**加在參數列最後**且可選 —— 舊呼叫端不傳＝undefined ⇒ 新條件恆為 false
+   *   ⇒ 舊行為零改變（test-v6252 的六參數呼叫全部原封不動仍成立）。
    */
   function tEvOpenBy(eventId: string, registered: boolean, dropped: boolean,
-                     pref: Record<string, boolean> | null, myMatchEventId: any, myByeEventId: any): boolean {
+                     pref: Record<string, boolean> | null, myMatchEventId: any, myByeEventId: any,
+                     status?: string): boolean {
     if (!eventId) return true;                                                 // 認不出賽事一律展開（fail-open）
     if (eventId === myMatchEventId || eventId === myByeEventId) return true;   // ⚠⚠ 硬約束：進場鈕不可被摺掉
+    if (registered && !dropped && status === 'checkin') return true;           // ⭐v6.303 硬約束：報到鈕不可被摺掉
     const p = pref ? pref[eventId] : undefined;
     if (typeof p === 'boolean') return p;                                      // 使用者手動改過的那幾場
     return !!registered && !dropped;                                           // 預設：有報名（且未棄賽）就展開
@@ -672,7 +681,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const mm = tMyMatch ? tMyMatch.eventId : null;
     const mb = tMyBye ? tMyBye.eventId : null;
     const out: Record<string, boolean> = {};
-    for (const e of tEvents) if (e && e._id) out[e._id] = tEvOpenBy(e._id, !!e.registered, !!e.dropped, pref, mm, mb);
+    for (const e of tEvents) if (e && e._id) out[e._id] = tEvOpenBy(e._id, !!e.registered, !!e.dropped, pref, mm, mb, e.status);
     return out;
   });
   /** 被強制展開（＝摺不起來）的賽事，只用來在標題列標一個鎖，免得玩家點了沒反應以為壞掉。 */
@@ -680,6 +689,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const s = new Set<string>();
     if (tMyMatch && tMyMatch.eventId) s.add(tMyMatch.eventId);
     if (tMyBye && tMyBye.eventId) s.add(tMyBye.eventId);
+    // ⭐v6.303 已報名且正在報到中的場也摺不起來 ⇒ 一併標上 🔒，
+    //   免得玩家點了標題列沒反應、以為介面壞掉（與既有兩條硬約束同一個理由）。
+    for (const e of tEvents) if (e && e._id && e.registered && !e.dropped && e.status === 'checkin') s.add(e._id);
     return s;
   });
   /** 使用者手動摺疊／展開。⚠ 被強制展開的場即使記成 false，tEvOpenBy 仍會蓋回 true。 */
@@ -9840,13 +9852,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       <p class="tourn-who">已登入：<b>{firebaseUser?.email}</b> <button class="tourn-logout" onclick={tournLogout} disabled={tBusy}>登出</button></p>
       <div class="tourn-tabs" role="tablist">
         <button class="tourn-tab" class:active={tTab === 'events'} role="tab" aria-selected={tTab === 'events'} onclick={() => tSwitchTab('events')}>🏆 賽事</button>
-        <button class="tourn-tab" class:active={tTab === 'leaderboard'} role="tab" aria-selected={tTab === 'leaderboard'} onclick={() => tSwitchTab('leaderboard')}>📊 排行榜</button>
-        <button class="tourn-tab" class:active={tTab === 'profile'} role="tab" aria-selected={tTab === 'profile'} onclick={() => tSwitchTab('profile')}>🪪 個人資料</button>
+        <button class="tourn-tab" class:active={tTab === 'leaderboard'} role="tab" aria-selected={tTab === 'leaderboard'} onclick={() => tSwitchTab('leaderboard')}>📊 排行</button>
+        <button class="tourn-tab" class:active={tTab === 'profile'} role="tab" aria-selected={tTab === 'profile'} onclick={() => tSwitchTab('profile')}>🪪 個人</button>
         <!-- ⭐⭐⭐ v6.297 第 4 顆：好友名單。
-             ⚠ 匿名玩家根本看不到這整列（整列在 {#if isAnonymous} 的 {:else} 裡，錦標賽本來就強制 email 登入），
+             ⚠ 匿名玩家根本看不到這整列（整列在 isAnonymous 的 else 分支裡，錦標賽本來就強制 email 登入），
                所以這裡只需要再擋一道 friendsEntryOn（伺服器不支援／開關關著就不出現）—— 與大廳分頁列同一條件。
-             ⚠⚠ 標籤寫「👥 好友」而不是「👥 好友名單」：375px 下四顆各 82.86px，寫全名會把整列推高；
-               這個寫法**一行 CSS 都不用改**（.tourn-tabs／.tourn-tab 逐字未動），量測見 scripts/measure-v6297-tourn-tabs.mjs。 -->
+             ⚠⚠ 標籤寫「👥 好友」而不是「👥 好友名單」：寫全名會把整列推高。
+             ⭐⭐⭐ v6.303 站長交辦「每個分頁都是 2 個字＋原有 icon」：排行榜→排行、個人資料→個人。
+               v6.297 量測時 375×812 下「🪪 個人資料」會折成兩行，把下方內容推低 21px；縮成 2 字之後
+               四顆都是單行、下方位移歸零 —— 量測見 scripts/measure-v6303-ui-batch.mjs（四種尺寸）。
+               ⚠ .tourn-tabs／.tourn-tab／:hover／.active 四條 CSS 一樣**一個字都沒改**。 -->
         {#if friendsEntryOn}
           <button class="tourn-tab" class:active={tTab === 'friends'} role="tab" aria-selected={tTab === 'friends'} onclick={() => tSwitchTab('friends')}>👥 好友</button>
         {/if}
@@ -9956,7 +9971,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
       {#snippet eventCard(ev)}
         {@const _evOpen = tEvOpen[ev._id] !== false}
         {@const _evLock = tEvForced.has(ev._id)}
-        <div class="tourn-event">
+        <!-- ⭐⭐ v6.303 左側色條：報名中／報到中而**尚未報名**時給一點提示色（已報名一律無色條＝回復正常）。
+             ⚠ 用 box-shadow: inset 而不是 border-left —— .tourn-event 已經有 1px 邊框＋10px 14px 內距，
+               把左邊框加寬會讓卡片內文字整體右移（v6.298 的 content-box 教訓）；inset 陰影零版面影響。 -->
+        <div class="tourn-event"
+             class:ev-open-reg={ev.status === 'registration' && !ev.registered}
+             class:ev-open-checkin={ev.status === 'checkin' && !ev.registered}>
           <div class="tourn-ev-head tourn-fold-toggle" role="button" tabindex="0" aria-expanded={_evOpen} onclick={() => tToggleEv(ev._id)} onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && tToggleEv(ev._id)}>
             <span class="tourn-fold-arrow">{_evOpen ? '▾' : '▸'}</span>
             <h3>🏆 {ev.name}</h3>
@@ -13880,7 +13900,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <label for="notify-enabled">🔔 錦標賽背景通知：</label>
             <input id="notify-enabled" type="checkbox" checked={notifyEnabled}
               onchange={(e) => onNotifyToggle(e.currentTarget.checked)} />
-            <span class="small" style="color:#9aa3b0">（測試與診斷請到錦標賽大廳的「🪪 個人資料」）</span>
+            <span class="small" style="color:#9aa3b0">（測試與診斷請到錦標賽大廳的「🪪 個人」）</span>
           </div>
         </details>
 
@@ -14595,6 +14615,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-logout { margin-left: 8px; padding: 2px 10px; font-size: 0.8rem; border: 1px solid #888; background: #2a2a2a; color: #ddd; border-radius: 6px; cursor: pointer; }
   .tourn-event { border: 1px solid #4a6a4a; border-radius: 10px; padding: 10px 14px; margin: 10px auto; max-width: 100%; background: #142414; }  /* v5.634 填滿欄位、邊緣對齊 */
   .tourn-event h3 { margin: 0 0 4px; }
+  /* ⭐⭐ v6.303 賽事狀態提示色條（站長裁定：左側色條，比照大廳練習房的 .open-room-row.practice-room）。
+     ⚠ 色票一律**從既有 CSS 挑**，不憑空發明：
+       #6ab87a ＝ .tourn-tab.active 的 border-color（站內既有的墨綠強調色）
+       #ffd35a ＝ .tcmsg.tcsys 系統播報的強調金（要催促行動，所以用比較亮的那一支）
+     ⚠ 用 inset 陰影而非 border-left：不改盒模型 ⇒ 卡片內文字的 left 完全不變（量測見 scripts/measure-v6303-ui-batch.mjs）。 */
+  .tourn-event.ev-open-reg { box-shadow: inset 3px 0 0 0 #6ab87a; }
+  .tourn-event.ev-open-checkin { box-shadow: inset 3px 0 0 0 #ffd35a; }
   .tourn-evstat { color: #cfe8cf; font-size: 0.88rem; }
   .reg-ok { color: #7CFC9A; font-weight: 600; }
   .tourn-chat { max-width: 100%; margin: 10px auto; border: 1px solid #3a5a3a; border-radius: 10px; background: #0f1c0f; overflow: hidden; text-align: left; }
