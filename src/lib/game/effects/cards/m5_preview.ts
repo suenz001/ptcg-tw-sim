@@ -66,6 +66,7 @@ import {
   addPendingPrize,
   regG, rejectAbilityUse } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { openDeckViewReshuffle } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { copyAttackPostDispatch } from '../_shared';
@@ -1693,13 +1694,13 @@ regPost('花岩怪|魂之末', (state, aIdx, pool) => {
   if (allOpp.length === 0) {
     return addLog(state, '魂之末：對手場上無寶可夢', aIdx);
   }
-  const pickCount = Math.min(2, allOpp.length);
+  const { minCount, maxCount } = mandatoryTargetCount(2, allOpp.length); // ⭐v6.305 中央：強制選滿
   return withPending(
-    addLog(state, `魂之末：棄牌區化隱 ${n} 張 → 選對手 ${pickCount} 隻寶可夢將其指示物 × 4 倍`, aIdx),
+    addLog(state, `魂之末：棄牌區化隱 ${n} 張 → 選對手 ${maxCount} 隻寶可夢將其指示物 × 4 倍`, aIdx),
     {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: pickCount, maxCount: pickCount,
+      minCount, maxCount,
       effectKey: 'm5-runerigus-soul-end',
       params: { includeActive: true },
     },

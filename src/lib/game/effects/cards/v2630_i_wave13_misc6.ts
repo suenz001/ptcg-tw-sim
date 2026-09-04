@@ -7,6 +7,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, ATTA
   getOwnBenchLimit, energyMatchesType,
 } from '../_shared';
 import { joinCardNames, logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
+import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { flipCoinsWithLog, flipCoinsUntilTails, dealAttackDamageToTarget, discardOppActiveEnergyPost, returnSelfActiveEnergyPost } from '../../effects';
@@ -152,7 +153,8 @@ function snipeNOppBenchAutoPost(amount: number, count: number, label: string): A
     const dIdx = (1 - aIdx) as 0 | 1;
     const opp = state.players[dIdx];
     if (opp.bench.length === 0) return addLog(state, `${label}：對手備戰區無寶可夢`, aIdx);
-    const realCount = Math.min(count, opp.bench.length);
+    const { minCount, maxCount } = mandatoryTargetCount(count, opp.bench.length); // ⭐v6.305 中央：強制選滿
+    const realCount = maxCount;
     if (realCount === 1) {
       // 1 隻：用既有 wave3a-snipe-bench resolver 給玩家選
       const s = addLog(state, `${label}：選 1 隻對手備戰寶可夢，受到 ${amount} 點傷害`, aIdx);
@@ -169,7 +171,7 @@ function snipeNOppBenchAutoPost(amount: number, count: number, label: string): A
     return withPending(s, {
       type: 'opp-bench-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: realCount, maxCount: realCount,
+      minCount, maxCount,
       effectKey: 'wave13-snipe-multi-opp-bench',
       params: { amount, label },
     });

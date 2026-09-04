@@ -14,6 +14,7 @@ import {
   findOwnFieldPokemon, attachEnergyToOwnPokemonByIid, // v6.165 互換後仍要附給本體 → 一律 iid 追蹤
 } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { canEvolveOnto } from '../_shared'; // v6.203 進化來源逐字比對中央述詞
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
 import { clearActiveEffects } from '../_shared'; // v5.743 離場清狀態
@@ -2550,10 +2551,11 @@ regPost('謎擬Ｑex|惡作劇之手', (state, aIdx, _pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const total = (state.players[dIdx].active ? 1 : 0) + state.players[dIdx].bench.length;
   if (total === 0) return state;
-  return withPending(addLog(state, '惡作劇之手：選 2 隻對手寶可夢各放 3 個指示物（30 點）', aIdx), {
+  const { minCount, maxCount } = mandatoryTargetCount(2, total); // ⭐v6.305 中央：強制選滿
+  return withPending(addLog(state, `惡作劇之手：選 ${maxCount} 隻對手寶可夢各放 3 個指示物（30 點）`, aIdx), {
     type: 'opp-poke-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: Math.min(2, total), maxCount: Math.min(2, total),
+    minCount, maxCount,
     effectKey: 'h-wave2-place-3-counters',
   });
 });

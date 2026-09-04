@@ -31,6 +31,7 @@ import { isStage2ByEvoVariant } from './stage2-index';
 import type { EffectFn, ResolveFn, TrainerGuardFn, AttackPreFn, AttackPostFn, PreDiscardSpec } from './effects/_shared';
 import { isBasicPokemonCard, isBasicPokemonOnField, getBasicEnergyType, isBasicEnergyOfType, isMegaExCard } from './selection-filter'; // v6.069 getBasicEnergyType：基本能量 pokemonType 恒 null，禁直讀（v6.008）
 import { placedBenchInstance } from './effects/_shared'; // v5.745 放場裸化+justPlaced中央
+import { mandatoryTargetCount } from './effects/_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { startEnergyChain } from './effects/cards/v158_energy_chain';
 import { copyAttackPostDispatch } from './effects/_shared';
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from './effects/_shared'; // v5.774 KO 對手戰鬥位 pre-KO 快照中央存取
@@ -1505,15 +1506,16 @@ export function hitBenchPickPost(
   // v3.94：移除 v3.892 入口整段 skip — picker 仍正常開，玩家可選任何備戰目標
   //   - 玩家選非規則寶可夢：bench-hit-N resolver 內 per-target resolveBenchGuard 擋（v3.888 + v3.94 snapshot fallback）
   //   - 玩家選 ex/V 等規則寶可夢：花之帷幔擋不到 → 造成傷害（玩家應有此選擇權）
-  const pickCount = Math.min(count, target.bench.length);
+  const { minCount, maxCount } = mandatoryTargetCount(count, target.bench.length); // ⭐v6.305 中央：強制選滿
+  const pickCount = maxCount;
   const pendingType: PendingSelection['type'] = targetSide === 'opp' ? 'opp-bench-choose' : 'bench-choose';
   let s = addLog(state, `${attackLabel}：選擇 ${pickCount} 隻${targetSide === 'opp' ? '對手' : '自己'}備戰寶可夢，各造成 ${amount} 傷害`, attackerIdx);
   return withPending(s, {
     type: pendingType,
     actorIdx: attackerIdx,
     sourcePlayerIdx: targetIdx,
-    minCount: pickCount,
-    maxCount: pickCount,
+    minCount,
+    maxCount,
     effectKey: 'bench-hit-N',
     params: { amount, attackLabel, targetIdx },
   });
@@ -1535,15 +1537,16 @@ export function placeCountersBenchPickPost(
   const targetIdx = (targetSide === 'opp' ? (1 - attackerIdx) : attackerIdx) as 0 | 1;
   const target = state.players[targetIdx];
   if (target.bench.length === 0 || counters <= 0 || count <= 0) return state;
-  const pickCount = Math.min(count, target.bench.length);
+  const { minCount, maxCount } = mandatoryTargetCount(count, target.bench.length); // ⭐v6.305 中央：強制選滿
+  const pickCount = maxCount;
   const pendingType: PendingSelection['type'] = targetSide === 'opp' ? 'opp-bench-choose' : 'bench-choose';
   const s = addLog(state, `${attackLabel}：選擇 ${pickCount} 隻${targetSide === 'opp' ? '對手' : '自己'}備戰寶可夢，各放置 ${counters} 個傷害指示物`, attackerIdx);
   return withPending(s, {
     type: pendingType,
     actorIdx: attackerIdx,
     sourcePlayerIdx: targetIdx,
-    minCount: pickCount,
-    maxCount: pickCount,
+    minCount,
+    maxCount,
     effectKey: 'bench-place-counters-N',
     params: { counters, attackLabel, targetIdx },
   });
@@ -11085,12 +11088,14 @@ function multiSnipePost(targetCount: number, damage: number, label: string, opts
     const d = state.players[dIdx];
     const all = [d.active, ...d.bench].filter((c): c is CardInstance => !!c);
     if (all.length === 0) return state;
-    const realMax = Math.min(targetCount, all.length);
-    const s = addLog(state, `${label}：選擇對手 ${realMax} 隻寶可夢各造成 ${damage} 傷害`, aIdx);
+    // ⭐ v6.305：卡面「對手的N隻寶可夢各受到…」無「最多」＝強制選滿 min(N, 可選數)。
+    //   原本 minCount:1 讓玩家只選 1 隻（酋雷姆｜三重冰霜／鐵頭殼ex｜雙刃劍）→ 走中央述詞。
+    const { minCount, maxCount } = mandatoryTargetCount(targetCount, all.length);
+    const s = addLog(state, `${label}：選擇對手 ${maxCount} 隻寶可夢各造成 ${damage} 傷害`, aIdx);
     return withPending(s, {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: 1, maxCount: realMax,
+      minCount, maxCount,
       effectKey: 'snipe-multi',
       params: { damage, label, flat: opts.flat ? true : undefined },
     });
@@ -13567,13 +13572,13 @@ regPost('仙子伊布ex|天仙石', (state, aIdx, _pool) => {
   if (oppBench.length === 0) {
     return addLog(s, '天仙石：對手備戰區無寶可夢，效果無作用', aIdx);
   }
-  const max = Math.min(2, oppBench.length);
-  s = addLog(s, `天仙石：選 ${max} 隻對手備戰寶可夢，連同附加卡放回對手牌庫並重洗`, aIdx);
+  const { minCount, maxCount } = mandatoryTargetCount(2, oppBench.length); // ⭐v6.305 中央：強制選滿
+  s = addLog(s, `天仙石：選 ${maxCount} 隻對手備戰寶可夢，連同附加卡放回對手牌庫並重洗`, aIdx);
   return withPending(s, {
     type: 'opp-bench-choose',
     actorIdx: aIdx, sourcePlayerIdx: oppIdx,
-    // v2.991：卡面寫「選 2 隻」是強制；對手備戰<2 時取全部（max 已是 Math.min(2,oppBench.length)）
-    minCount: max, maxCount: max,
+    // v2.991：卡面寫「選 2 隻」是強制；對手備戰<2 時取全部
+    minCount, maxCount,
     effectKey: 'sylveon-skystone-bounce',
   });
 });
@@ -15942,12 +15947,12 @@ regPost('甲賀忍蛙ex|分身連打', (state, aIdx, pool) => {
   if (all.length === 0) {
     return addLog(state, '分身連打：對手場上無寶可夢', aIdx);
   }
-  const maxN = Math.min(2, all.length);
-  const s = addLog(state, `分身連打：選對手 ${maxN} 隻寶可夢，各 120 點傷害（戰鬥場計算弱抗、備戰位不計）`, aIdx);
+  const { minCount, maxCount } = mandatoryTargetCount(2, all.length); // ⭐v6.305 中央：強制選滿
+  const s = addLog(state, `分身連打：選對手 ${maxCount} 隻寶可夢，各 120 點傷害（戰鬥場計算弱抗、備戰位不計）`, aIdx);
   return withPending(s, {
     type: 'opp-poke-choose',
     actorIdx: aIdx, sourcePlayerIdx: dIdx,
-    minCount: maxN, maxCount: maxN,
+    minCount, maxCount,
     effectKey: 'clone-strike-multi-hit',
     params: { dmg: 120, label: '分身連打' },
   });

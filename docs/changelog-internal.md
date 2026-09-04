@@ -1,5 +1,69 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.305 卡面寫死目標隻數的多目標招式必須選滿（酋雷姆｜三重冰霜，站長回報）
+
+BASE `8738219949eacfaa271bdb425baa1021aa08a268`（v6.304，遠端 main）。
+
+### 【0】站長回報（逐字）
+
+> 酋雷姆的招式 三重冰霜 如果在對手場上有3隻以上寶可夢的情況下，應該要強制選擇3隻寶可夢，不可以不選，也不能只選2隻，因為敘述是【將這隻寶可夢身上附加的能量卡全部丟棄，對手的3隻寶可夢各受到110點傷害。】，沒有出現弱希望，或是 選擇最多3隻寶可夢造成OO傷害 之類的文字，因此我判斷為強制須選擇3隻(除非場上寶可夢未滿3隻)，如果對方場上只有2隻，則就必須選擇那2隻
+
+### 【1】卡面與真因
+
+卡面（`static/cards/SV6a.json` id 10629，H 標）`attacks[0].effect`：
+「將這隻寶可夢身上附加的能量卡全部丟棄，對手的3隻寶可夢各受到110點傷害。[在備戰區不計算弱點・抵抗力。]」——無「最多／若希望／任意」⇒ 強制選滿 min(3, 對手可選數)。
+
+真因：`src/lib/game/effects.ts` 的 `multiSnipePost()` 開 picker 寫 `minCount: 1, maxCount: realMax`。
+同一 helper 的另一個消費點 **鐵頭殼ex｜雙刃劍**（卡面「對手的2隻寶可夢各受到50點傷害」）同病。
+（第三個消費點 月亮伊布｜出奇一擊 是 N=1 且 G 標，不受影響。）
+其他三支同型 helper（`snipeNoppPokemonPost`／`snipeNOppBenchAutoPost`／`snipeNOppPokemonAutoPost`）與中央
+`hitBenchPickPost`／`placeCountersBenchPickPost` 都寫 min=max —— 四支 helper 各自重刻同一段
+「算 realCount → 開 picker」，這種結構正是 outlier 的溫床。
+
+harness 行為端證明（修前）：三重冰霜 對手 4 隻 → `snipe-multi min:1 max:3`；雙刃劍 對手 3 隻 → `min:1 max:2`。
+
+### 【2】收斂
+
+`_shared.ts` 新增中央述詞 `mandatoryTargetCount(cardCount, availableCount)` → `{minCount, maxCount}`（恆相等）。
+改呼叫它的地方（**effectKey 一律不動**，既有守衛／測試斷言的 key 全部保留）：
+- effects.ts：`multiSnipePost`（真兇）、`hitBenchPickPost`、`placeCountersBenchPickPost`、天仙石 inline、分身連打 inline
+- v2620 `snipeNoppPokemonPost`／v2630 `snipeNOppBenchAutoPost`／v2660 `snipeNOppPokemonAutoPost`
+- m5_preview 魂之末 inline／v2750 惡作劇之手 inline／v2998_g2 亂咬（特性）inline
+未套：狡猾天狗｜驅趕龍捲風（語義是「選 3 隻**留下**、其餘放回」，備戰 ≤3 時無「未選者」⇒ 不開 picker 是等價行為；守衛 E 段行為端證明）。
+
+### 【3】三個待查點的結論（一律行為端）
+
+1. 雙尾怪手｜雙尾「疑似重複註冊」—— **不是**。effects.ts 的 `SELF_DISCARD_UNITS_BATCH` 那筆走 `registerSelfDiscardMultiply`，只註冊 **Pre**（丟 2 能量的 picker ＋ regPre）；v2660 的 `regPost` 是 **Post**（狙擊）。harness 實跑 ATTACK：先自動丟 2 能量 → 開 `wave16-snipe-multi min=2 max=2`（對手 3 隻）／`min=2 max=2`（對手 2 隻）。兩段各司其職。
+2. 火箭隊的叉字蝠ex｜亂咬 —— **已實作**（`getAbilityFn('火箭隊的叉字蝠ex','亂咬',0)` 回函式；實作在 `v2998_g2.ts` regA by-index），`min=max=min(2, 對手數)` 本來就對；本版順手接中央述詞。
+3. 相鄰子維度「選擇／丟棄／附 N 張（個）」（H/I/J live，排除「最多／若希望／任意／以上／以下／相同數量／全部／所有」與牌庫搜尋型）：N≥2 的已知區共 40 筆，34 筆 min=max（多數走 `ATTACK_PRE_DISCARD_CHOICE` 表 min=max）；遠古巨蜓ex｜噴射旋風 `min:1 max:3` 是**能量單位**語義（`unitTarget:3`，resolver fail-closed 驗 Σ單位 ≥3，UI :4595 同樣讀 unitTarget）不是漏洞；其餘為 fixture 條件未達（招式失敗）或本來就沒有 picker。**minCount 維度乾淨。**
+   ⚠ 附帶發現（**不同維度**，本版不動、交站長裁定）：蒼炎刃鬼｜煉獄斬（v2550_i_wave5_meta.ts）與 蘭螳花｜花切舞（v2500_i_wave3b_discard.ts，註解自稱「簡化：自動從尾端取」）手牌足夠時**自動丟末端 N 張基本能量、不開 picker**。基本能量同名同效、結果等價，但屬「自動取末端」型技術債。
+
+### 【4】守衛 `scripts/test-v6305-mandatory-n-targets.mjs`（167 PASS，進 npm test chain）
+
+A 中央述詞直呼 → C 卡面正則枚舉（下限 14 ＋ 15 張已知全部當正對照，型態 4／10）→ D 每張 harness 實跑完整 ATTACK（特性走 getAbilityFn），
+盤面 A（對手 5 隻）與盤面 B（對手 2 隻）各斷言 `min===max===min(N, 可選數)`，並接到 UI 層 `selectionConfirmFloor`／`selectionAllowsSkip`
+→ E 驅趕龍捲風特例行為證明 → F 白名單三張逐條行為端證明可少選（惡之覺醒 `minCount 0 + allowSkipZero`、阿杏 `1<2`、玻璃喇叭 `0<2`）
+→ G 靜態第二層（六支 helper 剝註解後含呼叫、不得殘留 `minCount: 1, maxCount: real`）。新卡自動納入。
+
+HEAD-FAIL：只還原 effects.ts → 紅在「酋雷姆|三重冰霜（對手 5 隻, N=3）minCount = 3（實際 1）」；全部還原 → 紅在 A。
+突變 10/10 各紅在預期斷言（只捕捉 AssertionError）：述詞回 min(1,n)／multiSnipePost 改回 1／三支 helper 各改 1／hitBenchPickPost／亂咬／天仙石改 0／惡作劇之手 max+1／掃描器正則弄壞。
+
+### 【5】驗證
+
+免疫網 5 支全綠；相關 12 支（flat-multisnipe×2／multi-target-promote-order／v6165／curl-wall／v6260／v6256／endure／…）全綠；
+既有 scripts 無斷言 snipe 類 minCount 舊值。tsc：BASE 與修後錯誤集合逐字相同（205 皆沙盒 alias 類），TS2304 0→0；test-ts2304-scan 綠；lint 綠。
+完整 npm test 分批全綠（見 push 回報）。
+
+### 【6】三配套與 changelog
+
+(a) `admin.html` SITE_VERSION_HINT → 6.305（LF）。(b) `test-v6272` ⑩ PREV_SHA → `87382199`、PREV_ALLOWED 12 項照實列；`test-v6264` BASE_SHA → `87382199`。
+(c) 本版新守衛不含 40 碼 sha、不拿版本號判斷。
+首頁 changelog 三步：新增 v6.305（open）、第 13 則 **v6.286** 內文搬進 bodies、被擠出的 **v6.225** 搬進封存頁（先搬再寫：摘要區 4,948 → 搬走 107 字再加新則）。
+
+### 【7】部署
+
+卡效果／引擎改動 ⇒ 站長跑 `update-tournament.bat`（重建 server-engine；離峰、無賽事進行中）＋ `redeploy-oracle.bat`。本版沒動 `server_admin_patch.js`。
+
 ## v6.304 錦標賽大廳：賽事卡與該場的積分表／賽程表**排在一起**（版面重構，站長交辦）
 
 **站長需求（逐字）**：「錦標賽現在是把賽事名稱（含報名人數等資訊）和賽程表分別顯示，

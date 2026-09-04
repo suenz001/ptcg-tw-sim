@@ -12,6 +12,7 @@ import { regPre, regPost, regR, addLog, updatePlayer, withPending, shuffle, coun
   getOwnBenchLimit,
 } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
+import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { isBasicPokemonOnField } from '../../selection-filter'; // v6.251 場上【基礎】中央述詞（leaf，無循環）
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 
@@ -392,11 +393,12 @@ function snipeNoppPokemonPost(amount: number, label: string): AttackPostFn {
     if (opp.active) targets.push(opp.active.iid);
     for (const b of opp.bench) targets.push(b.iid);
     if (targets.length === 0) return state;
-    const s = addLog(state, `${label}：選 2 隻對手寶可夢，各受到 ${amount} 點傷害`, aIdx);
+    const { minCount, maxCount } = mandatoryTargetCount(2, targets.length); // ⭐v6.305 中央：強制選滿
+    const s = addLog(state, `${label}：選 ${maxCount} 隻對手寶可夢，各受到 ${amount} 點傷害`, aIdx);
     return withPending(s, {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: Math.min(2, targets.length), maxCount: Math.min(2, targets.length),
+      minCount, maxCount,
       effectKey: 'wave12-snipe-2-flat',
       params: { amount, label, validIids: targets },
     });

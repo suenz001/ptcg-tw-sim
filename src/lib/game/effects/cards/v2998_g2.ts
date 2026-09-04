@@ -36,6 +36,7 @@ import {
   addLog, addPrivateLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, rejectAbilityUse } from '../_shared';
 import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPlaced中央
+import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import { flipCoinsWithLog, isBenchProtected, applyStatusToOppActive } from '../../effects';
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
@@ -378,14 +379,14 @@ regA('火箭隊的叉字蝠ex', 0, (st, idx, _pool, _cardInst) => {
   const opp = st.players[oppIdx];
   const allOppCount = (opp.active ? 1 : 0) + opp.bench.length;
   if (allOppCount === 0) return rejectAbilityUse(st, '亂咬：對手場上沒有寶可夢', idx);
-  const targetCount = Math.min(2, allOppCount);
+  const { minCount, maxCount } = mandatoryTargetCount(2, allOppCount); // ⭐v6.305 中央：強制選滿
   const s = addLog(st,
-    `亂咬：選 ${targetCount} 隻對手寶可夢，各放 2 個傷害指示物`,
+    `亂咬：選 ${maxCount} 隻對手寶可夢，各放 2 個傷害指示物`,
     idx);
   return withPending(s, {
     type: 'opp-poke-choose',
     actorIdx: idx, sourcePlayerIdx: oppIdx,
-    minCount: targetCount, maxCount: targetCount,
+    minCount, maxCount,
     effectKey: 'rocket-crobat-mass-bite',
     params: { includeActive: true, counters: 2, label: '亂咬' },
   });

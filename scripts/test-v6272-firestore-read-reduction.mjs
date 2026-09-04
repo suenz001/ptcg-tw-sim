@@ -664,16 +664,23 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'ae9737c595f0600caa2eb8a9162a80d0a63d89c1';   // v6.303（v6.304 的上一版）
-// ⭐⭐v6.304：錦標賽大廳把賽事卡與該場的積分表／賽程表排在一起（只搬模板位置＋兩個 $derived）
-//   ＋ changelog 三步搬運。⚠ 本版**沒有動** src/routes/cards/+page.svelte。
+const PREV_SHA = '8738219949eacfaa271bdb425baa1021aa08a268';   // v6.304（v6.305 的上一版）
+// ⭐⭐v6.305：卡面寫死目標隻數的多目標招式必須選滿（酋雷姆｜三重冰霜／鐵頭殼ex｜雙刃劍）——
+//   _shared.ts 新增中央述詞 mandatoryTargetCount，effects.ts 與六支卡檔改呼叫它；＋ changelog 三步搬運。
+//   ⚠ 本版**沒有動** src/routes/**（UI 零改動）、也沒動 oracle-admin/server_admin_patch.js。
 //   ⚠ 這一節只掃 src/ 與 static/ 兩個目錄、而且是**從 BASE 的檔案清單出發**逐檔比 ——
-//     scripts/ 與 oracle-admin/ 底下的改動（新守衛、量測腳本、SITE_VERSION_HINT）**不可以**列進來。
-//   ⚠⚠ 本版**沒有動** oracle-admin/server_admin_patch.js（test-v6303 的 H3 逐位元釘住）。
+//     scripts/ 與 oracle-admin/ 底下的改動（新守衛、SITE_VERSION_HINT）**不可以**列進來。
 //   ⚠ 少列一個就紅、多列一個也紅（deepStrictEqual）—— 這條清單就是「這一版動了什麼」的宣告。
 const PREV_ALLOWED = [
+  'src/lib/game/effects.ts',
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/effects/cards/m5_preview.ts',
+  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
+  'src/lib/game/effects/cards/v2630_i_wave13_misc6.ts',
+  'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
+  'src/lib/game/effects/cards/v2998_g2.ts',
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

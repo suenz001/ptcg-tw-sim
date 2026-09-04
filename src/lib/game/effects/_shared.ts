@@ -993,6 +993,24 @@ export function isOwnFirstTurn(state: GameState): boolean {
   return state.turn === 1;
 }
 
+/**
+ * ⭐ v6.305【中央】卡面寫死目標隻數的 picker 張數。
+ *
+ * 卡面「對手的N隻寶可夢各受到…」「在對手的N隻寶可夢身上各放置…」「選擇N隻…」
+ * ——沒有「最多／若希望／任意」——就是**強制選滿**：可選目標 ≥ N 時必須剛好選 N 隻；
+ * 不足 N 時必須把可選的全部選滿。玩家不得少選（站長 2026-09-04 裁定，酋雷姆｜三重冰霜）。
+ *
+ * 回 `{ minCount, maxCount }`（兩者恆相等），呼叫端直接展開進 withPending。
+ * ⚠ 卡面有「最多N隻」的可選型（玻璃喇叭／惡之覺醒／阿杏的秘招）**不可**用本述詞，
+ *   那類 minCount 由呼叫端依卡面另定。
+ * ⚠ 過去四支同型 helper 各自重刻「Math.min(N, avail)」，其中一支寫成 minCount:1 而漏了
+ *   ——本述詞就是要讓「算張數」只有一個出口。
+ */
+export function mandatoryTargetCount(cardCount: number, availableCount: number): { minCount: number; maxCount: number } {
+  const n = Math.max(0, Math.min(cardCount, availableCount));
+  return { minCount: n, maxCount: n };
+}
+
 export function getOwnBenchLimit(
   state: GameState,
   idx: 0 | 1,

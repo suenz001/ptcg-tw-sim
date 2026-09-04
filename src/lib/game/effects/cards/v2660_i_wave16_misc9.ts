@@ -26,6 +26,7 @@ import { regPre, regPost, regR, addLog, addPrivateLog, updatePlayer, withPending
   bareCardsForReturn,
 } from '../_shared'; // v5.792 寶可夢連附加回手中央(含 extraTools+進化棧)
 import { getKODefenderEnergyInDiscard, pluckOppEnergyActiveOrDiscard } from '../_shared'; // v5.776 KO對手戰鬥位能量搬移中央
+import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import type { AttackPostFn, AttackPreFn } from '../_shared';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上【基礎】中央述詞（leaf，無循環）
@@ -104,12 +105,12 @@ function snipeNOppPokemonAutoPost(amount: number, count: number, label: string):
     if (opp.active) targets.push(opp.active.iid);
     for (const b of opp.bench) targets.push(b.iid);
     if (targets.length === 0) return addLog(state, `${label}：對手沒有寶可夢`, aIdx);
-    const realCount = Math.min(count, targets.length);
-    const s = addLog(state, `${label}：選 ${realCount} 隻對手寶可夢各受到 ${amount} 點傷害`, aIdx);
+    const { minCount, maxCount } = mandatoryTargetCount(count, targets.length); // ⭐v6.305 中央：強制選滿
+    const s = addLog(state, `${label}：選 ${maxCount} 隻對手寶可夢各受到 ${amount} 點傷害`, aIdx);
     return withPending(s, {
       type: 'opp-poke-choose',
       actorIdx: aIdx, sourcePlayerIdx: dIdx,
-      minCount: realCount, maxCount: realCount,
+      minCount, maxCount,
       effectKey: 'wave16-snipe-multi',
       params: { amount, label, validIids: targets },
     });
