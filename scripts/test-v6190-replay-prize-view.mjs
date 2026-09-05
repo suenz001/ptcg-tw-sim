@@ -12,6 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { templateOnly as templateOnlyChecked, sectionInner } from './lib/strip-markup-sections.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GAME = process.env.V6190_GAME || join(ROOT, 'src/routes/game/+page.svelte');
@@ -21,14 +22,12 @@ let pass = 0, fail = 0;
 const chk = (t, c, extra = '') => { if (c) { pass++; } else { fail++; console.log('  ❌', t, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };
 
 // ── 剝註解／剝 script+style（保留字元位移，行號才對得上）＋自我驗證 ────────────
-const blankOut = (s, re) => s.replace(re, (m) => m.replace(/[^\n]/g, ' '));
-function templateOnly(src) {
-  let t = src;
-  t = blankOut(t, /<script[\s\S]*?<\/script>/g);
-  t = blankOut(t, /<style[\s\S]*?<\/style>/g);
-  t = blankOut(t, /<!--[\s\S]*?-->/g);
-  return t;
-}
+//   ⭐ v6.317：改走中央 helper scripts/lib/strip-markup-sections.mjs —— **先剝 HTML 註解**、再剝區段、等長空白化。
+//   ⚠ 本檔原本的順序是「先區段、最後才剝註解」：註解裡一提到樣式標籤的字面，非貪婪正則就從那段註解
+//     一路吃到真正的樣式收尾 ⇒ 模板清空（實測 game 從 184,279 個非空白字元剩 30、MPB 從 22,587 剩 8），
+//     後面 B～G 所有「某段 DOM 在某情境會不會渲染」的斷言全變恆真。helper 自帶護欄與已知答案表
+//     （scripts/test-lib-strip-markup-sections.mjs）；這裡另外給正對照 mustKeep／mustDrop。
+const templateOnly = (src, opt = {}) => templateOnlyChecked(src, { minSections: 1, ...opt });
 {
   const fx = '<script>let a = 1;</script>\nA{#if x}B{/if}\n<!-- {#if y}zz{/if} -->\n<style>.q{color:red}</style>';
   const out = templateOnly(fx);
@@ -37,6 +36,10 @@ function templateOnly(src) {
   chk('自我驗證：剝掉 HTML 註解裡的區塊標記', (out.match(/\{#if/g) || []).length === 1, out);
   chk('自我驗證：沒有誤刪正文區塊標記', /\{#if x\}/.test(out) && /\{\/if\}/.test(out), out);
   chk('自我驗證：字元位移完全不變（行號才可信）', out.length === fx.length && out.split('\n').length === fx.split('\n').length, `${out.length}/${fx.length}`);
+  // ⭐ v6.317 事故形狀：註解在真樣式之前、而且提到樣式標籤的字面 ⇒ 模板必須一個字都不少
+  const fx2 = '<script>let a = 1;</script>\n<!-- 提到 <' + 'style> 字面 -->\n<div>{#if x}BIG{/if}</div>\n<style>.q{color:red}</style>';
+  const out2 = templateOnly(fx2);
+  chk('自我驗證：註解提到樣式標籤字面時，模板不會被吃掉（v6.317）', /\{#if x\}BIG\{\/if\}/.test(out2) && !/color:red/.test(out2), out2);
 }
 
 // ── 讀到 `{#if ` 之後的平衡大括號，取出條件字串 ──────────────────────────────
@@ -168,8 +171,9 @@ const BATTLE_KEYS = Object.keys(SCEN).filter(k => !REPLAY_KEYS.includes(k));
 
 const gameSrc = readFileSync(GAME, 'utf8');
 const mpbSrc  = readFileSync(MPB, 'utf8');
-const gameT = templateOnly(gameSrc);
-const mpbT  = templateOnly(mpbSrc);
+// 正對照：模板錨點必須還在、腳本／樣式錨點必須不見（helper 內建斷言，抓到就直接炸 —— 這時後面的結論全不可信）
+const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal {'] });
+const mpbT  = templateOnly(mpbSrc, { label: 'mpb', mustKeep: ['mp-clickable'], mustDrop: ['.mp-chip {'] });
 const gameTree = parseBlocks(gameT);
 const mpbTree  = parseBlocks(mpbT);
 chk('桌機檔區塊解析無誤（解析錯就代表下面所有結論不可信）', gameTree.errs.length === 0, gameTree.errs.slice(0, 3).join('; '));
@@ -310,7 +314,8 @@ let modalIdx = -1, modalNode = null;
 
 // ═══ H. 沒有用 @media 當手機開關；安全區走單一來源 ══════════════════════
 {
-  const css = (gameSrc.match(/<style[\s\S]*?<\/style>/g) || []).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
+  // ⭐ v6.317：走 helper（先剝 HTML 註解、開頭標籤限行首）⇒ 模板裡 {@html '…'} 字串字面內的樣式標籤不再被算進 CSS
+  const css = sectionInner(gameSrc, 'style', { label: 'game css', minSections: 1, mustKeep: ['.prize-view-modal'] }).replace(/\/\*[\s\S]*?\*\//g, '');
   const NEW_SEL = ['.prize-view-modal', '.prize-view-btn', '.prize-view-side'];
   // 找出所有 @media 區塊的字元範圍
   const mediaRanges = [];
@@ -331,7 +336,7 @@ let modalIdx = -1, modalNode = null;
     !!rule && /var\(--safe-bottom/.test(rule[0]) && /var\(--safe-top/.test(rule[0]), rule ? rule[0].slice(0, 200) : '');
   chk('H4 視窗沒有自己寫死 env(safe-area-inset-*)（那就不是單一來源了）',
     !!rule && !/env\(\s*safe-area-inset/.test(rule[0]));
-  const mpbCss = (mpbSrc.match(/<style[\s\S]*?<\/style>/g) || []).join('\n');
+  const mpbCss = sectionInner(mpbSrc, 'style', { label: 'mpb css', minSections: 1, mustKeep: ['mp-clickable'] });
   chk('H5 手機端沿用既有 .mp-chip / .mp-clickable 樣式，沒有為此新增 @media',
     /mp-clickable/.test(mpbSrc) && !/@media[^{]*\{[^}]*prize-view/.test(mpbCss));
 }

@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
+import { sectionInner } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 先剝 HTML 註解再抽 script（開頭標籤限行首）
 import {
   readPatch, extractBlock, FR_START, FR_END,
   buildFriends, makeFakeDb, asUser,
@@ -653,7 +654,8 @@ console.log('\n【F】框架安全：對戰頁零私聊引用（逐位元未動�
 //   ⭐ 更完整的版本在 scripts/test-v6297-tourn-friends-tab.mjs【D】：那裡是走**整張靜態相依圖**，
 //     連「包一層 wrapper 再靜態 import」這種字串比對擋不住的繞道也擋得住（附兩個正對照）。
 function staticImportLines(src) {
-  const code = [...src.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
+  // ⭐ v6.317：改走中央 helper（先剝 HTML 註解、開頭標籤限行首、至少抽到 1 段）—— 與 test-v6190 同一族的形狀一併收斂
+  const code = sectionInner(src, 'script', { label: 'game/+page.svelte', minSections: 1 });
   return stripComments(code).split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
 }
 function assertNoStaticDmImport(src) {

@@ -17,6 +17,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sectionInner } from './lib/strip-markup-sections.mjs';   // ⭐v6.317 先剝 HTML 註解再抽 style（開頭標籤限行首）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SAP_PATH = join(ROOT, 'oracle-admin/server_admin_patch.js');
@@ -710,7 +711,8 @@ T('⭐⭐ 未登入顯示「登入後可留言」，而不是壞掉的輸入框'
 });
 
 T('⭐⭐ 手機直式：留言區靠 flex-wrap / 100% 寬自適應，沒有新增 @media 當手機開關', () => {
-  const css = P.slice(P.indexOf('<style>'));
+  // ⭐ v6.317：改走中央 helper（先剝 HTML 註解、開頭標籤限行首）再剝 CSS 區塊註解；原本用「第一個樣式標籤字面」切，會被更前面的字面騙
+  const css = sectionInner(RAW, 'style', { label: 'deck-posts css', minSections: 1 }).replace(/\/\*[\s\S]*?\*\//g, '');
   ok(/\.cmt-form textarea \{[^}]*width: 100%/.test(css), '留言輸入框沒有 width:100%（手機會爆版）');
   ok(/\.cmt-form textarea \{[^}]*box-sizing: border-box/.test(css), '留言輸入框沒有 box-sizing:border-box');
   ok(/\.cmt-head \{[^}]*flex-wrap: wrap/.test(css), '留言表頭沒有 flex-wrap（手機窄螢幕會被擠出去）');

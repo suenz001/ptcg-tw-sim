@@ -37,6 +37,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
+import { sectionInner } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 先剝 HTML 註解再抽 script（開頭標籤限行首）
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -233,7 +234,7 @@ const mkReader = (overlay) => (p) => (overlay && overlay.has(p) ? overlay.get(p)
 /** 抽「靜態」import 的來源字串（⚠ `import type` 與動態 `import(...)` 都不算）。 */
 function staticSpecs(src, isSvelte) {
   let code = src;
-  if (isSvelte) code = [...src.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
+  if (isSvelte) code = sectionInner(src, 'script');   // ⭐v6.317 中央 helper（先剝 HTML 註解；純標記的 .svelte 沒有腳本＝零 import，合法）
   code = stripCmt(code);
   const out = [];
   for (const m of code.matchAll(/^[ \t]*import\s+([\s\S]*?)from\s*['"]([^'"]+)['"]/gm)) {

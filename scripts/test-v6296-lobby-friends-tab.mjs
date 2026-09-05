@@ -30,6 +30,7 @@ import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
 import { pruneIfs, normalizeMarkup } from './lib/svelte-if-prune.mjs';
+import { sectionInner } from './lib/strip-markup-sections.mjs';   // ⭐v6.317 先剝 HTML 註解再抽 script（開頭標籤限行首）
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -402,7 +403,7 @@ console.log('\n【F】回歸不變量');
 //   守護意圖（私聊不可以被打包進對戰頁）改由「靜態 import 零私聊」＋「對戰版面分支零 Dm」接手，
 //   完整版（走整張靜態相依圖、擋得住 wrapper 繞道）在 scripts/test-v6297-tourn-friends-tab.mjs【D】。
 await T('F1 ⭐⭐ 私聊不進對戰頁主 chunk：主檔的靜態 import 零私聊模組（動態 import() 才是入口）；MobilePortraitBattle 零私聊；共用元件本身不 import 私聊面板', () => {
-  const importLines = stripCmt([...GAME.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n'))
+  const importLines = stripCmt(sectionInner(GAME, 'script', { label: 'game/+page.svelte', minSections: 1 }))   // ⭐v6.317 中央 helper
     .split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
   assert.ok(importLines.length > 10, '掃描器下限：只抽到 ' + importLines.length + ' 行靜態 import');
   for (const l of importLines) for (const k of ['DmPanel', 'dm-session', 'dm-poller'])
@@ -502,7 +503,7 @@ await T('H8 ⭐⭐ 突變：切分頁時順手把 onlineStep 改掉（房間輪�
 await T('H9 ⭐⭐ 突變：把私聊面板改成**靜態** import（會把 DM 打包進對戰頁）⇒ F1 紅在「主檔用靜態 import 引用了私聊模組」', () =>
   mutantMustBreak('主檔靜態 import 私聊', () => {
     const bad = mutate(GAME, '<script lang="ts">', '<script lang="ts">\n  import DmPanel from \'../friends/DmPanel.svelte\';');
-    const importLines = stripCmt([...bad.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n'))
+    const importLines = stripCmt(sectionInner(bad, 'script', { minSections: 1 }))
       .split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
     for (const l of importLines) for (const k of ['DmPanel', 'dm-session', 'dm-poller'])
       assert.ok(!l.includes(k), '⚠⚠ 主檔用靜態 import 引用了私聊模組：' + l.trim());

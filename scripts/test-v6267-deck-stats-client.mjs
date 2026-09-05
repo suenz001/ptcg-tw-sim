@@ -115,10 +115,30 @@ const ts2js = (s) => {
 //     量出來、再用一份獨立的 Python 行級狀態機重算核對後手抄進來的（三個 blob 的 room.ts 數字相同；
 //     room-oracle.ts 的 oracleUpsertRoomDelta 在 v6.270 由 0 → 1，表寫的是現況）。
 //   ⚠ 合法新增請求點時要**同步改表**（並在 changelog-internal 說明為什麼多一次讀取）；不可以放寬成 >=。
+//   ⭐ v6.317：ORACLE_TOKENS 補上 v6.316 漏列的四支真請求 oraclePollRoom／oracleListMessages／oracleListRoomsCombined／oracleAuth
+//     （審查者用「加一個 __probePoll 呼叫 oraclePollRoom」實證 v6.316 抓不到）。四格的期望值同樣是從
+//     v6.266／v6.267／v6.315／v6.316 四個 blob 用獨立的 Python 行級狀態機量出後手抄（四個 blob 數字相同：1／2／1／1；
+//     oracleAuth 在檔頭區塊註解裡還有一處，剝註解後不算）。
+//   ⭐ 清單怎麼決定：room-oracle.ts 從 './oracle-client' import 進來、名字以 oracle 開頭的**每一個**符號都必須在表裡，
+//     只有 ORACLE_NON_NET 白名單（純讀模組變數／localStorage，不發請求）例外 —— E3b 用 import 清單實跑核對，
+//     以後多 import 一支請求 helper 卻沒進表會直接紅（H14 突變實證），不再靠人記得。
 const FS_TOKENS = ['getDoc(', 'getDocs(', 'onSnapshot(', 'runTransaction(', 'tx.get(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'addDoc(', 'query(', 'collection('];
 const FS_ROOM_EXPECTED = { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 11, 'tx.get(': 11, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 };
-const ORACLE_TOKENS = ['oracleGetRoom(', 'oracleUpsertRoom(', 'oracleUpsertRoomDelta(', 'oracleDeleteRoom(', 'oracleListRooms(', 'oracleApi(', 'fetch('];
-const ORACLE_ROOM_EXPECTED = { 'oracleGetRoom(': 3, 'oracleUpsertRoom(': 2, 'oracleUpsertRoomDelta(': 1, 'oracleDeleteRoom(': 2, 'oracleListRooms(': 2, 'oracleApi(': 1, 'fetch(': 0 };
+const ORACLE_TOKENS = ['oracleGetRoom(', 'oracleUpsertRoom(', 'oracleUpsertRoomDelta(', 'oracleDeleteRoom(', 'oracleListRooms(', 'oracleApi(', 'fetch(',
+  'oraclePollRoom(', 'oracleListMessages(', 'oracleListRoomsCombined(', 'oracleAuth('];
+const ORACLE_ROOM_EXPECTED = { 'oracleGetRoom(': 3, 'oracleUpsertRoom(': 2, 'oracleUpsertRoomDelta(': 1, 'oracleDeleteRoom(': 2, 'oracleListRooms(': 2, 'oracleApi(': 1, 'fetch(': 0,
+  'oraclePollRoom(': 1, 'oracleListMessages(': 2, 'oracleListRoomsCombined(': 1, 'oracleAuth(': 1 };
+// 從 oracle-client import 進來、名字以 oracle 開頭但**不發請求**的符號（行為端：只讀 _uid／localStorage，見 oracle-client.ts oracleCurrentUid）
+const ORACLE_NON_NET = ['oracleCurrentUid'];
+/** room-oracle.ts 的 import { … } from './oracle-client' 清單裡，名字以 oracle 開頭的符號（含 type 以外的全部）。 */
+function oracleImportsOf(src) {
+  const m = src.match(/import \{([\s\S]*?)\} from '\.\/oracle-client';/);
+  assert.ok(m, 'room-oracle.ts 找不到 from ./oracle-client 的 import 區塊');
+  const names = stripComments(m[1]).split(',').map((x) => x.trim()).filter(Boolean)
+    .filter((x) => !/^type\s/.test(x)).map((x) => x.split(/\s+as\s+/)[0]).filter((x) => /^oracle[A-Z]/.test(x));
+  assert.ok(names.length >= 8, '只抽到 ' + names.length + ' 個 oracle* import（下限 8）⇒ 抽取器壞了');
+  return names;
+}
 const fsCountsRoom = (src) => countTokensStripped(src, FS_TOKENS, { label: 'room.ts', minRatio: 0.5, mustKeep: ['getDoc(', 'runTransaction('] });
 const oracleCountsRoom = (src) => countTokensStripped(src, ORACLE_TOKENS, { label: 'room-oracle.ts', minRatio: 0.5, mustKeep: ['oracleGetRoom('] });
 
@@ -507,6 +527,17 @@ await T('E3 ⭐⭐⭐ history-free 已知答案表：room.ts 的 Firestore 呼�
   assert.notStrictEqual(withCmt.split('getDocs(').length - 1, FS_ROOM_EXPECTED['getDocs('], '反面對照失效：多一行註解、不剝也對得上？');
   assert.deepStrictEqual(fsCountsRoom(withCmt), FS_ROOM_EXPECTED, '剝了註解還是對不上 ⇒ 剝除器沒把 // 行剔掉');
 });
+await T('E3b ⭐⭐ 表的完整性（v6.317）：room-oracle.ts 從 oracle-client import 的每個 oracle* 符號都在 ORACLE_TOKENS（或 ORACLE_NON_NET 白名單）；表裡每個 oracle* token 也都有 import', () => {
+  const names = oracleImportsOf(RO);
+  const tokens = ORACLE_TOKENS.filter((t) => t.startsWith('oracle')).map((t) => t.slice(0, -1));
+  for (const n of names) assert.ok(tokens.includes(n) || ORACLE_NON_NET.includes(n), '⚠⚠ room-oracle.ts import 了 ' + n + ' 卻不在 ORACLE_TOKENS ⇒ 這支請求 helper 沒被數到（v6.316 就是這樣漏了四支）');
+  for (const t of tokens) assert.ok(names.includes(t), 'ORACLE_TOKENS 裡的 ' + t + ' 沒有被 import ⇒ 表裡有死項（或 import 被改名）');
+  for (const n of ORACLE_NON_NET) assert.ok(names.includes(n), '白名單 ' + n + ' 沒被 import ⇒ 白名單過期');
+  // 正對照：白名單成員真的不發請求 —— oracle-client.ts 裡它的函式本體不含 fetch(/oracleApi(
+  const oc = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
+  const body = extractFn(oc, 'export function oracleCurrentUid(', 40, 'oracleCurrentUid');
+  assert.ok(!/fetch\(|oracleApi\(/.test(body), 'oracleCurrentUid 現在會發請求了 ⇒ 不能留在白名單');
+});
 
 // ══════════════════════════════════════════════════════════════════════════
 // 【F】既有牌組 CRUD 不變
@@ -808,6 +839,16 @@ await mut('H10 room.ts 多一個 getDocs( ⇒ E3 已知答案表必紅（history
 await mut('H11 room-oracle.ts 多一個 oracleGetRoom( ⇒ E3 已知答案表必紅', () => mk(RO,
   'export async function setSeatDeck(', 'export async function __probe(c) { return oracleGetRoom(c); }\nexport async function setSeatDeck('),
   (out) => { assert.deepStrictEqual(oracleCountsRoom(out), ORACLE_ROOM_EXPECTED); });
+await mut('H14 ⭐ v6.317 審查者的探針：多一個 oraclePollRoom( ⇒ E3 必紅（v6.316 的表抓不到這一支）', () => mk(RO,
+  'export async function setSeatDeck(', 'export async function __probePoll(c) { return oraclePollRoom(c, 0); }\nexport async function setSeatDeck('),
+  (out) => { assert.deepStrictEqual(oracleCountsRoom(out), ORACLE_ROOM_EXPECTED); });
+await mut('H15 ⭐ v6.317 表的完整性：多 import 一支請求 helper（oraclePollMessages）卻沒進表 ⇒ E3b 必紅', () => mk(RO,
+  '  oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid,', '  oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid, oraclePollMessages,'),
+  (out) => {
+    const names = oracleImportsOf(out);
+    const tokens = ORACLE_TOKENS.filter((t) => t.startsWith('oracle')).map((t) => t.slice(0, -1));
+    for (const n of names) assert.ok(tokens.includes(n) || ORACLE_NON_NET.includes(n), n + ' 不在表裡');
+  });
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} v6.267 守衛：${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

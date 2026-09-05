@@ -1,5 +1,68 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.317 審查者複驗三件一併修：test-v6267 補四個 Oracle 請求 token ＋ 新中央 helper 收乾「先剝區段、後剝 HTML 註解」的貪婪剝除（第三起）＋ 首頁第一則縮到 80 字內
+
+BASE `8f8b378236e0477f4451b5c00fa93d0582bf2c71`（v6.316，遠端 main；`git ls-remote` 確認；⚠ mount 本地 main 停在 e73af91a，一律以 BASE blob 為準）。
+改動檔：`scripts/lib/strip-markup-sections.mjs`（新）／`scripts/test-lib-strip-markup-sections.mjs`（新，進 package.json test chain，排在 test-v6190 之前）／
+`scripts/test-v6190-*`／`test-v6182-*`／`test-v6288-*`／`test-v6296-*`／`test-v6297-*`（改走 helper）／`scripts/test-v6267-*`（表＋E3b＋H14/H15）／
+`static/changelog.html`（只有第一則，走 test-v6264 F0b）／`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／`package.json`／本檔。零新依賴；src/ 只動 version.ts。
+
+### 審查者的結論逐條複驗（推翻／修正的部分）
+- ⚠1 **成立**：BASE 的 test-v6267 對 `room-oracle.ts` 加 `__probePoll(){ return oraclePollRoom(…) }` ⇒ 50 passed / 0 failed（我實跑）。
+  ⚠ 但「v6279 也抓不到」是**誤植**：test-v6279 的表只數 room.ts／firebase.ts 的 Firestore token，從來不守 room-oracle 的 Oracle 請求點，它本來就不該紅。
+- ⚠2 **成立，數字與描述部分修正**：事故重現的數字取決於註解插在哪 —— 插在 `{@html}` 那一行之後（那一行自帶一對樣式標籤字面，會先把註解吃到那裡），
+  BASE 的 templateOnly 剩 **30**（不是 33,985）；MPB 插在腳本收尾後剩 **8**。另外「之後所有斷言都變恆真」**不完全對**：BASE 守衛在植入後會紅 3 條
+  （B1／C1／D1 的「找到 0 個」下限），但 40 多條行為斷言消失、**原意突變（拿掉 isTReplay 閘）被遮蔽**（植入前 8 紅、植入後 0 紅）—— 危險性成立。
+- ⚠2 同型清單：v6182:713 的 `P.indexOf(樣式標籤)` 是在**已剝 HTML 註解**的 P 上切的，審查者說「也會被更前面的字面騙」只對字串字面成立、對註解不成立；
+  仍一併改走 helper（一致性）。v6288/v6296/v6297 那四處 script 抽取形狀相同但**方向相反**（字面只會讓它多抽、不會少抽 ⇒ 假紅方向），一併收斂但不算漏洞。
+- ⚠3 **成立**：第一則 body 88 字（守衛口徑含徽章標題 110）、internal 的「+7／4,938」實為 +8／4,939。
+
+### 【⚠1】test-v6267 ORACLE_TOKENS 補四格
+- 補 `oraclePollRoom(`＝1、`oracleListMessages(`＝2、`oracleListRoomsCombined(`＝1、`oracleAuth(`＝1。
+  期望值由**獨立的 Python 行級狀態機**（同 strip-comments 規則）對 v6.266(63104f4e)／v6.267(4ccfdff1)／v6.315(e73af91a)／v6.316(8f8b3782) 四個 blob 量出，四個相同，手抄進表；
+  ⚠ `oracleAuth(` 在檔頭區塊註解第 8 行還有一處，剝註解後不算（所以是 1 不是 2）。
+- 清單怎麼決定（不再靠人記得）：新增 **E3b** —— 解析 `import { … } from './oracle-client'` 區塊，名字以 `oracle` 開頭的每個符號都必須在 ORACLE_TOKENS，
+  唯一白名單 `ORACLE_NON_NET = ['oracleCurrentUid']`（行為端：抽出函式本體，斷言不含 `fetch(`／`oracleApi(`）；反向也查（表裡的 token 都要有 import，防死項）。
+  ⚠ 沒有擴大成「掃 oracle-client 所有 export」—— 那要判斷每支是不是真請求，做不乾淨；import 清單判準夠用而且零維護。
+- 突變：**補之前** 探針 ⇒ 50/0（抓不到）；**補之後** 探針 ⇒ 52 passed / 1 failed，紅在 E3「room-oracle.ts 的 Oracle 請求點變了」。H14（同一探針）、H15（多 import `oraclePollMessages` 沒進表 ⇒ E3b 紅）進守衛本體。53 passed。
+
+### 【⚠2】中央 helper `scripts/lib/strip-markup-sections.mjs`
+- API：`blankHtmlCommentsChecked`（先剝 HTML 註解，等長空白化）→ `markupSections`／`templateOnly`／`sectionInner`。
+  區段開頭標籤**限行首**（允許前導空白）、收尾取最近的一個 ⇒ `{@html '…'}` 字串字面內的樣式標籤不再被當成區段（審查者提的 :313「算進 CSS」既有問題順手排除；
+  全站 20 個 .svelte/.html 實掃：所有「行首找到的區段數 ≠ 原始字面數」的差異都是字串／註解裡的字面，零誤判）。
+- 護欄（Rule 25）：每段註解 ≤150 行且必須收尾；註解合計吃掉的非空白 ≤50%；輸出長度／行數必須與輸入相同；mustKeep／mustDrop 正反對照；minSections 下限。
+  ⚠ 檔頭**沒有**寫「絕不會少算」；只列實際擋得住的形狀。
+- 自驗 `test-lib-strip-markup-sections.mjs`（17 條）：【0】內嵌樣本手算答案（39／21／33／6，helper vs 舊順序）【1】固定 blob 8f8b3782 已知答案表
+  （game template **184,279**、style 內文 205,952、script 內文 373,083、註解 275；MPB **22,587**／23,495／24,484／43 —— 全部由 Python `re`＋utf-16-le 長度獨立量出後手抄；
+  ⚠ 口徑是 **UTF-16 code unit**，emoji 算 2，用 code point 量會少 335）【2】工作樹正對照【3】固定 blob 植入註解：舊順序剩 <1%，helper 不差一字【4】六條護欄突變各紅在指定訊息。
+  淺複製：【1】【3】大聲 SHALLOW-SKIP、13 passed（實測 `--depth 1`）。
+- 逐支修前／修後（註解含樣式標籤字面時剝完的非空白字元數）與原意突變：
+
+| 守衛 | 修前（BASE 剝除）| 修後（helper）| 原意突變（helper 版）|
+|---|---|---|---|
+| test-v6190 game | 184,192 → 植入後 **30** | 184,279 → 植入後 **184,279** | 拿掉 `isTReplay` 閘 ⇒ 8 紅；植入＋突變仍 8 紅（BASE 版植入後突變被遮蔽：114/3 ⇔ 114/3）|
+| test-v6190 mpb | 22,587 → 植入後 **8** | 22,587 → 22,587 | 同上（H5 走 sectionInner）|
+| test-v6190 :313／:334 CSS | 2 段（含 {@html} 字面）| 1 段 | H1 `.prize-view-modal` mustKeep 正對照 |
+| test-v6182 :713 | 已剝註解的 P 上 indexOf | sectionInner＋剝 CSS 區塊註解 | 拿掉 textarea `width: 100%` ⇒ 42/1 紅 |
+| test-v6288 :656 | matchAll script | sectionInner minSections 1 | 主檔靜態 import DmPanel ⇒ F1 紅（31/1）|
+| test-v6296 :405／:505 | 同上 | 同上 | 同上 ⇒ F1 紅（25/1）|
+| test-v6297 :236 | 同上（相依圖每個 .svelte）| sectionInner（minSections 0：純標記元件零 import 合法）| 同上 ⇒ D1 紅（32/2）|
+
+- **沒動**：`lastIndexOf('<style')` 那一族（20 多處，取最後一個，目前安全）、test-v6187:138／v6195:144（`matchAll(...).pop()` 取最後一個，同族）、
+  test-v6247:364／v6261:452／v6307:77（單一 first-match 抽腳本拿去 new Function 實跑，截斷會直接編譯失敗，不是假綠形狀）。
+
+### 【⚠3】首頁第一則
+- body 88 → **78 字**（守衛口徑 110 → 100）：「平板直立時可在對戰中「⚙️ 設定 › 🎴 對戰版面」勾選改用手機版直式畫面，橫放回電腦版；預設不勾選。⚠ 被旋轉提示遮住時先橫放再進設定，提示上也有說明。」
+  保住：平板直立可用手機版／入口在設定／預設不勾選／要先橫放／提示上有說明；砍「畫面不變」（預設不勾選已蘊含）。
+- 摘要區總長（守衛口徑）**4,939 → 4,929** / 5,000。徽章改成 v6.317（v6.313～v6.316 都未上正式站，比照 v6.316 的做法走 F0b）。
+
+### 三配套／驗證
+- admin.html `SITE_VERSION_HINT` 6.317（LF）；test-v6272 `PREV_SHA`→8f8b3782、`PREV_ALLOWED` = version.ts／changelog.html；test-v6264 `BASE_SHA`→8f8b3782（F0b）。
+  掃 pin：scripts/ 內引用 e73af91a 的只剩 test-v6279 的量測註解（非斷言）；無整檔 sha256 新增。
+- HEAD-FAIL：helper 還原成 BASE（不存在）⇒ test-lib／test-v6190 ERR_MODULE_NOT_FOUND；version.ts＋changelog.html 還原 ⇒ test-v6272 ⑩「玩家端被動到了」＋版本一致 2 紅。
+- 完整 npm test **641 步**（/tmp/w317 `git clone --shared` 完整歷史 2,646 commits、序列分批）：**0 紅**；tsc TS2304 0（src 只動 version.ts）；anti-pattern-lint 綠。
+
 ## v6.316 旋轉提示加「平板直立可改用手機版介面」引導 ＋ 修三支在完整 git 歷史下紅的過期守衛（第九種安慰劑）
 
 BASE `e73af91a6b8aec66ede6994500f76f8d26709836`（v6.315，遠端 main；`git ls-remote` 確認）。
@@ -70,7 +133,7 @@ BASE `e73af91a6b8aec66ede6994500f76f8d26709836`（v6.315，遠端 main；`git ls
 
 ### 三配套／驗證
 - admin.html `SITE_VERSION_HINT` 6.316（LF）；test-v6272 `PREV_SHA`→e73af91a、`PREV_ALLOWED` = version.ts／game/+page.svelte／changelog.html；test-v6264 `BASE_SHA`→e73af91a（F0b）。
-- 首頁 changelog：v6.313～v6.315 都還沒上正式站 ⇒ 第一則直接改寫成 v6.316（摘要 +7 字「；提示上也有說明」，摘要區 4,931 → 4,938 / 5,000），內文補一句提示本身有寫操作順序。
+- 首頁 changelog：v6.313～v6.315 都還沒上正式站 ⇒ 第一則直接改寫成 v6.316（摘要 +8 字「；提示上也有說明」，摘要區 4,931 → 4,939 / 5,000；⚠ v6.317 訂正：原寫「+7 字、4,938」是數錯，用守衛同一口徑（`entriesTxt[i].length`，含徽章＋標題）重量為 +8／4,939），內文補一句提示本身有寫操作順序。
 - 完整 npm test 640 步（/tmp/work 完整歷史、序列分批）：0 紅；tsc TS2304 新增 0；anti-pattern-lint 綠。
 
 ## v6.315 審查者複驗收尾：首頁第一則縮到 80 字內 ＋ test-v6313 補兩個盲點；「聊天面板跑兩倍」經量測不成立、不動
