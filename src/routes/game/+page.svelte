@@ -14066,6 +14066,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <br/>・桌墊版仍在測試，窄螢幕（&lt; 1200px）可能變形，會自動退回經典版
             <br/>・只動桌機 — 手機版直立 layout 不受影響
             <br/>・平板（iPad 等）直立時可勾選改用手機版介面；橫放時自動回到電腦版面
+            <br/>・iPad 直立時若被「請將手機旋轉至橫向」提示遮住而按不到設定，請先橫放再進來勾選
           </div>
         </details>
 
