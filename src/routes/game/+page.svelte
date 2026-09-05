@@ -10563,8 +10563,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
        真手機（min(w,h) <= 600）本來就被 @media min-width:601px 擋掉，這個條件對它是 no-op。 -->
   <div class="rotate-prompt">
     <div class="rotate-prompt-icon">📱</div>
-    <div class="rotate-prompt-text">請將手機旋轉至橫向<br/>以獲得最佳對戰體驗</div>
-    <div class="rotate-prompt-sub">（橫屏後此提示會自動消失）</div>
+    <div class="rotate-prompt-text">請將裝置旋轉至橫向<br/>以獲得最佳對戰體驗</div>
+    <div class="rotate-prompt-sub">（橫向後此提示會自動消失）</div>
+    <!-- ⭐ v6.316 站長交辦：在這裡告訴玩家「平板直立可以改用手機版介面」的開關在哪。
+         ⚠ 順序不能漏：這張遮罩蓋住「⚙️ 設定」鈕，玩家必須**先橫放**才進得去設定，文案第一步就是橫放。
+         ⚠ 不需要再加「只在開關關著時顯示」的內層條件：勾選後直立 isPortraitMobile 為 true，
+           外層 v6.313 的條件已讓整塊 rotate-prompt 不渲染（test-v6313【E】【H】＋ v6.316 playwright 820×1180 實測）。
+         ⚠ 這張提示只有 601～950px 直式觸控裝置（平板）看得到，真手機（短邊 ≤600）永遠看不到 ⇒ 文案寫「裝置」不寫「手機」。
+         ⚠ 新 class 只放在樣式區既有的那個 @media 區塊內，不外洩到其他裝置（⚠ 這段註解裡不要寫出樣式標籤字面，test-v6190 的剝除器會誤吞）。 -->
+    <div class="rotate-prompt-guide">平板想直立遊玩？<br/>橫放後點「⚙️ 設定」→「🎴 對戰版面」，<br/>勾選「📱 平板直立時用手機版介面」即可。</div>
   </div>
 {/if}
 
@@ -14066,7 +14073,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <br/>・桌墊版仍在測試，窄螢幕（&lt; 1200px）可能變形，會自動退回經典版
             <br/>・只動桌機 — 手機版直立 layout 不受影響
             <br/>・平板（iPad 等）直立時可勾選改用手機版介面；橫放時自動回到電腦版面
-            <br/>・iPad 直立時若被「請將手機旋轉至橫向」提示遮住而按不到設定，請先橫放再進來勾選
+            <br/>・iPad 直立時若被「請將裝置旋轉至橫向」提示遮住而按不到設定，請先橫放再進來勾選
           </div>
         </details>
 
@@ -18077,6 +18084,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .rotate-prompt-icon{ font-size:4rem; animation:rotate-hint 2s ease-in-out infinite; }
     .rotate-prompt-text{ font-size:1.1rem; line-height:1.5; }
     .rotate-prompt-sub{ font-size:0.85rem; color:#aaa; }
+    /* v6.316 引導文字：告訴平板玩家開關在哪（只在這個 @media 內，真手機／桌機不受影響） */
+    .rotate-prompt-guide{ font-size:0.9rem; line-height:1.6; color:#ddd; margin-top:0.5rem; padding-top:1rem;
+      border-top:1px solid rgba(255,255,255,0.25); max-width:34rem; }
     @keyframes rotate-hint {
       0%, 100% { transform: rotate(0deg); }
       50% { transform: rotate(90deg); }

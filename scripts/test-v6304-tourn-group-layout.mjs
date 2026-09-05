@@ -44,6 +44,12 @@ const P_PKG = join(ROOT, 'package.json');
 const P_SELF = join(ROOT, 'scripts/test-v6304-tourn-group-layout.mjs');
 const P_MEASURE = join(ROOT, 'scripts/measure-v6304-tourn-group.mjs');
 const BASE_SHA = 'ae9737c595f0600caa2eb8a9162a80d0a63d89c1';   // v6.303（本版的 BASE）
+// ⭐ v6.316：v6.304 自己的 sha。C1／D1／E1／E2／E4 的「本版只動了這些」改成比 BASE..THIS 兩個**固定** commit（永不過期）。
+//   原本拿**工作樹**跟 v6.303 比 ⇒ v6.307／v6.309 合法改動後 E4 在完整歷史下誤紅（第九種安慰劑：pin 過期；淺複製 CI 看不到）；
+//   C1／D1／E1／E2 只是「還沒被踩到」（那幾段自 v6.303 後恰好沒動；v6.316 在 <style> 加一條 CSS，E2 立刻會紅）。
+//   ⚠ 不可以把 BASE_SHA 往前移（守衛會變成「跟自己比」＝恆真）—— T0 擋這件事（H10 突變實證）。
+//   現況的守備：C2／C3（矩陣＋結構）、D1 前半（合併保留寫法）、E3（字面）、B 段行為端 —— 全部 history-free、沒有放寬。
+const THIS_SHA = '8738219949eacfaa271bdb425baa1021aa08a268';
 const rd = (p) => readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
 const sha = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
 const require_ = createRequire(import.meta.url);
@@ -95,7 +101,21 @@ if (fail) { console.log('\n══ v6.304 賽事分組版面守衛：' + pass + '
 
 const baseGame = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte');
 const BGAME = baseGame.ok ? baseGame.out.replace(/\r\n/g, '\n') : null;
-const hasHistory = hasBaseCommit(ROOT, BASE_SHA) && BGAME;
+const thisGame = readBaseBlob(ROOT, THIS_SHA, 'src/routes/game/+page.svelte');
+const TGAME = thisGame.ok ? thisGame.out.replace(/\r\n/g, '\n') : null;
+const hasHistory = !!(hasBaseCommit(ROOT, BASE_SHA) && hasBaseCommit(ROOT, THIS_SHA) && BGAME && TGAME);
+/** 「跟自己比」防線：THIS 必須真的是 v6.304（有全部新錨點）而 BASE 一個都沒有；兩份 blob 不同。 */
+function thisNotBase(tg, bg) {
+  assert.notStrictEqual(sha(tg), sha(bg), 'THIS 與 BASE 相同 ⇒ THIS_SHA 抓錯了（守衛會變成恆真）');
+  for (const k of NEW_ANCHORS) {
+    assert.ok(tg.includes(k), 'THIS(v6.304) 缺「' + k + '」⇒ THIS_SHA 抓錯了');
+    assert.ok(!bg.includes(k), 'BASE(v6.303) 竟然有「' + k + '」⇒ BASE_SHA 抓錯了');
+  }
+}
+await T('T0 ⭐ 固定兩 commit 自驗：THIS(v6.304) 含全部新錨點、BASE(v6.303) 一個都沒有、兩份 blob 不同（v6.316）', () => {
+  if (!hasHistory) { shallowSkip('v6304 T0 THIS vs BASE 自驗', '需要歷史'); return; }
+  thisNotBase(TGAME, BGAME);
+});
 
 // ── 共用抽取器（每一個都有下限斷言；壞掉不給假綠）────────────────────────
 /** 從 `const NAME = $derived.by(` 起算括號配對，抽出整段宣告。 */
@@ -265,12 +285,12 @@ function foldRegion(src) {
 }
 const FOLD_NOW = foldRegion(GAME);
 console.log('   摺疊區 sha256（現在）＝ ' + sha(FOLD_NOW) + '　長度 ' + FOLD_NOW.length);
-await T('C1 ⭐⭐ 整段摺疊區（tLoadEvFold／tEvFold／tEvOpenBy／tEvOpen／tEvForced／tToggleEv）與 BASE **逐位元相同**', () => {
-  if (!hasHistory) { shallowSkip('v6304 C1 摺疊區 vs BASE 逐位元', '由 C2 的矩陣回歸與 C3 的結構斷言補上'); return; }
-  const b = foldRegion(BGAME);
+await T('C1 ⭐⭐ 整段摺疊區（tLoadEvFold／tEvFold／tEvOpenBy／tEvOpen／tEvForced／tToggleEv）v6.304 與 v6.303 **逐位元相同**（固定兩 commit）', () => {
+  if (!hasHistory) { shallowSkip('v6304 C1 摺疊區 THIS vs BASE 逐位元', '由 C2 的矩陣回歸與 C3 的結構斷言補上'); return; }
+  const b = foldRegion(BGAME), t = foldRegion(TGAME);
   console.log('   摺疊區 sha256（BASE）＝ ' + sha(b) + '　長度 ' + b.length);
-  assert.strictEqual(sha(FOLD_NOW), sha(b),
-    '摺疊區被改到了（站長裁定：只搬位置，收折照舊）\n      現在 ' + sha(FOLD_NOW) + '\n      BASE ' + sha(b));
+  assert.strictEqual(sha(t), sha(b),
+    'v6.304 改到了摺疊區（站長裁定：只搬位置，收折照舊）\n      THIS ' + sha(t) + '\n      BASE ' + sha(b));
 });
 /** 把 tEvOpenBy 抽出來真的跑（不需要歷史，淺複製也在守）。 */
 async function evOpenByOf(src) {
@@ -349,8 +369,8 @@ await T('D1 ⭐ tBracketLoad（逐 eventId 合併、失敗沿用舊資料）與 
   assert.ok(now.includes('mergeKeyedOrKeep<any>(tBrackets,') && now.includes('tBrackets = merged.list;')
     && now.includes('tBracketsStale = merged.stale;'), 'tBracketLoad 已經不是「合併保留」的寫法');
   console.log('   tBracketLoad sha256 ＝ ' + sha(now));
-  if (!hasHistory) { shallowSkip('v6304 D1 tBracketLoad vs BASE', '上一行的結構斷言仍在守'); return; }
-  assert.strictEqual(sha(now), sha(fnBlock(BGAME, '  async function tBracketLoad() {')), 'tBracketLoad 被改到了');
+  if (!hasHistory) { shallowSkip('v6304 D1 tBracketLoad THIS vs BASE', '上一行的結構斷言仍在守'); return; }
+  assert.strictEqual(sha(fnBlock(TGAME, '  async function tBracketLoad() {')), sha(fnBlock(BGAME, '  async function tBracketLoad() {')), 'v6.304 改到了 tBracketLoad');
 });
 await T('D2 ⭐ 行為端：mergeKeyedOrKeep 真的「成功的用新的、失敗的沿用舊的」', async () => {
   const esbuild = await import('esbuild');
@@ -393,11 +413,12 @@ function snippetOf(src, name) {
   assert.ok(out.length > 100, 'snippet ' + name + ' 抽取器壞了（長度 ' + out.length + '）');
   return out;
 }
-await T('E1 ⭐⭐ 四個 snippet（eventCard／bracketBlock／myMatchBox／myByeBox）與 BASE **逐位元相同**', () => {
-  if (!hasHistory) { shallowSkip('v6304 E1 四個 snippet vs BASE', '本版只搬 each 的位置，snippet 內容由 B 段行為端間接涵蓋'); return; }
+await T('E1 ⭐⭐ 四個 snippet（eventCard／bracketBlock／myMatchBox／myByeBox）v6.304 與 v6.303 **逐位元相同**（固定兩 commit）', () => {
+  for (const n of ['eventCard', 'bracketBlock', 'myMatchBox', 'myByeBox']) snippetOf(GAME, n);   // 現況：四個 snippet 都還在（抽取器有下限）
+  if (!hasHistory) { shallowSkip('v6304 E1 四個 snippet THIS vs BASE', '本版只搬 each 的位置，snippet 內容由 B 段行為端間接涵蓋'); return; }
   for (const n of ['eventCard', 'bracketBlock', 'myMatchBox', 'myByeBox']) {
-    const now = snippetOf(GAME, n), b = snippetOf(BGAME, n);
-    assert.strictEqual(sha(now), sha(b), 'snippet ' + n + ' 被改到了（' + sha(now).slice(0, 12) + ' vs ' + sha(b).slice(0, 12) + '）');
+    const t = snippetOf(TGAME, n), b = snippetOf(BGAME, n);
+    assert.strictEqual(sha(t), sha(b), 'v6.304 改到了 snippet ' + n + '（' + sha(t).slice(0, 12) + ' vs ' + sha(b).slice(0, 12) + '）');
   }
 });
 await T('E2 ⭐⭐ 整段 <style> 與 BASE **逐位元相同**（版面重構不得靠改 CSS 達成）', () => {
@@ -410,17 +431,16 @@ await T('E2 ⭐⭐ 整段 <style> 與 BASE **逐位元相同**（版面重構不
   };
   const now = cssOf(GAME);
   console.log('   <style> sha256 ＝ ' + sha(now) + '　長度 ' + now.length);
-  if (!hasHistory) { shallowSkip('v6304 E2 <style> vs BASE', '長度下限斷言仍在'); return; }
-  assert.strictEqual(sha(now), sha(cssOf(BGAME)), '<style> 被改到了');
+  if (!hasHistory) { shallowSkip('v6304 E2 <style> THIS vs BASE', '長度下限斷言仍在'); return; }
+  assert.strictEqual(sha(cssOf(TGAME)), sha(cssOf(BGAME)), 'v6.304 改到了 <style>');
 });
 await T('E3 ⭐ 進場鈕保底區塊與報名中賽事迴圈逐字未動', () => {
   assert.ok(GAME.includes('{#if tMyMatch && !tBrackets.some((b) => b.event?._id === tMyMatch.eventId)}'), '保底條件被改了');
   assert.ok(GAME.includes('{:else if tMyBye && !tBrackets.some((b) => b.event?._id === tMyBye.eventId)}'), '輪空保底條件被改了');
   assert.ok(GAME.includes('{#each tUpcomingEvents as ev (ev._id)}{@render eventCard(ev)}{/each}'), '報名中賽事迴圈被改了');
 });
-await T('E4 ⭐ 這一版**只**動了模板的 each 位置與新增兩個 $derived —— 逐行 diff 只有這些', () => {
-  if (!hasHistory) { shallowSkip('v6304 E4 逐行 diff 白名單', 'E1～E3 的逐位元比對已涵蓋主要面積'); return; }
-  const a = BGAME.split('\n'), b = GAME.split('\n');
+function e4LineDiff(bg, tg) {
+  const a = bg.split('\n'), b = tg.split('\n');
   const setA = new Map(); for (const l of a) setA.set(l, (setA.get(l) ?? 0) + 1);
   const setB = new Map(); for (const l of b) setB.set(l, (setB.get(l) ?? 0) + 1);
   const removed = [], added = [];
@@ -434,6 +454,12 @@ await T('E4 ⭐ 這一版**只**動了模板的 each 位置與新增兩個 $deri
   const bad = removed.filter((l) => l !== '' && !REMOVED_OK.includes(l));
   assert.deepStrictEqual(bad, [], '本版刪掉了未申報的行：\n      ' + bad.slice(0, 8).join('\n      '));
   assert.ok(added.length >= 10 && added.length <= 60, '新增行數 ' + added.length + ' 不在預期範圍（只該是兩個 $derived ＋ 迴圈與註解）');
+  return { removed, added };
+}
+await T('E4 ⭐ v6.304 **只**動了模板的 each 位置與新增兩個 $derived —— v6.303..v6.304 逐行 diff 只有這些（固定兩 commit，永不過期）', () => {
+  if (!hasHistory) { shallowSkip('v6304 E4 逐行 diff 白名單', 'E1～E3 的逐位元比對已涵蓋主要面積'); return; }
+  const { removed, added } = e4LineDiff(BGAME, TGAME);
+  console.log('   v6.303..v6.304 逐行 diff：刪 ' + removed.length + ' 行（全在白名單）、增 ' + added.length + ' 行');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -561,6 +587,23 @@ await T('H9 突變：兩個舊的分離迴圈其中一個沒刪乾淨 ⇒ A1 必
       '還留著「所有進行中賽事卡排一區」的舊迴圈 ⇒ 賽事卡會被畫兩次');
   }, (e) => e instanceof assert.AssertionError && /賽事卡會被畫兩次/.test(e.message));
 });
+
+if (hasHistory) {
+  await T('H10 突變：THIS_SHA 指到 BASE（「跟自己比」）⇒ T0 必紅（v6.316）', () => {
+    assert.throws(() => thisNotBase(BGAME, BGAME), (e) => e instanceof assert.AssertionError && /THIS_SHA 抓錯了/.test(e.message), '「跟自己比」沒有被擋下');
+  });
+  await T('H11 突變：v6.304 若多刪了一行（未申報）⇒ E4 必紅在「未申報的行」（v6.316）', () => {
+    const g = mutate(TGAME, '\n  let tBracketsStale = $state(false);', '');
+    assert.throws(() => e4LineDiff(BGAME, g), (e) => e instanceof assert.AssertionError && /未申報的行/.test(e.message), '多刪一行沒有被抓到');
+  });
+  await T('H12 突變：v6.304 若改了 <style> 一個字 ⇒ E2 必紅（v6.316）', () => {
+    const g = mutate(TGAME, '  .rotate-prompt{ display:none; }', '  .rotate-prompt{ display:block; }');
+    const cssOf2 = (x) => x.slice(x.indexOf('>', x.lastIndexOf('<style')) + 1, x.lastIndexOf('</style>'));
+    assert.notStrictEqual(sha(cssOf2(g)), sha(cssOf2(BGAME)), '<style> 突變沒被抓到');
+  });
+} else {
+  shallowSkip('v6304 H10～H12 固定兩 commit 的突變', '需要歷史');
+}
 
 try { rmSync(R.dir, { recursive: true, force: true }); } catch { /* 清不掉無所謂 */ }
 console.log('\n══ v6.304 賽事分組版面守衛：' + pass + ' PASS / ' + fail + ' FAIL ══');

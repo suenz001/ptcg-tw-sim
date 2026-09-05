@@ -1,5 +1,70 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.316 旋轉提示加「平板直立可改用手機版介面」引導 ＋ 修三支在完整 git 歷史下紅的過期守衛（第九種安慰劑）
+
+BASE `e73af91a6b8aec66ede6994500f76f8d26709836`（v6.315，遠端 main；`git ls-remote` 確認）。
+改動檔：`src/routes/game/+page.svelte`（旋轉提示文案＋一段引導＋一條 CSS＋設定 hint 一行）／`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`static/changelog.html`（只有第一則，走 test-v6264 F0b）／`scripts/test-v6267-*`／`scripts/test-v6279-*`／`scripts/test-v6304-*`／
+`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。零新依賴、package.json 不動。
+
+### 【A】旋轉提示（`.rotate-prompt`）加引導文字（站長逐字：「請旋轉至橫向的提示文字中，再幫我增加…玩家們才知道有這個功能」）
+
+最終文案（四段）：
+```
+📱
+請將裝置旋轉至橫向 / 以獲得最佳對戰體驗
+（橫向後此提示會自動消失）
+────
+平板想直立遊玩？
+橫放後點「⚙️ 設定」→「🎴 對戰版面」，
+勾選「📱 平板直立時用手機版介面」即可。
+```
+- **「手機」→「裝置」**：這張遮罩的 CSS 條件是 `min-width:601px and max-width:950px and portrait and hover:none and pointer:coarse`，
+  真手機（短邊 ≤600）**永遠看不到**（v6.315 test-v6313【H1】鎖住），看得到的只有平板 ⇒ 寫「手機」不準確。設定 hint 那一行引用的字串同步改。
+- **雞生蛋的順序**：遮罩 `position:fixed; inset:0; z-index:99999` 蓋住「⚙️ 設定」鈕（harness 量測 `elementFromPoint` 落在 `.rotate-prompt`，gearCovered=true）
+  ⇒ 文案第一步就是「橫放後」，否則玩家照著找不到。
+- **不加「只在開關關著時顯示」的內層條件**（查證）：`computeIsPortraitMobile(w,h,force) = min(w,h)<=600 || (force && h>w)`；
+  勾選後直立 ⇒ `isPortraitMobile=true` ⇒ 外層 v6.313 的 `!isPortraitMobile` 讓整塊 rotate-prompt **不渲染**（test-v6313【E1】【H1】的合成真值表；
+  淺層原因：遮罩會蓋死 MobilePortraitBattle）⇒ 已勾選的人本來就看不到這段，內層條件是多餘的。
+- CSS：新 class `.rotate-prompt-guide` **只放在既有的那個 `@media` 區塊內**（`.rotate-prompt` 預設 `display:none`，區塊外不會出現）；
+  `.rotate-prompt` 的顯示條件**零改動**（test-v6313 H1 續綠）。
+- 量測（playwright headless chromium，從本版 svelte 逐字抽出 rotate-prompt 節點＋整段 @media CSS 做 harness，isMobile+hasTouch 模擬 hover:none/pointer:coarse）：
+
+| 情境 | display | 四段皆在視窗內 | 任一段被裁切 | 遮罩蓋住 ⚙️ |
+|---|---|---|---|---|
+| iPad 820×1180 直立 touch | flex | ✓（guide 265×86 @ y=647） | 無 | 是（⇒ 文案要先橫放） |
+| iPad mini 744×1133 直立 touch | flex | ✓ | 無 | 是 |
+| iPad Air 834×1194 直立 touch | flex | ✓ | 無 | 是 |
+| 真手機 375×812 touch | **none** | — | — | — |
+| iPad 1180×820 橫放 touch | **none** | — | — | — |
+| 桌機縮窄 820×1180 滑鼠 | **none** | — | — | — |
+
+  「開關開 ⇒ 遮罩不出現」是 `{#if}` 層（state gate，不是 CSS）：本地沙盒 vite build 超過 bash 上限跑不完，改由 test-v6313【E1】【H1】（25 格 × touch × 開關）證明，
+  並在測試站部署後用 v6.313 的 measure 腳本實跑（見部署後補記）。
+- ⚠ 踩坑：HTML 註解裡寫了「`<style>`」字面 ⇒ test-v6190 的剝除器 `/<style[\s\S]*?<\/style>/` 從註解一路吃到真正的 `</style>`，把整段模板清空
+  （「收尾殘留 2 個未關閉區塊」）。改成「樣式區」。⚠ 註解裡也不要寫 test-v6107 掃描器當錨點的那個 `{#if …}` 字面。
+
+### 【B】三支過期守衛：不是把 BASE_SHA 往前移，而是「歷史事實 → 固定兩 commit」＋「現況 → history-free 已知答案表」
+
+共同病灶（第九種安慰劑：pin 過期）：「工作樹 X 相對 BASE 逐位元相同／逐行 diff 只准是這些」守的是「**這一版**只動了這些」這個歷史事實，
+卻拿會一直往前走的工作樹去比 ⇒ v6.307／v6.309 合法改動 `room.ts`／`room-oracle.ts`／`game/+page.svelte` 之後在完整歷史下誤紅；
+淺複製 CI 因 SHALLOW-SKIP 看不到，哪天開 `fetch-depth: 0` 會直接擋 deploy。⚠ **不可以只把 BASE_SHA 往前移**：那會變成「跟自己比」＝恆真（HEAD-FAIL 消失）。
+
+| 守衛 | 原本守什麼 | 改成什麼 | HEAD-FAIL／突變證明（完整歷史樹 /tmp/work） |
+|---|---|---|---|
+| **test-v6267 Gc** | (a) v6.267 的 room.ts／room-oracle.ts 除 deckId 外逐位元等於 v6.266 ［歷史］；(b) 隱含「room.ts 請求點沒偷偷變多」［現況］ | (a) 改比 `63104f4e`(v6.266)..`4ccfdff1`(v6.267) 固定兩 blob（同一份剝除字串；v6.270 的剝除字串因不再比工作樹而拿掉）＋「THIS≠BASE」防線；(b) 新 **E3** history-free 已知答案表：room.ts Firestore 11 token／room-oracle.ts Oracle 請求 7 token，剝註解後逐 token 精確值（從 v6.266／v6.267／v6.315 三個 blob 量出＋獨立 Python 狀態機核對，三者相同），並在 Gc 拿真 blob 核對表沒抄錯 | 還原 room-oracle setSeatDeck 的 deckId 寫入 ⇒ A1／A2 紅（既有 G 段仍全紅）；**Gc-H12**：THIS_SHA 指到 BASE ⇒ 紅在「THIS_SHA 抓錯了」；**Gc-H13**：v6.267 多動一行 ⇒ 紅在「還動到別的地方」；**H10**：工作樹 room.ts 真的加一個 `getDocs(` ⇒ E3 紅（淺複製也紅，實跑 49 pass/1 fail）；**H11**：room-oracle 多一個 `oracleGetRoom(` ⇒ E3 紅；反面對照：註解裡的 `getDocs(` 不紅 |
+| **test-v6279 A3／E-d／E-e** | A3：v6.279 零接觸 room-oracle.ts（oracleTx 逐字＋整檔 sha）；E-d：tApi 逐字不變＋伺服器 delta-put 區塊不變；E-e：room.ts／firebase.ts 逐位元不變（Firestore 讀取紅線） | 全部改比 `095ea93f`(v6.278)..`10655494`(v6.279 code commit) 固定兩 blob；`assertThisIsNotBase()`（THIS 有深層區塊、BASE 沒有、oracle-client.ts 不同）擋「跟自己比」；E-e 現況改 history-free 已知答案表（room.ts 同上、firebase.ts 全 0，mustKeep `getFirestore(`）；delta-put 伺服器區塊現況：仍在且 >8000 字元（行為由 test-v6278 抽出實跑）；tApi 現況：零 delta 識別字（原有） | oracle-client.ts 退回 v6.278 ⇒ A1／A2／B1… 紅；**M-v6316a** room.ts 多 `getDocs(` ⇒ E-e 紅（工作樹真突變實跑 45 pass/1 fail）；**M-v6316b** firebase.ts 多 `onSnapshot(` ⇒ 紅；**M-v6316c** THIS=BASE ⇒ assertThisIsNotBase 紅；K3「不 pin 版本號」續綠 |
+| **test-v6304 E4（＋同型潛在的 C1／D1／E1／E2）** | E4：v6.304 只動 each 位置＋兩個 $derived（逐行 diff 白名單）；C1／D1／E1／E2：摺疊區／tBracketLoad／四個 snippet／整段 `<style>` 逐位元等於 v6.303 | 改比 `ae9737c5`(v6.303)..`87382199`(v6.304) 固定兩 blob；新 **T0**（THIS 含全部 NEW_ANCHORS、BASE 一個都沒有、blob 不同）擋「跟自己比」；現況由 C2／C3／D1 前半／E3／B 段行為端守（全部 history-free，原本就有、沒放寬）。⚠ C1／D1／E1／E2 只是「還沒被踩到」——本版在 `<style>` 加一條 CSS，E2 立刻會紅，所以一併改 | 拿掉分組迴圈 ⇒ A0／A1 紅；**H10** THIS=BASE ⇒ T0 紅；**H11** v6.304 多刪一行 ⇒ E4 紅在「未申報的行」；**H12** v6.304 改 `<style>` 一字 ⇒ E2 的比對不等 |
+
+- 三支在**完整歷史**（2,644 commits）：v6267 **50 passed**、v6279 **46 pass**、v6304 **41 PASS**，0 紅；**淺複製**（`--depth 1`）：43／39／38，全綠、SHALLOW-SKIP 大聲印出，史料段不 fail-open。
+- 已知答案表兩份（v6267／v6279 都有 room.ts）是刻意重複：合法新增 Firestore 呼叫點時兩張表都要改、並在本檔說明為什麼多一次讀取。
+- 同型潛在 pin 未動的：test-v6304 C2b（行為矩陣、與 C2 獨立表重疊）、test-v6279 D1（deep=false 與 v6.278 行為等價＝相容性不變量）——它們比的是行為不是位元組，留。
+
+### 三配套／驗證
+- admin.html `SITE_VERSION_HINT` 6.316（LF）；test-v6272 `PREV_SHA`→e73af91a、`PREV_ALLOWED` = version.ts／game/+page.svelte／changelog.html；test-v6264 `BASE_SHA`→e73af91a（F0b）。
+- 首頁 changelog：v6.313～v6.315 都還沒上正式站 ⇒ 第一則直接改寫成 v6.316（摘要 +7 字「；提示上也有說明」，摘要區 4,931 → 4,938 / 5,000），內文補一句提示本身有寫操作順序。
+- 完整 npm test 640 步（/tmp/work 完整歷史、序列分批）：0 紅；tsc TS2304 新增 0；anti-pattern-lint 綠。
+
 ## v6.315 審查者複驗收尾：首頁第一則縮到 80 字內 ＋ test-v6313 補兩個盲點；「聊天面板跑兩倍」經量測不成立、不動
 
 BASE `6af9d7a1a57cba92a831f2d0f1cd91f1c516a33a`（v6.314，遠端 main；`git ls-remote` 確認）。

@@ -28,10 +28,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { countTokensStripped } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // v6.266 的 sha（BASE 對照用；淺複製時大聲跳過，不 fail-open 成假綠）
 const BASE_SHA = '63104f4e4c6d8dfc03d04f64369d0cc6f727b4e8';
+// ⭐ v6.316：v6.267 自己的 sha。【Gc】改成比對 BASE..THIS 兩個**固定** commit（永不過期的可追溯證明），
+//   不再拿**工作樹**跟 v6.266 逐位元比 —— 那是第九種安慰劑（pin 過期）：v6.309 合法改了 room.ts／room-oracle.ts
+//   之後【Gc】在完整歷史下誤紅、淺複製 CI 又看不到。⚠ 不可以把 BASE_SHA 往前移（守衛會變成「跟自己比」＝恆真；
+//   gcAgainst() 開頭的「THIS ≠ BASE」斷言擋這件事，H12 突變實證）。
+//   「仍要守現況」的部分改成 history-free 的已知答案表（E3；FS_ROOM_EXPECTED／ORACLE_ROOM_EXPECTED）。
+const THIS_SHA = '4ccfdff1c5ec485172397c9509200f12906e3646';
 
 const P_DS = join(ROOT, 'src/lib/decks/deck-stats.ts');
 const P_RO = join(ROOT, 'src/lib/game/room-oracle.ts');
@@ -100,6 +107,20 @@ const ts2js = (s) => {
   assert.ok(!/^export /.test(stripped), 'export 沒脫掉');
   return esbuild.transformSync(stripped, { loader: 'ts' }).code;
 };
+
+// ── ⭐ v6.316 history-free 已知答案表（E3／【Gc】用）────────────────────────────
+//   room.ts 的 Firestore 呼叫點、room-oracle.ts 的 Oracle 請求呼叫點：**剝註解後**（中央 helper
+//   scripts/lib/strip-comments.mjs，帶長度護欄＋正對照）逐 token 的確切數字。
+//   ⚠ 這不是「拿新碼算出來的期望值」—— 是從 v6.266 (63104f4e)／v6.267 (4ccfdff1)／v6.315 (e73af91a) 三個 blob
+//     量出來、再用一份獨立的 Python 行級狀態機重算核對後手抄進來的（三個 blob 的 room.ts 數字相同；
+//     room-oracle.ts 的 oracleUpsertRoomDelta 在 v6.270 由 0 → 1，表寫的是現況）。
+//   ⚠ 合法新增請求點時要**同步改表**（並在 changelog-internal 說明為什麼多一次讀取）；不可以放寬成 >=。
+const FS_TOKENS = ['getDoc(', 'getDocs(', 'onSnapshot(', 'runTransaction(', 'tx.get(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'addDoc(', 'query(', 'collection('];
+const FS_ROOM_EXPECTED = { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 11, 'tx.get(': 11, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 };
+const ORACLE_TOKENS = ['oracleGetRoom(', 'oracleUpsertRoom(', 'oracleUpsertRoomDelta(', 'oracleDeleteRoom(', 'oracleListRooms(', 'oracleApi(', 'fetch('];
+const ORACLE_ROOM_EXPECTED = { 'oracleGetRoom(': 3, 'oracleUpsertRoom(': 2, 'oracleUpsertRoomDelta(': 1, 'oracleDeleteRoom(': 2, 'oracleListRooms(': 2, 'oracleApi(': 1, 'fetch(': 0 };
+const fsCountsRoom = (src) => countTokensStripped(src, FS_TOKENS, { label: 'room.ts', minRatio: 0.5, mustKeep: ['getDoc(', 'runTransaction('] });
+const oracleCountsRoom = (src) => countTokensStripped(src, ORACLE_TOKENS, { label: 'room-oracle.ts', minRatio: 0.5, mustKeep: ['oracleGetRoom('] });
 
 // ── 載入區段抽取（【D】用）─────────────────────────────────────────────────
 //   「/decks 載入時會跑到的程式碼」＝ onMount(...) 整塊 ＋ 每一個 `$state(...)` 的初始化運算式。
@@ -476,6 +497,17 @@ await T('E2 ⭐ Firestore 版也真的把 deckId 寫進座位（測試站測得�
     'updateDoc 的欄位集合變了（多寫欄位＝多一次寫入成本）：' + Object.keys(eNow.written));
 });
 
+await T('E3 ⭐⭐⭐ history-free 已知答案表：room.ts 的 Firestore 呼叫點／room-oracle.ts 的 Oracle 請求點（剝註解後）逐 token 等於表（v6.316；淺複製也在守）', () => {
+  assert.ok(FS_ROOM_EXPECTED['getDoc('] > 0 && ORACLE_ROOM_EXPECTED['oracleGetRoom('] > 0, '已知答案表是空的？');
+  const rt = fsCountsRoom(RT), ro = oracleCountsRoom(RO);
+  assert.deepStrictEqual(rt, FS_ROOM_EXPECTED, 'room.ts 的 Firestore 呼叫點變了（與已知答案表不同）：' + JSON.stringify(rt));
+  assert.deepStrictEqual(ro, ORACLE_ROOM_EXPECTED, 'room-oracle.ts 的 Oracle 請求點變了（與已知答案表不同）：' + JSON.stringify(ro));
+  // 反面對照（內嵌樣本，不綁真檔）：註解裡的呼叫點不算 —— 不剝就對不上、剝了就對得上 ⇒ 剝註解是必要的
+  const withCmt = RT + '\n// v6.307 風格的註解：getDocs(collection(db, "rooms")) 只是提一下\n';
+  assert.notStrictEqual(withCmt.split('getDocs(').length - 1, FS_ROOM_EXPECTED['getDocs('], '反面對照失效：多一行註解、不剝也對得上？');
+  assert.deepStrictEqual(fsCountsRoom(withCmt), FS_ROOM_EXPECTED, '剝了註解還是對不上 ⇒ 剝除器沒把 // 行剔掉');
+});
+
 // ══════════════════════════════════════════════════════════════════════════
 // 【F】既有牌組 CRUD 不變
 // ══════════════════════════════════════════════════════════════════════════
@@ -609,12 +641,21 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     assert.deepStrictEqual(eNow.n, rb.n, 'Firestore 呼叫次數變了');
     assert.deepStrictEqual(Object.keys(rb.written).sort(), Object.keys(eNow.written).sort(), 'updateDoc 的欄位集合變了');
   });
-  // ── 正對照 (c)：既有 CRUD 逐字不變（room.ts 除了宣告的那幾處以外逐字等於 BASE）──
-  await T('Gc ⭐⭐【正對照 c】room.ts／room-oracle.ts 除了 deckId 那幾處，其餘逐字等於 BASE', () => {
-    const undo = (s) => s
+  // ── 正對照 (c)：⭐ v6.316 改成比對 BASE(v6.266)..THIS(v6.267) 兩個**固定** commit ──────────
+  //   原本：**工作樹**的 room.ts／room-oracle.ts 剝掉 deckId 那幾處後必須逐位元等於 v6.266（後來還疊了 v6.270 的剝除字串）。
+  //   那守的是「v6.267 只動了這些」這個**歷史事實**，卻拿會一直往前走的工作樹去比 ⇒ v6.309 合法改動後在完整歷史下誤紅
+  //   （第九種安慰劑：pin 過期；淺複製 CI 因 SHALLOW-SKIP 看不到）。
+  //   現在：拿 v6.267 自己的 blob 比 v6.266 —— 同一個事實、永不過期。「跟自己比」由 (1) 擋住（H12 突變實證）；
+  //   現況的守備（請求點不准偷偷變多）由 E3 的 history-free 已知答案表接手，並在 (3) 拿真 blob 核對表沒抄錯。
+  function gcAgainst(thisRT, thisRO) {
+    // (1) 不是「跟自己比」：THIS 的兩個檔都與 BASE 不同
+    assert.notStrictEqual(thisRT, bRT.out, 'THIS_SHA 的 room.ts 與 BASE 相同 ⇒ THIS_SHA 抓錯了（守衛會變成恆真）');
+    assert.notStrictEqual(thisRO, bRO.out, 'THIS_SHA 的 room-oracle.ts 與 BASE 相同 ⇒ THIS_SHA 抓錯了（守衛會變成恆真）');
+    // (2) 剝掉宣告的改動之後逐位元等於 BASE（字面對不上＝有人再動 ⇒ 照樣紅）
+    const undo = (x) => x
       .replace(/deckEntries: null, deckId: null,/g, 'deckEntries: null,')
       .replace(/\{ \.\.\.s, deckEntries, deckId: deckId \?\? null, ready: false \}/g, '{ ...s, deckEntries, ready: false }');
-    const stripNew = (s, marks) => { let t = undo(s); for (const m of marks) t = t.split(m).join(''); return t; };
+    const stripNew = (x, marks) => { let t = undo(x); for (const m of marks) t = t.split(m).join(''); return t; };
     const RT_MARKS = [
       `  /**
    * v6.267 套牌戰績：這個座位目前選用的牌組 id（＝\`Deck.id\`，client 端的穩定 UUID）。
@@ -632,20 +673,33 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
   deckId?: string | null,
 `,
     ];
-    assert.strictEqual(stripNew(RT, RT_MARKS), bRT.out, 'room.ts 除了 deckId 之外還被動到別的地方');
-    // ⚠ v6.270 合法改動 room-oracle.ts（oracleTx 接上 delta-put；test-v6270 全面接管那一塊的守備）
-    //   ⇒ 比對前把那兩處**逐字剝回去**：字面對不上（＝有人再動）照樣紅。
-    const RO_V6270_IMPORT = "  // ⭐⭐⭐v6.270 休閒 PUT 上行增量：哨兵在＝送 patch；缺席／熔斷＝送全量（行為與 v6.269 逐字相同）\n  deltaPutBase, oracleUpsertRoomDelta,\n";
-    const RO_V6270_TX_NEW = "    // ⭐⭐⭐v6.270 差分基底必須在跑 `fn` **之前**快照（fn 可能就地改動 room 物件）。\n    //   哨兵缺席／熔斷時回 null ⇒ 下面走 oracleUpsertRoom，請求與 v6.269 逐字相同。\n    //   每一輪 attempt 都重新快照 ⇒ 409 後的下一輪自然是「重 GET 重 diff」。\n    //   ⚠ `typeof` 防衛：test-v6245/v6246 的 oracleTx 抽取 harness 只注入四個既有識別字、\n    //     test-v6265 的 CJS stub 也沒有這兩支 —— 識別字缺席時走全量（＝那些守衛驗的 BASE 行為）。\n    const dpBase = (typeof deltaPutBase === 'function') ? deltaPutBase(room as unknown as Record<string, unknown>) : null;\n    const newData = await fn(data);\n    let result: OracleUpsertResult;\n    try {\n      result = (dpBase !== null && typeof oracleUpsertRoomDelta === 'function')\n        ? await oracleUpsertRoomDelta(roomCode, newData as unknown as Record<string, unknown>, ver, dpBase, opts)\n        : await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);\n";
-    const RO_V6270_TX_OLD = "    const newData = await fn(data);\n    let result: OracleUpsertResult;\n    try {\n      result = await oracleUpsertRoom(roomCode, newData as unknown as Record<string, unknown>, ver, opts);\n";
-    let roUndone = stripNew(RO, []);
-    assert.ok(roUndone.includes(RO_V6270_IMPORT) && roUndone.includes(RO_V6270_TX_NEW),
-      'room-oracle.ts 的 v6.270 區段字面對不上（被第三度改動？）——先更新這裡的剝除字串');
-    roUndone = roUndone.split(RO_V6270_IMPORT).join('').split(RO_V6270_TX_NEW).join(RO_V6270_TX_OLD);
-    const roStripped = roUndone.replace(
+    for (const m of RT_MARKS) assert.ok(thisRT.includes(m), 'v6.267 的 room.ts 找不到宣告的改動字面：' + m.slice(0, 40));
+    assert.strictEqual(stripNew(thisRT, RT_MARKS), bRT.out, 'v6.267 的 room.ts 除了 deckId 之外還動到別的地方');
+    const roStripped = stripNew(thisRO, []).replace(
       /\/\*\*\n \* v6\.267：連同 `deckId` 一起寫進座位。[\s\S]*?\n \*\/\n(export async function setSeatDeck\(roomCode: string, deckEntries: DeckEntry\[\]), deckId\?: string \| null\)/,
       '$1)');
-    assert.strictEqual(roStripped, bRO.out, 'room-oracle.ts 除了 deckId 之外還被動到別的地方');
+    assert.notStrictEqual(roStripped, thisRO, 'room-oracle.ts 的剝除一個字都沒剝到 ⇒ 字面對不上');
+    assert.strictEqual(roStripped, bRO.out, 'v6.267 的 room-oracle.ts 除了 deckId 之外還動到別的地方');
+    // (3) 已知答案表沒抄錯：BASE／THIS 的 room.ts 都等於表；THIS 的 room-oracle.ts 請求點與 BASE 相同（v6.267 零新增請求）
+    assert.deepStrictEqual(fsCountsRoom(bRT.out), FS_ROOM_EXPECTED, '已知答案表與真 BASE(v6.266) 的 room.ts 對不上：' + JSON.stringify(fsCountsRoom(bRT.out)));
+    assert.deepStrictEqual(fsCountsRoom(thisRT), FS_ROOM_EXPECTED, '已知答案表與 v6.267 的 room.ts 對不上：' + JSON.stringify(fsCountsRoom(thisRT)));
+    assert.deepStrictEqual(oracleCountsRoom(thisRO), oracleCountsRoom(bRO.out), 'v6.267 的 room-oracle.ts 多了請求點');
+  }
+  const tRT = readBaseBlob(ROOT, THIS_SHA, 'src/lib/game/room.ts');
+  const tRO = readBaseBlob(ROOT, THIS_SHA, 'src/lib/game/room-oracle.ts');
+  await T('Gc ⭐⭐【正對照 c】v6.267 的 room.ts／room-oracle.ts 除了 deckId 那幾處，其餘逐字等於 v6.266（固定兩 commit，永不過期）；已知答案表對得上真 blob', () => {
+    assert.ok(hasBaseCommit(ROOT, THIS_SHA) && tRT.ok && tRO.ok, '讀不到 THIS_SHA(v6.267) 的 room.ts／room-oracle.ts');
+    gcAgainst(tRT.out, tRO.out);
+    console.log('        v6.266..v6.267：room.ts／room-oracle.ts 剝掉 deckId 後逐位元相同；room.ts Firestore 呼叫點 ' + JSON.stringify(FS_ROOM_EXPECTED));
+  });
+  await T('Gc-H12 突變：THIS_SHA 指到 BASE（「跟自己比」）⇒ Gc 必紅在 (1)', () => {
+    assert.throws(() => gcAgainst(bRT.out, bRO.out), (e) => e instanceof assert.AssertionError && /THIS_SHA 抓錯了/.test(e.message), '「跟自己比」沒有被擋下');
+  });
+  await T('Gc-H13 突變：v6.267 若多動了一行（room.ts 多一個 getDocs）⇒ Gc 必紅在 (2)', () => {
+    assert.ok(tRT.ok && tRO.ok);
+    const m = tRT.out.replace('export async function setSeatDeck(', 'export async function __probe() { return getDocs(collection(db, "rooms")); }\nexport async function setSeatDeck(');
+    assert.notStrictEqual(m, tRT.out, '突變沒套上');
+    assert.throws(() => gcAgainst(m, tRO.out), (e) => e instanceof assert.AssertionError && /還動到別的地方/.test(e.message), '多動一行沒有被抓到');
   });
   // ── 正對照 (d)：哨兵缺席時放大鏡不出現且不多打請求 → 已由 C4/C9/C10 行為端證明 ──
 }
@@ -747,6 +801,13 @@ await mut('H9 把放大鏡的請求搬到 onMount（＝載入就多打一發）'
     const sites = netCallSites(loadPathOf(out).all);
     assert.ok(!sites.some((s) => s.startsWith('fetchDeckStats(')), '載入區段出現 fetchDeckStats：' + sites.join(','));
   });
+
+await mut('H10 room.ts 多一個 getDocs( ⇒ E3 已知答案表必紅（history-free，淺複製也在守）', () => mk(RT,
+  'export async function setSeatDeck(', 'export async function __probe() { return getDocs(collection(db, "rooms")); }\nexport async function setSeatDeck('),
+  (out) => { assert.deepStrictEqual(fsCountsRoom(out), FS_ROOM_EXPECTED); });
+await mut('H11 room-oracle.ts 多一個 oracleGetRoom( ⇒ E3 已知答案表必紅', () => mk(RO,
+  'export async function setSeatDeck(', 'export async function __probe(c) { return oracleGetRoom(c); }\nexport async function setSeatDeck('),
+  (out) => { assert.deepStrictEqual(oracleCountsRoom(out), ORACLE_ROOM_EXPECTED); });
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} v6.267 守衛：${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

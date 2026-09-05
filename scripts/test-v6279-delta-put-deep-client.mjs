@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { countTokensStripped } from './lib/strip-comments.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '095ea93f4b85214ccd099d165b14ab608bcc568b';   // v6.278（本版的上一版）
@@ -63,6 +64,37 @@ const CB_S = '// >>> v6270-delta-put-client-core';
 const CB_E = '// <<< v6270-delta-put-client-core';
 const DEEP_S = '// >>> v6279-delta-put-deep-core';
 const DEEP_E = '// <<< v6279-delta-put-deep-core';
+
+// ⭐ v6.316：v6.279 自己的 code commit（docs 補記 8d366f9c 不算）。A3／E-d／E-e 原本拿**工作樹**跟 v6.278 整檔 sha256 比 ——
+//   那守的是「v6.279 零接觸 X」這個歷史事實，卻拿會一直往前走的工作樹去比 ⇒ v6.309 合法改動 room.ts／room-oracle.ts 後
+//   在完整歷史下誤紅（第九種安慰劑：pin 過期；淺複製 CI 因 SHALLOW-SKIP 看不到）。
+//   改成比對 BASE..THIS 兩個**固定** commit（永不過期）；⚠ 不可以把 BASE_SHA 往前移（守衛會變成「跟自己比」＝恆真）——
+//   assertThisIsNotBase() 擋這件事（M-v6316c 突變實證）。現況（Firestore 讀取紅線）改由 history-free 已知答案表守（E-e）。
+const THIS_SHA = '106554942b36f6c8ba42b6a66ebce86000fe6cfa';
+const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
+const LF = (s) => s.replace(/\r\n/g, '\n');
+/** 「跟自己比」防線：THIS 必須真的是 v6.279（oracle-client.ts 有深層區塊）而 BASE 沒有；兩者的 oracle-client.ts 不同。 */
+function assertThisIsNotBase(thisSha = THIS_SHA) {
+  const bo = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/oracle-client.ts');
+  const to = readBaseBlob(ROOT, thisSha, 'src/lib/game/oracle-client.ts');
+  assert.ok(bo.ok && to.ok, 'BASE／THIS 的 oracle-client.ts 讀不到');
+  assert.notEqual(sha256(to.out), sha256(bo.out), 'THIS_SHA 的 oracle-client.ts 與 BASE 相同 ⇒ THIS_SHA 抓錯了（守衛會變成恆真）');
+  assert.ok(to.out.includes(DEEP_S) && !bo.out.includes(DEEP_S), 'THIS 沒有深層區塊／BASE 竟然有 ⇒ THIS_SHA／BASE_SHA 抓錯');
+}
+// ⭐ v6.316 history-free 已知答案表（E-e 用）：room.ts／firebase.ts **剝註解後**的 Firestore 呼叫點確切數字。
+//   ⚠ 不是拿新碼算出來的 —— 從 v6.278 (095ea93f)／v6.279 (10655494)／v6.315 (e73af91a) 三個 blob 用
+//     scripts/lib/strip-comments.mjs 量出、再用獨立的 Python 行級狀態機重算核對後手抄（三個 blob 數字相同）。
+//   ⚠ 合法新增 Firestore 呼叫點時要同步改表並在 changelog-internal 說明；不可以放寬成 >=。
+const FS_TOKENS = ['getDoc(', 'getDocs(', 'onSnapshot(', 'runTransaction(', 'tx.get(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'addDoc(', 'query(', 'collection('];
+const FS_EXPECTED = {
+  room: { 'getDoc(': 12, 'getDocs(': 1, 'onSnapshot(': 3, 'runTransaction(': 11, 'tx.get(': 11, 'setDoc(': 1, 'updateDoc(': 19, 'deleteDoc(': 4, 'addDoc(': 1, 'query(': 3, 'collection(': 4 },
+  firebase: { 'getDoc(': 0, 'getDocs(': 0, 'onSnapshot(': 0, 'runTransaction(': 0, 'tx.get(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'addDoc(': 0, 'query(': 0, 'collection(': 0 },
+};
+const FS_STRIP = {
+  room: { label: 'room.ts', minRatio: 0.5, mustKeep: ['getDoc(', 'runTransaction('] },
+  firebase: { label: 'firebase.ts', minRatio: 0.5, mustKeep: ['getFirestore('] },
+};
+const fsCountsOf = (src, key) => { assert.ok(FS_STRIP[key], 'fsCountsOf：key 必須是 room/firebase'); return countTokensStripped(src, FS_TOKENS, FS_STRIP[key]); };
 
 /** client 出貨區塊實跑器（與 test-v6270 同款；再多回傳 v6.279 的新出口）。 */
 function loadClientCore(srcOC, hooks = {}) {
@@ -321,14 +353,20 @@ await T('A3 ⚠ room-oracle.ts 的 oracleTx 與 BASE **逐位元相同**（本�
   assert.ok(tx.indexOf('deltaPutBase') < tx.indexOf('await fn(data)'), '差分基底必須在 fn 之前快照');
   assert.equal((tx.match(/await /g) || []).length, 6,
     'oracleTx 的 await 次數變了（成功路徑不可多任何一次 await）：' + (tx.match(/await /g) || []).length);
-  if (hasBaseCommit(ROOT, BASE_SHA)) {
+  // ⭐ v6.316：「v6.279 零接觸 room-oracle.ts」是歷史事實 ⇒ 比 BASE(v6.278)..THIS(v6.279) 兩個固定 commit（永不過期）。
+  //   現況由上面三條 history-free 判準守（deltaPutBase 接上／快照順序／await 次數＝6）。
+  if (hasBaseCommit(ROOT, BASE_SHA) && hasBaseCommit(ROOT, THIS_SHA)) {
     const b = readBaseBlob(ROOT, BASE_SHA, 'src/lib/game/room-oracle.ts');
-    assert.ok(b.ok, 'BASE blob 讀不到');
-    assert.equal(tx, extractBlock(b.out, AN_S, AN_E, 700, 'BASE oracleTx'), 'oracleTx 與 BASE 不同（語義必須逐字不變）');
-    assert.equal(createHash('sha256').update(RO, 'utf8').digest('hex'),
-      createHash('sha256').update(b.out, 'utf8').digest('hex'), 'room-oracle.ts 整檔被動到了');
+    const t = readBaseBlob(ROOT, THIS_SHA, 'src/lib/game/room-oracle.ts');
+    assert.ok(b.ok && t.ok, 'BASE／THIS blob 讀不到');
+    assertThisIsNotBase();
+    const txThis = extractBlock(t.out, AN_S, AN_E, 700, 'THIS oracleTx');
+    assert.equal(txThis, extractBlock(b.out, AN_S, AN_E, 700, 'BASE oracleTx'), 'v6.279 的 oracleTx 與 v6.278 不同（語義必須逐字不變）');
+    assert.equal(sha256(t.out), sha256(b.out), 'v6.279 動到了 room-oracle.ts 整檔');
+    // 表沒抄錯的正對照：v6.279 的 oracleTx 用同一把尺（await 次數）量也是 6
+    assert.equal((txThis.match(/await /g) || []).length, 6, 'v6.279 的 oracleTx await 次數不是 6 ⇒ 上面的 history-free 判準抄錯了');
   } else {
-    shallowSkip('v6279-A3 oracleTx 與 BASE blob 逐位元比對', '同一件事另有 history-free 判準：上面的 await 次數＋快照順序');
+    shallowSkip('v6279-A3 oracleTx 與 BASE..THIS 固定兩 commit 比對', '同一件事另有 history-free 判準：上面的 await 次數＋快照順序');
   }
 });
 
@@ -675,14 +713,16 @@ await T('E-d ⭐⭐ 錦標賽 tApi 逐位元不變＋零 delta 識別字（錦�
   for (const kw of ['patchProto', 'deltaPut', 'oracleUpsertRoomDelta', 'buildRoomPatch', 'deltaPutDeep']) {
     assert.ok(!seg.includes(kw), 'tApi 出現 ' + kw);
   }
-  if (hasBaseCommit(ROOT, BASE_SHA)) {
+  // ⭐ v6.316：「v6.279 零接觸 tApi」是歷史事實 ⇒ 比 BASE..THIS 固定兩 commit；現況由上面的零 delta 識別字守。
+  const tApiOf = (src) => { const j = src.indexOf(AN); assert.ok(j > 0, '找不到 tApi 錨點'); const o = src.slice(j, src.indexOf('\n  }\n', j) + 4); assert.ok(o.length > 300, 'tApi 抽取太短'); return o; };
+  if (hasBaseCommit(ROOT, BASE_SHA) && hasBaseCommit(ROOT, THIS_SHA)) {
     const b = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte');
-    assert.ok(b.ok);
-    const bs = b.out.replace(/\r\n/g, '\n');
-    const j = bs.indexOf(AN);
-    assert.equal(seg, bs.slice(j, bs.indexOf('\n  }\n', j) + 4), 'tApi 與 BASE 不同');
+    const t = readBaseBlob(ROOT, THIS_SHA, 'src/routes/game/+page.svelte');
+    assert.ok(b.ok && t.ok);
+    assertThisIsNotBase();
+    assert.equal(tApiOf(LF(t.out)), tApiOf(LF(b.out)), 'v6.279 的 tApi 與 v6.278 不同');
   } else {
-    shallowSkip('v6279-E-d tApi 與 BASE blob 逐位元比對', 'history-free 判準（零 delta 識別字）仍在守');
+    shallowSkip('v6279-E-d tApi 與 BASE..THIS 固定兩 commit 比對', 'history-free 判準（零 delta 識別字）仍在守');
   }
   // 伺服器端 delta-put 區塊完全沒動（本版是純 client 版）
   // ⚠ v6.281 更正：原本斷言「工作樹整檔 sha256 === v6.278 blob」＝pin 死上一版整檔，
@@ -690,18 +730,20 @@ await T('E-d ⭐⭐ 錦標賽 tApi 逐位元不變＋零 delta 識別字（錦�
   //   的鏡像：pin 死版本讓守衛在下一版變成誤報器）。這條真正要守的前向意圖是
   //   「client 版不可偷動 delta-put 伺服器區塊」⇒ 改成只比對 PTCG-DELTA-PUT 區塊
   //   與 v6.278 逐位元相同（區塊行為另有 test-v6278 抽出實跑；錦標賽區塊另有 sha256 鎖）。
-  if (hasBaseCommit(ROOT, BASE_SHA)) {
+  //   ⭐ v6.316：同樣改成比 BASE..THIS 固定兩 commit（「v6.279 是純 client 版」是歷史事實）；
+  //     區塊現況由 test-v6278 抽出實跑守，這裡只留 history-free 的「區塊仍在且沒被掏空」。
+  const dpOf = (src) => {
+    const a = src.indexOf('// >>> PTCG-DELTA-PUT-BLOCK-START');
+    const z = src.indexOf('// <<< PTCG-DELTA-PUT-BLOCK-END');
+    assert.ok(a > 0 && z > a, 'PTCG-DELTA-PUT 區塊抽不到 —— 哨兵被動了？');
+    return src.slice(a, z);
+  };
+  assert.ok(dpOf(SRV).length > 8000, 'delta-put 伺服器區塊只剩 ' + dpOf(SRV).length + ' 字元 —— 被掏空了？');
+  if (hasBaseCommit(ROOT, BASE_SHA) && hasBaseCommit(ROOT, THIS_SHA)) {
     const b = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
-    assert.ok(b.ok);
-    const dpOf = (s) => {
-      const a = s.indexOf('// >>> PTCG-DELTA-PUT-BLOCK-START');
-      const z = s.indexOf('// <<< PTCG-DELTA-PUT-BLOCK-END');
-      assert.ok(a > 0 && z > a, 'PTCG-DELTA-PUT 區塊抽不到 —— 哨兵被動了？');
-      return s.slice(a, z);
-    };
-    assert.equal(createHash('sha256').update(dpOf(SRV), 'utf8').digest('hex'),
-      createHash('sha256').update(dpOf(b.out.replace(/\r\n/g, '\n')), 'utf8').digest('hex'),
-      '⚠⚠ delta-put 伺服器區塊被動到了（v6.279 是純 client 版）');
+    const t = readBaseBlob(ROOT, THIS_SHA, 'oracle-admin/server_admin_patch.js');
+    assert.ok(b.ok && t.ok);
+    assert.equal(sha256(dpOf(LF(t.out))), sha256(dpOf(LF(b.out))), '⚠⚠ v6.279 動到了 delta-put 伺服器區塊（v6.279 是純 client 版）');
   }
 });
 await T('E-e ⭐⭐ Firestore 讀取零增加：room.ts／firebase.ts 與 BASE 逐位元相同、零 delta 識別字', () => {
@@ -710,15 +752,26 @@ await T('E-e ⭐⭐ Firestore 讀取零增加：room.ts／firebase.ts 與 BASE �
   for (const [name, s] of [['room.ts', rt], ['firebase.ts', fb]]) {
     for (const kw of ['deltaPut', 'patchProto', 'buildRoomPatch']) assert.ok(!s.includes(kw), name + ' 出現 ' + kw);
   }
-  if (hasBaseCommit(ROOT, BASE_SHA)) {
-    for (const [p, cur] of [['src/lib/game/room.ts', rt], ['src/lib/firebase.ts', fb]]) {
-      const b = readBaseBlob(ROOT, BASE_SHA, p);
-      assert.ok(b.ok, '讀不到 ' + p);
-      assert.equal(createHash('sha256').update(cur, 'utf8').digest('hex'),
-        createHash('sha256').update(b.out.replace(/\r\n/g, '\n'), 'utf8').digest('hex'), p + ' 被動到了（Firestore 讀取紅線）');
+  // ⭐ v6.316：Firestore 讀取紅線改成 history-free 的已知答案表（剝註解後逐 token 計數；淺複製也在守）；
+  //   「v6.279 零接觸 room.ts／firebase.ts」是歷史事實 ⇒ 比 BASE..THIS 固定兩 commit，並拿真 BASE blob 核對表沒抄錯。
+  for (const [key, cur] of [['room', rt], ['firebase', fb]]) {
+    assert.deepStrictEqual(fsCountsOf(cur, key), FS_EXPECTED[key], FS_STRIP[key].label + ' 的 Firestore 呼叫點變了（與已知答案表不同）：' + JSON.stringify(fsCountsOf(cur, key)));
+  }
+  assert.ok(FS_EXPECTED.room['getDoc('] > 0, '已知答案表是空的？');
+  // 反面對照（內嵌樣本）：註解裡的呼叫點不算 —— 不剝就對不上、剝了就對得上 ⇒ 剝註解是必要的
+  const withCmt = rt + '\n// 註解裡提一下 getDocs(collection(db, "rooms"))\n';
+  assert.notEqual(withCmt.split('getDocs(').length - 1, FS_EXPECTED.room['getDocs('], '反面對照失效：多一行註解、不剝也對得上？');
+  assert.deepStrictEqual(fsCountsOf(withCmt, 'room'), FS_EXPECTED.room, '剝了註解還是對不上 ⇒ 剝除器沒把 // 行剔掉');
+  if (hasBaseCommit(ROOT, BASE_SHA) && hasBaseCommit(ROOT, THIS_SHA)) {
+    assertThisIsNotBase();
+    for (const [p, key] of [['src/lib/game/room.ts', 'room'], ['src/lib/firebase.ts', 'firebase']]) {
+      const b = readBaseBlob(ROOT, BASE_SHA, p), t = readBaseBlob(ROOT, THIS_SHA, p);
+      assert.ok(b.ok && t.ok, '讀不到 ' + p);
+      assert.equal(sha256(LF(t.out)), sha256(LF(b.out)), 'v6.279 動到了 ' + p + '（Firestore 讀取紅線）');
+      assert.deepStrictEqual(fsCountsOf(LF(b.out), key), FS_EXPECTED[key], '已知答案表與真 BASE 的 ' + p + ' 對不上：' + JSON.stringify(fsCountsOf(LF(b.out), key)));
     }
   } else {
-    shallowSkip('v6279-E-e room.ts/firebase.ts 與 BASE 逐位元比對', 'history-free 判準（零 delta 識別字）仍在守');
+    shallowSkip('v6279-E-e room.ts/firebase.ts 與 BASE..THIS 固定兩 commit 比對', 'history-free 判準（零 delta 識別字＋已知答案表）仍在守');
   }
   // 本版 oracleApi 的請求種類沒有新增（沒有任何新端點）
   assert.ok(!OC.includes('/api/rooms/deep'), '出現了新端點');
@@ -1145,6 +1198,24 @@ await expectRed('M8 bodyBytes 不分深/兩層（都記 two）⇒ G1 必紅', as
   const b = M.deltaPutDiag().bytes;
   assert.ok(b && b.deep && b.deep.n === 1, '深層統計不見了（被記成兩層）：' + JSON.stringify(b));
 });
+
+// ⭐ v6.316 新增：已知答案表／固定兩 commit 的突變（history-free 的兩條淺複製也在跑）
+await expectRed('M-v6316a room.ts 多一個 getDocs( ⇒ E-e 已知答案表紅', () => {
+  const rt = R(path.join(ROOT, 'src/lib/game/room.ts'));
+  const m = rt.replace('export async function setSeatDeck(', 'export async function __probe() { return getDocs(collection(db, "rooms")); }\nexport async function setSeatDeck(');
+  assert.notEqual(m, rt, '突變沒套上');
+  assert.deepStrictEqual(fsCountsOf(m, 'room'), FS_EXPECTED.room);
+});
+await expectRed('M-v6316b firebase.ts 多一個 onSnapshot( ⇒ E-e 已知答案表紅', () => {
+  const fb = R(path.join(ROOT, 'src/lib/firebase.ts'));
+  const m = fb + '\nexport const __probe = () => onSnapshot(db, () => {});\n';
+  assert.deepStrictEqual(fsCountsOf(m, 'firebase'), FS_EXPECTED.firebase);
+});
+if (hasBaseCommit(ROOT, BASE_SHA) && hasBaseCommit(ROOT, THIS_SHA)) {
+  await expectRed('M-v6316c THIS_SHA 指到 BASE（「跟自己比」）⇒ assertThisIsNotBase 紅', () => assertThisIsNotBase(BASE_SHA));
+} else {
+  shallowSkip('v6279-M-v6316c 「跟自己比」防線突變', '需要歷史');
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 // 【J】HEAD-FAIL
