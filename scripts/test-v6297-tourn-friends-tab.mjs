@@ -37,7 +37,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
-import { sectionInner } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 先剝 HTML 註解再抽 script（開頭標籤限行首）
+import { sectionInner, markupSections, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.318 單趟行級狀態機；v6.319 BOM／同行註解／殘留護欄
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -47,6 +47,7 @@ const P_FRP = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
 const P_API = join(ROOT, 'src/lib/friends/friends-api.ts');
 const P_POLL = join(ROOT, 'src/lib/friends/dm-poller.ts');
 const P_SESS = join(ROOT, 'src/lib/friends/dm-session.ts');
+const P_ROOMS = join(ROOT, 'src/lib/friends/friend-rooms.ts');   // v6.319：只有 FriendsPanel 會 import 它 ⇒ 「FriendsPanel 的腳本真的被讀進相依圖」的正對照
 const P_DMPANEL = join(ROOT, 'src/routes/friends/DmPanel.svelte');
 const P_FRPAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const P_PKG = join(ROOT, 'package.json');
@@ -234,7 +235,18 @@ const mkReader = (overlay) => (p) => (overlay && overlay.has(p) ? overlay.get(p)
 /** 抽「靜態」import 的來源字串（⚠ `import type` 與動態 `import(...)` 都不算）。 */
 function staticSpecs(src, isSvelte, label = '') {
   let code = src;
-  if (isSvelte) code = sectionInner(src, 'script');   // ⭐v6.317 中央 helper（純標記的 .svelte 沒有腳本＝零 import，合法；v6.318 起單趟行級狀態機）
+  if (isSvelte) {
+    // ⭐v6.319：這裡原本 sectionInner(src,'script') 沒給 minSections、接著 `if (!code.trim()) return []` ⇒
+    //   helper 認不到區段（檔首 BOM／`<!-- x --><script>` 同一行）時＝零 import ⇒ 整棵子樹從相依圖**靜默**消失（fail-open）。
+    //   審查者突變實證：FriendsPanel.svelte 只加 BOM ⇒ 34/0 全綠。現在 helper 自帶 fail-closed（護欄⑦）：
+    //   模板層只要殘留任何 <script／<style 開頭標籤字面就炸（game 的 {@html '<style>'} 是唯一宣告的例外，見 GAME_INLINE_STYLE）
+    //   ⇒ 「Svelte 認得、剝除器不認」的區段不可能靜默變成零 import；純標記、真的沒有 <script 的 .svelte 仍合法＝零 import。
+    //   ⚠ 審查者建議的第 3 點「原始碼含 <script 字面卻抽到 0 段 ⇒ 炸」沒有照寫：它被護欄⑦完全遮蔽（同一個判準、先於它觸發），
+    //     而且照寫會誤紅「純標記元件的 HTML 註解裡提到 <script>」（原始碼有字面、模板層沒有）。
+    const allowResidual = /(^|\/)src\/routes\/game\/\+page\.svelte$/.test(label) ? [GAME_INLINE_STYLE] : [];
+    const { sections } = markupSections(src, 'script', { label: label || 'staticSpecs', allowResidual });
+    code = sections.map((s) => s.inner).join('\n');
+  }
   if (!code.trim()) return [];
   // ⭐ v6.318：剝註解改走**行級** stripCommentsChecked（D1d 早就改了，D1 這條沒改）。本檔的 stripCmt 是區塊正則：
   //   game 腳本 :208 的 `// … /api/tournament/*` 會讓它吃掉 177 行；effects.ts 同一形狀**實際**吃掉了 3 個 import
@@ -287,6 +299,9 @@ function assertGraphClean(overlay) {
   const g = staticGraph(P_GAME, overlay);
   assert.ok(g.size > 8, '相依圖只走到 ' + g.size + ' 個檔 ⇒ 掃描器壞了（下限斷言）');
   assert.ok(g.has(P_FRP), '相依圖走不到共用元件 FriendsPanel ⇒ 掃描器壞了（正對照）');
+  // ⭐v6.319：走得到 FriendsPanel 只證明 game 有 import 它，不證明它的 <script> 被讀進來 —— 審查者突變（FriendsPanel 檔首加 BOM）
+  //   讓 helper 抽到 0 段 script ⇒ 整棵子樹靜默消失、34/0 全綠。friend-rooms.ts 全站只有 FriendsPanel import ⇒ 走得到它才算子樹沒被剪。
+  assert.ok(g.has(P_ROOMS), '⚠⚠ 相依圖走得到 FriendsPanel 卻走不到它 import 的 friend-rooms.ts ⇒ FriendsPanel 的 <script> 沒被讀進相依圖（子樹被靜默剪掉；BOM／同行註解／剝除器認不到區段）');
   for (const f of DM_FILES) assert.ok(!g.has(f), '⚠⚠⚠ 對戰頁的**靜態**相依圖走得到私聊模組：' + f.slice(ROOT.length) + ' ⇒ 它會被打包進對戰頁');
   return g;
 }
@@ -627,6 +642,30 @@ await T('I3 ⭐⭐⭐ 突變：把私聊改成靜態 import（打包進對戰頁
       "  import { createDmSession } from '$lib/friends/dm-session';\n  import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';");
     assertGraphClean(new Map([[P_GAME, bad]]));
   }, '靜態'));
+// ⭐v6.319 審查者的三種「Svelte 5.55 會編譯、v6.318 剝除器認不到區段」形狀（各自在 BASE 的 helper 下 34/0 全綠）：
+const DM_IMPORT = "import DmPanel from '../../routes/friends/DmPanel.svelte';";
+await T('I3b ⭐⭐⭐ 突變：FriendsPanel 檔首 BOM ＋ 與 <script> 同一行的靜態 import DmPanel ⇒ D1 紅在「靜態相依圖走得到私聊模組」（v6.318 helper：sections=0 ⇒ 子樹靜默消失 ⇒ 全綠）', () =>
+  mutantMustBreak('BOM＋同行 import', () => {
+    const bad = '\uFEFF' + mutate(FRP, '<script lang="ts">\n', '<script lang="ts">' + DM_IMPORT + '\n');
+    assertGraphClean(new Map([[P_FRP, bad]]));
+  }, '靜態**相依圖走得到私聊模組'));
+await T('I3c ⭐⭐⭐ 突變：FriendsPanel 的 <script> 前面同一行有 HTML 註解 ＋ 同行 import DmPanel ⇒ D1 紅在「走得到私聊模組」', () =>
+  mutantMustBreak('同行註解＋import', () => {
+    const bad = mutate(FRP, '<script lang="ts">\n', '<!-- x --><script lang="ts">' + DM_IMPORT + '\n');
+    assertGraphClean(new Map([[P_FRP, bad]]));
+  }, '靜態**相依圖走得到私聊模組'));
+await T('I3d ⭐⭐ 突變：FriendsPanel 只加 BOM、不加 import ⇒ 子樹**不會**被剪（正對照 friend-rooms.ts 仍在相依圖）；⚠ 這一條在 v6.318 的 helper 下會紅在「走不到 friend-rooms」', () => {
+  const g = assertGraphClean(new Map([[P_FRP, '\uFEFF' + FRP]]));
+  assert.ok(g.has(P_ROOMS) && g.has(P_FRP));
+});
+await T('I3e ⭐⭐ 突變：FriendsPanel 的頂層 <style> 接在 </div> 後面同一行（Svelte 合法、本站禁用）⇒ D1 紅在 helper 護欄「殘留 … 開頭標籤字面」（fail-closed，不會靜默當模板）', () =>
+  mutantMustBreak('</div><style>', () => {
+    assertGraphClean(new Map([[P_FRP, mutate(FRP, '</div>\n\n<style>', '</div><style>')]]));
+  }, '殘留 1 處 <script／<style 開頭標籤字面'));
+await T('I3f ⭐⭐ 突變：拿掉 FriendsPanel 的 <script> 收尾（區段吃到檔尾）⇒ D1 紅在 helper 護欄「沒有收尾」（不是靜默零 import）', () =>
+  mutantMustBreak('script 未收尾', () => {
+    assertGraphClean(new Map([[P_FRP, mutate(FRP, '\n</script>\n', '\n\n')]]));
+  }, '沒有收尾'));
 await T('I4 ⭐⭐⭐ 突變：切走分頁時忘了關私聊（$effect 的主體掏空）⇒ E4 紅在「切走之後還在發請求」', () =>
   mutantMustBreak('切分頁不關私聊', async () => {
     const bad = mutate(GAME, '$effect(() => { if (!friendsPaneOpen) closeDm(); });', '$effect(() => { if (!friendsPaneOpen) { void 0; } });');

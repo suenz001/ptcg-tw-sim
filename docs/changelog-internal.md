@@ -1,5 +1,70 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.319 剝除器收線（第六版）：「script 開頭」的定義對齊 Svelte（BOM／同行註解／同行第二段）＋ 護欄⑦「殘留開頭標籤字面必須逐條宣告」＋ 自驗改 ls-tree ＋ svelte parse() 當裁判
+
+BASE `af8a5830070c56a706099942b6402146b187da0d`（v6.318，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`scripts/lib/strip-markup-sections.mjs`／`scripts/test-lib-strip-markup-sections.mjs`（26 → 36 條）／`scripts/test-v6297-*`（staticSpecs ＋ D1 正對照 ＋ I3b～I3f）／
+`scripts/test-v6190-*`、`test-v6288-*`、`test-v6296-*`（掃 game 的呼叫端宣告 `allowResidual: [GAME_INLINE_STYLE]`）／`scripts/iron-rules-audit.sh`（ls-files → ls-tree，同型缺口）／
+`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+零新依賴（svelte/compiler 是既有 devDependency）；package.json 不動；src/ 只動 version.ts；首頁 changelog 不放（純守衛）。
+
+### 審查者逐條複驗
+- 三種形狀 **成立**（svelte 5.55.4 `compile()`／`parse()` 實測：BOM ⇒ instance=1；`<!-- x --><script>` ⇒ instance=1；`</div><style>` ⇒ css=1）；v6.318 helper 對前兩種 sections=0、第三種 style 當模板。
+- 四個突變數字 **成立**（BASE：只加 import 32/2；BOM＋同行 import 34/0；`<!-- x --><script>`＋同行 import 34/0；只加 BOM 34/0）。
+- ⚠A `ls-files` **成立**：站長本機 `.git/index` mtime 09-05 19:33 < HEAD commit 09-06 00:30。沙盒實證：index 少一支時 ls-files 列 21、ls-tree 列 22。
+- ⚠ 他寫的路徑 `static/body.html` **不對**，是 repo 根目錄的 `body.html`；「BOM ＋ 6 個同行 `<script src>`」本身正確（第 152 行 3 個、第 295 行 5 個、第 1 行 BOM；v6.318 只認 3 段）。
+- ⚠ 建議第 3 點（staticSpecs「原始碼含 `<script` 卻抽到 0 段 ⇒ 炸」）**沒有照寫**：它被護欄⑦完全遮蔽（同一判準、先觸發），而且照寫會誤紅「純標記元件的 HTML 註解裡提到 `<script>`」（原始碼有字面、模板層沒有）。意圖（fail-closed）由護欄⑦達成。
+- ⚠ 收線判準第 1 條「只加 BOM ⇒ test-v6297 必須紅」**照字面做不到、也不該做**：修好之後 BOM 檔的 script 被正常讀進相依圖，沒有任何東西壞掉；要紅只能禁 BOM（守寫法、不守行為）。
+  改成：D1 加正對照 `friend-rooms.ts`（全站只有 FriendsPanel import 它）⇒ 子樹被剪就紅（BASE helper ＋ BOM ⇒ I3d 紅在「走不到 friend-rooms」；v6.319 helper ⇒ 綠，因為子樹沒被剪）。
+
+### 【主修】helper 三處
+1. `OPEN_RE = /^[ \t\uFEFF]*<(script|style)\b/i`：檔首 BOM 算前導空白，原樣留在模板層。
+2. 「行首」＝ `atLineStart(out)`：本行**到此為止的輸出**只有空白／BOM／已剝掉的註解或區段 ⇒ `<!-- x --><script>`、`<script module>…</script><script>`（同一行第二段）都算開頭。
+   Svelte parse() 同判（0-7／0-10）。⚠ 前面有任何模板正文（`<div>`、`</div>`、`{@html '`）都**不**算 ⇒ `<div><style>` 巢狀（Svelte 也當模板）；`</div><style>` 見 3。
+3. 護欄⑦ `allowResidual`（預設 `[]`）：剝完的模板層每一個殘留的 `<script`／`<style` 字面都必須落在某條宣告字串的範圍內，殘留數 ＝ 宣告數；宣告字串必須含標籤字面、在原檔恰一處。
+   ⇒ 不管狀態機對「開頭」還有什麼沒對齊，開頭標籤字面都不可能**靜默**留在模板層。`scanMarkupChecked` 回傳多一個 `residual`。
+- `</div><style>`（頂層但前面有 `</tag>`）：Svelte 合法、prettier 不會產生、**本站禁用**，狀態機不認（要認得追蹤元素深度＝另一台掃描器與另一批洞），由護欄⑦紅（0-8／C-3／v6297 I3e）。檔頭寫明。
+- 全站唯一 allowlist：`GAME_INLINE_STYLE = "{@html '<style>html, body {"`（game/+page.svelte :9842，svelte:head 裡的 JS 字串）。行為端證明：svelte parse() 把它放在 fragment（css 仍只有 1 段＝最下面那段），自驗 0-9 用同形樣本、5-2 用實檔比對。
+- body.html：**不用 allowlist**，修好 BOM ＋「行首」定義後 9 段 `<script src>` 全部認得、零殘留（5-1 斷言 9 段＋BOM 開頭＋零殘留）。
+- 檔頭沒有任何「絕不會／保證」；沿革表加 v6.318 被推翻的洞與 v6.319 三處。
+
+### 主證明（收線五項；test-v6297；FriendsPanel.svelte 突變）
+| 突變 | BASE helper（v6.318）| v6.319 |
+|---|---|---|
+| 1 只加 BOM | 34/0（子樹靜默消失、零斷言察覺）| **34/0 但子樹沒被剪**（I3d：friend-rooms 仍在相依圖）；BASE helper ＋ 新守衛 ⇒ I3d **紅**「走不到 friend-rooms」|
+| 2 BOM ＋ 同行 import DmPanel | 34/0 | 32/**2** D1／D1c「走得到私聊模組」（I3b 內建）|
+| 3 `<!-- x --><script>` ＋ 同行 import | 34/0 | 32/**2** D1／D1c（I3c 內建）|
+| 4 `</div><style>` | 34/0（style 當模板）| 30/**4** D1／D1b／D1c／I3 全紅在護欄⑦「殘留 1 處 <script／<style 開頭標籤字面」（I3e 內建）|
+| 5 修法拿掉（BASE helper ＋ 只補 export）| — | 新 test-v6297 **35/4**：I3b／I3c／I3d／I3e 紅；新自驗檔 **25/11**：0-2／0-5～0-10／C-2／C-3／1 game／4-9 紅 ⇒ 是修法在守 |
+- 原意突變（五支消費者）：v6190 拿掉 isTReplay 閘 8 紅／v6182 拿掉 textarea width 1 紅／v6288 F1、v6296 F1、v6297 D1 靜態 import DmPanel 各紅 —— 與 v6.318 相同。
+- 方向 A／B：A-1／A-2／B-1／B-2／3-A／3-B／3-M 全綠（沒因「行首」定義改變而退步）；C-1 反面對照：v6.318 規則對 bom／cmt 只認得 style（script 0 段＝零 import）、div 只認得 script。
+
+### 護欄⑦誤紅測試
+全站 22 支 .svelte／.html（`git ls-tree HEAD`）跑過：**只有 game 殘留 1 處**（那條 allowlist），其餘 21 支零殘留（含 body.html 9 段、admin.html、app.html 2＋1、changelog 三檔）。
+5-2 svelte parse() 逐檔比對 14 支 .svelte：13 支 script／style 段數與 helper 完全一致；唯一偏差 `friends/+page.svelte`（`<svelte:head>\n\t<style>` 在行首，helper 當區段 2、Svelte 當模板元素 css=1）
+—— 列成精確例外（helper {1,2} vs svelte {1,1}），偏差消失就紅；沒有任何守衛拿 friends 頁的 style 守東西，站長裁定只報告不動。
+
+### ⚠A／⚠B／⚠C
+- ⚠A：5-1 改 `git ls-tree -r HEAD --name-only` ＋ 斷言清單含 game／FriendsPanel／body.html；同型缺口 `scripts/iron-rules-audit.sh:76`（CI 端 fresh checkout 沒差，本機會漏）一併改；`test-bat-crlf.mjs` 早已用 ls-tree。沙盒實證：index 少 FriendsPanel ⇒ ls-files 版 5-1 紅「清單缺了已知的檔案」、ls-tree 版綠。
+- ⚠B：v6.318 那段「body.html script 3 …零誤判」已在原文加【v6.319 訂正】（漏列 6 處同行 `<script src>`＋第 1 行 BOM）。
+- ⚠C：0-5 改成「Svelte parse() 說巢狀 `<div><style>` 是模板（css=1）⇒ helper 同判，但必須宣告 allowResidual」；新增 0-6（BOM）／0-7（同行註解、多行註解收尾接 `<style>`）／0-8（`</div><style>`／`<div>hi</div><script>` ⇒ 護欄⑦）／0-9（`{@html '<style>'}`）／0-10（同行兩段）；每條都拿 parse() 當裁判、附 v6.318 規則的反面對照（`v6318Tags`）。
+
+### 突變（12 個，各紅在預期 expectRe；只捕 assert.AssertionError）
+helper：M1 OPEN 不認 BOM ⇒ 0-6／C-2；M2 行首退回 pos===0 ⇒ 0-7／0-10／C-2／5-1（body.html 9 段）；M3 拿掉「殘留」斷言 ⇒ 0-2／0-5／0-8／0-9／C-3／1 game／4-9（7 紅）；M4 拿掉「白名單過期」⇒ 4-9；
+M5 殘留只掃 `<style` ⇒ 0-8／4-9；M6 白名單不比位置 ⇒ 4-9；M7 不驗恰一處 ⇒ 4-9；M8 GAME_INLINE_STYLE 字面過期 ⇒ 0-9／1／2-1／3-A／3-B／5-1／5-2（7 紅）；M9 同行第二段不算行首 ⇒ 0-7／0-10／C-2／5-1。
+消費者：M10 test-v6297 staticSpecs 忘了宣告 allowResidual ⇒ D1 紅「殘留」（8 紅）；M11 5-1 換回 ls-files ＋ index 少一支 ⇒ 紅「清單缺了已知的檔案」；I3b～I3f 五條內建突變（BOM＋import／同行註解＋import／只 BOM／`</div><style>`／未收尾）。
+
+### 三配套／驗證
+- admin.html `SITE_VERSION_HINT` 6.319（LF）；test-v6272 `PREV_SHA`→af8a5830、`PREV_ALLOWED` = version.ts；test-v6264 `BASE_SHA`→af8a5830（F0）。掃 pin：scripts/ 無 6.318 斷言、無新增整檔 sha256。
+- HEAD-FAIL：helper 還原成 BASE ⇒ 自驗檔／五支消費者在 import 就炸（`does not provide an export named 'GAME_INLINE_STYLE'`，不可能靜默）；BASE helper ＋ 只補 export ⇒ 自驗 11 紅、test-v6297 4 紅（上表第 5 列）；version.ts 還原 ⇒ test-v6272 ⑩ 兩紅。
+- 完整 npm test（/tmp/work `git clone --shared` 完整歷史；序列分批；最後一支確認有跑到）＋ tsc TS2304 0 ＋ anti-pattern-lint 綠：數字見推版回報。
+- 自驗檔耗時：svelte parse() 掃 game/+page.svelte 約 9 秒（CJS 單檔 bundle 載入；ESM 入口在網路掛載上要 60 秒）。
+
+### 沒動（只報告；站長裁定另開一輪）
+- 全站 **98 支**守衛仍用區塊正則 `/\/\*[\s\S]*?\*\//g` 剝註解（其中 **21 支**掃 effects.ts；`effects.ts:27` 的 `// … /*` 同型註解會讓正則吃到 :147）。清單：`grep -l` 那個正則 `scripts/*.mjs`。
+- `lastIndexOf('<style')` 那一族（v6288:597／v6293:75／v6297 cssRules…）與 `friends/+page.svelte:119` 註解含 `<style>` 字面的踩點。
+- test-v6288:69／v6296:67／v6297:76 的 `stripCmt` 區塊正則仍用於非 import 路徑。
+
 ## v6.318 剝除器架構解（第四版）：strip-markup-sections 改單趟行級狀態機 ＋ 四件審查者行為端發現（反對照恆真／比例護欄無牙／E3b 只看第一個 import／D1 仍用區塊正則）
 
 BASE `b3e2430b1bf04e7aeb8ccf5db32c373722e6a282`（v6.317，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
@@ -60,7 +125,7 @@ game template **184,279**／styleInner 205,952／scriptInner 373,083／註解 27
 ⇒ 門檻設「單一註解 ≤ 40%」：最緊的 friends 頁餘裕 14.6 點；合計口徑在 friends 頁已 57% ⇒ 不能當門檻。全站 22 支最大單一註解就是 friends 頁那 25.36%。
 
 ### 全站 22 支 .svelte／.html 實掃（自驗檔【5】永久在守）
-零炸、長度行數不變；區段數：admin.html style 1＋script 1、app.html script 2＋style 1、body.html script 3、logo-final style 1、friends 頁 script 1＋style 2（svelte:head 單行那段算一段）、
+零炸、長度行數不變；區段數：admin.html style 1＋script 1、app.html script 2＋style 1、body.html script 3（**【v6.319 訂正】其實有 9 個 `<script src>`：檔首 BOM 讓第 1 行那個沒被認、另 6 個與前一段同一行也沒被認 ⇒ 6 處被當模板，這裡漏列了；v6.319 起 9 段全認、零殘留**）、logo-final style 1、friends 頁 script 1＋style 2（svelte:head 單行那段算一段）、
 tournament 頁 script 1、其餘 .svelte 各 1＋1、changelog 三檔與 google 驗證檔 0 段。不在行首的標籤字面（game :9842 `{@html '<style>…'}`、card/[id] :35 ld+json 字串、admin.html 三處註解）全部留在模板／腳本，零誤判。
 突變形狀（自驗【0-4】【0-5】）：屬性跨行／tab 縮排／CRLF／大寫／自閉合／同行前置字元／未收尾／巢狀各有斷言。
 

@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { templateOnly as templateOnlyChecked, sectionInner } from './lib/strip-markup-sections.mjs';
+import { templateOnly as templateOnlyChecked, sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // v6.319：game 的 {@html '<style>'} 是唯一宣告的殘留字面
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GAME = process.env.V6190_GAME || join(ROOT, 'src/routes/game/+page.svelte');
@@ -173,7 +173,7 @@ const BATTLE_KEYS = Object.keys(SCEN).filter(k => !REPLAY_KEYS.includes(k));
 const gameSrc = readFileSync(GAME, 'utf8');
 const mpbSrc  = readFileSync(MPB, 'utf8');
 // 正對照：模板錨點必須還在、腳本／樣式錨點必須不見（helper 內建斷言，抓到就直接炸 —— 這時後面的結論全不可信）
-const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal{'] });
+const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal{'], allowResidual: [GAME_INLINE_STYLE] });
 const mpbT  = templateOnly(mpbSrc, { label: 'mpb', mustKeep: ['mp-clickable'], mustDrop: ['.mp-chip {'] });
 const gameTree = parseBlocks(gameT);
 const mpbTree  = parseBlocks(mpbT);
@@ -316,7 +316,7 @@ let modalIdx = -1, modalNode = null;
 // ═══ H. 沒有用 @media 當手機開關；安全區走單一來源 ══════════════════════
 {
   // ⭐ v6.317：走 helper（先剝 HTML 註解、開頭標籤限行首）⇒ 模板裡 {@html '…'} 字串字面內的樣式標籤不再被算進 CSS
-  const css = sectionInner(gameSrc, 'style', { label: 'game css', minSections: 1, mustKeep: ['.prize-view-modal'] }).replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = sectionInner(gameSrc, 'style', { label: 'game css', minSections: 1, mustKeep: ['.prize-view-modal'], allowResidual: [GAME_INLINE_STYLE] }).replace(/\/\*[\s\S]*?\*\//g, '');
   const NEW_SEL = ['.prize-view-modal', '.prize-view-btn', '.prize-view-side'];
   // 找出所有 @media 區塊的字元範圍
   const mediaRanges = [];

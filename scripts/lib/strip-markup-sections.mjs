@@ -6,15 +6,26 @@
 //   v6.311  行首是註解就丟整行                → `/* 註解 */ 程式碼` 整行被吃（假綠）
 //   v6.316/317 先剝 HTML 註解、再抽區段       → 註解剝除也套在 script 內容上：JS 字串 '<!--' … '-->'
 //                                             把中間的 import 整段空白化（三支守衛假綠，三道護欄都沒響）
-//   v6.318（本版）單趟行級狀態機：註解只在**模板層**認；區段只在**行首**開、只在**行首**收。
+//   v6.318  單趟行級狀態機：註解只在模板層認；區段只在行首開、只在行首收
+//                                             → 「行首」與 Svelte 對「頂層 script／style」的定義沒對齊：檔首 BOM、
+//                                               `<!-- x --><script>` 同一行、`</div><style>` 三種 Svelte 5 實測會編譯的形狀
+//                                               全被當模板 ⇒ sections=0 ⇒ test-v6297 的相依圖把整棵子樹靜默剪掉（假綠）
+//   v6.319（本版）① OPEN 允許檔首 BOM；② 「行首」改成「本行到此為止只有空白／已剝掉的註解／已剝掉的區段」；
+//                 ③ 護欄⑦：剝完的模板層若還殘留 <script／<style 開頭標籤字面，數量與位置必須與呼叫端的 allowResidual 逐一對上
+//                   （預設零條）—— 不管狀態機對「開頭」的定義還有什麼沒對齊，開頭標籤字面都不可能**靜默**留在模板層。
 //   ⚠ 本檔檔頭只描述規則，不做任何方向宣稱；每一條規則能擋什麼，以 scripts/test-lib-strip-markup-sections.mjs
-//     的突變（方向 A：註解含區段標籤字面；方向 B：腳本含註解字面）為準，突變沒紅就是這裡有洞。
+//     的突變（方向 A：註解含區段標籤字面；方向 B：腳本含註解字面；方向 C：BOM／同行註解／非行首頂層標籤）為準，突變沒紅就是這裡有洞。
+//   ⚠ `</div><style>`（頂層但前面有別的標籤）Svelte 允許、prettier 不會產生、本站禁用此寫法：狀態機**不**認它
+//     （要認就得追蹤元素深度，那是另一台掃描器與另一批洞），由護欄⑦擋成紅燈（fail-closed），不會靜默當模板。
 //
 // ── 狀態機規則（逐行、逐段）─────────────────────────────────────────────────
 //   狀態：template ｜ comment ｜ opentag ｜ section
 //   template：
-//     a. 行首（允許前導空白／tab）出現 <script 或 <style（不分大小寫）⇒ 進 opentag。
-//        ⚠ 不在行首的標籤字面（例：{@html '<style>…</style>'}）是模板文字，不是區段。
+//     a. 「行首」出現 <script 或 <style（不分大小寫）⇒ 進 opentag。
+//        「行首」＝本行到此為止的輸出只有空白（含檔首 BOM）、已剝掉的註解、已剝掉的區段（v6.319）。
+//        ⇒ `\uFEFF<script>`／`<!-- x --><script>`／`<script>a</script><script module>` 都算開頭（Svelte 5.55 parse() 同判）。
+//        ⚠ 前面有任何模板正文（例：`<div>`、`</div>`、`{@html '`）的標籤字面**不**認為區段：
+//          `<div><style>` 是巢狀元素（Svelte 也當模板）；`</div><style>` 由護欄⑦擋；`{@html '<style>'}` 由呼叫端 allowResidual 宣告。
 //     b. 其餘文字掃 <!--：找得到同一行的 --> ⇒ 只空白化那一段；找不到 ⇒ 進 comment，本行剩餘空白化。
 //   comment：找 -->；找不到整行空白化；找到 ⇒ 空白化到 --> 為止，剩餘回到 template 規則 b。
 //        ⚠ 在 comment 狀態**不看**區段標籤 ⇒ 註解裡提到 <style>／</style> 字面不會開／關區段（方向 A）。
@@ -34,12 +45,26 @@
 //   ④ 輸出長度與行數必須與輸入完全相同。          ⑤ mustKeep／mustDrop 正反對照，且**每個字串必須先在原檔存在**
 //      （v6.317 的 mustDrop 寫成 '.prize-view-modal {'，原檔是無空格的 '.prize-view-modal{' ⇒ 反對照恆真）。
 //   ⑥ minSections：呼叫端可要求至少找到幾個區段。
+//   ⑦ 殘留開頭標籤（v6.319）：模板層每一個殘留的 <script／<style 字面都必須落在 allowResidual 某一條字串的範圍內，
+//      且殘留數 ＝ allowResidual 條數（多一處、少一處都紅；每條字串必須含標籤字面、在原檔恰一處）。
+//      全站唯一一條：game/+page.svelte 的 `{@html '<style>html, body {`（GAME_INLINE_STYLE，Svelte parse() 判它在 fragment 不在 css）。
 //   已知答案表（固定 blob、獨立 Python 實作量出後手抄）在 scripts/test-lib-strip-markup-sections.mjs。
 import assert from 'node:assert';
 
 /** 可被辨識的區段標籤。 */
 export const SECTION_TAGS = ['script', 'style'];
-const OPEN_RE = /^[ \t]*<(script|style)\b/i;
+const OPEN_RE = /^[ \t\uFEFF]*<(script|style)\b/i;      // \uFEFF：檔首 BOM（Svelte 照樣把後面的 <script> 當腳本）
+const RESIDUAL_RE = /<(script|style)\b/gi;
+/** 本行到此為止的輸出只有空白（含 BOM）／已剝掉的註解或區段 ⇒ 仍算「行首」。 */
+const atLineStart = (out) => /^[\s\uFEFF]*$/.test(out);
+
+/**
+ * 全站唯一被允許殘留在模板層的開頭標籤字面：src/routes/game/+page.svelte 的 svelte:head 內
+ * `{@html '<style>html, body { … }</style>'}` —— 它是 JS 字串字面，Svelte parse() 把它放在 fragment（不是 css），
+ * 剝除器當模板文字是對的。掃 game/+page.svelte 的呼叫端一律傳 allowResidual: [GAME_INLINE_STYLE]。
+ * 行為端證明：scripts/test-lib-strip-markup-sections.mjs 5-2 用 svelte/compiler parse() 逐檔比對區段數，0-9 用內嵌樣本驗同一形狀。
+ */
+export const GAME_INLINE_STYLE = "{@html '<style>html, body {";
 const closeAtLineStart = (tag) => new RegExp('^[ \\t]*<\\/' + tag + '\\s*>', 'i');
 const closeAnywhere = (tag) => new RegExp('<\\/' + tag + '\\s*>', 'ig');
 
@@ -118,14 +143,15 @@ export function scanMarkup(src, { label = '' } = {}) {
         continue;
       }
       // template
-      if (pos === 0) {
-        const o = line.match(OPEN_RE);
+      if (atLineStart(out)) {              // v6.319：pos===0 ⇒ 「本行到此為止只有空白／已剝掉的註解或區段」
+        const o = line.slice(pos).match(OPEN_RE);
         if (o) {
-          const ts = o[0].indexOf('<');
-          out += line.slice(0, ts);
+          const ts = pos + o[0].indexOf('<');
+          out += line.slice(pos, ts);       // 前導空白／BOM 原樣留在模板層
           cur = { tag: o[1].toLowerCase(), line: i + 1, lineIdx: i, start: offset + ts, innerStart: -1 };
-          pos = ts + o[0].length - ts;      // 停在標籤名之後，opentag 狀態接著找 >
-          out += blank(line.slice(ts, pos));
+          const next = pos + o[0].length;   // 停在標籤名之後，opentag 狀態接著找 >
+          out += blank(line.slice(ts, next));
+          pos = next;
           state = 'opentag';
           continue;
         }
@@ -165,11 +191,28 @@ function finish(src, cur, innerEnd, end) {
  * @returns {{ template: string, sections: Array, comments: Array, commentRatio: number, commentTotalRatio: number }}
  *   commentRatio ＝ 最大單一註解 ÷ 模板層；commentTotalRatio ＝ 全部註解合計 ÷ 模板層（只回報，不斷言）
  */
-export function scanMarkupChecked(src, { label = '', maxCommentLines = 150, maxCommentRatio = 0.4, minTemplateForRatio = 200 } = {}) {
+export function scanMarkupChecked(src, { label = '', maxCommentLines = 150, maxCommentRatio = 0.4, minTemplateForRatio = 200, allowResidual = [] } = {}) {
   const tag = label ? label + '：' : '';
   assert.ok(Number.isInteger(maxCommentLines) && maxCommentLines > 0, tag + 'maxCommentLines 必須是正整數');
   assert.ok(maxCommentRatio > 0 && maxCommentRatio <= 1, tag + 'maxCommentRatio 必須在 (0, 1]');
+  assert.ok(Array.isArray(allowResidual) && allowResidual.every((a) => typeof a === 'string' && a.length > 0), tag + 'allowResidual 必須是非空字串陣列');
   const r = scanMarkup(src, { label });
+  // 護欄⑦（v6.319）：模板層殘留的開頭標籤字面 ⇔ 呼叫端宣告的 allowResidual 逐條對上
+  const spans = allowResidual.map((a) => {
+    assert.ok(new RegExp(RESIDUAL_RE.source, 'i').test(a), tag + 'allowResidual「' + a + '」本身不含 <script／<style 字面 ⇒ 白名單寫錯');
+    const n = src.split(a).length - 1;
+    assert.strictEqual(n, 1, tag + 'allowResidual「' + a + '」在原檔出現 ' + n + ' 次（必須恰一處）⇒ 白名單過期或打錯字');
+    const at = src.indexOf(a);
+    return { a, at, end: at + a.length };
+  });
+  const residual = [...r.template.matchAll(RESIDUAL_RE)].map((m) => ({ at: m.index, line: src.slice(0, m.index).split('\n').length, text: src.slice(m.index, m.index + 60).split('\n')[0] }));
+  const uncovered = residual.filter((x) => !spans.some((s) => s.at <= x.at && x.at < s.end));
+  assert.strictEqual(uncovered.length, 0,
+    tag + '剝完的模板層還殘留 ' + uncovered.length + ' 處 <script／<style 開頭標籤字面（不在 allowResidual 裡）：'
+      + uncovered.slice(0, 8).map((x) => '第 ' + x.line + ' 行「' + x.text + '」').join('；')
+      + ' ⇒ 剝除器沒把它當區段。若 Svelte 會把它當頂層區段（BOM／同行註解之後／</tag> 之後），這是剝除器的洞；若是字串字面，請以 allowResidual 宣告並附行為端證明');
+  assert.strictEqual(residual.length, spans.length,
+    tag + 'allowResidual 宣告了 ' + spans.length + ' 條，但模板層只殘留 ' + residual.length + ' 處開頭標籤字面 ⇒ 白名單過期（那條字面已經不在模板層了），請刪掉');
   for (const c of r.comments) {
     assert.ok(c.lines <= maxCommentLines,
       tag + '第 ' + c.line + ' 行開的 HTML 註解長達 ' + c.lines + ' 行（護欄 ≤ ' + maxCommentLines + '）⇒ 疑似「一路吃掉」事故');
@@ -183,7 +226,7 @@ export function scanMarkupChecked(src, { label = '', maxCommentLines = 150, maxC
   assert.ok(templateWithCmt < minTemplateForRatio || commentRatio <= maxCommentRatio,
     tag + '第 ' + (big && big.line) + ' 行開的 HTML 註解吃掉了模板層 ' + (commentRatio * 100).toFixed(1) + '% 的非空白字元（護欄 ≤ ' + (maxCommentRatio * 100) + '%，分母是扣掉 script／style 之後的模板）');
   assert.strictEqual(r.template.split('\n').length, src.split('\n').length, tag + '剝完行數變了');
-  return { ...r, commentRatio, commentTotalRatio };
+  return { ...r, commentRatio, commentTotalRatio, residual };
 }
 
 const mustExist = (src, keys, tag, what) => {

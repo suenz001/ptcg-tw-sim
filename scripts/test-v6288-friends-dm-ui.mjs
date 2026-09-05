@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
-import { sectionInner } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 先剝 HTML 註解再抽 script（開頭標籤限行首）
+import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.319 殘留護欄（game 的 {@html '<style>'} 是唯一宣告的例外）
 import {
   readPatch, extractBlock, FR_START, FR_END,
   buildFriends, makeFakeDb, asUser,
@@ -658,7 +658,7 @@ function staticImportLines(src) {
   // ⭐ v6.318：腳本內文的剝註解改走**行級** stripCommentsChecked —— 本檔的 stripComments 是區塊正則，
   //   game/+page.svelte 腳本 :208 的 `// … /api/tournament/*` 會讓它吃掉 177 行（今天 import 都在 :146 之前所以沒事，
   //   但 effects.ts 同一形狀已實際吃掉 3 個 import；第 13 種安慰劑的形狀不該留在 import 掃描路徑上）。
-  const code = sectionInner(src, 'script', { label: 'game/+page.svelte', minSections: 1 });
+  const code = sectionInner(src, 'script', { label: 'game/+page.svelte', minSections: 1, allowResidual: [GAME_INLINE_STYLE] });
   return stripCommentsChecked(code, { label: 'game/+page.svelte <script>', mustKeep: ["from 'svelte'"] })
     .split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
 }

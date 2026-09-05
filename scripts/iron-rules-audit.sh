@@ -73,7 +73,7 @@ echo ""
 #   改用 `grep -Pq '\x00'`（Perl regex 模式直接讀 \x00 字面）。
 echo "── Rule 11b: 文字檔（.ts / .svelte / .md / .json）不該含 NUL byte"
 nul_files=""
-for f in $(git ls-files | grep -E '\.(ts|svelte|md|json|js|mjs|css|html|sh|yml|yaml)$' 2>/dev/null); do
+for f in $(git ls-tree -r HEAD --name-only | grep -E '\.(ts|svelte|md|json|js|mjs|css|html|sh|yml|yaml)$' 2>/dev/null); do
   if [ -f "$f" ] && grep -Pq '\x00' "$f" 2>/dev/null; then
     nul_files="$nul_files
 $f"
