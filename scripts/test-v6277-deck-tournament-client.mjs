@@ -16,13 +16,18 @@
 //  【C】⭐ `/decks` 的 UI 三態：真數字／累積中／舊伺服器；`since` **讀伺服器欄位、不寫死版本號**
 //  【D】⭐⭐ `/decks` 載入請求數與 BASE 相同（量測，會把兩邊的呼叫點集合印出來）
 //  【E】⭐⭐ Firestore 讀取次數不變（三個改動檔的 Firestore 呼叫點逐字計數）
-//       ⭐v6.311：計數前先用 scripts/lib/strip-comments.mjs **剝掉整行註解**（行級、不做區塊狀態機），
-//       並附三道自驗：剝除器正對照（真呼叫點還在）／長度護欄／**已知答案表**（E3，history-free）。
+//       ⭐v6.311：計數前先用 scripts/lib/strip-comments.mjs **剝掉註解**，
+//       並附自驗：剝除器正對照（真呼叫點還在）／長度護欄／**已知答案表**（E3，history-free）。
 //       起因：v6.307 在 game/+page.svelte 寫了一行**註解**提到 loadDecksFromCloud，【Gc】在完整歷史下誤紅
 //       （CI 淺複製 SHALLOW-SKIP 所以看不到；一改 fetch-depth:0 就會擋 deploy）。
+//       ⭐v6.312：v6.311 的行級剝除器對「單行區塊／模板註解後接程式碼」「`*` 開頭的運算式續行」
+//       「`*/` 收尾行接程式碼」四種合法程式碼會**整行吃掉 ⇒ 假綠**（獨立審查者用突變實證）。
+//       helper 改成行級狀態機（只在行首開區塊、尾巴保留、孤兒 `*` 行保留、單一區塊 >150 行即炸）；
+//       E0a 把那四種樣式（B1~B4）放進正對照、【H】各自實跑突變；FS_TOKENS 同時數帶括號版
+//       （擋 `import * as cloud` 再呼叫兩次的假綠）；反面對照全改內嵌樣本、不再綁真檔的某行註解。
 //  【F】正對照：休閒那兩欄逐字不變；v6.271 的版面不回退；`Deck.id` 仍是 crypto.randomUUID()
 //  【G】HEAD-FAIL：對真 BASE(v6.276) blob 跑，A~E 的每一條**各自**紅
-//  【H】突變測試（7 條），每一條都必須紅在指定的位置
+//  【H】突變測試（16 條），每一條都必須紅在指定的位置
 //  【I】自查：本守衛在 package.json 的 test chain 裡
 //
 // ⚠⚠ 只捕捉 assert.AssertionError —— 其他例外（打錯字／抽取器壞掉）必須直接炸掉。
@@ -118,14 +123,19 @@ function netCallSites(text) {
   return out.sort();
 }
 // Firestore／雲端同步的呼叫點計數（【E】用）
-// ⭐v6.311：**先剝整行註解再數**（中央 helper scripts/lib/strip-comments.mjs；行級排除、不做區塊狀態機）。
+// ⭐v6.311：**先剝註解再數**（中央 helper scripts/lib/strip-comments.mjs）。
 //   ⚠ 不可以把 loadDecksFromCloud 拿掉、不可以放寬期望值 —— 這條守的是「Firestore 呼叫點不准偷偷變多」。
+// ⭐v6.312：五個雲端函式**同時數不帶括號與帶括號**兩種。只數不帶括號的 `loadDecksFromCloud`（=1 import＋1 呼叫＝2）
+//   擋不住「改成 `import * as cloud` 再呼叫兩次 `cloud.loadDecksFromCloud(`」（仍是 2 ⇒ 假綠）；帶括號版直接數呼叫點。
 const FS_TOKENS = ['getDoc(', 'getDocs(', 'setDoc(', 'updateDoc(', 'deleteDoc(', 'onSnapshot(', 'addDoc(',
-  'loadDecksFromCloud', 'syncDeckToCloud', 'removeDeckFromCloud', 'loadFavoritesFromCloud', 'saveFavoritesToCloud'];
+  'loadDecksFromCloud', 'syncDeckToCloud', 'removeDeckFromCloud', 'loadFavoritesFromCloud', 'saveFavoritesToCloud',
+  'loadDecksFromCloud(', 'syncDeckToCloud(', 'removeDeckFromCloud(', 'loadFavoritesFromCloud(', 'saveFavoritesToCloud('];
 // 每個檔的剝除器護欄：長度下限 ＋ 正對照（剝完之後「真呼叫點」必須還在；import 行沒有括號所以不算）
+//   ⭐v6.312：三個檔一律 0.5（v6.311 把 deck-stats.ts 放寬到 0.4 是不必要的削弱 —— 實測 9f500a55 剝後 67.4%、
+//   e65a718e 剝後 60.5%，0.5 就過且有 10 點餘裕；DS 的已知答案表全 0，長度護欄與 mustKeep 是它僅有的兩道護欄）。
 const FS_STRIP = {
   GP: { label: 'game/+page.svelte', minRatio: 0.5, mustKeep: ['loadDecksFromCloud('] },
-  DS: { label: 'deck-stats.ts', minRatio: 0.4, mustKeep: ['fetchDeckStats('] },   // 小檔、註解占四成，下限明寫低一點
+  DS: { label: 'deck-stats.ts', minRatio: 0.5, mustKeep: ['fetchDeckStats('] },
   DK: { label: 'decks/+page.svelte', minRatio: 0.5, mustKeep: ['loadDecksFromCloud(', 'syncDeckToCloud('] },
 };
 function fsCounts(text, which, { mod = stripMod, opt = FS_STRIP[which], tokens = FS_TOKENS } = {}) {
@@ -134,13 +144,18 @@ function fsCounts(text, which, { mod = stripMod, opt = FS_STRIP[which], tokens =
 }
 // ⭐ 已知答案表＝BASE(v6.276) 三個檔**剝註解後**的確切數字（history-free；【Gc】會拿真 BASE blob 核對這張表沒抄錯）。
 //   ⚠ 這不是「拿新碼算出來的期望值」—— 是從 9f500a55 的 blob 量出來、手抄進來的。
+//   ⭐v6.312 帶括號那五欄：用一份**獨立的 Python 實作**（同一套行級狀態機規則）對 9f500a55 blob 量出、手抄；
+//   JS helper 與 Python 在六個 blob（9f500a55／e65a718e 各三檔）的剝後輸出逐位元相同。
 const FS_BASE = {
   GP: { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
-    loadDecksFromCloud: 2, syncDeckToCloud: 0, removeDeckFromCloud: 0, loadFavoritesFromCloud: 0, saveFavoritesToCloud: 0 },
+    loadDecksFromCloud: 2, syncDeckToCloud: 0, removeDeckFromCloud: 0, loadFavoritesFromCloud: 0, saveFavoritesToCloud: 0,
+    'loadDecksFromCloud(': 1, 'syncDeckToCloud(': 0, 'removeDeckFromCloud(': 0, 'loadFavoritesFromCloud(': 0, 'saveFavoritesToCloud(': 0 },
   DS: { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
-    loadDecksFromCloud: 0, syncDeckToCloud: 0, removeDeckFromCloud: 0, loadFavoritesFromCloud: 0, saveFavoritesToCloud: 0 },
+    loadDecksFromCloud: 0, syncDeckToCloud: 0, removeDeckFromCloud: 0, loadFavoritesFromCloud: 0, saveFavoritesToCloud: 0,
+    'loadDecksFromCloud(': 0, 'syncDeckToCloud(': 0, 'removeDeckFromCloud(': 0, 'loadFavoritesFromCloud(': 0, 'saveFavoritesToCloud(': 0 },
   DK: { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
-    loadDecksFromCloud: 3, syncDeckToCloud: 5, removeDeckFromCloud: 2, loadFavoritesFromCloud: 2, saveFavoritesToCloud: 2 },
+    loadDecksFromCloud: 3, syncDeckToCloud: 5, removeDeckFromCloud: 2, loadFavoritesFromCloud: 2, saveFavoritesToCloud: 2,
+    'loadDecksFromCloud(': 2, 'syncDeckToCloud(': 4, 'removeDeckFromCloud(': 1, 'loadFavoritesFromCloud(': 1, 'saveFavoritesToCloud(': 1 },
 };
 // 【Gc／E3】共用的判準：三個檔的（剝註解後）計數必須等於已知答案表。可注入突變後的 helper 模組／原始碼。
 function assertFsMatchesTable({ gp = GP, ds = DS, dk = DK, mod = stripMod, tokens = FS_TOKENS, table = FS_BASE } = {}) {
@@ -549,27 +564,53 @@ await T('D2 ⭐ /api/deck-stats 只在 openDeckStats 內打，全檔恰 1 次', 
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n══ 【E】⭐⭐ Firestore 讀取次數（剝整行註解後的呼叫點逐字計數）════════════');
-await T('E0a ⭐ 剝除器正對照：註解裡的 token 被剔掉、真呼叫點留著（含 //、/* */ 單行、* 續行、<!-- -->、行尾註解）', () => {
-  const probe = [
-    "import { loadDecksFromCloud } from '$lib/decks/cloud';",
-    '// 每一個殘留 callback 都各跑一次 loadDecksFromCloud（每副牌 1 次）',
-    '/* loadDecksFromCloud( 區塊單行 */',
-    ' * loadDecksFromCloud( 續行',
-    '<!-- loadDecksFromCloud( 模板註解 -->',
-    'const cloud = await loadDecksFromCloud(u.uid); // 行尾註解也提到 loadDecksFromCloud',
-  ].join('\n');
-  assert.strictEqual(probe.split('loadDecksFromCloud').length - 1, 7, '樣本自己就不對');
-  const c = stripMod.countTokensStripped(probe, ['loadDecksFromCloud', 'loadDecksFromCloud('], { label: 'probe', minRatio: 0.3, mustKeep: ['loadDecksFromCloud('] });
-  // import 行 ＋ 真呼叫行 ＋ 該行的行尾註解（整行保留＝保守方向）＝ 3；帶括號的只有真呼叫 ＝ 1
-  assert.deepStrictEqual(c, { loadDecksFromCloud: 3, 'loadDecksFromCloud(': 1 }, '剝除器計數不對：' + JSON.stringify(c));
+// ⭐v6.312 剝除器正對照樣本（E0a／【H】共用）：純註解全剔掉、真呼叫點一個都不能少。
+//   上半：純註解（//、/* */ 單行、真正的 /** … */ 區塊含 * 續行、<!-- --> 單行與跨行、行尾註解）。
+//   下半：v6.311 會整行吃掉的四種**合法程式碼**（獨立審查者的 B1~B4），每一種各帶一個真呼叫點。
+const STRIP_PROBE = [
+  "import { loadDecksFromCloud } from '$lib/decks/cloud';",
+  '// 每一個殘留 callback 都各跑一次 loadDecksFromCloud（每副牌 1 次）',
+  '/* loadDecksFromCloud( 區塊單行 */',
+  '/**',
+  ' * loadDecksFromCloud( 續行（真正的區塊裡）',
+  ' */',
+  '<!-- loadDecksFromCloud( 模板註解 -->',
+  '<!--',
+  '  loadDecksFromCloud( 跨行模板註解',
+  '-->',
+  'const cloud = await loadDecksFromCloud(u.uid); // 行尾註解也提到 loadDecksFromCloud',
+  '/* B1 */ const b1 = await loadDecksFromCloud(u.uid);',
+  'const b2 = 1',
+  '  * (await loadDecksFromCloud(u.uid)).length;',
+  '<!-- B3 --> {await loadDecksFromCloud(u.uid)}',
+  '/* B4',
+  ' */ const b4 = await loadDecksFromCloud(u.uid);',
+].join('\n');
+// 期望值（手算）：不帶括號＝import 1 ＋ 真呼叫行 2（該行的行尾註解一起留＝保守）＋ B1~B4 各 1 ＝ 7；帶括號＝真呼叫 1 ＋ B1~B4 ＝ 5
+const STRIP_PROBE_EXPECT = { loadDecksFromCloud: 7, 'loadDecksFromCloud(': 5 };
+function assertStripProbe(mod = stripMod) {
+  const c = mod.countTokensStripped(STRIP_PROBE, ['loadDecksFromCloud', 'loadDecksFromCloud('], { label: 'probe', minRatio: 0.3, mustKeep: ['loadDecksFromCloud('] });
+  assert.deepStrictEqual(c, STRIP_PROBE_EXPECT, '剝除器計數不對：' + JSON.stringify(c));
+}
+await T('E0a ⭐⭐ 剝除器正對照：純註解裡的 token 全剔掉、真呼叫點（含 B1~B4 四種合法樣式）一個都不少', () => {
+  assert.strictEqual(STRIP_PROBE.split('loadDecksFromCloud').length - 1, 12, '樣本自己就不對');
+  assert.strictEqual(STRIP_PROBE.split('loadDecksFromCloud(').length - 1, 9, '樣本自己就不對（帶括號）');
+  assertStripProbe();
+  // 逐一：B1~B4 各自單獨也留得住（不是靠別行補數）
+  for (const [k, line] of Object.entries({
+    B1: '/* v6.312 */ const again = await loadDecksFromCloud(u.uid);',
+    B2: 'const n = 1\n  * (await loadDecksFromCloud(u.uid)).length;',
+    B3: '<!-- x --> {await loadDecksFromCloud(u.uid)}',
+    B4: '/* block\n */ const again = await loadDecksFromCloud(u.uid);',
+  })) assert.strictEqual(stripMod.stripCommentLines(line).split('loadDecksFromCloud(').length - 1, 1, k + ' 被剝除器吃掉了');
 });
 await T('E0b ⭐⭐ 反面對照（第 13 種安慰劑）：// 註解裡的 /api/x/* 會讓 block regex 吃掉真呼叫點；行級剝除器不會', () => {
   const trap = "// 伺服器在每個 /api/tournament/* 回應帶 X-Srv-Ms\nconst cloud = await loadDecksFromCloud(u.uid);\ntry { x(); } catch { /* ignore */ }\n";
   const blockRe = (x) => x.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
   assert.strictEqual(blockRe(trap).split('loadDecksFromCloud(').length - 1, 0, '樣本沒有重現「一路吃掉」⇒ 這條反面對照是假的');
   assert.strictEqual(stripMod.stripCommentLines(trap).split('loadDecksFromCloud(').length - 1, 1, '行級剝除器也把真呼叫點吃掉了');
-  // 真檔上的同一件事：game/+page.svelte 現在就有這種註解行（沒有的話這條反面對照就該重新找樣本）
-  assert.ok(/^\s*\/\/.*\/api\/[a-z-]+\/\*/m.test(GP), 'game/+page.svelte 裡已經沒有「// … /api/x/*」這種行 ⇒ 反面對照樣本要更新');
+  // ⭐v6.312：反面對照**只用內嵌樣本**。v6.311 這裡另外斷言真檔 game/+page.svelte 必須存在「// … /api/x/*」那一行，
+  //   等於守衛的綠紅取決於某一行註解在不在 —— 跟這次的病根（註解影響守衛）同型，拿掉。
 });
 await T('E0c ⭐ 護欄自驗：長度護欄與正對照都會炸（AssertionError），不是恆真', () => {
   assert.throws(() => stripMod.stripCommentsChecked('// a\n// b\n// c\nx = 1;', { label: 'p', minRatio: 0.5 }),
@@ -578,6 +619,17 @@ await T('E0c ⭐ 護欄自驗：長度護欄與正對照都會炸（AssertionErr
     (e) => e instanceof assert.AssertionError && /正對照/.test(e.message), '正對照沒炸');
   assert.throws(() => stripMod.stripCommentsChecked('', { label: 'p' }), assert.AssertionError, '空輸入沒炸');
   assert.strictEqual(stripMod.stripCommentsChecked('const x = 1;', { label: 'p', mustKeep: ['x = 1'] }), 'const x = 1;');
+  // ⭐v6.312 區塊長度護欄：行首開的區塊 >150 行（或沒收尾）要炸；長度護欄過得了（程式碼佔 60%）也照炸 —— 兩道獨立
+  const longBlock = '/*\n' + ' x\n'.repeat(200) + '*/\n' + 'const y = 1;\n'.repeat(300);
+  assert.throws(() => stripMod.stripCommentsChecked(longBlock, { label: 'p' }),
+    (e) => e instanceof assert.AssertionError && /長達 202 行/.test(e.message), '區塊護欄沒炸');
+  assert.throws(() => stripMod.stripCommentsChecked('/* 沒收尾\n' + 'const y = 1;\n'.repeat(10), { label: 'p' }),
+    (e) => e instanceof assert.AssertionError && /沒有收尾/.test(e.message), '未收尾區塊沒炸');
+  assert.ok(stripMod.stripCommentsChecked(longBlock, { label: 'p', maxBlockLines: 300 }).includes('const y = 1;'), '明寫 maxBlockLines 應放行');
+  // 反面：`// … /api/x/*` 這種行中 /* 永遠不會開區塊（事故 2 的根因）
+  const st = stripMod.stripCommentLinesWithStats('// 每個 /api/tournament/* 回應\nconst a = 1;\nconst b = 2; /* 行尾 */\nx();');
+  assert.strictEqual(st.blocks.length, 0, '行中的 /* 開了區塊：' + JSON.stringify(st.blocks));
+  assert.strictEqual(st.out, 'const a = 1;\nconst b = 2; /* 行尾 */\nx();');
 });
 const FS_NOW = { DK: fsCounts(DK, 'DK'), GP: fsCounts(GP, 'GP'), DS: fsCounts(DS, 'DS') };
 const ratioOf = (t, which) => (stripMod.stripCommentLines(t).length / t.length * 100).toFixed(1) + '%';
@@ -591,7 +643,8 @@ await T('E1 ⭐⭐ deck-stats.ts 完全沒有 Firestore／firebase 的呼叫點�
 await T('E2 ⭐⭐ /decks 的 Firestore 呼叫點與內嵌快照相同（history-free；只准變少）', () => {
   // 快照＝v6.271 守衛量到的同一組數字（歷史事實，不隨版本失效）。
   const SNAP = { 'getDoc(': 0, 'getDocs(': 0, 'setDoc(': 0, 'updateDoc(': 0, 'deleteDoc(': 0, 'onSnapshot(': 0, 'addDoc(': 0,
-    loadDecksFromCloud: 3, syncDeckToCloud: 5, removeDeckFromCloud: 2, loadFavoritesFromCloud: 2, saveFavoritesToCloud: 2 };
+    loadDecksFromCloud: 3, syncDeckToCloud: 5, removeDeckFromCloud: 2, loadFavoritesFromCloud: 2, saveFavoritesToCloud: 2,
+    'loadDecksFromCloud(': 2, 'syncDeckToCloud(': 4, 'removeDeckFromCloud(': 1, 'loadFavoritesFromCloud(': 1, 'saveFavoritesToCloud(': 1 };   // 帶括號欄 v6.312 從 9f500a55 量出手抄
   assert.deepStrictEqual(FS_NOW.DK, SNAP, '/decks 的 Firestore 呼叫點變了：' + JSON.stringify(FS_NOW.DK));
 });
 await T('E3 ⭐⭐⭐ 三個檔（剝註解後）的 Firestore 呼叫點等於已知答案表（history-free；淺複製也在守）', () => {
@@ -734,9 +787,13 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     assert.deepStrictEqual(FS_NOW.DS, base.DS, 'deck-stats.ts 的 Firestore 呼叫點變了');
     console.log('        BASE /decks：' + JSON.stringify(base.DK) + '（剝註解後剩 ' + ratioOf(bDK.out) + '）');
     console.log('        BASE /game ：' + JSON.stringify(base.GP) + '（剝註解後剩 ' + ratioOf(bGP.out) + '）');
-    // ③ 反面對照：**不剝註解**的話，現在的 /game 與 BASE 就對不上（v6.307 那一行註解）—— 證明剝註解是必要的、不是裝飾
+    // ③ 反面對照（⭐v6.312 改**內嵌樣本**、不綁真檔）：把 v6.307 那種註解行接到 BASE blob 後面 ——
+    //    不剝註解就對不上 BASE、剝了就對得上 ⇒ 證明剝註解是必要的、不是裝飾。
+    //    v6.311 這裡是拿工作樹 GP 與 BASE 比「不剝時必須不同」，等於要求真檔永遠留著那行註解（清掉註解守衛就紅）。
     const raw = (t) => { const o = {}; for (const k of FS_TOKENS) o[k] = t.split(k).length - 1; return o; };
-    assert.notDeepStrictEqual(raw(GP), raw(bGP.out), '反面對照失效：不剝註解也對得上 ⇒ 那行註解已經不在了，這條反面對照要更新');
+    const withCmt = bGP.out + '\n// v6.307 風格：每一個殘留 callback 都各跑一次 loadDecksFromCloud(uid)\n';
+    assert.notDeepStrictEqual(raw(withCmt), raw(bGP.out), '反面對照失效：多一行註解、不剝也對得上？');
+    assert.deepStrictEqual(fsCounts(withCmt, 'GP'), base.GP, '剝了註解還是對不上 BASE ⇒ 剝除器沒把 // 行剔掉');
   });
   await T('Gd ⭐⭐【正對照 d】休閒兩欄的內嵌快照真的來自 BASE（逐字核對）', () => {
     assert.ok(bDK.out.includes(CASUAL_CARD), '休閒勝率卡的快照與 BASE 對不上 ⇒ F1 是在測不存在的形狀');
@@ -875,8 +932,15 @@ async function mutStripMod(pairs) {
   assert.notStrictEqual(src, STRIP_SRC, '突變沒改到 helper');
   return import('data:text/javascript;base64,' + Buffer.from(src, 'utf8').toString('base64'));
 }
-const EAT_ALL = ['.filter((l) => !COMMENT_LINE_RE.test(l))', '.filter(() => false)'];                 // 剝除器吃掉整檔
-const EAT_TOKEN_LINES = ['.filter((l) => !COMMENT_LINE_RE.test(l))', ".filter((l) => !COMMENT_LINE_RE.test(l) && !l.includes('loadDecksFromCloud'))"]; // 只吃掉含 token 的行（長度護欄過得了）
+const KEEP_LINE = '    out.push(line);                                          // d. 其餘一律保留';
+const EAT_ALL = ["  return { out: out.join('\\n'), blocks, maxBlockLines };", "  return { out: '', blocks, maxBlockLines };"];   // 剝除器吃掉整檔
+const EAT_TOKEN_LINES = [KEEP_LINE, "    if (!line.includes('loadDecksFromCloud')) out.push(line);"]; // 只吃掉含 token 的行（長度護欄過得了）
+// ⭐v6.312 helper 自身回歸的突變（每一種都是「退回 v6.311 的吃法」）：
+const EAT_STAR_LINES = [KEEP_LINE, "    if (!/^\\s*\\*/.test(line)) out.push(line);"];             // 丟掉 * 開頭的行（B2 假綠）
+const EAT_TAIL_SINGLE = ['      if (tail.trim()) out.push(tail);                       // b. 單行區塊，尾巴保留（B1、B3）', '      if (false) out.push(tail);'];
+const EAT_TAIL_CLOSE = ['      if (tail.trim()) out.push(tail);                       // c. 收尾後的尾巴保留（B4）', '      if (false) out.push(tail);'];
+const OPEN_MIDLINE = ["      if (!t.startsWith(open)) continue;", "      if (!line.includes(open)) continue;"];              // 行中 /* 也開區塊（事故 2 的根因）
+const NO_BLOCK_GUARD = ['  const bad = blocks.find((b) => !b.closed || b.lines > maxBlockLines);', '  const bad = null;'];
 const NO_RATIO_GUARD = ['  assert.ok(ratio >= minRatio,\n', '  assert.ok(true,\n'];
 const NO_MUSTKEEP = ['  for (const k of mustKeep) {\n', '  for (const k of []) {\n'];
 const mutRe = async (label, run, expectRe) => {
@@ -898,11 +962,32 @@ assert.strictEqual(GP.split(GP_CALL).length - 1, 1, '突變錨點（真呼叫點
 await mutRe('H12 ⭐⭐⭐ game/+page.svelte 多一個**真的** loadDecksFromCloud( 呼叫（守衛還在守）',
   () => assertFsMatchesTable({ gp: GP.replace(GP_CALL, GP_CALL + '\n      const again = await loadDecksFromCloud(u.uid);') }),
   /\/game 的 Firestore 呼叫點變了/);
-await mutGreen('H13 ⭐⭐⭐ game/+page.svelte 多幾行**註解**提到 loadDecksFromCloud（假紅已修好）',
+// ⭐⭐⭐ v6.312 主證明：B1~B4 四種合法程式碼各多一個**真的**呼叫點 —— v6.311 全部假綠（剝後仍是 2），現在必須紅
+for (const [k, mut] of Object.entries({
+  B1: GP_CALL + '\n      /* v6.312 */ const again = await loadDecksFromCloud(u.uid);',
+  B2: GP_CALL + '\n      const n = 1\n        * (await loadDecksFromCloud(u.uid)).length;',
+  B3: GP_CALL + '\n      <!-- x --> {await loadDecksFromCloud(u.uid)}',
+  B4: GP_CALL + '\n      /* block\n      */ const again = await loadDecksFromCloud(u.uid);',
+})) {
+  await mutRe('H12-' + k + ' ⭐⭐⭐ game/+page.svelte 以「' + k + '」樣式多一個**真的** loadDecksFromCloud( 呼叫（v6.311 假綠）',
+    () => assertFsMatchesTable({ gp: GP.replace(GP_CALL, mut) }),
+    /\/game 的 Firestore 呼叫點變了/);
+}
+await mutRe('H12-ns ⭐⭐ 改成 `import * as cloud` 再呼叫兩次 cloud.loadDecksFromCloud(（不帶括號仍是 2 ⇒ v6.277 起假綠；帶括號版抓到）',
+  () => {
+    const gp = GP.replace(/^\s*import \{[^}]*loadDecksFromCloud[^}]*\} from '\$lib\/decks\/cloud';[^\n]*\n/m, "import * as cloud from '$lib/decks/cloud';\n")
+      .replace(GP_CALL, 'const cloud1 = await cloud.loadDecksFromCloud(u.uid);\n      const cloud2 = await cloud.loadDecksFromCloud(u.uid);');
+    assert.strictEqual(gp.split('loadDecksFromCloud').length - 1, GP.split('loadDecksFromCloud').length - 1, '突變沒做到「不帶括號計數不變」（樣本錯）');
+    assertFsMatchesTable({ gp });
+  },
+  /\/game 的 Firestore 呼叫點變了/);
+await mutGreen('H13 ⭐⭐⭐ game/+page.svelte 多幾行**註解**提到 loadDecksFromCloud（假紅已修好；⭐v6.312 樣本改成真正的區塊）',
   () => assertFsMatchesTable({ gp: GP.replace(GP_CALL,
     '// 以前這裡會對每個殘留 callback 各跑一次 loadDecksFromCloud(uid)\n' +
     '      /* 區塊單行：loadDecksFromCloud(uid) */\n' +
+    '      /**\n' +
     '       * 續行：loadDecksFromCloud(uid)\n' +
+    '       */\n' +
     GP_CALL) }));
 await mutRe('H14 ⭐⭐ 剝除器吃掉整檔（護欄還在）',
   async () => assertFsMatchesTable({ mod: await mutStripMod([EAT_ALL]) }),
@@ -922,7 +1007,34 @@ await mutRe('H17 ⭐ 把 loadDecksFromCloud 從 FS_TOKENS 拿掉（守衛被閹�
 await T('H18 ⭐ 反面對照：若 helper 沒被突變，同一條路徑是綠的（突變 harness 不是恆紅）', async () => {
   const same = await import('data:text/javascript;base64,' + Buffer.from(STRIP_SRC, 'utf8').toString('base64'));
   assertFsMatchesTable({ mod: same });
+  assertStripProbe(same);
 });
+// ⭐v6.312 helper 自身回歸：退回 v6.311 的任何一種吃法，E0a 的正對照樣本都要抓到（紅在「剝除器計數不對」）
+await mutRe('H19 ⭐⭐ helper 退化成「丟掉 * 開頭的行」（B2 假綠）⇒ 正對照樣本抓到',
+  async () => assertStripProbe(await mutStripMod([EAT_STAR_LINES])), /剝除器計數不對/);
+await mutRe('H20 ⭐⭐ helper 退化成「單行區塊後的尾巴不留」（B1、B3 假綠）⇒ 正對照樣本抓到',
+  async () => assertStripProbe(await mutStripMod([EAT_TAIL_SINGLE])), /剝除器計數不對/);
+await mutRe('H21 ⭐⭐ helper 退化成「區塊收尾行的尾巴不留」（B4 假綠）⇒ 正對照樣本抓到',
+  async () => assertStripProbe(await mutStripMod([EAT_TAIL_CLOSE])), /剝除器計數不對/);
+await mutRe('H22 ⭐⭐ helper 退化成「行中的 /* 也開區塊」（事故 2 的根因）⇒ 內嵌樣本上正對照抓到（真呼叫點被吃掉）',
+  async () => {
+    // 行中的 /* 出現在正則字面量裡（不是註解）；退化版會從這行開區塊、一路吃到下一個 */ ⇒ 真呼叫點不見
+    const m = await mutStripMod([OPEN_MIDLINE]);
+    const probe = "const re = /\\/api\\/*/;\nconst cloud = await loadDecksFromCloud(u.uid);\ntry { x(); } catch { /* ignore */ }\n" + 'const pad = 1;\n'.repeat(20);   // 墊高長度，讓抓到它的是正對照而不是長度護欄
+    assert.strictEqual(stripMod.stripCommentLines(probe).split('loadDecksFromCloud(').length - 1, 1, '正常版反而吃掉了真呼叫點');
+    m.stripCommentsChecked(probe, { label: 'probe', minRatio: 0.3, mustKeep: ['loadDecksFromCloud('] });
+  }, /正對照「loadDecksFromCloud\(」不見了/);
+await mutRe('H23 ⭐ 區塊長度護欄被拿掉 ⇒ E0c 的自驗抓到（區塊護欄沒炸）',
+  async () => {
+    const m = await mutStripMod([NO_BLOCK_GUARD]);
+    const longBlock = '/*\n' + ' x\n'.repeat(200) + '*/\n' + 'const y = 1;\n'.repeat(300);
+    assert.throws(() => m.stripCommentsChecked(longBlock, { label: 'p' }), (e) => e instanceof assert.AssertionError && /長達 202 行/.test(e.message), '區塊護欄沒炸');
+  }, /區塊護欄沒炸/);
+await mutRe('H24 ⭐ 正對照樣本的期望值被改壞（例如有人把 B2 從表裡拿掉）⇒ 樣本自檢抓到',
+  () => {
+    const c = stripMod.countTokensStripped(STRIP_PROBE, ['loadDecksFromCloud('], { label: 'probe', minRatio: 0.3 });
+    assert.deepStrictEqual(c, { 'loadDecksFromCloud(': STRIP_PROBE_EXPECT['loadDecksFromCloud('] - 1 }, '剝除器計數不對：' + JSON.stringify(c));
+  }, /剝除器計數不對/);
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n══ 【I】自查 ═══════════════════════════════════════════════════════════');

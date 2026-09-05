@@ -664,7 +664,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b0733ab229022c8d06c4c91e80edb5a7be1a800f';   // v6.310（v6.311 的上一版）
+const PREV_SHA = 'e65a718ee9e40acb12560f57b05e077e1f5b84f1';   // v6.311（v6.312 的上一版）
+// ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
+//   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
 //   玩家端零改動，只有 version.ts；不動首頁 changelog（玩家看不到的修正只寫 docs/changelog-internal.md）。
 // ⭐⭐v6.309：開局補抽被合併洗回（sync-guards 每座位同源單調合併＋推送端合併＋引擎結算＋診斷指紋）——

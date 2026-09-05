@@ -1,5 +1,60 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.312 守衛修正：strip-comments 行級剝除器的四種假綠（v6.311 自己留下的洞）＋ test-v6277 四個補強
+
+BASE `e65a718ee9e40acb12560f57b05e077e1f5b84f1`（v6.311，遠端 main；`git ls-remote` 確認）。純守衛修正、玩家端零改動（只有 version.ts）⇒ 首頁 changelog 不放。
+診斷來自獨立對抗性審查者，每一條都在 `/tmp` 的完整歷史樹上（`git clone --shared`）逐條實跑複驗。
+
+### 【0】⚠ 訂正 v6.311 的錯誤宣稱
+
+- v6.311【2】寫「行級排除……**絕不少算程式碼**」—— **這句是錯的**。`COMMENT_LINE_RE = /^\s*(\/\/|\/\*|\*|<!--)/` 只看行首就丟整行，
+  下面四種**合法程式碼**會被整行吃掉 ⇒ 假綠（對 e65a718e 的 game/+page.svelte 各多插一個真呼叫 `loadDecksFromCloud(`：raw 4、剝後仍 2、對表(2) 綠）：
+  B1 `/* 註解 */ const again = await loadDecksFromCloud(u.uid);`／B2 `  * (await loadDecksFromCloud(u.uid)).length;`（乘法續行）／
+  B3 `<!-- x --> {await loadDecksFromCloud(u.uid)}`／B4 `  */ const again = await loadDecksFromCloud(u.uid);`。
+  三個受測檔目前沒有這四種樣式（全站 `src/**`、`oracle-admin/*.js` grep 為 0）⇒ **潛伏**，是第 13 種安慰劑換個形狀長回來。
+- v6.311【3】的洞清單**漏列** `oracle-admin/admin.html :829`（`// ── 🏆 錦標賽管理（呼叫 /api/tournament/admin/* 端點…`，block regex 一路吃到 :1339，**511 行**，
+  含 loadTournamentAdmin／fetchAllTournamentStats／loadTournamentStats／tevDeleteArchive 整段錦標賽管理 UI）。
+
+### 【1】修法：行級**狀態機**（含糊處一律保留 ⇒ 假紅方向），不是 assert 炸掉
+
+- 審查者建議「被判為註解的行再看 `*/`／`-->` 之後有沒有字」—— **覆蓋不了 B2**（那行沒有 `*/`，是 `*` 開頭的乘法續行）。要分清「`*` 續行是註解還是程式碼」只能知道現在在不在區塊裡 ⇒ 需要狀態機。
+- 新規則（`scripts/lib/strip-comments.mjs`，零新依賴）：a. 不在區塊、行首 `//` ⇒ 丟整行（唯一「信任行首」的規則，檔頭明寫殘餘風險）；
+  b. 不在區塊、行首 `/*`／`<!--`：同行找得到收尾 ⇒ 只丟到收尾、**尾巴保留**（B1、B3），找不到 ⇒ 開區塊；c. 在區塊內：找不到收尾 ⇒ 整行丟，找到 ⇒ 關閉、**尾巴保留**（B4）；
+  d. 其餘一律保留 —— 含行尾註解與**不在區塊內的 `*` 開頭行**（B2；「區塊在行中開啟」的續行也落在這類，方向是保守的假紅）。
+  ⚠⚠ 區塊**只在行首開啟**，`// … /api/x/*` 這種行中 `/*` 永遠不會觸發（v6.311 事故 2 的根因在此設計下不成立）。
+- 為什麼不選 assert 炸掉：B1～B4 都是合法風格，守衛因「別人寫了合法程式碼」而紅是擾民；狀態機能精準分辨，剩下分不清的那一類（區塊在行中開啟）保留即可，只會多算不會少算。
+- 第四道護欄：任何行首開的區塊 >150 行、或沒收尾（吃到檔尾）⇒ AssertionError（可用 `maxBlockLines` 明寫放行）。全站量測（src/**＋oracle-admin＋scripts）1627 個行首區塊，**最長 91 行**、無未收尾者；事故 2 的 176／543／511 行全在護欄外。
+- 獨立驗證：用一份 **Python 實作**（同規則、不共用任何碼）對 9f500a55／e65a718e 各三檔剝除，與 JS helper 輸出**逐位元相同**；已知答案表新增的帶括號欄就從 Python 那份手抄。
+  新演算法在 game/+page.svelte 剝得比 v6.311 多（80.4%→77.0%），多剝的 620 行逐行看過全是 `<!-- -->`／`/* */` 區塊裡的說明文字。
+- ⚠ 副作用：v6.311 的 E0a 樣本與 H13 突變樣本裡有「單行 `/* */` 之後接一行孤兒 ` * …`」—— 在 JS 裡那不是註解（是語法錯誤或乘法），新版會保留它。兩個樣本都改成真正的 `/** … */` 區塊。
+
+### 【2】test-v6277 四個補強（審查者 ⚠1～⚠4，逐條複驗）
+
+- ⚠1 成立：`deck-stats.ts` 的 `minRatio 0.4` 改回 **0.5**。實測剝後比例 9f500a55＝67.4%、e65a718e＝60.5%（新舊演算法同值），0.5 就過且有 10 點餘裕；DS 已知答案表全 0，長度護欄與 mustKeep 是它僅有的兩道護欄，放寬只是削弱。
+- ⚠2 成立：E0b 原本斷言真檔 game/+page.svelte 必須存在 `// … /api/x/*` 那種行、Gc③ 依賴 `:1228` 那行註解存在（不剝時 NOW≠BASE）—— 任何人清掉那兩行註解守衛就紅，跟病根同型。
+  兩處改成**只用內嵌樣本**：E0b 只留 trap 樣本；Gc③ 改成「BASE blob 後面接一行 v6.307 風格註解：不剝就對不上 BASE、剝了就等於 BASE」。
+- ⚠3 成立（v6.277 既有）：`FS_TOKENS` 只數不帶括號的 `loadDecksFromCloud`（=1 import＋1 呼叫＝2），改成 `import * as cloud` 再呼叫兩次 `cloud.loadDecksFromCloud(` 仍是 2 ⇒ 假綠。
+  修法：五個雲端函式**同時數不帶括號與帶括號**（不帶括號的留著，仍能抓「多一個 import／引用」）。已知答案表帶括號欄（從 9f500a55 用 Python 手抄）：GP `loadDecksFromCloud(`=1；DK `loadDecksFromCloud(`=2、`syncDeckToCloud(`=4、`removeDeckFromCloud(`=1、`loadFavoritesFromCloud(`=1、`saveFavoritesToCloud(`=1；DS 全 0。E2 的 SNAP 同步補欄。突變 H12-ns 實跑證明帶括號版抓得到。
+- ⚠4 部分成立：洞本身成立、已補進【0】的清單。「至少 19 支 block-regex 守衛有讀 admin.html」的說法**沒逐支確認** —— 本版用運行時探針（攔 `String.prototype.replace`，判準＝「受體字串含 :829 那一行、且正則是 block pattern」）把**全部 62 支讀 admin.html 的守衛**實跑一遍（含靜態掃到同時含 block regex 的 30 支）：
+  **零命中** —— 沒有任何一支對含該洞的字串套過 block regex（探針對 admin.html 全文做 sanity 一定命中；另用「攔所有 block regex」的寬探針確認守衛裡確實有 replace 被跑到）。
+  `test-v6243` 有對 admin.html 的**片段**（showPlayerDetail 等 8364／2939 字元）套 block regex，片段不含 :829 ⇒ 不受此洞影響。⇒ 目前**沒有**被這個洞騙的守衛，不改任何一支；洞是潛伏、列管。
+  靜態掃到「讀 admin.html ＋ 含 block regex」的 30 支：card-index-freshness deck-meta-image v6155 v6158 v6159 v6179 v6180 v6198 v6213-perf v6214 v6227 v6241 v6243 v6261 v6269 v6275 v6279 v6286 v6287 v6288 v6289 v6290 v6293 v6295 v6296 v6297 v6299 v6300 v6302 v6303（它們的 block regex 都是套在 server_admin_patch.js／friends-api.ts／CSS 等別的字串上）。
+
+### 【3】驗證
+
+- 主證明（B1～B4 各自實跑）：修前 raw=4／剝後=2 ⇒ 假綠 ×4；修後剝後 `loadDecksFromCloud`=3、`loadDecksFromCloud(`=2 ⇒ 紅 ×4。守衛內建為 H12-B1～B4（各紅在 `/game 的 Firestore 呼叫點變了`）。
+- HEAD-FAIL：舊 helper（e65a718e blob）＋新守衛 ⇒ E0a、E0c、H12-B1～B4、H19～H23 共 16 條紅。
+- 突變 16 條（只捕 AssertionError）：H12／H12-B1～B4／H12-ns 真呼叫增加⇒紅在呼叫點變了；H13 純註解⇒綠；H14 吃整檔⇒紅在長度護欄；H15 吃整檔＋拿掉長度護欄＋拿掉正對照⇒紅在已知答案表；
+  H16 只吃 token 行⇒紅在正對照；H16b 同上拿掉正對照⇒紅在已知答案表；H17 拿掉 token⇒紅在已知答案表；H18 沒突變⇒綠；H19 丟 `*` 行／H20 單行區塊尾巴不留／H21 收尾行尾巴不留⇒紅在「剝除器計數不對」；
+  H22 行中 `/*` 也開區塊⇒紅在正對照不見了；H23 拿掉區塊護欄⇒紅在「區塊護欄沒炸」；H24 正對照期望值改壞⇒紅在「剝除器計數不對」。
+- test-v6277 在完整歷史樹實跑 79 passed／0 failed（【G】Ga～Ge 全部實跑、零 SHALLOW-SKIP）；test-v6288／test-v6297（另外兩個 helper 消費者）32／34 全綠。
+- 完整 npm test（沙盒分批序列）＋ tsc ＋ anti-pattern-lint：見推版當下的回報；預期只有 v6.309 弄紅、站長裁定本版不動的三支（test-v6267 Gc／test-v6279 A3、E-e／test-v6304 E4）。
+
+### 【4】三配套
+
+- `admin.html SITE_VERSION_HINT`→6.312（LF）；test-v6272 `PREV_SHA`→e65a718e、`PREV_ALLOWED`＝只有 version.ts；test-v6264 `BASE_SHA`→e65a718e（不動 changelog ⇒ F0 短路）。
+- 掃過：沒有守衛 pin 本版動到的檔（strip-comments.mjs／test-v6277／test-v6272／test-v6264／admin.html／version.ts）的 sha256 或版本號；`6.311` 字面只出現在註解。
+
 ## v6.311 守衛修正：test-v6277【Gc】把註解算成 Firestore 呼叫點（完整歷史下誤紅）＋ 剝註解中央 helper
 
 BASE `b0733ab229022c8d06c4c91e80edb5a7be1a800f`（v6.310，遠端 main；`git ls-remote` 確認）。純守衛修正、玩家端零改動（只有 version.ts）⇒ 首頁 changelog 不放。
@@ -15,6 +70,7 @@ BASE `b0733ab229022c8d06c4c91e80edb5a7be1a800f`（v6.310，遠端 main；`git ls
 - 新 `scripts/lib/strip-comments.mjs`（零新依賴）：`stripCommentLines()` 只丟「trim 後以 `//`、`/*`、`*`、`<!--` 開頭的**整行**」，
   **刻意不做跨行 block 狀態機** —— 1.4MB 的 svelte 檔裡滿是網址／正則／字串，block regex 出事的方向是**假綠**（吃掉太多 ⇒ 什麼都數不到 ⇒ 恆等）。
   行級排除最多把行尾註解多算成程式碼（誤紅方向），絕不少算程式碼。
+  **⚠ v6.312 訂正：上面這句是錯的** —— 單行區塊／模板註解後接程式碼、`*` 開頭的運算式續行、`*/` 收尾行接程式碼，四種合法程式碼會被整行吃掉（假綠）；v6.312 改成行級狀態機。
 - `stripCommentsChecked()` 三道護欄：① 長度 ≥ minRatio（預設 50%）② `mustKeep` 正對照（真呼叫點剝完必須還在）③ 空輸入即炸。全部丟 `AssertionError`。
 - test-v6277：`fsCounts(text, which)` 改走 helper；新增 **E0a/E0b/E0c**（剝除器正對照／第 13 種安慰劑反面對照／護欄自驗）、
   **E3 已知答案表**（BASE 剝完後的確切數字手抄進斷言，history-free，淺複製也在守）；Gc 改成「BASE 剝完 == 表」＋「NOW == BASE」＋反面對照「不剝註解就對不上」。
