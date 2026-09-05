@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '0c7422e555d0ff8029d555acee4173ba9264f8e3';   // v6.313（v6.314 的上一版）
+const PREV_SHA = '6af9d7a1a57cba92a831f2d0f1cd91f1c516a33a';   // v6.314（v6.315 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -684,9 +684,10 @@ const PREV_SHA = '0c7422e555d0ff8029d555acee4173ba9264f8e3';   // v6.313（v6.31
 // ⭐⭐v6.313：平板直立可選用手機版對戰介面（玩家自選開關、預設關）—— 玩家端動 game/+page.svelte（判定單一來源／開關／旋轉遮罩條件／設定 modal）
 //   ＋version.ts；首頁 changelog 三步搬運（三檔）。⚠ MobilePortraitBattle.svelte 零改動（量測前提）。
 // ⭐v6.314：純文案（設定 hint 一行＋首頁第一則改寫：iPad 直立時被旋轉提示遮住 ⇒ 先橫放再進設定勾選）；v6.313 尚未上正式站 ⇒ 第一則直接改寫、不搬運。
+// ⭐v6.315：審查者複驗收尾 —— 首頁第一則縮到 80 字內（v6.314 仍未上正式站 ⇒ 再改寫一次、不搬運）＋ test-v6313 補兩個盲點（w===h 格、rotate-prompt CSS 層）。
+//   ⚠ 審查者的「iPad 開關開時聊天面板拖曳跑兩倍」經 playwright 量測**不成立**（面板 right/bottom 錨定，margin 被 auto 的 left/top 吸收）⇒ game/+page.svelte 零改動。
 const PREV_ALLOWED = [
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
   'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {

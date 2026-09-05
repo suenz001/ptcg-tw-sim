@@ -1,5 +1,76 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.315 審查者複驗收尾：首頁第一則縮到 80 字內 ＋ test-v6313 補兩個盲點；「聊天面板跑兩倍」經量測不成立、不動
+
+BASE `6af9d7a1a57cba92a831f2d0f1cd91f1c516a33a`（v6.314，遠端 main；`git ls-remote` 確認）。
+獨立對抗性審查者對 v6.313／v6.314 提了三條 ⚠（沒有 ⛔），逐條複驗結果：**⚠1 成立（部分）、⚠2 不成立、⚠3 成立**。
+改動檔：`static/changelog.html`（只有第一則）／`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`scripts/test-v6313-tablet-mobile-ui.mjs`／`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+⚠ **`game/+page.svelte` 零改動**、零新 CSS、零新依賴、package.json 不動（test chain 沒有新檔）。
+
+### ⚠1 首頁 changelog：字數超標 ＋ 摘要區總長逼近守衛 ⑨（成立，但「多搬一則」做不到）
+
+- 第一則（v6.314）摘要內文 110 字（規格 40～80）；摘要區總長 4,961（守衛 ⑨ 上限 5,000；下一版若新增一則 150 字、搬走最舊的 100 字 ⇒ 5,011 會紅）。
+- 改寫成 **80 字**（含 ⚙️／🎴 的 VS16 各算 1 字）：「平板直立時可在對戰中「⚙️ 設定 › 🎴 對戰版面」勾選改用手機版直式畫面，橫放時回電腦版；預設不勾選、畫面不變。⚠ 直立時若被旋轉提示遮住，先橫放再進設定。」
+  核心資訊都在：入口位置／直式切手機版／橫放回桌機版／預設不勾選／被遮罩擋住要先橫放。砍掉的是「iPad 等平板…握持時」前綴、勾選項目全名、「自動回到電腦版面」的贅字。
+- 摘要區總長 **4,961 → 4,931**（含徽章＋標題的守衛口徑；第一則 132 → 102）。下一版最壞情況 4,931 − 100（v6.233）＋ 150 ＝ 4,981 < 5,000 ⇒ 不會爆；再下一版搬走 v6.234（115）更寬。
+- ⚠ **審查者建議「多搬一則最舊的」這一版不做**：`test-v6264` 的 A1／0-1／F0b／F1 全部斷言首頁**恰 50 則**（v6.223 不變量、明寫「未放寬」），
+  搬成 49 則等於要放寬守衛判準（鐵律 F：既有守衛翻紅不得用放寬判準混過）。縮字之後總長已經安全，不需要動結構。
+- v6.314 仍未上正式站 ⇒ 第一則直接改寫成 v6.315、不新增、不搬運，test-v6264 走 **F0b**（其餘 49 則／封存頁／bodies 與 BASE 逐位元相同）。
+
+### ⚠2 「iPad 開了開關之後聊天面板拖曳跑兩倍距離」—— **不成立**，game/+page.svelte 不動
+
+審查者的推論：`.chat-panel` 同時套 `style:transform=translate(x,y)` 與 `style:margin-left/top=(isPortraitMobile ? x : undefined)`，
+真手機靠 `@media (max-width:600px) and (orientation:portrait)` 的 `transform:none !important` 抵銷，iPad 820 寬不命中 ⇒ 兩者疊加 ⇒ 2N。
+**漏掉的一層**：`.chat-panel` 桌機規則是 `position:fixed; right:18px; bottom:18px; width:350px; height:450px`，**left／top 都是 auto**。
+CSS 絕對定位的過度約束式在 left 為 auto 時解 left，`margin-left` 被吸收進 auto 的 left，**對視覺位置零影響**（top／margin-top 同理）。
+只有真手機那條 @media 把 `left:2.5vw; top:…` 設成非 auto，margin 才變成有效位移 —— 而那裡 transform 是 none。所以任何情況都只有**一個**位移來源。
+
+量測（playwright headless chromium；從 BASE 逐字抽出兩條 `.chat-panel` 規則＋模板 inline style＋`onChatHeaderMove` 本體，模擬 pointerdown(100,100)→move(100+N,100+N) 後量 getBoundingClientRect 差值；腳本 `outputs/measure-chat-panel-v6315.html`）：
+
+| 情境 | N | computed transform | margin-left/top | 實際位移 dx,dy |
+|---|---|---|---|---|
+| iPad 820×1180 開關開（isPortraitMobile=true） | 100 | matrix(…,100,100) | 100px | **100, 100**（不是 200） |
+| 同上 | 37 | matrix(…,37,37) | 37px | **37, 37** |
+| iPad 820×1180 開關關（＝BASE） | 100 | matrix(…,100,100) | 0px | 100, 100 |
+| 真手機 375×812（isPortraitMobile=true） | 100 | none | 100px | 100, 100 |
+| 真手機橫放 812×375（BASE 既有） | 100 | matrix(…,100,100) | 100px | 100, 100 |
+| 桌機 1920×1080 | 100 | matrix(…,100,100) | 0px | 100, 100 |
+
+⇒ 三種情境位移都恰等於 N；開關開／關在 820×1180 的位移逐位相同 ⇒ 對 iPad 零回歸、對真手機零位移差、對桌機零位移差。
+審查者建議的「margin 改用 isSmallScreen」與「@media 收斂成 class gate」都**不做**（沒有要修的行為；順手收斂反而要動 game/+page.svelte 與 CSS）。
+附帶：拖曳 clamp（±45% W）在 iPad 上走手機分支只是限制範圍，不是位移錯誤。
+
+### ⚠3 test-v6313 的兩個盲點（成立，兩個都補；補之前綠、補之後紅 各附證明）
+
+1. **矩陣沒有 w === h**：把 `h > w` 突變成 `h >= w` —— v6.313 守衛 A1／B1 全綠（只有錨點型 M1／M2 紅，因為錨點字串消失）。
+   補：矩陣加 `[600,600] [700,700] [1024,1024]`（22 → 25 格；B1 44 → 50 次）＋ A1 明寫 `f(700,700,true) === false`。
+   證明：對 BASE 的 game/+page.svelte 套該突變 ⇒ 舊守衛 14 PASS / 2 FAIL（只有 M1／M2 錨點）；新守衛 **A1 紅在「開關開 700×700：預期 false」**。
+2. **`.rotate-prompt` 的 CSS 完全沒鎖**：把 `min-width: 601px` 突變成 `0px` —— v6.313 守衛 **16 條全綠**。
+   補【H1】：把 display:flex 規則所屬的 `@media` 查詢字串抽出來，用迷你求值器（只認 min-width／max-width／orientation／hover／pointer，
+   其他語法或 feature 一律 assert 不放行）在 25 格 × touch × 開關 逐格算，斷言：真手機（min(w,h)<=600）CSS 層**自己**就不命中；
+   滑鼠裝置不命中（v4.02）；橫式不命中；手機版分支亮著時合成後不可見；現況真值表（觸控＋601～950＋直式＋桌機分支 ⇒ 可見）逐格相同；
+   744／820／834 直式開關關 ⇒ 顯示（＝v6.314 changelog「先橫放」的根據）、1024×1366 不顯示。
+   證明：對 BASE 套 `min-width:0px` ⇒ 舊守衛 16/16 綠；新守衛 **H1 紅在「真手機 375×812 touch=true：CSS 條件命中了」**。
+   ⚠ 審查者說「真手機也命中」在 v6.313 之後其實**不會發生在畫面上**（`{#if}` 已含 `!isPortraitMobile`，真手機根本不渲染節點）——
+   CSS 層是**第二道防線**（v2.285 起的第一道），鎖它是雙層防禦，不是修 bug。
+   ⚠ CSS `orientation: portrait` 的規格定義是 **h >= w**（正方形算 portrait），與 JS 的 `h > w` 不同；求值器照規格寫，正方形三格的預期真值表也照這個算。
+- 新增突變 M10（h >= w）／M11（min-width 0）／M12（max-width 1400 ⇒ 1024×1366 現況改變）／M13（拿掉 hover/pointer ⇒ 桌面縮窄視窗誤觸發）。
+  守衛 16 → **21 PASS**；HEAD-FAIL（BASE blob 的守衛跑本版樹）不適用（守衛本身是被改的檔），改以上面兩個「補之前綠、補之後紅」證明。
+
+### 審查者其他幾條（站長裁定本版不動；只記錄）
+
+- 手動解析度模式會把手機版介面 zoom 掉：BASE 既有（真手機設 75% 也一樣），不是回歸 —— 站長看過再說。
+- iPad 手機版下方留白：站長「先不調，我看過再說」。
+- `test-v6267 Gc`／`test-v6279 A3+E-e`／`test-v6304 E4` 三支過期守衛：留到之後；帶歷史的樹上完整 npm test **預期恰 3 支紅**。
+- `<svelte:body class:mp-locked>` 疑似從未生效（v6.313【3】第 5 點的量測 body 沒有這個 class）：既有，不動。
+
+### 三配套與其他
+
+- `admin.html SITE_VERSION_HINT`→6.315（LF）；test-v6272 `PREV_SHA`→6af9d7a1、`PREV_ALLOWED`＝version.ts＋changelog.html；test-v6264 `BASE_SHA`→6af9d7a1。
+- 掃 pin：scripts/ 內沒有守衛 pin 本版動到的檔的 sha256（test-v6272 ⑨ 的 sha256 是 server_admin_patch.js 錦標賽尾段，本版沒動）。
+- ⚠ 站長：本版只有 SITE_VERSION_HINT 動到 admin.html，跑 `update-tournament.bat`（會先同步 git）即可；沒有伺服器相依。
+
 ## v6.314 純文案：iPad 直立時被旋轉提示遮住 ⇒ 先橫放再進設定勾選（v6.313 的收尾）
 
 BASE `0c7422e555d0ff8029d555acee4173ba9264f8e3`（v6.313，遠端 main）。零行為改動：只動 game/+page.svelte 設定 hint 一行、首頁第一則改寫成 v6.314
@@ -86,7 +157,9 @@ BASE `9c3e4932d1f249ed85b25a4668e81bd29f8ea3b6`（v6.312，遠端 main；`git ls
 
 1. 判定改成 `computeIsPortraitMobile`（單一來源）；開關關時逐格＝`Math.min(w,h) <= 600`（守衛 A1／B1 22 格矩陣）。
 2. 方向：直式限定，見【2】。
-3. `isTabletLayout = !isPortraitMobile && …` 只被兩處消費：`recomputeZoom` 的 targetH（手機分支早退、不會用到）與 `.battle-root` 的 class（桌機分支才渲染）
+3. `isTabletLayout = !isPortraitMobile && …` 只被兩處消費：`recomputeZoom` 的 targetH（手機分支早退、不會用到）與 `.battle-root` 的 class
+   （⚠ v6.315 訂正：原本寫「桌機分支才渲染」是**錯的** —— `<div class="battle-root">` 約 11167 行**包住**整組版面分支，手機版 `<MobilePortraitBattle>` 也在它裡面；
+   結論不受影響，因為 onResize 保證 `isPortraitMobile ⇒ isTabletLayout=false`，手機版亮著時 `.tablet-layout` class 一定不掛）
    ⇒ 開關開時它變 false 沒有任何副作用（守衛 B1 斷言手機版亮著時必為 false）。
 4. `recomputeZoom` 手機分支強制 `gameZoom=1`：手機版元件全用 CSS px 固定尺寸，量測就是在 zoom=1 下做的，合理；平板不需要縮放。
 5. `<svelte:body class:mp-locked>`：量測環境 body 沒有這個 class（375 BASE 也沒有）⇒ 與本版無關；`.mp` 自己 `position:fixed; overflow:hidden` 已鎖住畫面。
