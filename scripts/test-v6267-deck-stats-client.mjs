@@ -28,7 +28,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
-import { countTokensStripped } from './lib/strip-comments.mjs';
+import { countTokensStripped, stripCommentsChecked } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // v6.266 的 sha（BASE 對照用；淺複製時大聲跳過，不 fail-open 成假綠）
@@ -130,12 +130,36 @@ const ORACLE_ROOM_EXPECTED = { 'oracleGetRoom(': 3, 'oracleUpsertRoom(': 2, 'ora
   'oraclePollRoom(': 1, 'oracleListMessages(': 2, 'oracleListRoomsCombined(': 1, 'oracleAuth(': 1 };
 // 從 oracle-client import 進來、名字以 oracle 開頭但**不發請求**的符號（行為端：只讀 _uid／localStorage，見 oracle-client.ts oracleCurrentUid）
 const ORACLE_NON_NET = ['oracleCurrentUid'];
-/** room-oracle.ts 的 import { … } from './oracle-client' 清單裡，名字以 oracle 開頭的符號（含 type 以外的全部）。 */
+/**
+ * room-oracle.ts 從 './oracle-client' 進來的**每一個** import 語句（不只第一個），名字以 oracle 開頭的符號，以**本地名**回傳。
+ * ⭐ v6.318（審查者兩種繞道實證 v6.317 都 53/0 綠）：
+ *   ① 只 match 第一個 `import { … } from './oracle-client'` ⇒ 第二行 `import { oraclePollRoom as pollAlias } from './oracle-client'`
+ *      （IDE 自動 import 會產生的形狀）沒被看到；而且 alias 原本取的是**匯入名**，`pollAlias(c, 0)` 的呼叫根本不在 token 表的口徑裡。
+ *   ② `import * as oc from './oracle-client'` ＋ `oc.oraclePollMessages(c, 0)` 完全繞過。
+ *   ⇒ 現在：matchAll 掃全部 import 語句（剝註解走行級 helper）、alias 以本地名計、namespace／default／動態 import() 一律斷言為 0。
+ */
 function oracleImportsOf(src) {
-  const m = src.match(/import \{([\s\S]*?)\} from '\.\/oracle-client';/);
-  assert.ok(m, 'room-oracle.ts 找不到 from ./oracle-client 的 import 區塊');
-  const names = stripComments(m[1]).split(',').map((x) => x.trim()).filter(Boolean)
-    .filter((x) => !/^type\s/.test(x)).map((x) => x.split(/\s+as\s+/)[0]).filter((x) => /^oracle[A-Z]/.test(x));
+  const code = stripCommentsChecked(src, { label: 'room-oracle.ts', minRatio: 0.5, mustKeep: ["from './oracle-client'"] });
+  const isOc = (spec) => /^['"]\.\/oracle-client(?:\.ts|\.js)?['"]$/.test(spec);
+  const stmts = [...code.matchAll(/^[ \t]*import\s+([\s\S]*?)\s+from\s*(['"][^'"]+['"])/gm)].filter((m) => isOc(m[2]));
+  assert.ok(stmts.length >= 1, 'room-oracle.ts 找不到 from ./oracle-client 的 import 語句');
+  assert.strictEqual((code.match(/import\s*\(\s*['"]\.\/oracle-client/g) || []).length, 0, '⚠⚠ 動態 import(\'./oracle-client\') 繞過 token 表');
+  assert.strictEqual((code.match(/require\s*\(\s*['"]\.\/oracle-client/g) || []).length, 0, '⚠⚠ require(\'./oracle-client\') 繞過 token 表');
+  const names = [];
+  for (const m of stmts) {
+    const clause = m[1].trim();
+    if (/^type\s/.test(clause)) continue;                                            // import type { … } ⇒ 編譯後消失
+    assert.ok(!/\*\s*as\s+/.test(clause), '⚠⚠ namespace import（import * as）會讓 token 計數失效：' + clause);
+    const br = clause.match(/\{([\s\S]*)\}/);
+    assert.ok(br, '⚠⚠ default import 不在 token 表的口徑裡：' + clause);
+    assert.ok(!clause.slice(0, br.index).trim(), '⚠⚠ default import 不在 token 表的口徑裡：' + clause);
+    for (const part of br[1].split(',')) {
+      const p = part.trim();
+      if (!p || /^type\s/.test(p)) continue;
+      const [imported, local] = p.split(/\s+as\s+/).map((x) => x.trim());
+      if (/^oracle[A-Z]/.test(imported)) names.push(local || imported);            // alias 以本地名計（呼叫點長什麼樣就數什麼）
+    }
+  }
   assert.ok(names.length >= 8, '只抽到 ' + names.length + ' 個 oracle* import（下限 8）⇒ 抽取器壞了');
   return names;
 }
@@ -842,13 +866,23 @@ await mut('H11 room-oracle.ts 多一個 oracleGetRoom( ⇒ E3 已知答案表必
 await mut('H14 ⭐ v6.317 審查者的探針：多一個 oraclePollRoom( ⇒ E3 必紅（v6.316 的表抓不到這一支）', () => mk(RO,
   'export async function setSeatDeck(', 'export async function __probePoll(c) { return oraclePollRoom(c, 0); }\nexport async function setSeatDeck('),
   (out) => { assert.deepStrictEqual(oracleCountsRoom(out), ORACLE_ROOM_EXPECTED); });
+const e3bCheck = (out) => {
+  const names = oracleImportsOf(out);
+  const tokens = ORACLE_TOKENS.filter((t) => t.startsWith('oracle')).map((t) => t.slice(0, -1));
+  for (const n of names) assert.ok(tokens.includes(n) || ORACLE_NON_NET.includes(n), n + ' 不在表裡');
+};
 await mut('H15 ⭐ v6.317 表的完整性：多 import 一支請求 helper（oraclePollMessages）卻沒進表 ⇒ E3b 必紅', () => mk(RO,
   '  oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid,', '  oracleListRooms, oraclePollRoom, oracleListMessages, oracleCurrentUid, oraclePollMessages,'),
-  (out) => {
-    const names = oracleImportsOf(out);
-    const tokens = ORACLE_TOKENS.filter((t) => t.startsWith('oracle')).map((t) => t.slice(0, -1));
-    for (const n of names) assert.ok(tokens.includes(n) || ORACLE_NON_NET.includes(n), n + ' 不在表裡');
-  });
+  e3bCheck);
+await mut('H16 ⭐ v6.318 審查者繞道①：第二行 import { oraclePollRoom as pollAlias }（IDE 自動 import 的形狀）＋ pollAlias(c, 0) ⇒ E3b 必紅（alias 以本地名計）', () => mk(RO,
+  "} from './oracle-client';\n", "} from './oracle-client';\nimport { oraclePollRoom as pollAlias } from './oracle-client';\nexport async function __probeAlias(c) { return pollAlias(c, 0); }\n"),
+  e3bCheck);
+await mut('H17 ⭐ v6.318 審查者繞道②：import * as oc ＋ oc.oraclePollMessages(c, 0) ⇒ E3b 必紅（namespace import 禁用）', () => mk(RO,
+  "} from './oracle-client';\n", "} from './oracle-client';\nimport * as oc from './oracle-client';\nexport async function __probeNs(c) { return oc.oraclePollMessages(c, 0); }\n"),
+  e3bCheck);
+await mut('H18 ⭐ v6.318 動態 import(\'./oracle-client\') ⇒ E3b 必紅', () => mk(RO,
+  'export async function setSeatDeck(', "export async function __probeDyn(c) { const m = await import('./oracle-client'); return m.oraclePollMessages(c, 0); }\nexport async function setSeatDeck("),
+  e3bCheck);
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} v6.267 守衛：${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

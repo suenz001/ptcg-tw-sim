@@ -22,7 +22,8 @@ let pass = 0, fail = 0;
 const chk = (t, c, extra = '') => { if (c) { pass++; } else { fail++; console.log('  ❌', t, typeof extra === 'string' ? extra : JSON.stringify(extra)); } };
 
 // ── 剝註解／剝 script+style（保留字元位移，行號才對得上）＋自我驗證 ────────────
-//   ⭐ v6.317：改走中央 helper scripts/lib/strip-markup-sections.mjs —— **先剝 HTML 註解**、再剝區段、等長空白化。
+//   ⭐ v6.317：改走中央 helper scripts/lib/strip-markup-sections.mjs（v6.318 起是單趟行級狀態機：註解只在模板層認、區段只在行首開／收）。
+//   ⚠ v6.318：反對照 mustDrop 原本寫 '.prize-view-modal {'（有空格），原檔是 '.prize-view-modal{' ⇒ 那條反對照恆真；helper 現在會先斷言對照字串在原檔存在。
 //   ⚠ 本檔原本的順序是「先區段、最後才剝註解」：註解裡一提到樣式標籤的字面，非貪婪正則就從那段註解
 //     一路吃到真正的樣式收尾 ⇒ 模板清空（實測 game 從 184,279 個非空白字元剩 30、MPB 從 22,587 剩 8），
 //     後面 B～G 所有「某段 DOM 在某情境會不會渲染」的斷言全變恆真。helper 自帶護欄與已知答案表
@@ -172,7 +173,7 @@ const BATTLE_KEYS = Object.keys(SCEN).filter(k => !REPLAY_KEYS.includes(k));
 const gameSrc = readFileSync(GAME, 'utf8');
 const mpbSrc  = readFileSync(MPB, 'utf8');
 // 正對照：模板錨點必須還在、腳本／樣式錨點必須不見（helper 內建斷言，抓到就直接炸 —— 這時後面的結論全不可信）
-const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal {'] });
+const gameT = templateOnly(gameSrc, { label: 'game', mustKeep: ['prizeViewOpen'], mustDrop: ['function openPrizeView', '.prize-view-modal{'] });
 const mpbT  = templateOnly(mpbSrc, { label: 'mpb', mustKeep: ['mp-clickable'], mustDrop: ['.mp-chip {'] });
 const gameTree = parseBlocks(gameT);
 const mpbTree  = parseBlocks(mpbT);

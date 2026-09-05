@@ -232,10 +232,16 @@ console.log('\n【D】⭐⭐⭐ 靜態 import 相依圖：私聊只能經由動�
 /** 讀原始碼（可被 overlay 蓋掉，讓正對照不必真的寫檔）。 */
 const mkReader = (overlay) => (p) => (overlay && overlay.has(p) ? overlay.get(p) : (existsSync(p) ? rd(p) : null));
 /** 抽「靜態」import 的來源字串（⚠ `import type` 與動態 `import(...)` 都不算）。 */
-function staticSpecs(src, isSvelte) {
+function staticSpecs(src, isSvelte, label = '') {
   let code = src;
-  if (isSvelte) code = sectionInner(src, 'script');   // ⭐v6.317 中央 helper（先剝 HTML 註解；純標記的 .svelte 沒有腳本＝零 import，合法）
-  code = stripCmt(code);
+  if (isSvelte) code = sectionInner(src, 'script');   // ⭐v6.317 中央 helper（純標記的 .svelte 沒有腳本＝零 import，合法；v6.318 起單趟行級狀態機）
+  if (!code.trim()) return [];
+  // ⭐ v6.318：剝註解改走**行級** stripCommentsChecked（D1d 早就改了，D1 這條沒改）。本檔的 stripCmt 是區塊正則：
+  //   game 腳本 :208 的 `// … /api/tournament/*` 會讓它吃掉 177 行；effects.ts 同一形狀**實際**吃掉了 3 個 import
+  //   （./effects/cards/stadiums／tools／./selection-filter，v6.318 實量）⇒ 相依圖在那裡是斷的。
+  //   minRatio 給 0.02：相依圖裡有 154 個檔，說明註解佔九成的合法 .ts 不少（v2997_g4_wave3.ts 剝完只剩 7.8%）；
+  //   「一路吃掉」在行級狀態機下只可能是單一區塊，靠 maxBlockLines（預設 150，全站最長 91）擋。
+  code = stripCommentsChecked(code, { label: label || 'staticSpecs', minRatio: 0.02 });
   const out = [];
   for (const m of code.matchAll(/^[ \t]*import\s+([\s\S]*?)from\s*['"]([^'"]+)['"]/gm)) {
     if (/^\s*type\s/.test(m[1])) continue;                 // import type { X } from '…' ⇒ 編譯後消失
@@ -268,7 +274,7 @@ function staticGraph(entry, overlay) {
     seen.add(f);
     const src = read(f);
     if (src == null) continue;
-    for (const s of staticSpecs(src, f.endsWith('.svelte'))) {
+    for (const s of staticSpecs(src, f.endsWith('.svelte'), f.slice(ROOT.length))) {
       const r = resolveSpec(s, f, exists);
       if (r && !seen.has(r)) queue.push(r);
     }

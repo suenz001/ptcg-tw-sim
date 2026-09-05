@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '8f8b378236e0477f4451b5c00fa93d0582bf2c71';   // v6.316（v6.317 的上一版）
+const PREV_SHA = 'b3e2430b1bf04e7aeb8ccf5db32c373722e6a282';   // v6.317（v6.318 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -689,9 +689,10 @@ const PREV_SHA = '8f8b378236e0477f4451b5c00fa93d0582bf2c71';   // v6.316（v6.31
 // ⭐v6.316：旋轉提示加引導文字（站長交辦：告訴玩家「平板直立可改用手機版介面」的開關在哪；先橫放才進得去設定）——
 //   v6.317：玩家端只動 version.ts ＋ 首頁第一則縮字（v6.313～v6.316 仍未上正式站 ⇒ 改寫成 v6.317，走 test-v6264 F0b，不搬運）。
 //   其餘全在 scripts/（test-v6267 補四個 Oracle 請求 token／中央 helper strip-markup-sections 收乾五支守衛的區段剝除順序），不在這一節的掃描範圍。
+// ⭐v6.318：純守衛修正（strip-markup-sections 改單趟行級狀態機：註解只在模板層認、區段只在行首開／收 ⇒ 方向 A／B 兩種假綠一起收；
+//   test-v6190 反對照打錯字／test-v6267 E3b 掃全部 import／test-v6288・v6296・v6297 的 import 抽取改行級剝註解）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 const PREV_ALLOWED = [
   'src/lib/version.ts',
-  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

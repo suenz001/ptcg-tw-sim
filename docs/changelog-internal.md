@@ -1,5 +1,82 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.318 剝除器架構解（第四版）：strip-markup-sections 改單趟行級狀態機 ＋ 四件審查者行為端發現（反對照恆真／比例護欄無牙／E3b 只看第一個 import／D1 仍用區塊正則）
+
+BASE `b3e2430b1bf04e7aeb8ccf5db32c373722e6a282`（v6.317，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`scripts/lib/strip-markup-sections.mjs`（重寫）／`scripts/test-lib-strip-markup-sections.mjs`（重寫，26 條）／`scripts/test-v6190-*`（反對照字串）／
+`scripts/test-v6288-*`／`test-v6296-*`／`test-v6297-*`（script 內文的剝註解改走行級 helper）／`scripts/test-v6267-*`（E3b 重寫＋H16～H18）／
+`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+零新依賴；package.json 不動；src/ 只動 version.ts；首頁 changelog 不放（純守衛）。
+
+### ⚠ 訂正 v6.317 的錯誤結論
+v6.317 本檔寫「v6288/v6296/v6297 那四處 script 抽取形狀相同但**方向相反**（字面只會讓它多抽、不會少抽）⇒ 不算漏洞」—— **錯**。
+v6.317 的 helper 把「HTML 註解剝除」也套在 script 內容上，所以 JS 字串 `'<!--'`／`'-->'` 之間的程式碼會被整段空白化，import 就在那裡面消失：
+在 game/+page.svelte 靜態 import DmPanel、前後各夾一個字串常數 ⇒ test-v6288 32/0、v6296 26/0、v6297 34/0 **全綠**（不夾字串時 31/1、25/1、32/2）；
+三道護欄（150 行／50%／minSections）一個都沒響。⚠ v6.316 對同一突變也是綠的 ⇒ 不是 v6.317 引入的回歸，但 v6.317 把這個形狀寫進了中央 helper 並下了錯的結論。
+全站現況零處 JS 字串含 `<!--` ⇒ 今天沒有觸發字串；修的是形狀。
+
+### 審查者逐條複驗
+- 主修（方向 B 假綠）**成立**，數字與他一致（32/0、26/0、34/0）。
+- ⚠1 **成立**：`grep -c "\.prize-view-modal {"` ＝ 0（原檔是 `.prize-view-modal{`）；`mustDrop: ['.prize-view-modal {', 'THIS_STRING_NEVER_EXISTED_XYZ']` 直接通過。mustKeep 三處（prizeViewOpen／mp-clickable／.prize-view-modal）都在原檔存在，沒有同型問題。
+- ⚠2 **成立，但他的數字是舊口徑**：他給的「friends 頁 17.22%」是註解 ÷ **整檔**；改以模板層為分母後 friends 頁是 **57.4%**（模板很小、說明註解很多），
+  他建議的「模板分母 ＋ ≤25%」會直接誤紅 ⇒ 沒照做，改成「**單一**註解 ÷ 模板層 ≤ 40%」（見下）。
+- ⚠3 **成立**：兩種繞道（namespace import／第二行 alias import）BASE 都 53/0。
+- ⚠4 **成立**，而且比他說的更實際：`effects.ts` 的 `// … /*` 同型註解已經讓 D1 的區塊正則**實際吃掉 3 個 import**（`./effects/cards/stadiums`／`tools`／`./selection-filter`），相依圖在那裡是斷的（今天沒漏 DM 是因為那三支不引用私聊）。
+- 他查的「14 支 .svelte 收尾都在行首」：擴大到 22 支 .svelte/.html 實掃仍成立（含 admin.html、app.html、body.html、logo-final/index.html）。
+
+### 【主修】`scripts/lib/strip-markup-sections.mjs`：單趟行級狀態機（246 行含檔頭說明；狀態機本體約 90 行）
+狀態 template｜comment｜opentag｜section，逐行逐段：
+- template：行首（允許空白／tab）`<script`／`<style`（不分大小寫）⇒ opentag；其餘掃 `<!--`，同行有 `-->` 就空白化那一段，否則進 comment。
+- comment：**不看**區段標籤（方向 A）；找 `-->` 收尾。
+- opentag：找 `>`（允許屬性跨行）；`/>` 自閉合＝空區段。
+- section：**不看** `<!--`（方向 B）；只認「與開頭同一行的 `</tag>`」或「之後某行**行首**的 `</tag>`」；吃到檔尾 ⇒ 炸；行首再開同一種標籤 ⇒ 炸（巢狀）。
+- 護欄：未收尾註解／區段炸；單段註解 ≤150 行；**單一**註解 ÷ 模板層 ≤ 40%（模板層 <200 非空白不套）；長度／行數等長；mustKeep／mustDrop **先斷言在原檔存在**；minSections。
+- API 不變：`templateOnly`／`sectionInner`／`markupSections`；新增 `scanMarkup`／`scanMarkupChecked`；移除 `blankHtmlCommentsChecked`／`sectionRe`／`HTML_COMMENT_RE`（只有自驗檔用過）。
+- ⚠ 檔頭**沒有**任何「絕不會／保證」；只描述規則，能擋什麼以自驗檔的突變為準。
+
+### 主證明（修前 vs 修後）
+| 突變 | BASE（v6.317）| v6.318 |
+|---|---|---|
+| 方向 B：game 腳本 `'<!--'` ＋ `import DmPanel` ＋ `'-->'` | v6288 **32/0**、v6296 **26/0**、v6297 **34/0**（假綠）| v6288 31/**1** F1、v6296 25/**1** F1、v6297 32/**2** D1／D1c |
+| 方向 A：註解含行首 `<style>` 字面（自驗 FXA）| v6.316 之前順序剩 4／33 | 33（A-1）；固定 blob 植入後 game 仍 184,279、MPB 22,587（3-A／3-M）|
+| ⚠4：import 塞在 game 腳本 :248（區塊正則會吃掉的 :208～:384 範圍內）| v6297 **34/0**、v6296 **26/0**（假綠）| v6297 32/**2**、v6296 25/**1** |
+| ⚠3：`import * as oc` ＋ `oc.oraclePollMessages`；第二行 `{ oraclePollRoom as pollAlias }` ＋ `pollAlias(c,0)` | v6267 **53/0**、**53/0** | 55/**1** E3b、55/**1** E3b（H16／H17／H18 內建）|
+| ⚠1：`mustDrop: ['.prize-view-modal {', 'THIS_STRING_NEVER_EXISTED_XYZ']` | 通過 | 紅「反對照…在原檔根本不存在」（4-4）|
+| 原意：v6190 拿掉 `isTReplay` 閘／v6182 拿掉 textarea `width:100%` | 8 紅／1 紅 | 8 紅／1 紅 |
+
+### 已知答案表（獨立工具重算、手抄）
+固定 blob 8f8b3782（v6.316）用另一份 **Python 字元級掃描**（`/tmp/indep.py`，不用正則、與 JS 不同寫法）重算：
+game template **184,279**／styleInner 205,952／scriptInner 373,083／註解 275；MPB **22,587**／23,495／24,484／43 —— 與 v6.317 的表**相同**
+（那兩個 blob 的腳本裡沒有 `<!--` 字面，所以兩種演算法給同一個數；這是巧合不是恆等，自驗檔有註明）。口徑 UTF-16 code unit。
+
+### ⚠2 比例護欄：五個檔實測（註解 ÷ 模板層；模板層＝整檔扣掉 script／style，含註解）
+| 檔 | 模板層非空白 | 合計比例 | **最大單一註解** | 舊口徑（÷整檔）|
+|---|---|---|---|---|
+| game/+page.svelte | 208,144 | 11.47% | **0.21%** | 3.03% |
+| MobilePortraitBattle.svelte | 25,733 | 12.23% | **3.99%** | 4.27% |
+| deck-posts/+page.svelte | 10,430 | 0.79% | **0.79%** | 0.21% |
+| FriendsPanel.svelte | 6,218 | 9.95% | **2.04%** | 3.53% |
+| friends/+page.svelte | 1,723 | **57.40%** | **25.36%** | 17.22% |
+⇒ 門檻設「單一註解 ≤ 40%」：最緊的 friends 頁餘裕 14.6 點；合計口徑在 friends 頁已 57% ⇒ 不能當門檻。全站 22 支最大單一註解就是 friends 頁那 25.36%。
+
+### 全站 22 支 .svelte／.html 實掃（自驗檔【5】永久在守）
+零炸、長度行數不變；區段數：admin.html style 1＋script 1、app.html script 2＋style 1、body.html script 3、logo-final style 1、friends 頁 script 1＋style 2（svelte:head 單行那段算一段）、
+tournament 頁 script 1、其餘 .svelte 各 1＋1、changelog 三檔與 google 驗證檔 0 段。不在行首的標籤字面（game :9842 `{@html '<style>…'}`、card/[id] :35 ld+json 字串、admin.html 三處註解）全部留在模板／腳本，零誤判。
+突變形狀（自驗【0-4】【0-5】）：屬性跨行／tab 縮排／CRLF／大寫／自閉合／同行前置字元／未收尾／巢狀各有斷言。
+
+### 沒動（只報告）
+- `src/routes/friends/+page.svelte:119` 的 CSS 註解含 `<style>` 字面，位在真 `<style>`（:118）之後 ⇒ `lastIndexOf('<style')` 那一族（20 多處）抓到的是註解裡那個，只損失一行註解（v6288:597、v6293:75 仍抓得到 CSS）。非本版問題，動了會擴大面。
+- test-v6288:69／v6296:67／v6297:76／v6267:101 各自的區塊正則 `stripCmt`／`stripComments` 仍在（用於 `{@html}`／`{#each}` 檢查等非 import 路徑），沒收乾；本版只換 import 掃描路徑上的那四處。
+
+### 三配套／驗證
+- admin.html `SITE_VERSION_HINT` 6.318（LF）；test-v6272 `PREV_SHA`→b3e2430b、`PREV_ALLOWED` = version.ts；test-v6264 `BASE_SHA`→b3e2430b（F0）。掃 pin：scripts/ 無 6.317 斷言、無整檔 sha256 新增。
+- HEAD-FAIL（改過的檔各自還原成 BASE blob）：helper 還原 ⇒ 自驗檔在 import 就炸（`does not provide an export named 'scanMarkup'`，不是 AssertionError，但不可能靜默）；
+  test-v6190 還原（反對照打錯字那版）⇒ 新 helper 頂層紅「反對照『.prize-view-modal {』在原檔根本不存在」；version.ts 還原 ⇒ test-v6272 ⑩ 兩紅（玩家端被動到了／hint 6.318 ≠ 6.317）；
+  test-v6267／v6288／v6296／v6297 還原 ⇒ 用「BASE 版守衛 vs 新版守衛」對同一突變的紅綠差證明（上表：53/0→55/1、34/0→32/2、26/0→25/1）。
+- 突變 13 個（自驗檔【4】4-1～4-8 各紅在指定 expectRe；方向 A／B／⚠1～⚠4／原意 ×2 見上表）；⚠ 只捕 `assert.AssertionError`，其餘照丟。
+- 完整 npm test **641 步 0 紅**（/tmp/work `git clone --shared` 完整歷史；序列分批：321 步三批 rc 0 ＋ 107 步三批 rc 0 ＋ 428～640 逐步跑 213 步 rc 全 0；慢的幾支 v6167 66s／v6170 87s／v6171 74s／v6172 81s／v6237 99s／v6238 101s）。
+  anti-pattern-lint（chain 第 1 步）綠；tsc：TS2304 **0**（⚠ 沙盒沒跑 svelte-kit sync ⇒ 只有 TS5083／TS1160 兩個設定錯誤，與程式無關；src/ 本版只動 version.ts 一行）。零新依賴。
+
 ## v6.317 審查者複驗三件一併修：test-v6267 補四個 Oracle 請求 token ＋ 新中央 helper 收乾「先剝區段、後剝 HTML 註解」的貪婪剝除（第三起）＋ 首頁第一則縮到 80 字內
 
 BASE `8f8b378236e0477f4451b5c00fa93d0582bf2c71`（v6.316，遠端 main；`git ls-remote` 確認；⚠ mount 本地 main 停在 e73af91a，一律以 BASE blob 為準）。

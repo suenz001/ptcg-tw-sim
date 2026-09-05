@@ -654,9 +654,13 @@ console.log('\n【F】框架安全：對戰頁零私聊引用（逐位元未動�
 //   ⭐ 更完整的版本在 scripts/test-v6297-tourn-friends-tab.mjs【D】：那裡是走**整張靜態相依圖**，
 //     連「包一層 wrapper 再靜態 import」這種字串比對擋不住的繞道也擋得住（附兩個正對照）。
 function staticImportLines(src) {
-  // ⭐ v6.317：改走中央 helper（先剝 HTML 註解、開頭標籤限行首、至少抽到 1 段）—— 與 test-v6190 同一族的形狀一併收斂
+  // ⭐ v6.317：改走中央 helper（開頭標籤限行首、至少抽到 1 段）—— 與 test-v6190 同一族的形狀一併收斂
+  // ⭐ v6.318：腳本內文的剝註解改走**行級** stripCommentsChecked —— 本檔的 stripComments 是區塊正則，
+  //   game/+page.svelte 腳本 :208 的 `// … /api/tournament/*` 會讓它吃掉 177 行（今天 import 都在 :146 之前所以沒事，
+  //   但 effects.ts 同一形狀已實際吃掉 3 個 import；第 13 種安慰劑的形狀不該留在 import 掃描路徑上）。
   const code = sectionInner(src, 'script', { label: 'game/+page.svelte', minSections: 1 });
-  return stripComments(code).split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
+  return stripCommentsChecked(code, { label: 'game/+page.svelte <script>', mustKeep: ["from 'svelte'"] })
+    .split('\n').filter((l) => /^\s*import\s/.test(l) && !/^\s*import\s+type\s/.test(l));
 }
 function assertNoStaticDmImport(src) {
   const lines = staticImportLines(src);
