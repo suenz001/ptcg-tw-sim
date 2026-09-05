@@ -1,5 +1,91 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.313 平板（iPad 等）直立時可選用手機版對戰介面（玩家自選開關，預設關）
+
+BASE `9c3e4932d1f249ed85b25a4668e81bd29f8ea3b6`（v6.312，遠端 main；`git ls-remote` 確認）。
+站長轉述玩家需求：「有玩家反應 他們想要在使用平板的時候 如ipad 可以在直立的時候 使用手機版的介面 請協助看看能不能開放使用」。
+站長裁定：做成**開關、預設不變**（絕不拿玩家做實驗）；範圍**只有對戰畫面**。
+改動檔：`src/routes/game/+page.svelte`／`src/lib/version.ts`／首頁 changelog 三檔／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`scripts/test-v6272-*`／`scripts/test-v6264-*`／`package.json`（test chain）＋新檔 `scripts/test-v6313-tablet-mobile-ui.mjs`。
+⚠ `MobilePortraitBattle.svelte` **零改動**、零新 CSS、零新依賴。
+
+### 【0】診斷複驗（上游診斷全部成立，另補一個上游沒看到的連動）
+
+- `game/+page.svelte` onResize：`isPortraitMobile = Math.min(w, h) <= 600`。iPad mini 744×1133／iPad 10.9" 820×1180／iPad Pro 11" 834×1194／
+  iPad Pro 12.9" 1024×1366 的 min 分別是 744／820／834／1024，全部 > 600 ⇒ 一律桌機分支。成立。
+- 對戰頁是兩套獨立分支（手機版 `<MobilePortraitBattle>` vs 桌機 `.battle-root`）。成立。
+- ⚠⚠ **上游漏掉的連動**：`.rotate-prompt`（「請將手機旋轉至橫向」）是 `position:fixed; inset:0; z-index:99999` 的全螢幕遮罩，
+  CSS 條件 `@media (min-width:601px) and (max-width:950px) and (orientation:portrait) and (hover:none) and (pointer:coarse)`，
+  而且它**在版面分支之外**。iPad mini／10.9／Pro 11 直式全部命中 ⇒ 開了手機版之後遮罩會整個蓋在手機版上、什麼都按不到
+  （v6.313 在 820×1180 實測 `display=flex`）。修法：`{#if}` 條件加 `!isPortraitMobile`。對真手機是 no-op（≤600 本來就被 min-width:601 擋掉）。
+  附帶：這也解釋了玩家為什麼想要手機版 —— iPad 直立現在不是「桌機版不好看」，是**被遮罩擋住、只能橫放**。
+
+### 【1】量測（主證明；playwright headless chromium，沙盒缺 libXdamage ⇒ 從 jammy 解 deb 到 /tmp 用 LD_LIBRARY_PATH）
+
+做法：對**測試站 BASE（v6.312）**開一局本機 AI 對戰（超級快龍ex vs 超級巨牙鯊ex 預組），在指定 viewport（isMobile＋hasTouch＋dpr 2）下
+偽造一次 `innerWidth=600` 派發 resize 讓 `isPortraitMobile=true`，隨即還原 getter —— 等價於開關打開
+（`MobilePortraitBattle.svelte` 不讀 innerWidth／innerHeight／matchMedia、沒有 @media，守衛 G1 釘住這個前提）。
+旋轉遮罩用 CSS 隱藏模擬「不渲染」（並記錄它在 BASE 的 display）；github.io 專屬的「我們搬家了」橫幅一併隱藏（正式站沒有）。
+每個尺寸量 setup／setup 的 sheet／playing／戰鬥位 sheet 四個時點；375×812 **不偽造**（BASE 原生手機版，正對照）。
+
+| 尺寸 | 水平捲動 | 溢出視窗元素 | 主區塊重疊 | fixed 浮層 | 關鍵區在視窗內 | 內容用到的高度 | 卡片／按鈕（CSS px） |
+|---|---|---|---|---|---|---|---|
+| 375×812（真手機，BASE） | 無 | 0 | 0 | .mp／sheet(9000) | 全部 | 100% | slot 69×94、active 92×129、hand 64×86、結束回合 82×25、sheet 鈕 341×44 |
+| 744×1133（iPad mini） | 無 | 0 | 0 | 同上（＋回合橫幅 9998 短暫） | 全部 | 78～80% | slot 90×110、active 106×148、hand 64×86、結束回合 82×25、sheet 鈕 710×44 |
+| 820×1180（iPad 10.9） | 無 | 0 | 0 | 同上 | 全部 | 75～77% | slot 90×110、active 106×148、hand 64×86、sheet 鈕 786×44 |
+| 834×1194（iPad Pro 11） | 無 | 0 | 0 | 同上 | 全部 | 74～76% | 同上、sheet 鈕 800×44 |
+| 1024×1366（iPad Pro 12.9） | 無 | 0 | 0 | 同上 | 全部 | 65～66% | 同上、sheet 鈕 990×44 |
+| 1180×820（iPad 橫放，對照） | 無 | 0 | 0 | 同上 | 全部 | 100% | slot 90×92、active 90×126、hand 64×86；兩側大片留白 |
+
+- `document.scrollHeight` 在所有尺寸都比 clientHeight 多 ~80px（含 375 BASE：834/812）—— `.mp` 是 fixed 不受影響；`body.mp-locked`
+  在量測環境 `document.body.className` 為空（375 BASE 亦然）⇒ 既有行為、本版不動、與開關無關。
+- 手牌列 `.mp-hand` 在 iPad 寬度下 scrollWidth＝clientWidth（7 張手牌一列放得下，不必橫捲）。
+- 旋轉遮罩 BASE 狀態：744／820／834 `display=flex`（會蓋住）、1024 `none`（超過 950）、375 `none`。
+- **結論**：四種 iPad 直式尺寸零溢出／零重疊／零水平捲動／關鍵互動元素全在視窗內、按鈕與手機同尺寸（iPad 的 CSS px 物理上比 iPhone 略大，
+  不會點不到；也不會大到荒謬）。唯一的觀感問題是**下方留白**（各列有 max-height，內容只用到 65～80% 高度）—— 不是爆版，
+  如實列在首頁 changelog 的 ⚠ 裡。本版**不改 CSS**（改了就動到真手機；留白要不要處理由站長決定下一版）。
+  ⇒ 直式全部放行，不設寬度上限（1024 也過；1032×1376 的 iPad Pro 13 在守衛矩陣內）。
+
+### 【2】方向：直式限定（h > w）
+
+`computeIsPortraitMobile(w, h, force) = Math.min(w, h) <= 600 || (force && h > w)`。
+理由：(1) 玩家原話是「直立的時候」；(2) 橫式 1180×820 實測雖不爆版，但內容置中、兩側大片留白，沒有比桌機版（tablet-layout）好；
+(3) 平板橫放桌機版本來就正常，沒有理由改變。旋轉時走既有 onResize 自動切換（與桌機視窗縮放跨分支的既有行為同型）。
+
+### 【3】五個連動逐一查證
+
+1. 判定改成 `computeIsPortraitMobile`（單一來源）；開關關時逐格＝`Math.min(w,h) <= 600`（守衛 A1／B1 22 格矩陣）。
+2. 方向：直式限定，見【2】。
+3. `isTabletLayout = !isPortraitMobile && …` 只被兩處消費：`recomputeZoom` 的 targetH（手機分支早退、不會用到）與 `.battle-root` 的 class（桌機分支才渲染）
+   ⇒ 開關開時它變 false 沒有任何副作用（守衛 B1 斷言手機版亮著時必為 false）。
+4. `recomputeZoom` 手機分支強制 `gameZoom=1`：手機版元件全用 CSS px 固定尺寸，量測就是在 zoom=1 下做的，合理；平板不需要縮放。
+5. `<svelte:body class:mp-locked>`：量測環境 body 沒有這個 class（375 BASE 也沒有）⇒ 與本版無關；`.mp` 自己 `position:fixed; overflow:hidden` 已鎖住畫面。
+6. 開關儲存：照 `ptcg_battle_layout`／`ptcg_fable_card_scale` 的既有樣式 —— localStorage `ptcg_force_mobile_battle_ui`，`'1'` 才算開（守衛 C1）。
+7. 開關位置：對戰中「⚙️ 設定 › 🎴 對戰版面（測試）」section 內（好友 section 仍是最後一個，test-v6285 照綠）。
+   真手機（`isSmallScreen`＝min(w,h) <= 600）**不顯示**這個開關 —— 它對真手機沒有作用，顯示出來只會讓人困惑（守衛 F1／M7）。
+   其他讀 `isPortraitMobile` 的消費點（聊天面板 clamp／DmPanel mobile／zoom-section 預設收合）在開關開時都走手機行為，正確。
+
+### 【4】守衛陷阱
+
+- 分支 `{#if}` 字面一字未動（test-v6107／v6149／v6170／v6172／v6190／v6284／v6285 的錨點照舊；本版新註解裡沒有寫出那個字面）。
+- 沒用 @media 當開關；`MobilePortraitBattle.svelte` 零改動。
+
+### 【5】守衛 `scripts/test-v6313-tablet-mobile-ui.mjs`（16 PASS；全部行為端，抽出真實程式片段執行）
+
+A1 公式 22 格矩陣（開關關＝BASE、開關開只在 h>w 多切）／B1 onResize 抽出執行 44 次（三個旗標與單一來源一致、isTabletLayout）／
+C1 初始化只認 '1'／D1 setter 寫 localStorage＋派發 resize／E1 rotate-prompt 條件求值／F1 設定 modal 位置與接線／G1 結構不變量。
+HEAD-FAIL（BASE blob）：16 條全紅，E1 紅在**行為端**（isPortraitMobile=true 時遮罩仍渲染）。
+突變 9 條（只捕 AssertionError、各紅在預期）：橫式也切／破壞 BASE 公式／onResize 另抄公式／預設變開／setter 不重算／遮罩條件回 BASE／
+真手機也顯示開關／isSmallScreen 被污染／雙寫入點。
+
+### 【6】三配套與其他
+
+- `admin.html SITE_VERSION_HINT`→6.313（LF）；test-v6272 `PREV_SHA`→9c3e4932、`PREV_ALLOWED` 五項照實列；test-v6264 `BASE_SHA`→9c3e4932。
+- 首頁 changelog 三步：新增 v6.313（open）、第 13 則 **v6.293** 內文搬進 bodies、被擠出的 **v6.232** 搬進封存頁（4,950 → 4,9xx 字）。
+- 掃 pin：本版新守衛不含 sha、不拿版本號當判斷；沒有守衛 pin 本版動到的檔的 sha256。
+- 部署後在測試站用**真開關**再量一次（不偽造），與偽造量測比對；⚠ 站長：只有 SITE_VERSION_HINT 動到 admin.html，
+  跑 `update-tournament.bat`（會先同步 git）即可，順序不限；本版沒有伺服器相依。
+
 ## v6.312 守衛修正：strip-comments 行級剝除器的四種假綠（v6.311 自己留下的洞）＋ test-v6277 四個補強
 
 BASE `e65a718ee9e40acb12560f57b05e077e1f5b84f1`（v6.311，遠端 main；`git ls-remote` 確認）。純守衛修正、玩家端零改動（只有 version.ts）⇒ 首頁 changelog 不放。

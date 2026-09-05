@@ -586,7 +586,9 @@ await T('E2 ⭐⭐ 手機／桌機是 JS 分支：DmPanel.svelte **零 @media**�
   assert.ok(/class="dm-panel \{mobile \? 'mobile' : 'desktop'\}"/.test(PANEL), '面板 class 沒依 mobile prop 切分支');
   const m = /isMobile = Math\.min\(window\.innerWidth, window\.innerHeight\) <= (\d+);/.exec(PAGE);
   assert.ok(m, '/friends 頁沒有 JS 手機開關');
-  const g = /isPortraitMobile = Math\.min\(w, h\) <= (\d+);/.exec(GAME);
+  // ⭐v6.313 起門檻搬進單一來源 computeIsPortraitMobile(w, h, force)（回傳 Math.min(w, h) <= N || …）；仍抽同一個 N 比對，判準不變。
+  const g = /function computeIsPortraitMobile\(w: number, h: number, force: boolean\): boolean \{\s*return Math\.min\(w, h\) <= (\d+)/.exec(GAME)
+    || /isPortraitMobile = Math\.min\(w, h\) <= (\d+);/.exec(GAME);
   assert.ok(g, 'game/+page.svelte 的 isPortraitMobile 門檻抽不到（寫法變了？）');
   assert.strictEqual(m[1], g[1], '手機門檻與對戰頁不一致：' + m[1] + ' vs ' + g[1]);
   assert.ok(/<DmPanel [^>]*mobile=\{isMobile\}/.test(PAGE), 'DmPanel 沒接 mobile={isMobile}');

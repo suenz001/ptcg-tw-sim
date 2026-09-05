@@ -1977,6 +1977,25 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // 平板 / 1366x768 走 .battle-root.tablet-layout 橫式縮小配置。
   let isPortraitMobile = $state(false);
   let isTabletLayout = $state(false);
+  // ⭐ v6.313 平板（iPad 等）直立時可選用手機版對戰介面 —— 玩家自選的開關，預設關、不動任何現有玩家的畫面。
+  //   forceMobileBattleUI：localStorage 'ptcg_force_mobile_battle_ui' === '1' 才算開。
+  //   isSmallScreen：min(w,h) <= 600（本來就走手機版的裝置）—— 開關對它沒有作用，設定 modal 用它決定不顯示開關。
+  let forceMobileBattleUI = $state(false);
+  let isSmallScreen = $state(false);
+  // 手機版分支判定的**單一來源**（守衛 test-v6313 把這個函式抽出來跑尺寸矩陣）：
+  //   開關關 ⇒ 逐格等於 v6.312 之前的 Math.min(w, h) <= 600；
+  //   開關開 ⇒ 額外只在「直式」（h > w）切到手機版。橫放仍走桌機版 ——
+  //   MobilePortraitBattle 是為 ≤600px 寬設計的，v6.313 實測 iPad 直式 744～1024 寬零溢出／零重疊，
+  //   橫式 1180×820 雖也不爆版但兩側大片留白、沒有比桌機版好，而玩家要的也只有「直立的時候」。
+  function computeIsPortraitMobile(w: number, h: number, force: boolean): boolean {
+    return Math.min(w, h) <= 600 || (force && h > w);
+  }
+  function setForceMobileBattleUI(on: boolean) {
+    forceMobileBattleUI = on;
+    try { localStorage.setItem('ptcg_force_mobile_battle_ui', on ? '1' : '0'); } catch { /* ignore */ }
+    // 立刻重算：與旋轉裝置走同一條 onResize 路徑（不另抄一份判定）
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('resize'));
+  }
 
   // ── v2.45 解析度模式（Leon 反映 1024×576 螢幕容納不下 tablet-layout）──────────
   // 模式：
@@ -2092,6 +2111,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       const savedScale = parseFloat(localStorage.getItem('ptcg_fable_card_scale') ?? '');
       if (Number.isFinite(savedScale) && savedScale >= 0.7 && savedScale <= 1.4) fableCardScale = savedScale;
     } catch { /* ignore */ }
+    // ⭐ v6.313 平板直立用手機版：只認 '1'，其他值（含沒設過）一律當關 —— 預設不變。
+    //   ⚠ 必須在下面 onResize() 初始化之前讀好，否則第一幀會先走桌機版再跳成手機版。
+    try { forceMobileBattleUI = localStorage.getItem('ptcg_force_mobile_battle_ui') === '1'; } catch { /* ignore */ }
 
     const onResize = () => {
       const w = window.innerWidth;
@@ -2101,7 +2123,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
       // v5.194：手機橫放也走手機 layout — 改成 min(w, h) <= 600
       //   原條件只在 portrait（h>w）才切手機版，玩家不小心橫放會跳到桌機版
       //   新條件：任一邊 ≤ 600px 就視為手機（含手機橫放、平板大小手機）
-      isPortraitMobile = Math.min(w, h) <= 600;
+      // ⭐ v6.313：開關關閉時 computeIsPortraitMobile 就是原本的 Math.min(w, h) <= 600（單一來源，見函式註解）
+      isSmallScreen = Math.min(w, h) <= 600;
+      isPortraitMobile = computeIsPortraitMobile(w, h, forceMobileBattleUI);
       
       // 極小手機橫屏（交給原本的 @media max-width: 950px and orientation: landscape 處理）
       const isLandscapeMobile = w <= 950 && w > h;
@@ -10533,7 +10557,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
      v5.609：game-over / 觀戰時不顯示 — 此提示是 z-index:99999 全螢幕遮罩(無 pointer-events:none)，
        在 601~950px 直向觸控裝置會蓋住「返回賽事大廳 / 離開觀戰」鈕(z-9999)→ 按不了。
        這兩種狀態玩家只需按離開/返回、不需橫向，故不顯示提示。對戰進行中(參戰者)維持提示不變。 -->
-{#if game && game.phase !== 'game-over' && !isSpectator}
+{#if game && game.phase !== 'game-over' && !isSpectator && !isPortraitMobile}
+  <!-- ⭐ v6.313 加 !isPortraitMobile：平板直立開了手機版介面後（744～950px 直式觸控裝置），這張 z-index 99999 的
+       全螢幕遮罩會整個蓋在 MobilePortraitBattle 上面、什麼都按不到（v6.313 實測 rotate-prompt display=flex）。
+       真手機（min(w,h) <= 600）本來就被 @media min-width:601px 擋掉，這個條件對它是 no-op。 -->
   <div class="rotate-prompt">
     <div class="rotate-prompt-icon">📱</div>
     <div class="rotate-prompt-text">請將手機旋轉至橫向<br/>以獲得最佳對戰體驗</div>
@@ -14022,11 +14049,23 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 oninput={(e) => setFableCardScale(parseFloat(e.currentTarget.value))} />
             </div>
           {/if}
+          {#if !isSmallScreen}
+          <!-- ⭐ v6.313 平板（iPad 等）直立時改用手機版對戰介面。只在「本來就不是手機版」的裝置顯示：
+               min(w,h) <= 600 的裝置無論如何都走手機版，這個開關對它沒有作用，顯示出來只會讓人困惑。
+               零新 CSS（沿用 .setting-row／.small）。 -->
+          <div class="setting-row">
+            <label for="force-mobile-ui">📱 平板直立時用手機版介面：</label>
+            <input id="force-mobile-ui" type="checkbox" checked={forceMobileBattleUI}
+              onchange={(e) => setForceMobileBattleUI(e.currentTarget.checked)} />
+            <span class="small" style="color:#9aa3b0">（只在直立時生效；橫放仍是電腦版面）</span>
+          </div>
+          {/if}
           <div class="setting-hint">
             ・經典版 = 目前預設，所有玩家原本看到的版面
             <br/>・桌墊版 = 仿實體 TCG — 戰鬥位置中、Bench 5 格對稱列、競技場置中央
             <br/>・桌墊版仍在測試，窄螢幕（&lt; 1200px）可能變形，會自動退回經典版
             <br/>・只動桌機 — 手機版直立 layout 不受影響
+            <br/>・平板（iPad 等）直立時可勾選改用手機版介面；橫放時自動回到電腦版面
           </div>
         </details>
 
