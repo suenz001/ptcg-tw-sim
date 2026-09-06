@@ -487,10 +487,35 @@ function gameoverRegionOf(src) {
   return src.slice(a, b);
 }
 const sha256 = (t) => createHash('sha256').update(t, 'utf8').digest('hex');
-await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）與 BASE **逐位元相同**；勝負 modal 區間同樣逐位元相同', () => {
+// ⭐ v6.321（站長裁定的對戰 UI 改動：悔棋鈕三版面同源 undoBtnVisible ＋ 開局換戰鬥場的桌機拖曳入口）——
+//   沿用 test-v6265 F4 的作法：把**已知的合法改動**逐條還原（每條必須恰出現一次）之後，其餘仍必須逐位元等於 BASE。
+//   多動一個位元組照樣紅；少列一條也紅（還原不到＝那條改動不存在）。守護意圖不變：好友功能一個字都不准滲進對戰版面。
+const V6321_BATTLE_EDITS = [
+  ['      undoAvailable={undoBtnVisible}\n',
+   '      undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}\n'],
+  ["          {#if undoBtnVisible && mode !== 'online'}\n",
+   "          {#if undoSnapshot && mode !== 'online' && aiPlayerIndex !== null && !pendingSelection && game.phase === 'playing'}\n"],
+  ["          {#if undoBtnVisible && mode === 'online'}\n",
+   "          {#if undoSnapshot && mode === 'online' && roomData?.allowUndo && !undoDeniedThisSnapshot && !undoAwaitingResponse && !pendingSelection && game.phase === 'playing' && mySeatIdx >= 0 && mySeatIdx <= 1 && isMyTurn()}\n"],
+  ["evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)) || dragOpFor('poke')==='setup-active-swap')}\n            class:drop-hover={dropTargetIid===myPlayer.active.iid}\n",
+   "evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}\n            class:drop-hover={dropTargetIid===myPlayer.active.iid}\n"],
+  ["          {@const canSwapActive=ops.has('setup-active-swap')}\n", ''],
+  ['            {:else if canSwapActive && canBasic}<span class="hand-hint hl">🔁 拖到戰鬥場換上場／📥 拖到備戰</span>\n'
+   + '            {:else if canSwapActive}<span class="hand-hint hl">🔁 拖到戰鬥場換上場</span>\n', ''],
+];
+function revertV6321(region) {
+  let r = region;
+  for (const [now, before] of V6321_BATTLE_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, 1, 'v6.321 的合法改動必須恰出現一次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.replace(now, before);
+  }
+  return r;
+}
+await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
-  assert.strictEqual(sha256(battleRegionOf(GAME)), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6321(battleRegionOf(GAME))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(gameoverRegionOf(GAME)), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
@@ -498,6 +523,10 @@ await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比�
   assert.notStrictEqual(sha256(r), sha256(r + ' '), 'sha256 自驗失敗');
   const mutated = GAME.replace(BATTLE_START, BATTLE_START + '<!-- x -->');
   assert.notStrictEqual(sha256(battleRegionOf(mutated)), sha256(r), '對戰版面區間的抽取器對「多一個註解」沒有反應 ⇒ E1 是恆真式');
+  // v6.321 還原表：多一個位元組的區間，還原後仍與原區間還原後不同（還原不會把無關改動洗掉）
+  assert.notStrictEqual(sha256(revertV6321(battleRegionOf(mutated))), sha256(revertV6321(r)), 'revertV6321 把無關改動洗掉了 ⇒ E1 變成恆真式');
+  // 少列一條（把第一條的「現在」字串換掉）⇒ revertV6321 必須紅
+  assert.throws(() => revertV6321(r.replace(V6321_BATTLE_EDITS[0][0], V6321_BATTLE_EDITS[0][1])), /恰出現一次/, '合法改動不存在時 revertV6321 沒有紅');
 });
 await T('E1c ⭐⭐ 不需要歷史的等價條件：對戰版面分支區間零 `friend`／零 `lobby-tab`／零 `FriendsPanel`（本版新增的東西一個都不准滲進去）；且區間 >20000 字元、含兩套分支', () => {
   const r = battleRegionOf(GAME);

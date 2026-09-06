@@ -329,6 +329,8 @@ function newPredicate(game, myIdx, isSpectator) {
   for (const inst of game.players[myIdx].hand) {
     const o = ops.get(inst.iid) ?? new Set(); const acts = new Set();
     if (o.has('setup-active')) acts.add('active');
+    // ⭐v6.321 開局重選戰鬥場（站長裁定的新入口）：獨立成一個 act，下方用 engine 實跑證明它不是死按鈕
+    if (o.has('setup-active-swap')) acts.add('active-swap');
     if (o.has('basic') || o.has('basic-setup')) acts.add('bench');
     if (o.has('fossil')) acts.add('fossil');
     if (o.has('evolve')) acts.add('evolve');
@@ -379,7 +381,7 @@ if (M) {
       myIdx, isSpectator: rnd() < 0.12 };
   };
   const snap = s => JSON.stringify(s.players.map(p => [p.active?.iid ?? null, p.bench.map(b => b.iid), p.hand.map(h => h.iid)]));
-  let compared = 0, mismatch = 0, deadButton = 0, spectatorOnly = 0;
+  let compared = 0, mismatch = 0, deadButton = 0, spectatorOnly = 0, swapChecked = 0;
   // ⭐ 只有「黃框」不同（動作集合完全一樣）的 mismatch 也要斷言方向 ——
   //   子代理審查指出這個分支原本完全不檢查（＝一塊沒人看的死角）。
   let highlightOnly = 0, highlightGained = 0;
@@ -402,8 +404,21 @@ if (M) {
         continue;
       }
       // 新版**多**出來的動作 → 一律不允許（那才是真的行為漂移）
-      const extra = vb.acts.filter(x => !va.acts.includes(x));
+      // ⭐v6.321 唯一允許的新增動作是 active-swap，且**每一次**都要在 engine 上實跑證明：
+      //   PLACE_ACTIVE 真的換上場（新 active = 這張）、原本的戰鬥場寶可夢真的回到手牌。
+      //   （白名單條目必須附行為端證明 —— 不是名字對了就放行）
+      const extra = vb.acts.filter(x => !va.acts.includes(x) && x !== 'active-swap');
       if (extra.length) { regress.push(`新增動作 ${extra} @ ${st.phase}`); continue; }
+      if (vb.acts.includes('active-swap') && !va.acts.includes('active-swap')) {
+        swapChecked++;
+        const oldActive = st.players[myIdx].active;
+        const r = M.applyAction(st, { type: 'PLACE_ACTIVE', iid: id, senderIdx: myIdx }, pool);
+        const okSwap = !!oldActive && st.phase === 'setup' && !st.setupDone[myIdx] && !isSpectator
+          && r.players[myIdx].active?.iid === id && r.players[myIdx].hand.some(h => h.iid === oldActive.iid);
+        if (!okSwap) regress.push(`active-swap 在 engine 上不成立 @ ${st.phase} setupDone=${st.setupDone[myIdx]} active=${!!oldActive} spec=${isSpectator}`);
+        const rest = vb.acts.filter(x => x !== 'active-swap');
+        if (JSON.stringify(rest) === JSON.stringify(va.acts)) continue;   // 其餘動作完全一致 ⇒ 不再往下比「少掉的」
+      }
       // 新版**少**掉的動作 → 必須證明「舊的那顆按鈕本來就沒用」
       for (const act of va.acts.filter(x => !vb.acts.includes(x))) {
         if (isSpectator) { spectatorOnly++; continue; }   // 觀戰唯讀（v6.197 fail-closed）
@@ -427,6 +442,8 @@ if (M) {
   chk('⑥差分實跑：確實有跑到每一種 mismatch 分支（全等於 0 表示產生器沒覆蓋到 setup/觀戰）',
     mismatch > 0 && deadButton > 0 && highlightOnly > 0,
     JSON.stringify({ compared, mismatch, deadButton, spectatorOnly, highlightOnly }));
+  chk('⑥v6.321 開局換戰鬥場：fuzz 真的走到 active-swap 的 engine 實跑（0 次＝產生器沒覆蓋到「setup＋已有 active」）',
+    swapChecked > 0, String(swapChecked));
   chk('⑥差分實跑：只有黃框不同的那些，方向一律是「舊不亮→新亮」（新版沒有無故熄掉黃框）',
     highlightOnly > 0 && highlightGained === highlightOnly, JSON.stringify({ highlightOnly, highlightGained }));
   console.log(`  ℹ 差分實跑：比對 ${compared} 張手牌狀態 / mismatch ${mismatch}`

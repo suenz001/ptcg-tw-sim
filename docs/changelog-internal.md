@@ -1,5 +1,85 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.321 悔棋快照跨局殘留（新局 setup 按 ↶ 整包退回上一局；換了座位＝看到上一局對手的手牌）＋ 開局可重選戰鬥場
+
+BASE `9e41a5d55394cfc8547d0217c4095ef7dbe2c888`（v6.320，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`src/routes/game/+page.svelte`／`src/routes/game/MobilePortraitBattle.svelte`／`src/lib/game/hand-card-ops.ts`／
+`src/lib/game/room.ts`／`src/lib/game/room-oracle.ts`／`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`package.json`（test chain）／`scripts/test-v6201-*`（新增 active-swap 的行為端白名單）／`scripts/test-v6293-*`（E1 改 revert-diff）／
+`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED 九項）／`scripts/test-v6264-*`（BASE_SHA）／首頁 changelog 三檔／本檔
+＋ 新檔 `scripts/test-v6321-undo-snapshot-cross-game.mjs`、`scripts/measure-v6321-mobile-undo.mjs`。
+零新依賴。⚠ **engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 零改動**（test-v6265 F4／F5 逐位元釘住）。
+
+### 【0】玩家回報（站長逐字轉述）
+> 「一般對戰(休閒對戰)開局準備的時候我戰鬥場那一隻放錯，本來想說用倒退，然後直接退到我上一局跟別人打的，
+> 重點是我是對面呆呆王，他直接給我退到上一局我跟對面打對面的視角」
+
+### 【1】調查者診斷逐條複驗（全部成立，一條也沒推翻）
+- 「他按的不是瀏覽器上一頁」成立：對戰中 popstate 會被 pushState 回去；他按的是手機直式頂欄的 ↶。
+- 根因 (a)-1 成立：`undoSnapshot` 5 個賦值點全在 dispatch／悔棋後，`leaveOnlineGame`／adopt／rematch 一個都不碰；
+  第 1 局以攻擊終局時 END_TURN 根本沒跑到 ⇒ 快照留著（守衛 A1 的 `kept1 === true` 就是這個前提）。
+- 根因 (a)-2 成立：手機 `undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}` 沒有 phase 閘；
+  ⚠ 補充：**桌機也不是完全看不到** —— 桌機線上鈕的閘是 `playing && isMyTurn()`，第 2 局進入 playing 輪到自己時，
+  上一局的快照一樣讓它亮起來（守衛 A1 的 toPlaying 變體、G2 突變就是這個路徑）。
+- 根因 (a)-3 成立：`performUndo`／對手 modal／agreed `$effect`／`pushUndoRollback` 全不比 game.id。
+- 根因 (b) 成立：engine `PLACE_ACTIVE` 已有 active 時接受並把舊的放回手牌；`getHandCardOps` 只在 `!me.active` 給 `setup-active`。
+- 「休閒沒有 redact」成立，本版不碰（站長裁定）。
+- 主證明（真引擎＋逐字抽出的頁面規則）：BASE 第 2 局 setup 畫面手牌 = `["14424","14468","18565","18077"]`（小光／鬥子／小光／捷朵）
+  ＝ 第 1 局對手 X 的手牌；本版 = `["14086"]`（第 2 局自己的）。
+
+### 【2】修法
+- **A 單一接線點**（比照 v6.214 `_noteActiveGame`）：`$effect` 看到 `undoSnapshot && !undoSnapshotOwnedBy(undoSnapshot, game)`
+  ⇒ 清快照＋`undoActionDesc`／`undoDeniedThisSnapshot`／`undoAwaitingResponse`；若原本在等對手回應且還在房裡，
+  best-effort `clearUndoRequestApi(roomCode)` 撤回房間裡的 pending 請求。`game=null`（離房／回大廳）、換房、同房再來一局（id 變）全部涵蓋。
+  ⭐ 快照本身就是一份 GameState，`snap.id` 就是拍下時那一局的 id ⇒ **不需要另存 `{gameId, state}`**（同一個資訊、少一個會漂移的欄位）。
+  `undoSnapshotOwnedBy` 是 type predicate（`snap is GameState`）—— 否則 agreed `$effect` 的 `const snap = undoSnapshot` 會掉型別（svelte-check 抓到）。
+- **B 綁 gameId**：`undoBtnVisible`（唯一顯示述詞）／`performUndo`（同源早退）／agreed `$effect` 都走 `undoSnapshotOwnedBy`；
+  `requestUndo(roomCode, seat, desc, gameId?)`（room.ts／room-oracle.ts 鏡射，有值才放、不寫 undefined）；
+  對手端 modal 加 `undoRequestForThisGame(req, game)`：**帶 gameId 必須等於本局；沒帶（舊 client）退回 phase 閘（playing 才顯示）**。
+  - **版本 skew 取捨**：fail-closed 的對象是「異局」而不是「舊 client」——舊 client 的請求沒有 gameId，若一律拒收就把它們在 playing 階段的
+    正常悔棋擋死（新 bug）。退回 phase 閘等於 BASE 對舊 client 的行為，只多擋 setup。舊 client 在 playing 階段拿上一局快照發請求的洞，
+    由 E（收端）補。
+  - **不需要 server 先上**：`/api/rooms/:code` 的房間 doc 是不透明 JSON（server 只做 `_version` CAS，delta-put 的 set/del 也是泛型路徑、
+    無欄位白名單；`_ROOMS_DIGEST_NOISE` 只是把整個 `undoRequest` 排除在大廳 digest 之外）。守衛 C2 實跑 room-oracle 的 requestUndo，
+    寫出的 doc 其餘欄位逐字相同。Firestore 版同樣是子物件欄位。⇒ 部署順序沒有 server 相依；`redeploy-oracle.bat` 一支即可。
+- **C 手機 ↶ 補閘**：`undoAvailable={undoBtnVisible}`；桌機兩顆鈕也改讀它（`{#if undoBtnVisible && mode !== 'online'}`／`=== 'online'`），
+  三種版面同一份條件：`playing && !pendingSelection && !awaiting && !denied && (online ? allowUndo && seat 0/1 && isMyTurn() : aiPlayerIndex !== null)`
+  ＋ 快照屬於本局。
+- **D 開局可重選戰鬥場**：新 op `setup-active-swap`（`isBasicCard && setupFresh && !!me.active`；釋放區 `poke`）。
+  桌機：拖到**自己的戰鬥場寶可夢**上（結算端核對 `tIid === myPlayer.active.iid && phase === 'setup'`）；戰鬥場 drop-zone 亮起；手牌提示「🔁 拖到戰鬥場換上場」。
+  手機：sheet 多一顆「🔁 換上戰鬥場（原本的回手牌）」→ 同一支 `playBasicToActive`。
+  ⚠ 只到「準備完成」為止（setupFresh）；`mulliganPostBenchOpen` 期間不給（engine 只開放備戰）；閃焰王牌（非基礎、`canBeInitialActiveCard`）
+  **不給** swap（卡面只講「可放於戰鬥場開始對戰」；不擴張）；互動式開局進行中 engine 仍擋（E4）。engine 零改動。
+  「三處都要接」：UI 桌機／UI 手機／守衛（test-v6200 op 對照表、test-v6201 新增 `active-swap` act＋每一筆都在 engine 實跑證明不是死按鈕）；
+  ai.ts 不讀 `getHandCardOps`（AI 的 setup 走自己的擺場邏輯），無需接。
+- **E 收端**（調查者提、站長說「A＋B 根治就不要動」）：**仍做，理由＝版本 skew**：SW 快取讓舊 client 存活數天，舊 client 發起方在
+  第 2 局 playing 階段拿上一局快照發請求 → 新 client 對手同意 → 舊 client `pushUndoRollback(上一局快照)` → 新 client 收端 `apply-undo`
+  吃下去＝整包換成上一局。只在 `+page.svelte` 的 `apply-undo` case 加一行 `decision.game.id !== game.id ⇒ warn + return`（一次性標記照推進），
+  **sync-guards.ts 一個字沒動**（test-v6265 F5 逐位元）。同一局的 rollback id 恆相等 ⇒ 零影響（C6／test-v6265 E3）。
+
+### 【3】驗證
+- 守衛 `test-v6321`：39 PASS（A 主證明＋A4 對 BASE blob 必見洩漏／B 接線點／C gameId 五條／D 顯示矩陣 11 格／E 開局換戰鬥場 7 條／G 突變 13 個）。
+  HEAD-FAIL 逐檔：+page.svelte→BASE 紅 A1/A2/B1/B2/B3/C1/C4/C5/C6/D1/D2…；MPB→E7；hand-card-ops→E1/E5；room-oracle→C2；room.ts→C3。
+- 既有守衛翻紅兩支，都照它說的修、不放寬：
+  - test-v6201 ⑥「新版黃框與動作集合脫鉤」→ newPredicate 加 `active-swap` act，白名單附**行為端證明**（每一筆在 engine 實跑 PLACE_ACTIVE：
+    新 active＝這張、舊 active 回手牌；`swapChecked` 0 次也紅）。
+  - test-v6293 E1「對戰版面分支逐位元未變」→ 改 revert-diff（6 條合法改動各恰一次還原後仍須逐位元等於 v6.295 blob；E1b 加兩條自驗：
+    還原不洗無關改動、少列一條必紅）。守護意圖（好友功能零滲入對戰版面）不變。
+- 真元件 DOM（`measure-v6321-mobile-undo.mjs`：svelte/compiler 編真的 MobilePortraitBattle，headless Chrome CDP 掛載）：
+  375×812 與 768×1024（平板手機版介面）各 8 條全 OK —— setup `.mp-undo-btn` 0 個；playing＋我的回合 1 個且點了 onUndo 被叫；
+  異局快照／對手回合 0 個；setup 已有戰鬥場點手牌基礎卡 sheet 有「🔁 換上戰鬥場」，按下送出 PLACE_ACTIVE。對 BASE 樹跑同腳本 8 FAIL（setup 亮、沒有換上場）。
+  桌機／平板桌機版面：兩顆鈕的 `{#if}` 只讀 `undoBtnVisible`（D1）＋ 顯示矩陣（D2）；沙盒 vite build 會被 ~178s 工具上限殺掉，整站 DOM 沒跑。
+- 完整 npm test（`git clone --shared` 完整歷史、序列分批、642 支逐一計數、最後一支 test-v6321 有跑到）⇒ **0 紅**。
+  svelte-check：與 BASE 逐條 diff 零新增錯誤、TS2304 0；tsc 54 個既有錯誤＝BASE 同一組（逐條 diff 相同）；anti-pattern-lint 無違規。
+- 三配套：admin.html SITE_VERSION_HINT 6.321（LF）；test-v6272 PREV_SHA→9e41a5d5、PREV_ALLOWED 九項；test-v6264 BASE_SHA→9e41a5d5（F1~F3）。
+  掃 pin：scripts 內 `6.320` 全是註解沿革；沒有守衛拿版本號或整檔 sha256 當唯一判準（完整 chain 全綠即證）。
+- 首頁 changelog 三步：新增 v6.321（open；只寫 D 與「開局階段誤觸悔棋畫面異常」，不描述洩漏手法）、第 13 則 **v6.296** 內文搬進 bodies、
+  被擠出的 **v6.233** 搬進封存頁（摘要區 4,923 → 4,915 字）。
+
+### 【4】部署
+無 server 相依：`redeploy-oracle.bat` 即可上正式站；`update-tournament.bat` 不必（engine／server-engine 零改動）。
+⚠ 舊 client 與新 client 混跑期間：新 client 對舊 client 的 setup 請求不顯示 modal；舊 client 自己仍可能在 setup 按到 ↶（只影響它自己的畫面，且新 client 收端拒收異局 rollback）。
+
 ## v6.320 剝除器收線（第七版）：護欄⑧「收尾標籤字面也算殘留」＋ 護欄⑨「HTML 註解文字裡的收尾字面」＋ 自驗 5-2 改範圍級裁判 ＋ 六支自帶正則抽 script／style 的守衛改走中央 helper
 
 BASE `20ddf2e45b825aa634ece898421b76554273a165`（v6.319，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。

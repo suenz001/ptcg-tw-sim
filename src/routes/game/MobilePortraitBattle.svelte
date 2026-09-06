@@ -520,6 +520,10 @@
         action: () => playBasicToActive(iid), primary: true,
       });
     }
+    // ⭐v6.321 開局重選戰鬥場：已有戰鬥場寶可夢時，手牌基礎卡可「換上場」（原本那隻回手牌；engine 既有語意）
+    if (ops.has('setup-active-swap')) {
+      out.push({ label: '🔁 換上戰鬥場（原本的回手牌）', action: () => playBasicToActive(iid) });
+    }
     if (ops.has('basic') || ops.has('basic-setup')) {
       out.push({ label: '📥 放到備戰區', action: () => playBasicToBench(iid) });
     }

@@ -54,6 +54,7 @@ export type HandCardOp =
   | 'basic'          // playing 階段：基礎寶可夢放備戰
   | 'basic-setup'    // setup 階段：基礎寶可夢放備戰（已有出場寶可夢）
   | 'setup-active'   // setup 階段：放到空的戰鬥場
+  | 'setup-active-swap' // ⭐v6.321 setup 階段（尚未按準備完成）：已有戰鬥場寶可夢時換上場，原本那隻回手牌
   | 'fossil'         // 化石 Item 當基礎寶可夢放備戰
   | 'tool'           // 寶可夢道具附到寶可夢身上
   | 'trainer'        // 支援者／物品／競技場
@@ -61,7 +62,7 @@ export type HandCardOp =
   | 'hand-ability';  // ⭐ 從手牌發動的特性（齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝…）
 
 export const HAND_CARD_OPS: readonly HandCardOp[] = [
-  'energy', 'basic', 'basic-setup', 'setup-active',
+  'energy', 'basic', 'basic-setup', 'setup-active', 'setup-active-swap',
   'fossil', 'tool', 'trainer', 'evolve', 'hand-ability',
 ] as const;
 
@@ -77,6 +78,7 @@ export const HAND_OP_DROP_TARGET: Readonly<Record<HandCardOp, HandDropTarget>> =
   basic: 'bench-empty',
   'basic-setup': 'bench-empty',
   'setup-active': 'active-empty',
+  'setup-active-swap': 'poke',   // 釋放在**自己的戰鬥場寶可夢**上（桌機結算端再核對 iid）
   fossil: 'bench-empty',
   tool: 'poke',
   trainer: 'playmat',
@@ -95,6 +97,7 @@ const DRAG_KIND_PRIORITY: ReadonlyArray<readonly [HandCardOp, HandDragKind]> = [
   ['basic', 'basic'],
   ['basic-setup', 'basic'],
   ['setup-active', 'basic'],
+  ['setup-active-swap', 'basic'],
   ['fossil', 'fossil'],
   ['evolve', 'evolve'],
   ['tool', 'tool'],
@@ -214,6 +217,10 @@ export function getHandCardOps(
     if (isBasicCard && basics.has(inst.iid)) ops.add('basic');
     if (isBasicCard && setupOpen && !!me.active && !benchFull) ops.add('basic-setup');
     if (!me.active && (isBasicCard ? setupOpen : (setupFresh && canBeInitialActiveCard(c)))) ops.add('setup-active');
+    // ⭐v6.321 開局重選戰鬥場（玩家回報：放錯了只能找「倒退」）。engine 的 PLACE_ACTIVE 本來就接受已有 active
+    //   （舊的放回手牌），缺的只是 UI 入口。⚠ 只到「準備完成」為止（setupFresh：setupDone 之後 engine 鎖死，不放寬）；
+    //   mulligan 補抽後的 mulliganPostBenchOpen 只開放備戰，不開放換戰鬥場（engine 同一道 gate）。
+    if (isBasicCard && setupFresh && !!me.active) ops.add('setup-active-swap');
     if (isFossilCard && fossils.has(inst.iid)) ops.add('fossil');
     if (!isFossilCard && isTrainerCard && trainers.has(inst.iid)) {
       ops.add(isToolCard ? 'tool' : 'trainer');

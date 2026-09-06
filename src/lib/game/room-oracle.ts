@@ -937,10 +937,11 @@ export async function requestUndo(
   roomCode: string,
   fromSeatIdx: number,
   actionDesc: string,
+  gameId?: string,   // ⭐v6.321 發起時的 game.id（房間 doc 是不透明 JSON：伺服器原樣存、不必先上）
 ): Promise<void> {
   await oracleTx(roomCode.toUpperCase(), (data) => ({
     ...data,
-    undoRequest: { fromSeatIdx, actionDesc, status: 'pending' } as unknown as RoomData['undoRequest'],
+    undoRequest: { fromSeatIdx, actionDesc, status: 'pending', ...(gameId ? { gameId } : {}) } as unknown as RoomData['undoRequest'],
   }));
 }
 

@@ -141,6 +141,8 @@ export interface RoomData {
     fromSeatIdx: number;
     actionDesc: string;
     status: 'pending' | 'agreed' | 'rejected';
+    /** ⭐v6.321 發起時的 game.id（舊 client 不帶；對手端只在同一局顯示 modal） */
+    gameId?: string;
   };
   /**
    * v5.390 悔棋一次性標記：發起方同意悔棋後用 pushUndoRollback 寫入 rollback 狀態時 bump 此時間戳。
@@ -480,6 +482,7 @@ export async function requestUndo(
   roomCode: string,
   fromSeatIdx: number,
   actionDesc: string,
+  gameId?: string,   // ⭐v6.321 發起時的 game.id（Firestore 不能寫 undefined ⇒ 有值才放）
 ): Promise<void> {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error('尚未登入');
@@ -489,6 +492,7 @@ export async function requestUndo(
       fromSeatIdx,
       actionDesc,
       status: 'pending',
+      ...(gameId ? { gameId } : {}),
     },
     updatedAt: serverTimestamp(),
   });

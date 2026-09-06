@@ -1186,6 +1186,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   這一欄記「目前的門檻是哪一間房的」，判準在 sync-guards.nextRestartBaseline。
   let _restartBaselineRoom: string | null = null;
   let undoAwaitingResponse = $state(false);                // 發起方等待對手回應中
+  // ⭐⭐⭐v6.321 悔棋快照只屬於「拍下它的那一局」（玩家回報：新局 setup 按 ↶ 整包退回上一局，換了座位就是
+  //   上一局對手的視角）。快照本身就是一份 GameState，它的 id 就是拍下時那一局的 id ⇒ 綁定不需另存欄位。
+  //   單一接線點（比照 v6.214 的 _noteActiveGame）：換局／換房／離房（game=null）⇒ 快照與伴隨旗標一併作廢；
+  //   逐處手動清（leaveOnlineGame／adopt／rematch…）必定漏接，漏接的症狀就是這個 bug 本身。
+  //   ⚠ 第 1 局若以攻擊直接終局，END_TURN 根本沒跑到，快照就這樣留到下一局 —— 所以不能靠 END_TURN 清。
+  function undoSnapshotOwnedBy(snap: GameState | null, g: GameState | null): snap is GameState {
+    return !!snap && !!g && snap.id === g.id;
+  }
+  /** 對手端：這個悔棋請求是不是「本局、playing 階段」的（舊 client 沒帶 gameId ⇒ 只用 phase 閘）。 */
+  function undoRequestForThisGame(req: { gameId?: string } | null | undefined, g: GameState | null): boolean {
+    if (!req || !g || g.phase !== 'playing') return false;
+    return req.gameId ? req.gameId === g.id : true;
+  }
+  $effect(() => {
+    if (undoSnapshot && !undoSnapshotOwnedBy(undoSnapshot, game)) {
+      const wasAwaiting = undoAwaitingResponse;
+      undoSnapshot = null; undoActionDesc = null;
+      undoDeniedThisSnapshot = false; undoAwaitingResponse = false;
+      // 還掛在房間裡的 pending 請求一併撤回（best-effort；房已換／已離開時 roomCode 可能是 null）
+      if (wasAwaiting && mode === 'online' && roomCode) { clearUndoRequestApi(roomCode).catch(() => { /* ignore */ }); }
+    }
+  });
   let roomAllowUndoInput = $state(false);                  // 開房表單 checkbox 狀態
   let roomPrivateInput = $state(false);                    // v5.003 私密房 checkbox 狀態（預設公開）
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2857,6 +2879,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (op === 'energy' && tIid) {
       await dispatch(GameActions.attachEnergy(d.iid, tIid));
     } else if (op === 'setup-active' && activeEmpty && !myPlayer?.active) {
+      await dispatch(GameActions.placeActive(d.iid, myIdx));
+    } else if (op === 'setup-active-swap' && tIid && game?.phase === 'setup' && myPlayer?.active && tIid === myPlayer.active.iid) {
+      // ⭐v6.321 開局重選戰鬥場：拖到自己已放好的戰鬥場寶可夢上 ⇒ 換上場，原本那隻回手牌（engine 既有語意，UI 補入口）
       await dispatch(GameActions.placeActive(d.iid, myIdx));
     } else if (op === 'basic-setup' && benchEmpty && myPlayer?.active) {
       await dispatch(GameActions.benchPokemon(d.iid, myIdx));
@@ -8893,6 +8918,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         case 'apply-undo':
           // v5.390 悔棋 rollback：套用 + 清 undo/浮動選單 UI + bump 一次性 marker
           lastSeenUndoApplyAt = room.lastUndoApplyAt as number;
+          // ⭐v6.321 rollback 必須是**本局**的盤面：舊版 client（快照跨局殘留）仍可能把上一局的快照當 rollback 推上來，
+          //   吃下去就是整包換成上一局（換了座位＝看到上一局對手的手牌）。同一局的正常悔棋 id 恆相等，這裡零影響。
+          if (game && decision.game.id !== game.id) { console.warn('[undo] 拒收異局 rollback', decision.game.id, '!==', game.id); return; }
           game = decision.game;
           // ⭐v6.212：悔棋之後，那份「悔棋前的未推送快照」已經作廢 —— 留著會被自癒重推回去
           //   （它的 log 較長，shouldSkipStalePush 只擋嚴格較短的，擋不住）＝ 復活已悔掉的一手。
@@ -9709,6 +9737,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
   }
 
+  // ⭐v6.321 悔棋鈕「現在能不能按」的**唯一**來源 —— 桌機兩顆鈕、手機直式 ↶、performUndo 都讀這個。
+  //   手機直式原本只看「有快照」（setup 階段也亮），對齊桌機：playing、我的回合、無 pending，
+  //   再加上 v6.321 的「快照屬於本局」。
+  const undoBtnVisible = $derived(
+    undoSnapshotOwnedBy(undoSnapshot, game) && game!.phase === 'playing' && !pendingSelection
+    && !undoAwaitingResponse && !undoDeniedThisSnapshot
+    && (mode === 'online'
+      ? (roomData?.allowUndo === true && mySeatIdx >= 0 && mySeatIdx <= 1 && isMyTurn())
+      : aiPlayerIndex !== null));
+
   // v4.74 / v4.75 練習模式 — 悔棋按鈕點擊
   //   AI / 本機：直接回到 snapshot
   //   連線：發起 request 等對手同意
@@ -9716,6 +9754,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!undoSnapshot) return;
     if (undoAwaitingResponse) return;
     if (undoDeniedThisSnapshot) return;
+    // ⭐v6.321 與顯示條件同源（鈕沒顯示也可能被舊 DOM／鍵盤觸發）：快照不屬於本局、或不在 playing ⇒ 不做
+    if (!undoBtnVisible) return;
 
     if (mode === 'online') {
       // v4.75 連線練習模式：發起悔棋請求
@@ -9723,7 +9763,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
       if (!roomData?.allowUndo) return;
       undoAwaitingResponse = true;
       try {
-        await requestUndoApi(roomCode, mySeatIdx, undoActionDesc ?? '上一手');
+        // ⭐v6.321 請求帶上本局 id（對手端的 modal 只在同一局顯示；房間 doc 是不透明 JSON，伺服器不必認這個欄位）
+        await requestUndoApi(roomCode, mySeatIdx, undoActionDesc ?? '上一手', game!.id);
       } catch (e) {
         undoAwaitingResponse = false;
         console.warn('[undo] requestUndo failed:', e);
@@ -9777,8 +9818,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const req = roomData.undoRequest;
     if (!req || req.fromSeatIdx !== mySeatIdx) return;
     if (!undoAwaitingResponse) return;
-    if (req.status === 'agreed' && undoSnapshot) {
+    if (req.status === 'agreed' && undoSnapshotOwnedBy(undoSnapshot, game)) {
       // 對手同意 → 把 snapshot 設成新的 game state 並 push
+      // ⭐v6.321 快照必須屬於本局（A 的接線點已在換局時清掉它；這裡是第二道，同源述詞）
       const snap = undoSnapshot;
       (async () => {
         try {
@@ -11283,7 +11325,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
         else if (mode === 'online') surrenderLeave();
         else { game = null; mode = null; }
       }}
-      undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}
+      undoAvailable={undoBtnVisible}
       onUndo={performUndo}
     />
     {#if isTReplay && tReplay}
@@ -11805,14 +11847,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
             <button class="btn-act primary" disabled={actionBusy} onclick={()=>dispatch(GameActions.endTurn())}>⏭ 結束回合</button>
           {/if}
           <!-- v4.74 練習模式 — AI 對戰悔棋（直接回到上一手）-->
-          {#if undoSnapshot && mode !== 'online' && aiPlayerIndex !== null && !pendingSelection && game.phase === 'playing'}
+          {#if undoBtnVisible && mode !== 'online'}
             <button class="btn-act btn-undo" onclick={performUndo}
               title="悔棋：回到上一手前（AI 對戰練習模式）。換手後就不能再悔。">
               ↩ 悔棋
             </button>
           {/if}
           <!-- v4.75 連線練習模式 — 請求悔棋（需對手同意）-->
-          {#if undoSnapshot && mode === 'online' && roomData?.allowUndo && !undoDeniedThisSnapshot && !undoAwaitingResponse && !pendingSelection && game.phase === 'playing' && mySeatIdx >= 0 && mySeatIdx <= 1 && isMyTurn()}
+          {#if undoBtnVisible && mode === 'online'}
             <button class="btn-act btn-undo" onclick={performUndo}
               title="向對手請求悔棋（雙方同意制）。換手或被拒絕後就不能再悔。">
               ↩ 請求悔棋
@@ -11909,7 +11951,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {@const evoOpts=evoOptionsFor(myPlayer.active.iid)}
           <div class="active-card mine-active"
             class:energy-clickable={selectedEnergyIid!==null&&!pendingSelection&&isMyTurn()}
-            class:drop-zone={isMyTurn() && !!dragging && ((dragOpFor('poke')==='energy'||dragOpFor('poke')==='tool') || (dragOpFor('poke')==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)))}
+            class:drop-zone={isMyTurn() && !!dragging && ((dragOpFor('poke')==='energy'||dragOpFor('poke')==='tool') || (dragOpFor('poke')==='evolve'&&evolveTargetsFor(dragging.iid).includes(myPlayer.active.iid)) || dragOpFor('poke')==='setup-active-swap')}
             class:drop-hover={dropTargetIid===myPlayer.active.iid}
             class:energy-pulse={energyAttachPulse===myPlayer.active.iid}
             class:attack-shake={attackFx && attackFx.attackerIid === myPlayer.active.iid}
@@ -12142,6 +12184,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {@const isToolCard=c.supertype === 'Trainer' && c.subtype === 'PokemonTool'}
           {@const canEnergy=ops.has('energy')}
           {@const canBasic=ops.has('basic')||ops.has('basic-setup')||ops.has('setup-active')}
+          {@const canSwapActive=ops.has('setup-active-swap')}
           {@const canFossil=ops.has('fossil')}
           {@const canTrainer=ops.has('trainer')||ops.has('tool')}
           {@const canEvolve=ops.has('evolve')}
@@ -12198,6 +12241,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
             {#if canHandActivate && canEvolve}<span class="hand-hint hl">⚡ 拖到備戰發動特性／🔺 拖到進化目標</span>
             {:else if canHandActivate}<span class="hand-hint hl">⚡ 拖到備戰發動特性</span>
             {:else if canEnergy}<span class="hand-hint hl">⚡ 拖曳附加</span>
+            {:else if canSwapActive && canBasic}<span class="hand-hint hl">🔁 拖到戰鬥場換上場／📥 拖到備戰</span>
+            {:else if canSwapActive}<span class="hand-hint hl">🔁 拖到戰鬥場換上場</span>
             {:else if canBasic}<span class="hand-hint hl">📥 拖到備戰</span>
             {:else if canFossil}<span class="hand-hint hl">🦴 化石放到備戰</span>
             {:else if canEvolve}<span class="hand-hint hl">🔺 拖到進化目標</span>
@@ -14444,7 +14489,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
   {/if}
 
   <!-- v4.75 連線練習模式 — 對手請求悔棋 modal（顯示在被請求方的畫面）-->
-  {#if mode === 'online' && game && roomData?.undoRequest && roomData.undoRequest.status === 'pending' && mySeatIdx >= 0 && mySeatIdx <= 1 && roomData.undoRequest.fromSeatIdx !== mySeatIdx}
+  <!-- ⭐v6.321 只回應「本局」的請求：新 client 的請求帶 gameId ⇒ 必須等於 game.id；舊 client 沒帶 ⇒ 退回 phase 閘
+       （setup 階段一律不顯示；不把舊 client 在 playing 階段的正常悔棋擋死） -->
+  {#if mode === 'online' && game && roomData?.undoRequest && roomData.undoRequest.status === 'pending' && mySeatIdx >= 0 && mySeatIdx <= 1 && roomData.undoRequest.fromSeatIdx !== mySeatIdx
+      && undoRequestForThisGame(roomData.undoRequest, game)}
     <div class="modal-overlay undo-modal-overlay" role="dialog" aria-modal="true" aria-label="對手請求悔棋">
       <div class="undo-request-modal">
         <h3>↩ 對手請求悔棋</h3>
