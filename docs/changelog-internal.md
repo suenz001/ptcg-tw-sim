@@ -1,5 +1,59 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.320 剝除器收線（第七版）：護欄⑧「收尾標籤字面也算殘留」＋ 護欄⑨「HTML 註解文字裡的收尾字面」＋ 自驗 5-2 改範圍級裁判 ＋ 六支自帶正則抽 script／style 的守衛改走中央 helper
+
+BASE `20ddf2e45b825aa634ece898421b76554273a165`（v6.319，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`scripts/lib/strip-markup-sections.mjs`／`scripts/test-lib-strip-markup-sections.mjs`（36 → 44 條）／`scripts/test-v6297-*`（I3e 訊息 ＋ I3g／I3h）／
+六支守衛 `test-v6187`、`test-v6195`、`test-v6247`、`test-v6261`、`test-v6307`、`test-v6293`（自帶正則 → 中央 helper）／
+`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+零新依賴；package.json 不動；src/ 只動 version.ts；首頁 changelog 不放（純守衛）。
+
+### 審查者逐條複驗
+- ⛔-1（`<style>` 內 CSS 註解 `/*\n</style>\n*/`）**成立**：svelte 5.55.4 `compile()` 成功、`parse()` css 範圍 [47,133) 含 `@media`；helper 純掃描 style 段 [47,66)，`@media` 流進模板層；v6.319 三道網全綠（護欄⑦殘留 0／minSections:1 滿足／比段數裁判 SAME）。根因也確認：`read/style.js` 的 `allow_comment_or_whitespace` 在找 `</style` 之前先吃 `/* … */` **與 `<!-- … -->`**（後者是同型，D-4 一併守）。
+- ⛔-2（屬性值／表達式裡的 `<!--`）**只成立一半**：他寫「sections=[]、residual=0」—— 實測那要**檔案後面另有 `-->`** 才會發生（區段連收尾一起被當註解吞掉）；**後面沒有 `-->` 時 v6.319 就紅在護欄①「沒有收尾」**，不是靜默。而且他的「AST Comment 節點＝0」與「後面有 `-->`」互斥（有 `-->` 就有一個真註解節點）。
+- ⚠⚠ 他的「一條補丁同時封兩個洞」**不成立**：護欄⑧（模板層的收尾字面）對 ⛔-2 **是盲的** —— 被吞掉的區段，收尾字面在**註解文字**裡、不在模板層。⇒ 另加護欄⑨：HTML 註解文字裡出現 `</script`／`</style` ⇒ 紅（開頭字面在註解裡仍合法：方向 A、friends 頁說明註解提到 `<style>` 五次）。全站 22 支實掃：註解裡收尾字面 **0 處** ⇒ 零誤紅。
+- 「每一段被提前收尾的區段，真正的 `</tag>` 一定留在模板層」：對 ⛔-1 成立（第 9 行）；不寫成保證，以 D-2／5-3 的突變為準。
+- 範圍量測**成立**：14 支 .svelte，helper 每段 start/end/innerStart/innerEnd 與 Svelte instance／module／css **13 支逐位相同**；註解位移 **14/14 相同**（合計 27 段／393 個註解）；唯一差異 friends/+page.svelte `<svelte:head><style>` [3607,3704)（LF 位移）。
+- 六支守衛的形狀**成立**：v6187:138／v6195:144 `m ? … : src` 抓不到就拿整檔當 CSS（fail-open）；v6247／v6261／v6307 非貪婪到第一個 `</script>`（與 Svelte read_script 同判、有 assert）；v6293 三處 `/<style>([^<]*)<\/style>/.exec(stripHtmlCmt(headOf()))`。
+
+### 【主修】helper
+1. 護欄⑧：`RESIDUAL_RE = /<\/?(script|style)\b/gi`（開頭＋收尾都算）；訊息改成「殘留 N 處 <script／<style 標籤字面（開頭 a／收尾 b）」並分別註明兩種成因。
+2. 護欄⑨：每個 HTML 註解的 `text` 掃 `</script`／`</style`，不在 allowResidual 範圍內就紅（「註解吞了區段的指紋」）。
+3. allowResidual 語意：每一處殘留（模板層或註解內）必須被某條宣告蓋到；每條宣告至少蓋到一處（沒蓋到＝白名單過期）。舊的「殘留數＝宣告數」拿掉（一條宣告現在蓋開頭＋收尾兩處）。
+4. `GAME_INLINE_STYLE` 延長成整串 `{@html '<style>html, body { … }</style>'}`（game :9842，原檔仍恰一處；六支消費者零改動）。
+5. 檔頭沿革加 v6.320（⛔-1／⛔-2／⑧／⑨／範圍裁判）＋「仍沒有封住、只列明不宣稱」兩條：(a) 屬性值 `<!--` 到下一個 `-->` 之間只有模板正文 ⇒ 只靠護欄③比例；(b) 多行區段裡不在行首的 `</tag>`（Svelte script 在那裡就收）⇒ 只有 5-2 對 repo 檔會紅。沒有任何「絕不會／保證」。
+
+### 自驗檔
+- 【D】新增 D-1～D-7：⛔-1 前提（compile OK／範圍）→ D-2 修後紅在護欄⑧（四個入口都紅）→ D-3 反面對照（v6.319 的 RESIDUAL 規則 0 殘留、比段數裁判 SAME、範圍裁判 DIFF）→ D-4 `<!-- </style> -->` 同型 → D-5／D-6 ⛔-2 三形狀 × 三排列（有 `-->` 紅在護欄⑨、沒有 `-->` 紅在護欄①）→ D-7 護欄⑨白名單三態。
+- 5-2 改範圍級：`helperRanges` vs `svelteRanges`、`helperComments` vs `svelteComments`（fragment 遞迴走訪 Comment 節點）；friends 例外釘死 `{tag:'style',start:3607,end:3704,innerStart:3614,innerEnd:3696}` ＋ 那段文字逐字 ＋ Svelte AST 在同一範圍是 `<svelte:head>` 底下的 `RegularElement name=style`；⚠ 先 `\r\n → \n` 再比（站長本機 autocrlf=true）。下限：比對 ≥24 段／≥300 註解（裁判不空轉）。
+- 5-3：把 ⛔-1 植入 MobilePortraitBattle 真檔 ⇒ compile OK、範圍裁判紅、護欄⑧紅；v6.319 的比段數裁判與護欄⑦仍綠（反面對照）。
+- friends 例外的行為端證明：test-v6293 A1／pageHtmlFor／H8 就是要抽這一段當「注入 head 的樣式」（v6.320 起也走 helper 取它）；全站沒有守衛拿 friends 頁的模板層或 style 內文斷言「不存在」。
+
+### 六支守衛（全部改走 helper；抽出內容逐字相同）
+| 守衛 | 改法 | 原意突變 ⇒ 紅在 | ⛔-1 植入 game/friends ⇒ |
+|---|---|---|---|
+| v6187 | `sectionInner(style, minSections:1)` 再剝 CSS 註解；舊 = 新 + `</style>\n`（實測） | banner padding 拿掉 var(--safe-top) ⇒ 4 紅「上緣必須 >= 59」 | 護欄⑧炸（exit 1） |
+| v6195 | 同上，枚舉檔 minSections 0（tournament 頁沒 style）、GAME／MPB 給 1 | ✕ 改回 v6.194 top:50% ⇒ 4 紅「可點區上緣」 | 護欄⑧炸 |
+| v6247 | `markupSections(script)` 恰一段且 `^<script lang="ts"`；inner === 舊 m[1]（483,065 字元） | `_pushInFlightMarks` 宣告搬進區塊 ⇒ ④b「模組層級沒有繫結」 | ④b 紅在護欄⑧ |
+| v6261 | 同上，`inner.replace(/\n$/,'')` === 舊 m[1] | 拿掉 `_casualDiagSend` 分派 ⇒ 「沒有 mode 分派」 | 接線條紅在護欄⑧ |
+| v6307 | `scriptOf` 走 helper；inner === 舊 m[1] | `V6307_SRC` 指向「回傳值不存」的突變檔 ⇒ A／B 紅「沒有被賦值」；內建 M1～M7 仍各紅在預期 | A 紅在護欄⑧ |
+| v6293 | `headStyleOf`：helper style 段中落在 `<svelte:head>…</svelte:head>` 內的那段（A1／pageHtmlFor／H8 三處共用） | 拿掉 head 的 `<style>` ⇒ A1「沒有 <style> 元素」；少 !important ⇒ A1「沒有 !important」 | — |
+BASE 版六支各自的 PASS 數與改後相同（79／81／22／50／10／25）。
+
+### 突變（14 個 helper 突變 ＋ 消費者 I3g／I3h；只捕 AssertionError）
+M1 ⑧退回只看開頭 ⇒ 0-2／0-8／0-9／C-3／D-2／5-3（11 紅）；M2 ⑨拿掉 ⇒ D-6／D-7；M3 ⑨改掃開頭 ⇒ A-1／0-7／D-6（11 紅）；M4 白名單過期檢查拿掉 ⇒ 4-9／D-7；M5 GAME_INLINE_STYLE 退回短字串 ⇒ 0-9／1／2-1／3-A／3-B／5-1；M6 殘留斷言拿掉 ⇒ 10 紅；M7 多行收尾不限行首 ⇒ 4-6／4-7；M8 covered 恆真 ⇒ 12 紅；M9 不驗恰一處 ⇒ 4-9；M10 註解內認開頭（方向 A 退步）⇒ A-1／0-7／D-5～D-7；M11 不認 BOM ⇒ 0-6／C-2；M12 區段內看 `<!--`（方向 B 退步）⇒ B-1／B-2／3-B／5-1；M13 行首退回 pos===0 ⇒ 0-7／0-10／C-2／5-1；M14 只掃 `</style` ⇒ 0-8／4-9。
+方向 A／B／C／BOM／同行註解／`</div><style>` 全部仍紅（沒有退步）。
+
+### HEAD-FAIL／驗證
+- helper 還原 BASE ＋ 新自驗檔 ⇒ **32/12**：D-2／D-4／D-6／D-7／5-3 都「Missing expected exception」（洞的形狀），其餘是新宣告格式。
+- 完整 npm test（`git clone --shared` 完整歷史、序列分批、641 支逐一計數、最後一支 test-v6313 有跑到）⇒ **641/641 OK、0 紅**；tsc 54 個既有錯誤＝v6.317 基準、**TS2304 0**；anti-pattern-lint 綠。
+- 三配套：admin.html SITE_VERSION_HINT 6.320（LF）；test-v6272 PREV_SHA→20ddf2e4、PREV_ALLOWED＝version.ts；test-v6264 BASE_SHA→20ddf2e4（F0）。掃 pin：無守衛 pin 6.319／sha。
+
+### 只報告不動（下一輪 audit）
+- 98 支守衛仍用區塊正則 `/\/\*[\s\S]*?\*\//g` 剝 `/* */`（其中 21 支掃 effects.ts；`effects.ts:27` 的 `//` 註解含 `/*` 會讓它一路吃到 :147）。
+- `lastIndexOf('<style')` 族 27 處（test-v6186／v6199／v6283／v6284／v6288／v6293:74／v6297:210／v6298／v6299／v6303／v6304／v6313／legend-half-css ＋ 6 支 measure-*）；friends/+page.svelte:119 的 CSS 註解就是它們的踩點。
+- 仍沒封住：屬性值 `<!--` 只吞模板正文（不含區段）；多行區段裡不在行首的 `</tag>`（只有 5-2 對 repo 檔會紅）。
+
 ## v6.319 剝除器收線（第六版）：「script 開頭」的定義對齊 Svelte（BOM／同行註解／同行第二段）＋ 護欄⑦「殘留開頭標籤字面必須逐條宣告」＋ 自驗改 ls-tree ＋ svelte parse() 當裁判
 
 BASE `af8a5830070c56a706099942b6402146b187da0d`（v6.318，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。

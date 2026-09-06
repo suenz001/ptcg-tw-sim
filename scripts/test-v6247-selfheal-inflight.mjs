@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { transform } from 'esbuild';
 import assert from 'node:assert';
+import { markupSections, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GP = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
@@ -361,9 +362,11 @@ T('[HEAD-FAIL④] 在途上限常數真的 import 了（漏 import ＝ runtime R
 await TA('[HEAD-FAIL④b] 三個新識別字真的在**模組層級**有繫結（acorn 掃 scope，不是字串比對）', async () => {
   const acorn = await import('acorn');
   const esbuild = await import('esbuild');
-  const m = GP.match(/<script lang=["']ts["'][^>]*>([\s\S]*?)<\/script>/);
-  assert.ok(m, '抽不到 <script lang="ts"> 區塊');
-  const js = esbuild.transformSync(m[1], { loader: 'ts' }).code;
+  // ⭐v6.320：改走中央 helper（v6.319 以前自帶非貪婪正則到第一個 </script>；抽出的內文與 helper 的 inner 逐字相同，v6.320 實測）
+  const { sections } = markupSections(GP, 'script', { label: 'game/+page.svelte', minSections: 1, allowResidual: [GAME_INLINE_STYLE] });
+  assert.strictEqual(sections.length, 1, 'game/+page.svelte 應恰一段 <script>');
+  assert.ok(/^<script lang=["']ts["']/.test(sections[0].full), '抽到的不是 <script lang="ts"> 區塊：' + sections[0].full.slice(0, 40));
+  const js = esbuild.transformSync(sections[0].inner, { loader: 'ts' }).code;
   const ast = acorn.parse(js, { ecmaVersion: 'latest', sourceType: 'module' });
   const top = new Set();
   for (const n of ast.body) {

@@ -658,10 +658,20 @@ await T('I3d ⭐⭐ 突變：FriendsPanel 只加 BOM、不加 import ⇒ 子樹*
   const g = assertGraphClean(new Map([[P_FRP, '\uFEFF' + FRP]]));
   assert.ok(g.has(P_ROOMS) && g.has(P_FRP));
 });
-await T('I3e ⭐⭐ 突變：FriendsPanel 的頂層 <style> 接在 </div> 後面同一行（Svelte 合法、本站禁用）⇒ D1 紅在 helper 護欄「殘留 … 開頭標籤字面」（fail-closed，不會靜默當模板）', () =>
+await T('I3e ⭐⭐ 突變：FriendsPanel 的頂層 <style> 接在 </div> 後面同一行（Svelte 合法、本站禁用）⇒ D1 紅在 helper 護欄「殘留 … 標籤字面」（fail-closed，不會靜默當模板；v6.320 起開頭＋收尾各算一處）', () =>
   mutantMustBreak('</div><style>', () => {
     assertGraphClean(new Map([[P_FRP, mutate(FRP, '</div>\n\n<style>', '</div><style>')]]));
-  }, '殘留 1 處 <script／<style 開頭標籤字面'));
+  }, '殘留 2 處 <script／<style 標籤字面（開頭 1／收尾 1'));
+// ⭐v6.320 審查者的第二批（v6.319 的護欄⑦只看開頭字面 ⇒ 兩種 Svelte 會編譯的形狀仍能靜默變模板）：
+await T('I3g ⭐⭐⭐ 突變：FriendsPanel 的 <style> 開頭之後放 CSS 註解 `/*\\n</style>\\n*/`（Svelte read_style 跳過註解、剝除器在註解裡提前收尾 ⇒ 整段 CSS 流進模板層）⇒ D1 紅在護欄⑧「殘留 … 收尾」（v6.319：殘留 0、段數 1 ⇒ 全綠）', () =>
+  mutantMustBreak('style 內 CSS 註解含 </style>', () => {
+    assertGraphClean(new Map([[P_FRP, mutate(FRP, '</div>\n\n<style>\n', '</div>\n\n<style>\n/*\n</' + 'style>\n*/\n')]]));
+  }, '開頭 0／收尾 1'));
+await T('I3h ⭐⭐⭐ 突變：FriendsPanel 模板屬性值裡放 `<!--`、並在 <style> 之後補一個真註解 `-->`（Svelte 當屬性值）⇒ 剝除器把整段 <style> 當註解吞掉 ⇒ D1 紅在護欄⑨「註解文字裡有 … 收尾字面」（v6.319：殘留 0 ⇒ 靜默）', () =>
+  mutantMustBreak('屬性值 <!--', () => {
+    const bad = mutate(FRP, '</div>\n\n<style>\n', '<p title="<!' + '--">x</p></div>\n\n<style>\n') + '<!-- 尾註解 -->\n';
+    assertGraphClean(new Map([[P_FRP, bad]]));
+  }, '註解文字裡有 </script／</style 收尾字面'));
 await T('I3f ⭐⭐ 突變：拿掉 FriendsPanel 的 <script> 收尾（區段吃到檔尾）⇒ D1 紅在 helper 護欄「沒有收尾」（不是靜默零 import）', () =>
   mutantMustBreak('script 未收尾', () => {
     assertGraphClean(new Map([[P_FRP, mutate(FRP, '\n</script>\n', '\n\n')]]));

@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import assert from 'node:assert';
+import { markupSections, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const _require = createRequire(import.meta.url);
 // ⚠⚠ v6.308 教訓：只用 `acorn`（test-admin-helper-scope 已在 CI 上用、證明存在）。
@@ -73,10 +74,12 @@ const mutate = (src, a, b) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // 解析：<script lang="ts"> → esbuild 去型別 → acorn AST
 // ─────────────────────────────────────────────────────────────────────────────
+// ⭐v6.320：改走中央 helper（v6.319 以前自帶非貪婪正則到第一個 </script>；helper 的 inner 與它逐字相同，v6.320 實測）。
+//   ⚠ 突變體都只動 script 內文 ⇒ GAME_INLINE_STYLE 那一串在每個突變體裡仍恰一處（helper 會驗）。
 function scriptOf(svelteSrc) {
-  const m = svelteSrc.match(/<script\b[^>]*>([\s\S]*?)<\/script>/);
-  assert.ok(m, '找不到 <script> 區塊');
-  return m[1];
+  const { sections } = markupSections(svelteSrc, 'script', { label: 'game/+page.svelte', minSections: 1, allowResidual: [GAME_INLINE_STYLE] });
+  assert.strictEqual(sections.length, 1, '應恰一段 <script> 區塊（實得 ' + sections.length + '）');
+  return sections[0].inner;
 }
 function parseJs(ts) {
   const js = esbuild.transformSync(ts, { loader: 'ts', target: 'es2022', format: 'esm' }).code;

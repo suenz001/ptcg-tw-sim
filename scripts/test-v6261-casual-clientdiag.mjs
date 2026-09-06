@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { transform } from 'esbuild';
+import { markupSections, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
@@ -449,9 +450,11 @@ await TA('★★★[接線] confirmClaimForfeit 真的送出 casual-forfeit-clai
   assert.equal(h.granted(), false, 'granted=false（我的畫面是舊的）沒有被如實記錄 ⇒ 兩種成因分不開');
 });
 await TA('★★★[接線] 編譯輸出裡 _tSendClientDiag 的第一件事就是 mode 分派（在錦標賽三道閘之前）', async () => {
-  const m = /<script lang="ts">([\s\S]*?)\n<\/script>/.exec(PAGE);
-  assert.ok(m, '抽不到 <script> 區塊');
-  const js = (await transform(m[1], { loader: 'ts', target: 'node20' })).code;
+  // ⭐v6.320：改走中央 helper（v6.319 以前自帶正則 /<script lang="ts">([\s\S]*?)\n<\/script>/；helper 的 inner 多一個收尾前的 \n，切掉後逐字相同，v6.320 實測）
+  const { sections } = markupSections(PAGE, 'script', { label: 'game/+page.svelte', minSections: 1, allowResidual: [GAME_INLINE_STYLE] });
+  assert.strictEqual(sections.length, 1, 'game/+page.svelte 應恰一段 <script>');
+  assert.ok(sections[0].full.startsWith('<script lang="ts">'), '抽到的不是 <script lang="ts"> 區塊');
+  const js = (await transform(sections[0].inner.replace(/\n$/, ''), { loader: 'ts', target: 'node20' })).code;
   const fi = js.indexOf('function _tSendClientDiag');
   assert.ok(fi > 0, '編譯輸出找不到 _tSendClientDiag');
   const seg = js.slice(fi, fi + 900);

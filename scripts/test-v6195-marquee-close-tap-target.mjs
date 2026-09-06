@@ -14,6 +14,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const ROOT = process.env.V6195_ROOT || fileURLToPath(new URL('..', import.meta.url));
 const GAME   = join(ROOT, 'src/routes/game/+page.svelte');
@@ -139,10 +140,13 @@ function parseRules(css) {
   chk('自我驗證：解析器抓得到 ::before 偽元素規則', r.some((x) => x.sel === '.b::before' && x.decls.top === '50%'), JSON.stringify(r.map(x=>x.sel)));
 }
 // ⚠ 必須切在 <style> **標籤之後**，否則第一條規則的選擇器會黏上 "<style>" 而靜默漏掉
-const styleOf = (file) => {
-  const src = stripComments(readFileSync(file, 'utf8'));
-  const m = [...src.matchAll(/<style[^>]*>/g)].pop();
-  return m ? src.slice(m.index + m[0].length) : src;
+// ⭐v6.320：改走中央 helper sectionInner（v6.319 以前自帶正則：抓不到 <style 就 `: src` 拿整檔當 CSS，fail-open）。
+//   ④ 的枚舉會掃到沒有 <style> 的 .svelte（例：tournament/+page.svelte）⇒ 那些檔 minSections 給 0、抽到空字串＝零規則；
+//   有 <style> 的三個主檔（GAME／MPB／LAYOUT）在 ②③⑤ 另外各有「規則存在」的斷言擋空轉。
+const styleOf = (file, minSections = 0) => {
+  const src = readFileSync(file, 'utf8');
+  const allowResidual = /game[\\/]\+page\.svelte$/.test(file) ? [GAME_INLINE_STYLE] : [];
+  return stripComments(sectionInner(src, 'style', { label: file, minSections, allowResidual }));
 };
 {
   const first = parseRules(' .first{ position:fixed; top:0 } .second{ color:red }');
@@ -200,7 +204,7 @@ function geom(bar, btn, before, vars) {
 }
 
 // ═══ ① 核心：現行 CSS 的 ✕ 可點區必須完全在安全區之外，且 >= 44×44 ═══
-const gameCss = styleOf(GAME);
+const gameCss = styleOf(GAME, 1);
 const gameRules = parseRules(gameCss);
 const findRule = (rules, sel) => rules.filter((r) => r.sel === sel).pop();
 const bar    = findRule(gameRules, '.admin-broadcast-bar');
@@ -376,7 +380,7 @@ chk('④ 掃描範圍含 game/+page.svelte 與 MobilePortraitBattle.svelte',
 // ═══ ⑤ 沒有新增 @media 當手機開關 ═══════════════════════════════════
 {
   const nGame = (gameCss.match(/@media/g) || []).length;
-  const nMpb  = (styleOf(MPB).match(/@media/g) || []).length;
+  const nMpb  = (styleOf(MPB, 1).match(/@media/g) || []).length;
   chk('⑤ game/+page.svelte 的 @media 數量沒有增加（v6.187 基準 19）', nGame <= 19, '實際 ' + nGame);
   chk('⑤ MobilePortraitBattle.svelte 仍然 0 個 @media（手機直式是獨立分支）', nMpb === 0, '實際 ' + nMpb);
 }

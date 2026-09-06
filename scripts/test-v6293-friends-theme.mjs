@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import assert from 'node:assert';
 import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
+import { markupSections } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 
@@ -81,6 +82,17 @@ const headOf = (s) => {
   assert.ok(a >= 0 && b > a, '抽不到 <svelte:head>');
   return s.slice(a, b);
 };
+/** ⭐v6.320：<svelte:head> 裡那個一般 <style> 元素的內文 —— 改走中央 helper（v6.319 以前三處各自 /<style>([^<]*)<\/style>/.exec(stripHtmlCmt(headOf(s)))）。
+ *  helper 把行首的 <style> 都當區段（含 <svelte:head> 底下縮排的這一個；test-lib-strip-markup-sections 5-2 釘成精確位移例外），
+ *  這裡只取落在 <svelte:head>…</svelte:head> 範圍內的那一段；沒有 ⇒ 紅（HEAD-FAIL 訊息不變）。 */
+const headStyleOf = (s) => {
+  const a = s.indexOf('<svelte:head>'), b = s.indexOf('</svelte:head>');
+  assert.ok(a >= 0 && b > a, '抽不到 <svelte:head>');
+  const { sections } = markupSections(s, 'style', { label: 'friends/+page.svelte' });
+  const inHead = sections.filter((x) => x.start > a && x.end < b);
+  assert.ok(inHead.length === 1, 'HEAD-FAIL：<svelte:head> 裡沒有 <style> 元素（或不只一個：' + inHead.length + '）⇒ 整頁底色仍吃 layout 的白底 baseline');
+  return inHead[0].inner;
+};
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 const lc = (x) => String(x).toLowerCase();
 
@@ -89,9 +101,8 @@ console.log('\n【A】<svelte:head> 注入整頁底色（且不是 {@html}）');
 const PAGE_HEAD = headOf(PAGE);
 let HEAD_STYLE = '';
 await T('A1 ⭐⭐ /friends 的 <svelte:head> 有一個一般 <style> 元素，內容把 html/body 的 background-color 換成墨綠；整頁仍零 {@html}', () => {
-  const m = /<style>([^<]*)<\/style>/.exec(stripHtmlCmt(PAGE_HEAD));
-  assert.ok(m, 'HEAD-FAIL：<svelte:head> 裡沒有 <style> 元素 ⇒ 整頁底色仍吃 layout 的白底 baseline');
-  HEAD_STYLE = m[1];
+  assert.ok(PAGE_HEAD.length > 0);
+  HEAD_STYLE = headStyleOf(PAGE);
   assert.ok(/\bhtml\b/.test(HEAD_STYLE) && /\bbody\b/.test(HEAD_STYLE), '注入的 <style> 沒有同時蓋 html 與 body：' + HEAD_STYLE);
   assert.ok(/background-color:\s*#[0-9a-fA-F]{6}\s*!important/.test(HEAD_STYLE), '注入的底色沒有 !important（蓋不掉 layout 的 :global(body)）：' + HEAD_STYLE);
   assert.ok(!stripAllCmt(PAGE).includes('{@html'), '/friends 頁出現 {@html}（暱稱是玩家自由輸入 ⇒ 這是紅線）');
@@ -315,7 +326,7 @@ const FIXTURE_BODY = (pageSrc) => `
 const pageHtmlFor = (pageSrc, panelSrc, withHead) => `<!doctype html><html lang="zh-TW"><head><meta charset="utf-8">`
   + `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">`
   + `<style>:root{--safe-top:0px;--safe-bottom:0px;--safe-left:0px;--safe-right:0px}${LAYOUT_BASELINE}</style>`
-  + (withHead ? `<style>${/<style>([^<]*)<\/style>/.exec(stripHtmlCmt(headOf(pageSrc)))[1]}</style>` : '')
+  + (withHead ? `<style>${headStyleOf(pageSrc)}</style>` : '')
   + `<style>${styleOf(FRP)}\n${styleOf(pageSrc)}\n${styleOf(panelSrc)}</style>`
   + `</head><body>${FIXTURE_BODY(pageSrc)}</body></html>`;
 
@@ -551,9 +562,8 @@ await T('H7 突變：--fr-tab-fg 抄錯一個字 ⇒ B2 紅在「色票與錦標
 await T('H8 突變：<svelte:head> 的注入改成沒有 !important ⇒ A1 紅在「沒有 !important」', () =>
   mutantMustBreak('少 !important', () => {
     const bad = mutate(PAGE, 'background-color: #162816 !important;', 'background-color: #162816;');
-    const m = /<style>([^<]*)<\/style>/.exec(stripHtmlCmt(headOf(bad)));
-    assert.ok(m, '找不到 <style>');
-    assert.ok(/background-color:\s*#[0-9a-fA-F]{6}\s*!important/.test(m[1]), '注入的底色沒有 !important（蓋不掉 layout 的 :global(body)）：' + m[1]);
+    const inner = headStyleOf(bad);
+    assert.ok(/background-color:\s*#[0-9a-fA-F]{6}\s*!important/.test(inner), '注入的底色沒有 !important（蓋不掉 layout 的 :global(body)）：' + inner);
   }, '沒有 !important'));
 
 // ═══════════════════════════════════════════════════════════════════════════

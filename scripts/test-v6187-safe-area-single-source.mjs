@@ -14,6 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LAYOUT = process.env.V6187_LAYOUT || join(ROOT, 'src/routes/+layout.svelte');
@@ -133,10 +134,13 @@ function parseRules(css) {
 
 // ⚠ 必須切在 <style> **標籤之後**：切在標籤之前的話，第一條規則的選擇器會變成
 //   "<style>\n  .mp"，掃描器就會靜默漏掉整個檔案的第一條規則（＝掃不到就全綠的盲點）。
+// ⭐v6.320：改走中央 helper sectionInner（v6.319 以前這裡自帶正則：抓不到 <style 就 `: src` **拿整檔當 CSS**（fail-open），
+//   而且先對整檔剝 /* */ 再找最後一個 <style>）。現在抽不到 style 區段 ⇒ minSections:1 直接紅；區段被提前收尾／被註解吞掉 ⇒ 護欄⑧⑨紅。
+//   CSS 註解仍在抽出的內文上剝（CSS 裡的 /* */ 語意就是註解）。
 const styleOf = (file) => {
-  const src = stripComments(readFileSync(file, 'utf8'));
-  const m = [...src.matchAll(/<style[^>]*>/g)].pop();
-  return m ? src.slice(m.index + m[0].length) : src;
+  const src = readFileSync(file, 'utf8');
+  const allowResidual = /game[\\/]\+page\.svelte$/.test(file) ? [GAME_INLINE_STYLE] : [];
+  return stripComments(sectionInner(src, 'style', { label: file, minSections: 1, allowResidual }));
 };
 {
   // 自我驗證：styleOf 必須抓得到 <style> 之後的**第一條**規則（曾因切在標籤前而漏掉）
