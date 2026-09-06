@@ -209,8 +209,11 @@ T('3a ★★★自癒 tForceResync()/startTournamentPoll() 必須在診斷 if **
 T('3b ★★★自癒不得被任何 staleWhy 判準 gate 住', () => {
   const i = PAGE_NC.indexOf("_tSendClientDiag('stale-version')");
   const j = PAGE_NC.indexOf('startTournamentPoll();', i);
+  assert.ok(i >= 0 && j > i, 'anchor（stale-version 診斷／startTournamentPoll）失效 ⇒ 下面的否定斷言會恆真（v6.323 fail-open 同型修正）');
   const seg = PAGE_NC.slice(i, j);
-  assert.equal(/_staleVersionWhyNow\s*\(/.test(seg.slice(seg.indexOf('tForceResync'))), false,
+  const fr = seg.indexOf('tForceResync');
+  assert.ok(fr >= 0, 'anchor tForceResync 不在區段內 ⇒ 下面的否定斷言會恆真（v6.323 fail-open 同型修正）');
+  assert.equal(/_staleVersionWhyNow\s*\(/.test(seg.slice(fr)), false,
     '自癒與判準之間出現了新的耦合');
 });
 T('3c 新鮮度看門狗本身的門檻一個字都沒動（20 秒 / setup 3.5 秒 / 8 秒節流）', () => {

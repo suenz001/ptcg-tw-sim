@@ -54,7 +54,9 @@ T('⭐ 名次推導重用 app.locals._detectCutPlacements，不得自抄一份',
 
 T('⭐ 端點不回 deckEntries（前端已有一份，再傳一次每場 N×60 張很肥）', () => {
   const ep = section(SAP, "app.get('/api/admin/champion-report'", "app.get('/api/admin/deck-archetype-stats'");
-  const resJson = ep.slice(ep.indexOf('res.json('));
+  const rj = ep.indexOf('res.json(');
+  ok(rj >= 0, 'anchor res.json( 不存在（端點區段抓不到或改寫了）⇒ 下面的否定斷言會恆真（v6.323 fail-open 修正）');
+  const resJson = ep.slice(rj);
   ok(!/deckEntries/.test(resJson), '回應裡帶了 deckEntries');
 });
 

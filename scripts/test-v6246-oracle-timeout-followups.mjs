@@ -30,6 +30,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 等長留白版（本檔靠行號）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
@@ -126,8 +127,10 @@ function watch(p) {
   p.then((v) => { st.done = true; st.value = v; }, (e) => { st.done = true; st.err = e; });
   return st;
 }
-function stripComments(s) {
-  return s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+// ⭐v6.323：區塊註解改走中央行級狀態機的**等長留白版**（本檔用行號回報；原本的區塊正則會把 game 頁
+//   :208～:384 整段吃掉 ⇒ 洞內的 includes('404') 掃不到）。行尾 // 仍在本檔剝（單行、不跨行 ⇒ 不會形成洞）。
+function stripComments(s, opt = {}) {
+  return stripCommentsBlankChecked(s, { label: 'probe', minRatio: 0.2, ...opt })
           .replace(/(^|[^:])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
 }
 
@@ -173,7 +176,7 @@ await T('⭐⭐⭐ 全站枚舉：src/ 下不得再有 String(err).includes(\'<3
     '掃描器在 BASE(' + BASE_KIND + ') 上抓不到那兩處已知缺陷 —— 掃描器壞了');
   const hits = [];
   for (const [name, src] of files) {
-    const body = stripComments(src);
+    const body = stripComments(src, name === 'game/+page.svelte' ? { label: name, minRatio: 0.5, mustKeep: ['async function tApi(path: string'] } : { label: name });
     let m; const re = new RegExp(RE.source, 'g');
     while ((m = re.exec(body))) hits.push(name + ' @' + body.slice(0, m.index).split('\n').length);
   }
@@ -778,7 +781,7 @@ await T('⭐⭐ pushWithRetry 的註解已更正（不再宣稱「交給既有�
   ok(!/⇒ 交給既有的卡住自癒/.test(block), 'v6.245 那句過度樂觀的說明還在');
 });
 await T('⭐⭐ 該缺口確實存在（正對照）：自癒程式碼真的排在 isWaitingOnOpponent 的 early-return 之後', () => {
-  const g = stripComments(GP);
+  const g = stripComments(GP, { label: 'game/+page.svelte', minRatio: 0.5, mustKeep: ['decideStuckSelfHeal({'] });
   const gate = g.indexOf('if (!isWaitingOnOpponent(game, mySeatIdx))');
   ok(gate > 0, '抓不到 isWaitingOnOpponent 的 gate —— 掃描器壞了？');
   const heal = g.indexOf('decideStuckSelfHeal({', gate);

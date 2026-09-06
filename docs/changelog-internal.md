@@ -1,5 +1,52 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.323 純守衛版：strip-comments 等長留白渲染（H0）＋ 批 0（test-v6179 靠洞校準的期望值）＋ 批 1（game 頁六支守衛的區塊正則改走中央狀態機）＋ 五處 slice(indexOf) fail-open
+
+BASE `5e00e1ee928ba7397faae1ab5a7db997246ece4f`（v6.322，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔（全在 `scripts/`＋三配套）：`scripts/lib/strip-comments.mjs`／新 `scripts/test-lib-strip-comments.mjs`／`scripts/test-v6277-*`（helper 突變錨點改到新形狀）／
+`scripts/test-v6179-*`／`test-v6146-*`／`test-v6159-*`／`test-v6175-*`／`test-v6180-*`／`test-v6246-*`／`test-v6210-central-*`／`test-v6111-*`／`test-v6182-*`／`test-v6189-*`／`test-v6198-*`／
+`package.json`（chain 加 test-lib-strip-comments）／`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+零新依賴、`src/` 只動 version.ts、首頁 changelog 不放（玩家看不到）。⚠ **不做**批 2 以後（engine／effects／_shared 家族、多檔掃描器、伺服器端、39 支無洞的）；不動 test-v6277:609 的 `blockRe` 反面對照、`lastIndexOf('<style')` 28 處、`new Function`／esbuild 實跑型、純 CSS 剝除、test-admin-helper-scope 的 IIFE 弱點；不在 anti-pattern-lint 加棘輪。
+
+### 背景（行為端 hook 複驗上游枚舉）
+hook `String.prototype.replace` 實跑 7 支：7 支都把 `/\/\*[\s\S]*?\*\//g` 套在 `game/+page.svelte`（1,010,707 字元）上，最大一段匹配 **:208～:384（11,268 字元）** —— 起點是 :208 的 `// … /api/tournament/* 回應帶 X-Srv-Ms` 那行行中的 `/*`。洞內有 :342 `let _rtSegN = 0;` 等真程式碼。
+
+### 【H0】strip-comments.mjs：同一台狀態機、兩種渲染
+- 狀態機 `scanCommentLines()` 只跑一次，產出 `keepFrom[i]`（每行從第幾個字元起保留；-1＝整行丟）這份**唯一真相**；`renderDropped`（刪行，＝v6.312 輸出逐位相同）與 `renderBlanked`（等長留白：丟掉的字元換空格、`\r`／`\n`／每行長度不變）都從它導出。**沒有第二台狀態機。**
+- 新 export：`stripCommentsBlank()`／`stripCommentsBlankChecked()`／`scanCommentLines()`／`nonWs()`／`WS_RE`；`stripCommentsChecked()` 加 `mustDrop`（反對照），mustKeep／mustDrop **先斷言在原檔存在**（打錯字紅在「打錯字／恆真」，v6.320 教訓）。
+- 比例護欄①改以**非空白字元數**計（留白版用字元長度會恆 100%；自驗 3-6 反面對照）。「空白」定義固定為 ASCII 空白 `WS_RE`（JS `\s` 與 Python `\s` 的 Unicode 集合不同，獨立量測會對不上 —— 實際踩到：game 頁差 10 個字元）。
+- 檔頭不寫「絕不會／保證」；「行中 `/*` 不開區塊」那句明寫由 test-v6277 H22 與 test-lib-strip-comments【4】撐著。
+- 新自驗檔 `scripts/test-lib-strip-comments.mjs`（32 條，進 chain）：【0】內嵌樣本手算（刪行版非空白 99、留白版逐行位置、keepFrom 手算、CRLF）；【1】固定 blob（5e00e1ee）已知答案表由 **獨立 Python 實作**量出後手抄（game 789685→598381／server_admin_patch 485624→314111／admin.html 339468→296358／engine 385884→252028／effects 676037→475226；區塊數 239／29／24／66／102；最長 17／43／14／27／31 行；零未收尾）；【2】⭐主證明：兩種渲染**去空白後逐位相同**、留白版長度＝原長、行數＝原行數 —— 內嵌／固定 blob／工作樹／全站 1,025 檔三層實跑；【3】護欄突變兩入口各紅在指定訊息；【4】反面對照：區塊正則對固定 blob 把 :209 起 176 行清空、`let _rtSegN = 0;` 消失；兩種渲染都留住、留白版留在第 342 行；洞內探針（:209 之後塞一行）留白版在第 210 行看得到；【5】全站實掃（git ls-tree HEAD 的 .ts/.js/.mjs/.cjs/.svelte/.html 共 1,025 支）零未收尾、最長區塊 91 行（v3080_deferred_wave_c.ts）。
+- helper 自身突變 11/11 各紅在預期條目（A 留白退化成刪行→0-2；B 尾巴也清→0-2；C 單行區塊尾巴不留→0-1；D 行中 `/*` 開區塊→0-1；E nonWs 改回 `\s`→表【1】；F mustDrop 不查原檔→3-3；G mustKeep 不查原檔→3-1；H 比例改回字元長度→3-4 blank；I 行首 `//` 規則拿掉→0-1；J 區塊護欄拿掉→0-6；K 收尾行尾巴不留→0-1）。
+- test-v6277 的 H14～H21 突變錨點跟著 helper 形狀改（KEEP_LINE→`keepFrom[i] = 0;`、EAT_ALL→渲染①出口、EAT_TAIL_*→`keepFrom[i] = -1;`）；先跑一次紅 7 條（錨點不存在）證明它在守，改完 79/79。
+
+### 【批 0】test-v6179：`_rtSegN = 0;` 恰一處是靠洞校準出來的
+- 真檔兩處：:342 `let _rtSegN = 0;`（洞內）＋ :6042 歸零。舊剝除器吃掉宣告 ⇒ 剩 1 ⇒ 綠。**只換剝除器不收緊** ⇒ 立刻誤紅（實跑 NEW 計數 2）。
+- 收緊：`grabFn(BARE,'_tResetResSeg')` 本體恰 1 處 ＋ 全檔 `/^\s*_rtSegN = 0;/m` 恰 1 處 ＋ 全檔 `_rtSegN = 0;` 恰 2 處（宣告＋歸零，從 BASE blob grep 量出手抄）。新增自驗：洞內宣告剝完還在。
+- 原意突變：① tEnterMatch（:5509 之後）加 `_rtSegN = 0;` ⇒ 修前紅／修後紅（`reset 本體 1／行首歸零 2／全檔 3`）；② **洞內** :209 之後加 ⇒ 修前**綠**／修後紅。
+
+### 【批 1】game 頁六支：`stripCommentsChecked`／`stripCommentsBlankChecked` ＋ 各檔原有的行尾 `//` 正則（單行、不跨行 ⇒ 不會形成洞）
+每支：洞外（:386 之後）塞違規 ⇒ 修前紅／修後紅（原意守住）；**洞內**（:209 之後）塞同一違規 ⇒ 修前綠／修後紅。
+| 守衛 | 違規 snippet | 修後紅在 |
+|---|---|---|
+| v6146（等長版；mustKeep startTournamentPoll／tPollDesiredMs、mustDrop「是降頻不是停」） | `startTournamentPoll();` | 呼叫點 8 次 |
+| v6159 | `new PerformanceObserver(() => {})` | 最多兩顆 — 3 |
+| v6175 E | `resolveSelection(payload, sid)`（缺 token） | 每一處都帶 pendingToken |
+| v6180 | `decideBoardAdopt({})`／`game = fr.gameState` | 中央閘只有一份／繞過中央閘 |
+| v6246（等長版；行號回報 `@210` 正確） | `String(err).includes('404')` | 全站枚舉 |
+| v6210-central C4（只換 game 那一份；B／C1／C2 多檔掃描留批 2） | `const ZH_BY_TYPE = {}` | C4 |
+⚠ 取捨明寫：中央 helper 只剝行首 `//`；各守衛保留自己的**行尾** `//` 正則，否則正向斷言（例如 v6159 的 `/entryTypes: \['longtask'\]/`）會被行尾註解裡的字面滿足（假綠方向）。行尾正則最多吃一行，不會形成洞。
+
+### 【fail-open】`slice(indexOf(anchor))` 沒檢查 anchor ⇒ `slice(-1)` 只剩 1 字元、後接否定斷言恆真
+- v6111:57（`res.json(`）：程式碼改名 `res.json(`→`res.send(` ⇒ 修前綠／修後紅。⚠ 這支的 `section()` 找不到起點也回 `''`（第二層 fail-open），新的 `rj >= 0` 斷言一併兜住。
+- v6182:577（`docs.map`）：`docs.map`→`docs.flatMap` ⇒ 修前綠／修後紅。
+- v6189:396（`runInSeedChain(`）：⚠ **上游枚舉部分推翻** —— 程式碼改名時修前也紅（前一行 `ok(/runInSeedChain\(/.test(ci))` 是 throw 型、且 ②-a～e 行為端實跑全掛）。真正的洞是**守衛自己的 anchor 打錯字**：把 indexOf 的字串改成 `runInSeedChainX(` ⇒ 修前綠／修後紅。加 assert 讓兩條不互相依賴。
+- 同型掃描（139 處單／雙參 `slice(indexOf)`，逐一看「單參＋後接否定＋anchor 未斷言」）：另有 **v6146:63**（`setInterval`；`setInterval`→`setTimeout` ⇒ 修前綠／修後紅）與 **v6198:213**（`tForceResync`；程式碼改名被 3a 擋住，守衛 anchor 打錯字 ⇒ 修前綠／修後紅）—— 兩處順手修。其餘（v6101 字面量樣本、v6119／v6109／v6244／v6266 正向斷言、v6276／v6291／v6292 sha 比對、v6284 已斷言）不是 fail-open。
+
+### 【驗證】
+- 完整 `npm test`（`/tmp/w` = `git clone` 帶完整歷史，序列分批）：見本段末（push 前補數字）。tsc TS2304 新增 0。anti-pattern-lint 無違規。
+- HEAD-FAIL：helper 還原 BASE ⇒ test-lib-strip-comments 炸在 import（無 `stripCommentsBlank`）、test-v6277 H14～H21 紅 7 條；七支守衛還原 BASE ⇒ 洞內探針全綠（＝修前假綠的形狀）。
+
 ## v6.322 訂正版（範圍極小，站長裁定只做兩件）：首頁 changelog 一句不準確 ＋ E 那一行是不可達的死碼、歸功寫錯
 
 BASE `3d0b6e32d6db0299f4d3931b93c60fb7c0f6e24d`（v6.321，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。

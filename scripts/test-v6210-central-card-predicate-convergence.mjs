@@ -18,6 +18,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 game 頁那一份走中央行級狀態機
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.cp-e.ts'), O = join(ROOT, '.cp-o.mjs'), S = join(ROOT, '.cp-s.mjs');
 process.on('exit', () => { for (const p of [E, O, S]) { try { unlinkSync(p); } catch {} } });
@@ -214,7 +215,10 @@ console.log('\nC) 中央述詞的消費端覆蓋（B 段是否定型，沒有這
   //   `+page.svelte` / `MobilePortraitBattle.svelte` 內另有「卡名【X】→ EnergyType」的 zhMap
   //   （＝中央 `getBasicEnergyType` 的複本，用於能量計數顯示）＝**第三族**，不在本輪授權內，
   //   故本檔不掃它 —— 但 UI 那份 `isBasicEnergyOfType` 的本地定義（含自帶 ZH_BY_TYPE）必須已消失。
-  const sv = stripComments(FILES.find(([r]) => r === 'src/routes/game/+page.svelte')?.[1] ?? '');
+  // ⭐v6.323：game 頁這一份改走中央行級狀態機（本檔的區塊正則會把 game 頁 :208～:384 整段吃掉 ⇒ 洞內若有人抄回
+  //   ZH_BY_TYPE 對照表，否定型的 C4 掃不到）。其餘多檔掃描（B／C1／C2）仍是本檔的 stripComments，留待下一批。
+  const sv = stripCommentsChecked(FILES.find(([r]) => r === 'src/routes/game/+page.svelte')?.[1] ?? '',
+    { label: 'game/+page.svelte', mustKeep: ['isBasicEnergyOfTypeCentral('] }).replace(/\/\/.*$/gm, '');
   ck('C4 UI 端不得再自帶一份 isBasicEnergyOfType 的完整實作（ZH_BY_TYPE 對照表已刪，改薄殼委派中央）',
     !/ZH_BY_TYPE/.test(sv) && /isBasicEnergyOfTypeCentral\s*\(/.test(sv),
     'ZH_BY_TYPE 還在？' + /ZH_BY_TYPE/.test(sv) + ' / 有委派中央？' + /isBasicEnergyOfTypeCentral\s*\(/.test(sv));

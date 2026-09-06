@@ -19,18 +19,21 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 等長留白版（本檔靠行號／位移）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const RAW = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
 
-/** 剝掉 // 行註解、/* 區塊註解 *​/ 與 <!-- --> 模板註解（換成等長空白，行號不變） */
-function stripComments(s) {
-  return s
-    .replace(/\/\*[\s\S]*?\*\//g, (x) => x.replace(/[^\n]/g, ' '))
-    .replace(/<!--[\s\S]*?-->/g, (x) => x.replace(/[^\n]/g, ' '))
+/** 剝掉 // 行註解、區塊註解與模板註解（換成等長空白，行號不變）。
+ *  ⭐v6.323：區塊／模板註解改走中央行級狀態機的等長留白版 —— v6.310 起本檔的區塊正則會從 :208 的
+ *  `// … /api/tournament/*` 一路吃到 :384（行為端 hook 實測），洞內新增的 startTournamentPoll() 呼叫點數不到。
+ *  行尾 // 仍在本檔剝（單行、不跨行 ⇒ 不會形成洞）。 */
+function stripComments(s, opt = {}) {
+  return stripCommentsBlankChecked(s, { label: 'probe', minRatio: 0.2, ...opt })
     .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, (m, p1) => p1 + ' '.repeat(m.length - p1.length));
 }
-const SRC = stripComments(RAW);
+const SRC = stripComments(RAW, { label: 'game/+page.svelte', minRatio: 0.5,
+  mustKeep: ['function startTournamentPoll()', 'function tPollDesiredMs('], mustDrop: ['是降頻不是停'] });
 
 let pass = 0, fail = 0;
 const T = (n, fn) => { try { fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
@@ -57,7 +60,9 @@ T('⭐⭐輪詢節奏必須收斂在單一中央述詞 tPollDesiredMs（v6.148 �
   assert.ok(/6000\s*:\s*12000/.test(fn), 'game-over 的降頻數值不見了（平手 6s／有勝負 12s）');
   const body = sliceBetween(SRC, 'function startTournamentPoll()', '}, 400);');
   assert.ok(/tPollDesiredMs\(false\)/.test(body), '主輪詢沒有走中央節奏述詞');
-  assert.ok(!/clearInterval\s*\(\s*tPollTimer\s*\)/.test(body.slice(body.indexOf('setInterval'))),
+  const si = body.indexOf('setInterval');
+  assert.ok(si >= 0, 'anchor setInterval 不在 startTournamentPoll 本體裡 ⇒ 下面的否定斷言會恆真（v6.323 fail-open 同型修正）');
+  assert.ok(!/clearInterval\s*\(\s*tPollTimer\s*\)/.test(body.slice(si)),
     '不可在輪詢回呼內 clearInterval —— 平手待裁定的玩家會永遠等不到裁定結果');
 });
 

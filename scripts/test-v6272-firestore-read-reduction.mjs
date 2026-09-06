@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '3d0b6e32d6db0299f4d3931b93c60fb7c0f6e24d';   // v6.321（v6.322 的上一版）
+const PREV_SHA = '5e00e1ee928ba7397faae1ab5a7db997246ece4f';   // v6.322（v6.323 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -702,10 +702,11 @@ const PREV_SHA = '3d0b6e32d6db0299f4d3931b93c60fb7c0f6e24d';   // v6.321（v6.32
 // ⭐v6.322：訂正版（站長裁定只做兩件）—— 首頁第一則改寫（v6.321 未上線 ⇒ 徽章改 v6.322、只改 log-body 一句；走 test-v6264 F0b，不搬運）
 //   ＋ game/+page.svelte **只改註解**（apply-undo 的 defence-in-depth 那一行：寫實話「目前不可達」，行為零改動）＋ version.ts。
 //   ⚠ sync-guards.ts 零改動（test-v6265 F5）；守衛改動（test-v6321 C6a／C6b／G10b／G10c）在 scripts/，不在這一節範圍。
+// ⭐v6.323：純守衛修正（strip-comments.mjs 加等長留白渲染＋mustDrop／對照字串先斷言在原檔存在；新自驗檔 test-lib-strip-comments；
+//   test-v6179 期望值收緊（歸零只數 _tResetResSeg 本體）；game 頁六支守衛的區塊正則改走中央狀態機；五處 slice(indexOf) fail-open 加 anchor 斷言）
+//   —— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 const PREV_ALLOWED = [
   'src/lib/version.ts',
-  'src/routes/game/+page.svelte',
-  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

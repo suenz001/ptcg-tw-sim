@@ -29,6 +29,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { transform } from 'esbuild';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 區塊／HTML 註解走中央行級狀態機
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
@@ -41,10 +42,16 @@ const ok = (name, cond, extra = '') => {
 };
 
 // ── 工具：剝註解（否定型掃描一律先剝，否則註解裡的字讓掃描永遠假綠） ──────────
-function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
+// ⭐v6.323：區塊／HTML 註解改走中央行級狀態機。v6.310 起本檔的 `/\/\*[\s\S]*?\*\//g` 會從 :208 的
+//   `// … /api/tournament/*` 一路吃到 :384（行為端 hook 實測），把 :342 的 `let _rtSegN = 0;` 宣告一起吃掉
+//   ⇒ 下面「_rtSegN 歸零恰一處」的期望值 1 其實是**靠洞校準出來的**（真檔有宣告＋歸零共 2 處）。
+//   行尾 // 仍在本檔剝（單行、不跨行 ⇒ 不會形成洞）。
+function stripComments(src, opt = {}) {
+  return stripCommentsChecked(src, { label: 'probe', minRatio: 0.2, ...opt }).replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
 }
-const BARE = stripComments(PAGE);
+const BARE = stripComments(PAGE, { label: 'game/+page.svelte', minRatio: 0.5, mustKeep: ['let _rtSegN = 0;', 'function _tResetResSeg(): void {'] });
+ok('★掃描器自我驗證（v6.323）：洞內（:342）的宣告 `let _rtSegN = 0;` 剝完還在（區塊正則版會把它吃掉）',
+  BARE.includes('let _rtSegN = 0;'));
 ok('★掃描器自我驗證：剝註解真的有作用（有剝掉、但沒把程式碼一起剝光）',
   BARE.length < PAGE.length && BARE.length > PAGE.length * 0.5, `${PAGE.length} → ${BARE.length}`);
 ok('★掃描器自我驗證：剝註解會吃掉註解內容',
@@ -358,8 +365,11 @@ if (H) {
     /res: _resTimingStats\(\),/.test(BARE) && (BARE.match(/tApi\('\/clientdiag'/g) || []).length === 2,
     String((BARE.match(/tApi\('\/clientdiag'/g) || []).length));
   ok('★★★跨場殘留：歸零只有**一份**判準（各寫一套必然漂移）',
-    (BARE.match(/_rtSegN = 0;/g) || []).length === 1
-    && /function _tResetResSeg\(\): void \{/.test(BARE));
+    (grabFn(BARE, '_tResetResSeg') || '').split('_rtSegN = 0;').length - 1 === 1
+    && (BARE.match(/^\s*_rtSegN = 0;/mg) || []).length === 1
+    && (BARE.match(/_rtSegN = 0;/g) || []).length === 2
+    && /function _tResetResSeg\(\): void \{/.test(BARE),
+    'reset 本體 ' + ((grabFn(BARE, '_tResetResSeg') || '').split('_rtSegN = 0;').length - 1) + '／行首歸零 ' + (BARE.match(/^\s*_rtSegN = 0;/mg) || []).length + '／全檔 ' + (BARE.match(/_rtSegN = 0;/g) || []).length);
   ok('★★★對戰離場與**觀戰離場**都要呼叫（Fable 5 審查：觀戰殘留會揹到自己那一場）',
     (BARE.match(/_tResetResSeg\(\);/g) || []).length === 2
     && /function tLeaveMatch\(\)[\s\S]*?_tResetResSeg\(\);/.test(BARE)

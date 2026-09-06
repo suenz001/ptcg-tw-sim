@@ -11,6 +11,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 區塊／HTML 註解走中央行級狀態機
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x6175-s.js'), E = join(ROOT, '.x6175-e.ts'), O = join(ROOT, '.x6175-o.mjs');
@@ -212,10 +213,9 @@ console.log('\n── E. UI 接線（真的接上了嗎，不是「有這個字�
 {
   const raw = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
   // 剝註解（HTML 註解 + 區塊註解 + 「整行都是 //」的行註解；不動行尾，避免打壞網址字串）
-  const strip = (t) => t
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n')
+  // ⭐v6.323：改走中央行級狀態機（本節原本的區塊正則會把 game 頁 :208～:384 整段吃掉 ⇒ 洞內少帶 token 的
+  //   resolveSelection 呼叫點掃不到）。正對照：真呼叫點樣本剝完必須還在。
+  const strip = (t) => stripCommentsChecked(t, { label: 'game/+page.svelte', mustKeep: ['GameActions.resolveSelection(payload, sid, _pendingTok())'] })
     .replace(/[​-‍﻿]/g, '');
   const src = strip(raw);
 

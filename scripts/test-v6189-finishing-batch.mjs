@@ -393,7 +393,9 @@ await T('②-f 結構：/checkin 真的用了 runInSeedChain，且鎖內沒有�
   const ci = epSrc('/api/tournament/checkin');
   ok(/runInSeedChain\(/.test(ci), '/checkin 應排進 runInSeedChain');
   ok(!/seedEventBracket\(/.test(ci), '⚠ 鎖內不可呼叫 seedEventBracket（會自己等自己）');
-  const chainBody = ci.slice(ci.indexOf('runInSeedChain('));
+  const rc = ci.indexOf('runInSeedChain(');
+  ok(rc >= 0, 'anchor runInSeedChain( 不存在 ⇒ 下面的否定斷言會恆真（v6.323：上一行的正向斷言已兜住，這裡再鎖一次，兩條不互相依賴）');
+  const chainBody = ci.slice(rc);
   ok(!/tournIdentity\(/.test(chainBody), '⚠ tournIdentity 必須留在鎖外');
 });
 

@@ -574,7 +574,9 @@ T('⭐⭐⭐ /api/deck-posts 列表 handler 對留言表絕不 N+1（v6.218 起�
   ok((ep.match(/DPCOMM\.distinct/g) || []).length === 1, 'distinct 出現超過一處 —— 檢查是否混進逐筆查詢');
   const gate = section(ep, 'if (qTokens.length) {', 'const [docs, total]');
   ok(/DPCOMM\.distinct/.test(gate), 'DPCOMM.distinct 不在 qTokens.length 守門內 —— 沒搜尋也會查留言表');
-  const mapSeg = ep.slice(ep.indexOf('docs.map'));
+  const dm = ep.indexOf('docs.map');
+  ok(dm >= 0, 'anchor docs.map 不存在（列表端點改寫了）⇒ 下面的否定斷言會恆真（v6.323 fail-open 修正）');
+  const mapSeg = ep.slice(dm);
   ok(!/DPCOMM/.test(mapSeg), 'docs.map 之後出現 DPCOMM —— 每頁 20 筆就是 20 次查詢（v6.119）');
   ok(/projection:\s*\{[^}]*entries:\s*0/.test(ep), '列表 projection 被改壞了（正對照）');
 });

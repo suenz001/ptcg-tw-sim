@@ -38,7 +38,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '3d0b6e32d6db0299f4d3931b93c60fb7c0f6e24d'; // v6.321（v6.322 的前一版；v6.322 只改寫第一則 ⇒ 走 F0b）
+const BASE_SHA = '5e00e1ee928ba7397faae1ab5a7db997246ece4f'; // v6.322（v6.323 的前一版；v6.323 不動 changelog ⇒ 走 F0 短路）
 const N_INLINE = 12;   // 首頁內嵌完整內文的則數（站長裁定的「最新 N 則」）
 
 let pass = 0, fail = 0;

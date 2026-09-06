@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { transform, build } from 'esbuild';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 區塊註解走中央行級狀態機
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
@@ -62,9 +63,11 @@ function grabFn(src, name) {
   }
   return src.slice(i, j + 1);
 }
-/** 剝掉行註解與區塊註解（否則「否定型掃描」會被註解裡的示例騙過去）。 */
-function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => {
+/** 剝掉行註解與區塊註解（否則「否定型掃描」會被註解裡的示例騙過去）。
+ *  ⭐v6.323：區塊註解改走中央行級狀態機（本檔的區塊正則會把 game 頁 :208～:384 整段吃掉 ⇒ 洞內第二個
+ *  decideBoardAdopt( 或 `game = fr.gameState` 都掃不到）。行尾 // 仍在本檔剝（單行、不跨行）。 */
+function stripComments(src, opt = {}) {
+  return stripCommentsChecked(src, { label: 'probe', minRatio: 0.2, ...opt }).split('\n').map((l) => {
     const i = l.indexOf('//');
     if (i < 0) return l;
     // 粗略避開字串／網址裡的 //：只在 // 前沒有奇數個引號時才截斷
@@ -73,7 +76,7 @@ function stripComments(src) {
     return q % 2 === 0 ? head : l;
   }).join('\n');
 }
-const PAGE_CODE = stripComments(PAGE);
+const PAGE_CODE = stripComments(PAGE, { label: 'game/+page.svelte', minRatio: 0.5, mustKeep: ['decideBoardAdopt(', 'function tAdopt(state: any, version: number'] });
 
 // ── 打包中央判準 + 結構共享（真貨，不是複製一份）──────────────────────────
 const E = join(ROOT, '.v6180-e.ts'), O = join(ROOT, '.v6180-o.mjs'), S = join(ROOT, '.v6180-s.js');

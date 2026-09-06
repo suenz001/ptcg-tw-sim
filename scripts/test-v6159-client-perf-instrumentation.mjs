@@ -25,6 +25,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { transform } from 'esbuild';
+import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 區塊／HTML 註解走中央行級狀態機
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
@@ -39,10 +40,12 @@ const ok = (name, cond, extra = '') => {
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ── 工具：剝註解（否定型掃描一律先剝，否則註解裡的字會讓掃描永遠假綠） ──────
-function stripComments(src) {
-  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
+// ⭐v6.323：區塊／HTML 註解改走中央行級狀態機（本檔的區塊正則會把 game 頁 :208～:384 整段吃掉 ⇒ 洞內多開一顆
+//   PerformanceObserver 數不到）。行尾 // 仍在本檔剝（單行、不跨行 ⇒ 不會形成洞）。
+function stripComments(src, opt = {}) {
+  return stripCommentsChecked(src, { label: 'probe', minRatio: 0.2, ...opt }).replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1');
 }
-const BARE = stripComments(PAGE);
+const BARE = stripComments(PAGE, { label: 'game/+page.svelte', minRatio: 0.5, mustKeep: ['new PerformanceObserver(', 'async function tApi(path: string'] });
 ok('★掃描器自我驗證：剝註解真的有作用（有剝掉、但沒把程式碼一起剝光）',
   BARE.length < PAGE.length && BARE.length > PAGE.length * 0.5,
   `${PAGE.length} → ${BARE.length}`);

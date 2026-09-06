@@ -932,13 +932,13 @@ async function mutStripMod(pairs) {
   assert.notStrictEqual(src, STRIP_SRC, '突變沒改到 helper');
   return import('data:text/javascript;base64,' + Buffer.from(src, 'utf8').toString('base64'));
 }
-const KEEP_LINE = '    out.push(line);                                          // d. 其餘一律保留';
-const EAT_ALL = ["  return { out: out.join('\\n'), blocks, maxBlockLines };", "  return { out: '', blocks, maxBlockLines };"];   // 剝除器吃掉整檔
-const EAT_TOKEN_LINES = [KEEP_LINE, "    if (!line.includes('loadDecksFromCloud')) out.push(line);"]; // 只吃掉含 token 的行（長度護欄過得了）
+const KEEP_LINE = '    keepFrom[i] = 0;                                         // d. 其餘一律保留';   // ⭐v6.323 錨點：狀態機改產 keepFrom（單一真相），刪行／留白兩種渲染都從它導出
+const EAT_ALL = ["  return out.join('\\n');                                   // 渲染①（刪行）的唯一出口", "  return '';                                               // 渲染①（刪行）的唯一出口"];   // 剝除器吃掉整檔
+const EAT_TOKEN_LINES = [KEEP_LINE, "    keepFrom[i] = line.includes('loadDecksFromCloud') ? -1 : 0;"]; // 只吃掉含 token 的行（長度護欄過得了）
 // ⭐v6.312 helper 自身回歸的突變（每一種都是「退回 v6.311 的吃法」）：
-const EAT_STAR_LINES = [KEEP_LINE, "    if (!/^\\s*\\*/.test(line)) out.push(line);"];             // 丟掉 * 開頭的行（B2 假綠）
-const EAT_TAIL_SINGLE = ['      if (tail.trim()) out.push(tail);                       // b. 單行區塊，尾巴保留（B1、B3）', '      if (false) out.push(tail);'];
-const EAT_TAIL_CLOSE = ['      if (tail.trim()) out.push(tail);                       // c. 收尾後的尾巴保留（B4）', '      if (false) out.push(tail);'];
+const EAT_STAR_LINES = [KEEP_LINE, "    keepFrom[i] = /^\\s*\\*/.test(line) ? -1 : 0;"];            // 丟掉 * 開頭的行（B2 假綠）
+const EAT_TAIL_SINGLE = ['      keepFrom[i] = k + cl.length;                           // b. 單行區塊，尾巴保留（B1、B3）', '      keepFrom[i] = -1;'];
+const EAT_TAIL_CLOSE = ['      keepFrom[i] = from;                                    // c. 收尾後的尾巴保留（B4）', '      keepFrom[i] = -1;'];
 const OPEN_MIDLINE = ["      if (!t.startsWith(open)) continue;", "      if (!line.includes(open)) continue;"];              // 行中 /* 也開區塊（事故 2 的根因）
 const NO_BLOCK_GUARD = ['  const bad = blocks.find((b) => !b.closed || b.lines > maxBlockLines);', '  const bad = null;'];
 const NO_RATIO_GUARD = ['  assert.ok(ratio >= minRatio,\n', '  assert.ok(true,\n'];
