@@ -44,8 +44,18 @@ hook `String.prototype.replace` 實跑 7 支：7 支都把 `/\/\*[\s\S]*?\*\//g`
 - 同型掃描（139 處單／雙參 `slice(indexOf)`，逐一看「單參＋後接否定＋anchor 未斷言」）：另有 **v6146:63**（`setInterval`；`setInterval`→`setTimeout` ⇒ 修前綠／修後紅）與 **v6198:213**（`tForceResync`；程式碼改名被 3a 擋住，守衛 anchor 打錯字 ⇒ 修前綠／修後紅）—— 兩處順手修。其餘（v6101 字面量樣本、v6119／v6109／v6244／v6266 正向斷言、v6276／v6291／v6292 sha 比對、v6284 已斷言）不是 fail-open。
 
 ### 【驗證】
-- 完整 `npm test`（`/tmp/w` = `git clone` 帶完整歷史，序列分批）：見本段末（push 前補數字）。tsc TS2304 新增 0。anti-pattern-lint 無違規。
-- HEAD-FAIL：helper 還原 BASE ⇒ test-lib-strip-comments 炸在 import（無 `stripCommentsBlank`）、test-v6277 H14～H21 紅 7 條；七支守衛還原 BASE ⇒ 洞內探針全綠（＝修前假綠的形狀）。
+- 完整 `npm test`：chain 共 **643 支**，在 `/tmp/w`（`git clone` 帶完整歷史、非淺複製）**序列**分批跑，**643/643 rc=0**，最後一支 `test-v6321-undo-snapshot-cross-game.mjs` 確認有跑到（runner 逐支寫狀態檔，不靠 `while read`）。
+  `tsc --noEmit`：TS2304 **0**（既有的 2 個 TS2353／TS2339 是 BASE 就有的，本版 `src/` 只動 version.ts）。anti-pattern-lint 無違規。
+- 突變合計 **31 個**，各紅在預期條目：helper 自身 11（A～K）＋ 批 0 兩條（洞外／洞內）＋ 批 1 六支 × 洞外／洞內 12 條（v6180 兩種 snippet 共 14）＋ fail-open 五處（v6111／v6182／v6146 程式碼改名、v6189／v6198 守衛 anchor 打錯字）。
+- HEAD-FAIL：helper 還原 BASE ⇒ test-lib-strip-comments 炸在 import（`does not provide an export named 'WS_RE'`）、v6146／v6246 同（`stripCommentsBlankChecked`）、test-v6277 H14～H21 紅 7 條（錨點不存在）；七支守衛還原 BASE ⇒ 洞內探針全綠（＝修前假綠的形狀，見上表）。
+- commit `deac5fcd87b7f49383f15b294c2273c978f3a0be`（v6.323）。部署：純守衛版，正式站不必跑 bat；若要讓後台版本提示顯示 6.323，跑 `update-tournament.bat`（離峰、無賽事進行中）。
+- ⚠ 上游枚舉被推翻的部分：v6189:396 不是「anchor 一改名就恆真」——程式碼改名時前一行 throw 型正向斷言與 ②-a～e 行為端實跑都會紅；它的洞是**守衛自己的 anchor 字串打錯字**。其餘（v6179 靠洞校準、六支盲區、v6111／v6182 fail-open）均行為端複驗成立。
+
+### 【批 2 建議】
+- 依「輸入檔」切而不是依守衛切：engine.ts（洞 :7905～:8203，299 行）、effects.ts、`_shared` 家族、server_admin_patch.js（543 行）、admin.html（:829 起 511 行）各一批；每批先用 hook 量洞、再用洞內探針定「修前綠」的守衛清單。
+- 多檔掃描器（v6210 B／C1／C2、v6175 其他節）要先確認每個檔的洞位置；棘輪（≥）類是假紅方向，不急。
+- 正向斷言換中央 helper 前要看目標字串會不會出現在**行尾註解**（本版的取捨：各檔保留自己的行尾 `//` 正則）。
+- 39 支「無洞」的不是安全，是「今天沒洞」：一旦有人在 `//` 註解裡寫 `/api/x/*`，洞就出現；最後一批再加 anti-pattern-lint 棘輪。
 
 ## v6.322 訂正版（範圍極小，站長裁定只做兩件）：首頁 changelog 一句不準確 ＋ E 那一行是不可達的死碼、歸功寫錯
 
