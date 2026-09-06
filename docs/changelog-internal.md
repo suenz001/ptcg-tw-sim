@@ -1,5 +1,50 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.322 訂正版（範圍極小，站長裁定只做兩件）：首頁 changelog 一句不準確 ＋ E 那一行是不可達的死碼、歸功寫錯
+
+BASE `3d0b6e32d6db0299f4d3931b93c60fb7c0f6e24d`（v6.321，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`static/changelog.html`（只改第一則：徽章 v6.321→v6.322 ＋ log-body 一句；摘要 72 字不動）／`src/routes/game/+page.svelte`（**只改註解**，E 那一行本身零改動）／
+`scripts/test-v6321-*`（C6 拆成 C6a 真管線＋C6b defence-in-depth；G10 改名；新增 G10b／G10c 突變）／`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT）／
+`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED 三項）／`scripts/test-v6264-*`（BASE_SHA；走 F0b「改寫第一則」）／本檔。零新依賴。
+⚠ **不動**：`sync-guards.ts`（規則順序是 v6.309／v6.310 剛大改、test-v6265 F5 逐位元釘住）、E 那一行的行為、v6.321 的 A／B／C／D 實作、審查者另列的四件（舊 client 發起端殘留洞／閃焰王牌換上換下不對稱／setup 換場 push 節流／既有 2 個 `DeckEntry` TS2304）。
+
+### 【A】首頁 changelog 那一句不準確（站規：changelog 禁幻覺）
+- 審查者：v6.321 內文寫「練習房（開啟悔棋）與對戰 AI 時，悔棋按鈕先前在開局準備階段也會出現」，但桌機兩顆鈕在 v6.320 就有 `game.phase === 'playing'` 閘。
+- 我從 v6.320 blob（`9e41a5d5`）逐字查證，**審查者正確**：
+  - 桌機 AI 鈕（+page.svelte:11808）：`{#if undoSnapshot && mode !== 'online' && aiPlayerIndex !== null && !pendingSelection && game.phase === 'playing'}`
+  - 桌機線上鈕（:11815）：`{#if undoSnapshot && mode === 'online' && roomData?.allowUndo && !undoDeniedThisSnapshot && !undoAwaitingResponse && !pendingSelection && game.phase === 'playing' && mySeatIdx >= 0 && mySeatIdx <= 1 && isMyTurn()}`
+  - 手機直式 prop（:11286）：`undoAvailable={!!undoSnapshot && !undoAwaitingResponse && !undoDeniedThisSnapshot}` —— **沒有 phase 閘**；MobilePortraitBattle 的 `{#if undoAvailable && onUndo && !isSpectator}` 只讀 prop。
+  ⇒ 「開局準備階段也會出現」只有**手機版**成立。
+- 順帶訂正同一句的另一處：「只在對戰進行中、**輪到自己時**出現」—— `undoBtnVisible` 對 AI 模式的分支是 `aiPlayerIndex !== null`，沒有 `isMyTurn()`；
+  只有線上練習房分支才有 `isMyTurn()`。改寫成「只在對戰進行中出現（線上練習房還須輪到自己）」。
+- 徽章直接改 v6.322（v6.321 從未上線 ⇒ 改寫、不新增第二則；test-v6264 走 F0b）。摘要區總長不變（只改 log-body，⑧⑨只算 `<summary>`）。
+
+### 【B】E 那一行是打不到的死碼；commit／本檔把功勞歸錯
+- 用真 `resolveRoomUpdate`（BASE blob，esbuild bundle）實跑：
+  ```
+  local=GAME-2(setup)   incoming=GAME-1(playing)+undo marker ⇒ {kind:'reject', reason:'stale-old-game'}
+  local=GAME-2(playing) incoming=GAME-1(playing)+undo marker ⇒ {kind:'reject', reason:'stale-old-game'}
+  同 id                                                      ⇒ {kind:'apply-undo', idEq:true}
+  補：incoming=GAME-3（較新異局）+marker ⇒ adopt；local=null ⇒ adopt
+  窮舉 54 組「異局」（local phase×incoming phase×createdAt 三檔×restartCount）：kind==='apply-undo' 出現 0 次
+  ```
+  ⇒ 規則 2 排在規則 3 之前，`apply-undo` 只帶同局 game；頁面層 decision 到套用之間沒有 await ⇒ E 永遠不 return。**審查者正確。**
+- 處理（三件）：① 本檔 v6.321 段三處歸功訂正（第【2】B「由 E 補」、E 段、【4】部署）；② E 那一行的註解改寫成實話（行為零改動）；
+  ③ 守衛選 **(i)**：C6 拆成 **C6a 真管線**（bundle 真 `resolveRoomUpdate`，斷言審查者三行＋窮舉 54 組 0 次 apply-undo ＋「apply-undo 恆同局」）
+  與 **C6b defence-in-depth**（保留原本手工 decision 餵 case body 的斷言，標題明寫「此路目前不可達，守的是『若日後規則順序改動，這一行還在』」）。
+  理由：(ii) 只加註解的話，守衛外表仍像在守一件它沒在守的事；(i) 才守到**真正在擋的那條**（規則 2），而且一旦有人把規則 3 搬到規則 2 前，C6a 立刻紅、C6b 變成真的最後一道。
+  突變：G10（改名）拿掉 E ⇒ C6b 紅（⚠ 明寫：不代表玩家可見行為改變）；**G10b** 把 sync-guards 規則 3 搬到規則 2 之前（突變版寫暫存檔重 bundle）⇒ C6a 紅（證明 C6a 不是安慰劑）；
+  **G10c** 規則 2 的 `local.id !== incoming.id` 改成 `local.id === incoming.id`（把同局當異局）⇒ C6a 的「同局必 apply-undo」紅。
+
+### 【3】驗證
+- HEAD-FAIL：changelog.html 還原 BASE ⇒ test-v6264 F0b 紅（第一則版本沒前進）；+page.svelte 還原 BASE ⇒ test-v6321 C6b 綠（行為沒變，本來就該綠）但 test-v6272 ⑩ 紅（PREV_ALLOWED 列了它）；
+  test-v6321 守衛檔還原 BASE ⇒ 沒有 C6a／G10b／G10c（39 PASS 的舊版），這正是「守衛沒在守真管線」的狀態。
+- 完整 npm test（`git clone --shared` 完整歷史、序列分批、最後一支有跑到）0 紅；svelte-check 與 BASE 逐條 diff 零新增；tsc 錯誤集合與 BASE 相同；anti-pattern-lint 無違規。
+- 三配套：admin.html 6.322（LF）；test-v6272 PREV_SHA→3d0b6e32、PREV_ALLOWED 三項；test-v6264 BASE_SHA→3d0b6e32（F0b）。掃 pin：scripts 內 `6.321` 全是註解沿革；test-v6321 自己的 BASE_SHA（v6.320）只做 HEAD-FAIL 對照且拿不到會 SHALLOW-SKIP，不需前移。
+
+### 【4】部署
+無 server 相依、engine／server-engine 零改動：`redeploy-oracle.bat` 一支即可（`update-tournament.bat` 不必）。
+
 ## v6.321 悔棋快照跨局殘留（新局 setup 按 ↶ 整包退回上一局；換了座位＝看到上一局對手的手牌）＋ 開局可重選戰鬥場
 
 BASE `9e41a5d55394cfc8547d0217c4095ef7dbe2c888`（v6.320，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
@@ -38,7 +83,7 @@ BASE `9e41a5d55394cfc8547d0217c4095ef7dbe2c888`（v6.320，遠端 main；`git ls
   對手端 modal 加 `undoRequestForThisGame(req, game)`：**帶 gameId 必須等於本局；沒帶（舊 client）退回 phase 閘（playing 才顯示）**。
   - **版本 skew 取捨**：fail-closed 的對象是「異局」而不是「舊 client」——舊 client 的請求沒有 gameId，若一律拒收就把它們在 playing 階段的
     正常悔棋擋死（新 bug）。退回 phase 閘等於 BASE 對舊 client 的行為，只多擋 setup。舊 client 在 playing 階段拿上一局快照發請求的洞，
-    由 E（收端）補。
+    由 sync-guards 規則 2（`local.id !== incoming.id` ⇒ stale-old-game／adopt）擋；⚠ v6.322 訂正：**不是**由 E 補（E 目前不可達，見 v6.322）。
   - **不需要 server 先上**：`/api/rooms/:code` 的房間 doc 是不透明 JSON（server 只做 `_version` CAS，delta-put 的 set/del 也是泛型路徑、
     無欄位白名單；`_ROOMS_DIGEST_NOISE` 只是把整個 `undoRequest` 排除在大廳 digest 之外）。守衛 C2 實跑 room-oracle 的 requestUndo，
     寫出的 doc 其餘欄位逐字相同。Firestore 版同樣是子物件欄位。⇒ 部署順序沒有 server 相依；`redeploy-oracle.bat` 一支即可。
@@ -56,6 +101,11 @@ BASE `9e41a5d55394cfc8547d0217c4095ef7dbe2c888`（v6.320，遠端 main；`git ls
   第 2 局 playing 階段拿上一局快照發請求 → 新 client 對手同意 → 舊 client `pushUndoRollback(上一局快照)` → 新 client 收端 `apply-undo`
   吃下去＝整包換成上一局。只在 `+page.svelte` 的 `apply-undo` case 加一行 `decision.game.id !== game.id ⇒ warn + return`（一次性標記照推進），
   **sync-guards.ts 一個字沒動**（test-v6265 F5 逐位元）。同一局的 rollback id 恆相等 ⇒ 零影響（C6／test-v6265 E3）。
+  ⚠⚠ **v6.322 訂正（Opus 5 對抗性審查抓到，經真 `resolveRoomUpdate` 實跑確認）**：上面這段把功勞歸錯了。
+  `resolveRoomUpdate` 的規則 2（`local && local.id !== incoming.id`）排在規則 3（`apply-undo`）之前，異局一律在規則 2 就 `reject('stale-old-game')`
+  或 `adopt`，**永遠落不到 `apply-undo`**；而 `decision.kind === 'apply-undo'` 時 `decision.game.id === game.id` 恆成立（decision 到套用之間沒有 await）
+  ⇒ E 那一行**目前不可達**。真正擋「舊 client 推上一局快照當 rollback」的是**既有的規則 2**，不是 E。
+  E 保留為 defence-in-depth：它的價值只在「若日後有人改動規則順序，這一行還在」。
 
 ### 【3】驗證
 - 守衛 `test-v6321`：39 PASS（A 主證明＋A4 對 BASE blob 必見洩漏／B 接線點／C gameId 五條／D 顯示矩陣 11 格／E 開局換戰鬥場 7 條／G 突變 13 個）。
@@ -78,7 +128,7 @@ BASE `9e41a5d55394cfc8547d0217c4095ef7dbe2c888`（v6.320，遠端 main；`git ls
 
 ### 【4】部署
 無 server 相依：`redeploy-oracle.bat` 即可上正式站；`update-tournament.bat` 不必（engine／server-engine 零改動）。
-⚠ 舊 client 與新 client 混跑期間：新 client 對舊 client 的 setup 請求不顯示 modal；舊 client 自己仍可能在 setup 按到 ↶（只影響它自己的畫面，且新 client 收端拒收異局 rollback）。
+⚠ 舊 client 與新 client 混跑期間：新 client 對舊 client 的 setup 請求不顯示 modal；舊 client 自己仍可能在 setup 按到 ↶（只影響它自己的畫面；它推上來的異局 rollback 在新 client 端由 sync-guards 規則 2 擋掉 —— v6.322 訂正：不是 E 擋的）。
 
 ## v6.320 剝除器收線（第七版）：護欄⑧「收尾標籤字面也算殘留」＋ 護欄⑨「HTML 註解文字裡的收尾字面」＋ 自驗 5-2 改範圍級裁判 ＋ 六支自帶正則抽 script／style 的守衛改走中央 helper
 

@@ -17,7 +17,9 @@
 //     對手 modal：帶 gameId 必須相等、沒帶（舊 client）退回 phase 閘（不擋死舊 client 的正常悔棋）。
 //   C 手機 ↶ 讀同一份 `undoBtnVisible`（playing＋我的回合＋無 pending＋快照屬於本局＋allowUndo）。
 //   D `setup-active-swap`：setup 且尚未按準備完成、已有戰鬥場寶可夢時，手牌基礎卡可換上場（舊的回手牌）。
-//   E 收端：`apply-undo` 拒收異局 rollback（舊 client 發起方仍可能推上一局快照；只加在頁面層，不動 sync-guards）。
+//   E 收端：`apply-undo` case 多一行 `decision.game.id !== game.id ⇒ return`（只加在頁面層，不動 sync-guards）。
+//     ⚠ v6.322 訂正：這一行**目前不可達** —— 異局在 resolveRoomUpdate 規則 2（stale-old-game／adopt）就出局，apply-undo 只帶同局。
+//     真正擋「舊 client 推上一局快照當 rollback」的是規則 2（C6a 用真管線守）；E 只是 defence-in-depth（C6b 守它還在）。
 //
 // ── 紀律 ──────────────────────────────────────────────────────────────
 //   ・【A】是行為端主證明：真 createGame/applyAction ＋ 頁面規則**逐字抽出來執行**；
@@ -71,7 +73,8 @@ writeFileSync(S, 'export const base="";');
 writeFileSync(E,
   "export { createGame, applyAction, isOpeningInProgress } from './src/lib/game/engine';\n"
 + "import './src/lib/game/effects';\n"
-+ "export { getHandCardOps, handOpForDropTarget, HAND_CARD_OPS, HAND_OP_DROP_TARGET } from './src/lib/game/hand-card-ops';\n");
++ "export { getHandCardOps, handOpForDropTarget, HAND_CARD_OPS, HAND_OP_DROP_TARGET } from './src/lib/game/hand-card-ops';\n"
++ "export { resolveRoomUpdate } from './src/lib/game/sync-guards';\n");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
   alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const M = await import(pathToFileURL(O).href);
@@ -347,7 +350,33 @@ function applyUndoCase(src) {
      (() => { ${ts(body)} })();
      return { game, lastSeenUndoApplyAt, _unpushedState, undoSnapshot };`);
 }
-T('C6 ⭐ 收端 apply-undo：異局 rollback 拒收（盤面不換），同局 rollback 照常套用', () => {
+// ⭐ v6.322：C6 拆成兩條。C6a 走**真的** resolveRoomUpdate（＝守真正在擋異局 rollback 的那條：規則 2）；
+//   C6b 保留「手工 decision 直接餵 apply-undo case body」—— ⚠ 這條路**目前不可達**（C6a 證明），它守的只是
+//   「若日後有人把規則 3 搬到規則 2 之前，頁面層那一行還在」。⚠ 不可以把 C6b 說成「在擋異局 rollback」。
+const SG_CTX = { myPlayerIndex: 0, roomLastUndoApplyAt: 5, lastSeenUndoApplyAt: 4, roomRestartCount: 0, lastAdoptedRestartCount: 0, activeGameId: null };
+const sgGame = (id, phase, createdAt, logLen) => ({ id, phase, createdAt, log: Array.from({ length: logLen }, (_, i) => i), players: [{}, {}] });
+// 「異局＋悔棋 marker 永遠落不到 apply-undo」的判準：三行重現 ＋ 窮舉；resolve 由參數注入（突變 G10b／G10c 用突變版）
+function assertForeignNeverApplyUndo(resolve) {
+  const G1 = sgGame('GAME-1', 'playing', 1000, 3), G2s = sgGame('GAME-2', 'setup', 2000, 1), G2p = sgGame('GAME-2', 'playing', 2000, 2);
+  const r1 = resolve(G2s, G1, SG_CTX);
+  assert.deepStrictEqual({ kind: r1.kind, reason: r1.reason }, { kind: 'reject', reason: 'stale-old-game' }, 'local=setup 異局+marker 沒在規則 2 被擋');
+  const r2 = resolve(G2p, G1, SG_CTX);
+  assert.deepStrictEqual({ kind: r2.kind, reason: r2.reason }, { kind: 'reject', reason: 'stale-old-game' }, 'local=playing 異局+marker 沒在規則 2 被擋');
+  const r3 = resolve(G2p, sgGame('GAME-2', 'playing', 2000, 1), SG_CTX);
+  assert.strictEqual(r3.kind, 'apply-undo', '同局 rollback 沒走 apply-undo');
+  assert.strictEqual(r3.game.id, G2p.id, 'apply-undo 帶的不是同局');
+  let n = 0, hit = 0;
+  for (const lp of ['setup', 'playing', 'game-over']) for (const ip of ['setup', 'playing', 'game-over']) for (const ic of [500, 2000, 9000]) for (const rc of [0, 1]) {
+    const d = resolve(sgGame('L', lp, 2000, 2), sgGame('R', ip, ic, 1), { ...SG_CTX, roomRestartCount: rc });
+    n++; if (d.kind === 'apply-undo') hit++;
+  }
+  assert.strictEqual(n, 54);
+  assert.strictEqual(hit, 0, `異局組合有 ${hit} 組落到 apply-undo —— 頁面層的 defence-in-depth 變成可達了，C6b 現在是真的在擋`);
+}
+T('C6a ⭐ 收端真管線：異局＋悔棋 marker 在 resolveRoomUpdate 規則 2 就出局（stale-old-game／adopt），apply-undo 只帶同局 ⇒ 頁面層那一行目前不可達', () => {
+  assertForeignNeverApplyUndo(M.resolveRoomUpdate);
+});
+T('C6b 頁面層 defence-in-depth（⚠ 此路目前不可達，C6a 已證；守的是「若日後規則順序改動，這一行還在」）：手工異局 decision 餵 apply-undo case 不換盤面、同局照常套用', () => {
   const f = applyUndoCase(PAGE);
   const local = { id: 'G-2', phase: 'setup' }, foreign = { id: 'G-1', phase: 'playing' }, same = { id: 'G-2', phase: 'playing' };
   const r1 = f(local, { game: foreign }, { lastUndoApplyAt: 777 });
@@ -535,12 +564,47 @@ mustBreak('G9 agreed 條件退回只看有快照 ⇒ C5 紅', () => {
   const src = mut("if (req.status === 'agreed' && undoSnapshotOwnedBy(undoSnapshot, game)) {", "if (req.status === 'agreed' && undoSnapshot) {");
   assert.strictEqual(pageRules(src).agreed, 'undoSnapshotOwnedBy(undoSnapshot, game)');
 });
-mustBreak('G10 收端拿掉異局拒收 ⇒ C6 紅', () => {
+mustBreak('G10 收端拿掉 defence-in-depth 那一行 ⇒ C6b 紅（⚠ 只證明那一行還在；不代表玩家可見行為改變，該路徑目前不可達）', () => {
   const src = mut("          if (game && decision.game.id !== game.id) { console.warn('[undo] 拒收異局 rollback', decision.game.id, '!==', game.id); return; }\n", '');
   const f = applyUndoCase(src);
   const local = { id: 'G-2', phase: 'setup' };
   assert.strictEqual(f(local, { game: { id: 'G-1' } }, { lastUndoApplyAt: 1 }).game, local, '異局 rollback 被吃下去了');
 });
+// ⭐ v6.322：證明 C6a 不是安慰劑 —— 把 sync-guards 突變後重新 bundle 真管線再跑同一組判準。
+const SG_PATH = 'src/lib/game/sync-guards.ts';
+const SG = readFileSync(join(ROOT, SG_PATH), 'utf8');
+const SG_RULE3 = "  // 3. 悔棋 rollback 繞過：marker 遞增即無條件套用（log 較短也接受）\n"
+  + "  if (local && incoming.phase === 'playing'\n"
+  + "      && (ctx.roomLastUndoApplyAt ?? 0) > ctx.lastSeenUndoApplyAt) {\n"
+  + "    return { kind: 'apply-undo', game: incoming };\n"
+  + "  }\n";
+const SG_RULE2_HEAD = '  if (local && local.id !== incoming.id) {\n';
+T('G10a 正對照：sync-guards 的規則 2 與規則 3 都還在、且規則 2 在規則 3 之前（G10b／G10c 的突變錨點）', () => {
+  assert.strictEqual(SG.split(SG_RULE3).length - 1, 1, '規則 3 錨點不是恰好一處');
+  assert.strictEqual(SG.split(SG_RULE2_HEAD).length - 1, 1, '規則 2 錨點不是恰好一處');
+  ok(SG.indexOf(SG_RULE2_HEAD) < SG.indexOf(SG_RULE3), '規則 2 不在規則 3 之前');
+});
+async function bundleMutatedSyncGuards(src) {
+  const mp = join(ROOT, '.v6321-sg-mut.ts'), mo = join(ROOT, '.v6321-sg-mut.mjs');
+  writeFileSync(mp, src.replace("from './types'", "from './src/lib/game/types'").replace("from './engine'", "from './src/lib/game/engine'"));
+  try {
+    await build({ entryPoints: [mp], outfile: mo, bundle: true, format: 'esm', platform: 'node', target: 'node20', alias: { '$lib': join(ROOT, 'src/lib') }, logLevel: 'error' });
+    return (await import(pathToFileURL(mo).href + '?m=' + Date.now())).resolveRoomUpdate;
+  } finally { for (const p of [mp, mo]) { try { unlinkSync(p); } catch { /* ignore */ } } }
+}
+{
+  const mutOrder = SG.replace(SG_RULE3, '').replace(SG_RULE2_HEAD, SG_RULE3 + SG_RULE2_HEAD);
+  ok(mutOrder !== SG && mutOrder.indexOf(SG_RULE3) < mutOrder.indexOf(SG_RULE2_HEAD), '規則順序突變沒做成');
+  const resolveOrder = await bundleMutatedSyncGuards(mutOrder);
+  mustBreak('G10b sync-guards 規則 3 搬到規則 2 之前（異局+marker 變成 apply-undo）⇒ C6a 紅', () => {
+    assertForeignNeverApplyUndo(resolveOrder);
+  });
+  const mutEq = SG.replace(SG_RULE2_HEAD, '  if (local && local.id === incoming.id) {\n');
+  const resolveEq = await bundleMutatedSyncGuards(mutEq);
+  mustBreak('G10c sync-guards 規則 2 把同局當異局（`!==` 改 `===`）⇒ C6a 的「同局必 apply-undo／異局必被擋」紅', () => {
+    assertForeignNeverApplyUndo(resolveEq);
+  });
+}
 mustBreak('G11 performUndo 拿掉同源早退 ⇒ D1 紅', () => {
   const src = mut('    if (!undoBtnVisible) return;\n', '');
   ok(/async function performUndo\(\) \{\n[\s\S]{0,400}?if \(!undoBtnVisible\) return;/.test(src), 'performUndo 沒有同源早退');

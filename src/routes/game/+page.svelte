@@ -8918,8 +8918,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
         case 'apply-undo':
           // v5.390 悔棋 rollback：套用 + 清 undo/浮動選單 UI + bump 一次性 marker
           lastSeenUndoApplyAt = room.lastUndoApplyAt as number;
-          // ⭐v6.321 rollback 必須是**本局**的盤面：舊版 client（快照跨局殘留）仍可能把上一局的快照當 rollback 推上來，
-          //   吃下去就是整包換成上一局（換了座位＝看到上一局對手的手牌）。同一局的正常悔棋 id 恆相等，這裡零影響。
+          // ⭐v6.321 defence-in-depth（⚠ v6.322 訂正：**目前不可達**）：rollback 必須是本局的盤面。
+          //   異局快照（舊 client 把上一局快照當 rollback 推上來）在 resolveRoomUpdate 的規則 2（`local.id !== incoming.id`
+          //   ⇒ stale-old-game／adopt）就已出局，規則 3 的 `apply-undo` 只會帶**同局**的 game、且 decision 到這裡之間沒有 await
+          //   ⇒ 下面這行目前永遠不會 return；真正擋住異局 rollback 的是 sync-guards 規則 2，不是這一行。
+          //   留著的價值：若日後有人把規則 3 移到規則 2 之前，這裡仍是最後一道（test-v6321 C6a 證不可達、C6b 守這一行）。
           if (game && decision.game.id !== game.id) { console.warn('[undo] 拒收異局 rollback', decision.game.id, '!==', game.id); return; }
           game = decision.game;
           // ⭐v6.212：悔棋之後，那份「悔棋前的未推送快照」已經作廢 —— 留著會被自癒重推回去
