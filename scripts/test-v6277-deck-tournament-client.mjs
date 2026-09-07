@@ -625,7 +625,20 @@ await T('E0c ⭐ 護欄自驗：長度護欄與正對照都會炸（AssertionErr
     (e) => e instanceof assert.AssertionError && /長達 202 行/.test(e.message), '區塊護欄沒炸');
   assert.throws(() => stripMod.stripCommentsChecked('/* 沒收尾\n' + 'const y = 1;\n'.repeat(10), { label: 'p' }),
     (e) => e instanceof assert.AssertionError && /沒有收尾/.test(e.message), '未收尾區塊沒炸');
-  assert.ok(stripMod.stripCommentsChecked(longBlock, { label: 'p', maxBlockLines: 300 }).includes('const y = 1;'), '明寫 maxBlockLines 應放行');
+  // ⭐v6.324 護欄⑤（maxDropRun 預設 200）：202 行的區塊裡，收尾行 `*/` 的 keepFrom ≥ 0（尾巴保留）
+  //   ⇒ 「連續整行被丟掉」是 201 行，仍然 > 200 ⇒ 只放寬 maxBlockLines 還是會被 ⑤ 擋
+  assert.throws(() => stripMod.stripCommentsChecked(longBlock, { label: 'p', maxBlockLines: 300 }),
+    (e) => e instanceof assert.AssertionError && /連續 201 行被整行剝掉/.test(e.message), '⑤ 連續丟棄護欄沒炸');
+  assert.ok(stripMod.stripCommentsChecked(longBlock, { label: 'p', maxBlockLines: 300, maxDropRun: 300 }).includes('const y = 1;'),
+    '兩條都明寫應放行');
+  // ⑤ 與 ③ 是兩道獨立的網：210 行連續 `//` 完全沒有區塊（③ 看不到）⇒ 只有 ⑤ 抓得到
+  const slashRun = '// c\n'.repeat(210) + 'const y = 1;\n'.repeat(300);
+  assert.strictEqual(stripMod.scanCommentLines(slashRun).blocks.length, 0, '前提：這個樣本不含區塊註解');
+  assert.throws(() => stripMod.stripCommentsChecked(slashRun, { label: 'p' }),
+    (e) => e instanceof assert.AssertionError && /連續 210 行被整行剝掉/.test(e.message), '⑤ 對「連續 // 」沒炸');
+  // ⭐v6.324 護欄①：預設降到 0.02（只擋「整份吐空」）；上面第一條改明寫 minRatio 0.5 才紅得出來
+  assert.ok(stripMod.stripCommentsChecked('// a\n// b\n// c\nx = 1;', { label: 'p' }) === 'x = 1;',
+    '預設 minRatio 0.02 不該擋掉 4 行裡有 1 行程式碼的樣本（v6.323 的預設 0.5 會誤紅）');
   // 反面：`// … /api/x/*` 這種行中 /* 永遠不會開區塊（事故 2 的根因）
   const st = stripMod.stripCommentLinesWithStats('// 每個 /api/tournament/* 回應\nconst a = 1;\nconst b = 2; /* 行尾 */\nx();');
   assert.strictEqual(st.blocks.length, 0, '行中的 /* 開了區塊：' + JSON.stringify(st.blocks));

@@ -263,7 +263,17 @@ T('⭐⭐⭐動作被拒必須①標記②留下診斷指紋（舊版只閃一�
   const clear = body.indexOf('_tActionAuthErr = false');
   const call = body.indexOf("tApi('/action'");
   assert.ok(clear > call && clear > 0, '清旗標必須在 /action 成功回應之後，實際 clear=' + clear + ' call=' + call);
-  assert.ok(!/_tActionAuthErr = false/.test(P.slice(P.indexOf('function startTournamentPoll'), P.indexOf('function startTournamentPoll') + 3000)),
+  // ⚠⚠v6.324 fail-open：這一行原本是 `P.slice(P.indexOf('function startTournamentPoll'), …)`，
+  //   `indexOf` **沒有先被斷言 ≥ 0**。anchor 打錯字／輪詢函式改名 ⇒ indexOf 回 -1 ⇒ slice(-1, 2999) 只剩最後 1 個字元
+  //   ⇒ 後面那條否定型 `!/…/.test(…)` 恆真 ⇒ **靜默假綠**（行為端實證：違規仍在＋anchor 改名 ⇒ 本條 PASS）。
+  //   ⚠ 判準是「start anchor 的 indexOf 有沒有先被斷言 ≥ 0」，不是「單參數還是雙參數 slice」——
+  //     雙參數只是把 -1 的語意從「最後 1 個字」換成「倒數第 1 個字起的一小段」，一樣恆真。
+  const pi = P.indexOf('function startTournamentPoll');
+  assert.ok(pi >= 0, '找不到 startTournamentPoll —— 守衛 anchor 打錯字，或輪詢函式被改名了');
+  const pollSeg = P.slice(pi, pi + 3000);
+  assert.ok(pollSeg.length === 3000 && /tApi\(/.test(pollSeg) && /tPollDesiredMs/.test(pollSeg),
+    '正對照：抽出來的輪詢區段不像輪詢本體（len=' + pollSeg.length + '）⇒ 區間抽錯，下面那條否定斷言不算數');
+  assert.ok(!/_tActionAuthErr = false/.test(pollSeg),
     '輪詢成功時清掉了身分被拒旗標 —— /state 不驗身分，它證明不了身分是好的');
 });
 T('⭐⭐【行為端】身分被拒時失聯橫幅必須亮，且按叉叉之後不會被輪詢成功頂回來', () => {

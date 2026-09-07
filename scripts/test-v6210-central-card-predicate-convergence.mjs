@@ -18,7 +18,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 game 頁那一份走中央行級狀態機
+import { stripCommentsChecked, stripCommentsBlankChecked } from './lib/strip-comments.mjs';   // ⭐v6.323／v6.324 全檔走中央行級狀態機
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.cp-e.ts'), O = join(ROOT, '.cp-o.mjs'), S = join(ROOT, '.cp-s.mjs');
 process.on('exit', () => { for (const p of [E, O, S]) { try { unlinkSync(p); } catch {} } });
@@ -80,8 +80,22 @@ ck('A0 等價鎖比對點 ≥60000（掃太少＝卡池沒讀進來）', cmpPoin
 
 // ══════════════ B) 禁複本掃描 ══════════════
 console.log('\nB) 禁複本掃描（否定型 ＋ 自我驗證正對照）');
-const stripComments = s => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '))
-  .replace(/\/\/.*$/gm, '').replace(/[\u200b-\u200d\ufeff]/g, '');
+// ⭐v6.324 ⛔2：這裡原本是自寫的區塊正則 `/\/\*[\s\S]*?\*\//g` —— 第 13 種安慰劑。
+//   行為端實證（同樣兩行違規樣本，只換位置）：塞在 game 頁 :210（洞 :208～:384 之內）⇒ **rc=0、零 FAIL（假綠）**；
+//   塞在 :6001（洞外）⇒ rc=1、B1 與 B4c 各一條紅。B1 是**否定型全站枚舉**、B4c 是 `≤` 棘輪 ⇒ 兩者都是**假綠方向**
+//   （C1／C2 是 `≥` 棘輪，洞只會少算 ⇒ 假紅方向，安全 —— 但一併換掉，沒有留兩套剝除器的理由）。
+// ⇒ 整支改走中央行級狀態機 stripCommentsChecked()（多檔掃描 ⇒ 每檔帶 label，護欄壞了會指名是哪支檔）。
+// ⚠ 保留兩件原本就有的事：① 各檔自己的**行尾** `//` 正則（中央 helper 只剝行首 `//`；行尾正則最多吃一行、不會形成洞）；
+//   ② 零寬字元剝除（v6.117 事故；B9 是它的正對照）。
+// ⚠ 護欄用**預設值**（minRatio 0.02／maxBlockLines 150／maxDropRun 200）：這是多檔掃描，
+//   `src/lib` 底下有 60 支正常留存率 < 50%（最低 8.5% 的 effects/cards/v2997_g4_wave3.ts），
+//   v6.323 的預設 0.5 會當場誤紅 —— 見 test-lib-strip-comments 5-2。
+// ⚠⚠ 用**等長留白版**而不是刪行版：B1／B2／B4c 的錯誤訊息會印 `rel:line`，刪行版會讓行號整個移位
+//   （舊的區塊正則是「匹配換成等長空白」⇒ 行號本來是對的；換成刪行版就是我自己引入回歸）。
+//   等長留白 ＋ 行尾 `//` 正則（不吃 `\n`）＋ 零寬剝除（不吃 `\n`）⇒ 行號逐行對回原檔。
+const stripComments = (text, label) => (!text ? '' :
+  stripCommentsBlankChecked(text, { label: label || 'v6210-scan' })
+    .replace(/\/\/.*$/gm, '').replace(/[\u200b-\u200d\ufeff]/g, ''));
 const walk = (d, out = []) => { for (const f of readdirSync(d)) { const p = join(d, f); const st = statSync(p);
   if (st.isDirectory()) walk(p, out); else if (f.endsWith('.ts') || f.endsWith('.svelte')) out.push(p); } return out; };
 const FILES = [...walk(join(ROOT, 'src/lib')), ...walk(join(ROOT, 'src/routes'))]
@@ -92,7 +106,7 @@ ck('B0 掃描器下限：掃到 ≥60 個 .ts/.svelte 檔（掃不到檔＝掃�
 const scanEnergyDup = files => {
   const hits = [];
   for (const [rel, text] of files) {
-    const lines = stripComments(text).split('\n');
+    const lines = stripComments(text, rel).split('\n');
     lines.forEach((ln, i) => {
       if (!/\.name(\?)?\.includes\(\s*[`'][^`']*【/.test(ln)) return;
       const win = lines.slice(Math.max(0, i - 3), i + 4).join('\n');
@@ -116,7 +130,7 @@ const MEGA_EXEMPT = new Map(Object.entries({
 const scanMegaDup = files => {
   const hits = [];
   for (const [rel, text] of files) {
-    const lines = stripComments(text).split('\n');
+    const lines = stripComments(text, rel).split('\n');
     lines.forEach((ln, i) => {
       if (!/startsWith\(\s*'超級'\s*\)/.test(ln)) return;
       hits.push({ rel, line: i + 1, src: ln.trim().slice(0, 110), exempt: MEGA_EXEMPT.has(rel) });
@@ -137,7 +151,7 @@ const scanMegaDup = files => {
 const scanEnergyRegexDup = files => {
   const hits = [];
   for (const [rel, text] of files) {
-    const lines = stripComments(text).split('\n');
+    const lines = stripComments(text, rel).split('\n');
     lines.forEach((ln, i) => {
       if (!/\/[^/\n]*【[^/\n]*\/\s*\.\s*test\s*\(/.test(ln)) return;
       hits.push({ rel, line: i + 1, src: ln.trim().slice(0, 110) });
@@ -145,6 +159,14 @@ const scanEnergyRegexDup = files => {
   }
   return hits;
 };
+// ⭐v6.324 自驗：剝完的行數必須與原檔逐檔相同 —— 否則 B1／B2／B4c 印出來的 `rel:line` 是錯的行號。
+{
+  const bad = FILES.filter(([rel, t]) => t && stripComments(t, rel).split('\n').length !== t.split('\n').length);
+  ck('B0b 剝註解不得改變行數（錯誤訊息的行號要能對回原檔）', bad.length === 0, bad.map(([r]) => r).join(', '));
+  const probe = 'const a = 1;\n/* 區塊\n * 內文\n */\nconst zz = c.supertype === \'Energy\' && c.subtype === \'Basic\' && c.name.includes(\'【火】\');\n';
+  const h = scanEnergyDup([['fake/line.ts', probe]]);
+  ck('B0c 正對照：違規在第 5 行 ⇒ 掃描器就要報 5（刪行版會報 2 ⇒ 這條會紅）', h.length === 1 && h[0].line === 5, JSON.stringify(h));
+}
 const REGEX_FORM_FROZEN = 44;   // v6.210 實測值（只准降不准升）
 {
   const dup = scanEnergyDup(FILES);
@@ -174,7 +196,10 @@ const REGEX_FORM_FROZEN = 44;   // v6.210 實測值（只准降不准升）
   ck('B6 正對照：跨行（先 !== 早退再 includes）違規樣本也要抓到', scanEnergyDup(v2).length === 1);
   const v3 = [['fake/c.ts', "return isBasicEnergyOfType(card, 'Fire');"]];
   ck('B7 反向：合規寫法不得被誤報', scanEnergyDup(v3).length === 0);
-  const v4 = [['fake/d.ts', "// return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【火】');\n"
+  // ⚠v6.324：v4 原本是**純註解**，改走中央 helper 之後會撞到護欄①（剝完 0%）⇒ 補一行真程式碼當基底。
+  //   這一行不含任何違規樣式，所以 scanEnergyDup(v4)===0 的意義沒變。
+  const v4 = [['fake/d.ts', "const _pad = 1;\n"
+    + "// return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【火】');\n"
     + "/* card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【草】') */"]];
   ck('B8 剝註解：註解裡的樣本不得被算進來', scanEnergyDup(v4).length === 0);
   const v5 = [['fake/e.ts', "return card.supertype === 'Energy' && card.subtype === 'Basic' && card.name.includes('【火\u200b】');"]];
@@ -193,7 +218,7 @@ const REGEX_FORM_FROZEN = 44;   // v6.210 實測值（只准降不准升）
 // ══════════════ C) 消費端覆蓋（防「去中央化」時 B 段假綠） ══════════════
 console.log('\nC) 中央述詞的消費端覆蓋（B 段是否定型，沒有這段就會「全刪光也全綠」）');
 {
-  const count = re => FILES.reduce((n, [, t]) => n + (stripComments(t).match(re) ?? []).length, 0);
+  const count = re => FILES.reduce((n, [r, t]) => n + (stripComments(t, r).match(re) ?? []).length, 0);
   const cBE = count(/\bisBasicEnergyOfType\s*\(/g);
   const cME = count(/\bisMegaExCard\s*\(/g);
   // ⚠ v6.210 第二輪審查：門檻原本訂在 45/22（實測 106/31）⇒ 「把一半改回手刻」照樣綠。
@@ -215,8 +240,8 @@ console.log('\nC) 中央述詞的消費端覆蓋（B 段是否定型，沒有這
   //   `+page.svelte` / `MobilePortraitBattle.svelte` 內另有「卡名【X】→ EnergyType」的 zhMap
   //   （＝中央 `getBasicEnergyType` 的複本，用於能量計數顯示）＝**第三族**，不在本輪授權內，
   //   故本檔不掃它 —— 但 UI 那份 `isBasicEnergyOfType` 的本地定義（含自帶 ZH_BY_TYPE）必須已消失。
-  // ⭐v6.323：game 頁這一份改走中央行級狀態機（本檔的區塊正則會把 game 頁 :208～:384 整段吃掉 ⇒ 洞內若有人抄回
-  //   ZH_BY_TYPE 對照表，否定型的 C4 掃不到）。其餘多檔掃描（B／C1／C2）仍是本檔的 stripComments，留待下一批。
+  // ⭐v6.323：game 頁這一份先改走中央行級狀態機。⭐v6.324：B／C1／C2 的多檔掃描也全部改走了（見上面 stripComments 的註解），
+  //   本檔已經沒有第二套剝除器。
   const sv = stripCommentsChecked(FILES.find(([r]) => r === 'src/routes/game/+page.svelte')?.[1] ?? '',
     { label: 'game/+page.svelte', mustKeep: ['isBasicEnergyOfTypeCentral('] }).replace(/\/\/.*$/gm, '');
   ck('C4 UI 端不得再自帶一份 isBasicEnergyOfType 的完整實作（ZH_BY_TYPE 對照表已刪，改薄殼委派中央）',

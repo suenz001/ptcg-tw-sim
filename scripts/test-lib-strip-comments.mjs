@@ -12,7 +12,11 @@
 //        反面對照：留白版若拿 out.length/src.length 當比例會恆 100% ⇒ 證明比例護欄必須改用非空白字元數。
 //   【4】反面對照（第 13 種安慰劑）：固定 blob 的 game/+page.svelte 用 `/\/\*[\s\S]*?\*\//g` 剝，:208～:384 被吃掉；
 //        兩種渲染都留住 :342 的 `let _rtSegN = 0;`、留白版把它留在**同一行號**；洞內探針（:209 之後塞一行）留白版仍在 :210。
-//   【5】全站實掃（git ls-tree HEAD 的 .ts/.js/.mjs/.cjs/.svelte/.html）：兩種渲染逐檔等價、留白版長度行數不變、零未收尾、最長區塊 ≤ 150。
+//   【5】全站實掃（git ls-tree HEAD 的 .ts/.js/.mjs/.cjs/.svelte/.html）：兩種渲染逐檔等價、留白版長度行數不變、零未收尾、最長區塊 ≤ 150、最長連續丟棄 ≤ 200；
+//        ⭐v6.324 加掃「收尾符之後的尾巴只含非 ASCII 空白」的行數（現在是 0；> 0 就代表【6】那族地雷已經有人踩到了）。
+//   【6】⭐v6.324 收尾符之後的**尾巴空白定義**（⛔1）：`renderDropped` 若用 `tail.trim()`（JS Unicode 空白）而等價性比對用 ASCII `WS_RE`，
+//        兩者對「全形空格／NBSP／BOM／U+2000／U+2028」的判斷會不一致 ⇒ 刪行版丟、留白版留 ⇒ 等價性當場破。
+//        七個反例（修前紅／修後綠）＋ 六個已守住的正對照（修前綠／修後綠）。
 // ⚠⚠ 只捕捉 assert.AssertionError —— 其他例外必須直接炸掉。
 // Run: node scripts/test-lib-strip-comments.mjs
 import { readFileSync } from 'node:fs';
@@ -24,6 +28,7 @@ import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import {
   scanCommentLines, stripCommentLines, stripCommentLinesWithStats, stripCommentsBlank,
   stripCommentsChecked, stripCommentsBlankChecked, countTokensStripped, nonWs, WS_RE,
+  DEFAULT_MIN_RATIO, DEFAULT_MAX_DROP_RUN,
 } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -48,12 +53,39 @@ const T = (n, f) => {
 const throwsRe = (fn, re, why) => assert.throws(fn, (e) => e instanceof assert.AssertionError && re.test(e.message), why);
 const squash = (s) => s.replace(WS_RE, '');
 const lineCount = (s) => s.split('\n').length;
+/** 去空白後的字串 ＋「第 k 個非空白字元在原字串的位移」。⚠ 只在**已經確定不相等**時才建（600KB 字串逐字元很慢）。 */
+function squashWithPos(s) {
+  const t = [], pos = [];
+  for (let i = 0; i < s.length; i++) { const c = s[i];
+    if (c === ' ' || c === '\t' || c === '\r' || c === '\n' || c === '\f' || c === '\v') continue;
+    t.push(c); pos.push(i); }
+  return { t: t.join(''), pos };
+}
+/**
+ * ⭐v6.324 等價性斷言：**先比長度，再找第一個相異位置報行號／欄號**。
+ * ⚠ 絕不用 assert.strictEqual 直接比兩份剝完的大字串 —— 那會把 20KB 的 diff 吐進 CI log（v6.323 實測 20,405 字元／條）。
+ * ⚠ 留白版與原檔等長 ⇒ 留白版的位移可以直接當原檔位移用（行號／欄號就是原檔的）。
+ */
+function assertSquashEqual(blank, drop, src, label) {
+  const A = squash(blank), B = squash(drop);
+  if (A === B) return;
+  const a = squashWithPos(blank), b = squashWithPos(drop);
+  let k = 0; const n = Math.min(a.t.length, b.t.length);
+  while (k < n && a.t[k] === b.t[k]) k++;
+  const at = a.pos[Math.min(k, a.pos.length - 1)] ?? 0;
+  const head = src.slice(0, at);
+  const line = head.split('\n').length, col = at - head.lastIndexOf('\n');
+  assert.fail(label + '：兩種渲染去空白後不是逐位相同 ⇒ 不是同一台狀態機'
+    + '｜非空白長度 留白 ' + a.t.length + ' vs 刪行 ' + b.t.length
+    + '｜第 ' + (k + 1) + ' 個非空白字元起相異 → 原檔第 ' + line + ' 行第 ' + col + ' 欄'
+    + '｜留白版 ' + JSON.stringify(a.t.slice(k, k + 24)) + '｜刪行版 ' + JSON.stringify(b.t.slice(k, k + 24)));
+}
 /** 兩種渲染的等價性（主證明）：去空白後逐位相同；留白版長度／行數不變。回傳 { drop, blank }。 */
 function assertEquivalent(src, label) {
   const drop = stripCommentLines(src), blank = stripCommentsBlank(src);
   assert.strictEqual(blank.length, src.length, label + '：留白版長度變了');
   assert.strictEqual(lineCount(blank), lineCount(src), label + '：留白版行數變了');
-  assert.strictEqual(squash(blank), squash(drop), label + '：兩種渲染去空白後不是逐位相同 ⇒ 不是同一台狀態機');
+  assertSquashEqual(blank, drop, src, label);
   return { drop, blank };
 }
 // 第 13 種安慰劑的形狀（只當反面對照，不可拿去守東西）
@@ -127,6 +159,45 @@ T('0-6 未收尾的區塊：scan 記成 closed:false；checked 兩種入口都�
   throwsRe(() => stripCommentsBlankChecked(fx, { label: 'p' }), /第 2 行開的區塊註解沒有收尾/);
 });
 
+console.log('【6】⭐v6.324 收尾符之後的尾巴：空白定義必須與 WS_RE 同一套（⛔1）');
+// 形狀：`/* 註 */<TAIL>` 或多行區塊收尾行 `*/<TAIL>` 或 `<!-- x --><TAIL>`。
+//   舊碼用 `tail.trim()` 判尾巴空不空 —— JS 的 trim 吃 Unicode 空白，WS_RE 只吃 ASCII
+//   ⇒ 尾巴「只含非 ASCII 空白」時：刪行版丟掉、留白版留著、squash 又不當它是空白 ⇒ 等價性破。
+const PAD6 = 'const pad = 1;\n'.repeat(8);
+const mk1 = (tail) => PAD6 + 'const a = 1;\n' + '  /* 單行 */' + tail + '\nconst b = 2;\n';
+const mkMulti = (tail) => PAD6 + '/* 多行\n * 內文\n */' + tail + '\nconst b = 2;\n';
+const mkHtml = (tail) => PAD6 + '<!-- a -->' + tail + '\nconst b = 2;\n';
+// ⚠ 方向欄：RED＝修前紅／修後綠（這一版修掉的地雷）；GREEN＝修前綠／修後綠（本來就守住，放著當正對照）
+const TAIL_CASES = [
+  ['RED',   '6-1  `*/` 後接 U+00A0（NBSP）',        mk1('\u00A0')],
+  ['RED',   '6-2  `*/` 後接 U+3000（全形空格；中文註解最可能誤打的）', mk1('\u3000')],
+  ['RED',   '6-3  `*/` 後接 U+FEFF（BOM／ZWNBSP）',  mk1('\uFEFF')],
+  ['RED',   '6-4  `*/` 後接 U+2000（EN QUAD）',      mk1('\u2000')],
+  ['RED',   '6-5  `*/` 後接 U+2028（LINE SEP；⚠ split(\'\\n\') 不會切它）', mk1('\u2028')],
+  ['RED',   '6-6  多行區塊收尾行 `*/` 後接 U+3000',  mkMulti('\u3000')],
+  ['RED',   '6-7  `<!-- a -->` 後接 U+3000',         mkHtml('\u3000')],
+  ['GREEN', '6-8  正對照：`*/` 後接 U+200B（ZWSP）—— 不是 JS 空白也不是 ASCII 空白，兩邊都留', mk1('\u200B')],
+  ['GREEN', '6-9  正對照：`*/` 後接純 ASCII 空白 —— 兩邊都丟', mk1('   \t ')],
+  ['GREEN', '6-10 正對照：`*/` 後接非 BMP 代理對（🀄）—— 兩邊都留', mk1('\u{1F004}')],
+  ['GREEN', '6-11 正對照：CRLF 全檔（`*/` 後只有 \\r）', mk1('').replace(/\n/g, '\r\n')],
+  ['GREEN', '6-12 正對照：CR-only 全檔（沒有半個 \\n ⇒ 整份是一行）', mk1('  ').replace(/\n/g, '\r')],
+  ['GREEN', '6-13 正對照：檔首 BOM ＋ 行首 `//`（走 keepFrom=-1 那條路，不經過尾巴判斷）',
+            '\uFEFF// 行首註解 loadX(9)\n' + PAD6 + 'const b = 2;\n'],
+];
+for (const [dir, name, fx] of TAIL_CASES) {
+  T('6 ' + name + '（' + dir + '）', () => {
+    assertEquivalent(fx, name);
+    // 額外硬條件：刪行版的非空白數 ＝ 留白版的非空白數（等價性的必要條件，寫出來讓訊息更好讀）
+    assert.strictEqual(nonWs(stripCommentLines(fx)), nonWs(stripCommentsBlank(fx)), name + '：兩版非空白數不同');
+  });
+}
+T('6-14 判準自驗：這 7 個 RED 反例的尾巴，`tail.trim()` 說「空」但 nonWs 說「不空」（＝舊碼與 WS_RE 判斷相反）；4 個 GREEN 尾巴則兩者一致', () => {
+  const tails = ['\u00A0', '\u3000', '\uFEFF', '\u2000', '\u2028'];
+  for (const t of tails) assert.ok(!t.trim() && nonWs(t) > 0, JSON.stringify(t) + ' 不是「trim 說空、nonWs 說不空」⇒ 反例前提壞了');
+  for (const t of ['\u200B', '\u{1F004}']) assert.ok(!!t.trim() && nonWs(t) > 0, JSON.stringify(t) + ' 應該兩邊都算「不空」');
+  for (const t of ['   \t ', '']) assert.ok(!t.trim() && nonWs(t) === 0, JSON.stringify(t) + ' 應該兩邊都算「空」');
+});
+
 console.log('【3】護欄突變（兩種入口各紅在指定訊息）');
 const PAD = 'const pad = 1;\n'.repeat(30);
 const FX3 = PAD + '// 註解裡的 onlyInComment(1)\nconst real = realCall(1);\n';
@@ -146,16 +217,31 @@ for (const [name, fn] of [['drop', stripCommentsChecked], ['blank', stripComment
     throwsRe(() => fn(FX3, { label: 'p', mustDrop: [''] }), /mustDrop 裡有空字串/);
     throwsRe(() => fn(FX3, { label: 'p', mustKeep: 'realCall(' }), /必須是陣列/);
   });
-  T('3-4 ' + name + '：比例護欄（以非空白字元數計）⇒ 紅在「只剩」；明寫 minRatio 放行', () => {
-    const mostlyComment = '// ' + 'x'.repeat(200) + '\nconst y = 1;\n';
-    throwsRe(() => fn(mostlyComment, { label: 'p' }), /剝註解後只剩 \d+\.\d%/);
-    assert.ok(fn(mostlyComment, { label: 'p', minRatio: 0.01 }).includes('const y = 1;'));
+  T('3-4 ' + name + '：⭐v6.324 護欄①只擋「整份吐空」（預設 0.02，不是 0.5）⇒ 紅在「只剩」；明寫 minRatio 可放行也可收嚴', () => {
+    // ⚠ 4.3% 的樣本在 v6.323 的預設 0.5 下會紅 —— 那正是 ⛔2／批 2 誤紅的形狀，現在必須**綠**。
+    const near = '// ' + 'x'.repeat(200) + '\nconst y = 1;\n';
+    assert.ok(nonWs('const y = 1;') / nonWs(near) > 0.02 && nonWs('const y = 1;') / nonWs(near) < 0.5, '樣本比例跑掉了');
+    assert.ok(fn(near, { label: 'p' }).includes('const y = 1;'), '預設 0.02 不該擋掉 4.3% 的正常檔（全站正常下限 8.5%）');
+    throwsRe(() => fn(near, { label: 'p', minRatio: 0.5 }), /剝註解後只剩 \d+\.\d%/, '單檔守衛明寫 0.5 仍要擋得住');
+    // 真正的「吐空」：99.6% 是註解
+    const spat = '// ' + 'x'.repeat(2000) + '\nconst y = 1;\n';
+    throwsRe(() => fn(spat, { label: 'p' }), /剝註解後只剩 \d+\.\d%（護欄 ≥ 2%）⇒ 剝除器把整份吐空了/);
+    assert.ok(fn(spat, { label: 'p', minRatio: 0.001 }).includes('const y = 1;'));
   });
-  T('3-5 ' + name + '：超長區塊（>150 行）⇒ 紅在「長達 202 行」；明寫 maxBlockLines 放行；空輸入 ⇒ 紅', () => {
+  T('3-5 ' + name + '：超長區塊（>150 行）⇒ 紅在「長達 202 行」；明寫 maxBlockLines/maxDropRun 放行；空輸入 ⇒ 紅', () => {
     const longBlock = '/*\n' + ' x\n'.repeat(200) + '*/\n' + 'const y = 1;\n'.repeat(300);
     throwsRe(() => fn(longBlock, { label: 'p' }), /第 1 行開的區塊註解長達 202 行/);
-    assert.ok(fn(longBlock, { label: 'p', maxBlockLines: 300 }).includes('const y = 1;'));
+    assert.ok(fn(longBlock, { label: 'p', maxBlockLines: 300, maxDropRun: 300 }).includes('const y = 1;'));
     throwsRe(() => fn('', { label: 'p' }), /非空字串/);
+  });
+  T('3-8 ' + name + '：⭐v6.324 護欄⑤（連續丟棄行數）—— 看 keepFrom 實際輸出、不看 blocks 自報', () => {
+    // 210 行連續 `//` ⇒ blocks 是空的（③ 看不到），只有 ⑤ 抓得到
+    const runOfSlashes = '// c\n'.repeat(210) + 'const y = 1;\n'.repeat(300);
+    assert.strictEqual(scanCommentLines(runOfSlashes).blocks.length, 0, '前提：這個樣本不含任何區塊註解');
+    assert.strictEqual(scanCommentLines(runOfSlashes).maxBlockLines, 0);
+    throwsRe(() => fn(runOfSlashes, { label: 'p' }), /第 1 行起連續 210 行被整行剝掉（護欄 ≤ 200）/);
+    assert.ok(fn(runOfSlashes, { label: 'p', maxDropRun: 300 }).includes('const y = 1;'));
+    throwsRe(() => fn(runOfSlashes, { label: 'p', maxDropRun: 0 }), /maxDropRun 必須是正整數/);
   });
 }
 T('3-6 ⭐ 反面對照：留白版若拿 out.length/src.length 當比例，對「幾乎全是註解」的輸入也是 100% ⇒ 比例護欄必須用非空白字元數（3-4 才紅得出來）', () => {
@@ -225,6 +311,47 @@ if (!haveBlobs) {
     assert.strictEqual(blank.split('\n')[209], PROBE);
     assert.strictEqual(nonWs(drop), KNOWN[P_GAME].dropNonWs + nonWs(PROBE), '探針之外的數字不可以變');
   });
+  T('4-3 ⭐v6.324 護欄⑤：「區塊正則圈範圍、範圍內整行丟」型的回歸 blocks[] 是空的（③ 全綠），只有 ⑤ 抓得到', () => {
+    const src = blobs['oracle-admin/server_admin_patch.js'].out;
+    const bad = blockRegexStrip(src);
+    const L = src.split('\n'), BL = bad.split('\n');
+    let run = 0, mx = 0, at = 0, mxAt = 0;
+    for (let i = 0; i < L.length; i++) {
+      if (L[i].trim() && !BL[i].trim()) { if (run === 0) at = i + 1; run++; if (run > mx) { mx = run; mxAt = at; } }
+      else run = 0;
+    }
+    // 事故 2 在這支的形狀：單一匹配跨 544 行，其中「原本有內容、被清成空白」的最長連續段是 208 行（起於 :4908）
+    assert.strictEqual(mx, 208, '洞的形狀變了：最長連續被吃掉 ' + mx + ' 行（起於 :' + mxAt + '）');
+    assert.strictEqual(mxAt, 4908);
+    // 把那 208 行原封不動搬成一段連續 `//` ⇒ 同樣長度的 keepFrom=-1 run，但**沒有任何行首開啟的區塊**
+    const fx = L.slice(mxAt - 1, mxAt - 1 + mx).map((l) => '// ' + l).join('\n') + '\n' + 'const y = 1;\n'.repeat(400);
+    assert.strictEqual(scanCommentLines(fx).blocks.length, 0, '前提：合成輸入不含任何行首開啟的區塊 ⇒ 護欄③ 看不到它');
+    assert.strictEqual(scanCommentLines(fx).maxBlockLines, 0);
+    assert.strictEqual(scanCommentLines(fx).maxDropRun, mx);
+    throwsRe(() => stripCommentsChecked(fx, { label: 'p' }), new RegExp('第 1 行起連續 ' + mx + ' 行被整行剝掉（護欄 ≤ 200）'));
+    throwsRe(() => stripCommentsBlankChecked(fx, { label: 'p' }), new RegExp('第 1 行起連續 ' + mx + ' 行被整行剝掉（護欄 ≤ 200）'));
+    // 反面對照：把 ⑤ 關掉（maxDropRun 開大）⇒ 完全綠 ⇒ 證明擋下它的是 ⑤，不是 ①③
+    assert.ok(stripCommentsChecked(fx, { label: 'p', maxDropRun: 1000 }).includes('const y = 1;'),
+      '把 maxDropRun 開大之後居然還是紅 ⇒ 擋下它的不是 ⑤，這條對照失效');
+  });
+  T('4-4 ⭐v6.324 三起實證事故 × 兩條護欄的覆蓋表（誰擋誰，寫死實測值）', () => {
+    const HOLES = { 'oracle-admin/server_admin_patch.js': [208, 544], 'oracle-admin/admin.html': [292, 511], [P_GAME]: [176, 177] };
+    const BR = new RegExp('\\/\\*[\\s\\S]*?\\*\\/', 'g');
+    for (const [p, [runExp, spanExp]] of Object.entries(HOLES)) {
+      const src = blobs[p].out, L = src.split('\n'), BL = blockRegexStrip(src).split('\n');
+      let run = 0, mx = 0;
+      for (let i = 0; i < L.length; i++) { if (L[i].trim() && !BL[i].trim()) { run++; if (run > mx) mx = run; } else run = 0; }
+      assert.strictEqual(mx, runExp, p + ' 的連續丟棄行數 ' + mx);
+      let span = 0, m2; BR.lastIndex = 0;
+      while ((m2 = BR.exec(src))) span = Math.max(span, m2[0].split('\n').length);
+      assert.strictEqual(span, spanExp, p + ' 的單一匹配跨行數 ' + span);
+      // ⑤（連續丟棄 > 200）擋得到前兩支；③（區塊 > 150）擋得到三支全部
+      assert.strictEqual(mx > DEFAULT_MAX_DROP_RUN, p !== P_GAME, p + '：⑤ 的覆蓋與表不符');
+      assert.ok(span - 1 > 150, p + '：③ 應該擋得到（跨 ' + span + ' 行）');
+    }
+    // ⚠ 誠實的邊際：合法最長連續丟棄 140 行（server_admin_patch.js 的一段 `//`）vs 事故最小 208 行 ⇒ 窗口 (140, 208]
+    //   預設 200 選在靠近事故的一端（誤紅代價 > 漏抓代價，漏掉的那一支由 ③ 兜住）。
+  });
 }
 
 console.log('【2-tree】工作樹等價（不綁數字）');
@@ -239,11 +366,11 @@ T('2-tree game/+page.svelte：兩種渲染去空白後逐位相同；留白版�
 });
 
 console.log('【5】全站實掃');
-T('5-1 git ls-tree HEAD 的每一支 .ts/.js/.mjs/.cjs/.svelte/.html：兩種渲染逐檔等價、留白版長度行數不變、零未收尾、最長區塊 ≤ 150（實測 91）', () => {
+T('5-1 git ls-tree HEAD 的每一支 .ts/.js/.mjs/.cjs/.svelte/.html：兩種渲染逐檔等價、留白版長度行數不變、零未收尾、最長區塊 ≤ 150（實測 91）、最長連續丟棄 ≤ 200（實測 140）', () => {
   const files = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', 'HEAD', '--name-only'], { encoding: 'utf8', maxBuffer: 1 << 26 })
     .split('\n').filter((f) => /\.(ts|js|mjs|cjs|svelte|html)$/.test(f) && !f.startsWith('node_modules/'));
-  assert.ok(files.length >= 900, '只列到 ' + files.length + ' 支（v6.323 有 1025 支）⇒ ls-tree 壞了？');
-  let n = 0, maxB = 0, maxF = '';
+  assert.ok(files.length >= 900, '只列到 ' + files.length + ' 支（v6.324 有 1026 支）⇒ ls-tree 壞了？');
+  let n = 0, maxB = 0, maxF = '', maxR = 0, maxRF = '', tails = [];
   for (const f of files) {
     let src; try { src = readFileSync(join(ROOT, f), 'utf8'); } catch { continue; }
     if (!src) continue;
@@ -253,11 +380,44 @@ T('5-1 git ls-tree HEAD 的每一支 .ts/.js/.mjs/.cjs/.svelte/.html：兩種渲
       assert.ok(b.closed, f + '：第 ' + b.line + ' 行的區塊沒有收尾');
       assert.ok(b.lines <= 150, f + '：第 ' + b.line + ' 行的區塊長達 ' + b.lines + ' 行（護欄 150）');
     }
+    assert.ok(sc.maxDropRun <= DEFAULT_MAX_DROP_RUN,
+      f + '：第 ' + sc.maxDropRunAt + ' 行起連續 ' + sc.maxDropRun + ' 行被整行剝掉（護欄 ' + DEFAULT_MAX_DROP_RUN + '）');
+    // ⭐v6.324【6】的全站面：收尾符之後的尾巴「只含非 ASCII 空白」的行 —— 現在是 0。
+    //   ⚠ 這一條不是要求它永遠是 0（真的有人打了全形空格也不是錯），而是要**知道**：
+    //     它 > 0 的那一天，就是【6】那族反例從內嵌樣本變成真檔案的那一天；等價性本身由上面的 assertEquivalent 守。
+    for (let i = 0; i < sc.lines.length; i++) {
+      const kf = sc.keepFrom[i]; if (kf <= 0) continue;
+      const tail = sc.lines[i].slice(kf);
+      if (!tail.trim() && nonWs(tail) > 0) tails.push(f + ':' + (i + 1) + ' ' + JSON.stringify(tail));
+    }
     if (sc.maxBlockLines > maxB) { maxB = sc.maxBlockLines; maxF = f; }
+    if (sc.maxDropRun > maxR) { maxR = sc.maxDropRun; maxRF = f; }
     assertEquivalent(src, f);
   }
   assert.ok(n >= 900, '實際讀到 ' + n + ' 支');
-  console.log('        掃了 ' + n + ' 支；最長區塊 ' + maxB + ' 行（' + maxF + '）');
+  console.log('        掃了 ' + n + ' 支；最長區塊 ' + maxB + ' 行（' + maxF + '）；最長連續丟棄 ' + maxR + ' 行（' + maxRF + '）；'
+    + '「收尾符後尾巴只含非 ASCII 空白」的行 ' + tails.length + ' 處' + (tails.length ? '：' + tails.slice(0, 5).join(' / ') : ''));
+});
+T('5-2 ⭐v6.324 前置 A 不誤紅：全站每一支都用 stripCommentsChecked／stripCommentsBlankChecked 的**預設選項**跑一遍（v6.323 的預設 0.5 會誤紅數十支，實跑數字印在下面）', () => {
+  const files = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', 'HEAD', '--name-only'], { encoding: 'utf8', maxBuffer: 1 << 26 })
+    .split('\n').filter((f) => /\.(ts|js|mjs|cjs|svelte|html)$/.test(f) && !f.startsWith('node_modules/'));
+  let n = 0, minR = 1, minF = '', under50 = 0, under20 = 0;
+  for (const f of files) {
+    let src; try { src = readFileSync(join(ROOT, f), 'utf8'); } catch { continue; }
+    if (!src) continue;
+    n++;
+    const d = stripCommentsChecked(src, { label: f });
+    stripCommentsBlankChecked(src, { label: f });
+    const r = nonWs(d) / Math.max(1, nonWs(src));
+    if (r < 0.5) under50++;
+    if (r < 0.2) under20++;
+    if (r < minR) { minR = r; minF = f; }
+  }
+  assert.ok(n >= 900, '實際讀到 ' + n + ' 支');
+  assert.ok(minR >= DEFAULT_MIN_RATIO, '最低留存率 ' + (minR * 100).toFixed(1) + '% 低於預設地板 ' + (DEFAULT_MIN_RATIO * 100) + '% ⇒ 地板要再降');
+  assert.ok(under50 >= 10, '留存率 < 50% 的檔只有 ' + under50 + ' 支？那「0.5 會誤紅」這個前提就不成立了，本條的意義要重寫');
+  console.log('        ' + n + ' 支全部通過預設護欄；最低留存率 ' + (minR * 100).toFixed(1) + '%（' + minF + '）；'
+    + '< 50% 有 ' + under50 + ' 支、< 20% 有 ' + under20 + ' 支 ⇒ 舊預設 0.5 會誤紅 ' + under50 + ' 支');
 });
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} test-lib-strip-comments：${pass} passed, ${fail} failed`);
