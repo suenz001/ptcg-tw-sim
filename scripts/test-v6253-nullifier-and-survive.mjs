@@ -240,8 +240,13 @@ T('C1 卡面枚舉：live H/I/J 的「不會昏厥／留在場上」來源全部
   const abNames = new Set(found.filter(f => f.kind === 'ability').map(f => f.name));
   const toolNames = new Set(found.filter(f => f.kind === 'tool').map(f => f.name));
   // ⭐v6.325：下限自 4 收緊到 4（實測 4；已在實測值上、slack 0，再收就是誤紅）。
-  assert.ok(abNames.size >= 4, `掃描器下限：特性型防 KO 應 ≥4（實得 ${abNames.size}）— 掃不到＝掃描器壞了`);
-  assert.ok(toolNames.size >= 1, `掃描器下限：道具型防 KO 應 ≥1（實得 ${toolNames.size}）`);
+  // ⭐v6.326【B 類：結構性最小值】維持 slack 0，**不放寬**。
+  //   理由：這兩個數的是**卡池枚舉**（live H/I/J 卡面寫「不會昏厥／留在場上」的來源），
+  //   不是程式碼消費點 —— 中央收斂再怎麼做都不會讓卡面少一張。日常方向只增不減。
+  //   ⚠ 真正會讓它掉的只有「整批卡包輪替下架」，那種規模是掉一大截、不是掉 1~3，
+  //     而且那時本來就該人工回來重判整支守衛 ⇒ 留餘裕沒有用。掉了就是真的少了東西。
+  assert.ok(abNames.size >= 4, `掃描器下限：特性型防 KO 應 ≥4（實得 ${abNames.size}）— 掃不到＝掃描器壞了（B 類：結構性最小值，slack 0）`);
+  assert.ok(toolNames.size >= 1, `掃描器下限：道具型防 KO 應 ≥1（實得 ${toolNames.size}）（B 類：結構性最小值，slack 0）`);
   for (const n of abNames) assert.ok(PASSIVE_PREVENT_KO.has(n), `特性「${n}」卡面寫不會昏厥但沒進 PASSIVE_PREVENT_KO`);
   for (const n of toolNames) assert.ok(TOOL_PREVENT_KO.has(n), `道具「${n}」卡面寫不會昏厥但沒進 TOOL_PREVENT_KO`);
 });

@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'c4df2c55e9db5b9311f4e4b556df9a2624d05124';   // v6.324（v6.325 的上一版）
+const PREV_SHA = 'e9430084ed96c4270f675b3e440c775540136c3c';   // v6.325（v6.326 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -711,6 +711,10 @@ const PREV_SHA = 'c4df2c55e9db5b9311f4e4b556df9a2624d05124';   // v6.324（v6.32
 // ⭐v6.325：純守衛修正（批 2：engine／effects／_shared 家族 8 支守衛的自寫區塊正則整批改走中央
 //   stripCommentsBlankChecked；各支掃描器下限收緊到實測值；strip-comments 檔頭補「10%~50% 盲帶」實話）
 //   —— 玩家端零改動，只有 version.ts；不動首頁 changelog。
+// ⭐v6.326：純守衛修正（批 3：anti-pattern-lint Check Y 的貪婪區塊正則改走中央 stripCommentsBlankChecked
+//   ＋洞內正對照／反向對照；v6.325 那 19 條下限逐條分成 A 類「收斂就會掉」留 2~3、B 類「結構性最小值」維持 0；
+//   strip-comments 檔頭補「擋住事故 2 的是規則順序不是護欄」＋ test-lib-strip-comments【7】M11a／M11b′ 撐著；
+//   docs/changelog-internal 三處訂正）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 const PREV_ALLOWED = [
   'src/lib/version.ts',
 ];

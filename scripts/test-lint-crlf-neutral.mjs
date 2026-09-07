@@ -34,6 +34,11 @@ process.on('exit', () => { try { rmSync(WORK, { recursive: true, force: true });
 
 mkdirSync(join(WORK, 'scripts'), { recursive: true });
 cpSync(join(ROOT, 'scripts/anti-pattern-lint.mjs'), join(WORK, 'scripts/anti-pattern-lint.mjs'));
+// ⭐v6.326：lint 不再是「零相依單檔」—— Check Y 的剝註解改走 scripts/lib/strip-comments.mjs，
+//   所以 `scripts/lib/` 也要一起搬過來，否則臨時工作區的 lint 會 ERR_MODULE_NOT_FOUND 直接掛掉。
+//   ⚠ 這一條是被本守衛**當場抓到**才補的（v6.326 遷移後它先紅了 3 條）—— 它證明這個 harness
+//     真的在跑 lint 而不是在比字串。日後 lint 再新增任何相依，這裡都要跟著搬。
+cpSync(join(ROOT, 'scripts/lib'), join(WORK, 'scripts/lib'), { recursive: true });
 // lint 掃 src/lib/game 全部 .ts（會被換行改寫的對象）＋ Check R 額外納入兩個對戰 svelte。
 cpSync(join(ROOT, 'src/lib/game'), join(WORK, 'src/lib/game'), { recursive: true });
 mkdirSync(join(WORK, 'src/routes/game'), { recursive: true });
@@ -53,6 +58,15 @@ function targets() {
 }
 const FILES = targets();
 ok(FILES.length > 100, '前提：臨時工作區應有 >100 個待掃檔，實得 ' + FILES.length);
+// ⭐v6.326 前置：臨時工作區的 lint **必須真的跑得起來**（不是 ERR_MODULE_NOT_FOUND 之類的早退）。
+//   ⚠ 沒有這一條的話，lint 相依漏搬時本檔會退化成「兩邊都掛掉 ⇒ exit code 相同 ⇒ ① 全綠」的假綠。
+{
+  const probe = spawnSync(process.execPath, [join(WORK, 'scripts/anti-pattern-lint.mjs')], { encoding: 'utf8' });
+  const po = String(probe.stdout || '') + String(probe.stderr || '');
+  ok(!/ERR_MODULE_NOT_FOUND|Cannot find module|SyntaxError/.test(po),
+    '臨時工作區的 lint 起不來（相依沒搬齊？）：' + po.slice(0, 400));
+  ok(/反模式 lint/.test(po), '臨時工作區的 lint 沒有印出正常輸出：' + po.slice(0, 400));
+}
 
 function setEol(mode) {
   for (const f of FILES) {

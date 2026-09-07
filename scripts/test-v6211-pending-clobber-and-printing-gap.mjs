@@ -233,8 +233,13 @@ EFFECT_FILES.push({ rel: 'effects.ts', src: readFileSync(join(ROOT, 'src/lib/gam
 
 T('⭐ 掃描器自我驗證：檔案數與體積達下限（掃不到東西時不准綠燈）', () => {
   // ⭐v6.325：40 → 97（實測 98）、1_500_000 → 2_500_000（實測 2,548,259）。
-  ok(EFFECT_FILES.length >= 97, '只掃到 ' + EFFECT_FILES.length + ' 個 .ts —— 掃描器路徑壞了？');
+  // ⭐v6.326【A 類：收斂就會掉】97（slack 1）→ 95（slack 3，實測 98）。
+  //   理由：數的是 `effects/**` 的**檔案數**，把兩支卡檔合併成一支就會合法 −1。
+  //   ⚠ 掉 1~3 多半是合法合併／刪檔，確認後改這一行。
+  ok(EFFECT_FILES.length >= 95, '只掃到 ' + EFFECT_FILES.length + ' 個 .ts —— 掃描器路徑壞了？（A 類下限 95／實測基準 98）');
   const bytes = EFFECT_FILES.reduce((a, x) => a + x.src.length, 0);
+  // ⭐v6.326【A 類】`bytes` 維持 2_500_000：它是**唯一非整數計數**的下限，餘裕以百分比看
+  //   —— 實測 2,548,259，餘裕 48,259 bytes（1.9%）本來就足以吸收一般的刪碼／收斂，不必再放寬。
   ok(bytes > 2_500_000, '只掃到 ' + bytes + ' bytes —— 大檔被截斷或讀錯目錄');
   ok(EFFECT_FILES.some(x => x.rel === 'effects.ts'), '主檔 effects.ts 沒掃到');
   ok(EFFECT_FILES.some(x => x.rel === 'effects/_shared.ts'), '_shared.ts 沒掃到');

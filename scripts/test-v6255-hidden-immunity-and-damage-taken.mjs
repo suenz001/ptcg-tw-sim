@@ -125,7 +125,11 @@ T('A3 掃描器下限＋正對照：「不會受到…特性…」的特性只�
     return e.includes('不會受到') && e.includes('特性');
   });
   // ⭐v6.325：下限自 10 收緊到 12（實測 13）。
-  assert.ok(wide.length >= 12, `掃描器下限：應 ≥12 筆，實得 ${wide.length}`);
+  // ⭐v6.326【B 類：結構性最小值】維持 12、slack 1，**不放寬**。
+  //   理由：`wide` 數的是**卡池**裡符合寬鬆措辭的卡（印刷筆數），不是程式碼消費點；
+  //   而且真正的斷言是下面那條 deepEqual（三個特性名逐字釘死），這條只是「有掃到東西」的地板。
+  //   卡池日常只增不減 ⇒ 不需要收斂餘裕。
+  assert.ok(wide.length >= 12, `掃描器下限：應 ≥12 筆，實得 ${wide.length}（B 類：卡池枚舉，不留收斂餘裕）`);
   const names = new Set(wide.map(w => w.ab.name));
   assert.deepEqual([...names].sort(), ['光之翼', '化隱', '礎石之勢'].sort(),
     `符合寬鬆措辭的特性名單變了：${[...names].join('/')}`);
@@ -367,13 +371,20 @@ T('C7 lint：本欄位的讀取點枚舉（下限斷言 ＋ 正對照）', () =>
     }
   }
   // ⭐v6.325：下限自 5 收緊到 5（實測 5；已在實測值上、slack 0）。
-  assert.ok(total >= 5, `掃描器下限：damageTakenLastOppTurn 出現次數應 ≥5，實得 ${total}（掃描器壞了？）`);
+  // ⭐v6.326【A 類：收斂就會掉】5（slack 0）→ 3（slack 2，實測 5）。
+  //   理由：`total` 數的是 `damageTakenLastOppTurn` 這個**欄位名在程式碼裡出現幾次**
+  //   —— 少一個消費點就掉 1，而「少一個消費點」正是中央收斂的正常結果。
+  //   ⚠ 基數只有 5，所以餘裕給 2（不是 3）：3 仍然遠高於「掃描器壞掉＝0」，保得住偵測力。
+  //   ⚠ 往下掉 1~2 多半是合法收斂，確認後改這一行。
+  assert.ok(total >= 3, `掃描器下限：damageTakenLastOppTurn 出現次數應 ≥3，實得 ${total}（掃描器壞了？A 類下限 3／實測基準 5）`);
   const hookSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'), 'utf8'), 'v2690 hook');
   assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(hookSrc),
     '唯一讀取點（重裝角擊）不見了 ⇒ 這條守衛的前提消失');
   // 正對照：樣式真的抓得到「多一個讀取點」
   assert.ok(/\.damageTakenLastOppTurn\s*\?\?\s*0/.test('const x = a?.damageTakenLastOppTurn ?? 0;'), '讀取樣式恆假＝安慰劑');
-  assert.ok(readSites >= 1, `讀取點掃描結果為 ${readSites}，掃描器壞了`);
+  // ⭐v6.326【B 類：結構性最小值】維持 1、slack 0：上面那條 deepEqual 級的斷言已經說了
+  //   「唯一讀取點（重裝角擊）」—— 它是**結構**上必須存在的那一個，掉到 0 就是真的沒有了。
+  assert.ok(readSites >= 1, `讀取點掃描結果為 ${readSites}，掃描器壞了（B 類：結構性最小值，slack 0）`);
 });
 
 T('C8 lint：engine 主管線必須用「實際扣到的」而不是 baseDamage（＋正對照）', () => {

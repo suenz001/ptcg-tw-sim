@@ -304,6 +304,9 @@ T('L0【正對照】主詞分類器餵合成樣本必須分對（否則它只是
 T('L1 每個 PASSIVE_ATTACK_BONUS 條目的「卡面主詞」與 PASSIVE_ATTACK_SELF_SUBJECT 一致', () => {
   const names = [...PASSIVE_ATTACK_BONUS.keys()];
   // ⭐v6.325：下限自 12 收緊到 12（實測 12；已在實測值上、slack 0）。
+  // ⭐v6.326【B 類：結構性最小值】維持 12、slack 0，**不放寬**：
+  //   數的是 `PASSIVE_ATTACK_BONUS` 這張**註冊表的條目數** —— 條目只會因為新卡而增加；
+  //   會減少只有一種原因＝有人把一張卡的被動加成刪掉了，那正是本條要抓的東西。
   assert.ok(names.length >= 12, `下限失敗：只註冊了 ${names.length} 個被動加成（預期 ≥12）— 掃描器/註冊壞了？`);
   // 從卡池撈每個特性名的 effect（同名多印刷時 effect 必須一致，否則這裡也要紅）
   const effByAb = new Map();
@@ -361,7 +364,9 @@ T('L2【正對照】`.get(` 掃描器餵合成違規樣本必須抓到', () => {
 });
 T('L2 全站 `PASSIVE_ATTACK_BONUS.get(` 只出現在 collectPassiveAttackBonuses 內', () => {
   // ⭐v6.325：下限自 100 收緊到 193（實測 194）。
-  assert.ok(srcFiles.length >= 193, `掃描器下限失敗：只找到 ${srcFiles.length} 個原始檔`);
+  // ⭐v6.326【A 類：收斂就會掉】193（slack 1）→ 191（slack 3，實測 194）：
+  //   數的是 `src/**` 的**檔案數**，合併／刪一支卡檔就合法 −1。掉 1~3 多半是合法收斂，確認後改這一行。
+  assert.ok(srcFiles.length >= 191, `掃描器下限失敗：只找到 ${srcFiles.length} 個原始檔（A 類下限 191／實測基準 194）`);
   const sites = [];
   for (const p of srcFiles) {
     const n = countGet(readFileSync(p, 'utf8'), relative(ROOT, p).replace(/\\/g, '/'));

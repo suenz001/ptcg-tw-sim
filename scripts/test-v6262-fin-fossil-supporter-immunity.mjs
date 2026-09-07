@@ -237,7 +237,10 @@ for (const c of SUPS) for (const layout of ['bench', 'active']) for (const order
 
 T(`⚠ 掃描器下限斷言：live H/I/J 支援者 ${SUPS.length} 張、實跑 ${_runs} 次`, () => {
   // ⭐v6.325：下限自 80 收緊到 82（實測 83）。
-  ok(SUPS.length >= 82, `只枚舉到 ${SUPS.length} 張支援者 —— 枚舉器壞了？`);
+  // ⭐v6.326【B 類：結構性最小值】維持 82、**不放寬**：`SUPS` 數的是 live H/I/J 卡池裡的**支援者張數**，
+  //   不是程式碼消費點 —— 中央收斂不會讓卡池少一張，日常方向只增不減。
+  //   ⚠ 會讓它掉的只有「整批卡包輪替下架」，那是掉一大截、且本來就該人工回來重判 ⇒ 留 2~3 沒有用。
+  ok(SUPS.length >= 82, `只枚舉到 ${SUPS.length} 張支援者 —— 枚舉器壞了？（B 類：卡池枚舉，不留收斂餘裕）`);
   ok(_runs === SUPS.length * 2 * 3, `實跑 ${_runs} 次，應為 ${SUPS.length * 2 * 3}`);
   for (const c of SUPS) ok(M.TRAINER_EFFECTS.has(c.name), `${c.name} 沒有 TRAINER_EFFECTS ⇒ 這一輪等於沒測到它`);
 });

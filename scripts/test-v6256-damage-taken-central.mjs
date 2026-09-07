@@ -285,8 +285,12 @@ const WRITE_RE = /(?<!\?)\bdamageTakenLastOppTurn:\s/g;
 T('C1 ⭐⭐⭐除了 _shared.ts 的中央 helper，全 src 不得有第二個寫入點（＋正對照＋下限）', () => {
   // 下限斷言：掃描器至少要看得到唯一讀取點與型別宣告，否則就是讀錯檔／regex 壞了
   const totalMentions = Object.values(SRC).join('\n').split('damageTakenLastOppTurn').length - 1;
-  // ⭐v6.325：下限自 5 收緊到 6（實測 6）。
-  assert.ok(totalMentions >= 6, `掃描器下限：全檔提及次數應 ≥6，實得 ${totalMentions}（掃描器壞了？）`);
+  // ⭐v6.325：下限自 5 收緊到 6（實測 6）。⚠ 當時 slack ＝ 0 但**沒有像其他五條那樣註明**。
+  // ⭐v6.326【A 類：收斂就會掉】6（slack 0）→ 4（slack 2，實測 6）。
+  //   理由：數的是欄位名在程式碼裡的**提及次數**，中央收斂／刪一個消費點就會合法 −1；
+  //   slack 0 表示「任何一次合法收斂都翻紅」⇒ 橡皮圖章。基數 6 所以餘裕給 2。
+  //   ⚠ 往下掉 1~2 多半是合法收斂，確認後改這一行。
+  assert.ok(totalMentions >= 4, `掃描器下限：全檔提及次數應 ≥4，實得 ${totalMentions}（掃描器壞了？A 類下限 4／實測基準 6）`);
   assert.ok(/damageTakenLastOppTurn\?: number;/.test(SRC.types), 'types.ts 欄位宣告不見了');
   assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(SRC.hook), '唯一讀取點（重裝角擊）不見了');
   // 正對照：樣式真的抓得到違規樣本（否則就是恆真的安慰劑）
@@ -311,8 +315,15 @@ T('C2 ⭐⭐中央 helper 的算式與所有消費端（＋下限斷言＋正對
     'kind gate／actual>0 gate 不見了 ⇒ 放指示物會被誤計為「受到的傷害」');
   const calls = (SRC.engine + '\n' + SRC.effects).match(/withAttackDamageTaken\(/g) ?? [];
   // ⭐v6.325：下限自 10 收緊到 11（實測 12）。
+  // ⭐v6.326【A 類：收斂就會掉，但**例外只留 slack 1**】維持 11（實測 12）。
+  //   `calls` 確實是「消費端數」，把兩條管線併成一條會合法 −1 ⇒ 性質上是 A 類。
+  //   ⚠⚠ 但這條下限**同時兼任「有管線被拔掉」的唯一偵測器** —— 這個 token 沒有 exact enumeration
+  //   兜底（對比 C1 的 `sharedHits.length === 1`、C3 的 `sites.length === 6`）。
+  //   v6.325 已經實證：把兩個 `withAttackDamageTaken(` 改寫成 `withAttackDamageTaken (`（12 → 10）
+  //   時，`>= 10` 是**綠的**、`>= 11` 才紅 ⇒ 放到 10 就抓不到那個 HEAD-FAIL。
+  //   ⇒ 這一條刻意不跟其他 A 類一起放到 2~3。往下掉 1 若確認是合法收斂，再改這一行。
   assert.ok(calls.length >= 11,
-    `withAttackDamageTaken 呼叫點只剩 ${calls.length} 個（應 ≥11）⇒ 有管線被拔掉`);
+    `withAttackDamageTaken 呼叫點只剩 ${calls.length} 個（A 類但 slack 只留 1／實測基準 12）⇒ 有管線被拔掉`);
   assert.ok(/withAttackDamageTaken\(defenderState\.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage'\)/.test(SRC.engine),
     'engine 主管線沒有走中央寫入點');
   // 正對照

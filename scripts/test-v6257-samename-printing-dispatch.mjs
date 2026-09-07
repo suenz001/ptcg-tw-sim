@@ -375,8 +375,13 @@ check('E2 全站掃描：沒有「用卡名決定特性行為卻不驗證印刷�
     }
   })(join(ROOT, 'src'));
   // ⭐v6.325：100 → 193、50 → 99（實測 194／100）。
-  assert.ok(files.length >= 193, `掃描器下限失敗：只找到 ${files.length} 個原始檔`);
-  assert.ok(RISKY.size >= 99, `掃描器下限失敗：高風險卡名只有 ${RISKY.size} 個（預期 ≥99）`);
+  // ⭐v6.326 兩條分屬不同類，**不一刀切**：
+  //   · `files.length`【A 類：收斂就會掉】193（slack 1）→ 191（slack 3，實測 194）：
+  //     它數的是 `src/**` 的**檔案數**，合併／刪一支卡檔就合法 −1。掉 1~3 多半是合法收斂，確認後改這一行。
+  //   · `RISKY.size`【B 類：結構性最小值】維持 99、**不放寬**：它數的是**卡池**裡「同名不同印刷」的卡名，
+  //     不是程式碼消費點 —— 中央收斂不會讓卡池少一張，日常方向只增不減。
+  assert.ok(files.length >= 191, `掃描器下限失敗：只找到 ${files.length} 個原始檔（A 類下限 191／實測基準 194）`);
+  assert.ok(RISKY.size >= 99, `掃描器下限失敗：高風險卡名只有 ${RISKY.size} 個（預期 ≥99；B 類：卡池枚舉，不留收斂餘裕）`);
   let totalHits = 0; const viols = [];
   for (const p of files) {
     // ⭐v6.325：真檔一律過一次中央護欄（②③⑤）—— 剝除器把某個檔吃掉會在這裡炸，不會靜默漏掃。
@@ -391,7 +396,11 @@ check('E2 全站掃描：沒有「用卡名決定特性行為卻不驗證印刷�
   // ⚠ v6.258：下限自 20 調為 15 —— 收斂主詞閘時移除了 3 個「假裝自指」的卡名 gate
   //   （棄世猴／仆斬將軍／電蜘蛛），實測命中數 20 → 17。下限仍高於現值以保留掃描器壞掉的偵測力。
   // ⭐v6.325：下限自 15 收緊到 16（實測 17）。
-  assert.ok(totalHits >= 16, `掃描器下限失敗：只掃到 ${totalHits} 個卡名相等比對（預期 ≥16）`);
+  // ⭐v6.326【A 類：收斂就會掉】16（slack 1）→ 14（slack 3，實測 17）。
+  //   ⭐ 這一條有**直接的歷史證據**：v6.258 把手抄 dispatch 收斂掉之後，這個數字從 20 掉到 17（−3）
+  //   ⇒ slack 1 會讓那一次合法收斂當場翻紅。餘裕給 3 正好涵蓋那個量級。
+  //   ⚠ 往下掉 1~3 多半是合法收斂，確認後改這一行；掉超過 3 請回來重判。
+  assert.ok(totalHits >= 14, `掃描器下限失敗：只掃到 ${totalHits} 個卡名相等比對（A 類下限 14／實測基準 17）`);
   assert.deepStrictEqual(viols, [], `\n  ${viols.join('\n  ')}\n`);
 });
 check('E3 白名單不得有死條目（程式改過就要回來重判）', () => {
@@ -435,6 +444,9 @@ check('F2 getEvolvableTargets 與 EVOLVE handler 都經由 getEvolveTimingBypass
     .split('\n').map(l => l.split('//')[0]).join('\n');
   const calls = (src.match(/getEvolveTimingBypass\(/g) || []).length;
   // ⭐v6.325：下限自 3 收緊到 3（實測 3；已在實測值上、slack 0）。
+  // ⭐v6.326【B 類：結構性最小值】維持 3、slack 0，**不放寬**：
+  //   3 ＝ 定義 1 ＋ 兩個消費端各 1，是這個中央閘存在所必需的最小結構，
+  //   掉到 2 就代表某一端**繞過了中央閘**（正是這條守衛要抓的東西），不是「收斂」。
   assert.ok(calls >= 3, `getEvolveTimingBypass 呼叫點只有 ${calls}（預期 ≥3）`);
   assert.ok(!/\.name === '勒克貓'/.test(src), 'engine.ts 仍有 name === 勒克貓 的手刻判定');
 });

@@ -13,6 +13,7 @@
  * 見長期記憶 feedback-basic-energy-pokemontype-null / reference-discard-prize-log。
  */
 import { readFileSync as _readFileSyncRaw, readdirSync, statSync } from 'node:fs';
+import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -914,9 +915,44 @@ for (const f of files) {
   if (pokeNames.size < 500) {
     violations.push(`[Y] 掃描器異常 — 只讀到 ${pokeNames.size} 個寶可夢卡名（預期 >500），本 check 形同虛設`);
   } else {
+    // ── ⭐v6.326 批 3：Check Y 的剝除器改走中央 helper（scripts/lib/strip-comments.mjs）──
+    //   ⚠ 這是**全站 lint 唯一**一處自寫的貪婪區塊正則 `/\/\*[\s\S]*?\*\//g`（第 13 種安慰劑）：
+    //     行註解裡的 `effects/cards/*.ts` 會被當成區塊開頭，一路吃到下一個 `*/`
+    //     （effects.ts 實測兩處：`:27` 吃到 `:147`、`:7905` 吃到 `:8203`，合計 273 行真碼）。
+    //     吃掉之後那一段裡的 `regG('寶可夢名')` 就數不到 ⇒ Check Y 對那一段靜默失效。
+    //   ⚠ 用**等長留白**版而不是刪行版：Check Y 的違規訊息帶行號。實測遷移前 177 個命中裡
+    //     有 172 個的行號是錯的（例：`draw_supporters.ts` 的 `regG('管理員')` 實際在 :49，
+    //     舊剝除器刪掉區塊註解的換行後印成 :37）⇒ 這次遷移順帶把行號修正。
+    //   ⚠ 行尾 `//` 的處理**保留在這裡**（中央 helper 只剝行首 `//`）；`(^|[^:])` 是為了不要把
+    //     網址的 `https://` 誤當行尾註解 —— 與遷移前逐字相同，不放寬。
+    //   ⭐ 遷移前後的命中集合逐項相同（`regG` 177 → 177，(檔|卡名) 多重集合完全一致）。
+    const yStrip = (src, label) =>
+      stripCommentsBlankChecked(src, { label }).replace(/(^|[^:])\/\/.*$/gm, '$1');
+    // ⭐ 正對照／反向對照放在**真掃描之前** —— 剝除器一旦回歸成「行中 `/*` 也開區塊」，
+    //   這裡會先確定性地紅，而不是等某個真檔剛好踩到護欄才炸。
+    //   ⚠ 兩個樣本都墊 20 行 `const pad`，讓抓到它的是這條對照、不是護欄①的留存率地板。
+    {
+      const hole = "// 見 effects/cards/*.ts\nregG('__Y探針訓練家__', () => true);\n/* 收尾 */\n"
+        + 'const pad = 1;\n'.repeat(20);
+      if ((yStrip(hole, 'Y-probe-hole').match(/\bregG\(\s*'/g) || []).length !== 1) {
+        violations.push('[Y] 正對照失敗 — 剝除器把「行註解提到 cards/*.ts」之後的**真** regG 呼叫吃掉了'
+          + '（第 13 種安慰劑回歸）⇒ Check Y 會對那一整段靜默漏掃');
+      }
+      const onlyComment = "// regG('__Y註解甲__', () => true);\n/* regG('__Y註解乙__', () => true); */\n"
+        + 'const pad = 1;\n'.repeat(20);
+      if ((yStrip(onlyComment, 'Y-probe-comment').match(/\bregG\(\s*'/g) || []).length !== 0) {
+        violations.push('[Y] 反向對照失敗 — 註解裡的 regG 沒被剝掉 ⇒ Check Y 會把說明用的註解誤報成違規');
+      }
+    }
     let ySeen = 0;
     for (const f of files) {
-      const src = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      let src;
+      try { src = yStrip(readFileSync(f, 'utf8'), rel(f)); }
+      catch (e) {
+        // ⚠ 這不是 fail-open：中央護欄（②③⑤）炸掉時**轉成違規**（exit 1），不是靜默跳過這個檔。
+        violations.push(`[Y] ${rel(f)} — 剝註解中央護欄炸了（疑似「一路吃掉」事故）：${e.message}`);
+        continue;
+      }
       for (const m of src.matchAll(/\bregG\(\s*'([^']+)'/g)) {
         ySeen++;
         const nm = m[1];

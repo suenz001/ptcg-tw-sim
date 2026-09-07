@@ -14,12 +14,15 @@
 //        兩種渲染都留住 :342 的 `let _rtSegN = 0;`、留白版把它留在**同一行號**；洞內探針（:209 之後塞一行）留白版仍在 :210。
 //   【5】全站實掃（git ls-tree HEAD 的 .ts/.js/.mjs/.cjs/.svelte/.html）：兩種渲染逐檔等價、留白版長度行數不變、零未收尾、最長區塊 ≤ 150、最長連續丟棄 ≤ 200；
 //        ⭐v6.324 加掃「收尾符之後的尾巴只含非 ASCII 空白」的行數（現在是 0；> 0 就代表【6】那族地雷已經有人踩到了）。
+//   【7】⭐v6.326 **規則順序**（不是護欄）才是擋住事故 2 的東西：跑真的 `anti-pattern-lint` 子行程，
+//        M11a（只把 `startsWith`→`includes`）必須**綠**、M11b′（再把規則 (a) 搬到區塊判斷之後）必須**紅在 `[Y] 正對照失敗`**。
+//        ⚠ 這條同時是「Check Y 真的接上中央 helper」的**管線斷言** —— 沒接上的話，突變 helper 不會改變 lint 的行為。
 //   【6】⭐v6.324 收尾符之後的**尾巴空白定義**（⛔1）：`renderDropped` 若用 `tail.trim()`（JS Unicode 空白）而等價性比對用 ASCII `WS_RE`，
 //        兩者對「全形空格／NBSP／BOM／U+2000／U+2028」的判斷會不一致 ⇒ 刪行版丟、留白版留 ⇒ 等價性當場破。
 //        七個反例（修前紅／修後綠）＋ 六個已守住的正對照（修前綠／修後綠）。
 // ⚠⚠ 只捕捉 assert.AssertionError —— 其他例外必須直接炸掉。
 // Run: node scripts/test-lib-strip-comments.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -418,6 +421,66 @@ T('5-2 ⭐v6.324 前置 A 不誤紅：全站每一支都用 stripCommentsChecked
   assert.ok(under50 >= 10, '留存率 < 50% 的檔只有 ' + under50 + ' 支？那「0.5 會誤紅」這個前提就不成立了，本條的意義要重寫');
   console.log('        ' + n + ' 支全部通過預設護欄；最低留存率 ' + (minR * 100).toFixed(1) + '%（' + minF + '）；'
     + '< 50% 有 ' + under50 + ' 支、< 20% 有 ' + under20 + ' 支 ⇒ 舊預設 0.5 會誤紅 ' + under50 + ' 支');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n【7】⭐v6.326 擋住事故 2 的是「規則順序」（真管線斷言：跑真的 anti-pattern-lint 子行程）');
+// ⚠ 這一段只寫兩個 dot-file 到 scripts/（`.y6326-*`），**絕不覆寫 repo 既有檔**；離場一律刪。
+const TMP_STRIP7 = join(ROOT, 'scripts/.y6326-strip.mjs');
+const TMP_LINT7 = join(ROOT, 'scripts/.y6326-lint.mjs');
+const cleanup7 = () => { for (const q of [TMP_STRIP7, TMP_LINT7]) { try { unlinkSync(q); } catch {} } };
+process.on('exit', cleanup7);
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { cleanup7(); process.exit(1); });
+
+const STRIP_SRC7 = readFileSync(join(ROOT, 'scripts/lib/strip-comments.mjs'), 'utf8');
+const LINT_SRC7 = readFileSync(join(ROOT, 'scripts/anti-pattern-lint.mjs'), 'utf8');
+const LINT_IMPORT7 = "from './lib/strip-comments.mjs';";
+const RULE_A7 = '    if (LINE_COMMENT_RE.test(t)) { keepFrom[i] = -1; continue; }   // a. 行首 // ⇒ 丟整行\n';
+const OPEN_STARTSWITH7 = '      if (!t.startsWith(open)) continue;\n';
+const OPEN_INCLUDES7 = '      if (!line.includes(open)) continue;\n';
+const AFTER_LOOP7 = '    if (handled) continue;\n';
+
+/** 依 pairs 突變中央 helper，再用**真的** anti-pattern-lint（只把 import 改指到突變版）跑一次子行程。 */
+function runLintWith(pairs) {
+  let src = STRIP_SRC7;
+  for (const [x, y] of pairs) {
+    assert.strictEqual(src.split(x).length - 1, 1, '突變錨點不唯一或不存在（helper 的形狀變了）：' + x.slice(0, 60));
+    src = src.replace(x, y);
+  }
+  assert.notStrictEqual(pairs.length && src, STRIP_SRC7, '突變沒改到 helper');
+  // ⭐ 管線斷言：anti-pattern-lint 必須真的從中央 helper import，否則突變它等於沒突變（接線沒接上）。
+  assert.strictEqual(LINT_SRC7.split(LINT_IMPORT7).length - 1, 1,
+    'anti-pattern-lint.mjs 沒有從中央 helper import ⇒ Check Y 的剝除器沒接上中央 helper（接線沒接上）');
+  writeFileSync(TMP_STRIP7, src);
+  writeFileSync(TMP_LINT7, LINT_SRC7.replace(LINT_IMPORT7, "from './.y6326-strip.mjs';"));
+  try { return { code: 0, out: execFileSync(process.execPath, [TMP_LINT7], { encoding: 'utf8', maxBuffer: 1 << 26 }) }; }
+  catch (e) { return { code: e.status ?? 1, out: String(e.stdout || '') + String(e.stderr || '') }; }
+}
+
+T('7-0 反面對照：helper 沒被突變時，同一條子行程路徑必須綠（突變 harness 不是恆紅）', () => {
+  const r = runLintWith([]);
+  assert.strictEqual(r.code, 0, 'lint 在未突變時就紅了：' + r.out.slice(-400));
+});
+T('7-a ⭐⭐⭐ M11a（只把 `t.startsWith(open)` → `line.includes(open)`）⇒ lint 必須**綠** '
+  + '—— 護欄①③⑤ 對事故 2 的形狀都攔不到，擋住它的是規則 (a) 排在區塊判斷之前', () => {
+  const r = runLintWith([[OPEN_STARTSWITH7, OPEN_INCLUDES7]]);
+  assert.strictEqual(r.code, 0,
+    'M11a 竟然紅了 ⇒ 檔頭那句「護欄攔不到、靠的是規則順序」要重寫：' + r.out.slice(-400));
+});
+T('7-b ⭐⭐⭐ M11b′（M11a ＋ 把規則 (a) 搬到區塊判斷之後）⇒ lint 必須**紅在 `[Y] 正對照失敗``', () => {
+  const r = runLintWith([[OPEN_STARTSWITH7, OPEN_INCLUDES7], [RULE_A7, ''], [AFTER_LOOP7, RULE_A7 + AFTER_LOOP7]]);
+  assert.notStrictEqual(r.code, 0, 'M11b′（事故 2 的真根因形狀）竟然沒讓 lint 紅 ⇒ Check Y 沒接上中央 helper');
+  assert.ok(/\[Y\] 正對照失敗/.test(r.out),
+    '紅了但不是紅在 Check Y 的洞內正對照：' + r.out.slice(-500));
+});
+T('7-c 規則順序的行為端表述（不靠突變）：行首 `//` 裡的 `/*` 不開區塊；行首 `/*` 會開', () => {
+  const withSlash = '// 見 effects/cards/*.ts\nconst real = 1;\n/* 收尾 */\nconst pad = 1;\n';
+  const noSlash = '/* 見 effects/cards/*.ts\nconst real = 1;\n*/ const tail = 2;\nconst pad = 1;\n';
+  assert.ok(stripCommentLines(withSlash).includes('const real = 1;'),
+    '行首 `//` 的那一行竟然開了區塊 ⇒ 事故 2 回歸');
+  assert.ok(!stripCommentLines(noSlash).includes('const real = 1;'),
+    '行首 `/*` 沒有開區塊 ⇒ 狀態機的另一半壞了');
+  assert.ok(stripCommentLines(noSlash).includes('const tail = 2;'), '區塊收尾後的尾巴沒保留（B4）');
 });
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} test-lib-strip-comments：${pass} passed, ${fail} failed`);
