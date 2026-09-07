@@ -151,7 +151,7 @@ T('⭐⭐⭐ 9 張全部：標=J、setCode=M-P-J、在 M-P-J.json、不在 M-P-I
   }
 });
 
-T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 50／M-P-J 101；總數 4935 不變、未重生）', () => {
+T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 50／M-P-J 101；總數 4938、未重生）', () => {
   const mi = INDEX.find((e) => e.code === 'M-P-I'), mj = INDEX.find((e) => e.code === 'M-P-J');
   eq(mi.cardCount, 50, 'M-P-I cardCount'); eq(mi.count, 50, 'M-P-I count');
   eq(MPI.length, 50, 'M-P-I.json 實際張數');
@@ -161,7 +161,7 @@ T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 50／M-P-J 101；總
   eq(MPJ.length, 101, 'M-P-J.json 實際張數');
   eq(mj.supertypeCounts.Energy, 18, 'M-P-J Energy 數');
   eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), 101, 'M-P-J supertypeCounts 加總');
-  eq(INDEX.reduce((s, e) => s + e.cardCount, 0), 4935, '全站總張數');
+  eq(INDEX.reduce((s, e) => s + e.cardCount, 0), 4938, '全站總張數');   // v6.328 傳說競技場右半換號 +3
   ok(mi.regulationMark === 'I' && mj.regulationMark === 'J', '卡包層級的標被動到了');
 });
 
@@ -220,7 +220,8 @@ T('⭐⭐ 卡池仍載入 18965/18969、候選清單（filterPlayerSelectable）
   const sel = mod.VIS.filterPlayerSelectable([...pool.values()]);
   const ids = new Set(sel.map((c) => String(c.id)));
   for (const id of ['18965', '18969']) ok(!ids.has(id), '候選清單仍含 ' + id);
-  eq(pool.size - sel.length, 2, '被濾掉的張數');
+  // ⚠ v6.328：下架卡不只這兩張了 ⇒ 與 visibility 對帳，不釘死數字
+  eq(pool.size - sel.length, Object.keys(mod.VIS.HIDDEN_FROM_PLAYERS).length, '被濾掉的張數');
 });
 
 console.log(`\nv6.232 守衛：${pass} PASS / ${fail} FAIL`);

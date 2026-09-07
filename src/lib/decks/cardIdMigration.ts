@@ -153,9 +153,9 @@ export function mergeDuplicateEntries(entries: DeckEntry[]): DeckEntry[] {
  * ⚠ 冪等：已經有右半 entry 的牌組（＝已轉換過）原樣回傳，不會愈轉愈多。
  */
 const TWO_CARD_STADIUM_SPLIT: Readonly<Record<string, string>> = {
-  '19621': '19624',   // 傳說的海溝   071/076 → 072/076
-  '19622': '19625',   // 傳說的山頂   073/076 → 074/076
-  '19623': '19626',   // 傳說的熔岩洞 075/076 → 076/076
+  '19621': '19621-1',   // 傳說的海溝   071/076 → 072/076
+  '19622': '19622-1',   // 傳說的山頂   073/076 → 074/076
+  '19623': '19623-1',   // 傳說的熔岩洞 075/076 → 076/076
 };
 /**
  * v6.101：`splitTwoCardStadiumEntries` 的**反向**操作 —— 把右半併回官方那張卡的 id。
@@ -172,6 +172,13 @@ const TWO_CARD_STADIUM_SPLIT: Readonly<Record<string, string>> = {
 export function mergeTwoCardStadiumEntries(entries: DeckEntry[]): DeckEntry[] {
   const rightToLeft: Record<string, string> = {};
   for (const [left, right] of Object.entries(TWO_CARD_STADIUM_SPLIT)) rightToLeft[right] = left;
+  // ⚠ v6.328：沒跑過 migrateCardId 的舊資料（例如 v6.328 之前拍下的錦標賽報名快照）
+  //   仍可能帶著**舊的**右半 id ⇒ 也要能併回官方左半，否則會送出官網不認得的 id。
+  //   ⭐ 不寫死清單：從停用卡對照表推導（v6.329 把那三筆刪掉之後，這段自動失效）。
+  for (const [retiredId, currentId] of Object.entries(RETIRED_DUP_TO_TW_ID)) {
+    const left = rightToLeft[currentId];
+    if (left) rightToLeft[retiredId] = left;
+  }
   const out: DeckEntry[] = [];
   const idx = new Map<string, number>();
   for (const e of entries) {

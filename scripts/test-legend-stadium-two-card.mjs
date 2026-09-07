@@ -11,6 +11,7 @@ process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p)}catch{}}});
 writeFileSync(S,'export const base="";');
 writeFileSync(E,"export { applyAction, getPlayableTrainers } from './src/lib/game/engine';\n"
               +"export { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, discardActiveStadium, PENDING_STADIUMS } from './src/lib/game/effects/_shared';\n"
+              +"export { isHiddenFromPlayers } from './src/lib/cards/visibility';\n"
               +"import './src/lib/game/effects';");
 await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',target:'node20',
   alias:{'$lib':join(ROOT,'src/lib'),'$app/paths':S},logLevel:'error'});
@@ -26,7 +27,10 @@ const dir=join(ROOT,'static/cards');
 const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
 const pool=new Map();
 for(const f of readdirSync(dir)){ if(!f.endsWith('.json')||f==='index.json'||!live.has(f.slice(0,-5)))continue;
-  for(const c of JSON.parse(readFileSync(join(dir,f),'utf8'))) if(c?.id!=null) pool.set(String(c.id),c); }
+  // ⚠ v6.328：M6 現在多了三筆**停用的**舊右半（見 $lib/cards/visibility）。
+  //   這裡枚舉的語義是「玩家用得到的那幾張」⇒ 走中央述詞排除，不是把張數判準放寬。
+  for(const c of JSON.parse(readFileSync(join(dir,f),'utf8')))
+    if(c?.id!=null && !M.isHiddenFromPlayers(c.id)) pool.set(String(c.id),c); }
 const byName=(n,p2)=>[...pool.values()].find(c=>c.name===n && (!p2||p2(c)));
 const ZH={Water:'水',Fighting:'鬥'};
 const EID={}; for(const [id,c] of pool){ if(c.supertype!=='Energy'||c.subtype!=='Basic')continue;

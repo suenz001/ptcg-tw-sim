@@ -3,7 +3,7 @@
  *
  * 背景（Wilson 回報）：M6 傳說場地卡匯出成官網代碼會出問題，因為官網是
  * **兩張合成一張卡片、共用一個序號**。本站 v6.093 為了讓左右半各自能出牌，
- * 自己造了右半 id（19624/19625/19626）—— 官方卡表沒有這些 id。
+ * 自己造了右半 id（19621-1/19625/19626）—— 官方卡表沒有這些 id。
  *
  * ⚠ 最危險的地方：台灣官網的 beforecheck API **不驗 cardId 存不存在**，
  *   送幽靈 id 不會報錯，而是靜默產生一副壞掉的牌組代碼。
@@ -34,16 +34,16 @@ const E = (cardId, count, name = '') => ({ cardId, count, name });
 
 console.log('① 合併：右半 id 併回官方那張卡');
 ok('1-1 一套（左1右1）→ 官方 id 一筆、count=2（實體張數）', () => {
-  const r = M.mergeTwoCardStadiumEntries([E('19622', 1, '傳說的山頂'), E('19625', 1, '傳說的山頂')]);
+  const r = M.mergeTwoCardStadiumEntries([E('19622', 1, '傳說的山頂'), E('19622-1', 1, '傳說的山頂')]);
   assert.deepStrictEqual(r.map((x) => [x.cardId, x.count]), [['19622', 2]]);
 });
 ok('1-2 兩套（左2右2）→ count=4', () => {
-  const r = M.mergeTwoCardStadiumEntries([E('19621', 2), E('19624', 2)]);
+  const r = M.mergeTwoCardStadiumEntries([E('19621', 2), E('19621-1', 2)]);
   assert.deepStrictEqual(r.map((x) => [x.cardId, x.count]), [['19621', 4]]);
 });
 ok('1-3 三張傳說場地卡各自獨立、不互相混到', () => {
   const r = M.mergeTwoCardStadiumEntries([
-    E('19621', 1), E('19624', 1), E('19622', 1), E('19625', 1), E('19623', 1), E('19626', 1),
+    E('19621', 1), E('19621-1', 1), E('19622', 1), E('19622-1', 1), E('19623', 1), E('19623-1', 1),
   ]);
   assert.deepStrictEqual(r.map((x) => [x.cardId, x.count]), [['19621', 2], ['19622', 2], ['19623', 2]]);
 });
@@ -52,15 +52,15 @@ ok('1-4 一般卡片完全不受影響（順序與張數原樣）', () => {
   assert.deepStrictEqual(M.mergeTwoCardStadiumEntries(src), src);
 });
 ok('1-5 合併後不會殘留任何自造的右半 id（送出去的都是官方 id）', () => {
-  const r = M.mergeTwoCardStadiumEntries([E('19621', 2), E('19624', 2), E('19625', 1), E('19622', 1), E('19626', 3), E('19623', 3)]);
-  for (const e of r) assert.ok(!['19624', '19625', '19626'].includes(e.cardId), '殘留幽靈 id：' + e.cardId);
+  const r = M.mergeTwoCardStadiumEntries([E('19621', 2), E('19621-1', 2), E('19622-1', 1), E('19622', 1), E('19623-1', 3), E('19623', 3)]);
+  for (const e of r) assert.ok(!['19621-1', '19622-1', '19623-1'].includes(e.cardId), '殘留幽靈 id：' + e.cardId);
 });
 ok('1-6 只有右半、沒有左半（牌組壞掉的邊緣情形）也要換成官方 id', () => {
-  const r = M.mergeTwoCardStadiumEntries([E('19625', 1)]);
+  const r = M.mergeTwoCardStadiumEntries([E('19622-1', 1)]);
   assert.deepStrictEqual(r.map((x) => [x.cardId, x.count]), [['19622', 1]]);
 });
 ok('1-7 合併不改變總張數（官網 60 張上限的計算前提）', () => {
-  const src = [E('19621', 2), E('19624', 2), E('12345', 4)];
+  const src = [E('19621', 2), E('19621-1', 2), E('12345', 4)];
   const sum = (a) => a.reduce((n, e) => n + e.count, 0);
   assert.strictEqual(sum(M.mergeTwoCardStadiumEntries(src)), sum(src));
 });
@@ -75,20 +75,20 @@ ok('2-1 拆 → 合 回到原樣', () => {
   );
 });
 ok('2-2 合 → 拆 回到原樣（本站內部表示：左右各半）', () => {
-  const inSite = [E('19623', 2), E('19626', 2)];
+  const inSite = [E('19623', 2), E('19623-1', 2)];
   const back = M.splitTwoCardStadiumEntries({ entries: M.mergeTwoCardStadiumEntries(inSite) }).entries;
   assert.deepStrictEqual(back.map((x) => [x.cardId, x.count]), inSite.map((x) => [x.cardId, x.count]));
 });
 
 ok('1-8 合併保留 cardName 等其他欄位（送官網要帶卡名）', () => {
   const r = M.mergeTwoCardStadiumEntries([
-    { cardId: '19625', cardName: '傳說的山頂', count: 1 },
+    { cardId: '19622-1', cardName: '傳說的山頂', count: 1 },
     { cardId: '19622', cardName: '傳說的山頂', count: 1 },
   ]);
   assert.deepStrictEqual(r, [{ cardId: '19622', cardName: '傳說的山頂', count: 2 }]);
 });
 ok('1-9 只有右半時仍拿得到卡名（左右半的官方卡名逐字相同）', () => {
-  const r = M.mergeTwoCardStadiumEntries([{ cardId: '19626', cardName: '傳說的熔岩洞', count: 1 }]);
+  const r = M.mergeTwoCardStadiumEntries([{ cardId: '19623-1', cardName: '傳說的熔岩洞', count: 1 }]);
   assert.strictEqual(r[0].cardName, '傳說的熔岩洞');
 });
 ok('1-10 卡表資料前提：左右半同名，且右半沒有 twDeckBuildId', () => {
@@ -97,7 +97,7 @@ ok('1-10 卡表資料前提：左右半同名，且右半沒有 twDeckBuildId', 
   //   這一項就是釘住那個前提；真要補 twDeckBuildId，必須同時處理合併。
   const m6 = JSON.parse(readFileSync(join(ROOT, 'static/cards/M6.json'), 'utf8'));
   const by = new Map(m6.map((c) => [String(c.id), c]));
-  for (const [left, right] of [['19621', '19624'], ['19622', '19625'], ['19623', '19626']]) {
+  for (const [left, right] of [['19621', '19621-1'], ['19622', '19622-1'], ['19623', '19623-1']]) {
     const L = by.get(left), R = by.get(right);
     assert.ok(L && R, `卡表缺 ${left}/${right}`);
     assert.strictEqual(R.name, L.name, `${right} 與 ${left} 卡名不一致`);
@@ -119,7 +119,7 @@ ok('3-2 匯入官網代碼後有還原成左右兩半', () => {
 ok('3-3 兩個函式都從中央模組取得（禁在頁面裡另外手刻一份對照表）', () => {
   assert.ok(/import\s*\{[^}]*mergeTwoCardStadiumEntries[^}]*\}\s*from\s*'\$lib\/decks\/cardIdMigration'/.test(decks));
   const noComment = decks.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const ghost of ['19624', '19625', '19626']) {
+  for (const ghost of ['19621-1', '19622-1', '19623-1']) {
     assert.ok(!noComment.includes(`'${ghost}'`), `頁面裡手刻了右半 id ${ghost}，應只存在於 cardIdMigration.ts`);
   }
 });

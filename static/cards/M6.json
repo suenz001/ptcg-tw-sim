@@ -2831,6 +2831,20 @@
   "illustrator": "danciao"
  },
  {
+  "id": "19621-1",
+  "name": "傳說的海溝",
+  "supertype": "Trainer",
+  "subtype": "Stadium",
+  "setCode": "M6",
+  "collectorNumber": "072/076",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019621.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19621/",
+  "scrapedAt": "2026-07-31T04:40:07.117Z",
+  "regulationMark": "J",
+  "rulesText": "雙方的所有寶可夢恢復HP時，恢復的HP改為2倍。",
+  "illustrator": "danciao"
+ },
+ {
   "id": "19622",
   "name": "傳說的山頂",
   "supertype": "Trainer",
@@ -2859,6 +2873,20 @@
   "illustrator": "nagimiso"
  },
  {
+  "id": "19622-1",
+  "name": "傳說的山頂",
+  "supertype": "Trainer",
+  "subtype": "Stadium",
+  "setCode": "M6",
+  "collectorNumber": "074/076",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019622.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19622/",
+  "scrapedAt": "2026-07-31T04:40:07.454Z",
+  "regulationMark": "J",
+  "rulesText": "雙方的【無】寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，被獲得的獎賞卡減少1張。",
+  "illustrator": "nagimiso"
+ },
+ {
   "id": "19623",
   "name": "傳說的熔岩洞",
   "supertype": "Trainer",
@@ -2874,6 +2902,20 @@
  },
  {
   "id": "19626",
+  "name": "傳說的熔岩洞",
+  "supertype": "Trainer",
+  "subtype": "Stadium",
+  "setCode": "M6",
+  "collectorNumber": "076/076",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019623.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19623/",
+  "scrapedAt": "2026-07-31T04:40:07.840Z",
+  "regulationMark": "J",
+  "rulesText": "雙方場上所有進化寶可夢的特性全部消除。",
+  "illustrator": "akagi"
+ },
+ {
+  "id": "19623-1",
   "name": "傳說的熔岩洞",
   "supertype": "Trainer",
   "subtype": "Stadium",

@@ -20,7 +20,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6192-s.js'), E = join(ROOT, '.v6192-e.ts'), O = join(ROOT, '.v6192-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";');
-writeFileSync(E, "export { validateDeck, sameNameTotal, remainingCapacity, sameNameKey, SAME_NAME_PAREN_EXCEPTIONS, isStandardReprintLegal } from './src/lib/decks/validation';");
+writeFileSync(E, "export { validateDeck, sameNameTotal, remainingCapacity, sameNameKey, SAME_NAME_PAREN_EXCEPTIONS, isStandardReprintLegal } from './src/lib/decks/validation';\n"
+  + "export { isHiddenFromPlayers } from './src/lib/cards/visibility';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
   alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const M = await import(pathToFileURL(O).href);
@@ -37,7 +38,10 @@ const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).m
 const byId = new Map();
 for (const f of readdirSync(dir)) {
   if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
-  for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) byId.set(String(c.id), c);
+  // ⚠ v6.328：M6 現在多了三筆**停用的**舊右半（見 $lib/cards/visibility）。
+  //   這裡枚舉的語義是「玩家用得到的那幾張」⇒ 走中央述詞排除，不是把張數判準放寬。
+  for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8')))
+    if (c?.id != null && !M.isHiddenFromPlayers(c.id)) byId.set(String(c.id), c);
 }
 const all = [...byId.values()];
 const liveNames = new Set(all.map(c => c.name));

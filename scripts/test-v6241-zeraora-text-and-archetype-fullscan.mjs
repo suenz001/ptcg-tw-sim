@@ -221,14 +221,14 @@ await T('【A】⑧ 與「則將」措辭的同族卡走完全相同的實作（
 
 await T('【A】⑨ 校驗和：卡片總數與各卡包張數與 v6.240 完全相同（只改一個字串，沒有搬動資料）', () => {
   const EXPECT = {"M-P-H":11,"M-P-I":50,"M-P-J":101,"M1L":92,"M1S":92,"M2":116,"M2a":486,"M3":117,"M4":120,
-    "M5":118,"M6":76,"MBD":24,"MBG":24,"MC":902,"MJ":24,"SV-P-H":61,"SV-P-I":22,"SV-P-J":21,"SV10":132,
+    "M5":118,"M6":79,"MBD":24,"MBG":24,"MC":902,"MJ":24,"SV-P-H":61,"SV-P-I":22,"SV-P-J":21,"SV10":132,
     "SV11B":253,"SV11W":254,"SV5K":100,"SV5M":100,"SV5a":96,"SV6":133,"SV6a":94,"SV7":135,"SV7a":94,
     "SV8":138,"SV8a":335,"SV9":132,"SV9a":92,"SVK":50,"SVM":183,"SVOD":23,"SVOM":23,"SVPN":8,"SVPS":8,
     "SVQL":23,"SVQP":24,"svhk":24,"svhm":24};
   assert.deepStrictEqual(bySet, EXPECT, '各卡包張數變了');
   const tot = Object.values(bySet).reduce((a, b) => a + b, 0);
-  assert.strictEqual(tot, 4935, '卡片總數變了：' + tot);
-  assert.strictEqual(pool.size, 4935, 'cardId 出現重複（全站唯一性壞了）');
+  assert.strictEqual(tot, 4938, '卡片總數變了：' + tot);
+  assert.strictEqual(pool.size, 4938, 'cardId 出現重複（全站唯一性壞了）');
 });
 
 // ══════════════════════════════════════════════════════════════════════════

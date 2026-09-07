@@ -85,8 +85,14 @@ console.log('① 唯一述詞：全站只有一份「這張卡要不要對玩家
 
 T('⭐⭐⭐ $lib/cards/visibility 是唯一來源，函式語義正確（含 String(id) 比對）', () => {
   const V = mod.VIS;
-  ok(V.HIDDEN_FROM_PLAYERS && Object.keys(V.HIDDEN_FROM_PLAYERS).sort().join() === HID.sort().join(),
-    'HIDDEN_FROM_PLAYERS 內容不對：' + JSON.stringify(Object.keys(V.HIDDEN_FROM_PLAYERS || {})));
+  // ⚠ v6.328：下架卡不只 v6.194 這兩張了（傳說競技場右半換號後，舊 id 也停用）
+  //   ⇒ 改成「HID 必須仍在表上」＋「每一筆的欄位都完整」，不再釘死總筆數。
+  ok(V.HIDDEN_FROM_PLAYERS && HID.every((id) => id in V.HIDDEN_FROM_PLAYERS),
+    'v6.194 的兩張下架卡不在表上了：' + JSON.stringify(Object.keys(V.HIDDEN_FROM_PLAYERS || {})));
+  for (const [id, info] of Object.entries(V.HIDDEN_FROM_PLAYERS)) {
+    ok(info && typeof info.replacementId === 'string' && typeof info.setCode === 'string'
+      && typeof info.reason === 'string' && info.reason.length > 0, id + ' 的下架資訊欄位不完整');
+  }
   for (const id of HID) {
     ok(V.isHiddenFromPlayers(id) === true, id + ' 應為下架');
     ok(V.isHiddenFromPlayers(Number(id)) === true, id + ' 傳 number 也要判得出來（比對必須 String()）');
@@ -101,7 +107,11 @@ T('⭐⭐⭐ $lib/cards/visibility 是唯一來源，函式語義正確（含 St
 
 T('⭐⭐⭐ cardIdMigration 的 RETIRED_DUP_TO_TW_ID 由 visibility 推導（不是第二份清單）', () => {
   const R = mod.MIG.RETIRED_DUP_TO_TW_ID;
-  ok(JSON.stringify(R) === JSON.stringify(REPL), '對照表內容漂移：' + JSON.stringify(R));
+  const V2 = mod.VIS.HIDDEN_FROM_PLAYERS;
+  ok(Object.keys(R).sort().join() === Object.keys(V2).sort().join()
+    && Object.entries(R).every(([k, v]) => v === V2[k].replacementId),
+    '對照表與 visibility 漂移了（＝有人寫了第二份清單）：' + JSON.stringify(R));
+  for (const [k, v] of Object.entries(REPL)) ok(R[k] === v, 'v6.194 的對照不見了：' + k);
   const src = readFileSync(join(ROOT, 'src/lib/decks/cardIdMigration.ts'), 'utf8');
   ok(/HIDDEN_FROM_PLAYERS/.test(src), 'cardIdMigration 沒有引用 HIDDEN_FROM_PLAYERS —— 又寫了第二份');
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -120,7 +130,8 @@ T('⭐⭐⭐ 枚舉：src/ 全樹除了 visibility.ts 之外，不得再出現�
   ok(files.length >= 100, '只掃到 ' + files.length + ' 個檔 —— 掃描器壞了？');
   // ⚠ 剝註解（v6.126 教訓：註解裡的字面量會讓否定型守衛誤報）
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  const RE = /['"](?:18965|18969)['"]/;
+  // ⚠ v6.328：枚舉範圍改成「表上所有下架 id」（釘死兩個 id 的話，新增停用卡就不再守了）
+  const RE = new RegExp("['\"](?:" + Object.keys(mod.VIS.HIDDEN_FROM_PLAYERS).join('|') + ")['\"]");
   const bad = files.filter((p) => p !== 'src/lib/cards/visibility.ts' && RE.test(strip(readFileSync(join(ROOT, p), 'utf8'))));
   ok(bad.length === 0, '這些檔各自寫了一份排除清單（必然漂移）：' + bad.join(', '));
   // 正對照 + 剝註解自驗
@@ -144,7 +155,9 @@ T('⭐⭐⭐ 實跑 /cards?set=ALL 的 load()：下架卡不在回傳的 cards �
     .filter((c) => ['H', 'I', 'J'].includes(INDEX.find((e) => e.code === c).regulationMark))
     .flatMap((c) => JSON.parse(readFileSync(join(dir, c + '.json'), 'utf8')));
   ok(rawAll.some((c) => String(c.id) === '18965'), '正對照失效：原始資料裡本來就沒有 18965？');
-  ok(rawAll.length - allView.cards.length === 2, '濾掉的張數不是剛好 2：' + (rawAll.length - allView.cards.length));
+  const NHID = Object.keys(mod.VIS.HIDDEN_FROM_PLAYERS).length;
+  ok(rawAll.length - allView.cards.length === NHID,
+    '濾掉的張數不是剛好 ' + NHID + '（＝下架卡總數）：' + (rawAll.length - allView.cards.length));
 });
 
 T('⭐⭐⭐ 實跑 /cards?set=M-P-J 的 load()：單一卡包檢視同樣看不到（走同一份述詞）', () => {
@@ -284,10 +297,11 @@ T('⭐⭐ /cards 卡包摘要張數必須扣掉下架卡（磚上寫 101、內�
   ok(INDEX.find((e) => e.code === 'M-P-J').cardCount === 101, 'index.json 被改掉了 —— 資料層張數必須維持 101');
 });
 
-T('⭐⭐⭐ 行為端：filterPlayerSelectable 對真實卡庫的輸出剛好少掉那兩張', () => {
+T('⭐⭐⭐ 行為端：filterPlayerSelectable 對真實卡庫的輸出剛好少掉所有下架卡', () => {
   const all = [...pool.values()];
   const sel = mod.VIS.filterPlayerSelectable(all);
-  ok(all.length - sel.length === 2, '濾掉的張數不是 2：' + (all.length - sel.length));
+  const NHID = Object.keys(mod.VIS.HIDDEN_FROM_PLAYERS).length;
+  ok(all.length - sel.length === NHID, '濾掉的張數不是 ' + NHID + '：' + (all.length - sel.length));
   const ids = new Set(sel.map((c) => String(c.id)));
   for (const id of HID) ok(!ids.has(id), '候選裡還有 ' + id);
   // 牌組編輯器的搜尋是在 pool 上做 filter ⇒ 任何搜尋條件都不可能把它們找回來
@@ -432,7 +446,8 @@ T('⭐⭐⭐ index.json 逐包張數 = 實際檔案；三個動到的卡包數�
 T('⭐⭐ live 總張數 / card-set-map 零落差 / id 全站唯一', () => {
   const total = INDEX.reduce((s, e) => s + e.cardCount, 0);
   ok(total === pool.size, 'index.json 宣告 ' + total + ' 張，實際掃到 ' + pool.size);
-  ok(total === 4935, 'live 總張數應為 4935（v6.193 的 4933 + 放回來的 2 張），實際 ' + total);
+  ok(total === 4938, 'live 總張數應為 4938（v6.328 為傳說競技場右半換號新增 3 筆新 id；'
+    + '舊 3 筆同時登記為停用卡 ⇒ 對玩家仍是 4933 張），實際 ' + total);
   const missing = [...pool.keys()].filter((k) => !(k in CSM));
   const extra = Object.keys(CSM).filter((k) => !pool.has(k));
   ok(missing.length === 0 && extra.length === 0,
