@@ -30,6 +30,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.v6256-e.ts'), O = join(ROOT, '.v6256-o.mjs'), S = join(ROOT, '.v6256-s.mjs');
@@ -263,13 +264,20 @@ T('B12 ⭐中央 helper 單元語意（治療型 leaveHP 高於受招前 ⇒ 不
 // ══════════════════════════════════════════════════════════════════════
 console.log('C. lint：唯一寫入點（含下限斷言與正對照）');
 
-const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+const strip = (s, label = '') => stripCommentsBlankChecked(s, { label }).replace(/\/\/.*$/gm, '');
 const SRC = {
-  engine: strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8')),
-  effects: strip(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8')),
-  shared: strip(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8')),
-  types: strip(readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8')),
-  hook: strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'), 'utf8')),
+  engine: strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'), 'engine.ts'),
+  effects: strip(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'), 'effects.ts'),
+  shared: strip(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'), 'effects/_shared.ts'),
+  types: strip(readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8'), 'types.ts'),
+  hook: strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'), 'utf8'), 'v2690 hook'),
 };
 // 「寫入」樣式 = 出現 `damageTakenLastOppTurn:` 當物件鍵（型別宣告用 `?:`，另外排除）
 const WRITE_RE = /(?<!\?)\bdamageTakenLastOppTurn:\s/g;
@@ -277,7 +285,8 @@ const WRITE_RE = /(?<!\?)\bdamageTakenLastOppTurn:\s/g;
 T('C1 ⭐⭐⭐除了 _shared.ts 的中央 helper，全 src 不得有第二個寫入點（＋正對照＋下限）', () => {
   // 下限斷言：掃描器至少要看得到唯一讀取點與型別宣告，否則就是讀錯檔／regex 壞了
   const totalMentions = Object.values(SRC).join('\n').split('damageTakenLastOppTurn').length - 1;
-  assert.ok(totalMentions >= 5, `掃描器下限：全檔提及次數應 ≥5，實得 ${totalMentions}（掃描器壞了？）`);
+  // ⭐v6.325：下限自 5 收緊到 6（實測 6）。
+  assert.ok(totalMentions >= 6, `掃描器下限：全檔提及次數應 ≥6，實得 ${totalMentions}（掃描器壞了？）`);
   assert.ok(/damageTakenLastOppTurn\?: number;/.test(SRC.types), 'types.ts 欄位宣告不見了');
   assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(SRC.hook), '唯一讀取點（重裝角擊）不見了');
   // 正對照：樣式真的抓得到違規樣本（否則就是恆真的安慰劑）
@@ -301,8 +310,9 @@ T('C2 ⭐⭐中央 helper 的算式與所有消費端（＋下限斷言＋正對
   assert.ok(/if \(kind !== 'attack-damage' \|\| actual <= 0\) return \{ \.\.\.inst, damage: newDamage \};/.test(SRC.shared),
     'kind gate／actual>0 gate 不見了 ⇒ 放指示物會被誤計為「受到的傷害」');
   const calls = (SRC.engine + '\n' + SRC.effects).match(/withAttackDamageTaken\(/g) ?? [];
-  assert.ok(calls.length >= 10,
-    `withAttackDamageTaken 呼叫點只剩 ${calls.length} 個（應 ≥10：engine 1 ＋ effects 9）⇒ 有管線被拔掉`);
+  // ⭐v6.325：下限自 10 收緊到 11（實測 12）。
+  assert.ok(calls.length >= 11,
+    `withAttackDamageTaken 呼叫點只剩 ${calls.length} 個（應 ≥11）⇒ 有管線被拔掉`);
   assert.ok(/withAttackDamageTaken\(defenderState\.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage'\)/.test(SRC.engine),
     'engine 主管線沒有走中央寫入點');
   // 正對照
@@ -315,7 +325,8 @@ T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正
   const re = /applyPreventKOToVictim\(([^;]*?)\)\s*;/g;
   // ⭐v6.260：備戰 KO 路徑補防 KO（hitBenchAll／bench-hit-N／snipe-60-ex）＋ mega_decks 的
   //   olive-oil-distribute ⇒ effects.ts 6 個、mega_decks.ts 1 個。每個都必須宣告 kind（下方檢查）。
-  const megaSrc = readFileSync(join(ROOT, 'src/lib/game/effects/cards/mega_decks.ts'), 'utf8');
+  // ⭐v6.325：這一份原本**沒有剝註解**（與同函式其他來源不一致）⇒ 一併收進中央 helper。
+  const megaSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/mega_decks.ts'), 'utf8'), 'mega_decks.ts');
   const sites = [...SRC.effects.matchAll(re)].map(m => m[1]);
   const megaSites = [...megaSrc.matchAll(re)].map(m => m[1]);
   assert.equal(sites.length, 6,

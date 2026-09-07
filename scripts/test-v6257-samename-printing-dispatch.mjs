@@ -36,6 +36,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from '
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6257-s.js'), E = join(ROOT, '.v6257-e.ts'), O = join(ROOT, '.v6257-o.mjs');
@@ -293,7 +294,13 @@ function scanSource(text, riskySet) {
   const hits = [];      // 所有「拿高風險卡名做相等比對」的位置
   const viol = [];      // 其中沒有伴隨特性驗證的
   let s = text.replace(/[​-‍﻿]/g, '');                       // 剝零寬（v6.117 教訓）
-  s = s.replace(/\/\*[\s\S]*?\*\//g, m => '\n'.repeat((m.match(/\n/g) || []).length)); // 剝區塊註解但保行號
+  // ⭐v6.325 批2：區塊註解改走中央 helper（等長留白，行號不變）。
+  //   ⚠ 舊的 `/\/\*[\s\S]*?\*\//g` 會被行註解裡的 `cards/*.ts` 騙開假區塊 ——
+  //     effects.ts 兩處假區塊合計吃掉 273 行真碼、game/+page.svelte 吃掉 72 行 ⇒ E2 靜默漏掃。
+  //   ⚠ 合成樣本也走這裡 ⇒ 用**無護欄**的純函式版（片段可能 100% 是註解，護欄①不適用）；
+  //     真檔的護欄由 E2/E3 走訪時另外由 scanFile() 加上。
+  s = stripCommentsBlank(s);
+  // ⚠ 行首／行尾 `//` 的處理保留在下面（`code[]`），中央 helper 只剝行首 `//`。
   const lines = s.split('\n');
   // ⚠⚠ 視窗**必須**用剝掉註解後的碼 —— 突變測試 M7 抓到的守衛缺陷：
   //   只要註解裡提到 hasEffectiveAbilityByInst / cardPrintsAbility，違規碼就會被
@@ -367,10 +374,13 @@ check('E2 全站掃描：沒有「用卡名決定特性行為卻不驗證印刷�
       else if (/\.(ts|svelte)$/.test(e)) files.push(q);
     }
   })(join(ROOT, 'src'));
-  assert.ok(files.length >= 100, `掃描器下限失敗：只找到 ${files.length} 個原始檔`);
-  assert.ok(RISKY.size >= 50, `掃描器下限失敗：高風險卡名只有 ${RISKY.size} 個（預期 ≥50）`);
+  // ⭐v6.325：100 → 193、50 → 99（實測 194／100）。
+  assert.ok(files.length >= 193, `掃描器下限失敗：只找到 ${files.length} 個原始檔`);
+  assert.ok(RISKY.size >= 99, `掃描器下限失敗：高風險卡名只有 ${RISKY.size} 個（預期 ≥99）`);
   let totalHits = 0; const viols = [];
   for (const p of files) {
+    // ⭐v6.325：真檔一律過一次中央護欄（②③⑤）—— 剝除器把某個檔吃掉會在這裡炸，不會靜默漏掃。
+    stripCommentsBlankChecked(readFileSync(p, 'utf8'), { label: relative(ROOT, p).replace(/\\/g, '/') });
     const r = scanSource(readFileSync(p, 'utf8'), RISKY);
     totalHits += r.hits.length;
     for (const v of r.viol) {
@@ -380,7 +390,8 @@ check('E2 全站掃描：沒有「用卡名決定特性行為卻不驗證印刷�
   }
   // ⚠ v6.258：下限自 20 調為 15 —— 收斂主詞閘時移除了 3 個「假裝自指」的卡名 gate
   //   （棄世猴／仆斬將軍／電蜘蛛），實測命中數 20 → 17。下限仍高於現值以保留掃描器壞掉的偵測力。
-  assert.ok(totalHits >= 15, `掃描器下限失敗：只掃到 ${totalHits} 個卡名相等比對（預期 ≥15）`);
+  // ⭐v6.325：下限自 15 收緊到 16（實測 17）。
+  assert.ok(totalHits >= 16, `掃描器下限失敗：只掃到 ${totalHits} 個卡名相等比對（預期 ≥16）`);
   assert.deepStrictEqual(viols, [], `\n  ${viols.join('\n  ')}\n`);
 });
 check('E3 白名單不得有死條目（程式改過就要回來重判）', () => {
@@ -401,8 +412,8 @@ check('E3 白名單不得有死條目（程式改過就要回來重判）', () =
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('── F. 進化時序豁免：單一 producer（兩端不可能再分岔）──────────────────────');
 check('F1 engine.ts 中「提升進化」「鬥志戰吼」只出現在 getEvolveTimingBypass 內', () => {
-  const src = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, m => '\n'.repeat((m.match(/\n/g) || []).length));
+  const src = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'),
+    { label: 'engine.ts', mustKeep: ['export function getEvolveTimingBypass'] });
   const lines = src.split('\n');
   const start = lines.findIndex(l => l.includes('export function getEvolveTimingBypass'));
   assert.ok(start > 0, '找不到 getEvolveTimingBypass ⇒ 中央 producer 不見了');
@@ -419,11 +430,12 @@ check('F1 engine.ts 中「提升進化」「鬥志戰吼」只出現在 getEvolv
 });
 check('F2 getEvolvableTargets 與 EVOLVE handler 都經由 getEvolveTimingBypass', () => {
   // ⚠ 必須剝掉註解才檢查 —— 註解裡會逐字引用舊碼（否則這條永遠紅）
-  const src = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n').filter(l => !/^\s*\/\//.test(l)).map(l => l.split('//')[0]).join('\n');
+  const src = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'),
+    { label: 'engine.ts', mustKeep: ['getEvolveTimingBypass('] })
+    .split('\n').map(l => l.split('//')[0]).join('\n');
   const calls = (src.match(/getEvolveTimingBypass\(/g) || []).length;
-  assert.ok(calls >= 3, `getEvolveTimingBypass 呼叫點只有 ${calls}（定義 1 + 兩端各 1 ⇒ 至少 3）`);
+  // ⭐v6.325：下限自 3 收緊到 3（實測 3；已在實測值上、slack 0）。
+  assert.ok(calls >= 3, `getEvolveTimingBypass 呼叫點只有 ${calls}（預期 ≥3）`);
   assert.ok(!/\.name === '勒克貓'/.test(src), 'engine.ts 仍有 name === 勒克貓 的手刻判定');
 });
 check('F3 兩端結果一致（行為端交叉驗證，非字串比對）', () => {

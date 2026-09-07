@@ -26,6 +26,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.v6255-e.ts'), O = join(ROOT, '.v6255-o.mjs'), S = join(ROOT, '.v6255-s.mjs');
@@ -123,7 +124,8 @@ T('A3 掃描器下限＋正對照：「不會受到…特性…」的特性只�
     const e = (ab.effect ?? '').replace(/[​-‍﻿]/g, '');
     return e.includes('不會受到') && e.includes('特性');
   });
-  assert.ok(wide.length >= 10, `掃描器下限：應 ≥10 筆，實得 ${wide.length}`);
+  // ⭐v6.325：下限自 10 收緊到 12（實測 13）。
+  assert.ok(wide.length >= 12, `掃描器下限：應 ≥12 筆，實得 ${wide.length}`);
   const names = new Set(wide.map(w => w.ab.name));
   assert.deepEqual([...names].sort(), ['光之翼', '化隱', '礎石之勢'].sort(),
     `符合寬鬆措辭的特性名單變了：${[...names].join('/')}`);
@@ -346,10 +348,17 @@ T('C7 lint：本欄位的讀取點枚舉（下限斷言 ＋ 正對照）', () =>
   const files = ['src/lib/game/engine.ts', 'src/lib/game/effects.ts', 'src/lib/game/types.ts',
                  'src/lib/game/effects/_shared.ts',
                  'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'];
-  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+  const strip = (s, label = '') => stripCommentsBlankChecked(s, { label }).replace(/\/\/.*$/gm, '');
   let readSites = 0, total = 0;
   for (const f of files) {
-    const src = strip(readFileSync(join(ROOT, f), 'utf8'));
+    const src = strip(readFileSync(join(ROOT, f), 'utf8'), f);
     for (const line of src.split('\n')) {
       if (!line.includes('damageTakenLastOppTurn')) continue;
       total++;
@@ -357,8 +366,9 @@ T('C7 lint：本欄位的讀取點枚舉（下限斷言 ＋ 正對照）', () =>
       if (/\.damageTakenLastOppTurn\s*\?\?\s*0/.test(line) && !/damageTakenLastOppTurn:/.test(line)) readSites++;
     }
   }
+  // ⭐v6.325：下限自 5 收緊到 5（實測 5；已在實測值上、slack 0）。
   assert.ok(total >= 5, `掃描器下限：damageTakenLastOppTurn 出現次數應 ≥5，實得 ${total}（掃描器壞了？）`);
-  const hookSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'), 'utf8'));
+  const hookSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'), 'utf8'), 'v2690 hook');
   assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(hookSrc),
     '唯一讀取點（重裝角擊）不見了 ⇒ 這條守衛的前提消失');
   // 正對照：樣式真的抓得到「多一個讀取點」
@@ -367,8 +377,8 @@ T('C7 lint：本欄位的讀取點枚舉（下限斷言 ＋ 正對照）', () =>
 });
 
 T('C8 lint：engine 主管線必須用「實際扣到的」而不是 baseDamage（＋正對照）', () => {
-  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
-  const src = strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
+  const strip = (s, label = '') => stripCommentsBlankChecked(s, { label }).replace(/\/\/.*$/gm, '');
+  const src = strip(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'), 'engine.ts');
   const BAD = /const accumDmgTaken = \(defenderState\.active!\.damageTakenLastOppTurn \?\? 0\) \+ \(baseDamage > 0 \? baseDamage : 0\);/;
   assert.ok(!BAD.test(src), 'engine.ts 又回到「記全額 baseDamage」的寫法');
   // ⭐v6.256：算式下沉到 effects/_shared.ts 的 withAttackDamageTaken（全站唯一寫入點）。
@@ -376,7 +386,7 @@ T('C8 lint：engine 主管線必須用「實際扣到的」而不是 baseDamage�
   //   兩條合起來仍然涵蓋 v6.255 的原意（防 KO 時記實際扣到的），且順便擋住「又拉回 engine 內寫死」。
   assert.ok(/withAttackDamageTaken\(defenderState\.active!, _damageBeforeThisAttack, _survivedDamage, 'attack-damage'\)/.test(src),
     'engine 主管線沒有走中央寫入點 withAttackDamageTaken');
-  const sharedSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'));
+  const sharedSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'), 'effects/_shared.ts');
   assert.ok(/const actual = Math\.max\(0, newDamage - prevDamage\);/.test(sharedSrc),
     '「實際扣到的」算式不見了（現居 effects/_shared.ts 的 withAttackDamageTaken）');
   assert.ok(BAD.test(strip('const accumDmgTaken = (defenderState.active!.damageTakenLastOppTurn ?? 0) + (baseDamage > 0 ? baseDamage : 0);')),
@@ -430,8 +440,10 @@ T('D5 lint：isTargetOnActorOwnSide 必須排在 hasEffectiveAbilityByInst 之�
 console.log('E. 守衛自身：v6.253 的 C5 不得再是恆真斷言');
 
 T('E1 lint：test-v6253 不得再出現 `!(listed && blocked)` 這種恆真寫法（＋正對照）', () => {
-  const src = readFileSync(join(ROOT, 'scripts/test-v6253-nullifier-and-survive.mjs'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
+  const src = stripCommentsBlankChecked(
+    readFileSync(join(ROOT, 'scripts/test-v6253-nullifier-and-survive.mjs'), 'utf8'),
+    { label: 'test-v6253' },
+  ).replace(/\/\/.*$/gm, '');
   const BAD = /assert\.ok\(!\(listed && blocked\)/;
   assert.ok(!BAD.test(src), 'C5 又變回恆真安慰劑寫法');
   assert.ok(/assert\.equal\(listed, !blocked,/.test(src), 'C5 的「同一答案」雙向斷言不見了');

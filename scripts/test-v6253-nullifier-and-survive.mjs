@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.v6253-e.ts'), O = join(ROOT, '.v6253-o.mjs'), S = join(ROOT, '.v6253-s.mjs');
@@ -238,6 +239,7 @@ T('C1 卡面枚舉：live H/I/J 的「不會昏厥／留在場上」來源全部
   }
   const abNames = new Set(found.filter(f => f.kind === 'ability').map(f => f.name));
   const toolNames = new Set(found.filter(f => f.kind === 'tool').map(f => f.name));
+  // ⭐v6.325：下限自 4 收緊到 4（實測 4；已在實測值上、slack 0，再收就是誤紅）。
   assert.ok(abNames.size >= 4, `掃描器下限：特性型防 KO 應 ≥4（實得 ${abNames.size}）— 掃不到＝掃描器壞了`);
   assert.ok(toolNames.size >= 1, `掃描器下限：道具型防 KO 應 ≥1（實得 ${toolNames.size}）`);
   for (const n of abNames) assert.ok(PASSIVE_PREVENT_KO.has(n), `特性「${n}」卡面寫不會昏厥但沒進 PASSIVE_PREVENT_KO`);
@@ -251,9 +253,19 @@ T('C2 下限斷言：「受到傷害時」的道具／特殊能量登錄數不�
 // ── lint：靜態樣式檢查（各配「抓得到」的正對照） ──────────────────────
 // ⚠ 一律先剝註解再比對 —— 否則「說明這個違規寫法」的註解本身會被自己的 lint 抓到
 //   （本檔第一版就踩了這個雷；同 IRON_RULES Rule 25.4）。
-const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/\/\/.*$/gm, '');
-const srcEngine = stripComments(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
-const srcW3 = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v3001_g3_wave3.ts'), 'utf8'));
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+const stripComments = (s, label = '') => stripCommentsBlankChecked(s, { label }).replace(/\/\/.*$/gm, '');
+// ⚠ 合成片段（下面 C3-正對照的三個字串）走**無護欄**的純函式版：護欄①是「整份吐空」
+//   偵測器，對「整行都是註解」的合成樣本必然誤炸 —— 那不是放寬，是護欄不適用的場景。
+const stripSnippet = (s) => stripCommentsBlank(s).replace(/\/\/.*$/gm, '');
+const srcEngine = stripComments(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'), 'engine.ts');
+const srcW3 = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v3001_g3_wave3.ts'), 'utf8'), 'v3001_g3_wave3.ts');
 const BAD_ELSE_RE = /\}\s*else if \(!preventedKO\)\s*\{/;
 T('C3 lint：ATTACK 主管線不得再用 `else if (!preventedKO)`（會讓防 KO 掉進無人分支）', () => {
   assert.ok(!BAD_ELSE_RE.test(srcEngine), 'engine.ts 又出現 `} else if (!preventedKO) {`');
@@ -261,9 +273,9 @@ T('C3 lint：ATTACK 主管線不得再用 `else if (!preventedKO)`（會讓防 K
   assert.ok(/\}\s*else if \(defenderSurvivedAttack\)\s*\{/.test(srcEngine), '非 KO 分支沒有接上中央述詞');
 });
 T('C3-正對照：lint 樣式真的抓得到違規寫法（否則它是恆真安慰劑）', () => {
-  assert.ok(BAD_ELSE_RE.test(stripComments('    } else if (!preventedKO) {\n')), 'lint regex 抓不到已知違規樣本');
-  assert.ok(!BAD_ELSE_RE.test(stripComments('    } else if (defenderSurvivedAttack) {\n')), 'lint regex 誤報修好的寫法');
-  assert.ok(!BAD_ELSE_RE.test(stripComments('    // } else if (!preventedKO) { 這只是註解\n')), '剝註解沒生效＝會被自己的說明誤報');
+  assert.ok(BAD_ELSE_RE.test(stripSnippet('    } else if (!preventedKO) {\n')), 'lint regex 抓不到已知違規樣本');
+  assert.ok(!BAD_ELSE_RE.test(stripSnippet('    } else if (defenderSurvivedAttack) {\n')), 'lint regex 誤報修好的寫法');
+  assert.ok(!BAD_ELSE_RE.test(stripSnippet('    // } else if (!preventedKO) { 這只是註解\n')), '剝註解沒生效＝會被自己的說明誤報');
 });
 const NULLIFIER_SITES = ['初始化', '黏著束縛'];
 T('C4 lint：兩個特性型消除源都必須問過持有者有效性（isNullifierAbilityEffective）', () => {

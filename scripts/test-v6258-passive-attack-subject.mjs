@@ -28,6 +28,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync, unlinkSync } from '
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6258-s.js'), E = join(ROOT, '.v6258-e.ts'), O = join(ROOT, '.v6258-o.mjs');
@@ -268,10 +269,23 @@ T('D3 mega_decks.ts computeOliveOilBuff（油之機關槍）：皇家聲援 +20 
 
 // ══ L. 靜態 lint（全部配正對照 + 下限斷言）═════════════════════════════════
 console.log('\n── L. lint ──');
-const stripComments = s => s
-  .replace(/[​-‍﻿]/g, '')                                     // 剝零寬（v6.117 教訓）
-  .replace(/\/\*[\s\S]*?\*\//g, m => '\n'.repeat((m.match(/\n/g) || []).length))
-  .split('\n').map(l => (/^\s*\/\//.test(l) ? '' : l.split('//')[0])).join('\n');
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+//   ⛔ 本檔 L2 是**今天就存在的假綠**：`effects.ts:8125`（假區塊 :7905→:8203 之內）插一行
+//      `const _dup = PASSIVE_ATTACK_BONUS.get("x");`，舊剝除器只數到 1 ⇒ 31 PASS / 0 FAIL、rc=0。
+//      同一行插在 `:9000`（洞外）才數到 2 ⇒ 紅。遷移後兩處都紅。
+const stripComments = (s, label = '') => stripCommentsBlankChecked(
+  s.replace(/[​-‍﻿]/g, ''),                                   // 剝零寬（v6.117 教訓）
+  { label },
+).split('\n').map(l => l.split('//')[0]).join('\n');
+/** 合成樣本專用：無護欄版（片段可能 100% 是註解，護欄①「整份吐空」偵測不適用）。 */
+const stripSnippet = s => stripCommentsBlank(s.replace(/[​-‍﻿]/g, ''))
+  .split('\n').map(l => l.split('//')[0]).join('\n');
 
 /** 依卡面 effect 判「主詞是不是持有者本人」；回傳 'self' | 'field' | 'unknown' */
 function classifySubject(effect) {
@@ -289,6 +303,7 @@ T('L0【正對照】主詞分類器餵合成樣本必須分對（否則它只是
 });
 T('L1 每個 PASSIVE_ATTACK_BONUS 條目的「卡面主詞」與 PASSIVE_ATTACK_SELF_SUBJECT 一致', () => {
   const names = [...PASSIVE_ATTACK_BONUS.keys()];
+  // ⭐v6.325：下限自 12 收緊到 12（實測 12；已在實測值上、slack 0）。
   assert.ok(names.length >= 12, `下限失敗：只註冊了 ${names.length} 個被動加成（預期 ≥12）— 掃描器/註冊壞了？`);
   // 從卡池撈每個特性名的 effect（同名多印刷時 effect 必須一致，否則這裡也要紅）
   const effByAb = new Map();
@@ -332,17 +347,24 @@ const srcFiles = [];
     else if (/\.(ts|svelte)$/.test(e)) srcFiles.push(q);
   }
 })(join(ROOT, 'src'));
-const countGet = text => (stripComments(text).match(/PASSIVE_ATTACK_BONUS\s*\.\s*get\s*\(/g) || []).length;
+const countGet = (text, label = '') => (stripComments(text, label).match(/PASSIVE_ATTACK_BONUS\s*\.\s*get\s*\(/g) || []).length;
+const countGetSnippet = text => (stripSnippet(text).match(/PASSIVE_ATTACK_BONUS\s*\.\s*get\s*\(/g) || []).length;
 T('L2【正對照】`.get(` 掃描器餵合成違規樣本必須抓到', () => {
-  assert.strictEqual(countGet('const fn = PASSIVE_ATTACK_BONUS.get(ab.name);'), 1);
-  assert.strictEqual(countGet('// const fn = PASSIVE_ATTACK_BONUS.get(ab.name);'), 0, '註解沒被剝掉');
-  assert.strictEqual(countGet('a\nPASSIVE_ATTACK_BONUS.get(x)\nPASSIVE_ATTACK_BONUS .get( y )'), 2);
+  assert.strictEqual(countGetSnippet('const fn = PASSIVE_ATTACK_BONUS.get(ab.name);'), 1);
+  assert.strictEqual(countGetSnippet('// const fn = PASSIVE_ATTACK_BONUS.get(ab.name);'), 0, '註解沒被剝掉');
+  assert.strictEqual(countGetSnippet('a\nPASSIVE_ATTACK_BONUS.get(x)\nPASSIVE_ATTACK_BONUS .get( y )'), 2);
+  // ⭐v6.325【洞內正對照】：把違規樣本放在「行註解提到 cards/*.ts」之後 —— 舊的區塊正則
+  //   會從那個 `/*` 一路吃到下一個 `*/`，違規行整段消失（=今天 L2 的假綠成因）。
+  assert.strictEqual(countGetSnippet(
+    '// 見 effects/cards/*.ts\nconst fn = PASSIVE_ATTACK_BONUS.get(ab.name);\n/* 收尾 */\n'), 1,
+    '行註解裡的 `cards/*.ts` 又把後面的真程式碼吃掉了（第 13 種安慰劑回歸）');
 });
 T('L2 全站 `PASSIVE_ATTACK_BONUS.get(` 只出現在 collectPassiveAttackBonuses 內', () => {
-  assert.ok(srcFiles.length >= 100, `掃描器下限失敗：只找到 ${srcFiles.length} 個原始檔`);
+  // ⭐v6.325：下限自 100 收緊到 193（實測 194）。
+  assert.ok(srcFiles.length >= 193, `掃描器下限失敗：只找到 ${srcFiles.length} 個原始檔`);
   const sites = [];
   for (const p of srcFiles) {
-    const n = countGet(readFileSync(p, 'utf8'));
+    const n = countGet(readFileSync(p, 'utf8'), relative(ROOT, p).replace(/\\/g, '/'));
     if (n > 0) sites.push([relative(ROOT, p).replace(/\\/g, '/'), n]);
   }
   assert.deepStrictEqual(sites, [['src/lib/game/effects.ts', 1]],
@@ -362,7 +384,7 @@ T('L2 全站 `PASSIVE_ATTACK_BONUS.get(` 只出現在 collectPassiveAttackBonuse
 T('L3 三個消費點都呼叫中央 dispatch（少一個就是漏接）', () => {
   const want = ['src/lib/game/engine.ts', 'src/lib/game/effects.ts', 'src/lib/game/effects/cards/mega_decks.ts'];
   const got = srcFiles
-    .filter(p => /collectPassiveAttackBonuses\s*\(/.test(stripComments(readFileSync(p, 'utf8'))))
+    .filter(p => /collectPassiveAttackBonuses\s*\(/.test(stripComments(readFileSync(p, 'utf8'), relative(ROOT, p).replace(/\\/g, '/'))))
     .map(p => relative(ROOT, p).replace(/\\/g, '/')).sort();
   assert.deepStrictEqual(got, [...want].sort(), '呼叫端清單不符：' + JSON.stringify(got));
 });

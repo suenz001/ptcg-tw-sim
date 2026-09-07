@@ -1,5 +1,183 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.325 純守衛版【批 2】：卡效果家族 8 支守衛的自寫區塊正則整批遷移到中央 helper（含 test-v6258 今天就存在的假綠）
+
+BASE `c4df2c55e9db5b9311f4e4b556df9a2624d05124`（v6.324，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔（全在 `scripts/`＋`docs/`＋三配套）：8 支守衛（`test-v6202`／`test-v6211`／`test-v6253`／`test-v6255`／
+`test-v6256`／`test-v6257`／`test-v6258`／`test-v6262`）＋`scripts/lib/strip-comments.mjs`（只補檔頭實話）＋
+`src/lib/version.ts`／`oracle-admin/admin.html`（SITE_VERSION_HINT，LF）／`scripts/test-v6272-*`（PREV_SHA／PREV_ALLOWED）／
+`scripts/test-v6264-*`（BASE_SHA）／本檔。零新依賴、`src/` 只動 version.ts、首頁 changelog 不放（純守衛）。
+⚠ **不做**：批 3（走目錄的多檔掃描器／伺服器端／39 支無洞的）、A 類 22~23 處 fail-open 全修、
+`test-v6277:609` 的 `blockRe`、`lastIndexOf('<style')` 那族、`new Function` 實跑型、純 CSS 剝除、anti-pattern-lint 棘輪、
+「chain 裡 2 支重複／25 支不在 chain 上」（只列不動）。
+
+### 【洞的地圖】我自己重量的結果（`measure-holes.mjs`），與交辦的診斷有兩處不一致
+判準：用守衛自寫的剝除器剝完「整行沒有非空白字元」，但中央 helper 剝完該行仍有非空白字元 ⇒ 那一行真碼被多吃掉。
+
+| 檔 | 洞 |
+|---|---|
+| `src/lib/game/effects.ts` | 🔴 **273 行 / 49 段 / 最長 18 行 @55** |
+| `engine.ts`／`effects/_shared.ts`／`defense.ts`／`v3001_g3_wave3.ts`／`mega_decks.ts`／`v2690_i_wave19_engine_hooks.ts`／`v3080_deferred_wave_c.ts`／`types.ts` | 🟢 0 |
+
+⇒ **273 / 49 段 / 18 行 @55 三個數字與審查者完全一致。** 但：
+
+1. ⚠ **「洞的成因單一（只有 `:7905`）」不成立** —— 實際有**兩個**假區塊：
+   `:27` 的行註解寫了 `effects/cards/*.ts`（吃到 `:147`，121 行）、`:7905` 的 `cards/*.ts`（吃到 `:8203`，299 行）。
+   第一個假區塊造成 `:31`~`:145` 的洞（前 13 段），這也是「最長 18 行 @55」為什麼落在檔案開頭。
+2. ⚠⚠ **「其餘 7 支的目標檔洞是 0 ⇒ 只有 test-v6258 能給出真 HEAD-FAIL」是錯的。**
+   我把「每支守衛**實際讀到的所有檔**」（含走目錄的）都量了一遍：**8 支裡有 7 支會讀到 `effects.ts`**
+   （只有 `test-v6253` 真的沒有），另外 `test-v6257`／`test-v6258` 走 `src/**` 還會讀到
+   `src/routes/game/+page.svelte`（同型假區塊，A 型剝除器 72 行、C 型 730 行）。
+   ⇒ **實測 6 支拿得到真 HEAD-FAIL**（洞內注入：修前綠 / 修後紅），不是 1 支。
+   全站 993 支的洞分佈另存在 `measure-holes` 的姊妹輸出：`src` 內 2 支、`scripts` 內 20 支（批 3 的地圖）。
+
+### 【主證明】洞內注入 ⇒ 修前綠／修後紅（6 支，各自的斷言）
+
+| 守衛 | 洞內注入（`effects.ts:8125`）的一行 | BASE 守衛 | v6.325 守衛 |
+|---|---|---|---|
+| `test-v6258` | `const _dup = PASSIVE_ATTACK_BONUS.get("x");` | rc=0 **31 PASS / 0 FAIL ← 假綠** | rc=1，L2 紅在 `[["src/lib/game/effects.ts",2]]` |
+| `test-v6202` | `{ const _c: any = null; if (_c?.abilities?.some((a: any) => a.name === '假特性ABC')) { void 0; } }` | rc=0 53 PASS / 0 FAIL | rc=1 52/1（20d 未接閘） |
+| `test-v6211` | `const _pc: any = { pendingSelection: { type: "x" } };` | rc=0 15/0 | rc=1 14/1 |
+| `test-v6256` | `const _dt: any = { damageTakenLastOppTurn: 1 };` | rc=0 17/0 | rc=1 16/1 |
+| `test-v6257` | `const _rk = (null as any)?.name === '凱西';` | rc=0 24/0 | rc=1 23/1（E2 viols） |
+| `test-v6262` | `const _ff = '陳舊的鰭之化石';` | rc=0 36/0 | rc=1 35/1 |
+
+同一行注在 `effects.ts:9000`（洞外）時 BASE 也紅 ⇒ 差別確實只在「洞」。
+`test-v6253`（目標檔真的沒有洞）與 `test-v6255`（`effects.ts` 只被下限型斷言消費）沒有這條路，改用下面的三段證明。
+
+### 【等價性】遷移前後的輸出比對（`measure-equiv.mjs`，方向性分類）
+⚠ 「**逐位元相同**」這個目標本身要先講清楚：中央 helper 把行首 `//` 換成**等寬空白**（保住行號／位移），
+舊自寫版把它砍成只剩縮排 ⇒ **空白字元數必然不同**，字面上的 byte 相等做不到，也不該做到。
+所以比較單位是「**每一行去掉 ASCII 空白之後的字元序列**」（＝守衛的 `.test()` / `.match()` / `indexOf` 真正消費的東西），
+再依方向分三類：
+
+| 守衛 | 掃檔數 | A【救回真碼】 | B【保守保留】 | ⭐C【新版吃更多】 |
+|---|---|---|---|---|
+| v6202 | 128 | 273 | 12 | **0** |
+| v6211 | 99 | 273 | 1 | **0** |
+| v6253 | 2 | 0 | 1 | **0** |
+| v6255 | 6 | 273 | 1 | **0** |
+| v6256 | 6 | 273 | 1 | **0** |
+| v6257 | 194 | 345 | 916 | **0** |
+| v6258 | 194 | 345 | 916 | **0** |
+| v6262（整份比對） | 6 | `effects.ts` old 462,910 → new 475,226 字元、`engine.ts` 252,000 → 252,028；**old 有而 new 沒有的字元 = 0**（超集） | | **0** |
+
+- A 類 ＝ 舊剝除器吃掉的真碼，新版救回（＝洞）。
+- B 類 ＝ 中央 helper **只在行首**開區塊 ⇒ 行**中**的 `/* … */`（例如 `} catch { /* ignore */ }`）一律保留（v6.312 明寫的假紅方向）；
+  以及 `.svelte` 的多行 `<!-- … -->` 新版剝掉、舊 C 型剝除器完全不處理（它就是註解，剝掉是對的）。
+- ⭐ **C 類（新版吃掉舊版沒吃的真碼）全部為 0** —— 這是唯一危險的方向，逐檔逐行實測，不是宣稱。
+- ⚠ v6262 舊版是**刪除**式（`replace(…, '')`）⇒ 後面所有行整體上移，逐行對齊沒有意義 ⇒ 改比「整份去空白後的字元序列是否為超集」。
+  順帶：v6262 遷移後位移對得回原檔，`eng.slice(k - 400, k).includes('FOSSIL_ITEM_NAMES')` 這類視窗仍然綠。
+
+### 【下限收緊】把「掃描器下限」從鬆到看不出壞掉，收到實測值
+⚠ 這一段的紀律是：**只收緊，不放寬**。實測值 ≥ 舊下限 ＋2 的收到「實測值 −1」；實測值本來就等於舊下限的**維持不動並註明 slack = 0**。
+
+| 守衛 | 斷言 | 舊下限 | 實測 | 新下限 |
+|---|---|---|---|---|
+| v6202 | `sites.length` | 85 | **93** | 92 |
+| v6202 | 已接閘 `g` | 63 | 77 | 76 |
+| v6202 | pattern1 `lit` | 50 | 59 | 58 |
+| v6202 | pattern2 `reg` | 30 | 34 | 33 |
+| v6211 | `EFFECT_FILES.length` | 40 | 98 | 97 |
+| v6211 | `bytes` | 1,500,000 | 2,548,259 | 2,500,000 |
+| v6253 | `abNames.size` | 4 | 4 | 4（slack 0，再收就是誤紅） |
+| v6255 | `wide.length` | 10 | 13 | 12 |
+| v6255 | `total` | 5 | 5 | 5（slack 0） |
+| v6255 | `readSites` | 1 | 1 | 1（slack 0） |
+| v6256 | `totalMentions` | 5 | 6 | 6 |
+| v6256 | `calls.length` | 10 | 12 | 11 |
+| v6257 | `files.length` | 100 | 194 | 193 |
+| v6257 | `RISKY.size` | 50 | 100 | 99 |
+| v6257 | `totalHits` | 15 | 17 | 16 |
+| v6257 | `getEvolveTimingBypass(` | 3 | 3 | 3（slack 0） |
+| v6258 | `names.length` | 12 | 12 | 12（slack 0） |
+| v6258 | `srcFiles.length` | 100 | 194 | 193 |
+| v6262 | `SUPS.length` | 80 | 83 | 82 |
+
+⚠ v6202 的 `sites` 從 88 變 93，**不是掃描器變強，是那 273 行真碼重新可見** —— 洞裡本來就有 5 個 passive 消費點，
+而且它們**全部都已經接了中央閘**（20d/20e 遷移後仍綠）⇒ 沒有因此挖出新的卡片 bug。
+
+**下限收緊本身的 HEAD-FAIL**（證明這一段不是裝飾）：把 `effects.ts` 裡兩個 `withAttackDamageTaken(` 改寫成
+`withAttackDamageTaken (`（多一個空格，程式照樣編譯，文字計數 12 → 10）⇒
+BASE 的 `>= 10` **✅ ALL PASS 17/0**、v6.325 的 `>= 11` **❌ 16/1「呼叫點只剩 10 個（應 ≥11）」**。
+
+### 【行號正確性】等長留白版必須「注入在第 N 行就報第 N 行」
+v6.324 第一版用刪行版踩過這個雷（注入 `:210` 卻報 `:152`）。本版用 `test-v6211` 的 `scanDirectWrites`（會印 `rel:line`）實測：
+
+| 注入位置 | 守衛回報 |
+|---|---|
+| `effects.ts:210` | `effects.ts:210` ✅ |
+| `effects.ts:3000` | `effects.ts:3000` ✅ |
+| `effects.ts:8125`（洞內） | `effects.ts:8125` ✅ |
+| `effects.ts:12345` | `effects.ts:12345` ✅ |
+
+### 【突變】14 個，全部紅在預期
+原意突變（把守衛原本要抓的東西弄壞）：
+`M1` 拿掉一處 `isAbilityHolderEffective`（v6202）／`M2` 拿掉 `addPendingPrize` 的 `!state.pendingSelection` 前置閘（v6211）／
+`M3` engine 改回 `} else if (!preventedKO) {`（v6253）／`M4` 拿掉 `_nullifierVisiting` 遞迴防護（v6253）／
+`M5` 中央算式改成記全額 `Math.max(0, newDamage)`（v6255）／`M6` 拿掉 `kind !== 'attack-damage'` gate（v6256）／
+`M7` engine 加回 `.name === '勒克貓'` 手刻判定（v6257）／`M8b` `supporters_gust` 加回內聯化石卡名（v6262）／
+`M12b` 主詞閘塞一個死條目（v6258）／`M13` 中央 dispatch 拿掉主詞閘（v6258）／
+`M15` engine 拿掉 `handlePlaying` 全域閘（v6211）。
+剝除器突變（證明遷移後這 8 支真的在吃中央護欄）：
+`M9` 狀態機整份吐空 ⇒ 紅在護欄①「剝註解後只剩 …%」／`M10` 換回「區塊正則圈範圍、範圍內整行丟」⇒ 紅在護欄⑤（`blocks[]` 是空的，③ 全綠）／
+`M11b` 讓行**中**的 `/*` 也開區塊（＝事故 2 的根因）⇒ 紅在護欄③與本版新增的 v6258 洞內正對照。
+⚠ `M8` 的第一版把 `isImmuneToOppSupporter` 整個改名 ⇒ esbuild 編譯失敗（rc=1 但紅在編譯不是斷言）⇒ 換成 `M8b`。**「rc≠0」不算數，要紅在預期那一條。**
+
+### 【新增的正對照】v6258 多一條「洞內」正對照
+`countGetSnippet('// 見 effects/cards/*.ts\nconst fn = PASSIVE_ATTACK_BONUS.get(ab.name);\n/* 收尾 */\n') === 1`
+—— 把違規樣本放在「行註解提到 `cards/*.ts`」之後。舊的區塊正則會從那個 `/*` 一路吃到下一個 `*/`，這一條會 `0 !== 1` 紅。
+⇒ 第 13 種安慰劑（假區塊開洞）如果哪天被寫回來，這條會立刻抓到，不必等到某張卡出事。
+
+### 【順手修掉的一個不一致】v6256 的 `megaSrc` 原本沒剝註解
+`test-v6256` C3 的 `SRC.effects` 有剝註解，但同一條裡的 `megaSrc`（`mega_decks.ts`）是**生的**
+⇒ 只要有人在註解裡寫一個 `applyPreventKOToVictim(…)`，`megaSites.length === 1` 就會誤紅。本版一併收進中央 helper。
+
+### 【護欄的實話】① 的盲帶（`strip-comments.mjs` 檔頭補上）
+- `minRatio` 從 0.5 降到 0.02 之後，「剝除器吃掉 **10%~50%** 實碼」這一整段**沒有任何護欄看得到**。
+- 實測（`engine.ts`，每 100 行丟掉前 N 行）：吃掉 70% ⇒ 留存 **29.3%**、吃掉 90% ⇒ 留存 **10.0%**，
+  兩者在 0.02 之下**都是綠的**；舊的 0.5 兩個都紅。⇒ 0.02 買到的是「多檔掃描不誤紅」（全站正常留存率下限 8.47%），代價就是這條盲帶。
+- ⚠ 這一版**沒有**在 helper 檔頭寫任何「絕不會／保證」——檔頭已經被改過八版，每一版的方向保證都被後續突變推翻過。
+  現在檔頭的每一句都對應 `test-lib-strip-comments` 的一條實跑突變。
+
+### 【訂正】`<50%` 的支數是 **59**，不是 60
+本檔 v6.324 段有兩處寫「60 支 < 50%」（第 51 行、第 65 行），helper 檔頭寫的 59 才是對的。
+我用 `stripCommentsBlank` 重量了三種檔案集合（`src+scripts+oracle-admin` 的 ts/svelte/mjs/js/cjs/html = 1,000 支、
+去掉 html = 998 支、只有 `src` = 194 支）：
+**前兩者都是 59 支 < 50%、8 支 < 20%**（只有「只掃 src」是 55 支）。最低仍是 `effects/cards/v2997_g4_wave3.ts` **8.47%**。
+⇒ 統一訂正成 **59**。⚠ 這個數字**跟檔案集合有關**，日後引用時要一併寫清楚掃了哪些副檔名／目錄。
+
+### 【訂正】B 類分類理由：`test-opening-interactive:203` 靠的是**別的 `T()` 區塊**
+`:203` 是 `const seg = pg.slice(pg.indexOf('let createOpts'), pg.indexOf('game = createGame('));`，
+它後面（`:204`）只有一條**否定**斷言 `!seg.includes('forceLegacyOpening')`，**同一個 `T()` 裡沒有任何長度／正向斷言**。
+真正兜住它的是**同檔 20 行後另一個 `T()` 區塊**（`:224`，`seg.length > 0 && seg.length < 2000`）——
+兩個區塊各自重算一次同樣的 `seg`。
+⇒ ⚠ **只要有人刪掉或改寫 `:224` 那個 `T()`，`:203` 就變成靜默假綠。** B 類表已加註「靠的是別的 `T()` 區塊，不是同一條」。
+⚠ 本版**只改註記、不修那一處**（它屬於下一批的 A/B 類清單）。
+
+### 【護欄①③⑤ 對這一批的實際涵蓋】不要當安全網
+- ③ `maxBlockLines` 預設 150、⑤ `maxDropRun` 預設 200。
+- 這一批八支目標檔的洞：`effects.ts` 兩個假區塊是 121 行與 299 行 —— **299 行的那個 ③ 擋得到，121 行的那個兩條都擋不到**；
+  `game/+page.svelte` 那族更是 40／38／11~91 全部低於門檻。
+- ⇒ **護欄①③⑤ 對這一批基本上形同不存在**，真正把洞補起來的是「改用行級狀態機」本身。這一條不是安全網，別寫成安全網。
+
+### 【全站護欄餘裕】遷移後的實測（993 支）
+`maxDropRun` 最長 **90**（`effects/cards/v3080_deferred_wave_c.ts@1`，門檻 200）、
+`maxBlockLines` 最長 **91**（同檔，門檻 150）、留存率最低 **8.47%**（門檻 2%）
+⇒ 八支守衛全部走**預設值**即可，沒有任何一支需要明寫較寬的 `minRatio`／`maxBlockLines`／`maxDropRun`。
+
+### 【批 3 的地圖】我量到的洞在哪（下一批用）
+`scripts/**` 有洞的 20 支（同一個 A 型剝除器判準）：
+`anti-pattern-lint.mjs` **573 行**（最大宗）／`test-v6211` 202（本版已修）／`test-v6296` 179／`test-v6280` 142／
+`test-v6297` 61／`test-v6172` 49／`test-v6157` 43／`test-v6277` 34／`test-v6265-perf` 33／`test-ai-playbook-contract` 30／
+`test-v6272` 24／`scrape/scrape-set.js` 21／`test-deck-meta-image` 13／`test-v6149` 9／`test-v6267` 9／
+`test-v6265-phantom-start-race` 8／`test-lib-strip-comments` 6／`test-v6179` 1／`test-v6274` 1／`lib/strip-comments.mjs` 1。
+`src/**` 有洞的 2 支：`effects.ts` 273（本版已修）／`routes/game/+page.svelte` 72。
+⚠ 這是「**檔案**有洞」不是「**守衛**受影響」——`server_admin_patch.js`／`admin.html` 的洞（543／511 行）在 `oracle-admin/`，
+本次量測腳本沒掃，批 3 要單獨量。建議切法：**① `anti-pattern-lint.mjs` 單獨一批**（573 行、而且它是全站 lint 的地基）、
+**② `oracle-admin` 家族（server_admin_patch.js／admin.html）一批**、**③ 其餘 scripts 小洞一批**。
+
+
 ## v6.324 純守衛版：strip-comments 的「尾巴空白定義」等價性地雷（⛔1）＋ test-v6210 自寫區塊正則整支遷移（⛔2）＋ 批 2 兩個前置（護欄①預設／fail-open 判準）
 
 BASE `6a95bd7b5c6bc131f8298c617380a7fe1bed6d33`（v6.323 的第二個 commit，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
@@ -48,7 +226,7 @@ BASE `6a95bd7b5c6bc131f8298c617380a7fe1bed6d33`（v6.323 的第二個 commit，�
 ### 【批 2 前置 A】護欄①（留存率）：預設 0.5 會讓批 2／批 3 當場誤紅，而且它本來就攔不到「洞」
 - 全站 1,026 支的**正常**留存率（`nonWs`）實測：game 頁 75.8%／admin.html 87.3%／`effects.ts` 70.3%／`engine.ts` 65.3%／`server_admin_patch.js` 64.7%
   —— 這五支都 > 50%，所以**批 2 本體其實不會被 0.5 誤紅**；真正會誤紅的是**多檔掃描**：
-  **60 支 < 50%、8 支 < 20%**，最低 `effects/cards/v2997_g4_wave3.ts` **8.5%**、`gust-supporters.ts`／`version.ts` 14.1%、`decks/+page.ts` 15.7%。
+  **59 支 < 50%、8 支 < 20%**（⭐v6.325 重量訂正，原本誤寫 60），最低 `effects/cards/v2997_g4_wave3.ts` **8.5%**、`gust-supporters.ts`／`version.ts` 14.1%、`decks/+page.ts` 15.7%。
   ⛔2 的 B 段掃 `src/lib`＋`src/routes` 全部 `.ts/.svelte` ⇒ **這一版就踩到了**，前置 A 是 ⛔2 的必要條件，不是預備動作。
 - ⭐ 護欄①攔不到「洞」型事故（複驗成立）：把事故 2 的區塊正則套在 game 頁，留存率 **93.2%**（純區塊正則、`nonWs`）；
   連同行尾 `//` 一起剝的 v6210 版是 **77.0%**（＝審查者的數字）—— 兩個都遠高於任何合理門檻，因為洞只有 176/19,148 ≈ 0.9%。
@@ -62,7 +240,7 @@ BASE `6a95bd7b5c6bc131f8298c617380a7fe1bed6d33`（v6.323 的第二個 commit，�
   3. 檔頭的護欄段整段改寫成實話：**真正有辨識力的是 ②mustKeep/mustDrop、③maxBlockLines、⑤maxDropRun；① 只是吐空偵測器**，
      而且明寫「① 沒有擋到過任何一起實證事故」。
 - **不誤紅證明**：新測 `5-2` 拿全站 1,026 支各跑一次 `stripCommentsChecked`／`stripCommentsBlankChecked` 的**預設選項** ⇒ 全綠；
-  印出最低留存率 8.5%、`< 50%` 有 60 支、`< 20%` 有 8 支。
+  印出最低留存率 8.5%、`< 50%` 有 59 支（⭐v6.325 重量訂正）、`< 20%` 有 8 支。
 - **仍擋得住什麼**（突變，不是宣稱）：
   - ① `3-4`：99.6% 是註解的輸入 ⇒ 紅在「只剩 0.4%（護欄 ≥ 2%）⇒ 剝除器把整份吐空了」；同一條驗「4.3% 的正常檔預設下必須綠」（＝舊預設 0.5 誤紅的形狀）。
   - ⑤ `3-8`：210 行連續 `//`（`blocks.length === 0`、`maxBlockLines === 0`）⇒ 兩個入口都紅在「第 1 行起連續 210 行被整行剝掉（護欄 ≤ 200）」。
@@ -87,7 +265,9 @@ BASE `6a95bd7b5c6bc131f8298c617380a7fe1bed6d33`（v6.323 的第二個 commit，�
   `test-v6296-lobby-friends-tab:192`／`test-v6313-tablet-mobile-ui:213`／`test-v6321-undo-snapshot-cross-game:500`
 
   **B 類 10 處（後方有長度／正向斷言 ⇒ `-1` 會先紅在那裡，優先度低）**
-  `test-opening-interactive:203,224`／`test-v6101-two-card-stadium-export:128`／`test-v6160-checkin-version-gate:178`／
+  `test-opening-interactive:203,224`（⚠⭐v6.325 訂正：`:203` **同一個 `T()` 裡沒有**長度／正向斷言，
+     兜住它的是**同檔 20 行後另一個 `T()` 區塊**（`:224` 的 `seg.length > 0 && < 2000`，各自重算一次 `seg`）
+     ⇒ 刪掉 `:224` 那個區塊，`:203` 就變靜默假綠）／`test-v6101-two-card-stadium-export:128`／`test-v6160-checkin-version-gate:178`／
   `test-v6244-tournament-date-basis:316`／`test-v6286-friends-hardening:587`／`test-v6288-friends-dm-ui:227`／
   `test-v6289-unblock-purge:284`／`test-v6297-tourn-friends-tab:113,595`
   ⚠ A/B 是**啟發式分類**，下一批每一處都要逐處讀，不可以照抄這張表就當已判讀。

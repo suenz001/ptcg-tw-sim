@@ -40,6 +40,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const E = join(ROOT, '.pc-e.ts'), O = join(ROOT, '.pc-o.mjs'), S = join(ROOT, '.pc-s.mjs');
 process.on('exit', () => { for (const p of [E, O, S]) { try { unlinkSync(p); } catch {} } });
@@ -197,9 +198,15 @@ T('剎那斬（無道具）：仍直接開 opp-bench-choose，且解完備戰真
 
 console.log('C) 靜態接線：effects/** 禁寫 pendingSelection 物件字面量');
 
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+function stripComments(src, label = '') {
+  return stripCommentsBlankChecked(src, { label })
     .replace(/\/\/.*$/gm, '')
     .replace(/[\u200b-\u200d\ufeff]/g, '');
 }
@@ -208,7 +215,7 @@ function scanDirectWrites(files) {
   const hits = [];
   for (const { rel, src } of files) {
     const raw = src.split('\n');
-    stripComments(src).split('\n').forEach((l, i) => {
+    stripComments(src, rel).split('\n').forEach((l, i) => {
       if (/pendingSelection\s*:\s*\{/.test(l)) hits.push({ file: rel, line: i + 1, text: raw[i].trim() });
     });
   }
@@ -225,9 +232,10 @@ const EFFECT_FILES = [];
 EFFECT_FILES.push({ rel: 'effects.ts', src: readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8') });
 
 T('⭐ 掃描器自我驗證：檔案數與體積達下限（掃不到東西時不准綠燈）', () => {
-  ok(EFFECT_FILES.length >= 40, '只掃到 ' + EFFECT_FILES.length + ' 個 .ts —— 掃描器路徑壞了？');
+  // ⭐v6.325：40 → 97（實測 98）、1_500_000 → 2_500_000（實測 2,548,259）。
+  ok(EFFECT_FILES.length >= 97, '只掃到 ' + EFFECT_FILES.length + ' 個 .ts —— 掃描器路徑壞了？');
   const bytes = EFFECT_FILES.reduce((a, x) => a + x.src.length, 0);
-  ok(bytes > 1_500_000, '只掃到 ' + bytes + ' bytes —— 大檔被截斷或讀錯目錄');
+  ok(bytes > 2_500_000, '只掃到 ' + bytes + ' bytes —— 大檔被截斷或讀錯目錄');
   ok(EFFECT_FILES.some(x => x.rel === 'effects.ts'), '主檔 effects.ts 沒掃到');
   ok(EFFECT_FILES.some(x => x.rel === 'effects/_shared.ts'), '_shared.ts 沒掃到');
 });
@@ -251,7 +259,7 @@ T('⭐⭐⭐ effects/** 內只剩唯一白名單（addPendingPrize），其餘�
 });
 
 T('⭐ 白名單本身要有前置閘：addPendingPrize 必須先確認沒有既存 pending', () => {
-  const src = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'));
+  const src = stripComments(readFileSync(join(ROOT, 'src/lib/game/effects/_shared.ts'), 'utf8'), 'effects/_shared.ts');
   const i = src.indexOf('export function addPendingPrize');
   ok(i > 0, '找不到 addPendingPrize —— anchor 失效');
   const j = src.indexOf('pendingSelection: {', i);
@@ -275,7 +283,7 @@ T('⭐⭐ engine.ts 的直接覆寫處數量凍結（新增第 19 處要回來�
 
 T('⭐⭐⭐ engine 全域閘還在：有 pending 時只收 RESOLVE_SELECTION（上面那條的地基）', () => {
   const src = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
-  const stripped = stripComments(src);
+  const stripped = stripComments(src, 'engine.ts');
   const i = stripped.indexOf('function handlePlaying');
   ok(i > 0, '找不到 handlePlaying —— anchor 失效');
   const win = stripped.slice(i, i + 3000);
@@ -289,7 +297,9 @@ T('⭐⭐⭐ engine 全域閘還在：有 pending 時只收 RESOLVE_SELECTION（
 
 T('⭐ 上兩條的正對照：把閘拿掉的合成原始碼必須被判成紅', () => {
   const fake = 'function handlePlaying(state, action, pool) {\n  const aIdx = 0;\n  return state;\n}';
-  const stripped = stripComments(fake);
+  // ⚠ 合成樣本用**無護欄**的純函式版：護欄①（留存率）是「整份吐空」偵測器，
+  //   對 3 行的合成片段本來就沒有意義（片段可能 100% 是註解）。真檔一律走 checked 版。
+  const stripped = stripCommentsBlank(fake).replace(/\/\/.*$/gm, '');
   const i = stripped.indexOf('function handlePlaying');
   const win = stripped.slice(i, i + 3000);
   ok(!/if\s*\(\s*state\.pendingSelection\s*&&/.test(win), '判準連「沒有閘」都判成有 —— 這條是安慰劑');

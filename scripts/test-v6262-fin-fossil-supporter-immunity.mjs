@@ -20,6 +20,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6262-s.js'), E = join(ROOT, '.v6262-e.ts'), O = join(ROOT, '.v6262-o.mjs');
@@ -235,7 +236,8 @@ for (const c of SUPS) for (const layout of ['bench', 'active']) for (const order
 }
 
 T(`⚠ 掃描器下限斷言：live H/I/J 支援者 ${SUPS.length} 張、實跑 ${_runs} 次`, () => {
-  ok(SUPS.length >= 80, `只枚舉到 ${SUPS.length} 張支援者 —— 枚舉器壞了？`);
+  // ⭐v6.325：下限自 80 收緊到 82（實測 83）。
+  ok(SUPS.length >= 82, `只枚舉到 ${SUPS.length} 張支援者 —— 枚舉器壞了？`);
   ok(_runs === SUPS.length * 2 * 3, `實跑 ${_runs} 次，應為 ${SUPS.length * 2 * 3}`);
   for (const c of SUPS) ok(M.TRAINER_EFFECTS.has(c.name), `${c.name} 沒有 TRAINER_EFFECTS ⇒ 這一輪等於沒測到它`);
 });
@@ -485,8 +487,18 @@ T('engine.ts 的死碼 isFinFossilSupporterImmune 已刪除（全 repo 零呼叫
   ok(!/export function isFinFossilSupporterImmune/.test(eng), 'isFinFossilSupporterImmune 還在');
 });
 T('supporters_gust.ts 的內聯化石檢查已收斂（會繞過 v6.262 的來源前提）', () => {
-  const g = readFileSync(join(ROOT, 'src/lib/game/effects/cards/supporters_gust.ts'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+//   ⚠ 本檔原本用的是**刪除**版（`replace(..., '')`）⇒ 位移會亂跑；改成等長留白後
+//     下方 `eng.slice(k - 400, k)` 這類視窗才對得回原檔。
+  const g = stripCommentsBlankChecked(
+    readFileSync(join(ROOT, 'src/lib/game/effects/cards/supporters_gust.ts'), 'utf8'),
+    { label: 'supporters_gust.ts', mustKeep: ['isImmuneToOppSupporter'] });
   ok(!/陳舊的鰭之化石/.test(g), 'supporters_gust 仍有內聯化石卡名比對');
   ok(/isImmuneToOppSupporter/.test(g), 'supporters_gust 沒接中央述詞');
 });
@@ -497,13 +509,13 @@ T('化石免疫的卡名字面量只出現在中央述詞一處（其餘卡檔�
     'src/lib/game/effects/cards/m5_preview.ts', 'src/lib/game/effects/cards/v2370_mp_promo.ts',
   ];
   for (const f of files) {
-    const s2 = readFileSync(join(ROOT, f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    const s2 = stripCommentsBlankChecked(readFileSync(join(ROOT, f), 'utf8'), { label: f });
     ok(!/'陳舊的鰭之化石'/.test(s2), `${f} 出現手刻的化石卡名比對（免疫只准走 isImmuneToOppSupporter）`);
   }
   // ⚠ engine.ts 保留的那一處是 FOSSIL_ITEM_NAMES（化石**物品**登錄表，7 張化石一起列），
   //   與支援者免疫無關 ⇒ 斷言它剛好只有那一處，且不在任何 supporter/immune 語境裡。
-  const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const eng = stripCommentsBlankChecked(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'),
+    { label: 'engine.ts', mustKeep: ['FOSSIL_ITEM_NAMES'] });
   const engHits = eng.match(/'陳舊的鰭之化石'/g) || [];
   ok(engHits.length === 1, `engine.ts 應剛好 1 處（FOSSIL_ITEM_NAMES），實得 ${engHits.length}`);
   const k = eng.indexOf("'陳舊的鰭之化石'");

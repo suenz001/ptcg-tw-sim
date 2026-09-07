@@ -18,6 +18,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync, statSync } from '
 import { join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { stripCommentsBlankChecked, stripCommentsBlank } from './lib/strip-comments.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S=join(ROOT,'.x6202-s.js'),E=join(ROOT,'.x6202-e.ts'),O=join(ROOT,'.x6202-o.mjs');
 process.on('exit',()=>{for(const p of [S,E,O])try{unlinkSync(p)}catch{}});
@@ -511,12 +512,19 @@ const EXEMPT=new Map(Object.entries({
 }));
 const walk=(d,out=[])=>{for(const f of readdirSync(d)){const p=join(d,f);const s=statSync(p);
   if(s.isDirectory())walk(p,out); else if(f.endsWith('.ts'))out.push(p);} return out;};
-const stripComments=s=>s.replace(/\/\*[\s\S]*?\*\//g,m=>m.replace(/[^\n]/g,' '))
+// ⭐v6.325 批2：區塊註解剝除改走中央 helper（scripts/lib/strip-comments.mjs 的行級狀態機）。
+//   ⚠ 原本的 `/\/\*[\s\S]*?\*\//g` 會被**行註解裡的** `cards/*.ts` 這種字樣騙開假區塊：
+//     effects.ts 有兩處（:27 的 `effects/cards/*.ts` 吃到 :147、:7905 的 `cards/*.ts` 吃到 :8203），
+//     合計把 273 行真程式碼變成空白 ⇒ 掃在那段裡的違規一律靜默漏掉。
+//   ⚠ 一律用**等長留白**版（不是刪行版）：本檔靠行號／位移回報，刪行會讓行號整體位移。
+//   ⚠ 行尾 `//` 的處理**保留在這裡** —— 中央 helper 只剝行首 `//`，正向斷言目標若落在
+//     行尾註解裡會假綠。行尾正則是單行、不跨行 ⇒ 不會像區塊正則那樣開洞。
+const stripComments=(s,label='')=>stripCommentsBlankChecked(s,{label})
   .replace(/\/\/.*$/gm,'').replace(/[\u200b-\u200d\ufeff]/g,'');
 const scanSites=(files)=>{
   const sites=[];
   for(const [rel,text] of files){
-    const lines=stripComments(text).split('\n');
+    const lines=stripComments(text,rel).split('\n');
     const gatedNear=(i,needles)=>{
       for(let k=Math.max(0,i-8);k<Math.min(lines.length,i+9);k++){
         if(!GATE_RE.test(lines[k])) continue;
@@ -549,18 +557,22 @@ const sites=scanSites(realFiles);
 // ⚠ v6.258：下限 90 → 85。PASSIVE_ATTACK_BONUS 的三份手抄 dispatch 迴圈
 //   （engine.ts／effects.ts／mega_decks.ts）收斂成單一 collectPassiveAttackBonuses，
 //   消費點淨減 2（3 → 1），實測 90 → 88。下限仍高於現值以保留「掃描器壞掉」的偵測力。
-T('20a. 掃描器下限：全站 passive 消費點掃到 ≥85 個（掃不到＝掃描器壞了）',()=>{
-  assert.ok(sites.length>=85,'只掃到 '+sites.length+' 個');
+// ⭐v6.325：下限自 85 收緊到 92（實測 93，收到「實測值 −1」）。
+//   ⚠ 舊值 85 對實測值有 8 個 的鬆度 —— 掃描器少掃掉一整個檔都還是綠的。
+T('20a. 掃描器下限：全站 passive 消費點掃到 ≥92 個（掃不到＝掃描器壞了）',()=>{
+  assert.ok(sites.length>=92,'只掃到 '+sites.length+' 個');
 });
 T('20b. 掃描器下限：兩種 pattern 都要抓得到東西（少一種＝那一族又隱形了）',()=>{
   const lit=sites.filter(s=>s.kind==='lit').length, reg=sites.filter(s=>s.kind==='reg').length;
   // v6.204：pattern1 從 55 降到 50 —— 本版把 6 支 helper 的『.name === 特性名』字面量整段換成
   //   中央述詞呼叫（消費點消失，不是掃描器變瞎）；20f/20g/20h 三條自我驗證仍釘住掃得到違規樣本。
-  assert.ok(lit>=50,'pattern1 只 '+lit); assert.ok(reg>=30,'pattern2(registry 查表) 只 '+reg);
+  // ⭐v6.325：50/30 → 58/33（實測 59/34）。
+  assert.ok(lit>=58,'pattern1 只 '+lit); assert.ok(reg>=33,'pattern2(registry 查表) 只 '+reg);
 });
-T('20c. 掃描器下限：其中「已接中央閘」的 ≥63 個（v6.204 把 C 段整段接上後的新底線）',()=>{
+// ⭐v6.325：下限自 63 收緊到 76（實測 77）。
+T('20c. 掃描器下限：其中「已接中央閘」的 ≥76 個（v6.204 把 C 段整段接上後的新底線）',()=>{
   const g=sites.filter(s=>s.gated).length;
-  assert.ok(g>=63,'只有 '+g+' 個接了閘');
+  assert.ok(g>=76,'只有 '+g+' 個接了閘');
 });
 T('20d. 枚舉守衛：每個沒接閘的消費點都必須在豁免表內並附理由',()=>{
   const bad=sites.filter(s=>!s.gated && !EXEMPT.has(`${s.rel}|${s.ability}`))
