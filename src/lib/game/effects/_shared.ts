@@ -2217,6 +2217,28 @@ export interface DevolveResult {
   devolved: CardInstance;
   removedCards: CardInstance[];
 }
+
+/**
+ * ⭐⭐⭐ v6.330：這隻寶可夢**實際**能退化幾層 ＝ 進化堆疊深度。
+ *
+ * ⚠⚠ **不可以用卡面印的 stage 推論**。玩家回報：
+ *   「凱西 →（神奇糖果）→ 胡地」中間沒有勇基拉，卡面是【2階進化】但堆疊深度只有 1，
+ *   舊版奇異時鐘照卡面給了「退 1 層／退 2 層」兩個選項，玩家選 2 層撞「堆疊深度不足」取消，
+ *   而奇異時鐘**已經打出去了** ⇒ 卡片白白浪費。
+ *
+ * ⚠ 另一個同型情境（站內真的打得到，不是理論）：**進化寶可夢被直接放置於場上**時堆疊是空的
+ *   ⇒ 深度 0、根本不能退化。真實例子（已逐張查證屬性／階級）：
+ *     ・**燈火幽靈｜亮光增長**（J 標、【超】、1 階）：「從牌庫選擇最多3張…放置於備戰區」
+ *       —— 屬性正好是【超】，**就是奇異時鐘會選到的目標**。
+ *     ・`deckTopPeekPokemonToBenchPost` 家族（人造細胞卵｜傳喚之門、超級妖火紅狐ex｜戲法傳送門）
+ *       卡面寫「寶可夢卡」未限制階段 ⇒ 進化寶可夢也放得下去。
+ *   官方 Q&A 亦有「因索羅亞克的特性『幻影變化』直接放置於場上的[1階進化]寶可夢」這個類別。
+ *
+ * ⇒ 任何「可以退幾層／能不能退化」的判斷一律走這支，不要各自讀 stage。
+ */
+export function devolvableLayers(inst: CardInstance | null | undefined): number {
+  return inst?.evolvedFromStack?.length ?? 0;
+}
 export function buildDevolvedInstance(
   target: CardInstance,
   layers: number,

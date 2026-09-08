@@ -1,5 +1,177 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.330 奇異時鐘：退化層數選單改由「實際進化堆疊深度」產生（玩家回報）
+
+BASE `feb2b687298c1bfe07a7a2c096fc4768f8e12333`（v6.329，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`src/lib/game/effects/_shared.ts`（**新增中央 `devolvableLayers`**）／
+`src/lib/game/effects/cards/items_misc.ts`（gate ＋ 層數選單 ＋ step2 解析）／
+**新增** `scripts/test-v6330-odd-clock-devolve-layers.mjs`／`package.json`（chain 646 → **647** 步）／
+首頁 changelog 三步／`src/lib/version.ts`／`oracle-admin/admin.html`／
+`scripts/test-v6272-*`（PREV_SHA ＋ PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+
+### 【零】玩家回報（逐字）
+
+> 「使用 奇異時鐘 退回 由 神奇糖果進化的胡地(凱西=>神奇糖果+胡地進化，中間沒有勇基拉)時，
+>  會沒有辦法退回變成凱西，依據官方QA，在中間沒有一階進化卡牌的情況下，
+>  應該還是可以直接從胡地退回凱西，請修正」
+
+**已完整重現**（`scripts/repro-v6330.mjs`，走完整 `PLAY_TRAINER → RESOLVE_SELECTION` 流程）：
+
+```
+--- 糖果進化的胡地（深度1）---
+  選好目標後 pending = odd-clock-step2 | 選項 = ["①退化 1 層（→ 1 階進化）","②退化 2 層（→ 基礎）"]
+    選「2」→ 場上變成：胡地 ｜手牌：(空)      ← 奇異時鐘：堆疊深度不足以退化 2 層，取消
+    選「1」→ 場上變成：凱西 ｜手牌：胡地
+--- 正規進化的胡地（深度2）---
+    選「2」→ 場上變成：凱西 ｜手牌：胡地、勇基拉
+```
+
+### 【一】根因：用**卡面印的 stage** 推論**實際堆疊深度**
+
+`odd-clock-step1`（`items_misc.ts`）：
+
+```ts
+const stage = tCard.subtype === 'Stage2' || tCard.stage === 'Stage2' ? 'Stage2' : …
+if (stage === 'Stage1') return doOddClockDevolve(st, idx, targetIid, 1, pool);
+// Stage2 → 問玩家退 1 還是 2 層
+options: [ { id:'1', text:'①退化 1 層（→ 1 階進化）' }, { id:'2', text:'②退化 2 層（→ 基礎）' } ]
+```
+
+檔頭註解甚至寫著「Stage1（stack 長度 1）／Stage2（stack 長度 2）」——
+**那個等號在神奇糖果面前不成立**：凱西 →（神奇糖果）→ 胡地 的 `evolvedFromStack` 只有 `[凱西]`、深度 **1**。
+
+⇒ 玩家選「②退化 2 層（→ 基礎）」（那正是他想要的結果）就撞 `stack.length(1) < 2`、
+「堆疊深度不足以退化 2 層，取消」，而**奇異時鐘已經打出去了** ⇒ 卡片白白浪費。
+選①雖然真的會退回凱西，但標籤寫「→ 1 階進化」是**錯的**。
+
+⭐ 引擎層的 `buildDevolvedInstance` 本來就是讀 `evolvedFromStack`、行為完全正確 ——
+**壞掉的純粹是選單**。所以修的是「選項怎麼產生」，不是退化語義。
+
+### 【二】修法：中央 `devolvableLayers(inst)` 為唯一來源
+
+```ts
+/** 這隻寶可夢**實際**能退化幾層 ＝ 進化堆疊深度。⚠ 不可以用卡面印的 stage 推論。 */
+export function devolvableLayers(inst: CardInstance | null | undefined): number {
+  return inst?.evolvedFromStack?.length ?? 0;
+}
+```
+
+- `psychicEvoIids`（**gate 與 picker 共用同一個 predicate**，v5.996 立的慣例）追加
+  `devolvableLayers(c) >= 1` ⇒ 身上沒有可移除進化卡的寶可夢不再被列為可選目標。
+- `odd-clock-step1`：深度 1 ⇒ **直接退 1 層、不再多問**；深度 ≥2 ⇒ 選項數 ＝ 深度，
+  且每個標籤直接用 `pool.get(stack[len-n].cardId).name` 寫出**實際會變成哪一張**。
+- `odd-clock-step2`：`const layers = choice === '2' ? 2 : 1` 改成 `parseInt`
+  （選項數可能 >2，寫死 1/2 是新的地雷）。
+
+### 【三】⭐ 順帶關掉的同型情境：**進化寶可夢被「直接放置」於場上**
+
+站內真的有這種卡（H/I/J，逐字查證自 `static/cards`）：
+
+- **齒輪怪｜緊急迴轉**（H）：「…則可使用1次。將這張卡放置於備戰區。」
+- **烈箭鷹ex｜激動俯衝**（J）：同型
+
+官方規則檔 `PTCG RULES/PTCG_RULES.md:1139` 也有一條 Q&A 提到
+「因索羅亞克的特性『幻影變化』**直接放置於場上**的[1階進化]寶可夢」。
+
+這類寶可夢 `evolvedFromStack` 是**空的**，卡面卻是 Stage1/Stage2 ⇒
+舊版會讓玩家選到它、然後在 `doOddClockDevolve` 取消，**同樣白白浪費奇異時鐘**。
+新的 gate 判準直接把它排除。
+（今天這兩張都不是【超】屬性，所以還撞不到奇異時鐘；但判準本來就該正確。）
+
+### 【四】跨卡 audit（本輪掃的維度）
+
+**維度：「效果的選項／數量上限是硬寫的，沒有依實際可用量產生 ⇒ 玩家選了做不到的選項，卡就白白浪費」**
+
+掃法：枚舉全站 `type: 'modal-choice'` 的 pending（**38 個**），逐一看 `options` 是靜態字面量還是由變數產生。
+
+結論：**只有 `odd-clock-step2` 的靜態選項可能是玩家做不到的**。
+其餘靜態選項都是恆可達的類別 —— yes/no（8 處）、keep/discard、reshuffle/keep、
+狀態名（`miracle-painting-status` 5 種、`lumineon-slime-pick-status` 3 種）、swap/boost、return/skip。
+其餘 20+ 個 `options` 都是由 `map`／變數產生（能量清單、道具清單、招式清單…），本來就跟著實際可用量走。
+
+⇒ 這個維度**乾淨，只有這一張**。守衛 D 區把不變量鎖住。
+
+另外查過但**判定不是同維度**的：
+- `_shared.ts` 的 `getEnergyDiscardUnits`／`engine.ts` 的 `totalEnergyUnits` 用 host 的
+  `stage === 'Stage2'` 決定燃火能量／新衝天能量算幾個 —— 那是**能量卡面自己寫的**
+  「若附於【2階進化】寶可夢身上」，讀卡面印的 stage 才是對的。
+- 其他 5 張退化卡（超能豔鴕｜奧密之眼、太陽伊布ex｜阿賽斯特萊石、始祖大鳥｜原始之翼、
+  念力土偶｜退化光線）卡面都是「移除**1張**進化卡」⇒ 硬寫 `layers = 1`，不受影響。
+  它們全部已收斂在 `buildDevolvedInstance`。
+
+### 【五】⛔ 對抗性審查（Opus 5）抓到的三件，已全部修進本版
+
+我自報「11 條全綠」之後，審查者用 15 個針對性突變戳，**3 個存活**：
+
+**⛔A `C1` 是恆真斷言（安慰劑：對空集合做否定斷言）**
+第一版的 C1 場面只放了一隻【基礎】凱西 ⇒ `regG` 回 false ⇒ 奇異時鐘**根本打不出去**
+⇒ `pendingSelection` 是 `undefined` ⇒ `valid = (undefined ?? [])` ⇒ 三條 `!valid.includes(...)` **恆成立**。
+審查者用「picker 改掃雙方場上」「把【超】屬性 gate 整條拿掉」兩個突變證明它**什麼都沒守**。
+我自己複驗：`pending= undefined  validIids= undefined  卡被消耗= false` ✅ 屬實。
+⇒ 修法：C1 場面先放一隻**合法目標**（自己的【超】1階、深度 1）讓卡真的打得出來，
+再斷言基礎／對手的／非【超】那三隻不在 `validIids`，並加一條「合法目標必須在清單裡」的前提斷言，
+避免它日後又退化成恆真。
+
+**⛔B 本版最有行為風險的新行為（`regG` 收緊 ⇒ 沒有目標時打不出去）完全沒有守衛**
+B4 只驗了 `validIids` 不含堆疊 0 的那隻，**沒有驗「卡沒有被消耗」**。
+審查者用 `regG('奇異時鐘', () => true)` 的突變存活證明。
+⇒ 新增 **C2**：場上只有堆疊 0 的【超】進化寶可夢時，`PLAY_TRAINER` 後
+`pendingSelection === null` **且奇異時鐘仍在手牌、不在棄牌區**。
+
+**⛔C `parseInt` 沒有上限夾制 ⇒ 又多一條「白白浪費」的路徑（與本版意圖相反）**
+`engine.ts` 的 `VALID_IIDS_GATE_EXEMPT` 含 `'modal-choice'`
+⇒ payload **原封進 resolver、不做白名單交集**，送進來的 choice 是未經消毒的輸入。
+我自己複驗（深度 2 的正規胡地）：
+
+```
+choice='3'   → active=胡地  log=奇異時鐘：堆疊深度不足以退化 3 層，取消    ← 卡白白消耗
+choice='9'   → active=胡地  log=奇異時鐘：堆疊深度不足以退化 9 層，取消
+choice='abc' → active=勇基拉（parseInt NaN → 1，正常）
+```
+⇒ `regR('odd-clock-step2')` 改成先取 target、`Math.min(devolvableLayers(target), parsed)` 夾制；
+新增 **C3** 用 `'3'/'9'/'999'/'abc'` 實跑，並驗「超出深度 ⇒ 夾制成退到底＝凱西」。
+
+**⚠ 訂正我自己寫錯的兩件事**
+1. `_shared.ts` 註解原本舉的例子是「齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝」——
+   那兩張分別是【鋼】與【無】，**永遠不可能是奇異時鐘的目標**，舉例無效。
+   審查者找出站內真正打得到的：**燈火幽靈｜亮光增長**（J 標、**【超】**、1 階，
+   「從牌庫選擇最多3張…放置於備戰區」）與 `deckTopPeekPokemonToBenchPost` 家族
+   （人造細胞卵｜傳喚之門、超級妖火紅狐ex｜戲法傳送門，卡面寫「寶可夢卡」未限制階段）。
+   我複驗 `燈火幽靈 19230 type=Psychic stage=Stage1 reg=J` ✅ ⇒ 註解已換成真例子。
+2. HEAD-FAIL 我原本寫「6 條紅」，實際是 **7 條紅**，而且其中 A1／B4／D5 三條是
+   `devolvableLayers is not a function`＝**匯入層紅、不是斷言紅**（只證明新 export 不存在）。
+   真正的斷言級紅是 B1／B2／D1／D2 四條。**照實記，不灌水。**
+
+### 【五-b】🔨 查證後**刻意不夾帶**的既有行為
+
+`regR('odd-clock-step2')` 開頭的 `if (!choice || !targetIid) return st;` ——
+選擇為空時什麼都不做，但卡已經消耗掉了。
+逐字比對 BASE 完全相同，而且 `v2995_g4_wave1.ts:214` 等其他 modal-choice resolver 也是同一寫法
+⇒ **既有行為、不是本版回歸，也不是玩家回報的症狀**。
+要改就該當成一個獨立維度（「modal-choice 取消時卡片是否該退回」）整批處理，本版不夾帶。
+
+### 【六】守衛 `test-v6330-odd-clock-devolve-layers.mjs`（13 條）
+
+A1 `devolvableLayers` 只數堆疊（糖果進化的 Stage2 = 1、正規 = 2、直接放置 = 0、null = 0）／
+**B1 行為端：糖果進化的胡地不再問層數、直接退回凱西**（BASE 上紅）／
+B2 正規深度 2 有兩個選項、標籤寫出勇基拉／凱西、兩個選項都不得撞「堆疊深度不足」／
+B3 一階進化維持自動退 1 層／**B4 沒有堆疊的進化寶可夢不得可選**／
+**C1 否定對照（基礎／對手的／非【超】都不可選，⚠ 場上必須有合法目標否則整條恆真）**／
+**C2 沒有可退化目標時卡打不出去、必須留在手上**／**C3 送進超出深度的層數要被夾制、不得取消**／
+D1 結構：選項必須由 `devolvableLayers` 產生、不得再有寫死的層數標籤／
+D2 `devolvableLayers` 是唯一來源、呼叫端不得自己再數一次 stack 長度／
+D3 反安慰劑：D1 的判準（同一個正則）對違規樣本會抓、對合規樣本不誤報／
+D4 剝註解真的有作用（⚠ 本檔第一版就踩到：我在新註解裡引用了違規字面量，D1 立刻假紅
+　　—— 一律走中央 `scripts/lib/strip-comments.mjs`，不要自己再寫一份）／
+D5 step2 的層數必須一般化解析（用**合成 3 層堆疊**實跑，因為真實卡池最深只有 2 層、
+　　寫死 `'2'?2:1` 在現行卡池行為等價 ⇒ 不合成就測不出來；已在檔內誠實標註這是鎖結構）。
+
+⚠ 另一則玩家回報（**超級巨牙鯊ex 裝鎖鏈糬且中毒時，隔回合 +40 失效**）**本版不處理**：
+純中毒／中毒＋麻痺／中毒＋睡眠／中毒＋混亂四種情境、連打四回合都**重現不出來**
+（鎖鏈糬每回合都正常 +40；看起來像失效的幾次其實是麻痺／睡眠／混亂擋住了攻擊）。
+`TOOL_ATTACK_BONUS.set('鎖鏈糬', …)` 三個狀態槽都有讀，不是「漏讀第三槽」。
+站長裁定：先不處理，他自己再測。**沒有重現就不改碼、也不編造根因。**
+
 ## v6.329 把 19624/19625/19626 還給官方那三張卡（膽小蟲／超級米立龍ex／麻麻小魚）
 
 BASE `97ace332059fc3215c77ab5161d0648b71cd3ccb`（v6.328，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。

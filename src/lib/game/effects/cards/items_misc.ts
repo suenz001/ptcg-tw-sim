@@ -29,7 +29,7 @@ import {
   getOwnBenchLimit,
 } from '../_shared';
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
-import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈)
+import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance, devolvableLayers } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈) + v6.330 devolvableLayers
 import { tryPromptPromoteActive } from '../_shared';
 import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
@@ -1738,9 +1738,12 @@ regR('changing-book-step2', (st, idx, iids, params, pool) => {
 //
 // 實裝（兩段 pending）：
 //   1. bench-choose w/ includeActive 選自己的【超】Stage1/Stage2 寶可夢 → 'odd-clock-step1'
-//   2. step1：根據 target 的 stack 長度決定退化選項：
-//      - Stage1（stack 長度 1）：直接退 1 層（自動，不問）
-//      - Stage2（stack 長度 2）：modal-choice 1 / 2 層
+//   2. step1：根據 target 的**實際進化堆疊深度**（devolvableLayers）決定退化選項：
+//      - 深度 1：直接退 1 層（自動，不問）
+//      - 深度 ≥2：modal-choice，選項數 ＝ 深度，標籤直接寫出「退化後會變成哪一張」
+//      ⚠⚠ v6.330 訂正：**不可以用卡面印的 stage 推論深度**。神奇糖果跳過 1 階直接進化的
+//        Stage2（凱西→糖果→胡地）深度只有 1，舊版照卡面給了「退 2 層」的選項，
+//        玩家選了就撞「堆疊深度不足」取消，而卡片已經打出去 ⇒ 白白浪費（玩家回報）。
 //   3. step2 / inline：執行 pop —
 //      - 移除 N 層（含當前頂層）→ 對應 cardId 包成新 hand instance 放回手牌
 //      - instance 的 cardId 改成 stack[len-N] 的 cardId
@@ -1756,8 +1759,12 @@ function psychicEvoIids(st: import('../../types').GameState, idx: 0 | 1,
     const card = pool.get(c.cardId);
     if (!card || card.supertype !== 'Pokemon'
         || !hasEffectivePokemonType(st, idx, c, card, pool, 'Psychic')) return false;
-    return card.subtype === 'Stage1' || card.subtype === 'Stage2'
+    const isEvolutionCard = card.subtype === 'Stage1' || card.subtype === 'Stage2'
       || card.stage === 'Stage1' || card.stage === 'Stage2';
+    // ⭐ v6.330：卡面「移除任意數量的『進化卡』**使其退化**」⇒ 身上沒有可移除的進化卡就退化不了。
+    //   進化寶可夢**直接放置**於場上時（齒輪怪｜緊急迴轉、烈箭鷹ex｜激動俯衝、官方 Q&A 的幻影變化）
+    //   堆疊是空的 ⇒ 舊版會讓玩家選到它、然後取消，白白浪費奇異時鐘。
+    return isEvolutionCard && devolvableLayers(c) >= 1;
   }).map(c => c.iid);
 }
 regG('奇異時鐘', (st, idx, pool) => {
@@ -1789,37 +1796,49 @@ regR('odd-clock-step1', (st, idx, iids, _params, pool) => {
   if (!tCard || !hasEffectivePokemonType(st, idx, target, tCard, pool, 'Psychic')) {
     return addLog(st, '奇異時鐘：所選目標非【超】寶可夢，取消', idx);
   }
-  const stage = tCard.subtype === 'Stage2' || tCard.stage === 'Stage2' ? 'Stage2'
-    : (tCard.subtype === 'Stage1' || tCard.stage === 'Stage1' ? 'Stage1' : 'Basic');
-  if (stage === 'Basic') {
+  const isEvolutionCard = tCard.subtype === 'Stage1' || tCard.subtype === 'Stage2'
+    || tCard.stage === 'Stage1' || tCard.stage === 'Stage2';
+  if (!isEvolutionCard) {
     return addLog(st, '奇異時鐘：所選目標非進化寶可夢，取消', idx);
   }
-
-  if (stage === 'Stage1') {
-    // 自動退 1 層
+  // ⭐⭐ v6.330：可退幾層一律讀**實際堆疊深度**，不是卡面印的 stage（見 devolvableLayers 的註解）。
+  const maxLayers = devolvableLayers(target);
+  if (maxLayers < 1) {
+    return addLog(st, '奇異時鐘：所選目標身上沒有可移除的進化卡，取消', idx);
+  }
+  if (maxLayers === 1) {
+    // 只有一種可能（含神奇糖果跳階進化的 2 階）⇒ 不必問，直接退 1 層
     return doOddClockDevolve(st, idx, targetIid, 1, pool);
   }
-  // Stage2 → 問玩家退 1 還是 2 層
+  // 深度 ≥2 → 依實際堆疊產生選項；標籤直接寫出「退化後會變成哪一張」，不再寫死「→ 1 階進化」
+  const _stk = target.evolvedFromStack ?? [];
+  const _opts: { id: string; text: string }[] = [];
+  for (let n = 1; n <= maxLayers; n++) {
+    const resultName = pool.get(_stk[_stk.length - n].cardId)?.name ?? '?';
+    _opts.push({ id: String(n), text: `退化 ${n} 層（→ ${resultName}）` });
+  }
   st = addLog(st, '奇異時鐘：選擇要退化的層數', idx);
   return withPending(st, {
     type: 'modal-choice', actorIdx: idx, sourcePlayerIdx: idx,
     minCount: 1, maxCount: 1,
     effectKey: 'odd-clock-step2',
-    params: {
-      label: '奇異時鐘',
-      targetIid,
-      options: [
-        { id: '1', text: '①退化 1 層（→ 1 階進化）' },
-        { id: '2', text: '②退化 2 層（→ 基礎）' },
-      ],
-    },
+    params: { label: '奇異時鐘', targetIid, options: _opts },
   });
 });
 regR('odd-clock-step2', (st, idx, iids, params, pool) => {
   const choice = iids[0];
   const targetIid = (params?.targetIid as string) ?? '';
   if (!choice || !targetIid) return st;
-  const layers = choice === '2' ? 2 : 1;
+  // ⚠ v6.330：選項數 ＝ 實際堆疊深度（可能 >2），不可再寫死 '2' ? 2 : 1。
+  // ⚠⚠ 而且一定要**夾制在實際深度內**：`modal-choice` 在 engine 的
+  //   VALID_IIDS_GATE_EXEMPT 名單裡（payload 原封進 resolver、不做白名單交集），
+  //   送進來的 choice 是**未經消毒的輸入**。沒夾制的話送 '3' 到深度 2 的目標
+  //   會撞「堆疊深度不足」取消 ⇒ 又多一條「奇異時鐘白白浪費」的路徑，
+  //   與本版的修正意圖正好相反（對抗性審查抓到）。
+  const _p = st.players[idx];
+  const _t = _p.active?.iid === targetIid ? _p.active : _p.bench.find(c => c.iid === targetIid);
+  const _max = Math.max(1, devolvableLayers(_t));
+  const layers = Math.min(_max, Math.max(1, Number.parseInt(String(choice), 10) || 1));
   return doOddClockDevolve(st, idx, targetIid, layers, pool);
 });
 function doOddClockDevolve(
