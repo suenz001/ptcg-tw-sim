@@ -1517,7 +1517,10 @@ reg('小霞的朝氣', (st, idx) => {
         actorIdx: idx, sourcePlayerIdx: idx,
         minCount: 1, maxCount: 1,
         effectKey: 'm5-trainer-karunari-vigor-end-only',
-        params: { endTurnAfter: true, options: ['確認結束回合'] },
+        // ⚠ v6.331：這裡原本寫成字串陣列 `['確認結束回合']` —— UI 讀的是 `opt.text` 與 `opt.id`，
+        //   字串沒有這兩個欄位 ⇒ 玩家看到的是一顆**沒有任何文字的空白按鈕**、送出的 payload 是
+        //   `[undefined]`。全站 38 個 modal-choice 只有這兩處是這個形狀。
+        params: { endTurnAfter: true, options: [{ id: 'end-turn', text: '確認結束回合' }] },
       },
     );
   }
@@ -1545,7 +1548,10 @@ regR('m5-trainer-karunari-vigor-pick', (state, aIdx, iids) => {
         actorIdx: aIdx, sourcePlayerIdx: aIdx,
         minCount: 1, maxCount: 1,
         effectKey: 'm5-trainer-karunari-vigor-end-only',
-        params: { endTurnAfter: true, options: ['確認結束回合'] },
+        // ⚠ v6.331：這裡原本寫成字串陣列 `['確認結束回合']` —— UI 讀的是 `opt.text` 與 `opt.id`，
+        //   字串沒有這兩個欄位 ⇒ 玩家看到的是一顆**沒有任何文字的空白按鈕**、送出的 payload 是
+        //   `[undefined]`。全站 38 個 modal-choice 只有這兩處是這個形狀。
+        params: { endTurnAfter: true, options: [{ id: 'end-turn', text: '確認結束回合' }] },
       },
     );
   }

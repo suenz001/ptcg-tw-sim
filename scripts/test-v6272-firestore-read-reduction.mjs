@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'feb2b687298c1bfe07a7a2c096fc4768f8e12333';   // v6.329（v6.330 的上一版）
+const PREV_SHA = '041d7d6d4d9dd485eb57d965b386678bfb1d6d5d';   // v6.330（v6.331 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -718,10 +718,14 @@ const PREV_SHA = 'feb2b687298c1bfe07a7a2c096fc4768f8e12333';   // v6.329（v6.33
 // ⚠ v6.329 把被本站佔用的三個官方 id 還給官方卡並補收 M-P 209~211
 //   ⇒ 玩家端本來就會動到卡表、下架卡清單、牌組遷移與招式登錄。
 // ⚠ v6.330 修奇異時鐘的退化層數選單（玩家回報）⇒ 動到卡效果與中央 helper。
+// ⚠ v6.331 modal-choice 空／無效選擇的中央閘（引擎＋UI＋中央述詞）＋ 小霞的朝氣選項形狀
+//   ⇒ 動到 selection-ui / engine / game 頁 / m5_preview。
 const PREV_ALLOWED = [
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/items_misc.ts',
+  'src/lib/game/effects/cards/m5_preview.ts',
+  'src/lib/game/engine.ts',
+  'src/lib/game/selection-ui.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

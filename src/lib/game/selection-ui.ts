@@ -140,6 +140,103 @@ export function selectionConfirmFloor(minCount: number): number {
 }
 
 /**
+ * ⭐⭐⭐ v6.331 `modal-choice` 專用的中央述詞群。
+ *
+ * `modal-choice` 與其他 picker 有兩個**結構性**差異，站內踩過的洞都源自這兩點：
+ *   ① 候選不在 `selectionItems` 裡 —— `game/+page.svelte` 的 `selectionItemsRaw`
+ *      的 `switch` **沒有** `modal-choice` 這個 case，所以它對 modal-choice 永遠回 `[]`。
+ *      拿 `selectionItems.length` 判斷「有沒有候選」等於恆為 0。
+ *   ② payload 是**選項 id 字串**（'keep' / 'yes' / '2' / 能量 iid …）不是場上 iid，
+ *      所以 `sanitizeSelectedIids` 把它列在 `VALID_IIDS_GATE_EXEMPT` 裡**原封放行**
+ *      —— 送進 resolver 的是完全未消毒的輸入。
+ */
+export interface ModalChoiceOption {
+  id: string;
+  text: string;
+  disabled?: boolean;
+}
+
+/** 這個 modal-choice **形狀合法**的全部選項（含 disabled；字串等壞形狀一律不算）。 */
+export function modalChoiceAllOptions(params?: Record<string, unknown> | null): ModalChoiceOption[] {
+  const raw = params?.options;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((o): o is ModalChoiceOption =>
+    !!o && typeof o === 'object'
+    && typeof (o as { id?: unknown }).id === 'string'
+    && (o as { id: string }).id !== '');
+}
+
+/** 這個 modal-choice 目前有幾個「玩家真的按得下去」的選項（disabled 的不算）。 */
+export function modalChoiceEnabledOptions(params?: Record<string, unknown> | null): ModalChoiceOption[] {
+  return modalChoiceAllOptions(params).filter((o) => o.disabled !== true);
+}
+
+/**
+ * modal-choice 的「候選數」。stepper 型一律算 1（數字面板永遠送得出一個合法值）。
+ * ⚠ 這是 `selectionHasNoExit` 對 modal-choice 的正確輸入 —— 見上面的差異①。
+ */
+export function modalChoiceCandidateCount(params?: Record<string, unknown> | null): number {
+  if (params?.stepper) return 1;
+  return modalChoiceEnabledOptions(params).length;
+}
+
+/**
+ * ⭐⭐⭐ 這一次送進來的 payload 是「玩家真的做了一個選擇」嗎？
+ *
+ * 回 `false` 時引擎必須**不執行 resolver、不關 pending** —— 否則就是玩家回報的症狀：
+ * **卡片已經消耗掉了，盤面卻什麼都沒發生。**
+ * （38 個 modal-choice resolver 對空 choice 的寫法是散的：有的 `if (!choice) return st;`
+ *   直接吞掉；有的 `parseInt(iids[0] ?? '0')` **靜默幫玩家選了第一個選項**；
+ *   有的 `choice !== 'yes'` 當成拒絕。逐個修＝下一張新卡又會漏，所以收斂到這裡。）
+ *
+ * ⚠⚠ 沒有任何可選項時**必須回 true**：那時空 payload 是玩家唯一的出口（UI 的放棄鈕），
+ *    擋下去就從「卡片白費」變成「畫面鎖死」，是更嚴重的回歸。
+ */
+export function modalChoicePayloadValid(
+  params: Record<string, unknown> | null | undefined,
+  iids: readonly unknown[] | null | undefined,
+): boolean {
+  const first = Array.isArray(iids) ? iids[0] : undefined;
+  const stepper = params?.stepper as { min?: number; max?: number } | undefined;
+  if (stepper) {
+    const n = Number(first);
+    if (typeof first !== 'string' && typeof first !== 'number') return false;
+    if (!Number.isFinite(n)) return false;
+    if (typeof stepper.min === 'number' && n < stepper.min) return false;
+    if (typeof stepper.max === 'number' && n > stepper.max) return false;
+    return true;
+  }
+  // ⚠ 兩種「零可用選項」都必須放行，但理由不同，不可合併成一個判斷：
+  //   ・完全沒有選項（options 缺漏／空／形狀壞掉）⇒ 空 payload 是玩家唯一的出口。
+  //   ・有選項但**全部 disabled** ⇒ 玩家一顆也按不下去，同樣需要出口。
+  //   ⇒ 但只要還有一個 enabled 的選項，disabled 的那些就**不可以**被送進來。
+  //   ⚠⚠ 一定要呼叫**中央** `modalChoiceEnabledOptions`，不可以就地再寫一次
+  //   `filter(o => o.disabled !== true)` —— 抄第二遍等於「判準有兩份」：
+  //   對抗性審查實測，把中央那份的 disabled 過濾拿掉，守衛全部照樣綠（突變存活）。
+  const all = modalChoiceAllOptions(params);
+  if (all.length === 0) return true;
+  const enabled = modalChoiceEnabledOptions(params);
+  if (enabled.length === 0) return true;
+  return typeof first === 'string' && enabled.some((o) => o.id === first);
+}
+
+/**
+ * ⭐ v6.331 本機 AI「連續無進展」保險絲要送出的 payload。
+ *
+ * 那條保險絲（`game/+page.svelte` 的 no-progress guard）原本無條件送 `[]`。
+ * 加了上面的中央閘之後，`[]` 對「還有選項的 modal-choice」會被退回，
+ * 保險絲就得白繞 `RESOLVE_REJECT_STREAK_MAX` 拍才推得動。
+ * ⇒ 直接送**第一個可用選項**，一拍就有進展，且與 `ai.ts` 的預設選法（第一個非 disabled）一致。
+ */
+export function aiStuckSelectionPayload(pending: { type: string; params?: Record<string, unknown> | null }): string[] {
+  if (pending.type !== 'modal-choice') return [];
+  const stepper = pending.params?.stepper as { init?: number; min?: number } | undefined;
+  if (stepper) return [String(stepper.init ?? stepper.min ?? 0)];
+  const opts = modalChoiceEnabledOptions(pending.params);
+  return opts.length > 0 ? [opts[0].id] : [];
+}
+
+/**
  * ⭐⭐⭐ v6.174 中央安全網述詞：這個 picker 現在**完全沒有出口**嗎？
  *
  * 「沒有出口」＝ 候選清單是空的（玩家一個都勾不到）、卡面又要求至少選 1，
@@ -153,9 +250,15 @@ export function selectionConfirmFloor(minCount: number): number {
  *   分配型的候選為空一樣要給放棄鈕；改成純函式後由 test-selection-ui 直接覆蓋。
  *
  * @param candidateCount picker 目前實際渲染出的候選數量（UI 的 selectionItems.length）。
+ *   ⚠ v6.331：`modal-choice` 的候選**不在** selectionItems 裡（見 modalChoiceCandidateCount 註解），
+ *   所以這裡對它一律改用 `params.options` 重算 —— 由述詞自己接管，呼叫端傳什麼都不會接錯線。
  */
-export function selectionHasNoExit(p: SkipDecisionInput & { minCount?: number; allowCancel?: boolean }, candidateCount: number): boolean {
-  if (candidateCount > 0) return false;
+export function selectionHasNoExit(
+  p: SkipDecisionInput & { minCount?: number; allowCancel?: boolean; params?: Record<string, unknown> | null },
+  candidateCount: number,
+): boolean {
+  const n = p.type === 'modal-choice' ? modalChoiceCandidateCount(p.params) : candidateCount;
+  if (n > 0) return false;
   if ((p.minCount ?? 0) <= 0) return false;
   // 已經有【不選】鈕的 picker 本來就有出口
   if (selectionAllowsSkip(p)) return false;

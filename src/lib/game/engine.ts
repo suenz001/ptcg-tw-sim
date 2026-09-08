@@ -8,6 +8,7 @@
  *   - M3 多人連線時只需傳送動作序列
  */
 
+import { modalChoicePayloadValid } from './selection-ui';   // >>> v6331-modal-choice-payload-import
 import type { Card, EnergyType, Attack } from '$lib/cards/types';
 // v5.988：平穩境地述詞改從 v3001 既有安全 import 取得(移除此處早期反向 import 卡檔 v3080，杜絕 module-init TDZ)
 import { BENCH_SCRUB_LOCK_FLAGS, OPP_ATTACK_DEBUFF_FLAGS } from './instance-flags';
@@ -3260,6 +3261,29 @@ function handlePlaying(
         actorIdx,
       );
     }
+    // >>> v6331-modal-choice-payload-gate
+    // ⭐⭐⭐ v6.331 **modal-choice 的空／對不上任何選項的 payload，一律不執行、不關 pending。**
+    //   玩家回報：「選擇為空（取消）時，卡片已經消耗掉了，盤面卻什麼都沒發生。」
+    //   實跑重現（奇異時鐘 step2，胡地堆疊深度 2）：送空選擇 ⇒ pending 被關掉、
+    //   胡地一層都沒退、奇異時鐘已經躺在棄牌區 —— 一張訓練家卡就這樣憑空蒸發。
+    //   ⚠ 為什麼上面兩道閘都攔不到：modal-choice 在 `VALID_IIDS_GATE_EXEMPT` 名單裡
+    //     （payload 是選項 id 不是 iid，必須原封放行），所以 `_cleanIids === _rawIids`；
+    //     而 v6.175 的 reject 分支要求 `_rawIids.length > 0`，真正的空陣列直接穿過去。
+    //   ⇒ 收斂到這一刀（判準在 selection-ui.ts 的純述詞，由 test-selection-ui 覆蓋）：
+    //     只要這個 pending 還有選項可按，空／不合法的 payload 就原地退回、pending 留著讓玩家重選。
+    //   ⚠ 沒有任何可選項時放行 —— 那時空 payload 是玩家唯一的出口（UI 的「放棄」鈕），
+    //     擋下去會把「卡片白費」升級成「畫面鎖死」。
+    //   ⚠ 同樣受 RESOLVE_REJECT_STREAK_MAX 上限保護 ⇒ 任何情況下都不會軟鎖。
+    if (state.pendingSelection.type === 'modal-choice'
+        && !modalChoicePayloadValid(state.pendingSelection.params, _rawIids)
+        && _rejStreak < RESOLVE_REJECT_STREAK_MAX) {
+      return addLog(
+        { ...state, _rejectedResolveStreak: _rejStreak + 1, _rejectedResolveTok: _tokNow },
+        '⚠ 剛才那一次選擇沒有對應到畫面上的任何選項，沒有生效 —— 請直接點選畫面上的選項。',
+        actorIdx,
+      );
+    }
+    // <<< v6331-modal-choice-payload-gate
     let newState: GameState = { ...state, pendingSelection: undefined, _rejectedResolveStreak: undefined, _rejectedResolveTok: undefined };
     if (resolver) {
       newState = resolver(newState, actorIdx, _cleanIids, params, pool);

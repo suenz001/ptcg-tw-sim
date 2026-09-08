@@ -252,11 +252,19 @@ console.log('\n── E. UI 接線（真的接上了嗎，不是「有這個字�
   ck('★ 找得到 AI 無進展防呆分支（掃描器 anchor 有效）', gi >= 0);
   const gblk = gi >= 0 ? src.slice(gi, gi + 1600) : '';
   ck('★ anchor 沒有失效（窗口長度合理）', gblk.length > 0 && gblk.length <= 1600);
-  ck('★★★ AI 無進展且 pending 未解時，必須以空選擇強制推進（不可靜默 return）',
-    /_g\.pendingSelection && _g\.pendingSelection\.actorIdx === aiPlayerIndex[\s\S]{0,400}?resolveSelection\(\[\], undefined, _g\.pendingSelection\.token\)/.test(gblk));
+  // ⭐ v6.331：payload 由「一律空陣列」改成中央 `aiStuckSelectionPayload(pending)` ——
+  //   modal-choice 有選項時送第一個可用選項，其餘型別仍然是 `[]`（逐字同舊行為）。
+  //   守的仍然是同一件事：**pending 還在時一定要真的 dispatch，不可以靜默 return**
+  //   （靜默 return ⇒ 不 scheduleAI ⇒ AI 從此不再有任何 tick ＝ 真死結）。
+  //   ⚠ 只接受這兩種 payload 寫法，不放寬成「任意運算式」—— 否則寫成 undefined 也會綠。
+  const AI_PUSH_RE = /_g\.pendingSelection && _g\.pendingSelection\.actorIdx === aiPlayerIndex[\s\S]{0,700}?resolveSelection\((?:\[\]|aiStuckSelectionPayload\(_g\.pendingSelection\)), undefined, _g\.pendingSelection\.token\)/;
+  ck('★★★ AI 無進展且 pending 未解時，必須真的送出選擇強制推進（不可靜默 return）',
+    AI_PUSH_RE.test(gblk));
   ck('★ 掃描器正對照：拿掉那段 dispatch 後判準必須變紅',
-    !/_g\.pendingSelection && _g\.pendingSelection\.actorIdx === aiPlayerIndex[\s\S]{0,400}?resolveSelection\(\[\], undefined, _g\.pendingSelection\.token\)/
-      .test('if (_aiStuck >= 2) { _aiStuck = 0; return; }'));
+    !AI_PUSH_RE.test('if (_aiStuck >= 2) { _aiStuck = 0; return; }'));
+  ck('★ 掃描器反安慰劑：payload 換成 undefined（不是中央 helper 也不是空陣列）必須變紅',
+    !AI_PUSH_RE.test('_g.pendingSelection && _g.pendingSelection.actorIdx === aiPlayerIndex) {\n'
+      + 'dispatch(GameActions.resolveSelection(undefined, undefined, _g.pendingSelection.token), { fromAI: true });'));
 }
 
 console.log('\n── F. 同維度枚舉（棘輪）：場上目標型 picker 有多少個完全不經中央消毒閘 ──');

@@ -41,7 +41,7 @@ try {
   writeFileSync(S, 'export const base="";');
   writeFileSync(E,
     "export { applyAction } from './src/lib/game/engine';\n"
-    + "export { devolvableLayers, buildEvolvedInstance, buildDevolvedInstance } from './src/lib/game/effects/_shared';\n"
+    + "export { devolvableLayers, buildEvolvedInstance, buildDevolvedInstance, RESOLVERS } from './src/lib/game/effects/_shared';\n"
     + "import './src/lib/game/effects';\n");
   await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node', target: 'node20',
     alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
@@ -221,21 +221,35 @@ T('⭐⭐⭐ C3 送進做不到的層數（未經消毒的 modal-choice 輸入�
   const { picked } = playClock(deep);
   ok(picked.pendingSelection?.effectKey === 'odd-clock-step2', '前提壞了：深度 2 應該要問層數');
   // ⚠ 範圍：只驗「**超出實際深度的層數**」被夾制 —— 那才是 v6.330 改的東西。
-  //   `選擇為空`（RESOLVE_SELECTION 送 []）走的是 `if (!choice) return st;`，
-  //   那行在 BASE 逐字相同、而且全站其他 modal-choice resolver 也是同一寫法
-  //   ⇒ **既有行為、非本版回歸**，不在這裡夾帶修改（已記進 docs/changelog-internal 的待辦）。
+  // ⭐⭐⭐ v6.331 更新：現在有**兩層**防護，任何一層擋住都算「卡沒有白白浪費」——
+  //   第一層（v6.331，engine）：modal-choice 的 payload 對不上 params.options 就原地退回、**pending 留著**
+  //     ⇒ 玩家可以重選一次，卡片的效果還沒有被結算掉。
+  //   第二層（v6.330，resolver）：層數夾制在實際深度內 ⇒ 就算輸入穿過第一層也不會撞「堆疊深度不足」。
+  //   ⚠ 這裡刻意**兩層各自驗**：只驗第一層的話，把 v6.330 的夾制拿掉不會翻紅（守衛會退化成安慰劑）。
   for (const bogus of ['3', '9', '999', 'abc']) {
     const done = M.applyAction(picked, { type: 'RESOLVE_SELECTION', selectedIids: [bogus] }, pool);
     const logTxt = (done.log ?? []).map((l) => l?.message ?? l).join('\n');
     ok(!/堆疊深度不足/.test(logTxt),
       `送 choice='${bogus}' 竟然撞「堆疊深度不足」而取消（卡白白浪費）：` + logTxt.slice(-120));
-    ok(nameOf(done.players[0].active) !== '胡地',
-      `送 choice='${bogus}' 之後場上還是胡地 ⇒ 什麼都沒發生、卡卻用掉了`);
+    const kept = done.pendingSelection?.effectKey === 'odd-clock-step2';
+    const devolved = nameOf(done.players[0].active) !== '胡地';
+    ok(kept || devolved,
+      `送 choice='${bogus}' 之後 pending 被關掉、場上還是胡地 ⇒ 什麼都沒發生、卡卻用掉了`);
   }
-  // 夾制之後：'3'/'9'/'999' 都應等同「退到底」＝凱西；'abc' 解析不出數字 ⇒ 退 1 層＝勇基拉
-  const toMax = M.applyAction(picked, { type: 'RESOLVE_SELECTION', selectedIids: ['999'] }, pool);
-  ok(nameOf(toMax.players[0].active) === '凱西',
-    "超出深度的層數應夾制成「退到底」，實得 " + nameOf(toMax.players[0].active));
+  // ⭐ 第二層單獨驗：直接呼叫 resolver（繞過 v6.331 的 engine 閘），確認 v6.330 的夾制本身還在。
+  const r = M.RESOLVERS.get('odd-clock-step2');
+  ok(typeof r === 'function', 'odd-clock-step2 resolver 不見了');
+  const bare = { ...picked, pendingSelection: undefined };
+  const prm = picked.pendingSelection.params;
+  for (const bogus of ['3', '9', '999']) {
+    const toMax = r(bare, 0, [bogus], prm, pool);
+    ok(nameOf(toMax.players[0].active) === '凱西',
+      `resolver 直呼 choice='${bogus}'：超出深度的層數應夾制成「退到底」，實得 ` + nameOf(toMax.players[0].active));
+    ok(!/堆疊深度不足/.test((toMax.log ?? []).map((l) => l?.message ?? l).join('\n')),
+      `resolver 直呼 choice='${bogus}' 仍撞「堆疊深度不足」`);
+  }
+  ok(nameOf(r(bare, 0, ['abc'], prm, pool).players[0].active) === '勇基拉',
+    "resolver 直呼 choice='abc'：解析不出數字 ⇒ 退 1 層＝勇基拉");
 });
 
 console.log('D. 結構：層數不得再由卡面 stage 推論，選項不得寫死做不到的數字');

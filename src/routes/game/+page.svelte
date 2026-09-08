@@ -57,7 +57,7 @@
            nextRestartBaseline, setupSeatRank } from '$lib/game/sync-guards';
   import { staleVersionDiagWhy } from '$lib/tournament/stale-diag';
   import { activeEnergyDiscardCandidates, fieldPickerBaseCandidates } from '$lib/game/selection-candidates';
-  import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit } from '$lib/game/selection-ui';
+  import { selectionAllowsSkip, selectionAllowsCancel, selectionConfirmFloor, selectionHasNoExit, aiStuckSelectionPayload } from '$lib/game/selection-ui';
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
@@ -3259,7 +3259,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         if (_g.pendingSelection && _g.pendingSelection.actorIdx === aiPlayerIndex) {
           console.warn('[AI no-progress guard] AI 連續無進展且 pending 未解 → 以空選擇強制推進');
           aiThinking = true;
-          dispatch(GameActions.resolveSelection([], undefined, _g.pendingSelection.token), { fromAI: true });
+          // ⭐ v6.331：modal-choice 有選項時要送**一個真的選項** —— 新的中央閘會退回空 payload，
+          //   繼續無腦送 [] 會讓這條保險絲白繞 RESOLVE_REJECT_STREAK_MAX 拍才推得動。
+          dispatch(GameActions.resolveSelection(aiStuckSelectionPayload(_g.pendingSelection), undefined, _g.pendingSelection.token), { fromAI: true });
           scheduleAI();
           return;
         }
@@ -9532,6 +9534,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
       minCount: pendingSelection.minCount,
       allowSkipZero: pendingSelection.params?.allowSkipZero === true,
       allowCancel: pendingSelection.params?.allowCancel === true,   // v6.175 有【取消】鈕就有出口
+      // ⭐⭐⭐ v6.331：modal-choice 的候選**不在** selectionItems 裡（selectionItemsRaw 的 switch
+      //   根本沒有這個 case ⇒ 對它永遠回 []）。不把 params 傳下去，述詞就只能看到「候選 0」，
+      //   對全部 38 個 modal-choice 一律判成「沒有出口」。判斷交給 selection-ui 自己接管。
+      params: pendingSelection.params,
     }, selectionItems.length);
   });
   // v2.121：判斷一張卡是否為指定屬性的基本能量。
@@ -12821,6 +12827,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
           {/if}
           {#if pendingSelection.type === 'modal-choice'}
             <!-- modal-choice 直接點按鈕 resolve，不需要確認/跳過 footer -->
+            <!-- ⭐⭐⭐ v6.331：唯一的例外是「一個選項都沒有」的 modal-choice ——
+                 上面 modal-choice-list 會渲染成空的、這裡又什麼都不放
+                 ⇒ 玩家整個畫面**一顆能按的按鈕都沒有**＝真的鎖死。
+                 pendingStuckEmpty 現在對 modal-choice 是用 params.options 算的（v6.331），
+                 所以有選項時這顆鈕不會出現，行為與先前逐 bit 相同。 -->
+            {#if pendingStuckEmpty}
+              <button class="btn-act secondary" onclick={abandonSelection}
+                title="這個選單沒有任何可選項目 — 放棄此效果以繼續">
+                放棄（無可選項目）
+              </button>
+            {/if}
           {:else if isDmgDist}
             <button class="btn-act primary" disabled={actionBusy||!selectionValid} onclick={confirmSelection}>
               確認本批次（{selectionBatchSum}／{pendingSelection.maxCount} 個指示物）

@@ -1,5 +1,87 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.331 modal-choice「空／對不上任何選項」的 payload 中央閘（玩家回報）
+
+BASE `041d7d6d4d9dd485eb57d965b386678bfb1d6d5d`（v6.330，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。
+改動檔：`src/lib/game/selection-ui.ts`（**新增 4 個中央純述詞** ＋ `selectionHasNoExit` 接管 modal-choice）／
+`src/lib/game/engine.ts`（RESOLVE_SELECTION 中央閘）／`src/routes/game/+page.svelte`（述詞接線 ＋ modal-choice footer 逃生口 ＋ AI 保險絲）／
+`src/lib/game/effects/cards/m5_preview.ts`（小霞的朝氣 options 形狀）／
+**新增** `scripts/test-v6331-modal-choice-empty-payload.mjs`／`package.json`（chain 647 → **648** 步）／
+首頁 changelog 三步／`src/lib/version.ts`／`oracle-admin/admin.html`／
+`scripts/test-v6272-*`（PREV_SHA ＋ PREV_ALLOWED）／`scripts/test-v6264-*`（BASE_SHA）／本檔。
+
+### 【零】站長指示（逐字）
+
+> 「請修正 modal-choice 選擇為空時（取消）卡片已消耗但什麼都不做」
+
+**已完整重現**（`repro331.mjs`，走完整 `PLAY_TRAINER → RESOLVE_SELECTION` 流程；奇異時鐘 → 堆疊深度 2 的胡地）：
+
+```
+step1 後 pending= odd-clock-step2  opts= [{"id":"1",…勇基拉},{"id":"2",…凱西}]
+▶ 送空選擇後：pending= (已關閉)
+  active 有沒有變？ 完全沒變
+  棄牌區： 奇異時鐘
+```
+
+### 【一】根因：三道既有閘對 modal-choice **結構上**都攔不到
+
+1. `sanitizeSelectedIids` 把 `modal-choice` 列在 `VALID_IIDS_GATE_EXEMPT`（payload 是**選項 id 字串**不是 iid，
+   必須原封放行）⇒ `_cleanIids === _rawIids`，v6.010 的消毒閘等於不存在。
+2. v6.175 的 reject-and-keep-pending 分支條件是 `_rawIids.length > 0 && _cleanIids.length === 0`
+   ⇒ 真正的**空陣列**直接穿過去。
+3. `engine.ts` 在呼叫 resolver **之前**就把 `pendingSelection` 設成 `undefined`，
+   所以 resolver 什麼都不做時，pending 也已經關掉了。
+
+而 38 個 modal-choice resolver 對空 choice 的寫法是**散的**（實際逐個讀過）：
+・`if (!choice) return st;` ⇒ 卡片已消耗、盤面零改變（回報的症狀本身）
+・`parseInt(iids[0] ?? '0', 10)` ⇒ **靜默幫玩家選了第一個選項**（比什麼都不做更糟：做了沒同意的事）
+・`choice !== 'yes'` ⇒ 靜默當成拒絕
+逐個修＝下一張新卡又會漏，所以收斂成一刀。
+⚠ 首頁 changelog 因此**不可以**寫「效果完全沒有結算」（對第二類是錯的，對抗性審查抓到）：
+  改寫成「效果沒有照玩家的選擇結算 —— 有的什麼都沒發生，有的會直接套用第一個選項」。
+
+### 【二】修法（中央收斂，兩層）
+
+**中央述詞（`selection-ui.ts`，零 import ⇒ 無循環／TDZ 風險）**
+・`modalChoiceAllOptions` / `modalChoiceEnabledOptions`：形狀合法（`{id:string}`）且非 disabled 的選項。
+・`modalChoiceCandidateCount`：stepper 一律算 1。
+・`modalChoicePayloadValid(params, iids)`：payload 必須命中一個 enabled 選項；
+  **零選項／全部 disabled 時回 true**（那時空 payload 是玩家唯一的出口，擋下去會把「卡片白費」升級成「畫面鎖死」）。
+・`aiStuckSelectionPayload(pending)`：AI 無進展保險絲要送的東西。
+
+**第一層 — engine 中央閘**：`RESOLVE_SELECTION` 內、`pendingSelection: undefined` **之前**，
+payload 不合法就原地退回、pending 留著；受 `RESOLVE_REJECT_STREAK_MAX = 3` 上限保護（絕不軟鎖）。
+
+**第二層 — UI**：`pendingStuckEmpty` 現在把 `params` 傳給 `selectionHasNoExit`，
+述詞對 modal-choice 自己改用 `params.options` 重算候選數。
+⚠ 這一條修掉的是**另一個**結構性洞：`selectionItemsRaw` 的 `switch` 沒有 `modal-choice` 這個 case
+⇒ `selectionItems` 對它永遠是 `[]` ⇒ 述詞先前對**全部 38 個** modal-choice 都判「沒有出口」。
+先前之所以沒炸，只是因為 footer 的 modal-choice 分支是空的、那顆放棄鈕根本沒被渲染；
+反過來說，`options` 真的空掉的 modal-choice 就是**玩家一顆按鈕都按不到**。本版補上該分支的逃生口。
+
+### 【三】順手修到的真 bug：小霞的朝氣的**空白按鈕**
+
+`m5_preview.ts` 兩處把選項寫成 `options: ['確認結束回合']`（**字串陣列**）。
+UI 讀的是 `opt.text` / `opt.id`，字串沒有這兩個欄位
+⇒ 玩家看到一顆**完全沒有文字的按鈕**，送出的 payload 是 `[undefined]`。
+全站 38 個 modal-choice 產生點只有這兩處是這個形狀（已加 C1 全站掃描鎖住）。
+
+### 【四】守衛 `test-v6331-modal-choice-empty-payload.mjs`（43 條）
+
+A 段純述詞、B 段**行為端**（真的跑 `applyAction`）、C 段全站掃描、D 段結構鎖（先剝註解）。
+・HEAD-FAIL：在 BASE 上 **31 條紅**（含 B1「pending 留在原地」、B3、C1、D1~D5b）。
+  ⚠ 述詞缺席時用 `MISSING` 哨兵包起來，否則第一條就 throw、後面 40 條永遠跑不到，
+  那種「紅」證明不了每一條都在做事。
+・突變測試 15 個、殺掉 14 個。**⑧ `typeof first === 'string'` → `first != null` 存活，
+  判定為等價突變**（後面接的是 `enabled.some(o => o.id === first)`，`===` 已經保證型別，
+  任何非字串都不可能命中）—— 誠實記錄，不補假條件。
+
+### 【五】既有行為零回歸的依據
+
+・合法選項照常結算（B4/B5）；非 modal-choice 的 `selectionHasNoExit` 語義完全不動（A15）。
+・AI：`ai.ts` 的預設選法本來就是「第一個非 disabled」，`aiStuckSelectionPayload` 與它一致（A16~A19）。
+・streak 上限沿用 v6.175 既有機制，連送空最多被擋 3 次（B6/B7 實測）。
+
 ## v6.330 奇異時鐘：退化層數選單改由「實際進化堆疊深度」產生（玩家回報）
 
 BASE `feb2b687298c1bfe07a7a2c096fc4768f8e12333`（v6.329，遠端 main；`git ls-remote` 確認；一律以 BASE blob 為準）。

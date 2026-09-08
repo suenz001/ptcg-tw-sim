@@ -732,13 +732,30 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     "  //   ⚠ v6.310 標註：**目前不可達（死碼）**—— 上一行 `isOpeningInProgress` 與 `ensureOpeningFinalized` 用的是同一個判準\n"
     + "  //   （effectiveOpeningDone），雙定案一通過，`ensureOpeningFinalized` 必已寫下 openingFinalized。留著純粹是防**未來**有人把\n"
     + "  //   兩邊的判準改成不同（或 finalizeOpening 不再寫旗標）：那時寧可卡住也不吃補抽。它現在**零保護力**，不要把它當成守備。\n", '');
+  // ⭐ v6.331：engine.ts 合法新增「modal-choice 空／無效 payload 的中央閘」——
+  //   一行 import ＋ 一段用 `>>> v6331-modal-choice-payload-gate` 哨兵框住的區塊
+  //   （由 test-v6331 全面接管那一塊的守備）。沿用 v6.267／v6.270／v6.280／v6.310 對 F4 的既有修法：
+  //   把**已知的合法新增**用哨兵剝掉之後，其餘仍必須逐字等於 v6.309 的 blob —— 動到別的地方照樣紅。
+  const stripV6331Engine = (src) => {
+    const IMP = "import { modalChoicePayloadValid } from './selection-ui';   // >>> v6331-modal-choice-payload-import\n";
+    let t = src.split(IMP).join('');
+    const a = t.indexOf('    // >>> v6331-modal-choice-payload-gate\n');
+    const eMark = '    // <<< v6331-modal-choice-payload-gate\n';
+    const e = t.indexOf(eMark);
+    if (a >= 0 && e > a) t = t.slice(0, a) + t.slice(e + eMark.length);
+    return t;
+  };
   for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA],
                           ['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
     const b = readBaseBlob(ROOT, sha, p);
     ok(b.ok, '讀不到 BASE 的 ' + p);
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
-      : (p === 'src/lib/game/engine.ts' ? (() => { const s = stripV6310Engine(raw); ok(s !== raw, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）'); return s; })() : raw);
+      : (p === 'src/lib/game/engine.ts' ? (() => {
+        const s1 = stripV6310Engine(raw); ok(s1 !== raw, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
+        const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
+        return s2;
+      })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
   // sync-guards.ts：整檔比對已由 test-v6274 E1/E2（本體 seg sha）接管；這裡只確認那兩支守衛還在 test chain 裡（不是靜默消失）
