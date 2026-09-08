@@ -6728,6 +6728,12 @@ regPre('長鼻葉|連出巴掌', coinHeadsMultiplyPre(3, 30, '連出巴掌'));
 regPre('蘑蘑菇|二連頭錘', coinHeadsMultiplyPre(2, 10, '二連頭錘'));
 regPre('佛烈托斯|尖刺加農炮', coinHeadsMultiplyPre(3, 30, '尖刺加農炮'));
 regPre('大舌舔|舔舔颶風', coinHeadsMultiplyPre(4, 70, '舔舔颶風'));
+// v6.329 超級米立龍ex（M-P 210/M-P，J 標）——卡面：「擲3次硬幣，造成正面出現的次數×150點傷害。」
+//   ⚠ 這張卡的 id（19625）從 v6.093 起被本站拿去當「傳說的山頂」右半，所以一直收不進卡庫；
+//     v6.328 把右半改號成 19622-1、v6.329 才把 id 還給官方這張卡。
+//   ⭐「超級進化寶可夢【ex】」不必另外登錄：中央述詞 isMegaExCard 判「subtype==='ex' 且卡名以『超級』開頭」
+//     ⇒ 被擊倒時對手取得 3 張獎賞卡、玳蘿／飯匙蛇｜激動力量 等既有機制自動涵蓋。
+regPre('超級米立龍ex|三貫頭擊', coinHeadsMultiplyPre(3, 150, '三貫頭擊'));
 regPre('向日種子|種子機關槍', coinHeadsMultiplyPre(4, 10, '種子機關槍'));
 regPre('蚊香蝌蚪|擺尾拍打', coinHeadsMultiplyPre(2, 20, '擺尾拍打'));
 regPre('蚊香君|連環巴掌', coinHeadsMultiplyPre(2, 30, '連環巴掌'));

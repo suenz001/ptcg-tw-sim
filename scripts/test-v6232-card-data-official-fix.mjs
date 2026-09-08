@@ -151,16 +151,16 @@ T('⭐⭐⭐ 9 張全部：標=J、setCode=M-P-J、在 M-P-J.json、不在 M-P-I
   }
 });
 
-T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 50／M-P-J 101；總數 4938、未重生）', () => {
+T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 51／M-P-J 103；總數 4938、未重生）', () => {
   const mi = INDEX.find((e) => e.code === 'M-P-I'), mj = INDEX.find((e) => e.code === 'M-P-J');
-  eq(mi.cardCount, 50, 'M-P-I cardCount'); eq(mi.count, 50, 'M-P-I count');
-  eq(MPI.length, 50, 'M-P-I.json 實際張數');
+  eq(mi.cardCount, 51, 'M-P-I cardCount'); eq(mi.count, 51, 'M-P-I count');   // v6.329 +麻麻小魚 211
+  eq(MPI.length, 51, 'M-P-I.json 實際張數');
   ok(!('Energy' in (mi.supertypeCounts || {})), 'M-P-I 不該再有 Energy 供應數');
-  eq(Object.values(mi.supertypeCounts).reduce((a, b) => a + b, 0), 50, 'M-P-I supertypeCounts 加總');
-  eq(mj.cardCount, 101, 'M-P-J cardCount'); eq(mj.count, 101, 'M-P-J count');
-  eq(MPJ.length, 101, 'M-P-J.json 實際張數');
+  eq(Object.values(mi.supertypeCounts).reduce((a, b) => a + b, 0), 51, 'M-P-I supertypeCounts 加總');
+  eq(mj.cardCount, 103, 'M-P-J cardCount'); eq(mj.count, 103, 'M-P-J count');   // v6.329 +膽小蟲209 +超級米立龍ex210
+  eq(MPJ.length, 103, 'M-P-J.json 實際張數');
   eq(mj.supertypeCounts.Energy, 18, 'M-P-J Energy 數');
-  eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), 101, 'M-P-J supertypeCounts 加總');
+  eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), 103, 'M-P-J supertypeCounts 加總');
   eq(INDEX.reduce((s, e) => s + e.cardCount, 0), 4938, '全站總張數');   // v6.328 傳說競技場右半換號 +3
   ok(mi.regulationMark === 'I' && mj.regulationMark === 'J', '卡包層級的標被動到了');
 });

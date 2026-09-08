@@ -145,10 +145,8 @@ const IMG_EXCEPTIONS = {
   '18965': 'https://asia.pokemon-card.com/hk/card-img/hk00018965.png',
   '18969': 'https://asia.pokemon-card.com/hk/card-img/hk00018969.png',
   // 「傳說」競技場的右半：官方只發行一張合併橫圖（掛在左半那個 id）⇒ 合成不出來。
-  //   舊 id（v6.328 起為停用卡，v6.329 移除）與新 id 都要列。
-  '19624': 'https://asia.pokemon-card.com/tw/card-img/tw00019621.png',
-  '19625': 'https://asia.pokemon-card.com/tw/card-img/tw00019622.png',
-  '19626': 'https://asia.pokemon-card.com/tw/card-img/tw00019623.png',
+  //   ⚠ v6.329 起 19624/19625/19626 已還給官方那三張卡（膽小蟲／超級米立龍ex／麻麻小魚），
+  //     它們的圖檔可以正常由 id 合成 ⇒ **不可以**再列在例外表裡。
   '19621-1': 'https://asia.pokemon-card.com/tw/card-img/tw00019621.png',
   '19622-1': 'https://asia.pokemon-card.com/tw/card-img/tw00019622.png',
   '19623-1': 'https://asia.pokemon-card.com/tw/card-img/tw00019623.png',

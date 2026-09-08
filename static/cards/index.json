@@ -356,30 +356,30 @@
   "code": "M-P-I",
   "name": "M-P特典卡(I)",
   "regulationMark": "I",
-  "cardCount": 50,
+  "cardCount": 51,
   "supertypeCounts": {
-   "Pokemon": 35,
+   "Pokemon": 36,
    "Trainer": 15
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00014090.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 50
+  "count": 51
  },
  {
   "code": "M-P-J",
   "name": "M-P特典卡(J)",
   "regulationMark": "J",
-  "cardCount": 101,
+  "cardCount": 103,
   "supertypeCounts": {
-   "Pokemon": 75,
+   "Pokemon": 77,
    "Trainer": 8,
    "Energy": 18
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00018077.png",
   "scrapedAt": "2026-04-25T00:00:00.000Z",
   "releaseDate": null,
-  "count": 101
+  "count": 103
  },
  {
   "code": "M3",
@@ -607,15 +607,15 @@
   "code": "M6",
   "name": "綠寶石風暴",
   "regulationMark": "J",
-  "cardCount": 79,
+  "cardCount": 76,
   "supertypeCounts": {
    "Pokemon": 62,
-   "Trainer": 17,
+   "Trainer": 14,
    "Energy": 0
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m6/assets/images/ogp.png",
   "scrapedAt": "2026-07-31T04:45:00.000Z",
   "releaseDate": "2026-08-07",
-  "count": 79
+  "count": 76
  }
 ]

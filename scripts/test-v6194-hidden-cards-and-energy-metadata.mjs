@@ -163,7 +163,7 @@ T('⭐⭐⭐ 實跑 /cards?set=ALL 的 load()：下架卡不在回傳的 cards �
 T('⭐⭐⭐ 實跑 /cards?set=M-P-J 的 load()：單一卡包檢視同樣看不到（走同一份述詞）', () => {
   const ids = new Set(setView.cards.map((c) => String(c.id)));
   for (const id of HID) ok(!ids.has(id), '/cards?set=M-P-J 仍列出下架卡 ' + id);
-  ok(setView.cards.length === 99, 'M-P-J 對玩家應顯示 99 張（101 − 2），實際 ' + setView.cards.length);
+  ok(setView.cards.length === 101, 'M-P-J 對玩家應顯示 101 張（103 − 2；v6.329 補收官方 209/210），實際 ' + setView.cards.length);
   ok(idxView.mode === 'index' && idxView.sets.length === INDEX.length, '卡包列表模式壞了');
 });
 
@@ -284,17 +284,17 @@ T('⭐⭐ /cards 卡包摘要張數必須扣掉下架卡（磚上寫 101、內�
   }
   const adjusted = V.applyHiddenCountsToSets(INDEX);
   const mpj = adjusted.find((e) => e.code === 'M-P-J');
-  ok(mpj.cardCount === 99 && mpj.count === 99, 'M-P-J 對玩家應顯示 99 張，實際 ' + mpj.cardCount + '/' + mpj.count);
+  ok(mpj.cardCount === 101 && mpj.count === 101, 'M-P-J 對玩家應顯示 101 張，實際 ' + mpj.cardCount + '/' + mpj.count);
   ok(mpj.cardCount === setView.cards.length, '卡包磚(' + mpj.cardCount + ') 與內頁實際張數(' + setView.cards.length + ') 對不上');
   const untouched = adjusted.find((e) => e.code === 'SV-P-J');
   ok(untouched.cardCount === 21, '沒有下架卡的卡包被動到了：' + untouched.cardCount);
-  ok(adjusted.reduce((s, e) => s + e.cardCount, 0) === 4933, '對玩家的總張數應為 4933（4935 − 2）');
+  ok(adjusted.reduce((s, e) => s + e.cardCount, 0) === 4936, '對玩家的總張數應為 4936（4938 − 2 張下架卡）');
   // 行為端：index 模式與 set 模式回傳的 sets 都要是扣過的
-  ok(idxView.sets.find((e) => e.code === 'M-P-J').cardCount === 99, '/cards 卡包列表沒有扣');
-  ok(setView.sets.find((e) => e.code === 'M-P-J').cardCount === 99, '/cards?set=… 帶的 sets 沒有扣');
-  ok(allView.sets.find((e) => e.code === 'M-P-J').cardCount === 99, '/cards?set=ALL 帶的 sets 沒有扣');
+  ok(idxView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards 卡包列表沒有扣');
+  ok(setView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards?set=… 帶的 sets 沒有扣');
+  ok(allView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards?set=ALL 帶的 sets 沒有扣');
   // ⚠ index.json 本身不可以被改（卡庫完整性守衛靠它對帳）
-  ok(INDEX.find((e) => e.code === 'M-P-J').cardCount === 101, 'index.json 被改掉了 —— 資料層張數必須維持 101');
+  ok(INDEX.find((e) => e.code === 'M-P-J').cardCount === 103, 'index.json 與實際檔案不符 —— 資料層應為 103（v6.329 補收官方 209/210）');
 });
 
 T('⭐⭐⭐ 行為端：filterPlayerSelectable 對真實卡庫的輸出剛好少掉所有下架卡', () => {
@@ -431,7 +431,7 @@ T('⭐ 基本能量卡名沿用站內慣例「基本【X】能量」（engine �
 console.log('⑥ 校驗和：張數／對照表／id 唯一性全部自洽');
 
 T('⭐⭐⭐ index.json 逐包張數 = 實際檔案；三個動到的卡包數字正確', () => {
-  const want = { 'M-P-J': 101, 'SV-P-I': 22, 'SV-P-J': 21 };
+  const want = { 'M-P-J': 103, 'SV-P-I': 22, 'SV-P-J': 21 };   // v6.329 補收官方 209/210
   for (const e of INDEX) {
     const arr = JSON.parse(readFileSync(join(dir, e.code + '.json'), 'utf8'));
     ok(e.cardCount === arr.length && e.count === arr.length,

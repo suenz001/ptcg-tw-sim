@@ -1,27 +1,21 @@
-// ⭐⭐⭐ v6.328 守衛：「傳說」競技場右半 id 換號，把官方 id 空間還回去
+// ⭐⭐⭐ v6.328／v6.329 守衛：「傳說」競技場右半 id 換號 ＋ 官方 id 已歸還
 //
 // 事故經過（2026-09-07 查出）：
 //   v6.093 把「傳說」競技場拆成左右兩張獨立卡片時，右半需要新的 cardId，
 //   當時**自己捏了 19624 / 19625 / 19626**。
 //   但那三個號碼**其實是台灣官方 M-P 209~211**（膽小蟲 J／超級米立龍ex J／麻麻小魚 I）——
 //   repo 自己的 `scripts/data/official-set-manifest.json` 早就把它們列在 M-P 底下。
-//   後果：那三張官方卡永遠補不進來（補了就 id 重複），
-//   其中「超級米立龍ex」是站內完全沒有、但標準賽可用的卡。
+//   後果：那三張官方卡永遠補不進來，其中「超級米立龍ex」是標準賽可用、站內完全沒有的卡。
 //
 // ⚠⚠ 為什麼既有守衛全都沒抓到（安慰劑型態）：
 //   `test-official-set-completeness` 的判準是 `if (OURS.has(String(id))) continue;`
-//   —— **只問 id 在不在我方卡庫，不問那是不是同一張卡**。
-//   19624 一直在卡庫（是傳說的海溝右半）⇒ 一路綠燈。B2 補的就是這個缺口。
+//   —— **只問 id 在不在我方卡庫，不問那是不是同一張卡**。B2 補的就是這個缺口。
 //
-// v6.328 的修法（**只做換號**）：
-//   ・右半改成「左半 id ＋ `-1`」——官方 id 一律純數字，這種形式結構上不可能再被官方佔用。
-//   ・舊 id 的**卡片資料留著**、登記進 `$lib/cards/visibility` 的 HIDDEN_FROM_PLAYERS
-//     ⇒ 部署當下進行中的對局／部署前的錦標賽報名快照仍解析成傳說場地卡，**零破壞**；
-//        玩家選不到；舊牌組載入時由 migrateCardId 換成新 id。
-//
-// 🔨 v6.329（下一版）才會：刪掉那三筆停用卡 → **同版**把 19624/19625/19626 讓給官方那三張。
-//   ⚠⚠ 順序反了（先加官方卡、遷移表卻還在）會讓玩家新放的官方卡被遷移吃掉 ——
-//   這正是 v6.328 第一版設計被對抗性審查抓到的錯，E 區的交接斷言就是為了鎖住它。
+// 兩版分工（⚠ 遷移表與新語義**不可以同版共存**，v6.328 第一版設計就是栽在這裡）：
+//   ・v6.328 只換號：右半改成「左半 id ＋ `-1`」（官方 id 一律純數字 ⇒ 結構上不可能再撞），
+//     舊 id 的卡片資料留著並登記為停用卡 ⇒ 進行中的對局／舊報名快照零破壞。
+//   ・v6.329 才歸還：刪停用卡 ＋ 移除停用登記 ＋ 加官方卡，**三件同版**。
+//     本檔的 D 區從 v6.329 起改成「歸還完成鎖」——反向確保不會有人把 id 又拿回去自用。
 import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -34,7 +28,6 @@ function T(name, fn) {
   catch (e) { console.log('  ✗ ' + name + '\n      ' + (e && e.message)); fail++; }
 }
 
-// ── 卡庫 ─────────────────────────────────────────────────────────────────────
 const dir = join(ROOT, 'static/cards');
 const INDEX = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
 const liveCodes = new Set(INDEX.map((e) => e.code));
@@ -45,13 +38,13 @@ for (const f of readdirSync(dir)) {
 }
 const MANIFEST = JSON.parse(readFileSync(join(ROOT, 'scripts/data/official-set-manifest.json'), 'utf8'));
 
-// ── 判準函式（A1／B2 與它們的自檢共用同一份，避免「自檢抄一份判準」的安慰劑）─────
+// ── 判準函式（正式斷言與反安慰劑自檢**共用同一份**，不得各抄一份）───────────────
 /** 本站自造的 cardId 必須有非數字字元；官方 id 一律純數字。 */
 const isSiteMintedId = (id) => !/^\d+$/.test(String(id));
 /** 官方快照說這個 id 屬於 `allowed` 這幾個本地卡包，我方收的 setCode 對不對得起來。 */
 const setCodeMatchesOfficial = (allowed, setCode) => allowed.has(setCode);
 
-// ── 從**產品端**取表（不在測試檔自己抄一份清單，否則新增第 4 組時守衛會靜默失效）──
+// ── 從**產品端**取表（不在測試檔自己抄清單；抄清單只守得住「今天這三張」）─────────
 const S = join(ROOT, '.x6328-s.js'), E = join(ROOT, '.x6328-e.ts'), O = join(ROOT, '.x6328-o.mjs');
 const cleanup = () => { for (const p of [S, E, O]) { try { if (existsSync(p)) unlinkSync(p); } catch { /* ignore */ } } };
 let M;
@@ -72,6 +65,8 @@ try {
 const LEFT_IDS = [...M.TWO_CARD_STADIUM_LEFT_IDS];
 const RIGHT_IDS = LEFT_IDS.map((l) => M.TWO_CARD_STADIUM_PAIR_IDS[l]);
 const HIDDEN = M.HIDDEN_FROM_PLAYERS;
+/** 那三個曾被本站佔用、v6.329 已歸還的官方 id（判準：官方快照有、而且是我方右半 id 去掉 `-1` 之外的號碼） */
+const RECLAIMED = { '19624': '膽小蟲', '19625': '超級米立龍ex', '19626': '麻麻小魚' };
 
 console.log('A. 右半 id 的結構性不變量（清單一律從產品端的配對表推導）');
 
@@ -102,30 +97,26 @@ T('⭐ A2 左右半必須是同一張官方卡（卡名逐字相同、都是競�
   }
 });
 
-console.log('B. 官方 id 空間：被佔用的三個 id 已停用並排定歸還');
+console.log('B. 官方 id 空間');
 
-T('⭐⭐⭐ B1 舊右半 id 必須①資料還在②登記為停用卡③指向對應的新右半④已離開配對表', () => {
-  const retired = Object.entries(HIDDEN).filter(([, v]) => RIGHT_IDS.includes(v.replacementId));
-  ok(retired.length === LEFT_IDS.length,
-    '登記為停用的舊右半有 ' + retired.length + ' 筆，應為 ' + LEFT_IDS.length + ' 筆');
-  for (const [oldId, info] of retired) {
-    const card = BY_ID.get(oldId);
-    ok(card, `停用卡 ${oldId} 的資料被刪了 —— 進行中的對局／舊報名快照會變成查不到的卡`);
-    ok(card.subtype === 'Stadium', `${oldId} 不是競技場：${card.subtype}`);
-    ok(BY_ID.get(info.replacementId)?.name === card.name,
-      `${oldId} 的 replacementId ${info.replacementId} 不是同一張卡`);
-    ok(M.isHiddenFromPlayers(oldId), `${oldId} 沒有被判成「玩家選不到」`);
-    ok(M.twoCardStadiumPartnerCardId(oldId) === null,
-      `⚠ 舊右半 ${oldId} 還留在配對表裡 —— 那三個 id 排定要讓給官方卡，兩套判準不可以並存`);
-    ok(M.migrateCardId(oldId) === info.replacementId,
-      `舊牌組裡的 ${oldId} 沒有被換成 ${info.replacementId}（玩家的傳說場地卡會壞掉）`);
+T('⭐⭐⭐ B1 被佔用過的三個官方 id 必須已完全退出本站的競技場邏輯', () => {
+  for (const [id, name] of Object.entries(RECLAIMED)) {
+    const c = BY_ID.get(id);
+    ok(c, `官方 id ${id}（${name}）不在卡庫`);
+    ok(c.name === name, `${id} 應該是「${name}」，實得「${c.name}」`);
+    ok(c.subtype !== 'Stadium', `${id} 竟然又變回競技場了 —— 這個 id 屬於官方的「${name}」`);
+    ok(!M.isHiddenFromPlayers(id), `${id} 仍被登記為停用卡 —— 歸還之後玩家必須選得到`);
+    ok(M.twoCardStadiumPartnerCardId(id) === null,
+      `⚠ 官方卡 ${id}（${name}）竟被當成競技場的另一半 —— 兩套判準不可以並存`);
+    ok(M.migrateCardId(id) === id,
+      `⚠⚠ ${id} 仍然會被 migrateCardId 換成別的 id ⇒ 玩家把這張官方卡放進牌組會被靜默吃掉。`
+      + '\n      → 「遷移表」與「新語義」不可以同版共存（v6.328 第一版設計就是栽在這裡）');
   }
 });
 
 T('⭐⭐⭐ B2 官方快照宣告某 id 屬於某卡包 → 我方若也收了，setCode 必須對得起來', () => {
   // ⭐ 這條就是 v6.328 之前**完全沒有人在守**的維度：
   //   既有的 test-official-set-completeness 只問「id 在不在」，不問「是不是同一張卡」。
-  //   在 v6.327 上跑會紅：快照說 19624 屬於 M-P，我方卻收在 M6。
   const bad = [], exempted = [];
   let checked = 0;
   for (const [code, v] of Object.entries(MANIFEST.sets ?? {})) {
@@ -136,7 +127,7 @@ T('⭐⭐⭐ B2 官方快照宣告某 id 屬於某卡包 → 我方若也收了�
       if (!c) continue;                       // 沒收錄 → 由 test-official-set-completeness 管
       checked++;
       if (setCodeMatchesOfficial(allowed, c.setCode)) continue;
-      // 唯一豁免：**已登記為停用、且排定在 v6.329 把 id 讓出去**的那幾張。
+      // 唯一豁免：**已登記為停用、且排定把 id 讓出去**的過渡期卡（v6.329 之後應為 0 筆）
       if (Object.prototype.hasOwnProperty.call(HIDDEN, String(id))) { exempted.push(String(id)); continue; }
       bad.push(`${id}「${c.name}」官方屬於 ${code}(${[...allowed].join('/')})，我方卻收在 ${c.setCode}`);
     }
@@ -144,7 +135,6 @@ T('⭐⭐⭐ B2 官方快照宣告某 id 屬於某卡包 → 我方若也收了�
   ok(checked >= 4000, '只比對到 ' + checked + ' 個 id —— 掃描器多半壞了（下限斷言）');
   ok(bad.length === 0,
     '官方 id 被指到別的卡包共 ' + bad.length + ' 筆：\n      ' + bad.slice(0, 10).join('\n      '));
-  // ⚠ 豁免不可以無限期存在：每一筆都必須是「排定歸還」的停用右半，而不是隨手加白名單。
   for (const id of exempted) {
     ok(RIGHT_IDS.includes(HIDDEN[id].replacementId),
       `${id} 借用了 B2 的豁免，但它不是「排定歸還的停用右半」 —— 不得用停用清單繞過本條`);
@@ -157,40 +147,28 @@ T('⭐⭐ B2b 反安慰劑：B2 用的 setCodeMatchesOfficial 正反樣本都要
   ok(setCodeMatchesOfficial(allowed, 'M6') === false, '判準把錯誤卡包判成合法');
 });
 
-T('⭐ B3 M6 的張數與 index.json 對得起來（不寫死魔術數字）', () => {
+T('⭐ B3 M6 的張數與 index.json 對得起來（不寫死魔術數字），且不再有停用的右半', () => {
   const m6 = JSON.parse(readFileSync(join(dir, 'M6.json'), 'utf8'));
   const decl = INDEX.find((e) => e.code === 'M6');
   ok(decl && decl.cardCount === m6.length && decl.count === m6.length,
     `index.json 宣告 M6 ${decl?.cardCount}/${decl?.count} 張，實際檔案 ${m6.length} 張`);
-  const stadium = m6.filter((c) => c.subtype === 'Stadium'
-    && (LEFT_IDS.includes(String(c.id)) || RIGHT_IDS.includes(String(c.id)) || M.isHiddenFromPlayers(String(c.id))));
-  ok(stadium.length === LEFT_IDS.length * 3,
-    `兩張合一競技場相關的筆數應為 左${LEFT_IDS.length}＋新右${LEFT_IDS.length}＋停用右${LEFT_IDS.length}，實得 ${stadium.length}`);
+  const stadiumRelated = m6.filter((c) => LEFT_IDS.includes(String(c.id)) || RIGHT_IDS.includes(String(c.id)));
+  ok(stadiumRelated.length === LEFT_IDS.length * 2,
+    `兩張合一競技場應為 左${LEFT_IDS.length}＋右${LEFT_IDS.length} 筆，實得 ${stadiumRelated.length}`);
+  const stillHidden = m6.filter((c) => M.isHiddenFromPlayers(String(c.id)));
+  ok(stillHidden.length === 0, 'M6 仍有停用卡（v6.329 應該已刪除）：' + stillHidden.map((c) => c.id).join(', '));
 });
 
-console.log('C. 行為端：舊牌組載入、送官網合併、冪等性');
+console.log('C. 行為端：牌組載入、送官網合併、冪等性');
 
-T('⭐⭐⭐ C1 舊牌組（帶舊右半 id）載入後不得殘留舊 id，且張數守恆', () => {
-  const oldRight = Object.keys(HIDDEN).filter((k) => RIGHT_IDS.includes(HIDDEN[k].replacementId));
-  for (const oldId of oldRight) {
-    const left = M.twoCardStadiumPartnerCardId(HIDDEN[oldId].replacementId);
-    const deck = { id: 'd', name: 'x', entries: [{ cardId: left, count: 2 }, { cardId: oldId, count: 2 }] };
-    const got = M.migrateDeck(deck).entries;
-    ok(!got.some((e) => e.cardId === oldId), `載入後仍殘留舊 id ${oldId}：` + JSON.stringify(got));
-    ok(got.reduce((s, e) => s + e.count, 0) === 4, '張數沒有守恆：' + JSON.stringify(got));
-    const byId = Object.fromEntries(got.map((e) => [e.cardId, e.count]));
-    ok(byId[left] === 2 && byId[HIDDEN[oldId].replacementId] === 2, '左右張數不對：' + JSON.stringify(got));
-  }
-});
-
-T('⭐⭐ C2 拆卡之前的更舊牌組（只有左半 N 張）仍要攤成左右各半', () => {
+T('⭐⭐ C1 拆卡之前的舊牌組（只有左半 N 張）仍要攤成左右各半', () => {
   const left = LEFT_IDS[0], right = RIGHT_IDS[0];
   const got = M.migrateDeck({ id: 'd', name: 'y', entries: [{ cardId: left, count: 4 }] }).entries
     .map((e) => [e.cardId, e.count]);
   ok(JSON.stringify(got) === JSON.stringify([[left, 2], [right, 2]]), '攤開結果錯誤：' + JSON.stringify(got));
 });
 
-T('⭐⭐ C3 冪等：新格式的牌組連跑三次都不得變動（不會愈跑愈多張）', () => {
+T('⭐⭐ C2 冪等：新格式的牌組連跑三次都不得變動（不會愈跑愈多張）', () => {
   let d = { id: 'd', name: 'z', entries: [{ cardId: LEFT_IDS[1], count: 2 }, { cardId: RIGHT_IDS[1], count: 2 }] };
   const want = JSON.stringify(d.entries);
   for (let i = 0; i < 3; i++) {
@@ -199,34 +177,22 @@ T('⭐⭐ C3 冪等：新格式的牌組連跑三次都不得變動（不會愈�
   }
 });
 
-T('⭐⭐ C4 送去官網牌組工具前：新右半與**舊**右半都要併回官方那張左半的 id', () => {
+T('⭐⭐ C3 送去官網牌組工具前：右半要併回官方那張左半的 id（右半 id 官網不認得）', () => {
   const left = LEFT_IDS[2], right = RIGHT_IDS[2];
   const a = M.mergeTwoCardStadiumEntries([{ cardId: left, count: 2 }, { cardId: right, count: 2 }])
     .map((e) => [e.cardId, e.count]);
-  ok(JSON.stringify(a) === JSON.stringify([[left, 4]]), '新右半合併錯誤：' + JSON.stringify(a));
-  const oldId = Object.keys(HIDDEN).find((k) => HIDDEN[k].replacementId === right);
-  ok(oldId, '找不到對應的停用右半 id');
-  const b = M.mergeTwoCardStadiumEntries([{ cardId: left, count: 1 }, { cardId: oldId, count: 1 }])
-    .map((e) => [e.cardId, e.count]);
-  ok(JSON.stringify(b) === JSON.stringify([[left, 2]]),
-    '舊右半的 fail-safe 失效（沒跑過 migrate 的舊報名快照會送出官網不認得的 id）：' + JSON.stringify(b));
+  ok(JSON.stringify(a) === JSON.stringify([[left, 4]]), '右半合併錯誤：' + JSON.stringify(a));
 });
 
-console.log('D. 交接給 v6.329 的硬約束');
-
-T('⭐⭐⭐ D1 那三個官方 id 目前**還不是**官方那三張卡（v6.329 才會歸還，順序反了會吃掉新卡）', () => {
-  // ⚠ 這條是「交接鎖」：只要有人在遷移表還在的情況下把官方卡加進來，這裡就會紅。
-  //   v6.093→v6.328 的第一版設計就是栽在這裡：migrateCardId 會把玩家新放的
-  //   超級米立龍ex(19625) 無條件換成傳說的山頂右半，那張卡等於完全不能用。
-  for (const [oldId, info] of Object.entries(HIDDEN)) {
-    if (!RIGHT_IDS.includes(info.replacementId)) continue;
-    const c = BY_ID.get(oldId);
-    ok(c && c.subtype === 'Stadium' && c.setCode === 'M6',
-      `${oldId} 已經被換成別的卡（${c?.name} / ${c?.setCode}），但遷移表還在 ⇒ 那張新卡會被靜默吃掉。`
-      + '\n      → v6.329 必須「刪停用卡 ＋ 移除本表項目 ＋ 加官方卡」**同版**完成');
-    ok(M.migrateCardId(oldId) !== oldId, `${oldId} 的遷移已失效，舊牌組會壞掉`);
+T('⭐⭐⭐ C4 歸還之後：那三個官方 id **不可以**再被合併回競技場左半', () => {
+  // ⚠ v6.328 的過渡期 fail-safe 會把舊右半併回左半；v6.329 移除停用登記之後它必須自動失效，
+  //   否則玩家牌組裡的「膽小蟲」送去官網時會被換成「傳說的海溝」。
+  for (const [id, name] of Object.entries(RECLAIMED)) {
+    const out = M.mergeTwoCardStadiumEntries([{ cardId: id, count: 2 }]).map((e) => [e.cardId, e.count]);
+    ok(JSON.stringify(out) === JSON.stringify([[id, 2]]),
+      `${id}（${name}）被併成別的卡了：` + JSON.stringify(out));
   }
 });
 
-console.log(`\n${fail === 0 ? '✅' : '❌'} v6.328 兩張合一競技場 id 換號：${pass} PASS, ${fail} FAIL`);
+console.log(`\n${fail === 0 ? '✅' : '❌'} v6.328/v6.329 兩張合一競技場 id 換號與歸還：${pass} PASS, ${fail} FAIL`);
 process.exit(fail === 0 ? 0 : 1);

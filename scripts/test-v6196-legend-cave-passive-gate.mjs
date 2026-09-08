@@ -52,7 +52,8 @@ let pass=0,fail=0;const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(
 
 // ── 卡面事實錨（掃描器下限斷言：卡池變動導致抓不到卡時要紅，而不是靜默全綠）──
 const CAVE='19623';           // 傳說的熔岩洞 075/076
-const CAVE2='19626';          // 傳說的熔岩洞 076/076（兩張合一的另一半，rulesText 相同）
+const CAVE2='19623-1';        // 傳說的熔岩洞 076/076（兩張合一的另一半，rulesText 相同）
+                              // ⚠ v6.328 換號：舊 id 19626 其實是官方 M-P 211（麻麻小魚），v6.329 已歸還
 const MOAT=findId('護城龍', ab('太古防壁'));
 const BUG=findId('蟲甲聖', ab('球形盾牌'));
 const PIXY=findId('超級皮可西ex', ab('光之翼'));

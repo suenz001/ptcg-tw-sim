@@ -1666,5 +1666,37 @@
     "regulationMark": "I",
     "rulesText": "選擇1隻對手的備戰寶可夢，與戰鬥寶可夢互換。",
     "illustrator": "akagi"
+  },
+  {
+    "id": "19626",
+    "name": "麻麻小魚",
+    "supertype": "Pokemon",
+    "subtype": "Basic",
+    "setCode": "M-P-I",
+    "collectorNumber": "211/M-P",
+    "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019626.png",
+    "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19626/",
+    "scrapedAt": "2026-09-08T00:00:00.000Z",
+    "regulationMark": "I",
+    "stage": "Basic",
+    "hp": 40,
+    "pokemonType": "Lightning",
+    "attacks": [
+      {
+        "name": "紋絲不動",
+        "cost": [
+          "Colorless"
+        ],
+        "damage": "",
+        "effect": "將這隻寶可夢恢復「10」HP。"
+      }
+    ],
+    "weakness": {
+      "type": "Fighting",
+      "value": "×2"
+    },
+    "pokedexNumber": 602,
+    "species": "電魚寶可夢",
+    "illustrator": "Saboteri"
   }
 ]

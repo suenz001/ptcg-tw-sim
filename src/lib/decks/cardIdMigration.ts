@@ -122,7 +122,64 @@ export function migrateCardId(cardId: string): string {
 import type { Deck, DeckEntry } from './types';
 export function migrateDeck(d: Deck): Deck {
   const mapped = mergeDuplicateEntries(d.entries.map(e => ({ ...e, cardId: migrateCardId(e.cardId) })));
-  return splitTwoCardStadiumEntries({ ...d, entries: mapped });
+  return splitTwoCardStadiumEntries(repairLegacyStadiumRightIds({ ...d, entries: mapped }));
+}
+
+/**
+ * ⭐⭐⭐ v6.329：v6.093~v6.328 期間存下來的牌組，「傳說」競技場的右半用的是**舊 id**
+ *   （19624/19625/19626）—— 而那三個 id 從 v6.329 起是官方的
+ *   膽小蟲 209／超級米立龍ex 210／麻麻小魚 211。
+ *
+ * ⚠⚠ 為什麼**不能**放進 `migrateCardId`：那支是**無條件、永久**的，而且 `engine.ts` 的
+ *   createGame 咽喉點也會呼叫它 ⇒ 會把玩家新放的那三張官方卡靜默換成競技場右半
+ *   （v6.328 的第一版設計就是栽在這裡，對抗性審查實跑證明「新卡效果是 0」）。
+ *
+ * ⚠⚠ 不修又會怎樣（第一輪對抗性審查抓到）：`migrateCardId` 不動 19624 之後，
+ *   接著跑的 `splitTwoCardStadiumEntries` 找不到右半 entry
+ *   （`d.entries.some(x => x.cardId === rightId)` 為 false），就把玩家**原本已經拆好**的
+ *   左半 2 張**再拆一次**成 1+1 —— 左右張數仍然相等 ⇒ `validateDeck` 完全不會提示，
+ *   玩家一套傳說場地卡憑空消失、多出兩張膽小蟲，60 張、合法、零警告。
+ *
+ * ⭐⭐⭐ 判準用**牌組形狀**，不是用「存檔時間」（第二輪審查把時間戳版本打穿了）：
+ *   時間戳描述的是「牌組什麼時候被存」，不是「entries 是哪個年代的格式」，
+ *   這兩件事在**匯入路徑上會脫鉤** —— 公布欄匯入／JSON 匯入都是
+ *   `{ ...newDeck(名稱), entries: 舊資料 }`（新時間戳 ＋ 舊 entries）⇒ 舊版判成「新牌組」不修；
+ *   而官網代碼匯入寫的是 `updatedAt: Date.now()`（**數字**）⇒ `String(178…) < '2026…'` 恆真
+ *   ⇒ 反而把玩家剛匯入的超級米立龍ex 換成競技場右半。
+ *
+ * ⇒ 換舊右半的條件是：**這副牌同時含對應的左半、而且還沒有新右半**。
+ *   ・舊格式（左2 ＋ 舊右2）⇒ 命中，修回「左2 ＋ 新右2」。
+ *   ・新牌組（左2 ＋ 新右2 ＋ 膽小蟲2）⇒ 已有新右半 ⇒ 不動，膽小蟲保留。
+ *   ・只放那三張官方卡（沒有左半）⇒ 不動。
+ * ⚠ 已知取捨：「只有右半、沒有左半」的壞資料不再自動換
+ *   （v6.328 會換完再由驗證提示；v6.329 起 19624 本來就是一張合法的卡）。
+ * ⭐ 為什麼選形狀而不是時間：**失效方向不同**。形狀判錯的結果是左右張數不等
+ *   ⇒ `validateDeck` 會明確提示；時間戳判錯是**靜默改壞、零提示**。
+ */
+const LEGACY_STADIUM_RIGHT_ID: Readonly<Record<string, string>> = {
+  '19624': '19621-1',   // 傳說的海溝  （19624 從 v6.329 起是官方的「膽小蟲」209/M-P）
+  '19625': '19622-1',   // 傳說的山頂  （19625 ＝ 官方「超級米立龍ex」210/M-P）
+  '19626': '19623-1',   // 傳說的熔岩洞（19626 ＝ 官方「麻麻小魚」211/M-P）
+};
+
+export function repairLegacyStadiumRightIds(d: Deck): Deck {
+  const has = (id: string) => d.entries.some((x) => x.cardId === id && x.count > 0);
+  // 舊右半 id → 左半 id（由 TWO_CARD_STADIUM_SPLIT 反查，避免第三份清單漂移）
+  const leftOf: Record<string, string> = {};
+  for (const [oldRight, newRight] of Object.entries(LEGACY_STADIUM_RIGHT_ID)) {
+    const left = Object.keys(TWO_CARD_STADIUM_SPLIT).find((l) => TWO_CARD_STADIUM_SPLIT[l] === newRight);
+    if (left) leftOf[oldRight] = left;
+  }
+  let changed = false;
+  const entries = d.entries.map((e) => {
+    const to = LEGACY_STADIUM_RIGHT_ID[e.cardId];
+    const left = leftOf[e.cardId];
+    if (!to || !left) return e;
+    if (!has(left) || has(to)) return e;   // 沒有左半／已經有新右半 ⇒ 這是真的那張官方卡
+    changed = true;
+    return { ...e, cardId: to };
+  });
+  return changed ? { ...d, entries: mergeDuplicateEntries(entries) } : d;
 }
 
 /**

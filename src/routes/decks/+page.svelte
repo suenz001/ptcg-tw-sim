@@ -1174,7 +1174,10 @@
       mergedEntries = splitTwoCardStadiumEntries({ entries: mergedEntries } as Deck).entries;
       // 更新 active deck — v4.972 hotfix: saveDecks 沒 module top-level import
       //   仿 line 374 pattern：dynamic import storage.saveDecks + pushDeck() cloud sync
-      const updated = { ...active!, entries: mergedEntries, updatedAt: Date.now() };
+      // ⚠ v6.329：`Deck.updatedAt` 的型別是 **ISO 字串**（`newDeck`／`upsertDeck` 都寫 ISO）。
+      //   這裡原本寫 `Date.now()`（數字）⇒ 雲端合併的 `d.updatedAt > existing.updatedAt`
+      //   會拿數字跟 ISO 字串比大小，永遠比不出正確結果。
+      const updated = { ...active!, entries: mergedEntries, updatedAt: new Date().toISOString() };
       decks = decks.map(d => d.id === active!.id ? updated : d);
       import('$lib/decks/storage').then(({ saveDecks }) => saveDecks(decks));
       setDirty(updated.id);  // v5.114

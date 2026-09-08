@@ -3501,5 +3501,85 @@
   "regulationMark": "J",
   "rulesText": "這張卡必須在上個對手的回合自己的「超級進化寶可夢【ex】」【昏厥】了才可使用。\n\n從自己的牌庫選擇最多2張基本能量卡，附於自己的1隻「超級進化寶可夢【ex】」身上。並且重洗牌庫。",
   "illustrator": "En Morikura"
+ },
+ {
+  "id": "19624",
+  "name": "膽小蟲",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "209/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019624.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19624/",
+  "scrapedAt": "2026-09-08T00:00:00.000Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "abilities": [
+   {
+    "label": "特性",
+    "name": "懦弱",
+    "effect": "若對手的場上有「寶可夢【ex】」，則這隻寶可夢【撤退】所需的能量全部消除。"
+   }
+  ],
+  "attacks": [
+   {
+    "name": "衝撞",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "10",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 767,
+  "species": "疾行寶可夢",
+  "illustrator": "Tonji Matsuno"
+ },
+ {
+  "id": "19625",
+  "name": "超級米立龍ex",
+  "supertype": "Pokemon",
+  "subtype": "ex",
+  "setCode": "M-P-J",
+  "collectorNumber": "210/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019625.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19625/",
+  "scrapedAt": "2026-09-08T00:00:00.000Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 260,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "三貫頭擊",
+    "cost": [
+     "Water",
+     "Water",
+     "Water"
+    ],
+    "damage": "150×",
+    "effect": "擲3次硬幣，造成正面出現的次數×150點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 978,
+  "illustrator": "Keisuke Azuma"
  }
 ]
