@@ -208,6 +208,29 @@ node --input-type=module -e "globalThis.fetch=()=>Promise.reject(new Error('SIM_
 連得上時才多做一次「我方資料是否仍與官網一致」的加值檢查。
 兩種情況都實測過：斷網 32/0、有網 32/0 且印出「官網實測 4/4 張相符」。
 
+### 【四之四】第二次 CI 紅：兩支既有守衛因「M6a 不開放組牌」翻紅（Rule 40）
+
+⚠ 這兩支我**在本機也重現得到**，是我第一次跑完整 npm test 時**沒看到**——
+原因不是測試環境，是**我自己的驗證腳本**：`/tmp` 的 runner 印的是 `===== FAIL[511]`，
+而我一直用 `grep "^### FAIL"` 過濾 ⇒ 所有失敗被靜默吃掉，只剩 `batch done` 讓我以為全綠。
+
+⭐⭐⭐ **通則（和 Rule 38 同型，只是發生在驗證流程上）：
+「產生輸出的那一份」與「判斷成敗的那一份」不可以是兩份。**
+改法：runner 自己統計，最後一行一定印 `RANGE a-b COMPLETED FAILED=N`，不再依賴任何 grep 樣式。
+⚠ 順帶抓到第二個洞：`while IFS= read -r line` 會**漏掉沒有換行結尾的最後一行**
+（第 649 步 `test-v6327` 從來沒被我的分批跑到）。已補跑並確認綠。
+
+兩支守衛本身（都是 Rule 40：改判準到意圖級，不是放寬）：
+- **`test-v6194`** 釘死 `pool = filterPlayerSelectable(allCards)` **逐字**。v6.333 在外面再包一層
+  `filterDeckSelectable(...)`。它的意圖是「牌池有經過下架卡述詞、而 poolById 沒有」，
+  不是「只能有一層」⇒ 改成 `pool\s*=\s*[^;]*filterPlayerSelectable\(allCards\)`，
+  並補**兩個方向**的對照（舊寫法要抓得到、外包一層要放行、poolById 被濾要紅）。
+- **`test-v6192`** 的 `pick(name)` 挑到 M6a 的拉普拉斯 ⇒ ⑤「ex／非 ex 各 4 張仍合法」被
+  組牌閘擋下而誤紅，**引擎沒壞**。⇒ `pick` 走中央 `isDeckLockedCard` 排除；
+  同時讓 `scripts/lib/pick-printing.mjs` **預設就排除不開放對戰的卡包**
+  （測試挑印刷幾乎都是為了拿去跑對戰，挑到本來就不能用的卡毫無意義），
+  要挑那些卡得明確傳 `{ includeDeckLocked: true }`，`test-v6333` 有正反對照釘住這個預設。
+
 ### 【五】我這一輪講錯、當面更正的地方
 
 跟站長回報時我寫「另外 10 張帶的是舊標」—— **錯的，是 8 張**（A2/C1/D2/E1/F1/G1）。

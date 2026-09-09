@@ -15,6 +15,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDeckLockedCard } from './lib/deck-locked-sets.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6192-s.js'), E = join(ROOT, '.v6192-e.ts'), O = join(ROOT, '.v6192-o.mjs');
@@ -45,7 +46,10 @@ for (const f of readdirSync(dir)) {
 }
 const all = [...byId.values()];
 const liveNames = new Set(all.map(c => c.name));
-const pick = (name, extra) => all.find(c => c.name === name && (!extra || extra(c)));
+// ⚠ v6.333：這一支測的是**牌組合法性**，挑到「不開放對戰」卡包（M6a）的印刷毫無意義，
+//   而且會產生假警報（拉普拉斯 M6a 版被合法性檢查擋下 ⇒ ⑤ 誤紅，但引擎沒壞）。
+//   判準走中央 deck-locked-sets，不在這裡寫第二份卡包清單。
+const pick = (name, extra) => all.find(c => c.name === name && !isDeckLockedCard(c) && (!extra || extra(c)));
 
 let pass = 0, fail = 0;
 const chk = (t, cond, extra = '') => { if (cond) { pass++; console.log('  OK', t); } else { fail++; console.log('  ❌', t, extra); } };

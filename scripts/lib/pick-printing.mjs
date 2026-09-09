@@ -1,3 +1,5 @@
+import { isDeckLockedCard } from './deck-locked-sets.mjs';
+
 // ⭐⭐⭐ v6.333 測試用：從卡池挑「**具備指定招式／特性的那一張印刷**」。
 //
 // ⚠⚠ 為什麼需要這個（M6a「30th CELEBRATION」帶出來的）：
@@ -13,6 +15,11 @@
 //   這是**收緊**不是放寬：條件不夠精確時會直接 throw，不會靜默挑錯。
 
 /**
+ * ⚠ v6.333：**預設排除「不開放對戰」的卡包**（DECK_LOCKED_SETS）。
+ *   測試挑印刷幾乎都是為了拿去跑對戰／牌組合法性，挑到一張本來就不能用的卡毫無意義，
+ *   而且會產生「守衛紅了、但引擎沒壞」的假警報（v6.333 的拉普拉斯就是這樣）。
+ *   真的要挑那些卡時傳 `{ includeDeckLocked: true }`。
+ *
  * @param {Map<string, any>} pool  cardId → card（呼叫端自己組，通常只含 live 卡包）
  * @param {string} name            台灣官方卡名（逐字）
  * @param {{attack?: string, ability?: string, marks?: string[]}} [opt]
@@ -21,10 +28,11 @@
  * @returns {string} cardId
  */
 export function pickPrinting(pool, name, opt = {}) {
-  const { attack, ability, marks = ['H', 'I', 'J'] } = opt;
+  const { attack, ability, marks = ['H', 'I', 'J'], includeDeckLocked = false } = opt;
   const hits = [];
   for (const [id, c] of pool) {
     if (!c || c.name !== name) continue;
+    if (!includeDeckLocked && isDeckLockedCard(c)) continue;
     if (marks && !marks.includes(c.regulationMark)) continue;
     if (attack && !(c.attacks ?? []).some((a) => a?.name === attack)) continue;
     if (ability && !(c.abilities ?? []).some((a) => a?.name === ability)) continue;
@@ -43,10 +51,11 @@ export function pickPrinting(pool, name, opt = {}) {
 
 /** 同上，但要求「剛好一張」——用於必須唯一指認的場合（多於一張時代表條件不夠精確）。 */
 export function pickPrintingUnique(pool, name, opt = {}) {
-  const { attack, ability, marks = ['H', 'I', 'J'] } = opt;
+  const { attack, ability, marks = ['H', 'I', 'J'], includeDeckLocked = false } = opt;
   const hits = [];
   for (const [id, c] of pool) {
     if (!c || c.name !== name) continue;
+    if (!includeDeckLocked && isDeckLockedCard(c)) continue;
     if (marks && !marks.includes(c.regulationMark)) continue;
     if (attack && !(c.attacks ?? []).some((a) => a?.name === attack)) continue;
     if (ability && !(c.abilities ?? []).some((a) => a?.name === ability)) continue;

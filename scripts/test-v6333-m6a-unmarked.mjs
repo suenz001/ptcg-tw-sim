@@ -571,7 +571,12 @@ await TA('行為級：pickPrinting 真的會依「招式／特性」分辨同名
   const { pickPrinting } = await import(pathToFileURL(join(ROOT, 'scripts/lib/pick-printing.mjs')).href);
   // 耿鬼ex：MC/SV5K 的特性是【侵蝕詛咒】，M6a 076/103 的是【死亡宣告】——必須挑到不同張
   const curse = pickPrinting(POOL, '耿鬼ex', { ability: '侵蝕詛咒' });
-  const doom = pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告' });
+  // ⚠ 【死亡宣告】只存在於 M6a 那張（不開放對戰）⇒ 這裡要明確 opt-in，
+  //   正好也驗證了 pickPrinting 預設會排除不開放對戰的卡包。
+  const doom = pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告', includeDeckLocked: true });
+  let blocked = false;
+  try { pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告' }); } catch { blocked = true; }
+  ok(blocked, 'pickPrinting 預設沒有排除「不開放對戰」的卡包 —— 測試會挑到組不進牌組的卡，產生假警報');
   ok(curse !== doom, '兩個不同特性挑到同一張耿鬼ex（' + curse + '）—— 判準沒有在看特性名');
   ok((POOL.get(curse).abilities || []).some((a) => a.name === '侵蝕詛咒'), curse + ' 沒有【侵蝕詛咒】');
   ok((POOL.get(doom).abilities || []).some((a) => a.name === '死亡宣告'), doom + ' 沒有【死亡宣告】');

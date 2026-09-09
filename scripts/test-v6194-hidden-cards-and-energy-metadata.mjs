@@ -180,12 +180,21 @@ T('⭐⭐⭐ 接線：pool = filterPlayerSelectable(allCards)、poolById = build
   const src = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
   const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const body = strip(src);
-  ok(/pool\s*=\s*filterPlayerSelectable\(allCards\)/.test(body),
+  // ⚠ v6.333（Rule 40）：原本釘死「pool = filterPlayerSelectable(allCards)」**逐字**。
+  //   v6.333 在外面再包了一層 `filterDeckSelectable(...)`（M6a 不開放組牌，站長裁定），
+  //   這個守衛的**意圖**是「牌池有經過下架卡述詞、而 poolById 沒有」，不是「只能有一層」。
+  //   ⇒ 判準改成「filterPlayerSelectable(allCards) 這個呼叫出現在 pool 的賦值裡」，
+  //     再外包幾層都可以（只會更嚴），但少了它就紅。
+  ok(/pool\s*=\s*[^;]*filterPlayerSelectable\(allCards\)/.test(body),
     '牌池沒有套用唯一述詞 —— 牌組編輯器仍選得到下架卡');
   ok(/poolById\s*=\s*buildCardIndex\(allCards\)/.test(body),
     'poolById 被一起濾掉了 —— 已存牌組裡的那張卡會變成「缺卡」（entry 消失、張數變少）');
-  // 正對照：舊寫法必須抓得出來
-  ok(!/pool\s*=\s*filterPlayerSelectable\(allCards\)/.test('  pool = allCards;'), '正對照失效');
+  // 正對照：舊寫法必須抓得出來；外包一層必須放行（兩個方向都要驗，否則是放寬）
+  ok(!/pool\s*=\s*[^;]*filterPlayerSelectable\(allCards\)/.test('  pool = allCards;'), '正對照失效');
+  ok(/pool\s*=\s*[^;]*filterPlayerSelectable\(allCards\)/.test(
+    '  pool = filterDeckSelectable(filterPlayerSelectable(allCards));'), '外包一層被誤判成沒接');
+  ok(!/poolById\s*=\s*buildCardIndex\(allCards\)/.test(
+    '  poolById = buildCardIndex(filterDeckSelectable(allCards));'), 'poolById 的正對照失效');
 });
 
 // ⚠⚠ 審查子代理抓到、查證屬實：這條原本用「往後取 1400 字元的固定視窗 + 未剝註解」來判斷，
