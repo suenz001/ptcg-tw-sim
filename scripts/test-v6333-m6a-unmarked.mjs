@@ -201,8 +201,18 @@ await TA('行為級：直接呼叫 resolveEvolvesFrom 跑官方真頁面（露�
     const got = mod.resolveEvolvesFrom(cheerio.load(html));
     ok(got === want, id + ' 官方頁 -> 期望 ' + JSON.stringify(want) + '，實得 ' + JSON.stringify(got));
   }
-  ok(offline.length < cases.length,
-    '四個案例都連不上官網（' + offline.join(',') + '）—— 這條沒有真的驗到任何東西');
+  // ⚠⚠ v6.333 事故：這一條原本寫成「四個都連不上就 FAIL」，結果**CI 上直接把 build 打紅**
+  //   （GitHub Actions 的 runner 連不到 asia.pokemon-card.com）。
+  //   ⭐ 通則：**守衛不可以拿外部網路當 gating 條件** —— 網路不是我們的程式，
+  //     它斷掉時該紅的是監控，不是 CI。
+  //   ⇒ 連不上就**大聲跳過**。語義本身由下一條「離線 fixture」保證（決定性、永遠會跑），
+  //     這一條只是額外的「我方資料是否仍與官網一致」的加值檢查。
+  if (offline.length === cases.length) {
+    console.log('      ⚠ 連不到官網（' + offline.join(',') + '）⇒ 這一條跳過；'
+      + '語義由離線 fixture 那一條保證');
+  } else {
+    console.log('      官網實測 ' + (cases.length - offline.length) + '/' + cases.length + ' 張相符');
+  }
 });
 
 await TA('行為級(離線 fixture)：巢狀層級的語義 —— 前階看「上一層」，不是同層鄰居', async () => {

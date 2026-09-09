@@ -185,6 +185,29 @@ Opus 5 審查抓出來、我自己複驗屬實：
 **突變 14/14 全殺**（含 faceAttackDamage 的四種寫壞法、待實裝清單多一筆／少一筆／偷加卡包、
 pick-printing 退回只用卡名挑）。
 
+### 【四之三】CI 事故：守衛不可以拿外部網路當 gating 條件
+
+第一次 push（`64f88d61`）**build 紅、deploy skipped**，紅在 `Run engine regression tests`。
+我沒有猜，直接在沙盒**模擬斷網**重現：
+
+```
+node --input-type=module -e "globalThis.fetch=()=>Promise.reject(new Error('SIM_NO_NET'));
+  await import('./scripts/test-v6333-m6a-unmarked.mjs');"
+⇒ XX 行為級：直接呼叫 resolveEvolvesFrom 跑官方真頁面   PASS 31 / FAIL 1
+```
+
+`test-v6333` 有一條會去打 `asia.pokemon-card.com` 的真頁面，我原本寫成
+「四個案例**都**連不上才 FAIL」，以為這樣就夠寬鬆 —— 但 GitHub Actions 的 runner
+根本連不到那個網域，四個全掛 ⇒ 整支紅 ⇒ 整個 build 紅。
+（全站 649 支守衛裡，實際會發網路請求的**只有這一支**，是我這一版新引入的。）
+
+⭐⭐⭐ **通則：守衛不可以拿外部網路當 gating 條件。**
+網路不是我們的程式，它斷掉時該紅的是監控，不是 CI。
+⇒ 改成連不上就**大聲跳過**（印一行說明），語義由同一節的**離線 fixture**保證
+（決定性、永遠會跑，而且它才是真正在守「前階看上一層、不是同層鄰居」的那一條）；
+連得上時才多做一次「我方資料是否仍與官網一致」的加值檢查。
+兩種情況都實測過：斷網 32/0、有網 32/0 且印出「官網實測 4/4 張相符」。
+
 ### 【五】我這一輪講錯、當面更正的地方
 
 跟站長回報時我寫「另外 10 張帶的是舊標」—— **錯的，是 8 張**（A2/C1/D2/E1/F1/G1）。

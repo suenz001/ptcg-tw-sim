@@ -393,7 +393,8 @@ regR('j-2354-raichu-charge-commit', (state, aIdx, iids, params, pool) => {
 // ⚠⚠ v6.333：這裡原本是 `regA('彩粉蝶', 0, …)`（**by-index** 註冊）。
 //   M6a「30th CELEBRATION」019/103 收了另一張彩粉蝶，它的 abilities[0] 是【指引之舞】——
 //   by-index 會把【大飛翅】派給那張卡（同名不同印刷錯派，正是 v6.257 那個維度）。
-//   ⇒ 改成 **by-name** 註冊；【指引之舞】尚未實裝（已列管於 scripts/lib/pending-impl.mjs）。
+//   ⇒ 改成 **by-name** 註冊；M6a 那張的【指引之舞】不實裝（該卡包不開放對戰，
+//     見 src/lib/cards/regulation.ts 的 DECK_LOCKED_SETS）。
 regAByName('彩粉蝶', '大飛翅', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
