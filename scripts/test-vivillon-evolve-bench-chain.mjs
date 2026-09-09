@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { pickPrinting } from './lib/pick-printing.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x-s-vv.js'), E = join(ROOT, '.x-e-vv.ts'), O = join(ROOT, '.x-o-vv.mjs');
@@ -38,7 +39,9 @@ for (const [id,c] of pool) {
   }
 }
 assert(baseId&&evoId, '找不到 base+evo 對');
-let vivId=null; for (const [id,c] of pool) if (c.name==='彩粉蝶') { vivId=id; break; }
+// ⚠ v6.333：原本是「同名挑第一張」。M6a 019/103 又收了一張彩粉蝶（特性【指引之舞】、
+//   沒有「進化粉」），靠卡名挑會撈到錯的印刷。改用中央 pickPrinting，用**這一輪在測的那一招**指名。
+const vivId = pickPrinting(pool, '彩粉蝶', { attack: '進化粉' });
 assert(vivId,'找不到彩粉蝶');
 
 function mk(cardId, over={}) {

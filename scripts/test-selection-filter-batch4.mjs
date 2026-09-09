@@ -59,16 +59,42 @@ const ALL_TYPES=['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkne
 let pass=0,fail=0;
 const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FAIL',n,'::',e.message);fail++;}};
 
-T('資料契約哨兵：現役 DB 無 supertype=Pokemon + subtype=Other（Basic 收斂前提）',()=>{
-  const bad=cards.filter(c=>c.supertype===P&&c.subtype==='Other');
-  assert.equal(bad.length,0,'發現 Pokemon+Other：'+bad.map(c=>c.id+'/'+c.name).join(','));
+// ⭐⭐⭐ v6.333（Rule 40：既有守衛因本版合法改動翻紅 ⇒ 判準改到「意圖級」，不是放寬）
+//   M6a「30th CELEBRATION」收了 5 張官方階段字樣是**「其他」**的老機制卡
+//   （帕路奇亞 147/103 ＝ LV.X 世代、達克萊伊＆克雷色利亞LEGEND、M沙奈朵EX、
+//     甲賀忍蛙BREAK、夢幻VMAX），本站存成 supertype=Pokemon + subtype='Other'。
+//   這 5 張**全部沒有賽制標記**，v6.333 起連牌組都組不進去（decks/validation 的中央閘），
+//   因此永遠不會出現在任何一場對戰的手牌／棄牌區 ⇒ 'Basic' 收斂的前提仍然成立。
+//   ⇒ 哨兵的範圍從「現役 DB」收斂成「**可對戰的**卡」，並用下面 F6b 釘住
+//     「卡庫裡的 Pokemon+Other 必須全部是不可對戰的」——少一張可對戰的就會紅。
+const isBattleLegal=(c)=>['H','I','J'].includes(c.regulationMark);
+const otherPoke=cards.filter(c=>c.supertype===P&&c.subtype==='Other');
+T('F6 資料契約哨兵：**可對戰的**卡裡沒有 supertype=Pokemon + subtype=Other（Basic 收斂前提）',()=>{
+  const bad=otherPoke.filter(isBattleLegal);
+  assert.equal(bad.length,0,'發現可對戰的 Pokemon+Other：'+bad.map(c=>c.id+'/'+c.name+'/'+c.regulationMark).join(','));
+});
+T('F6b 反安慰劑：卡庫裡確實存在 Pokemon+Other，而且**每一張**都不可對戰（否則 F6 是恆真）',()=>{
+  assert.ok(otherPoke.length>0,
+    '卡庫裡一張 Pokemon+Other 都沒有 → F6 變成恆真的空集合斷言（M6a 還在卡庫嗎？）');
+  const leaked=otherPoke.filter(isBattleLegal);
+  assert.equal(leaked.length,0,'這幾張 Pokemon+Other 竟然可對戰：'+leaked.map(c=>c.id).join(','));
+  // ⚠ 判準是「進不進得了牌組」，不是「有沒有標」：夢幻VMAX 20070 帶的是 **E 標**，
+  //   一樣早就退出標準賽（decks/validation 會擋「E 標，已退出標準賽」）。
+  //   兩種都不可對戰 ⇒ 一樣碰不到 isBasicPokemonCard 的分歧。
+  const cannotPlay=otherPoke.filter(c=>!isBattleLegal(c));
+  assert.equal(cannotPlay.length,otherPoke.length,
+    '有 Pokemon+Other 是 H/I/J 可對戰卡（'+otherPoke.filter(isBattleLegal).map(c=>c.id+':'+c.regulationMark).join(',')+'）'
+    +' —— 那就不能靠「不可對戰」豁免，必須真的處理 isBasicPokemonCard 的分歧');
+  console.log('   Pokemon+Other 共 '+otherPoke.length+' 張，全部不可對戰：'
+    +otherPoke.map(c=>c.id+'/'+c.name+'/'+(c.regulationMark||'無標')).join('、'));
 });
 
 T('hand-discard predicate 逐卡與 golden 等價',()=>{
   let n=0;
   for(const [f,g] of Object.entries(GOLDEN_HD)){
     assert.ok(known('hand-discard',f),f+' 應被收錄');
-    for(const c of cards){ assert.equal(ev('hand-discard',f,{iid:'x'},c,{}), g(c), `HD '${f}' 卡 ${c.id}(${c.name})`); n++; }
+    for(const c of cards){ if(c.supertype===P&&c.subtype==='Other')continue; // v6.333 見 F6/F6b
+      assert.equal(ev('hand-discard',f,{iid:'x'},c,{}), g(c), `HD '${f}' 卡 ${c.id}(${c.name})`); n++; }
   }
   console.log('   hand-discard 逐卡',n,'次等價');
 });
@@ -77,13 +103,19 @@ T('discard-search predicate 逐卡與 golden 等價（含 Basic 收斂 isBasicPo
   let n=0;
   for(const [f,g] of Object.entries(GOLDEN_DS)){
     assert.ok(known('discard-search',f),f+' 應被收錄');
-    for(const c of cards){ assert.equal(ev('discard-search',f,{iid:'x'},c,{}), g(c), `DS '${f}' 卡 ${c.id}(${c.name})`); n++; }
+    for(const c of cards){ if(c.supertype===P&&c.subtype==='Other')continue; // v6.333 見 F6/F6b
+      assert.equal(ev('discard-search',f,{iid:'x'},c,{}), g(c), `DS '${f}' 卡 ${c.id}(${c.name})`); n++; }
   }
   console.log('   discard-search 逐卡',n,'次等價');
 });
 
-T('收斂證明：discard-search Basic evaluator(isBasicPokemonCard) === UI 手刻式，全卡池',()=>{
+T('收斂證明：discard-search Basic evaluator(isBasicPokemonCard) === UI 手刻式，全可對戰卡池',()=>{
+  // ⚠ v6.333：subtype='Other'（官方階段「其他」）在這兩份判準上**確實分歧**
+  //   （isBasicPokemonCard=false、UI 手刻式=true）。這是已知且**目前不可達**的分歧：
+  //   那 5 張全是無標卡，組不進牌組 ⇒ 不會進到任何人的手牌／棄牌區。
+  //   F6b 釘住「它們必須全部不可對戰」；哪天有一張變成可對戰，F6/F6b 會先紅。
   for(const c of cards){
+    if(c.supertype===P&&c.subtype==='Other')continue;
     const uiHand=c.supertype===P&&!c.evolvesFrom&&c.subtype!=='Stage1'&&c.subtype!=='Stage2';
     assert.equal(isBasicPokemonCard(c), uiHand, `Basic 收斂差異 卡 ${c.id}(${c.name}) isBasicPokemonCard=${isBasicPokemonCard(c)} 手刻=${uiHand}`);
   }

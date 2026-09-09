@@ -36,6 +36,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { isDeckLockedCard } from './lib/deck-locked-sets.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '0b47f36b19076796c6b62a066730029145bd7308';   // v6.238
@@ -380,7 +381,15 @@ console.log('\n⑨ 【C】全卡池 audit：卡面「若希望」的招式一律
     return p.type === 'modal-choice' ? (p.params?.options?.length ?? 0) >= 2 : (p.minCount ?? 1) === 0;
   };
   const outliers = [];
-  for (const [key, entry] of rows) if (!asksPlayer(key, entry)) outliers.push(key);
+  const deferredC1 = [];
+  for (const [key, entry] of rows) {
+    if (asksPlayer(key, entry)) continue;
+    // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外。
+    //   （完全沒有 handler 的卡當然不會問玩家；但那張卡永遠不會出現在對戰裡。）
+    if (isDeckLockedCard(entry.c)) { deferredC1.push(key); continue; }
+    outliers.push(key);
+  }
+  if (deferredC1.length) console.log('    [不開放對戰的卡包] ' + deferredC1.join(' | '));
   chk('C1 沒有「卡面寫若希望、實作卻自動執行」的招式', outliers.length === 0, outliers.join(' | '));
 
   // C2 正對照：餵一個一定不會問玩家的招式（卡面沒有「若希望」、實作也不開選擇），

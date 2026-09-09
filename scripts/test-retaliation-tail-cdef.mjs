@@ -3,6 +3,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path'; import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { pickPrinting } from './lib/pick-printing.mjs';
 const ROOT=fileURLToPath(new URL('..',import.meta.url));
 const S=join(ROOT,'.xtd-s.js'),E=join(ROOT,'.xtd-e.ts'),O=join(ROOT,'.xtd-o.mjs');
 process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p);}catch{}}});
@@ -14,8 +15,12 @@ const dir=join(ROOT,'static/cards');
 const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
 const pool=new Map();
 for(const f of readdirSync(dir)){if(!f.endsWith('.json')||f==='index.json'||!live.has(f.slice(0,-5)))continue;for(const c of JSON.parse(readFileSync(join(dir,f),'utf8')))if(c?.id!=null)pool.set(String(c.id),c);}
+// ⚠ v6.333：原本是「同名挑第一張」，M6a 收了另一張『藏瑪然特』（彈落／盾牌壓制，沒有強大猛擊）
+//   之後會靜默挑錯 ⇒ 症狀是 E 段 assert『找不到強大猛擊』，但引擎其實沒壞。
+//   改用中央的 pickPrinting，用「這一輪在測的那一招」當條件（收緊，不是放寬）。
 const byName=(n)=>{for(const[id,c]of pool)if(c.name===n)return id;throw new Error(n);};
-const TUDU=byName('拖拖蚓ex'), METAL=byName('基本【鋼】能量'), ZAMA=byName('藏瑪然特');
+const TUDU=byName('拖拖蚓ex'), METAL=byName('基本【鋼】能量');
+const ZAMA=pickPrinting(pool,'藏瑪然特',{attack:'強大猛擊'});
 let nn=0; const inst=(cid,x={})=>({iid:'i'+(++nn),cardId:String(cid),damage:0,energyAttached:[],...x});
 const en=(cid)=>({iid:'e'+(++nn),cardId:String(cid),damage:0,energyAttached:[]});
 const mk=(p0,p1,p1b)=>({phase:'playing',turnPhase:'main',activePlayerIndex:0,firstPlayerIdx:0,turn:5,isFirstTurn:false,log:[],pendingSelection:null,setupDone:[true,true],

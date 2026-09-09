@@ -23,6 +23,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { allCarriersDeckLocked } from './lib/deck-locked-sets.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S=join(ROOT,'.x6205-s.js'),E=join(ROOT,'.x6205-e.ts'),O=join(ROOT,'.x6205-o.mjs');
 process.on('exit',()=>{for(const p of [S,E,O])try{unlinkSync(p)}catch{}});
@@ -370,7 +371,14 @@ T('7c.⭐ 狠辣椒ex｜雙重屬性 已補實作 ⇒ 不得再是候選（HEAD 
     ['Grass','Fire'],'字串在、行為不在 ⇒ 接線是死碼');
 });
 T('7d.⭐ 候選必須全部已判讀（新卡帶來新的「完全沒實裝」會在這裡紅）',()=>{
-  const extra=found.filter(k=>!ADJUDICATED_IMPLEMENTED.has(k)&&!KNOWN_UNIMPLEMENTED.has(k));
+  // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外。
+  //   只有「持有這個『卡名|特性名』的**每一張** live H/I/J 卡都來自不開放對戰的卡包」才豁免。
+  const carriersOfKey=(k)=>{const [nm,ab]=String(k).split('|');
+    return [...pool.values()].filter(c=>c.name===nm&&['H','I','J'].includes(c.regulationMark)
+      &&(c.abilities??[]).some(a=>a?.name===ab));};
+  const deferred=found.filter(k=>allCarriersDeckLocked(carriersOfKey(k)));
+  if(deferred.length)console.log('      [不開放對戰的卡包] '+deferred.length+' 個：'+deferred.join('、'));
+  const extra=found.filter(k=>!ADJUDICATED_IMPLEMENTED.has(k)&&!KNOWN_UNIMPLEMENTED.has(k)&&!deferred.includes(k));
   assert.equal(extra.length,0,'未判讀的候選：\n      '+extra.join('\n      '));
 });
 T('7e. 兩張判讀表都不得有死條目（判準改動或補了實作就要同步清理）',()=>{

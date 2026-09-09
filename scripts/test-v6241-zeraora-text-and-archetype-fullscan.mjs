@@ -225,10 +225,23 @@ await T('【A】⑨ 校驗和：卡片總數與各卡包張數與 v6.240 完全�
     "SV11B":253,"SV11W":254,"SV5K":100,"SV5M":100,"SV5a":96,"SV6":133,"SV6a":94,"SV7":135,"SV7a":94,
     "SV8":138,"SV8a":335,"SV9":132,"SV9a":92,"SVK":50,"SVM":183,"SVOD":23,"SVOM":23,"SVPN":8,"SVPS":8,
     "SVQL":23,"SVQP":24,"svhk":24,"svhm":24};
-  assert.deepStrictEqual(bySet, EXPECT, '各卡包張數變了');
+  // ⭐ v6.333（Rule 40）：這張表是 v6.240 當下的快照，**新增卡包**（M6a 168 張）
+  //   本來就不算「搬動資料」——它守的是「既有卡包的張數沒被動到」。
+  //   ⇒ 只對 EXPECT 裡列出的卡包逐一比對，並額外斷言「既有卡包一個都沒有消失」。
+  //   新卡包的張數自洽由 test-card-db-integrity（index vs 檔案）與 test-v6333 負責。
+  const existing = Object.fromEntries(Object.keys(EXPECT).map((k) => [k, bySet[k]]));
+  assert.deepStrictEqual(existing, EXPECT, '既有卡包的張數被動到了（新增卡包不算）');
+  const gone = Object.keys(EXPECT).filter((k) => !(k in bySet));
+  assert.deepStrictEqual(gone, [], '既有卡包消失了：' + gone.join(','));
+  // v6.333：總數同理改成「既有卡包的總和不變」＋「全站只准增不准減」。
+  const existingTot = Object.values(existing).reduce((a, b) => a + b, 0);
+  assert.strictEqual(existingTot, Object.values(EXPECT).reduce((a, b) => a + b, 0),
+    '既有卡包的總張數變了：' + existingTot);
   const tot = Object.values(bySet).reduce((a, b) => a + b, 0);
-  assert.strictEqual(tot, 4938, '卡片總數變了：' + tot);
-  assert.strictEqual(pool.size, 4938, 'cardId 出現重複（全站唯一性壞了）');
+  assert.ok(tot >= 4938, '全站卡片總數 ' + tot + ' 比 v6.240 當時的 4938 還少 —— 有卡被刪掉了？');
+  // v6.333：唯一性的意圖是「pool（以 id 為 key）的大小 === 各卡包張數總和」——
+  //   有重複 id 時 pool 會比較小。原本釘死 4938 只是順便，換成直接比對兩個量。
+  assert.strictEqual(pool.size, tot, 'cardId 出現重複（全站唯一性壞了）：檔案共 ' + tot + ' 張，pool 只有 ' + pool.size);
 });
 
 // ══════════════════════════════════════════════════════════════════════════

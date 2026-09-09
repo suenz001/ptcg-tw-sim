@@ -29,6 +29,7 @@ import {
   ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS, ATTACK_PRE_DISCARD_CHOICE,
 } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
+import { faceAttackDamage } from '../_shared'; // v6.333 同名不同印刷：讀出招那一張的卡面傷害
 import { canApplyEffectToTarget } from '../../defense';
 import { defCantRetreatNextPost, discardOppActiveEnergyPost, selfCantAttackNextPost, oppSwapDmgPost } from '../../effects'; // v5.840 收斂禁撤退+化隱gate; v5.973 咬碎能量丟棄中央; v5.982 全鎖自鎖
 import { flipCoinsUntilTails } from '../../effects'; // v6.234 擲到反面為止中央 helper（上限逐處宣告）
@@ -986,6 +987,11 @@ regPost('阿柏怪|恐慌毒', (state, aIdx, pool) => {
 // === Section 4: 自殘類 ===
 // ══════════════════════════════════════════════════════════════════════════════
 // 「這隻寶可夢也受到 N 點傷害」
+// ⚠⚠ v6.333：第 2 欄是 **fallback**，不是「這一招固定打幾點」。
+//   實際傷害改由 `faceAttackDamage()` 讀**出招那一張印刷**自己的卡面 ——
+//   `皮卡丘ex|打雷` 在 SVM 038/175 是 220、在 M6a 048/103 是 **200**，
+//   寫死一個數字一定有一版是錯的（M6a 進卡庫後那張會多打 20 點）。
+//   fallback 只在「出招者卡面上沒有這一招」（複製招式）時才用得到，行為與改動前一致。
 const SELF_HIT: Array<[string, number, number]> = [
   ['纏紅鶴ex|勇鳥猛攻', 200, 30],
   ['皮卡丘ex|打雷', 220, 30],
@@ -995,7 +1001,7 @@ const SELF_HIT: Array<[string, number, number]> = [
 ];
 for (const [key, dmg, selfDmg] of SELF_HIT) {
   const atkName = key.split('|')[1];
-  regPre(key, (s) => ({ state: s, damage: dmg }));
+  regPre(key, (s, aIdx, pool) => ({ state: s, damage: faceAttackDamage(s, aIdx, pool, atkName, dmg) }));
   regPost(key, selfHitPost(selfDmg, atkName));
 }
 

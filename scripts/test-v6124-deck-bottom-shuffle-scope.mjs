@@ -17,6 +17,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { allCarriersDeckLocked } from './lib/deck-locked-sets.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x124-s.js'), E = join(ROOT, '.x124-e.ts'), O = join(ROOT, '.x124-o.mjs');
@@ -340,7 +341,16 @@ T('⭐⭐ 卡面掃描：每張「放回牌庫下方」的 HIJ 卡都在列管�
   // ⚠ 措辭變體：卡面也會寫「放回**對手的**牌庫下方」（N的扒手貓｜暗槓、能量撢子）——
   //   舊 regex 少了這個 or 分支，那兩張整整逃過列管（Fable 5 審查抓到）。
   for (const [name, texts] of byName) if (/放回(對手的)?牌庫(最)?下方/.test(texts)) found.push(name);
-  const missing = found.filter((n) => !VERIFIED.has(n));
+  // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外。
+  //   ⚠ 只有「該卡名**每一張**帶這個措辭的 live H/I/J 卡都來自不開放對戰的卡包」才豁免；
+  //     同名卡只要有一張是可對戰的（＝已經在跑的實作），照樣要求列管。這是收緊，不是整包放過。
+  const lockedOnly = (name) => allCarriersDeckLocked([...pool.values()].filter((c) =>
+    c.name === name && ['H', 'I', 'J'].includes(c.regulationMark)
+    && [...(c.attacks || []), ...(c.abilities || [])]
+      .some((a) => /放回(對手的)?牌庫(最)?下方/.test(a?.effect || ''))));
+  const deferred = found.filter((n) => !VERIFIED.has(n) && lockedOnly(n));
+  if (deferred.length) console.log('      [不開放對戰的卡包] ' + deferred.join('、'));
+  const missing = found.filter((n) => !VERIFIED.has(n) && !deferred.includes(n));
   ok(missing.length === 0,
     '這些 HIJ 卡的卡面有「放回牌庫下方」，但沒被本守衛列管：\n      ' + missing.join('、')
     + '\n      → 請逐張比對「重洗的主詞是哪幾張卡」，改用 deckWithCardsToBottom(rest, toBottom, mode)，'

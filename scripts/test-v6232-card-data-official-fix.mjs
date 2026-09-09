@@ -161,7 +161,16 @@ T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 51／M-P-J 103；總
   eq(MPJ.length, 103, 'M-P-J.json 實際張數');
   eq(mj.supertypeCounts.Energy, 18, 'M-P-J Energy 數');
   eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), 103, 'M-P-J supertypeCounts 加總');
-  eq(INDEX.reduce((s, e) => s + e.cardCount, 0), 4938, '全站總張數');   // v6.328 傳說競技場右半換號 +3
+  // ⭐⭐ v6.333（Rule 40）：原本這裡釘死「全站總張數 === 4938」。
+  //   那是**每收一個新卡包就要手改一次**的字面量（v6.328 才剛改過一次），
+  //   而且它想守的其實是「index.json 沒被重生／沒有卡憑空消失」。
+  //   改成意圖級的兩條：① 宣告總數 === 實際檔案總數（自洽）；② 只准增加不准減少。
+  //   ⇒ 新增卡包（M6a：4938 → 5106）不再誤紅，但「少了卡」「index 對不上檔案」照樣紅。
+  eq(INDEX.reduce((s, e) => s + e.cardCount, 0), pool.size,
+    'index.json 宣告的總張數 ≠ 實際 live 卡片檔的總張數（index 被重生或補卡沒同步）');
+  ok(pool.size >= 4938,
+    '全站總張數 ' + pool.size + ' 比 v6.328 當時的 4938 還少 —— 有卡被刪掉了？'
+    + '（下架卡要留在資料裡，見 $lib/cards/visibility）');
   ok(mi.regulationMark === 'I' && mj.regulationMark === 'J', '卡包層級的標被動到了');
 });
 

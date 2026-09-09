@@ -93,8 +93,26 @@ for (const c of HIJ) {
 }
 // F：同名寶可夢的 stage／evolvesFrom 跨印刷一致性
 {
+  // ⭐⭐ v6.333（Rule 40：既有守衛因本版合法改動翻紅 ⇒ 把判準改到「意圖級」，不是放寬）
+  //   M6a「30th CELEBRATION」收了 5 張官方階段字樣是**「其他」**的老機制卡
+  //   （帕路奇亞 147/103 ＝ LV.X 世代、達克萊伊＆克雷色利亞LEGEND、M沙奈朵EX、
+  //     甲賀忍蛙BREAK、夢幻VMAX），本站一律存成 `subtype:'Other'` 且**沒有 stage 欄位**。
+  //   F 的意圖是「**同一張卡**的不同印刷不該有差異」；但「帕路奇亞(基礎)」與
+  //   「帕路奇亞(其他／LV.X)」根本不是同一張卡，只是共用寶可夢名 ——
+  //   拿「沒有階段」去跟「Basic」比，是在比兩個不同的軸。
+  //   ⇒ 只把「官方階段＝其他」的那幾張排除在跨印刷比對之外，並用下面的 G 補回檢查面：
+  //     G 反過來釘住「subtype==='Other' 的寶可夢卡不得帶 stage」——
+  //     萬一哪天爬蟲把一張普通 Basic 誤標成 Other，還是會被抓到（不是把洞留著）。
+  //   ⚠ 實測：全站 live 只有這 5 張是 Pokemon/Other，且全部沒有 stage ⇒ 排除範圍精確、零副作用。
+  const isOtherStage = (c) => c.subtype === 'Other' && c.stage == null;
+  for (const c of all) {
+    if (c.subtype === 'Other' && c.stage != null) {
+      report('G 其他階段卻帶 stage', `[${c._set}] ${c.name}(${c.collectorNumber}) subtype=Other 卻有 stage=${c.stage}`
+        + '　→ 官方階段字樣是「其他」的卡不該有 Basic/Stage1/Stage2');
+    }
+  }
   const byName = {};
-  for (const c of all) (byName[c.name] ||= []).push(c);
+  for (const c of all) { if (isOtherStage(c)) continue; (byName[c.name] ||= []).push(c); }
   for (const [nm, xs] of Object.entries(byName)) {
     for (const field of ['stage', 'evolvesFrom']) {
       const variants = [...new Set(xs.map(c => String(c[field] ?? '-')))];

@@ -402,9 +402,14 @@ T('W1 電氣球：卡面條件是**卡名**「皮卡丘【ex】」⇒ 無特性�
   const ball = findId('電氣球');
   assert.strictEqual(pool.get(ball).rulesText,
     '附有這張卡的「皮卡丘【ex】」使用的招式，對對手的戰鬥場的「寶可夢【ex】」造成的傷害「+50」點。');
-  const noAb = findId('皮卡丘ex', c => (c.abilities ?? []).length === 0);
-  const withAb = findId('皮卡丘ex', c => (c.abilities ?? []).some(a => a.name === '勤奮之心'));
-  assert.ok(noAb && withAb, '找不到「有特性 / 無特性」兩種皮卡丘ex 印刷');
+  // ⚠ v6.333：印刷要挑「**第一招真的會造成傷害**」的那一張 —— 下面 shoot() 固定打 attacks[0]。
+  //   M6a 收了新的皮卡丘ex（047/103、048/103），它們的 attacks[0]（皮卡皮卡大遊行／
+  //   劈哩劈哩夜狂歡）卡面沒有傷害值，打出去 0 點 ⇒ 根本不會有「電氣球 +50」那一行，
+  //   會被誤判成「電氣球壞了」。這是**測試挑錯印刷**，不是實作回歸。
+  const dealsDamage = (c) => /^\d+$/.test(String((c.attacks ?? [])[0]?.damage ?? '').trim());
+  const noAb = findId('皮卡丘ex', c => (c.abilities ?? []).length === 0 && dealsDamage(c));
+  const withAb = findId('皮卡丘ex', c => (c.abilities ?? []).some(a => a.name === '勤奮之心') && dealsDamage(c));
+  assert.ok(noAb && withAb, '找不到「有特性 / 無特性」且第一招會造成傷害的兩種皮卡丘ex 印刷');
   const EBY = { Grass: ID.E_GRASS, Lightning: ID.E_LIGHT, Metal: '14434', Fighting: ID.E_FIGHT,
                 Psychic: ID.E_PSY, Darkness: ID.E_DARK, Colorless: ID.E_GRASS };
   const shoot = (pid, tool) => {

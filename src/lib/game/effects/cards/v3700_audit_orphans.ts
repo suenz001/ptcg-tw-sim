@@ -25,7 +25,7 @@
  *   或在 scrape pipeline 內 canonical 化卡名。
  */
 
-import { regPre, regPost, addLog, updatePlayer, withPending } from '../_shared';
+import { regPre, regPost, addLog, updatePlayer, withPending, faceAttackDamage } from '../_shared';
 import { getOwnBenchLimit } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 import type { PlayerState } from '../../types';
@@ -136,8 +136,10 @@ const SELF_HIT_V370: Array<[string, number, number]> = [
   ['加熱洛托姆|熱力衝撞', 100, 40],    // SVQL Fire Basic
   ['自爆磁怪|打雷', 180, 30],          // SVQP Lightning Stage1
 ];
+// ⚠ v6.333 同 v2750：第 2 欄只是 fallback，實際讀出招那一張印刷的卡面（同名不同印刷數字會不同）。
 for (const [key, dmg, selfDmg] of SELF_HIT_V370) {
-  regPre(key, (s) => ({ state: s, damage: dmg }));
+  const atkName = key.split('|')[1];
+  regPre(key, (s, aIdx, pool) => ({ state: s, damage: faceAttackDamage(s, aIdx, pool, atkName, dmg) }));
   regPost(key, selfHitPost(selfDmg));
 }
 

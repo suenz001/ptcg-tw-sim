@@ -20,6 +20,8 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { pickPrinting } from './lib/pick-printing.mjs';
+import { allCarriersDeckLocked } from './lib/deck-locked-sets.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.hapc-s.js'), E = join(ROOT, '.hapc-e.ts'), O = join(ROOT, '.hapc-o.mjs');
@@ -40,16 +42,19 @@ for (const f of readdirSync(dir)) {
   if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
   for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
 }
+// ⚠ v6.333：這一支測的是**特性**【侵蝕詛咒】，但原本只能用招式名區分印刷。
+//   M6a 收了另一張『耿鬼ex』（特性是【死亡宣告】、招式渾沌傷痛）⇒ 會靜默挑錯那一張，
+//   症狀是「一次附 2 張 → 實得 0」，看起來像引擎壞了，其實是測試挑錯印刷。
+//   改成走中央 pickPrinting，並在需要時用特性名指認。
 function byName(name, attackName) {
-  for (const [id, c] of pool) {
-    if (c.name !== name || !['H', 'I', 'J'].includes(c.regulationMark)) continue;
-    if (attackName && !(c.attacks ?? []).some(a => a.name === attackName)) continue;
-    return id;
-  }
-  throw new Error('找不到 H/I/J 卡：' + name + (attackName ? '｜' + attackName : ''));
+  return pickPrinting(pool, name, attackName ? { attack: attackName } : {});
 }
+/** 這一支專用：一定要挑到帶【侵蝕詛咒】的那張耿鬼ex。 */
+const GENGAR_CURSE = () => pickPrinting(pool, '耿鬼ex', { ability: '侵蝕詛咒' });
 let U = 0;
 const inst = (name, extra = {}, atk) => ({ iid: 'i' + (++U), cardId: byName(name, atk), damage: 0, energyAttached: [], ...extra });
+/** v6.333：直接指定 cardId 建 instance —— 同名多印刷時必須指名道姓，不能靠卡名猜。 */
+const instId = (cardId, extra = {}) => ({ iid: 'i' + (++U), cardId: String(cardId), damage: 0, energyAttached: [], ...extra });
 const hcard = (name) => ({ iid: 'h' + (++U), cardId: byName(name) });
 const mk = (p0, p1) => ({
   phase: 'playing', turnPhase: 'main', activePlayerIndex: 0, firstPlayerIdx: 0,
@@ -67,11 +72,12 @@ let pass = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); pass++; console.log('  ✓', msg); };
 
 // ══ 1) 阿響的鳳王ex｜金色火焰（特性，卡面「最多2張」）══════════════════════
-function goldFlame(nEnergy, oppActiveName = '耿鬼ex', targetDamage = 0) {
+// ⚠ v6.333：對手戰鬥位預設是「帶【侵蝕詛咒】的那張耿鬼ex」——用 id 指定，不用卡名。
+function goldFlame(nEnergy, oppActiveId = GENGAR_CURSE(), targetDamage = 0) {
   const gold = inst('阿響的鳳王ex');
   const target = inst('阿響的凱羅斯', { damage: targetDamage });
   const es = Array.from({ length: nEnergy }, () => hcard('基本【火】能量'));
-  let st = mk({ active: gold, bench: [target], hand: es }, { active: inst(oppActiveName), bench: [] });
+  let st = mk({ active: gold, bench: [target], hand: es }, { active: instId(oppActiveId), bench: [] });
   st = mod.applyAction(st, { type: 'USE_ABILITY', iid: gold.iid, abilityIndex: 0 }, pool);
   assert.ok(st.pendingSelection?.effectKey === 'gold-flame-pick-energy', '金色火焰應開能量 picker');
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: es.map(e => e.iid) }, pool);
@@ -91,7 +97,7 @@ console.log('【金色火焰】對手耿鬼ex｜侵蝕詛咒（每張 2 個指�
 }
 console.log('【金色火焰】自方瑪機雅娜｜自動治癒（每張恢復 90 HP）');
 {
-  const { st, target } = goldFlame(2, '阿響的凱羅斯', 110);
+  const { st, target } = goldFlame(2, byName('阿響的凱羅斯'), 110);
   const t = find(st, target.iid);
   // 對手 active 換成無反應的一般卡；自方 active 是鳳王ex，故另外驗自動治癒需要瑪機雅娜在戰鬥場
   ok(t.damage === 110, '對手無侵蝕詛咒時不放指示物（正對照，實得 ' + t.damage + '）');
@@ -115,7 +121,7 @@ console.log('【漸強波】官方 §17.37.A：從手牌附 N 張 → 侵蝕詛�
 {
   const sakura = inst('櫻花魚');
   const es = [hcard('基本【水】能量'), hcard('基本【水】能量'), hcard('基本【水】能量')];
-  let st = mk({ active: sakura, hand: es }, { active: inst('耿鬼ex') });
+  let st = mk({ active: sakura, hand: es }, { active: instId(GENGAR_CURSE()) });
   st = mod.ATTACK_POST.get('櫻花魚|漸強波')(st, 0, pool, {});
   assert.ok(st.pendingSelection, '漸強波應開手牌能量 picker');
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: es.map(e => e.iid) }, pool);
@@ -128,7 +134,7 @@ console.log('【漸強波】官方 §17.37.A L2196-2197：附能反應打死攻�
   const sakura = inst('櫻花魚');                       // HP 90
   const shelter = inst('阿響的凱羅斯');                // 備戰墊背，避免直接 game-over
   const es = Array.from({ length: 5 }, () => hcard('基本【水】能量'));
-  const gengar = inst('耿鬼ex');                       // HP 310
+  const gengar = instId(GENGAR_CURSE());                       // HP 310
   let st = mk({ active: sakura, bench: [shelter], hand: es, prizes: [{ iid: 'p1' }, { iid: 'p2' }] },
               { active: gengar, prizes: [{ iid: 'q1' }, { iid: 'q2' }] });
   st = mod.ATTACK_POST.get('櫻花魚|漸強波')(st, 0, pool, {});
@@ -146,7 +152,7 @@ function fullHeart(assign) {   // assign = 每張能量指定的目標 iid 陣�
   const emo = inst('艾姆利多');
   const b1 = inst('阿響的凱羅斯'), b2 = inst('阿響的凱羅斯');
   const es = [hcard('基本【超】能量'), hcard('基本【超】能量')];
-  let st = mk({ active: emo, bench: [b1, b2], hand: es }, { active: inst('耿鬼ex') });
+  let st = mk({ active: emo, bench: [b1, b2], hand: es }, { active: instId(GENGAR_CURSE()) });
   st = mod.ATTACK_POST.get('艾姆利多|滿載心田')(st, 0, pool, {});
   assert.ok(st.pendingSelection, '滿載心田應開手牌能量 picker');
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: es.map(e => e.iid) }, pool);
@@ -173,7 +179,7 @@ console.log('【迴旋充能】');
   const bird = inst('大電海燕ex', {}, '迴旋充能');
   const back = inst('阿響的凱羅斯');
   const es = [hcard('基本【雷】能量'), hcard('基本【雷】能量')];
-  let st = mk({ active: bird, bench: [back], hand: es }, { active: inst('耿鬼ex') });
+  let st = mk({ active: bird, bench: [back], hand: es }, { active: instId(GENGAR_CURSE()) });
   st = mod.ATTACK_POST.get('大電海燕ex|迴旋充能')(st, 0, pool, {});
   // 迴旋充能先與備戰互換（可能先開換位 picker），再開手牌能量 picker
   let g0 = 0;
@@ -200,7 +206,7 @@ console.log('【幸福禮物】卡面「各自從自己的手牌選擇最多3張
   const b1 = inst('阿響的凱羅斯');
   const es = [hcard('基本【草】能量'), hcard('基本【草】能量')];
   // 對手手牌沒有基本能量 ⇒ 跳過對手側，直接進自己側
-  let st = mk({ active: bird, bench: [b1], hand: es }, { active: inst('耿鬼ex'), hand: [] });
+  let st = mk({ active: bird, bench: [b1], hand: es }, { active: instId(GENGAR_CURSE()), hand: [] });
   st = mod.ATTACK_POST.get('信使鳥|幸福禮物')(st, 0, pool, { discardedEnergyIids: [es[0].iid] });
   assert.ok(st.pendingSelection, '幸福禮物應開手牌能量 picker');
   st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: es.map(e => e.iid) }, pool);
@@ -283,7 +289,18 @@ console.log('【枚舉守衛】卡面掃描（新卡出現時強制回來檢視 
     '烈焰猴｜火焰蹈舞',          // v2996 兩階段各 1 張、各自 fire 一次 ⇒ 天生就是 per-card
   ].filter(x => x !== 'splitter').sort();
   assert.ok(uniq.length >= 10, `枚舉只找到 ${uniq.length} 張，卡面 regex 可能失效`);
-  assert.deepStrictEqual(uniq, KNOWN,
+  // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外。
+  //   只有「持有這個『卡名｜效果名』的**每一張** live H/I/J 卡都來自不開放對戰的卡包」才豁免。
+  const carriersOfLabel = (label) => {
+    const [nm, ef] = String(label).split('｜');
+    return [...pool.values()].filter((c) => c.name === nm
+      && ['H', 'I', 'J'].includes(c.regulationMark)
+      && [...(c.abilities || []), ...(c.attacks || [])].some((a) => a?.name === ef));
+  };
+  const deferredHA = uniq.filter((x) => allCarriersDeckLocked(carriersOfLabel(x)));
+  if (deferredHA.length) console.log('  [不開放對戰的卡包] ' + deferredHA.join('、'));
+  const uniqLive = uniq.filter((x) => !deferredHA.includes(x));
+  assert.deepStrictEqual(uniqLive, KNOWN,
     '「從自己的手牌一次附多張能量」的卡清單有變動 —— 新卡必須確認其 resolver 有把實際張數\n'
     + '傳進 fireOnHandEnergyAttached / applyMagearnaHandAttachHeal（per-energy-card）。\n'
     + '實際掃到：\n  ' + uniq.join('\n  '));

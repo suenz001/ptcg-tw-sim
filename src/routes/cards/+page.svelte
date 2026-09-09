@@ -6,6 +6,7 @@
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   // v6.045 卡包排序（越新越靠左上、特典卡墊底）抽成模組才測得到，見 set-order.ts
   import { orderSetsForPicker } from '$lib/cards/set-order';
+  import { cardRegMarkFilterKey, NO_REG_MARK_KEY } from '$lib/cards/regulation';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
@@ -178,8 +179,19 @@
   let selectedStages = $state<Set<StageKey>>(new Set());
 
   // v2.84: 賽制賽季標記篩選 (G, H, I, J)
-  type RegMarkKey = 'G' | 'H' | 'I' | 'J';
-  const REG_MARK_ORDER: RegMarkKey[] = ['G', 'H', 'I', 'J'];
+  // ⭐ v6.333 新增 'none'＝【無標】（站長 2026-09-09 交辦，按鈕排在【不限】右邊）。
+  //   M6a「30th CELEBRATION」帶進 21 張官網 `.alpha` 顯示 n/a 的純收藏卡
+  //   （皮卡丘 136/103、洛奇亞、耿鬼、N、小霞、烈空坐EX、達克萊伊＆克雷色利亞LEGEND …），
+  //   這些卡沒有任何賽制標記、不能對戰，但仍要能在卡牌資料庫查得到。
+  //   ⚠ 站長裁定【無標】**只收真的完全沒有標的**：M6a 另外那 8 張帶舊標的收藏卡
+  //     （索爾迦雷歐GX／爆肌蚊GX=A、皮卡丘&捷克羅姆GX=C、蒼響V／雷公=D、夢幻VMAX=E、
+  //     阿爾宙斯VSTAR=F、鯉魚王=G）**不併進【無標】**。
+  //     其中鯉魚王落在既有的【G標】鈕，其餘 7 張任何一顆鈕都篩不到，只在【不限】看得到。
+  type RegMarkKey = 'none' | 'G' | 'H' | 'I' | 'J';
+  const REG_MARK_ORDER: RegMarkKey[] = [NO_REG_MARK_KEY as RegMarkKey, 'G', 'H', 'I', 'J'];
+  const REG_MARK_LABEL: Record<RegMarkKey, string> = {
+    none: '無標', G: 'G 標', H: 'H 標', I: 'I 標', J: 'J 標',
+  };
   let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());
 
   /** 取得寶可夢的階段。v2.75 起 JSON 有 `stage` 欄位（由 migration 補齊），
@@ -331,8 +343,10 @@
         if (!stage || !stages.has(stage)) return false;
       }
       // v2.83: 賽季標記篩選（OR）
+      // v6.333：改走 regMarkKeyOf —— 舊寫法 `!c.regulationMark || ...` 讓無標卡
+      //   在**任何**賽季鈕下都被濾掉，新的【無標】鈕會永遠是空的。
       if (marks.size > 0) {
-        if (!c.regulationMark || !marks.has(c.regulationMark as RegMarkKey)) return false;
+        if (!marks.has(cardRegMarkFilterKey(c.regulationMark) as RegMarkKey)) return false;
       }
       if (!q) return true;
       // v4.987: 進化鏈搜尋模式 — 輸入名字顯示整條進化鏈
@@ -604,7 +618,7 @@
           class:active={selectedRegMarks.has(m)}
           onclick={() => toggleRegMark(m)}
           title="點一次選取、點兩次取消"
-        >{m} 標</button>
+        >{REG_MARK_LABEL[m]}</button>
       {/each}
     </div>
   </div>

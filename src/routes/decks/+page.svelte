@@ -20,6 +20,7 @@
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, sameNameKey, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
+  import { isCardMarkStandardLegal, filterDeckSelectable } from '$lib/cards/regulation';
   import { splitTwoCardStadiumEntries, mergeTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';
   //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
   //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
@@ -334,7 +335,8 @@
    *  時，自動替換成同名的本站合法版（好友寶芬 / 高級球 / 老大的指令 / 基本能量 等）。 */
   const poolByName = $derived((() => {
     const isLegal = (c: Card): boolean =>
-      (!!c.regulationMark && ['H', 'I', 'J'].includes(c.regulationMark)) || isBasicEnergy(c) || isStandardReprintLegal(c);
+      // v6.333 Rule 38：H/I/J 判準唯一來源＝$lib/cards/regulation（無標 fail-closed）。
+      isCardMarkStandardLegal(c.regulationMark) || isBasicEnergy(c) || isStandardReprintLegal(c);
     const m = new Map<string, Card>();
     for (const c of pool) {
       const key = stripArtSuffix(c.name);
@@ -651,7 +653,10 @@
       //   ・`poolById`（Map）＝**畫得出來**的卡：**不濾**。
       //     已存牌組若還帶著下架卡的 id，activeEntries／validateDeck／deckStats 都靠它，
       //     濾掉會讓那張卡變成「缺卡」（entry 直接消失、張數少 N）——正是站長要求避免的。
-      pool = filterPlayerSelectable(allCards);
+      //   ⭐ v6.333 再疊一層：`filterDeckSelectable` 濾掉「暫不開放組牌」的卡包（M6a）。
+      //     站長裁定「可查卡、暫不開放組牌」⇒ /cards 照樣看得到，只有這裡的候選清單擋。
+      //     ⚠ 同樣**不能**濾 poolById，否則已存牌組裡的 M6a 卡會變成「缺卡」而不是被 validateDeck 指出來。
+      pool = filterDeckSelectable(filterPlayerSelectable(allCards));
       poolById = buildCardIndex(allCards);
       poolReady = true;
     }).catch((e) => { poolError = e instanceof Error ? e.message : String(e); });

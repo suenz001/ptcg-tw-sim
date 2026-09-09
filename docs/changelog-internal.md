@@ -1,5 +1,195 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.333 M6a「30th CELEBRATION」進卡庫 ＋ 無標卡不能組進牌組 ＋ 分支進化 evolvesFrom
+
+BASE `7e1f69c54f5ff6a322853d4898944c27a4fcf235`（v6.332，遠端 main）。
+站長交辦：「最新的卡表 m6a 出來了，你先去 audit 把它裝在我們的牌組資料庫裡面」
+＋「m6a 裡面很多卡是沒有標的…只是純收藏用途的卡片，不能對戰」
+＋「ex 寶可夢並不是由同名寶可夢進化的，例如耿鬼ex 是由鬼斯通進化的」。
+
+### 【零】M6a 的組成（官網 `.alpha` 欄位逐張實查，不是推論）
+
+168 張，id **19913–20080 連號**，`collectorNumber` 主體是 `xxx/103`：
+
+| 類別 | 張數 | 說明 |
+|---|---|---|
+| J 標 | 137 | 001–103 本篇（含新物品卡「寶可平板」102/103）＋ 104–135 異畫版 |
+| I 標 | 2 | 高級球 101/103、寶可夢交替 103/103（官網 `.alpha` 就是 I，不是抓錯） |
+| **無標** | **21** | 136–165 的 30 週年紀念卡，官網 `.alpha` 顯示 `n/a` |
+| 舊標 A/C/D/E/F/G | 8 | 索爾迦雷歐GX=A、爆肌蚊GX=A、皮卡丘&捷克羅姆GX=C、蒼響V=D、雷公=D、夢幻VMAX=E、阿爾宙斯VSTAR=F、鯉魚王=G |
+
+站長 2026-09-09 裁定：**【無標】按鈕只收「真的完全沒有標」的那 21 張**；
+A~F 那 8 張帶著自己的標，不併進【無標】，也不屬於 G/H/I/J ⇒ 只在【不限】看得到。
+按鈕只加在 **`/cards` 卡牌資料庫**（站長說的「牌組資料庫」，但
+【不限】【G標】【H標】【I標】【J標】這一排只存在於 `/cards`；`/decks` 是【不限】【H標】【I標】【J標】），
+已當面確認過。
+
+### 【一】真 bug①：無標卡可以組進標準賽牌組（fail-open）
+
+`src/lib/decks/validation.ts` 原本：
+
+```ts
+if (card.regulationMark && !STANDARD_MARKS.has(card.regulationMark)) { … }
+```
+
+`regulationMark` **缺席時整段跳過** ⇒ 無標卡被當成合法。
+站上在 M6a 之前**剛好一張無標卡都沒有**（live 卡包的標只有 H/I/J/G/F），
+所以這個洞從來沒發作過 —— 這正是「fail-open 只有在資料出現新形狀時才會爆」的典型。
+
+⭐ 修法沒有只改那一行，而是收斂成**唯一一份**述詞（Rule 38）：
+`src/lib/cards/regulation.ts` 新增 `isCardMarkStandardLegal(mark)`（`if (!mark) return false`），
+把原本散在三處的複本刪掉：
+`validation.ts` 的 local `STANDARD_MARKS`、`server/cardIndex.ts` 的 `STD_MARKS`、
+`decks/+page.svelte` 的 `['H','I','J'].includes(c.regulationMark)`。
+另加 `cardRegMarkFilterKey(mark)`（無標回 `'none'`）給 `/cards` 的篩選鈕用 ——
+舊寫法 `if (!c.regulationMark || !marks.has(...)) return false;` 會讓無標卡在**任何**鈕底下都被濾掉，
+新按鈕會永遠是空的。
+
+### 【二】真 bug②：官方爬蟲把分支進化的前一階抓錯
+
+`scripts/scrape/parse-card.js` 原本把官網 `.evolution` **攤平**成一串名字、取「本人的前一個」。
+但那個區塊實際上是一棵樹，每一階是一層 `<ul class="evolutionStep first|second|third">`，
+本人是 `<li class="step active">`；**同一層列的是所有分支與所有印刷版本**
+（伊布那一層一次列 24 隻）。舊註解自己也承認「分支進化需人工 + `fix-evolves-from-v*` 腳本修正」——
+那些一次性腳本就是這個 bug 的補丁。
+
+改成讀層級（`resolveEvolvesFrom($)`，獨立 export 供守衛做真行為斷言）後，M6a 修掉 9 張：
+
+| 卡 | 舊 parser | 正解 |
+|---|---|---|
+| 太陽伊布 / 月亮伊布 / 仙子伊布ex ×2 | 月亮伊布 / 冰伊布 / 太陽伊布 | **伊布** |
+| 巨鉗螳螂ex | 劈斧螳螂 | **飛天螳螂** |
+| 露奈雅拉 / 索爾迦雷歐GX | 索爾迦雷歐 / 露奈雅拉 | **科斯莫姆** |
+| 阿羅拉 椰蛋樹 ×2 | 椰蛋樹 | **蛋蛋** |
+
+⭐ **回歸驗證**：用新 parser 重跑 M6 全部 62 隻寶可夢 → **0 差異**；
+M5 全部 94 隻 → 只有 2 張差異，且都是**已知的化石限制**（`頭蓋龍`／`盾甲龍` 的前階是化石道具卡，
+不在 `.evolution` 區塊內，舊 parser 同樣抓不到，DB 值來自 `migrate-fossil-evolves-from.mjs`）
+⇒ 新 parser 是嚴格改善，不是換一種錯法。
+
+⭐ 站長的裁定在資料上得到印證：**耿鬼ex 官方就是寫「由鬼斯通進化」**（新舊 parser 都對），
+守衛把它連同上面 9 張一起釘死，避免日後有人「修 bug」時改成同名。
+
+### 【三】資料層手術式更新（`index.json` 絕不重生）
+
+- `static/cards/M6a.json`（新檔，168 張）—— 用既有 `scripts/scrape/scrape-set.js` 全新爬。
+- `static/cards/index.json` —— **純文字手術**：只在檔尾 `\n]` 前插入一筆（+372 bytes，
+  前 620 行逐位元組未動）。`name: "30th CELEBRATION"`、`regulationMark: "J"`、
+  `releaseDate: "2026-09-16"`、`cardCount/count: 168`、
+  cover 用官方 30 週年特設站的 `.../m6a/images/locale/tw/ogp.jpg`
+  （⚠ 沿用 M6 的 `assets/images/ogp.png` 路徑會 404，已實測）。
+- `static/card-set-map.json` —— 同樣純文字手術，只在最後的 `}` 前追加 168 筆（4938 → 5106）。
+
+⚠ **站長要跑 `update-tournament.bat`**：`oracle-admin/tournament/tournament-pool.json`
+由 `build-server-engine.mjs` 產生，不跑的話伺服器端卡池不含 M6a。
+
+### 【四】守衛 `scripts/test-v6333-m6a-unmarked.mjs`（22 條）
+
+行為級的部分：真的 `validateDeck()` 一副含 4 張無標皮卡丘的 60 張牌組（必須不合法）、
+換成 J 標卡的零回歸對照、G 標舊訊息的零回歸對照、
+真的呼叫 `resolveEvolvesFrom()` 跑官方頁面 ＋ 一組**離線 fixture**
+（官網連不上時仍守得住「前階看上一層、不是同層鄰居」的語義）。
+
+- **HEAD-FAIL**：全部還原成 BASE ⇒ 19/20 紅（唯一綠的是負對照自檢，本來就該綠）。
+  逐檔還原：`parse-card.js` 紅 2、`validation.ts` 紅 3、`cards/+page.svelte` 紅 1、
+  `regulation.ts` 紅 8、`index.json` 紅 5。
+- **突變 10/10 全殺**（fail-open 改回去、prevAll→nextAll、拿掉 first 層守門、
+  無標鈕挪位置、篩選改回舊寫法、訊息改成跟 G 標同一句…）。
+- ⚠ **Rule 41 現場**：第一版守衛在「只還原 `regulation.ts`」時 **esbuild build fail → 整支 throw**，
+  後面 8 條完全沒跑到。已改成接住 build 失敗、把依賴它的條目各自記 FAIL。
+- ⚠ **Rule 40 現場**：`test-v6264` 的 F1 裡釘死 `assert.strictEqual(checked, 49)`。
+  那是 `N_HOME` 還是 50 時留下的字面量；v6.332 走的是 F0c 批次縮減分支、F1 沒跑到，
+  所以它沒有在改政策的那一版翻紅，**一直到 v6.333 第一次走常規「一進一出」才誤紅**。
+  已改成 `N_HOME - 1`（從 `changelog-policy.mjs` 推導）。
+  ⭐ 通則：**「因為走了別的分支所以沒紅」的釘死字面量，會在下一個走回主分支的版本才爆。**
+
+### 【四之二】站長裁定「先上資料層，效果分批做」之後補的三件事
+
+**① 真 bug：`皮卡丘ex|打雷` 會多打 20 點**（同名不同印刷 × regPre 硬寫數字）
+`v2750_h_wave2_full.ts` 的 `SELF_HIT` 表寫死 `['皮卡丘ex|打雷', 220, 30]`，
+但 M6a 048/103 的卡面是 **200**（SVM 038/175 才是 220）。引擎用 `卡名|招式名` 當 key，
+M6a 那張打出去會變成 220。
+⇒ 新增 `_shared.ts` 的 `faceAttackDamage(state, aIdx, pool, attackName, fallback)`，
+讀**出招那一張印刷**自己的卡面；`SELF_HIT` / `SELF_HIT_V370` 兩張表的數字降級成 fallback
+（只有「出招者卡面沒有這一招」＝複製招式時才用得到 ⇒ 舊行為零回歸）。
+實測：12108→220、19960→200、20038→200、複製招式→220。
+⚠ 全 M6a 掃出 **6 組同名碰撞**，逐張比對後只有這一組會實際影響對戰；
+其餘（呆呆獸｜水槍、密勒頓｜音速伏特、卡比獸｜倒下）兩邊都沒有效果或效果相同、傷害讀卡面；
+巨鉗螳螂ex｜鋼翼 的效果確實不同（−20 vs −50）但那張是**無標**、打不了。
+守衛把這 6 組釘成 `KNOWN_COLLISIONS`，下次進卡包再撞名就會逼人回來看。
+
+**② 兩支守衛是「測試端」挑錯印刷，不是引擎壞**
+`test-retaliation-tail-cdef` 的 `byName('藏瑪然特')` 撈到 M6a 那張（沒有「強大猛擊」）；
+`test-hand-attach-percard-reaction` 的 `byName('耿鬼ex')` 撈到 M6a 076/103（特性是【死亡宣告】
+不是【侵蝕詛咒】）⇒ 症狀是「一次附 2 張 → 實得 0」，看起來像引擎壞了。
+⇒ 抽 `scripts/lib/pick-printing.mjs`：**用「這一輪在測的那個特徵」（招式名／特性名）挑印刷**，
+條件對不上直接 throw（收緊，不會靜默挑錯）。
+
+**③ M6a 整包不開放對戰（站長兩次裁定後定案）**
+
+我第一次問切版時只講「9 支守衛紅、deploy 過不了」，**沒有講最關鍵的事實**——
+Opus 5 審查抓出來、我自己複驗屬實：
+
+```
+不含 M6a：live H/I/J「有效果的招式」1691 招 → 未實裝 0   ← 站上從沒破過的不變量
+含  M6a：                              → 未實裝 96
+```
+
+引擎結算招式是 `const preFn = ATTACK_PRE.get(key); if (preFn) {…}` ——
+**沒有 handler 就直接套卡面傷害、效果整段跳過、對戰紀錄一個字都不寫**。
+（訓練家有 `isTrainerPendingImplementation` 擋、特性沒實裝按鈕不會出現，**唯獨招式沒有閘**。）
+其中 15 招是**代價型**效果，沒實裝＝單方面對出招者有利。我用完整 `applyAction ATTACK` 實跑：
+
+| 卡 | 卡面 | 實跑 |
+|---|---|---|
+| 超夢ex｜超能之力 | 230，下個自己的回合無法使用招式 | 打 230，**不鎖招** |
+| 閃電鳥｜雷轟 | 210，自傷 60 | 打 210，**不自傷** |
+| 皮卡丘ex｜十萬伏特 | 200，丟光自己身上能量 | 打 200，**一張沒丟** |
+
+站長裁定兩句：①「M6a 可查卡，但暫不開放組牌」②「m6a 全部的卡的功能都不要實裝」。
+
+⇒ **`DECK_LOCKED_SETS`**（`src/lib/cards/regulation.ts`，runtime）
+＋ **`scripts/lib/deck-locked-sets.mjs`**（守衛端；跨 .ts/.mjs 沒辦法共用 export，
+比照 version.ts 與 admin.html `SITE_VERSION_HINT` 的處理方式，由 `test-v6333` 逐項比對防漂移）。
+接線三處：
+- `validateDeck` 擋下並說明原因（⚠ 擺在**標的檢查之前**，因為這批卡多數是 J 標、標的檢查會放行）
+- `/decks` 候選池 `filterDeckSelectable(filterPlayerSelectable(allCards))`
+  ⚠ **poolById 不濾** —— 濾了的話已存牌組裡的 M6a 卡會變成「缺卡」，而不是被 validateDeck 明確指出來
+- `/cards` **不套**這個閘（站長要的是可查卡）；守衛有一條反向斷言擋住誤套
+
+六支「照卡面枚舉」的守衛改成依 **卡包** 排除（不是依「待實裝 key」）——
+`test-self-recoil-amounts` / `test-v6124` / `test-v6208` / `test-hand-attach-percard-reaction` /
+`test-v6205`⑦ / `test-v6239`C1。
+⚠ 豁免判準一律是「持有這個效果名的**每一張** live H/I/J 卡都來自不開放對戰的卡包」，
+只要有一張是可對戰的就照樣要求列管 —— 收緊，不是整包放過。
+
+⭐⭐⭐ **並且把站上原本的不變量明確釘成守衛**：
+「**不在** `DECK_LOCKED_SETS` 裡的 live H/I/J 卡，未實裝招式必須是 0」（實測掃 3767 條，0）。
+這比我原先寫的「111 個 key 的待實裝清單」可靠 —— 清單會腐爛，不變量不會。
+⚠ **只掃招式不掃特性**：招式的判準是精確的（registry 查不到＝靜默失效）；
+特性不是（registry 只有 by-index 123 + by-name 11 ＝ 134 筆，但站上 H/I/J 特性有 250 筆以上，
+被動特性根本沒有 handler，由引擎各 helper 直接讀卡面）。第一版掃了特性，**誤報 890 筆**。
+特性的覆蓋由 `test-v6205`⑦ 的逐張判讀表負責。
+
+**④ 兩支既有守衛的釘死字面量（Rule 40）**
+・`test-v6232` 的「全站總張數 === 4938」→ 改成「宣告總數 === 實際檔案總數」＋「只准增不准減」。
+　（原本每收一個卡包就要手改一次；v6.328 才剛改過。）
+・`test-selection-filter-batch4` 的「現役 DB 無 Pokemon+Other」→ 範圍收斂成「**可對戰的**卡」，
+　並補 F6b 反安慰劑：卡庫裡必須確實存在 Pokemon+Other 且**每一張都不可對戰**
+　（否則 F6 變成恆真的空集合斷言）。⚠ 判準是「進不進得了牌組」不是「有沒有標」——
+　夢幻VMAX 20070 帶的是 E 標，一樣早就退出標準賽。
+　⚠ 已知且目前不可達的分歧：那 5 張 `subtype:'Other'` 卡上，
+　`isBasicPokemonCard`（false）與 UI 手刻式（true）判斷相反；因為組不進牌組所以碰不到。
+
+**守衛總計**：`test-v6333` **28 條全綠**，HEAD-FAIL 全還原 19/20 紅、逐檔還原各自紅，
+**突變 14/14 全殺**（含 faceAttackDamage 的四種寫壞法、待實裝清單多一筆／少一筆／偷加卡包、
+pick-printing 退回只用卡名挑）。
+
+### 【五】我這一輪講錯、當面更正的地方
+
+跟站長回報時我寫「另外 10 張帶的是舊標」—— **錯的，是 8 張**（A2/C1/D2/E1/F1/G1）。
+是憑印象數的，沒有先跑一次分類。守衛裡已經把四類張數加總 = 168 釘死，避免再數錯。
+
 ## v6.332 首頁 changelog 保留則數 50 → 35（批次搬 15 則進封存頁）
 
 BASE `a8758155eb503b6518d387762829b1c55872af05`（v6.331，遠端 main）。

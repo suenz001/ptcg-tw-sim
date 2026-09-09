@@ -2789,6 +2789,38 @@ export function isStadiumPendingImplementation(name: string | undefined | null):
  * @param kind 只有 `'attack-damage'` 才是「受到的招式的傷害」；放置傷害指示物
  *             （`'attack-effect'`）與特性效果（`'ability-effect'`）**不是傷害**，不計。
  */
+/**
+ * ⭐⭐⭐ v6.333 讀「**這一次出招的那一張印刷**自己的卡面傷害」。
+ *
+ * ⚠⚠ 為什麼需要這個（M6a「30th CELEBRATION」帶出來的真 bug）：
+ *   引擎用 `卡名|招式名` 當 handler 的 key，但**同名不同印刷的卡面數字可以不一樣**。
+ *   實例：`皮卡丘ex|打雷` 在 SVM 038/175 是 **220**，在 M6a 048/103 是 **200**；
+ *   `regPre` 硬寫 `damage: 220` ⇒ M6a 那張打出去會變成 220，多打 20 點。
+ *   30 週年紀念包大量重印經典寶可夢名，這種碰撞只會越來越多。
+ *
+ * ⇒ 凡是「純數字傷害」的 regPre，一律改成讀出招者自己的卡面，不要寫死數字。
+ *   （`scripts/test-fixed-damage-base.mjs` 會擋住新寫死的；這個 helper 是修法那一半。）
+ *
+ * @param fallback 讀不到卡面時用的值。**故意保留**：複製招式（出招者卡面上沒有這一招）
+ *   或資料缺漏時，行為與改動前完全一致，不會因為這次收斂而產生新的回歸。
+ */
+export function faceAttackDamage(
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  attackName: string,
+  fallback: number,
+): number {
+  const inst = state.players[aIdx]?.active;
+  if (!inst) return fallback;
+  const card = pool.get(String(inst.cardId));
+  const atk = card?.attacks?.find((a) => a?.name === attackName);
+  const raw = String(atk?.damage ?? '').trim();
+  // 只接受「純數字」——「120+」「30×」「20-」這類條件式傷害本來就該由各自的 regPre 算。
+  if (!/^\d+$/.test(raw)) return fallback;
+  return parseInt(raw, 10);
+}
+
 export function withAttackDamageTaken(
   inst: CardInstance,
   prevDamage: number,

@@ -67,6 +67,83 @@ export const SET_REGULATION_MARK: Record<string, RegulationMark> = {
 /** Marks currently legal in Standard format. */
 export const STANDARD_MARKS: ReadonlySet<RegulationMark> = new Set(['H', 'I', 'J']);
 
+/**
+ * ⭐⭐⭐ v6.333 **全站唯一**的「這張卡的標能不能打標準賽」述詞。
+ *
+ * ⚠⚠ 為什麼一定要有這一份、而且所有消費點都必須呼叫它：
+ *   原本這個判準被抄成三份（`decks/validation.ts` 的 local `STANDARD_MARKS`、
+ *   `server/cardIndex.ts` 的 `STD_MARKS`、本檔的 `STANDARD_MARKS`），
+ *   其中 validation 那一份寫成 **`if (card.regulationMark && !STANDARD_MARKS.has(...))`**
+ *   ——「標是空的」時整段條件直接跳過 ＝ **fail-open**，等於把無標卡判成合法。
+ *   在 M6a「30th CELEBRATION」之前站上剛好一張無標卡都沒有，所以這個洞一直沒發作；
+ *   M6a 進卡庫後有 21 張官網 `.alpha` 顯示 n/a 的純收藏卡（皮卡丘 136/103、洛奇亞、
+ *   N、小霞、烈空坐EX、達克萊伊＆克雷色利亞LEGEND …），站長 2026-09-09 明確指示
+ *   「這些卡不能對戰」。
+ *
+ * ⇒ **標缺席一律 fail-closed（回 false）**。要判「不合法」時請寫
+ *   `!isCardMarkStandardLegal(mark)`，**絕對不要**再寫 `mark && !SET.has(mark)`。
+ */
+export function isCardMarkStandardLegal(mark: string | null | undefined): boolean {
+  if (!mark) return false;   // 無標（純收藏卡）＝ 不能對戰
+  return (STANDARD_MARKS as ReadonlySet<string>).has(mark);
+}
+
+/**
+ * ⭐ v6.333 賽季篩選鈕的分組 key（`/cards` 用）。
+ *
+ * 沒有 regulationMark 的卡回 `'none'`（＝【無標】鈕），**不是** null／空字串 ——
+ * 舊的篩選寫法是 `if (!c.regulationMark || !marks.has(...)) return false;`，
+ * 無標卡在任何一顆鈕底下都會被濾掉，新加的【無標】鈕會永遠空的。
+ *
+ * ⚠ 站長 2026-09-09 裁定：【無標】**只收真的完全沒有標的**卡。
+ *   M6a 帶舊標 A/C/D/E/F 的收藏卡回傳自己的標（'A'…），因此不會落進【無標】，
+ *   也不會落進 G/H/I/J —— 它們只在【不限】看得到，這是站長選的行為。
+ */
+export const NO_REG_MARK_KEY = 'none';
+export function cardRegMarkFilterKey(mark: string | null | undefined): string {
+  return mark || NO_REG_MARK_KEY;
+}
+
+/**
+ * ⭐⭐⭐ v6.333「已進卡庫、但**暫時不開放組牌**」的卡包（唯一來源）。
+ *
+ * **站長 2026-09-09 裁定（兩句）**：
+ *   ①「M6a 可查卡，但暫不開放組牌」
+ *   ②「m6a 全部的卡的功能都不要實裝」
+ * ⇒ M6a「30th CELEBRATION」是**純資料**：玩家在卡牌資料庫查得到、【無標】篩選鈕也用得到，
+ *   但牌組編輯器不給選、牌組合法性檢查會擋，卡效果一律不做。
+ *
+ * ⚠⚠ 為什麼一定要擋（這是公平性問題，不是功能缺口）：
+ *   引擎結算招式是 `const preFn = ATTACK_PRE.get(key); if (preFn) {…}` —— **沒有 handler 就
+ *   直接套卡面傷害、效果整段跳過、對戰紀錄一個字都不寫**（訓練家有
+ *   `isTrainerPendingImplementation` 擋、特性沒實裝按鈕不會出現，唯獨招式沒有閘）。
+ *   實測：M6a 之前「live H/I/J 有效果的招式 1691 招、未實裝 0」是站上**從沒破過的不變量**；
+ *   M6a 一進來就變成 96 招未實裝，其中 15 招是**代價型**效果（自傷／下回合鎖招／丟光自己
+ *   身上的能量），沒實裝等於**單方面對出招者有利** ——
+ *   例：超夢ex｜超能之力 打 230 卻不鎖招、閃電鳥｜雷轟 打 210 卻不自傷、
+ *       皮卡丘ex｜十萬伏特 打 200 卻不丟能量。卡片會比實體卡更強。
+ *
+ * ⚠ 這是「不能組牌」不是「從資料裡刪掉」：卡仍留在 pool / poolById / 對戰回放拿得到
+ *   （同 $lib/cards/visibility 的下架卡分界）——只有**候選清單**與**牌組合法性**擋。
+ *
+ * ⚠⚠ 這份清單與 `scripts/lib/deck-locked-sets.mjs` 的 `DECK_LOCKED_SETS` 必須永遠相同
+ *   （一個給 runtime、一個給守衛，跨 .ts/.mjs 沒辦法共用同一個 export ——
+ *    同 version.ts 與 admin.html SITE_VERSION_HINT 的處理方式）。
+ *   `scripts/test-v6333-m6a-unmarked.mjs` 有一條逐項比對，漂移就會紅。
+ */
+export const DECK_LOCKED_SETS: ReadonlySet<string> = new Set(['M6a']);
+
+/** 這張卡是不是來自「暫不開放組牌」的卡包？ */
+export function isDeckLockedCard(card: { setCode?: string | null } | null | undefined): boolean {
+  return !!card && DECK_LOCKED_SETS.has(String(card.setCode));
+}
+
+/** 從候選清單濾掉「暫不開放組牌」的卡。⚠ 只用於**可挑選**的清單，不可用在 poolById。 */
+export function filterDeckSelectable<T extends { setCode?: string | null }>(cards: readonly T[]): T[] {
+  if (DECK_LOCKED_SETS.size === 0) return [...cards];
+  return cards.filter((c) => !isDeckLockedCard(c));
+}
+
 /** Check if a set code is legal in the current Standard format. */
 export function isStandardLegal(setCode: string): boolean {
   const mark = SET_REGULATION_MARK[setCode];

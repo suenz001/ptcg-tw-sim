@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'a8758155eb503b6518d387762829b1c55872af05';   // v6.331（v6.332 的上一版）
+const PREV_SHA = '7e1f69c54f5ff6a322853d4898944c27a4fcf235';   // v6.332（v6.333 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -721,10 +721,22 @@ const PREV_SHA = 'a8758155eb503b6518d387762829b1c55872af05';   // v6.331（v6.33
 // ⚠ v6.331 modal-choice 空／無效選擇的中央閘（引擎＋UI＋中央述詞）＋ 小霞的朝氣選項形狀。
 // ⚠ v6.332 首頁 changelog 保留則數 50 → 35（批次把 15 則搬進封存頁）
 //   ⇒ 玩家端只動到 changelog 三檔與 version.ts，**零程式碼改動**。
+// ⚠ v6.333 M6a「30th CELEBRATION」進卡庫（新檔 static/cards/M6a.json 不在此清單 ——
+//   這一條比的是「BASE 樹裡既有的檔案有沒有被動到」，新增檔案由 test-card-db-integrity 對帳）
+//   ＋ 無標卡不能組進牌組（regulation/validation/cardIndex/decks 頁）＋ /cards 新增【無標】鈕。
 const PREV_ALLOWED = [
-  'src/lib/changelog-lazy.ts',
+  'src/lib/cards/regulation.ts',
+  'src/lib/decks/validation.ts',
+  'src/lib/game/effects/_shared.ts',                     // v6.333 faceAttackDamage（同名不同印刷）
+  'src/lib/game/effects/cards/v2354_j_mark_batch.ts',     // v6.333 彩粉蝶｜大飛翅 by-index → by-name
+  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',    // v6.333 SELF_HIT 改讀卡面
+  'src/lib/game/effects/cards/v3700_audit_orphans.ts',   // v6.333 同上
+  'src/lib/server/cardIndex.ts',
   'src/lib/version.ts',
-  'src/service-worker.ts',
+  'src/routes/cards/+page.svelte',
+  'src/routes/decks/+page.svelte',
+  'static/card-set-map.json',
+  'static/cards/index.json',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

@@ -38,7 +38,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = 'a8758155eb503b6518d387762829b1c55872af05'; // v6.331（v6.332 的前一版；v6.332 是**批次縮減** 50→35 則 ⇒ 走 F0c）
+const BASE_SHA = '7e1f69c54f5ff6a322853d4898944c27a4fcf235'; // v6.332（v6.333 的前一版；v6.333 是常規的「一進一出」⇒ 走 F1~F3）
 // ⭐⭐⭐ v6.332：則數政策一律從 `scripts/lib/changelog-policy.mjs` 讀（Rule 38：判準只能有一份）。
 //   在那之前「50」被抄在三支守衛裡，改政策時 test-v6223 會莫名其妙誤紅。
 const { N_HOME, N_INLINE, MAX_KB } = await import(pathToFileURL(join(ROOT, 'scripts/lib/changelog-policy.mjs')).href);
@@ -628,7 +628,10 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
         assert.strictEqual(rebuilt, orig, e.ver + ' 還原後與 BASE 不同');
         checked++;
       }
-      assert.strictEqual(checked, 49, '只比對到 ' + checked + ' 則（應為 49）');
+      // ⚠ v6.333（Rule 40）：這裡原本釘死 49 —— 那是 N_HOME 還是 50 時的「除了最新那一則」。
+    //   v6.332 把 N_HOME 改成 35 時走的是 F0c 批次縮減分支，F1 沒跑到，所以這個字面量沒有翻紅，
+    //   一直到 v6.333 第一次走常規「一進一出」才會誤紅。改成從政策單一來源推導（N_HOME - 1）。
+    assert.strictEqual(checked, N_HOME - 1, '只比對到 ' + checked + ' 則（應為 ' + (N_HOME - 1) + '）');
       assert.strictEqual(movedOut, 1, '這一版把 ' + movedOut + ' 則的內文搬出內嵌區（應恰好 1 則＝搬運步驟②）');
       assert.strictEqual(home.entries.filter((e) => e.open).length, 1, '預設展開的不是恰好一則');
       assert.strictEqual(home.entries[0].open, true, '預設展開的不是最新那一則（上一版的 open 沒有收起來）');

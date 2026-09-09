@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { isDeckLockedCard } from './lib/deck-locked-sets.mjs';
 const ROOT=fileURLToPath(new URL('..',import.meta.url));
 const S=join(ROOT,'.stub-rc.js'); writeFileSync(S,'export const base="";');
 const E=join(ROOT,'.ent-rc.ts'); const O=join(ROOT,'.ent-rc.mjs');
@@ -26,9 +27,12 @@ for(const c of byName.values())for(const a of (c.attacks||[])){
   if(m && !/[擲若]/.test(eff)){const k=`${c.name}|${a.name}`; if(!seen.has(k)){seen.add(k); recoil.push({card:c,key:k,N:parseInt(m[1])});}}
 }
 let iid=0;const inst=(cid,e={})=>({iid:`c${++iid}`,cardId:String(cid),damage:0,energyAttached:[],...e});
-let pass=0,fail=0,fails=[];
+let pass=0,fail=0,fails=[];const locked=[];
 for(const r of recoil){
   const fn=M.ATTACK_POST.get(r.key);
+  // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外
+  //   （它永遠不會出現在任何一場對戰裡）。判準走中央 deck-locked-sets，不在這裡寫第二份。
+  if(!fn && isDeckLockedCard(r.card)){locked.push(r.key);continue;}
   if(!fn){fails.push(`[未實裝] ${r.key} 應自傷${r.N}`);fail++;continue;}
   const act=inst(r.card.id);
   // 對手 active + bench(避免KO後game-over跳過自傷段)
@@ -39,6 +43,7 @@ for(const r of recoil){
   if(got===r.N) pass++;
   else { fails.push(`[不符] ${r.key} 卡面${r.N} 實際${got}`); fail++; }
 }
+if(locked.length)console.log('  [不開放對戰的卡包·不實裝] '+locked.length+' 招：'+locked.join('、'));
 console.log(`自傷反作用力守衛(無條件固定型):${recoil.length} 招,PASS ${pass} / FAIL ${fail}`);
 fails.forEach(x=>console.log('  '+x));
 process.exit(fail?1:0);

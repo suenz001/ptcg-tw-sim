@@ -617,5 +617,20 @@
   "scrapedAt": "2026-07-31T04:45:00.000Z",
   "releaseDate": "2026-08-07",
   "count": 76
+ },
+ {
+  "code": "M6a",
+  "name": "30th CELEBRATION",
+  "regulationMark": "J",
+  "cardCount": 168,
+  "supertypeCounts": {
+   "Pokemon": 155,
+   "Trainer": 5,
+   "Energy": 8
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m6a/images/locale/tw/ogp.jpg",
+  "scrapedAt": "2026-09-09T07:30:00.000Z",
+  "releaseDate": "2026-09-16",
+  "count": 168
  }
 ]

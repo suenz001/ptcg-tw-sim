@@ -15,6 +15,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { allCarriersDeckLocked } from './lib/deck-locked-sets.mjs';
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x6208-s.js'), E = join(ROOT, '.x6208-e.ts'), O = join(ROOT, '.x6208-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) try { unlinkSync(p); } catch {} });
@@ -166,6 +167,8 @@ T('2g.〔枚舉守衛〕被動減傷路徑會消費到、且卡面寫「只要�
   //   逐張要求「要嘛在中央宣告、要嘛在下面的 FIELD_WIDE 白名單」，白名單那批由 2g2 做**行為端**驗證。
   const FIELD_WIDE = new Set(['盾之守護', '岩石宮殿']);
   const allReduceRestricted = new Set();
+  /** 特性名 → 持有它的 live H/I/J 卡（判「是不是整批都還沒實裝」用）。 */
+  const carriersOf = new Map();
   for (const [, c] of pool) {
     if (!['H', 'I', 'J'].includes(c.regulationMark)) continue;
     for (const a of c.abilities || []) {
@@ -174,9 +177,16 @@ T('2g.〔枚舉守衛〕被動減傷路徑會消費到、且卡面寫「只要�
           && !/^(只要|若)這隻寶可夢在(戰鬥場上|備戰區)/.test(e)) continue;
       if (!/「-\d+」點/.test(e)) continue;    // 只看「減傷」型
       allReduceRestricted.add(a.name);
+      (carriersOf.get(a.name) ?? carriersOf.set(a.name, []).get(a.name)).push(c);
     }
   }
-  const unhandled = [...allReduceRestricted].filter(n => !declared.has(n) && !FIELD_WIDE.has(n));
+  // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外。
+  //   只有「持有這個特性名的**每一張** live H/I/J 卡都來自不開放對戰的卡包」才豁免。
+  const deferredAbil = [...allReduceRestricted]
+    .filter((n) => allCarriersDeckLocked(carriersOf.get(n) ?? []));
+  if (deferredAbil.length) console.log('      [不開放對戰的卡包] ' + deferredAbil.join('、'));
+  const unhandled = [...allReduceRestricted]
+    .filter(n => !declared.has(n) && !FIELD_WIDE.has(n) && !deferredAbil.includes(n));
   assert.deepEqual(unhandled, [],
     '有位置限定的被動減傷特性既不在中央宣告、也不在 field-wide 白名單：' + unhandled.join(','));
   assert.ok(allReduceRestricted.size >= 4, '位置限定減傷只掃到 ' + allReduceRestricted.size + ' 個');

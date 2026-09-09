@@ -23,8 +23,11 @@
 
 import type { Card } from '$lib/cards/types';
 import type { Deck, DeckValidationResult } from './types';
+import { isCardMarkStandardLegal, isDeckLockedCard } from '$lib/cards/regulation';
 
-const STANDARD_MARKS = new Set(['H', 'I', 'J']);
+// ⭐ v6.333 Rule 38：這裡原本有一份 local `STANDARD_MARKS = new Set(['H','I','J'])`。
+//   同一個判準有兩份 ＝ 守衛必然安慰劑，而且那一份的用法是 fail-open（見下）。
+//   唯一來源改成 `$lib/cards/regulation` 的 isCardMarkStandardLegal。
 
 /**
  * v6.192「括號冠名 ＝ 同一張卡的藝術版本」——**站長 2026-08-15 裁定**：
@@ -286,12 +289,26 @@ export function validateDeck(
     }
     if (isBasicPokemon(card)) basicPokemonCount += entry.count;
 
-    if (card.regulationMark && !STANDARD_MARKS.has(card.regulationMark)) {
+    // ⭐⭐⭐ v6.333 站長裁定：M6a「30th CELEBRATION」**不開放對戰**（卡效果一律不實裝）。
+    //   引擎對「沒有 handler 的招式」是靜默略過效果、只結算卡面傷害 ⇒ 代價型招式（自傷／
+    //   下回合鎖招／丟光自己的能量）會變成單方面對出招者有利，卡片比實體卡更強。
+    //   ⚠ 擺在標的檢查**之前**：這批卡多數是 J 標、標的檢查會放行，只有這一條擋得住。
+    if (isDeckLockedCard(card)) {
+      issues.push(`${card.name}（${card.setCode}）是紀念收藏卡包的卡，本站不開放用於對戰，`
+        + '暫時無法加入牌組');
+    }
+    // ⭐⭐⭐ v6.333：改成 `!isCardMarkStandardLegal(...)`。
+    //   舊寫法 `if (card.regulationMark && !STANDARD_MARKS.has(...))` 是 fail-open ——
+    //   `regulationMark` 缺席時整段跳過，無標卡會被判成合法可組牌。
+    //   M6a「30th CELEBRATION」帶進 21 張無標純收藏卡，站長裁定不能對戰。
+    if (!isCardMarkStandardLegal(card.regulationMark)) {
       // v3.61：兩類例外免被擋
       //   1) 基本能量在標準賽不受任何構築限制（含 G 標）
       //   2) Reprint exception 名單：H/I/J 有重印的舊卡，舊版本仍合法
       if (!isBasicEnergy(card) && !isStandardReprintLegal(card)) {
-        issues.push(`${card.name} 為 ${card.regulationMark} 標，已退出標準賽`);
+        issues.push(card.regulationMark
+          ? `${card.name} 為 ${card.regulationMark} 標，已退出標準賽`
+          : `${card.name} 沒有賽制標記，是純收藏卡，不能用於對戰`);
       }
     }
   }

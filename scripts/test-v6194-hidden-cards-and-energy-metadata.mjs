@@ -288,7 +288,14 @@ T('⭐⭐ /cards 卡包摘要張數必須扣掉下架卡（磚上寫 101、內�
   ok(mpj.cardCount === setView.cards.length, '卡包磚(' + mpj.cardCount + ') 與內頁實際張數(' + setView.cards.length + ') 對不上');
   const untouched = adjusted.find((e) => e.code === 'SV-P-J');
   ok(untouched.cardCount === 21, '沒有下架卡的卡包被動到了：' + untouched.cardCount);
-  ok(adjusted.reduce((s, e) => s + e.cardCount, 0) === 4936, '對玩家的總張數應為 4936（4938 − 2 張下架卡）');
+  // ⭐ v6.333（Rule 40）：原本釘死 4936（＝當時的 4938 − 2 張下架卡）。
+  //   那是每收一個新卡包就要手改一次的字面量；它想守的是「扣掉的**張數**正好等於下架卡數」。
+  //   改成從 index.json 的實際總數推導 ⇒ 新增卡包不再誤紅，但「多扣／少扣」照樣紅。
+  const rawTotal = INDEX.reduce((s, e) => s + e.cardCount, 0);
+  const hiddenN = Object.keys(V.HIDDEN_FROM_PLAYERS).length;
+  ok(hiddenN > 0, '下架卡表是空的 —— 下一條會變成「扣 0 等於沒扣」的恆真斷言');
+  ok(adjusted.reduce((s, e) => s + e.cardCount, 0) === rawTotal - hiddenN,
+    '對玩家的總張數應為 ' + (rawTotal - hiddenN) + '（index 總數 ' + rawTotal + ' − ' + hiddenN + ' 張下架卡）');
   // 行為端：index 模式與 set 模式回傳的 sets 都要是扣過的
   ok(idxView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards 卡包列表沒有扣');
   ok(setView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards?set=… 帶的 sets 沒有扣');
@@ -446,8 +453,10 @@ T('⭐⭐⭐ index.json 逐包張數 = 實際檔案；三個動到的卡包數�
 T('⭐⭐ live 總張數 / card-set-map 零落差 / id 全站唯一', () => {
   const total = INDEX.reduce((s, e) => s + e.cardCount, 0);
   ok(total === pool.size, 'index.json 宣告 ' + total + ' 張，實際掃到 ' + pool.size);
-  ok(total === 4938, 'live 總張數應為 4938（v6.328 為傳說競技場右半換號新增 3 筆新 id；'
-    + '舊 3 筆同時登記為停用卡 ⇒ 對玩家仍是 4933 張），實際 ' + total);
+  // ⭐ v6.333（Rule 40）：原本釘死 4938。同上，改成意圖級的「只准增不准減」——
+  //   上面那條 total === pool.size 已經守住「index 與實際檔案自洽」，
+  //   這一條守的是「卡不會憑空消失」（下架卡要留在資料裡，見 $lib/cards/visibility）。
+  ok(total >= 4938, 'live 總張數 ' + total + ' 比 v6.328 當時的 4938 還少 —— 有卡被刪掉了？');
   const missing = [...pool.keys()].filter((k) => !(k in CSM));
   const extra = Object.keys(CSM).filter((k) => !pool.has(k));
   ok(missing.length === 0 && extra.length === 0,

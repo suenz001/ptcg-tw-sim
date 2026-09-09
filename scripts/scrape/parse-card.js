@@ -94,6 +94,29 @@ function classifyTrainerOrEnergyByH3($) {
  * @param {string} sourceUrl
  * @returns {import('./card-schema.d.ts').Card}
  */
+/**
+ * ⭐⭐⭐ v6.333：從官網 `.evolution` 的**巢狀層級**取出這張卡的前一階。
+ *
+ * **獨立 export 的唯一目的是讓守衛能對它做真行為斷言**（Rule 38：判準只能有一份，
+ * 守衛不可以自己再抄一份選擇器）。`parseCard` 是唯一的生產呼叫點。
+ *
+ * @param {import('cheerio').CheerioAPI} $ 已載入整頁 HTML 的 cheerio
+ * @returns {string|null} 前一階卡名；本人是基礎（在 evolutionStep first）或沒有進化區塊時回 null
+ */
+export function resolveEvolvesFrom($) {
+  const active = $('.evolution li.step.active').first();
+  if (!active.length) return null;
+  // 本人所在的那一層 <ul class="evolutionStep first|second|third">
+  const level = active.parent();
+  // 這一層被包在「上一階的那個 <li>」後面的 <li> 裡；
+  // 往前找最近的 <li class="step">，那就是上一階。
+  const wrapper = level.parent();
+  if (!wrapper.is('li')) return null;   // 本人在 first 層 ＝ 基礎寶可夢
+  const prev = wrapper.prevAll('li.step').first();
+  const name = prev.text().trim().replace(/[<>]/g, '');
+  return name || null;
+}
+
 export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
   const $ = cheerio.load(html);
 
@@ -285,52 +308,36 @@ export function parseCard(html, id, sourceUrl, expectedSetCode = null) {
       }
     });
 
-    // Pre-evolution (from .evolution section)
-    // Format: "{prevName}  {thisName}  {nextName...}" — this card is in the middle
-    // Heuristic: find this card's name in .evolution and the previous entry is evolvesFrom
+    // ⭐⭐⭐ Pre-evolution（v6.333 改寫）：讀官網 .evolution 的**巢狀層級**，不再用「同一串名字取
+    // 前一個」的啟發式。
     //
-    // Known limitation: 化石進化鏈（陳舊的XX化石 → Stage1 → Stage2）的 Stage1 寶可夢
-    // 不會抓到 evolvesFrom，因為官網 .evolution block 只列寶可夢，化石（Trainer/Item）
-    // 不在區塊裡。所以 Stage1 寶可夢的 .evolution 只有自己 + Stage2，找不到前一階。
+    // 官網 HTML 的真實結構是一棵樹，每一階是一層 <ul class="evolutionStep first|second|third">，
+    // 這張卡本人是 <li class="step active">：
+    //     <ul class="evolutionStep first">
+    //       <li class="step"><a>科斯莫古</a></li>          ← 基礎（＝上一階）
+    //       <li><ul class="evolutionStep second">
+    //             <li class="step"><a>科斯莫姆</a></li>     ← 1 階（＝上一階）
+    //             <li><ul class="evolutionStep third">
+    //                   <li class="step"><a>索爾迦雷歐</a></li>
+    //                   <li class="step active"><a>露奈雅拉</a></li>   ← 本人
+    //     ⇒ 露奈雅拉 的前階是「科斯莫姆」，不是同層隔壁的「索爾迦雷歐」。
+    //
+    // ⚠⚠ 為什麼一定要改：舊做法是把整個區塊攤平成一串名字、取本人的前一個。
+    //   **同一層會列出所有分支與所有印刷版本**（伊布那層一次列 24 隻），所以只要是
+    //   分支進化就必錯。實測 M6a 168 張裡錯了 9 張：
+    //     太陽伊布←月亮伊布(應為伊布)／月亮伊布←冰伊布(應為伊布)／仙子伊布ex←太陽伊布(應為伊布)
+    //     巨鉗螳螂ex←劈斧螳螂(應為飛天螳螂)／露奈雅拉←索爾迦雷歐(應為科斯莫姆)
+    //     索爾迦雷歐GX←露奈雅拉(應為科斯莫姆)／阿羅拉椰蛋樹←椰蛋樹(應為蛋蛋，×2)
+    //   舊註解自己也承認「分支進化需人工 + fix-evolves-from-v* 腳本修正」——那些腳本就是
+    //   這個 bug 的補丁。改成讀層級之後，分支不再需要人工修。
+    //
+    // 本人在 `evolutionStep first` ⇒ 基礎寶可夢，沒有前階（不寫 evolvesFrom）。
+    //
+    // Known limitation（沿用）：化石進化鏈（陳舊的XX化石 → Stage1 → Stage2）的 Stage1
+    // 不會抓到 evolvesFrom，因為官網 .evolution 只列寶可夢，化石（Trainer/Item）不在區塊裡。
     // 重爬後跑 `node scripts/migrate-fossil-evolves-from.mjs` 補回。
-    const evo = $('.evolution').first();
-    if (evo.length) {
-      const names = evo.find('a, span').map((_, el) => $(el).text().trim()).get()
-        .filter((s) => s && s.length > 0);
-      const idx = names.findIndex((n) => n === card.name);
-      if (idx > 0) {
-        // v2.76: 向前搜尋正確的前階卡。
-        // 官網 .evolution 區塊可能在 ex 卡前面列出同名的 GX / 非 ex 版本，
-        // 例如 [小火龍, 火恐龍, 噴火龍, 噴火龍GX, 噴火龍ex]
-        // 噴火龍ex 的 evolvesFrom 應該是 火恐龍（跳過同名的噴火龍和噴火龍GX）。
-        //
-        // v2.87: 加 strip 地區前綴（洗翠/伽勒爾/阿羅拉/帕底亞）— 官網會把地區
-        // 分身列在同一條進化鏈裡，例：
-        //   [木木梟, 投羽梟, 狙射樹梟, 狙射樹梟GX, 洗翠 狙射樹梟, 狙射樹梟ex]
-        // 狙射樹梟ex 的前階是 投羽梟，要跳過「洗翠 狙射樹梟」（同族地區分身）。
-        //
-        // ⚠️ 仍無法自動處理的情況（需人工 + fix-evolves-from-v* 腳本修正）：
-        //   - 分支進化（呆呆獸 → 呆殼獸 / 呆呆王；飛天螳螂 → 巨鉗螳螂 / 劈斧螳螂）
-        //     官網會把兩條分支列在同一條線，scraper 取 idx-1 會撈到另一條分支的卡
-        //   - Mega Stage1 from Basic（超級寶石海星ex ← 海星星，跳過中間 Stage1）
-        //     官網鏈會顯示 海星星 → 寶石海星 → 超級寶石海星ex，但正確前階是 Basic 海星星
-        const cardBase = card.name.replace(/ex$/, '').trim();
-        const stripAll = (s) => s
-          .replace(/[<>]/g, '')
-          .replace(/^(洗翠|伽勒爾|阿羅拉|帕底亞) /, '')
-          .replace(/GX$/, '')
-          .replace(/ex$/, '')
-          .trim();
-        let evoName = null;
-        for (let i = idx - 1; i >= 0; i--) {
-          if (stripAll(names[i]) !== cardBase) {
-            evoName = names[i].replace(/[<>]/g, '').replace(/GX$/, '');
-            break;
-          }
-        }
-        if (evoName) card.evolvesFrom = evoName;
-      }
-    }
+    const evoName = resolveEvolvesFrom($);
+    if (evoName) card.evolvesFrom = evoName;
   } else {
     // Trainer or Energy
     const rawTrainerName = $('h1').first().text().trim();

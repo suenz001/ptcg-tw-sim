@@ -12,7 +12,7 @@
 
 import type { CardInstance, GameState } from '../../types';
 import { startEnergyChain } from './v158_energy_chain';
-import { deckWithCardsToBottom } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
+import { deckWithCardsToBottom, regAByName } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { flipCoinsWithLog } from '../../effects';
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppDiscardChosenConcealedPost } from '../../effects';
@@ -390,7 +390,11 @@ regR('j-2354-raichu-charge-commit', (state, aIdx, iids, params, pool) => {
 // 卡面：在自己的回合時可使用1次。對手將對手自己的手牌全部翻回反面並重洗，
 //        放回牌庫下方。然後，對手從牌庫抽出4張卡。
 // 實裝：opp.hand 洗亂後附到 opp.deck 尾端，再 drawCards(dIdx, 4)
-regA('彩粉蝶', 0, (st, idx) => {
+// ⚠⚠ v6.333：這裡原本是 `regA('彩粉蝶', 0, …)`（**by-index** 註冊）。
+//   M6a「30th CELEBRATION」019/103 收了另一張彩粉蝶，它的 abilities[0] 是【指引之舞】——
+//   by-index 會把【大飛翅】派給那張卡（同名不同印刷錯派，正是 v6.257 那個維度）。
+//   ⇒ 改成 **by-name** 註冊；【指引之舞】尚未實裝（已列管於 scripts/lib/pending-impl.mjs）。
+regAByName('彩粉蝶', '大飛翅', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   const dp = st.players[dIdx];
   if (dp.hand.length === 0 && dp.deck.length === 0) {
