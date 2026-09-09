@@ -27,21 +27,30 @@ const bodies = existsSync(BD) ? readFileSync(BD, 'utf8') : '';
 const clAll = cl + '\n' + bodies;
 const countEntries = (s) => (s.match(/class="ver-badge"/g) || []).length;
 
-T('① 首頁 changelog 則數 ≤ 50（Wilson 指定「約 50 則」）', () => {
+// ⭐⭐⭐ v6.332：則數政策從 `scripts/lib/changelog-policy.mjs` 讀（Rule 38：判準只能有一份）。
+//   站長裁定 50 → 35；這是**收緊**（{n ≤ 35} ⊂ {n ≤ 50}），不是放寬。
+import { N_HOME, MAX_KB, BODIES_GROWTH_PER_VERSION, BODIES_MIN_SLACK_VERSIONS } from './lib/changelog-policy.mjs';
+T(`① 首頁 changelog 則數 ≤ ${N_HOME}（v6.332 站長裁定，由 50 收緊）`, () => {
   const n = countEntries(cl);
-  assert.ok(n > 0 && n <= 50, '實際 ' + n + ' 則（超過就該把最舊的搬進 changelog-archive.html）');
+  assert.ok(n > 0 && n <= N_HOME, '實際 ' + n + ' 則（超過就該把最舊的搬進 changelog-archive.html）');
+});
+T('①b ⭐ bodies 的餘裕必須 > 20 版（成長率實測約 120 bytes/版）—— 逼近時要再做一次批次縮減', () => {
+  const slack = MAX_KB * 1024 - statSync(BD).size;
+  assert.ok(slack > BODIES_MIN_SLACK_VERSIONS * BODIES_GROWTH_PER_VERSION,
+    `bodies 只剩 ${slack} bytes ≒ ${Math.floor(slack / BODIES_GROWTH_PER_VERSION)} 版就撞 40KB`
+    + ' —— 請調降 scripts/lib/changelog-policy.mjs 的 N_HOME 再做一次批次搬運');
 });
 T('② 首頁 changelog 檔案 < 40KB（v6.264 收緊：原本 60KB 只差 4 bytes 就爆）', () => {
   // ⚠ v6.100 的門檻是 60KB，到 v6.263 已經逼到 61,436 / 61,440 bytes（剩 4 bytes）。
   //   v6.264 把「展開才看得到的內文」搬到 changelog-bodies.html 之後降到約 30KB，
   //   門檻同步收緊到 40KB —— {x : x < 40KB} ⊂ {x : x < 60KB}，**嚴格更緊，不是放寬**。
   const kb = statSync(CL).size / 1024;
-  assert.ok(kb < 40, '實際 ' + kb.toFixed(1) + 'KB');
+  assert.ok(kb < MAX_KB, '實際 ' + kb.toFixed(1) + 'KB');
 });
 T('②b 搬出去的內文檔也要有上限（40KB），否則只是把成長換個地方繼續', () => {
   assert.ok(existsSync(BD), 'static/changelog-bodies.html 必須存在（v6.264 起）');
   const kb = statSync(BD).size / 1024;
-  assert.ok(kb < 40, 'changelog-bodies.html 實際 ' + kb.toFixed(1) + 'KB');
+  assert.ok(kb < MAX_KB, 'changelog-bodies.html 實際 ' + kb.toFixed(1) + 'KB');
 });
 T('③ 底部有「完整更新歷史」連結，且用 __BASE__ 佔位（GitHub Pages 有子路徑前綴）', () => {
   assert.ok(cl.includes('__BASE__/changelog-archive.html'),

@@ -38,8 +38,10 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '041d7d6d4d9dd485eb57d965b386678bfb1d6d5d'; // v6.330（v6.331 的前一版；v6.331 有動首頁 changelog ⇒ 走完整 F 比對）
-const N_INLINE = 12;   // 首頁內嵌完整內文的則數（站長裁定的「最新 N 則」）
+const BASE_SHA = 'a8758155eb503b6518d387762829b1c55872af05'; // v6.331（v6.332 的前一版；v6.332 是**批次縮減** 50→35 則 ⇒ 走 F0c）
+// ⭐⭐⭐ v6.332：則數政策一律從 `scripts/lib/changelog-policy.mjs` 讀（Rule 38：判準只能有一份）。
+//   在那之前「50」被抄在三支守衛裡，改政策時 test-v6223 會莫名其妙誤紅。
+const { N_HOME, N_INLINE, MAX_KB } = await import(pathToFileURL(join(ROOT, 'scripts/lib/changelog-policy.mjs')).href);
 
 let pass = 0, fail = 0;
 const T = async (n, fn) => {
@@ -84,8 +86,8 @@ const home = splitEntries(HOME);
 const arc = splitEntries(ARC);
 
 console.log('【0】掃描器自我驗證');
-await T('0-1 切割器抓得到 50 則、每則都有版本徽章（抓不到就代表下面全部是假綠）', () => {
-  assert.strictEqual(home.entries.length, 50, '首頁切出 ' + home.entries.length + ' 則');
+await T(`0-1 切割器抓得到 ${N_HOME} 則、每則都有版本徽章（抓不到就代表下面全部是假綠）`, () => {
+  assert.strictEqual(home.entries.length, N_HOME, '首頁切出 ' + home.entries.length + ' 則');
   assert.ok(home.entries.every((e) => e.ver), '有條目抓不到版本徽章');
 });
 await T('0-2 切割器對「人工植入的壞樣本」會判錯（正對照：判準真的在看東西）', () => {
@@ -103,8 +105,8 @@ console.log('【A】新結構的不變量（history-free，淺複製下照樣在
 const inline = home.entries.filter((e) => e.hasBody);
 const lazy = home.entries.filter((e) => !e.hasBody);
 
-await T('A1 首頁恰 50 則、恰 1 則預設展開（沿用 v6.223 的不變量，未放寬）', () => {
-  assert.strictEqual(home.entries.length, 50);
+await T(`A1 首頁恰 ${N_HOME} 則、恰 1 則預設展開（沿用 v6.223 的不變量，只有則數依站長裁定調整）`, () => {
+  assert.strictEqual(home.entries.length, N_HOME);
   assert.strictEqual(home.entries.filter((e) => e.open).length, 1);
 });
 await T(`A2 恰 ${N_INLINE} 則內嵌內文，而且就是**最前面**那 ${N_INLINE} 則（順序不可亂）`, () => {
@@ -117,12 +119,12 @@ await T(`A2 恰 ${N_INLINE} 則內嵌內文，而且就是**最前面**那 ${N_I
 });
 await T('A3 內嵌的那幾則不得有 data-ver；懶載入的每一則 data-ver 必須等於自己的版本徽章', () => {
   for (const e of inline) assert.strictEqual(e.dataVer, null, e.ver + ' 內嵌內文卻還帶 data-ver（會被當成要再抓一次）');
-  assert.strictEqual(lazy.length, 50 - N_INLINE);
+  assert.strictEqual(lazy.length, N_HOME - N_INLINE);
   for (const e of lazy) assert.strictEqual(e.dataVer, e.ver, e.ver + ' 的 data-ver 是 ' + e.dataVer);
 });
 const bodyMap = new Map();
 for (const m of BODIES.matchAll(/<div class="log-body" data-ver="(v[\d.]+)">([\s\S]*?)<\/div>/g)) bodyMap.set(m[1], m[2]);
-await T('A4 bodies 檔與首頁「懶載入那 38 則」**雙向**一一對應（多一則少一則都紅）', () => {
+await T(`A4 bodies 檔與首頁「懶載入那 ${N_HOME - N_INLINE} 則」**雙向**一一對應（多一則少一則都紅）`, () => {
   assert.ok(existsSync(P_BODIES), 'static/changelog-bodies.html 必須存在');
   const want = lazy.map((e) => e.ver).sort();
   const got = [...bodyMap.keys()].sort();
@@ -144,7 +146,7 @@ await T('A5 內文不得含巢狀 div（pickChangelogBody 抓到第一個結束�
 });
 await T('A6 首頁片段 < 40KB（把 v6.100 的 60KB 上限**收緊**；40 < 60 ⇒ 嚴格更緊，不是放寬）', () => {
   const bytes = statSync(P_HOME).size;
-  assert.ok(bytes < 40 * 1024, '實際 ' + (bytes / 1024).toFixed(1) + 'KB');
+  assert.ok(bytes < MAX_KB * 1024, '實際 ' + (bytes / 1024).toFixed(1) + 'KB');
   assert.ok(bytes > 8 * 1024, '只有 ' + bytes + ' bytes → 檔案疑似被截斷，上面的檢查不可信');
 });
 await T('A7 封存頁一則都不可少：≥ 324 則、≥ 首頁則數、且仍是可直接開啟的完整頁面', () => {
@@ -160,6 +162,30 @@ await T('A7 封存頁一則都不可少：≥ 324 則、≥ 首頁則數、且�
   // ⚠ 更早的封存條目把說明整段寫在 summary 裡（沒有 log-body），所以只能用「整體不得被掏空」把關。
   assert.ok(statSync(P_ARC).size > 200 * 1024,
     '封存頁只剩 ' + (statSync(P_ARC).size / 1024).toFixed(0) + 'KB（v6.263 當下是 218KB）—— 歷史疑似被刪掉');
+});
+await T('A9 ⭐⭐⭐ 首頁與封存頁的**非條目區**（head／tail）不得寫死則數', () => {
+  // ⚠⚠ v6.332 對抗性審查抓到的真回歸：封存頁的副標寫著「首頁只顯示最近 **50** 次更新」，
+  //   首頁改成 35 則之後它就對玩家講錯話了 —— 而且**當時沒有任何守衛蓋得到**
+  //   （F0c-2／F2 只逐位元 pin `<details>` 區塊，head／style／tail 完全在 pin 範圍之外）。
+  //   記憶裡早就有「頁尾不要寫死數字」這條規則，但從來沒有守衛化 ⇒ 這一條就是它的守衛。
+  // ⚠ 刻意**不**改成「head 逐位元 pin」：那會讓任何合法的文案／樣式調整誤紅（＝安慰劑型態 9 的變體）。
+  //   只鎖真正會過期的東西：寫死的則數。
+  const DIGIT_COUNT = /最近\s*\d+\s*(次更新|則|個版本|版)/;
+  const nonEntry = (html) => {
+    const i = html.indexOf('<details');
+    const j = html.lastIndexOf('</details>') + '</details>'.length;
+    return html.slice(0, i) + '\n' + html.slice(j);           // head ＋ tail
+  };
+  for (const [name, html] of [['changelog.html', HOME], ['changelog-archive.html', ARC]]) {
+    const seg = nonEntry(html);
+    const m = DIGIT_COUNT.exec(seg);
+    assert.ok(!m, `${name} 的非條目區寫死了則數：「${m ? m[0] : ''}」`
+      + ' —— 首頁是滾動視窗，寫死的數字遲早會對玩家講錯話。改成「最近的更新」這種不綁數字的說法。');
+  }
+  // 正對照：判準必須真的抓得到（否則它就是恆真的安慰劑）
+  assert.ok(DIGIT_COUNT.test('首頁只顯示最近 50 次更新；這裡保留全部紀錄。'), '正對照失效：判準抓不到違規樣本');
+  assert.ok(DIGIT_COUNT.test('這裡顯示最近 12 則更新'), '正對照失效（「則」的變體）');
+  assert.ok(!DIGIT_COUNT.test('首頁只顯示最近的更新；這裡保留全部紀錄。'), '反對照失效：合規寫法被誤判');
 });
 await T('A8 bodies 檔是**片段**（不是完整 HTML 頁面）—— 它要被注入首頁，吃的是首頁的樣式', () => {
   assert.ok(!/<!DOCTYPE/i.test(BODIES) && !/<html/i.test(BODIES), 'bodies 檔不該是完整頁面');
@@ -183,9 +209,9 @@ async function loadLib(sourceText = LIB_SRC, tag = 'lib') {
 }
 const LIB = await loadLib();
 
-await T('B1 每一則懶載入的版本都取得回**非空**內文（38 則逐則跑，不是抽樣）', () => {
+await T(`B1 每一則懶載入的版本都取得回**非空**內文（${N_HOME - N_INLINE} 則逐則跑，不是抽樣）`, () => {
   assert.ok(typeof LIB.pickChangelogBody === 'function', 'src/lib/changelog-lazy.ts 沒有匯出 pickChangelogBody');
-  assert.strictEqual(lazy.length, 38, '懶載入則數 ' + lazy.length);
+  assert.strictEqual(lazy.length, N_HOME - N_INLINE, '懶載入則數 ' + lazy.length);
   for (const e of lazy) {
     const got = LIB.pickChangelogBody(BODIES, e.ver);
     assert.ok(typeof got === 'string' && got.trim().length > 10, e.ver + ' 取不到內文（回 ' + got + '）');
@@ -193,7 +219,7 @@ await T('B1 每一則懶載入的版本都取得回**非空**內文（38 則逐�
 });
 await T('B2 取回的內文與 bodies 檔裡那一則**逐字相同**（正對照：不是回了別則或截斷）', () => {
   assert.ok(typeof LIB.pickChangelogBody === 'function', 'lib 沒有匯出 pickChangelogBody');
-  assert.strictEqual(lazy.length, 38, '懶載入 ' + lazy.length + ' 則 → 這個迴圈會空轉（空陣列空真）');
+  assert.strictEqual(lazy.length, N_HOME - N_INLINE, '懶載入 ' + lazy.length + ' 則 → 這個迴圈會空轉（空陣列空真）');
   for (const e of lazy) assert.strictEqual(LIB.pickChangelogBody(BODIES, e.ver), bodyMap.get(e.ver), e.ver + ' 內文不一致');
 });
 await T('B3 找不到／格式不合的版本一律回 null（不可回空字串讓玩家看到空白區塊）', () => {
@@ -516,6 +542,18 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     && NEW_VER !== _baseTop
     && !home.entries.some((e) => e.ver === _baseTop) && !arc.entries.some((e) => e.ver === _baseTop) && !bodyMap.has(_baseTop);
 
+  // ⭐⭐⭐ v6.332 第四種合法情況：**批次縮減**（首頁保留則數 50 → 35，一次把 15 則搬進封存頁）。
+  //   ⚠ 這一版不是常規的「一進一出」⇒ F1（只多最新一則）／F2（封存只多一則）本來就會紅。
+  //   但它的**意圖**（搬運必須無損）完全沒變，而且可以斷言得**比 F1/F2 更強**：
+  //   除了「掉出去的那 M 則」以外，三個檔全部**逐位元相同**。
+  //   ⇒ 這不是放寬，是換一組更嚴的斷言（多動一個位元組就落到 else 分支走 F1~F3）。
+  const _shrinkM = baseHomeSplit.entries.length - home.entries.length;
+  const _clBatchShrink = !_clUnchanged && !_clTopRewrite
+    && baseHome.ok && baseArc.ok && baseBodiesRaw.ok
+    && _shrinkM > 0
+    && droppedVers.length === _shrinkM
+    && arc.entries.length === baseArcSplit.entries.length + _shrinkM;
+
   if (_clUnchanged) {
     T('F0 ⭐ 本版未動 changelog（admin-only 版）：首頁／封存頁／bodies 三檔與 BASE 逐位元相同', () => {
       assert.strictEqual(HOME, baseHome.out); assert.strictEqual(ARC, baseArc.out);
@@ -526,7 +564,47 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
       assert.ok(num(NEW_VER) > num(_baseTop), `第一則版本 ${NEW_VER} 沒有比 BASE 的 ${_baseTop} 新`);
       assert.strictEqual(home.entries.filter((e) => e.open).length, 1, '預設展開的不是恰好一則');
       assert.strictEqual(home.entries[0].open, true, '預設展開的不是最新那一則');
-      assert.strictEqual(home.entries.length, 50);
+      assert.strictEqual(home.entries.length, N_HOME);
+    });
+  } else if (_clBatchShrink) {
+    T(`F0c-1 ⭐ 批次縮減：首頁保留的 ${home.entries.length} 則，逐位元等於 BASE 首頁的前 ${home.entries.length} 則`, () => {
+      assert.strictEqual(home.head, baseHomeSplit.head, '首頁的前導區塊（head）被動到了');
+      for (let i = 0; i < home.entries.length; i++) {
+        assert.strictEqual(home.entries[i].text, baseHomeSplit.entries[i].text,
+          `第 ${i + 1} 則（${home.entries[i].ver}）與 BASE 不是逐位元相同`);
+      }
+      assert.strictEqual(home.entries.filter((e) => e.open).length, 1, '預設展開的不是恰好一則');
+      assert.ok(home.entries[0].open, '預設展開的不是最新那一則');
+      // ⚠ 掉出去的必須是**連續的最舊那一段**，不能挑著刪
+      const wantDropped = baseHomeSplit.entries.slice(home.entries.length).map((e) => e.ver);
+      assert.deepStrictEqual(droppedVers, wantDropped, '掉出首頁的不是最舊的連續那一段');
+    });
+    T(`F0c-2 ⭐ 批次縮減：封存頁恰好多 ${_shrinkM} 則、就是掉出去的那幾則（標題＋內文逐字保留），其餘逐位元不變`, () => {
+      assert.strictEqual(arc.entries.slice(_shrinkM).map((e) => e.text).join(''),
+        baseArcSplit.entries.map((e) => e.text).join(''), '封存頁的舊條目被動到了 —— 歷史一則都不可以改');
+      for (let i = 0; i < _shrinkM; i++) {
+        const v = droppedVers[i];
+        assert.strictEqual(arc.entries[i].ver, v, `封存頁第 ${i + 1} 則應為 ${v}，實得 ${arc.entries[i].ver}`);
+        const origTitle = baseHomeSplit.entries.find((e) => e.ver === v).text;
+        const origBody = baseBodyMap.get(v);
+        assert.ok(origBody, 'BASE 的 bodies 檔沒有 ' + v + ' 的內文');
+        const want = origTitle.replace('<details data-ver="' + v + '">', '<details>')
+          .replace('</summary>\n', '</summary>\n        <div class="log-body">' + origBody + '</div>\n');
+        assert.strictEqual(arc.entries[i].text, want, v + ' 搬進封存頁時標題或內文被改到了');
+      }
+    });
+    T(`F0c-3 ⭐ 批次縮減：bodies 只少了那 ${_shrinkM} 則，其餘逐字不變`, () => {
+      const removed = [...baseBodyMap.keys()].filter((v) => !bodyMap.has(v));
+      assert.deepStrictEqual(removed, droppedVers, 'bodies 少掉的不是搬進封存頁的那幾則');
+      assert.strictEqual([...bodyMap.keys()].filter((v) => !baseBodyMap.has(v)).length, 0, 'bodies 憑空多出條目');
+      for (const [v, b] of baseBodyMap) {
+        if (removed.includes(v)) continue;
+        assert.strictEqual(bodyMap.get(v), b, v + ' 的內文在搬運中被改到了');
+      }
+      const before = Buffer.byteLength(baseBodiesRaw.out, 'utf8'), after = Buffer.byteLength(BODIES, 'utf8');
+      assert.ok(after < before, `bodies 沒有變小（${before} → ${after}）—— 批次縮減的整個目的就是讓它變小`);
+      console.log(`        bodies ${before} → ${after} bytes（-${(100 - after / before * 100).toFixed(1)}%）；`
+        + `首頁 ${Buffer.byteLength(baseHome.out, 'utf8')} → ${Buffer.byteLength(HOME, 'utf8')} bytes`);
     });
   } else {
     T('F1 ⭐ 首頁：除了最新那一則以外，每一則都能逐位元組還原回 BASE（搬運沒有動到內文）', () => {

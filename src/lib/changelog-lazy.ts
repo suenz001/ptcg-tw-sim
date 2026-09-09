@@ -1,13 +1,14 @@
 // v6.264 首頁「版本更新記錄」較舊條目的補充說明延後載入 —— 純函式部分。
 //
 // 背景：static/changelog.html 是**每次開啟首頁都會 fetch 一整份**的片段（v5.969 起）。
-//   它固定 50 則、每出一版「進一則、擠掉最舊一則」，但新條目普遍比被擠掉的舊條目長，
+//   它固定 N 則（v6.332 起 35，見 scripts/lib/changelog-policy.mjs）、每出一版「進一則、擠掉最舊一則」，
+//   但新條目普遍比被擠掉的舊條目長，
 //   到 v6.263 已累積到 61,436 bytes，距離守衛的 60KB（61,440 bytes）上限只剩 4 bytes
 //   —— 下一則必爆。其中 log-body 的內文就佔了 40,729 bytes（66%），
 //   而那是「展開才看得到」的補充說明。
 //
 // 站長裁定：「首頁只載最新 N 則，其餘展開才拓」。
-//   ⇒ static/changelog.html 只內嵌最新 12 則的完整內文；更舊的 38 則只留標題（summary），
+//   ⇒ static/changelog.html 只內嵌最新 12 則的完整內文；更舊的那些只留標題（summary），
 //     並在 details 上標 data-ver；內文全部搬到 static/changelog-bodies.html，
 //     玩家展開那一則的當下才 fetch（整份只抓一次，之後共用）。
 //

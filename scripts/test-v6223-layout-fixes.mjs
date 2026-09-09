@@ -8,6 +8,7 @@
 // 並另斷言 DOM 模板端的 class 接線（擋「規則在但沒接上」）。
 // 真正的像素級驗證由部署後 headless 量測（見 docs/changelog-internal.md v6.223）與人工目視補位。
 import fs from 'node:fs';
+import { N_HOME } from './lib/changelog-policy.mjs';
 import path from 'node:path';
 
 const ROOT = process.env.V6223_SRC_ROOT || '.';
@@ -189,7 +190,9 @@ try {
   const clv = cl.match(/v(\d+\.\d+)/);
   check(!!clv && parseFloat(clv[1]) <= parseFloat(verM[1]) && parseFloat(clv[1]) >= 6.223,
     'changelog 最新條目版本（v' + (clv ? clv[1] : '?') + '）需 <= 當前版本 v' + verM[1] + ' 且 >= 6.223');
-  check((cl.match(/<details/g) || []).length === 50, 'changelog 條目數 = 50');
+  // ⭐ v6.332：則數改讀中央政策（Rule 38）—— 這一份原本寫死 50，站長把政策改成 35 時它會誤紅，
+  //   而且改的人完全不會想到要來看「版面守衛」。
+  check((cl.match(/<details/g) || []).length === N_HOME, 'changelog 條目數 = ' + N_HOME);
   check((cl.match(/<details open>/g) || []).length === 1, 'changelog 恰一則 open');
 } catch { console.log('  （changelog 不在此樹，跳過）'); }
 

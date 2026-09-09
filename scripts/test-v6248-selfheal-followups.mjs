@@ -27,6 +27,7 @@
  * Run: node scripts/test-v6248-selfheal-followups.mjs
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { N_HOME } from './lib/changelog-policy.mjs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { transform } from 'esbuild';
@@ -613,17 +614,20 @@ T('[HEAD-FAIL⑨] v6.247 那則不可以再宣稱問題是「上一版起」才�
   assert.ok(!/上一版起，資料量較大的盤面/.test(full), '錯誤的歸因（「上一版起」）還在');
   assert.ok(/並不是上一版才出現/.test(full) && /早就存在/.test(full), '沒有把「這個現象一直都在」講清楚');
 });
-T('[HEAD-FAIL⑩] 首頁維持 50 則、最新那一則是展開的、被擠掉的那些都進了封存（不綁特定版本）', () => {
+T(`[HEAD-FAIL⑩] 首頁維持 ${N_HOME} 則、最新那一則是展開的、被擠掉的那些都進了封存（不綁特定版本）`, () => {
   const nums = (s) => (s.match(/ver-badge">v(\d+)\.(\d+)</g) || [])
     .map((m) => /v(\d+)\.(\d+)</.exec(m)).map((m) => Number(m[1]) * 1000 + Number(m[2]));
   const clNums = nums(CL), arNums = nums(AR);
-  assert.equal(clNums.length, 50, '首頁則數不是 50');
+  // ⚠ v6.332：則數改讀中央政策（Rule 38：判準只能有一份；原本三支守衛各抄一份 50）。
+  assert.equal(clNums.length, N_HOME, '首頁則數不是 ' + N_HOME);
   assert.ok(/^<details open>\s*<summary><span class="ver-badge">v6\.\d+<\/span>/.test(CL.trim()),
     '首頁最上面那一則不是展開的 <details open>');
   // ⚠⚠ v6.251：原本這裡寫死「v6.248／v6.181 必須在首頁／封存」——再過 50 版一定會紅
   //   （v6.248 會被新版擠進封存），是顆時間炸彈。改成不綁版本的**等價**條件：
   //   ① 首頁是嚴格遞減的最新 50 則；② 首頁最舊那一則的**前一則**（＝剛被擠掉的那一版）
   //      必須出現在封存頁 ⇒ 「搬進封存」而不是「被刪掉」這件事仍然被鎖住。
+  //   ⚠ v6.332 一次搬 15 則（批次縮減）時這條**不必**放大容差：批次縮減是把最舊的**連續**一段
+  //     整批搬到封存頁最上面，所以「首頁最舊」與「封存最新」仍然相鄰，容差 5 自然成立。
   for (let i = 1; i < clNums.length; i++) {
     assert.ok(clNums[i] < clNums[i - 1], '首頁條目不是由新到舊嚴格遞減（第 ' + i + ' 則）');
   }

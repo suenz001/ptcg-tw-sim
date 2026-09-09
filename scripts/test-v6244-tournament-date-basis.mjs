@@ -33,6 +33,9 @@ const ADMIN = rd('oracle-admin/admin.html');
 const PAT = rd('oracle-admin/server_admin_patch.js');
 const INTERNAL = rd('docs/changelog-internal.md');
 const CHANGELOG = rd('static/changelog.html');
+// ⚠⚠ v6.332：首頁是**滾動視窗**（固定 N 則，舊的會被擠進封存頁）
+//   ⇒ 「某一則永遠在首頁」這個判準遲早必然過期。公告存在性一律搜三檔聯集。
+const CHANGELOG_ALL = CHANGELOG + '\n' + rd('static/changelog-bodies.html') + '\n' + rd('static/changelog-archive.html');
 
 // ══ fixture：站長回報的那一場 ═══════════════════════════════════════════════
 //   開賽    2026-08-26 21:00 台灣時間 = 2026-08-26 13:00 UTC
@@ -337,12 +340,14 @@ await T('⑬ 版本一致：version.ts ≥ 6.244、admin.html SITE_VERSION_HINT 
   assert.ok(Number(_pv[1]) * 1000 + Number(_pv[2]) >= 1026,
     'server patch 檔頭版本倒退了（' + _pv[0].trim() + '，v6.244 當時是 v1.26）');
 });
-await T('⑭ 文件：首頁 changelog 有這一則、內部文件寫了枚舉與回填裁定', () => {
-  const _i244 = CHANGELOG.indexOf('v6.244');
-  assert.ok(_i244 >= 0, '首頁 changelog 少了 v6.244（這是玩家看得到的顯示錯誤，要寫）');
-  // ⚠v6.245：原本用 slice(0,900) 假設 v6.244 永遠是第一則 —— 之後每加一則就會往後推。
-  //   改成從 v6.244 那一則自己的位置往後找。
-  assert.ok(/開賽/.test(CHANGELOG.slice(_i244, _i244 + 900)), '首頁那一則要講清楚改以開賽日為準');
+await T('⑭ 文件：這一則公告存在（首頁或封存頁皆可）、內部文件寫了枚舉與回填裁定', () => {
+  // ⚠⚠ v6.332：原本斷言「**首頁** changelog 有 v6.244」——首頁是滾動視窗，v6.332 把它縮到 35 則
+  //   時 v6.244 就被擠進封存頁，於是這條紅在一個與行為完全無關的地方。
+  //   ⭐ 意圖是「**那則公告存在而且文字正確**」，不是「它必須在首頁」；
+  //   封存頁是逐位元保留的（test-v6264 F0c-2 有證明），所以搜三檔聯集與原意等價。
+  const _i244 = CHANGELOG_ALL.indexOf('v6.244');
+  assert.ok(_i244 >= 0, 'changelog（首頁／bodies／封存頁）都找不到 v6.244');
+  assert.ok(/開賽/.test(CHANGELOG_ALL.slice(_i244, _i244 + 900)), '那一則要講清楚改以開賽日為準');
   assert.ok(INTERNAL.includes('## v6.244'), 'docs/changelog-internal.md 少了 v6.244');
   assert.ok(INTERNAL.includes('startedAt') && INTERNAL.includes('零資料遷移'),
     '內部文件要寫明欄位與「不需要回填」的裁定');

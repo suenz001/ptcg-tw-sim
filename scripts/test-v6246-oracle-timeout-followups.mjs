@@ -25,6 +25,7 @@
 // ⚠ 時間全部走**虛擬時鐘**（注入的 setTimeout/clearTimeout），所以「87 秒」是瞬間的。
 // Run: node scripts/test-v6246-oracle-timeout-followups.mjs
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { N_HOME } from './lib/changelog-policy.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -744,13 +745,18 @@ await T('⭐⭐⭐ 首頁公告的四個數字都是實跑量到的（30／61／
     ok(r.st.done && r.st.err, lbl + ' 竟然沒 settle —— UI 永遠解不開');
   }
 });
-await T('⭐⭐ 首頁公告逐字檢查：不得再宣稱「最多等三十秒」，且必須是 50 則、無裸大括號', () => {
-  const html = readFileSync(join(ROOT, 'static/changelog.html'), 'utf8');
+await T(`⭐⭐ 公告逐字檢查：不得再宣稱「最多等三十秒」，且首頁必須是 ${N_HOME} 則、無裸大括號`, () => {
+  const homeOnly = readFileSync(join(ROOT, 'static/changelog.html'), 'utf8');
+  // ⚠⚠ v6.332：首頁是**滾動視窗**，v6.246 那一則早晚會被擠進封存頁
+  //   ⇒ 「公告存在且逐字正確」要搜三檔聯集；「則數」則仍然只數首頁（homeOnly）。
+  const html = homeOnly
+    + '\n' + readFileSync(join(ROOT, 'static/changelog-bodies.html'), 'utf8')
+    + '\n' + readFileSync(join(ROOT, 'static/changelog-archive.html'), 'utf8');
   // ⚠v6.247 修這支守衛自己的缺陷：原本寫死「首頁第一則必須是 v6.246」，
   //   下一版公告一發布就必紅，而那不是行為壞掉。改成「找到 v6.246 那一則再逐字檢查」，
   //   檢查的內容一字未變，只是不再綁在最上面。
   const _i246 = html.indexOf('<span class="ver-badge">v6.246</span>');
-  ok(_i246 > 0, '首頁找不到 v6.246 那一則（那則公告的逐字檢查就失去對象了）');
+  ok(_i246 > 0, 'changelog（首頁／bodies／封存頁）都找不到 v6.246 那一則');
   const _b246 = html.lastIndexOf('<details', _i246);
   ok(_b246 >= 0, 'v6.246 那則的 <details> 起點找不到');
   const head = html.slice(_b246, html.indexOf('</details>', _i246) + 10);
@@ -760,8 +766,9 @@ await T('⭐⭐ 首頁公告逐字檢查：不得再宣稱「最多等三十秒�
   ok(!/v6\.245/.test(html), 'v6.245 那則沒有被改寫掉');
   // 正對照：確認這條斷言抓得到 v6.245 的原文（否則它就是安慰劑）
   ok(/現在最多等三十秒/.test('現在最多等三十秒，逾時就自動取回最新盤面讓對局繼續。'), '關鍵字比對本身壞了');
-  ok((html.match(/<details/g) || []).length === 50, '首頁 changelog 則數不是 50');
-  ok((html.match(/<details open>/g) || []).length === 1, '不只一則展開');
+  ok((homeOnly.match(/<details/g) || []).length === N_HOME, '首頁 changelog 則數不是 ' + N_HOME);
+  // ⚠ v6.332：這條數的是**首頁**的展開則數（封存頁本來就有一堆 <details open>，71 則）。
+  ok((homeOnly.match(/<details open>/g) || []).length === 1, '首頁不只一則展開');
   for (const kw of ['你', '您']) ok(!head.includes(kw), '公告出現第二人稱：' + kw);
   ok(!/[{}]/.test(head), '公告出現裸大括號（Rule 1）');
   const sum = head.slice(head.indexOf('</b><br>') + 8, head.indexOf('</summary>'));
