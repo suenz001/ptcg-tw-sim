@@ -44,7 +44,6 @@ import {
   shuffle, addLog, withPending, updatePlayer,
   ATTACK_PRE_DISCARD_CHOICE,
   getAllAttachedTools, getEnergyDiscardUnits, clearActiveEffects, countAttachedEnergyAsUnits,
-  buildDevolvedInstance, // v5.984 中央退化建構
 } from '../_shared';
 import {
   coinHeadsMultiplyPre,
@@ -53,7 +52,6 @@ import {
   hasBloomOnField,
   discardOppActiveEnergyPost,
 } from '../../effects';
-import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
 import { resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 import { countEnergy } from '../../engine';
 import { startEnergyChain } from './v158_energy_chain';
@@ -388,78 +386,17 @@ regR('kissy-attach-all-to-target', (st, aIdx, iids, params, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // (13) 阿賽斯特萊石（太陽伊布ex）— 0 傷 + 對手所有進化寶可夢退化
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('太陽伊布ex|阿賽斯特萊石', (state) => ({ state, damage: 0 }));
-regPost('太陽伊布ex|阿賽斯特萊石', (state, aIdx, pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const dPlayer = state.players[dIdx];
-  // 找所有「進化寶可夢」（active + bench 中 stage===Stage1/Stage2）
-  type Slot = { kind: 'active' } | { kind: 'bench'; idx: number };
-  const targets: { iid: string; slot: Slot }[] = [];
-  // v5.808：招式退化受化隱等免疫(attack-effect);免疫的寶可夢不退化(逐 target gate,bench 傳 isBench)。
-  if (dPlayer.active) {
-    const card = pool.get(dPlayer.active.cardId);
-    const _ga = canApplyEffectToTarget(state, aIdx, dPlayer.active, card, 'attack-effect', pool);
-    if ((card?.stage === 'Stage1' || card?.stage === 'Stage2') && !_ga.blocked) {
-      targets.push({ iid: dPlayer.active.iid, slot: { kind: 'active' } });
-    }
-  }
-  dPlayer.bench.forEach((b, idx) => {
-    const card = pool.get(b.cardId);
-    // v6.028：退化不是放指示物 → 對戰圓形不擋
-    const _gb = canApplyEffectToTarget(state, aIdx, b, card, 'attack-effect', pool, { isBench: true, counterPlacement: false });
-    if ((card?.stage === 'Stage1' || card?.stage === 'Stage2') && !_gb.blocked) {
-      targets.push({ iid: b.iid, slot: { kind: 'bench', idx } });
-    }
-  });
-  if (targets.length === 0) {
-    return addLog(state, '阿賽斯特萊石：對手場上無進化寶可夢', aIdx);
-  }
-
-  // 對每隻 target：取 evolvedFromStack 最頂的進化卡 → 放回對手 deck，並用 evolvedFromStack 倒退一階
-  let s = state;
-  let returnedCount = 0;
-  s = updatePlayerInline(s, dIdx, p => {
-    const newDeckExtras: typeof p.deck = [];
-    const downgrade = (poke: CardInstance): CardInstance => {
-      if (!poke.evolvedFromStack || poke.evolvedFromStack.length === 0) return poke;
-      // evolvedFromStack 結構：較底部 → 較頂部；最後一個是「目前形態」前一階
-      const stack = [...poke.evolvedFromStack];
-      const prev = stack.pop()!;
-      // 把目前 cardId（最頂進化卡）放回對手牌庫。
-      // 必須給回牌庫的「實體卡」新的唯一 iid；同一條進化鏈可能被多次退化，
-      // 若固定使用 `${poke.iid}_evo_returned`，Stage1/Stage2 會在手牌/牌庫中撞 iid，
-      // 導致 EVOLVE 以 toIid 找到錯的卡。
-      // v5.984：退化建構收斂中央 buildDevolvedInstance(唯一 removed iid + 暈眩山谷混亂例外)
-      const _dv = buildDevolvedInstance(poke, 1, state, pool);
-      if (!_dv) return poke;
-      newDeckExtras.push(..._dv.removedCards);
-      returnedCount++;
-      // 退化為 prev：cardId 變回前一階
-      // v2.261 Bug C-13：退化規則 — 保留 damage / energy / tool（PDF §II-C-13），
-      //   但清除特殊狀態與附加效果。
-      // v3.9998 修：原 v2.261 設 evolvedThisTurn:true 防「本回合再進化」，
-      //   但這 flag 只在「當前玩家」END_TURN 清（clearTurnFlags 只跑 aIdx）。
-      //   阿賽斯特萊石作用對象是「對手」寶可夢 → 對手 START_TURN 時 flag 仍 true
-      //   → 對手回合不能進化，違反 PTCG 規則（跨回合應失效）。
-      //   修法：不設此 flag。本回合對方寶可夢沒有「進化動作」（不是他回合），
-      //   所以即使移除 flag 也不會發生「本回合自我連續進化」問題。
-      // v5.672：清狀態+附加效果改用中央 clearActiveEffects(原只清 7 旗標,漏其餘;PDF §II-C-13)。
-      return _dv.devolved;
-    };
-    let active = p.active;
-    let bench = p.bench;
-    for (const t of targets) {
-      if (t.slot.kind === 'active' && active) {
-        active = downgrade(active);
-      } else if (t.slot.kind === 'bench') {
-        const benchIdx = t.slot.idx;
-        bench = bench.map((b, i) => i === benchIdx ? downgrade(b) : b);
-      }
-    }
-    return { ...p, active, bench, deck: shuffle([...p.deck, ...newDeckExtras]) };
-  });
-  return addLog(s, `阿賽斯特萊石：對手 ${returnedCount} 隻進化寶可夢退化（進化卡回對手牌庫並洗）`, aIdx);
-});
+// ⭐ v6.344 Rule 38 收斂：本招與 太陽伊布｜奇跡璨耀（M6a 058/103）**逐字同措辭**
+//   （「從對手的所有進化的寶可夢身上，各移除1張『進化卡』使其退化」，只差移除的卡去牌庫還是去手牌）
+//   ⇒ 判準統一走中央 `devolveAllOppEvolvedPost`（effects.ts），**登錄也搬到那裡**。
+//   （搬過去、而不是在本檔改成 import 中央 helper —— 是為了不讓「複製 src → 把幾個檔換回 BASE blob」
+//     型的守衛在 BASE 的 effects.ts 上找不到新符號而 esbuild build failed，見 v6.342。）
+//   ⚠ 禁在本檔再抄一份 —— grep 到兩份就會不知道哪一份生效。
+//   ⚠ 中央版順帶修正兩處（行為更正，不是放寬）：
+//     ・「是不是進化寶可夢」改問 `devolvableLayers`（實際堆疊深度）；原用卡面 stage 推論，
+//       v6.330 已知會誤判（神奇糖果 / 進化寶可夢被直接放置於場上）。
+//     ・active 分支的免疫閘補上 counterPlacement:false，與同段 bench 分支一致
+//       （退化不是放置傷害指示物 ⇒ 對戰圓形不擋，見 v6.028）。
 
 // ══════════════════════════════════════════════════════════════════════════════
 // (14) 雀躍（捲捲耳）— 0 傷 + 與備戰互換

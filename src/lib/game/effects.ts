@@ -64,6 +64,7 @@ import {
   healResolver,
   sameEvoName, canEvolveOnto, getAllAttachedTools, toBareCard, resolveInfiniteShadowKo,
   bareCardsForReturn,
+  buildDevolvedInstance, devolvableLayers, // v6.344 中央退化建構 + 「實際能退幾層」述詞（禁用卡面 stage 推論）
   applyBenchPlaceSideEffects,
   getEnergyDiscardUnits,
   effectivePreDiscardMin,
@@ -9515,6 +9516,76 @@ export function oppPokemonImmuneToAttackEffect(
   return { blocked: g.blocked, reason: g.reason ?? '', name: pool.get(inst.cardId)?.name ?? '?' };
 }
 
+/**
+ * ⭐ v6.344 中央出口：「從對手的**所有**進化的寶可夢身上，各移除 1 張『進化卡』使其退化。」
+ *
+ * 逐字同措辭的兩張卡共用本支（差別只在被移除的進化卡去哪裡）：
+ *   ・太陽伊布ex｜阿賽斯特萊石 —— 將移除的卡放回對手的**牌庫**並重洗（dest='deck'）
+ *   ・太陽伊布｜奇跡璨耀（M6a 058/103）—— 將移除的卡放回對手的**手牌**（dest='hand'）
+ * ⚠ Rule 38：v155_attacks.ts 的第二份實作已於本版移除（登錄一併搬到這裡），禁再抄回去。
+ *
+ * ⚠ 「各移除 **1 張**」＝只退**一層**，不是退到基礎。
+ * ⚠⚠ 「是不是進化的寶可夢」一律問 `devolvableLayers`（＝實際進化堆疊深度），
+ *   **不可**用卡面 stage 推論 —— v6.330：神奇糖果（凱西→胡地，中間沒有勇基拉）與
+ *   「進化寶可夢被直接放置於場上」（燈火幽靈｜亮光增長等）兩種情形卡面 stage 都會騙人。
+ *   （舊 v155 版以 stage 選 target、再靠 buildDevolvedInstance 回 null 兜底 ⇒ 結果一樣但
+ *     log 的隻數會多算；本版改成選 target 時就問對述詞。）
+ * ⚠⚠ 免疫閘**逐隻各過一次**（化隱／純樸…），走中央 `oppPokemonImmuneToAttackEffect`
+ *   （內部已處理 isBench，並帶 counterPlacement:false —— 退化不是「放置傷害指示物」，
+ *    對戰圓形不該擋，見 v6.028；舊 v155 版的 active 分支漏傳，與同段 bench 分支不一致）。
+ *   被擋的那一隻只是**不退化**，其餘照退。`scripts/test-devolve-attack-hidden-immunity.mjs` 在守。
+ * ⚠⚠ dest='hand' 的卡還要過【平穩境地】（美納斯）閘 —— 那張卡管的是「場上的卡放回**手牌**」，
+ *   回牌庫不在它的射程內。**閘不在本 helper 裡**：effects.ts 不可以 import
+ *   ./effects/cards/v3001_g3_wave3 的 symbol（scripts/anti-pattern-lint.mjs 的反向 edge 規則，
+ *   module-init 循環 TDZ）⇒ 判準（中央的 `isReturnToHandBlockedByCalmGround`）由**卡檔**套用，
+ *   與站上所有「場上的卡回手牌」的卡（念力土偶｜退化光線 等）完全一致。
+ *   ⚠ 新增 dest='hand' 的卡時**務必**在卡檔補這一閘。
+ */
+export function devolveAllOppEvolvedPost(label: string, dest: 'hand' | 'deck'): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const dp0 = state.players[dIdx];
+    // 先抓 iid 快照：退化只改 cardId/堆疊，不動位置，所以 iid 在整段迴圈內都有效。
+    const targetIids = [dp0.active, ...dp0.bench]
+      .filter((c): c is CardInstance => !!c && devolvableLayers(c) >= 1)
+      .map(c => c.iid);
+    if (targetIids.length === 0) return addLog(state, `${label}：對手場上無進化寶可夢`, aIdx);
+
+    let s = state;
+    let done = 0;
+    for (const iid of targetIids) {
+      const dp = s.players[dIdx];
+      const target = dp.active?.iid === iid ? dp.active : dp.bench.find(b => b.iid === iid);
+      if (!target || devolvableLayers(target) < 1) continue;
+      const g = oppPokemonImmuneToAttackEffect(s, aIdx, iid, pool);
+      if (g.blocked) { s = addLog(s, `${label}：${g.name}｜${g.reason}（不退化）`, aIdx); continue; }
+      const dv = buildDevolvedInstance(target, 1, s, pool);
+      if (!dv) continue;
+      const oldName = pool.get(target.cardId)?.name ?? '?';
+      const newName = pool.get(dv.devolved.cardId)?.name ?? '?';
+      s = updatePlayer(s, dIdx, p => ({
+        ...p,
+        active: p.active?.iid === iid ? dv.devolved : p.active,
+        bench: p.bench.map(b => (b.iid === iid ? dv.devolved : b)),
+        ...(dest === 'hand'
+          ? { hand: [...p.hand, ...dv.removedCards] }
+          : { deck: [...p.deck, ...dv.removedCards] }),
+      }));
+      s = addLog(s, `${label}：對手 ${oldName} 退化為 ${newName}（移除的進化卡放回對手的${dest === 'hand' ? '手牌' : '牌庫'}）`, aIdx);
+      done++;
+    }
+    if (done === 0) return s;
+    // 「放回對手的牌庫」⇒ 要重洗（放回手牌的那一型卡面沒有重洗）。
+    if (dest === 'deck') s = updatePlayer(s, dIdx, p => ({ ...p, deck: shuffle([...p.deck]) }));
+    return addLog(s, `${label}：對手共 ${done} 隻進化寶可夢退化`, aIdx);
+  };
+}
+
+// 太陽伊布ex｜阿賽斯特萊石 — 0 傷 + 對手所有進化寶可夢退化（進化卡回對手牌庫並重洗）
+//   v6.344：登錄從 v155_attacks.ts 搬來這裡（與中央 helper 同一處，禁兩地各一份）。
+regPre('太陽伊布ex|阿賽斯特萊石', (state) => ({ state, damage: 0 }));
+regPost('太陽伊布ex|阿賽斯特萊石', devolveAllOppEvolvedPost('阿賽斯特萊石', 'deck'));
+
 export function oppSwapDmgPost(dmg: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
@@ -13361,7 +13432,8 @@ export function selfReturnToHandPost(label: string): AttackPostFn {
 /**
  * 自身回牌庫（重洗）：active + 所有附加卡放回牌庫並 shuffle，active=null。
  */
-function selfReturnToDeckPost(label: string): AttackPostFn {
+// v6.344：export 供 M6a 批次4（飄飄球｜飄舞）復用（原為 local，行為完全未變）
+export function selfReturnToDeckPost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
@@ -13926,6 +13998,14 @@ regPre('烈雀|啄食', defToolDiscardPre(10, '啄食'));
 regPre('拉達|削落', defToolDiscardPre(20, '削落'));
 regPre('燃燒蟲|啄落', defToolDiscardPre(10, '啄落'));
 regPre('派帕的貪心栗鼠|咬取', defToolDiscardPre(10, '咬取'));
+// v6.344 M6a 086/103 藏瑪然特｜彈落 [M] 20：
+//   「在造成傷害前，將對手的戰鬥寶可夢身上附加的『寶可夢道具』卡丟棄。」
+//   ⚠⚠ 「**在造成傷害前**」⇒ 必須落在 PRE（丟掉猛攻手鐲之類會改傷害的道具後才算傷害），
+//     不可以做成 POST。與 金魚王｜啄落／烈雀｜啄食／拉達｜削落 逐字同措辭，共用同一支
+//     local helper defToolDiscardPre（內含免疫閘 + getAllAttachedTools 的 toolAttached+extraTools）。
+//   ⚠ base 20 = 卡面數字（`scripts/test-fixed-damage-base.mjs` 在守）；
+//     同名同招碰撞檢查 `__m6a/collide_w4.mjs` 全綠（全卡庫只有 M6a 這一個印刷）。
+regPre('藏瑪然特|彈落', defToolDiscardPre(20, '彈落'));
 
 // 丟對手 tool + 有丟棄則麻痺
 regPre('N的電電蟲|劈哩啪啦短路', defToolDiscardParalyzePre(30, '劈哩啪啦短路'));
@@ -19969,3 +20049,4 @@ regR('discard-one-each-type', (st, aIdx, iids, params, pool) => {
 import './effects/cards/m6a_wave1'; // v6.341 M6a「30th CELEBRATION」招式實裝 批次1（26 招）
 import './effects/cards/m6a_wave2'; // v6.342 M6a 招式實裝 批次2（16 招｜傷害計算類）
 import './effects/cards/m6a_wave3'; // v6.343 M6a 招式實裝 批次3（11 招｜能量操作）
+import './effects/cards/m6a_wave4'; // v6.344 M6a 招式實裝 批次4（7 招｜換位／回牌庫／退化）
