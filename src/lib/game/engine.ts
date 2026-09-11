@@ -4910,7 +4910,7 @@ function handlePlaying(
     players[aIdx] = attacker;
     let afterAttach: GameState = addLog(
       { ...state, players },
-      `${attacker.name} 將能量附加到 ${cardLink(target.iid, targetCard.name)}`,
+      `${attacker.name} 將 ${cardLink(energyCard.iid, getCard(energyCard.cardId, pool).name)} 附加到 ${cardLink(target.iid, targetCard.name)}`,   // >>> v6334-attach-energy-log-name
       aIdx
     );
     // v2.22：特殊能量「附加時」hook（例：富裕能量抽 4、感應【超】能量搜【超】基本）

@@ -745,6 +745,13 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     if (a >= 0 && e > a) t = t.slice(0, a) + t.slice(e + eMark.length);
     return t;
   };
+  // ⭐ v6.334：engine.ts 的合法改動只有「填能 log 改成顯示實際能量卡名」那**一行**
+  //   （行尾掛 `// >>> v6334-attach-energy-log-name` 哨兵，那一塊的守備由 test-v6334 全面接管）。
+  //   沿用 v6.267／v6.270／v6.280／v6.310／v6.331 對 F4 的既有修法：把已知的合法改動換回 BASE 的樣子，
+  //   其餘仍必須逐字等於 v6.309 的 blob —— 動到別的地方照樣紅。
+  const stripV6334Engine = (src) => src.replace(
+    '      `${attacker.name} 將 ${cardLink(energyCard.iid, getCard(energyCard.cardId, pool).name)} 附加到 ${cardLink(target.iid, targetCard.name)}`,   // >>> v6334-attach-energy-log-name\n',
+    '      `${attacker.name} 將能量附加到 ${cardLink(target.iid, targetCard.name)}`,\n');
   for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA],
                           ['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
     const b = readBaseBlob(ROOT, sha, p);
@@ -754,7 +761,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
       : (p === 'src/lib/game/engine.ts' ? (() => {
         const s1 = stripV6310Engine(raw); ok(s1 !== raw, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
-        return s2;
+        const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
+        return s3;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }

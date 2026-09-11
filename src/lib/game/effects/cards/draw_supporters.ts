@@ -16,6 +16,7 @@ import {
   reg, regR, regG,
   addLog, addPrivateLog, updatePlayer, withPending,
   drawCards, discardHand, returnHandToDeck,
+  joinCardNames,   // v6.334 附能 log 顯示實際能量卡名
   shuffle,   // v6.213 sameEvoName 不再需要（2 階判定改走 stage2-index 的 per-pool 索引）
 } from '../_shared';
 import type { CardInstance } from '../../types';
@@ -385,7 +386,8 @@ regR('naruei-encourage-pick-target', (st, idx, iids, _params, pool) => {
     const target = validStage2[0];
     const energies = p.discard.filter(c => iids.includes(c.iid));
     const targetName = pool.get(target.cardId)?.name ?? '?';
-    let s = addLog(st, `鳴依的勉勵：將 ${energies.length} 張基本能量附加到 ${targetName}`, idx);
+    // v6.334：改列出實際能量卡名
+    let s = addLog(st, `鳴依的勉勵：將 ${joinCardNames(energies, pool)} 附加到 ${targetName}`, idx);
     return updatePlayer(s, idx, pl => {
       const rest = pl.discard.filter(c => !iids.includes(c.iid));
       if (pl.active && pl.active.iid === target.iid) {
@@ -431,7 +433,8 @@ regR('naruei-encourage-commit', (st, idx, iids, params, pool) => {
   const energies = p.discard.filter(c => energyIids.includes(c.iid));
   if (energies.length === 0) return st;
   const targetName = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `鳴依的勉勵：將 ${energies.length} 張基本能量附加到 ${targetName}`, idx);
+  // v6.334：改列出實際能量卡名
+  let s = addLog(st, `鳴依的勉勵：將 ${joinCardNames(energies, pool)} 附加到 ${targetName}`, idx);
   return updatePlayer(s, idx, pl => {
     const rest = pl.discard.filter(c => !energyIids.includes(c.iid));
     if (pl.active && pl.active.iid === targetIid) {

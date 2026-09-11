@@ -1,5 +1,80 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.334 附能對戰 log 顯示實際能量卡名（玩家建議）
+
+BASE `fec4b4eecf4d5062df8efed171d16693b0cf1277`（v6.333，遠端 main）。
+玩家原話：填能時 log 是「{玩家} 將能量附加到 {寶可夢}」，希望改成顯示實際卡名
+（感應【超】能量／稜鏡能量／基本【草】能量…）。站長裁定：三種都改（手動填能 ＋ 能量支援 ＋
+那批「N 張能量」的卡效果）；多張時**全部列出、頓號分隔**，不縮寫也不保留張數。
+
+### 【零】⚠ 上一輪勘查列的「11 處」有一處是死碼
+
+`effects/cards/v2354_j_mark_batch.ts:371` 整段包在 `/* DEPRECATED */`（354~385 行，v4.33 已被
+`startEnergyChain` 取代）⇒ 實際只有 **10 處**。教訓：勘查清單只靠 grep 行號、沒讀上下文，
+就會把註解掉的死碼算成產生點。
+
+### 【一】不新開 helper（IRON_RULES Rule 38：同一個判準只能有一份）
+
+上一輪設計要新增 `energyNamesForLog()`，但 `effects/_shared.ts:1490` 早就有
+`joinCardNames(cards, pool)` ＝ `cards.map(c => cardLink(c.iid, pool.get(c.cardId)?.name ?? '?')).join('、')`
+—— 正是要的東西。再開一支就是判準寫兩份。
+
+為什麼一定要 `cardLink(iid, …)` 而不是純文字：基本【草】能量全站幾十種印刷，純文字會被
+`tokenizeLogMessage` 的 `splitCardNames` 靠**名字**猜印刷；只有帶 iid 的 PUA marker 才會被
+`log_zoom.ts` 的 `collectPlayerInstances`（第 21 行會走進 `energyAttached`）解析成**本場那一張**。
+匯出 .txt 走 `stripCardLinkMarkers`，會剝成純名字，不會亂碼。
+
+### 【二】改到的 10 個產生點
+
+| # | 位置 | 改法 |
+|---|---|---|
+| 1 | `engine.ts` 手動填能 | **只動 log 那一行**，行尾掛 `// >>> v6334-attach-energy-log-name` 哨兵 |
+| 2 | `effects.ts:11300` `v312-attach-energy-to-active`（土地雲｜真氣之拳） | `joinCardNames(energies, pool)` |
+| 3 | `effects.ts:11334` `discard-energy-attach-bench-only`（多麗米亞｜能量支援） | 同上（原本**連張數都沒有**） |
+| 4 | `effects.ts:11359` `discard-energy-attach-commit-bench` | 同上 |
+| 5 | `effects.ts:11445` `energy-wheel-attach`（能量車輪） | 同上 |
+| 6 | `effects.ts:13025` `applyBenchAttachFullHeal` | 同上 |
+| 7 | `abra_mawile_deck.ts:211` `applyDeckAttachBench`（謝米｜親送花朵等） | ⚠ 原本**沒有 pool**：兩支 regR 的 `_pool`→`pool`，helper 加第 6 參 `pool` |
+| 8/9 | `draw_supporters.ts:388/434` 鳴依的勉勵兩條路徑 | 同上；⚠ 兩行**縮排不同**（4／2 空白），一次替換兩處會 MISMATCH |
+| 10 | `v2353_j_mark_batch.ts:249` 雷吉充能 | 同上；順手刪掉因此無用的 `const txt = …` |
+
+⚠⚠ 第 1 處為什麼刻意寫成「只動一行」而且行內重複呼叫 `getCard`：`test-v6265` 的 **F4** 把
+`engine.ts` **逐字釘在 v6.309 的 blob**，凡是動 engine.ts 的版本都會被它擋。照 IRON_RULES **Rule 40**
+與該檔既有慣例（v6.267／v6.270／v6.280／v6.310／v6.331），本版的合法改動要能被一個剝除器**換回 BASE 的樣子**；
+把 `const energyName` 的宣告上移會變成多行位移、剝不乾淨，所以改成單行、宣告留在原位（代價：`getCard` 多呼叫一次）。
+F4 已加 `stripV6334Engine` 並斷言「剝除後真的有變」（剝除器過期會自己翻紅）。
+
+### 【三】新守衛 `scripts/test-v6334-energy-attach-log-card-name.mjs`（行為級）
+
+12 條斷言全部**真的跑** `applyAction('ATTACH_ENERGY')` 或直接餵 `pendingSelection` 跑該支 resolver，
+再斷言回傳 state 的 log 內含 `\uE100<能量iid>\uE101<卡名>\uE102`（**比對到 iid**，不是只比對名字）。
+
+HEAD-FAIL 照 **Rule 41**（不可整支 throw）：用 `git archive <BASE_SHA> src` 解到 temp、
+esbuild 另 build 一份 BASE 引擎，**逐條**重跑並要求每一條都紅。
+另有 **哨兵**（Rule 23）：「填能 log 要含目標寶可夢卡名」本版前後都該綠 ——
+哨兵若在 BASE 也紅，代表 BASE 那份根本沒跑起來（整批「紅」不算數），直接報錯。
+實測：本版 12 PASS；BASE 哨兵綠、其餘 11 條全紅。
+
+⚠ BASE_SHA 是 pin 死的 sha（`fec4b4ee`）。CI 淺複製取不到歷史時會印 `SKIP HEAD-FAIL` 而不是假綠。
+
+### 【四】沒做、留給下一版的第二批
+
+全站掃「附於／改附」還有同性質、看不到能量卡名的 log（`effects.ts:10109/10133` 將能量改附於備戰、
+陽光支援、風暴伏特、能量攪拌，以及 `mega_decks`／`v2352`／`v2306`／`abra_mawile:288` 那些
+「N 張基本【X】能量」）。站長 2026-09-11 裁定**本版只做原定那批**，第二批另案。
+
+### 【五】作業環境
+
+⚠ Linux 沙盒仍然掛不起來（`no Plan9 drive shares mounted`）⇒ device_bash 全廢；
+本版全程用 Windows PowerShell 直接在 `E:\ptcg-tw-sim` 跑 git／node／npm test。
+⚠ PowerShell 工具有**指令長度上限（~8000 字元）**與**60 秒回應上限**：
+大段中文改碼走「雲端寫 node 補丁 → base64 分塊 → 解碼執行」，每條替換都斷言命中次數；
+長時間的 npm test 用 `Start-Process` 丟背景寫 log 再輪詢。
+
+⚠⚠ **Windows 工作樹是 CRLF（`core.autocrlf=true`），部分守衛的 regex 會因此假紅** ——
+`test-v6120-event-shared-and-roundlimit` 的「正對照」在本機紅、在 LF 樹綠。
+⇒ 本機跑出來的紅字要先用 LF 樹複驗再下結論（這正是記憶裡「我誤判工作樹被改壞、其實只是 CRLF」那一條）。
+
 ## v6.333 M6a「30th CELEBRATION」進卡庫 ＋ 無標卡不能組進牌組 ＋ 分支進化 evolvesFrom
 
 BASE `7e1f69c54f5ff6a322853d4898944c27a4fcf235`（v6.332，遠端 main）。

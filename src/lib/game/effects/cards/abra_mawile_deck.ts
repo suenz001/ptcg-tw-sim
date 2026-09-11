@@ -30,6 +30,7 @@ import {
   shuffle, updatePlayer, addLog, drawCards, withPending,
   recordOppKO, rejectAbilityUse } from '../_shared';
 import { openDeckViewReshuffle } from '../_shared';  // v5.963 0-pick 重洗
+import { joinCardNames } from '../_shared';  // v6.334 附能 log 顯示實際能量卡名
 import {
   selfSwapPost, skipDefEffectsPre, countOppPokemon, koPrizeCount,
   canApplyAttackEffectToTarget, koTargetByAttackEffect,
@@ -180,13 +181,13 @@ export function deckEnergyAttachBenchPost(targetType: EnergyType | null, label: 
     });
   };
 }
-regR('deck-energy-attach-bench-pick-energy', (st, idx, iids, params, _pool) => {
+regR('deck-energy-attach-bench-pick-energy', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '附能到備戰';
   // v5.821：目標限定於 benchTargets(POST 已依屬性過濾，如謝米限【草】)；空=無合法目標。
   const benchTargets = (params?.benchTargets as string[] | undefined) ?? st.players[idx].bench.map(b => b.iid);
   if (benchTargets.length === 0) return st;
   if (benchTargets.length === 1) {
-    return applyDeckAttachBench(st, idx, iids, benchTargets[0], label);
+    return applyDeckAttachBench(st, idx, iids, benchTargets[0], label, pool);
   }
   return withPending(st, {
     type: 'bench-choose', actorIdx: idx, sourcePlayerIdx: idx,
@@ -195,20 +196,22 @@ regR('deck-energy-attach-bench-pick-energy', (st, idx, iids, params, _pool) => {
     params: { energyIids: iids, label, validIids: benchTargets },
   });
 });
-regR('deck-energy-attach-bench-commit', (st, idx, iids, params, _pool) => {
+regR('deck-energy-attach-bench-commit', (st, idx, iids, params, pool) => {
   const label = (params?.label as string) ?? '附能到備戰';
   const energyIids = (params?.energyIids as string[]) ?? [];
-  return applyDeckAttachBench(st, idx, energyIids, iids[0], label);
+  return applyDeckAttachBench(st, idx, energyIids, iids[0], label, pool);
 });
 function applyDeckAttachBench(
-  st: import('../../types').GameState, idx: 0 | 1, energyIids: string[], targetIid: string, label: string
+  st: import('../../types').GameState, idx: 0 | 1, energyIids: string[], targetIid: string, label: string,
+  pool: Map<string, import('$lib/cards/types').Card>,   // v6.334 log 要列能量卡名
 ): import('../../types').GameState {
   const p = st.players[idx];
   const target = p.bench.find(c => c.iid === targetIid);
   if (!target) return openDeckViewReshuffle(st, idx, label);  // v5.963 0-pick 重洗
   const energies = p.deck.filter(c => energyIids.includes(c.iid));
   if (energies.length === 0) return openDeckViewReshuffle(st, idx, label);  // v5.963
-  const s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰（重洗牌庫）`, idx);
+  // v6.334：改列出實際能量卡名
+  const s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到備戰（重洗牌庫）`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     deck: shuffle(pl.deck.filter(c => !energyIids.includes(c.iid))),

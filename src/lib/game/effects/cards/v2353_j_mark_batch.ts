@@ -230,7 +230,6 @@ function regiChargePost(
 
   regR(resolverKey, (state, aIdx, iids, params, pool) => {
     const lbl = (params?.label as string) ?? label;
-    const txt = (params?.typeText as string) ?? typeText;
     const p = state.players[aIdx];
     if (!p.active) return state;
     const picked = p.discard.filter(c => iids.includes(c.iid));
@@ -246,7 +245,8 @@ function regiChargePost(
     }));
     return addLog(
       s,
-      `${lbl}：將 ${picked.length} 張基本${txt}能量附加到 ${activeName}`,
+      // v6.334：改列出實際能量卡名（原本只寫「N 張基本【X】能量」）
+      `${lbl}：將 ${joinCardNames(picked, pool)} 附加到 ${activeName}`,
       aIdx,
     );
   });

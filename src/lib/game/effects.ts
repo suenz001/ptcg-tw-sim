@@ -11297,7 +11297,8 @@ regR('v312-attach-energy-to-active', (st, idx, iids, params, pool) => {
   const energies = p.discard.filter(c => iids.includes(c.iid));
   if (energies.length === 0) return addLog(st, `${label}：能量遺失`, idx);
   const tname = pool.get(p.active.cardId)?.name ?? '?';
-  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到 ${tname}（戰鬥場）`, idx);
+  // v6.334：改列出實際能量卡名（可點，指到本場那一張印刷）
+  let s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到 ${tname}（戰鬥場）`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     discard: pl.discard.filter(c => !iids.includes(c.iid)),
@@ -11331,7 +11332,8 @@ regR('discard-energy-attach-bench-only', (st, idx, iids, params, pool) => {
     const target = p.bench[0];
     const energies = p.discard.filter(c => iids.includes(c.iid));
     const tname = pool.get(target.cardId)?.name ?? '?';
-    let s = addLog(st, `${label}：將能量附加到備戰 ${tname}`, idx);
+    // v6.334：原本連張數都沒有，改列出實際能量卡名
+    let s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到備戰 ${tname}`, idx);
     return updatePlayer(s, idx, pl => ({
       ...pl,
       discard: pl.discard.filter(c => !iids.includes(c.iid)),
@@ -11356,7 +11358,8 @@ regR('discard-energy-attach-commit-bench', (st, idx, iids, params, pool) => {
   if (!target) return st;
   const energies = p.discard.filter(c => energyIids.includes(c.iid));
   const tname = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰 ${tname}`, idx);
+  // v6.334：改列出實際能量卡名
+  let s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到備戰 ${tname}`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     discard: pl.discard.filter(c => !energyIids.includes(c.iid)),
@@ -11442,7 +11445,8 @@ regR('energy-wheel-attach', (st, idx, iids, params, pool) => {
   const target = p.bench.find(c => c.iid === targetIid);
   if (!target) return st;
   const tname = pool.get(target.cardId)?.name ?? '?';
-  let s = addLog(st, `能量車輪：將 ${energies.length} 張能量附加到 ${tname}`, idx);
+  // v6.334：改列出實際能量卡名
+  let s = addLog(st, `能量車輪：將 ${joinCardNames(energies, pool)} 附加到 ${tname}`, idx);
   return updatePlayer(s, idx, pl => ({
     ...pl,
     bench: pl.bench.map(c => c.iid === targetIid
@@ -13022,7 +13026,8 @@ function applyBenchAttachFullHeal(st: GameState, idx: 0 | 1, energyIids: string[
   // 只取 pool 以保留名字 — 由呼叫者傳入 pool 會較好，這裡從 cardId 推名即可
   const newDamage = 0;
   const healed = target.damage;
-  let s = addLog(st, `${label}：將 ${energies.length} 張能量附加到備戰，並全回復（回 ${healed} HP）`, idx);
+  // v6.334：改列出實際能量卡名
+  let s = addLog(st, `${label}：將 ${joinCardNames(energies, pool)} 附加到備戰，並全回復（回 ${healed} HP）`, idx);
   s = updatePlayer(s, idx, pl => ({
     ...pl,
     hand: pl.hand.filter(c => !energyIids.includes(c.iid)),
