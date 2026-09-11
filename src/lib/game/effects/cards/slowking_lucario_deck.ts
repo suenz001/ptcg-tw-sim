@@ -112,15 +112,10 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
     };
   }
   {
-    const sub = dispatchCopiedAttack(s, aIdx, pool, copiedKey, _pick.candidate.damage, dispatchAction, _pick.restChain);
-    // Bug fix (#18): 複製招式時，弱點/抗性必須以使用者（呆呆王＝超屬性）的屬性計算
-    // 不繼承被複製招式的 skipWeakRes — 否則若複製到「不計算弱點」招式會錯誤跳過弱點
-    return {
-      state: sub.state,
-      damage: sub.damage,
-      skipWeakRes: false,
-      skipDefEffects: sub.skipDefEffects,
-    };
+    // ⭐ v6.338 站長裁示：弱點／抵抗力仍然用**借招者**（呆呆王＝超屬性）的屬性計算，
+    //   但被借招式卡面自己寫的「不計算弱點・抵抗力」屬於**招式本身**，借過來要跟著生效
+    //   ⇒ 旗標整包交給中央出口原樣轉發，不再在這裡寫死 skipWeakRes: false。
+    return dispatchCopiedAttack(s, aIdx, pool, copiedKey, _pick.candidate.damage, dispatchAction, _pick.restChain);
   }
   // v6.337：被借招式沒有註冊 PRE 時的印刷傷害 fallback 已經收斂進 dispatchCopiedAttack，
   //   上面的區塊一定 return ⇒ 這裡原本的程式碼是不可達碼，已移除。

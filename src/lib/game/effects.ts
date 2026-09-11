@@ -15527,9 +15527,9 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
   const copiedKey = `${_pick.candidate.ownerName}|${_pick.candidate.attackName}`;
   const s = addLog(state,
     `扮晶晶酒：扮演 ${_pick.candidate.ownerName} 的「${_pick.candidate.attackName}」（${_pick.byPlayer ? '玩家選擇' : '自動挑印刷最高'}）`, aIdx);
-  // ⚠ 第 8 參 true＝**繼承**被借招式的 skipWeakRes —— 扮晶晶酒從 v3.873 起就是這個行為，
-  //   收斂時刻意保留，不在這一版偷偷改動傷害。
-  return dispatchCopiedAttack(s, aIdx, pool, copiedKey, _pick.candidate.damage, action, _pick.restChain, true);
+  // ⭐ v6.338：弱抗旗標的繼承改由中央出口一律處理（站長裁示：招式自己寫的「不計算弱點・
+  //   抵抗力」屬於招式本身，借過來要跟著生效）⇒ 這裡不再需要第 8 參。
+  return dispatchCopiedAttack(s, aIdx, pool, copiedKey, _pick.candidate.damage, action, _pick.restChain);
 });
 
 // POST 轉接：engine 走完傷害施加後，查本招式的 POST → 這邊將 state.pendingCopyAttackKey

@@ -71,6 +71,14 @@ T('⑤ changelog-archive.html 存在、是可直接開啟的完整頁面、且�
   assert.ok(n >= countEntries(cl), '封存頁則數(' + n + ') 應 ≥ 首頁則數(' + countEntries(cl) + ')');
   assert.ok(n >= 200, '封存頁應保留完整歷史（≥200 則），實際 ' + n + ' —— 舊紀錄不可以被刪掉');
 });
+T('⑭ ⭐封存頁不得混入首頁專屬的尾巴（v6.337 的搬運把它一起搬進去過）', () => {
+  const ar = readFileSync(AR, 'utf8');
+  assert.ok(!/changelog-archive-link/.test(ar),
+    '封存頁出現了首頁的「查看完整更新歷史」區塊 —— 它會在封存頁上寫著「這裡顯示最近的更新內容」並連到自己');
+  assert.ok(!/ptcg-override-gen/.test(ar),
+    '封存頁出現了首頁專用的檔尾訊號（v6.306 的 homeChangelog 閘門），封存頁沒有那個機制');
+});
+
 T('⑥ 首頁 changelog 不得再出現偏技術面的字眼（Wilson：只顯示跟玩家有關的內容）', () => {
   // ⚠ 這是「玩家視角」的硬性檢查：新增條目若寫了根因/內部名稱會被擋下。
   const BAD = ['根因', '中央收斂', '收斂到', '守衛', 'resolver', 'effectKey', 'commit',

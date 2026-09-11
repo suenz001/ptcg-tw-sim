@@ -1080,14 +1080,9 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
   const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
   const s = addLog(state, `暗黑底牌：使用 ${pick.candidate.ownerName} 的「${pick.candidate.attackName}」`, aIdx);
   {
-    const sub = dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
-    // Bug fix (#18): 複製招式時，弱點/抗性必須以使用者（N的索羅亞克ex＝惡屬性）的屬性計算
-    return {
-      state: sub.state,
-      damage: sub.damage,
-      skipWeakRes: false,
-      skipDefEffects: sub.skipDefEffects,
-    };
+    // ⭐ v6.338 站長裁示：弱抗仍依**借招者**（N的索羅亞克ex＝惡屬性）計算，但被借招式自己
+    //   寫的「不計算弱點・抵抗力」屬於招式本身 ⇒ 旗標整包交給中央出口原樣轉發。
+    return dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
   }
 });
 regPost('N的索羅亞克ex|暗黑底牌', copyAttackPostDispatch);

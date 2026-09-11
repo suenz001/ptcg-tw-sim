@@ -2051,14 +2051,9 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
     `技能大盜：選擇對手「${pick.candidate.ownerName}」的「${pick.candidate.attackName}」作為此招式使用（${pickMode}）`,
     aIdx);
   {
-    const sub = dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
-    // 弱抗依照使用者（狐大盜＝惡屬性）計算，不繼承 borrowed 招式的 skipWeakRes
-    return {
-      state: sub.state,
-      damage: sub.damage,
-      skipWeakRes: false,
-      skipDefEffects: sub.skipDefEffects,
-    };
+    // ⭐ v6.338 站長裁示：弱抗仍依**借招者**（狐大盜＝惡屬性）計算，但被借招式自己寫的
+    //   「不計算弱點・抵抗力」屬於招式本身 ⇒ 旗標整包交給中央出口原樣轉發。
+    return dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
   }
 });
 

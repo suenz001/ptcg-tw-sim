@@ -445,7 +445,8 @@ if (CA) {
     out.pendingCopyAttackKeys === undefined, JSON.stringify(out.pendingCopyAttackKeys));
 }
 
-// G5 —— 扮晶晶酒**繼承** skipWeakRes（v3.873 起的既有行為），耀閃挑戰**不繼承**
+// G5 —— ⭐ v6.338 站長裁示後的新判準：**8 張借招卡一律繼承**被借招式的弱抗旗標。
+//   （v6.337 只有扮晶晶酒繼承，其餘 7 張寫死 false —— 那是錯的，見 v6.338 守衛。）
 //   作法：暫時把被借招式的 PRE 換成回傳 skipWeakRes:true 的替身，看外層原封回傳什麼。
 {
   const KEY = `${DRAGA.name}|${(DRAGA.attacks ?? [])[0].name}`;
@@ -456,15 +457,24 @@ if (CA) {
     const dr = inst(DRAGA.id);
     const st1 = board({ myActive: mimiInst, oppActive: dr, oppDeck: [inst(DRAGA.id)] });
     const r1 = HEAD.ATTACK_PRE.get('火箭隊的謎擬Ｑ|扮晶晶酒')(st1, 0, pool, { type: 'ATTACK', attackIndex: 0, copyAttackChoice: { pokeIid: dr.iid, attackIndex: 0 } });
-    chk('G5a 扮晶晶酒**繼承**被借招式的 skipWeakRes（v3.873 起的既有行為，本版刻意保留）',
+    chk('G5a 扮晶晶酒**繼承**被借招式的 skipWeakRes（v3.873 起的既有行為）',
       r1.skipWeakRes === true, String(r1.skipWeakRes));
 
     const slow = inst(SLOWKING.id, { energyAttached: ENERGIES() });
     const topDr = inst(MIMIKYU.id);
-    const st2 = board({ myActive: slow, myDeck: [topDr], oppActive: inst(DRAGA.id), oppDeck: [inst(DRAGA.id)] });
-    const r2 = HEAD.ATTACK_PRE.get('呆呆王|耀閃挑戰')(st2, 0, pool, { type: 'ATTACK', attackIndex: 0, copyAttackChoice: { pokeIid: topDr.iid, attackIndex: 0 } });
-    chk('G5b 耀閃挑戰**不繼承** skipWeakRes（Bug #18：弱抗以使用者的屬性計算）',
-      r2.skipWeakRes === false, String(r2.skipWeakRes));
+    const oppD = inst(DRAGA.id);
+    const st2 = board({ myActive: slow, myDeck: [topDr], oppActive: oppD, oppDeck: [inst(DRAGA.id)] });
+    // ⚠⚠ 必須**明確給第 2 層的鏈**指到被 stub 的第 1 招 ——
+    //   不給鏈的話扮晶晶酒會走 fallback「挑傷害最高的」＝多龍巴魯托ex 的第 2 招，
+    //   根本碰不到 stub。v6.337 的這條就是這樣變成安慰劑的（它讀到的是外層寫死的 false）。
+    const r2 = HEAD.ATTACK_PRE.get('呆呆王|耀閃挑戰')(st2, 0, pool, {
+      type: 'ATTACK', attackIndex: 0,
+      copyAttackChoice: { pokeIid: topDr.iid, attackIndex: 0 },
+      copyAttackChain: [{ pokeIid: oppD.iid, attackIndex: 0 }],
+    });
+    chk('G5b0 ⭐哨兵：三層鏈真的打到了被替身接管的那一招（damage=10）', r2.damage === 10, String(r2.damage));
+    chk('G5b ⭐v6.338 耀閃挑戰**也要繼承** skipWeakRes（站長裁示：招式自己寫的「不計算弱點・抵抗力」屬於招式本身）',
+      r2.skipWeakRes === true, String(r2.skipWeakRes));
   } finally {
     if (orig) HEAD.ATTACK_PRE.set(KEY, orig); else HEAD.ATTACK_PRE.delete(KEY);
   }

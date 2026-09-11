@@ -187,6 +187,13 @@ export function copyAttackPostDispatch(
 }
 
 /**
+ * ⭐ v6.338：借招轉接的回傳型別 —— 直接綁在 `AttackPreFn` 的回傳上。
+ * 這樣「借來的招式能帶回哪些旗標」永遠等於「招式本來能回傳哪些旗標」，
+ * 不會再出現「AttackPreFn 加了新欄位、借招路徑卻靜默少一欄」的漏轉發。
+ */
+export type CopiedAttackResult = ReturnType<AttackPreFn>;
+
+/**
  * ⭐⭐⭐ v6.337：借招家族「轉接到被借招式」的**唯一出口**（PRE 階段）。
  *
  * 它做三件事，缺一不可：
@@ -194,22 +201,21 @@ export function copyAttackPostDispatch(
  *   2. 把**剩餘的借招鏈**（`restChain`）重新裝回 action 再往下傳。
  *      ⚠ 舊寫法是把**同一個 action 原封往下傳** —— 那正是玩家回報的 bug：
  *        上一層的 `{謎擬Ｑ.iid, 0}` 被下一層拿去索引多龍巴魯托ex 的招式陣列。
- *   3. 弱點／抗性一律以**使用者**的屬性計算 ⇒ `skipWeakRes` 固定 false
- *      （Bug #18 的既有結論：不繼承被借招式的 skipWeakRes）。
+ *   3. ⭐ v6.338 站長裁示：弱點／抵抗力**一律以使用者（借招者）的屬性計算**，
+ *      但被借招式卡面若自己寫著「不計算弱點・抵抗力」（或只寫其中一半），
+ *      那個限制**屬於招式本身**，借過來的時候要跟著生效
+ *      ⇒ `skipWeakRes` / `skipWeakness` / `skipResistance` / `breakdown` 一律**原樣轉發**。
+ *      ⚠ v6.337 以前只有「火箭隊的謎擬Ｑ｜扮晶晶酒」是轉發的，其餘 7 張寫死 false
+ *        ⇒ 借到「不計算弱點・抵抗力」的招式時仍然會算弱點（傷害被 ×2 灌水）。
+ *      ⚠ 而 `skipWeakness` / `skipResistance`（v4.495 的半套旗標）在 v6.337 是**8 張全被吃掉**，
+ *        因為中央出口只逐欄位列舉了 skipWeakRes 與 skipDefEffects —— 同一個 bug 的另一半。
  */
 export function dispatchCopiedAttack(
   state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
   copiedKey: string, fallbackDamage: number,
   action: Extract<GameAction, { type: 'ATTACK' }> | undefined,
   restChain: { pokeIid: string; attackIndex: number }[],
-  /**
-   * v6.337：是否**繼承**被借招式的 skipWeakRes。
-   * ⚠ 預設 false（Bug #18 的既有結論：弱抗以使用者的屬性計算），8 張借招卡裡
-   *   只有「火箭隊的謎擬Ｑ｜扮晶晶酒」從 v3.873 起就是繼承的 —— 收斂時如果一律寫死 false
-   *   就等於偷偷改了它的傷害。這裡用明確的參數保留原狀，要不要統一由站長裁定。
-   */
-  inheritSkipWeakRes = false,
-): { state: GameState; damage: number; skipWeakRes: boolean | undefined; skipDefEffects?: boolean } {
+): CopiedAttackResult {
   const s: GameState = {
     ...state,
     pendingCopyAttackKeys: [...(state.pendingCopyAttackKeys ?? []), copiedKey],
@@ -217,15 +223,12 @@ export function dispatchCopiedAttack(
   const next = withCopyAttackChain(action, restChain);
   const copiedPre = ATTACK_PRE.get(copiedKey);
   if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, next);
-    return {
-      state: sub.state, damage: sub.damage,
-      skipWeakRes: inheritSkipWeakRes ? sub.skipWeakRes : false,
-      skipDefEffects: sub.skipDefEffects,
-    };
+    // ⭐ v6.338：**整包原樣回傳**。用展開而不是逐欄位列舉 —— 以後 AttackPreFn 新增欄位時
+    //   不會再靜默漏掉（v6.337 就是這樣把 skipWeakness / skipResistance / breakdown 吃掉的）。
+    return { ...copiedPre(s, aIdx, pool, next) };
   }
-  // 被借招式沒有註冊 PRE ⇒ 用印刷傷害
-  return { state: s, damage: fallbackDamage, skipWeakRes: false };
+  // 被借招式沒有註冊 PRE ⇒ 用印刷傷害（沒有招式文字可繼承 ⇒ 旗標一個都不設）
+  return { state: s, damage: fallbackDamage };
 }
 
 export function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }

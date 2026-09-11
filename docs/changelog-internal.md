@@ -1,5 +1,88 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.338 借招家族：被借招式的弱抗旗標一律原樣轉發
+
+BASE `391b86b806a5e3018b700dfcb94dab2613cefa05`（v6.337，遠端 main）。站長裁示：
+
+> 弱點抵抗力一律用使用招式的那隻（借招者）的屬性計算，這是正確的，
+> **除非借到的招式上有寫「不計算弱點・抵抗力」** ——
+> 因此借到那種招式時照抄那個限制，是正確的。
+
+### 【零】v6.337 的實況
+
+`_shared.dispatchCopiedAttack()` 用**逐欄位列舉**回傳：
+
+```ts
+return {
+  state: sub.state, damage: sub.damage,
+  skipWeakRes: inheritSkipWeakRes ? sub.skipWeakRes : false,
+  skipDefEffects: sub.skipDefEffects,
+};
+```
+
+兩個各自獨立的洞：
+
+| 旗標 | v6.337 的行為 | 影響 |
+|---|---|---|
+| `skipWeakRes` | 只有「火箭隊的謎擬Ｑ｜扮晶晶酒」傳 `inheritSkipWeakRes=true`；其餘 7 張走預設 false | 借到「不計算弱點・抵抗力」的招式時仍算弱點 ⇒ **傷害被 ×2 灌水** |
+| `skipWeakness` / `skipResistance`（v4.495 的半套旗標） | **8 張全部**被吃掉（根本沒列舉） | 「激怒咒詛」「岩石投擲」那一類借過來完全失效 |
+| `breakdown`（v3.03 傷害拆解） | 同上，8 張全部被吃掉 | 借來的招式在傷害預估面板看不到拆解 |
+
+⚠ 另外三張卡（耀閃挑戰 / 技能大盜 / 暗黑底牌）**自己又在外層寫死一次 `skipWeakRes: false`**
+（`const sub = dispatchCopiedAttack(...)` 再逐欄位組回去）—— 就算中央出口改對了，
+它們還是會蓋掉。這是本版 D4 守衛釘住的**結構病灶**：
+**把中央出口的回傳拆開再組回去，一定會漏掉沒列舉到的欄位。**
+
+### 【一】修法
+
+1. 拿掉 `inheritSkipWeakRes` 參數（判準只能有一個 —— Rule 38）。
+2. 回傳改成 `return { ...copiedPre(s, aIdx, pool, next) }`（整包原樣轉發）。
+3. 回傳型別改成 `export type CopiedAttackResult = ReturnType<AttackPreFn>` ——
+   「借來的招式能帶回哪些旗標」永遠等於「招式本來能回傳哪些旗標」，
+   日後 `AttackPreFn` 加欄位不必再同步一次，也不會再靜默漏轉發。
+4. 三張把回傳拆開重組的卡改成直接 `return dispatchCopiedAttack(...)`。
+
+### 【二】v6.337 的 G5b 其實是安慰劑（自己抓到的）
+
+v6.337 的 `G5b` 宣稱「耀閃挑戰**不繼承** skipWeakRes」，它的盤面是：
+呆呆王借牌庫頂謎擬Ｑ 的扮晶晶酒，而替身掛在多龍巴魯托ex 的**第 1 招**上。
+但第 2 層沒有給鏈 ⇒ 扮晶晶酒走 fallback「挑傷害最高的」＝**第 2 招**，
+**根本碰不到替身**。它讀到的 `false` 一路都是外層**寫死的**那個 false。
+⇒ 本版補上明確的兩層鏈與 `G5b0` 哨兵（`damage === 10`），確認真的打到替身。
+
+### 【三】封存頁誤植（v6.337 的搬運瑕疵）
+
+v6.337 做 changelog 三步搬運時，把**首頁專屬的尾巴**
+（`<p class="changelog-archive-link">` ＋ `<!-- ptcg-override-gen:0 -->`）
+一起搬進了 `static/changelog-archive.html`，卡在 v6.264 與 v6.262 兩則之間。
+封存頁上會出現一個寫著「這裡顯示最近的更新內容」並連到**它自己**的方框。
+本版移除，並在 `test-changelog-size-and-archive` 加上第 ⑭ 條把它釘死。
+（比對證據：`3b95c5dc` 的封存頁 archiveLink=0，`391b86b8` 變成 1。）
+
+### 【四】守衛
+
+新增 `scripts/test-v6338-copy-attack-inherit-flags.mjs`（54 條）：
+
+- 【A】8 張借招卡逐一驗旗標轉發，每張都附「替身真的被呼叫到（damage=10）」哨兵，
+  避免盤面搭錯導致「旗標是 undefined」被誤讀成通過（空真）；A5 是反安慰劑
+  （替身不設旗標時不可以憑空生出 true）。
+- 【B】行為端：呆呆王打一隻**對超屬性有弱點**的對手，50 ×2 = 100 vs 標了旗標的 50。
+- 【C】HEAD-FAIL 對 `391b86b8`：C3 要求「扮晶晶酒以外的 7 張都沒繼承」、
+  C4/C5 要求「半套旗標與 breakdown 是 8 張全滅」、C7/C8 行為端在 BASE 上是 100。
+  C1/C2/C6 是 Rule 41 哨兵（BASE 上必須綠，證明不是整支爆掉）。
+- 【D】結構：不可以再有 `inheritSkipWeakRes`、不可以接成變數再組回去，
+  並用 D5 確認「8 個轉接點都還在」（D4 不是因為呼叫全消失才綠的）。
+
+⚠ 卡片資料的 `supertype` 是 `'Pokemon'`（沒有 é）—— 第一版寫成 `'Pokémon'`，
+【B】整段靜默不跑。fixture 斷言（Rule 25）當場抓到。
+
+### 【五】部署
+
+錦標賽是伺服器權威：`push` → 跑 `update-tournament.bat`（它自己
+`git reset --hard origin/main` 再重建 `server-engine.cjs`）→ 確認 pm2 →
+才讓玩家打錦標賽。舊 server 會照 v6.337 的算法把傷害算成兩倍。
+
+
 ## v6.337 借招（複製他人招式）鏈：中央管線收斂
 
 BASE `3b95c5dc6690da80149ad9375dc7422cf14e93b9`（v6.336，遠端 main）。玩家回報：
