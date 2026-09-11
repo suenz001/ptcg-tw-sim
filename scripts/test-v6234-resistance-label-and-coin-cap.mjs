@@ -18,6 +18,7 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, mkdtempSync, cpSync, rmSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { withSeededRandom, withBiasedCoin } from './lib/seeded-rng.mjs';   // v6.336 取樣可重現，消除隨機假紅
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -369,21 +370,56 @@ for (const [an, atkn] of RUNAWAY) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-console.log('\n⑦ 【C】正對照：真實隨機下上限根本碰不到 ⇒ 實戰行為與 BASE 相同');
+console.log('\n⑦ 【C】正對照：真實機率分布下上限根本碰不到 ⇒ 實戰行為與 BASE 相同');
 {
+  // ⭐⭐⭐ v6.336：本段原本直接吃 Math.random（真隨機），判準是 `maxFlips < 20`。
+  //   「擲到反面為止」⇒ P(f ≥ 20) = 2^-19 ≈ 1.91e-6，3000 次 ⇒ P(max ≥ 20) ≈ 0.57%
+  //   ⇒ **平均每 175 次 CI 就假紅一次**（v6.334 實際踩到，原樣 rerun 就綠）。
+  //   修法照 IRON_RULES Rule 40「改判準到意圖級，不是放寬」，做三件事：
+  //     (1) 取樣改吃**固定種子 PRNG**（scripts/lib/seeded-rng.mjs）⇒ 同一顆 commit 的
+  //         結果完全可重現，結構上不可能再隨機翻紅；
+  //     (2) 判準改成本段標題真正要守的那件事 —— **官方上限 CAP 碰不到**，
+  //         而不是隨手留的安全邊際 20；
+  //     (3) 用多顆種子各跑 N 次 ⇒ 證明結論不是「剛好挑到一顆會過的種子」。
+  //   ⚠ 種子化不會削弱守備力：擲幣的正／反判準在出貨碼裡，硬幣一旦被改偏（或上限被動過），
+  //     同一顆種子跑出來的平均值與 maxFlips 就會跟著變 ⇒ 下面兩條斷言照樣翻紅。
   const s = setup('怪顎龍', '亂暴', NEUTRAL?.name);
-  let maxFlips = 0, total = 0;
   const N = 3000;
-  for (let i = 0; i < N; i++) {
-    const out = mod.applyAction(s.state, { type: 'ATTACK', attackIndex: s.idx }, pool);
-    const f = (out._machineGunLastFlips ?? []).length;
-    total += f; if (f > maxFlips) maxFlips = f;
-  }
-  const mean = total / N;
-  console.log(`   ${N} 次真隨機：平均擲 ${mean.toFixed(2)} 次、最多 ${maxFlips} 次（上限 30）`);
-  chk(`真隨機 ${N} 次從未接近 30 次上限（最多 ${maxFlips}）⇒ 新增的上限不改變實戰行為`, maxFlips < 20);
-  chk(`  └ 平均擲幣次數 ${mean.toFixed(2)} 落在理論值 2.0 附近（證明擲幣沒被我改壞）`,
-      mean > 1.7 && mean < 2.4);
+  const CAP = 30;                                    // 出貨碼：flipCoinsUntilTails(..., 30)
+  const SEEDS = [0x6c7a5f01, 0x1f35b9c4, 0x9e214d08];
+  const sample = (seed) => withSeededRandom(seed, () => {
+    let maxFlips = 0, total = 0;
+    for (let i = 0; i < N; i++) {
+      const out = mod.applyAction(s.state, { type: 'ATTACK', attackIndex: s.idx }, pool);
+      const f = (out._machineGunLastFlips ?? []).length;
+      total += f; if (f > maxFlips) maxFlips = f;
+    }
+    return { maxFlips, mean: total / N };
+  });
+  const runs = SEEDS.map(sample);
+  console.log(`   ${N} 次 × ${SEEDS.length} 顆種子：最多 ${runs.map((r) => r.maxFlips).join(' / ')} 次`
+    + `（上限 ${CAP}）、平均 ${runs.map((r) => r.mean.toFixed(2)).join(' / ')} 次`);
+  chk('⭐ 可重現：同一顆種子再跑一輪，maxFlips 與平均逐欄相同'
+    + '（沒有這一條，種子哪天被拿掉就會靜默變回會隨機翻紅的守衛）',
+      JSON.stringify(sample(SEEDS[0])) === JSON.stringify(runs[0]));
+  chk(`${SEEDS.length} 顆種子 × ${N} 次都碰不到 ${CAP} 次上限（最多 ${Math.max(...runs.map((r) => r.maxFlips))}）`
+    + '⇒ 新增的上限不改變實戰行為',
+      runs.every((r) => r.maxFlips < CAP));
+  chk(`  └ 平均擲幣次數 ${runs.map((r) => r.mean.toFixed(2)).join(' / ')} 都落在理論值 2.0 附近（證明擲幣沒被我改壞）`,
+      runs.every((r) => r.mean > 1.7 && r.mean < 2.4));
+  // ⭐ 反安慰劑（Rule 33）：這個量測真的量得到「碰到上限」——把硬幣灌成 95% 正面必須撞到 CAP。
+  //   沒有這一條，上面那條「碰不到上限」可能只是因為 maxFlips 壓根沒被量到（恆真放行）。
+  const rigged = withBiasedCoin(SEEDS[0], 0.95, () => {
+    let m = 0;
+    for (let i = 0; i < 200; i++) {
+      const out = mod.applyAction(s.state, { type: 'ATTACK', attackIndex: s.idx }, pool);
+      const f = (out._machineGunLastFlips ?? []).length;
+      if (f > m) m = f;
+    }
+    return m;
+  });
+  chk(`  └ 反安慰劑：硬幣灌成 95% 正面時，同一段量到 ${rigged} 次＝撞上限 ${CAP}（證明不是恆真放行）`,
+      rigged === CAP);
 }
 
 // ══════════════════════════════════════════════════════════════════════════

@@ -83,13 +83,32 @@ const stubs = {
 };
 
 // ── 讓路 helper：從出貨碼抽出來真的用（不是在測試裡另寫一份）──────────────
-function extractYield() {
+function extractYield(overrideEvery) {
   const i = pat.indexOf('const ADMIN_SCAN_YIELD_EVERY =');
   assert.ok(i > 0, '找不到 ADMIN_SCAN_YIELD_EVERY —— 讓路節拍沒實作？');
   const j = pat.indexOf('\n  }', pat.indexOf('function adminScanYield', i));
-  const src = pat.slice(i, j + 4);
+  let src = pat.slice(i, j + 4);
   assert.ok(/setImmediate/.test(src), '讓路沒有用 setImmediate（microtask 對 I/O 沒有幫助）');
+  // ⭐ v6.336：overrideEvery 只給⑤的反安慰劑用 —— **只改節拍常數，實作仍是出貨碼那一份**
+  //   （在測試裡另寫一份 helper 就變成 Rule 38 的「判準第二份」了）。
+  if (overrideEvery != null) {
+    const before = src;
+    src = src.replace(/const ADMIN_SCAN_YIELD_EVERY = \d+/, 'const ADMIN_SCAN_YIELD_EVERY = ' + overrideEvery);
+    assert.notStrictEqual(src, before, '節拍常數的突變錨點對不上（宣告寫法改了？）');
+  }
   return new Function(src + '\nreturn { adminScanYield, ADMIN_SCAN_YIELD_EVERY };')();
+}
+/** 把出貨碼的讓路 helper 包一層計數器（實作不變，只是數「真的讓路了幾次」）。 */
+function countingYield(overrideEvery) {
+  const Y = extractYield(overrideEvery);
+  const spy = { n: 0, every: Y.ADMIN_SCAN_YIELD_EVERY };
+  return {
+    spy,
+    extra: {
+      ...Y,
+      adminScanYield: (n) => { const r = Y.adminScanYield(n); if (r) spy.n++; return r; },
+    },
+  };
 }
 
 function buildHandler(arrowSrc, extra, docs, batchSize) {
@@ -204,7 +223,9 @@ await T('⑤ ⭐ 事件迴圈實測：全量掃描期間，玩家探針不得被
   });
   console.log('      ⚠ classifyDeck 在本守衛是 stub（比線上便宜）⇒ 下面的阻塞數字是**下界**；'
     + '線上每筆更貴，但讓路節拍是「每 N 筆」不是「每 N 毫秒」，比例關係不變。');
-  const extra = { _archStatsCache: new Map() };
+  // ⭐ v6.336：出貨碼這一發包一層讓路計數器（實作仍是出貨碼那一份，只是多數一個數字）
+  const counted = countingYield(null);
+  const extra = { _archStatsCache: new Map(), ...counted.extra };
   // ⚠ 先跑一次暖機再量：第一發帶著 JIT 編譯與 GC 的成本，會讓「先量的那一組」無辜變差
   //   （實測 shipped 排第一時 max 會從 1.5ms 跳到 57ms）——那不是被測對象的問題，是儀器的。
   await measure(statsArrow, { _archStatsCache: new Map() }, BIG.slice(0, 12000), 8000);
@@ -239,8 +260,36 @@ await T('⑤ ⭐ 事件迴圈實測：全量掃描期間，玩家探針不得被
     + ' ms，沒有比「不讓路」的 ' + bare.max.toFixed(1) + ' ms 明顯改善 —— 讓路沒生效');
   assert.ok(shipped.max < 60, '出貨碼仍被擋 ' + shipped.max.toFixed(1) + ' ms（沙盒上限 60ms ⇒ 正式 VM 約 6ms）');
   assert.ok(shipped.p99 < 25, '出貨碼 p99 被擋 ' + shipped.p99.toFixed(1) + ' ms');
-  // 讓路的額外成本不可以太大（不然 admin 會等很久）
-  assert.ok(shipped.ms < bare.ms * 1.3, '讓路讓總耗時多了 ' + ((shipped.ms / bare.ms - 1) * 100).toFixed(0) + '%');
+  // ── 讓路的額外成本不可以太大（不然 admin 會等很久）──────────────────────
+  // ⭐⭐⭐ v6.336：這裡原本是 `shipped.ms < bare.ms * 1.3` —— **拿一個同樣有噪音的牆鐘數字
+  //   當分母取比值**，而 shipped / bare 各只量一發。CI runner 被鄰居搶 CPU 時分母縮、分子脹，
+  //   實測比值在 1.2~1.35 之間游走（v6.335 那次量到 1.345 ⇒ 假紅，原樣 rerun 就綠）。
+  //   ⚠ 上面十行自己就寫了「絕對值抓太緊會變成隨機翻紅的守衛」，唯獨這一條沒照做。
+  //   修法照 Rule 40「改判準到意圖級」：這條要守的意圖是「讓路的成本不可以大到讓 admin 等很久」，
+  //   而真正會把成本炸掉的旋鈕是**讓路節拍**（每 N 筆讓一次）。所以拆成兩條：
+  //     (i)  讓路次數必須剛好等於節拍算得出來的值 —— 完全確定性，零牆鐘噪音，
+  //          而且比舊判準**更嚴**：節拍從 200 改成 10 會立刻紅，舊的比值判準未必抓得到。
+  //     (ii) 總耗時給一個寬鬆的**絕對**上界（意圖本身），不對噪音分母取比值。
+  const wantYields = Math.floor(BIG.length / counted.spy.every);
+  assert.ok(counted.spy.n > 0, '整輪掃描一次讓路都沒發生 —— 讓路沒接上（或計數器沒接上）');
+  assert.strictEqual(counted.spy.n, wantYields, '讓路發生 ' + counted.spy.n + ' 次，'
+    + '節拍每 ' + counted.spy.every + ' 筆、掃 ' + BIG.length + ' 筆應該恰好 ' + wantYields + ' 次');
+  assert.ok(shipped.ms < 5000, '出貨碼掃 ' + BIG.length + ' 筆花了 ' + shipped.ms.toFixed(0)
+    + ' ms（沙盒上限 5000ms ⇒ 正式 VM 約 500ms；端點另有 60 秒 TTL 快取）');
+
+  // ⭐ 反安慰劑（Rule 33）：把出貨碼裡的節拍常數突變成「每 1 筆」，其餘一字未動 ⇒
+  //   讓路次數必須跟著變成「每一筆都讓」。沒有這一條，上面的計數斷言可能只是個常數。
+  {
+    const SMALL = BIG.slice(0, 4000);
+    const keep = countingYield(null), mut = countingYield(1);
+    assert.strictEqual(mut.spy.every, 1, '節拍突變沒生效（還是 ' + mut.spy.every + '）');
+    await measure(statsArrow, { _archStatsCache: new Map(), ...keep.extra }, SMALL, 8000);
+    await measure(statsArrow, { _archStatsCache: new Map(), ...mut.extra }, SMALL, 8000);
+    assert.strictEqual(keep.spy.n, Math.floor(SMALL.length / keep.spy.every),
+      '小 fixture 的讓路次數對不上節拍（' + keep.spy.n + '）');
+    assert.strictEqual(mut.spy.n, SMALL.length,
+      '節拍改成每 1 筆之後讓路次數沒有跟著變（實得 ' + mut.spy.n + '）⇒ 計數器是常數＝安慰劑');
+  }
 });
 
 await T('⑥ 讓路 helper 本身的單元行為：不到節拍回 null（連 microtask 都不排）、到了回 Promise', () => {
