@@ -1,5 +1,80 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.339 借招家族：第 1 層的候選枚舉也收斂到中央
+
+BASE `87f90e023137fa027ef6495a70f8008d8a08ea88`（v6.338，遠端 main）。站長裁示：「請你一起收乾淨」。
+
+### 【零】v6.338 的缺口
+
+v6.337 把**第 2 層以後**收斂進 `copyAttackCandidates`，但 `+page.svelte` 的
+**第 1 層**仍有 6 份各自手寫的「可以借誰」：
+
+| 卡 | 手寫的判定 | 與中央判準的落差 |
+|---|---|---|
+| 暗黑底牌 | `startsWith('N的')` | v6.337 已補上 ownerIid 過濾，但招式層級沒過濾 |
+| 扮晶晶酒 | `tags.includes('太晶')` | — |
+| 耀閃挑戰 | `supertype==='Pokemon' && !RULE_BOX` | — |
+| 揮指 / 欺詐 / 試著模仿 | `a.name !== atk.name` | ⚠ **只比招式名**：將來進一張招式同名的卡，對手那一招會被誤排除；而且 modal 仍把對手同名的那一招畫出來（規則層不接受 ⇒ 按了白費一次招式） |
+| 技能大盜 | `active + bench` 自己組 | — |
+| 高傲指令 | `deck.slice(0, 10)` 自己組 | — |
+
+### 【一】修法
+
+第 1 層改成一個泛用分支：
+
+```ts
+const _selfBorrowKey = \`\${sourceCardName}|\${atk.name}\`;
+if (isCopyAttackKey(_selfBorrowKey)) { advanceBorrowChain(attackIndex, [], _selfBorrowKey); return; }
+```
+
+`advanceBorrowChain` 原本就是第 2 層以後的唯一推進點，`chain=[]` 就是第 1 層：
+0 候選 ⇒ 交給 engine 出 fail log；1 候選 ⇒ 直接用；2+ ⇒ 開 picker。
+**各卡原本的專屬 modal 保留**（玩家認得的畫面不變），只是清單改由中央 `cands` 決定，
+並把 `allowed`（ownerIid → 可選 attackIndex）傳進去過濾按鈕。
+第 2 層以後一律用共用 modal（專屬 modal 的文案是寫給第 1 層情境的）。
+
+⚠ 高傲指令的「將對手的牌庫上方 10 張卡**翻到正面**」是公開揭示，
+即使一張寶可夢都沒有也要顯示 ⇒ 在 `advanceBorrowChain` 的 0 候選分支特判，
+並抽出 `_rocketTop10All()`。這是收斂時最容易弄丟的東西，守衛 B2 釘住。
+
+### 【二】行為差異（要寫進首頁 changelog 的）
+
+1. 揮指 / 欺詐 / 試著模仿 的 modal 不再列出對手同名的那一招（按了不會生效）。
+2. 可選招式只有 1 個時一律直接使用，不再跳出只有一個選項的 modal
+   （暗黑底牌與扮晶晶酒先前會跳）。
+
+### 【二之二】順手抓到的規則 bug：「若希望」被 fast-path 吃掉
+
+收斂時比對 8 張卡的官方 effect 文字，發現只有
+「火箭隊的貓老大ex｜高傲指令」是「**若希望**，選擇1個…」（其餘 7 張都是
+「選擇1個…」，強制）。而 UI 從 v4.39 起就有一條 fast-path：
+「只有 1 個可選招式 ⇒ 直接 dispatch，不開 picker」。
+⇒ 高傲指令翻出的 10 張裡只有一個可借招式時，**玩家被強制複製**，
+沒有機會按下 picker 裡那顆「不複製」（那顆按鈕才會送 skip sentinel）。
+
+這是 v6.338 以前就有的 bug，不是本版造成的，但本版正好在改這段，一併修：
+`OPTIONAL_BORROW_KEYS` 擋住 fast-path。守衛 C4 拿 `static/cards` 的 effect
+文字回頭核對這個集合 —— 將來進第二張「若希望」的借招卡，C4 會紅。
+
+### 【三】守衛
+
+`scripts/test-v6339-copy-attack-layer1-central.mjs`：
+
+- 【A】`copyAttackCandidates` 在 `+page.svelte` **只能有一個呼叫點**，而且必須在
+  `advanceBorrowChain` 裡；沒有殘留的每卡 intercept；UI 不再重寫卡面規則。
+- 【B】三個專屬 modal 都依 `allowed` 過濾（B3 是突變測試：拿掉扮晶晶酒那一行必須紅）。
+- 【C】行為端：8 個 key 都被 `isCopyAttackKey` 認得，而且在「什麼都有」的盤面上
+  都枚舉得出候選 —— 認不得或枚舉不出來的話，那張卡會**靜默**退回「engine 自動挑最高傷害」。
+- 【D】HEAD-FAIL：對 v6.338 的 `+page.svelte`，A1/A2/A3/B1 四條全部必須紅。
+
+⚠ 判準一律套在**剝掉註解**的版本上（`scripts/lib/strip-comments.mjs`）——
+第一版沒剝，抓到守衛自己註解裡的 `startsWith('N的')` 而誤紅。
+
+### 【四】部署
+
+`push` → `update-tournament.bat` → 確認 pm2 → 才讓玩家打錦標賽。
+
+
 ## v6.338 借招家族：被借招式的弱抗旗標一律原樣轉發
 
 BASE `391b86b806a5e3018b700dfcb94dab2613cefa05`（v6.337，遠端 main）。站長裁示：

@@ -7473,166 +7473,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const entry = eff[attackIndex];
     if (!entry) return;
     const { atk, sourceCardName } = entry;
-    // v2.119 copy-attack intercept：暗黑底牌 要先讓玩家選備戰 N的寶可夢 + 招式
-    if (atk.name === '暗黑底牌') {
-      // ⭐v6.337：候選改由中央 copyAttackCandidates 決定（與規則層同一份）——
-      //   原本手寫的 startsWith('N的') 會把「暗黑底牌」自己也列成可點按鈕，
-      //   點下去規則層不接受，只會靜默 fallback 成別的招。
-      const _okIids = new Set(copyAttackCandidates('N的索羅亞克ex|暗黑底牌', game, myIdx as 0 | 1, pool, 0)
-        .map(c => c.ownerIid));
-      const candidates = activePlayer.bench
-        .map(b => ({ inst: b, card: getCard(b.cardId) }))
-        .filter(x => _okIids.has(x.inst.iid));
-      if (candidates.length === 0) {
-        dispatch(GameActions.attack(attackIndex));  // 沒目標就讓 engine 自己出錯 log
-        return;
-      }
-      copyAttackPicker = { sourceAttackIndex: attackIndex, candidates };
-      return;
-    }
-    // v3.873 扮晶晶酒 intercept：對手戰鬥場若為太晶寶可夢，讓玩家挑要扮演哪個招式
-    //   解決：之前自動挑最高傷害 → 啜泣（20）永遠用不到 + 激流水泵 picker 不開
-    if (atk.name === '扮晶晶酒') {
+    // ⭐⭐⭐ v6.339：**第 1 層借招也走同一個推進點**。
+    //   v6.337 只把第 2 層以後收斂掉，第 1 層仍有 6 份手寫的「可以借誰」：
+    //     暗黑底牌手寫 startsWith('N的')、扮晶晶酒手寫 tags.includes('太晶')、
+    //     耀閃挑戰手寫 supertype/RULE_BOX、揮指族手寫 a.name !== atk.name（只比招式名，
+    //     將來進一張同名招式的卡就會誤排除）、技能大盜手寫 active+bench、
+    //     高傲指令手寫 deck.slice(0,10)。六份各自演化 ⇒ 畫面與規則層遲早對不上。
+    //   現在一律由 `advanceBorrowChain` 呼叫中央 `copyAttackCandidates` 決定，
+    //   各卡原本的專屬 modal 仍然保留（玩家認得的畫面不變），只是清單換成中央那一份。
+    const _selfBorrowKey = `${sourceCardName}|${atk.name}`;
+    if (isCopyAttackKey(_selfBorrowKey)) {
       if (!game) return;
-      const opp = game.players[1 - myIdx];
-      const oppActive = opp.active;
-      const oppCard = oppActive ? getCard(oppActive.cardId) : undefined;
-      // 目標必為對手戰鬥場「太晶」寶可夢；無目標 / 非太晶 → 讓 engine 出 log
-      if (!oppActive || !oppCard || !(oppCard.tags ?? []).includes('太晶') || (oppCard.attacks?.length ?? 0) === 0) {
-        dispatch(GameActions.attack(attackIndex));
-        return;
-      }
-      personateAttackPicker = {
-        sourceAttackIndex: attackIndex,
-        oppPoke: { inst: oppActive, card: oppCard },
-      };
-      return;
-    }
-    // v3.895 耀閃挑戰 intercept：peek 自己牌庫頂，若該卡為寶可夢（非規則）且有 2+ 招式 → 開 picker 讓玩家選
-    //   - 1 招 → 自動填 copyAttackChoice (attackIndex=0)，不彈 picker（避免單一選項浪費 UX）
-    //   - 牌庫空 / 非寶可夢 / 規則寶可夢 / 0 招 → 直接 dispatch（engine 自己會 fail log）
-    //   - 2+ 招 → 開 brightChallengePicker（卡面：「選擇 1 個那隻寶可夢持有的招式，作為這個招式使用」）
-    if (atk.name === '耀閃挑戰') {
-      if (!game) return;
-      const myDeck = game.players[myIdx].deck;
-      const topInst = myDeck[0];
-      if (!topInst) {
-        dispatch(GameActions.attack(attackIndex));
-        return;
-      }
-      const topCard = getCard(topInst.cardId);
-      const isPokemon = topCard?.supertype === 'Pokemon';
-      const isRule = topCard ? (RULE_BOX_SUBTYPES.has(topCard.subtype ?? '')) : false;
-      const atks = topCard?.attacks ?? [];
-      if (!isPokemon || isRule || atks.length === 0) {
-        dispatch(GameActions.attack(attackIndex));
-        return;
-      }
-      if (atks.length === 1) {
-        // v5.992 單招也走 dispatchBorrowedAttack — 被借招式有 PRE_DISCARD_CHOICE(若希望)時開 modal
-        dispatchBorrowedAttack(attackIndex, topInst.iid, 0, topCard);
-        return;
-      }
-      // 2+ 招 → 開 picker
-      brightChallengePicker = {
-        sourceAttackIndex: attackIndex,
-        topPoke: { inst: topInst, card: topCard! },
-      };
-      return;
-    }
-    // v5.178 皮可西|揮指 / 阿響的樹才怪|試著模仿 intercept：開 picker 讓玩家選對手戰鬥場招式
-    //   reuse rocketCommandPicker UI（pokeList = [對手戰鬥場 1 寶可夢]）
-    //   試著模仿擲幣後正面才用 choice，反面 0 傷害 (玩家選了但浪費)
-    if ((atk.name === '揮指' && sourceCardName === '皮可西') ||
-        (atk.name === '試著模仿' && sourceCardName === '阿響的樹才怪') ||
-        (atk.name === '欺詐' && sourceCardName === '索羅亞克')) {
-      if (!game) return;
-      const oppActive = game.players[1 - myIdx].active;
-      if (!oppActive) {
-        dispatch(GameActions.attack(attackIndex));
-        return;
-      }
-      const oppCard = getCard(oppActive.cardId);
-      const oppAttacks = (oppCard?.attacks ?? []).filter(a => a.name && a.name !== atk.name);
-      if (oppAttacks.length === 0) {
-        dispatch(GameActions.attack(attackIndex));
-        return;
-      }
-      if (oppAttacks.length === 1) {
-        const idx = oppCard!.attacks!.findIndex(a => a.name === oppAttacks[0].name);
-        // v5.992 單招也走 dispatchBorrowedAttack — 忍者飛旋等「若希望」選擇不再被 fast-path 吃掉
-        dispatchBorrowedAttack(attackIndex, oppActive.iid, idx, oppCard);
-        return;
-      }
-      // v5.181：sourceAttackName 動態, modal hint 不再顯示「高傲指令」
-      rocketCommandPicker = {
-        sourceAttackIndex: attackIndex,
-        pokeList: [{ inst: oppActive, card: oppCard! }],
-        top10All: [{ inst: oppActive, card: oppCard! }],
-        revealOnly: false,
-        sourceAttackName: atk.name,
-      };
-      return;
-    }
-    // v5.468 狐大盜|技能大盜 intercept：手牌=0 時複製對手場上(active+備戰)任一寶可夢的招式。
-    //   原本無 intercept → engine 自動挑印刷最高傷害(簡易)；完整版讓玩家選要複製哪招(reuse rocketCommandPicker)。
-    if (atk.name === '技能大盜') {
-      if (!game) return;
-      // 手牌須=0(engine gate)；>0 直接 dispatch 讓 engine fail log
-      if (game.players[myIdx].hand.length > 0) { dispatch(GameActions.attack(attackIndex)); return; }
-      const opp = game.players[1 - myIdx];
-      const pokeList = [
-        ...(opp.active ? [{ inst: opp.active, card: getCard(opp.active.cardId) }] : []),
-        ...opp.bench.map(b => ({ inst: b, card: getCard(b.cardId) })),
-      ].filter(x => x.card?.supertype === 'Pokemon' && (x.card?.attacks?.length ?? 0) > 0) as Array<{ inst: CardInstance; card: Card }>;
-      if (pokeList.length === 0) { dispatch(GameActions.attack(attackIndex)); return; }
-      if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
-        dispatchBorrowedAttack(attackIndex, pokeList[0].inst.iid, 0, pokeList[0].card); // v5.992 單選也帶出「若希望」modal
-        return;
-      }
-      rocketCommandPicker = {
-        sourceAttackIndex: attackIndex,
-        pokeList,
-        top10All: pokeList,
-        revealOnly: false,
-        sourceAttackName: '技能大盜',
-      };
-      return;
-    }
-    // v4.39 火箭隊的貓老大ex|高傲指令 intercept：peek 對手牌庫頂 10 張 → 列寶可夢的招式讓玩家選
-    //   - 0 寶可夢 → 直接 dispatch（engine PRE 出 fail log）
-    //   - 1 寶可夢 1 招 → 自動帶 copyAttackChoice（避免單一選項浪費 UX）
-    //   - 多選項 → 開 rocketCommandPicker（含「不複製」skip 按鈕，符合「若希望」）
-    if (atk.name === '高傲指令' && sourceCardName === '火箭隊的貓老大ex') {
-      if (!game) return;
-      const oppDeck = game.players[1 - myIdx].deck;
-      const top10 = oppDeck.slice(0, 10);
-      const pokeList = top10
-        .map(inst => ({ inst, card: getCard(inst.cardId) }))
-        .filter(x => x.card?.supertype === 'Pokemon' && (x.card?.attacks?.length ?? 0) > 0) as Array<{ inst: CardInstance; card: Card }>;
-      // v5.174：top10 全 10 張 (含非寶可夢) 給 modal 揭示用 — 參考寶可裝置3.0「公開揭示」精神
-      const top10All = top10.map(inst => ({ inst, card: getCard(inst.cardId) })).filter(x => x.card) as Array<{ inst: CardInstance; card: Card }>;
-      if (pokeList.length === 0) {
-        rocketCommandPicker = {
-          sourceAttackIndex: attackIndex,
-          pokeList: [],
-          top10All,
-          revealOnly: true,
-          sourceAttackName: '高傲指令',
-        };
-        return;
-      }
-      if (pokeList.length === 1 && (pokeList[0].card.attacks?.length ?? 0) === 1) {
-        dispatchBorrowedAttack(attackIndex, pokeList[0].inst.iid, 0, pokeList[0].card); // v5.992 單選也帶出「若希望」modal
-        return;
-      }
-      rocketCommandPicker = {
-        sourceAttackIndex: attackIndex,
-        pokeList,
-        top10All,
-        revealOnly: false,
-        sourceAttackName: '高傲指令',
-      };
+      advanceBorrowChain(attackIndex, [], _selfBorrowKey);
       return;
     }
     const key = `${sourceCardName}|${atk.name}`;
@@ -7674,6 +7526,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let copyAttackPicker = $state<{
     sourceAttackIndex: number;
     candidates: Array<{ inst: CardInstance; card: Card | undefined }>;
+    /** v6.339：本層真正可選的招式（來自中央 copyAttackCandidates）—— 畫出來的＝規則層認的。 */
+    allowed?: Map<string, Set<number>>;
   } | null>(null);
   // v5.721：copy-attack 借招式統一 dispatch（收斂 4 個 picker）——被借招式有 PRE_DISCARD_CHOICE
   //   （「若希望」binary-yes-no / 能量 picker）時開 preAttackDiscard 帶 copyAttackChoice 讓玩家選；
@@ -7709,12 +7563,29 @@ function _setupSelfPending(g: any, seat: number): string | null {
     }
     const cands = copyAttackCandidates(borrowedKey, game, myIdx as 0 | 1, pool, chain.length);
     if (cands.length === 0) {
+      // ⚠ v6.339：高傲指令的卡面是「將對手的牌庫上方10張卡**翻到正面**。若希望，選擇1個
+      //   其中的寶可夢持有的招式…」—— 即使一張寶可夢都沒有，那 10 張仍然要公開揭示給雙方看。
+      if (borrowedKey === ROCKET_COMMAND_KEY) {
+        rocketCommandPicker = {
+          sourceAttackIndex: srcAttackIndex,
+          pokeList: [],
+          top10All: _rocketTop10All(),
+          revealOnly: true,
+          sourceAttackName: '高傲指令',
+          chain,
+        };
+        return;
+      }
       // 這一層沒有可借的招式 ⇒ 讓 engine 自己出 fail log（與各 intercept 的既有行為一致）
       finishBorrowChain(srcAttackIndex, chain, borrowedKey);
       return;
     }
-    if (cands.length === 1) {
+    if (cands.length === 1 && !OPTIONAL_BORROW_KEYS.has(borrowedKey)) {
       // 只有一個選項 ⇒ 不彈 picker（與第 1 層各 intercept 的 fast-path 一致）
+      // ⚠⚠ v6.339：卡面寫「**若希望**」的借招不適用這條 fast-path ——
+      //   自動幫玩家複製就等於剝奪了「不複製」這個選擇。全站 8 張借招卡裡只有
+      //   「火箭隊的貓老大ex｜高傲指令」是「若希望」（其餘都是「選擇1個…」，強制），
+      //   守衛 C4 會拿官方卡面的 effect 文字回頭核對這個集合。
       const c = cands[0];
       advanceBorrowChain(srcAttackIndex, [...chain, { pokeIid: c.ownerIid, attackIndex: c.attackIndex }],
         `${c.ownerName}|${c.attackName}`);
@@ -7733,15 +7604,48 @@ function _setupSelfPending(g: any, seat: number): string | null {
       allowed.get(c.ownerIid)!.add(c.attackIndex);
     }
     if (pokeList.length === 0) { finishBorrowChain(srcAttackIndex, chain, borrowedKey); return; }
+    // ⭐ v6.339：第 1 層沿用各卡既有的專屬 modal —— 玩家看到的畫面完全不變，
+    //   但「列出哪些寶可夢、哪幾招可以按」一律由上面那份中央 cands 決定。
+    //   第 2 層以後一律用共用 modal（專屬 modal 的文案是寫給第 1 層情境的）。
+    if (chain.length === 0) {
+      if (borrowedKey === 'N的索羅亞克ex|暗黑底牌') {
+        copyAttackPicker = { sourceAttackIndex: srcAttackIndex, candidates: pokeList, allowed };
+        return;
+      }
+      if (borrowedKey === '火箭隊的謎擬Ｑ|扮晶晶酒') {
+        personateAttackPicker = { sourceAttackIndex: srcAttackIndex, oppPoke: pokeList[0], allowed };
+        return;
+      }
+      if (borrowedKey === '呆呆王|耀閃挑戰') {
+        brightChallengePicker = { sourceAttackIndex: srcAttackIndex, topPoke: pokeList[0], allowed };
+        return;
+      }
+    }
     rocketCommandPicker = {
       sourceAttackIndex: srcAttackIndex,
       pokeList,
-      top10All: pokeList,
+      // ⚠ 高傲指令要顯示「翻到正面的 10 張全部」（含非寶可夢）；其餘卡沒有揭示需求
+      top10All: borrowedKey === ROCKET_COMMAND_KEY ? _rocketTop10All() : pokeList,
       revealOnly: false,
       sourceAttackName: borrowedKey.slice(borrowedKey.indexOf('|') + 1),
       chain,
       allowed,
     };
+  }
+
+  /** 高傲指令：卡面「翻到正面」⇒ 對手牌庫上方 10 張（含非寶可夢）都要公開揭示。 */
+  const ROCKET_COMMAND_KEY = '火箭隊的貓老大ex|高傲指令';
+  /**
+   * 卡面寫「**若希望**」的借招 —— 玩家必須永遠有「不複製」的選項，
+   * 因此就算只有 1 個候選也要開 picker（picker 裡才有那顆「不複製」按鈕）。
+   * ⚠ 這個集合由守衛 C4 對照官方卡面 effect 文字檢查，將來進新卡不會漏。
+   */
+  const OPTIONAL_BORROW_KEYS = new Set([ROCKET_COMMAND_KEY]);
+  function _rocketTop10All(): Array<{ inst: CardInstance; card: Card }> {
+    if (!game) return [];
+    return game.players[1 - myIdx].deck.slice(0, 10)
+      .map(inst => ({ inst, card: getCard(inst.cardId) }))
+      .filter(x => x.card) as Array<{ inst: CardInstance; card: Card }>;
   }
 
   /** 借招鏈收尾：終端招式若有「若希望／丟能量」選擇就先開 modal，否則直接 dispatch。 */
@@ -7789,6 +7693,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let personateAttackPicker = $state<{
     sourceAttackIndex: number;
     oppPoke: { inst: CardInstance; card: Card };
+    /** v6.339：同上，來自中央 copyAttackCandidates。 */
+    allowed?: Map<string, Set<number>>;
   } | null>(null);
   function resolvePersonateAttack(pokeIid: string, attackIndex: number) {
     if (!personateAttackPicker) return;
@@ -7806,6 +7712,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let brightChallengePicker = $state<{
     sourceAttackIndex: number;
     topPoke: { inst: CardInstance; card: Card };
+    /** v6.339：同上，來自中央 copyAttackCandidates。 */
+    allowed?: Map<string, Set<number>>;
   } | null>(null);
   function resolveBrightChallenge(pokeIid: string, attackIndex: number) {
     if (!brightChallengePicker) return;
@@ -13534,6 +13442,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   <div class="copy-attack-name">{cand.card.name}</div>
                   <div class="copy-attack-atks">
                     {#each cand.card.attacks ?? [] as atk, aIdx}
+                      {#if !copyAttackPicker.allowed || (copyAttackPicker.allowed.get(cand.inst.iid)?.has(aIdx) ?? false)}
                       <button
                         class="copy-attack-btn"
                         onclick={() => resolveCopyAttack(cand.inst.iid, aIdx)}
@@ -13545,6 +13454,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                         <span class="copy-atk-name">{atk.name}</span>
                         {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
                       </button>
+                      {/if}
                     {/each}
                   </div>
                 </div>
@@ -13575,6 +13485,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div class="copy-attack-name">{op.card.name}（對手戰鬥場）</div>
               <div class="copy-attack-atks">
                 {#each op.card.attacks ?? [] as atk, aIdx}
+                  {#if !personateAttackPicker.allowed || (personateAttackPicker.allowed.get(op.inst.iid)?.has(aIdx) ?? false)}
                   <button
                     class="copy-attack-btn"
                     onclick={() => resolvePersonateAttack(op.inst.iid, aIdx)}
@@ -13586,6 +13497,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <span class="copy-atk-name">{atk.name}</span>
                     {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
                   </button>
+                  {/if}
                 {/each}
               </div>
             </div>
@@ -13614,6 +13526,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               <div class="copy-attack-name">{tp.card.name}（牌庫頂）</div>
               <div class="copy-attack-atks">
                 {#each tp.card.attacks ?? [] as atk, aIdx}
+                  {#if !brightChallengePicker.allowed || (brightChallengePicker.allowed.get(tp.inst.iid)?.has(aIdx) ?? false)}
                   <button
                     class="copy-attack-btn"
                     onclick={() => resolveBrightChallenge(tp.inst.iid, aIdx)}
@@ -13625,6 +13538,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     <span class="copy-atk-name">{atk.name}</span>
                     {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
                   </button>
+                  {/if}
                 {/each}
               </div>
             </div>

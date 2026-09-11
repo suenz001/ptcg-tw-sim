@@ -506,8 +506,29 @@ if (CA) {
   chk('G7b preAttackDiscard 的每一個出口都帶上 copyAttackChain（5 處）',
     (page.split('ccChain').length - 1) >= 6 && /copyAttackChoice, copyAttackChain, exactRequired/.test(page),
     String(page.split('ccChain').length - 1));
-  chk('G7c 暗黑底牌的第 1 層 picker 走中央 copyAttackCandidates（不再手寫 startsWith）',
-    /copyAttackCandidates\('N的索羅亞克ex\|暗黑底牌'/.test(page));
+  // ⚠ v6.339（Rule 40）：這一條原本釘 UI 裡的字面量 `copyAttackCandidates('N的索羅亞克ex|暗黑底牌'`，
+  //   但 v6.339 把第 1 層收斂成泛用分支（key 用變數傳）⇒ 字面量消失、意圖卻沒被破壞。
+  //   改成驗**中央判準本身的行為**：暗黑底牌不可以把「暗黑底牌」自己列成候選
+  //   （那正是 v6.337 修掉的 UI bug —— 按下去規則層不接受，白白用掉一次招式）。
+  //   「UI 只有一個中央呼叫點」由 v6.339 的守衛 A1 負責，這裡不抄第二份（Rule 38）。
+  if (CA) {
+    const NZ = byName('N的索羅亞克ex', c => (c.attacks ?? []).some(a => a.name === '暗黑底牌'));
+    const selfIdx = (NZ?.attacks ?? []).findIndex(a => a.name === '暗黑底牌');
+    // ⚠ N的索羅亞克ex 自己只有「暗黑底牌」一招 ⇒ 只放它的話，排除之後候選必然是空的，
+    //   「不含自己」就變成空真。備戰再放一隻**別的** N的寶可夢當正對照。
+    const NB = [...pool.values()].find(c => c.name?.startsWith('N的') && c.name !== 'N的索羅亞克ex' && (c.attacks ?? []).length >= 1);
+    const benchSelf = inst(NZ.id);
+    const benchOther = inst(NB.id);
+    const st = board({ myActive: inst(NZ.id, { energyAttached: ENERGIES() }), oppActive: inst(DRAGA.id), oppDeck: [inst(DRAGA.id)] });
+    st.players[0].bench = [benchSelf, benchOther];
+    const cands = CA.copyAttackCandidates('N的索羅亞克ex|暗黑底牌', st, 0, pool, 0);
+    chk('G7c0 ⭐哨兵：別的「N的」備戰寶可夢確實列得出候選（否則下一條是空真）',
+      cands.some(c => c.ownerIid === benchOther.iid),
+      JSON.stringify(cands.map(c => c.ownerName + '|' + c.attackName)));
+    chk('G7c 暗黑底牌的候選不可以包含「暗黑底牌」自己（卡面不可複製自己；UI 與規則層共用這一份）',
+      !cands.some(c => c.ownerIid === benchSelf.iid && c.attackIndex === selfIdx),
+      JSON.stringify(cands.map(c => c.attackName)));
+  }
   chk('G7d 借招鏈的遞迴推進點存在且唯一（advanceBorrowChain）',
     (page.split('function advanceBorrowChain').length - 1) === 1
     && (page.split('advanceBorrowChain(').length - 1) >= 4);
