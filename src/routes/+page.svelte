@@ -7,6 +7,11 @@
   import type { User } from 'firebase/auth';
   import type { Unsubscribe } from 'firebase/firestore';
   import { VERSION } from '$lib/version';
+  // ⭐ v6.340：首頁**刻意不連 Firestore**（v6.267／v6.271／v6.277 三支效能守衛的量測口徑），
+  //   所以這一行用的是**程式內建**的賽季值，不是後台設定值。
+  //   ⚠ 站長在後台改賽季之後，其他頁面即時跟上，首頁這行要等下一次版本更新才會變。
+  import { DEFAULT_CARD_POLICY } from '$lib/cards/regulation';
+  const STD_MARKS_LABEL = DEFAULT_CARD_POLICY.allowedMarks.join(' / ');
   import { hardRefreshNow } from '$lib/hard-refresh';   // v6.160 清快取唯一實作（與錦標賽報到共用）
   // v6.264 較舊 changelog 條目的補充說明「展開才取得」（純函式抽在 lib，守衛可直接執行）
   import { CHANGELOG_BODIES_FILE, isValidChangelogVer, pickChangelogBody } from '$lib/changelog-lazy';
@@ -362,7 +367,7 @@
       <span class="hm-icon" aria-hidden="true">🃏</span>
       <span class="hm-body">
         <span class="hm-title">卡牌資料庫</span>
-        <span class="hm-desc">標準賽 H / I / J 標，繁體中文</span>
+        <span class="hm-desc">標準賽 {STD_MARKS_LABEL} 標，繁體中文</span>
       </span>
       <span class="hm-arrow" aria-hidden="true">→</span>
     </a>

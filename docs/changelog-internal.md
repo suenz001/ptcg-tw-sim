@@ -1,5 +1,121 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.340 卡牌政策：賽季與卡包容許改由後台設定
+
+BASE `a1f2c5e71b7be017f1c16bcf00ee38d21c544b6a`（v6.339，遠端 main）。站長交辦三件事：
+
+1. 後台要能設定「哪些卡包不能在牌組編輯器與對戰裡使用（用了就判不合格）」。
+2. 明年賽季 H/I/J → I/J/K，站長希望**自己把 H 的容許關掉**就好。
+3. M6a 先把卡效果做出來、**但先不要開放**，所以卡包容許要能單獨開關。
+4. 牌組的賽季篩選拿掉【G 標】，加一顆【已退標】（含 A~G）。
+
+### 【零】為什麼是 Firebase `config/*` 而不是 Oracle API
+
+站上既有的「後台↔前端共享設定」管道就是 Firestore `config/*`
+（`config/broadcast`、`config/homeChangelog`），兩站共用、不必動 Oracle server、沒有 CORS。
+⇒ 新增 `config/cardPolicy` `{ allowedMarks: string[], lockedSets: string[], updatedAt }`。
+
+### 【一】⚠⚠ 伺服器端一定要自己讀（不然是前後端分裂）
+
+伺服器端跑的是 **`TENG.validateDeck`＝與前端同一支 `validateDeck`**
+（`build-server-engine.mjs` 匯出）。只有前端讀設定的話，站長把某個標關掉之後
+**伺服器照樣放行** —— 同 v6.261「client 送新欄位、server 要認」那一類事故。
+
+⚠⚠ **更正（本節初稿寫錯，第二輪 Fable 5.1 審查抓到）**：目前伺服器端真正吃到這份政策的
+是**牌組公布欄的一般投稿**（`dpValidateDeck`）。錦標賽的 `/register`、
+`/register-and-checkin`、`/propose` **只檢查 60 張**，原始碼寫得很明白：
+`const bad = tournament ? null : dpValidateDeck(norm, deckName);` —— `tournament` 為真時
+直接跳過。所以**錦標賽那一側的合法性目前仍然只靠玩家端擋**。
+要不要把 `dpValidateDeck` 接到那三個端點上，**待站長裁示**：那會改變既有的報名行為
+（過去合法、今天退標的舊牌組會被擋在門外），本版不自作主張。
+
+⇒ `server_admin_patch.js` 的錦標賽 IIFE 每 60 秒同步一次 `config/cardPolicy`，
+呼叫 bundle 匯出的 `TENG.setCardPolicy`。
+⚠ 跨 IIFE：`adminDb` 在 firebase-admin 的 then-callback 內，錦標賽 IIFE 拿不到
+⇒ 自己再取一次 firestore handle（不重複 initializeApp）。
+⚠ 舊 bundle 沒有 `setCardPolicy` ⇒ 直接跳過，維持 bundle 內建值（**這一版一定要跑
+`update-tournament.bat`**，否則伺服器端這條線根本不存在）。
+
+### 【二】fail-closed 的三道
+
+這是**合法性判定**，v6.333 才因為 `if (card.regulationMark && !STANDARD_MARKS.has(...))`
+的 fail-open 出過事，所以：
+
+| 情境 | 行為 |
+|---|---|
+| Firestore 讀不到／離線／權限 | 維持 `DEFAULT_CARD_POLICY`（H/I/J ＋ M6a 鎖住） |
+| 文件缺欄位／型別錯／標不是單一字母 | `setCardPolicy` 回 false，**整包忽略**，現行政策一個字都不動 |
+| `allowedMarks` 是空陣列 | **拒絕**（全部關掉＝全站每張卡都不合法，不可能是本意） |
+| 舊 server bundle | 跳過同步，用 bundle 內建值 |
+
+`lockedSets` 允許空陣列 —— 那正是「把 M6a 開放」的操作。
+
+### 【三】【已退標】做成動態的（我的判斷，已先跟站長講）
+
+站長說「【已退標】裡面包含 ABCDEFG」。我實作成
+**「有標、但不在目前容許清單裡」**：今天容許 H/I/J，結果完全等於 A~G；
+明年把 H 關掉之後 H 標卡會自動落進【已退標】，不必再改一次碼。
+【無標】那 21 張純收藏卡維持獨立一顆鈕（站長 2026-09-09 的裁定不變）。
+
+篩選鈕的順序與文字也收斂成 `regMarkFilterKeys()` / `regMarkFilterLabel()`（Rule 38），
+`/cards` 與 `/decks` 共用同一份。
+
+### 【四】Svelte 的反應性
+
+政策是**模組層級狀態**、不是 rune ⇒ 政策到貨不會自動觸發 `$derived` 重算。
+三頁各自加一個 `policyGen = $state(0)`，載入完成後 +1，並在吃到政策的 `$derived`
+裡明確 `void policyGen;`。`/game` 的 `startLocalGame` 另外 **await** 一次，
+確保開戰前用的是最新政策。
+
+### 【五】既有守衛的三個觀測點（Rule 40）
+
+- 「Rule 38：判準只准有一份」原本釘 `new Set(['H','I','J'])` ⇒ 改釘
+  `DEFAULT_CARD_POLICY.allowedMarks`，並補一條「`isCardMarkStandardLegal` 還在」。
+- 「分組 key：其餘回自己的標」**被站長改判** ⇒ 改成 A~G 回 `'rotated'`，
+  並加驗「關掉 H 之後 H 自動變 rotated」（順便證明 setter 不是安慰劑）。
+- 「/cards 按鈕列＝不限/無標/G/H/I/J」原本釘 `REG_MARK_ORDER` 字面量 ⇒ 順序改由中央產生，
+  判準搬到行為層（驗 `regMarkFilterKeys()` 的輸出）。
+
+### 【六】守衛
+
+`scripts/test-v6340-card-policy.mjs`（34 條）：
+【A】政策本身（預設值／8 種不合格輸入全部被拒／被拒後現行政策完全沒變／可雙向開關）、
+【B】**行為端**（同一副 60 張牌：關掉 H ⇒ 不合法、打開 ⇒ 合法；M6a 鎖住 ⇒ 擋、解鎖 ⇒ 放行）、
+【C】接線（四頁／後台／伺服器／bundle 七個檔九條）、
+【D】HEAD-FAIL 對 v6.339 九條全紅 ＋ Rule 41 哨兵。
+
+### 【七】部署
+
+⚠⚠ **這一版一定要跑 `update-tournament.bat`**（重建 `server-engine.cjs` ＋ 更新
+`server_admin_patch.js` ＋ `admin.html`）—— 後台分頁、伺服器端同步、引擎匯出全在那支裡。
+跑完之後，**以後改設定就不用再跑 bat**（伺服器每 60 秒自己重讀）。
+
+### 【八】第二輪：Opus 5 ＋ Fable 5.1 對抗性審查抓到的東西
+
+初版自評全綠之後，兩輪對抗性審查各抓到一批真訊號。以下每一條都是**我自己再查證過**
+（grep 原始碼／跑真的函式）才動手，不是照單全收：
+
+| # | 問題 | 為什麼是真的 | 處置 |
+|---|---|---|---|
+| 1 | 重印例外名單只看卡名 | 名單上 `西餐廚師`／`改造之錘`／`反擊增幅器`／`慶祝開場樂` **只有 H 標印刷**；站長明年關掉 H 之後，這些卡會靜默地繼續合法 ⇒ 「只要把 H 關掉就好」破功 | `isStandardReprintLegal(card, stillLegal)`：豁免改成**依當期政策**判。守衛 B9／B9a／B9b ＋ 突變 M5 |
+| 2 | 線上房 lobby 的閘門只認「退標」 | v5.217 起用 `/為 [A-Z]+ 標/`，認不得「卡包未開放」「沒有賽制標記」⇒ 站長鎖起來的卡包**在線上對戰完全擋不住** | 新增全站唯一述詞 `hasIneligibleCardIssue`，三個 lobby 閘門一起改。守衛 B10／B10b ＋ 突變 M6 |
+| 3 | `/cards?set=ALL` 把 H/I/J 寫死在 `+page.ts` | 賽季換成 I/J/K 之後，「全部」虛擬卡包還是舊的三個標，K 標卡包一張都進不來 | 改走 `isCardMarkStandardLegal`。守衛 C6b ＋ 突變 M7 |
+| 4 | 四個玩家頁面殘留「標準賽 H / I / J 標」字樣 | 站長改賽季之後，畫面上的字會說謊 | 全部由政策產生（首頁例外，見下）。守衛 C13 ＋ 突變 M10 |
+| 5 | 後台 `admin.html` 自己有一份常數 | 它是純 HTML+ESM、吃不到 `$lib`，兩邊漂掉時站長看到的預設值會與全站行為不一致 | 守衛 E3 逐字比對 ＋ 突變 M8 |
+| 6 | `set-order.ts` 的 `MARK_ORDER` 沒有 K | K 標卡包會落進 fallback 被排到最後面（最新卡包沉底） | 補上 K。守衛 E4 ＋ 突變 M9 |
+| 7 | `/decks` 玩家動過賽季鈕之後，政策到貨不會修正他的勾選 | 他勾的標若被政策拿掉，那顆鈕已經不在畫面上、卻還在過濾條件裡 ⇒ 候選池空掉而且**點不掉** | 政策到貨時取交集；交集為空退回預設（他自己按【清除】清成空的則不動） |
+| 8 | 後台面板：`**粗體**` 直接顯示星號、`cp-extra` 重整後遺失、文案不實 | 清單外的卡包代號重整後看不見，下一次儲存會把它**靜默解鎖** | 改 `<b>`；`cp-extra` 預填清單外代號；儲存前列出逐項差異讓站長確認；存檔成功後對齊現值 |
+| 9 | 本檔【一】的敘述不實 | 見上方更正 | 已更正 |
+
+⚠ **首頁那一行是刻意的例外**：`src/routes/+page.svelte` 的
+「標準賽 H / I / J 標」改成吃 `DEFAULT_CARD_POLICY`（**程式內建值**），**不連 Firestore** ——
+v6.267／v6.271／v6.277 三支效能守衛把「首頁載入路徑」當量測口徑，加一個 `getDoc` 就等於
+把那三支的結論作廢。代價是：站長在後台改賽季之後，**首頁這一行要等下一次版本更新才會變**，
+其餘頁面即時跟上。若站長認為不可接受，再討論要不要讓首頁讀 localStorage 快取。
+
+正對照（Rule 33）：`mutcheck` 十個突變（M1～M10）全部紅在指定的那一條，還原後複驗 exit=0。
+
+
 ## v6.339 借招家族：第 1 層的候選枚舉也收斂到中央
 
 BASE `87f90e023137fa027ef6495a70f8008d8a08ea88`（v6.338，遠端 main）。站長裁示：「請你一起收乾淨」。

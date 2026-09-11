@@ -20,7 +20,9 @@
   import { PRESET_DECKS, PRESET_IDS } from '$lib/decks/presets';
   import type { Deck } from '$lib/decks/types';
   import { validateDeck, maxCopies, isBasicEnergy, isStandardReprintLegal, isAceSpec, aceSpecCount, sameNameTotal, remainingCapacity, sameNameKey, isTwoCardStadium, twoCardStadiumPartnerCardId, twoCardStadiumSide } from '$lib/decks/validation';
-  import { isCardMarkStandardLegal, filterDeckSelectable } from '$lib/cards/regulation';
+  import { isCardMarkStandardLegal, filterDeckSelectable, getCardPolicy, DEFAULT_CARD_POLICY, ALL_REGULATION_MARKS } from '$lib/cards/regulation';
+  // ⭐ v6.340：可選的標跟著後台政策走 ⇒ 這一頁也要載入政策（同一個分頁只會真的讀一次）
+  import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { splitTwoCardStadiumEntries, mergeTwoCardStadiumEntries } from '$lib/decks/cardIdMigration';
   //   splitTwoCardStadiumEntries：匯入時攤成左右各半（v6.094）
   //   mergeTwoCardStadiumEntries：v6.101 匯出到官網前把右半併回官方 id（官網沒有右半的 id）
@@ -257,16 +259,54 @@
   function clearStages() { selectedStages = new Set(); }
 
   // ── Regulation mark filter ─────────────────────────────────────────────
-  type RegMarkKey = 'H' | 'I' | 'J';
-  const REG_MARK_ORDER: RegMarkKey[] = ['H', 'I', 'J'];
-  // v4.9：預設選 H/I/J 三個（標準賽全範圍），玩家可自行點選縮小範圍
-  let selectedRegMarks = $state<Set<RegMarkKey>>(new Set(['H', 'I', 'J']));
+  // ⭐⭐ v6.340：可選的標**跟著後台政策走**（今天 H/I/J；明年賽季改成 I/J/K 時
+  //   站長在後台把 H 取消勾選，這一頁的鈕就自動少一顆，不必改碼）。
+  type RegMarkKey = string;
+  /** 後台政策載入完成後 +1，讓吃到政策的 $derived 重算一次。 */
+  let policyGen = $state(0);
+  /** 玩家有沒有自己動過賽季鈕 —— 動過就不要被政策到貨覆蓋掉他的選擇。 */
+  let regMarksTouched = $state(false);
+  // ⚠ 依 A~K 時序排（不是 Firestore 存進來的順序）—— 與 /cards 走同一份中央排序。
+  const REG_MARK_ORDER = $derived.by((): RegMarkKey[] => {
+    void policyGen;
+    const allowed = new Set(getCardPolicy().allowedMarks);
+    return ALL_REGULATION_MARKS.filter((m) => allowed.has(m)) as RegMarkKey[];
+  });
+  // v4.9：預設選全部容許的標（標準賽全範圍），玩家可自行點選縮小範圍
+  let selectedRegMarks = $state<Set<RegMarkKey>>(new Set(DEFAULT_CARD_POLICY.allowedMarks));
+  // ⚠⚠ 這一頁**不可以**新增 `$effect`／`onMount`／計時器／fetch ——
+  //   v6.267 D0、v6.271、v6.277 C6 三支效能守衛都把「/decks 的載入路徑只有 $state 初始化」
+  //   當成量測口徑，多一個就等於把那三支的結論作廢。
+  //   ⇒ 直接在元件初始化時呼叫一次：loader 自己擋 SSR，而且整個分頁只會真的讀一次。
+  loadCardPolicyOnce().then(() => {
+    policyGen += 1;
+    // 玩家還沒自己動過賽季鈕時，跟著新政策更新預設勾選
+    if (!regMarksTouched) selectedRegMarks = new Set(getCardPolicy().allowedMarks);
+    // ⭐⭐ 玩家動過鈕時：保留他的選擇，但要把「政策已經拿掉的標」剔除 ——
+    //   留著的話，那顆鈕已經不在畫面上（REG_MARK_ORDER 只列容許的標），
+    //   卻還留在過濾條件裡，玩家會看到「我什麼都沒改，候選池卻空了」而且**點不掉**。
+    //   ⚠ 交集變空時退回「全部容許的標」＝ 預設狀態，不要留一個永遠空的清單；
+    //     但玩家自己按【清除】清成空的（size === 0）是他的本意，不碰。
+    else if (selectedRegMarks.size > 0) {
+      const allowedNow = new Set(getCardPolicy().allowedMarks);
+      const kept = new Set([...selectedRegMarks].filter((m) => allowedNow.has(m)));
+      selectedRegMarks = kept.size > 0 ? kept : new Set(getCardPolicy().allowedMarks);
+    }
+    // ⭐⭐⭐ pool 是 onMount 裡的**一次性賦值**，不是 $derived ⇒ 政策到貨後不會自己重算。
+    //   沒有這一行的話：站長把某個卡包鎖起來之後，第一次進站（或快取過期）的玩家
+    //   會拿到用**程式內建政策**建起來的候選清單 —— 也就是那個卡包照樣挑得到、組得進去
+    //   （validateDeck 事後會擋，但 UI 已經讓他組進去了）。這是收緊方向上的 fail-open 窗口。
+    //   ⚠ 兩種到貨順序都正確：政策先到 ⇒ _rawAllCards 還是空的、跳過，下面 onMount 用新政策建；
+    //     卡片先到 ⇒ 這裡用新政策重建一次。
+    if (_rawAllCards.length > 0) pool = filterDeckSelectable(filterPlayerSelectable(_rawAllCards));
+  });
   function toggleRegMark(m: RegMarkKey) {
+    regMarksTouched = true;
     const next = new Set(selectedRegMarks);
     if (next.has(m)) next.delete(m); else next.add(m);
     selectedRegMarks = next;
   }
-  function clearRegMarks() { selectedRegMarks = new Set(); }
+  function clearRegMarks() { regMarksTouched = true; selectedRegMarks = new Set(); }
   // v2.129 全螢幕卡牌放大 — 鏡射 /cards lightbox：preview 內點圖即放大；列表 thumb 也可直接放大
   let lightboxUrl = $state<string | null>(null);
   function openLightbox(url: string) { lightboxUrl = url; }
@@ -330,10 +370,17 @@
   const CARD_NAME_ALIASES: Record<string, string> = {
     '寶可齒輪3.0': '寶可裝置3.0', // 官方改名：寶可齒輪3.0 → 寶可裝置3.0
   };
+  /**
+   * ⭐ v6.340：未經政策過濾的全卡快照。**刻意不是 `$state`** ——
+   * 它只是給「政策到貨後重算 pool」用的來源，本身不需要驅動任何畫面
+   * （/decks 有三支效能守衛盯著 $state／$effect 的數量）。
+   */
+  let _rawAllCards: Card[] = [];
   /** 三級索引：去後綴卡名 → 本站「標準合法」Card（H/I/J 標 / 基本能量 / reprint-legal 優先）。
    *  供官網代碼匯入：舊版合法卡無法以 id / set+number 對應（常 setCode/collectorNumber 為 null）
    *  時，自動替換成同名的本站合法版（好友寶芬 / 高級球 / 老大的指令 / 基本能量 等）。 */
   const poolByName = $derived((() => {
+    void policyGen;   // ⭐ v6.340：isLegal 讀政策（模組層級狀態）⇒ 政策到貨要重算
     const isLegal = (c: Card): boolean =>
       // v6.333 Rule 38：H/I/J 判準唯一來源＝$lib/cards/regulation（無標 fail-closed）。
       isCardMarkStandardLegal(c.regulationMark) || isBasicEnergy(c) || isStandardReprintLegal(c);
@@ -392,6 +439,9 @@
     return getEvolutionChainNames(q, pool);
   });
   const filteredPool = $derived.by(() => {
+    // ⭐ v6.340：讀政策的判準散在下面的 filter callback 裡，必須在**本體第一行**登記依賴 ——
+    //   寫在 callback 內時，只要 early-return（poolReady 還沒好）那一次求值就不會登記。
+    void policyGen;
     if (!poolReady) return [] as Card[];
     const q = search.trim().toLowerCase();
     const cats = selectedCategories;
@@ -656,6 +706,7 @@
       //   ⭐ v6.333 再疊一層：`filterDeckSelectable` 濾掉「暫不開放組牌」的卡包（M6a）。
       //     站長裁定「可查卡、暫不開放組牌」⇒ /cards 照樣看得到，只有這裡的候選清單擋。
       //     ⚠ 同樣**不能**濾 poolById，否則已存牌組裡的 M6a 卡會變成「缺卡」而不是被 validateDeck 指出來。
+      _rawAllCards = allCards;   // ⭐ v6.340：留一份未過濾的快照，政策到貨時要重新過濾一次
       pool = filterDeckSelectable(filterPlayerSelectable(allCards));
       poolById = buildCardIndex(allCards);
       poolReady = true;
@@ -1704,7 +1755,7 @@
   <header class="page-head">
     <a href="{base}/" class="back">← 首頁</a>
     <h1>牌組編輯器 <span class="version-tag">v{VERSION}</span></h1>
-    <span class="hint">Standard · H / I / J 標</span>
+    <span class="hint">Standard · {REG_MARK_ORDER.join(' / ')} 標</span>
     <!-- v6.139：牌組公布欄入口（批次 2 只有瀏覽與匯入，投稿在批次 3） -->
     <a href="{base}/deck-posts" class="to-board">📋 牌組公布欄</a>
     <span class="sync-pill sync-{dirtyDeckIds.size > 0 ? 'unsaved' : syncStatus}" title={dirtyDeckIds.size > 0 ? `有 ${dirtyDeckIds.size} 個牌組未存檔（按 💾 存檔 推到雲端）` : (syncStatus === 'error' ? (syncError ?? '雲端連線失敗') : '')}>

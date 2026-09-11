@@ -267,8 +267,11 @@ function walk(dir, out = []) {
 }
 const SVELTE = walk(join(ROOT, 'src')).sort();
 chk('④ 掃描器真的掃到檔案（掃不到＝全綠的盲點）', SVELTE.length >= 8, '找到 ' + SVELTE.length);
+// ⚠ Windows 的 walk() 回傳反斜線路徑 ⇒ 比對前先正規化，否則這條自驗在 Windows 上恆假。
+const _slash = (f) => f.replace(/\\/g, '/');
 chk('④ 掃描範圍含 game/+page.svelte 與 MobilePortraitBattle.svelte',
-  SVELTE.some(f => f.endsWith('game/+page.svelte')) && SVELTE.some(f => f.endsWith('MobilePortraitBattle.svelte')));
+  SVELTE.some(f => _slash(f).endsWith('game/+page.svelte'))
+  && SVELTE.some(f => _slash(f).endsWith('MobilePortraitBattle.svelte')));
 {
   let pinnedSeen = 0, kidChecked = 0;
   for (const f of SVELTE) {

@@ -27,7 +27,10 @@
 import type { SetSummary } from './types';
 
 /** 賽季標的顯示順序：越新的標越前面。不在清單內的（F/G 等）一律排在最後。 */
-export const MARK_ORDER = ['J', 'I', 'H'] as const;
+// ⭐ v6.340：K 標（明年賽季）也要有固定位置。沒有它的話，K 標卡包會落進下方
+//   「不在 MARK_ORDER 裡」的 fallback 而被排到**最後面** —— 最新的卡包沉底是錯的。
+//   ⚠ 這是顯示順序，不是合法性判準；合法性一律看 $lib/cards/regulation（Rule 38）。
+export const MARK_ORDER = ['K', 'J', 'I', 'H'] as const;
 
 /** 特典卡（促銷卡）包：code 形如 M-P-J、SV-P-I。這類卡包沒有單一發售日。 */
 export function isPromoSet(set: Pick<SetSummary, 'code'>): boolean {

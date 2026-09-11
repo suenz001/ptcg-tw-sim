@@ -6,7 +6,9 @@
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   // v6.045 卡包排序（越新越靠左上、特典卡墊底）抽成模組才測得到，見 set-order.ts
   import { orderSetsForPicker } from '$lib/cards/set-order';
-  import { cardRegMarkFilterKey, NO_REG_MARK_KEY } from '$lib/cards/regulation';
+  import { cardRegMarkFilterKey, regMarkFilterKeys, regMarkFilterLabel, getCardPolicy, isCardMarkStandardLegal } from '$lib/cards/regulation';
+  // ⭐ v6.340：賽季鈕要跟著後台政策走 ⇒ 這一頁也要載入政策（同一個分頁只會真的讀一次）
+  import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { isMegaExCard } from '$lib/game/selection-filter'; // v6.210：Mega ex 判定收斂中央述詞
 
   /** Resolve a coverImageUrl that is either an absolute https:// URL (external
@@ -178,7 +180,12 @@
   const STAGE_ORDER: StageKey[] = ['Basic', 'Stage1', 'Stage2'];
   let selectedStages = $state<Set<StageKey>>(new Set());
 
-  // v2.84: 賽制賽季標記篩選 (G, H, I, J)
+  // v2.84: 賽制賽季標記篩選
+  // ⭐⭐ v6.340 站長交辦：拿掉【G 標】鈕，改成一顆【已退標】。
+  //   ⚠ 判準**不是**寫死 A~G，而是「有標、但不在目前容許清單裡」（見 regulation.ts）——
+  //     今天容許 H/I/J，結果剛好等於 A~G；明年站長在後台把 H 關掉之後，
+  //     H 標卡會自動落進【已退標】，這一頁一個字都不用改。
+  //   ⚠ 鈕的順序與文字一律由 regMarkFilterKeys()／regMarkFilterLabel() 產生（Rule 38）。
   // ⭐ v6.333 新增 'none'＝【無標】（站長 2026-09-09 交辦，按鈕排在【不限】右邊）。
   //   M6a「30th CELEBRATION」帶進 21 張官網 `.alpha` 顯示 n/a 的純收藏卡
   //   （皮卡丘 136/103、洛奇亞、耿鬼、N、小霞、烈空坐EX、達克萊伊＆克雷色利亞LEGEND …），
@@ -186,12 +193,22 @@
   //   ⚠ 站長裁定【無標】**只收真的完全沒有標的**：M6a 另外那 8 張帶舊標的收藏卡
   //     （索爾迦雷歐GX／爆肌蚊GX=A、皮卡丘&捷克羅姆GX=C、蒼響V／雷公=D、夢幻VMAX=E、
   //     阿爾宙斯VSTAR=F、鯉魚王=G）**不併進【無標】**。
-  //     其中鯉魚王落在既有的【G標】鈕，其餘 7 張任何一顆鈕都篩不到，只在【不限】看得到。
-  type RegMarkKey = 'none' | 'G' | 'H' | 'I' | 'J';
-  const REG_MARK_ORDER: RegMarkKey[] = [NO_REG_MARK_KEY as RegMarkKey, 'G', 'H', 'I', 'J'];
-  const REG_MARK_LABEL: Record<RegMarkKey, string> = {
-    none: '無標', G: 'G 標', H: 'H 標', I: 'I 標', J: 'J 標',
-  };
+  //     ⭐ v6.340 起它們全部落在【已退標】（先前只在【不限】看得到）。
+  type RegMarkKey = string;
+  /** 後台政策載入完成後 +1，讓下面吃到政策的 $derived 重算一次。 */
+  let policyGen = $state(0);
+  $effect(() => { loadCardPolicyOnce().then(() => { policyGen += 1; }); });
+  const REG_MARK_ORDER = $derived.by((): RegMarkKey[] => { void policyGen; return regMarkFilterKeys(); });
+  // ⭐ v6.340：畫面上的「標準賽 H / I / J 標」字樣與「幾個標準卡包」統計，
+  //   一律由政策產生（Rule 38：一個判準只留一份）。原本是三處字串 ＋ 兩處
+  //   `s.regulationMark === 'H' || ... 'I' || ... 'J'` 寫死，賽季一換就全部說謊。
+  const MARKS_LABEL = $derived.by(() => { void policyGen; return getCardPolicy().allowedMarks.join(' / '); });
+  const STANDARD_SETS = $derived.by(() => {
+    void policyGen;
+    // ⚠ index 模式與 set 模式的 LoadData 是聯集型別，sets 在型別上可能缺席 ⇒ 先給空陣列。
+    return (data.sets ?? []).filter((s) => isCardMarkStandardLegal(s.regulationMark));
+  });
+  const STANDARD_CARD_COUNT = $derived(STANDARD_SETS.reduce((n, s) => n + s.cardCount, 0));
   let selectedRegMarks = $state<Set<RegMarkKey>>(new Set());
 
   /** 取得寶可夢的階段。v2.75 起 JSON 有 `stage` 欄位（由 migration 補齊），
@@ -318,6 +335,9 @@
   }
   const filtered = $derived.by(() => {
     if (data.mode !== 'set') return [];
+    // ⭐ v6.340：cardRegMarkFilterKey 會讀政策（【已退標】＝不在容許清單裡），
+    //   政策是模組層級狀態、不是 rune ⇒ 這裡明確讀一次 policyGen，政策到貨才會重算。
+    void policyGen;
     const q = debouncedQuery.trim().toLowerCase();
     const cats = selectedCategories;
     const tags = selectedTags;
@@ -438,24 +458,24 @@
     <a class="back" href="{base}/">← 首頁</a>
     <h1>卡牌資料庫</h1>
     <p class="meta">
-      {data.sets.filter(s => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J').length} 個標準卡包 · 共 {data.sets.filter(s => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J').reduce((n, s) => n + s.cardCount, 0)} 張卡
-      <span class="hint">（標準賽 H / I / J 標，繁體中文）</span>
+      {STANDARD_SETS.length} 個標準卡包 · 共 {STANDARD_CARD_COUNT} 張卡
+      <span class="hint">（標準賽 {MARKS_LABEL} 標，繁體中文）</span>
     </p>
   </header>
 
   <!-- ═══════════════ ALL (virtual aggregator) ═══════════════ -->
-  {@const totalAllCards = data.sets.filter(s => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J').reduce((n, s) => n + s.cardCount, 0)}
+  {@const totalAllCards = STANDARD_CARD_COUNT}
   <div class="markSection">
     <h2 class="markHeader">
       <span class="markBadge mark-ALL">★</span>
-      <span>全部 · 合併 H / I / J 所有卡包</span>
+      <span>全部 · 合併 {MARKS_LABEL} 所有卡包</span>
     </h2>
     <div class="setGrid">
       <a class="setTile setTileAll" href="{base}/cards?set=ALL">
         <img src="{base}/covers/ALL.svg" alt="全部卡牌" loading="lazy" />
         <div class="setInfo">
           <div class="setCode">ALL</div>
-          <div class="setName">全部 H / I / J 卡牌</div>
+          <div class="setName">全部 {MARKS_LABEL} 卡牌</div>
           <div class="setCount">{totalAllCards} 張</div>
         </div>
       </a>
@@ -618,7 +638,7 @@
           class:active={selectedRegMarks.has(m)}
           onclick={() => toggleRegMark(m)}
           title="點一次選取、點兩次取消"
-        >{REG_MARK_LABEL[m]}</button>
+        >{regMarkFilterLabel(m)}</button>
       {/each}
     </div>
   </div>

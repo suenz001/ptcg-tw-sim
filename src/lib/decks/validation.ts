@@ -177,11 +177,43 @@ const STANDARD_REPRINT_LEGAL_NAMES = new Set<string>([
   '道具拆除器',     // Tool Scrapper — M2a:I / SV11W:I
 ]);
 
-export function isStandardReprintLegal(card: Card): boolean {
+/**
+ * 這張舊卡是不是靠「重印例外」還合法？
+ *
+ * ⭐⭐⭐ v6.340：名單的語意是「**這個卡名有當期合法的重印**」，所以它必須**依當期政策**判定，
+ *   不能只看名字在不在名單裡。
+ *   ⚠ 實測：名單上的「西餐廚師」「改造之錘」「反擊增幅器」「慶祝開場樂」等 17 張卡
+ *     **只有 H 標印刷**。明年站長把 H 關掉之後，若照舊只看名字，這些卡會靜默地繼續合法
+ *     —— 站長「只要把 H 的容許關掉就好」的承諾就破功了（Fable 5.1 對抗性審查抓到）。
+ *
+ * @param stillLegal 由 `validateDeck` 算好的「目前仍有合法重印的卡名 key」集合。
+ *   ⚠ 沒有傳的時候維持 v3.61 的舊行為（只看名單）—— 那些呼叫點拿不到卡池，
+ *     而且它們只影響「挑哪一張印刷當代表」，不是合法性判定。
+ */
+export function isStandardReprintLegal(card: Card, stillLegal?: ReadonlySet<string>): boolean {
   // v6.192：藝術版本冠名（結尾括號段）與本名是同一張卡 ⇒ 重印例外一併適用。
-  //   這條**只會放寬、不會收緊**（原本合法的卡名一個都不會變成不合法）。
-  return STANDARD_REPRINT_LEGAL_NAMES.has(card.name)
+  const named = STANDARD_REPRINT_LEGAL_NAMES.has(card.name)
       || STANDARD_REPRINT_LEGAL_NAMES.has(sameNameKey(card.name));
+  if (!named) return false;
+  if (!stillLegal) return true;
+  return stillLegal.has(sameNameKey(card.name));
+}
+
+/**
+ * ⭐⭐⭐ v6.340 全站唯一的「這副牌裡有**不能使用的卡**」述詞。
+ *
+ * ⚠⚠ 為什麼要有這一份：線上連線房的 lobby 從 v5.217 起用 `/為 [A-Z]+ 標/` 這條 regex
+ *   當閘門，它只認得「退標」一種，**認不得**「這個卡包目前不開放用於對戰」與
+ *   「沒有賽制標記（純收藏卡）」⇒ 站長鎖起來的卡包在**線上對戰完全擋不住**
+ *   （只有本機／AI 與公布欄投稿有擋）。站長 2026-09-11 交辦的正是
+ *   「用了就會被判定為不合格卡牌」，所以這個洞一定要補。
+ *
+ * ⚠ 這一條**只收「卡片資格」類**的問題（退標／卡包未開放／無標），
+ *   不含張數、同名上限、ACE SPEC 等構築規則 —— 線上房對那些的既有行為（不擋）本版不動。
+ */
+export const INELIGIBLE_CARD_ISSUE_RE = /為 [A-Z]+ 標|不開放用於對戰|沒有賽制標記/;
+export function hasIneligibleCardIssue(issues: readonly string[]): boolean {
+  return issues.some((s) => INELIGIBLE_CARD_ISSUE_RE.test(s));
 }
 
 export function isBasicEnergy(card: Card): boolean {
@@ -259,6 +291,14 @@ export function validateDeck(
   let basicPokemonCount = 0;
   const byName = new Map<string, number>();
   const missingIds: string[] = [];
+  // ⭐ v6.340：先算出「目前仍有合法重印的卡名」——重印豁免要依當期政策判，不是只看名字。
+  //   一次掃過卡池（~5000 筆）＋ 一個 Set，比每張卡各掃一次便宜得多。
+  const reprintStillLegal = new Set<string>();
+  for (const c of cardsById.values()) {
+    if (!isCardMarkStandardLegal(c.regulationMark)) continue;
+    const k = sameNameKey(c.name);
+    if (STANDARD_REPRINT_LEGAL_NAMES.has(c.name) || STANDARD_REPRINT_LEGAL_NAMES.has(k)) reprintStillLegal.add(k);
+  }
 
   for (const entry of deck.entries) {
     const card = cardsById.get(entry.cardId);
@@ -294,7 +334,7 @@ export function validateDeck(
     //   下回合鎖招／丟光自己的能量）會變成單方面對出招者有利，卡片比實體卡更強。
     //   ⚠ 擺在標的檢查**之前**：這批卡多數是 J 標、標的檢查會放行，只有這一條擋得住。
     if (isDeckLockedCard(card)) {
-      issues.push(`${card.name}（${card.setCode}）是紀念收藏卡包的卡，本站不開放用於對戰，`
+      issues.push(`${card.name}（${card.setCode}）這個卡包目前不開放用於對戰，`
         + '暫時無法加入牌組');
     }
     // ⭐⭐⭐ v6.333：改成 `!isCardMarkStandardLegal(...)`。
@@ -305,7 +345,7 @@ export function validateDeck(
       // v3.61：兩類例外免被擋
       //   1) 基本能量在標準賽不受任何構築限制（含 G 標）
       //   2) Reprint exception 名單：H/I/J 有重印的舊卡，舊版本仍合法
-      if (!isBasicEnergy(card) && !isStandardReprintLegal(card)) {
+      if (!isBasicEnergy(card) && !isStandardReprintLegal(card, reprintStillLegal)) {
         issues.push(card.regulationMark
           ? `${card.name} 為 ${card.regulationMark} 標，已退出標準賽`
           : `${card.name} 沒有賽制標記，是純收藏卡，不能用於對戰`);

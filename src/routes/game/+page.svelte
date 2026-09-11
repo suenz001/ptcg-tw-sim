@@ -20,7 +20,10 @@
   import { loadDecksFromCloud, cloudDecksUnchanged, recordCloudDecksRev } from '$lib/decks/cloud';  // v6.273 讀取減量
   import type { Deck } from '$lib/decks/types';
   import { PRESET_DECKS } from '$lib/decks/presets';
-  import { validateDeck } from '$lib/decks/validation';
+  import { validateDeck, hasIneligibleCardIssue } from '$lib/decks/validation';
+  // ⭐ v6.340：牌組合法性吃後台政策（哪些標可打／哪些卡包暫不開放）——
+  //   開戰前一定要先載好，否則會拿舊政策判定。
+  import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import { friendsEntryVisible, friendsBattleEntryVisible, requestFriendFromBattle, friendsRequestReplyText, type FriendsBattleTarget, type FriendRow } from '$lib/friends/friends-api';   // v6.283 線上大廳「👥 好友」入口（純函式、零請求）；v6.284 賽後／設定「將對手加為好友」
   import FriendsPanel from '$lib/friends/FriendsPanel.svelte';   // ⭐ v6.296 大廳第二個分頁「👥 好友名單」；與 /friends 頁**共用同一份**（不要兩份漂移）
   import { friendsCtxFromAuth } from '$lib/friends/auth-ctx';   // ⭐ v6.297 私聊內嵌：取身分的中央出口（匿名回 null ⇒ 一發請求都不發）
@@ -1215,6 +1218,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
   let roomPrivateInput = $state(false);                    // v5.003 私密房 checkbox 狀態（預設公開）
   let aiTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /** ⭐ v6.340：後台政策載入完成後 +1，讓吃到政策的 $derived 重算一次。 */
+  let cardPolicyGen = $state(0);
+  $effect(() => { loadCardPolicyOnce().then(() => { cardPolicyGen += 1; }); });
   // v3.38：本機/AI lobby 牌組 60 張驗證 — UI gate（防止使用者選擇張數錯誤的牌組開戰）
   // 連線 lobby 已在 seat-area 內 derive hasValidDeck（L3078），此處補本機/AI 模式
   const p1DeckObj = $derived(allDecks.find(d => d.id === p1DeckId));
@@ -1224,11 +1230,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // v5.215：本機 lobby 牌組驗證加上 validateDeck 完整檢查（60 張 / 無 G 標 / ACE SPEC ≤1 /
   //   同名 ≤4 / ≥1 基礎寶可夢）。pool 還沒 load 完時 fallback 用 60 張簡易檢查避免 UI 卡按鈕。
   const p1DeckValid = $derived.by(() => {
+    void cardPolicyGen;   // v6.340：政策到貨要重算
     if (!p1DeckId || p1DeckCount !== 60) return false;
     if (!p1DeckObj || !deckEntriesAllInPool(p1DeckObj.entries, pool)) return p1DeckCount === 60;  // 該牌組卡包未載齊 → 走輕量檢查
     return validateDeck(p1DeckObj, pool).issues.length === 0;
   });
   const p2DeckValid = $derived.by(() => {
+    void cardPolicyGen;   // v6.340：政策到貨要重算
     if (!p2DeckId || p2DeckCount !== 60) return false;
     if (!p2DeckObj || !deckEntriesAllInPool(p2DeckObj.entries, pool)) return p2DeckCount === 60;
     return validateDeck(p2DeckObj, pool).issues.length === 0;
@@ -1236,12 +1244,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
   // v5.216：deck-count-info UI 用 — 判定是否有 G 標違規（依 validateDeck issue 字串「為 X 標」匹配）
   //   含 G/F/E 等任何非 H/I/J 標卡（剔除基本能量與 reprint exception 名單後）— 全部歸類「含 G 標」訊息
   const p1DeckHasIllegalMark = $derived.by(() => {
+    void cardPolicyGen;   // v6.340：政策到貨要重算
     if (!p1DeckObj || !deckEntriesAllInPool(p1DeckObj.entries, pool)) return false;
-    return validateDeck(p1DeckObj, pool).issues.some(s => /為 [A-Z]+ 標/.test(s));
+    return hasIneligibleCardIssue(validateDeck(p1DeckObj, pool).issues);
   });
   const p2DeckHasIllegalMark = $derived.by(() => {
+    void cardPolicyGen;   // v6.340：政策到貨要重算
     if (!p2DeckObj || !deckEntriesAllInPool(p2DeckObj.entries, pool)) return false;
-    return validateDeck(p2DeckObj, pool).issues.some(s => /為 [A-Z]+ 標/.test(s));
+    return hasIneligibleCardIssue(validateDeck(p2DeckObj, pool).issues);
   });
 
   // ── 線上模式狀態（v2.269 座位制重構） ──────────────────────────────────
@@ -8204,6 +8214,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!d1 || !d2) return;
     // v5.894：建局前確保雙方牌組卡包已載入（完整性 fallback 缺卡則全載），使下方 validateDeck 與對戰用真 pool。
     await ensurePoolForDeckEntries([d1.entries, d2.entries], true);
+    // ⭐ v6.340：合法性判定吃後台政策，開戰前一定要先載好（讀不到會維持程式內建值，不會放行）。
+    await loadCardPolicyOnce();
     // v3.38：60 張規則最終 gate（雙重保險，UI button 已 disabled）
     // v5.215：改用 validateDeck 完整驗證（60 張 / 無 G 標 / ACE SPEC ≤1 / 同名 ≤4 /
     //   ≥1 基礎寶可夢 + reprint exception 名單例外）。任一玩家有 issues 即 alert 列出。
@@ -10730,8 +10742,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </select>
         {#if p1DeckId}
           {#if p1DeckCount === 60 && p1DeckHasIllegalMark}
-            <!-- v5.216：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
-            <div class="deck-count-info bad">⚠ 含有 G 標</div>
+            <!-- v5.216：60 張到位但含不能使用的卡 → 黃字警告
+                 ⚠ v6.340：文字不再寫死「G 標」——現在也包含「卡包未開放」與「無標收藏卡」 -->
+            <div class="deck-count-info bad">⚠ 含有不能使用的卡</div>
           {:else if p1DeckCount === 60}
             <div class="deck-count-info ok">✓ 60 張</div>
           {:else if p1DeckCount < 60}
@@ -10778,8 +10791,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
         </select>
         {#if p2DeckId}
           {#if p2DeckCount === 60 && p2DeckHasIllegalMark}
-            <!-- v5.216：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
-            <div class="deck-count-info bad">⚠ 含有 G 標</div>
+            <!-- v5.216：60 張到位但含不能使用的卡 → 黃字警告
+                 ⚠ v6.340：文字不再寫死「G 標」——現在也包含「卡包未開放」與「無標收藏卡」 -->
+            <div class="deck-count-info bad">⚠ 含有不能使用的卡</div>
           {:else if p2DeckCount === 60}
             <div class="deck-count-info ok">✓ 60 張</div>
           {:else if p2DeckCount < 60}
@@ -11081,8 +11095,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {@const myDeckCount = countDeckCards(s.deckEntries)}
                 <!-- v5.217：線上 seat 也加 G 標驗證（依現行 PTCG 規則，validateDeck 含 reprint exception） -->
                 {@const seatDeckObj = ({ id: '', name: '', entries: s.deckEntries } as Deck)}
-                {@const seatIssues = (myDeckCount === 60 && deckEntriesAllInPool(s.deckEntries, pool)) ? validateDeck(seatDeckObj, pool).issues : []}
-                {@const seatHasIllegalMark = seatIssues.some(x => /為 [A-Z]+ 標/.test(x))}
+                <!-- v6.340：validateDeck 讀後台政策（模組層級狀態）⇒ 逗號運算子先讀一次 cardPolicyGen，政策到貨才會重算 -->
+                {@const seatIssues = (void cardPolicyGen, (myDeckCount === 60 && deckEntriesAllInPool(s.deckEntries, pool)) ? validateDeck(seatDeckObj, pool).issues : [])}
+                <!-- ⭐ v6.340：改走中央述詞 —— 原本的 /為 [A-Z]+ 標/ 認不得「卡包未開放」與「無標」，
+                     站長鎖起來的卡包在線上房完全擋不住（本機／AI 有擋，只有這裡漏） -->
+                {@const seatHasIllegalMark = hasIneligibleCardIssue(seatIssues)}
                 {@const hasValidDeck = myDeckCount === 60 && !seatHasIllegalMark}
                 <div class="seat battle-seat {s.uid ? 'taken' : 'empty'} {isMine ? 'mine' : ''} {s.ready ? 'ready' : ''}">
                   <div class="seat-label">對戰玩家 {i + 1}</div>
@@ -11107,8 +11124,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {#if hasValidDeck}
                         <div class="seat-deck-info">✓ 牌組已套用（60 張）</div>
                       {:else if myDeckCount === 60 && seatHasIllegalMark}
-                        <!-- v5.217：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
-                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 含有 G 標</div>
+                        <!-- v5.217：60 張到位但含不能使用的卡 → 黃字警告（v6.340 文字不再寫死 G 標） -->
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 含有不能使用的卡</div>
                       {:else if myDeckId && myDeckCount === 0}
                         <div class="seat-deck-info" style="color:#ffcc66;">套用中⋯</div>
                       {:else if myDeckId && myDeckCount < 60}
@@ -11136,8 +11153,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {#if hasValidDeck}
                         <div class="seat-deck-info">✓ 已選牌組（60 張）</div>
                       {:else if myDeckCount === 60 && seatHasIllegalMark}
-                        <!-- v5.217：60 張到位但含 G 標等非標準賽卡 → 黃字警告 -->
-                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組含有 G 標</div>
+                        <!-- v5.217：60 張到位但含不能使用的卡 → 黃字警告（v6.340 文字不再寫死 G 標） -->
+                        <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組含有不能使用的卡</div>
                       {:else if myDeckCount > 0 && myDeckCount < 60}
                         <div class="seat-deck-info" style="color:#ff8866;">⚠ 牌組不足 60 張（{myDeckCount} 張）</div>
                       {:else if myDeckCount > 60}

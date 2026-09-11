@@ -1,7 +1,10 @@
 // 守衛：卡包選單的排列順序（v6.045）。
 //
 // Wilson 要的是「越新越靠左上」：
-//   ① 賽季標的順序 J → I → H（原本是 H → I → J）
+//   ① 賽季標的順序由新到舊（原本是 H → I → J）
+//      ⭐ v6.340：原本這裡逐字釘死 ['J','I','H']，K 標一進來就會腐爛；
+//        依 Rule 40 把判準**上移到意圖層**（A~K 的倒序 ＋ 必須涵蓋 H/I/J/K），
+//        不是放寬 —— 排錯順序、漏掉一個標，兩種都照樣紅。
 //   ② 同一標內發售日 新 → 舊（原本是舊 → 新）
 //   ③ 特典卡永遠排在該標最後
 //
@@ -19,10 +22,10 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x-so-s.js'), E = join(ROOT, '.x-so-e.ts'), O = join(ROOT, '.x-so-o.mjs');
 process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } catch {} } });
 writeFileSync(S, 'export const base="";export const assets="";');
-writeFileSync(E, "export * from './src/lib/cards/set-order';");
+writeFileSync(E, "export * from './src/lib/cards/set-order';\nexport { ALL_REGULATION_MARKS } from './src/lib/cards/regulation';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
-const { orderSetsForPicker, compareSetsNewestFirst, isPromoSet, MARK_ORDER }
+const { orderSetsForPicker, compareSetsNewestFirst, isPromoSet, MARK_ORDER, ALL_REGULATION_MARKS }
   = await import(pathToFileURL(O).href);
 
 const SETS = JSON.parse(readFileSync(join(ROOT, 'static/cards/index.json'), 'utf8'));
@@ -37,8 +40,16 @@ T('前提：index.json 讀得到，且 H/I/J 三個標都有卡包', () => {
   }
 });
 
-T('⭐⭐標的順序是 J → I → H（最新的標在最上面）', () => {
-  assert.deepEqual([...MARK_ORDER], ['J', 'I', 'H']);
+T('⭐⭐標的順序是由新到舊（最新的標在最上面）', () => {
+  // ⭐ Rule 40：判準＝「MARK_ORDER 是 A~K 的倒序」＋「當期與下一個賽季的標一個都不能少」。
+  //   漏掉一個標的後果不是排序難看而已 —— set-order 對「不在 MARK_ORDER 裡」的標
+  //   會走 fallback 接在**最後面**，新卡包會沉底。
+  const order = [...MARK_ORDER];
+  assert.deepEqual(order, [...ALL_REGULATION_MARKS].filter((m) => order.includes(m)).reverse(),
+    `MARK_ORDER 必須是 A~K 的倒序，實得 ${order.join(' → ')}`);
+  for (const m of ['H', 'I', 'J', 'K']) {
+    assert.ok(order.includes(m), `MARK_ORDER 缺少 ${m} 標（那個標的卡包會被排到最後面）`);
+  }
   const marks = orderSetsForPicker(SETS).map(([m]) => m);
   const std = marks.filter((m) => ['H', 'I', 'J'].includes(m));
   assert.deepEqual(std, ['J', 'I', 'H'],

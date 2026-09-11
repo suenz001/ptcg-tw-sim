@@ -272,6 +272,10 @@ await T('A5 client 端（src/）讀取檔案集合＝v6.273 已列管清單（�
     'src/lib/game/oracle-client.ts', 'src/lib/game/room-oracle.ts', 'src/lib/game/room.ts',
     'src/lib/tracking.ts', 'src/routes/+page.svelte', 'src/routes/admin/feedbacks/+page.svelte',
     'src/routes/decks/+page.svelte', 'src/routes/game/+page.svelte',
+    // ⭐ v6.340《卡牌政策》：整個分頁只讀 config/cardPolicy 一次，
+    //   而且有 localStorage 10 分鐘 TTL 快取 ⇒ 讀取量級是「每人每 10 分鐘 ≤1 次」。
+    //   ⚠ 這是**列管**不是豁免：它仍然算在下面的讀取上限斷言裡。
+    'src/lib/cards/policy-loader.ts',
   ];
   assert.ok(hits.length >= 7, 'client 端只掃到 ' + hits.length + ' 檔（下限斷言）：' + hits.join(','));
   const extra = hits.filter((h) => !KNOWN.includes(h));

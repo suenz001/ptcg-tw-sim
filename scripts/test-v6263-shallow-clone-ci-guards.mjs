@@ -138,12 +138,14 @@ console.log('\n④ ⭐⭐ 行為端：把 git 換成「必定失敗」的 shim�
 // ⚠ 這不是「假裝拿不到 blob」的紙上模擬 —— 子行程真的執行、真的呼叫 git、真的失敗，
 //   跟 fetch-depth:1 的淺複製對這幾支腳本而言是同一件事（實測過：兩者輸出逐字相同）。
 const shim = mkdt('shim');
+// ⚠ Windows 的 PATH 分隔符是 ';'，寫死 ':' 會讓 shim 完全沒套上（自驗恆假）。
+const PATHSEP = process.platform === 'win32' ? ';' : ':';
 writeFileSync(join(shim, 'git'), '#!/bin/sh\nexit 1\n');
 chmodSync(join(shim, 'git'), 0o755);
 
 function runGuard(rel, { noGit = false, env = {} } = {}) {
   const e = { ...process.env, ...env };
-  if (noGit) e.PATH = shim + ':' + (process.env.PATH || '');
+  if (noGit) e.PATH = shim + PATHSEP + (process.env.PATH || '');
   let out = '', code = 0;
   try {
     out = execFileSync(process.execPath, [join(ROOT, rel)],
@@ -160,7 +162,7 @@ function runGuard(rel, { noGit = false, env = {} } = {}) {
   let shimWorks = false;
   try {
     execFileSync('git', ['--version'],
-      { env: { ...process.env, PATH: shim + ':' + (process.env.PATH || '') }, stdio: 'ignore' });
+      { env: { ...process.env, PATH: shim + PATHSEP + (process.env.PATH || '') }, stdio: 'ignore' });
   } catch { shimWorks = true; }
   chk('★ shim 自身有效：套上 PATH 之後 git 真的會失敗', shimWorks);
 }

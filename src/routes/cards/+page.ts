@@ -4,12 +4,15 @@ import type { Card, SetSummary } from '$lib/cards/types';
 import { VERSION } from '$lib/version';
 // v6.194：已對玩家下架的卡不得出現在卡牌資料庫（唯一述詞，見 $lib/cards/visibility）。
 import { filterPlayerSelectable, applyHiddenCountsToSets } from '$lib/cards/visibility';
+// ⭐⭐ v6.340：「標準環境」不再寫死 H/I/J，改由後台政策決定（見 $lib/cards/regulation）。
+import { getCardPolicy, isCardMarkStandardLegal } from '$lib/cards/regulation';
+import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
 
 /**
  * Loads either:
  *  - the set index (list of all sets) when no `?set=` query is present
  *  - a single set's cards when `?set=SV10` is present
- *  - **ALL** combined cards across every H/I/J set when `?set=ALL` is present
+ *  - **ALL** combined cards across every standard-legal set when `?set=ALL` is present
  *    (virtual set — v2.29)
  *
  * Card JSONs live under static/cards/*.json, fetched at runtime.
@@ -35,8 +38,14 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
 
     // Fetch every set's cards in parallel. Individual set failures are
     // tolerated — one broken file shouldn't bomb the whole ALL view.
-    // v4.77/v4.9：ALL = 標準環境合併（H/I/J）；M5（深淵之瞳）已於 v4.9 改 regulationMark 為 J，自然納入此 filter
-    const standardSets = sets.filter((s) => s.regulationMark === 'H' || s.regulationMark === 'I' || s.regulationMark === 'J');
+    // v4.77/v4.9：ALL = 標準環境合併；M5（深淵之瞳）已於 v4.9 改 regulationMark 為 J，自然納入此 filter
+    // ⭐⭐⭐ v6.340：容許的標改由後台政策決定（原本三個字串寫死 H/I/J）——
+    //   站長「明年只要把 H 的容許關掉就好」的承諾，這一頁也要跟著兌現，
+    //   否則賽季換了之後「全部」虛擬卡包還是舊的 H/I/J，K 標卡包一張都進不來。
+    //   ⚠ loader 自己擋 SSR（伺服器端／預先渲染時直接回程式內建值），所以這裡 await 是安全的，
+    //     而且整個分頁只會真的讀一次（10 分鐘 TTL ＋ 負快取）。
+    await loadCardPolicyOnce();
+    const standardSets = sets.filter((s) => isCardMarkStandardLegal(s.regulationMark));
     const results = await Promise.all(
       standardSets.map(async (s) => {
         try {
@@ -54,7 +63,7 @@ export async function load({ fetch, url }: { fetch: typeof globalThis.fetch; url
     return {
       mode: 'set' as const,
       setCode: 'ALL',
-      setName: '全部 H / I / J 卡牌',
+      setName: `全部 ${getCardPolicy().allowedMarks.join(' / ')} 卡牌`,
       cards,
       sets,  // v2.184：給 modal foot 顯示「出自於卡包【XXX】」用
     };

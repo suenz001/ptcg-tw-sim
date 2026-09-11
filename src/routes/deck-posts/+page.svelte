@@ -18,10 +18,18 @@
   import { newDeck, upsertDeck, loadDecks } from '$lib/decks/storage';
   import { syncDeckToCloud } from '$lib/decks/cloud';
   import { validateDeck } from '$lib/decks/validation';
+  // ⭐ v6.340：這一頁也會跑 validateDeck。不載政策的話，玩家從外部連結直接開公布欄時
+  //   會拿程式內建政策判定 ⇒ 出現「公布欄說合法、牌組編輯器說不合法」的分裂。
+  //   ⚠ 刻意**不**放進 +layout：首頁在 v6.306 特地做成 0 次 Firestore 讀取，不能被這條打回去。
+  import { loadCardPolicyOnce } from '$lib/cards/policy-loader';
   import type { Deck } from '$lib/decks/types';
   import { VERSION } from '$lib/version';
   import { auth } from '$lib/firebase';
   import { onAuthStateChanged, type User } from 'firebase/auth';
+
+  // ⭐ v6.340：載入後台政策（同一個分頁只會真的讀一次；讀不到就維持程式內建值）。
+  //   ⚠ 公布欄的合法性顯示是玩家點開牌組時才算，那時候政策早就到了。
+  void loadCardPolicyOnce();
   // ⚠ 留言載入失敗時「保留上一份好資料」一律走 v6.177 的中央述詞，不另寫一套、也不清空。
   import { adoptOrKeep } from '$lib/ui/stale-keep';
 

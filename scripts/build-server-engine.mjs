@@ -26,6 +26,11 @@ export * from '$lib/tournament/swiss';
 //     （v0.88／v0.93 的 classifyDeck 就是這個教訓）。validation.ts 只 import 型別、
 //     零 runtime 依賴，可以安全打包進來。
 export { validateDeck } from '$lib/decks/validation';
+// ⭐⭐⭐ v6.340 卡牌政策（哪些標可打／哪些卡包暫不開放）：
+//   錦標賽伺服器跑的是**同一支** validateDeck，所以它也必須能套用後台設定，
+//   否則站長把某個標關掉之後，前端說不合法、伺服器照樣放行 ＝ 前後端分裂。
+//   ⚠ 判準本身仍然只有一份（regulation.ts）；這裡只是把 setter 開出去。
+export { setCardPolicy, getCardPolicy, resetCardPolicy, DEFAULT_CARD_POLICY } from '$lib/cards/regulation';
 `);
 await build({
   entryPoints: [ENTRY],

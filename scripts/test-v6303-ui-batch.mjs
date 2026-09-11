@@ -480,7 +480,19 @@ await T('H3 ⭐ 沒有動到不該動的檔：oracle-admin/server_admin_patch.js
   if (!hasHistory) { shallowSkip('v6303 H3 server_admin_patch.js 與 BASE 逐位元比對', '需要歷史 commit'); skipped.push('H3（淺複製）'); return; }
   const b = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
   assert.ok(b.ok, '讀不到 BASE 的 server_admin_patch.js');
-  assert.strictEqual(rd(join(ROOT, 'oracle-admin/server_admin_patch.js')), b.out.replace(/\r\n/g, '\n'), '⚠⚠ 本版不該動伺服器補丁');
+  // ⚠ v6.340（Rule 40）：這一條原本是**整檔逐字** pin，等於「以後誰都不准動伺服器補丁」——
+  //   那不是它的意圖（意圖是「**v6.303 這個純 UI 版**不該動伺服器」）。
+  //   依 repo 既有慣例（v6.267／v6.270／v6.280／v6.310／v6.334）改成哨兵剝除：
+  //   後續版本的合法新增用 `// >>> vNNNN-xxx` … `// <<< vNNNN-xxx` 框起來，
+  //   剝掉之後仍必須逐字等於 BASE；⭐ 並斷言「剝除器真的有剝到東西」，
+  //   否則日後哨兵被刪掉，剝除器會靜默變成 no-op、這一條又變回整檔 pin。
+  const SAP_RAW = rd(join(ROOT, 'oracle-admin/server_admin_patch.js'));
+  const SAP_STRIPPED = SAP_RAW.replace(/[ \t]*\/\/ >>> v\d+-[\w-]+[\s\S]*?\/\/ <<< v\d+-[\w-]+\n/g, '');
+  assert.ok(SAP_STRIPPED !== SAP_RAW,
+    '⚠ 剝除器過期了：server_admin_patch.js 裡一組 // >>> vNNNN-xxx … // <<< vNNNN-xxx 哨兵都沒有。'
+    + '若確實沒有任何後續版本動過這個檔，請把這一條改回整檔逐字比對。');
+  assert.strictEqual(SAP_STRIPPED, b.out.replace(/\r\n/g, '\n'),
+    '⚠⚠ 伺服器補丁在哨兵以外的地方被動到了（本版不該動）');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

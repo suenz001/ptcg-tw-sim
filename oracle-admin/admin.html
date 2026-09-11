@@ -389,6 +389,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div class="tab" data-tab="monitor" onclick="switchTab('monitor')">📡 監控</div>
     <div class="tab" data-tab="deck-rules" onclick="switchTab('deck-rules')">🎴 牌組原型</div>
     <div class="tab" data-tab="changelog" onclick="switchTab('changelog')">📋 更新記錄</div>
+      <div class="tab" data-tab="card-policy" onclick="switchTab('card-policy')">🗂️ 卡包與賽季</div>
   </div>
 
   <main>
@@ -404,6 +405,7 @@ table { width: 100%; border-collapse: collapse; background: #ffffff; border-radi
     <div id="tab-tournament-stats" class="tab-content" style="display:none;"></div>
     <div id="tab-deck-rules" class="tab-content" style="display:none;"></div>
     <div id="tab-changelog" class="tab-content" style="display:none;"></div>
+    <div id="tab-card-policy" class="tab-content" style="display:none;"></div>
     <div id="tab-monitor" class="tab-content" style="display:none;"></div>
   </main>
 </div>
@@ -1821,6 +1823,7 @@ window.loadActive = function(forceRefresh = false) {
   else if (currentTab === 'broadcast') p = loadBroadcastAdmin();  // v1.17 系統廣播設定
   else if (currentTab === 'deck-rules') p = loadDeckRules();  // v1.51 牌組原型規則
   else if (currentTab === 'changelog') p = loadChangelogAdmin();  // 首頁更新記錄編輯
+  else if (currentTab === 'card-policy') p = loadCardPolicyAdmin();  // v6.340 卡包與賽季容許
   else if (currentTab === 'tournament') p = loadTournamentAdmin();  // 錦標賽管理
   else if (currentTab === 'tournament-stats') p = loadTournamentStats(forceRefresh);  // 賽事統計
   else if (currentTab === 'monitor') p = loadMonitor();  // v1.67 對戰連線監控
@@ -1876,6 +1879,142 @@ async function loadChangelogAdmin() {
       document.getElementById('cl-html').value = '';
       st.textContent = '✅ 已清空（恢復程式內建）'; st.style.color = '#5c5';
     } catch(e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
+  };
+}
+
+// ── ⭐⭐⭐ v6.340 卡包與賽季容許（寫 Firestore config/cardPolicy）────────────────
+//   玩家端（src/lib/cards/policy-loader.ts）與**錦標賽伺服器**（server_admin_patch.js）
+//   讀的是同一份文件 ⇒ 不會出現「前端說不合法、伺服器說合法」的分裂。
+//   ⚠ 兩邊都是 fail-closed：讀不到／格式不合格 ⇒ 用程式內建的 H/I/J ＋ M6a 鎖住。
+const CARD_POLICY_ALL_MARKS = ['A','B','C','D','E','F','G','H','I','J','K'];
+const CARD_POLICY_DEFAULT = { allowedMarks: ['H','I','J'], lockedSets: ['M6a'] };
+async function loadCardPolicyAdmin() {
+  const el = document.getElementById('tab-card-policy');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px;color:#aaa;">載入中…</div>';
+
+  let policy = null;
+  try {
+    const snap = await getDoc(doc(dbF, 'config', 'cardPolicy'));
+    if (snap.exists()) {
+      const d = snap.data() || {};
+      policy = {
+        allowedMarks: Array.isArray(d.allowedMarks) ? d.allowedMarks.map(String) : null,
+        lockedSets: Array.isArray(d.lockedSets) ? d.lockedSets.map(String) : null,
+      };
+    }
+  } catch (e) { /* 沒設定過 ⇒ 用程式內建 */ }
+  const curMarks = new Set((policy && policy.allowedMarks) || CARD_POLICY_DEFAULT.allowedMarks);
+  const curLocked = new Set((policy && policy.lockedSets) || CARD_POLICY_DEFAULT.lockedSets);
+  const isOverride = !!(policy && policy.allowedMarks && policy.lockedSets);
+
+  let sets = [];
+  try { sets = await _fetchCardJson(CARDS_BASE + '/index.json'); } catch (e) { sets = []; }
+  sets = (sets || []).slice().sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+
+  const markBoxes = CARD_POLICY_ALL_MARKS.map(function (m) {
+    return '<label style="display:inline-block;margin:0 14px 8px 0;white-space:nowrap;">'
+      + '<input type="checkbox" class="cp-mark" value="' + m + '"' + (curMarks.has(m) ? ' checked' : '') + '> '
+      + m + ' 標</label>';
+  }).join('');
+
+  // ⚠⚠ 後台只替 index.json 裡的卡包畫 checkbox。若 lockedSets 含有清單外的代號（站長手打的），
+  //   重整後面板上完全看不出它被鎖著，而下一次儲存（勾選 ∪ extra）會把它**靜默解鎖**。
+  //   ⇒ 把清單外的代號預填回文字框。
+  const knownCodes = new Set((sets || []).map(function (s) { return String(s.code); }));
+  const extraLocked = [...curLocked].filter(function (c) { return !knownCodes.has(c); });
+  const setBoxes = sets.length === 0
+    ? '<div style="color:#f66;">⚠ 讀不到卡包清單（' + escapeHtml(CARDS_BASE) + '/index.json）——'
+      + '可以先用下面的文字框直接輸入卡包代號（逗號分隔）。</div>'
+    : sets.map(function (s) {
+        const code = String(s.code);
+        return '<label style="display:inline-block;margin:0 14px 8px 0;white-space:nowrap;">'
+          + '<input type="checkbox" class="cp-set" value="' + escapeHtml(code) + '"' + (curLocked.has(code) ? ' checked' : '') + '> '
+          + escapeHtml(code) + ' <span class="small muted">' + escapeHtml(String(s.name || '')) + '</span></label>';
+      }).join('');
+
+  el.innerHTML =
+    '<div style="max-width:1000px;padding:16px;">'
+      + '<h2 style="margin-top:0;">🗂️ 卡包與賽季容許</h2>'
+      + '<p style="color:#aaa;font-size:.9rem;line-height:1.7;">'
+        + '這裡設定的是<b>牌組編輯器與對戰的合法性</b>：沒有勾選的標、以及勾為「暫不開放」的卡包，'
+        + '玩家組進牌組時會被判定為不合格卡牌，也不能拿去對戰。<br>'
+        + '玩家端最慢 10 分鐘內生效（瀏覽器有 10 分鐘快取，<b>重新整理不會提前</b>；'
+        + '想立刻看到請用無痕視窗或清除網站資料）。<br>'
+        + '伺服器端每 60 秒同步一次，目前吃到這份設定的是<b>牌組公布欄的投稿驗證</b>；'
+        + '錦標賽的報名與開戰目前只檢查 60 張，那一側靠玩家端的檢查擋。<br>'
+        + '⚠ 讀不到這份設定時（離線／權限／格式壞掉），兩端都會退回程式內建值 '
+        + '（' + CARD_POLICY_DEFAULT.allowedMarks.join('/') + ' 標，'
+        + CARD_POLICY_DEFAULT.lockedSets.join('、') + ' 暫不開放），<b>不會變成全部放行</b>。'
+      + '</p>'
+      + '<p style="color:' + (isOverride ? '#5c5' : '#e9b949') + ';font-size:.9rem;">'
+        + (isOverride ? '● 目前套用的是這個後台設定。' : '● 目前<b>沒有</b>後台設定，全站使用程式內建值。按下儲存後才會改用後台設定。')
+      + '</p>'
+      + '<h3 style="margin-bottom:6px;">賽季（可用的標）</h3>'
+      + '<p style="color:#aaa;font-size:.86rem;margin-top:0;">明年賽季改成 I/J/K 時，把 H 的勾取消、把 K 勾起來即可。'
+        + '⚠ 至少要勾一個，全部取消不會被接受。沒勾的標會在卡牌資料庫落進【已退標】。</p>'
+      + '<div style="margin-bottom:18px;">' + markBoxes + '</div>'
+      + '<h3 style="margin-bottom:6px;">暫不開放組牌／對戰的卡包</h3>'
+      + '<p style="color:#aaa;font-size:.86rem;margin-top:0;">勾起來的卡包：玩家在卡牌資料庫<b>查得到</b>，但不能組進牌組、不能對戰。'
+        + '新卡包的卡效果還沒實裝完成之前請保持勾選。</p>'
+      + '<div style="margin-bottom:12px;max-height:260px;overflow:auto;border:1px solid #333;border-radius:5px;padding:10px;">' + setBoxes + '</div>'
+      + '<div style="margin-bottom:18px;">'
+        + '<label style="color:#aaa;font-size:.86rem;">另外手動加上的卡包代號（逗號分隔，通常留空；⚠ 區分大小寫）：</label><br>'
+        + '<input id="cp-extra" type="text" value="' + escapeHtml(extraLocked.join(',')) + '" style="width:100%;box-sizing:border-box;margin-top:4px;padding:6px;font-family:monospace;" placeholder="例如 M7,M7a">'
+      + '</div>'
+      + '<div>'
+        + '<button id="cp-save" style="padding:9px 24px;background:#5b8def;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:1rem;">💾 儲存（套用到全站）</button> '
+        + '<button id="cp-clear" style="padding:9px 18px;background:#888;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:.95rem;">🗑️ 清除設定（恢復程式內建）</button>'
+        + '<span id="cp-status" style="margin-left:14px;"></span>'
+      + '</div>'
+    + '</div>';
+
+  document.getElementById('cp-save').onclick = async function () {
+    const st = document.getElementById('cp-status');
+    const marks = Array.prototype.slice.call(document.querySelectorAll('.cp-mark'))
+      .filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    if (marks.length === 0) {
+      st.textContent = '❌ 至少要勾一個標（全部取消會讓全站每一張卡都不合法）'; st.style.color = '#f66';
+      return;
+    }
+    const locked = Array.prototype.slice.call(document.querySelectorAll('.cp-set'))
+      .filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+    const extra = String(document.getElementById('cp-extra').value || '')
+      .split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    const lockedSets = Array.from(new Set(locked.concat(extra)));
+    // ⚠ 勾錯／手滑的防線：把「這次會改變什麼」逐項列出來讓站長確認。
+    const before = { marks: [...curMarks], sets: [...curLocked] };
+    const diff = [];
+    for (const m of CARD_POLICY_ALL_MARKS) {
+      if (marks.indexOf(m) >= 0 && before.marks.indexOf(m) < 0) diff.push('＋ 開放 ' + m + ' 標');
+      if (marks.indexOf(m) < 0 && before.marks.indexOf(m) >= 0) diff.push('－ 關閉 ' + m + ' 標');
+    }
+    for (const s of lockedSets) if (before.sets.indexOf(s) < 0) diff.push('＋ 鎖住卡包 ' + s);
+    for (const s of before.sets) if (lockedSets.indexOf(s) < 0) diff.push('－ 開放卡包 ' + s);
+    if (diff.length === 0) {
+      if (!confirm('這次沒有任何變更，仍要儲存嗎？')) { st.textContent = ''; return; }
+    } else if (!confirm('確認要套用以下變更？\n\n' + diff.join('\n')
+      + '\n\n（玩家端最慢 10 分鐘、伺服器端最慢 60 秒生效）')) { st.textContent = ''; return; }
+    st.textContent = '儲存中…'; st.style.color = '#aaa';
+    try {
+      await setDoc(doc(dbF, 'config', 'cardPolicy'), { allowedMarks: marks, lockedSets: lockedSets, updatedAt: Date.now() });
+      st.textContent = '✅ 已儲存（玩家端最慢 10 分鐘、錦標賽伺服器最慢 60 秒生效）'; st.style.color = '#5c5';
+      // ⚠ 存檔成功後把「目前值」對齊：不然連按兩次儲存時，第二次的差異表會**重複列出**
+      //   同一批變更（站長會以為自己又改了一次）。
+      curMarks.clear(); marks.forEach(function (m) { curMarks.add(m); });
+      curLocked.clear(); lockedSets.forEach(function (s) { curLocked.add(s); });
+    } catch (e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
+  };
+  document.getElementById('cp-clear').onclick = async function () {
+    if (!confirm('確定清除？全站會恢復使用程式內建值（'
+      + CARD_POLICY_DEFAULT.allowedMarks.join('/') + ' 標，' + CARD_POLICY_DEFAULT.lockedSets.join('、') + ' 暫不開放）。')) return;
+    const st = document.getElementById('cp-status');
+    st.textContent = '清除中…'; st.style.color = '#aaa';
+    try {
+      // ⚠ 寫 null 而不是刪文件：兩端都只認「陣列」，其餘一律退回程式內建值 ⇒ 語意等同清除。
+      await setDoc(doc(dbF, 'config', 'cardPolicy'), { allowedMarks: null, lockedSets: null, updatedAt: Date.now() });
+      st.textContent = '✅ 已清除（恢復程式內建）'; st.style.color = '#5c5';
+    } catch (e) { st.textContent = '❌ ' + (e.message || e); st.style.color = '#f66'; }
   };
 }
 
@@ -3559,7 +3698,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.339';
+window.SITE_VERSION_HINT = '6.340';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

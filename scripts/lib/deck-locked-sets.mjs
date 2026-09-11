@@ -19,7 +19,9 @@
 //   ⇒ 這不是把洞放著：`test-v6333` 有一條斷言「**不在這份清單裡**的 live H/I/J 卡，
 //     未實裝招式／特性必須是 0」，把站上原本的不變量明確釘住（比原本更強）。
 //
-// ⚠⚠ 這份清單必須與 `src/lib/cards/regulation.ts` 的 `DECK_LOCKED_SETS` 永遠相同
+// ⚠⚠ 這份清單必須與 `src/lib/cards/regulation.ts` 的 `DEFAULT_CARD_POLICY.lockedSets` 永遠相同
+//   （v6.340 起 runtime 的「暫不開放」清單可由後台調整，但**程式內建預設值**仍然是這一份；
+//    守衛端枚舉卡效果時看的就是預設值 —— 後台臨時開放某個卡包不代表卡效果已經實裝）
 //   （一個給 runtime、一個給守衛；跨 .ts/.mjs 沒辦法共用同一個 export，
 //    同 version.ts 與 admin.html SITE_VERSION_HINT 的處理方式）。
 //   `test-v6333` 有逐項比對，漂移就會紅。

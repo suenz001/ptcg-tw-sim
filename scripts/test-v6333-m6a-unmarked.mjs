@@ -256,8 +256,10 @@ process.on('exit', () => { for (const p of [S, E, O]) { try { unlinkSync(p); } c
 writeFileSync(S, 'export const base="";export const assets="";');
 writeFileSync(E,
   "export { validateDeck, isStandardReprintLegal, isBasicEnergy } from './src/lib/decks/validation';\n"
-  + "export { isCardMarkStandardLegal, cardRegMarkFilterKey, NO_REG_MARK_KEY, DECK_LOCKED_SETS,"
-  + " isDeckLockedCard, filterDeckSelectable } from './src/lib/cards/regulation';\n");
+  + "export { isCardMarkStandardLegal, cardRegMarkFilterKey, NO_REG_MARK_KEY, ROTATED_REG_MARK_KEY,"
+  + " getCardPolicy, setCardPolicy, resetCardPolicy, DEFAULT_CARD_POLICY,"
+  + " regMarkFilterKeys, regMarkFilterLabel, isDeckLockedCard, filterDeckSelectable }"
+  + " from './src/lib/cards/regulation';\n");
 // ⚠⚠ Rule 41：**不可以讓整支 throw**。
 //   把 regulation.ts 還原成 BASE 時（＝中央述詞不存在），esbuild 會直接 build fail；
 //   若不接住，這支守衛會在第 (4) 節整個炸掉 —— 後面 8 條就永遠沒跑到，
@@ -379,8 +381,13 @@ T('Rule 38：H/I/J 合法性判準只准有一份（不得再有 local 複本）
   }
   ok(dup.length === 0, '這些檔案還留著自己的 H/I/J 複本：' + dup.join(', '));
   const reg = stripComments(readOr(join(ROOT, 'src/lib/cards/regulation.ts'), ''));
-  ok(/new Set\(\s*\[\s*'H'\s*,\s*'I'\s*,\s*'J'\s*\]\s*\)/.test(reg),
-    'regulation.ts 的唯一來源不見了 —— 上一條的判準會變成恆真');
+  // ⚠ v6.340（Rule 40）：唯一來源從 `STANDARD_MARKS = new Set([...])` 變成《卡牌政策》的
+  //   預設值 `DEFAULT_CARD_POLICY.allowedMarks`（可由後台覆寫，讀不到一律退回這一份）。
+  //   意圖沒變：這份唯一來源不見了的話，上一條「不得有 local 複本」就變成恆真。
+  ok(/DEFAULT_CARD_POLICY[\s\S]{0,300}?\[\s*'H'\s*,\s*'I'\s*,\s*'J'\s*\]/.test(reg),
+    'regulation.ts 的唯一來源（DEFAULT_CARD_POLICY.allowedMarks）不見了 —— 上一條的判準會變成恆真');
+  ok(/export function isCardMarkStandardLegal/.test(reg),
+    'regulation.ts 沒有 export isCardMarkStandardLegal —— 上一條要求各檔呼叫的中央述詞不存在');
   // 反安慰劑：LEGALITY_COPY 必須真的抓得到「合法性複本」，也必須放過「顯示順序」。
   ok(LEGALITY_COPY.some((re) => re.test("if (['H', 'I', 'J'].includes(c.regulationMark)) {")),
     '判準抓不到 `[H,I,J].includes(c.regulationMark)` 這種複本');
@@ -399,27 +406,57 @@ T('validation.ts 不得再出現 fail-open 的寫法', () => {
 
 console.log('(5) 卡牌資料庫的【無標】篩選鈕');
 
-T('分組 key：無標回 "none"，其餘回自己的標（站長裁定 A~F 不併進無標）', () => {
+T('分組 key：無標回 "none"、退標回 "rotated"、容許的標回自己（v6.340 站長改判）', () => {
   ok(typeof V.cardRegMarkFilterKey === 'function', 'regulation.ts 沒有 export cardRegMarkFilterKey');
   ok(V.NO_REG_MARK_KEY === 'none', 'NO_REG_MARK_KEY 應為 "none"');
+  ok(V.ROTATED_REG_MARK_KEY === 'rotated', 'ROTATED_REG_MARK_KEY 應為 "rotated"');
   for (const v of [undefined, null, '']) ok(V.cardRegMarkFilterKey(v) === 'none', JSON.stringify(v) + ' 應歸 none');
-  for (const v of ['G', 'H', 'I', 'J', 'A', 'F']) ok(V.cardRegMarkFilterKey(v) === v, v + ' 應回自己');
+  // ⭐⭐ v6.340 站長交辦：拿掉【G 標】鈕、加一顆【已退標】。
+  //   判準**不是**寫死 A~G，而是「有標、但不在目前容許清單裡」——
+  //   預設政策（H/I/J）之下，結果剛好等於 A~G。
+  for (const v of ['H', 'I', 'J']) ok(V.cardRegMarkFilterKey(v) === v, v + ' 是容許的標，應回自己');
+  for (const v of ['A', 'C', 'D', 'E', 'F', 'G']) ok(V.cardRegMarkFilterKey(v) === 'rotated', v + ' 應歸【已退標】');
   ok(V.cardRegMarkFilterKey('A') !== 'none',
     '舊標 A 被併進【無標】了 —— 站長裁定【無標】只收真的完全沒有標的');
+  // ⭐ 動態性（明年賽季的行為）：把 H 從容許清單拿掉之後，H 標卡要自動落進【已退標】。
+  //   這一段也順便證明 setCardPolicy／resetCardPolicy 真的會改變判準（不是安慰劑）。
+  // ⚠ 中間任何一條 ok() 丟出都會把「I/J 政策」洩漏給後面的測試（連鎖假紅、難以定位）
+  //   ⇒ 一定要 try/finally 還原。
+  try {
+    ok(V.setCardPolicy({ allowedMarks: ['I', 'J'], lockedSets: [] }) === true, 'setCardPolicy 應接受 I/J');
+    ok(V.cardRegMarkFilterKey('H') === 'rotated', '關掉 H 之後，H 標卡應自動落進【已退標】');
+    ok(V.isCardMarkStandardLegal('H') === false, '關掉 H 之後 H 標卡應判為不合法');
+  } finally {
+    V.resetCardPolicy();
+  }
+  ok(V.cardRegMarkFilterKey('H') === 'H', 'resetCardPolicy 之後應回到預設政策');
+  ok(V.isCardMarkStandardLegal('H') === true, 'resetCardPolicy 之後 H 標應恢復合法');
+  // ⚠ fail-closed：不合格的設定一律整包忽略，且**絕不可以**變成「全部放行」。
+  ok(V.setCardPolicy({ allowedMarks: [], lockedSets: [] }) === false, '空的 allowedMarks 應被拒絕（全部關掉＝全站癱瘓）');
+  ok(V.setCardPolicy({ allowedMarks: ['HH'], lockedSets: [] }) === false, '非單一字母的標應被拒絕');
+  ok(V.setCardPolicy(null) === false && V.setCardPolicy({}) === false, '缺欄位／null 應被拒絕');
+  ok(V.isCardMarkStandardLegal('H') === true && V.isCardMarkStandardLegal('G') === false,
+    '被拒絕的設定不可以改變現行政策');
 });
 
-T('/cards 的按鈕列：由左至右＝不限/無標/G標/H標/I標/J標', () => {
+T('/cards 的按鈕列：由左至右＝不限/無標/已退標/目前容許的標（v6.340 站長改判）', () => {
   const raw = readOr(join(ROOT, 'src/routes/cards/+page.svelte'), '');
   const src = stripComments(raw);
   ok(src.length > 5000, '讀不到 cards/+page.svelte');
-  const m = src.match(/REG_MARK_ORDER\s*:\s*RegMarkKey\[\]\s*=\s*\[([^\]]*)\]/);
-  ok(m, '找不到 REG_MARK_ORDER');
-  const order = m[1].split(',').map((s) => s.replace(/as RegMarkKey/, '').trim().replace(/^'|'$/g, ''));
-  ok(order[0] === 'NO_REG_MARK_KEY' || order[0] === 'none',
-    '第一顆（【不限】右邊）必須是【無標】，實得 ' + order[0]);
-  ok(order.slice(1).join(',') === 'G,H,I,J',
-    '後面四顆應為 G,H,I,J，實得 ' + order.slice(1).join(','));
-  ok(/none\s*:\s*'無標'/.test(src), 'REG_MARK_LABEL 沒有把 none 標成「無標」');
+  // ⚠ v6.340（Rule 40）：舊判準釘的是 `REG_MARK_ORDER: RegMarkKey[] = [...]` 這個**字面量**，
+  //   本版改成由中央 regMarkFilterKeys() 產生（賽季會變，寫死的順序一定會過期）
+  //   ⇒ 判準搬到行為層：驗中央函式的輸出，並要求這一頁確實走中央函式。
+  ok(/regMarkFilterKeys\(\)/.test(src), '/cards 沒有走中央的 regMarkFilterKeys()');
+  ok(/regMarkFilterLabel\(/.test(src), '/cards 沒有走中央的 regMarkFilterLabel()');
+  ok(!/'G 標'/.test(src), '【G 標】鈕還在 —— 站長交辦要用【已退標】取代');
+  const keys = V.regMarkFilterKeys();
+  ok(keys[0] === 'none', '第一顆（【不限】右邊）必須是【無標】，實得 ' + keys[0]);
+  ok(keys[1] === 'rotated', '第二顆必須是【已退標】，實得 ' + keys[1]);
+  ok(keys.slice(2).join(',') === 'H,I,J', '後面應為目前容許的 H,I,J，實得 ' + keys.slice(2).join(','));
+  ok(!keys.includes('G'), '【G 標】鈕應該已經被【已退標】取代');
+  ok(V.regMarkFilterLabel('none') === '無標', '【無標】鈕的文字不對');
+  ok(V.regMarkFilterLabel('rotated') === '已退標', '【已退標】鈕的文字不對');
+  ok(V.regMarkFilterLabel('H') === 'H 標', '標記鈕的文字不對');
   ok(/cardRegMarkFilterKey\(c\.regulationMark\)/.test(src), '篩選沒有走中央的 cardRegMarkFilterKey');
   ok(!/!c\.regulationMark\s*\|\|\s*!marks\.has/.test(src),
     '舊的 `!c.regulationMark || !marks.has(...)` 還在 —— 無標卡在任何鈕下都會被濾掉，'
@@ -613,9 +650,13 @@ T('⭐⭐ 零回歸：非 M6a 的 J 標卡照樣可以組進牌組（不得把�
   ok(bad.length === 0, j.setCode + ' 的卡不該被擋：' + JSON.stringify(bad));
 });
 
-await TA('⭐⭐ 兩份 DECK_LOCKED_SETS（regulation.ts / deck-locked-sets.mjs）必須逐項相同', () => {
-  ok(V.DECK_LOCKED_SETS instanceof Set, 'regulation.ts 沒有 export DECK_LOCKED_SETS');
-  const ts = [...V.DECK_LOCKED_SETS].sort();
+await TA('⭐⭐ 兩份「暫不開放」清單（regulation.ts 的 DEFAULT_CARD_POLICY / deck-locked-sets.mjs）必須逐項相同', () => {
+  // ⚠ v6.340（Rule 40）：觀測點從 `DECK_LOCKED_SETS` 搬到 `DEFAULT_CARD_POLICY.lockedSets` ——
+  //   runtime 的清單改成可由後台調整，但**程式內建預設值**仍然是守衛端要比對的那一份。
+  //   意圖沒變：兩份清單漂移就要紅。
+  ok(Array.isArray(V.DEFAULT_CARD_POLICY?.lockedSets), 'regulation.ts 沒有 export DEFAULT_CARD_POLICY.lockedSets');
+  ok(Array.isArray(V.getCardPolicy?.().lockedSets), 'regulation.ts 沒有 export getCardPolicy()');
+  const ts = [...V.DEFAULT_CARD_POLICY.lockedSets].sort();
   const mjs = [...LOCKED.DECK_LOCKED_SETS].sort();
   ok(ts.join(',') === mjs.join(','),
     'runtime 與守衛端的清單漂移了：regulation.ts=[' + ts + '] vs deck-locked-sets.mjs=[' + mjs + ']');

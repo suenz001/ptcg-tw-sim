@@ -585,7 +585,9 @@ const SG = await (async () => {
   const out = join(ROOT, 'scripts/.v6265-sync-guards.mjs');
   await build({ entryPoints: [join(ROOT, 'src/lib/game/sync-guards.ts')], outfile: out, bundle: true,
     format: 'esm', platform: 'neutral', target: 'node18', alias: { $lib: join(ROOT, 'src/lib') }, logLevel: 'error' });
-  const m = await import(out + '?t=' + Date.now());
+  // ⚠ Windows 絕對路徑（c:\…）不是合法的 ESM 指定符 ⇒ 一律轉成 file:// URL。
+  const { pathToFileURL } = await import('node:url');
+  const m = await import(pathToFileURL(out).href + '?t=' + Date.now());
   const { unlinkSync } = await import('node:fs'); try { unlinkSync(out); } catch { /* ignore */ }
   return m;
 })();

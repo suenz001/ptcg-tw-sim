@@ -3946,6 +3946,51 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const _fs = await import('fs');
       poolObj = JSON.parse(_fs.readFileSync(TDIR + '/tournament-pool.json', 'utf8'));
     }
+    // >>> v6340-card-policy
+    // ⭐⭐⭐ v6.340 卡牌政策：伺服器端與玩家端讀**同一份** Firestore `config/cardPolicy`。
+    //   ⚠ 目前吃到這份政策的伺服器端路徑：**牌組公布欄的一般投稿**（dpValidateDeck）。
+    //     ⚠⚠ 錦標賽的報名（/register、/register-and-checkin）與開戰（makeGame）**目前只檢查 60 張**、
+    //       完全沒有跑 validateDeck（`const bad = tournament ? null : dpValidateDeck(...)` 明確跳過），
+    //       所以錦標賽那一側的合法性目前仍靠前端。要不要把 dpValidateDeck 加到報名端點
+    //       由站長裁示（會影響已報名的玩家）。**不要**把這段註解寫成「錦標賽已經擋住了」。
+    //   ⚠ fail-closed：讀不到／格式壞掉 ⇒ 維持 bundle 內建的預設值（H/I/J ＋ M6a 鎖住），
+    //     **絕不放寬**。舊 bundle 沒有 setCardPolicy ⇒ 直接跳過（跑 update-tournament.bat 即可）。
+    //   ⚠ 跨 IIFE：adminDb 在 firebase-admin 的 then-callback 內（另一個 closure），這裡拿不到
+    //     ⇒ 自己再取一次 firestore handle（initializeApp 已在那邊做過，這裡不重複初始化）。
+    const CARD_POLICY_POLL_MS = 60 * 1000;
+    async function _syncCardPolicy() {
+      try {
+        if (!TENG || typeof TENG.setCardPolicy !== 'function') return;   // 舊 bundle
+        const _fa = (await import('firebase-admin')).default;
+        if (!_fa.apps.length) {                                          // 沒有金鑰／還沒 initializeApp
+          // ⚠ 開機時錦標賽 IIFE 很可能跑在 firebase-admin 的 initializeApp 之前
+          //   ⇒ 第一次同步會靜默略過。出個聲，免得以為政策有生效。
+          console.warn('[card-policy] firebase-admin 尚未就緒，這一輪同步略過（下一輪會再試）');
+          return;
+        }
+        const snap = await _fa.firestore().collection('config').doc('cardPolicy').get();
+        if (!snap.exists) { if (typeof TENG.resetCardPolicy === 'function') TENG.resetCardPolicy(); return; }
+        const d = snap.data() || {};
+        const def = TENG.DEFAULT_CARD_POLICY || { allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6a'] };
+        const ok = TENG.setCardPolicy({
+          allowedMarks: Array.isArray(d.allowedMarks) ? d.allowedMarks : def.allowedMarks,
+          lockedSets: Array.isArray(d.lockedSets) ? d.lockedSets : def.lockedSets,
+        });
+        if (!ok) console.warn('[card-policy] config/cardPolicy 內容不合格，維持現值');
+      } catch (e) {
+        console.warn('[card-policy] 同步失敗（維持現值）:', (e && e.message) || e);
+      }
+    }
+    // ⚠⚠ 不可以無條件 await：這一段在錦標賽 IIFE 的最前面，後面才註冊 /api/tournament 的路由。
+    //   Firestore 若不通，firebase-admin 會退避重試（總時間可到分鐘級）⇒ 整組錦標賽路由
+    //   在那段時間都是 404（Fable 5.1 對抗性審查抓到）。給它 5 秒，逾時就先走、讓計時器接手。
+    await Promise.race([
+      _syncCardPolicy(),
+      new Promise((r) => { const _t0 = setTimeout(r, 5000); if (_t0 && _t0.unref) _t0.unref(); }),
+    ]);
+    try { const _t = setInterval(_syncCardPolicy, CARD_POLICY_POLL_MS); if (_t && _t.unref) _t.unref(); } catch (e) { /* noop */ }
+    console.log('[card-policy] v6.340 已啟動：每 ' + (CARD_POLICY_POLL_MS / 1000) + ' 秒同步一次 config/cardPolicy');
+    // <<< v6340-card-policy
     const TPOOL = new Map(Object.entries(poolObj));
     const TROOMS = db.collection('tournamentRooms');
     // ⭐⭐⭐ v6.213【③ per-request 伺服器處理時間】—— **只加量測，不動任何業務邏輯**。

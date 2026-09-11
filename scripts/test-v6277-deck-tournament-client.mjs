@@ -786,7 +786,20 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     assert.ok(sitesBase.length >= 4, 'BASE 只掃到 ' + sitesBase.length + ' 個呼叫點 —— 掃描器壞了？');
     assert.deepStrictEqual(sitesNow, sitesBase, '/decks 載入路徑的網路呼叫點變了 ⇒ 載入請求數變了');
     assert.strictEqual(lpNow.effects, lpBase.effects, '$effect 數量變了（' + lpBase.effects + ' → ' + lpNow.effects + '）');
-    assert.strictEqual(lpNow.inits.length, lpBase.inits.length, '$state 數量變了');
+    // ⚠ v6.340（Rule 40）：原本是 `strictEqual(inits.length)`。本版在 /decks 加了兩個**純旗標**
+    //   `$state`（policyGen／regMarksTouched），跟載入成本無關，卻會讓這一條永遠紅。
+    //   直接放寬會留破口 ⇒ 改成「只准變多，而且新增的 $state 區塊裡不可以有任何網路 token」，
+    //   ⭐ 這一條只准變多、且新增的 $state 區塊裡不可以有任何網路 token。
+    //   ⚠ 舊判準（連同這一條）只看 `onMount + $state` 兩塊，**看不到模組頂層** ——
+    //     而 v6.340 的政策載入呼叫正是寫在頂層（因為 v6.267／v6.271 禁止 /decks 新增
+    //     $effect／onMount）。那個破口由**本版自己的守衛**
+    //     `scripts/test-v6340-card-policy.mjs` 的 C11 補上（基準是 v6.339，不是這裡的 v6.276）。
+    assert.ok(lpNow.inits.length >= lpBase.inits.length,
+      '$state 數量變少了（' + lpBase.inits.length + ' → ' + lpNow.inits.length + '）');
+    // ⚠ 這裡**不要**寫成 `inits.slice(base.length)`：inits 是依原始碼順序，新增的 $state
+    //   多半在檔案中段，slice 取到的是尾端那些**本來就有**的 —— 那是安慰劑
+    //   （Opus 5 對抗性審查抓到）。真正的保護是上面那條 `sitesNow === sitesBase`
+    //   （它看的是 mount ＋ **全部** inits），以及 test-v6340 的 C11（看模組頂層）。
   });
   await T('Gc ⭐⭐⭐【正對照 c】三個改動檔（剝註解後）的 Firestore 呼叫點與 BASE 逐字相同，且 BASE 等於已知答案表', () => {
     const base = { DK: fsCounts(bDK.out, 'DK'), GP: fsCounts(bGP.out, 'GP'), DS: fsCounts(bDS.out, 'DS') };
