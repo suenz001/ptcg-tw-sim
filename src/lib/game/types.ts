@@ -1117,7 +1117,15 @@ export interface GameState {
    * 可以轉接呼叫被複製招式的 POST（包含 pendingSelection 類附加效果）。
    * 必須在呼叫方自己的 POST 最末清空，否則下一招會重複觸發。
    */
-  pendingCopyAttackKey?: string;
+  /**
+   * v6.337：借招**堆疊**（原本是單一 `pendingCopyAttackKey`）。
+   *   借招可以鏈式（官方 PTCG_RULES L2276~2277），PRE 由外而內逐層 push，
+   *   POST 由 `copyAttackPostDispatch` 逐層 shift 回放 ——
+   *   舊的單一欄位會讓中間層的 POST 被整個跳過（例：揮指借高傲指令時，
+   *   「把翻開的卡放回牌庫並重洗」那段永遠不會執行）。
+   * ⚠ 這是單次 applyAction 內的暫時欄位（PRE 設、POST 清），不會跨同步保留。
+   */
+  pendingCopyAttackKeys?: string[];
   /**
    * v2.124：END_TURN 中途若有 self-KO（中毒/灼傷/雪妖女冰冷之帳），剩餘 checkup
    * 與 finalize（清旗標 + 切換玩家）需要等被 KO 方補完戰鬥位後才繼續。
@@ -1242,6 +1250,16 @@ export type GameAction =
        * 轉接到被複製招式的 PRE/POST。無傳值時 fallback 為自動挑最高傷害招式。
        */
       copyAttackChoice?: { pokeIid: string; attackIndex: number };
+      /**
+       * v6.337：借招**鏈**的第 2 層以後（`copyAttackChoice` 是第 1 層）。
+       * 借招可以借到另一張借招卡（官方 PTCG_RULES **L2276~2277** 明文允許），
+       * 這時單層的 `copyAttackChoice` 表達不了「第 2 層要選哪一招」——
+       * 舊版把上一層的 choice 原封往下傳，下一層拿它去索引**別隻寶可夢**的招式陣列
+       * （玩家回報：耀閃挑戰→謎擬Ｑ→扮晶晶酒 永遠只會用對手的第 1 招）。
+       * ⚠ 消費端一律走 `src/lib/game/copy-attack.ts` 的 `pickCopiedAttack()`，
+       *   不要自己讀這兩個欄位（IRON_RULES Rule 38：判準只能有一份）。
+       */
+      copyAttackChain?: { pokeIid: string; attackIndex: number }[];
       /**
        * v5.165 重試徽章 — 玩家選「保留前次結果」時，engine 用既定的擲幣結果
        * 重跑 ATTACK（透過此欄位 inject 給 regPre，避免重新 random）。

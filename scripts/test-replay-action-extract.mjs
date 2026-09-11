@@ -263,7 +263,10 @@ T('⭐⭐交叉驗證的判準必須是「有方向性」的（log ≥ 動作才
 // 這兩條措辭必須與引擎當前實作一致（引擎改字 → 這裡就該紅）
 T('⭐⭐抽取用的 log 措辭與引擎實作逐字一致', () => {
   const six = readFileSync(join(ROOT, 'src/lib/game/effects/cards/six_decks.ts'), 'utf8');
-  assert.ok(six.includes('暗黑底牌：使用 ${nCard.name} 的「${pickedAtk.name}」'),
+  // ⭐v6.337（Rule 40）：原本把整串**含變數名**的樣板字面量釘死，v6.337 把選招收斂到
+  //   中央管線、變數改名（nCard → pick.candidate）就誤紅。它要守的意圖是
+  //   「引擎寫出來的 log **措辭**沒變」，所以改成只釘措辭、變數名用 \${…} 萬用。
+  assert.ok(/暗黑底牌：使用 \$\{[^}]+\} 的「\$\{[^}]+\}」/.test(six),
     '引擎的暗黑底牌 log 措辭已改，抽取用的正則要同步更新');
   assert.ok(six.includes('交易：丟棄 ${joinCardNames(picks, pool)}'),
     '引擎的交易 log 措辭已改，抽取用的正則要同步更新');

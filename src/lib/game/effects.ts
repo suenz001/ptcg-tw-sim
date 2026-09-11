@@ -15,6 +15,9 @@ import { withAttackDamageTaken } from './effects/_shared'; // ⭐v6.256「受到
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂（【無】被招式傷害KO 獎賞-1）
 import { markDamageCounterMovedFrom } from './effects/_shared'; // v5.947 移動指示物非治療
 import { hasStatusInAnySlot, countSpecialConditions } from './effects/_shared'; // v5.834 跨三槽狀態讀取
+import { dispatchCopiedAttack } from './effects/_shared'; // ⭐v6.337 借招轉接唯一出口
+// ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
+import { copyAttackCandidates, pickCopiedAttack } from './copy-attack';
 
 import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
 import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
@@ -15506,52 +15509,27 @@ regPre('火箭隊的謎擬Ｑ|扮晶晶酒', (state, aIdx, pool, action) => {
     const oname = oppCard?.name ?? '?';
     return { state: addLog(state, `扮晶晶酒：${oname} 不是「太晶」寶可夢，無法扮演`, aIdx), damage: 0 };
   }
-  const atks = oppCard.attacks ?? [];
-  if (atks.length === 0) {
+  // ⭐ v6.337：候選枚舉改走中央 copyAttackCandidates（與 UI picker 同一份來源）
+  const _cands = copyAttackCandidates('火箭隊的謎擬Ｑ|扮晶晶酒', state, aIdx, pool);
+  if (_cands.length === 0) {
     return { state: addLog(state, `扮晶晶酒：${oppCard.name} 沒有可以扮演的招式`, aIdx), damage: 0 };
   }
-  // v3.873：先試 action.copyAttackChoice（玩家透過 UI 自選的招式 index）— 解決：
-  //   1) 啜泣（20）一直被自動挑最高 logic 蓋掉，永遠用不到
-  //   2) 借 激流水泵 時 picker 不開（key 不匹配） → option 永遠不觸發
-  // 無 copyAttackChoice（AI / 舊 state）→ fallback 自動挑印刷最高（v2.57 行為）。
-  const choice = action?.copyAttackChoice;
-  let picked: typeof atks[number];
-  let pickedDmg = 0;
-  const parseDmg = (s: string): number => {
-    const m = s.match(/^(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  };
-  if (choice && choice.attackIndex >= 0 && choice.attackIndex < atks.length) {
-    picked = atks[choice.attackIndex];
-    pickedDmg = parseDmg(picked.damage);
-  } else {
-    // fallback：挑印刷最高那招（全 0 退回第一招）
-    picked = atks[0];
-    pickedDmg = parseDmg(picked.damage);
-    for (let i = 1; i < atks.length; i++) {
-      const d = parseDmg(atks[i].damage);
-      if (d > pickedDmg) { picked = atks[i]; pickedDmg = d; }
-    }
+  // ⭐⭐⭐ v6.337：選招改走中央 pickCopiedAttack（全站唯一判準）。
+  //   ⚠ 這裡原本是 `if (choice && choice.attackIndex >= 0 && choice.attackIndex < atks.length)`
+  //     —— **完全不驗 choice.pokeIid**。借招鏈（呆呆王｜耀閃挑戰 → 火箭隊的謎擬Ｑ → 扮晶晶酒）
+  //     時，上一層「謎擬Ｑ 的第 0 招」被這裡當成「對手太晶寶可夢的第 0 招」用 ⇒
+  //     玩家永遠只能打到對手的第 1 招（玩家回報）。
+  //   中央判準要求 pokeIid 必須真的是**本層候選的持有者**，結構上擋死串味。
+  const _pick = pickCopiedAttack(_cands, action);
+  if (!_pick.candidate) {
+    return { state: addLog(state, `扮晶晶酒：${oppCard.name} 沒有可以扮演的招式`, aIdx), damage: 0 };
   }
-  // 被複製招式的 effectKey（與 engine.ts 的 effectKey 組法一致）
-  const copiedKey = `${oppCard.name}|${picked.name}`;
-  let s = addLog(state, `扮晶晶酒：扮演 ${oppCard.name} 的「${picked.name}」`, aIdx);
-  s = { ...s, pendingCopyAttackKey: copiedKey };
-
-  const copiedPre = ATTACK_PRE.get(copiedKey);
-  if (copiedPre) {
-    // 遞迴呼叫被複製招式 PRE — 傷害以 PRE 回傳為準（涵蓋 ×能量 / +條件 等動態計算）。
-    // 傳 action（含 discardedEnergyIids），好讓 PRE_DISCARD_CHOICE 類招式（激流水泵 等）拿到玩家挑的能量 iid。
-    const sub = copiedPre(s, aIdx, pool, action);
-    return {
-      state: sub.state,
-      damage: sub.damage,
-      skipWeakRes: sub.skipWeakRes,
-      skipDefEffects: sub.skipDefEffects,
-    };
-  }
-  // 被複製招式沒有註冊 PRE → 走 v2.57 舊路徑：解析印刷傷害
-  return { state: s, damage: pickedDmg };
+  const copiedKey = `${_pick.candidate.ownerName}|${_pick.candidate.attackName}`;
+  const s = addLog(state,
+    `扮晶晶酒：扮演 ${_pick.candidate.ownerName} 的「${_pick.candidate.attackName}」（${_pick.byPlayer ? '玩家選擇' : '自動挑印刷最高'}）`, aIdx);
+  // ⚠ 第 8 參 true＝**繼承**被借招式的 skipWeakRes —— 扮晶晶酒從 v3.873 起就是這個行為，
+  //   收斂時刻意保留，不在這一版偷偷改動傷害。
+  return dispatchCopiedAttack(s, aIdx, pool, copiedKey, _pick.candidate.damage, action, _pick.restChain, true);
 });
 
 // POST 轉接：engine 走完傷害施加後，查本招式的 POST → 這邊將 state.pendingCopyAttackKey

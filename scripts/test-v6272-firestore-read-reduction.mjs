@@ -19,7 +19,7 @@
  *   ・只捕捉 assert.AssertionError（其他例外一律讓它炸出來，不可被當成 PASS）；
  *   ・不 pin 死版本號當唯一判準（第九種安慰劑）。
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';   // v6.337：補掃工作樹的新增檔案
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'be43eb1e19e365fe086a0baea8e21c132a73d84b';   // v6.335（v6.336 的上一版）
+const PREV_SHA = '3b95c5dc6690da80149ad9375dc7422cf14e93b9';   // v6.336（v6.337 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -724,9 +724,23 @@ const PREV_SHA = 'be43eb1e19e365fe086a0baea8e21c132a73d84b';   // v6.335（v6.33
 // ⚠ v6.333 M6a「30th CELEBRATION」進卡庫（新檔 static/cards/M6a.json 不在此清單 ——
 //   這一條比的是「BASE 樹裡既有的檔案有沒有被動到」，新增檔案由 test-card-db-integrity 對帳）
 //   ＋ 無標卡不能組進牌組（regulation/validation/cardIndex/decks 頁）＋ /cards 新增【無標】鈕。
-// v6.336 只動守衛腳本（scripts/）與內部文件 ⇒ 玩家端唯一該變的就是版本號
+// v6.337 借招鏈中央管線：玩家端動到的檔案
 const PREV_ALLOWED = [
+  'src/lib/game/actions.ts',
+  'src/lib/game/copy-attack.ts',
+  'src/lib/game/effects.ts',
+  'src/lib/game/effects/_shared.ts',
+  'src/lib/game/effects/cards/m5_preview.ts',
+  'src/lib/game/effects/cards/six_decks.ts',
+  'src/lib/game/effects/cards/slowking_lucario_deck.ts',
+  'src/lib/game/effects/cards/v2680_i_wave18_copy_attacks.ts',
+  'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
+  'src/lib/game/types.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
@@ -743,6 +757,22 @@ T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一
     } catch { diff.push(p + '(刪除)'); continue; }
     if (cur !== sha) diff.push(p);
   }
+  // ⭐v6.337（Rule 25 掃描器盲點）：上面只走 PREV_SHA 的 ls-tree ⇒ **本版新增的檔案看不見**。
+  //   新增一個玩家端檔案同樣是「玩家端被動到」，補掃工作樹把它們也列進 diff（判準變嚴）。
+  const walk = (relDir) => {
+    const out = [];
+    const stack = [relDir];
+    while (stack.length) {
+      const d = stack.pop();
+      for (const ent of readdirSync(join(ROOT, d), { withFileTypes: true })) {
+        const rel = d + '/' + ent.name;
+        if (ent.isDirectory()) { if (ent.name !== 'node_modules' && ent.name !== '.svelte-kit') stack.push(rel); }
+        else if (ent.isFile()) out.push(rel);
+      }
+    }
+    return out;
+  };
+  for (const rel of [...walk('src'), ...walk('static')]) if (!base.has(rel)) diff.push(rel);
   assert.deepStrictEqual(diff.sort(), PREV_ALLOWED, '玩家端被動到了：' + diff.join(', '));
 });
 T('版本一致：version.ts = admin.html SITE_VERSION_HINT', () => {

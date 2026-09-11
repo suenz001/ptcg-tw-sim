@@ -1,5 +1,85 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.337 借招（複製他人招式）鏈：中央管線收斂
+
+BASE `3b95c5dc6690da80149ad9375dc7422cf14e93b9`（v6.336，遠端 main）。玩家回報：
+> 呆呆王【耀閃挑戰】→ 翻出火箭隊的謎擬Ｑ →【扮晶晶酒】學對手太晶寶可夢 多龍巴魯托ex 的招式時，
+> 會預設選取第 1 招【噴射頭擊】，無法選取第 2 招【幻影奇襲】。
+
+### 【零】真因：不是一張卡，是結構性缺口
+
+`action.copyAttackChoice` 是**單層** `{pokeIid, attackIndex}`，但借招可以**鏈式**
+（官方 `PTCG RULES/PTCG_RULES.md` **L2276~2277** 明文允許）。
+而全站 8 張借招卡**每一張都把同一個 action 原封往下傳、沒有任何一層清掉 choice**，
+且「怎麼讀 choice」的判準**各自手寫一份、驗證程度不一**：
+
+| 借招卡 | 驗 owner iid？ |
+|---|---|
+| 耀閃挑戰 / 欺詐 / 試著模仿 / 揮指 / 技能大盜 / 高傲指令 | ✅ 有 |
+| **扮晶晶酒** | ❌ **完全沒有**（只檢查 index 沒越界）← 玩家踩到的就是這一張 |
+| 暗黑底牌 | ⚠ 半套（驗 iid，不驗「N的」前綴，且對不上就直接失效不 fallback） |
+
+⇒ 耀閃挑戰驗過 `pokeIid === 牌庫頂.iid` ✅ 放行後，把同一個 `{謎擬Ｑ, 0}` 傳給扮晶晶酒，
+被它拿去索引**多龍巴魯托ex** 的招式陣列 ⇒ 永遠 index 0。
+
+### 【一】中央管線（新檔 `src/lib/game/copy-attack.ts`，只 import `./types`）
+
+判準各只有一份（IRON_RULES **Rule 38**）：
+
+1. `copyAttackCandidates(key, state, aIdx, pool, depth)` ——「**這一層可以借哪些招**」的唯一來源，
+   規則層與 UI picker 共用 ⇒ 結構上保證「畫面看得到的 ＝ 能勾的 ＝ 規則層認的」。
+   卡面條件（太晶／N的／擁有規則的寶可夢除外／手牌為 0／同名招排除）全部收斂在這裡。
+2. `pickCopiedAttack(candidates, action)` ——「**怎麼從 action 取出屬於本層的選擇**」的唯一判準。
+   鏈首的 `(pokeIid, attackIndex)` 必須**真的落在本層候選裡**；上一層的選擇其 `pokeIid` 是上一層的
+   持有者，**結構上不可能**命中本層候選 ⇒ 串味在這裡被擋死，不再靠每張卡各自記得寫一行檢查。
+   對不上就**整條鏈丟掉**走 fallback（fail-safe：深層不會再串一次味）。
+3. `_shared.dispatchCopiedAttack()` —— 轉接被借招式的**唯一出口**：推堆疊、把**剩餘的鏈**裝回 action
+   再往下傳（原本是把同一個 action 原封傳下去，就是本次的 bug）、`skipWeakRes` 固定 false。
+
+順手刪掉 `pickHighestAttack` 的**兩份逐字複本**（v2680 / v2760）。
+
+### 【二】順帶修好的三個同族問題
+
+1. **中間層的 POST 被整個跳過** —— `pendingCopyAttackKey` 是單一槽位，鏈式時 PRE 由外而內覆寫，
+   POST 會直接跳到最深那一層。實例：「皮可西｜揮指」借「高傲指令」時，
+   卡面要求的「把翻到正面的卡放回牌庫並重洗」**永遠不會執行**。改成 `pendingCopyAttackKeys` 堆疊逐層回放。
+2. **高傲指令排掉了官方允許的選項** —— 舊碼兩條路徑都把「火箭隊的貓老大ex|高傲指令」自己排除，
+   但 **L2276~2277** 明文「翻到的 10 張裡有貓老大ex，**可以**選它的高傲指令來使用」。
+   改由 `COPY_ATTACK_MAX_DEPTH` 界定遞迴，不再靠排除自己。
+3. **暗黑底牌**：UI 會把「暗黑底牌」自己畫出來讓人點，規則層卻回 damage 0「無法複製自己」⇒ 卡片白白浪費。
+   候選收斂後 UI 不會再畫出來。另外 `if (choice)` 分支不驗「N的」前綴、對不上就直接失效（不 fallback）也一併修掉。
+
+另外補一條：stepper 型招式（波盪水｜蜿蜒割裂）的 confirm 鈕原本**連第 1 層的 `copyAttackChoice` 都沒帶**，
+借到它時玩家的借招選擇會在那一步整個丟失。
+
+### 【三】UI：`advanceBorrowChain()` 是唯一的遞迴推進點
+
+所有 picker 的 resolve 都匯進 `dispatchBorrowedAttack` → `advanceBorrowChain`：
+借到的招式本身若也是借招卡就自動再開一段 picker（沿用既有 `rocketCommandPicker` 的 modal，零新 CSS），
+只有一個候選時自動帶入、0 個候選時直接 dispatch 讓 engine 出 fail log，並受 `COPY_ATTACK_MAX_DEPTH` 限制。
+picker 新增 `allowed`（來自中央候選）⇒ 揮指/欺詐/試著模仿 的 modal 不會再畫出「對手同名的那一招」。
+
+### 【四】⚠⚠⚠ 上線順序（錦標賽是伺服器權威）
+
+錦標賽的 `ATTACK` action 是**整包送到 VM 上的 `server-engine.cjs` 重跑**，client 連樂觀預測都沒有
+（`OPTIMISTIC_ACTION_TYPES` 不含 ATTACK）。舊 server 收到 `copyAttackChain` **不會報錯，而是靜默忽略**
+⇒ 走 fallback「自動挑印刷傷害最高」，玩家在錦標賽選的招會被無聲換掉 —— 比報錯更糟。
+⇒ **push → 先跑 `update-tournament.bat`（它自己 `git reset --hard origin/main` 再重建 bundle）→ 確認 pm2 起來 → 才讓玩家打錦標賽。**
+休閒連線對戰沒有這個問題（只同步 GameState，不送 action）。
+
+### 【五】守衛 `scripts/test-v6337-copy-attack-chain.mjs`
+
+【A】行為端跑完整 `applyAction`：第 2 層選 index 0 ⇒ 70、選 index 1 ⇒ 200 且開 6 指示物 picker、
+無鏈時 fallback ⇒ 200。
+⚠⚠ **Rule 39 實例**：「第 2 層選 index 0 ⇒ 70」這一條在 BASE 上**也是綠的** ——
+BASE 的串味剛好也給出 70（它把第 1 層的 index 0 當成對手的第 0 招）。
+⇒ 真正能判別的是「選第 2 招」「無鏈 fallback」「中間層 POST」三條，已寫進守衛註解。
+【B】中央判準單元測（鏈首對不上 ⇒ 不採用且整條鏈丟掉）。
+【C】候選枚舉的規則正確性，含兩條官方裁定：**L2059~2060**（道具賦予的招式不算「持有的招式」⇒ 只讀
+`card.attacks`，不可用 `getEffectiveAttacks`）與 **L2276~2277**（高傲指令可以選另一張貓老大ex 的高傲指令）。
+【D】中間層 POST 逐層回放（用 v6.336 的 `seeded-rng` 讓重洗判定變確定性）。
+【E】HEAD-FAIL vs BASE，含 Rule 41 哨兵與「逐條列出紅了哪幾條」。
+
 ## v6.336 修掉兩支「會隨機假紅」的守衛（不影響玩家端，首頁不公告）
 
 BASE `be43eb1e19e365fe086a0baea8e21c132a73d84b`（v6.335，遠端 main）。

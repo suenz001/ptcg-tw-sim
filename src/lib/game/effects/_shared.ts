@@ -21,6 +21,8 @@ import { CLEAR_ON_EXIT_FLAGS } from '../instance-flags';
 import { isMegaExCard, isBasicPokemonOnField } from '../selection-filter';
 // ⭐v6.213 sameEvoName 的名稱正規化唯一來源（stage2-index 是 leaf，只 import type，無循環）
 import { normalizeEvoVariantName } from '../stage2-index';
+// ⭐v6.337 借招（複製他人招式）中央管線；copy-attack 只 import ../types，無循環
+import { withCopyAttackChain } from '../copy-attack';
 import type {
   GameState, PlayerState, CardInstance, PendingSelection, GameAction,
   SpecialCondition,
@@ -168,12 +170,62 @@ export const ATTACK_POST = new Map<string, AttackPostFn>();
 export function copyAttackPostDispatch(
   state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, action?: GameAction,
 ): GameState {
-  const key = state.pendingCopyAttackKey;
-  const cleared: GameState = { ...state, pendingCopyAttackKey: undefined };
-  if (!key) return cleared;
+  // ⭐ v6.337：改成**逐層回放**（原本是單一 pendingCopyAttackKey）。
+  //   借招鏈時 PRE 由外而內 push，POST 這裡 shift 一層、呼叫那一層的 POST；
+  //   若那一層自己也是借招卡，它的 POST 就是本函式 ⇒ 再 shift 一層，自然遞迴。
+  //   ⚠ 舊寫法（單一欄位）在鏈式時會直接跳到**最深那一層**，把中間層的 POST 整個吃掉——
+  //     例如「皮可西｜揮指」借到「火箭隊的貓老大ex｜高傲指令」時，
+  //     卡面要求的「將翻到正面的卡放回牌庫並重洗」永遠不會執行。
+  const keys = state.pendingCopyAttackKeys ?? [];
+  if (keys.length === 0) return { ...state, pendingCopyAttackKeys: undefined };
+  const [key, ...rest] = keys;
   const copiedPost = ATTACK_POST.get(key);
-  if (!copiedPost) return cleared;
-  return copiedPost(cleared, aIdx, pool, action);
+  // 這一層沒有註冊 POST ⇒ 鏈就到此為止（剩下的層級沒有回放路徑，整條清掉）
+  if (!copiedPost) return { ...state, pendingCopyAttackKeys: undefined };
+  const s: GameState = { ...state, pendingCopyAttackKeys: rest.length > 0 ? rest : undefined };
+  return copiedPost(s, aIdx, pool, action);
+}
+
+/**
+ * ⭐⭐⭐ v6.337：借招家族「轉接到被借招式」的**唯一出口**（PRE 階段）。
+ *
+ * 它做三件事，缺一不可：
+ *   1. 把 `copiedKey` **push 進借招堆疊**，供 `copyAttackPostDispatch` 逐層回放 POST。
+ *   2. 把**剩餘的借招鏈**（`restChain`）重新裝回 action 再往下傳。
+ *      ⚠ 舊寫法是把**同一個 action 原封往下傳** —— 那正是玩家回報的 bug：
+ *        上一層的 `{謎擬Ｑ.iid, 0}` 被下一層拿去索引多龍巴魯托ex 的招式陣列。
+ *   3. 弱點／抗性一律以**使用者**的屬性計算 ⇒ `skipWeakRes` 固定 false
+ *      （Bug #18 的既有結論：不繼承被借招式的 skipWeakRes）。
+ */
+export function dispatchCopiedAttack(
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>,
+  copiedKey: string, fallbackDamage: number,
+  action: Extract<GameAction, { type: 'ATTACK' }> | undefined,
+  restChain: { pokeIid: string; attackIndex: number }[],
+  /**
+   * v6.337：是否**繼承**被借招式的 skipWeakRes。
+   * ⚠ 預設 false（Bug #18 的既有結論：弱抗以使用者的屬性計算），8 張借招卡裡
+   *   只有「火箭隊的謎擬Ｑ｜扮晶晶酒」從 v3.873 起就是繼承的 —— 收斂時如果一律寫死 false
+   *   就等於偷偷改了它的傷害。這裡用明確的參數保留原狀，要不要統一由站長裁定。
+   */
+  inheritSkipWeakRes = false,
+): { state: GameState; damage: number; skipWeakRes: boolean | undefined; skipDefEffects?: boolean } {
+  const s: GameState = {
+    ...state,
+    pendingCopyAttackKeys: [...(state.pendingCopyAttackKeys ?? []), copiedKey],
+  };
+  const next = withCopyAttackChain(action, restChain);
+  const copiedPre = ATTACK_PRE.get(copiedKey);
+  if (copiedPre) {
+    const sub = copiedPre(s, aIdx, pool, next);
+    return {
+      state: sub.state, damage: sub.damage,
+      skipWeakRes: inheritSkipWeakRes ? sub.skipWeakRes : false,
+      skipDefEffects: sub.skipDefEffects,
+    };
+  }
+  // 被借招式沒有註冊 PRE ⇒ 用印刷傷害
+  return { state: s, damage: fallbackDamage, skipWeakRes: false };
 }
 
 export function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn); }

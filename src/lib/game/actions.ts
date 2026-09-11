@@ -27,6 +27,8 @@ export const GameActions = {
                        attackIndex: number,
                        discardedEnergyIids?: string[],
                        copyAttackChoice?: { pokeIid: string; attackIndex: number },
+                       // v6.337：借招鏈第 2 層以後（借招借到借招，官方 L2276~2277）
+                       copyAttackChain?: { pokeIid: string; attackIndex: number }[],
                      ): GameAction =>
                        ({
                          type: 'ATTACK',
@@ -38,6 +40,7 @@ export const GameActions = {
                          //   - [] / [...] 都保留 → engine 用 length 區分 yes/no
                          ...(discardedEnergyIids !== undefined && { discardedEnergyIids }),
                          ...(copyAttackChoice && { copyAttackChoice }),
+                        ...(copyAttackChain && copyAttackChain.length > 0 && { copyAttackChain }),
                        }),
   takePrizes:        (count: number, playerIdx: 0 | 1, senderIdx?: 0 | 1): GameAction =>
                        ({ type: 'TAKE_PRIZES', count, playerIdx,

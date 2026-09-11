@@ -7,7 +7,9 @@
  */
 
 import type { CardInstance, GameAction, GameState } from '../../types';
-import { copyAttackPostDispatch } from '../_shared';
+import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
+// ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
+import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import type { Card } from '$lib/cards/types';
 import { RULE_BOX_SUBTYPES } from '../../types';
 import {
@@ -50,6 +52,8 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
   }
   const top = p.deck[0];
   const rest = p.deck.slice(1);
+  // ⭐ v6.337：候選必須在「丟棄之前」對 deck[0] 取樣（與 UI 的 peek 同一個來源）
+  const _cands = copyAttackCandidates('呆呆王|耀閃挑戰', state, aIdx, pool);
   const topCard = pool.get(top.cardId);
   const topName = topCard?.name ?? '?';
   // Step 1: 丟牌庫頂 1 張到棄牌區
@@ -80,35 +84,17 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
       damage: 0,
     };
   }
-  // Step 5（v3.895 重寫）：選擇 borrowed 招式
-  //   - 優先讀 action.copyAttackChoice（玩家在 UI brightChallengePicker 選的招式）
-  //     · pokeIid 必須等於牌庫頂 top.iid（防 race — 若玩家從開 picker 到 confirm 之間 deck top 變了，fallback 自動挑）
-  //     · attackIndex 為玩家選的招式 index（0 ≤ idx < atks.length）
-  //   - fallback（AI / 舊 state / pokeIid mismatch / index 越界）：自動挑印刷傷害最高那招
-  const choice = action?.copyAttackChoice;
-  let pickedIdx = -1;
-  let useChoice = false;
-  if (choice && choice.pokeIid === top.iid && choice.attackIndex >= 0 && choice.attackIndex < atks.length) {
-    pickedIdx = choice.attackIndex;
-    useChoice = true;
-  } else {
-    // 自動挑印刷傷害最高（同扮晶晶酒 v2.57 fallback precedent）
-    const parseDmg = (dmgStr: string): number => {
-      const m = dmgStr.match(/^(\d+)/);
-      return m ? parseInt(m[1], 10) : 0;
-    };
-    let bestDmg = parseDmg(atks[0].damage);
-    pickedIdx = 0;
-    for (let i = 1; i < atks.length; i++) {
-      const d = parseDmg(atks[i].damage);
-      if (d > bestDmg) { pickedIdx = i; bestDmg = d; }
-    }
+  // Step 5（v6.337 改走中央管線）：選擇 borrowed 招式
+  //   判準只有一份：`pickCopiedAttack` —— 鏈首的 (pokeIid, attackIndex) 必須真的落在本層候選裡。
+  //   fallback（AI / 舊 client / 鏈對不上）：自動挑印刷傷害最高那招。
+  const _pick = pickCopiedAttack(_cands, action);
+  if (!_pick.candidate) {
+    return { state: addLog(s, `耀閃挑戰：「${topName}」沒有招式可選，招式效果失敗`, aIdx), damage: 0 };
   }
-  const picked = atks[pickedIdx];
-  const copiedKey = `${topCard.name}|${picked.name}`;
-  const pickMode = useChoice ? '玩家選擇' : '自動挑印刷最高傷害';
+  const picked = atks[_pick.candidate.attackIndex];
+  const copiedKey = `${_pick.candidate.ownerName}|${_pick.candidate.attackName}`;
+  const pickMode = _pick.byPlayer ? '玩家選擇' : '自動挑印刷最高傷害';
   s = addLog(s, `耀閃挑戰：選擇「${topName}」的「${picked.name}」作為這個招式使用（${pickMode}）`, aIdx);
-  s = { ...s, pendingCopyAttackKey: copiedKey };
   // Step 6: 遞迴該招式的 regPre
   //   v3.72 QA fix：若 borrowed 招式有 binary-yes-no PRE_DISCARD_CHOICE（「若希望」類），
   //     borrowed attack 的 picker 不會跳（attack key 是耀閃挑戰不是 borrowed），
@@ -125,9 +111,8 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
       discardedEnergyIids: ['__yaoshan_borrowed_yes__'],
     };
   }
-  const copiedPre = ATTACK_PRE.get(copiedKey);
-  if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, dispatchAction);
+  {
+    const sub = dispatchCopiedAttack(s, aIdx, pool, copiedKey, _pick.candidate.damage, dispatchAction, _pick.restChain);
     // Bug fix (#18): 複製招式時，弱點/抗性必須以使用者（呆呆王＝超屬性）的屬性計算
     // 不繼承被複製招式的 skipWeakRes — 否則若複製到「不計算弱點」招式會錯誤跳過弱點
     return {
@@ -137,12 +122,8 @@ regPre('呆呆王|耀閃挑戰', (state, aIdx, pool, action) => {
       skipDefEffects: sub.skipDefEffects,
     };
   }
-  // 無註冊 regPre → 退回印刷傷害（解析 picked.damage 數字）
-  const parseDmgFallback = (dmgStr: string): number => {
-    const m = dmgStr.match(/^(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  };
-  return { state: s, damage: parseDmgFallback(picked.damage) };
+  // v6.337：被借招式沒有註冊 PRE 時的印刷傷害 fallback 已經收斂進 dispatchCopiedAttack，
+  //   上面的區塊一定 return ⇒ 這裡原本的程式碼是不可達碼，已移除。
 });
 // regPost 轉接到被複製招式的 ATTACK_POST（與扮晶晶酒對稱）
 regPost('呆呆王|耀閃挑戰', copyAttackPostDispatch);

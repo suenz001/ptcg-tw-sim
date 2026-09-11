@@ -16,7 +16,9 @@
  */
 
 import { regPre, regPost, addLog, updatePlayer, withPending, shuffle, ATTACK_PRE_DISCARD_CHOICE, revealTopCardsLog } from '../_shared';
-import { copyAttackPostDispatch } from '../_shared';
+import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
+// ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
+import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import { ATTACK_PRE, ATTACK_POST, TRAINER_EFFECTS } from '../_shared';
 // ⭐ v6.262 支援者效果來源（葉子模組）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
 import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
@@ -30,41 +32,11 @@ const parseDmg = (s: string): number => {
   return m ? parseInt(m[1], 10) : 0;
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-// 共用 helper：從候選寶可夢中挑「印刷傷害最高」的招式，回傳 (cardName, attackName)
-// 排除「self|self」防遞迴
-// ══════════════════════════════════════════════════════════════════════════════
-function pickHighestAttack(
-  candidates: CardInstance[],
-  pool: Map<string, Card>,
-  selfKey: string,
-): { cardName: string; attackName: string; damage: number } | null {
-  let best: { cardName: string; attackName: string; damage: number } | null = null;
-  for (const c of candidates) {
-    const card = pool.get(c.cardId);
-    if (!card?.attacks) continue;
-    for (const atk of card.attacks) {
-      const key = `${card.name}|${atk.name}`;
-      if (key === selfKey) continue;
-      const d = parseDmg(atk.damage);
-      if (!best || d > best.damage) best = { cardName: card.name!, attackName: atk.name!, damage: d };
-    }
-  }
-  return best;
-}
-
-// 共用：執行複製招式（PRE 階段）
-function copyAttackPre(state: GameState, aIdx: 0|1, pool: Map<string, Card>, copiedKey: string, label: string,
-  fallbackDamage: number, action?: any): { state: GameState; damage: number; skipWeakRes?: boolean; skipDefEffects?: boolean } {
-  let s = addLog(state, `${label}：複製招式「${copiedKey}」`, aIdx);
-  s = { ...s, pendingCopyAttackKey: copiedKey };
-  const copiedPre = ATTACK_PRE.get(copiedKey);
-  if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, action);
-    return { state: sub.state, damage: sub.damage, skipWeakRes: false, skipDefEffects: sub.skipDefEffects };
-  }
-  return { state: s, damage: fallbackDamage };
-}
+// ⭐ v6.337：本檔原本有一份 `pickHighestAttack` 與一份 `copyAttackPre`，
+//   v2760_h_wave3_complex.ts 又抄了一份逐字相同的 `pickHighestAttack`
+//   —— 判準有複本，針對它的守衛必然是安慰劑（IRON_RULES Rule 38）。
+//   兩份都刪掉，全部收斂到 `src/lib/game/copy-attack.ts`（候選枚舉 + 選招）
+//   與 `_shared.dispatchCopiedAttack`（轉接被借招式）。
 
 // v5.722：收斂到 _shared.copyAttackPostDispatch（傳 action，讓 borrowed regPost 判 yes/no）。
 const copyAttackPost = copyAttackPostDispatch;
@@ -76,25 +48,14 @@ regPre('索羅亞克|欺詐', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da) return { state: addLog(state, '欺詐：對手戰鬥場無寶可夢', aIdx), damage: 0 };
-  // v5.869 修：卡面「選擇1個對手的戰鬥寶可夢持有的招式」→ 讀 action.copyAttackChoice 讓玩家自選
-  //   (原只 pickHighestAttack 自動挑最高傷害,違卡面「選擇」+ 絕不簡化;同 皮可西|揮指 / 阿響的樹才怪)。
-  //   無 choice(AI/舊 state) 才 fallback 自動挑印刷最高。
-  const choice = (action as { copyAttackChoice?: { pokeIid: string; attackIndex: number } } | undefined)?.copyAttackChoice;
-  let best: { cardName: string; attackName: string; damage: number } | null = null;
-  if (choice && choice.pokeIid === da.iid && choice.attackIndex >= 0) {
-    const daCard = pool.get(da.cardId);
-    const atk = daCard?.attacks?.[choice.attackIndex];
-    if (daCard && atk && atk.name && atk.name !== '欺詐') {
-      const m = (atk.damage ?? '').match(/^(\d+)/);
-      best = { cardName: daCard.name!, attackName: atk.name, damage: m ? parseInt(m[1], 10) : 0 };
-    }
-  }
-  if (!best) best = pickHighestAttack([da], pool, '索羅亞克|欺詐');
-  if (!best) return { state: addLog(state, '欺詐：對手戰鬥場無可複製招式', aIdx), damage: 0 };
-  const copiedKey = `${best.cardName}|${best.attackName}`;
-  const pickMode = choice ? '玩家選擇' : '自動挑印刷最高';
+  // v6.337：候選枚舉與選招全部走中央管線（卡面「選擇1個對手的戰鬥寶可夢持有的招式」）
+  const cands = copyAttackCandidates('索羅亞克|欺詐', state, aIdx, pool);
+  const pick = pickCopiedAttack(cands, action);
+  if (!pick.candidate) return { state: addLog(state, '欺詐：對手戰鬥場無可複製招式', aIdx), damage: 0 };
+  const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
+  const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高';
   const sLog = addLog(state, `欺詐：${pickMode}「${copiedKey}」`, aIdx);
-  return copyAttackPre(sLog, aIdx, pool, copiedKey, '欺詐', best.damage, action);
+  return dispatchCopiedAttack(sLog, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
 });
 regPost('索羅亞克|欺詐', copyAttackPost);
 
@@ -107,23 +68,14 @@ regPre('阿響的樹才怪|試著模仿', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = r.state.players[dIdx].active;
   if (!da) return { state: addLog(r.state, '試著模仿：正面但對手戰鬥場無寶可夢', aIdx), damage: 0 };
-  // v5.178：讀 action.copyAttackChoice (UI 端 picker 帶) 讓玩家自選
-  const choice = (action as { copyAttackChoice?: { pokeIid: string; attackIndex: number } } | undefined)?.copyAttackChoice;
-  let best: { cardName: string; attackName: string; damage: number } | null = null;
-  if (choice && choice.pokeIid === da.iid && choice.attackIndex >= 0) {
-    const daCard = pool.get(da.cardId);
-    const atk = daCard?.attacks?.[choice.attackIndex];
-    if (daCard && atk && atk.name && atk.name !== '試著模仿') {
-      const m = (atk.damage ?? '').match(/^(\d+)/);
-      best = { cardName: daCard.name!, attackName: atk.name, damage: m ? parseInt(m[1], 10) : 0 };
-    }
-  }
-  if (!best) best = pickHighestAttack([da], pool, '阿響的樹才怪|試著模仿');
-  if (!best) return { state: addLog(r.state, '試著模仿：對手戰鬥場無可複製招式', aIdx), damage: 0 };
-  const copiedKey = `${best.cardName}|${best.attackName}`;
-  const pickMode = choice ? '玩家選擇' : '自動挑印刷最高';
+  // v6.337：候選枚舉與選招全部走中央管線
+  const cands = copyAttackCandidates('阿響的樹才怪|試著模仿', r.state, aIdx, pool);
+  const pick = pickCopiedAttack(cands, action);
+  if (!pick.candidate) return { state: addLog(r.state, '試著模仿：對手戰鬥場無可複製招式', aIdx), damage: 0 };
+  const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
+  const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高';
   const sLog = addLog(r.state, `試著模仿：${pickMode}「${copiedKey}」`, aIdx);
-  return copyAttackPre(sLog, aIdx, pool, copiedKey, '試著模仿', best.damage, action);
+  return dispatchCopiedAttack(sLog, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
 });
 regPost('阿響的樹才怪|試著模仿', copyAttackPost);
 
@@ -190,33 +142,22 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   if (pokemonCards.length === 0) {
     return { state: addLog(state, '高傲指令：對手牌庫頂 10 張無寶可夢', aIdx), damage: 0 };
   }
-  // v4.39：讀玩家選擇
-  const choice = (action as Extract<GameAction, { type: 'ATTACK' }> | undefined)?.copyAttackChoice;
   // skip sentinel：玩家明確選擇不複製（「若希望」= 不希望）
+  const choice = (action as Extract<GameAction, { type: 'ATTACK' }> | undefined)?.copyAttackChoice;
   if (choice?.pokeIid === '__rocket_command_skip__') {
     return { state: addLog(state, '高傲指令：玩家選擇不複製招式（傷害 0）', aIdx), damage: 0 };
   }
-  let picked: { cardName: string; attackName: string; damage: number } | null = null;
-  let useChoice = false;
-  if (choice && choice.pokeIid && choice.attackIndex >= 0) {
-    const inst = pokemonCards.find(c => c.iid === choice.pokeIid);
-    if (inst) {
-      const card = pool.get(inst.cardId);
-      const atk = card?.attacks?.[choice.attackIndex];
-      if (card && atk && card.name && atk.name && `${card.name}|${atk.name}` !== '火箭隊的貓老大ex|高傲指令') {
-        const m = (atk.damage ?? '').match(/^(\d+)/);
-        const dmg = m ? parseInt(m[1], 10) : 0;
-        picked = { cardName: card.name, attackName: atk.name, damage: dmg };
-        useChoice = true;
-      }
-    }
-  }
-  if (!picked) {
-    picked = pickHighestAttack(pokemonCards, pool, '火箭隊的貓老大ex|高傲指令');
-  }
-  if (!picked) return { state: addLog(state, '高傲指令：對手牌庫頂無可複製招式', aIdx), damage: 0 };
+  // ⭐ v6.337：候選枚舉與選招走中央管線。
+  //   ⚠ 順帶修正一條**違反官方裁定**的排除：舊碼在兩條路徑都把
+  //     「火箭隊的貓老大ex|高傲指令」自己排掉，但官方 PTCG_RULES **L2276~2277** 明文
+  //     「翻到的 10 張裡有貓老大ex，**可以**選它的高傲指令來使用」。
+  //     中央管線改由 `COPY_ATTACK_MAX_DEPTH` 界定遞迴，不再靠排除自己。
+  const cands = copyAttackCandidates('火箭隊的貓老大ex|高傲指令', state, aIdx, pool);
+  const pick = pickCopiedAttack(cands, action);
+  if (!pick.candidate) return { state: addLog(state, '高傲指令：對手牌庫頂無可複製招式', aIdx), damage: 0 };
+  const picked = { cardName: pick.candidate.ownerName, attackName: pick.candidate.attackName, damage: pick.candidate.damage };
+  const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高';
   const copiedKey = `${picked.cardName}|${picked.attackName}`;
-  const pickMode = useChoice ? '玩家選擇' : '自動挑印刷最高';
   const s = addLog(state, `高傲指令：${pickMode}「${picked.cardName}」的「${picked.attackName}」`, aIdx);
   // borrowed 招式 binary-yes-no PRE_DISCARD_CHOICE → 注入 sentinel 視為「希望」（仿耀閃挑戰）
   const copiedSpec = ATTACK_PRE_DISCARD_CHOICE.get(copiedKey);
@@ -228,21 +169,28 @@ regPre('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
       discardedEnergyIids: ['__rocket_command_borrowed_yes__'],
     };
   }
-  return copyAttackPre(s, aIdx, pool, copiedKey, '高傲指令', picked.damage, dispatchAction);
+  // ⭐⭐⭐ v6.337：官方 PTCG_RULES **L2277** 後半句 ——
+  //   「此情況應**先**將翻到正面的卡放回牌庫並重洗，**再**處理招式「高傲指令」的效果。」
+  //   v6.336 以前重洗寫在 POST，反正借不到另一張高傲指令所以看不出差別；
+  //   本版解禁借招鏈之後，重洗如果還留在 POST，第 2 層的高傲指令會看到**同一批沒重洗的 10 張**。
+  //   ⇒ 重洗搬到「候選枚舉之後、轉接被借招式之前」。
+  const sShuffled = addLog(
+    updatePlayer(s, dIdx, p => ({ ...p, deck: shuffle(p.deck) })),
+    '高傲指令：對手牌庫重洗', aIdx);
+  return dispatchCopiedAttack(sShuffled, aIdx, pool, copiedKey, picked.damage, dispatchAction, pick.restChain);
 });
 regPost('火箭隊的貓老大ex|高傲指令', (state, aIdx, pool, action) => {
   // v5.063：若希望 binary-yes-no guard
   const _chosenIids = action?.discardedEnergyIids;
   const _choseYes = _chosenIids === undefined ? true : _chosenIids.length >= 1;
-  if (!_choseYes) return addLog(state, '高傲指令：選擇「否」 — 跳過複製對手招式', aIdx);
-  const _cb: AttackPostFn = (state, aIdx, pool) => {
-  // 重洗對手牌庫（卡面要求「翻到正面的卡放回牌庫並重洗」）
-  const dIdx = (1 - aIdx) as 0 | 1;
-  let s = updatePlayer(state, dIdx, p => ({ ...p, deck: shuffle(p.deck) }));
-  s = addLog(s, '高傲指令：對手牌庫重洗', aIdx);
-  return copyAttackPostDispatch(s, aIdx, pool, action); // v5.722 傳 action
-};
-  return _cb(state, aIdx, pool);
+  // ⭐ v6.337：選「否」也必須走 copyAttackPostDispatch —— 它同時負責把借招堆疊清乾淨。
+  //   舊寫法直接 return，堆疊會殘留到**下一個 action**（改成陣列後會累積，比舊版更嚴重）。
+  if (!_choseYes) {
+    return copyAttackPostDispatch(
+      addLog(state, '高傲指令：選擇「否」 — 跳過複製對手招式', aIdx), aIdx, pool, action);
+  }
+  // 重洗已移到 PRE（L2277 的順序要求），這裡只負責轉接被借招式的 POST。
+  return copyAttackPostDispatch(state, aIdx, pool, action); // v5.722 傳 action
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

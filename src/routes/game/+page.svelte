@@ -61,6 +61,9 @@
   import { GameActions } from '$lib/game/actions';
   import type { GameState, CardInstance } from '$lib/game/types';
   import { RULE_BOX_SUBTYPES } from '$lib/game/types';
+  // ⭐⭐⭐v6.337 借招（複製他人招式）中央管線 —— 候選枚舉與規則層共用同一份，
+  //   且提供「借到的招式本身也是借招卡」時要不要再開一段 picker 的判準。
+  import { copyAttackCandidates, isCopyAttackKey, COPY_ATTACK_MAX_DEPTH, type CopyChoice } from '$lib/game/copy-attack';
   import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
@@ -2229,6 +2232,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
     attackName: string;
     picked: Set<string>;
     copyAttackChoice?: { pokeIid: string; attackIndex: number };
+    /** v6.337：借招鏈第 2 層以後（借招借到借招）。confirm/yes/no 的每一條 dispatch 都要帶。 */
+    copyAttackChain?: CopyChoice[];
     exactRequired?: number;
   } | null>(null);
 
@@ -7470,9 +7475,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
     const { atk, sourceCardName } = entry;
     // v2.119 copy-attack intercept：暗黑底牌 要先讓玩家選備戰 N的寶可夢 + 招式
     if (atk.name === '暗黑底牌') {
+      // ⭐v6.337：候選改由中央 copyAttackCandidates 決定（與規則層同一份）——
+      //   原本手寫的 startsWith('N的') 會把「暗黑底牌」自己也列成可點按鈕，
+      //   點下去規則層不接受，只會靜默 fallback 成別的招。
+      const _okIids = new Set(copyAttackCandidates('N的索羅亞克ex|暗黑底牌', game, myIdx as 0 | 1, pool, 0)
+        .map(c => c.ownerIid));
       const candidates = activePlayer.bench
         .map(b => ({ inst: b, card: getCard(b.cardId) }))
-        .filter(x => x.card?.name?.startsWith('N的') && (x.card?.attacks?.length ?? 0) > 0);
+        .filter(x => _okIids.has(x.inst.iid));
       if (candidates.length === 0) {
         dispatch(GameActions.attack(attackIndex));  // 沒目標就讓 engine 自己出錯 log
         return;
@@ -7671,21 +7681,98 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   試著模仿 / 技能大盜）與暗黑底牌「漏」→ 借金屬之錘等「若希望」招式時玩家無法選不希望（v5.720
   //   只修了引擎端 sentinel，前端沒開 modal 仍走 fallback）。
   function dispatchBorrowedAttack(srcAttackIndex: number, pokeIid: string, attackIndex: number, borrowedCard: Card | undefined) {
+    // v6.337：所有 picker 的 resolve 都經過這裡 ⇒ 這裡就是「借招鏈」的起點。
     const pickedAtk = borrowedCard?.attacks?.[attackIndex];
-    if (borrowedCard && pickedAtk) {
-      const borrowedKey = `${borrowedCard.name}|${pickedAtk.name}`;
-      const spec = ATTACK_PRE_DISCARD_CHOICE.get(borrowedKey);
-      if (spec) {
-        const borrowerActive = game?.players[myIdx].active ?? null;
-        const exactRequired = _computeExactRequired(pickedAtk.name, borrowerActive);
-        preAttackDiscard = {
-          attackIndex: srcAttackIndex, spec, attackName: pickedAtk.name,
-          picked: new Set<string>(), copyAttackChoice: { pokeIid, attackIndex }, exactRequired,
-        };
-        return;
-      }
+    const key = borrowedCard?.name && pickedAtk?.name ? `${borrowedCard.name}|${pickedAtk.name}` : '';
+    advanceBorrowChain(srcAttackIndex, [{ pokeIid, attackIndex }], key);
+  }
+
+  // ══ ⭐⭐⭐ v6.337 借招鏈（借招借到借招）══════════════════════════════════
+  //   官方 PTCG_RULES **L2276~2277** 明文：高傲指令翻到另一張貓老大ex，「可以」選它的
+  //   高傲指令來使用 ⇒ 借招是可以鏈式的，而且第 2 層也必須讓玩家選。
+  //   玩家回報的 bug（耀閃挑戰 → 謎擬Ｑ → 扮晶晶酒 只能打到對手第 1 招）就是這一層缺席：
+  //   舊碼把第 1 層的 `copyAttackChoice` 原封傳給第 2 層，被拿去索引**別隻寶可夢**的招式陣列。
+  //
+  //   `advanceBorrowChain` 是**唯一**的推進點：不管是哪一張借招卡、第幾層，都走這裡。
+  //   候選枚舉一律呼叫中央 `copyAttackCandidates`（與規則層同一份來源）。
+  /**
+   * @param srcAttackIndex 玩家原本點的那一招的 index（dispatch 時要用的那個）
+   * @param chain          已經選好的借招鏈（第 1 層在前）
+   * @param borrowedKey    剛剛選到的那一招的 key；若它自己也是借招卡就再往下開一層
+   */
+  function advanceBorrowChain(srcAttackIndex: number, chain: CopyChoice[], borrowedKey: string) {
+    if (!game) return;
+    // 終端：選到的不是借招招式，或已經到達深度上限 ⇒ 收尾
+    if (!isCopyAttackKey(borrowedKey) || chain.length >= COPY_ATTACK_MAX_DEPTH) {
+      finishBorrowChain(srcAttackIndex, chain, borrowedKey);
+      return;
     }
-    dispatch(GameActions.attack(srcAttackIndex, undefined, { pokeIid, attackIndex }));
+    const cands = copyAttackCandidates(borrowedKey, game, myIdx as 0 | 1, pool, chain.length);
+    if (cands.length === 0) {
+      // 這一層沒有可借的招式 ⇒ 讓 engine 自己出 fail log（與各 intercept 的既有行為一致）
+      finishBorrowChain(srcAttackIndex, chain, borrowedKey);
+      return;
+    }
+    if (cands.length === 1) {
+      // 只有一個選項 ⇒ 不彈 picker（與第 1 層各 intercept 的 fast-path 一致）
+      const c = cands[0];
+      advanceBorrowChain(srcAttackIndex, [...chain, { pokeIid: c.ownerIid, attackIndex: c.attackIndex }],
+        `${c.ownerName}|${c.attackName}`);
+      return;
+    }
+    // 2+ 選項 ⇒ 開下一段 picker（沿用 rocketCommandPicker 的 modal，不另外寫一套）
+    const allowed = new Map<string, Set<number>>();
+    const pokeList: Array<{ inst: CardInstance; card: Card }> = [];
+    for (const c of cands) {
+      if (!allowed.has(c.ownerIid)) {
+        allowed.set(c.ownerIid, new Set<number>());
+        const inst = _findInstForBorrow(c.ownerIid);
+        const card = getCard(c.ownerCardId);
+        if (inst && card) pokeList.push({ inst, card });
+      }
+      allowed.get(c.ownerIid)!.add(c.attackIndex);
+    }
+    if (pokeList.length === 0) { finishBorrowChain(srcAttackIndex, chain, borrowedKey); return; }
+    rocketCommandPicker = {
+      sourceAttackIndex: srcAttackIndex,
+      pokeList,
+      top10All: pokeList,
+      revealOnly: false,
+      sourceAttackName: borrowedKey.slice(borrowedKey.indexOf('|') + 1),
+      chain,
+      allowed,
+    };
+  }
+
+  /** 借招鏈收尾：終端招式若有「若希望／丟能量」選擇就先開 modal，否則直接 dispatch。 */
+  function finishBorrowChain(srcAttackIndex: number, chain: CopyChoice[], terminalKey: string) {
+    const head = chain[0];
+    const rest = chain.slice(1);
+    const spec = terminalKey ? ATTACK_PRE_DISCARD_CHOICE.get(terminalKey) : undefined;
+    if (spec && head) {
+      const atkName = terminalKey.slice(terminalKey.indexOf('|') + 1);
+      const borrowerActive = game?.players[myIdx].active ?? null;
+      const exactRequired = _computeExactRequired(atkName, borrowerActive);
+      preAttackDiscard = {
+        attackIndex: srcAttackIndex, spec, attackName: atkName,
+        picked: new Set<string>(), copyAttackChoice: head, copyAttackChain: rest, exactRequired,
+      };
+      return;
+    }
+    dispatch(GameActions.attack(srcAttackIndex, undefined, head, rest));
+  }
+
+  /** 在場上／自己牌庫頂／對手牌庫頂 10 張裡找出這個 iid 的實體（借招候選的持有者）。 */
+  function _findInstForBorrow(iid: string): CardInstance | undefined {
+    if (!game) return undefined;
+    for (const p of game.players) {
+      if (p.active?.iid === iid) return p.active;
+      const b = p.bench.find(x => x.iid === iid);
+      if (b) return b;
+      const d = p.deck.slice(0, 10).find(x => x.iid === iid);
+      if (d) return d;
+    }
+    return undefined;
   }
   function resolveCopyAttack(pokeIid: string, attackIndex: number) {
     if (!copyAttackPicker) return;
@@ -7747,19 +7834,36 @@ function _setupSelfPending(g: any, seat: number): string | null {
     revealOnly?: boolean;
     // v5.181：sourceAttackName — 揮指/試著模仿/高傲指令 共用 modal, hint 動態
     sourceAttackName?: string;
+    /** v6.337：這一層之前已經選好的借招鏈（第 1 層 picker 是空陣列） */
+    chain?: CopyChoice[];
+    /**
+     * v6.337：本層**真正可選**的招式（ownerIid → 可選的 attackIndex 集合）。
+     * 來源是中央 `copyAttackCandidates` ⇒ 「畫面上看得到的」＝「規則層認的」。
+     * ⚠ 沒有它的話，揮指/欺詐/試著模仿 的 modal 會把「對手同名的那一招」也畫出來，
+     *   但規則層根本不接受 —— 玩家按了只會 fallback 成別的招。
+     */
+    allowed?: Map<string, Set<number>>;
   } | null>(null);
   function resolveRocketCommand(pokeIid: string, attackIndex: number) {
     if (!rocketCommandPicker) return;
     const src = rocketCommandPicker.sourceAttackIndex;
     const card = rocketCommandPicker.pokeList.find(pk => pk.inst.iid === pokeIid)?.card; // v5.721 borrowed card
+    const chain = rocketCommandPicker.chain ?? [];
     rocketCommandPicker = null;
-    dispatchBorrowedAttack(src, pokeIid, attackIndex, card);
+    // v6.337：接回借招鏈（chain 為空 ⇒ 這是第 1 層，行為與 v6.336 相同）
+    const atkName = card?.attacks?.[attackIndex]?.name;
+    advanceBorrowChain(src, [...chain, { pokeIid, attackIndex }],
+      card?.name && atkName ? `${card.name}|${atkName}` : '');
   }
   function skipRocketCommand() {
     if (!rocketCommandPicker) return;
     const src = rocketCommandPicker.sourceAttackIndex;
+    // ⭐v6.337：第 2 層以後按「不複製」時，前面幾層的選擇**必須一起送出**。
+    //   漏掉的話 engine 收到的第 1 層 choice 會是 skip sentinel，比對不到本層候選 ⇒
+    //   fallback 打出「印刷傷害最高」的另一招（玩家想打 0 傷害卻打出 140）。
+    const chain = [...(rocketCommandPicker.chain ?? []), { pokeIid: '__rocket_command_skip__', attackIndex: -1 }];
     rocketCommandPicker = null;
-    dispatch(GameActions.attack(src, undefined, { pokeIid: '__rocket_command_skip__', attackIndex: -1 }));
+    dispatch(GameActions.attack(src, undefined, chain[0], chain.slice(1)));
   }
   function cancelRocketCommand() { rocketCommandPicker = null; }
 
@@ -8104,7 +8208,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (!preAttackDiscard) return;
     // v3.873：解構 copyAttackChoice — 若為 扮晶晶酒 borrowed picker 流程，需一併 dispatch
     // v3.875：exactRequired 設值時，picked 必須是 0 (skip) 或 exactRequired (啟用 option)，中間數量 reject
-    const { attackIndex, spec, picked, copyAttackChoice, exactRequired } = preAttackDiscard;
+    const { attackIndex, spec, picked, copyAttackChoice, copyAttackChain, exactRequired } = preAttackDiscard;
     const energies = getDiscardableEnergies(spec);
     const amount = computePickedAmount(spec, picked, energies);
     if (amount < effectivePreDiscardMin(spec, _maxDiscardAmount(spec))) return;
@@ -8114,7 +8218,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     if (exactRequired !== undefined && amount !== 0 && amount < exactRequired) return;
     const iids = [...picked];
     preAttackDiscard = null;
-    dispatch(GameActions.attack(attackIndex, iids, copyAttackChoice));
+    dispatch(GameActions.attack(attackIndex, iids, copyAttackChoice, copyAttackChain));
   }
 
   function cancelPreAttackDiscard() {
@@ -13226,8 +13330,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
               const iids = [...preAttackDiscard.picked];
+              // v6.337：這一條原本連第 1 層的 copyAttackChoice 都沒帶 —— 借到 stepper 型招式
+              //   （波盪水｜蜿蜒割裂 等）時，玩家的借招選擇會在 confirm 這一步整個丟失。
+              const cc = preAttackDiscard.copyAttackChoice;
+              const ccChain = preAttackDiscard.copyAttackChain;
               preAttackDiscard = null;
-              dispatch(GameActions.attack(ai, iids));
+              dispatch(GameActions.attack(ai, iids, cc, ccChain));
             }}>確認（放 {currentN} 個）</button>
         </div>
       </div>
@@ -13253,6 +13361,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
               const cc = preAttackDiscard.copyAttackChoice; // v5.720 borrowed(耀閃挑戰/高傲指令)時帶上,否則被借招式選擇丟失
+              const ccChain = preAttackDiscard.copyAttackChain; // v6.337 借招鏈第 2 層以後
               // v5.992 spec.optInPay 一般化二段流程（原 v4.46 金屬之錘 hardcode Stage 2 抽象化，
               //   金屬之錘/忍者飛旋/災難衝擊/時間爆炸/叢林鞭打/狂暴噴射共用）：
               //   - 0 可付 → OPTIN_NO_PAYMENT sentinel（Wilson 裁定：固定加傷/狀態照給全額）
@@ -13271,10 +13380,10 @@ function _setupSelfPending(g: any, seat: number): string | null {
                   : eligible.length;
                 if (eligible.length === 0) {
                   preAttackDiscard = null;
-                  dispatch(GameActions.attack(ai, [OPTIN_NO_PAYMENT], cc));
+                  dispatch(GameActions.attack(ai, [OPTIN_NO_PAYMENT], cc, ccChain));
                 } else if (op.payMax === null || totalAmount <= op.payMax) {
                   preAttackDiscard = null;
-                  dispatch(GameActions.attack(ai, eligible.map(e => e.iid), cc));
+                  dispatch(GameActions.attack(ai, eligible.map(e => e.iid), cc, ccChain));
                 } else {
                   // 超過 N：切換到 picker spec（min=max=N 強制玩家選恰 N）
                   preAttackDiscard = {
@@ -13284,12 +13393,13 @@ function _setupSelfPending(g: any, seat: number): string | null {
                     picked: new Set<string>(),
                     exactRequired: op.payMax,
                     copyAttackChoice: cc, // v5.720 borrowed:stage2 picker confirm 也要帶
+                    copyAttackChain: ccChain, // v6.337 借招鏈也要一起帶下去
                   };
                 }
                 return;
               }
               preAttackDiscard = null;
-              dispatch(GameActions.attack(ai, ['yes-token'], cc));
+              dispatch(GameActions.attack(ai, ['yes-token'], cc, ccChain));
             }}>{yesLabel}</button>
           <button class="btn-ghost" style="padding:12px 32px;font-size:16px"
             onclick={() => {
@@ -13297,8 +13407,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
               if (!preAttackDiscard) return;
               const ai = preAttackDiscard.attackIndex;
               const cc = preAttackDiscard.copyAttackChoice; // v5.720 borrowed 選「否」也要帶,否則耀閃挑戰收不到借招選擇
+              const ccChain = preAttackDiscard.copyAttackChain; // v6.337 借招鏈第 2 層以後
               preAttackDiscard = null;
-              dispatch(GameActions.attack(ai, [], cc));
+              dispatch(GameActions.attack(ai, [], cc, ccChain));
             }}>{noLabel}</button>
         </div>
       </div>
@@ -13562,6 +13673,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 <div class="copy-attack-name">{p.card.name}</div>
                 <div class="copy-attack-atks">
                   {#each p.card.attacks ?? [] as atk, aIdx}
+                    <!-- v6.337：allowed 來自中央 copyAttackCandidates ⇒ 畫出來的＝規則層認的。
+                         沒有 allowed（第 1 層的既有 intercept）時維持原本「全部畫出來」的行為。 -->
+                    {#if !rocketCommandPicker.allowed || (rocketCommandPicker.allowed.get(p.inst.iid)?.has(aIdx) ?? false)}
                     <button
                       class="copy-attack-btn"
                       onclick={() => resolveRocketCommand(p.inst.iid, aIdx)}
@@ -13573,6 +13687,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       <span class="copy-atk-name">{atk.name}</span>
                       {#if atk.damage}<span class="copy-atk-dmg">{atk.damage}</span>{/if}
                     </button>
+                    {/if}
                   {/each}
                 </div>
               </div>

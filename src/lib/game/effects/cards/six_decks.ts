@@ -11,7 +11,9 @@
  */
 import { tryPromptPromoteActive, damageCounterCount } from '../_shared';
 import { deckWithCardsToBottom } from '../_shared'; // v6.124 「放回牌庫下方」中央管線 // v5.785 指示物個數中央
-import { copyAttackPostDispatch } from '../_shared';
+import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
+// ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
+import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.986 場上卡→手牌中央述詞
 import { joinCardNames, toBareCard } from '../_shared';  // v5.515 丟棄 log 顯示卡名 / v5.993 rescue 回手裸化
 import { attachEnergyFromZoneToOwnPokemon } from '../_shared';  // ⭐ v6.174 附能目標解析失敗一律 no-op（禁半套：能量已離開來源區卻沒附上）
@@ -1062,61 +1064,24 @@ regR('az-peace-swap', (state, aIdx, selectedIids, _params, pool) => {
 //   4) fallback：無 copyAttackChoice 時（例如 AI / 舊 state），自動挑備戰 N的寶可夢
 //      中「印刷傷害最高」的招式（同扮晶晶酒 precedent）
 regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
-  const parseDmg = (s: string): number => {
-    const m = s.match(/^(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  };
-  const choice = action?.copyAttackChoice;
-  const bench = state.players[aIdx].bench;
-  let nBench: CardInstance | null = null;
-  let pickedAttackIdx = -1;
-  if (choice) {
-    nBench = bench.find(b => b.iid === choice.pokeIid) ?? null;
-    pickedAttackIdx = choice.attackIndex;
-  } else {
-    // v2.140 改良 fallback：跨整個備戰區的所有 N的寶可夢與所有招式組合中，
-    //   挑「印刷傷害最高」的（含 ex 招式）— 原本只看第一隻備戰，導致 sim 勝率 10.6%。
-    // 排除：自己（索羅亞克ex 不能複製自己）、暗黑底牌（防遞迴）。
-    const benchCandidates = bench.filter(b => {
-      const c = pool.get(b.cardId);
-      return c?.name?.startsWith('N的') && c.name !== 'N的索羅亞克ex';
-    });
-    let best: { inst: CardInstance; atkIdx: number; dmg: number } | null = null;
-    for (const b of benchCandidates) {
-      const atks = pool.get(b.cardId)?.attacks ?? [];
-      for (let i = 0; i < atks.length; i++) {
-        if (atks[i].name === '暗黑底牌') continue; // 防遞迴
-        const d = parseDmg(atks[i].damage);
-        if (!best || d > best.dmg) {
-          best = { inst: b, atkIdx: i, dmg: d };
-        }
-      }
-    }
-    if (best) {
-      nBench = best.inst;
-      pickedAttackIdx = best.atkIdx;
-    }
-  }
-  if (!nBench) {
+  // ⭐ v6.337：候選枚舉與選招全部走中央管線。
+  //   ⚠ 舊碼的 `if (choice)` 分支**只比對 iid、完全不驗「N的」前綴**，而且一旦
+  //     choice 對不上就直接回「備戰區沒有『N的』寶可夢」damage 0（不 fallback）——
+  //     借招鏈時會讓整個招式失效。中央判準要求 choice 必須真的落在本層候選裡，
+  //     對不上就走 fallback，不會把卡片白白浪費掉。
+  const cands = copyAttackCandidates('N的索羅亞克ex|暗黑底牌', state, aIdx, pool);
+  if (cands.length === 0) {
     return { state: addLog(state, '暗黑底牌：備戰區沒有「N的」寶可夢', aIdx), damage: 0 };
   }
-  const nCard = pool.get(nBench.cardId);
-  const pickedAtk = nCard?.attacks?.[pickedAttackIdx];
-  if (!nCard || !pickedAtk) {
-    return { state: addLog(state, `暗黑底牌：${nCard?.name ?? '?'} 沒有對應的招式`, aIdx), damage: 0 };
+  const pick = pickCopiedAttack(cands, action);
+  if (!pick.candidate) {
+    return { state: addLog(state, '暗黑底牌：備戰區沒有「N的」寶可夢', aIdx), damage: 0 };
   }
-  const copiedKey = `${nCard.name}|${pickedAtk.name}`;
-  // v2.134 防呆：拒絕複製自己（避免 stack overflow）
-  if (copiedKey === 'N的索羅亞克ex|暗黑底牌') {
-    return { state: addLog(state, '暗黑底牌：無法複製自己', aIdx), damage: 0 };
-  }
-  let s = addLog(state, `暗黑底牌：使用 ${nCard.name} 的「${pickedAtk.name}」`, aIdx);
-  s = { ...s, pendingCopyAttackKey: copiedKey };
-  const copiedPre = ATTACK_PRE.get(copiedKey);
-  if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, action);
+  const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
+  const s = addLog(state, `暗黑底牌：使用 ${pick.candidate.ownerName} 的「${pick.candidate.attackName}」`, aIdx);
+  {
+    const sub = dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
     // Bug fix (#18): 複製招式時，弱點/抗性必須以使用者（N的索羅亞克ex＝惡屬性）的屬性計算
-    // 不繼承被複製招式的 skipWeakRes — 否則若複製到「不計算弱點」招式會錯誤跳過弱點
     return {
       state: sub.state,
       damage: sub.damage,
@@ -1124,7 +1089,5 @@ regPre('N的索羅亞克ex|暗黑底牌', (state, aIdx, pool, action) => {
       skipDefEffects: sub.skipDefEffects,
     };
   }
-  // 被複製招式未註冊 PRE：回印刷傷害
-  return { state: s, damage: parseDmg(pickedAtk.damage) };
 });
 regPost('N的索羅亞克ex|暗黑底牌', copyAttackPostDispatch);

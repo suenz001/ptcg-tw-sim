@@ -69,7 +69,9 @@ import { placedBenchInstance } from '../_shared'; // v5.745 放場裸化+justPla
 import { mandatoryTargetCount } from '../_shared'; // ⭐v6.305 卡面寫死目標隻數 → 強制選滿
 import { openDeckViewReshuffle } from '../_shared';
 import { logPickedCards } from '../_shared'; // v6.097 揭示卡名中央來源
-import { copyAttackPostDispatch } from '../_shared';
+import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
+// ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
+import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import { joinCardNames } from '../_shared';  // v5.515 丟棄 log 顯示卡名
 import { clearActiveEffects } from '../_shared';  // v5.527 收斂 m5ClearTurnFlags→中央
 import type { AttackPostFn, AttackPreFn } from '../_shared';
@@ -2032,47 +2034,10 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
     };
   }
 
-  // 選擇對手寶可夢 + 其招式：優先讀 action.copyAttackChoice（UI 提供）；
-  // fallback: opp.active + 印刷傷害最高招式（與 耀閃挑戰 v3.895 同 precedent）。
-  const choice = action?.copyAttackChoice;
-  let pickedPoke: { inst: import('../../types').CardInstance; card: import('$lib/cards/types').Card } | undefined;
-  let pickedAttackIdx = -1;
-  let useChoice = false;
-
-  if (choice && choice.pokeIid && typeof choice.attackIndex === 'number') {
-    const found = oppPokes.find(p => p.inst.iid === choice.pokeIid);
-    if (found) {
-      const atks = found.card.attacks ?? [];
-      if (choice.attackIndex >= 0 && choice.attackIndex < atks.length) {
-        pickedPoke = found;
-        pickedAttackIdx = choice.attackIndex;
-        useChoice = true;
-      }
-    }
-  }
-
-  if (!pickedPoke) {
-    // Fallback: 優先 opp.active；若 active 沒有/無招式，往 bench 找
-    for (const op of oppPokes) {
-      const atks = op.card.attacks ?? [];
-      if (atks.length === 0) continue;
-      pickedPoke = op;
-      // 印刷傷害最高
-      const parseDmg = (dmgStr: string): number => {
-        const m = (dmgStr ?? '').match(/^(\d+)/);
-        return m ? parseInt(m[1], 10) : 0;
-      };
-      let bestDmg = parseDmg(atks[0].damage);
-      pickedAttackIdx = 0;
-      for (let i = 1; i < atks.length; i++) {
-        const d = parseDmg(atks[i].damage);
-        if (d > bestDmg) { pickedAttackIdx = i; bestDmg = d; }
-      }
-      break;
-    }
-  }
-
-  if (!pickedPoke || pickedAttackIdx < 0) {
+  // ⭐ v6.337：候選枚舉與選招全部走中央管線（原本各自手寫一份判準）
+  const cands = copyAttackCandidates('狐大盜|技能大盜', state, aIdx, pool);
+  const pick = pickCopiedAttack(cands, action);
+  if (!pick.candidate) {
     return {
       state: addLog(state,
         '技能大盜：對手場上寶可夢皆無可選招式，招式效果失敗',
@@ -2080,22 +2045,13 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
       damage: 0,
     };
   }
-
-  const atks = pickedPoke.card.attacks ?? [];
-  const picked = atks[pickedAttackIdx];
-  const copiedKey = `${pickedPoke.card.name}|${picked.name}`;
-  const pickMode = useChoice ? '玩家選擇' : '自動挑印刷最高傷害（UI picker deferred）';
-  let s = addLog(state,
-    `技能大盜：選擇對手「${pickedPoke.card.name}」的「${picked.name}」作為此招式使用（${pickMode}）`,
+  const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
+  const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高傷害';
+  const s = addLog(state,
+    `技能大盜：選擇對手「${pick.candidate.ownerName}」的「${pick.candidate.attackName}」作為此招式使用（${pickMode}）`,
     aIdx);
-
-  // 標記 pendingCopyAttackKey 供 regPost 轉接
-  s = { ...s, pendingCopyAttackKey: copiedKey };
-
-  // 遞迴呼叫 borrowed attack 的 PRE
-  const copiedPre = ATTACK_PRE.get(copiedKey);
-  if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, action);
+  {
+    const sub = dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
     // 弱抗依照使用者（狐大盜＝惡屬性）計算，不繼承 borrowed 招式的 skipWeakRes
     return {
       state: sub.state,
@@ -2104,12 +2060,6 @@ regPre('狐大盜|技能大盜', (state, aIdx, pool, action) => {
       skipDefEffects: sub.skipDefEffects,
     };
   }
-  // 無註冊 PRE → 退回印刷傷害
-  const parseDmgFallback = (dmgStr: string): number => {
-    const m = (dmgStr ?? '').match(/^(\d+)/);
-    return m ? parseInt(m[1], 10) : 0;
-  };
-  return { state: s, damage: parseDmgFallback(picked.damage) };
 });
 
 // ── 1b. 狐大盜|技能大盜 POST — 轉接 borrowed attack 的 POST ──────────

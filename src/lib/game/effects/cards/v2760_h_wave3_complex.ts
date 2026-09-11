@@ -21,7 +21,9 @@ import { clearActiveEffects } from '../_shared'; // v5.807 退化清附加效果
 // ⭐ v6.262 支援者效果來源（葉子模組，零 import）—— 複製成招式效果時關閉「從手牌使出」才有的免疫
 import { runAsCopiedSupporterEffect } from '../../supporter-effect-source';
 
-import { copyAttackPostDispatch } from '../_shared';
+import { copyAttackPostDispatch, dispatchCopiedAttack } from '../_shared';
+// ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
+import { copyAttackCandidates, pickCopiedAttack } from '../../copy-attack';
 import { canApplyEffectToTarget } from '../../defense';
 import { getAllAttachedTools } from '../_shared'; // v5.841 丟道具含 extraTools
 import { relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示物中央管線
@@ -93,49 +95,21 @@ regPost('帝牙海獅|凍結獠牙', (state, aIdx, _pool) => {
 // 4. 皮可西|揮指 — 選擇 1 個對手戰鬥寶可夢的招式作為此招使用
 //    用 v2.119 N的索羅亞克ex 暗黑底牌 模式：fallback 自動挑印刷傷害最高
 // ══════════════════════════════════════════════════════════════════════════════
-function pickHighestAttack(candidates: CardInstance[], pool: Map<string, Card>, selfKey: string) {
-  let best: { cardName: string; attackName: string; damage: number } | null = null;
-  for (const c of candidates) {
-    const card = pool.get(c.cardId);
-    if (!card?.attacks) continue;
-    for (const atk of card.attacks) {
-      const key = `${card.name}|${atk.name}`;
-      if (key === selfKey) continue;
-      const d = parseDmg(atk.damage);
-      if (!best || d > best.damage) best = { cardName: card.name!, attackName: atk.name!, damage: d };
-    }
-  }
-  return best;
-}
+// ⭐ v6.337：本檔原本有一份與 v2680 逐字相同的 `pickHighestAttack` 複本
+//   —— 判準有兩份，針對它的守衛必然是安慰劑（IRON_RULES Rule 38）。已刪除，
+//   全部收斂到 `src/lib/game/copy-attack.ts`。
 regPre('皮可西|揮指', (state, aIdx, pool, action) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const da = state.players[dIdx].active;
   if (!da) return { state: addLog(state, '揮指：對手戰鬥場無寶可夢', aIdx), damage: 0 };
-  // v5.178：讀 action.copyAttackChoice (UI rocketCommandPicker 帶) 讓玩家自選
-  //   - 有 choice + 匹配 da.iid + 招式有效 → 用該招式
-  //   - 否則 fallback 自動挑印刷最高（同高傲指令 v2680 L184-200 模式）
-  const choice = (action as { copyAttackChoice?: { pokeIid: string; attackIndex: number } } | undefined)?.copyAttackChoice;
-  let best: { cardName: string; attackName: string; damage: number } | null = null;
-  if (choice && choice.pokeIid === da.iid && choice.attackIndex >= 0) {
-    const daCard = pool.get(da.cardId);
-    const atk = daCard?.attacks?.[choice.attackIndex];
-    if (daCard && atk && atk.name && atk.name !== '揮指') {
-      const m = (atk.damage ?? '').match(/^(\d+)/);
-      best = { cardName: daCard.name!, attackName: atk.name, damage: m ? parseInt(m[1], 10) : 0 };
-    }
-  }
-  if (!best) best = pickHighestAttack([da], pool, '皮可西|揮指');
-  if (!best) return { state: addLog(state, '揮指：對手戰鬥場無可複製招式', aIdx), damage: 0 };
-  const copiedKey = `${best.cardName}|${best.attackName}`;
-  const pickMode = choice ? '玩家選擇' : '自動挑印刷最高';
-  let s = addLog(state, `揮指：${pickMode}「${copiedKey}」`, aIdx);
-  s = { ...s, pendingCopyAttackKey: copiedKey };
-  const copiedPre = ATTACK_PRE.get(copiedKey);
-  if (copiedPre) {
-    const sub = copiedPre(s, aIdx, pool, action);
-    return { state: sub.state, damage: sub.damage, skipWeakRes: false, skipDefEffects: sub.skipDefEffects };
-  }
-  return { state: s, damage: best.damage };
+  // v6.337：候選枚舉與選招全部走中央管線
+  const cands = copyAttackCandidates('皮可西|揮指', state, aIdx, pool);
+  const pick = pickCopiedAttack(cands, action);
+  if (!pick.candidate) return { state: addLog(state, '揮指：對手戰鬥場無可複製招式', aIdx), damage: 0 };
+  const copiedKey = `${pick.candidate.ownerName}|${pick.candidate.attackName}`;
+  const pickMode = pick.byPlayer ? '玩家選擇' : '自動挑印刷最高';
+  const s = addLog(state, `揮指：${pickMode}「${copiedKey}」`, aIdx);
+  return dispatchCopiedAttack(s, aIdx, pool, copiedKey, pick.candidate.damage, action, pick.restChain);
 });
 regPost('皮可西|揮指', copyAttackPostDispatch);
 
