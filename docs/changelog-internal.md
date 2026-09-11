@@ -1,5 +1,74 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.342 M6a 招式實裝 批次 2（傷害計算類 16 招）
+
+BASE `a66b26e5eb72533374c4229eeb217273176b6928`（v6.341）。
+⚠⚠ M6a 仍被 `lockedSets` 鎖著 ⇒ **玩家看不到任何變化，不寫首頁 changelog**。
+
+### 【一】範圍
+
+「條件加成（+N）」與「乘算（×N）」兩型共 16 招：鐳射火焰／心情好火焰／水炮／隱密斬／
+皮卡連鎖／鬥志雷霆／氣沖沖伏特／爆烈閃電／精神強念／鮮豔和聲／午夜之光／雙倍奉還／
+報仇／寶物猛攻／堅硬利刃／軟彈陣。
+這 16 招全部要改寫傷害 ⇒ 全部先過同名印刷碰撞檢查（`__m6a/collide_w2.mjs`），**16 鍵全 OK**。
+
+### 【二】⭐⭐⭐ 這一版真正的價值：把 11 型「inline 複本」收斂成中央出口
+
+站上原本沒有可參數化的出口，每一型都是各卡自己 inline 算。本版新增 11 支中央 helper
+（全部放 `effects.ts`），**並把既有的同措辭卡一起搬過去**，log 與傷害逐字相同：
+
+| 新中央 helper | 一起收斂的既有卡 |
+|---|---|
+| `selfHasEnergyTypePre` | 電蜘蛛｜麻麻羅網 |
+| `prizesTakenMultiplyPre` | 超級大嘴娃ex｜貪心（`mega_decks.ts`） |
+| `revengeDamageKOPre` | 鐵斑葉｜復仇刀鋒、普隆隆姆｜捲土重來 |
+| `damageTakenLastOppTurnPlusPre` | 超級赫拉克羅斯ex｜重裝角擊（`v2690_i_wave19_engine_hooks.ts`） |
+
+另外 7 支（`selfCountersMultiplyPre`／`selfDiscardEnergyMultiplyPre`／`selfHandMultiplyPre`／
+`selfHasToolPre`／`selfNamedPokemonMultiplyPre`／`selfBasicEnergyTypeCountPre`／
+`selfBenchMaxHpMultiplyPre`）站上是第一次出現這個型。
+既有的 `selfAttachedEnergyMultiplyPre`／`defActiveEnergyMultiplyPre` 原本是 local，只加了 `export`（行為 0 變動）。
+
+⚠ 能量數一律走 host-aware 的中央述詞（`energyProvidesType`／`getBasicEnergyType`），
+**不自己數 `energyAttached.length`** —— 特殊能量提供的屬性與張數不是一對一；
+基本能量卡的 `pokemonType` 恆為 null，讀它一定錯。
+
+⚠ 沒有新增任何 `GameState` 欄位：雙倍奉還與報仇分別沿用既有的
+`damageTakenLastOppTurn` 與 `oppDamageKOdMeInLastOppTurn`。
+
+### 【三】隱密斬（甲賀忍蛙ex）——「傷害依選定目標而定」
+
+卡面「對手的 1 隻寶可夢受到**那隻寶可夢身上放置的傷害指示物的數量**×30 點傷害」。
+目標選好之後才知道傷害 ⇒ 只能在 resolver 內算。
+作法：`chooseOppPokemonDamageByCounters` ＋ `snipe-variable` 新增 `params.perCounter` 分支
+（沒有 `perCounter` 的既有 snipe 路徑完全不受影響）。
+⚠ 它的卡面 `damage` 是空的 ⇒ **只登記 `regPost`、不可以有 `regPre`**（突變 M24 在守這條）。
+
+### 【四】既有守衛翻紅的處理（Rule 40，四條都是收緊或修正，不是放寬）
+
+1. `test-v6255` C7／`test-v6256` C1：`damageTakenLastOppTurn` 的唯一讀取點**下沉**到中央 helper
+   ⇒ 判準上移到意圖層：①中央 helper 在 ②讀取點在它裡面 ③**卡檔端不得再自己讀**。
+   從 1 條斷言變成 4 條，偵測力比原本強。
+2. `test-v6239` ⑤（`eng.indexOf('\n}\n')`）與 `test-v6256` C3（跨行 regex 用 `\n`）：
+   ⚠⚠ **CRLF false red，與本版無關** —— 本機 `core.autocrlf=true` ⇒ 工作樹全 CRLF，
+   JS 的 `\n` 不吃 `\r\n`，這兩條在 Windows 上**改動前就是恆紅**（已用 BASE blob 轉 CRLF 實測證明）。
+   只把換行改成 `\r?\n`，判準一字未改。
+
+### 【五】守衛與正對照
+
+`scripts/test-m6a-wave2.mjs`：**PASS 61 / FAIL 0**。每一招至少兩組不同輸入 → 不同輸出
+（條件成立／不成立、乘數 0／N），隱密斬走真的 `RESOLVE_SELECTION`，
+5 支新 helper 各附一張既有同措辭卡當正對照。
+突變 `__m6a/mutcheck_w2.mjs`：**M1~M35 全部紅在指定條目**，還原後複驗 exit=0。
+
+免疫網跑過：damage-immunity-matrix、attack-effect-immunity-matrix、
+status-apply-immunity-converge、full-immunity、opp-swap-hidden、gust、tera-bench、
+nobench-snipe、flat-multisnipe —— 全綠。
+
+### 【六】剩餘
+
+本批之後 M6a 001~100/103 還剩 **54 招 ＋ 15 特性**。
+
 ## v6.341 M6a 招式實裝 批次 1（26 招）
 
 BASE `aa6c13f60e0d9593fac9d9118a914a42a3df8742`（v6.340，遠端 main）。

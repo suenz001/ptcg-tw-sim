@@ -292,7 +292,14 @@ T('C1 ⭐⭐⭐除了 _shared.ts 的中央 helper，全 src 不得有第二個�
   //   ⚠ 往下掉 1~2 多半是合法收斂，確認後改這一行。
   assert.ok(totalMentions >= 4, `掃描器下限：全檔提及次數應 ≥4，實得 ${totalMentions}（掃描器壞了？A 類下限 4／實測基準 6）`);
   assert.ok(/damageTakenLastOppTurn\?: number;/.test(SRC.types), 'types.ts 欄位宣告不見了');
-  assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(SRC.hook), '唯一讀取點（重裝角擊）不見了');
+  // ⭐v6.342：唯一讀取點**下沉到** effects.ts 的中央 helper `damageTakenLastOppTurnPlusPre`
+  //   （鬃岩狼人｜雙倍奉還 與 重裝角擊 卡面逐字同措辭 ⇒ 共用一支，Rule 38）。
+  //   判準上移到意圖層（Rule 40）：中央 helper 在、讀取點在它裡面、卡檔端不得再自己讀。
+  assert.ok(/export function damageTakenLastOppTurnPlusPre\(/.test(SRC.effects),
+    '中央讀取 helper damageTakenLastOppTurnPlusPre 不見了');
+  assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(SRC.effects), '唯一讀取點（中央 helper 內）不見了');
+  assert.ok(!/\.damageTakenLastOppTurn\b/.test(SRC.hook),
+    'v2690 卡檔不得再自己讀 damageTakenLastOppTurn（已收斂到中央 helper）');
   // 正對照：樣式真的抓得到違規樣本（否則就是恆真的安慰劑）
   assert.equal(('x = { ...c, damageTakenLastOppTurn: 1 };'.match(WRITE_RE) ?? []).length, 1,
     'C1 樣式抓不到已知違規樣本＝安慰劑');
@@ -356,7 +363,10 @@ T('C3 ⭐⭐防 KO 中央 helper 的三個呼叫端都必須宣告 kind（＋正
   assert.equal(bad.length, 1, 'C3 抽取器抓不到已知樣本＝安慰劑');
   assert.equal(bad[0].split(',').length, 6, 'C3 參數計數壞了');
   // 且宣告端必須是必填（沒有 `?:` 也沒有預設值）
-  assert.ok(/kind: DamageKind,\n\): \{ prevented: boolean; state: GameState \} \{/.test(SRC.effects),
+  // ⭐v6.342 CRLF 中性化：本機是 CRLF checkout（core.autocrlf=true），JS 的 \n 不吃 \r\n
+  //   ⇒ 這條**跨行** regex 在 Windows 上恆假（false red），與程式碼改動無關（見 scripts/test-lint-crlf-neutral.mjs 記載的同型事故）。
+  //   只把換行改成 \r?\n —— 判準一字未改，兩種行尾都抓得到。
+  assert.ok(/kind: DamageKind,\r?\n\): \{ prevented: boolean; state: GameState \} \{/.test(SRC.effects),
     'applyPreventKOToVictim 的 kind 參數不再是必填 ⇒ 新呼叫端可以靜默漏掉');
 });
 

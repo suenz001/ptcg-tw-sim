@@ -6663,26 +6663,30 @@ regPost('豐蜜龍|甜蜜熔化', defCantAttackNextPost());
 // 卡面共通條件：「在上個對手的回合，若自己的寶可夢**因招式的傷害**而【昏厥】了，則增加N點傷害」
 // v2.246 修：精確 KO cause tracking — 只算「招式 KO」（attackKOdMe），
 //   排除：對手主動特性 KO（如咒詛炸彈/腎上腺腦力）+ checkup KO + 自 KO
+/**
+ * ⭐ v6.342 中央收斂：「在上個對手的回合，若自己的寶可夢**因招式的傷害**而【昏厥】了，
+ *   則增加 N 點傷害。」使用者：鐵斑葉｜復仇刀鋒(100+60)、普隆隆姆｜捲土重來(30+90)、
+ *   月亮伊布｜報仇(30+100)。
+ * ⚠ 讀的是既有欄位 `oppDamageKOdMeInLastOppTurn`（Rule 38：不得新增第二個記錄機制）——
+ *   它只計「招式**傷害**KO」，排除效果昏厥（咒詛炸彈等，_faintByEffect）／checkup KO／自 KO。
+ * ⚠ 另有 `oppAttackKOdMeInLastOppTurn`（含效果 KO）給措辭不同的卡（古玉魚｜嫉妒業火）用，
+ *   兩者**不可互換**（scripts/test-revenge-damage-vs-effect-ko.mjs 在守）。
+ */
+export function revengeDamageKOPre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
+    const tookPrize = attackKO > 0;
+    const add = tookPrize ? bonus : 0;
+    const s = tookPrize
+      ? addLog(state, `${label}：上個對手主回合自己有寶可夢被招式 KO → +${bonus} 傷害`, aIdx)
+      : state;
+    return { state: s, damage: base + add };
+  };
+}
 // 鐵斑葉｜復仇刀鋒 100+60
-regPre('鐵斑葉|復仇刀鋒', (state, aIdx, _pool) => {
-  const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
-  const tookPrize = attackKO > 0;
-  const bonus = tookPrize ? 60 : 0;
-  const s = tookPrize
-    ? addLog(state, `復仇刀鋒：上個對手主回合自己有寶可夢被招式 KO → +60 傷害`, aIdx)
-    : state;
-  return { state: s, damage: 100 + bonus };
-});
+regPre('鐵斑葉|復仇刀鋒', revengeDamageKOPre(100, 60, '復仇刀鋒'));
 // 普隆隆姆｜捲土重來 30+90
-regPre('普隆隆姆|捲土重來', (state, aIdx, _pool) => {
-  const attackKO = state.oppDamageKOdMeInLastOppTurn?.[aIdx] ?? 0;
-  const tookPrize = attackKO > 0;
-  const bonus = tookPrize ? 90 : 0;
-  const s = tookPrize
-    ? addLog(state, `捲土重來：上個對手主回合自己有寶可夢被招式 KO → +90 傷害`, aIdx)
-    : state;
-  return { state: s, damage: 30 + bonus };
-});
+regPre('普隆隆姆|捲土重來', revengeDamageKOPre(30, 90, '捲土重來'));
 // 古玉魚｜嫉妒業火 50+90
 regPre('古玉魚|嫉妒業火', (state, aIdx, _pool) => {
   const attackKO = state.oppAttackKOdMeInLastOppTurn?.[aIdx] ?? 0;
@@ -7152,19 +7156,30 @@ regPre('師父鼬|疾風迴旋', (state, aIdx, _pool) => {
   return { state, damage: 30 };
 });
 
-// 若這隻寶可夢身上附有【雷】能量卡 → +80
+// 若這隻寶可夢身上附有【X】能量卡 → +N
 // v5.214 Bug 2：原 pokemonType==='Lightning' 永遠 false（能量卡 JSON pokemonType=null）。
 //   改用既有 isEnergyOfType helper（含「【X】」name fallback），基本/特殊雷能量都正確識別。
-regPre('電蜘蛛|麻麻羅網', (state, aIdx, pool) => {
-  const att = state.players[aIdx].active;
-  if (!att) return { state, damage: 50 };
-  // v5.683：host-aware → 古舊/稜鏡(Basic)等「視為雷」的特殊能量也算「附有【雷】能量」
-  const has = att.energyAttached.some(e => energyProvidesType(att, e, 'Lightning', pool));
-  if (has) {
-    return { state: addLog(state, '麻麻羅網：附有【雷】能量 → +80', aIdx), damage: 130 };
-  }
-  return { state, damage: 50 };
-});
+/**
+ * ⭐ v6.342 中央收斂：「若這隻寶可夢身上附有【X】能量卡，則增加 N 點傷害。」
+ *   使用者：電蜘蛛｜麻麻羅網(50+80/雷)、萊希拉姆｜鐳射火焰(80+80/雷)、
+ *          捷克羅姆｜爆烈閃電(80+80/火)。
+ * ⚠ 判定**只能**走 host-aware 的 energyProvidesType —— 基本能量卡的 pokemonType 恒 null，
+ *   且古舊／稜鏡等「視為該屬性」的特殊能量同樣算「附有【X】能量卡」（v5.683 結論）。
+ *   自己數 energyAttached／直讀 pokemonType 都會漏。
+ */
+export function selfHasEnergyTypePre(base: number, bonus: number, type: EnergyType, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return { state, damage: base };
+    const has = att.energyAttached.some(e => energyProvidesType(att, e, type, pool));
+    if (has) {
+      const tag = TYPE_TO_TAG[type] ?? `【${type}】`;
+      return { state: addLog(state, `${label}：附有${tag}能量 → +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+regPre('電蜘蛛|麻麻羅網', selfHasEnergyTypePre(50, 80, 'Lightning', '麻麻羅網'));
 
 // 若自己場上的【惡】能量有 3 個以上 → +50
 regPre('阿勃梭魯|惡棍墜落', (state, aIdx, pool) => {
@@ -8039,7 +8054,8 @@ function isEnergyOfType(ec: any, type: string): boolean {
 //   而 塗標客｜能量塗鴉／霏歐納｜能量壓制(走本檔 helper) 只算 2 個 —— 同措辭兩種結果。
 //   涵蓋 selfAttached / defActive / oppAll / selfAll 四個 helper ＋ 吞食獸｜張大嘴、
 //   椰蛋樹｜投球時刻、迷唇姐｜精神強念 三處 inline。
-function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+// v6.342：export 供 M6a 批次2 卡檔復用（蓋歐卡｜水炮）— 原為 local，行為完全未變
+export function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
     if (!att) return { state, damage: base };
@@ -8053,7 +8069,8 @@ function selfAttachedEnergyMultiplyPre(base: number, per: number, filter: Energy
   };
 }
 
-function defActiveEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
+// v6.342：export 供 M6a 批次2 卡檔復用（夢幻｜精神強念）— 原為 local，行為完全未變
+export function defActiveEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
@@ -8978,10 +8995,23 @@ export function snipeOneOppBenchPost(amount: number, label: string, exOnly: bool
 
 regR('snipe-variable', (st, actorIdx, selectedIids, params, pool) => {
   // v5.385：改為呼叫中央 dealAttackDamageToTarget（行為不變）。
-  const dmg = (params?.damage as number) ?? 0;
+  let s = st;
+  let dmg = (params?.damage as number) ?? 0;
   const label = (params?.label as string) ?? '遠程攻擊';
   const kind = ((params?.kind as DamageKind) ?? 'attack-damage');
-  return dealAttackDamageToTarget(st, actorIdx, selectedIids[0], dmg, pool, { kind, label });
+  // ⭐ v6.342：params.perCounter ＝「傷害依**選定目標**身上的傷害指示物數而定」
+  //   （甲賀忍蛙ex｜隱密斬：「對手的1隻寶可夢受到那隻寶可夢身上放置的傷害指示物的數量×30點傷害」）
+  //   —— 目標選好之前算不出數字，只能在 resolver 內算；其餘路徑（params.damage）完全不受影響。
+  const perCounter = params?.perCounter as number | undefined;
+  if (typeof perCounter === 'number') {
+    const dIdx = (1 - actorIdx) as 0 | 1;
+    const d = s.players[dIdx];
+    const tgt = d.active?.iid === selectedIids[0] ? d.active : d.bench.find(c => c.iid === selectedIids[0]);
+    const n = counterCount(tgt?.damage ?? 0);
+    dmg = n * perCounter;
+    s = addLog(s, `${label}：目標身上 ${n} 個傷害指示物 × ${perCounter} → ${dmg} 點傷害`, actorIdx);
+  }
+  return dealAttackDamageToTarget(s, actorIdx, selectedIids[0], dmg, pool, { kind, label });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -19592,4 +19622,190 @@ import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8
 import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）
 import './effects/cards/v6191_new_printings'; // v6.191 官方完整性補收（玳蘿）
+
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.342 M6a 招式實裝 批次2「傷害計算類」—— 中央 helper
+//
+// ⚠ 本區每一支都是「卡面措辭逐字相同才共用」。措辭不同的一律各自實作。
+// ⚠ 能量相關一律走 host-aware 中央述詞（countEnergyTypeHostAware / energyProvidesType /
+//   getBasicEnergyType）—— 特殊能量提供的屬性與張數不是一對一，直讀 pokemonType 恒 null。
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 「造成自己已經獲得的獎賞卡的張數×N點傷害。」
+ * 使用者：呆火鱷ex｜心情好火焰(70)、超級大嘴娃ex｜貪心(80)。
+ * ⚠「已獲得」＝ 6 − 自己**剩餘**獎賞數（取獎賞時取走的是自己那一疊）。
+ * ⚠ 倫琴貓｜猛力進攻 也是同措辭，但它額外回 `breakdown`（傷害預估 UI 逐字顯示
+ *   「已取獎賞 N×70」）⇒ 形狀不同，本次不併入，留在原處。
+ */
+export function prizesTakenMultiplyPre(per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const taken = Math.max(0, 6 - state.players[aIdx].prizes.length);
+    const dmg = taken * per;
+    return {
+      state: addLog(state, `${label}：自己已取獎賞 ${taken} 張 → 造成 ${dmg} 點傷害`, aIdx),
+      damage: dmg,
+    };
+  };
+}
+
+/**
+ * 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」
+ * 使用者：皮卡丘｜氣沖沖伏特(10+10×)。
+ * ⚠ 指示物數走既有中央述詞 selfActiveCounters（= damage ÷ 10），不要自己除。
+ */
+export function selfCountersMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const n = selfActiveCounters(state, aIdx);
+    const dmg = base + per * n;
+    return { state: addLog(state, `${label}：自身傷害指示物 ${n} 個 × ${per} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * 「增加自己的棄牌區的能量卡的張數×N點傷害。」
+ * 使用者：露奈雅拉｜午夜之光(20+20×)。
+ * ⚠ 卡面是「**張數**」不是「數量」⇒ 逐張計數，**不**走 host-aware 單位數
+ *   （火箭隊能量在場上算 2 個，但在棄牌區就只是 1 張）。
+ * ⚠ 「能量卡」含特殊能量（卡面沒限定「基本」）。
+ */
+export function selfDiscardEnergyMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const n = state.players[aIdx].discard.filter(c => pool.get(c.cardId)?.supertype === 'Energy').length;
+    const dmg = base + per * n;
+    return { state: addLog(state, `${label}：棄牌區能量卡 ${n} 張 × ${per} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * 「造成自己的手牌的張數×N點傷害。」
+ * 使用者：伽勒爾 喵喵｜寶物猛攻(10×)。
+ * （對手手牌版是另一組措辭，見 超級雪妖女ex｜怨言 / 引夢貘人｜意志統治者。）
+ */
+export function selfHandMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const n = state.players[aIdx].hand.length;
+    const dmg = base + per * n;
+    return { state: addLog(state, `${label}：自己手牌 ${n} 張 × ${per} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * 「若這隻寶可夢身上附有「寶可夢道具」卡，則增加 N 點傷害。」
+ * 使用者：蒼響｜堅硬利刃(20+40)。
+ * ⚠ 一律走 getAllAttachedTools —— 洛托姆ex｜多重轉接開啟的第 2 張道具放在 extraTools，
+ *   只看 toolAttached 會漏（v3.20）。
+ */
+export function selfHasToolPre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const att = state.players[aIdx].active;
+    if (getAllAttachedTools(att).length > 0) {
+      return { state: addLog(state, `${label}：附有「寶可夢道具」卡 → +${bonus}`, aIdx), damage: base + bonus };
+    }
+    return { state, damage: base };
+  };
+}
+
+/**
+ * 「造成自己的場上的「XXX（包含『寶可夢【ex】』）」的數量×N點傷害。」
+ * 使用者：皮卡丘｜皮卡連鎖(40×)。
+ * ⚠ 括號「包含『寶可夢【ex】』」＝ 只多收 `XXXex` 這一種卡名；
+ *   `皮卡丘&捷克羅姆GX` 這類卡名不同的聯合卡**不算**（卡面沒寫）。
+ * ⚠ 計數走既有中央 countOwnPokemon（含戰鬥場＋備戰）。
+ */
+export function selfNamedPokemonMultiplyPre(base: number, per: number, baseName: string, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const n = countOwnPokemon(state, aIdx, pool, c => c.name === baseName || c.name === `${baseName}ex`);
+    const dmg = base + per * n;
+    return { state: addLog(state, `${label}：自己場上的「${baseName}」${n} 隻 × ${per} → ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * 「造成自己的所有寶可夢身上附加的**基本能量的屬性種類**的數量×N點傷害。」
+ * 使用者：仙子伊布ex｜鮮豔和聲(50×)。
+ * ⚠ 數的是**屬性種類**（3 張基本【草】只算 1 種），不是張數也不是單位數。
+ * ⚠ 現役基本能量卡的 `pokemonType` 恒 null（v6.008 踩過的坑）⇒ 一律走中央
+ *   getBasicEnergyType（由卡名推）；它對特殊能量回 null ⇒ 「基本能量」自動被濾出。
+ */
+export function selfBasicEnergyTypeCountPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const types = new Set<EnergyType>();
+    for (const host of [...(p.active ? [p.active] : []), ...p.bench]) {
+      for (const e of host.energyAttached) {
+        const t = getBasicEnergyType(pool.get(e.cardId));
+        if (t) types.add(t);
+      }
+    }
+    const dmg = base + per * types.size;
+    return {
+      state: addLog(state, `${label}：自方全場基本能量 ${types.size} 種屬性 × ${per} → ${dmg}`, aIdx),
+      damage: dmg,
+    };
+  };
+}
+
+/**
+ * 「造成自己的最大HP為「H」的**備戰**寶可夢的數量×N點傷害。」
+ * 使用者：寶寶丁｜軟彈陣(HP30, 30×)。
+ * ⚠ 「最大HP」＝卡面 HP（不因受傷而變），且卡面主詞是「備戰寶可夢」⇒ **不含戰鬥場**。
+ */
+export function selfBenchMaxHpMultiplyPre(maxHp: number, base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, pool) => {
+    let n = 0;
+    for (const b of state.players[aIdx].bench) {
+      const c = pool.get(b.cardId);
+      if (c && Number(c.hp) === maxHp) n++;
+    }
+    const dmg = base + per * n;
+    return {
+      state: addLog(state, `${label}：自己備戰最大HP「${maxHp}」的寶可夢 ${n} 隻 × ${per} → ${dmg}`, aIdx),
+      damage: dmg,
+    };
+  };
+}
+
+/**
+ * 「增加與在上個對手的回合這隻寶可夢受到的招式的傷害相同數值的傷害。」
+ * 使用者：超級赫拉克羅斯ex｜重裝角擊(100+)、鬃岩狼人｜雙倍奉還(10+)。
+ * ⚠ 讀的是既有欄位 `damageTakenLastOppTurn`（唯一寫入點＝_shared 的 withAttackDamageTaken，
+ *   由 scripts/test-v6256-damage-taken-central.mjs 守；防 KO 時記的是「實際扣到的」）。
+ */
+export function damageTakenLastOppTurnPlusPre(base: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const a = state.players[aIdx].active;
+    const dmgTaken = a?.damageTakenLastOppTurn ?? 0;
+    const dmg = base + dmgTaken;
+    return {
+      state: addLog(state, `${label}：上個對手回合受到 ${dmgTaken} 點招式傷害 → ${base} + ${dmgTaken} = ${dmg}`, aIdx),
+      damage: dmg,
+    };
+  };
+}
+
+/**
+ * 「對手的1隻寶可夢受到**那隻寶可夢身上放置的傷害指示物的數量**×N點傷害。
+ *   [在備戰區不計算弱點・抵抗力。]」
+ * 使用者：甲賀忍蛙ex｜隱密斬(30×)。
+ * ⚠ 傷害依**選定目標**而定 ⇒ 只能在 snipe-variable resolver 內算（params.perCounter）。
+ * ⚠ 卡面主詞是「1隻**寶可夢**」（含戰鬥場）⇒ opp-poke-choose，不是 opp-bench-choose。
+ * ⚠ 括號「在備戰區不計算弱點・抵抗力」是中央 dealAttackDamageToTarget 的既有行為，
+ *   不需要也不可以再加旗標。
+ */
+export function chooseOppPokemonDamageByCounters(state: GameState, aIdx: 0 | 1, per: number, label: string) {
+  const dIdx = (1 - aIdx) as 0 | 1;
+  const d = state.players[dIdx];
+  if (!d.active && d.bench.length === 0) return addLog(state, `${label}：對手場上無寶可夢`, aIdx);
+  return withPending(
+    addLog(state, `${label}：選擇對手 1 隻寶可夢，受到「那隻身上的傷害指示物數 × ${per}」點傷害`, aIdx),
+    {
+      type: 'opp-poke-choose', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'snipe-variable',
+      params: { perCounter: per, label, kind: 'attack-damage' },
+    });
+}
+
 import './effects/cards/m6a_wave1'; // v6.341 M6a「30th CELEBRATION」招式實裝 批次1（26 招）
+import './effects/cards/m6a_wave2'; // v6.342 M6a 招式實裝 批次2（16 招｜傷害計算類）

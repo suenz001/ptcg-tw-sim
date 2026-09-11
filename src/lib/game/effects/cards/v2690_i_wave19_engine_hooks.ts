@@ -13,20 +13,14 @@
 
 import { regPre, regPost, addLog } from '../_shared';
 import type { AttackPostFn, AttackPreFn } from '../_shared';
-import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
+import { applyOppActiveDebuffPost, damageTakenLastOppTurnPlusPre } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate) / v6.342「上個對手回合受到的招式傷害」中央 helper
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 超級赫拉克羅斯ex｜重裝角擊 100+ — 增加上個對手回合此寶可夢受到的招式傷害
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('超級赫拉克羅斯ex|重裝角擊', (state, aIdx, _pool) => {
-  const a = state.players[aIdx].active;
-  const dmgTaken = a?.damageTakenLastOppTurn ?? 0;
-  const dmg = 100 + dmgTaken;
-  return {
-    state: addLog(state, `重裝角擊：上個對手回合受到 ${dmgTaken} 點招式傷害 → 100 + ${dmgTaken} = ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+// v6.342：收斂到中央 damageTakenLastOppTurnPlusPre（log 與傷害逐字相同）。
+//   同措辭的 鬃岩狼人｜雙倍奉還（M6a 071，10+）共用同一支。
+regPre('超級赫拉克羅斯ex|重裝角擊', damageTakenLastOppTurnPlusPre(100, '重裝角擊'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 2. 雙彈瓦斯｜瘋狂炸彈 50+ — 上個自己回合使出過「充滿瓦斯」+120

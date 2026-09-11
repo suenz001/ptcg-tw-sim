@@ -29,6 +29,7 @@ import {
   applyPreventKOToVictim,  // ⭐v6.260 油之機關槍 KO 補防 KO（倖存鍛鍊器/勤奮之心等）
   resolveMultiTargetDamageGuard,   // v6.141 多目標傷害免疫中央閘
   passiveImmunityByDamageAmount,   // v6.165 依傷害量判定的被動免疫（鐵壁硬殼）
+  prizesTakenMultiplyPre,          // v6.342「自己已取獎賞張數×N」中央 helper
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -90,14 +91,8 @@ regPost('超級寶石海星ex|噴射打擊', (state, aIdx) =>
 // ══════════════════════════════════════════════════════════════════════════════
 // 卡面：「造成自己已經獲得的獎賞卡的張數×80點傷害。」
 // 「已取獎賞」= 6 - 自己剩餘獎賞數。初始 6 張 → 已取 0；取到最後 1 張 → 已取 5。
-regPre('超級大嘴娃ex|貪心', (state, aIdx) => {
-  const remaining = state.players[aIdx].prizes.length;
-  const taken = Math.max(0, 6 - remaining);
-  const dmg = taken * 80;
-  const s = addLog(state,
-    `貪心：自己已取獎賞 ${taken} 張 → 造成 ${dmg} 點傷害`, aIdx);
-  return { state: s, damage: dmg };
-});
+// v6.342：收斂到中央 prizesTakenMultiplyPre（log 與傷害逐字相同）。
+regPre('超級大嘴娃ex|貪心', prizesTakenMultiplyPre(80, '貪心'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 超級大嘴娃ex ｜ 大啃咬（基礎 260；若對手戰鬥位有傷害指示物 → 改為 30）

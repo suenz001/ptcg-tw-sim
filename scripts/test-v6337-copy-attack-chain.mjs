@@ -19,7 +19,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync, mkdtempSync, cpSy
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { hasBaseCommit, readBaseBlob, restoreBaseSubtree, shallowSkip } from './lib/base-blob.mjs';
 import { withSeededRandom } from './lib/seeded-rng.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -310,7 +310,16 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
 
   const baseSrc = join(TMP, 'base-src');
   cpSync(join(ROOT, 'src'), baseSrc, { recursive: true });
-  let rebuilt = true;
+  // ⭐ v6.343 harness 修正：只換 effects.ts 會與 HEAD 的卡檔不相容 ——
+  //   HEAD 的卡檔可能 `import { 新helper } from '../../effects'`，而 BASE 的 effects.ts
+  //   還沒有那個符號 ⇒ esbuild build failed ⇒ 整支守衛爆掉（紅在 harness，不是判準）。
+  //   ⇒ 整個 src/lib/game/effects 子樹一起換回 BASE（含刪掉 BASE 沒有的新卡檔）才自洽。
+  //   ⚠ pathspec `src/lib/game/effects` 只涵蓋**目錄**，不含 `effects.ts`；
+  //     effects.ts 仍由下面 CHANGED 的逐檔清單換回 BASE blob。
+  const sub = restoreBaseSubtree(ROOT, BASE_SHA, baseSrc, 'src/lib/game/effects');
+  console.log(`      [BASE 子樹] src/lib/game/effects：換回 ${sub.replaced} 檔、刪除 ${sub.removed} 檔（BASE 沒有的）`);
+  if (!sub.ok) console.log('      ⚠⚠ BASE 子樹重建失敗（harness 壞了，不可以當成「BASE 是紅的」）⇒ ' + sub.reason);
+  let rebuilt = sub.ok;
   for (const rel of CHANGED) {
     const b = readBaseBlob(ROOT, BASE_SHA, rel);
     if (!b.ok) { rebuilt = false; break; }

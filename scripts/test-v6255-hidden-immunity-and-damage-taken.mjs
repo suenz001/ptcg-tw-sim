@@ -377,9 +377,20 @@ T('C7 lint：本欄位的讀取點枚舉（下限斷言 ＋ 正對照）', () =>
   //   ⚠ 基數只有 5，所以餘裕給 2（不是 3）：3 仍然遠高於「掃描器壞掉＝0」，保得住偵測力。
   //   ⚠ 往下掉 1~2 多半是合法收斂，確認後改這一行。
   assert.ok(total >= 3, `掃描器下限：damageTakenLastOppTurn 出現次數應 ≥3，實得 ${total}（掃描器壞了？A 類下限 3／實測基準 5）`);
+  // ⭐v6.342：唯一讀取點**下沉到** effects.ts 的中央 helper `damageTakenLastOppTurnPlusPre`
+  //   —— M6a「鬃岩狼人｜雙倍奉還」（071，10+）與「超級赫拉克羅斯ex｜重裝角擊」（100+）
+  //   卡面逐字同措辭，共用同一支（Rule 38）。判準上移到意圖層（Rule 40）：
+  //   ① 中央 helper 在 ② 讀取點在它裡面（仍是唯一一處）③ 卡檔端不得再自己讀。
+  const effSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'), 'effects.ts');
+  assert.ok(/export function damageTakenLastOppTurnPlusPre\(/.test(effSrc),
+    '中央讀取 helper damageTakenLastOppTurnPlusPre 不見了 ⇒ 這條守衛的前提消失');
+  assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(effSrc),
+    '唯一讀取點（中央 helper 內）不見了 ⇒ 這條守衛的前提消失');
   const hookSrc = strip(readFileSync(join(ROOT, 'src/lib/game/effects/cards/v2690_i_wave19_engine_hooks.ts'), 'utf8'), 'v2690 hook');
-  assert.ok(/const dmgTaken = a\?\.damageTakenLastOppTurn \?\? 0;/.test(hookSrc),
-    '唯一讀取點（重裝角擊）不見了 ⇒ 這條守衛的前提消失');
+  assert.ok(!/\.damageTakenLastOppTurn\b/.test(hookSrc),
+    '卡檔不得再自己讀 damageTakenLastOppTurn（已收斂到中央 helper）');
+  assert.ok(/damageTakenLastOppTurnPlusPre\(100, '重裝角擊'\)/.test(hookSrc),
+    '重裝角擊必須走中央 helper 且 base ＝ 100');
   // 正對照：樣式真的抓得到「多一個讀取點」
   assert.ok(/\.damageTakenLastOppTurn\s*\?\?\s*0/.test('const x = a?.damageTakenLastOppTurn ?? 0;'), '讀取樣式恆假＝安慰劑');
   // ⭐v6.326【B 類：結構性最小值】維持 1、slack 0：上面那條 deepEqual 級的斷言已經說了

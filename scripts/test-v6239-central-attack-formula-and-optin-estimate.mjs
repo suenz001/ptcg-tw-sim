@@ -266,7 +266,11 @@ console.log('\n⑤ 【A】突變測試：composeAttackFormula 是**唯一**來�
 {
   const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
   const head = eng.indexOf('export function composeAttackFormula(');
-  const tail = eng.indexOf('\n}\n', head);
+  // ⭐v6.342 CRLF 中性化：'\n}\n' 在 CRLF checkout（core.autocrlf=true）永遠找不到 ⇒ 這條在 Windows 上恆紅。
+  //   改成 /\r?\n\}\r?\n/ 尋找，LF 與 CRLF 兩種行尾都抓得到（判準不變）。
+  const tailRe = /\r?\n\}\r?\n/g; tailRe.lastIndex = head;
+  const tailM = tailRe.exec(eng);
+  const tail = tailM ? tailM.index : -1;
   chk('抓得到 composeAttackFormula 函式本體', head > 0 && tail > head, `${head} ${tail}`);
   const mutated = eng.slice(0, head) + eng.slice(head, tail).split(' = ${finalValue}').join(' ⊞ ${finalValue}') + eng.slice(tail);
   chk('突變真的改到東西（正對照）', mutated !== eng);
