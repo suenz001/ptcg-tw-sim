@@ -221,7 +221,7 @@ await T('【A】⑧ 與「則將」措辭的同族卡走完全相同的實作（
 
 await T('【A】⑨ 校驗和：卡片總數與各卡包張數與 v6.240 完全相同（只改一個字串，沒有搬動資料）', () => {
   const EXPECT = {"M-P-H":11,"M-P-I":51,"M-P-J":103,"M1L":92,"M1S":92,"M2":116,"M2a":486,"M3":117,"M4":120,
-    "M5":118,"M6":76,"MBD":24,"MBG":24,"MC":902,"MJ":24,"SV-P-H":61,"SV-P-I":22,"SV-P-J":21,"SV10":132,
+    "M5":118,"M6":113,"MBD":24,"MBG":24,"MC":902,"MJ":24,"SV-P-H":61,"SV-P-I":22,"SV-P-J":21,"SV10":132,
     "SV11B":253,"SV11W":254,"SV5K":100,"SV5M":100,"SV5a":96,"SV6":133,"SV6a":94,"SV7":135,"SV7a":94,
     "SV8":138,"SV8a":335,"SV9":132,"SV9a":92,"SVK":50,"SVM":183,"SVOD":23,"SVOM":23,"SVPN":8,"SVPS":8,
     "SVQL":23,"SVQP":24,"svhk":24,"svhm":24};
@@ -229,6 +229,10 @@ await T('【A】⑨ 校驗和：卡片總數與各卡包張數與 v6.240 完全�
   //   本來就不算「搬動資料」——它守的是「既有卡包的張數沒被動到」。
   //   ⇒ 只對 EXPECT 裡列出的卡包逐一比對，並額外斷言「既有卡包一個都沒有消失」。
   //   新卡包的張數自洽由 test-card-db-integrity（index vs 檔案）與 test-v6333 負責。
+  // ⭐ v6.335（Rule 40 再一次）：M6 由 76 → 113 —— 官方在發售後才公開 077/076～113/076 共 37 張異畫版，
+  //   本版是**補齊漏收的官方印刷**（只 append，既有 76 筆逐字未動），不是「改字串時悄悄搬動資料」。
+  //   ⚠ 這種「快照式張數」的判準每次補卡都會擋一次；真正在守「沒搬動資料」的是
+  //   test-v6335 的 E4（拿 BASE blob 逐字比對 M6 原本那 76 筆）與下面「只准增不准減」那兩條。
   const existing = Object.fromEntries(Object.keys(EXPECT).map((k) => [k, bySet[k]]));
   assert.deepStrictEqual(existing, EXPECT, '既有卡包的張數被動到了（新增卡包不算）');
   const gone = Object.keys(EXPECT).filter((k) => !(k in bySet));

@@ -607,16 +607,16 @@
   "code": "M6",
   "name": "綠寶石風暴",
   "regulationMark": "J",
-  "cardCount": 76,
+  "cardCount": 113,
   "supertypeCounts": {
-   "Pokemon": 62,
-   "Trainer": 14,
-   "Energy": 0
+   "Pokemon": 87,
+   "Trainer": 23,
+   "Energy": 3
   },
   "coverImageUrl": "https://asia.pokemon-card.com/tw/archive/special/card/m6/assets/images/ogp.png",
   "scrapedAt": "2026-07-31T04:45:00.000Z",
   "releaseDate": "2026-08-07",
-  "count": 76
+  "count": 113
  },
  {
   "code": "M6a",
