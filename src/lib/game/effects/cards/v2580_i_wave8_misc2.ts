@@ -23,9 +23,10 @@ import type { CardInstance, PlayerState } from '../../types';
 import { snipeCountersPost } from '../../effects'; // v6.069 收斂：放置 N 個傷害指示物
 import { flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
 import { defNextAtkReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate)
+import { healOneOwnBenchFullPost } from '../../effects'; // v6.343 「1隻備戰寶可夢HP全部恢復」中央出口
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
 import {
-  regPre, regPost, regR,
+  regPre, regPost,
   addLog, updatePlayer, withPending, shuffle,
   getOwnBenchLimit, ATTACK_PRE_DISCARD_CHOICE,
   toBareCard,
@@ -178,36 +179,9 @@ regPre('噴火駝|炙燒灼傷', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 風妖精|治癒棉絮 0 — 1 隻備戰寶可夢回滿 HP
 regPre('風妖精|治癒棉絮', (s) => ({ state: s, damage: 0 }));
-regPost('風妖精|治癒棉絮', (state, aIdx, _pool) => {
-  const player = state.players[aIdx];
-  if (player.bench.length === 0) {
-    return addLog(state, '治癒棉絮：備戰區無寶可夢', aIdx);
-  }
-  const wounded = player.bench.filter(b => (b.damage ?? 0) > 0);
-  if (wounded.length === 0) {
-    return addLog(state, '治癒棉絮：備戰區無受傷寶可夢', aIdx);
-  }
-  const s = addLog(state, '治癒棉絮：選 1 隻備戰寶可夢回滿 HP', aIdx);
-  return withPending(s, {
-    type: 'heal-target',
-    actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'wave8-heal-full-bench',
-    params: { validIids: wounded.map(b => b.iid) },
-  });
-});
-
-regR('wave8-heal-full-bench', (state, aIdx, iids, _params, _pool) => {
-  if (iids.length === 0) return state;
-  const targetIid = iids[0];
-  return updatePlayer(
-    addLog(state, `治癒棉絮：選定備戰寶可夢回復至滿 HP`, aIdx),
-    aIdx, p => ({
-      ...p,
-      bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: 0 } : b),
-    }),
-  );
-});
+// v6.343 中央收斂：與 鳳王｜神聖之息「將自己的1隻備戰寶可夢的HP全部恢復。」逐字同措辭
+//   ⇒ 改用 effects.ts 的 healOneOwnBenchFullPost（行為與 log 逐字相同，只是 label 參數化）。
+regPost('風妖精|治癒棉絮', healOneOwnBenchFullPost('治癒棉絮'));
 
 // 阿響的鳳王ex|閃耀羽毛 160 + 自方所有寶可夢各回 50 HP
 regPre('阿響的鳳王ex|閃耀羽毛', (s) => ({ state: s, damage: 160 }));

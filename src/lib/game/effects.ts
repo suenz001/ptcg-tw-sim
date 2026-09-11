@@ -9300,7 +9300,8 @@ function selfDiscardNEnergyPost(n: number, label: string): AttackPostFn {
   };
 }
 
-function selfDiscardAllEnergyPost(label: string): AttackPostFn {
+// v6.343：export 供 M6a 批次3 卡檔復用（索爾迦雷歐｜流星閃衝、鳳王｜神聖之息）。原為 local，行為完全未變。
+export function selfDiscardAllEnergyPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const att = state.players[aIdx].active;
     if (!att || att.energyAttached.length === 0) return state;
@@ -9393,15 +9394,9 @@ regPost('紅蓮鎧騎|紅蓮引爆', (state, aIdx, pool) => {
   const fireEnergies = att.energyAttached.filter(e => energyProvidesType(att, e, 'Fire', pool)); // v5.683 host-aware
   if (fireEnergies.length === 0) return state;
   // 先丟棄火能量
-  let s = updatePlayer(state, aIdx, p => {
-    if (!p.active) return p;
-    const kept = p.active.energyAttached.filter(e => !energyProvidesType(p.active!, e, 'Fire', pool)); // v5.683 host-aware
-    return {
-      ...p,
-      active: { ...p.active, energyAttached: kept },
-      discard: [...p.discard, ...fireEnergies],
-    };
-  });
+  // v6.343 中央收斂：與 皮卡丘｜雷電落（「將這隻寶可夢身上附加的【雷】能量卡全部丟棄」）
+  //   逐字同措辭 ⇒ 共用 selfDiscardAllEnergyOfTypePost（同一支 host-aware 判準）。
+  let s = selfDiscardAllEnergyOfTypePost('Fire', '紅蓮引爆')(state, aIdx, pool);
   // 然後 opp-bench-choose 選 1 隻打 180
   const dIdx = (1 - aIdx) as 0 | 1;
   if (s.players[dIdx].bench.length === 0) {
@@ -11074,7 +11069,8 @@ regPost('噗隆隆|金屬塗層', (state, aIdx, pool) => {
 // ── Session 38ac (v1.79) H 標第 24 波：棄牌能量附加 + 多目標 snipe ──────────────
 // 共同 helper：棄牌區選 N 張特定屬性基本能量 → 選 1 隻自己寶可夢附加
 // 兩步：步驟 1 選能量（discard-search），步驟 2 選目標（heal-target 類，任一自己寶可夢）
-function discardEnergyAttachPost(
+// v6.343：export 供 M6a 批次3 卡檔復用（超夢｜賦予力量）。原為 local，行為完全未變。
+export function discardEnergyAttachPost(
   max: number,
   typeFilter: EnergyType | null,
   label: string,
@@ -11086,6 +11082,13 @@ function discardEnergyAttachPost(
    *   所以**不能**用 effectKey 白名單表達（會一次放行全部，含該必選的卡）。
    */
   optional: boolean,
+  /**
+   * ⭐ v6.343：卡面是「附於自己的**1隻**寶可夢身上」→ 選好的能量全部附到同一隻，不可分散。
+   *   預設 false ＝「**以任意方式**附於自己的寶可夢身上」型（莫魯貝可｜撿拾附上）。
+   *   ⚠ 這兩種卡面是**不同的規則**（見 EnergyChainOpts.singleTarget 的長註解）；
+   *     這裡只是把那個既有旗標透傳下去，不是第二份判準。
+   */
+  singleTarget: boolean = false,
 ): AttackPostFn {
   // v3.12 升級：改用 v158-energy-chain-start resolver（source: 'discard'），
   // 支援多目標分配（單一目標自動全附；同類能量批次 +/- UI；混合屬性逐張 picker）。
@@ -11115,6 +11118,7 @@ function discardEnergyAttachPost(
         source: 'discard',
         scope: 'any-own',
         allowSkipZero: optional,
+        singleTarget: singleTarget ? true : undefined,  // v6.343 「附於自己的1隻寶可夢身上」
       },
     });
   };
@@ -12511,7 +12515,8 @@ export function drawToHandPost(n: number, label: string): AttackPostFn {
 
 // ── Helper: handAttachEnergyPost — 從手牌選基本能量附於自己場上寶可夢 ────
 // typeFilter=null 不限屬性；max=99 表示不限上限
-function handAttachEnergyPost(
+// v6.343：export 供 M6a 批次3 卡檔復用（皮卡丘ex｜劈哩劈哩夜狂歡）。原為 local，行為完全未變。
+export function handAttachEnergyPost(
   max: number,
   typeFilter: EnergyType | null,
   label: string,
@@ -12897,9 +12902,12 @@ regPost('美錄坦|搬運破爛', deckSearchToHandPost(1, 'Tool', '搬運破爛'
 export function deckEnergyAttachSelfPost(
   typeFilter: EnergyType | null,
   label: string,
-  opts?: { anyEnergy?: boolean },
+  // v6.343：opts.max —— 卡面寫「最多 N 張」時的上限（皮卡丘｜充電衝刺＝擲幣正面數）。
+  //   預設 1 ＝ 既有呼叫端（穿著熊｜力量充能／雷公ex｜雷霆纏身）行為完全不變。
+  opts?: { anyEnergy?: boolean; max?: number },
 ): AttackPostFn {
   const anyEnergy = opts?.anyEnergy === true;
+  const maxPick = opts?.max ?? 1;
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     if (!p.active) return state;
@@ -12912,10 +12920,16 @@ export function deckEnergyAttachSelfPost(
     });
     if (cand.length === 0) return openDeckViewReshuffle(state, aIdx, label); // v5.496
     const filterStr = typeFilter ? `Energy:${typeFilter}` : (anyEnergy ? 'Energy' : 'BasicEnergy');
-    const s = addLog(state, `${label}：從牌庫選 1 張${anyEnergy ? '能量' : '基本能量'}附於自己`, aIdx);
+    // v6.343：上限為 0（例：充電衝刺 0 次正面）⇒ 不開 picker，但卡面「並且重洗牌庫」照做。
+    if (maxPick <= 0) {
+      return updatePlayer(addLog(state, `${label}：可附加張數為 0，未附加能量（重洗牌庫）`, aIdx),
+        aIdx, p => ({ ...p, deck: shuffle(p.deck) }));
+    }
+    const realMaxPick = Math.min(maxPick, cand.length);
+    const s = addLog(state, `${label}：從牌庫選最多 ${realMaxPick} 張${anyEnergy ? '能量' : '基本能量'}附於自己`, aIdx);
     return withPending(s, {
       type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-      filter: filterStr, minCount: 0, maxCount: 1,
+      filter: filterStr, minCount: 0, maxCount: realMaxPick,
       effectKey: 'deck-energy-attach-self',
       params: { validIids: cand.map(c => c.iid), label },
     });
@@ -12929,7 +12943,8 @@ regR('deck-energy-attach-self', (st, idx, iids, params, pool) => {
   if (picked.length === 0) return openDeckViewReshuffle(st, idx, label);  // v5.963 0-pick 重洗(卡面「並且重洗牌庫」)
   const tname = pool.get(p.active.cardId)?.name ?? '?';
   const ename = pool.get(picked[0].cardId)?.name ?? '?';
-  let s = addLog(st, `${label}：將 ${ename} 附加到 ${tname}（重洗牌庫）`, idx);
+  // v6.343：maxCount 可能 >1（充電衝刺）⇒ log 要說得出總張數，不能只報第 1 張。
+  let s = addLog(st, `${label}：將 ${ename}${picked.length > 1 ? ` 等 ${picked.length} 張` : ''} 附加到 ${tname}（重洗牌庫）`, idx);
   return updatePlayer(s, idx, pl => {
     if (!pl.active) return pl;
     const newDeck = shuffle(pl.deck.filter(c => !iids.includes(c.iid)));
@@ -19807,5 +19822,150 @@ export function chooseOppPokemonDamageByCounters(state: GameState, aIdx: 0 | 1, 
     });
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// v6.343（M6a 批次3）中央出口：能量操作三支
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 「將這隻寶可夢身上附加的【X】能量卡**全部**丟棄」型的唯一判準。
+ * 使用者：紅蓮鎧騎｜紅蓮引爆（【火】）、皮卡丘｜雷電落（【雷】）。
+ * ⚠ 屬性一律走 host-aware energyProvidesType（古舊／稜鏡(Basic host)／新衝天(Stage2) 等
+ *   「視為該屬性」的特殊能量同樣算數；基本能量卡的 pokemonType 恒 null，直讀必錯）。
+ */
+export function selfDiscardAllEnergyOfTypePost(type: EnergyType, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return state;
+    const tag = TYPE_TO_TAG[type] ?? '';
+    const hit = att.energyAttached.filter(e => energyProvidesType(att, e, type, pool));
+    if (hit.length === 0) return addLog(state, `${label}：身上沒有${tag}能量可丟棄`, aIdx);
+    const ids = new Set(hit.map(e => e.iid));
+    const s = updatePlayer(state, aIdx, p => {
+      if (!p.active) return p;
+      return {
+        ...p,
+        active: { ...p.active, energyAttached: p.active.energyAttached.filter(e => !ids.has(e.iid)) },
+        discard: [...p.discard, ...hit],
+      };
+    });
+    return addLog(s, `${label}：丟棄全部${tag}能量（${hit.length} 個）`, aIdx);
+  };
+}
+
+/**
+ * 「將自己的1隻備戰寶可夢的HP全部恢復。」的唯一判準（＝傷害指示物清成 0，不是回固定點數）。
+ * 使用者：風妖精｜治癒棉絮（v2.58 原 inline，v6.343 收斂至此）、鳳王｜神聖之息。
+ * ⚠ 主詞是「**備戰**」⇒ picker 的 validIids 只列備戰，且只列**受傷**的（沒受傷的選了沒意義）。
+ * ⚠ 沒有備戰／備戰都沒受傷時只記一行 log 就結束 —— 這兩張卡面都沒有寫「否則招式失敗」。
+ */
+export function healOneOwnBenchFullPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const player = state.players[aIdx];
+    if (player.bench.length === 0) return addLog(state, `${label}：備戰區無寶可夢`, aIdx);
+    const wounded = player.bench.filter(b => (b.damage ?? 0) > 0);
+    if (wounded.length === 0) return addLog(state, `${label}：備戰區無受傷寶可夢`, aIdx);
+    const s = addLog(state, `${label}：選 1 隻備戰寶可夢回滿 HP`, aIdx);
+    return withPending(s, {
+      type: 'heal-target',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'heal-full-bench-one',
+      params: { label, validIids: wounded.map(b => b.iid) },
+    });
+  };
+}
+/**
+ * ⚠⚠ effectKey 改名必須留相容別名：`pendingSelection` 是**存在對戰狀態裡**的，
+ *   部署的那一瞬間若有玩家正停在舊 key 的選擇視窗，新版找不到 resolver ⇒ 那一局**卡死**
+ *   （v6.175「遲到的答案」同一類事故）。舊 key `wave8-heal-full-bench`（v2.58 風妖精｜治癒棉絮）
+ *   因此繼續註冊，指到同一支實作。⚠ 舊 pending 的 params 沒有 `label` ⇒ 走下面的 fallback 文案。
+ */
+const _healOneOwnBenchFullResolver: Parameters<typeof regR>[1] = (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '回復';
+  if (iids.length === 0) return state;
+  const targetIid = iids[0];
+  return updatePlayer(
+    addLog(state, `${label}：選定備戰寶可夢回復至滿 HP`, aIdx),
+    aIdx, p => ({
+      ...p,
+      bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: 0 } : b),
+    }),
+  );
+};
+regR('heal-full-bench-one', _healOneOwnBenchFullResolver);
+regR('wave8-heal-full-bench', _healOneOwnBenchFullResolver);   // ⚠ v2.58 起的舊 key，相容用，不可刪
+
+/** v6.343 內部：把攻擊者身上指定 iid 的那 1 張能量丟到棄牌區（單一寫入點）。 */
+function discardOneAttachedEnergyFromActive(
+  state: GameState, aIdx: 0 | 1, iid: string, label: string, pool: Map<string, Card>,
+): GameState {
+  const att = state.players[aIdx].active;
+  if (!att) return state;
+  const e = att.energyAttached.find(x => x.iid === iid);
+  if (!e) return state;
+  const ename = pool.get(e.cardId)?.name ?? '?';
+  const s = updatePlayer(state, aIdx, p => {
+    if (!p.active) return p;
+    return {
+      ...p,
+      active: { ...p.active, energyAttached: p.active.energyAttached.filter(x => x.iid !== iid) },
+      discard: [...p.discard, e],
+    };
+  });
+  return addLog(s, `${label}：丟棄 ${ename}`, aIdx);
+}
+
+/**
+ * ⭐⭐ 「選擇這隻寶可夢身上附加的【A】【B】【C】能量**各 1 個**，將其丟棄。」
+ *   使用者：洛奇亞｜元素爆破（【火】【水】【雷】各 1 個）。
+ *
+ * ⚠ 為什麼不走 ATTACK_PRE_DISCARD_CHOICE：中央 PreDiscardSpec 只有**單一**
+ *   energyTypeFilter，表達不了「三種屬性各剛好 1 個」；而這張卡的 250 是卡面印刷、
+ *   與丟幾個能量無關 ⇒ 不需要 PRE。改走 POST 的中央能量 picker（active-energy-discard，
+ *   ＋ params.validIids 走中央消毒閘），一行共用的 PRE_DISCARD UI 都不用動。
+ * ⚠ 屬性判定 host-aware（energyProvidesType）—— 與 紅蓮引爆／雷電落 同一支述詞。
+ * ⚠ 某一屬性**只有 1 個候選**時直接丟（沒有可選的餘地，不該為此彈一次視窗）；
+ *   2 個以上才開 picker —— 玩家可能想留下稜鏡／古舊等特殊能量。
+ * ⚠ 某一屬性**沒有**候選時只記 log 並往下一個屬性走（卡面沒有寫「否則招式失敗」）。
+ */
+export function discardOneEnergyOfEachTypePost(types: EnergyType[], label: string): AttackPostFn {
+  return (state, aIdx, pool) => runDiscardOneEachType(state, aIdx, pool, types, label);
+}
+function runDiscardOneEachType(
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, types: EnergyType[], label: string,
+): GameState {
+  let s = state;
+  for (let i = 0; i < types.length; i++) {
+    const t = types[i];
+    const tag = TYPE_TO_TAG[t] ?? '';
+    const att = s.players[aIdx].active;
+    if (!att) return addLog(s, `${label}：戰鬥場已無寶可夢，停止丟棄`, aIdx);
+    const cand = att.energyAttached.filter(e => energyProvidesType(att, e, t, pool));
+    if (cand.length === 0) { s = addLog(s, `${label}：身上沒有${tag}能量可丟棄`, aIdx); continue; }
+    if (cand.length === 1) { s = discardOneAttachedEnergyFromActive(s, aIdx, cand[0].iid, `${label}（${tag}）`, pool); continue; }
+    return withPending(addLog(s, `${label}：選擇 1 個${tag}能量丟棄`, aIdx), {
+      type: 'active-energy-discard',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'discard-one-each-type',
+      params: {
+        label, targetIid: att.iid,
+        validIids: cand.map(e => e.iid),
+        restTypes: types.slice(i + 1),
+        titleOverride: `${label}：選擇 1 個${tag}能量丟棄`,
+      },
+    });
+  }
+  return s;
+}
+regR('discard-one-each-type', (st, aIdx, iids, params, pool) => {
+  const label = String(params?.label ?? '招式');
+  const rest = (params?.restTypes as EnergyType[] | undefined) ?? [];
+  let s = st;
+  if (iids.length > 0) s = discardOneAttachedEnergyFromActive(s, aIdx, iids[0], label, pool);
+  return runDiscardOneEachType(s, aIdx, pool, rest, label);
+});
+
 import './effects/cards/m6a_wave1'; // v6.341 M6a「30th CELEBRATION」招式實裝 批次1（26 招）
 import './effects/cards/m6a_wave2'; // v6.342 M6a 招式實裝 批次2（16 招｜傷害計算類）
+import './effects/cards/m6a_wave3'; // v6.343 M6a 招式實裝 批次3（11 招｜能量操作）

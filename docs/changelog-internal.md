@@ -1,5 +1,57 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.343 M6a 招式實裝 批次 3（能量操作 11 招）
+
+BASE `937852208ad6416f1d24d50af0c07065166566e0`（v6.342）。M6a 仍鎖著 ⇒ **玩家看不到任何變化，不寫首頁 changelog**。
+
+### 【一】範圍（原定 12 招，實裝 11）
+
+宣告時選能量丟棄（走既有 `ATTACK_PRE_DISCARD_CHOICE` picker）：火焰旋渦／閃電猛衝／
+精神驅動／全開猛撞。全部丟棄：流星閃衝／神聖之息。丟光【雷】再打對手 1 隻：雷電落。
+三屬性各 1 個：元素爆破。附能量：充電衝刺／劈哩劈哩夜狂歡／賦予力量。
+
+⚠⚠ **皮卡丘ex｜十萬伏特 本批未實裝**，見【四】。
+
+### 【二】三型 inline 複本收斂到中央（Rule 38）
+
+| 新中央出口 | 一起收斂的既有卡 |
+|---|---|
+| `selfDiscardAllEnergyOfTypePost(type,label)` | 紅蓮鎧騎｜紅蓮引爆 |
+| `healOneOwnBenchFullPost(label)` ＋ `regR('heal-full-bench-one')` | 風妖精｜治癒棉絮（`v2580_i_wave8_misc2.ts`） |
+| `discardOneEnergyOfEachTypePost(types,label)` ＋ `regR('discard-one-each-type')` | （本型站上第一次出現） |
+
+另外三處是既有 helper 的最小擴充，預設值 ＝ 既有呼叫端行為完全不變：
+`selfDiscardAllEnergyPost`／`handAttachEnergyPost`／`discardEnergyAttachPost` 由 local 改 `export`；
+`discardEnergyAttachPost` 加 `singleTarget`（透傳既有的 `EnergyChainOpts`）；
+`deckEnergyAttachSelfPost` 加 `opts.max`（原本寫死 1，充電衝刺要用擲幣正面數）。
+
+⚠⚠ **「各 1 個」表達不了**：`PreDiscardSpec` 只有單一 `energyTypeFilter`。
+元素爆破的 250 是卡面印刷、與丟棄無關 ⇒ 改走 POST 的中央能量 picker，
+**完全沒有動到 PRE_DISCARD 的共用 UI**（180+ 張既有卡零風險）。
+
+### 【三】⚠⚠⚠ effectKey 改名一定要留相容別名
+
+`風妖精｜治癒棉絮` 收斂時 effectKey 從 `wave8-heal-full-bench` 改成 `heal-full-bench-one`。
+**`pendingSelection` 是存在對戰狀態裡的** —— 部署的那一瞬間若有玩家正停在舊 key 的選擇視窗，
+新版找不到 resolver ⇒ **那一局卡死**（v6.175「遲到的答案」同一類事故）。
+⇒ 舊 key 繼續註冊、指到同一支實作，並在註解裡寫明不可刪。
+⭐ **通則：任何 effectKey 改名都要留別名至少一個版本。**
+
+### 【四】⚠ 皮卡丘ex｜十萬伏特 —— 待站長裁示（本批刻意不做）
+
+M6a 047/126 的十萬伏特是 **200 ＋「將這隻寶可夢身上附加的能量卡全部丟棄」**，
+但 `ATTACK_POST` 的鍵是「卡名｜招式名」、**沒有印刷維度**，而同鍵另有
+**MC 227／MC 764／MJ 008 三張 H 標、現在就能對戰**的皮卡丘ex｜十萬伏特：**120 點、效果欄全空**。
+掛上去會把那三張一起改壞。這正是 `test-v6333` 的 `KNOWN_COLLISIONS` 列管的那一條。
+可行解是「讀場上那張卡的卡面 `attacks[].effect` 當印刷閘」，但會連帶影響借招／複製招式路徑
+（扮晶晶酒等），**需要裁示才敢做**。
+
+### 【五】守衛
+
+`scripts/test-m6a-wave3.mjs`：**PASS 77 / FAIL 0**；突變 `__m6a/mutcheck_w3.mjs` M1~M32 全殺。
+免疫網（attack-effect／damage／status-apply／full-immunity／opp-swap-hidden／gust／tera-bench）全綠。
+本批之後 M6a 001~100/103 還剩 **43 招 ＋ 15 特性**。
+
 ## v6.342 M6a 招式實裝 批次 2（傷害計算類 16 招）
 
 BASE `a66b26e5eb72533374c4229eeb217273176b6928`（v6.341）。
