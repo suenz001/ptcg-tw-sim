@@ -6859,6 +6859,8 @@ regPre('土狼犬|連續舞步', coinUntilTailsMultiplyPre(10, 0, '連續舞步'
 regPre('普隆隆姆|奔進', coinUntilTailsMultiplyPre(100, 0, '奔進'));
 regPre('燈罩夜菇|螺旋衝刺', coinUntilTailsMultiplyPre(30, 60, '螺旋衝刺'));
 regPre('索財靈|連續擲幣', coinUntilTailsMultiplyPre(20, 0, '連續擲幣'));
+// v6.341 M6a 033/103 皮卡丘｜鐵尾 20×：擲硬幣直到出現反面，造成正面出現的次數×20點傷害。
+regPre('皮卡丘|鐵尾', coinUntilTailsMultiplyPre(20, 0, '鐵尾'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Session 38o v1.65 H 標第 10 波 — self-heal 招式（22 張）
@@ -19590,3 +19592,4 @@ import './effects/cards/m6_wave9';  // v6.071 M6 特性/招式實裝 批次9
 import './effects/cards/m6_wave8';  // v6.070 M6 特性實裝 批次8
 import './effects/cards/m6_wave7';  // v6.069 M6 招式實裝 批次7（12 招）
 import './effects/cards/v6191_new_printings'; // v6.191 官方完整性補收（玳蘿）
+import './effects/cards/m6a_wave1'; // v6.341 M6a「30th CELEBRATION」招式實裝 批次1（26 招）
