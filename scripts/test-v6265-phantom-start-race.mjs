@@ -872,6 +872,10 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   //   ⇒ 一律 v6357- 哨兵框住，泛用剝除器一次剝掉，不需要逐字還原。
   //   那一塊的守備由 scripts/test-v6357-field-wide-retal-attack-time.mjs 全面接管。
   const stripV6357Engine = (src) => stripSentinelBlocks(src, 'v6357-');
+  // ⭐ v6.361：engine.ts 合法新增「中央終局判定（含平手）＋ 先結算 on-KO 再判勝負的延後」
+  //   —— 三段**全部是純新增**，一律 `>>> v6361-…` 哨兵框住 ⇒ 泛用剝除器一次剝掉，
+  //   不需要逐字還原。那一塊的守備由 scripts/test-v6361-draw-and-ko-order.mjs 全面接管。
+  const stripV6361Engine = (src) => stripSentinelBlocks(src, 'v6361-');
   // ⭐ v6.360：engine.ts 的合法改動有兩種（站長裁定 E-14）。
   //   ① 中央述詞 stadiumPlacementBlock ＋ PLAY_TRAINER 的前移呼叫點（**純新增**）
   //      ⇒ `>>> v6360-…` 哨兵框住，泛用剝除器一次剝掉。
@@ -971,7 +975,7 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))));
+        const s0 = stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))));
         ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');

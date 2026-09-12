@@ -983,6 +983,10 @@ import { isTrainerPendingImplementation } from './effects';
 //   （入列 gate 與 effects.fireDefenderOnKO ④ 共用；出列只在 sanityKOSweep）。
 import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // <<< v6355-ko-after-prize-import
+// >>> v6361-lift-import
+// ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
+import { liftEndgameForOnKoV6361 } from './effects';
+// <<< v6361-lift-import
 export { sameEvoName, canEvolveOnto };
 
 /**
@@ -9184,6 +9188,95 @@ export function applyAction(
   return stampPendingToken(state,
     applyRuggedRuinsBenchPlace(state, normalizeNonFieldStacks(raw), pool)); // v5.866 險惡廢墟中央 / v6.175 pending 蓋章
 }
+// >>> v6361-central-endgame
+/**
+ * ⭐⭐⭐ v6.361 站長裁定 D-10／D-11（逐字）：
+ *   「應該先結算死亡宣告再判勝負，有可能雙方一起昏厥(剛好都是場上最後一隻寶可夢)，
+ *     就判定為平手請另開一版處理」
+ *
+ * 官方規則（PTCG RULES/PTCG_RULES.md，逐字；行號為該檔行號）：
+ *   L455「勝敗判定規則如下：1.拿完所有獎賞卡的玩家獲勝2.無法放置寶可夢至戰鬥場時，
+ *        則沒有寶可夢的玩家敗北 ／ 3.在自己的回合的最開始無法從牌庫抽卡時，無法抽卡的玩家敗北」
+ *   L622／L728／L894／L1668（四處一致）：
+ *        「可以從備戰區放置寶可夢至戰鬥場上的玩家獲勝。若雙方皆可以放置，或雙方皆不可放置，則為平手。」
+ *   L431「戰鬥場與備戰區都沒有寶可夢的情況下，沒有寶可夢的玩家視為敗北，對戰結束。」
+ *   L1459-1460「雙方皆為1隻備戰寶可夢都沒有時，若使用了操陷蛛的招式「捲入陷阱」，
+ *        對戰的勝敗將如何判定？ ／ A: 為平手。」
+ *   L2403-2404「雙方的獎賞卡剩餘張數都為1張時…雙方玩家各自獲得1張獎賞卡…A: 為平手。」
+ *
+ * 判定順序＝官方 §14 的**編號順序**（獎賞在前、場上在後）：
+ *   ① 只有一方取完所有獎賞卡 ⇒ 該方獲勝（＝ addPendingPrize 的既有行為，逐字不變）
+ *   ② 雙方**同時**取完 ⇒ 依 L622 改由「能不能從備戰區放上戰鬥場」決勝；雙方皆可／皆不可 ⇒ 平手
+ *   ③ 沒有人取完 ⇒ 沒有可上場寶可夢的玩家敗北；雙方皆無 ⇒ 平手（L1460）
+ *
+ * ⚠ `withPrizeRule` 只有在「本次 action 已經被判過終局、正在重判」時才為 true。
+ *   一般 dispatch 末端只跑 ③（＝ v2.135 防禦層的判準）＋平手 —— 刻意**不**新增
+ *   「獎賞剩 0 就終局」的新路徑，避免動到既有取獎流程與既有守衛的盤面假設。
+ */
+export type EndgameVerdictV6361 =
+  | { over: false }
+  | { over: true; winner: 0 | 1 | null; reason: string };
+
+export function judgeEndgameV6361(state: GameState, withPrizeRule: boolean): EndgameVerdictV6361 {
+  const ps = state.players;
+  const noMon: [boolean, boolean] = [
+    ps[0].active === null && ps[0].bench.length === 0,
+    ps[1].active === null && ps[1].bench.length === 0,
+  ];
+  const byPlacement = (): EndgameVerdictV6361 => {
+    if (noMon[0] && noMon[1]) return { over: true, winner: null, reason: '雙方皆沒有可上場的寶可夢' };
+    if (noMon[0]) return { over: true, winner: 1, reason: `${ps[0].name} 沒有可上場的寶可夢` };
+    if (noMon[1]) return { over: true, winner: 0, reason: `${ps[1].name} 沒有可上場的寶可夢` };
+    return { over: false };
+  };
+  if (withPrizeRule) {
+    const out: [boolean, boolean] = [ps[0].prizes.length <= 0, ps[1].prizes.length <= 0];
+    if (out[0] && out[1]) {
+      const v = byPlacement();
+      if (v.over) return v;
+      return { over: true, winner: null, reason: '雙方同時取得所有獎賞卡，且雙方皆可放置戰鬥寶可夢' };
+    }
+    if (out[0]) return { over: true, winner: 0, reason: `${ps[0].name} 取得所有獎賞卡` };
+    if (out[1]) return { over: true, winner: 1, reason: `${ps[1].name} 取得所有獎賞卡` };
+  }
+  return byPlacement();
+}
+
+/**
+ * v6.361：把中央判定的結果寫進盤面。
+ *   ・平手 ⇒ **刪掉** winner 這個 key（不是寫 undefined —— Firestore 會對 undefined 值丟例外）
+ *     ＋ isDraw:true ＋ 一行平手 log。
+ *   ・有勝方 ⇒ winner/winReason 照寫。`quiet` 代表「這次終局在別處已經寫過 log 了」
+ *     （延後重判的情境）⇒ 不再補一行，避免重複。
+ */
+function applyEndgameVerdictV6361(
+  state: GameState,
+  v: { over: true; winner: 0 | 1 | null; reason: string },
+  quiet: boolean,
+): GameState {
+  if (v.winner === null) {
+    const dr: GameState = {
+      ...state,
+      phase: 'game-over',
+      winReason: v.reason,
+      isDraw: true,
+      pendingSelection: undefined,
+      log: [...state.log, { turn: state.turn, playerIndex: null as null,
+        message: `⚖️ ${v.reason} ⇒ 本局平手！` }],
+    };
+    delete (dr as { winner?: 0 | 1 }).winner;
+    return dr;
+  }
+  const w = v.winner;
+  const out: GameState = {
+    ...state, phase: 'game-over', winner: w, winReason: v.reason, pendingSelection: undefined,
+  };
+  delete (out as { isDraw?: boolean }).isDraw;
+  if (quiet) return out;
+  return { ...out, log: [...state.log, { turn: state.turn, playerIndex: null as null,
+    message: `${state.players[(1 - w) as 0 | 1].name} 沒有可上場的寶可夢，${state.players[w].name} 獲勝！` }] };
+}
+// <<< v6361-central-endgame
 function applyActionImpl(
   state: GameState,
   action: GameAction,
@@ -9318,6 +9411,21 @@ function applyActionImpl(
   //   - v4.497 PLAY_TRAINER 內 explicit call 保留作為前線；wrapper 是後備
   //   - 不影響 normal attack KO（sanityKOSweep 只處理「damage ≥ effHP 但 active 仍在」zombie）
   //   性能：每個 dispatch 多 2 次 sweep（各 ~6 個寶可夢 HP 比較），可忽略
+  // >>> v6361-defer-endgame
+  // ⭐⭐⭐ v6.361 站長裁定 D-10：「應該先結算死亡宣告再判勝負」。
+  //   本次 action 已被判終局、但 PASSIVE_ON_KO_AFTER_PRIZE 佇列還沒結算 ⇒ 把終局
+  //   暫時收回 'playing'，讓下方**既有唯一**的 drain 點（sanityKOSweep 開頭的
+  //   drainOnKoAfterPrize；v6.355 的「全站只有一個 drain 呼叫點」架構一個字都沒動）
+  //   把 on-KO 特性跑完，最後由 v6361-central-endgame-apply 重新判一次勝負（含平手）。
+  //   ⚠ 還有 pendingSelection 時**不**延後：sanityKOSweep 本來就被 gate 住 ⇒ drain 跑不到，
+  //     延後只會把終局吊在半空 ⇒ 維持 HEAD 行為（已知限制）。
+  //   ⚠ 只在 state.phase === 'playing'（本次 action 才剛判出終局）時延後；既有終局盤面
+  //     在 applyActionImpl 開頭就 return 了，走不到這裡。
+  if (next.phase === 'game-over' && state.phase === 'playing'
+      && !next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0) {
+    next = liftEndgameForOnKoV6361(next);
+  }
+  // <<< v6361-defer-endgame
   if (next.phase === 'playing' && !next.pendingSelection) {
     const aIdxForKO = next.activePlayerIndex;
     next = sanityKOSweep(next, aIdxForKO, pool);
@@ -9331,6 +9439,36 @@ function applyActionImpl(
     next = flushDiverCatchQueue(next, pool);
   }
 
+  // >>> v6361-central-endgame-apply
+  // ⭐⭐⭐ v6.361 中央終局判定點（站長裁定 D-10／D-11）。位置在 sanityKOSweep
+  //   （＝ v6.355 的唯一 drain 點）**之後** ⇒ on-KO 特性一定已經結算完才判勝負。
+  //   ⚠ 下方 v2.135 防禦層**逐字保留**，但在本區塊之後實務上不可達（本區塊的 byPlacement
+  //     判準與它完全相同，只是多了「雙方皆無 ⇒ 平手」）—— 刻意不動它的任何一個字，
+  //     好讓 test-v6265 F4 對 BASE 的逐字比對只需要剝哨兵。
+  if (next.phase === 'playing' || next._v6361NeedsVerdict === true) {
+    const _v6361Need = next._v6361NeedsVerdict === true;
+    const _v6361V = judgeEndgameV6361(next, _v6361Need);
+    if (_v6361V.over) {
+      next = applyEndgameVerdictV6361(next, _v6361V, _v6361Need);
+    } else if (_v6361Need) {
+      // 重判之後不成立（理論上不該發生）⇒ fail-safe：還原本來已經判出的終局，絕不把局吊在半空
+      const _rb: GameState = { ...next, phase: 'game-over' };
+      if (next._v6361LiftedReason !== undefined) _rb.winReason = next._v6361LiftedReason;
+      if (next._v6361LiftedWinner === 0 || next._v6361LiftedWinner === 1) _rb.winner = next._v6361LiftedWinner;
+      next = _rb;
+    }
+    // ⚠⚠ 三個暫存旗標**一定**要在這裡清掉：它們只在單一 applyActionImpl 內有意義，
+    //   留下去就會被推上 Firestore／Mongo 並跨 action 汙染判定。
+    if (next._v6361NeedsVerdict !== undefined
+        || next._v6361LiftedWinner !== undefined || next._v6361LiftedReason !== undefined) {
+      const _cl: GameState = { ...next };
+      delete (_cl as { _v6361NeedsVerdict?: boolean })._v6361NeedsVerdict;
+      delete (_cl as { _v6361LiftedWinner?: 0 | 1 })._v6361LiftedWinner;
+      delete (_cl as { _v6361LiftedReason?: string })._v6361LiftedReason;
+      next = _cl;
+    }
+  }
+  // <<< v6361-central-endgame-apply
   // v2.135 防禦層：若任一玩家在 'playing' 階段沒 active 也沒 bench → game-over
   // 漏網的 KO 路徑（self-return-to-hand / self-KO ability / 中毒/灼傷邊緣案例 等）若忘了
   // trigger game-over，sim 會 stuck loop。這裡做最後一道保險。

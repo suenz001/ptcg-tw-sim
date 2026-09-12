@@ -17683,12 +17683,36 @@ export function firePassiveOnKoAfterPrize(
  * 那裡必然在該次 action 全部 addPendingPrize 之後 ⇒ 兩條 KO 管線等價。
  * ⚠ 第一件事就是把佇列整個清空：結構上不可能再入（效果本身會再呼叫 addPendingPrize）。
  */
+// >>> v6361-lift-endgame
+/**
+ * ⭐⭐⭐ v6.361 站長裁定 D-10（逐字：「應該先結算死亡宣告再判勝負」）。
+ * 把「已經判出的終局」暫時收回 'playing'，並留下 _v6361NeedsVerdict，讓 engine 的
+ * 中央重判點（applyActionImpl 末端的 v6361-central-endgame-apply）在 on-KO 特性
+ * **全部結算完之後**重新判一次勝負（含平手）。
+ * ⚠ 同時把原本判出的勝方／原因留在 _v6361Lifted*，當作重判不成立時的 fail-safe 還原值
+ *   ——「絕不把一局吊在半空」。first-write-wins（同一個 action 內只記最早那一次）。
+ * ⚠ 三個欄位都是**純量**，不是 per-player 陣列（Firestore 巢狀陣列禁令，v6.056／v6.359）。
+ */
+export function liftEndgameForOnKoV6361(state: GameState): GameState {
+  if (state.phase !== 'game-over') return state;
+  const s: GameState = { ...state, phase: 'playing', _v6361NeedsVerdict: true };
+  if (s._v6361LiftedReason === undefined && state.winReason !== undefined) s._v6361LiftedReason = state.winReason;
+  if (s._v6361LiftedWinner === undefined && (state.winner === 0 || state.winner === 1)) s._v6361LiftedWinner = state.winner;
+  delete (s as { winner?: 0 | 1 }).winner;
+  delete (s as { winReason?: string }).winReason;
+  return s;
+}
+// <<< v6361-lift-endgame
 export function drainOnKoAfterPrize(state: GameState, pool: Map<string, Card>): GameState {
   const q = state._onKoAfterPrize;
   if (!q || q.length === 0) return state;
   let s: GameState = { ...state, _onKoAfterPrize: undefined };
   for (const e of q) {
-    if (s.phase === 'game-over') break;   // 已經分出勝負 ⇒ 後面的 on-KO 效果不再結算
+    // ⭐v6361-settle-before-verdict 站長裁定 D-10：原本這一行是「已經分出勝負 ⇒ 後面的 on-KO
+    //   效果不再結算」（break）——站長把順序**反過來**：「應該先結算死亡宣告再判勝負」。
+    //   ⇒ 改成把終局暫時收回，全部結算完之後由 engine 的中央重判點重新判（含平手）。
+    //   ⚠ 不可以退回 break：那等於「判勝負優先於結算」，耿鬼ex 是最後一隻時死亡宣告整支不會跑。
+    s = liftEndgameForOnKoV6361(s);
     const fn = PASSIVE_ON_KO_AFTER_PRIZE.get(e.ability);
     if (!fn) continue;
     const koCard = pool.get(e.koInst.cardId);

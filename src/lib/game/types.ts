@@ -870,6 +870,27 @@ export interface GameState {
   /** 勝者（game-over 時填入） */
   winner?: 0 | 1;
   winReason?: string;
+  // >>> v6361-draw
+  /**
+   * ⭐⭐⭐ v6.361 站長裁定 D-11：雙方同時符合敗北條件 ⇒ **平手**。
+   * 平手時 `winner` 這個 key **不存在**（不是 null、也不是 undefined 值）——
+   * 與全站既有慣例一致：server_admin_patch.js 的 casualSideResult()（winner 為
+   * null/undefined ⇒ 'draw'）、onMatchGameOver()（wSeat==null ⇒ 不結算、等管理員裁定）、
+   * 統計聚合 winner:{$in:[0,1]}（排除平局），前端也已有「本場平手，等待管理員裁定」分支。
+   * ⚠ 純量布林，**不是** per-player 陣列 —— Firestore 不支援巢狀陣列（v6.056／v6.359 事故）。
+   */
+  isDraw?: boolean;
+  /**
+   * ⭐⭐⭐ v6.361 站長裁定 D-10：「先結算 on-KO 特性再判勝負」用的**單一 action 內暫存**旗標。
+   * 由 effects.liftEndgameForOnKoV6361（drain 內）或 engine.applyActionImpl 的延後區塊寫入，
+   * 一定會在同一個 applyActionImpl 的中央重判點被**刪掉** ⇒ 絕不會寫進 Firestore／Mongo。
+   * _v6361Lifted* 是「已經判出但被暫時收回」的勝方／原因，當重判不成立時的 fail-safe 還原值。
+   * ⚠ 三個都是純量（boolean / 0|1 / string）—— 禁止 per-player 陣列（v6.056／v6.359 Firestore 事故）。
+   */
+  _v6361NeedsVerdict?: boolean;
+  _v6361LiftedWinner?: 0 | 1;
+  _v6361LiftedReason?: string;
+  // <<< v6361-draw
   /**
    * v2.98：每側待領獎賞 [P1 owed, P2 owed]。
    * idx 為「應該取走的 owner」。由 addPendingPrize() 統一寫入。

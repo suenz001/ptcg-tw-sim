@@ -14570,6 +14570,50 @@ function _setupSelfPending(g: any, seat: number): string | null {
     </div>
   {/if}
 
+  <!-- >>> v6361-draw-modal -->
+  <!-- ⭐⭐⭐ v6.361 站長裁定 D-11：平手 = game-over 但**沒有 winner**（全站既有慣例）。
+       下方那個勝負視窗的渲染條件是 `winner !== null && winner !== undefined` ⇒ 平手時
+       整個不渲染，單機／休閒對戰會看起來「卡在盤面」。這裡補一個同樣式的平手視窗。
+       錦標賽另有既有的「本場平手，等待管理員裁定」返回列（tourn-return-bar，v6.146 起就在），
+       所以這裡 gate 掉 isTournament，不重複渲染、也不改動錦標賽的任何既有行為。 -->
+  {#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}
+    <div class="gameover-modal"
+      style:transform={`translate(calc(-50% + ${gameoverPanelPos.x}px), calc(-50% + ${gameoverPanelPos.y}px))`}>
+      <div class="gameover-modal-header"
+        onpointerdown={onGameoverHeaderDown}
+        onpointermove={onGameoverHeaderMove}
+        onpointerup={onGameoverHeaderUp}
+        title="拖曳此處移動平手視窗 — 可看到背後戰鬥盤最終狀態">
+        <span class="gameover-modal-drag-hint">☰ 拖曳移動</span>
+      </div>
+      <div class="gameover-modal-body">
+        <div class="gameover-icon">🤝</div>
+        <h1 class="gameover-title" style="color:#e8d9a0;">Draw</h1>
+        <p class="winner-text">本局平手！</p>
+        <p class="muted">{game.winReason}</p>
+        <div class="lobby-btns export-btns">
+          <button class="btn-secondary" onclick={()=>exportLogAs('txt')} title="匯出純文字 log 供復盤">
+            📄 匯出 log（.txt）
+          </button>
+          <button class="btn-secondary" onclick={()=>exportLogAs('json')} title="匯出結構化 log 供外部工具分析">
+            🧾 匯出 log（.json）
+          </button>
+        </div>
+        {#if mode === 'online' || roomCode}
+          <div class="lobby-btns">
+            <button class="btn-secondary" onclick={() => { game = null; leaveOnlineGame(); }}>離開房間</button>
+          </div>
+          <a href="{base}/" class="back-home-link">回首頁</a>
+        {:else}
+          <div class="lobby-btns">
+            <button class="btn-primary" onclick={() => { game = null; }}>再來一局</button>
+            <a href="{base}/" class="btn-secondary">回首頁</a>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+  <!-- <<< v6361-draw-modal -->
   <!-- v4.21 對局結束可拖曳勝負視窗 — overlay 在戰鬥盤面上方 -->
   {#if game.phase === 'game-over' && game.winner !== null && game.winner !== undefined}
     {@const isWin = (
