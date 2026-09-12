@@ -1,5 +1,105 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.363 修好 `test-coin-animation-parser` 並接進 `npm test` 鏈（站長裁定 F-16）
+
+BASE `6c8dfce231a8963289b2d81abff634b4804f12b3`（v6.362）。⚠ **本版一行產品程式碼都沒改**（`src/` 只有 `version.ts` 被 bump 動到）
+⇒ 硬幣動畫的行為與上一版完全相同。
+
+### 【一】判斷：**守衛過期**，不是程式 bug
+
+- `git log -- scripts/test-coin-animation-parser.mjs` 只有 **1 個** commit（`fdd04ee3`）；
+  `coinAnimation.ts` 有 2 個（`fdd04ee3` → `6fa22f89`，同日相隔 4 個 commit）
+  ⇒ **`6fa22f89` 改了實作、沒改守衛**，典型過期。
+- 紅的那一條釘的正是 `6fa22f89` **刻意刪掉**的舊 fallback
+  （`if (!msg.includes('硬幣')) return []; if (msg.includes('正面')) return [{heads}]`）。
+- ⭐ 那條 fallback 在**今天的 log 下真的是玩家看得到的 bug**：現行卡檔有 **15 條總結行**
+  同時含「硬幣」＋「正面/反面」（奇跡之吻、死亡宣告、強大伏特、雙重冰凍、鱗粉颶風、
+  顧前不顧後、緊束粉碎、能量硬幣…），舊 fallback 會在真正的擲幣動畫之後**再多播一次**。
+- 反向檢查：全 `src/lib` 只有 3 處 `Math.random() < 0.5`（中央 `flipCoinsWithLog`、
+  干擾命中判定、setup 先手擲幣），**全部**符合現行 regex ⇒ 實作沒有漏判也沒有誤判。
+- 守衛硬寫的 `機關槍合擊：第 1 次擲硬幣 — 正面` 連格式都過期了
+  （v6.234 收斂到 `flipCoinsUntilTails`、每次 `count=1` ⇒ 實際沒有「第 N 次」）；
+  第 2 條用的 `連斬：擲 2 次硬幣正面 1 次` 全 repo **查無此格式**。
+
+⇒ 依 **Rule 40 把判準上移到意圖層**（沒有放寬、沒有刪除、沒有改成恆真）。
+
+### 【二】新判準
+
+> **玩家看到的硬幣動畫序列，必須逐一對應引擎真的擲出來的那幾次幣 —— 不多也不少；
+> 任何總結行都不得產生動畫。**
+
+不再驗字串，改成 esbuild bundle 後**呼叫真的引擎程式**（`ATTACK_PRE` 註冊表 ＋ 中央
+`flipCoinsWithLog`），全部落在行為層。**PASS 33 / FAIL 1**（唯一的紅是 D1，見【三】）：
+
+- **【A】4 張真卡 × 6 條（24）**：超級袋獸ex｜機關槍合擊、貓鼬斬｜連斬、雙倍多多冰｜雙重冰凍、
+  巴大蝶｜鱗粉颶風。stub `Math.random` 給定序列 → 跑真的 pre-fn →
+  **拿引擎自記的 `state._machineGunLastFlips` 當 ground truth**（不是硬寫）⇒
+  斷言「動畫序列 === 引擎實際擲幣序列」。附 4 種哨兵防空真。
+- **【B】6 條**：把 **parser ↔ logger 的契約釘死** —— 中央 `flipCoinsWithLog` 的三種輸出格式
+  各驗一次（`count=1` 無「第 N 次」／`count≥2` 有／重試徽章後綴）。
+  以後誰單方面改掉 logger 格式就會紅（突變 M5）。
+- **【C】2 條（自動網）**：掃 `src/lib/game/**/*.ts` 所有 `addLog(` 樣板，
+  取出「含硬幣 ＋ 含正面/反面 ＋ **不含破折號**」者逐條斷言 0 動畫。
+  實測掃到 **15 條**；哨兵要求 ≥ 6（空集合＝恆真，突變 M9 證明有牙齒）。
+  **未來任何人新增總結行都自動被涵蓋。**
+- **【D】2 條**：D1 **自檢**斷言本檔出現在 `package.json` 的 `scripts.test` 裡（讀檔，不是硬寫）。
+
+### 【三】D1 自檢：為什麼做成硬紅
+
+這支守衛「紅了很久沒人發現」的真因就是**不在鏈裡**。D1 刻意做成 `exit=1` 而不是只印警告
+—— 只印警告的話，「被人從鏈裡移除」這個方向就抓不到，等於安慰劑。
+本版 bump 已經把它接進鏈（anchor：擲幣家族那一叢，
+`test-coin-until-tails-formula` 與 `test-gust-attacker-chooses` 之間）⇒ D1 轉綠、整支 exit=0，
+之後有人再把它移出鏈會再度翻紅。
+
+### 【四】守衛與突變
+
+`__m6a/mutcheck_v6363.mjs`：**未達標 0 / 9；還原後複驗紅燈 0**。
+- **M1** 退回 `6fa22f89`（把舊 fallback 加回去）⇒ A 區立刻抓到「動畫數比引擎實際擲幣數多 1」
+- **M2** parser 放寬成不要求破折號 ⇒ 13 條紅　**M3** parser 恆回空陣列 ⇒ 15 條紅
+- **M4** 正反面對調 ⇒ 7 條紅　**M5** 中央擲幣器把「 — 」改成「：」（契約被單方面改掉）⇒ 17 條紅
+- **M6** 把守衛整檔換回 BASE ＝ **HEAD-FAIL 證據**
+- **M7／M8** 把 A3／C2 改成恆真 ＋ 同時退回 `6fa22f89` ⇒ 證明那兩條就是牙齒（其他層仍紅）
+- **M9** C1 哨兵有牙齒
+
+⭐ M1／M2 就是「機關槍合擊 summary 誤觸額外動畫」的**正反兩組行為端證明**。
+
+### 【五】⚠ 順帶盤點：`scripts/` 底下**不在 `npm test` 鏈裡**的守衛共 **50 支**
+
+（`scripts/*.mjs` 843 支，守衛命名 725 支，鏈裡 675 支；鏈裡沒有「寫了但檔案不存在」的項目。）
+- `audit-*` **22 支**
+- `test-*` **28 支**：`test-all-presets`、`test-ami-gaze-allmons`、`test-burn-cure-tertiary`、
+  `test-coin-animation-parser`（**本版已接**）、`test-confuse-newactive-placement`、
+  `test-diver-catch-repro`、`test-evolve-iid-regression`、`test-festival-dance`、
+  `test-hydro-pump-bench`、`test-idle-setup-blocker`、`test-kaleido-waltz`、`test-multi-tool-relay`、
+  `test-opp-turn-immune-promote`、`test-picker-skip-cancel`、`test-play-basic`、
+  `test-prevent-prize-nullify`、`test-protect-charge-expire`、`test-regmarks`、
+  `test-retaliation-nullify`、`test-rotom-call-namecontains`、`test-scorch-earth-stadium`、
+  `test-sticky-retreat-deferred-prize`、`test-swap-ability`、`test-swiss`、
+  `test-tournament-setup-idle-gate`、`test-tournament-stats`、`test-v2341-a-batch`、
+  `test-v6291-friends-theme`
+
+⚠ `test-picker-skip-cancel.mjs` 是 **0 bytes 空檔**；
+⚠ `test-v6291-friends-theme.mjs` 疑似被鏈裡的 `test-v6293-friends-theme.mjs` 取代。
+
+### 【六】⚠ 待站長裁示
+
+1. ⭐**疑似真 bug（本版範圍外）：開局先手的擲硬幣動畫看起來已經死了很久。**
+   `+page.svelte` 的特例條件是 `msg.includes('擲硬幣') && msg.includes('先手')`，
+   但引擎今天寫的兩條 log 都**不同時**滿足：
+   `🪙 擲硬幣：<名> 獲勝，選擇先攻/後攻`（有「擲硬幣」沒「先手」）、
+   `🎯 <名> 先手`（有「先手」沒「擲硬幣」）。
+   `git log -S "獲勝，選擇"` 指向 `bf20b96d v3.824 UX: 簡化擲幣 log 訊息`
+   —— 那次改字面時把 UI 的比對條件孤立了 ⇒ **開局擲幣不再播動畫、不再出 coin 音效**。
+   要不要另開一版修？（屬於 `+page.svelte`，不在 F-16 授權範圍，本版沒動。）
+2. `test-picker-skip-cancel.mjs` 是 0 bytes 空檔 —— 補內容還是刪除？
+3. `test-v6291-friends-theme.mjs` 是否該刪（已被 `test-v6293` 取代）？
+4. 另外 47 支不在鏈裡的守衛要不要分批接進鏈？建議先做一輪「全部跑一遍、標出既有紅」的體檢。
+5. ⚠ `6fa22f89` 的 commit message 舉的例子 `機關槍合擊：3 次正面 → …` **不含「硬幣」**，
+   會被舊 fallback 的 `if (!msg.includes('硬幣')) return []` 擋掉 ⇒ 那個具體例子其實不會誤觸。
+   **修正本身仍然是對的**（真正會誤觸的是那 15 條含「硬幣」的總結行），本版的 A 區已改用
+   真正會誤觸的卡來釘。
+
 ## v6.362 站長裁定 A-1／A-2／A-3（三張 M6a 卡）
 
 BASE `cbfad1d5cccae3914ab9f1af789d97cac67f9283`（v6.361）。**沒有改變任何線上既有卡的行為**（三張卡都在 M6a、仍鎖著；
