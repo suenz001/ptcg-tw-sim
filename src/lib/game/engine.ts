@@ -1026,6 +1026,9 @@ import {
   getOppRetreatTriggers,
   hasRocketAmpharosDarkPulse,
   hasAbilityOnActive,  // v5.222 Plan A: 統一查「對手戰鬥位特性是否生效」
+  // >>> v6354-heal-block-import
+  isHealBlockedFor,    // ⭐v6.354 「禁止恢復HP」中央閘（伊裴爾塔爾｜生命制約）— 唯一消費點在 markHealsByDamageDecrease
+  // <<< v6354-heal-block-import
 } from './effects/cards/v3001_g3_wave3';
 
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
@@ -2027,6 +2030,9 @@ export function markHealsByDamageDecrease(
 
   let changed = false;
   const trenchDoubled: string[] = [];   // v6.077 被海溝加倍的 iid（用於補 log）
+  // >>> v6354-heal-block-decl
+  const healBlocked: string[] = [];     // ⭐v6.354 被【生命制約】擋下恢復的寶可夢名（用於中央補 log）
+  // <<< v6354-heal-block-decl
   const players = [...next.players] as [PlayerState, PlayerState];
 
   for (const idx of [0, 1] as const) {
@@ -2039,6 +2045,23 @@ export function markHealsByDamageDecrease(
       const newDmg = c.damage ?? 0;
       const healed = prevDmg - newDmg;
       if (healed <= 0 || movedSet.has(c.iid)) return c;
+      // >>> v6354-heal-block
+      // ⭐v6.354 伊裴爾塔爾｜生命制約 —「只要這隻寶可夢在場上，對手的戰鬥寶可夢的HP無法恢復。」
+      //   ⚠⚠ 必須排在【傳說的海溝】(恢復量×2) **之前**：沒有恢復，就沒有加倍可言。
+      //   ⚠ 回捲只能寫成「damage 回到 prevDmg」＝這次恢復完全沒發生過；寫成 0 或任何
+      //     再加減的形式，等於自己造了一個卡面沒有的新效果（已放置的指示物一律不變）。
+      //   ⚠⚠ 被擋下時**不可以**標 healedThisTurn —— 否則對手打一張被擋下的回血卡就滿足
+      //     「在這個回合中曾恢復過HP」的條件（活潑刀／活潑鮮花／活潑針會誤觸發）。
+      //     上面 movedSet 那一條 `return c` 就是同一個道理（v5.947）。
+      //   ⚠ 官方 §17.3.I（L818）：卡照樣能使用、費用照付、卡照樣進棄牌區，只是恢復量變 0
+      //     ⇒ 這裡只回捲盤面，**絕不** gate「能不能使用」。
+      //   ⚠ 「戰鬥寶可夢」的判準取 next 端（結算後誰在戰鬥場）—— 見 isHealBlockedFor。
+      if (isHealBlockedFor(next, idx, c.iid, pool)) {
+        healBlocked.push(pool?.get(c.cardId)?.name ?? '戰鬥寶可夢');
+        pChanged = true;
+        return { ...c, damage: prevDmg };
+      }
+      // <<< v6354-heal-block
       // v6.077 傳說的海溝：恢復量再扣一次（＝2 倍），下限 0。
       //   ⚠ 加倍要**每次恢復都判**（卡面「恢復HP時」），不能被 healedThisTurn 短路；
       //     但「只標記一次」的原行為必須保留 —— 否則已標記的實例每次都產生新物件，
@@ -2070,6 +2093,13 @@ export function markHealsByDamageDecrease(
   if (trenchDoubled.length > 0) {
     _out = addLog(_out, `傳說的海溝：恢復的HP改為 2 倍（${trenchDoubled.length} 隻寶可夢）`, null);
   }
+  // >>> v6354-heal-block-log
+  // ⭐v6.354：各 heal 站點自己寫的 log 會說「恢復 30 HP」，實際上一點都沒恢復 ⇒ 中央補一行揭示
+  //   （照抄上面【傳說的海溝】的同一個範式；不補就等於畫面對玩家說謊）。
+  if (healBlocked.length > 0) {
+    _out = addLog(_out, `生命制約：${healBlocked.join('、')} 的HP無法恢復`, null);
+  }
+  // <<< v6354-heal-block-log
   // v5.947 _counterMoveSrcIids 為 per-action 標記,消費後即清除(避免殘留誤跳過後續真回血)
   if (_out._counterMoveSrcIids !== undefined) { const _o = { ..._out }; delete _o._counterMoveSrcIids; return _o; }
   return _out;

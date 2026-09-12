@@ -133,10 +133,11 @@ console.log('\n【0】harness 自驗');
     String(PIKA_LONELY.id) !== String(PIKA_HIDE.id));
   chk('0c 基本能量 id 都查到', ['Grass', 'Fire', 'Water', 'Lightning', 'Metal'].every((k) => EID[k]));
   chk('0d 有乾淨的【無】屬性對照靶', !!PLAIN, String(PLAIN?.name));
-  // ⭐反安慰劑：沒有實裝的特性（伊裴爾塔爾｜生命制約）不該出現在可用清單（它是待裁示項）
+  // ⭐反安慰劑：純被動特性（伊裴爾塔爾｜生命制約，⭐v6.354 已實裝）不該出現在可用清單
+  //   —— 被動特性沒有 handler，混進去就會變成「按鈕亮著卻按不下去」。
   const yv = findAb('伊裴爾塔爾', '生命制約');
   const stv = mk({ active: inst(yv.id) }, { active: inst(PLAIN.id) });
-  chk('0e ⭐反安慰劑：未實裝的被動特性不會混進 getUsableAbilities', !listed(stv, '生命制約'));
+  chk('0e ⭐反安慰劑：純被動特性不會混進 getUsableAbilities', !listed(stv, '生命制約'));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -230,40 +231,41 @@ console.log('\n【3】027 皮卡丘｜躲起來 — 只要在備戰區，不受�
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('\n【4】⚠ 本批**未實裝**的 2 個特性 —— 卡面逐字錨（待站長裁示；卡面若改版這裡會紅）');
+console.log('\n【4】⚠ 本批**未實裝**的 1 個特性 —— 卡面逐字錨（待站長裁示；卡面若改版這裡會紅）');
 {
   // ⚠ 這一段**不是**「宣告永遠不做」。它只做兩件事：
-  //   ① 把 3 張待裁示卡的 abilities[].effect 逐字釘住（卡面改版／抓錯卡時會紅）；
-  //   ② 讓交接的人一眼看到「哪 3 個沒做、為什麼」。實作了之後把該條移到自己的章節即可。
+  //   ① 把待裁示卡的 abilities[].effect 逐字釘住（卡面改版／抓錯卡時會紅）；
+  //   ② 讓交接的人一眼看到「哪一個沒做、為什麼」。實作了之後把該條移到自己的章節即可。
   // ⭐ v6.352：原本的第 4 張「弱丁魚｜群聚反擊」已實裝（field-wide 受傷反擊收斂成中央
   //   FIELD_WIDE_RETALIATION + fireFieldWideRetaliation 之後就做得到了），卡面逐字錨
   //   已移交 scripts/test-v6352-field-wide-retaliation.mjs 的 C2 段。
   // ⭐ v6.353：原本的第 1 張「甜甜螢｜絕佳費洛蒙」已實裝（弱點**倍率**參數化成中央述詞
   //   WEAKNESS_MULTIPLIER_ABILITIES + weaknessMultiplier 之後就做得到了），卡面逐字錨
   //   已移交 scripts/test-v6353-weakness-multiplier.mjs 的 C1 段。
+  // ⭐ v6.354：原本的「伊裴爾塔爾｜生命制約」已實裝（「禁止恢復HP」收斂成中央閘
+  //   v3001_g3_wave3.isHealBlockedFor，唯一消費點 engine.markHealsByDamageDecrease 之後就做得到了），
+  //   卡面逐字錨已移交 scripts/test-v6354-heal-block.mjs 的【0】段。
   const FACE = [
     ['耿鬼ex', '死亡宣告',
       '這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。若為正面，則將使用招式的寶可夢【昏厥】。',
       'PASSIVE_ON_KO 在兩條 KO 管線中相對 addPendingPrize 的順序相反（v6.259 已記載）；'
       + '而本特性的效果會發獎賞＋清掉攻擊方 active ⇒ 實測兩條管線不等價'
       + '（test-v6259 的 C4：主管線攻擊方取 2 張獎賞、中央 helper 取 0 張）'],
-    ['伊裴爾塔爾', '生命制約',
-      '只要這隻寶可夢在場上，對手的戰鬥寶可夢的HP無法恢復。',
-      '站上沒有「禁止恢復」這個機制：全站約 195 個回血點沒有任何中央閘（grep 無 healBlocked／無法恢復）'],
   ];
   for (const [cn, an, eff] of FACE) {
     const c = findAb(cn, an);
     const got = (c.abilities || []).find((a) => a.name === an)?.effect;
     chk(`4 待裁示｜${cn}｜${an} 卡面逐字錨`, got === eff, String(got));
   }
-  // ⭐ 反安慰劑：主動型待裁示特性若有人偷偷掛上 regA，這裡會抓到
+  // ⭐ 反安慰劑：若有人把被動特性偷偷掛上 regA（主動特性），這裡會抓到。
+  //   ⭐v6.354 生命制約已實裝，但它是**純被動**（沒有 handler）⇒ 這條的守備價值反而更高。
   const y = findAb('伊裴爾塔爾', '生命制約');
   const sty = mk({ active: inst(y.id), deck: [inst(PLAIN.id)] }, { active: inst(PLAIN.id) });
   chk('4z ⭐反安慰劑：生命制約沒有被誤登記成主動特性', !listed(sty, '生命制約'));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('\n【4B】⚠⚠ 上面 2 個待裁示特性「目前確實沒有作用」—— 一律用**行為端數字**釘住');
+console.log('\n【4B】⚠⚠ 待裁示特性「目前確實沒有作用」＋ 已實裝特性「卡面要求真的做到了」—— 一律用**行為端數字**釘住');
 {
   // ⚠ 這一段取代原本的 `chk(..., true)` ＝ 恆真安慰劑（把整個實作拆掉也不會紅）。
   //   Rule 33：斷言必須落到行為層。以下每條都配哨兵（證明「該發生的事真的發生了」），
@@ -334,7 +336,14 @@ console.log('\n【4B】⚠⚠ 上面 2 個待裁示特性「目前確實沒有�
     + ' ⇒ 死亡宣告目前確實無作用', !!A0(rGen) && A0(rGen).damage === 0,
     JSON.stringify([!!A0(rGen), A0(rGen)?.damage]));
 
-  // ── (d) 伊裴爾塔爾｜生命制約：卡面要讓對手戰鬥寶可夢無法恢復；現況照樣回血 ──────
+  // ── (d) 伊裴爾塔爾｜生命制約：⭐v6.354 **已實裝**（「禁止恢復HP」收斂成中央閘之後）────
+  //    這一條原本釘的是「**仍然**回到 30 ⇒ 生命制約目前確實無作用」的 HEAD-FAIL 錨，
+  //    v6.354 實作後主動翻紅 —— 依 Rule 40 把判準**上移到意圖層**：現在釘「卡面要求的
+  //    『無法恢復』真的發生了（damage 一點都沒少，仍是 60）」＋反對照（沒有伊裴爾塔爾時
+  //    照樣回到 30）。回捲寫成 0 照樣紅、閘整個拿掉照樣紅、連備戰一起擋照樣紅
+  //    ⇒ 這是收緊，不是放寬。完整守備（三種回血管線／只擋戰鬥位／只擋對手／特性消除／
+  //    移動指示物不算恢復／卡照樣能打出／healedThisTurn 不誤標／海溝順序／中央性）
+  //    由 scripts/test-v6354-heal-block.mjs 接管（60 條行為端斷言）。
   //    用同批次的「尼多娜｜分享歡樂」（自己的 1 隻恢復 30）當回血來源，
   //    伊裴爾塔爾放在**對手**（p1）的戰鬥場 ⇒ 受制的正是 p0 的戰鬥寶可夢。
   const YVEL = findAb('伊裴爾塔爾', '生命制約');
@@ -352,8 +361,12 @@ console.log('\n【4B】⚠⚠ 上面 2 個待裁示特性「目前確實沒有�
     JSON.stringify(findInst(hYve.r2.players[0], hYve.nidoIid)?.abilityUsedThisTurn));
   chk('4B-d 哨兵：對照組（對手戰鬥場無特性）自己的戰鬥寶可夢 60 → 30',
     A0(hCtl.r2)?.damage === 30, String(A0(hCtl.r2)?.damage));
-  chk('4B-d ⭐行為端：對手場上有伊裴爾塔爾時**仍然**回到 30'
-    + ' ⇒ 生命制約目前確實無作用', A0(hYve.r2)?.damage === 30, String(A0(hYve.r2)?.damage));
+  chk('4B-d ⭐行為端（v6.354 已實裝）：對手場上有伊裴爾塔爾 ⇒ 自己的戰鬥寶可夢**完全不回血**（仍是 60）',
+    A0(hYve.r2)?.damage === 60, String(A0(hYve.r2)?.damage));
+  chk('4B-d ⭐反對照：同一盤面沒有伊裴爾塔爾 ⇒ 照樣回到 30（差異真的來自這個特性）',
+    A0(hCtl.r2)?.damage === 30, String(A0(hCtl.r2)?.damage));
+  chk('4B-d ⭐被擋下時不可以標 healedThisTurn（活潑刀家族的「本回合恢復過HP」條件）',
+    A0(hYve.r2)?.healedThisTurn !== true, String(A0(hYve.r2)?.healedThisTurn));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

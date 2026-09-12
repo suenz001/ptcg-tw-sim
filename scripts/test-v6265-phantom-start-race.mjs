@@ -853,6 +853,11 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
       + "      formula.push({ sign: '×', value: 2, label: '弱點' });\n");
     return s;
   };
+  // ⭐ v6.354：engine.ts 的合法改動**全部是純新增**（v3001_g3_wave3 的 import 一行、
+  //   markHealsByDamageDecrease 裡的 healBlocked 宣告、「禁止恢復HP」中央閘、中央揭示 log）
+  //   ⇒ 一律 `>>> v6354-…` 哨兵框住，泛用剝除器一次剝掉，不需要逐字還原。
+  //   那一塊的守備由 scripts/test-v6354-heal-block.mjs 全面接管（行為端 A~K + 中央性 L + 突變 M1~M12）。
+  const stripV6354Engine = (src) => stripSentinelBlocks(src, 'v6354-');
   const stripV6348Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6348-');
     s = s.split(
@@ -891,8 +896,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

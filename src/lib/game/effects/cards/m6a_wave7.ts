@@ -15,6 +15,15 @@
  *     022     皮卡丘｜寂寞眼神        → `PASSIVE_DAMAGE_REDUCE` + `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`
  *     027     皮卡丘｜躲起來          → `getBenchImmunityAbilityName`（藏隱／深度下潛 同一支）
  *     076     耿鬼ex｜死亡宣告        → ⚠**本版未實裝**（待站長裁示；曾實作後撤回，見 changelog v6.347【五】3：PASSIVE_ON_KO 在兩條 KO 管線相對 addPendingPrize 的順序相反）
+ *     079     伊裴爾塔爾｜生命制約    → `v3001_g3_wave3.isHealBlockedFor`
+ *                                       （⭐v6.354 實裝的「禁止恢復HP」中央閘，與
+ *                                        `hasEffectiveCalmGroundOnSide`／`isReturnToHandBlockedByCalmGround`
+ *                                        同一個句型家族。全站唯一消費點是
+ *                                        `engine.markHealsByDamageDecrease` —— applyAction 的 heal
+ *                                        偵測唯一出口（heal 站點分散 18+ 處，接一處涵蓋全部），
+ *                                        且排在 v6.077【傳說的海溝】恢復量×2 之前。純被動 ⇒ 無 handler，
+ *                                        也不會出現在 `getUsableAbilities`。
+ *                                        守衛：scripts/test-v6354-heal-block.mjs）
  *     095     卡比獸｜好眠            → `engine` 寶可夢檢查的睡眠擲幣區
  *     057/135 夢幻ex｜記憶螺旋        → `engine.getEffectiveAttacks`（古空棘魚｜潛入記憶 同一家族）
  *

@@ -979,3 +979,56 @@ export function isReturnToHandBlockedByCalmGround(
   if (hasEffectiveCalmGroundOnSide(state, guardIdx, pool)) return true;
   return state._attackTimeCalmGround?.[guardIdx] === true;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// ⭐ v6.354：「禁止恢復 HP」中央閘 —— 伊裴爾塔爾｜生命制約（M6a 079/103，id 19991）
+//   卡面逐字（static/cards/M6a.json 的 `abilities[].effect`）：
+//     「只要這隻寶可夢在場上，對手的戰鬥寶可夢的HP無法恢復。」
+//
+//   ⭐ 為何放這一檔：與 hasEffectiveCalmGroundOnSide / isReturnToHandBlockedByCalmGround
+//     同一個句型家族（「只要這隻寶可夢在場上，對手的…無法…」），而特性消除的中央述詞
+//     isAbilityHolderEffective 就在本檔 ⇒ 不必再開第二份消除閘（Rule 38）。
+//
+//   ⚠ 官方裁定（PTCG RULES/PTCG_RULES.md）：
+//     §17.3.H L779「改附傷害指示物不屬於恢復體力。」⇒ 移動／改放指示物不受本閘影響
+//       （消費點沿用既有的 movedSet／_counterMoveSrcIids，本述詞不再判一次＝不做第二份）。
+//     §17.3.I L818「可以使用（野餐籃）。但是，寶可夢無法恢復體力。」⇒ 本閘**只把恢復量歸零**，
+//       ⚠⚠ 絕對不可以拿來 gate「卡不能使用」（費用照付、卡照樣進棄牌區）。
+// ════════════════════════════════════════════════════════════════════════════
+/** v6.354：某側「當下盤面」是否有生效中的【生命制約】(active/bench 任一)。 */
+export function hasEffectiveLifeRestraintOnSide(
+  state: GameState | undefined,
+  holderIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || holderIdx == null || !pool) return false;
+  const hp = state.players?.[holderIdx];
+  if (!hp) return false;
+  const check = (inst: CardInstance, loc: 'active' | 'bench'): boolean => {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities?.some(ab => ab.name === '生命制約')) return false;
+    // isAbilityHolderEffective 涵蓋初始化/暗夜羽擊/監視塔/熔岩洞/黏著束縛等全部特性消除路徑
+    return isAbilityHolderEffective(state, inst, card, holderIdx, '生命制約', loc, pool);
+  };
+  if (hp.active && check(hp.active, 'active')) return true;
+  return hp.bench.some(b => check(b, 'bench'));
+}
+
+/**
+ * v6.354：這一隻寶可夢的 HP 現在能不能恢復（回傳 true ＝ 被禁止）。
+ * ⚠ 全站唯一消費點：engine.markHealsByDamageDecrease —— applyAction 的 heal 偵測唯一出口
+ *   （全站 heal 站點分散 18+ 處，接這一處即涵蓋全部；與 v6.077 傳說的海溝同一格）。
+ */
+export function isHealBlockedFor(
+  state: GameState | undefined,
+  targetOwnerIdx: 0 | 1 | undefined,
+  targetIid: string | undefined,
+  pool: Map<string, Card> | undefined,
+): boolean {
+  if (!state || targetOwnerIdx == null || !targetIid || !pool) return false;
+  // 卡面「對手的**戰鬥**寶可夢」⇒ 只有戰鬥場那一隻受制，備戰區完全不受影響。
+  if (state.players?.[targetOwnerIdx]?.active?.iid !== targetIid) return false;
+  // 持有者在「被禁止那一隻」的對手側；卡面「只要這隻寶可夢**在場上**」⇒ active 與 bench 都算。
+  const holderIdx = (1 - targetOwnerIdx) as 0 | 1;
+  return hasEffectiveLifeRestraintOnSide(state, holderIdx, pool);
+}
