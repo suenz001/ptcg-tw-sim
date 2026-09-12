@@ -10624,7 +10624,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
      ⚠ 手機在背景／鎖屏時看不到任何畫面 ⇒ 仍要靠 v6.151 的 60 秒推播叫醒。彈窗是補強不是取代。 -->
 {#if isTournament && !isTournSpectator && tMyIdleSec != null && tMyIdleSec <= 60}<div class="tourn-still-here" role="alertdialog" aria-live="assertive"><div class="tsh-title">⏰ 系統已開始計時</div><div class="tsh-body">剩 <strong>{tMyIdleSec}</strong> 秒未行動就會被判負。如果你還在，按一下確認。</div><button class="tsh-btn" disabled={tStillHereBusy} onclick={tStillHere}>{tStillHereBusy ? '確認中…' : '我還在'}</button>{#if tStillHereNote}<div class="tsh-note">{tStillHereNote}</div>{/if}</div>{/if}
 
-{#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手，等待管理員裁定'}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
+{#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}<div class="tourn-return-bar" style="text-align:center;"><p class="muted small" style="margin:0 0 6px;color:#fd0;">⏰ {game.winReason || '本場平手'}{#if game.isDraw} ⇒ 錦標賽平手以「雙敗」計（雙方各記一敗），不需管理員裁定{/if}</p><button class="btn-primary" onclick={tLeaveMatch}>🏆 返回賽事大廳</button></div>{/if}
 {#if isTournSpectator && game && !isTReplay}<div class="tourn-return-bar"><button class="btn-secondary" onclick={tLeaveSpectate}>← 離開觀戰</button></div>{/if}
 
 <!-- v2.206：手機直屏旋轉提示 — 進戰鬥（game !== null）且手機直屏時顯示。
@@ -14577,7 +14577,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
   <!-- ⭐⭐⭐ v6.361 站長裁定 D-11：平手 = game-over 但**沒有 winner**（全站既有慣例）。
        下方那個勝負視窗的渲染條件是 `winner !== null && winner !== undefined` ⇒ 平手時
        整個不渲染，單機／休閒對戰會看起來「卡在盤面」。這裡補一個同樣式的平手視窗。
-       錦標賽另有既有的「本場平手，等待管理員裁定」返回列（tourn-return-bar，v6.146 起就在），
+       錦標賽另有既有的「無勝方」返回列（tourn-return-bar，v6.146 起就在；v6.365 起依站長裁定 六-2
+       把平手說成「雙敗」，不再叫玩家等管理員），
        所以這裡 gate 掉 isTournament，不重複渲染、也不改動錦標賽的任何既有行為。 -->
   {#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}
     <div class="gameover-modal"

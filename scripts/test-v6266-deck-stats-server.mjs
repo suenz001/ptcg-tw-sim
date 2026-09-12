@@ -650,11 +650,11 @@ console.log('\n══ 【F】⭐⭐ 錦標賽零接觸（站長硬約束）═�
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 // ⚠ v6.276 起錦標賽區塊含 6 處 additive 的 deckId 插入（報名×3＋歸檔×1 等；
 //   「只有那 6 處、其餘逐位元同 v6.265」由 test-v6276 的 revert-diff 證明）。
-const TOURN_SHA_V6265 = 'e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40';
+const TOURN_SHA_V6265 = 'ec75c9673267ece3c9cc6ed3858c6ec7b88926f0fd29c18558303916c3c240c2';
 // ⚠ 這是 **JS 字串長度（UTF-16 code units）**：區塊內有 emoji（surrogate pair 各算 2），
 //   所以它比 Python／code-point 的 218,164 多 29。判準是下面的 sha256（對 UTF-8 bytes 算），
 //   長度只是讓失敗訊息好讀；兩個值都是從 **BASE v6.265 的 blob** 算出來的，不是從出貨檔。
-const TOURN_LEN_V6265 = 220560;
+const TOURN_LEN_V6265 = 223610;   // ⭐v6.365 重釘（站長裁定 六-2：錦標賽平手＝雙敗，區塊加長 3050 字元（舊值不寫在這裡：守衛要求舊值零殘留））
 
 await T('F1 ⭐⭐ 錦標賽區塊與 v6.265 **逐位元相同**（sha256 內嵌快照，不需要 git 歷史）', () => {
   const i = pat.indexOf(TOURN_ANCHOR);

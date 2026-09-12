@@ -534,8 +534,8 @@ await T('G1 delta PUT 一輪(findOne clone+apply+hash+回填)p99 上限', async 
 console.log('\n══ 【H】⭐⭐ 錦標賽零接觸(站長硬約束) ═══════════════════════════');
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 // ⚠ v6.276 起錦標賽區塊含 6 處 additive 的 deckId 插入（revert-diff 見 test-v6276）。
-const TOURN_SHA_V6276 = 'e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40';
-const TOURN_LEN_V6276 = 220560;
+const TOURN_SHA_V6276 = 'ec75c9673267ece3c9cc6ed3858c6ec7b88926f0fd29c18558303916c3c240c2';
+const TOURN_LEN_V6276 = 223610;   // ⭐v6.365 重釘（站長裁定 六-2：錦標賽平手＝雙敗，區塊加長 3050 字元（舊值不寫在這裡：守衛要求舊值零殘留））
 await T('H1 錦標賽區塊與 v6.265 **逐位元相同**(內嵌 sha256,history-free)', () => {
   const i = PATCH.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');

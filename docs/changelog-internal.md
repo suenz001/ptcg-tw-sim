@@ -1,5 +1,141 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.365 錦標賽平手＝**雙敗**（站長裁定 六-2）
+
+BASE `7fcc1c66adfbaff17f8a245a2ba0683962f86f53`（v6.364）。⚠⚠ **本版改變錦標賽行為**，而且**主要改動在
+`oracle-admin/server_admin_patch.js`** —— 要跑 `update-tournament.bat`（或
+`update-admin-full.bat`）才會生效，見【六】。
+
+### 【一】站長裁定（逐字）
+
+> 「錦標賽平手就等於雙敗，千萬不要由管理員判定，管理員不可能隨時在線上，
+> 　而且目前已經有雙敗的機制」
+
+v6.361 引入平手時，錦標賽端的設計是「fail-safe：不結算、停在 `playing`、
+顯示『⏰ 本場平手，等待管理員裁定』」—— **本裁定推翻它**。
+
+### 【二】站上既有的雙敗機制（找到了，沿用，沒有發明第二套）
+
+**計分端**（`src/lib/tournament/swiss.ts`，逐字）：
+
+```ts
+// 只計已結束的對戰：有 winner=勝負已定；無 winner 但 status==='done'=雙未進場(雙敗)。
+const resolved = m.winnerUid != null || m.status === 'done';
+if (!resolved) continue;
+…
+} else {
+  // status==='done' 且無 winner = 雙未進場/雙敗
+  if (a) a.results.push('L');
+  if (b) b.results.push('L');
+}
+```
+
+**既有的三個生產者**（`server_admin_patch.js`）全部是同一個資料形狀
+`status:'done' + winnerUid:null`：
+| 情境 | 旗標 | 既有註解逐字 |
+|---|---|---|
+| v0.44 對局時限平手 | `timeLimit:true, draw:true` | 「平手 → 自動判雙敗（雙方淘汰，不需管理員）」 |
+| v6.188 兩人都棄賽 | `doubleDrop:true` | 「計分邏輯 swiss.ts 現成：`status==='done'` 且 `winnerUid===null` ⇒ 雙方各記一敗、都不得分」 |
+| 雙方未進場 | `doubleNoShow:true` | — |
+
+⇒ **本版只要讓伺服器把平手場寫成 `status:'done' + winnerUid:null`，
+`swiss.ts` 一個字都不用改**，自動變成雙 L。（守衛 C3 逐字釘住「swiss.ts 沒被動過」。）
+
+⚠ **刻意不用 `SwissResult` 的 `'T'`**：它宣告在型別裡、`matchPoints` 註解寫「平 1」，
+但全 repo **沒有任何寫入點**。啟用它＝發明第二套（Rule 38），而且「平 1 分」與
+「平手＝雙敗（0 分）」的裁定**相反**。
+
+### 【三】改了哪三處（`server_admin_patch.js`，**+50／−0 純新增、全部包在哨兵裡**）
+
+1. `v6365-tournament-draw-double-loss`：`onMatchGameOver` 內、`wSeat == null` 早退**之前**
+   的平手分支。CAS 搶占 `{status:{$ne:'done'}}`、寫 `draw + gameDraw`、公告、
+   `advanceOrFinish(m, null, null)`。
+   ⚠ 既有的 `if (wSeat == null) return;` **一個字都沒改**，仍原封不動留在哨兵外。
+2. `v6365-gamedraw-wording`：`noChampionReason` 的前置早退，只在「無勝方場**全部**是
+   gameDraw」時另開措辭（既有四種措辭一字未動）。
+3. `v6365-reconcile-draw`：v6.212 的 level-triggered 對帳多一條 `isDraw` 前置分支
+   —— ⚠ 這一處**簡報沒提到**，但不改的話平手場會永遠留在「需人工確認」。
+
+前端 `+page.svelte`（+3／−2）：錦標賽無勝方返回列的 fallback 文案改寫 ＋
+`{#if game.isDraw}` 雙敗說明。**非錦標賽的平手結算視窗（v6.361／v6.364）一個位元都沒動。**
+
+### 【四】⚠⚠ sha256 鎖：**25 把、分布在 17 支守衛**（簡報只知道 1 支）
+
+`server_admin_patch.js` 被兩個家族的 sha256 常數釘住：
+- 家族①「第一支 `app.get('/api/tournament` 至檔尾」：`TOURN_TAIL_SHA256` /
+  `TOURN_TAIL_SHA256_V6276` / `NEW_TAIL_SHA` —— **11 把**
+- 家族②「`const TEVENTS = db.collection('tournamentEvents');` 至檔尾」：
+  `TOURN_ANCHOR_SHA256` / `TOURN_SHA` / `TOURN_SHA_V6265` / `TOURN_SHA_V6276` /
+  `NEW_TEV_SHA` —— **14 把**
+
+⚠ 只改家族① 會讓 `test-v6282/6289/6295/6300` 翻紅（實測遇到才發現家族②）。
+⚠ **鎖釘的是 LF 正規化後的值**（倉庫與 CI 是 LF，本機工作樹是 CRLF）
+⇒ 這些守衛在本機**本來就紅**，而且**不可以**照本機值去釘，否則 CI 會全紅。
+工具：`__m6a/pin365c.mjs`（重釘，可重複執行）、`__m6a/shaverify365.mjs`（驗 25 把全部等於 LF 實際值）。
+**⭐ 只要再動 `server_admin_patch.js` 一個字元，就必須重跑 `pin365c.mjs`。**
+
+⚠ `test-v6276` 的 revert-diff 鏈照它自己既有的 `revertV6291`／`revertV6292` 形狀
+再串一節 `revertV6365`（剝掉哨兵後仍逐位元回到 v6.275）。
+
+⚠ 過程中 `test-v6303` 的 H3 曾經翻紅（「伺服器補丁在哨兵以外的地方被動到了」）。
+**沒有放寬那條守衛**，而是把改法從「就地改三行」改成**純新增的哨兵區塊** ⇒ 現在 39/0。
+
+### 【五】⚠ 會改變線上既有行為的清單
+
+| 改變 | 之前 | 之後 |
+|---|---|---|
+| 錦標賽對局打成平手 | TMATCH 永遠停在 `playing`、無公告、輪次永不推進、只能等管理員 | `status:'done' + winnerUid:null + draw + gameDraw`、公告雙敗、輪次照常推進 |
+| 平手場的瑞士輪計分 | 被當「未結束」跳過（0 分、**無 W/L 紀錄**） | 雙方各記一筆 `L`、0 分（與時限平手／雙棄賽完全一致） |
+| 平手場之後的輪次 | 本輪永遠打不完 ⇒ 下一輪永不產生 | 本輪收乾淨 ⇒ 正常配下一輪／進 Top Cut／完賽 |
+| level-triggered 對帳 | 只 `console.warn`「需人工確認」 | 補跑結算（雙敗）。非平手的無勝方仍只 warn |
+| 完賽公告措辭 | 最後一場是規則平手時會說成「平手（時限到…）」 | 說「雙方同時符合敗北條件 ⇒ 雙敗」 |
+| 前端錦標賽無勝方返回列 | fallback「本場平手，等待管理員裁定」 | fallback 改「本場平手」；`isDraw` 時加註雙敗說明 |
+
+**明確沒有變的**：休閒／單機／AI 平手仍是平手（`casualSideResult` 回 `'draw'`、v6.364 落敗音照播、
+v6.361 平手視窗一字未動）；一般勝負場的結算／公告／配對與 BASE **逐字元相同**；
+系統死角 `deadlockDraw`（`pending-admin`）仍等站長（v6.156 的裁定：那不是玩家掛機，
+用雙敗等於處罰兩個無辜的人）。
+
+### 【六】⚠⚠ 要跑哪一支 .bat
+
+| 改動 | 生效方式 |
+|---|---|
+| `oracle-admin/server_admin_patch.js` | **`update-tournament.bat`**（或 `update-admin-full.bat`） |
+| `src/routes/game/+page.svelte` | **`redeploy-oracle.bat`** |
+| `scripts/test-*.mjs` | 不需要 .bat，push 即可 |
+
+⚠⚠ **`update-tournament.bat` 會先 `git fetch origin` 再 `git reset --hard origin/main`**
+⇒ 必須**先 push** 才能跑，而且它會清掉任何未提交的工作樹改動。
+
+### 【七】守衛
+
+`scripts/test-v6365-tournament-draw-double-loss.mjs`：**32 PASS / 0 FAIL**。
+【0】harness 自驗、【A】HEAD-FAIL（同檔內直接對 BASE blob 跑）、【B】雙敗行為 8、
+【C】**瑞士輪行為端實跑** 3（不丟例外／分數正確／絕不為負或 NaN／`swiss.ts` 沒被動）、
+【D】一般勝負逐字對照、【E】休閒/單機平手仍是平手＋落敗音、【F】前端、
+【G】晉級不卡住 5、【H】對帳 4。
+
+**HEAD-FAIL 實測**：BASE(v6.364) exit=1、**紅 16 條**；還原後 exit=0。
+突變 **M1~M9 全殺**（平手退回等管理員／只記一邊敗／被當成雙贏／一般勝負計分被改壞／
+拿掉成因旗標／平手不推進輪次／對帳不認平手／公告講成時限到／前端改回等管理員）。
+
+逐位元家族 **39 支**改動前後逐支比對：**狀態改變 0 支**。
+另做更廣的安全 BASE 對照（110 支）：**本版新弄紅的 0 支**。
+另用 `__m6a/lfsim365.mjs` 暫時 LF 化模擬 CI（try/finally 還原）：
+`test-v6276`／`test-v6303`／`test-v6212`／`test-v6189`／`test-v6269`／`test-v6286`／
+`test-v6361`／新守衛 **全部 GREEN**。
+
+### 【八】⚠ 待站長裁示
+
+1. ⭐**單淘汰／Top Cut 階段的平手 ＝ 兩個人都不晉級**（沿用既有雙敗機制，
+   與時限平手／雙棄賽一直以來的行為相同）。
+   ⚠ **決賽打成平手就會變成「無冠軍」** —— Top Cut 要不要改成「重賽」？
+2. `SwissResult` 的 `'T'` 與 `matchPoints` 註解的「平 1」永遠不會發生，要不要清掉？
+3. 歸檔（`recordTournamentArchive`）沒有帶 `gameDraw`（為了不弄紅 `test-v6276` 的逐字快照）。
+   事後對帳要靠 `draw:true + timeLimit:false + deadlockDraw:false` 推。要不要另一版同步改？
+4. 系統死角 `deadlockDraw` 維持等站長裁定（見【五】），與六-2 的精神有張力，請確認。
+5. 公告措辭與前端說明文字要不要改短／加一句「瑞士制下你仍可繼續後續輪次」。
+
 ## v6.364 開局擲幣死碼移除（站長裁定 六-1）＋ 平手音效＝雙方落敗音（六-8）
 
 BASE `6379f54d06cac1be7934c49ebea87ee876ce103b`（v6.363）。

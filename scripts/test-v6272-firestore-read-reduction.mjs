@@ -639,7 +639,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = 'c0891b6f200ab4e3898c50aa77365458d2207870e828dc28bbfb44df81ddcda3' /* v6.276 重釘：報名/歸檔 6 處 additive 插入，revert-diff 見 test-v6276 */;
+const TOURN_TAIL_SHA256 = 'dc50464ff6843c4903080305afbdab4597b755fa89e2d623fb6a25cb314f0ff9' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '6379f54d06cac1be7934c49ebea87ee876ce103b';   // v6.363（v6.364 的上一版）
+const PREV_SHA = '7fcc1c66adfbaff17f8a245a2ba0683962f86f53';   // v6.364（v6.365 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -731,9 +731,9 @@ const PREV_SHA = '6379f54d06cac1be7934c49ebea87ee876ce103b';   // v6.363（v6.36
 // v6.342 M6a 招式實裝 批次2（傷害計算類 16 招）＋ 既有同措辭卡收斂到新的中央 helper
 //   ⚠ M6a 仍被 lockedSets 鎖著 ⇒ 玩家看不到任何變化，**不動首頁 changelog**。
 //   ⚠ mega_decks / v2690 兩檔是「既有卡改走中央 helper」，log 與傷害逐字相同（Rule 38 收斂）。
-// v6.364 開局擲幣死碼移除（站長裁定 六-1）＋ 平手音效＝雙方落敗音（六-8）
+// v6.365 錦標賽平手＝雙敗（站長裁定 六-2）
+//   ⚠ 主要改動在 oracle-admin/server_admin_patch.js（不在 src/ 掃描範圍內）。
 const PREV_ALLOWED = [
-  'src/lib/audio/sfx-events.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
 ];

@@ -8341,6 +8341,15 @@ import('firebase-admin').then(async ({ default: admin }) => {
       if (droppedWinners > 0) return droppedWinners > 1 ? '本輪勝出的選手都已棄賽' : '最後一場的勝方已棄賽';
       const noWin = (ms || []).filter((m) => !m.winnerUid);
       if (!noWin.length) return '本輪沒有可晉級的選手';
+      // >>> v6365-gamedraw-wording
+      //   ⑤v6.365 gameDraw —— 對局中依規則判出的平手（雙方同時符合敗北條件）。
+      //     既有的 'draw' 措辭寫死「時限到」，用在規則平手上是假話 ⇒ 另開一種措辭。
+      //   ⚠ 寫成「前置早退」而不是改下一行：既有的 kinds 分類與四種措辭**一個字都沒動**；
+      //     混合成因（一場規則平手、一場棄賽）也照舊路徑走涵蓋式措辭。
+      if (noWin.length > 0 && noWin.every((m) => m.gameDraw)) {
+        return (noWin.length > 1 ? '最後各場' : '最後一場') + '平手（雙方同時符合敗北條件）⇒ 雙敗';
+      }
+      // <<< v6365-gamedraw-wording
       const kinds = new Set(noWin.map((m) => (m.doubleDrop ? 'drop' : ((m.draw || m.timeLimit) ? 'draw' : (m.doubleNoShow ? 'noshow' : 'other')))));
       if (kinds.size === 1) {
         const pfx = noWin.length > 1 ? '最後各場' : '最後一場';
@@ -8410,6 +8419,33 @@ import('firebase-admin').then(async ({ default: admin }) => {
       const m = await TMATCH.findOne({ _id: doc.matchId });
       if (!m || m.status === 'done') return;
       const wSeat = (gs.winner === 0 || gs.winner === 1) ? gs.winner : null;
+      // >>> v6365-tournament-draw-double-loss
+      // ⭐⭐⭐v6.365 站長裁定 六-2（逐字）：「錦標賽平手就等於雙敗，千萬不要由管理員判定，
+      //   管理員不可能隨時在線上，而且目前已經有雙敗的機制」。
+      //   ⚠ 這裡**沿用站上既有的雙敗機制**，不是新發明第二套。既有三條路徑的資料形狀完全一致：
+      //     ・v0.44 對局時限平手（本檔下方 `timeLimit: true, draw: true` ⇒ advanceOrFinish(m, null, null)）
+      //     ・v6.188 兩人都棄賽（`doubleDrop`）
+      //     ・未進場雙缺席（`doubleNoShow`）
+      //     ⇒ TMATCH 寫 `status:'done'` ＋ `winnerUid:null`（＋成因旗標），然後照常推進輪次。
+      //   計分端 src/lib/tournament/swiss.ts 的 buildSwissPlayersFromMatches 對這個形狀**現成**：
+      //     「有 winner=勝負已定；無 winner 但 status==='done'=雙敗」⇒ 雙方各記一筆 'L'、都不得分
+      //     （所以本版一個字都不必動 swiss.ts，也不需要動用沒人寫入的 SwissResult 'T'）。
+      //   ⚠ 成因旗標用**新的** `gameDraw`，刻意不重用 doubleNoShow／doubleDrop／timeLimit
+      //     （v6.156／v6.188 的明訓：旗標混用會讓事後對帳分不出成因）。通用的 `draw` 照寫
+      //     —— 賽果頁與 noChampionReason 已經在讀它。
+      //   ⚠⚠ 只認 v6.361 的 `isDraw === true`。其他「game-over 卻沒有勝方」的狀態（資料不一致、
+      //     系統死角 deadlockDraw）**維持現行行為**：不結算、交給既有對帳與站長，
+      //     絕不自作主張把兩個無辜的人都判敗。
+      if (wSeat == null && gs.isDraw === true) {
+        const _drawClaim = await TMATCH.updateOne({ _id: m._id, status: { $ne: 'done' } }, { $set: { winnerUid: null, winnerName: null, status: 'done', draw: true, gameDraw: true,
+          finalLog: Array.isArray(gs.log) ? gs.log : [], finalState: gs, finalWinReason: gs.winReason || null, finalTurn: gs.turn || null, endedAt: Date.now() } });
+        // 條件式搶占：沒搶到代表別的路徑（投降／棄賽／時限）已經收掉這一場 ⇒ 不重複公告、不重複推進。
+        if (!_drawClaim || _drawClaim.matchedCount !== 1) return;
+        await postSystemChat('\u2696\ufe0f 第 ' + m.round + ' 輪 ' + (m.p1name || 'P1') + ' vs ' + (m.p2name || 'P2') + '：雙方同時符合敗北條件，本局平手 ⇒ 依站長裁定以「雙敗」處理（雙方各記一敗，不需管理員裁定）。');
+        await advanceOrFinish(m, null, null);
+        return;
+      }
+      // <<< v6365-tournament-draw-double-loss
       if (wSeat == null) return;
       const winnerUid = doc.seats[wSeat]; const winnerName = (doc.names && doc.names[wSeat]) || '';
       // v0.37 永久快照：把最終盤面 + 逐回合對戰 log 寫進 match 紀錄，供日後 debug（即使房間被清也留得住）。
@@ -10326,6 +10362,20 @@ import('firebase-admin').then(async ({ default: admin }) => {
               const _rcRoom = await TROOMS.findOne({ _id: m.roomId });
               const _rcGs = _rcRoom && _rcRoom.gameState;
               if (_rcGs && _rcGs.phase === 'game-over') {
+                // >>> v6365-reconcile-draw
+                // ⭐v6.365 六-2：平手（v6.361 的 isDraw）現在**有結果**了（雙敗）⇒ 也要補跑結算，
+                //   否則 /action 那一次呼叫失敗時，平手場照樣永遠停在 status:'playing'。
+                //   ⚠ 寫成「多一條前置分支」而不是改既有那一行的條件：既有的 winner 0/1 分支、
+                //   以及下面「無勝方只出聲不判」的 else 都**一個字都沒動**。
+                if (_rcGs.isDraw === true) {
+                  try {
+                    await onMatchGameOver(_rcRoom, _rcGs);
+                    console.warn('[tournament] \u2699 對帳：房間已平手 game-over 但對戰仍是 playing → 補跑雙敗結算 match=' + m._id);
+                  } catch (_rcE) {
+                    console.warn('[tournament] \u26a0 對帳補跑平手雙敗失敗 match=' + m._id + ' :: ' + (_rcE && _rcE.message));
+                  }
+                } else
+                // <<< v6365-reconcile-draw
                 if (_rcGs.winner === 0 || _rcGs.winner === 1) {
                   try {
                     await onMatchGameOver(_rcRoom, _rcGs);

@@ -299,10 +299,18 @@ console.log('\n【F】下游消費端：平手不可丟例外、不可算出負�
 
   // ── HEAD-FAIL 錨（Rule 41）：本版**刻意不動**的消費端，逐字釘住現況 ────────────
   const SRV = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-  chk('F5 ⭐⭐錨：錦標賽對局結束沒有勝方時 **不結算**（等管理員裁定）—— 本版刻意維持現行行為',
+  // ⭐v6.365 Rule 40 上移：站長裁定 六-2 正當地推翻了 v6.361 這條錨釘住的行為
+  //   （錦標賽平手不再等管理員，直接走既有雙敗機制）。錨不是放寬、是改指向新的意圖：
+  //   「平手一定要被結算掉」＋「非平手的無勝方狀態一定還是不結算」兩邊都要成立。
+  //   行為層的牙齒在 scripts/test-v6365-tournament-draw-double-loss.mjs（實跑 onMatchGameOver）。
+  chk('F5 ⭐⭐錨（v6.365 上移）：錦標賽平手 ⇒ 走既有雙敗機制結算掉，**不再**停下來等管理員',
     SRV.includes("const wSeat = (gs.winner === 0 || gs.winner === 1) ? gs.winner : null;")
-    && SRV.includes('      if (wSeat == null) return;'),
-    '找不到 onMatchGameOver 的 wSeat 早退');
+    && SRV.includes('      if (wSeat == null && gs.isDraw === true) {')
+    && SRV.includes("        const _drawClaim = await TMATCH.updateOne({ _id: m._id, status: { $ne: 'done' } }, { $set: { winnerUid: null, winnerName: null, status: 'done', draw: true, gameDraw: true,")
+    // ⚠ 順序才是牙齒：雙敗分支必須在「無勝方就早退」**之前**，否則它永遠走不到。
+    && SRV.indexOf('      if (wSeat == null && gs.isDraw === true) {') > 0
+    && SRV.indexOf('      if (wSeat == null && gs.isDraw === true) {') < SRV.indexOf('      if (wSeat == null) return;'),
+    '找不到 onMatchGameOver 的 v6.365 平手雙敗分支（或它被排在無勝方早退之後）');
   chk('F6 ⭐⭐錨：休閒戰績「無 winner ⇒ draw」的判定逐字還在',
     SRV.includes("      if (winner === null || winner === undefined) return 'draw';"),
     '找不到 casualSideResult 的 draw 分支');
@@ -314,10 +322,11 @@ console.log('\n【F】下游消費端：平手不可丟例外、不可算出負�
     SW.includes('不容許平手：有 winner → 勝方+3記W、敗方記L；Bye → +3記BYE；無 winner(雙未進場) → 雙方記L不得分。'),
     '找不到 swiss.ts 的計分宣告');
   const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-  chk('F9 ⭐錦標賽既有的「平手待管理員裁定」返回列逐字還在（不可被本版蓋掉）',
+  chk('F9 ⭐（v6.365 上移）錦標賽無勝方返回列還在，但平手改說「雙敗」、不再說等管理員裁定',
     PAGE.includes("{#if isTournament && game && game.phase === 'game-over' && (game.winner === null || game.winner === undefined)}")
-    && PAGE.includes('本場平手，等待管理員裁定'),
-    '找不到錦標賽平手返回列');
+    && PAGE.includes('錦標賽平手以「雙敗」計（雙方各記一敗），不需管理員裁定')
+    && !PAGE.includes('本場平手，等待管理員裁定'),
+    '找不到錦標賽平手返回列（或仍停留在「等待管理員裁定」）');
   chk('F10 ⭐非錦標賽的平手結算視窗（本版新增；沒有它單機／休閒平手會看起來卡住）',
     PAGE.includes('>>> v6361-draw-modal') && PAGE.includes('<<< v6361-draw-modal')
     && PAGE.includes("{#if game.phase === 'game-over' && (game.winner === null || game.winner === undefined) && !isTournament}")

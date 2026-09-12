@@ -31,6 +31,10 @@ import { revertV6291 } from './lib/tourn-revert-v6291.mjs';
 // ⭐v6.292：同一道閘又補到 /drop、/unregister、/chat、/match/enter、/match/forfeit 五支 ⇒ 區塊再多 5 行。
 //   鏈再長一節：revertV6292() → revertV6291() → 本檔的 revertTail() ⇒ 仍是逐位元回到 v6.275。
 import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
+// ⭐v6.365：鍵再長一節（站長裁定 六-2：錦標賽平手＝雙敗）。
+//   還原器本體放在 scripts/lib/tourn-revert-v6365.mjs（與 v6.291／v6.292 同一個形狀，
+//   三支守衛共用同一份 ⇒ 不會出現兩份會漂移的還原器；test-v6292 B6 在守這條鍵）。
+import { revertV6365 } from './lib/tourn-revert-v6365.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '4ce276453c998058f70a35778a6ab262fa679921';   // v6.275
@@ -114,8 +118,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = 'c0891b6f200ab4e3898c50aa77365458d2207870e828dc28bbfb44df81ddcda3';
-const NEW_TEV_SHA = 'e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40';
+const NEW_TAIL_SHA = 'dc50464ff6843c4903080305afbdab4597b755fa89e2d623fb6a25cb314f0ff9';
+const NEW_TEV_SHA = 'ec75c9673267ece3c9cc6ed3858c6ec7b88926f0fd29c18558303916c3c240c2';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
@@ -170,10 +174,16 @@ await T('A5 app.locals._sanitizeDeckId 的掛載點在所有 IIFE 之外（跨 I
 
 console.log('\n══ 【B】⭐⭐⭐ revert-diff：錦標賽區塊＝v6.265 ＋ 恰好這 6 處插入 ═══════════');
 
+// ⭐v6.365（站長裁定 六-2：錦標賽平手＝雙敗）：本版在錦標賽區塊新增三段，
+//   全部包在 `// >>> v6365-xxx` … `// <<< v6365-xxx` 哨兵裡、且是**純新增**
+//   （既有的行一個字都沒改；test-v6303 H3 的哨兵剥除器也在守這件事）。
+//   剥掉之後必須逐位元回到 v6.364 ⇒ 接進 revert 鏈，B1/B2 仍是逐位元回到 v6.275。
+//   ⚠ 不是放寬：哨兵**以外**的任何一個字元被動到，B1 照樣翻紅（B3 突變就在驗這件事）。
+//   ⚠ 還原器已改由 scripts/lib/tourn-revert-v6365.mjs 提供（單一資料來源）。
 function revertTail(tail) {
   // ⭐v6.291／v6.292 串接：先還原 v6.292 的 5 行、再還原 v6.291 的 3 行 gate，
   //   最後才還原 v6.276 自己的 6 處插入 ⇒ 鏈起來仍是逐位元回到 v6.275。
-  let r = revertV6291(revertV6292(tail));
+  let r = revertV6291(revertV6292(revertV6365(tail)));
   const rem = (needle, tag) => {
     const n = r.split(needle).length - 1;
     assert.strictEqual(n, 1, 'revert-diff：' + tag + ' 出現 ' + n + ' 次（應恰 1）—— 區塊被動了不只宣告的那幾處');

@@ -832,8 +832,8 @@ await T('H2 突變自驗:拿掉 set 條數上限後,「1 萬條深路徑」會�
 
 console.log('\n══ 【I】⭐⭐ 錦標賽零接觸 ＋ 玩家端零改動 ═══════════════════════');
 const TOURN_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
-const TOURN_SHA = 'e7c15148d4bc39ea62682b735625b9fddf6b960369f20d9e339158c090075f40';
-const TOURN_LEN = 220560;
+const TOURN_SHA = 'ec75c9673267ece3c9cc6ed3858c6ec7b88926f0fd29c18558303916c3c240c2';
+const TOURN_LEN = 223610;   // ⭐v6.365 重釘（站長裁定 六-2：錦標賽平手＝雙敗，區塊加長 3050 字元（舊值不寫在這裡：守衛要求舊值零殘留））
 await T('I1 錦標賽區塊逐位元未動(內嵌 sha256,history-free)', () => {
   const i = PATCH.indexOf(TOURN_ANCHOR);
   assert.ok(i > 0, '找不到錦標賽區塊錨點');
