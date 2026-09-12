@@ -8734,6 +8734,16 @@ export function fireDefenderOnKO(
       }
     }
   }
+  // ⭐⭐⭐ v6.355 ④ PASSIVE_ON_KO_AFTER_PRIZE（耿鬼ex｜死亡宣告）——「獎賞結算完才輪到」的 on-KO 特性。
+  //   這裡只**入列**，不執行；真正的觸發在 engine.sanityKOSweep 的唯一 drain 點。
+  //   為什麼不能跟 ③ 一樣就地執行：本函式在 effects.ts 的三條路徑上是
+  //   「fireDefenderOnKO → addPendingPrize」（dealAttackDamageToTarget／狙擊自傷／clone-strike），
+  //   而 engine 主管線是「addPendingPrize → PASSIVE_ON_KO」——順序相反（v6.259 的定論）。
+  //   會發獎賞／清掉攻擊方 active／可能終局的效果就地執行必然兩邊不等價（v6.347 撤回的真因）。
+  //   ⚠ **刻意放在「if (koByAttackDamage)」區塊外面**：卡面條件「受到…**傷害**而昏厥」的 gate
+  //     全站只留 firePassiveOnKoAfterPrize 裡那一份（與 engine 主管線共用同一支）。
+  //     放在區塊裡的話那道 gate 會變成到不了的死碼 ＝ 安慰劑（__m6a/mutcheck_v6355.mjs M8 釘住）。
+  s = firePassiveOnKoAfterPrize(s, dIdx, aIdx, pool, koInst, isActive, koByAttackDamage);
   return s;
 }
 
@@ -17223,24 +17233,40 @@ export type PassiveOnKoFn = (
  *   炸裂針（SV9 12468）。鬆口氣（獎賞修正）已走 PASSIVE_KO_PRIZE_ADJUST（v6.259，
  *   koVictimAbilityPrizeAdjust 不做位置 gate，備戰本來就涵蓋）。
  */
-//   ⚠v6.347 曾嘗試加入「耿鬼ex｜死亡宣告」（M6a 076/103），**已撤回** ——
-//     原因見下方 PASSIVE_ON_KO 宣告上方的「待站長裁示」註解。
-export const PASSIVE_ON_KO_BENCH_ALSO = new Set<string>(['最後鎖鏈']);
-// ⚠⚠⚠ v6.347【待站長裁示】耿鬼ex｜死亡宣告（M6a 076/103）**未實裝**，原因記在這裡：
-//   卡面：「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。
-//          若為正面，則將使用招式的寶可夢【昏厥】。」
-//   觸發時機正好落在 PASSIVE_ON_KO，但它的效果是「**把攻擊方也昏厥**」——
-//   昏厥會發獎賞、會把攻擊方的 active 清成 null。而 PASSIVE_ON_KO 在兩條 KO 管線中
-//   相對 addPendingPrize 的執行點**是相反的**（見下方 v6.259 的定論註解）：
-//     ・engine.ts 主 ATTACK 管線：addPendingPrize → PASSIVE_ON_KO
-//     ・effects.ts dealAttackDamageToTarget：fireDefenderOnKO（→PASSIVE_ON_KO）→ addPendingPrize
-//   v6.347 行為端實測（scripts/test-v6259-ko-prize-adjust-central.mjs 的 C4 跨管線等價）：
-//     主管線 → 攻擊方正常取 2 張獎賞（剩 4）；中央 helper → 攻擊方取 0 張（剩 6）。
-//   ⇒ 要正確實裝需要一個「**兩條管線都在 addPendingPrize 之後**」的 on-KO hook
-//     （＝新增 engine 核心流程的觸發點），本批不做。
-//   ⚠ 也**不可以**改成「把攻擊方的 damage 設到有效 HP、交給 sanityKOSweep」——
-//     那會把「效果昏厥」偽裝成「招式傷害昏厥」，錯誤地讓防 KO 道具、影藏／古舊能量的
-//     獎賞修正、以及傷害路徑的免疫閘全部被套用。
+//   ⭐v6.355：耿鬼ex｜死亡宣告（M6a 076/103，id 19988）卡面同樣**沒有**「在戰鬥場」：
+//     「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。
+//       若為正面，則將使用招式的寶可夢【昏厥】。」
+//     ⇒ 備戰區被狙擊／全體傷害 KO 時照樣觸發。
+//     （v6.347 曾因「兩條 KO 管線相對 addPendingPrize 順序相反」把它整個撤回；
+//      v6.355 改接下方的 PASSIVE_ON_KO_AFTER_PRIZE ＋ 單一 drain 點之後解除，見該段註解。）
+//   ⚠ 本 Set 供 fireDefenderOnKO ②③④ 三段共用（fail-closed：未宣告 = 只在戰鬥場觸發）。
+export const PASSIVE_ON_KO_BENCH_ALSO = new Set<string>(['最後鎖鏈', '死亡宣告']);
+// ⚠⚠⚠ v6.347 這裡曾經是「耿鬼ex｜死亡宣告 待站長裁示、未實裝」的理由，⭐v6.355 已解除。
+//   歷史（**不要刪**，這是設計判準的由來）：
+//     卡面「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。
+//           若為正面，則將使用招式的寶可夢【昏厥】。」
+//     觸發時機落在 PASSIVE_ON_KO，但效果是「**把攻擊方也昏厥**」——會發獎賞、會把攻擊方的
+//     active 清成 null、甚至可能終局。而 PASSIVE_ON_KO 在兩條 KO 管線中相對 addPendingPrize
+//     的執行點**是相反的**：
+//       ・engine.ts 主 ATTACK 管線：addPendingPrize → PASSIVE_ON_KO
+//       ・effects.ts dealAttackDamageToTarget：fireDefenderOnKO（→PASSIVE_ON_KO）→ addPendingPrize
+//     v6.347 行為端實測：主管線攻擊方取 2 張獎賞（剩 4）；中央 helper 取 0 張（剩 6）。**不等價。**
+//   ⇒ v6.355 的解法：新增 PASSIVE_ON_KO_AFTER_PRIZE 家族（見下方），
+//     入列兩點共用同一支 gate、出列**只有一個點**（engine.sanityKOSweep）⇒ 結構上不可能分岔。
+//   ⚠ 以下三條**禁令**依然成立（v6.355 的實作全部遵守，守衛 scripts/test-v6355-death-declaration.mjs 釘住）：
+//     ① 不可以掛在 PASSIVE_KO_RETALIATION（它的型別只有 { counters }）。
+//     ② 不可以用 selfKOInstance（那是「使用者**自己**昏厥」的語意）。
+//     ③ 不可以「把攻擊方的 damage 設到有效 HP、交給 sanityKOSweep」——
+//        那會把「效果昏厥」偽裝成「招式傷害昏厥」，錯誤地讓防 KO 道具（勤奮之心／結實／
+//        堅忍之軀／倖存鍛鍊器）、影藏／古舊能量的獎賞修正、以及傷害路徑的免疫閘全部被套用；
+//        而且那條路的獎賞是 sanityKOSweep 自己算的 prizesForKO（**繞過** v6.259 的中央獎賞
+//        管線 koPrizesAdjusted／koVictimAbilityPrizeAdjust），觸發時機也整個交給 sweep，
+//        本家族「兩條管線由同一行決定」的保證會消失。
+//     ⇒ v6.355 改走既有中央路徑 koTargetByAttackEffect（「讓**別人**因效果昏厥」的唯一入口）：
+//        它 ① 直接把目標移出場（不走 damage 管線 ⇒ 防 KO／傷害免疫閘都不會被套用）
+//           ② 獎賞走 koPrizesAdjusted(..., koByAttackDamage=false)（⇒ 影藏／古舊能量不生效，
+//              官方判例 PTCG_RULES.md L2544：「因招式的效果[昏厥]，影藏不會生效」同一句型）
+//           ③ recordOppKO(..., byDamage=false)（復仇家族不誤觸發）。
 export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // 桃歹郎(I) | 最後鎖鏈 — 從牌庫任選 1 張加手 + 重洗
   ['最後鎖鏈', (state, dIdx, _aIdx, _pool, _defCard) => {
@@ -17325,6 +17351,133 @@ export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
     );
   }],
 ]);
+
+/**
+ * ⭐⭐⭐ v6.355 中央收斂：「被 KO 之後、**獎賞已經結算完**才輪到」的防守方 on-KO 特性。
+ *
+ * 為什麼不能繼續用 PASSIVE_ON_KO（＝ v6.347 撤回的真因，見上方註解）：
+ *   PASSIVE_ON_KO 在兩條 KO 管線中相對 addPendingPrize 的執行點**是相反的**，
+ *   任何「會發獎賞／清掉攻擊方 active／可能終局」的 on-KO 效果就地執行就必然兩邊不等價。
+ *
+ * v6.355 的形狀（站長要求「一勞永逸的收斂式中央管線」——呼叫點越少越好）：
+ *   ① **入列**只有 2 個點，而且兩點呼叫的是**同一支** gate firePassiveOnKoAfterPrize：
+ *        ・effects.ts fireDefenderOnKO ④ 段
+ *          —— 一口氣涵蓋 effects.ts 側全部「受對手招式傷害而昏厥」的路徑：
+ *             dealAttackDamageToTarget（狙擊／延後傷害／中央結算）、hitBenchAll（地震／燃燒熱浪／
+ *             天空波／大地斷裂）、bench-hit-N、clone-strike-multi-hit（分身連打／三色炮）…
+ *        ・engine.ts 主 ATTACK 管線的 PASSIVE_ON_KO 迴圈旁（主管線**不走** fireDefenderOnKO）。
+ *   ② **出列（drain）只有 1 個點**：engine.ts sanityKOSweep 的函式開頭。
+ *      sanityKOSweep 是每一條 action 的 KO 收斂點（USE_ATTACK 末端／RESOLVE_SELECTION 末端／
+ *      每個 dispatch 末端雙邊掃），位置**必然**在該次 action 全部 addPendingPrize 之後
+ *      ⇒ 兩條管線的觸發時機由**同一行程式碼**決定，結構上不可能再分岔。
+ *      （也因此，連「addPendingPrize 排在 fireDefenderOnKO **前面**」的那三條路徑
+ *        ——hitBenchAll／bench-hit-N／clone-strike-multi-hit——都一樣正確。）
+ *   ③ 佇列 state._onKoAfterPrize 在 drain 的第一步就整個清空 ⇒ 結構上不可能再入／雙觸發。
+ *
+ * ⭐ 卡面逐字（static/cards 台灣官方，abilities[].effect）：
+ *   耿鬼ex｜死亡宣告（M6a 076/103，id 19988，HP280，Stage2，【惡】）
+ *   「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。
+ *     若為正面，則將使用招式的寶可夢【昏厥】。」
+ *   ⇒ ① 只限「受到對手招式的**傷害**而昏厥」（koByAttackDamage）——效果昏厥（渾沌傷痛等
+ *        放指示物）、中毒／灼傷檢查階段 KO、自傷 KO 一律不觸發；
+ *      ② 卡面**沒有**「在戰鬥場」⇒ 備戰也觸發（已登記進 PASSIVE_ON_KO_BENCH_ALSO）；
+ *      ③ 「將使用招式的寶可夢【昏厥】」是**效果昏厥**，獎賞由持有者（dIdx）這一側取得。
+ */
+export type PassiveOnKoAfterPrizeFn = (
+  state: GameState,
+  /** 被 KO 那一方（特性持有者的擁有者）＝ 取得獎賞的那一方 */
+  dIdx: 0 | 1,
+  /** 使出招式的那一方 */
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  defenderCard: Card,
+  defenderInst?: CardInstance,
+  /** 「使用招式的寶可夢」的 iid 快照（KO 當下 aIdx 的戰鬥寶可夢） */
+  attackerIid?: string,
+) => GameState;
+
+export const PASSIVE_ON_KO_AFTER_PRIZE = new Map<string, PassiveOnKoAfterPrizeFn>([
+  // 耿鬼ex(J) | 死亡宣告 — 擲 1 次硬幣，正面則讓「使用招式的寶可夢」效果昏厥
+  ['死亡宣告', (state, dIdx, aIdx, pool, defCard, _defInst, attackerIid) => {
+    // ⭐ 卡面：「…自己擲1次硬幣。若為正面，則…」——擲幣是**無條件**的（就算目標已經不在場上
+    //   也照擲），所以先擲再找目標。dIdx 擲幣 ⇒ 不會誤設 coinFlippedThisAttack（v5.513），
+    //   也就不會誤觸重試徽章 modal。
+    const fr = flipCoinsWithLog(state, 1, `${defCard.name}｜死亡宣告`, dIdx);
+    let s = fr.state;
+    // 「使用招式的寶可夢」＝ KO 當下 aIdx 的戰鬥寶可夢（用 iid 快照認人，不是「現在的戰鬥位」）。
+    const atkP = s.players[aIdx];
+    const isAtkActive = !!attackerIid && atkP.active?.iid === attackerIid;
+    const target = isAtkActive ? atkP.active! : atkP.bench.find(b => b.iid === attackerIid);
+    const targetName = target ? (pool.get(target.cardId)?.name ?? '?') : '使用招式的寶可夢';
+    if (fr.heads !== 1) {
+      return addLog(s, `「死亡宣告」啟動：硬幣反面 → ${targetName} 不昏厥`, dIdx);
+    }
+    if (!target) {
+      return addLog(s, '「死亡宣告」啟動：硬幣正面，但使用招式的寶可夢已經不在場上 → 沒有可昏厥的目標', dIdx);
+    }
+    s = addLog(s, `「死亡宣告」啟動：硬幣正面 → 將使用招式的 ${targetName} 【昏厥】`, dIdx);
+    // ⭐ 走全站既有的「讓**別人**因效果昏厥」唯一中央入口（深淵之瞳／藍柱石／千面避役同一支）：
+    //   直接移除目標（不走 damage 管線）＋ koPrizesAdjusted(koByAttackDamage=false) ＋
+    //   recordOppKO(byDamage=false) ＋ 補位空場 game-over ＋ addPendingPrize 自動發獎。
+    //   ⚠ 這裡的「attackerIdx」參數語意是「**取得獎賞**的那一方」= dIdx（耿鬼ex 的擁有者）。
+    return koTargetByAttackEffect(s, dIdx, target, isAtkActive, pool, '死亡宣告');
+  }],
+]);
+
+/**
+ * ⭐⭐⭐ v6.355 入列唯一入口（gate 只有這一份）。兩個呼叫點共用：
+ *   ・effects.ts fireDefenderOnKO ④ 段
+ *   ・engine.ts 主 ATTACK 管線
+ * gate 逐條對齊 fireDefenderOnKO ③ 段的既有寫法：
+ *   ① koByAttackDamage（卡面「受到…**傷害**而昏厥」⇒ 效果KO／中毒／檢查時KO 不觸發）
+ *   ② 卡面沒有「在戰鬥場」才在備戰觸發（PASSIVE_ON_KO_BENCH_ALSO，fail-closed）
+ *   ③ isAbilityHolderEffective（初始化／暗夜羽擊／監視塔／熔岩洞／黏著束縛 消除持有者特性）
+ */
+export function firePassiveOnKoAfterPrize(
+  state: GameState,
+  dIdx: 0 | 1,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  koInst: CardInstance,
+  isActive: boolean,
+  koByAttackDamage: boolean,
+): GameState {
+  if (!koByAttackDamage) return state;
+  const koCard = pool.get(koInst.cardId);
+  if (!koCard?.abilities) return state;
+  const queued: NonNullable<GameState['_onKoAfterPrize']> = [];
+  for (const ab of koCard.abilities) {
+    if (!PASSIVE_ON_KO_AFTER_PRIZE.has(ab.name)) continue;
+    if (!isActive && !PASSIVE_ON_KO_BENCH_ALSO.has(ab.name)) continue;
+    if (!isAbilityHolderEffective(state, koInst, koCard, dIdx, ab.name, isActive ? 'active' : 'bench', pool)) continue;
+    queued.push({
+      ability: ab.name, dIdx, aIdx, koInst,
+      attackerIid: state.players[aIdx].active?.iid,
+    });
+  }
+  if (queued.length === 0) return state;
+  return { ...state, _onKoAfterPrize: [...(state._onKoAfterPrize ?? []), ...queued] };
+}
+
+/**
+ * ⭐⭐⭐ v6.355 出列唯一入口。**全站只能有一個呼叫點**（engine.sanityKOSweep 開頭），
+ * 那裡必然在該次 action 全部 addPendingPrize 之後 ⇒ 兩條 KO 管線等價。
+ * ⚠ 第一件事就是把佇列整個清空：結構上不可能再入（效果本身會再呼叫 addPendingPrize）。
+ */
+export function drainOnKoAfterPrize(state: GameState, pool: Map<string, Card>): GameState {
+  const q = state._onKoAfterPrize;
+  if (!q || q.length === 0) return state;
+  let s: GameState = { ...state, _onKoAfterPrize: undefined };
+  for (const e of q) {
+    if (s.phase === 'game-over') break;   // 已經分出勝負 ⇒ 後面的 on-KO 效果不再結算
+    const fn = PASSIVE_ON_KO_AFTER_PRIZE.get(e.ability);
+    if (!fn) continue;
+    const koCard = pool.get(e.koInst.cardId);
+    if (!koCard) continue;
+    s = fn(s, e.dIdx, e.aIdx, pool, koCard, e.koInst, e.attackerIid);
+  }
+  return s;
+}
 
 /**
  * ⭐⭐⭐ v6.259 中央收斂：「被 KO 時直接改變對手獲得的獎賞卡張數」的防守方特性。

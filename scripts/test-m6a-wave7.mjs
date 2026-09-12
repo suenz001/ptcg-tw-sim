@@ -231,7 +231,7 @@ console.log('\n【3】027 皮卡丘｜躲起來 — 只要在備戰區，不受�
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('\n【4】⚠ 本批**未實裝**的 1 個特性 —— 卡面逐字錨（待站長裁示；卡面若改版這裡會紅）');
+console.log('\n【4】M6a 批次7 被動特性的卡面逐字錨（實裝後仍要釘住卡面；卡面改版／抓錯卡會紅）');
 {
   // ⚠ 這一段**不是**「宣告永遠不做」。它只做兩件事：
   //   ① 把待裁示卡的 abilities[].effect 逐字釘住（卡面改版／抓錯卡時會紅）；
@@ -246,11 +246,14 @@ console.log('\n【4】⚠ 本批**未實裝**的 1 個特性 —— 卡面逐字
   //   v3001_g3_wave3.isHealBlockedFor，唯一消費點 engine.markHealsByDamageDecrease 之後就做得到了），
   //   卡面逐字錨已移交 scripts/test-v6354-heal-block.mjs 的【0】段。
   const FACE = [
+    // ⭐v6.355 **已實裝**（PASSIVE_ON_KO_AFTER_PRIZE：入列 2 點共用 gate、出列只有
+    //   engine.sanityKOSweep 一點 ⇒ 兩條 KO 管線的觸發時機由同一行決定）。
+    //   卡面逐字錨**保留在這裡**（本檔是 M6a 批次7 的卡面真相表）；完整守備
+    //   （正／反面、戰鬥場／備戰、兩條管線等價、效果KO／檢查時KO 不觸發、特性消除、
+    //    防 KO 不被套用、獎賞張數、game-over 順序）由 scripts/test-v6355-death-declaration.mjs 接管。
     ['耿鬼ex', '死亡宣告',
       '這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。若為正面，則將使用招式的寶可夢【昏厥】。',
-      'PASSIVE_ON_KO 在兩條 KO 管線中相對 addPendingPrize 的順序相反（v6.259 已記載）；'
-      + '而本特性的效果會發獎賞＋清掉攻擊方 active ⇒ 實測兩條管線不等價'
-      + '（test-v6259 的 C4：主管線攻擊方取 2 張獎賞、中央 helper 取 0 張）'],
+      'v6.355 已實裝：PASSIVE_ON_KO_AFTER_PRIZE ＋ 單一 drain 點（engine.sanityKOSweep）'],
   ];
   for (const [cn, an, eff] of FACE) {
     const c = findAb(cn, an);
@@ -271,13 +274,13 @@ console.log('\n【4B】⚠⚠ 待裁示特性「目前確實沒有作用」＋ �
   //   Rule 33：斷言必須落到行為層。以下每條都配哨兵（證明「該發生的事真的發生了」），
   //   並且會在該特性**被實作的那一天主動變紅**，逼實作者把它搬到自己的章節。
   //   ⇒ 「待裁示」不再是靠註解宣告，而是靠可量測的數字。
-  const runHail = (p1Active, p1Bench, actExtra = {}) => {
+  const runHail = (p1Active, p1Bench, actExtra = {}, heads) => {   // ⭐v6.355 加 heads（正／反面對照）
     const a = inst(ARTI.id, { energyAttached: energyForCost(ARTI, '冰雹') });
     const st = mk(
       { active: a, deck: [inst(PLAIN.id)], prizes: Array.from({ length: 6 }, () => inst(PLAIN.id)) },
       { active: inst(p1Active.id, actExtra), bench: p1Bench.map((c) => inst(c.id)),
         deck: [inst(PLAIN.id)], prizes: Array.from({ length: 6 }, () => inst(PLAIN.id)) });
-    return act(st, { type: 'ATTACK', attackIndex: atkIndexOf(ARTI, '冰雹') });
+    return act(st, { type: 'ATTACK', attackIndex: atkIndexOf(ARTI, '冰雹') }, heads);
   };
 
   // ── (a) 甜甜螢｜絕佳費洛蒙：⭐v6.353 **已實裝**（弱點倍率參數化成中央述詞之後）────
@@ -328,13 +331,23 @@ console.log('\n【4B】⚠⚠ 待裁示特性「目前確實沒有作用」＋ �
   chk('4B-b ⭐正對照（KO 分支）：花岩怪昏厥時攻擊方一樣吃到反擊',
     D0(rGeoKO) == null && (A0(rGeoKO)?.damage ?? 0) > 0, String(A0(rGeoKO)?.damage));
 
-  // ── (c) 耿鬼ex｜死亡宣告：卡面要「擲幣正面則讓攻擊方昏厥」；現況攻擊方毫髮無傷 ──
-  //    act() 預設把 Math.random 釘在正面 ⇒ 若哪天實作了，這條一定會紅。
-  const rGen = runHail(GENG, [], { damage: Number(GENG.hp) - 30 });
-  chk('4B-c 哨兵：耿鬼ex 確實因招式傷害昏厥', D0(rGen) == null, JSON.stringify(D0(rGen)));
-  chk('4B-c ⭐行為端：擲幣固定正面下，攻擊方（急凍鳥）仍在場且 0 點'
-    + ' ⇒ 死亡宣告目前確實無作用', !!A0(rGen) && A0(rGen).damage === 0,
-    JSON.stringify([!!A0(rGen), A0(rGen)?.damage]));
+  // ── (c) 耿鬼ex｜死亡宣告：⭐v6.355 **已實裝**（PASSIVE_ON_KO_AFTER_PRIZE）────────────
+  //    這一條原本釘的是「攻擊方毫髮無傷 ⇒ 死亡宣告目前確實無作用」的 HEAD-FAIL 錨，
+  //    v6.355 實作後主動翻紅 —— 依 Rule 40 把判準**上移到意圖層**：現在釘「卡面要求的
+  //    『擲幣正面 ⇒ 使用招式的寶可夢昏厥』真的發生了」＋**反面對照**（同一盤面只差擲幣結果）。
+  //    實作被拿掉照樣紅、正反面接反照樣紅 ⇒ 這是收緊，不是放寬。
+  // ⚠ 對手一定要有備戰：耿鬼ex 是對手唯一寶可夢時，它昏厥當下就「沒有可上場的寶可夢」
+  //   ⇒ 立即 game-over，死亡宣告（排在獎賞結算之後）本來就不再結算。
+  const rGenH = runHail(GENG, [PLAIN], { damage: Number(GENG.hp) - 30 });        // 擲幣正面
+  const rGenT = runHail(GENG, [PLAIN], { damage: Number(GENG.hp) - 30 }, false); // 擲幣反面
+  chk('4B-c 哨兵：耿鬼ex 確實因招式傷害昏厥（正／反面都一樣）',
+    D0(rGenH) == null && D0(rGenT) == null,
+    JSON.stringify([D0(rGenH), D0(rGenT)]));
+  chk('4B-c ⭐行為端（v6.355 已實裝）：擲幣正面 ⇒ 使用招式的寶可夢（急凍鳥）真的【昏厥】',
+    A0(rGenH) == null, JSON.stringify([!!A0(rGenH), A0(rGenH)?.damage]));
+  chk('4B-c ⭐反對照（同一盤面只差擲幣結果）：擲幣反面 ⇒ 攻擊方仍在場且 0 點',
+    !!A0(rGenT) && A0(rGenT).damage === 0,
+    JSON.stringify([!!A0(rGenT), A0(rGenT)?.damage]));
 
   // ── (d) 伊裴爾塔爾｜生命制約：⭐v6.354 **已實裝**（「禁止恢復HP」收斂成中央閘之後）────
   //    這一條原本釘的是「**仍然**回到 30 ⇒ 生命制約目前確實無作用」的 HEAD-FAIL 錨，

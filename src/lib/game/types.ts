@@ -1112,6 +1112,14 @@ export interface GameState {
   //   於 dispatcher 末端 flush 成 modal-choice 鏈(多隻一組組問)。
   _diverCatchQueue?: { ownerIdx: 0 | 1; koName: string; heldEnergy: CardInstance[] }[];
   /**
+   * ⭐⭐⭐ v6.355「獎賞結算完之後才輪到的 on-KO 特性」待觸發佇列（耿鬼ex｜死亡宣告）。
+   * 入列：effects.fireDefenderOnKO ④ 段／engine 主 ATTACK 管線（都走 firePassiveOnKoAfterPrize）。
+   * 出列：engine.sanityKOSweep 開頭的 drainOnKoAfterPrize（全站**唯一** drain 點）——
+   *       它必然在該次 action 全部 addPendingPrize 之後 ⇒ 兩條 KO 管線的時機由同一行決定。
+   * ⚠ drain 的第一步就整個清空 ⇒ 結構上不可能再入／雙觸發。
+   */
+  _onKoAfterPrize?: { ability: string; dIdx: 0 | 1; aIdx: 0 | 1; koInst: CardInstance; attackerIid?: string }[];
+  /**
    * v2.70：copy-attack（例如 火箭隊的謎擬Ｑ｜扮晶晶酒）在 ATTACK_PRE 階段
    * 記下被複製招式的 effectKey（格式 `對手卡名|招式名`），好讓 ATTACK_POST
    * 可以轉接呼叫被複製招式的 POST（包含 pendingSelection 類附加效果）。

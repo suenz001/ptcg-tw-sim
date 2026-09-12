@@ -1,5 +1,127 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.355 PASSIVE_ON_KO_AFTER_PRIZE 中央家族 ＋ 耿鬼ex｜死亡宣告
+
+BASE `494ae3b50675f1ebda07131d266a032dbd93250c`（v6.354）。站長清單 **A-4**。M6a 仍鎖著 ⇒ 玩家看不到變化；
+既有卡的 on-KO 行為**逐字不變**（`PASSIVE_ON_KO` / `PASSIVE_KO_PRIZE_ADJUST` 兩張表都沒動）。
+
+### 【一】v6.347 為什麼撤回、v6.355 怎麼解
+
+卡面（`static/cards/M6a.json` id 19988，076/103，Stage2【惡】HP280）：
+「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。
+　若為正面，則將使用招式的寶可夢【昏厥】。」
+
+觸發時機落在 `PASSIVE_ON_KO`，但效果會**發獎賞／清掉攻擊方 active／可能終局**。
+而 `PASSIVE_ON_KO` 在兩條 KO 管線中相對 `addPendingPrize` 的執行點**是相反的**：
+
+| 管線 | 順序 |
+|---|---|
+| `engine.ts` 主 ATTACK | `addPendingPrize` → `PASSIVE_ON_KO` |
+| `effects.ts` `fireDefenderOnKO` 家族 | `fireDefenderOnKO`（→`PASSIVE_ON_KO`）→ `addPendingPrize` |
+
+v6.347 行為端實測：主管線攻擊方取 2 張獎賞（剩 4）；中央 helper 取 0 張（剩 6）。**不等價** ⇒ 整個撤回。
+
+### 【二】v6.355 的形狀：**入列 2 點（共用同一支 gate）＋ 出列 1 點**
+
+```
+firePassiveOnKoAfterPrize(state, dIdx, aIdx, pool, koInst, isActive, koByAttackDamage)   ← gate 只有一份
+  ① effects.ts  fireDefenderOnKO ④ 段          （涵蓋 effects 側全部 6 條招式傷害 KO 路徑）
+  ② engine.ts   主 ATTACK 管線（主管線不走 fireDefenderOnKO）
+        ↓ 只推進 state._onKoAfterPrize 佇列，不執行
+drainOnKoAfterPrize(state, pool)
+  ③ engine.ts   sanityKOSweep 函式開頭         ← 全站唯一出列點
+```
+
+⭐ **為什麼 drain 選 `sanityKOSweep` 而不是 `addPendingPrize` 尾端**：
+`sanityKOSweep` 是每一條 action 的 KO 收斂點（`USE_ATTACK` 末端／`RESOLVE_SELECTION` 末端，
+兩處都是**無條件**呼叫），位置**必然**在該次 action 全部 `addPendingPrize` 之後
+⇒ 兩條管線的觸發時機由**同一行程式碼**決定，結構上不可能再分岔。
+
+掛在 `addPendingPrize` 反而不行：(a) 它有三個早退分支（`n<=0`／`count0<=0`／有正面朝上獎賞開 picker）都會漏 drain；
+(b) `_shared.ts` 不能 import `effects.ts`（循環）；
+(c) ⚠ 逐一查證後發現**有三條路徑的 `addPendingPrize` 排在 `fireDefenderOnKO` 前面**
+（`hitBenchAll` 地震／燃燒熱浪／天空波／大地斷裂、`bench-hit-N`、`clone-strike-multi-hit` 分身連打／三色炮）
+—— 掛在 `addPendingPrize` 上那三條**永遠不會 drain**。
+
+⚠ `drain` 的第一步就整個清空佇列 ⇒ 結構上不可能再入／雙觸發；遇 `game-over` 早停。
+⚠ `sanityKOSweep` 裡是覆寫參數 `state` 而不是下方的 `let s` —— 因為 `if (!anyKO)` 早退回傳的是 `state` 本身。
+
+### 【三】效果本體：走既有中央路徑 `koTargetByAttackEffect`
+
+「將使用招式的寶可夢【昏厥】」＝**效果昏厥**，不是招式傷害昏厥。
+`koTargetByAttackEffect` 是全站「讓**別人**因效果昏厥」的唯一入口（深淵之瞳／藍柱石／千面避役同一支）：
+① 直接把目標移出場（不走 damage 管線 ⇒ 防 KO 道具／傷害免疫閘都不會被套用）
+② 獎賞走 `koPrizesAdjusted(..., koByAttackDamage=false)`（影藏／古舊能量不生效；官方 `PTCG_RULES.md` L2544 同句型）
+③ `recordOppKO(..., byDamage=false)`（復仇家族不誤觸發）
+
+⚠ 三條**禁令**（原始碼註解逐條保留，守衛 G8 掃描 ＋ 突變 M14 釘住）：
+① 不可掛 `PASSIVE_KO_RETALIATION`（型別只有 `{counters}`）
+② 不可用 `selfKOInstance`（那是「使用者**自己**昏厥」的語意）
+③ 不可「把攻擊方 damage 設到有效 HP、交給 `sanityKOSweep`」——
+   ⚠ v6.347 的註解說理由是「攻擊方掃不到」，**這句不精確**（dispatcher 末端是雙邊掃，
+   `markFaintByEffect` 的殭屍照樣會被掃掉，突變 M14 實測行為端沒紅）。
+   真正的理由是：那條路的獎賞由 sweep 自己的 `prizesForKO` 算，**繞過** v6.259 的中央獎賞管線
+   （`koPrizesAdjusted`／`koVictimAbilityPrizeAdjust`），而且觸發時機不再由本家族控制。註解已照這個修正改寫。
+
+⚠ 卡面**沒有**「在戰鬥場」⇒ `'死亡宣告'` 已登記進 `PASSIVE_ON_KO_BENCH_ALSO`（備戰被狙擊／全體傷害 KO 也觸發）。
+⚠ 擲幣是**無條件**的（卡面「…自己擲1次硬幣。若為正面…」）⇒ 就算目標已不在場上也照擲，只是沒有可昏厥的目標。
+⚠ 「使用招式的寶可夢」用 **iid 快照**認人（drain 在 action 末端，不能讀「現在的戰鬥位」）。
+
+### 【四】守衛
+
+`scripts/test-v6355-death-declaration.mjs`：**PASS 83 / FAIL 0**（全部行為端，每條都配哨兵）。
+【0】harness 自驗＋卡面逐字錨（反安慰劑：`getUsableAbilities` 不得列出這個被動特性）
+、【A】正面昏厥／棄牌／獎賞 6−1=5／「啟動」恰 1 次 ＋ 反面對照
+、【A-ex】攻擊方是 ex ⇒ 6−2=4；**防 KO 特性「勤奮之心」不該擋效果昏厥** ＋ 正對照
+、【B】耿鬼ex 在**備戰**被全體傷害 KO 照樣觸發 ＋ 反面對照
+、【C】⭐兩條管線等價（先用 log 格式哨兵證明真的是兩條不同管線，再比雙方剩餘獎賞／是否昏厥／手牌）
+、【D】效果昏厥（渾沌傷痛 13 個指示物）與中毒檢查昏厥 ⇒ **不**觸發、連 log 都沒有
+、【E】傳說的熔岩洞消除特性 ⇒ 不觸發、連硬幣都不擲 ＋ 正對照
+、【F】game-over 順序（耿鬼ex 側剩 1 張時攻擊方**仍然先**拿 2 張 ＝ v6.347 的直接重現條件，兩條管線都驗）
+、【G】中央性 9 條（入列恰 2 點／出列恰 1 點／三張 on-KO 表不相交／禁令掃描器自身有效／禁令①②③）
+、【H】⭐**非主 ATTACK handler** 的 dispatch：超級噴火龍Yex｜炎獄狂爆Y 走 picker，
+　　傷害與 KO 發生在 `RESOLVE_SELECTION` ⇒ 死亡宣告必須**在同一個 dispatch 內**結算完
+、【I】⭐佇列不變量：23 次 action 結束後 `_onKoAfterPrize` 全空；I3 反安慰劑用手塞一筆再跑**普通** action
+　　（`ATTACH_ENERGY`）證明 dispatcher 末端那個**條件式** sweep 真的會 drain；
+　　I5 把「入列路徑的宿主只有 ATTACK／RESOLVE_SELECTION」這個前提用全站掃描釘住。
+
+突變 **M1~M18 全殺**（含 M7「就地執行＝v6.347 的錯誤寫法」、M14「禁令③寫法」、
+M16「drain 整支變 no-op」、M17「條件式 dispatcher tail 停用」、M18「effects 側整條不入列」）。
+
+⚠ `test-m6a-wave7` 的 4B-(c) 原本釘「死亡宣告目前確實無作用」的 HEAD-FAIL 錨，本版實裝後主動翻紅
+⇒ 依 **Rule 40 上移到意圖層**（釘「正面 ⇒ 急凍鳥真的昏厥」＋新增反面對照），
+待裁示 FACE 表 **1 → 0**（M6a 卡面待裁示清單清空）。
+⚠ 該處對手盤面必須補一隻備戰，否則耿鬼ex 昏厥當下就「沒有可上場的寶可夢」→ 立即 game-over，錨會誤紅。
+
+`test-v6259` 的 C4 跨管線等價：`names` 加入 `...PASSIVE_ON_KO_AFTER_PRIZE.keys()`，
+下限由 `checked >= 3` 收緊成 `>= 4`。
+
+### 【五】⚠ 待站長裁示（4 條）
+
+1. ⭐**「招式的效果」免疫閘被套到「特性的效果」上**。
+   `koTargetByAttackEffect` 內建 `canApplyAttackEffectToTarget`，會擋下 化隱／薄霧能量／硬岩鬥能量／
+   純樸／阿塞蘿拉的惡作劇／陳舊的背蓋化石／飛翔‧躲藏的 per-turn 旗標。
+   ⚠ 這些卡面**全都只寫「不會受到對手寶可夢的『招式』的效果影響」，而死亡宣告是『特性』的效果**
+   （官方句型對照：`PTCG_RULES.md` L1667 咒詛炸彈寫「因**特性**『咒詛炸彈』的效果」、L2544 寫「因**招式**的效果[昏厥]」）。
+   嚴格照卡面，死亡宣告**不該**被這些免疫擋住。本版選擇 **fail-closed、不動中央函式**
+   （寧可少觸發、零擴散風險），代價是：攻擊方若附硬岩鬥能量或殘留飛翔／躲藏旗標，死亡宣告會**無聲失效**。
+   要修需要給 `koTargetByAttackEffect` 加一個「效果來源＝特性」的選項。
+
+2. **雙方獎賞都只剩 1 張時的勝負**。官方 `PTCG_RULES.md` L621-622／L727-728／L893-894／L1667-1668 一致：
+   「可以從備戰區放置寶可夢至戰鬥場上的玩家獲勝；若雙方皆可／皆不可，則為**平手**」。
+   引擎目前沒有平手概念、`addPendingPrize` 是順序結算 ⇒ 攻擊方先取完就直接 `winner`。
+   守衛 F2 只是把**現行行為**釘住（避免無聲漂移），**不是**主張它正確。
+
+3. **對手唯一寶可夢被 KO 時，死亡宣告連硬幣都不擲**：引擎當下就判「沒有可上場的寶可夢」而終局，
+   drain 遇 `game-over` 早停。規則書查不到「被 KO 觸發的特性 vs 終局判定孰先」的明文。
+
+4. **條件式 dispatcher tail 是全站共用的結構假設**（非本版造成）。
+   目前 `_onKoAfterPrize` 的安全性依賴「入列只發生在 ATTACK／RESOLVE_SELECTION」這個**今天為真**的事實
+   （守衛 I5 全站掃描已釘住：78 個呼叫點，掛在特性／訓練家 handler 上的 **0** 個）。
+   若將來有「**特性**造成招式傷害 KO」的新卡，那條 handler 沒有無條件 `sanityKOSweep`，
+   佇列會殘留一個 dispatch。屆時正解是把 `sanityKOSweep` 變成 `applyActionImpl` 的**無條件** tail
+   —— 那會改動全站 KO 收斂行為，超出本版範圍。在那之前 I5 會翻紅，不會無聲。
+
 ## v6.354 「禁止恢復 HP」中央閘 ＋ 伊裴爾塔爾｜生命制約
 
 BASE `cfcb9faa926fe4ce793945f37d84da419df20641`（v6.353）。站長清單 **A-5**。M6a 仍鎖著 ⇒ 玩家看不到變化；

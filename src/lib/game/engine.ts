@@ -975,6 +975,11 @@ export { twoCardStadiumHalfIndex, twoCardStadiumSide, isTwoCardStadiumName };
 import { legendPeakPrizeReduction } from './effects/_shared'; // v6.077 傳說的山頂
 // v6.066：未實裝訓練家卡 fail-closed（判定需要 TRAINER_EFFECTS，故從 effects.ts 取）
 import { isTrainerPendingImplementation } from './effects';
+// >>> v6355-ko-after-prize-import
+// ⭐v6.355 耿鬼ex｜死亡宣告：「獎賞結算完才輪到的 on-KO 特性」中央家族
+//   （入列 gate 與 effects.fireDefenderOnKO ④ 共用；出列只在 sanityKOSweep）。
+import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
+// <<< v6355-ko-after-prize-import
 export { sameEvoName, canEvolveOnto };
 
 /**
@@ -3099,6 +3104,16 @@ function sanityKOSweep(
   attackerIdx: 0 | 1,
   pool: Map<string, Card>,
 ): GameState {
+  // >>> v6355-ko-after-prize-drain
+  // ⭐⭐⭐ v6.355【耿鬼ex｜死亡宣告】的**唯一** drain 點。
+  //   sanityKOSweep 是每一條 action 的 KO 收斂點（USE_ATTACK 末端／RESOLVE_SELECTION 末端／
+  //   每個 dispatch 末端雙邊掃）⇒ 位置必然在本次 action 全部 addPendingPrize **之後**。
+  //   兩條 KO 管線（engine 主 ATTACK／effects.ts fireDefenderOnKO 家族）都只在這裡出列，
+  //   觸發時機由同一行決定 ⇒ 結構上不可能再像 v6.347 那樣分岔。
+  //   ⚠ 這裡直接覆寫參數 state（而不是下面的 let s）：因為「if (!anyKO)」的 early return
+  //     回傳的是 state 本身 —— 只改 s 會讓「沒有殭屍可掃」時 drain 的結果被整個丟掉。
+  state = drainOnKoAfterPrize(state, pool);
+  // <<< v6355-ko-after-prize-drain
   const dIdx = (1 - attackerIdx) as 0 | 1;
   let s = state;
   let prizesAcc = 0;
@@ -6269,6 +6284,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           if (fnKO) newState = fnKO(newState, dIdx, aIdx, pool, defenderCard, koInst ?? undefined);
         }
       }
+      // >>> v6355-ko-after-prize-enqueue
+      // ⭐⭐⭐ v6.355：主 ATTACK 管線**不走** fireDefenderOnKO，所以「獎賞結算完才輪到的
+      //   on-KO 特性」（耿鬼ex｜死亡宣告）要在這裡入列。gate 與 effects.fireDefenderOnKO ④
+      //   共用同一支 firePassiveOnKoAfterPrize ⇒ 兩條管線的判準只有一份。
+      //   本分支＝「招式**傷害** KO 對手**戰鬥位**」⇒ isActive=true、koByAttackDamage=true。
+      //   實際觸發在 sanityKOSweep 的唯一 drain 點（必然在上方 addPendingPrize 之後）。
+      if (koInst) {
+        newState = firePassiveOnKoAfterPrize(newState, dIdx, aIdx, pool, koInst, true, true);
+      }
+      // <<< v6355-ko-after-prize-enqueue
       if (deferredBonus > 0) {
         newState = addLog(newState, `${defenderCard.name} 因「多餘花粉」遺留效果，+${deferredBonus} 張獎賞卡`, null);
       }

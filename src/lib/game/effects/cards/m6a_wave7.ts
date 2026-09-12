@@ -14,7 +14,16 @@
  *                                        有登錄的主動特性）。守衛：scripts/test-v6353-weakness-multiplier.mjs）
  *     022     皮卡丘｜寂寞眼神        → `PASSIVE_DAMAGE_REDUCE` + `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`
  *     027     皮卡丘｜躲起來          → `getBenchImmunityAbilityName`（藏隱／深度下潛 同一支）
- *     076     耿鬼ex｜死亡宣告        → ⚠**本版未實裝**（待站長裁示；曾實作後撤回，見 changelog v6.347【五】3：PASSIVE_ON_KO 在兩條 KO 管線相對 addPendingPrize 的順序相反）
+ *     076/103 耿鬼ex｜死亡宣告        → `effects.PASSIVE_ON_KO_AFTER_PRIZE`
+ *                                       （⭐v6.355 實裝的「獎賞結算完才輪到的 on-KO 特性」中央家族。
+ *                                        入列 2 點共用 `firePassiveOnKoAfterPrize`（effects.fireDefenderOnKO ④
+ *                                        ＋ engine 主 ATTACK 管線），出列**只有 1 點**：
+ *                                        `engine.sanityKOSweep` 開頭的 `drainOnKoAfterPrize`
+ *                                        —— 那個位置必然在該次 action 全部 addPendingPrize 之後，
+ *                                        所以 v6.347 撤回的「兩條管線順序相反」結構上不可能再發生。
+ *                                        效果本體走既有中央路徑 `koTargetByAttackEffect`（效果昏厥）。
+ *                                        純被動 ⇒ 無 handler，也不會出現在 `getUsableAbilities`。
+ *                                        守衛：scripts/test-v6355-death-declaration.mjs）
  *     079     伊裴爾塔爾｜生命制約    → `v3001_g3_wave3.isHealBlockedFor`
  *                                       （⭐v6.354 實裝的「禁止恢復HP」中央閘，與
  *                                        `hasEffectiveCalmGroundOnSide`／`isReturnToHandBlockedByCalmGround`

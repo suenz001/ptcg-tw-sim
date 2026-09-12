@@ -28,13 +28,14 @@ writeFileSync(E,
   "export { applyAction } from './src/lib/game/engine';\n" +
   "export { dealAttackDamageToTarget, koTargetByAttackEffect, koPrizesAdjusted,\n" +
   "         PASSIVE_ON_KO, PASSIVE_KO_PRIZE_ADJUST, koVictimAbilityPrizeAdjust,\n" +
+  "         PASSIVE_ON_KO_AFTER_PRIZE,\n" +
   "         TOOL_ON_KO, PASSIVE_KO_RETALIATION } from './src/lib/game/effects';\n" +
   "import './src/lib/game/effects';");
 await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platform: 'node',
   target: 'node20', alias: { '$lib': join(ROOT, 'src/lib'), '$app/paths': S }, logLevel: 'error' });
 const mod = await import(pathToFileURL(O).href);
 const { applyAction, dealAttackDamageToTarget, koTargetByAttackEffect,
-        PASSIVE_ON_KO, PASSIVE_KO_PRIZE_ADJUST } = mod;
+        PASSIVE_ON_KO, PASSIVE_KO_PRIZE_ADJUST, PASSIVE_ON_KO_AFTER_PRIZE } = mod;
 
 const dir = join(ROOT, 'static/cards');
 const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map(e => e.code));
@@ -282,7 +283,8 @@ T('C4 ★跨管線等價：PASSIVE_ON_KO 的每個成員，兩條管線 KO 後�
   needPKA();
   // 這條是「防再犯」的核心：任何 on-KO 效果只要對兩條管線表現不同，這裡就會紅。
   const bad = [];
-  const names = [...PASSIVE_ON_KO.keys(), ...PASSIVE_KO_PRIZE_ADJUST.keys()];
+  // ⭐v6.355：新家族 PASSIVE_ON_KO_AFTER_PRIZE（耿鬼ex｜死亡宣告）也必須過同一條跨管線等價。
+  const names = [...PASSIVE_ON_KO.keys(), ...PASSIVE_KO_PRIZE_ADJUST.keys(), ...PASSIVE_ON_KO_AFTER_PRIZE.keys()];
   let checked = 0;
   for (const name of names) {
     const card = allCards.find(c => (c.abilities ?? []).some(a => a.name === name)
@@ -310,7 +312,7 @@ T('C4 ★跨管線等價：PASSIVE_ON_KO 的每個成員，兩條管線 KO 後�
       bad.push(`${name}(${card.name})：攻擊方手牌 主管線=${p1.players[0].hand.length} vs 中央helper=${p2.players[0].hand.length}`);
     }
   }
-  assert.ok(checked >= 3, `跨管線等價至少要驗到 3 個 on-KO 特性，實得 ${checked}（＝守衛沒測到東西）`);
+  assert.ok(checked >= 4, `跨管線等價至少要驗到 4 個 on-KO 特性（v6.355 +死亡宣告），實得 ${checked}（＝守衛沒測到東西）`);
   assert.deepStrictEqual(bad, [], bad.join(' / '));
 });
 
