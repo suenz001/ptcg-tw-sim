@@ -4196,6 +4196,12 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
   // v2.992 Group 1 (A 類)
   ['毛皮大衣', 20],     // 多麗米亞(H) — 受招式傷害 -20
   ['爆炸頭防守', 30],   // 爆炸頭水牛ex(I) — 受招式傷害 -30
+  // ⭐v6.347 M6a 022/103 皮卡丘｜寂寞眼神（J，Basic【雷】60HP）—
+  //   卡面逐字：「只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-20」點。」
+  //   ⚠ 與 火炎獅｜威嚇之牙／陳舊的顎之化石｜威嚇之顎 **卡面逐字同構**（只差數字）
+  //     ⇒ 位置限制一律登記在下方 ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES（v6.208 的唯一宣告），
+  //       不可以在這裡或任何消費點另寫一份 location 判斷。
+  ['寂寞眼神', 20],
 ]);
 
 /**
@@ -4219,6 +4225,7 @@ export const PASSIVE_DAMAGE_REDUCE = new Map<string, number>([
 export const ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES: ReadonlySet<string> = new Set<string>([
   '威嚇之牙',  // 火炎獅（M1S/I，Stage1）— PASSIVE_DAMAGE_REDUCE -30
   '威嚇之顎',  // 陳舊的顎之化石（J，化石 Item）— engine.ts 內按卡名手刻的 -30（v6.207 才接上消除閘）
+  '寂寞眼神',  // ⭐v6.347 皮卡丘（M6a 022/103，J，Basic）— PASSIVE_DAMAGE_REDUCE -20
 ]);
 
 /**
@@ -16952,7 +16959,24 @@ export type PassiveOnKoFn = (
  *   炸裂針（SV9 12468）。鬆口氣（獎賞修正）已走 PASSIVE_KO_PRIZE_ADJUST（v6.259，
  *   koVictimAbilityPrizeAdjust 不做位置 gate，備戰本來就涵蓋）。
  */
+//   ⚠v6.347 曾嘗試加入「耿鬼ex｜死亡宣告」（M6a 076/103），**已撤回** ——
+//     原因見下方 PASSIVE_ON_KO 宣告上方的「待站長裁示」註解。
 export const PASSIVE_ON_KO_BENCH_ALSO = new Set<string>(['最後鎖鏈']);
+// ⚠⚠⚠ v6.347【待站長裁示】耿鬼ex｜死亡宣告（M6a 076/103）**未實裝**，原因記在這裡：
+//   卡面：「這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。
+//          若為正面，則將使用招式的寶可夢【昏厥】。」
+//   觸發時機正好落在 PASSIVE_ON_KO，但它的效果是「**把攻擊方也昏厥**」——
+//   昏厥會發獎賞、會把攻擊方的 active 清成 null。而 PASSIVE_ON_KO 在兩條 KO 管線中
+//   相對 addPendingPrize 的執行點**是相反的**（見下方 v6.259 的定論註解）：
+//     ・engine.ts 主 ATTACK 管線：addPendingPrize → PASSIVE_ON_KO
+//     ・effects.ts dealAttackDamageToTarget：fireDefenderOnKO（→PASSIVE_ON_KO）→ addPendingPrize
+//   v6.347 行為端實測（scripts/test-v6259-ko-prize-adjust-central.mjs 的 C4 跨管線等價）：
+//     主管線 → 攻擊方正常取 2 張獎賞（剩 4）；中央 helper → 攻擊方取 0 張（剩 6）。
+//   ⇒ 要正確實裝需要一個「**兩條管線都在 addPendingPrize 之後**」的 on-KO hook
+//     （＝新增 engine 核心流程的觸發點），本批不做。
+//   ⚠ 也**不可以**改成「把攻擊方的 damage 設到有效 HP、交給 sanityKOSweep」——
+//     那會把「效果昏厥」偽裝成「招式傷害昏厥」，錯誤地讓防 KO 道具、影藏／古舊能量的
+//     獎賞修正、以及傷害路徑的免疫閘全部被套用。
 export const PASSIVE_ON_KO = new Map<string, PassiveOnKoFn>([
   // 桃歹郎(I) | 最後鎖鏈 — 從牌庫任選 1 張加手 + 重洗
   ['最後鎖鏈', (state, dIdx, _aIdx, _pool, _defCard) => {
@@ -20104,12 +20128,73 @@ regR('discard-one-each-type', (st, aIdx, iids, params, pool) => {
   return runDiscardOneEachType(s, aIdx, pool, rest, label);
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐v6.347 M6a 三神鳥「羽擊」三支特性 —— 中央規格表 + 唯一可用性述詞
+//
+// 卡面逐字（static/cards/M6a.json，abilities[].effect；三張只差「屬性」與「前提的兩隻」）：
+//   006/105 火焰鳥｜燃燒羽擊「若自己的場上有『急凍鳥』『閃電鳥』，則在自己的回合時可使用1次。
+//                            從自己的手牌選擇1張『基本【火】能量』卡，附於這隻寶可夢身上。」
+//   012/107 急凍鳥｜嚴寒羽擊「…『火焰鳥』『閃電鳥』…『基本【水】能量』…」
+//   049/108 閃電鳥｜濺射羽擊「…『火焰鳥』『急凍鳥』…『基本【雷】能量』…」
+//
+// ⚠ 為什麼放在 effects.ts：engine.getUsableAbilities（決定按鈕亮不亮／USE_ABILITY 能不能跑）
+//   與 m6a_wave7.ts 的 regAByName（實際執行）必須問同一份條件。v6.127／v6.131／v6.132 三次
+//   事故全是「能不能按」與「按下去做什麼」各寫一份、改了一邊忘了另一邊。
+// ⚠ 一律寫成**函式宣告**（會提升）：effects.ts 在檔尾 import 卡檔，而 ESM 的 import 會被提升
+//   ⇒ 卡檔的模組主體比本檔主體先跑；卡檔若在模組主體讀本檔的 const 會 TDZ ReferenceError。
+// ⚠ 「自己的場上」＝ 戰鬥場 + 備戰區；卡名一律**完全相等**比對（「超級急凍鳥ex」不算）。
+export type M6aWingSpec = {
+  /** 持有者卡名 */
+  holder: string;
+  /** 卡面指定「自己的場上」必須有的另外兩隻 */
+  partners: readonly [string, string];
+  /** 要從手牌附加的基本能量屬性 */
+  energyType: EnergyType;
+  /** 卡面屬性字（log / picker 標題用） */
+  zh: string;
+};
+const M6A_WING_SPECS: ReadonlyMap<string, M6aWingSpec> = new Map<string, M6aWingSpec>([
+  ['燃燒羽擊', { holder: '火焰鳥', partners: ['急凍鳥', '閃電鳥'], energyType: 'Fire', zh: '火' }],
+  ['嚴寒羽擊', { holder: '急凍鳥', partners: ['火焰鳥', '閃電鳥'], energyType: 'Water', zh: '水' }],
+  ['濺射羽擊', { holder: '閃電鳥', partners: ['火焰鳥', '急凍鳥'], energyType: 'Lightning', zh: '雷' }],
+]);
+
+export function m6aWingSpec(abilityName: string): M6aWingSpec | undefined {
+  return M6A_WING_SPECS.get(abilityName);
+}
+export function isM6aWingAbility(abilityName: string): boolean {
+  return M6A_WING_SPECS.has(abilityName);
+}
+/**
+ * ⭐ 三神鳥羽擊特性「現在能不能用」的唯一述詞。
+ *   engine.getUsableAbilities（按鈕／USE_ABILITY 前置閘）與卡檔的 regAByName 都問這一支。
+ *   ⚠ 不含「每回合 1 次」與「特性被消除」—— 那兩層由 getUsableAbilities 的共用段落負責。
+ */
+export function m6aWingAbilityReady(
+  state: GameState, idx: 0 | 1, abilityName: string, pool: Map<string, Card>,
+): { ok: boolean; reason?: string } {
+  const spec = M6A_WING_SPECS.get(abilityName);
+  if (!spec) return { ok: false, reason: '不是三神鳥的羽擊特性' };
+  const p = state.players[idx];
+  const field = [...(p.active ? [p.active] : []), ...p.bench];
+  for (const nm of spec.partners) {
+    if (!field.some(c => pool.get(c.cardId)?.name === nm)) {
+      return { ok: false, reason: '自己的場上沒有「' + nm + '」' };
+    }
+  }
+  if (!p.hand.some(c => isBasicEnergyOfType(pool.get(c.cardId), spec.energyType))) {
+    return { ok: false, reason: '手牌沒有「基本【' + spec.zh + '】能量」' };
+  }
+  return { ok: true };
+}
+
 import './effects/cards/m6a_wave1'; // v6.341 M6a「30th CELEBRATION」招式實裝 批次1（26 招）
 import './effects/cards/m6a_wave2'; // v6.342 M6a 招式實裝 批次2（16 招｜傷害計算類）
 import './effects/cards/m6a_wave3'; // v6.343 M6a 招式實裝 批次3（11 招｜能量操作）
 import './effects/cards/m6a_wave4'; // v6.344 M6a 招式實裝 批次4（7 招｜換位／回牌庫／退化）
 import './effects/cards/m6a_wave5'; // v6.345 M6a 招式實裝 批次5（18 招｜牌庫／手牌／棄牌區操作）
 import './effects/cards/m6a_wave6'; // v6.346 M6a 招式實裝 批次6（8 招｜防禦旗標／減傷／全體傷害／指示物）
+import './effects/cards/m6a_wave7'; // v6.347 M6a **特性**實裝 批次7（主動特性 6 個；被動的登記在各中央表）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口
 //   （BRIEF §2 Rule 38：同一個判準只能有一份；卡檔只負責「哪一張卡用哪一支」。）

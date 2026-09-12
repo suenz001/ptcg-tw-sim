@@ -291,6 +291,14 @@ chk('D1 ⭐⭐⭐ 中間層的 POST 有跑到：對手牌庫被重洗（卡面�
 console.log('\n【E】HEAD-FAIL：對 BASE(' + BASE_SHA.slice(0, 8) + ') 逐條列出紅了哪幾條');
 
 const CHANGED = [
+  // ⭐⭐v6.347：**engine.ts 也必須換回 BASE**。
+  //   v6.343 那一輪只處理了「HEAD 的卡檔 import BASE 還沒有的 effects.ts 符號」，
+  //   但同一個病也發生在 `engine.ts → effects.ts`：HEAD 的 engine.ts 會
+  //   `import { 新helper } from './effects'`，BASE 的 effects.ts 沒有那個符號
+  //   ⇒ esbuild「No matching export」⇒ 整支守衛爆在 harness（不是判準）。
+  //   （v6.334 的同款 harness 本來就把 engine.ts 列進 CHANGED —— 這裡是補齊。）
+  //   ⚠ 這不是放寬任何判準：BASE 樹本來就該是**全部**都 BASE，半新半舊才是錯的。
+  'src/lib/game/engine.ts',
   'src/lib/game/types.ts',
   'src/lib/game/actions.ts',
   'src/lib/game/effects.ts',

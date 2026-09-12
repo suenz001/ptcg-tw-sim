@@ -31,6 +31,8 @@ import {
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   koVictimAbilityPrizeAdjust,  // ⭐v6.259 被 KO 者自身特性的獎賞張數修正（願增猿ex｜鬆口氣）
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
+  countEnergyTypeBloomAware,                  // ⭐v6.347 一長再長：「6個以上【草】能量」host-aware 個數
+  isM6aWingAbility, m6aWingAbilityReady,      // ⭐v6.347 三神鳥羽擊：唯一可用性述詞（與 regAByName 共用）
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
@@ -1266,6 +1268,19 @@ export function getEffectiveHP(
       return ec?.supertype === 'Energy' && ec.subtype !== 'Basic';
     });
     if (hasSpecial) hp += 150;
+  }
+  // ⭐v6.347 阿羅拉 椰蛋樹｜一長再長（M6a 002/103・104/103，J，Stage1 150HP【草】）
+  // 卡面逐字：「若這隻寶可夢身上附有6個以上【草】能量，則這隻寶可夢的最大HP「+250」。」
+  //   ⚠ 「6個以上【草】能量」＝**能量的個數**（不是能量卡的張數）⇒ 走中央 host-aware 述詞
+  //     countEnergyTypeBloomAware（含 大竺葵｜繁茂「基本【草】各算 2 個」，以及古舊／稜鏡
+  //     （Basic host）等視為【草】的特殊能量），不自己數 pokemonType。
+  //   ⚠ 與同區其他最大 HP 特性一樣要過 hpAbilityEffective —— 特性被暗夜羽擊／初始化／
+  //     黏著束縛／傳說的熔岩洞（本卡是 Stage1 進化）消除時，+250 不生效。
+  if (state && _v6206OwnerIdx != null
+      && (card.abilities?.some(a => a.name === '一長再長') ?? false)
+      && hpAbilityEffective(inst, card, '一長再長')
+      && countEnergyTypeBloomAware(inst, 'Grass', state, _v6206OwnerIdx, pool) >= 6) {
+    hp += 250;
   }
   return hp;
 }
@@ -7165,6 +7180,24 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           state = addLog({ ...state, players }, `${sleeperName}：正面 → 醒來了！`, null);
         } else {
           state = addLog({ ...state, players }, `${sleeperName}：反面 → 仍在睡眠`, null);
+          // ⭐v6.347 卡比獸｜好眠（M6a 095/103，J，Basic【無】160HP）
+          // 卡面逐字：「這隻寶可夢【睡眠】時，若在寶可夢檢查中這隻寶可夢沒有從【睡眠】恢復，
+          //            則將這隻寶可夢的HP全部恢復。」
+          //   ⚠ 觸發點就是**這一格**（睡眠擲幣為反面的那一刻），不是 checkup 尾端的
+          //     「放指示物特性區」—— 卡面的條件是「沒有從睡眠恢復」，必須綁在擲幣結果上。
+          //   ⚠ 中毒／灼傷在本區**之前**結算；若已被 checkup 傷害 KO，active 已是 null，
+          //     上面的 sleepPlayer.active?.status === 'asleep' 就進不來 ⇒ 不會「死而復生」。
+          //   ⚠ 特性被消除（火箭隊的監視塔對【無】屬性、初始化、暗夜羽擊…）時不生效 → 中央述詞。
+          const _v6347Sleeper = sleepPlayer.active;
+          const _v6347Card = _v6347Sleeper ? pool.get(_v6347Sleeper.cardId) : undefined;
+          if (_v6347Sleeper && _v6347Card?.abilities?.some(a => a.name === '好眠')
+              && _v6347Sleeper.damage > 0
+              && isAbilityHolderEffective(state, _v6347Sleeper, _v6347Card, tIdx, '好眠', 'active', pool)) {
+            sleepPlayer.active = { ..._v6347Sleeper, damage: 0 };
+            players[tIdx] = sleepPlayer;
+            state = addLog({ ...state, players },
+              `好眠：${sleeperName} 沒有從睡眠恢復 → HP 全部恢復`, null);
+          }
         }
       }
     }
@@ -9145,6 +9178,34 @@ export function getEffectiveAttacks(
         result.push({ atk, sourceCardName, isFromTool: false });
       }
     }
+    // ⭐v6.347 夢幻ex｜記憶螺旋（M6a 057/103・135/103，J，Basic【超】160HP）
+    // 卡面逐字：「這隻寶可夢可使用自己的備戰寶可夢持有的所有招式。[需要有足夠使用招式的能量。]」
+    //   ⚠ 這是「可使用**他人持有的**招式」家族（古空棘魚｜潛入記憶 同型），**不是**
+    //     copy-attack.ts 那一支「某個招式去複製另一個招式」的借招家族 —— 借招家族的成員是
+    //     **招式**，本卡是**特性**，而且是把招式加進自己的招式清單（cost 用該招卡面的，
+    //     由既有 canAffordAttack 判，正好對應卡面括號「需要有足夠使用招式的能量」）。
+    //   ⚠⚠ 官方 PTCG RULES L2059~2060：「因訓練家卡或特性等效果可以使用的招式，
+    //     **不屬於這隻寶可夢持有的招式**」⇒ 這裡只能讀備戰寶可夢的**卡面** card.attacks，
+    //     絕不可以遞迴呼叫 getEffectiveAttacks（否則道具招式／潛入記憶招式會被一起借走）。
+    //   ⚠ sourceCardName 用「招式原本持有者的卡名」⇒ effectKey 就是那張卡的「卡名|招式名」，
+    //     所以借到的招式若本身是借招招式（例：皮可西｜揮指），+page.svelte 第 1 層的
+    //     isCopyAttackKey(sourceCardName + '|' + atk.name) 也會自動生效（v6.339 已泛用化）。
+    //   ⚠ 特性被消除（暗夜羽擊／初始化／監視塔／熔岩洞…）時不生效 → 走中央 isAbilityHolderEffective。
+    if (card.abilities?.some(a => a.name === '記憶螺旋') ?? false) {
+      const _v6347Loc: 'active' | 'bench' =
+        state.players[ownerIdx].active?.iid === inst.iid ? 'active' : 'bench';
+      if (isAbilityHolderEffective(state, inst, card, ownerIdx, '記憶螺旋', _v6347Loc, pool)) {
+        for (const b of state.players[ownerIdx].bench) {
+          if (b.iid === inst.iid) continue;   // 持有者自己在備戰時不重複列自己的招式
+          const bc = pool.get(b.cardId);
+          if (!bc?.name || !bc.attacks?.length) continue;
+          for (const atk of bc.attacks) {
+            if (!atk?.name) continue;
+            result.push({ atk, sourceCardName: bc.name, isFromTool: false });
+          }
+        }
+      }
+    }
   }
   return result;
 }
@@ -10117,6 +10178,20 @@ export function getUsableAbilities(
       }
       // v5.519 土龍節節｜逃跑抽出 — 官方 Q&A：牌庫為 0 時不能使用（需先抽 3 張）→ 不列入可用清單。
       if (ab.name === '逃跑抽出' && player.deck.length === 0) return;
+      // ⭐v6.347 M6a 三神鳥（火焰鳥｜燃燒羽擊／急凍鳥｜嚴寒羽擊／閃電鳥｜濺射羽擊）
+      //   卡面前提：「若自己的場上有『X』『Y』」＋「從自己的手牌選擇1張『基本【Z】能量』卡」。
+      //   ⚠ 與卡檔的 regAByName 問**同一支**中央述詞（effects.m6aWingAbilityReady），
+      //     不在這裡另寫一份條件（v6.131：兩份條件遲早分岔 → 按鈕亮著卻沒反應／能用卻按不下去）。
+      if (isM6aWingAbility(ab.name)
+          && !m6aWingAbilityReady(state, state.activePlayerIndex as 0 | 1, ab.name, pool).ok) return;
+      // ⭐v6.347 彩粉蝶｜指引之舞 — 牌庫為空時整個效果無事可做（同 頸傘發電／惡棍衝天 v6.132 裁定；
+      //   只判**張數**這個公開資訊，不掃牌庫內容）。
+      if (ab.name === '指引之舞' && player.deck.length === 0) return;
+      // ⭐v6.347 索爾迦雷歐｜日出 — 卡面「若這隻寶可夢**在備戰區**，則…可使用1次」＋牌庫非空。
+      if (ab.name === '日出') {
+        if (player.active?.iid === pk.iid) return;   // 在戰鬥場不可使用
+        if (player.deck.length === 0) return;
+      }
       // v4.4996：4 組撞 key 卡的另一個 ability — 都是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕
       //   - 生機森巴 (樂天河童 SV9/MC) — passive +40 HP，自動套用 getEffectiveHP
       //   - 雜草魂 (怖納噬草 SV8a) — passive 對手獎賞×50 HP，自動套用

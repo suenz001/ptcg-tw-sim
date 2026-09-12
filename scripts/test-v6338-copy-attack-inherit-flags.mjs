@@ -323,6 +323,11 @@ if (OPPW) {
 console.log('\n【C】HEAD-FAIL：對 BASE(' + BASE_SHA.slice(0, 8) + ' ＝ v6.337) 重跑');
 
 const CHANGED = [
+  // ⭐⭐v6.347：**engine.ts 也必須換回 BASE**（同 v6337 的說明）——
+  //   HEAD 的 engine.ts 會 import BASE 的 effects.ts 還沒有的中央 helper
+  //   ⇒ esbuild「No matching export」⇒ 整支守衛爆在 harness（不是判準）。
+  //   ⚠ 不是放寬判準：BASE 樹本來就該全部都是 BASE。
+  'src/lib/game/engine.ts',
   'src/lib/game/effects/_shared.ts',
   'src/lib/game/effects.ts',
   'src/lib/game/effects/cards/slowking_lucario_deck.ts',

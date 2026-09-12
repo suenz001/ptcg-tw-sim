@@ -134,7 +134,14 @@ export function getBenchImmunityAbilityName(
 ): string | null {
   if (!targetCard?.abilities) return null;
   for (const a of targetCard.abilities) {
-    if (a.name === '藏隱' || a.name === '深度下潛') {
+    // ⭐v6.347 追加 皮卡丘｜躲起來（M6a 027/103，J，Basic【雷】60HP，非規則寶可夢）——
+    //   卡面逐字與 藏隱／深度下潛 **完全相同**：
+    //   「只要這隻寶可夢在備戰區，不會受到對手的寶可夢招式的傷害與效果的影響。」
+    //   ⇒ 同一支述詞多一個名字，不另開第二條判準（Rule 38）。
+    //   ⚠ 全卡庫掃過：「躲起來」這個特性名只出現在這一張，無同名不同效果的碰撞。
+    //   ⚠ 上面那段 v6.210 的「七種消除來源今天都打不到」推論對這張卡同樣成立
+    //     （Basic／【雷】／非規則／恆在備戰），但一樣照走中央閘（自我維護）。
+    if (a.name === '藏隱' || a.name === '深度下潛' || a.name === '躲起來') {
       // v6.210：特性消除閘（見上方定論註解）。持有者卡面限備戰 ⇒ location 固定 'bench'。
       if (state && targetInst && ownerIdx != null && pool
         && !isAbilityHolderEffective(state, targetInst, targetCard, ownerIdx, a.name, 'bench', pool)) continue;

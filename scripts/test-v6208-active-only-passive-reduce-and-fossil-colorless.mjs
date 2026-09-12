@@ -546,7 +546,13 @@ T('6a. 掃描器抓得到全站位置限定特性（下限斷言：掃不到就�
   assert.ok(uniq.length >= 23, '只掃到 ' + uniq.length + ' 個位置限定 passive：' + JSON.stringify(uniq));
 });
 T('6b. 中央宣告的內容逐字釘死（多一個少一個都紅）', () => {
-  assert.deepEqual([...EFF.ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES].sort(), ['威嚇之牙', '威嚇之顎']);
+  // ⭐v6.347 加入 皮卡丘｜寂寞眼神（M6a 022/103，J）——
+  //   卡面「只要這隻寶可夢在戰鬥場上，對手的戰鬥寶可夢使用的招式的傷害「-20」點。」
+  //   與 威嚇之牙／威嚇之顎 逐字同構（只差數字），實裝後被動減傷路徑會消費到它
+  //   ⇒ 上面 2g 的**卡面驅動枚舉守衛**本來就會要求它出現在中央宣告裡（2g 已綠）。
+  //   本條只是那份推導結果的快照：**不是放寬**，依然是「多一個少一個都紅」。
+  assert.deepEqual([...EFF.ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES].sort(),
+    ['威嚇之牙', '威嚇之顎', '寂寞眼神'].sort());
 });
 /** 只剝註解、**保留字串內容**（v6.207 教訓：先剝字串會把要比對的字面量一起清掉）。 */
 function stripComments(src) {
