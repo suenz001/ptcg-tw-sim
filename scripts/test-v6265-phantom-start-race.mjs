@@ -782,6 +782,9 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   //   ＋ getAvailableAttacks），**全部是純新增**，一律用 `>>> v6350-…` 哨兵框住 ⇒ 泛用剝除器
   //   一次剝掉，不需要逐字還原。那一塊的守備由 test-v6350 全面接管（39 條行為端斷言）。
   const stripV6350Engine = (src) => stripSentinelBlocks(src, 'v6350-');
+  // ⭐ v6.351：engine.ts 合法新增「PRE 之後對齊 defender 快照」一個區塊（**純新增**，哨兵框住）。
+  //   那一塊的守備由 test-v6351 全面接管（32 條行為端斷言，家族 9 張各驗一次）。
+  const stripV6351Engine = (src) => stripSentinelBlocks(src, 'v6351-');
   const stripV6348Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6348-');
     s = s.split(
@@ -820,8 +823,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

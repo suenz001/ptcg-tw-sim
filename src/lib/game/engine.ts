@@ -5342,6 +5342,26 @@ function handlePlaying(
       if (preResult.breakdown && preResult.breakdown.length > 0) {
         preBreakdown = preResult.breakdown;
       }
+      // >>> v6351-resync-defender-after-pre
+      // ⭐⭐⭐v6.351 ATTACK_PRE 跑完之後，把 `defender` 這個**快照**重新對齊 workingState。
+      //
+      // ⚠⚠ `const defender = { ...players[dIdx] }` 是在 applyAction 最上面就抓走的快照，
+      //   而整條傷害管線（弱點／抵抗力、減傷道具、有效 HP、免疫閘…）讀的全是這個快照
+      //   ⇒ 凡是卡面寫「**在造成傷害前**…」的 PRE 效果，對**這一次**的傷害結算完全無效。
+      //   v6.351 實測（`__m6a/probe_tooldiscard.mjs`）：藏瑪然特｜彈落 20 點、對手戴著霹霹果
+      //   （「受到對手的【鋼】寶可夢招式的傷害時，那個傷害『-60』點，將這張卡丟棄」）⇒
+      //   log 明明已經寫「彈落：丟棄 … 的道具「霹霹果」」，接著卻還是印「霹霹果：招式傷害 -20」，
+      //   最終傷害 **0**（卡面應為 20）。受影響的是**全部 9 張**「造成傷害前丟道具」家族的卡。
+      //
+      // ⇒ 用 Object.assign 就地對齊（`defender` 是 const **物件**，屬性可寫），
+      //   讓後面的傷害管線看到「PRE 之後」的盤面 —— 這就是卡面「在造成傷害前」的字面意思。
+      // ⚠ 一律整個 PlayerState 對齊（不只 active）：PRE 可能同時動到 discard／bench，
+      //   只同步 active 會讓後面把整個 `defender` 寫回 players 時吃掉那些改動。
+      // ⚠ **只對齊 defender，不動 attacker**：attacker 側在 PRE 之前就已經被本函式其他地方
+      //   （費用支付、旗標蓋章）動過，整個覆蓋回去會把那些改動洗掉。攻擊方自身的
+      //   「造成傷害前丟自己的能量」是否也該同步，另案處理（見 changelog 待裁示）。
+      Object.assign(defender, workingState.players[dIdx]);
+      // <<< v6351-resync-defender-after-pre
     }
 
     // v3.02 傷害公式累積器 — 每個 modifier 點推一個 term，最後組合成可讀公式。
