@@ -5870,7 +5870,9 @@ function oppAllCounters(state: GameState, aIdx: 0 | 1): number {
 // ⭐ v6.206：filterFn 多收一個「場上實體」——「場上【X】寶可夢」要問**有效**屬性
 //   （狠辣椒ex｜雙重屬性 在場上是【草】＋【火】），只有卡片本身答不出來。
 //   既有 caller 用 `c => …` 一個參數，TS 相容不受影響。
-function countOwnPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, filterFn: (c: Card, inst: CardInstance) => boolean): number {
+// v6.345：export 供 M6a 批次5 卡檔復用（一家鼠｜一同咬 要數自己場上的「一家鼠」）。
+//   ⚠ 這是「自己場上（戰鬥場＋備戰）符合條件的寶可夢數量」的唯一一份判準，卡檔禁止另抄。
+export function countOwnPokemon(state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, filterFn: (c: Card, inst: CardInstance) => boolean): number {
   const p = state.players[aIdx];
   let n = 0;
   if (p.active) { const c = pool.get(p.active.cardId); if (c && filterFn(c, p.active)) n++; }
@@ -10639,17 +10641,11 @@ function benchBasicFromDeckPost(max: number, label: string): AttackPostFn {
   };
 }
 
-function millSelfDeckTopPost(n: number, label: string): AttackPostFn {
-  return (state, aIdx, pool) => {
-    const p = state.players[aIdx];
-    if (p.deck.length === 0) return addLog(state, `${label}：自己牌庫為空`, aIdx);
-    const taken = p.deck.slice(0, n);
-    return updatePlayer(
-      addLog(state, `${label}：自己牌庫頂 ${taken.length} 張丟入棄牌區：${joinCardNames(taken, pool)}`, aIdx),
-      aIdx,
-      pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
-    );
-  };
+// v6.345：export 供 M6a 批次5 卡檔復用（暴飛龍ex｜龍之波動）。
+//   實作下沉到 millSelfTopCards —— 「將自己的牌庫上方 N 張卡丟棄」只有那一份判準，
+//   讓「丟完還要從其中選 1 張」的 莫魯貝可｜選點心 共用同一段，不再抄第二份（Rule 38）。
+export function millSelfDeckTopPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => millSelfTopCards(state, aIdx, pool, n, label).state;
 }
 
 export function millOppDeckTopPost(n: number, label: string): AttackPostFn {
@@ -12892,7 +12888,8 @@ regPre('破破舵輪|破壞船錨', defToolDiscardPre(80, '破壞船錨'));
 // ══════════════════════════════════════════════════════════════════════════════
 
 // (A) 棄牌區選卡到手牌：Pokemon×2
-function discardSearchToHandPost(max: number, filter: string, label: string): AttackPostFn {
+// v6.345：export 供 M6a 批次5 卡檔復用（皮卡丘｜存起來）。原為 local，行為完全未變。
+export function discardSearchToHandPost(max: number, filter: string, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const p = state.players[aIdx];
     const cand = p.discard.filter(c => {
@@ -12939,25 +12936,9 @@ regPost('斯魔茶|上茶', discardSearchToHandPost(1, 'Energy:Grass', '上茶')
 
 // (B) 刺龍王ex|王之號召 — 從棄牌區選最多 3 張【水】寶可夢卡放備戰（重用 bench-from-discard-samename resolver，validIids=水寶可夢）
 regPre('刺龍王ex|王之號召', (state, _aIdx, _pool) => ({ state, damage: 0 }));
-regPost('刺龍王ex|王之號召', (state, aIdx, pool) => {
-  const p = state.players[aIdx];
-  // v5.041：bench limit 改 getBenchLimit (5→8)
-  if (p.bench.length >= getOwnBenchLimit(state, aIdx, pool)) return addLog(state, '王之號召：備戰區已滿', aIdx);
-  const cand = p.discard.filter(c => {
-    const card = pool.get(c.cardId);
-    return card?.supertype === 'Pokemon' && card.pokemonType === 'Water';
-  });
-  if (cand.length === 0) return addLog(state, '王之號召：棄牌區無【水】寶可夢', aIdx);
-  // v5.041：bench limit 改 getBenchLimit (5→8)
-  const slots = Math.min(3, getOwnBenchLimit(state, aIdx, pool) - p.bench.length, cand.length);
-  const s = addLog(state, `王之號召：從棄牌區選最多 ${slots} 張【水】寶可夢放備戰`, aIdx);
-  return withPending(s, {
-    type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
-    filter: 'Pokemon', minCount: 0, maxCount: slots,
-    effectKey: 'bench-from-discard-samename',
-    params: { validIids: cand.map(c => c.iid), targetName: '【水】寶可夢', label: '王之號召' },
-  });
-});
+// ⭐ v6.345 收斂：與 暴飛龍ex｜轟鳴呼聲（M6a，最多3張【龍】寶可夢）**逐字同措辭**
+//   ⇒ 共用中央 discardPokemonToBenchPost（Rule 38）。log 文字與 pending 形狀完全不變。
+regPost('刺龍王ex|王之號召', discardPokemonToBenchPost(3, '王之號召', c => c.pokemonType === 'Water', '【水】寶可夢'));
 
 // (C) 甲賀忍蛙ex|忍之利刃 — v2.222 移除：v2.129 已在 line 10626 重新實裝為
 //   「若希望」可選 0~1 張，舊版 deckSearchToHandPost(1) 強制搜 1 張不正確；
@@ -17509,20 +17490,30 @@ reg('聖灰', (st, idx, pool) => {
     effectKey: 'sacred-ash-discard-to-deck',
   });
 });
-regR('sacred-ash-discard-to-deck', (state, aIdx, iids, _params, pool) => {
+regR('sacred-ash-discard-to-deck', (state, aIdx, iids, params, pool) => {
+  // ⭐ v6.345：label 參數化 —— 「從棄牌區選最多N張，放回牌庫並重洗」不只聖灰一張
+  //   （帝牙盧卡｜反轉時間 M6a 逐字同措辭）⇒ 共用同一支 resolver（Rule 38）。
+  //   ⚠ effectKey **不改**（相容紀律 A：部署瞬間停在舊 pending 的玩家仍要解得掉）；
+  //     舊 pending 沒有 params ⇒ 一律 fallback，不可假設有值。
+  const label = (params?.label as string) ?? '聖灰';
+  // v6.009：resolver 自行 re-validate client 傳來的 iids。
+  //   ⚠ 只有「有傳 validIids」的 caller 才收斂；聖灰沒傳 ⇒ 行為與 v6.344 完全相同。
+  const valid = (params?.validIids as string[] | undefined) ?? null;
+  const iids2 = valid ? iids.filter(i => valid.includes(i)) : iids;
   let s = state;
   const players = [...s.players] as [PlayerState, PlayerState];
   const p = { ...players[aIdx] };
-  const picked = p.discard.filter(c => iids.includes(c.iid));
-  if (picked.length === 0) return addLog(s, '聖灰：未選任何卡', aIdx);
-  p.discard = p.discard.filter(c => !iids.includes(c.iid));
+  const picked = p.discard.filter(c => iids2.includes(c.iid));
+  if (picked.length === 0) return addLog(s, `${label}：未選任何卡`, aIdx);
+  p.discard = p.discard.filter(c => !iids2.includes(c.iid));
   // v5.993：進牌庫前 toBareCard 裸化(v5.705 契約) — 棄牌區的卡(KO 進棄牌)帶著 abilityUsedThisTurn
   //   等場上 transient 旗標，直接回牌庫會讓旗標跟著卡回到手牌/場上(咒詛炸彈第二隻被擋根因鏈之一)。
   p.deck = shuffle([...p.deck, ...picked.map(toBareCard)]);
   players[aIdx] = p;
   s = { ...s, players };
   const names = picked.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  return addLog(s, `聖灰：${names}（${picked.length} 張）放回牌庫並重洗`, aIdx);
+  // 卡面「在給對手看過後放回牌庫」⇒ 公開揭示卡名（聖灰無此措辭但棄牌區本來就是公開資訊）。
+  return addLog(s, `${label}：${names}（${picked.length} 張）放回牌庫並重洗`, aIdx);
 });
 
 // ── 秘密箱 ACE（Item）— 棄 3 手牌，搜「物品/道具/支援者/競技場」各 1 張到手 ──
@@ -20050,3 +20041,217 @@ import './effects/cards/m6a_wave1'; // v6.341 M6a「30th CELEBRATION」招式實
 import './effects/cards/m6a_wave2'; // v6.342 M6a 招式實裝 批次2（16 招｜傷害計算類）
 import './effects/cards/m6a_wave3'; // v6.343 M6a 招式實裝 批次3（11 招｜能量操作）
 import './effects/cards/m6a_wave4'; // v6.344 M6a 招式實裝 批次4（7 招｜換位／回牌庫／退化）
+import './effects/cards/m6a_wave5'; // v6.345 M6a 招式實裝 批次5（18 招｜牌庫／手牌／棄牌區操作）
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口
+//   （BRIEF §2 Rule 38：同一個判準只能有一份；卡檔只負責「哪一張卡用哪一支」。）
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** 「將自己的牌庫上方 N 張卡丟棄」的唯一一份判準；回傳被丟掉的那幾張（給後續還要挑的卡用）。 */
+function millSelfTopCards(
+  state: GameState, aIdx: 0 | 1, pool: Map<string, Card>, n: number, label: string,
+): { state: GameState; taken: CardInstance[] } {
+  const p = state.players[aIdx];
+  // ⚠ 牌庫不足 N 張時丟到沒有為止（slice 自然截斷），不可當掉。
+  if (p.deck.length === 0) return { state: addLog(state, `${label}：自己牌庫為空`, aIdx), taken: [] };
+  const taken = p.deck.slice(0, n);
+  const s = updatePlayer(
+    addLog(state, `${label}：自己牌庫頂 ${taken.length} 張丟入棄牌區：${joinCardNames(taken, pool)}`, aIdx),
+    aIdx,
+    pl => ({ ...pl, deck: pl.deck.slice(taken.length), discard: [...pl.discard, ...taken] }),
+  );
+  return { state: s, taken };
+}
+
+/**
+ * 「將自己的牌庫上方 N 張卡丟棄，從其中選擇 1 張卡，在給對手看過後加入手牌。」
+ * 使用者：莫魯貝可｜選點心（M6a 052）。
+ * ⚠ 丟棄與挑選是**兩段**：先真的丟進棄牌區（公開可見），再從「剛丟的那幾張」挑。
+ *   ⇒ picker 的候選必須用 validIids 綁死在剛丟的那幾張，不能讓玩家從整個棄牌區挑。
+ * ⚠ 這幾張已經攤開＝**已知資訊**，卡面又是「選擇1張」（沒有「最多／任意」）⇒ minCount = 1。
+ *   （對照 v6.104：那條「minCount 必須永遠 0」只適用於**牌庫**搜尋，牌庫是隱藏資訊。）
+ * ⚠ 「在給對手看過後加入手牌」＝公開揭示 ⇒ 共用 'discard-to-hand' resolver（它會 addLog 卡名）。
+ */
+export function millSelfThenPickOneToHandPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const r = millSelfTopCards(state, aIdx, pool, n, label);
+    if (r.taken.length === 0) return r.state;
+    const validIids = r.taken.map(c => c.iid);
+    const s = addLog(r.state, `${label}：從剛丟棄的 ${r.taken.length} 張中選 1 張，在給對手看過後加入手牌`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Any', minCount: 1, maxCount: 1,
+      effectKey: 'discard-to-hand',
+      params: { validIids, titleOverride: `${label}：從剛丟棄的 ${r.taken.length} 張中選 1 張加入手牌` },
+    });
+  };
+}
+
+/**
+ * 「從自己的牌庫**任意選擇** N 張卡加入手牌。並且重洗牌庫。」
+ * 使用者：索財靈｜走個夠（M6a 067，擲幣正面才發動）。
+ * ⭐⭐ v6.126 官方裁定（PTCG_RULES.md L1454 親送無人機／L1708 仙后／L2333 君主蛇ex｜青草命令／
+ *   L1373 呆呆王ex｜才智頭擊）：從牌庫「任意選擇」（**無類別限定**）**不可以 1 張都不選**
+ *   ⇒ minCount = N（牌庫非空就一定找得到「任意 1 張」，不適用官方 fail-to-find）。
+ *   ⚠ 對照：**帶條件**的搜尋（找寶可夢卡／能量卡…）走 deckSearchToHandPost，那支 minCount = 0。
+ * ⚠ 卡面**沒有**「在給對手看過後」⇒ 私下揭示（privateReveal，對手只看到張數）。
+ */
+export function deckSearchAnyToHandPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx) => {
+    const p = state.players[aIdx];
+    if (p.deck.length === 0) return addLog(state, `${label}：牌庫為空`, aIdx);
+    const pick = Math.min(n, p.deck.length);
+    const s = addLog(state, `${label}：從牌庫任意選擇 ${pick} 張卡加入手牌（並且重洗牌庫）`, aIdx);
+    return withPending(s, {
+      type: 'deck-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Any', minCount: pick, maxCount: pick,
+      effectKey: 'search-to-hand-reshuffle',
+      params: { privateReveal: true },
+    });
+  };
+}
+
+/**
+ * 「從自己的棄牌區選擇（predicate）合計最多 N 張，在給對手看過後放回牌庫並重洗。」
+ * 使用者：帝牙盧卡｜反轉時間（M6a 082，寶可夢卡與基本能量卡**合計**最多 3 張）。
+ * ⚠ 「合計」＝**一個** picker、兩種卡型混選、總數上限 N（不是開兩個 picker）
+ *   ⇒ filter 用既有的混選述詞 'PokemonOrBasicEnergy'（selection-filter.ts 已收錄）。
+ * ⚠ 共用既有 'sacred-ash-discard-to-deck' resolver（聖灰 I 同措辭）；它已在
+ *   scripts/test-v6125-optional-picker-skip.mjs 的 MANDATORY_BY_SITE_RULE 裡
+ *   （棄牌區＝已知資訊，純「最多N張」措辭依 2026-08-07 站長裁定維持必選 ≥1 的站規；
+ *    minCount 0 是「候選可能為空」的技術性設定）。
+ * ⚠ 回牌庫的卡由 resolver 統一 toBareCard 裸化（v5.705 契約）。
+ */
+export function discardSearchToDeckPost(
+  max: number, filter: string, label: string, predicate: (c: Card) => boolean,
+): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const cand = p.discard.filter(c => { const card = pool.get(c.cardId); return !!card && predicate(card); });
+    if (cand.length === 0) return addLog(state, `${label}：棄牌區沒有可選的卡`, aIdx);
+    const maxN = Math.min(max, cand.length);
+    const s = addLog(state, `${label}：從棄牌區選最多 ${maxN} 張，在給對手看過後放回牌庫並重洗`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter, minCount: 0, maxCount: maxN,
+      effectKey: 'sacred-ash-discard-to-deck',
+      params: { label, validIids: cand.map(c => c.iid) },
+    });
+  };
+}
+
+/**
+ * 「從自己的棄牌區選擇最多 N 張（predicate）寶可夢卡，放置於備戰區。」
+ * 使用者：刺龍王ex｜王之號召（H，【水】）／暴飛龍ex｜轟鳴呼聲（M6a 088，【龍】）—— 逐字同措辭。
+ * ⚠ 備戰上限一律走 getOwnBenchLimit（零之大空洞＋太晶＝8），禁硬編 5；
+ *   放場的實例一律過 placedBenchInstance（resolver 內，裸化＋justPlaced）。
+ * ⚠ 備戰區已滿／棄牌區沒有符合條件的卡 ⇒ 只寫 log 不開 picker（避免空視窗＝體感沒發動）。
+ */
+export function discardPokemonToBenchPost(
+  max: number, label: string, predicate: (c: Card) => boolean, targetDesc: string,
+): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const p = state.players[aIdx];
+    const limit = getOwnBenchLimit(state, aIdx, pool);
+    if (p.bench.length >= limit) return addLog(state, `${label}：備戰區已滿`, aIdx);
+    const cand = p.discard.filter(c => {
+      const card = pool.get(c.cardId);
+      return card?.supertype === 'Pokemon' && predicate(card);
+    });
+    if (cand.length === 0) return addLog(state, `${label}：棄牌區無${targetDesc}`, aIdx);
+    const slots = Math.min(max, limit - p.bench.length, cand.length);
+    const s = addLog(state, `${label}：從棄牌區選最多 ${slots} 張${targetDesc}放備戰`, aIdx);
+    return withPending(s, {
+      type: 'discard-search', actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      filter: 'Pokemon', minCount: 0, maxCount: slots,
+      effectKey: 'bench-from-discard-samename',
+      params: { validIids: cand.map(c => c.iid), targetName: targetDesc, label },
+    });
+  };
+}
+
+/**
+ * 「對手將對手自己的手牌全部放回牌庫並重洗。然後，對手從牌庫抽出 N 張卡。」
+ * 使用者：滑滑小子｜挑毛病（M6a 078）。
+ * ⚠ 與 bothReturnHandAndDrawPost 的差別：只作用在**對手**一側（卡面主詞是「對手」）。
+ * ⚠ 這是**玩家層級**效果（不作用於某隻寶可夢）→ **不**過 canApplyEffectToTarget
+ *   （v5.929 背蓋化石誤擋玩家層級 lock 的教訓）。
+ * ⚠ 對手牌庫不足 N 張時抽到沒有為止（drawCards 內部 Math.min），不可當掉。
+ */
+export function oppReturnHandAndDrawPost(n: number, label: string): AttackPostFn {
+  return (state, aIdx) => {
+    const oIdx = (1 - aIdx) as 0 | 1;
+    let s = addLog(state, `${label}：對手手牌放回牌庫重洗，然後從牌庫抽出 ${n} 張卡`, aIdx);
+    s = returnHandToDeck(s, oIdx);
+    s = drawCards(s, oIdx, n);
+    return s;
+  };
+}
+
+/**
+ * 「查看對手的手牌，從其中選擇 1 張（predicate）卡，放回對手的牌庫下方。」
+ * 使用者：伊布｜叼去藏（M6a 094，物品卡）。
+ * ⚠⚠ Check T：picker **之前**不可以用公開 log 印出對手手牌內容 —— 一律 addPrivateLog
+ *   （actor 私訊看得到卡名、公開訊息只有張數）。v5.877 突刺目光／舌引 的 view-leak 事故，
+ *   scripts/test-peek-view-leak-inline.mjs 在守這條。
+ * ⚠ 「查看對手的手牌」是**無條件**的玩家權益：就算對手手牌裡沒有符合條件的卡，
+ *   仍要讓玩家看完整副手牌（開 maxCount 0 的純檢視 picker，與 能量撢子 同一種做法）。
+ * ⚠ 卡面「選擇1張」沒有「最多／若希望」⇒ 有候選時 minCount = 1（必選）。
+ * ⚠ 「放回牌庫**下方**」沒有「重洗」⇒ 走中央 deckWithCardsToBottom 的 'keep-order'（v6.124）。
+ * ⚠ 既有的 能量撢子（Item，能量卡版）本版**未**一併收斂：它是訓練家卡、自帶 regG 可用性閘，
+ *   且它的 effectKey 'energy-duster-pick' 還列在 selection-ui 的 OPTIONAL 白名單裡 ——
+ *   抽掉它的 withPending 會讓白名單產生死條目（test-v6125-optional-picker-skip ④ 會紅）。
+ *   ⇒ 收斂留給獨立版本處理，本版不動既有卡。
+ */
+export function peekOppPickToDeckBottomPost(
+  filter: string, label: string, predicate: (c: Card) => boolean, targetDesc: string,
+): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const oppHand = state.players[dIdx].hand;
+    if (oppHand.length === 0) return addLog(state, `${label}：對手手牌為空`, aIdx);
+    const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
+    const s = addPrivateLog(state,
+      `${label}：查看對手手牌（${oppHand.length} 張）— ${handNames}`,
+      `${label}：查看對手手牌（${oppHand.length} 張）`,
+      aIdx);
+    const validIids = oppHand
+      .filter(c => { const card = pool.get(c.cardId); return !!card && predicate(card); })
+      .map(c => c.iid);
+    if (validIids.length === 0) {
+      return withPending(addLog(s, `${label}：對手手牌無${targetDesc}（僅查看）`, aIdx), {
+        type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+        minCount: 0, maxCount: 0, filter,
+        effectKey: 'peek-pick-to-deck-bottom',
+        params: { validIids: [], label, targetDesc,
+                  titleOverride: `${label}：查看對手手牌（無${targetDesc}可選，確認後結束）` },
+      });
+    }
+    return withPending(addLog(s, `${label}：選 1 張${targetDesc}放回對手的牌庫下方`, aIdx), {
+      type: 'hand-discard', actorIdx: aIdx, sourcePlayerIdx: dIdx,
+      minCount: 1, maxCount: 1, filter,
+      effectKey: 'peek-pick-to-deck-bottom',
+      params: { validIids, label, targetDesc,
+                titleOverride: `${label}：選 1 張${targetDesc}放回對手的牌庫下方` },
+    });
+  };
+}
+regR('peek-pick-to-deck-bottom', (st, idx, iids, params, pool) => {
+  const label = (params?.label as string) ?? '叼去藏';
+  const dIdx = (1 - idx) as 0 | 1;
+  // v6.009：resolver 自行 re-validate client 傳來的 iids（候選集合以 params.validIids 為準）。
+  const valid = (params?.validIids as string[] | undefined) ?? [];
+  const pickIid = iids.find(i => valid.includes(i));
+  if (!pickIid) return addLog(st, `${label}：未選擇任何卡`, idx);
+  const inst = st.players[dIdx].hand.find(c => c.iid === pickIid);
+  if (!inst) return addLog(st, `${label}：對手手牌中找不到所選卡`, idx);
+  const name = pool.get(inst.cardId)?.name ?? '?';
+  // 揭示：卡面「查看對手的手牌」⇒ 被放回的那一張雙方都明知 → 公開 log（與 奧爾迪加 同一條判準）。
+  const s = addLog(st, `${label}：將對手的「${name}」從手牌放回牌庫下方`, idx);
+  return updatePlayer(s, dIdx, p => ({
+    ...p,
+    hand: p.hand.filter(c => c.iid !== pickIid),
+    // 卡面「放回對手的牌庫下方」沒有「重洗」→ keep-order（v6.124 中央管線）。
+    deck: deckWithCardsToBottom(p.deck, [inst], 'keep-order'),
+  }));
+});
