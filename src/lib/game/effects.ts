@@ -2719,6 +2719,126 @@ export interface AttackEffectImmunityRule {
   targetFilter?: 'BasicRocket';   // 額外限制目標類別
 }
 
+/**
+ * ⭐⭐⭐ v6.358 站長裁定 D-9：「**招式**的效果」免疫**不該**擋住「**特性**的效果」。
+ *
+ * 站長裁定逐字：
+ *   「耿鬼ex的死亡宣告是『特性』的效果，不該被只寫『不會受到對手寶可夢的「招式」的效果影響』
+ *     的內容擋住，請修正」
+ *
+ * 官方也是把兩者當**兩個不同的來源**在寫的（PTCG RULES/PTCG_RULES.md）：
+ *   ・L1669：「因**特性**『咒詛炸彈』的效果，彷徨夜靈也會[昏厥]」
+ *   ・L2544：「由於超級耿鬼ex是因**招式的效果**[昏厥]的，特性『影藏』的效果不會生效」
+ *   ・L2308–L2309（⭐**直接判例**，就是本表的 A 類）：
+ *       Q「對手的戰鬥場上放置有物品卡『陳舊的背蓋化石』時，可以使用火神蛾的**特性**
+ *         『熱浪鱗粉』，從手牌丟棄基本【火】能量卡嗎？」 A「可以。」
+ *       ——「陳舊的背蓋化石」卡面只寫「不會受到對手的寶可夢使用**招式**的效果的影響」，
+ *         官方確認它擋不住**特性**的效果。
+ *
+ * ⭐⭐ 判準只有這一份（IRON_RULES Rule 38）：**每一筆免疫登記自己宣告它擋哪些來源**，
+ *    而且來源分類由**卡面**決定。任何地方都不准再包第二層 bypass／特例。
+ * ⚠ `source` 預設 'attack' ⇒ 既有全部呼叫端一個字都不用改、行為逐字不變。
+ * ⚠ **fail-closed**：查無登記 ⇒ 視同「兩者都擋」（維持 BASE 舊行為），絕不無聲放行。
+ * ⚠ 「不會受到招式的**傷害**」與「不會受到招式的**效果**」是**兩件事**；
+ *   本表只決定「**效果**」這一維要不要擋，傷害那一維由 PASSIVE_IMMUNITY／各自管線負責。
+ *
+ * 分類（逐筆去 static/cards 抓台灣官方卡面逐字，見每一筆的 face）：
+ *   A 只寫「…招式的效果…」        ⇒ blocks: ['attack']
+ *   B 只寫「…特性的效果…」        ⇒ blocks: ['ability']          （目前**沒有**這一類）
+ *   C 寫「招式**與/或**特性…」或沒限定 ⇒ blocks: ['attack', 'ability']
+ */
+export type EffectSource = 'attack' | 'ability';
+
+export interface EffectSourceImmunityDecl {
+  /** 卡面出處：static/cards 的 card.name（守衛拿它逐字比對） */
+  readonly card: string;
+  /** 逐字文字所在欄位：寶可夢＝abilities[].effect / attacks[].effect；訓練家・能量＝rulesText */
+  readonly field: 'ability' | 'attack' | 'rulesText';
+  /**
+   * field 為 ability / attack 時的**特性名／招式名**。
+   * ⚠ 同名不同卡是常態（同一個卡名的不同印刷可能印著完全不同的特性），
+   *   守衛用「卡名 ＋ 這個 member 名」鎖定要比對的那一欄，才不會抓到隔壁那張。
+   */
+  readonly member?: string;
+  /** ⭐台灣官方卡面**逐字**（守衛確認它真的出現在該欄位裡；卡面改版／抓錯印刷會翻紅） */
+  readonly face: string;
+  /** 卡面判定：這一筆擋哪些「效果來源」 */
+  readonly blocks: readonly EffectSource[];
+}
+
+export const EFFECT_SOURCE_IMMUNITY = new Map<string, EffectSourceImmunityDecl>([
+  // ── A 類：卡面只寫「招式的效果」⇒ 只擋 'attack' ─────────────────────────────
+  ['陳舊的背蓋化石', {
+    card: '陳舊的背蓋化石', field: 'ability', member: '背蓋守護',
+    face: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。',
+    blocks: ['attack'],
+  }],
+  ['薄霧能量', {
+    card: '薄霧能量', field: 'rulesText',
+    face: '附有這張卡的寶可夢不會受到對手的寶可夢使用招式的效果的影響。（已經受到的效果不會消除。）',
+    blocks: ['attack'],
+  }],
+  ['硬岩【鬥】能量', {
+    card: '硬岩【鬥】能量', field: 'rulesText',
+    face: '附有這張卡的【鬥】寶可夢不會受到對手的寶可夢使用招式的效果的影響。（已經受到的效果不會消除。）',
+    blocks: ['attack'],
+  }],
+  ['皇帝之勢', {
+    card: '帝王拿波ex', field: 'ability', member: '皇帝之勢',
+    face: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。',
+    blocks: ['attack'],
+  }],
+  ['璀璨鱗片', {
+    card: '美納斯ex', field: 'ability', member: '璀璨鱗片',
+    face: '這隻寶可夢不會受到對手的「太晶」寶可夢招式的傷害與效果的影響。',
+    blocks: ['attack'],
+  }],
+  ['抵抗之幕', {
+    card: '火箭隊的急凍鳥', field: 'ability', member: '抵抗之幕',
+    face: '不會受到對手的寶可夢使用招式的效果的影響。（已經受到的效果不會消除。）',
+    blocks: ['attack'],
+  }],
+  ['全能硬殼', {
+    card: '肋骨海龜', field: 'ability', member: '全能硬殼',
+    face: '這隻寶可夢不會受到對手的身上附有特殊能量卡的寶可夢招式的傷害與效果的影響。',
+    blocks: ['attack'],
+  }],
+  // ── A 類（per-turn 旗標）：旗標本身就是一筆登記，餵它的卡全部同一句型 ──────────
+  ['immuneToAllAttackThisTurn', {
+    // 飛翔（咕咕鴿／喇叭啄鳥）・躲藏（雪吞蟲／小灰怪／百合根娃娃／瑪力露／粉蝶蛹）・
+    // 要害斬（具甲武者）・高速移動（電海燕／音波龍）・躍起閃避（赫普的小木靈）・暗影側踢（瑪夏多）…
+    card: '雪吞蟲', field: 'attack', member: '躲藏',
+    face: '擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。',
+    blocks: ['attack'],
+  }],
+  ['immuneToAttackEffectsThisTurn', {
+    card: '骨紋巨聲鱷', field: 'attack', member: '純樸',
+    face: '這隻寶可夢不會受到對手的寶可夢使用招式的效果的影響。',
+    blocks: ['attack'],
+  }],
+  ['immuneToExAttackThisTurn', {
+    card: '阿塞蘿拉的惡作劇', field: 'rulesText',
+    face: '那隻寶可夢不會受到對手的「寶可夢【ex】」招式的傷害與效果的影響。',
+    blocks: ['attack'],
+  }],
+  // ── C 類：卡面寫「招式**與**特性」⇒ 兩者都擋 ────────────────────────────────
+  ['化隱', {
+    card: '斯魔茶', field: 'ability', member: '化隱',
+    face: '這隻寶可夢不會受到對手的招式與特性的效果的影響。',
+    blocks: ['attack', 'ability'],
+  }],
+]);
+
+/**
+ * ⭐v6.358 **唯一**的來源判準：這一筆免疫登記擋不擋 `source` 這個效果來源？
+ * ⚠ 查無登記 ⇒ fail-closed 回 true（照擋 = BASE 舊行為），不會無聲放行。
+ */
+export function effectSourceBlocks(key: string, source: EffectSource): boolean {
+  const d = EFFECT_SOURCE_IMMUNITY.get(key);
+  if (!d) return true;
+  return d.blocks.includes(source);
+}
+
 export const ATTACK_EFFECT_IMMUNITY = new Map<string, AttackEffectImmunityRule>([
   // 特殊能量
   ['薄霧能量',         { kind: 'energy-on-target' }],
@@ -2792,6 +2912,9 @@ export function canApplyAttackEffectToTarget(
   target: CardInstance,
   targetCard: Card | undefined,
   pool: Map<string, Card>,
+  // ⭐v6.358 站長裁定 D-9：效果的**來源**。預設 'attack' ⇒ 既有全部呼叫端行為逐字不變。
+  //   每一筆免疫擋不擋，一律問 EFFECT_SOURCE_IMMUNITY（唯一判準），不准在外面包 bypass。
+  source: EffectSource = 'attack',
 ): { blocked: true; reason: string } | { blocked: false } {
   // v3.21 陳舊的背蓋化石（H）— 卡面「不會受到對手寶可夢招式的『效果』影響」。
   //   engine.ts ATTACK_POST 階段的 short-circuit 只擋 POST 階段，
@@ -2799,7 +2922,8 @@ export function canApplyAttackEffectToTarget(
   //   （足球 / 卡害穴 / 多龍巴魯托ex 幻影奇襲 等），
   //   v2.191 漏未處理 → v3.21 在此開頭加 short-circuit 修補。
   //   僅 fossilOnField 即觸發；外部 caller 已保證 target.iid 為當前指定目標。
-  if (target.fossilOnField) {
+  // ⭐v6358-D9：官方判例 PTCG_RULES.md L2308–L2309 ——「熱浪鱗粉」（**特性**）不受背蓋化石阻擋。
+  if (target.fossilOnField && effectSourceBlocks('陳舊的背蓋化石', source)) {
     const fossilCard = pool.get(target.cardId);
     if (fossilCard?.name === '陳舊的背蓋化石') {
       return { blocked: true, reason: '陳舊的背蓋化石 免疫招式效果' };
@@ -2808,25 +2932,27 @@ export function canApplyAttackEffectToTarget(
   // v5.213：化隱（M5 詛咒娃娃 / 斯魔茶 / 來悲粗茶 / 怨影娃娃）— 不受招式效果（含狀態）
   //   defense.ts L139 unified entry 已有此 check；legacy helper 補一份避免漏 caller。
   // v5.224：加 holder 位置 + 振翼髮暗夜羽擊壓制 check（target 在對手戰鬥場時若被壓制 → 失效）
-  if (targetCard?.abilities?.some(a => a.name === '化隱')) {
+  // ⭐v6358-D9：化隱卡面寫「招式**與**特性的效果」⇒ C 類，兩種來源都擋（行為不變）。
+  if (effectSourceBlocks('化隱', source) && targetCard?.abilities?.some(a => a.name === '化隱')) {
     const dIdxForHy = (1 - atkIdx) as 0 | 1;
     const defActiveHy = state.players[dIdxForHy].active;
     const locHy: 'active' | 'bench' = (defActiveHy && defActiveHy.iid === target.iid) ? 'active' : 'bench';
     if (isAbilityHolderEffective(state, target, targetCard, dIdxForHy, '化隱', locHy, pool)) {
-      return { blocked: true, reason: '化隱 免疫招式效果' };
+      return { blocked: true, reason: source === 'ability' ? '化隱 免疫特性效果' : '化隱 免疫招式效果' };
     }
   }
   // v5.333：per-turn 招式免疫旗標（飛翔/要害斬/躲藏=immuneToAllAttackThisTurn、純樸=
   //   immuneToAttackEffectsThisTurn、阿塞蘿拉=immuneToExAttackThisTurn）也納入此 legacy guard，
   //   與 unified canApplyEffectToTarget 一致 — 因 defCantAttackNextPost / defNextAtkReducePost /
   //   悄聲加害 等仍走此 helper。此 helper 永遠是 attack-effect 語境，三者皆擋。
-  if (target.immuneToAllAttackThisTurn) {
+  // ⭐v6358-D9：三個 per-turn 旗標的卡面都只寫「**招式**的…效果」⇒ A 類，只擋 'attack'。
+  if (target.immuneToAllAttackThisTurn && effectSourceBlocks('immuneToAllAttackThisTurn', source)) {
     return { blocked: true, reason: '免疫招式的傷害與效果（飛翔/要害斬/躲藏類）' };
   }
-  if (target.immuneToAttackEffectsThisTurn) {
+  if (target.immuneToAttackEffectsThisTurn && effectSourceBlocks('immuneToAttackEffectsThisTurn', source)) {
     return { blocked: true, reason: '免疫招式的效果（純樸類）' };
   }
-  if (target.immuneToExAttackThisTurn) {
+  if (target.immuneToExAttackThisTurn && effectSourceBlocks('immuneToExAttackThisTurn', source)) {
     const atkActiveIm = state.players[atkIdx].active;
     const atkCardIm = atkActiveIm ? pool.get(atkActiveIm.cardId) : undefined;
     if (atkCardIm && isRulePokemon(atkCardIm)) {
@@ -2835,6 +2961,8 @@ export function canApplyAttackEffectToTarget(
   }
   const dIdx = (1 - atkIdx) as 0 | 1;
   for (const [name, rule] of ATTACK_EFFECT_IMMUNITY) {
+    // ⭐v6358-D9：這一筆擋不擋本次來源，由 EFFECT_SOURCE_IMMUNITY（唯一判準）決定。
+    if (!effectSourceBlocks(name, source)) continue;
     if (rule.kind === 'energy-on-target') {
       // 目標身上附有此名稱的能量；若有 requireType，目標屬性必須相符
       if (rule.requireType && targetCard?.pokemonType !== rule.requireType) continue;
@@ -12404,11 +12532,15 @@ export function applyMiracleKissOnOppActiveKO(state: GameState, attackerIdx: 0 |
 export function koTargetByAttackEffect(
   state: GameState, attackerIdx: 0 | 1, target: CardInstance, isActive: boolean,
   pool: Map<string, Card>, label: string,
+  // ⭐v6.358 站長裁定 D-9：「讓別人因效果昏厥」的來源可以是**招式**也可以是**特性**
+  //   （耿鬼ex｜死亡宣告）。預設 'attack' ⇒ 既有 9 個呼叫端行為逐字不變。
+  //   ⚠ 這裡**只**透傳，不做任何判斷 —— 判準只有 EFFECT_SOURCE_IMMUNITY 一份。
+  source: EffectSource = 'attack',
 ): GameState {
   const dIdx = (1 - attackerIdx) as 0 | 1;
   const def = state.players[dIdx];
   const card = pool.get(target.cardId);
-  const guard = canApplyAttackEffectToTarget(state, attackerIdx, target, card, pool);
+  const guard = canApplyAttackEffectToTarget(state, attackerIdx, target, card, pool, source);
   if (guard.blocked) {
     return addLog(state, `${label}：${card?.name ?? '?'}｜${guard.reason}（不昏厥）`, attackerIdx);
   }
@@ -17500,7 +17632,11 @@ export const PASSIVE_ON_KO_AFTER_PRIZE = new Map<string, PassiveOnKoAfterPrizeFn
     //   直接移除目標（不走 damage 管線）＋ koPrizesAdjusted(koByAttackDamage=false) ＋
     //   recordOppKO(byDamage=false) ＋ 補位空場 game-over ＋ addPendingPrize 自動發獎。
     //   ⚠ 這裡的「attackerIdx」參數語意是「**取得獎賞**的那一方」= dIdx（耿鬼ex 的擁有者）。
-    return koTargetByAttackEffect(s, dIdx, target, isAtkActive, pool, '死亡宣告');
+    //   ⭐v6.358 站長裁定 D-9：死亡宣告是「**特性**的效果」⇒ source='ability'。
+    //     只寫「不會受到對手寶可夢**招式**的效果影響」的免疫（薄霧能量／硬岩【鬥】能量／
+    //     皇帝之勢／璀璨鱗片／抵抗之幕／全能硬殼／陳舊的背蓋化石／純樸／飛翔躲藏類／
+    //     阿塞蘿拉的惡作劇）擋不住它；化隱（卡面寫「招式**與**特性」）仍然擋得住。
+    return koTargetByAttackEffect(s, dIdx, target, isAtkActive, pool, '死亡宣告', 'ability');
   }],
 ]);
 
