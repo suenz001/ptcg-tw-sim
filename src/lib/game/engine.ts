@@ -35,6 +35,9 @@ import {
   countEnergyTypeBloomAware,                  // ⭐v6.347 一長再長：「6個以上【草】能量」host-aware 個數
   isM6aWingAbility, m6aWingAbilityReady,      // ⭐v6.347 三神鳥羽擊：唯一可用性述詞（與 regAByName 共用）
   // <<< v6347-engine-imports
+  // >>> v6350-engine-imports
+  ATTACK_USE_PRECONDITION,                    // ⭐v6.350 per-attack 使用前提（本檔兩處共用同一份）
+  // <<< v6350-engine-imports
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
@@ -5159,6 +5162,20 @@ function handlePlaying(
             aIdx);
         }
       }
+      // >>> v6350-attack-precondition
+      // ⭐⭐v6.350 中央 per-attack 使用前提（`ATTACK_USE_PRECONDITION`）。
+      //   key 的組法與下方 `effectKey` **完全相同**（招式來源卡名｜招式名），
+      //   所以道具招式與借招都會正確命中。
+      //   ⚠ 與 `getAvailableAttacks`（UI 反白）**共用同一份**述詞 —— 兩處各寫一份的下場
+      //     見 v6.103／v6.131：「按鈕亮著卻送不出去」或「明明可以打卻反白」。
+      //   ⚠ 這是 per-attack；「這隻寶可夢所有招式都不能用」走 selfAttackPreconditionBlock（下方）。
+      if (attackName) {
+        const _preKey = `${eff[attackIdx]?.sourceCardName ?? atkName}|${attackName}`;
+        const _preFn = ATTACK_USE_PRECONDITION.get(_preKey);
+        const _preWhy = _preFn ? _preFn(state, aIdx, pool) : null;
+        if (_preWhy) return addLog(state, _preWhy, aIdx);
+      }
+      // <<< v6350-attack-precondition
     }
 
     // 玩家級「本回合所有寶可夢皆無法使用招式」（例：電擊魔獸｜雷電在地）
@@ -9541,6 +9558,13 @@ export function getAvailableAttacks(
   if (effective.length === 0) return [];
   return effective
     .map(({ atk }, i) => {
+      // >>> v6350-attack-precondition-ui
+      // ⭐v6.350 與 ATTACK handler 共用**同一份** per-attack 使用前提述詞。
+      {
+        const _preFn = ATTACK_USE_PRECONDITION.get(`${effective[i].sourceCardName}|${atk.name}`);
+        if (_preFn && _preFn(state, state.activePlayerIndex as 0 | 1, pool)) return -1;
+      }
+      // <<< v6350-attack-precondition-ui
       // v2.92：單招下回合禁用（例：超級勇氣）— UI 層反白禁按
       if (player.active!.blockedAttackNamesThisTurn?.includes(atk.name)) return -1;
       // v2.219：後攻方最初回合限定招式（吼叫尾ex｜絕叫、甜甜螢｜慢芬香）— UI 層反白

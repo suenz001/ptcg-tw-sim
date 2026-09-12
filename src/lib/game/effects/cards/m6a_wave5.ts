@@ -38,6 +38,7 @@
 import type { Card } from '$lib/cards/types';
 import {
   regPost,
+  regAttackPrecondition,   // ⭐v6.350 per-attack 使用前提（engine 兩處共用同一份）
   addLog,
   returnHandToDeck,        // 「將自己的手牌全部放回牌庫並重洗」中央出口
   addPendingPrize,         // ⭐ 取獎賞唯一出口（含「取完即勝」判定），禁自己動 prizes 陣列
@@ -212,23 +213,35 @@ regPost('滑滑小子|挑毛病', oppReturnHandAndDrawPost(4, '挑毛病'));
 // 087/103 賽富豪｜歡慶 [M] dmg=''：
 //   若自己的手牌為30張，則獲得2張自己的獎賞卡。然後，將自己的手牌全部放回牌庫並重洗。
 //   ⚠ 條件是「**剛好** 30 張」（卡面「為30張」，不是「30張以上」）⇒ `=== 30`。
-//   ⚠⚠ 「然後，將自己的手牌全部放回牌庫並重洗」是**句號後的獨立句**，
-//     不在「若…則…」的射程內 ⇒ **無論手牌是不是 30 張都要洗回去**
-//     （與本批 滑滑小子｜挑毛病「…並重洗。然後，對手從牌庫抽出4張卡。」同一種句構）。
+//   ⭐⭐ **站長裁定（2026-09-12）**：「若自己的手牌為30張」在本站是**使用條件** ——
+//     手牌不是剛好 30 張時**這一招不能使用**（UI 反白 ＋ 引擎拒絕），
+//     而不是「可以打出來但沒效果」。而「然後，將自己的手牌全部放回牌庫並重洗」
+//     是在條件成立之後才做的第二段（先取獎賞、**取到手牌之後**才洗回去）。
+//     ⇒ 走中央 `ATTACK_USE_PRECONDITION`（engine 的 ATTACK handler 與 getAvailableAttacks 共用同一份）。
+//     ⚠ 這是**站長對本站的裁定**，卡面原文沒有「只有在…才可使用」的措辭。
+//       要改回「可以打、沒效果」只要把下面那一支 `regAttackPrecondition` 刪掉即可
+//       （regPost 的防呆分支會接手，行為就是舊版）。
 //   ⚠⚠ 取獎賞一律走中央 `addPendingPrize`（v5.466 自動給獎賞 + 私密 log + 「取完即勝」判定），
 //     **禁止**自己動 `players[].prizes` 陣列。取完獎賞若已勝利就立刻 return（不再洗手牌）。
 //   ⚠ 獎賞卡會先進手牌，再一起洗回牌庫 —— 這就是卡面的順序（PTCG_RULES.md L551：
 //     獎賞與其他效果同時發生時先取獎賞）。
+regAttackPrecondition('賽富豪|歡慶', (state, aIdx) => {
+  const n = state.players[aIdx]?.hand.length ?? 0;
+  return n === 30 ? null : `歡慶：自己的手牌為 ${n} 張（必須剛好 30 張）— 無法使用這個招式`;
+});
 regPost('賽富豪|歡慶', (state, aIdx, pool) => {
   let s = state;
   const handCount = s.players[aIdx].hand.length;
-  if (handCount === 30) {
-    s = addLog(s, '歡慶：自己的手牌為 30 張 — 獲得 2 張自己的獎賞卡', aIdx);
-    s = addPendingPrize(s, aIdx, 2, pool);
-    if (s.phase === 'game-over') return s;
-  } else {
-    s = addLog(s, `歡慶：自己的手牌為 ${handCount} 張（不是 30 張）— 不獲得獎賞卡`, aIdx);
+  // ⚠ fail-closed 防呆：上面的 gate 已保證 === 30，這個分支理論上不可達
+  //   （AI／伺服器若繞過 gate 送出 ATTACK，寧可什麼都不做也不要洗掉手牌）。
+  if (handCount !== 30) {
+    return addLog(s, `歡慶：自己的手牌為 ${handCount} 張（不是 30 張）— 沒有效果`, aIdx);
   }
+  s = addLog(s, '歡慶：自己的手牌為 30 張 — 獲得 2 張自己的獎賞卡', aIdx);
+  s = addPendingPrize(s, aIdx, 2, pool);
+  if (s.phase === 'game-over') return s;
+  // ⭐ 站長裁定逐字：「拿完2張獎賞卡，**拿到以後**，將手牌全部放回牌庫重洗」
+  //   ⇒ 獎賞卡先進手牌，再連同原本的 30 張一起洗回牌庫。
   s = addLog(s, '歡慶：將自己的手牌全部放回牌庫並重洗', aIdx);
   return returnHandToDeck(s, aIdx);
 });

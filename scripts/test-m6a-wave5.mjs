@@ -553,13 +553,22 @@ console.log('\n【K】手牌洗回牌庫（滑滑小子｜挑毛病 對手、賽
     P0(r).hand.length === 0 && P0(r).deck.length === 37, `hand=${P0(r).hand.length} deck=${P0(r).deck.length}`);
   const r29 = run('歡慶', c, {
     handCards: Array.from({ length: 29 }, () => ITEM.id), deckCards: Array.from({ length: 5 }, () => PLAIN.id) });
+  // ⭐⭐ v6.350 站長裁定（2026-09-12）改判準：「若自己的手牌為30張」在本站是**使用條件**，
+  //   手牌不是剛好 30 張時**這一招根本不能使用**（中央 ATTACK_USE_PRECONDITION，
+  //   UI 反白 ＋ 引擎拒絕）。⇒ 原本 K10「不管 30 不 30 都要洗回去」的判準已經不成立。
+  //   ⚠ 這是 Rule 40 的「判準上移到意圖層」，**不是放寬**：原本只驗「手牌有沒有被洗掉」，
+  //     現在驗「整個招式打不出去、盤面一個字都不能動」，比原本嚴。
+  //   ⚠ UI 反白那一半與印刷閘由 scripts/test-v6350-… 全面接管（39 條行為端斷言）。
   chk('K9 ⭐⭐條件是「**剛好** 30 張」：29 張 ⇒ 不拿獎賞（獎賞仍 6 張）',
     P0(r29).prizes.length === 6, String(P0(r29).prizes.length));
-  chk('K10 ⭐但「然後…放回牌庫並重洗」是句號後的獨立句 ⇒ 不管 30 不 30 都要洗回去（手牌 0、牌庫 34）',
-    P0(r29).hand.length === 0 && P0(r29).deck.length === 34, `hand=${P0(r29).hand.length} deck=${P0(r29).deck.length}`);
+  chk('K10 ⭐⭐（v6.350 站長裁定）29 張 ⇒ 招式被拒，盤面一個字都不動（手牌仍 29、牌庫仍 5、招式沒蓋章）',
+    P0(r29).hand.length === 29 && P0(r29).deck.length === 5 && !ran(r29, '歡慶'),
+    `hand=${P0(r29).hand.length} deck=${P0(r29).deck.length} ran=${ran(r29, '歡慶')}`);
   const r31 = run('歡慶', c, {
     handCards: Array.from({ length: 31 }, () => ITEM.id), deckCards: Array.from({ length: 5 }, () => PLAIN.id) });
-  chk('K11 ⭐反向：31 張（>30）也不拿獎賞（卡面不是「30張以上」）', P0(r31).prizes.length === 6, String(P0(r31).prizes.length));
+  chk('K11 ⭐反向：31 張（>30）同樣不能使用（卡面不是「30張以上」）',
+    P0(r31).prizes.length === 6 && P0(r31).hand.length === 31 && !ran(r31, '歡慶'),
+    `prizes=${P0(r31).prizes.length} hand=${P0(r31).hand.length} ran=${ran(r31, '歡慶')}`);
   const rWin = run('歡慶', c, { handCards: hand30, deckCards: [PLAIN.id], prizeN: 2 });
   chk('K12 ⭐獎賞只剩 2 張時取滿 ⇒ 走中央 addPendingPrize 的勝利判定（game-over）',
     rWin.phase === 'game-over' && rWin.winner === 0, `${rWin.phase}/${rWin.winner}`);

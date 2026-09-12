@@ -9,12 +9,12 @@
  *   那 4 鍵已跑過同名印刷碰撞檢查（`__m6a/collide_w3.mjs` + `wave3-keys.json`）：
  *   全卡庫同名同招只有一種傷害與一種效果文字 ⇒ 可以安全寫死 base。
  *
- * ⚠⚠ **皮卡丘ex｜十萬伏特（M6a 047/126，200＋丟光能量）本批不實裝** ——
+ * ⭐⭐ **皮卡丘ex｜十萬伏特（M6a 047/126，200＋丟光能量）已於 v6.350 實裝（見本檔最下方 ⑦）** ——
  *   `ATTACK_POST` 的鍵是「卡名|招式名」，沒有「哪一個印刷」的維度，而
  *   `皮卡丘ex|十萬伏特` 另有 MC 227/764 與 MJ 008 三個印刷是 **120 點、效果欄全空**（H 標，可對戰）。
  *   在這個鍵上掛「丟光全部能量」會讓那三張可對戰的印刷一起被改壞 ——
- *   正是 `scripts/test-v6333-m6a-unmarked.mjs` KNOWN_COLLISIONS 裡列管「新效果列管在待實裝清單」的那一條。
- *   ⇒ 留給站長裁示（要不要新增「讀場上那張卡的卡面」的印刷閘）。
+ *   正是 `scripts/test-v6333-m6a-unmarked.mjs` KNOWN_COLLISIONS 裡列管的那一條。
+ *   ⇒ **v6.350 站長裁示：加印刷閘**，走中央 `faceAttackEffect`（讀出招那一張印刷自己的卡面）。
  *
  * ⚠ 能量屬性一律走中央 host-aware 述詞（`energyProvidesType`）或中央 registrar 既有的判準，
  *   **不直讀 `pokemonType`**（現役基本能量卡 `pokemonType` 恒 null）。
@@ -25,7 +25,7 @@
  *   （紅蓮鎧騎｜紅蓮引爆、風妖精｜治癒棉絮）一起收斂過去。
  */
 
-import { regPost } from '../_shared';
+import { regPost, faceAttackEffect } from '../_shared';   // ⭐v6.350 faceAttackEffect＝印刷閘
 import {
   registerSelfDiscardMultiply,      // ATTACK_PRE_DISCARD_CHOICE ＋ regPre 一鍵註冊（宣告時選能量丟棄）
   selfDiscardAllEnergyPost,         // 「將這隻寶可夢身上附加的能量卡全部丟棄。」
@@ -139,3 +139,22 @@ regPost('皮卡丘ex|劈哩劈哩夜狂歡', handAttachEnergyPost(99, null, '劈
 //   ⚠ 卡面沒有「任意數量／以任意方式／若希望」⇒ optional=false（依 v6.125 的既有判準，
 //     與 花舞鳥｜能量支援、怒鸚哥ex｜幹勁十足 相同）。
 regPost('超夢|賦予力量', discardEnergyAttachPost(2, null, '賦予力量', false, true));
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ⑦ 047/103（+126/103）皮卡丘ex｜十萬伏特 [L,L,C] dmg=200：
+//    將這隻寶可夢身上附加的能量卡全部丟棄。
+// ══════════════════════════════════════════════════════════════════════════════
+//   ⚠⚠ **印刷閘**（站長裁示 2026-09-12）：`ATTACK_POST` 的鍵是「卡名|招式名」，**沒有印刷維度**，
+//     而 `皮卡丘ex|十萬伏特` 另有 MC 227／MC 764／MJ 008 三個 **H 標可對戰**印刷是
+//     **120 點、效果欄全空**。把「丟光全部能量」無條件掛在這個鍵上會把那三張一起改壞。
+//   ⇒ 走中央 `faceAttackEffect`（與 v6.333 的 `faceAttackDamage` 同一個家族）：
+//     讀**出招那一張印刷自己的卡面**，卡面沒有這句話就整個 POST 不做事。
+//   ⚠ 傷害不寫死（只登 `regPost`）⇒ 200／120 各自由引擎讀卡面，那一半 v6.333 已經處理好。
+//   ⚠ `faceAttackEffect` 回 `null` ＝ 出招者自己的卡面上沒有這一招（借招）⇒ **fail-closed 不丟能量**：
+//     寧可少做，也不要把不該丟的能量全部丟光。
+//   ⚠ 效果本體復用既有中央 `selfDiscardAllEnergyPost`（閃電鳥｜十萬伏特 等 5 張同一支）。
+regPost('皮卡丘ex|十萬伏特', (state, aIdx, pool) => {
+  const face = faceAttackEffect(state, aIdx, pool, '十萬伏特');
+  if (!face || !face.includes('能量卡全部丟棄')) return state;
+  return selfDiscardAllEnergyPost('十萬伏特')(state, aIdx, pool);
+});

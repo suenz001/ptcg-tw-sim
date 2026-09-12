@@ -235,6 +235,26 @@ export function regPre(key: string, fn: AttackPreFn)   { ATTACK_PRE.set(key, fn)
 export function regPost(key: string, fn: AttackPostFn) { ATTACK_POST.set(key, fn); }
 
 /**
+ * ⭐⭐ v6.350 中央：**per-attack** 的「這一招現在能不能使用」述詞。
+ *
+ * key ＝ `招式來源卡名|招式名` —— 與 engine 組 `effectKey` 的方式**完全相同**
+ * （道具招式用道具名、借招用來源卡名），所以這三條路徑都會正確命中。
+ * 回傳阻擋原因字串（會寫進對戰紀錄）；`null` ＝ 可以使用。
+ *
+ * ⚠⚠ 全站只有這一份：engine 的 ATTACK handler（拒絕並寫 log）與
+ *   `getAvailableAttacks`（UI 反白）**共用同一支**。兩處各寫一份的下場見 v6.103／v6.131：
+ *   「按鈕亮著卻送不出去」或「明明可以打卻反白」。
+ * ⚠ 這是 **per-attack**。「這隻寶可夢的**所有**招式都不能用」那一型
+ *   （力量抑制者／啟動限制／懶怠個性）走 engine 的 `selfAttackPreconditionBlock`，兩者不要混。
+ */
+export type AttackUsePreconditionFn =
+  (state: GameState, aIdx: 0 | 1, pool: Map<string, Card>) => string | null;
+export const ATTACK_USE_PRECONDITION = new Map<string, AttackUsePreconditionFn>();
+export function regAttackPrecondition(key: string, fn: AttackUsePreconditionFn) {
+  ATTACK_USE_PRECONDITION.set(key, fn);
+}
+
+/**
  * 招式宣告時需要玩家選擇丟棄能量的宣告表。見 effects.ts 原註解說明。
  */
 export interface PreDiscardSpec {
@@ -2910,6 +2930,34 @@ export function faceAttackDamage(
   // 只接受「純數字」——「120+」「30×」「20-」這類條件式傷害本來就該由各自的 regPre 算。
   if (!/^\d+$/.test(raw)) return fallback;
   return parseInt(raw, 10);
+}
+
+/**
+ * ⭐⭐ v6.350 讀「**這一次出招的那一張印刷**自己的卡面 effect 文字」。
+ *
+ * 與 v6.333 的 `faceAttackDamage` 同一個家族、同一個理由：`ATTACK_PRE`/`ATTACK_POST` 的 key 是
+ * 「卡名|招式名」，**沒有印刷維度**，但同名同招的不同印刷連**效果欄**都可以不一樣。
+ *
+ * 實例：`皮卡丘ex|十萬伏特` 在 M6a 047/103（J）是 200 ＋「將這隻寶可夢身上附加的能量卡全部丟棄。」，
+ * 在 MC 227/764 與 MJ 008（**H 標、可對戰**）是 120、**效果欄全空**。
+ * 把新效果無條件掛在這個鍵上，會把那三張可對戰的印刷一起改壞。
+ *
+ * @returns 卡面 effect 文字（可能是空字串＝這張印刷沒有效果）；
+ *   `null` ＝ **出招者自己的卡面上沒有這一招**（借招／資料缺漏）
+ *   ⇒ 呼叫端必須自己決定 fail-open 還是 fail-closed（多數情況應 **fail-closed**）。
+ */
+export function faceAttackEffect(
+  state: GameState,
+  aIdx: 0 | 1,
+  pool: Map<string, Card>,
+  attackName: string,
+): string | null {
+  const inst = state.players[aIdx]?.active;
+  if (!inst) return null;
+  const card = pool.get(String(inst.cardId));
+  const atk = card?.attacks?.find((a) => a?.name === attackName);
+  if (!atk) return null;
+  return String(atk.effect ?? '');
 }
 
 export function withAttackDamageTaken(
