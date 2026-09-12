@@ -987,6 +987,11 @@ import { firePassiveOnKoAfterPrize, drainOnKoAfterPrize } from './effects';
 // ⭐v6.361 站長裁定 D-10：把「已判出的終局」暫時收回，讓 on-KO 特性先結算完再重判（含平手）。
 import { liftEndgameForOnKoV6361 } from './effects';
 // <<< v6361-lift-import
+// >>> v6362-return-hand-import
+// ⭐ v6.362 站長裁定 A-1：跨 take-prize-choose picker 之後補跑「將手牌全部放回牌庫並重洗」。
+//   用的是全站唯一那支中央出口（賽富豪｜歡慶 的同步路徑也是它），不另寫一份洗牌邏輯。
+import { returnHandToDeck } from './effects/_shared';
+// <<< v6362-return-hand-import
 export { sameEvoName, canEvolveOnto };
 
 /**
@@ -3569,6 +3574,23 @@ function handlePlaying(
       newState = reviveAttackDiscardedSpecialEnergy(newState, _rv.aIdx, _rv.boomIids, _rv.boomActiveIid, _rv.fuelIids, pool);
       newState = { ...newState, _pendingAttackEnergyRevive: undefined };
     }
+    // >>> v6362-return-hand-after-prize
+    // ⭐⭐ v6.362 站長裁定 A-1：賽富豪｜歡慶「獲得2張獎賞卡。**然後**，將自己的手牌全部放回
+    //   牌庫並重洗。」取獎時若有正面朝上的獎賞卡，addPendingPrize 會開 take-prize-choose
+    //   逐張 picker ⇒「洗手牌」要等整條 picker 鏈解完才做。
+    //   ⚠ 位置與判準**逐字比照上面 v5.678 那一段**（同一個「!pendingSelection ⇒ 補跑待辦 ⇒
+    //     清旗標」形狀），不另開第二種跨 picker 延後機制。
+    //   ⚠ 若取獎當下就分出勝負（取完最後一張獎賞獲勝）則不洗牌 —— 與 m6a_wave5 同步路徑的
+    //     `if (s.phase === 'game-over') return s;` 同一條判準；但旗標**照樣清掉**，不留殘留。
+    if (!newState.pendingSelection && newState._pendingReturnHandToDeck) {
+      const _rh = newState._pendingReturnHandToDeck;
+      if (newState.phase !== 'game-over') {
+        newState = addLog(newState, `${_rh.label}：將自己的手牌全部放回牌庫並重洗`, _rh.aIdx);
+        newState = returnHandToDeck(newState, _rh.aIdx);
+      }
+      newState = { ...newState, _pendingReturnHandToDeck: undefined };
+    }
+    // <<< v6362-return-hand-after-prize
     // 若為招式觸發的互動效果，解決後進入回合結束（不再有連鎖 pendingSelection 時才設）
     if (endTurnAfter && !newState.pendingSelection) {
       newState = { ...newState, turnPhase: 'end' };
@@ -8539,6 +8561,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         endTurnSkipCheckup: undefined,
         endTurnCheckupAbilitiesDone: undefined,  // v5.426 清除特性區旗標
         _pendingAttackEnergyRevive: undefined,  // v5.678 安全清除跨picker revive快照
+        // >>> v6362-clear-return-hand
+        _pendingReturnHandToDeck: undefined,  // ⭐v6.362 A-1 安全清除跨picker「手牌洗回牌庫」待辦
+        // <<< v6362-clear-return-hand
         // v4.24 對戰計時器
         playerTurnTimeMs: _timerNewTimes,
         currentTurnStartTime: _timerNowMs,

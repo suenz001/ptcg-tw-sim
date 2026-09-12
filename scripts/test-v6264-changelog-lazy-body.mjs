@@ -38,7 +38,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '3426f6239e31853db0e07e8c53cdb6c1791e3faf'; // v6.360（v6.361 的前一版；v6.361 只在極罕見的同時終局才看得到 ⇒ 不動首頁 changelog）
+const BASE_SHA = 'cbfad1d5cccae3914ab9f1af789d97cac67f9283'; // v6.361（v6.362 的前一版；v6.362 玩家看不到 ⇒ 不動首頁 changelog）
 // ⭐⭐⭐ v6.332：則數政策一律從 `scripts/lib/changelog-policy.mjs` 讀（Rule 38：判準只能有一份）。
 //   在那之前「50」被抄在三支守衛裡，改政策時 test-v6223 會莫名其妙誤紅。
 const { N_HOME, N_INLINE, MAX_KB } = await import(pathToFileURL(join(ROOT, 'scripts/lib/changelog-policy.mjs')).href);

@@ -916,6 +916,19 @@ export interface GameState {
    */
   /** v5.678：招式以 picker 收尾時，跨 RESOLVE_SELECTION 保留回力鏢/燃料火 revive 快照。 */
   _pendingAttackEnergyRevive?: { aIdx: 0 | 1; boomIids: string[]; boomActiveIid: string; fuelIids: string[] };
+  /**
+   * ⭐⭐ v6.362 站長裁定 A-1：賽富豪｜歡慶
+   * 「若自己的手牌為30張，則獲得2張自己的獎賞卡。**然後**，將自己的手牌全部放回牌庫並重洗。」
+   * 取獎時場上若有**正面朝上**的獎賞卡（克雷色利亞｜弦月光芒 翻的／火箭隊的妨礙機器人 換的），
+   * 「addPendingPrize」 會開 「take-prize-choose」 逐張 picker ⇒「洗手牌」必須等整條 picker 鏈
+   * 解完才做（站長逐字：「如果當時有翻正面的獎賞卡，就讓玩家選」）。
+   * 形狀**逐字比照上面 v5.678 的 「_pendingAttackEnergyRevive」**：存待辦 → RESOLVE_SELECTION
+   * 在 「!pendingSelection」 時補跑 → 立刻清旗標。全站只有一個出口
+   * （engine.ts 的 「v6362-return-hand-after-prize」），END_TURN finalize 另有一道安全清除。
+   * ⚠ 這是**單一純量物件**（「{ aIdx, label }」），不是 per-player 陣列，也沒有巢狀陣列
+   *   ⇒ Firestore 禁令（v6.056／v6.359）在這裡自然滿足。
+   */
+  _pendingReturnHandToDeck?: { aIdx: 0 | 1; label: string };
   pendingChainQueue?: PendingSelection[];
   /**
    * v2.160：上一次招式套用後實際造成的傷害量（含弱抗 / 道具減傷後最終值）。

@@ -240,6 +240,18 @@ regPost('賽富豪|歡慶', (state, aIdx, pool) => {
   s = addLog(s, '歡慶：自己的手牌為 30 張 — 獲得 2 張自己的獎賞卡', aIdx);
   s = addPendingPrize(s, aIdx, 2, pool);
   if (s.phase === 'game-over') return s;
+  // ⭐⭐ v6.362 站長裁定 A-1 逐字：「**如果當時有翻正面的獎賞卡，就讓玩家選**」。
+  //   有正面朝上的獎賞時 addPendingPrize 會開 「take-prize-choose」 逐張 picker ——
+  //   那 2 張要等玩家**真的逐張選完**才算「拿到」，卡面的「然後，將自己的手牌全部放回牌庫
+  //   並重洗」是拿到之後的第二段。
+  //   ⚠ v6.361 以前這裡無條件往下跑：picker 還開著手牌就先被洗回牌庫（實測 deck 直接 +30、
+  //     hand 歸 0），玩家選到的 2 張最後落在**空手牌**裡 —— 順序與卡面完全相反。
+  //   ⇒ 跨 picker 的後續步驟走站上**既有形狀**：v5.678 「_pendingAttackEnergyRevive」 的
+  //     「待辦存進 GameState → picker 鏈全部解完後在 RESOLVE_SELECTION 補跑」同一條路徑
+  //     （engine.ts 的 「v6362-return-hand-after-prize」）。不自創第二種延後機制。
+  if (s.pendingSelection) {
+    return { ...s, _pendingReturnHandToDeck: { aIdx, label: '歡慶' } };
+  }
   // ⭐ 站長裁定逐字：「拿完2張獎賞卡，**拿到以後**，將手牌全部放回牌庫重洗」
   //   ⇒ 獎賞卡先進手牌，再連同原本的 30 張一起洗回牌庫。
   s = addLog(s, '歡慶：將自己的手牌全部放回牌庫並重洗', aIdx);

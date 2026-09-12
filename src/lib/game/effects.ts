@@ -20607,14 +20607,25 @@ export function selfBasicEnergyTypeCountPre(base: number, per: number, label: st
 /**
  * 「造成自己的最大HP為「H」的**備戰**寶可夢的數量×N點傷害。」
  * 使用者：寶寶丁｜軟彈陣(HP30, 30×)。
- * ⚠ 「最大HP」＝卡面 HP（不因受傷而變），且卡面主詞是「備戰寶可夢」⇒ **不含戰鬥場**。
+ * ⚠ 卡面主詞是「**備戰**寶可夢」⇒ 不含戰鬥場的自己。
+ *
+ * ⭐⭐ v6.362 站長裁定 A-3（逐字）：「如果改變hp，就以當下hp來算，因此如果當最大HP不是30hp，
+ *   則不列入計算(例如場上有激動競技場)」
+ *   ⇒ 讀的是**當下的有效最大 HP** —— 全站唯一那支中央述詞 「engine.getEffectiveHP」
+ *     （道具 TOOL_HP_BONUS／特殊能量 SPECIAL_ENERGY_HP_BONUS／場地〔激動競技場【基礎】+30、
+ *     引力山岳【2階進化】-30、昂主花葉蒂 +150〕／被動最大HP特性〔雜草魂／生機森巴／大師工藝／
+ *     腎上腺力量…〕，外加阻礙之塔與特性消除閘，全部在那一支裡），**不是**印刷的 「card.hp」。
+ *   ⚠ v6.361 以前讀 「card.hp」：場上有激動競技場時，HP30 的【基礎】備戰實際最大 HP 是 60，
+ *     卻照樣被算進去（實測 90 而不是 0）。
+ *   ⚠ 「最大 HP」是**上限**，不是「剩餘 HP」—— 受傷不會改變最大 HP ⇒ 這裡**不可以**扣「damage」。
+ *   ⚠ 反方向同樣成立：印刷 HP 不是 30、但被場地／道具調成 30 的**要**列入
+ *     （例：引力山岳把印刷 60 的【2階進化】壓成 30）。
  */
 export function selfBenchMaxHpMultiplyPre(maxHp: number, base: number, per: number, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     let n = 0;
     for (const b of state.players[aIdx].bench) {
-      const c = pool.get(b.cardId);
-      if (c && Number(c.hp) === maxHp) n++;
+      if (getEffectiveHP(b, pool, state) === maxHp) n++;
     }
     const dmg = base + per * n;
     return {

@@ -1,5 +1,115 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.362 站長裁定 A-1／A-2／A-3（三張 M6a 卡）
+
+BASE `cbfad1d5cccae3914ab9f1af789d97cac67f9283`（v6.361）。**沒有改變任何線上既有卡的行為**（三張卡都在 M6a、仍鎖著；
+新增的 engine 區塊只在 M6a 那張卡把旗標設起來時才動作）。
+
+### 【一】A-1 賽富豪｜歡慶（M6a 19999／20030）—— ⚠ 實測出一個比預期更嚴重的壞法
+
+卡面：「若自己的手牌為30張，則獲得2張自己的獎賞卡。然後，將自己的手牌全部放回牌庫並重洗。」
+（v6.350 的「手牌必須剛好 30 張」使用前提**沒有動**。）
+
+> 站長裁定：「如果當時有翻正面的獎賞卡，就讓玩家選」
+
+⚠⚠ **BASE 的實際壞法（實測，不是推測）**：有 faceUp 獎賞（弦月光芒／妨礙機器人）時，
+`addPendingPrize` 會開逐張 picker，但歡慶**就地**把手牌洗回牌庫 ⇒ ATTACK 結束時
+`hand=0 / deck=35`，玩家**之後**選到的 2 張獎賞卡掉進一個**已經被清空的手牌**；
+log 也是「洗手牌」先於「取得獎賞」。修後：picker 中 `hand=30 / deck=5`，
+選完 2 張才 `hand=0 / deck=37`。
+
+**修法照站上既有的跨 picker 待辦形狀（v5.678 `_pendingAttackEnergyRevive`）**：
+- `types.ts`：新增 `_pendingReturnHandToDeck?: { aIdx: 0|1; label: string }`（**純量物件**，
+  無陣列 ⇒ Firestore 巢狀陣列禁令自然滿足）。
+- `m6a_wave5.ts`：`addPendingPrize` 之後若 `pendingSelection` 還在 ⇒ 存待辦並 return，**不**就地洗牌。
+- `engine.ts`：RESOLVE_SELECTION 內補跑（緊接 v5.678 那一段）＋ END_TURN finalize 安全清除。
+  補跑呼叫的是**同一支**中央出口 `returnHandToDeck`（不是第二份實作）。
+- 規則佐證：`PTCG_RULES.md` **L551**「獎賞卡 vs 卡牌效果：先獲得獎賞卡，再執行卡牌效果」。
+
+### 【二】A-2 洛奇亞｜元素爆破（M6a 20009）—— **站上已經是站長要的樣子，本版一行都沒改**
+
+> 站長裁定：「甚麼是 窮舉最優 ?? 能乾脆放讓玩家選嗎??先選【火】再選【水】再選【雷】??」
+
+查證結果：v6.343 的 `discardOneEnergyOfEachTypePost` / `runDiscardOneEachType` /
+`regR('discard-one-each-type')` **早就**是「依 `['Fire','Water','Lightning']` 順序、
+用 `params.restTypes` 串接、逐屬性開 `active-energy-discard` picker 讓玩家選」。
+候選判準用的是中央 host-aware 述詞 `energyProvidesType`（與紅蓮引爆／雷電落同一支）。
+
+⇒ 待裁示 D-14 說的「每種屬性各自貪心」在現況**只剩「該屬性唯一候選時引擎代選」**，
+而那是站上既有慣例（同見 `effects.ts` 另一處同樣寫法）。
+⇒ 本版**未改任何實作**，改成用守衛【B】把現況**錨釘**住（11 條行為層斷言 ＋ 5 個突變）。
+
+⚠ 順帶由規則書解決一個原本要問的問題：**「各1個」湊不齊時照樣結算**——
+`PTCG_RULES.md` **L1855**（同型另見 L767、L2507）：「無法丟棄…3個能量，那麼可以造成傷害嗎？」
+→「**可以。這個情況下，丟棄2個…**」。與站上現行 fail-open 行為一致，守衛已釘住。
+
+### 【三】A-3 寶寶丁｜軟彈陣（M6a 20008）
+
+卡面：「造成自己的最大HP為「30」的備戰寶可夢的數量×30點傷害。」
+
+> 站長裁定：「如果改變hp，就以當下hp來算，因此如果當最大HP不是30hp，則不列入計算
+> 　（例如場上有激動競技場）」
+
+`effects.ts` `selfBenchMaxHpMultiplyPre` 的判準由 `Number(pool.get(b.cardId).hp) === maxHp`
+改成 `getEffectiveHP(b, pool, state) === maxHp`（engine 的中央有效 HP 述詞，本來就已 import）。
+⇒ 一次涵蓋 `TOOL_HP_BONUS`／`SPECIAL_ENERGY_HP_BONUS`／場地／被動最大 HP 特性／
+阻礙之塔與特性消除閘。
+
+⚠ 「**最大** HP」是上限，**不是**剩餘 HP（突變 M13 釘住）。
+⚠ 實測修正：**激動競技場**（`SV8` id 11285「雙方場上所有【基礎】寶可夢的最大HP各「+30」」）
+會把備戰 3 隻寶寶丁**全部**排除 ⇒ 0，不是 60。要驗「只排除 1 隻 ⇒ 60」必須用**道具**
+（英雄斗篷 `MC` id 17158「最大HP「+100」」附在其中 1 隻）。兩種來源各驗一次，各配同盤面哨兵。
+⚠ 「印刷 HP 不是 30、被場地壓成 30 ⇒ 應列入」這個反方向**沒有實卡可測**
+（全卡池沒有 HP60 的【2 階進化】＝引力山岳 −30 的唯一入口）⇒ 改用等價證法：
+英雄斗篷 ＋ 阻礙之塔（道具加成失效）⇒ 那一隻又變回 30 ⇒ 回到 90。
+
+### 【四】守衛
+
+`scripts/test-v6362-owner-rulings-a1a2a3.mjs`：**PASS 54 / FAIL 0**
+（【0】harness 5、【A】歡慶 17、【B】元素爆破 15、【C】軟彈陣 17）。
+**HEAD-FAIL 實測**：BASE 下 `PASS 38 / FAIL 16`（A-1 11 條、A-3 5 條；
+【B】在 BASE 全綠 —— 正確反映「A-2 本版沒有改動」）。
+突變 **M1~M18 全殺**。
+
+### 【五】⚠ 順帶：`test-v6293` 的 E1 依 Rule 40 上移（v6.361 造成的）
+
+v6.361 在 `+page.svelte` 新增的「非錦標賽平手結算視窗」讓
+`scripts/test-v6293-friends-theme.mjs` 的 **E1**（勝負 modal 區間**逐位元** pin）翻紅。
+
+⚠ 真因不只是「多一塊」：平手視窗**自己也用 `class="gameover-modal"`**，
+而 E1 的 `gameoverRegionOf` 起點是 `indexOf('<div class="gameover-modal"')`
+⇒ **整個比對區間的起點被搶走**。
+
+依 **Rule 40 上移到意圖層**：照 E1 自己既有的 `revertV6321()` 形狀
+（它的註解就寫「沿用 test-v6265 F4 的作法」）新增 `stripV6361DrawModal`，
+用 `stripSentinelBlocks` 剝掉 `v6361-draw-modal` 哨兵區塊**之後**仍然 `sha256` 全等。
+⇒ 「勝負 modal 不可以被偷改」這條保護**完全保留**，只排除那一塊合法新增。
+**沒有放寬**：不是比長度、不是比關鍵字、沒有 `||`、沒有 try/catch 吞掉。
+
+牙齒（兩層）：
+- 守衛內新增正對照 **E1d**：①在勝負 modal 區間內、哨兵**外**多一個位元組 ⇒ 剝完 sha 仍須不同；
+  ②把起始哨兵拿掉 ⇒ `assert.throws(/恰出現一次/)`（不會默默變成免檢區）。
+- 外部突變 **M17／M18**（突變 `+page.svelte`、跑 `test-v6293`）各自證明會翻紅。
+
+`test-v6293`：24 PASS / 1 FAIL → **26 PASS / 0 FAIL**。
+另外逐字元驗證過 v6.361 在 `+page.svelte` 的新增**本來就整塊在哨兵內、哨兵外沒有多餘空行**
+（剝掉 `v6361-` 後與 v6.360 的 `+page.svelte` 逐字元相同）⇒ 本版**一個位元都沒動** `+page.svelte`。
+
+### 【六】⚠ 待站長裁示
+
+1. **A-1 的已知邊界（沿用 v5.678 的相同限制）**：`_pendingReturnHandToDeck` 的出列點只有
+   `RESOLVE_SELECTION`。若取獎 picker 是被**其他 action** 清掉（而非玩家 RESOLVE），
+   洗手牌會延到下一次 `RESOLVE_SELECTION`，最遲在 END_TURN finalize 被安全清掉（那時就不洗了）。
+   目前找不到會走到這條路的實卡。要不要把出列點再往上收（比照 v6.355 的「唯一 drain 點」）？
+2. ⚠ **`test-v6265` 的 F4 目前實際上是失效的**：它在 `server_admin_patch.js` 的 sha 比對就先
+   `throw`，**後面的 `engine.ts` 逐字 pin 整段跑不到** ⇒「engine.ts 不可被改壞」這條保護
+   在 CRLF 工作樹上等同失效。要不要另開一版把 F4 拆成兩個獨立 `T(...)`？
+   （本版沒有動守衛結構，只在剝除鏈最外層接上 `stripV6362Engine`，並另外用
+   `__m6a/stripcheck362.mjs` 補驗「剝掉 v6362 哨兵後 = BASE 逐字元相同」。）
+3. ⚠ **`test-v6234` 的 2 條紅是環境相依的既有紅**：它的突變錨點是用 `\n` 拼的多行字串，
+   在 Windows **CRLF 工作樹**上本來就永遠定位不到（實測：工作樹 CRLF 21151 行、LF-only 0 行）。
+   要不要另開一版修？
+
 ## v6.361 先結算 on-KO 特性再判勝負 ＋ 引入「平手」（站長裁定 D-10／D-11）
 
 BASE `3426f6239e31853db0e07e8c53cdb6c1791e3faf`（v6.360）。⚠ **本版改變線上既有行為**（見【四】），

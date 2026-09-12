@@ -512,11 +512,44 @@ function revertV6321(region) {
   }
   return r;
 }
-await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間同樣逐位元相同', () => {
+
+// ⭐⭐ v6.362（Rule 40：判準上移到意圖層，不放寬也不刪除）
+//   v6.361（站長裁定 D-10／D-11）在本檔新增了「非錦標賽平手結算視窗」。那一塊是**純新增**，
+//   而且整塊用 HTML 註解哨兵框住：
+//       <!-- >>> v6361-draw-modal -->  …  <!-- <<< v6361-draw-modal -->
+//   （實測 __m6a/stripcheck_gen.mjs：把那一塊剝掉之後，本檔與 v6.360 的版本**逐字元相同**。）
+//   ⇒ 沿用 test-v6265 F4 的 stripSentinelBlocks 形狀：先把**哨兵框住的那一塊**整個剝掉，
+//     其餘**仍然必須逐位元等於 BASE**。守護意圖（勝負 modal 不可以被偷改）一個字都沒有鬆。
+//   ⚠ 這不是放寬：哨兵區塊**外**多一個位元組照樣紅、哨兵不見了也照樣紅（E1d 正對照證明）。
+//   ⚠ 一定要在 gameoverRegionOf **之前**剝 —— 平手視窗自己也用 class="gameover-modal"，
+//     不剝的話 indexOf 會把區間起點搶去平手視窗那一個（v6.361 當下 E1 就是這樣紅的）。
+const V6361_DRAW_MODAL_TAG = 'v6361-draw-modal';
+/** 剝掉成對哨兵之間（含兩行哨兵本身）的內容；形狀與 test-v6265 的 stripSentinelBlocks 相同。 */
+function stripSentinelBlocks(src, tag) {
+  let s = src;
+  for (let guard = 0; ; guard++) {
+    assert.ok(guard <= 50, '哨兵剝除迴圈：' + tag);
+    const a = s.indexOf('>>> ' + tag);
+    if (a < 0) return s;
+    const b = s.indexOf('<<< ' + tag, a);
+    assert.ok(b > a, '哨兵不成對（只有 >>>）：' + tag);
+    const ls = s.lastIndexOf('\n', a) + 1;
+    const le = s.indexOf('\n', b) + 1;
+    assert.ok(le > 0, '哨兵收尾行沒有換行：' + tag);
+    s = s.slice(0, ls) + s.slice(le);
+  }
+}
+/** 剝掉 v6.361 平手視窗那一塊；哨兵必須**恰出現一次**（少了＝有人把它搬出哨兵 ⇒ 大聲紅）。 */
+function stripV6361DrawModal(src) {
+  const n = src.split('>>> ' + V6361_DRAW_MODAL_TAG).length - 1;
+  assert.strictEqual(n, 1, 'v6.361 平手視窗的哨兵必須恰出現一次（實際 ' + n + '）⇒ 有人把它搬出哨兵、刪掉、或另外複製了一份');
+  return stripSentinelBlocks(src, V6361_DRAW_MODAL_TAG);
+}
+await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間剝掉 v6.361 平手視窗哨兵後同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
   assert.strictEqual(sha256(revertV6321(battleRegionOf(GAME))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
-  assert.strictEqual(sha256(gameoverRegionOf(GAME)), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
+  assert.strictEqual(sha256(gameoverRegionOf(stripV6361DrawModal(GAME))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {
   const r = battleRegionOf(GAME);
@@ -527,6 +560,21 @@ await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比�
   assert.notStrictEqual(sha256(revertV6321(battleRegionOf(mutated))), sha256(revertV6321(r)), 'revertV6321 把無關改動洗掉了 ⇒ E1 變成恆真式');
   // 少列一條（把第一條的「現在」字串換掉）⇒ revertV6321 必須紅
   assert.throws(() => revertV6321(r.replace(V6321_BATTLE_EDITS[0][0], V6321_BATTLE_EDITS[0][1])), /恰出現一次/, '合法改動不存在時 revertV6321 沒有紅');
+});
+await T('E1d ⭐⭐ 正對照：v6.361 平手視窗的哨兵剝除**只**剝哨兵內那一塊 —— 勝負 modal 區間裡（哨兵外）多一個位元組照樣紅', () => {
+  assert.ok((GAME.match(/<div class="gameover-modal"/g) || []).length >= 2,
+    'fixture：剝除前本檔應同時有「v6.361 平手視窗」與「既有勝負視窗」兩個 gameover-modal');
+  assert.strictEqual((stripV6361DrawModal(GAME).match(/<div class="gameover-modal"/g) || []).length, 1,
+    '剝掉哨兵之後應只剩既有那一個勝負視窗（證明剝掉的是平手視窗，不是剝到別的東西）');
+  const clean = gameoverRegionOf(stripV6361DrawModal(GAME));
+  assert.notStrictEqual(sha256(clean), sha256(clean + ' '), 'sha256 自驗失敗');
+  // ① 勝負 modal 區間**內**、哨兵**外**多一個位元組 ⇒ 剝完仍然必須不同（否則 E1 是恆真式）
+  const mutated = GAME.replace('<!-- ── v4.913 Auth modal', '<!-- v6362-e1d-probe -->\n<!-- ── v4.913 Auth modal');
+  assert.notStrictEqual(sha256(gameoverRegionOf(stripV6361DrawModal(mutated))), sha256(clean),
+    '⚠⚠ 剝除器把哨兵外的改動也洗掉了 ⇒ E1 的勝負 modal 比對變成恆真式');
+  // ② 哨兵被拿掉（有人把平手視窗搬出哨兵）⇒ 必須大聲紅，不可以默默放行變成免檢區
+  assert.throws(() => stripV6361DrawModal(GAME.replace('>>> ' + V6361_DRAW_MODAL_TAG, 'xxx')), /恰出現一次/,
+    '哨兵消失時剝除器沒有紅 ⇒ 等於把那一整塊變成免檢區');
 });
 await T('E1c ⭐⭐ 不需要歷史的等價條件：對戰版面分支區間零 `friend`／零 `lobby-tab`／零 `FriendsPanel`（本版新增的東西一個都不准滲進去）；且區間 >20000 字元、含兩套分支', () => {
   const r = battleRegionOf(GAME);
