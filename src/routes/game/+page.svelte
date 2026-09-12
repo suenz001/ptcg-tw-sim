@@ -67,7 +67,7 @@
   // ⭐⭐⭐v6.337 借招（複製他人招式）中央管線 —— 候選枚舉與規則層共用同一份，
   //   且提供「借到的招式本身也是借招卡」時要不要再開一段 picker 的判準。
   import { copyAttackCandidates, isCopyAttackKey, COPY_ATTACK_MAX_DEPTH, type CopyChoice } from '$lib/game/copy-attack';
-  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel
+  import { ATTACK_PRE_DISCARD_CHOICE, type PreDiscardSpec, PASSIVE_STADIUMS, getEnergyDiscardUnits, effectivePreDiscardMin, ABILITY_RETREAT_MOD, SPECIAL_ENERGY_RETREAT_MOD, TOOL_BOTH_SIDES_RETREAT_PLUS, energyProvidesType, preDiscardEnergyEligible, OPTIN_NO_PAYMENT } from '$lib/game/effects'; // v5.992 若希望 opt-in sentinel / ⭐v6.349 preDiscardEnergyEligible
   import { JAMMING_TOWER_STADIUMS } from '$lib/game/effects/cards/stadiums';
   import { ENERGY_LABEL, ENERGY_COLOR } from '$lib/cards/energy';
   import type { EnergyType } from '$lib/cards/types';
@@ -7982,7 +7982,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ownerName 顯示卡名（讓玩家看清楚要丟哪張）
   function getDiscardableEnergies(spec: PreDiscardSpec): Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> {
     if (!game || !activePlayer) return [];
-    let out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> = []; // v6.078 basicEnergyOnly 需重新指派
+    const out: Array<{ iid: string; cardId: string; ownerIid: string; ownerName: string; hostInst: CardInstance }> = []; // ⭐v6.349 過濾改在 return 時做，不再重新指派
     if (spec.scope === 'hand-rocket-supporter') {
       // v2.143 火箭羽毛：列出手牌中「火箭隊」支援者
       const placeholder = activePlayer.active ?? activePlayer.bench[0];
@@ -8048,18 +8048,16 @@ function _setupSelfPending(g: any, seat: number): string | null {
       addFrom(activePlayer.active);
       for (const b of activePlayer.bench) addFrom(b);
     }
-    // v6.078：spec.basicEnergyOnly — 只留「基本能量卡」（卡面寫「基本能量卡」的招式）。
-    //   與 energyTypeFilter 正交，先套這一層再套屬性層。
-    if (spec.basicEnergyOnly) {
-      out = out.filter(item => getCard(item.cardId)?.subtype === 'Basic');
-    }
-    // v4.16：spec.energyTypeFilter 設定時，filter 出「視為該屬性」的能量
-    //   覆蓋基本/特殊能量規則；新衝天 (Stage2) 視為所有屬性；稜鏡 (Basic) 視為所有屬性
-    if (spec.energyTypeFilter) {
-      // v5.682：收斂到中央 host-aware energyProvidesType（基本【X】/古舊(全)/稜鏡(Basic=全)/
-      //   新衝天(Stage2=全)/燃火/火箭隊）。取代原本前端自己一份、漏掉古舊等的實作。
-      const filterType = spec.energyTypeFilter as EnergyType;
-      return out.filter(item => energyProvidesType(item.hostInst, { cardId: item.cardId }, filterType, pool));
+    // ⭐v6.349 收斂：basicEnergyOnly（卡面「基本能量卡」）＋ energyTypeFilter（卡面「【X】能量」，
+    //   host-aware：古舊=全屬性／稜鏡附[基礎]=全屬性／新衝天 Stage2=全屬性／燃火／火箭隊）
+    //   兩層一起交給中央 preDiscardEnergyEligible —— 與 registerSelfDiscardMultiply 的 regPre
+    //   **同一支述詞**。原本這裡一份、regPre 另一份（非 host-aware）⇒ 玩家選得到的能量與
+    //   實際被丟／算進倍率的能量不一致（v6.349 實測：十字破壞 240 變 120）。
+    if (spec.basicEnergyOnly || spec.energyTypeFilter) {
+      return out.filter(item => preDiscardEnergyEligible(item.hostInst, { cardId: item.cardId }, pool, {
+        basicOnly: spec.basicEnergyOnly,
+        type: (spec.energyTypeFilter ?? null) as EnergyType | null,
+      }));
     }
     return out;
   }

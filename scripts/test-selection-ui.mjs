@@ -23,7 +23,14 @@ ck('賽吉(搜尋進化卡,可找不到)→可不選', selectionAllowsSkip(mk('d
 ck('八朔(看頂8最多3)→可不選', selectionAllowsSkip(mk('deck-search','search-to-hand-reshuffle',0,0)));
 ck('牌庫頂排序→可不選', selectionAllowsSkip(mk('reorder-deck-top')));
 ck('查看對手手牌(枇琶)→可不選', selectionAllowsSkip(mk('hand-discard','loquat-discard-opp-items',1,0)));
-ck('能量撢子→可不選', selectionAllowsSkip(mk('hand-discard','energy-duster-pick',1,0)));
+// ⭐v6.349：能量撢子已收斂到 peekOppPickToDeckBottomPost（卡面「選擇1張」＝必選）。
+//   有候選時 minCount=1 ⇒ **不給**【不選】鈕；沒有候選時是 min=max=0 的純檢視 picker ⇒ 給。
+//   （舊斷言寫 'energy-duster-pick' + minCount 0，收斂後那個 key 不再有任何 withPending 產生，
+//     斷言雖然還是綠的但已經不是在守這張卡 —— 換成 收斂後真正會出現的形狀。）
+ck('能量撢子(有能量可選,必選1張)→不可不選',
+  !selectionAllowsSkip(mk('hand-discard','peek-pick-to-deck-bottom',1,0,1)));
+ck('能量撢子/叼去藏(對手手牌無符合的卡,純檢視)→可不選',
+  selectionAllowsSkip(mk('hand-discard','peek-pick-to-deck-bottom',1,0,0)));
 ck('力之沙漏(可不附能量)→可不選', selectionAllowsSkip(mk('discard-search','brailliant-attach',0,0,0)));
 ck('棄牌區奇跡耳麥→強制', !selectionAllowsSkip(mk('discard-search','discard-to-hand')));
 ck('棄牌區聖灰→強制', !selectionAllowsSkip(mk('discard-search','sacred-ash-discard-to-deck')));

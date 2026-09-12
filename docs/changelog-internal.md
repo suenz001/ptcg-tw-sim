@@ -1,5 +1,102 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.349 收斂殘留三處：能量丟棄候選述詞／能量撢子／breakdown
+
+BASE `d99a980358fad29b8309dd5c7b48cd0514591476`（v6.348）。站長清單的 C 段（收斂殘留）＋ E 段（工具）。
+⚠ **本版有兩處會改變既有卡的實際行為**（見【一】【二】），都是把原本就錯的修正回卡面。
+
+### 【一】⚠⚠ 「選 N 個能量丟棄」型招式：picker 與 regPre 是**兩份判準**，玩家選得到的引擎不認
+
+`ATTACK_PRE_DISCARD_CHOICE` 的 picker（`+page.svelte` 的 `getDiscardableEnergies`）用的是
+**host-aware** 的 `energyProvidesType`（古舊能量視為全屬性、稜鏡附[基礎]視為全屬性、新衝天 Stage2…），
+而 `registerSelfDiscardMultiply` 的 `regPre` 用的是 `card.pokemonType === type` 加卡名含【X】的 fallback
+—— **看不到**古舊／稜鏡／新衝天。
+
+實測（`__m6a/probe_energy_2.mjs`，收斂前）：
+
+| 卡 | 盤面 | 玩家看到 | 實際結果 |
+|---|---|---|---|
+| 鳳王｜紅蓮之翼（選 1 個【火】） | 1 古舊 + 1 基本【火】，只選古舊 | 古舊是合法候選 | log「丟棄 **0** 個能量 → 130」，古舊原封留著、130 照給（**白嫖代價**） |
+| 巨鉗螳螂ex｜十字破壞（最多 2 張【鋼】×120） | 1 古舊 + 1 基本【鋼】，兩張都選 | 兩張都是候選 | 只丟 1 張、傷害 **120**（兩張基本【鋼】則是 240） |
+| 密勒頓｜閃電猛衝（選 2 個【雷】） | 1 古舊 + 1 基本【雷】 | 兩張都是候選 | 只丟 1 張（少付一個代價），140 照給 |
+| 四季鹿｜落葉衝撞（選 1 個【草】） | 稜鏡能量（附於[基礎]⇒視為【草】） | 是候選 | 丟 0 個 |
+
+**方向依卡面**：這 8 張寫的是「【火】能量」「【鋼】能量卡」——**沒有「基本」二字**
+⇒ 看的是「這張能量**現在提供什麼屬性**」，古舊／稜鏡當然算 ⇒ **兩端都用 host-aware**。
+卡面寫「**基本**能量卡」的（電擊魔獸｜電壓錘）才走 `basicOnly`（實測兩端本來就一致，當正對照釘住）。
+
+⇒ 新增中央出口 `effects.preDiscardEnergyEligible(host, e, pool, { basicOnly, type })`，
+picker 端與 regPre 端**共用這一支**。收斂後實測：十字破壞 古舊+基本鋼 兩張都被丟、傷害 **240**。
+
+⚠ 順帶修好第二個洞：`PreDiscardSpec.energyTypeFilter` 原本**沒有 'Fairy'**，
+`registerSelfDiscardMultiply` 只好把 Fairy 當成「picker 不過濾」而 regPre 照樣過濾 —— 同一類不一致。
+
+⚠ 受影響的卡共 **9 張**（站長清單寫 6 張，實際盤點偏少）：
+picker 型 7（四季鹿・紅蓮鎧騎ex・雷丘・鳳王・巨鉗螳螂ex・密勒頓・故勒頓）＋
+forceAll 型 1（席多藍恩｜鋼鐵爆炸，沒有 picker 但 regPre 的 eligible 一樣漏算）＋
+basic 型 1（電擊魔獸，本來就一致）。
+
+### 【二】能量撢子 收斂到 `peekOppPickToDeckBottomPost`（必選判準與 叼去藏 統一）
+
+卡面逐字（`static/cards`）：
+- 能量撢子（M3 067/080，Item）：「查看對手的手牌，從其中選擇1張**能量**卡，放回對手的牌庫下方。」
+- 伊布｜叼去藏（M6a 094/103）：「查看對手的手牌，從其中選擇1張**物品**卡，放回對手的牌庫下方。」
+
+⇒ 除了「能量卡／物品卡」四個字**逐字相同**，判準必須相同。原本 能量撢子 是
+`minCount: 0 / maxCount: 1`（有能量可選時玩家也能整個跳過），叼去藏 是 `minCount: 1`。
+
+官方判準（`PTCG RULES/PTCG_RULES.md` 逐條查證）：
+- §2780「使用物品卡『能量撢子』時，可以選擇對手手牌中的『特殊能量卡』嗎？ A: 可以。」
+  ⇒ predicate 是 `supertype === 'Energy'`（含特殊能量），原實作這點是對的。
+- §803／§805／§1116 一致：「選擇1張」＝**必選**；「找不到符合條件的卡」是自然無事可做
+  （純檢視 picker），**不是**玩家可以選 0。
+
+⇒ 改走同一支中央管線。`regR('energy-duster-pick')` 的**相容別名保留**（舊 pending 不可卡死），
+但 `selection-ui` 的 OPTIONAL 白名單移除該 key（收斂後是死條目）。
+
+⚠ 附帶發現：那筆白名單條目**本來就是 no-op** —— `selectionAllowsSkip` 的
+`isUnknownInfoPicker`（hand-discard 且來源是對手）已經回 true，白名單那半邊從來沒被用到。
+
+⚠ `test-selection-ui.mjs` 那條斷言同步改嚴：舊斷言寫的 `'energy-duster-pick' + minCount 0`
+收斂後**仍然是綠的**，卻已經不是在守這張卡（安慰劑）⇒ 換成收斂後真正會出現的兩種形狀
+（有候選＝不可跳過／無候選＝純檢視可跳過）。**這是收緊不是放寬。**
+
+### 【三】breakdown 收斂 —— ⚠ 站長清單那兩張**有一張報錯了**
+
+- **未重現**：`倫琴貓｜強力伏特`（200，「選擇2個…能量丟棄」）**已經**在中央
+  `registerSelfDiscardMultiply` 裡，固定 200、沒有多步加法 ⇒ 根本沒有 breakdown 可言，
+  也沒有第二份實作。**沒有硬改。**
+- **真正的殘留是同一張卡的另一招**（v6.342 的註解自己寫明「形狀不同，本次不併入，留在原處」）：
+  - `倫琴貓｜猛力進攻`（70×「已獲得獎賞卡張數×70」）→ 中央 `prizesTakenMultiplyPre`
+    （與 呆火鱷ex｜心情好火焰 / 超級大嘴娃ex｜貪心 同措辭）
+  - `寶寶暴龍｜勃然大怒`（20×「自身傷害指示物數量×20」）→ 中央 `selfCountersMultiplyPre`
+    （原 inline 自己寫 `Math.floor(damage/10)`，是中央述詞 `selfActiveCounters` 的第二份）
+
+兩支中央 helper 加 `MultiplyPreOpts { breakdownLabel?, log? }`（**逐卡開關**，n=0 時不產；
+`log:false` 讓收斂前後對戰紀錄逐字不變）。守衛逐字比對前後 log 與傷害數字，並用
+呆火鱷ex 當正對照（M19 突變「硬塞 breakdown 給呆火鱷ex」必須紅）證明是逐卡開關。
+
+⚠ `composeAttackFormula` 有 `if (terms.length <= 1) return '';` —— 只有基礎項時引擎**不印公式**，
+所以驗 breakdown 一定要在盤面上再放一個 modifier（否則會誤以為 breakdown 沒生效）。
+
+### 【四】`__v6341/survey_m6a.mjs` 的特性欄修好
+
+病因：它讀 `ENG.ABILITY_EFFECTS` 與 `ENG.ABILITY_NAMES` —— 前者 engine.ts **沒有 export**，
+後者**全站根本不存在這個名字** ⇒ `abilityKeys` 恆為空集合；而且 `ABILITY_EFFECTS` 的 key 是
+`卡名|abIdx`，拿去比 `卡名|特性名` 本來也永遠不中。
+修法：entry 改 export `hasAbilityFn`（`effects/_shared.ts` 的中央查詢述詞，引擎判「這個特性
+有沒有 handler」用的就是它），逐隻帶 abIdx 問。
+
+數字：未實裝特性 **35 → 25**（35 ＝ M6a 全部有 effect 文字的特性，等於一個都沒被認出來）。
+招式欄不受影響（前後同為 43／28）。
+
+### 【五】守衛
+
+`scripts/test-v6349-converge-residuals.mjs`：**PASS 61 / FAIL 0**（7 段，每條都帶哨兵）。
+突變 **M1~M19 全殺**。
+⚠ 第一版 M13 沒紅 ⇒ 依紀律**改嚴守衛**（加 E11b/E11c 直接餵 resolver 的 re-validate 斷言），
+**不是**把突變刪掉 —— 原本只經 `applyAction` 驗不到它，因為中央消毒閘已先把壞 iid 拿掉了。
+
 ## v6.348 ⚠⚠ 弱點覆寫跨回合時序修正（**自 v2.78 起的死碼**）＋ 治癒類四張卡收斂
 
 BASE `eee32db24edc871fb4ef5c87d043250e19aeea81`（v6.347）。**本版有一項會改變既有卡的實際行為**（智揮猩｜掌握弱點），

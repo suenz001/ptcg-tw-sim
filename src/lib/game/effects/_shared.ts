@@ -292,7 +292,9 @@ export interface PreDiscardSpec {
    *   - 稜鏡能量 (Basic host = 視為所有屬性；Evolution host 不視為)
    * 不符的能量在 picker 內隱藏，避免玩家點選後被 regPre 退回。
    */
-  energyTypeFilter?: 'Grass' | 'Fire' | 'Water' | 'Lightning' | 'Psychic' | 'Fighting' | 'Darkness' | 'Metal' | 'Dragon' | 'Colorless';
+  // ⭐v6.349 補上 'Fairy'：原本少了【妖】，registerSelfDiscardMultiply 只好把 Fairy 當成
+  //   「不設 picker 過濾」（picker 全放行）而 regPre 仍然過濾 ⇒ 兩端不一致的第二個洞。
+  energyTypeFilter?: 'Grass' | 'Fire' | 'Water' | 'Lightning' | 'Psychic' | 'Fighting' | 'Darkness' | 'Metal' | 'Dragon' | 'Colorless' | 'Fairy';
   /**
    * v6.078：picker 只顯示「**基本**能量卡」（subtype === 'Basic'）。
    *   用於卡面寫「將…身上附加的任意數量的**基本能量卡**丟棄」的招式（電擊魔獸｜電壓錘）。

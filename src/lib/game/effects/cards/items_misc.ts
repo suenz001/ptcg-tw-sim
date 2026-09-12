@@ -29,6 +29,7 @@ import {
   getOwnBenchLimit,
 } from '../_shared';
 import { hasEffectivePokemonType } from '../../effects';  // v6.207 中央「場上有效屬性」述詞
+import { peekOppPickToDeckBottomPost } from '../../effects'; // ⭐v6.349 「查看對手手牌→選1張→放回對手牌庫下方」中央管線
 import { joinCardNames, abilityUsedAfterSwap, toBareCard, buildDevolvedInstance, devolvableLayers } from '../_shared'; // v5.993 rescue 回牌庫裸化 + v6.020 buildDevolvedInstance(修奇異時鐘 TS2304 runtime 炸彈) + v6.330 devolvableLayers
 import { tryPromptPromoteActive } from '../_shared';
 import { promoteOppBenchToActive } from '../_shared';  // ⭐ v6.174 換場目標解析失敗一律 no-op + 據實 log
@@ -1127,56 +1128,20 @@ regG('能量撢子', (st, idx) => {
   const dIdx = (1 - idx) as 0 | 1;
   return st.players[dIdx].hand.length > 0;
 });
-reg('能量撢子', (st, idx, pool) => {
-  const dIdx = (1 - idx) as 0 | 1;
-  const oppHand = st.players[dIdx].hand;
-  if (oppHand.length === 0) return addLog(st, '能量撢子：對手手牌為空', idx);
-  const handNames = oppHand.map(c => pool.get(c.cardId)?.name ?? '?').join('、');
-  // v3.9992：揭示對手手牌改 addPrivateLog
-  let s = addPrivateLog(st,
-    `能量撢子：查看對手手牌（${oppHand.length} 張）— ${handNames}`,
-    `能量撢子：查看對手手牌（${oppHand.length} 張）`,
-    idx);
-  const energyIids = oppHand
-    .filter(c => pool.get(c.cardId)?.supertype === 'Energy')
-    .map(c => c.iid);
-  if (energyIids.length === 0) {
-    s = addLog(s, '能量撢子：對手手牌無能量卡（僅查看）', idx);
-    return withPending(s, {
-      type: 'hand-discard',  // 借用 hand-discard UI（sourcePlayerIdx=dIdx 對手手牌）
-      actorIdx: idx, sourcePlayerIdx: dIdx,
-      minCount: 0, maxCount: 0,
-      filter: 'Energy',
-      effectKey: 'energy-duster-pick',
-      params: { validIids: [] },
-    });
-  }
-  s = addLog(s, `能量撢子：選 1 張能量放回對手牌庫下方`, idx);
-  return withPending(s, {
-    type: 'hand-discard',
-    actorIdx: idx, sourcePlayerIdx: dIdx,
-    minCount: 0, maxCount: 1,
-    filter: 'Energy',
-    effectKey: 'energy-duster-pick',
-    // v3.62 titleOverride：是「放回對手牌庫下方」不是丟棄
-    params: { validIids: energyIids, titleOverride: '能量撢子：選 1 張對手手牌能量放回對手牌庫下方' },
-  });
-});
-regR('energy-duster-pick', (st, idx, iids, _params, pool) => {
-  const dIdx = (1 - idx) as 0 | 1;
-  if (iids.length === 0) return addLog(st, '能量撢子：未選擇任何能量', idx);
-  const targetIid = iids[0];
-  const inst = st.players[dIdx].hand.find(c => c.iid === targetIid);
-  if (!inst) return st;
-  const name = pool.get(inst.cardId)?.name ?? '能量';
-  st = addLog(st, `能量撢子：對手的 ${name} 從手牌放回牌庫下方`, idx);
-  return updatePlayer(st, dIdx, p => ({
-    ...p,
-    hand: p.hand.filter(c => c.iid !== targetIid),
-    // v6.124 收斂：卡面「放回對手的牌庫下方」沒有「重洗」→ keep-order。
-    deck: deckWithCardsToBottom(p.deck, [inst], 'keep-order'),
-  }));
-});
+// ⭐⭐v6.349 收斂：與 伊布｜叼去藏（M6a 094）卡面除了「能量卡／物品卡」四個字以外**逐字相同**
+//   （「查看對手的手牌，從其中選擇1張○○卡，放回對手的牌庫下方。」）⇒ 判準必須相同，
+//   改走同一支中央 peekOppPickToDeckBottomPost（addPrivateLog 不洩漏手牌、minCount=1 必選、
+//   放回牌庫下方走 deckWithCardsToBottom 'keep-order'）。
+//   ⚠ 官方判準：「選擇1張」＝**必選**（沒有「可以選擇／最多N張／任意數量」）；
+//     對手手牌裡沒有能量卡時是「找不到符合條件的卡 ⇒ 自然無事可做」（純檢視 picker），
+//     不是玩家可以選 0。原本 minCount:0/maxCount:1 讓玩家在有能量可選時也能整個跳過，
+//     與同措辭的 叼去藏 不一致。
+//   ⚠ predicate 用 supertype === 'Energy'（含**特殊**能量）——官方 Q&A：
+//     「使用物品卡『能量撢子』時，可以選擇對手手牌中的『特殊能量卡』嗎？ A: 可以。」
+//   ⚠ regG 可用性閘（對手手牌非空）保留在上方不動：卡面效果是「查看對手的手牌」＝永遠有效果。
+reg('能量撢子', (st, idx, pool) =>
+  peekOppPickToDeckBottomPost('Energy', '能量撢子', (c) => c.supertype === 'Energy', '能量卡')(st, idx, pool));
+// ⚠ 舊 effectKey 'energy-duster-pick' 的相容別名註冊在 effects.ts（緊接主 regR 之後），不可刪。
 
 // ── 招式學習器機（Item）────────────────────────────────────────────────────
 // 卡面：從自己的牌庫選最多 3 張名稱中有「招式學習器」的「寶可夢道具」卡，給對手看後加手牌並重洗。

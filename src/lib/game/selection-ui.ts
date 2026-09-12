@@ -32,7 +32,11 @@ export const OPTIONAL_SELECTION_EFFECT_KEYS: ReadonlySet<string> = new Set<strin
   'flame-dance-pick-fight',        // 烈焰猴｜火焰蹈舞（鬥側）
   'lillie-ribombee-invite-place',  // 莉莉艾的蝶結萌虻：查看對手手牌任意數量（亦屬未知資訊）
   'loquat-discard-opp-items',      // 枇琶：查看對手手牌（未知資訊）
-  'energy-duster-pick',            // 能量撢子：查看對手手牌（未知資訊）
+  // ⭐v6.349 移除 'energy-duster-pick'：能量撢子已收斂到 peekOppPickToDeckBottomPost
+  //   （minCount=1 必選，與同措辭的 伊布｜叼去藏 一致）⇒ 沒有任何 withPending 再用這個 key，
+  //   留著就是 test-v6125-optional-picker-skip ④ 說的「死條目」（會讓人誤以為那張卡已處理過）。
+  //   ⚠ regR('energy-duster-pick') 的**相容別名**仍然保留（舊 pending 不可卡死），
+  //     那是 resolver 註冊，與本白名單（UI 的【不選】鈕）無關。
   'heavy-baton-pick-energies',     // 沉重接力棒（on-KO）：任意方式改附
   'alloy-forge-pick',              // 鋁鋼橋龍ex｜合金建造：任意方式附加
   'pulse-thrust-energies-picked',  // 超級路卡利歐ex｜波動突刺：自選填能（可不選）

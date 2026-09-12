@@ -9666,6 +9666,43 @@ const TYPE_TO_TAG: Record<string, string> = {
   Fairy: '【妖】', Dragon: '【龍】', Colorless: '【無】',
 };
 
+/**
+ * ⭐⭐⭐ v6.349 中央出口：「選 N 個能量丟棄」型招式的**唯一**候選述詞。
+ *
+ * `ATTACK_PRE_DISCARD_CHOICE` 的 picker（`+page.svelte` 的 `getDiscardableEnergies`）與
+ * `registerSelfDiscardMultiply` 的 `regPre` 以前**各寫一份**，判準不同：
+ *   ・picker ＝ host-aware 的 `energyProvidesType`（古舊能量視為全屬性、稜鏡附[基礎]視為全屬性…）
+ *   ・regPre ＝ `card.pokemonType === type` 或卡名含【X】（**看不到**古舊／稜鏡／新衝天）
+ * ⇒ 玩家在 picker 選得到、引擎卻不認。v6.349 實測（`__m6a/probe_energy_2.mjs`）：
+ *   ・鳳王｜紅蓮之翼（min=max=1）身上 1 古舊 + 1 基本【火】，**只選古舊** ⇒
+ *     log 寫「紅蓮之翼：丟棄 **0** 個能量 → 130」，古舊能量原封留在身上、130 照給（白嫖）。
+ *   ・巨鉗螳螂ex｜十字破壞（per=120, max=2）身上 1 古舊 + 1 基本【鋼】兩張都選 ⇒
+ *     只丟 1 張、傷害 **120**；換成兩張基本【鋼】則是 **240**。玩家看到的候選與實際倍率差一半。
+ *   ・四季鹿｜落葉衝撞 選稜鏡能量（附於[基礎]四季鹿 ⇒ 視為【草】）⇒ 同樣丟 0 個。
+ *
+ * 方向依卡面：這些卡寫的是「【火】能量」「【鋼】能量卡」——**沒有「基本」二字** ⇒
+ * 依官方規則看的是「這張能量**現在提供什麼屬性**」，古舊／稜鏡等當然算 ⇒ 兩端都用 host-aware。
+ * 卡面寫「**基本**能量卡」的（電擊魔獸｜電壓錘）才走 `basicOnly`（實測兩端本來就一致）。
+ *
+ * ⚠ 兩個條件**正交**：`basicOnly` 篩「卡片本身是基本能量卡」，`type` 篩「視為某屬性」。
+ *   同時給 = 兩者都要滿足（卡面「基本【水】能量」型）。
+ * ⚠ 兩個條件都沒給（卡面只寫「能量」）⇒ 一律是候選，**不**額外檢查 supertype ——
+ *   維持既有 typeFilter='all' 的行為（附加區裡的非能量卡照樣被「全部丟棄」帶走）。
+ */
+export function preDiscardEnergyEligible(
+  host: { cardId: string } | null | undefined,
+  e: { cardId: string },
+  pool: Map<string, Card>,
+  opts: { basicOnly?: boolean; type?: EnergyType | null },
+): boolean {
+  if (!opts.basicOnly && !opts.type) return true;
+  const ec = pool.get(e.cardId);
+  if (!ec) return false;
+  if (opts.basicOnly && !(ec.supertype === 'Energy' && ec.subtype === 'Basic')) return false;
+  if (opts.type && (!host || !energyProvidesType(host, e, opts.type, pool))) return false;
+  return true;
+}
+
 // v6.063：export 供 M6 批次4 卡檔復用（原為 local，行為完全未變）
 export function registerSelfDiscardMultiply(
   key: string,
@@ -9695,10 +9732,11 @@ export function registerSelfDiscardMultiply(
       //   受惠：火山流星(2) / 防守回轉(2) / 冰之牢籠(2) / 水射擊(1)。
       countMode: (per === 0 && min > 0) ? ('units' as const) : undefined,
       // v4.71: picker 也限定屬性（玩家不會選到非該屬性能量造成 UX 混淆）
-      // Cast 避開 ATTACK_PRE_DISCARD_CHOICE config 不接受 'Fairy' 的型別限制
-      energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic' || typeFilter === 'Fairy')
+      // ⭐v6.349：'Fairy' 不再被排除（PreDiscardSpec.energyTypeFilter 已收錄【妖】）——
+      //   原本 Fairy 會讓 picker 完全不過濾、regPre 卻照樣過濾，是同一類兩端不一致。
+      energyTypeFilter: (typeFilter === 'all' || typeFilter === 'basic')
         ? undefined
-        : (typeFilter as Exclude<EnergyType, 'Fairy'>),
+        : typeFilter,
       // v6.078：typeFilter='basic'（卡面「基本能量卡」）時，picker 也要只顯示基本能量。
       //   原本只有 regPre 端過濾 → picker 會列出特殊能量，玩家勾了卻丟不掉、傷害對不上。
       basicEnergyOnly: typeFilter === 'basic' ? true : undefined,
@@ -9708,16 +9746,14 @@ export function registerSelfDiscardMultiply(
     const player = state.players[aIdx];
     if (!player.active) return { state, damage: baseDamage };
     const all = player.active.energyAttached;
-    const eligible = all.filter(e => {
-      if (typeFilter === 'all') return true;
-      const c = pool.get(e.cardId);
-      if (!c) return false;
-      if (typeFilter === 'basic') return c.subtype === 'Basic';
-      // v4.71: pokemonType match OR name 含對應 type tag（基本能量 fallback）
-      if (c.pokemonType === typeFilter) return true;
-      const tag = TYPE_TO_TAG[typeFilter];
-      return tag ? c.name.includes(tag) : false;
-    });
+    // ⭐v6.349 收斂：與 picker 端（+page.svelte getDiscardableEnergies）**共用同一支述詞**。
+    //   原本這裡是「pokemonType 直接比對 + 卡名【X】fallback」，picker 端卻是 host-aware 的
+    //   energyProvidesType ⇒ 玩家選得到的能量與實際被丟／算進倍率的能量不一致
+    //   （實測數字見 preDiscardEnergyEligible 的註解）。
+    const eligible = all.filter(e => preDiscardEnergyEligible(player.active, e, pool, {
+      basicOnly: typeFilter === 'basic',
+      type: (typeFilter === 'all' || typeFilter === 'basic') ? null : typeFilter,
+    }));
     const chosenIids = action?.discardedEnergyIids;
     let discarded: CardInstance[];
     let remaining: CardInstance[];
@@ -18885,26 +18921,21 @@ regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
 });
 
 // 倫琴貓｜猛力進攻：自己已獲得獎賞卡張數 × 70。
-regPre('倫琴貓|猛力進攻', (state, aIdx, _pool) => {
-  const taken = Math.max(0, 6 - state.players[aIdx].prizes.length);
-  const damage = taken * 70;
-  // v3.03：breakdown 顯示「已取獎賞 N×70」
-  if (taken > 0) {
-    return { state, damage, breakdown: [{ value: damage, label: `已取獎賞 ${taken}×70` }] };
-  }
-  return { state, damage };
-});
+// ⭐v6.349 收斂：與 呆火鱷ex｜心情好火焰 / 超級大嘴娃ex｜貪心 卡面逐字同措辭 ⇒ 共用中央
+//   prizesTakenMultiplyPre。v6.342 當時因為「它額外回 breakdown、形狀不同」把它留在原處，
+//   本版把 breakdown 做成中央 helper 的選項（MultiplyPreOpts），判準就只剩一份。
+// ⚠ log: false ＝ 收斂前後**對戰紀錄逐字不變**（原 inline 版不寫 log，只回 breakdown）。
+regPre('倫琴貓|猛力進攻', prizesTakenMultiplyPre(70, '猛力進攻', {
+  breakdownLabel: (n) => `已取獎賞 ${n}×70`, log: false,
+}));
 
 // 寶寶暴龍｜勃然大怒：自身傷害指示物數量 × 20。
-regPre('寶寶暴龍|勃然大怒', (state, aIdx, _pool) => {
-  const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
-  const damage = counters * 20;
-  // v3.03：breakdown 顯示「自身指示物 N×20」
-  if (counters > 0) {
-    return { state, damage, breakdown: [{ value: damage, label: `自身指示物 ${counters}×20` }] };
-  }
-  return { state, damage };
-});
+// ⭐v6.349 收斂：指示物數改問中央述詞（selfCountersMultiplyPre 內部的 selfActiveCounters），
+//   原本在這裡自己寫 Math.floor(damage / 10) 是同一個判準的第二份。
+// ⚠ 傷害數字與對戰紀錄皆不變（log: false；base=0、per=20 與原式等價）。
+regPre('寶寶暴龍|勃然大怒', selfCountersMultiplyPre(0, 20, '勃然大怒', {
+  breakdownLabel: (n) => `自身指示物 ${n}×20`, log: false,
+}));
 
 // 摔角鷹人｜復仇踢：若自己的備戰寶可夢身上有傷害指示物，+60。
 regPre('摔角鷹人|復仇踢', (state, aIdx, _pool) => {
@@ -19809,33 +19840,59 @@ import './effects/cards/v6191_new_printings'; // v6.191 官方完整性補收（
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * 「造成自己已經獲得的獎賞卡的張數×N點傷害。」
- * 使用者：呆火鱷ex｜心情好火焰(70)、超級大嘴娃ex｜貪心(80)。
- * ⚠「已獲得」＝ 6 − 自己**剩餘**獎賞數（取獎賞時取走的是自己那一疊）。
- * ⚠ 倫琴貓｜猛力進攻 也是同措辭，但它額外回 `breakdown`（傷害預估 UI 逐字顯示
- *   「已取獎賞 N×70」）⇒ 形狀不同，本次不併入，留在原處。
+ * ⭐v6.349「×N 倍率」型中央 helper 的共用選項。
+ *
+ * ⚠ 為什麼需要 `log`：收斂**既有**卡時，對戰紀錄必須逐字不變 —— log 是玩家看得到的介面，
+ *   也是多支守衛的比對對象。被收斂進來的兩支 inline regPre（倫琴貓｜猛力進攻、
+ *   寶寶暴龍｜勃然大怒）原本就不寫 log、只回 breakdown。
+ * ⚠ `breakdownLabel` 只在 n > 0 時才產生 breakdown —— 沿用既有形狀
+ *   （n=0 時沒有「理由」可寫，讓引擎照常印「0(基礎)」）。
  */
-export function prizesTakenMultiplyPre(per: number, label: string): AttackPreFn {
+export interface MultiplyPreOpts {
+  /** 傷害預估明細（`AttackPreResult.breakdown`）的標籤產生器；不給 = 不回 breakdown。 */
+  breakdownLabel?: (n: number) => string;
+  /** 預設 true（寫一行 log）。false = 完全不寫 log。 */
+  log?: boolean;
+}
+
+/**
+ * 「造成自己已經獲得的獎賞卡的張數×N點傷害。」
+ * 使用者：呆火鱷ex｜心情好火焰(70)、超級大嘴娃ex｜貪心(80)、
+ *        ⭐v6.349 併入 倫琴貓｜猛力進攻(70，帶 breakdown「已取獎賞 N×70」、不寫 log)。
+ * ⚠「已獲得」＝ 6 − 自己**剩餘**獎賞數（取獎賞時取走的是自己那一疊）。
+ */
+export function prizesTakenMultiplyPre(per: number, label: string, opts: MultiplyPreOpts = {}): AttackPreFn {
   return (state, aIdx, _pool) => {
     const taken = Math.max(0, 6 - state.players[aIdx].prizes.length);
     const dmg = taken * per;
-    return {
-      state: addLog(state, `${label}：自己已取獎賞 ${taken} 張 → 造成 ${dmg} 點傷害`, aIdx),
-      damage: dmg,
-    };
+    const s = opts.log === false
+      ? state
+      : addLog(state, `${label}：自己已取獎賞 ${taken} 張 → 造成 ${dmg} 點傷害`, aIdx);
+    if (opts.breakdownLabel && taken > 0) {
+      return { state: s, damage: dmg, breakdown: [{ value: dmg, label: opts.breakdownLabel(taken) }] };
+    }
+    return { state: s, damage: dmg };
   };
 }
 
 /**
  * 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」
- * 使用者：皮卡丘｜氣沖沖伏特(10+10×)。
+ * 使用者：皮卡丘｜氣沖沖伏特(10+10×)、
+ *        ⭐v6.349 併入 寶寶暴龍｜勃然大怒（卡面「**造成**…×20點傷害」⇒ base=0，
+ *        帶 breakdown「自身指示物 N×20」、不寫 log）。
  * ⚠ 指示物數走既有中央述詞 selfActiveCounters（= damage ÷ 10），不要自己除。
  */
-export function selfCountersMultiplyPre(base: number, per: number, label: string): AttackPreFn {
+export function selfCountersMultiplyPre(base: number, per: number, label: string, opts: MultiplyPreOpts = {}): AttackPreFn {
   return (state, aIdx, _pool) => {
     const n = selfActiveCounters(state, aIdx);
     const dmg = base + per * n;
-    return { state: addLog(state, `${label}：自身傷害指示物 ${n} 個 × ${per} → ${dmg}`, aIdx), damage: dmg };
+    const s = opts.log === false
+      ? state
+      : addLog(state, `${label}：自身傷害指示物 ${n} 個 × ${per} → ${dmg}`, aIdx);
+    if (opts.breakdownLabel && n > 0) {
+      return { state: s, damage: dmg, breakdown: [{ value: dmg, label: opts.breakdownLabel(n) }] };
+    }
+    return { state: s, damage: dmg };
   };
 }
 
@@ -20351,10 +20408,15 @@ export function oppReturnHandAndDrawPost(n: number, label: string): AttackPostFn
  *   仍要讓玩家看完整副手牌（開 maxCount 0 的純檢視 picker，與 能量撢子 同一種做法）。
  * ⚠ 卡面「選擇1張」沒有「最多／若希望」⇒ 有候選時 minCount = 1（必選）。
  * ⚠ 「放回牌庫**下方**」沒有「重洗」⇒ 走中央 deckWithCardsToBottom 的 'keep-order'（v6.124）。
- * ⚠ 既有的 能量撢子（Item，能量卡版）本版**未**一併收斂：它是訓練家卡、自帶 regG 可用性閘，
- *   且它的 effectKey 'energy-duster-pick' 還列在 selection-ui 的 OPTIONAL 白名單裡 ——
- *   抽掉它的 withPending 會讓白名單產生死條目（test-v6125-optional-picker-skip ④ 會紅）。
- *   ⇒ 收斂留給獨立版本處理，本版不動既有卡。
+ * ⭐v6.349 能量撢子（Item，能量卡版）已一併收斂進來（items_misc.ts 的 reg）：
+ *   官方判準（`PTCG RULES/PTCG_RULES.md`）與站上定論一致 ——「選擇1張」＝必選（minCount 1），
+ *   「可以選擇／最多N張／任意數量」才可選 0；找不到符合條件的卡則自然無事可做（§ 查看牌庫
+ *   沒有「寶可夢道具」⇒ 洗切牌庫結束招式；墓仔狗｜黃泉散步 對手沒有支援者 ⇒ 查看後結束）。
+ *   兩張卡的卡面除了「能量卡／物品卡」四個字以外**逐字相同** ⇒ 判準相同，不該一個必選一個可選 0。
+ *   ・原 effectKey 'energy-duster-pick' 已從 selection-ui 的 OPTIONAL 白名單移除（已成死條目）；
+ *     但 **regR 仍保留為相容別名**（見下方），部署瞬間停在舊 pending 的玩家才不會卡死。
+ *   ・predicate 用 `supertype === 'Energy'`（含特殊能量）—— 官方 Q&A：
+ *     「使用物品卡『能量撢子』時，可以選擇對手手牌中的『特殊能量卡』嗎？ A: 可以。」
  */
 export function peekOppPickToDeckBottomPost(
   filter: string, label: string, predicate: (c: Card) => boolean, targetDesc: string,
@@ -20389,7 +20451,10 @@ export function peekOppPickToDeckBottomPost(
     });
   };
 }
-regR('peek-pick-to-deck-bottom', (st, idx, iids, params, pool) => {
+export function peekPickToDeckBottomResolve(
+  st: GameState, idx: 0 | 1, iids: string[],
+  params: Record<string, unknown> | undefined, pool: Map<string, Card>,
+): GameState {
   const label = (params?.label as string) ?? '叼去藏';
   const dIdx = (1 - idx) as 0 | 1;
   // v6.009：resolver 自行 re-validate client 傳來的 iids（候選集合以 params.validIids 為準）。
@@ -20407,7 +20472,15 @@ regR('peek-pick-to-deck-bottom', (st, idx, iids, params, pool) => {
     // 卡面「放回對手的牌庫下方」沒有「重洗」→ keep-order（v6.124 中央管線）。
     deck: deckWithCardsToBottom(p.deck, [inst], 'keep-order'),
   }));
-});
+}
+regR('peek-pick-to-deck-bottom', peekPickToDeckBottomResolve);
+// ⚠⚠ v6.349 舊 key，相容用，**不可刪**（BRIEF 紀律 A）：能量撢子在 v6.349 之前用
+//   'energy-duster-pick'，pendingSelection 是存在對戰狀態裡的 —— 部署那一瞬間若有玩家正停在
+//   舊 key 的選擇視窗，新版找不到 resolver ⇒ 那一局卡死。
+//   舊 pending 的 params 只有 { validIids, titleOverride }（沒有 label/targetDesc）⇒ 這裡補上
+//   label，讓舊視窗解掉時 log 仍寫「能量撢子」而不是 fallback 的「叼去藏」。
+regR('energy-duster-pick', (st, idx, iids, params, pool) =>
+  peekPickToDeckBottomResolve(st, idx, iids, { label: '能量撢子', ...(params ?? {}) }, pool));
 
 
 /**
