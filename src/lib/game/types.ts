@@ -688,6 +688,20 @@ export interface PendingSelection {
 
 // ── 遊戲狀態 ────────────────────────────────────────────────────────────────
 
+/**
+ * ⭐v6.357 站長裁定 C-7：field-wide 受傷反擊（怨恨旋渦／群聚反擊）的「宣告當時」快照條目。
+ * 卡面前提是「只要這隻寶可夢**在場上**」；PTCG 招式效果同時 resolve ⇒ 即使持有者被同一招式
+ * 打到昏厥離場，只要**宣告當時**它在場上且特性生效，反擊仍然要放（比照 _attackTimeCalmGround）。
+ * ⚠ ability 記的是「宣告當時 isAbilityHolderEffective 判定為 true」的那一個特性名 ——
+ *   存的是**判定結果**不是卡名；宣告當時被消除的持有者根本不會進這份快照。
+ */
+export interface FieldWideRetalHolderSnapshot {
+  /** 持有者 CardInstance 的 iid（與當下盤面聯集時的去重鍵）。 */
+  iid: string;
+  /** 宣告當時**生效中**的 field-wide 反擊特性名。 */
+  ability: string;
+}
+
 export interface GameState {
   /** 本局唯一 ID */
   id: string;
@@ -1203,6 +1217,13 @@ export interface GameState {
    * Transient：每次 attack flow 後 clear。
    */
   _attackTimeAttackerEnergyUnits?: number;
+  /**
+   * ⭐v6.357 站長裁定 C-7：field-wide 受傷反擊的 attack-time snapshot（比照 _attackTimeCalmGround）。
+   * 索引＝玩家 index；內容＝該側**備戰**上「宣告當時特性生效中」的 field-wide 反擊持有者。
+   * 消費點 fireFieldWideRetaliation 以「當下盤面 ∪ 本快照」觸發，並以持有者 iid 去重。
+   * Transient：每次 attack flow 後 clear（pendingSelection 還在時保留到 resolver 跑完）。
+   */
+  _attackTimeFieldWideRetal?: [FieldWideRetalHolderSnapshot[], FieldWideRetalHolderSnapshot[]];
 }
 
 export interface LogEntry {

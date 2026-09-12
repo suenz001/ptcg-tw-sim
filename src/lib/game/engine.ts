@@ -93,6 +93,9 @@ import {
   // >>> v6352-field-wide-retal-import
   fireFieldWideRetaliation,  // ⭐v6.352 field-wide 受傷反擊中央管線（怨恨旋渦／群聚反擊）
   // <<< v6352-field-wide-retal-import
+  // >>> v6357-field-wide-retal-snapshot-import
+  snapshotFieldWideRetalHolders,  // ⭐v6.357 站長裁定 C-7：field-wide 反擊「宣告當時」持有者快照
+  // <<< v6357-field-wide-retal-snapshot-import
   // >>> v6353-weakness-multiplier-import
   weaknessMultiplier,  // ⭐v6.353 弱點**倍率**中央述詞（甜甜螢｜絕佳費洛蒙 ×3）
   // <<< v6353-weakness-multiplier-import
@@ -5449,6 +5452,17 @@ function handlePlaying(
     workingState = { ...workingState, _attackTimeCalmGround: [
       _hasCalmGround(state, 0, pool), _hasCalmGround(state, 1, pool),
     ] as [boolean, boolean] };
+    // >>> v6357-field-wide-retal-snapshot-set
+    // ⭐v6.357 站長裁定 C-7：field-wide 受傷反擊（怨恨旋渦／群聚反擊）的「宣告當時」快照。
+    //   站長逐字：「備戰那一份傷害先結算 ⇒ 弱丁魚先昏厥離場，但還是要計算他當初留下的特性，
+    //   因此還是要在使用招式的寶可夢身上放置3個傷害指示物」
+    //   ⚠ 刻意沿用 _attackTimeCalmGround 的**同一個**設定點（Rule 38：不另開 ATTACK 起點 hook），
+    //     且每次 ATTACK 都無條件重設 ⇒ 上一回合的殘留不可能跨回合誤觸發。
+    //   ⚠ clear 只放在 applyAction wrapper（見該處註解），不可搬到下方那一疊 snapshot clear。
+    workingState = { ...workingState, _attackTimeFieldWideRetal: [
+      snapshotFieldWideRetalHolders(state, 0, pool), snapshotFieldWideRetalHolders(state, 1, pool),
+    ] };
+    // <<< v6357-field-wide-retal-snapshot-set
     // v5.186：抵抗之幕 同 pattern — 玩家回報多龍巴魯托ex 幻影奇襲 對戰急凍鳥時
     //   急凍鳥被 KO 後 6 個指示物還能放到備戰；規則上同招式 resolve 視為同時，
     //   攻擊宣告當時抵抗之幕生效，備戰「火箭隊的」基礎寶可夢仍應免疫此招式效果。
@@ -9173,6 +9187,18 @@ function applyActionImpl(
     delete cleared._attackTimeCalmGround;
     next = cleared;
   }
+  // >>> v6357-field-wide-retal-snapshot-clear-wrapper
+  // ⭐⭐v6.357：本快照的 clear **只有這一處**（applyAction wrapper），刻意**不**放進上方
+  //   ATTACK 流程裡那一疊 snapshot clear —— 那一疊位在「非 KO 分支的 field-wide 反擊」
+  //   （⭐v6352-field-wide-retal-nonko）**之前**，放那裡會在消費前就把快照刪掉（實測：
+  //   急凍鳥｜冰雹 打弱丁魚ex＋備戰弱丁魚 仍然 0 點）。wrapper 是整個 dispatch 的真正結尾，
+  //   在它之後不可能再有消費點；pendingSelection 還在時照樣保留給 resolver（比照花之帷幔）。
+  if (next._attackTimeFieldWideRetal !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeFieldWideRetal;
+    next = cleared;
+  }
+  // <<< v6357-field-wide-retal-snapshot-clear-wrapper
   // v5.186：抵抗之幕 snapshot 同步清除（跨 deferred picker 後最終清理）
   if (next._attackTimeOppRocketVeil !== undefined && !next.pendingSelection) {
     const cleared = { ...next };

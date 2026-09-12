@@ -19,7 +19,7 @@ import { dispatchCopiedAttack } from './effects/_shared'; // ⭐v6.337 借招轉
 // ⭐v6.337 借招家族中央管線（候選枚舉 + 選招判準只有這一份）
 import { copyAttackCandidates, pickCopiedAttack } from './copy-attack';
 
-import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition } from './types';
+import type { GameState, PlayerState, CardInstance, PendingSelection, GameAction, SpecialCondition, FieldWideRetalHolderSnapshot } from './types';
 import { RULE_BOX_SUBTYPES } from './types';  // v3.67 本地 isRulePokemon mirror 需要
 // ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
 import { isStage2ByEvoVariant } from './stage2-index';
@@ -5159,11 +5159,47 @@ function makeFieldWideRetaliationFn(spec: FieldWideRetaliationSpec): Retaliation
 }
 
 /**
+ * ⭐⭐v6.357 站長裁定 C-7 —— 「宣告當時」持有者快照的**唯一**產生點。
+ * engine 在 ATTACK 宣告時（與 _attackTimeCalmGround 同一個設定點）對兩側各呼叫一次。
+ *
+ * ⚠ 只掃**備戰**：持有者自己在戰鬥位的那一份由 PASSIVE_RETALIATION 主 loop 觸發，
+ *   把戰鬥位也記進來，聯集時就會變成雙重觸發。
+ * ⚠ 存進來的是「當時 isAbilityHolderEffective 的**結果**」——宣告當時被熔岩洞／初始化／
+ *   監視塔／暗夜羽擊／黏著束縛消除的持有者根本不會進快照，之後就算特性「恢復」也不觸發。
+ */
+export function snapshotFieldWideRetalHolders(
+  state: GameState,
+  idx: 0 | 1,
+  pool: Map<string, Card>,
+): FieldWideRetalHolderSnapshot[] {
+  const out: FieldWideRetalHolderSnapshot[] = [];
+  const bench = state.players?.[idx]?.bench;
+  if (!bench) return out;
+  for (const benchInst of bench) {
+    const bc = pool.get(benchInst.cardId);
+    if (!bc?.abilities) continue;
+    for (const spec of FIELD_WIDE_RETALIATION) {
+      if (!bc.abilities.some((ab) => ab.name === spec.ability)) continue;
+      if (!isAbilityHolderEffective(state, benchInst, bc, idx, spec.ability, 'bench', pool)) continue;
+      out.push({ iid: benchInst.iid, ability: spec.ability });
+    }
+  }
+  return out;
+}
+
+/**
  * ⭐ field-wide 受傷反擊的**唯一**消費出口 —— engine 的 KO／非 KO 兩分支
  * 與 effects.fireDefenderOnDamaged 共 3 處呼叫它。
  *
  * 只掃 defender 的**備戰**：持有者自己在戰鬥位的那一份由 PASSIVE_RETALIATION 主 loop
  * 觸發（見 makeFieldWideRetaliationFn），這裡再掃一次就會變成雙重觸發。
+ *
+ * ⭐⭐v6.357 站長裁定 C-7：持有者「在不在場上」這一維改判「**當下盤面 ∪ 宣告當時快照**」，
+ *   以持有者 iid 去重（同一隻同時出現在兩邊只算一次）。理由（站長逐字）：
+ *   「備戰那一份傷害先結算 ⇒ 弱丁魚先昏厥離場，但還是要計算他當初留下的特性，
+ *     因此還是要在使用招式的寶可夢身上放置3個傷害指示物」
+ * ⚠ 「自己**戰鬥場**的〈X〉受到傷害」那一維**不動** —— 仍看當下（KO 分支則看 defSnapshot）
+ *   的戰鬥位符不符合卡面主詞。本版只改「持有者在不在場上」一維。
  *
  * @param defSnapshot KO 分支專用：此時 state.players[dIdx].active 已被設成 null，
  *                    要用受傷前的快照來判「自己戰鬥場那一隻」符不符合卡面主詞。
@@ -5178,9 +5214,11 @@ export function fireFieldWideRetaliation(
   if (!da) return state;
   const daCard = pool.get(da.cardId);
   if (!daCard) return state;
+  const atkTimeHolders = state._attackTimeFieldWideRetal?.[dIdx] ?? [];
   let s = state;
   for (const spec of FIELD_WIDE_RETALIATION) {
     if (!spec.activeQualifies(daCard)) continue;
+    const holderIids = new Set<string>();
     for (const benchInst of s.players[dIdx].bench) {
       const bc = pool.get(benchInst.cardId);
       if (!bc?.abilities) continue;
@@ -5188,8 +5226,15 @@ export function fireFieldWideRetaliation(
         if (ab.name !== spec.ability) continue;
         // v5.656：holder 特性被初始化／暗夜羽擊／監視塔／熔岩洞等消除 → 不反擊
         if (!isAbilityHolderEffective(s, benchInst, bc, dIdx, spec.ability, 'bench', pool)) continue;
-        s = placeFieldWideRetaliationCounters(s, dIdx, pool, spec);
+        holderIids.add(benchInst.iid);
       }
+    }
+    // ⭐v6.357：宣告當時在場上的持有者（快照已內含「當時特性生效」的判定結果）
+    for (const h of atkTimeHolders) {
+      if (h.ability === spec.ability) holderIids.add(h.iid);
+    }
+    for (let k = 0; k < holderIids.size; k++) {
+      s = placeFieldWideRetaliationCounters(s, dIdx, pool, spec);
     }
   }
   return s;

@@ -302,15 +302,34 @@ console.log('\n【D】effects.fireDefenderOnDamaged 路徑（月亮伊布｜出�
   chk('D5 ⭐多目標招式（備戰也吃傷害）下備戰花岩怪仍只反擊一次 ⇒ +10',
     atkDmg(rD5) === 10 && retalLogs(rD5).length === 1, JSON.stringify([atkDmg(rD5), retalLogs(rD5).length]));
 
-  // ⚠ 「只要這隻寶可夢**在場上**」是卡面前提：冰雹同時打備戰 30 點，弱丁魚只有 HP30
-  //   ⇒ 備戰的持有者在戰鬥場那份傷害結算前就已經昏厥離場 ⇒ 不觸發。
-  //   （這是收斂前就有的引擎時序，不是 v6.352 改出來的；D5 的花岩怪 HP80 活著才會觸發。）
+  // ⚠⚠ v6.357 站長裁定 C-7 ⇒ 依 **Rule 40 把判準上移到意圖層（不是放寬、不是刪除）**。
+  //   原本這一條釘的是「卡面前提『在場上』⇒ 備戰持有者被同一招打到離場就不觸發（0）」。
+  //   站長逐字裁定：「備戰那一份傷害先結算 ⇒ 弱丁魚先昏厥離場，但還是要計算他當初留下的特性，
+  //   因此還是要在使用招式的寶可夢身上放置3個傷害指示物」⇒ 「在不在場上」改依**宣告當時**判定。
+  //   ⇒ 這裡從 1 條改成 4 條（比原本**嚴格**）：
+  //     ① 哨兵：備戰持有者真的被同一招打到離場（不是活著）
+  //     ② 仍然觸發 +30，而且**只放一次**（不可因為同時在「當下盤面」與「宣告當時快照」而 +60）
+  //     ③ 哨兵：反對照組的持有者同樣真的離場
+  //     ④ 反對照：宣告當時特性**就已經**被消除 ⇒ 即使離場也**不**觸發（證明不是放寬成無條件觸發）
+  //   這一維的完整守備在 scripts/test-v6357-field-wide-retal-attack-time.mjs。
   const rD6 = run(ARTI, '冰雹', inst(FEEBEX.id), [inst(FEEB.id), inst(PLAIN.id)]);
   chk('D6 哨兵：冰雹打到戰鬥場的弱丁魚ex（30），備戰的弱丁魚（HP30）被同一招打到昏厥離場',
     defDmg(rD6) === 30 && rD6.players[1].bench.length === 1
     && pool.get(rD6.players[1].bench[0].cardId)?.name !== '弱丁魚',
     JSON.stringify([defDmg(rD6), rD6.players[1].bench.map((b) => [pool.get(b.cardId)?.name, b.damage])]));
-  chk('D6 ⭐卡面前提「在場上」：備戰持有者已離場 ⇒ 不觸發（0）', atkDmg(rD6) === 0, String(atkDmg(rD6)));
+  chk('D6 ⭐⭐v6.357 站長裁定 C-7：備戰持有者已離場，但宣告當時在場上且特性生效 ⇒ 仍觸發 +30（且只放一次）',
+    atkDmg(rD6) === 30 && retalLogs(rD6).length === 1,
+    JSON.stringify([atkDmg(rD6), retalLogs(rD6).length]));
+  const rD6b = run(ARTI, '冰雹', inst(FEEBEX.id),
+    [inst(FEEB.id, { fossilOnField: true, damage: 30 }), inst(PLAIN.id)],
+    { activeStadium: inst(TOWER.id), activeStadiumOwnerIdx: 0 });
+  chk('D6b 哨兵：反對照組的備戰持有者同樣被這一招打到昏厥離場',
+    defDmg(rD6b) === 30 && rD6b.players[1].bench.length === 1
+    && pool.get(rD6b.players[1].bench[0].cardId)?.name !== '弱丁魚',
+    JSON.stringify([defDmg(rD6b), rD6b.players[1].bench.map((b) => [pool.get(b.cardId)?.name, b.damage])]));
+  chk('D6b ⭐⭐反對照：宣告當時特性就被消除（火箭隊的監視塔×化石在場上）⇒ 即使離場也不觸發（0）',
+    atkDmg(rD6b) === 0 && retalLogs(rD6b).length === 0,
+    JSON.stringify([atkDmg(rD6b), retalLogs(rD6b).length]));
 
   const rD7 = run(ARTI, '冰雹', inst(FEEB.id), [inst(FEEB.id), inst(PLAIN.id)]);
   chk('D7 哨兵：戰鬥場的弱丁魚（HP30）被冰雹打到昏厥', defDmg(rD7) === 'KO', String(defDmg(rD7)));
