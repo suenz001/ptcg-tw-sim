@@ -30,6 +30,7 @@ import {
   resolveMultiTargetDamageGuard,   // v6.141 多目標傷害免疫中央閘
   passiveImmunityByDamageAmount,   // v6.165 依傷害量判定的被動免疫（鐵壁硬殼）
   prizesTakenMultiplyPre,          // v6.342「自己已取獎賞張數×N」中央 helper
+  selfClearAllStatusPost,          // ⭐v6.346「將這隻寶可夢的特殊狀態全部恢復」中央出口（三槽全清）
 } from '../../effects';
 import { isBasicEnergyOfType, getEffectiveHP } from '../../engine';  // v5.091
 import { dispatchEnergyDistributePending } from './v158_energy_chain';
@@ -44,16 +45,12 @@ import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判�
 // ══════════════════════════════════════════════════════════════════════════════
 // 卡面：「將這隻寶可夢的特殊狀態全部恢復。」（基礎 160）
 regPre('奧利瓦ex|芳香射擊', (s) => ({ state: s, damage: 160 }));
-regPost('奧利瓦ex|芳香射擊', (state, aIdx, pool) => {
-  const att = state.players[aIdx].active;
-  if (!att || !att.status) return state;
-  const name = pool.get(att.cardId)?.name ?? '?';
-  const newActive: CardInstance = { ...att, status: undefined };
-  const players = [...state.players] as typeof state.players;
-  players[aIdx] = { ...state.players[aIdx], active: newActive };
-  return addLog({ ...state, players },
-    `芳香射擊：${name} 的特殊狀態全部恢復`, aIdx);
-});
+// ⭐v6.346 中央收斂（Rule 38）：與 M6a 040/103 皮卡丘｜吹吹風
+//   「將這隻寶可夢的特殊狀態全部恢復。」卡面逐字相同 ⇒ 共用中央 selfClearAllStatusPost。
+//   ⚠ 原本的本地實作**只清 status 主格**，雙／三重狀態（灼傷＋混亂、睡＋毒＋燒）會殘留在
+//     secondaryStatus／tertiaryStatus ——「全部恢復」三槽都要清，本版一併修正。
+//   ⚠ 公開 log 文字不變（`芳香射擊：<卡名> 的特殊狀態全部恢復`）。
+regPost('奧利瓦ex|芳香射擊', selfClearAllStatusPost('芳香射擊'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 超級雪妖女ex ｜ 怨言（傷害 = 對手手牌張數 × 50）

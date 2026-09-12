@@ -298,6 +298,8 @@ console.log('\n④ ⭐⭐⭐ 全卡池行為掃描：對手戰鬥位真的掉血
   const ALLOW_COUNTER_PLACEMENT = new Set([
     '胡地|手之力量', '鬼斯通|纏擾', '斯魔茶|無聲加害', '由克希|痛楚記憶',
     '恰雷姆ex|氣功指壓', '蜈蚣王|偏道一回',
+    // v6.346 M6a 099/103：卡面與 恰雷姆ex｜氣功指壓 逐字相同（放置指示物到剩 50），同一支 setOppActiveHPPost
+    '洗翠 索羅亞克|嗟怨漩渦',
   ]);
   const real = misses.filter(m => !ALLOW_COUNTER_PLACEMENT.has(m.split('(')[0]));
   chk('⭐ 沒有「實際掉血卻不顯示預估」的招式（放置指示物型除外）', real.length === 0, JSON.stringify(real));

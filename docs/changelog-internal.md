@@ -1,5 +1,67 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.346 M6a 招式實裝 批次 6（防禦旗標／全體傷害／指示物 15 招）—— 招式收尾
+
+BASE `4a4865447a72d5aa056e9025009928d2769eedab`（v6.345）。M6a 仍鎖著 ⇒ **玩家看不到任何變化，不寫首頁 changelog**。
+
+⭐ **這一批之後，M6a 001~100/103 的 96 招只剩 2 招沒實裝**（兩招都在【四】待裁示）。
+
+### 【一】三組主詞完全不同的減傷／易傷，逐字對齊卡面
+
+v5.997 的 `reference-defnextatk-vs-self-reduce-subject` 專門記這個坑：
+- 「**這隻寶可夢受到**招式的傷害 −N」（凝固／盾牌壓制）⇒ `selfDmgReducePost`
+- 「受到這個招式的寶可夢**使用**招式的傷害 −30」（叫聲）⇒ `defNextAtkReducePost`
+- 「受到這個招式的寶可夢**受到**招式的傷害 +30」（刺耳聲）⇒ `oppTargetTakeExtraNextPost`
+
+施加在對手身上的兩個都過 attack-effect 免疫閘。
+
+### 【二】傷害型 vs 指示物型（又一次）
+
+光子彈／大地裂破／轟爆尖刺是「受到 N 點傷害」＝**傷害型**；
+渾沌傷痛／嗟怨漩渦是「放置傷害指示物」＝**指示物型**。
+`嗟怨漩渦` 與既有的 `恰雷姆ex｜氣功指壓` 卡面逐字相同（放到剩 50 HP）⇒ 同一支
+`setOppActiveHPPost`，並照 `test-v6238` 白名單原註解的設計意圖把它加進「指示物型」清單
+（`misses.length === ALLOW.size` 這條精確相等**沒有放寬**）。
+
+⚠ `snipeAllOppExPost` 加了第 4 個參數 `noWeakness`，預設 `true` ＝ 既有兩張卡行為零變更；
+光子彈的卡面只有「[在**備戰區**不計算弱點・抵抗力]」⇒ 戰鬥位要照算弱點，傳 `false`。
+
+### 【三】⚠⚠ 順帶修好的既有 bug：鐵臂膀ex｜感激放大 的「多獲得 1 張獎賞卡」自 v5.466 起就是死碼
+
+`bonusPrizeIfKOPost` 的守門條件是 `getPendingPrize(state, aIdx) <= 0 → return`，
+但 **v5.466 改成「自動給獎賞」之後 `pendingPrizes` 恆為 0** ⇒ 整支 helper 從此不會執行。
+實測：KO 之後只拿到 1 張。
+而守著它的 `test-self-bounce-and-bonus-prize.mjs` 那一條是 **`assert.ok(true)` 的安慰劑**，
+所以三年多沒人發現。
+修法：改讀中央計數 `oppDamageKOdMeThisTurn`（`recordOppKO` 只在 `cause==='attack' && byDamage`
+時 ++），與復仇家族的 `oppDamageKOdMeInLastOppTurn` 同一份判準（Rule 38），
+也剛好對齊卡面「因這個招式的**傷害**而昏厥」⇒ 效果 KO 不加碼。突變 M38 釘住它不會退回死碼。
+M6a 的 `未知圖騰｜神秘信號` 用的就是修好之後的這一支。
+
+另外 `selfClearAllStatusPost` 這個新中央出口，也順手修好 `奧利瓦ex｜芳香射擊`
+**只清 `status` 主格、雙／三重狀態會殘留**的既有 bug（狀態三槽，v5.295）。
+
+### 【四】⚠ 待站長裁示（兩招，都是「要動核心流程」）
+
+1. **蟾蜍王｜撼盪拳**（070/103）：「在下個對手的回合，每次對手從手牌使出訓練家卡時，
+   使用前擲 1 次硬幣。若為反面，則不算使用過那張卡，將其丟棄。」
+   站上**完全沒有**這個機制（只有 `cantPlayItem/Supporter/StadiumNext` 這種全禁型旗標）。
+   要做必須新增 `PlayerState` 欄位 ＋ 改 `engine.ts` 的訓練家使用流程
+   （擲幣攔截點、「不算使用過」不得吃掉 `supporterPlayedThisTurn`、UI 擲幣動畫與重試徽章互動）。
+2. **皮卡丘ex｜十萬伏特**（047/103，見 v6.343【四】）：同鍵有三張 H 標可對戰印刷是 120／無效果。
+
+### 【五】誠實標註：三招的免疫閘在行為端偵測不到
+
+`叫聲／刺耳聲／覆蓋伏特` 走中央免疫閘這件事，在行為端測不出來 ——
+`engine.ts` 在 ATTACK_POST 之後還有一道由 `OPP_ATTACK_DEBUFF_FLAGS` 驅動的免疫還原 sweep
+（v5.344／v6.046）會兜底。照 v6.210 F 段的既有做法，另加【I】靜態接線段（I1~I6）釘住兩層，
+並用突變 M42「兩層同時拆掉」證明【D】的行為端斷言確實有牙齒。
+
+### 【六】守衛
+
+`scripts/test-m6a-wave6.mjs`：**PASS 96 / FAIL 0**；突變 M1~M46 全殺。
+既有守衛一次跑 46 支全綠（含 scripts 內**全部 32 支** `*immun*`）。
+
 ## v6.345 M6a 招式實裝 批次 5（牌庫／手牌／棄牌區 18 招）
 
 BASE `d4a850acf604024f225262a44734580ddaa689a2`（v6.344）。M6a 仍鎖著 ⇒ **玩家看不到任何變化，不寫首頁 changelog**。

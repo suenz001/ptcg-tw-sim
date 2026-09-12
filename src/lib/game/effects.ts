@@ -774,7 +774,7 @@ import './effects/cards/m6_wave4';  // v6.063 M6 招式實裝 批次4（3 招）
 import './effects/cards/m6_wave5';  // v6.067 M6 招式實裝 批次5（5 招）
 import './effects/cards/m6_wave6';  // v6.068 M6 招式實裝 批次6（4 招）
 import { desertDragonflyOnKo } from './effects/cards/v2998_g2';
-import { addPendingPrize, getPendingPrize } from './effects/_shared';
+import { addPendingPrize } from './effects/_shared';  // v6.346：getPendingPrize 最後一個使用點已移除
 // v5.246：effects.ts 內部 reg 用 (烏栗 / 衝浪手 / 鐵斑葉ex 等)
 import { tryPromptPromoteActive } from './effects/_shared';
 import { damageCounterCount } from './effects/_shared'; // v5.785 指示物個數中央
@@ -6841,6 +6841,15 @@ regPost('電電蟲|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
 regPost('東施喵|喵打滾', coinHeadsSelfImmuneNextPost('喵打滾'));
 regPost('飄飄雛|躍起閃避', coinHeadsSelfImmuneNextPost('躍起閃避'));
 regPost('七夕青鳥|棉花之翼', coinHeadsSelfImmuneNextPost('棉花之翼', 'damage'));
+// ⭐v6.346 M6a 批次6 —— 卡面與上面 7 張逐字相同：
+//   「擲1次硬幣若為正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害與效果的影響。」
+//   ⇒ 同一支 local helper，immuneKind 用預設 'all'（傷害**與效果**全免 = immuneToAllAttackNextTurn）；
+//     **不是** 'damage'（那是 鐵壁／棉花之翼「不會受到招式的傷害」的措辭，效果照常）。
+//   ⚠ 反面時整個效果不發動（連減傷都沒有）。
+// M6a 010/103 呆呆獸｜藏入井裡 [C] dmg=''
+regPost('呆呆獸|藏入井裡', coinHeadsSelfImmuneNextPost('藏入井裡'));
+// M6a 038/103 皮卡丘｜高速移動 [C] 10 —— 10 點傷害由引擎讀卡面，不寫 regPre
+regPost('皮卡丘|高速移動', coinHeadsSelfImmuneNextPost('高速移動'));
 
 // ── (C) coin-until-tails-multiply helper + 5 張 ───────────────────────────
 // v2.252：改為每次擲幣寫 1 行 log（格式「第 N 次擲硬幣 — 正面/反面」），
@@ -7873,6 +7882,13 @@ regPost('蜈蚣王|偏道一回', setOppActiveHPPost(10, '偏道一回'));
 // 恰雷姆ex|氣功指壓 — 剩餘 HP 變為 50
 regPre('恰雷姆ex|氣功指壓', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('恰雷姆ex|氣功指壓', setOppActiveHPPost(50, '氣功指壓'));
+// ⭐v6.346 M6a 099/103 洗翠 索羅亞克｜嗟怨漩渦 [C,C,C] dmg='' —— 與 氣功指壓 卡面逐字相同：
+//   「在對手的戰鬥寶可夢身上放置傷害指示物直到剩餘HP變為「50」為止。」
+//   ⚠ 剩餘 HP 已經 ≤50 時放 **0 個**（helper 的 hp <= targetHP / needed <= 0 兩道）。
+//   ⚠ HP 取 effectiveHPInline（受特性／道具影響的**有效**最大 HP，v5.952），不是卡面 hp。
+//   ⚠ 這是**放置傷害指示物**＝招式效果（不計弱抗、不觸發順滑大衣等擲幣免傷），不是傷害。
+//   ⚠ 嗟怨漩渦 卡面沒有傷害（dmg=''）⇒ 不寫 regPre。
+regPost('洗翠 索羅亞克|嗟怨漩渦', setOppActiveHPPost(50, '嗟怨漩渦'));
 
 // 古鼎鹿|傲慢衝擊 — 220；若自身 ≥40 傷害（=4 指示物）則失敗
 regPre('古鼎鹿|傲慢衝擊', (state, aIdx, _pool) => {
@@ -11829,7 +11845,14 @@ function bonusPrizeIfKOPost(bonus: number, label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     if (state.players[dIdx].active !== null) return state;
-    if (getPendingPrize(state, aIdx) <= 0) return state;
+    // ⭐⭐v6.346 修正「自 v5.466 起的死碼」：原條件是「待取獎賞數 <= 0 就 return」，
+    //   但 v5.466「自動給獎賞」之後 pendingPrizes **恆為 0**（獎賞在 KO 當下就直接進手牌）
+    //   ⇒ 這個 helper 從那時起完全不生效（實測 鐵臂膀ex｜感激放大 KO 後只取 1 張，應為 2）。
+    //   卡面逐字「若對手的寶可夢因這個招式的**傷害**而【昏厥】了」⇒ 判準改讀中央計數
+    //   `oppDamageKOdMeThisTurn`（recordOppKO 只在 cause==='attack' && byDamage 時 ++），
+    //   與復仇家族的 `oppDamageKOdMeInLastOppTurn` 同一份判準（Rule 38：不新增第二個記錄機制）。
+    //   ⇒ 招式**效果**造成的昏厥（byDamage=false，如放指示物打死）**不**加碼，完全對齊卡面。
+    if ((state.oppDamageKOdMeThisTurn?.[dIdx] ?? 0) <= 0) return state;
     const s = addLog(state, `${label}：擊倒對手 → 多獲得 ${bonus} 張獎賞卡`, aIdx);
     return addPendingPrize(s, aIdx, bonus, pool);
   };
@@ -11867,6 +11890,15 @@ function defCantAttackIfSubtypePost(
 
 // 鐵臂膀ex｜感激放大 — 120 傷害，若 KO → +1 獎賞卡
 regPost('鐵臂膀ex|感激放大', bonusPrizeIfKOPost(1, '感激放大'));
+// ⭐v6.346 M6a 060/103 未知圖騰｜神秘信號 [P,P] 40 —— 卡面與 感激放大 逐字相同：
+//   「若對手的寶可夢因這個招式的傷害而【昏厥】了，則多獲得1張獎賞卡。」
+//   ⚠⚠ 條件是「因這個招式的**傷害**而昏厥」—— 招式**效果**造成的昏厥不算
+//     （長期記憶 reference-ko-prize-modifiers-damage-only / revenge-damage-vs-effect-ko）。
+//     bonusPrizeIfKOPost 讀中央計數 `oppDamageKOdMeThisTurn`（只在「招式 ＋ 傷害」KO 時 ++）
+//     就是這條判準 —— 效果 KO（例如放指示物打死）不加碼。
+//   ⚠ 取獎賞一律走中央 addPendingPrize（helper 內），禁自己動 prizes 陣列。
+//   ⚠ 40 點傷害由引擎讀卡面，不寫 regPre。
+regPost('未知圖騰|神秘信號', bonusPrizeIfKOPost(1, '神秘信號'));
 
 // 鐵包袱｜冷卻噴射 — 80 傷害，若對手為進化寶可夢 → 下回合無法使用招式
 regPost('鐵包袱|冷卻噴射', defCantAttackIfSubtypePost('evolved', '冷卻噴射'));
@@ -12693,7 +12725,10 @@ regR('bench-from-discard-samename', (st, idx, iids, params, pool) => {
 });
 
 // ── Helper: snipeAllOppExPost — 對手所有 ex/V 各 N 傷害（不計弱抵與附加效果）
-function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: string): AttackPostFn {
+// ⭐v6.346：加上 noWeakness 參數（預設 true＝既有兩張卡的行為完全不變）。
+//   卡面差異：重磅驟雨／橄欖石音波 另有「這個招式的傷害不計算弱點・抵抗力」⇒ 整招 flat；
+//   超夢ex｜光子彈 只有規則提示括號「[在備戰區不計算弱點・抵抗力。]」⇒ 戰鬥位照算弱抗 ⇒ 傳 false。
+function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: string, noWeakness: boolean = true): AttackPostFn {
   return (state, aIdx, pool) => {
     const dIdx = (1 - aIdx) as 0 | 1;
     const d = state.players[dIdx];
@@ -12710,7 +12745,9 @@ function snipeAllOppExPost(dmg: number, filterType: 'ex' | 'ex-or-v', label: str
     // v5.434：改走中央 dealAttackDamageToTarget（補免疫 guard：太晶/神秘石居/中立中心/對戰圓形等）。
     //   noWeakness=true：卡面「這個招式的傷害不計算弱點・抵抗力」→ 整招 flat（含 active ex）。
     for (const iid of targetIids) {
-      s = dealAttackDamageToTarget(s, aIdx, iid, dmg, pool, { kind: 'attack-damage', noWeakness: true, label });
+      // ⚠ dealAttackDamageToTarget 只在 isActive 才套弱抗／攻擊方加成 ⇒ **備戰恆為 flat**，
+      //   noWeakness 這個旗標實際上只影響對手**戰鬥位**那一隻。
+      s = dealAttackDamageToTarget(s, aIdx, iid, dmg, pool, { kind: 'attack-damage', noWeakness, label });
       if (s.phase === 'game-over') return s;
     }
     return s;
@@ -12867,6 +12904,20 @@ regPost('水伊布ex|重磅驟雨', snipeAllOppExPost(60, 'ex', '重磅驟雨'))
 
 regPre('沙漠蜻蜓ex|橄欖石音波', (state, _aIdx, _pool) => ({ state, damage: 0 }));
 regPost('沙漠蜻蜓ex|橄欖石音波', snipeAllOppExPost(100, 'ex-or-v', '橄欖石音波'));
+
+// ⭐v6.346 M6a 055/103・134/103 超夢ex｜光子彈 [P,P] dmg=''：
+//   「對手的所有「寶可夢【ex】」各受到50點傷害。[在備戰區不計算弱點・抵抗力。]」
+//   ⭐⭐⭐ 這是**傷害**（卡面「受到50點傷害」），不是「放置傷害指示物」
+//     ⇒ 走 dealAttackDamageToTarget kind='attack-damage'（helper 內），
+//       不可以用 applyDamageToAllOpp（那是指示物型的中央出口，不報傷害預估）。
+//   ⚠⚠ 與 重磅驟雨／橄欖石音波 的唯一差異：那兩張卡面另有一句「這個招式的傷害不計算
+//     弱點・抵抗力」⇒ 整招 flat；光子彈只有「[在備戰區不計算弱點・抵抗力。]」這個**規則提示
+//     括號**（備戰本來就不計弱抗）⇒ 對手**戰鬥位**的那隻 ex 仍照算弱點×2／抵抗力
+//     ⇒ noWeakness = false。
+//   ⚠ 只打「寶可夢【ex】」（filterType='ex'），非 ex 不受影響；對手場上沒有 ex 就整招無目標。
+//   ⚠ 卡面沒有傷害（dmg=''）⇒ 不寫 regPre；戰鬥位那一份由本 helper 統一處理，不走 mainline
+//     （與 重磅驟雨 同型：目標是否存在取決於「是不是 ex」，mainline 無法表達這個條件）。
+regPost('超夢ex|光子彈', snipeAllOppExPost(50, 'ex', '光子彈', false));
 
 // ── (I) 攻擊前丟對手道具 ────────────────────────────────────────────
 regPre('金魚王|啄落', defToolDiscardPre(50, '啄落'));
@@ -13309,6 +13360,13 @@ regPre('厄鬼椪 礎石面具ex|打爆', skipBothPre(140, '打爆'));
 
 // 安瓢蟲｜高速星星 — 70，不計算弱點・抵抗力與對手戰鬥寶可夢身上的附加效果
 regPre('安瓢蟲|高速星星', skipBothPre(70, '高速星星'));
+// ⭐v6.346 M6a 081/103・132/103 基拉祈ex｜高速星星 [C,C,C] 150 —— 與 安瓢蟲｜高速星星 卡面逐字相同：
+//   「這個招式的傷害不計算弱點・抵抗力與對手的戰鬥寶可夢身上的附加效果。」
+//   ⇒ skipWeakRes ＋ skipDefEffects 兩個旗標 ＝ 既有的 skipBothPre（照同型卡寫法，不自創）。
+//   ⚠ 「flat/skipDefEffects 會 bypass 全免疫」是**已知的既有坑**
+//     （長期記憶 reference-flat-skipdefeffects-immunity-bypass），本版維持既有行為不另作處理。
+//   ⚠ 用 regPre 寫死 150 已跑過同名印刷碰撞檢查（__m6a/collide_w6.mjs）：全卡庫 2 個印刷都是 150。
+regPre('基拉祈ex|高速星星', skipBothPre(150, '高速星星'));
 
 // 輕身鱈｜音波刀鋒 — 110，不計算對手戰鬥寶可夢身上的附加效果
 regPre('輕身鱈|音波刀鋒', skipDefEffectsPre(110, '音波刀鋒'));
@@ -13644,6 +13702,15 @@ regPost('電擊魔獸|雷電在地', playerNoAttacksNextPost('雷電在地'));
 // 超音波幼蟲｜刺耳聲 — 0 傷，對手戰鬥寶可夢下個自己（攻擊方）回合受招式 +50
 regPre('超音波幼蟲|刺耳聲', (state, _a, _p) => ({ state, damage: 0 }));
 regPost('超音波幼蟲|刺耳聲', oppTargetTakeExtraNextPost(50, '刺耳聲'));
+// ⭐v6.346 M6a 089/103 心鱗寶｜刺耳聲 [C] dmg='' —— 與 超音波幼蟲｜刺耳聲 卡面逐字相同（只差數值）：
+//   「在下個自己的回合，受到這個招式的寶可夢受到招式的傷害「+30」點。」
+//   ⚠⚠ 主詞：「受到這個招式的寶可夢**受到**招式的傷害 +30」＝ **易傷 debuff**（打在對手身上），
+//     ・不是 defNextAtkReducePost（那是對手**使用**招式的傷害 -N，本批 尼多蘭｜叫聲）
+//     ・不是 selfDmgReducePost（那是**自己**受到的傷害 -N，本批 凝固／盾牌壓制）
+//     長期記憶 reference-defnextatk-vs-self-reduce-subject-v5997 專記這個坑。
+//   ⚠ 施加在對手身上 ⇒ helper 內已含 canApplyAttackEffectToTarget 免疫閘。
+//   ⚠ 心鱗寶｜刺耳聲 卡面沒有傷害（dmg=''）⇒ 不寫 regPre（超音波幼蟲那張的 regPre damage:0 是舊寫法）。
+regPost('心鱗寶|刺耳聲', oppTargetTakeExtraNextPost(30, '刺耳聲'));
 
 // v2.464 泥巴魚|飛撲圈套 — 30；
 //   下個對手回合：受到此招的寶可夢無法撤退
@@ -20042,6 +20109,7 @@ import './effects/cards/m6a_wave2'; // v6.342 M6a 招式實裝 批次2（16 招�
 import './effects/cards/m6a_wave3'; // v6.343 M6a 招式實裝 批次3（11 招｜能量操作）
 import './effects/cards/m6a_wave4'; // v6.344 M6a 招式實裝 批次4（7 招｜換位／回牌庫／退化）
 import './effects/cards/m6a_wave5'; // v6.345 M6a 招式實裝 批次5（18 招｜牌庫／手牌／棄牌區操作）
+import './effects/cards/m6a_wave6'; // v6.346 M6a 招式實裝 批次6（8 招｜防禦旗標／減傷／全體傷害／指示物）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口
 //   （BRIEF §2 Rule 38：同一個判準只能有一份；卡檔只負責「哪一張卡用哪一支」。）
@@ -20255,3 +20323,36 @@ regR('peek-pick-to-deck-bottom', (st, idx, iids, params, pool) => {
     deck: deckWithCardsToBottom(p.deck, [inst], 'keep-order'),
   }));
 });
+
+
+/**
+ * ⭐v6.346 中央出口：「將這隻寶可夢的特殊狀態全部恢復。」（主詞＝出招的自己）
+ *
+ * 卡面逐字（台灣官方 static/cards，attacks[].effect）：
+ *   M6a 040/103            皮卡丘｜吹吹風    「將這隻寶可夢的特殊狀態全部恢復。」
+ *   MC 071 / SV10 012・111 奧利瓦ex｜芳香射擊「將這隻寶可夢的特殊狀態全部恢復。」（逐字相同）
+ *
+ * ⚠⚠ 特殊狀態是**三槽制**（status / secondaryStatus / tertiaryStatus，v4.965／v5.295／v5.728）
+ *   ⇒「全部恢復」必須三槽都清。mega_decks 原本的本地實作只清 status 主格，
+ *     雙／三重狀態（灼傷＋混亂、睡＋毒＋燒）會殘留 —— 本版收斂到這一支並一併修正。
+ * ⚠ 主詞是「這隻寶可夢」＝出招的自己、而且對自己有利 ⇒ **不**過 canApplyEffectToTarget
+ *   （免疫閘是擋「對手施加的效果」；v5.929 背蓋化石誤擋自身／玩家層級效果的教訓）。
+ * ⚠ 與 clearActiveEffects（離場清旗標）不同：那一支是換場／回手時清跨回合 debuff，不是這個。
+ */
+export function selfClearAllStatusPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const att = state.players[aIdx].active;
+    if (!att) return state;
+    if (!att.status && !att.secondaryStatus && !att.tertiaryStatus) {
+      return addLog(state, `${label}：這隻寶可夢沒有特殊狀態`, aIdx);
+    }
+    const name = pool.get(att.cardId)?.name ?? '?';
+    return updatePlayer(
+      addLog(state, `${label}：${name} 的特殊狀態全部恢復`, aIdx),
+      aIdx,
+      p => (p.active
+        ? { ...p, active: { ...p.active, status: undefined, secondaryStatus: undefined, tertiaryStatus: undefined } }
+        : p),
+    );
+  };
+}
