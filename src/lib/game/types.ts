@@ -1219,11 +1219,27 @@ export interface GameState {
   _attackTimeAttackerEnergyUnits?: number;
   /**
    * ⭐v6.357 站長裁定 C-7：field-wide 受傷反擊的 attack-time snapshot（比照 _attackTimeCalmGround）。
-   * 索引＝玩家 index；內容＝該側**備戰**上「宣告當時特性生效中」的 field-wide 反擊持有者。
-   * 消費點 fireFieldWideRetaliation 以「當下盤面 ∪ 本快照」觸發，並以持有者 iid 去重。
-   * Transient：每次 attack flow 後 clear（pendingSelection 還在時保留到 resolver 跑完）。
+   * key＝座位（p1＝玩家 0、p2＝玩家 1）；內容＝該側**備戰**上「宣告當時特性生效中」的
+   * field-wide 反擊持有者。消費點 fireFieldWideRetaliation 以「當下盤面 ∪ 本快照」觸發，
+   * 並以持有者 iid 去重。Transient：每次 attack flow 後 clear
+   * （pendingSelection 還在時保留到 resolver 跑完）。
+   *
+   * ⚠⚠**v6.359：型別由 `[Snapshot[], Snapshot[]]` 改成 `{ p1, p2 }` —— Firestore 禁止巢狀陣列**
+   *   （array 的元素不可以再是 array；map 裡包 array 才可以）。v6.357 首版寫成 tuple-of-array，
+   *   由 `scripts/test-firestore-nested-array.mjs` 抓出來。
+   *   同型事故 **v6.056**：v5.911 的 `ancientAttackedIidsThisTurn` 宣告成 `[string[], string[]]`，
+   *   讓 `startGame` / `pushGameState` 每一次寫入都被 Firestore 整包拒收
+   *   （`Nested arrays are not supported`）⇒ **休閒線上完全建不起對局**，
+   *   而且錯誤只進 console → 畫面永遠停在「⏳ 雙方已準備，遊戲即將開始⋯」。
+   *   ⚠ 不要以為「反正 attack flow 結束就清掉了所以寫不進房間」：招式開 picker 時本欄位
+   *     **刻意跨 dispatch 保留**給 resolver（見 engine.ts 的 clear 條件 `!next.pendingSelection`），
+   *     那一份 state 正是會被推上房間的那一份。
+   *   同型前例：`mulliganRevealedHands`（v3.741 / v2.84）、`ancientAttackedIidsThisTurn`（v6.056）。
+   *   ⭐ per-player 欄位**一律用 `{ p1, p2 }`，不要用 `T[][]`**；seat→key 的中央 helper 是
+   *     engine.ts 的 `ancientKey(idx)`（effects 側因為會造成循環 import，沿用
+   *     v2750_h_wave2_full.ts 既有寫法 `[idx === 0 ? 'p1' : 'p2']`）。
    */
-  _attackTimeFieldWideRetal?: [FieldWideRetalHolderSnapshot[], FieldWideRetalHolderSnapshot[]];
+  _attackTimeFieldWideRetal?: { p1: FieldWideRetalHolderSnapshot[]; p2: FieldWideRetalHolderSnapshot[] };
 }
 
 export interface LogEntry {

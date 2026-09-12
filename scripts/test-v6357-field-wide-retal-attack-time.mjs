@@ -292,7 +292,7 @@ console.log('\n【D】不重複觸發：「當下盤面 ∪ 宣告當時快照�
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('\n【E】跨回合不殘留（主判準＝盤面指示物數，旗標只是輔助）');
 {
-  const GHOST = { _attackTimeFieldWideRetal: [[], [{ iid: 'ghost-prev-turn', ability: '群聚反擊' }]] };
+  const GHOST = { _attackTimeFieldWideRetal: { p1: [], p2: [{ iid: 'ghost-prev-turn', ability: '群聚反擊' }] } };
   const rE1 = run(MORT, '尾鞭', inst(FEEBEX.id), [inst(PLAIN.id)], GHOST);
   chk('E1 哨兵：尾鞭確實打到戰鬥場（10）', defDmg(rE1) === 10, String(defDmg(rE1)));
   chk('E1 ⭐⭐上一回合殘留的快照**不可以**讓這一回合誤觸發（盤面沒有持有者 ⇒ 0 點）',
@@ -356,8 +356,7 @@ console.log('\n【G】picker 路徑（月亮伊布｜出奇一擊 → snipe-mult
     r0?.pendingSelection?.effectKey === 'snipe-multi',
     JSON.stringify(r0?.pendingSelection?.effectKey ?? null));
   chk('G1 ⭐picker 未解時快照**必須保留**給 resolver（比照花之帷幔的跨 dispatch 規則）',
-    Array.isArray(r0?._attackTimeFieldWideRetal) && r0._attackTimeFieldWideRetal.length === 2
-    && r0._attackTimeFieldWideRetal[1].some((h) => h.ability === '群聚反擊'),
+    (r0?._attackTimeFieldWideRetal?.p2 ?? []).some((h) => h.ability === '群聚反擊'),
     JSON.stringify(r0?._attackTimeFieldWideRetal ?? null));
   const r = act(r0, { type: 'RESOLVE_SELECTION', selectedIids: [dActive.iid], actorIdx: 0 });
   chk('G2 哨兵：picker 解掉了，戰鬥場的弱丁魚ex 吃到 50 點（出奇一擊不計弱抗）',
@@ -368,6 +367,64 @@ console.log('\n【G】picker 路徑（月亮伊布｜出奇一擊 → snipe-mult
     JSON.stringify([atkDmg(r), retalLogs(r).length]));
   chk('G4 （輔助）resolver 跑完、pending 已消 ⇒ 快照由 applyAction wrapper 清掉',
     r._attackTimeFieldWideRetal === undefined, JSON.stringify(r._attackTimeFieldWideRetal ?? null));
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+console.log('\n【I】Firestore 不變量：這個欄位序列化後**不得**出現巢狀陣列（v6.056 事故）');
+{
+  // ⚠ Firestore **不支援巢狀陣列**（array 的元素不可以再是 array；map 裡包 array 可以）。
+  //   v5.911 把 ancientAttackedIidsThisTurn 宣告成 [string[], string[]] ⇒ startGame /
+  //   pushGameState 每一次寫入都被整包拒收（Nested arrays are not supported）⇒
+  //   **休閒線上完全建不起對局**，錯誤只進 console、畫面停在「⏳ 雙方已準備」（v6.056）。
+  //   v6.357 首版的 _attackTimeFieldWideRetal 正是同一個形狀 ⇒ v6.359 改成 { p1, p2 }。
+  // ⚠ 「反正 attack flow 結束會清掉」**不成立**：招式開 picker 時本欄位刻意跨 dispatch 保留，
+  //   那一份 state 就是會被推上房間的那一份 —— 所以下面用 picker 未解的 state 來驗。
+  // ⚠ 全站版的同型守衛是 scripts/test-firestore-nested-array.mjs（那支掃整份開局／對局盤面）；
+  //   這裡只釘本欄位，走訪器是那一支的**逐字複本**，I0 釘住兩份不漂移。
+  const findNestedArrays = (o) => {
+    const hits = [];
+    const walk = (v, path, inArray) => {
+      if (Array.isArray(v)) {
+        if (inArray) hits.push(path);
+        v.forEach((x, i) => walk(x, `${path}[${i}]`, true));
+        return;
+      }
+      if (v && typeof v === 'object') for (const k of Object.keys(v)) walk(v[k], `${path}.${k}`, false);
+    };
+    walk(o, 'gameState', false);
+    return [...new Set(hits.map((h) => h.replace(/\[\d+\]/g, '[]')))];
+  };
+  const fnaSrc = readFileSync(join(ROOT, 'scripts/test-firestore-nested-array.mjs'), 'utf8');
+  chk('I0 ⭐走訪器與全站版 scripts/test-firestore-nested-array.mjs 沒有漂移（核心判準逐字相同）',
+    fnaSrc.includes('if (inArray) hits.push(path);')
+    && fnaSrc.includes("if (v && typeof v === 'object') for (const k of Object.keys(v)) walk(v[k], `${path}.${k}`, false);"),
+    '全站版的走訪器改了 ⇒ 這裡的複本要同步');
+  chk('I0b ⭐正對照：走訪器對人造巢狀陣列真的抓得到、對 { p1, p2 } 則不會誤報（證明 I2 不是恆真）',
+    JSON.stringify(findNestedArrays({ x: [[1], [2]] })) === '["gameState.x[]"]'
+    && findNestedArrays({ x: { p1: [1], p2: [2] } }).length === 0,
+    JSON.stringify([findNestedArrays({ x: [[1], [2]] }), findNestedArrays({ x: { p1: [1], p2: [2] } })]));
+
+  const aI = inst(UMB.id, { energyAttached: eForCost(UMB, '出奇一擊') });
+  const stI = mk(
+    { active: aI, bench: [inst(PLAIN.id)], deck: filler(3), prizes: filler(6) },
+    { active: inst(FEEBEX.id), bench: [inst(FEEB.id), inst(PLAIN.id)], deck: filler(3), prizes: filler(6) });
+  const rI = act(stI, { type: 'ATTACK', attackIndex: atkIdx(UMB, '出奇一擊') });
+  chk('I1 哨兵：這一份 state 真的帶著快照（picker 未解 ⇒ 會被推上房間）—— 否則 I2 是空真',
+    rI?.pendingSelection != null && rI._attackTimeFieldWideRetal != null
+    && JSON.stringify(rI._attackTimeFieldWideRetal).includes('群聚反擊'),
+    JSON.stringify([rI?.pendingSelection?.effectKey ?? null, rI?._attackTimeFieldWideRetal ?? null]));
+  chk('I2 ⭐⭐⭐序列化後整份盤面**沒有任何**巢狀陣列（有的話 Firestore 整包拒收 ⇒ 線上建不起對局）',
+    findNestedArrays(JSON.parse(JSON.stringify(rI))).length === 0,
+    JSON.stringify(findNestedArrays(JSON.parse(JSON.stringify(rI)))));
+  chk('I3 ⭐⭐這個欄位是 { p1, p2 } map（**不是** tuple-of-array），兩個 key 都是陣列',
+    !Array.isArray(rI._attackTimeFieldWideRetal)
+    && Array.isArray(rI._attackTimeFieldWideRetal?.p1) && Array.isArray(rI._attackTimeFieldWideRetal?.p2),
+    JSON.stringify(rI._attackTimeFieldWideRetal ?? null));
+  chk('I4 ⭐快照條目是純 map（iid / ability 都是字串，沒有任何陣列欄位）',
+    (rI._attackTimeFieldWideRetal?.p2 ?? []).length === 1
+    && (rI._attackTimeFieldWideRetal?.p2 ?? []).every((h) => typeof h.iid === 'string'
+      && typeof h.ability === 'string' && Object.keys(h).length === 2),
+    JSON.stringify(rI._attackTimeFieldWideRetal?.p2 ?? null));
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -382,14 +439,16 @@ console.log('\n【H】中央性（Rule 38）—— 同一個判準只能有一�
     countOf(effSrc, 'export function snapshotFieldWideRetalHolders(') === 1
     && countOf(engSrc, 'export function snapshotFieldWideRetalHolders(') === 0,
     JSON.stringify([countOf(effSrc, 'export function snapshotFieldWideRetalHolders('), countOf(engSrc, 'export function snapshotFieldWideRetalHolders(')]));
-  chk('H1b ⭐engine.ts 只有**一個**設定點（兩次呼叫＝兩側玩家，且在同一行）',
-    countOf(engSrc, 'snapshotFieldWideRetalHolders(state, 0, pool), snapshotFieldWideRetalHolders(state, 1, pool),') === 1
+  // ⚠v6.359：錨點跟著形狀改動一起更新（tuple → { p1, p2 }）。判準沒有放寬 ——
+  //   仍然要求「全檔只有那一行、而且那一行同時寫了 p1 與 p2 兩側」。
+  chk('H1b ⭐engine.ts 只有**一個**設定點（同一行寫兩側、且形狀是 { p1, p2 }）',
+    countOf(engSrc, 'p1: snapshotFieldWideRetalHolders(state, 0, pool), p2: snapshotFieldWideRetalHolders(state, 1, pool),') === 1
     && countOf(engSrc, 'snapshotFieldWideRetalHolders(') === 2,   // 全檔只有那一行的兩次呼叫（import 那一行沒有括號）
     String(countOf(engSrc, 'snapshotFieldWideRetalHolders(')));
   chk('H1c ⭐⭐設定點就沿用 `_attackTimeCalmGround` 那一個 ATTACK 宣告點（Rule 38：不另開 hook）',
     (() => {
       const i = engSrc.indexOf('_attackTimeCalmGround: [');
-      const j = engSrc.indexOf('_attackTimeFieldWideRetal: [');
+      const j = engSrc.indexOf('_attackTimeFieldWideRetal: {');
       return i > 0 && j > i && (engSrc.slice(i, j).split('\n').length - 1) < 20;
     })(), '兩個設定點相隔超過 20 行 ⇒ 可能另開了新的 ATTACK 起點 hook');
 

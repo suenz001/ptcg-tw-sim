@@ -1,5 +1,83 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.359 ⚠⚠⚠ 修 v6.357 的 Firestore 巢狀陣列（會讓休閒線上完全建不起對局）
+
+BASE `7a3c28249aed361da89e97d94b0964fdd4595877`（v6.358）。**行為一個字都沒有變**，只改了一個欄位的形狀。
+⚠ v6.357 **沒有推上線**（v6.350 之後是一整批一起推的），所以玩家從來沒有受到影響。
+
+### 【一】v6.357 差點闖的禍
+
+v6.357 把「宣告當時快照」宣告成：
+
+```ts
+_attackTimeFieldWideRetal?: [FieldWideRetalHolderSnapshot[], FieldWideRetalHolderSnapshot[]];
+```
+
+⚠⚠ 這是**陣列裡包陣列**。**Firestore 不支援巢狀陣列**（map 裡包 array 可以，array 裡包 array 不行）。
+
+**同型事故 v6.056**（`scripts/test-firestore-nested-array.mjs` 檔頭記載）：
+v5.911「輪番狂攻」的 `ancientAttackedIidsThisTurn` 宣告成 `[string[], string[]]`
+⇒ 每一次 `startGame` / `pushGameState` 寫入都被 Firestore **整包拒收**
+（`Nested arrays are not supported`）⇒ **休閒線上從此完全建不起對局**，
+而且錯誤只進 console，畫面永遠停在「⏳ 雙方已準備，遊戲即將開始⋯」。
+
+⭐ **站上慣例：per-player 欄位一律用 `{ p1, p2 }`，不要用 `T[][]`。**
+（`mulliganRevealedHands` v2.84／v3.741、`ancientAttackedIidsThisTurn` v6.056 都是這樣改的。）
+
+### 【二】怎麼被抓到的
+
+v6.357 commit 之後跑 LF 樹完整套件（673 步）多出一支紅：
+`scripts/test-firestore-nested-array.mjs`。
+
+⚠ **只有第四條（型別宣告掃描）抓到它，前三條行為端檢查全部 PASS** ——
+因為那三條看的是開局盤面與 END_TURN 之間的盤面，那些時點快照早就被 clear 了。
+真正會把壞形狀推上房間的是「**招式開了 picker、還沒 RESOLVE**」的那一份 state
+（本欄位在 `!next.pendingSelection` 時才 clear，就是為了留給 resolver）。
+
+### 【三】修法
+
+```ts
+_attackTimeFieldWideRetal?: { p1: FieldWideRetalHolderSnapshot[]; p2: FieldWideRetalHolderSnapshot[] };
+```
+
+- 設定點（`engine.ts`，仍在 `v6357-field-wide-retal-snapshot-set` 哨兵內）改寫成 `{ p1, p2 }`。
+- 消費端（`effects.ts`）改成 `?.[dIdx === 0 ? 'p1' : 'p2']`
+  —— 沿用 `v2750_h_wave2_full.ts` 對 `ancientAttackedIidsLastSelfTurn` 的既有取法
+  （`engine.ts` 的 `ancientKey(idx)` 在 effects 側 import 會造成循環）。
+- clear 不用改（`delete` 與形狀無關）。
+- `types.ts` 該格的註解**寫明為什麼不能用 `[T[], T[]]`**（引 v6.056、引守衛、引同型前例），
+  並特別註明「反正會被清掉所以寫不進房間」這個想法是**錯的**。
+
+### 【四】補上的網（本版最重要的產出）
+
+v6.357 的行為端守衛 **62/0 全綠**，線上卻會整個建不起對局 —— 因為沒有人在
+「picker 未解的 state」上驗過序列化形狀。本版在 `test-v6357` 加【I】組 **6 條行為端不變量**
+（62 → **68**，原本 62 條一條都沒動）：
+
+- **I0** 走訪器與全站版 `test-firestore-nested-array.mjs` **沒有漂移**（讀原始碼逐字比對核心兩行）
+- **I0b** ⭐反安慰劑正對照：同一支走訪器對人造 `{x:[[1],[2]]}` 必須抓到、對 `{x:{p1:[1],p2:[2]}}` 必須放行
+- **I1** 哨兵：這份 state 真的帶著快照（`pendingSelection != null` 且序列化後含「群聚反擊」），
+  刻意寫成**形狀無關**，這樣 M14 下它仍綠、I2 才是唯一判準
+- **I2** ⭐主判準：`JSON.parse(JSON.stringify(state))` 之後**整份盤面沒有任何巢狀陣列**
+- **I3** 欄位本身是 `{ p1, p2 }` map、**I4** 快照條目是純 map（`Object.keys().length === 2`）
+
+**突變 M14**（形狀改回 `[T[], T[]]`，**設定端與消費端一起改**所以行為完全等價）實測：
+`62 passed, 6 failed` —— 紅的 6 條**全部是形狀／接線斷言，A~F 那 62 條行為斷言一條都沒紅**。
+這正是 v6.357 出包的機制。突變引擎也因此擴充成支援多檔 `edits`（單檔版會讓行為一起壞掉，
+就證明不了「I2 是唯一抓得到它的網」）。
+
+`mutcheck_v6357`：13 → **14 個突變，未達標 0，還原後複驗 exit=0**。
+
+### 【五】驗收
+
+`test-firestore-nested-array` **4 PASS / 0 FAIL**（修之前是 3 PASS / 1 FAIL）；
+`test-v6357` **68/0**；`test-v6352` **89/0**；`test-v6358` **79/0**；
+`npx tsc --noEmit` `error TS` **55 行、TS2304 0**（＝ baseline）。
+
+⚠ 另外確認過 v6.357 **沒有別的新欄位**踩到這條規則
+（`git show` 那個 commit 的 types.ts 新增欄位只有這一個；`FieldWideRetalHolderSnapshot`
+本身是 `{ iid, ability }` 純字串 map）。
+
 ## v6.358 效果來源（招式／特性）中央維度（站長裁定 D-9）
 
 BASE `e4c2cb96232de7958c0a9df6822d56e6e2e79957`（v6.357）。⚠ **本版改變線上既有卡的行為**（10 類免疫卡不再擋住耿鬼ex｜死亡宣告，

@@ -5342,7 +5342,10 @@ export function fireFieldWideRetaliation(
   if (!da) return state;
   const daCard = pool.get(da.cardId);
   if (!daCard) return state;
-  const atkTimeHolders = state._attackTimeFieldWideRetal?.[dIdx] ?? [];
+  // ⚠v6.359：欄位是 { p1, p2 } 不是 tuple（Firestore 禁巢狀陣列）⇒ 用 seat key 取。
+  //   寫法沿用 v2750_h_wave2_full.ts 對 ancientAttackedIidsLastSelfTurn 的既有取法
+  //   （engine.ts 的 ancientKey 在 effects 側 import 會造成循環）。
+  const atkTimeHolders = state._attackTimeFieldWideRetal?.[dIdx === 0 ? 'p1' : 'p2'] ?? [];
   let s = state;
   for (const spec of FIELD_WIDE_RETALIATION) {
     if (!spec.activeQualifies(daCard)) continue;

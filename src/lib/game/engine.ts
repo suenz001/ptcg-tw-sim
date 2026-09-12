@@ -5459,9 +5459,11 @@ function handlePlaying(
     //   ⚠ 刻意沿用 _attackTimeCalmGround 的**同一個**設定點（Rule 38：不另開 ATTACK 起點 hook），
     //     且每次 ATTACK 都無條件重設 ⇒ 上一回合的殘留不可能跨回合誤觸發。
     //   ⚠ clear 只放在 applyAction wrapper（見該處註解），不可搬到下方那一疊 snapshot clear。
-    workingState = { ...workingState, _attackTimeFieldWideRetal: [
-      snapshotFieldWideRetalHolders(state, 0, pool), snapshotFieldWideRetalHolders(state, 1, pool),
-    ] };
+    //   ⚠⚠v6.359：形狀是 { p1, p2 } **不是** [a, b] —— Firestore 禁止巢狀陣列，tuple-of-array
+    //     會讓整份盤面寫不進房間（v6.056 事故；守衛 scripts/test-firestore-nested-array.mjs）。
+    workingState = { ...workingState, _attackTimeFieldWideRetal: {
+      p1: snapshotFieldWideRetalHolders(state, 0, pool), p2: snapshotFieldWideRetalHolders(state, 1, pool),
+    } };
     // <<< v6357-field-wide-retal-snapshot-set
     // v5.186：抵抗之幕 同 pattern — 玩家回報多龍巴魯托ex 幻影奇襲 對戰急凍鳥時
     //   急凍鳥被 KO 後 6 個指示物還能放到備戰；規則上同招式 resolve 視為同時，
