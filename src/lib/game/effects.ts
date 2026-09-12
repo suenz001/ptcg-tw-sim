@@ -417,6 +417,121 @@ export function getEffectiveWeaknessType(
   if (defenderActive?.weaknessOverrideTypeThisTurn) t = defenderActive.weaknessOverrideTypeThisTurn;
   return { type: t, disabled: !!defenderActive?.weaknessDisabledThisTurn };
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ⭐⭐⭐ v6.353 弱點**倍率**的中央述詞 —— 全站唯一一份
+//
+// 上面那支 getEffectiveWeaknessType 管的是「弱點是**哪個屬性**」（妖精領域／掌握弱點／
+// 覆蓋伏特／金屬防禦強化）；這一支管的是「**要乘幾倍**」。兩者是**正交**的兩維，
+// 刻意並列放在同一區，日後兩邊都只會有一份判準（Rule 38）。
+//
+// 卡面逐字（static/cards/M6a.json，甜甜螢 M6a 004/103 的 `abilities[].effect`）：
+//   「若自己的場上有「電螢蟲」則生效。只要這隻寶可夢在場上，
+//     雙方的戰鬥寶可夢的弱點以「×3」計算傷害。」
+//
+// ⚠⚠ 卡面有**三個不同的主詞**，不可混為一談：
+//   ① 前提「**自己**的場上有『電螢蟲』」—— 「自己」＝甜甜螢**持有者**那一側；
+//      「場上」＝戰鬥場 ＋ 備戰區。卡名**完全相等**比對
+//      ⇒ M6a 19915 與 SV6 10418 兩種印刷都算，但「電螢蟲ex」之類未來卡不會被誤吃。
+//   ② 持有者「只要這隻寶可夢**在場上**」⇒ 戰鬥場或備戰都生效（不是只有戰鬥場）。
+//   ③ 影響範圍「**雙方**的戰鬥寶可夢」⇒ 不論持有者在哪一側，**兩邊** active 都以 ×3 結算。
+//
+// ⚠ 只影響「**戰鬥**寶可夢」：備戰位本來就不計弱點 —— engine 主管線只對 defender.active 算，
+//   applyWeakRes 的三個呼叫端全部 gate 在 `isActive`。⇒ 本述詞不需要、也不可以再開備戰路徑。
+//
+// ⚠ 官方裁定（PTCG RULES/PTCG_RULES.md L1945-1946 與 L2100-2101，鐮刀盔｜遠古真理「×4」）：
+//     「自己的鐮刀盔的特性『遠古真理』處於有效狀態時，若使用自己的智揮猩的招式『掌握弱點』…
+//       那麼弱點會按照「×4」計算嗎？ A: 會按照「×4」計算。」
+//     「…『妖精領域』…對手的【龍】寶可夢的弱點會變為【超】，那麼弱點計算會視為「×4」計算嗎？
+//       A: 會視為「×4」計算。」
+//   ⇒ **倍率改寫與屬性改寫可以疊加**，兩維互不 gate。本述詞與 getEffectiveWeaknessType
+//     各自回答自己那一維，消費點把兩者相乘即可。
+//   ⚠ 鐮刀盔｜遠古真理本身**站上尚未實裝**（grep 全站無此特性）；它就是本表的第二列預留位置。
+//
+// ⚠⚠ `weakness.value` 的值域（全站 4170 筆）：`×2` 4169 筆、`+20` 1 筆（由克希 M6a 20056）。
+//   引擎**從來沒讀過** `weakness.value`（只讀 `.type`）⇒ `+20` 目前一律被當成 ×2 算（既有偏差）。
+//   卡面說的是「弱點以『×3』計算」，對「+N」型弱點官方**查無裁定**（PTCG_RULES.md 全文無此條）
+//   ⇒ 本述詞**只改寫「×N」型**，「+N」型一律回預設值＝維持站上既有行為。**待站長裁示**。
+// ══════════════════════════════════════════════════════════════════════════════
+export interface WeaknessMultiplierSpec {
+  /** 特性名。 */
+  ability: string;
+  /** 生效時弱點要用幾倍。 */
+  multiplier: number;
+  /** 卡面前提：持有者**自己的場上**必須有這些卡名（完全相等比對）。空陣列＝無前提。 */
+  requiresOwnOnField: readonly string[];
+  /** 卡面逐字（守衛 scripts/test-v6353-weakness-multiplier.mjs 會拿它跟 static/cards 對拍）。 */
+  face: string;
+}
+
+/** 沒有任何倍率改寫時的預設值（PTCG_RULES.md L155「寶可夢卡牌下方記載的『×2』…需要×2計算」）。 */
+export const WEAKNESS_MULTIPLIER_DEFAULT = 2;
+
+export const WEAKNESS_MULTIPLIER_ABILITIES: readonly WeaknessMultiplierSpec[] = [
+  // ⭐v6.353 甜甜螢｜絕佳費洛蒙（M6a 19916 004/103，Basic 80HP【草】J 標）
+  {
+    ability: '絕佳費洛蒙',
+    multiplier: 3,
+    requiresOwnOnField: ['電螢蟲'],
+    face: '若自己的場上有「電螢蟲」則生效。只要這隻寶可夢在場上，雙方的戰鬥寶可夢的弱點以「×3」計算傷害。',
+  },
+];
+
+/** 「**自己**的場上（戰鬥場＋備戰）有名為 nm 的寶可夢」——卡名完全相等（不同印刷都算）。 */
+function hasNamedPokemonOnOwnField(
+  state: GameState, ownerIdx: 0 | 1, nm: string, pool: Map<string, Card>,
+): boolean {
+  const p = state.players[ownerIdx];
+  if (!p) return false;
+  return [...(p.active ? [p.active] : []), ...p.bench]
+    .some((c) => pool.get(c.cardId)?.name === nm);
+}
+
+/**
+ * 「這一次傷害結算時，弱點要用幾倍」——全站唯一一份。
+ * 消費點：engine.ts 主傷害管線、effects.applyWeakRes（狙擊／多目標／延後傷害都走它）。
+ *
+ * @param defenderOwnerIdx 受招方。⚠ 現行唯一一張卡（絕佳費洛蒙）卡面寫的是「**雙方**的戰鬥
+ *   寶可夢」⇒ 回傳值其實與受招方是誰無關。**參數刻意保留**：日後若出現「只有對手的戰鬥
+ *   寶可夢」這種單邊卡，只要在 spec 加一個欄位就好，不必動兩個消費點的簽章。
+ * @param defenderCard 受招方的卡（可省略）。只用來判「弱點是『×N』型還是『+N』型」——
+ *   只有「×N」型會被改寫；省略時視為「×N」型（＝既有行為，不會更糟）。
+ */
+export function weaknessMultiplier(
+  state: GameState,
+  defenderOwnerIdx: 0 | 1,
+  pool: Map<string, Card>,
+  defenderCard?: Card,
+): number {
+  // 「+N」型弱點（由克希 M6a 20056「+20」）：卡面「以×3計算」對它沒有裁定 ⇒ 維持原樣。
+  const wv = defenderCard?.weakness?.value;
+  if (wv != null && !String(wv).startsWith('×')) return WEAKNESS_MULTIPLIER_DEFAULT;
+  let mul = WEAKNESS_MULTIPLIER_DEFAULT;
+  // 卡面「**雙方**的戰鬥寶可夢」⇒ 持有者在哪一側都算，兩側都要掃。
+  for (const ownerIdx of [0, 1] as const) {
+    const p = state.players[ownerIdx];
+    if (!p) continue;
+    // 卡面「只要這隻寶可夢**在場上**」⇒ 戰鬥場 ＋ 備戰都要掃（漏掉備戰是最容易犯的錯）。
+    const spots: Array<{ inst: CardInstance; loc: 'active' | 'bench' }> = [
+      ...(p.active ? [{ inst: p.active, loc: 'active' as const }] : []),
+      ...p.bench.map((b) => ({ inst: b, loc: 'bench' as const })),
+    ];
+    for (const { inst, loc } of spots) {
+      const card = pool.get(inst.cardId);
+      if (!card?.abilities) continue;
+      for (const spec of WEAKNESS_MULTIPLIER_ABILITIES) {
+        if (!card.abilities.some((a) => a.name === spec.ability)) continue;
+        // 特性被消除（招式版／passive 暗夜羽擊、初始化、監視塔、熔岩洞、黏著束縛…）⇒ 不生效。
+        if (!isAbilityHolderEffective(state, inst, card, ownerIdx, spec.ability, loc, pool)) continue;
+        // 卡面前提：「**自己**的場上有『電螢蟲』」＝ 持有者那一側的戰鬥場＋備戰。
+        if (!spec.requiresOwnOnField.every((nm) => hasNamedPokemonOnOwnField(state, ownerIdx, nm, pool))) continue;
+        if (spec.multiplier > mul) mul = spec.multiplier;
+      }
+    }
+  }
+  return mul;
+}
+
 /**
  * ⭐⭐⭐ v6.206 中央述詞：「**在場上**的這隻寶可夢，此刻的有效屬性是哪幾種」。
  *
@@ -532,7 +647,15 @@ export function applyWeakRes(
   const atkTypes = getAttackerEffectiveTypes(state, actorIdx, atk, atkCard, pool);
   let d = dmg;
   const w = getEffectiveWeaknessType(state, actorIdx, target, targetCard, pool);
-  if (!w.disabled && w.type && atkTypes.includes(w.type)) { d *= 2; terms?.push({ sign: '×', value: 2, label: '弱點' }); }
+  // ⭐v6.353 弱點**倍率**不再硬寫 ×2，改問中央述詞（甜甜螢｜絕佳費洛蒙生效時為 3）。
+  //   ⚠ 只在「這一次真的要算弱點」時才呼叫 —— 掃雙方場上有成本，狙擊/多目標管線會跑很多次。
+  //   ⚠ 本函式的三個呼叫端（dealAttackDamageToTarget／多目標／snipe-multi）全部 gate 在
+  //     `isActive`，備戰位根本不會進來 ⇒ 卡面「**戰鬥**寶可夢」這個限定自動成立。
+  if (!w.disabled && w.type && atkTypes.includes(w.type)) {
+    const mul = weaknessMultiplier(state, (1 - actorIdx) as 0 | 1, pool, targetCard);   // ⭐v6353-weakness-multiplier
+    d *= mul;
+    terms?.push({ sign: '×', value: mul, label: '弱點' });
+  }
   if (targetCard?.resistance?.type && atkTypes.includes(targetCard.resistance.type)) {
     const rv = parseInt(String(targetCard.resistance.value ?? '0').replace(/[^-\d]/g, ''), 10);
     if (!isNaN(rv)) {

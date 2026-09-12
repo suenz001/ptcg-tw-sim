@@ -6,6 +6,12 @@
  * ⭐ 本檔只放「玩家主動使用（USE_ABILITY）」型的特性；**被動特性沒有 handler**，
  *   一律登記在 `effects.ts` / `engine.ts` 的既有中央表裡（Rule 38：同一個判準只能有一份）：
  *     002/104 阿羅拉 椰蛋樹｜一長再長 → `engine.getEffectiveHP`（被動最大 HP 家族，含特性消除閘）
+ *     004/103 甜甜螢｜絕佳費洛蒙      → `effects.WEAKNESS_MULTIPLIER_ABILITIES` ＋ `effects.weaknessMultiplier`
+ *                                       （⭐v6.353 實裝的「弱點**倍率**」中央述詞，與弱點**屬性**述詞
+ *                                        `getEffectiveWeaknessType` 並列；engine 主傷害管線與
+ *                                        `effects.applyWeakRes` 兩個消費點都問它。純被動 ⇒ 無 handler，
+ *                                        也不會出現在 `getUsableAbilities`（那份清單只列 `ABILITY_EFFECTS`
+ *                                        有登錄的主動特性）。守衛：scripts/test-v6353-weakness-multiplier.mjs）
  *     022     皮卡丘｜寂寞眼神        → `PASSIVE_DAMAGE_REDUCE` + `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`
  *     027     皮卡丘｜躲起來          → `getBenchImmunityAbilityName`（藏隱／深度下潛 同一支）
  *     076     耿鬼ex｜死亡宣告        → ⚠**本版未實裝**（待站長裁示；曾實作後撤回，見 changelog v6.347【五】3：PASSIVE_ON_KO 在兩條 KO 管線相對 addPendingPrize 的順序相反）

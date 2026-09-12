@@ -833,6 +833,26 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
       + '      }\n');
     return s;
   };
+  // ⭐ v6.353：engine.ts 的合法改動有兩種。
+  //   ① import 一行（**純新增**）⇒ `>>> v6353-…` 哨兵框住，泛用剝除器一次剝掉。
+  //   ② 主傷害管線的「弱點 ×2」兩行改成問中央述詞 `weaknessMultiplier`（弱點**倍率**
+  //      參數化；甜甜螢｜絕佳費洛蒙 ×3）—— 這是**修改既有行**，不能用哨兵剝
+  //      ⇒ 逐字換回 BASE 的樣子。那一塊的守備由 test-v6353-weakness-multiplier 全面接管
+  //      （行為端 A~H 八組 + 中央性 I 組 + 突變 M1~M12）。
+  //   ⚠ engine.ts 是 CRLF；LF／CRLF 兩種都試（同 v6.352）。
+  const stripV6353Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6353-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    s = swap(s,
+      '      const _wkMul = weaknessMultiplier(workingState, dIdx, pool, defenderCard);   // ⭐v6353-weakness-multiplier\n'
+      + '      baseDamage *= _wkMul;   // ⭐v6353-weakness-multiplier\n'
+      + "      formula.push({ sign: '×', value: _wkMul, label: '弱點' });   // ⭐v6353-weakness-multiplier\n",
+      '      baseDamage *= 2;\n'
+      + "      formula.push({ sign: '×', value: 2, label: '弱點' });\n");
+    return s;
+  };
   const stripV6348Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6348-');
     s = s.split(
@@ -871,8 +891,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

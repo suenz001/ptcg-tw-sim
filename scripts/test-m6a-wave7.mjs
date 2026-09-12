@@ -230,7 +230,7 @@ console.log('\n【3】027 皮卡丘｜躲起來 — 只要在備戰區，不受�
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('\n【4】⚠ 本批**未實裝**的 3 個特性 —— 卡面逐字錨（待站長裁示；卡面若改版這裡會紅）');
+console.log('\n【4】⚠ 本批**未實裝**的 2 個特性 —— 卡面逐字錨（待站長裁示；卡面若改版這裡會紅）');
 {
   // ⚠ 這一段**不是**「宣告永遠不做」。它只做兩件事：
   //   ① 把 3 張待裁示卡的 abilities[].effect 逐字釘住（卡面改版／抓錯卡時會紅）；
@@ -238,11 +238,10 @@ console.log('\n【4】⚠ 本批**未實裝**的 3 個特性 —— 卡面逐字
   // ⭐ v6.352：原本的第 4 張「弱丁魚｜群聚反擊」已實裝（field-wide 受傷反擊收斂成中央
   //   FIELD_WIDE_RETALIATION + fireFieldWideRetaliation 之後就做得到了），卡面逐字錨
   //   已移交 scripts/test-v6352-field-wide-retaliation.mjs 的 C2 段。
+  // ⭐ v6.353：原本的第 1 張「甜甜螢｜絕佳費洛蒙」已實裝（弱點**倍率**參數化成中央述詞
+  //   WEAKNESS_MULTIPLIER_ABILITIES + weaknessMultiplier 之後就做得到了），卡面逐字錨
+  //   已移交 scripts/test-v6353-weakness-multiplier.mjs 的 C1 段。
   const FACE = [
-    ['甜甜螢', '絕佳費洛蒙',
-      '若自己的場上有「電螢蟲」則生效。只要這隻寶可夢在場上，雙方的戰鬥寶可夢的弱點以「×3」計算傷害。',
-      '弱點倍率在站上是 engine 主傷害管線與 effects.applyWeakRes 兩個消費點各自硬寫的 ×2，'
-      + '要參數化必須改 engine 核心傷害流程'],
     ['耿鬼ex', '死亡宣告',
       '這隻寶可夢受到對手的寶可夢招式的傷害而【昏厥】時，自己擲1次硬幣。若為正面，則將使用招式的寶可夢【昏厥】。',
       'PASSIVE_ON_KO 在兩條 KO 管線中相對 addPendingPrize 的順序相反（v6.259 已記載）；'
@@ -264,7 +263,7 @@ console.log('\n【4】⚠ 本批**未實裝**的 3 個特性 —— 卡面逐字
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('\n【4B】⚠⚠ 上面 3 個待裁示特性「目前確實沒有作用」—— 一律用**行為端數字**釘住');
+console.log('\n【4B】⚠⚠ 上面 2 個待裁示特性「目前確實沒有作用」—— 一律用**行為端數字**釘住');
 {
   // ⚠ 這一段取代原本的 `chk(..., true)` ＝ 恆真安慰劑（把整個實作拆掉也不會紅）。
   //   Rule 33：斷言必須落到行為層。以下每條都配哨兵（證明「該發生的事真的發生了」），
@@ -279,8 +278,13 @@ console.log('\n【4B】⚠⚠ 上面 3 個待裁示特性「目前確實沒有�
     return act(st, { type: 'ATTACK', attackIndex: atkIndexOf(ARTI, '冰雹') });
   };
 
-  // ── (a) 甜甜螢｜絕佳費洛蒙：卡面要求弱點以 ×3 計算；現況仍是 ×2 ──────────────
-  //    靶用程式挑：Basic／無特性／弱點是【水】且倍率是「×2」／HP≥120（吃 60 不會昏厥）。
+  // ── (a) 甜甜螢｜絕佳費洛蒙：⭐v6.353 **已實裝**（弱點倍率參數化成中央述詞之後）────
+  //    這一條原本釘的是「弱點仍以 ×2 結算（60）⇒ 絕佳費洛蒙目前確實無作用」的 HEAD-FAIL 錨，
+  //    v6.353 實作後主動翻紅 —— 依 Rule 40 把判準**上移到意圖層**：現在釘「卡面要求的
+  //    ×3 真的算出來了（30×3 = 90）」＋反對照（前提不成立時回到 ×2）。倍率改成 2 或 4 照樣紅，
+  //    前提被拿掉也照樣紅 ⇒ 這是收緊，不是放寬。完整守備（雙方／戰鬥場／備戰／特性消除／
+  //    不誤套備戰／預估一致／中央性）由 scripts/test-v6353-weakness-multiplier.mjs 接管。
+  //    靶用程式挑：Basic／無特性／弱點是【水】且倍率是「×2」／HP≥120（吃 90 不會昏厥）。
   const WEAK_W = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic'
     && !(c.abilities || []).length && !(c.tags || []).includes('太晶')
     && c.weakness?.type === 'Water' && c.weakness?.value === '×2' && Number(c.hp) >= 120);
@@ -288,13 +292,16 @@ console.log('\n【4B】⚠⚠ 上面 3 個待裁示特性「目前確實沒有�
   const VOLBE = byName('電螢蟲');                 // 卡面前提：自己場上要有「電螢蟲」
   const ctlW = runHail(WEAK_W, [PLAIN]);
   const pheW = runHail(WEAK_W, [ILLUM, VOLBE]);
-  chk(`4B-a 哨兵：靶（${WEAK_W?.name}）對【水】是弱點 ⇒ 冰雹 30 ×2 = 60`,
+  const noVo = runHail(WEAK_W, [ILLUM, PLAIN]);   // 有甜甜螢、沒有電螢蟲
+  chk(`4B-a 哨兵：靶（${WEAK_W?.name}）對【水】是弱點 ⇒ 沒有甜甜螢時 冰雹 30 ×2 = 60`,
     D0(ctlW)?.damage === 60, String(D0(ctlW)?.damage));
   chk('4B-a 哨兵：甜甜螢與電螢蟲真的都在對手場上（各吃了備戰的 30）',
     pheW.players[1].bench.length === 2 && pheW.players[1].bench.every((b) => b.damage === 30),
     JSON.stringify(pheW.players[1].bench.map((b) => b.damage)));
-  chk('4B-a ⭐行為端：同場有甜甜螢＋電螢蟲，弱點仍以 ×2 結算（60，不是 ×3 的 90）'
-    + ' ⇒ 絕佳費洛蒙目前確實無作用', D0(pheW)?.damage === 60, String(D0(pheW)?.damage));
+  chk('4B-a ⭐行為端（v6.353 已實裝）：同場有甜甜螢＋電螢蟲 ⇒ 弱點以 ×3 結算（30×3 = 90）',
+    D0(pheW)?.damage === 90, String(D0(pheW)?.damage));
+  chk('4B-a ⭐反對照：只有甜甜螢、場上沒有「電螢蟲」⇒ 前提不成立，回到 ×2（60）',
+    D0(noVo)?.damage === 60, String(D0(noVo)?.damage));
 
   // ── (b) 弱丁魚｜群聚反擊：⭐v6.352 **已實裝**（field-wide 受傷反擊收斂成中央管線之後）──
   //    這一條原本釘的是「目前確實無作用（0 點）」的 HEAD-FAIL 錨，v6.352 實作後主動翻紅 ——

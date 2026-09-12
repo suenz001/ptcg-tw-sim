@@ -93,6 +93,9 @@ import {
   // >>> v6352-field-wide-retal-import
   fireFieldWideRetaliation,  // ⭐v6.352 field-wide 受傷反擊中央管線（怨恨旋渦／群聚反擊）
   // <<< v6352-field-wide-retal-import
+  // >>> v6353-weakness-multiplier-import
+  weaknessMultiplier,  // ⭐v6.353 弱點**倍率**中央述詞（甜甜螢｜絕佳費洛蒙 ×3）
+  // <<< v6353-weakness-multiplier-import
 } from './effects';
 import {
   steelixPalaceReduce,
@@ -5566,8 +5569,9 @@ function handlePlaying(
     // v4.495：弱點 gate 同時 check skipWeakRes (跳兩個) 與 skipWeakness (只跳弱點)
     if (!skipWeakRes && !skipWeakness && !weaknessDisabled && baseDamage > 0 && effectiveWeaknessType
         && attackerEffectiveTypes.includes(effectiveWeaknessType)) {
-      baseDamage *= 2;
-      formula.push({ sign: '×', value: 2, label: '弱點' });
+      const _wkMul = weaknessMultiplier(workingState, dIdx, pool, defenderCard);   // ⭐v6353-weakness-multiplier
+      baseDamage *= _wkMul;   // ⭐v6353-weakness-multiplier
+      formula.push({ sign: '×', value: _wkMul, label: '弱點' });   // ⭐v6353-weakness-multiplier
     }
     // v2.78 密勒頓｜防護代碼 — 若 defender 有 immuneToExAttackTagThisTurn，
     //   且 attacker 是 ex + 帶有對應 tag，傷害變 0
