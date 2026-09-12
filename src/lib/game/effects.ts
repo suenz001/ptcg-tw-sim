@@ -4941,6 +4941,137 @@ export type RetaliationFn = (
   pool: Map<string, Card>,
   defSnapshot?: CardInstance | null  // v5.548 KO 安全：holder 被擊倒時 state.players[dIdx].active 已 null，傳入受傷前快照
 ) => GameState;
+
+// ════════════════════════════════════════════════════════════════════════════
+// ⭐⭐v6.352 FIELD_WIDE_RETALIATION —「field-wide 受傷反擊」中央表（Rule 38）
+//
+// 卡面家族：「只要這隻寶可夢**在場上**，自己**戰鬥場**的〈X〉受到對手的寶可夢招式的
+//   傷害時，在使用招式的寶可夢身上放置 N 個傷害指示物。」
+//   ⇒ 持有者可以在**備戰**；觸發條件看的是「自己戰鬥場那一隻」符不符合〈X〉。
+//
+// v6.351 以前這個家族只有「花岩怪｜怨恨旋渦」一張，而且是 **4 處手寫**：
+//   ① effects.ts PASSIVE_RETALIATION 的「怨恨旋渦」（持有者自己就在戰鬥位被打）
+//   ② effects.ts fireDefenderOnDamaged 的 3b（掃備戰）
+//   ③ engine.ts KO 分支的 field-wide 掃描
+//   ④ engine.ts 非 KO 分支的 field-wide 掃描
+//   加第二張卡（弱丁魚｜群聚反擊）要改 4 個地方 ⇒ 違反 Rule 38，故收斂成本表 + 一支 helper。
+//
+// ⚠ 「光之翼」（攻擊方不受對手的寶可夢特性效果影響）的豁免**留在三個消費點**，不搬進
+//   helper —— 三處的條件**不是逐字相同**：
+//     ・fireDefenderOnDamaged：`!attackerHasMagicalShine`（`_v6196HasEffAbilByInst`），
+//       「有傷害」是靠函式開頭 `baseDamage <= 0 return` 早退；
+//     ・engine KO 分支：`!_v456KoMagicalShine && baseDamage > 0`；
+//     ・engine 非 KO 分支：`!_v5113RanInKoBranch && baseDamage > 0 && !attackerHasMagicalShine`。
+//   硬搬進 helper 會把三處各自的其他前提（KO 分支去重、baseDamage 早退）一起改掉。
+// ════════════════════════════════════════════════════════════════════════════
+export interface FieldWideRetaliationSpec {
+  /** 特性名（同時是 PASSIVE_RETALIATION 的 key）。 */
+  ability: string;
+  /** 放在攻擊方身上的傷害指示物個數（1 個 ＝ 10 點）。 */
+  counters: number;
+  /** 卡面的「〈X〉」：自己**戰鬥場**那一隻要符合什麼條件才觸發。 */
+  activeQualifies: (activeCard: Card) => boolean;
+  /** 卡面逐字（守衛 scripts/test-v6352-field-wide-retaliation.mjs C2 會拿它跟 static/cards 對拍）。 */
+  face: string;
+}
+
+export const FIELD_WIDE_RETALIATION: readonly FieldWideRetaliationSpec[] = [
+  // 花岩怪｜怨恨旋渦（M1L 13996／M1L 14189／MC 16926，Basic 80HP【惡】）
+  {
+    ability: '怨恨旋渦',
+    counters: 1,
+    activeQualifies: (c) => c.pokemonType === 'Darkness',
+    face: '只要這隻寶可夢在場上，自己戰鬥場的【惡】寶可夢受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置1個傷害指示物。',
+  },
+  // ⭐v6.352 弱丁魚｜群聚反擊（M6a 19928，Basic 30HP【水】）
+  //   卡面「弱丁魚（包含『寶可夢【ex】』）」⇒ 戰鬥場是「弱丁魚」或「弱丁魚ex」都算。
+  //   ⚠ 刻意明列兩個卡名而不是 startsWith('弱丁魚')：後者會把未來的別種同字首卡名一起吃進來。
+  {
+    ability: '群聚反擊',
+    counters: 3,
+    activeQualifies: (c) => c.name === '弱丁魚' || c.name === '弱丁魚ex',
+    face: '只要這隻寶可夢在場上，自己戰鬥場的「弱丁魚（包含『寶可夢【ex】』）」受到對手的寶可夢招式的傷害時，在使用招式的寶可夢身上放置3個傷害指示物。',
+  },
+];
+
+/**
+ * 把 spec.counters 個傷害指示物放到攻擊方戰鬥位身上 ——**唯一**的數字與 log 產生點。
+ * ⚠⚠ log 逐字沿用 v6.351 以前「怨恨旋渦」的格式，一個字都不能改：
+ *   `怨恨旋渦：${攻擊方卡名} 身上放置 1 個傷害指示物（+10）`
+ */
+function placeFieldWideRetaliationCounters(
+  state: GameState,
+  dIdx: 0 | 1,
+  pool: Map<string, Card>,
+  spec: FieldWideRetaliationSpec,
+): GameState {
+  const aIdx = (1 - dIdx) as 0 | 1;
+  const players = [...state.players] as [PlayerState, PlayerState];
+  const att = { ...players[aIdx] };
+  if (!att.active) return state;
+  const dmg = spec.counters * 10;
+  att.active = { ...att.active, damage: att.active.damage + dmg };
+  players[aIdx] = att;
+  const attName = pool.get(att.active.cardId)?.name ?? '?';
+  return addLog({ ...state, players },
+    `${spec.ability}：${attName} 身上放置 ${spec.counters} 個傷害指示物（+${dmg}）`,
+    dIdx);
+}
+
+/**
+ * 持有者**自己就是戰鬥位**那一份（由 PASSIVE_RETALIATION 主 loop 觸發）。
+ * ⚠ 主 loop 掃的就是 defender 戰鬥位那張卡的 abilities ⇒ 這裡的 `def` 必然是持有者本人；
+ *   activeQualifies 對現有兩張卡恆真（花岩怪必為【惡】、弱丁魚的卡名必為「弱丁魚」），
+ *   留著是為了讓「卡面主詞」在兩條路徑上是同一份判準（Rule 38）。
+ * ⚠ `if (!def) return state` 逐字沿用收斂前的寫法（KO 分支 defSnapshot 為 null 時的行為不變）。
+ */
+function makeFieldWideRetaliationFn(spec: FieldWideRetaliationSpec): RetaliationFn {
+  return (state, dIdx, pool, defSnapshot) => {
+    const def = defSnapshot ?? state.players[dIdx].active;
+    if (!def) return state;
+    const defCard = pool.get(def.cardId);
+    if (!defCard || !spec.activeQualifies(defCard)) return state;
+    return placeFieldWideRetaliationCounters(state, dIdx, pool, spec);
+  };
+}
+
+/**
+ * ⭐ field-wide 受傷反擊的**唯一**消費出口 —— engine 的 KO／非 KO 兩分支
+ * 與 effects.fireDefenderOnDamaged 共 3 處呼叫它。
+ *
+ * 只掃 defender 的**備戰**：持有者自己在戰鬥位的那一份由 PASSIVE_RETALIATION 主 loop
+ * 觸發（見 makeFieldWideRetaliationFn），這裡再掃一次就會變成雙重觸發。
+ *
+ * @param defSnapshot KO 分支專用：此時 state.players[dIdx].active 已被設成 null，
+ *                    要用受傷前的快照來判「自己戰鬥場那一隻」符不符合卡面主詞。
+ */
+export function fireFieldWideRetaliation(
+  state: GameState,
+  dIdx: 0 | 1,
+  pool: Map<string, Card>,
+  defSnapshot?: CardInstance | null,
+): GameState {
+  const da = defSnapshot ?? state.players[dIdx].active;
+  if (!da) return state;
+  const daCard = pool.get(da.cardId);
+  if (!daCard) return state;
+  let s = state;
+  for (const spec of FIELD_WIDE_RETALIATION) {
+    if (!spec.activeQualifies(daCard)) continue;
+    for (const benchInst of s.players[dIdx].bench) {
+      const bc = pool.get(benchInst.cardId);
+      if (!bc?.abilities) continue;
+      for (const ab of bc.abilities) {
+        if (ab.name !== spec.ability) continue;
+        // v5.656：holder 特性被初始化／暗夜羽擊／監視塔／熔岩洞等消除 → 不反擊
+        if (!isAbilityHolderEffective(s, benchInst, bc, dIdx, spec.ability, 'bench', pool)) continue;
+        s = placeFieldWideRetaliationCounters(s, dIdx, pool, spec);
+      }
+    }
+  }
+  return s;
+}
+
 export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
   // 毒薔薇 / 羅絲雷朵 毒刺 — 攻擊者中毒
   // v5.979：走中央 applyStatusToOppActive(三槽共存:攻擊方已有其他狀態仍中毒/灼傷、且過來源無關免疫鏈+log)。
@@ -4982,27 +5113,12 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
     return state;
   }],
   // v2.268 wave 2：被動反擊類（defender 持有此特性 → 反擊攻擊者）─────────
-  // 花岩怪｜怨恨旋渦 (MC Basic 80HP, Darkness)
-  // 卡面：「只要這隻寶可夢在場上，自己戰鬥場的【惡】寶可夢受到對手的寶可夢招式的傷害時，
-  //   在使用招式的寶可夢身上放置 1 個傷害指示物。」
-  // 簡化：本實裝以「持有者本身在 active 被打」觸發（持有者必為【惡】，符合卡面 active 條件）。
-  //   若日後需 field-wide（持有者在備戰時 active 是其他【惡】寶可夢也觸發），需擴 hook。
-  ['怨恨旋渦', (state, dIdx, pool, defSnapshot) => {
-    const aIdx = (1 - dIdx) as 0 | 1;
-    const def = defSnapshot ?? state.players[dIdx].active;
-    if (!def) return state;
-    const players = [...state.players] as [PlayerState, PlayerState];
-    const att = { ...players[aIdx] };
-    if (att.active) {
-      att.active = { ...att.active, damage: att.active.damage + 10 };
-      players[aIdx] = att;
-      const attName = pool.get(att.active.cardId)?.name ?? '?';
-      return addLog({ ...state, players },
-        `怨恨旋渦：${attName} 身上放置 1 個傷害指示物（+10）`,
-        dIdx);
-    }
-    return state;
-  }],
+  // ⭐v6.352：「花岩怪｜怨恨旋渦」與「弱丁魚｜群聚反擊」是同一個 field-wide 家族，
+  //   一律由上方中央表 FIELD_WIDE_RETALIATION 產生 —— 指示物個數、log 格式、卡面主詞
+  //   全站只有一份（Rule 38）。
+  //   ⚠ 這裡登記的是「持有者自己就在戰鬥位被打」那一份；持有者在**備戰**的那一份走
+  //     fireFieldWideRetaliation（engine 的 KO／非 KO 兩分支 + fireDefenderOnDamaged）。
+  ...FIELD_WIDE_RETALIATION.map((spec) => [spec.ability, makeFieldWideRetaliationFn(spec)] as [string, RetaliationFn]),
   // 爆焰龜獸｜甲殼刺 (M3 Basic 120HP, Fire)
   // 卡面：「這隻寶可夢在戰鬥場上受到對手的寶可夢招式的傷害時，選擇 1 個使用招式的寶可夢身上附加的能量，將其丟棄。」
   // v5.069：完整實裝 — 改 picker（v5.066 龐克頭盔反擊、v5.067 沉重接力棒
@@ -8319,23 +8435,10 @@ export function fireDefenderOnDamaged(
   }
   // v5.494：卡面內建受傷反擊（陳舊的頭蓋化石等，無 abilities，按卡名；非特性不受光之翼擋）。
   if (baseDamage > 0) s = applyInherentRetaliation(s, dIdx, defCard, pool);
-  // 3b. 怨恨旋渦 field-wide（自方戰鬥場為【惡】時掃備戰）
+  // 3b. ⭐v6.352 field-wide 受傷反擊（怨恨旋渦／群聚反擊）—— 持有者在**備戰**的那一份。
+  //   光之翼的豁免**留在這裡**（理由見 FIELD_WIDE_RETALIATION 上方註解）。
   if (!attackerHasMagicalShine) {
-    const da = s.players[dIdx].active;
-    const daCard = da ? pool.get(da.cardId) : null;
-    if (daCard?.pokemonType === 'Darkness') {
-      for (const benchInst of s.players[dIdx].bench) {
-        const bc = pool.get(benchInst.cardId);
-        if (!bc?.abilities) continue;
-        for (const ab of bc.abilities) {
-          if (ab.name === '怨恨旋渦') {
-            if (!isAbilityHolderEffective(s, benchInst, bc, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656
-            const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
-            if (fn) s = fn(s, dIdx, pool);
-          }
-        }
-      }
-    }
+    s = fireFieldWideRetaliation(s, dIdx, pool);
   }
   // 5. retaliateCountersOnNextHit（還擊斧/等待角擊/殼捲風旋轉）
   {

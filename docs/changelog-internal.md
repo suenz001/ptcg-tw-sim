@@ -1,5 +1,85 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.352 field-wide 受傷反擊收斂成中央管線 ＋ 弱丁魚｜群聚反擊 實裝
+
+BASE `d98ec1c631041aa2b507227edbdde17d9b76dbad`（v6.351）。站長清單 **A-3**。M6a 仍鎖著 ⇒ 玩家看不到新卡；
+既有的 花岩怪｜怨恨旋渦 **行為逐字不變**（log 也不變）。
+
+### 【一】為什麼要先收斂才做得了
+
+卡面句型（兩張逐字同構，只差「哪一隻算數」與指示物數量）：
+「只要這隻寶可夢在場上，自己**戰鬥場**的〈X〉受到對手的寶可夢招式的傷害時，
+在使用招式的寶可夢身上放置 N 個傷害指示物。」
+
+這一家族與一般的 `PASSIVE_RETALIATION` 不同：**觸發者是「自己戰鬥場那一隻」，而持有者可以在備戰**。
+所以除了 active 持有者走主 loop，還要再掃一次 defender 的備戰 —— 那個掃描原本是 **4 處手寫**：
+
+| # | 位置 | 內容 |
+|---|---|---|
+| ① | `effects.ts` `PASSIVE_RETALIATION` 的 `['怨恨旋渦', …]` | 硬寫 `damage + 10` 與 log 字串（22 行） |
+| ② | `effects.ts` `fireDefenderOnDamaged` 3b 段 | 硬寫 `'怨恨旋渦'` ＋ `pokemonType === 'Darkness'`（18 行） |
+| ③ | `engine.ts` **KO 分支** | 同上（15 行），另傳 `koInst` 當快照 |
+| ④ | `engine.ts` **非 KO 分支** | 同上（15 行） |
+
+⇒ 加第二張卡要改 4 個地方（Rule 38）。
+
+### 【二】收斂成一張表 ＋ 一支 helper
+
+```ts
+export interface FieldWideRetaliationSpec { ability; counters; activeQualifies(activeCard); face }
+export const FIELD_WIDE_RETALIATION: readonly FieldWideRetaliationSpec[]        // 2 筆
+function placeFieldWideRetaliationCounters(...)   // ⭐ 數字與 log 的唯一產生點
+function makeFieldWideRetaliationFn(spec)         // 產生 PASSIVE_RETALIATION 成員
+export function fireFieldWideRetaliation(state, dIdx, pool, defSnapshot?)  // 只掃備戰
+```
+
+四處各改成一行；`PASSIVE_RETALIATION` 的成員改由中央表展開
+（`...FIELD_WIDE_RETALIATION.map((spec) => [spec.ability, makeFieldWideRetaliationFn(spec)])`）。
+
+⚠ **log 逐字不變**（既有守衛是字串比對）：收斂前後同一個盤面都是
+`怨恨旋渦：摩托蜥 身上放置 1 個傷害指示物（+10）`（收斂前的實測存在 `__m6a/probe352_base.txt`）。
+
+⚠ **「光之翼」豁免刻意留在三個消費點**，不搬進 helper —— 三處條件**不是逐字相同**：
+- `fireDefenderOnDamaged`：`!attackerHasMagicalShine`（「有傷害」靠函式開頭早退）
+- engine KO 分支：`!_v456KoMagicalShine && baseDamage > 0`
+- engine 非 KO 分支：`!_v5113RanInKoBranch && baseDamage > 0 && !attackerHasMagicalShine`
+
+硬搬會把三處各自的其他前提（KO 分支去重、baseDamage 早退）一起改掉。守衛 C4/C4b 把這三行逐字釘住，
+並斷言 helper 本體**不含** MagicalShine；突變 M17 驗證它真的還在擋。
+
+### 【三】弱丁魚｜群聚反擊（M6a 072/103）
+
+卡面：「只要這隻寶可夢在場上，自己戰鬥場的『弱丁魚（包含「寶可夢【ex】」）』受到對手的寶可夢招式的
+傷害時，在使用招式的寶可夢身上放置3個傷害指示物。」
+
+⇒ 只是在中央表加一筆（`counters: 3`、`activeQualifies: c => c.name === '弱丁魚' || c.name === '弱丁魚ex'`）。
+⚠ 刻意**明列兩個卡名**而不是 `startsWith('弱丁魚')`：後者會把未來的同字首卡名一起吃進來。
+⚠ `弱丁魚ex` 確實存在（M6 id 19571／19645，Basic【水】HP260，特性「大洋增輝」）——
+它**沒有**群聚反擊，所以守衛 B3 用它來證明卡面「（包含『寶可夢【ex】』）」那半句真的有接。
+
+### 【四】守衛
+
+`scripts/test-v6352-field-wide-retaliation.mjs`：**PASS 87 / FAIL 0**（全部行為端，每條都配哨兵）。
+- 【A】怨恨旋渦**零行為變更**：戰鬥場／備戰／非【惡】反對照／KO 分支／持有者自己被 KO／
+  log 逐字／兩隻各觸發一次／三隻／特性被消除＋正對照／`abilityNullifiedThisTurn`
+- 【B】群聚反擊：+30／備戰 +30／**弱丁魚ex** +30／反對照 0／雙持有者 +60／KO 分支／特性被消除
+- 【D】`effects.fireDefenderOnDamaged` 消費點（月亮伊布｜出奇一擊 的 picker 真的 RESOLVE 掉）
+- 【E】光之翼擋住／熔岩洞消除光之翼後恢復
+- 【C】中央性：`'怨恨旋渦'` 字面在 engine.ts **0 處**、effects.ts 只剩中央表 1 處；
+  `fireFieldWideRetaliation(` 呼叫點剛好 **3**；兩筆 `face` 與 `static/cards` 逐字相同
+
+突變 **M1~M20 全殺**。
+
+⚠ `test-m6a-wave7` 的 4B-b 原本釘的是「群聚反擊目前確實無作用（0 點）」的 HEAD-FAIL 錨，
+本版實裝後主動翻紅 ⇒ 依 **Rule 40 把判準上移到意圖層**：改釘「卡面要求的 3 個指示物真的放上去了（30 點）」
+＋新增反對照 0 點，並把該卡從【4】待裁示 FACE 表移除（4 → 3）。完整守備移交 test-v6352。
+
+### 【五】⚠ 順帶記錄一個**收斂前就存在**的時序（本版沒改，待裁示）
+
+急凍鳥｜冰雹（對手全體各 30）打到「備戰有 HP30 的弱丁魚」時：
+備戰那一份傷害先結算 ⇒ 弱丁魚先昏厥離場 ⇒ 輪到戰鬥場那一份時它已經不「在場上」⇒ **不觸發**；
+但同一招走 KO 分支時備戰那隻還在 ⇒ **照樣觸發 +60**。兩條路徑不等價，是否要統一待站長裁示。
+
 ## v6.351 ⚠⚠⚠ 「在造成傷害前…」的招式效果**從來沒有對傷害生效過**（9 張卡）
 
 BASE `362bbe162317f39b13c0e861da1b660ef3016d4e`（v6.350）。站長清單 **A-6**。

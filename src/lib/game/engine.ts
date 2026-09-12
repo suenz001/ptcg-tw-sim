@@ -90,6 +90,9 @@ import {
   ON_EVOLVE_FROM_HAND_ABILITIES,
   wouldNeutralCenterBlock,  // v3.67 中立中心 stadium damage block
   applyInherentRetaliation,  // v5.494 化石卡面內建受傷反擊
+  // >>> v6352-field-wide-retal-import
+  fireFieldWideRetaliation,  // ⭐v6.352 field-wide 受傷反擊中央管線（怨恨旋渦／群聚反擊）
+  // <<< v6352-field-wide-retal-import
 } from './effects';
 import {
   steelixPalaceReduce,
@@ -6370,21 +6373,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       //             這裡只 scan defender.bench 上的花岩怪（持有者在備戰 + active 是其他【惡】）。
       //   光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。
       if (!_v456KoMagicalShine && baseDamage > 0) {
-        const defActiveKO = koInst;  // v5.548 KO 安全：KO 時 active 已 null，用受傷前快照判【惡】field-wide
-        const defActiveCardKO = defActiveKO ? pool.get(defActiveKO.cardId) : null;
-        if (defActiveCardKO?.pokemonType === 'Darkness') {
-          for (const benchInst of newState.players[dIdx].bench) {
-            const benchCard = pool.get(benchInst.cardId);
-            if (!benchCard?.abilities) continue;
-            for (const ab of benchCard.abilities) {
-              if (ab.name === '怨恨旋渦') {
-                if (!isAbilityHolderEffective(newState, benchInst, benchCard, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656
-                const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
-                if (fn) newState = fn(newState, dIdx, pool, koInst);
-              }
-            }
-          }
-        }
+        newState = fireFieldWideRetaliation(newState, dIdx, pool, koInst);   // ⭐v6352-field-wide-retal-ko
       }
 
       // 無備戰寶可夢 → 直接終局，不需送出新寶可夢
@@ -6782,21 +6771,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     //   光之翼亦擋（同 PASSIVE_RETALIATION 既有準則）。
     // v5.113 KO 重複觸發修：v5.083 KO branch L5006 已跑過，這裡共用版加 KO gate
     if (!_v5113RanInKoBranch && baseDamage > 0 && !attackerHasMagicalShine) {
-      const defActiveNK = newState.players[dIdx].active;
-      const defActiveCardNK = defActiveNK ? pool.get(defActiveNK.cardId) : null;
-      if (defActiveCardNK?.pokemonType === 'Darkness') {
-        for (const benchInst of newState.players[dIdx].bench) {
-          const benchCard = pool.get(benchInst.cardId);
-          if (!benchCard?.abilities) continue;
-          for (const ab of benchCard.abilities) {
-            if (ab.name === '怨恨旋渦') {
-              if (!isAbilityHolderEffective(newState, benchInst, benchCard, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656
-              const fn = PASSIVE_RETALIATION.get('怨恨旋渦');
-              if (fn) newState = fn(newState, dIdx, pool);
-            }
-          }
-        }
-      }
+      newState = fireFieldWideRetaliation(newState, dIdx, pool);   // ⭐v6352-field-wide-retal-nonko
     }
 
     // v2.382：殼捲風旋轉 retaliation — defender 有 retaliateCountersOnNextHit flag

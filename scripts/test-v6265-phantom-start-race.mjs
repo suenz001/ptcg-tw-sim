@@ -785,6 +785,54 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   // ⭐ v6.351：engine.ts 合法新增「PRE 之後對齊 defender 快照」一個區塊（**純新增**，哨兵框住）。
   //   那一塊的守備由 test-v6351 全面接管（32 條行為端斷言，家族 9 張各驗一次）。
   const stripV6351Engine = (src) => stripSentinelBlocks(src, 'v6351-');
+  // ⭐ v6.352：engine.ts 的合法改動有兩種。
+  //   ① import 一行（**純新增**）⇒ `>>> v6352-…` 哨兵框住，泛用剝除器一次剝掉。
+  //   ② KO／非 KO 兩處「怨恨旋渦 field-wide 掃備戰」收斂成中央 fireFieldWideRetaliation
+  //      的一行呼叫 —— 這是**修改既有行**，不能用哨兵剝（剝掉等於把 BASE 的內容也刪掉）
+  //      ⇒ 逐字換回 BASE 的樣子。那一塊的守備由 test-v6352-field-wide-retaliation 全面接管
+  //      （行為端 A/B 兩組 + 中央性 C 組 + 突變 M1~M13）。
+  //   ⚠ engine.ts 是 CRLF；下面 LF／CRLF 兩種都試，避免哪天行尾被正規化就靜默失效。
+  const stripV6352Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6352-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    s = swap(s,
+      '        newState = fireFieldWideRetaliation(newState, dIdx, pool, koInst);   // ⭐v6352-field-wide-retal-ko\n',
+      '        const defActiveKO = koInst;  // v5.548 KO 安全：KO 時 active 已 null，用受傷前快照判【惡】field-wide\n'
+      + '        const defActiveCardKO = defActiveKO ? pool.get(defActiveKO.cardId) : null;\n'
+      + "        if (defActiveCardKO?.pokemonType === 'Darkness') {\n"
+      + '          for (const benchInst of newState.players[dIdx].bench) {\n'
+      + '            const benchCard = pool.get(benchInst.cardId);\n'
+      + '            if (!benchCard?.abilities) continue;\n'
+      + '            for (const ab of benchCard.abilities) {\n'
+      + "              if (ab.name === '怨恨旋渦') {\n"
+      + "                if (!isAbilityHolderEffective(newState, benchInst, benchCard, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656\n"
+      + "                const fn = PASSIVE_RETALIATION.get('怨恨旋渦');\n"
+      + '                if (fn) newState = fn(newState, dIdx, pool, koInst);\n'
+      + '              }\n'
+      + '            }\n'
+      + '          }\n'
+      + '        }\n');
+    s = swap(s,
+      '      newState = fireFieldWideRetaliation(newState, dIdx, pool);   // ⭐v6352-field-wide-retal-nonko\n',
+      '      const defActiveNK = newState.players[dIdx].active;\n'
+      + '      const defActiveCardNK = defActiveNK ? pool.get(defActiveNK.cardId) : null;\n'
+      + "      if (defActiveCardNK?.pokemonType === 'Darkness') {\n"
+      + '        for (const benchInst of newState.players[dIdx].bench) {\n'
+      + '          const benchCard = pool.get(benchInst.cardId);\n'
+      + '          if (!benchCard?.abilities) continue;\n'
+      + '          for (const ab of benchCard.abilities) {\n'
+      + "            if (ab.name === '怨恨旋渦') {\n"
+      + "              if (!isAbilityHolderEffective(newState, benchInst, benchCard, dIdx, '怨恨旋渦', 'bench', pool)) continue; // v5.656\n"
+      + "              const fn = PASSIVE_RETALIATION.get('怨恨旋渦');\n"
+      + '              if (fn) newState = fn(newState, dIdx, pool);\n'
+      + '            }\n'
+      + '          }\n'
+      + '        }\n'
+      + '      }\n');
+    return s;
+  };
   const stripV6348Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6348-');
     s = s.split(
@@ -823,8 +871,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
