@@ -754,6 +754,61 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   const stripV6334Engine = (src) => src.replace(
     '      `${attacker.name} 將 ${cardLink(energyCard.iid, getCard(energyCard.cardId, pool).name)} 附加到 ${cardLink(target.iid, targetCard.name)}`,   // >>> v6334-attach-energy-log-name\n',
     '      `${attacker.name} 將能量附加到 ${cardLink(target.iid, targetCard.name)}`,\n');
+  // ⭐ v6.347：engine.ts 合法新增 M6a「特性」實裝的五個區塊（import／一長再長／好眠／
+  //   記憶螺旋／可用性 gate），全部用 `// >>> v6347-…` ~ `// <<< v6347-…` 哨兵框住，
+  //   那些區塊的守備由 test-m6a-wave7 全面接管（111 條行為端斷言 + 突變 M1~M34）。
+  // ⭐ v6.348：掌握弱點／覆蓋伏特 的跨回合 promote 時序修正 —— 純新增的部分同樣用
+  //   `>>> v6348-…` 哨兵框住；**修改型**的三處（promote 呼叫端兩行、promotePending 內的
+  //   promote→clear、治癒類 gate 多一個名字）不能用哨兵剝（剝掉就等於把 BASE 的內容也刪掉），
+  //   一律逐字還原成 BASE 的樣子。那一塊的守備由 test-v6348 全面接管。
+  //   ⚠ 沿用 v6.267／v6.270／v6.280／v6.310／v6.331／v6.334 對 F4 的既有修法：
+  //     把已知的合法改動還原之後，其餘仍必須逐字等於 BASE 的 blob —— 動到別的地方照樣紅。
+  const stripSentinelBlocks = (src, tag) => {
+    let s = src;
+    for (let guard = 0; ; guard++) {
+      if (guard > 50) throw new Error('哨兵剝除迴圈：' + tag);
+      const a = s.indexOf('>>> ' + tag);
+      if (a < 0) return s;
+      const b = s.indexOf('<<< ' + tag, a);
+      if (b < 0) throw new Error('哨兵不成對（只有 >>>）：' + tag);
+      const ls = s.lastIndexOf('\n', a) + 1;          // 起點那一行的行首
+      const le = s.indexOf('\n', b) + 1;              // 收尾那一行的行尾（含換行）
+      if (le <= 0) throw new Error('哨兵收尾行沒有換行：' + tag);
+      s = s.slice(0, ls) + s.slice(le);
+    }
+  };
+  const stripV6347Engine = (src) => stripSentinelBlocks(src, 'v6347-');
+  const stripV6348Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6348-');
+    s = s.split(
+      '    if (currentPlayer.active) currentPlayer.active = promoteWeaknessOverride(promoteDeferredPrize(promoteTakeExtra(currentPlayer.active)));   // ⭐v6348-weakness-override-callsite\n'
+      + '    currentPlayer.bench = currentPlayer.bench.map(c => promoteWeaknessOverride(promoteDeferredPrize(promoteTakeExtra(c))));   // ⭐v6348-weakness-override-callsite\n'
+    ).join(
+      '    if (currentPlayer.active) currentPlayer.active = promoteDeferredPrize(promoteTakeExtra(currentPlayer.active));\n'
+      + '    currentPlayer.bench = currentPlayer.bench.map(c => promoteDeferredPrize(promoteTakeExtra(c)));\n'
+    );
+    s = s.split(
+      '      // v6348-weakness-override-clear：原 v2.78 的 promote 移到 promoteWeaknessOverride，\n'
+      + '      //   這一格改成**清除**（與上方 Wave 36 的 takeExtraDamageThisTurn 同一格語意）——\n'
+      + '      //   施加者的回合結束 ＝ 卡面「在下個自己的回合**結束前**」的終點。\n'
+      + '      if (c.weaknessOverrideTypeThisTurn) {\n'
+      + '        n = { ...n };\n'
+      + '        delete n.weaknessOverrideTypeThisTurn;\n'
+      + '      }\n'
+    ).join(
+      '      // v2.78 智揮猩｜掌握弱點\n'
+      + '      if (c.weaknessOverrideTypeNextTurn) {\n'
+      + '        n = { ...n, weaknessOverrideTypeThisTurn: c.weaknessOverrideTypeNextTurn };\n'
+      + '        delete n.weaknessOverrideTypeNextTurn;\n'
+      + '      }\n'
+    );
+    s = s.split(
+      "      if (ab.name === '甜點之禮' || ab.name === '發酵果汁' || ab.name === '激動治癒' || ab.name === '分享歡樂') {   // ⭐v6348-share-joy-gate\n"
+    ).join(
+      "      if (ab.name === '甜點之禮' || ab.name === '發酵果汁' || ab.name === '激動治癒') {\n"
+    );
+    return s;
+  };
   for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA],
                           ['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
     const b = readBaseBlob(ROOT, sha, p);
@@ -761,7 +816,9 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s1 = stripV6310Engine(raw); ok(s1 !== raw, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6348Engine(stripV6347Engine(raw));
+        ok(s0 !== raw, 'v6.347／v6.348 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
         return s3;

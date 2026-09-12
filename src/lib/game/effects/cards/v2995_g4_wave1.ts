@@ -39,7 +39,8 @@ import {
   regA, regAByName, regR,
   addLog, updatePlayer, withPending, shuffle, drawCards,
   clearActiveEffects,
-  healResolver, rejectAbilityUse } from '../_shared';
+  healResolver, rejectAbilityUse,
+  healOneOwnPokemonPending } from '../_shared';   // ⭐v6.348 治癒類中央出口
 import { flipCoinsWithLog, applyStatusToOppActive, energyProvidesType } from '../../effects'; // v5.702 host-aware 草能量述詞
 import type { Card } from '$lib/cards/types';
 import { isMegaExCard } from '../../selection-filter'; // v6.210：Mega ex 判定收斂中央述詞（leaf，Check O 安全）
@@ -71,18 +72,9 @@ function hasMegaExOfType(
 // ── 1. 霜奶仙ex｜甜點之禮 ─────────────────────────────────────────────────────
 // 卡面：「在自己的回合時可使用 1 次。將自己的 1 隻寶可夢恢復『30』HP。」
 // gate：每回合 1 次（engine 處理）
-regA('霜奶仙ex', 0, (st, idx, _pool, _cardInst) => {
-  const p = st.players[idx];
-  const hasAnyone = !!p.active || p.bench.length > 0;
-  if (!hasAnyone) return rejectAbilityUse(st, '甜點之禮：場上沒有寶可夢可恢復', idx);
-  const s = addLog(st, '甜點之禮：選擇 1 隻自己的寶可夢恢復 30 HP', idx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'sweet-gift-heal-30',
-    params: { healAmount: 30 },
-  });
-});
+regA('霜奶仙ex', 0, (st, idx, _pool, _cardInst) =>
+  // ⭐v6.348 收斂到中央出口（log／reject 字串逐字不變，並補上 validIids）
+  healOneOwnPokemonPending(st, idx, 30, 'sweet-gift-heal-30', '甜點之禮'));
 regR('sweet-gift-heal-30', healResolver);
 
 // ── 2. 壺壺｜發酵果汁 ────────────────────────────────────────────────────────
@@ -102,13 +94,8 @@ regA('壺壺', 0, (st, idx, pool, cardInst) => {
   const hasGrass = src.energyAttached.some(e => energyProvidesType(src, e, 'Grass', pool));
   if (!hasGrass) return rejectAbilityUse(st, '發酵果汁：身上沒有【草】能量', idx);
 
-  const s = addLog(st, '發酵果汁：選擇 1 隻自己的寶可夢恢復 30 HP', idx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'fermented-juice-heal-30',
-    params: { healAmount: 30 },
-  });
+  // ⭐v6.348 收斂到中央出口（前提檢查留在上面，治癒本體共用）
+  return healOneOwnPokemonPending(st, idx, 30, 'fermented-juice-heal-30', '發酵果汁');
 });
 regR('fermented-juice-heal-30', healResolver);
 
@@ -138,15 +125,8 @@ regAByName('樂天河童', '激動治癒', (st, idx, pool, _cardInst) => {
   if (!hasMegaExOfType(p, pool, 'Grass')) {
     return rejectAbilityUse(st, '激動治癒：場上沒有【草】屬性的超級進化【ex】', idx);
   }
-  const hasAnyone = !!p.active || p.bench.length > 0;
-  if (!hasAnyone) return rejectAbilityUse(st, '激動治癒：場上沒有寶可夢可恢復', idx);
-  const s = addLog(st, '激動治癒：選擇 1 隻自己的寶可夢恢復 60 HP', idx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'rasoten-mega-heal-60',
-    params: { healAmount: 60 },
-  });
+  // ⭐v6.348 收斂到中央出口（前提檢查留在上面，治癒本體共用）
+  return healOneOwnPokemonPending(st, idx, 60, 'rasoten-mega-heal-60', '激動治癒');
 });
 regR('rasoten-mega-heal-60', healResolver);
 

@@ -31,8 +31,10 @@ import {
   PASSIVE_DAMAGE_REDUCE_BY_ATTACKER, PASSIVE_COIN_AVOID, PASSIVE_KO_RETALIATION, PASSIVE_ON_KO,
   koVictimAbilityPrizeAdjust,  // ⭐v6.259 被 KO 者自身特性的獎賞張數修正（願增猿ex｜鬆口氣）
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
+  // >>> v6347-engine-imports
   countEnergyTypeBloomAware,                  // ⭐v6.347 一長再長：「6個以上【草】能量」host-aware 個數
   isM6aWingAbility, m6aWingAbilityReady,      // ⭐v6.347 三神鳥羽擊：唯一可用性述詞（與 regAByName 共用）
+  // <<< v6347-engine-imports
   TOOL_HP_BONUS, TOOL_ATTACK_BONUS, TOOL_DEFENSE_REDUCE_BY_TYPE, TOOL_DEFENSE_REDUCE_BY_ATTACKER_ABILITY,
   TOOL_DEFENSE_REDUCE_BY_ATTACKER_CARD,  // v6.072 訂製背心（依攻擊方卡片減傷）
   TOOL_PREVENT_KO, TOOL_ON_KO, TOOL_PRIZE_BONUS, TOOL_ON_DAMAGED,
@@ -1269,6 +1271,7 @@ export function getEffectiveHP(
     });
     if (hasSpecial) hp += 150;
   }
+  // >>> v6347-exeggutor-bloom
   // ⭐v6.347 阿羅拉 椰蛋樹｜一長再長（M6a 002/103・104/103，J，Stage1 150HP【草】）
   // 卡面逐字：「若這隻寶可夢身上附有6個以上【草】能量，則這隻寶可夢的最大HP「+250」。」
   //   ⚠ 「6個以上【草】能量」＝**能量的個數**（不是能量卡的張數）⇒ 走中央 host-aware 述詞
@@ -1282,6 +1285,7 @@ export function getEffectiveHP(
       && countEnergyTypeBloomAware(inst, 'Grass', state, _v6206OwnerIdx, pool) >= 6) {
     hp += 250;
   }
+  // <<< v6347-exeggutor-bloom
   return hp;
 }
 
@@ -7180,6 +7184,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
           state = addLog({ ...state, players }, `${sleeperName}：正面 → 醒來了！`, null);
         } else {
           state = addLog({ ...state, players }, `${sleeperName}：反面 → 仍在睡眠`, null);
+          // >>> v6347-snorlax-good-sleep
           // ⭐v6.347 卡比獸｜好眠（M6a 095/103，J，Basic【無】160HP）
           // 卡面逐字：「這隻寶可夢【睡眠】時，若在寶可夢檢查中這隻寶可夢沒有從【睡眠】恢復，
           //            則將這隻寶可夢的HP全部恢復。」
@@ -7198,6 +7203,7 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
             state = addLog({ ...state, players },
               `好眠：${sleeperName} 沒有從睡眠恢復 → HP 全部恢復`, null);
           }
+          // <<< v6347-snorlax-good-sleep
         }
       }
     }
@@ -7795,6 +7801,21 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete n.takeExtraDamageNextTurn;
       return n;
     };
+    // >>> v6348-weakness-override-promote
+    // ⭐v6.348 智揮猩｜掌握弱點（v2.78）／皮卡丘｜覆蓋伏特（M6a 034/103）
+    //   卡面：「在下個**自己**的回合結束前，受到這個招式的寶可夢弱點改為【X】屬性。」
+    //   ⚠ 旗標掛在**對手**的寶可夢身上，消費點卻在**施加者自己**的回合
+    //     （傷害管線只在攻擊時讀 defenderActive.weaknessOverrideTypeThisTurn）
+    //     ⇒ 與 takeExtraDamageNextTurn（刺耳聲家族）完全同型，必須共用同一套生命週期：
+    //       **擁有者自己的 END_TURN** promote（本函式，與 promoteTakeExtra 並列）、
+    //       **施加者的 END_TURN** 清除（promotePending，見下方 v6348-weakness-override-clear）。
+    const promoteWeaknessOverride = (c: CardInstance): CardInstance => {
+      if (!c.weaknessOverrideTypeNextTurn) return c;
+      const n: CardInstance = { ...c, weaknessOverrideTypeThisTurn: c.weaknessOverrideTypeNextTurn };
+      delete n.weaknessOverrideTypeNextTurn;
+      return n;
+    };
+    // <<< v6348-weakness-override-promote
     // Wave 39：於 aIdx 方自己的卡 promote deferredPrizeBonusNextTurn → ThisTurn（同跨回合模型）
     const promoteDeferredPrize = (c: CardInstance): CardInstance => {
       if (!c.deferredPrizeBonusNextTurn || c.deferredPrizeBonusNextTurn <= 0) return c;
@@ -7802,8 +7823,8 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       delete n.deferredPrizeBonusNextTurn;
       return n;
     };
-    if (currentPlayer.active) currentPlayer.active = promoteDeferredPrize(promoteTakeExtra(currentPlayer.active));
-    currentPlayer.bench = currentPlayer.bench.map(c => promoteDeferredPrize(promoteTakeExtra(c)));
+    if (currentPlayer.active) currentPlayer.active = promoteWeaknessOverride(promoteDeferredPrize(promoteTakeExtra(currentPlayer.active)));   // ⭐v6348-weakness-override-callsite
+    currentPlayer.bench = currentPlayer.bench.map(c => promoteWeaknessOverride(promoteDeferredPrize(promoteTakeExtra(c))));   // ⭐v6348-weakness-override-callsite
     players[aIdx] = currentPlayer;
 
     // 重置次方玩家的回合限制旗標 + promote cantAttackPending → cantAttackThisTurn
@@ -7915,10 +7936,12 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         n = { ...n, endTurnOnOppAttachEnergyThisTurn: true };
         delete n.endTurnOnOppAttachEnergyNextTurn;
       }
-      // v2.78 智揮猩｜掌握弱點
-      if (c.weaknessOverrideTypeNextTurn) {
-        n = { ...n, weaknessOverrideTypeThisTurn: c.weaknessOverrideTypeNextTurn };
-        delete n.weaknessOverrideTypeNextTurn;
+      // v6348-weakness-override-clear：原 v2.78 的 promote 移到 promoteWeaknessOverride，
+      //   這一格改成**清除**（與上方 Wave 36 的 takeExtraDamageThisTurn 同一格語意）——
+      //   施加者的回合結束 ＝ 卡面「在下個自己的回合**結束前**」的終點。
+      if (c.weaknessOverrideTypeThisTurn) {
+        n = { ...n };
+        delete n.weaknessOverrideTypeThisTurn;
       }
       // v2.92：promote blockedAttackNamesNextTurn → blockedAttackNamesThisTurn
       // （超級勇氣：在下個自己的回合，這隻寶可夢無法使用『超級勇氣』）
@@ -9178,6 +9201,7 @@ export function getEffectiveAttacks(
         result.push({ atk, sourceCardName, isFromTool: false });
       }
     }
+    // >>> v6347-mew-memory-spiral
     // ⭐v6.347 夢幻ex｜記憶螺旋（M6a 057/103・135/103，J，Basic【超】160HP）
     // 卡面逐字：「這隻寶可夢可使用自己的備戰寶可夢持有的所有招式。[需要有足夠使用招式的能量。]」
     //   ⚠ 這是「可使用**他人持有的**招式」家族（古空棘魚｜潛入記憶 同型），**不是**
@@ -9206,6 +9230,7 @@ export function getEffectiveAttacks(
         }
       }
     }
+    // <<< v6347-mew-memory-spiral
   }
   return result;
 }
@@ -10178,6 +10203,7 @@ export function getUsableAbilities(
       }
       // v5.519 土龍節節｜逃跑抽出 — 官方 Q&A：牌庫為 0 時不能使用（需先抽 3 張）→ 不列入可用清單。
       if (ab.name === '逃跑抽出' && player.deck.length === 0) return;
+      // >>> v6347-ability-gates
       // ⭐v6.347 M6a 三神鳥（火焰鳥｜燃燒羽擊／急凍鳥｜嚴寒羽擊／閃電鳥｜濺射羽擊）
       //   卡面前提：「若自己的場上有『X』『Y』」＋「從自己的手牌選擇1張『基本【Z】能量』卡」。
       //   ⚠ 與卡檔的 regAByName 問**同一支**中央述詞（effects.m6aWingAbilityReady），
@@ -10192,6 +10218,7 @@ export function getUsableAbilities(
         if (player.active?.iid === pk.iid) return;   // 在戰鬥場不可使用
         if (player.deck.length === 0) return;
       }
+      // <<< v6347-ability-gates
       // v4.4996：4 組撞 key 卡的另一個 ability — 都是 passive HP 修飾或未實裝，不該顯示「使用特性」按鈕
       //   - 生機森巴 (樂天河童 SV9/MC) — passive +40 HP，自動套用 getEffectiveHP
       //   - 雜草魂 (怖納噬草 SV8a) — passive 對手獎賞×50 HP，自動套用
@@ -10764,8 +10791,12 @@ export function getUsableAbilities(
         if (!player.active) return;
         if (player.active.damage === 0) return;
       }
+      // >>> v6348-share-joy-gate-note
+      // ⭐v6.348 尼多娜｜分享歡樂（M6a 074/103）與 甜點之禮 **卡面逐字相同**，卻漏了這道 gate
+      //   ⇒ 全員滿血時按鈕仍亮、按下去開一個沒意義的 picker 並吃掉本回合特性權（Rule 38）。
+      // <<< v6348-share-joy-gate-note
       // 霜奶仙ex｜甜點之禮 / 壺壺｜發酵果汁 / 樂天河童｜激動治癒：需場上有受傷的寶可夢（沒受傷按了也沒效果）
-      if (ab.name === '甜點之禮' || ab.name === '發酵果汁' || ab.name === '激動治癒') {
+      if (ab.name === '甜點之禮' || ab.name === '發酵果汁' || ab.name === '激動治癒' || ab.name === '分享歡樂') {   // ⭐v6348-share-joy-gate
         const allFs = [...(player.active ? [player.active] : []), ...player.bench];
         if (!allFs.some(c => c.damage > 0)) return;
       }

@@ -2018,6 +2018,40 @@ export function applyBenchPlaceSideEffects(
   return state;
 }
 
+/**
+ * ⭐v6.348 「將自己的 1 隻寶可夢恢復 N HP」的**唯一**中央出口。
+ *
+ * 站上有四張卡面**逐字同構**（只差數字與前提）：
+ *   霜奶仙ex｜甜點之禮 30 ／ 壺壺｜發酵果汁 30 ／ 樂天河童｜激動治癒 60 ／ 尼多娜｜分享歡樂 30
+ * 原本四份各自手寫同一段 withPending（Rule 38 違反），而且**四份都沒有宣告 validIids**
+ * ⇒ 完全不經 engine 的中央消毒閘（test-v6175 F 段棘輪點名的樣式）。
+ *
+ * ⚠ log／reject 字串刻意維持與收斂前**逐字相同**（四張卡的既有守衛都是字串比對）。
+ * ⚠ 卡面是「自己的 1 隻寶可夢」＝ 戰鬥場 ＋ 備戰，**沒受傷的也可以選**（官方允許無效果的選擇）
+ *   ⇒ validIids 是「自己場上全部」，不是「damage > 0 的」。
+ *   「場上完全沒有受傷的寶可夢時按鈕不亮」是 engine.getUsableAbilities 的**另一份**判準
+ *   （按了也沒效果就不該浪費特性權），與這裡的合法目標集合是兩件事。
+ */
+export function healOneOwnPokemonPending(
+  state: GameState,
+  idx: 0 | 1,
+  amount: number,
+  effectKey: string,
+  label: string,
+): GameState {
+  const p = state.players[idx];
+  const ownIids = [...(p.active ? [p.active.iid] : []), ...p.bench.map((b) => b.iid)];
+  if (ownIids.length === 0) return rejectAbilityUse(state, `${label}：場上沒有寶可夢可恢復`, idx);
+  const s = addLog(state, `${label}：選擇 1 隻自己的寶可夢恢復 ${amount} HP`, idx);
+  return withPending(s, {
+    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
+    minCount: 1, maxCount: 1,
+    validIids: ownIids,
+    effectKey,
+    params: { healAmount: amount },
+  });
+}
+
 export function healResolver(
   st: GameState,
   idx: 0 | 1,

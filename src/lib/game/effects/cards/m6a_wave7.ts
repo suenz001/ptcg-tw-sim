@@ -8,7 +8,7 @@
  *     002/104 阿羅拉 椰蛋樹｜一長再長 → `engine.getEffectiveHP`（被動最大 HP 家族，含特性消除閘）
  *     022     皮卡丘｜寂寞眼神        → `PASSIVE_DAMAGE_REDUCE` + `ACTIVE_ONLY_PASSIVE_REDUCE_ABILITIES`
  *     027     皮卡丘｜躲起來          → `getBenchImmunityAbilityName`（藏隱／深度下潛 同一支）
- *     076     耿鬼ex｜死亡宣告        → `PASSIVE_ON_KO` + `PASSIVE_ON_KO_BENCH_ALSO`
+ *     076     耿鬼ex｜死亡宣告        → ⚠**本版未實裝**（待站長裁示；曾實作後撤回，見 changelog v6.347【五】3：PASSIVE_ON_KO 在兩條 KO 管線相對 addPendingPrize 的順序相反）
  *     095     卡比獸｜好眠            → `engine` 寶可夢檢查的睡眠擲幣區
  *     057/135 夢幻ex｜記憶螺旋        → `engine.getEffectiveAttacks`（古空棘魚｜潛入記憶 同一家族）
  *
@@ -33,6 +33,7 @@ import {
   regAByName, regR,
   addLog, updatePlayer, withPending, rejectAbilityUse,
   shuffle, healResolver, fireOnHandEnergyAttached,
+  healOneOwnPokemonPending,   // ⭐v6.348 治癒類中央出口（與 甜點之禮／發酵果汁／激動治癒 同一支）
 } from '../_shared';
 import { applyMagearnaHandAttachHeal } from './v3000_g3_wave2';
 import {
@@ -149,19 +150,10 @@ regR('m6a-wing-attach-self', (st, idx, iids, params, pool) => {
 //   ⚠ 與 霜奶仙ex｜甜點之禮（v2995_g4_wave1.ts）**卡面逐字相同** ⇒ 走同一支中央
 //     `healResolver`（heal-target pending，params.healAmount），不另寫一份回血邏輯。
 // ══════════════════════════════════════════════════════════════════════════════
-regAByName('尼多娜', '分享歡樂', (st, idx, _pool, _cardInst) => {
-  const p = st.players[idx];
-  if (!p.active && p.bench.length === 0) {
-    return rejectAbilityUse(st, '分享歡樂：場上沒有寶可夢可恢復', idx);
-  }
-  const s = addLog(st, '分享歡樂：選擇 1 隻自己的寶可夢恢復 30 HP', idx);
-  return withPending(s, {
-    type: 'heal-target', actorIdx: idx, sourcePlayerIdx: idx,
-    minCount: 1, maxCount: 1,
-    effectKey: 'share-joy-heal-30',
-    params: { healAmount: 30 },
-  });
-});
+//   ⭐v6.348 與 霜奶仙ex｜甜點之禮 卡面逐字相同 ⇒ 連「開 picker」都走同一支中央出口
+//     healOneOwnPokemonPending（含 validIids 消毒閘），不再各寫一份 withPending。
+regAByName('尼多娜', '分享歡樂', (st, idx, _pool, _cardInst) =>
+  healOneOwnPokemonPending(st, idx, 30, 'share-joy-heal-30', '分享歡樂'));
 regR('share-joy-heal-30', healResolver);
 
 // ══════════════════════════════════════════════════════════════════════════════

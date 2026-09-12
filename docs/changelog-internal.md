@@ -1,5 +1,99 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.348 ⚠⚠ 弱點覆寫跨回合時序修正（**自 v2.78 起的死碼**）＋ 治癒類四張卡收斂
+
+BASE `eee32db24edc871fb4ef5c87d043250e19aeea81`（v6.347）。**本版有一項會改變既有卡的實際行為**（智揮猩｜掌握弱點），
+請站長在跑 `update-tournament.bat` 之前先看【一】。
+
+來源：Fable 5.1 對 v6.342~v6.347 的獨立審查（A-1／B-2／B-3）＋ 本版自行查證。
+
+### 【一】⚠⚠⚠ 智揮猩｜掌握弱點 與 皮卡丘｜覆蓋伏特：**弱點覆寫從來沒有生效過**
+
+卡面（兩張逐字同構）：「在下個**自己**的回合結束前，受到這個招式的寶可夢弱點改為【X】屬性。」
+
+旗標 `weaknessOverrideTypeNextTurn` 掛在**對手**的寶可夢身上，但消費點在**施加者自己**的回合
+（傷害管線只在攻擊時讀 `defenderActive.weaknessOverrideTypeThisTurn`）。
+而 v2.78 把 promote 放在 `promotePending` —— 那支是套在 **nextP**（下一個要行動的玩家）身上：
+
+| 時點 | 舊行為 |
+|---|---|
+| A 出招 | B 的戰鬥寶可夢：`NextTurn = X` |
+| A END_TURN | promotePending 套在 **B** ⇒ `NextTurn → ThisTurn`（**在 B 自己的回合**） |
+| B END_TURN | clearV278ThisTurn 套在 **B** ⇒ `ThisTurn` 被刪掉 |
+| A 的下一個回合 | **旗標已經不見了** ⇒ 弱點沒有改寫 |
+
+實測（`__m6a/probe_weakover_v1.mjs`）：覆蓋伏特第二次出招增量 **10**（應為 20）。
+
+⭐ 修法＝**與卡面措辭完全相同的 `takeExtraDamageNextTurn`（刺耳聲家族）共用同一套生命週期**，
+不是另外發明一套：
+- **擁有者自己的 END_TURN** promote（新增 `promoteWeaknessOverride`，與 `promoteTakeExtra` 並列）
+- **施加者的 END_TURN** 清除（`promotePending` 內，與 Wave 36 的 `takeExtraDamageThisTurn` 同一格）
+
+修正後實測：覆蓋伏特 10 → **20**；掌握弱點 → 掌擊 80 → **160**。
+
+⚠ `clearV278ThisTurn` 裡那一行 `delete n.weaknessOverrideTypeThisTurn` 現在是**保險**
+（新生命週期下旗標活不到那一格），**刻意保留**：拿掉它等於把「萬一哪天又有人動 promote 位置」
+的兜底也拆了。`test-v6348` 的 C1/C3 釘住「promote 全站只有一份、而且在 promoteWeaknessOverride 內」。
+
+**⚠ 對玩家的影響**：智揮猩｜掌握弱點 是**線上可用的既有卡**，本版之後它才第一次真的有效果。
+覆蓋伏特 在 M6a，M6a 還鎖著 ⇒ 玩家看不到。
+
+### 【二】為什麼 v6.346 的守衛抓不到（守衛安慰劑的第 28 號樣式：**只驗旗標值**）
+
+`test-m6a-wave6` 的 D 段只斷言 `D0(r)?.weaknessOverrideTypeNextTurn === 'Lightning'`
+—— **斷言的是自己剛塞進去的那個值**，跨回合一步都沒走。
+`test-v6348` 【A】【B】一律走完 `ATTACK → END_TURN → END_TURN → ATTACK` 看**傷害數字**，
+並且附「不疊加」（A7）與兩條「期限」（A8/A9、B4）反向斷言。
+⇒ 通則：**凡是 NextTurn/ThisTurn 型跨回合旗標，守衛一定要真的走兩次 END_TURN 再出招看數字。**
+
+### 【三】「將自己的 1 隻寶可夢恢復 N HP」四張卡收斂到單一中央出口
+
+卡面逐字同構：霜奶仙ex｜甜點之禮 30／壺壺｜發酵果汁 30／樂天河童｜激動治癒 60／
+尼多娜｜分享歡樂 30（M6a，v6.347 新做）。原本**四份各寫一份 `withPending`**，而且
+**四份都沒宣告 `validIids`** ⇒ 完全不經中央消毒閘（`test-v6175` F 段棘輪點名的樣式）。
+
+⇒ 新增 `_shared.healOneOwnPokemonPending(state, idx, amount, effectKey, label)`：
+log／reject 字串與收斂前**逐字相同**（四張卡的既有字串守衛原封不動全綠），並宣告 `validIids`。
+
+⚠ 卡面是「自己的 1 隻寶可夢」＝ 戰鬥場＋備戰，**沒受傷的也能選** ⇒ validIids 是「自己場上全部」。
+「全員滿血時按鈕不亮」是 `getUsableAbilities` 的**另一份**判準（按了也沒效果就不該浪費特性權）。
+
+⭐ `test-v6175` F 段棘輪：**57 → 53**（v6.347 新增了 2 個，收斂之後又少掉 4 個）。
+
+### 【四】⚠ 順帶修好：尼多娜｜分享歡樂 漏了 甜點之禮 的可用性 gate（Rule 38）
+
+`engine.getUsableAbilities` 有一道「場上要有受傷的寶可夢」gate，列了
+`甜點之禮／發酵果汁／激動治癒` 三個名字 —— v6.347 新做的 `分享歡樂` **卡面逐字相同卻沒進去**
+⇒ 全員滿血時按鈕仍亮、按下去開一個沒意義的 picker 並**吃掉本回合的特性權**。
+本版補上，並由 `test-v6348` D4/D4b 對**四張卡各驗一次**（M11／M12 兩個突變分別釘住新卡與舊卡）。
+
+### 【五】test-v6265 F4 的 engine.ts 逐字比對
+
+F4 把 `engine.ts` 釘在 v6.309 的 blob，每一版合法改動都要在剝除器鏈上補一段
+（v6.310／v6.331／v6.334 的既有做法）。v6.347 是好幾版以來第一次動 engine.ts ⇒ 本版補上：
+- `stripV6347Engine`：v6.347 的五個區塊全部用 `// >>> v6347-… / // <<< v6347-…` 哨兵框住，
+  用**泛用**的 `stripSentinelBlocks` 一次剝掉。
+- `stripV6348Engine`：純新增的部分同樣走哨兵；**修改型**的三處（promote 呼叫端兩行、
+  promotePending 內的 promote→clear、治癒類 gate 多一個名字）不能用哨兵剝
+  （剝掉就等於把 BASE 的內容也刪掉）⇒ 逐字還原成 BASE 的樣子。
+⚠ 修改型標記一律用 `// ⭐v6348-…`，**不可以用 `>>>`** —— 泛用剝除器會把它當成區塊起點，
+  一路吃到下一個 `<<<`。
+
+### 【六】Fable 5.1 審查的其餘項目
+
+- **B-3 已修**：`m6a_wave7.ts` 檔頭把 `耿鬼ex｜死亡宣告` 寫成「→ PASSIVE_ON_KO」，
+  但它其實是**實作後撤回**的待裁示項 ⇒ 改成明寫「本版未實裝」。
+- **B-5 回歸風險**逐一查證：`snipeAllOppExPost(noWeakness=true)`／`discardEnergyAttachPost(singleTarget=false)`／
+  `deckEnergyAttachSelfPost(opts.max ?? 1)` 三支都是「預設值＝既有行為」，既有呼叫端一行未動；
+  `bonusPrizeIfKOPost` 改判準與 `奧利瓦ex｜芳香射擊` 三槽清狀態都是**修好既有 bug**，各有行為端正對照。
+- **C-4~C-7**（賽富豪｜歡慶 的獎賞 picker 邊角、洛奇亞｜元素爆破 的貪婪順序、
+  寶寶丁｜軟彈陣 讀卡面 HP、能量撢子 未收斂）列入給站長的問題清單，本版不動。
+
+### 【七】守衛
+
+`scripts/test-v6348-weakness-override-timing-and-heal-convergence.mjs`：**PASS 53 / FAIL 0**；
+突變 **M1~M12 全殺**（含「把 promote 改回 v2.78 的原始錯誤位置」與「既有卡被踢出 gate」）。
+
 ## v6.347 M6a **特性**實裝 批次 7（11 個特性）—— M6a 實裝收尾
 
 BASE `3847043d140de95d88f73f78cb485ad8e6989669`（v6.346）。M6a 仍鎖著 ⇒ **玩家看不到任何變化，不寫首頁 changelog**。
