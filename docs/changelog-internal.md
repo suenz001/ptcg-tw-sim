@@ -1,5 +1,76 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.360 訓練家卡合法性判準收斂 ＋ 前移到擲幣之前（站長裁定 E-14）
+
+BASE `35eea58fd2a9c5131572d840d3f7817e93d0f4e3`（v6.359）。**沒有改變任何線上既有卡的行為**（全卡池 887 張訓練家卡 × 3 種盤面
+掃描：`getPlayableTrainers` 與 handler 判準零分歧；沒有撼盪拳旗標時中央閘是純 passthrough）。
+
+### 【一】站長裁定（逐字）
+
+> 「要卡片真的有使出的時候才要擲硬幣，我有點看不懂你在說甚麼」
+
+v6.356 的中央閘放在 `canPlayTrainer` 之後、卡片離手之前，但 `PLAY_TRAINER` 裡還有
+**兩個「在卡片離手之後才擋」的殘留檢查**（競技場每回合額度、同名競技場覆蓋）排在閘的後面
+⇒ 一個引擎最終判定為非法的打出，**仍然會消耗一次擲幣**，反面時還會把卡丟進棄牌區。
+
+### 【二】順帶發現：判準本來就是**兩份**
+
+`getPlayableTrainers`（UI／AI 的可打出清單）**本來就各自鏡射了一份**那兩條判準
+（BASE 的 `engine.ts` 10251-10264）—— 這正是 Rule 38 的違反。本版一次收斂成一份。
+
+```ts
+// engine.ts，緊接 v6356 中央閘之前
+function stadiumPlacementBlock(state, aIdx, card, pool): { blocked: boolean; log: string | null }
+```
+
+- `getPlayableTrainers` 的兩份鏡射改成一行 `stadiumPlacementBlock(...).blocked`。
+- `PLAY_TRAINER` handler 新增呼叫點，排在 `canPlayTrainer` 之後、`tremorPunchTrainerGate` 之前。
+- 回傳刻意分 `blocked` / `log` 兩欄以**逐字保留 BASE 差異**：
+  ①每回合額度 BASE 是**靜默 `return state`** ⇒ `log: null`；
+  ②同名覆蓋 BASE 會寫一行規則 log ⇒ 帶原本那行逐字內容。（突變 M10 釘住這個差異。）
+
+⚠ **沒有搬進 `canPlayTrainer`**，理由（全部查證過，非推論）：
+- `canPlayTrainer`（`_shared.ts`）本體只是 `TRAINER_GUARDS` 的派發器，語義是
+  「**這張卡自己的效果有沒有合法目標**」，不是場地規則。
+- 同一支函式有 **v6.201** 留下的明訓：ACE消弭那份「引擎級判定」被從這裡**移除**，
+  並註明「⚠ 不要再加回來」。把場地規則塞進去等於重犯同一個錯。
+- `_shared.ts` 明文不 import engine（避免 effects → engine 循環）。
+- `canPlayTrainer` 的呼叫端不只兩個（還有 5 支守衛用合成 state 直接呼叫它）。
+
+⚠ `PLAY_FOSSIL` 側查證過**沒有同型問題**：所有合法性檢查（turnPhase／備戰上限／
+`isFossilItemCard`／三種物品鎖）本來就全部在閘之前，未改動。
+
+### 【三】守衛
+
+`scripts/test-v6360-trainer-play-legality-before-flip.mjs`：**PASS 59 / FAIL 0**。
+**HEAD-FAIL 實測**：HEAD 版 exit=1、**紅燈 26 條**（HEAD 的實測 log 就是
+`撼盪拳（活力森林）：擲硬幣 — 反面`）。
+
+⭐ **守衛額外加了「亂數消耗計數」**（A5/A5b、B5/B5b、D5）：
+「先擲幣、事後還原」那種做法會把 log 跟盤面都還原掉、**只留 `Math.random` 被消耗的痕跡**
+⇒ 純 log 斷言抓不到它。突變 **M4** 就是這個形狀，只有 A5 會紅 —— 這一條是那道禁令的唯一牙齒。
+
+突變 **M1~M14 全殺**（含 M1 搬回閘後、M2/M3 只前移一個、M4 事後還原、M5 閘永遠不擲幣、
+M9 昂主花葉蒂 × 稜鏡塔的 v3.851 例外被收斂掉、M12 偽收斂、M13/M14 清單又變回自己一份）。
+
+`test-v6356-tremor-punch` 維持 **60/0**（不需要 Rule 40 上移）。
+既有守衛 36 支全綠（競技場家族 11 支、訓練家／化石家族 8 支、樂觀更新 3 支、
+m6a wave1~7、v6355/v6357/v6358、anti-pattern-lint）。
+
+### 【四】⚠ 待站長裁示
+
+1. **被引擎退回的打出仍會記入 `currentTurnActions`**（BASE 就有的行為，與擲幣無關）：
+   ②同名覆蓋那條因為多寫了一行 log ⇒ 回傳新 state ⇒ 流水帳記上一筆 `{type:'play_hand'}`；
+   ①每回合額度回傳的是**同一個 state 物件**，連流水帳都不記。
+   規則上「宣告了但被判定非法」不算使用過那張卡；若下游有消費者（回放、對局紀錄、反作弊）
+   會看到一個從未發生的 `play_hand`。`PTCG_RULES.md` 查無「非法宣告是否留痕」的條文。
+2. `PLAY_TRAINER` 的**道具 fallback**（「找不到 attach 效果註冊，已退回手牌」）也排在擲幣閘之後。
+   它不是合法性檢查（`isTrainerPendingImplementation` 應該先擋掉未實裝的道具），
+   但真的踩到會變成「擲了幣、卡又退回手牌」⇒ 可無限重擲。本版**沒有動它**
+   （動它會改變未實裝道具的既有行為）。要不要一起收斂？
+3. 規則出處：每回合 1 張競技場 ⇒ `PTCG_RULES.md` **L117／L152／L261**；
+   同名競技場不可覆蓋 ⇒ **L224-L225**。
+
 ## v6.359 ⚠⚠⚠ 修 v6.357 的 Firestore 巢狀陣列（會讓休閒線上完全建不起對局）
 
 BASE `7a3c28249aed361da89e97d94b0964fdd4595877`（v6.358）。**行為一個字都沒有變**，只改了一個欄位的形狀。

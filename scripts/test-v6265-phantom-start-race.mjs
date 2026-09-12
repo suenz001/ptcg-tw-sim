@@ -872,6 +872,67 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   //   ⇒ 一律 v6357- 哨兵框住，泛用剝除器一次剝掉，不需要逐字還原。
   //   那一塊的守備由 scripts/test-v6357-field-wide-retal-attack-time.mjs 全面接管。
   const stripV6357Engine = (src) => stripSentinelBlocks(src, 'v6357-');
+  // ⭐ v6.360：engine.ts 的合法改動有兩種（站長裁定 E-14）。
+  //   ① 中央述詞 stadiumPlacementBlock ＋ PLAY_TRAINER 的前移呼叫點（**純新增**）
+  //      ⇒ `>>> v6360-…` 哨兵框住，泛用剝除器一次剝掉。
+  //   ② Stadium 分支與 getPlayableTrainers 裡的兩份舊判準被**收斂掉**（修改既有行，
+  //      不能用哨兵剝 — 剝掉等於把 BASE 的內容也刪掉）⇒ 逐字換回 BASE 的樣子。
+  //      那一塊的守備由 scripts/test-v6360-trainer-play-legality-before-flip.mjs 全面接管。
+  //   ⚠ engine.ts 是 CRLF；LF／CRLF 兩種都試（同 v6.352／v6.353）。
+  const stripV6360Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6360-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    s = swap(s,
+      "    if (trainerCard.subtype === 'Stadium') {\n"
+      + '      // ⭐v6360-stadium-legality-hoist：「每回合 1 張」與「同名不可覆蓋」兩條場地規則已上移到\n'
+      + '      //   擲幣之前的中央述詞 stadiumPlacementBlock（站長裁定 E-14：卡片真的有使出時才擲硬幣）。\n'
+      + '      //   ⚠ 這裡只留「下游還要用的宣告」；把判斷搬回這裡＝非法打出又會白白吃掉一次擲幣。\n'
+      + '      const played = state.stadiumPlayedThisTurn ?? [false, false];   // ⭐v6360-stadium-legality-hoist\n'
+      + '      const prevStadium = state.activeStadium;   // ⭐v6360-stadium-legality-hoist\n',
+      "    if (trainerCard.subtype === 'Stadium') {\n"
+      + '      // 一回合只能打出一張競技場卡（不論目前場上有無 stadium）\n'
+      + '      const played = state.stadiumPlayedThisTurn ?? [false, false];\n'
+      + '      // v3.851: 昂主花葉蒂卡面明文「使出了『稜鏡塔』的回合也可放置於場上」\n'
+      + '      //   → 繞過「每回合 1 張 Stadium」通則的特例。當本回合已打過稜鏡塔（prismFlag=true）\n'
+      + '      //   時，允許再打出昂主花葉蒂（同回合第 2 張 Stadium）。打完後 newPlayed[aIdx]=true 仍生效，\n'
+      + '      //   所以玩家不會繼續打第 3 張。\n'
+      + '      const prismFlag = state.prismTowerPlayedThisTurn ?? [false, false];\n'
+      + "      const isAonzhuExempt = trainerCard.name === '昂主花葉蒂' && prismFlag[aIdx];\n"
+      + '      if (played[aIdx] && !isAonzhuExempt) return state;\n'
+      + '      // v2.41：PTCG 規則 — 同名競技場不能覆蓋自己\n'
+      + '      // 場上已有同名競技場（例：對戰圓形競技場）時，禁止再從手牌打出同名的競技場。\n'
+      + '      // 回傳到原 state 之前把已移出手牌的卡放回（線上 Stadium branch 在 `attacker.hand = ...` 之後執行）。\n'
+      + '      const prevStadium = state.activeStadium;\n'
+      + '      if (prevStadium) {\n'
+      + '        const prevCard = pool.get(prevStadium.cardId);\n'
+      + '        if (prevCard?.name === trainerCard.name) {\n'
+      + '          // 還原手牌：上方已 filter 掉該張，這裡直接 return 原 state（hand 未實際 commit 到 state）\n'
+      + '          return addLog(state, `規則：場上已有相同名稱的競技場（${trainerCard.name}），無法重複打出`, aIdx);\n'
+      + '        }\n'
+      + '      }\n');
+    s = swap(s,
+      '      // ⭐v6360-stadium-legality-hoist：「每回合 1 張」與「同名不可覆蓋」改問中央述詞 ——\n'
+      + '      //   與 PLAY_TRAINER handler **同一份**判準（Rule 38），而 handler 端排在擲幣之前。\n'
+      + '      //   （原本這裡與 handler 各留一份鏡射，handler 那份還排在擲幣閘的後面。）\n'
+      + '      if (stadiumPlacementBlock(state, state.activePlayerIndex, c, pool).blocked) return false;   // ⭐v6360-stadium-legality-hoist\n',
+      '      // 競技場：一回合每位玩家只能打出一張\n'
+      + '      //   v3.851 exception: 昂主花葉蒂卡面允許「使出了稜鏡塔的回合也可放置」→ 同回合第 2 張 Stadium\n'
+      + "      if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) {\n"
+      + '        const prism = state.prismTowerPlayedThisTurn ?? [false, false];\n'
+      + "        const aonzhuOk = c.name === '昂主花葉蒂' && prism[state.activePlayerIndex];\n"
+      + '        if (!aonzhuOk) return false;\n'
+      + '      }\n'
+      + '      // v2.43：PTCG 規則 — 同名競技場不能覆蓋自己。\n'
+      + '      // engine play path 也會 block，但 UI 需要在「可打出」清單就濾掉，\n'
+      + '      // 否則手牌卡會亮黃框讓使用者誤以為可以拖曳（實際上拖下去會被 engine 擋）。\n'
+      + "      if (c.subtype === 'Stadium' && state.activeStadium) {\n"
+      + '        const prev = pool.get(state.activeStadium.cardId);\n'
+      + '        if (prev?.name === c.name) return false;\n'
+      + '      }\n');
+    return s;
+  };
   const stripV6348Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6348-');
     s = s.split(
@@ -910,8 +971,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

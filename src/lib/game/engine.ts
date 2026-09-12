@@ -3243,6 +3243,58 @@ function reviveAttackDiscardedSpecialEnergy(
   return newState;
 }
 
+// >>> v6360-stadium-legality
+/**
+ * ⭐v6.360【中央】競技場「能不能從手牌放置」的場地規則述詞 —— 站長裁定 E-14
+ *   「要卡片真的有使出的時候才要擲硬幣」。
+ *
+ * 收的是 PTCG 的兩條**場地規則**（不是某張卡自己的效果，那些在 TRAINER_GUARDS／canPlayTrainer）：
+ *   ① 每位玩家每回合只能放置 1 張『競技場』
+ *      （v3.851 例外：昂主花葉蒂卡面明文「使出了『稜鏡塔』的回合也可放置於場上」）
+ *   ② 場上已有**同名**競技場時不可重複放置（PTCG 規則：同名競技場不能覆蓋自己）
+ *
+ * ⭐ 呼叫點恰好 2 個，而且是「同一份判準」的兩個消費者（Rule 38）：
+ *     ・engine.ts PLAY_TRAINER handler —— 排在 tremorPunchTrainerGate（擲幣）**之前**
+ *     ・engine.ts getPlayableTrainers —— UI 黃框／AI 可打出清單
+ *   v6.356 之前這兩條規則有**兩份**鏡射（一份在清單 filter、一份在 handler 的 Stadium 分支尾巴，
+ *   而且後者排在擲幣閘的**後面**）⇒ 一個引擎最終會判定為非法、根本不會生效的打出，
+ *   仍然會消耗撼盪拳的一次擲幣（反面時還會把那張卡丟進棄牌區）。本版一次收斂掉。
+ *
+ * ⚠ 回傳刻意分「blocked」與「log」兩欄，逐字保留 BASE 的行為差異：
+ *   ①：HEAD 是靜默 `return state`（沒有 log）⇒ log:null
+ *   ②：HEAD 會寫一行規則 log ⇒ log 帶原本那一行的逐字內容
+ *   改動其中任何一邊都會讓「沒有撼盪拳時行為與 HEAD 逐字相同」的反對照翻紅。
+ * ⚠⚠ **不可以**把這兩條判斷搬回擲幣閘的後面，也不可以改成「先擲幣、事後還原」——
+ *   那會留下 log 與 Math.random 消耗，並破壞 v6.356「靠早退達成不算使用過」的結構。
+ */
+function stadiumPlacementBlock(
+  state: GameState,
+  aIdx: 0 | 1,
+  card: Card,
+  pool: Map<string, Card>,
+): { blocked: boolean; log: string | null } {
+  if (card.subtype !== 'Stadium') return { blocked: false, log: null };
+  // ① 一回合只能打出一張競技場卡（不論目前場上有無 stadium）
+  //   v3.851: 昂主花葉蒂卡面明文「使出了『稜鏡塔』的回合也可放置於場上」
+  //   → 繞過「每回合 1 張 Stadium」通則的特例。當本回合已打過稜鏡塔（prismFlag=true）
+  //   時，允許再打出昂主花葉蒂（同回合第 2 張 Stadium）。打完後 newPlayed[aIdx]=true 仍生效，
+  //   所以玩家不會繼續打第 3 張。
+  const played = state.stadiumPlayedThisTurn ?? [false, false];
+  const prismFlag = state.prismTowerPlayedThisTurn ?? [false, false];
+  const isAonzhuExempt = card.name === '昂主花葉蒂' && prismFlag[aIdx];
+  if (played[aIdx] && !isAonzhuExempt) return { blocked: true, log: null };
+  // ② v2.41：PTCG 規則 — 同名競技場不能覆蓋自己
+  //   場上已有同名競技場（例：對戰圓形競技場）時，禁止再從手牌打出同名的競技場。
+  const prevStadium = state.activeStadium;
+  if (prevStadium) {
+    const prevCard = pool.get(prevStadium.cardId);
+    if (prevCard?.name === card.name) {
+      return { blocked: true, log: `規則：場上已有相同名稱的競技場（${card.name}），無法重複打出` };
+    }
+  }
+  return { blocked: false, log: null };
+}
+// <<< v6360-stadium-legality
 // >>> v6356-tremor-punch-gate
 /**
  * ⭐v6.356 蟾蜍王｜撼盪拳（M6a 19982）——「對手從手牌使出訓練家卡時，使用前擲 1 次硬幣」的
@@ -4178,6 +4230,17 @@ function handlePlaying(
 
     if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
 
+    // >>> v6360-stadium-legality-before-flip
+    // ⭐v6.360 站長裁定 E-14：競技場的兩條場地規則（每回合 1 張／同名不可覆蓋）原本寫在
+    //   下方 Stadium 分支的尾巴 ＝ 擲幣閘的**後面** ⇒ 一個引擎最終會判定為非法的打出
+    //   仍然會消耗撼盪拳的一次擲幣。這裡上移到閘之前，並與 getPlayableTrainers 共用
+    //   同一份中央述詞 stadiumPlacementBlock（Rule 38：判準只有一份）。
+    //   ⚠ 位置必須維持在 v6356-tremor-punch-play-trainer 之前；順序由 test-v6360 的靜態斷言釘住。
+    {
+      const _sb = stadiumPlacementBlock(state, aIdx, trainerCard, pool);
+      if (_sb.blocked) return _sb.log ? addLog(state, _sb.log, aIdx) : state;
+    }
+    // <<< v6360-stadium-legality-before-flip
     // >>> v6356-tremor-punch-play-trainer
     // ⭐v6.356 撼盪拳：訓練家卡 4 種（物品／寶可夢道具／支援者／競技場）全部走這一個 handler
     //   ⇒ 這裡是 PLAY_TRAINER 側**唯一**的攔截點。放在所有合法性檢查之後、卡片離手之前
@@ -4193,26 +4256,11 @@ function handlePlaying(
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
 
     if (trainerCard.subtype === 'Stadium') {
-      // 一回合只能打出一張競技場卡（不論目前場上有無 stadium）
-      const played = state.stadiumPlayedThisTurn ?? [false, false];
-      // v3.851: 昂主花葉蒂卡面明文「使出了『稜鏡塔』的回合也可放置於場上」
-      //   → 繞過「每回合 1 張 Stadium」通則的特例。當本回合已打過稜鏡塔（prismFlag=true）
-      //   時，允許再打出昂主花葉蒂（同回合第 2 張 Stadium）。打完後 newPlayed[aIdx]=true 仍生效，
-      //   所以玩家不會繼續打第 3 張。
-      const prismFlag = state.prismTowerPlayedThisTurn ?? [false, false];
-      const isAonzhuExempt = trainerCard.name === '昂主花葉蒂' && prismFlag[aIdx];
-      if (played[aIdx] && !isAonzhuExempt) return state;
-      // v2.41：PTCG 規則 — 同名競技場不能覆蓋自己
-      // 場上已有同名競技場（例：對戰圓形競技場）時，禁止再從手牌打出同名的競技場。
-      // 回傳到原 state 之前把已移出手牌的卡放回（線上 Stadium branch 在 `attacker.hand = ...` 之後執行）。
-      const prevStadium = state.activeStadium;
-      if (prevStadium) {
-        const prevCard = pool.get(prevStadium.cardId);
-        if (prevCard?.name === trainerCard.name) {
-          // 還原手牌：上方已 filter 掉該張，這裡直接 return 原 state（hand 未實際 commit 到 state）
-          return addLog(state, `規則：場上已有相同名稱的競技場（${trainerCard.name}），無法重複打出`, aIdx);
-        }
-      }
+      // ⭐v6360-stadium-legality-hoist：「每回合 1 張」與「同名不可覆蓋」兩條場地規則已上移到
+      //   擲幣之前的中央述詞 stadiumPlacementBlock（站長裁定 E-14：卡片真的有使出時才擲硬幣）。
+      //   ⚠ 這裡只留「下游還要用的宣告」；把判斷搬回這裡＝非法打出又會白白吃掉一次擲幣。
+      const played = state.stadiumPlayedThisTurn ?? [false, false];   // ⭐v6360-stadium-legality-hoist
+      const prevStadium = state.activeStadium;   // ⭐v6360-stadium-legality-hoist
       // v2.244 stadium 換新時，舊 stadium 應丟回原擁有者棄牌堆（不一定是 attacker）
       if (prevStadium) {
         const prevOwnerIdx = state.activeStadiumOwnerIdx ?? aIdx;
@@ -10248,20 +10296,10 @@ export function getPlayableTrainers(state: GameState, pool: Map<string, Card>): 
         state.activePlayerIndex === state.firstPlayerIdx &&
         !canPlaySupporterOnFirstTurn(c)
       ) return false;
-      // 競技場：一回合每位玩家只能打出一張
-      //   v3.851 exception: 昂主花葉蒂卡面允許「使出了稜鏡塔的回合也可放置」→ 同回合第 2 張 Stadium
-      if (c.subtype === 'Stadium' && (state.stadiumPlayedThisTurn?.[state.activePlayerIndex] ?? false)) {
-        const prism = state.prismTowerPlayedThisTurn ?? [false, false];
-        const aonzhuOk = c.name === '昂主花葉蒂' && prism[state.activePlayerIndex];
-        if (!aonzhuOk) return false;
-      }
-      // v2.43：PTCG 規則 — 同名競技場不能覆蓋自己。
-      // engine play path 也會 block，但 UI 需要在「可打出」清單就濾掉，
-      // 否則手牌卡會亮黃框讓使用者誤以為可以拖曳（實際上拖下去會被 engine 擋）。
-      if (c.subtype === 'Stadium' && state.activeStadium) {
-        const prev = pool.get(state.activeStadium.cardId);
-        if (prev?.name === c.name) return false;
-      }
+      // ⭐v6360-stadium-legality-hoist：「每回合 1 張」與「同名不可覆蓋」改問中央述詞 ——
+      //   與 PLAY_TRAINER handler **同一份**判準（Rule 38），而 handler 端排在擲幣之前。
+      //   （原本這裡與 handler 各留一份鏡射，handler 那份還排在擲幣閘的後面。）
+      if (stadiumPlacementBlock(state, state.activePlayerIndex, c, pool).blocked) return false;   // ⭐v6360-stadium-legality-hoist
       // Wave 43 fix：玩家級物品/支援者鎖也要在可用清單裡濾掉（否則 AI 會挑到被鎖的卡、engine 靜默 no-op → AI 當機）
       if (c.subtype === 'Item' && player.cantPlayItemThisTurn) return false;
       if (c.subtype === 'Supporter' && player.cantPlaySupporterThisTurn) return false;
