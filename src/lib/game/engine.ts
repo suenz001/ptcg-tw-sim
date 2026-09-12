@@ -3240,6 +3240,71 @@ function reviveAttackDiscardedSpecialEnergy(
   return newState;
 }
 
+// >>> v6356-tremor-punch-gate
+/**
+ * ⭐v6.356 蟾蜍王｜撼盪拳（M6a 19982）——「對手從手牌使出訓練家卡時，使用前擲 1 次硬幣」的
+ * **唯一**中央閘。
+ *
+ * 卡面逐字（static/cards/M6a.json，台灣官方中文）：
+ *   「在下個對手的回合，每次對手從手牌使出訓練家卡時，使用前擲1次硬幣。
+ *     若為反面，則不算使用過那張卡，將其丟棄。」
+ *
+ * ⭐ 呼叫點只有 2 個，而且**兩個都是「從手牌使出訓練家卡」的 action handler**：
+ *     ① PLAY_TRAINER —— 物品／寶可夢道具／支援者／競技場，訓練家卡 4 種全在這一個 handler
+ *     ② PLAY_FOSSIL  —— 化石是「物品」卡，但站上走自己的 action type
+ *   這與既有的「物品鎖」家族（isOppItemPlayBlocked / cantPlayItemThisTurn）**完全同形**：
+ *   同一個述詞、同樣掛在這兩個 handler 上（engine.ts PLAY_FOSSIL ＋ PLAY_TRAINER）。
+ *   規則依據：PTCG_RULES.md L117「訓練家卡：在自己的回合中可從手牌中使出的卡牌……
+ *   『支援者』卡和『競技場』卡，……『物品』卡，……『寶可夢道具』卡等4種」；
+ *   化石在手牌中視為「物品」卡（PTCG_RULES.md L2321／L2323／L2988），
+ *   且 L2276 明載「從手牌將物品『陳舊的甲殼化石』放置於備戰區」就是從手牌使出物品卡。
+ *   ⇒ 化石**涵蓋**在卡面的「訓練家卡」裡。
+ *
+ * ⚠ 擲幣時機：本閘位於 PLAY_TRAINER 所有合法性檢查之後、卡片離手之前
+ *   ⇒ 「使用前擲1次硬幣」，且被引擎判為非法的打出不會白白消耗一次擲幣。
+ * ⚠ 反面分支**自己**把卡移到棄牌區後回傳；**不可以** `return state`
+ *   （v5.638 的無限重擲洞：卡還在手牌 ⇒ 玩家可以一直重打同一張卡重擲）。
+ * ⚠ 反面分支**絕對不可以**設 supporterPlayedThisTurn／stadiumPlayedThisTurn ——
+ *   卡面「不算使用過那張卡」⇒ 每回合 1 張的額度不得被吃掉。做法是「早退」：
+ *   那兩個額度都在本閘的**下游**才設，早退天然不會設到（不是靠事後還原）。
+ * ⚠ coinFlippedThisAttack／_machineGunLastFlips 是「重試徽章」專用的 per-ATTACK 副資料，
+ *   flipCoinsWithLog 會在 aIdx === activePlayerIndex 時設起來。這裡擲幣的是**正在行動的
+ *   那個玩家**（他自己在打訓練家卡）⇒ 必然命中那個條件 ⇒ 擲完要把兩個欄位還原成擲幣前的值，
+ *   否則對手回合的訓練家擲幣會汙染重試徽章的判定資料（卡面只對「招式」擲幣生效）。
+ * ⚠ 線上樂觀更新：本閘會呼叫 Math.random ⇒ optimistic.ts 的 gate ④（randomness）
+ *   會直接判 `ok:false, reason:'randomness:N'`，強制走伺服器來回，玩家端不會猜錯結果。
+ */
+function tremorPunchTrainerGate(
+  state: GameState,
+  aIdx: 0 | 1,
+  inst: CardInstance,
+  cardName: string,
+): { state: GameState; blocked: boolean } {
+  if (!state.players[aIdx].trainerCoinFlipThisTurn) return { state, blocked: false };
+  const prevCoinFlag = state.coinFlippedThisAttack;
+  const prevFlips = state._machineGunLastFlips;
+  const r = flipCoinsWithLog(state, 1, `撼盪拳（${cardName}）`, aIdx);
+  const s: GameState = {
+    ...r.state,
+    coinFlippedThisAttack: prevCoinFlag,
+    _machineGunLastFlips: prevFlips,
+  };
+  if (r.heads > 0) {
+    return { state: addLog(s, `撼盪拳：正面 ⇒ ${cardName} 照常使用`, aIdx), blocked: false };
+  }
+  const players = [...s.players] as [PlayerState, PlayerState];
+  players[aIdx] = {
+    ...players[aIdx],
+    hand: players[aIdx].hand.filter(c => c.iid !== inst.iid),
+    discard: [...players[aIdx].discard, inst],
+  };
+  return {
+    state: addLog({ ...s, players },
+      `撼盪拳：反面 ⇒ 不算使用過 ${cardName}，將其丟棄（不消耗本回合的支援者／競技場額度）`, aIdx),
+    blocked: true,
+  };
+}
+// <<< v6356-tremor-punch-gate
 function handlePlaying(
   state: GameState,
   action: GameAction,
@@ -3595,6 +3660,15 @@ function handlePlaying(
         `${attacker.name} 因對手「海之詛咒」效果，無法從手牌使出化石（物品卡）`, aIdx);
     }
 
+    // >>> v6356-tremor-punch-play-fossil
+    // ⭐v6.356 撼盪拳：化石在手牌中視為「物品」卡 ⇒ 也是「從手牌使出訓練家卡」。
+    //   位置：所有物品鎖檢查（cantPlayItemThisTurn／威迫目光／海之詛咒）之後、卡片離手之前。
+    {
+      const _tp = tremorPunchTrainerGate(state, aIdx, inst, card!.name);
+      if (_tp.blocked) return _tp.state;
+      state = _tp.state;
+    }
+    // <<< v6356-tremor-punch-play-fossil
     // v5.993：化石上場也 toBareCard 白名單裸化(原完全未清 — 被回收重打會殘留 damage/旗標)。
     const placed: CardInstance = { ...toBareCard(inst), justPlaced: true, fossilOnField: true, playedFromHand: true };
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
@@ -4101,6 +4175,17 @@ function handlePlaying(
 
     if (!canPlayTrainer(trainerCard.name, state, aIdx, pool)) return state;
 
+    // >>> v6356-tremor-punch-play-trainer
+    // ⭐v6.356 撼盪拳：訓練家卡 4 種（物品／寶可夢道具／支援者／競技場）全部走這一個 handler
+    //   ⇒ 這裡是 PLAY_TRAINER 側**唯一**的攔截點。放在所有合法性檢查之後、卡片離手之前
+    //   （卡面「使用前擲1次硬幣」），反面時走中央閘自己的棄牌分支並早退
+    //   ⇒ 下游的 supporterPlayedThisTurn／stadiumPlayedThisTurn 天然不會被設起來。
+    {
+      const _tp = tremorPunchTrainerGate(state, aIdx, trainerInst, trainerCard.name);
+      if (_tp.blocked) return _tp.state;
+      state = _tp.state;
+    }
+    // <<< v6356-tremor-punch-play-trainer
     // 移出手牌
     attacker.hand = attacker.hand.filter((_, i) => i !== hIdx);
 
@@ -8159,6 +8244,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     }
     // Wave 36/39：清除 aIdx（本回合結束方）的玩家級 ThisTurn 旗標（若本回合已消耗完）
     if (
+      // >>> v6356-endturn-clear-cond
+      currentPlayer.trainerCoinFlipThisTurn ||
+      // <<< v6356-endturn-clear-cond
       currentPlayer.noAttacksThisTurn ||
       currentPlayer.cantPlayItemThisTurn ||
       currentPlayer.cantPlaySupporterThisTurn ||
@@ -8174,6 +8262,9 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       currentPlayer.cantPlayStadiumThisTurn
     ) {
       const cp = { ...currentPlayer };
+      // >>> v6356-endturn-clear-delete
+      delete cp.trainerCoinFlipThisTurn;
+      // <<< v6356-endturn-clear-delete
       delete cp.noAttacksThisTurn;
       delete cp.cantPlayItemThisTurn;
       delete cp.cantPlaySupporterThisTurn;
@@ -8227,6 +8318,16 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       nextP.cantPlayStadiumThisTurn = true;
       delete nextP.cantPlayStadiumNextTurn;
     }
+    // >>> v6356-endturn-promote
+    // ⭐v6.356：promote nextIdx 的 trainerCoinFlipNextTurn → ThisTurn（蟾蜍王｜撼盪拳）
+    //   旗標是設在**對手**身上、在**對手自己的回合**生效 ⇒ 與 cantPlayItem/Supporter/Stadium
+    //   完全同型，放在這個 nextP 區塊（不是下方 metalShield 那種「對手回合」型的位置）。
+    //   布林 ⇒ 連兩回合使用撼盪拳也只擲 1 次（卡面「擲1次硬幣」）。
+    if (nextP.trainerCoinFlipNextTurn) {
+      nextP.trainerCoinFlipThisTurn = true;
+      delete nextP.trainerCoinFlipNextTurn;
+    }
+    // <<< v6356-endturn-promote
     players[nextIdx] = {
       ...nextP,
       energyAttachedThisTurn: false,

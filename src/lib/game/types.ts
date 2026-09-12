@@ -567,6 +567,21 @@ export interface PlayerState {
    */
   cantPlayStadiumThisTurn?: boolean;
   cantPlayStadiumNextTurn?: boolean;
+  /**
+   * ⭐v6.356 蟾蜍王｜撼盪拳（M6a 19982）—— 玩家級「下個自己的回合，每次從手牌使出訓練家卡前
+   * 擲 1 次硬幣」預約旗標。卡面逐字：「在下個對手的回合，每次對手從手牌使出訓練家卡時，
+   * 使用前擲1次硬幣。若為反面，則不算使用過那張卡，將其丟棄。」
+   * 由攻擊方的 ATTACK_POST 設在**對手（dIdx）**身上；於該玩家下個 END_TURN（＝ nextIdx 方）
+   * promote 成 trainerCoinFlipThisTurn。與 cantPlayItemNextTurn／cantPlaySupporterNextTurn／
+   * cantPlayStadiumNextTurn 同一家族、同一個 promote／clear 位置。
+   * ⚠ 布林（不是計數）—— 卡面是「擲1次硬幣」，兩隻蟾蜍王連續兩回合使用也只擲 1 次。
+   */
+  trainerCoinFlipNextTurn?: boolean;
+  /**
+   * ⭐v6.356 本回合此玩家每次從手牌使出訓練家卡前要擲 1 次硬幣
+   * （由 trainerCoinFlipNextTurn promote）。在 END_TURN 時清除（於 aIdx 方）。
+   */
+  trainerCoinFlipThisTurn?: boolean;
   cantEvolveThisTurn?: boolean;
   /**
    * Wave 42：玩家級「本回合自己的【鬥】寶可夢招式傷害 +N」累積值（例：力量蛋白飲）。

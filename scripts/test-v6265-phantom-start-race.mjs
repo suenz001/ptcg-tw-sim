@@ -862,6 +862,11 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   //   on-KO-after-prize 入列、sanityKOSweep 開頭的唯一 drain 點）⇒ 一律 v6355- 哨兵框住，
   //   泛用剝除器一次剝掉。那一塊的守備由 scripts/test-v6355-death-declaration.mjs 全面接管。
   const stripV6355Engine = (src) => stripSentinelBlocks(src, 'v6355-');
+  // ⭐ v6.356：engine.ts 的合法改動**全部是純新增**（撼盪拳中央閘 tremorPunchTrainerGate、
+  //   PLAY_TRAINER／PLAY_FOSSIL 兩個呼叫點、END_TURN 的 clear 條件一行＋delete 一行＋promote 區塊）
+  //   ⇒ 一律 v6356- 哨兵框住，泛用剝除器一次剝掉，不需要逐字還原。
+  //   那一塊的守備由 scripts/test-v6356-tremor-punch.mjs 全面接管。
+  const stripV6356Engine = (src) => stripSentinelBlocks(src, 'v6356-');
   const stripV6348Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6348-');
     s = s.split(
@@ -900,8 +905,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

@@ -1,5 +1,95 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.356 蟾蜍王｜撼盪拳（對手回合「使出訓練家卡前擲幣」中央閘）
+
+BASE `54c936ce36e574ab6d986f6d5544ff3beedaf815`（v6.355）。站長清單 **A-1**（A 組最後一張）。M6a 仍鎖著 ⇒ 玩家看不到變化；
+`engine.ts` 剝掉哨兵後**與 BASE 逐字相同**（0 改動、0 多餘空行，`__m6a/verify356b.mjs` 實測）。
+
+### 【一】卡面
+
+`static/cards/M6a.json` id 19982 蟾蜍王（Stage2，進化自藍蟾蜍，【鬥】HP160，J 標）：
+
+| 招式 | 費用 | 傷害 | 效果 |
+|---|---|---|---|
+| 撼盪拳 | [鬥] | 60 | 「在下個對手的回合，每次對手從手牌使出訓練家卡時，使用前擲1次硬幣。若為反面，則不算使用過那張卡，將其丟棄。」 |
+| 百萬噸重拳 | [鬥][無][無][無] | 180 | （無效果） |
+
+⭐ **卡面自己回答了「反面吃不吃額度」**：「**不算使用過那張卡**」
+⇒ 支援者／競技場每回合 1 張的額度**不消耗**，但那張卡**要進棄牌區**。不需要另外裁示。
+
+### 【二】中央閘（唯一一支）＋ 為什麼是 2 個呼叫點
+
+`engine.ts` 新增 `tremorPunchTrainerGate(state, aIdx, inst, cardName) → { state, blocked }`
+（哨兵 `v6356-tremor-punch-gate`）。呼叫點恰好 **2** 個，因為站上「從手牌使出訓練家卡」
+就只有 2 個 action type：
+
+| # | action | 涵蓋 |
+|---|---|---|
+| ① | `PLAY_TRAINER` | 訓練家卡 **4 種**（物品／寶可夢道具／支援者／競技場）**全部**只有這一個 handler |
+| ② | `PLAY_FOSSIL` | 化石在手牌中視為「物品」卡，但站上走自己的 action type |
+
+⭐ 這與既有的**物品鎖家族**（`isOppItemPlayBlocked` / `cantPlayItemThisTurn`）**完全同形** ——
+同一支述詞、同樣掛在這兩個 handler ⇒ 是「1 份判準 × 2 個消費點」，不是兩份判準。
+（`USE_STADIUM` 是場上已放置的競技場、`USE_HAND_ABILITY` 是手牌**寶可夢**的特性，都不是「使出訓練家卡」。）
+
+官方依據（`PTCG_RULES.md`）：**L117**「訓練家卡……『支援者』『競技場』『物品』『寶可夢道具』等 4 種」；
+化石在手牌／棄牌區視為「物品」卡（**L2321／L2323／L2988**）；**L2276**「**從手牌**將物品
+『陳舊的甲殼化石』放置於備戰區」⇒ 化石**涵蓋**在卡面的「訓練家卡」內。
+
+### 【三】四個實作紀律
+
+1. **擲幣時機**：閘位於所有合法性檢查（含 `canPlayTrainer`）之後、`hand.filter` **之前**
+   ⇒ 對齊卡面「**使用前**擲1次硬幣」。
+2. ⚠ **反面分支自己把卡移到棄牌區後早退**，**不可以** `return state`
+   —— v5.638 的無限重擲洞（卡還在手牌 ⇒ 可以一直重打同一張重擲）。
+3. ⚠ **「不算使用過」是靠早退天然達成的，不是事後還原**：
+   `supporterPlayedThisTurn` / `stadiumPlayedThisTurn` 都在閘的**下游**才設。
+   守衛 B3 用**行為端**證明：反面丟掉一張支援者後，同一回合**還可以**再打一張支援者且真的抽到牌。
+4. ⚠ **重試徽章副資料不得被汙染**：`flipCoinsWithLog` 在 `aIdx === activePlayerIndex` 時會設
+   `coinFlippedThisAttack` 並 append `_machineGunLastFlips`，而這裡擲幣的正是行動方
+   ⇒ 擲完把這兩個欄位**還原成擲幣前的值**（卡面只對「招式」擲幣生效）。守衛 H1/H2 ＋ 突變 M21 釘住。
+
+**旗標**（`types.ts`，緊接 `cantPlayStadiumNextTurn` 的同一家族）：
+`trainerCoinFlipNextTurn` / `trainerCoinFlipThisTurn`，promote 與 clear 都放在同家族那一格。
+⚠ **布林不是計數** ⇒ 連兩回合使用撼盪拳也只擲 1 次（卡面「擲1次硬幣」）。守衛【F】釘住。
+
+**線上樂觀更新不必改**：`PLAY_TRAINER` 本來就不在 `OPTIMISTIC_ACTION_TYPES` 白名單；
+`PLAY_FOSSIL` 在白名單，但本閘呼叫 `Math.random` ⇒ `optimistic.ts` 的 gate ④ 直接回
+`{ok:false, reason:'randomness:1'}`，強制伺服器來回。守衛 I1/I2 正反對照 ＋ 突變 M16 釘住。
+
+### 【四】守衛
+
+`scripts/test-v6356-tremor-punch.mjs`：**PASS 60 / FAIL 0**（全部行為端）。
+**HEAD-FAIL 實測**（`__m6a/headfail356.mjs` 把 4 個實作檔 checkout 回 BASE 再跑）：
+`PASS 33 / FAIL 27`，27 條紅、跑完自動還原。
+
+【0】fixture 自驗＋卡面逐字錨、【A】正面照常生效（＋「沒出招」「改用百萬噸重拳」兩組對照）
+、【B】反面：效果 0／進棄牌／**額度不消耗**（支援者與競技場各一組，含反對照）
+、【C】「每次」⇒ 第二張再擲一次、【D】只持續一個對手回合、【E】蟾蜍王被 KO／換下場仍生效
+、【F】連兩回合不疊加、【G】化石 `PLAY_FOSSIL`、【H】擲幣副資料不被汙染、
+【I】樂觀更新 randomness 正反對照、【J】中央性靜態接線。
+
+突變 **M1~M21 全殺**（含 M12「反面沒早退」、M18「反面卻吃掉支援者額度」、
+M19「反面沒把卡移出手牌＝v5.638 的洞」、M21「重試徽章還原被拿掉」）。
+
+### 【五】⚠ 待站長裁示（2 條）
+
+1. **誰擲這個幣？** `PTCG_RULES.md` 查無規定（「不算使用過」「視為沒有使用」「使用前擲」
+   三個關鍵字全站 0 命中）。現行實作由「**打出那張訓練家卡的玩家**」擲，log 掛在他那一側；
+   硬幣動畫靠 log 文字觸發，與 aIdx 無關，雙方都看得到。若裁定應由蟾蜍王持有者擲，改 1 行即可。
+2. **「已經非法的打出」仍會消耗一次擲幣**（實測，非推論）。只發生在 PLAY_TRAINER 裡兩個
+   「在卡片離手之後才擋」的殘留檢查：競技場每回合額度與同名競技場覆蓋。
+   ⚠ `getPlayableTrainers`（UI 與 AI 的可打出清單）已經濾掉那張卡 ⇒ 只有**手改封包／線上 desync**
+   才踩得到。要根治必須把那兩個條件上移到 `canPlayTrainer` 之前，會動到 BASE 既有結構
+   （違反本版「哨兵外 0 改動」），故先列此。
+
+### 【六】⚠ 順帶發現：`scripts/test-coin-animation-parser.mjs` 是**既有紅燈**
+
+它**不在 `npm test` 鏈裡**（所以歷來套件都看不到它），而且在 **v6.355 的 LF 樹上實測就已經是
+`exit=1`**（`AssertionError: 舊式包含「擲硬幣/硬幣」的擲幣總結仍應保留一次 fallback 動畫`）
+⇒ 與 v6.356 無關。它只 import `src/lib/game/coinAnimation.ts`，該檔最後一次變更是
+`6fa22f89 fix(coinAnimation): 修復機關槍合擊 summary 行誤觸額外硬幣動畫`。列給站長另案處理。
+
 ## v6.355 PASSIVE_ON_KO_AFTER_PRIZE 中央家族 ＋ 耿鬼ex｜死亡宣告
 
 BASE `494ae3b50675f1ebda07131d266a032dbd93250c`（v6.354）。站長清單 **A-4**。M6a 仍鎖著 ⇒ 玩家看不到變化；

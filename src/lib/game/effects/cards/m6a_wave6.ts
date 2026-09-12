@@ -32,6 +32,14 @@
  *   ・「在下個自己的回合，受到這個招式的寶可夢**受到**招式的傷害「+N」點。」
  *       ＝ 對手易傷 +N ⇒ `oppTargetTakeExtraNextPost(N)`（刺耳聲 30；登在 effects.ts）
  *   長期記憶 `reference-defnextatk-vs-self-reduce-subject-v5997` 專記這個坑。
+ *
+ * ⭐⭐ v6.356 補記：本批當初列為「待站長裁示」的 **070/103 蟾蜍王｜撼盪拳（id 19982）**
+ *   已於 v6.356 實裝。它屬於 `effects.ts` 內部 local helper 的家族
+ *   （`oppTrainerCoinFlipNextPost`，與 `oppCantPlayItemNextPost`／`oppCantPlaySupporterNextPost`
+ *    並列於 Wave 39 那一區），依本檔第 6~10 行的同一條規範**登記在 effects.ts**，
+ *   本檔不另抄一份（Rule 38）。擲幣／「不算使用過」的丟棄由 engine.ts 的中央閘
+ *   `tremorPunchTrainerGate` 執行（PLAY_TRAINER ＋ PLAY_FOSSIL 兩個呼叫點）。
+ *   守衛：`scripts/test-v6356-tremor-punch.mjs`。
  *   ⚠ 後兩者是**施加在對手身上**的招式效果 ⇒ 一律要過 attack-effect 免疫閘
  *     （中央 helper 內部已含 `canApplyAttackEffectToTarget`；
  *      `scripts/test-opp-debuff-immunity.mjs`、`test-oppdebuff-immunity-converge.mjs` 在守）。

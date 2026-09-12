@@ -14348,6 +14348,7 @@ regPre('美錄梅塔|重塑斧', selfToolDiscardOrFailPre(250, '重塑斧'));
 // 新 Helper（effects.ts）：
 //   • oppCantPlayItemNextPost(label)       — 對手下個回合無法從手牌使出物品卡
 //   • oppCantPlaySupporterNextPost(label)  — 對手下個回合無法從手牌使出支援者卡
+//   • oppTrainerCoinFlipNextPost(label)    — ⭐v6.356 對手下個回合每次從手牌使出訓練家卡前擲 1 次硬幣
 //   • oppCantEvolveNextPost(label)         — 對手下個回合無法從手牌使出寶可夢並完成進化
 //   • oppActiveCantAttachEnergyNextPost(label) — 對手戰鬥寶可夢下個回合無法附上從手牌的能量
 //   • oppActiveDeferredPrizeNextPost(bonus, label) — 對手戰鬥寶可夢在攻擊方下個回合被 KO 時 +N 張獎賞卡
@@ -14384,6 +14385,32 @@ function oppCantPlaySupporterNextPost(label: string): AttackPostFn {
     const players = [...state.players] as [PlayerState, PlayerState];
     players[dIdx] = { ...players[dIdx], cantPlaySupporterNextTurn: true };
     return addLog({ ...state, players }, `${label}：對手下個回合無法從手牌使出支援者卡`, aIdx);
+  };
+}
+
+/**
+ * ⭐v6.356 蟾蜍王｜撼盪拳（M6a 19982）—— 「在下個對手的回合，每次對手從手牌使出訓練家卡時，
+ * 使用前擲1次硬幣。若為反面，則不算使用過那張卡，將其丟棄。」
+ *
+ * 本 helper 只負責**設旗標**（與 oppCantPlayItemNextPost／oppCantPlaySupporterNextPost 同形）；
+ * 真正的擲幣／丟棄由 engine.ts 的中央閘 tremorPunchTrainerGate 執行
+ * （PLAY_TRAINER ＋ PLAY_FOSSIL 兩個「從手牌使出訓練家卡」的 handler 共用同一支）。
+ *
+ * ⚠ 旗標掛在**對手玩家（dIdx）**身上，不是掛在蟾蜍王這張卡上
+ *   ⇒ 蟾蜍王之後被 KO／被換下場／被退化都**不影響**效果（卡面沒有任何「只要牠還在場上」的條件）。
+ * ⚠ 布林 ⇒ 兩隻蟾蜍王連續兩回合使用也只擲 1 次（卡面「擲1次硬幣」，不疊加）。
+ * ⚠ 與同家族一致：這是**玩家級**效果（不是加在對手寶可夢身上的 debuff）
+ *   ⇒ 不過 canApplyAttackEffectToTarget（該閘是保護「寶可夢」的；
+ *      oppCantPlayItemNextPost／oppCantPlaySupporterNextPost／oppCantEvolveNextPost 同樣沒有過閘）。
+ */
+function oppTrainerCoinFlipNextPost(label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
+    const players = [...state.players] as [PlayerState, PlayerState];
+    players[dIdx] = { ...players[dIdx], trainerCoinFlipNextTurn: true };
+    return addLog({ ...state, players },
+      `${label}：在下個對手的回合，對手每次從手牌使出訓練家卡前都要擲 1 次硬幣（反面則不算使用過、直接丟棄）`,
+      aIdx);
   };
 }
 
@@ -14459,6 +14486,14 @@ regPost('青銅鐘|進化妨礙者', oppCantEvolveNextPost('進化妨礙者'));
 // 吼叫尾ex｜絕叫 0 + 下回合對手禁支援者
 regPre('吼叫尾ex|絕叫', (s, _a, _p) => ({ state: s, damage: 0 }));
 regPost('吼叫尾ex|絕叫', oppCantPlaySupporterNextPost('絕叫'));
+
+// ⭐v6.356 蟾蜍王｜撼盪拳（M6a 070/103 id=19982）[F] 60 + 下回合對手每次出訓練家卡前擲幣
+//   ⚠ 只登 regPost，傷害 60 讓引擎讀卡面（v6.333 皮卡丘ex｜打雷硬寫 220 的前科；
+//     scripts/test-fixed-damage-base.mjs 在守）。
+//   ⚠ 同名不同印刷：全卡庫「蟾蜍王」共 4 張（M6a 19982 ＋ SV11B 12966/13714/13891），
+//     但招式名「撼盪拳」**只有 M6a 這一張**（另外三張是 輪唱／巨聲）
+//     ⇒ 鍵「蟾蜍王|撼盪拳」不會撞到別的印刷，不需要印刷閘。
+regPost('蟾蜍王|撼盪拳', oppTrainerCoinFlipNextPost('撼盪拳'));
 
 // 電蜘蛛ex｜雷擊石 180 + 自丟所有能量 + 下回合對手禁物品卡
 regPre('電蜘蛛ex|雷擊石', (s, _a, _p) => ({ state: s, damage: 180 }));
