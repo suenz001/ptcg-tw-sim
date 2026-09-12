@@ -279,15 +279,29 @@ export function computeSfxEvents(
     }
   }
   // D3. 對局結束
-  if (prev.phase !== 'game-over' && next.phase === 'game-over'
-      && next.winner !== null && next.winner !== undefined) {
-    const isLocalWin = ctx.mode === 'online' && ctx.myPlayerIndex !== null && ctx.myPlayerIndex !== undefined
-      ? next.winner === ctx.myPlayerIndex
-      : (ctx.aiPlayerIndex !== null && ctx.aiPlayerIndex !== undefined
-        ? next.winner !== ctx.aiPlayerIndex
-        : true);
-    events.push({ name: isLocalWin ? 'game-win' : 'game-lose', delayMs: 300 });
+  // >>> v6364-draw-sfx
+  // ⭐⭐v6.364 站長裁定 六-8：「平手完全沒有音效，就雙方都用落敗音效」。
+  //   v6.361 的平手表示法 = `phase === 'game-over'` ＋ **沒有 `winner` 這個 key**
+  //   ＋ `isDraw: true`（types.ts L873-882）。舊 gate 要求 winner 非 null/undefined
+  //   ⇒ 平手整場靜音（連結算視窗跳出來都沒聲音）。
+  //   ⇒ 平手時**不分視角**一律播站上既有的落敗音 `game-lose`（雙方都聽到落敗），
+  //     delayMs 沿用同一個 300（與勝負音同步在動畫之後）。
+  //   ⚠ 有勝方的那一條路徑（isLocalWin 的三段判定）**一個字都沒動**。
+  //   ⚠ 只在 phase 從非 game-over → game-over 的那一拍成立 ⇒ 沿用既有的「只播一次」去重。
+  if (prev.phase !== 'game-over' && next.phase === 'game-over') {
+    const hasWinner = next.winner !== null && next.winner !== undefined;
+    if (!hasWinner && next.isDraw === true) {
+      events.push({ name: 'game-lose', delayMs: 300 });
+    } else if (hasWinner) {
+      const isLocalWin = ctx.mode === 'online' && ctx.myPlayerIndex !== null && ctx.myPlayerIndex !== undefined
+        ? next.winner === ctx.myPlayerIndex
+        : (ctx.aiPlayerIndex !== null && ctx.aiPlayerIndex !== undefined
+          ? next.winner !== ctx.aiPlayerIndex
+          : true);
+      events.push({ name: isLocalWin ? 'game-win' : 'game-lose', delayMs: 300 });
+    }
   }
+  // <<< v6364-draw-sfx
 
   return events;
 }

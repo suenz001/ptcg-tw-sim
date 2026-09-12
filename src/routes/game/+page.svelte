@@ -2766,12 +2766,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
     lastLogProcessed = _maxTs;
     for (const entry of fresh) {
       const msg = entry.message;
-      // setup 先手特例（保留現有邏輯）
-      if (msg.includes('擲硬幣') && msg.includes('先手')) {
-        const winnerName = msg.replace(/^🪙?\s*擲硬幣：\s*/, '').replace(/\s*先手.*$/, '');
-        enqueueCoinFlip(Math.random() < 0.5 ? 'heads' : 'tails', `${winnerName} 先手`);
-        continue;
-      }
+      // >>> v6364-setup-coin
+      // ⭐⭐v6.364 站長裁定 六-1：開局擲幣的視覺是**另一套** —— 由 `game.id` 變化驅動的
+      //   全螢幕硬幣 overlay（本檔上方 coinFlipStage 的 $effect），**不走 log 解析**。
+      //   舊的「setup 先手特例」分支永遠進不去：引擎寫的兩條 setup log
+      //   （`🎯 XX 先手` / `🪙 擲硬幣：XX 獲勝，選擇先攻/後攻`）沒有任何一條同時含
+      //   「擲硬幣」＋「先手」。而且它 enqueue 的是 `Math.random()` 的隨機面，
+      //   與引擎實際擲出來的結果完全無關（＝在 log 旁顯示一個**捏造的**正反面）
+      //   ⇒ v6.364 移除，不「修好」它（引擎的 setup log 根本沒寫出正反面）。
+      // <<< v6364-setup-coin
       for (const event of parseCoinFlipAnimationEvents(msg)) {
         enqueueCoinFlip(event.result, event.label);
       }

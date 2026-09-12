@@ -1,5 +1,85 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.364 開局擲幣死碼移除（站長裁定 六-1）＋ 平手音效＝雙方落敗音（六-8）
+
+BASE `6379f54d06cac1be7934c49ebea87ee876ce103b`（v6.363）。
+
+### 【一】⚠⚠ 六-1：**v6.363 回報給站長的「開局擲幣動畫壞了」是錯的，站長是對的**
+
+站長逐字：「我自己測試開局擲幣還是有動畫阿?? 你再確認吧」
+
+複驗結果：**站上有兩套完全不同的擲幣視覺**，v6.363 的回報把它們搞混了。
+
+| # | 是什麼 | 在哪 | 驅動 | 現況 |
+|---|---|---|---|---|
+| ① | **開局全螢幕硬幣 overlay**（「擲硬幣決定先後…」→「XX 先手！」） | `+page.svelte` markup L14474-14499 ＋ `$effect` L2266-2280 | **`game.id` 變化**（新局就播），整段**零** `game.log` 參照 | **活得好好的**（站長看到的就是這個） |
+| ② | log 行旁邊的小硬幣 chip ＋ `playSfx('coin')` | `+page.svelte` L2718-2779 | 解析 log 文字 | 招式擲幣正常；**setup 特例分支是死碼** |
+
+死碼（BASE 的 `+page.svelte` L2769-2773）：
+```js
+if (msg.includes('擲硬幣') && msg.includes('先手')) {
+  enqueueCoinFlip(Math.random() < 0.5 ? 'heads' : 'tails', `${winnerName} 先手`);
+}
+```
+引擎的兩條 setup log 沒有任何一條同時滿足 ——
+`🎯 XX 先手`（有「先手」無「擲硬幣」）／`🪙 擲硬幣：XX 獲勝，選擇**先攻**/後攻`
+（⚠「先**攻**」≠「先**手**」，所以 `includes('先手')` 不成立）。
+守衛另做**全站網**：`engine.ts` 共 136 條 log 樣板，同時含「擲硬幣」＋「先手」的 **0 條**。
+
+⇒ **移除，而不是「修好」它**：它 enqueue 的是 `Math.random()` 的**隨機面**，
+與引擎實際擲出來的結果完全無關（引擎的 setup log 根本沒寫出正反面）
+—— 復活等於在 log 旁顯示一個**捏造的**正反面。
+⚠ overlay 的 `$effect` 與 markup **一個位元都沒碰**（用 sha256 pin ＋ 哨兵剝除釘住）。
+
+### 【二】六-8：平手音效
+
+站長逐字：「平手完全沒有音效，就雙方都用落敗音效」
+
+`sfx-events.ts` 的勝負音 gate 原本是
+`prev.phase !== 'game-over' && next.phase === 'game-over' && next.winner != null`，
+而 v6.361 的平手表示法是「`game-over` ＋ **沒有 `winner` 這個 key** ＋ `isDraw: true`」
+⇒ 平手整場**靜音**（連結算視窗跳出來都沒聲音）。
+
+修法：把 **phase 轉換**與 **winner 判定**拆開 ——
+- 平手 ⇒ **不分視角**一律 `game-lose`（`delayMs: 300`，與勝負音同一口徑）
+- 有勝方 ⇒ 原本的 `isLocalWin` 三段判定（線上／AI／本機 2P）**一個字都沒動**
+- 兩者皆非（舊式殘局：`game-over` 但既無 `winner` 也無 `isDraw`）⇒ 維持既有靜音
+- 只在「非 game-over → game-over」那一拍成立 ⇒ 沿用既有的「只播一次」去重
+
+### 【三】守衛
+
+`scripts/test-v6364-setup-coin-and-draw-sfx.mjs`：**PASS 45 / FAIL 0**。
+做法照 v6.363 的形狀：esbuild bundle 起來**真的呼叫**
+`parseCoinFlipAnimationEvents` / `flipCoinsWithLog` / `computeSfxEvents` / `applyAction`。
+【B】的平手盤面是**真引擎跑出來的**（沿用 test-v6361 的 fixture：急凍鳥｜冰雹 vs
+耿鬼ex｜死亡宣告，雙方最後一隻互相昏厥 ⇒ 真平手），不是手捏旗標。
+setup log 樣板是**從 `engine.ts` 原始碼抓出來再展開三元**，不是硬寫。
+overlay 用 **sha256 pin ＋ `stripSentinelBlocks`**（形狀抄 `test-v6293` E1），不用 `includes`。
+
+**HEAD-FAIL 實測**：BASE exit=1、**紅 6 條**（A5b／A5f 死碼還在；B1b×2／B1e／B4c 平手靜音）。
+突變 **M1~M6 全殺**（死碼加回去／平手靜音／平手播勝利音／勝負顛倒／overlay 改成由 log 驅動／
+平手只有一邊聽得到）。
+
+⭐ 動到 `+page.svelte` ⇒ 用 `__m6a/bytewise_scan.mjs` 掃出 **37 支**逐位元守衛，
+改動前後各跑一次逐支比對：**沒有任何守衛因本版翻紅**（前 GREEN 16／RED 21，
+後 GREEN 17／RED 21，+1 綠是新守衛自己）。`test-v6293` 維持 GREEN。
+（`test-v6297` 那支既有永久紅的紅行只差內嵌行號 9916 → 9919，失敗條目與條數完全相同。）
+
+### 【四】⚠ 玩家看得到／聽得到的變化
+
+1. **平手現在會播落敗音 `game-lose`（延遲 300ms），雙方都聽得到**（原本完全靜音）。
+   ⚠ 錦標賽平手目前與休閒共用同一表示法 ⇒ 本版一上線錦標賽平手也會聽到落敗音
+   （v6.365 會把錦標賽平手改成雙敗）。
+2. 六-1 是**純刪死碼**，玩家看到／聽到的東西**零變化**。
+
+### 【五】⚠ 待站長裁示
+
+1. **觀戰者在「有勝方」時目前聽到的是勝利音**（`isLocalWin` 走到 `: true`）——
+   這是 v6.048 以來的既有行為，本版刻意沒動；平手時觀戰者依裁定改成落敗音。
+   要不要之後統一成「觀戰者一律中性音／靜音」？
+2. **舊式「`game-over` 但既無 `winner` 也無 `isDraw`」的殘局**仍是靜音（守衛 B5 釘住）。
+3. **開局 overlay 對觀戰者刻意不播**（v5.516）—— 確認維持。
+
 ## v6.363 修好 `test-coin-animation-parser` 並接進 `npm test` 鏈（站長裁定 F-16）
 
 BASE `6c8dfce231a8963289b2d81abff634b4804f12b3`（v6.362）。⚠ **本版一行產品程式碼都沒改**（`src/` 只有 `version.ts` 被 bump 動到）
