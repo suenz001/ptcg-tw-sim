@@ -886,6 +886,88 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
   //   ⇒ 泛用剝除器一次剝掉，不需要逐字還原。
   //   那一塊的守備由 scripts/test-v6367-attacker-pre-resync.mjs 全面接管。
   const stripV6367Engine = (src) => stripSentinelBlocks(src, 'v6367-');
+  // ⭐ v6.368：engine.ts 的合法改動有兩種（站長裁定 六-10／六-11 ＋ v6.367 recon 發現的第二個 stale 洞）。
+  //   ① 純新增（生命制約的 import／宣告當時快照／applyActionImpl 尾段的 clear）
+  //      ⇒ 一律 `>>> v6368-…` 哨兵框住，泛用剝除器一次剝掉。
+  //   ② 修改／刪除既有行（兩處 stale players 反寫 ＋ ATTACK 尾段那一疊 snapshot clear 整疊移走）
+  //      —— 不能用哨兵剝（剝掉等於把 BASE 的內容也刪掉）⇒ 逐字換回 BASE 的樣子。
+  //      那一塊的守備由 scripts/test-v6368-on-field-snapshot-family.mjs 全面接管。
+  //   ⚠ engine.ts 是 CRLF；LF／CRLF 兩種都試（同 v6.352／v6.353／v6.360）。
+  const stripV6368Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6368-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    const V6368_OLD_D = `      players[aIdx] = { ...players[aIdx], active: newAtk };
+      workingState = { ...workingState, players };
+`;
+    s = swap(s, `      // ⭐v6368-pre-stale-players-bonus（v6.367 recon 發現的第二個 stale 洞；站長已授權預先處理）
+      //   原碼寫的是 handlePlaying 開頭那個區域 players 陣列，再**整份**蓋回 workingState
+      //   ⇒ ATTACK_PRE 回傳的新 players（防守方全部 ＋ 攻擊方 player-level）會在這一行被
+      //     反寫回 PRE 之前 —— 6063 行的 const defPlayers = [...workingState.players] 讀到的
+      //     就是這個被反寫過的陣列；v6.351／v6.367 對齊的是 defender／attacker 兩份
+      //     **快照物件**，救不到 workingState.players 本身。
+      //   實測（__m6a/probe368d.mjs）：合成 PRE 在造成傷害前替防守方 +30 傷害並丟 1 張卡、
+      //     招式帶 damageBonusThisTurn=50 ⇒ 最終 damage 60（應為 90）、防守方棄牌 0 張（應為 1 張）。
+      //   ⇒ 改成從 workingState.players 起手（v6.351／v6.367 同一個家族、同一種寫法）。
+      const _v6368P = [...workingState.players] as [PlayerState, PlayerState];
+      _v6368P[aIdx] = { ..._v6368P[aIdx], active: newAtk };
+      players[aIdx] = _v6368P[aIdx];   // 區域快照陣列同步，避免與 workingState 分岔
+      workingState = { ...workingState, players: _v6368P };
+`, V6368_OLD_D);
+    s = swap(s, `      // ⭐v6368-pre-stale-players-penalty（同上，另一格；理由與實測見上面那一格的註解）
+      const _v6368P2 = [...workingState.players] as [PlayerState, PlayerState];
+      _v6368P2[aIdx] = { ..._v6368P2[aIdx], active: newAtk };
+      players[aIdx] = _v6368P2[aIdx];   // 區域快照陣列同步，避免與 workingState 分岔
+      workingState = { ...workingState, players: _v6368P2 };
+`, V6368_OLD_D);
+    s = swap(s, `    // ⭐v6368-attack-time-clear-moved 站長裁定 六-11（逐字：「看不懂，但依你的建議統一」）
+    //   這裡原本有一疊 attack-time snapshot clear（花之帷幔／平穩境地／抵抗之幕／
+    //   球形盾牌／太古防壁 共五個），位置在 ATTACK 流程尾段 —— 但它**排在後面
+    //   好幾個消費點之前**（PASSIVE_RETALIATION、on-KO 特性、以及 applyActionImpl 尾段的
+    //   applyOppActiveReturnedToBenchTriggers／markHealsByDamageDecrease…）
+    //   ⇒ 那一疊之後的任何消費點永遠讀不到快照。
+    //   v6.357 的 _attackTimeFieldWideRetal 已經示範了**正確位置只有一個**：
+    //   applyActionImpl 尾段（整個 dispatch 的真正結尾，在它之後不可能再有消費點）。
+    //   ⇒ 本版把這五個既有快照的 clear 統一移到那裡。⚠ 那裡本來就**各有一份完全相同的**
+    //     clear（見「v4.47 P2：花之帷幔 attack-time snapshot 跨 deferred picker 後的最終清理」
+    //     那一段）⇒ 這裡整疊刪除即可，尾段不需要新增任何一行，清除語意逐字不變。
+`, `    // v3.892：清掉 attack-time snapshot transient flag（attack flow 結束）
+    // v4.47 P2：若 POST 開了 pendingSelection（油之機關槍 / hitBenchPickPost），
+    //   snapshot 必須跨 dispatch 保留到 resolver 跑完（resolver 內 resolveBenchGuard 仍要讀）。
+    //   pendingSelection 為空時才清；resolver 結束後若 pending 已消，由 applyAction wrapper
+    //   統一清（line 5970 附近，markHealsByDamageDecrease 之後）。
+    if (newState._attackTimeOppFlowerVeil !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeOppFlowerVeil;
+      newState = cleared;
+    }
+    if (newState._attackTimeCalmGround !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeCalmGround;
+      newState = cleared;
+    }
+    // v5.186：抵抗之幕 snapshot 同步清除
+    if (newState._attackTimeOppRocketVeil !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeOppRocketVeil;
+      newState = cleared;
+    }
+    // v5.237：球形盾牌 snapshot 同步清除
+    if (newState._attackTimeOppBugShield !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeOppBugShield;
+      newState = cleared;
+    }
+    // v5.325：太古防壁能量快照 同步清除
+    if (newState._attackTimeAttackerEnergyUnits !== undefined && !newState.pendingSelection) {
+      const cleared = { ...newState };
+      delete cleared._attackTimeAttackerEnergyUnits;
+      newState = cleared;
+    }
+`);
+    return s;
+  };
   // ⭐ v6.360：engine.ts 的合法改動有兩種（站長裁定 E-14）。
   //   ① 中央述詞 stadiumPlacementBlock ＋ PLAY_TRAINER 的前移呼叫點（**純新增**）
   //      ⇒ `>>> v6360-…` 哨兵框住，泛用剝除器一次剝掉。
@@ -985,8 +1067,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

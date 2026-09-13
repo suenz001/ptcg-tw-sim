@@ -1046,6 +1046,9 @@ import {
   // >>> v6354-heal-block-import
   isHealBlockedFor,    // ⭐v6.354 「禁止恢復HP」中央閘（伊裴爾塔爾｜生命制約）— 唯一消費點在 markHealsByDamageDecrease
   // <<< v6354-heal-block-import
+  // >>> v6368-life-restraint-import
+  hasEffectiveLifeRestraintOnSide as _hasLifeRestraint,  // ⭐v6.368 站長裁定 六-10：宣告當時快照要用的「當下盤面」述詞
+  // <<< v6368-life-restraint-import
 } from './effects/cards/v3001_g3_wave3';
 
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
@@ -5539,6 +5542,19 @@ function handlePlaying(
       p1: snapshotFieldWideRetalHolders(state, 0, pool), p2: snapshotFieldWideRetalHolders(state, 1, pool),
     } };
     // <<< v6357-field-wide-retal-snapshot-set
+    // >>> v6368-life-restraint-snapshot-set
+    // ⭐⭐v6.368 站長裁定 六-10（逐字：「一起修」）：伊裴爾塔爾｜生命制約 是同一個句型家族
+    //   （「只要這隻寶可夢在場上，對手的…無法…」）的一員，而它的**唯一**消費點
+    //   markHealsByDamageDecrease 排在 applyActionImpl 的最尾端 ⇒ 持有者被同一招打死之後
+    //   才被讀到 ⇒ 對手用「打死伊裴爾塔爾 ＋ 同一招吸血」就能繞過。依裁定改成**宣告當時**判定。
+    //   ⚠ 刻意沿用 _attackTimeCalmGround 的**同一個**設定點（Rule 38：不另開 ATTACK 起點 hook），
+    //     且每次 ATTACK 都無條件重設 ⇒ 上一回合的殘留不可能跨回合誤觸發。
+    //   ⚠ clear 只放在 applyActionImpl 尾段（比照 v6.357）—— 消費點就在那之前一點點。
+    //   ⚠⚠ 形狀是 { p1, p2 } **不是** [a, b]：Firestore 禁止巢狀陣列（v6.056 事故）。
+    workingState = { ...workingState, _attackTimeLifeRestraint: {
+      p1: _hasLifeRestraint(state, 0, pool), p2: _hasLifeRestraint(state, 1, pool),
+    } };
+    // <<< v6368-life-restraint-snapshot-set
     // v5.186：抵抗之幕 同 pattern — 玩家回報多龍巴魯托ex 幻影奇襲 對戰急凍鳥時
     //   急凍鳥被 KO 後 6 個指示物還能放到備戰；規則上同招式 resolve 視為同時，
     //   攻擊宣告當時抵抗之幕生效，備戰「火箭隊的」基礎寶可夢仍應免疫此招式效果。
@@ -5652,8 +5668,19 @@ function handlePlaying(
       if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
         delete newAtk.damageBonusThisTurn;
       }
-      players[aIdx] = { ...players[aIdx], active: newAtk };
-      workingState = { ...workingState, players };
+      // ⭐v6368-pre-stale-players-bonus（v6.367 recon 發現的第二個 stale 洞；站長已授權預先處理）
+      //   原碼寫的是 handlePlaying 開頭那個區域 players 陣列，再**整份**蓋回 workingState
+      //   ⇒ ATTACK_PRE 回傳的新 players（防守方全部 ＋ 攻擊方 player-level）會在這一行被
+      //     反寫回 PRE 之前 —— 6063 行的 const defPlayers = [...workingState.players] 讀到的
+      //     就是這個被反寫過的陣列；v6.351／v6.367 對齊的是 defender／attacker 兩份
+      //     **快照物件**，救不到 workingState.players 本身。
+      //   實測（__m6a/probe368d.mjs）：合成 PRE 在造成傷害前替防守方 +30 傷害並丟 1 張卡、
+      //     招式帶 damageBonusThisTurn=50 ⇒ 最終 damage 60（應為 90）、防守方棄牌 0 張（應為 1 張）。
+      //   ⇒ 改成從 workingState.players 起手（v6.351／v6.367 同一個家族、同一種寫法）。
+      const _v6368P = [...workingState.players] as [PlayerState, PlayerState];
+      _v6368P[aIdx] = { ..._v6368P[aIdx], active: newAtk };
+      players[aIdx] = _v6368P[aIdx];   // 區域快照陣列同步，避免與 workingState 分岔
+      workingState = { ...workingState, players: _v6368P };
       const atkName = pool.get(newAtk.cardId)?.name ?? '?';
       workingState = addLog(workingState, `${atkName} 招式傷害 +${dmgBonus}（回合加傷效果）`, aIdx);
       formula.push({ sign: '+', value: dmgBonus, label: '回合加傷' });
@@ -5674,8 +5701,11 @@ function handlePlaying(
       if (!_isFestivalDanceFirstAttack(state, aIdx, pool)) {
         delete newAtk.nextOwnAttackPenalty;
       }
-      players[aIdx] = { ...players[aIdx], active: newAtk };
-      workingState = { ...workingState, players };
+      // ⭐v6368-pre-stale-players-penalty（同上，另一格；理由與實測見上面那一格的註解）
+      const _v6368P2 = [...workingState.players] as [PlayerState, PlayerState];
+      _v6368P2[aIdx] = { ..._v6368P2[aIdx], active: newAtk };
+      players[aIdx] = _v6368P2[aIdx];   // 區域快照陣列同步，避免與 workingState 分岔
+      workingState = { ...workingState, players: _v6368P2 };
       const atkName2 = pool.get(newAtk.cardId)?.name ?? '?';
       workingState = addLog(workingState, `${atkName2} 招式傷害 -${penalty}（受招致使傷害削減效果）`, aIdx);
       formula.push({ sign: '-', value: penalty, label: '招致削傷' });
@@ -6939,39 +6969,17 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
     if (newState.phase === 'playing') {
       newState = { ...newState, turnPhase: 'end' as const };
     }
-    // v3.892：清掉 attack-time snapshot transient flag（attack flow 結束）
-    // v4.47 P2：若 POST 開了 pendingSelection（油之機關槍 / hitBenchPickPost），
-    //   snapshot 必須跨 dispatch 保留到 resolver 跑完（resolver 內 resolveBenchGuard 仍要讀）。
-    //   pendingSelection 為空時才清；resolver 結束後若 pending 已消，由 applyAction wrapper
-    //   統一清（line 5970 附近，markHealsByDamageDecrease 之後）。
-    if (newState._attackTimeOppFlowerVeil !== undefined && !newState.pendingSelection) {
-      const cleared = { ...newState };
-      delete cleared._attackTimeOppFlowerVeil;
-      newState = cleared;
-    }
-    if (newState._attackTimeCalmGround !== undefined && !newState.pendingSelection) {
-      const cleared = { ...newState };
-      delete cleared._attackTimeCalmGround;
-      newState = cleared;
-    }
-    // v5.186：抵抗之幕 snapshot 同步清除
-    if (newState._attackTimeOppRocketVeil !== undefined && !newState.pendingSelection) {
-      const cleared = { ...newState };
-      delete cleared._attackTimeOppRocketVeil;
-      newState = cleared;
-    }
-    // v5.237：球形盾牌 snapshot 同步清除
-    if (newState._attackTimeOppBugShield !== undefined && !newState.pendingSelection) {
-      const cleared = { ...newState };
-      delete cleared._attackTimeOppBugShield;
-      newState = cleared;
-    }
-    // v5.325：太古防壁能量快照 同步清除
-    if (newState._attackTimeAttackerEnergyUnits !== undefined && !newState.pendingSelection) {
-      const cleared = { ...newState };
-      delete cleared._attackTimeAttackerEnergyUnits;
-      newState = cleared;
-    }
+    // ⭐v6368-attack-time-clear-moved 站長裁定 六-11（逐字：「看不懂，但依你的建議統一」）
+    //   這裡原本有一疊 attack-time snapshot clear（花之帷幔／平穩境地／抵抗之幕／
+    //   球形盾牌／太古防壁 共五個），位置在 ATTACK 流程尾段 —— 但它**排在後面
+    //   好幾個消費點之前**（PASSIVE_RETALIATION、on-KO 特性、以及 applyActionImpl 尾段的
+    //   applyOppActiveReturnedToBenchTriggers／markHealsByDamageDecrease…）
+    //   ⇒ 那一疊之後的任何消費點永遠讀不到快照。
+    //   v6.357 的 _attackTimeFieldWideRetal 已經示範了**正確位置只有一個**：
+    //   applyActionImpl 尾段（整個 dispatch 的真正結尾，在它之後不可能再有消費點）。
+    //   ⇒ 本版把這五個既有快照的 clear 統一移到那裡。⚠ 那裡本來就**各有一份完全相同的**
+    //     clear（見「v4.47 P2：花之帷幔 attack-time snapshot 跨 deferred picker 後的最終清理」
+    //     那一段）⇒ 這裡整疊刪除即可，尾段不需要新增任何一行，清除語意逐字不變。
 
     // v2.69 瘋狂炸彈追蹤 — 招式結算後寫入攻擊方 active.attackUsedThisTurn
     {
@@ -9404,6 +9412,16 @@ function applyActionImpl(
     next = cleared;
   }
   // <<< v6357-field-wide-retal-snapshot-clear-wrapper
+  // >>> v6368-life-restraint-snapshot-clear
+  // ⭐v6.368：生命制約快照的 clear **只有這一處**（applyActionImpl 尾段，比照 v6.357）。
+  //   ⚠ 一定要排在上面 markHealsByDamageDecrease **之後** —— 那是它唯一的消費點。
+  //   pendingSelection 還在時保留給 resolver（比照花之帷幔／平穩境地）。
+  if (next._attackTimeLifeRestraint !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeLifeRestraint;
+    next = cleared;
+  }
+  // <<< v6368-life-restraint-snapshot-clear
   // v5.186：抵抗之幕 snapshot 同步清除（跨 deferred picker 後最終清理）
   if (next._attackTimeOppRocketVeil !== undefined && !next.pendingSelection) {
     const cleared = { ...next };

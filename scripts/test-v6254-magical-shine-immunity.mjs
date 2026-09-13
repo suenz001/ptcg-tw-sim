@@ -5,9 +5,9 @@
 //   「這隻寶可夢不會受到對手的寶可夢特性效果的影響。」
 //
 // 官方裁定（PTCG RULES/PTCG_RULES.md）：
-//   L2818「對手的戰鬥場上有特性『初始化』處於生效狀態的鐵荊棘ex時，自己的超級皮可西ex的
+//   L2819「對手的戰鬥場上有特性『初始化』處於生效狀態的鐵荊棘ex時，自己的超級皮可西ex的
 //         特性『光之翼』會消除嗎？」→「不會消除。」
-//   L2733「…若從手牌抽出超級皮可西ex重疊在自己場上的皮皮身上讓其進化，特性『光之翼』
+//   L2734「…若從手牌抽出超級皮可西ex重疊在自己場上的皮皮身上讓其進化，特性『光之翼』
 //         會生效嗎？」→「會生效。」
 //   L2722/2723「使用黑夜魔靈的特性『咒詛炸彈』時，可以選擇特性『光之翼』處於生效狀態的
 //         對手的超級皮可西ex…？」→「可以。／但…不受特性的效果影響，因此在讓黑夜魔靈
@@ -106,20 +106,22 @@ T('A1 超級皮可西ex 資料欄位與光之翼 effect 逐字', () => {
 T('A0 中央豁免述詞 hasEffectiveOppAbilityImmunity 有被 export（否則下面全是 TypeError）', () => {
   assert.equal(typeof hasEffectiveOppAbilityImmunity, 'function', 'v3001_g3_wave3 沒有 export 中央豁免述詞');
 });
-T('A2 官方 PTCG_RULES.md L2818 / L2733 逐字仍在（裁定來源沒被改掉）', () => {
+T('A2 官方 PTCG_RULES.md L2819 / L2734 逐字仍在（裁定來源沒被改掉）', () => {
   const p = join(ROOT, 'PTCG RULES', 'PTCG_RULES.md');
   if (!existsSync(p)) { console.log('      (PTCG RULES 未解出，跳過逐字比對但仍檢查卡面)'); return; }
   const lines = readFileSync(p, 'utf8').split(/\r?\n/);
   assert.ok(lines.length > 2900, `規則檔只有 ${lines.length} 行 — 掃描器壞了？`);
-  assert.ok(lines[2817].includes('特性「光之翼」會消除嗎') && lines[2818].includes('不會消除'),
-    'L2818/L2819 不是預期的「光之翼會消除嗎／不會消除」');
-  assert.ok(lines[2732].includes('特性「光之翼」會生效嗎') && lines[2733].includes('會生效'),
-    'L2733/L2734 不是預期的「光之翼會生效嗎／會生效」');
+  // ⭐v6.368：站長裁定 六-14 在 §16.2 插入 1 行（PTCG_RULES.md 的唯一改動）⇒ 這兩段官方問答
+  //   的**逐字內容完全沒變**，只是整體往下移了一行 ⇒ 行號各 +1（原 L2818/L2733）。
+  assert.ok(lines[2818].includes('特性「光之翼」會消除嗎') && lines[2819].includes('不會消除'),
+    'L2819/L2820 不是預期的「光之翼會消除嗎／不會消除」');
+  assert.ok(lines[2733].includes('特性「光之翼」會生效嗎') && lines[2734].includes('會生效'),
+    'L2734/L2735 不是預期的「光之翼會生效嗎／會生效」');
 });
 
 // ══ B. 中央述詞：豁免生效（HEAD 必紅，各項各自紅）══════════════════════════
 console.log('\n── B. 豁免生效（HEAD-FAIL 各項各自紅）──');
-T('B1 對手戰鬥場鐵荊棘ex｜初始化 ⇒ 光之翼「不會消除」（官方 L2818）', () => {
+T('B1 對手戰鬥場鐵荊棘ex｜初始化 ⇒ 光之翼「不會消除」（官方 L2819）', () => {
   const pixy = I(ID.PIXY);
   const st = mkState({ active: pixy }, { active: I(ID.IRON) });
   assert.equal(isAbilityHolderEffective(st, pixy, C(ID.PIXY), 0, '光之翼', 'active', pool), true);

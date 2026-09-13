@@ -1274,6 +1274,19 @@ export interface GameState {
    *     v2750_h_wave2_full.ts 既有寫法 `[idx === 0 ? 'p1' : 'p2']`）。
    */
   _attackTimeFieldWideRetal?: { p1: FieldWideRetalHolderSnapshot[]; p2: FieldWideRetalHolderSnapshot[] };
+  /**
+   * ⭐v6.368 站長裁定 六-10（逐字：「一起修」）：伊裴爾塔爾（那張卡唯一的特性）的 attack-time snapshot
+   * （比照 _attackTimeCalmGround／_attackTimeOppFlowerVeil，同一個「宣告當時」家族）。
+   * 卡面逐字（static/cards/M6a.json，M6a 079/103，id 19991）：
+   *   「只要這隻寶可夢在場上，對手的戰鬥寶可夢的HP無法恢復。」
+   * key＝座位（p1＝玩家 0、p2＝玩家 1）；值＝該側**宣告當時**是否有生效中的持有者
+   * （判準走中央述詞 hasEffectiveLifeRestraintOnSide，本檔不再寫第二份）。
+   * 消費點 isHealBlockedFor 以「當下盤面 OR 本快照」判定 ⇒ 持有者被同一招打死離場，
+   * 這一次招式裡的恢復仍然被擋（PTCG「招式效果同時 resolve」）。
+   * Transient：每次 attack flow 後 clear（pendingSelection 還在時保留到 resolver 跑完）。
+   * ⚠⚠ per-player 一律 { p1, p2 }，禁止 T[][]（Firestore 禁巢狀陣列；v6.056 事故）。
+   */
+  _attackTimeLifeRestraint?: { p1: boolean; p2: boolean };
 }
 
 export interface LogEntry {

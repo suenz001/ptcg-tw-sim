@@ -1030,5 +1030,10 @@ export function isHealBlockedFor(
   if (state.players?.[targetOwnerIdx]?.active?.iid !== targetIid) return false;
   // 持有者在「被禁止那一隻」的對手側；卡面「只要這隻寶可夢**在場上**」⇒ active 與 bench 都算。
   const holderIdx = (1 - targetOwnerIdx) as 0 | 1;
-  return hasEffectiveLifeRestraintOnSide(state, holderIdx, pool);
+  if (hasEffectiveLifeRestraintOnSide(state, holderIdx, pool)) return true;
+  // ⭐v6.368 站長裁定 六-10（逐字：「一起修」）：即使【生命制約】持有者被**同一次**招式打死離場，
+  //   只要「宣告當時」它在場上且特性生效，這一次招式裡的恢復仍然被擋
+  //   （PTCG「招式效果同時 resolve」；與 isReturnToHandBlockedByCalmGround 讀
+  //   _attackTimeCalmGround 是**同一個**形狀，不另開第二套機制）。
+  return state._attackTimeLifeRestraint?.[holderIdx === 0 ? 'p1' : 'p2'] === true;
 }
