@@ -31,6 +31,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, restoreBaseSubtree, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '45e925c17dc8b2b3edee2b80e52f3da322a90cea';   // v6.372（v6.373 的上一版）
@@ -335,7 +336,7 @@ chk('D4 ⭐戴**英雄斗篷**（最大 HP +100）⇒ 道具先被丟掉，傷�
 // 【E】(丙) C-11：`_attackTime*` 的枚舉式掃描器
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('\n【E】⭐(丙) C-11：`_attackTime*` 枚舉式掃描器（設定點一處／清除點一處／清除在 applyActionImpl 尾段）');
-const engSrc = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
+const engSrc = normEol(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
 const typSrc = readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8');
 const count = (t, s) => t.split(s).length - 1;
 

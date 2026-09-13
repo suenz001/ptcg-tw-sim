@@ -17,12 +17,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0, fail = 0;
 const T = async (n, fn) => { try { await fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
 
-const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
 const verTs = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
 

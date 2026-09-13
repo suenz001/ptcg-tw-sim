@@ -15,6 +15,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x-oi-s.js'), E = join(ROOT, '.x-oi-e.ts'), O = join(ROOT, '.x-oi-o.mjs');
@@ -248,7 +249,7 @@ T('⭐⭐批2：AI 已定案的一側不會重複送 OPENING_KEEP（避免 setup
 });
 
 T('⭐批2：本機雙人視角切換與 setupActorSeat 都認得 openingChoicePending', () => {
-  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  const pg = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
   // 視角：openingChoicePending 必須排在 pendingMulliganDraw 之前（否則 P2 要選時看不到視窗）
   const iOpen = pg.indexOf('game.openingChoicePending?.[0]');
   const iPmd = pg.indexOf('(game.pendingMulliganDraw?.[0] ?? 0) > 0\n          ? 0');
@@ -267,7 +268,7 @@ T('⭐批2：本機雙人視角切換與 setupActorSeat 都認得 openingChoiceP
 });
 
 T('⭐批2：選擇視窗存在，且兩個按鈕分別派送 KEEP / MULLIGAN', () => {
-  const pg = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  const pg = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
   assert.ok(pg.includes("game.openingChoicePending?.[myIdx]"), '缺少選擇視窗的顯示條件');
   assert.ok(pg.includes('GameActions.openingKeep(myIdx)'), '缺少「用牠開局」按鈕');
   assert.ok(pg.includes('GameActions.openingMulligan(myIdx)'), '缺少「重抽」按鈕');

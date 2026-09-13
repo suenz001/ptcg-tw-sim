@@ -34,6 +34,7 @@ import {
   readPatch, extractBlock, FR_START, FR_END,
   buildFriends, asUser, findEmails,
 } from './lib/friends-harness-v6282.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PATCH = readPatch(join(ROOT, 'oracle-admin/server_admin_patch.js'));
@@ -41,7 +42,7 @@ const P_FR = join(ROOT, 'src/lib/friends/friend-rooms.ts');
 const P_API = join(ROOT, 'src/lib/friends/friends-api.ts');
 const P_CTX = join(ROOT, 'src/lib/friends/auth-ctx.ts');
 const P_FRP = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
-const FR_TS = readFileSync(P_FR, 'utf8');
+const FR_TS = normEol(readFileSync(P_FR, 'utf8'));
 const API_TS = readFileSync(P_API, 'utf8');
 const FRP = readFileSync(P_FRP, 'utf8');
 const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');

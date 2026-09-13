@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -64,7 +65,7 @@ await T('F0 HEAD-FAIL：friends-api.ts／routes/friends/+page.svelte／+page.ts 
   PANEL = readFileSync(P_PANEL, 'utf8');
   assert.ok(PANEL.length > 3000, 'FriendsPanel.svelte 只有 ' + PANEL.length + ' 字元 —— 被掏空');
   API = readFileSync(P_API, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); PAGE_TS = readFileSync(P_PAGE_TS, 'utf8');
-  GAME = readFileSync(P_GAME, 'utf8'); MPB = readFileSync(P_MPB, 'utf8'); SRV = readFileSync(P_SRV, 'utf8');
+  GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = readFileSync(P_MPB, 'utf8'); SRV = readFileSync(P_SRV, 'utf8');
   assert.ok(API.length > 3000, 'friends-api.ts 只有 ' + API.length + ' 字元 —— 被掏空');
   assert.ok(PAGE.length > 3000, '+page.svelte 只有 ' + PAGE.length + ' 字元 —— 被掏空');
 });

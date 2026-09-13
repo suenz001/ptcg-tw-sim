@@ -11,9 +11,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const notify = readFileSync(join(ROOT, 'src/lib/notify.ts'), 'utf8').replace(/\r\n/g, '\n');
 const page = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
 

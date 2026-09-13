@@ -21,6 +21,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0, fail = 0;
@@ -186,7 +187,7 @@ T('⭐⭐log 行的欄位名是 message（第一版寫成 text，整份 log 靜�
   //   守衛當時只檢查「措辭與 six_decks.ts 一致」→ 全綠，於是提示指向「措辭改過」，
   //   但真根因是抽取端讀 `line.text`，而 LogEntry 的欄位是 **message** ——
   //   每一行都變成空字串被 continue 掉。措辭再怎麼對也沒用。
-  const types = readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8');
+  const types = normEol(readFileSync(join(ROOT, 'src/lib/game/types.ts'), 'utf8'));
   const i = types.indexOf('export interface LogEntry');
   const body = types.slice(i, types.indexOf('\n}', i));
   assert.ok(/^\s*message:\s*string;/m.test(body), 'LogEntry 的公開訊息欄位應為 message');

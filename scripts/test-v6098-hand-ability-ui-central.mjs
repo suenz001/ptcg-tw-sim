@@ -27,6 +27,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S=join(ROOT,'.v98-s.js'),E=join(ROOT,'.v98-e.ts'),O=join(ROOT,'.v98-o.mjs');
 process.on('exit',()=>{for(const p of[S,E,O]){try{unlinkSync(p)}catch{}}});
@@ -107,7 +108,7 @@ T('①-5 回歸保護：齒輪怪｜緊急迴轉 仍然正常（對手有 2 階�
 // ══ ② 靜態端：UI 不得硬編 ══
 const stripComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 const gateNames = (() => {
-  const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
+  const eng = normEol(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
   const i = eng.indexOf('const HAND_ACTIVATE_GATES');
   assert.ok(i >= 0, '找得到 HAND_ACTIVATE_GATES');
   const seg = eng.slice(i, eng.indexOf('\n};', i));

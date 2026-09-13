@@ -55,9 +55,9 @@ const BASE_SHA_V6309 = '039625c870f5243548d54c20abb1139bc34acc53';
 //   「只有那 6 處」由 test-v6276 的 revert-diff 證明（還原後 sha 回到 34a8448b…）。
 const TOURN_TAIL_SHA256_V6276 = 'dc50464ff6843c4903080305afbdab4597b755fa89e2d623fb6a25cb314f0ff9';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
-const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
+const RO = normEol(readFileSync(join(ROOT, RO_PATH), 'utf8'));
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8');
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 const SRV = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 

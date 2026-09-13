@@ -20,6 +20,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6352-s.js'), E = join(ROOT, '.v6352-e.ts'), O = join(ROOT, '.v6352-o.mjs');
@@ -356,7 +357,7 @@ console.log('\n【E】光之翼豁免**原封保留**（三個消費點各自的
 console.log('\n【C】中央性（Rule 38）—— 同一個判準只能有一份');
 {
   const engSrc = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
-  const effSrc = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8');
+  const effSrc = normEol(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
   const countOf = (src, needle) => src.split(needle).length - 1;
 
   // C1：'怨恨旋渦' 這個**字面**（含引號）在兩個大檔裡只剩中央表那一處

@@ -1,5 +1,106 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.377 孤兒守衛 harness ＋ **行尾中性 lint** ＋ 淺複製對照網進 repo（C-10／C-9／C-15）
+
+BASE `a434f4fc41f74a985bb5735c91a2a9268cbd76b2`（v6.376）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。
+⭐ **本機紅燈 58 → 48**，而且**白名單 0 條**（不是靠放寬換來的）。
+
+### 【零】⚠ 三處與原先假設不符（實測否證）
+
+1. ⭐⭐ **`test-festival-dance` 的診斷我先前給錯了。**
+   我說「`pendingPrizes` 是 tuple，正確寫法是 `pendingPrizes[0]`」——**實測否證**：
+   KO 之後 `pendingPrizes` 是 **`[0,0]`**，改成 `[0]` 一樣紅。
+   真因有**兩層**：① 它自 v2.98 起是 tuple（`types.ts:899`）；
+   ② **v5.466「自動給獎賞」之後，獎賞在 KO 當下直接進手牌**（`effects.ts:12342` 的註解寫明；
+   實測 `prizes 6→5、hand 0→1`）⇒ 根本不會有 pending。
+   ⇒ 斷言**上移到行為層**：KO 後攻擊方獎賞區少 1 張、手牌多 1 張。
+2. **「4 支修好就接進 chain」不成立 —— 只有 2 支能接**（見【一】）。
+3. **違規數量遠超預期**：初掃 **123 處／57 檔**（原本預估上限 15）。**沒有**用白名單解決。
+
+### 【一】(甲) C-10：4 支孤兒守衛
+
+| 檔 | 紅在 | 修法 | 結論 |
+|---|---|---|---|
+| `test-evolve-iid-regression` | **harness**：`new URL(OUT,'file://')` → 協定變成 `e:` | `pathToFileURL(OUT).href`；順手修 `chooseActor` 裡 `state.pendingPrizes > 0`（tuple 比 0 **恆為 false** ⇒ 該分支等於沒接上） | ✅ 綠（1000 seeds）**已接進 chain** |
+| `test-festival-dance` | **守衛過期**（祭典樂舞流程實測完全正確，不是出貨碼 bug） | fixture `pendingPrizes: 0`→`[0,0]`；`TAKE_PRIZES` 補 `playerIdx`；斷言上移到行為層 | ✅ 綠 **已接進 chain** |
+| `test-all-presets` | harness 同上 | 修好了 | ❌ **不接進 chain**：它**沒有任何 exit 判準** —— 實測跑完 1332 場、**478 bugs**，仍 `exit 0`。接進去就是恆綠安慰劑 ⇒ **待裁示** |
+| `test-v2341-a-batch` | **harness**：土砲 `test()` 沒有 `.skip` ⇒ TypeError 整支掛 | 補 `test.skip`（另計 skipped，不混進 passed） | ❌ **不接進 chain**：harness 修好後**暴露 9/10 紅在真判準** —— 鐵荊棘ex 初始化／伏特旋風、耿鬼ex 侵蝕詛咒／戲法舞步、幸福蛋ex 幸福切換、來悲粗茶ex 熬返、倫琴貓ex 突刺目光，**7 個卡效尚未實裝**（檔頭自己列為「需實作」）。卡片查證皆為 **H 標**（在範圍內）。**未改出貨碼 ⇒ 待裁示** |
+
+⭐ `test-festival-dance` 的**行為層佐證**：守衛 M2／M3 把 `addPendingPrize`
+（`effects/_shared.ts:2178`，v5.466 自動給獎賞的唯一入口）在**暫存 src 副本**裡改成 no-op
+（不動 repo 的 `src/`），再把**真的** `test-festival-dance.mjs` 指向突變過的碼 ⇒ 它必紅。
+
+### 【二】(乙) C-9：`scripts/lint-eol-anchors.mjs`（新）
+
+判準（寫死在檔頭）：**「多行錨點」× 「磁碟原始內容 haystack」**，作用域感知解析綁定；
+`normEol(...)`／`.replace(/\r\n/…)` 視為已收斂。
+
+| 階段 | 違規 | 檔數 |
+|---|---|---|
+| 初掃（原型判準） | 123 | 57 |
+| 第一批修完 | 82 | 38 |
+| 正式掃描器（加作用域感知） | **10**（其中 8 處原型誤報已排除） | 4 |
+| 全部修完 | **0** | 0 |
+
+- **修了 65 個讀檔點、跨 57 支守衛**（統一在讀檔處 `normEol(readFileSync(...))`）。
+- ⭐ **白名單 0 條**（`ALLOW = []`）。**沒有靠白名單換全綠。**
+- 為何零風險：`normEol` 在 LF 下是**證明得了的 no-op** ⇒ 對 CI／LF 免疫網不可能造成差異，
+  只修好 CRLF 本機。
+- 反安慰劑：內建自驗（正／負對照，壞掉就在掃描前 `exit 1`）＋ 下限斷言 `MIN_SCANNED=800`
+  ＋ ALLOW 過期偵測。
+- ⭐ **副產品：本機紅燈 58 → 48**（10 支轉綠），且**零回歸**（逐支比對修補前後 PASS/FAIL，
+  全部持平或改善；例：v6188 `8P/21F → 29P/0F`、v6280 `25/19 → 44/0`、v6321 崩潰 → `40P/3F`）。
+
+### 【三】(丙) C-15：`scripts/tools/shallow-parity.mjs`（新）
+
+跨平台：ROOT 由 `import.meta.url` 推、`pathToFileURL` 產 `file://` URL
+（`--depth 1` 只對 `file://` 有效）、`fs.symlinkSync(..., 'junction'|'dir')` 取代 `mklink`，
+失敗才整份複製。支援 `--full` / `--dry-run` / `--keep` / `--dest`。
+檔頭寫明兩張網各抓什麼、且**明文禁止接進 chain**（它會 clone 整個 repo，太重）。
+
+實證 clone 參數真的有效：`rev-list --count HEAD = 1`、`.git/shallow` 存在、checkout `crlf=0 lf=290`。
+
+**守衛怎麼釘（行為層，不是 grep 原始碼）**：跑 `--dry-run` 子行程，
+解析它印出的 `GITARGS` **真實 argv 陣列**來斷言；
+正對照把 `--depth 1`／`core.autocrlf=false` 各拿掉一次，同一組檢查必須翻紅。
+⚠ C8 也改成行為層（`ROOT` 等於真實 repo 根、`DEST` 落在 `os.tmpdir()`）——
+原本寫成「原始碼不得出現 `mklink`」，實測會把**檔頭的說明文字**當成違規。
+
+### 【四】⚠ C-16（`deploy.yml` 的 `fetch-depth` 改 `0`）**本版刻意沒做**
+
+我原本建議改 `0`，但後來發現**它跟 (丙) 衝突**：
+- CI 改成完整 clone 之後，「淺複製假紅／假綠」就不再是 CI 的風險；
+- 但 `test-v6263` **整支的存在意義**就是「淺複製時守衛不可以靜默掏空」⇒ 需要重新定位；
+- 而且 `test-v6263` ⑥ 明文把「現況是淺複製」釘住了。
+
+⇒ 這是**新資訊**，回頭列入待裁示。
+
+### 【五】守衛 `scripts/test-v6377-eol-anchors-and-orphan-harness.mjs`：**PASS 29 / FAIL 0**
+
+HEAD-FAIL（BASE `a434f4fc41f74a985bb5735c91a2a9268cbd76b2`，`hasBaseCommit` 保護、淺複製 `shallowSkip`）：
+`test-festival-dance` 必紅 ✓、`test-evolve-iid-regression` 必紅 ✓
+（後者是 Windows 專屬 bug ⇒ 非 win32 走 `loudSkip` 大聲宣告沒在守）。
+
+**突變 12/12 全部翻紅、未達標 0、還原後 exit=0。**
+⚠ M-8 第一版只中和一條斷言 ⇒ 另一條還在守、守衛正確保持綠；已改成同時中和兩條後翻紅。
+
+**整條 chain（序列，712 步）**：`red=48`，基準 58 → **48**、**零新增**。
+算式自洽：58 − 10（本版修好的）＝ 48。4 支新步驟全綠。
+`npx tsc --noEmit`：`error TS` 55 行、`TS2304` **0**。
+
+### 【六】⚠ 待站長裁示
+
+1. **`test-all-presets.mjs`**：要不要補判準（`totalBugs > 0 ⇒ exit 1`）？
+   現況 1332 場 **478 bugs**，補了就是永久紅；而且跑完要數分鐘，不適合進 chain。
+   它現在是**報表工具**，建議維持不接。
+2. **`test-v2341-a-batch.mjs`**：9/10 紅在真判準，是一份**寫了但沒實裝**的 TDD spec
+   （7 個 **H 標**卡效）。要實裝？要拆成「已實裝的接 chain、未實裝的另存 backlog」？還是整支封存？
+3. 剩下 **48 支本機紅燈**中，有 16 支屬於這次修過的 eol 檔（已大幅改善但仍紅在別的原因，
+   如 v6284 `27P/4F`、v6291 `17P/16F`）。要不要另開一版逐支收？
+4. `acorn` / `acorn-walk` 是掃描器的相依，目前是 **svelte 帶進來的傳遞相依**
+   （lockfile 有釘、`npm ci` 必裝）。要不要提升成明寫的 `devDependencies` 以免日後被換掉？
+5. **C-16** 見【四】。
+
 ## v6.376 A-1 第三步：**加傷 8 ＋ 弱點 2 實測無病灶**，只有**生機森巴**要修
 
 BASE `0d1aa3d7a27f931f48850e74b18d8cd7819ae6c9`（v6.375）。⚠⚠ 這一版**會改變獎賞卡數量與勝負**（只有一張卡），請務必看【三】。

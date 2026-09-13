@@ -12,6 +12,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x-pr-s.js'), E = join(ROOT, '.x-pr-e.ts'), O = join(ROOT, '.x-pr-o.mjs');
@@ -32,7 +33,7 @@ for (const f of readdirSync(dir)) {
 }
 
 // 用內建預組（真實牌組構成），跨原型對打才看得到弱點與不同節奏
-const PRESET_SRC = readFileSync(join(ROOT, 'src/lib/decks/presets.ts'), 'utf8');
+const PRESET_SRC = normEol(readFileSync(join(ROOT, 'src/lib/decks/presets.ts'), 'utf8'));
 function presetEntries(id) {
   const i = PRESET_SRC.indexOf(`id: '${id}'`);
   if (i < 0) throw new Error('找不到預組 ' + id);

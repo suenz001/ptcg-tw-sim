@@ -18,9 +18,10 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SRC = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const SRC = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 
 let pass = 0, fail = 0;
 const ok = (m) => { pass++; console.log('  PASS ' + m); };

@@ -6,9 +6,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const src = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const src = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 
 // ── 從 patch 檔抽出三個純函式（以 function 宣告起頭、到該行縮排的 '}' 為止）──
 function grabFn(name) {

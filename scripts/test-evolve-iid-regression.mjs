@@ -5,7 +5,7 @@
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = join(REPO_ROOT, '.tmp-test-evolve-iid-bundle.mjs');
 const ENTRY = join(REPO_ROOT, '.tmp-test-evolve-iid-entry.ts');
@@ -17,7 +17,7 @@ export { getAIAction } from './src/lib/game/ai';
 export { PRESET_DECKS } from './src/lib/decks/presets';
 `);
 await build({entryPoints:[ENTRY], outfile:OUT, bundle:true, format:'esm', platform:'node', target:'node20', alias:{'$lib':join(REPO_ROOT,'src/lib'), '$app/paths':join(REPO_ROOT,'scripts/shim-app-paths.mjs')}, logLevel:'silent'});
-const {createGame, applyAction, getAIAction, PRESET_DECKS} = await import(new URL(OUT,'file://').href);
+const {createGame, applyAction, getAIAction, PRESET_DECKS} = await import(pathToFileURL(OUT).href);
 const pool = new Map();
 for (const f of readdirSync(join(REPO_ROOT,'static/cards'))) {
   if (!f.endsWith('.json') || f === 'index.json') continue;
@@ -29,7 +29,9 @@ if (!A || !B) throw new Error('preset deck missing');
 function rng(seed){ let s=seed>>>0; return ()=>{ s=(1664525*s+1013904223)>>>0; return s/2**32; }; }
 function chooseActor(state){
   if (state.phase === 'setup') { for (const i of [0,1]) if (!state.setupDone[i] || (state.pendingMulliganDraw?.[i] ?? 0)>0) return i; }
-  if (state.pendingPrizes > 0) return state.activePlayerIndex;
+  // v6.377：pendingPrizes 自 v2.98 起是 [number, number]（types.ts:899）；
+  //   舊寫法 `state.pendingPrizes > 0` 拿整個陣列跟 0 比 ⇒ 恆為 false，這一條分支等於沒接上。
+  if ((state.pendingPrizes?.[0] ?? 0) > 0 || (state.pendingPrizes?.[1] ?? 0) > 0) return state.activePlayerIndex;
   if (state.pendingSelection) return state.pendingSelection.actorIdx;
   if (state.players[0].active === null && state.players[0].bench.length > 0) return 0;
   if (state.players[1].active === null && state.players[1].bench.length > 0) return 1;

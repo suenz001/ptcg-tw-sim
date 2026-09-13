@@ -17,10 +17,11 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const P = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const P = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 
 let pass = 0, fail = 0;
 const T = async (name, fn) => {

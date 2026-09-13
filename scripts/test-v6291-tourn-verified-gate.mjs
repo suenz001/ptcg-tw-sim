@@ -50,6 +50,7 @@ import {
   NEW_TAIL_SHA_V6365, NEW_TEV_SHA_V6365, NEW_TEV_LEN_V6365,
   revertV6365, stripDeclaredBlocksNewerThan,
 } from './lib/tourn-revert-v6365.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'bb3adda65b536a7e0be67b788bd1fd5934051bc7';   // v6.290
@@ -254,7 +255,7 @@ await T('B5 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與 notStrictE
   const files = [...new Set([...TAIL_LOCKS, ...TEV_LOCKS])];
   assert.strictEqual(files.length, 14, '應涵蓋 14 支守衛，實際 ' + files.length);
   for (const f of files) {
-    const s = readFileSync(join(ROOT, f), 'utf8');
+    const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
     assert.ok(/assert\.(strictEqual|equal)\(/.test(s) && /sha256/.test(s), f + ' 已經沒有 sha256 比對式了');
     assert.ok(/createHash\('sha256'\)/.test(s), f + ' 不再自己算 sha ⇒ 可能被改成只比字串片段');
   }
@@ -473,7 +474,7 @@ const MUT = [
     null,
     async () => {
       const f = 'scripts/test-v6287-friends-dm.mjs';
-      const s = readFileSync(join(ROOT, f), 'utf8').replace(NEW_TEV_SHA_V6365, '0'.repeat(64));
+      const s = normEol(readFileSync(join(ROOT, f), 'utf8').replace(NEW_TEV_SHA_V6365, '0'.repeat(64)));
       assert.ok(s.includes(NEW_TEV_SHA_V6365), 'B4：' + f + ' 沒重釘');
     }],
 ];

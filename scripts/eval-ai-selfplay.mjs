@@ -23,6 +23,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync, existsSync } from
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.x-ev-s.js'), E = join(ROOT, '.x-ev-e.ts'), O = join(ROOT, '.x-ev-o.mjs');
@@ -55,7 +56,7 @@ for (const f of readdirSync(dir)) {
   for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
 }
 
-const PRESET_SRC = readFileSync(join(ROOT, 'src/lib/decks/presets.ts'), 'utf8');
+const PRESET_SRC = normEol(readFileSync(join(ROOT, 'src/lib/decks/presets.ts'), 'utf8'));
 function presetEntries(id) {
   const i = PRESET_SRC.indexOf(`id: '${id}'`);
   if (i < 0) throw new Error('找不到預組 ' + id);

@@ -18,6 +18,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0, fail = 0;
@@ -131,7 +132,7 @@ T('⭐⭐_faintReason 是 transient：離場一定被清（否則會隨卡片再
 });
 
 T('⭐同一條中央管線也涵蓋其他效果昏厥（滲透寒氣／浸蝕污泥）', () => {
-  const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
+  const eng = normEol(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
   assert.ok(/_faintReason = '滲透寒氣'/.test(eng), '滲透寒氣致死應帶來源');
   assert.ok(/_faintReason: '浸蝕污泥'/.test(eng), '浸蝕污泥效果昏厥應帶來源');
   assert.ok(/function koSweepLogLine\(/.test(eng), '措辭應收斂在單一 helper');

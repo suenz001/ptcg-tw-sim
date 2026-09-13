@@ -31,12 +31,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import assert from 'node:assert';
-import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 等長留白版（本檔靠行號）
+import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位   // ⭐v6.323 等長留白版（本檔靠行號）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
-const RO = readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8');
-const GP = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const RO = normEol(readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8'));
+const GP = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 // v6.245 的 sha（只用來拿 BASE 對照；CI 是 fetch-depth:1 淺複製 ⇒ 拿不到就用等價突變版，不 fail-open）
 const BASE_SHA = '3937a1e5e141c13977b03b38897f4e569a264905';
 

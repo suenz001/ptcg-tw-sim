@@ -32,6 +32,7 @@ import {
   readPatch, extractBlock, FR_START, FR_END,
   buildFriends, makeFakeDb, asUser,
 } from './lib/friends-harness-v6282.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const esbuild = await import('esbuild');
 const { compile: svelteCompile } = await import('svelte/compiler');
@@ -79,7 +80,7 @@ await T('A0 HEAD-FAIL：dm-poller.ts／dm-session.ts／DmPanel.svelte 存在；F
   SRC = FR + '\n' + DM;
   assert.ok(FR.includes('async function _frPurgeDm('), 'FRIENDS 區塊沒有 _frPurgeDm');
   API = readFileSync(P_API, 'utf8'); POLL = readFileSync(P_POLL, 'utf8'); SESS = readFileSync(P_SESS, 'utf8');
-  PANEL = readFileSync(P_PANEL, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); GAME = readFileSync(P_GAME, 'utf8'); MPB = readFileSync(P_MPB, 'utf8');
+  PANEL = readFileSync(P_PANEL, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = readFileSync(P_MPB, 'utf8');
   assert.ok(existsSync(P_FRP), '缺 ' + P_FRP);
   FRP = readFileSync(P_FRP, 'utf8');
   assert.ok(API.includes('export async function fetchDmMessages(') && API.includes('export async function sendDm('), 'friends-api.ts 沒有 dm 函式');

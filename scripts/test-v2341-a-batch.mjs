@@ -90,6 +90,10 @@ function baseState(overrides = {}) {
 
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); console.log(`  ✅ ${name}`); passed++; } catch(e) { console.log(`  ❌ ${name}: ${e.message}`); failed++; } }
+// v6.377：本檔的 test() 是土砲（不是 node:test），但下面用了 test.skip ⇒ TypeError 整支掛掉。
+//   ⚠ skip 不是「通過」—— 另外計數並印出來，不讓它混進 passed 裡假裝有在守。
+let skipped = 0;
+test.skip = (name) => { console.log(`  ⏭️  SKIP ${name}`); skipped++; };
 const atkIdx = (cid, name) => pool.get(String(cid))?.attacks?.findIndex(a => a.name === name) ?? -1;
 const hasPending = (s) => typeof s.pendingSelection === 'object' && s.pendingSelection !== null;
 const noPending = (s) => typeof s.pendingSelection === 'undefined' || s.pendingSelection === null;
@@ -308,5 +312,6 @@ test('T11 侵蝕詛咒 does NOT trigger when OWN Genghost is on bench (only when
 });
 
 console.log('\n────────────────────────────────────────────────────────────');
+if (skipped > 0) console.log(`\n⚠️  ${skipped} 段被 skip（前提未實裝）—— 這幾段沒有在守。`);
 if (failed > 0) { console.log(`\n❌ ${failed}/${passed + failed} tests failed.`); process.exit(1); }
 console.log(`\n✅ All ${passed} tests passed!`);

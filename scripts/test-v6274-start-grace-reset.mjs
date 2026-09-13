@@ -34,12 +34,13 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { transformSync } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '65553fb6c68992f719c80d82620e9d68298b43ca';   // v6.273（本版的前一版）
 const PAGE_PATH = 'src/routes/game/+page.svelte';
 const SG_PATH = 'src/lib/game/sync-guards.ts';
-const PAGE = readFileSync(join(ROOT, PAGE_PATH), 'utf8');
+const PAGE = normEol(readFileSync(join(ROOT, PAGE_PATH), 'utf8'));
 const SG = readFileSync(join(ROOT, SG_PATH), 'utf8');
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 

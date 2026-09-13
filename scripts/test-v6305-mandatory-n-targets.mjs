@@ -26,6 +26,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6305-s.js'), E = join(ROOT, '.v6305-e.ts'), O = join(ROOT, '.v6305-o.mjs');
@@ -237,7 +238,7 @@ const HELPER_FILES = [
   ['src/lib/game/effects/cards/v2660_i_wave16_misc9.ts', ['function snipeNOppPokemonAutoPost']],
 ];
 for (const [rel, fns] of HELPER_FILES) {
-  const src = stripComments(readFileSync(join(ROOT, rel), 'utf8'));
+  const src = normEol(stripComments(readFileSync(join(ROOT, rel), 'utf8')));
   for (const fn of fns) {
     const at = src.indexOf(fn);
     ok(at >= 0, `${rel}：找得到 ${fn}`);

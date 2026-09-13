@@ -10,7 +10,7 @@
 import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OUT = join(REPO_ROOT, '.tmp-all-presets-bundle.mjs');
@@ -42,7 +42,7 @@ await build({
 });
 safeUnlink(ENTRY_PATH);
 
-const { createGame, applyAction, getAIAction } = await import(new URL(OUT, 'file://').href);
+const { createGame, applyAction, getAIAction } = await import(pathToFileURL(OUT).href);
 
 // ── Load card pool ────────────────────────────────────────────────────────────
 const pool = new Map();

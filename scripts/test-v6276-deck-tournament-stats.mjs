@@ -35,10 +35,11 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 //   還原器本體放在 scripts/lib/tourn-revert-v6365.mjs（與 v6.291／v6.292 同一個形狀，
 //   三支守衛共用同一份 ⇒ 不會出現兩份會漂移的還原器；test-v6292 B6 在守這條鍵）。
 import { revertV6365 } from './lib/tourn-revert-v6365.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '4ce276453c998058f70a35778a6ab262fa679921';   // v6.275
-const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const body = pat.split('\n').slice(1).join('\n');   // 第 1 行是版本沿革註解，一律先切掉
 
 let pass = 0, fail = 0;

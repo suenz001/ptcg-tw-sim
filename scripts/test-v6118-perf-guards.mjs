@@ -14,6 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GAME = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
@@ -57,7 +58,7 @@ T('⭐ ensureRoomArchetypes 也要有 isTournament 早退（雙保險）', () =>
 });
 
 T('⭐ 輪詢間隔沒有被偷偷調快（大廳 2 秒是刻意的下限）', () => {
-  const ro = readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8');
+  const ro = normEol(readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8'));
   const i = ro.indexOf('export function subscribeOpenRooms');
   ok(i > 0, '找不到 subscribeOpenRooms');
   // v6.217①②:subscribeOpenRooms 拆成合併協定 tick 與退回舊協定的 legacyTick 兩條路徑,

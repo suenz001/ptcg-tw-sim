@@ -29,10 +29,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { transform } from 'esbuild';
-import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.323 區塊／HTML 註解走中央行級狀態機
+import { stripCommentsChecked } from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位   // ⭐v6.323 區塊／HTML 註解走中央行級狀態機
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
 
 let pass = 0, fail = 0;

@@ -21,6 +21,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6360-s.js'), E = join(ROOT, '.v6360-e.ts'), O = join(ROOT, '.v6360-o.mjs');
@@ -433,7 +434,7 @@ console.log('\n【E】合法路徑零變更（收斂不可以把既有規則改�
 console.log('\n【F】靜態：判準只有一份，而且完全排在擲幣之前');
 // ══════════════════════════════════════════════════════════════════════════════
 {
-  const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
+  const eng = normEol(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'));
   const defs = eng.split('function stadiumPlacementBlock(').length - 1;
   const calls = eng.split('stadiumPlacementBlock(state, ').length - 1;
   chk('F1 ⭐中央述詞只有 1 份定義', defs === 1, String(defs));

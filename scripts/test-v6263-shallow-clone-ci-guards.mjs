@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let n = 0, bad = 0;
@@ -269,7 +270,7 @@ console.log('\n⑥ CI 設定：checkout 的 fetch-depth 現況必須與本檔宣
 // ⚠ 這一條不是「規定只能淺複製」—— 是**把現況釘住**，讓改 fetch-depth 變成刻意的動作
 //   （改了就要回來改這裡，順便被迫確認 8 支守衛在完整 clone 下是綠的）。
 {
-  const dep = readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
+  const dep = normEol(readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8'));
   const aud = readFileSync(join(ROOT, '.github/workflows/iron-rules-audit.yml'), 'utf8');
   const buildJob = dep.slice(dep.indexOf('\n  build:'), dep.indexOf('\n  deploy:'));
   chk('抓得到 deploy.yml 的 build job', buildJob.length > 200, String(buildJob.length));

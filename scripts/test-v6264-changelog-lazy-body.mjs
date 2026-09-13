@@ -25,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
@@ -38,7 +39,7 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = '0d1aa3d7a27f931f48850e74b18d8cd7819ae6c9'; // v6.375（v6.376 的前一版；v6.376 只影響生機森巴的極罕見組合 ⇒ 不動首頁 changelog）
+const BASE_SHA = 'a434f4fc41f74a985bb5735c91a2a9268cbd76b2'; // v6.376（v6.377 的前一版；v6.377 出貨碼零改動、只修守衛與工具 ⇒ 不動首頁 changelog）
 // ⭐⭐⭐ v6.332：則數政策一律從 `scripts/lib/changelog-policy.mjs` 讀（Rule 38：判準只能有一份）。
 //   在那之前「50」被抄在三支守衛裡，改政策時 test-v6223 會莫名其妙誤紅。
 const { N_HOME, N_INLINE, MAX_KB } = await import(pathToFileURL(join(ROOT, 'scripts/lib/changelog-policy.mjs')).href);
@@ -62,7 +63,7 @@ const readOr = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '');
 const BODIES = readOr(P_BODIES);
 const LIB_SRC = readOr(P_LIB);   // 檔案不存在時給空字串，讓下面每一條各自紅，而不是整支崩掉
 const ARC = readFileSync(P_ARC, 'utf8');
-const PAGE = readFileSync(P_PAGE, 'utf8');
+const PAGE = normEol(readFileSync(P_PAGE, 'utf8'));
 const SW = readFileSync(P_SW, 'utf8');
 
 // ── 共用切割器（先自我驗證，Rule 25：掃描器自己要先被驗過）─────────────────────

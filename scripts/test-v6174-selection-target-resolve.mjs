@@ -21,6 +21,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.g6174-s.js'), E = join(ROOT, '.g6174-e.ts'), O = join(ROOT, '.g6174-o.mjs');
@@ -265,7 +266,7 @@ for (const [poke, atk, energyName] of [
 // ── G. ★接線斷言：分配型 picker 的逃生鈕必須真的**渲染在那個分支裡** ─────────────
 //   （v6.154 教訓：純函式回傳 true ≠ 畫面上真的有那顆按鈕可以按。）
 {
-  const page = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+  const page = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
   const fi = page.indexOf('<div class="sel-footer">');
   const fj = page.indexOf('{/if}\n        </div>', fi);
   const footer = fi >= 0 && fj > fi ? page.slice(fi, fj) : '';

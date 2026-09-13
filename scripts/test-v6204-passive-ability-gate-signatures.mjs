@@ -26,6 +26,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S=join(ROOT,'.x6204-s.js'),E=join(ROOT,'.x6204-e.ts'),O=join(ROOT,'.x6204-o.mjs');
 process.on('exit',()=>{for(const p of [S,E,O])try{unlinkSync(p)}catch{}});
@@ -529,7 +530,7 @@ T('12a. 行為端：黏著束縛偵測仍生效且不會無窮遞迴（備戰 St
   assert.equal(mod.hasEffectiveAbilityByInst(st,0,g,pool,'無限之影'),false);
 });
 T('12b. 靜態：hasAbilityOnBench 必須維持沒有 gate（加了會無窮遞迴）＋正對照',()=>{
-  const src=readFileSync(join(ROOT,'src/lib/game/effects/cards/v3001_g3_wave3.ts'),'utf8');
+  const src=normEol(readFileSync(join(ROOT,'src/lib/game/effects/cards/v3001_g3_wave3.ts'),'utf8'));
   const i=src.indexOf('function hasAbilityOnBench(');
   assert.ok(i>0,'anchor 失效');
   const blk=src.slice(i, src.indexOf('\n}\n', i));

@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0, fail = 0;
@@ -159,7 +160,7 @@ await T('【A】⑤ 正對照：fail-open 沒壞 —— 任一側的值改變就
 });
 
 await T('【A】⑥ 同名碰撞 audit 不留死條目：「可」字差異已消除 ⇒ 豁免清單不得再有這一筆', () => {
-  const src = readFileSync(join(ROOT, 'scripts/audit-samename-collision.mjs'), 'utf8');
+  const src = normEol(readFileSync(join(ROOT, 'scripts/audit-samename-collision.mjs'), 'utf8'));
   const i = src.indexOf('const KNOWN = new Set([');
   assert.ok(i >= 0, '找不到 KNOWN');
   const seg = src.slice(i, braceEnd(src, src.indexOf('[', i), '[', ']'));

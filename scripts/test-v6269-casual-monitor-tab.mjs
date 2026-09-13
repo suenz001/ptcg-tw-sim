@@ -26,9 +26,10 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import * as cheerio from 'cheerio';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRV = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const SRV = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
 const DUMPSRC = readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8');
 const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));

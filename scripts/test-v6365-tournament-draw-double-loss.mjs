@@ -27,14 +27,15 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';   // ⭐v6.370：改走中央 helper（test-v6263 ② 的規範）
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位   // ⭐v6.370：改走中央 helper（test-v6263 ② 的規範）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '7fcc1c66adfbaff17f8a245a2ba0683962f86f53';   // v6.364（本版的前一版）
 const LF = (s) => s.split('\r\n').join('\n');
-const SRV = LF(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const SRV = normEol(LF(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8')));
 const PAGE = LF(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
-const SWISS = LF(readFileSync(join(ROOT, 'src/lib/tournament/swiss.ts'), 'utf8'));
+const SWISS = normEol(LF(readFileSync(join(ROOT, 'src/lib/tournament/swiss.ts'), 'utf8')));
 
 // ⭐⭐⭐v6.370：本檔原本自己 shell out 到 git（`execFileSync('git', ['show', …])`）＋寫死 40 位 sha，
 //   違反 test-v6263 ②「讀歷史的腳本一律走中央 helper `scripts/lib/base-blob.mjs`」。

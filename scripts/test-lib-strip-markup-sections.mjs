@@ -40,6 +40,7 @@ import { createRequire } from 'node:module';
 // ⭐ v6.319：「Svelte 怎麼看」的裁判（devDependency，零新依賴）。走 CJS 單檔 bundle（compiler/index.js）：ESM 入口會拉一整棵相依樹，慢 100 倍。
 const { parse: svelteParse, compile: svelteCompile } = createRequire(import.meta.url)('svelte/compiler');
 import { templateOnly, sectionInner, markupSections, scanMarkup, scanMarkupChecked, nonWs, blankOut, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // ⭐ 固定 blob（v6.316）。這不是「pin 版本」—— blob 內容永不變，表也永不過期；淺複製時大聲 SKIP（不 fail-open）。
@@ -502,7 +503,7 @@ T('5-1 git ls-tree HEAD 的每一支 .svelte／.html 都掃得過（零炸、零
   const both = new Set([P_GAME, P_MPB, 'src/routes/decks/+page.svelte', 'src/routes/deck-posts/+page.svelte']);
   let bodyScripts = -1;
   for (const f of files) {
-    const src = readFileSync(join(ROOT, f), 'utf8');
+    const src = normEol(readFileSync(join(ROOT, f), 'utf8'));
     if (!src) continue;
     const r = scanMarkupChecked(src, { label: f, allowResidual: RESIDUAL_ALLOW[f] ?? [] });
     assert.strictEqual(r.template.length, src.length, f);

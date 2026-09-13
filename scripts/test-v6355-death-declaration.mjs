@@ -22,6 +22,7 @@ import { build } from 'esbuild';
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.v6355-s.js'), E = join(ROOT, '.v6355-e.ts'), O = join(ROOT, '.v6355-o.mjs');
@@ -454,7 +455,7 @@ console.log('\n【H】⭐⭐不是「主 ATTACK handler 直接結算」的 dispa
 
 console.log('\n【G】中央性（呼叫點數量／不得掛錯表／禁令）');
 {
-  const eff = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8');
+  const eff = normEol(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
   const eng = readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8');
   const cnt = (s, re) => (s.match(re) || []).length;
 

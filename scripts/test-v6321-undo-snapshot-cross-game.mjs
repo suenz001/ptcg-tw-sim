@@ -33,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
 import { build, transformSync } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE_PATH = 'src/routes/game/+page.svelte';
@@ -40,7 +41,7 @@ const MPB_PATH = 'src/routes/game/MobilePortraitBattle.svelte';
 const HCO_PATH = 'src/lib/game/hand-card-ops.ts';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RF_PATH = 'src/lib/game/room.ts';
-const PAGE = readFileSync(join(ROOT, PAGE_PATH), 'utf8');
+const PAGE = normEol(readFileSync(join(ROOT, PAGE_PATH), 'utf8'));
 const MPB = readFileSync(join(ROOT, MPB_PATH), 'utf8');
 const HCO = readFileSync(join(ROOT, HCO_PATH), 'utf8');
 const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
@@ -572,7 +573,7 @@ mustBreak('G10 收端拿掉 defence-in-depth 那一行 ⇒ C6b 紅（⚠ 只證�
 });
 // ⭐ v6.322：證明 C6a 不是安慰劑 —— 把 sync-guards 突變後重新 bundle 真管線再跑同一組判準。
 const SG_PATH = 'src/lib/game/sync-guards.ts';
-const SG = readFileSync(join(ROOT, SG_PATH), 'utf8');
+const SG = normEol(readFileSync(join(ROOT, SG_PATH), 'utf8'));
 const SG_RULE3 = "  // 3. 悔棋 rollback 繞過：marker 遞增即無條件套用（log 較短也接受）\n"
   + "  if (local && incoming.phase === 'playing'\n"
   + "      && (ctx.roomLastUndoApplyAt ?? 0) > ctx.lastSeenUndoApplyAt) {\n"

@@ -30,6 +30,7 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { compile } from 'svelte/compiler';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'cc06ae2084754322a04e0811c6cfe7298851f45f';   // v6.237
@@ -367,7 +368,7 @@ console.log('\n⑦ HEAD-FAIL：同一組斷言在 BASE（v6.237）上必須是�
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑧ 【B】放大鏡：點它絕對不可以使出招式');
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 {
   // ── 抓出 .atk-slot 這一整塊（從 <span class="atk-slot" 到對應的 </span>）──
   const start = PAGE.indexOf('<span class="atk-slot"');

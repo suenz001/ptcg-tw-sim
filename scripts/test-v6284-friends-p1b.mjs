@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -69,7 +70,7 @@ console.log('\n【F】HEAD-FAIL 錨點');
 let API = '', GAME = '', MPB = '', NOTIFY = '', SRV = '';
 await T('F0 HEAD-FAIL：friends-api.ts 匯出 friendsBattleEntryVisible／requestFriendFromBattle／friendsRequestReplyText（BASE v6.283 沒有 ⇒ 這一條必紅）', () => {
   for (const p of [P_API, P_GAME, P_MPB, P_NOTIFY, P_SRV]) assert.ok(existsSync(p), '缺 ' + p);
-  API = readFileSync(P_API, 'utf8'); GAME = readFileSync(P_GAME, 'utf8'); MPB = readFileSync(P_MPB, 'utf8'); NOTIFY = readFileSync(P_NOTIFY, 'utf8'); SRV = readFileSync(P_SRV, 'utf8');
+  API = readFileSync(P_API, 'utf8'); GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = readFileSync(P_MPB, 'utf8'); NOTIFY = readFileSync(P_NOTIFY, 'utf8'); SRV = readFileSync(P_SRV, 'utf8');
   const mod = loadApi(API).load(mkFetch(() => jsonRes(200, listBody())));
   for (const k of ['friendsBattleEntryVisible', 'requestFriendFromBattle', 'friendsRequestReplyText', 'friendsEntryVisible', 'requestFriendByEmail']) assert.strictEqual(typeof mod[k], 'function', 'friends-api.ts 沒有匯出 ' + k);
   assert.ok(GAME.length > 900000, 'game/+page.svelte 只有 ' + GAME.length + ' 字元 —— 被截斷？');

@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const S = join(ROOT, '.k9-s.js'), E = join(ROOT, '.k9-e.ts'), O = join(ROOT, '.k9-o.mjs');
@@ -317,7 +318,7 @@ T('C4 ★跨管線等價：PASSIVE_ON_KO 的每個成員，兩條管線 KO 後�
 });
 
 T('C5 源碼掃描：PASSIVE_ON_KO 的登錄區塊內不得直接改寫獎賞（prizes:）', () => {
-  const src = readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8');
+  const src = normEol(readFileSync(join(ROOT, 'src/lib/game/effects.ts'), 'utf8'));
   const start = src.indexOf('export const PASSIVE_ON_KO = new Map');
   assert.ok(start > 0, '找不到 PASSIVE_ON_KO 宣告（掃描器自身失效）');
   const end = src.indexOf('\n]);', start);

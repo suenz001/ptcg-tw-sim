@@ -39,6 +39,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import * as stripMod from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '9f500a55cf83daa8be3530ff01c8a163c6a60a23';   // v6.276
@@ -58,7 +59,7 @@ const P_PK = join(ROOT, 'package.json');
 
 const GP = readFileSync(P_GP, 'utf8');
 const DS = readFileSync(P_DS, 'utf8');
-const DK = readFileSync(P_DK, 'utf8');
+const DK = normEol(readFileSync(P_DK, 'utf8'));
 const ST = readFileSync(P_ST, 'utf8');
 const PK = readFileSync(P_PK, 'utf8');
 
