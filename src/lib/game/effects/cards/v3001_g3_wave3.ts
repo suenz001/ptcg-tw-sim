@@ -53,7 +53,7 @@ import type { Card } from '$lib/cards/types';
 import { isStage2ByPlainEx } from '../../stage2-index';
 // >>> v6373-as-of-declaration-import
 // ⭐v6.373 站長裁定 A-3：「宣告當時」家族的全站唯一述詞（判準本體在該檔，本檔只消費）。
-import { AS_OF_DECLARATION_ABILITIES, isEffectiveAsOfDeclaration } from '../../as-of-declaration';
+import { AS_OF_DECLARATION_ABILITIES, isEffectiveAsOfDeclaration, asOfDeclarationHolderIids } from '../../as-of-declaration';
 // <<< v6373-as-of-declaration-import
 
 // 導出 sentinel 防止 unused import warnings
@@ -103,18 +103,34 @@ export function countEffectiveAbilityOnSide(
   pool: Map<string, Card> | undefined,
   abilityName: string,
 ): number {
-  if (!state || ownerIdx == null || !pool) return 0;
+  return effectiveAbilityHolderIidsOnSide(state, ownerIdx, pool, abilityName).length; // ⭐v6374-count-via-iids
+}
+
+// >>> v6374-effective-ability-holder-iids
+/**
+ * ⭐v6.374：場上「擁有且此刻生效」指定 ability 的持有者 **iid 清單**。
+ *   ⚠ 與 countEffectiveAbilityOnSide 是**同一份**掃描（後者 ＝ 本函式的 .length，Rule 38）；
+ *   新增的理由是「宣告當時」家族要按 iid 跟快照對帳（見 as-of-declaration.ts）。
+ */
+export function effectiveAbilityHolderIidsOnSide(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+  abilityName: string,
+): string[] {
+  if (!state || ownerIdx == null || !pool) return [];
   const owner = state.players[ownerIdx];
   const actIid = owner.active?.iid;
-  let n = 0;
+  const out: string[] = [];
   for (const c of [...(owner.active ? [owner.active] : []), ...owner.bench]) {
     const card = pool.get(c.cardId);
     if (!card?.abilities?.some(a => a.name === abilityName)) continue;
     const loc: 'active' | 'bench' = (actIid != null && c.iid === actIid) ? 'active' : 'bench';
-    if (isAbilityHolderEffective(state, c, card, ownerIdx, abilityName, loc, pool)) n++;
+    if (isAbilityHolderEffective(state, c, card, ownerIdx, abilityName, loc, pool)) out.push(c.iid);
   }
-  return n;
+  return out;
 }
+// <<< v6374-effective-ability-holder-iids
 
 /**
  * 玩家 idx 戰鬥場上是否「擁有且生效」指定 ability。
@@ -903,8 +919,15 @@ export function getOppRetreatTriggers(
   if (!state || retreaterIdx == null || !retreatingInst || !newActiveInst || !pool) return result;
   const oppIdx = (1 - retreaterIdx) as 0 | 1; // 持有者陣營（= 「對手」視角中的我方）
 
+  // >>> v6374-a2-as-of-declaration
+  // ⭐⭐v6.374 站長裁定 A-2（＝A-3「比照花之帷幔」）：持有者被**這一次**招式打到昏厥離場，
+  //   對**這一次**的「對手戰鬥寶可夢回備戰」仍然生效。
+  //   ⚠ 判準一律走 src/lib/game/as-of-declaration.ts，禁止在這裡自寫 `|| state._attackTime…`。
+  //   ⚠ 非 ATTACK 路徑（撤退／寶可夢交替／急進開關…）沒有 _attackTimeHolders ⇒ 行為與 v6.373 相同。
+  //   ⚠ 「被主動移除」（回手／洗回牌庫）由中央述詞排除 ⇒ 不生效。
   // 熔岩蝸牛｜熔岩地域 — 場上即可（active+bench）
-  if (hasAbilityOnSide(state, oppIdx, pool, '熔岩地域')) {
+  if (asOfDeclarationHolderIids(state, oppIdx, '熔岩地域',
+    effectiveAbilityHolderIidsOnSide(state, oppIdx, pool, '熔岩地域')).length > 0) {
     result.burnNewActive = true;
     result.triggerNames.push('熔岩地域');
   }
@@ -915,14 +938,18 @@ export function getOppRetreatTriggers(
   }
   // 火箭隊的三地鼠｜凹洞 — 場上即可（active+bench）
   // 卡面：「在那隻寶可夢身上放置 2 個傷害指示物」=「回到備戰的那隻」
-  if (hasAbilityOnSide(state, oppIdx, pool, '凹洞')) {
-    // 多隻凹洞會疊加（卡面未寫不重複）→ 計數
-    // ⭐ v6.196：外層 hasAbilityOnSide 已帶 gate，但內層逐隻計數原本沒有 →
-    //   被消除的三地鼠仍會被算進去（熔岩洞在場卻放 4 個）。改走中央計數。
-    const n = countEffectiveAbilityOnSide(state, oppIdx, pool, '凹洞');
-    result.countersOnRetreater = n * 2;  // 每隻三地鼠 +2 指示物
-    if (n > 0) result.triggerNames.push('凹洞');
+  // 多隻凹洞會疊加（卡面未寫不重複）→ 按**隻**計數
+  // ⭐ v6.196：逐隻計數要帶特性消除 gate（被消除的三地鼠不得計入）。
+  // ⭐ v6.374：再把「宣告當時的持有者」併進來（同一份中央述詞，見上方註解）。
+  {
+    const n = asOfDeclarationHolderIids(state, oppIdx, '凹洞',
+      effectiveAbilityHolderIidsOnSide(state, oppIdx, pool, '凹洞')).length;
+    if (n > 0) {
+      result.countersOnRetreater = n * 2;  // 每隻三地鼠 +2 指示物
+      result.triggerNames.push('凹洞');
+    }
   }
+  // <<< v6374-a2-as-of-declaration
 
   return result;
 }

@@ -45,6 +45,13 @@ export const AS_OF_DECLARATION_ABILITIES: readonly string[] = [
   '球形盾牌',    // 蟲甲聖        — 備戰免招式傷害與效果（_attackTimeOppBugShield）
   '平穩境地',    // 美納斯        — 對手場上寶可夢無法放回手牌（_attackTimeCalmGround）
   '生命制約',    // 伊裴爾塔爾    — 對手戰鬥寶可夢 HP 無法恢復（_attackTimeLifeRestraint）
+  // >>> v6374-a2-opp-active-returned-to-bench
+  // ⭐v6.374 站長裁定 A-2（＝A-3「凡是有這種類似的狀況，請你都比照花之帷幔」）：
+  //   這兩個特性的消費點在 applyActionImpl 尾段（applyOppActiveReturnedToBenchTriggers），
+  //   讀的是**動作結束後**的盤面 ⇒ 持有者被同一招打到昏厥離場就整個不生效（v6.374 前實測）。
+  '凹洞',        // 火箭隊的三地鼠（M2a，標 I）— 對手戰鬥寶可夢回備戰 ⇒ 那隻身上 2 個傷害指示物
+  '熔岩地域',    // 熔岩蝸牛（SV5M，標 H）    — 對手戰鬥寶可夢回備戰 ⇒ 新上場的寶可夢【灼傷】
+  // <<< v6374-a2-opp-active-returned-to-bench
 ];
 
 export type AsOfDeclarationSide = 'p1' | 'p2';
@@ -75,6 +82,36 @@ export function declarationHolderStillCounts(
   }
   return false;
 }
+
+// >>> v6374-as-of-declaration-holder-iids
+/**
+ * ⭐⭐v6.374：同一份判準核心的**集合版**入口（站長裁定 A-2：凹洞／熔岩地域）。
+ *
+ * `isEffectiveAsOfDeclaration` 回傳布林，只能表達「這個特性算不算數」；
+ * 但「凹洞」卡面是「只要**這隻**寶可夢在場上…放置 2 個傷害指示物」＝**每隻各算一次**
+ * （v6.196 已改成按隻計數）⇒ 消費點要的是**持有者集合**，不是布林。
+ *
+ * ⚠⚠ 判準**完全不另寫**：逐一交給同一份 declarationHolderStillCounts（Rule 38）。
+ *   回傳 ＝ 現在仍然生效的持有者 ∪ 宣告當時生效且「不是被主動移出場」的持有者（依 iid 去重）。
+ *   非 ATTACK 路徑（撤退／道具換場…）沒有 _attackTimeHolders ⇒ 原封不動回傳 liveIids。
+ */
+export function asOfDeclarationHolderIids(
+  state: GameState | undefined,
+  holderIdx: 0 | 1 | undefined,
+  abilityName: string,
+  liveIids: readonly string[],
+): string[] {
+  const out = [...liveIids];
+  if (!state || holderIdx == null) return out;
+  const declared = state._attackTimeHolders?.[asOfDeclarationSideKey(holderIdx)]?.[abilityName];
+  if (!declared || declared.length === 0) return out;
+  for (const iid of declared) {
+    if (out.includes(iid)) continue;
+    if (declarationHolderStillCounts(state, holderIdx, [iid])) out.push(iid);
+  }
+  return out;
+}
+// <<< v6374-as-of-declaration-holder-iids
 
 /**
  * ⭐⭐⭐ 全站唯一的「宣告當時」消費入口。6 個消費點一律走這裡（Rule 38：一個判準一份）。
