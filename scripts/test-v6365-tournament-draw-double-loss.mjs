@@ -27,7 +27,7 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';   // ⭐v6.370：改走中央 helper（test-v6263 ② 的規範）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '7fcc1c66adfbaff17f8a245a2ba0683962f86f53';   // v6.364（本版的前一版）
@@ -36,11 +36,20 @@ const SRV = LF(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'u
 const PAGE = LF(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 const SWISS = LF(readFileSync(join(ROOT, 'src/lib/tournament/swiss.ts'), 'utf8'));
 
+// ⭐⭐⭐v6.370：本檔原本自己 shell out 到 git（`execFileSync('git', ['show', …])`）＋寫死 40 位 sha，
+//   違反 test-v6263 ②「讀歷史的腳本一律走中央 helper `scripts/lib/base-blob.mjs`」。
+//   ⚠⚠ 後果不是「多一條紅燈」而是**整個 CI build job 失敗 ⇒ deploy job 被 skip**
+//   ⇒ 測試站從 v6.364（7fcc1c66）之後就再也沒有更新過（v6.365／6.366／6.367／6.368 都沒上去）。
+//   改走中央 helper：`readBaseBlob` 拿不到時回 { ok:false } 而**不丟例外**，
+//   再由 `shallowSkip` 大聲宣告「這一段沒有在守」（不是靜默掏空）。
 let BASE_SRV = null, baseWhy = '';
-try {
-  BASE_SRV = LF(execFileSync('git', ['show', BASE_SHA + ':oracle-admin/server_admin_patch.js'],
-    { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 30 }));
-} catch (e) { baseWhy = String((e && e.message) || e).slice(0, 160); }
+{
+  const _r = hasBaseCommit(ROOT, BASE_SHA)
+    ? readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js')
+    : { ok: false, out: '' };
+  if (_r.ok) BASE_SRV = LF(_r.out);
+  else baseWhy = `物件庫裡沒有 ${BASE_SHA.slice(0, 8)}（淺複製 fetch-depth:1？）`;
+}
 
 let pass = 0, fail = 0, skip = 0;
 const chk = (t, c, extra = '') => {
@@ -188,7 +197,7 @@ await TA('0-2 正對照：有勝方的對局照樣會被結算（沙盒沒壞、
   const m = await mrow(S, 'EV_r1_m0');
   return (m.status === 'done' && m.winnerUid === 'u1') || JSON.stringify(m);
 });
-if (!BASE_SRV) { skip++; console.log('  ⚠ SKIP HEAD-FAIL 段：拿不到 BASE blob（淺複製？）:: ' + baseWhy); }
+if (!BASE_SRV) { skip++; shallowSkip('test-v6365【A】HEAD-FAIL 段（對 v6.364 出貨碼的行為端對照）', baseWhy); }
 
 // ══════════════════════════════════════════════════════════════════════════════
 console.log('\n【A】HEAD-FAIL：同樣的情境餵給 v6.364 的出貨碼 ⇒ 必須「卡住等管理員」');

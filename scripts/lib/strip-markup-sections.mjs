@@ -84,6 +84,17 @@ const atLineStart = (out) => /^[\s\uFEFF]*$/.test(out);
  * 行為端證明：scripts/test-lib-strip-markup-sections.mjs 5-2 用 svelte/compiler parse() 逐檔比對區段**範圍**與註解位移，0-9 用內嵌樣本驗同一形狀。
  */
 export const GAME_INLINE_STYLE = "{@html '<style>html, body { margin: 0; background-color: #162816 !important; min-height: 100vh; }</style>'}";
+/**
+ * ⭐⭐v6.370：「這個 label／檔案路徑是不是 src/routes/game/+page.svelte」的**唯一**判準（Rule 38）。
+ * ⚠⚠ 路徑分隔符必須同時吃 `/` 與 `\\` —— 呼叫端在 **Windows** 上拿到的是
+ *   `src\\routes\\game\\+page.svelte`。test-v6297 原本只寫 `/` ⇒ 在 Windows 上 allowResidual
+ *   變成空陣列 ⇒ 護欄⑦ 誤炸（D1／D1b／D1c／I3／I3b **五條在本機永久紅、在 CI 全綠**，
+ *   ⇒ 那五條的保護力在本機等於零，而且把「本機紅燈」變成雜訊）。
+ */
+export const isGamePageLabel = (label) =>
+  /(^|[\\/])src[\\/]routes[\\/]game[\\/]\+page\.svelte$/.test(String(label ?? ''));
+/** 呼叫端一律用這支取 allowResidual，不要各自寫正則（Rule 38：一個判準一份）。 */
+export const allowResidualFor = (label) => (isGamePageLabel(label) ? [GAME_INLINE_STYLE] : []);
 const closeAtLineStart = (tag) => new RegExp('^[ \\t]*<\\/' + tag + '\\s*>', 'i');
 const closeAnywhere = (tag) => new RegExp('<\\/' + tag + '\\s*>', 'ig');
 

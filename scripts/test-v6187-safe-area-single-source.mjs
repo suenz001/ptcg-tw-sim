@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
+import { sectionInner, allowResidualFor } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LAYOUT = process.env.V6187_LAYOUT || join(ROOT, 'src/routes/+layout.svelte');
@@ -139,7 +139,7 @@ function parseRules(css) {
 //   CSS 註解仍在抽出的內文上剝（CSS 裡的 /* */ 語意就是註解）。
 const styleOf = (file) => {
   const src = readFileSync(file, 'utf8');
-  const allowResidual = /game[\\/]\+page\.svelte$/.test(file) ? [GAME_INLINE_STYLE] : [];
+  const allowResidual = allowResidualFor(file);   // ⭐v6.370 中央判準（Rule 38）
   return stripComments(sectionInner(src, 'style', { label: file, minSections: 1, allowResidual }));
 };
 {

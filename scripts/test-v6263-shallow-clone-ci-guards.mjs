@@ -157,6 +157,21 @@ function runGuard(rel, { noGit = false, env = {} } = {}) {
   return { code, pass: m ? Number(m[1]) : -1, fail: m ? Number(m[2]) : -1, out };
 }
 
+// ⭐⭐⭐v6.370：④⑤ 這個 PATH shim 在 **Windows 上結構性無效**。
+//   Node 的 `execFileSync` 走 CreateProcess，只認 `.exe`/`.com`；shim 寫出來的是無副檔名的
+//   `git`（`#!/bin/sh`），Windows 不會執行它，`.cmd`/`.bat` 也要 shell 才跑得起來。
+//   ⇒ 在 Windows 上「套上 shim」根本沒發生：子行程拿到的仍然是真的 git
+//   ⇒ ④ 的 `nogit` 與 `real` 必然逐字相同、⑤ 的突變也還是看得到歷史
+//   ⇒ **這兩段在 Windows 上是恆真安慰劑**，而 shim 自驗那一條則是永久假紅。
+//   真正在守這件事的是 **CI（ubuntu-latest）**。
+//   ⇒ 依 Rule 40 把判準上移：POSIX 照跑；Windows **大聲宣告「這一段沒有在守」**，
+//   並由下面兩條正對照釘住「只有 Windows 准跳過」與「跳過的理由是實測成立的」。
+const WIN = process.platform === 'win32';
+let ranBehaviour = false;
+if (WIN) {
+  console.log('  ⚠⚠ PLATFORM-SKIP ④⑤：Windows 的 execFileSync 套不上無副檔名的 PATH shim');
+  console.log('  ⚠⚠ ⇒ 這兩段在本機【沒有在守】；守門人是 CI（.github/workflows/deploy.yml，ubuntu）。');
+} else {
 // shim 自身先驗（Rule 25：掃描器/工具本身要先被驗證）
 {
   let shimWorks = false;
@@ -208,6 +223,20 @@ for (const [rel, envKey, from, to] of MUTS) {
   chk(`  ⭐⭐ ${rel.replace('scripts/', '')}：改壞回應訊息後在**淺複製環境下也會紅**（exit ${r.code}, ${r.fail} fail）`,
       r.code !== 0 && r.fail >= 1, r.out.slice(-400));
 }
+  ranBehaviour = true;
+}
+// ⭐v6.370 正對照①：CI 跑的是 ubuntu ⇒ 這兩段在 CI 永遠會真的執行（跳過只可能發生在 Windows 本機）。
+chk('★★ ④⑤ 行為端在 POSIX 一定要真的執行過（只有 Windows 准跳過）', WIN || ranBehaviour);
+// ⭐v6.370 正對照②：跳過的**理由**必須實測成立 —— 在 Windows 上，套了 shim 之後 git 仍然跑得起來。
+//   哪天 Node/Windows 改成吃得到這種 shim，這一條就會翻紅，強迫回來把 ④⑤ 打開。
+chk('★ Windows 跳過的理由實測成立：套上 shim 之後 git 仍然執行得起來（＝shim 沒套上）',
+    !WIN || (() => {
+      try {
+        execFileSync('git', ['--version'],
+          { env: { ...process.env, PATH: shim + PATHSEP + (process.env.PATH || '') }, stdio: 'ignore' });
+        return true;
+      } catch { return false; }
+    })());
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑥ CI 設定：checkout 的 fetch-depth 現況必須與本檔宣告一致');

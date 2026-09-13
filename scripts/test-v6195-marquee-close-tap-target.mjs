@@ -14,7 +14,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
+import { sectionInner, allowResidualFor } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
 
 const ROOT = process.env.V6195_ROOT || fileURLToPath(new URL('..', import.meta.url));
 const GAME   = join(ROOT, 'src/routes/game/+page.svelte');
@@ -145,7 +145,7 @@ function parseRules(css) {
 //   有 <style> 的三個主檔（GAME／MPB／LAYOUT）在 ②③⑤ 另外各有「規則存在」的斷言擋空轉。
 const styleOf = (file, minSections = 0) => {
   const src = readFileSync(file, 'utf8');
-  const allowResidual = /game[\\/]\+page\.svelte$/.test(file) ? [GAME_INLINE_STYLE] : [];
+  const allowResidual = allowResidualFor(file);   // ⭐v6.370 中央判準（Rule 38）
   return stripComments(sectionInner(src, 'style', { label: file, minSections, allowResidual }));
 };
 {

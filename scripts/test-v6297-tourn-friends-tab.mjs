@@ -37,7 +37,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.311 行級剝註解（含護欄）
-import { sectionInner, markupSections, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.318 單趟行級狀態機；v6.319 BOM／同行註解／殘留護欄
+import { sectionInner, markupSections, GAME_INLINE_STYLE, allowResidualFor } from './lib/strip-markup-sections.mjs';     // ⭐v6.317 中央 helper；v6.318 單趟行級狀態機；v6.319 BOM／同行註解／殘留護欄
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -243,7 +243,10 @@ function staticSpecs(src, isSvelte, label = '') {
     //   ⇒ 「Svelte 認得、剝除器不認」的區段不可能靜默變成零 import；純標記、真的沒有 <script 的 .svelte 仍合法＝零 import。
     //   ⚠ 審查者建議的第 3 點「原始碼含 <script 字面卻抽到 0 段 ⇒ 炸」沒有照寫：它被護欄⑦完全遮蔽（同一個判準、先於它觸發），
     //     而且照寫會誤紅「純標記元件的 HTML 註解裡提到 <script>」（原始碼有字面、模板層沒有）。
-    const allowResidual = /(^|\/)src\/routes\/game\/\+page\.svelte$/.test(label) ? [GAME_INLINE_STYLE] : [];
+    // ⭐v6.370：原本這條正則只吃 `/` ⇒ Windows 的 `src\\routes\\game\\+page.svelte` 對不上
+    //   ⇒ allowResidual 空掉 ⇒ 護欄⑦ 把 game 的 {@html '<style>…'} 當成違規殘留
+    //   ⇒ D1／D1b／D1c／I3／I3b 在本機永久紅（CI 全綠）。改走中央判準 allowResidualFor。
+    const allowResidual = allowResidualFor(label);
     const { sections } = markupSections(src, 'script', { label: label || 'staticSpecs', allowResidual });
     code = sections.map((s) => s.inner).join('\n');
   }
