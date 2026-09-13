@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { transform, transformSync } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { eolFind, normEol } from './lib/eol-agnostic.mjs';   // ⭐v6.371（乙）多行錨點／BASE blob(LF) vs 工作樹(CRLF) 的中央收斂
 import { createHash } from 'node:crypto';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -253,8 +254,9 @@ await T('B1c (a) 我方 PUT 送達、只是回應逾時 ⇒ 房間就是我這�
   ok(n.won === true, '房間 canonical 明明是我這一局，卻判成 ' + n.won);
 });
 await T('B2 (b) Firestore 版 room.ts 的 startGame 與 BASE **逐字元相同**（它是對的，不可以被改壞）', () => {
+  // ⭐v6.371（乙）：'\n}\n' 是**多行**錨點，CRLF 工作樹用 indexOf 永遠找不到 ⇒ 走中央 helper。
   const cur = (() => { const i = ROOM.indexOf('export async function startGame('); ok(i > 0, '抓不到 room.ts 的 startGame');
-    const j = ROOM.indexOf('\n}\n', i); ok(j > i, 'startGame 結尾定位不到'); return ROOM.slice(i, j + 3); })();
+    const f = eolFind(ROOM, '\n}\n', i); ok(f && f.index > i, 'startGame 結尾定位不到'); return ROOM.slice(i, f.end); })();
   ok(cur.includes('runTransaction'), 'Firestore 版竟然不再用 runTransaction —— 語意被換掉了');
   ok(!cur.includes('oracleTxFlagged'), 'Firestore 版被塞進 oracle 專用的 helper');
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('B2 對 BASE 的逐字比對', '上面兩條結構斷言仍在守'); return; }
@@ -264,9 +266,10 @@ await T('B2 (b) Firestore 版 room.ts 的 startGame 與 BASE **逐字元相同**
   //   改壞」；整份檔案的比對會讓「同一個檔案裡別的函式被合法改動」（v6.267 的 seats[].deckId）
   //   誤紅。⇒ 改成只對 **startGame 這一段**做逐字比對 —— 範圍更準、強度不變。
   const baseFn = (() => { const i = b.out.indexOf('export async function startGame(');
-    ok(i > 0, 'BASE 的 room.ts 抓不到 startGame'); const j = b.out.indexOf('\n}\n', i); return b.out.slice(i, j + 3); })();
+    ok(i > 0, 'BASE 的 room.ts 抓不到 startGame'); const f = eolFind(b.out, '\n}\n', i); ok(f, 'BASE 的 startGame 結尾定位不到'); return b.out.slice(i, f.end); })();
   ok(baseFn.length > 500, 'BASE 的 startGame 只抽到 ' + baseFn.length + ' 字元 —— 抽取器壞了？');
-  assert.strictEqual(cur, baseFn, 'src/lib/game/room.ts 的 startGame 被動過了（Firestore 版必須逐字不變）');
+  // ⚠ readBaseBlob 一律吐 LF，工作樹是 CRLF ⇒ 兩邊都正規化再比（不正規化＝Windows 永久紅、LF 永久綠）。
+  assert.strictEqual(normEol(cur), normEol(baseFn), 'src/lib/game/room.ts 的 startGame 被動過了（Firestore 版必須逐字不變）');
 });
 await T('B3 (c) 一般對局（沒有任何衝突）：請求序列與 BASE **逐字相同**、PUT 次數相同', async () => {
   const b = await runStart(BASE_RO, 'clean'), n = await runStart(RO, 'clean');
@@ -573,8 +576,12 @@ console.log('\n【E】接線：把 handleRoomUpdate 的盤面區塊抽出來真�
 const HRU_A = "    if (room.gameState) {\n      const incoming = room.gameState;";
 const HRU_B = "\n    // v2.72：雙方 P1/P2 都 ready";
 function hruBlock(src) {
-  const i = src.indexOf(HRU_A); ok(i > 0, '抓不到 handleRoomUpdate 的盤面區塊起點');
-  const j = src.indexOf(HRU_B, i); ok(j > i, '抓不到盤面區塊終點');
+  // ⭐v6.371（乙）：HRU_A／HRU_B 都是**多行**字串字面 ⇒ CRLF 工作樹用 indexOf 永遠 -1
+  //   （實測：E0／E1／E2／E3／G1 五條在本機是永久紅，在 LF 的 CI 才綠）⇒ 走中央 helper。
+  const fa = eolFind(src, HRU_A); ok(fa && fa.index > 0, '抓不到 handleRoomUpdate 的盤面區塊起點');
+  const i = fa.index;
+  const fb = eolFind(src, HRU_B, i); ok(fb && fb.index > i, '抓不到盤面區塊終點');
+  const j = fb.index;
   const blk = src.slice(i, j);
   let d = 0; for (const c of blk) { if (c === '{') d++; else if (c === '}') d--; }
   ok(d === 0, '盤面區塊的大括號沒配對（抽取器壞了）');
@@ -691,12 +698,14 @@ await T('F3 ⭐⭐⭐ 伺服器端**零改動**：分帳只看 `casual-` 前綴�
   const SAMPLE = /const SAMPLE_REASONS = \[([^\]]*)\]/.exec(SRV);
   ok(SAMPLE && !SAMPLE[1].includes('phantom'), '新指紋被誤加進健康對照組 SAMPLE_REASONS（會污染分母）');
 });
-await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本版只改 room-oracle.ts 與休閒區塊', () => {
-  // 錦標賽走 tApi('/action')／tAdopt／decideBoardAdopt，與 room-oracle.ts 完全無關
-  ok(!RO.includes('tournament') && !RO.includes('/action'), 'room-oracle.ts 出現錦標賽相關字樣');
-  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, BASE_SHA_V6266)) {
-    shallowSkip('F4 對 BASE 的逐字比對', '上一條結構斷言仍在守'); return;
-  }
+// ⭐⭐⭐ v6.371（甲）站長裁定 六-4：原本 F4 是**一個** `T(...)` 回呼裡塞了六件**彼此無關**的判準
+//   （結構／server sha／engine.ts 位元組釘／oracle-client.ts 位元組釘／test-v6274 還在 chain 裡）。
+//   `T()` 的實作是 try/catch ⇒ **第一條 throw 就整條中止**，後面全部不會執行。
+//   實測（v6.371 recon）：server_admin_patch.js 的 tail sha 只要對不上（本機 CRLF 就是這樣），
+//   engine.ts／oracle-client.ts 的位元組釘**一次都沒有跑過** —— 第十種安慰劑：被前一條斷言短路。
+//   ⚠ 這不是假設：v6.365 就發生過「sha 沒重釘 ⇒ 五支守衛翻紅」。
+//   ⇒ 拆成 F4a~F4e 五條**互相獨立**的 T(...)；判準內容逐字搬運，只改「它們分屬不同的 T」。
+//   剝除器全部是純函式（沒有斷言、沒有副作用）⇒ 一律上移到模組層，五條共用同一份。
   // ⚠ v6.267：每個檔各自釘在**最後一次合法改動的那一版**（見檔頭 BASE_SHA_V6266 的說明）。
   // ⚠ v6.270：oracle-client.ts 合法新增了 delta-put 區塊與兩行哨兵記錄（test-v6270 全面接管
   //   那一塊的守備）。這裡沿用 v6.267 對 F4 自己的修法：把已知的合法新增**剝掉**之後，
@@ -720,15 +729,6 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const e = src.indexOf(eMark);
     return (a >= 0 && e > a) ? src.slice(0, a) + src.slice(e + eMark.length) : src;
   };
-  // ⭐ v6.275：server_admin_patch.js 改鎖錦標賽 tail 的 sha256（見檔頭說明）
-  {
-    const srvCur = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-    const ti = srvCur.indexOf("app.get('/api/tournament");
-    ok(ti > 0, 'server_admin_patch.js 找不到第一支 /api/tournament 端點');
-    const hex = createHash('sha256').update(srvCur.slice(ti), 'utf8').digest('hex');
-    assert.strictEqual(hex, TOURN_TAIL_SHA256_V6276,
-      'server_admin_patch.js 的錦標賽區塊被動到了（tail sha256 不符）');
-  }
   // ⭐ v6.310：engine.ts 的合法改動只有 tryAdvanceToPlaying 硬 gate 上方的三行註解（哨兵剝掉之後必須逐字等於 v6.309 blob）
   const stripV6310Engine = (src) => src.replace(
     "  //   ⚠ v6.310 標註：**目前不可達（死碼）**—— 上一行 `isOpeningInProgress` 與 `ensureOpeningFinalized` 用的是同一個判準\n"
@@ -1078,11 +1078,38 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
       "  if (next.phase === 'playing' && !next.pendingSelection) {\n");
     return s;
   };
-  for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA],
-                          ['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
+
+await T('F4a ⭐⭐⭐ 結構：room-oracle.ts 不得出現錦標賽相關字樣（本版只改 room-oracle.ts 與休閒區塊）', () => {
+  // 錦標賽走 tApi('/action')／tAdopt／decideBoardAdopt，與 room-oracle.ts 完全無關
+  ok(!RO.includes('tournament') && !RO.includes('/action'), 'room-oracle.ts 出現錦標賽相關字樣');
+});
+await T('F4b ⭐⭐ server_admin_patch.js 的錦標賽區塊 tail sha256 未變（v6.275 起的內容鎖）', () => {
+  // ⚠ v6.371：這一條**不需要 git 歷史**（sha 是內嵌常數）⇒ 從原本的 shallowSkip 保護傘底下搬出來，
+  //   淺複製的 CI 上照樣在守。
+  // ⭐ v6.275：server_admin_patch.js 改鎖錦標賽 tail 的 sha256（見檔頭說明）
+  {
+    // ⭐v6.371（乙）：TOURN_TAIL_SHA256_V6276 釘的是 **LF** 內容的 sha（＝ git blob 的 sha，
+    //   實測 recon371a：LF 正規化後逐字相符）。工作樹是 CRLF ⇒ 不正規化就是**永久紅**，
+    //   而它一紅就把 F4 後面整條剝除鏈與位元組釘全部短路掉（本版 (甲) 修的就是那件事）。
+    const srvCur = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+    const ti = srvCur.indexOf("app.get('/api/tournament");
+    ok(ti > 0, 'server_admin_patch.js 找不到第一支 /api/tournament 端點');
+    const hex = createHash('sha256').update(srvCur.slice(ti), 'utf8').digest('hex');
+    assert.strictEqual(hex, TOURN_TAIL_SHA256_V6276,
+      'server_admin_patch.js 的錦標賽區塊被動到了（tail sha256 不符）');
+  }
+});
+await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等於 BASE（v6.309）', () => {
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, BASE_SHA_V6266)) {
+    shallowSkip('F4c engine.ts 對 BASE 的逐字比對', 'F4a 的結構斷言仍在守'); return;
+  }
+  for (const [p, sha] of [['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
     const b = readBaseBlob(ROOT, sha, p);
     ok(b.ok, '讀不到 BASE 的 ' + p);
-    const raw = readFileSync(join(ROOT, p), 'utf8');
+    // ⭐v6.371（乙）：BASE blob 一律 LF、工作樹 CRLF ⇒ 先正規化再剝除、再逐字比。
+    //   ⚠ 順便讓底下那些「LF 字面」的剝除器（stripV6310/V6331/V6334/V6348…）真的匹配得到 ——
+    //     它們在 CRLF 工作樹是全部落空的（`ok(s1 !== s0, '剝除器過期')` 因此假性翻紅）。
+    const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
         const s0 = stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))));
@@ -1094,12 +1121,37 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
+});
+await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法新增後必須逐字等於 BASE（v6.264）', () => {
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, BASE_SHA_V6266)) {
+    shallowSkip('F4d oracle-client.ts 對 BASE 的逐字比對', 'F4a 的結構斷言仍在守'); return;
+  }
+  for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA]]) {
+    const b = readBaseBlob(ROOT, sha, p);
+    ok(b.ok, '讀不到 BASE 的 ' + p);
+    // ⭐v6.371（乙）：BASE blob 一律 LF、工作樹 CRLF ⇒ 先正規化再剝除、再逐字比。
+    //   ⚠ 順便讓底下那些「LF 字面」的剝除器（stripV6310/V6331/V6334/V6348…）真的匹配得到 ——
+    //     它們在 CRLF 工作樹是全部落空的（`ok(s1 !== s0, '剝除器過期')` 因此假性翻紅）。
+    const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
+    const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
+      : (p === 'src/lib/game/engine.ts' ? (() => {
+        const s0 = stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
+        const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
+        const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
+        return s3;
+      })() : raw);
+    assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
+  }
+});
+await T('F4e ⭐ test-v6274 仍在 test chain 裡（sync-guards 的本體守備有人接）', () => {
   // sync-guards.ts：整檔比對已由 test-v6274 E1/E2（本體 seg sha）接管；這裡只確認那兩支守衛還在 test chain 裡（不是靜默消失）
   const pkg = readFileSync(join(ROOT, 'package.json'), 'utf8');
   ok(pkg.includes('node scripts/test-v6274-start-grace-reset.mjs'), 'test-v6274 不在 test chain ⇒ sync-guards 的本體守備沒人接');
 });
 await T('F5 ⭐⭐⭐ `resolveRoomUpdate` 的收斂邏輯逐字未動（長期記憶明訓：動它會造成死結）', () => {
-  const cur = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
+  const cur = normEol(readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8'));   // ⭐v6.371（乙）BASE blob 是 LF
   ok(cur.includes('export function resolveRoomUpdate('), '抓不到 resolveRoomUpdate');
   if (!hasBaseCommit(ROOT, BASE_SHA_V6309)) { shallowSkip('F5 對 BASE 的逐字比對', ''); return; }
   const b = readBaseBlob(ROOT, BASE_SHA_V6309, 'src/lib/game/sync-guards.ts');

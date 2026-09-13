@@ -63,10 +63,18 @@ const CHAIN_UNIQ = [...new Set(CHAIN)];
 chk('chain 裡每一支腳本都讀得到', files.size === CHAIN_UNIQ.length, `${files.size}/${CHAIN_UNIQ.length}`);
 
 const HELPER = 'lib/base-blob.mjs';
+// ⭐⭐v6.371（丁-1）：舊判準是 `src.includes('lib/base-blob.mjs')` —— 在**含註解**的原始碼上找字面
+//   ⇒ 只要在註解裡寫一句那個路徑，就可以一邊自己 shell out 到 git、一邊被算成「走了中央 helper」。
+//   實測（v6.370 的 mutcheck M5）：把 test-v6365 突變回「自己 shell out 到 git」，②**竟然沒紅**
+//   （它的檔頭註解剛好有那句話）。v6.370 只在新守衛補了更硬的 B4，② 本身沒動。
+//   ⇒ 本版把 ② 收斂成**同一個** import 語句偵測器（Rule 38：判準只准有一份）。
+//   ⚠ 不依賴 naive 剝註解（`/* */` 的貪吃問題）—— 直接要求**行首的 import … from '…base-blob.mjs'**。
+const HELPER_IMPORT_RE = /^[ \t]*import\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*from\s*'[^']*lib\/base-blob\.mjs'\s*;?/m;
+const importsHelper = (src) => HELPER_IMPORT_RE.test(String(src));
 // 「會去讀歷史」＝ 自己 shell out 到 git（且寫死 40 位 sha），或 import 了中央 helper。
 const rawGitUsers = [...files].filter(([, src]) => gitCallsIn(src).length > 0).map(([rel]) => rel);
 const rawHistUsers = rawGitUsers.filter((rel) => hasHistSha(files.get(rel)));
-const helperUsers = [...files].filter(([, src]) => src.includes(HELPER)).map(([rel]) => rel);
+const helperUsers = [...files].filter(([, src]) => importsHelper(src)).map(([rel]) => rel);
 // ⚠ 排除**本檔自己**：它是掃描器，內含「靜默掏空」與「git 呼叫」的合成樣本字串
 //   （③ 的正對照），被自己掃到會誤報。本檔的正確性由 ③ 的正／負對照與 ④⑤ 的行為端保證。
 const SELF = 'scripts/test-v6263-shallow-clone-ci-guards.mjs';
@@ -97,9 +105,16 @@ const ALLOW = new Map([
   ['scripts/test-v6246-oracle-timeout-followups.mjs', '同上，內嵌等價突變版當 BASE 對照'],
   ['scripts/test-v6261-casual-clientdiag.mjs', '拿不到 BASE 時改驗內嵌 sha256，且自己斷言 checked >= 1'],
 ]);
-const offenders = rawHistUsers.filter((rel) => rel !== SELF && !ALLOW.has(rel) && !files.get(rel).includes(HELPER));
+const offenders = rawHistUsers.filter((rel) => rel !== SELF && !ALLOW.has(rel) && !importsHelper(files.get(rel)));
 chk('★★ 每一支「自己呼叫 git 且寫死歷史 sha」的腳本，不是走中央 helper 就是在白名單裡',
     offenders.length === 0, JSON.stringify(offenders));
+// ⭐v6.371（丁-1）偵測器自驗（Rule 25：掃描器本身要先被驗證；沒有這三條，改判準只是換一種安慰劑）
+chk('★ 偵測器正對照：真的 import 語句判為有',
+    importsHelper("import { hasBaseCommit } from './lib/base-blob.mjs';\n") === true);
+chk('★ 偵測器負對照①：只有註解提到路徑 ⇒ 判為沒有',
+    importsHelper("//   走中央 helper `scripts/lib/base-blob.mjs`\nconst x = 1;\n") === false);
+chk('★ 偵測器負對照②：字串字面提到路徑 ⇒ 判為沒有',
+    importsHelper("const HELPER = 'lib/base-blob.mjs';\n") === false);
 chk('★ 中央 helper 檔案存在且有 shallowSkip 匯出',
     /export function shallowSkip\(/.test(readFileSync(join(ROOT, 'scripts/lib/base-blob.mjs'), 'utf8')));
 
@@ -169,8 +184,9 @@ function runGuard(rel, { noGit = false, env = {} } = {}) {
 const WIN = process.platform === 'win32';
 let ranBehaviour = false;
 if (WIN) {
-  console.log('  ⚠⚠ PLATFORM-SKIP ④⑤：Windows 的 execFileSync 套不上無副檔名的 PATH shim');
-  console.log('  ⚠⚠ ⇒ 這兩段在本機【沒有在守】；守門人是 CI（.github/workflows/deploy.yml，ubuntu）。');
+  console.log('  ⚠⚠ PLATFORM-SKIP ④：Windows 的 execFileSync 套不上無副檔名的 PATH shim');
+  console.log('  ⚠⚠ ⇒ 這一段在本機【沒有在守】；守門人是 CI（.github/workflows/deploy.yml，ubuntu）。');
+  console.log('  ⚠⚠ （⑤ 不受影響：它靠 V6224_SAP／V6230_SAP 環境變數做突變，與 PATH shim 無關 ⇒ 兩個平台都照跑。）');
 } else {
 // shim 自身先驗（Rule 25：掃描器/工具本身要先被驗證）
 {
@@ -204,29 +220,10 @@ for (const rel of BEHAVIOR_LIST) {
       `real=${real.pass}/${real.fail} nogit=${nogit.pass}/${nogit.fail}`);
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-console.log('\n⑤ ⭐⭐ 突變測試：同一個 shim 下，把「被守的東西」改壞必須紅');
-// ⚠ 我們已連續踩過七次守衛安慰劑 —— ④ 只證明「條數沒少」，不證明「那些條真的在測東西」。
-//   這一段把 server_admin_patch.js 的回應訊息改掉（只有 BASE 行為快照那一條會看），
-//   在**拿不到歷史**的環境下重跑，必須紅。
-const SAP = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const MUTS = [
-  ['scripts/test-v6224-deck-import-timeout.mjs', 'V6224_SAP', '官網回應異常 (HTTP ', '官網回應異常了啦 (HTTP '],
-  ['scripts/test-v6230-deck-export-timeout.mjs', 'V6230_SAP', '官網 token 抽取失敗（HTML 結構變動？）', '拿不到 token'],
-];
-for (const [rel, envKey, from, to] of MUTS) {
-  chk(`  突變錨點唯一：${from.slice(0, 14)}…`, SAP.split(from).length === 2);
-  const d = mkdt('mut');
-  const p = join(d, 'server_admin_patch.js');
-  writeFileSync(p, SAP.replace(from, to));
-  const r = runGuard(rel, { noGit: true, env: { [envKey]: p } });
-  chk(`  ⭐⭐ ${rel.replace('scripts/', '')}：改壞回應訊息後在**淺複製環境下也會紅**（exit ${r.code}, ${r.fail} fail）`,
-      r.code !== 0 && r.fail >= 1, r.out.slice(-400));
-}
   ranBehaviour = true;
 }
-// ⭐v6.370 正對照①：CI 跑的是 ubuntu ⇒ 這兩段在 CI 永遠會真的執行（跳過只可能發生在 Windows 本機）。
-chk('★★ ④⑤ 行為端在 POSIX 一定要真的執行過（只有 Windows 准跳過）', WIN || ranBehaviour);
+// ⭐v6.370 正對照①：CI 跑的是 ubuntu ⇒ ④ 在 CI 永遠會真的執行（跳過只可能發生在 Windows 本機）。
+chk('★★ ④ 行為端在 POSIX 一定要真的執行過（只有 Windows 准跳過）', WIN || ranBehaviour);
 // ⭐v6.370 正對照②：跳過的**理由**必須實測成立 —— 在 Windows 上，套了 shim 之後 git 仍然跑得起來。
 //   哪天 Node/Windows 改成吃得到這種 shim，這一條就會翻紅，強迫回來把 ④⑤ 打開。
 chk('★ Windows 跳過的理由實測成立：套上 shim 之後 git 仍然執行得起來（＝shim 沒套上）',
@@ -237,6 +234,35 @@ chk('★ Windows 跳過的理由實測成立：套上 shim 之後 git 仍然執�
         return true;
       } catch { return false; }
     })());
+
+// ══════════════════════════════════════════════════════════════════════════
+console.log('\n⑤ ⭐⭐ 突變測試：把「被守的東西」改壞必須紅（**兩個平台都跑**）');
+// ⚠ 我們已連續踩過七次守衛安慰劑 —— ④ 只證明「條數沒少」，不證明「那些條真的在測東西」。
+//   這一段把 server_admin_patch.js 的回應訊息改掉（只有 BASE 行為快照那一條會看）再重跑，必須紅。
+// ⭐⭐v6.371（丁-2）：v6.370 把 ⑤ 一起關進 Windows 的 PLATFORM-SKIP，但那是**範圍過寬**——
+//   ⑤ 的突變靠 V6224_SAP／V6230_SAP 兩個**環境變數**注入，與 PATH shim 完全無關；
+//   `noGit:true` 在 Windows 只是沒有效果，不影響突變本身。實測：Windows 上 ⑤ 會跑、而且會過。
+//   ⇒ 收斂成「只跳 ④ 與 shim 自驗，⑤ 保留」，標籤也從「在**淺複製環境下**也會紅」
+//     改成平台中立的說法（在 Windows 上「淺複製」那個前提是假的，寫在標籤裡會誤導）。
+let ranMutation = 0;
+const SAP = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const MUTS = [
+  ['scripts/test-v6224-deck-import-timeout.mjs', 'V6224_SAP', '官網回應異常 (HTTP ', '官網回應異常了啦 (HTTP '],
+  ['scripts/test-v6230-deck-export-timeout.mjs', 'V6230_SAP', '官網 token 抽取失敗（HTML 結構變動？）', '拿不到 token'],
+];
+for (const [rel, envKey, from, to] of MUTS) {
+  chk(`  突變錨點唯一：${from.slice(0, 14)}…`, SAP.split(from).length === 2);
+  const d = mkdt('mut');
+  const p = join(d, 'server_admin_patch.js');
+  writeFileSync(p, SAP.replace(from, to));
+  // noGit 在 POSIX 會真的斷掉 git（＝順便驗「淺複製下也會紅」）；在 Windows 套不上，
+  //   但突變本身照樣生效 ⇒ 兩個平台都必須紅。
+  const r = runGuard(rel, { noGit: true, env: { [envKey]: p } });
+  chk(`  ⭐⭐ ${rel.replace('scripts/', '')}：改壞回應訊息後**必須紅**（exit ${r.code}, ${r.fail} fail）`,
+      r.code !== 0 && r.fail >= 1, r.out.slice(-400));
+  ranMutation++;
+}
+chk('★★ ⑤ 突變測試在**所有平台**都必須真的跑完（Windows 也不准跳）', ranMutation === MUTS.length, `${ranMutation}/${MUTS.length}`);
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑥ CI 設定：checkout 的 fetch-depth 現況必須與本檔宣告一致');

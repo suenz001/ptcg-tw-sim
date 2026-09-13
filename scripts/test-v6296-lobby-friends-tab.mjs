@@ -26,9 +26,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
-import { hasBaseCommit, shallowSkip } from './lib/base-blob.mjs';
+import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';   // ⭐v6.371（丁-3）BASE blob 也改走中央 helper
 import { pruneIfs, normalizeMarkup } from './lib/svelte-if-prune.mjs';
 import { sectionInner, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.317 抽 script；v6.318 單趟行級狀態機；v6.319 殘留護欄（game 的 {@html '<style>'} 是唯一宣告的例外）
 import { stripCommentsChecked } from './lib/strip-comments.mjs';   // ⭐v6.318 腳本內文剝註解走行級 helper（本檔的 stripCmt 是區塊正則，會吃掉 game 腳本 :208 起 177 行）
@@ -218,7 +217,12 @@ const asAnon = (src, pm) => normalizeMarkup(pruneIfs(lobbyRegion(src), ANON(pm))
 let BASE_GAME = null;
 await T('D1 ⭐⭐⭐ 匿名玩家的大廳（把 {#if} 依「匿名」求值剪枝後）與 BASE **逐字相同** —— 手機直式與桌機各驗一次', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6296 D1 匿名大廳與 BASE 逐字比對', 'D2/D3 的結構斷言不需要歷史，仍在守'); skipped.push('D1（淺複製）'); return; }
-  BASE_GAME = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
+  // ⭐v6.371（丁-3）：本檔原本是 chain 裡**唯一**「自己 shell out 到 git ＋ 寫死 40 位歷史 sha」
+  //   卻不在 test-v6263 ② 白名單裡的腳本 —— 它靠「檔頭有 import base-blob」矇混過 ②／B4，
+  //   但這個 git 呼叫本身沒有走 helper（淺複製時會直接丟例外，不是大聲 SKIP）。⇒ 一併收斂。
+  const _bg = readBaseBlob(ROOT, BASE_SHA, 'src/routes/game/+page.svelte');
+  assert.ok(_bg.ok, '讀不到 BASE 的 src/routes/game/+page.svelte');
+  BASE_GAME = _bg.out;
   for (const pm of [false, true]) {
     const a = asAnon(GAME, pm), b = asAnon(BASE_GAME, pm);
     assert.ok(a.length > 3000, '剪枝後只剩 ' + a.length + ' 字元 ⇒ 剪枝器把東西吃掉了');

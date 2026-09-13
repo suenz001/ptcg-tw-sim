@@ -1,5 +1,148 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.371 守衛層債務清理（站長裁定 六-4／六-7／六-6 ＋ v6.370 留下的四個洞）
+
+BASE `b3ec78771f1ffa16602a94cb6ad2c776cece7514`（v6.370）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。
+
+### 【零】本版修掉的**真保護力缺口**
+
+#### (甲) 六-4：`test-v6265` F4 的短路 —— ⚠ **根因與原先推測不同**
+
+原先推測「有人合法動過 `server_admin_patch.js` 卻忘了重釘 sha」。**實測否證**：
+該檔自 v6.365 起一個字未動，釘住的 `dc50464f…` 正是它 **LF 內容**的 sha（＝ HEAD blob 的 sha），
+而 F4 拿**工作樹 CRLF 內容**去算得到 `b996884d…` ⇒ **紅的是行尾落差**，屬於 (乙) 的家族。
+
+但**後果與推測完全一致**：那一條 `assert` 一 throw，後面
+`stripV6270`→`stripV6369Engine` 整條剝除鏈與 `engine.ts`／`oracle-client.ts` 的位元組釘
+**一次都沒有跑過**（第十種安慰劑：被前一條斷言短路）。
+
+**修法**：F4 拆成五條互相獨立的 `T(...)`，判準逐字搬運：
+
+| 條 | 內容 | 備註 |
+|---|---|---|
+| F4a | `room-oracle.ts` 不得出現錦標賽字樣 | 結構 |
+| F4b | `server_admin_patch.js` tail sha256 | ⭐ **不需歷史 ⇒ 從 shallowSkip 保護傘搬出來，淺複製 CI 上也照守** |
+| F4c | `engine.ts` 位元組釘 | 各自 shallowSkip |
+| F4d | `oracle-client.ts` 位元組釘 | 各自 shallowSkip |
+| F4e | `test-v6274` 仍在 chain | |
+
+⭐ **HEAD-FAIL 是行為層的**：把 F4 家族的真實原始碼逐字抽出來當獨立模組跑，
+`readFileSync` 包一層可換輸入並**記錄讀取次數**——
+BASE(v6.370) 在同一個突變下 **`engine.ts` 的讀取次數 = 0**（＝位元組釘一次都沒跑），
+本版則是「F4b 紅、F4c/F4d 仍然有跑而且綠」。
+
+#### (乙) 六-7：多行字串字面錨點在 CRLF 工作樹定位失敗 —— 中央收斂
+
+新增 **`scripts/lib/eol-agnostic.mjs`**（先查過 `scripts/lib/` 沒有同類 helper）：
+`esc / eolRxSource / eolRx / eolCount / eolIndexOf / eolFind / matchEol / eolReplaceOnce / eolReplaceAll / normEol`。
+⚠ `eolReplaceOnce` 找不到或不唯一時回 `{ ok:false, count }`，**絕不靜默不取代**。
+
+| 守衛 | 修前 | 修後 |
+|---|---|---|
+| `test-v6234`（突變錨點 M1／M2） | 61 PASS / **2 FAIL** | **63 PASS / 0 FAIL** |
+| `test-v6265`（B2／E0-E3／G1／F4／F5） | 45 PASS / **8 FAIL** | **57 PASS / 0 FAIL** |
+
+⚠ **不是放寬**：`test-v6234` 的判準反而從「取代第一處」收緊成「必須恰一處」；
+`normEol` 兩邊比對則是把「依機器而定的判準」變成「兩種機器同一結論」，
+內容差異照樣一個字跑不掉（行尾本身由 `.gitattributes` 與 `test-bat-crlf` 管）。
+
+**`test-lint-crlf-neutral` 為什麼沒抓到？** 實測：它的守備範圍**只有 `anti-pattern-lint.mjs` 一支**
+（把 lint 搬到臨時工作區、LF/CRLF 各跑一次比 stdout），從來不掃其他守衛。
+不是判準寫錯，是**範圍**問題 ⇒ 列入待裁示。
+
+#### (丁-1) `test-v6263` ② 可以用**註解**騙過去 —— 已修
+
+② 原本用 `files.get(rel).includes('lib/base-blob.mjs')`，在**含註解的原始碼**上找字面。
+改成單一 `HELPER_IMPORT_RE` ＋ `importsHelper()`，`helperUsers` 與 `offenders` **兩處共用同一份**（Rule 38），
+並就地補三條偵測器真值表。
+⭐ 新守衛 D1b 把 ② 的**判準碼逐字抽出來**、餵合成 offender（git 呼叫＋40 位 sha＋路徑只寫在註解裡）真的跑一次。
+
+#### (丁-2) `test-v6263` ⑤ 被 v6.370 的 `PLATFORM-SKIP` 誤殺 —— 已修
+
+實測確認 ⑤ 靠 `V6224_SAP`／`V6230_SAP` **環境變數**注入突變，**與 PATH shim 無關**、在 Windows 有效。
+⇒ ⑤ 整段搬出 `if (WIN){}else{}`；`PLATFORM-SKIP ④⑤` → `PLATFORM-SKIP ④`；
+標籤「在**淺複製環境下**也會紅」→「**必須紅**」（平台中立）；
+新增 `ranMutation` 計數 ＋「⑤ 在所有平台都必須真的跑完」正對照。
+`test-v6370` 的【C】跟著把 ⑤ 的驗證從 POSIX-only 分支**上移到兩個平台都驗**（Rule 40）。
+`test-v6263`：22 PASS → **27 PASS / 0 FAIL**。
+
+#### (丁-3) `test-v6296` 自己 shell out 到 git —— 已修
+
+`execFileSync('git', ['-C', ROOT, 'cat-file', '-p', …])` → `readBaseBlob(...)` ＋ `assert.ok(_bg.ok)`，
+並移除已無用的 `node:child_process` import。26 PASS / 0 FAIL。
+
+### 【一】(丙) 六-6：49 支不在 chain 的守衛盤點（⚠ 不是 50 支）
+
+#### ⚠⚠ 盤點過程中的事故（已完全還原）
+
+實跑 `audit-*` 時 **`scripts/audit-all-stages.mjs` 直接改寫了卡池**
+（`static/cards/MC.json`／`SV8a.json`／`SV-P-I.json`，70273 行差異）。
+已立刻中止、用 `git cat-file -p HEAD:<path>` 還原並**逐位元驗證 blob sha 相同**，再補回 CRLF。
+⇒ **`git diff HEAD -- static/` 為空**（逐位元相同）。
+之後改用「每跑完一支就 `git diff --name-only` 比對、動到就立刻還原」的安全版，且只實跑 `test-*`。
+
+#### 22 支 `audit-*` —— **全部 C 類，一支都不接**
+
+| 特徵 | 支數 | 結論 |
+|---|---|---|
+| `process.exit` = 0（不論結果都 exit 0） | **20 / 22** | 接進 chain ＝ 永遠綠的安慰劑步驟 |
+| 會 `writeFileSync`（改資料或產報表） | **12 / 22** | 絕對不能進 chain（`audit-all-stages` 已實證會改卡池） |
+
+#### 27 支 `test-*`
+
+- **A 類｜本版已接進 chain：18 支**（全綠、各 < 2 秒、有非零 exit 路徑、不改檔），合計 **22.75 秒**。
+  `test-ami-gaze-allmons`／`test-burn-cure-tertiary`／`test-confuse-newactive-placement`／
+  `test-hydro-pump-bench`／`test-idle-setup-blocker`／`test-kaleido-waltz`／`test-multi-tool-relay`／
+  `test-opp-turn-immune-promote`／`test-prevent-prize-nullify`／`test-protect-charge-expire`／
+  `test-retaliation-nullify`／`test-rotom-call-namecontains`／`test-scorch-earth-stadium`／
+  `test-sticky-retreat-deferred-prize`／`test-swap-ability`／`test-swiss`／
+  `test-tournament-setup-idle-gate`／`test-tournament-stats`
+- **B 類｜該接但現在是紅的：4 支**（本版不動，列待裁示）
+  `test-all-presets`／`test-evolve-iid-regression`（Windows 絕對路徑當 ESM specifier）、
+  `test-v2341-a-batch`（舊 `node:test` API）＝ **harness 過期**；
+  `test-festival-dance`（`actual 0 expected 1`）＝ **無法斷定是守衛過期還是出貨碼問題 ⇒ 不自行改出貨碼**。
+- **C 類｜已被取代／空檔／一次性工具：5 支**（**一個都沒刪**，列待裁示）
+  `test-picker-skip-cancel`（**0 bytes**）、`test-v6291-friends-theme`（已被 `test-v6293` 取代，實測 6/13）、
+  `test-diver-catch-repro`（重現腳本）、`test-play-basic`／`test-regmarks`（**沒有任何 `process.exit`** ⇒ 永遠綠）。
+- **D 類｜需線上環境／金鑰：本批 0 支。**
+
+**時間增量**：18 支 22.75s ＋ 新守衛 20.3s ＝ **約 43 秒**（上限 90 秒）。chain 1372.8s → 1437.2s。
+
+### 【二】守衛 `scripts/test-v6371-guard-hygiene.mjs`：**PASS 141 / FAIL 0**
+
+【A】(甲) 25 條（含行為層 HEAD-FAIL 3 條）｜【B】(乙) 16 條（含反對照 3 條）｜
+【C】(丙) 45 條｜【D】(丁) 53 條（含 D1b 行為層 6 條、HEAD-FAIL 4 條）｜【E】2 條。
+0 SHALLOW-SKIP。
+
+**突變 M1~M11 全殺**（未達標 0、還原後複驗 exit=0）：
+F4c 併回 F4b、F4c 位元組釘掏空、F4b sha 恆真、helper 的 `\r?\n` 改回 `\n`、
+`test-v6234` 改回 `String.includes`、② 判準改回 `includes(HELPER)`、import 偵測器恆真、
+⑤ 的突變迴圈跳掉、拿掉 `ranMutation`、`test-v6296` 改回自己呼叫 git、把本守衛從 chain 拿掉。
+
+**整條 chain（序列執行，非 `&&` 短路）**：
+685 步 / 紅 **60** → 704 步 / 紅 **58**，**新增 0**、消失 2（`test-v6234`、`test-v6265`，兩支都是真修）。
+`npx tsc --noEmit`：`error TS` 55 行、`TS2304` **0**。
+
+⚠ 剩下 58 支的根因分類：**37 支與本版同一家族**（多行錨點／行尾／區塊抽取器切歪），
+其中 `test-v6275` E1 與 `test-v6283` D1 就是 **F4b 一模一樣的 sha 問題**，`normEol` 一行可解；
+另外 21 支是其他原因（真實斷言失敗、模組載入失敗、缺 playwright、白名單未更新）。
+
+### 【三】⚠ 待站長裁示
+
+1. **要不要再壓一輪紅燈？** 58 支裡 37 支同家族，最便宜的兩支一行可解。
+2. **`test-lint-crlf-neutral` 的判準要不要上移？** 現在只守 `anti-pattern-lint.mjs` 一支。
+   建議改成**靜態掃描器**（掃出「多行字串字面被 `indexOf/includes/split/replace`」的呼叫點，
+   強制走 `scripts/lib/eol-agnostic.mjs`），而不是蓋一層 704 步的鏡像 chain。
+3. **B 類 4 支要不要修 harness？** 三支是純 harness 過期（`pathToFileURL`／舊 `node:test` API）；
+   `test-festival-dance` 可能是真 bug，需要裁示才查出貨碼。
+4. **刪檔／搬檔**（本版一個都沒刪）：`scripts/` 底下 **38 個未追蹤暫存檔**、
+   22 支 `audit-*`、5 支 C 類 `test-*`。
+   ⚠ 建議在 `audit-all-stages*.mjs` 檔頭加警語「**會改寫 `static/cards/*.json`**」。
+5. ⭐ **還有 58 個 `T(...)` 塞了多個彼此無關的判準**（與 F4 同型的短路風險）。最該拆的：
+   `test-v6276` B4（一個迴圈 `assert` 連驗 5 支守衛的 sha）、
+   `test-v6291`／`test-v6292` B4（一個迴圈鎖 19 個檔）、
+   `test-v6267` F3（55 斷言 / 6 檔）、`test-v6277` F5（56 / 5）、`test-v6279` H1（27 / 5）。
+
 ## v6.370 ⚠ 修好 CI（測試站自 v6.364 起停更 4 個版本）＋ 三處守衛假紅收斂
 
 BASE `56329766c11e0e4d313fc6067dfb7e228929e798`（v6.369）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。

@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, writeFileSync, existsSync, mkdtempSync, cpSy
 import { execSync } from 'node:child_process';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { withSeededRandom, withBiasedCoin } from './lib/seeded-rng.mjs';   // v6.336 取樣可重現，消除隨機假紅
+import { eolReplaceOnce } from './lib/eol-agnostic.mjs';   // ⭐v6.371（乙）站長裁定 六-7：突變錨點是多行字串字面，CRLF 工作樹永遠定位失敗
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -60,8 +61,13 @@ async function bundleMutated(tag, mutations) {
   for (const [rel, from, to] of mutations) {
     const p = join(td, 'src', rel);
     const t = readFileSync(p, 'utf8');
-    if (!t.includes(from)) return { err: `突變定位失敗（找不到 ${from.slice(0, 40)}… @ ${rel}）` };
-    writeFileSync(p, t.replace(from, to));
+    // ⭐v6.371（乙）：錨點是**多行字串字面**（用 \n 接），但工作樹是 CRLF ⇒ 舊寫法的
+    //   `t.includes(from)` / `t.replace(from, to)` 在 Windows 永遠失敗、在 LF 的 CI／免疫
+    //   測試網永遠成功 —— 突變層因此**只在一種機器上有保護力**（另一種是永久紅、看久就麻痺）。
+    //   ⇒ 收斂到中央 helper（Rule 38），順便從「取代第一處」收緊成「必須恰好一處」。
+    const r = eolReplaceOnce(t, from, to);
+    if (!r.ok) return { err: `突變定位失敗（${from.slice(0, 40)}… @ ${rel} 找到 ${r.count} 處，必須恰 1 處）` };
+    writeFileSync(p, r.out);
   }
   return { mod: await bundleSrc(join(td, 'src'), tag) };
 }

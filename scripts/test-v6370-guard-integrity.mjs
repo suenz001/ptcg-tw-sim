@@ -306,15 +306,24 @@ if (WIN) {
   chk('C1 ⭐⭐ Windows：test-v6263 必須印出 PLATFORM-SKIP（大聲宣告「這一段沒有在守」）', hasSkipMark === true);
   chk('C1 Windows：宣告文字要指名守門人是 CI',
       /守門人是 CI/.test(v6263Out || '') && /ubuntu/.test(v6263Out || ''));
+  // ⭐v6.371（丁-2）：跳過的**範圍**必須收斂到 ④ 一段（v6.370 寫的是「④⑤」，把有效的 ⑤ 一起關掉了）。
+  chk('C1 ⭐⭐ Windows：PLATFORM-SKIP 只宣告 ④（⑤ 不准被一起關掉）',
+      /PLATFORM-SKIP ④[^⑤]/.test(v6263Out || '') && !/PLATFORM-SKIP ④⑤/.test(v6263Out || ''));
 } else {
-  chk('C1 ⭐⭐⭐ POSIX（CI）：test-v6263 **不准**出現 PLATFORM-SKIP（④⑤ 必須真的跑）', hasSkipMark === false);
+  chk('C1 ⭐⭐⭐ POSIX（CI）：test-v6263 **不准**出現 PLATFORM-SKIP（④ 必須真的跑）', hasSkipMark === false);
   chk('C1 ⭐⭐ POSIX：`★ shim 自身有效` 那一條必須 PASS（shim 真的套得上）', linePass('★ shim 自身有效'));
   chk('C1 ⭐⭐ POSIX：④ 的行為端對照真的跑過（輸出要有 v6224 的真環境那一條）',
       linePass('test-v6224-deck-import-timeout.mjs：真環境'));
-  chk('C1 ⭐⭐ POSIX：⑤ 的突變測試真的跑過', linePass('改壞回應訊息後在**淺複製環境下也會紅**'));
 }
+// ⭐⭐v6.371（丁-2）Rule 40 判準上移：⑤ 的突變測試與 PATH shim 無關（靠 V6224_SAP／V6230_SAP
+//   環境變數注入）⇒ **兩個平台都必須真的跑過**，不再只在 POSIX 分支裡驗。
+chk('C1 ⭐⭐⭐ ⑤ 的突變測試在**兩個平台**都必須真的跑過（v6.370 誤把它關進 Windows 的跳過範圍）',
+    linePass('test-v6224-deck-import-timeout.mjs：改壞回應訊息後**必須紅**')
+    && linePass('test-v6230-deck-export-timeout.mjs：改壞回應訊息後**必須紅**'));
+chk('C1 ⭐⭐ ⑤ 自己的「全平台都跑完」正對照必須 PASS',
+    linePass('⑤ 突變測試在**所有平台**都必須真的跑完'));
 // 兩個平台都必須成立的正對照（(乙) 新增的那兩條）
-chk('C2 ⭐⭐ 正對照①「④⑤ 行為端在 POSIX 一定要真的執行過」必須 PASS', linePass('④⑤ 行為端在 POSIX 一定要真的執行過'));
+chk('C2 ⭐⭐ 正對照①「④ 行為端在 POSIX 一定要真的執行過」必須 PASS', linePass('④ 行為端在 POSIX 一定要真的執行過'));
 chk('C2 ⭐⭐ 正對照②「Windows 跳過的理由實測成立」必須 PASS', linePass('Windows 跳過的理由實測成立'));
 
 // ── C-3 結構層（補充）：WIN 的定義不得被改成看環境變數／CI 旗標 ────────────────
