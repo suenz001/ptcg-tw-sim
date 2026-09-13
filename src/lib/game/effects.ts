@@ -19170,10 +19170,18 @@ OPP_ENERGY_ATTACH_PASSIVE.set('侵蝕詛咒', (state, gIdx, _oppIdx, targetIid, 
   // gIdx = 侵蝕詛咒 擁有者；附能的那隻寶可夢在「對手(attacker = 1-gIdx = _oppIdx)」場上。
   // v5.536 收斂＋修 bug：原實作誤用 player = state.players[gIdx]（擁有者自己場上）去找 targetIid，
   //   但 targetIid 在【對手】場上 → 永遠找不到 → return state（沒放指示物，玩家回報）。
-  //   改走中央 dealAttackDamageToTarget(kind:'attack-effect'，放 2 個傷害指示物 = 20，flat)：
+  //   改走中央 dealAttackDamageToTarget（放 2 個傷害指示物 = 20，flat）：
   //   actorIdx=gIdx → 內部 dIdx=1-gIdx=對手，依 targetIid 在對手場上正確命中；
   //   一次處理免疫(化隱/太晶備戰/對戰圓形/光之翼)＋昏厥＋自動拿獎(原實作都漏)。
-  return dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'attack-effect', label: '侵蝕詛咒' });
+  // ⭐⭐⭐v6366 站長裁定 六-3：侵蝕詛咒是【特性】的效果（卡面 label「特性」），v5.536 卻沿用
+  //   kind:'attack-effect'（＝**招式**效果）⇒ 被一整排只寫「招式」的免疫誤擋（球形盾牌／藏隱／
+  //   深度下潛／抵抗之幕／薄霧能量／皇帝之勢／背蓋化石／躲藏類旗標…），又躲過只擋「特性」的
+  //   【光之翼】。改用**既有**的 'ability-effect'（DamageKind 早就有這個值，必殺手裡劍／咒詛炸彈／
+  //   揚沙 等 20 餘個特性呼叫端都用它）——不是新增第三種 kind。
+  //   ⚠ 數字那一維**不動**：dealAttackDamageToTarget 內的弱點／抵抗力／防守方減傷／防 KO 全部
+  //     gate 在 `kind === 'attack-damage'`，'attack-effect' 與 'ability-effect' 一律 flat。
+  //     卡面「放置2個傷害指示物」＝ 20 點 flat，實測不變（v6.366 守衛 §D 釘住行為端數字）。
+  return dealAttackDamageToTarget(state, gIdx, targetIid, 20, pool, { kind: 'ability-effect', label: '侵蝕詛咒' });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
