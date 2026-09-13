@@ -1072,6 +1072,10 @@ import {
   collectAsOfDeclarationHolders,  // ⭐v6.373 站長裁定 A-3：宣告當時的持有者 iid 收集器
   // <<< v6373-collect-holders-import
 } from './effects/cards/v3001_g3_wave3';
+// >>> v6376-max-hp-import
+// ⭐v6.376：最大 HP 型的「宣告當時」判準入口（全站唯一一份，見 as-of-declaration.ts）。
+import { asOfDeclarationHolderIids as _v6376HolderIids } from './as-of-declaration';
+// <<< v6376-max-hp-import
 
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
 //   ON_RETREAT_TO_BENCH_ABILITIES：白名單 Set，列出有此觸發機制的特性名（卡面文義「從戰鬥場回到備戰區時，可使用 1 次」）
@@ -1244,13 +1248,25 @@ export function getEffectiveHP(
   //   只查持有者的所屬玩家是否場上有此特性 → 該玩家所有寶可夢 +40。
   //   要查「擁有者所屬玩家」，需要知道 inst 在哪一邊。直接掃 state.players[*]。
   if (state) {
-    for (const p of state.players) {
+    for (let _v6376k = 0 as 0 | 1; _v6376k <= 1; _v6376k = (_v6376k + 1) as 0 | 1) {   // ⭐v6376-samba-side-index
+      // >>> v6376-max-hp-side
+      // ⭐v6.376：中央述詞要的是「持有者在哪一側」⇒ for…of 換成帶 index 的迴圈。
+      const p = state.players[_v6376k];
+      if (!p) continue;
+      // <<< v6376-max-hp-side
       const allP = [...(p.active ? [p.active] : []), ...p.bench];
-      const hasSamba = allP.some(c => {
+      // >>> v6376-max-hp-live-iids
+      // ⭐⭐v6.376 站長裁定 A-1／A-3：原本只問「**現在**場上有沒有有效的生機森巴」，
+      //   所以持有者被同一招打死之後，同一次招式後續的昏厥判定就少了 +40（實測見
+      //   as-of-declaration.ts 的名單註解）。這裡先收「現在仍然生效」的持有者 iid，
+      //   下一行再交給全站唯一的判準補上「宣告當時生效、且不是被主動移出場」的那一半。
+      const _v6376Live = allP.filter(c => {
         const cc = pool.get(c.cardId);
         if (!cc?.abilities?.some(a => a.name === '生機森巴')) return false;
         return hpAbilityEffective(c, cc, '生機森巴');
-      });
+      }).map(c => c.iid);
+      // <<< v6376-max-hp-live-iids
+      const hasSamba = _v6376HolderIids(state, _v6376k, '生機森巴', _v6376Live).length > 0;   // ⭐v6376-samba-as-of
       if (!hasSamba) continue;
       // 確認 inst 是這位玩家的寶可夢
       if (allP.some(c => c.iid === inst.iid)) { hp += 40; break; }
@@ -9528,15 +9544,6 @@ function applyActionImpl(
     delete cleared._attackTimeAttackerEnergyUnits;
     next = cleared;
   }
-  // >>> v6373-as-of-declaration-holders-clear
-  // ⭐v6.373：持有者 iid 快照的 clear **只有這一處**（applyActionImpl 尾段，比照 v6.357／v6.368）。
-  //   pendingSelection 還在時保留給 resolver（比照花之帷幔／平穩境地）。
-  if (next._attackTimeHolders !== undefined && !next.pendingSelection) {
-    const cleared = { ...next };
-    delete cleared._attackTimeHolders;
-    next = cleared;
-  }
-  // <<< v6373-as-of-declaration-holders-clear
 
   // v5.335：集中偵測「自方戰鬥寶可夢於自己回合回到自己備戰區」→ 觸發 ON_RETREAT_TO_BENCH 類特性
   //   （海豚俠｜全能變身 / 鋼炮臂蝦｜返回重載）。原本只有 RETREAT handler inline 觸發；衝浪手 /
@@ -9633,6 +9640,26 @@ function applyActionImpl(
       next = sanityKOSweep(next, (1 - aIdxForKO) as 0 | 1, pool);
     }
   }
+  // >>> v6376-as-of-declaration-holders-clear
+  // ⭐⭐⭐v6.376：持有者 iid 快照的 clear **只有這一處**（v6.373 原本放在上方那一排
+  //   attack-time 快照清除的旁邊 ＝ sanityKOSweep **之前**）。
+  //   ⚠⚠ 為什麼一定要搬到 sanityKOSweep 之後（v6.376 插樁實測 __m6a/probe376l.mjs）：
+  //     v6.373~v6.375 這一家族的消費點全都是「傷害量」，算完就寫進 damage、不會再被重算；
+  //     v6.376 接進來的 樂天河童｜生機森巴 是**最大 HP** 型 —— 而 sanityKOSweep 是本 action
+  //     最後一個 KO 判定點，它會**重新**呼叫 getEffectiveHP。clear 排在它前面時：
+  //       備戰那一段算出 HP 170、蒼響 150 傷害存活（快照讀得到），
+  //       緊接著 sanityKOSweep 用「沒有快照」的 state 重算成 HP 130 ⇒ 150 ≥ 130 ⇒ 又被殺掉。
+  //   ⇒ 快照的語意是「這一個 action 內有效」，clear 必須排在本 action 的**最後一個** KO
+  //     判定之後。搬到這裡對 v6.373／v6.374／v6.375 的六個特性**零行為變更**
+  //     （它們的消費點全都排在 sanityKOSweep 之前，讀到的快照內容一模一樣）。
+  //   ⚠ 仍然維持「pendingSelection 還在時保留給 resolver」（比照花之帷幔／平穩境地），
+  //     也仍然只有這一處 clear ⇒ 不可能跨 action 殘留（下一次 ATTACK 宣告點無條件重設）。
+  if (next._attackTimeHolders !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeHolders;
+    next = cleared;
+  }
+  // <<< v6376-as-of-declaration-holders-clear
 
   // v5.918 潛者捕捉:把本次 dispatch 累積的「基本水能量放回手牌」確認 flush 成 modal 鏈(多隻一組組問)
   if (next.phase === 'playing') {

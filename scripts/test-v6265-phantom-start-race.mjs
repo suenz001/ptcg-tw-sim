@@ -1082,6 +1082,27 @@ await T('F3 ⭐⭐⭐ 伺服器端**零改動**：分帳只看 `casual-` 前綴�
     return s;
   };
 
+  // ⭐v6.376：engine.ts 的改動 ＝ 三個純新增哨兵區塊（import／側別索引／live iids）
+  //   ＋ **兩行 BASE 既有行**被換掉（for…of 的迴圈頭、hasSamba 的定義）⇒ 後兩者用 swap
+  //   逐字還原（不可以包進哨兵：BASE 既有行被包進去，剝除後會整行消失）。
+  const stripV6376Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6376-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    s = swap(s,
+      "    for (let _v6376k = 0 as 0 | 1; _v6376k <= 1; _v6376k = (_v6376k + 1) as 0 | 1) {   // ⭐v6376-samba-side-index\n",
+      "    for (const p of state.players) {\n");
+    s = swap(s,
+      "      const hasSamba = _v6376HolderIids(state, _v6376k, '生機森巴', _v6376Live).length > 0;   // ⭐v6376-samba-as-of\n",
+      "      const hasSamba = allP.some(c => {\n"
+      + "        const cc = pool.get(c.cardId);\n"
+      + "        if (!cc?.abilities?.some(a => a.name === '生機森巴')) return false;\n"
+      + "        return hpAbilityEffective(c, cc, '生機森巴');\n"
+      + "      });\n");
+    return s;
+  };
+
   const stripV6369Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6369-');
     const swap = (str, from, to) => str
@@ -1126,8 +1147,8 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
     const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))))))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6376Engine(stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369／v6.376 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
@@ -1149,8 +1170,8 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
     const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))))))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6376Engine(stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369／v6.376 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');

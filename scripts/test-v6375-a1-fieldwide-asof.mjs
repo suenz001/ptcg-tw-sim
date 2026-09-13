@@ -610,10 +610,65 @@ if (!hasBaseCommit(ROOT, BASE)) {
   const r = restoreBaseSubtree(ROOT, BASE, baseSrc, 'src');
   if (chk('F0 BASE 樹重建成功（整個 src/ 子樹）', r.ok, r.reason ?? ('replaced=' + r.replaced + ' removed=' + r.removed))) {
     const bEng = readBaseBlob(ROOT, BASE, 'src/lib/game/engine.ts');
-    chk('F0b ⭐⭐engine.ts **一個字都沒有動**（BASE 與 HEAD 逐位元組相同）—— 本版刻意不碰它，'
-      + '理由見【D】；也因此 test-v6265 的剝除鏈**不需要**加 stripV6375Engine',
-      bEng.ok && bEng.out.replace(/\r\n/g, '\n') === engSrc.replace(/\r\n/g, '\n'),
-      bEng.ok ? ('len base=' + bEng.out.length + ' head=' + engSrc.length) : 'readBaseBlob failed');
+    // ⭐⭐v6.376 更新（既有守衛因為**下一版的合法改動**而紅，不是回歸）：
+    //   v6.375 本身確實一個字都沒動 engine.ts；但 v6.376 把 樂天河童｜生機森巴（**最大 HP** 型）
+    //   接進同一個中央述詞，必須動 engine.ts 兩處：
+    //     ① getEffectiveHP 裡生機森巴的持有者判準（哨兵區塊 ＋ 兩行 swap 還原）
+    //     ② _attackTimeHolders 的 clear 位置搬到 sanityKOSweep **之後**
+    //        （最大 HP 型會被 sanityKOSweep 重算，clear 排在它前面 ⇒ 剛救活的又被殺掉）
+    //   ⇒ 這一條改成「**剝掉 v6.376 的合法改動之後**仍與 BASE 逐位元組相同」：
+    //     v6.375 的守備力一點沒少（v6.376 以外的任何改動照樣紅），
+    //     而且剝除器一過期（哨兵不在／swap 字面對不上）也會立刻紅（下面第二個條件）。
+    const _v6376StripBlocks = (src, tag) => {
+      let t = src;
+      for (let guard = 0; ; guard++) {
+        if (guard > 50) throw new Error('哨兵剝除迴圈：' + tag);
+        const a = t.indexOf('>>> ' + tag);
+        if (a < 0) return t;
+        const b = t.indexOf('<<< ' + tag, a);
+        if (b < 0) throw new Error('哨兵不成對（只有 >>>）：' + tag);
+        const ls = t.lastIndexOf('\n', a) + 1;
+        const le = t.indexOf('\n', b) + 1;
+        if (le <= 0) throw new Error('哨兵收尾行沒有換行：' + tag);
+        t = t.slice(0, ls) + t.slice(le);
+      }
+    };
+    const _v6376Strip = (src) => {
+      let t = _v6376StripBlocks(src, 'v6376-');
+      // ⚠ v6.376 把 v6.373 的 clear 區塊從「太古防壁快照清除」旁邊**搬到** sanityKOSweep 之後
+      //   （最大 HP 型會被 sanityKOSweep 重算 ⇒ clear 排在它前面等於白救）。上一行已經把
+      //   新位置那一塊（v6376- 哨兵）剝掉，這裡要把它**插回原位置**，否則會比 BASE 少一整段。
+      const _anchorV6373 = "    delete cleared._attackTimeAttackerEnergyUnits;\n    next = cleared;\n  }\n";
+      const _v6373Clear = "  // >>> v6373-as-of-declaration-holders-clear\n"
+        + "  // ⭐v6.373：持有者 iid 快照的 clear **只有這一處**（applyActionImpl 尾段，比照 v6.357／v6.368）。\n"
+        + "  //   pendingSelection 還在時保留給 resolver（比照花之帷幔／平穩境地）。\n"
+        + "  if (next._attackTimeHolders !== undefined && !next.pendingSelection) {\n"
+        + "    const cleared = { ...next };\n"
+        + "    delete cleared._attackTimeHolders;\n"
+        + "    next = cleared;\n"
+        + "  }\n"
+        + "  // <<< v6373-as-of-declaration-holders-clear\n";
+      if (t.split(_anchorV6373).length - 1 !== 1) throw new Error('v6376 剝除器：找不到唯一的 v6.373 clear 原位置錨點');
+      t = t.split(_anchorV6373).join(_anchorV6373 + _v6373Clear);
+      t = t.split("    for (let _v6376k = 0 as 0 | 1; _v6376k <= 1; _v6376k = (_v6376k + 1) as 0 | 1) {   // ⭐v6376-samba-side-index\n")
+        .join("    for (const p of state.players) {\n");
+      t = t.split("      const hasSamba = _v6376HolderIids(state, _v6376k, '生機森巴', _v6376Live).length > 0;   // ⭐v6376-samba-as-of\n")
+        .join("      const hasSamba = allP.some(c => {\n"
+          + "        const cc = pool.get(c.cardId);\n"
+          + "        if (!cc?.abilities?.some(a => a.name === '生機森巴')) return false;\n"
+          + "        return hpAbilityEffective(c, cc, '生機森巴');\n"
+          + "      });\n");
+      return t;
+    };
+    const _engHeadLf = engSrc.replace(/\r\n/g, '\n');
+    const _engStripped = _v6376Strip(_engHeadLf);
+    chk('F0b ⭐⭐engine.ts 除了 **v6.376 的合法改動**（三個 v6376- 哨兵區塊 ＋ 兩行 swap 還原）'
+      + '之外一個字都沒有動（剝除後與 BASE 逐位元組相同）—— v6.375 本身刻意不碰它，理由見【D】；'
+      + '剝除器若過期（哨兵不在／swap 字面對不上）這一條同樣會紅',
+      bEng.ok && _engStripped !== _engHeadLf
+      && bEng.out.replace(/\r\n/g, '\n') === _engStripped,
+      bEng.ok ? ('len base=' + bEng.out.length + ' head=' + engSrc.length + ' stripped=' + _engStripped.length
+        + ' strippedChanged=' + (_engStripped !== _engHeadLf)) : 'readBaseBlob failed');
     const BMOD = await bundleFrom(baseSrc, 'base');
     const B = matrix(BMOD);
     chk('F1 哨兵：BASE bundle 是活的（哨兵情境照樣綠，不是整支爆掉造成的「全紅」）',
