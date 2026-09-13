@@ -195,17 +195,32 @@ if (probeHead) {
   chk('A2 ⭐⭐ 同一次執行裡 F4d（oracle-client.ts 位元組釘）也仍然有跑而且是綠的',
       mutSap.data && one(mutSap.data, 'F4d') && one(mutSap.data, 'F4d').ok === true,
       mutSap.data ? JSON.stringify(res(mutSap.data, 'F4d')) : mutSap.out.slice(-400));
-  chk('A2 ⭐⭐ 行為層佐證：engine.ts 在這一次執行裡**真的被讀取過**（不是靠名字判斷有沒有跑）',
-      mutSap.data && mutSap.data.engineReads >= 1, mutSap.data ? String(mutSap.data.engineReads) : '?');
+  // ⭐⭐v6.372：F4c 的位元組釘本身就是「需要歷史」的斷言（拿不到 BASE blob 時它自己 shallowSkip）
+  //   ⇒ 在**淺複製**（CI 的 fetch-depth:1）下 engine.ts 必然是 0 次讀取、突變也翻不紅。
+  //   v6.371 漏了這一層 ⇒ CI build job 紅 2 條（A2 的讀取次數、A3 的反對照）⇒ deploy 被 skip。
+  //   ⚠ 這不是放寬：F4c／F4d「仍然有跑而且是綠的」那兩條在淺複製下照樣守（它們驗的是
+  //   「有沒有被短路掉」，不需要歷史）；這裡只把「需要真的做位元組比對」的兩條大聲宣告跳過。
+  if (!HAS_BASE) {
+    shallowSkip('v6.371【A2】engine.ts 真的被讀取過（位元組釘需要 BASE blob）',
+                'F4c/F4d「沒有被短路」那兩條不需要歷史，仍在守');
+  } else {
+    chk('A2 ⭐⭐ 行為層佐證：engine.ts 在這一次執行裡**真的被讀取過**（不是靠名字判斷有沒有跑）',
+        mutSap.data && mutSap.data.engineReads >= 1, mutSap.data ? String(mutSap.data.engineReads) : '?');
+  }
   chk('A2 ★ 其餘三條（F4a/F4e）不受影響、仍然綠',
       mutSap.data && ['F4a', 'F4e'].every((k) => one(mutSap.data, k) && one(mutSap.data, k).ok === true),
       mutSap.data ? JSON.stringify(mutSap.data.results.map((x) => x.name + '=' + x.ok)) : '');
 
   // ── A3 反對照：engine.ts 改一個位元組 ⇒ F4c 必紅、F4b 仍綠（兩條各自獨立） ──
   const mutEng = runProbe(probeHead, { V6371_ENG: ENG_MUT });
-  chk('A3 ⭐⭐⭐ 反對照：engine.ts 改一個位元組 ⇒ F4c 必紅（證明 A2 的「綠」不是恆真）',
-      mutEng.data && one(mutEng.data, 'F4c') && one(mutEng.data, 'F4c').ok === false,
-      mutEng.data ? JSON.stringify(res(mutEng.data, 'F4c')) : mutEng.out.slice(-400));
+  if (!HAS_BASE) {
+    shallowSkip('v6.371【A3】engine.ts 改一個位元組 ⇒ F4c 必紅（需要 BASE blob 才做得了位元組比對）',
+                '下面兩條「F4b／F4d 不被反向污染」不需要歷史，仍在守');
+  } else {
+    chk('A3 ⭐⭐⭐ 反對照：engine.ts 改一個位元組 ⇒ F4c 必紅（證明 A2 的「綠」不是恆真）',
+        mutEng.data && one(mutEng.data, 'F4c') && one(mutEng.data, 'F4c').ok === false,
+        mutEng.data ? JSON.stringify(res(mutEng.data, 'F4c')) : mutEng.out.slice(-400));
+  }
   chk('A3 ⭐⭐ 反對照：同一次執行裡 F4b（sha）仍然綠（engine 的紅不會反向污染 sha 那一條）',
       mutEng.data && one(mutEng.data, 'F4b') && one(mutEng.data, 'F4b').ok === true,
       mutEng.data ? JSON.stringify(res(mutEng.data, 'F4b')) : '');

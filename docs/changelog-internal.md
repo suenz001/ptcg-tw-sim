@@ -1,5 +1,70 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.372 ⚠ 修好 v6.371 在**淺複製 CI** 上的 2 條紅，並補上「淺複製對照網」
+
+BASE `9aec1634c405ea64c53f532726a0e85a50530b47`（v6.371）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。
+
+### 【零】事故：v6.371 本機全綠、CI 卻紅
+
+```
+本機 CRLF 工作樹      test-v6371 → PASS 141 / FAIL 0
+免疫測試網(LF 全 clone) 704 步 → 失敗 0 支
+CI (ubuntu, fetch-depth:1) → [v6371-guard-hygiene] PASS 129 / FAIL 2 / SHALLOW-SKIP 4
+                              ⇒ build job 紅 ⇒ deploy job 被 skip
+```
+
+紅的兩條：
+
+```
+FAIL A2 ⭐⭐ 行為層佐證：engine.ts 在這一次執行裡**真的被讀取過**   ⟵ 0
+FAIL A3 ⭐⭐⭐ 反對照：engine.ts 改一個位元組 ⇒ F4c 必紅          ⟵ [{"name":"F4c …","ok":true}]
+```
+
+**根因**：`F4c`（`engine.ts` 位元組釘）本身就是「需要歷史」的斷言 —— 拿不到 BASE blob 時
+它**自己 `shallowSkip`**。⇒ 在淺複製下 `engine.ts` 必然 **0 次讀取**、突變也翻不紅。
+v6.371 漏了這一層。
+
+⚠⚠ **為什麼本機兩張網都沒抓到**：`%TEMP%\lf340` 的免疫測試網是**完整 clone**
+（`git rev-parse --is-shallow-repository` = `false`），與 CI 的 `fetch-depth: 1` **不同環境**。
+＝ 這兩張網從來沒有覆蓋「淺複製」這個維度。
+
+### 【一】修法
+
+`A2` 的「`engine.ts` 真的被讀取過」與 `A3` 的「改一個位元組 ⇒ F4c 必紅」
+各自加上 `if (!HAS_BASE) shallowSkip(...) else chk(...)`。
+
+⚠ **不是放寬**：同一段裡「F4c／F4d **仍然有跑而且是綠的**」那兩條**照樣在淺複製下守**
+—— 它們驗的是「有沒有被前一條斷言短路掉」，不需要歷史。
+被宣告跳過的只有「真的要做位元組比對」那兩條。
+
+### 【二】⭐ 新增：淺複製對照網（`__m6a/shallow372.bat`，工具，不進 repo）
+
+```bat
+git clone --depth 1 "file:///E:/ptcg-tw-sim" "%TEMP%\sh372"
+mklink /J "%TEMP%\sh372\node_modules" "E:\ptcg-tw-sim\node_modules"
+node __v6340\runall_b.mjs "%TEMP%\sh372" "%TEMP%\sh372.txt"
+```
+
+⇒ **真正的淺複製**（`is-shallow-repository = true`），與 CI 的 `fetch-depth: 1` 同一個環境。
+
+**從本版起，推之前要跑的是兩張網**：
+1. `%TEMP%\lf340` 完整 clone（LF 正規化）—— 抓行為回歸
+2. `%TEMP%\sh372` **淺複製** —— 抓「只在 CI 才會紅」的那一類
+
+⚠ 這正是 `test-v6263` ④ 想守的同一件事的**另一半**：
+④ 守的是「淺複製時守衛不可以**靜默掏空**（假綠）」，
+這張新網守的是「淺複製時守衛不可以**假紅**」。兩個方向都要。
+
+### 【三】⚠ 待站長裁示
+
+1. **要不要把淺複製對照網寫進 repo**（例如 `.github/workflows` 加一個 `fetch-depth: 0` 的
+   平行 job，或把 `shallow372.bat` 正式化成 `scripts/tools/`）？
+   現在它只是我本機的工具，換一台機器就不存在。
+2. **要不要乾脆把 `deploy.yml` 的 `fetch-depth` 改成 `0`（完整 clone）？**
+   好處：CI 與本機同環境、所有 HEAD-FAIL 位元組釘都真的在守（現在 CI 上是一整批 SHALLOW-SKIP）。
+   代價：checkout 變慢（repo 歷史不小）。
+   ⚠ `test-v6263` ⑥ 把「現況是淺複製」釘住了 ⇒ 改了要一起改那條宣告。
+
 ## v6.371 守衛層債務清理（站長裁定 六-4／六-7／六-6 ＋ v6.370 留下的四個洞）
 
 BASE `b3ec78771f1ffa16602a94cb6ad2c776cece7514`（v6.370）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。
