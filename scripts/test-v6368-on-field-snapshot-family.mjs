@@ -419,11 +419,17 @@ console.log('\n【E】中央性：新機制只有一份，而且接在既有形�
   chk('E8 ⭐哨兵成對（純新增的三個區塊）',
     ['v6368-life-restraint-import', 'v6368-life-restraint-snapshot-set', 'v6368-life-restraint-snapshot-clear']
       .every(t => count(eng, '>>> ' + t) === 1 && count(eng, '<<< ' + t) === 1));
-  chk('E9 ⭐test-v6265 的剝除鏈**最外層**已經是 stripV6368Engine',
+  // ⚠ v6.369 修一個**同型的守衛過期**：剝除鏈每出一版就往外長一層，原本寫死「最外層＝
+  //   stripV6368Engine」的斷言在下一版必然假性翻紅。改成只釘本版該負責的兩件事 ——
+  //   ① v6.368 那一層還在；② 它緊貼在 v6.367 外面；③ 它真的被接在 s0 那條鏈上。
+  //   「誰是最外層」由**當版**的守衛自己釘（v6.369 起是 test-v6369 的 D10 ＋ __m6a/stripcheck369v2.mjs）。
+  chk('E9 ⭐test-v6265 的剝除鏈裡 v6.368 那一層還在，且緊貼在 v6.367 外面、確實接在 s0 鏈上',
     (() => {
       const t = readFileSync(join(ROOT, 'scripts/test-v6265-phantom-start-race.mjs'), 'utf8');
+      const s0line = (t.split(/\r?\n/).find(l => l.includes('const s0 = strip')) ?? '');
       return count(t, 'const stripV6368Engine = (src) =>') === 1
-        && /const s0 = stripV6368Engine\(stripV6367Engine\(/.test(t);
+        && /stripV6368Engine\(stripV6367Engine\(/.test(t)
+        && s0line.includes('stripV6368Engine(');
     })());
 }
 

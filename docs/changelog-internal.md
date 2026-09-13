@@ -1,5 +1,123 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.369 回捲基準線／picker 下的 on-KO drain／非法打出不記流水帳（站長裁定 六-5／六-12／六-13）
+
+BASE `cf97b3f22dabddee524f4c423fe2b0ac28270606`（v6.368）。三個互不相干的時序缺口，各自收斂在**唯一出口**上。
+
+### 【一】(甲) 六-5：回捲要回到「**回血發生的前一刻**」，不是「這個 action 開始時」
+
+> 站長裁定：「要修」
+
+**病灶**（v6.354 守衛 K4 當初記錄下來等裁示的偏差）：同一個 `END_TURN` 裡引擎的順序是
+**中毒 → 灼傷 → 睡眠區（卡比獸｜好眠：HP 全部恢復）**。
+`markHealsByDamageDecrease` 的 diff 基準 `prev` 是「這個 action 一開始」的盤面
+⇒ 中毒 +10 之後的恢復被【伊裴爾塔爾｜生命制約】的中央閘擋下時，
+回捲把 `damage` 設回 **100**（action 開始值）而不是 **110**（回血前一刻）
+⇒ **中毒那 10 點跟著被捲掉**。
+
+**修法（收斂點的選擇）**：全站 heal 站點 18+ 處，逐站補等於 18 份重複判準（違反 Rule 38）。
+`markHealsByDamageDecrease` 是 `applyAction` **唯一**的 heal 偵測出口
+⇒ **在出口把基準線修正一次**，一處涵蓋全部。
+
+- 新欄位 `GameState._v6369CheckupDmgUp`：`Record<string, number>`（iid → 本 action 內 checkup 加的 damage）。
+  ⚠ Firestore 規範：物件 map，**不是**巢狀陣列、也不是 per-player 陣列。
+- 寫入點只有 **2 個**（中毒格、灼傷格），而且都在 **非致死分支**
+  （致死分支 `active` 已成 `null`，之後不可能被恢復，記了也沒有消費者）。
+  helper `noteCheckupDamageUpV6369` **只寫 top-level 欄位、完全不碰 `state.players`**
+  —— checkup 那一段的區域 `players` 陣列是後寫回的，碰了就會被蓋掉（v6.351／v6.367／v6.368 同一個坑）。
+- 消費點只有 **1 個**（`markHealsByDamageDecrease` 把它「**只加不減**」疊回 `prevDamage`），
+  消費完由 `applyActionImpl` 立刻 `delete`（比照 v5.947 `_counterMoveSrcIids`、v6.361 的三個暫存旗標）。
+  ⚠ 留下去會被推上 Firestore／Mongo，並在下一個 action 誤把舊的中毒量當成基準。
+
+⚠⚠ **這不是把「中毒造成的 damage 上升」當成 heal**：沒有恢復時 `newDmg` 正好等於疊完的基準
+⇒ `healed === 0` ⇒ 既有的 `healed <= 0` 早退照舊。守衛以行為端反對照釘住。
+
+### 【二】(乙) 六-12：`pendingSelection` 還開著時，on-KO 佇列不再整支消失
+
+> 站長裁定：「依你的建議就好」
+
+v6.361 刻意留了一個 fail-safe 缺口：`v6361-defer-endgame` 的 `!next.pendingSelection`。
+**recon 後把病灶縮到比原本假設窄很多**：只有「這次 action 已判出 `game-over`
+＋ on-KO 佇列非空 ＋ 同時開著 picker」這一種交集才會出事。
+
+⚠⚠ **為什麼「留到下一個 action 再 drain」救不了這一種**：終局一旦寫進盤面，
+`applyActionImpl` 開頭 `if (state.phase === 'game-over') return state;` 就早退
+⇒ 那個 picker 永遠解不掉、`sanityKOSweep` 永遠不會再跑 ⇒ **死亡宣告整支消失**。
+（`phase` 仍是 `'playing'` 的一般 picker 沒有這個問題 —— 玩家解完 picker 的那個
+`RESOLVE_SELECTION` 本來就會走到 drain 點。本版**刻意不動**那條路徑。）
+
+**做法刻意不新增任何呼叫點**（保住 v6.355「全站唯一出列點」＝ `sanityKOSweep` 開頭那一行，
+由 `test-v6355` G2／G3 與 `test-v6361` H3 釘住；`liftEndgameForOnKoV6361` 的 engine 呼叫點由 H9 釘住）：
+只讓既有的 sweep gate 對「這一種、而且只有這一種」情形放行一次 ——
+
+```ts
+const _v6369NeedDrain = next.phase === 'game-over' && state.phase === 'playing'
+  && !!next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0;
+if (_v6369NeedDrain || (next.phase === 'playing' && !next.pendingSelection)) {
+```
+
+⇒ **完全不必碰 `sanityKOSweep` 自己的 `pendingSelection` gate**（BRIEF 裡評估風險最高的那一塊）。
+終局的收回由 `drainOnKoAfterPrize` **內部既有的** `liftEndgameForOnKoV6361` 完成，
+最後仍由 `v6361-central-endgame-apply` 重新判一次勝負（含平手）；重判不成立時走 v6.361 既有的
+fail-safe 還原 ⇒ **結構上不可能把一局吊在半空**（守衛以行為端反對照釘住）。
+
+### 【三】(丙) 六-13：被引擎退回的非法打出不再記進 `currentTurnActions`
+
+> 站長裁定：「依你的建議就好」
+
+BASE 的兩條競技場非法路徑**本來就不一致**（Rule 38 的違反）：
+
+| 路徑 | BASE 行為 |
+|---|---|
+| 每回合額度（`stadiumPlacementBlock` ①） | 回傳**同一個 state 物件** ⇒ `before === after` 早退 ⇒ 本來就不記 |
+| 同名競技場覆蓋（②） | 多寫了一行規則 log ⇒ 回傳新 state ⇒ **記上一筆 `{type:'play_hand'}`** |
+
+**判準刻意取行為層，不是「哪一條路徑」**：**那張卡還在手上 ＝ 它根本沒有被使出**。
+
+```ts
+if (rec !== null && justPlayedIid !== undefined
+    && (after.players[aIdx].hand ?? []).some(c => c.iid === justPlayedIid)) {
+  rec = null; justPlayedIid = undefined;
+}
+```
+
+⇒ 同一份判準一次涵蓋所有「寫了 log 才退回」的非法打出，不必逐條列舉，也不會再長出第三種不一致。
+⚠ 只作用在「從手牌打出」的四種 record（`PLAY_TRAINER`／`ATTACH_ENERGY`／`PLAY_BASIC`／`EVOLVE`）
+—— `justPlayedIid` 只有這四支會設；`ATTACK`／`RETREAT`／`USE_ABILITY` 不受影響。
+⚠ **撼盪拳反面**（v6.356「不算使用過那張卡，將其丟棄」）**不在此列**：那張卡已經離開手牌進了棄牌區
+⇒ 維持 BASE 行為（已列入待站長裁示）。
+
+### 【四】⚠ 會改變線上既有行為的清單
+
+1. **(甲)** 「中毒／灼傷之後、同一個 `END_TURN` 內的恢復被『禁止恢復 HP』擋下」時，
+   回捲值由 100 改為 110（以站長舉的盤面為例）。⚠ 需要**生命制約 ＋ 異常狀態 ＋ 引擎內部恢復**三者同時成立。
+2. **(乙)** 「終局 ＋ on-KO 佇列 ＋ picker」三者交集時，死亡宣告從**整支消失**改為**確實結算**
+   （可能因此改變勝負／變成平手）。
+3. **(丙)** 同名競技場覆蓋被退回時，該回合流水帳不再多出一筆從未發生的 `play_hand`。
+
+### 【五】守衛
+
+`scripts/test-v6369-rollback-and-pending-and-actionlog.mjs`：**PASS 56 / FAIL 0**。
+**HEAD-FAIL 實測**：BASE(v6.368) exit=1、**紅 20 條**；還原後 exit=0。
+突變 **M1~M17 全殺**（`__m6a/mutcheck_v6369.mjs`：突變 17 個、未達標 **0** 個）。
+既有守衛複驗全綠：`test-v6354`(60/0)、`test-v6360`(59/0)、`test-v6361`(54/0)、
+`test-v6368`(71/0)、`test-firestore-nested-array`(4/0)。
+**整條 chain（684 步，序列）**：紅燈集合與未改動的 HEAD 基準跑**逐支相同**（62 支，新增 0、消失 0）。
+`npx tsc --noEmit`：`error TS` 55 行、`TS2304` **0**。
+
+### 【六】⚠ 待站長裁示
+
+1. **撼盪拳反面（v6.356）要不要比照 (丙)？** 卡面寫「不算使用過那張卡，將其丟棄」，
+   但那張卡已進棄牌區 ⇒ (丙) 的「還在手上」判準抓不到它，目前仍會記一筆 `play_hand`。
+2. **(甲) 的更外圈缺口**：checkup 除了中毒／灼傷之外，「放置傷害指示物」類的特性
+   （若日後排在引擎內部恢復之前）同樣需要疊基準線。要不要現在就把判準推廣成
+   「checkup 區段內**任何** damage 上升」而不是只列舉這兩格？
+3. **(乙) 修好之後，那個 picker 裡「還沒取的獎賞卡」怎麼算？**
+   目前終局收回後 picker 仍在，玩家解完才重判 —— 但終局已經判過一次。
+   要不要在重判時把「未取的獎賞」視為已取（＝提前結束）？
+4. **整條 chain 現有 62 支既有紅燈**（都不是本版造成，逐支以 BASE 對照證明）。
+   要不要專開一版清理？
+
 ## v6.368 「宣告當時」家族收斂（站長裁定 六-10／六-11／六-14 ＋ stale players 洞）
 
 BASE `917874bf11c146023afcd5097a3c0978ea361e5b`（v6.367）。四件事，同一個家族。

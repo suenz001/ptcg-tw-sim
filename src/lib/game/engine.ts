@@ -295,6 +295,25 @@ function recordTurnAction(
     }
   }
 
+  // >>> v6369-illegal-play-not-recorded
+  // ⭐⭐v6.369 站長裁定 六-13：「宣告了但被引擎判定非法」不算使用過那張卡 ⇒ 流水帳不該記。
+  //   BASE 的兩條競技場非法路徑本身就不一致（Rule 38）：
+  //     ・每回合額度（stadiumPlacementBlock ①）回傳的是**同一個 state 物件**
+  //       ⇒ 上面 `before === after` 早退 ⇒ 本來就不記；
+  //     ・同名競技場覆蓋（②）多寫了一行規則 log ⇒ 回傳新 state ⇒ 記上一筆 play_hand。
+  //   判準刻意取**行為層**而不是「哪一條路徑」：那張卡**還在手上** ＝ 它根本沒有被使出。
+  //   ⇒ 同一份判準一次涵蓋所有「寫了 log 才退回」的非法打出（尚未實裝的競技場／燒灼大地／
+  //     大王銅象｜爆大身軀…），不必逐條列舉，也不會再長出第三種不一致。
+  //   ⚠ 只作用在「從手牌打出」的四種 record（PLAY_TRAINER／ATTACH_ENERGY／PLAY_BASIC／EVOLVE）
+  //     —— justPlayedIid 只有這四支會設。ATTACK／RETREAT／USE_ABILITY 不是手牌卡，不受影響。
+  //   ⚠ 撼盪拳反面（v6.356「不算使用過那張卡，將其丟棄」）**不在此列**：那張卡已經離開手牌
+  //     進了棄牌區 ⇒ 維持 BASE 行為（已列入待站長裁示）。
+  if (rec !== null && justPlayedIid !== undefined
+      && (after.players[aIdx].hand ?? []).some(c => c.iid === justPlayedIid)) {
+    rec = null;
+    justPlayedIid = undefined;
+  }
+  // <<< v6369-illegal-play-not-recorded
   // v5.055：先 push 主要 action record（如果有）
   let state = rec ? pushCurrentTurnAction(after, aIdx, rec) : after;
 
@@ -2012,6 +2031,21 @@ function clearTurnFlags(c: CardInstance): CardInstance {
   return n;
 }
 
+// >>> v6369-checkup-damage-up-helper
+/**
+ * ⭐v6.369 站長裁定 六-5（逐字：「要修」）。
+ * 記下「本 action 內、寶可夢檢查的**中毒／灼傷**對這隻寶可夢加了多少 damage」。
+ *   ⚠ 呼叫點只有 2 個，而且都在 END_TURN checkup 的**非致死**分支
+ *     （致死分支 active 已變成 null，之後不可能再被恢復，記了也沒有消費者）。
+ *   ⚠ 這個函式**只寫一個 top-level 欄位**，完全不碰 state.players ——
+ *     checkup 那一段的「players」區域陣列是後寫回的，碰了就會被蓋掉。
+ */
+function noteCheckupDamageUpV6369(state: GameState, iid: string, amount: number): GameState {
+  if (!iid || amount <= 0) return state;
+  const prev = state._v6369CheckupDmgUp ?? {};
+  return { ...state, _v6369CheckupDmgUp: { ...prev, [iid]: (prev[iid] ?? 0) + amount } };
+}
+// <<< v6369-checkup-damage-up-helper
 /**
  * v4.43：偵測 prev → next 之間，任何 iid 相同的寶可夢 damage 是否減少。
  * 若是 → 標記 healedThisTurn=true（不清除既有 flag，只增加）。
@@ -2045,6 +2079,22 @@ export function markHealsByDamageDecrease(
   }
   // 沒任何 prev 資料 → 跳過（早期初始化階段）
   if (prevDamage.size === 0) return next;
+  // >>> v6369-heal-baseline
+  // ⭐⭐v6.369 站長裁定 六-5：diff 的基準要是「**回血發生的前一刻**」，不是「這個 action 開始時」。
+  //   同一個 END_TURN 裡引擎的順序是：中毒 → 灼傷 → 睡眠區（卡比獸｜好眠把 HP 全部恢復）。
+  //   prev 端拿到的是中毒**之前**的 damage ⇒ 被【生命制約】擋下時回捲到 100 而不是 110，
+  //   中毒那 10 點跟著被捲掉。
+  //   ⇒ 這裡把本 action 內 checkup 確定發生的「傷害上升」疊回基準線，**只加不減**。
+  //   ⚠⚠ 這**不是**把「中毒造成的 damage 上升」當成 heal：沒有恢復時 newDmg 正好等於
+  //     疊完的基準 ⇒ healed === 0 ⇒ 下面 `healed <= 0` 照樣 return c。
+  //   ⚠ 收斂理由：全站 heal 站點 18+ 處，本函式是 applyAction **唯一**的 heal 偵測出口；
+  //     在出口把基準線修正一次 ＝ 一處涵蓋全部，不必在每個 heal 站點各補一次。
+  //   ⚠ 只疊「這個 action 內」的量：_v6369CheckupDmgUp 由 applyActionImpl 每次 action 結束即清除。
+  for (const [_iid369, _up369] of Object.entries(next._v6369CheckupDmgUp ?? {})) {
+    const _b369 = prevDamage.get(_iid369);
+    if (_b369 !== undefined && _up369 > 0) prevDamage.set(_iid369, _b369 + _up369);
+  }
+  // <<< v6369-heal-baseline
   // v5.947 本 action 因「移動傷害指示物」(非治療)而減傷的來源 iid → 不算 heal
   const movedSet = new Set<string>(next._counterMoveSrcIids ?? []);
 
@@ -7391,6 +7441,11 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
       } else {
         poisonPlayer.active = { ...poisonPlayer.active, damage: newDmg };
         players[tIdx] = poisonPlayer;
+        // >>> v6369-checkup-damage-up-poison
+        // ⭐v6.369 六-5：中毒加的這 `poisonTotalDmg` 點要疊進「回血前一刻」的基準線
+        //   （同一個 END_TURN 後面還有睡眠區的好眠恢復）。
+        state = noteCheckupDamageUpV6369(state, poisonPlayer.active.iid, poisonTotalDmg);
+        // <<< v6369-checkup-damage-up-poison
         // v5.192：log 已在致死前統一 addLog，此處不再重複（避免雙重 log）
       }
     }
@@ -7438,6 +7493,10 @@ if (!isAbilityHolderEffective(state, defender.active, defenderCard, dIdx, ab.nam
         state = burnState;
       } else {
         burnedPlayer.active = { ...burnedPlayer.active, damage: newBurnDmg };
+        // >>> v6369-checkup-damage-up-burn
+        // ⭐v6.369 六-5：同中毒那一格（灼傷也排在睡眠區之前）。
+        state = noteCheckupDamageUpV6369(state, burnedPlayer.active.iid, burnTotalDmg);
+        // <<< v6369-checkup-damage-up-burn
         // 擲硬幣：正面解除燒傷
         const burnFlip = flipCoinsWithLog(state, 1, `燒傷判定（${burnedCard?.name ?? '?'}）`, tIdx);
         state = burnFlip.state;
@@ -9382,6 +9441,16 @@ function applyActionImpl(
 
   // v4.43：偵測寶可夢 damage 減少 → 標記 healedThisTurn（用於活潑鮮花 / 活潑針等條件）
   next = markHealsByDamageDecrease(state, next, pool);
+  // >>> v6369-checkup-damage-up-clear
+  // ⭐v6.369：_v6369CheckupDmgUp 是 per-action 的暫存基準線，唯一消費點就是上面那一行
+  //   ⇒ 消費完立刻 delete（比照 v5.947 的 _counterMoveSrcIids、v6.361 的三個暫存旗標）。
+  //   ⚠ 留下去會被推上 Firestore／Mongo，並在下一個 action 誤把舊的中毒量當成基準。
+  if (next._v6369CheckupDmgUp !== undefined) {
+    const _c369 = { ...next };
+    delete _c369._v6369CheckupDmgUp;
+    next = _c369;
+  }
+  // <<< v6369-checkup-damage-up-clear
 
   // v5.055：對手回合動作 panel — 比對 before/after 後 push 對應 ActionRecord
   next = recordTurnAction(state, next, action, pool);
@@ -9506,7 +9575,30 @@ function applyActionImpl(
     next = liftEndgameForOnKoV6361(next);
   }
   // <<< v6361-defer-endgame
-  if (next.phase === 'playing' && !next.pendingSelection) {
+  // >>> v6369-onko-drain-under-picker
+  // ⭐⭐⭐v6.369 站長裁定 六-12（v6.361 刻意留下的 fail-safe 缺口；逐字：「依你的建議就好」）。
+  //   缺口：這次 action 已判出終局、on-KO 佇列（耿鬼ex｜死亡宣告）還沒結算，而且同時開著一個
+  //   pendingSelection（獎賞裡有「正面朝上」的卡 ⇒ addPendingPrize 開了逐張 take-prize-choose
+  //   picker）。上面 v6361-defer-endgame 的 `!next.pendingSelection` 讓這一種組合整個跳過，
+  //   下面那一格的 sweep gate 又被 pendingSelection 擋住 ⇒ 唯一 drain 點永遠跑不到。
+  //   ⚠⚠ 為什麼「留到下一個 action 再 drain」在**這一種**情形救不了：終局一旦寫進盤面，
+  //     applyActionImpl 開頭 `if (state.phase === 'game-over') return state;` 就早退
+  //     ⇒ 那個 picker 永遠解不掉、sanityKOSweep 永遠不會再跑 ⇒ 死亡宣告**整支消失**。
+  //     （phase 仍是 'playing' 的一般 picker 沒有這個問題：玩家解完 picker 的那個
+  //      RESOLVE_SELECTION 走到下面那一格就會 drain —— 本版刻意**不動**那條路徑，
+  //      也就完全不必碰 sanityKOSweep 的 pendingSelection gate 本身。）
+  //   ⭐ 做法刻意**不新增 drain 呼叫點**，也**不新增收回終局的呼叫點**
+  //     （v6.355「全站唯一出列點」＝ sanityKOSweep 開頭那一行，由 test-v6355 G2／G3 與
+  //      test-v6361 H3 釘住；liftEndgameForOnKoV6361 的 engine 呼叫點由 test-v6361 H9 釘住）：
+  //     這裡只讓下面那一格的 gate 對「這一種、而且只有這一種」情形放行一次，
+  //     終局的收回由 drainOnKoAfterPrize **內部既有的** liftEndgameForOnKoV6361 完成
+  //     （佇列非空 ⇒ 迴圈第一件事就是收回 ⇒ 進到 sweep 本體時 phase 已經是 'playing'），
+  //     最後仍由 v6361-central-endgame-apply 重新判一次勝負（含平手）；重判不成立時
+  //     走 v6361 既有的 fail-safe 還原 ⇒ 結構上不可能把一局吊在半空。
+  const _v6369NeedDrain = next.phase === 'game-over' && state.phase === 'playing'
+    && !!next.pendingSelection && (next._onKoAfterPrize?.length ?? 0) > 0;
+  // <<< v6369-onko-drain-under-picker
+  if (_v6369NeedDrain || (next.phase === 'playing' && !next.pendingSelection)) {   // ⭐v6369-sweep-gate-under-picker
     const aIdxForKO = next.activePlayerIndex;
     next = sanityKOSweep(next, aIdxForKO, pool);
     if (next.phase !== 'game-over') {

@@ -119,9 +119,12 @@ const inHand = (r, i, iid) => r.players[i].hand.some((c) => c.iid === iid);
 const inDisc = (r, i, iid) => r.players[i].discard.some((c) => c.iid === iid);
 /**
  * 盤面（不含 log、不含「本回合動作流水帳」）逐字比對。
- * ⚠ currentTurnActions 是 applyAction 外層的動作流水帳：只要回傳的 state 有變（哪怕只多一行
- *   規則 log），這一筆「play_hand」就會被記上去 —— 這是 HEAD 本來就有的行為，與擲幣無關，
- *   所以比對盤面時要把它normalize 掉，另外用 J 系列斷言單獨釘住「有／沒有撼盪拳時它完全一樣」。
+ * ⚠ currentTurnActions 是 applyAction 外層的動作流水帳。v6.360 當時：只要回傳的 state 有變
+ *   （哪怕只多一行規則 log），這一筆「play_hand」就會被記上去。
+ *   ⭐v6.369 站長裁定 六-13：「宣告了但被引擎判定非法」不算使用過那張卡 ⇒ 改成**不記**
+ *   （判準在 engine.recordTurnAction：那張卡還在手上就不記；全面守備在
+ *    scripts/test-v6369-rollback-and-pending-and-actionlog.mjs 的【C】）。
+ *   比對盤面時仍把它 normalize 掉，另外用 C5／C6 單獨釘住「有／沒有撼盪拳時它完全一樣」。
  */
 const noLog = (s) => JSON.stringify({
   ...s, log: null,
@@ -320,11 +323,13 @@ console.log('\n【C】反對照：**沒有**撼盪拳旗標時，同樣的非法
   chk('C4 ⭐⭐⭐②有／沒有旗標，非法打出新增的 log **逐字相同**（＝擲幣完全沒有發生過）',
     JSON.stringify(LOGS(dt).slice(LOGS(Dt.v1).length)) === JSON.stringify(LOGS(dn).slice(LOGS(Dn.v1).length)),
     JSON.stringify([LOGS(dt).slice(LOGS(Dt.v1).length), LOGS(dn).slice(LOGS(Dn.v1).length)]));
-  // 動作流水帳（HEAD 本來就會記一筆被退回的 play_hand）：有／沒有旗標必須完全一樣
-  chk('C5 ⭐⭐②有／沒有旗標，applyAction 的動作流水帳增量**完全相同**（沒有多出擲幣造成的副作用）',
+  // 動作流水帳：有／沒有旗標必須完全一樣；⭐v6.369 站長裁定 六-13 起「被退回的非法打出
+  //   一筆都不記」（v6.360 當時是 `+ 1`，那是 BASE 的不一致 —— ①額度那條不記、②同名這條記）。
+  chk('C5 ⭐⭐②有／沒有旗標，applyAction 的動作流水帳增量**完全相同**（沒有多出擲幣造成的副作用）'
+    + '；⭐v6.369 六-13：被退回的非法打出一筆都不記（與①一致）',
     journal(dt, 1) === journal(dn, 1)
-    && JSON.parse(journal(dt, 1)).length === JSON.parse(journal(Dt.v1, 1)).length + 1,
-    JSON.stringify([journal(dt, 1), journal(dn, 1)]));
+    && JSON.parse(journal(dt, 1)).length === JSON.parse(journal(Dt.v1, 1)).length,
+    JSON.stringify([journal(dt, 1), journal(dn, 1), journal(Dt.v1, 1)]));
   chk('C6 ⭐①有／沒有旗標，非法打出都是「原封不動回傳」（流水帳也一筆都沒記）',
     journal(rt, 1) === journal(Qt.v1, 1) && journal(rn, 1) === journal(Qn.v1, 1),
     JSON.stringify([journal(rt, 1), journal(rn, 1)]));

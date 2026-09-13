@@ -1231,6 +1231,18 @@ export interface GameState {
   _attackTimeCalmGround?: [boolean, boolean];
   _counterMoveSrcIids?: string[];  // v5.947 本 action 因「移動/改放傷害指示物」(非治療)而減傷的來源 iid;markHealsByDamageDecrease 跳過不誤標 healedThisTurn
   /**
+   * ⭐v6.369 站長裁定 六-5：本 action 內「寶可夢檢查的中毒／灼傷」對某隻寶可夢**增加**的
+   * damage 累計（iid → 累計增加量）。markHealsByDamageDecrease 的 diff 基準必須是
+   * 「**回血發生的前一刻**」而不是「這個 action 開始時」——否則同一個 END_TURN 裡
+   * 「中毒 +10 → 被『禁止恢復HP』中央閘擋下的恢復」回捲時會把中毒那 10 點一起捲掉
+   * （v6.354 守衛 K4 當時把這個偏差記錄下來並等站長裁示）。
+   * ⚠ 只記「中毒／灼傷」這兩格 —— 它們是唯一會在**同一個 action 內**排在引擎內部恢復
+   *   （卡比獸｜好眠）**之前**的傷害來源。
+   * ⚠ Transient：唯一消費點 markHealsByDamageDecrease 之後，由 applyActionImpl 統一 delete。
+   * ⚠ Firestore 禁令：物件 map（iid → number），不是巢狀陣列、也不是 per-player 陣列。
+   */
+  _v6369CheckupDmgUp?: Record<string, number>;
+  /**
    * v5.186：抵抗之幕 attack-time snapshot — 攻擊宣告時對手場上是否有火箭隊的急凍鳥（抵抗之幕）。
    * 仿花之帷幔 pattern：規則上「招式效果同時 resolve」，急凍鳥被同招式 KO 後備戰仍應免疫此招式效果。
    * canApplyAttackEffectToTarget 內 OR fallback 讀此 snapshot。

@@ -347,16 +347,18 @@ console.log('\n【K】卡比獸｜好眠（v6.347）的時序：回血發生在 
     A0(koY) == null && A0(koC) == null, `${A0(koY)?.damage}/${A0(koC)?.damage}`);
   chk('K3b 哨兵：兩側都真的走了中毒 KO 那條路', L(koY).includes('被中毒傷害擊倒') && L(koC).includes('被中毒傷害擊倒'));
 
-  // K4 ⚠⚠ 已知偏差（列入待站長裁示，不是安慰劑：改了會紅）：
-  //   diff 式中央閘只看 prev→next 的淨差 ⇒ 回捲會回到「這個 action 開始時」的 damage，
-  //   而不是「恢復發生前」的 damage。同一個 END_TURN 內先中毒 +10 再被擋下好眠：
-  //   理論上應停在 110（中毒照算、只是不恢復），實際停在 100（中毒那 10 點被一起回捲掉）。
-  //   ⇒ 對被擋方有利 10 點。要修的話得把閘下放到各 heal 站點（違反 Rule 38 的單一中央出口），
-  //   因此本版**記錄現況**並等站長裁示。這條釘的是現況數字，任何一端改變都會紅。
+  // K4 ⭐⭐v6.369 站長裁定 六-5（逐字：「要修」）：回捲要回到「**回血發生的前一刻**」。
+  //   同一個 END_TURN 內先中毒 +10 再被擋下好眠 ⇒ 必須停在 110（中毒照算、只是不恢復），
+  //   而不是 v6.354～v6.368 的 100（中毒那 10 點被一起回捲掉）。
+  //   ⚠ 實作**不是**把閘下放到各 heal 站點（那會違反 Rule 38 的單一中央出口），而是在
+  //     markHealsByDamageDecrease 這個唯一出口把 diff 的**基準線**修正一格
+  //     （engine.noteCheckupDamageUpV6369；全面守備在
+  //      scripts/test-v6369-rollback-and-pending-and-actionlog.mjs 的【A】）。
+  //   這條釘的是修正**後**的數字，任何一端改變都會紅。
   const kp = runSleep([YVEL], 100, { secondaryStatus: 'poisoned' });
   const kpc = runSleep([PLAIN], 100, { secondaryStatus: 'poisoned' });
-  chk('K4 ⚠已知偏差（待裁示）：中毒+10 後被擋下的好眠 ⇒ 現況回捲到 100（理論值 110）',
-    A0(kp)?.damage === 100, String(A0(kp)?.damage));
+  chk('K4 ⭐⭐v6.369 六-5：中毒+10 後被擋下的好眠 ⇒ 回捲到**回血前一刻**的 110（不是 100）',
+    A0(kp)?.damage === 110, String(A0(kp)?.damage));
   chk('K4b 哨兵：同一盤面沒有伊裴爾塔爾時是 0（中毒 +10 後被好眠清光）',
     A0(kpc)?.damage === 0, String(A0(kpc)?.damage));
 }

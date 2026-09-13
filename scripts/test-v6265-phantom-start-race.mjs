@@ -1060,6 +1060,24 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     );
     return s;
   };
+  // ⭐ v6.369：engine.ts 的合法改動有兩種（站長裁定 六-5／六-12／六-13）。
+  //   ① 純新增（checkup 基準線 helper／中毒‧灼傷兩個寫入點／markHeals 的基準線上疊／
+  //      applyActionImpl 的清除／recordTurnAction 的非法打出早退／(乙) 放行條件的宣告）
+  //      ⇒ 一律 `>>> v6369-…` 哨兵框住，泛用剝除器一次剝掉。
+  //   ② 修改既有行：applyActionImpl 末端 sweep 那一格的 gate 多了一個旁路條件
+  //      —— 不能用哨兵剝（剝掉等於把 BASE 的內容也刪掉）⇒ 逐字換回 BASE 的樣子。
+  //   那一塊的守備由 scripts/test-v6369-rollback-and-pending-and-actionlog.mjs 全面接管。
+  //   ⚠ engine.ts 是 CRLF；LF／CRLF 兩種都試（同 v6.352／v6.353／v6.360／v6.368）。
+  const stripV6369Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6369-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    s = swap(s,
+      "  if (_v6369NeedDrain || (next.phase === 'playing' && !next.pendingSelection)) {   // ⭐v6369-sweep-gate-under-picker\n",
+      "  if (next.phase === 'playing' && !next.pendingSelection) {\n");
+    return s;
+  };
   for (const [p, sha] of [['src/lib/game/oracle-client.ts', BASE_SHA],
                           ['src/lib/game/engine.ts', BASE_SHA_V6309]]) {
     const b = readBaseBlob(ROOT, sha, p);
@@ -1067,8 +1085,8 @@ await T('F4 ⭐⭐⭐ 錦標賽的同步／盤面路徑**一行都沒動**：本
     const raw = readFileSync(join(ROOT, p), 'utf8');
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))))))));
-        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368 的哨兵不在 engine.ts 裡（剝除器過期）');
+        const s0 = stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))));
+        ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
