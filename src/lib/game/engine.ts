@@ -1068,6 +1068,9 @@ import {
   // >>> v6368-life-restraint-import
   hasEffectiveLifeRestraintOnSide as _hasLifeRestraint,  // ⭐v6.368 站長裁定 六-10：宣告當時快照要用的「當下盤面」述詞
   // <<< v6368-life-restraint-import
+  // >>> v6373-collect-holders-import
+  collectAsOfDeclarationHolders,  // ⭐v6.373 站長裁定 A-3：宣告當時的持有者 iid 收集器
+  // <<< v6373-collect-holders-import
 } from './effects/cards/v3001_g3_wave3';
 
 // v3.05 Deferred Wave A — 自身寶可夢從戰鬥場回備戰時觸發類（ON_RETREAT_TO_BENCH）
@@ -5619,6 +5622,19 @@ function handlePlaying(
     //   攻擊方能量單位數計，不計入招式自身條件丟棄（判例：三重冰霜類自丟能量招式仍以開打前計）。
     const attackTimeAttackerEnergyUnits = totalEnergyUnits(attacker.active.energyAttached, pool, state, aIdx, attacker.active);
     workingState = { ...workingState, _attackTimeAttackerEnergyUnits: attackTimeAttackerEnergyUnits };
+    // >>> v6373-as-of-declaration-holders-set
+    // ⭐⭐⭐v6.373 站長裁定 A-3（逐字：「凡是有這種類似的狀況，請你都比照 謝米［特性］花之帷幔
+    //   的判定邏輯」）：上面那 5 份 boolean 快照只記「宣告當時生沒生效」，分不出持有者後來是
+    //   **昏厥離場**（仍算數）還是**被主動移出場**（不算數 —— 仙子伊布ex｜天仙石 把對手備戰
+    //   洗回牌庫）。⇒ 這裡補記**持有者 iid**，判準集中在 src/lib/game/as-of-declaration.ts。
+    //   ⚠ 刻意沿用 _attackTimeCalmGround 的**同一個**設定點（Rule 38：不另開 ATTACK 起點 hook），
+    //     且每次 ATTACK 都無條件重設 ⇒ 上一回合的殘留不可能跨回合誤觸發。
+    //   ⚠ clear 只放在 applyActionImpl 尾段（比照 v6.357／v6.368）。
+    //   ⚠⚠ 形狀是 { p1, p2 } 的物件 map **不是** [a, b]：Firestore 禁止巢狀陣列（v6.056 事故）。
+    workingState = { ...workingState, _attackTimeHolders: {
+      p1: collectAsOfDeclarationHolders(state, 0, pool), p2: collectAsOfDeclarationHolders(state, 1, pool),
+    } };
+    // <<< v6373-as-of-declaration-holders-set
 
     // v3.03：preFn 可額外回傳 breakdown，把內部多步加法（如赫月瘋狂啃咬 7×30+100）
     //        展開為多個 term，UI 顯示更易懂。
@@ -5658,7 +5674,10 @@ function handlePlaying(
       // ⚠ 一律整個 PlayerState 對齊（不只 active）：PRE 可能同時動到 discard／bench，
       //   只同步 active 會讓後面把整個 `defender` 寫回 players 時吃掉那些改動。
       // ⚠ **只對齊 defender，不動 attacker**：attacker 側在 PRE 之前就已經被本函式其他地方
-      //   （費用支付、旗標蓋章）動過，整個覆蓋回去會把那些改動洗掉。攻擊方自身的
+      //   （旗標蓋章之類）動過，整個覆蓋回去會把那些改動洗掉。 // ⭐v6373-c14-stale-comment
+      //   （⭐v6.373 C-14：原文寫「費用支付、旗標蓋章」—— PTCG 招式費用**不支付**、能量留在身上，
+      //     engine.ts 全檔也沒有任何攻擊費用扣除；v6.367 的平行註解早已只寫「旗標蓋章之類」。）
+      //   攻擊方自身的
       //   「造成傷害前丟自己的能量」是否也該同步，另案處理（見 changelog 待裁示）。
       Object.assign(defender, workingState.players[dIdx]);
       // <<< v6351-resync-defender-after-pre
@@ -9509,6 +9528,15 @@ function applyActionImpl(
     delete cleared._attackTimeAttackerEnergyUnits;
     next = cleared;
   }
+  // >>> v6373-as-of-declaration-holders-clear
+  // ⭐v6.373：持有者 iid 快照的 clear **只有這一處**（applyActionImpl 尾段，比照 v6.357／v6.368）。
+  //   pendingSelection 還在時保留給 resolver（比照花之帷幔／平穩境地）。
+  if (next._attackTimeHolders !== undefined && !next.pendingSelection) {
+    const cleared = { ...next };
+    delete cleared._attackTimeHolders;
+    next = cleared;
+  }
+  // <<< v6373-as-of-declaration-holders-clear
 
   // v5.335：集中偵測「自方戰鬥寶可夢於自己回合回到自己備戰區」→ 觸發 ON_RETREAT_TO_BENCH 類特性
   //   （海豚俠｜全能變身 / 鋼炮臂蝦｜返回重載）。原本只有 RETREAT handler inline 觸發；衝浪手 /

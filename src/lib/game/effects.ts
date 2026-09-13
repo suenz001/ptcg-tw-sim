@@ -124,6 +124,10 @@ import { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_ST
 // v5.293: import field-wide damage-reduce helpers for bench damage path
 import { steelixPalaceReduce, bronzongShelterReduce, gearCoatingReduce, hasIronTracksDualCore, curlWallReduce, shieldFossilGuardReduce } from './effects/cards/v2999_g3_wave1';
 import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887 神奇糖果進化也要過瞪眼效用 gate
+// >>> v6373-as-of-declaration-import
+// ⭐v6.373 站長裁定 A-3：「宣告當時」家族的全站唯一述詞（判準本體在該檔，本檔只消費）。
+import { declarationHolderStillCounts, isEffectiveAsOfDeclaration } from './as-of-declaration';
+// <<< v6373-as-of-declaration-import
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 // v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
 export { PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/_shared';
@@ -734,7 +738,9 @@ export function resolveBenchGuard(
   //         備戰寶可夢仍應免疫此招式放置的指示物效果。
   if (kind === 'attack-damage' || kind === 'attack-effect') {
     const defenderIdxBA = (1 - actorIdx) as 0 | 1;
-    if (hasBugAegislashShield(state, defenderIdxBA, pool) || state._attackTimeOppBugShield) {
+    // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
+    if (isEffectiveAsOfDeclaration(state, defenderIdxBA, '球形盾牌',
+      hasBugAegislashShield(state, defenderIdxBA, pool), state._attackTimeOppBugShield === true)) {
       return { blocked: true, reason: '蟲甲聖 球形盾牌 效果' };
     }
   }
@@ -759,7 +765,10 @@ export function resolveBenchGuard(
     // v5.186：加 attack-time snapshot fallback — 急凍鳥被同招式 KO 後 state 已沒急凍鳥，
     //   但 _attackTimeOppRocketVeil snapshot 仍記得宣告當時有，per-target 仍擋。
     //   仿 v3.892 花之帷幔 pattern。
-    if ((hasRocketVeil(state, defenderIdx, pool) || state._attackTimeOppRocketVeil) && isRocketBasicTarget(targetCard)) {
+    // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
+    if (isEffectiveAsOfDeclaration(state, defenderIdx, '抵抗之幕',
+      hasRocketVeil(state, defenderIdx, pool), state._attackTimeOppRocketVeil === true)
+      && isRocketBasicTarget(targetCard)) {
       return { blocked: true, reason: '火箭隊的急凍鳥 抵抗之幕 效果' };
     }
   }
@@ -767,7 +776,10 @@ export function resolveBenchGuard(
     const defenderIdx = (1 - actorIdx) as 0 | 1;
     // v3.94：加 attack-time snapshot fallback — 戰鬥場謝米被同招式 KO 後，
     //   state 已沒謝米但 _attackTimeOppFlowerVeil snapshot 仍記得宣告當時有，per-target 仍擋。
-    if ((hasFlowerVeil(state, defenderIdx, pool) || state._attackTimeOppFlowerVeil) && !isExCard(targetCard)) {
+    // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
+    if (isEffectiveAsOfDeclaration(state, defenderIdx, '花之帷幔',
+      hasFlowerVeil(state, defenderIdx, pool), state._attackTimeOppFlowerVeil === true)
+      && !isExCard(targetCard)) {
       return { blocked: true, reason: '謝米 花之帷幔 效果' };
     }
     if (targetCard?.tags?.includes('太晶')) {
@@ -1485,7 +1497,9 @@ function hitBenchAll(
     //   - snapshot 機制：戰鬥場謝米被同招式 KO 後，state 已沒謝米但 snapshot 仍記得宣告當時有 → 仍擋
     if (
       attackerIdx !== targetIdx
-      && (hasFlowerVeil(state, targetIdx, pool) || state._attackTimeOppFlowerVeil)
+      // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 live || snapshot 過寬）。
+      && isEffectiveAsOfDeclaration(state, targetIdx, '花之帷幔',
+        hasFlowerVeil(state, targetIdx, pool), state._attackTimeOppFlowerVeil === true)
       && !isExCard(card)
     ) {
       teraImmunNames.push(`${card?.name ?? '?'}（謝米 花之帷幔）`);
@@ -3005,7 +3019,8 @@ export function canApplyAttackEffectToTarget(
       });
       // v5.220：抵抗之幕 attack-time snapshot fallback (KO 後 holder 已消失)
       const snapshotFallback = name === '抵抗之幕' && state._attackTimeOppRocketVeil === true;
-      if (!hasFieldAbility && !snapshotFallback) continue;
+      // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原 !live && !snapshot 過寬）。
+      if (!isEffectiveAsOfDeclaration(state, dIdx, name, hasFieldAbility, snapshotFallback)) continue;
       // 檢查 targetFilter
       if (rule.targetFilter === 'BasicRocket') {
         if (!isRocketBasicTarget(targetCard)) continue;
@@ -5345,7 +5360,10 @@ export function fireFieldWideRetaliation(
   // ⚠v6.359：欄位是 { p1, p2 } 不是 tuple（Firestore 禁巢狀陣列）⇒ 用 seat key 取。
   //   寫法沿用 v2750_h_wave2_full.ts 對 ancientAttackedIidsLastSelfTurn 的既有取法
   //   （engine.ts 的 ancientKey 在 effects 側 import 會造成循環）。
-  const atkTimeHolders = state._attackTimeFieldWideRetal?.[dIdx === 0 ? 'p1' : 'p2'] ?? [];
+  // ⭐v6.373 站長裁定 A-3：本快照存的就是持有者 iid ⇒ 直接走同一份判準核心
+  //   （昏厥離場仍算數＝站長 C-7 弱丁魚那一條；被放回手牌／洗回牌庫則不算數）。
+  const atkTimeHolders = (state._attackTimeFieldWideRetal?.[dIdx === 0 ? 'p1' : 'p2'] ?? [])
+    .filter((h) => declarationHolderStillCounts(state, dIdx, [h.iid]));
   let s = state;
   for (const spec of FIELD_WIDE_RETALIATION) {
     if (!spec.activeQualifies(daCard)) continue;

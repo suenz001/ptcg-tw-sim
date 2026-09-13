@@ -425,8 +425,13 @@ console.log('\n【L】中央性（Rule 38：同一個判準只能有一份）');
   }
   chk('L1 ⭐⭐`isHealBlockedFor(` 的消費點只有 engine.ts 一處（唯一出口）',
     callers.length === 1 && callers[0].startsWith('lib/game/engine.ts×1'), callers.join(','));
-  chk('L2 ⭐「生命制約」字面只出現在 3 個檔（述詞／engine 的 log＋註解／卡檔檔頭註解）',
-    literal.length === 3
+  // ⭐v6.373：白名單 3 → 4 —— 新增的 lib/game/as-of-declaration.ts 是站長裁定 A-3 的
+  //   **中央述詞**（AS_OF_DECLARATION_ABILITIES 名單 ＋ 判準本體），與本條想防的
+  //   「判準被抄散到各處」方向相反。⚠ 仍然是**逐字白名單**（不是放寬成 <= N）：
+  //   多出任何第五個檔案照樣紅。
+  chk('L2 ⭐「生命制約」字面只出現在 4 個檔（中央述詞／述詞／engine 的 log＋註解／卡檔檔頭註解）',
+    literal.length === 4
+      && literal.includes('lib/game/as-of-declaration.ts')
       && literal.includes('lib/game/effects/cards/v3001_g3_wave3.ts')
       && literal.includes('lib/game/engine.ts')
       && literal.includes('lib/game/effects/cards/m6a_wave7.ts'),

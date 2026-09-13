@@ -1068,6 +1068,20 @@ await T('F3 ⭐⭐⭐ 伺服器端**零改動**：分帳只看 `casual-` 前綴�
   //      —— 不能用哨兵剝（剝掉等於把 BASE 的內容也刪掉）⇒ 逐字換回 BASE 的樣子。
   //   那一塊的守備由 scripts/test-v6369-rollback-and-pending-and-actionlog.mjs 全面接管。
   //   ⚠ engine.ts 是 CRLF；LF／CRLF 兩種都試（同 v6.352／v6.353／v6.360／v6.368）。
+  // ⭐v6.373 C-14：本版改了 engine.ts 的一行 **BASE 既有註解**（v6.351 那段「費用支付」
+  //   已被 v6.367 的 recon 證偽）⇒ 位元組釘要先把它逐字還原回 BASE 的樣子。
+  //   ⚠ 它**不是**哨兵區塊（不可以用 >>> 包起來：BASE 既有行被包進哨兵，剝除後會整行消失）。
+  const stripV6373Engine = (src) => {
+    let s = stripSentinelBlocks(src, 'v6373-');
+    const swap = (str, from, to) => str
+      .split(from).join(to)
+      .split(from.replace(/\n/g, '\r\n')).join(to.replace(/\n/g, '\r\n'));
+    s = swap(s,
+      "      //   （旗標蓋章之類）動過，整個覆蓋回去會把那些改動洗掉。 // ⭐v6373-c14-stale-comment\n      //   （⭐v6.373 C-14：原文寫「費用支付、旗標蓋章」—— PTCG 招式費用**不支付**、能量留在身上，\n      //     engine.ts 全檔也沒有任何攻擊費用扣除；v6.367 的平行註解早已只寫「旗標蓋章之類」。）\n      //   攻擊方自身的\n",
+      "      //   （費用支付、旗標蓋章）動過，整個覆蓋回去會把那些改動洗掉。攻擊方自身的\n");
+    return s;
+  };
+
   const stripV6369Engine = (src) => {
     let s = stripSentinelBlocks(src, 'v6369-');
     const swap = (str, from, to) => str
@@ -1112,7 +1126,7 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
     const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))));
+        const s0 = stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))))))))));
         ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
@@ -1135,7 +1149,7 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
     const raw = normEol(readFileSync(join(ROOT, p), 'utf8'));
     const cur = p === 'src/lib/game/oracle-client.ts' ? stripV6270(raw)
       : (p === 'src/lib/game/engine.ts' ? (() => {
-        const s0 = stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw))))))))))))))));
+        const s0 = stripV6373Engine(stripV6369Engine(stripV6368Engine(stripV6367Engine(stripV6362Engine(stripV6361Engine(stripV6360Engine(stripV6357Engine(stripV6356Engine(stripV6355Engine(stripV6354Engine(stripV6353Engine(stripV6352Engine(stripV6351Engine(stripV6350Engine(stripV6348Engine(stripV6347Engine(raw)))))))))))))))));
         ok(s0 !== raw, 'v6.347／v6.348／v6.350／v6.351／v6.352／v6.353／v6.354／v6.355／v6.356／v6.357／v6.360／v6.362／v6.367／v6.368／v6.369 的哨兵不在 engine.ts 裡（剝除器過期）');
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');

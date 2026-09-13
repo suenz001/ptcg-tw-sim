@@ -1299,6 +1299,17 @@ export interface GameState {
    * ⚠⚠ per-player 一律 { p1, p2 }，禁止 T[][]（Firestore 禁巢狀陣列；v6.056 事故）。
    */
   _attackTimeLifeRestraint?: { p1: boolean; p2: boolean };
+  // >>> v6373-as-of-declaration-holders-type
+  /**
+   * ⭐⭐⭐v6.373 站長裁定 A-3：「宣告當時」家族的**持有者 iid**快照。
+   *   既有的 5 份 boolean 快照只記「當時有沒有生效」，分不出持有者後來是
+   *   **昏厥離場**（仍算數）還是**被放回手牌／洗回牌庫**（不算數，例：仙子伊布ex｜天仙石）。
+   *   ⇒ 補記 iid，判準集中在 src/lib/game/as-of-declaration.ts（全站唯一）。
+   *   ⚠ 形狀是 { p1, p2 } 的**物件 map**（Firestore 禁巢狀陣列，v6.056 事故）。
+   *   ⚠ transient：設定點與其他 attack-time 快照同一處，清除點在 applyActionImpl 尾段。
+   */
+  _attackTimeHolders?: { p1: Record<string, string[]>; p2: Record<string, string[]> };
+  // <<< v6373-as-of-declaration-holders-type
 }
 
 export interface LogEntry {

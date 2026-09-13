@@ -51,6 +51,10 @@ import { RULE_BOX_SUBTYPES } from '../../types';
 import type { Card } from '$lib/cards/types';
 // ⭐v6.213 2 階判定的 per-pool 索引（leaf，只 import type ⇒ 不可能循環）
 import { isStage2ByPlainEx } from '../../stage2-index';
+// >>> v6373-as-of-declaration-import
+// ⭐v6.373 站長裁定 A-3：「宣告當時」家族的全站唯一述詞（判準本體在該檔，本檔只消費）。
+import { AS_OF_DECLARATION_ABILITIES, isEffectiveAsOfDeclaration } from '../../as-of-declaration';
+// <<< v6373-as-of-declaration-import
 
 // 導出 sentinel 防止 unused import warnings
 export type _v3001G3W3Sentinel = PlayerState | GameState | Card | CardInstance;
@@ -431,6 +435,35 @@ function isNullifiedByLegendCave(
   if (!st) return false;
   return pool.get(st.cardId)?.name === '傳說的熔岩洞';
 }
+
+// >>> v6373-collect-as-of-declaration-holders
+/**
+ * ⭐⭐v6.373：某側「當下盤面」上**特性生效中**的持有者 iid（依特性名分組）。
+ *   ⚠ 只在 engine 的 ATTACK 宣告點呼叫（與其他 attack-time 快照**同一個**設定點，Rule 38）。
+ *   ⚠ 消費判準不在這裡 —— 一律走 src/lib/game/as-of-declaration.ts。
+ */
+export function collectAsOfDeclarationHolders(
+  state: GameState,
+  sideIdx: 0 | 1,
+  pool: Map<string, Card>,
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  const sp = state.players?.[sideIdx];
+  if (!sp) return out;
+  const scan = (inst: CardInstance, loc: 'active' | 'bench') => {
+    const card = pool.get(inst.cardId);
+    if (!card?.abilities) return;
+    for (const name of AS_OF_DECLARATION_ABILITIES) {
+      if (!card.abilities.some((ab) => ab.name === name)) continue;
+      if (!isAbilityHolderEffective(state, inst, card, sideIdx, name, loc, pool)) continue;
+      (out[name] ??= []).push(inst.iid);
+    }
+  };
+  if (sp.active) scan(sp.active, 'active');
+  for (const b of sp.bench) scan(b, 'bench');
+  return out;
+}
+// <<< v6373-collect-as-of-declaration-holders
 
 export function isAbilityHolderEffective(
   state: GameState | undefined,
@@ -976,8 +1009,12 @@ export function isReturnToHandBlockedByCalmGround(
   const guardIdx = (1 - cardOwnerIdx) as 0 | 1;
   // v5.987：當下盤面 OR attack-time snapshot(比照花之帷幔)。即使美納斯被同一招式 KO，
   //   只要「宣告當時」在生效，此招式的回手效果仍被擋(PTCG 招式效果同時 resolve)。
-  if (hasEffectiveCalmGroundOnSide(state, guardIdx, pool)) return true;
-  return state._attackTimeCalmGround?.[guardIdx] === true;
+  // >>> v6373-calm-ground-central
+  // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原本是 live || snapshot 的過寬寫法）。
+  return isEffectiveAsOfDeclaration(state, guardIdx, '平穩境地',
+    hasEffectiveCalmGroundOnSide(state, guardIdx, pool),
+    state._attackTimeCalmGround?.[guardIdx] === true);
+  // <<< v6373-calm-ground-central
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1030,10 +1067,14 @@ export function isHealBlockedFor(
   if (state.players?.[targetOwnerIdx]?.active?.iid !== targetIid) return false;
   // 持有者在「被禁止那一隻」的對手側；卡面「只要這隻寶可夢**在場上**」⇒ active 與 bench 都算。
   const holderIdx = (1 - targetOwnerIdx) as 0 | 1;
-  if (hasEffectiveLifeRestraintOnSide(state, holderIdx, pool)) return true;
+  // >>> v6373-life-restraint-central
   // ⭐v6.368 站長裁定 六-10（逐字：「一起修」）：即使【生命制約】持有者被**同一次**招式打死離場，
   //   只要「宣告當時」它在場上且特性生效，這一次招式裡的恢復仍然被擋
   //   （PTCG「招式效果同時 resolve」；與 isReturnToHandBlockedByCalmGround 讀
   //   _attackTimeCalmGround 是**同一個**形狀，不另開第二套機制）。
-  return state._attackTimeLifeRestraint?.[holderIdx === 0 ? 'p1' : 'p2'] === true;
+  // ⭐v6.373 站長裁定 A-3：改走全站唯一的「宣告當時」述詞（原本是 live || snapshot 的過寬寫法）。
+  return isEffectiveAsOfDeclaration(state, holderIdx, '生命制約',
+    hasEffectiveLifeRestraintOnSide(state, holderIdx, pool),
+    state._attackTimeLifeRestraint?.[holderIdx === 0 ? 'p1' : 'p2'] === true);
+  // <<< v6373-life-restraint-central
 }

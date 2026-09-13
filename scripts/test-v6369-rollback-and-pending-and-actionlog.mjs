@@ -425,9 +425,14 @@ console.log('\n【D】中央性／結構（補充層，Rule 28：不單獨成立
   {
     const V6265 = readFileSync(join(ROOT, 'scripts/test-v6265-phantom-start-race.mjs'), 'utf8');
     const s0line = (V6265.split(/\r?\n/).find((l) => l.includes('const s0 = strip')) ?? '');
-    chk('D10 ⭐⭐test-v6265 的剝除鏈**最外層**是 stripV6369Engine（本版該負責的那一層）',
+    // ⭐v6.373：原本斷言「**最外層**是 stripV6369Engine」。剝除鏈的慣例是每一版把自己
+    //   那一層包在最外面 ⇒ 只要有下一版動到 engine.ts 的 BASE 既有行，這條必然翻紅。
+    //   ⇒ 改成斷言本版該負責的事實本身：**恰好一份定義**，而且**緊貼在 stripV6368Engine 外面**
+    //     （順序正確、沒有被跳過）。「最外層」由當版守衛負責（v6.373 的 G4 在守 stripV6373Engine）。
+    chk('D10 ⭐⭐test-v6265 的剝除鏈裡 stripV6369Engine 恰好一份，且緊貼在 stripV6368Engine 外面',
       (V6265.match(/const stripV6369Engine = \(src\) => \{/g) || []).length === 1
-      && s0line.includes('const s0 = stripV6369Engine(stripV6368Engine('),
+      && s0line.includes('stripV6369Engine(stripV6368Engine(')
+      && s0line.startsWith('        const s0 = strip'),
       s0line.slice(0, 120));
   }
   chk('D9 ⭐(丙) 判準是**行為層**（卡還在手上），不是逐條路徑列舉',
