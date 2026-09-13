@@ -52,7 +52,55 @@ export const AS_OF_DECLARATION_ABILITIES: readonly string[] = [
   '凹洞',        // 火箭隊的三地鼠（M2a，標 I）— 對手戰鬥寶可夢回備戰 ⇒ 那隻身上 2 個傷害指示物
   '熔岩地域',    // 熔岩蝸牛（SV5M，標 H）    — 對手戰鬥寶可夢回備戰 ⇒ 新上場的寶可夢【灼傷】
   // <<< v6374-a2-opp-active-returned-to-bench
+  // >>> v6375-a1-field-wide-reduce
+  // ⭐⭐v6.375 站長裁定 A-1／A-3（「凡是有這種類似的狀況，請你都比照花之帷幔」）：
+  //   field-wide 減傷 5 張。消費點是 effects.ts 的 _applyBenchAbilityReduce（備戰那一份傷害），
+  //   它排在主傷害的 KO 分支**之後** ⇒ 持有者在戰鬥位被同一招打死，備戰那一段就讀不到它。
+  //   v6.375 行為端實測（真卡 三首惡龍ex｜黑曜石 130＋2 隻備戰各 130，__m6a/probe375_d2.mjs）：
+  //     守護之鐘 備戰 130（應 120）／齒輪塗層 130（應 110）／凍原堡壘 130（應 80）／
+  //     垃圾洩氣 130（應 110）／捲牆 備戰水牛直接被 KO（應 -60 存活）。五張全中。
+  '守護之鐘',    // 青銅鐘（SVM 12152，標 H）  — 自方所有寶可夢受招式傷害 -10（疊加 ×N）
+  '凍原堡壘',    // 冰雪巨龍（M3 18000，標 J） — 自方附【水】能量者 -50（卡面明文不重複）
+  '齒輪塗層',    // 齒輪怪（MC 16979，標 I）   — 自方附【鋼】能量者 -20（疊加 ×N）
+  '捲牆',        // 爆炸頭水牛（M2a 14800，標 H）— 【無】基礎 -60（卡面明文不重複）
+  '垃圾洩氣',    // 灰塵山（M4 18475，標 J）   — 攻擊方附道具時 -20（不重複）
+  // ⚠ 漩渦言靈是 A-2 家族（與 凹洞／熔岩地域 同一個函式 getOppRetreatTriggers），
+  //   但條件是「在**戰鬥場**上」⇒ 見下方 AS_OF_DECLARATION_ACTIVE_ONLY_ABILITIES。
+  '漩渦言靈',    // 夢妖魔ex（M2 14354／18582，標 I）— 對手戰鬥寶可夢回備戰 ⇒ 新上場的【混亂】
+  // <<< v6375-a1-field-wide-reduce
 ];
+
+// >>> v6375-active-only-and-counted-card-names
+/**
+ * ⭐v6.375：卡面條件是「只要這隻寶可夢在**戰鬥場**上」而**不是**「在場上」的特性。
+ *   ⚠ 快照端（collectAsOfDeclarationHolders）看到 loc !== 'active' 就**不記**，
+ *     否則「宣告當時在備戰」的持有者會被誤算成生效（v6.375 實測反對照 V3）。
+ *   ⚠ 判準本身仍然只有 declarationHolderStillCounts 一份（Rule 38）；這裡只界定
+ *     「宣告當時生效」的**位置**條件，與 hasAbilityOnActive 的 live 判準逐字同義
+ *     （後者最後一步就是 isAbilityHolderEffective(..., 'active', ...)，見 v3001_g3_wave3.ts）。
+ */
+export const AS_OF_DECLARATION_ACTIVE_ONLY_ABILITIES: readonly string[] = [
+  '漩渦言靈',    // 夢妖魔ex — 「只要這隻寶可夢在戰鬥場上…」
+];
+
+/**
+ * ⭐⭐v6.375：有些持有者條件數的是**卡名隻數**，不是「特性生效的持有者隻數」。
+ *   目前唯一一張：爆炸頭水牛｜捲牆 —— 卡面「只要這隻寶可夢與自己的**其他「爆炸頭水牛」**
+ *   在場上」，而 v5.614 已查明現行卡池有 **SV8 id 11267 的爆炸頭水牛（標 H、HP130、
+ *   沒有捲牆特性）**，它**算隻數但不是特性持有者**（玩家回報：1 隻捲牆 ＋ 1 隻 SV8 漏減傷）。
+ *   ⇒ 只記「特性持有者 iid」的快照表達不了它：SV8 那隻被同一招打死時，卡名計數會從 2 掉到 1。
+ *   ⇒ 這裡另外依**卡名**記一份在場 iid，key 用 asOfDeclarationCardNameKey() 加後綴隔開，
+ *     不會和任何特性名相撞（特性名不可能含「@」）。判準仍然共用同一份
+ *     declarationHolderStillCounts（Rule 38）。
+ *   ⚠ 只放真的「依卡名計數」的卡；每多一個名字就多掃一次全場，不要當成通用清單。
+ */
+export const AS_OF_DECLARATION_COUNTED_CARD_NAMES: readonly string[] = [
+  '爆炸頭水牛',  // 捲牆的「與自己的其他『爆炸頭水牛』在場上」
+];
+
+/** 依卡名記錄時使用的快照 key。⚠ Firestore map key 不可含 '.'／'/'／'['／']'／'*'；'@' 安全。 */
+export const asOfDeclarationCardNameKey = (cardName: string): string => cardName + '@卡名';
+// <<< v6375-active-only-and-counted-card-names
 
 export type AsOfDeclarationSide = 'p1' | 'p2';
 export const asOfDeclarationSideKey = (idx: 0 | 1): AsOfDeclarationSide => (idx === 0 ? 'p1' : 'p2');

@@ -128,6 +128,11 @@ import { isOppEvilEyeBlocking } from './effects/cards/v3001_g3_wave3'; // v5.887
 // ⭐v6.373 站長裁定 A-3：「宣告當時」家族的全站唯一述詞（判準本體在該檔，本檔只消費）。
 import { declarationHolderStillCounts, isEffectiveAsOfDeclaration } from './as-of-declaration';
 // <<< v6373-as-of-declaration-import
+// >>> v6375-as-of-declaration-import
+// ⭐v6.375 站長裁定 A-1／A-3：凍原堡壘／垃圾洩氣的「宣告當時」判準一律走中央述詞。
+//   ⛔ 禁止在本檔自寫 `|| state._attackTime…`（v6.373 守衛 F1 的掃描器會抓）。
+import { asOfDeclarationHolderIids } from './as-of-declaration';
+// <<< v6375-as-of-declaration-import
 export { JAMMING_TOWER_STADIUMS, ROCKET_WATCHTOWER_STADIUMS, BENCH_PROTECTION_STADIUMS, PASSIVE_STADIUMS };
 // v6.059：傳說競技場 fail-closed 述詞下沉 _shared(leaf) 以免底層反向 import 卡檔(lint Check O)
 export { PENDING_STADIUMS, isStadiumPendingImplementation } from './effects/_shared';
@@ -1335,8 +1340,15 @@ function _applyBenchAbilityReduce(
       ...defender.bench,
     ];
     // ⭐ v6.196：冰雪巨龍 stage=Stage2 進化 ⇒ 熔岩洞應消除凍原堡壘（原本無 gate）。
-    const hasFrost = defAll.some(c =>
-      pool.get(c.cardId)?.name === '冰雪巨龍' && _v6196HasEffAbilByInst(state, defenderIdx, c, pool, '凍原堡壘'));
+    // ⭐⭐v6375-as-of-declaration：live 這一半**一字不動**（含卡名條件），只把結果交給
+    //   中央述詞補上「宣告當時生效、被這一招打到昏厥離場」的持有者。
+    //   病灶實測（BASE）：冰雪巨龍在戰鬥位被 三首惡龍ex｜黑曜石 打死 ⇒ 後段備戰那 130 點
+    //   完全不減（應為 80）。⚠ 卡面明文「這個特性的效果不會重複」⇒ 仍然是固定 -50。
+    const _liveFrostIids: string[] = [];
+    for (const c of defAll) {
+      if (pool.get(c.cardId)?.name === '冰雪巨龍' && _v6196HasEffAbilByInst(state, defenderIdx, c, pool, '凍原堡壘')) _liveFrostIids.push(c.iid);
+    }
+    const hasFrost = asOfDeclarationHolderIids(state, defenderIdx, '凍原堡壘', _liveFrostIids).length > 0;
     if (hasFrost) {
       const hasWaterE = victim.energyAttached.some(e => {
         const ec = pool.get(e.cardId);
@@ -1372,8 +1384,14 @@ function _applyBenchAbilityReduce(
   if (dmg > 0) {
     const _dp = state.players[defenderIdx];
     // ⭐ v6.196：灰塵山 stage=Stage1 進化 ⇒ 熔岩洞應消除垃圾洩氣（原本無 gate）。
-    const _hasGarbage = [...(_dp.active ? [_dp.active] : []), ..._dp.bench].some(cc =>
-      pool.get(cc.cardId)?.name === '灰塵山' && _v6196HasEffAbilByInst(state, defenderIdx, cc, pool, '垃圾洩氣'));
+    // ⭐⭐v6375-as-of-declaration：同 凍原堡壘 —— live 這一半一字不動，只補「宣告當時」。
+    //   病灶實測（BASE）：灰塵山在戰鬥位被同一招打死 ⇒ 備戰那 130 點不減（應為 110）。
+    //   ⚠ 判的是**攻擊方**身上有沒有道具（下方 _atkTools），與持有者條件無關，不動。
+    const _liveGarbageIids: string[] = [];
+    for (const cc of [...(_dp.active ? [_dp.active] : []), ..._dp.bench]) {
+      if (pool.get(cc.cardId)?.name === '灰塵山' && _v6196HasEffAbilByInst(state, defenderIdx, cc, pool, '垃圾洩氣')) _liveGarbageIids.push(cc.iid);
+    }
+    const _hasGarbage = asOfDeclarationHolderIids(state, defenderIdx, '垃圾洩氣', _liveGarbageIids).length > 0;
     const _atkAct = state.players[attackerIdx].active;
     if (_hasGarbage && _atkAct) {
       const _atkTools = getAllAttachedTools(_atkAct);

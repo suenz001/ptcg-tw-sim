@@ -28,7 +28,7 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { hasBaseCommit, readBaseBlob, restoreBaseSubtree, shallowSkip } from './lib/base-blob.mjs';  // ⭐v6375-restore-base-subtree
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = '917874bf11c146023afcd5097a3c0978ea361e5b';   // v6.367（v6.368 的上一版）
@@ -441,13 +441,16 @@ if (!hasBaseCommit(ROOT, BASE)) {
 } else {
   const baseSrc = join(TMP, 'base-src');
   cpSync(join(ROOT, 'src'), baseSrc, { recursive: true });
-  const FILES = ['src/lib/game/engine.ts', 'src/lib/game/types.ts', 'src/lib/game/effects/cards/v3001_g3_wave3.ts'];
-  let rebuilt = true;
-  for (const rel of FILES) {
-    const b = readBaseBlob(ROOT, BASE, rel);
-    if (!chk('F0 BASE 樹重建成功：' + rel, b.ok)) { rebuilt = false; continue; }
-    writeFileSync(join(baseSrc, rel.replace('src/', '')), b.out, 'utf8');
-  }
+  // ⭐⭐v6375-restore-base-subtree：原本是「只換 3 個寫死的檔案」。
+  //   一旦後續版本把某張既有卡改成 import v3001_g3_wave3.ts 的**新** symbol
+  //   （v6.375 的 v2999_g3_wave1.ts 就是：asOfDeclarationEffectiveHolderIids／
+  //    asOfDeclarationSameNameIids），BASE 的 v3001 沒有那個 export ⇒ esbuild build failed
+  //   ⇒ 整支守衛爆掉，而且紅的是 harness 不是判準。
+  //   base-blob.mjs 的 restoreBaseSubtree JSDoc 已逐字預告這件事會「一再重演」，
+  //   正解是**整棵 src 子樹一起換**才自洽（v6.374 守衛已經這樣寫）。
+  const _rst = restoreBaseSubtree(ROOT, BASE, baseSrc, 'src');
+  const rebuilt = chk('F0 BASE 樹重建成功（整個 src/ 子樹）', _rst.ok,
+    _rst.reason ?? ('replaced=' + _rst.replaced + ' removed=' + _rst.removed));
   if (rebuilt) {
     const BMOD = await bundleFrom(baseSrc, 'base');
     const B = matrix(BMOD);

@@ -351,7 +351,10 @@ const ALLOW = [
   //   partner 的條件是**卡名**（卡面沒有要求 partner 也帶特性），所以
   //   SV8 087/106（abilities=null）確實算數量。持有者那一端的 gate 在同函式下方
   //   （`card.abilities?.some(a => a.name === '捲牆')` + isAbilityHolderEffective）。
-  "const buffaloByName = all.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;",   // ⭐ 行為端證明：test-v6258 W4
+  // ⭐v6375-curl-wall-as-of-declaration：這一行在 v6.375 改走中央述詞
+  //   （asOfDeclarationSameNameIids，把「宣告當時在場、被這一招打死」的同名卡一併計入），
+  //   但**依卡名判定**的性質一樣，白名單理由逐字不變（卡面就是寫卡名）。
+  "const buffaloByName = asOfDeclarationSameNameIids(state, defenderIdx, pool, '爆炸頭水牛').length;",   // ⭐ 行為端證明：test-v6258 W4；test-v6375 A4/A6/A6b/A11
 ];
 check('E1【正對照】掃描器餵違規樣本必須抓得到（否則它只是安慰劑）', () => {
   const victim = [...RISKY][0];

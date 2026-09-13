@@ -54,6 +54,9 @@ import { isStage2ByPlainEx } from '../../stage2-index';
 // >>> v6373-as-of-declaration-import
 // ⭐v6.373 站長裁定 A-3：「宣告當時」家族的全站唯一述詞（判準本體在該檔，本檔只消費）。
 import { AS_OF_DECLARATION_ABILITIES, isEffectiveAsOfDeclaration, asOfDeclarationHolderIids } from '../../as-of-declaration';
+// >>> v6375-as-of-declaration-import
+import { AS_OF_DECLARATION_ACTIVE_ONLY_ABILITIES, AS_OF_DECLARATION_COUNTED_CARD_NAMES, asOfDeclarationCardNameKey } from '../../as-of-declaration';
+// <<< v6375-as-of-declaration-import
 // <<< v6373-as-of-declaration-import
 
 // 導出 sentinel 防止 unused import warnings
@@ -131,6 +134,63 @@ export function effectiveAbilityHolderIidsOnSide(
   return out;
 }
 // <<< v6374-effective-ability-holder-iids
+
+// >>> v6375-as-of-declaration-entries
+/**
+ * ⭐⭐v6.375 全站唯一的「場上即可」型消費入口：
+ *   ＝ 現在仍生效的持有者 ∪ 宣告當時生效且「不是被主動移出場」的持有者。
+ *   ⚠ 判準一個字都不另寫：live 那一半是 effectiveAbilityHolderIidsOnSide（v6.374），
+ *     宣告當時那一半是 asOfDeclarationHolderIids → declarationHolderStillCounts（v6.373）。
+ *   ⚠ 非 ATTACK 路徑沒有 _attackTimeHolders ⇒ 回傳值與 live 逐字相同（零行為變更）。
+ */
+export function asOfDeclarationEffectiveHolderIids(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+  abilityName: string,
+): string[] {
+  return asOfDeclarationHolderIids(state, ownerIdx, abilityName,
+    effectiveAbilityHolderIidsOnSide(state, ownerIdx, pool, abilityName));
+}
+
+/**
+ * ⭐v6.375「只要這隻寶可夢在**戰鬥場**上」型的消費入口（目前：夢妖魔ex｜漩渦言靈）。
+ *   ⚠ live 那一半刻意走 **hasAbilityOnActive**（不是自寫的 active 過濾）——
+ *     那是本檔既有的唯一「對手戰鬥位特性是否生效」述詞，行為保證零變更。
+ *   ⚠ 快照那一半由 AS_OF_DECLARATION_ACTIVE_ONLY_ABILITIES 在收集端就擋掉備戰持有者。
+ */
+export function asOfDeclarationActiveOnlyHolderIids(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+  abilityName: string,
+): string[] {
+  const act = (state && ownerIdx != null) ? state.players[ownerIdx]?.active : null;
+  const liveIids = (act && hasAbilityOnActive(state, ownerIdx, pool, abilityName)) ? [act.iid] : [];
+  return asOfDeclarationHolderIids(state, ownerIdx, abilityName, liveIids);
+}
+
+/**
+ * ⭐v6.375 依**卡名**計數的持有者條件（目前只有 捲牆 的「其他『爆炸頭水牛』」）。
+ *   live ＝ 此刻場上同名卡的 iid（不要求它有特性 —— SV8 無捲牆版也算隻數，v5.614）。
+ *   ⚠ 快照 key 由 asOfDeclarationCardNameKey 產生，與特性名不共用命名空間。
+ */
+export function asOfDeclarationSameNameIids(
+  state: GameState | undefined,
+  ownerIdx: 0 | 1 | undefined,
+  pool: Map<string, Card> | undefined,
+  cardName: string,
+): string[] {
+  if (!state || ownerIdx == null || !pool) return [];
+  const owner = state.players[ownerIdx];
+  if (!owner) return [];
+  const liveIids: string[] = [];
+  for (const c of [...(owner.active ? [owner.active] : []), ...owner.bench]) {
+    if (pool.get(c.cardId)?.name === cardName) liveIids.push(c.iid);
+  }
+  return asOfDeclarationHolderIids(state, ownerIdx, asOfDeclarationCardNameKey(cardName), liveIids);
+}
+// <<< v6375-as-of-declaration-entries
 
 /**
  * 玩家 idx 戰鬥場上是否「擁有且生效」指定 ability。
@@ -468,9 +528,23 @@ export function collectAsOfDeclarationHolders(
   if (!sp) return out;
   const scan = (inst: CardInstance, loc: 'active' | 'bench') => {
     const card = pool.get(inst.cardId);
-    if (!card?.abilities) return;
+    if (!card) return;
+    // >>> v6375-counted-card-names-snapshot
+    // ⭐v6.375：依**卡名**計數的持有者條件（目前只有 捲牆 的「其他『爆炸頭水牛』」）。
+    //   ⚠ 刻意在 abilities 早退之前 —— SV8 id 11267 的爆炸頭水牛**沒有 abilities**，
+    //     但它算隻數（v5.614 玩家回報）。理由見 as-of-declaration.ts 的名單註解。
+    if (card.name && AS_OF_DECLARATION_COUNTED_CARD_NAMES.includes(card.name)) {
+      (out[asOfDeclarationCardNameKey(card.name)] ??= []).push(inst.iid);
+    }
+    // <<< v6375-counted-card-names-snapshot
+    if (!card.abilities) return;
     for (const name of AS_OF_DECLARATION_ABILITIES) {
       if (!card.abilities.some((ab) => ab.name === name)) continue;
+      // >>> v6375-active-only-snapshot
+      // ⭐v6.375：卡面寫「在**戰鬥場**上」的特性，宣告當時在備戰的持有者**不算生效**。
+      //   （漏這一層 ⇒ 「宣告當時就在備戰」的夢妖魔ex 會誤觸發混亂；實測反對照 V3。）
+      if (loc !== 'active' && AS_OF_DECLARATION_ACTIVE_ONLY_ABILITIES.includes(name)) continue;
+      // <<< v6375-active-only-snapshot
       if (!isAbilityHolderEffective(state, inst, card, sideIdx, name, loc, pool)) continue;
       (out[name] ??= []).push(inst.iid);
     }
@@ -932,7 +1006,10 @@ export function getOppRetreatTriggers(
     result.triggerNames.push('熔岩地域');
   }
   // 夢妖魔ex｜漩渦言靈 — 戰鬥場 only
-  if (hasAbilityOnActive(state, oppIdx, pool, '漩渦言靈')) {
+  // ⭐v6.375 站長裁定 A-2／A-3：與上面兩張**同一個病灶**（持有者在戰鬥場被同一招打死
+  //   ⇒ 觸發點讀動作結束後的盤面 ⇒ 完全不觸發）。BASE 行為端實測：新上場的不混亂。
+  //   ⚠ 條件是「在戰鬥場上」⇒ 走 active-only 入口，快照端也只收 active 位置的持有者。
+  if (asOfDeclarationActiveOnlyHolderIids(state, oppIdx, pool, '漩渦言靈').length > 0) {
     result.confuseNewActive = true;
     result.triggerNames.push('漩渦言靈');
   }

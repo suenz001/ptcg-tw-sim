@@ -418,8 +418,12 @@ const ABIL = (() => {
   const m = asof.match(/AS_OF_DECLARATION_ABILITIES[^=]*=\s*\[([\s\S]*?)\n\];/);
   return m ? [...m[1].matchAll(/^\s*'([^']+)',/gm)].map(x => x[1]) : [];
 })();
-chk('E1 ⭐AS_OF_DECLARATION_ABILITIES ＝ v6.373 的五個 ＋ 本版的「凹洞」「熔岩地域」，恰好 7 個',
-  ABIL.length === 7
+// ⭐v6375-abilities-list-grows：這份名單是**會成長**的——v6.375 又接上了
+//   field-wide 減傷 5 張 ＋ 漩渦言靈。原本寫死「恰好 7 個」，每接一張就假紅一次
+//   （v6.375 實測：本條是全 chain 裡唯一因為 v6.375 合法變更而翻紅的斷言）。
+//   ⭐ 改成「這 7 個都還在、沒被刪掉」＋數量下限，仍然守得住「有人把名單清空」。
+chk('E1 ⭐AS_OF_DECLARATION_ABILITIES 含 v6.373 的五個 ＋ v6.374 的「凹洞」「熔岩地域」（名單可再成長，見 ⭐v6375-abilities-list-grows）',
+  ABIL.length >= 7
   && ['花之帷幔', '抵抗之幕', '球形盾牌', '平穩境地', '生命制約', '凹洞', '熔岩地域'].every(n => ABIL.includes(n)),
   JSON.stringify(ABIL));
 chk('E2 ⭐「監視之眼」與「頭蓋尖刺」刻意**不在**名單裡（理由見【D】與本檔檔頭）',

@@ -40,6 +40,12 @@
 
 import type { CardInstance, GameState, PlayerState } from '../../types';
 import { isAbilityHolderEffective } from './v3001_g3_wave3';
+// >>> v6375-as-of-declaration-import
+// ⭐v6.375 站長裁定 A-1／A-3：field-wide 減傷的「宣告當時」判準一律走中央述詞
+//   （src/lib/game/as-of-declaration.ts）。⛔ 禁止在本檔自寫 `|| state._attackTime…`。
+import { asOfDeclarationEffectiveHolderIids, asOfDeclarationSameNameIids } from './v3001_g3_wave3';
+import { asOfDeclarationHolderIids } from '../../as-of-declaration';
+// <<< v6375-as-of-declaration-import
 import type { Card } from '$lib/cards/types';
 import { PASSIVE_ATTACK_BONUS } from '../../effects';
 import { ROCKET_WATCHTOWER_STADIUMS } from './stadiums';
@@ -174,7 +180,10 @@ export function curlWallReduce(
   const me = state.players[defenderIdx];
   const all = [...(me.active ? [me.active] : []), ...me.bench];
   // 依【卡名】計數「爆炸頭水牛」≥2（不要求每隻都有捲牆特性；SV8 11267 無捲牆版也算數量）
-  const buffaloByName = all.filter(c => pool.get(c.cardId)?.name === '爆炸頭水牛').length;
+  // ⭐⭐v6375-as-of-declaration：這一半**不能**用特性持有者快照表達 —— SV8 11267 沒有捲牆
+  //   特性卻算隻數，它被同一招打死時卡名計數會從 2 掉到 1。⇒ 走依卡名的快照入口
+  //   （asOfDeclarationSameNameIids，判準仍是同一份 declarationHolderStillCounts）。
+  const buffaloByName = asOfDeclarationSameNameIids(state, defenderIdx, pool, '爆炸頭水牛').length;
   if (buffaloByName < 2) return 0;
   // 火箭隊的監視塔消除【無】寶可夢特性 → 捲牆失效（爆炸頭水牛本身是【無】）
   const sd = state.activeStadium ? pool.get(state.activeStadium.cardId) : null;
@@ -184,12 +193,18 @@ export function curlWallReduce(
   //   招式版暗夜羽擊（abilityNullifiedThisTurn）與 passive 振翼髮｜暗夜羽擊 都打得到
   //   位於戰鬥場的爆炸頭水牛 ⇒ 逐隻過中央述詞 isAbilityHolderEffective（v6.196 家族）。
   const _actIid = me.active?.iid;
-  const hasWall = all.some(c => {
+  // ⭐v6375-as-of-declaration：live 這一半**一字不動**（含「卡名必須是爆炸頭水牛」這個
+  //   額外條件，刻意不改用只認特性名的入口），只把結果交給中央述詞補上
+  //   「宣告當時生效、被這一招打到昏厥離場」的持有者。
+  const _liveWallIids: string[] = [];
+  for (const c of all) {
     const card = pool.get(c.cardId);
-    if (card?.name !== '爆炸頭水牛' || !card.abilities?.some(a => a.name === '捲牆')) return false;
+    if (card?.name !== '爆炸頭水牛' || !card.abilities?.some(a => a.name === '捲牆')) continue;
     const loc: 'active' | 'bench' = (_actIid != null && c.iid === _actIid) ? 'active' : 'bench';
-    return isAbilityHolderEffective(state, c, card, defenderIdx, '捲牆', loc, pool);
-  });
+    if (isAbilityHolderEffective(state, c, card, defenderIdx, '捲牆', loc, pool)) _liveWallIids.push(c.iid);
+  }
+  const hasWall = asOfDeclarationHolderIids(state, defenderIdx, '捲牆', _liveWallIids).length > 0;
+  // ⚠ 卡面「無論有多少隻擁有這個特性的寶可夢，這個效果也不會重複」⇒ 恆為 60，不按隻數疊加。
   return hasWall ? 60 : 0;
 }
 
@@ -282,17 +297,11 @@ export function bronzongShelterReduce(
 ): number {
   // v5.193：count × 10（場上有 N 隻青銅鐘 → -10×N 傷害）
   if (!state || defenderIdx == null || !pool) return 0;
-  const owner = state.players[defenderIdx];
-  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
-  let count = 0;
-  for (const c of all) {
-    const card = pool.get(c.cardId);
-    if (!card?.abilities?.some(a => a.name === '守護之鐘')) continue;
-    const loc: 'active' | 'bench' = owner.active && c.iid === owner.active.iid ? 'active' : 'bench';
-    if (!isAbilityHolderEffective(state, c, card, defenderIdx, '守護之鐘', loc, pool)) continue;
-    count++;
-  }
-  return count * 10;
+  // ⭐v6375-as-of-declaration：原本這裡是「掃場上 → isAbilityHolderEffective → count++」的
+  //   迴圈，與 effectiveAbilityHolderIidsOnSide 逐字等價（v6.375 逐行比對）⇒ 直接換成
+  //   中央入口，順帶把「宣告當時生效、被這一招打到昏厥離場」的持有者一併計入。
+  //   ⚠ 疊加語意不變：卡面未寫「不重複」⇒ 仍然是**隻數** × 10（v5.193）。
+  return asOfDeclarationEffectiveHolderIids(state, defenderIdx, pool, '守護之鐘').length * 10;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -368,17 +377,10 @@ export function gearCoatingReduce(
   });
   if (!hasMetal) return 0;
   // v5.193：count × 20（場上有 N 隻齒輪怪 → -20×N 傷害）
-  const owner = state.players[defenderIdx];
-  const all = [...(owner.active ? [owner.active] : []), ...owner.bench];
-  let count = 0;
-  for (const c of all) {
-    const card = pool.get(c.cardId);
-    if (!card?.abilities?.some(a => a.name === '齒輪塗層')) continue;
-    const loc: 'active' | 'bench' = owner.active && c.iid === owner.active.iid ? 'active' : 'bench';
-    if (!isAbilityHolderEffective(state, c, card, defenderIdx, '齒輪塗層', loc, pool)) continue;
-    count++;
-  }
-  return count * 20;
+  // ⭐v6375-as-of-declaration：同 守護之鐘 —— 原迴圈與 effectiveAbilityHolderIidsOnSide
+  //   逐字等價，換成中央入口以納入「宣告當時生效、被這一招打死」的持有者。
+  //   ⚠ 受惠 gate（受傷者身上要有【鋼】能量）在上方，不受本次改動影響。
+  return asOfDeclarationEffectiveHolderIids(state, defenderIdx, pool, '齒輪塗層').length * 20;
 }
 
 
