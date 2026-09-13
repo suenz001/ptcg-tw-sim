@@ -5558,6 +5558,14 @@ function handlePlaying(
     //        展開為多個 term，UI 顯示更易懂。
     let preBreakdown: { value: number; label: string }[] | undefined;
     if (preFn) {
+      // >>> v6367-attacker-pre-baseline
+      // ⭐⭐v6.367 站長裁定 六-9：攻擊方那一側的「在造成傷害前…」快照也要對齊
+      //   （v6.351 只修了防守方那一半）。這裡先留下「PRE 跑之前」的攻擊方 PlayerState
+      //   **參考**，下面才分得出「PRE 到底換掉了哪些欄位」。
+      // ⚠ 只存參考、不深拷貝：本引擎一律以「整個換掉物件」的方式更新 PlayerState／
+      //   CardInstance（沒有就地 mutate 的寫法），所以「參考相同」＝「PRE 沒動過這個欄位」。
+      const _v6367AtkBeforePre = workingState.players[aIdx];
+      // <<< v6367-attacker-pre-baseline
       const preResult = preFn(workingState, aIdx, pool, action);
       workingState = preResult.state;
       baseDamage = preResult.damage;
@@ -5588,6 +5596,35 @@ function handlePlaying(
       //   「造成傷害前丟自己的能量」是否也該同步，另案處理（見 changelog 待裁示）。
       Object.assign(defender, workingState.players[dIdx]);
       // <<< v6351-resync-defender-after-pre
+      // >>> v6367-resync-attacker-after-pre
+      // ⭐⭐⭐v6.367 站長裁定 六-9：**攻擊方**那一份快照也要對齊（與上面 defender 那一格並列）。
+      //
+      // ⚠⚠ `const attacker = { ...players[aIdx] }` 和 defender 一樣，是在 handlePlaying
+      //   最上面就抓走的快照，而整條傷害管線讀的都是它：
+      //     damageBonusThisTurn／nextOwnAttackPenalty／gladionDuelBonusThisTurn／
+      //     伏特【雷】能量張數／attacker 身上道具的 TOOL_ATTACK_BONUS／
+      //     collectPassiveAttackBonuses／damageBoostFightingThisTurn／腎上腺力量的【惡】能量／
+      //     karateKingBonusThisTurn／unrudaBonusThisTurn／
+      //     getAttackerEffectiveTypes（弱點・抵抗力用的攻擊方屬性）…
+      //   ⇒ 卡面寫「在造成傷害前，…（改變攻擊方自己的狀態）」的效果，對**這一次**的
+      //     傷害結算會完全無效 —— 與 v6.351 修掉的防守方那一半是同一個洞。
+      //
+      // ⚠ 為什麼不能照抄 v6.351 的 `Object.assign(attacker, …)` 一行：那是**整份覆蓋**，
+      //   只要本函式在 PRE 之前動過 `attacker`（旗標蓋章之類），覆蓋就會把那些變更洗掉。
+      //   ⇒ 這裡改成「**只把 PRE 造成的差異疊上去**」：逐欄位比對 PRE 前／後的 PlayerState，
+      //     只有 PRE 真的換掉的欄位才寫回快照；PRE 沒碰過的欄位一律保留快照原值
+      //     ⇒ 結構上不可能蓋掉 PRE 之前發生的任何變更。
+      // ⚠ 一律比整個 PlayerState（不只 active）：PRE 可能同時動到 discard／bench／hand，
+      //   只同步 active 會在後面把 `attacker` 寫回 players 時吃掉那些改動（同 v6.351 的理由）。
+      {
+        const _after = workingState.players[aIdx] as unknown as Record<string, unknown>;
+        const _before = _v6367AtkBeforePre as unknown as Record<string, unknown>;
+        const _dst = attacker as unknown as Record<string, unknown>;
+        const _keys = Object.keys(_after);
+        for (const _k of Object.keys(_before)) if (!(_k in _after)) _keys.push(_k);
+        for (const _k of _keys) if (_after[_k] !== _before[_k]) _dst[_k] = _after[_k];
+      }
+      // <<< v6367-resync-attacker-after-pre
     }
 
     // v3.02 傷害公式累積器 — 每個 modifier 點推一個 term，最後組合成可讀公式。

@@ -1,5 +1,91 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.367 攻擊方側「造成傷害前」快照對齊（站長裁定 六-9）
+
+BASE `912e9bf55256a13d6596456d55fc6190473f3973`（v6.366）。⚠ **行為零變更**（目前沒有任何實卡會踩到這個洞）——
+本版是站長要求的**預先處理**。`engine.ts` 只有**純新增**（+37／−0，兩個哨兵區塊）。
+
+### 【一】站長裁定
+
+> 「C-6 要修，請預先處理」
+
+v6.351 修好了「卡面寫『在造成傷害前…』的 PRE 效果對這一次傷害無效」——
+但只對齊了**防守方**（`Object.assign(defender, workingState.players[dIdx])`）。
+**攻擊方**那一份仍然是 `handlePlaying` 開頭抓的 stale 快照。
+
+### 【二】⚠⚠ recon 推翻了 v6.351 留下的說法
+
+v6.351 的註解說「攻擊方在那個時間點已經被**支付招式費用**、**旗標蓋章**動過了，
+硬對齊會蓋掉」。逐行查證後，**兩句都不精確**：
+
+1. **引擎裡根本沒有「支付招式費用」這回事**。PTCG 規則上招式費用不丟能量，
+   全檔搜不到任何 attack-cost 的能量扣除（只有**撤退**費用會丟）。
+   招式自丟能量一律是 ATTACK_PRE／POST **自己**做的，本來就在 PRE 之後。
+2. **旗標蓋章寫的是 `players[aIdx]` / `state`，不是 `attacker` 這個物件**。
+   從快照點（`const attacker = { ...players[aIdx] }`）到 PRE 之間，ATTACK 路徑上
+   **`attacker` 一次都沒有被 mutate 過**（其他會 mutate 它的程式碼全都在別的
+   `action.type` 分支；混亂自傷／`cantAttackThisTurn` 那幾條都一定 `return`）。
+
+⇒ 「整份 `Object.assign`」今天其實**不會**蓋掉任何東西。
+
+### 【三】仍然採用「只把 PRE 造成的差異疊上去」的三個理由
+
+1. **整份覆蓋是巧合而非保證**：只要哪天有人在 ATTACK 分支加一行 `attacker.xxx = …`，
+   整份覆蓋就會**靜默**洗掉它。差異疊加法在**結構上**不可能蓋掉 PRE 之前的變更。
+2. **v6.351 的守衛 C4 明文釘死** `Object.assign(attacker, workingState.players[aIdx]);`
+   在全檔必須出現 **0 次** ⇒ 照抄那一行會直接弄紅既有守衛。
+3. 沒有採用「把費用支付／旗標蓋章移到快照之後」那條路：會改到 BASE 既有行、
+   動到 early-return 的控制流（混亂自傷、`cantAttackThisTurn`），風險遠大於純新增。
+
+形狀：`v6367-attacker-pre-baseline`（PRE 之前留一份參考）＋
+`v6367-resync-attacker-after-pre`（PRE 之後逐欄位比對，只有 PRE 真的換掉的欄位才寫回
+`attacker`），與 v6.351 的 defender 對齊**並排**在同一個 `if (preFn)` 區塊內。
+
+### 【四】原本會失效的 14 個消費點（recon 逐條）
+
+傷害管線讀 `attacker` 的地方：`damageBonusThisTurn`／`nextOwnAttackPenalty`／
+`gladionDuelBonusThisTurn`／伏特【雷】能量計數／`getAllAttachedTools` → `TOOL_ATTACK_BONUS`／
+`collectPassiveAttackBonuses`／`damageBoostFightingThisTurn`／`countEnergy`（腎上腺力量）／
+`karateKingBonusThisTurn`／`unrudaBonusThisTurn`／`getAttackerEffectiveTypes`（弱抗的攻方屬性）／
+`hasAnyEffectiveAbility`／熔岩牆的 `status === 'burned'` 免疫閘／整個 `attacker` 傳進免疫閘。
+⚠ 其中 `damageBonusThisTurn` 與 `nextOwnAttackPenalty` 那兩處**還會把 PRE 對 active 的改動反寫掉**。
+
+### 【五】守衛
+
+因為沒有實卡會踩到，守衛用**合成的 ATTACK_PRE**（在守衛裡 `ATTACK_PRE.set(...)` 註冊、
+try/finally 還原，照既有 `test-v6338` 的形狀）。⚠ `src/` 裡沒有任何測試用的東西。
+
+`scripts/test-v6367-attacker-pre-resync.mjs`：**39 passed / 0 failed**。
+【0】fixture 自驗 5（含「這一招在 src/ 裡沒有既有 ATTACK_PRE」「加成不會把靶打倒」防空真）
+、【A】PRE 改攻擊方 ⇒ 傷害跟著變 7、【B】防守方哨兵、
+【C】**不可蓋掉** 7（干擾命中判定旗標仍被清、單費招式不丟能量、PRE 丟掉的能量沒被復活、
+手牌／牌庫／備戰／棄牌沒被動、`_attackerActiveBonusDone` 仍被標記）、
+【D】重跑 v6.351、【E】中央性 8、【F】HEAD-FAIL 內建 10。
+
+**HEAD-FAIL 實測**：BASE(v6.366) exit=1、**紅 10 條**；還原後 exit=0。
+突變 **M1~M8 全殺**（對齊拿掉／挪到 PRE 之前／只同步 active／只同步 player-level／
+蓋掉旗標／蓋掉 PRE 丟掉的能量／防守方那一份被誤改／退回整份 Object.assign）。
+
+⭐ **本版核心驗收：整條 test chain（682 支，序列執行）零新紅燈**
+（62 支紅全部用安全 BASE 對照法逐支證明 HEAD=1／BASE=1）。
+`test-v6265` 用 `lfsim`（暫時 LF 化）驗證：**53 PASS / 0 FAIL**
+⇒ `stripV6367Engine` 剝完後 engine.ts 仍逐字等於 BASE blob。
+
+### 【六】⚠ 待站長裁示
+
+1. ⭐**同一家族的第二個洞（本版沒修）**：`engine.ts` 5618／5640 那兩行
+   `players[aIdx] = { ...players[aIdx], active: newAtk }; workingState = { ...workingState, players };`
+   用的是**函式開頭那個區域 `players` 陣列**，而 PRE 回傳的是**新的** players 陣列
+   ⇒ 只要招式同時有 `damageBonusThisTurn`／`nextOwnAttackPenalty`，
+   PRE 對**防守方**（以及攻擊方 player-level）的盤面改動會在那一行被**反寫回 PRE 之前**。
+   BASE 與 HEAD 行為相同（本版沒讓它變好或變壞）。建議比照本版預先處理。
+2. **v6.351 留在 `engine.ts` 的那段註解現在不精確了**（見【二】）。要不要下一版順手改正？
+   本版刻意沒動（避免改 BASE 既有行、避免 v6265 逐字比對翻紅）。
+3. **本機 62 支既有紅燈（CRLF 造成的居多）要不要排一版清掉？**
+   ⚠ 真正危險的是：`test-v6265` 的 F4 會在 `server_admin_patch.js` 那條就短路，
+   導致後面「engine.ts 逐字未動」那條斷言在本機**永遠沒有在守**。
+   （這一條與站長裁定 六-4 是同一件事。）
+
 ## v6.366 耿鬼ex（SV5K）｜侵蝕詛咒：效果來源改成「特性」（站長裁定 六-3）
 
 BASE `b9e78e32a3dff15285ff4e647437bde2b33eb689`（v6.365）。⚠ **本版改變 15 筆線上既有卡／機制的行為**（全部方向都與卡面一致）。

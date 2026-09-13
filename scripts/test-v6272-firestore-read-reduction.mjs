@@ -664,7 +664,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'b9e78e32a3dff15285ff4e647437bde2b33eb689';   // v6.365（v6.366 的上一版）
+const PREV_SHA = '912e9bf55256a13d6596456d55fc6190473f3973';   // v6.366（v6.367 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -731,9 +731,9 @@ const PREV_SHA = 'b9e78e32a3dff15285ff4e647437bde2b33eb689';   // v6.365（v6.36
 // v6.342 M6a 招式實裝 批次2（傷害計算類 16 招）＋ 既有同措辭卡收斂到新的中央 helper
 //   ⚠ M6a 仍被 lockedSets 鎖著 ⇒ 玩家看不到任何變化，**不動首頁 changelog**。
 //   ⚠ mega_decks / v2690 兩檔是「既有卡改走中央 helper」，log 與傷害逐字相同（Rule 38 收斂）。
-// v6.366 耿鬼ex（SV5K）｜侵蝕詛咒 的效果來源改成「特性」（站長裁定 六-3）
+// v6.367 攻擊方側「造成傷害前」快照對齊（站長裁定 六-9；行為零變更）
 const PREV_ALLOWED = [
-  'src/lib/game/effects.ts',
+  'src/lib/game/engine.ts',
   'src/lib/version.ts',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
