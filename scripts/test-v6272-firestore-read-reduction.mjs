@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '3977d1c937307f8b0f15d3221ac1c15a0b8cae4e';   // v6.381（v6.382 的上一版）
+const PREV_SHA = '7626d33e98b6008096054a632ab8a087d5786d90';   // v6.382（v6.383 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -739,9 +739,15 @@ const PREV_SHA = '3977d1c937307f8b0f15d3221ac1c15a0b8cae4e';   // v6.381（v6.38
 // v6.379 B-3（站長裁定）：清掉 src/lib/tournament/swiss.ts 的死碼 —— 型別 SwissResult 的 'T'
 //   與 matchPoints 註解的「平 1」。站上平手一律走雙敗（done + winnerUid:null ⇒ 雙 L），
 //   'T' 從來沒有生產者也沒有消費者 ⇒ 純刪死碼＋改註解，執行期行為零變化。
+// ⭐⭐v6.383：首頁 changelog 補上 M6a 完整上線那一則（站長交辦：M6a 上線要寫首頁 changelog）——
+//   三步搬運（三檔）：changelog.html 進一則 v6.382／v6.317 的內文降級為懶載入／最舊的 v6.271 移出；
+//   changelog-bodies.html 收 v6.317 的內文、吐出 v6.271；changelog-archive.html 收下 v6.271。
+//   玩家端其餘一律零改動（引擎、前端頁面、卡片資料全部沒動），只多一個 version.ts。
 const PREV_ALLOWED = [
-  'src/lib/cards/regulation.ts',
   'src/lib/version.ts',
+  'static/changelog-archive.html',
+  'static/changelog-bodies.html',
+  'static/changelog.html',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

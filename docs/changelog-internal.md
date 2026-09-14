@@ -1,5 +1,62 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.383 首頁 changelog 補上 M6a 完整上線那一則（站長交辦）
+
+BASE `7626d33e98b6008096054a632ab8a087d5786d90`（v6.382）。
+⚠ 這一版**只動前端靜態檔**：跑 `update-admin-full.bat` 即可（引擎與伺服器都沒動）。
+
+### 【零】站長交辦（逐字）
+
+> 「記得 m6a 上線的時候要寫首頁的 changelog」
+
+v6.382 只寫了 `docs/changelog-internal.md`，沒有動 `static/changelog.html` ——
+而 M6a 完整上線是這一連串版本裡**玩家唯一看得到**的變化（突然可以組牌了）。
+Fable 5 在 v6.382 的獨立審查裡也把「首頁沒動」列為非阻擋觀察項。
+
+### 【一】三步搬運（`N_HOME = 35` / `N_INLINE = 12`，政策來自 `scripts/lib/changelog-policy.mjs`）
+
+| 檔案 | 進 | 出 |
+|---|---|---|
+| `static/changelog.html` | 最前面新增 v6.382 一則（`<details open>` ＋ 內嵌 `log-body`），原本的第一則 v6.340 收起來 | ① v6.317 掉出內嵌區 ⇒ 移除它的 `log-body`、補 `data-ver="v6.317"`；② 最舊的 v6.271 整則移出 |
+| `static/changelog-bodies.html` | 最上面收下 v6.317 的內文 | 吐出 v6.271 的內文 |
+| `static/changelog-archive.html` | 最上面收下 v6.271 的完整條目（`summary` ＋ `log-body`，**不帶** `data-ver`） | — |
+
+搬運後：首頁 35 則、內嵌 12 則、預設展開 1 則、懶載入 23 則；
+封存頁 379 則（原本 378，最新一則從 v6.270 變成 v6.271，與首頁最舊的一則正好接上、不重疊）。
+
+⭐ **搬運無損由 `test-v6264` 的【F】段實際驗到**：它的 `BASE_SHA` 是 v6.381，
+而 v6.382 沒動 changelog ⇒ v6.381 的三檔與 v6.382 逐位元相同 ⇒【F】的 F0 短路**不成立**，
+會真的跑一次「對 BASE 逐字還原」。所以這一版**刻意不把 pin 往前挪到 v6.382** ——
+挪過去結果一樣，但就少守了一次。
+
+### 【二】文案（受守衛約束，不是隨便寫）
+
+`test-changelog-size-and-archive` 對首頁 changelog 有硬性規範，新則逐條對過：
+
+| 規範 | 本則 |
+|---|---|
+| ⑧ 每則 `summary` 純文字 ≤ 150 字 | **137 字**（初稿 155 字被擋，把重複的卡包全名拿掉） |
+| ⑨ 全篇合計 ≤ 5000 字 | 3618 字 |
+| ⑫ 不得出現第二人稱（你／妳／您） | 無 |
+| ⑥ 不得出現技術字眼（含 bodies 檔） | 無 |
+| ⑬ 不得出現站長專屬題材（含「部署」二字） | 用「等伺服器更新後才會套用」，與既有條目一致 |
+| A4 內文不得含巢狀 `<div>` | 無 |
+
+內文提了三個玩家真的會去用的效果當代表：甜甜螢｜絕佳費洛蒙（弱點 ×3）、
+皮卡丘ex｜劈哩劈哩夜狂歡（手牌任意數量基本能量任意分配）、伊布｜叼去藏（抽對手 1 張物品卡放牌庫底）——
+正好就是 v6.382 補守衛時逐一驗過行為的那三張。
+
+⚠ 沒有去改 v6.333 那一則舊公告（「這個卡包整包不開放用於對戰」）：changelog 是歷史紀錄，
+當時的敘述是當時的事實，由新的一則說明改變，不回頭竄改。
+
+### 【三】bump 四配套
+
+- `src/lib/version.ts` → `6.383`
+- `oracle-admin/admin.html` 的 `SITE_VERSION_HINT` → `6.383`
+- `scripts/test-v6264-changelog-lazy-body.mjs` 的 `BASE_SHA` → **刻意不動**（理由見【一】），只改註解
+- `scripts/test-v6272-firestore-read-reduction.mjs` 的 `PREV_SHA` → v6.382 的 sha；
+  `PREV_ALLOWED` → `version.ts` ＋ changelog 三檔（列不齊就會紅，這正是那條的用途）
+
 ## v6.382 ⭐ M6a「30th CELEBRATION」完整上線（站長 2026-09-14 新裁定）
 
 BASE `3977d1c937307f8b0f15d3221ac1c15a0b8cae4e`（v6.381）。
