@@ -14,15 +14,20 @@
  *      斷言的是 `/checkin` 這一發 API 有沒有被送出去，不是「有沒有呼叫 tCheckinCommit」。
  */
 import { build, transform } from 'esbuild';
-import { parse } from 'svelte/compiler';
+// ⭐v6.384：svelte if-chain 求值器已抽成共用模組（v6.384 的休閒版本閘要用同一份判準）。
+import { ifChains, exclusiveCond } from './lib/svelte-if-chains.mjs';
 import { readFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUTVC = join(ROOT, '.xv6167-vc.mjs');
+// ⭐v6.384：版本閘的判準已收斂到 $lib/version-gate，harness 必須載入**真的那一支**，
+//   不可以在這裡自己寫一份等價邏輯 —— 那就是第二份判準（Rule 38）。
+const OUTVG = join(ROOT, '.xv6167g.mjs');
 const OUTHN = join(ROOT, '.xv6167-hn.mjs');
 process.on('exit', () => { for (const f of [OUTVC, OUTHN]) { try { unlinkSync(f); } catch { /* */ } } });
+process.on('exit', () => { try { unlinkSync(OUTVG); } catch { /* */ } });   // ⭐v6.384
 
 const rd = (rel) => { try { return readFileSync(join(ROOT, rel), 'utf8'); } catch { return ''; } };
 const PAGE = rd('src/routes/game/+page.svelte');
@@ -37,40 +42,8 @@ const ok = (name, cond, extra = '') => {
   else { fail++; console.log('  FAIL ' + name + (extra ? ' — ' + extra : '')); }
 };
 
-// ── 共用：算出某個字元位置所在節點的「if-chain」（每一層記下條件字面量與走 then/else）──
-function ifChains(src, targets) {
-  const ast = parse(src, { modern: true });
-  const out = {};
-  const walk = (node, path) => {
-    if (!node || typeof node !== 'object') return;
-    if (Array.isArray(node)) { for (const n of node) walk(n, path); return; }
-    if (node.type === 'IfBlock' && node.test) {
-      const cond = src.slice(node.test.start, node.test.end).replace(/\s+/g, ' ').trim();
-      walk(node.consequent, path.concat([{ cond, branch: 'then' }]));
-      if (node.alternate) walk(node.alternate, path.concat([{ cond, branch: 'else' }]));
-      return;
-    }
-    if (typeof node.start === 'number' && typeof node.end === 'number') {
-      for (const k of Object.keys(targets)) {
-        const i = targets[k];
-        if (i >= 0 && node.start <= i && i < node.end) out[k] = path;
-      }
-    }
-    for (const k of Object.keys(node)) {
-      if (k === 'type' || k === 'start' || k === 'end' || k === 'parent') continue;
-      walk(node[k], path);
-    }
-  };
-  walk(ast.fragment, []);
-  return out;
-}
-/** 兩條 if-chain 若對同一個條件各走 then / else ⇒ 兩個節點**永遠不可能同時在畫面上**。 */
-function exclusiveCond(a, b) {
-  for (const x of (a || [])) for (const y of (b || [])) {
-    if (x.cond === y.cond && x.branch !== y.branch) return x.cond;
-  }
-  return null;
-}
+// ⭐v6.384：ifChains / exclusiveCond 的定義已搬到 scripts/lib/svelte-if-chains.mjs
+//   （逐字搬移，行為不變）。下面 ⓪ 的掃描器自我驗證照舊守著它。
 
 // ══ ⓪ 掃描器自我驗證（Rule 25：掃描器自身要先驗）══════════════════════════
 console.log('⓪ 掃描器自我驗證');
@@ -135,6 +108,11 @@ try {
     entryPoints: [join(ROOT, 'src/lib/version-compare.ts')],
     outfile: OUTVC, bundle: true, format: 'esm', platform: 'node', target: 'node20', logLevel: 'silent',
   });
+  // ⭐v6.384 中央判準（bundle 會把 version-compare 一起帶進去）
+  await build({
+    entryPoints: [join(ROOT, 'src/lib/version-gate.ts')],
+    outfile: OUTVG, bundle: true, format: 'esm', platform: 'node', target: 'node20', logLevel: 'silent',
+  });
   const a = PAGE.indexOf('function tCheckinBlockedByVersion');
   const b = PAGE.indexOf('function tSendLobbyDiag');
   if (a < 0 || b < 0 || b <= a) throw new Error('抓不到 tCheckinBlockedByVersion / tVerModalUpdate 的區間');
@@ -142,6 +120,7 @@ try {
   const js = (await transform(tsSrc, { loader: 'ts', target: 'node20' })).code;
   const mod = `
 import { isClientTooOld, recentlyHardRefreshed } from ${JSON.stringify(pathToFileURL(OUTVC).href)};
+import { evaluateVersionGate } from ${JSON.stringify(pathToFileURL(OUTVG).href)};   // ⭐v6.384
 export function run(env) {
   const VERSION = env.VERSION;
   let tMinClientVer = env.minVer;

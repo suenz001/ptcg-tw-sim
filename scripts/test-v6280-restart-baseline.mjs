@@ -558,7 +558,15 @@ T('F7 ⭐⭐⭐ 零額外請求：整份 +page.svelte 的診斷送出點數量�
   const tapi = (PAGE.match(/\btApi\(/g) || []).length;
   assert.strictEqual(tapi, 37, 'tApi 的呼叫點數量變了（錦標賽必須零接觸），實際 ' + tapi);
   const fet = (PAGE.match(/\bfetch\(/g) || []).length;
-  assert.strictEqual(fet, 3, 'fetch 的呼叫點數量變了，實際 ' + fet);
+  // ⭐v6.384 合法新增 1 個 fetch 呼叫點（3 → 4）：休閒（一般）對戰的版本閘要抓公開門檻
+  //   GET /api/client-min-version（站長 2026-09-14 裁定「所有人都擋，含匿名」⇒ 門檻
+  //   必須走不驗身分的公開端點，錦標賽那條 /event 輪詢在休閒大廳根本不會跑）。
+  //   ⚠⚠ 這不是放寬：數字仍然是**精確值**（多一個紅、少一個也紅），而且下一行會再釘一次
+  //     「多出來的那一發確實是那一支端點」。行為面（只抓一次／1.5 秒上限／抓不到照樣
+  //     進得了房）由 test-v6384 的【H】行為端 harness 守 —— 那裡是真的把函式抽出來跑的。
+  assert.strictEqual(fet, 4, 'fetch 的呼叫點數量變了，實際 ' + fet);
+  assert.ok(PAGE.includes("fetch('/api/client-min-version'"),
+    '多出來的那一發 fetch 不是 v6.384 的版本閘門檻 —— 有人偷渡了別的請求進來');
 });
 T('F8 ⭐ 指紋只讀既有 state：本版動過的每一段裡都沒有 fetch/計時器/await/送出點', () => {
   const blk = noteFn(PAGE) + phantomField(PAGE) + seedBlock(PAGE) + subResetBlock(PAGE);

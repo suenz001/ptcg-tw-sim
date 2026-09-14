@@ -344,9 +344,10 @@ const SRV = rd(SRV_REL);
   //   （lib 三支是宣告端，test-v6292 B3 要斷言「還原到最後有沒有回到 v6.290」⇒ 必須寫出那兩個值）。
   const LIB_DECL = new Set(['scripts/lib/tourn-revert-v6291.mjs', 'scripts/lib/tourn-revert-v6292.mjs',
     'scripts/lib/tourn-revert-v6365.mjs', 'scripts/lib/tourn-revert-v6381.mjs',   // ⭐v6.381 新節點
+    'scripts/lib/tourn-revert-v6384.mjs',   // ⭐v6.384 新節點（休閒對戰版本閘的公開端點）
     'scripts/test-v6292-tourn-verified-gate2.mjs']);
   chk('★★ D3-前提：被豁免的 ' + LIB_DECL.size + ' 個檔案**每一個**都真的是還原鏈的一員（豁免不能隨便加）',
-    LIB_DECL.size === 5 && [...LIB_DECL].every((rel) => {
+    LIB_DECL.size === 6 && [...LIB_DECL].every((rel) => {   // ⭐v6.384 鏈多一節 ⇒ 6
       const s = rd(rel);
       const isLib = /^scripts\/lib\/tourn-revert-v\d+\.mjs$/.test(rel);
       const isConsumer = /from '\.\/lib\/tourn-revert-v\d+\.mjs'/.test(s);

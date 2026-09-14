@@ -643,7 +643,7 @@ await TA('M7 admin.html 拿掉 msgCounts 參數 ⇒「按開關要帶 msgCounts=
 // ⑨ ⭐⭐ 錦標賽區塊逐位元未動（內嵌 sha256，淺複製下也在守）
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑨ 錦標賽區塊逐位元未動');
-const TOURN_TAIL_SHA256 = 'f908eb048dc41bd37f17d253b17ea5d5db5ae718fd21805d16fec27b4417b8c4' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
+const TOURN_TAIL_SHA256 = '9b234e690ec261cafc40031b0730821042ef625e4383c8e46b9df857cb2df4d1' /* v6.365 重釘：站長裁定 六-2「錦標賽平手＝雙敗」動到 onMatchGameOver 的平手分支、level-triggered 對帳的 isDraw、noChampionReason 的措辭三處；行為守衛見 test-v6365-tournament-draw-double-loss */;
 function tournTail(src) {
   const i = src.indexOf("app.get('/api/tournament");
   if (i < 0) throw new assert.AssertionError({ message: '找不到第一支 /api/tournament 端點' });
@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '7626d33e98b6008096054a632ab8a087d5786d90';   // v6.382（v6.383 的上一版）
+const PREV_SHA = 'e78b2312bc5b59c7037c3a8280dea485d5b8a3cc';   // v6.383（v6.384 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -743,11 +743,23 @@ const PREV_SHA = '7626d33e98b6008096054a632ab8a087d5786d90';   // v6.382（v6.38
 //   三步搬運（三檔）：changelog.html 進一則 v6.382／v6.317 的內文降級為懶載入／最舊的 v6.271 移出；
 //   changelog-bodies.html 收 v6.317 的內文、吐出 v6.271；changelog-archive.html 收下 v6.271。
 //   玩家端其餘一律零改動（引擎、前端頁面、卡片資料全部沒動），只多一個 version.ts。
+// ⭐⭐⭐v6.384：休閒（一般）對戰的版本閘（站長 2026-09-14 裁定，玩家建議「版本盡量一致」）——
+//   新增 src/lib/version-gate.ts（版本閘的唯一判準，錦標賽與休閒共用）；
+//   src/routes/game/+page.svelte 三個入口過閘（建立／加入／觀戰，後兩者同一支 handler）；
+//   首頁 changelog 三步搬運（三檔）。
+//   ⚠ 伺服器端的公開端點在 oracle-admin/，不在這一節的掃描範圍（由區塊指紋鎖與 test-v6384 守）。
+// ⚠ 下面兩個 home-video.json **不是本版的程式改動** —— 是站長 2026-09-14 把首頁影片換成
+//   當天的奪冠報告（`20260914 ptcg tw sim 奪冠報告`）。那份設定本來就會不定期更新，
+//   它躺在工作樹裡就會跟著下一個 commit 一起進去 ⇒ 這裡誠實列出來，不是放寬。
 const PREV_ALLOWED = [
+  'src/lib/home-video.json',
+  'src/lib/version-gate.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',
+  'static/home-video.json',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }

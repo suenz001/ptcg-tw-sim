@@ -3454,17 +3454,20 @@ async function loadMonitor() {
     var mvCur = window.SITE_VERSION_HINT || '';
     var mvWarn = (mvOn && mvMin && mvCur && !verLE(mvMin, mvCur));
     html += '<div style="border-top:1px dashed #e3e8ef;padding-top:12px;margin-top:12px;">'
-      + '<div style="font-weight:700;margin-bottom:4px;">🔄 報到版本閘　'
+      + '<div style="font-weight:700;margin-bottom:4px;">🔄 版本閘（報到＋線上對戰）　'
       + (mvOn && mvMin ? '<span style="color:#2e7d32;">已啟用（最低 v' + escapeHtml(mvMin) + '）</span>' : '<span style="color:#888;">關閉</span>')
       + '</div>'
       + '<p class="small muted" style="margin:2px 0 8px;">玩家按「✋ 我要報到」時，若他載入的版本低於門檻，會跳視窗引導他清快取更新。'
-      + '<b>不會自動重載、也不會擋住報到</b>——視窗上一定有「先不更新，直接報到」，而且按過更新後版本仍舊、或報到只剩不到 30 秒時一律直接放行。'
+      + '<br>⭐⭐ <b>v6.384 起同一個門檻也管一般（休閒）對戰</b>：建立房間／加入／👁 觀戰之前也會跳同一個提示視窗，'
+      + '<b>包含沒有登入的匿名玩家</b>。也就是說，為了某一場比賽把門檻調高，會連帶提示全站正在打休閒的人 —— 調之前請先想一下。'
+      + '（休閒端只對 v6.384 以上的玩家生效；更舊的版本沒有那段程式碼。）'
+      + '<b>不會自動重載、也不會擋住報到或進房</b>——視窗上一定有「先不更新，直接報到／直接進房」，而且按過更新後版本仍舊、或報到只剩不到 30 秒時一律直接放行；同一顆按鈕最多只提示一次。'
       + '<br>⚠ 這個門檻<b>只對 v6.160 以上的玩家生效</b>（更舊的版本沒有這段程式碼）。想找出更舊的人，看下面指紋區與報名名單的 clientVer：<code>pre-gate</code> 就是 v6.159 以下。'
       + '<br>⚠ 改完最多約 13 秒才會生效（伺服器兩層快取）。</p>'
       + '<label style="display:inline-block;margin:4px 12px 8px 0;">最低版本（例 6.160）：'
       + '<input id="mon-mv-min" value="' + escapeHtml(mvMin) + '" placeholder="6.160" style="width:90px;padding:5px;"></label>'
       + (mvCur ? '<span class="small muted">　現行部署版本 v' + escapeHtml(mvCur) + '</span>' : '')
-      + (mvWarn ? '<div style="color:#c62828;font-weight:700;margin:4px 0;">⚠ 門檻高於現行部署版本 —— 會提示<b>所有</b>玩家（不會鎖人，但多半是填錯了）。</div>' : '')
+      + (mvWarn ? '<div style="color:#c62828;font-weight:700;margin:4px 0;">⚠ 門檻高於現行部署版本 —— 會提示<b>所有</b>玩家（含休閒對戰與匿名玩家；不會鎖人，但多半是填錯了）。</div>' : '')
       + '<br><button style="' + btnS + '" onclick="monSetMinVer(true, this)">啟用版本閘</button> '
       + '<button style="' + btnW + '" onclick="monSetMinVer(false, this)">關閉</button>'
       + '</div>';
@@ -3699,7 +3702,7 @@ window.monSetLongPoll = async function (enabled, btn) {
 // v6.160 現行部署版本（純顯示用的對照值，出新版時順手更新即可）。
 //   ⚠ 這只影響「門檻高於現行版本」那句紅字警告要不要出現 —— 過期了最多是多叫一次，
 //     絕不影響版本閘本身的行為（門檻是伺服器給的，擋人判斷在玩家端且處處 fail-open）。
-window.SITE_VERSION_HINT = '6.383';
+window.SITE_VERSION_HINT = '6.384';
 // v6.160 十進位版本比較（與 src/lib/version-compare.ts 同語義：minor 右補 0 到等長再比）。
 //   ⚠ 不可以用 parseFloat 或字串比：'10.0' vs '6.159' 字串比會判反。
 //   回傳 a <= b；任一邊格式不對回 true（＝不警告，寧可少叫也不要亂叫）。

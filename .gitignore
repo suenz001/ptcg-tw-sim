@@ -40,3 +40,13 @@ oracle-admin/tournament/server-engine.cjs
 oracle-admin/tournament/tournament-pool.json
 oracle-admin/tournament/.engine-entry.ts
 oracle-admin/tournament/.appstub.js
+
+# ⭐⭐⭐v6.384：Firebase Admin 服務帳戶金鑰（裡面是明文私鑰）——絕不可以進版控。
+#   ⚠ 這個檔案一直躺在工作樹裡，而 .gitignore 從來沒有擋它。v6.384 有一次 `git add -A`
+#     把它 staged 進 commit（當場 `git reset` 撤銷；查證過它從未進過任何一個 commit）。
+#   ⇒ 補上這兩條，讓同樣的手滑不可能再發生一次。
+oracle-admin/firebase-admin-key.json
+oracle-admin/*firebase*key*.json
+
+# AI 交辦用的臨時腳本與輸出（純本機，不進版控）
+__m6a/

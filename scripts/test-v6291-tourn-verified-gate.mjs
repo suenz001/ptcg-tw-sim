@@ -47,9 +47,10 @@ import {
 //   本檔的 revert-diff 從此再串一節：先還原 v6.365 的三段，再往後退。
 //   ⚠ 站長明文禁止把鎖拿掉／改成不驗／只比片段 ⇒ 一律串接，不放水。
 import {
-  NEW_TAIL_SHA_V6381, NEW_TEV_SHA_V6381, NEW_TEV_LEN_V6381,
-  revertV6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
-} from './lib/tourn-revert-v6381.mjs';
+  NEW_TAIL_SHA_V6384, NEW_TEV_SHA_V6384, NEW_TEV_LEN_V6384,
+  revertV6384, revertV6381 as _rv6381, revertV6365 as _rv6365, stripDeclaredBlocksNewerThan,
+} from './lib/tourn-revert-v6384.mjs';
+const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
@@ -183,9 +184,9 @@ await T('B1 現行兩個區塊的指紋 ＝ v6.365 重釘的新值；逐層還�
   const tail = PATCH.slice(PATCH.indexOf(TAIL_ANCHOR));
   const tev = PATCH.slice(PATCH.indexOf(TEV_ANCHOR));
   assert.ok(tail.length > 200000 && tev.length > 200000, '區塊抽太短 ⇒ 比對會變恆真式');
-  assert.strictEqual(sha256(tail), NEW_TAIL_SHA_V6381, 'tail sha=' + sha256(tail));
-  assert.strictEqual(sha256(tev), NEW_TEV_SHA_V6381, 'tev sha=' + sha256(tev));
-  assert.strictEqual(tev.length, NEW_TEV_LEN_V6381, 'tev 長度=' + tev.length);
+  assert.strictEqual(sha256(tail), NEW_TAIL_SHA_V6384, 'tail sha=' + sha256(tail));
+  assert.strictEqual(sha256(tev), NEW_TEV_SHA_V6384, 'tev sha=' + sha256(tev));
+  assert.strictEqual(tev.length, NEW_TEV_LEN_V6384, 'tev 長度=' + tev.length);
   // ⭐ 中繼站：每一版原本守的指紋都沒有被丟掉，只是各往後退了一層。
   assert.strictEqual(sha256(revertV6365(tail)), NEW_TAIL_SHA_V6292, '還原 v6.365 後 tail ≠ v6.292');
   assert.strictEqual(sha256(revertV6365(tev)), NEW_TEV_SHA_V6292, '還原 v6.365 後 tev ≠ v6.292');
@@ -240,7 +241,7 @@ const TEV_LOCKS = [
 for (const f of TAIL_LOCKS) {
   await T('B4-tail ' + f + '：重釘到新 tail sha，且 v6.290／v6.291／v6.292 的舊值零殘留', () => {
     const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
-    assert.ok(s.includes(NEW_TAIL_SHA_V6381), f + ' 沒重釘 tail sha（它現在守的是錯的值）');
+    assert.ok(s.includes(NEW_TAIL_SHA_V6384), f + ' 沒重釘 tail sha（它現在守的是錯的值）');
     assert.ok(!s.includes(OLD_TAIL_SHA_V6290), f + ' 還留著 v6.290 的舊 tail sha');
     assert.ok(!s.includes(NEW_TAIL_SHA_V6291), f + ' 還留著 v6.291 的舊 tail sha');
     assert.ok(!s.includes(NEW_TAIL_SHA_V6292), f + ' 還留著 v6.292 的舊 tail sha');
@@ -249,7 +250,7 @@ for (const f of TAIL_LOCKS) {
 for (const f of TEV_LOCKS) {
   await T('B4-tev ' + f + '：重釘到新 TEVENTS sha，且 v6.290／v6.291／v6.292 的舊值零殘留', () => {
     const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
-    assert.ok(s.includes(NEW_TEV_SHA_V6381), f + ' 沒重釘 TEVENTS sha');
+    assert.ok(s.includes(NEW_TEV_SHA_V6384), f + ' 沒重釘 TEVENTS sha');
     assert.ok(!s.includes(OLD_TEV_SHA_V6290), f + ' 還留著 v6.290 的舊 TEVENTS sha');
     assert.ok(!s.includes(NEW_TEV_SHA_V6291), f + ' 還留著 v6.291 的舊 TEVENTS sha');
     assert.ok(!s.includes(NEW_TEV_SHA_V6292), f + ' 還留著 v6.292 的舊 TEVENTS sha');
@@ -259,7 +260,7 @@ for (const f of TEV_LOCKS) {
 for (const f of ['scripts/test-v6266-deck-stats-server.mjs', 'scripts/test-v6268-delta-put-server.mjs', 'scripts/test-v6278-delta-put-deep-path.mjs']) {
   await T('B4-len ' + f + '：長度常數重釘、舊值零殘留', () => {
     const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
-    assert.ok(s.includes(String(NEW_TEV_LEN_V6381)), f + ' 的長度常數沒重釘');
+    assert.ok(s.includes(String(NEW_TEV_LEN_V6384)), f + ' 的長度常數沒重釘');
     assert.ok(!s.includes(String(OLD_TEV_LEN_V6290)), f + ' 還留著 v6.290 的舊長度常數');
     assert.ok(!s.includes(String(NEW_TEV_LEN_V6291)), f + ' 還留著 v6.291 的舊長度常數');
     assert.ok(!s.includes(String(NEW_TEV_LEN_V6292)), f + ' 還留著 v6.292 的舊長度常數');
@@ -497,8 +498,8 @@ const MUT = [
     null,
     async () => {
       const f = 'scripts/test-v6287-friends-dm.mjs';
-      const s = normEol(readFileSync(join(ROOT, f), 'utf8').replace(NEW_TEV_SHA_V6381, '0'.repeat(64)));
-      assert.ok(s.includes(NEW_TEV_SHA_V6381), 'B4：' + f + ' 沒重釘');
+      const s = normEol(readFileSync(join(ROOT, f), 'utf8').replace(NEW_TEV_SHA_V6384, '0'.repeat(64)));
+      assert.ok(s.includes(NEW_TEV_SHA_V6384), 'B4：' + f + ' 沒重釘');
     }],
 ];
 for (const [name, mutate, check] of MUT) {

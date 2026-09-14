@@ -31,7 +31,8 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
-import { revertV6381 } from './lib/tourn-revert-v6381.mjs';
+import { revertV6384, revertV6381 as _rv6381 } from './lib/tourn-revert-v6384.mjs';
+const revertV6381 = (b) => _rv6381(revertV6384(b));   // ⭐v6.384 鏈又長一節（別名：既有呼叫點一個字都不必改）
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));

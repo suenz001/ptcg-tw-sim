@@ -7506,6 +7506,31 @@ import('firebase-admin').then(async ({ default: admin }) => {
     //     所以即使把 min 誤填成 '99.0'，結果也只是所有玩家被提示一次、按逃生鈕照樣報到，
     //     不會有人被鎖在賽外。（admin 頁會拿現行部署版本對照並紅字警告。）
     //   ⚠⚠ 門檻**只對 v6.160 以上的 client 生效** —— 更舊的 bundle 沒有那段程式碼。
+// >>> v6384-public-min-client-version
+    // ⭐⭐⭐v6.384 休閒（一般）對戰的版本閘：建立房間／加入／觀戰之前也要比對得到版本。
+    //   ⚠⚠ 門檻與錦標賽**共用同一份設定**（站長 2026-09-14 裁定）⇒ 這一支只是把既有的
+    //     `minVerConfig()` 開一個**公開**出口，站上仍然只有一份判準（Rule 38）。
+    //     絕不可以在這裡自己讀 TCONFIG 或自己寫一份預設值 —— 那就是第二份判準。
+    //   ⚠⚠ **公開＝不驗身分**：休閒對戰可以匿名玩，而站長裁定「所有人都擋（含匿名）」，
+    //     匿名玩家沒有 Firebase token ⇒ 這支不能要求認證。回應只有「門檻版本號」這個
+    //     公開常數，不含任何玩家資料、不因請求者而異 ⇒ 沒有任何可洩漏的東西。
+    //   ⚠⚠ 擋人的判斷一樣**全部在 client**、每一條失敗路徑都 fail-open（v6.160 的硬約束
+    //     原封不動延用）：這支端點掛掉、回 500、回 HTML、回垃圾值 ⇒ client 解析不出來
+    //     ⇒ `isClientTooOld` 回 false ⇒ **不擋任何人**。所以 catch 也回「不擋」的形狀，
+    //     而不是回 500 —— 讓 client 少一條要處理的例外路徑。
+    //   ⚠ `Cache-Control: max-age=10` 與 `minVerConfig()` 自己的 10 秒記憶體快取同級：
+    //     站長在後台改門檻後，最壞 10 秒（快取）＋10 秒（CDN）內全站生效。
+    app.get('/api/client-min-version', async (req, res) => {
+      try {
+        const cfg = await minVerConfig();
+        res.set('Cache-Control', 'public, max-age=10');
+        res.json({ enabled: cfg.enabled === true, min: cfg.min || '' });
+      } catch (e) {
+        // fail-open：讀不到設定就回「沒有門檻」，client 於是不擋任何人。
+        res.json({ enabled: false, min: '' });
+      }
+    });
+// <<< v6384-public-min-client-version
     app.get('/api/tournament/admin/minclientver', async (req, res) => {
       try {
         const id = await tournIdentity(req);

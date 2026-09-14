@@ -123,7 +123,12 @@
   import { VERSION } from '$lib/version';
   // ⭐⭐⭐v6.160 錦標賽報到的「client 版本太舊」提示。清快取動作與首頁那顆鈕**共用同一份實作**。
   import { hardRefreshNow } from '$lib/hard-refresh';
-  import { isClientTooOld, recentlyHardRefreshed } from '$lib/version-compare';
+  // ⭐v6.384：isClientTooOld / recentlyHardRefreshed 的呼叫點已全部收斂進 $lib/version-gate，
+  //   這裡不再直接 import 它們（留著會變成沒有人在看的死 import；Fable 5 審查指出）。
+  // ⭐⭐⭐v6.384 版本閘的**唯一判準**（錦標賽報到 ＋ 休閒建立房間／加入／觀戰共用）。
+  //   ⚠ 這一版把 tCheckinBlockedByVersion 的五條 fail-open 整組搬進 $lib/version-gate，
+  //     休閒那三個入口直接重用**同一支**：站上只有一份判準（Rule 38）。
+  import { evaluateVersionGate, readMinVersionPayload } from '$lib/version-gate';
   import { playSfx, closeAudio, preloadReadyGoSample, staggerSfx, playSfxEvents } from '$lib/audio/sfx';
   // v6.048：音效決策收斂到純函式（三條路徑共用，可寫自動化守衛）
   import { computeSfxEvents } from '$lib/audio/sfx-events';
@@ -562,6 +567,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //   ⚠ 刻意用非響應式的 Set（不是 $state）：它只影響判定，不需要驅動任何畫面。
   //   ⚠ 只存在於這一次頁面生命週期；重載後可以再提示一次，這正是我們要的（重載＝版本可能已更新）。
   const _tVerPrompted = new Set<string>();
+// >>> v6384-casual-version-gate-state
+  // ⭐⭐⭐v6.384 休閒（一般）對戰的版本閘（站長 2026-09-14 裁定：玩家建議「讓版本盡量一致」）。
+  //   ⚠⚠ 門檻與錦標賽**共用同一份設定**（伺服器 tournamentConfig 的 minClientVer）——
+  //     只是取得的管道不同：錦標賽大廳從 /event 順便拿；休閒大廳沒有那支輪詢
+  //     （tournLoadEvent 只在 isTournament 時跑），所以改打公開的 /api/client-min-version。
+  //   ⚠⚠ 空字串 ＝ 沒設定／灰度沒開／端點還沒部署／回應壞掉 ⇒ **不擋任何人**（fail-open）。
+  let casualMinClientVer = $state('');
+  // 非空 ＝ 正在顯示版本提示視窗（值是觸發的入口 key：'create' / 'join:<房號>'）。
+  let casualVerModalKey = $state('');
+  // ⭐ 與錦標賽的 _tVerPrompted 同一條 v6.167 不變式：**同一個入口最多只擋一次**，
+  //   不依賴提示視窗有沒有被畫出來 ⇒ 最壞情況只是白按一次，絕不會有人進不了房間。
+  //   ⚠ 刻意用非響應式 Set（不是 $state）：它只影響判定，不需要驅動畫面。
+  const _casualVerPrompted = new Set<string>();
+  // 逃生鈕按下去要接著做的事（＝原本那顆按鈕的動作）。⚠ 一定要在開視窗時就存好，
+  //   不可以事後從 casualVerModalKey 反推 —— 反推一旦解析失敗，逃生口就變成死路。
+  let _casualVerPendingAction: (() => Promise<void>) | null = null;
+  // 只抓一次就夠（門檻是全站設定，不會在玩家開房的那幾秒內變）。
+  //   ⚠ 失敗不重試、不阻塞任何動作：抓不到就是抓不到，維持空字串＝不擋。
+  let _casualMinVerFetched = false;
+  // ⚠ 與錦標賽的 tVerModalBusy 同一個理由：hardRefreshNow() 保證會**呼叫** location.replace，
+  //   但不保證瀏覽器真的導航離開（PWA／異常狀態）。沒有看門狗的話兩顆鈕都會永久 disabled，
+  //   連逃生口都按不動 —— 那就是把人關在房間外面。
+  let casualVerModalBusy = $state(false);
+// <<< v6384-casual-version-gate-state
   let tRegFormEventId = $state('');  // 目前展開報名表單的賽事 id（點某場「報名」才展開）
   // ⭐⭐⭐v6.188 棄賽確認框。站長裁定：棄賽**不可逆**、不開放玩家自助反悔 ⇒ 唯一的保護就是這個確認框，
   //   所以「按鈕」與「真的送出」一定要是兩個不同的動作（tDropRequest 只開框、tDropCommit 才打 API）。
@@ -5854,25 +5883,30 @@ function _setupSelfPending(g: any, seat: number): string | null {
   //     ⑤ 是唯一不依賴 UI 的那一條，也是守衛 test-v6167-checkin-never-locked.mjs 的核心不變式。
   function tCheckinBlockedByVersion(eventId: string): boolean {
     try {
-      if (!isClientTooOld(VERSION, tMinClientVer)) return false;
-      // ⑤**同一場賽事最多只擋一次**（v6.167）。這條與視窗顯示與否完全無關：
-      //   就算提示視窗因為任何理由沒被畫出來（版面分支、CSS、未來重構…），
-      //   玩家再按一次「我要報到」就一定會完成報到 ⇒ 最壞情況只是白按一次，不會被鎖住。
-      if (_tVerPrompted.has(eventId)) return false;
-      // ②更新過一輪還是舊的 ⇒ 放行，並記一筆診斷讓站長看得到「更新沒生效」這件事。
-      const _href = (typeof window !== 'undefined' && window.location) ? window.location.href : '';
-      if (recentlyHardRefreshed(_href, Date.now())) {
-        tSendLobbyDiag('checkin-stale-after-update', eventId);
-        return false;
-      }
-      // ③報到剩餘時間不足 ⇒ 放行（寧可讓他帶著舊版打，也不要害他錯過報到）。
+      // ⭐⭐⭐v6.384：五條 fail-open 整組搬到 $lib/version-gate 的 evaluateVersionGate()，
+      //   休閒對戰的建立房間／加入／觀戰重用**同一支**（Rule 38：判準只能有一份）。
+      //   ⚠ 判定順序與 v6.160~v6.167 逐條對齊，行為逐字不變（test-v6384 有逐案對照）：
+      //     ①版本沒比門檻舊 ②已提示過一次 ③剛更新過 ④截止時間不足 ⇒ 都放行。
+      //   ⚠ 診斷訊號改由 reason 決定，送出的字串與時機與舊版逐字相同 ——
+      //     站長在 admin 的診斷頁看到的東西不會因為這次收斂而變。
       const _ev = tEvents.find((e: any) => e && e._id === eventId);
       // ⚠ 門檻 30 秒（v6.162 站長裁定，v6.160 原為 90 秒）：「更新不需要那麼久，30 秒綽綽有餘」。
-      //   改這個數字時，scripts/test-v6160-checkin-version-gate.mjs 的 ⑩ 區塊（行為端）要一起改，
-      //   admin.html 的兩處說明文字也要一起改（「90 秒」這個說法散在四處，grep 數字只找得到這一處）。
-      const _left = (_ev && _ev.checkInDeadline) ? (_ev.checkInDeadline - tNow) : Infinity;
-      if (_left < 30000) { tSendLobbyDiag('checkin-stale-deadline-near', eventId); return false; }
-      return true;
+      //   ⭐v6.384 這個數字現在是 version-gate 的 DEADLINE_FLOOR_MS_DEFAULT（單一來源）；
+      //   改它時 scripts/test-v6160 的 ⑩ 區塊與 admin.html 的兩處說明文字仍要一起改。
+      const _href = (typeof window !== 'undefined' && window.location) ? window.location.href : '';
+      const _v = evaluateVersionGate({
+        cur: VERSION,
+        min: tMinClientVer,
+        href: _href,
+        now: Date.now(),
+        alreadyPrompted: _tVerPrompted.has(eventId),
+        // ⚠ 沒有 checkInDeadline 就不傳 ⇒ 中央那邊視為 Infinity（與舊版逐字同義）。
+        deadlineLeftMs: (_ev && _ev.checkInDeadline) ? (_ev.checkInDeadline - tNow) : undefined,
+      });
+      // ⚠ 診斷字串與舊版逐字相同（'checkin-stale-after-update' / 'checkin-stale-deadline-near'）。
+      if (_v.reason === 'recently-refreshed') tSendLobbyDiag('checkin-stale-after-update', eventId);
+      else if (_v.reason === 'deadline-near') tSendLobbyDiag('checkin-stale-deadline-near', eventId);
+      return _v.block;
     } catch { return false; }   // 判斷本身出任何錯 ⇒ 不擋（fail-open）
   }
   async function tCheckin(eventId: string) {
@@ -8277,7 +8311,115 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
 
   // ── 線上 Lobby（v2.269 座位制重構） ────────────────────────────────────
+// >>> v6384-casual-version-gate
+  /**
+   * ⭐⭐⭐v6.384 休閒（一般）對戰的版本閘 —— 【建立房間】【加入】【👁 觀戰】三個入口共用。
+   *
+   * 站長 2026-09-14 裁定（玩家建議「讓玩家們的版本盡量可以一致」）：
+   *   ・門檻與錦標賽**共用同一份設定**（伺服器 tournamentConfig 的 minClientVer）
+   *   ・**所有人都擋**，含匿名玩家 ⇒ 門檻走公開端點 /api/client-min-version（不驗身分）
+   *   ・**觀戰也擋**
+   *   ・擋法沿用錦標賽那套：提示一次 ＋ 永遠有逃生鈕
+   *
+   * ⚠⚠ 三個入口實際上只有兩個函式：列表上的「加入」與「👁 觀戰」都走 handleJoinFromList
+   *   → handleJoinRoom（房號手動加入也是同一支）。所以閘只要掛在 handleCreateRoom 與
+   *   handleJoinRoom 兩處，三顆按鈕（含好友面板的 onjoinroom）就全部涵蓋 —— 這正是
+   *   「一勞永逸」的位置，不必在每顆按鈕上各寫一次。
+   */
+  /** 抓一次公開門檻。⚠ 只抓一次、失敗不重試、任何錯都靜默 ⇒ 維持空字串＝不擋任何人。 */
+  async function ensureCasualMinVer(): Promise<void> {
+    if (_casualMinVerFetched) return;
+    _casualMinVerFetched = true;   // ⚠ 先設旗標：失敗也不再重試，避免每按一次就打一發
+    try {
+      const r = await fetch('/api/client-min-version', { headers: { Accept: 'application/json' } });
+      if (!r.ok) return;           // 404（端點還沒部署）／500 ⇒ 維持空字串
+      casualMinClientVer = readMinVersionPayload(await r.json());
+    } catch { /* 網路錯誤 ⇒ 維持空字串（fail-open） */ }
+  }
+
+  /**
+   * 判定並開視窗。回 true ＝ 已開提示視窗，呼叫端**不要**繼續執行原本的動作。
+   * ⚠ pendingAction 一定要在開視窗的當下就存好 —— 不可以事後從 key 反推，
+   *   反推一旦解析失敗，逃生口就變成死路（那正是 v6.167 事故的形狀）。
+   */
+  function casualVerBlock(key: string, action: () => Promise<void>): boolean {
+    try {
+      const _href = (typeof window !== 'undefined' && window.location) ? window.location.href : '';
+      const v = evaluateVersionGate({
+        cur: VERSION,
+        min: casualMinClientVer,
+        href: _href,
+        now: Date.now(),
+        alreadyPrompted: _casualVerPrompted.has(key),
+        // ⚠ 休閒對戰沒有任何截止時間 ⇒ 不傳 deadlineLeftMs（中央那邊視為 Infinity）。
+      });
+      if (!v.block) {
+        // ⭐⭐v6.384（Fable 5 複審 Y1）：提示視窗開著時**又按到背後那顆原按鈕** ——
+        //   滑鼠點完焦點還留在鈕上，按 Enter／Space 就會再觸發一次；遮罩擋得住滑鼠，
+        //   擋不住鍵盤。這一次會被 ⑤（同一入口只擋一次）放行去建房，可是視窗還蓋在
+        //   上面，玩家接著按逃生鈕就會**再建一間**（孤兒房）。
+        //   ⇒ 放行的同時把視窗收掉、pendingAction 一起清空，讓逃生鈕不可能再觸發一次。
+        //   ⚠⚠ 刻意**不是**寫成「視窗開著就 return（擋下）」—— 那會讓「視窗畫不出來」
+        //     的情況變成玩家永遠按不進去，正是 v6.167 事故的形狀。這裡永遠是
+        //     「放行 ＋ 順手收窗」，不會多擋任何一次。
+        if (casualVerModalKey) {
+          casualVerModalKey = '';
+          _casualVerPendingAction = null;
+          casualVerModalBusy = false;
+        }
+        return false;
+      }
+      _casualVerPrompted.add(key);   // v6.167 不變式：同一個入口最多只擋一次
+      _casualVerPendingAction = action;
+      casualVerModalKey = key;
+      return true;
+    } catch { return false; }        // 判斷本身出任何錯 ⇒ 不擋（fail-open）
+  }
+
+  /** 三個入口共用的前置：先確保門檻抓過（**有上限**），再判定。 */
+  async function casualVerGate(key: string, action: () => Promise<void>): Promise<boolean> {
+    // ⚠⚠ 1.5 秒上限：端點慢、隧道黑洞或伺服器還沒更新時，寧可不擋，
+    //   也絕不能讓按鈕看起來「按了沒反應」——那是 v6.167 事故的核心症狀。
+    try {
+      await Promise.race([ensureCasualMinVer(), new Promise((r) => setTimeout(r, 1500))]);
+    } catch { /* 抓不到就是不擋 */ }
+    return casualVerBlock(key, action);
+  }
+
+  /** 視窗：「🔄 更新並重新載入」。⚠ 不在這裡進房 —— 重載後版本就是新的，玩家自己再按一次。 */
+  async function casualVerModalUpdate() {
+    if (casualVerModalBusy) return;
+    casualVerModalBusy = true;
+    // ⚠⚠ 5 秒看門狗（與 v6.160 的 tVerModalUpdate 逐條同形）：真的離開頁面就無感，
+    //   沒離開則逃生鈕自己復活，絕不會出現「兩顆鈕都按不動」。
+    setTimeout(() => { casualVerModalBusy = false; }, 5000);
+    try { await hardRefreshNow(); }
+    catch { casualVerModalBusy = false; casualVerModalKey = ''; }   // 清快取炸了也不能卡住視窗
+  }
+
+  /** 視窗：逃生口「先不更新，直接進房」。⚠ 這條路徑不可以有任何會 throw 的前置動作。 */
+  async function casualVerModalSkip() {
+    const _act = _casualVerPendingAction;
+    casualVerModalKey = '';
+    _casualVerPendingAction = null;
+    casualVerModalBusy = false;
+    if (_act) await _act();
+  }
+// <<< v6384-casual-version-gate
+
+  // ⭐v6384 版本閘：擋下來就只開視窗、**不執行動作**；逃生鈕會再呼叫同一支 Commit。
   async function handleCreateRoom() {
+    // ⚠⚠ Fable 5 審查（v6.384）：閘裡有一段 await（抓門檻，最多 1.5 秒），這期間按鈕原本
+    //   還沒 disabled ⇒ 手快連點兩下會建出兩間房（孤兒房），或第二下先進房、第一下的視窗
+    //   再疊在房間畫面上。⇒ 進閘之前就同步鎖住；每一條出口都要放開（含被閘擋下那條）。
+    if (onlineLoading) return;
+    onlineLoading = true;
+    try {
+      if (await casualVerGate('create', handleCreateRoomCommit)) return;
+    } finally { onlineLoading = false; }
+    await handleCreateRoomCommit();
+  }
+  async function handleCreateRoomCommit() {
     if (!myName.trim()) { onlineError = '請輸入玩家名稱'; return; }
     if (!roomNameInput.trim()) { onlineError = '請輸入房間名稱'; return; }
     onlineLoading = true; onlineError = '';
@@ -8296,7 +8438,20 @@ function _setupSelfPending(g: any, seat: number): string | null {
     finally { onlineLoading = false; }
   }
 
+  // ⭐v6384 版本閘：列表上的「加入」與「👁 觀戰」都走 handleJoinFromList → 這一支，
+  //   房號手動加入也是這一支 ⇒ 掛在這裡就三顆按鈕全涵蓋。
+  //   ⚠ key 帶房號：不同房間各自算一次「提示過了沒」，換一間房仍會提示一次。
   async function handleJoinRoom() {
+    // ⚠⚠ 同 handleCreateRoom 的競態（Fable 5 審查）：進閘之前就鎖住按鈕。
+    if (onlineLoading) return;
+    const _k = 'join:' + (joinInput || '').trim().toUpperCase();
+    onlineLoading = true;
+    try {
+      if (await casualVerGate(_k, handleJoinRoomCommit)) return;
+    } finally { onlineLoading = false; }
+    await handleJoinRoomCommit();
+  }
+  async function handleJoinRoomCommit() {
     if (!myName.trim()) { onlineError = '請輸入玩家名稱'; return; }
     if (!joinInput.trim()) { onlineError = '請輸入房號'; return; }
     onlineLoading = true; onlineError = '';
@@ -9976,6 +10131,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
       </div>
       <button class="tvg-btn tvg-primary" disabled={tBusy} onclick={tDropCommit}>🏳 確定棄賽</button>
       <button class="tvg-btn tvg-ghost" disabled={tBusy} onclick={() => (tDropConfirmEventId = '')}>取消，我要繼續比賽</button>
+    </div>
+  </div>
+{/if}
+
+<!-- ⭐⭐⭐v6.384 休閒（一般）對戰的版本閘提示視窗。
+     ⚠⚠ 與錦標賽那個視窗一樣放在**所有版面分支之外**（v6.167 的教訓：跨版面的視窗寫進
+       某個分支，就等於在另一個分支永遠畫不出來 ⇒ 玩家只看到「按了沒反應」）。
+     ⚠ 條件不能跟錦標賽那個合併成一個 {#if}：那一個帶著 `isTournament`，而這一個要在
+       `!isTournament` 時出現 —— 合併就一定有一邊畫不出來。判準本身共用同一支
+       evaluateVersionGate()，視窗標記分兩份是版面條件互斥造成的，不是兩份判準。
+     ⚠ 沒有 X、也不能點背景關閉，但兩顆鈕都會離開視窗，其中逃生鈕一定會完成原本的動作。 -->
+{#if !isTournament && casualVerModalKey}
+  <div class="tourn-vergate-mask" role="alertdialog" aria-modal="true" aria-labelledby="cvg-title">
+    <div class="tourn-vergate">
+      <div class="tvg-title" id="cvg-title">🔄 你的版本較舊，建議先更新</div>
+      <div class="tvg-body">
+        目前這個瀏覽器載入的是 <strong>v{VERSION}</strong>，目前建議的最低版本是 <strong>v{casualMinClientVer}</strong>。
+        <br>舊版可能沒有近期的對戰修正，連線也容易卡頓，<b>並且會一起拖慢對手</b>。
+        <br><span class="tvg-note">更新會清除網頁快取並重新載入，牌組與帳號資料都會保留。更新後請再按一次剛才那顆按鈕。</span>
+      </div>
+      <button class="tvg-btn tvg-primary" disabled={casualVerModalBusy} onclick={casualVerModalUpdate}>{casualVerModalBusy ? '更新中…' : '🔄 更新並重新載入'}</button>
+      <button class="tvg-btn tvg-ghost" disabled={casualVerModalBusy} onclick={casualVerModalSkip}>先不更新，直接進房</button>
     </div>
   </div>
 {/if}

@@ -16,10 +16,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(ROOT, '.xv6160.mjs');
-process.on('exit', () => { try { unlinkSync(OUT); } catch { /* */ } });
+// ⭐v6.384：門檻與五條 fail-open 已收斂到 $lib/version-gate（Rule 38），這裡一起載進來真的跑。
+const OUTG = join(ROOT, '.xv6160g.mjs');
+process.on('exit', () => { for (const p of [OUT, OUTG]) { try { unlinkSync(p); } catch { /* */ } } });
 // ⚠ 模組不存在／編不起來時**不可以直接爆掉** —— 那樣看起來像「測試環境壞了」，
 //   而不是「這一版的東西還沒做」。改成留下 modErr，下面每一條行為斷言各自記一筆 FAIL。
 let isClientTooOld = null, recentlyHardRefreshed = null, modErr = null;
+let evaluateVersionGate = null, DEADLINE_FLOOR_MS_DEFAULT = null;   // ⭐v6.384 中央判準
 try {
   await build({
     entryPoints: [join(ROOT, 'src/lib/version-compare.ts')],
@@ -27,6 +30,14 @@ try {
   });
   const m = await import(pathToFileURL(OUT).href);
   isClientTooOld = m.isClientTooOld; recentlyHardRefreshed = m.recentlyHardRefreshed;
+  // ⭐v6.384 中央判準（bundle 會把 version-compare 一起帶進去）
+  await build({
+    entryPoints: [join(ROOT, 'src/lib/version-gate.ts')],
+    outfile: OUTG, bundle: true, format: 'esm', platform: 'node', target: 'node20', logLevel: 'silent',
+  });
+  const g = await import(pathToFileURL(OUTG).href);
+  evaluateVersionGate = g.evaluateVersionGate; DEADLINE_FLOOR_MS_DEFAULT = g.DEADLINE_FLOOR_MS_DEFAULT;
+  if (typeof evaluateVersionGate !== 'function') { modErr = 'src/lib/version-gate.ts 沒有 export evaluateVersionGate'; evaluateVersionGate = null; }
   if (typeof isClientTooOld !== 'function' || typeof recentlyHardRefreshed !== 'function') {
     modErr = 'src/lib/version-compare.ts 沒有 export isClientTooOld / recentlyHardRefreshed';
     isClientTooOld = recentlyHardRefreshed = null;
@@ -145,7 +156,14 @@ console.log('⑤ 逃生口與接線');
     !PAGE.slice(PAGE.indexOf('function tCheckinBlockedByVersion'), PAGE.indexOf('function tSendLobbyDiag')).match(/sessionStorage|localStorage/));
   ok('報到真的會帶 client 版本給伺服器', PAGE.includes("tApi('/checkin', { eventId, ver: VERSION })"));
   ok('★門檻由 /event 收下，缺欄位退回空字串', PAGE.includes("tMinClientVer = (typeof r.minClientVer === 'string') ? r.minClientVer : '';"));
-  ok('★報到剩餘時間不足就不擋（門檻＝30 秒，行為端逐條驗在 ⑩）', /_left < 30000/.test(PAGE));
+  // ⭐v6.384 判準往上移（Rule 40）：門檻數字已從這裡搬到 $lib/version-gate 的
+  //   DEADLINE_FLOOR_MS_DEFAULT（單一來源）。原本的 `/_left < 30000/.test(PAGE)` 是 grep 字面量，
+  //   實作改成幾就綠成幾；現在改成驗「意圖」的兩半：①頁面真的把剩餘時間交給中央判準
+  //   ②中央的預設門檻真的是 30 秒。真正的行為驗證在 ⑩（注入 90 秒的變異版必須翻紅）。
+  ok('★報到剩餘時間有交給中央判準（v6.384 起門檻在 $lib/version-gate）',
+    /deadlineLeftMs:\s*\(_ev && _ev\.checkInDeadline\)/.test(PAGE));
+  okb('★★中央的預設門檻就是 30 秒（單一來源，改它等於改全站）',
+    () => (DEADLINE_FLOOR_MS_DEFAULT === 30000));
   ok('★大廳診斷不依賴 tActiveRoom（既有 _tSendClientDiag 在大廳送不出去）',
     /function tSendLobbyDiag[\s\S]{0,600}?tApi\('\/clientdiag'/.test(PAGE)
     && !/function tSendLobbyDiag[\s\S]{0,400}?tActiveRoom/.test(PAGE));
@@ -246,7 +264,7 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
   const src = _i0 < 0 ? '' : PAGE.slice(_i0, PAGE.indexOf('async function tCheckin(', _i0));
   let mkErr = modErr;
   const compile = async (source) => {
-    const wrapped = '(function(env){ const { isClientTooOld, recentlyHardRefreshed, VERSION, tMinClientVer, tEvents, tNow, tSendLobbyDiag, _tVerPrompted } = env;\n'
+    const wrapped = '(function(env){ const { isClientTooOld, recentlyHardRefreshed, evaluateVersionGate, VERSION, tMinClientVer, tEvents, tNow, tSendLobbyDiag, _tVerPrompted } = env;\n'
       + source + '\nreturn tCheckinBlockedByVersion; })';
     const js = (await transform(wrapped, { loader: 'ts' })).code;
     const f = (0, eval)(js);
@@ -257,21 +275,27 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
   if (!mkErr) {
     if (src.length < 200) mkErr = '抽不到 tCheckinBlockedByVersion 的原始碼（函式改名／搬走了？）';
     else {
-      const oldSrc = src.replace('_left < ' + THRESHOLD_MS, '_left < 90000');
-      if (oldSrc === src) mkErr = '原始碼裡找不到 `_left < ' + THRESHOLD_MS + '`（門檻沒改到，或寫法變了）';
+      // ⭐v6.384：門檻不再寫在這支函式裡（搬到 $lib/version-gate），所以變異不是改字面量，
+      //   而是**注入一個門檻 90 秒的中央判準**（見下方 run 的 floorMs）——同樣證明
+      //   「30 秒這個位置真的在生效」，而且比改字面量更嚴：它連「頁面有沒有把 deadline
+      //   交出去」一起測到了。
+      if (!/deadlineLeftMs:/.test(src)) mkErr = '原始碼裡找不到 deadlineLeftMs（沒把報到剩餘時間交給中央判準）';
       else {
-        try { mk = await compile(src); mkOld = await compile(oldSrc); }
+        try { mk = await compile(src); mkOld = mk; }   // ⭐v6.384 變異改注入門檻，不再改字面量
         catch (e) { mkErr = '轉譯/載入失敗：' + (e && e.message ? String(e.message).split('\n')[0] : e); }
       }
     }
   }
   const diag = [];
   // 版本一定太舊（6.100 < 門檻 6.160）⇒ 唯一的變因就是「報到剩餘時間」。
-  const run = (factory, leftMs) => {
+  const run = (factory, leftMs, floorMs) => {
     diag.length = 0;
     const now = 1700000000000;
     return factory({
+      // ⭐v6.384 floorMs 非 null ⇒ 注入「門檻被改掉」的中央判準（變異版）。
       isClientTooOld, recentlyHardRefreshed,
+      evaluateVersionGate: (floorMs == null) ? evaluateVersionGate
+        : ((i) => evaluateVersionGate(Object.assign({}, i, { deadlineFloorMs: floorMs }))),
       VERSION: '6.100', tMinClientVer: '6.160',
       tEvents: [{ _id: 'E1', checkInDeadline: (leftMs === null) ? null : (now + leftMs) }],
       tNow: now,
@@ -288,8 +312,8 @@ console.log('⑩ 報到剩餘時間門檻（行為端）');
   okx('★放行時要留下 checkin-stale-deadline-near 診斷（站長才看得到有人踩到）',
     () => (run(mk, 29000) === false && diag.includes('checkin-stale-deadline-near')));
   okx('★沒有 checkInDeadline ⇒ 剩餘時間視為無限 ⇒ 照常提示更新', () => (run(mk, null) === true));
-  okx('★★掃描器自我驗證（變異測試）：門檻退回 90000 的實作在「剩 31 秒」會放行',
-    () => (run(mkOld, 31000) === false && run(mk, 31000) === true));
+  okx('★★掃描器自我驗證（變異測試）：把中央門檻換成 90000 之後，「剩 31 秒」會放行',
+    () => (run(mkOld, 31000, 90000) === false && run(mk, 31000) === true));
   ok('★註解與程式碼同步講 30 秒（改了數字沒改註解 ⇒ 下一個人被註解騙）',
     /剩不到 30 秒還把人推去重載/.test(PAGE) && !/剩不到 90 秒/.test(PAGE) && !/_left < 90000/.test(PAGE));
   // ⚠v6.163 補漏：v6.162 掃「90 秒」的說法時只掃到 4 處（+page.svelte 註解、admin.html ×2、

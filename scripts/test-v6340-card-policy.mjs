@@ -334,6 +334,24 @@ const CRITERIA = {
     'src/routes/game/+page.svelte': 2,       // $effect 一次 ＋ 開戰前 await 一次
     'src/routes/deck-posts/+page.svelte': 1,
   };
+  /**
+   * ⚠⚠ v6.340 之後**刻意**新增的網路呼叫，逐檔逐 token **具名登記**。
+   *
+   * 這不是放寬 C11（Rule 40：既有守衛因新版翻紅時，判準往**上**移，絕不放寬）：
+   *   ・沒登記的增量一律照舊翻紅，登記過的**少一個也紅**（比較用 !== 不是 >）
+   *   ・每一筆都要寫清楚是哪一版、為了什麼加的
+   *   ・下面 C11c 會再把「登記的那一發到底是哪一發」釘一次
+   */
+  const ALLOWED_NEW_NET = {
+    'src/routes/game/+page.svelte': {
+      // ⭐v6.384 休閒（一般）對戰的版本閘：抓公開門檻 GET /api/client-min-version。
+      //   站長 2026-09-14 裁定「所有人都擋（含匿名）」⇒ 門檻必須走不驗身分的公開端點。
+      //   ⚠ 只抓一次（旗標先設再抓）、1.5 秒上限、失敗不重試、抓不到就不擋任何人。
+      //   行為面不是靠這裡的字串守的 —— test-v6384 的【H】行為端 harness（H7／H14）
+      //   是真的把函式抽出來執行、斷言「有沒有真的建到房」的。
+      'fetch(': 1,
+    },
+  };
   if (hasBaseCommit(ROOT, BASE_SHA)) {
     const drift = [];
     for (const [rel, want] of Object.entries(EXPECT_LOADER)) {
@@ -345,11 +363,27 @@ const CRITERIA = {
       if (now[LOADER] !== want) drift.push(`${rel}:政策載入呼叫 ${now[LOADER]} 次（期望 ${want}）`);
       for (const t of NET_TOKENS) {
         if (t === LOADER) continue;
-        if (now[t] !== base[t]) drift.push(`${rel}:${t} ${base[t]}→${now[t]}`);
+        // ⚠ 已登記的增量要**剛好**對上：多一個紅，少一個也紅。
+        const extra = (ALLOWED_NEW_NET[rel] && ALLOWED_NEW_NET[rel][t]) || 0;
+        if (now[t] !== base[t] + extra) {
+          drift.push(`${rel}:${t} ${base[t]} + 已登記 ${extra} → 實際 ${now[t]}`);
+        }
       }
     }
     chk('C11 ⭐⭐⭐ 四頁除了「政策載入」之外沒有新增任何網路呼叫，而政策載入的次數逐檔對得上',
       drift.length === 0, drift.join('、'));
+    // ⭐⭐⭐ C11c：白名單不是免死金牌 —— 登記進 ALLOWED_NEW_NET 的那一發，
+    //   要在這裡被「名實相符」地釘一次（登記說是版本閘，就不能其實是別的東西）。
+    //   ⚠ 這一條是字串比對，**它守的是「名實相符」不是行為**；行為面
+    //     （真的只打一次／真的有 1.5 秒上限／抓不到照樣進得了房）由
+    //     test-v6384 的【H】行為端 harness 負責 —— 那裡是真的把函式抽出來跑的。
+    chk('C11c ⭐⭐⭐ 登記的那一發新網路呼叫確實是版本閘門檻，而且只抓一次、有時間上限',
+      (() => {
+        const g = read('src/routes/game/+page.svelte');
+        return g.includes("fetch('/api/client-min-version'")
+          && /if \(_casualMinVerFetched\) return;\s*_casualMinVerFetched = true;/.test(g)
+          && /Promise\.race\(\[ensureCasualMinVer\(\), new Promise\(\(r\) => setTimeout\(r, 1500\)\)\]\)/.test(g);
+      })());
     // 反安慰劑：判準真的分辨得出差異
     chk('C11b ⭐反安慰劑：countOf 對「多一個 fetch(」判得出來',
       countOf('a fetch( b')['fetch('] === 1 && countOf('a b')['fetch('] === 0);

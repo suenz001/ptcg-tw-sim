@@ -28,8 +28,8 @@ const P_PAGE = join(ROOT, 'src/lib/friends/FriendsPanel.svelte');
 const P_FRPAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const DM_START = '// >>> PTCG-FRIENDS-DM-BLOCK-START';
 const DM_END = '// <<< PTCG-FRIENDS-DM-BLOCK-END';
-const TOURN_TAIL_SHA256 = 'f908eb048dc41bd37f17d253b17ea5d5db5ae718fd21805d16fec27b4417b8c4';   // 與 test-v6272 ⑨／test-v6288 A1 同一把
-const TOURN_ANCHOR_SHA256 = '7f5399c428aaae7e87ad849b6868d13211b0020df9ba36f7272948741be3d5a8'; // 與 test-v6278 I1／test-v6288 A1 同一把
+const TOURN_TAIL_SHA256 = '9b234e690ec261cafc40031b0730821042ef625e4383c8e46b9df857cb2df4d1';   // 與 test-v6272 ⑨／test-v6288 A1 同一把
+const TOURN_ANCHOR_SHA256 = '09370edc9c304d729962d0a0e4d4b6757e810a7029f264486979f39475b25486'; // 與 test-v6278 I1／test-v6288 A1 同一把
 const UNBLOCK_PURGE_LINE = "        if (del && del.deletedCount > 0) await _frPurgeDm(cur.fid || _frFid(cur._id), 'unblock');\n";
 const UNBLOCK_DEL_LINE = "        const del = await c.deleteOne({ _id: cur._id, status: 'blocked', blockedBy: me.email });\n";
 const UNBLOCK_CONFIRM = '<span class="confirm">解除封鎖後關係會歸零，要重新邀請才會成為好友；和這位玩家的私聊對話也會一起刪除，無法復原。</span>';
