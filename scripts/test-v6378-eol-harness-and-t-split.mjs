@@ -197,7 +197,8 @@ console.log('\n【C】⭐ 修完之後它們**真的還在守**（把它們守�
         '物件庫沒有 test-v6272 的 PREV_SHA(' + mSha[1].slice(0, 8) + ') ⇒ 它自己就會 shallowSkip');
     } else {
       mutMustRed('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅（證明 git diff 真的有在比，不是恆真）',
-        V72, "const PREV_ALLOWED = [" + NL + "  'src/lib/version.ts'," + NL + "];", 'const PREV_ALLOWED = [];', 'prev');
+        V72, "const PREV_ALLOWED = [" + NL + "  'src/lib/tournament/swiss.ts'," + NL
+        + "  'src/lib/version.ts'," + NL + "];", 'const PREV_ALLOWED = [];', 'prev');   // ⭐v6.379 跟著清單一起維護
     }
   }
 
@@ -242,8 +243,10 @@ console.log('\n【D】C-8：拆完之後「第一項失敗，後面仍各自判�
   const FIRST = "'scripts/test-v6265-phantom-start-race.mjs'";
   const OTHER = "'scripts/test-v6156-still-here.mjs'";   // 真的存在、但不含那些 sha ⇒ AssertionError（不是 ENOENT）
   const SPLITS = [
-    ['scripts/test-v6291-tourn-verified-gate.mjs', 'B4-tail ', 8, /\bB4\b/],
-    ['scripts/test-v6292-tourn-verified-gate2.mjs', 'B5-tail ', 8, /\bB5\b/],
+    // ⭐v6.379：8 → 11（v6.291／v6.292 的 TAIL_LOCKS 補上三支漏網的鎖）。這個數字是
+    //   「拆成 N 個 T 之後真的逐項判定」的**期望條數**，跟著清單長度走，不是判準放寬。
+    ['scripts/test-v6291-tourn-verified-gate.mjs', 'B4-tail ', 11, /\bB4\b/],
+    ['scripts/test-v6292-tourn-verified-gate2.mjs', 'B5-tail ', 11, /\bB5\b/],
     ['scripts/test-v6276-deck-tournament-stats.mjs', 'B4-repin ', 5, /\bB4\b/],
   ];
   const baseOk = hasBaseCommit(ROOT, BASE_SHA);
@@ -296,8 +299,21 @@ console.log('\n【E】零意外：行尾錨點 lint 仍 0 違規 ＋ 本守衛�
   }
   chk('★★ E2 本守衛在 package.json 的 test chain 裡（只加進 iron-rules-audit 等於沒加）',
     CHAIN.includes('node scripts/test-v6378-eol-harness-and-t-split.mjs'));
-  const srcDiff = gitLines(['diff', '--name-only', '--', 'src']);
-  chk('★★ E3 本版沒有動到 src/（出貨碼零改動）', srcDiff.length === 0, srcDiff.join(', '));
+  // ⭐v6.379：E3 原本比的是「工作樹 vs HEAD 的 src/ 差異必須是空的」—— 那不是「v6.378 沒動
+  //   出貨碼」這個**歷史事實**，而是「以後誰都不准動 src/」（第九種安慰劑：pin 死版本；
+  //   test-v6272 ⑩ 在 v6.275、test-v6278 I4 在 v6.279 都為同一個病灶留下過修法）。
+  //   而且它在「工作樹乾淨」時恆真 —— 任何人只要先 commit 就能讓它變綠 ⇒ 沒有在守。
+  //   ⇒ 改成 commit vs commit：v6.377(BASE_SHA) → v6.378(SELF_SHA) 在 src/ 底下的差異清單
+  //     必須逐項等於 ['src/lib/version.ts']（deepStrictEqual 口徑：少一個、多一個都紅）。
+  //   ⚠ 這不是放寬：舊寫法完全不看 v6.378 到底改了什麼，新寫法把它釘死成一份具名清單。
+  const SELF_SHA = 'b2649b46';   // v6.378 自己的 commit
+  if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, SELF_SHA)) {
+    shallowSkip('E3 v6.377 → v6.378 的 src/ 逐檔差異', '需要歷史 commit；「這一版動了什麼」由 test-v6272 ⑩ 的 PREV_ALLOWED 接手守');
+  } else {
+    const srcDiff = gitLines(['diff', '--name-only', BASE_SHA, SELF_SHA, '--', 'src']);
+    chk('★★ E3 v6.378 出貨碼零改動：v6.377 → v6.378 在 src/ 底下只有 version.ts',
+      srcDiff.length === 1 && srcDiff[0] === 'src/lib/version.ts', srcDiff.join(', ') || '(空)');
+  }
 }
 
 console.log('\n' + (fail === 0 ? '✅ 全部通過' : '❌ 有失敗') + '（PASS ' + pass + ' / FAIL ' + fail + '）');

@@ -59,7 +59,19 @@ export const MIN_SCANNED = 800;
  * 債務基線／不適用清單。每一條：{ file, hay, method, reason }。
  * ⚠ 沒有蓋到任何違規的條目 ⇒ 紅（過期偵測）。⚠ 只准變短。
  */
-export const ALLOW = [];
+export const ALLOW = [
+  // ⭐v6.379：test-v6378 C7b 是**負對照本身** —— 它要證明「同一個多行錨點對**未正規化**的
+  //   磁碟原始內容是 0 次」，藉此排除 C7a『normEol 之後找得到』是恆真式。那兩處 RAW.split
+  //   刻意不收斂：收斂掉就等於把 C7a 的自驗拆掉（那才是真的放寬）。
+  //   ⚠ 這條是「不適用」不是「已知債務」：它的 0 次結果本身就是斷言。
+  //   ⚠ 過期偵測照樣管它 —— C7b 哪天不再這樣寫，這一條就會因為蓋不到東西而翻紅。
+  {
+    file: 'scripts/test-v6378-eol-harness-and-t-split.mjs',
+    hay: 'RAW',
+    method: 'split',
+    reason: 'C7b 負對照：刻意對未正規化的磁碟內容比多行錨點，期望值就是 0 次',
+  },
+];
 
 const METHODS = new Set(['indexOf', 'lastIndexOf', 'includes', 'split', 'replace', 'replaceAll', 'startsWith', 'endsWith']);
 const SCOPE_TYPES = new Set([

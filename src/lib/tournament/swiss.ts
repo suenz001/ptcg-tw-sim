@@ -5,12 +5,16 @@
  *   輪數自動帶值 admin 可覆寫、每輪設時限、棄賽者後續不再配對。
  */
 
-export type SwissResult = 'W' | 'L' | 'T' | 'BYE';
+// ⭐v6.379 B-3（站長裁定）：拿掉死碼 'T'。站上平手一律走**雙敗**
+//   （TMATCH `status:'done'` ＋ `winnerUid:null` ⇒ 下面 buildSwissPlayersFromMatches 的
+//   else 分支給雙方各記一筆 'L'），全站**沒有任何生產者**會 push 'T'、也沒有任何消費者
+//   讀它（伺服器 standings 只數 'W'/'BYE' 與 'L'）⇒ 留著只會讓人以為站上真的有平手記分。
+export type SwissResult = 'W' | 'L' | 'BYE';
 
 export interface SwissPlayer {
   uid: string;
   name: string;
-  matchPoints: number;      // 累計積分（勝3 / 平1 / 負0 / Bye3）
+  matchPoints: number;      // 累計積分（勝3 / 負0 / Bye3）⭐v6.379：平手走雙敗 ⇒ 兩邊都記敗、都是 0 分
   opponents: string[];      // 交手過的對手 uid（Bye 不列入 → 不算進 OWP）
   results: SwissResult[];   // 每輪結果（含 'BYE'）
   byes: number;             // 已獲得 Bye 次數（每人整場最多 1）

@@ -101,8 +101,11 @@ console.log('\n【A】C-9：行尾中性靜態掃描器 scripts/lint-eol-anchors
   }
   // ── 正對照③：白名單過期偵測 ──
   {
-    const mutated = LINT_SRC.replace('export const ALLOW = [];',
-      "export const ALLOW = [{ file: 'scripts/__v6377_not_exist.mjs', hay: 'X', method: 'indexOf', reason: 'v6377 過期偵測用' }];");
+    // ⭐v6.379：ALLOW 從 `[]` 變成有一條（test-v6378 C7b 負對照）⇒ 突變錨點改成**單行**的
+    //   `export const ALLOW = [`，在陣列最前面插一條蓋不到任何東西的豁免。
+    //   ⚠ 判準一個字都沒動：仍然是「塞一條過期豁免 ⇒ lint 必須紅」。
+    const mutated = LINT_SRC.replace('export const ALLOW = [',
+      "export const ALLOW = [{ file: 'scripts/__v6377_not_exist.mjs', hay: 'X', method: 'indexOf', reason: 'v6377 過期偵測用' },");
     const changed = mutated !== LINT_SRC;
     const m = runNode(tempScript('lint-mut-allow.mjs', mutated));
     chk('★★★ A5 正對照：ALLOW 塞一條蓋不到任何東西的豁免 ⇒ 必須紅（過期偵測；白名單要有代價）',

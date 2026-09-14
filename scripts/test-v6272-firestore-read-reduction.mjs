@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = '991ba70a525b2050e6b4c168fa71747a38bb4ba1';   // v6.377（v6.378 的上一版）
+const PREV_SHA = 'b2649b46cca108d3989616cbb31e740969c5c7f9';   // v6.378（v6.379 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -736,7 +736,11 @@ const PREV_SHA = '991ba70a525b2050e6b4c168fa71747a38bb4ba1';   // v6.377（v6.37
 //   ⚠ M6a 仍被 lockedSets 鎖著 ⇒ 玩家看不到任何變化，**不動首頁 changelog**。
 //   ⚠ mega_decks / v2690 兩檔是「既有卡改走中央 helper」，log 與傷害逐字相同（Rule 38 收斂）。
 // v6.378 本機紅燈 48 → 0（全部是 harness／環境）＋ 拆掉會短路的 T(...) —— 出貨碼零改動，只有 version.ts
+// v6.379 B-3（站長裁定）：清掉 src/lib/tournament/swiss.ts 的死碼 —— 型別 SwissResult 的 'T'
+//   與 matchPoints 註解的「平 1」。站上平手一律走雙敗（done + winnerUid:null ⇒ 雙 L），
+//   'T' 從來沒有生產者也沒有消費者 ⇒ 純刪死碼＋改註解，執行期行為零變化。
 const PREV_ALLOWED = [
+  'src/lib/tournament/swiss.ts',
   'src/lib/version.ts',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {

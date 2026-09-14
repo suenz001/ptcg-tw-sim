@@ -106,17 +106,27 @@ T('A1 超級皮可西ex 資料欄位與光之翼 effect 逐字', () => {
 T('A0 中央豁免述詞 hasEffectiveOppAbilityImmunity 有被 export（否則下面全是 TypeError）', () => {
   assert.equal(typeof hasEffectiveOppAbilityImmunity, 'function', 'v3001_g3_wave3 沒有 export 中央豁免述詞');
 });
-T('A2 官方 PTCG_RULES.md L2819 / L2734 逐字仍在（裁定來源沒被改掉）', () => {
+T('A2 官方 PTCG_RULES.md 的兩段「光之翼」問答逐字仍在（裁定來源沒被改掉；錨點式、不吃行號）', () => {
   const p = join(ROOT, 'PTCG RULES', 'PTCG_RULES.md');
   if (!existsSync(p)) { console.log('      (PTCG RULES 未解出，跳過逐字比對但仍檢查卡面)'); return; }
   const lines = readFileSync(p, 'utf8').split(/\r?\n/);
   assert.ok(lines.length > 2900, `規則檔只有 ${lines.length} 行 — 掃描器壞了？`);
-  // ⭐v6.368：站長裁定 六-14 在 §16.2 插入 1 行（PTCG_RULES.md 的唯一改動）⇒ 這兩段官方問答
-  //   的**逐字內容完全沒變**，只是整體往下移了一行 ⇒ 行號各 +1（原 L2818/L2733）。
-  assert.ok(lines[2818].includes('特性「光之翼」會消除嗎') && lines[2819].includes('不會消除'),
-    'L2819/L2820 不是預期的「光之翼會消除嗎／不會消除」');
-  assert.ok(lines[2733].includes('特性「光之翼」會生效嗎') && lines[2734].includes('會生效'),
-    'L2734/L2735 不是預期的「光之翼會生效嗎／會生效」');
+  // ⭐v6.379：原本這兩條釘的是**硬編行號**（lines 的第 2818／2733 項）—— 規則書只要在前面
+  //   插一行，整段就位移、這一條就翻紅；v6.368 插 1 行就真的翻紅過一次，而那是**假紅**
+  //   （官方問答的逐字內容一個字都沒變）。全站 25 支引用規則書的守衛只有這一支這樣寫。
+  //   ⇒ 改成錨點式：用問句本身定位，再要求**緊接的下一行**是對應的答案。
+  //   ⚠ 這**不是放寬**：舊寫法只驗「第 2819 行含問句」「第 2820 行含答案」（兩者甚至不必相鄰，
+  //     而且問句在別處被複製一份也照樣綠）；新寫法多驗了「問句全檔恰好出現 1 次」與
+  //     「答案就在它的下一行」⇒ 判準嚴格**變強**，只是不再耦合到行號。
+  const qaAt = (q, a) => {
+    const hits = lines.map((L, i) => (L.includes(q) ? i : -1)).filter((i) => i >= 0);
+    assert.strictEqual(hits.length, 1, `規則檔裡「${q}」出現 ${hits.length} 次（應恰 1 次）`);
+    const nxt = lines[hits[0] + 1];
+    assert.ok(typeof nxt === 'string' && nxt.includes(a),
+      `「${q}」在 L${hits[0] + 1}，但下一行不是預期的「${a}」：` + String(nxt).slice(0, 60));
+  };
+  qaAt('特性「光之翼」會消除嗎', '不會消除');
+  qaAt('特性「光之翼」會生效嗎', '會生效');
 });
 
 // ══ B. 中央述詞：豁免生效（HEAD 必紅，各項各自紅）══════════════════════════

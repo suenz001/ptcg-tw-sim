@@ -214,6 +214,12 @@ const TAIL_LOCKS = [
   'scripts/test-v6275-usersall-scan-guard.mjs', 'scripts/test-v6276-deck-tournament-stats.mjs',
   'scripts/test-v6286-friends-hardening.mjs', 'scripts/test-v6287-friends-dm.mjs',
   'scripts/test-v6288-friends-dm-ui.mjs', 'scripts/test-v6289-unblock-purge.mjs',
+  // ⭐v6.379 B-2 recon：v6.295／v6.300／v6.302 三支也各自內嵌了**同一把** tail sha，
+  //   但這份清單是手抄的、v6.365 重釘時沒跟上 ⇒ 那三把鎖的「重釘＋舊值零殘留」等於沒人在守。
+  //   （這正是 v6.365「漏掉第三個家族」同型的病灶：清單靠人維護、掃描不是遞迴的。）
+  //   ⇒ 補進清單；並由 test-v6379 的**遞迴**盤點證明 scripts/ 底下再也沒有清單外的鎖。
+  'scripts/test-v6295-friends-alias-nick.mjs', 'scripts/test-v6300-friends-intournament.mjs',
+  'scripts/test-v6302-friend-room-by-email.mjs',
 ];
 const TEV_LOCKS = [
   'scripts/test-v6266-deck-stats-server.mjs', 'scripts/test-v6268-delta-put-server.mjs',
@@ -222,6 +228,9 @@ const TEV_LOCKS = [
   'scripts/test-v6284-friends-p1b.mjs', 'scripts/test-v6286-friends-hardening.mjs',
   'scripts/test-v6287-friends-dm.mjs', 'scripts/test-v6288-friends-dm-ui.mjs',
   'scripts/test-v6289-unblock-purge.mjs',
+  // ⭐v6.379 B-2 recon：同上，三支漏網的 TEVENTS 鎖補進清單。
+  'scripts/test-v6295-friends-alias-nick.mjs', 'scripts/test-v6300-friends-intournament.mjs',
+  'scripts/test-v6302-friend-room-by-email.mjs',
 ];
 
 // ⭐v6.378 C-8：底下原本是**同一個 T** 裡跑一整圈 —— 第一個 assert 一 throw，
@@ -258,9 +267,11 @@ for (const f of ['scripts/test-v6266-deck-stats-server.mjs', 'scripts/test-v6268
 
 await T('B5 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與 notStrictEqual 自驗都還在（沒被改成不驗／只比片段）', () => {
   const n = TAIL_LOCKS.length + TEV_LOCKS.length;
-  assert.ok(n >= 19, '鎖清單掃描器壞了？只列到 ' + n + ' 條');
+  assert.ok(n >= 25, '鎖清單掃描器壞了？只列到 ' + n + ' 條');   // ⭐v6.379：19 → 25（11 tail + 14 tev）
   const files = [...new Set([...TAIL_LOCKS, ...TEV_LOCKS])];
-  assert.strictEqual(files.length, 14, '應涵蓋 14 支守衛，實際 ' + files.length);
+  // ⭐v6.379：14 → 17（補上 v6.295／v6.300／v6.302 三支漏網的鎖）。這個數字是**掃描器前提**
+  //   （「清單沒有被人砍短」），不是判準；判準是上面每一把鎖各自的重釘＋零殘留。
+  assert.strictEqual(files.length, 17, '應涵蓋 17 支守衛，實際 ' + files.length);
   // ⭐v6.378 C-8：這一圈也拆出去（見下方 B5-lock）。留在這裡的只有清單本身的前提。
   // v6.276 的 revert-diff 必須改成「先還原 v6.291 再還原 v6.276」，而不是被停用
   const v76 = normEol(readFileSync(join(ROOT, 'scripts/test-v6276-deck-tournament-stats.mjs'), 'utf8'));
