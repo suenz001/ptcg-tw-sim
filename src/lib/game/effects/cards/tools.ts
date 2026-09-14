@@ -387,12 +387,40 @@ function findAttackerInstance(
   return ap.bench.find(b => b.iid === attackerIid) ?? null;   // 已離場 ⇒ null ⇒ 效果不發動
 }
 
+/**
+ * ⭐⭐⭐ v6.386：holder（附有這張道具的那隻寶可夢）由**這裡**統一解析並傳給 fn ——
+ * fn 一律不准自己讀 `state.players[dIdx].active`。
+ *
+ * 玩家回報：附「火箭隊的催眠裝置」的火箭隊寶可夢被對手招式打死時，對手沒有被【睡眠】。
+ *
+ * 根因（維度＝「KO 之後 state 上已經沒有 holder 了」）：
+ *   舊的 KO 鏡射寫成 `(state, dIdx, aIdx, pool, _koInst, ...) => fn(...)` —— **把 koInst 丟掉**。
+ *   而 fn 內部是用 `state.players[dIdx].active` 取 holder；引擎主管線跑到 TOOL_ON_KO 時
+ *   active 已經是 null ⇒ 「holder 是不是『火箭隊的』」這種條件**靜默失敗**，整個效果不發動。
+ *   行為端實測（__m6a/v386_repro2）：非 KO 觸發、KO 不觸發 —— 火箭隊的催眠裝置、逆境保險。
+ *   ⚠ 幸運頭盔／凸凸頭盔沒事，純粹因為它們不讀 holder —— 那是運氣，不是設計。
+ *   ⚠ 奢華炸彈更危險：它讀 `p.active.toolAttached` 來丟棄自己，KO 後若補位的新寶可夢
+ *     身上有道具，就會丟錯人的道具。
+ *
+ * 收斂（Rule 38：holder 的判準只有一份）：
+ *   ・TOOL_ON_DAMAGED（holder 還在場上）⇒ `state.players[dIdx].active`
+ *   ・TOOL_ON_KO（holder 已離場）⇒ `koInst`（KO 前的 instance 快照，呼叫端本來就有傳）
+ * 官方依據（PTCG RULES）：§17.2.A L619-620 反擊針「昏厥了仍可放 3 個傷害指示物」、
+ *   §17.22 L1472-1473 沉重接力棒「昏厥時可以發動」、§16.1 L549「先處理發動方的招式效果」
+ *   ⇒ 卡面「受到…傷害時」含被這一次傷害打死的情況。
+ *
+ * ⚠ 守衛 test-v6386 會掃描：本 helper 註冊的 fn 區塊內不得再出現 `players[dIdx].active`。
+ */
 function registerToolOnDamagedAndKO(
   name: string,
-  fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>, attackerIid?: string) => import('../../types').GameState,
+  fn: (state: import('../../types').GameState, dIdx: 0|1, aIdx: 0|1, damage: number, pool: Map<string, import('$lib/cards/types').Card>, attackerIid: string | undefined, holder: CardInstance | null) => import('../../types').GameState,
 ): void {
-  TOOL_ON_DAMAGED.set(name, fn);
-  TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, _koInst, attackerIid) => fn(state, dIdx, aIdx, 0, pool, attackerIid));
+  // ⭐v6.386 holder 必填：非 KO ⇒ 戰鬥位本人（這批道具卡面全部有「在戰鬥場」）
+  TOOL_ON_DAMAGED.set(name, (state, dIdx, aIdx, damage, pool, attackerIid) =>
+    fn(state, dIdx, aIdx, damage, pool, attackerIid, state.players[dIdx].active ?? null));
+  // ⭐v6.386 holder 必填：KO ⇒ koInst（KO 前快照）。舊版把它丟掉 ⇒ 本次修的 bug 根因。
+  TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, koInst, attackerIid) =>
+    fn(state, dIdx, aIdx, 0, pool, attackerIid, koInst ?? null));
   TOOL_ON_KO_MIRRORED_FROM_DAMAGED.add(name);
 }
 
@@ -411,9 +439,10 @@ registerToolOnDamagedAndKO('凸凸頭盔', (state, _dIdx, aIdx) => {
   });
 });
 // v2.170 火箭隊的催眠裝置：受傷時若 holder 為「火箭隊的」寶可夢，將攻擊方睡眠
-registerToolOnDamagedAndKO('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg, pool) => {
-  const dp = state.players[dIdx];
-  const holder = dp.active;
+registerToolOnDamagedAndKO('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg, pool, _atkIid, holder) => {
+  // ⭐v6.386：holder 改吃中央傳進來的那一隻（KO 時是 koInst 快照）。
+  //   原本讀 state.players[dIdx].active —— holder 被這一招打死時 active 已是 null，
+  //   「是不是『火箭隊的』寶可夢」永遠判 false ⇒ 玩家回報的「昏厥時不觸發」。
   if (!holder) return state;
   const holderCard = pool.get(holder.cardId);
   if (!holderCard?.name?.startsWith('火箭隊的')) return state;
@@ -422,11 +451,12 @@ registerToolOnDamagedAndKO('火箭隊的催眠裝置', (state, dIdx, aIdx, _dmg,
   return applyStatusToOppActive(state, dIdx, 'asleep', pool, { kind: 'item-effect', label: '火箭隊的催眠裝置' });
 });
 // v2.170 逆境保險：受傷時若 holder 弱點屬性 = 攻擊方屬性，從牌庫抽 3 張
-registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
-  const dp = state.players[dIdx];
+registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool, _atkIid, holder) => {
+  // ⭐v6.386：同「火箭隊的催眠裝置」—— holder 改吃中央傳進來的（KO 時是 koInst 快照）。
+  //   本卡要讀 holder 自己的**弱點屬性**，KO 後讀不到 ⇒ 實測 KO 時整個不觸發。
   const ap = state.players[aIdx];
-  if (!dp.active || !ap.active) return state;
-  const dCard = pool.get(dp.active.cardId);
+  if (!holder || !ap.active) return state;
+  const dCard = pool.get(holder.cardId);
   const aCard = pool.get(ap.active.cardId);
   if (!dCard || !aCard) return state;
   // ⭐ v6.206：「對手戰鬥寶可夢的**屬性**」＝有效屬性，原本手刻 `aCard.pokemonType`（印刷屬性），
@@ -440,7 +470,7 @@ registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
   //   ⚠ actorIdx = 攻擊方 aIdx（妖精領域以攻擊方為持有方視角）；holder 是被攻擊的 dp.active。
   //   ⚠ disabled（鋁鋼橋龍ex｜金屬防禦強化「這隻寶可夢的弱點全部消除」）⇒ 此刻沒有弱點
   //     ⇒ 不可能匹配，與傷害引擎 `!w.disabled && …` 同判準。
-  const _wk = getEffectiveWeaknessType(state, aIdx, dp.active, dCard, pool);
+  const _wk = getEffectiveWeaknessType(state, aIdx, holder, dCard, pool);   // ⭐v6.386 holder 快照
   if (_wk.disabled) return state;
   const weakness = _wk.type;
   if (!weakness) return state;
@@ -450,10 +480,13 @@ registerToolOnDamagedAndKO('逆境保險', (state, dIdx, aIdx, _dmg, pool) => {
     return { ...p, deck: p.deck.slice(taken.length), hand: [...p.hand, ...taken] };
   });
 });
-registerToolOnDamagedAndKO('奢華炸彈', (state, dIdx, aIdx) => {
+registerToolOnDamagedAndKO('奢華炸彈', (state, dIdx, aIdx, _dmg, _pool, _atkIid, holder) => {
   // 反彈 120 傷害到攻擊方，且道具丟棄
+  // ⭐v6.386：丟棄只在「holder 還站在戰鬥位」時做。holder 被這一招打死時，道具已經隨著
+  //   holder 一起進棄牌區；此時若照舊讀 players[dIdx].active，會把**補位上來的新寶可夢**
+  //   身上的道具誤丟掉（實測目前 active 為 null 所以沒出事，但那是巧合不是保證）。
   state = updatePlayer(state, dIdx, p => {
-    if (!p.active || !p.active.toolAttached) return p;
+    if (!p.active || !holder || p.active.iid !== holder.iid || !p.active.toolAttached) return p;
     const tool = p.active.toolAttached;
     return { ...p, active: { ...p.active, toolAttached: undefined }, discard: [...p.discard, tool] };
   });

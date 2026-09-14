@@ -1,5 +1,114 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.386 ⭐⭐⭐「受到…傷害時」型寶可夢道具，持有者被打死時也要觸發（玩家回報）
+
+### 【零】來源
+
+站長轉玩家回報：
+
+> 附有 火箭隊的催眠裝置 的 火箭隊寶可夢，在受到對手寶可夢的招式傷害昏厥時，不會將對手的寶可夢睡眠。
+> 這個問題之前有發生過很多次，就是裝備寶可夢道具的寶可夢被對手昏厥的時候，寶可夢道具沒有觸發效果，
+> 蠻多寶可夢道具後來都已經修復了，但火箭隊的催眠裝置還是有這個問題。
+
+### 【一】⭐⭐⭐ 病灶複驗（行為端實測，回報屬實）
+
+引擎主管線 `applyAction` 的 KO / 非 KO 對照（`__m6a/v386_repro2.out.txt`）：
+
+| 道具 | 非 KO | KO | 判定 |
+| --- | --- | --- | --- |
+| 火箭隊的催眠裝置 | 攻擊方 `status=asleep` | **`status=null`** | 🔴 |
+| 逆境保險 | 抽 3 張 | **抽 0 張** | 🔴（audit 挖出的同型）|
+| 奢華炸彈 | 反彈 120 | 反彈 120 | ✅ |
+| 幸運頭盔 | 抽 2 張 | 抽 2 張 | ✅ |
+| 手持循環扇 | 開 1 個 pending | 開 1 個 pending | ✅ |
+
+### 【二】⭐⭐⭐ 根因：KO 鏡射把 `koInst` 丟掉了
+
+```ts
+// 修前
+TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, _koInst, attackerIid) =>
+  fn(state, dIdx, aIdx, 0, pool, attackerIid));
+```
+
+呼叫端（`engine.ts` L6656）**本來就有傳** KO 前的 instance 快照當第 5 參數（`updatedActive`），
+但這個鏡射把它寫成 `_koInst` 丟掉了。而 fn 內部是用 `state.players[dIdx].active` 取 holder ——
+引擎跑到 `TOOL_ON_KO` 時 active 已經是 `null` ⇒ 「holder 是不是『火箭隊的』寶可夢」這種條件
+**靜默失敗**，整個效果不發動。
+
+⚠ 幸運頭盔／凸凸頭盔／手持循環扇沒事，純粹因為它們**不讀 holder**（手持循環扇讀的是
+  攻擊方的 iid 快照）—— 那是運氣，不是設計。
+⚠ 奢華炸彈更危險：它讀 `p.active.toolAttached` 來丟棄自己。目前 KO 後 active 是 null 所以沒出事，
+  但只要補位時序改變，就會丟掉**補位上來的新寶可夢**身上的道具。
+
+### 【三】官方規則依據（`PTCG RULES/PTCG_RULES.md` 逐字）
+
+- §17.2.B L619-620：「擁有特性『反擊針』的刺球仙人掌若受到來自對手的寶可夢的招式的傷害昏厥了，
+  可以因特性『反擊針』的效果，在使用招式的寶可夢身上放置3個傷害指示物嗎？」→ **可以。**
+- §17.20.B L1472-1473：沉重接力棒的持有者被「送回」[昏厥]時 → **可以**發動。
+- §17.20.B L1474-1475（反面）：場上有「災禍荒野」（道具失效）時 → **不可以** ⇒ toolsJammed 閘不放寬。
+- §16.2 L558（站長裁定 六-14, v6.368）：持有者即使被**這一次**招式打到[昏厥]離場，
+  該效果對**這一次**招式仍然生效。
+- §17.2.A L608：學習裝置在持有者昏厥時效果仍執行（只是順序問題）。
+
+⇒ 卡面「在戰鬥場受到對手的寶可夢招式的傷害時」**含被這一次傷害打死**。
+
+### 【四】⭐⭐⭐ 收斂（Rule 38：holder 的判準只有一份）
+
+`registerToolOnDamagedAndKO` 統一解析 holder 並傳給 fn，fn 一律**不准**自己讀 `players[dIdx].active`：
+
+```ts
+// TOOL_ON_DAMAGED（holder 還在場上）⇒ 戰鬥位本人
+TOOL_ON_DAMAGED.set(name, (state, dIdx, aIdx, damage, pool, attackerIid) =>
+  fn(state, dIdx, aIdx, damage, pool, attackerIid, state.players[dIdx].active ?? null));
+// TOOL_ON_KO（holder 已離場）⇒ koInst 快照
+TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, koInst, attackerIid) =>
+  fn(state, dIdx, aIdx, 0, pool, attackerIid, koInst ?? null));
+```
+
+三張卡改吃傳進來的 holder：
+
+- **火箭隊的催眠裝置**：判「是不是『火箭隊的』」改讀 holder。
+- **逆境保險**：讀 holder 自己的弱點屬性（`getEffectiveWeaknessType(state, aIdx, holder, …)`）。
+- **奢華炸彈**：丟棄道具只在「holder 還站在戰鬥位」（`p.active.iid === holder.iid`）時做。
+
+⚠ `applyStatusToOppActive(state, dIdx, …)` 施加的對象是 `1-dIdx`＝攻擊方，攻擊方還在場上，
+  所以 holder 修好之後睡眠就能正常施加（已行為端複驗）。
+
+### 【五】守衛 `scripts/test-v6386-tool-holder-on-ko.mjs`（**46 / 0**）
+
+- 【0】fixture 自驗（卡面逐字、傷害算式 200×2 ≥ 280 ⇒ KO／50×2 < 280 ⇒ 不 KO）
+- 【A】⭐⭐⭐ 行為端：催眠裝置／逆境保險 的 KO × 非KO 矩陣 ＋ **條件反對照**
+  （holder 不是「火箭隊的」⇒ 兩邊都不觸發；弱點不匹配 ⇒ 不抽牌）＋ 反對照的前提哨兵
+  （那兩盤真的一個 KO、一個沒 KO —— 否則反對照是恆真式）
+- 【B】⭐⭐⭐ **卡池自動枚舉**：每一張 H/I/J「受到…招式的傷害時」型且有實裝的道具，
+  KO 與非 KO 的觸發結果必須一致。白名單只准放「本 fixture 條件不成立」的（豪邁炸彈、龐克頭盔），
+  而且每一張都要有理由。**未來新卡自動納入。**
+- 【C】⭐⭐ 不得矯枉過正：幸運頭盔恰好抽 2、手持循環扇恰好開 1 個 pending、奢華炸彈仍反彈 120、
+  空白對照（沒帶道具 ⇒ 攻擊方毫髮無傷）
+- 【D】⭐⭐ 收斂：KO 鏡射必須把 `koInst` 傳給 fn（不得再寫成 `_koInst`）、
+  `TOOL_ON_DAMAGED` 不再直接塞 fn、掃描每一個 `registerToolOnDamagedAndKO` 區塊不得再讀
+  `players[dIdx].active`（跳過註解行）＋ 掃描器正／負對照
+- 【E】⭐ 官方規則逐字錨（四條，含「災禍荒野 ⇒ 不可以」的反面）
+- 【F】⭐⭐⭐ HEAD-FAIL：只把 `tools.ts` 換成 BASE 的 blob 重跑【A】——
+  BASE 必須在 KO 情境不觸發、HEAD 必須觸發；再加「BASE 的 tools.ts 確實把 koInst 丟掉了」的逐字錨，
+  與「幸運頭盔在 BASE 與 HEAD 結果相同」的零變更對照
+- 【G】⭐ 本守衛在 npm test chain 裡（恰好一次）
+
+### 【六】沒有動的
+
+- **龐克頭盔**（engine.ts 的 inline 反擊）與**豪邁炸彈**（engine.ts L6668 的 KO 特判）
+  都是「第二份判準」（Rule 38 意義上的重複），但它們**行為正確**，且收斂需要把 `baseDamage`
+  加進 `TOOL_ON_KO` 的簽名（動到型別與所有呼叫點）⇒ 本版不動，列在這裡當待辦。
+- 果實型（千香果／福祿果／巧可果／刺耳果／莓榴果／霹霹果）走的是減傷管線，不是 on-damaged hook。
+- 「受到…傷害而【昏厥】時」型（倖存鍛鍊器／希望護身符／沉重接力棒／莉莉艾的珍珠）
+  本來就只在 KO 觸發，不在本版範圍。
+
+### 【七】部署
+
+⚠ 本版**只動引擎**（`src/lib/game/effects/cards/tools.ts`），**沒有動 `server_admin_patch.js`**
+⇒ 跑 `update-tournament.bat`（引擎）＋ `update-admin-full.bat`（前端與首頁 changelog），
+**不必**跑 `redeploy-oracle.bat`。
+
 ## v6.385 ⭐⭐⭐「能量的數量」＝個數的中央化（玩家回報 → 全站 audit 挖出 9 張漏網）
 
 BASE `d369184c386060a6f1f1b700f6fae6b34850be13`（v6.384）。

@@ -668,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'd369184c386060a6f1f1b700f6fae6b34850be13';   // v6.384（v6.385 的上一版）
+const PREV_SHA = 'e0f2695028edcfaed81034f312a5b53385c2075e';   // v6.385（v6.386 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -755,28 +755,10 @@ const PREV_SHA = 'd369184c386060a6f1f1b700f6fae6b34850be13';   // v6.384（v6.38
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  'src/lib/game/effects.ts',
-  'src/lib/game/effects/_shared.ts',
-  'src/lib/game/effects/cards/m5_preview.ts',
-  'src/lib/game/effects/cards/v2306_meta_pokemon.ts',
-  'src/lib/game/effects/cards/v2353_j_mark_batch.ts',
-  'src/lib/game/effects/cards/v2354_j_mark_batch.ts',
-  'src/lib/game/effects/cards/v2355_j_mark_batch.ts',
-  'src/lib/game/effects/cards/v2359_j_mark_batch.ts',
-  'src/lib/game/effects/cards/v2402_mega_gardevoir.ts',
-  'src/lib/game/effects/cards/v2490_i_wave3a_conditional.ts',
-  'src/lib/game/effects/cards/v2550_i_wave5_meta.ts',
-  'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
-  'src/lib/game/effects/cards/v2580_i_wave8_misc2.ts',
-  'src/lib/game/effects/cards/v2600_i_wave10_conditional.ts',
-  'src/lib/game/effects/cards/v2610_i_wave11_misc4.ts',
-  'src/lib/game/effects/cards/v2620_i_wave12_misc5.ts',
-  'src/lib/game/effects/cards/v2640_i_wave14_misc7.ts',
-  'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
-  'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
-  'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',
-  'src/lib/game/effects/cards/v2750_h_wave2_full.ts',
-  'src/lib/game/engine.ts',
+  // ⭐v6.386：玩家端只動了 tools.ts（registerToolOnDamagedAndKO 的 holder 收斂）
+  //   ＋ version.ts ＋ 首頁 changelog 三步搬運（三檔）。
+  //   ⚠ engine.ts／effects.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 零改動。
+  'src/lib/game/effects/cards/tools.ts',
   'src/lib/version.ts',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
