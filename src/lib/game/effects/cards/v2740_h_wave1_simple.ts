@@ -103,7 +103,7 @@ function selfEnergyCountPre(
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
     // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡/燃火/火箭隊/新衝天等「視為該屬性」特殊能量。
-    const count = countEnergyTypeHostAware(a, energyType, pool);
+    const count = countEnergyTypeHostAware(a, energyType, pool, { state, ownerIdx: aIdx });
     const dmg = base + count * perEnergy;
     return { state: addLog(state, `${label}：自身${energyType}能量 ${count} → ${base}+${count}×${perEnergy} = ${dmg}`, aIdx), damage: dmg };
   };

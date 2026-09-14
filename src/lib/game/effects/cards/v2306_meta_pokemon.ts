@@ -136,10 +136,14 @@ regR('delphox-flare-magic', (state, actorIdx, selectedIids, params, pool) => {
 // v4.959 refactor：用 _shared.countAttachedEnergyAsUnits helper（取代 v4.958 inline）。
 regPre('妖火紅狐|能量風暴', (state, aIdx, pool) => {
   let energyCount = 0;
-  for (const p of state.players) {
+  // ⭐v6.385：原本沒傳 state/ownerIdx ⇒ 拿不到「大竺葵｜繁茂」（基本【草】各算 2 個）。
+  //   ⚠ 這一招數的是**雙方**全場，所以要 per-player 傳各自的 ownerIdx ——
+  //     繁茂是「自己的所有寶可夢」，兩邊各自算各自的。
+  for (let pIdx = 0 as 0 | 1; pIdx <= 1; pIdx = (pIdx + 1) as 0 | 1) {
+    const p = state.players[pIdx];
     for (const poke of [p.active, ...p.bench]) {
       if (!poke) continue;
-      energyCount += countAttachedEnergyAsUnits(poke, pool);
+      energyCount += countAttachedEnergyAsUnits(poke, pool, state, pIdx);
     }
   }
   const dmg = energyCount * 30;

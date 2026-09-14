@@ -317,7 +317,7 @@ regPost('坦克臭鼬|粉碎迴轉', (state, aIdx) => {
 regPre('超能妙喵|精神強念', (state, aIdx, pool) => {
   const dIdx = (1 - aIdx) as 0 | 1;
   const defActive = state.players[dIdx].active;
-  const count = defActive ? countAttachedEnergyAsUnits(defActive, pool) : 0;
+  const count = defActive ? countAttachedEnergyAsUnits(defActive, pool, state, dIdx) : 0;   // ⭐v6.385 補 state/dIdx（繁茂）
   const dmg = 30 + count * 20;
   return {
     state: addLog(state, `精神強念：對手 ${count} 個能量 → ${dmg}`, aIdx),

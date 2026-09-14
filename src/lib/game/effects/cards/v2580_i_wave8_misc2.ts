@@ -22,6 +22,7 @@
 import type { CardInstance, PlayerState } from '../../types';
 import { snipeCountersPost } from '../../effects'; // v6.069 收斂：放置 N 個傷害指示物
 import { flipCoinsWithLog, energyProvidesType } from '../../effects'; // v5.682 host-aware 視為提供X
+import { countEnergyTypeHostAware } from '../../effects';   // ⭐v6.385b 屬性能量**個數**中央述詞
 import { defNextAtkReducePost } from '../../effects'; // v5.803 中央減攻(免疫gate)
 import { healOneOwnBenchFullPost } from '../../effects'; // v6.343 「1隻備戰寶可夢HP全部恢復」中央出口
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
@@ -56,12 +57,10 @@ function fieldEnergyCountConditionPre(
   return (state, aIdx, pool) => {
     const player = state.players[aIdx];
     const all: CardInstance[] = [...(player.active ? [player.active] : []), ...player.bench];
+    // ⭐v6.385b（Fable 5 複審 🟡7）：卡面「自己的場上的【X】能量有 N 個以上」＝**個數** ⇒ 走中央
+    //   （原本逐張比屬性：2 水 ＋ 2 古舊能量只算 2 個，應為 4 個）。
     let count = 0;
-    for (const pk of all) {
-      for (const e of pk.energyAttached) {
-        if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
-      }
-    }
+    for (const pk of all) count += countEnergyTypeHostAware(pk, energyType, pool, { state, ownerIdx: aIdx });
     const cond = count >= threshold;
     const dmg = cond ? base + bonus : base;
     const s = addLog(state, `${label}：自方場上 ${energyType} 能量 ${count} 個（門檻 ${threshold}）${cond ? `→ +${bonus}` : ''} = ${dmg}`, aIdx);

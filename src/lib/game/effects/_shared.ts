@@ -518,11 +518,21 @@ export function countSpecialConditions(inst: CardInstance | null | undefined): n
   return (inst.status ? 1 : 0) + (inst.secondaryStatus ? 1 : 0) + (inst.tertiaryStatus ? 1 : 0);
 }
 
+/**
+ * ⚠⚠⚠ v6.385：`state` / `ownerIdx` 從 optional 改成**必填**（拿不到場上脈絡就明確傳 `null`）。
+ *   它們決定「大竺葵｜繁茂」要不要把基本【草】算 2 個。optional 的時候「忘了傳」是**靜默**的：
+ *   v6.069 修過 8 個呼叫點，後來新加的卡又漏回去 —— v6.385 的行為端 audit 實測抓到 6 張
+ *   （代歐奇希斯／超能妙喵／蟲甲聖ex｜精神強念、巨鍛匠｜大橫掃、妖火紅狐｜能量風暴、
+ *    班基拉斯ex｜壓碎）在繁茂在場時數字完全沒動。
+ *   ⇒ 改必填之後，漏傳會是**編譯錯誤**，不可能再靜默少算。
+ * ⚠ `ownerIdx` 必須是**能量持有者那一方**（繁茂卡面：「自己的所有寶可夢」）——
+ *   數對手身上的能量時要傳 dIdx。
+ */
 export function countAttachedEnergyAsUnits(
   host: CardInstance,
   pool: Map<string, Card>,
-  state?: GameState,
-  ownerIdx?: 0 | 1,
+  state: GameState | null,
+  ownerIdx: 0 | 1 | null,
 ): number {
   // v5.541：收斂為「逐能量呼叫 getEnergyDiscardUnits（host-aware 單一來源）」。
   //   原本只算「新衝天能量 on Stage2 = 2」，漏算 燃火能量（附進化=3）/ 火箭隊能量（=2）。
@@ -533,7 +543,7 @@ export function countAttachedEnergyAsUnits(
   for (const e of host.energyAttached) {
     const ec = pool.get(e.cardId);
     if (!ec || ec.supertype !== 'Energy') continue;
-    count += getEnergyDiscardUnits(e.cardId, host, pool, state, ownerIdx);
+    count += getEnergyDiscardUnits(e.cardId, host, pool, state ?? undefined, ownerIdx ?? undefined);
   }
   return count;
 }

@@ -228,7 +228,7 @@ regPre('超級沙奈朵ex|超級交響樂', (state, aIdx, pool) => {
   ];
   let psyCount = 0;
   for (const pk of allOwn) {
-    psyCount += countEnergyTypeHostAware(pk, 'Psychic', pool);  // v5.616 改用型別計數中央 helper：火箭隊能量正確計 2 超(原 countEnergy 計 1)+ 保留新衝天等 host-aware
+    psyCount += countEnergyTypeHostAware(pk, 'Psychic', pool, { state, ownerIdx: aIdx });  // v5.616 改用型別計數中央 helper：火箭隊能量正確計 2 超(原 countEnergy 計 1)+ 保留新衝天等 host-aware
   }
   const dmg = psyCount * 50;
   return {

@@ -615,7 +615,7 @@ regPre('超級龍頭地鼠ex|極限鑽', (state, aIdx, pool) => {
 //   （舊註解誤標為 legacy「雷電拳/能量數(全部)」— 該命名為未上線的 jp_legacy 卡，已更正。）
 regPre('超級捷拉奧拉ex|閃電拳', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
-  const n = att ? countEnergyTypeHostAware(att, 'Lightning', pool) : 0;
+  const n = att ? countEnergyTypeHostAware(att, 'Lightning', pool, { state, ownerIdx: aIdx }) : 0;
   const dmg = n * 60;
   return {
     state: addLog(state, `閃電拳：自身【雷】能量 ${n} 個 → ${n}×60 = ${dmg}`, aIdx),
@@ -799,7 +799,7 @@ regPost('金魚王|水炮射', (state, aIdx, pool) => {
   }
   const att = state.players[aIdx].active;
   // v5.689：卡面「【水】能量的數量」→ 只數水、且 host-aware(古舊/稜鏡/火箭隊等)。原誤數全部能量。
-  const n = att ? countEnergyTypeHostAware(att, 'Water', pool) : 0;
+  const n = att ? countEnergyTypeHostAware(att, 'Water', pool, { state, ownerIdx: aIdx }) : 0;
   if (n === 0) {
     return addLog(state, '水炮射：自身無水能量 → 0 傷害（仍需選目標）', aIdx);
   }

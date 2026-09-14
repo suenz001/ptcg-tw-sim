@@ -5529,7 +5529,7 @@ export const PASSIVE_RETALIATION = new Map<string, RetaliationFn>([
     const def = defSnapshot ?? state.players[dIdx].active;
     if (!def) return state;
     // v5.980：改走中央 host-aware countEnergyTypeHostAware(火箭隊/燃火/新衝天等倍率),原 inline 按張數。
-    const metalCount = countEnergyTypeHostAware(def, 'Metal', pool);
+    const metalCount = countEnergyTypeHostAware(def, 'Metal', pool, { state, ownerIdx: dIdx });
     if (metalCount === 0) return state;
     const players = [...state.players] as [PlayerState, PlayerState];
     const att = { ...players[aIdx] };
@@ -7660,7 +7660,7 @@ regPre('阿勃梭魯|惡棍墜落', (state, aIdx, pool) => {
   let count = 0;
   for (const c of [p.active, ...p.bench]) {
     if (!c) continue;
-    count += countEnergyTypeHostAware(c, 'Darkness', pool);
+    count += countEnergyTypeHostAware(c, 'Darkness', pool, { state, ownerIdx: aIdx });
   }
   if (count >= 3) {
     return { state: addLog(state, `惡棍墜落：【惡】能量 ${count} ≥3 → +50`, aIdx), damage: 70 };
@@ -8423,13 +8423,32 @@ function energyMatchesType(card: Card, filter: EnergyType): boolean {
   return !!m && ENERGY_NAME_TO_TYPE[m[1]] === filter;
 }
 
-export function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: Map<string, Card>): number {
+/**
+ * ⚠⚠ v6.385：`ctx` 必填（拿不到場上脈絡就明確傳 `{ state: null, ownerIdx: null }`）。
+ *   ⭐ 站長 2026-09-15 裁定：**「基本能量的數量」算的是「個數」，會受到繁茂的影響。**
+ *     ⇒ filter='basic' 時，大竺葵｜繁茂在場的基本【草】能量算 **2 個**。
+ *     目前唯一走這條的是 帕路奇亞｜空間粉碎（卡面：「這隻寶可夢身上附加的基本能量的數量×40」）。
+ *   ⚠ 'special' 與屬性 filter 的語意**不變**（特殊能量不是繁茂的對象；屬性計數另有
+ *     countEnergyTypeHostAware 這條 host-aware 管線）。
+ *   ⚠ 「丟棄 N **張**基本能量卡 ⇒ 每張 ×M」那一類（電擊魔獸｜電壓錘、猛雷鼓ex｜極降駕）
+ *     走的是另一條 registerSelfDiscardMultiply／registerFieldDiscardMultiply，卡面主詞是
+ *     「卡」＝張數，**不經過這裡**，不受本次裁定影響。
+ */
+export function countOneEnergy(
+  inst: CardInstance,
+  filter: EnergyFilter,
+  pool: Map<string, Card>,
+  ctx: { state: GameState | null; ownerIdx: 0 | 1 | null },
+): number {
   let count = 0;
+  const _bloom = !!(ctx.state && ctx.ownerIdx != null && hasBloomOnField(ctx.state, ctx.ownerIdx, pool));
   for (const e of inst.energyAttached) {
     const card = pool.get(e.cardId);
     if (!card || card.supertype !== 'Energy') continue;
     if (filter === 'all') count++;
-    else if (filter === 'basic' && card.subtype === 'Basic') count++;
+    else if (filter === 'basic' && card.subtype === 'Basic') {
+      count += (_bloom && energyMatchesType(card, 'Grass')) ? 2 : 1;   // ⭐v6.385 個數語意（站長裁定）
+    }
     else if (filter === 'special' && card.subtype === 'Special') count++;
     // v3.731：pokemonType=null 的 fallback — 看 card.name 的【X】
     else if (typeof filter === 'string' && energyMatchesType(card, filter as EnergyType)) count++;
@@ -8454,9 +8473,39 @@ export function countOneEnergy(inst: CardInstance, filter: EnergyFilter, pool: M
 //   此處 re-export 保持既有 caller（各 cards 檔 import from '../../effects'）不變。
 export { energyTypeUnitsHostAware, energyProvidesType };
 
-export function countEnergyTypeHostAware(host: CardInstance, type: EnergyType, pool: Map<string, Card>): number {
+/**
+ * ⭐⭐⭐ host 身上某屬性的能量**個數**（唯一出口）。
+ *
+ * ⚠⚠⚠ v6.385（玩家回報「大竺葵｜繁茂在場，椰蛋樹的草能量沒有算 2 個」後的全站 audit）：
+ *   v6.385 之前這一支**完全沒有繁茂**，繁茂只存在於另一支 countEnergyTypeBloomAware ——
+ *   而本支有 22 個呼叫點、那支只有 3 個。行為端實測確認 9 張卡因此少算一半：
+ *     椰蛋樹｜木之重壓、暴雪王｜結冰木、代歐奇希斯／超能妙喵／蟲甲聖ex｜精神強念、
+ *     巨鍛匠｜大橫掃、妖火紅狐｜能量風暴、班基拉斯ex｜壓碎、帕路奇亞｜空間粉碎。
+ *   ⇒ 兩支合併成這一支（Rule 38：同一個判準只能有一份）。
+ *
+ * ⚠⚠ `ctx` 是**必填**的（拿不到場上脈絡就明確傳 `{ state: null, ownerIdx: null }`）。
+ *   v6.385 之前所有「要不要算繁茂」的參數都是 optional ⇒「忘了傳」是**靜默**的，
+ *   v6.069 修過 8 個呼叫點，後來新加的卡又漏回去。改必填之後，漏傳會是編譯錯誤。
+ * ⚠ `ownerIdx` 必須是**能量持有者那一方**（繁茂卡面：「自己的所有寶可夢」）——
+ *   數對手身上的能量時要傳 dIdx，不是 aIdx。
+ */
+export function countEnergyTypeHostAware(
+  host: CardInstance,
+  type: EnergyType,
+  pool: Map<string, Card>,
+  ctx: { state: GameState | null; ownerIdx: 0 | 1 | null },
+): number {
   let count = 0;
   for (const e of host.energyAttached) count += energyTypeUnitsHostAware(host, e, type, pool);
+  // ⭐ 大竺葵｜繁茂：自己的所有寶可夢身上附加的「基本【草】能量」卡，視為各提供 2 個【草】能量。
+  //   （host-aware 已算 1，這裡再 +1 ⇒ 視為 2。特性被暗夜羽擊／黏著束縛／初始化／熔岩洞
+  //    消除時 hasBloomOnField 會回 false，這裡就不加 —— 消除閘也只有那一份。）
+  if (type === 'Grass' && ctx.state && ctx.ownerIdx != null && hasBloomOnField(ctx.state, ctx.ownerIdx, pool)) {
+    for (const e of host.energyAttached) {
+      const ec = pool.get(e.cardId);
+      if (ec?.supertype === 'Energy' && ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass')) count += 1;
+    }
+  }
   return count;
 }
 
@@ -8497,19 +8546,15 @@ setAbilityHolderEffectiveAtFn((state, inst, card, ownerIdx, abilityName, locatio
 setAbilityHolderEffectiveFn((state, inst, _card, ownerIdx, abilityName, pool) =>
   _v6196HasEffAbilByInst(state, ownerIdx, inst, pool, abilityName));
 
-// host 身上某屬性能量數（host-aware 特殊能量 + 繁茂基本草×2）。依能量數算傷害/指示物用此。
+// ⭐⭐⭐v6.385：countEnergyTypeBloomAware 已**併入** countEnergyTypeHostAware（Rule 38）。
+//   兩支並存的後果：有繁茂的那支只有 3 個呼叫點，沒繁茂的那支有 22 個 ⇒ 9 張卡少算一半。
+//   保留這個薄 wrapper 只是為了不動既有呼叫端的可讀性；新程式碼請直接用
+//   countEnergyTypeHostAware(host, type, pool, { state, ownerIdx })。
+/** @deprecated v6.385：改用 countEnergyTypeHostAware(host, type, pool, { state, ownerIdx })。 */
 export function countEnergyTypeBloomAware(
   host: CardInstance, type: EnergyType, state: GameState, ownerIdx: 0 | 1, pool: Map<string, Card>,
 ): number {
-  let count = countEnergyTypeHostAware(host, type, pool);
-  if (type === 'Grass' && hasBloomOnField(state, ownerIdx, pool)) {
-    // 每個基本【草】能量 host-aware 已算 1，繁茂再 +1 → 視為 2。
-    for (const e of host.energyAttached) {
-      const ec = pool.get(e.cardId);
-      if (ec?.supertype === 'Energy' && ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass')) count += 1;
-    }
-  }
-  return count;
+  return countEnergyTypeHostAware(host, type, pool, { state, ownerIdx });
 }
 
 // v4.963: 基本能量 pokemonType=null fallback helper — 認屬性能量含 name【X】 fallback。
@@ -8541,8 +8586,8 @@ export function selfAttachedEnergyMultiplyPre(base: number, per: number, filter:
     // v4.797：type filter 改走 host-aware（認新衝天能量等特殊能量的 stage-dependent unit）
     const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     const count = isTypeFilter
-      ? countEnergyTypeHostAware(att, filter as EnergyType, pool)
-      : filter === 'all' ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : countOneEnergy(att, filter, pool); // v5.448：'all'→單位計數(新衝天Stage2×2)
+      ? countEnergyTypeHostAware(att, filter as EnergyType, pool, { state, ownerIdx: aIdx })
+      : filter === 'all' ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : countOneEnergy(att, filter, pool, { state, ownerIdx: aIdx }); // v5.448：'all'→單位計數(新衝天Stage2×2)
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：自身能量 ${count} → ${dmg}`, aIdx), damage: dmg };
   };
@@ -8557,8 +8602,8 @@ export function defActiveEnergyMultiplyPre(base: number, per: number, filter: En
     const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     const count = def
       ? (isTypeFilter
-          ? countEnergyTypeHostAware(def, filter as EnergyType, pool)
-          : filter === 'all' ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : countOneEnergy(def, filter, pool)) // v5.448：'all'→單位計數
+          ? countEnergyTypeHostAware(def, filter as EnergyType, pool, { state, ownerIdx: dIdx })
+          : filter === 'all' ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : countOneEnergy(def, filter, pool, { state, ownerIdx: dIdx })) // v5.448：'all'→單位計數
       : 0;
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手出場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
@@ -8575,8 +8620,8 @@ export function oppAllEnergyMultiplyPre(base: number, per: number, filter: Energ
     for (const p of [d.active, ...d.bench]) {
       if (!p) continue;
       count += isTypeFilter
-        ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
-        : filter === 'all' ? countAttachedEnergyAsUnits(p, pool, state, dIdx) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
+        ? countEnergyTypeHostAware(p, filter as EnergyType, pool, { state, ownerIdx: dIdx })
+        : filter === 'all' ? countAttachedEnergyAsUnits(p, pool, state, dIdx) : countOneEnergy(p, filter, pool, { state, ownerIdx: dIdx }); // v5.448：'all'→單位計數
     }
     const dmg = base + per * count;
     return { state: addLog(state, `${label}：對手全場能量 ${count} → ${dmg}`, aIdx), damage: dmg };
@@ -8586,31 +8631,18 @@ export function oppAllEnergyMultiplyPre(base: number, per: number, filter: Energ
 function selfAllEnergyMultiplyPre(base: number, per: number, filter: EnergyFilter, label: string): AttackPreFn {
   return (state, aIdx, pool) => {
     const a = state.players[aIdx];
-    // v3.731：filter='Grass' + 自方有大竺葵繁茂 → 基本【草】能量算 2 個
-    //   原邏輯只用 countOneEnergy 不套繁茂倍率，跟 bothActiveEnergyMultiplyPre 不對稱
-    //   ( bothActiveEnergyMultiplyPre 用 countWithBloom inline helper)
-    // v3.731: inline bloom check (effects.ts 不能 import engine.ts — circular)
-    // v5.601：繁茂走中央 hasBloomOnField（被暗夜羽擊/黏著束縛/初始化消除時不算）
-    const bloom = filter === 'Grass' && hasBloomOnField(state, aIdx, pool);
+    // ⭐⭐⭐v6.385：原本這裡有一份 **inline 的繁茂分支**（v3.731 寫的，當時 effects.ts 還不能
+    //   import engine.ts）。它與中央 host-aware 的算法不一致 —— inline 那份對「非基本但提供
+    //   【草】的能量」（古舊／稜鏡／新衝天）一律只算 1，把 host-aware 的倍率吃掉了。
+    //   ⇒ 整段刪掉，繁茂交給 countEnergyTypeHostAware 內部處理（Rule 38：只留一份判準）。
+    const bloom = filter === 'Grass' && hasBloomOnField(state, aIdx, pool);   // 只用來寫 log
     let count = 0;
-    // v4.797：type filter 走 host-aware（無繁茂時）；繁茂仍用原 inline 邏輯（基本草 +2）
     const isTypeFilter = filter !== 'all' && filter !== 'basic' && filter !== 'special';
     for (const p of [a.active, ...a.bench]) {
       if (!p) continue;
-      if (!bloom) {
-        count += isTypeFilter
-          ? countEnergyTypeHostAware(p, filter as EnergyType, pool)
-          : filter === 'all' ? countAttachedEnergyAsUnits(p, pool, state, aIdx) : countOneEnergy(p, filter, pool); // v5.448：'all'→單位計數
-        continue;
-      }
-      // 繁茂啟用：iterate 每個 energy，基本【草】 +2、其他依 filter 規則 +1
-      for (const e of p.energyAttached) {
-        const ec = pool.get(e.cardId);
-        if (!ec || ec.supertype !== 'Energy') continue;
-        const isBasicGrass = ec.subtype === 'Basic' && energyMatchesType(ec, 'Grass');
-        if (isBasicGrass) count += 2;
-        else if (energyMatchesType(ec, 'Grass')) count += 1;
-      }
+      count += isTypeFilter
+        ? countEnergyTypeHostAware(p, filter as EnergyType, pool, { state, ownerIdx: aIdx })
+        : filter === 'all' ? countAttachedEnergyAsUnits(p, pool, state, aIdx) : countOneEnergy(p, filter, pool, { state, ownerIdx: aIdx }); // v5.448：'all'→單位計數
     }
     const bloomLog = bloom ? '（繁茂×2 套用基本【草】）' : '';
     const dmg = base + per * count;
@@ -9083,7 +9115,7 @@ export function applyAttackerActiveDamageBonuses(
     formula.push({ sign: '+', value: b, label: '力量蛋白飲' });
   }
   // ── 夠讚狗｜腎上腺力量（自身附【惡】能量 +100）─────────────────────────
-  if (aCard.name === '夠讚狗' && isAbilityHolderEffective(state, aInst, aCard, aIdx, '腎上腺力量', 'active', pool) && countEnergyTypeHostAware(aInst, 'Darkness', pool) >= 1) {
+  if (aCard.name === '夠讚狗' && isAbilityHolderEffective(state, aInst, aCard, aIdx, '腎上腺力量', 'active', pool) && countEnergyTypeHostAware(aInst, 'Darkness', pool, { state, ownerIdx: aIdx }) >= 1) {
     d += 100;
     s = addLog(s, `「腎上腺力量」啟動：夠讚狗 招式傷害 +100`, aIdx);
     formula.push({ sign: '+', value: 100, label: '腎上腺力量' });
@@ -19582,7 +19614,7 @@ function attachedEnergyNameIncludes(inst: CardInstance | null | undefined, pool:
 regPre('波爾凱尼恩|強力蒸汽', (state, aIdx, pool) => {
   // v5.688：改用中央 countEnergyTypeHostAware — 「擲與【水】能量數相同次數」應認列古舊/稜鏡等視為水的特殊能量。
   const _act = state.players[aIdx].active;
-  const waterCount = _act ? countEnergyTypeHostAware(_act, 'Water', pool) : 0;
+  const waterCount = _act ? countEnergyTypeHostAware(_act, 'Water', pool, { state, ownerIdx: aIdx }) : 0;
   const r = flipCoinsWithLog(state, waterCount, '強力蒸汽', aIdx);
   const damage = r.heads * 90;
   return { state: addLog(r.state, `強力蒸汽：${r.heads}/${waterCount} 次正面 → ${damage} 傷害`, aIdx), damage };

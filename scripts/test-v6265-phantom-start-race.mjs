@@ -1134,6 +1134,32 @@ await T('F4b ⭐⭐ server_admin_patch.js 的錦標賽區塊 tail sha256 未變�
       'server_admin_patch.js 的錦標賽區塊被動到了（tail sha256 不符）');
   }
 });
+// ⭐v6.385b：engine.ts 的合法改動只有 **一處修改既有行** —— getEffectiveHP 裡
+//   修建老匠｜大師工藝的【鬥】能量計數，從 inline for 迴圈改走中央述詞
+//   countEnergyTypeHostAware（Rule 38：繁茂／host-aware 的判準只有一份）。
+//   ⚠ **不能**用哨兵剝（剝掉等於把 BASE 的內容也一起刪掉）⇒ 逐字換回 BASE 的樣子。
+//   ⚠ import 的那一行加在**既有的** `>>> v6347-engine-imports` 區塊內
+//     ⇒ 由 stripV6347Engine 一併剝掉，這裡不必再處理。
+//   ⚠ 本還原器**刻意不包進 s0 的剝除鏈最外層**：test-v6376 D7 與 test-v6369 D10 都釘著
+//     「s0 那一行必須由 stripV6376Engine 起頭、且 6369 緊貼在 6368 外面」的字面，
+//     包進去會讓那兩條假性翻紅。改成與 stripV6310/V6331/V6334 同一種「鏈外單獨呼叫」的寫法。
+//     （⚠ 這段註解本身也刻意不重寫出那兩個字面 —— 寫出來就會被它們的 count/find 抓到。）
+const stripV6385Engine = (src) => src.split(
+  "    // \u2b50\u2b50v6.385b\uff08Fable 5 \u8907\u5be9 \ud83d\udfe17\uff09\uff1a\u539f\u672c inline \u5224\u300c\u57fa\u672c\u3010\u9b25\u3011\u6216 pokemonType===Fighting\u300d\uff0c\n"
+  + "    //   \u6f0f\u6389 host-aware \u7684\u7279\u6b8a\u80fd\u91cf \u2014\u2014 \u786c\u5ca9\u3010\u9b25\u3011\u80fd\u91cf\uff08Special\uff0cpokemonType \u53ef\u80fd\u662f null\uff09\u3001\n"
+  + "    //   \u53e4\u820a\u80fd\u91cf\uff08\u8996\u70ba\u63d0\u4f9b\u6240\u6709\u5c6c\u6027\uff09\u3001\u65b0\u885d\u5929\u80fd\u91cf\uff08\u9644 2 \u968e\u9032\u5316\u8996\u70ba 2 \u500b\uff09\u3002\u5be6\u6e2c\u90fd\u7b97 0 \u500b\u3002\n"
+  + "    //   \u21d2 \u8d70\u8207\u300c\u4e00\u9577\u518d\u9577\u300d\u300c\u6728\u4e4b\u91cd\u58d3\u300d\u540c\u4e00\u652f\u4e2d\u592e\u8ff0\u8a5e\uff08Rule 38\uff09\u3002\n"
+  + "    const fightingCount = countEnergyTypeHostAware(inst, 'Fighting', pool,\n"
+  + "      { state: state ?? null, ownerIdx: _v6206OwnerIdx ?? null });\n"
+).join(
+  "    let fightingCount = 0;\n"
+  + "    for (const e of inst.energyAttached) {\n"
+  + "      const ec = pool.get(e.cardId);\n"
+  + "      if (!ec || ec.supertype !== 'Energy') continue;\n"
+  + "      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /\u3010\u9b25\u3011/.test(ec.name))) fightingCount++;\n"
+  + "      else if (ec.pokemonType === 'Fighting') fightingCount++;\n"
+  + "    }\n"
+);
 await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等於 BASE（v6.309）', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA) || !hasBaseCommit(ROOT, BASE_SHA_V6266)) {
     shallowSkip('F4c engine.ts 對 BASE 的逐字比對', 'F4a 的結構斷言仍在守'); return;
@@ -1152,7 +1178,8 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
-        return s3;
+        const s4 = stripV6385Engine(s3); ok(s4 !== s3, 'v6.385b 的還原器過期（大師工藝那一段的字面對不上）');
+        return s4;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
@@ -1175,7 +1202,8 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         const s1 = stripV6310Engine(s0); ok(s1 !== s0, 'v6.310 的三行註解哨兵不在 engine.ts 裡（剝除器過期）');
         const s2 = stripV6331Engine(s1); ok(s2 !== s1, 'v6.331 的中央閘哨兵不在 engine.ts 裡（剝除器過期）');
         const s3 = stripV6334Engine(s2); ok(s3 !== s2, 'v6.334 的哨兵不在 engine.ts 裡（剝除器過期）');
-        return s3;
+        const s4 = stripV6385Engine(s3); ok(s4 !== s3, 'v6.385b 的還原器過期（大師工藝那一段的字面對不上）');
+        return s4;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }

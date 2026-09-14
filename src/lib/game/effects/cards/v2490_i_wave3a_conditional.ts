@@ -25,7 +25,6 @@ import {
   addLog, updatePlayer,
   withPending,  // v6.211：picker 一律走 withPending（已有 pending 時排隊，禁直接覆寫）
 } from '../_shared';
-import { energyMatchesType } from '../_shared';
 import type { AttackPreFn, AttackPostFn } from '../_shared';
 // v5.177：補 import (v5.176 hotfix wave3a-snipe-bench resolver 用此 helper 但漏 import)
 import { canApplyEffectToTarget } from '../../defense';
@@ -56,7 +55,7 @@ function selfEnergyCountPre(
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
     // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡/燃火/火箭隊/新衝天等「視為該屬性」特殊能量。
-    const count = countEnergyTypeHostAware(a, energyType, pool);
+    const count = countEnergyTypeHostAware(a, energyType, pool, { state, ownerIdx: aIdx });
     const dmg = base + count * perEnergy;
     const s = addLog(state, `${label}：自身${energyType}能量 ${count} 個 → ${base} + ${count}×${perEnergy} = ${dmg}`, aIdx);
     return { state: s, damage: dmg };
@@ -80,7 +79,7 @@ function oppActiveEnergyCountPre(
     const dIdx = (1 - aIdx) as 0 | 1;
     const def = state.players[dIdx].active;
     // v5.448：改用單位計數（新衝天 on Stage2 = 2）— 大橫掃依對手能量數減傷
-    const count = def ? countAttachedEnergyAsUnits(def, pool) : 0;
+    const count = def ? countAttachedEnergyAsUnits(def, pool, state, dIdx) : 0;   // ⭐v6.385 補 state/dIdx（繁茂）
     const delta = count * perEnergy;
     const dmg = mode === 'add' ? base + delta : Math.max(0, base - delta);
     const s = addLog(state, `${label}：對手戰鬥場 ${count} 個能量 → ${base}${mode === 'add' ? '+' : '-'}${delta} = ${dmg}`, aIdx);
@@ -260,12 +259,14 @@ function selfFieldEnergyConditionPre(
   return (state, aIdx, pool) => {
     const player = state.players[aIdx];
     const allOwn: CardInstance[] = [...(player.active ? [player.active] : []), ...player.bench];
+    // ⭐⭐⭐v6.385c（Fable 5 第二輪複審 🔴1）：卡面「若自己的場上的【X】能量有 N 個以上」
+    //   ＝**個數**（不是張數）⇒ 走與「一長再長」「木之重壓」「水晶墜落」同一支中央述詞。
+    //   ⚠ v6.385b 只改到 v2580 的 fieldEnergyCountConditionPre，而**雷公｜電氣墜落走的是
+    //     這一支** —— 同一個語意在本 repo 有兩份 factory。與 v6.385b 的暴雪王是同型錯誤：
+    //     「改了某個 helper」不等於「那張卡走那個 helper」，必須從 regPre 的註冊點反查。
+    //   實測（改前）：2 張基本雷 ＋ 備戰 2 張古舊能量 ⇒ 只算 2 個（應為 4 個）⇒ 永遠不增傷。
     let count = 0;
-    for (const pk of allOwn) {
-      for (const e of pk.energyAttached) {
-        if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
-      }
-    }
+    for (const pk of allOwn) count += countEnergyTypeHostAware(pk, energyType, pool, { state, ownerIdx: aIdx });
     const cond = count >= threshold;
     const dmg = cond ? base + bonus : base;
     const s = addLog(state, `${label}：自方場上${energyType}能量 ${count} 個（門檻 ${threshold}）→ ${cond ? `+${bonus}` : '不增傷'} = ${dmg}`, aIdx);

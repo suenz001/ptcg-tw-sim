@@ -11,9 +11,11 @@
  */
 
 import type { CardInstance, GameState } from '../../types';
+import type { Card } from '$lib/cards/types';   // ⭐v6.385b totalEnergyCount 的 pool 型別
 import { startEnergyChain } from './v158_energy_chain';
 import { deckWithCardsToBottom, regAByName } from '../_shared'; // v6.124 「重洗放回牌庫下方」中央管線
 import { flipCoinsWithLog } from '../../effects';
+import { countAttachedEnergyAsUnits } from '../_shared';   // ⭐v6.385b 能量**個數**（host-aware ＋ 繁茂）
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppDiscardChosenConcealedPost } from '../../effects';
 import { canApplyEffectToTarget } from '../../defense'; // v5.808 招式效果免疫 gate(化隱)
@@ -47,10 +49,20 @@ function isBasicLightningEnergy(card: any): boolean {
   return /【雷】/.test(card.name || '');
 }
 
-/** 計算玩家場上所有寶可夢附加能量總數（active + bench） */
-function totalEnergyCount(p: { active: CardInstance | null | undefined; bench: CardInstance[] }): number {
+/**
+ * 計算玩家場上所有寶可夢附加能量的**個數**（active + bench）。
+ * ⭐⭐v6.385b（Fable 5 複審 🔴3）：原本是 `energyAttached.length`（張數），
+ *   卡面「對手的所有寶可夢身上附加的能量的數量」＝個數（站長 v5.669 裁定）⇒ 走中央。
+ *   ⚠ ownerIdx 要傳**被數的那一方**（繁茂是「自己的所有寶可夢」）。
+ */
+function totalEnergyCount(
+  p: { active: CardInstance | null | undefined; bench: CardInstance[] },
+  pool: Map<string, Card>,
+  state: GameState,
+  ownerIdx: 0 | 1,
+): number {
   const all: CardInstance[] = [...(p.active ? [p.active] : []), ...p.bench];
-  return all.reduce((sum, inst) => sum + inst.energyAttached.length, 0);
+  return all.reduce((sum, inst) => sum + countAttachedEnergyAsUnits(inst, pool, state, ownerIdx), 0);
 }
 
 // ── Group A：手牌計數攻擊 ────────────────────────────────────────────────────
@@ -287,7 +299,7 @@ regPost('咚咚鼠|擺尾發電', (state, aIdx, pool) => {
   const dp = state.players[dIdx];
 
   // 計算上限 N = 對手全場能量總數
-  const oppEnergyTotal = totalEnergyCount(dp);
+  const oppEnergyTotal = totalEnergyCount(dp, pool, state, dIdx);   // ⭐v6.385b 對手側 ⇒ dIdx
   if (oppEnergyTotal === 0) {
     return addLog(state, '擺尾發電：對手場上無附加能量，無法選取', aIdx);
   }

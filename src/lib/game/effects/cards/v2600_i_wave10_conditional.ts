@@ -27,6 +27,7 @@ import { addLog } from '../_shared';
 import type { AttackPreFn } from '../_shared';
 // v5.227: 引入 totalEnergyUnits 處理燃火/新衝天/大竺葵繁茂等 host-aware 能量倍率
 import { totalEnergyUnits } from '../../engine';
+import { countEnergyTypeHostAware } from '../../effects';   // ⭐v6.385b 屬性能量**個數**中央述詞
 import { isEvolutionCard } from '../../effects'; // v5.860：判進化收斂中央 helper(cardStage 三重防線,防資料缺 evolvesFrom 漏判)
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -113,10 +114,12 @@ function selfEnergyMinPre(
   return (state, aIdx, pool) => {
     const a = state.players[aIdx].active;
     if (!a) return { state, damage: base };
-    let count = 0;
-    for (const e of a.energyAttached) {
-      if (energyMatchesType(pool.get(e.cardId), energyType)) count++;
-    }
+    // ⭐⭐v6.385b（Fable 5 複審 🔴1）：原本逐張 energyMatchesType 數**張數** —— 既不 host-aware
+    //   （古舊／稜鏡／新衝天／火箭隊），也拿不到大竺葵｜繁茂。實測：暴雪王｜結冰木「2 個以上
+    //   【草】能量」在繁茂在場、身上 1 張基本草時，判成「1 個不足」（應為 2 個 ⇒ +120）。
+    //   ⚠ v6.385 第一輪把它列進 commit 訊息說修好了，但其實改的是另一個檔的 helper ——
+    //     這是「改了 A 就宣稱 B 也好了」的幻覺，Fable 5 複審當場抓到。
+    const count = countEnergyTypeHostAware(a, energyType, pool, { state, ownerIdx: aIdx });
     const cond = count >= threshold;
     const dmg = base + (cond ? bonus : 0);
     const s = addLog(state, `${label}：自身 ${energyType} 能量 ${count} 個（門檻 ${threshold}）${cond ? `→ +${bonus}` : '不足'} = ${dmg}`, aIdx);

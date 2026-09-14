@@ -208,12 +208,15 @@ function requirePrevAttackPre(base: number, requiredAtkName: string, label: stri
 }
 
 // 自身與對手戰鬥能量數同 → +bonus
+// ⭐v6.385b（Fable 5 複審 🟡7）：卡面「身上附加的能量數量相同」＝**個數** ⇒ 兩邊都走中央，
+//   而且各自傳**自己那一方**的 ownerIdx（繁茂只管「自己的所有寶可夢」）。
 function sameEnergyCountPre(base: number, bonus: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
+  return (state, aIdx, pool) => {
+    const dIdx = (1 - aIdx) as 0 | 1;
     const a = state.players[aIdx].active;
-    const d = state.players[(1-aIdx) as 0|1].active;
-    const aE = a?.energyAttached.length ?? 0;
-    const dE = d?.energyAttached.length ?? 0;
+    const d = state.players[dIdx].active;
+    const aE = a ? countAttachedEnergyAsUnits(a, pool, state, aIdx) : 0;
+    const dE = d ? countAttachedEnergyAsUnits(d, pool, state, dIdx) : 0;
     if (aE === dE) return { state: addLog(state, `${label}：能量數同 ${aE} → ${base}+${bonus} = ${base+bonus}`, aIdx), damage: base + bonus };
     return { state: addLog(state, `${label}：能量數 ${aE} vs ${dE} → ${base}`, aIdx), damage: base };
   };
@@ -1487,17 +1490,19 @@ regPre('阿羅拉 三地鼠|三賓果', exactHandSizePre(120, 3, '三賓果'));
 // v4.959：用 countAttachedEnergyAsUnits — 認新衝天能量 on Stage2 = 2 個。
 regPre('蟲甲聖ex|精神強念', (state, aIdx, pool) => {
   const def = state.players[(1-aIdx) as 0|1].active;
-  const dE = def ? countAttachedEnergyAsUnits(def, pool) : 0;
+  const dE = def ? countAttachedEnergyAsUnits(def, pool, state, (1 - aIdx) as 0 | 1) : 0;   // ⭐v6.385 補 state/dIdx（繁茂）
   return { state: addLog(state, `精神強念：對手戰鬥能量 ${dE} → 20+${dE}×90 = ${20 + dE*90}`, aIdx), damage: 20 + dE * 90 };
 });
 
 // 沙鐵皮|磁場炸裂 20+ — 自方場上能量 ≥3 +70；卡面僅「不計算弱點」
 // v5.783：原誤用 skipWeakRes(連抵抗力一起跳)→ 改 skipWeakness(只跳弱點，抵抗力仍計)。
 //   同 v4.495 對「不計算抵抗力」批次的修法(SKIP_RES)，此為弱點側漏網孿生。
-regPre('沙鐵皮|磁場炸裂', (state, aIdx, _pool) => {
+regPre('沙鐵皮|磁場炸裂', (state, aIdx, pool) => {
   const p = state.players[aIdx];
-  let total = (p.active?.energyAttached.length ?? 0);
-  for (const b of p.bench) total += b.energyAttached.length;
+  // ⭐v6.385b（Fable 5 複審 🟡7）：卡面「自己的場上的能量有 3 個以上」＝**個數** ⇒ 走中央
+  //   （原本數張數：鬥＋草＋繁茂算 2 個、鬥＋火箭隊算 2 個，都應該是 3 個）。
+  let total = p.active ? countAttachedEnergyAsUnits(p.active, pool, state, aIdx) : 0;
+  for (const b of p.bench) total += countAttachedEnergyAsUnits(b, pool, state, aIdx);
   if (total >= 3) return { state: addLog(state, `磁場炸裂：自方場上能量 ${total} ≥3 → 20+70 = 90 (skipWeakness)`, aIdx), damage: 90, skipWeakness: true };
   return { state: addLog(state, `磁場炸裂：自方場上能量 ${total} < 3 → 20 (skipWeakness)`, aIdx), damage: 20, skipWeakness: true };
 });
@@ -1610,7 +1615,7 @@ regPost('路卡利歐ex|龍捲風猛攻', (state, aIdx, _pool) => {
 // v4.959：班基拉斯ex 是 Stage2 — 用 host-aware unit count（新衝天能量 on Stage2 = 2 個）。
 regPre('班基拉斯ex|壓碎', (state, aIdx, pool) => {
   const att = state.players[aIdx].active;
-  const n = att ? countAttachedEnergyAsUnits(att, pool) : 0;
+  const n = att ? countAttachedEnergyAsUnits(att, pool, state, aIdx) : 0;   // ⭐v6.385 補 state/aIdx（繁茂）
   return { state: addLog(state, `壓碎：自身能量 ${n} → ${n}×50 = ${n*50}`, aIdx), damage: n * 50 };
 });
 // 班基拉斯ex|暴君粉碎 — 固定 150 + 從對手手牌（不看正面）隨機棄 1 張

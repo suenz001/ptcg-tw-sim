@@ -22,6 +22,7 @@ import {
   addLog, updatePlayer, withPending,
 } from '../_shared';
 import { joinCardNames } from '../_shared';
+import { countAttachedEnergyAsUnits } from '../_shared';   // ⭐v6.385b 能量**個數**（host-aware ＋ 繁茂）
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import type { AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect, discardOppActiveEnergyPost } from '../../effects';
@@ -95,9 +96,12 @@ regPre('流氓鱷|復仇獠牙', (state, aIdx, _pool) => {
 // 招式 cost = ['Grass','Grass','Colorless','Colorless'] = 4 個能量
 // 條件：身上能量 ≥ 6 個
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('巨蔓藤|肌力鞭打', (state, aIdx, _pool) => {
+regPre('巨蔓藤|肌力鞭打', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
-  const have = a?.energyAttached.length ?? 0;
+  // ⭐⭐v6.385b（Fable 5 複審 🔴2）：卡面「身上附有的能量比使用這個招式所需的能量多 2 個」
+  //   ＝**個數**（站長 v5.669 裁定）。原本數張數 ⇒ 4 張基本草＋大竺葵｜繁茂算成 4 個
+  //   （應為 8 個 ⇒ 達標 +140）、火箭隊能量算 1 個（應為 2）。草牌配大竺葵是實戰盤面。
+  const have = a ? countAttachedEnergyAsUnits(a, pool, state, aIdx) : 0;
   const cond = have >= 6;  // cost 4 + 2
   const dmg = 120 + (cond ? 140 : 0);
   const s = addLog(state, `肌力鞭打：自身能量 ${have} 個 ${cond ? '(≥ cost+2 = 6) → +140' : '不足 cost+2，不增傷'} = ${dmg}`, aIdx);

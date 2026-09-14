@@ -658,11 +658,32 @@ if (!hasBaseCommit(ROOT, BASE)) {
           + "        if (!cc?.abilities?.some(a => a.name === '生機森巴')) return false;\n"
           + "        return hpAbilityEffective(c, cc, '生機森巴');\n"
           + "      });\n");
+      // ⭐v6.385b（既有守衛因**更後面那一版的合法改動**而紅，不是回歸）：
+      //   v6.385b 把 getEffectiveHP 裡 修建老匠｜大師工藝 的【鬥】能量計數改走中央述詞
+      //   countEnergyTypeHostAware（Rule 38），並在既有的 v6347- import 區塊內加一行 import。
+      //   兩處都逐字換回 BASE 的樣子；字面一對不上，F0b 的第二個條件照樣會紅。
+      t = t.split("  countEnergyTypeHostAware,                   // \u2b50v6.385b \u5927\u5e2b\u5de5\u85dd\uff1a\u3010\u9b25\u3011\u80fd\u91cf**\u500b\u6578**\uff08\u540c\u4e00\u652f\u4e2d\u592e\u8ff0\u8a5e\uff09\n").join('');
+      t = t.split(
+        "    // \u2b50\u2b50v6.385b\uff08Fable 5 \u8907\u5be9 \ud83d\udfe17\uff09\uff1a\u539f\u672c inline \u5224\u300c\u57fa\u672c\u3010\u9b25\u3011\u6216 pokemonType===Fighting\u300d\uff0c\n"
+        + "    //   \u6f0f\u6389 host-aware \u7684\u7279\u6b8a\u80fd\u91cf \u2014\u2014 \u786c\u5ca9\u3010\u9b25\u3011\u80fd\u91cf\uff08Special\uff0cpokemonType \u53ef\u80fd\u662f null\uff09\u3001\n"
+        + "    //   \u53e4\u820a\u80fd\u91cf\uff08\u8996\u70ba\u63d0\u4f9b\u6240\u6709\u5c6c\u6027\uff09\u3001\u65b0\u885d\u5929\u80fd\u91cf\uff08\u9644 2 \u968e\u9032\u5316\u8996\u70ba 2 \u500b\uff09\u3002\u5be6\u6e2c\u90fd\u7b97 0 \u500b\u3002\n"
+        + "    //   \u21d2 \u8d70\u8207\u300c\u4e00\u9577\u518d\u9577\u300d\u300c\u6728\u4e4b\u91cd\u58d3\u300d\u540c\u4e00\u652f\u4e2d\u592e\u8ff0\u8a5e\uff08Rule 38\uff09\u3002\n"
+        + "    const fightingCount = countEnergyTypeHostAware(inst, 'Fighting', pool,\n"
+        + "      { state: state ?? null, ownerIdx: _v6206OwnerIdx ?? null });\n"
+      ).join(
+        "    let fightingCount = 0;\n"
+        + "    for (const e of inst.energyAttached) {\n"
+        + "      const ec = pool.get(e.cardId);\n"
+        + "      if (!ec || ec.supertype !== 'Energy') continue;\n"
+        + "      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /\u3010\u9b25\u3011/.test(ec.name))) fightingCount++;\n"
+        + "      else if (ec.pokemonType === 'Fighting') fightingCount++;\n"
+        + "    }\n"
+      );
       return t;
     };
     const _engHeadLf = engSrc.replace(/\r\n/g, '\n');
     const _engStripped = _v6376Strip(_engHeadLf);
-    chk('F0b ⭐⭐engine.ts 除了 **v6.376 的合法改動**（三個 v6376- 哨兵區塊 ＋ 兩行 swap 還原）'
+    chk('F0b ⭐⭐engine.ts 除了 **v6.376／v6.385b 的合法改動**（三個 v6376- 哨兵區塊 ＋ 兩行 swap 還原 ＋ v6.385b 大師工藝兩處逐字還原）'
       + '之外一個字都沒有動（剝除後與 BASE 逐位元組相同）—— v6.375 本身刻意不碰它，理由見【D】；'
       + '剝除器若過期（哨兵不在／swap 字面對不上）這一條同樣會紅',
       bEng.ok && _engStripped !== _engHeadLf

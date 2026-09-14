@@ -144,11 +144,13 @@ regPre('恰雷姆|七度踢腿', (state, aIdx, _pool) => {
 });
 
 // 恰雷姆｜合氣掌 50+ — 自身能量數 = 對手戰鬥場能量數時 +120
-regPre('恰雷姆|合氣掌', (state, aIdx, _pool) => {
+regPre('恰雷姆|合氣掌', (state, aIdx, pool) => {
+  // ⭐v6.385b（Fable 5 複審 🟡7）：「能量數量相同」＝**個數** ⇒ 兩邊各走中央、各傳自己那一方。
+  const dIdx = (1 - aIdx) as 0 | 1;
   const a = state.players[aIdx].active;
-  const d = state.players[(1-aIdx) as 0|1].active;
-  const aE = a?.energyAttached.length ?? 0;
-  const dE = d?.energyAttached.length ?? 0;
+  const d = state.players[dIdx].active;
+  const aE = a ? countAttachedEnergyAsUnits(a, pool, state, aIdx) : 0;
+  const dE = d ? countAttachedEnergyAsUnits(d, pool, state, dIdx) : 0;
   if (aE === dE) {
     return { state: addLog(state, `合氣掌：能量數同 ${aE} → 50+120 = 170`, aIdx), damage: 170 };
   }

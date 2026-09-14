@@ -87,7 +87,7 @@ regPre('拉普拉斯ex|水炮迴旋', (state, aIdx, pool) => {
   const a = state.players[aIdx].active;
   if (!a) return { state, damage: 0 };
   // v5.688：改用中央 countEnergyTypeHostAware — 認列古舊/稜鏡等「視為水」特殊能量。
-  const count = countEnergyTypeHostAware(a, 'Water', pool);
+  const count = countEnergyTypeHostAware(a, 'Water', pool, { state, ownerIdx: aIdx });
   const dmg = count * 30;
   const s = addLog(state, `水炮迴旋：自身水能量 ${count} 個 → ${count}×30 = ${dmg}`, aIdx);
   return { state: s, damage: dmg };

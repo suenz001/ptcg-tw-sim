@@ -33,6 +33,7 @@ import {
   PASSIVE_ON_DAMAGED, PASSIVE_PREVENT_PRIZE, PASSIVE_ATTACKER_BUFF,
   // >>> v6347-engine-imports
   countEnergyTypeBloomAware,                  // ⭐v6.347 一長再長：「6個以上【草】能量」host-aware 個數
+  countEnergyTypeHostAware,                   // ⭐v6.385b 大師工藝：【鬥】能量**個數**（同一支中央述詞）
   isM6aWingAbility, m6aWingAbilityReady,      // ⭐v6.347 三神鳥羽擊：唯一可用性述詞（與 regAByName 共用）
   // <<< v6347-engine-imports
   // >>> v6350-engine-imports
@@ -1276,13 +1277,12 @@ export function getEffectiveHP(
   //   依這隻寶可夢身上附加的【鬥】能量每 1 個『+40』。」
   //   依 host 自身 fighting energy 數量加 HP。
   if (card.name === '修建老匠' && hpAbilityEffective(inst, card, '大師工藝')) {
-    let fightingCount = 0;
-    for (const e of inst.energyAttached) {
-      const ec = pool.get(e.cardId);
-      if (!ec || ec.supertype !== 'Energy') continue;
-      if (ec.subtype === 'Basic' && (ec.pokemonType === 'Fighting' || /【鬥】/.test(ec.name))) fightingCount++;
-      else if (ec.pokemonType === 'Fighting') fightingCount++;
-    }
+    // ⭐⭐v6.385b（Fable 5 複審 🟡7）：原本 inline 判「基本【鬥】或 pokemonType===Fighting」，
+    //   漏掉 host-aware 的特殊能量 —— 硬岩【鬥】能量（Special，pokemonType 可能是 null）、
+    //   古舊能量（視為提供所有屬性）、新衝天能量（附 2 階進化視為 2 個）。實測都算 0 個。
+    //   ⇒ 走與「一長再長」「木之重壓」同一支中央述詞（Rule 38）。
+    const fightingCount = countEnergyTypeHostAware(inst, 'Fighting', pool,
+      { state: state ?? null, ownerIdx: _v6206OwnerIdx ?? null });
     hp += fightingCount * 40;
   }
   // 怖納噬草｜雜草魂 (SV8a Stage1 100HP) — 「這隻寶可夢的最大 HP，

@@ -106,7 +106,7 @@ function energyMultiplyPre(
       if (typeFilter === 'all' || typeFilter === 'Colorless') {
         return totalEnergyUnits(c.energyAttached, pool, state, ownerIdx, c);
       }
-      return countEnergyTypeHostAware(c, typeFilter as EnergyType, pool);
+      return countEnergyTypeHostAware(c, typeFilter as EnergyType, pool, { state, ownerIdx });
     };
 
     let count = 0;

@@ -581,7 +581,7 @@ regPre('奇樹的霹靂電球|連鎖伏特', (state, aIdx, pool) => {
     const card = pool.get(c.cardId);
     if (!card?.name?.startsWith('奇樹的')) continue;
     // v5.683：host-aware 型別計數（古舊/稜鏡(Basic)視為雷；火箭隊不提供雷）
-    lightning += countEnergyTypeHostAware(c, 'Lightning', pool);
+    lightning += countEnergyTypeHostAware(c, 'Lightning', pool, { state, ownerIdx: aIdx });
   }
   const dmg = 20 + lightning * 20;
   return { state: addLog(state, `連鎖伏特：奇樹寶可雷能量 ${lightning} 個 → 20 + ${lightning}×20 = ${dmg}`, aIdx), damage: dmg };
