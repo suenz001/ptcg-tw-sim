@@ -79,10 +79,10 @@ await T('A0 HEAD-FAIL：dm-poller.ts／dm-session.ts／DmPanel.svelte 存在；F
   DM = extractBlock(PATCH, DM_START, DM_END, 8000);
   SRC = FR + '\n' + DM;
   assert.ok(FR.includes('async function _frPurgeDm('), 'FRIENDS 區塊沒有 _frPurgeDm');
-  API = readFileSync(P_API, 'utf8'); POLL = readFileSync(P_POLL, 'utf8'); SESS = readFileSync(P_SESS, 'utf8');
-  PANEL = readFileSync(P_PANEL, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = readFileSync(P_MPB, 'utf8');
+  API = normEol(readFileSync(P_API, 'utf8')); POLL = normEol(readFileSync(P_POLL, 'utf8')); SESS = normEol(readFileSync(P_SESS, 'utf8'));
+  PANEL = normEol(readFileSync(P_PANEL, 'utf8')); PAGE = normEol(readFileSync(P_PAGE, 'utf8')); GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = normEol(readFileSync(P_MPB, 'utf8'));
   assert.ok(existsSync(P_FRP), '缺 ' + P_FRP);
-  FRP = readFileSync(P_FRP, 'utf8');
+  FRP = normEol(readFileSync(P_FRP, 'utf8'));
   assert.ok(API.includes('export async function fetchDmMessages(') && API.includes('export async function sendDm('), 'friends-api.ts 沒有 dm 函式');
   assert.ok(PAGE.includes('DmPanel'), '/friends 頁沒接 DmPanel');
 });
@@ -703,10 +703,10 @@ await T('F1 ⭐⭐⭐ 私聊不得進對戰頁的主 chunk：game/+page.svelte �
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【G】test chain／版本');
 await T('G1 本守衛在 package.json 的 test chain；version.ts 與 admin.html SITE_VERSION_HINT 一致（不 pin 版本）', () => {
-  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(normEol(readFileSync(join(ROOT, 'package.json'), 'utf8')));
   assert.ok(pkg.scripts.test.includes('node scripts/test-v6288-friends-dm-ui.mjs'), '沒進 test chain');
-  const V = /VERSION = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'))[1];
-  const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'))[1];
+  const V = /VERSION = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')))[1];
+  const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8')))[1];
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
 });
 

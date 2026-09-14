@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import assert from 'node:assert/strict';
 import { transformSync } from 'esbuild';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRC = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
+const SRC = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 
 let pass = 0; const fails = [];
 const T = (name, fn) => { try { fn(); pass++; } catch (e) { fails.push(name + ' — ' + (e && e.message)); } };

@@ -20,6 +20,7 @@ import { spawnSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { selfTest, scanSource } from './lint-eol-anchors.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7：讀檔處收斂（原本手刻雙行尾錨點）
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = process.env.V6377_BASE || 'a434f4fc';
@@ -206,13 +207,16 @@ console.log('\n【B-mut】⭐ test-festival-dance 的斷言真的在守（把出
   const MUT = join(TMPDIR, 'mut-src');
   cpSync(join(ROOT, 'src'), MUT, { recursive: true });
   const shared = join(MUT, 'lib/game/effects/_shared.ts');
-  const s0 = readFileSync(shared, 'utf8');
+  // ⚠⚠ v6.378 C-7：這裡原本手刻「先試 CRLF 的錨點、再試 LF 的錨點」。那個寫法行為上是對的，
+  //   但 scripts/lint-eol-anchors.mjs 的判準會（正確地）把它判成「多行錨點 × 磁碟原始內容」
+  //   ⇒ 本檔自己的 A1『掃描器 0 處違規』從 v6.377 commit 起就**恆紅**（LF/CI 也紅，實測確認）。
+  //   ⇒ 改走中央 helper 在**讀檔處**收斂：錨點只留 LF 一份。normEol 在 LF 下是 no-op，
+  //     而寫回 TMPDIR 副本的 LF 內容正是 CI／正式站建置時吃到的那一份 ⇒ 判準沒有放寬。
+  const s0 = normEol(readFileSync(shared, 'utf8'));
   // v5.466「自動給獎賞」的唯一入口 addPendingPrize ⇒ 讓它變成 no-op。
-  const N_CRLF = '  if (n <= 0) return state;\r\n  const takerPeek = state.players[ownerIdx];';
-  const N_LF = N_CRLF.replace(/\r\n/g, '\n');
-  const useN = s0.includes(N_CRLF) ? N_CRLF : (s0.includes(N_LF) ? N_LF : null);
+  const useN = '  if (n <= 0) return state;\n  const takerPeek = state.players[ownerIdx];';
   if (chk('★ M0 前提：找得到 addPendingPrize 的唯一突變點（出貨碼重構了就要跟著改，不可以默默跳過）',
-    useN !== null && s0.split(useN).length - 1 === 1)) {
+    s0.split(useN).length - 1 === 1)) {
     writeFileSync(shared, s0.split(useN).join(useN.replace('n <= 0', 'n >= 0')));
     const ENTRY = join(TMPDIR, 'entry.ts');
     writeFileSync(ENTRY, "export { createGame, applyAction } from './mut-src/lib/game/engine';\n");

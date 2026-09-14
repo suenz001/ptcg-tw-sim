@@ -29,10 +29,14 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import * as CP from 'node:child_process';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const BASE_SHA = '54e7a3c68892f5d8ee7146181c7481549b26e177';   // v6.277
-const PATCH = readFileSync(path.join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const PATCH = normEol(readFileSync(path.join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 
 let pass = 0, fail = 0;
 async function T(name, fn) {
@@ -874,8 +878,7 @@ await T('I4 ⭐ 玩家端零改動:v6.277 → v6.278 兩個 commit 的 src/ + st
   assert.deepStrictEqual(diff.sort(), ['src/lib/version.ts'], 'v6.278 動到了玩家端: ' + diff.join(', '));
 });
 await T('I5 admin.html 維持 LF', () => {
-  const raw = readFileSync(path.join(ROOT, 'oracle-admin/admin.html'));
-  assert.equal(raw.includes(Buffer.from('\r\n')), false, 'admin.html 出現 CRLF');
+  assert.equal(ADMIN_EOL.ok, true, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
 });
 
 console.log('\n══ 【J】突變測試(每條必須紅在預期的那條斷言) ═══════════════════');
@@ -1012,15 +1015,15 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
 
 console.log('\n══ 【L】自查 ═══════════════════════════════════════════════');
 await T('L1 守衛在 package.json 的 test chain 裡(CI 的 iron-rules-audit 是 continue-on-error,不算數)', () => {
-  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(normEol(readFileSync(path.join(ROOT, 'package.json'), 'utf8')));
   assert.ok(String(pkg.scripts.test).includes('node scripts/test-v6278-delta-put-deep-path.mjs'),
     '本守衛沒進 npm test chain');
 });
 await T('L2 版本一致(version.ts ＝ admin.html hint);patch 檔頭已 bump 且 v1.29/v1.33 舊紀錄還在', () => {
-  const ver = readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8');
+  const ver = normEol(readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8'));
   const mv = /export const VERSION = '([\d.]+)';/.exec(ver);
   assert.ok(mv, 'version.ts 讀不到 VERSION');
-  const adm = readFileSync(path.join(ROOT, 'oracle-admin/admin.html'), 'utf8');
+  const adm = normEol(readFileSync(path.join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
   const ma = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(adm);
   assert.ok(ma && ma[1] === mv[1], 'admin.html hint 沒跟著 version.ts 同步');
   const mp = /^\/\/ === ORACLE ADMIN ENDPOINTS === v1\.(\d+) \(/.exec(PATCH);
@@ -1030,7 +1033,7 @@ await T('L2 版本一致(version.ts ＝ admin.html hint);patch 檔頭已 bump �
   assert.ok(PATCH.includes('前版 v1.33 (v6.276 '), 'v1.33 檔頭紀錄被洗掉了');
 });
 await T('L3 ⚠ 本守衛沒有 pin 死任何 v6.xxx 版本號(第九種安慰劑)', () => {
-  const self = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const self = normEol(readFileSync(fileURLToPath(import.meta.url), 'utf8'));
   const body = self.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const hits = body.match(/['"]6\.\d{3}['"]/g) || [];
   // ⭐ 唯一允許的版本字面量是「HEAD-FAIL 用來確認 BASE 是哪一版」的那一個(＝BASE_SHA 對應的版本)。

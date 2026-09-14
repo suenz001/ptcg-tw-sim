@@ -37,10 +37,11 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parse } from 'svelte/compiler';
 import { parse as acornParse } from 'acorn';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const PAGE = join(ROOT, 'src/routes/game/+page.svelte');
-const pageSrc = readFileSync(PAGE, 'utf8');
+const pageSrc = normEol(readFileSync(PAGE, 'utf8'));
 
 let pass = 0, fail = 0;
 const chk = (label, cond, extra) => {
@@ -147,11 +148,11 @@ chk('fuzz 有實際觸發「整棵沿用 prev」的分支（否則等價性測�
 console.log('\n[v6.173] A2/B. 真盤面序列：等價性 ＋ 沒變的子樹真的沿用');
 
 const cardsDir = join(ROOT, 'static/cards');
-const live = new Set(JSON.parse(readFileSync(join(cardsDir, 'index.json'), 'utf8')).map(e => e.code));
+const live = new Set(JSON.parse(normEol(readFileSync(join(cardsDir, 'index.json'), 'utf8'))).map(e => e.code));
 const pool = new Map();
 for (const f of readdirSync(cardsDir)) {
   if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
-  for (const c of JSON.parse(readFileSync(join(cardsDir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
+  for (const c of JSON.parse(normEol(readFileSync(join(cardsDir, f), 'utf8')))) if (c?.id != null) pool.set(String(c.id), c);
 }
 const DECK = [
   ['14129', 4], ['14130', 2], ['14151', 1], ['14131', 2], ['14132', 2], ['14133', 1],
@@ -331,7 +332,7 @@ function scanTemplate(source) {
 
 // state-share.ts 本身要能被 acorn 之外的檢查釘住：不得就地修改 prev
 {
-  const shareSrc = readFileSync(join(ROOT, 'src/lib/game/state-share.ts'), 'utf8');
+  const shareSrc = normEol(readFileSync(join(ROOT, 'src/lib/game/state-share.ts'), 'utf8'));
   const codeOnly = shareSrc.replace(/\/\*[\s\S]*?\*\//g, '').split('\n').filter(l => !l.trim().startsWith('*') && !l.trim().startsWith('//')).join('\n');
   chk('state-share.ts 不對 prev 做就地寫入（不得出現 pObj[...] = / pArr[...] =）',
     !/\bp(Obj|Arr)\s*\[[^\]]*\]\s*=[^=]/.test(codeOnly));

@@ -22,12 +22,16 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const BASE_SHA = 'cef06975e99502eb8eb20f26e07ac713267f41b3';   // v6.265
-const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const verTs = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
+const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const adm = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const verTs = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
 // ⚠ 第 1 行是版本沿革註解（裡面什麼字都有）⇒ 所有「全檔掃描」一律先切掉它，
 //   否則註解裡寫到的字串會被當成程式碼掃到（v6.242 ⑨ 的先例）。
 const body = pat.split('\n').slice(1).join('\n');
@@ -745,13 +749,13 @@ await T('G3 版本一致：version.ts ≥ 6.266，admin.html SITE_VERSION_HINT �
   const h = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(adm);
   assert.ok(h, '抓不到 SITE_VERSION_HINT');
   assert.strictEqual(h[1], m[1], 'admin.html 的 SITE_VERSION_HINT (' + h[1] + ') 與 version.ts (' + m[1] + ') 不同步');
-  assert.ok(!adm.includes('\r\n'), 'admin.html 出現 CRLF（必須維持 LF）');
+  assert.ok(ADMIN_EOL.ok, 'admin.html 出現 CRLF（必須維持 LF）：' + ADMIN_EOL.detail);
 });
 
 await T('G4 內部 changelog 有本版（純伺服器端 ⇒ 刻意**不寫**首頁 changelog）', () => {
-  const internal = readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8');
+  const internal = normEol(readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8'));
   assert.ok(/^## v6\.266 /m.test(internal), 'docs/changelog-internal.md 沒有 v6.266 段落');
-  const home = readFileSync(join(ROOT, 'src/routes/+page.svelte'), 'utf8');
+  const home = normEol(readFileSync(join(ROOT, 'src/routes/+page.svelte'), 'utf8'));
   assert.ok(!/v6\.266/.test(home), '首頁 changelog 竟然有 v6.266 —— 本版玩家看不到任何東西，不該寫首頁');
 });
 

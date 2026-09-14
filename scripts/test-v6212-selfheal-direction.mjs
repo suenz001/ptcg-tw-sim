@@ -30,11 +30,12 @@ import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SRC = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const GP = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-const OC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
+const SRC = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const GP = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+const OC = normEol(readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8'));
 
 let pass = 0, fail = 0;
 const T = (n, f) => { try { f(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };

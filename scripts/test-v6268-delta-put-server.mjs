@@ -20,10 +20,11 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_SHA = '4ccfdff1c5ec485172397c9509200f12906e3646';   // v6.267
-const PATCH = readFileSync(path.join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const PATCH = normEol(readFileSync(path.join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 
 let pass = 0, fail = 0;
 async function T(name, fn) {
@@ -677,7 +678,7 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
 
 console.log('\n══ 【K】自查 ═══════════════════════════════════════════════');
 await T('K1 守衛在 package.json 的 test chain 裡(不是只放 CI)', () => {
-  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(normEol(readFileSync(path.join(ROOT, 'package.json'), 'utf8')));
   assert.ok(String(pkg.scripts.test).includes('node scripts/test-v6268-delta-put-server.mjs'),
     '本守衛沒進 npm test chain — CI 的 iron-rules-audit 是 continue-on-error,不算數');
 });
@@ -686,10 +687,10 @@ await T('K1 守衛在 package.json 的 test chain 裡(不是只放 CI)', () => {
 //   逼下一棒去刪守衛 —— 那才是真正的災難。改成「三者互相一致 ＋ 舊紀錄不得被洗掉」，
 //   ⭐ 這樣它從此每一版都在守（原寫法只在 v6.268 那一天有意義）。
 await T('K2 版本字串一致(version.ts ＝ admin.html hint；patch 檔頭已 bump 且 v1.29 紀錄還在)', () => {
-  const ver = readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8');
+  const ver = normEol(readFileSync(path.join(ROOT, 'src/lib/version.ts'), 'utf8'));
   const mv = /export const VERSION = '([\d.]+)';/.exec(ver);
   assert.ok(mv, 'version.ts 讀不到 VERSION');
-  const adm = readFileSync(path.join(ROOT, 'oracle-admin/admin.html'), 'utf8');
+  const adm = normEol(readFileSync(path.join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
   const ma = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(adm);
   assert.ok(ma, 'admin.html 讀不到 SITE_VERSION_HINT');
   assert.strictEqual(ma[1], mv[1], 'admin.html hint 沒跟著 version.ts 同步');

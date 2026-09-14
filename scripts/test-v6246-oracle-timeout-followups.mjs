@@ -28,14 +28,14 @@ import { readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { N_HOME } from './lib/changelog-policy.mjs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import assert from 'node:assert';
 import { stripCommentsBlankChecked } from './lib/strip-comments.mjs';
 import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位   // ⭐v6.323 等長留白版（本檔靠行號）
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const OC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
+const OC = normEol(readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8'));
 const RO = normEol(readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8'));
 const GP = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
 // v6.245 的 sha（只用來拿 BASE 對照；CI 是 fetch-depth:1 淺複製 ⇒ 拿不到就用等價突變版，不 fail-open）
@@ -586,7 +586,7 @@ await T('⭐⭐⭐ 故意讓 esbuild 壞掉 ⇒ test-v6245 的 M1~M5 必須全�
   //     「transformSync 一定丟平台不符錯誤」的替身，其餘逐字不動（測的還是出貨的守衛碼）。
   //     替身讓副本完全不需要解析 esbuild 模組 ⇒ 可以放在 os.tmpdir() 執行，不污染 repo。
   const v6245Path = join(ROOT, 'scripts/test-v6245-oracle-api-timeout.mjs');
-  const orig = readFileSync(v6245Path, 'utf8');
+  const orig = normEol(readFileSync(v6245Path, 'utf8'));
   const IMPORT_LINE = "const esbuild = await import('esbuild');";
   const ROOT_LINE = "const ROOT = fileURLToPath(new URL('..', import.meta.url));";
   ok(orig.includes(IMPORT_LINE), 'test-v6245 的 esbuild import 那一行變了 —— 這個模擬器壞了');
@@ -594,8 +594,15 @@ await T('⭐⭐⭐ 故意讓 esbuild 壞掉 ⇒ test-v6245 的 M1~M5 必須全�
   const broken = orig
     .replace(IMPORT_LINE,
       "const esbuild = { transformSync() { throw new Error('You installed esbuild for another platform than the one you\\'re currently using.'); } };")
-    .replace(ROOT_LINE, 'const ROOT = ' + JSON.stringify(ROOT) + ';');
+    .replace(ROOT_LINE, 'const ROOT = ' + JSON.stringify(ROOT) + ';')
+    // ⭐v6.378 C-7：副本是放到 os.tmpdir() 執行的 ⇒ 檔案裡的 `from './lib/…'` 會解不到
+    //   （ERR_MODULE_NOT_FOUND），下面「工具鏈真的壞了」那條就會紅在**別的原因**上。
+    //   把相對匯入改寫成本 repo 的絕對 file URL —— 跑的仍是逐字相同的守衛碼，判準沒變。
+    .replace(/from '\.\/lib\//g, "from '" + pathToFileURL(join(ROOT, 'scripts', 'lib')).href + '/');
   ok(broken !== orig, '替身沒有真的換進去 —— 這條在測空氣');
+  ok(!/from '\.{1,2}\//.test(broken),
+    '副本裡還留著相對匯入 ⇒ 放到 tmpdir 會 ERR_MODULE_NOT_FOUND（下面的斷言會紅在別的原因）：'
+    + (/^.*from '\.{1,2}\/.*$/m.exec(broken) || [''])[0]);
   const tmpFile = join(tmpdir(), 'ptcg-v6246-toolchain-broken-' + process.pid + '.mjs');
   let out = '';
   let status = null;
@@ -747,12 +754,12 @@ await T('⭐⭐⭐ 首頁公告的四個數字都是實跑量到的（30／61／
   }
 });
 await T(`⭐⭐ 公告逐字檢查：不得再宣稱「最多等三十秒」，且首頁必須是 ${N_HOME} 則、無裸大括號`, () => {
-  const homeOnly = readFileSync(join(ROOT, 'static/changelog.html'), 'utf8');
+  const homeOnly = normEol(readFileSync(join(ROOT, 'static/changelog.html'), 'utf8'));
   // ⚠⚠ v6.332：首頁是**滾動視窗**，v6.246 那一則早晚會被擠進封存頁
   //   ⇒ 「公告存在且逐字正確」要搜三檔聯集；「則數」則仍然只數首頁（homeOnly）。
   const html = homeOnly
-    + '\n' + readFileSync(join(ROOT, 'static/changelog-bodies.html'), 'utf8')
-    + '\n' + readFileSync(join(ROOT, 'static/changelog-archive.html'), 'utf8');
+    + '\n' + normEol(readFileSync(join(ROOT, 'static/changelog-bodies.html'), 'utf8'))
+    + '\n' + normEol(readFileSync(join(ROOT, 'static/changelog-archive.html'), 'utf8'));
   // ⚠v6.247 修這支守衛自己的缺陷：原本寫死「首頁第一則必須是 v6.246」，
   //   下一版公告一發布就必紅，而那不是行為壞掉。改成「找到 v6.246 那一則再逐字檢查」，
   //   檢查的內容一字未變，只是不再綁在最上面。

@@ -27,11 +27,15 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import * as cheerio from 'cheerio';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRV = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const VERTS = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
+const SRV = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const ADMIN = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const VERTS = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
 const BASE_SHA = '866c4dcf61d876dd06c45e1215a50f4a4ad4f910';   // v6.271
 
 let pass = 0, fail = 0;
@@ -664,7 +668,7 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'a434f4fc41f74a985bb5735c91a2a9268cbd76b2';   // v6.376（v6.377 的上一版）
+const PREV_SHA = '991ba70a525b2050e6b4c168fa71747a38bb4ba1';   // v6.377（v6.378 的上一版）
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -731,41 +735,30 @@ const PREV_SHA = 'a434f4fc41f74a985bb5735c91a2a9268cbd76b2';   // v6.376（v6.37
 // v6.342 M6a 招式實裝 批次2（傷害計算類 16 招）＋ 既有同措辭卡收斂到新的中央 helper
 //   ⚠ M6a 仍被 lockedSets 鎖著 ⇒ 玩家看不到任何變化，**不動首頁 changelog**。
 //   ⚠ mega_decks / v2690 兩檔是「既有卡改走中央 helper」，log 與傷害逐字相同（Rule 38 收斂）。
-// v6.377 孤兒守衛 harness ＋ 行尾中性 lint ＋ 淺複製對照網進 repo —— 出貨碼零改動，只有 version.ts
+// v6.378 本機紅燈 48 → 0（全部是 harness／環境）＋ 拆掉會短路的 T(...) —— 出貨碼零改動，只有 version.ts
 const PREV_ALLOWED = [
   'src/lib/version.ts',
 ];
 T('★★[玩家端零改動] src/ 與 static/ 的工作樹內容，相對上一版只有 ' + PREV_ALLOWED.join(',') + ' 不同', () => {
   if (!hasBaseCommit(ROOT, PREV_SHA)) { shallowSkip('v6272 ⑩ 玩家端逐檔 blob 比對', '需要歷史 commit'); return; }
-  const ls = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', PREV_SHA, '--', 'src', 'static'],
-    { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n');
-  const base = new Map(ls.map((l) => { const [meta, p] = l.split('\t'); return [p, meta.split(' ')[2]]; }));
-  assert.ok(base.size > 100, '掃描器壞了？只列到 ' + base.size + ' 個玩家端檔案');
-  const diff = [];
-  for (const [p, sha] of base) {
-    let cur = null;
-    try {
-      const buf = readFileSync(join(ROOT, p));
-      cur = createHash('sha1').update('blob ' + buf.length + '\0').update(buf).digest('hex');
-    } catch { diff.push(p + '(刪除)'); continue; }
-    if (cur !== sha) diff.push(p);
+  // ⚠⚠ v6.378 C-7：舊寫法是「對**工作樹位元組**算 blob sha1，再跟 BASE tree 的 sha 比」。
+  //   站長的 Windows 是 core.autocrlf=true ⇒ 工作樹每一個 text 檔都是 CRLF、sha 全部對不上
+  //   ⇒ 這一條在本機**恆紅**（列出兩百多個檔），只有 CI 才會綠。它量的是 checkout 設定，不是改動。
+  //   ⇒ 改用 git 自己的比對（`git diff --name-only <BASE>`）：那正是「commit 起來會記錄到什麼」的
+  //     定義，行尾過濾器由 git 套用。CI（autocrlf=false）兩者逐檔相同 ⇒ **不是放寬**。
+  //   ⭐ v6.337 的「新增檔也要看得見」沒有丟掉：新增的玩家端檔案一旦進 index，
+  //     `git diff <commit>` 就會把它列成新增；完全沒進 git 的散落檔本來就不可能被部署，
+  //     但仍然據實印出來（下面那行），不靜默。
+  const baseList = execFileSync('git', ['-C', ROOT, 'ls-tree', '-r', '--name-only', PREV_SHA, '--', 'src', 'static'],
+    { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n').filter(Boolean);
+  assert.ok(baseList.length > 100, '掃描器壞了？只列到 ' + baseList.length + ' 個玩家端檔案');
+  const diff = execFileSync('git', ['-C', ROOT, 'diff', '--name-only', PREV_SHA, '--', 'src', 'static'],
+    { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n').filter(Boolean);
+  const untracked = execFileSync('git', ['-C', ROOT, '-c', 'core.quotepath=false', 'ls-files', '--others', '--exclude-standard', '--', 'src', 'static'],
+    { maxBuffer: 1 << 28 }).toString('utf8').trim().split('\n').filter(Boolean);
+  if (untracked.length) {
+    console.log('     ⚠ src/static 底下有 ' + untracked.length + ' 個未追蹤檔（不在任何 commit 裡 ⇒ 不會被部署）：' + untracked.join(', '));
   }
-  // ⭐v6.337（Rule 25 掃描器盲點）：上面只走 PREV_SHA 的 ls-tree ⇒ **本版新增的檔案看不見**。
-  //   新增一個玩家端檔案同樣是「玩家端被動到」，補掃工作樹把它們也列進 diff（判準變嚴）。
-  const walk = (relDir) => {
-    const out = [];
-    const stack = [relDir];
-    while (stack.length) {
-      const d = stack.pop();
-      for (const ent of readdirSync(join(ROOT, d), { withFileTypes: true })) {
-        const rel = d + '/' + ent.name;
-        if (ent.isDirectory()) { if (ent.name !== 'node_modules' && ent.name !== '.svelte-kit') stack.push(rel); }
-        else if (ent.isFile()) out.push(rel);
-      }
-    }
-    return out;
-  };
-  for (const rel of [...walk('src'), ...walk('static')]) if (!base.has(rel)) diff.push(rel);
   assert.deepStrictEqual(diff.sort(), PREV_ALLOWED, '玩家端被動到了：' + diff.join(', '));
 });
 T('版本一致：version.ts = admin.html SITE_VERSION_HINT', () => {
@@ -774,9 +767,11 @@ T('版本一致：version.ts = admin.html SITE_VERSION_HINT', () => {
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
 });
 T('admin.html 維持 LF（test-v6189 靠 "\\n};\\n" 定位函式）', () => {
-  const raw = readFileSync(join(ROOT, 'oracle-admin/admin.html'));
-  assert.strictEqual(raw.indexOf('\r\n'.charCodeAt(0) === 13 ? Buffer.from('\r\n') : ''), -1, 'CRLF 檢查器寫壞了');
-  assert.strictEqual(raw.includes(Buffer.from('\r\n')), false, 'admin.html 出現 CRLF');
+  // ⚠ 舊寫法是「讀工作樹位元組」⇒ CRLF 工作樹恆紅、CI 恆綠，兩邊都沒有在守（v6.378 C-7）。
+  //   改問 git index（＝真的會被部署的那份），CI 上與舊寫法逐位元等價。
+  assert.strictEqual(committedEolIsLf(ROOT, 'oracle-admin/dump-monitor.bat').ok, false,
+    'CRLF 檢查器寫壞了：i/crlf 的檔案竟然被判成 LF（這一條是負對照，不是恆真式）');
+  assert.strictEqual(ADMIN_EOL.ok, true, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
 });
 
 // ══════════════════════════════════════════════════════════════════════════

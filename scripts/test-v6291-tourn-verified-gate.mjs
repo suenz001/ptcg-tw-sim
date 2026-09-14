@@ -55,11 +55,11 @@ import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作�
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'bb3adda65b536a7e0be67b788bd1fd5934051bc7';   // v6.290
 const PATCH_REL = 'oracle-admin/server_admin_patch.js';
-const PATCH = readFileSync(join(ROOT, PATCH_REL), 'utf8');
+const PATCH = normEol(readFileSync(join(ROOT, PATCH_REL), 'utf8'));
 const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8').replace(/\r\n/g, '\n');
-const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
-const VERTS = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
-const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
+const PKG = JSON.parse(normEol(readFileSync(join(ROOT, 'package.json'), 'utf8')));
+const VERTS = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
+const ADMIN = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
 
 let pass = 0, fail = 0;
 const T = async (n, fn) => {
@@ -224,49 +224,60 @@ const TEV_LOCKS = [
   'scripts/test-v6289-unblock-purge.mjs',
 ];
 
-await T('B4 ⭐⭐ 全站 14 把區塊鎖都重釘到新值，且**沒有一把被拿掉**（舊值零殘留）', () => {
-  for (const f of TAIL_LOCKS) {
-    const s = readFileSync(join(ROOT, f), 'utf8');
+// ⭐v6.378 C-8：底下原本是**同一個 T** 裡跑一整圈 —— 第一個 assert 一 throw，
+//   同一個回呼裡後面的項目一次都不會跑（與 v6.265 F4 同型的短路：14 支只會看到 1 支的訊息）。
+//   ⇒ 改成「每一把鎖各自一個 T」。⚠ 判準逐字未變，只是改成分屬不同的 T。
+for (const f of TAIL_LOCKS) {
+  await T('B4-tail ' + f + '：重釘到新 tail sha，且 v6.290／v6.291／v6.292 的舊值零殘留', () => {
+    const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
     assert.ok(s.includes(NEW_TAIL_SHA_V6365), f + ' 沒重釘 tail sha（它現在守的是錯的值）');
     assert.ok(!s.includes(OLD_TAIL_SHA_V6290), f + ' 還留著 v6.290 的舊 tail sha');
     assert.ok(!s.includes(NEW_TAIL_SHA_V6291), f + ' 還留著 v6.291 的舊 tail sha');
     assert.ok(!s.includes(NEW_TAIL_SHA_V6292), f + ' 還留著 v6.292 的舊 tail sha');
-  }
-  for (const f of TEV_LOCKS) {
-    const s = readFileSync(join(ROOT, f), 'utf8');
+  });
+}
+for (const f of TEV_LOCKS) {
+  await T('B4-tev ' + f + '：重釘到新 TEVENTS sha，且 v6.290／v6.291／v6.292 的舊值零殘留', () => {
+    const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
     assert.ok(s.includes(NEW_TEV_SHA_V6365), f + ' 沒重釘 TEVENTS sha');
     assert.ok(!s.includes(OLD_TEV_SHA_V6290), f + ' 還留著 v6.290 的舊 TEVENTS sha');
     assert.ok(!s.includes(NEW_TEV_SHA_V6291), f + ' 還留著 v6.291 的舊 TEVENTS sha');
     assert.ok(!s.includes(NEW_TEV_SHA_V6292), f + ' 還留著 v6.292 的舊 TEVENTS sha');
-  }
-  // 長度常數（3 支有）：v6.290 的 219484 與 v6.291 的 219837 都不得殘留
-  for (const f of ['scripts/test-v6266-deck-stats-server.mjs', 'scripts/test-v6268-delta-put-server.mjs', 'scripts/test-v6278-delta-put-deep-path.mjs']) {
-    const s = readFileSync(join(ROOT, f), 'utf8');
+  });
+}
+// 長度常數（3 支有）：v6.290 的 219484 與 v6.291 的 219837 都不得殘留
+for (const f of ['scripts/test-v6266-deck-stats-server.mjs', 'scripts/test-v6268-delta-put-server.mjs', 'scripts/test-v6278-delta-put-deep-path.mjs']) {
+  await T('B4-len ' + f + '：長度常數重釘、舊值零殘留', () => {
+    const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
     assert.ok(s.includes(String(NEW_TEV_LEN_V6365)), f + ' 的長度常數沒重釘');
     assert.ok(!s.includes(String(OLD_TEV_LEN_V6290)), f + ' 還留著 v6.290 的舊長度常數');
     assert.ok(!s.includes(String(NEW_TEV_LEN_V6291)), f + ' 還留著 v6.291 的舊長度常數');
     assert.ok(!s.includes(String(NEW_TEV_LEN_V6292)), f + ' 還留著 v6.292 的舊長度常數');
-  }
-});
+  });
+}
 
 await T('B5 ⚠⚠ 那 14 把鎖仍然「在守」：sha 比對式與 notStrictEqual 自驗都還在（沒被改成不驗／只比片段）', () => {
   const n = TAIL_LOCKS.length + TEV_LOCKS.length;
   assert.ok(n >= 19, '鎖清單掃描器壞了？只列到 ' + n + ' 條');
   const files = [...new Set([...TAIL_LOCKS, ...TEV_LOCKS])];
   assert.strictEqual(files.length, 14, '應涵蓋 14 支守衛，實際 ' + files.length);
-  for (const f of files) {
-    const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
-    assert.ok(/assert\.(strictEqual|equal)\(/.test(s) && /sha256/.test(s), f + ' 已經沒有 sha256 比對式了');
-    assert.ok(/createHash\('sha256'\)/.test(s), f + ' 不再自己算 sha ⇒ 可能被改成只比字串片段');
-  }
+  // ⭐v6.378 C-8：這一圈也拆出去（見下方 B5-lock）。留在這裡的只有清單本身的前提。
   // v6.276 的 revert-diff 必須改成「先還原 v6.291 再還原 v6.276」，而不是被停用
-  const v76 = readFileSync(join(ROOT, 'scripts/test-v6276-deck-tournament-stats.mjs'), 'utf8');
+  const v76 = normEol(readFileSync(join(ROOT, 'scripts/test-v6276-deck-tournament-stats.mjs'), 'utf8'));
   assert.ok(v76.includes("from './lib/tourn-revert-v6291.mjs'"), 'test-v6276 沒有串接 v6.291 的還原器（它的 revert-diff 會被停用）');
   assert.ok(v76.includes('revertV6291('), 'test-v6276 沒有實際呼叫 revertV6291');
   // ⭐v6.292：鏈又長一節 —— v6.276 必須先還原 v6.292 的 6 行，否則它的 B1/B2 只能靠改基準值來「湊綠」。
   assert.ok(v76.includes("from './lib/tourn-revert-v6292.mjs'"), 'test-v6276 沒有串接 v6.292 的還原器');
   assert.ok(v76.includes('revertV6292('), 'test-v6276 沒有實際呼叫 revertV6292');
 });
+
+for (const f of [...new Set([...TAIL_LOCKS, ...TEV_LOCKS])]) {
+  await T('B5-lock ' + f + '：sha 比對式與自算 sha 都還在（沒被改成不驗／只比片段）', () => {
+    const s = normEol(readFileSync(join(ROOT, f), 'utf8'));
+    assert.ok(/assert\.(strictEqual|equal)\(/.test(s) && /sha256/.test(s), f + ' 已經沒有 sha256 比對式了');
+    assert.ok(/createHash\('sha256'\)/.test(s), f + ' 不再自己算 sha ⇒ 可能被改成只比字串片段');
+  });
+}
 
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n══ 【C】⭐⭐ 行為端實跑（出貨碼本尊 ＋ 假 mongo）══════════════════════');
@@ -544,7 +555,7 @@ await T('F2 三配套：version.ts ＝ admin.html SITE_VERSION_HINT，且 ≥ 6.
 });
 
 await T('F3 ⚠ 本守衛沒有 pin 死任何 v6.xxx 版本號當判準（第九種安慰劑）', () => {
-  const self = readFileSync(join(ROOT, 'scripts/test-v6291-tourn-verified-gate.mjs'), 'utf8');
+  const self = normEol(readFileSync(join(ROOT, 'scripts/test-v6291-tourn-verified-gate.mjs'), 'utf8'));
   const body = self.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n');
   assert.ok(!/VERSION === '6\.29\d'/.test(body), '出現 pin 死版本號的判準');
 });
@@ -570,12 +581,12 @@ await T('F4 ⭐ HEAD-FAIL：對真 BASE blob 跑同一組行為斷言 ⇒ BASE �
 });
 
 await T('F5 內部 changelog 有本版（公平性／安全修正 ⇒ 依站長既有裁定**不寫首頁 changelog**）', () => {
-  const ic = readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8');
+  const ic = normEol(readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8'));
   assert.ok(/v6\.291/.test(ic), 'docs/changelog-internal.md 沒有 v6.291');
   assert.ok(/tourn-needs-verified/.test(ic), 'internal changelog 沒寫下 code（站長查 log 要用）');
   for (const f of ['src/routes/+page.svelte', 'src/lib/changelog-data.ts', 'src/lib/changelog.ts']) {
     let s = null;
-    try { s = readFileSync(join(ROOT, f), 'utf8'); } catch { continue; }
+    try { s = normEol(readFileSync(join(ROOT, f), 'utf8')); } catch { continue; }
     assert.ok(!/6\.291/.test(s), '⚠ 公平性修正被寫進首頁 changelog（' + f + '）—— 站長裁定不寫');
   }
 });

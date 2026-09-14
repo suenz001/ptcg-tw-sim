@@ -27,10 +27,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from 'svelte/compiler';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = path.join(ROOT, 'src/routes/game/+page.svelte');
-const src = fs.readFileSync(PAGE, 'utf8');
+const src = normEol(fs.readFileSync(PAGE, 'utf8'));
 
 let fails = 0;
 const bad = (m) => { console.error('  ✗ ' + m); fails++; };
@@ -118,14 +119,14 @@ console.log('[v6.171] C. 正對照：本版「不做 pointer 防護」的兩個�
   if (!fs.existsSync(T) || !fs.existsSync(D)) {
     console.log('  – 跳過（找不到 svelte 原始碼，可能是 CI 只裝了 dist）');
   } else {
-    const t = fs.readFileSync(T, 'utf8');
+    const t = normEol(fs.readFileSync(T, 'utf8'));
     const oi = t.indexOf('out(fn) {');
     const seg = oi >= 0 ? t.slice(oi, oi + 400) : '';
     if (!/element\.inert\s*=\s*true/.test(seg)) {
       bad('svelte transitions.js 的 out() 不再同步設 element.inert=true '
         + '⇒ 離場中的節點會重新變成可點／可被 elementFromPoint 命中，本專案要自己補防護');
     } else ok('out() 仍同步 element.inert = true（離場中的節點點不到）');
-    const d = fs.readFileSync(D, 'utf8');
+    const d = normEol(fs.readFileSync(D, 'utf8'));
     if (!/derived_inert\(\)/.test(d) || !/DESTROYED \| INERT/.test(d)) {
       bad('svelte deriveds.js 的 derived_inert guard 條件變了 ⇒ 診斷的判讀說明要跟著改');
     } else ok('derived_inert 的 guard 條件仍是 (DESTROYED | INERT)');

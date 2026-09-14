@@ -29,15 +29,19 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { transform } from 'esbuild';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const require_ = createRequire(import.meta.url);
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-const DUMPSRC = readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8');
+const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+const DUMPSRC = normEol(readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8'));
 const DUMP = require_(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'));
-const VERS = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
-const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const PKG = readFileSync(join(ROOT, 'package.json'), 'utf8');
+const VERS = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
+const ADMIN = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const PKG = normEol(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 const ok = (n, c, extra) => { if (c) { pass++; console.log('  PASS ' + n); } else { fail++; console.log('  FAIL ' + n + (extra ? ' — ' + extra : '')); } };
@@ -318,7 +322,7 @@ const _hintNum = (ADMIN.match(/SITE_VERSION_HINT = '([\d.]+)'/) || [])[1];
 ok('[版本] version.ts 已 bump 到 ≥6.227', _verNum >= 6.227);
 ok('[版本] admin.html 的 SITE_VERSION_HINT 與 version.ts 一致',
   !!_hintNum && VERS.includes(`VERSION = '${_hintNum}'`));
-ok('[版本] admin.html 維持 LF 行尾（CRLF 會讓部署流程炸）', !ADMIN.includes('\r'));
+ok('[版本] admin.html 維持 LF 行尾（CRLF 會讓部署流程炸）', ADMIN_EOL.ok, ADMIN_EOL.detail);
 ok('[自我註冊] 本守衛已掛進 npm test', PKG.includes('test-v6227-colo-telemetry.mjs'));
 
 console.log('\n═══ 結果：' + pass + ' PASS / ' + fail + ' FAIL ═══');

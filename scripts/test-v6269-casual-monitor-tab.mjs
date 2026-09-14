@@ -18,7 +18,7 @@
  *   ・「逐位元未動」用**內嵌 sha256**（淺複製下也在守）；
  *   ・只捕捉 assert.AssertionError（其他例外一律讓它炸出來，不可被當成 PASS）。
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -30,9 +30,9 @@ import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作�
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRV = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
-const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const DUMPSRC = readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8');
-const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+const ADMIN = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const DUMPSRC = normEol(readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8'));
+const PKG = JSON.parse(normEol(readFileSync(join(ROOT, 'package.json'), 'utf8')));
 const DUMP = (await import('node:module')).createRequire(import.meta.url)(
   join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'));
 
@@ -492,7 +492,7 @@ T('★★[接線] loadMonitor 真的多打了一發 ?mode=casual，而且用 _ok
   assert.ok(seg.includes('html += monCasualBlock(cg);'), 'monCasualBlock 定義了卻沒有被呼叫＝白寫');
 });
 T('★[版本提示] admin.html 的 SITE_VERSION_HINT 與 version.ts 一致（**不寫死版本號**，每一版都在守）', () => {
-  const mv = /export const VERSION = '([\d.]+)';/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
+  const mv = /export const VERSION = '([\d.]+)';/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')));
   const ma = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(ADMIN);
   assert.ok(mv && ma, '讀不到版本字串');
   assert.strictEqual(ma[1], mv[1], 'admin.html hint 沒跟著 version.ts 同步');
@@ -591,39 +591,50 @@ T('★★[既有三分流不可退化] splitDiagRows（明細那一路）仍然�
 // ⑦ 玩家端零改動
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n⑦ 玩家端零改動');
+// ⭐v6.378 C-7（平台）：原本這三處是 spawn `grep -rl`。Windows 上沒有 grep ⇒ execFileSync 丟
+//   ENOENT，而呼叫端的 catch 是為了「grep 無命中 exit 1」寫的 ⇒ **例外被吞掉、斷言恆綠**
+//   （在 CI/Ubuntu 才真的有在守）。改成純 Node 掃描器：同一個判準、不依賴外部工具，
+//   在 Linux 上結果逐一相同，在 Windows 上從「恆綠安慰劑」變成真的在守（是**收緊**不是放寬）。
+function scanFilesContaining(dirs, needle) {
+  const hits = [];
+  const stack = dirs.slice();
+  while (stack.length) {
+    const d = stack.pop();
+    let ents;
+    try { ents = readdirSync(d, { withFileTypes: true }); } catch { continue; }
+    for (const e of ents) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== 'node_modules' && e.name !== '.svelte-kit') stack.push(p); continue; }
+      if (!e.isFile()) continue;
+      let txt;
+      try { txt = readFileSync(p, 'utf8'); } catch { continue; }
+      if (txt.includes(needle)) hits.push(p);
+    }
+  }
+  return hits.sort();
+}
 T('★★★[零改動] 本版沒有把任何新符號洩漏進玩家端（src/ 與 static/ 都不該認識這些名字）', () => {
   const names = ['monCasualBlock', '_buildCasualDiagReport', 'splitAggRows', 'CASUAL_DIAG_SCAN_CAP', 'casualApi'];
   const hits = [];
   for (const n of names) {
-    try {
-      const out = execFileSync('grep', ['-rl', '--include=*', n, join(ROOT, 'src'), join(ROOT, 'static')],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-      if (out.trim()) hits.push(n + ' → ' + out.trim().split('\n').join(','));
-    } catch { /* grep 無命中 exit 1 */ }
+    const out = scanFilesContaining([join(ROOT, 'src'), join(ROOT, 'static')], n);
+    if (out.length) hits.push(n + ' → ' + out.join(','));
   }
   assert.deepEqual(hits, [], '玩家端出現了本版的新符號：' + hits.join(' | '));
 });
 T('★★[零改動／不需歷史] 玩家端的建置根本碰不到 oracle-admin/（改 admin 不可能改到玩家的 bundle）', () => {
   // ⚠ 上一條要歷史 blob，淺複製下會 SHALLOW-SKIP ⇒ 這一條是**不需要歷史**的備援判準。
-  let hits = '';
-  try {
-    hits = execFileSync('grep', ['-rl', 'oracle-admin', join(ROOT, 'src'), join(ROOT, 'static')],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch { /* 無命中 */ }
-  assert.equal(hits, '', '玩家端引用了 oracle-admin：' + hits);
+  const hits = scanFilesContaining([join(ROOT, 'src'), join(ROOT, 'static')], 'oracle-admin');
+  assert.deepEqual(hits, [], '玩家端引用了 oracle-admin：' + hits.join(','));
   // 正對照：掃描器真的掃得到東西（否則上面是恆真式）
-  let ctl = '';
-  try {
-    ctl = execFileSync('grep', ['-rl', 'VERSION', join(ROOT, 'src/lib')],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-  } catch { /* */ }
+  const ctl = scanFilesContaining([join(ROOT, 'src/lib')], 'VERSION');
   assert.ok(ctl.length > 0, '掃描器連 VERSION 都掃不到 ⇒ 上面那條是恆真式');
 });
 T('★★★[零改動／逐位元] src/ 與 static/ 底下**只有 version.ts** 與 v6.268 不同', () => {
   // ⚠ 這一條只在**本版當下**有意義（下一版一定會動 src/）⇒ 版本一往前走就停用，
   //   否則它會從 v6.270 起永遠紅、逼下一棒去刪守衛（那才是真正的災難）。
   //   ⭐ 停用是明講的，不是靜默 return —— 而且 ⑦a/⑦b 兩條durable 判準永遠在守。
-  const VER = /VERSION = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
+  const VER = /VERSION = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')));
   assert.ok(VER, '讀不到 version.ts');
   if (VER[1] !== '6.269') {
     console.log('     （本條只在 v6.269 當下有效，現在是 v' + VER[1] + ' ⇒ 停用；⑦a/⑦b 仍在守）');

@@ -21,10 +21,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { performance } from 'node:perf_hooks';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const PATCH = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const HTML = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
+const PATCH = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const HTML = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
 
 let pass = 0, fail = 0;
 function T(name, fn) { try { fn(); console.log('  ✓ ' + name); pass++; } catch (e) { console.log('  ✗ ' + name + '\n      ' + (e && e.message)); fail++; } }

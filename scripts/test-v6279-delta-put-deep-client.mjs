@@ -26,8 +26,12 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { countTokensStripped } from './lib/strip-comments.mjs';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const BASE_SHA = '095ea93f4b85214ccd099d165b14ab608bcc568b';   // v6.278（本版的上一版）
 const require_ = createRequire(import.meta.url);
 const esbuild = await import('esbuild');
@@ -1270,17 +1274,17 @@ if (hasBaseCommit(ROOT, BASE_SHA)) {
 // ══════════════════════════════════════════════════════════════════════════
 console.log('\n══ 【K】自查 ═══════════════════════════════════════════════════');
 await T('K1 守衛在 package.json 的 test chain 裡（CI 的 iron-rules-audit 是 continue-on-error，不算數）', () => {
-  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(normEol(readFileSync(path.join(ROOT, 'package.json'), 'utf8')));
   assert.ok(String(pkg.scripts.test).includes('node scripts/test-v6279-delta-put-deep-client.mjs'), '本守衛沒進 npm test chain');
 });
 await T('K2 版本一致（version.ts ＝ admin.html hint）；admin.html 維持 LF', () => {
   const adm = readFileSync(path.join(ROOT, 'oracle-admin/admin.html'));
   const ma = /window\.SITE_VERSION_HINT = '([\d.]+)';/.exec(adm.toString('utf8'));
   assert.ok(ma && ma[1] === VERSION, 'admin.html hint(' + (ma && ma[1]) + ') ≠ version.ts(' + VERSION + ')');
-  assert.equal(adm.includes(Buffer.from('\r\n')), false, 'admin.html 出現 CRLF');
+  assert.equal(ADMIN_EOL.ok, true, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
 });
 await T('K3 ⚠ 本守衛沒有 pin 死任何 v6.xxx 版本號（第九種安慰劑）', () => {
-  const self = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const self = normEol(readFileSync(fileURLToPath(import.meta.url), 'utf8'));
   const body = self.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
   const hits = body.match(/['"]6\.\d{3}['"]/g) || [];
   const bad = hits.filter((h) => h !== "'6.278'");   // 唯一允許：HEAD-FAIL 確認 BASE 是哪一版

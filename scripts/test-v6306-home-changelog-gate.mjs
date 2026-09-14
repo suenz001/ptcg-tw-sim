@@ -33,6 +33,7 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const BASE_SHA = 'e3233caea4b4f3daab92b49b636bf9e6e0d03846';   // v6.305（HEAD-FAIL 對照；取不到 ⇒ SHALLOW-SKIP，不 fail-open）
@@ -42,7 +43,7 @@ const P_HP = 'src/routes/+page.svelte';
 const P_CL = 'static/changelog.html';
 const P_RULES = 'firestore.rules';
 const P_CLOUD = 'src/lib/decks/cloud.ts';
-const rd = (p) => readFileSync(join(ROOT, p), 'utf8');
+const rd = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
 const HC = rd(P_HC), HP = rd(P_HP), CL = rd(P_CL), RULES = rd(P_RULES), CLOUD = rd(P_CLOUD);
 
 let pass = 0, fail = 0;
@@ -568,7 +569,7 @@ await T('P1 本守衛在 npm test chain 內', () => {
   ok(String(pkg.scripts && pkg.scripts.test).includes('test-v6306-home-changelog-gate.mjs'), '守衛沒接進 package.json 的 test chain —— 寫了等於沒寫');
 });
 await T('P2 本檔不 pin 站台版本號當判準、不整檔 sha256 鎖', () => {
-  const self = readFileSync(fileURLToPath(import.meta.url), 'utf8');
+  const self = normEol(readFileSync(fileURLToPath(import.meta.url), 'utf8'));
   ok(!/\b[0-9a-f]{64}\b/.test(self) && !/createHash\(/.test(self), '本檔出現整檔雜湊鎖');
   ok(!/VERSION\s*===\s*'6\./.test(self), '本檔拿版本號當判準');
 });

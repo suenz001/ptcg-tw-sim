@@ -25,11 +25,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_API = join(ROOT, 'src/lib/friends/friends-api.ts');
-const API = readFileSync(P_API, 'utf8');
+const API = normEol(readFileSync(P_API, 'utf8'));
 
 let pass = 0, fail = 0;
 const T = async (name, fn) => {
@@ -206,10 +207,10 @@ await T('B9 突變：私聊負向改用好友的 5 分鐘 ⇒ A4 紅在「私聊
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【C】test chain／版本');
 await T('C1 本守衛在 package.json 的 test chain；version.ts 與 admin.html SITE_VERSION_HINT 一致（不 pin 版本）', () => {
-  const pk = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const pk = JSON.parse(normEol(readFileSync(join(ROOT, 'package.json'), 'utf8')));
   assert.ok(pk.scripts.test.includes('node scripts/test-v6290-neg-cache-ttl.mjs'), '沒進 test chain');
-  const V = /VERSION = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'))[1];
-  const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'))[1];
+  const V = /VERSION = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')))[1];
+  const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8')))[1];
   assert.strictEqual(H, V, 'admin.html SITE_VERSION_HINT=' + H + ' 與 version.ts=' + V + ' 不同步');
 });
 

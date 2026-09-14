@@ -25,10 +25,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const GAME = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-const MPB = readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8');
+const GAME = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+const MPB = normEol(readFileSync(join(ROOT, 'src/routes/game/MobilePortraitBattle.svelte'), 'utf8'));
 
 let pass = 0, fail = 0;
 const T = async (name, fn) => {

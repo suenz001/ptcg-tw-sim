@@ -20,13 +20,14 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { transform } from 'esbuild';
 import { markupSections, GAME_INLINE_STYLE } from './lib/strip-markup-sections.mjs';   // ⭐v6.320 中央 helper（護欄①～⑨）
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const PAGE = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-const SRV = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const DUMPSRC = readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8');
-const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const PKG = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+const PAGE = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+const SRV = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const DUMPSRC = normEol(readFileSync(join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'), 'utf8'));
+const ADMIN = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const PKG = JSON.parse(normEol(readFileSync(join(ROOT, 'package.json'), 'utf8')));
 const DUMP = (await import('node:module')).createRequire(import.meta.url)(
   join(ROOT, 'oracle-admin/tournament/dump-client-monitor.cjs'));
 

@@ -27,16 +27,17 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const OC_PATH = join(ROOT, 'src/lib/game/oracle-client.ts');
 const RO_PATH = join(ROOT, 'src/lib/game/room-oracle.ts');
 const GP_PATH = join(ROOT, 'src/routes/game/+page.svelte');
 const DK_PATH = join(ROOT, 'src/routes/decks/+page.svelte');
-const OC = readFileSync(OC_PATH, 'utf8');
-const RO = readFileSync(RO_PATH, 'utf8');
-const GP = readFileSync(GP_PATH, 'utf8');
-const DK = readFileSync(DK_PATH, 'utf8');
+const OC = normEol(readFileSync(OC_PATH, 'utf8'));
+const RO = normEol(readFileSync(RO_PATH, 'utf8'));
+const GP = normEol(readFileSync(GP_PATH, 'utf8'));
+const DK = normEol(readFileSync(DK_PATH, 'utf8'));
 // v6.244 的 sha（只用來拿 BASE 對照；CI 是 fetch-depth:1 淺複製 ⇒ 拿不到就跳過，不 fail-open 成假綠）
 const BASE_SHA = '5fbfb616ce96dee44d18e1f019f125c3fc477c63';
 
@@ -555,7 +556,7 @@ await T('⭐ 成功路徑不變：第一發就成功 ⇒ 只送 1 次且回 true
   ok(a.pushes.length === 1, '成功路徑送了 ' + a.pushes.length + ' 次');
 });
 await T('⭐⭐ 逾時後靠**既有**自癒收斂：decideStuckSelfHeal 在額度用完時走 force-adopt（拉最新盤面讓玩家重做）', () => {
-  const sg = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
+  const sg = normEol(readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8'));
   const block = extractBlock(sg, 'export function decideStuckSelfHeal(', '\n}', 120, 'decideStuckSelfHeal');
   const js = esbuild.transformSync(block.replace('export ', ''), { loader: 'ts' }).code;
   const f = new Function(js + '\n;return decideStuckSelfHeal;')();

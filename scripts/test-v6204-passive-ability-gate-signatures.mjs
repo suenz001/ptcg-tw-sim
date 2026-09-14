@@ -49,10 +49,10 @@ await build({entryPoints:[E],outfile:O,bundle:true,format:'esm',platform:'node',
 const mod=await import(pathToFileURL(O).href);
 
 const dir=join(ROOT,'static/cards');
-const live=new Set(JSON.parse(readFileSync(join(dir,'index.json'),'utf8')).map(e=>e.code));
+const live=new Set(JSON.parse(normEol(readFileSync(join(dir,'index.json'),'utf8'))).map(e=>e.code));
 const pool=new Map();
 for(const f of readdirSync(dir)){if(!f.endsWith('.json')||f==='index.json'||!live.has(f.slice(0,-5)))continue;
-  for(const c of JSON.parse(readFileSync(join(dir,f),'utf8')))if(c?.id!=null)pool.set(String(c.id),c);}
+  for(const c of JSON.parse(normEol(readFileSync(join(dir,f),'utf8'))))if(c?.id!=null)pool.set(String(c.id),c);}
 
 let pass=0,fail=0;const T=(n,fn)=>{try{fn();console.log('PASS',n);pass++;}catch(e){console.log('FAIL',n,'::',e.message);fail++;}};
 let _n=0;
@@ -541,7 +541,7 @@ T('12b. 靜態：hasAbilityOnBench 必須維持沒有 gate（加了會無窮遞�
 });
 
 // ══════════════ ⑤ 靜態：兩份免疫實作不得再各自手刻消除來源 ══════════════
-const readSrc=p=>readFileSync(join(ROOT,p),'utf8');
+const readSrc=p=>normEol(readFileSync(join(ROOT,p),'utf8'));
 const cut=(src,anchor)=>{const i=src.indexOf(anchor); assert.ok(i>=0,'anchor 失效：'+anchor);
   const j=src.indexOf('\n}\n',i); assert.ok(j>i); return src.slice(i,j);};
 T('13a. passiveImmunityDamageBlock / passiveCoinImmunity 都必須呼叫中央述詞，且不得再 inline 手刻來源',()=>{

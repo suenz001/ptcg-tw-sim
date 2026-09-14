@@ -18,9 +18,10 @@ import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import assert from 'node:assert/strict';
 import { transformSync } from 'esbuild';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const R = (p) => readFileSync(join(ROOT, p), 'utf8');
+const R = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
 const VR   = R('src/lib/game/viewer-role.ts');
 const PAGE = R('src/routes/game/+page.svelte');
 const MOB  = R('src/routes/game/MobilePortraitBattle.svelte');

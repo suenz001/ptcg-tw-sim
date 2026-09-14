@@ -27,6 +27,7 @@ import {
   buildFriends, makeFakeDb, asUser, findEmails, makeYield,
 } from './lib/friends-harness-v6282.mjs';
 import { extractCss, settingsMarkup, zoomModalFixtures, VIEWPORTS, pageHtml } from './lib/zoom-modal-fixture.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const P_SRV = join(ROOT, 'oracle-admin/server_admin_patch.js');
@@ -35,7 +36,7 @@ const P_GAME = join(ROOT, 'src/routes/game/+page.svelte');
 const P_FRPAGE = join(ROOT, 'src/routes/friends/+page.svelte');
 const P_PKG = join(ROOT, 'package.json');
 const PATCH = readPatch(P_SRV);
-const ADMIN = readFileSync(P_ADMIN, 'utf8');
+const ADMIN = normEol(readFileSync(P_ADMIN, 'utf8'));
 const GAME = readFileSync(P_GAME, 'utf8').replace(/\r\n/g, '\n');
 const FRPAGE = readFileSync(P_FRPAGE, 'utf8').replace(/\r\n/g, '\n');
 // ⭐⭐ v6.296：名單本體搬到共用元件、取身分搬到共用 auth-ctx.ts（/friends 頁與大廳分頁共用）。
@@ -200,7 +201,7 @@ await T('1c ⭐⭐⭐ 兩端接線：把 admin UI 送出的 (method,path,body) �
 await T('1d admin 那一發經過 _ok() 包裝（舊伺服器 404 不會被當成「關閉」）；SITE_VERSION_HINT 與 version.ts 一致（不 pin 版本）', () => {
   const lm = fnSrc(ADMIN, 'async function loadMonitor() {');
   assert.ok(/fc = _ok\(_r\[6\]\)/.test(lm), 'fc 沒經過 _ok()');
-  const V = /VERSION = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'))[1];
+  const V = /VERSION = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')))[1];
   const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(ADMIN)[1];
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
 });
@@ -643,7 +644,7 @@ await T('7-8m 突變：在某個 $effect 內塞 fetch(\'/api/friends/list\')／f
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【8】test chain');
 await T('8a 本守衛在 package.json 的 test chain（只加進 iron-rules-audit 等於沒加）', () => {
-  const pk = JSON.parse(readFileSync(P_PKG, 'utf8'));
+  const pk = JSON.parse(normEol(readFileSync(P_PKG, 'utf8')));
   assert.ok(pk.scripts.test.includes('node scripts/test-v6286-friends-hardening.mjs'), 'package.json test 沒有本守衛');
 });
 

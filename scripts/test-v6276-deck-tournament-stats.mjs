@@ -35,9 +35,12 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 //   還原器本體放在 scripts/lib/tourn-revert-v6365.mjs（與 v6.291／v6.292 同一個形狀，
 //   三支守衛共用同一份 ⇒ 不會出現兩份會漂移的還原器；test-v6292 B6 在守這條鍵）。
 import { revertV6365 } from './lib/tourn-revert-v6365.mjs';
-import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { normEol, committedEolIsLf } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const BASE_SHA = '4ce276453c998058f70a35778a6ab262fa679921';   // v6.275
 const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const body = pat.split('\n').slice(1).join('\n');   // 第 1 行是版本沿革註解，一律先切掉
@@ -228,21 +231,28 @@ await T('B3 突變【M6】revert-diff 不是恆真：區塊內改一個字元 �
   assert.notStrictEqual(sha256(revertTail(mutated)), OLD_TAIL_SHA, 'revert-diff 抓不到差異 —— B1 是安慰劑');
 });
 
-await T('B4 現行區塊的新指紋與重釘後的 4 支既有守衛一致（防釘錯值）', () => {
+// ⭐v6.378 C-8：原本這 7 條判準塞在**同一個 T** 裡 —— 第一條 assert 一 throw，
+//   同一個回呼裡後面 6 條一次都不會跑（與 v6.265 F4 同型的短路：5 支守衛只會看到 1 支的訊息）。
+//   ⇒ 拆成「兩條指紋各自一個 T ＋ 每一支被重釘的守衛各自一個 T」。判準逐字未變。
+await T('B4a 現行 tail 區塊的新指紋 ＝ 本守衛內嵌的新值（防釘錯值）', () => {
   const tail = pat.slice(pat.indexOf(TAIL_ANCHOR));
   assert.strictEqual(sha256(tail), NEW_TAIL_SHA, '現行 tail sha 與本守衛內嵌的新值不符');
+});
+await T('B4b 現行 TEVENTS 區塊的新指紋 ＝ 本守衛內嵌的新值（防釘錯值）', () => {
   const tev = pat.slice(pat.indexOf(TEV_ANCHOR));
   assert.strictEqual(sha256(tev), NEW_TEV_SHA, '現行 TEVENTS sha 與本守衛內嵌的新值不符');
-  for (const [f, v] of [
-    ['scripts/test-v6265-phantom-start-race.mjs', NEW_TAIL_SHA],
-    ['scripts/test-v6272-firestore-read-reduction.mjs', NEW_TAIL_SHA],
-    ['scripts/test-v6275-usersall-scan-guard.mjs', NEW_TAIL_SHA],
-    ['scripts/test-v6266-deck-stats-server.mjs', NEW_TEV_SHA],
-    ['scripts/test-v6268-delta-put-server.mjs', NEW_TEV_SHA],
-  ]) {
-    assert.ok(readFileSync(join(ROOT, f), 'utf8').includes(v), f + ' 沒有重釘到新的 sha（它現在守的是錯的值）');
-  }
 });
+for (const [f, v, tag] of [
+  ['scripts/test-v6265-phantom-start-race.mjs', NEW_TAIL_SHA, 'tail'],
+  ['scripts/test-v6272-firestore-read-reduction.mjs', NEW_TAIL_SHA, 'tail'],
+  ['scripts/test-v6275-usersall-scan-guard.mjs', NEW_TAIL_SHA, 'tail'],
+  ['scripts/test-v6266-deck-stats-server.mjs', NEW_TEV_SHA, 'TEVENTS'],
+  ['scripts/test-v6268-delta-put-server.mjs', NEW_TEV_SHA, 'TEVENTS'],
+]) {
+  await T('B4-repin ' + f + ' 重釘到新的 ' + tag + ' sha', () => {
+    assert.ok(normEol(readFileSync(join(ROOT, f), 'utf8')).includes(v), f + ' 沒有重釘到新的 sha（它現在守的是錯的值）');
+  });
+}
 
 console.log('\n══ 【C】⭐⭐⭐ 報名行為：舊 payload 產出的 TREGS doc 與 BASE 逐位元相同 ═══════');
 
@@ -689,10 +699,10 @@ await T('F1 ⭐⭐ 300 場大歸檔連打：讓路有效；突變【M1】拿掉�
 console.log('\n══ 【G】舊 client（v6.267）不會壞的證明 ═══════════════════════════════════');
 
 await T('G1 v6.267 client 的錦標賽欄寫死「累積中」＝不讀新欄位；normalize 對新 status 容忍', () => {
-  const page = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
+  const page = normEol(readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8'));
   assert.ok(page.includes('<div class="ds-rate ds-pending">累積中</div>'),
     'v6.267 的錦標賽欄不再是寫死的「累積中」—— 那 client 檔案被動過，本版宣稱「玩家端零改動」不成立');
-  const dsTs = readFileSync(join(ROOT, 'src/lib/decks/deck-stats.ts'), 'utf8');
+  const dsTs = normEol(readFileSync(join(ROOT, 'src/lib/decks/deck-stats.ts'), 'utf8'));
   assert.ok(dsTs.includes("status: toStr(t.status, 'not-collected')"),
     'deck-stats.ts 的 normalize 形狀變了');
   // normalize 抽出來實跑：伺服器回新形狀（status:ok＋新欄位）時，舊 client 的產物仍是合法形狀
@@ -790,7 +800,7 @@ await T('I1 ⭐ 伺服器 v6.276 契約的 client 端退路仍在（行為端；
   //   而它擋下來的並不是任何真正的風險（Rule E：pin 死版本／pin 死 diff 的斷言是路障不是保護）。
   // ⇒ 改成**不綁版本的行為端等價條件**：v6.276 的伺服器契約其實只依賴下面兩件事，
   //   而這兩件事與「client 改了幾個檔」完全無關，可以一路守下去。
-  const dsTs = readFileSync(join(ROOT, 'src/lib/decks/deck-stats.ts'), 'utf8');
+  const dsTs = normEol(readFileSync(join(ROOT, 'src/lib/decks/deck-stats.ts'), 'utf8'));
   const i0 = dsTs.indexOf('function normalize(');
   assert.ok(i0 > 0, '抽不到 deck-stats.ts 的 normalize（掃描器壞了？）');
   const fnTxt = dsTs.slice(i0, braceEnd(dsTs, dsTs.indexOf('{', i0)))
@@ -809,7 +819,7 @@ await T('I1 ⭐ 伺服器 v6.276 契約的 client 端退路仍在（行為端；
   assert.strictEqual(noTourn.tournament.games, 0);
   assert.strictEqual(noTourn.tournament.winRate, null, 'winRate 被誤轉成 0 ⇒ 畫面會顯示 0.0% 騙玩家');
   // ②【UI 退路】/decks 一定要留著「累積中」這個 fallback（三態的第二、三態都靠它）。
-  const page2 = readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8');
+  const page2 = normEol(readFileSync(join(ROOT, 'src/routes/decks/+page.svelte'), 'utf8'));
   assert.ok(page2.includes('<div class="ds-rate ds-pending">累積中</div>'),
     '/decks 的「累積中」退路不見了 ⇒ 查無資料／舊伺服器時畫面會空掉或顯示假數字');
   // ── 診斷（**不當判準**）：印出玩家端相對 BASE 有哪些檔不同，讓改動仍然看得見。
@@ -843,14 +853,14 @@ await T('I1 ⭐ 伺服器 v6.276 契約的 client 端退路仍在（行為端；
 console.log('\n══ 【J】版本／文件 ═══════════════════════════════════════════════════════');
 
 await T('J1 version.ts ≥ 6.276、admin.html SITE_VERSION_HINT 同步且維持 LF；內部 changelog 有本版；首頁沒有', () => {
-  const v = /VERSION = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'))[1];
+  const v = /VERSION = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')))[1];
   assert.ok(parseFloat(v) >= 6.276, 'VERSION=' + v);
   const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'latin1');
   assert.ok(adm.includes("window.SITE_VERSION_HINT = '" + v + "';"), 'SITE_VERSION_HINT 沒同步');
-  assert.ok(!adm.includes('\r\n'), 'admin.html 出現 CRLF');
-  const internal = readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8');
+  assert.ok(ADMIN_EOL.ok, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
+  const internal = normEol(readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8'));
   assert.ok(/^## v6\.276 /m.test(internal), 'docs/changelog-internal.md 沒有 v6.276 段落');
-  const home = readFileSync(join(ROOT, 'src/routes/+page.svelte'), 'utf8');
+  const home = normEol(readFileSync(join(ROOT, 'src/routes/+page.svelte'), 'utf8'));
   assert.ok(!/v6\.276/.test(home), '首頁 changelog 竟然有 v6.276 —— 純伺服器端不寫首頁');
 });
 

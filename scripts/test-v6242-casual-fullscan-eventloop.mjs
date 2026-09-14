@@ -17,15 +17,18 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
-import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { normEol, committedEolIsLf } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 let pass = 0, fail = 0;
 const T = async (n, fn) => { try { await fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
 
 const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
-const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const verTs = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
+const adm = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const verTs = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
 
 function braceEnd(s, i) { let d = 0; for (let k = i; k < s.length; k++) { const c = s[k]; if (c === '{') d++; else if (c === '}') { d--; if (!d) return k + 1; } } return s.length; }
 function arrowOf(anchor) {
@@ -353,7 +356,7 @@ await T('⑩ 版本一致：version.ts ≥ 6.242 且 admin.html SITE_VERSION_HIN
   assert.ok(parseFloat(V) >= 6.242, 'version.ts 沒有 bump 到 6.242（實為 ' + V + '）');
   const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(adm)[1];
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
-  assert.ok(!adm.includes('\r'), 'admin.html 出現 CRLF');
+  assert.ok(ADMIN_EOL.ok, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
 });
 
 console.log('\n' + pass + ' PASS / ' + fail + ' FAIL');

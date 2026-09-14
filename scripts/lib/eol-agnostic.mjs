@@ -20,6 +20,10 @@
 //   「錨點過期了就默默不取代、然後宣告突變成功」是最嚴重的安慰劑（第十一種）。
 
 /** 正則逸出（抄 __m6a/bump369.mjs 的 esc()）。 */
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 export function esc(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -109,4 +113,52 @@ export function eolReplaceAll(hay, needle, repl) {
  */
 export function normEol(s) {
   return String(s).replace(/\r\n/g, '\n');
+}
+
+// ══ v6.378 C-7：「這個檔案**被 commit 的內容**是不是 LF」 ══════════════════
+/**
+ * ⚠⚠ 為什麼**不可以**用工作樹的位元組判斷行尾（本版把 11 支守衛從這個寫法搬過來）：
+ *   站長的 Windows 是 `core.autocrlf=true` ⇒ 任何被 git 判定為 text 的檔案，
+ *   **工作樹一律是 CRLF**；但真正會被部署的是 **index/blob 的內容**
+ *   （GitHub Actions 的 actions/checkout 在 Linux 上取出來的就是它）。
+ *   ⇒ `!readFileSync(p).includes('\r\n')` 這種寫法在本機**恆紅**、在 CI **恆綠**，
+ *     兩邊都沒有在守 —— 它量的是 checkout 設定，不是那個檔案。
+ *
+ * ⭐ 正解：直接問 git「index 的行尾是什麼」（`git ls-files --eol`）。
+ *   - CI／LF checkout：index 與工作樹逐位元相同 ⇒ 與舊寫法**完全等價**（不是放寬）。
+ *   - CRLF 工作樹：改成檢查真正會被部署的那份位元組 ⇒ 從恆紅變成真的在守。
+ *
+ * ⚠ 這**不是**恆真式：本 repo 現在就有 12 個 `i/crlf` 的追蹤檔（.bat 那一批，
+ *   例如 oracle-admin/dump-monitor.bat）—— 拿它們當負對照必須回 false。
+ *   （scripts/test-v6378-*.mjs 有正／負對照把這件事鎖住。）
+ *
+ * ⚠ 拿不到 git（沒有 git／不是 repo／檔案未追蹤）⇒ **退回**檢查工作樹位元組，
+ *   也就是舊寫法，並在 `how` 據實回報是哪一條路徑（不假裝有在守）。
+ */
+export function indexEol(root, rel) {
+  try {
+    const out = execFileSync('git', ['-C', root, 'ls-files', '--eol', '--', rel],
+      { maxBuffer: 1 << 24, stdio: ['ignore', 'pipe', 'ignore'] }).toString('utf8');
+    const m = /(?:^|\n)i\/(\S+)\s/.exec(out);
+    return m ? m[1] : null;      // 未追蹤 ⇒ git 不會輸出任何一行
+  } catch { return null; }       // 沒有 git／不是 repo
+}
+
+/**
+ * @returns {{ ok: boolean, how: 'index'|'worktree'|'missing', detail: string }}
+ *   `ok` ＝「會被部署的那份位元組沒有 CRLF」。`how` 說明這次是走哪一條路徑判定的。
+ */
+export function committedEolIsLf(root, rel) {
+  const i = indexEol(root, rel);
+  if (i !== null) {
+    return { ok: i === 'lf' || i === 'none', how: 'index', detail: 'git index 行尾＝i/' + i };
+  }
+  let buf;
+  try { buf = readFileSync(join(root, rel)); }
+  catch (e) { return { ok: false, how: 'missing', detail: '讀不到檔案：' + (e && e.message ? e.message : e) }; }
+  const has = buf.includes(Buffer.from('\r\n'));
+  return {
+    ok: !has, how: 'worktree',
+    detail: '拿不到 git index（未追蹤／沒有 git）⇒ 退回工作樹位元組：' + (has ? '有 CRLF' : '全 LF'),
+  };
 }

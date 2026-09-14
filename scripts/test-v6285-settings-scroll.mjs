@@ -141,7 +141,7 @@ console.log('\n【F】前置');
 let API = '', GAME = '', MPB = '', CSS = '';
 await T('F0 檔案存在且沒被截斷；<style> 區抽得出來', () => {
   for (const p of [P_API, P_GAME, P_MPB]) assert.ok(existsSync(p), '缺 ' + p);
-  API = readFileSync(P_API, 'utf8'); GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = readFileSync(P_MPB, 'utf8');
+  API = normEol(readFileSync(P_API, 'utf8')); GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = normEol(readFileSync(P_MPB, 'utf8'));
   assert.ok(GAME.length > 900000, 'game/+page.svelte 只有 ' + GAME.length + ' 字元 —— 被截斷？');
   CSS = extractCss(GAME);
   assert.ok(CSS.length > 100000, 'style 區只有 ' + CSS.length + ' 字元');

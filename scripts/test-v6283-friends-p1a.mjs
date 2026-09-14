@@ -62,10 +62,10 @@ await T('F0 HEAD-FAIL：friends-api.ts／routes/friends/+page.svelte／+page.ts 
   assert.ok(existsSync(P_PAGE), '缺 ' + P_PAGE);
   assert.ok(existsSync(P_PAGE_TS), '缺 ' + P_PAGE_TS);
   assert.ok(existsSync(P_PANEL), '缺 ' + P_PANEL);
-  PANEL = readFileSync(P_PANEL, 'utf8');
+  PANEL = normEol(readFileSync(P_PANEL, 'utf8'));
   assert.ok(PANEL.length > 3000, 'FriendsPanel.svelte 只有 ' + PANEL.length + ' 字元 —— 被掏空');
-  API = readFileSync(P_API, 'utf8'); PAGE = readFileSync(P_PAGE, 'utf8'); PAGE_TS = readFileSync(P_PAGE_TS, 'utf8');
-  GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = readFileSync(P_MPB, 'utf8'); SRV = readFileSync(P_SRV, 'utf8');
+  API = normEol(readFileSync(P_API, 'utf8')); PAGE = normEol(readFileSync(P_PAGE, 'utf8')); PAGE_TS = normEol(readFileSync(P_PAGE_TS, 'utf8'));
+  GAME = normEol(readFileSync(P_GAME, 'utf8')); MPB = normEol(readFileSync(P_MPB, 'utf8')); SRV = normEol(readFileSync(P_SRV, 'utf8'));
   assert.ok(API.length > 3000, 'friends-api.ts 只有 ' + API.length + ' 字元 —— 被掏空');
   assert.ok(PAGE.length > 3000, '+page.svelte 只有 ' + PAGE.length + ' 字元 —— 被掏空');
 });

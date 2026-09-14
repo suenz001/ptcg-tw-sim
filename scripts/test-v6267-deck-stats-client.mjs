@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 import { countTokensStripped, stripCommentsChecked } from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // v6.266 的 sha（BASE 對照用；淺複製時大聲跳過，不 fail-open 成假綠）
@@ -47,13 +48,13 @@ const P_GP = join(ROOT, 'src/routes/game/+page.svelte');
 const P_DK = join(ROOT, 'src/routes/decks/+page.svelte');
 const P_ST = join(ROOT, 'src/lib/decks/storage.ts');
 
-const readOr = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : '');
+const readOr = (p) => (existsSync(p) ? normEol(readFileSync(p, 'utf8')) : '');
 const DS = readOr(P_DS);      // 新檔：不存在時給空字串 ⇒ 下面每一條各自紅，不會整支崩掉
-const RO = readFileSync(P_RO, 'utf8');
-const RT = readFileSync(P_RT, 'utf8');
-const GP = readFileSync(P_GP, 'utf8');
-const DK = readFileSync(P_DK, 'utf8');
-const ST = readFileSync(P_ST, 'utf8');
+const RO = normEol(readFileSync(P_RO, 'utf8'));
+const RT = normEol(readFileSync(P_RT, 'utf8'));
+const GP = normEol(readFileSync(P_GP, 'utf8'));
+const DK = normEol(readFileSync(P_DK, 'utf8'));
+const ST = normEol(readFileSync(P_ST, 'utf8'));
 
 let pass = 0, fail = 0;
 const T = async (n, f) => {
@@ -558,7 +559,7 @@ await T('E3b ⭐⭐ 表的完整性（v6.317）：room-oracle.ts 從 oracle-clie
   for (const t of tokens) assert.ok(names.includes(t), 'ORACLE_TOKENS 裡的 ' + t + ' 沒有被 import ⇒ 表裡有死項（或 import 被改名）');
   for (const n of ORACLE_NON_NET) assert.ok(names.includes(n), '白名單 ' + n + ' 沒被 import ⇒ 白名單過期');
   // 正對照：白名單成員真的不發請求 —— oracle-client.ts 裡它的函式本體不含 fetch(/oracleApi(
-  const oc = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
+  const oc = normEol(readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8'));
   const body = extractFn(oc, 'export function oracleCurrentUid(', 40, 'oracleCurrentUid');
   assert.ok(!/fetch\(|oracleApi\(/.test(body), 'oracleCurrentUid 現在會發請求了 ⇒ 不能留在白名單');
 });

@@ -29,13 +29,14 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { transform } from 'esbuild';
 import assert from 'node:assert';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const GP = readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8');
-const SG = readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8');
-const OC = readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8');
-const RO = readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8');
-const T45 = readFileSync(join(ROOT, 'scripts/test-v6245-oracle-api-timeout.mjs'), 'utf8');
+const GP = normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'));
+const SG = normEol(readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8'));
+const OC = normEol(readFileSync(join(ROOT, 'src/lib/game/oracle-client.ts'), 'utf8'));
+const RO = normEol(readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8'));
+const T45 = normEol(readFileSync(join(ROOT, 'scripts/test-v6245-oracle-api-timeout.mjs'), 'utf8'));
 
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 let pass = 0, fail = 0;

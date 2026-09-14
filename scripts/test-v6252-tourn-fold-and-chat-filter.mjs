@@ -13,11 +13,12 @@ import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 import { parse } from 'svelte/compiler';
 import ts from 'typescript';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const fileArg = process.argv.slice(2).find((a) => a.startsWith('--file='));
 const GAME = fileArg ? fileArg.slice('--file='.length) : join(ROOT, 'src/routes/game/+page.svelte');
-const src = readFileSync(GAME, 'utf8');
+const src = normEol(readFileSync(GAME, 'utf8'));
 
 let pass = 0, fail = 0;
 const failed = [];

@@ -1,5 +1,103 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.378 本機紅燈 **48 → 0**（全部是 harness／環境，R 類 0 支）＋ 拆掉會短路的 `T(...)`（C-7／C-8）
+
+BASE `991ba70a525b2050e6b4c168fa71747a38bb4ba1`（v6.377）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。
+
+### 【零】⚠⚠ 先講：v6.377 推之前被**兩張網擋下來**
+
+v6.377 commit 之後，我的兩張網（完整 clone ＋ 淺複製）都跑出 **712 步 / 失敗 2 支**：
+`lint-eol-anchors` 與 `test-v6377` 自己 —— **在 LF／CI 上也是紅的**。
+
+**成因**：v6.377 的子代理 chain 跑在 `06:36`，但 `M0~M3`（含手刻雙行尾錨點）是 `06:49` commit 前才加的
+⇒ **那次 chain 沒有跑在最終工作樹上**。
+
+⭐ **流程沒有破洞**：兩張網是從 **commit** 拉的（`git fetch` + `checkout FETCH_HEAD` ／ `clone`），
+所以**永遠跑在最終內容上**。⇒ 子代理自驗的 chain 數字只供參考，**主 session 的兩張網才是把關**。
+v6.377 因此**沒有推出去**，等本版一起推（tip 綠 ⇒ CI 綠 ⇒ 部署成功）。
+
+### 【一】⭐ 實測結論：**50 支紅燈全部是 H 類（harness／環境），R 類 0 支**
+
+⚠ 簡報說 48 支，**實測是 50 支** —— 多的兩支就是【零】那兩支。
+
+**決定性證據**（同一顆 commit、同一份內容，只差行尾）：
+
+| 環境 | 結果 |
+|---|---|
+| 本機 CRLF 工作樹（`core.autocrlf=true`） | 48 支紅 |
+| **LF 完整 clone**（`git clone -c core.autocrlf=false`，同一顆 `991ba70a`） | 同一組跑下來 **47 綠 / 1 紅** |
+
+唯一那 1 紅是 `test-v6269`，紅在 **Windows 沒有 `grep(1)`**，與行尾無關。
+⇒ **沒有一支是判準紅。**
+
+### 【二】五種修法 —— 每一種「為什麼不是放寬」
+
+| # | 修法 | 為什麼不是放寬 |
+|---|---|---|
+| ① | 讀檔處收斂 `normEol(readFileSync(...))`（**198 處、46 支＋2 支 lib**） | `normEol` 是 `s.replace(/\r\n/g,'\n')`：**LF 下可證明是 no-op** ⇒ 對 CI／LF 免疫網不可能造成差異。守衛裡所有 sha／逐位元比對釘的都是 **LF 的值**（BASE blob 由 `git cat-file` 吐出永遠是 LF），normEol 是讓兩邊回到同一個口徑 |
+| ② | 「admin.html 必須維持 LF」從「讀工作樹位元組」改成問 **git index**（`committedEolIsLf`，11 支） | 舊寫法量的是 **checkout 設定**不是那個檔案：本機（autocrlf=true）**恆紅**、CI（=false）**恆綠**，兩邊都沒在守。新寫法看的是「GitHub Actions checkout 出來、真的會被部署的那份位元組」。⚠ 不是恆真式：repo 現有 **12 個 `i/crlf`** 追蹤檔，守衛用 `oracle-admin/dump-monitor.bat` 當負對照，必須回 `false` |
+| ③ | 改用 **git 的口徑**：`test-v6272` 的「玩家端零改動」改 `git diff --name-only <PREV_SHA>`；`test-v6130` 的 `static/music` 白名單改掃 `git ls-files` | 兩條斷言講的都是「**會不會被部署／會不會進 commit**」。`git diff` 就是那件事的定義。v6.337 的「新增檔也要看得見」沒丟：新檔一旦 `git add` 就會出現在 diff 裡；散落的未追蹤檔仍然**據實列印**、不靜默 |
+| ④ | 平台／路徑：`test-v6269` 的 `grep -rl` 換成 Node 掃描器；`test-v6246` 把 tmpdir 副本裡的相對匯入改成絕對 file URL | ⭐ **這是收緊不是放寬**：v6269 舊碼是 `try { execFileSync('grep',…) } catch { /* 無命中 */ }` —— Windows 上 grep 不存在會丟 ENOENT、**被那個 catch 吞掉 ⇒ 斷言恆綠**（真正的安慰劑）。換成 Node 掃描器之後在 Windows 上才真的有在守，Linux 上結果逐一相同 |
+| ⑤ | `test-v6377` 的手刻「先試 CRLF 再試 LF」錨點改走中央 helper | 那寫法行為上是對的，但 `lint-eol-anchors` 會（正確地）判成違規 ⇒ 兩支從 v6.377 起恆紅 |
+
+### 【三】(乙) C-8：拆掉會短路的 `T(...)`
+
+| 檔案 | 原本 | 拆成 |
+|---|---|---|
+| `test-v6291` B4 | 1 個 `T`，3 圈共 **88 條 assert**（8 把 tail 鎖 ×4 ＋ 11 把 TEV 鎖 ×4 ＋ 3 個長度常數 ×4） | `B4-tail` ×8、`B4-tev` ×11、`B4-len` ×3 各自一個 `T` |
+| `test-v6291` B5 | 1 個 `T` 裡一圈掃 14 支 | `B5-lock` ×14 |
+| `test-v6292` B5／B6 | 同型 | 同上 |
+| `test-v6276` B4 | 1 個 `T` 裡 2 條指紋 ＋ 一圈驗 5 支 | `B4a`／`B4b`／`B4-repin` ×5 |
+
+**判準逐字未變**（只把 assert 搬進不同的 `T`）。判定條數：v6291 42 → **68**、v6292 → **72**、v6276 → **35**。
+
+⭐ **行為層正對照＋BASE 短路對照**：把清單第一項換成一支真的存在、但不含那些 sha 的守衛檔
+（`test-v6156-still-here.mjs`，故意丟 `AssertionError` 而不是 `ENOENT`），兩個版本都當子行程真的跑：
+
+```
+HEAD（拆完）  ：B4-tail 8 條，其中恰 1 條 FAIL、7 條 PASS  ⇒ 後面仍各自判定 ✅
+BASE（未拆版）：整支只印得出 1 條 B4（FAIL）              ⇒ 短路真的存在 ✅
+```
+
+⚠ **v6.371 的清單已過期**：`test-v6267 F3`／`test-v6277 F5`／`test-v6279 H1` 現在各自都是
+小而單一的 `T`（F3 只有 3 條 assert）。真正的短路大戶是上表那三支迴圈型。
+
+### 【四】守衛 `scripts/test-v6378-eol-harness-and-t-split.mjs`
+
+```
+本機（CRLF）  ：PASS 48 / FAIL 0
+LF 完整 clone ：PASS 32 / FAIL 0   ← CRLF 專屬段落大聲 ENV-SKIP
+淺複製 clone  ：PASS 31 / FAIL 0   ← C4 大聲 SHALLOW-SKIP
+```
+
+【A】中央述詞正／負對照（`dump-monitor.bat` = `i/crlf` 必須判 false）
+｜【B】**8 支代表**的 HEAD-FAIL（BASE blob 原樣寫成臨時守衛真的跑起來，BASE 必紅、HEAD 必綠；
+前提不成立就大聲 ENV-SKIP）｜【C】⭐「修完之後真的還在守」**7 條行為層證明**
+｜【D】(乙) 的正對照＋BASE 短路對照｜【E】lint 0 違規、E1b 環境無關的 HEAD-FAIL、chain 接線、`src/` 零改動。
+
+> ⚠ E1b 為什麼不用「把 BASE 版寫成暫存檔再跑 lint」：**lint 掃的是 git 追蹤集**，
+> 暫存檔不在裡面 ⇒ 那樣會假綠。改成行為層的 `scanSource` 對照。
+
+⚠ **淺複製網又抓到一條真問題並已修掉**（正是【零】那個教訓）：C4 突變 `test-v6272` 的
+`PREV_ALLOWED`，但 v6272 那條斷言自己有 `hasBaseCommit` 保護、淺複製時會 `shallowSkip`
+⇒ 突變不會翻紅 ⇒ C4 誤報。已改成先讀出 v6272 的 `PREV_SHA`、`hasBaseCommit` 保護、
+拿不到時 `shallowSkip`。
+
+**突變 M-1~M-13 全殺**（未達標 0、還原後 exit=0）。
+**整條 chain（713 步，序列）**：`red = 0`。
+`npx tsc --noEmit`：`error TS` 55 行、`TS2304` **0**。
+
+### 【五】⚠ 待站長裁示
+
+1. **(乙) 的其餘 284 個 `T`**（含 120 個迴圈型，清單在 `__m6a/tscan378.txt`）要不要排進後續版本？
+   建議只挑「一圈驗 N 個獨立對象」那一型（約 20~30 個），其餘維持現狀 ——
+   多數是「同一件事的多個面向」而不是「彼此無關的判準」。
+2. **`static/music/最後一張牌.mp3`**：看起來是 `last-card.mp3` 的中文檔名原檔，躺在工作樹裡**未追蹤**。
+   **沒有刪**（依禁令），守衛現在會每次大聲列印它。要移走、加白名單，還是就這樣？
+3. **`src/lib/game/ai.ts.backup`**：同樣是未追蹤檔。`test-v6272` 現在會列印它但不再因此翻紅。要清掉嗎？
+4. `scripts/lib/eol-agnostic.mjs` 新增的 `committedEolIsLf` 目前只有 11 支在用；
+   全站還沒掃過有沒有其他「讀工作樹位元組驗行尾」的守衛。要不要下一版掃一遍？
+
 ## v6.377 孤兒守衛 harness ＋ **行尾中性 lint** ＋ 淺複製對照網進 repo（C-10／C-9／C-15）
 
 BASE `a434f4fc41f74a985bb5735c91a2a9268cbd76b2`（v6.376）。**出貨碼一行都沒改**（`src/` 只動 `src/lib/version.ts`）。

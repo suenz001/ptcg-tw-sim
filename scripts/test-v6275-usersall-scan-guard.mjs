@@ -24,10 +24,11 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const SRV = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const ADMIN = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
+const SRV = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const ADMIN = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
 const BASE_SHA = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';   // v6.274（本版 BASE；users-all 未修）
 const V6271_SHA = '866c4dcf61d876dd06c45e1215a50f4a4ad4f910';  // v6.271（v6.272 修的 Firestore 無上限還在）
 
@@ -262,7 +263,7 @@ await T('A5 client 端（src/）讀取檔案集合＝v6.273 已列管清單（�
       const st = statSync(join(ROOT, rel));
       if (st.isDirectory()) { walk(rel); continue; }
       if (!/\.(ts|svelte)$/.test(f)) continue;
-      const txt = readFileSync(join(ROOT, rel), 'utf8');
+      const txt = normEol(readFileSync(join(ROOT, rel), 'utf8'));
       if (/\b(getDocs|getDoc|onSnapshot)\s*\(/.test(txt)) hits.push(rel);
     }
   };

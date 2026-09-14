@@ -42,10 +42,10 @@ const HCO_PATH = 'src/lib/game/hand-card-ops.ts';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RF_PATH = 'src/lib/game/room.ts';
 const PAGE = normEol(readFileSync(join(ROOT, PAGE_PATH), 'utf8'));
-const MPB = readFileSync(join(ROOT, MPB_PATH), 'utf8');
-const HCO = readFileSync(join(ROOT, HCO_PATH), 'utf8');
-const RO = readFileSync(join(ROOT, RO_PATH), 'utf8');
-const RF = readFileSync(join(ROOT, RF_PATH), 'utf8');
+const MPB = normEol(readFileSync(join(ROOT, MPB_PATH), 'utf8'));
+const HCO = normEol(readFileSync(join(ROOT, HCO_PATH), 'utf8'));
+const RO = normEol(readFileSync(join(ROOT, RO_PATH), 'utf8'));
+const RF = normEol(readFileSync(join(ROOT, RF_PATH), 'utf8'));
 // ⚠ 任何一版都可能被 pin 死 —— 這裡的 BASE 只拿來做 HEAD-FAIL 對照，拿不到就 SHALLOW-SKIP，主判準不靠它。
 const BASE_SHA = '9e41a5d55394cfc8547d0217c4095ef7dbe2c888';   // v6.320
 
@@ -81,11 +81,11 @@ await build({ entryPoints: [E], outfile: O, bundle: true, format: 'esm', platfor
 const M = await import(pathToFileURL(O).href);
 
 const dir = join(ROOT, 'static/cards');
-const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map(e => e.code));
+const live = new Set(JSON.parse(normEol(readFileSync(join(dir, 'index.json'), 'utf8'))).map(e => e.code));
 const pool = new Map();
 for (const f of readdirSync(dir)) {
   if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
-  for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
+  for (const c of JSON.parse(normEol(readFileSync(join(dir, f), 'utf8')))) if (c?.id != null) pool.set(String(c.id), c);
 }
 const LION = '18508', WILLDUN = '14086', ENERGY = '14102';
 ok(pool.get(LION) && pool.get(WILLDUN) && pool.get(ENERGY), 'fixture 卡不在卡庫');
@@ -513,7 +513,7 @@ T('E7 手機直式入口：sheet 動作清單問 ops.has(setup-active-swap) → 
 console.log('\n【F】接線＋守衛鏈');
 // ═══════════════════════════════════════════════════════════
 T('F1 本守衛在 package.json 的 test chain 裡（不在 chain＝沒有在守）', () => {
-  const pkg = readFileSync(join(ROOT, 'package.json'), 'utf8');
+  const pkg = normEol(readFileSync(join(ROOT, 'package.json'), 'utf8'));
   ok(pkg.includes('node scripts/test-v6321-undo-snapshot-cross-game.mjs'), '不在 test chain');
 });
 T('F2 undoSnapshot 的賦值點枚舉：除了既有的 dispatch／END_TURN／悔棋後清／apply-undo 之外，只多了接線點那一處', () => {

@@ -21,12 +21,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { transformSync } from 'esbuild';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 let pass = 0, fail = 0;
 const T = async (n, fn) => { try { await fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
 
-const rd = (p) => readFileSync(join(ROOT, p), 'utf8');
+const rd = (p) => normEol(readFileSync(join(ROOT, p), 'utf8'));
 const EVDATE_SRC = rd('src/lib/tournament/event-date.ts');
 const GAME = rd('src/routes/game/+page.svelte');
 const ADMIN = rd('oracle-admin/admin.html');
@@ -331,8 +335,7 @@ await T('⑬ 版本一致：version.ts ≥ 6.244、admin.html SITE_VERSION_HINT 
   assert.ok(parseFloat(v) >= 6.244, 'version.ts 版本倒退了：' + v);
   assert.ok(ADMIN.includes("window.SITE_VERSION_HINT = '" + v + "';"),
     'SITE_VERSION_HINT 沒同步（version.ts=' + v + '）');
-  assert.ok(!readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'latin1').includes('\r\n'),
-    'admin.html 必須維持 LF 行尾');
+  assert.ok(ADMIN_EOL.ok, 'admin.html 必須維持 LF 行尾：' + ADMIN_EOL.detail);
   // ⭐v6.261 原本寫死 'v1.26' ⇒ 每 bump 一次就會無故翻紅（接著就會有人去 skip 它）。
   //   判準沒有放寬：仍要求「有版本號」而且「不得倒退到 v1.26 以下」（v6.244 的那一版）。
   const _pv = /^\/\/ === ORACLE ADMIN ENDPOINTS === v(\d+)\.(\d+) /.exec(PAT);

@@ -29,12 +29,16 @@ import {
   readPatch, extractBlock, FR_START, FR_END,
   buildFriends, makeFakeDb, makeFakeApp, mkRes, asUser, findEmails, makeYield, fakeTournIdentity, fakeIsTournAdmin,
 } from './lib/friends-harness-v6282.mjs';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 const P_SRV = join(ROOT, 'oracle-admin/server_admin_patch.js');
 const P_ADMIN = join(ROOT, 'oracle-admin/admin.html');
 const PATCH = readPatch(P_SRV);
-const ADMIN = readFileSync(P_ADMIN, 'utf8');
+const ADMIN = normEol(readFileSync(P_ADMIN, 'utf8'));
 const DM_START = '// >>> PTCG-FRIENDS-DM-BLOCK-START';
 const DM_END = '// <<< PTCG-FRIENDS-DM-BLOCK-END';
 
@@ -227,9 +231,9 @@ await T('C3 靜態枚舉：本檔所有對 tournamentChat／TCHAT 的刪除呼�
   assert.strictEqual(purges.length, 1, 'dm 等值刪除必須恰一處（_frPurgeDm）：' + purges.length);
   for (const m of dels) assert.ok(/room:\s*'lobby'/.test(m[3]) || m[3].trim() === PURGE_FILTER, '這個刪除沒有限定 lobby（也不是 v6.288 授權的等值 dm 刪除）：' + m[0].slice(0, 120));
   const others = readdirSync(join(ROOT, 'oracle-admin')).filter((f) => f !== 'server_admin_patch.js' && /\.(js|cjs|mjs|sh|bat)$/.test(f));
-  for (const f of others) assert.ok(!readFileSync(join(ROOT, 'oracle-admin', f), 'utf8').includes('tournamentChat'), f + ' 也碰 tournamentChat（要逐一確認不會刪私聊）');
+  for (const f of others) assert.ok(!normEol(readFileSync(join(ROOT, 'oracle-admin', f), 'utf8')).includes('tournamentChat'), f + ' 也碰 tournamentChat（要逐一確認不會刪私聊）');
   const tdir = join(ROOT, 'oracle-admin/tournament');
-  for (const f of readdirSync(tdir)) assert.ok(!readFileSync(join(tdir, f), 'utf8').includes('tournamentChat'), 'oracle-admin/tournament/' + f + ' 也碰 tournamentChat');
+  for (const f of readdirSync(tdir)) assert.ok(!normEol(readFileSync(join(tdir, f), 'utf8')).includes('tournamentChat'), 'oracle-admin/tournament/' + f + ' 也碰 tournamentChat');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -727,16 +731,16 @@ await T('J3m 正對照：展開畫面的 text 不經 escapeHtml ⇒ J3 紅在 im
 await T('J4 fd 那一發經過 _ok()（舊伺服器 404 不會被當成「關閉」）；SITE_VERSION_HINT 與 version.ts 一致（不 pin 版本）', () => {
   const lm = fnSrc(ADMIN, 'async function loadMonitor() {');
   assert.ok(/fd = _ok\(_r\[7\]\)/.test(lm), 'fd 沒經過 _ok()');
-  const V = /VERSION = '([\d.]+)'/.exec(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'))[1];
+  const V = /VERSION = '([\d.]+)'/.exec(normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8')))[1];
   const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(ADMIN)[1];
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
-  assert.strictEqual(readFileSync(P_ADMIN).includes(Buffer.from('\r\n')), false, 'admin.html 出現 CRLF');
+  assert.strictEqual(ADMIN_EOL.ok, true, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【K】test chain');
 await T('K1 本守衛在 package.json 的 test chain', () => {
-  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(normEol(readFileSync(join(ROOT, 'package.json'), 'utf8')));
   assert.ok(pkg.scripts.test.includes('node scripts/test-v6287-friends-dm.mjs'), '沒進 test chain');
 });
 

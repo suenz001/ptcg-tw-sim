@@ -15,6 +15,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let pass = 0, fail = 0;
@@ -28,7 +29,28 @@ const ALLOWED = new Set(['last-card.mp3']);
 const FORBIDDEN = ['Aim to Be a Pokemon Master.mp3', 'Pokemon XYZ Opening.mp3', 'We Go.mp3'];
 {
   ok(existsSync(MUSIC_DIR), 'static/music/ 必須存在（掃描器前提）');
-  const files = existsSync(MUSIC_DIR) ? readdirSync(MUSIC_DIR).filter(f => !f.startsWith('.')) : [];
+  // ⚠⚠ v6.378 C-7（環境）：舊寫法掃的是**工作樹**（readdirSync）。但會被部署上線的是
+  //   git 追蹤到的那一份（GitHub Actions checkout ⇒ build ⇒ 部署）；本機散落的未追蹤檔
+  //   （例如同一首曲子的中文檔名原檔）根本進不了任何 commit，卻讓這一條在本機**恆紅**。
+  //   ⇒ 改掃 `git ls-files static/music`：CI 上追蹤集與工作樹逐檔相同 ⇒ **與舊寫法等價**，
+  //     而且判準更貼近「會不會被部署」。未追蹤檔仍然據實列印（不靜默），一旦 git add
+  //     就會進追蹤集、立刻被下面那圈白名單斷言擋下來。
+  const gitLines = (args) => {
+    try {
+      return execFileSync('git', ['-C', ROOT, '-c', 'core.quotepath=false', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+        .split('\n').map((x) => x.trim()).filter(Boolean);
+    } catch { return null; }
+  };
+  const tracked = gitLines(['ls-files', '--', 'static/music']);
+  const files = tracked
+    ? tracked.map((p) => p.slice(p.lastIndexOf('/') + 1))
+    : (existsSync(MUSIC_DIR) ? readdirSync(MUSIC_DIR).filter((f) => !f.startsWith('.')) : []);
+  if (!tracked) console.log('  ⚠⚠ 拿不到 git ⇒ 退回掃工作樹（這一段的判準與 v6.377 以前相同）');
+  const untracked = gitLines(['ls-files', '--others', '--exclude-standard', '--', 'static/music']) || [];
+  if (untracked.length) {
+    console.log('  ⚠ static/music/ 有 ' + untracked.length + ' 個**未追蹤**檔（不在任何 commit 裡 ⇒ 不會被部署；'
+      + 'git add 之後就會被本守衛擋下來）：' + untracked.join(', '));
+  }
   ok(files.length > 0, 'static/music/ 掃到 0 個檔案 → 掃描器壞了或曲目遺失，不是「乾淨」');
   for (const f of files) {
     ok(ALLOWED.has(f),

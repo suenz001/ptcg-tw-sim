@@ -33,6 +33,7 @@ import {
   stripCommentsChecked, stripCommentsBlankChecked, countTokensStripped, nonWs, WS_RE,
   DEFAULT_MIN_RATIO, DEFAULT_MAX_DROP_RUN,
 } from './lib/strip-comments.mjs';
+import { normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // ⭐ 固定 blob（v6.322）。這不是「pin 版本」—— blob 內容永不變，表也永不過期；淺複製時大聲 SKIP。
@@ -375,7 +376,7 @@ T('5-1 git ls-tree HEAD 的每一支 .ts/.js/.mjs/.cjs/.svelte/.html：兩種渲
   assert.ok(files.length >= 900, '只列到 ' + files.length + ' 支（v6.324 有 1026 支）⇒ ls-tree 壞了？');
   let n = 0, maxB = 0, maxF = '', maxR = 0, maxRF = '', tails = [];
   for (const f of files) {
-    let src; try { src = readFileSync(join(ROOT, f), 'utf8'); } catch { continue; }
+    let src; try { src = normEol(readFileSync(join(ROOT, f), 'utf8')); } catch { continue; }
     if (!src) continue;
     n++;
     const sc = scanCommentLines(src);
@@ -406,7 +407,7 @@ T('5-2 ⭐v6.324 前置 A 不誤紅：全站每一支都用 stripCommentsChecked
     .split('\n').filter((f) => /\.(ts|js|mjs|cjs|svelte|html)$/.test(f) && !f.startsWith('node_modules/'));
   let n = 0, minR = 1, minF = '', under50 = 0, under20 = 0;
   for (const f of files) {
-    let src; try { src = readFileSync(join(ROOT, f), 'utf8'); } catch { continue; }
+    let src; try { src = normEol(readFileSync(join(ROOT, f), 'utf8')); } catch { continue; }
     if (!src) continue;
     n++;
     const d = stripCommentsChecked(src, { label: f });
@@ -432,8 +433,8 @@ const cleanup7 = () => { for (const q of [TMP_STRIP7, TMP_LINT7]) { try { unlink
 process.on('exit', cleanup7);
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { cleanup7(); process.exit(1); });
 
-const STRIP_SRC7 = readFileSync(join(ROOT, 'scripts/lib/strip-comments.mjs'), 'utf8');
-const LINT_SRC7 = readFileSync(join(ROOT, 'scripts/anti-pattern-lint.mjs'), 'utf8');
+const STRIP_SRC7 = normEol(readFileSync(join(ROOT, 'scripts/lib/strip-comments.mjs'), 'utf8'));
+const LINT_SRC7 = normEol(readFileSync(join(ROOT, 'scripts/anti-pattern-lint.mjs'), 'utf8'));
 const LINT_IMPORT7 = "from './lib/strip-comments.mjs';";
 const RULE_A7 = '    if (LINE_COMMENT_RE.test(t)) { keepFrom[i] = -1; continue; }   // a. 行首 // ⇒ 丟整行\n';
 const OPEN_STARTSWITH7 = '      if (!t.startsWith(open)) continue;\n';

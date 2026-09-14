@@ -57,11 +57,11 @@ const P_DK = join(ROOT, 'src/routes/decks/+page.svelte');
 const P_ST = join(ROOT, 'src/lib/decks/storage.ts');
 const P_PK = join(ROOT, 'package.json');
 
-const GP = readFileSync(P_GP, 'utf8');
-const DS = readFileSync(P_DS, 'utf8');
+const GP = normEol(readFileSync(P_GP, 'utf8'));
+const DS = normEol(readFileSync(P_DS, 'utf8'));
 const DK = normEol(readFileSync(P_DK, 'utf8'));
-const ST = readFileSync(P_ST, 'utf8');
-const PK = readFileSync(P_PK, 'utf8');
+const ST = normEol(readFileSync(P_ST, 'utf8'));
+const PK = normEol(readFileSync(P_PK, 'utf8'));
 
 let pass = 0, fail = 0;
 const T = async (n, f) => {
@@ -949,7 +949,7 @@ await mut('H11 ⭐⭐ tournReady 為真時仍然畫「累積中」（三態接�
 // ── ⭐v6.311 剝註解計數的突變測試（每一條都要紅在**指定的那一條訊息**；只捕 AssertionError）──────
 //   突變 helper 本身：把 scripts/lib/strip-comments.mjs 的原始碼改壞，用 data: URL 匯入（不落地暫存檔，
 //   併行跑其他守衛也不會互相干擾）。
-const STRIP_SRC = readFileSync(join(ROOT, 'scripts/lib/strip-comments.mjs'), 'utf8');
+const STRIP_SRC = normEol(readFileSync(join(ROOT, 'scripts/lib/strip-comments.mjs'), 'utf8'));
 async function mutStripMod(pairs) {
   let src = STRIP_SRC;
   for (const [a, b] of pairs) {

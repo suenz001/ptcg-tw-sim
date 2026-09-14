@@ -19,9 +19,12 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
-import { normEol } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
+import { normEol, committedEolIsLf } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 let pass = 0, fail = 0;
 const T = async (n, fn) => { try { await fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
 
@@ -29,12 +32,12 @@ const T = async (n, fn) => { try { await fn(); console.log('PASS', n); pass++; }
 // 【A】卡面文字
 // ══════════════════════════════════════════════════════════════════════════
 const CARDS = join(ROOT, 'static/cards');
-const LIVE = new Set(JSON.parse(readFileSync(join(CARDS, 'index.json'), 'utf8')).map((e) => e.code));
+const LIVE = new Set(JSON.parse(normEol(readFileSync(join(CARDS, 'index.json'), 'utf8'))).map((e) => e.code));
 const pool = new Map();
 const bySet = {};
 for (const f of readdirSync(CARDS)) {
   if (!f.endsWith('.json') || f === 'index.json' || !LIVE.has(f.slice(0, -5))) continue;
-  const arr = JSON.parse(readFileSync(join(CARDS, f), 'utf8'));
+  const arr = JSON.parse(normEol(readFileSync(join(CARDS, f), 'utf8')));
   bySet[f.slice(0, -5)] = arr.length;
   for (const c of arr) if (c && c.id != null) pool.set(String(c.id), c);
 }
@@ -84,7 +87,7 @@ await T('【A】③ 站內同型「擲N次硬幣若為正面，則將…【狀�
 });
 
 // ── 稽核白名單：把 audit script 的白名單與比對邏輯抽出來**真的跑** ──
-const auditSrc = readFileSync(join(ROOT, 'scripts/audit-card-data-vs-official.mjs'), 'utf8');
+const auditSrc = normEol(readFileSync(join(ROOT, 'scripts/audit-card-data-vs-official.mjs'), 'utf8'));
 function braceEnd(src, openIdx, open = '{', close = '}') {
   let d = 0;
   for (let k = openIdx; k < src.length; k++) {
@@ -252,9 +255,9 @@ await T('【A】⑨ 校驗和：卡片總數與各卡包張數與 v6.240 完全�
 // ══════════════════════════════════════════════════════════════════════════
 // 【B】牌組原型統計：全量 + cursor
 // ══════════════════════════════════════════════════════════════════════════
-const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
-const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const verTs = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
+const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
+const adm = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const verTs = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
 
 function arrowOf(anchor) {
   const i = pat.indexOf(anchor);
@@ -420,7 +423,7 @@ await T('版本一致：version.ts ≥ 6.241 且 admin.html SITE_VERSION_HINT �
   assert.ok(parseFloat(V) >= 6.241, 'version.ts 倒退了（實為 ' + V + '）');
   const H = /SITE_VERSION_HINT = '([\d.]+)'/.exec(adm)[1];
   assert.strictEqual(H, V, 'hint ' + H + ' ≠ version.ts ' + V);
-  assert.ok(!adm.includes('\r'), 'admin.html 出現 CRLF');
+  assert.ok(ADMIN_EOL.ok, 'admin.html 出現 CRLF：' + ADMIN_EOL.detail);
 });
 
 // ══ benchmark（Rule 32：效能數字必須附量測腳本，這裡就是那支腳本）══

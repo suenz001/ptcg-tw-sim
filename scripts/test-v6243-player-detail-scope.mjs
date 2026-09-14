@@ -24,16 +24,20 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
+import { committedEolIsLf, normEol } from './lib/eol-agnostic.mjs';   // v6.378 C-7
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+// ⭐v6.378 C-7：「admin.html 必須維持 LF」要問 git index（真的會被部署的那份位元組），
+//   不是問工作樹 —— core.autocrlf=true 的本機工作樹一律 CRLF ⇒ 舊寫法恆紅、CI 恆綠。
+const ADMIN_EOL = committedEolIsLf(ROOT, 'oracle-admin/admin.html');
 let pass = 0, fail = 0;
 const T = async (n, fn) => { try { await fn(); console.log('PASS', n); pass++; } catch (e) { console.log('FAIL', n, '::', e.message); fail++; } };
 
-const pat = readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8');
+const pat = normEol(readFileSync(join(ROOT, 'oracle-admin/server_admin_patch.js'), 'utf8'));
 const admRaw = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'latin1');
-const adm = readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8');
-const verTs = readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8');
-const internal = readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8');
+const adm = normEol(readFileSync(join(ROOT, 'oracle-admin/admin.html'), 'utf8'));
+const verTs = normEol(readFileSync(join(ROOT, 'src/lib/version.ts'), 'utf8'));
+const internal = normEol(readFileSync(join(ROOT, 'docs/changelog-internal.md'), 'utf8'));
 
 /** 剝掉註解再解析（Rule 25.4）—— 註解裡出現的字串不可以被當成程式碼證據。 */
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '').replace(/([^:'"\\])\/\/.*$/gm, '$1');
@@ -372,7 +376,7 @@ await T('⑪ 版本一致：version.ts ≥ 6.243、admin.html SITE_VERSION_HINT 
   assert.ok(v && parseFloat(v) >= 6.243, 'version.ts=' + v);
   const hv = (adm.match(/window\.SITE_VERSION_HINT = '([\d.]+)'/) || [])[1];
   assert.strictEqual(hv, v, 'admin.html SITE_VERSION_HINT=' + hv + ' 與 version.ts=' + v + ' 不同步');
-  assert.ok(!/\r/.test(admRaw), 'admin.html 出現 CR —— 行尾必須維持 LF');
+  assert.ok(ADMIN_EOL.ok, 'admin.html 出現 CR —— 行尾必須維持 LF：' + ADMIN_EOL.detail);
 });
 
 // ══ 突變測試（正對照：把 bug 種回去，上面的儀器必須真的翻紅）══════════════

@@ -16,6 +16,7 @@ import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert';
+import { normEol } from './eol-agnostic.mjs';   // v6.378 C-7: CRLF 工作樹的多行錨點定位
 
 export const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const TAG = `.x-srm${process.pid}`;
@@ -26,11 +27,11 @@ process.on('exit', () => {
 writeFileSync(S, 'export const base="";export const assets="";');
 
 export const SRC = {
-  guards: readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8'),
-  engine: readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8'),
-  oracle: readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8'),
-  fire: readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8'),
-  page: readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8'),
+  guards: normEol(readFileSync(join(ROOT, 'src/lib/game/sync-guards.ts'), 'utf8')),
+  engine: normEol(readFileSync(join(ROOT, 'src/lib/game/engine.ts'), 'utf8')),
+  oracle: normEol(readFileSync(join(ROOT, 'src/lib/game/room-oracle.ts'), 'utf8')),
+  fire: normEol(readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8')),
+  page: normEol(readFileSync(join(ROOT, 'src/routes/game/+page.svelte'), 'utf8')),
 };
 
 let bundleSeq = 0;
@@ -59,11 +60,11 @@ export async function bundle(mut) {
 
 // ── 卡池 ──────────────────────────────────────────────────────────────────
 const dir = join(ROOT, 'static/cards');
-const live = new Set(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8')).map((e) => e.code));
+const live = new Set(JSON.parse(normEol(readFileSync(join(dir, 'index.json'), 'utf8'))).map((e) => e.code));
 export const pool = new Map();
 for (const f of readdirSync(dir)) {
   if (!f.endsWith('.json') || f === 'index.json' || !live.has(f.slice(0, -5))) continue;
-  for (const c of JSON.parse(readFileSync(join(dir, f), 'utf8'))) if (c?.id != null) pool.set(String(c.id), c);
+  for (const c of JSON.parse(normEol(readFileSync(join(dir, f), 'utf8')))) if (c?.id != null) pool.set(String(c.id), c);
 }
 export const BURST = '13974', BASIC = '19174', ENERGY = '14128';
 assert.ok(pool.get(BURST)?.abilities?.some((a) => a.name === '瞬間爆發力'), '前提：13974 有「瞬間爆發力」');
