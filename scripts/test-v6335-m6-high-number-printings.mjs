@@ -116,7 +116,8 @@ const ENT = join(ROOT, '.ent-v6335.ts');
 const OUT = join(ROOT, '.ent-v6335.mjs');
 writeFileSync(ENT,
   "export { createGame, applyAction } from './src/lib/game/engine';\n"
-  + "export { isDeckLockedCard, isCardMarkStandardLegal } from './src/lib/cards/regulation';\n");
+  + "export { isDeckLockedCard, isCardMarkStandardLegal,"
+  + " setCardPolicy, resetCardPolicy } from './src/lib/cards/regulation';\n");
 await build({
   entryPoints: [ENT], outfile: OUT, bundle: true, format: 'esm', platform: 'node', target: 'node20',
   alias: { $lib: join(ROOT, 'src/lib'), '$app/paths': STUB }, logLevel: 'error',
@@ -173,7 +174,16 @@ console.log('\n【D】牌組合法性：可組進標準賽；M6a 仍被擋（正
   const locked = news.filter((c) => mod.isDeckLockedCard(c) !== false);
   chk('D2 37 張都不在 DECK_LOCKED_SETS（M6 開放組牌）', locked.length === 0, locked.map((c) => c.collectorNumber).join(','));
   const m6a = all.find((c) => c.setCode === 'M6a');
-  chk('D3 ⚠ 正對照：M6a 的卡仍然被擋（證明 D2 不是恆真式）', !!m6a && mod.isDeckLockedCard(m6a) === true);
+  // ⭐v6.382 站長裁定「M6a 完整上線」⇒ 內建的卡包鎖清單是空的，原本「M6a 仍被擋」這個正對照失效。
+  //   改成**臨時把 M6a 鎖回去**：isDeckLockedCard 必須立刻認得、M6 不受影響、還原後必須不認得。
+  //   ⭐ 這比原本更強 —— 驗的是「鎖一個卡包就會生效」這個機制，不是「M6a 此刻剛好被鎖著」。
+  mod.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6a'] });
+  const m6aLockedNow = !!m6a && mod.isDeckLockedCard(m6a) === true;
+  const m6StillFree = news.every((c) => mod.isDeckLockedCard(c) === false);
+  mod.resetCardPolicy();
+  chk('D3 ⚠ 正對照：把 M6a 鎖回去 ⇒ 立刻被擋、M6 不受影響；還原後就不擋（證明 D2 不是恆真式）',
+      m6aLockedNow && m6StillFree && !!m6a && mod.isDeckLockedCard(m6a) === false,
+      JSON.stringify({ m6aLockedNow, m6StillFree }));
 }
 
 // ══════════════════════════════════════════════════════════════════════════

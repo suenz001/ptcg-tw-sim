@@ -108,7 +108,10 @@ export interface CardPolicy {
  */
 export const DEFAULT_CARD_POLICY: CardPolicy = Object.freeze({
   allowedMarks: Object.freeze(['H', 'I', 'J']) as readonly string[],
-  lockedSets: Object.freeze(['M6a']) as readonly string[],
+  // ⭐⭐⭐ 站長 2026-09-14 新裁定：M6a「30th CELEBRATION」完整上線（一般對戰＋錦標賽都可組牌、
+  //   卡效果全開）⇒ 程式內建的預設值改成**空清單**，不再需要站長去後台點開關。
+  //   ⚠ 後台仍然可以隨時把某個卡包鎖回去（`setCardPolicy`），這裡只是 fallback 的預設值。
+  lockedSets: Object.freeze([]) as readonly string[],
 });
 
 let _allowedMarks: ReadonlySet<string> = new Set(DEFAULT_CARD_POLICY.allowedMarks);

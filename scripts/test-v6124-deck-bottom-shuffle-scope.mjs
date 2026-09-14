@@ -324,6 +324,47 @@ T('⭐ N的扒手貓｜暗槓 / 能量撢子：單張放回**對手**牌庫下�
     '暗槓沒有把那張原封不動接到對手牌庫下方');
 });
 
+// >>> v6382-m6a-eevee
+// ⚠⚠ 突變測試誠實紀錄（v6.382）：把 resolver 的 'keep-order' 換成 'shuffled' 這個突變**殺不死**
+//   本條 —— 而那不是守衛的缺陷，是數學事實：toBottom 只有**1 張**時「洗 1 張」與「不洗」
+//   完全等價（① 段已證 deckWithCardsToBottom 的 'shuffled' 只洗 toBottom、rest 不動）。
+//   ⇒ 對所有「單張放回下方」的卡（伊布、N的扒手貓、能量撢子、狂歡浪舞鴨、胖嘟嘟）而言，
+//     mode 參數在行為上不可觀測；本條擋的是 v6.124 真正的 bug 型。實測殺死：
+//       ・shuffle([...deck, inst])  整副重洗  ✅
+//       ・[inst, ...deck]           放到牌庫**頂** ✅
+//       ・deck 原樣               根本沒放回  ✅
+//     另兩條斷言（候選集合只有物品卡／minCount=1）各自也有殺死的突變。
+T('⭐⭐ 伊布｜叼去藏（M6a）：1 張物品卡原封不動接到**對手**牌庫下方，對手牌庫順序不得被動到', () => {
+  const post = mod.ATTACK_POST.get('伊布|叼去藏');
+  ok(post, '找不到 伊布|叼去藏');
+  // ⚠ 手牌自己組：FILLER 是「卡池裡第一張訓練家」，有可能剛好就是物品卡 ——
+  //   那樣 validIids 會不只一張，下面的「候選只有那張」正對照就失去鑑別力。
+  let itemId = null, supId = null;
+  for (const [id, c] of pool) {
+    if (c.supertype === 'Trainer' && c.subtype === 'Item' && !itemId) itemId = id;
+    if (c.supertype === 'Trainer' && c.subtype === 'Supporter' && !supId) supId = id;
+    if (itemId && supId) break;
+  }
+  ok(itemId && supId, '卡池裡找不到物品卡／支援者卡');
+  const s0 = mkState(30, 0);
+  s0.players[1].hand = [inst('qs0', supId), inst('qs1', supId), inst('qItem', itemId)];
+  const before = s0.players[1].deck;
+  const s1 = post(s0, 0, pool, {});
+  ok(s1.pendingSelection?.effectKey === 'peek-pick-to-deck-bottom',
+    '沒開 peek-pick-to-deck-bottom picker，實得 ' + s1.pendingSelection?.effectKey);
+  // 正對照：predicate 真的在篩（支援者不得成為候選）
+  ok((s1.pendingSelection.params?.validIids || []).join(',') === 'qItem',
+    '候選應只有那張物品卡，實得 ' + (s1.pendingSelection.params?.validIids || []).join(','));
+  // 卡面「選擇1張」沒有「最多／若希望」⇒ 必選
+  ok(s1.pendingSelection.minCount === 1,
+    '卡面「選擇1張」＝必選，minCount 應為 1，實得 ' + s1.pendingSelection.minCount);
+  const s2 = mod.RESOLVERS.get('peek-pick-to-deck-bottom')(
+    s1, 0, ['qItem'], s1.pendingSelection.params, pool);
+  ok(ids(s2.players[1].deck) === ids([...before, { iid: 'qItem' }]),
+    '叼去藏沒有把那張物品卡原封不動接到對手牌庫下方（卡面無「重洗」⇒ keep-order）');
+  ok(s2.players[1].hand.every((c) => c.iid !== 'qItem'), '那張物品卡沒有從對手手牌移除');
+});
+// <<< v6382-m6a-eevee
 console.log('③ 枚舉守衛：卡面有「放回牌庫下方」的 HIJ 卡都必須列管');
 
 // 已逐張比對過卡面 → 實作的清單。新卡只要卡面出現「放回牌庫下方」就會逼你回來這裡。
@@ -334,6 +375,10 @@ const VERIFIED = new Set([
   '海岱',          // 「以任意順序排列，放回牌庫下方」— 無「重洗」→ keep-order
   '狂歡浪舞鴨', '胖嘟嘟',  // 單張手牌放回下方，無「重洗」
   'N的扒手貓', '能量撢子',  // 「放回**對手的**牌庫下方」— 無「重洗」→ keep-order
+  // ⭐v6382-m6a-eevee：M6a 完整上線後不再被 allCarriersDeckLocked 豁免 ⇒ 必須列管。
+  //   伊布｜叼去藏（M6a 094）v6.349 就已經收斂到 peekOppPickToDeckBottomPost，
+  //   與 能量撢子 同一支中央 helper（deckWithCardsToBottom 'keep-order'）。行為驗證見 ② 段。
+  '伊布',          // 招式 叼去藏 —「放回**對手的**牌庫下方」無「重洗」→ keep-order
 ]);
 
 T('⭐⭐ 卡面掃描：每張「放回牌庫下方」的 HIJ 卡都在列管清單裡', () => {

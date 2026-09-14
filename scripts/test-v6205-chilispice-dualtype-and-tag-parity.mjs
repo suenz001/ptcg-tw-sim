@@ -318,6 +318,12 @@ const ADJUDICATED_IMPLEMENTED=new Map(Object.entries({
   //   ⇒ 候選判準（「特性名的出現點有沒有綁到自己的卡名」）不再把它列為候選，
   //   留在表裡就是 7e 的死條目。這正是 7e 想逼出來的同步清理。
   '陳舊的鰭之化石|鰭之守護':'v3080_deferred_wave_c.ts isImmuneToOppSupporter 按卡名（v3.21）',
+  // ⭐v6.382：M6a 開放對戰之後才進入枚舉範圍（v6.333 時 M6a 被排除在外）。
+  //   判讀結果：**實作存在而且有專屬守衛**（v6.353 的弱點倍率中央述詞），
+  //   只是「絕佳費洛蒙」在剝掉註解後唯一的出現點是 effects.ts 的
+  //   `ability: '絕佳費洛蒙'`，它前後 4 行綁到的卡名是**前提卡**「電螢蟲」而不是自己
+  //   ⇒ 正好落進候選判準的型 (ii)（每個出現點都綁別的卡名）。
+  '甜甜螢|絕佳費洛蒙':'effects.ts WEAKNESS_MULTIPLIER_ABILITIES ＋ weaknessMultiplier（v6.353 弱點倍率中央述詞，×3；scripts/test-v6353-weakness-multiplier.mjs 在守）',
 }));
 // ⭐⭐ v6.206：**陳舊的盾甲化石｜盾之守護 已補實裝**（M5 19216，J）——
 //   shieldFossilGuardReduce（v2999_g3_wave1.ts）＋ engine 戰鬥位管線 ＋ effects 備戰管線。

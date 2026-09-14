@@ -608,12 +608,20 @@ await TA('行為級：pickPrinting 真的會依「招式／特性」分辨同名
   const { pickPrinting } = await import(pathToFileURL(join(ROOT, 'scripts/lib/pick-printing.mjs')).href);
   // 耿鬼ex：MC/SV5K 的特性是【侵蝕詛咒】，M6a 076/103 的是【死亡宣告】——必須挑到不同張
   const curse = pickPrinting(POOL, '耿鬼ex', { ability: '侵蝕詛咒' });
-  // ⚠ 【死亡宣告】只存在於 M6a 那張（不開放對戰）⇒ 這裡要明確 opt-in，
-  //   正好也驗證了 pickPrinting 預設會排除不開放對戰的卡包。
-  const doom = pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告', includeDeckLocked: true });
-  let blocked = false;
-  try { pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告' }); } catch { blocked = true; }
-  ok(blocked, 'pickPrinting 預設沒有排除「不開放對戰」的卡包 —— 測試會挑到組不進牌組的卡，產生假警報');
+  // ⭐v6.382 站長裁定「M6a 完整上線」⇒ 不開放清單現在是**空的**，【死亡宣告】那張預設就挑得到。
+  //   ⚠ 排除機制本身仍然要在：這裡**臨時**把 M6a 塞回清單，驗證 pickPrinting 真的會排除它，再還原。
+  //   ⭐ 這比原本的寫法更強 —— 原本只驗得到「M6a 此刻剛好被鎖著」這個當下的事實，
+  //     現在驗的是「鎖一個卡包，pickPrinting 就會排除它」這個機制。
+  const doom = pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告' });
+  let blocked = false; let optIn = null;
+  LOCKED.DECK_LOCKED_SETS.add('M6a');
+  try {
+    try { pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告' }); } catch { blocked = true; }
+    optIn = pickPrinting(POOL, '耿鬼ex', { ability: '死亡宣告', includeDeckLocked: true });
+  } finally { LOCKED.DECK_LOCKED_SETS.delete('M6a'); }
+  ok(blocked, '把 M6a 塞回「不開放」清單之後，pickPrinting **沒有**排除它 —— 排除機制壞了');
+  ok(optIn === doom, 'includeDeckLocked 這個 opt-in 開關失效了（兩種取法挑到不同張）');
+  ok(!LOCKED.DECK_LOCKED_SETS.has('M6a'), '臨時鎖沒有還原乾淨 —— 會污染後面的條目');
   ok(curse !== doom, '兩個不同特性挑到同一張耿鬼ex（' + curse + '）—— 判準沒有在看特性名');
   ok((POOL.get(curse).abilities || []).some((a) => a.name === '侵蝕詛咒'), curse + ' 沒有【侵蝕詛咒】');
   ok((POOL.get(doom).abilities || []).some((a) => a.name === '死亡宣告'), doom + ' 沒有【死亡宣告】');
@@ -629,15 +637,24 @@ await TA('行為級：pickPrinting 真的會依「招式／特性」分辨同名
 
 console.log('(7) M6a 不開放對戰：不可組牌、卡效果一律不實裝');
 
-await TA('⭐⭐⭐ 行為級：M6a 的卡進牌組 → 不合法，且訊息說得出「暫時無法加入牌組」', async () => {
+await TA('⭐⭐⭐ 行為級：M6a 的卡**可以**組進牌組（站長 2026-09-14 裁定完整上線）；鎖回去就會被擋', async () => {
   needV('validateDeck');
+  needV('setCardPolicy');
   ok(POOL.has('19960'), '卡池沒有 19960（M6a J 標 皮卡丘ex）');
+  // ① 程式內建的預設政策（v6.382 起不鎖任何卡包）⇒ 卡包這一關必須是過的
+  const open = V.validateDeck(deckWith('19960', 4), POOL);
+  ok(!open.issues.some((x) => x.includes('不開放用於對戰')),
+    'M6a 的 J 標卡還是被卡包鎖擋下來了。issues=' + JSON.stringify(open.issues));
+  // ② 機制還在：臨時把 M6a 鎖回去，訊息要說得出原因
+  V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6a'] });
   const r = V.validateDeck(deckWith('19960', 4), POOL);
+  V.resetCardPolicy();
   const hit = r.issues.filter((x) => x.includes('皮卡丘ex'));
-  ok(hit.length > 0, 'M6a 的 J 標卡沒有被擋下來。issues=' + JSON.stringify(r.issues));
+  ok(hit.length > 0, '鎖回去之後 M6a 的卡竟然還是過的。issues=' + JSON.stringify(r.issues));
   ok(hit.some((x) => x.includes('不開放用於對戰') && x.includes('暫時無法加入牌組')),
     '訊息沒說清楚原因，實得：' + JSON.stringify(hit));
-  ok(r.legal === false, 'legal 應為 false');
+  ok(r.legal === false, '鎖住時 legal 應為 false');
+  ok(V.getCardPolicy().lockedSets.length === 0, '臨時鎖沒有還原乾淨 —— 會污染後面的條目');
 });
 
 T('⭐⭐ 零回歸：非 M6a 的 J 標卡照樣可以組進牌組（不得把整個標都擋掉）', () => {
@@ -660,8 +677,14 @@ await TA('⭐⭐ 兩份「暫不開放」清單（regulation.ts 的 DEFAULT_CARD
   const mjs = [...LOCKED.DECK_LOCKED_SETS].sort();
   ok(ts.join(',') === mjs.join(','),
     'runtime 與守衛端的清單漂移了：regulation.ts=[' + ts + '] vs deck-locked-sets.mjs=[' + mjs + ']');
-  ok(ts.length > 0 && ts.includes('M6a'), '清單應包含 M6a，實得 [' + ts + ']');
-  ok(LOCKED.isDeckLockedCard({ setCode: 'M6a' }) === true
+  // ⭐v6.382 站長裁定 M6a 完整上線 ⇒ 內建清單現在是**空的**。
+  //   ⚠ 上一條「兩份逐項相同」的判準一個字都沒改（空清單也必須兩邊一致）。
+  ok(ts.length === 0, 'v6.382 起內建的卡包鎖清單應為空，實得 [' + ts + ']');
+  // 機制仍在：臨時塞一個進去，isDeckLockedCard 必須認得；還原後必須不認得。
+  LOCKED.DECK_LOCKED_SETS.add('M6a');
+  const lockedOn = LOCKED.isDeckLockedCard({ setCode: 'M6a' });
+  LOCKED.DECK_LOCKED_SETS.delete('M6a');
+  ok(lockedOn === true && LOCKED.isDeckLockedCard({ setCode: 'M6a' }) === false
     && LOCKED.isDeckLockedCard({ setCode: 'M6' }) === false
     && LOCKED.isDeckLockedCard(null) === false, 'isDeckLockedCard 判斷壞了');
   ok(LOCKED.allCarriersDeckLocked([]) === false,

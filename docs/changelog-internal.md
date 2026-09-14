@@ -1,5 +1,85 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.382 ⭐ M6a「30th CELEBRATION」完整上線（站長 2026-09-14 新裁定）
+
+BASE `3977d1c937307f8b0f15d3221ac1c15a0b8cae4e`（v6.381）。
+⚠⚠ **這一版要跑兩支部署**：`update-tournament.bat`（引擎 bundle 帶著 `DEFAULT_CARD_POLICY`）
+＋ `update-admin-full.bat`（前端三頁與後台的卡牌政策頁）。
+
+### 【零】站長新裁定推翻 2026-09-09 的舊裁定
+
+> 「請讓 M6a 30th CELEBRATION 完整上線（包含一般對戰、錦標賽對戰都可以使用裡面的卡牌組牌，卡牌功能也開放）」
+
+舊裁定（v6.333）是「M6a 可查卡，但暫不開放組牌」＋「m6a 全部的卡的功能都不要實裝」。
+
+### 【一】⭐ 動手前先量：**卡效果早就做完了，這一版一個效果都不必補**
+
+| 項目 | 實測 |
+|---|---|
+| M6a 總張數 | 168 |
+| 其中 H/I/J 標（可組牌） | **139** |
+| 其餘（無標 21 ＋ A/C/D/E/F/G 8） | 29 —— 由 `allowedMarks` 擋著，**跟卡包鎖無關** |
+| 139 張裡有效果的招式 | 133 條 |
+| **未實裝** | **0 條** ⭐（M6a wave1~7 那幾版已經做完） |
+| 訓練家 | 3 張（高級球／寶可平板／寶可夢交替，站上早就有） |
+| 能量 | 8 張，全是基本能量 |
+
+⇒ `deck-locked-sets.mjs` 舊註解裡「96 招未實裝」那個數字是 v6.333 當時的現況，**早就不成立**。
+
+### 【二】唯一一張「看起來沒實裝」的其實也實裝了
+
+`test-v6205` ⑦d 唯一列出的候選是 **甜甜螢｜絕佳費洛蒙**。
+實查結果：**v6.353 就已經實裝**（`effects.ts` 的 `WEAKNESS_MULTIPLIER_ABILITIES` ＋ `weaknessMultiplier`
+中央述詞，`test-v6353-weakness-multiplier.mjs` 在守）。
+
+會被列成候選是因為候選判準看的是「特性名在剝掉註解後的出現點，有沒有綁到自己的卡名」——
+而「絕佳費洛蒙」唯一的程式碼出現點是 `ability: '絕佳費洛蒙'`，它前後 4 行綁到的卡名是**前提卡**
+「電螢蟲」而不是「甜甜螢」⇒ 正好落進型 (ii)。⇒ 補進判讀表（這正是判讀表存在的理由）。
+
+### 【三】改了什麼
+
+| 檔案 | 改動 |
+|---|---|
+| `src/lib/cards/regulation.ts` | `DEFAULT_CARD_POLICY.lockedSets` → `[]` |
+| `scripts/lib/deck-locked-sets.mjs` | `DECK_LOCKED_SETS` → `new Set([])` |
+| `oracle-admin/admin.html` | `CARD_POLICY_DEFAULT.lockedSets` → `[]` |
+| `scripts/test-v6335-m6-high-number-printings.mjs` | D3 正對照：原本釘死「M6a 恆被擋」（M6a 開放後必紅）⇒ 改成「臨時把 M6a 鎖回去 ⇒ 立刻被擋、M6 不受影響、還原後不擋」，判準往**上**移 |
+| `scripts/test-hand-attach-percard-reaction.mjs` | 枚舉凍結表補 `皮卡丘ex｜劈哩劈哩夜狂歡`（M6a 開放後不再被 `allCarriersDeckLocked` 豁免），**並非只加名字**：同時補 §5c 行為層驗證 —— 3 張基本雷能量分散成 2/1，侵蝕詛咒 per-card 放出 40/20，另加「picker maxCount ≥ 3」正對照（證明卡面「任意數量」沒被夾小）。突變測試 M-1～M-4 全殺 |
+| `scripts/test-v6124-deck-bottom-shuffle-scope.mjs` | 「放回牌庫下方」枚舉表補 `伊布`（M6a 094｜叼去藏；v6.349 就已走中央 `peekOppPickToDeckBottomPost`），並補行為驗證：候選只有物品卡、`minCount=1` 必選、那張原封不動接到**對手**牌庫下方。⭐ 突變測試誠實紀錄：`keep-order`→`shuffled` 這個突變**殺不死** —— 不是守衛有洞，是 toBottom 只有 1 張時「洗 1 張＝不洗」，改用「整副重洗／放到牌庫頂／根本沒放回」三個突變全殺 |
+
+⚠⚠ **機制沒有退役**：`isDeckLockedCard` / `allCarriersDeckLocked` / `filterDeckSelectable` 全部原封不動，
+下一個「先進卡庫、卡效果還沒做完」的卡包照樣寫進清單就生效（守衛 A3／B5 用「臨時鎖回去」驗這件事）。
+
+### 【四】四支既有守衛的判準上移（不是放寬）
+
+| 守衛 | 原本釘的 | 改成 |
+|---|---|---|
+| `test-v6333` pickPrinting | 「M6a 此刻剛好被鎖著」 | **臨時把 M6a 塞回清單**，驗 pickPrinting 真的會排除它、`includeDeckLocked` 開關仍有效 |
+| `test-v6333` 組牌 | 「M6a 的卡被擋」 | ①預設政策下**過**　②鎖回去**擋**（一對正反對照） |
+| `test-v6333` 兩份清單 | 「清單應包含 M6a」 | 「清單應為空」＋逐項相同（判準本身沒動） |
+| `test-v6340` A1／A4／A10／B3～B6／B10／E2 | 同型 | 同型上移；⭐ **E2 原本對空陣列是恆真式**（`.every`），改成逐項比對兩份清單 |
+| `test-v6205` ⑦ | M6a 被排除在枚舉外 | 判讀表補上甜甜螢那一筆 |
+
+### 【五】新守衛 `test-v6382-m6a-live.mjs`（PASS 26 / FAIL 0）
+
+⭐ 行為層：組牌真的跑 `validateDeck`、卡效果真的跑引擎的完整 `ATTACK`。
+
+| 段 | 內容 |
+|---|---|
+| A0～A3 | 三份清單都空、逐項一致；臨時鎖一個卡包 ⇒ 機制立刻生效 |
+| B0～B5 | M6a 的 J 標卡組進 60 張**合法**；無標／舊標**照樣擋**；候選池含 M6a；反對照：鎖回去就擋 |
+| C0～C4 | **跑真的 ATTACK**：沒甜甜螢 20→40（×2）／有甜甜螢沒電螢蟲 20→40／兩隻都在 **20→60（×3）** |
+| D0～D2 | M6a 的 H/I/J 卡有效果招式**未實裝 0**；卡包結構 139/168 沒被改掉 |
+| E1～E3 | **HEAD-FAIL**：BASE 的三份清單都鎖著 M6a |
+| F1～F3 | chain 與機制 export 都還在 |
+
+### 【六】⚠ 留給下一版的小尾巴
+
+`oracle-admin/server_admin_patch.js` 有一行**最後 fallback**：
+`const def = TENG.DEFAULT_CARD_POLICY || { allowedMarks: [...], lockedSets: ['M6a'] };`
+它只在「引擎 bundle 沒有 export `DEFAULT_CARD_POLICY`」時才會用到（v6.340 起一定有）。
+改它要重釘 28 把區塊指紋鎖 ⇒ **本版刻意不動**，留給下一次動 server 的版本一起清。
+
 ## v6.381 B 組收尾：(乙) 錦標賽歸檔補 `gameDraw`、(丁) 平手公告在瑞士制下說「仍可繼續」
 
 BASE `f1428cf23d9083f88fa63aa77e0140bda450c7ee`（v6.380）。`src/` 只動 `src/lib/version.ts`；出貨碼改的是 `oracle-admin/server_admin_patch.js`。

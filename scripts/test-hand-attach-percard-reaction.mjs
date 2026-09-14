@@ -244,6 +244,39 @@ console.log('【拍檔提升】特性型 chain：瑪機雅娜可同時在戰鬥�
     `附火+雷共 2 張 → 自動治癒 90×2=180（130 傷害全清；實得 damage=${m?.damage}、能量 ${m?.energyAttached.length}）`);
 }
 
+// >>> v6382-m6a-pikachu-ex
+// ══ 5c) 皮卡丘ex｜劈哩劈哩夜狂歡（M6a，招式，卡面「任意數量…以任意方式」）══════
+//   M6a 完整上線（v6.382 站長裁定）後這張進入現役卡池。卡面措辭與 阿羅拉 椰蛋樹ex｜
+//   熱帶狂燒 逐字相同（差別只在它沒有傷害），實作同樣是 handAttachEnergyPost ⇒
+//   v158-energy-chain-start。這裡用 3 張（> 滿載心田的「最多2張」）同時驗兩件事：
+//     ・max=99「任意數量」真的收得下 3 張（不是被夾到 2）
+//     ・分散到 2 隻時，侵蝕詛咒的指示物按「每張各一次」分別落在各自的接收者身上
+console.log('【劈哩劈哩夜狂歡】M6a 上線：任意數量 + 以任意方式 ⇒ per-card 且可分散');
+{
+  const pika = inst('皮卡丘ex', {}, '劈哩劈哩夜狂歡');
+  const b1 = inst('阿響的凱羅斯'), b2 = inst('阿響的凱羅斯');
+  const es = [hcard('基本【雷】能量'), hcard('基本【雷】能量'), hcard('基本【雷】能量')];
+  let st = mk({ active: pika, bench: [b1, b2], hand: es }, { active: instId(GENGAR_CURSE()) });
+  const post = mod.ATTACK_POST.get('皮卡丘ex|劈哩劈哩夜狂歡');
+  assert.ok(post, 'ATTACK_POST 沒有註冊 皮卡丘ex|劈哩劈哩夜狂歡');
+  st = post(st, 0, pool, {});
+  assert.ok(st.pendingSelection, '劈哩劈哩夜狂歡應開手牌能量 picker');
+  // ⚠ 正對照（maxCount 不得被夾小）：picker 必須收得下全部 3 張
+  ok(st.pendingSelection.maxCount >= 3,
+    `「任意數量」⇒ picker maxCount 至少 3（實得 ${st.pendingSelection.maxCount}）`);
+  st = mod.applyAction(st, { type: 'RESOLVE_SELECTION', selectedIids: es.map(e => e.iid) }, pool);
+  let g = 0;
+  while (st.pendingSelection && g++ < 10) {
+    st = mod.applyAction(st, { type: 'RESOLVE_SELECTION',
+      selectedIids: [b1.iid, b1.iid, b2.iid] }, pool);
+  }
+  const t1 = find(st, b1.iid), t2 = find(st, b2.iid);
+  ok(t1 && t2 && t1.energyAttached.length === 2 && t2.energyAttached.length === 1,
+    `3 張分散成 2/1（實得 ${t1?.energyAttached.length}/${t2?.energyAttached.length}）`);
+  ok(t1.damage === 40 && t2.damage === 20,
+    `侵蝕詛咒 per-card：2 張那隻 4 個指示物 = 40、1 張那隻 2 個 = 20（實得 ${t1?.damage}/${t2?.damage}）`);
+}
+// <<< v6382-m6a-pikachu-ex
 // ══ 6) 卡面枚舉守衛：「從自己的手牌 + 一次可能多張 + 附於」的卡必須列管 ══════
 console.log('【枚舉守衛】卡面掃描（新卡出現時強制回來檢視 per-card 觸發）');
 {
@@ -287,6 +320,11 @@ console.log('【枚舉守衛】卡面掃描（新卡出現時強制回來檢視 
     '阿響的鳳王ex｜金色火焰',    // gold-flame（fast-path + picker path 兩條）
     '鴨嘴炎獸｜拍檔提升',        // v158-energy-chain（火/雷 各最多 1 張 ⇒ 合計可 2 張）
     '烈焰猴｜火焰蹈舞',          // v2996 兩階段各 1 張、各自 fire 一次 ⇒ 天生就是 per-card
+    // ⭐v6382-m6a-pikachu-ex：M6a 完整上線後這張不再被 DECK_LOCKED_SETS 豁免 ⇒ 必須列管。
+    //   m6a_wave3.ts L132 regPost('皮卡丘ex|劈哩劈哩夜狂歡', handAttachEnergyPost(99, null, …, true))
+    //   ⇒ 與 艾姆利多｜滿載心田 / 阿羅拉 椰蛋樹ex｜熱帶狂燒 同一條 v158-energy-chain（source='hand'）。
+    //   行為層驗證見下方 §5c（不是只把名字加進清單）。
+    '皮卡丘ex｜劈哩劈哩夜狂歡',  // v158-energy-chain（任意數量＝max 99、optional）
   ].filter(x => x !== 'splitter').sort();
   assert.ok(uniq.length >= 10, `枚舉只找到 ${uniq.length} 張，卡面 regex 可能失效`);
   // ⭐ v6.333 站長裁定：M6a 不開放對戰、卡效果一律不實裝 ⇒ 排除在枚舉範圍外。

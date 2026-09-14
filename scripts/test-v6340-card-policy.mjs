@@ -87,8 +87,9 @@ V.resetCardPolicy();
   chk('A0 ⭐⭐⭐ 標缺席一律 fail-closed（無標的純收藏卡不能打）',
     leaked.length === 0, JSON.stringify(leaked));
   const p = V.getCardPolicy();
-  chk('A1 程式內建預設政策＝H/I/J ＋ M6a 暫不開放',
-    p.allowedMarks.slice().sort().join(',') === 'H,I,J' && p.lockedSets.join(',') === 'M6a',
+  // ⭐v6.382 站長裁定「M6a 完整上線」⇒ 內建的卡包鎖清單改成**空的**（機制仍在，見 A7／B3／B7）。
+  chk('A1 程式內建預設政策＝H/I/J ＋ 不鎖任何卡包',
+    p.allowedMarks.slice().sort().join(',') === 'H,I,J' && p.lockedSets.length === 0,
     JSON.stringify(p));
   chk('A2 DEFAULT_CARD_POLICY 與 getCardPolicy() 一致（預設狀態）',
     [...V.DEFAULT_CARD_POLICY.allowedMarks].sort().join(',') === p.allowedMarks.slice().sort().join(',')
@@ -109,7 +110,7 @@ V.resetCardPolicy();
   chk('A3 ⭐⭐⭐ 不合格的設定一律被拒絕（含「全部關掉」）', wrong.length === 0, wrong.join('、'));
   const after = V.getCardPolicy();
   chk('A4 ⭐⭐⭐ 被拒絕之後現行政策**完全沒變**（fail-closed，不是半套套用）',
-    after.allowedMarks.slice().sort().join(',') === 'H,I,J' && after.lockedSets.join(',') === 'M6a',
+    after.allowedMarks.slice().sort().join(',') === 'H,I,J' && after.lockedSets.length === 0,
     JSON.stringify(after));
 
   chk('A5 合格的設定會被接受', V.setCardPolicy({ allowedMarks: ['I', 'J', 'K'], lockedSets: ['M6a', 'M7'] }) === true);
@@ -124,9 +125,13 @@ V.resetCardPolicy();
   chk('A9 ⭐lockedSets 可以清空（＝站長把 M6a 開放）',
     V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: [] }) === true
     && V.isDeckLockedCard({ setCode: 'M6a' }) === false);
+  // ⚠ v6.382：內建值現在是「不鎖任何卡包」⇒ reset 前必須先設一個**不同**的政策，
+  //   否則「reset 之後 M6a 沒被鎖」會變成恆真式（A9 剛好就把它解開了）。
+  V.setCardPolicy({ allowedMarks: ['I'], lockedSets: ['M6a'] });
   V.resetCardPolicy();
-  chk('A10 resetCardPolicy 回到程式內建值',
-    V.isCardMarkStandardLegal('H') === true && V.isDeckLockedCard({ setCode: 'M6a' }) === true);
+  chk('A10 resetCardPolicy 回到程式內建值（標與卡包鎖都要回來）',
+    V.isCardMarkStandardLegal('H') === true && V.isDeckLockedCard({ setCode: 'M6a' }) === false
+    && V.getCardPolicy().lockedSets.length === 0);
   chk('A11 篩選鈕順序＝無標/已退標/目前容許的標',
     V.regMarkFilterKeys().join(',') === 'none,rotated,H,I,J', V.regMarkFilterKeys().join(','));
   chk('A12 【已退標】是動態的：關掉 H 之後 H 就進【已退標】',
@@ -158,26 +163,30 @@ if (H_BASIC && ENERGY && M6A_CARD) {
 
   // 卡包鎖：M6a 的卡本來就進不了牌組
   const m6aDeck = deckOf([{ cardId: String(M6A_CARD.id), count: 4 }, { cardId: String(ENERGY.id), count: 56 }]);
+  // ⭐v6.382：內建預設已經是「不鎖任何卡包」⇒ B3 改成驗「**鎖回去**就會被擋」（機制仍有效），
+  //   B4 驗「預設政策下就是過的」。兩條變成一對正反對照，比原本只驗當下狀態更強。
+  V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6a'] });
   const locked = V.validateDeck(m6aDeck, pool);
-  chk('B3 ⭐M6a 的卡被擋（預設政策）', locked.issues.length > 0, locked.issues.slice(0, 2).join(' / '));
+  chk('B3 ⭐把 M6a 鎖回去就會被擋（卡包鎖機制本身仍然有效）',
+    locked.issues.some((x) => /不開放用於對戰/.test(x)), locked.issues.slice(0, 2).join(' / '));
 
-  V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: [] });
+  V.resetCardPolicy();
   const unlocked = V.validateDeck(m6aDeck, pool);
   const m6aLegalMark = V.isCardMarkStandardLegal(M6A_CARD.regulationMark);
-  chk('B4 ⭐⭐⭐ 把 M6a 從「暫不開放」拿掉之後，卡包這一關就過了（站長之後要用的開關）',
+  chk('B4 ⭐⭐⭐ 程式內建的預設政策下 M6a 的卡包這一關就是過的（站長 2026-09-14 裁定：完整上線）',
     !unlocked.issues.some((s) => /不開放用於對戰/.test(s)),
     `mark=${M6A_CARD.regulationMark} markLegal=${m6aLegalMark} issues=${unlocked.issues.slice(0, 2).join(' / ')}`);
   // ⭐⭐⭐ B5/B6：站長交辦的第②件事（「哪些卡包暫不開放組牌」）在 **UI 候選清單**的落地。
   //   `filterDeckSelectable` 是 /decks 候選池的唯一執行點；把它改成 `return [...cards]`
   //   原本整支守衛都不會紅（Opus 5 對抗性審查 M3 實測）。
-  V.resetCardPolicy();
   const poolAll = [...pool.values()];
+  V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6a'] });
   const lockedNow = V.filterDeckSelectable(poolAll);
-  chk('B5 ⭐⭐⭐ 候選池真的濾掉 M6a（不是只有 validateDeck 事後擋）',
+  chk('B5 ⭐⭐⭐ 候選池真的會濾掉被鎖的卡包（不是只有 validateDeck 事後擋）',
     lockedNow.length < poolAll.length && lockedNow.every((c) => String(c.setCode) !== 'M6a'),
     `${poolAll.length} → ${lockedNow.length}`);
-  V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: [] });
-  chk('B6 ⭐解鎖之後候選池完全復原（開關是雙向的）',
+  V.resetCardPolicy();
+  chk('B6 ⭐內建預設（不鎖任何卡包）下候選池完全復原（開關是雙向的）',
     V.filterDeckSelectable(poolAll).length === poolAll.length);
   V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6'] });
   const m6locked = V.filterDeckSelectable(poolAll);
@@ -227,7 +236,8 @@ if (H_BASIC && ENERGY && M6A_CARD) {
   const NOMARK = all.find((c) => !c.regulationMark && String(c.setCode) === 'M6a');
   V.setCardPolicy({ allowedMarks: ['I', 'J'], lockedSets: ['M6a'] });
   const gRetired = V.validateDeck(LEGAL_DECK(), pool).issues;
-  V.resetCardPolicy();
+  // ⭐v6.382：「卡包未開放」這一種訊息現在要**臨時鎖**才產生得出來（內建預設不鎖任何卡包）。
+  V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: ['M6a'] });
   const gLocked = V.validateDeck(m6aDeck, pool).issues;
   V.setCardPolicy({ allowedMarks: ['H', 'I', 'J'], lockedSets: [] });
   const gNoMark = NOMARK ? V.validateDeck(deckOf([
@@ -405,8 +415,13 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
   chk('E1 版本已 bump 到 6.340 以上', /VERSION = '6\.(34\d|3[5-9]\d|[4-9]\d\d)'/.test(v),
     v.match(/VERSION = '[^']+'/)?.[0] ?? '');
   const mjs = readFileSync(join(ROOT, 'scripts/lib/deck-locked-sets.mjs'), 'utf8');
-  chk('E2 守衛端的預設清單與 DEFAULT_CARD_POLICY.lockedSets 一致',
-    [...V.DEFAULT_CARD_POLICY.lockedSets].every((s) => mjs.includes(`'${s}'`)));
+  // ⭐v6.382：原寫法是「每一項都出現在 .mjs 裡」—— 清單一旦空掉，`.every` 對空陣列**恆真**，
+  //   這一條就靜默失效了。改成**逐項比對兩份清單**（空清單也必須兩邊一致）。
+  const mjsSets = (mjs.match(/DECK_LOCKED_SETS = new Set\(\[([^\]]*)\]\)/)?.[1] || '')
+    .split(',').map((x) => x.trim().replace(/^'|'$/g, '')).filter(Boolean);
+  chk('E2 守衛端的預設清單與 DEFAULT_CARD_POLICY.lockedSets **逐項相同**（空清單也要一致）',
+    mjsSets.join(',') === [...V.DEFAULT_CARD_POLICY.lockedSets].join(','),
+    'mjs=[' + mjsSets + '] ts=[' + [...V.DEFAULT_CARD_POLICY.lockedSets] + ']');
 
   // ⭐⭐⭐ E3：後台 admin.html 是**獨立的一份**常數（它不吃 $lib，是純 HTML+ESM）。
   //   兩邊漂掉的話，站長在後台看到的勾選預設值會與全站實際行為不一樣 —— 最難察覺的一種錯。
