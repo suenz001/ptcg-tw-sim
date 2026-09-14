@@ -185,7 +185,6 @@ console.log('\n【C】⭐ 修完之後它們**真的還在守**（把它們守�
   {
     const V72 = 'scripts/test-v6272-firestore-read-reduction.mjs';
     const v72 = load(V72);
-    const NL = v72.includes('\r\n') ? '\r\n' : '\n';
     // ⚠⚠ 這一條**需要歷史**：test-v6272 的那條斷言自己有 hasBaseCommit(PREV_SHA) 保護，
     //   淺複製（fetch-depth:1）時它會 shallowSkip ⇒ 把 PREV_ALLOWED 清空也不會紅，
     //   本條就會誤報成「守衛壞了」（v6.371 的教訓：本機全綠 ≠ CI 全綠）。⇒ 一樣要 shallowSkip。
@@ -196,9 +195,18 @@ console.log('\n【C】⭐ 修完之後它們**真的還在守**（把它們守�
       shallowSkip('C4（test-v6272 的 git diff 口徑真的在比）',
         '物件庫沒有 test-v6272 的 PREV_SHA(' + mSha[1].slice(0, 8) + ') ⇒ 它自己就會 shallowSkip');
     } else {
-      mutMustRed('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅（證明 git diff 真的有在比，不是恆真）',
-        V72, "const PREV_ALLOWED = [" + NL + "  'src/lib/tournament/swiss.ts'," + NL
-        + "  'src/lib/version.ts'," + NL + "];", 'const PREV_ALLOWED = [];', 'prev');   // ⭐v6.379 跟著清單一起維護
+      // ⭐v6.380：突變錨點改成**從 test-v6272 自己動態抓**，不再手抄清單內容。
+      //   手抄版每次 PREV_ALLOWED 一變就失配（v6.380 bump 改單筆時就踩到）。判準逐字未變：
+      //   把預期差異清單清空 ⇒ test-v6272 的那條斷言必須紅。
+      const mAllow = /const PREV_ALLOWED = \[[\s\S]*?\];/.exec(v72);
+      if (!mAllow) {
+        chk('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅', false, '抓不到 PREV_ALLOWED 區塊（寫法改了？）');
+      } else if (mAllow[0].replace(/\s+/g, '') === 'constPREV_ALLOWED=[];') {
+        chk('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅', false, 'PREV_ALLOWED 本來就是空的 ⇒ 這個突變不成立');
+      } else {
+        mutMustRed('★★★ C4 test-v6272：預期差異清單清空 ⇒ 必紅（證明 git diff 真的有在比，不是恆真）',
+          V72, mAllow[0], 'const PREV_ALLOWED = [];', 'prev');
+      }
     }
   }
 

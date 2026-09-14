@@ -1,5 +1,78 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.380 ⚠⚠ CI hotfix：`scripts/` 直接 import 的套件必須自己宣告（`acorn-walk` 讓 v6.379 的 deploy 掛掉）
+
+BASE `d359f15739ed81959a1020db1c7a393421f0b5e7`（v6.379）。`src/` 只動 `src/lib/version.ts`。
+
+### 【零】事故：v6.379 推上去之後 CI 紅、deploy 被 skip
+
+`Run engine regression tests` 這一步炸在 **`ERR_MODULE_NOT_FOUND: Cannot find package 'acorn-walk'`**，
+位置是 chain 的 `node scripts/lint-eol-anchors.mjs`（v6.377 新增的 EOL 錨點掃描器，用 acorn 做 AST 解析）。
+⇒ build 失敗 ⇒ deploy `skipped` ⇒ **測試站停在 v6.376**。
+
+### 【一】⭐ 真因不是「npm ci 沒裝」
+
+`package-lock.json` 裡 `node_modules/acorn-walk` **本來就有頂層節點**（`dev: true`）。
+**實測**：本機乾淨 `npm ci` 之後 `node_modules/acorn-walk` 確實存在。
+真正殺掉它的是 `deploy.yml` 在 `npm ci` **之後**的那一步：
+
+```
+npm install @rollup/rollup-linux-x64-gnu @esbuild/linux-x64 --no-save --no-package-lock
+```
+
+`--no-package-lock` 會**忽略 lock、依 `package.json` 重算整棵樹並修剪**。
+`acorn-walk` 不是任何宣告者需要的東西（只是別人的 transitive）⇒ 被移除。
+
+**本機實測**（同一支指令在 `E:\ptcg-tw-sim` 跑）：`added 46 packages, removed 82 packages, and changed 180 packages`。
+⇒ ⚠⚠ **CI 實際跑測試時用的套件版本並不是 lock 鎖定的那一組**。這件事本身列入待裁示（見【五】）。
+
+### 【二】修法：凡是我們自己 `import` 的，就自己宣告
+
+`npm install --save-dev acorn@8.16.0 acorn-walk@8.3.5 esbuild@0.25.12`
+—— 三個都是 `scripts/` **直接 import** 卻從來沒宣告過的（`esbuild` 629 處、`acorn` 3 處、`acorn-walk` 1 處）。
+⭐ `package-lock.json` **只多了 3 行**（三個節點本來就在 lock 裡，只是現在成為 root 的直接相依）⇒ 零版本變動。
+
+**實測**：宣告之後再跑一次 `npm install --no-save --no-package-lock`（＝ CI 那一步），
+`acorn` / `acorn-walk` / `esbuild` / `cheerio` / `svelte` / `typescript` **六個全部存活**。
+（之後再 `npm ci` 把本機 `node_modules` 還原回 lock 的狀態，833 個套件，六個全在。）
+
+### 【三】⚠⚠ 為什麼兩張免疫網沒擋下來 —— 網的結構性盲點
+
+兩張網（完整 clone `%TEMP%\lf340`、淺複製 `%TEMP%\sh379`）都把 `node_modules`
+**junction 到 `E:\ptcg-tw-sim\node_modules`**（完整樹），
+所以「某個套件在 CI 的樹裡不存在」這件事**在網裡是看不見的**。
+兩張網各跑 714 步、失敗 0，CI 照樣紅。
+
+⭐ 補的不是網（每次 `npm ci` 要 2~5 分鐘，不划算），而是**靜態守衛**：
+`scripts/test-v6380-script-imports-declared.mjs` 用 **acorn AST** 掃 `scripts/` 底下 890 支檔案，
+把每一個 bare import 的套件名抓出來，斷言它 ∈ `package.json` 的 `dependencies ∪ devDependencies`。
+成本接近零，而且**釘住的正是真正的失效機制**。
+
+### 【四】守衛 `test-v6380-script-imports-declared.mjs`（PASS 21 / FAIL 0）
+
+| 段 | 內容 |
+|---|---|
+| A1／A1b／A1c | 掃到 ≥ 800 支檔案、≥ 4 種套件、**0 支解析不動**（掃描器壞掉就紅，不准靜默全綠） |
+| A2 | **正對照**：塞一支真的含未宣告 import 的暫存檔 ⇒ 必須抓到 |
+| A3 | **負對照**：註解／字串常值裡的 `import(...)` 不可被誤判 |
+| A4 | **負對照（真實檔案）**：`test-admin-helper-scope.mjs` 的 `firebase-admin` 只在註解裡 ⇒ 不算 |
+| A5 | `ALLOW_BARE` 過期偵測（目前**零白名單**，只准變短） |
+| B1 | ★★★ 每個直接 import 的套件都已宣告 |
+| B2 | 每個都在 lock 有**頂層**節點 `node_modules/<pkg>` |
+| B3 | `package.json` 與 lock 的 root 相依表完全一致（`npm ci` 的前提） |
+| B4／B5 | acorn／acorn-walk／esbuild 仍在被 import、且都已是直接相依 |
+| C1／C2／C3 | 釘住 CI 現場：`npm ci` 之後**確實**還有一步帶 `--no-package-lock`（順序也釘） |
+| D1～D4 | **HEAD-FAIL**：用 BASE 的 `package.json` 當宣告表 ⇒ 掃出未宣告，且**恰好**是那三個；並證明 BASE 的 lock 本來就有 acorn-walk 頂層節點（＝真因不是 npm ci） |
+| E1／E2 | 本守衛與 `lint-eol-anchors` 都在 npm test chain 裡 |
+
+### 【五】⚠ 待站長裁示（累積中）
+
+- ⭐ **新增**：`deploy.yml` 的 `--no-package-lock` 讓 CI 實際用的套件版本脫離 lock（本機實測 180 個套件版本不同）。
+  要不要改掉？（⚠ 這是動 `.github/workflows/`，與 C-16 同一個範圍，留給站長一起裁示。）
+- **B-4 `deadlockDraw`**：三個選項已備妥（維持現狀／雙敗／逾時 fallback），需要站長決定分鐘數與措辭。
+- **A-5**：站長說看不懂，下一份報告重新說明。
+- **C-16 `fetch-depth: 0`**：它與 C-15 的淺複製免疫網相衝，且 `test-v6263` ⑥ 釘著「現況是淺複製」。
+
 ## v6.379 B 組：規則書補明文（B-1）＋ 清掉 `SwissResult` 的死碼 `T`（B-3）＋ 補完 v6.291／v6.292 漏掉的 6 把鎖
 
 BASE `b2649b46cca108d3989616cbb31e740969c5c7f9`（v6.378）。`src/` 只動 `src/lib/version.ts` 與 `src/lib/tournament/swiss.ts`（後者是型別層死碼移除，執行期行為零改變）。
