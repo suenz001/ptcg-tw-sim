@@ -238,14 +238,34 @@ if (probeHead) {
     const probeBase = b.ok ? buildF4Probe(b.out, 'base') : null;
     chk('A4 ⭐ BASE 版抽得出 F4（它只有一條 `F4 …`，沒有 F4a~F4e）', probeBase !== null);
     if (probeBase) {
-      const bm = runProbe(probeBase, { V6371_SAP: SAP_MUT });
+      // ⭐⭐v6.381：BASE 版的 F4 釘的是**它當時**的 server_admin_patch.js sha。
+      //   之後的版本合法改過那個檔（v6.381 就改了錦標賽區塊）⇒ 拿**現行**檔案餵 BASE 探針，
+      //   它的 sha 那一條本來就會紅、engine.ts 一樣被短路 ⇒ 這一節會變成「永遠成立」的假 HEAD-FAIL，
+      //   而下面的對照組則會誤報成紅。
+      //   ⇒ BASE 探針一律餵 **BASE 版自己的** server_admin_patch.js（那才是它的環境），
+      //     突變也在 BASE 版的內容上做（同樣只改錦標賽區塊的一個字元）。
+      const bSap = readBaseBlob(ROOT, BASE_SHA, 'oracle-admin/server_admin_patch.js');
+      chk('A4 ★ 讀得到 BASE 的 server_admin_patch.js', bSap.ok);
+      const SAP_BASE = join(MUTDIR, 'sap-base.js');
+      const SAP_BASE_MUT = join(MUTDIR, 'sap-base-mut.js');
+      if (bSap.ok) {
+        const b0 = normEol(bSap.out);
+        writeFileSync(SAP_BASE, b0, 'utf8');
+        const ti0 = b0.indexOf("app.get('/api/tournament");
+        chk('A4 ★ BASE 版的 server_admin_patch.js 也抓得到第一支 /api/tournament 端點', ti0 > 0, String(ti0));
+        writeFileSync(SAP_BASE_MUT,
+          b0.slice(0, ti0)
+          + b0.slice(ti0).replace("app.get('/api/tournament", "app.get('/api/tournamenT"), 'utf8');
+      }
+      const bm = runProbe(probeBase, { V6371_SAP: SAP_BASE_MUT });
       chk('A4 ⭐⭐⭐ HEAD-FAIL：BASE 版在同一個突變下**只有一條**判定結果，而且是紅的',
           bm.data && bm.data.results.length === 1 && bm.data.results[0].ok === false,
           bm.data ? JSON.stringify(bm.data.results) : bm.out.slice(-400));
       chk('A4 ⭐⭐⭐ HEAD-FAIL：BASE 版在同一個突變下 engine.ts 的讀取次數是 **0**（＝位元組釘被短路掉，一次都沒跑）',
           bm.data && bm.data.engineReads === 0, bm.data ? String(bm.data.engineReads) : '?');
       chk('A4 ★ 對照組：BASE 版**沒有**突變時 engine.ts 讀得到（證明上一條不是因為 BASE 本來就不讀）',
-          (() => { const bb = runProbe(probeBase); return !!bb.data && bb.data.engineReads >= 1; })());
+          bSap.ok && (() => { const bb = runProbe(probeBase, { V6371_SAP: SAP_BASE });
+            return !!bb.data && bb.data.engineReads >= 1; })());
     }
   }
 }

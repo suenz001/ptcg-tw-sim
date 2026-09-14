@@ -31,6 +31,7 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
+import { revertV6381 } from './lib/tourn-revert-v6381.mjs';
 
 const esbuild = await import('esbuild');
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -486,9 +487,15 @@ await T('H3 ⭐ 沒有動到不該動的檔：oracle-admin/server_admin_patch.js
   //   後續版本的合法新增用 `// >>> vNNNN-xxx` … `// <<< vNNNN-xxx` 框起來，
   //   剝掉之後仍必須逐字等於 BASE；⭐ 並斷言「剝除器真的有剝到東西」，
   //   否則日後哨兵被刪掉，剝除器會靜默變成 no-op、這一條又變回整檔 pin。
-  const SAP_RAW = rd(join(ROOT, 'oracle-admin/server_admin_patch.js'));
-  const SAP_STRIPPED = SAP_RAW.replace(/[ \t]*\/\/ >>> v\d+-[\w-]+[\s\S]*?\/\/ <<< v\d+-[\w-]+\n/g, '');
-  assert.ok(SAP_STRIPPED !== SAP_RAW,
+  const SAP_RAW = rd(join(ROOT, 'oracle-admin/server_admin_patch.js')).replace(/\r\n/g, '\n');
+  // ⭐v6.381：本版有 4 處**不是純新增**的宣告式改動（在既有行中間補欄位／改公告措辭），
+  //   沒辦法用 `// >>> …` 哨兵框住 ⇒ 沿用 v6.292 的形狀，由
+  //   scripts/lib/tourn-revert-v6381.mjs 逐字還原（它對「命中次數不合理」「還原後仍有
+  //   v6381 痕跡」一律 throw ⇒ 這不是放寬，是把改動搬到宣告端）。
+  const SAP_REVERTED = revertV6381(SAP_RAW);
+  assert.ok(SAP_REVERTED !== SAP_RAW, '⚠ v6.381 的還原器對 server_admin_patch.js 是 no-op（宣告端過期了）');
+  const SAP_STRIPPED = SAP_REVERTED.replace(/[ \t]*\/\/ >>> v\d+-[\w-]+[\s\S]*?\/\/ <<< v\d+-[\w-]+\n/g, '');
+  assert.ok(SAP_STRIPPED !== SAP_REVERTED,
     '⚠ 剝除器過期了：server_admin_patch.js 裡一組 // >>> vNNNN-xxx … // <<< vNNNN-xxx 哨兵都沒有。'
     + '若確實沒有任何後續版本動過這個檔，請把這一條改回整檔逐字比對。');
   assert.strictEqual(SAP_STRIPPED, b.out.replace(/\r\n/g, '\n'),

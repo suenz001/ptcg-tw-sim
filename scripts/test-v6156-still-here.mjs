@@ -206,7 +206,11 @@ function staticChecks() {
 
   console.log('\n── 3. 賽果對帳認得死角平手（否則顯示「正常分勝負」）──');
   ok('★歸檔 mapping 帶 draw / deadlockDraw（兩處：歸檔與 summary）',
-    (SRC.match(/draw: !!m\.draw, deadlockDraw: !!m\.deadlockDraw/g) || []).length === 2);
+    // ⭐v6.381（Rule 40 判準上移）：原本釘的是「這兩個欄位**正好相鄰**」——
+  //   v6.381 在中間補了 gameDraw 就失配了，可是它守的東西其實沒有被破壞。
+  //   真正要守的是「兩處 mapping 都同時帶 draw 與 deadlockDraw」，跟相不相鄰無關。
+  //   ⚠ 不是放寬：仍然要求同一個 mapping、draw 在前、兩處都有；中間只准是同型的 `x: !!m.x,`。
+  (SRC.match(/draw: !!m\.draw,(?: \w+: !!m\.\w+,)* deadlockDraw: !!m\.deadlockDraw/g) || []).length === 2);
   ok('★admin 賽果文字認得 deadlockDraw，且排在 doubleNoShow 之前',
     ADMIN.indexOf('if (m.deadlockDraw) return') > 0
     && ADMIN.indexOf('if (m.deadlockDraw) return') < ADMIN.indexOf("if (m.doubleNoShow) return '雙方未進場'"));

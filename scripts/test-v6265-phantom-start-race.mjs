@@ -53,7 +53,7 @@ const BASE_SHA_V6274 = '4edf9e7f8ec13892d9abd4d22d9f675fbc6b8b54';
 const BASE_SHA_V6309 = '039625c870f5243548d54c20abb1139bc34acc53';
 // ⚠ v6.276 對錦標賽區塊做了 6 處**純 additive** 插入（報名/歸檔帶 deckId）⇒ 重釘；
 //   「只有那 6 處」由 test-v6276 的 revert-diff 證明（還原後 sha 回到 34a8448b…）。
-const TOURN_TAIL_SHA256_V6276 = 'dc50464ff6843c4903080305afbdab4597b755fa89e2d623fb6a25cb314f0ff9';
+const TOURN_TAIL_SHA256_V6276 = 'f908eb048dc41bd37f17d253b17ea5d5db5ae718fd21805d16fec27b4417b8c4';
 const RO_PATH = 'src/lib/game/room-oracle.ts';
 const RO = normEol(readFileSync(join(ROOT, RO_PATH), 'utf8'));
 const ROOM = readFileSync(join(ROOT, 'src/lib/game/room.ts'), 'utf8');

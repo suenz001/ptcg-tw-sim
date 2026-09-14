@@ -34,7 +34,11 @@ import { revertV6292 } from './lib/tourn-revert-v6292.mjs';
 // ⭐v6.365：鍵再長一節（站長裁定 六-2：錦標賽平手＝雙敗）。
 //   還原器本體放在 scripts/lib/tourn-revert-v6365.mjs（與 v6.291／v6.292 同一個形狀，
 //   三支守衛共用同一份 ⇒ 不會出現兩份會漂移的還原器；test-v6292 B6 在守這條鍵）。
-import { revertV6365 } from './lib/tourn-revert-v6365.mjs';
+// ⭐v6.381：鏈又長一節（B 組：歸檔補 gameDraw ＋ 平手公告加「瑞士制仍可繼續」）。
+//   ⚠ 用**別名**把 v6.381 那一節接在最前面 ⇒ 下面每一個既有呼叫點一個字都不必改，
+//     語意也不變（還原後仍是 v6.292 的區塊）。test-v6292 B6 在守這條鏈。
+import { revertV6381, revertV6365 as _rv6365 } from './lib/tourn-revert-v6381.mjs';
+const revertV6365 = (b) => _rv6365(revertV6381(b));   // ⭐v6.381 鏈又長一節（別名：既有呼叫點一個字都不必改）
 import { normEol, committedEolIsLf } from './lib/eol-agnostic.mjs';   // v6.377 C-9: CRLF 工作樹的多行錨點定位
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -122,8 +126,8 @@ const TEV_ANCHOR = "const TEVENTS = db.collection('tournamentEvents');";
 const OLD_TAIL_SHA = '34a8448b7de92a1f9a3a30c02c01ecd274409e1520fcc73fe5e92d6da47cc12c';
 const OLD_TEV_SHA = '54cd122681c99f050eadf22e7823159bc5f40ecbc88118f49e5de88cb683b196';
 const OLD_TEV_LEN = 218193;
-const NEW_TAIL_SHA = 'dc50464ff6843c4903080305afbdab4597b755fa89e2d623fb6a25cb314f0ff9';
-const NEW_TEV_SHA = 'ec75c9673267ece3c9cc6ed3858c6ec7b88926f0fd29c18558303916c3c240c2';
+const NEW_TAIL_SHA = 'f908eb048dc41bd37f17d253b17ea5d5db5ae718fd21805d16fec27b4417b8c4';
+const NEW_TEV_SHA = '7f5399c428aaae7e87ad849b6868d13211b0020df9ba36f7272948741be3d5a8';
 
 console.log('\n══ 【A】結構（每一條在 BASE v6.275 上都必須紅，見【H】）═══════════════════');
 
@@ -441,7 +445,7 @@ await T('D1 ⭐⭐ 沒有 deckId 的 reg ⇒ 歸檔 player 與 BASE 逐位元相
   assert.ok(JSON.stringify(pa).endsWith(',"deckId":"' + UUID + '"}'), 'deckId 應附加在最後：' + JSON.stringify(pa));
   // matches 一個字都不動
   assert.strictEqual(JSON.stringify(setDoc.matches),
-    '[{"round":1,"idx":0,"p1uid":"u1","p1name":"甲","p2uid":"u2","p2name":"乙","winnerUid":"u1","winnerName":"甲","status":"done","bye":false,"noShow":false,"doubleNoShow":false,"draw":false,"deadlockDraw":false,"forfeit":false,"idleForfeit":false,"timeLimit":false,"adminResolved":false,"doubleDrop":false,"dropForfeit":false}]',
+    '[{"round":1,"idx":0,"p1uid":"u1","p1name":"甲","p2uid":"u2","p2name":"乙","winnerUid":"u1","winnerName":"甲","status":"done","bye":false,"noShow":false,"doubleNoShow":false,"draw":false,"gameDraw":false,"deadlockDraw":false,"forfeit":false,"idleForfeit":false,"timeLimit":false,"adminResolved":false,"doubleDrop":false,"dropForfeit":false}]',
     'matches 映射被動到了：' + JSON.stringify(setDoc.matches));
 });
 
@@ -786,8 +790,21 @@ await T('H2 ⭐⭐⭐ BASE 的 /register／歸檔函式跑同一份 fixture ⇒ 
   // 歸檔
   const a4 = await runArchive(fnAsync(basePat, 'recordTournamentArchive'), [REG_B], MATCHES);
   const c4 = await runArchive(ARCH_SRC, [REG_B], MATCHES);
-  assert.deepStrictEqual(c4[0], a4[0], 'BASE vs 修後 歸檔 $set doc 不同');
-  assert.strictEqual(JSON.stringify(c4[0]), JSON.stringify(a4[0]), '歸檔 doc key 順序不同');
+  // ⭐v6.381（乙）B-2：歸檔的 matches 多了一個 gameDraw。
+  //   ⚠ 這不是放寬 —— 先**斷言每一場都真的有 gameDraw**（漏掉就紅），再宣告式剔除，
+  //     剩下的欄位仍然與 BASE 逐位元相同 ⇒「對舊欄位是純 additive」照樣在守。
+  const stripV6381 = (setDoc) => {
+    const d = JSON.parse(JSON.stringify(setDoc));
+    assert.ok(Array.isArray(d.matches) && d.matches.length > 0, 'fixture 沒有 matches ⇒ 這條比對是空的');
+    for (const m of d.matches) {
+      assert.ok(Object.prototype.hasOwnProperty.call(m, 'gameDraw'),
+        'v6.381 的 gameDraw 沒有出現在歸檔的 matches 裡（B-2 沒做到／被改掉了）');
+      delete m.gameDraw;
+    }
+    return d;
+  };
+  assert.deepStrictEqual(stripV6381(c4[0]), a4[0], 'BASE vs 修後（剔除 v6.381 的 gameDraw）歸檔 $set doc 不同');
+  assert.strictEqual(JSON.stringify(stripV6381(c4[0])), JSON.stringify(a4[0]), '歸檔 doc key 順序不同');
   console.log('        BASE vs 修後：register／register-and-checkin／propose／歸檔 4 條路徑 deepStrictEqual ＋ JSON 逐位元相同');
 });
 

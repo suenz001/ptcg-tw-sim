@@ -333,6 +333,8 @@ const SRV = rd(SRV_REL);
     ['v6.290 tail', RV91.OLD_TAIL_SHA_V6290], ['v6.290 tev', RV91.OLD_TEV_SHA_V6290],
     ['v6.291 tail', RV91.NEW_TAIL_SHA_V6291], ['v6.291 tev', RV91.NEW_TEV_SHA_V6291],
     ['v6.292 tail', RV92.NEW_TAIL_SHA_V6292], ['v6.292 tev', RV92.NEW_TEV_SHA_V6292],
+    // ⭐v6.381：v6.365 的指紋從「現行值」變成「舊值」⇒ 也要納入零殘留檢查（本版 28 把鎖全部重釘，漏一把這裡就會紅）。
+    ['v6.365 tail', RV65.NEW_TAIL_SHA_V6365], ['v6.365 tev', RV65.NEW_TEV_SHA_V6365],
   ];
   chk('★ D3-前提：revert-chain 的舊值都拿得到，而且跟現行值不同（否則「零殘留」是恆真式）',
     OLD_VALUES.every(([, v]) => typeof v === 'string' && v.length === 64 && v !== CUR.tail && v !== CUR.tev),
@@ -341,9 +343,10 @@ const SRV = rd(SRV_REL);
   //   ⭐ 豁免不是「列上去就沒事」：下面立刻驗每一個被豁免的檔案真的是還原鏈的一員
   //   （lib 三支是宣告端，test-v6292 B3 要斷言「還原到最後有沒有回到 v6.290」⇒ 必須寫出那兩個值）。
   const LIB_DECL = new Set(['scripts/lib/tourn-revert-v6291.mjs', 'scripts/lib/tourn-revert-v6292.mjs',
-    'scripts/lib/tourn-revert-v6365.mjs', 'scripts/test-v6292-tourn-verified-gate2.mjs']);
+    'scripts/lib/tourn-revert-v6365.mjs', 'scripts/lib/tourn-revert-v6381.mjs',   // ⭐v6.381 新節點
+    'scripts/test-v6292-tourn-verified-gate2.mjs']);
   chk('★★ D3-前提：被豁免的 ' + LIB_DECL.size + ' 個檔案**每一個**都真的是還原鏈的一員（豁免不能隨便加）',
-    LIB_DECL.size === 4 && [...LIB_DECL].every((rel) => {
+    LIB_DECL.size === 5 && [...LIB_DECL].every((rel) => {
       const s = rd(rel);
       const isLib = /^scripts\/lib\/tourn-revert-v\d+\.mjs$/.test(rel);
       const isConsumer = /from '\.\/lib\/tourn-revert-v\d+\.mjs'/.test(s);

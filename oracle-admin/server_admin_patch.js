@@ -8091,6 +8091,14 @@ import('firebase-admin').then(async ({ default: admin }) => {
     }
     // v0.50：瑞士制(swiss)階段判定文字用「不淘汰」措辭；cut 階段與單敗用原本「晉級/淘汰」。
     function swissPhase(ev) { return !!(ev && ev.format === 'swiss-then-cut' && ev.phase === 'swiss'); }
+    // >>> v6381-swiss-continue-note
+    // ⭐v6.381（丁）B-5 站長裁定：雙敗公告要讓玩家知道「瑞士制下還能繼續打」。
+    //   ⚠ 措辭與 v6.156 閒置雙敗那一句**逐字相同**（站上已經在用這個說法）⇒ 三處共用同一份，
+    //     以後只會有一種講法，不會再出現「同一件事兩種措辭」。
+    //   ⚠ postSystemChat 會 slice(0, 200)：三處原句都 < 100 字，加上這 14 字仍遠低於上限。
+    //   ⚠ 非瑞士制回空字串 ⇒ 單淘汰的公告**逐字不變**（本版對單淘汰是零行為改變）。
+    function swissContinueNote(ev) { return swissPhase(ev) ? '（瑞士制：雙方仍可繼續比賽）' : ''; }
+    // <<< v6381-swiss-continue-note
     async function postSystemChat(text) {
       try { await TCHAT.insertOne({ room: 'lobby', uid: 'system', name: '系統', text: String(text).slice(0, 200), ts: Date.now(), sys: true }); }
       catch (e) { /* best-effort 通知 */ }
@@ -8215,7 +8223,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
           //   錦標賽勝率從歸檔算）。⚠⚠ 純 additive：reg 沒有 deckId ⇒ 欄位缺席（絕不寫 null，
           //   sparse 索引 {'players.deckId':1} 才不會把舊形狀收進去）；其餘欄位逐字不動。
           players: regs.map((r) => ({ uid: r.uid, name: r.name, email: r.email || null, deckName: r.deckName || '', coinPref: r.coinPref || 'random', dropped: !!r.dropped, droppedAt: r.droppedAt || null, lateJoin: !!r.lateJoin, deckEntries: r.deckEntries || [], ...(typeof r.deckId === 'string' && r.deckId ? { deckId: r.deckId } : {}) })),
-          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved, doubleDrop: !!m.doubleDrop, dropForfeit: !!m.dropForfeit })),
+          matches: matches.map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, gameDraw: !!m.gameDraw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved, doubleDrop: !!m.doubleDrop, dropForfeit: !!m.dropForfeit })),
         } }, { upsert: true });
       } catch (e) { /* best-effort 歸檔 */ }
     }
@@ -8441,7 +8449,8 @@ import('firebase-admin').then(async ({ default: admin }) => {
           finalLog: Array.isArray(gs.log) ? gs.log : [], finalState: gs, finalWinReason: gs.winReason || null, finalTurn: gs.turn || null, endedAt: Date.now() } });
         // 條件式搶占：沒搶到代表別的路徑（投降／棄賽／時限）已經收掉這一場 ⇒ 不重複公告、不重複推進。
         if (!_drawClaim || _drawClaim.matchedCount !== 1) return;
-        await postSystemChat('\u2696\ufe0f 第 ' + m.round + ' 輪 ' + (m.p1name || 'P1') + ' vs ' + (m.p2name || 'P2') + '：雙方同時符合敗北條件，本局平手 ⇒ 依站長裁定以「雙敗」處理（雙方各記一敗，不需管理員裁定）。');
+        const _evNote = await TEVENTS.findOne({ _id: m.eventId });   // ⭐v6.381 B-5：只為了措辭，判定完全不看它
+        await postSystemChat('\u2696\ufe0f 第 ' + m.round + ' 輪 ' + (m.p1name || 'P1') + ' vs ' + (m.p2name || 'P2') + '：雙方同時符合敗北條件，本局平手 ⇒ 依站長裁定以「雙敗」處理（雙方各記一敗，不需管理員裁定）。' + swissContinueNote(_evNote));
         await advanceOrFinish(m, null, null);
         return;
       }
@@ -10118,7 +10127,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
             communityEvent: !!a.communityEvent, format: a.format || null,
             championUid: a.championUid || null, championName: a.championName || null,
             players: (a.players || []).map((p) => ({ uid: p.uid, name: p.name, email: p.email || '', deckName: p.deckName || '', coinPref: p.coinPref || 'random', deckEntries: p.deckEntries || [] })),
-            matches: (a.matches || []).map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
+            matches: (a.matches || []).map((m) => ({ round: m.round, idx: m.idx, p1uid: m.p1uid, p1name: m.p1name, p2uid: m.p2uid, p2name: m.p2name, winnerUid: m.winnerUid, winnerName: m.winnerName, status: m.status, bye: !!m.bye, noShow: !!m.noShow, doubleNoShow: !!m.doubleNoShow, draw: !!m.draw, gameDraw: !!m.gameDraw, deadlockDraw: !!m.deadlockDraw, forfeit: !!m.forfeit, idleForfeit: !!m.idleForfeit, timeLimit: !!m.timeLimit, adminResolved: !!m.adminResolved })),
           })),
           champions: champions.map((c) => ({ eventId: c.eventId, eventName: c.eventName, championUid: c.championUid, championName: c.championName, deckName: c.deckName || '', playerCount: c.playerCount || 0, finishedAt: c.finishedAt || 0 })),
         });
@@ -10541,7 +10550,7 @@ import('firebase-admin').then(async ({ default: admin }) => {
               // 平手 → 自動判雙敗（雙方淘汰，不需管理員）。bracket 對「無 winner 場」天生支援：兩人皆不晉級、下一輪對手輪空。
               await TMATCH.updateOne({ _id: m._id }, { $set: { status: 'done', winnerUid: null, winnerName: null, timeLimit: true, draw: true, endedAt: now } });
               try { const og = JSON.parse(JSON.stringify(gs)); og.phase = 'game-over'; og.winner = null; og.winReason = '對局時限到，最後回合結束後雙方剩餘獎賞卡相同 → 自動判雙敗（雙方淘汰）'; await TROOMS.updateOne({ _id: m.roomId }, { $set: { gameState: og, version: (room.version || 1) + 1, updatedAt: now } }); } catch (e) { /* best-effort */ }
-              await postSystemChat('⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗，雙方淘汰（下一輪對手輪空）。');
+              await postSystemChat('⏰ 對局時限到，最後回合結束後仍平手 → 自動判雙敗' + (swissPhase(ev) ? swissContinueNote(ev) : '，雙方淘汰（下一輪對手輪空）') + '。');
               await advanceOrFinish(m, null, null);
               continue;
             }
