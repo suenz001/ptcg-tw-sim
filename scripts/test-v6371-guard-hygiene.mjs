@@ -661,7 +661,13 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
   const REPO = '/home/runner/work/ptcg-tw-sim/ptcg-tw-sim';
   const P = pathMod.posix;
   const fileURLToPathPosix = (u) => decodeURIComponent(new URL(u).pathname);
-  const ALLOWED_ROOTS = new Set([REPO, REPO + '/scripts', REPO + '/scripts/lib']);
+  // ⚠v6.388f（Opus 5 複審 🟡2）：這裡原本是白名單集合
+  //   new Set([REPO, REPO + '/scripts', REPO + '/scripts/lib'])
+  //   —— 但 `const __filename = fileURLToPath(import.meta.url);` 是 **Node 官方的跨平台寫法**，
+  //   算出來的是**檔案**路徑，不在集合裡 ⇒ 假紅 ⇒ CI 紅 ⇒ deploy 被 skip
+  //   （跟這一整串版本在修的災難同型，只是方向相反）。
+  //   ⇒ 判準改成「落在 repo 之下的 POSIX 絕對路徑」：壞寫法算出來的是**相對路徑**或**含反斜線**，
+  //     兩者都還是會紅（F2／F2b 正對照在守）。
   const normRoot = (v) => {
     const n = P.normalize(String(v));
     return n.length > 1 ? n.replace(/\/+$/, '') : n;
@@ -677,18 +683,27 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
   chk('F0c ★★★ acorn 必須載得到（區塊註解要用真 tokenizer 剝；載不到一律紅，不得靜默退回正則）',
       !!acornMod && typeof acornMod.parse === 'function', acornErr);
 
-  /** 把區塊註解換成等量空白（保住行號與行數）。acorn 不可用時原樣回傳（F0c 已經先紅了）。 */
+  /**
+   * 把區塊註解換成等量空白（保住行號與行數），並回傳 acorn 算出來的**權威註解區間**。
+   * acorn 不可用時原樣回傳（F0c 已經先紅了）。
+   * ⚠ 為什麼不用中央的 scripts/lib/strip-comments.mjs（`stripCommentsBlankChecked`）：
+   *   那一支連 `//` 行註解一起剝，而本節**必須**看得到行註解 ——
+   *   `isLineComment()` 要靠它判斷、F5 的豁免標記也寫在行尾註解裡。
+   *   （中央那份對這幾支檔案的**區塊**註解處理實測是正確的，本節不是在繞過它。）
+   */
   const stripBlockComments = (s) => {
-    if (!acornMod) return s;
+    if (!acornMod) return { out: s, spans: [] };
     const spans = [];
     try {
       acornMod.parse(s, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true,
         onComment: (isBlock, _text, start, end) => { if (isBlock) spans.push([start, end]); } });
-    } catch { return s; }   // 解析不了的檔原樣處理（F0e 會記帳）
+    } catch { return { out: s, spans: [] }; }   // 解析不了的檔原樣處理（F0e 會記帳）
     let out = s;
     for (const [a, b] of spans) out = out.slice(0, a) + out.slice(a, b).replace(/[^\n]/g, ' ') + out.slice(b);
-    return out;
+    return { out, spans };
   };
+  /** 每一行的起始字元 offset（用來判斷該行是否整行落在某個註解區間裡） */
+  const lineStartsOf = (s) => { const a = [0]; for (let i = 0; i < s.length; i++) if (s[i] === '\n') a.push(i + 1); return a; };
 
   // 求值環境提供得起的識別字。
   // ⚠ 必須包含 pathname／slice（否則 v6.388 那個壞寫法會被這一關放走）
@@ -717,7 +732,8 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
       return typeof v === 'string' ? v : null;
     } catch { return null; }
   };
-  const goodRoot = (v) => typeof v === 'string' && !v.includes('\\') && ALLOWED_ROOTS.has(normRoot(v));
+  const goodRoot = (v) => typeof v === 'string' && !v.includes('\\')
+    && (normRoot(v) === REPO || normRoot(v).startsWith(REPO + '/'));
 
   // ⚠ 只掃**正式的**守衛檔：站長機器上 scripts/ 常有未追蹤的 tmp*.mjs／_repro*.mjs，
   //   本機與 CI 的掃描母體會不一樣，一支垃圾檔就能弄出假紅。
@@ -732,6 +748,9 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
   const KNOWN_SAFE_SKIP = (l) => /readFileSync\(\s*fileURLToPath\(\s*import\.meta\.url\s*\)/.test(l)
     && !l.includes('.pathname');
 
+  // ⚠ 掃描範圍只有這兩層。scripts/tools/、scripts/scrape/、scripts/*.js 不在內 ——
+  //   現況 npm test chain 的每一步都是 `node scripts/*.mjs`（沒有 .js、沒有子目錄），
+  //   所以目前沒有 CI 風險；但**日後把 scripts/tools/ 接進 chain 就會有盲區**，記得同步加進來。
   const scanDirs = ['scripts', 'scripts/lib'];
   const rows = [];        // 「路徑根定義行」——會被 F1 求值
   const skippedRows = []; // 被識別字白名單濾掉、又不在 KNOWN_SAFE_SKIP 裡的（必須是 0）
@@ -748,15 +767,26 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
         try { acornMod.parse(raw, { ecmaVersion: 'latest', sourceType: 'module', allowHashBang: true }); }
         catch { parseFailFiles.push(rel); }
       }
-      const src = stripBlockComments(raw);
+      const { out: src, spans } = stripBlockComments(raw);
       const before = raw.split(/\r?\n/);
       const after = src.split(/\r?\n/);
+      const starts = lineStartsOf(raw);
+      // ⚠v6.388f（Opus 5 複審 🟡1）：F0d 原本是「剝前是路徑根定義行、剝後不是 ⇒ 剝壞了」，
+      //   但一行**寫在區塊註解裡**的路徑根定義被**正確**剝掉，也完全符合這個條件 ⇒ 假紅。
+      //   （而這一整串版本的敘事正是在鼓勵大家把那個壞寫法寫進檔頭說明，本 repo 守衛檔頭
+      //     清一色是 /** … */ ⇒ 下一個人照做就 CI 紅、deploy 被 skip。）
+      //   ⇒ 改拿 acorn 的**權威註解區間**當基準：整行落在某個區間裡就是「本來就該剝掉」。
+      const inComment = (i) => {
+        const a = starts[i] ?? 0;
+        const b = (starts[i + 1] ?? raw.length);
+        return spans.some(([s0, s1]) => s0 <= a && b <= s1 + 1);
+      };
       const url = 'file://' + REPO + '/' + rel;   // ⭐ 用該檔**真實的**相對路徑組 URL
       for (let i = 0; i < after.length; i++) {
         const line = after[i];
         allLines.push({ fn: rel, line });
         // F0d：剝之前是路徑根定義行、剝之後卻不是 ⇒ 剝壞了（v6.388d 的正則版就是這樣壞的）
-        if (looksLikeRootLine(before[i] ?? '') && !looksLikeRootLine(line)) {
+        if (looksLikeRootLine(before[i] ?? '') && !looksLikeRootLine(line) && !inComment(i)) {
           lostByStrip.push(rel + ':' + (i + 1) + '  ' + String(before[i]).trim().slice(0, 70));
         }
         if (!looksLikeRootLine(line)) continue;
@@ -780,13 +810,13 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
       skippedRows.length === 0,
       JSON.stringify(skippedRows.slice(0, 5).map((r) => r.fn + ' :: ' + r.line.slice(0, 70))));
   // ★★ F0d：剝區塊註解不可以吃掉真程式碼（v6.388d 的正則版吃掉了 4 支守衛的 ROOT 行）
-  chk('F0d ★★★ 剝掉區塊註解之後，路徑根定義行一行都不能少',
+  chk('F0d ★★★ 剝註解不得吃掉**註解以外**的路徑根定義行（基準＝acorn 算出來的註解區間）',
       lostByStrip.length === 0, JSON.stringify(lostByStrip.slice(0, 6)));
   chk('F0e ★ 每一支守衛檔都要 parse 得過（parse 不過 ⇒ 區塊註解剝不乾淨 ⇒ 掃描有盲區）',
       parseFailFiles.length === 0, JSON.stringify(parseFailFiles.slice(0, 5)));
 
   const broken = rows.filter((r) => !goodRoot(evalRootLine(r.line, r.url)));
-  chk('F1 ⭐⭐⭐ 每一行路徑根定義在 **POSIX**（Linux／CI）底下都必須算出 repo／scripts／scripts/lib 之一',
+  chk('F1 ⭐⭐⭐ 每一行路徑根定義在 **POSIX**（Linux／CI）底下都必須算出 repo 之下的絕對路徑',
       broken.length === 0,
       JSON.stringify(broken.slice(0, 5).map((r) => ({ fn: r.fn, v: evalRootLine(r.line, r.url), line: r.line.slice(0, 80) }))));
 
@@ -846,7 +876,10 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
       JSON.stringify({ bad: probeBad.filter((l) => f5rules.some((r) => r(l))).length,
                        good: probeGood.filter((l) => f5rules.some((r) => r(l))).length }));
   const exemptRows = allLines.filter((r) => r.line.includes(F5_EXEMPT));
-  chk('F5c ★ 豁免標記只准出現在本守衛自己的樣本行（不得被拿來繞過 F5）',
+  // ⚠ 額度是「恰好夠用」的：本檔目前 6 行（BAD、BAD2、probeBad×4），其他檔一律不准用。
+  //   別的檔要寫壞寫法當樣本，請用字串拼接（'import.meta' + '.url'），
+  //   mutcheck-v6388d-guard-root.mjs 就是這樣做的。
+  chk('F5c ★ 豁免標記只准出現在本守衛自己的樣本行（其他檔請改用字串拼接，不要借用標記）',
       exemptRows.length <= 6 && exemptRows.every((r) => r.fn === SELF),
       JSON.stringify(exemptRows.map((r) => r.fn)));
   // ★ F6：本節的突變測試必須留在 repo 裡，**而且真的還在測這兩條**

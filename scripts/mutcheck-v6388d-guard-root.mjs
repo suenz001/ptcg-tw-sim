@@ -121,6 +121,67 @@ for (const victim of [
   finally { writeFileSync(p, orig, 'utf8'); }
 }
 
+/** 跑一次守衛，要求指定的斷言**全部是綠的**（反對照用） */
+function expectGreen(tag, keys, out) {
+  for (const k of keys) {
+    const ok = !isRed(out, k);
+    console.log(`${ok ? '✅' : '❌'} ${tag} → 「${k}」${ok ? '如預期維持綠燈' : '居然紅了（誤紅！）'}`);
+    console.log('   ' + lineFor(out, k).slice(0, 150));
+    if (!ok) allOk = false;
+  }
+}
+
+// ── M7：F0b 的正對照 —— 右側用到白名單外的函式（split）⇒ 必須紅，不可以無聲跳過 ──────
+withProbe('zz-mut-probe-e.mjs', [
+  '// v6.388f 突變探針5：白名單外的識別字（split）',
+  "import { fileURLToPath } from 'node:url';",
+  "const ROOT = fileURLToPath(new URL('..', " + IMU + ")).split('/').slice(0, -1).join('/');",
+  'console.log(ROOT);',
+], (out) => expectRed('M7 白名單外識別字（F0b 正對照）', ['F0b ★★'], out));
+
+// ── M8：F0e 的正對照 —— 語法錯誤的守衛檔 ⇒ 必須紅（parse 不過 ⇒ 註解剝不乾淨 ⇒ 盲區）─
+withProbe('zz-mut-probe-f.mjs', [
+  '// v6.388f 突變探針6：故意的語法錯誤',
+  'const x = ;',
+], (out) => expectRed('M8 語法錯誤檔（F0e 正對照）', ['F0e ★'], out));
+
+// ── M9：F0d 的**反對照** —— 寫在區塊註解裡的壞 ROOT **不得**讓 F0d 紅 ────────────────
+//   ⚠ 這是 Opus 5 複審 v6.388e 抓到的地雷：本 repo 守衛檔頭清一色是 /** … */，
+//     而這一整串版本的敘事正是在鼓勵大家把那個壞寫法寫進檔頭說明。
+//     v6.388e 的 F0d（剝前 vs 剝後）會把它判成「剝壞了」⇒ 假紅 ⇒ CI 紅 ⇒ deploy 被 skip。
+withProbe('zz-mut-probe-g.mjs', [
+  '/**',
+  ' * v6.388f 突變探針7：檔頭說明裡逐字引用壞寫法（這是**合法**的，不可以紅）',
+  ' *   const ROOT = join(dirname(new URL(' + IMU + ')' + PN + ".slice(1)), '..');",
+  ' */',
+  "import { fileURLToPath } from 'node:url';",
+  "const ROOT = fileURLToPath(new URL('..', " + IMU + '));',
+  'console.log(ROOT);',
+], (out) => expectGreen('M9 區塊註解裡的壞 ROOT（F0d 反對照，不得誤紅）', ['F0d ★★★', 'F1 ⭐⭐⭐'], out));
+
+// ── M10：F0d 的正對照 —— 把剝除器退回 v6.388d 的正則版 ⇒ 必須紅 ──────────────────────
+{
+  const p = join(ROOT, 'scripts/test-v6371-guard-hygiene.mjs');
+  const orig = readFileSync(p, 'utf8');
+  const from = "    let out = s;";
+  const to = "    let out = s.replace(/\\/\\*[\\s\\S]*?\\*\\//g, (m) => m.replace(/[^\\n]/g, ' '));   // [MUTANT] 退回 v6.388d 的正則版";
+  if (orig.split(from).length - 1 !== 1) { console.log('❌ M10 錨點不唯一，這一條不算數'); allOk = false; }
+  else {
+    try { writeFileSync(p, orig.replace(from, to), 'utf8'); expectRed('M10 剝除器退回正則版（F0d 正對照）', ['F0d ★★★'], run()); }
+    finally { writeFileSync(p, orig, 'utf8'); }
+  }
+}
+
+// ── M11：F1 的反對照 —— Node 官方的 __filename 寫法**不得**被判成壞 ────────────────────
+//   ⚠ Opus 5 複審 v6.388e 抓到：goodRoot 原本要求結果 ∈ {repo, repo/scripts, repo/scripts/lib}，
+//     但 const __filename = fileURLToPath(import.meta.url) 算出來是**檔案**路徑 ⇒ 假紅。
+withProbe('zz-mut-probe-h.mjs', [
+  '// v6.388f 突變探針8：Node 官方的 __filename 寫法（合法，不可以紅）',
+  "import { fileURLToPath } from 'node:url';",
+  'const SELF = fileURLToPath(' + IMU + ');',
+  'console.log(SELF);',
+], (out) => expectGreen('M11 __filename 官方寫法（F1 反對照，不得誤紅）', ['F1 ⭐⭐⭐', 'F0b ★★'], out));
+
 // ── 還原後必須回到全綠 ──────────────────────────────────────────────────────
 const clean = run();
 const tail = clean.split(/\r?\n/).filter((l) => l.includes('guard-hygiene]')).pop() || '(找不到總結行)';

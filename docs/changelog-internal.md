@@ -1,5 +1,93 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.388f ⭐⭐ Opus 5 複審 v6.388e：兩個「**合法寫法**把 CI 弄紅」的地雷
+
+BASE `6b53c3bc4b507dd8b2ed6f40ab7074b68f0ed0eb`（v6.388e）。
+⚠ 本版**只動守衛與文件**，`src/` 一行都沒改 ⇒ **不需要重跑 bat**。
+⚠ 審查者換人：站長交代「Fable 5.1 額度要滿了，換 Opus 5 來複審」。
+
+Opus 5 判定 **🔴 = 0（可以收尾）**，但開了 8 個 🟡。
+其中 🟡1、🟡2 跟這一整串版本在修的災難**同型，只是方向相反** ——
+不是「壞寫法沒被抓到」，而是「**合法寫法被誤判成壞**」⇒ CI 紅 ⇒ deploy 被 skip ⇒ 測試站整版沒更新。
+所以這兩條本版一定要修。
+
+### 【一】🟡1 F0d 會誤紅：**區塊註解裡**寫一行路徑根定義就炸
+
+v6.388e 的 F0d 是「剝之前是路徑根定義行、剝之後不是 ⇒ 剝壞了」。
+這個前提**在邏輯上不成立**：一行被**正確**剝掉的、寫在註解裡的路徑根定義，
+也完全符合這個條件。
+
+Opus 5 實測（乾淨 worktree 放探針）：
+
+```
+M15 探針：/* … const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..'); … */
+      → PASS 156 FAIL 1 [F0d]      ← 合法的檔頭說明，卻被判成「剝壞了」
+```
+
+它今天沒紅，**只是因為全 repo 的區塊註解裡剛好 0 行含 `import.meta.url`**。
+而這一整串版本的敘事正是在鼓勵大家把那個壞寫法寫進檔頭說明，
+本 repo 守衛檔頭又清一色是 `/** … */` ⇒ **下一個人照做就 CI 紅**。
+（本檔自己是靠把說明全寫成 `//` 行註解閃過去的，mutcheck 則是靠字串拼接 —— 兩個都是巧合，不是設計。）
+
+**修法**：F0d 不再拿「剝前 vs 剝後」比，改拿 **acorn 自己算出來的權威註解區間**當基準 ——
+「被剝掉、**而且** acorn 說它不在任何註解區間內」才算剝壞。
+v6.388d 的正則版正是把非註解區間的 4 行吃掉 ⇒ 仍然會紅（M10 實測）；
+註解裡的範例行落在區間內 ⇒ 不誤紅（M9 實測）。
+
+### 【二】🟡2 F1 會誤殺 Node 官方寫法 `const __filename = fileURLToPath(import.meta.url);`
+
+v6.388e 的 `goodRoot` 要求求值結果 ∈ `{repo, repo/scripts, repo/scripts/lib}`。
+但上面那個是 **Node 官方的跨平台寫法**，算出來是**檔案**路徑，不在集合裡 ⇒ 假紅。
+
+repo 現在有 7 支把它包在 `readFileSync(...)` 裡（靠 `KNOWN_SAFE_SKIP` 走 F0b 白名單放行），
+但只要有人拆成兩行就立刻紅，而白名單也接不住（那行沒有 `readFileSync`）。
+
+**修法**：判準改成「必須是落在 **repo 之下**的 POSIX 絕對路徑」。
+壞寫法算出來的是**相對路徑**（F2）或**含反斜線**（F2b），兩者仍然紅。
+
+### 【三】🟡6 F0b／F0d／F0e 在 HEAD 上是**空真**，F 節內沒有正對照
+
+（F1／F5 都有 F2／F2b／F3／F4／F5b 當正反對照，這三條沒有。）
+已把 Opus 5 的探針併進 `scripts/mutcheck-v6388d-guard-root.mjs`：
+
+| 代號 | 內容 | 期望 |
+|---|---|---|
+| M7 | 右側用到白名單外的識別字（`split`） | **F0b 紅** |
+| M8 | 語法錯誤的守衛檔 | **F0e 紅** |
+| M9 | 區塊註解裡逐字引用壞寫法 | **F0d／F1 維持綠**（反對照） |
+| M10 | 把剝除器退回 v6.388d 的正則版 | **F0d 紅** |
+| M11 | `const SELF = fileURLToPath(import.meta.url);` | **F1／F0b 維持綠**（反對照） |
+
+### 【四】🟡3／🟡4／🟡5 文件更正（又是沒現查）
+
+- **🟡3**：changelog 寫「acorn 是 transitive 相依」——**不實**。
+  `package.json` 從 **v6.380（`f1428cf2`）** 起就有 `devDependencies.acorn: ^8.16.0`。
+  真正該用 `createRequire` 的理由是 **fail-closed 的粒度**（靜態 import 失敗＝整支 crash，
+  createRequire 可以 catch 後讓 F0c 紅一條）。已改。
+- **🟡4**：「859 檔」是在**站長的髒工作樹**上量的；乾淨 worktree 是 **858 檔 / 57 個差異檔**。
+  已註明量測基準。核心數字（4 行、哪 4 支、哪 4 行）兩邊一致。
+- **🟡5**：「17 個突變全數翻紅」其實是 **16 個翻紅斷言 ＋ 1 個還原檢查**。已改措辭。
+
+### 【五】🟡7／🟡8 註解補齊
+
+- repo 已有中央 `scripts/lib/strip-comments.mjs`（`stripCommentsBlankChecked`，v6.310~v6.320 為它連燒七版）。
+  本節**不是**在繞過它 —— 那一支連 `//` 行註解一起剝，而本節**必須**看得到行註解
+  （`isLineComment()` 要用、F5 的豁免標記寫在行尾註解裡）。已把這個理由寫進檔內，
+  免得下一個人照「剝除器只准一份」的紀律把它改回去。
+- 掃描範圍只有 `scripts` 與 `scripts/lib`。現況 npm test chain 的每一步都是 `node scripts/*.mjs`
+  （Opus 5 實查：720 個腳本參照全是 `.mjs`、沒有子目錄）⇒ 目前無 CI 風險；
+  但**日後把 `scripts/tools/` 接進 chain 就會有盲區**，已寫進註解。
+- F5c 的額度是「恰好夠用」的 6 行、零餘裕，紅訊息已補上「其他檔請改用字串拼接」。
+
+### 【六】驗收
+
+- `scripts/test-v6371-guard-hygiene.mjs`：**PASS 157 / FAIL 0**（F 節 14 條）
+- `scripts/mutcheck-v6388d-guard-root.mjs`：**22 個斷言全數如預期**
+  （19 個翻紅 ＋ 3 個「不得誤紅」的反對照），＋1 個還原檢查，合計 23 個 ✅
+
+---
+
+
 ## v6.388e ⭐⭐⭐ Fable 5 複審 v6.388d：我用正則剝區塊註解，把 4 支守衛的 ROOT 行變成不設防
 
 BASE `c0d63fdb83df5478b3704c4b7e44d4b6d7cc8132`（v6.388d）。
@@ -16,7 +104,12 @@ const stripBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replac
 正則不認得字串／正則字面／行註解 —— 一個 `// … /api/tournament/* 是同源路徑` 就會開啟
 「區塊註解」，一路吃到下一個 `*/`。
 
-**我用 acorn 8.16.0 當對照自行查證**（`__m6a/probe_strip.mjs`，859 檔 parse 全過）：
+**我用 acorn 8.16.0 當對照自行查證**（`__m6a/probe_strip.mjs`，parse 全過、0 失敗）：
+
+⚠v6.388f 更正量測基準：下面這組數字是在**站長的工作樹**（含未追蹤檔）上量的 ——
+Opus 5 在**乾淨 worktree**（＝CI checkout 的形狀）重算是 **858 檔 / 57 個差異檔**
+（多的那一支是 `test-v6371-guard-hygiene.mjs` 自己，本版新增的字串讓它也進了差異集）。
+⭐ **核心數字「4 行、哪 4 支、哪 4 行」兩邊完全一致**，那一段是實的。
 
 ```
 正則版與 acorn 版剝出來不一樣的檔數 = 56
@@ -34,7 +127,7 @@ const stripBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replac
 
 | 項 | 做什麼 |
 |---|---|
-| **acorn 剝註解** | `createRequire(import.meta.url)('acorn')` ＋ `onComment` 只取 `Block` 區間換成等量空白（保住行號）。用 createRequire 是因為 acorn 是 transitive 相依，靜態 bare import 會被 `test-v6380`【B1】要求寫進 package.json |
+| **acorn 剝註解** | `createRequire(import.meta.url)('acorn')` ＋ `onComment` 只取 `Block` 區間換成等量空白（保住行號）。⚠v6.388f 更正：**acorn 不是 transitive 相依** —— `package.json` 從 v6.380（`f1428cf2`）起就有 `devDependencies.acorn: ^8.16.0`，靜態 bare import 根本不會被【B1】擋。用 `createRequire` 的**真正**理由是 **fail-closed 的粒度**：靜態 import 失敗會讓整支守衛直接 crash（看起來像壞掉，不像「守衛說有問題」），而 `createRequire` 可以 catch 之後讓 **F0c 紅一條**、訊息清楚 |
 | **F0c fail-closed** | acorn 載不到就**一律紅**。絕不 try/catch 靜默退回正則 —— 那只會變成另一個安慰劑 |
 | **F0d 自證** | 剝之前是路徑根定義行、剝之後不是 ⇒ 紅。**這條就是用來抓 v6.388d 那個倒退的** |
 | **F0e** | 每支守衛檔都要 parse 得過（parse 不過 ⇒ 註解剝不乾淨 ⇒ 掃描有盲區） |
@@ -58,7 +151,7 @@ v6.388d 寫「把 url 存進變數、再在另一行取 `.pathname`……兩層�
 ### 【三】驗收
 
 - `scripts/test-v6371-guard-hygiene.mjs`：**PASS 157 / FAIL 0**（F 節 14 條）
-- `scripts/mutcheck-v6388d-guard-root.mjs`：**17 個突變全數如預期翻紅**，還原後 157/0
+- `scripts/mutcheck-v6388d-guard-root.mjs`：**16 個翻紅斷言全數如預期翻紅**（＋1 個「還原後回到全綠」檢查，合計 17 個 ✅）
 
 ```
 ✅ M1 壞 ROOT 放回 test-v6388            → F1 紅、F5 紅
