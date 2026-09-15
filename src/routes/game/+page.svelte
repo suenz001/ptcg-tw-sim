@@ -15096,7 +15096,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .tourn-match-log { cursor: pointer; transition: background .12s, box-shadow .12s; border-color: #3a6a48; }
   .tourn-match-log:hover { background: #1c3320; box-shadow: 0 0 0 1px #5aa86a inset; }
   .mlog-modal { max-width: 680px; }
-  .mlog-list { max-height: 62vh; overflow-y: auto; background: #0d140d; border: 1px solid #2a3a2a; border-radius: 8px; padding: 8px 10px; font-size: .82rem; line-height: 1.5; }
+  .mlog-list { --scroll-list-max: 62vh; background: #0d140d; border: 1px solid #2a3a2a; border-radius: 8px; padding: 8px 10px; font-size: .82rem; line-height: 1.5; }
   .mlog-list .log-line { padding: 2px 0; border-bottom: 1px solid #161f16; word-break: break-word; }
   .mlog-list .log-line:last-child { border-bottom: none; }
   /* 排行榜 */
@@ -15410,7 +15410,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   /* v2.144：html + body 背景色改由頂端 svelte:head 動態注入，避免污染其他頁面 */
 
   /* v2.164 reorder-deck-top — 排序牌庫頂 N 張 UI */
-  .reorder-deck-wrap { display:flex; flex-direction:column; gap:0.7rem; padding:0.5rem 0; max-height:60vh; overflow-y:auto; }
+  .reorder-deck-wrap { display:flex; flex-direction:column; gap:0.7rem; padding:0.5rem 0; --scroll-list-max:60vh; }
   .reorder-section-title { font-weight:700; color:#cce5cc; margin-bottom:0.3rem; font-size:0.95rem; }
   .reorder-list { display:flex; flex-direction:column; gap:0.3rem; }
   .reorder-item { display:flex; align-items:center; gap:0.4rem; background:#2a3a2a; border:1px solid #3a5a3a; border-radius:6px; padding:0.35rem 0.5rem; }
@@ -17103,21 +17103,42 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* ─── v2.119 Copy-attack picker（暗黑底牌） ──────────────── */
   .copy-attack-modal{ max-width:560px; }
-  /* ⭐⭐v6.389 可捲清單的**中央 utility**。
-     起因：repo 裡有 9 處各自寫死 max-height + overflow-y:auto（52vh／58vh／60vh／70vh…），
-     每一份的觸控處理還不一樣。新的東西一律掛這個 class，用 --scroll-list-max 覆寫高度。
-     ⚠ 觸控四件套（-webkit-overflow-scrolling／touch-action／overscroll-behavior／min-height:0）
-       照抄 .zoom-scroll —— 那是目前最完整的一份。
-     ⚠ 既有那 9 處**本版不動**：那會一次動到 9 個版面元素，與本版的 bug 修正是不同量級的風險，
-       混在一起出事時分不清是誰造成的（ptcg-vm-infra：一次只動一樣）。列為 v6.390。 */
+  /* ⭐⭐v6.389 可捲清單的**中央 utility**；v6.390 完成遷移（站長交辦「順手收斂」）。
+     ⚠ v6.389 這段原本寫「repo 裡有 9 處」—— **那個數字是錯的**。v6.390 現查（Rule 46）：
+       整份樣式區塊裡「同一條規則同時有 max-height ＋ overflow-y:auto」共 **18 條** ＝
+       清單類 7（已遷移）＋ modal 容器 6（.hof-modal／.gameover-modal／.settings-modal／
+       .selection-modal／.prize-view-modal／.pv-inner，語意不同不收）＋
+       非 vh 清單 4（.open-room-list 420px／.chat-messages 240px／.log-col 100%／
+       .playmat.layout-fable .action-bar > .log-col none）＋ .scroll-list 自己 1。
+     ⚠ **遷移後**現況（守衛 C5 盯住這個數字，不是盯註解）：那 18 條會剩 **11 條** ＝
+       modal 容器 6 ＋ 非 vh 清單 4 ＋ 下面這條群組規則自己 1；被遷移的 7 個清單 class 一條都不在。
+     ⚠⚠ 這段註解裡**永遠不可以**寫出樣式標籤的開頭字面（角括號 + style）——
+       test-v6199／v6284／v6297／v6298／v6299／v6303／v6370 取樣式區塊用的是 lastIndexOf，
+       註解裡出現一次就會把區塊起點往後推，7 支守衛一起翻紅（IRON_RULES Rule 48）。
+     ⚠⚠ 遷移後的鐵則：下面這 7 個 class 的個別規則裡**不可以**再寫 max-height／overflow-y ——
+       它們排在群組規則之後、同特異度，留著就會把群組規則蓋成死碼
+       （v6.389 的 .atk-overflow 就是這樣變成死規則的）。要調高度請只改 --scroll-list-max。
+     ⚠ 觸控四件套照抄 .zoom-scroll（遷移前只有它是完整的）：min-height:0 讓 flex/grid 子元素縮得下去；
+       -webkit-overflow-scrolling 是 iOS 慣性捲動；touch-action:pan-y 讓瀏覽器知道這裡只吃垂直手勢；
+       overscroll-behavior:contain 擋住「捲到底之後把整頁一起帶著捲」（手機上最惱人的那個行為）。
+     ⚠ 刻意**不動**的兩條高特異度覆寫（它們仍然會贏，行為不變）：
+       .prize-view-modal .sel-grid{max-height:none;overflow:visible}（(0,2,0) 勝）、
+       @media 600px portrait 的 .retreat-grid{...!important}。 */
   /* ⭐v6.389a picker 裡的預估傷害（短版，不用 hover） */
   .copy-atk-est{ margin-left:.4rem; font-size:.78rem; color:#9fd; opacity:.9; white-space:nowrap; }
-  .scroll-list{
+  .scroll-list,
+  .mlog-list,
+  .reorder-deck-wrap,
+  .copy-attack-list,
+  .sel-grid,
+  .full-deck-list,
+  .rocket-command-scroll,
+  .retreat-grid{
     min-height:0; overflow-y:auto; overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch; touch-action:pan-y;
     max-height:var(--scroll-list-max, 60vh);
   }
-  .copy-attack-list{ display:flex; flex-direction:column; gap:.8rem; padding:.5rem 0; max-height:60vh; overflow-y:auto; }
+  .copy-attack-list{ display:flex; flex-direction:column; gap:.8rem; padding:.5rem 0; --scroll-list-max:60vh; }
   .copy-attack-poke{ display:flex; gap:.8rem; background:#1e2e1e; border:1px solid #3a5a3a; border-radius:8px; padding:.5rem; }
   .copy-attack-img{ width:80px; height:auto; border-radius:4px; object-fit:cover; }
   .copy-attack-col{ display:flex; flex-direction:column; gap:.35rem; flex:1; min-width:0; }
@@ -17990,12 +18011,12 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .stepper-value{ min-width:5rem; text-align:center; font-size:1.6rem; font-weight:700; color:#aaffaa; padding:0 .8rem; background:#0a180a; border:1px solid #2a4a2a; border-radius:8px; line-height:2.4rem; }
   .stepper-confirm{ margin-left:.4rem; }
   .stepper-hint{ text-align:center; }
-  .sel-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:.4rem; overflow-y:auto; max-height:52vh; padding-right:.25rem; }
+  .sel-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:.4rem; --scroll-list-max:52vh; padding-right:.25rem; }
   .full-deck-view{ margin-top:.6rem; background:#0e1a0e; border:1px solid #2a4a2a; border-radius:6px; padding:.4rem .7rem; }
   .full-deck-view summary{ cursor:pointer; font-size:.85rem; color:#aaffcc; font-weight:600; }
   .full-deck-note{ margin:.4rem 0; font-size:.75rem; color:#888; }
   /* v5.309: grid 卡圖 + 右下 count badge, 64px 寬控制 modal 不過大 (與棄牌區 cell 視覺一致) */
-  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:4px; max-height:60vh; overflow-y:auto; padding:4px; }
+  .full-deck-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:4px; --scroll-list-max:60vh; padding:4px; }
   .deck-cell{ position:relative; display:block; width:100%; height:0; padding:0 0 140% 0; background:rgba(255,255,255,.04); border:1px solid #444; border-radius:6px; overflow:hidden; cursor:pointer; }
   .deck-cell:hover{ border-color:#4a8a4a; }
   .deck-cell-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; display:block; }
@@ -18020,8 +18041,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .sel-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 6px #aaff4488; }
   /* v4.39 高傲指令 picker — 長列表（多 Pokemon × 多 attack）需可滾動 */
   .rocket-command-scroll {
-    max-height: 60vh;
-    overflow-y: auto;
+    --scroll-list-max: 60vh;
     padding-right: 4px;
   }
 
@@ -18199,7 +18219,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* 撤退選單（置中橫向 grid） */
   .retreat-modal{ max-width:760px; }
-  .retreat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.6rem; overflow-y:auto; max-height:58vh; padding:.25rem; }
+  .retreat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:.6rem; --scroll-list-max:58vh; padding:.25rem; }
   .retreat-card{ position:relative; background:#0e1e0e; border:2px solid #2a4a2a; border-radius:8px; overflow:hidden; transition:border-color .15s, box-shadow .15s; }
   .retreat-card:hover{ border-color:#4a8a4a; box-shadow:0 0 8px rgba(170,255,170,.25); }
   .retreat-card.sel-picked{ border-color:#aaff44; box-shadow:0 0 10px #aaff4488; }
@@ -18347,7 +18367,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .discard-modal{ max-width:920px; }
   .discard-title{ margin:0 0 .6rem; color:#aaffaa; font-size:1.05rem; }
   /* v2.69：棄牌區卡片圖示放大（Leon 反饋：原本太小考驗眼力） */
-  .discard-modal .sel-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:.55rem; max-height:72vh; }
+  .discard-modal .sel-grid{ grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:.55rem; --scroll-list-max:72vh; }
   .discard-modal .sel-card{ padding:.4rem; font-size:.78rem; }
   .discard-modal .sel-card img{ width:108px; }
   .discard-modal .sel-name{ font-size:.74rem; }
@@ -18608,7 +18628,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .sel-grid {
       grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)) !important;
       gap: 0.25rem;
-      max-height: 50vh;
+      --scroll-list-max: 50vh;
     }
     /* v5.667：手機直式能量 picker — 修 v5.664 桌機放大(img 88px)外溢到手機 54px 欄位致排版跑掉。
        欄寬加大到 80px(!important 蓋上面 54px)、圖縮到吻合格子,來源寶可夢名仍完整顯示。 */
@@ -18737,7 +18757,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .selection-modal{ max-width:580px; width:96vw; max-height:82vh; padding:0.6rem; gap:0.4rem; }
     .sel-header h3{ font-size:0.86rem; }
     .sel-hint{ font-size:0.66rem; }
-    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:0.25rem; max-height:46vh; }
+    .sel-grid{ grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:0.25rem; --scroll-list-max:46vh; }
     /* ── stepper（仍 ≥40px 觸控最小） ── */
     .stepper-btn{ width:2.4rem; height:2.4rem; font-size:1.2rem; }
     .stepper-value{ min-width:4rem; font-size:1.3rem; line-height:2.2rem; }

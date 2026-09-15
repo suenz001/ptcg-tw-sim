@@ -1580,3 +1580,19 @@ if (depth <= 0) end = i;
   版面分支的 `end` 必須找得到、而且在 `opp-inactive-banner` 之前。
   （`__m6a/v389_step6.mjs` 末尾就是這段自檢，可以照抄。）
 - ⚠ 這一類「用 regex 數 depth」的守衛不只 test-v6107 一支，改 `.svelte` 時一律跑全套。
+
+## Rule 48（v6.390）：`.svelte` 的**註解裡**不可以寫出樣式／腳本標籤的開頭字面
+
+v6.390 在 `src/routes/game/+page.svelte` 的 CSS 註解裡寫了一次樣式標籤的開頭字面，
+**7 支守衛同時翻紅**（test-v6199／v6284／v6297／v6298／v6299／v6303／v6370），
+而且訊息全部是「抽不到 CSS 規則」—— 看起來像 CSS 壞了，其實一行 CSS 都沒問題。
+
+**真因**：那些守衛取樣式區塊用的是 `src.slice(src.lastIndexOf(開頭字面))` —— **lastIndexOf**。
+註解裡那個字面排在真標籤**後面** ⇒ 被當成區塊起點 ⇒ 它前面的 `.tourn-tabs`／`.lobby-tabs`／
+`.warn-x`／`.tourn-lb-grid` 全部抽不到。
+
+⚠ 這是 **Rule 47 的親戚**（Svelte 註解裡不可寫區塊開頭標記字面）：**註解不是安全區**，
+  這個 repo 有大量守衛是用字串位置定位的。要在註解裡提到樣式區塊，就寫「樣式區塊」四個字。
+⚠ 同理適用 `</` + `style`、`<` + `script`、`</` + `script`。
+⚠ 守衛：`scripts/test-v6390-scroll-list.mjs` 的【G】段（G1 ＋ G1b 正對照）。
+⚠ 更根本的修法（把那 7 支的區塊抽取收斂到中央 helper）尚未做 —— 列為待辦，不是本版範圍。

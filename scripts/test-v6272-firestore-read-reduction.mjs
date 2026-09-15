@@ -788,6 +788,11 @@ const PREV_ALLOWED = [
   //   ・+page.svelte：招式數 > 上限時收成一顆按鈕 ＋ 走既有的 .selection-modal picker
   //     ＋ .scroll-list 中央 utility ＋ .atk-overflow 的 Fable 槽位
   //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
+  // ⭐v6.390 可捲清單收斂到中央 utility（站長交辦「順手收斂」）＋ 版本號補 bump：
+  //   ・+page.svelte：7 個清單 class 併進同一條群組規則，各自只留 --scroll-list-max
+  //   ・version.ts 6.388 → 6.390（v6.389／v6.389a 當時沒 bump）
+  //   ・changelog.html：第一則改寫（v6.388 尚未上正式站 ⇒ 走 test-v6264 F0b，不搬運）
+  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
   'src/lib/ui-limits.ts',
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',

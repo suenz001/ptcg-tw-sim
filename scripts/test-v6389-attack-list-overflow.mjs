@@ -214,8 +214,14 @@ const CONTRACTS = [
     (s) => /\{#if attackListPicker\}[\s\S]{0,400}selection-modal/.test(s)],
   ['C5 ⭐⭐ picker 的清單掛了 scroll-list（可捲）',
     (s) => /copy-attack-list scroll-list/.test(s)],
-  ['C6 ⭐⭐ .scroll-list 真的有 overflow-y:auto ＋ max-height',
-    (s) => /\.scroll-list\{[\s\S]{0,400}overflow-y:auto[\s\S]{0,400}max-height:var\(--scroll-list-max/.test(s)],
+  ['C6 ⭐⭐ .scroll-list 所在的那條規則真的有 overflow-y:auto ＋ max-height:var(--scroll-list-max)',
+    (s) => {
+      // ⚠ v6.390 起 .scroll-list 與另外 7 個清單 class 共用同一條**群組**規則
+      //   ⇒ 不可以再用 `\.scroll-list\{`（v6.390 之後永遠找不到 ⇒ 假紅）。
+      //   改成「.scroll-list 後面接大括號**或**接逗號後的其他選擇器」，斷言的內容完全沒有放寬。
+      const m = /(?:^|[\s,{}])\.scroll-list\s*(?:,[^{}]*)?\{([^{}]*)\}/m.exec(s);
+      return !!m && /overflow-y:\s*auto/.test(m[1]) && /max-height:\s*var\(--scroll-list-max/.test(m[1]);
+    }],
   // ⚠⚠v6.389a（Opus 5 複審 🔴-1）：v6.389 這一條只驗「那行字存在」——
   //   而那條規則的特異度輸給後面的 .btn-act.primary{grid-row:4}，**是死規則**。
   //   ⇒ 改成驗「選擇器含 .primary.atk-overflow（特異度贏）」**而且**「排在 .primary{grid-row:4} 之後」。
