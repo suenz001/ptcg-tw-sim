@@ -1376,3 +1376,98 @@ v6.331 一次遇到三種，處理方式都不一樣，但判準只有一句：
 ⚠ 下面這兩個**不是**停下來的理由：
 - 「這個工程比預期大，要不要繼續？」—— 他已經說了要跑完。
 - 「我想先讓他看一下 UI／中間結果」—— **測試站就是給他看的**，他自己驗比我描述快得多也準得多。
+
+
+---
+
+## Rule 43: 「要跑哪幾支 .bat」必須從 bat 的**實際內容**推導，而且要**實測正式站**才算部署完成
+
+**2026-09-15 的事故**：我在 v6.385 與 v6.386 的內部紀錄都寫了
+「跑 `update-tournament.bat`（引擎）＋ `update-admin-full.bat`（**前端與首頁 changelog**），
+**不必**跑 `redeploy-oracle.bat`」。
+⇒ 結果 **v6.384／v6.385／v6.386 三版的玩家端前端一版都沒上線**，正式站停在 v6.382，
+而站長以為早就部署好了。休閒對戰的玩家整整三版都沒吃到引擎修正。
+
+根因：我把 `update-admin-full.bat` 當成「前端」。實際讀過三支之後：
+
+| bat | 真正做的事 | 部署到哪 |
+|---|---|---|
+| `redeploy-oracle.bat` | ssh 進 VM 跑 `~/redeploy-oracle.sh`：`git` 同步 → `npm run build` → `rsync` 到 `/opt/ptcg/web/` | **玩家端前端**（SvelteKit 站台、首頁 changelog、前端引擎） |
+| `update-tournament.bat` | 在**本機** `git fetch` + `git reset --hard origin/main` → `node scripts/build-server-engine.mjs` → scp `server-engine.cjs`／`tournament-pool.json`／`server_admin_patch.js`／`admin.html` | **錦標賽伺服器權威引擎** ＋ 伺服器補丁 ＋ admin 後台 |
+| `update-admin-full.bat` | 只 scp `admin.html` ＋ `server_admin_patch.js` ＋ icons | **admin 後台**（是 `update-tournament.bat` 的子集，**完全不碰玩家前端**） |
+
+⭐⭐⭐ **關鍵事實：休閒對戰跑的是「玩家瀏覽器裡的前端引擎」，只有錦標賽才是伺服器權威。**
+⇒ 只要動了 `src/lib/game/**`（引擎、卡片效果），
+**`redeploy-oracle.bat` 與 `update-tournament.bat` 兩支都必跑**，缺一就是只有一半的玩家吃到修正。
+順序：先 `update-tournament.bat`（server）再 `redeploy-oracle.bat`（client）。
+
+- ⭐ 改了 `src/lib/game/**`／`src/routes/**`／`src/lib/*.ts`／`static/*` ⇒ 必跑 `redeploy-oracle.bat`
+- ⭐ 改了 `src/lib/game/**`（server-engine 要重建）或 `oracle-admin/server_admin_patch.js`／`admin.html`
+  ⇒ 必跑 `update-tournament.bat`
+- ⭐ 只改 `admin.html`／`server_admin_patch.js` ⇒ `update-admin-full.bat` 就夠
+
+⚠⚠ **寫部署段之前，一律重新 `cat` 那三支 bat 的內容，禁憑印象、禁抄上一版的部署段。**
+上一版的部署段可能就是錯的（這次就是 v6.385 抄錯、v6.386 再抄一次）。
+
+⭐⭐ **驗收判準：bat 沒報錯 ≠ 部署成功。** 必須實測正式站：
+
+```
+curl -s https://www.ptcg-tw-sim.com/changelog.html | head -c 400      # 第一則的版本號
+curl -s https://www.ptcg-tw-sim.com/_app/version.json                  # 時間戳有沒有變
+```
+
+對照測試站 `https://suenz001.github.io/ptcg-tw-sim/changelog.html` 的第一則。
+**兩邊版本號不一樣，就是還沒部署完**，不管 bat 印了什麼。
+
+---
+
+## Rule 44: build 會寫回「被 git 追蹤的檔案」時，部署腳本一律不可以用 `git pull`
+
+**2026-09-15 的事故**：站長跑 `redeploy-oracle.bat`，VM 上
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        src/lib/home-video.json
+        static/home-video.json
+Aborting
+```
+
+根因：`scripts/fetch-latest-video.mjs`（v6.166 首頁「最新影片」）在 **build 時**抓 YouTube RSS，
+把結果寫進 `src/lib/home-video.json` 與 `static/home-video.json` —— **這兩個檔是 git 追蹤的**。
+⇒ VM 上每 build 一次工作樹就髒一次，下一次 `git pull` **必然**衝突。
+之前沒爆只是因為抓到的值碰巧沒變；站長 9/14 上傳新影片之後值變了，當場炸。
+
+- ⭐ 修法（已套用在 VM 的 `~/redeploy-oracle.sh` 第 5 行）：
+  `git pull` → `git fetch origin && git reset --hard origin/main`
+  這正是 `update-tournament.bat` 本來就在用的寫法 ⇒ 三支部署腳本同一個判準（Rule 38）。
+- ⭐ 通則：**部署腳本同步 repo 一律用 `fetch` + `reset --hard`，不要用 `pull`。**
+  部署目錄是拋棄式的建置產物，本機改動沒有一個是該保留的。
+- ⚠ 排查時先分辨「真的有人改過」還是「只是行尾差異」：
+  `git diff --ignore-cr-at-eol --numstat` —— 檔案從清單裡消失＝純 CRLF/LF 差異，安全可丟。
+- ⚠ VM 的 `~/redeploy-oracle.sh` **不在 repo 裡**，改它要請站長在 VM 上執行，
+  且必須「備份 ＋ 行號與內容雙重錨定」：
+  `cp ~/x.sh ~/x.sh.bak && sed -i '5s|^git pull$|...|' ~/x.sh && cat -n ~/x.sh`
+
+---
+
+## Rule 45: 守衛的 `BASE_SHA` 必須是**留在 `main` 上的那一顆**，不可以是 amend／rebase 前的中途 sha
+
+**2026-09-15，Fable 5 複審 v6.386 抓到**：`scripts/test-v6386-tool-holder-on-ko.mjs` 的
+`BASE_SHA` 填了 `82f40f57`（v6.385 **amend 前**的中途 commit）。
+
+```
+git branch -a --contains 82f40f57   →（空，不在任何分支）
+git branch -a --contains e0f26950   → main / origin/main
+```
+
+懸空 commit 不被任何 ref 保護 ⇒ 本機 `git gc` 之後就消失 ⇒ `hasBaseCommit()` 轉成
+`SHALLOW-SKIP` ⇒ **整個【F】HEAD-FAIL 靜默失效，而守衛看起來還是 46/0 全綠**。
+這是 Rule 40「過期的版本 pin」的變體：守衛沒有變紅，它只是**停止守備**。
+
+- ⭐ 每次寫或 bump `BASE_SHA`／`PREV_SHA` 時，必須驗：
+  `git branch -a --contains <sha>` **一定要印得出 `main`**。
+- ⭐ 在該常數上方寫死這條規範與驗法，讓下一版的人看得到。
+- ⚠ 特別容易踩到的情境：本版 push 過一次、發現問題後 `commit --amend` 再 force push ——
+  這時**新的 sha 才在 main 上**，而我手上記著的往往是 amend 前那顆。
+- ⚠ 這也提醒：**「守衛全綠」不等於「守衛有在守」。** 會 skip 的區段（淺複製、缺歷史、
+  缺檔案）必須在輸出裡明確印出 SKIP，而且每一版都要確認它**沒有**在本機 skip。

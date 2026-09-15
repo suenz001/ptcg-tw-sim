@@ -147,16 +147,36 @@ Fable 誠實列出的「沒能查證」：沒跑 `npm test` 全套（由站長�
 
 ### 【八】部署
 
-⚠ 本版**只動引擎**（`src/lib/game/effects/cards/tools.ts`），**沒有動 `server_admin_patch.js`**
-⇒ 跑 `update-tournament.bat`（引擎）＋ `update-admin-full.bat`（前端與首頁 changelog），
-**不必**跑 `redeploy-oracle.bat`。
+⛔⛔ **v6.386b 更正（原本這一段是錯的，已寫進 IRON_RULES Rule 43）**：
+原文寫「跑 `update-tournament.bat`＋`update-admin-full.bat`，**不必**跑 `redeploy-oracle.bat`」，
+把 `update-admin-full.bat` 誤當成「前端」。實際上它只 scp `admin.html`＋`server_admin_patch.js`
+（admin 後台），**完全不碰玩家前端**；玩家前端是 `redeploy-oracle.bat`（VM 上 build → rsync 到
+`/opt/ptcg/web/`）。而**休閒對戰跑的是玩家瀏覽器裡的前端引擎**，只有錦標賽才是伺服器權威。
+
+⇒ 正確答案：**兩支都要跑**，先 `update-tournament.bat`（錦標賽伺服器引擎）
+再 `redeploy-oracle.bat`（玩家前端）。`update-admin-full.bat` 不必（是前者的子集）。
+
+⚠ 這個錯誤在 v6.385 就寫了、v6.386 照抄，導致 **v6.384／v6.385／v6.386 三版的玩家端前端
+一版都沒上線**（正式站的 changelog 第一則卡在 v6.382），2026-09-15 才發現並補部署。
+⭐ 驗收判準：`curl https://www.ptcg-tw-sim.com/changelog.html` 的第一則版本號
+必須等於測試站的第一則 —— **bat 沒報錯不等於部署成功**。
 
 ## v6.385 ⭐⭐⭐「能量的數量」＝個數的中央化（玩家回報 → 全站 audit 挖出 9 張漏網）
 
 BASE `d369184c386060a6f1f1b700f6fae6b34850be13`（v6.384）。
-⚠ 本版**只動引擎**（`src/lib/game/**`），**沒有動 `server_admin_patch.js`** ⇒
-部署跑 `update-tournament.bat`（引擎）＋ `update-admin-full.bat`（前端與首頁 changelog），
-**不必**跑 `redeploy-oracle.bat`。
+⛔⛔ **v6.386b 更正（原本這一段是錯的，已寫進 IRON_RULES Rule 43）**：
+原文寫「跑 `update-tournament.bat`＋`update-admin-full.bat`，**不必**跑 `redeploy-oracle.bat`」，
+把 `update-admin-full.bat` 誤當成「前端」。實際上它只 scp `admin.html`＋`server_admin_patch.js`
+（admin 後台），**完全不碰玩家前端**；玩家前端是 `redeploy-oracle.bat`（VM 上 build → rsync 到
+`/opt/ptcg/web/`）。而**休閒對戰跑的是玩家瀏覽器裡的前端引擎**，只有錦標賽才是伺服器權威。
+
+⇒ 正確答案：**兩支都要跑**，先 `update-tournament.bat`（錦標賽伺服器引擎）
+再 `redeploy-oracle.bat`（玩家前端）。`update-admin-full.bat` 不必（是前者的子集）。
+
+⚠ 這個錯誤在 v6.385 就寫了、v6.386 照抄，導致 **v6.384／v6.385／v6.386 三版的玩家端前端
+一版都沒上線**（正式站的 changelog 第一則卡在 v6.382），2026-09-15 才發現並補部署。
+⭐ 驗收判準：`curl https://www.ptcg-tw-sim.com/changelog.html` 的第一則版本號
+必須等於測試站的第一則 —— **bat 沒報錯不等於部署成功**。
 
 ### 【零】來源
 
