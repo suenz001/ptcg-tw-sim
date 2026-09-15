@@ -1476,7 +1476,7 @@ git branch -a --contains e0f26950   → main / origin/main
 
 ## Rule 46: 守衛的 `ROOT` 一律用 `fileURLToPath`，**禁止** `new URL(import.meta.url).pathname.slice(1)`
 
-**2026-09-15，v6.388 的 CI 整支 build job 紅了三天沒被發現**：
+**2026-09-15，v6.388 的 CI 整支 build job 連紅兩版（約 2.5 小時）沒被發現**：
 `scripts/test-v6388-mf-wave1.mjs` 的 ROOT 寫成
 
 ```js
@@ -1525,3 +1525,20 @@ GET https://api.github.com/repos/suenz001/ptcg-tw-sim/actions/runs?per_page=4
 
 ⚠ **CI 紅 ⇒ 測試站沒更新 ⇒ 在測試站上做的任何「驗收」都是在驗舊版。**
 所以順序是：push → **先確認 CI 兩個 workflow 都 success** → 才去跑免疫測試網。
+
+### ⚠ 附帶的一條：**寫進文件的每一個數字都要現查，不可以憑記憶**
+
+這一條 Rule 的初稿我自己寫了「紅了**三天**」，Fable 5 複審時用 GitHub API 實查打臉：
+
+```
+754f17ab Deploy | success | 2026-09-15T08:41Z
+821fb5ca Deploy | failure | 2026-09-15T07:41Z
+d1098d1c Deploy | failure | 2026-09-15T06:09Z
+af368113 Deploy | success | 2026-09-15T04:05Z
+```
+
+實際是**兩版、約 2.5 小時**。「三天」是把另一件事（v6.384~386 的正式站 changelog 卡在 v6.382 三天，Rule 43）
+的記憶帶過來的。而同一版的 R2 正好就在修「不實 JSDoc」——
+**我一邊修別人的不實陳述，一邊寫下新的不實陳述。**
+
+⇒ 文件裡的時間、次數、版本號、張數，一律**現查再寫**；查法要一併寫進文件，讓下一個人能複驗。

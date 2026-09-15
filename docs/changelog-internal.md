@@ -1,6 +1,100 @@
 # 內部改版紀錄（不打包進網站）
 
-## v6.388b ⭐⭐⭐ CI 紅了三天沒被發現：守衛的 ROOT 用了 Windows-only 寫法 ⇒ 測試站整版沒更新
+## v6.388c ⭐⭐ Fable 5 複審 v6.388a/b 的三個 🟡：【F】節掃描條件太窄、下限太鬆、我寫了不實陳述
+
+BASE `754f17abe881355cfed92ecc5731ddee3becb2ee`（v6.388b）。
+⚠ 本版**只動守衛與文件**，`src/` 一行都沒改 ⇒ **不需要重跑 bat**。
+
+Fable 5 對 v6.388a/b 的判定是 **🔴 = 0（可以跑 bat）**，但開了 4 個 🟡。
+我逐一實測，其中 3 個屬實、本版修掉；第 4 個是既有問題，列待辦。
+
+### 【一】🟡1 【F】節的掃描條件太窄（**Fable 實測過，不是假設**）
+
+原本是 `/^const\s+ROOT\s*=/` —— 第 0 欄、只認 `ROOT` 這個名字、只認單行。
+他放了一支探針，裡面四種 Windows-only 壞寫法（`REPO_ROOT`、縮排、跨兩行、`export const`），
+跑守衛 **148/0 全綠，F1 完全沒紅**。
+
+我自己複查 repo 現況：
+
+```
+git grep -c "^const REPO_ROOT\s*=" -- scripts   → 23 支
+git grep -c "^export const ROOT"    -- scripts   → 3 支
+（含 import.meta.url 但逃過舊掃描條件的行，合計 55 行）
+```
+
+修法 —— **兩層防線**：
+
+| 層 | 做什麼 | 抓得到什麼 |
+|---|---|---|
+| **F1 行為層** | 掃描條件放寬成 `(export)? const/let/var <任何名字> =`，把每一行**真的求值**（模擬 POSIX） | 單行的各種變數名、縮排 |
+| **F5 字串層** | Rule 46 本文的直接執行面：任何**非註解**行同時出現 `import.meta` 的 url 與 URL 的 path name 就紅 | 跨行定義、包在函式裡、求值不出來的寫法 |
+
+⚠ F1 的納入條件踩了三個坑，每個都是「假紅」：
+1. `const require = createRequire(import.meta.url);` —— 不是路徑計算。
+2. `const ROOT_LINE = "const ROOT = fileURLToPath(...)";`（test-v6246）—— 右側是**字串樣本**。
+3. `const self = normEol(readFileSync(fileURLToPath(import.meta.url), 'utf8'));` —— 讀檔不是算路徑。
+
+⇒ 改成「右側的識別字必須全部在白名單內」才納入。
+⚠⚠ 白名單**必須包含 `pathname` 與 `slice`**，否則 v6.388 那個壞寫法會被這一關放走；
+也**必須包含 `new`**，否則 `new URL(...)` 型全被濾掉（第一次漏了 `new`，rows 從 792 掉到 **56**）。
+
+⚠ F5 自己會命中自己（自指假紅），踩了兩次：
+・本節開頭**逐字引用**壞寫法的註解行 ⇒ 純註解行不算違規（Rule 46 禁的是會執行的程式碼）。
+・F5 的**實作行**與**斷言標題**本身含那兩個字面 ⇒ 關鍵字拆開組（`'import.meta' + '.url'`），標題改寫。
+・守衛自己的樣本行（BAD 常數、F5b 的 probe 陣列）用行尾 `F5-EXEMPT` 標記豁免，
+  並加 **F5c**：豁免標記最多 3 行、且必須全部在本檔（不得被拿來繞過 F5）。
+
+### 【二】🟡2 F0 下限太鬆
+
+原本 400，實測 tracked 的路徑根定義行是 **737**（放寬條件後 792）⇒ 掃描器壞到剩一半仍然綠。
+已提高到 **700**。
+另外掃描母體改成排除 `tmp*`／`_*`／`.*` —— 站長機器上 `scripts/` 有 30 支未追蹤的暫存檔，
+本機與 CI 的母體不同，一支垃圾檔就能弄出假紅。
+
+### 【三】🟡3 ⚠⚠ 我自己寫了不實陳述
+
+changelog 標題與 Rule 46 本文都寫「CI 紅了**三天**」。Fable 用 GitHub API 實查：
+
+```
+754f17ab Deploy | success | 2026-09-15T08:41Z
+821fb5ca Deploy | failure | 2026-09-15T07:41Z
+d1098d1c Deploy | failure | 2026-09-15T06:09Z
+af368113 Deploy | success | 2026-09-15T04:05Z
+```
+
+實際是**兩版、約 2.5 小時**。「三天」是把 Rule 43 那件事（正式站 changelog 卡在 v6.382 三天）
+的記憶帶過來的 —— **而同一版的 R2 正好就在修「不實 JSDoc」**。
+已改正，並把「文件裡的數字一律現查、不可憑記憶」寫進 Rule 46。
+
+### 【四】🟡4 既有的 Rule 38 殘留（**不是** v6.388a/b 造成，列待辦）
+
+- 「**造成**這隻寶可夢身上放置的傷害指示物的數量×10點傷害」：
+  `石居蟹|抓狂`（`v2660_i_wave16_misc9.ts:192`）、`鐵炮魚|抓狂`（`v2510_i_wave3c_status_self.ts:90`）
+  仍是本地手寫，而同措辭的 `寶寶暴龍|勃然大怒` v6.349 早就併進 `selfCountersMultiplyPre(0, 20, …)`。
+- 「對手戰鬥寶可夢傷害指示物 ×N」至少 **4 份**：`effects.ts` 的 `oppActiveCounters` 6 處 inline、
+  `v2740:281 閃電鳥`、`v3700:192 小拉達`、`v2490:93 oppActiveDamageCountPre`、`v2620:118 oppActiveCounterCountPre`。
+
+### 【五】🟡5 給站長的一件事（我不擅自動）
+
+`git remote get-url origin` 會直接印出內嵌在 URL 裡的 GitHub PAT。
+建議把 token 從 remote URL 拿掉、改用 Git Credential Manager。
+
+### 【六】驗收
+
+- `scripts/test-v6371-guard-hygiene.mjs`：**PASS 151 / FAIL 0**（F 節 8 條：F0/F1/F2/F3/F4/F5/F5b/F5c）
+- 突變測試 `__m6a/v388s_mutate.mjs`（每個都保持可編譯，跑完自動還原）：
+
+```
+✅ M1 壞 ROOT 放回 test-v6388            → F1 紅、F5 紅
+✅ M2 REPO_ROOT／export const／縮排 三變形 → F1 紅、F5 紅   ← Fable 指出的漏洞，新版抓得到了
+✅ M3 跨行定義（F1 的單行解析器抓不到）    → F5 紅          ← 證明兩層防線缺一不可
+✅ 還原後回到全綠：PASS 151 / FAIL 0
+```
+
+---
+
+
+## v6.388b ⭐⭐⭐ CI 連紅兩版沒被發現：守衛的 ROOT 用了 Windows-only 寫法 ⇒ 測試站整版沒更新
 
 BASE `821fb5caa75f08ace73097e571ed45b00909d61e`（v6.388a）。
 ⚠ 本版**只動守衛與文件**，`src/` 一行都沒改。

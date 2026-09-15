@@ -619,28 +619,38 @@ console.log('\n【E】本守衛自己必須在 npm test chain 裡');
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-console.log('\n【F】⭐v6.388b 守衛的 ROOT 必須是**跨平台**的（Windows-only 寫法會讓 CI 紅、deploy 被 skip）');
+console.log('\n【F】⭐v6.388b/c 守衛的 ROOT 必須是**跨平台**的（Windows-only 寫法會讓 CI 紅、deploy 被 skip）');
 // v6.388 的 test-v6388-mf-wave1.mjs 寫了
 //   const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');
 // `.slice(1)` 只在 Windows 對（pathname 是 `/E:/x/...`）；Linux 的 pathname 是 `/home/...`，
 // 砍掉開頭那個 '/' 就變成**相對路徑** ⇒ CI 上 ENOENT ⇒ build job 全紅 ⇒ deploy job 被 skip
 // ⇒ **測試站（GitHub Pages）整版沒有更新**，而本機（Windows）永遠測不出來。
-// ⇒ 這一節把每支守衛的 ROOT 定義行**真的求值一次**，餵 POSIX 形狀的 file:// URL，
-//   斷言算出來是絕對路徑 —— 行為層，不是 grep 字串。
 //
-// ⚠ 求值環境必須是**模擬的 POSIX**，不可以直接餵 node 內建的 fileURLToPath：
-//   在 Windows 上 fileURLToPath('file:///home/x') 會 throw ERR_INVALID_FILE_URL_PATH
-//   （它要求 drive letter 或 UNC）⇒ 每一行都算不出來、整節變成恆綠的安慰劑。
-//   所以這裡用 path.posix 的 join/dirname/isAbsolute ＋ 一支 posix 版的 fileURLToPath shim。
+// 兩層防線：
+//   F1 行為層 —— 把每一行「路徑根變數的定義」**真的求值一次**（餵 POSIX 形狀的 file:// URL、
+//      用 path.posix 的 join/dirname/isAbsolute），斷言算出來是絕對路徑。
+//   F5 字串層 —— Rule 46 本文的直接執行面：任何一行同時出現 `import.meta.url` 與 `.pathname`
+//      就紅。多行定義、奇怪的變數名、求值不出來的寫法，都逃不過這一條。
+//
+// ⚠ 求值環境必須是**模擬的 POSIX**：在 Windows 上 fileURLToPath('file:///home/x') 會 throw
+//   ERR_INVALID_FILE_URL_PATH（它要求 drive letter 或 UNC）⇒ 直接餵 node 內建那支的話，
+//   每一行都算不出來 ⇒ 整節變成恆綠的安慰劑（v6.388b 第一次寫就踩到）。
+//
+// ⚠v6.388c（Fable 5 複審 🟡1／🟡2）：
+//   ・掃描條件原本是 `/^const\s+ROOT\s*=/`（第 0 欄、只認 ROOT 這個名字、只認單行）
+//     ⇒ repo 裡 23 支 `const REPO_ROOT =`、3 支 `export const ROOT`、以及縮排寫法（共 55 行）
+//     **完全逃過掃描**。已放寬成「(export) const|let|var <任何名字> =」。
+//   ・F0 下限原本是 400，實際 tracked 是 737 ⇒ 掃描器壞到只剩一半仍然綠。已提高到 700。
 {
   const POSIX_URL = 'file:///home/runner/work/ptcg-tw-sim/ptcg-tw-sim/scripts/x.mjs';
   const P = pathMod.posix;
   const fileURLToPathPosix = (u) => decodeURIComponent(new URL(u).pathname);
-  /** 把一行 `const ROOT = <expr>;` 在模擬的 POSIX 環境下求值；回傳字串，求不出來回傳 null */
+  /** 把一行 `<decl> <名字> = <expr>;` 在模擬的 POSIX 環境下求值；回傳字串，求不出來回傳 null */
   const evalRootLine = (line, url) => {
-    // ⚠ 有些守衛把 ROOT 和別的宣告寫在同一行（test-swap-ability.mjs），
+    // ⚠ 有些守衛把根變數和別的宣告寫在同一行（test-swap-ability.mjs），
     //   所以取「第一個分號之前」，不能只砍行尾分號。
-    const expr = line.replace(/^\s*const\s+ROOT\s*=\s*/, '').split(';')[0]
+    const expr = line.replace(/^\s*(export\s+)?(const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*/, '')
+      .split(';')[0]
       .replace(/import\.meta\.url/g, '__U');
     try {
       // eslint-disable-next-line no-new-func
@@ -650,27 +660,59 @@ console.log('\n【F】⭐v6.388b 守衛的 ROOT 必須是**跨平台**的（Wind
       return typeof v === 'string' ? v : null;
     } catch { return null; }
   };
-  const files = readdirSync(join(ROOT, 'scripts')).filter((x) => x.endsWith('.mjs'));
+  // ⚠ 只掃**正式的**守衛檔：站長機器上 scripts/ 常有未追蹤的 tmp*.mjs／_repro*.mjs，
+  //   本機與 CI 的掃描母體會不一樣，一支垃圾檔就能弄出假紅。
+  const isFormal = (f) => f.endsWith('.mjs') && !/^(tmp|_|\.)/.test(f);
+  // 求值環境提供得起的識別字（含 pathname/slice —— 壞寫法要進得來才守得到）
+  const ALLOWED_IDENTS = new Set(['URL', 'fileURLToPath', 'join', 'dirname', 'path', 'process', '__U',
+    'posix', 'resolve', 'normalize', 'relative', 'sep', 'isAbsolute', 'env', 'cwd', 'argv',
+    'pathname', 'href', 'slice', 'substring', 'replace', 'decodeURIComponent', 'String',
+    'new', 'typeof', 'void', 'null', 'true', 'false', 'undefined']);   // ⚠ 'new' 一定要有，否則 new URL(...) 全被濾掉
+  const onlyAllowedIdents = (line) => {
+    const rhs = line.replace(/^\s*(export\s+)?(const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*/, '').split(';')[0]
+      .replace(/import\.meta\.url/g, '__U')
+      .replace(/process\.env\.[A-Za-z_$][\w$]*/g, 'process')   // 環境變數名不是識別字白名單的事
+      .replace(/(['"`])(?:\\.|(?!\1).)*\1/g, "''");   // 先把字串字面挖掉，免得字串內容被當識別字
+    const ids = rhs.match(/[A-Za-z_$][\w$]*/g) || [];
+    return ids.every((id) => ALLOWED_IDENTS.has(id));
+  };
+  const scanDirs = ['scripts', 'scripts/lib'];
   const rows = [];
-  for (const fn of files) {
-    const src = readFileSync(join(ROOT, 'scripts', fn), 'utf8');
-    for (const line of src.split(/\r?\n/)) {
-      if (!/^const\s+ROOT\s*=/.test(line)) continue;
-      if (!line.includes('import.meta.url')) continue;   // process.argv／cwd 型不在守備範圍
-      rows.push({ fn, line: line.trim() });
+  const allLines = [];
+  for (const d of scanDirs) {
+    let names = [];
+    try { names = readdirSync(join(ROOT, d)); } catch { continue; }
+    for (const fn of names.filter(isFormal)) {
+      const src = readFileSync(join(ROOT, d, fn), 'utf8');
+      for (const line of src.split(/\r?\n/)) {
+        allLines.push({ fn: d + '/' + fn, line });
+        if (!line.includes('import.meta.url')) continue;
+        if (!/^\s*(export\s+)?(const|let|var)\s+[A-Za-z_$][\w$]*\s*=/.test(line)) continue;
+        // ⚠ 只收「真的在算路徑」的行 —— createRequire(import.meta.url) 這種不是路徑計算，
+        //   硬拿去求值只會得到 null ⇒ 假紅。路徑計算一定會用到 fileURLToPath 或 new URL。
+        if (!/fileURLToPath|new URL|\.pathname/.test(line)) continue;
+        // ⚠ 右側是純字串字面的不算（別的守衛會把 ROOT 定義存成字串樣本去做突變測試，
+        //   例如 test-v6246 的 const ROOT_LINE = "const ROOT = fileURLToPath(...)";）
+        if (/^\s*(export\s+)?(const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*['"`]/.test(line)) continue;
+        // ⚠ 只收「純路徑計算」的行：右側用到我們沒提供的函式（readFileSync、normEol…）
+        //   就不是路徑根定義，硬拿去求值只會得到 null ⇒ 假紅。那些形狀由 F5 字串層守。
+        //   ⚠ 白名單**必須**包含 pathname／slice，否則 v6.388 那個壞寫法會被這一關放走。
+        if (!onlyAllowedIdents(line)) continue;
+        rows.push({ fn: d + '/' + fn, line: line.trim() });
+      }
     }
   }
-  chk('F0 ★ 下限斷言：掃得到夠多支守衛的 ROOT 定義（掃描器壞掉會在這裡紅）',
-      rows.length >= 400, String(rows.length));
+  chk('F0 ★ 下限斷言：掃得到夠多支守衛的路徑根定義（掃描器壞掉會在這裡紅）',
+      rows.length >= 700, String(rows.length));
   const broken = rows.filter((r) => {
     const v = evalRootLine(r.line, POSIX_URL);
     return v === null || !P.isAbsolute(v);
   });
-  chk('F1 ⭐⭐⭐ 每一支守衛的 ROOT 在 **POSIX**（Linux／CI）底下都必須算出**絕對路徑**',
+  chk('F1 ⭐⭐⭐ 每一行路徑根定義在 **POSIX**（Linux／CI）底下都必須算出**絕對路徑**',
       broken.length === 0, JSON.stringify(broken.slice(0, 5)));
   // ★★ 正對照：v6.388 那個 Windows-only 寫法，必須被同一個 evaluator 判成「非絕對」
   //    —— 這一條證明 F1 不是恆真（沒有它，F1 在 evaluator 壞掉時也會綠）
-  const BAD = "const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');";
+  const BAD = "const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');";   // F5-EXEMPT 守衛自己的樣本
   const badVal = evalRootLine(BAD, POSIX_URL);
   chk('F2 ★★ 正對照：v6.388 那個 Windows-only 寫法，在 POSIX 底下確實算出**相對路徑**',
       typeof badVal === 'string' && !P.isAbsolute(badVal), JSON.stringify(badVal));
@@ -679,11 +721,40 @@ console.log('\n【F】⭐v6.388b 守衛的 ROOT 必須是**跨平台**的（Wind
   const goodVal = evalRootLine(GOOD, POSIX_URL);
   chk('F3 ★ 反向正對照：官方寫法在同一個 evaluator 下算得出絕對路徑（evaluator 沒壞）',
       typeof goodVal === 'string' && P.isAbsolute(goodVal), JSON.stringify(goodVal));
-  // ★ 第二種官方寫法（join(dirname(fileURLToPath(import.meta.url)), '..')）也要算得出來
   const GOOD2 = "const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');";
   const good2 = evalRootLine(GOOD2, POSIX_URL);
   chk('F4 ★ 反向正對照2：join(dirname(fileURLToPath(...))) 型也算得出絕對路徑',
       typeof good2 === 'string' && P.isAbsolute(good2), JSON.stringify(good2));
+  // ★★★ F5：Rule 46 本文的直接執行面 —— 字串層禁令，把 F1 求值抓不到的形狀全部堵死
+  //   （多行定義、包在函式裡、算不出來的寫法……只要同一行同時出現這兩個東西就是違規）
+  // ⚠ 這三個字面都要拆開組，否則這一節自己的實作行就會命中自己的判準（自指假紅）。
+  const F5_EXEMPT = 'F5-' + 'EXEMPT';
+  const K_URL = 'import.meta' + '.url';
+  const K_PATH = '.path' + 'name';
+  //   ⚠ 純註解行不算違規（Rule 46 禁的是**會執行的程式碼**，不是說明文字；
+  //     本節開頭的說明就必須逐字引用那個壞寫法）。
+  const isComment = (l) => { const t = l.trim(); return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'); };
+  const pathnameViolations = allLines.filter((r) =>
+    !isComment(r.line) && r.line.includes(K_URL) && r.line.includes(K_PATH)
+    && !r.line.includes(F5_EXEMPT));
+  // ⚠ 斷言標題也要避開那兩個字面（否則這一行自己就是違規行）
+  chk('F5 ⭐⭐⭐ scripts/ 裡不得有任何一行同時出現 import.meta 的 url 與 URL 的 path name（IRON_RULES Rule 46）',
+      pathnameViolations.length === 0,
+      JSON.stringify(pathnameViolations.slice(0, 5).map((r) => r.fn + ' :: ' + r.line.trim().slice(0, 90))));
+  // ★ F5 的正對照：判準真的抓得到（否則 F5 在掃描器壞掉時也會綠）
+  const probe = [
+    "  const REPO_ROOT = dirname(new URL(import.meta.url).pathname.slice(1));",   // F5-EXEMPT 守衛自己的樣本
+    "export const ROOT3 = new URL(import.meta.url).pathname.slice(1);",           // F5-EXEMPT 守衛自己的樣本
+    "const clean = fileURLToPath(new URL('..', import.meta.url));",
+  ];
+  const caught = probe.filter((l) => l.includes(K_URL) && l.includes(K_PATH) && !l.includes(F5_EXEMPT));
+  chk('F5b ★★ 正對照：F5 的判準抓得到 REPO_ROOT／export const／縮排 三種變形，且不誤殺正確寫法',
+      caught.length === 2, JSON.stringify(caught.length));
+  // ★ 豁免不得被濫用：全 scripts/ 只允許守衛自己那一行
+  const exemptRows = allLines.filter((r) => r.line.includes(F5_EXEMPT));
+  chk('F5c ★ 豁免標記只准出現在本守衛自己的樣本行（不得被拿來繞過 F5）',
+      exemptRows.length <= 3 && exemptRows.every((r) => r.fn === 'scripts/' + SELF.replace(/^scripts\//, '')),
+      JSON.stringify(exemptRows.map((r) => r.fn)));
 }
 
 
