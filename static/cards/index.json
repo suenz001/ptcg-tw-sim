@@ -632,5 +632,20 @@
   "scrapedAt": "2026-09-09T07:30:00.000Z",
   "releaseDate": "2026-09-16",
   "count": 168
+ },
+ {
+  "code": "MF",
+  "name": "頂級牌組組合 「太陽伊布・月亮伊布」",
+  "regulationMark": "J",
+  "cardCount": 49,
+  "supertypeCounts": {
+   "Pokemon": 31,
+   "Trainer": 13,
+   "Energy": 5
+  },
+  "coverImageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019684.png",
+  "scrapedAt": "2026-09-15T04:08:27.947Z",
+  "releaseDate": "2026-09-16",
+  "count": 49
  }
 ]

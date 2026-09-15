@@ -2,7 +2,7 @@ import type { Card } from '$lib/cards/types';
 import type { CardInstance, GameState } from '../../types';
 import { addLog, drawCards, healResolver, regPost, regPre, regR, updatePlayer, withPending, countAttachedEnergyAsUnits } from '../_shared';
 import { hasStatusInAnySlot } from '../_shared'; // v5.834 跨三槽狀態讀取
-import { flipCoinsWithLog, flipCoinsUntilTails, applyStatusToSelfActive } from '../../effects';
+import { flipCoinsWithLog, flipCoinsUntilTails, applyStatusToSelfActive , defHasCountersBonusPre } from '../../effects';
 import { computeActiveRetreatCostFor } from '../../engine'; // v5.711 有效撤退費(整隻咬)
 
 function allPokemon(state: GameState, idx: 0 | 1): CardInstance[] {
@@ -77,10 +77,7 @@ regPre('南瓜怪人ex|恐怖輪舞', (state, aIdx) => {
 });
 
 // 超級大力鱷ex｜晶光嚼碎：若對手戰鬥寶可夢有傷害指示物，200+200。
-regPre('超級大力鱷ex|晶光嚼碎', (state, aIdx) => {
-  const def = state.players[1 - aIdx as 0 | 1].active;
-  return { state, damage: def && def.damage > 0 ? 400 : 200 };
-});
+regPre('超級大力鱷ex|晶光嚼碎', defHasCountersBonusPre(200, 200, '晶光嚼碎'));   // ⭐v6.388 收斂到中央
 
 // 泥巴魚ex｜濕漉漉陷阱：若自身有傷害指示物，100+100。
 regPre('泥巴魚ex|濕漉漉陷阱', (state, aIdx) => {

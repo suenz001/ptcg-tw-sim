@@ -668,7 +668,9 @@ console.log('\n⑩ 玩家端零改動 / 版本 / 行尾');
 //   改為比「上一版（PREV_SHA）的 blob」vs「**工作樹實際內容**」（不是 HEAD，避免建 commit 前後的雞生蛋），
 //   預期差異清單 PREV_ALLOWED 由每一版主動維護：admin-only 版＝只有 version.ts；
 //   動了玩家端的版本必須把動過的檔案列進來（列不齊就紅 —— 這正是守護意圖）。
-const PREV_SHA = 'e0f2695028edcfaed81034f312a5b53385c2075e';   // v6.385（v6.386 的上一版）
+const PREV_SHA = 'af36811389c5a546e9da86ddbc2f35487a0aadfa';   // v6.387（v6.388 的上一版）
+// ⚠ v6.387 是純工具版（scripts/ ＋ oracle-admin/verify-deploy.bat ＋ docs/），src/ 與 static/ 零改動
+//   ⇒ 從它到本版的 src/static 差集就是 v6.388 的全部玩家端改動。
 // ⭐v6.312：純守衛修正（strip-comments.mjs 行級狀態機：修 v6.311 四種「單行區塊／`*` 續行／收尾行接程式碼」假綠；
 //   test-v6277 帶括號 token＋B1~B4 正對照＋反面對照改內嵌）—— 玩家端零改動，只有 version.ts；不動首頁 changelog。
 // ⭐v6.311：純守衛修正（test-v6277 Gc 剝註解計數 ＋ scripts/lib/strip-comments.mjs 中央 helper）——
@@ -755,11 +757,23 @@ const PREV_SHA = 'e0f2695028edcfaed81034f312a5b53385c2075e';   // v6.385（v6.38
 //   （countEnergyTypeHostAware 併入繁茂、countAttachedEnergyAsUnits／countOneEnergy 的
 //    state/ownerIdx 改必填）＋ 12 個卡片檔補上 ctx。玩家端會看到傷害數字變正確。
 const PREV_ALLOWED = [
-  // ⭐v6.386：玩家端只動了 tools.ts（registerToolOnDamagedAndKO 的 holder 收斂）
-  //   ＋ version.ts ＋ 首頁 changelog 三步搬運（三檔）。
-  //   ⚠ engine.ts／effects.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 零改動。
-  'src/lib/game/effects/cards/tools.ts',
+  // ⭐v6.388：MF 卡包上線（資料層 ＋ 招式實裝批次1）。
+  //   ・effects.ts：coinHeadsSelfImmuneNextPost 加 export、ABILITY_RETREAT_MOD 收斂
+  //     森林秘道／夜之秘道共用判準、載入 mf_wave1
+  //   ・mf_wave1.ts：新檔（10 招，全部復用既有中央 helper）
+  //   ・static/cards/MF.json：新檔（49 張）；index.json ＋ card-set-map.json：各加 MF
+  //   ・首頁 changelog 三步搬運（三檔）＋ version.ts
+  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 零改動。
+  'src/lib/game/effects.ts',
+  'src/lib/game/effects/cards/m6_wave2.ts',
+  'src/lib/game/effects/cards/mf_wave1.ts',
+  'src/lib/game/effects/cards/mf_wave2.ts',
+  'src/lib/game/effects/cards/v2346_j_mark_batch.ts',
+  'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',
   'src/lib/version.ts',
+  'static/card-set-map.json',
+  'static/cards/MF.json',
+  'static/cards/index.json',
   'static/changelog-archive.html',
   'static/changelog-bodies.html',
   'static/changelog.html',

@@ -16,6 +16,7 @@ import {
   defIsEvolvedPre, defIsExPre, coinPlusPre, oppBenchMultiplyPre,
   coinHeadsMultiplyPre, coinTailsFailPre, prizesConditionPre,
   chooseOppPokemonDamage, chooseOppBenchDamage,
+  defHasCountersBonusPre,   // ⭐v6.388 收斂到中央
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -29,12 +30,7 @@ regPre('蜂女王|俐落一擊', defIsEvolvedPre(80, 80, '俐落一擊'));
 //   超級具甲武者ex｜致命刺擊 damage='60+'：…則增加160點傷害。
 //   判準：對手 active.damage > 0（damage 即傷害指示物×10）。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('超級具甲武者ex|致命刺擊', (state, aIdx, _pool) => {
-  const def = state.players[(1 - aIdx) as 0 | 1];
-  const hurt = (def.active?.damage ?? 0) > 0;
-  const dmg = hurt ? 60 + 160 : 60;
-  return { state: addLog(state, `致命刺擊：對手${hurt ? '身上有傷害指示物 +160' : '身上無傷害指示物'} = ${dmg}`, aIdx), damage: dmg };
-});
+regPre('超級具甲武者ex|致命刺擊', defHasCountersBonusPre(60, 160, '致命刺擊'));   // ⭐v6.388 收斂到中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // C 對手剩餘獎賞卡 ≤ N → 加傷（既有 7 張，範本：蒼響｜界限破壞）

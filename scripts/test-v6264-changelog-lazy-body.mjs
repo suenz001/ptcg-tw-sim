@@ -39,7 +39,9 @@ const TMP = mkdtempSync(join(tmpdir(), 'v6264-'));
 //   （BASE 裡沒有 v6.271~v6.273 的條目）。自 v6.275 起：**不動 changelog 的版本**（admin-only）
 //   由下方的 F0 短路涵蓋（三檔與 BASE 逐位元相同即無損成立），pin 只需在**動了 changelog**
 //   的版本前移到上一版。
-const BASE_SHA = 'e0f2695028edcfaed81034f312a5b53385c2075e'; // v6.384（v6.385 的前一版；v6.384 動過首頁 changelog，本版又動一次 ⇒ pin 必須前移，【F】才驗得到本版的搬運）
+const BASE_SHA = 'af36811389c5a546e9da86ddbc2f35487a0aadfa'; // v6.387（v6.388 的前一版；本版又動一次首頁 changelog ⇒ pin 必須前移，【F】才驗得到本版的搬運）
+// ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**（git branch -a --contains <sha> 要印得出 main）——
+//    amend／rebase 前的中途 sha 是懸空的，本機 git gc 後就消失，整個【F】會靜默退化成 SKIP。IRON_RULES Rule 45。
 //   所以 v6.383 動 changelog 時**刻意不把 pin 往前挪**：留在 v6.381 才能讓【F】真的跑一次逐字還原比對，挪到 v6.382 結果一樣但沒有多守到東西）
 // ⭐⭐⭐ v6.332：則數政策一律從 `scripts/lib/changelog-policy.mjs` 讀（Rule 38：判準只能有一份）。
 //   在那之前「50」被抄在三支守衛裡，改政策時 test-v6223 會莫名其妙誤紅。

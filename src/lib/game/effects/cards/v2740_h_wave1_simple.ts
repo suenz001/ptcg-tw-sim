@@ -29,6 +29,7 @@ import {
   selfHitPost,
   countEnergyTypeHostAware,
   selfCantAttackNextPost, discardOppActiveEnergyPost,
+  ownFieldCountMultiplyPre,   // ⭐v6.388 收斂到中央
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
 
@@ -263,12 +264,7 @@ regPre('卡璞・鳴鳴ex|閃電結連', (state, aIdx, _pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 11. 自方場上寶可數 ×N（1 張）— 大宇怪|宇宙律動
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('大宇怪|宇宙律動', (state, aIdx, _pool) => {
-  const p = state.players[aIdx];
-  const n = (p.active ? 1 : 0) + p.bench.length;
-  const dmg = n * 20;
-  return { state: addLog(state, `宇宙律動：自方場上寶可 ${n} → ${n}×20 = ${dmg}`, aIdx), damage: dmg };
-});
+regPre('大宇怪|宇宙律動', ownFieldCountMultiplyPre(20, '宇宙律動'));   // ⭐v6.388 收斂到中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 12. 自身指示物 ×10（2 張）

@@ -1,5 +1,206 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.388 ⭐⭐⭐ MF 卡包完整上線（資料層 ＋ 16 招 ＋ 1 特性，一版做完）
+
+BASE `af36811389c5a546e9da86ddbc2f35487a0aadfa`（v6.387）。
+⚠ 本版動了 `src/lib/game/**` 與 `static/cards/**` ⇒ 部署要跑 **`update-tournament.bat`（先）
+＋ `redeploy-oracle.bat`（後）** 兩支（IRON_RULES Rule 43；卡池同時活在伺服器端與玩家前端）。
+跑完用 `oracle-admin\verify-deploy.bat` 驗收。
+
+### 【零】來源
+
+> 站長：「我發現我們還有擴充包沒有抓到也沒有實裝，請排入排程
+>   https://asia.pokemon-card.com/tw/card-search/list/?expansionCodes=MF
+>   他的發售日也是9月16日，與m6a相同」
+
+卡包正式名稱取自官方卡牌檢索頁 `value="MF"` 的 label 逐字：**頂級牌組組合 「太陽伊布・月亮伊布」**。
+
+### 【一】資料層
+
+`node scripts/scrape/scrape-set.js MF --delay 700` ⇒ **49 張，0 失敗**（J 標 43 ＋ I 標 6）。
+
+| 項目 | 值 |
+|---|---|
+| `static/cards/MF.json` | 新檔，49 張 |
+| `static/cards/index.json` | 手術式加一筆（⚠ 絕不可用 `build-sets-index.js` 重生）；既有 43 筆**逐字未動**（腳本內有斷言） |
+| `static/card-set-map.json` | 5143 → 5192 筆（守衛 `test-card-db-integrity` 抓到缺 49 筆，補齊後綠） |
+| 封面 | ⚠ 官方沒有 MF 的 ogp 圖（三個慣用路徑實測都 404）⇒ 暫用主打卡的官方卡圖；日後可換成產品圖 |
+
+#### ⭐ 「老大的指令（烏羽）」沿用站長 2026-08-15 的裁定改名
+
+MF 039/040（id 19709）官方卡名是「老大的指令（烏羽）」。站長 2026-08-15 裁定
+「老大的指令」與括號冠名版**算同名卡**（共用 4 張上限），v6.193 已把 M-P 215（id 19630）
+改名並把 `gust-supporters.ts` 的括號條目刪掉（留著＝零產出的死條目）。
+⇒ 本版沿用同一裁定：改名之後直接吃 `supporters_gust.ts` 的 `registerGustSupporter` 中央註冊，
+**零新程式碼**，牌組 4 張上限也自動正確。
+⚠ 改名前腳本先斷言「MF 這張的 `rulesText` 與既有『老大的指令』**逐字相同**」——
+效果不同就不可以共用註冊。
+
+### 【二】⭐⭐ 實裝盤點（行為端，不是字串比對）
+
+`__m6a/mf_impl_audit.mjs` 真的 bundle 引擎，讀 `ATTACK_PRE`／`ATTACK_POST`／`ABILITY_*`／
+`TRAINER_EFFECTS` 的**實際註冊表**逐項比對（`scripts/audit-hij-impl.mjs` 那種字串比對會被註解騙到）：
+
+| 類別 | 結果 |
+|---|---|
+| 招式 | 需要登錄且已有 5／**需要登錄但缺 21**（去重後 15 個 key）／不必登錄（純傷害）19 |
+| 特性 | 缺 1（索羅亞克｜夜之秘道） |
+| 訓練家 | 已有 12／缺 1（老大的指令，已靠改名解決） |
+
+另外用 `__m6a/mf_collision.mjs` 驗過「同 effectKey 但效果不同」的撞號風險：
+只有 **伊布｜電光一閃** 報出來，差異**只在 cost**（MF 2 個【無】／SV5a 3 個【無】），
+damage 與 effect 逐字相同 —— cost 是引擎從卡片資料讀的，不走 effectKey ⇒ 共用註冊是對的。
+
+### 【三】⭐⭐⭐ 批次1（10 招 ＋ 1 特性，全部復用既有中央 helper）
+
+新檔 `src/lib/game/effects/cards/mf_wave1.ts`。每一條的類推依據都是
+`__m6a/v388_findsame.mjs` 實測「卡面 `effect` 逐字相同的既有卡」，不是憑印象：
+
+| MF | 中央 helper | 逐字相同的既有卡 |
+|---|---|---|
+| 熱帶龍｜捲土重來 30+ | `revengeDamageKOPre(30, 90)` | 普隆隆姆｜捲土重來（SV6） |
+| 六尾｜踹 30 | `coinTailsFailPre(30)` | 炎兔兒｜踹（M1L，全站 19 招） |
+| 櫻花寶｜躲藏 | `coinHeadsSelfImmuneNextPost` | 雪吞蟲｜躲藏（M1S，全站 20 招） |
+| 櫻花兒｜能量之禮 | `deckSearchAttachToAnyPost(2)` | 黑魯加｜鼓勵（SVM） |
+| 比克提尼｜呼朋引伴 | `recruitBasicToBenchPost(2)` | 毒電嬰｜呼朋引伴（M2，全站 14 招） |
+| 捷拉奧拉｜快速抽出 20 | `drawNPost(1)` | 拉魯拉絲｜呼喚（M2a，全站 27 招） |
+| 捷拉奧拉｜電氣子彈 50 | `chooseOppBenchDamage(20)` | 凱路迪歐｜穿通（M4） |
+| 瑪力露麗｜泰山壓頂 90 | `coinStatusPost(paralyzed)` | 電擊魔獸｜泰山壓頂（M6，全站 34 招） |
+| 克雷色利亞｜極光增輝 30 | `selfHealPost(30)` | 巨蔓藤｜吸取（M1S，全站 20 招） |
+| 小隕星｜流星射擊 | `selfDiscardAllEnergyPost` ＋ `chooseOppPokemonDamage(120)` | 投羽梟｜羽毛射擊（M3，同型 90） |
+| 索羅亞克｜夜之秘道 | `ABILITY_RETREAT_MOD` | 陸地水母｜森林秘道（SVM） |
+
+⭐ **只註冊需要的那一半**：印刷傷害由引擎讀卡資料（`engine.ts` 的 `parseInt(attack.damage)`），
+不寫 `regPre(() => ({ damage: N }))` 硬編數字 —— 硬編是舊檔的技術債（同 `m6_wave1.ts` 的紀律）。
+守衛 C2 釘住這一點：純傷害招式**不得**被註冊。
+
+#### ⭐⭐ 順手收斂（Rule 38）
+
+`ABILITY_RETREAT_MOD` 裡森林秘道原本是 inline arrow function。本版抽成
+`benchAllyRetreatReduce2` 並讓兩個特性**指向同一個函式參照**，
+守衛 B2 直接斷言 `get(夜之秘道) === get(森林秘道)`，B6 掃描 `effects.ts` 確認函式本體只有一份。
+⇒ 日後再出同措辭的特性，加一行指向這一份即可。
+
+### 【四】守衛 `scripts/test-v6388-mf-wave1.mjs`（**79 / 0**，涵蓋兩個批次）
+
+- 【0】fixture 自驗：11 張卡的卡面**逐字**、全部 H/I/J、夜之秘道與森林秘道 effect 相同
+- 【A】行為端逐招實跑 `applyAction`，含正反對照：
+  捲土重來 30 / 120、踹 正面 30 反面 0、躲藏 正面才有免疫旗標且**不是**只免傷害那種、
+  快速抽出手牌 +1、電氣子彈 50 ＋ 備戰 20、泰山壓頂正面麻痺、極光增輝 50→20、
+  流星射擊能量 6→0、夜之秘道 0 能量撤得掉（＋不在備戰就撤不掉的反對照）
+- 【B】收斂：函式參照相等 ＋ 行為層三種 params ＋ 掃描器（含正對照）
+- 【C】不得矯枉過正：10 個 key 全接上、純傷害招式沒被多註冊、
+  C3 森林秘道行為不變、C4 空白對照
+- 【D】資料層：index.json／card-set-map／改名（含 D7 反對照「那張卡還在，只是換了名字」）
+- 【E】HEAD-FAIL：對 BASE 的 `src` 樹（換回 BASE 的 effects.ts ＋ 刪掉 mf_wave1）重跑，
+  E1 哨兵證明 BASE bundle 是活的，E2/E3/E4 三條必紅，E5 零變更對照
+- 【F】在 `npm test` chain 裡恰好一次
+
+#### ⚠ 寫守衛時踩到的三個 fixture 坑（都不是實作的問題）
+
+1. 復仇讀的是 `oppDamageKOdMeInLastOppTurn`（只計「招式**傷害** KO」），
+   不是 `oppAttackKOdMeInLastOppTurn`（含效果 KO，那是古玉魚｜嫉妒業火那一型）。兩者不可互換。
+2. **能量屬性要對得上招式 cost，否則招式根本打不出來** —— 實測傷害靜默變 0，**不會 throw**。
+   六尾要餵【火】、捷拉奧拉要餵【雷】，原本一律餵【草】⇒ A2／A7 假紅。
+3. 守衛檔是 CRLF，patch 用 `\n` 組多行錨點會**命中 0 次**，而錯誤訊息長得像「找不到」。
+
+### 【五】⭐⭐⭐ 批次2（6 招）—— **同一版做完**，不是留到下一版
+
+⚠⚠ 原本規劃「批次1 先上、6 招留到 v6.389」，跑完整測試時被 `test-v6333` 擋下來：
+
+> ⭐⭐⭐ 站上不變量：**不在**不開放清單裡的 live H/I/J 卡，未實裝**招式**必須是 0
+> → 引擎對「沒有 handler 的招式」是**靜默略過效果、只結算卡面傷害**，
+>   代價型招式會變成單方面對出招者有利。
+> → 要嘛把它實作出來，要嘛把那個卡包加進 `DECK_LOCKED_SETS`（兩份都要改）。
+
+兩條路都試過：
+
+1. **鎖卡包**（`DECK_LOCKED_SETS` ＋ `regulation.ts` 的 `lockedSets` 加 `MF`）——
+   會讓 `test-v6333` 的「v6.382 起內建的卡包鎖清單應為空」與 `test-v6340` 的 A1／A4／A10／B6／E2／E3
+   共 7 條翻紅。那些斷言是站長 2026-09-14「M6a 完整上線」裁定之後釘上去的，
+   **鎖卡包屬於產品方向，需要站長裁定**（Rule 42 的例外②）⇒ 不自作主張。
+   （順帶發現 `test-v6340` E2 的解析器把 `Set([...])` 裡的**註解**也當成項目，是既有的小 bug，已記在下方待辦。）
+2. **一次做完 6 招** ⇒ 不動任何既有守衛的斷言、不需要裁定、玩家直接拿到完整卡包。**選這條。**
+
+#### 新增的 6 支中央 helper（全部放在 `effects.ts`）
+
+| helper | 卡面措辭 | MF 的使用者 | 一起收斂的既有卡 |
+|---|---|---|---|
+| `ownFieldCountMultiplyPre(per, label)` | 造成自己的場上寶可夢的數量×N點傷害 | 太陽伊布ex｜陽光律動（×30） | 君主蛇｜皇家指令、霜奶仙｜甜點圓陣、索羅亞克ex｜狂暴亂打、大宇怪｜宇宙律動（皆 ×20） |
+| `healOneOwnBenchPost(amount, label)` | 將自己的1隻備戰寶可夢恢復「N」HP | 花療環環｜平和芳香（80） | （新 key，見下） |
+| `defHasCountersBonusPre(base, bonus, label)` | 若對手的戰鬥寶可夢身上放置有傷害指示物，則增加N點傷害 | 月亮伊布ex｜月光利爪（100+140） | 布魯皇｜致命刺擊(90+90)、超級大力鱷ex｜晶光嚼碎(200+200)、超級具甲武者ex｜致命刺擊(60+160) |
+| `coinHeadsDefCantRetreatPost(label)` | 擲1次硬幣若為正面，則…無法撤退 | 黑暗鴉｜抓一下 | （卡池唯一，新開） |
+| `coinHeadsDiscardOppEnergyPost(coins, label)` | 擲N次硬幣，選擇與正面出現的次數相同數量的…能量丟棄 | 三首惡龍｜三首啃咬（3） | （卡池唯一，新開） |
+| `selfCountersBonusPre(base, per, label)` | 增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害 | 袋獸｜憤怒(20+10) | 鋁鋼龍｜激怒之錘(80+10)、狠辣椒ex｜香料激怒(10+70) |
+
+⇒ **收斂了 9 張既有卡**（原本同一個判準散在 5 份不同實作裡，log 格式還各不相同：
+君主蛇無 log、索羅亞克ex 一種、大宇怪另一種還帶錯字「自方場上寶可」）。
+本版統一成中央 helper 的一種格式，傷害數值一個字都沒動。
+
+#### ⚠ `healOneOwnBenchPost` 為什麼要開新的 resolver key
+
+既有的 `healOneOwnBenchFullPost` 是「HP **全部**恢復」（風妖精｜治癒棉絮／鳳王｜神聖之息），
+key 是 `heal-full-bench-one`。MF 是「恢復**80**HP」——**不同的卡面措辭**。
+⚠⚠ 絕不可以把新措辭塞進舊 key：`pendingSelection` 是**存在對戰狀態裡**的，
+部署那一瞬間若有玩家正停在舊 key 的選擇視窗，恢復量就會給錯（v6.175「遲到的答案」同一類事故）。
+⇒ 新開 `heal-bench-one-amount`，恢復量放 `params.amount`（守衛 A2-2c 釘住「不是硬編在 resolver 裡」）。
+
+#### 守衛擴充（【A2】段，共 79 / 0）
+
+- 陽光律動：自己場上 1 隻 ⇒ 30、4 隻 ⇒ 120，A2-1c 另外釘住「倍率是 30 不是 20」
+  （既有同措辭卡都是 ×20，照抄範本參數就會錯）
+- 平和芳香：開的是 `heal-bench-one-amount` 而不是全恢復那一支、`amount` 進 params、
+  備戰都沒受傷時不開 picker
+- 月光利爪：對手身上沒指示物 ⇒ 100、有 30 傷害 ⇒ +140 累計 270
+- 抓一下：正面才有「無法撤退」，反面沒有，兩種結果主傷害都一樣
+- 三首啃咬：3 次全反面 ⇒ 一個都不丟且 log 據實、3 次全正面 ⇒ 丟 3 個
+- 憤怒：自身 0 傷害 ⇒ 20、50 傷害（5 個指示物）⇒ 70，A2-6c 釘住「是 floor(damage/10) 不是 damage」
+
+#### ⚠ 批次2 踩到的三個坑
+
+1. **防守方 fixture 吃到弱點×2**：預設肉盾（超夢）弱點是【惡】，
+   月光利爪／抓一下都是【惡】招式 ⇒ 傷害斷言全對不上；而且它 HP 不夠，加傷型招式直接把它打死
+   （`active` 變 null ⇒ 讀不到 damage）。⇒ 改成動態找「HP≥300 且弱點不是【惡】」的肉盾。
+2. **【E】HEAD-FAIL 只換 effects.ts 是不夠的**：本版還新增了 mf_wave1／mf_wave2，
+   又把三個既有卡檔收斂到新 export ⇒ BASE 的 effects.ts 沒有那些 export，整包 build 失敗。
+   ⇒ 改用中央 helper `restoreBaseSubtree(ROOT, BASE_SHA, baseSrc, 'src/lib/game')`，
+   它會連「BASE 沒有的檔案」一起移除（實測 replaced=137、removed=3）。
+   ⭐ 這同時滿足 `test-v6263` 的「讀歷史一律走中央 helper，禁自己 shell out git」。
+3. **收斂之後要補 import**：`m6_wave2.ts`／`v2346`／`v2740` 用了新 export 卻沒 import
+   ⇒ TS2304（runtime ReferenceError 炸彈，esbuild 照樣 bundle，走到執行點才炸）。
+
+### 【六】⭐⭐ 官方快照：只加 MF，**不**全站重抓（順帶發現 32 張 M-P 缺卡）
+
+`test-official-set-completeness` 的第①條「live 的每個卡包都要被快照涵蓋（新卡包不得無聲逃過列管）」
+在 MF 進卡庫之後翻紅，它給的修法是 `node scripts/refresh-official-set-manifest.mjs --write`。
+
+⚠⚠ 但**全站重抓會順便把別的缺口帶進來**：實跑之後官方快照多出
+**32 張 M-P 特典卡（全部 J 標）**是「官方有、我們沒有」的 ——
+
+```
+M-P #19668 慶祝開場樂（Stadium）  #19669 皮卡丘  #19670 樂園度假地（Stadium）
+M-P #19720~19746  九世代御三家 × 24 張（妙蛙種子／小火龍／傑尼龜／菊草葉／…／呆火鱷／潤水鴨）
+M-P #19747, #19748 皮卡丘ex ×2
+```
+
+那是**獨立的完整性缺口**（快照過期造成的，不是 MF 這一版弄出來的）。
+把它們一起帶進快照會讓第②條「官方有的 H/I/J 卡，我們一張都不能少」翻紅，
+而補那 32 張是另一版的工作量（抓卡 ＋ 實裝 ＋ 守衛）。
+
+⇒ 本版**手術式**只把 MF 這個卡包加進快照（`__m6a/v388b_manifest.mjs`），其餘逐字不動。
+腳本內先自檢「官方快照的 MF = 49 張、與我們的 `MF.json` **逐一對得上**」才寫檔
+（missing／extra 兩個方向都驗）—— 確認 MF 自己沒有漏收。
+
+🔨 **下一版待辦**：補那 32 張 M-P 特典卡（全量快照已存在 `__m6a/manifest_full.json`，可直接拿來對）。
+
+### 【六】待辦（不在本版）
+
+- ⚠ `test-v6340` E2 的解析器把 `DECK_LOCKED_SETS = new Set([...])` 裡的**註解**也當成項目
+  （清單非空時才看得出來）。本版沒有動那份清單所以照不到，但那是真 bug。
+- ⚠ 「自己場上寶可夢數量×N」「自身指示物×N」在 `v2740_h_wave1_simple.ts` 還有一份 local 的
+  `selfDamageCountersPre`（沒 export）—— 本版收斂了 effects.ts 那幾張，這一份的使用者留待下輪。
+- MF 的封面圖目前用主打卡的官方卡圖（官方沒有 ogp），可換成產品圖。
+
 ## v6.387 ⭐⭐ 部署驗收工具 `verify-deploy`（站長交辦，IRON_RULES Rule 43 的執行面）
 
 BASE `4e3925b8f0f4aa593c323e3caa10baaaaa6b3c23`（v6.386b）。

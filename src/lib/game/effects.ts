@@ -1925,20 +1925,12 @@ regPre('超級蒂安希ex|花冠射線', (state, aIdx, _pool, action) => {
 // ── MBD 霜奶仙 ────────────────────────────────────────────────────────────────
 
 // 甜點圓陣 — 自己場上寶可夢數量×20
-regPre('霜奶仙|甜點圓陣', (state, aIdx, _pool) => {
-  const p = state.players[aIdx];
-  const count = (p.active ? 1 : 0) + p.bench.length;
-  return { state, damage: count * 20 };
-});
+regPre('霜奶仙|甜點圓陣', ownFieldCountMultiplyPre(20, '甜點圓陣'));   // ⭐v6.388 收斂
 
 // ── MBD 布魯皇 ────────────────────────────────────────────────────────────────
 
 // 致命刺擊 — 若對手戰鬥寶可夢有傷害指示物，+90 傷害
-regPre('布魯皇|致命刺擊', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const defenderDamaged = (state.players[dIdx].active?.damage ?? 0) > 0;
-  return { state, damage: 90 + (defenderDamaged ? 90 : 0) };
-});
+regPre('布魯皇|致命刺擊', defHasCountersBonusPre(90, 90, '致命刺擊'));   // ⭐v6.388 收斂
 
 // ── MBG 黑暗鴉 ────────────────────────────────────────────────────────────────
 
@@ -5124,6 +5116,17 @@ export type AbilityRetreatModParams = {
   countEnergy: (inst: CardInstance) => Map<string, number>;
 };
 
+/**
+ * ⭐v6.388 「只要這隻寶可夢在備戰區，自己的戰鬥寶可夢【撤退】所需的能量減少 2 個。」的**唯一判準**。
+ * 使用者：陸地水母｜森林秘道（SVM，H）、索羅亞克｜夜之秘道（MF，J）—— 兩張卡面逐字相同。
+ * ⚠ 日後再出同措辭的特性，一律加進 ABILITY_RETREAT_MOD 指向這一份，禁複製函式本體。
+ */
+const benchAllyRetreatReduce2 = (p: AbilityRetreatModParams): { reduceBy?: number } => {
+  if (p.holderOwnerIdx !== p.retreatingOwnerIdx) return {};
+  if (p.holderPosition !== 'bench') return {};
+  return { reduceBy: 2 };
+};
+
 export const ABILITY_RETREAT_MOD = new Map<string, (
   p: AbilityRetreatModParams
 ) => { zero?: boolean; reduceBy?: number; addBy?: number }>([
@@ -5179,15 +5182,14 @@ export const ABILITY_RETREAT_MOD = new Map<string, (
     return hasEx ? { zero: true } : {};
   }],
 
-  // 陸地水母｜森林秘道（SVM）—
+  // ⭐⭐v6.388 收斂（Rule 38：同一個判準只能有一份）——
+  //   陸地水母｜森林秘道（SVM）與 索羅亞克｜夜之秘道（MF）的卡面**逐字相同**：
   //   「只要這隻寶可夢在備戰區，自己的戰鬥寶可夢【撤退】所需的能量減少 2 個。」
+  //   ⇒ 共用 benchAllyRetreatReduce2（宣告在本 Map 上方），**禁再抄一份**。
   //   - 持有者必須在自己備戰區（不在戰鬥場）。
   //   - 撤退者必須同陣營（撤退者一定是 active，所以條件天然成立）。
-  ['森林秘道', (p) => {
-    if (p.holderOwnerIdx !== p.retreatingOwnerIdx) return {};
-    if (p.holderPosition !== 'bench') return {};
-    return { reduceBy: 2 };
-  }],
+  ['森林秘道', benchAllyRetreatReduce2],
+  ['夜之秘道', benchAllyRetreatReduce2],
 
   // 阿利多斯｜大網（SV5a）—
   //   「只要這隻寶可夢在場上，對手的戰鬥場的進化寶可夢【撤退】所需的能量增加 1 個。」
@@ -6360,16 +6362,10 @@ regPre('厄鬼椪 火灶面具ex|憤怒之窯', (state, aIdx, _pool) => {
 });
 
 // 鋁鋼龍｜激怒之錘 — 80 + 10× counter
-regPre('鋁鋼龍|激怒之錘', (state, aIdx, _pool) => {
-  const n = selfActiveCounters(state, aIdx);
-  return { state, damage: 80 + n * 10 };
-});
+regPre('鋁鋼龍|激怒之錘', selfCountersBonusPre(80, 10, '激怒之錘'));   // ⭐v6.388 收斂
 
 // 狠辣椒ex｜香料激怒 — 10 + 70× counter
-regPre('狠辣椒ex|香料激怒', (state, aIdx, _pool) => {
-  const n = selfActiveCounters(state, aIdx);
-  return { state, damage: 10 + n * 70 };
-});
+regPre('狠辣椒ex|香料激怒', selfCountersBonusPre(10, 70, '香料激怒'));   // ⭐v6.388 收斂
 
 // 巨蔓藤｜覆蓋 — 150 - 10× counter（自己身上傷害減傷，最少 0）
 regPre('巨蔓藤|覆蓋', (state, aIdx, _pool) => {
@@ -7275,7 +7271,7 @@ regPre('咕咕鴿|飛翔', coinFlyPre(40, '飛翔'));
 // 擲 1 次硬幣若正面，則在下個對手的回合，這隻寶可夢不會受到招式的傷害。
 // 實作：damageReduceNextHit = 9999 → 招式傷害降到 0（卡面範圍即「招式傷害」，
 // 不擋招式附加效果如異常狀態/放指示物，與卡面語意完全一致）。
-function coinHeadsSelfImmuneNextPost(attackName: string, immuneKind: 'all' | 'damage' = 'all'): AttackPostFn {
+export function coinHeadsSelfImmuneNextPost(attackName: string, immuneKind: 'all' | 'damage' = 'all'): AttackPostFn {
   return (state, aIdx, _pool) => {
     const r = flipCoinsWithLog(state, 1, attackName, aIdx);
     if (!r.heads) return addLog(r.state, `${attackName}：反面 → 無追加效果`, aIdx);
@@ -7885,13 +7881,7 @@ regPre('魔幻假面喵ex|魔法子彈', (s) => ({ state: s, damage: 120 }));
 regPost('魔幻假面喵ex|魔法子彈', snipeDamagedBenchPost(120, '魔法子彈'));
 
 // 索羅亞克ex|狂暴亂打 20× — 造成「自己場上寶可夢的數量」×20（場上=戰鬥場+備戰）
-regPre('索羅亞克ex|狂暴亂打', (state, aIdx) => {
-  const p = state.players[aIdx];
-  const count = (p.active ? 1 : 0) + p.bench.length;  // 場上 = active + bench
-  const dmg = count * 20;
-  const s = addLog(state, '狂暴亂打：自己場上寶可夢 ' + count + ' 隻 → ' + count + '×20 = ' + dmg, aIdx);
-  return { state: s, damage: dmg };
-});
+regPre('索羅亞克ex|狂暴亂打', ownFieldCountMultiplyPre(20, '狂暴亂打'));   // ⭐v6.388 收斂
 
 // 索羅亞克ex|猛擊在地 210 — 下個自己回合無法使用「猛擊在地」（單鎖，同蒼響ex/飛天螳螂|猛擊在地）
 regPost('索羅亞克ex|猛擊在地', selfBlockSpecificAttackNextPost('猛擊在地'));
@@ -19571,11 +19561,7 @@ regPost('阿利多斯|毒陣', (state, aIdx, pool) => {
 });
 
 // 君主蛇｜皇家指令：自己的場上寶可夢數量 × 20。
-regPre('君主蛇|皇家指令', (state, aIdx, _pool) => {
-  const p = state.players[aIdx];
-  const count = (p.active ? 1 : 0) + p.bench.length;
-  return { state, damage: count * 20 };
-});
+regPre('君主蛇|皇家指令', ownFieldCountMultiplyPre(20, '皇家指令'));   // ⭐v6.388 收斂
 
 // 彩粉蝶｜穿堂風：60；若場上有競技場卡，+60。
 regPre('彩粉蝶|穿堂風', (state, aIdx, _pool) => {
@@ -20788,6 +20774,131 @@ export function selfDiscardAllEnergyOfTypePost(type: EnergyType, label: string):
  * ⚠ 主詞是「**備戰**」⇒ picker 的 validIids 只列備戰，且只列**受傷**的（沒受傷的選了沒意義）。
  * ⚠ 沒有備戰／備戰都沒受傷時只記一行 log 就結束 —— 這兩張卡面都沒有寫「否則招式失敗」。
  */
+/**
+ * ⭐v6.388 「造成自己的場上寶可夢的數量×N點傷害。」的**唯一判準**。
+ * 場上＝戰鬥場 ＋ 備戰區（卡面「場上」一律含 active）。
+ * 使用者：君主蛇｜皇家指令、霜奶仙｜甜點圓陣、索羅亞克ex｜狂暴亂打、大宇怪｜宇宙律動（皆 ×20）、
+ *   太陽伊布ex｜陽光律動（MF，×30）。
+ * ⚠ 日後再出同措辭的招式，一律指向這一支，禁再抄一份數量算式。
+ */
+export function ownFieldCountMultiplyPre(per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const p = state.players[aIdx];
+    const count = (p.active ? 1 : 0) + p.bench.length;
+    const dmg = count * per;
+    return { state: addLog(state, `${label}：自己場上寶可夢 ${count} 隻 → ${count}×${per} = ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * ⭐v6.388 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」的**唯一判準**。
+ * 使用者：鋁鋼龍｜激怒之錘(80+10)、狠辣椒ex｜香料激怒(10+70)、雷吉斯奇魯｜激怒之錘(60+?)、
+ *   皮卡丘｜氣沖沖伏特、吃吼霸ex｜駭浪反攻、故勒頓ex｜復仇懲處、袋獸｜憤怒（MF，20+10）。
+ * ⚠ 指示物數 = floor(damage / 10)，走既有的 counterCount（不得自己再除一次 10）。
+ */
+export function selfCountersBonusPre(base: number, per: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const n = selfActiveCounters(state, aIdx);
+    const dmg = base + n * per;
+    return { state: addLog(state, `${label}：自身傷害指示物 ${n} 個 → ${base}+${n}×${per} = ${dmg}`, aIdx), damage: dmg };
+  };
+}
+
+/**
+ * ⭐v6.388 「若對手的戰鬥寶可夢身上放置有傷害指示物，則增加N點傷害。」的**唯一判準**。
+ * 使用者：布魯皇｜致命刺擊(90+90)、超級大力鱷ex｜晶光嚼碎(200+200)、
+ *   超級具甲武者ex｜致命刺擊(60+160)、月亮伊布ex｜月光利爪（MF，100+140）。
+ * ⚠ 判準是「對手 active.damage > 0」（damage 即傷害指示物×10），
+ *   **不是**「受過傷」——被治療回滿的寶可夢身上沒有指示物，卡面就不該加傷。
+ */
+export function defHasCountersBonusPre(base: number, bonus: number, label: string): AttackPreFn {
+  return (state, aIdx, _pool) => {
+    const def = state.players[(1 - aIdx) as 0 | 1];
+    const hurt = (def.active?.damage ?? 0) > 0;
+    const dmg = base + (hurt ? bonus : 0);
+    return {
+      state: addLog(state, `${label}：對手${hurt ? `身上有傷害指示物 +${bonus}` : '身上無傷害指示物'} = ${dmg}`, aIdx),
+      damage: dmg,
+    };
+  };
+}
+
+/**
+ * ⭐v6.388 「擲1次硬幣若為正面，則在下個對手的回合，受到這個招式的寶可夢無法撤退。」的**唯一判準**。
+ * 使用者：黑暗鴉｜抓一下（MF）。
+ * ⚠ 組合既有兩支中央實作（flipCoinsWithLog ＋ defCantRetreatNextPost），
+ *   寫法比照 大岩蛇｜綁緊（擲幣 ＋ statusPost）；**不得**自己再手刻「無法撤退」的旗標，
+ *   defCantRetreatNextPost 內已含招式效果免疫 gate。
+ */
+export function coinHeadsDefCantRetreatPost(label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const r = flipCoinsWithLog(state, 1, label, aIdx);
+    if (!r.heads) return addLog(r.state, `${label}：反面 → 無附加效果`, aIdx);
+    return defCantRetreatNextPost(label)(addLog(r.state, `${label}：正面 → 對手下個回合無法撤退`, aIdx), aIdx, pool);
+  };
+}
+
+/**
+ * ⭐v6.388 「擲N次硬幣，選擇與正面出現的次數相同數量的對手的戰鬥寶可夢身上附加的能量，將其丟棄。」
+ * 的**唯一判準**。使用者：三首惡龍｜三首啃咬（MF，擲 3 次）。
+ * ⚠ 丟棄走既有中央 discardOppActiveEnergyPost（攻擊方以 picker 選哪幾張 ＋ attack-effect 免疫 gate
+ *   ＋ 對手能量不足時只丟得到的那幾張）——**不得**自己再手刻丟棄迴圈。
+ * ⚠ 0 次正面 ⇒ 什麼都不丟（卡面「與正面出現的次數相同數量」），據實 log。
+ */
+export function coinHeadsDiscardOppEnergyPost(coins: number, label: string): AttackPostFn {
+  return (state, aIdx, pool) => {
+    const r = flipCoinsWithLog(state, coins, label, aIdx);
+    if (r.heads <= 0) return addLog(r.state, `${label}：${coins} 次全反面 → 不丟棄能量`, aIdx);
+    const s = addLog(r.state, `${label}：${r.heads}/${coins} 次正面 → 丟棄對手 ${r.heads} 個能量`, aIdx);
+    return discardOppActiveEnergyPost(label, 'any', r.heads)(s, aIdx, pool);
+  };
+}
+
+/**
+ * ⭐v6.388 「將自己的1隻備戰寶可夢恢復「N」HP。」的**唯一判準**（帶量版）。
+ * 使用者：花療環環｜平和芳香（MF，80）。
+ * ⚠ 與既有的 healOneOwnBenchFullPost（「HP**全部**恢復」）是**不同的卡面措辭**，
+ *   兩者共用同一套 picker 形狀但 resolver 不同 key：
+ *   ・全恢復 → `heal-full-bench-one`（＋舊相容 key `wave8-heal-full-bench`）
+ *   ・恢復 N → `heal-bench-one-amount`（params.amount）
+ *   ⚠⚠ 絕不可以把新措辭塞進舊 key —— pendingSelection 存在對戰狀態裡，
+ *   部署那一瞬間停在舊 key 的玩家會拿到錯的恢復量。
+ * ⚠ 主詞是「**備戰**」⇒ validIids 只列備戰，且只列**受傷**的。
+ * ⚠ 沒有備戰／備戰都沒受傷時只記一行 log 就結束（卡面沒有寫「否則招式失敗」）。
+ */
+export function healOneOwnBenchPost(amount: number, label: string): AttackPostFn {
+  return (state, aIdx, _pool) => {
+    const player = state.players[aIdx];
+    if (player.bench.length === 0) return addLog(state, `${label}：備戰區無寶可夢`, aIdx);
+    const wounded = player.bench.filter(b => (b.damage ?? 0) > 0);
+    if (wounded.length === 0) return addLog(state, `${label}：備戰區無受傷寶可夢`, aIdx);
+    const s = addLog(state, `${label}：選 1 隻備戰寶可夢恢復 ${amount} HP`, aIdx);
+    return withPending(s, {
+      type: 'heal-target',
+      actorIdx: aIdx, sourcePlayerIdx: aIdx,
+      minCount: 1, maxCount: 1,
+      effectKey: 'heal-bench-one-amount',
+      params: { label, amount, validIids: wounded.map(b => b.iid) },
+    });
+  };
+}
+
+regR('heal-bench-one-amount', (state, aIdx, iids, params, _pool) => {
+  const label = (params?.label as string) ?? '回復';
+  const amount = Number(params?.amount ?? 0);
+  if (iids.length === 0 || !(amount > 0)) return state;
+  const targetIid = iids[0];
+  const before = state.players[aIdx].bench.find(b => b.iid === targetIid)?.damage ?? 0;
+  const healed = Math.min(before, amount);
+  return updatePlayer(
+    addLog(state, `${label}：選定備戰寶可夢恢復 ${healed} HP`, aIdx),
+    aIdx, p => ({
+      ...p,
+      bench: p.bench.map(b => b.iid === targetIid ? { ...b, damage: Math.max(0, b.damage - amount) } : b),
+    }),
+  );
+});
+
 export function healOneOwnBenchFullPost(label: string): AttackPostFn {
   return (state, aIdx, _pool) => {
     const player = state.players[aIdx];
@@ -20963,6 +21074,8 @@ import './effects/cards/m6a_wave4'; // v6.344 M6a 招式實裝 批次4（7 招�
 import './effects/cards/m6a_wave5'; // v6.345 M6a 招式實裝 批次5（18 招｜牌庫／手牌／棄牌區操作）
 import './effects/cards/m6a_wave6'; // v6.346 M6a 招式實裝 批次6（8 招｜防禦旗標／減傷／全體傷害／指示物）
 import './effects/cards/m6a_wave7'; // v6.347 M6a **特性**實裝 批次7（主動特性 6 個；被動的登記在各中央表）
+import './effects/cards/mf_wave1';  // v6.388 MF 招式實裝 批次1（純類推既有中央 helper）
+import './effects/cards/mf_wave2';  // v6.388 MF 招式實裝 批次2（6 招，需要新的中央 helper）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口
 //   （BRIEF §2 Rule 38：同一個判準只能有一份；卡檔只負責「哪一張卡用哪一支」。）
