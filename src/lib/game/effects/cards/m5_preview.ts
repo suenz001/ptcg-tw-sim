@@ -104,6 +104,7 @@ import {
   discardOppActiveEnergyPost, // v5.974：丟對手能量收斂中央(picker+免疫gate)
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
+import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.388a 收斂：自身傷害指示物 × N（v6.349 中央）
 import { totalEnergyUnits, computeActiveRetreatCostFor, isFossilItemCard } from '../../engine'; // v5.862：host-aware 能量單位數／v6.209 化石中央述詞
 import { RULE_BOX_SUBTYPES } from '../../types';
 import type { CardInstance, GameState, PlayerState } from '../../types';  // v5.203 hotfix: type-only import（v5.326 補 PlayerState）
@@ -354,16 +355,7 @@ regPre('故勒頓|戰鬥爪', (state, aIdx, pool) => {
 
 // ── 莫魯貝可ex|空腹轟炸 — 40 + N×40（N=自身傷害指示物數，即 damage/10）
 //   卡面：「這隻寶可夢身上的傷害指示物數 × 40 點，追加傷害。」
-regPre('莫魯貝可ex|空腹轟炸', (state, aIdx) => {
-  const att = state.players[aIdx].active;
-  const counters = att ? Math.floor((att.damage ?? 0) / 10) : 0;
-  const bonus = counters * 40;
-  const dmg = 40 + bonus;
-  return {
-    state: addLog(state, `空腹轟炸：自身傷害指示物 ${counters} 個 → 40 + ${counters}×40 = ${dmg}`, aIdx),
-    damage: dmg,
-  };
-});
+regPre('莫魯貝可ex|空腹轟炸', selfCountersMultiplyPre(40, 40, '空腹轟炸'));   // ⭐v6.388a 收斂到中央
 
 // ── 古玉魚|嫉妒漩渦 — 20 +90 + skipWeakness（當自身傷害指示物≥2）
 //   卡面：「若這隻寶可夢身上的傷害指示物有 2 個以上，則此招式傷害 +90。此招式的傷害不計算弱點。」

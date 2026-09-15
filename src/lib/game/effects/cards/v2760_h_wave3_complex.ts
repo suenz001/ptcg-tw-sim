@@ -30,6 +30,7 @@ import { relocateOwnCounterToOpp } from '../../effects'; // v5.825 改放指示�
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, applyOppActiveDebuffPost, statusPost, flipCoinsWithLog, canApplyAttackEffectToTarget, dealAttackDamageToTarget } from '../../effects';
+import { defHasCountersBonusPre } from '../../effects'; // ⭐v6.388a 收斂：對手身上有指示物則加傷（中央）
 // v3.08 美納斯｜平穩境地 — 對手寶可夢/附加卡 → 對手手牌 阻擋 helper
 import { isReturnToHandBlockedByCalmGround as _calmGroundBlocks } from './v3080_deferred_wave_c'; // v5.985 傳「被回手卡持有者」idx
 import { computeActiveRetreatCostFor } from '../../engine';  // v5.362：影繩結有效撤退費
@@ -270,11 +271,7 @@ regPost('勾魂眼|傷害集結', (state, aIdx, pool) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // 11. 密勒頓ex|抵制伏特 60+ — 對手戰鬥有指示物 +100
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('密勒頓ex|抵制伏特', (state, aIdx, _pool) => {
-  const dDmg = state.players[(1-aIdx) as 0|1].active?.damage ?? 0;
-  if (dDmg > 0) return { state: addLog(state, '抵制伏特：對手戰鬥有指示物 → 60+100 = 160', aIdx), damage: 160 };
-  return { state: addLog(state, '抵制伏特：對手戰鬥無指示物 → 60', aIdx), damage: 60 };
-});
+regPre('密勒頓ex|抵制伏特', defHasCountersBonusPre(60, 100, '抵制伏特'));   // ⭐v6.388a 收斂到中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 12. 智揮猩|掌握弱點 — 下回合本招式對方弱點變【無】

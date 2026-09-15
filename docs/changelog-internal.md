@@ -1,5 +1,89 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.388a ⭐⭐⭐ Fable 5 複審：我自己在 v6.388 新造了第二份判準（Rule 38 違規）＋ 兩處安慰劑守衛
+
+BASE `d1098d1cb7c6820ed4558fa3db287b1dcc97f209`（v6.388）。
+⚠ 本版仍然動了 `src/lib/game/**` ⇒ 部署要跑 **`update-tournament.bat`（先）
+＋ `redeploy-oracle.bat`（後）** 兩支（IRON_RULES Rule 43）。
+跑完用 `oracle-admin\\verify-deploy.bat` 驗收。
+⚠ 本版**不動** `version.ts`／`SITE_VERSION_HINT`／首頁 changelog（沿用 v6.386a、v6.386b 的字尾字母版慣例）。
+
+### 【零】Fable 5 對 v6.388 的判定：🔴
+
+> **[R1] `selfCountersBonusPre` 是與既有中央 helper `selfCountersMultiplyPre` 重複的第二份判準
+> （本版新引入的 Rule 38 違規）。** 同一判準現在有 **5 份**。
+> **[R2] 三支新 helper 的 JSDoc／卡檔註解有不實陳述，會誤導下一次審查。**
+
+**我自行查證後確認屬實**（`__m6a/v388c_dup.out.txt`、`v388c_probe2/3.out.txt`）。
+
+### 【一】R1 —— 這一坑的根因與教訓
+
+v6.349 就已經有 `selfCountersMultiplyPre`（「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害」）。
+我在 v6.388 要接 袋獸｜憤怒 時，搜的是「`selfCountersBonusPre` 存不存在」——
+搜不到，就自己寫了一支新的。
+
+> ⚠⚠ **教訓：開新 helper 前要搜「有沒有**別的名字**在做同一件事」，
+> 不是只搜「我想用的那個名字存不存在」。**
+> 判準的身分是**卡面措辭**，不是函式名。
+
+修法（`__m6a/v388c_fix.mjs`）：刪掉 `selfCountersBonusPre`，**8 個同措辭 key 全部改指中央那一支**，
+順手把 `v2740_h_wave1_simple.ts` 的 local `selfDamageCountersPre` 也拆掉。
+
+| 卡｜招式 | base + per× | 原本住在哪 |
+|---|---|---|
+| 皮卡丘｜氣沖沖伏特 | 10 + 10× | 早就在用中央 |
+| 鋁鋼龍｜激怒之錘 | 80 + 10× | effects.ts 本地 |
+| 雷吉斯奇魯｜激怒之錘 | 60 + 10× | v2740 local helper |
+| 故勒頓ex｜復仇懲處 | 20 + 10× | v2740 local helper |
+| 狠辣椒ex｜香料激怒 | 10 + 70× | effects.ts 本地 |
+| 莫魯貝可ex｜空腹轟炸 | 40 + 40× | m5_preview 本地 |
+| 吃吼霸ex｜駭浪反攻 | 30 + 10× | v2510 本地 |
+| 袋獸｜憤怒（MF） | 20 + 10× | v6.388 我新造的那一支 |
+| 寶寶暴龍｜勃然大怒 | 0 + 20×（帶 breakdown、不寫 log） | v6.349 已併入 |
+
+⇒ **9 張、1 份判準**。
+
+### 【二】R2 —— 不實註解，以及順手做完的收斂
+
+1. `defHasCountersBonusPre`（「若對手的戰鬥寶可夢身上放置有傷害指示物，則增加N點傷害」）
+   的 JSDoc 只列 4 張，實際 grep 出來是 **9 張**（另外 5 張是本版收斂進來的：
+   暴噬龜｜堅硬嚼碎 80+80、火箭隊的尼多力諾｜角裂 60+60、劈斬司令｜致命刺擊 60+60、
+   密勒頓ex｜抵制伏特 60+100、青木的毛頭小鷹｜啄傷口 20+80）。已改寫成完整清單，
+   並註明「改動時請重跑 `git grep`」。`selfCountersMultiplyPre` 同樣處理。
+2. `coinHeadsDiscardOppEnergyPost` 的 JSDoc 寫「使用者：三首惡龍｜三首啃咬」——
+   但 **焚焰蚣｜緊束粉碎（擲 2）** 與 **毛崖蟹｜喀嚓鉗（擲 2）** 做的是同一件事，
+   只是各自手寫擲幣外殼（丟棄那一層 v5.974 就已經走中央 `discardOppActiveEnergyPost` 了）。
+   ⇒ 兩張的外殼也收斂進來，JSDoc 改成三張的完整清單。
+
+### 【三】Fable 5 的 Y 系列（守衛品質）
+
+| 代號 | 問題 | 修法 |
+|---|---|---|
+| Y1 | 守衛 A5「呼朋引伴」是**安慰劑**：斷言是 `pendType==='deck-search' \|\| said(r,'呼朋引伴')`，後半段恆真（招式名一定在 log 裡）⇒ 把整支 `regPost` 刪掉照樣 PASS | 自建牌庫放 2 張【基礎】寶可夢，硬斷言 `type/effectKey/minCount/maxCount/filter`（值逐一對過 `recruitBasicToBenchPost` 原始碼），再補一條「牌庫沒有基礎寶可夢 ⇒ 不開 picker」的反對照 |
+| Y2 | 月光利爪只驗「有傷 → 加傷」，分不出讀的是**對手的戰鬥寶可夢**還是自己／全隊 | 補兩條反對照：自己身上 50 傷害而對手 0 ⇒ 仍 100；對手**備戰**60 傷害而戰鬥場 0 ⇒ 仍 100 |
+| Y3 | `scripts/data/official-set-manifest.json` 被整檔重新序列化（產生器是 `JSON.stringify(m,null,1)+'\n'`，我寫成 2 空格）⇒ v6.388 的 diff 是 **+6387 / −6330** | 改回 1 空格 + LF。相對 v6.387 的 diff 縮回 **+57 / −0**（只剩 MF 那一筆） |
+| Y5 | 抓一下的「無法撤退」在對戰紀錄裡**重複兩行**（helper 與 `defCantRetreatNextPost` 各寫一次） | 拿掉 helper 那一行，並補回歸守衛 A2-4d；順手把 A2-4 的判準從「旗標 **或** log 有字串」收緊成**只看旗標** |
+
+### 【四】突變測試（自證不是安慰劑）
+
+`__m6a/v388f_mutate.mjs` 對真原始碼逐一套用「可編譯但語意錯」的突變，要求指定斷言翻紅，跑完一律還原：
+
+```
+✅ M-Y1  比克提尼｜呼朋引伴 的 regPost 整支拿掉        → A5   如預期翻紅
+✅ M-Y2c defHasCountersBonusPre 改成讀「自己」         → A2-3c 如預期翻紅
+✅ M-Y2d defHasCountersBonusPre 改成讀「對手全隊」      → A2-3d 如預期翻紅
+✅ 還原後回到全綠：=== v6.388 守衛：PASS 86 / FAIL 0 ===
+```
+
+⚠ 三個突變都保持**可編譯**、只改語意 ——「因為程式碼區塊不存在所以紅」是很弱的 HEAD-FAIL，不算數。
+
+### 【五】驗收
+
+- `tsc --noEmit --skipLibCheck`：**新增 TS2304 = 0**（修前 61 個錯 → 修後 55 個，少掉的 6 個正好是收斂造成的 TS2304，已補 import）
+- `scripts/test-v6388-mf-wave1.mjs`：**PASS 86 / FAIL 0**（原 79 → 新增 7 條）
+
+---
+
 ## v6.388 ⭐⭐⭐ MF 卡包完整上線（資料層 ＋ 16 招 ＋ 1 特性，一版做完）
 
 BASE `af36811389c5a546e9da86ddbc2f35487a0aadfa`（v6.387）。

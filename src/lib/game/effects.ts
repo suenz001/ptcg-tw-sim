@@ -6362,10 +6362,10 @@ regPre('厄鬼椪 火灶面具ex|憤怒之窯', (state, aIdx, _pool) => {
 });
 
 // 鋁鋼龍｜激怒之錘 — 80 + 10× counter
-regPre('鋁鋼龍|激怒之錘', selfCountersBonusPre(80, 10, '激怒之錘'));   // ⭐v6.388 收斂
+regPre('鋁鋼龍|激怒之錘', selfCountersMultiplyPre(80, 10, '激怒之錘'));   // ⭐v6.388a 收斂
 
 // 狠辣椒ex｜香料激怒 — 10 + 70× counter
-regPre('狠辣椒ex|香料激怒', selfCountersBonusPre(10, 70, '香料激怒'));   // ⭐v6.388 收斂
+regPre('狠辣椒ex|香料激怒', selfCountersMultiplyPre(10, 70, '香料激怒'));   // ⭐v6.388a 收斂
 
 // 巨蔓藤｜覆蓋 — 150 - 10× counter（自己身上傷害減傷，最少 0）
 regPre('巨蔓藤|覆蓋', (state, aIdx, _pool) => {
@@ -7515,14 +7515,7 @@ regPre('銅鏡怪|鏡面攻擊', (state, aIdx, pool) => {
 });
 
 // 若對手戰鬥寶可夢身上放置有傷害指示物 → +80
-regPre('暴噬龜|堅硬嚼碎', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (def && def.damage > 0) {
-    return { state: addLog(state, '堅硬嚼碎：對手帶傷 → +80', aIdx), damage: 160 };
-  }
-  return { state, damage: 80 };
-});
+regPre('暴噬龜|堅硬嚼碎', defHasCountersBonusPre(80, 80, '堅硬嚼碎'));   // ⭐v6.388a 收斂
 
 // 若對手戰鬥寶可夢【撤退】所需的能量為2個以上 → +110
 regPre('烈箭鷹|氣旋競爭', (state, aIdx, pool) => {
@@ -13049,14 +13042,7 @@ regPost('呆火駝|呼朋引伴', (state, aIdx, pool) => {
 
 // ── (I) 條件式 +N 傷害（其他）──────────────────────────────────────────
 // 火箭隊的尼多力諾｜角裂 60 + 若對手有傷害指示物 +60
-regPre('火箭隊的尼多力諾|角裂', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const def = state.players[dIdx].active;
-  if (def && def.damage > 0) {
-    return { state: addLog(state, '角裂：對手帶傷 → +60', aIdx), damage: 120 };
-  }
-  return { state, damage: 60 };
-});
+regPre('火箭隊的尼多力諾|角裂', defHasCountersBonusPre(60, 60, '角裂'));   // ⭐v6.388a 收斂
 
 // N的萊希拉姆｜強力激怒 — 自身傷害指示物數 × 20（damage / 10 = 指示物數）
 regPre('N的萊希拉姆|強力激怒', (state, aIdx, _pool) => {
@@ -20563,9 +20549,14 @@ export function prizesTakenMultiplyPre(per: number, label: string, opts: Multipl
 
 /**
  * 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」
- * 使用者：皮卡丘｜氣沖沖伏特(10+10×)、
- *        ⭐v6.349 併入 寶寶暴龍｜勃然大怒（卡面「**造成**…×20點傷害」⇒ base=0，
- *        帶 breakdown「自身指示物 N×20」、不寫 log）。
+ * 使用者（⭐v6.388a 收斂後共 9 張，改動時請重跑 `git grep selfCountersMultiplyPre(` 核對）：
+ *   皮卡丘｜氣沖沖伏特(10+10×)、鋁鋼龍｜激怒之錘(80+10×)、雷吉斯奇魯｜激怒之錘(60+10×)、
+ *   狠辣椒ex｜香料激怒(10+70×)、莫魯貝可ex｜空腹轟炸(40+40×)、故勒頓ex｜復仇懲處(20+10×)、
+ *   袋獸｜憤怒(20+10×, MF)、吃吼霸ex｜駭浪反攻(30+10×)、
+ *   ⭐v6.349 併入 寶寶暴龍｜勃然大怒（卡面「**造成**…×20點傷害」⇒ base=0，
+ *   帶 breakdown「自身指示物 N×20」、不寫 log）。
+ * ⚠v6.388a：本檔曾另有一支 selfCountersBonusPre 做同一件事（Rule 38 違規），已刪除。
+ *   要加新卡時請**直接指向這一支**，不要再開第二個名字。
  * ⚠ 指示物數走既有中央述詞 selfActiveCounters（= damage ÷ 10），不要自己除。
  */
 export function selfCountersMultiplyPre(base: number, per: number, label: string, opts: MultiplyPreOpts = {}): AttackPreFn {
@@ -20790,24 +20781,19 @@ export function ownFieldCountMultiplyPre(per: number, label: string): AttackPreF
   };
 }
 
-/**
- * ⭐v6.388 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」的**唯一判準**。
- * 使用者：鋁鋼龍｜激怒之錘(80+10)、狠辣椒ex｜香料激怒(10+70)、雷吉斯奇魯｜激怒之錘(60+?)、
- *   皮卡丘｜氣沖沖伏特、吃吼霸ex｜駭浪反攻、故勒頓ex｜復仇懲處、袋獸｜憤怒（MF，20+10）。
- * ⚠ 指示物數 = floor(damage / 10)，走既有的 counterCount（不得自己再除一次 10）。
- */
-export function selfCountersBonusPre(base: number, per: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const n = selfActiveCounters(state, aIdx);
-    const dmg = base + n * per;
-    return { state: addLog(state, `${label}：自身傷害指示物 ${n} 個 → ${base}+${n}×${per} = ${dmg}`, aIdx), damage: dmg };
-  };
-}
+// ⛔v6.388a（Fable 5 複審 R1）：這裡原本有一支 selfCountersBonusPre —— 它與
+//   **既有的 selfCountersMultiplyPre（v6.349，本檔上方）做的是同一件事**，
+//   等於我自己新造了第二份判準，正是 Rule 38 禁止的。已刪除，8 個同措辭 key 全部
+//   改指向 selfCountersMultiplyPre。
+//   ⚠ 教訓：開新 helper 前要搜「有沒有別的**名字**在做同一件事」，
+//     不是只搜「我想用的那個名字存不存在」。
 
 /**
  * ⭐v6.388 「若對手的戰鬥寶可夢身上放置有傷害指示物，則增加N點傷害。」的**唯一判準**。
- * 使用者：布魯皇｜致命刺擊(90+90)、超級大力鱷ex｜晶光嚼碎(200+200)、
- *   超級具甲武者ex｜致命刺擊(60+160)、月亮伊布ex｜月光利爪（MF，100+140）。
+ * 使用者（v6.388a 收斂後共 9 張，改動時請重跑 `git grep defHasCountersBonusPre(` 核對）：
+ *   布魯皇｜致命刺擊(90+90)、超級大力鱷ex｜晶光嚼碎(200+200)、超級具甲武者ex｜致命刺擊(60+160)、
+ *   月亮伊布ex｜月光利爪(100+140, MF)、暴噬龜｜堅硬嚼碎(80+80)、火箭隊的尼多力諾｜角裂(60+60)、
+ *   青木的毛頭小鷹｜啄傷口(20+80)、劈斬司令｜致命刺擊(60+60)、密勒頓ex｜抵制伏特(60+100)。
  * ⚠ 判準是「對手 active.damage > 0」（damage 即傷害指示物×10），
  *   **不是**「受過傷」——被治療回滿的寶可夢身上沒有指示物，卡面就不該加傷。
  */
@@ -20834,13 +20820,19 @@ export function coinHeadsDefCantRetreatPost(label: string): AttackPostFn {
   return (state, aIdx, pool) => {
     const r = flipCoinsWithLog(state, 1, label, aIdx);
     if (!r.heads) return addLog(r.state, `${label}：反面 → 無附加效果`, aIdx);
-    return defCantRetreatNextPost(label)(addLog(r.state, `${label}：正面 → 對手下個回合無法撤退`, aIdx), aIdx, pool);
+    // ⚠v6.388a（Fable 5 複審 Y5）：這裡原本自己再 addLog 一行「正面 → 對手下個回合無法撤退」，
+    //   但 defCantRetreatNextPost(label) 內部已經會寫「${label}：對手下回合無法撤退」，
+    //   兩邊都寫 ⇒ 對戰紀錄連續兩行講同一件事。擲幣結果 flipCoinsWithLog 已經寫過了。
+    return defCantRetreatNextPost(label)(r.state, aIdx, pool);
   };
 }
 
 /**
  * ⭐v6.388 「擲N次硬幣，選擇與正面出現的次數相同數量的對手的戰鬥寶可夢身上附加的能量，將其丟棄。」
- * 的**唯一判準**。使用者：三首惡龍｜三首啃咬（MF，擲 3 次）。
+ * 的**唯一判準**。使用者（v6.388a 收斂後共 3 張）：
+ *   ・三首惡龍｜三首啃咬（MF，擲 3 次）
+ *   ・焚焰蚣｜緊束粉碎（v2560，擲 2 次，另有 regPre 50 點固定傷害）
+ *   ・毛崖蟹｜喀嚓鉗（v2660，擲 2 次，regPre 0 點）
  * ⚠ 丟棄走既有中央 discardOppActiveEnergyPost（攻擊方以 picker 選哪幾張 ＋ attack-effect 免疫 gate
  *   ＋ 對手能量不足時只丟得到的那幾張）——**不得**自己再手刻丟棄迴圈。
  * ⚠ 0 次正面 ⇒ 什麼都不丟（卡面「與正面出現的次數相同數量」），據實 log。

@@ -26,6 +26,7 @@ import { countAttachedEnergyAsUnits } from '../_shared';   // ⭐v6.385b 能量*
 import { getEffectiveHP } from '../../engine'; // v5.778 有效HP單一來源
 import type { AttackPostFn } from '../_shared';
 import { canApplyAttackEffectToTarget, statusPost, countOneEnergy, flipCoinsWithLog, dealAttackDamageToTarget, countEnergyTypeBloomAware, markFaintByEffect, koTargetByAttackEffect, discardOppActiveEnergyPost } from '../../effects';
+import { coinHeadsDiscardOppEnergyPost } from '../../effects'; // ⭐v6.388a 擲 N 次 → 棄對手 N 個能量（中央）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. 瑪夏多|暗影側踢 60 + 若 KO 對手 → 下回合免疫招式
@@ -112,13 +113,10 @@ regPre('巨蔓藤|肌力鞭打', (state, aIdx, pool) => {
 // 6. 焚焰蚣|緊束粉碎 50 + 擲 2 次正面數 → 棄對手 N 個能量
 // ══════════════════════════════════════════════════════════════════════════════
 regPre('焚焰蚣|緊束粉碎', (s) => ({ state: s, damage: 50 }));
-regPost('焚焰蚣|緊束粉碎', (state, aIdx, pool) => {
-  const r = flipCoinsWithLog(state, 2, '緊束粉碎', aIdx);
-  const s = addLog(r.state, `緊束粉碎：擲 2 次硬幣 → ${r.heads} 次正面`, aIdx);
-  if (r.heads === 0) return addLog(s, '緊束粉碎：無正面，無棄能效果', aIdx);
-  // v5.974：選擇 N=正面數 → 中央 discardOppActiveEnergyPost(count=heads,選擇 picker + 免疫 gate),取代原自動從尾端丟。
-  return discardOppActiveEnergyPost('緊束粉碎', 'any', r.heads)(s, aIdx, pool);
-});
+// ⭐v6.388a（Fable 5 複審 R2）收斂：原本這裡自己擲幣、自己組 log，
+//   與三首惡龍｜三首啃咬（MF，擲 3）是**同一個判準**（擲 N 次 → 正面數 = 丟棄數）。
+//   ⇒ 外殼一併走中央 coinHeadsDiscardOppEnergyPost（它內部仍呼叫 discardOppActiveEnergyPost）。
+regPost('焚焰蚣|緊束粉碎', coinHeadsDiscardOppEnergyPost(2, '緊束粉碎'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 7. 超級暴雪王ex|山崩之錘 牌庫頂 6 棄 → 其中基本【水】張數 ×100

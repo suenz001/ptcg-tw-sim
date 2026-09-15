@@ -764,12 +764,25 @@ const PREV_ALLOWED = [
   //   ・static/cards/MF.json：新檔（49 張）；index.json ＋ card-set-map.json：各加 MF
   //   ・首頁 changelog 三步搬運（三檔）＋ version.ts
   //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 零改動。
+  // ⭐v6.388a（Fable 5 複審 R1／R2 收斂）：再多動 6 個卡檔，全部是**把本地重複判準改指中央**，
+  //   沒有新增任何第二份判準：
+  //   ・selfCountersBonusPre（v6.388 新造，與 v6.349 的 selfCountersMultiplyPre 重複）已刪，
+  //     8 個同措辭 key 全部改指 selfCountersMultiplyPre
+  //   ・defHasCountersBonusPre 再收斂 5 張既有卡
+  //   ・焚焰蚣｜緊束粉碎、毛崖蟹｜喀嚓鉗 的擲幣外殼收斂到 coinHeadsDiscardOppEnergyPost
+  //   ⚠ engine.ts 仍然零改動。
   'src/lib/game/effects.ts',
+  'src/lib/game/effects/cards/m5_preview.ts',
   'src/lib/game/effects/cards/m6_wave2.ts',
   'src/lib/game/effects/cards/mf_wave1.ts',
   'src/lib/game/effects/cards/mf_wave2.ts',
   'src/lib/game/effects/cards/v2346_j_mark_batch.ts',
+  'src/lib/game/effects/cards/v2510_i_wave3c_status_self.ts',
+  'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
+  'src/lib/game/effects/cards/v2650_i_wave15_misc8.ts',
+  'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
   'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',
+  'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
   'src/lib/version.ts',
   'static/card-set-map.json',
   'static/cards/MF.json',

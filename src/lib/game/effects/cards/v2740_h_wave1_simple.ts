@@ -32,6 +32,7 @@ import {
   ownFieldCountMultiplyPre,   // ⭐v6.388 收斂到中央
 } from '../../effects';
 import { applyOppActiveDebuffPost } from '../../effects'; // v6.046 對手 debuff 中央(含招式效果免疫 gate)
+import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.388a 收斂：自身傷害指示物 × N（v6.349 中央）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 共用 helper（大多複製自 I 標 wave 14）
@@ -269,15 +270,10 @@ regPre('大宇怪|宇宙律動', ownFieldCountMultiplyPre(20, '宇宙律動')); 
 // ══════════════════════════════════════════════════════════════════════════════
 // 12. 自身指示物 ×10（2 張）
 // ══════════════════════════════════════════════════════════════════════════════
-function selfDamageCountersPre(base: number, per: number, label: string): AttackPreFn {
-  return (state, aIdx, _pool) => {
-    const counters = Math.floor((state.players[aIdx].active?.damage ?? 0) / 10);
-    const dmg = base + counters * per;
-    return { state: addLog(state, `${label}：自身指示物 ${counters} → ${base}+${counters}×${per} = ${dmg}`, aIdx), damage: dmg };
-  };
-}
-regPre('雷吉斯奇魯|激怒之錘', selfDamageCountersPre(60, 10, '激怒之錘'));
-regPre('故勒頓ex|復仇懲處', selfDamageCountersPre(20, 10, '復仇懲處'));
+// ⭐v6.388a 收斂（Fable 5 複審 R1）：本檔原本有一支 local 的 selfDamageCountersPre，
+//   與 effects.ts 的 selfCountersMultiplyPre（v6.349）是同一個判準 ⇒ 刪掉，改指中央那一支。
+regPre('雷吉斯奇魯|激怒之錘', selfCountersMultiplyPre(60, 10, '激怒之錘'));
+regPre('故勒頓ex|復仇懲處', selfCountersMultiplyPre(20, 10, '復仇懲處'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 13. 對手戰鬥指示物 ×10（1 張）— 閃電鳥|追擊伏特

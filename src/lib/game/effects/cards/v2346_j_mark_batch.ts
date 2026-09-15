@@ -92,10 +92,7 @@ regPre('小碎鑽|反擊寶石', (state, aIdx) => {
 });
 
 // 青木的毛頭小鷹｜啄傷口：若對手戰鬥寶可夢有傷害指示物，20+80。
-regPre('青木的毛頭小鷹|啄傷口', (state, aIdx) => {
-  const def = state.players[1 - aIdx as 0 | 1].active;
-  return { state, damage: def && def.damage > 0 ? 100 : 20 };
-});
+regPre('青木的毛頭小鷹|啄傷口', defHasCountersBonusPre(20, 80, '啄傷口'));   // ⭐v6.388a 收斂到中央
 
 // 青木的姆克鷹｜硬撐：若自身中毒或灼傷，60+100。
 regPre('青木的姆克鷹|硬撐', (state, aIdx) => {

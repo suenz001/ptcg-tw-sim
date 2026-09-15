@@ -16,6 +16,7 @@ import {
 } from '../_shared';
 import type { AttackPostFn } from '../_shared';
 import { coinStatusPost, flipCoinsWithLog } from '../../effects';
+import { selfCountersMultiplyPre } from '../../effects'; // ⭐v6.388a 收斂：自身傷害指示物 × N（v6.349 中央）
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 1. A 擲幣狀態（7 張）— 純擲幣狀態類，復用 coinStatusPost
@@ -74,13 +75,7 @@ regPre('小霞的寶石海星|乍然閃光', (state, aIdx, pool) => {
 // 3. C 自身傷害指示物相關（3 張）
 // ══════════════════════════════════════════════════════════════════════════════
 // 吃吼霸ex|駭浪反攻 30+ — 自身指示物 ×10 增傷
-regPre('吃吼霸ex|駭浪反攻', (state, aIdx, _pool) => {
-  const a = state.players[aIdx].active;
-  const counters = a ? Math.floor((a.damage ?? 0) / 10) : 0;
-  const dmg = 30 + counters * 10;
-  const s = addLog(state, `駭浪反攻：自身 ${counters} 個指示物 → 30 + ${counters}×10 = ${dmg}`, aIdx);
-  return { state: s, damage: dmg };
-});
+regPre('吃吼霸ex|駭浪反攻', selfCountersMultiplyPre(30, 10, '駭浪反攻'));   // ⭐v6.388a 收斂到中央
 
 // 派帕的獒教父ex|幹勁衝撞 30+ — 自身無指示物 +120
 regPre('派帕的獒教父ex|幹勁衝撞', (state, aIdx, _pool) => {

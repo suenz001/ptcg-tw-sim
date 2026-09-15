@@ -24,7 +24,7 @@ import {
   defHasCountersBonusPre,        // 「若對手的戰鬥寶可夢身上放置有傷害指示物，則增加N點傷害。」
   coinHeadsDefCantRetreatPost,   // 「擲1次硬幣若為正面，則在下個對手的回合，受到這個招式的寶可夢無法撤退。」
   coinHeadsDiscardOppEnergyPost, // 「擲N次硬幣，選擇與正面出現的次數相同數量的…能量，將其丟棄。」
-  selfCountersBonusPre,          // 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」
+  selfCountersMultiplyPre,       // 「增加這隻寶可夢身上放置的傷害指示物的數量×N點傷害。」（v6.349 既有）
 } from '../../effects';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -77,8 +77,8 @@ regPost('黑暗鴉|抓一下', coinHeadsDefCantRetreatPost('抓一下'));
 regPost('三首惡龍|三首啃咬', coinHeadsDiscardOppEnergyPost(3, '三首啃咬'));
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 6. 自身傷害指示物數 × N（selfCountersBonusPre）
+// 6. 自身傷害指示物數 × N（selfCountersMultiplyPre，v6.349 中央）
 //    袋獸｜憤怒 `20+`：「增加這隻寶可夢身上放置的傷害指示物的數量×10點傷害。」
 //    ⚠ 指示物數 = floor(damage / 10)，走既有的 counterCount，不得自己再除一次 10。
 // ══════════════════════════════════════════════════════════════════════════════
-regPre('袋獸|憤怒', selfCountersBonusPre(20, 10, '憤怒'));
+regPre('袋獸|憤怒', selfCountersMultiplyPre(20, 10, '憤怒'));

@@ -246,13 +246,40 @@ console.log('\n【A】行為端：逐招實跑');
     JSON.stringify({ max: r.s?.pendingSelection?.maxCount, min: r.s?.pendingSelection?.minCount }));
 }
 
-// A5 比克提尼｜呼朋引伴 —— 開牌庫搜尋 picker（放備戰）
+// A5 比克提尼｜呼朋引伴 —— 開牌庫搜尋 picker（放備戰，卡面「最多2張【基礎】」）
+// ⚠⚠v6.388a（Fable 5 複審 Y1）：原本這一條是
+//     r.pendType === 'deck-search' || said(r, '呼朋引伴')
+//   —— 後半段**恆真**（招式名一定會出現在 log 裡），所以把整支 regPost 刪掉照樣 PASS＝安慰劑。
+//   改成自建牌庫（放 2 張【基礎】寶可夢）硬斷言 picker 的形狀，並補一條反對照。
+//   斷言值逐一對過 effects.ts recruitBasicToBenchPost（type/effectKey/minCount/maxCount/filter）。
 {
   const i = (VICTINI.attacks || []).findIndex((a) => a.name === '呼朋引伴');
-  const r = hit(HEAD, String(VICTINI.id), i, { energyCid: GRASS });
-  chk('A5 ⭐ 呼朋引伴：接上了（開 picker 或據實 log 牌庫沒有基礎寶可夢）',
-    r.pendType === 'deck-search' || said(r, '呼朋引伴'),
-    JSON.stringify({ t: r.pendType, k: r.pend, e: r.err, log: (r.log || []).slice(-2) }));
+  const BASIC2 = all.filter((c) => c.supertype === 'Pokemon' && HIJ(c) && c.stage === 'Basic').slice(0, 2);
+  chk('A5-0 ★ fixture：找得到 2 張【基礎】寶可夢可以放進牌庫', BASIC2.length === 2,
+    JSON.stringify(BASIC2.map((c) => c?.name ?? null)));
+  const st = ST(
+    PL('P0', {
+      active: mon(String(VICTINI.id), 'atk', { energyAttached: E6(GRASS) }),
+      deck: [...BASIC2.map((c, k) => mon(String(c.id), 'bk' + k)), ...DECK(GRASS)],
+    }),
+    PL('P1', { active: mon('19680', 'def'), deck: DECK(GRASS) }),
+  );
+  let ps = null, e5 = null;
+  try { ps = HEAD.applyAction(st, { type: 'ATTACK', attackIndex: i, actorIdx: 0 }, pool).pendingSelection ?? null; }
+  catch (e) { e5 = String(e && e.message); }
+  chk('A5 ⭐⭐ 呼朋引伴：牌庫有【基礎】⇒ 開 deck-search picker，走中央 effectKey=recruit-to-bench',
+    ps?.type === 'deck-search' && ps?.effectKey === 'recruit-to-bench',
+    JSON.stringify({ t: ps?.type, k: ps?.effectKey, e: e5 }));
+  chk('A5b ⭐⭐ 呼朋引伴：卡面「**最多**2張」⇒ minCount=0（可以選 0 張）、maxCount=2',
+    (ps?.minCount ?? -1) === 0 && ps?.maxCount === 2,
+    JSON.stringify({ min: ps?.minCount, max: ps?.maxCount }));
+  chk('A5c ⭐ 呼朋引伴：候選過濾器是【基礎】寶可夢（不是全牌庫）',
+    ps?.filter === 'BasicPokemon', JSON.stringify(ps?.filter ?? null));
+  // ★ 反對照：牌庫全是能量 ⇒ **不得**開 picker（避免空視窗），且要據實 log
+  const none = hit(HEAD, String(VICTINI.id), i, { energyCid: GRASS });
+  chk('A5d ★ 反對照：牌庫裡沒有【基礎】寶可夢 ⇒ 不開 picker，據實 log',
+    none.pendType === null && said(none, '牌庫內無可選的基礎寶可夢'),
+    JSON.stringify({ t: none.pendType, log: (none.log || []).slice(-2), e: none.err }));
 }
 
 // A6 捷拉奧拉｜快速抽出 —— 手牌 +1、傷害 20
@@ -384,6 +411,29 @@ const idxA = (c, nm) => (c.attacks || []).findIndex((a) => a.name === nm);
   try { const r = HEAD.applyAction(st, { type: 'ATTACK', attackIndex: i, actorIdx: 0 }, pool); hurtDmg = r.players[1].active?.damage ?? null; } catch (e) { hurtDmg = String(e.message); }
   chk('A2-3 ⭐ 月光利爪：對手身上沒有指示物 ⇒ 100', clean.defDamage === 100, JSON.stringify(clean.defDamage ?? clean.err));
   chk('A2-3b ⭐⭐ 月光利爪：對手身上有 30 傷害 ⇒ 100+140 = 240，累計 270', hurtDmg === 270, JSON.stringify(hurtDmg));
+
+  // ★★v6.388a（Fable 5 複審 Y2）補反對照 —— 上面兩條只能證明「有人身上有傷就加傷」，
+  //   分不出 defHasCountersBonusPre 讀的是「對手的戰鬥寶可夢」還是「自己」或「對手全隊」。
+  //   ⇒ 這兩條把『讀錯人』『讀錯位置』的突變抓出來（卡面主詞是「對手的戰鬥寶可夢」）。
+  const selfHurt = ST(
+    PL('P0', { active: mon(String(UMBRE.id), 'atk', { energyAttached: E6(DARK), damage: 50 }), deck: DECK(DARK) }),
+    PL('P1', { active: mon(String(TANKY.id), 'def'), deck: DECK(DARK) }),
+  );
+  let selfDmg = null;
+  try { selfDmg = HEAD.applyAction(selfHurt, { type: 'ATTACK', attackIndex: i, actorIdx: 0 }, pool).players[1].active?.damage ?? null; }
+  catch (e) { selfDmg = String(e && e.message); }
+  chk('A2-3c ★★ 反對照：**自己**身上有 50 傷害、對手 0 ⇒ 仍是 100（讀的是對手，不是自己）',
+    selfDmg === 100, JSON.stringify(selfDmg));
+
+  const benchHurt = ST(
+    PL('P0', { active: mon(String(UMBRE.id), 'atk', { energyAttached: E6(DARK) }), deck: DECK(DARK) }),
+    PL('P1', { active: mon(String(TANKY.id), 'def'), bench: [mon(String(TANKY.id), 'defb', { damage: 60 })], deck: DECK(DARK) }),
+  );
+  let benchDmg = null;
+  try { benchDmg = HEAD.applyAction(benchHurt, { type: 'ATTACK', attackIndex: i, actorIdx: 0 }, pool).players[1].active?.damage ?? null; }
+  catch (e) { benchDmg = String(e && e.message); }
+  chk('A2-3d ★★ 反對照：對手**備戰**有 60 傷害、戰鬥場 0 ⇒ 仍是 100（讀的是戰鬥寶可夢，不是全隊）',
+    benchDmg === 100, JSON.stringify(benchDmg));
 }
 
 // A2-4 黑暗鴉｜抓一下 20 —— 擲幣正面則對手下回合無法撤退
@@ -391,13 +441,19 @@ const idxA = (c, nm) => (c.attacks || []).findIndex((a) => a.name === nm);
   const i = idxA(ROOK, '抓一下');
   const h = withCoin(HEADS, () => hit(HEAD, String(ROOK.id), i, { energyCid: DARK, defId: String(TANKY.id) }));
   const t = withCoin(TAILS, () => hit(HEAD, String(ROOK.id), i, { energyCid: DARK, defId: String(TANKY.id) }));
-  const defCant = (r) => r.s?.players?.[1]?.active?.cantRetreatNextTurn === true
-    || r.log?.some((l) => l.includes('無法撤退'));
-  chk('A2-4 ⭐⭐ 抓一下：正面 ⇒ 對手下回合無法撤退', defCant(h) === true,
+  // ⚠v6.388a：原本判準是「旗標 **或** log 有『無法撤退』字樣」——
+  //   後半段會讓「只寫 log、沒真的設旗標」的壞實作矇混過關 ⇒ 收緊成只看旗標。
+  const defCant = (r) => r.s?.players?.[1]?.active?.cantRetreatNextTurn === true;
+  chk('A2-4 ⭐⭐ 抓一下：正面 ⇒ 對手下回合無法撤退（看**旗標**，不看 log 字串）', defCant(h) === true,
     JSON.stringify({ flag: h.s?.players?.[1]?.active?.cantRetreatNextTurn, log: (h.log || []).slice(-3) }));
   chk('A2-4b ★ 抓一下：反面 ⇒ 沒有那個效果', defCant(t) !== true, JSON.stringify((t.log || []).slice(-2)));
   chk('A2-4c ⭐ 抓一下：兩種擲幣結果主傷害都是 20', h.defDamage === 20 && t.defDamage === 20,
     JSON.stringify({ h: h.defDamage, t: t.defDamage }));
+  // ★v6.388a（Fable 5 複審 Y5）回歸守衛：coinHeadsDefCantRetreatPost 曾自己 addLog 一行，
+  //   而它呼叫的 defCantRetreatNextPost(label) 內部也會寫一行 ⇒ 對戰紀錄連續兩行講同一件事。
+  chk('A2-4d ★★ 抓一下：「無法撤退」在對戰紀錄裡**只出現一行**（不得 helper 與中央各寫一次）',
+    (h.log || []).filter((l) => l.includes('無法撤退')).length === 1,
+    JSON.stringify((h.log || []).filter((l) => l.includes('無法撤退'))));
 }
 
 // A2-5 三首惡龍｜三首啃咬 —— 擲 3 幣，正面數 = 丟對手能量個數

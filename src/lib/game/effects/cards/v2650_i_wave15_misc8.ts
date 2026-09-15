@@ -22,6 +22,7 @@ import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost, snipeOneOppBenchPost, dealAttackDamageToTarget, koTargetByAttackEffect, countEnergyTypeHostAware, resolveOptInPayment } from '../../effects'; // v5.992 若希望 opt-in 中央管線
 import { registerDirectEvolveAwaken } from '../../effects'; // v6.078 「覺醒」型直接進化中央 helper
+import { defHasCountersBonusPre } from '../../effects'; // ⭐v6.388a 收斂：對手身上有指示物則加傷（中央）
 import { isBasicEnergyOfType } from '../../selection-filter'; // v6.210：基本能量屬性判定收斂中央述詞（leaf，Check O 安全）
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -611,14 +612,7 @@ regPre('流氓鱷|咒詛猛擊', (state, aIdx, _pool) => {
 });
 
 // 劈斬司令｜致命刺擊 — 60 + 對手戰鬥場有指示物時 +60
-regPre('劈斬司令|致命刺擊', (state, aIdx, _pool) => {
-  const dIdx = (1 - aIdx) as 0 | 1;
-  const dmgCounter = state.players[dIdx].active?.damage ?? 0;
-  if (dmgCounter > 0) {
-    return { state: addLog(state, `致命刺擊：對手戰鬥場有 ${dmgCounter} 傷害 → 60+60 = 120`, aIdx), damage: 120 };
-  }
-  return { state: addLog(state, `致命刺擊：對手無指示物 → 60`, aIdx), damage: 60 };
-});
+regPre('劈斬司令|致命刺擊', defHasCountersBonusPre(60, 60, '致命刺擊'));   // ⭐v6.388a 收斂到中央
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 4. 棄能量 + 額外效果（3 張）

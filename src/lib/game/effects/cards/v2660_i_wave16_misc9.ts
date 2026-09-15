@@ -33,6 +33,7 @@ import { isBasicPokemonOnField } from '../../selection-filter'; // v6.250 場上
 import type { GameState, CardInstance } from '../../types';
 import type { Card } from '$lib/cards/types';
 import { coinStatusPost, flipCoinsWithLog, statusPost, selfHitPost as effectsSelfHitPost, dealAttackDamageToTarget, koTargetByAttackEffect, energyProvidesType, countAttachedEnergyAsUnits, returnSelfActiveEnergyPost, discardOppActiveEnergyPost } from '../../effects';
+import { coinHeadsDiscardOppEnergyPost } from '../../effects'; // ⭐v6.388a 擲 N 次 → 棄對手 N 個能量（中央）
 // v6.065「不看正面→從對手手牌選擇」中央收斂（卡面是「選擇」，不是隨機）
 import { oppReturnChosenConcealedToDeckPost } from '../../effects';
 import { defCantRetreatNextPost } from '../../effects'; // v5.802 中央禁撤退(免疫gate)
@@ -514,12 +515,8 @@ regR('v327-octopus-water-clean', (st, idx, iids, _params, pool) => {
 
 // 毛崖蟹｜喀嚓鉗 — 擲 2 次, 對手戰鬥場能量 ×N 棄
 regPre('毛崖蟹|喀嚓鉗', (s) => ({ state: s, damage: 0 }));
-regPost('毛崖蟹|喀嚓鉗', (state, aIdx, pool) => {
-  const r = flipCoinsWithLog(state, 2, '喀嚓鉗', aIdx);
-  if (r.heads === 0) return addLog(r.state, '喀嚓鉗：0 正面，無棄能量', aIdx);
-  // v5.974：選擇 N=正面數 → 中央 discardOppActiveEnergyPost(count=heads,選擇 picker + 免疫 gate),取代原自動從尾端丟。
-  return discardOppActiveEnergyPost('喀嚓鉗', 'any', r.heads)(addLog(r.state, `喀嚓鉗：${r.heads} 次正面`, aIdx), aIdx, pool);
-});
+// ⭐v6.388a（Fable 5 複審 R2）收斂：與焚焰蚣｜緊束粉碎、三首惡龍｜三首啃咬同一判準。
+regPost('毛崖蟹|喀嚓鉗', coinHeadsDiscardOppEnergyPost(2, '喀嚓鉗'));
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 11. 條件失敗（2 張）
