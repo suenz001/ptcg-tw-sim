@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tokenizeLogMessage, lineClass as logLineClass } from '$lib/game/log_format';
   import { retryImg } from '$lib/img-retry';
+import { ATTACK_LIST_INLINE_MAX } from '$lib/ui-limits';   // ⭐v6.389 招式清單上限（單一來源，UI 與守衛共用）
   // ⭐⭐⭐v6.177「抓取中／抓取失敗不清空已顯示資料」的唯一中央述詞（stale-while-revalidate）。
   import { adoptOrKeep, mergeKeyedOrKeep } from '$lib/ui/stale-keep';
   import { LB_TOP_OPTIONS, LB_TOP_MAX, lbTopRows, loadLbTop, saveLbTop } from '$lib/ui/leaderboard-top';
@@ -7734,6 +7735,28 @@ function _setupSelfPending(g: any, seat: number): string | null {
   }
   function cancelCopyAttack() { copyAttackPicker = null; }
 
+  // ⭐v6.389 招式清單溢出：招式數 > ATTACK_LIST_INLINE_MAX 時，行動列收成一顆按鈕，
+  //   點開這個 picker（沿用借招家族既有的 .selection-modal / .copy-attack-list，
+  //   那是 position:fixed + 高 z-index + 可捲，不可能被卡片蓋住或被 overflow:hidden 裁掉）。
+  let attackListPicker = $state<{ eff: { atk: any; sourceCardName: string; isFromTool: boolean }[] } | null>(null);
+  /**
+   * 依「招式原本的持有者」分組。
+   * ⚠⚠ **絕對不可以排序或過濾** —— `i` 是 getEffectiveAttacks() 結果的 index，
+   *   initiateAttack(i) 直接吃它。順序跑掉＝打錯招式，是這個改動最嚴重的風險。
+   *   （守衛 test-v6389 的【A】節就在守這件事。）
+   */
+  function groupAttacksBySource(eff: { atk: any; sourceCardName: string; isFromTool: boolean }[]) {
+    const out: { label: string; items: { atk: any; isFromTool: boolean; i: number }[] }[] = [];
+    const byName = new Map<string, { label: string; items: { atk: any; isFromTool: boolean; i: number }[] }>();
+    eff.forEach((e, i) => {
+      const key = String(e?.sourceCardName ?? '');
+      let g = byName.get(key);
+      if (!g) { g = { label: key || '招式', items: [] }; byName.set(key, g); out.push(g); }
+      g.items.push({ atk: e.atk, isFromTool: e.isFromTool, i });
+    });
+    return out;
+  }
+
   // v3.873 扮晶晶酒 picker：玩家挑對手戰鬥場太晶寶可夢的招式
   //   - 啜泣 → 直接 dispatch（無 PRE_DISCARD_CHOICE）
   //   - 激流水泵 → 接 preAttackDiscard 開能量 picker（min=0/max=3，可選 0 = 不希望使用 option / 選 3 = 希望使用 option）
@@ -11977,6 +12000,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
                讓 P2 無法按「準備完成」/「確認 mulligan 揭示」。phase gate 已足夠。 -->
           {#if game.turnPhase==='main' && activePlayer?.active && game.phase==='playing'}
             {@const eff=getEffectiveAttacks(game, activePlayer.active, pool)}
+            <!-- ⭐v6.389 招式清單溢出（玩家回報：夢幻ex｜記憶螺旋 後面的招式按不下去）。
+                 ⚠ 根因是 Fable 版只釘死 3 個招式槽（.atk-slot:nth-of-type(1|2|3)），
+                   第 4 個以後被 CSS Grid 排到「悔棋」下方，再被 .playmat.layout-fable{overflow:hidden}
+                   **實體裁掉** —— 不是被蓋住，是根本沒被畫出來，而且整頁也捲不動。
+                 ⚠ 這不是記憶螺旋專屬：古空棘魚｜潛入記憶 配 2 階進化就有 7 招（v3.08 起就有這個坑）。
+                 ⚠⚠ ≤ ATTACK_LIST_INLINE_MAX 時**完全走原本的路徑**（站長裁示：零位移零回歸），
+                   下面那一整段 each 區塊一個字都沒有動。
+                 ⚠ 註解裡**不可以**寫區塊開頭標記的字面（大括號 + 井號 + each／if）—— test-v6107 等守衛用 regex 數
+                   區塊 depth 來找版面分支的邊界，註解裡的開頭標記沒有對應的結束標記，
+                   會讓 depth 永遠不歸零、區間算到檔尾（v6.389 踩過）。 -->
+            {#if eff.length <= ATTACK_LIST_INLINE_MAX}
             {#each eff as { atk, sourceCardName, isFromTool }, i}
               {@const _shinyOn = isShinyCrystalActive(activePlayer.active, atk.cost)}
               {@const _est = damageEstimates ? (damageEstimates[i] ?? null) : null}
@@ -12022,6 +12056,15 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {/if}
               </span>
             {/each}
+            {:else}
+              <!-- 招式太多 ⇒ 收成一顆，點開 picker。
+                   ⚠ 這顆用的是 .btn-act.primary ⇒ 在 Fable 版吃 grid-row:4（原本「跳過攻擊」那一列），
+                     而「跳過攻擊」在下面另外 render，兩者不會互搶（實測見守衛【C】節）。 -->
+              <button class="btn-act primary atk-overflow"
+                disabled={actionBusy || (!!pendingSelection && pendingSelection.actorIdx === myIdx)}
+                title="這隻寶可夢目前可以使用 {eff.length} 個招式（含特性／道具借來的），點開選擇"
+                onclick={()=>{ attackListPicker = { eff }; }}>⚔ 選擇招式（{eff.length}）</button>
+            {/if}
             <!-- v5.166：disabled 改為精確判定 — 只在「自己有 pending modal 顯示中」
                  才 disabled；對方 pending 不擋（理論上 isMyTurn() 已 gate，但雙保險）。
                  PTCG 「跳過攻擊」= 自己選擇放棄本回合攻擊直接結束，應永遠可按。 -->
@@ -13664,7 +13707,47 @@ function _setupSelfPending(g: any, seat: number): string | null {
     </div>
   {/if}
 
-  <!-- v3.873 火箭隊的謎擬Ｑ｜扮晶晶酒 — 挑對手戰鬥場太晶寶可夢的招式 ─────────── -->
+  <!-- ⭐v6.389 招式清單溢出 picker ───────────────────────────────────────────── -->
+{#if attackListPicker}
+  <div class="selection-overlay">
+    <div class="selection-modal copy-attack-modal">
+      <div class="sel-header">
+        <h3>⚔ 選擇要使用的招式</h3>
+        <p class="sel-hint">這隻寶可夢目前可以使用 {attackListPicker.eff.length} 個招式（含特性／道具借來的）。</p>
+      </div>
+      <div class="copy-attack-list scroll-list">
+        {#each groupAttacksBySource(attackListPicker.eff) as g}
+          <div class="copy-attack-poke">
+            <div class="copy-attack-col">
+              <div class="copy-attack-name">{g.label}</div>
+              <div class="copy-attack-atks">
+                {#each g.items as it}
+                  <button
+                    class="copy-attack-btn"
+                    disabled={actionBusy || !availableAttacks.includes(it.i)}
+                    title={it.atk.effect ?? ''}
+                    onclick={()=>{ attackListPicker = null; initiateAttack(it.i); }}
+                  >
+                    <span class="copy-atk-cost">
+                      {#each it.atk.cost as e}<span class="copy-atk-pip" style:background={ENERGY_COLOR[e]} title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
+                    </span>
+                    <span class="copy-atk-name">{it.atk.name}{it.isFromTool ? ' 🔧' : ''}</span>
+                    {#if it.atk.damage}<span class="copy-atk-dmg">{it.atk.damage}</span>{/if}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+      <div class="sel-footer">
+        <button class="btn-act secondary" onclick={()=>{ attackListPicker = null; }}>取消</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- v3.873 火箭隊的謎擬Ｑ｜扮晶晶酒 — 挑對手戰鬥場太晶寶可夢的招式 ─────────── -->
   {#if personateAttackPicker}
     {@const op = personateAttackPicker.oppPoke}
     <div class="selection-overlay">
@@ -17013,6 +17096,18 @@ function _setupSelfPending(g: any, seat: number): string | null {
 
   /* ─── v2.119 Copy-attack picker（暗黑底牌） ──────────────── */
   .copy-attack-modal{ max-width:560px; }
+  /* ⭐⭐v6.389 可捲清單的**中央 utility**。
+     起因：repo 裡有 9 處各自寫死 max-height + overflow-y:auto（52vh／58vh／60vh／70vh…），
+     每一份的觸控處理還不一樣。新的東西一律掛這個 class，用 --scroll-list-max 覆寫高度。
+     ⚠ 觸控四件套（-webkit-overflow-scrolling／touch-action／overscroll-behavior／min-height:0）
+       照抄 .zoom-scroll —— 那是目前最完整的一份。
+     ⚠ 既有那 9 處**本版不動**：那會一次動到 9 個版面元素，與本版的 bug 修正是不同量級的風險，
+       混在一起出事時分不清是誰造成的（ptcg-vm-infra：一次只動一樣）。列為 v6.390。 */
+  .scroll-list{
+    min-height:0; overflow-y:auto; overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch; touch-action:pan-y;
+    max-height:var(--scroll-list-max, 60vh);
+  }
   .copy-attack-list{ display:flex; flex-direction:column; gap:.8rem; padding:.5rem 0; max-height:60vh; overflow-y:auto; }
   .copy-attack-poke{ display:flex; gap:.8rem; background:#1e2e1e; border:1px solid #3a5a3a; border-radius:8px; padding:.5rem; }
   .copy-attack-img{ width:80px; height:auto; border-radius:4px; object-fit:cover; }
@@ -19351,6 +19446,9 @@ function _setupSelfPending(g: any, seat: number): string | null {
      就不再鎖在 1/2/3 列（桌機**預設**就是 Fable 版，會直接看得出來）。
      ⚠ 這正是 svelte 編譯器的 unused-CSS 警告抓到的 —— 換 DOM 結構時務必回頭掃一次。 */
   .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(1){ grid-row:1; }
+  /* ⭐v6.389 招式太多時的收合鈕：佔「招式 1」那一列。
+     ⚠ 它是 .btn-act.primary，不指定的話會吃下面那條 grid-row:4，跟「跳過攻擊」搶同一格。 */
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk-overflow{ grid-row:1; }
   .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(2){ grid-row:2; }
   .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(3){ grid-row:3; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.secondary,

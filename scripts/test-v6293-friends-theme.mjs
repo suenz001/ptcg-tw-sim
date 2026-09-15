@@ -513,6 +513,26 @@ function revertV6321(region) {
   return r;
 }
 
+// ⭐⭐v6.389（招式清單溢出，玩家回報「記憶螺旋後面的招式按不下去」）的合法改動。
+//   ⚠ 與 V6321_BATTLE_EDITS 同一個機制：逐條還原之後，其餘仍必須逐位元等於 BASE。
+//   ⚠ ≤ATTACK_LIST_INLINE_MAX 時走的還是原本那一整段 each 區塊 —— 一個字都沒動，
+//     所以 A 段的還原就是「把外層條件分支與它的說明註解拿掉」。
+const V6389_BATTLE_EDITS = [
+  ["            <!-- ⭐v6.389 招式清單溢出（玩家回報：夢幻ex｜記憶螺旋 後面的招式按不下去）。\n                 ⚠ 根因是 Fable 版只釘死 3 個招式槽（.atk-slot:nth-of-type(1|2|3)），\n                   第 4 個以後被 CSS Grid 排到「悔棋」下方，再被 .playmat.layout-fable{overflow:hidden}\n                   **實體裁掉** —— 不是被蓋住，是根本沒被畫出來，而且整頁也捲不動。\n                 ⚠ 這不是記憶螺旋專屬：古空棘魚｜潛入記憶 配 2 階進化就有 7 招（v3.08 起就有這個坑）。\n                 ⚠⚠ ≤ ATTACK_LIST_INLINE_MAX 時**完全走原本的路徑**（站長裁示：零位移零回歸），\n                   下面那一整段 each 區塊一個字都沒有動。\n                 ⚠ 註解裡**不可以**寫區塊開頭標記的字面（大括號 + 井號 + each／if）—— test-v6107 等守衛用 regex 數\n                   區塊 depth 來找版面分支的邊界，註解裡的開頭標記沒有對應的結束標記，\n                   會讓 depth 永遠不歸零、區間算到檔尾（v6.389 踩過）。 -->\n            {#if eff.length <= ATTACK_LIST_INLINE_MAX}\n            {#each eff as { atk, sourceCardName, isFromTool }, i}\n",
+   "            {#each eff as { atk, sourceCardName, isFromTool }, i}\n"],
+  ["            {:else}\n              <!-- 招式太多 ⇒ 收成一顆，點開 picker。\n                   ⚠ 這顆用的是 .btn-act.primary ⇒ 在 Fable 版吃 grid-row:4（原本「跳過攻擊」那一列），\n                     而「跳過攻擊」在下面另外 render，兩者不會互搶（實測見守衛【C】節）。 -->\n              <button class=\"btn-act primary atk-overflow\"\n                disabled={actionBusy || (!!pendingSelection && pendingSelection.actorIdx === myIdx)}\n                title=\"這隻寶可夢目前可以使用 {eff.length} 個招式（含特性／道具借來的），點開選擇\"\n                onclick={()=>{ attackListPicker = { eff }; }}>⚔ 選擇招式（{eff.length}）</button>\n            {/if}\n",
+   ""],
+];
+function revertV6389(region) {
+  let r = region;
+  for (const [now, before] of V6389_BATTLE_EDITS) {
+    const n = r.split(now).length - 1;
+    assert.strictEqual(n, 1, 'v6.389 的合法改動必須恰出現一次（實際 ' + n + '）：' + now.slice(0, 70));
+    r = r.replace(now, before);
+  }
+  return r;
+}
+
 // ⭐⭐ v6.362（Rule 40：判準上移到意圖層，不放寬也不刪除）
 //   v6.361（站長裁定 D-10／D-11）在本檔新增了「非錦標賽平手結算視窗」。那一塊是**純新增**，
 //   而且整塊用 HTML 註解哨兵框住：
@@ -548,7 +568,7 @@ function stripV6361DrawModal(src) {
 await T('E1 ⭐⭐⭐ 對戰版面分支區間（手機直式＋三種桌機版面）還原 v6.321 的合法改動後與 BASE **逐位元相同**；勝負 modal 區間剝掉 v6.361 平手視窗哨兵後同樣逐位元相同', () => {
   if (!hasBaseCommit(ROOT, BASE_SHA)) { shallowSkip('v6293 E1 對戰版面分支逐位元比對', '需要歷史 commit；E1c 的結構斷言不需要歷史，仍在守'); skipped.push('E1（淺複製）'); return; }
   const baseSrc = execFileSync('git', ['-C', ROOT, 'cat-file', '-p', BASE_SHA + ':src/routes/game/+page.svelte'], { maxBuffer: 1 << 28 }).toString('utf8');
-  assert.strictEqual(sha256(revertV6321(battleRegionOf(GAME))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
+  assert.strictEqual(sha256(revertV6389(revertV6321(battleRegionOf(GAME)))), sha256(battleRegionOf(baseSrc)), '⚠⚠⚠ 對戰版面分支被動到了（站長最高紅線）');
   assert.strictEqual(sha256(gameoverRegionOf(stripV6361DrawModal(GAME))), sha256(gameoverRegionOf(baseSrc)), '⚠⚠ 勝負結算 modal 被動到了');
 });
 await T('E1b ⭐ 正對照：把對戰版面分支改一個位元 ⇒ E1 的比對必須不同（不是恆真式）', () => {

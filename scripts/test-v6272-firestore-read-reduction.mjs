@@ -783,7 +783,14 @@ const PREV_ALLOWED = [
   'src/lib/game/effects/cards/v2660_i_wave16_misc9.ts',
   'src/lib/game/effects/cards/v2740_h_wave1_simple.ts',
   'src/lib/game/effects/cards/v2760_h_wave3_complex.ts',
+  // ⭐v6.389 招式清單溢出（玩家回報：夢幻ex｜記憶螺旋 後面的招式按不下去）：
+  //   ・ui-limits.ts：新檔，ATTACK_LIST_INLINE_MAX 的單一來源
+  //   ・+page.svelte：招式數 > 上限時收成一顆按鈕 ＋ 走既有的 .selection-modal picker
+  //     ＋ .scroll-list 中央 utility ＋ .atk-overflow 的 Fable 槽位
+  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
+  'src/lib/ui-limits.ts',
   'src/lib/version.ts',
+  'src/routes/game/+page.svelte',
   'static/card-set-map.json',
   'static/cards/MF.json',
   'static/cards/index.json',

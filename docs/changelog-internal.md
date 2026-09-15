@@ -1,5 +1,98 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.389 ⭐⭐⭐ 招式清單溢出：夢幻ex｜記憶螺旋 後面的招式按不下去（玩家回報）
+
+BASE `6d715d5f3a759a4cfa899b112cccbcb34694d931`（v6.388g）。
+⚠ 本版**動了 `src/`** ⇒ 部署要跑 **`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**，
+跑完用 `oracle-admin\\verify-deploy.bat` 驗收。
+
+### 【零】玩家回報
+
+> 夢幻ex｜記憶螺旋 因為備戰區可以選的招式太多了，導致後面的招式無法點選（按不下去）
+
+### 【一】⚠ 根因不是「清單太長」，是 Fable 版只釘死 3 個招式槽
+
+桌機（寬度 ≥1024）**預設走 Fable 版**（`+page.svelte:2167`）。Fable 版的招式區：
+
+```
+.atk-slot:nth-of-type(1){ grid-row:1; }   ← 只有 3 個
+.atk-slot:nth-of-type(2){ grid-row:2; }
+.atk-slot:nth-of-type(3){ grid-row:3; }
+跳過攻擊 → grid-row:4 ／ 撤退 → 5 ／ 場地 → 6 ／ 悔棋 → 7,8
+```
+
+第 4 招以後**沒有任何 grid-row 規則** ⇒ CSS Grid 的 sparse auto-placement 把它們丟到
+row 9、10、11…（也就是「悔棋」按鈕**下方**），再被
+`.playmat.layout-fable{ overflow:hidden }` ＋ `.battle-root{ overflow:hidden }`
+**實體裁掉** —— 不是被蓋住，是根本沒被畫出來，而且整頁也捲不動。
+
+⚠⚠ **所以這不是記憶螺旋專屬的坑，是「超過 3 招就會發生」**：
+- 古空棘魚｜潛入記憶（`engine.ts:9811`，**v3.08 起**）配 2 階進化 ⇒ 7 招
+- 洛托姆ex｜多重轉接 帶 2 張技術機 ⇒ 4 招
+
+記憶螺旋只是把這個舊坑踩穿（備戰 8 隻 × 每張最多 3 招 ⇒ 理論上界 26 招）。
+
+### 【二】手機直式**本來就沒問題**
+
+`MobilePortraitBattle.svelte:1845` 的 `.mp-sheet` 是 `max-height:70vh; overflow-y:auto`，
+而且 iOS 的整頁滑動鎖有把它列進白名單 ⇒ **手機直式早就是站長要的滑動，本版不動**。
+真正還有問題的是**手機橫向／小平板**（≤950px 橫向，`.action-bar{max-height:12vh; overflow-y:hidden}`）
+—— 本版的改法也一併解決（走 modal）。
+
+### 【三】修法（站長 2026-09-15 裁示：閾值 3、≤3 招維持現狀、順手收斂）
+
+| 項 | 內容 |
+|---|---|
+| 常數單一來源 | 新檔 `src/lib/ui-limits.ts`：`ATTACK_LIST_INLINE_MAX = 3`（UI 與守衛同一個 import） |
+| **≤3 招** | **一個字都沒動** —— 原本那整段 each 區塊原封不動包進條件分支，零位移零回歸 |
+| **>3 招** | 行動列收成一顆「⚔ 選擇招式（N）」，點開既有的 `.selection-modal` / `.copy-attack-list` picker，依「來自哪隻備戰寶可夢」分組 |
+| Fable 槽位 | 收合鈕指定 `grid-row:1` —— 不指定的話它吃 `.btn-act.primary` 的 `grid-row:4`，會跟「跳過攻擊」搶同一格 |
+| `.scroll-list` | 可捲清單的**中央 utility**（觸控四件套照抄 `.zoom-scroll`，repo 裡最完整的一份），新 picker 已經在用 |
+
+⭐ **一套解四個版面**：classic／tabletop／fable／手機橫向全部走同一條 modal 路徑，
+而 `.selection-modal` 是 `position:fixed` ＋ 高 z-index ⇒ **結構上**不可能被卡片蓋住、
+不可能被 `overflow:hidden` 裁掉。**「會不會被蓋住」是用設計消滅的，不是假裝守得到。**
+
+⚠ 既有 9 處各寫各的 `max-height + overflow-y:auto`（`.sel-grid`／`.full-deck-list`／
+`.retreat-grid`／`.reorder-deck-wrap`／`.log-col`／`.zoom-scroll`／`.mp-sheet`／`.selection-modal`…）
+**本版不動**：那會一次動到 9 個版面元素，與本版的 bug 修正是不同量級的風險
+（ptcg-vm-infra：一次只動一樣）。列為 **v6.390** 的純樣式遷移。
+
+### 【四】守衛 `scripts/test-v6389-attack-list-overflow.mjs`
+
+- 【A】**行為層**：真的 bundle 引擎跑 `getEffectiveAttacks`，招式數用**公式**驗
+  （每張卡最多幾招是從 `static/cards` 全掃出來的，不寫死 ⇒ 日後出 4 招的卡會自己跟上）；
+  正對照：拿掉記憶螺旋 ⇒ 掉回卡面數。
+- 【B】⭐⭐⭐ **index 對齊**：把 UI 的 `groupAttacksBySource` **抽出來實跑**。
+  `i` 是 `getEffectiveAttacks()` 的 index、`initiateAttack(i)` 直接吃它 ——
+  **分組時排序或過濾就會打錯招式**，這是本版最嚴重的風險。
+  ⚠ 抽取器踩過一個坑：函式簽名的**型別註記裡就有大括號**，
+  直接 `indexOf('{')` 會從參數型別開始數 ⇒ 抽出半截 ⇒ esbuild transform 失敗。
+  要先用小括號平衡找到參數列表結尾，再找 body 的大括號；並加「抽出來的必須以右大括號結尾」的自驗。
+- 【C】**接線層**：7 條 markup／CSS 契約 ＋ **HEAD-FAIL**（對 BASE 的 `+page.svelte` 跑同一組，
+  **7 條全部必須紅**）＋ 哨兵（BASE 讀得到內容、不是空字串）。
+- 【D】在 npm test chain 裡。
+
+⚠ 誠實聲明：這支守衛**不驗 hit-testing**（沒有瀏覽器，做不了 elementFromPoint）。
+覆蓋風險是用**設計**消滅的（見【三】），不是假裝守得到。
+
+### 【五】⚠ 踩到的坑：Svelte **註解裡**寫了區塊開頭標記的字面
+
+`test-v6107` 用 regex 數 `{#if|{#each|{#await` 的 depth 找「手機／桌機版面分支」的邊界。
+我在註解裡寫了「下面這整段 …each… 一個字都沒有動」，那個開頭標記**沒有對應的結束標記**
+⇒ depth 永遠不歸零 ⇒ 邊界算到檔尾 ⇒ 守衛誤判「banner 在版面分支內」。
+
+⚠⚠ **同一個坑連踩兩次**：我寫修正時，把警語寫成「註解裡不可以寫 …各種字面…」，
+那句警語**自己就是兩個字面**，depth 又 +2。
+⇒ 已寫成 **IRON_RULES Rule 47**，並在 `__m6a/v389_step6.mjs` 末尾留了可照抄的自檢。
+
+另外 `test-v6272`（玩家端零改動）的判準是 `assert.deepStrictEqual(diff.sort(), PREV_ALLOWED)`
+—— **嚴格相等**。新檔 `src/lib/ui-limits.ts` 必須 `git add` 進 index，
+`git diff <PREV_SHA>` 才會把它列成新增（守衛的註解早就寫了這件事）。
+
+---
+
+
 ## v6.388g ⭐⭐⭐ Opus 5 複審 v6.388f：F0d 的邊界判準**在 LF／CI 上也會誤紅**
 
 BASE `2a8e2fad8832292769eaf6c6601943373fcfd725`（v6.388f）。
