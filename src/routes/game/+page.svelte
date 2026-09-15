@@ -7743,7 +7743,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
    * 依「招式原本的持有者」分組。
    * ⚠⚠ **絕對不可以排序或過濾** —— `i` 是 getEffectiveAttacks() 結果的 index，
    *   initiateAttack(i) 直接吃它。順序跑掉＝打錯招式，是這個改動最嚴重的風險。
-   *   （守衛 test-v6389 的【A】節就在守這件事。）
+   *   （守衛 test-v6389 的【B】節就在守這件事；【C】節另外守「markup 真的消費 it.i」。）
    */
   function groupAttacksBySource(eff: { atk: any; sourceCardName: string; isFromTool: boolean }[]) {
     const out: { label: string; items: { atk: any; isFromTool: boolean; i: number }[] }[] = [];
@@ -12004,7 +12004,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                  ⚠ 根因是 Fable 版只釘死 3 個招式槽（.atk-slot:nth-of-type(1|2|3)），
                    第 4 個以後被 CSS Grid 排到「悔棋」下方，再被 .playmat.layout-fable{overflow:hidden}
                    **實體裁掉** —— 不是被蓋住，是根本沒被畫出來，而且整頁也捲不動。
-                 ⚠ 這不是記憶螺旋專屬：古空棘魚｜潛入記憶 配 2 階進化就有 7 招（v3.08 起就有這個坑）。
+                 ⚠ 這不是記憶螺旋專屬：古空棘魚｜潛入記憶 配 2 階進化最多有 6 招（v3.08 起就有這個坑）。
                  ⚠⚠ ≤ ATTACK_LIST_INLINE_MAX 時**完全走原本的路徑**（站長裁示：零位移零回歸），
                    下面那一整段 each 區塊一個字都沒有動。
                  ⚠ 註解裡**不可以**寫區塊開頭標記的字面（大括號 + 井號 + each／if）—— test-v6107 等守衛用 regex 數
@@ -13724,7 +13724,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
                 {#each g.items as it}
                   <button
                     class="copy-attack-btn"
-                    disabled={actionBusy || !availableAttacks.includes(it.i)}
+                    disabled={actionBusy || !availableAttacks.includes(it.i) || !!pendingSelection}
                     title={it.atk.effect ?? ''}
                     onclick={()=>{ attackListPicker = null; initiateAttack(it.i); }}
                   >
@@ -13732,7 +13732,14 @@ function _setupSelfPending(g: any, seat: number): string | null {
                       {#each it.atk.cost as e}<span class="copy-atk-pip" style:background={ENERGY_COLOR[e]} title={ENERGY_LABEL[e]}>{ENERGY_LABEL[e]}</span>{/each}
                     </span>
                     <span class="copy-atk-name">{it.atk.name}{it.isFromTool ? ' 🔧' : ''}</span>
-                    {#if it.atk.damage}<span class="copy-atk-dmg">{it.atk.damage}</span>{/if}
+                    <span class="copy-atk-dmg">{it.atk.damage || '—'}</span>
+                    <!-- ⭐v6.389a 預估傷害：原本的招式鈕有 v6.233/6.237/6.238 的 hover／🔍 預估，
+                         picker 少掉的話，**最需要預估的那群玩家（記憶螺旋牌）反而看不到**。
+                         picker 的項目是全寬清單、空間夠 ⇒ 直接把短版預估印出來，不用 hover。
+                         ⚠ index 用 it.i —— damageEstimates 是對齊 getEffectiveAttacks() 的。 -->
+                    {#if hasEstimateToShow(damageEstimates ? (damageEstimates[it.i] ?? null) : null)}
+                      <span class="copy-atk-est">{estimateShortText(damageEstimates[it.i])}</span>
+                    {/if}
                   </button>
                 {/each}
               </div>
@@ -17103,6 +17110,8 @@ function _setupSelfPending(g: any, seat: number): string | null {
        照抄 .zoom-scroll —— 那是目前最完整的一份。
      ⚠ 既有那 9 處**本版不動**：那會一次動到 9 個版面元素，與本版的 bug 修正是不同量級的風險，
        混在一起出事時分不清是誰造成的（ptcg-vm-infra：一次只動一樣）。列為 v6.390。 */
+  /* ⭐v6.389a picker 裡的預估傷害（短版，不用 hover） */
+  .copy-atk-est{ margin-left:.4rem; font-size:.78rem; color:#9fd; opacity:.9; white-space:nowrap; }
   .scroll-list{
     min-height:0; overflow-y:auto; overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch; touch-action:pan-y;
@@ -19446,13 +19455,17 @@ function _setupSelfPending(g: any, seat: number): string | null {
      就不再鎖在 1/2/3 列（桌機**預設**就是 Fable 版，會直接看得出來）。
      ⚠ 這正是 svelte 編譯器的 unused-CSS 警告抓到的 —— 換 DOM 結構時務必回頭掃一次。 */
   .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(1){ grid-row:1; }
-  /* ⭐v6.389 招式太多時的收合鈕：佔「招式 1」那一列。
-     ⚠ 它是 .btn-act.primary，不指定的話會吃下面那條 grid-row:4，跟「跳過攻擊」搶同一格。 */
-  .playmat.layout-fable .action-bar > .action-btns > .btn-act.atk-overflow{ grid-row:1; }
+
   .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(2){ grid-row:2; }
   .playmat.layout-fable .action-bar > .action-btns > .atk-slot:nth-of-type(3){ grid-row:3; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.secondary,
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.primary{ grid-row:4; }
+  /* ⭐v6.389a 招式太多時的收合鈕：佔「招式 1」那一列。
+     ⚠⚠ v6.389 這條寫在上面那條 .primary{grid-row:4} **之前**，而且沒有 .primary ——
+       兩條特異度都是 (0,6,0)、後者在後 ⇒ **後者勝** ⇒ 這條是死規則，收合鈕實際吃 grid-row:4，
+       跟「跳過攻擊」撞同一列、CSS Grid 開出隱式第 2 欄、該列溢出按鈕欄約 54px（Opus 5 複審實測）。
+     ⇒ 兩道保險：① 加上 .primary（特異度 6→7）② 整條移到 .primary{grid-row:4} 之後。 */
+  .playmat.layout-fable .action-bar > .action-btns > .btn-act.primary.atk-overflow{ grid-row:1; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-retreat-mirror,
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.btn-fossil-discard{ grid-row:5; }
   .playmat.layout-fable .action-bar > .action-btns > .btn-act.stadium-btn{ grid-row:6; }

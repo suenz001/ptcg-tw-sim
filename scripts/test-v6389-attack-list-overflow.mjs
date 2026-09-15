@@ -40,6 +40,14 @@ const chk = (name, ok, extra = '') => {
 
 const PAGE = 'src/routes/game/+page.svelte';
 const SRC = readFileSync(join(ROOT, PAGE), 'utf8');
+// ⭐v6.389a（Opus 5 複審 🟡-3）：閾值常數的**值**要被守到 ——
+//   把 ATTACK_LIST_INLINE_MAX 改成 99，整個修法就靜默失效（picker 永遠不會開），
+//   而 v6.389 的守衛對此全綠（A1b 寫死了 > 3，沒有用 import 的常數）。
+//   ⇒ 值從 ui-limits.ts 真的讀出來，並斷言它**對齊 Fable 版釘死的招式槽條數**
+//     （那正是 ui-limits.ts 自己宣稱的對齊關係，不是隨便挑一個數字）。
+const LIMITS_SRC = readFileSync(join(ROOT, 'src/lib/ui-limits.ts'), 'utf8');
+const INLINE_MAX = Number((LIMITS_SRC.match(/ATTACK_LIST_INLINE_MAX\s*=\s*(\d+)/) || [])[1]);
+const FABLE_SLOTS = (SRC.match(/\.action-btns > \.atk-slot:nth-of-type\(\d+\)\{ grid-row:\d+; \}/g) || []).length;
 
 // ── 卡池 ────────────────────────────────────────────────────────────────────
 const dir = join(ROOT, 'static/cards');
@@ -75,6 +83,19 @@ const FAT = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic' && 
   || all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic' && (c.attacks || []).length >= 2);
 chk('0c ★ 找得到招式數最多的基礎寶可夢當備戰樣本', !!FAT,
   JSON.stringify({ n: FAT?.name, atk: (FAT?.attacks || []).length }));
+// ⚠v6.389a（Opus 5 複審 🟡-4）：fixture 的招式**不可以全部都有傷害** ——
+//   否則 `filter(e => e.atk.damage)` 這種很像回事的突變是 no-op，【B】抓不到。
+const NODMG = all.find((c) => c.supertype === 'Pokemon' && c.stage === 'Basic'
+  && (c.attacks || []).length >= 2 && (c.attacks || []).some((a) => !a.damage));
+chk('0d ★★ 找得到「有招式不帶傷害」的基礎寶可夢（讓 filter 型突變無所遁形）', !!NODMG,
+  JSON.stringify({ n: NODMG?.name, dmgs: (NODMG?.attacks || []).map((a) => a.damage) }));
+// ⭐⭐v6.389a（Opus 5 複審 🟡-3）：閾值常數的**值**必須被守到。
+//   把 ATTACK_LIST_INLINE_MAX 改成 99，picker 永遠不會開、整個修法靜默失效 ——
+//   而 v6.389 的守衛對此全綠。ui-limits.ts 自己宣稱「這個值對齊 Fable 版釘死的招式槽」，
+//   所以就用那個關係當判準，不是隨便挑一個數字。
+chk('0e ⭐⭐⭐ ATTACK_LIST_INLINE_MAX 的**值**必須等於 Fable 版釘死的招式槽條數',
+  Number.isFinite(INLINE_MAX) && INLINE_MAX === FABLE_SLOTS && INLINE_MAX > 0,
+  JSON.stringify({ INLINE_MAX, FABLE_SLOTS }));
 
 // ── 盤面 helper ─────────────────────────────────────────────────────────────
 const mon = (cid, iid, o = {}) => ({ iid, cardId: String(cid), damage: 0, energyAttached: [], ...o });
@@ -88,15 +109,18 @@ const ST = (p0, p1, extra = {}) => ({
 // ═══════════════════════════════════════════════════════════════════════════
 console.log('\n【A】行為層：記憶螺旋真的會把招式清單撐爆');
 // ═══════════════════════════════════════════════════════════════════════════
-const benchOf = (n) => Array.from({ length: n }, (_, k) => mon(FAT.id, 'b' + k));
+// ⚠ 備戰刻意混入一隻「有招式不帶傷害」的卡（見 0d）
+const benchOf = (n) => Array.from({ length: n },
+  (_, k) => mon(k === 0 && NODMG ? NODMG.id : FAT.id, 'b' + k));
 {
   const st = ST(PL('P0', { active: mon(MEW.id, 'atk'), bench: benchOf(5) }), PL('P1', { active: mon(FAT.id, 'd') }));
   const eff = ENG.getEffectiveAttacks(st, st.players[0].active, pool);
-  const expect = (MEW.attacks || []).length + 5 * (FAT.attacks || []).length;
-  chk('A1 ⭐⭐⭐ 備戰 5 隻（每隻 ' + (FAT.attacks || []).length + ' 招）⇒ 招式數 = 自己 + 5×每隻（公式算，不是寫死）',
+  const expect = (MEW.attacks || []).length
+    + (NODMG ? (NODMG.attacks || []).length + 4 * (FAT.attacks || []).length : 5 * (FAT.attacks || []).length);
+  chk('A1 ⭐⭐⭐ 備戰 5 隻 ⇒ 招式數 = 自己 + 逐隻卡面招式數（公式算，不是寫死）',
     eff.length === expect, JSON.stringify({ got: eff.length, expect }));
-  chk('A1b ⭐⭐ 而且它**超過**行動列的內嵌上限（＝這個 bug 真的會發生）',
-    eff.length > 3, String(eff.length));
+  chk('A1b ⭐⭐ 而且它**超過**行動列的內嵌上限（用 import 的常數，不是寫死的 3）',
+    Number.isFinite(INLINE_MAX) && eff.length > INLINE_MAX, JSON.stringify({ eff: eff.length, INLINE_MAX }));
 }
 {
   // ★ 正對照：拿掉記憶螺旋 ⇒ 只剩自己的卡面招式（證明 A1 不是恆真）
@@ -104,7 +128,7 @@ const benchOf = (n) => Array.from({ length: n }, (_, k) => mon(FAT.id, 'b' + k))
   const pool2 = new Map(pool); pool2.set(String(MEW.id), noAbil);
   const st = ST(PL('P0', { active: mon(MEW.id, 'atk'), bench: benchOf(5) }), PL('P1', { active: mon(FAT.id, 'd') }));
   const eff = ENG.getEffectiveAttacks(st, st.players[0].active, pool2);
-  chk('A2 ★★ 正對照：拿掉「記憶螺旋」⇒ 招式數掉回自己的卡面數',
+  chk('A2 ★★ 正對照：拿掉「記憶螺旋」⇒ 招式數掉回自己的卡面數（證明 A1 不是恆真）',
     eff.length === (MEW.attacks || []).length, String(eff.length));
 }
 {
@@ -192,8 +216,31 @@ const CONTRACTS = [
     (s) => /copy-attack-list scroll-list/.test(s)],
   ['C6 ⭐⭐ .scroll-list 真的有 overflow-y:auto ＋ max-height',
     (s) => /\.scroll-list\{[\s\S]{0,400}overflow-y:auto[\s\S]{0,400}max-height:var\(--scroll-list-max/.test(s)],
-  ['C7 ⭐⭐⭐ 收合鈕在 Fable 版佔 grid-row:1（不指定就會吃 .btn-act.primary 的 grid-row:4，跟「跳過攻擊」搶格）',
-    (s) => /\.action-btns\s*>\s*\.btn-act\.atk-overflow\{\s*grid-row:1;\s*\}/.test(s)],
+  // ⚠⚠v6.389a（Opus 5 複審 🔴-1）：v6.389 這一條只驗「那行字存在」——
+  //   而那條規則的特異度輸給後面的 .btn-act.primary{grid-row:4}，**是死規則**。
+  //   ⇒ 改成驗「選擇器含 .primary.atk-overflow（特異度贏）」**而且**「排在 .primary{grid-row:4} 之後」。
+  ['C7 ⭐⭐⭐ 收合鈕的 grid-row:1 必須**真的贏得過** .btn-act.primary{grid-row:4}（特異度 ＋ 順序）',
+    (s) => {
+      const win = /\.action-btns > \.btn-act\.primary\.atk-overflow\{ grid-row:1; \}/.exec(s);
+      const lose = /\.action-btns > \.btn-act\.primary\{ grid-row:4; \}/.exec(s);
+      return !!win && !!lose && win.index > lose.index;
+    }],
+  // ⚠⚠v6.389a（Opus 5 複審 🔴-2）：【B】只把 groupAttacksBySource 抽出來單獨跑，
+  //   **從未斷言 markup 真的消費 it.i**。把 `as it` 改成 `as it, k`、`initiateAttack(it.i)`
+  //   改成 `initiateAttack(k)`，v6.389 的守衛照樣全綠 —— 而那正是「打錯招式」的真實形態。
+  ['C9 ⭐⭐⭐ picker 送出的是 **it.i**（getEffectiveAttacks 的 index），不是組內序號',
+    (s) => /\{#if attackListPicker\}[\s\S]{0,3000}initiateAttack\(it\.i\)/.test(s)],
+  ['C10 ⭐⭐⭐ picker 的 disabled 判定用的也是 **it.i**',
+    (s) => /\{#if attackListPicker\}[\s\S]{0,3000}availableAttacks\.includes\(it\.i\)/.test(s)],
+  ['C11 ⭐⭐ picker 的 each 不得帶 index 變數（帶了就代表有人想用組內序號）',
+    (s) => {
+      const m = /\{#each g\.items as ([^}]*)\}/.exec(s);
+      return !!m && m[1].trim() === 'it';
+    }],
+  ['C12 ⭐⭐ picker 的 disabled 與原招式鈕一致（都要擋 pendingSelection）',
+    (s) => /\{#if attackListPicker\}[\s\S]{0,3000}availableAttacks\.includes\(it\.i\) \|\| !!pendingSelection/.test(s)],
+  ['C13 ⭐⭐ picker 有預估傷害（>3 招的玩家正是最需要預估的那一群）',
+    (s) => /\{#if attackListPicker\}[\s\S]{0,3000}hasEstimateToShow\(damageEstimates/.test(s)],
 ];
 for (const [name, f] of CONTRACTS) chk(name, f(SRC));
 

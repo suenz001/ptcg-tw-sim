@@ -1,5 +1,118 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.389a ⭐⭐⭐ Opus 5 複審 v6.389：我加的那條 CSS 是**死規則**，守衛守的是一條死碼
+
+BASE `d602232d0c8b78cbd05fe9f0b4da96930030afe4`（v6.389）。
+⚠ 本版**動了 `src/`** ⇒ 部署要跑 **`update-tournament.bat`（先）＋ `redeploy-oracle.bat`（後）**。
+
+### 【零】🔴-1 `.atk-overflow{ grid-row:1 }` 完全沒有生效
+
+```
+.playmat.layout-fable … > .btn-act.atk-overflow{ grid-row:1; }   ← 6 個 class
+.playmat.layout-fable … > .btn-act.primary{ grid-row:4; }        ← 6 個 class，**在後**
+```
+
+**同特異度、後者在後 ⇒ 後者勝** ⇒ 我加的那條是**死規則**，收合鈕實際吃 `grid-row:4`。
+
+Opus 5 用 Chrome headless 實測（把那幾行逐字抄成獨立 HTML 讀 `getComputedStyle`）：
+
+```
+現況：  a gridRowStart=4 | c gridRowStart=4
+幾何：  grid:[624,776] :: a row=4 L=624 R=741 | b(跳過攻擊) row=4 L=744 R=830
+改成 .btn-act.primary.atk-overflow 之後：
+       FIXED :: a row=1 L=624 R=776 T=253 | b row=4 L=624 R=776 T=376
+```
+
+⇒ 收合鈕與「跳過攻擊」**撞同一列**，CSS Grid 開出隱式第 2 欄，該列總寬 152→206px
+（**溢出按鈕欄 54px**，壓到 action-bar 中央的場地顯示），rows 1–3 留白約 123px。
+**而且只有 Fable 版（桌機預設）受影響** —— classic 是 flex-wrap、tabletop 與手機橫向是 flex-column。
+
+修法（兩道保險）：① 選擇器加上 `.primary`（特異度 6→7）② 整條移到 `.primary{grid-row:4}` **之後**。
+
+⚠⚠ **守衛 C7 只驗「那行字存在」⇒ 它守的是一條死規則**（安慰劑）。
+已改成驗「選擇器含 `.primary.atk-overflow`（特異度贏）**而且**排在 `.primary{grid-row:4}` 之後」。
+
+### 【一】🔴-2 守衛守不到「打錯招式」的**真實形態**
+
+【B】只把 `groupAttacksBySource` 抽出來單獨跑，**從未斷言 markup 真的消費 `it.i`**。
+Opus 5 的突變（保持可編譯）：
+
+```
+{#each g.items as it}              → {#each g.items as it, k}
+initiateAttack(it.i)               → initiateAttack(k)
+availableAttacks.includes(it.i)    → availableAttacks.includes(k)
+⇒ 守衛 23 PASS / 0 FAIL（一條都沒紅）
+```
+
+而那正是「第 2 組以後每一顆都打錯招式」—— **本版自稱最嚴重的風險，守衛完全沒守到**。
+⇒ 【C】新增 **C9／C10／C11**（送出的是 `it.i`、disabled 用的也是 `it.i`、each 不得帶 index 變數）。
+
+### 【二】🟡 picker 的功能缺口
+
+| 項 | v6.389 | v6.389a |
+|---|---|---|
+| `disabled` | `actionBusy \|\| !availableAttacks.includes(it.i)` | **補上 `\|\| !!pendingSelection`** ——原本對手有 pending 時按得下去，但 `engine.ts:3456` 會**靜默吞掉** ⇒ 玩家按了沒反應、modal 還關掉了 |
+| 預估傷害 | 完全沒有 | 補上短版預估（`hasEstimateToShow` / `estimateShortText`，index 用 `it.i`）——**>3 招的玩家正是最需要預估的那一群** |
+| 傷害欄 | 只在 `it.atk.damage` 為真時顯示 | 一律顯示（無傷害顯示 `—`，與原招式鈕一致） |
+
+### 【三】🟡 閾值常數的**值**沒有守衛
+
+把 `ATTACK_LIST_INLINE_MAX` 改成 99 ⇒ picker 永遠不會開、整個修法靜默失效，
+而 v6.389 的守衛**全綠**（A1b 寫死了 `> 3`，沒有用 import 的常數）。
+⇒ 新增 **0e**：值從 `ui-limits.ts` 真的讀出來，並斷言它**等於 Fable 版釘死的招式槽條數**
+（那正是 `ui-limits.ts` 自己宣稱的對齊關係）；A1b 也改用讀出來的常數。
+
+### 【四】🟡 fixture 讓 filter 型突變逃得掉
+
+v6.389 的 fixture 那批招式**全部都有傷害** ⇒ `filter(e => e.atk.damage)` 是 no-op ⇒ 抓不到。
+⇒ 備戰刻意混入一隻「有招式不帶傷害」的卡（**0d** 負責找它、找不到就紅）。
+
+### 【五】🟡 文件數字**全部重新現查**（v6.389 寫的三個數字都是錯的）
+
+`__m6a/v389a_step4.mjs` 自己掃 live 卡池算出來再寫進文件（不手寫）：
+
+```
+單張卡最多招式數 = 3        （全池只有 2 張 3 招）
+夢幻ex 的卡面招式數 = 1     （19969 / 20043 都是）
+備戰上限 = 8                （零之大空洞 ＋ 太晶）
+⇒ 理論上界 = 1 + 8×3 = 25   （v6.389 寫 26，錯）
+2 階進化線招式總和上界 = 6：黑眼鱷(2) + 混混鱷(2) + 流氓鱷ex(2)
+                            （v6.389 寫「古空棘魚配 2 階進化 ⇒ 7 招」，錯）
+給招式的寶可夢道具 = 核心記憶碟 / 超級烈空坐帽子 / 招式學習器 螢石・演進・衰退（各 1 招）
+                            （v6.389 寫「技術機」，live 卡池**根本沒有這張卡**）
+```
+
+另外 `groupAttacksBySource` 的 JSDoc 把守衛節次寫成【A】，實際是【B】，已更正。
+
+### 【六】驗收
+
+- `scripts/test-v6389-attack-list-overflow.mjs`：**PASS 30 / FAIL 0**（原 23）
+- `scripts/mutcheck-v6389-attack-list.mjs`（新，進 repo 可複驗）：**9 個 ✅ 全過**
+
+```
+✅ M1 picker 改用組內序號 k              → C9／C10／C11 紅   ← v6.389 對此全綠
+✅ M2 ATTACK_LIST_INLINE_MAX = 99        → 0e 紅            ← v6.389 對此全綠
+✅ M3 grid-row 規則退回死寫法             → C7 紅            ← v6.389 對此全綠
+✅ M4 picker disabled 拿掉 pendingSelection → C12 紅
+✅ M5 拿掉 picker 的預估傷害              → C13 紅
+✅ M6 分組時過濾掉沒有傷害的招式          → B1 紅（fixture 改過才抓得到）
+✅ 還原後回到全綠：PASS 30 / FAIL 0
+```
+
+- `npx vite build`：✅（`✓ built in 1m 25s`）
+- `test-v6293` E1（站長最高紅線）：**26 PASS / 0 FAIL**
+  ⚠ 本版改了 ③a 的註解 ⇒ `V6389_BATTLE_EDITS` 的 `now` 字面跟著變，已重新產生。
+
+### 【七】記一筆（本版不處理）
+
+- `.copy-attack-list{max-height:60vh}` 排在 `.scroll-list` **之後**、同特異度
+  ⇒ `--scroll-list-max` 對它**無效**（今天兩者都是 60vh 所以看不出來，**v6.390 遷移時會踩**）。
+- `attackListPicker` 沒有「盤面變了自動關閉」的機制，`eff` 是點擊當下的快照
+  （沿用既有 picker 的作法，風險低）。
+
+---
+
+
 ## v6.389 ⭐⭐⭐ 招式清單溢出：夢幻ex｜記憶螺旋 後面的招式按不下去（玩家回報）
 
 BASE `6d715d5f3a759a4cfa899b112cccbcb34694d931`（v6.388g）。
