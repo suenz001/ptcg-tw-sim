@@ -9,3 +9,6 @@
 # ⚠ .bat 反過來：cmd.exe 必須吃 CRLF，否則會把行拆錯（IRON_RULES Rule 35）。
 oracle-admin/health-check.sh   text eol=lf
 oracle-admin/check-health.bat  text eol=crlf
+# v6.387：部署驗收工具（IRON_RULES Rule 43）。同樣是 cmd.exe 要吃的 .bat ⇒ 一樣釘 CRLF；
+#   守衛 test-v6387 的 E2 會驗工作樹裡的那一份確實是全 CRLF。
+oracle-admin/verify-deploy.bat text eol=crlf
