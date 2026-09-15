@@ -5,11 +5,11 @@
 // 玩家回報：附「火箭隊的催眠裝置」的火箭隊寶可夢被對手招式打死時，對手沒有【睡眠】。
 //
 // 官方依據（PTCG RULES/PTCG_RULES.md，逐字）：
-//   §17.2.B L619-620
+//   §17.2.B L621-622
 //     Q: 擁有特性「反擊針」的刺球仙人掌若受到來自對手的寶可夢的招式的傷害昏厥了，
 //        可以因特性「反擊針」的效果，在使用招式的寶可夢身上放置3個傷害指示物嗎？
 //     A: 可以。
-//   §17.20.B L1472-1473
+//   §17.20.B L1475-1476
 //     Q: 對手的稚山雀使出招式「送回」，將附有寶可夢道具卡「沉重接力棒」的自己的鐵臂膀ex[昏厥]了。
 //        此時，因寶可夢道具卡「沉重接力棒」的效果，可以將[昏厥]的鐵臂膀ex身上附加的
 //        基本能量卡改附給備戰寶可夢嗎？
@@ -48,7 +48,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const BASE_SHA = '82f40f570ebfca67c17fd1ce9abf2830035ff622';   // v6.385（本版的上一版）
+const BASE_SHA = 'e0f2695028edcfaed81034f312a5b53385c2075e';   // v6.385（本版的上一版）
+// ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**，不可以填 amend／rebase 前的中途 sha ——
+//    那種 commit 不被任何 ref 保護，本機 git gc 後就消失，hasBaseCommit() 會轉成
+//    SHALLOW-SKIP，整個【F】HEAD-FAIL 靜默失效（守衛看起來還是綠的）。
+//    驗法：git branch -a --contains <sha> 必須印得出 main。
 
 let pass = 0, fail = 0;
 const chk = (name, ok, extra = '') => {

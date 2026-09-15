@@ -96,14 +96,56 @@ TOOL_ON_KO.set(name, (state, dIdx, aIdx, pool, koInst, attackerIid) =>
 
 ### 【六】沒有動的
 
-- **龐克頭盔**（engine.ts 的 inline 反擊）與**豪邁炸彈**（engine.ts L6668 的 KO 特判）
-  都是「第二份判準」（Rule 38 意義上的重複），但它們**行為正確**，且收斂需要把 `baseDamage`
-  加進 `TOOL_ON_KO` 的簽名（動到型別與所有呼叫點）⇒ 本版不動，列在這裡當待辦。
+- **龐克頭盔**是 **三份** 判準（Rule 38 意義上的重複；⭐v6.386a 更正 —— 原本記成兩份）：
+  ① `engine.ts` L6269-6276 預算 `punkReflectDamage`（KO 分支 L6690 與非 KO 分支 L6885 各套一次）、
+  ② `effects.ts` L8828-8836 `fireDefenderOnDamaged` 內另一份 inline。
+  ⚠ 另外 ① 那份只讀 `active.toolAttached`，**不看 `extraTools`**（多重轉接）—— 這是獨立的待辦。
+- **豪邁炸彈**是兩份（`tools.ts` 的 `TOOL_ON_DAMAGED` ＋ `engine.ts` L6668 的 KO 特判），
+  KO 特判用 `defenderCard` 快照 ⇒ 行為正確。
+  這兩張都**行為正確**，且收斂需要把 `baseDamage` 加進 `TOOL_ON_KO` 的簽名
+  （動到型別與所有呼叫點）⇒ 本版不動，列在這裡當待辦。
 - 果實型（千香果／福祿果／巧可果／刺耳果／莓榴果／霹霹果）走的是減傷管線，不是 on-damaged hook。
 - 「受到…傷害而【昏厥】時」型（倖存鍛鍊器／希望護身符／沉重接力棒／莉莉艾的珍珠）
   本來就只在 KO 觸發，不在本版範圍。
 
-### 【七】部署
+### 【七】⭐⭐⭐ Fable 5 獨立複審（判定 🟢可部署，0 個 🔴）
+
+複審對象：BASE `e0f26950` → HEAD `d490c2db`。Fable 實跑了守衛、`git grep` 全站註冊點、
+卡池枚舉、以及**四組突變測試**（把 `src` 整份複製到 `%TEMP%` 後在副本上突變，repo 未動）：
+
+| 突變 | 內容 | 守衛反應 |
+|---|---|---|
+| m0 | 無突變對照 | 46/0 ✅（證明副本流程本身可信） |
+| m1 | helper 的 KO 鏡射改回讀 `state.players[dIdx].active` | **紅 6 條**（A1／A4／B1×2／F2／F3） |
+| m2 | 只讓催眠裝置的 fn 自己重讀 `state.players[dIdx].active` | **紅 4 條**（A1／B1／D4／F2） |
+| m3 | 奢華炸彈的丟棄條件回退成 BASE 寫法 | **全綠** ⇒ 見下方 Y2 |
+| m4 | 逆境保險改 `state.players[dIdx].active ?? holder`（行為仍對） | 只 D4 紅 ⇒ 掃描器是獨立防線 |
+
+⇒ m1 證明了「即使繞過 D1 的字串斷言，行為層照樣抓得到」；m2 證明 D4 掃描器與行為層雙層在守。
+
+複審開出 4 條 🟡（**0 條 🔴**），本版處理如下：
+
+- **Y1（已修，v6.386a）**：守衛的 `BASE_SHA` 原本填 `82f40f57` —— 那是 v6.385 **amend 前**的中途
+  commit，`git branch -a --contains 82f40f57` 印不出任何分支 ⇒ **懸空**。本機 `git gc` 後它就消失，
+  `hasBaseCommit()` 會轉成 SHALLOW-SKIP，**整個【F】HEAD-FAIL 靜默失效而守衛看起來還是綠的**。
+  已改成 main 上的 `e0f26950`（兩顆 commit 的 `tools.ts` **逐字相同**，
+  `git diff --stat 82f40f57 e0f26950` 只有 `docs/changelog-internal.md` 與 test-v6385 守衛
+  ⇒ 比對對象行為零差異），並在該常數上方寫死「必須是留在 main 上的那一顆」＋驗法
+  （`git branch -a --contains <sha>` 必須印得出 main）。
+  ⚠⚠ **這是「過期的版本 pin」的變體，日後每一版 bump 時都要檢查。**
+- **Y2（不修，記錄）**：奢華炸彈那條「不誤丟補位者道具」（`p.active.iid === holder.iid`）
+  目前**不可觀測** —— 兩條 KO 路徑跑 `TOOL_ON_KO` 時 `active` 恆為 null（補位是後續 pending），
+  所以 m3 突變全綠。它是**純防禦性**的；首頁 changelog 也已逐字寫「奢華炸彈本來就是對的，
+  行為完全沒有改變」，沒有把它說成修 bug。
+- **Y3（已更正描述，見【六】）**：龐克頭盔是三份判準不是兩份。
+- **Y4（已修，v6.386a）**：守衛表頭引用的官方問答行號偏兩行（實際 L621-622／L1475-1476）。
+  E1~E4 是用 `RULES.includes(逐字)` 比對、不吃行號 ⇒ 純註解修正。
+
+Fable 誠實列出的「沒能查證」：沒跑 `npm test` 全套（由站長端跑，720 步紅 0 已驗）、
+非 KO 延後路徑遇到「招式同步換防守方戰鬥位」未構造盤面（BASE 已如此，本版無退步）、
+`effects.ts` L8833 那份龐克頭盔 inline 是否也漏 `extraTools`（已列進【六】待辦）。
+
+### 【八】部署
 
 ⚠ 本版**只動引擎**（`src/lib/game/effects/cards/tools.ts`），**沒有動 `server_admin_patch.js`**
 ⇒ 跑 `update-tournament.bat`（引擎）＋ `update-admin-full.bat`（前端與首頁 changelog），
