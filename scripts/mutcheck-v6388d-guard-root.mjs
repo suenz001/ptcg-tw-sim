@@ -99,6 +99,28 @@ withProbe('zz-mut-probe-d.mjs', [
   'console.log(ROOT);',
 ], (out) => expectRed('M5 反斜線拼接（F1 的期望值集合 ＋ F5 規則③）', ['F1 ⭐⭐⭐', 'F5 ⭐⭐⭐'], out));
 
+// ── M6：區塊註解剝除的決定性突變（Fable 5 複審 v6.388d 抓到的倒退）─────────────
+// v6.388d 用正則剝 /* */，被 `//` 行註解或字串裡的 `/*` 觸發後會一路吃到下一個 `*/`，
+// 把 56 支守衛的真程式碼剝成空白 —— 其中這 4 支的 `const ROOT =` 行整行消失：
+//   test-ai-playbook-contract / test-v6149-sw-api-bypass-and-net-banner
+//   test-v6211-pending-clobber-and-printing-gap / test-v6296-lobby-friends-tab
+// 把壞寫法放進其中任何一支，v6.388d 照樣 154/0 全綠（＝那 4 支對 F 節完全隱形）。
+// v6.388e 改用 acorn 之後必須紅。
+for (const victim of [
+  'scripts/test-ai-playbook-contract.mjs',
+  'scripts/test-v6149-sw-api-bypass-and-net-banner.mjs',
+  'scripts/test-v6211-pending-clobber-and-printing-gap.mjs',
+  'scripts/test-v6296-lobby-friends-tab.mjs',
+]) {
+  const p = join(ROOT, victim);
+  const orig = readFileSync(p, 'utf8');
+  const from = "const ROOT = fileURLToPath(new URL('..', " + IMU + '));';
+  const to = 'const ROOT = join(dirname(new URL(' + IMU + ')' + PN + '.slice(1)), \'..\');';
+  if (orig.split(from).length - 1 !== 1) { console.log('❌ M6 錨點不唯一：' + victim); allOk = false; continue; }
+  try { writeFileSync(p, orig.replace(from, to), 'utf8'); expectRed('M6 壞 ROOT 放進 ' + victim.replace('scripts/', ''), ['F1 ⭐⭐⭐', 'F5 ⭐⭐⭐'], run()); }
+  finally { writeFileSync(p, orig, 'utf8'); }
+}
+
 // ── 還原後必須回到全綠 ──────────────────────────────────────────────────────
 const clean = run();
 const tail = clean.split(/\r?\n/).filter((l) => l.includes('guard-hygiene]')).pop() || '(找不到總結行)';

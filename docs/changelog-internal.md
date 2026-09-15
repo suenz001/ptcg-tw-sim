@@ -1,5 +1,80 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.388e ⭐⭐⭐ Fable 5 複審 v6.388d：我用正則剝區塊註解，把 4 支守衛的 ROOT 行變成不設防
+
+BASE `c0d63fdb83df5478b3704c4b7e44d4b6d7cc8132`（v6.388d）。
+⚠ 本版**只動守衛與文件**，`src/` 一行都沒改 ⇒ **不需要重跑 bat**。
+
+### 【零】🔴 v6.388d 是**倒退**，不只是不夠好
+
+v6.388d 為了堵住 Fable 的 P1/P2（`/* x */ const ROOT = …`），加了
+
+```js
+const stripBlockComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+```
+
+正則不認得字串／正則字面／行註解 —— 一個 `// … /api/tournament/* 是同源路徑` 就會開啟
+「區塊註解」，一路吃到下一個 `*/`。
+
+**我用 acorn 8.16.0 當對照自行查證**（`__m6a/probe_strip.mjs`，859 檔 parse 全過）：
+
+```
+正則版與 acorn 版剝出來不一樣的檔數 = 56
+被正則版「吃掉」的路徑根定義行 = 4
+   scripts/test-ai-playbook-contract.mjs:20
+   scripts/test-v6149-sw-api-bypass-and-net-banner.mjs:17
+   scripts/test-v6211-pending-clobber-and-printing-gap.mjs:44
+   scripts/test-v6296-lobby-friends-tab.mjs:36
+```
+
+⇒ 把 v6.388 那個**原始壞寫法**放進那 4 支任何一支，v6.388d 照樣 154/0 全綠。
+**我為了堵兩個自己造的探針，把 4 支真實守衛變成不設防、在 56 支裡開了盲區。**
+
+### 【一】修法
+
+| 項 | 做什麼 |
+|---|---|
+| **acorn 剝註解** | `createRequire(import.meta.url)('acorn')` ＋ `onComment` 只取 `Block` 區間換成等量空白（保住行號）。用 createRequire 是因為 acorn 是 transitive 相依，靜態 bare import 會被 `test-v6380`【B1】要求寫進 package.json |
+| **F0c fail-closed** | acorn 載不到就**一律紅**。絕不 try/catch 靜默退回正則 —— 那只會變成另一個安慰劑 |
+| **F0d 自證** | 剝之前是路徑根定義行、剝之後不是 ⇒ 紅。**這條就是用來抓 v6.388d 那個倒退的** |
+| **F0e** | 每支守衛檔都要 parse 得過（parse 不過 ⇒ 註解剝不乾淨 ⇒ 掃描有盲區） |
+| **F0b 從「≤12」改成「必須 0」** | 加一條 `KNOWN_SAFE_SKIP` 白名單（唯一形狀：`readFileSync(fileURLToPath(import.meta.url))` 讀自己），白名單外一律紅。原本門檻 12、現況 7 ⇒ 等於可以無聲放行 5 行 |
+| **F6 不再只驗檔案存在** | 斷言 mutcheck 檔內真的還有 `F1`／`F5` 那兩個鍵（它靠這兩個字串找斷言行） |
+| **F5 紅訊息加提示** | 規則②不看 import.meta ⇒ 未來若有守衛解析 **http URL**（`new URL(req.url).pathname.slice(1)` 是合法的）會被判違規。訊息裡直接寫「改用 `.pathname.replace(/^\//, '')`」 |
+
+### 【二】🟡1 「已知極限」的描述**與實測不符**，已改精確
+
+v6.388d 寫「把 url 存進變數、再在另一行取 `.pathname`……兩層都守不到」——
+但同一版的 M4 實測 **F5 規則②抓得到**（規則②不看 import.meta 在不在同一行）。自相矛盾。
+
+現在明列的已知極限（Fable 22 種探針實測，仍逃得掉的三種）：
+
+- 解構：`const { pathname: pn } = new URL(import.meta.url);` ＋ 別處 `pn.slice(1)`
+- 編碼繞法：`.path\u006eame`、`import.meta['url']`
+- 反斜線的其他拼法：模板字串 `+ \`\\..\``、`.concat('\\..')`
+
+（`split('\\')` 型原本也逃得掉 —— 本版 F0b 改成「必須 0」之後它一進來就紅。）
+
+### 【三】驗收
+
+- `scripts/test-v6371-guard-hygiene.mjs`：**PASS 157 / FAIL 0**（F 節 14 條）
+- `scripts/mutcheck-v6388d-guard-root.mjs`：**17 個突變全數如預期翻紅**，還原後 157/0
+
+```
+✅ M1 壞 ROOT 放回 test-v6388            → F1 紅、F5 紅
+✅ M2 REPO_ROOT／export const／縮排       → F1 紅、F5 紅
+✅ M3 跨行定義                           → F5 紅
+✅ M4 關鍵字分行（規則②）                 → F5 紅
+✅ M5 反斜線拼接                         → F1 紅、F5 紅
+✅ M6 壞 ROOT 放進被正則版吃掉的那 4 支    → F1 紅、F5 紅   ← v6.388d 在這 4 支上全綠
+✅ 還原後回到全綠：PASS 157 / FAIL 0
+```
+
+⚠ M6 就是 Fable 的**決定性突變**：同一個突變在 v6.388d 上是綠的。
+
+---
+
+
 ## v6.388d ⭐⭐ Fable 5 複審 v6.388c：我又抄了一個沒現查的數字，＋【F】節十種逃逸寫法
 
 BASE `9990165912c2a96fb61d6af986c0d626e1fd2b87`（v6.388c）。
@@ -112,7 +187,7 @@ git grep -c "^export const ROOT"    -- scripts   → 3 支
 與 `scripts/lib/*.mjs`，排除 `tmp*`／`_*`／`.*`）：
 
 ```
-舊條件（行首 const ROOT = ，且該行含 import.meta.url）       → 737 行
+舊條件（行首 const ROOT = ，且該行含 import.meta.url）       → 737 行   ※量測於加入 mutcheck 之前
 放寬條件（(export)? const|let|var <任何名字> = ，未過白名單） → 792 行
 差                                                          →  55 行
 ```
