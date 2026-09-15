@@ -55,12 +55,23 @@ function expectRed(tag, keys, out) {
   }
 }
 
-/** 寫一支暫時的探針守衛檔，跑一次【F】節，然後刪掉 */
-function withProbe(name, lines, fn) {
+/**
+ * 寫一支暫時的探針守衛檔，跑一次【F】節，然後刪掉。
+ * ⚠v6.388g：`eol` 可以指定 —— 行尾字元曾經讓 F0d 的判準失效（CRLF 下誤紅），
+ *   所以 CRLF 這條路徑必須有人守。
+ */
+function withProbe(name, lines, fn, eol = '\n') {
   const p = join(ROOT, 'scripts/' + name);
-  try { writeFileSync(p, lines.join('\n') + '\n', 'utf8'); fn(run()); }
+  try { writeFileSync(p, lines.join(eol) + eol, 'utf8'); fn(run()); }
   finally { if (existsSync(p)) unlinkSync(p); }
 }
+/**
+ * ★v6.388g（Opus 5 複審 🟡3）「這一輪真的掃到那個探針了」的見證。
+ * ⚠ 沒有它，M9／M11 這種「必須維持綠」的反對照會在**探針根本沒被掃到**時照樣通過
+ *   （withProbe 寫錯位置、isFormal() 日後改嚴把 zz-* 排除掉…）。
+ * 作法：探針檔裡故意放一行**真的**壞寫法當見證 —— F5 必須紅，才證明這個檔進了掃描母體。
+ */
+const WITNESS_LINE = 'const WITNESS = witnessUrl' + PN + '.slice(1);';
 
 // ── M2：變數名／縮排／export 三種變形（Fable 5 在 v6.388c 指出的漏洞）──────────
 withProbe('zz-mut-probe-a.mjs', [
@@ -121,10 +132,16 @@ for (const victim of [
   finally { writeFileSync(p, orig, 'utf8'); }
 }
 
-/** 跑一次守衛，要求指定的斷言**全部是綠的**（反對照用） */
+/**
+ * 跑一次守衛，要求指定的斷言**全部是綠的**（反對照用）。
+ * ⚠v6.388g（Opus 5 複審 🟡2）：原本是 `!isRed(...)` —— **fail-open**。
+ *   `lineFor()` 找不到那條斷言時回 '(找不到…)'，`isRed` 就是 false，這裡就 ✅ ——
+ *   只要有人改掉斷言標題、刪掉那條檢查、或守衛整支 crash，反對照照樣印 ✅。
+ *   ⇒ 改成**必須真的看到 PASS 開頭的那一行**。
+ */
 function expectGreen(tag, keys, out) {
   for (const k of keys) {
-    const ok = !isRed(out, k);
+    const ok = lineFor(out, k).startsWith('PASS');
     console.log(`${ok ? '✅' : '❌'} ${tag} → 「${k}」${ok ? '如預期維持綠燈' : '居然紅了（誤紅！）'}`);
     console.log('   ' + lineFor(out, k).slice(0, 150));
     if (!ok) allOk = false;
@@ -155,9 +172,14 @@ withProbe('zz-mut-probe-g.mjs', [
   ' *   const ROOT = join(dirname(new URL(' + IMU + ')' + PN + ".slice(1)), '..');",
   ' */',
   "import { fileURLToPath } from 'node:url';",
+  "const witnessUrl = new URL('file:///witness');",   // ⚠ 不可以用 import.meta.url —— 那會讓這一行自己被 F1 納入求值
   "const ROOT = fileURLToPath(new URL('..', " + IMU + '));',
-  'console.log(ROOT);',
-], (out) => expectGreen('M9 區塊註解裡的壞 ROOT（F0d 反對照，不得誤紅）', ['F0d ★★★', 'F1 ⭐⭐⭐'], out));
+  WITNESS_LINE,
+  'console.log(ROOT, WITNESS);',
+], (out) => {
+  expectGreen('M9 區塊註解裡的壞 ROOT（F0d 反對照，不得誤紅）', ['F0d ★★★', 'F1 ⭐⭐⭐'], out);
+  expectRed('M9 見證：這個探針檔確實進了掃描母體', ['F5 ⭐⭐⭐'], out);
+});
 
 // ── M10：F0d 的正對照 —— 把剝除器退回 v6.388d 的正則版 ⇒ 必須紅 ──────────────────────
 {
@@ -178,9 +200,55 @@ withProbe('zz-mut-probe-g.mjs', [
 withProbe('zz-mut-probe-h.mjs', [
   '// v6.388f 突變探針8：Node 官方的 __filename 寫法（合法，不可以紅）',
   "import { fileURLToPath } from 'node:url';",
+  "const witnessUrl = new URL('file:///witness');",   // ⚠ 不可以用 import.meta.url —— 那會讓這一行自己被 F1 納入求值
   'const SELF = fileURLToPath(' + IMU + ');',
-  'console.log(SELF);',
-], (out) => expectGreen('M11 __filename 官方寫法（F1 反對照，不得誤紅）', ['F1 ⭐⭐⭐', 'F0b ★★'], out));
+  WITNESS_LINE,
+  'console.log(SELF, WITNESS);',
+], (out) => {
+  expectGreen('M11 __filename 官方寫法（F1 反對照，不得誤紅）', ['F1 ⭐⭐⭐', 'F0b ★★'], out);
+  expectRed('M11 見證：這個探針檔確實進了掃描母體', ['F5 ⭐⭐⭐'], out);
+});
+
+// ── M12／M13：F0d 的行尾／半行註解反對照（v6.388g 修的那個 🔴）──────────────────
+// v6.388f 的 inComment 拿「整行的 [a,b) 有沒有被某個 span 包住」比，而 b 是下一行的起始 offset、
+// 判準寫成 `b <= s1 + 1`（假設註解結束在行尾、後面只有一個 \n）。實測：
+//   ・CRLF 下 b = s1 + 2  ⇒ **本機誤紅、CI 綠**（守衛行為跟行尾字元綁在一起）
+//   ・註解結束在**行中間**、後面還有程式碼 ⇒ **LF 也紅** ⇒ CI build 紅 ⇒ deploy 被 skip
+// 這兩條就是那兩個形狀的回歸守衛。
+{
+  const commentBad = [
+    '/*',
+    ' * 檔頭說明裡逐字引用壞寫法（合法）：',
+    ' *   const ROOT = join(dirname(new URL(' + IMU + ')' + PN + ".slice(1)), '..');",
+    ' */',
+    "import { fileURLToPath } from 'node:url';",
+    "const witnessUrl = new URL('file:///witness');",   // ⚠ 不可以用 import.meta.url —— 那會讓這一行自己被 F1 納入求值
+    "const ROOT = fileURLToPath(new URL('..', " + IMU + '));',
+    WITNESS_LINE,
+    'console.log(ROOT, WITNESS);',
+  ];
+  withProbe('zz-mut-probe-i.mjs', commentBad, (out) => {
+    expectGreen('M12 同樣的檔頭說明，但檔案是 **CRLF** 行尾（F0d 不得因行尾字元誤紅）', ['F0d ★★★'], out);
+    expectRed('M12 見證：這個探針檔確實進了掃描母體', ['F5 ⭐⭐⭐'], out);
+  }, '\r\n');
+
+  // 註解結束在行中間、後面還有程式碼
+  const halfLine = [
+    '/*',
+    ' *   const ROOT = join(dirname(new URL(' + IMU + ')' + PN + ".slice(1)), '..');",
+    " */ import { fileURLToPath } from 'node:url';",
+    "const witnessUrl = new URL('file:///witness');",   // ⚠ 不可以用 import.meta.url —— 那會讓這一行自己被 F1 納入求值
+    "const ROOT = fileURLToPath(new URL('..', " + IMU + '));',
+    WITNESS_LINE,
+    'console.log(ROOT, WITNESS);',
+  ];
+  for (const [tag, eol] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+    withProbe('zz-mut-probe-j.mjs', halfLine, (out) => {
+      expectGreen('M13 註解結束在**行中間**、後面還有程式碼（' + tag + '）（F0d 不得誤紅）', ['F0d ★★★'], out);
+      expectRed('M13 見證：這個探針檔確實進了掃描母體（' + tag + '）', ['F5 ⭐⭐⭐'], out);
+    }, eol);
+  }
+}
 
 // ── 還原後必須回到全綠 ──────────────────────────────────────────────────────
 const clean = run();

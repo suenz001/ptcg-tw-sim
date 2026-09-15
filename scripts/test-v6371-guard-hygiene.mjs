@@ -649,10 +649,13 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
 //   ⇒ 另加 F0d 自證：剝完之後路徑根定義行**一行都不能少**。
 //
 // ── 已知極限（**實測**過的，不要再寫「都逃不過」）────────────────────────────
-//   下列寫法兩層都守不到，F 節不宣稱守得住：
+//   下列寫法兩層都守不到，F 節不宣稱守得住（⭐v6.388g 依 Opus 5 的實測**現查更新**）：
 //     ・解構：`const { pathname: pn } = new URL(import.meta.url);` ＋ 別處 `pn.slice(1)`
-//     ・編碼繞法：`.path\u006eame`、`import.meta['url']`
+//     ・正則取代：`fileURLToPath(import.meta.url).replace(/\/scripts\/.*$/, '')`
+//       （Windows 下反斜線不 match ⇒ ROOT 會變成檔案路徑本身）
 //     ・反斜線的其他拼法：模板字串 `+ \`\\..\``、`.concat('\\..')`
+//   ⚠ v6.388e/f 的清單裡有一項是**錯的**：`.path\u006eame` 實測**會紅**
+//     （identsOf 把字串字面剝成 ''，求值後是相對路徑 ⇒ F1 抓得到）。已移除。
 //   （`const u = import.meta.url;` ＋ 下一行 `new URL(u).pathname.slice(1)` 這種**關鍵字分行**
 //    是守得到的 —— F5 規則②不看 import.meta 在不在同一行。）
 //   這一節守的是「照著現有守衛抄、順手自己優化路徑處理」這個**實際發生過**的情境，
@@ -776,10 +779,23 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
       //   （而這一整串版本的敘事正是在鼓勵大家把那個壞寫法寫進檔頭說明，本 repo 守衛檔頭
       //     清一色是 /** … */ ⇒ 下一個人照做就 CI 紅、deploy 被 skip。）
       //   ⇒ 改拿 acorn 的**權威註解區間**當基準：整行落在某個區間裡就是「本來就該剝掉」。
+      // ⚠v6.388g（Opus 5 複審 🔴1）：這裡原本是
+      //     return spans.some(([s0, s1]) => s0 <= a && b <= s1 + 1);
+      //   —— b 是**下一行的起始 offset**，`s1 + 1` 假設「註解剛好結束在行尾、後面只有一個 \n」。
+      //   兩個前提都不成立：
+      //     (a) CRLF 下 b = s1 + 2（多一個 \r）⇒ 本機誤紅、CI 綠 ⇒ **守衛的行為跟行尾字元綁在一起**
+      //     (b) 註解結束在**行中間**、後面還有程式碼（`*/ export default 1;`）
+      //         ⇒ **LF 也紅** ⇒ CI build 紅 ⇒ deploy job 被 skip ⇐ 正是本串版本在修的災難
+      //   ⇒ 改成「這一行**被抹掉的每一個字元**都必須落在 acorn 的註解區間內」：
+      //     不看行尾、不看註解結束在哪裡，只看「被動到的字元有沒有授權」。
       const inComment = (i) => {
         const a = starts[i] ?? 0;
         const b = (starts[i + 1] ?? raw.length);
-        return spans.some(([s0, s1]) => s0 <= a && b <= s1 + 1);
+        for (let k = a; k < b; k++) {
+          if (raw[k] === src[k]) continue;                                   // 沒被動到
+          if (!spans.some(([s0, s1]) => k >= s0 && k < s1)) return false;     // 被動到，但不在註解裡 ⇒ 剝壞了
+        }
+        return true;
       };
       const url = 'file://' + REPO + '/' + rel;   // ⭐ 用該檔**真實的**相對路徑組 URL
       for (let i = 0; i < after.length; i++) {
@@ -816,6 +832,11 @@ console.log('\n【F】⭐v6.388b~e 守衛的路徑根必須是**跨平台**的�
       parseFailFiles.length === 0, JSON.stringify(parseFailFiles.slice(0, 5)));
 
   const broken = rows.filter((r) => !goodRoot(evalRootLine(r.line, r.url)));
+  // ⚠ 責任分工（v6.388g）：F1 放寬成「repo 之下的絕對路徑」之後，它只保證
+  //   「在 Linux 上算得出一個合理的 repo 內路徑」。**Windows-only 寫法的偵測責任在 F5**
+  //   （例：`const u = import.meta.url;` ＋ `'/' + new URL(u).pathname.slice(1)` 會算出
+  //     repo 之下的絕對路徑 ⇒ F1 綠，但 F5 規則②會紅）。
+  //   ⇒ **不要因為覺得 F5 冗餘就把它砍掉**，那會直接開洞。
   chk('F1 ⭐⭐⭐ 每一行路徑根定義在 **POSIX**（Linux／CI）底下都必須算出 repo 之下的絕對路徑',
       broken.length === 0,
       JSON.stringify(broken.slice(0, 5).map((r) => ({ fn: r.fn, v: evalRootLine(r.line, r.url), line: r.line.slice(0, 80) }))));
