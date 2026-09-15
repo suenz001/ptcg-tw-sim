@@ -1,5 +1,67 @@
 # 內部改版紀錄（不打包進網站）
 
+## v6.388b ⭐⭐⭐ CI 紅了三天沒被發現：守衛的 ROOT 用了 Windows-only 寫法 ⇒ 測試站整版沒更新
+
+BASE `821fb5caa75f08ace73097e571ed45b00909d61e`（v6.388a）。
+⚠ 本版**只動守衛與文件**，`src/` 一行都沒改。
+
+### 【零】怎麼發現的
+
+v6.388a push 完，我照紀律去查 GitHub Actions 的 `conclusion`，順手看到上一版：
+
+```
+821fb5ca | Deploy to GitHub Pages | in_progress |
+821fb5ca | Iron Rules Audit       | completed   | success
+d1098d1c | Deploy to GitHub Pages | completed   | failure   ← v6.388
+d1098d1c | Iron Rules Audit       | completed   | success
+af368113 | Deploy to GitHub Pages | completed   | success   ← v6.387，之前都是綠的
+```
+
+⇒ **v6.388 的 build job 是紅的，deploy job 被 skip，測試站（GitHub Pages）從那時起就沒更新過。**
+（也就是說，之前以為「兩張免疫網正在跑 d1098d1c」其實跑的還是舊版。）
+
+### 【一】根因
+
+```
+Error: ENOENT: no such file or directory, open
+  'home/runner/work/ptcg-tw-sim/ptcg-tw-sim/static/cards/index.json'
+  at scripts/test-v6388-mf-wave1.mjs:75
+```
+
+開頭少一個 `/`。那支守衛的 ROOT 我寫成：
+
+```js
+const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');   // ⛔
+```
+
+`.slice(1)` 只在 **Windows** 對（pathname 是 `/E:/x/...`）；Linux 是 `/home/...`，
+砍掉開頭就變**相對路徑**。⇒ **本機永遠測不出來，只有 CI 會紅。**
+
+全 repo 568 支守衛用 `fileURLToPath(new URL('..', import.meta.url))`、
+44 支用 `join(dirname(fileURLToPath(import.meta.url)), '..')` —— 我那一支是**唯一的異類**。
+
+### 【二】修法
+
+1. 本體改用 `fileURLToPath`。
+2. 防回歸：`test-v6371-guard-hygiene`（守衛衛生的既有歸屬地）新增【F】節 ——
+   把**每一支**守衛的 ROOT 定義行**真的求值一次**，餵 POSIX 形狀的 `file://` URL，
+   斷言算出來是絕對路徑（F0 下限斷言 ＋ F1 全掃 ＋ F2 壞寫法正對照 ＋ F3/F4 好寫法反向正對照）。
+   - ⚠ 求值環境必須是**模擬的 POSIX**：Windows 上 `fileURLToPath('file:///home/x')` 會
+     throw `ERR_INVALID_FILE_URL_PATH`，直接用內建那支 ⇒ 每行都算不出來 ⇒ 整節恆綠安慰劑。
+     （第一次寫就踩到，F1 假綠、F3 回 null 才抓出來。）
+   - ⚠ 有守衛把 ROOT 和別的宣告寫在同一行（`test-swap-ability.mjs`）⇒ 取「第一個分號之前」，
+     不能只砍行尾分號。
+3. IRON_RULES **Rule 46**，含更上位的一條：**push 完一定要回頭看 CI 的 conclusion；
+   CI 紅 ⇒ 測試站沒更新 ⇒ 在測試站上做的任何驗收都是在驗舊版。**
+
+### 【三】驗收
+
+- `scripts/test-v6371-guard-hygiene.mjs`：**PASS 148 / FAIL 0**（原 145，新增 F0~F4 五條）
+- `scripts/test-v6388-mf-wave1.mjs`：**PASS 86 / FAIL 0**
+
+---
+
+
 ## v6.388a ⭐⭐⭐ Fable 5 複審：我自己在 v6.388 新造了第二份判準（Rule 38 違規）＋ 兩處安慰劑守衛
 
 BASE `d1098d1cb7c6820ed4558fa3db287b1dcc97f209`（v6.388）。

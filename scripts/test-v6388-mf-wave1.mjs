@@ -23,12 +23,17 @@
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync, rmSync, unlinkSync, cpSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 // ⚠ 讀歷史一律走中央 helper（test-v6263 ★★ 在守：禁自己 shell out git ＋ 寫死歷史 sha）
 import { hasBaseCommit, restoreBaseSubtree, shallowSkip } from './lib/base-blob.mjs';
 import { build } from 'esbuild';
 
-const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');
+// ⚠⚠v6.388b：這裡原本寫 join(dirname(new URL(import.meta.url).pathname.slice(1)), '..')
+//   —— `.slice(1)` 只在 **Windows** 對（pathname 是 `/E:/x/...`，要砍掉開頭那個 '/'）；
+//   在 **Linux** pathname 是 `/home/...`，砍掉就變成**相對路徑** ⇒ CI 上 ENOENT。
+//   本機（Windows）永遠測不出來，v6.388 的 CI 因此整個 build job 紅、deploy 被 skip。
+//   ⇒ 一律用 Node 官方跨平台 API fileURLToPath（全 repo 568 支守衛都是這個寫法）。
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 // ⚠⚠ BASE_SHA 必須是**留在 main 上的那一顆**，不可以填 amend／rebase 前的中途 sha ——
 //    那種 commit 不被任何 ref 保護，本機 git gc 後就消失，hasBaseCommit() 會轉成

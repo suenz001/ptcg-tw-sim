@@ -1471,3 +1471,57 @@ git branch -a --contains e0f26950   → main / origin/main
   這時**新的 sha 才在 main 上**，而我手上記著的往往是 amend 前那顆。
 - ⚠ 這也提醒：**「守衛全綠」不等於「守衛有在守」。** 會 skip 的區段（淺複製、缺歷史、
   缺檔案）必須在輸出裡明確印出 SKIP，而且每一版都要確認它**沒有**在本機 skip。
+
+---
+
+## Rule 46: 守衛的 `ROOT` 一律用 `fileURLToPath`，**禁止** `new URL(import.meta.url).pathname.slice(1)`
+
+**2026-09-15，v6.388 的 CI 整支 build job 紅了三天沒被發現**：
+`scripts/test-v6388-mf-wave1.mjs` 的 ROOT 寫成
+
+```js
+const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');   // ⛔
+```
+
+`.slice(1)` 是為了砍掉 Windows 的 `/E:/x/...` 開頭那個斜線 —— 但在 Linux 上
+`pathname` 是 `/home/runner/...`，砍掉就變成**相對路徑**：
+
+```
+Error: ENOENT: no such file or directory, open
+  'home/runner/work/ptcg-tw-sim/ptcg-tw-sim/static/cards/index.json'
+                                                    ↑ 開頭少一個 '/'
+```
+
+### 為什麼特別致命
+
+- ⚠⚠ **本機（Windows）永遠是綠的** —— 全套 722 支測試在本機全過，但 CI 一定紅。
+- ⚠⚠ build job 紅 ⇒ **deploy job 被 skip** ⇒ **測試站（GitHub Pages）整版沒有更新**。
+  這與 Rule 43「bat 沒報錯 ≠ 部署成功」是同一個家族：**沒有人報錯，但東西就是沒上線**。
+- ⚠ 全 repo 有 568 支守衛用 `fileURLToPath(new URL('..', import.meta.url))`、
+  44 支用 `join(dirname(fileURLToPath(import.meta.url)), '..')`，只有我新寫的那一支是異類
+  ⇒ **抄現成的寫法就不會踩到；自己「優化」路徑處理才會**。
+
+### 規範
+
+- ⭐ ROOT 一律寫成 `const ROOT = fileURLToPath(new URL('..', import.meta.url));`
+- ⛔ 禁止對 `URL.pathname` 做任何 `slice`／`substring`／手工砍斜線當檔案路徑用。
+- ⭐ 防回歸守衛：`scripts/test-v6371-guard-hygiene.mjs` 的【F】節 ——
+  把每支守衛的 ROOT 定義行**真的求值一次**（餵 POSIX 形狀的 `file://` URL、
+  用 `path.posix` 的 join/dirname/isAbsolute），斷言算出來是絕對路徑。
+  ⚠ 求值環境必須是**模擬的 POSIX**：在 Windows 上 `fileURLToPath('file:///home/x')`
+  會 throw `ERR_INVALID_FILE_URL_PATH`（它要求 drive letter 或 UNC），
+  直接餵 node 內建的那一支 ⇒ 每一行都算不出來 ⇒ 整節變成恆綠的安慰劑。
+
+### 更上位的教訓：**push 完一定要回頭看 CI 的 `conclusion`**
+
+v6.388 push 完我沒有查 GitHub Actions，直接去做下一件事。
+`ptcg-vm-infra` skill 早就寫了「驗綠燈只看 GitHub API 的 `conclusion`（build 與 deploy 兩個 job）」，
+但我沒做。查法（token 從 `git config --get remote.origin.url` 取，**不要印出來**）：
+
+```
+GET https://api.github.com/repos/suenz001/ptcg-tw-sim/actions/runs?per_page=4
+→ 每一列都要是 completed / success，兩個 workflow（Deploy to GitHub Pages、Iron Rules Audit）都要看
+```
+
+⚠ **CI 紅 ⇒ 測試站沒更新 ⇒ 在測試站上做的任何「驗收」都是在驗舊版。**
+所以順序是：push → **先確認 CI 兩個 workflow 都 success** → 才去跑免疫測試網。

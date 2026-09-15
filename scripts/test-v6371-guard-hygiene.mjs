@@ -30,8 +30,9 @@
  * ⚠ 禁止恆真斷言（#27）／禁止用 `||` 放寬（#26）／旗標層斷言只能當補充（#28）。
  * 突變測試：`__m6a/mutcheck_v6371.mjs`。
  */
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, existsSync, statSync, readdirSync } from 'node:fs';
+import { join, dirname, isAbsolute } from 'node:path';
+import * as pathMod from 'node:path';   // ⭐v6.388b【F】求值守衛 ROOT 定義行時要餵 path 模組
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -616,6 +617,75 @@ console.log('\n【E】本守衛自己必須在 npm test chain 裡');
       String(chain.filter((s) => s === 'node ' + SELF).length));
   chk('E1 ★ 本檔在 chain 裡宣告的路徑真的存在', existsSync(join(ROOT, SELF)) && statSync(join(ROOT, SELF)).size > 5000);
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+console.log('\n【F】⭐v6.388b 守衛的 ROOT 必須是**跨平台**的（Windows-only 寫法會讓 CI 紅、deploy 被 skip）');
+// v6.388 的 test-v6388-mf-wave1.mjs 寫了
+//   const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');
+// `.slice(1)` 只在 Windows 對（pathname 是 `/E:/x/...`）；Linux 的 pathname 是 `/home/...`，
+// 砍掉開頭那個 '/' 就變成**相對路徑** ⇒ CI 上 ENOENT ⇒ build job 全紅 ⇒ deploy job 被 skip
+// ⇒ **測試站（GitHub Pages）整版沒有更新**，而本機（Windows）永遠測不出來。
+// ⇒ 這一節把每支守衛的 ROOT 定義行**真的求值一次**，餵 POSIX 形狀的 file:// URL，
+//   斷言算出來是絕對路徑 —— 行為層，不是 grep 字串。
+//
+// ⚠ 求值環境必須是**模擬的 POSIX**，不可以直接餵 node 內建的 fileURLToPath：
+//   在 Windows 上 fileURLToPath('file:///home/x') 會 throw ERR_INVALID_FILE_URL_PATH
+//   （它要求 drive letter 或 UNC）⇒ 每一行都算不出來、整節變成恆綠的安慰劑。
+//   所以這裡用 path.posix 的 join/dirname/isAbsolute ＋ 一支 posix 版的 fileURLToPath shim。
+{
+  const POSIX_URL = 'file:///home/runner/work/ptcg-tw-sim/ptcg-tw-sim/scripts/x.mjs';
+  const P = pathMod.posix;
+  const fileURLToPathPosix = (u) => decodeURIComponent(new URL(u).pathname);
+  /** 把一行 `const ROOT = <expr>;` 在模擬的 POSIX 環境下求值；回傳字串，求不出來回傳 null */
+  const evalRootLine = (line, url) => {
+    // ⚠ 有些守衛把 ROOT 和別的宣告寫在同一行（test-swap-ability.mjs），
+    //   所以取「第一個分號之前」，不能只砍行尾分號。
+    const expr = line.replace(/^\s*const\s+ROOT\s*=\s*/, '').split(';')[0]
+      .replace(/import\.meta\.url/g, '__U');
+    try {
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('URL', 'fileURLToPath', 'join', 'dirname', 'path', 'process', '__U',
+        'return (' + expr + ');');
+      const v = fn(URL, fileURLToPathPosix, P.join, P.dirname, P, process, url);
+      return typeof v === 'string' ? v : null;
+    } catch { return null; }
+  };
+  const files = readdirSync(join(ROOT, 'scripts')).filter((x) => x.endsWith('.mjs'));
+  const rows = [];
+  for (const fn of files) {
+    const src = readFileSync(join(ROOT, 'scripts', fn), 'utf8');
+    for (const line of src.split(/\r?\n/)) {
+      if (!/^const\s+ROOT\s*=/.test(line)) continue;
+      if (!line.includes('import.meta.url')) continue;   // process.argv／cwd 型不在守備範圍
+      rows.push({ fn, line: line.trim() });
+    }
+  }
+  chk('F0 ★ 下限斷言：掃得到夠多支守衛的 ROOT 定義（掃描器壞掉會在這裡紅）',
+      rows.length >= 400, String(rows.length));
+  const broken = rows.filter((r) => {
+    const v = evalRootLine(r.line, POSIX_URL);
+    return v === null || !P.isAbsolute(v);
+  });
+  chk('F1 ⭐⭐⭐ 每一支守衛的 ROOT 在 **POSIX**（Linux／CI）底下都必須算出**絕對路徑**',
+      broken.length === 0, JSON.stringify(broken.slice(0, 5)));
+  // ★★ 正對照：v6.388 那個 Windows-only 寫法，必須被同一個 evaluator 判成「非絕對」
+  //    —— 這一條證明 F1 不是恆真（沒有它，F1 在 evaluator 壞掉時也會綠）
+  const BAD = "const ROOT = join(dirname(new URL(import.meta.url).pathname.slice(1)), '..');";
+  const badVal = evalRootLine(BAD, POSIX_URL);
+  chk('F2 ★★ 正對照：v6.388 那個 Windows-only 寫法，在 POSIX 底下確實算出**相對路徑**',
+      typeof badVal === 'string' && !P.isAbsolute(badVal), JSON.stringify(badVal));
+  // ★ 反向正對照：官方寫法必須算得出絕對路徑（證明 evaluator 本身沒壞掉）
+  const GOOD = "const ROOT = fileURLToPath(new URL('..', import.meta.url));";
+  const goodVal = evalRootLine(GOOD, POSIX_URL);
+  chk('F3 ★ 反向正對照：官方寫法在同一個 evaluator 下算得出絕對路徑（evaluator 沒壞）',
+      typeof goodVal === 'string' && P.isAbsolute(goodVal), JSON.stringify(goodVal));
+  // ★ 第二種官方寫法（join(dirname(fileURLToPath(import.meta.url)), '..')）也要算得出來
+  const GOOD2 = "const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');";
+  const good2 = evalRootLine(GOOD2, POSIX_URL);
+  chk('F4 ★ 反向正對照2：join(dirname(fileURLToPath(...))) 型也算得出絕對路徑',
+      typeof good2 === 'string' && P.isAbsolute(good2), JSON.stringify(good2));
+}
+
 
 const skipped = shallowSkipCount();
 console.log(`\n[v6371-guard-hygiene] PASS ${n - bad} / FAIL ${bad}` + (skipped ? ` / SHALLOW-SKIP ${skipped}` : ''));
