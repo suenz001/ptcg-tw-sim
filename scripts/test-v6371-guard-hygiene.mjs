@@ -104,6 +104,7 @@ import { eolFind, normEol } from ${JSON.stringify(libDir + 'eol-agnostic.mjs')};
 //   ⇒ 探針的模組層相依也要提供它，否則 F4c 會紅在「stripV6394Engine is not defined」。
 import { stripV6394Engine } from ${JSON.stringify(libDir + 'engine-strip-v6394.mjs')};
   import { stripV6398Engine } from ${JSON.stringify(libDir + 'engine-strip-v6398.mjs')};
+  import { stripV6400Engine } from ${JSON.stringify(libDir + 'engine-strip-v6400.mjs')};
 const ROOT = ${JSON.stringify(ROOT)};
 ${consts.map(([k, v]) => `const ${k} = ${JSON.stringify(v)};`).join('\n')}
 const __reads = [];

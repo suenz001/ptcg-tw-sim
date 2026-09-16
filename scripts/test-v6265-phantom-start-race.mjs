@@ -19,6 +19,7 @@
 // Run: node scripts/test-v6265-phantom-start-race.mjs
 import { stripV6394Engine } from './lib/engine-strip-v6394.mjs';
 import { stripV6398Engine } from './lib/engine-strip-v6398.mjs';
+import { stripV6400Engine } from './lib/engine-strip-v6400.mjs';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1188,7 +1189,9 @@ await T('F4c ⭐⭐⭐ engine.ts 位元組釘：哨兵剝除後必須逐字等�
         // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
         const s6 = stripV6398Engine(s5); ok(s6 !== s5, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
-        return s6;
+        // ⭐v6.400：特殊能量「視為提供什麼」的五份判準往一致方向收，對 engine.ts 的 2 組合法改動。
+        const s7 = stripV6400Engine(s6); ok(s7 !== s6, 'v6.400 的還原器過期（特殊能量表那兩處的字面對不上）');
+        return s7;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }
@@ -1219,7 +1222,9 @@ await T('F4d ⭐⭐⭐ oracle-client.ts 位元組釘：剝掉 v6.270 的合法�
         // ⭐v6.398：「身上附加的【X】能量卡」收斂到中央 host-aware 述詞，對 engine.ts 的 3 組合法改動。
         //   ⚠ 還原內容放在 scripts/lib/engine-strip-v6398.mjs —— test-v6375 的 F0b 也 import 同一份。
         const s6 = stripV6398Engine(s5); ok(s6 !== s5, 'v6.398 的還原器過期（host-aware 收斂那三處的字面對不上）');
-        return s6;
+        // ⭐v6.400：特殊能量「視為提供什麼」的五份判準往一致方向收，對 engine.ts 的 2 組合法改動。
+        const s7 = stripV6400Engine(s6); ok(s7 !== s6, 'v6.400 的還原器過期（特殊能量表那兩處的字面對不上）');
+        return s7;
       })() : raw);
     assert.strictEqual(cur, b.out, p + ' 被改動了（本版不該碰它）');
   }

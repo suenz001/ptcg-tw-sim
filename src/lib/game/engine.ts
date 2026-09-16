@@ -1494,7 +1494,14 @@ export function energyTypeUnitsHostAware(host: { cardId: string }, e: { cardId: 
   //     行為（不做該降級），不在本版擴大範圍；G 標不在標準賽，之後要做再連同 SPECIAL_ENERGY_TYPES 一起收。
   if (ec.name === '夜光能量') return 1;
   if (ec.name === '火箭隊能量') return (type === 'Psychic' || type === 'Darkness') ? 2 : 0;
-  return isEnergyOfType(ec, type) ? 1 : 0;
+  // ⭐v6.400：一般能量（基本能量 ＋ 非 host-dependent 的特殊能量）一律問**成本端那一份表**
+  //   getEnergyProvided，不要再自己用 isEnergyOfType 判一次。
+  //   修掉的漏判：扣殺／回力鏢／富裕／薄霧（H/I 標）與噴射／反轉／治療（G 標）這 7 張
+  //   卡面都是「視為提供1個【無】能量」，但卡名裡沒有「【無】」兩個字 ⇒ isEnergyOfType 回 false
+  //   ⇒ 本函式對它們的【無】一律答 0，而 countEnergy 與 canAffordAttack 都答 1。
+  //   ⚠ 目前 H/I/J 沒有任何卡面在篩「附加的【無】能量卡」⇒ 這是把兩份判準對齊，
+  //     玩家可見行為零變化（守衛 test-v6400 逐格比對釘住）。
+  return getEnergyProvided(e.cardId, pool).includes(type) ? 1 : 0;
 }
 /** v5.702：「這張附加能量當下是否視為提供某屬性」host-aware 述詞（選/移/丟「【X】能量」一律走此，禁 isEnergyOfType）。 */
 export function energyProvidesType(host: { cardId: string }, e: { cardId: string }, type: EnergyType, pool: Map<string, Card>): boolean {
@@ -1577,8 +1584,17 @@ export function getEnergyProvided(cardId: string, pool: Map<string, Card>): Ener
       if (t) return [t];
     }
   }
-  // 特殊能量：先查表；未登記者 fallback 為 Colorless
+  // 特殊能量：先查表；未登記者先看卡名的【X】，最後才 fallback 為 Colorless
+  // ⭐v6.400：補「卡名【X】」這一層 —— 站上**現有**的特殊能量全部都在表裡，所以這是
+  //   **行為零變化**的改動（守衛 test-v6400 的 F1 逐張釘住）；它的意義是：日後新增一張
+  //   「泡沫【水】能量」這種卡名自帶屬性的特殊能量時，就算忘了加進 SPECIAL_ENERGY_TYPES，
+  //   也不會靜默退化成【無】（那會讓玩家付不出有色費用）。
   if (SPECIAL_ENERGY_TYPES[c.name]) return SPECIAL_ENERGY_TYPES[c.name];
+  const sm = c.name.match(/【(.+?)】/);
+  if (sm) {
+    const st = ZH_ENERGY_TYPE[sm[1]];
+    if (st) return [st];
+  }
   return ['Colorless'];
 }
 
