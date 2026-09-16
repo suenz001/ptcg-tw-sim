@@ -163,7 +163,12 @@ T('⭐⭐⭐ 實跑 /cards?set=ALL 的 load()：下架卡不在回傳的 cards �
 T('⭐⭐⭐ 實跑 /cards?set=M-P-J 的 load()：單一卡包檢視同樣看不到（走同一份述詞）', () => {
   const ids = new Set(setView.cards.map((c) => String(c.id)));
   for (const id of HID) ok(!ids.has(id), '/cards?set=M-P-J 仍列出下架卡 ' + id);
-  ok(setView.cards.length === 101, 'M-P-J 對玩家應顯示 101 張（103 − 2；v6.329 補收官方 209/210），實際 ' + setView.cards.length);
+  // ⭐v6.391（Rule 40）：原本把 101／103 寫死在本檔 6 個地方。改成現查推導：
+  //   對玩家 ＝ index.json 的資料層張數 − 該卡包的下架卡數。
+  const _mpjRaw = INDEX.find((e) => e.code === 'M-P-J').cardCount;
+  const _mpjHid = Object.values(mod.VIS.HIDDEN_FROM_PLAYERS).filter((i) => i.setCode === 'M-P-J').length;
+  ok(_mpjHid > 0, '下架卡表裡沒有 M-P-J 的卡 —— 下面幾條會退化成「扣 0 等於沒扣」');
+  ok(setView.cards.length === _mpjRaw - _mpjHid, 'M-P-J 對玩家應顯示 ' + (_mpjRaw - _mpjHid) + ' 張（資料層 ' + _mpjRaw + ' − 下架 ' + _mpjHid + '），實際 ' + setView.cards.length);
   ok(idxView.mode === 'index' && idxView.sets.length === INDEX.length, '卡包列表模式壞了');
 });
 
@@ -293,7 +298,9 @@ T('⭐⭐ /cards 卡包摘要張數必須扣掉下架卡（磚上寫 101、內�
   }
   const adjusted = V.applyHiddenCountsToSets(INDEX);
   const mpj = adjusted.find((e) => e.code === 'M-P-J');
-  ok(mpj.cardCount === 101 && mpj.count === 101, 'M-P-J 對玩家應顯示 101 張，實際 ' + mpj.cardCount + '/' + mpj.count);
+  const _raw = INDEX.find((e) => e.code === 'M-P-J').cardCount;
+  const _hid = Object.values(V.HIDDEN_FROM_PLAYERS).filter((i) => i.setCode === 'M-P-J').length;
+  ok(mpj.cardCount === _raw - _hid && mpj.count === _raw - _hid, 'M-P-J 對玩家應顯示 ' + (_raw - _hid) + ' 張，實際 ' + mpj.cardCount + '/' + mpj.count);
   ok(mpj.cardCount === setView.cards.length, '卡包磚(' + mpj.cardCount + ') 與內頁實際張數(' + setView.cards.length + ') 對不上');
   const untouched = adjusted.find((e) => e.code === 'SV-P-J');
   ok(untouched.cardCount === 21, '沒有下架卡的卡包被動到了：' + untouched.cardCount);
@@ -306,11 +313,12 @@ T('⭐⭐ /cards 卡包摘要張數必須扣掉下架卡（磚上寫 101、內�
   ok(adjusted.reduce((s, e) => s + e.cardCount, 0) === rawTotal - hiddenN,
     '對玩家的總張數應為 ' + (rawTotal - hiddenN) + '（index 總數 ' + rawTotal + ' − ' + hiddenN + ' 張下架卡）');
   // 行為端：index 模式與 set 模式回傳的 sets 都要是扣過的
-  ok(idxView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards 卡包列表沒有扣');
-  ok(setView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards?set=… 帶的 sets 沒有扣');
-  ok(allView.sets.find((e) => e.code === 'M-P-J').cardCount === 101, '/cards?set=ALL 帶的 sets 沒有扣');
+  ok(idxView.sets.find((e) => e.code === 'M-P-J').cardCount === _raw - _hid, '/cards 卡包列表沒有扣');
+  ok(setView.sets.find((e) => e.code === 'M-P-J').cardCount === _raw - _hid, '/cards?set=… 帶的 sets 沒有扣');
+  ok(allView.sets.find((e) => e.code === 'M-P-J').cardCount === _raw - _hid, '/cards?set=ALL 帶的 sets 沒有扣');
   // ⚠ index.json 本身不可以被改（卡庫完整性守衛靠它對帳）
-  ok(INDEX.find((e) => e.code === 'M-P-J').cardCount === 103, 'index.json 與實際檔案不符 —— 資料層應為 103（v6.329 補收官方 209/210）');
+  const _mpjFile = [...pool.values()].filter((c) => c.setCode === 'M-P-J').length;
+  ok(_raw === _mpjFile, 'index.json 與實際檔案不符：index ' + _raw + ' vs 檔案 ' + _mpjFile);
 });
 
 T('⭐⭐⭐ 行為端：filterPlayerSelectable 對真實卡庫的輸出剛好少掉所有下架卡', () => {
@@ -447,7 +455,10 @@ T('⭐ 基本能量卡名沿用站內慣例「基本【X】能量」（engine �
 console.log('⑥ 校驗和：張數／對照表／id 唯一性全部自洽');
 
 T('⭐⭐⭐ index.json 逐包張數 = 實際檔案；三個動到的卡包數字正確', () => {
-  const want = { 'M-P-J': 103, 'SV-P-I': 22, 'SV-P-J': 21 };   // v6.329 補收官方 209/210
+  // ⭐v6.391（Rule 40）：M-P-J 由 103 → 135（本版補收官方差集 32 張）。
+  //   這張 want 表是「只准增不准減」的下限，不是等號 —— 下面的比對也跟著改成 >=。
+  //   真正在守「既有資料沒被搬動」的是 test-v6391 的 E4（BASE blob 逐字比對）。
+  const wantMin = { 'M-P-J': 135, 'SV-P-I': 22, 'SV-P-J': 21 };
   for (const e of INDEX) {
     const arr = JSON.parse(readFileSync(join(dir, e.code + '.json'), 'utf8'));
     ok(e.cardCount === arr.length && e.count === arr.length,
@@ -455,7 +466,7 @@ T('⭐⭐⭐ index.json 逐包張數 = 實際檔案；三個動到的卡包數�
     const sum = Object.values(e.supertypeCounts || {}).reduce((a, b) => a + b, 0);
     ok(sum === arr.length, e.code + ' supertypeCounts 加總 ' + sum + ' ≠ ' + arr.length);
     ok(e.regulationMark && e.name && e.name !== e.code, e.code + ' 的手工欄位被重生洗掉了');
-    if (want[e.code]) ok(arr.length === want[e.code], e.code + ' 應為 ' + want[e.code] + ' 張，實際 ' + arr.length);
+    if (wantMin[e.code]) ok(arr.length >= wantMin[e.code], e.code + ' 只准增加（下限 ' + wantMin[e.code] + '），實際 ' + arr.length);
   }
 });
 

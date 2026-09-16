@@ -102,10 +102,13 @@ T('⭐⭐ 保留的台版與被刪的港版是同一張卡（卡名／編號／�
 T('⭐⭐ 卡包張數同步（M-P-J = 101；index.json 禁重生）', () => {
   const e = INDEX.find((x) => x.code === 'M-P-J');
   const arr = JSON.parse(readFileSync(join(dir, 'M-P-J.json'), 'utf8'));
-  ok(arr.length === 103, 'M-P-J.json 應為 103 張（v6.194 放回 2 張、v6.232 收入 9 張能量、v6.329 補收官方 209/210），實際 ' + arr.length);
-  ok(e.cardCount === 103 && e.count === 103, 'index.json M-P-J 張數沒同步：' + e.cardCount + '/' + e.count);
+  // ⭐v6.391（Rule 40）：原本把 103 寫死在這一條的三個地方，每補一次卡就要手改三次，
+  //   而且它真正想守的是「index.json 與實際檔案同步、沒有被重生洗掉」。
+  //   ⇒ 改成現查推導 ＋『只准增加』的下限（v6.391 現查 135）。
+  ok(arr.length >= 135, 'M-P-J.json 只准增加（v6.391 現查 135：v6.391 補收官方差集 32 張），實際 ' + arr.length);
+  ok(e.cardCount === arr.length && e.count === arr.length, 'index.json M-P-J 張數沒同步：' + e.cardCount + '/' + e.count + ' vs 檔案 ' + arr.length);
   const sc = e.supertypeCounts;
-  ok(sc.Pokemon + sc.Trainer + sc.Energy === 103, 'supertypeCounts 加總 ≠ 103：' + JSON.stringify(sc));
+  ok(sc.Pokemon + sc.Trainer + sc.Energy === arr.length, 'supertypeCounts 加總 ≠ ' + arr.length + '：' + JSON.stringify(sc));
   ok(e.name === 'M-P特典卡(J)' && e.regulationMark === 'J', 'index.json 的手工欄位被重生洗掉了');
 });
 

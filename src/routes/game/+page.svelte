@@ -17135,7 +17135,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .rocket-command-scroll,
   .retreat-grid{
     min-height:0; overflow-y:auto; overscroll-behavior:contain;
-    -webkit-overflow-scrolling:touch; touch-action:pan-y;
+    -webkit-overflow-scrolling:touch; touch-action:pan-y pinch-zoom;
     max-height:var(--scroll-list-max, 60vh);
   }
   .copy-attack-list{ display:flex; flex-direction:column; gap:.8rem; padding:.5rem 0; --scroll-list-max:60vh; }
@@ -18379,7 +18379,7 @@ function _setupSelfPending(g: any, seat: number): string | null {
   .prize-view-modal{ max-width:760px; overflow-y:auto;
     padding-bottom:calc(1.44rem + var(--safe-bottom, 0px));
     max-height:calc(100dvh - var(--safe-top, 0px) - var(--safe-bottom, 0px) - 2rem); }
-  .prize-view-modal .sel-grid{ max-height:none; overflow:visible; }
+  .prize-view-modal .sel-grid{ max-height:none; overflow:visible; min-height:auto; }
   .prize-view-side{ margin-bottom:.5rem; }
   .prize-view-side-title{ margin:.15rem 0 .35rem; color:#ffd23f; font-size:.9rem; font-weight:700; }
   .prize-view-btn{ background:rgba(255,210,63,.14); border:1px solid #a8842a; border-radius:6px; color:#ffd23f; cursor:pointer; font:inherit; padding:1px 7px; }
@@ -18614,6 +18614,11 @@ function _setupSelfPending(g: any, seat: number): string | null {
     .retreat-grid {
       max-height: none !important;
       overflow-y: visible !important;
+      /* ⭐v6.391（審查者 🔴-1）：v6.390 的群組規則新加了 min-height:0，而這條只蓋 max-height／
+         overflow-y ⇒ min-height 會留在 0。.retreat-grid 在這裡是 .selection-modal（flex column）
+         的直接子元素，min-height:0 會讓它被壓縮，而 overflow-y 又是 visible ⇒ 內容溢出蓋到
+         sticky 的 .sel-footer ＝ v5.299 修掉的那個回報會回來。必須把 auto 要回來。 */
+      min-height: auto !important;
     }
     /* ⭐ v6.122：手機直式整個 modal 才是捲動容器（見上方 v5.299/v5.308），
        備戰滿場時「確定上場」會落在折疊線下面、要捲才看得到。

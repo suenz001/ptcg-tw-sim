@@ -1596,3 +1596,23 @@ v6.390 在 `src/routes/game/+page.svelte` 的 CSS 註解裡寫了一次樣式標
 ⚠ 同理適用 `</` + `style`、`<` + `script`、`</` + `script`。
 ⚠ 守衛：`scripts/test-v6390-scroll-list.mjs` 的【G】段（G1 ＋ G1b 正對照）。
 ⚠ 更根本的修法（把那 7 支的區塊抽取收斂到中央 helper）尚未做 —— 列為待辦，不是本版範圍。
+
+## Rule 49（v6.391）：把多條規則收斂成一條群組規則時，**新加的每一個屬性**都要回頭對既有覆寫點名
+
+v6.390 把 7 個可捲清單併成一條群組規則，順手把 `.zoom-scroll` 的觸控四件套也給了它們 ——
+其中 `min-height:0` 是**這 7 個 class 原本都沒有**的新屬性。
+兩條「刻意保留為不捲」的覆寫只蓋了 `max-height` 與 `overflow`，沒蓋 `min-height`
+⇒ 它們的 computed `min-height` 留在群組規則的 `0`。
+
+`.retreat-grid` 在手機直式是 `.selection-modal`（`display:flex; flex-direction:column`）的**直接子元素**。
+flex item 的 `min-height:auto` ＝ min-content ⇒ 原本不會被 flex 壓縮，內容撐高由外層 modal 去捲
+（v5.299 ＋ v6.122 的設計）。改成 `0` 之後它會被壓縮，而 `overflow-y` 又是 `visible`
+⇒ 內容溢出、蓋到 sticky 的 `.sel-footer` ＝ **v5.299 當初修掉的那個玩家回報會回來**。
+
+⚠ 收斂的風險不在「值算錯」，而在「**多給了一個屬性**」。每次群組化都要跑這張檢查表：
+  群組規則裡的**每一個宣告** × 既有的**每一條覆寫** ⇒ 那條覆寫有沒有蓋到這個宣告？
+  沒蓋到的話，那個元素就會拿到群組規則的值 —— 而它原本是沒有這個屬性的。
+⚠ 守衛必須**逐屬性**算 computed，不能只算「主角那一個」（v6.390 的守衛只算了 max-height／overflow-y，
+  所以 11 個情境全綠，min-height 的回歸一條都沒守到）。
+⚠ 本版的做法：`scripts/test-v6390-scroll-list.mjs` 的 B12c／B13c 各釘住一條覆寫的 `min-height`，
+  並由 `scripts/mutcheck-v6390-scroll-list.mjs` 的 M11／M12 證明它們真的會紅。

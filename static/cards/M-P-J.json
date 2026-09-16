@@ -3581,5 +3581,1137 @@
   ],
   "pokedexNumber": 978,
   "illustrator": "Keisuke Azuma"
+ },
+ {
+  "id": "19668",
+  "name": "慶祝開場樂",
+  "supertype": "Trainer",
+  "subtype": "Stadium",
+  "setCode": "M-P-J",
+  "collectorNumber": "218/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019668.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19668/",
+  "scrapedAt": "2026-09-15T21:03:32.401Z",
+  "regulationMark": "J",
+  "rulesText": "雙方玩家在每個自己的回合時，可使用1次，可將自己的所有寶可夢各恢復「10」HP。這個情況下，自己的回合結束。",
+  "illustrator": "Yuu Nishida"
+ },
+ {
+  "id": "19669",
+  "name": "皮卡丘",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "217/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019669.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19669/",
+  "scrapedAt": "2026-09-15T21:03:32.971Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Lightning",
+  "attacks": [
+   {
+    "name": "激戰電光",
+    "cost": [
+     "Lightning",
+     "Lightning",
+     "Colorless"
+    ],
+    "damage": "30+",
+    "effect": "擲硬幣直到出現反面，增加正面出現的次數×30點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Fighting",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 25,
+  "species": "鼠寶可夢",
+  "illustrator": "DOM"
+ },
+ {
+  "id": "19670",
+  "name": "樂園度假地",
+  "supertype": "Trainer",
+  "subtype": "Stadium",
+  "setCode": "M-P-J",
+  "collectorNumber": "M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019670.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19670/",
+  "scrapedAt": "2026-09-15T21:03:33.549Z",
+  "regulationMark": "J",
+  "rulesText": "雙方的所有「可達鴨」【撤退】所需的能量，各減少1個。",
+  "illustrator": "Naoki Saito"
+ },
+ {
+  "id": "19720",
+  "name": "妙蛙種子",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "173/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019720.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19720/",
+  "scrapedAt": "2026-09-15T21:03:34.185Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "寄生種子",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "10",
+    "effect": "將這隻寶可夢恢復「10」HP。"
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 1,
+  "species": "種子寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19721",
+  "name": "小火龍",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "174/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019721.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19721/",
+  "scrapedAt": "2026-09-15T21:03:34.735Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "火花",
+    "cost": [
+     "Fire"
+    ],
+    "damage": "30",
+    "effect": "選擇1個這隻寶可夢身上附加的能量，將其丟棄。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 4,
+  "species": "蜥蜴寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19722",
+  "name": "傑尼龜",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "175/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019722.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19722/",
+  "scrapedAt": "2026-09-15T21:03:35.352Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "泡沫",
+    "cost": [
+     "Water"
+    ],
+    "damage": "10",
+    "effect": "擲1次硬幣若為正面，則將對手的戰鬥寶可夢【麻痺】。"
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 7,
+  "species": "小龜寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19723",
+  "name": "菊草葉",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "176/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019723.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19723/",
+  "scrapedAt": "2026-09-15T21:03:35.974Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "飛葉快刀",
+    "cost": [
+     "Grass",
+     "Colorless"
+    ],
+    "damage": "30",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 152,
+  "species": "葉子寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19724",
+  "name": "火球鼠",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "177/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019724.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19724/",
+  "scrapedAt": "2026-09-15T21:03:36.606Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "撞擊",
+    "cost": [
+     "Fire",
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "40",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 155,
+  "species": "火鼠寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19725",
+  "name": "小鋸鱷",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "178/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019725.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19725/",
+  "scrapedAt": "2026-09-15T21:03:37.222Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "咬住",
+    "cost": [
+     "Water",
+     "Water",
+     "Colorless"
+    ],
+    "damage": "50",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 158,
+  "species": "大顎寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19726",
+  "name": "木守宮",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "179/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019726.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19726/",
+  "scrapedAt": "2026-09-15T21:03:37.848Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "拍擊",
+    "cost": [
+     "Grass"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 252,
+  "species": "林蜥寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19727",
+  "name": "火稚雞",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "180/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019727.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19727/",
+  "scrapedAt": "2026-09-15T21:03:38.397Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 60,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "啄",
+    "cost": [
+     "Colorless"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 255,
+  "species": "雛雞寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19728",
+  "name": "水躍魚",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "181/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019728.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19728/",
+  "scrapedAt": "2026-09-15T21:03:38.940Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "擲泥",
+    "cost": [
+     "Water",
+     "Water"
+    ],
+    "damage": "40",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 258,
+  "species": "沼魚寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19729",
+  "name": "草苗龜",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "182/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019729.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19729/",
+  "scrapedAt": "2026-09-15T21:03:39.558Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 90,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "飛葉快刀",
+    "cost": [
+     "Grass",
+     "Grass",
+     "Colorless"
+    ],
+    "damage": "60",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 387,
+  "species": "嫩葉寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19730",
+  "name": "小火焰猴",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "183/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019730.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19730/",
+  "scrapedAt": "2026-09-15T21:03:40.243Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 60,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "亂抓",
+    "cost": [
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "20×",
+    "effect": "擲3次硬幣，造成正面出現的次數×20點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 390,
+  "species": "小猴寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19731",
+  "name": "波加曼",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "184/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019731.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19731/",
+  "scrapedAt": "2026-09-15T21:03:40.790Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "啄",
+    "cost": [
+     "Water"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 393,
+  "species": "企鵝寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19732",
+  "name": "藤藤蛇",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "185/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019732.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19732/",
+  "scrapedAt": "2026-09-15T21:03:41.406Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 60,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "藤鞭",
+    "cost": [
+     "Colorless"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 495,
+  "species": "草蛇寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19733",
+  "name": "暖暖豬",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "186/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019733.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19733/",
+  "scrapedAt": "2026-09-15T21:03:41.966Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 80,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "火花",
+    "cost": [
+     "Fire",
+     "Fire"
+    ],
+    "damage": "40",
+    "effect": "選擇1個這隻寶可夢身上附加的能量，將其丟棄。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 498,
+  "species": "火豬寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19734",
+  "name": "水水獺",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "187/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019734.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19734/",
+  "scrapedAt": "2026-09-15T21:03:42.588Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "貝殼刃",
+    "cost": [
+     "Water",
+     "Colorless"
+    ],
+    "damage": "10+",
+    "effect": "擲1次硬幣若為正面，則增加30點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 501,
+  "species": "海獺寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19735",
+  "name": "哈力栗",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "188/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019735.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19735/",
+  "scrapedAt": "2026-09-15T21:03:43.198Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "飛彈針",
+    "cost": [
+     "Grass",
+     "Colorless"
+    ],
+    "damage": "10×",
+    "effect": "擲4次硬幣，造成正面出現的次數×10點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 650,
+  "species": "刺栗寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19736",
+  "name": "火狐狸",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "189/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019736.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19736/",
+  "scrapedAt": "2026-09-15T21:03:43.744Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "抓",
+    "cost": [
+     "Fire",
+     "Colorless"
+    ],
+    "damage": "30",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 653,
+  "species": "狐狸寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19737",
+  "name": "呱呱泡蛙",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "190/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019737.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19737/",
+  "scrapedAt": "2026-09-15T21:04:24.163Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "拍擊",
+    "cost": [
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 656,
+  "species": "泡蛙寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19738",
+  "name": "木木梟",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "191/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019738.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19738/",
+  "scrapedAt": "2026-09-15T21:03:44.863Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "撞擊",
+    "cost": [
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "20",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 722,
+  "species": "草羽寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19739",
+  "name": "火斑喵",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "192/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019739.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19739/",
+  "scrapedAt": "2026-09-15T21:03:45.438Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "火焰牙",
+    "cost": [
+     "Fire",
+     "Fire"
+    ],
+    "damage": "20",
+    "effect": "將對手的戰鬥寶可夢【灼傷】。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 725,
+  "species": "火貓寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19740",
+  "name": "球球海獅",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "193/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019740.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19740/",
+  "scrapedAt": "2026-09-15T21:03:46.078Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "魅惑之聲",
+    "cost": [
+     "Water",
+     "Water"
+    ],
+    "damage": "20",
+    "effect": "將對手的戰鬥寶可夢【混亂】。"
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 728,
+  "species": "海獅寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19741",
+  "name": "敲音猴",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "194/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019741.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19741/",
+  "scrapedAt": "2026-09-15T21:03:46.626Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "木枝突刺",
+    "cost": [
+     "Grass",
+     "Grass"
+    ],
+    "damage": "40",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 810,
+  "species": "小猴寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19742",
+  "name": "炎兔兒",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "195/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019742.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19742/",
+  "scrapedAt": "2026-09-15T21:03:47.260Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "二連踢",
+    "cost": [
+     "Fire",
+     "Colorless"
+    ],
+    "damage": "20×",
+    "effect": "擲2次硬幣，造成正面出現的次數×20點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 813,
+  "species": "兔子寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19743",
+  "name": "淚眼蜥",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "196/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019743.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19743/",
+  "scrapedAt": "2026-09-15T21:03:47.804Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "水槍",
+    "cost": [
+     "Water",
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "40",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 816,
+  "species": "水蜥寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19744",
+  "name": "新葉喵",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "197/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019744.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19744/",
+  "scrapedAt": "2026-09-15T21:03:48.350Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Grass",
+  "attacks": [
+   {
+    "name": "樹葉",
+    "cost": [
+     "Grass",
+     "Colorless",
+     "Colorless"
+    ],
+    "damage": "40",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Fire",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 906,
+  "species": "草貓寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19745",
+  "name": "呆火鱷",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "198/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019745.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19745/",
+  "scrapedAt": "2026-09-15T21:03:49.049Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 90,
+  "pokemonType": "Fire",
+  "attacks": [
+   {
+    "name": "噴射火焰",
+    "cost": [
+     "Fire",
+     "Fire",
+     "Colorless"
+    ],
+    "damage": "70",
+    "effect": "選擇1個這隻寶可夢身上附加的能量，將其丟棄。"
+   }
+  ],
+  "weakness": {
+   "type": "Water",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless",
+   "Colorless",
+   "Colorless"
+  ],
+  "pokedexNumber": 909,
+  "species": "火鱷寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19746",
+  "name": "潤水鴨",
+  "supertype": "Pokemon",
+  "subtype": "Basic",
+  "setCode": "M-P-J",
+  "collectorNumber": "199/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019746.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19746/",
+  "scrapedAt": "2026-09-15T21:03:49.668Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 70,
+  "pokemonType": "Water",
+  "attacks": [
+   {
+    "name": "翅膀攻擊",
+    "cost": [
+     "Water",
+     "Colorless"
+    ],
+    "damage": "30",
+    "effect": ""
+   }
+  ],
+  "weakness": {
+   "type": "Lightning",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "pokedexNumber": 912,
+  "species": "小鴨寶可夢",
+  "illustrator": "Saboteri"
+ },
+ {
+  "id": "19747",
+  "name": "皮卡丘ex",
+  "supertype": "Pokemon",
+  "subtype": "ex",
+  "setCode": "M-P-J",
+  "collectorNumber": "200/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019747.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19747/",
+  "scrapedAt": "2026-09-15T21:03:50.213Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 190,
+  "pokemonType": "Lightning",
+  "attacks": [
+   {
+    "name": "皮卡皮卡大遊行",
+    "cost": [
+     "Colorless"
+    ],
+    "damage": "",
+    "effect": "從自己的牌庫選擇任意數量的【基礎】寶可夢卡，放置於備戰區。並且重洗牌庫。"
+   },
+   {
+    "name": "十萬伏特",
+    "cost": [
+     "Lightning",
+     "Lightning",
+     "Colorless"
+    ],
+    "damage": "200",
+    "effect": "將這隻寶可夢身上附加的能量卡全部丟棄。"
+   }
+  ],
+  "weakness": {
+   "type": "Fighting",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "illustrator": "YOSHIROTTEN"
+ },
+ {
+  "id": "19748",
+  "name": "皮卡丘ex",
+  "supertype": "Pokemon",
+  "subtype": "ex",
+  "setCode": "M-P-J",
+  "collectorNumber": "201/M-P",
+  "imageUrl": "https://asia.pokemon-card.com/tw/card-img/tw00019748.png",
+  "sourceUrl": "https://asia.pokemon-card.com/tw/card-search/detail/19748/",
+  "scrapedAt": "2026-09-15T21:03:50.825Z",
+  "regulationMark": "J",
+  "stage": "Basic",
+  "hp": 190,
+  "pokemonType": "Lightning",
+  "attacks": [
+   {
+    "name": "劈哩劈哩夜狂歡",
+    "cost": [
+     "Lightning"
+    ],
+    "damage": "",
+    "effect": "從自己的手牌選擇任意數量的基本能量卡，以任意方式附於自己的寶可夢身上。"
+   },
+   {
+    "name": "打雷",
+    "cost": [
+     "Lightning",
+     "Lightning",
+     "Colorless"
+    ],
+    "damage": "200",
+    "effect": "這隻寶可夢也受到30點傷害。"
+   }
+  ],
+  "weakness": {
+   "type": "Fighting",
+   "value": "×2"
+  },
+  "retreatCost": [
+   "Colorless"
+  ],
+  "illustrator": "YOSHIROTTEN"
  }
 ]

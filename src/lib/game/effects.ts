@@ -4130,7 +4130,8 @@ RESOLVERS.set('brailliant-attach', (st, idx, iids, params, pool) => {
 // Session 31 H5 — 擲硬幣正面 +N 傷害（PRE）
 // ══════════════════════════════════════════════════════════════════════════════
 
-function coinPlusDmg(base: number, bonus: number): AttackPreFn {
+// ⭐v6.391：改為 export —— M-P（J）批次 1 的 水水獺｜貝殼刃 要用同一份判準（Rule 38）。
+export function coinPlusDmg(base: number, bonus: number): AttackPreFn {
   return (state, aIdx) => {
     const r = flipCoinsWithLog(state, 1, '招式擲幣', aIdx);
     const dmg = base + (r.heads ? bonus : 0);
@@ -12963,6 +12964,11 @@ const SELF_DISCARD_UNITS_BATCH: Array<[string, string, number, number, DiscardMu
   ['超級噴火龍Yex|炎獄狂爆Y', '炎獄狂爆Y', 0, 3, 'all'],
   ['青木的姆克鷹|羽毛強襲', '羽毛強襲', 150, 2, 'all'],
   ['烏鴉頭頭|狙擊羽毛', '狙擊羽毛', 0, 2, 'all'],
+  // ⭐v6.391：M-P（J 標）慶祝系列御三家三張。卡面「選擇1個這隻寶可夢身上附加的能量，將其丟棄。」
+  //   與 長尾火狐｜噴射火焰 等 24 個既有 key 逐字相同（__m6a/v391_scan.mjs 實測）⇒ 指這張表，不另寫。
+  ['小火龍|火花', '火花', 30, 1, 'all'],
+  ['暖暖豬|火花', '火花', 40, 1, 'all'],
+  ['呆火鱷|噴射火焰', '噴射火焰', 70, 1, 'all'],
 ];
 for (const [key, label, dmg, n, tf] of SELF_DISCARD_UNITS_BATCH) {
   registerSelfDiscardMultiply(key, label, dmg, 0, n, tf, false, n);
@@ -21068,6 +21074,7 @@ import './effects/cards/m6a_wave6'; // v6.346 M6a 招式實裝 批次6（8 招�
 import './effects/cards/m6a_wave7'; // v6.347 M6a **特性**實裝 批次7（主動特性 6 個；被動的登記在各中央表）
 import './effects/cards/mf_wave1';  // v6.388 MF 招式實裝 批次1（純類推既有中央 helper）
 import './effects/cards/mf_wave2';  // v6.388 MF 招式實裝 批次2（6 招，需要新的中央 helper）
+import './effects/cards/mp_j_wave1'; // v6.391 M-P（J 標）招式實裝 批次1（11 招，全部純類推既有中央 helper）
 // ══════════════════════════════════════════════════════════════════════════════
 // ⭐ v6.345 M6a 批次5 —— 牌庫／手牌／棄牌區操作的中央出口
 //   （BRIEF §2 Rule 38：同一個判準只能有一份；卡檔只負責「哪一張卡用哪一支」。）

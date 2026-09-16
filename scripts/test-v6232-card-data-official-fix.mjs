@@ -157,10 +157,13 @@ T('⭐⭐⭐ index.json 定點數字＝實際檔案（M-P-I 51／M-P-J 103；總
   eq(MPI.length, 51, 'M-P-I.json 實際張數');
   ok(!('Energy' in (mi.supertypeCounts || {})), 'M-P-I 不該再有 Energy 供應數');
   eq(Object.values(mi.supertypeCounts).reduce((a, b) => a + b, 0), 51, 'M-P-I supertypeCounts 加總');
-  eq(mj.cardCount, 103, 'M-P-J cardCount'); eq(mj.count, 103, 'M-P-J count');   // v6.329 +膽小蟲209 +超級米立龍ex210
-  eq(MPJ.length, 103, 'M-P-J.json 實際張數');
+  // ⭐v6.391（Rule 40，與本檔 164~168 行同一套想法）：原本釘死 103，每補一次卡就要手改。
+  //   改成「index.json ＝ 實際檔案」的自洽判準 ＋ 只准增加的下限。
+  eq(mj.cardCount, MPJ.length, 'M-P-J cardCount'); eq(mj.count, MPJ.length, 'M-P-J count');
+  ok(MPJ.length >= 135, 'M-P-J 只准增加（v6.391 現查 135），實際 ' + MPJ.length);
+  // （張數本身已由上面那條「index ＝ 檔案」＋ 下限守著，不再釘死字面量）
   eq(mj.supertypeCounts.Energy, 18, 'M-P-J Energy 數');
-  eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), 103, 'M-P-J supertypeCounts 加總');
+  eq(Object.values(mj.supertypeCounts).reduce((a, b) => a + b, 0), MPJ.length, 'M-P-J supertypeCounts 加總');
   // ⭐⭐ v6.333（Rule 40）：原本這裡釘死「全站總張數 === 4938」。
   //   那是**每收一個新卡包就要手改一次**的字面量（v6.328 才剛改過一次），
   //   而且它想守的其實是「index.json 沒被重生／沒有卡憑空消失」。

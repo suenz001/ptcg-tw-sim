@@ -32,6 +32,9 @@ export function parseCss(css) {
       i = j; continue;
     }
     if (ch === '}') { stack.pop(); buf = ''; i++; continue; }
+    // ⚠ 無區塊 at-rule（`@charset "utf-8";`／`@import …;`／`@layer a;`）：遇到分號把 buf 清掉。
+    //   不處理的話 `@charset "x"; .a{…}` 會被當成一條 at-rule 的前言 ⇒ **靜默吞掉 .a**（v6.391 審查者 🟡-5）。
+    if (ch === ';' && buf.trim().startsWith('@')) { buf = ''; i++; continue; }
     buf += ch; i++;
   }
   return rules;
@@ -63,7 +66,11 @@ export function parseDecls(body) {
   return out;
 }
 
-const PSEUDO_OK = new Set(['hover', 'focus', 'active', 'disabled', 'last-child', 'first-child', 'not', 'nth-of-type', 'nth-child']);
+// ⚠⚠ `not` **刻意不在**這個白名單裡（v6.391 審查者 🟡-2）：parseCompound 是用
+//   /\.([\w-]+)/g 抓 class 的，會把 `:not(.foo)` 括號裡的 class 當成「必須具備」
+//   ⇒ 語意整個相反（`.a:not(.b)` 對只有 a 的元素判成不 match，對 a+b 反而 match，特異度也錯）。
+//   ⇒ 一律 fail-closed，讓呼叫端的白名單去炸，不要給錯答案。
+const PSEUDO_OK = new Set(['hover', 'focus', 'active', 'disabled', 'last-child', 'first-child', 'nth-of-type', 'nth-child']);
 
 function parseCompound(c) {
   const classes = [...c.matchAll(/\.([\w-]+)/g)].map((m) => m[1]);
@@ -79,6 +86,7 @@ function parseCompound(c) {
  */
 export function matchOne(sel, ctx) {
   if (/[#\[]|::|,/.test(sel)) return null;                    // id／屬性／偽元素 ⇒ 不支援
+  if (/:(?:not|is|where|has)\(/.test(sel)) return null;        // 邏輯偽類 ⇒ 不支援（見 PSEUDO_OK 的說明）
   const toks = sel.trim().replace(/\s*([>+~])\s*/g, ' $1 ').split(/\s+/).filter(Boolean);
   if (toks.some((t) => t === '+' || t === '~')) return null;   // 兄弟組合子 ⇒ 不支援
   const right = parseCompound(toks[toks.length - 1]);
@@ -136,12 +144,50 @@ export function cascade(rules, prop, ctx, onUnsupported) {
   return best;
 }
 
-/** 取 Svelte 檔案的 <style> 內容（含起點位移）。 */
+/**
+ * 簡寫 → 長寫的對照。`cascade()` 只查單一屬性名，遇到
+ * `.x{overflow:visible}` 蓋 `.y{overflow-y:auto}` 這種情形會答錯（v6.391 審查者 🟡-4）。
+ * ⚠ 誠實揭露：這裡只收了本 repo 實際用得到的兩組，不是完整的簡寫展開表。
+ */
+const SHORTHAND_OF = {
+  'overflow-y': 'overflow',
+  'overflow-x': 'overflow',
+  'overscroll-behavior-y': 'overscroll-behavior',
+  'overscroll-behavior-x': 'overscroll-behavior',
+};
+
+/** 與 cascade 同，但把「簡寫也可能贏」算進去。守衛一律用這支，不要直接用 cascade。 */
+export function cascadeEffective(rules, prop, ctx, onUnsupported) {
+  const a = cascade(rules, prop, ctx, onUnsupported);
+  const sh = SHORTHAND_OF[prop];
+  if (!sh) return a;
+  const b = cascade(rules, sh, ctx, onUnsupported);
+  if (!b) return a;
+  if (!a) return b;
+  if (b.important !== a.important) return b.important ? b : a;
+  if (b.spec !== a.spec) return b.spec > a.spec ? b : a;
+  return b.order > a.order ? b : a;
+}
+
+/**
+ * 取 Svelte 檔案的樣式區塊內容（含起點位移）。
+ * ⚠⚠ 一定要用 **lastIndexOf**（v6.391 審查者 🔴-2）：game/+page.svelte 的 `<svelte:head>` 裡
+ *   有一段 `{@html '…'}` 注入樣式，那個字面排在真標籤**之前**。用 indexOf 會從那裡開始切
+ *   ⇒ 中間 4,900 行的 markup／JS 被當成 CSS 餵進 parser（實測多出 3,668 條垃圾規則），
+ *   而且不會報錯。repo 裡其他 7 支守衛用的都是 lastIndexOf —— 這裡跟它們對齊。
+ * ⚠ fail-closed：切出來的內容若看起來像 markup，回 null 讓呼叫端炸掉。
+ */
 export function styleBlockOf(src) {
-  const a = src.indexOf('<style');
+  const a = src.lastIndexOf('<' + 'style');
   if (a < 0) return null;
   const b = src.indexOf('>', a);
-  const e = src.lastIndexOf('</style>');
-  if (b < 0 || e < 0) return null;
-  return { css: src.slice(b + 1, e), offset: b + 1 };
+  const e = src.lastIndexOf('</' + 'style>');
+  if (b < 0 || e < 0 || e <= b) return null;
+  const css = src.slice(b + 1, e);
+  // ⚠ fail-closed：正確切出來的區塊裡**不可能**再出現一個結束標籤（e 已經是最後一個）。
+  //   出現了就代表起點取到了更前面的假標籤（例如 `{@html '…'}` 注入的那一段）。
+  //   ⚠ 不可以拿 `<div` 或 `{#if` 當判準 —— CSS 註解裡本來就寫得到那些字
+  //     （現查：本 repo 的 .tourn-nt 註解就有 `{#if tError}<p class="warn">`）。
+  if (css.includes('</' + 'style>')) return null;
+  return { css, offset: b + 1 };
 }

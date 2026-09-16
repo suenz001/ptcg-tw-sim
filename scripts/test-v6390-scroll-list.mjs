@@ -21,7 +21,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseCss, cascade, matchOne, styleBlockOf } from './lib/css-cascade.mjs';
+import { parseCss, cascade, cascadeEffective, matchOne, styleBlockOf } from './lib/css-cascade.mjs';
 import { hasBaseCommit, readBaseBlob, shallowSkip } from './lib/base-blob.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));   // Rule 46：禁 pathname.slice
@@ -73,7 +73,13 @@ console.log('【0】fixture');
 const sb = styleBlockOf(SRC);
 chk('F0 抓得到 <style> 區塊', !!sb && sb.css.length > 100000, String(sb ? sb.css.length : -1));
 const RULES = parseCss(sb.css);
-chk('F0b 解析出大量規則（解析器沒有在第一個 } 就停）', RULES.length > 3000, String(RULES.length));
+// ⚠⚠ 這個門檻原本寫 3000，是**安慰劑**（v6.391 審查者 🔴-2）：當時 styleBlockOf 用 indexOf
+//   ⇒ 切到 `{@html '…'}` 那個假標籤 ⇒ 把 4,900 行 markup 當 CSS 解析出 3,668 條垃圾規則，
+//   門檻靠垃圾才過得了。lastIndexOf 修好之後真 CSS 只有約 1,637 條（v6.391 現查，Rule 46）。
+chk('F0b 解析出大量規則（解析器沒有在第一個 } 就停）', RULES.length > 1400, String(RULES.length));
+chk('F0b2 ⭐⭐ 切出來的是真的樣式區塊（沒有把 markup 當 CSS）',
+  !sb.css.includes('<div') && !sb.css.includes('onclick=') && sb.css.includes('.tourn-tabs'),
+  String(RULES.length));
 // ★ 哨兵：解析器真的在讀這份 CSS（不是回傳固定結果）
 //   ⚠ 不可以用 GROUP_SEL 去 replace 原始 css —— 原始檔是**逐行**寫的，
 //     GROUP_SEL 是 parseCss 正規化（\s+→單一空格）之後的樣子，replace 會靜默不命中 ⇒ 哨兵變恆真。
@@ -96,7 +102,14 @@ chk('F0c ★ 哨兵：把群組規則的第一個選擇器改名之後，解析�
     });
     if (!hit.length) continue;
     rightmostHits.push((r.at.join(' ') || '') + '|' + r.sel);
-    for (const t of hit) if (matchOne(t, { self: new Set(), ancestors: [], media: [] }) === null) unsupported.push(t);
+    // ⚠ 探測用的 self **必須**帶上最右複合選擇器的 class（v6.391 審查者 🟡-3）：
+    //   matchOne 在「最右不 match」時就提早回 -1，祖先端的不支援形態（element／邏輯偽類）
+    //   根本走不到那幾個 null 檢查 ⇒ fail-open，F1 永遠綠。
+    for (const t of hit) {
+      const rightmost = t.replace(/\s*[>+~]\s*/g, ' ').split(/\s+/).pop();
+      const selfClasses = new Set((rightmost.match(/\.[\w-]+/g) || []).map((x) => x.slice(1)));
+      if (matchOne(t, { self: selfClasses, ancestors: [], media: [] }) === null) unsupported.push(t);
+    }
   }
   chk('F1 ⭐ 沒有一條規則用到本模擬器不支援的選擇器形態（fail-closed）',
     unsupported.length === 0, JSON.stringify(unsupported));
@@ -119,7 +132,7 @@ if (group.length === 1) {
     ['overflow-y', 'auto'],
     ['overscroll-behavior', 'contain'],
     ['-webkit-overflow-scrolling', 'touch'],
-    ['touch-action', 'pan-y'],
+    ['touch-action', 'pan-y pinch-zoom'],   // ⭐v6.391 審查者 🟡-1：補回 pinch-zoom（卡圖清單不能失去雙指縮放）
     ['max-height', VAR_MH],
   ]) chk('A2 群組規則有 ' + p + ':' + v, d[p]?.value === v, JSON.stringify(d[p] ?? null));
   // ⚠ decls 存的是**值**（'60vh'），不是 'max-height:60vh' —— 早一版寫成比對含屬性名的字串，
@@ -159,17 +172,29 @@ const ctxOf = (self, ancestors = [], media = []) => ({
   self: new Set(self), ancestors: ancestors.map((a) => new Set(a)), media,
 });
 
-/** 回傳 {mh, src, resolved, oy, oyFrom}：max-height 勝出者、來源規則、解析後的實際高度、overflow-y 勝出者 */
+/**
+ * 回傳 {mh, oy, cv, mn, resolved, unsupported}。
+ * ⚠ 一律走 cascadeEffective（簡寫也算進來，原本手寫的 overflow vs overflow-y 合併搬進 lib 了）
+ *   ＋ 收集 onUnsupported —— v6.391 審查者 🟡-3／🟡-4：原本直接用 cascade，遇到模擬器
+ *   不支援的選擇器會**靜默忽略**，那條規則若在瀏覽器裡會贏，守衛就給出假綠。
+ */
 function computeFor(rules, ctx) {
-  const mh = cascade(rules, 'max-height', ctx);
-  const ov = cascade(rules, 'overflow', ctx);
-  const oy = cascade(rules, 'overflow-y', ctx);
-  const cv = cascade(rules, '--scroll-list-max', ctx);
-  // overflow 簡寫會蓋掉 overflow-y（同 important 時比特異度／順序）
-  let eff = oy;
-  if (ov && (!oy || (ov.important && !oy.important) || (ov.important === oy.important && (ov.spec > oy.spec || (ov.spec === oy.spec && ov.order > oy.order))))) eff = ov;
+  const uns = [];
+  // ⚠ 只收「**最右**複合選擇器的 class 全都在 ctx.self 裡」的不支援 ——
+  //   整份 CSS 有一大堆 `.bench-slot img{max-height:…}`／`:global(…)` 也帶著我們查的屬性，
+  //   它們的最右根本不可能 match 這幾個清單元素，全收會讓這條斷言變成「永遠紅」。
+  const on = (r, sel) => {
+    const rightmost = sel.replace(/\s*[>+~]\s*/g, ' ').split(/\s+/).filter(Boolean).pop() || '';
+    const cls = (rightmost.match(/\.[\w-]+/g) || []).map((x) => x.slice(1));
+    if (!cls.length || !cls.every((c) => ctx.self.has(c))) return;
+    uns.push(sel + ' @' + (r.at.join(' ') || 'top'));
+  };
+  const mh = cascadeEffective(rules, 'max-height', ctx, on);
+  const oy = cascadeEffective(rules, 'overflow-y', ctx, on);
+  const cv = cascadeEffective(rules, '--scroll-list-max', ctx, on);
+  const mn = cascadeEffective(rules, 'min-height', ctx, on);
   return {
-    mh, oy: eff, cv,
+    mh, oy, cv, mn, unsupported: [...new Set(uns)],
     resolved: mh?.value === VAR_MH ? (cv?.value ?? '60vh') : (mh?.value ?? null),
   };
 }
@@ -192,6 +217,7 @@ const SCENES = [
 ];
 for (const [name, ctx, wantH, wantFrom, wantOy] of SCENES) {
   const r = computeFor(RULES, ctx);
+  chk(name + ' → ⭐ 沒有任何相關規則是模擬器不支援的形態（fail-closed）', r.unsupported.length === 0, JSON.stringify(r.unsupported));
   chk(name + ' → max-height 解析為 ' + wantH, r.resolved === wantH, JSON.stringify({ got: r.resolved, mh: r.mh?.value }));
   chk(name + ' → ⭐ 勝出的 max-height 來自**群組規則**（不是個別規則，否則群組是死碼）',
     r.mh?.fullSel === wantFrom && r.mh?.value === VAR_MH, JSON.stringify({ from: r.mh?.fullSel, value: r.mh?.value }));
@@ -206,12 +232,23 @@ for (const [name, ctx, wantH, wantFrom, wantOy] of SCENES) {
     r.mh?.value === 'none' && r.mh?.fullSel === '.prize-view-modal .sel-grid', JSON.stringify({ v: r.mh?.value, from: r.mh?.fullSel }));
   chk('B12b ⭐ 且 overflow 仍被覆寫成 visible（群組的 overflow-y:auto 不可以贏）',
     r.oy?.value === 'visible', JSON.stringify(r.oy));
+  // ⭐v6.391 審查者 🔴-1：min-height 是 v6.390 新加的屬性，覆寫如果只蓋 max-height／overflow，
+  //   min-height 就會留在群組規則的 0 ⇒ 這個「刻意不捲」的元素會被 flex 壓縮、內容溢出。
+  chk('B12c ⭐⭐ 且 min-height 必須是 auto（不可以留在群組規則的 0）',
+    r.mn?.value === 'auto', JSON.stringify(r.mn));
 }
 {
   const r = computeFor(RULES, ctxOf(['retreat-grid'], [], [MEDIA_P]));
   chk('B13 ⭐ 手機直式的 .retreat-grid 仍然是 max-height:none !important（v5.299 解雙層滑捲衝突）',
     r.mh?.value === 'none' && r.mh?.important === true, JSON.stringify(r.mh));
   chk('B13b ⭐ 且 overflow-y 仍是 visible !important', r.oy?.value === 'visible' && r.oy?.important === true, JSON.stringify(r.oy));
+  // ⭐⭐v6.391 審查者 🔴-1：.retreat-grid 在手機直式是 .selection-modal（display:flex; column）的
+  //   **直接子元素**（現查 markup 12567／12628／14136／14141）＝ flex item。
+  //   flex item 的 min-height:auto ＝ min-content ⇒ 不會被壓縮，內容撐高由外層 modal 去捲
+  //   （v5.299＋v6.122 的設計）。留在群組規則的 0 就會被壓縮、內容溢出蓋到 sticky 的 .sel-footer
+  //   ＝ v5.299 修掉的那個玩家回報會回來。
+  chk('B13c ⭐⭐ 且 min-height 必須是 auto !important（v5.299 的雙層滑捲設計）',
+    r.mn?.value === 'auto' && r.mn?.important === true, JSON.stringify(r.mn));
 }
 
 // B14：觸控四件套真的套到每一個清單上（不是只寫在群組規則裡沒人吃到）
@@ -219,13 +256,23 @@ for (const c of LISTS) {
   const ctx = ctxOf([c]);
   const got = {};
   for (const p of ['min-height', 'overscroll-behavior', '-webkit-overflow-scrolling', 'touch-action']) {
-    const w = cascade(RULES, p, ctx);
+    const w = cascadeEffective(RULES, p, ctx);
     got[p] = w ? w.value + '@' + (w.fullSel === GROUP_SEL ? 'group' : w.fullSel) : null;
   }
   chk('B14 .' + c + ' 吃到完整的觸控四件套（且都來自群組規則）',
     got['min-height'] === '0@group' && got['overscroll-behavior'] === 'contain@group'
-    && got['-webkit-overflow-scrolling'] === 'touch@group' && got['touch-action'] === 'pan-y@group',
+    && got['-webkit-overflow-scrolling'] === 'touch@group' && got['touch-action'] === 'pan-y pinch-zoom@group',
     JSON.stringify(got));
+}
+
+// ⭐v6.391 審查者 🟡-12：`.copy-attack-list rocket-command-scroll` 是**同時掛兩個**被遷移 class
+//   的真實 DOM（現查 markup 13858／13867）。兩邊都設 --scroll-list-max ⇒ 這是一場同特異度的
+//   順序競賽，值一旦被調成不同就會有一個是死的，而單一 class 的情境測不出來。
+{
+  const r = computeFor(RULES, ctxOf(['copy-attack-list', 'rocket-command-scroll']));
+  chk('B15 ⭐ 同時掛 copy-attack-list ＋ rocket-command-scroll 的清單：仍是 60vh、來源仍是群組規則',
+    r.resolved === '60vh' && r.mh?.fullSel === GROUP_SEL && r.oy?.value === 'auto',
+    JSON.stringify({ h: r.resolved, from: r.mh?.fullSel, oy: r.oy?.value }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -261,22 +308,25 @@ if (!hasBaseCommit(ROOT, BASE_SHA)) {
     const bsb = styleBlockOf(b.out);
     const BR = parseCss(bsb.css);
     chk('C1 BASE 沒有本版的群組規則', BR.filter((r) => r.sel === GROUP_SEL).length === 0);
-    let reds = 0, total = 0;
+    // ⚠ v6.391 審查者 🟡-6：原本把「高度紅」與「來源紅」加在一起比 `reds >= 11`，
+    //   而 C1 一旦成立，「來源紅」對 11 個情境**必定**全中 ⇒ 那個不等式是恆真式、零資訊量。
+    //   ⇒ 拆成兩個分項：來源必須 11/11 紅（HEAD-FAIL 的本體）、
+    //     高度必須 0/11 紅（正對照：這一版**不准**改到任何一個實際高度）。
+    let sourceReds = 0, heightReds = 0;
+    const heightDiff = [];
     for (const [name, ctx, wantH] of SCENES) {
       const r = computeFor(BR, ctx);
-      total += 2;
-      if (r.resolved !== wantH) reds++;                                   // 高度（BASE 大多仍相同 ⇒ 這半不一定紅）
-      if (!(r.mh?.fullSel === GROUP_SEL && r.mh?.value === VAR_MH)) reds++; // 來源（BASE **必定**全紅）
+      if (!(r.mh?.fullSel === GROUP_SEL && r.mh?.value === VAR_MH)) sourceReds++;
+      if (r.resolved !== wantH) { heightReds++; heightDiff.push(name + ':' + r.resolved + '≠' + wantH); }
     }
-    chk('C2 ⭐⭐⭐ BASE 上「max-height 來自群組規則」這 ' + SCENES.length + ' 條**全部**不成立',
-      reds >= SCENES.length, JSON.stringify({ reds, total }));
-    let touchRed = 0;
-    for (const c of LISTS) {
-      const w = cascade(BR, 'overscroll-behavior', ctxOf([c]));
-      if (!w || w.fullSel !== GROUP_SEL) touchRed++;
-    }
-    chk('C3 ⭐⭐ BASE 上這 7 個 class **一個都沒有**吃到 overscroll-behavior',
-      touchRed === LISTS.length, String(touchRed));
+    chk('C2 ⭐⭐⭐ BASE 上「max-height 來自群組規則」這 ' + SCENES.length + ' 條**一條都不成立**',
+      sourceReds === SCENES.length, String(sourceReds) + '/' + SCENES.length);
+    chk('C2b ★ 正對照：BASE 上這 ' + SCENES.length + ' 個情境的**實際高度與現在完全相同**（本版沒有改到任何高度）',
+      heightReds === 0, JSON.stringify(heightDiff));
+    // ⚠ 同樣收緊（🟡-6）：原本「沒有值」與「有值但來源不同」都算紅 ⇒ 資訊量低。
+    //   BASE 上這 7 個 class 連一條 overscroll-behavior 都沒有，斷言就寫成 null。
+    const hasOB = LISTS.filter((c) => !!cascadeEffective(BR, 'overscroll-behavior', ctxOf([c])));
+    chk('C3 ⭐⭐ BASE 上這 7 個 class **一條 overscroll-behavior 都沒有**', hasOB.length === 0, JSON.stringify(hasOB));
     // ★ 正對照：BASE 上「刻意保留的兩條覆寫」本來就成立 ⇒ 不可以因為讀錯檔就全紅
     const pv = computeFor(BR, ctxOf(['sel-grid'], [['prize-view-modal']]));
     chk('C4 ★ 正對照：BASE 上 .prize-view-modal .sel-grid 本來就是 none（守衛不是「什麼都紅」）',

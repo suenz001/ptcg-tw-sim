@@ -12,10 +12,21 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const P = join(ROOT, 'src/routes/game/+page.svelte');
 const GUARD = join(ROOT, 'scripts/test-v6390-scroll-list.mjs');
-const ORIG = readFileSync(P, 'utf8');
+// ⭐v6.391：突變面擴到 2 個檔 —— 守衛的判準有一半在 lib 裡，只突變 CSS 守不到 lib 的退化。
+const FILES = {
+  P: join(ROOT, 'src/routes/game/+page.svelte'),
+  L: join(ROOT, 'scripts/lib/css-cascade.mjs'),
+};
+const ORIGS = Object.fromEntries(Object.entries(FILES).map(([k, f]) => [k, readFileSync(f, 'utf8')]));
+const P = FILES.P;
+const ORIG = ORIGS.P;
 const EOL = ORIG.includes('\r\n') ? '\r\n' : '\n';
+// ⚠ process 級還原（v6.391 審查者 🟡-10）：Ctrl-C／被 kill 時也要把檔案放回去，
+//   否則會留下壞掉的 +page.svelte 或 lib，而且下一支守衛會莫名其妙地紅。
+const restoreAll = () => { for (const [k, f] of Object.entries(FILES)) { try { writeFileSync(f, ORIGS[k], 'utf8'); } catch { /* */ } } };
+process.on('exit', restoreAll);
+process.on('SIGINT', () => { restoreAll(); process.exit(130); });
 
 let ok = 0, bad = 0;
 const say = (good, msg) => { if (good) { ok++; console.log('  ✅ ' + msg); } else { bad++; console.log('  ❌ ' + msg); } };
@@ -26,11 +37,20 @@ function runGuard() {
   return { out, fails: out.split('\n').filter((l) => l.trim().startsWith('FAIL ')).map((l) => l.trim()) };
 }
 
-/** 突變：mutate(src) 回傳新內容或 null（代表錨點沒命中 ⇒ 突變本身壞了，要報錯） */
+/**
+ * 突變。mutate 可以是 `(src)=>src`（只動 +page.svelte，舊寫法）
+ * 或 `{ P:(s)=>s, L:(s)=>s }`（多檔）。
+ */
 function mut(name, mutate, wantRedKeys) {
-  const next = mutate(ORIG);
-  if (next === null || next === ORIG) { say(false, name + ' :: ⚠ 突變沒命中錨點（突變測試本身壞了）'); return; }
-  writeFileSync(P, next, 'utf8');
+  const edits = typeof mutate === 'function' ? { P: mutate } : mutate;
+  let touched = false;
+  for (const [k, fn] of Object.entries(edits)) {
+    const next = fn(ORIGS[k]);
+    if (next === null || next === ORIGS[k]) continue;
+    writeFileSync(FILES[k], next, 'utf8');
+    touched = true;
+  }
+  if (!touched) { say(false, name + ' :: ⚠ 突變沒命中錨點（突變測試本身壞了）'); restoreAll(); return; }
   try {
     const { fails } = runGuard();
     for (const k of wantRedKeys) {
@@ -39,7 +59,7 @@ function mut(name, mutate, wantRedKeys) {
     if (!wantRedKeys.length) say(fails.length === 0, name + ' ⇒ 守衛維持全綠（不得誤紅）'
       + (fails.length ? ' :: 誤紅了 ' + JSON.stringify(fails.slice(0, 5)) : ''));
   } finally {
-    writeFileSync(P, ORIG, 'utf8');
+    restoreAll();
   }
 }
 
@@ -68,8 +88,8 @@ mut('M4 群組規則拿掉 overscroll-behavior:contain',
   ['A2 群組規則有 overscroll-behavior:contain', 'B14 .mlog-list']);
 
 // ── M5：刻意保留的高特異度覆寫被刪掉 ────────────────────────────────────
-mut('M5 刪掉 .prize-view-modal .sel-grid 的 max-height:none',
-  (s) => s.replace('.prize-view-modal .sel-grid{ max-height:none; overflow:visible; }', ''),
+mut('M5 刪掉 .prize-view-modal .sel-grid 那一條覆寫',
+  (s) => s.replace('.prize-view-modal .sel-grid{ max-height:none; overflow:visible; min-height:auto; }', ''),
   ['B12 ⭐ .prize-view-modal .sel-grid 仍然是 max-height:none', 'F2 ⭐⭐ 影響這 8 個 class 的規則集合']);
 
 // ── M6：覆寫的高度被改掉 ────────────────────────────────────────────────
@@ -109,10 +129,35 @@ mut('N2 新增一個與這 8 個 class 無關的規則',
   (s) => s.replace('  .copy-attack-poke{', '  .__v6390_probe__{ color:#fff; }' + EOL + '  .copy-attack-poke{'),
   []);
 
+// ── ⭐v6.391 審查者指出的新契約，逐條配突變 ────────────────────────────
+mut('M11 ⭐ 拿掉 .prize-view-modal .sel-grid 的 min-height:auto（🔴-1 的回歸）',
+  (s) => s.replace('overflow:visible; min-height:auto; }', 'overflow:visible; }'),
+  ['B12c ⭐⭐ 且 min-height 必須是 auto']);
+mut('M12 ⭐⭐ 拿掉手機直式 .retreat-grid 的 min-height:auto !important（v5.299 的回歸）',
+  (s) => s.replace('      min-height: auto !important;' + EOL, ''),
+  ['B13c ⭐⭐ 且 min-height 必須是 auto !important']);
+mut('M13 ⭐ 群組規則的 touch-action 改回 pan-y（拿掉 pinch-zoom）',
+  (s) => s.replace('touch-action:pan-y pinch-zoom;', 'touch-action:pan-y;'),
+  ['A2 群組規則有 touch-action:pan-y pinch-zoom', 'B14 .mlog-list']);
+mut('M14 ⭐ .rocket-command-scroll 的高度改成 70vh（雙 class 情境會有一個變死規則）',
+  (s) => s.replace('    --scroll-list-max: 60vh;' + EOL + '    padding-right: 4px;',
+    '    --scroll-list-max: 70vh;' + EOL + '    padding-right: 4px;'),
+  ['B6 .rocket-command-scroll（火箭隊指令 picker） → max-height 解析為 60vh',
+    'B15 ⭐ 同時掛 copy-attack-list ＋ rocket-command-scroll']);
+mut('M15 ⭐⭐ 加一條模擬器不支援的選擇器（:not）到 .sel-grid ⇒ 必須 fail-closed，不可以靜默忽略',
+  (s) => s.replace('  .copy-attack-poke{', '  .selection-modal:not(.x) .sel-grid{ max-height:9vh; }' + EOL + '  .copy-attack-poke{'),
+  ['F1 ⭐ 沒有一條規則用到本模擬器不支援的選擇器形態', 'F2 ⭐⭐ 影響這 8 個 class 的規則集合']);
+mut('M16 ⭐⭐ 把 lib 的 styleBlockOf 改回 indexOf（🔴-2 的回歸）',
+  { L: (s) => s.replace("const a = src.lastIndexOf('<' + 'style');", "const a = src.indexOf('<' + 'style');") },
+  ['F0 抓得到']);
+mut('M17 ⭐ 把 lib 的 cascadeEffective 退化成不理簡寫（🟡-4 的回歸）',
+  { L: (s) => s.replace("  const sh = SHORTHAND_OF[prop];", "  const sh = undefined; void SHORTHAND_OF;") },
+  ['B12b ⭐ 且 overflow 仍被覆寫成 visible']);
+
 // ── 還原檢查 ────────────────────────────────────────────────────────────
 {
-  const cur = readFileSync(P, 'utf8');
-  say(cur === ORIG, '還原檢查：+page.svelte 逐位元回到突變前');
+  const same = Object.entries(FILES).every(([k, f]) => readFileSync(f, 'utf8') === ORIGS[k]);
+  say(same, '還原檢查：2 個檔案逐位元回到突變前');
   const { out, fails } = runGuard();
   say(fails.length === 0 && /FAIL 0 ===/.test(out), '還原後守衛回到全綠');
 }

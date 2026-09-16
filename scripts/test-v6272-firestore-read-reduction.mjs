@@ -776,6 +776,11 @@ const PREV_ALLOWED = [
   'src/lib/game/effects/cards/m6_wave2.ts',
   'src/lib/game/effects/cards/mf_wave1.ts',
   'src/lib/game/effects/cards/mf_wave2.ts',
+  // ⭐v6.391 M-P 特典卡（J 標）32 張進卡庫 ＋ 招式實裝批次 1（11 招，全部指既有中央 helper）：
+  //   ・mp_j_wave1.ts：新檔（8 招）；另外 3 招「丟 1 個自身能量」進 effects.ts 的 SELF_DISCARD_UNITS_BATCH
+  //   ・static/cards/M-P-J.json：103 → 135 張；index.json 的 count／supertypeCounts 跟著重算
+  //   ⚠ engine.ts／sync-guards.ts／oracle-client.ts／server_admin_patch.js 仍然零改動。
+  'src/lib/game/effects/cards/mp_j_wave1.ts',
   'src/lib/game/effects/cards/v2346_j_mark_batch.ts',
   'src/lib/game/effects/cards/v2510_i_wave3c_status_self.ts',
   'src/lib/game/effects/cards/v2560_i_wave6_complex.ts',
@@ -797,6 +802,7 @@ const PREV_ALLOWED = [
   'src/lib/version.ts',
   'src/routes/game/+page.svelte',
   'static/card-set-map.json',
+  'static/cards/M-P-J.json',
   'static/cards/MF.json',
   'static/cards/index.json',
   'static/changelog-archive.html',
